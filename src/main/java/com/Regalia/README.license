@@ -1,0 +1,15 @@
+This directory contains Java source files for the Regalia Android application.
+
+License classification by file:
+  - StockfishNative.java: GPL v3 (derived from DroidFish)
+      Engine management logic from DroidFish (ExternalEngine.java,
+      InternalStockFish.java, UCIEngineBase.java, EngineUtil.java,
+      DroidComputerPlayer.java). Copyright (C) Peter Österlund.
+      Modifications Copyright (C) 2026 Regalia.
+  - MainActivity.java: AGPL v3 (original)
+  - ChessApp.java: AGPL v3 (original)
+  - ChessWebViewClient.java: AGPL v3 (original)
+  - EngineService.java: AGPL v3 (original)
+
+See the root-level LICENSE-AGPL v3, LICENSE-GPL v3, and NOTICE files
+for full license texts and attribution details.
