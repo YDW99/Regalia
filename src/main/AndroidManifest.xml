@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.Regalia"
+    android:versionCode="100"
+    android:versionName="1.0.0">
+
+    <!-- v18.5.0: Removed appcompat dependency — no more AndroidX permission injection issues -->
+    <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="35" />
+
+    <!-- Required permissions -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- Keep screen on during gameplay -->
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- v18.4.5 FIX: VIBRATE permission required for haptic feedback -->
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Android 5-9: Storage permissions for settings export/import -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <!-- Android 13+ (API 33): READ_MEDIA_IMAGES for MediaStore access (used by file browser to find .txt files) -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" android:minSdkVersion="33" />
+    <!-- v18.4.0: Request foreground service for engine stability on HyperOS -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" android:minSdkVersion="28" />
+    <!-- v18.4.7: Android 14+ requires specifying foreground service type -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" android:minSdkVersion="34" />
+    <!-- Android 13+ (API 33): POST_NOTIFICATIONS required for foreground service notification -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Declare native library requirement -->
+    <!-- v18.5.0: portrait no longer required — app supports both orientations -->
+    <uses-feature android:name="android.hardware.screen.portrait" android:required="false" />
+    <uses-feature android:name="android.hardware.screen.landscape" android:required="false" />
+
+    <application
+        android:name="com.Regalia.ChessApp"
+        android:label="@string/app_name"
+        android:theme="@android:style/Theme.NoTitleBar"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:extractNativeLibs="true"
+        android:hardwareAccelerated="true"
+        android:usesCleartextTraffic="false"
+        android:requestLegacyExternalStorage="true">
+
+        <!-- v18.5.0 FIX: Changed from "portrait" to "unspecified" — the previous
+             portrait lock prevented CSS @media (orientation:landscape) from ever
+             triggering because the WebView viewport was always in portrait dimensions.
+             Now the Activity can rotate, and CSS landscape rules work correctly.
+             configChanges ensures we handle rotation without recreating the Activity. -->
+        <activity
+            android:name="com.Regalia.MainActivity"
+            android:exported="true"
+            android:screenOrientation="unspecified"
+            android:configChanges="keyboardHidden|orientation|screenSize|smallestScreenSize|density|uiMode"
+            android:windowSoftInputMode="adjustPan"
+            android:hardwareAccelerated="true"
+            android:resizeableActivity="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- v18.4.7: Foreground service to keep the chess engine process alive
+             on Android 14/15 (Xiaomi HyperOS 3). Without this, the OS aggressively
+             kills the engine subprocess when the app goes to background. -->
+        <service
+            android:name="com.Regalia.EngineService"
+            android:foregroundServiceType="specialUse"
+            android:exported="false"
+            android:stopWithTask="true" />
+
+    </application>
+
+</manifest>

@@ -1,0 +1,21 @@
+This directory contains the main Android application source code.
+
+Subdirectory license summary:
+  - java/com/Regalia/: Mixed AGPL v3 and GPL v3
+      See java/com/Regalia/README.license for per-file classification.
+  - cpp/: Mixed AGPL v3 and GPL v3
+      See cpp/README.license for per-file classification.
+  - assets/: Combined work (AGPL v3 + GPL v3)
+      See assets/README.license for details.
+  - res/: AGPL v3 (original code and AI-generated assets)
+      See res/README.license for details.
+  - AndroidManifest.xml: AGPL v3 (original configuration)
+
+Overall, the application is a combined work under dual AGPL v3 + GPL v3
+licensing. Only files containing DroidFish-derived code use GPL v3;
+all other original code uses AGPL v3. Since AGPL v3 imposes stricter
+requirements (including network interaction provisions), its obligations
+effectively extend to the entire combined work.
+
+See the root-level LICENSE-AGPL v3, LICENSE-GPL v3, and NOTICE files
+for full license texts and attribution details.
