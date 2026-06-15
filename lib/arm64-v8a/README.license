@@ -1,0 +1,129 @@
+Regalia - Native Library License Notice
+========================================
+This directory contains shared libraries (.so) required by Regalia.
+Each library retains its original license as described below.
+
+========================================================================
+1. libc++_shared.so
+========================================================================
+Size     : ~1.29 MB
+Origin   : Android NDK — LLVM libc++ C++ Standard Library runtime
+License  : Apache License v2.0 with LLVM Exception
+Copyright: LLVM Project, University of Illinois at Urbana-Champaign
+Source   : https://android.googlesource.com/platform/ndk/
+           https://libcxx.llvm.org/
+
+This is the C++ standard library runtime shipped with the Android NDK.
+It is redistributed as-is per the NDK redistribution terms.
+
+Full license text:
+  https://llvm.org/LICENSE.txt
+
+--- Apache License v2.0 with LLVM Exception (summary) ---
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+The LLVM Exception allows linking with this library without subjecting
+your own code to the Apache License terms.
+
+========================================================================
+2. libengine_bridge.so
+========================================================================
+Size     : ~15 KB
+Origin   : Regalia project — Engine JNI Bridge
+License  : GNU General Public License v3 (GPL v3)
+Copyright: (C) 2026 Regalia
+           DroidFish-derived parts: (C) 2011-2014 Peter Österlund
+Source   : src/main/cpp/engine_jni.cpp
+
+This library provides the JNI bridge for loading and communicating with
+the UCI chess engine (libstockfish.so) via dlopen()/dlsym() and pipe-based
+I/O. It also includes native chmod and renice functionality derived from
+DroidFish (nativeutil.cpp by Peter Österlund).
+
+Full license text: LICENSE-GPL v3 (included in the lib folder)
+
+--- GPL v3 notice ---
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+DroidFish attribution:
+  DroidFish - An Android chess program.
+  Copyright (C) 2011-2014 Peter Österlund, peterosterlund2@gmail.com
+  Source: https://github.com/peterosterlund2/droidfish
+
+========================================================================
+3. libstockfish.so
+========================================================================
+Size     : ~109 MB (arm64-v8a-dotprod build)
+Origin   : Stockfish Chess Engine
+License  : GNU General Public License v3 (GPL v3)
+Copyright: (C) Tord Romstad, Marco Costalba, Joona Kiiski, Gary Linscott
+           and the Stockfish contributors (see AUTHORS-stockfish)
+Source   : https://github.com/official-stockfish/Stockfish
+
+Stockfish is a free, open-source UCI chess engine. This build is
+Stockfish 18 compiled for the arm64-v8a architecture with dotprod
+extensions enabled.
+
+Full license text: LICENSE-GPL v3 (included in the lib folder)
+Full authors list : AUTHORS-stockfish (included in the lib folder)
+
+--- GPL v3 notice ---
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+========================================================================
+License Summary
+========================================================================
+
+  File                    | License
+  ------------------------+--------------------------------
+  libc++_shared.so        | Apache License v2.0 + LLVM Exception
+  libengine_bridge.so     | GPL v3
+  libstockfish.so         | GPL v3
+
+The combined work (Regalia) is distributed under dual licensing:
+  - AGPL v3 (original Regalia code)
+  - GPL v3  (DroidFish-derived code and Stockfish engine)
+
+Per GPL v3 Section 13, these licenses are compatible for combination.
+
+For the full license texts and detailed attribution, see:
+  - LICENSE-AGPL v3
+  - LICENSE-GPL v3
+  - NOTICE
+  - NOTICE-DroidFish
+  - AUTHORS-stockfish
