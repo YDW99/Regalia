@@ -1,0 +1,13 @@
+This directory contains application assets loaded by the WebView.
+
+License classification by file:
+  - chess.html: Combined work (AGPL v3 + GPL v3)
+      Built from chess.src/ modules. The HTML/CSS template is AGPL v3;
+      the embedded JavaScript modules include GPL v3 (DroidFish-derived)
+      and AGPL v3 (original) code. See chess.src/README.license for details.
+  - AGPLv3_Logo.svg: FSF official AGPL v3 logo
+      Used for license identification on the About page.
+      Source: https://www.gnu.org/graphics/agplv3-with-text-162x68.png
+
+See the root-level LICENSE-AGPL v3, LICENSE-GPL v3, and NOTICE files
+for full license texts and attribution details.
