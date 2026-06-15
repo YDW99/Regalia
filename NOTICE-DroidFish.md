@@ -1,0 +1,129 @@
+Regalia - DroidFish Attribution Notice
+======================================
+
+This file provides detailed attribution for code derived from DroidFish,
+an Android chess program by Peter Österlund.
+
+DroidFish source: https://github.com/peterosterlund2/droidfish
+
+DroidFish - An Android chess program.
+Copyright (C) 2011-2014 Peter Österlund, peterosterlund2@gmail.com
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+===== FILE-LEVEL MAPPING: DROIDFISH → REGALIA =================================
+
+The following Regalia files contain logic derived from the listed DroidFish
+source files. All derived code retains GPL v3 licensing as required.
+
+1. StockfishNative.java
+   DroidFish sources:
+     - src/com/peterosterlund/droidfish/ExternalEngine.java
+     - src/com/peterosterlund/droidfish/InternalStockFish.java
+     - src/com/peterosterlund/droidfish/UCIEngineBase.java
+     - src/com/peterosterlund/droidfish/EngineUtil.java
+     - src/com/peterosterlund/droidfish/DroidComputerPlayer.java
+   Derived functions:
+     - copyFileChannel(): Asset/file copying logic
+     - cleanUpExeDir(): Engine executable directory management
+     - makeExecutable() / nativeChmod: File permission setting
+     - UCI protocol communication patterns (go, stop, position, setoption)
+   Original additions:
+     - SAF (Storage Access Framework) file picker integration
+     - AndroidBridge JavaScript interface callbacks
+     - Engine configuration export/import
+     - Foreground service integration for engine stability
+
+2. engine_jni.cpp
+   DroidFish sources:
+     - jni/nativeutil.cpp
+   Derived functions:
+     - nativeChmod(): JNI wrapper for chmod() system call
+     - nativeRenice(): JNI wrapper for setpriority() system call
+   Original additions:
+     - dlopen()/dlsym() based engine loading (bypasses execve() restriction)
+     - Pipe-based I/O bridge for running engine as shared library
+     - Multiple engine entry point conventions support
+
+3. game-logic.js
+   DroidFish sources:
+     - Chess move generation, PGN disambiguation, and SAN notation patterns
+       from DroidFish's game logic layer
+   Derived logic:
+     - PGN disambiguation rules (when to include file/rank in notation)
+     - SAN (Standard Algebraic Notation) move notation generation
+   Original additions:
+     - Complete board representation and move generation (original implementation)
+     - Zobrist hashing for position identification
+     - FEN generation and parsing
+     - i18n internationalization system
+     - Game state management
+
+4. ai-bridge.js
+   DroidFish sources:
+     - Engine communication patterns from DroidFish's UCI protocol handling
+   Derived logic:
+     - UCI protocol command/response patterns
+     - Evaluation parsing and display logic
+     - Engine configuration management approach
+   Original additions:
+     - WebView-specific AndroidBridge callback integration
+     - MultiPV analysis display
+     - WDL (Win/Draw/Loss) probability display
+     - Engine configuration export/import
+     - Ponder mode display with right-aligned info
+
+5. ui.js
+   DroidFish sources:
+     - UI layout and interaction patterns from DroidFish's user interface
+   Derived logic:
+     - General UI interaction patterns and dialog management approach
+     - Board rendering and move highlight patterns
+   Original additions:
+     - Complete HTML/CSS/JS WebView-based UI (original DroidFish uses native Android UI)
+     - Control heatmap visualization
+     - Evaluation trend chart in review mode
+     - 🌿Line variation display system
+     - Haptic feedback integration
+     - Bilingual (Chinese/English) UI
+
+6. tablebase.js
+   DroidFish sources:
+     - PGN parsing logic from DroidFish's GameTree, PgnToken, and PgnScanner
+   Derived logic:
+     - PGN tokenization and parsing approach
+     - Game tree data structure for PGN variations
+     - PGN variation (RAV) handling
+   Original additions:
+     - Lichess Syzygy tablebase API integration
+     - PGN import with variation (🌿Line) display
+     - Clipboard paste and file-based PGN import
+     - Position setup from FEN
+
+===== MODIFICATIONS SUMMARY ===================================================
+
+The DroidFish-derived code has been substantially modified to fit Regalia's
+WebView-based architecture. Key architectural differences:
+
+- Original DroidFish: Native Android UI (Activities, Views, Layouts)
+- Regalia: WebView-based UI with HTML/CSS/JS frontend
+
+- Original DroidFish: Direct JNI calls to engine
+- Regalia: AndroidBridge JavaScript interface + pipe-based dlopen() bridge
+
+- Original DroidFish: Single-language UI
+- Regalia: Bilingual (Chinese/English) with i18n system
+
+All modifications are Copyright (C) 2026 Regalia and licensed under GPL v3
+as required by the original DroidFish license.

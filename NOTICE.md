@@ -1,0 +1,144 @@
+Regalia - Notice of Third-Party Components
+===========================================
+
+This application is a combined work under AGPL v3 and GPL v3.
+See LICENSE-AGPL v3 and LICENSE-GPL v3 for full license texts.
+
+This project is a combined work under dual licensing:
+- The application as a whole is licensed under AGPL v3 (GNU Affero General Public License v3)
+- Code derived from DroidFish and the Stockfish engine itself are licensed under GPL v3 (GNU General Public License v3)
+
+Per GPL v3 Section 13, these licenses are compatible for combination. Each component
+retains its original license: AGPL v3 parts remain under AGPL v3, GPL v3 parts remain
+under GPL v3. Since AGPL v3 imposes stricter requirements (including network interaction
+provisions under Section 13), its obligations effectively extend to the entire combined
+work, ensuring users who access the work over a network retain the right to obtain
+source code.
+
+The original NOTICE files from third-party projects are preserved alongside this one:
+- NOTICE-DroidFish: Original DroidFish notice
+- AUTHORS-stockfish: Stockfish project authors list
+
+===== LICENSE CLASSIFICATION BY FILE ==========================================
+
+GPL v3 (DroidFish-derived or Stockfish):
+  - src/main/java/com/Regalia/StockfishNative.java
+      Engine management logic from DroidFish (ExternalEngine.java,
+      InternalStockFish.java, UCIEngineBase.java, EngineUtil.java,
+      DroidComputerPlayer.java)
+  - src/main/cpp/engine_jni.cpp
+      Native chmod/renice from DroidFish nativeutil.cpp;
+      JNI bridge (dlopen/dlsym/pipe) is original code
+  - src/main/assets/chess.src/game-logic.js
+      PGN disambiguation and SAN notation logic from DroidFish
+  - src/main/assets/chess.src/ai-bridge.js
+      Engine communication patterns from DroidFish
+  - src/main/assets/chess.src/ui.js
+      UI layout and interaction patterns from DroidFish
+  - src/main/assets/chess.src/tablebase.js
+      PGN parsing logic from DroidFish (GameTree/PgnToken/PgnScanner)
+  - libstockfish.so (Stockfish 18 engine binary, GPL v3)
+
+AGPL v3 (original code):
+  - src/main/java/com/Regalia/MainActivity.java
+  - src/main/java/com/Regalia/ChessApp.java
+  - src/main/java/com/Regalia/ChessWebViewClient.java
+  - src/main/java/com/Regalia/EngineService.java
+  - src/main/assets/chess.src/eco-data.js
+      ECO data from lichess-org/chess-openings (CC0); code is original
+  - src/main/assets/chess.src/index.html.tpl
+  - src/main/cpp/CMakeLists.txt
+  - build-chess.py, build-chess.sh
+  - All other project files not listed above
+
+===== DROIDFISH ATTRIBUTION ===================================================
+
+This application includes code derived from DroidFish,
+an Android chess program by Peter Österlund.
+
+DroidFish - An Android chess program.
+Copyright (C) 2011-2014 Peter Österlund, peterosterlund2@gmail.com
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+DroidFish source: https://github.com/peterosterlund2/droidfish
+
+Specific files with DroidFish-derived logic:
+
+Java:
+  - StockfishNative.java: Engine management logic (process startup, shutdown,
+    UCI communication) derived from DroidFish's ExternalEngine.java,
+    InternalStockFish.java, UCIEngineBase.java, EngineUtil.java,
+    and DroidComputerPlayer.java patterns.
+    Key DroidFish-derived functions: copyFileChannel(), cleanUpExeDir(),
+    makeExecutable() (nativeChmod pattern).
+
+C++:
+  - engine_jni.cpp: Native chmod (nativeChmod) and renice (nativeRenice)
+    functions derived from DroidFish's nativeutil.cpp.
+    JNI bridge (dlopen/dlsym/pipe) is original code.
+
+JavaScript (in chess.src/, merged into chess.html):
+  - game-logic.js: PGN disambiguation and SAN notation logic derived from
+    DroidFish's chess engine integration and move notation handling.
+  - ai-bridge.js: Engine communication patterns (UCI protocol handling,
+    evaluation parsing) derived from DroidFish's engine interaction logic.
+  - ui.js: UI layout and interaction patterns derived from DroidFish's
+    user interface design and game presentation approach.
+  - tablebase.js: PGN parsing logic (GameTree/PgnToken/PgnScanner) derived
+    from DroidFish's PGN import and game tree management.
+
+Modifications from original DroidFish code:
+  - Adapted for WebView-based UI architecture (original DroidFish uses native Android UI)
+  - Integrated with JavaScript bridge (AndroidBridge) for WebView-native communication
+  - Added engine configuration management with export/import
+  - Changed from DroidFish's native UI to WebView/JS hybrid approach
+  - Added PGN import functionality (inspired by DroidFish's PGN handling)
+  - Added multilingual support (Chinese/English) with i18n system
+  - Added Control heatmap, evaluation trend chart, and 🌿Line variation display
+
+===== STOCKFISH ENGINE ========================================================
+
+Stockfish Chess Engine
+Copyright (C) T. Romstad, M. Costalba, J. Kiiski, G. Linscott
+Licensed under GNU General Public License v3
+Source: https://github.com/official-stockfish/Stockfish
+
+This application uses Stockfish 18 (arm64-v8a-dotprod build).
+Stockfish is a free, open-source UCI chess engine.
+
+===== OTHER THIRD-PARTY COMPONENTS ============================================
+
+Lichess Tablebase API
+Source: https://tablebase.lichess.ovh
+Used for endgame tablebase queries (7-piece Syzygy).
+No API key required; rate-limited public API.
+
+ECO Opening Data
+Opening classification data derived from lichess-org/chess-openings (CC0).
+https://github.com/lichess-org/chess-openings
+Opening classification based on the Encyclopaedia of Chess Openings (ECO)
+standard codes (A00-E99), adapted for use within this application.
+
+===== AI-GENERATED ASSETS =====================================================
+
+All application icon files (mipmap resources: ic_launcher.png,
+ic_launcher_foreground.png, ic_launcher_round.png across all density
+buckets: mdpi, hdpi, xhdpi, xxhdpi, xxxhdpi) were generated by AI
+image generation tools. No human-created artwork is included in these
+icon assets.
+
+AGPLv3_Logo.svg is the official GNU AGPL v3 logo by the Free Software
+Foundation, used for license identification on the About page.
+Source: https://www.gnu.org/graphics/agplv3-with-text-162x68.png
