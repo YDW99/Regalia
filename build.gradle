@@ -1,0 +1,113 @@
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.7.3'
+    }
+}
+
+apply plugin: 'com.android.application'
+
+buildDir = "/tmp/regalia_build/${project.name}"
+
+android {
+    namespace 'com.Regalia'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "com.Regalia"
+        minSdk 21
+        targetSdk 35
+        versionCode 100
+        versionName "1.0.0"
+
+        ndk {
+            abiFilters 'arm64-v8a'
+        }
+
+        externalNativeBuild {
+            cmake {
+                targets 'engine_bridge'
+                arguments '-DANDROID_STL=c++_shared'
+            }
+        }
+    }
+
+    signingConfigs {
+        debug {
+            storeFile file('../debug.keystore')
+            storePassword 'android'
+            keyAlias 'debug'
+            keyPassword 'android'
+        }
+        release {
+            storeFile file('../debug.keystore')
+            storePassword 'android'
+            keyAlias 'debug'
+            keyPassword 'android'
+            enableV1Signing true
+            enableV2Signing true
+            enableV3Signing true
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            shrinkResources false
+            signingConfig signingConfigs.release
+        }
+        debug {
+            minifyEnabled false
+            debuggable true
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    externalNativeBuild {
+        cmake {
+            path file('src/main/cpp/CMakeLists.txt')
+            version '3.22.1'
+        }
+    }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging true
+            excludes += ['lib/x86/**', 'lib/x86_64/**', 'lib/armeabi-v7a/**']
+        }
+    }
+}
+
+dependencies {
+}
+
+def buildJniLibsDir = new File("/tmp/regalia_build/jniLibs")
+def buildAbiDir = new File(buildJniLibsDir, "arm64-v8a")
+
+task prepareStockfishEngine {
+    description 'Copies Stockfish engine to build/jniLibs for APK packaging'
+    group 'build'
+    doFirst {
+        buildAbiDir.mkdirs()
+        copy {
+            from '/tmp/stockfish/stockfish-android-armv8-dotprod'
+            into buildAbiDir
+            rename { 'libstockfish.so' }
+        }
+    }
+}
+
+preBuild.dependsOn prepareStockfishEngine
+android.sourceSets.main.jniLibs.srcDirs += [buildJniLibsDir]
