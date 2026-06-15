@@ -1,0 +1,29 @@
+This directory contains the JavaScript source modules for the chess UI.
+These modules are merged by build-chess.py / build-chess.sh into chess.html.
+
+License classification by file:
+  - game-logic.js: GPL v3 (derived from DroidFish)
+      PGN disambiguation and SAN notation logic from DroidFish.
+      Copyright (C) Peter Österlund. Modifications Copyright (C) 2026 Regalia.
+  - ai-bridge.js: GPL v3 (derived from DroidFish)
+      Engine communication patterns from DroidFish.
+      Copyright (C) Peter Österlund. Modifications Copyright (C) 2026 Regalia.
+  - ui.js: GPL v3 (derived from DroidFish)
+      UI layout and interaction patterns from DroidFish.
+      Copyright (C) Peter Österlund. Modifications Copyright (C) 2026 Regalia.
+  - tablebase.js: GPL v3 (derived from DroidFish)
+      PGN parsing logic (GameTree/PgnToken/PgnScanner) from DroidFish.
+      Copyright (C) Peter Österlund. Modifications Copyright (C) 2026 Regalia.
+  - eco-data.js: AGPL v3 (original)
+      ECO opening data from lichess-org/chess-openings (CC0).
+      Code is original — not derived from DroidFish.
+  - index.html.tpl: AGPL v3 (original CSS/HTML template)
+  - build-chess.sh: AGPL v3 (original build script)
+
+The combined output (chess.html) is a combined work. The GPL v3 JavaScript
+modules and AGPL v3 template retain their respective licenses. Since AGPL v3
+imposes stricter requirements, its obligations effectively cover the entire
+combined output.
+
+See the root-level LICENSE-AGPL v3, LICENSE-GPL v3, and NOTICE files
+for full license texts and attribution details.
