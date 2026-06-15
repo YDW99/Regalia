@@ -1,0 +1,14 @@
+This directory contains the chess engine JNI bridge native code.
+
+License classification by file:
+  - engine_jni.cpp: GPL v3 (partially derived from DroidFish)
+      Native chmod/renice functions derived from DroidFish nativeutil.cpp.
+      Copyright (C) Peter Österlund.
+      JNI bridge (dlopen/dlsym/pipe) is original code.
+      Modifications Copyright (C) 2026 Regalia.
+  - CMakeLists.txt: AGPL v3 (original build configuration)
+      Note: this CMake file builds engine_jni.cpp which is GPL v3,
+      but the CMake file itself is original and uses AGPL v3.
+
+See the root-level LICENSE-AGPL v3, LICENSE-GPL v3, and NOTICE files
+for full license texts and attribution details.
