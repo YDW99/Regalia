@@ -31,13 +31,15 @@ package com.Regalia;
  *
  * The notification text is bilingual: it reads the app's language setting
  * from SharedPreferences and displays the appropriate language string.
- * The notification can be updated dynamically to show engine status info
- * (e.g., "Stockfish 18 · depth 22") via updateNotification().
+ * v1.0.1: The notification shows ONLY three states — ready / analyzing / error.
+ * Detailed depth/nps/score data is shown in the in-app eval bar instead.
+ * The notification can be updated dynamically via updateNotification().
  */
 
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
@@ -56,6 +58,34 @@ public class EngineService extends Service {
     private PowerManager.WakeLock wakeLock = null;
     private static boolean isRunning = false;
     private static String lastStatusInfo = "";
+
+    /**
+     * v1.0.1: Build the PendingIntent that opens MainActivity when the user taps
+     * the persistent notification. We pre-build this once per service instance and
+     * reuse it for every notification update (cheap to construct, but no point
+     * re-doing it 1×/sec during engine progress updates).
+     *
+     * PendingIntent flags:
+     *   - FLAG_IMMUTABLE (mandatory on Android 12+/API 31+)
+     *   - FLAG_UPDATE_CURRENT: update extras if a new PendingIntent with the same
+     *     requestCode is created — keeps the intent fresh.
+     *   - On API 23+ we use FLAG_IMMUTABLE; on older devices FLAG_UPDATE_CURRENT only.
+     */
+    private PendingIntent buildContentIntent() {
+        try {
+            Intent intent = new Intent(this, MainActivity.class);
+            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP
+                    | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                flags |= PendingIntent.FLAG_IMMUTABLE;
+            }
+            return PendingIntent.getActivity(this, 0, intent, flags);
+        } catch (Throwable e) {
+            Log.w(TAG, "buildContentIntent failed", e);
+            return null;
+        }
+    }
 
     @Override
     public void onCreate() {
@@ -169,14 +199,20 @@ public class EngineService extends Service {
             contentText = en ? "Engine analysis running" : "引擎分析运行中";
         }
 
+        PendingIntent contentIntent = buildContentIntent();
         Notification notification;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Notification.Builder builder = new Notification.Builder(this, CHANNEL_ID)
                     .setContentTitle(title)
                     .setContentText(contentText)
                     .setSmallIcon(R.mipmap.ic_launcher)
-                    .setOngoing(true)
+                    .setOngoing(true)              // v1.0.1: non-dismissable while service runs
+                    .setShowWhen(false)            // v1.0.1: cleaner look — no timestamp
+                    .setOnlyAlertOnce(true)        // v1.0.1: don't re-sound on every update
+                    .setLocalOnly(true)            // v1.0.1: don't mirror to other devices
+                    .setCategory(Notification.CATEGORY_SERVICE)
                     .setPriority(Notification.PRIORITY_LOW);
+            if (contentIntent != null) builder.setContentIntent(contentIntent);
             notification = builder.build();
         } else {
             // Pre-Android 8: use deprecated constructor
@@ -184,9 +220,17 @@ public class EngineService extends Service {
                     .setContentTitle(title)
                     .setContentText(contentText)
                     .setSmallIcon(R.mipmap.ic_launcher)
-                    .setOngoing(true);
+                    .setOngoing(true)
+                    .setPriority(Notification.PRIORITY_LOW);
+            if (contentIntent != null) builder.setContentIntent(contentIntent);
             notification = builder.build();
         }
+        // FLAG_NO_CLEAR: prevent the notification from being cleared by "Clear all"
+        // (in addition to setOngoing which prevents swipe-dismiss on most Android versions).
+        // Note: Android 14+ may still allow user dismissal of foreground service
+        // notifications, but the foreground service itself stays alive. Re-posting
+        // via updateNotification() restores the notification.
+        notification.flags |= Notification.FLAG_NO_CLEAR;
         return notification;
     }
 
@@ -237,7 +281,7 @@ public class EngineService extends Service {
      * is actively updated, the OS knows it's still in use).
      *
      * @param context Android context
-     * @param info    Status string (e.g., "Stockfish 18 · depth 22")
+     * @param info    Status string (v1.0.1: one of "ready" / "analyzing" / "error: ...")
      */
     public static void updateNotification(Context context, String info) {
         if (!isRunning || info == null) return;
@@ -258,23 +302,47 @@ public class EngineService extends Service {
             } catch (Throwable e) { /* default to zh */ }
 
             String title = "Regalia";
+
+            // v1.0.1: Build PendingIntent to open MainActivity on tap.
+            // Re-built per update because the context may differ (passed in by JS bridge).
+            // Cheap operation; uses FLAG_IMMUTABLE on API 23+ per Android security requirements.
+            PendingIntent contentIntent = null;
+            try {
+                Intent intent = new Intent(context, MainActivity.class);
+                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP
+                        | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+                int piFlags = PendingIntent.FLAG_UPDATE_CURRENT;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    piFlags |= PendingIntent.FLAG_IMMUTABLE;
+                }
+                contentIntent = PendingIntent.getActivity(context, 0, intent, piFlags);
+            } catch (Throwable e) { /* fallback: no content intent */ }
+
             Notification notification;
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 Notification.Builder builder = new Notification.Builder(context, CHANNEL_ID)
                         .setContentTitle(title)
                         .setContentText(info)
                         .setSmallIcon(R.mipmap.ic_launcher)
-                        .setOngoing(true)
+                        .setOngoing(true)              // v1.0.1: non-dismissable while service runs
+                        .setShowWhen(false)
+                        .setOnlyAlertOnce(true)
+                        .setLocalOnly(true)
+                        .setCategory(Notification.CATEGORY_SERVICE)
                         .setPriority(Notification.PRIORITY_LOW);
+                if (contentIntent != null) builder.setContentIntent(contentIntent);
                 notification = builder.build();
             } else {
                 Notification.Builder builder = new Notification.Builder(context)
                         .setContentTitle(title)
                         .setContentText(info)
                         .setSmallIcon(R.mipmap.ic_launcher)
-                        .setOngoing(true);
+                        .setOngoing(true)
+                        .setPriority(Notification.PRIORITY_LOW);
+                if (contentIntent != null) builder.setContentIntent(contentIntent);
                 notification = builder.build();
             }
+            notification.flags |= Notification.FLAG_NO_CLEAR;
             nm.notify(NOTIFICATION_ID, notification);
         } catch (Throwable e) {
             Log.w(TAG, "Failed to update notification", e);

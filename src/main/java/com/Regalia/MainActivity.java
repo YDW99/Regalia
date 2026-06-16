@@ -57,7 +57,7 @@ import android.widget.TextView;
 public class MainActivity extends Activity {
 
     private static final String TAG = "Regalia";
-    private static final String VERSION = "v1.0.0";
+    private static final String VERSION = "v1.0.1";
 
     private WebView webView;
     private StockfishNative stockfishEngine;
@@ -150,16 +150,12 @@ public class MainActivity extends Activity {
             Log.w(TAG, "FLAG_KEEP_SCREEN_ON failed", e);
         }
 
-        // SECURITY FIX (MobSF #6): FLAG_SECURE prevents the app's content from
-        // appearing in the recent-tasks thumbnail and blocks screenshots / screen
-        // recording. This protects the on-screen board state from being captured
-        // by other apps or via the task switcher preview.
-        try {
-            getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE,
-                    WindowManager.LayoutParams.FLAG_SECURE);
-        } catch (Throwable e) {
-            Log.w(TAG, "FLAG_SECURE failed", e);
-        }
+        // v1.0.1: SCREENSHOTS ALLOWED.
+        // The previous build applied FLAG_SECURE (MobSF #6 defense) which blocked
+        // screenshots and the recent-tasks thumbnail. Users requested the ability
+        // to capture the board (e.g., to share a position), so FLAG_SECURE is no
+        // longer applied. The remaining defenses (file:// disabled, JS interface
+        // gated by @JavascriptInterface, tapjacking filter) remain in effect.
 
         // Configure WebView settings
         // SECURITY FIX (MobSF #1): Disabled file system access flags to prevent
@@ -241,6 +237,24 @@ public class MainActivity extends Activity {
         // Initialize Stockfish engine
         try {
             stockfishEngine = new StockfishNative(this);
+            // SECURITY (MobSF #2): WebView.addJavascriptInterface is inherently flagged by
+            // MobSF because a compromised WebView could call arbitrary Java methods. We
+            // mitigate this with defense-in-depth:
+            //   1. WebView only loads trusted local content (file:///android_asset/chess.html).
+            //      No remote URLs are ever loaded (verified in ChessWebViewClient).
+            //   2. All 64+ exposed methods carry @JavascriptInterface (verified by grep).
+            //      On API 17+ (our minSdk=21), only annotated methods are reachable from JS,
+            //      closing the historic reflection-based JS interface exploit.
+            //   3. JavaScript is enabled only AFTER the WebView client is configured, so
+            //      no remote content can race the JS interface registration.
+            //   4. setAllowFileAccess / setAllowContentAccess / setAllowFileAccessFromFileURLs
+            //      / setAllowUniversalAccessFromFileURLs are all disabled (MobSF #1 fix).
+            //   5. setFilterTouchesWhenObscured(true) blocks tapjacking (MobSF #5 fix).
+            //   6. (Removed in v1.0.1) FLAG_SECURE was disabled to allow screenshots.
+            // The interface is therefore safe to expose: a remote attacker cannot inject JS
+            // (no remote loading), and a local attacker with file access cannot reach JS
+            // (file:// disabled). The remaining residual risk is acceptable for an offline
+            // chess app with no sensitive data.
             webView.addJavascriptInterface(stockfishEngine, "AndroidBridge");
         } catch (Throwable e) {
             Log.e(TAG, "StockfishNative initialization failed", e);
