@@ -29,7 +29,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://tablebase.lichess.ovh; img-src data: file:; frame-ancestors 'none'; base-uri 'self'">
-<title>Regalia v1.0.0</title>
+<title>Regalia v1.0.1</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{color-scheme:dark;--bg:#1a0a0a;--card:#221015;--border:#8b6914;--border2:#d4a017;--text:#f5e6c8;--muted:#a08050;--accent:#d4a017;--accent2:#ffd700;--blue:#4a90d9;--red:#c0392b;--purple:#8e44ad;--green:#27ae60;--danger:#c0392b}
@@ -85,15 +85,15 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .rlbl{display:flex;flex-direction:column}
 .rlbl span{display:flex;align-items:center;justify-content:center;width:28px;font-size:.7rem;color:var(--muted);font-family:system-ui,-apple-system,sans-serif}
 .bwrap{position:relative;border:4px solid var(--border2);border-radius:4px;overflow:hidden;box-shadow:0 0 6px rgba(212,160,23,.08),0 4px 14px rgba(0,0,0,.40),inset 0 0 4px rgba(0,0,0,.08);background:#1a0a0a;transform:translateZ(0)}
-.bgrid{display:grid;transform:translateZ(0);touch-action:none}
-.sq{display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;user-select:none;font-size:2rem;line-height:1;transition:background .15s,box-shadow .3s;touch-action:manipulation}
-.sq:hover{box-shadow:inset 0 0 3px rgba(255,215,0,.05)}
+.bgrid{display:grid;transform:translateZ(0);touch-action:none;will-change:transform;backface-visibility:hidden}
+.sq{display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;user-select:none;font-size:2rem;line-height:1;transition:background .15s;touch-action:manipulation;contain:layout style paint;transform:translateZ(0)}
+.sq:hover{background-color:rgba(255,215,0,.04)}
 .sq .lbl{position:absolute;top:1px;left:2px;font-size:9px;opacity:.95;font-family:"DejaVu Sans",system-ui,sans-serif;pointer-events:none;z-index:2;letter-spacing:0}
 /* === 黑曜石棋子 — 清晰轮廓、全局可辨 === */
 /* 黑子: 深曜石底色 + 亮金描边 + 亮金微光 (深色格上描边醒目可辨) */
 /* 白子: 银曜石底色 + 浓棕描边 + 浓棕微光 (浅色格上描边醒目可辨) */
-.sq .pc{pointer-events:none;font-size:2rem;z-index:1;transition:transform .1s;position:relative;font-variant-emoji:text;-webkit-font-variant-emoji:text;font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-weight:400;speak:none}
-.sq:hover .pc{transform:scale(1.05)}
+.sq .pc{pointer-events:none;font-size:2rem;z-index:1;transition:transform .1s;position:relative;font-variant-emoji:text;-webkit-font-variant-emoji:text;font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-weight:400;speak:none;transform:translateZ(0);backface-visibility:hidden;will-change:transform,opacity}
+.sq:hover .pc{transform:scale(1.05) translateZ(0)}
 /* 黑子 — 深曜石：亮金描边 + 亮金微光 (深/浅色背景上均可辨) */
 .sq .pc.bk,.prom-btn.bk-prom,.setup-btn.sb,.move-anim.bk-piece,.rv-bk{color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55)}
 /* 白子 — 银曜石：浓棕描边 + 浓棕微光 (深/浅色背景上均可辨) */
@@ -103,12 +103,12 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .sq .dot{width:18px;height:18px;border-radius:50%;background:radial-gradient(circle,rgba(255,140,0,.6),rgba(255,140,0,.35));pointer-events:none;z-index:1;box-shadow:0 0 3px rgba(255,140,0,.2)}
 .sq .ring{position:absolute;inset:3px;border-radius:50%;border:3px solid rgba(255,140,0,.55);pointer-events:none;z-index:1;box-shadow:0 0 2px rgba(255,140,0,.10)}
 /* Piece-specific animations */
-.sq .pc.anim-pawn{animation:pawnStep .6s cubic-bezier(.4,0,.2,1)}
-.sq .pc.anim-knight{animation:knightJump .8s cubic-bezier(.2,-.2,.2,1.2)}
-.sq .pc.anim-bishop{animation:bishopGlide .7s cubic-bezier(.4,0,.2,1)}
-.sq .pc.anim-rook{animation:rookSlide .6s cubic-bezier(.4,0,.2,1)}
-.sq .pc.anim-queen{animation:queenGlide .8s cubic-bezier(.25,.1,.25,1)}
-.sq .pc.anim-king{animation:kingStep .7s cubic-bezier(.4,0,.2,1)}
+.sq .pc.anim-pawn{animation:pawnStep .6s cubic-bezier(.4,0,.2,1);will-change:transform,opacity}
+.sq .pc.anim-knight{animation:knightJump .8s cubic-bezier(.2,-.2,.2,1.2);will-change:transform,opacity}
+.sq .pc.anim-bishop{animation:bishopGlide .7s cubic-bezier(.4,0,.2,1);will-change:transform,opacity}
+.sq .pc.anim-rook{animation:rookSlide .6s cubic-bezier(.4,0,.2,1);will-change:transform,opacity}
+.sq .pc.anim-queen{animation:queenGlide .8s cubic-bezier(.25,.1,.25,1);will-change:transform,opacity}
+.sq .pc.anim-king{animation:kingStep .7s cubic-bezier(.4,0,.2,1);will-change:transform,opacity}
 @keyframes pawnStep{0%{transform:translateY(6px) scale(.95);opacity:.8}40%{transform:translateY(-2px) scale(1.03)}100%{transform:translateY(0) scale(1);opacity:1}}
 @keyframes knightJump{0%{transform:scale(.8) translateY(0);opacity:.7}30%{transform:scale(1.1) translateY(-14px);opacity:.85}60%{transform:scale(1.05) translateY(-4px)}100%{transform:scale(1) translateY(0);opacity:1}}
 @keyframes bishopGlide{0%{transform:translate(-6px,6px) scale(.9);opacity:.7}50%{transform:translate(1px,-1px) scale(1.04);opacity:.9}100%{transform:translate(0,0) scale(1);opacity:1}}
@@ -116,7 +116,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 @keyframes queenGlide{0%{transform:scale(.85) rotate(-3deg);opacity:.7}30%{transform:scale(1.06) rotate(1deg);opacity:.85}60%{transform:scale(1.02) rotate(-1deg)}100%{transform:scale(1) rotate(0);opacity:1}}
 @keyframes kingStep{0%{transform:scale(.85);opacity:.75}30%{transform:scale(1.08);opacity:.9}60%{transform:scale(1.02)}100%{transform:scale(1);opacity:1}}
 /* Check animation on king — enhanced with background pulse + stronger glow */
-.sq.in-check{animation:checkPulse 1.2s ease-in-out infinite;position:relative;z-index:1;}
+.sq.in-check{animation:checkPulse 1.2s ease-in-out infinite;position:relative;z-index:1;transform:translateZ(0);will-change:box-shadow}
 .sq.in-check::before{content:'';position:absolute;inset:0;animation:checkBgPulse 1.2s ease-in-out infinite;border-radius:inherit;z-index:-1;}
 @keyframes checkPulse{
   0%,100%{box-shadow:inset 0 0 6px rgba(192,57,43,.4),0 0 4px rgba(192,57,43,.2),inset 0 0 20px rgba(192,57,43,.06)}
@@ -125,7 +125,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
   0%,100%{background:rgba(192,57,43,0)}
   50%{background:rgba(192,57,43,.22)}}
 /* Capture flash — enhanced with stronger gold burst + white flash core */
-.sq.capture-flash{animation:captureFlash 1.0s ease-out;position:relative;}
+.sq.capture-flash{animation:captureFlash 1.0s ease-out;position:relative;transform:translateZ(0);will-change:box-shadow}
 .sq.capture-flash::before{content:'';position:absolute;inset:0;animation:captureCore .6s ease-out;border-radius:inherit;z-index:-1;}
 @keyframes captureFlash{
   0%{box-shadow:inset 0 0 15px rgba(255,215,0,.7),0 0 10px rgba(255,215,0,.4),inset 0 0 50px rgba(255,200,50,.25)}

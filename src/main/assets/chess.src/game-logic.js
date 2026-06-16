@@ -28,7 +28,7 @@
 // ===================== i18n SYSTEM =====================
 let _lang='zh';
 function T(key){return _i18n[key]?.[_lang]||_i18n[key]?.zh||key;}
-function toggleLang(){_lang=(_lang==='zh')?'en':'zh';try{localStorage.setItem('Regalia_lang',_lang);}catch(e){}try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.saveLangPref)AndroidBridge.saveLangPref(_lang);}catch(e){}render();}
+function toggleLang(){_lang=(_lang==='zh')?'en':'zh';try{localStorage.setItem('Regalia_lang',_lang);}catch(e){}try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.saveLangPref)AndroidBridge.saveLangPref(_lang);}catch(e){}try{if(typeof HapticManager!=='undefined'&&HapticManager.fire)HapticManager.fire('TOGGLE_ON');}catch(e){}render();}
 const _i18n={
 'app_name':{zh:'Regalia',en:'Regalia'},
 'new_game':{zh:'新游戏',en:'New Game'},
@@ -169,7 +169,7 @@ const _i18n={
 'requesting_storage':{zh:'正在请求存储权限...',en:'Requesting storage permission...'},
 'settings_exported':{zh:'设置已导出到',en:'Settings exported to'},
 'settings_clipboard_fallback':{zh:'设置已复制到剪贴板（文件写入失败）',en:'Settings copied to clipboard (file write failed)'},
-'built_in_only':{zh:'v1.0.0: 仅支持内置引擎',en:'v1.0.0: Built-in engine only'},
+'built_in_only':{zh:'v1.0.1: 仅支持内置引擎',en:'v1.0.1: Built-in engine only'},
 'engine_error_restart':{zh:'引擎错误，正在重启',en:'Engine error, restarting'},
 'engine_error':{zh:'引擎错误',en:'Engine error'},
 'view_white':{zh:'视角: 白方(下方)',en:'View: White (bottom)'},
@@ -267,7 +267,7 @@ const _i18n={
 'elo_target':{zh:'Elo目标',en:'ELO Target'},
 'export_settings_btn':{zh:'📤 导出设置',en:'📤 Export'},
 'import_settings_btn':{zh:'📥 导入设置',en:'📥 Import'},
-'loading_title':{zh:'Regalia v1.0.0',en:'Regalia v1.0.0'},
+'loading_title':{zh:'Regalia v1.0.1',en:'Regalia v1.0.1'},
 'click_skip_loading':{zh:'点击跳过加载',en:'Click to skip loading'},
 'white_checkmate':{zh:'白方将杀获胜',en:'White wins by checkmate'},
 'black_checkmate':{zh:'黑方将杀获胜',en:'Black wins by checkmate'},
