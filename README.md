@@ -12,7 +12,7 @@ A standalone, open-source chess app for Android — play offline against Stockfi
 
 *Portrait mode — evaluation bar, move history, AI opponent display with ponder info, and Control heatmap*
 
-**Control Heatmap** — Tap the 🌈 button on the toolbar to toggle the control heatmap. Each square is dynamically colored by HSL to indicate which side controls it: blue-purple = your control, red = opponent's control, purple = contested. Hovering a square shows SVG arrows from each controlling piece to that square (warm gold for your pieces, cool silver-blue for opponent's). The info card below the board shows per-piece control contributions with position labels.
+**Control Heatmap** — Tap the 🌗/🌈 button on the toolbar to toggle the control heatmap. Each square is dynamically colored by HSL to indicate which side controls it: blue-purple = your control, red = opponent's control, purple = contested. Hovering a square shows SVG arrows from each controlling piece to that square (warm gold for your pieces, cool silver-blue for opponent's). The info card below the board shows per-piece control contributions with position labels.
 
 **🌿Line** — In the move record, 🌿 lines appear below each move showing engine analysis variations (MultiPV) and PGN import variations (RAV). Each variation group is labeled 🌿Line 1, 🌿Line 2, etc. — Line 1 is the principal variation; Line 2+ are alternative lines. PGN import variations are automatically parsed and displayed as 🌿Lines with proper move numbering. Toggle the Variations switch to show or hide them.
 
@@ -41,7 +41,6 @@ Download the latest APK from [GitHub Releases](https://github.com/YDW99/Regalia/
 
 - Android 5.0 (API 21) or later
 - ARM64 device (arm64-v8a)
-- ~80 MB storage
 
 ## Building
 
