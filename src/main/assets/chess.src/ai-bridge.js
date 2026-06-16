@@ -977,8 +977,11 @@ function onEngineProgress(depth,nodes,nps,scoreCp,scoreMate,wdlW,wdlD,wdlL){
   }
   if(isAIThinking||isHintLoading)_updateAIThinkDisplay();
   // Update foreground service notification with engine progress info
+  // v1.0.1: Notification shows ONLY ready/analyzing/error states — no depth/speed.
+  // The detailed depth/nps/score data is still shown in the in-app eval bar;
+  // the notification is intentionally minimal to avoid distracting the user.
   if(isAIThinking&&depth>0){
-    _updateEngineNotification(T('depth')+':'+depth+(nps!=null?' · '+T('nodes')+':'+(nps>=1000?Math.round(nps/1000)+'K/s':nps+' n/s'):''));
+    _updateEngineNotification(T('analyzing_ellipsis'));
   }
   // Ponder info: when not AI thinking, not hint loading, not eval loading, store as ponder info
   // Note: _ponderBarInfo is ONLY set by onPonderProgress(), not here.
@@ -1039,7 +1042,8 @@ function onPonderProgress(depth,nodes,nps,scoreCp,scoreMate){
   _ponderBarInfo=infoParts.join(' ');
   _updateAIThinkDisplay();
   // Update foreground service notification with ponder progress
-  _updateEngineNotification('Ponder · '+T('depth')+':'+depth);
+  // v1.0.1: Ponder is also "analyzing" from the user's POV — show the same minimal state.
+  _updateEngineNotification(T('analyzing_ellipsis'));
 }
 
 // Callback: Engine evaluation result
@@ -1690,6 +1694,13 @@ function onEngineError(msg){
   // calling AndroidBridge methods on a dead engine process, which would
   // trigger infinite "Engine not ready" error loops from the Java side.
   _engineReady=false;
+  // v1.0.1: Reflect the error state in the persistent notification bar.
+  // Truncate very long messages so the notification stays on one line.
+  // The full message is still shown in the in-app toast below.
+  try{
+    const _errShort=(msg&&typeof msg==='string')?msg.slice(0,80):String(msg);
+    _updateEngineNotification(T('engine_error')+': '+_errShort);
+  }catch(e){}
   // Reset animation flags to prevent permanent UI freeze.
   // If an engine error occurs DURING an animation, render() and sqClick()
   // would block forever since animationInProgress/_landingAnimActive are

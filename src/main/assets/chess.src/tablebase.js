@@ -161,13 +161,30 @@ function _parsePGN(pgnText){
   const rawTokens=text.match(/\(|\)|\S+/g)||[];
   if(rawTokens.length===0)return null;
   
-  // ---- Phase 1: Recursive-descent variation parsing (DroidFish GameTree.parsePgn style) ----
-  // Build a tree of variations: main-line at depth 0, variations nested in parens.
-  // Each variation is associated with the last main-line move before the '(' .
-  const variations=new Map(); // moveIndex → array of { sanTokens: string[] }
-  let moveIndexCounter=0; // counts main-line SAN moves at depth 0
-  let varStack=[]; // stack: each entry = {tokens[], moveIndex, depth}
-  
+  // ---- Phase 1: Recursive variation tree parser (PGN RAV spec-compliant) ----
+  // PGN spec §8.2.5: "An RAV is a sequence of movetext containing one or more
+  // moves enclosed in parentheses... the alternate move sequence given by an
+  // RAV is one that may be legally played by first unplaying the move that
+  // appears immediately prior to the RAV. Because the RAV is a recursive
+  // construct, it may be nested."
+  //
+  // First-principles design:
+  //   - Each '(' opens a new variation frame, attached to the LAST move played
+  //     in the PARENT context (either the main line or an enclosing variation).
+  //   - Each frame tracks its OWN local move index, so a nested '(' attaches
+  //     to the correct move within the parent variation (not the main line).
+  //   - The result is a tree: root (main line) → variations → sub-variations.
+  //   - Phase 2 flattens the tree into the Map<mainMoveIdx, VariationEntry[]>
+  //     that importPGN consumes.
+  //
+  // Bug being fixed (v1.0.1): the previous flat varStack design used a single
+  // moveIndexCounter (main-line only). When '(' appeared inside a variation,
+  // the inner variation was attached to moveIndexCounter-1 (the main-line
+  // move before the OUTER '('), NOT to the correct move within the parent
+  // variation. This caused nested RAVs to be misplaced at the wrong main-line
+  // move, and they appeared in reverse order before the outer variation.
+  // Symptom: "🌿 variations incomplete" after PGN import.
+
   // Regex to identify move number tokens (e.g. "1.", "2...", "12.")
   const moveNumRe=/^\d+\.+$/;
   // Regex to strip leading move number from combined tokens (e.g. "1.e4" → "e4", "2...Nf3" → "Nf3")
@@ -178,47 +195,90 @@ function _parsePGN(pgnText){
   const skipTokens=new Set(['1-0','0-1','1/2-1/2','*']);
   // Regex to identify annotation suffixes (!, ?, !!, ??, !?, ?!, also triple like !!!)
   const annotRe=/[!?]+$/;
-  
-  // Recursive-descent: when '(' encountered, commit any pending main-line move
-  // then parse the variation as a sibling (same logic as DroidFish Node.parsePgn)
+
+  // Tree node structure:
+  //   { tokens: string[],          // cleaned SAN tokens of this variation (excluding sub-vars)
+  //     subVars: SubVarRef[],      // sub-variations branching from moves in this variation
+  //     localMoveIdx: number,      // current move count within this frame (for attach target)
+  //     attachToMoveIdx: number,   // index in parent's tokens where this var branches (0..n)
+  //     mainMoveIdx: number }      // main-line move index this var ultimately attaches to
+  // SubVarRef: { tree: TreeNode, attachToMoveIdx: number, parentPrefix: string[] }
+  //
+  // For the root (main line), tokens = main-line moves, mainMoveIdx is N/A.
+  const rootFrame={tokens:[],subVars:[],localMoveIdx:0,attachToMoveIdx:-1,mainMoveIdx:-1};
+  const stack=[rootFrame];
+
   for(const token of rawTokens){
     if(token==='('){
-      // Associate this variation with the LAST main-line move before it.
-      const varMoveIdx=moveIndexCounter>0?moveIndexCounter-1:0;
-      varStack.push({tokens:[],moveIndex:varMoveIdx});
+      // Open a new variation frame, attached to the LAST move in the current frame.
+      const parent=stack[stack.length-1];
+      // PGN spec: RAV attaches to "the move that appears immediately prior to the RAV".
+      // If parent has 0 moves yet (very rare: '(' at start), attach to index 0 by convention.
+      const attachIdx=parent.localMoveIdx>0?parent.localMoveIdx-1:0;
+      // The main-line move index this variation ultimately attaches to:
+      // - For top-level vars: parent.attachToMoveIdx === -1 means parent IS main line,
+      //   so mainMoveIdx = attachIdx (the main-line move before this '(').
+      // - For nested vars: inherit parent's mainMoveIdx (sub-vars attach to the SAME
+      //   main-line move as their parent variation, but branch off mid-variation).
+      const mainIdx=(parent===rootFrame)?attachIdx:parent.mainMoveIdx;
+      const newFrame={tokens:[],subVars:[],localMoveIdx:0,
+                      attachToMoveIdx:attachIdx,mainMoveIdx:mainIdx};
+      parent.subVars.push({tree:newFrame,attachToMoveIdx:attachIdx});
+      stack.push(newFrame);
       continue;
     }
     if(token===')'){
-      // Pop the variation stack and store it
-      if(varStack.length>0){
-        const v=varStack.pop();
-        // Clean variation tokens: remove standalone move numbers, ellipsis, results;
-        // strip leading move number prefixes from combined tokens (e.g. "1.e4" → "e4");
-        // strip annotation suffixes (!, ?, etc.)
-        const vClean=v.tokens.filter(t=>
-          !moveNumRe.test(t)&&!ellipsisRe.test(t)&&!skipTokens.has(t)&&t.length>0
-        ).map(t=>t.replace(moveNumPrefixRe,'').replace(annotRe,''));
-        if(vClean.length>0){
-          const mi=v.moveIndex;
-          if(!variations.has(mi))variations.set(mi,[]);
-          variations.get(mi).push(vClean);
-        }
-      }
+      if(stack.length>1)stack.pop();
       continue;
     }
-    if(varStack.length>0){
-      // Inside a variation: accumulate tokens into the deepest stack frame
-      varStack[varStack.length-1].tokens.push(token);
-      continue;
-    }
-    // At depth 0: skip standalone move numbers and ellipsis, count SAN moves
+    // Skip non-move tokens at any depth
     if(moveNumRe.test(token)||ellipsisRe.test(token)||skipTokens.has(token))continue;
-    // Combined tokens like "1.e4" are NOT standalone move numbers — they contain the SAN move
-    // We don't need to strip the prefix here since Phase 2 handles it, but we must count them
-    moveIndexCounter++;
+    // Strip move number prefix from combined tokens and annotation suffixes
+    const clean=token.replace(moveNumPrefixRe,'').replace(annotRe,'');
+    if(!clean)continue;
+    // Add to current frame's tokens and increment local move index
+    const frame=stack[stack.length-1];
+    frame.tokens.push(clean);
+    frame.localMoveIdx++;
+  }
+
+  // ---- Phase 2: Flatten the variation tree into Map<mainMoveIdx, VariationEntry[]> ----
+  // Each VariationEntry = { sanTokens: string[] } where sanTokens includes the
+  // parent variation's prefix moves up to (but not including) the branching move,
+  // so the resulting token array can be replayed from the start position.
+  //
+  // Rationale: importPGN replays each variation's tokens from a known state
+  // (either preMoveState or postMoveState of the main-line move). For nested
+  // variations, the "branching state" is reached by replaying the parent
+  // variation's moves up to the branching point. We embed that prefix directly
+  // in the sanTokens so the existing Type A/B matching logic in importPGN
+  // handles them uniformly.
+  const variations=new Map();
+  function _flattenVariationTree(frame, parentPrefixTokens){
+    // Emit this variation's own tokens (with parent prefix prepended)
+    if(frame.tokens.length>0){
+      const combinedSanTokens=parentPrefixTokens.concat(frame.tokens);
+      const mi=frame.mainMoveIdx;
+      if(!variations.has(mi))variations.set(mi,[]);
+      variations.get(mi).push({sanTokens:combinedSanTokens});
+    }
+    // Recurse into sub-variations.
+    // For each sub-var, the prefix is: parentPrefixTokens + frame.tokens[0..attachToMoveIdx-1]
+    // (i.e., everything played BEFORE the branching move, since the sub-var's first
+    // move REPLACES the branching move per PGN spec).
+    for(const sv of frame.subVars){
+      const subPrefix=parentPrefixTokens.concat(frame.tokens.slice(0, sv.attachToMoveIdx));
+      _flattenVariationTree(sv.tree, subPrefix);
+    }
+  }
+  // Flatten top-level variations (children of rootFrame).
+  // For top-level vars, parentPrefixTokens is empty (they branch from the main line).
+  for(const sv of rootFrame.subVars){
+    _flattenVariationTree(sv.tree, []);
   }
   
-  // ---- Phase 2: Rebuild clean main-line tokens ----
+  // ---- Phase 3: Rebuild clean main-line tokens ----
+  // Walk rawTokens at depth 0 (outside all variations) and collect main-line SAN moves.
   let mainTokens=[];
   let inVar=0;
   for(const token of rawTokens){
@@ -234,19 +294,28 @@ function _parsePGN(pgnText){
   
   if(mainTokens.length===0)return null;
   
-  // ---- Phase 3: Replay main-line moves using _applySANMove ----
+  // ---- Phase 4: Replay main-line moves using _applySANMove ----
   let state=startFEN?fenToState(startFEN):initState();
   if(!state)return null;
   
-  const moves=[]; // array of { notation, move, state (post-move) }
+  const moves=[]; // array of { notation, move, state (post-move), mainTokenIdx }
   
+  // v1.0.1 FIX: Track the original mainToken index for each valid move.
+  // If a main-line token fails to parse (rare but possible with malformed PGN),
+  // it's skipped in `moves` but its index is still used as a key in the
+  // `variations` Map. Without this tracking, variations attached to moves
+  // AFTER the invalid token would be looked up at the wrong index and silently
+  // dropped — manifesting as "incomplete variations" after PGN import.
   for(let ti=0;ti<mainTokens.length;ti++){
     const token=mainTokens[ti];
     const result=_applySANMove(state,token);
     if(!result){
       // Could not parse — skip this token (DroidFish-style lazy validation: silently drop invalid)
+      // Log so we can diagnose which token failed.
+      console.warn('_parsePGN: skipping invalid main-line token at index',ti,':',token);
       continue;
     }
+    result.mainTokenIdx=ti;
     moves.push(result);
     state=result.state;
   }
@@ -514,14 +583,22 @@ function importPGN(pgnText){
     try{properNotation=moveAlg(preMoveState,parsedMove.move,replayState);}catch(e){properNotation=parsedMove.notation||'';}
     
     // Build variations for this move from PGN
-    const pgnVars=result.variations&&result.variations.get(moveIdx);
+    // v1.0.1 FIX: Use parsedMove.mainTokenIdx (original main-line token index)
+    // instead of moveIdx (which only counts valid moves). This ensures variations
+    // are correctly looked up even if some main-line tokens were skipped during parsing.
+    const _varKey=(parsedMove.mainTokenIdx!=null)?parsedMove.mainTokenIdx:moveIdx;
+    const pgnVars=result.variations&&result.variations.get(_varKey);
     const varEntries=[];
     if(pgnVars&&pgnVars.length>0){
       const postMoveState=replayState; // read-only: replayState already updated by makeMvInPlace
       const branchMoveIsWhite=preMoveState.currentTurn==='white';
       const branchMoveNum=preMoveState.fullMoveNumber||Math.floor(moveIdx/2)+1;
       for(let vi=0;vi<pgnVars.length;vi++){
-        const vTokens=pgnVars[vi]; // array of pure SAN tokens
+        // v1.0.1: Each entry is now an object with .sanTokens (was a bare array).
+        // For nested variations, sanTokens already includes the parent variation's
+        // prefix moves, so the entire array replays from the start position.
+        const vEntry=pgnVars[vi];
+        const vTokens=(vEntry&&vEntry.sanTokens)?vEntry.sanTokens:vEntry; // backward-compatible
         const sanParts=[];
         let vState=null, vIsWhite, vMoveNum, startIdx=0;
         // PGN variations can start from either side:
@@ -537,35 +614,60 @@ function importPGN(pgnText){
             startIdx=1; // first token already applied
             sanParts.push(tryA.notation);
           }else{
-            // Attempt Type B: first token matches from postMoveState (opponent's side)
-            const tryB=_applySANMove(cloneS(postMoveState),vTokens[0]);
-            if(tryB){
-              vState=tryB.state;
-              vIsWhite=!branchMoveIsWhite;
-              vMoveNum=branchMoveIsWhite?branchMoveNum:branchMoveNum+1;
+            // Fallback Type A: try moveAlg matching from preMoveState.
+            // v1.0.1: Some PGNs use slightly non-standard SAN (e.g., missing
+            // disambiguation, or check suffixes that confuse _applySANMove).
+            // moveAlg-based matching is more forgiving and recovers these cases.
+            const fbAState=cloneS(preMoveState);
+            const fbAMoves=legalMoves(fbAState,null);
+            let fbAMatch=null;
+            for(const vm of fbAMoves){
+              const vAlg=moveAlg(fbAState,vm);
+              if(vAlg.replace(/[+#!?]+$/,'')===vTokens[0].replace(/[+#!?]+$/,'')){fbAMatch=vm;break;}
+            }
+            if(fbAMatch){
+              sanParts.push(moveAlg(fbAState,fbAMatch));
+              makeMvInPlace(fbAState,fbAMatch);
+              vState=fbAState;
+              vIsWhite=branchMoveIsWhite;
+              vMoveNum=branchMoveNum;
               startIdx=1;
-              sanParts.push(tryB.notation);
             }else{
-              // Fallback Type B: try moveAlg matching from postMoveState
-              const fbState=cloneS(postMoveState);
-              const fbMoves=legalMoves(fbState,null);
-              let fbMatch=null;
-              for(const vm of fbMoves){
-                const vAlg=moveAlg(fbState,vm);
-                if(vAlg.replace(/[+#!?]+$/,'')===vTokens[0].replace(/[+#!?]+$/,'')){fbMatch=vm;break;}
-              }
-              if(fbMatch){
-                sanParts.push(moveAlg(fbState,fbMatch));
-                makeMvInPlace(fbState,fbMatch);
-                vState=fbState;
+              // Attempt Type B: first token matches from postMoveState (opponent's side)
+              const tryB=_applySANMove(cloneS(postMoveState),vTokens[0]);
+              if(tryB){
+                vState=tryB.state;
                 vIsWhite=!branchMoveIsWhite;
                 vMoveNum=branchMoveIsWhite?branchMoveNum:branchMoveNum+1;
                 startIdx=1;
+                sanParts.push(tryB.notation);
+              }else{
+                // Fallback Type B: try moveAlg matching from postMoveState
+                const fbState=cloneS(postMoveState);
+                const fbMoves=legalMoves(fbState,null);
+                let fbMatch=null;
+                for(const vm of fbMoves){
+                  const vAlg=moveAlg(fbState,vm);
+                  if(vAlg.replace(/[+#!?]+$/,'')===vTokens[0].replace(/[+#!?]+$/,'')){fbMatch=vm;break;}
+                }
+                if(fbMatch){
+                  sanParts.push(moveAlg(fbState,fbMatch));
+                  makeMvInPlace(fbState,fbMatch);
+                  vState=fbState;
+                  vIsWhite=!branchMoveIsWhite;
+                  vMoveNum=branchMoveIsWhite?branchMoveNum:branchMoveNum+1;
+                  startIdx=1;
+                }
               }
             }
           }
         }
-        if(!vState){continue;} // Cannot match first token — skip this variation
+        if(!vState){
+          // v1.0.1: Log dropped variations for diagnostics — helps identify which
+          // PGN inputs are losing variations and why.
+          console.warn('importPGN: could not match first variation token, dropping. vTokens[0]=',vTokens[0],'branchMoveIsWhite=',branchMoveIsWhite);
+          continue;
+        }
         const initialVIsWhite=vIsWhite;
         const initialVMoveNum=vMoveNum;
 
@@ -612,6 +714,13 @@ function importPGN(pgnText){
     const algRe=/^[a-h][1-8]$/;
     if(!algRe.test(fromAlg)){console.error('importPGN: invalid fromAlg at index',moveIdx,fromAlg);fromAlg=posAlg(from)||'??';}
     if(!algRe.test(toAlg)){console.error('importPGN: invalid toAlg at index',moveIdx,toAlg);toAlg=posAlg(to)||'??';}
+    // v1.0.1 CRITICAL FIX: Push stateHistory BEFORE adding the current move to moveRecords.
+    // Previously this was pushed AFTER moveRecords.push(), which meant each stateHistory
+    // entry's moveRecords INCLUDES the move that was just added. When undoMove() restored
+    // such an entry, the move was still in moveRecords — so undo didn't actually remove
+    // the move from the move list (symptom: "can't undo white's first move from move records").
+    // The correct order (matching executeMove in ui.js) is: snapshot first, then push the move.
+    stateHistory.push({state:preMoveState,moveRecords:[...moveRecords],lastMove:lastMove?{...lastMove}:null,selectedSquare:null});
     moveRecords.push({
       notation:properNotation,
       from:fromAlg,
@@ -621,7 +730,6 @@ function importPGN(pgnText){
       time:null,
       variations:varEntries
     });
-    stateHistory.push({state:preMoveState,moveRecords:[...moveRecords],lastMove:lastMove?{...lastMove}:null,selectedSquare:null});
     lastMove={from,to};
     _cachedStatus=null;_cachedStatusKey='';
     moveIdx++;

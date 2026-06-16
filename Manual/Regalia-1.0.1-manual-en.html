@@ -1,5 +1,5 @@
 <!--
-  Regalia v1.0.0 User Manual
+  Regalia v1.0.1 User Manual
   Copyright (C) 2026 Regalia
 
   This document is part of the Regalia project, licensed under
@@ -23,7 +23,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Regalia v1.0.0 User Manual</title>
+<title>Regalia v1.0.1 User Manual</title>
 <style>
 :root {
   --bg: #1a0a0a;
@@ -476,7 +476,7 @@ details summary:hover { color: var(--accent2); }
   <div class="cover-deco">&#9816; &#9814; &#9812; &#9815; &#9813;</div>
   <div class="cover-crown">&#9812;</div>
   <div class="cover-title">Regalia</div>
-  <div class="cover-version">v1.0.0</div>
+  <div class="cover-version">v1.0.1</div>
   <div class="cover-divider">
     <div class="cover-divider-line"></div>
     <div class="cover-divider-icon">&#9830;</div>
@@ -490,7 +490,25 @@ details summary:hover { color: var(--accent2); }
 
 <!-- ===== TABLE OF CONTENTS ===== -->
 <div class="toc">
-  <h2>Table of Contents</h2>
+  
+<!-- v1.0.1 Changelog -->
+<div class="card" style="margin: 20px 0; padding: 16px; background: linear-gradient(145deg, rgba(139,105,20,.08), rgba(255,215,0,.04)); border: 1px solid rgba(212,160,23,.3); border-radius: 8px;">
+  <h3 style="color:#ffd700; margin-bottom: 12px; font-size: 1.1rem;">v1.0.1 Changelog</h3>
+  <ul style="line-height: 1.7; font-size: .9rem; color: var(--text); padding-left: 20px;">
+    <li><strong>Screenshots Allowed</strong>: Removed the <code>FLAG_SECURE</code> restriction from v1.0.0 — users can now take screenshots normally (to share positions or record board states), and the recent-tasks thumbnail is no longer blocked. Other defenses (<code>file://</code> disabled, JS interface <code>@JavascriptInterface</code> gating, anti-tapjacking) remain in effect.</li>
+    <li><strong>Simplified Notification Bar</strong>: The persistent notification now shows only three states — <strong>Ready</strong> / <strong>Analyzing</strong> / <strong>Error</strong> — and no longer displays search depth or speed. Detailed depth/nodes/speed/score data is still shown in the in-app eval bar; the notification is intentionally minimal to avoid distracting the user.</li>
+    <li><strong>Undo Auto-Select Fix</strong>: Fixed a bug where undo did not auto-select the original piece. After undo, the piece that was moved in the undone step is now auto-selected (at its starting square). Works for multiple consecutive undos. The auto-selected square can be tapped to deselect, just like any other selection.</li>
+    <li><strong>PGN Variation Parsing Improved</strong>: Fixed a bug where variations were lost or attached to the wrong move during PGN import. Added Type A fallback (<code>moveAlg</code> matching), <code>mainTokenIdx</code> index tracking (handles main lines with invalid moves), and diagnostic logging when the first variation token cannot be matched. Nested RAV (Recursive Annotation Variation) is compliant with PGN spec §8.2.5.</li>
+    <li><strong>PGN Import Undo Fix</strong>: Fixed root cause of "cannot undo white's first move after PGN import" — the <code>stateHistory</code> snapshot was taken after <code>moveRecords.push</code>, so the restored <code>moveRecords</code> still contained the undone move. Now matches <code>executeMove</code>'s order: snapshot first, then push.</li>
+    <li><strong>Smoother Move Animations</strong>: Enabled GPU compositing layers for piece animations (<code>translateZ(0)</code>, <code>will-change</code>, <code>backface-visibility</code>), added <code>contain:layout style paint</code> to limit repaint scope, and removed expensive <code>box-shadow</code> transitions. Reduces jank and improves responsiveness.</li>
+    <li><strong>Foreground Service Notification Enhanced</strong>: The persistent notification supports <strong>click-to-open the app</strong> and is <strong>non-removable</strong> (<code>setOngoing(true)</code> + <code>FLAG_NO_CLEAR</code>). On Xiaomi HyperOS 3, even if the system allows dismissal, the foreground service itself keeps running and the notification auto-restores on the next status update.</li>
+    <li><strong>Language Switch Haptic Feedback</strong>: Tapping the Chinese/English toggle button now triggers a <code>TOGGLE_ON</code> haptic feedback, consistent with other button interactions.</li>
+    <li><strong>MobSF Security Audit Fixes</strong>: Remediated 5 static-scan findings: JavaScript interface safety documentation, TLS certificate pinning code reference, Certificate Transparency reference, SafetyNet non-applicability statement, and ChessApp exception log minimization.</li>
+    <li><strong>Terminology Sync</strong>: English move classification label "Book" changed to "Mediocre" (since v1.0.0).</li>
+  </ul>
+</div>
+
+<h2>Table of Contents</h2>
   <ol class="toc-list">
     <li class="toc-item"><span class="toc-num">1</span><span class="toc-label"><a href="#sec1">App Introduction</a></span></li>
     <li class="toc-item"><span class="toc-num">2</span><span class="toc-label"><a href="#sec2">Installation &amp; Launch</a></span></li>
@@ -522,7 +540,7 @@ details summary:hover { color: var(--accent2); }
     <div class="section-title">App Introduction</div>
   </div>
 
-  <p>Regalia v1.0.0 is a powerful Android chess playing and analysis app. This version includes the world-class open-source engine <strong>Stockfish 18</strong> (arm64-v8a-dotprod native build), providing professional-grade playing, review, and training experience for everyone from beginners to advanced players.</p>
+  <p>Regalia v1.0.1 is a powerful Android chess playing and analysis app. This version includes the world-class open-source engine <strong>Stockfish 18</strong> (arm64-v8a-dotprod native build), providing professional-grade playing, review, and training experience for everyone from beginners to advanced players.</p>
 
   <div class="card-row">
     <div class="stat-card">
@@ -672,10 +690,19 @@ function onEngineReady(){
 }</div>
   </div>
 
-  <h3>Foreground Service Notification</h3>
-  <p>When the engine process is running, the app displays a Foreground Service Notification, continuously showing engine process information in the System Notification Bar. This notification informs the Android system that the engine process is performing important computations, preventing the system from terminating the engine process due to memory reclamation or power-saving policies, ensuring that gameplay and analysis are not interrupted.</p>
+  <h3>Foreground Service Notification <span class="new-tag">v1.0.1 Enhanced</span></h3>
+  <p>When the engine process is running, the app displays a Foreground Service Notification, continuously showing engine status information in the System Notification Bar. This notification informs the Android system that the engine process is performing important computations, preventing the system from terminating the engine process due to memory reclamation or power-saving policies, ensuring that gameplay and analysis are not interrupted.</p>
   <div class="tip-box">
-    <span class="tip-label">Bilingual Notification：</span>The text content of the Foreground Service Notification is displayed bilingually, following the app's current language setting. In Chinese mode, the notification title and content are in Chinese; in English mode, they are in English, consistent with the interface language.
+    <span class="tip-label">v1.0.1 Simplified States：</span>The notification now shows only three engine states — <strong>"Engine ready!"</strong> (ready), <strong>"Analyzing"</strong> (AI thinking / Ponder / review analysis), and <strong>"Engine error: ..."</strong> (truncated error message on failure). Search depth, node count, and speed are no longer displayed. Detailed depth/nodes/speed/score data is still shown in real time in the in-app top eval bar; the notification is intentionally minimal to avoid frequent-update distractions.
+  </div>
+  <div class="tip-box">
+    <span class="tip-label">Click-to-Open：</span>Tapping the notification opens the app's main screen (<code>PendingIntent</code> + <code>FLAG_ACTIVITY_NEW_TASK | SINGLE_TOP | CLEAR_TOP</code>), allowing the user to quickly return to the game from any other app.
+  </div>
+  <div class="tip-box">
+    <span class="tip-label">Non-Removable：</span>The notification sets <code>setOngoing(true)</code> + <code>FLAG_NO_CLEAR</code>; under normal conditions it cannot be swiped away by the user. On Android 14+ (including Xiaomi HyperOS 3), the system may allow manual dismissal, but the foreground service itself keeps running and the notification auto-restores on the next status update.
+  </div>
+  <div class="tip-box">
+    <span class="tip-label">Bilingual Notification：</span>The text content of the Foreground Service Notification is bilingual, following the app's current language setting (stored in <code>SharedPreferences</code>, synced from JS via <code>saveLangPref</code>). In Chinese mode the notification text is Chinese; in English mode it is English, consistent with the interface language.
   </div>
   <div class="tip-box">
     <span class="tip-label">Notification Permission：</span>On Android 13 (API 33) and above, the app proactively requests Notification Permission (POST_NOTIFICATIONS) when the engine is first launched, to ensure the Foreground Service Notification can be displayed normally. If the user denies permission, the engine still runs normally, but the System Notification Bar will not display engine status information, slightly increasing the risk of the engine process being terminated by the system.
@@ -720,7 +747,7 @@ function onEngineReady(){
       <div style="display:flex;align-items:center;gap:8px">
         <span style="font-size:1.1rem;color:#E8E8F0;border:2px solid #d4a017;padding:2px 4px;background:linear-gradient(145deg,rgba(139,105,20,.18),rgba(255,215,0,.08))">♔</span>
         <span style="font-weight:900;color:#ffd700;letter-spacing:2px;font-size:1rem">Regalia</span>
-        <span style="font-size:.55rem;color:#d4a017;background:rgba(212,160,23,.15);padding:1px 6px;border-radius:3px;border:1px solid rgba(212,160,23,.3)">v1.0.0</span>
+        <span style="font-size:.55rem;color:#d4a017;background:rgba(212,160,23,.15);padding:1px 6px;border-radius:3px;border:1px solid rgba(212,160,23,.3)">v1.0.1</span>
         <span style="font-size:.55rem;color:#d4a017;background:rgba(212,160,23,.15);padding:1px 6px;border-radius:3px;border:1px solid rgba(212,160,23,.3);cursor:pointer">ℹ️</span>
       </div>
       <span style="font-size:.55rem;color:#d4a017;background:rgba(212,160,23,.15);padding:1px 6px;border-radius:3px;border:1px solid rgba(212,160,23,.3);cursor:pointer;flex-shrink:0">↔️ZH</span>
@@ -916,7 +943,7 @@ for(const ar of arrows){
     <tr><th>Button</th><th>Name</th><th>Function</th></tr>
     <tr><td>⚔️</td><td>New Game</td><td>Open New Game Settings dialog</td></tr>
     <tr><td>♔/♚</td><td>Free Start</td><td>Skip settings and start a new game directly</td></tr>
-    <tr><td>↩️</td><td>Undo</td><td>Undo the last move (hidden in Setup Mode)</td></tr>
+    <tr><td>↩️</td><td>Undo</td><td>Undo the last move (auto-rewinds to the player's previous move; hidden in Setup Mode). v1.0.1: After undo, the piece that was moved in the undone step is auto-selected at its starting square for easy replay. Tap the selected square to deselect.</td></tr>
     <tr><td>↪️</td><td>Redo</td><td>Redo the undone move (hidden in Setup Mode)</td></tr>
     <tr><td>🔃</td><td>Flip</td><td>Flip board orientation</td></tr>
     <tr><td>💡</td><td>AI Hint</td><td>Engine analyzes current position (multi-line display)</td></tr>
@@ -1045,7 +1072,7 @@ function makeMvInPlace(state, move){
     </div>
   </div>
 
-  <h3>Ponder Ponder Mode<span class="new-tag">v1.0.0</span></h3>
+  <h3>Ponder Ponder Mode<span class="new-tag">v1.0.1</span></h3>
   <p>When enabled, AI continues thinking about the opponent's possible responses after making its move. During the player's turn, the AI Opponent Bar's second line (right-aligned) displays Ponder Search Information (without showing the Ponder Move); if the AI Hint function is also in use, the hint bar also displaysponderinformationand displayPonder Move。recommendationwhile chargingOn。</p>
 
   <div class="impl-section">
@@ -1224,7 +1251,7 @@ h+='&lt;/div&gt;&lt;/div&gt;';</div>
     <tr><td>Brilliant</td><td>Deviation ≥300 (good)</td><td style="color:#00cfff"><code>#00cfff</code></td><td><span class="color-swatch" style="background:#00cfff"></span></td></tr>
     <tr><td>Great</td><td>Deviation 150-299 (good)</td><td style="color:#27ae60"><code>#27ae60</code></td><td><span class="color-swatch" style="background:#27ae60"></span></td></tr>
     <tr><td>Good</td><td>Deviation 50-149 (good)</td><td style="color:#a0c060"><code>#a0c060</code></td><td><span class="color-swatch" style="background:#a0c060"></span></td></tr>
-    <tr><td>Book</td><td>Deviation &lt;50</td><td style="color:#a08050"><code>var(--muted)</code></td><td><span class="color-swatch" style="background:#a08050"></span></td></tr>
+    <tr><td>Mediocre</td><td>Deviation &lt;50</td><td style="color:#a08050"><code>var(--muted)</code></td><td><span class="color-swatch" style="background:#a08050"></span></td></tr>
     <tr><td>Inaccuracy</td><td>Deviation 50-149 (bad)</td><td style="color:#f0c040"><code>#f0c040</code></td><td><span class="color-swatch" style="background:#f0c040"></span></td></tr>
     <tr><td>Mistake</td><td>Deviation 150-299 (bad)</td><td style="color:#e67e22"><code>#e67e22</code></td><td><span class="color-swatch" style="background:#e67e22"></span></td></tr>
     <tr><td>Blunder</td><td>Deviation ≥300 (bad)</td><td style="color:#c0392b"><code>#c0392b</code></td><td><span class="color-swatch" style="background:#c0392b"></span></td></tr>
@@ -1254,7 +1281,7 @@ function _classifyMove(evalDelta,isMoverWhite){
     if(isGood) return{cls:'good',label:'Good',color:'#a0c060'};
     return{cls:'inaccuracy',label:'Inaccuracy',color:'#f0c040'};
   }
-  return{cls:'book',label:'Book',color:'var(--muted)'};
+  return{cls:'book',label:'Mediocre',color:'var(--muted)'};
 }</div>
   </div>
 </div>
@@ -1273,7 +1300,7 @@ function _classifyMove(evalDelta,isMoverWhite){
   <p>Built-in ECO Opening Library (A00-E99, 500 variations), with search, Family Filter, opening identification, and recommendation functions.</p>
 
   <h3>Opening Identification Card</h3>
-  <p>Starting from v1.0.0, ECO Opening Identification Card and Opening Recommendation bar are only displayed under the following conditions:</p>
+  <p>Starting from v1.0.1, ECO Opening Identification Card and Opening Recommendation bar are only displayed under the following conditions:</p>
   <ul class="feature-list">
     <li><strong>Free Start Mode</strong>：When no specific opening is selected, automatically identify ECO code based on current position</li>
     <li><strong>Custom ECO Opening</strong>：When a built-in ECO opening is selected in New Game settings, display the current opening's ECO information</li>
@@ -1336,7 +1363,7 @@ const ECO_BY_FAMILY={
   </table>
 
   <h3>AI Tip</h3>
-  <p>When MultiPV &gt; 1, multi-line display: ⭐ First line gold <span class="color-swatch" style="background:#ffd700"></span> <code>#ffd700</code>，subsequent lines gray <span class="color-swatch" style="background:#a08050"></span> <code>var(--muted)</code>。Starting from v1.0.0, Multi-line Analysismoveusing PGN Bookalgebraic notation（SAN）formatdisplay，rather than the engine raw UCI format。for exampledisplay <code>Nf3 e5 d4</code> rather than <code>g1f3 e7e5 d2d4</code>。</p>
+  <p>When MultiPV &gt; 1, multi-line display: ⭐ First line gold <span class="color-swatch" style="background:#ffd700"></span> <code>#ffd700</code>, subsequent lines gray <span class="color-swatch" style="background:#a08050"></span> <code>var(--muted)</code>. Starting from v1.0.0, moves in multi-line analysis are displayed in PGN Standard Algebraic Notation (SAN) format rather than the engine's raw UCI format. For example, <code>Nf3 e5 d4</code> is displayed instead of <code>g1f3 e7e5 d2d4</code>.</p>
 
   <h3>🔮 Ponder Hint</h3>
   <p>When Ponder mode is enabled in Engine Configuration, after the AI opponent makes its move, the engine continues analyzing the opponent's possible responses in the background. Ponder information is displayed in different areas depending on the current position:</p>
@@ -1384,7 +1411,7 @@ const ECO_BY_FAMILY={
   </div>
 
   <h3>🌐 Chinese/English Language Switching</h3>
-  <p>v1.0.0 adds a global Chinese/English language switching feature. Click the toggle button on the left side of the evaluation bar (outside the evaluation bar) to switch language mode:</p>
+  <p>v1.0.1 adds a global Chinese/English language switching feature. Click the toggle button on the left side of the evaluation bar (outside the evaluation bar) to switch language mode:</p>
   <table>
     <tr><th>Current Mode</th><th>Button Display</th><th>Switch To</th></tr>
     <tr><td>Chinese Mode</td><td><code>↔️ZH</code></td><td>Switch to English mode</td></tr>
@@ -1787,7 +1814,7 @@ function clearReviewCache() {
     <li><strong>Progress display</strong>：During analysis, current progress is displayed (e.g. "Analyzing 5/30"), keeping the user informed of overall progress</li>
     <li><strong>Interruptible</strong>：Users can exit review mode at any time to interrupt Analyze All; completed step results are preserved in cache</li>
     <li><strong>Incremental analysis</strong>：Steps with cached results are skipped, analyzing only uncached steps for improved efficiency</li>
-    <li><strong>Move Classification</strong>：After each step's analysis completes, it is automatically classified as Brilliant, Great, Good, Book, Inaccuracy, Mistake, or Blunder based on evaluation deviation</li>
+    <li><strong>Move Classification</strong>：After each step's analysis completes, it is automatically classified as Brilliant, Great, Good, Mediocre, Inaccuracy, Mistake, or Blunder based on evaluation deviation</li>
   </ul>
 
   <div class="impl-section">
@@ -1847,8 +1874,8 @@ if (_analyzeAllActive) {
     <li><strong>Export Settings</strong>：Uses the Android system SAF file picker (<code>ACTION_CREATE_DOCUMENT</code>), users can directly select save location (such as Download directory），without any specialPermissions。exportcontent is also automaticallycopytoclipboardasbackup</li>
   </ul>
   <div class="tip-box">
-    <span class="tip-label">Important Update：</span>v1.0.0 has removed the <code>MANAGE_EXTERNAL_STORAGE</code> (all files access）Permissions。This permissionforsettingsfileImport/exportis not required，and in Google Play and other app stores require additional review。now allfileActionall via SAF（Storage Access Framework）complete，this is Android recommendationfileaccess method，on all Android version（API 19+）works normally on all，without any specialPermissions。<br>
-    <em>v1.0.0 has removed the <code>MANAGE_EXTERNAL_STORAGE</code> (All Files Access) permission. This permission is not necessary for settings import/export and requires additional review on app stores like Google Play. All file operations now use SAF (Storage Access Framework), which is Android's recommended file access method, works on all Android versions (API 19+), and requires no special permissions.</em>
+    <span class="tip-label">Important Update：</span>v1.0.1 has removed the <code>MANAGE_EXTERNAL_STORAGE</code> (all files access）Permissions。This permissionforsettingsfileImport/exportis not required，and in Google Play and other app stores require additional review。now allfileActionall via SAF（Storage Access Framework）complete，this is Android recommendationfileaccess method，on all Android version（API 19+）works normally on all，without any specialPermissions。<br>
+    <em>v1.0.1 has removed the <code>MANAGE_EXTERNAL_STORAGE</code> (All Files Access) permission. This permission is not necessary for settings import/export and requires additional review on app stores like Google Play. All file operations now use SAF (Storage Access Framework), which is Android's recommended file access method, works on all Android versions (API 19+), and requires no special permissions.</em>
   </div>
 
   <div class="tip-box">
@@ -1984,6 +2011,10 @@ public void handleFilePickerResult(Intent data) {
     <li>Remove Comments(curly brace content) and NAG symbols ($1, $2, etc.)</li>
     <li>Extract and save variations before removing variation content, associating them with the corresponding main move</li>
     <li>Validate move legality step by step，Skip Unrecognized Moves Instead of Aborting</li>
+    <li><span class="new-tag">v1.0.1</span> Recursive variation tree parser: each <code>(</code> opens a new variation frame attached to the "last move played" in the parent context. Nested <code>(</code> attaches to the correct move within the parent variation (not the main line), per PGN spec §8.2.5</li>
+    <li><span class="new-tag">v1.0.1</span> Three-tier first-token fallback for variations: Type A (same-side alternative) → Type A moveAlg fuzzy match → Type B (opponent response) → Type B moveAlg fuzzy match. Handles non-standard SAN (missing disambiguation, +/# suffixes, etc.)</li>
+    <li><span class="new-tag">v1.0.1</span> mainTokenIdx index tracking: even if a main-line move fails to parse and is skipped, subsequent variations still correctly attach to their corresponding main moves</li>
+    <li><span class="new-tag">v1.0.1</span> Diagnostic logging: when a variation's first token cannot be matched, a <code>console.warn</code> is emitted for troubleshooting PGN input issues</li>
   </ul>
 
   <h3>Post-Import Behavior / Post-Import Behavior</h3>
@@ -1995,6 +2026,7 @@ public void handleFilePickerResult(Intent data) {
     <li>Auto-request Engine EvaluationCurrent Position</li>
     <li>Does not auto-trigger AI moves; users can freely browse or start a new game</li>
     <li>Supports review mode for browsing imported games</li>
+    <li><span class="new-tag">v1.0.1</span> Undo works correctly: after import, you can undo step-by-step all the way back to white's first move and clear the move list (fixes the v1.0.0 bug where stateHistory snapshot order prevented undo from removing moves from the list)</li>
   </ul>
 </div>
 
@@ -2002,7 +2034,7 @@ public void handleFilePickerResult(Intent data) {
 
 <!-- ===== FOOTER ===== -->
 <div style="text-align: center; padding: 40px 0 20px; color: #6a5a40; font-size: 12px;">
-  <p style="margin: 4px 0;">Regalia v1.0.0 User Manual (User Manual)</p>
+  <p style="margin: 4px 0;">Regalia v1.0.1 User Manual (User Manual)</p>
   <p style="margin: 4px 0;">Built with Stockfish 18 &nbsp;|&nbsp; AGPL v3</p>
   <p style="margin: 4px 0;">Compatible with Android 5.0-15 &nbsp;|&nbsp; Xiaomi HyperOS 3</p>
   <a href="#top" class="back-top">&#9650; Back to Top</a>

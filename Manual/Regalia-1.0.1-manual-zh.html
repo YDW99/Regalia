@@ -1,5 +1,5 @@
 <!--
-  Regalia v1.0.0 User Manual
+  Regalia v1.0.1 User Manual
   Copyright (C) 2026 Regalia
 
   This document is part of the Regalia project, licensed under
@@ -23,7 +23,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Regalia v1.0.0 User Manual</title>
+<title>Regalia v1.0.1 User Manual</title>
 <style>
 :root {
   --bg: #1a0a0a;
@@ -476,7 +476,7 @@ details summary:hover { color: var(--accent2); }
   <div class="cover-deco">&#9816; &#9814; &#9812; &#9815; &#9813;</div>
   <div class="cover-crown">&#9812;</div>
   <div class="cover-title">Regalia</div>
-  <div class="cover-version">v1.0.0</div>
+  <div class="cover-version">v1.0.1</div>
   <div class="cover-divider">
     <div class="cover-divider-line"></div>
     <div class="cover-divider-icon">&#9830;</div>
@@ -490,7 +490,25 @@ details summary:hover { color: var(--accent2); }
 
 <!-- ===== TABLE OF CONTENTS ===== -->
 <div class="toc">
-  <h2>目 录</h2>
+  
+<!-- v1.0.1 Changelog -->
+<div class="card" style="margin: 20px 0; padding: 16px; background: linear-gradient(145deg, rgba(139,105,20,.08), rgba(255,215,0,.04)); border: 1px solid rgba(212,160,23,.3); border-radius: 8px;">
+  <h3 style="color:#ffd700; margin-bottom: 12px; font-size: 1.1rem;">v1.0.1 更新日志</h3>
+  <ul style="line-height: 1.7; font-size: .9rem; color: var(--text); padding-left: 20px;">
+    <li><strong>允许屏幕截图</strong>：移除 v1.0.0 中的 <code>FLAG_SECURE</code> 限制，用户现在可以正常截屏（分享棋局、记录局面），最近任务缩略图也不再被屏蔽。其余安全防御（<code>file://</code> 禁用、JS 接口 <code>@JavascriptInterface</code> 守门、防 tapjacking）保留。</li>
+    <li><strong>通知栏引擎条精简</strong>：常驻通知现仅显示三种状态——<strong>就绪</strong> / <strong>分析中</strong> / <strong>报错</strong>，不再显示搜索深度与速度。详细的深度/节点/速度/评分仍在 APP 内评估栏显示，通知栏保持极简，避免打扰用户。</li>
+    <li><strong>悔棋自动选中棋子修复</strong>：修复悔棋后未自动选中原棋子的 bug。现在悔棋后会自动选中"被悔的那步棋移动的棋子（所在的格子）"，连续悔多步同样生效。自动选中后可正常点击该格解除选中（与其他选中状态一致）。</li>
+    <li><strong>PGN 变例解析完善</strong>：修复 PGN 导入时变例丢失或附加到错误走法的问题，新增 Type A fallback（<code>moveAlg</code> 匹配）、<code>mainTokenIdx</code> 索引追踪（处理主行包含非法走法的情况）、无法匹配首 token 时的诊断日志。嵌套变例（RAV）符合 PGN 规范 §8.2.5。</li>
+    <li><strong>PGN 导入悔棋修复</strong>：修复 PGN 导入后无法悔白方首步走法的根本原因——<code>stateHistory</code> 的快照顺序错误（在 <code>moveRecords.push</code> 之后才推入），导致悔棋恢复的 <code>moveRecords</code> 仍包含被悔的走法。现按 <code>executeMove</code> 一致的方式先快照再推入。</li>
+    <li><strong>走棋动画流畅度优化</strong>：为棋子动画启用 GPU 合成层（<code>translateZ(0)</code>、<code>will-change</code>、<code>backface-visibility</code>），添加 <code>contain:layout style paint</code> 限制重绘范围，移除昂贵的 <code>box-shadow</code> 过渡。减少卡顿，提升响应速度。</li>
+    <li><strong>前台服务通知增强</strong>：常驻通知支持<strong>点击跳转至 APP</strong>、<strong>不可手动移除</strong>（<code>setOngoing(true)</code> + <code>FLAG_NO_CLEAR</code>）。在小米澎湃OS 3 上即使被系统允许划掉，前台服务本身仍持续运行，下次状态更新时通知自动恢复。</li>
+    <li><strong>语言切换振动反馈</strong>：点击中英文切换按钮时触发 <code>TOGGLE_ON</code> 振动反馈，与其它按钮交互体验一致。</li>
+    <li><strong>MobSF 安全检查修复</strong>：补全 5 项静态扫描缺陷：JavaScript 接口安全文档化、TLS 证书固定代码引用、Certificate Transparency 引用、SafetyNet 不适用性说明、ChessApp 异常日志精简。</li>
+    <li><strong>术语同步</strong>：英文模式下走法评价 "Book" 改为 "Mediocre"（v1.0.0 起）。</li>
+  </ul>
+</div>
+
+<h2>目 录</h2>
   <ol class="toc-list">
     <li class="toc-item"><span class="toc-num">1</span><span class="toc-label"><a href="#sec1">应用简介</a></span></li>
     <li class="toc-item"><span class="toc-num">2</span><span class="toc-label"><a href="#sec2">安装与启动</a></span></li>
@@ -522,7 +540,7 @@ details summary:hover { color: var(--accent2); }
     <div class="section-title">应用简介</div>
   </div>
 
-  <p>Regaliav1.0.0 是一款功能强大的 Android 国际象棋对弈与分析应用。本版本内置世界顶级开源棋力引擎 <strong>Stockfish 18</strong>（arm64-v8a-dotprod 原生编译），为从初学者到高级棋手提供专业级的对弈、复盘与训练体验。</p>
+  <p>Regaliav1.0.1 是一款功能强大的 Android 国际象棋对弈与分析应用。本版本内置世界顶级开源棋力引擎 <strong>Stockfish 18</strong>（arm64-v8a-dotprod 原生编译），为从初学者到高级棋手提供专业级的对弈、复盘与训练体验。</p>
 
   <div class="card-row">
     <div class="stat-card">
@@ -672,10 +690,19 @@ function onEngineReady(){
 }</div>
   </div>
 
-  <h3>前台服务通知</h3>
-  <p>当引擎进程运行时，应用会显示一个前台服务通知（Foreground Service Notification），在系统通知栏中持续展示引擎进程信息。该通知的作用是告知 Android 系统引擎进程正在执行重要计算，防止系统因内存回收或省电策略而终止引擎进程，确保对局与分析过程不被中断。</p>
+  <h3>前台服务通知 <span class="new-tag">v1.0.1 增强</span></h3>
+  <p>当引擎进程运行时，应用会显示一个前台服务通知（Foreground Service Notification），在系统通知栏中持续展示引擎状态信息。该通知的作用是告知 Android 系统引擎进程正在执行重要计算，防止系统因内存回收或省电策略而终止引擎进程，确保对局与分析过程不被中断。</p>
   <div class="tip-box">
-    <span class="tip-label">双语通知：</span>前台服务通知的文本内容为双语显示，跟随应用当前的语言设置。中文模式下通知标题与内容为中文，英文模式下为英文，与界面语言保持一致。
+    <span class="tip-label">v1.0.1 简化状态：</span>通知栏现仅显示三种引擎状态——<strong>"引擎就绪！"</strong>（就绪）、<strong>"分析中"</strong>（AI 思考 / Ponder 预判 / 复盘分析中）、<strong>"引擎错误: ..."</strong>（异常时显示截断后的错误消息）。不再显示搜索深度、节点数、速度等数值。详细的深度/节点/速度/评分仍在 APP 内顶部评估栏实时显示，通知栏保持极简风格，避免频繁更新打扰用户。
+  </div>
+  <div class="tip-box">
+    <span class="tip-label">点击跳转：</span>点击通知可跳转至 APP 主界面（<code>PendingIntent</code> + <code>FLAG_ACTIVITY_NEW_TASK | SINGLE_TOP | CLEAR_TOP</code>），方便用户从其他应用快速回到棋局。
+  </div>
+  <div class="tip-box">
+    <span class="tip-label">不可手动移除：</span>通知设置 <code>setOngoing(true)</code> + <code>FLAG_NO_CLEAR</code>，正常情况下无法被用户划掉。在 Android 14+（含小米澎湃OS 3）上系统可能允许用户手动划除，但前台服务本身仍持续运行，下次状态更新时通知会自动重新出现。
+  </div>
+  <div class="tip-box">
+    <span class="tip-label">双语通知：</span>前台服务通知的文本内容为双语显示，跟随应用当前的语言设置（保存在 <code>SharedPreferences</code> 中，由 JS 端 <code>saveLangPref</code> 同步）。中文模式下通知文本为中文，英文模式下为英文，与界面语言保持一致。
   </div>
   <div class="tip-box">
     <span class="tip-label">通知权限：</span>在 Android 13（API 33）及以上版本中，应用首次启动引擎时会主动请求通知权限（POST_NOTIFICATIONS），以确保前台服务通知能够正常显示。如果用户拒绝授权，引擎仍可正常运行，但系统通知栏不会显示引擎状态信息，此时引擎进程被系统终止的风险会略有增加。
@@ -720,7 +747,7 @@ function onEngineReady(){
       <div style="display:flex;align-items:center;gap:8px">
         <span style="font-size:1.1rem;color:#E8E8F0;border:2px solid #d4a017;padding:2px 4px;background:linear-gradient(145deg,rgba(139,105,20,.18),rgba(255,215,0,.08))">♔</span>
         <span style="font-weight:900;color:#ffd700;letter-spacing:2px;font-size:1rem">Regalia</span>
-        <span style="font-size:.55rem;color:#d4a017;background:rgba(212,160,23,.15);padding:1px 6px;border-radius:3px;border:1px solid rgba(212,160,23,.3)">v1.0.0</span>
+        <span style="font-size:.55rem;color:#d4a017;background:rgba(212,160,23,.15);padding:1px 6px;border-radius:3px;border:1px solid rgba(212,160,23,.3)">v1.0.1</span>
         <span style="font-size:.55rem;color:#d4a017;background:rgba(212,160,23,.15);padding:1px 6px;border-radius:3px;border:1px solid rgba(212,160,23,.3);cursor:pointer">ℹ️</span>
       </div>
       <span style="font-size:.55rem;color:#d4a017;background:rgba(212,160,23,.15);padding:1px 6px;border-radius:3px;border:1px solid rgba(212,160,23,.3);cursor:pointer;flex-shrink:0">↔️中</span>
@@ -916,7 +943,7 @@ for(const ar of arrows){
     <tr><th>按钮</th><th>名称</th><th>功能</th></tr>
     <tr><td>⚔️</td><td>新游戏</td><td>打开新游戏设置对话框</td></tr>
     <tr><td>♔/♚</td><td>自由开局</td><td>跳过设置直接开始新对局</td></tr>
-    <tr><td>↩️</td><td>悔棋</td><td>撤销上一步走法（摆棋模式隐藏）</td></tr>
+    <tr><td>↩️</td><td>悔棋</td><td>撤销上一步走法（自动回退到玩家上一手；摆棋模式隐藏）。v1.0.1：悔棋后会自动选中"被悔的那步棋移动的棋子"所在的格子，方便重走。点击该格可解除选中。</td></tr>
     <tr><td>↪️</td><td>撤悔</td><td>重做已撤销的走法（摆棋模式隐藏）</td></tr>
     <tr><td>🔃</td><td>翻转</td><td>翻转棋盘方向</td></tr>
     <tr><td>💡</td><td>AI提示</td><td>引擎分析当前局面（多线展示）</td></tr>
@@ -1045,7 +1072,7 @@ function makeMvInPlace(state, move){
     </div>
   </div>
 
-  <h3>Ponder 预判模式<span class="new-tag">v1.0.0</span></h3>
+  <h3>Ponder 预判模式<span class="new-tag">v1.0.1</span></h3>
   <p>启用后 AI 在自己走完棋后继续思考对手可能的应手。玩家回合时，AI 对手栏第二行右对齐显示预判搜索信息（不显示预判走法）；若同时使用 AI 提示功能，AI 提示栏也会显示预判信息并展示预判走法。推荐充电时开启。</p>
 
   <div class="impl-section">
@@ -1273,7 +1300,7 @@ function _classifyMove(evalDelta,isMoverWhite){
   <p>内置 ECO 开局库（A00-E99，500 个变例），含搜索、家族筛选、开局识别和推荐功能。</p>
 
   <h3>开局识别卡片</h3>
-  <p>v1.0.0 起，ECO 开局识别卡片与开局推荐栏仅在以下情况显示：</p>
+  <p>v1.0.1 起，ECO 开局识别卡片与开局推荐栏仅在以下情况显示：</p>
   <ul class="feature-list">
     <li><strong>自由开局模式</strong>：未选择特定开局时，根据当前局面自动识别 ECO 编码</li>
     <li><strong>自选 ECO 开局</strong>：在新游戏设置中选择了内置 ECO 开局时，显示当前开局的 ECO 信息</li>
@@ -1336,7 +1363,7 @@ const ECO_BY_FAMILY={
   </table>
 
   <h3>AI 提示</h3>
-  <p>MultiPV &gt; 1 时多线展示：⭐ 第一线金色 <span class="color-swatch" style="background:#ffd700"></span> <code>#ffd700</code>，后续线灰色 <span class="color-swatch" style="background:#a08050"></span> <code>var(--muted)</code>。v1.0.0 起，多线分析中的走法采用 PGN 标准代数记谱法（SAN）格式显示，而非引擎原始 UCI 格式。例如显示 <code>Nf3 e5 d4</code> 而非 <code>g1f3 e7e5 d2d4</code>。</p>
+  <p>MultiPV &gt; 1 时多线展示：⭐ 第一线金色 <span class="color-swatch" style="background:#ffd700"></span> <code>#ffd700</code>，后续线灰色 <span class="color-swatch" style="background:#a08050"></span> <code>var(--muted)</code>。v1.0.1 起，多线分析中的走法采用 PGN 标准代数记谱法（SAN）格式显示，而非引擎原始 UCI 格式。例如显示 <code>Nf3 e5 d4</code> 而非 <code>g1f3 e7e5 d2d4</code>。</p>
 
   <h3>🔮 Ponder 预判提示</h3>
   <p>当引擎配置中开启 Ponder（预判）模式后，AI 对手走棋完毕时，引擎会继续在后台分析对手可能的应手。预判信息根据当前局面分别显示在不同的区域：</p>
@@ -1384,7 +1411,7 @@ const ECO_BY_FAMILY={
   </div>
 
   <h3>🌐 中/英语言切换</h3>
-  <p>v1.0.0 新增全局中英文切换功能。点击评估栏左侧（评估栏外部）的切换按钮即可切换语言模式：</p>
+  <p>v1.0.1 新增全局中英文切换功能。点击评估栏左侧（评估栏外部）的切换按钮即可切换语言模式：</p>
   <table>
     <tr><th>当前模式</th><th>按钮显示</th><th>切换后</th></tr>
     <tr><td>中文模式</td><td><code>↔️中</code></td><td>切换至英文模式</td></tr>
@@ -1847,8 +1874,8 @@ if (_analyzeAllActive) {
     <li><strong>导出设置</strong>：使用 Android 系统 SAF 文件选择器（<code>ACTION_CREATE_DOCUMENT</code>），用户可直接选择保存位置（如 Download 目录），无需任何特殊权限。导出内容同时自动复制到剪贴板作为备份</li>
   </ul>
   <div class="tip-box">
-    <span class="tip-label">重要更新 / Important Update：</span>v1.0.0 已移除 <code>MANAGE_EXTERNAL_STORAGE</code>（所有文件访问）权限。此权限对于设置文件的导入/导出并非必需，且在 Google Play 等应用商店中需要额外审核。现在所有文件操作均通过 SAF（Storage Access Framework）完成，这是 Android 推荐的文件访问方式，在所有 Android 版本（API 19+）上均可正常工作，无需任何特殊权限。<br>
-    <em>v1.0.0 has removed the <code>MANAGE_EXTERNAL_STORAGE</code> (All Files Access) permission. This permission is not necessary for settings import/export and requires additional review on app stores like Google Play. All file operations now use SAF (Storage Access Framework), which is Android's recommended file access method, works on all Android versions (API 19+), and requires no special permissions.</em>
+    <span class="tip-label">重要更新 / Important Update：</span>v1.0.1 已移除 <code>MANAGE_EXTERNAL_STORAGE</code>（所有文件访问）权限。此权限对于设置文件的导入/导出并非必需，且在 Google Play 等应用商店中需要额外审核。现在所有文件操作均通过 SAF（Storage Access Framework）完成，这是 Android 推荐的文件访问方式，在所有 Android 版本（API 19+）上均可正常工作，无需任何特殊权限。<br>
+    <em>v1.0.1 has removed the <code>MANAGE_EXTERNAL_STORAGE</code> (All Files Access) permission. This permission is not necessary for settings import/export and requires additional review on app stores like Google Play. All file operations now use SAF (Storage Access Framework), which is Android's recommended file access method, works on all Android versions (API 19+), and requires no special permissions.</em>
   </div>
 
   <div class="tip-box">
@@ -1984,6 +2011,10 @@ public void handleFilePickerResult(Intent data) {
     <li>移除注释（花括号内容）和 NAG 符号（$1, $2 等）</li>
     <li>在移除变例内容前先提取并保存变例，将其关联到对应的主走法</li>
     <li>逐着验证走法的合法性，遇到无法识别的走法时跳过而非中断</li>
+    <li><span class="new-tag">v1.0.1</span> 递归变例树解析：每个 <code>(</code> 开启一个新的变例帧，附加到父上下文中"最后一步走法"。嵌套 <code>(</code> 附加到父变例中正确的走法（而非主线走法），符合 PGN 规范 §8.2.5</li>
+    <li><span class="new-tag">v1.0.1</span> 变例首 token 匹配三重 fallback：Type A（同侧替代）→ Type A moveAlg 模糊匹配 → Type B（对手应着）→ Type B moveAlg 模糊匹配。处理非标准 SAN（缺少消歧符、+/# 后缀等）</li>
+    <li><span class="new-tag">v1.0.1</span> mainTokenIdx 索引追踪：即使主线某步走法无法解析被跳过，后续变例仍能正确关联到对应的主走法</li>
+    <li><span class="new-tag">v1.0.1</span> 诊断日志：变例首 token 无法匹配时输出 <code>console.warn</code>，便于排查 PGN 输入问题</li>
   </ul>
 
   <h3>导入后的行为 / Post-Import Behavior</h3>
@@ -1995,6 +2026,7 @@ public void handleFilePickerResult(Intent data) {
     <li>自动请求引擎评估当前局面</li>
     <li>不会自动触发 AI 走棋，用户可自由浏览或开始新游戏</li>
     <li>支持复盘模式浏览导入的对局</li>
+    <li><span class="new-tag">v1.0.1</span> 悔棋正常工作：导入后可逐步悔棋至白方首步并清空走法记录（修复了 v1.0.0 中 stateHistory 快照顺序错误导致的悔棋失效问题）</li>
   </ul>
 </div>
 
@@ -2002,7 +2034,7 @@ public void handleFilePickerResult(Intent data) {
 
 <!-- ===== FOOTER ===== -->
 <div style="text-align: center; padding: 40px 0 20px; color: #6a5a40; font-size: 12px;">
-  <p style="margin: 4px 0;">Regalia v1.0.0 用户说明书 (User Manual)</p>
+  <p style="margin: 4px 0;">Regalia v1.0.1 用户说明书 (User Manual)</p>
   <p style="margin: 4px 0;">Built with Stockfish 18 &nbsp;|&nbsp; AGPL v3</p>
   <p style="margin: 4px 0;">Compatible with Android 5.0-15 &nbsp;|&nbsp; Xiaomi HyperOS 3</p>
   <a href="#top" class="back-top">&#9650; 返回顶部</a>

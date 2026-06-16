@@ -29,7 +29,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://tablebase.lichess.ovh; img-src data: file:; frame-ancestors 'none'; base-uri 'self'">
-<title>Regalia v1.0.0</title>
+<title>Regalia v1.0.1</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{color-scheme:dark;--bg:#1a0a0a;--card:#221015;--border:#8b6914;--border2:#d4a017;--text:#f5e6c8;--muted:#a08050;--accent:#d4a017;--accent2:#ffd700;--blue:#4a90d9;--red:#c0392b;--purple:#8e44ad;--green:#27ae60;--danger:#c0392b}
@@ -85,15 +85,15 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .rlbl{display:flex;flex-direction:column}
 .rlbl span{display:flex;align-items:center;justify-content:center;width:28px;font-size:.7rem;color:var(--muted);font-family:system-ui,-apple-system,sans-serif}
 .bwrap{position:relative;border:4px solid var(--border2);border-radius:4px;overflow:hidden;box-shadow:0 0 6px rgba(212,160,23,.08),0 4px 14px rgba(0,0,0,.40),inset 0 0 4px rgba(0,0,0,.08);background:#1a0a0a;transform:translateZ(0)}
-.bgrid{display:grid;transform:translateZ(0);touch-action:none}
-.sq{display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;user-select:none;font-size:2rem;line-height:1;transition:background .15s,box-shadow .3s;touch-action:manipulation}
-.sq:hover{box-shadow:inset 0 0 3px rgba(255,215,0,.05)}
+.bgrid{display:grid;transform:translateZ(0);touch-action:none;will-change:transform;backface-visibility:hidden}
+.sq{display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;user-select:none;font-size:2rem;line-height:1;transition:background .15s;touch-action:manipulation;contain:layout style paint;transform:translateZ(0)}
+.sq:hover{background-color:rgba(255,215,0,.04)}
 .sq .lbl{position:absolute;top:1px;left:2px;font-size:9px;opacity:.95;font-family:"DejaVu Sans",system-ui,sans-serif;pointer-events:none;z-index:2;letter-spacing:0}
 /* === 黑曜石棋子 — 清晰轮廓、全局可辨 === */
 /* 黑子: 深曜石底色 + 亮金描边 + 亮金微光 (深色格上描边醒目可辨) */
 /* 白子: 银曜石底色 + 浓棕描边 + 浓棕微光 (浅色格上描边醒目可辨) */
-.sq .pc{pointer-events:none;font-size:2rem;z-index:1;transition:transform .1s;position:relative;font-variant-emoji:text;-webkit-font-variant-emoji:text;font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-weight:400;speak:none}
-.sq:hover .pc{transform:scale(1.05)}
+.sq .pc{pointer-events:none;font-size:2rem;z-index:1;transition:transform .1s;position:relative;font-variant-emoji:text;-webkit-font-variant-emoji:text;font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-weight:400;speak:none;transform:translateZ(0);backface-visibility:hidden;will-change:transform,opacity}
+.sq:hover .pc{transform:scale(1.05) translateZ(0)}
 /* 黑子 — 深曜石：亮金描边 + 亮金微光 (深/浅色背景上均可辨) */
 .sq .pc.bk,.prom-btn.bk-prom,.setup-btn.sb,.move-anim.bk-piece,.rv-bk{color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55)}
 /* 白子 — 银曜石：浓棕描边 + 浓棕微光 (深/浅色背景上均可辨) */
@@ -103,12 +103,12 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .sq .dot{width:18px;height:18px;border-radius:50%;background:radial-gradient(circle,rgba(255,140,0,.6),rgba(255,140,0,.35));pointer-events:none;z-index:1;box-shadow:0 0 3px rgba(255,140,0,.2)}
 .sq .ring{position:absolute;inset:3px;border-radius:50%;border:3px solid rgba(255,140,0,.55);pointer-events:none;z-index:1;box-shadow:0 0 2px rgba(255,140,0,.10)}
 /* Piece-specific animations */
-.sq .pc.anim-pawn{animation:pawnStep .6s cubic-bezier(.4,0,.2,1)}
-.sq .pc.anim-knight{animation:knightJump .8s cubic-bezier(.2,-.2,.2,1.2)}
-.sq .pc.anim-bishop{animation:bishopGlide .7s cubic-bezier(.4,0,.2,1)}
-.sq .pc.anim-rook{animation:rookSlide .6s cubic-bezier(.4,0,.2,1)}
-.sq .pc.anim-queen{animation:queenGlide .8s cubic-bezier(.25,.1,.25,1)}
-.sq .pc.anim-king{animation:kingStep .7s cubic-bezier(.4,0,.2,1)}
+.sq .pc.anim-pawn{animation:pawnStep .6s cubic-bezier(.4,0,.2,1);will-change:transform,opacity}
+.sq .pc.anim-knight{animation:knightJump .8s cubic-bezier(.2,-.2,.2,1.2);will-change:transform,opacity}
+.sq .pc.anim-bishop{animation:bishopGlide .7s cubic-bezier(.4,0,.2,1);will-change:transform,opacity}
+.sq .pc.anim-rook{animation:rookSlide .6s cubic-bezier(.4,0,.2,1);will-change:transform,opacity}
+.sq .pc.anim-queen{animation:queenGlide .8s cubic-bezier(.25,.1,.25,1);will-change:transform,opacity}
+.sq .pc.anim-king{animation:kingStep .7s cubic-bezier(.4,0,.2,1);will-change:transform,opacity}
 @keyframes pawnStep{0%{transform:translateY(6px) scale(.95);opacity:.8}40%{transform:translateY(-2px) scale(1.03)}100%{transform:translateY(0) scale(1);opacity:1}}
 @keyframes knightJump{0%{transform:scale(.8) translateY(0);opacity:.7}30%{transform:scale(1.1) translateY(-14px);opacity:.85}60%{transform:scale(1.05) translateY(-4px)}100%{transform:scale(1) translateY(0);opacity:1}}
 @keyframes bishopGlide{0%{transform:translate(-6px,6px) scale(.9);opacity:.7}50%{transform:translate(1px,-1px) scale(1.04);opacity:.9}100%{transform:translate(0,0) scale(1);opacity:1}}
@@ -116,7 +116,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 @keyframes queenGlide{0%{transform:scale(.85) rotate(-3deg);opacity:.7}30%{transform:scale(1.06) rotate(1deg);opacity:.85}60%{transform:scale(1.02) rotate(-1deg)}100%{transform:scale(1) rotate(0);opacity:1}}
 @keyframes kingStep{0%{transform:scale(.85);opacity:.75}30%{transform:scale(1.08);opacity:.9}60%{transform:scale(1.02)}100%{transform:scale(1);opacity:1}}
 /* Check animation on king — enhanced with background pulse + stronger glow */
-.sq.in-check{animation:checkPulse 1.2s ease-in-out infinite;position:relative;z-index:1;}
+.sq.in-check{animation:checkPulse 1.2s ease-in-out infinite;position:relative;z-index:1;transform:translateZ(0);will-change:box-shadow}
 .sq.in-check::before{content:'';position:absolute;inset:0;animation:checkBgPulse 1.2s ease-in-out infinite;border-radius:inherit;z-index:-1;}
 @keyframes checkPulse{
   0%,100%{box-shadow:inset 0 0 6px rgba(192,57,43,.4),0 0 4px rgba(192,57,43,.2),inset 0 0 20px rgba(192,57,43,.06)}
@@ -125,7 +125,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
   0%,100%{background:rgba(192,57,43,0)}
   50%{background:rgba(192,57,43,.22)}}
 /* Capture flash — enhanced with stronger gold burst + white flash core */
-.sq.capture-flash{animation:captureFlash 1.0s ease-out;position:relative;}
+.sq.capture-flash{animation:captureFlash 1.0s ease-out;position:relative;transform:translateZ(0);will-change:box-shadow}
 .sq.capture-flash::before{content:'';position:absolute;inset:0;animation:captureCore .6s ease-out;border-radius:inherit;z-index:-1;}
 @keyframes captureFlash{
   0%{box-shadow:inset 0 0 15px rgba(255,215,0,.7),0 0 10px rgba(255,215,0,.4),inset 0 0 50px rgba(255,200,50,.25)}
@@ -493,7 +493,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 // ===================== i18n SYSTEM =====================
 let _lang='zh';
 function T(key){return _i18n[key]?.[_lang]||_i18n[key]?.zh||key;}
-function toggleLang(){_lang=(_lang==='zh')?'en':'zh';try{localStorage.setItem('Regalia_lang',_lang);}catch(e){}try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.saveLangPref)AndroidBridge.saveLangPref(_lang);}catch(e){}render();}
+function toggleLang(){_lang=(_lang==='zh')?'en':'zh';try{localStorage.setItem('Regalia_lang',_lang);}catch(e){}try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.saveLangPref)AndroidBridge.saveLangPref(_lang);}catch(e){}try{if(typeof HapticManager!=='undefined'&&HapticManager.fire)HapticManager.fire('TOGGLE_ON');}catch(e){}render();}
 const _i18n={
 'app_name':{zh:'Regalia',en:'Regalia'},
 'new_game':{zh:'新游戏',en:'New Game'},
@@ -634,7 +634,7 @@ const _i18n={
 'requesting_storage':{zh:'正在请求存储权限...',en:'Requesting storage permission...'},
 'settings_exported':{zh:'设置已导出到',en:'Settings exported to'},
 'settings_clipboard_fallback':{zh:'设置已复制到剪贴板（文件写入失败）',en:'Settings copied to clipboard (file write failed)'},
-'built_in_only':{zh:'v1.0.0: 仅支持内置引擎',en:'v1.0.0: Built-in engine only'},
+'built_in_only':{zh:'v1.0.1: 仅支持内置引擎',en:'v1.0.1: Built-in engine only'},
 'engine_error_restart':{zh:'引擎错误，正在重启',en:'Engine error, restarting'},
 'engine_error':{zh:'引擎错误',en:'Engine error'},
 'view_white':{zh:'视角: 白方(下方)',en:'View: White (bottom)'},
@@ -732,7 +732,7 @@ const _i18n={
 'elo_target':{zh:'Elo目标',en:'ELO Target'},
 'export_settings_btn':{zh:'📤 导出设置',en:'📤 Export'},
 'import_settings_btn':{zh:'📥 导入设置',en:'📥 Import'},
-'loading_title':{zh:'Regalia v1.0.0',en:'Regalia v1.0.0'},
+'loading_title':{zh:'Regalia v1.0.1',en:'Regalia v1.0.1'},
 'click_skip_loading':{zh:'点击跳过加载',en:'Click to skip loading'},
 'white_checkmate':{zh:'白方将杀获胜',en:'White wins by checkmate'},
 'black_checkmate':{zh:'黑方将杀获胜',en:'Black wins by checkmate'},
@@ -1740,6 +1740,7 @@ let _ecoComposing=false;let _ecoSearchFocused=false;let _ecoBlurTimer=0;let ecoS
 function posEmoji(ev){if(ev>600)return'🏆';if(ev>350)return'😄';if(ev>150)return'😊';if(ev>50)return'🙂';if(ev>-50)return'😐';if(ev>-150)return'😟';if(ev>-350)return'😰';if(ev>-600)return'😱';return'💀'}
 
 // ---- Exports ----
+;
 
 // ===================== MODULE: ai-bridge =====================
 // Engine communication layer — AndroidBridge callbacks, engine config, eval display
@@ -2720,8 +2721,11 @@ function onEngineProgress(depth,nodes,nps,scoreCp,scoreMate,wdlW,wdlD,wdlL){
   }
   if(isAIThinking||isHintLoading)_updateAIThinkDisplay();
   // Update foreground service notification with engine progress info
+  // v1.0.1: Notification shows ONLY ready/analyzing/error states — no depth/speed.
+  // The detailed depth/nps/score data is still shown in the in-app eval bar;
+  // the notification is intentionally minimal to avoid distracting the user.
   if(isAIThinking&&depth>0){
-    _updateEngineNotification(T('depth')+':'+depth+(nps!=null?' · '+T('nodes')+':'+(nps>=1000?Math.round(nps/1000)+'K/s':nps+' n/s'):''));
+    _updateEngineNotification(T('analyzing_ellipsis'));
   }
   // Ponder info: when not AI thinking, not hint loading, not eval loading, store as ponder info
   // Note: _ponderBarInfo is ONLY set by onPonderProgress(), not here.
@@ -2782,7 +2786,8 @@ function onPonderProgress(depth,nodes,nps,scoreCp,scoreMate){
   _ponderBarInfo=infoParts.join(' ');
   _updateAIThinkDisplay();
   // Update foreground service notification with ponder progress
-  _updateEngineNotification('Ponder · '+T('depth')+':'+depth);
+  // v1.0.1: Ponder is also "analyzing" from the user's POV — show the same minimal state.
+  _updateEngineNotification(T('analyzing_ellipsis'));
 }
 
 // Callback: Engine evaluation result
@@ -3433,6 +3438,13 @@ function onEngineError(msg){
   // calling AndroidBridge methods on a dead engine process, which would
   // trigger infinite "Engine not ready" error loops from the Java side.
   _engineReady=false;
+  // v1.0.1: Reflect the error state in the persistent notification bar.
+  // Truncate very long messages so the notification stays on one line.
+  // The full message is still shown in the in-app toast below.
+  try{
+    const _errShort=(msg&&typeof msg==='string')?msg.slice(0,80):String(msg);
+    _updateEngineNotification(T('engine_error')+': '+_errShort);
+  }catch(e){}
   // Reset animation flags to prevent permanent UI freeze.
   // If an engine error occurs DURING an animation, render() and sqClick()
   // would block forever since animationInProgress/_landingAnimActive are
@@ -3728,6 +3740,7 @@ function _updateAIThinkDisplay(){
 
 
 // ---- Exports ----
+;
 
 // ===================== MODULE: tablebase =====================
 // Syzygy endgame tablebase integration + PGN parser
@@ -3892,13 +3905,30 @@ function _parsePGN(pgnText){
   const rawTokens=text.match(/\(|\)|\S+/g)||[];
   if(rawTokens.length===0)return null;
   
-  // ---- Phase 1: Recursive-descent variation parsing (DroidFish GameTree.parsePgn style) ----
-  // Build a tree of variations: main-line at depth 0, variations nested in parens.
-  // Each variation is associated with the last main-line move before the '(' .
-  const variations=new Map(); // moveIndex → array of { sanTokens: string[] }
-  let moveIndexCounter=0; // counts main-line SAN moves at depth 0
-  let varStack=[]; // stack: each entry = {tokens[], moveIndex, depth}
-  
+  // ---- Phase 1: Recursive variation tree parser (PGN RAV spec-compliant) ----
+  // PGN spec §8.2.5: "An RAV is a sequence of movetext containing one or more
+  // moves enclosed in parentheses... the alternate move sequence given by an
+  // RAV is one that may be legally played by first unplaying the move that
+  // appears immediately prior to the RAV. Because the RAV is a recursive
+  // construct, it may be nested."
+  //
+  // First-principles design:
+  //   - Each '(' opens a new variation frame, attached to the LAST move played
+  //     in the PARENT context (either the main line or an enclosing variation).
+  //   - Each frame tracks its OWN local move index, so a nested '(' attaches
+  //     to the correct move within the parent variation (not the main line).
+  //   - The result is a tree: root (main line) → variations → sub-variations.
+  //   - Phase 2 flattens the tree into the Map<mainMoveIdx, VariationEntry[]>
+  //     that importPGN consumes.
+  //
+  // Bug being fixed (v1.0.1): the previous flat varStack design used a single
+  // moveIndexCounter (main-line only). When '(' appeared inside a variation,
+  // the inner variation was attached to moveIndexCounter-1 (the main-line
+  // move before the OUTER '('), NOT to the correct move within the parent
+  // variation. This caused nested RAVs to be misplaced at the wrong main-line
+  // move, and they appeared in reverse order before the outer variation.
+  // Symptom: "🌿 variations incomplete" after PGN import.
+
   // Regex to identify move number tokens (e.g. "1.", "2...", "12.")
   const moveNumRe=/^\d+\.+$/;
   // Regex to strip leading move number from combined tokens (e.g. "1.e4" → "e4", "2...Nf3" → "Nf3")
@@ -3909,47 +3939,90 @@ function _parsePGN(pgnText){
   const skipTokens=new Set(['1-0','0-1','1/2-1/2','*']);
   // Regex to identify annotation suffixes (!, ?, !!, ??, !?, ?!, also triple like !!!)
   const annotRe=/[!?]+$/;
-  
-  // Recursive-descent: when '(' encountered, commit any pending main-line move
-  // then parse the variation as a sibling (same logic as DroidFish Node.parsePgn)
+
+  // Tree node structure:
+  //   { tokens: string[],          // cleaned SAN tokens of this variation (excluding sub-vars)
+  //     subVars: SubVarRef[],      // sub-variations branching from moves in this variation
+  //     localMoveIdx: number,      // current move count within this frame (for attach target)
+  //     attachToMoveIdx: number,   // index in parent's tokens where this var branches (0..n)
+  //     mainMoveIdx: number }      // main-line move index this var ultimately attaches to
+  // SubVarRef: { tree: TreeNode, attachToMoveIdx: number, parentPrefix: string[] }
+  //
+  // For the root (main line), tokens = main-line moves, mainMoveIdx is N/A.
+  const rootFrame={tokens:[],subVars:[],localMoveIdx:0,attachToMoveIdx:-1,mainMoveIdx:-1};
+  const stack=[rootFrame];
+
   for(const token of rawTokens){
     if(token==='('){
-      // Associate this variation with the LAST main-line move before it.
-      const varMoveIdx=moveIndexCounter>0?moveIndexCounter-1:0;
-      varStack.push({tokens:[],moveIndex:varMoveIdx});
+      // Open a new variation frame, attached to the LAST move in the current frame.
+      const parent=stack[stack.length-1];
+      // PGN spec: RAV attaches to "the move that appears immediately prior to the RAV".
+      // If parent has 0 moves yet (very rare: '(' at start), attach to index 0 by convention.
+      const attachIdx=parent.localMoveIdx>0?parent.localMoveIdx-1:0;
+      // The main-line move index this variation ultimately attaches to:
+      // - For top-level vars: parent.attachToMoveIdx === -1 means parent IS main line,
+      //   so mainMoveIdx = attachIdx (the main-line move before this '(').
+      // - For nested vars: inherit parent's mainMoveIdx (sub-vars attach to the SAME
+      //   main-line move as their parent variation, but branch off mid-variation).
+      const mainIdx=(parent===rootFrame)?attachIdx:parent.mainMoveIdx;
+      const newFrame={tokens:[],subVars:[],localMoveIdx:0,
+                      attachToMoveIdx:attachIdx,mainMoveIdx:mainIdx};
+      parent.subVars.push({tree:newFrame,attachToMoveIdx:attachIdx});
+      stack.push(newFrame);
       continue;
     }
     if(token===')'){
-      // Pop the variation stack and store it
-      if(varStack.length>0){
-        const v=varStack.pop();
-        // Clean variation tokens: remove standalone move numbers, ellipsis, results;
-        // strip leading move number prefixes from combined tokens (e.g. "1.e4" → "e4");
-        // strip annotation suffixes (!, ?, etc.)
-        const vClean=v.tokens.filter(t=>
-          !moveNumRe.test(t)&&!ellipsisRe.test(t)&&!skipTokens.has(t)&&t.length>0
-        ).map(t=>t.replace(moveNumPrefixRe,'').replace(annotRe,''));
-        if(vClean.length>0){
-          const mi=v.moveIndex;
-          if(!variations.has(mi))variations.set(mi,[]);
-          variations.get(mi).push(vClean);
-        }
-      }
+      if(stack.length>1)stack.pop();
       continue;
     }
-    if(varStack.length>0){
-      // Inside a variation: accumulate tokens into the deepest stack frame
-      varStack[varStack.length-1].tokens.push(token);
-      continue;
-    }
-    // At depth 0: skip standalone move numbers and ellipsis, count SAN moves
+    // Skip non-move tokens at any depth
     if(moveNumRe.test(token)||ellipsisRe.test(token)||skipTokens.has(token))continue;
-    // Combined tokens like "1.e4" are NOT standalone move numbers — they contain the SAN move
-    // We don't need to strip the prefix here since Phase 2 handles it, but we must count them
-    moveIndexCounter++;
+    // Strip move number prefix from combined tokens and annotation suffixes
+    const clean=token.replace(moveNumPrefixRe,'').replace(annotRe,'');
+    if(!clean)continue;
+    // Add to current frame's tokens and increment local move index
+    const frame=stack[stack.length-1];
+    frame.tokens.push(clean);
+    frame.localMoveIdx++;
+  }
+
+  // ---- Phase 2: Flatten the variation tree into Map<mainMoveIdx, VariationEntry[]> ----
+  // Each VariationEntry = { sanTokens: string[] } where sanTokens includes the
+  // parent variation's prefix moves up to (but not including) the branching move,
+  // so the resulting token array can be replayed from the start position.
+  //
+  // Rationale: importPGN replays each variation's tokens from a known state
+  // (either preMoveState or postMoveState of the main-line move). For nested
+  // variations, the "branching state" is reached by replaying the parent
+  // variation's moves up to the branching point. We embed that prefix directly
+  // in the sanTokens so the existing Type A/B matching logic in importPGN
+  // handles them uniformly.
+  const variations=new Map();
+  function _flattenVariationTree(frame, parentPrefixTokens){
+    // Emit this variation's own tokens (with parent prefix prepended)
+    if(frame.tokens.length>0){
+      const combinedSanTokens=parentPrefixTokens.concat(frame.tokens);
+      const mi=frame.mainMoveIdx;
+      if(!variations.has(mi))variations.set(mi,[]);
+      variations.get(mi).push({sanTokens:combinedSanTokens});
+    }
+    // Recurse into sub-variations.
+    // For each sub-var, the prefix is: parentPrefixTokens + frame.tokens[0..attachToMoveIdx-1]
+    // (i.e., everything played BEFORE the branching move, since the sub-var's first
+    // move REPLACES the branching move per PGN spec).
+    for(const sv of frame.subVars){
+      const subPrefix=parentPrefixTokens.concat(frame.tokens.slice(0, sv.attachToMoveIdx));
+      _flattenVariationTree(sv.tree, subPrefix);
+    }
+  }
+  // Flatten top-level variations (children of rootFrame).
+  // For top-level vars, parentPrefixTokens is empty (they branch from the main line).
+  for(const sv of rootFrame.subVars){
+    _flattenVariationTree(sv.tree, []);
   }
   
-  // ---- Phase 2: Rebuild clean main-line tokens ----
+  // ---- Phase 3: Rebuild clean main-line tokens ----
+  // Walk rawTokens at depth 0 (outside all variations) and collect main-line SAN moves.
   let mainTokens=[];
   let inVar=0;
   for(const token of rawTokens){
@@ -3965,19 +4038,28 @@ function _parsePGN(pgnText){
   
   if(mainTokens.length===0)return null;
   
-  // ---- Phase 3: Replay main-line moves using _applySANMove ----
+  // ---- Phase 4: Replay main-line moves using _applySANMove ----
   let state=startFEN?fenToState(startFEN):initState();
   if(!state)return null;
   
-  const moves=[]; // array of { notation, move, state (post-move) }
+  const moves=[]; // array of { notation, move, state (post-move), mainTokenIdx }
   
+  // v1.0.1 FIX: Track the original mainToken index for each valid move.
+  // If a main-line token fails to parse (rare but possible with malformed PGN),
+  // it's skipped in `moves` but its index is still used as a key in the
+  // `variations` Map. Without this tracking, variations attached to moves
+  // AFTER the invalid token would be looked up at the wrong index and silently
+  // dropped — manifesting as "incomplete variations" after PGN import.
   for(let ti=0;ti<mainTokens.length;ti++){
     const token=mainTokens[ti];
     const result=_applySANMove(state,token);
     if(!result){
       // Could not parse — skip this token (DroidFish-style lazy validation: silently drop invalid)
+      // Log so we can diagnose which token failed.
+      console.warn('_parsePGN: skipping invalid main-line token at index',ti,':',token);
       continue;
     }
+    result.mainTokenIdx=ti;
     moves.push(result);
     state=result.state;
   }
@@ -4245,14 +4327,22 @@ function importPGN(pgnText){
     try{properNotation=moveAlg(preMoveState,parsedMove.move,replayState);}catch(e){properNotation=parsedMove.notation||'';}
     
     // Build variations for this move from PGN
-    const pgnVars=result.variations&&result.variations.get(moveIdx);
+    // v1.0.1 FIX: Use parsedMove.mainTokenIdx (original main-line token index)
+    // instead of moveIdx (which only counts valid moves). This ensures variations
+    // are correctly looked up even if some main-line tokens were skipped during parsing.
+    const _varKey=(parsedMove.mainTokenIdx!=null)?parsedMove.mainTokenIdx:moveIdx;
+    const pgnVars=result.variations&&result.variations.get(_varKey);
     const varEntries=[];
     if(pgnVars&&pgnVars.length>0){
       const postMoveState=replayState; // read-only: replayState already updated by makeMvInPlace
       const branchMoveIsWhite=preMoveState.currentTurn==='white';
       const branchMoveNum=preMoveState.fullMoveNumber||Math.floor(moveIdx/2)+1;
       for(let vi=0;vi<pgnVars.length;vi++){
-        const vTokens=pgnVars[vi]; // array of pure SAN tokens
+        // v1.0.1: Each entry is now an object with .sanTokens (was a bare array).
+        // For nested variations, sanTokens already includes the parent variation's
+        // prefix moves, so the entire array replays from the start position.
+        const vEntry=pgnVars[vi];
+        const vTokens=(vEntry&&vEntry.sanTokens)?vEntry.sanTokens:vEntry; // backward-compatible
         const sanParts=[];
         let vState=null, vIsWhite, vMoveNum, startIdx=0;
         // PGN variations can start from either side:
@@ -4268,35 +4358,60 @@ function importPGN(pgnText){
             startIdx=1; // first token already applied
             sanParts.push(tryA.notation);
           }else{
-            // Attempt Type B: first token matches from postMoveState (opponent's side)
-            const tryB=_applySANMove(cloneS(postMoveState),vTokens[0]);
-            if(tryB){
-              vState=tryB.state;
-              vIsWhite=!branchMoveIsWhite;
-              vMoveNum=branchMoveIsWhite?branchMoveNum:branchMoveNum+1;
+            // Fallback Type A: try moveAlg matching from preMoveState.
+            // v1.0.1: Some PGNs use slightly non-standard SAN (e.g., missing
+            // disambiguation, or check suffixes that confuse _applySANMove).
+            // moveAlg-based matching is more forgiving and recovers these cases.
+            const fbAState=cloneS(preMoveState);
+            const fbAMoves=legalMoves(fbAState,null);
+            let fbAMatch=null;
+            for(const vm of fbAMoves){
+              const vAlg=moveAlg(fbAState,vm);
+              if(vAlg.replace(/[+#!?]+$/,'')===vTokens[0].replace(/[+#!?]+$/,'')){fbAMatch=vm;break;}
+            }
+            if(fbAMatch){
+              sanParts.push(moveAlg(fbAState,fbAMatch));
+              makeMvInPlace(fbAState,fbAMatch);
+              vState=fbAState;
+              vIsWhite=branchMoveIsWhite;
+              vMoveNum=branchMoveNum;
               startIdx=1;
-              sanParts.push(tryB.notation);
             }else{
-              // Fallback Type B: try moveAlg matching from postMoveState
-              const fbState=cloneS(postMoveState);
-              const fbMoves=legalMoves(fbState,null);
-              let fbMatch=null;
-              for(const vm of fbMoves){
-                const vAlg=moveAlg(fbState,vm);
-                if(vAlg.replace(/[+#!?]+$/,'')===vTokens[0].replace(/[+#!?]+$/,'')){fbMatch=vm;break;}
-              }
-              if(fbMatch){
-                sanParts.push(moveAlg(fbState,fbMatch));
-                makeMvInPlace(fbState,fbMatch);
-                vState=fbState;
+              // Attempt Type B: first token matches from postMoveState (opponent's side)
+              const tryB=_applySANMove(cloneS(postMoveState),vTokens[0]);
+              if(tryB){
+                vState=tryB.state;
                 vIsWhite=!branchMoveIsWhite;
                 vMoveNum=branchMoveIsWhite?branchMoveNum:branchMoveNum+1;
                 startIdx=1;
+                sanParts.push(tryB.notation);
+              }else{
+                // Fallback Type B: try moveAlg matching from postMoveState
+                const fbState=cloneS(postMoveState);
+                const fbMoves=legalMoves(fbState,null);
+                let fbMatch=null;
+                for(const vm of fbMoves){
+                  const vAlg=moveAlg(fbState,vm);
+                  if(vAlg.replace(/[+#!?]+$/,'')===vTokens[0].replace(/[+#!?]+$/,'')){fbMatch=vm;break;}
+                }
+                if(fbMatch){
+                  sanParts.push(moveAlg(fbState,fbMatch));
+                  makeMvInPlace(fbState,fbMatch);
+                  vState=fbState;
+                  vIsWhite=!branchMoveIsWhite;
+                  vMoveNum=branchMoveIsWhite?branchMoveNum:branchMoveNum+1;
+                  startIdx=1;
+                }
               }
             }
           }
         }
-        if(!vState){continue;} // Cannot match first token — skip this variation
+        if(!vState){
+          // v1.0.1: Log dropped variations for diagnostics — helps identify which
+          // PGN inputs are losing variations and why.
+          console.warn('importPGN: could not match first variation token, dropping. vTokens[0]=',vTokens[0],'branchMoveIsWhite=',branchMoveIsWhite);
+          continue;
+        }
         const initialVIsWhite=vIsWhite;
         const initialVMoveNum=vMoveNum;
 
@@ -4343,6 +4458,13 @@ function importPGN(pgnText){
     const algRe=/^[a-h][1-8]$/;
     if(!algRe.test(fromAlg)){console.error('importPGN: invalid fromAlg at index',moveIdx,fromAlg);fromAlg=posAlg(from)||'??';}
     if(!algRe.test(toAlg)){console.error('importPGN: invalid toAlg at index',moveIdx,toAlg);toAlg=posAlg(to)||'??';}
+    // v1.0.1 CRITICAL FIX: Push stateHistory BEFORE adding the current move to moveRecords.
+    // Previously this was pushed AFTER moveRecords.push(), which meant each stateHistory
+    // entry's moveRecords INCLUDES the move that was just added. When undoMove() restored
+    // such an entry, the move was still in moveRecords — so undo didn't actually remove
+    // the move from the move list (symptom: "can't undo white's first move from move records").
+    // The correct order (matching executeMove in ui.js) is: snapshot first, then push the move.
+    stateHistory.push({state:preMoveState,moveRecords:[...moveRecords],lastMove:lastMove?{...lastMove}:null,selectedSquare:null});
     moveRecords.push({
       notation:properNotation,
       from:fromAlg,
@@ -4352,7 +4474,6 @@ function importPGN(pgnText){
       time:null,
       variations:varEntries
     });
-    stateHistory.push({state:preMoveState,moveRecords:[...moveRecords],lastMove:lastMove?{...lastMove}:null,selectedSquare:null});
     lastMove={from,to};
     _cachedStatus=null;_cachedStatusKey='';
     moveIdx++;
@@ -4556,6 +4677,7 @@ _updateBoardLightweight();
 }
 
 // ---- Exports ----
+;
 
 // ===================== MODULE: eco-data =====================
 // ECO opening data, IndexedDB cache, and lookup functions
@@ -4683,6 +4805,7 @@ let ecoHashMap=null,ecoHashMap2=null,ecoHashMap3=null;
 
 
 // ---- Exports ----
+;
 
 // ===================== MODULE: ui =====================
 // Rendering, interaction, dialog management
@@ -4960,7 +5083,7 @@ function _updateEvalDisplayIncremental() {
       if (app) {
         app.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#1a0a0a;color:#f5e6c8;padding:20px;text-align:center;font-family:system-ui,sans-serif">' +
           '<div style="font-size:3rem;margin-bottom:16px">♔</div>' +
-          '<h2 style="color:#ffd700;margin-bottom:12px">'+T('app_name')+' v1.0.0</h2>' +
+          '<h2 style="color:#ffd700;margin-bottom:12px">'+T('app_name')+' v1.0.1</h2>' +
           '<p style="color:#a08050;margin-bottom:20px;max-width:300px">'+T('render_error')+'</p>' +
           '<button onclick="location.reload()" style="padding:12px 24px;background:#c49512;color:#1a0a0a;border:none;border-radius:6px;font-size:1rem;font-weight:700;cursor:pointer">'+T('refresh_page')+'</button>' +
           '</div>';
@@ -5426,7 +5549,7 @@ const oppC=OPP_COLOR[playerColor];
 const flip=playerColor==='black';
 // Arrows computed separately by _updateArrows() — no inline computation needed
 
-let h='<div class="hdr" role="banner"><div class="hdr-top"><div class="hdr-l"><span style="font-size:1.3rem;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text;border:3px solid transparent;border-image:linear-gradient(145deg,#8b6914,#d4a017,#ffd700,#fff8dc,#ffd700,#d4a017,#8b6914) 1;padding:3px 6px;background:linear-gradient(145deg,rgba(139,105,20,.18),rgba(255,215,0,.08),rgba(139,105,20,.18));box-shadow:0 0 6px rgba(212,160,23,.35),0 0 12px rgba(255,215,0,.12),inset 0 0 3px rgba(255,215,0,.1),inset 0 1px 0 rgba(255,248,220,.15);position:relative">♔&#xFE0E;</span><h1>'+T('app_name')+'<span class="ver">v1.0.0</span><button onclick="showAboutPage=true;render()" style="font-size:.6rem;color:var(--accent);background:rgba(212,160,23,.15);padding:2px 8px;border-radius:4px;border:1px solid rgba(212,160,23,.3);margin-left:4px;cursor:pointer;font-family:system-ui,-apple-system,sans-serif;letter-spacing:1px">ℹ️</button></h1></div><button onclick="toggleLang()" style="font-size:.65rem;color:var(--accent);background:rgba(212,160,23,.15);padding:2px 6px;border-radius:4px;border:1px solid rgba(212,160,23,.3);cursor:pointer;font-family:system-ui,-apple-system,sans-serif;letter-spacing:1px;flex-shrink:0">'+(_lang==='zh'?'↔️中':'↔️EN')+'</button><div class="ev" id="eval-disp" role="status" aria-label="'+T('evaluating')+'">'+(setupMode?T('setup_label'):(isAIThinking?'<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>':'<span class="ev-e">'+pe+'</span><span>'+pd+'</span><span style="color:var(--muted)">('+scoreStr+')</span>'+_hdrDepthStr+_hdrProgressStr))+'</div></div><div class="hdr-tools" role="toolbar" aria-label="'+T('ctrl_range')+'">'+(setupMode?'':'<div class="diff-sel" role="radiogroup" aria-label="AI">'+getAI_LEVELS().map(l=>'<button class="diff-b'+(getEffectiveAILevel()===l.id?' act':'')+'" onclick="if(!isAIThinking){'+(l.id===8?'openEngineConfig()':('aiLevel='+l.id+';try{AndroidBridge.syncGameDifficulty('+l.id+')}catch(e){}render()'))+'}" title="'+l.desc+'" role="radio" aria-checked="'+(getEffectiveAILevel()===l.id)+'">'+(l.id===8?'⚙️':l.id===7?'SL':l.id)+'</button>').join('')+'</div>')+'<button type="button" class="btn" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()" aria-label="'+T('new_game')+'"><span style="font-size:1.4rem">⚔️</span> '+T('new_game')+'</button>'+'<button class="btn" onclick="quickFreeOpening()" aria-label="'+T('free_opening')+'">'+(playerColor==='white'?'<span style=\"font-size:1.4rem;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text\">♔&#xFE0E;</span>':'<span style=\"font-size:1.4rem;font-weight:400;color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans Symbol&#x27;,sans-serif;font-variant-emoji:text\">♚&#xFE0E;</span>')+' '+T('free_opening')+'</button>'+(setupMode?'':'<button class="btn" onclick="undoMove()" aria-label="'+T('undo')+'"><span style="font-size:1.4rem">↩️</span> '+T('undo')+'</button><button class="btn" onclick="redoMove()" aria-label="'+T('redo')+'" id="redoBtn"><span style="font-size:1.4rem">↪️</span> '+T('redo')+'</button>')+'<button class="btn" onclick="flipBoard()" aria-label="'+T('flip')+'"><span style="font-size:1.4rem">🔃</span> '+T('flip')+'</button>'+'<button class="btn" onclick="getHint()" aria-label="'+T('ai_hint')+'"><span style="font-size:1.4rem">💡</span> '+T('ai_hint')+'</button>'+(setupMode?'':'<button class="btn" onclick="toggleSound()" id="btnSound" aria-label="'+T('sound')+'">'+(soundOn?'<span style="font-size:1.4rem">🔊</span> '+T('sound'):'<span style="font-size:1.4rem">🔇</span> '+T('sound'))+'</button>')+'<button class="btn" onclick="showCtrlMap=!showCtrlMap;cachedCtrlKey=&quot;&quot;;render()" aria-label="'+T('ctrl_range')+'" title="'+T('ctrl_range')+'">'+(showCtrlMap?'<span style="font-size:1.4rem">🌈</span> '+T('ctrl_range'):'<span style="font-size:1.4rem">🌗</span> '+T('ctrl_range'))+'</button>'+'<button class="btn" onclick="copyFEN()" title="'+T('copy_fen')+'" aria-label="'+T('copy_fen')+'"><span style="font-size:1.4rem">📝</span> FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="'+T('import_fen')+'" aria-label="'+T('import_fen')+'"><span style="font-size:1.4rem">🗃️</span> '+T('import_label')+'</button><button class="btn" onclick="'+(setupMode?'exitSetup()':'toggleSetup()')+'" aria-label="'+(setupMode?T('setup_done'):T('setup_mode'))+'">'+(setupMode?'<span style="font-size:1.4rem">✓</span> '+T('setup_done'):'<span style="font-size:1.4rem">🏗️</span> '+T('setup_mode'))+'</button></div></div>';
+let h='<div class="hdr" role="banner"><div class="hdr-top"><div class="hdr-l"><span style="font-size:1.3rem;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text;border:3px solid transparent;border-image:linear-gradient(145deg,#8b6914,#d4a017,#ffd700,#fff8dc,#ffd700,#d4a017,#8b6914) 1;padding:3px 6px;background:linear-gradient(145deg,rgba(139,105,20,.18),rgba(255,215,0,.08),rgba(139,105,20,.18));box-shadow:0 0 6px rgba(212,160,23,.35),0 0 12px rgba(255,215,0,.12),inset 0 0 3px rgba(255,215,0,.1),inset 0 1px 0 rgba(255,248,220,.15);position:relative">♔&#xFE0E;</span><h1>'+T('app_name')+'<span class="ver">v1.0.1</span><button onclick="showAboutPage=true;render()" style="font-size:.6rem;color:var(--accent);background:rgba(212,160,23,.15);padding:2px 8px;border-radius:4px;border:1px solid rgba(212,160,23,.3);margin-left:4px;cursor:pointer;font-family:system-ui,-apple-system,sans-serif;letter-spacing:1px">ℹ️</button></h1></div><button onclick="toggleLang()" style="font-size:.65rem;color:var(--accent);background:rgba(212,160,23,.15);padding:2px 6px;border-radius:4px;border:1px solid rgba(212,160,23,.3);cursor:pointer;font-family:system-ui,-apple-system,sans-serif;letter-spacing:1px;flex-shrink:0">'+(_lang==='zh'?'↔️中':'↔️EN')+'</button><div class="ev" id="eval-disp" role="status" aria-label="'+T('evaluating')+'">'+(setupMode?T('setup_label'):(isAIThinking?'<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>':'<span class="ev-e">'+pe+'</span><span>'+pd+'</span><span style="color:var(--muted)">('+scoreStr+')</span>'+_hdrDepthStr+_hdrProgressStr))+'</div></div><div class="hdr-tools" role="toolbar" aria-label="'+T('ctrl_range')+'">'+(setupMode?'':'<div class="diff-sel" role="radiogroup" aria-label="AI">'+getAI_LEVELS().map(l=>'<button class="diff-b'+(getEffectiveAILevel()===l.id?' act':'')+'" onclick="if(!isAIThinking){'+(l.id===8?'openEngineConfig()':('aiLevel='+l.id+';try{AndroidBridge.syncGameDifficulty('+l.id+')}catch(e){}render()'))+'}" title="'+l.desc+'" role="radio" aria-checked="'+(getEffectiveAILevel()===l.id)+'">'+(l.id===8?'⚙️':l.id===7?'SL':l.id)+'</button>').join('')+'</div>')+'<button type="button" class="btn" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()" aria-label="'+T('new_game')+'"><span style="font-size:1.4rem">⚔️</span> '+T('new_game')+'</button>'+'<button class="btn" onclick="quickFreeOpening()" aria-label="'+T('free_opening')+'">'+(playerColor==='white'?'<span style=\"font-size:1.4rem;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text\">♔&#xFE0E;</span>':'<span style=\"font-size:1.4rem;font-weight:400;color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans Symbol&#x27;,sans-serif;font-variant-emoji:text\">♚&#xFE0E;</span>')+' '+T('free_opening')+'</button>'+(setupMode?'':'<button class="btn" onclick="undoMove()" aria-label="'+T('undo')+'"><span style="font-size:1.4rem">↩️</span> '+T('undo')+'</button><button class="btn" onclick="redoMove()" aria-label="'+T('redo')+'" id="redoBtn"><span style="font-size:1.4rem">↪️</span> '+T('redo')+'</button>')+'<button class="btn" onclick="flipBoard()" aria-label="'+T('flip')+'"><span style="font-size:1.4rem">🔃</span> '+T('flip')+'</button>'+'<button class="btn" onclick="getHint()" aria-label="'+T('ai_hint')+'"><span style="font-size:1.4rem">💡</span> '+T('ai_hint')+'</button>'+(setupMode?'':'<button class="btn" onclick="toggleSound()" id="btnSound" aria-label="'+T('sound')+'">'+(soundOn?'<span style="font-size:1.4rem">🔊</span> '+T('sound'):'<span style="font-size:1.4rem">🔇</span> '+T('sound'))+'</button>')+'<button class="btn" onclick="showCtrlMap=!showCtrlMap;cachedCtrlKey=&quot;&quot;;render()" aria-label="'+T('ctrl_range')+'" title="'+T('ctrl_range')+'">'+(showCtrlMap?'<span style="font-size:1.4rem">🌈</span> '+T('ctrl_range'):'<span style="font-size:1.4rem">🌗</span> '+T('ctrl_range'))+'</button>'+'<button class="btn" onclick="copyFEN()" title="'+T('copy_fen')+'" aria-label="'+T('copy_fen')+'"><span style="font-size:1.4rem">📝</span> FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="'+T('import_fen')+'" aria-label="'+T('import_fen')+'"><span style="font-size:1.4rem">🗃️</span> '+T('import_label')+'</button><button class="btn" onclick="'+(setupMode?'exitSetup()':'toggleSetup()')+'" aria-label="'+(setupMode?T('setup_done'):T('setup_mode'))+'">'+(setupMode?'<span style="font-size:1.4rem">✓</span> '+T('setup_done'):'<span style="font-size:1.4rem">🏗️</span> '+T('setup_mode'))+'</button></div></div>';
 h+=`<div class="main" role="main"><div class="bsec">`;
 {const _aiCapHtml=capturedPiecesHtml(gameState.board,oppC,playerColor);h+=`<div class="pbar" id="ai-bar" role="status" aria-label="AI" style="flex-wrap:wrap"><span class="pico">${playerColor==='white'?'<span style="color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55)">♚&#xFE0E;</span>':'<span style="color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55)">♔&#xFE0E;</span>'}</span><div style="flex:1;min-width:0;display:flex;flex-direction:column"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><div class="pname">${T('ai_opponent')}</div><div class="pbar-sub">${getEffectiveAILevel()===8?T('manual_config'):getEffectiveAILevel()===7?'SL':('Lv.'+getEffectiveAILevel())}</div>${gameState.currentTurn!==playerColor&&!gameOver&&!isAIThinking?'<span class="tind">'+T('waiting')+'</span>':''}${isAIThinking?'<span class="tind">'+(_aiBarInfo||T('thinking'))+'</span>':''}</div>${_aiCapHtml}<div id="ai-ponder-info" style="display:flex;justify-content:flex-end;text-align:right;font-size:.65rem;color:var(--muted);font-family:monospace,system-ui,-apple-system,sans-serif;letter-spacing:.5px;padding-top:2px;line-height:1.3;min-height:1.3em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;flex:0 0 auto">${(!isAIThinking&&!isHintLoading&&!hintText&&_ponderMoveSAN&&_ponderBarInfo&&!gameOver&&!setupMode&&!reviewMode)?('🔮 '+_esc(_ponderMoveSAN)+' '+_esc(_ponderBarInfo)):''}</div></div></div>`;}
 h+=`<div class="flbl" style="margin-left:28px">${(flip?'hgfedcba':'abcdefgh').split('').map(f=>`<span style="width:${CELL}px">${f}</span>`).join('')}</div>`;
@@ -5573,7 +5696,7 @@ if(showAboutPage){
 // Load AGPL v3 SVG via AndroidBridge as base64 (CSP-compliant)
 let _gplSvgSrc='';
 try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.loadAssetAsBase64){const b64=AndroidBridge.loadAssetAsBase64('AGPLv3_Logo.svg');if(b64)_gplSvgSrc='data:image/svg+xml;base64,'+b64;}}catch(e){}
-h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="About"><div class="dlg" style="max-width:460px"><h2>${T('about_title')}</h2><div class="dlg-sec"><div class="crow"><span class="lb">${T('about_app')}</span><span class="vl">${T('app_name')} v1.0.0</span></div><div class="crow"><span class="lb">${T('about_engine')}</span><span class="vl">Stockfish 18 (arm64-v8a-dotprod)</span></div><div class="crow"><span class="lb">${T('about_platform')}</span><span class="vl">Android arm64-v8a</span></div></div><div class="dlg-sec"><h3>${T('copyright_license')}</h3>`+(_gplSvgSrc?`<div style="text-align:center;margin-bottom:10px"><img src="${_gplSvgSrc}" alt="AGPL v3 Logo" style="width:120px;height:auto;opacity:.9" /></div>`:'')+`<div style="font-size:.75rem;color:var(--text);line-height:1.6"><p style="margin-bottom:8px">${T('about_copyright')}</p><p style="margin-bottom:8px">${T('about_source_code')}</p><p style="margin-bottom:8px">${T('about_agpl')} <a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank">GNU AGPL v3</a>${T('about_agpl_desc')}</p><p style="margin-bottom:8px">${T('about_droidfish')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank">GPL v3</a>${T('about_droidfish_desc')}</p><p style="margin-bottom:8px">${T('about_stockfish')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank">GPL v3</a> ${T('about_gplv3')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_disclaimer')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_ai')}</p></div></div><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="showAboutPage=false;render()" style="flex:1;justify-content:center">${T('close')}</button></div></div></div>`;}
+h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="About"><div class="dlg" style="max-width:460px"><h2>${T('about_title')}</h2><div class="dlg-sec"><div class="crow"><span class="lb">${T('about_app')}</span><span class="vl">${T('app_name')} v1.0.1</span></div><div class="crow"><span class="lb">${T('about_engine')}</span><span class="vl">Stockfish 18 (arm64-v8a-dotprod)</span></div><div class="crow"><span class="lb">${T('about_platform')}</span><span class="vl">Android arm64-v8a</span></div></div><div class="dlg-sec"><h3>${T('copyright_license')}</h3>`+(_gplSvgSrc?`<div style="text-align:center;margin-bottom:10px"><img src="${_gplSvgSrc}" alt="AGPL v3 Logo" style="width:120px;height:auto;opacity:.9" /></div>`:'')+`<div style="font-size:.75rem;color:var(--text);line-height:1.6"><p style="margin-bottom:8px">${T('about_copyright')}</p><p style="margin-bottom:8px">${T('about_source_code')}</p><p style="margin-bottom:8px">${T('about_agpl')} <a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank">GNU AGPL v3</a>${T('about_agpl_desc')}</p><p style="margin-bottom:8px">${T('about_droidfish')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank">GPL v3</a>${T('about_droidfish_desc')}</p><p style="margin-bottom:8px">${T('about_stockfish')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank">GPL v3</a> ${T('about_gplv3')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_disclaimer')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_ai')}</p></div></div><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="showAboutPage=false;render()" style="flex:1;justify-content:center">${T('close')}</button></div></div></div>`;}
 // Import dialog — paste FEN, paste PGN, or select PGN file
 if(showImportDialog){
 h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="${T('import_title')}" onclick="if(event.target===this){showImportDialog=false;render()}"><div class="dlg" style="max-width:420px"><h2>${T('import_title')}</h2><div class="dlg-sec" style="gap:10px;display:flex;flex-direction:column">
@@ -6191,11 +6314,18 @@ if(isAIThinking&&!setupMode)return;_cachedStatus=null;_cachedStatusKey='';_updat
 _clearAnimationState();
 if(pendingPromotion)pendingPromotion=null;
 let steps=0;
-// Track the from-position of the player's move being undone.
-// After the undo loop, we select the piece at its original (pre-move) position
-// so the user can see legal moves from there and potentially replay differently.
+// Track the from-position of the most recent PLAYER move being undone.
+// v1.0.1 FIX: We must capture `lastMove` BEFORE popping — that's the move actually
+// being undone in this iteration. After the pop, gameState is restored to the
+// PRE-move state, and the piece that moved is now BACK at lastMove.from.
+// (The previous code read `prev.lastMove.from`, which is the move from BEFORE the
+// one being undone — that pointed to the wrong square, so auto-select never fired.)
 let _playerMoveFrom=null;
 while(stateHistory.length>0&&steps<3){
+// Capture the move being undone BEFORE we pop the state history entry.
+// After we restore, gameState will be the pre-move state — and the piece
+// that was moved will be back at this from-square.
+const _undoneMove=lastMove?{from:{row:lastMove.from.row,col:lastMove.from.col},to:{row:lastMove.to.row,col:lastMove.to.col}}:null;
 const prev=stateHistory.pop();
 // Validate prev before using it — if invalid, push back and stop
 if(!prev||!prev.state){
@@ -6207,8 +6337,10 @@ if(!prev||!prev.state){
 // Push current state to redo stack BEFORE restoring
 _redoStack.push({state:cloneS(gameState),moveRecords:[...moveRecords],lastMove:lastMove?{...lastMove}:null});
 gameState=prev.state;
-if(prev.lastMove&&prev.lastMove.from){
-  const fromRow=prev.lastMove.from.row,fromCol=prev.lastMove.from.col;
+// If the move being undone was a PLAYER move, capture its from-position.
+// The piece is now back at that square in the restored gameState.
+if(_undoneMove&&_undoneMove.from){
+  const fromRow=_undoneMove.from.row,fromCol=_undoneMove.from.col;
   const pieceAtFrom=gameState.board[fromRow]&&gameState.board[fromRow][fromCol];
   if(pieceAtFrom&&pieceAtFrom.color===playerColor){
     _playerMoveFrom={row:fromRow,col:fromCol};
@@ -6221,20 +6353,15 @@ if(gameState.currentTurn===playerColor)break;
 // After undo, select the piece at the player's original (from) position.
 // This is the position the piece was at BEFORE the player moved it, so the user
 // can see its legal moves and potentially make a different move.
+// v1.0.1: Removed the fallback that selected lastMove.to — that was pointing
+// to an AI piece (wrong color), so selection silently failed. Now we only
+// select if we successfully tracked a player move's from-square.
 if(_playerMoveFrom&&!gameOver){
   const tp=gameState.board[_playerMoveFrom.row]&&gameState.board[_playerMoveFrom.row][_playerMoveFrom.col];
   if(tp&&tp.color===playerColor){
     selectedSquare={row:_playerMoveFrom.row,col:_playerMoveFrom.col};
     legalMvs=legalMoves(gameState,selectedSquare);legalSet=new Set(legalMvs.map(m=>m.row*8+m.col));
-  }else{
-    selectedSquare=null;legalMvs=[];legalSet=new Set();
-  }
-}else if(lastMove&&lastMove.to&&!gameOver){
-  // Fallback: if no player from-position was found, select the piece at lastMove.to
-  const tp=gameState.board[lastMove.to.row]&&gameState.board[lastMove.to.row][lastMove.to.col];
-  if(tp&&tp.color===playerColor){
-    selectedSquare={row:lastMove.to.row,col:lastMove.to.col};
-    legalMvs=legalMoves(gameState,selectedSquare);legalSet=new Set(legalMvs.map(m=>m.row*8+m.col));
+    HapticManager.fire('PIECE_SELECT');
   }else{
     selectedSquare=null;legalMvs=[];legalSet=new Set();
   }
@@ -6879,6 +7006,7 @@ function _doPastePGN(){
 }
 
 // ---- Exports ----
+;
 </script>
 </body>
 </html>

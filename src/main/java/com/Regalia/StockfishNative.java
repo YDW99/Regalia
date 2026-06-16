@@ -116,7 +116,7 @@ public class StockfishNative {
 
     // v18.4.0: ELO_MAP synced with JS ELO_MATCH for consistent level display
     private static final int[] ELO_MAP = {0, 800, 1350, 1700, 2000, 2200, 2350, 2800};
-    private static final String ENGINE_VERSION = "v1.0.0";
+    private static final String ENGINE_VERSION = "v1.0.1";
     // Movetime mapping: index 0 unused, 1-7 = game levels
     private static final int[] MOVETIME_MAP = {0, 500, 800, 1000, 1500, 2000, 3000, 5000};
 
@@ -609,7 +609,7 @@ public class StockfishNative {
     }
 
     /**
-     * v1.0.0: Get the Android system language for i18n auto-detection.
+     * v1.0.1: Get the Android system language for i18n auto-detection.
      * Returns the ISO 639-1 language code (e.g., "zh", "en", "ja").
      */
     @JavascriptInterface
@@ -2393,10 +2393,13 @@ public class StockfishNative {
     // ===================== NOTIFICATION UPDATE =====================
 
     /**
-     * Update the foreground service notification with engine process info.
-     * This keeps the notification actively showing engine status (e.g.,
-     * "Stockfish 18 · depth 22"), which prevents the OS from killing
-     * the service on aggressive memory managers like Xiaomi HyperOS 3.
+     * Update the foreground service notification with engine status info.
+     * v1.0.1: The notification now shows ONLY ready/analyzing/error states
+     * (no depth/speed). Detailed depth/nps/score data is still shown in the
+     * in-app eval bar; the notification is intentionally minimal to avoid
+     * distracting the user. Keeping the notification actively updated (even
+     * with a static "ready" string) still prevents the OS from killing the
+     * service on aggressive memory managers like Xiaomi HyperOS 3.
      *
      * @param info Status string to display in the notification
      */
