@@ -146,7 +146,7 @@ Per GPL v3 Section 13, these licenses are compatible for combination. Each compo
 - **Lichess Tablebase API** — Endgame tablebase queries (public API, requires network)
 - **lichess-org/chess-openings** — ECO opening classification data (CC0)
 
-See [NOTICE](NOTICE) for full attribution details. More declaration documents are preserved in [NOTICE-DroidFish](NOTICE-DroidFish) and [AUTHORS-stockfish](AUTHORS-stockfish).
+See [NOTICE](NOTICE) for full attribution details. More declaration are preserved in [NOTICE-DroidFish](NOTICE-DroidFish) and [AUTHORS-stockfish](AUTHORS-stockfish).
 
 ## Contributing
 
