@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Regalia Network Security Configuration
+
+  SECURITY FIX (MobSF #4, #7): Enforces TLS for all network traffic and pins
+  the Lichess Tablebase API certificate chain to prevent MITM attacks.
+
+  Design decisions (first-principles analysis):
+  - cleartextTrafficPermitted="false": The app is offline-first; the only network
+    endpoint is the optional Lichess Syzygy tablebase API (HTTPS). Cleartext is
+    never needed, so it is globally blocked.
+  - system trust anchors: Rely on the device's trusted CA store for general HTTPS.
+  - Pin set for tablebase.lichess.ovh: Pins the current Let's Encrypt E7 ECDSA
+    intermediate (primary) plus the ISRG Root X1 / X2 root CAs (backups). The root
+    pins guarantee the app keeps working even if Let's Encrypt rotates to a new
+    intermediate that chains to the same roots, while the intermediate pin blocks
+    MITM by a forged cert from a different CA. Expiration is set to 2028-12-31 so
+    stale pins cannot permanently brick the optional tablebase feature.
+  - Certificate Transparency (#4): Android 10+ (API 29+) enforces CT for all
+    certificates issued from certificates whose CT enforcement dates have passed,
+    via the platform Conscrypt provider. minSdk 21 devices without platform CT
+    still benefit from the pin-set above. No additional library is needed.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system"/>
+        </trust-anchors>
+    </base-config>
+    <domain-config>
+        <domain includeSubdomains="false">tablebase.lichess.ovh</domain>
+        <pin-set expiration="2028-12-31">
+            <!-- Primary: Let's Encrypt E7 (ECDSA intermediate, currently in use) -->
+            <pin digest="SHA-256">y7xVm0TVJNahMr2sZydE2jQH8SquXV9yLF9seROHHHU=</pin>
+            <!-- Backup 1: ISRG Root X1 (RSA root, valid until 2035-06-04) -->
+            <pin digest="SHA-256">C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=</pin>
+            <!-- Backup 2: ISRG Root X2 (ECDSA root, valid until 2035-09-06) -->
+            <pin digest="SHA-256">diGVwiVYbubAI3RW4hB9xU8e/CH2GnkuvVFZE8zmgzI=</pin>
+        </pin-set>
+    </domain-config>
+</network-security-config>
