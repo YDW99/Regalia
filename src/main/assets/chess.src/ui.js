@@ -875,7 +875,7 @@ h+=`<div class="dlg-sec"><h3>${T('classic_openings')}</h3><div style="display:fl
 _ensureEcoParsed();ecoDisplayList=ECO_OPENINGS;
 if(window.ecoSearchQuery){const q=window.ecoSearchQuery.trim().toUpperCase();ecoDisplayList=searchEco(q)}
 else if(window.ecoFamilyFilter){ecoDisplayList=ECO_BY_FAMILY[window.ecoFamilyFilter]||[]}
-for(const o of ecoDisplayList.slice(0,ecoShowCount))h+=`<button class="op-btn${dlgOpeningId===o.id+'|'+o.name?' act':''}" onclick="dlgOpeningId='${_esc(o.id)}|${_esc(o.name)}';_ecoUpdateResults()"><div class="on">${_esc(o.id)} ${_esc(o.name)}</div><div class="os">${_esc(o.family)}</div></button>`;
+for(const o of ecoDisplayList.slice(0,ecoShowCount))h+=`<button class="op-btn${dlgOpeningId===o.id+'|'+o.name?' act':''}" onclick="dlgOpeningId='${_escJs(o.id)}|${_escJs(o.name)}';_ecoUpdateResults()"><div class="on">${_esc(o.id)} ${_esc(o.name)}</div><div class="os">${_esc(o.family)}</div></button>`;
 if(ecoDisplayList.length>ecoShowCount)h+=`<button class="btn btn-d" style="width:100%;margin-top:4px" onclick="ecoShowCount+=30;_ecoUpdateResults()">${T('load_more')} (+${ecoDisplayList.length-ecoShowCount})</button>`;
 h+=`</div></div>`;
 h+=`<div class="dlg-btns"><button type="button" class="btn btn-s" onclick="showNewGameDialog=false;dlgOpeningId=null;render()">${T('cancel')}</button><button type="button" class="btn btn-p" onclick="startGame()">${T('start_game_pawn')}</button></div>`;
