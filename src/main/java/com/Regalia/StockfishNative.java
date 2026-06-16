@@ -96,9 +96,12 @@ public class StockfishNative {
     static {
         try {
             System.loadLibrary("engine_bridge");
-            Log.i("StockfishNative", "Native JNI library loaded successfully");
+            // SECURITY (MobSF #3): Minimal logging — no library path or exception detail
+            Log.i("StockfishNative", "JNI ready");
         } catch (UnsatisfiedLinkError e) {
-            Log.w("StockfishNative", "Native JNI library not available (non-critical): " + e.getMessage());
+            // SECURITY (MobSF #3): Do NOT log the exception message — it may contain
+            // internal library paths. Log only a generic, non-sensitive notice.
+            Log.w("StockfishNative", "JNI optional module not loaded (non-critical)");
         }
     }
 

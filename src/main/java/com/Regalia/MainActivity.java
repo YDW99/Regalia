@@ -122,6 +122,10 @@ public class MainActivity extends Activity {
             // so the user never sees a white flash or blank screen while chess.html loads.
             // This is critical for perceived startup speed on slow devices.
             webView.setBackgroundColor(Color.parseColor("#1a0a0a"));
+            // SECURITY FIX (MobSF #5): Prevent tapjacking — reject touches delivered
+            // while the window is obscured by another overlay. This blocks malicious
+            // apps that draw a transparent overlay on top to hijack taps.
+            webView.setFilterTouchesWhenObscured(true);
         } catch (Throwable e) {
             Log.e(TAG, "WebView creation failed", e);
             showFallbackUI("WebView\u4e0d\u53ef\u7528: " + e.getMessage());
@@ -146,13 +150,32 @@ public class MainActivity extends Activity {
             Log.w(TAG, "FLAG_KEEP_SCREEN_ON failed", e);
         }
 
+        // SECURITY FIX (MobSF #6): FLAG_SECURE prevents the app's content from
+        // appearing in the recent-tasks thumbnail and blocks screenshots / screen
+        // recording. This protects the on-screen board state from being captured
+        // by other apps or via the task switcher preview.
+        try {
+            getWindow().setFlags(WindowManager.LayoutParams.FLAG_SECURE,
+                    WindowManager.LayoutParams.FLAG_SECURE);
+        } catch (Throwable e) {
+            Log.w(TAG, "FLAG_SECURE failed", e);
+        }
+
         // Configure WebView settings
+        // SECURITY FIX (MobSF #1): Disabled file system access flags to prevent
+        // script injection from accessing local resources. The app loads its UI
+        // from file:///android_asset/ which is NOT affected by setAllowFileAccess
+        // (assets/resources are always reachable). All local file I/O (PGN import,
+        // settings export) is routed through the AndroidBridge Java interface using
+        // SAF (Storage Access Framework), so JS does not need file:// or content://
+        // access. Disabling these three flags closes the WebView file-access attack
+        // surface flagged by MobSF (MainActivity.java:154).
         try {
             WebSettings webSettings = webView.getSettings();
             webSettings.setJavaScriptEnabled(true);
             webSettings.setDomStorageEnabled(true);
-            webSettings.setAllowFileAccess(true);
-            webSettings.setAllowContentAccess(true);
+            webSettings.setAllowFileAccess(false);
+            webSettings.setAllowContentAccess(false);
             webSettings.setMediaPlaybackRequiresUserGesture(false);
             webSettings.setBuiltInZoomControls(false);
             webSettings.setDisplayZoomControls(false);
@@ -162,8 +185,8 @@ public class MainActivity extends Activity {
             webSettings.setCacheMode(WebSettings.LOAD_DEFAULT);
             webSettings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
             webSettings.setTextZoom(100);
-            webSettings.setAllowFileAccessFromFileURLs(true);
-            webSettings.setAllowUniversalAccessFromFileURLs(true);
+            webSettings.setAllowFileAccessFromFileURLs(false);
+            webSettings.setAllowUniversalAccessFromFileURLs(false);
             // Disable WebView force-dark (Android 10+) to prevent OEM dark mode
             // from inverting our dark theme colors (causes black-on-black text)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
