@@ -38,7 +38,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          
+          git pull:
           git add -A
           
           # [skip ci] 防止 Actions 提交后再次触发本工作流
