@@ -3,45 +3,70 @@ name: Auto Unzip Folder to Root
 on:
   push:
     paths:
-      - 'upload.zip'  # 只有当 upload.zip 发生变化时才触发
+      - 'upload.zip'
     branches:
-      - main          # 替换为你的默认分支名
-  workflow_dispatch:
+      - main  # 替换为你的默认分支（如 master）
+  workflow_dispatch:  # 允许手动触发
 
 jobs:
   unzip_and_commit:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: write  # 必须开启写入权限
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 拉取全部历史，避免 push 失败
+
+      - name: Check if upload.zip exists
+        id: check_zip
+        run: |
+          if [ -f "upload.zip" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "✅ Found upload.zip"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "❌ upload.zip not found, skipping unzip"
+          fi
 
       - name: Unzip and flatten to root
+        if: steps.check_zip.outputs.exists == 'true'
         run: |
-          # 1. 创建临时目录并解压
+          echo "📦 Unzipping upload.zip..."
           mkdir -p ./extracted
           unzip -o -q upload.zip -d ./extracted
-          
-          # 2. 将解压内容（包含隐藏文件）覆盖到仓库根目录
-          # 使用 cp -a ./extracted/. ./ 可以把所有文件及隐藏文件铺到当前目录
+          echo "📁 Extracted files (including hidden):"
+          ls -la ./extracted
+          echo "📁 Copying to root (preserve hidden files)..."
           cp -a ./extracted/. ./
-          
-          # 3. 清理临时目录和 zip 包
+          echo "📁 Root directory after copy:"
+          ls -la .
+          echo "🧹 Cleaning up..."
           rm -rf ./extracted
           rm -f upload.zip
-          
-          echo "已解压并铺在根目录！"
+
+      # 【关键改动】同步远程变更（解决 push 被拒绝问题）
+      - name: Pull latest changes from remote
+        run: |
+          echo "🔄 Pulling latest changes from remote..."
+          # 尝试快进合并（优先，避免冲突）
+          git pull origin main --ff-only || \
+          # 若快进失败，尝试 rebase（保留本地提交历史）
+          git pull origin main --rebase || \
+          # 若 rebase 失败（如分支历史不同），允许不相关历史合并
+          git pull origin main --allow-unrelated-histories
+          echo "✅ Remote changes merged"
 
       - name: Commit and push changes
+        if: steps.check_zip.outputs.exists == 'true'
         run: |
+          echo "📝 Committing changes..."
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          pull:
           git add -A
-          
-          # [skip ci] 防止 Actions 提交后再次触发本工作流
-          git commit -m "chore: auto unzip files to root [skip ci]" || echo "Nothing to commit"
+          git status --short
+          git commit -m "chore: auto unzip files to root [skip ci]" || echo "ℹ️ Nothing to commit"
           git push
-
+          echo "✅ Changes pushed successfully"
