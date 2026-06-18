@@ -6,6 +6,7 @@ on:
       - 'upload.zip'  # 只有当 upload.zip 发生变化时才触发
     branches:
       - main          # 替换为你的默认分支名
+  workflow_dispatch:
 
 jobs:
   unzip_and_commit:
