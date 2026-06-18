@@ -5,7 +5,7 @@ on:
     paths:
       - 'upload.zip'
     branches:
-      - main  # 替换为你的默认分支（如 master）
+      - upload  # 替换为你的默认分支（如 master）
   workflow_dispatch:  # 允许手动触发
 
 jobs:
