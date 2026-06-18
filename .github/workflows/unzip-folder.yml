@@ -1,0 +1,46 @@
+name: Auto Unzip Folder to Root
+
+on:
+  push:
+    paths:
+      - 'upload.zip'  # 只有当 upload.zip 发生变化时才触发
+    branches:
+      - patch          # 替换为你的默认分支名
+
+jobs:
+  unzip_and_commit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Unzip and flatten to root
+        run: |
+          # 1. 创建临时目录并解压
+          mkdir -p ./extracted
+          unzip -o -q upload.zip -d ./extracted
+          
+          # 2. 将解压内容（包含隐藏文件）覆盖到仓库根目录
+          # 使用 cp -a ./extracted/. ./ 可以把所有文件及隐藏文件铺到当前目录
+          cp -a ./extracted/. ./
+          
+          # 3. 清理临时目录和 zip 包
+          rm -rf ./extracted
+          rm -f upload.zip
+          
+          echo "已解压并铺在根目录！"
+
+      - name: Commit and push changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          
+          git add -A
+          
+          # [skip ci] 防止 Actions 提交后再次触发本工作流
+          git commit -m "chore: auto unzip files to root [skip ci]" || echo "Nothing to commit"
+          git push
+
