@@ -291,8 +291,10 @@ let _emergencyFallbackTimerId=setTimeout(function(){
     }
   },200);
 })();
-function copyMoveHistory(){
-  if(!moveRecords||!moveRecords.length){showToast(T('no_move_records'));return}
+// v1.0.2 FEATURE (audit): extracted PGN-building logic into _buildPGNString() so
+// it can be shared by copyMoveHistory (clipboard) and exportPGNToFile (SAF file).
+function _buildPGNString(){
+  if(!moveRecords||!moveRecords.length)return '';
   let pgn='';
   for(let i=0;i<moveRecords.length;i+=2){
     const n=Math.floor(i/2)+1;
@@ -335,7 +337,34 @@ function copyMoveHistory(){
     else if(gameOver.includes(T('black_wins'))||gameOver.includes('Black wins'))pgn+=' 0-1';
     else pgn+=' 1/2-1/2';
   }
+  return pgn;
+}
+function copyMoveHistory(){
+  const pgn=_buildPGNString();
+  if(!pgn){showToast(T('no_move_records'));return}
   safeCopyToClipboard(pgn,T('pgn_copied'));
+}
+// v1.0.2 FEATURE (audit): export the current game's PGN to a user-chosen file
+// via Android SAF (ACTION_CREATE_DOCUMENT). Mirrors the settings-export flow.
+function exportPGNToFile(){
+  const pgn=_buildPGNString();
+  if(!pgn){showToast(T('no_move_records'));return}
+  _bridgeCall(function(bridge){
+    if(typeof bridge.openPGNExportFilePicker==='function'){
+      bridge.openPGNExportFilePicker(pgn);
+    }else{
+      // Fallback: copy to clipboard if SAF unavailable
+      safeCopyToClipboard(pgn,T('pgn_copied'));
+    }
+  });
+}
+// v1.0.2 FEATURE: callback for PGN export result (mirrors onSettingsExported)
+function onPGNExported(success,fileName){
+  if(success){
+    showToast(T('pgn_exported')+': '+fileName);
+  }else{
+    showToast(T('settings_clipboard_fallback'));
+  }
 }
 function copyReviewPGN(){
   if(!moveRecords||!moveRecords.length){showToast(T('no_move_records'));return}
@@ -476,20 +505,32 @@ function _formatVariationGroups(variations, moveNum, isAfterWhiteMove){
   if(!variations||!variations.length)return '';
   // Collect all displayable variations into a single unified list
   const displayLines=[];
+  // v1.0.2 FIX: Track the maximum engine-line number used so far so that
+  // PGN-imported variations don't collide with engine lines (previously
+  // mainline=1, multipv=2,3,..., pgn=lineNum=1,2,... — collisions caused
+  // duplicate "🌿 Line 1" labels when both engine and PGN vars existed).
+  let maxEngineLineNum=0;
   for(const v of variations){
     // Skip analysis and ponder groups entirely
     if(v.group==='analysis'||v.group==='ponder')continue;
     // Mainline prediction → line 1
     if(v.group==='mainline'){
-      displayLines.push({san:v.san, varMoveNum:v.varMoveNum, firstMoveIsWhite:v.firstMoveIsWhite, lineNum:1});
+      displayLines.push({san:v.san, varMoveNum:v.varMoveNum, firstMoveIsWhite:v.firstMoveIsWhite, lineNum:1, _src:'mainline'});
+      maxEngineLineNum=Math.max(maxEngineLineNum,1);
     }
     // Secondary MultiPV → line 2, 3, etc.
-    else if(v.group==='multipv'&&v.mpvIndex>0){
-      displayLines.push({san:v.san, varMoveNum:v.varMoveNum, firstMoveIsWhite:v.firstMoveIsWhite, lineNum:v.mpvIndex+1});
+    // v1.0.2: include mpvIndex=0 (primary-as-alternative case from
+    // _processDeferredVariations when primary PV didn't start with bestmove).
+    else if(v.group==='multipv'&&v.mpvIndex>=0){
+      const ln=v.mpvIndex+1;
+      displayLines.push({san:v.san, varMoveNum:v.varMoveNum, firstMoveIsWhite:v.firstMoveIsWhite, lineNum:ln, _src:'multipv'});
+      maxEngineLineNum=Math.max(maxEngineLineNum,ln);
     }
-    // PGN imported variations → 🌿 line N
+    // PGN imported variations → 🌿 line N (offset to avoid engine-line collisions)
     else if(v.group==='pgn'){
-      displayLines.push({san:v.san, varMoveNum:v.varMoveNum, firstMoveIsWhite:v.firstMoveIsWhite, lineNum:v.lineNum||1});
+      // PGN line numbers start AFTER the engine lines so they never collide.
+      const pgnLn=maxEngineLineNum+(v.lineNum||1);
+      displayLines.push({san:v.san, varMoveNum:v.varMoveNum, firstMoveIsWhite:v.firstMoveIsWhite, lineNum:pgnLn, _src:'pgn'});
     }
   }
   if(!displayLines.length)return '';
@@ -693,6 +734,11 @@ function onEngineRestarting(){
   if(isHintLoading){isHintLoading=false;_hintBarInfo='';}
   if(_evalLoading){_evalLoading=false;_sfEvalReady=false;}
   _ponderGen++;_ponderMoveSAN='';_ponderBarInfo='';_pendingPonderMoveUCI=null;
+  // v1.0.2 FIX (audit): Parity with restartCurrentEngine() — clear review eval
+  // cache + MultiPV state so the recovered engine's evaluations are re-fetched
+  // instead of showing stale values from the pre-crash engine.
+  _reviewEvalCache.clear();_reviewEvalRequestedStep=-1;
+  _multiPVLines=[];_multiPVResult=null;_lastEngineVariation=null;
   if(_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
   render();
 }
@@ -1346,6 +1392,14 @@ function restartCurrentEngine(){
       isHintLoading=false;_hintBarInfo='';
       _evalLoading=false;_sfEvalReady=false;
       _ponderGen++;_ponderMoveSAN='';_ponderBarInfo='';_pendingPonderMoveUCI=null;
+      // v1.0.2 FIX (audit): Clear review eval cache so the new engine instance's
+      // evaluations are re-fetched. Without this, stale eval values from the
+      // pre-restart engine remained in the cache and were displayed in review
+      // mode even after the engine was replaced.
+      _reviewEvalCache.clear();_reviewEvalRequestedStep=-1;
+      // v1.0.2 FIX (audit): Clear MultiPV variation state — the old engine's
+      // in-flight PV lines are invalid after restart.
+      _multiPVLines=[];_multiPVResult=null;_lastEngineVariation=null;
       if(_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
     }else{
       showToast(T('engine_unavailable_bridge'));
@@ -1454,7 +1508,33 @@ function onEngineSwitched(result){
   showToast(T('built_in_only'));
 }
 function onSettingsImported(result){
-  try{const r=JSON.parse(result);showToast(r.success?T('settings_imported'):T('settings_import_fail')+': '+r.message);if(r.success){openEngineConfig();}}catch(e){showToast(T('settings_import_done'));}
+  // v1.0.2 FIX: Refresh cached engineSettingsData + _cachedMultiPV after import,
+  // so the engine-config UI reflects the new values immediately. Previously the
+  // UI showed stale values until the user closed+reopened the dialog manually.
+  try{
+    const r=JSON.parse(result);
+    if(r.success){
+      // Refresh cached settings from the Java side (single source of truth)
+      try{
+        if(typeof AndroidBridge!=='undefined'&&AndroidBridge.isEngineReady&&AndroidBridge.isEngineReady()){
+          const s=AndroidBridge.getEngineSettings();
+          if(s){engineSettingsData=JSON.parse(s);}
+          _cachedMultiPV=engineSettingsData?engineSettingsData.multiPV||1:1;
+        }
+      }catch(e){console.warn('onSettingsImported: refresh cached settings failed',e);}
+      // Show the optional informational suffix (e.g. "autoConfig disabled to honor ...")
+      const baseMsg=T('settings_imported');
+      let suffix='';
+      if(r.message){
+        const m=r.message.match(/\(([^)]+)\)\s*$/);
+        if(m)suffix=' ('+m[1]+')';
+      }
+      showToast(baseMsg+suffix);
+      openEngineConfig();
+    }else{
+      showToast(T('settings_import_fail')+': '+(r.message||'unknown'));
+    }
+  }catch(e){showToast(T('settings_import_done'));}
 }
 
 // MultiPV progress callback — receives secondary PV lines during search
@@ -1537,13 +1617,25 @@ function _processDeferredVariations(){
   const variations=[];
 
   // Get primary PV data
+  // v1.0.2 FIX: Fall back to _multiPVResult[0].pv when _lastEngineVariation is
+  // empty. Previously, if the bestmove didn't carry a PV (some Stockfish builds
+  // omit it when MultiPV is on), the mainline variation was silently dropped.
   const primaryPV=_lastEngineVariation||(_multiPVResult&&_multiPVResult.length>0?_multiPVResult[0].pv:null);
 
   // --- Mainline prediction: continuation after the played move ---
   // Primary PV starts with the bestmove. Strip it to get continuation.
+  // v1.0.2 FIX: If primary PV does NOT start with bestmove, the engine is
+  // suggesting an ALTERNATIVE first move (rare but happens with MultiPV when
+  // different lines converge). Previously the code fabricated a fake "mainline"
+  // variation by treating the first move as already-played, which produced a
+  // confusing duplicate. Now we skip mainline creation and let the MultiPV
+  // iteration (which now starts from index 0 in this case) handle it as an
+  // alternative line.
+  let primaryStartedWithBestmove=false;
   if(primaryPV){
     const uciMoves=primaryPV.trim().split(/\s+/);
     if(uciMoves.length>0 && uciMoves[0]===uciMove){
+      primaryStartedWithBestmove=true;
       // Strip bestmove, convert remaining to SAN using post-bestmove state
       const afterBestState=_uciToSAN(uciMove,preMoveState).postState;
       const remainingUci=uciMoves.slice(1);
@@ -1564,37 +1656,26 @@ function _processDeferredVariations(){
       if(!lastRec.variation){
         lastRec.variation=remainingUci.join(' ');
       }
-    }else if(uciMoves.length>1){
-      // PV doesn't start with bestmove — strip first move as alternative
-      // The remaining moves are the continuation from the opposite side
-      const afterFirstState=_uciToSAN(uciMoves[0],preMoveState).postState;
-      const remainingUci=uciMoves.slice(1);
-      const sanResult=_convertPVtoSAN(remainingUci.join(' '),afterFirstState);
-      if(sanResult.sanMoves){
-        variations.push({
-          type:'mainline',
-          san:sanResult.sanMoves,
-          firstMoveIsWhite:contFirstIsWhite,
-          varMoveNum:contVarMoveNum,
-          group:'mainline',
-          mpvIndex:-1
-        });
-      }
     }
   }
   _lastEngineVariation=null;
 
-  // --- MultiPV secondary variations (index 1+) ---
-  // These start with alternative first moves (NOT the bestmove)
+  // --- MultiPV secondary variations (and primary if it didn't start with bestmove) ---
+  // v1.0.2 FIX: When the primary PV didn't start with bestmove, include it in
+  // the iteration as an alternative line (mpvIndex=0). Otherwise iterate from
+  // index 1 as before (primary was already handled as mainline above).
   if(_multiPVResult&&_multiPVResult.length>1){
-    for(let vi=1;vi<_multiPVResult.length;vi++){
+    const startIdx=primaryStartedWithBestmove?1:0;
+    for(let vi=startIdx;vi<_multiPVResult.length;vi++){
       const mpv=_multiPVResult[vi];
       if(!mpv.pv)continue;
       const uciMoves=mpv.pv.trim().split(/\s+/);
       if(uciMoves.length===0)continue;
 
       // Secondary PV's first move is an alternative to bestmove (same side)
-      // Convert the ENTIRE PV to SAN starting from preMoveState
+      // — UNLESS this is the primary that didn't start with bestmove, in which
+      // case its first move is also an alternative (also same side).
+      // Convert the ENTIRE PV to SAN starting from preMoveState.
       const sanResult=_convertPVtoSAN(mpv.pv,preMoveState);
       if(sanResult.sanMoves){
         variations.push({
@@ -1996,4 +2077,4 @@ function _updateAIThinkDisplay(){
 
 
 // ---- Exports ----
-export {showToast,_bridgeCall,_showLoadingOverlay,_updateLoadingStatus,_hideLoadingOverlay,_attemptEngineInit,onInitProgress,onEngineReady,onBestMove,onHintMove,onEngineProgress,onPonderProgress,onEngineEval,onEngineInfo,onEngineSwitched,onSettingsImported,onSettingsExported,onGameDifficultyChanged,onEngineError,onMultiPVProgress,onMultiPVResult,copyMoveHistory,copyReviewPGN,playSound,handleBackPress,renderEngineConfig,renderEngineConfigAndUpdate,openEngineConfig,closeEngineConfig,scanEngines,switchEngine,importExternalEngine,restartCurrentEngine,setConfigThreads,setConfigHash,setConfigMultiPV,setConfigMoveOverhead,togglePonder,toggleShowWDL,setConfigSkillLevel,toggleLimitElo,setConfigElo,toggleAutoConfig,exportEngineSettings,importEngineSettings,requestEngineEval,_updateEvalDisplay,_updateReviewEvalUI,formatEval,_resetEvalState,_updateAllEvalDisplays,copyFEN,copyReviewFEN,importFEN,_startEngineHeartbeat,_cleanupEventListeners,_formatVariationGroups};
+export {showToast,_bridgeCall,_showLoadingOverlay,_updateLoadingStatus,_hideLoadingOverlay,_attemptEngineInit,onInitProgress,onEngineReady,onBestMove,onHintMove,onEngineProgress,onPonderProgress,onEngineEval,onEngineInfo,onEngineSwitched,onSettingsImported,onSettingsExported,onPGNExported,onGameDifficultyChanged,onEngineError,onMultiPVProgress,onMultiPVResult,copyMoveHistory,copyReviewPGN,exportPGNToFile,playSound,handleBackPress,renderEngineConfig,renderEngineConfigAndUpdate,openEngineConfig,closeEngineConfig,scanEngines,switchEngine,importExternalEngine,restartCurrentEngine,setConfigThreads,setConfigHash,setConfigMultiPV,setConfigMoveOverhead,togglePonder,toggleShowWDL,setConfigSkillLevel,toggleLimitElo,setConfigElo,toggleAutoConfig,exportEngineSettings,importEngineSettings,requestEngineEval,_updateEvalDisplay,_updateReviewEvalUI,formatEval,_resetEvalState,_updateAllEvalDisplays,copyFEN,copyReviewFEN,importFEN,_startEngineHeartbeat,_cleanupEventListeners,_formatVariationGroups};

@@ -129,6 +129,8 @@ const _i18n={
 'export_settings':{zh:'导出设置',en:'Export'},
 'import_settings':{zh:'导入设置',en:'Import'},
 'pgn_copied':{zh:'PGN已复制到剪贴板',en:'PGN copied to clipboard'},
+'export_pgn':{zh:'导出PGN到文件',en:'Export PGN to file'},
+'pgn_exported':{zh:'PGN已导出',en:'PGN exported'},
 'fen_copied':{zh:'FEN已复制到剪贴板',en:'FEN copied to clipboard'},
 'fen_imported':{zh:'FEN导入成功',en:'FEN imported'},
 'settings_imported':{zh:'设置导入成功',en:'Settings imported'},
@@ -169,7 +171,7 @@ const _i18n={
 'requesting_storage':{zh:'正在请求存储权限...',en:'Requesting storage permission...'},
 'settings_exported':{zh:'设置已导出到',en:'Settings exported to'},
 'settings_clipboard_fallback':{zh:'设置已复制到剪贴板（文件写入失败）',en:'Settings copied to clipboard (file write failed)'},
-'built_in_only':{zh:'v1.0.1: 仅支持内置引擎',en:'v1.0.1: Built-in engine only'},
+'built_in_only':{zh:'v1.0.2: 仅支持内置引擎',en:'v1.0.2: Built-in engine only'},
 'engine_error_restart':{zh:'引擎错误，正在重启',en:'Engine error, restarting'},
 'engine_error':{zh:'引擎错误',en:'Engine error'},
 'view_white':{zh:'视角: 白方(下方)',en:'View: White (bottom)'},
@@ -267,7 +269,7 @@ const _i18n={
 'elo_target':{zh:'Elo目标',en:'ELO Target'},
 'export_settings_btn':{zh:'📤 导出设置',en:'📤 Export'},
 'import_settings_btn':{zh:'📥 导入设置',en:'📥 Import'},
-'loading_title':{zh:'Regalia v1.0.1',en:'Regalia v1.0.1'},
+'loading_title':{zh:'Regalia v1.0.2',en:'Regalia v1.0.2'},
 'click_skip_loading':{zh:'点击跳过加载',en:'Click to skip loading'},
 'white_checkmate':{zh:'白方将杀获胜',en:'White wins by checkmate'},
 'black_checkmate':{zh:'黑方将杀获胜',en:'Black wins by checkmate'},
@@ -550,7 +552,7 @@ setTimeout(_finishAnim,dur+60);
 function initBoard(){const b=Array.from({length:8},()=>Array(8).fill(null));const backRank=['rook','knight','bishop','queen','king','bishop','knight','rook'];for(let c=0;c<8;c++){b[0][c]={type:backRank[c],color:'black'};b[1][c]={type:'pawn',color:'black'};b[6][c]={type:'pawn',color:'white'};b[7][c]={type:backRank[c],color:'white'}}return b}
 // Returns all squares this piece attacks
 function attacked(board,pos){const b=board,p=b[pos.row][pos.col];if(!p)return[];const r=pos.row,c=pos.col,co=p.color,mv=[];if(p.type==='pawn'){const d=co==='white'?-1:1;for(const dc of[-1,1])if(inB(r+d,c+dc))mv.push({row:r+d,col:c+dc})}else if(p.type==='knight'){for(const[dr,dc]of KNIGHT_OFFSETS)if(inB(r+dr,c+dc))mv.push({row:r+dr,col:c+dc})}else if(p.type==='king'){for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++)if((dr||dc)&&inB(r+dr,c+dc))mv.push({row:r+dr,col:c+dc})}else{const dirs=p.type==='rook'?DIR_ROOK:p.type==='bishop'?DIR_BISHOP:DIR_QUEEN;for(const[dr,dc]of dirs){let nr=r+dr,nc=c+dc;while(inB(nr,nc)){mv.push({row:nr,col:nc});if(b[nr][nc])break;nr+=dr;nc+=dc}}}return mv}
-function initState(){const s={board:initBoard(),currentTurn:'white',castlingRights:{whiteKingside:true,whiteQueenside:true,blackKingside:true,blackQueenside:true},enPassantTarget:null,halfMoveClock:0,fullMoveNumber:1,moveHistory:[],posCount:new Map(),wk:{row:7,col:4},bk:{row:0,col:4},hash:0};syncHash(s);s.posCount.set(s.hash,1);return s}
+function initState(){const s={board:initBoard(),currentTurn:'white',castlingRights:{whiteKingside:true,whiteQueenside:true,blackKingside:true,blackQueenside:true},enPassantTarget:null,halfMoveClock:0,fullMoveNumber:1,moveHistory:[],posCount:new Map(),wk:{row:7,col:4},bk:{row:0,col:4},hash:0,boardVersion:1};syncHash(s);s.posCount.set(s.hash,1);return s}
 function validateSetupPosition(s){for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=s.board[r][c];if(p&&p.type==='king'){if(p.color==='white')s.wk={row:r,col:c};else s.bk={row:r,col:c}}}const errs=[];const wPieces=[],bPieces=[];for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=s.board[r][c];if(p){if(p.color==='white')wPieces.push(p);else bPieces.push(p)}}const wk=s.wk,bk=s.bk;const wKingCount=wPieces.filter(p=>p.type==='king').length,bKingCount=bPieces.filter(p=>p.type==='king').length;if(wKingCount===0)errs.push(T('setup_no_white_king'));if(bKingCount===0)errs.push(T('setup_no_black_king'));if(wKingCount>1)errs.push(T('setup_white')+T('setup_king_count_over'));if(bKingCount>1)errs.push(T('setup_black')+T('setup_king_count_over'));if(wk&&bk&&Math.abs(wk.row-bk.row)<=1&&Math.abs(wk.col-bk.col)<=1)errs.push(T('setup_kings_adjacent'));const nonMoveColor=OPP_COLOR[s.currentTurn];const nonMoveKing=nonMoveColor==='white'?s.wk:s.bk;if(nonMoveKing&&inCheck(s.board,nonMoveColor,nonMoveKing))errs.push((nonMoveColor==='white'?T('setup_white'):T('setup_black'))+T('setup_check_impossible'));for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=s.board[r][c];if(p&&p.type==='pawn'){if(p.color==='white'&&r===0)errs.push(T('setup_white')+T('setup_pawn_on_rank')+'1'+T('setup_rank')+'('+posAlg({row:r,col:c})+')');if(p.color==='black'&&r===7)errs.push(T('setup_black')+T('setup_pawn_on_rank')+'8'+T('setup_rank')+'('+posAlg({row:r,col:c})+')')}}if(wPieces.length>16)errs.push(T('setup_white')+T('setup_piece_over_limit'));if(bPieces.length>16)errs.push(T('setup_black')+T('setup_piece_over_limit'));if(wPieces.filter(p=>p.type==='pawn').length>8)errs.push(T('setup_white')+T('setup_pawn_over_8'));if(bPieces.filter(p=>p.type==='pawn').length>8)errs.push(T('setup_black')+T('setup_pawn_over_8'));if(wPieces.filter(p=>p.type==='queen').length>9)errs.push(T('setup_white')+T('setup_queen_over_9'));if(bPieces.filter(p=>p.type==='queen').length>9)errs.push(T('setup_black')+T('setup_queen_over_9'));if(wPieces.filter(p=>p.type==='rook').length>10)errs.push(T('setup_white')+T('setup_rook_over_10'));if(bPieces.filter(p=>p.type==='rook').length>10)errs.push(T('setup_black')+T('setup_rook_over_10'));if(wPieces.filter(p=>p.type==='bishop').length>10)errs.push(T('setup_white')+T('setup_bishop_over_10'));if(bPieces.filter(p=>p.type==='bishop').length>10)errs.push(T('setup_black')+T('setup_bishop_over_10'));if(wPieces.filter(p=>p.type==='knight').length>10)errs.push(T('setup_white')+T('setup_knight_over_10'));if(bPieces.filter(p=>p.type==='knight').length>10)errs.push(T('setup_black')+T('setup_knight_over_10'));return errs}
 // Piece objects are immutable (makeMv creates new objects for promotions)
 // Only clone array structure — reduces 64 object copies to 8 array slices per clone
@@ -559,7 +561,7 @@ function cloneB(b){return b.map(r=>r.slice())}
 function cloneS(s){return{board:cloneB(s.board),currentTurn:s.currentTurn,castlingRights:{...s.castlingRights},enPassantTarget:s.enPassantTarget?{...s.enPassantTarget}:null,halfMoveClock:s.halfMoveClock,fullMoveNumber:s.fullMoveNumber,// moveHistory: deep-copied to prevent shared-reference corruption
 // (makeMvInPlace pushes to existing array, unmakeMv truncates it — sharing by reference
 // would silently corrupt the original state's moveHistory)
-moveHistory:s.moveHistory?s.moveHistory.slice():[],posCount:new Map(s.posCount),wk:s.wk?{...s.wk}:null,bk:s.bk?{...s.bk}:null,hash:s.hash||0}}
+moveHistory:s.moveHistory?s.moveHistory.slice():[],posCount:new Map(s.posCount),wk:s.wk?{...s.wk}:null,bk:s.bk?{...s.bk}:null,hash:s.hash||0,boardVersion:s.boardVersion||0}}
 
 function sqAttackedFast(b,pos,byCo){if(!b||!pos||!inB(pos.row,pos.col))return false;const r=pos.row,c=pos.col;const pd=byCo==='white'?1:-1;if(inB(r+pd,c-1)&&b[r+pd][c-1]&&b[r+pd][c-1].color===byCo&&b[r+pd][c-1].type==='pawn')return true;if(inB(r+pd,c+1)&&b[r+pd][c+1]&&b[r+pd][c+1].color===byCo&&b[r+pd][c+1].type==='pawn')return true;for(const[dr,dc]of KNIGHT_OFFSETS){if(inB(r+dr,c+dc)&&b[r+dr][c+dc]&&b[r+dr][c+dc].color===byCo&&b[r+dr][c+dc].type==='knight')return true}for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){if(!dr&&!dc)continue;if(inB(r+dr,c+dc)&&b[r+dr][c+dc]&&b[r+dr][c+dc].color===byCo&&b[r+dr][c+dc].type==='king')return true}for(const[dr,dc]of DIR_ROOK){let nr=r+dr,nc=c+dc;while(inB(nr,nc)){const p=b[nr][nc];if(p){if(p.color===byCo&&(p.type==='rook'||p.type==='queen'))return true;break}nr+=dr;nc+=dc}}for(const[dr,dc]of DIR_BISHOP){let nr=r+dr,nc=c+dc;while(inB(nr,nc)){const p=b[nr][nc];if(p){if(p.color===byCo&&(p.type==='bishop'||p.type==='queen'))return true;break}nr+=dr;nc+=dc}}return false}
 /**
@@ -651,6 +653,10 @@ if(s.castlingRights.whiteQueenside&&!ns.castlingRights.whiteQueenside)h^=zobrist
 if(s.castlingRights.blackKingside&&!ns.castlingRights.blackKingside)h^=zobrist.castling[2];
 if(s.castlingRights.blackQueenside&&!ns.castlingRights.blackQueenside)h^=zobrist.castling[3];
 ns.hash=(h>>>0);
+// v1.0.2 PERF (audit): bump boardVersion so _updateBoardIncremental can
+// skip the JSON.stringify dirty check (which serializes the 8x8 board on
+// every render tick). Integer compare is ~100x cheaper.
+ns.boardVersion=(s.boardVersion||0)+1;
 ns.posCount.set(ns.hash,(ns.posCount.get(ns.hash)||0)+1);
 return ns}
 // ===================== MAKE/UNMAKE (INCREMENTAL) =====================
@@ -681,6 +687,7 @@ oldEnPassant:s.enPassantTarget?{r:s.enPassantTarget.row,c:s.enPassantTarget.col}
 oldHalfMove:s.halfMoveClock,
 oldFullMove:s.fullMoveNumber,
 oldHash:s.hash,
+oldBoardVersion:s.boardVersion||0,
 promotion:promotion||null,
 oldMoveHistoryLength:s.moveHistory?s.moveHistory.length:0,
 isBlackMove:piece.color==='black'
@@ -758,6 +765,9 @@ if(undo.oldCastling.whiteQueenside&&!s.castlingRights.whiteQueenside)h^=zobrist.
 if(undo.oldCastling.blackKingside&&!s.castlingRights.blackKingside)h^=zobrist.castling[2];
 if(undo.oldCastling.blackQueenside&&!s.castlingRights.blackQueenside)h^=zobrist.castling[3];
 s.hash=(h>>>0);
+// v1.0.2 PERF (audit): bump boardVersion so _updateBoardIncremental can use
+// an integer compare instead of JSON.stringify on every render tick.
+s.boardVersion=(s.boardVersion||0)+1;
 // 12. Incremental posCount
 s.posCount.set(s.hash,(s.posCount.get(s.hash)||0)+1);
 return undo;
@@ -787,6 +797,8 @@ s.enPassantTarget=undo.oldEnPassant?{row:undo.oldEnPassant.r,col:undo.oldEnPassa
 s.halfMoveClock=undo.oldHalfMove;
 s.fullMoveNumber=undo.oldFullMove;
 s.hash=undo.oldHash;
+// v1.0.2 PERF (audit): restore boardVersion so dirty-check still works after unmake.
+s.boardVersion=undo.oldBoardVersion||0;
 if(s.moveHistory&&undo.oldMoveHistoryLength!==undefined)s.moveHistory.length=undo.oldMoveHistoryLength;
 s.currentTurn=undo.isBlackMove?'black':'white';
 }
@@ -978,6 +990,9 @@ s.wk=null;s.bk=null;s.enPassantTarget=null;
 for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=s.board[r][c];if(p){if(p.type==='king'&&p.color==='white')s.wk={row:r,col:c};if(p.type==='king'&&p.color==='black')s.bk={row:r,col:c};}}
 recomputeCastlingRights(s);
 syncHash(s);
+// v1.0.2 PERF (audit): bump boardVersion so _updateBoardIncremental detects
+// setup-mode board mutations (piece placement/deletion/clear-board/reset-board).
+s.boardVersion=(s.boardVersion||0)+1;
 }
 
 // NOTE: All position evaluation comes exclusively from Stockfish18. No JS-side eval code.

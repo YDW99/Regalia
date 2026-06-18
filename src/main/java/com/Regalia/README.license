@@ -7,9 +7,22 @@ License classification by file:
       DroidComputerPlayer.java). Copyright (C) Peter Österlund.
       Modifications Copyright (C) 2026 Regalia.
   - MainActivity.java: AGPL v3 (original)
+      WebView host, immersive mode, lifecycle, SAF file-picker routing.
   - ChessApp.java: AGPL v3 (original)
+      Application class, crash protection, locale detection.
   - ChessWebViewClient.java: AGPL v3 (original)
+      Page load handler, JS bridge registration.
   - EngineService.java: AGPL v3 (original)
+      Foreground service that keeps the engine subprocess alive on
+      Android 14/15 (Xiaomi HyperOS 3) when the app goes to background.
+  - TlsSecurityHelper.java: AGPL v3 (original)
+      TLS 1.2+ enforcement helper for HTTPS connections to the Lichess
+      Tablebase API on older Android versions (API 21-27).
+  - RootDetector.java: AGPL v3 (original)
+      Non-blocking root detection. The result is informational only —
+      the app never refuses to run on a rooted device because it is an
+      offline chess app with no sensitive data to protect. The check
+      is reported to the user via the About dialog.
 
 See the root-level LICENSE-AGPL v3, LICENSE-GPL v3, and NOTICE files
 for full license texts and attribution details.

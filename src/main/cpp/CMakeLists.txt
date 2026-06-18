@@ -21,11 +21,13 @@ add_library(engine_bridge SHARED
     engine_jni.cpp
 )
 
-# Link against Android log library and dl for dlopen/dlsym
+# v1.0.2 REDUNDANCY (audit): removed `dl` link — the dlopen/dlsym engine-loading
+# code was deleted from engine_jni.cpp in v1.0.2 (dead since v18.5.0 removed
+# engine import). Only nativeChmod and nativeRenice remain, which use only
+# libc (sys/stat.h, sys/resource.h) and liblog.
 target_link_libraries(engine_bridge
     android
     log
-    dl
 )
 
 # Set C++ standard

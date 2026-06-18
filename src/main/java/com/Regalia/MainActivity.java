@@ -57,7 +57,7 @@ import android.widget.TextView;
 public class MainActivity extends Activity {
 
     private static final String TAG = "Regalia";
-    private static final String VERSION = "v1.0.1";
+    private static final String VERSION = "v1.0.2";
 
     private WebView webView;
     private StockfishNative stockfishEngine;
@@ -596,7 +596,10 @@ public class MainActivity extends Activity {
         try {
             if (requestCode == StockfishNative.REQUEST_CODE_IMPORT_SETTINGS) {
                 stockfishEngine.handleFilePickerResult(data);
-            } else if (requestCode == StockfishNative.REQUEST_CODE_EXPORT_SETTINGS) {
+            } else if (requestCode == StockfishNative.REQUEST_CODE_EXPORT_SETTINGS
+                    || requestCode == StockfishNative.REQUEST_CODE_EXPORT_PGN) {
+                // v1.0.2: route PGN export through the same handler — it dispatches
+                // to onSettingsExported() or onPGNExported() based on _pendingExportType.
                 stockfishEngine.handleExportFilePickerResult(data);
             } else if (requestCode == StockfishNative.REQUEST_CODE_IMPORT_PGN) {
                 stockfishEngine.handlePGNFilePickerResult(data);

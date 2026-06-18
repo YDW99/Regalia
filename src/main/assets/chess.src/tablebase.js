@@ -671,17 +671,30 @@ function importPGN(pgnText){
         const initialVIsWhite=vIsWhite;
         const initialVMoveNum=vMoveNum;
 
+        // v1.0.2 FIX: Replace the previous `break` on unparseable token with
+        // `continue` so that ONE malformed SAN in the middle of a variation
+        // doesn't TRUNCATE the entire variation. The previous behavior
+        // manifest as "variation segments incomplete" — only the moves up to
+        // the first unparseable token were displayed.
+        // Also unified the moveAlg fallback so EVERY token (not just the first)
+        // gets the same forgiving matching that the first token already had.
         for(let ti=startIdx;ti<vTokens.length;ti++){
           const vToken=vTokens[ti];
           const vResult=_applySANMove(vState,vToken);
           if(!vResult){
             const vAllMoves=legalMoves(vState,null);
             let vMatched=null;
+            const vTokenClean=vToken.replace(/[+#!?]+$/,'');
             for(const vm of vAllMoves){
-              const vAlg=moveAlg(vState,vm);
-              if(vAlg.replace(/[+#!?]+$/,'')===vToken.replace(/[+#!?]+$/,'')){vMatched=vm;break;}
+              const vAlg=moveAlg(vState,vm).replace(/[+#!?]+$/,'');
+              if(vAlg===vTokenClean){vMatched=vm;break;}
             }
-            if(!vMatched)break;
+            if(!vMatched){
+              // v1.0.2: skip this token but CONTINUE parsing the rest of the
+              // variation — do not abort the whole variation.
+              console.warn('importPGN: skipping unparseable variation token at',ti,'token=',vToken);
+              continue;
+            }
             sanParts.push(moveAlg(vState,vMatched));
             if(!vIsWhite)vMoveNum++;
             vIsWhite=!vIsWhite;
@@ -838,7 +851,7 @@ if(_epHasCap)enPassantTarget={row:er,col:ec};
 }}
 const halfMoveClock=parts[4]?parseInt(parts[4])||0:0;
 const fullMoveNumber=parts[5]?parseInt(parts[5])||1:1;
-const s={board,currentTurn:turn,castlingRights,enPassantTarget,halfMoveClock,fullMoveNumber,moveHistory:[],posCount:new Map(),wk,bk,hash:0};
+const s={board,currentTurn:turn,castlingRights,enPassantTarget,halfMoveClock,fullMoveNumber,moveHistory:[],posCount:new Map(),wk,bk,hash:0,boardVersion:1};
 syncHash(s);s.posCount.set(s.hash,1);
 // Validate: the side NOT to move must not be in check (illegal position)
 const nonMover=OPP_COLOR[turn];
