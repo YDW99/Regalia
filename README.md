@@ -12,9 +12,9 @@ A standalone, open-source chess app for Android — play offline against Stockfi
 
 *Portrait mode — evaluation bar, move history, AI opponent display with ponder info, and Control heatmap*
 
-**Control Heatmap** — Tap the 🌗/🌈 button on the toolbar to toggle the control heatmap. Each square is dynamically colored by HSL to indicate which side controls it: blue-purple = your control, red = opponent's control, purple = contested. Hovering a square shows SVG arrows from each controlling piece to that square (warm gold for your pieces, cool silver-blue for opponent's). The info card below the board shows per-piece control contributions with position labels.
+**Control Heatmap** — Tap the 🌈 button on the toolbar to toggle the control heatmap. Each square is dynamically colored by HSL to indicate which side controls it: blue-purple = your control, red = opponent's control, purple = contested. Hovering a square shows SVG arrows from each controlling piece to that square (warm gold for your pieces, cool silver-blue for opponent's). The info card below the board shows per-piece control contributions with position labels.
 
-**🌿Line** — In the move record, 🌿 lines appear below each move showing engine analysis variations (MultiPV) and PGN import variations (RAV). Each variation group is labeled 🌿Line 1, 🌿Line 2, etc. — Line 1 is the principal variation; Line 2+ are alternative lines. PGN import variations are automatically parsed and displayed as 🌿Lines with proper move numbering. Toggle the Variations switch to show or hide them.
+**🌿Line** — In the move record, 🌿 lines appear below each move showing engine analysis variations (MultiPV) and PGN import variations (RAV). Each variation is labeled 🌿Line 1, 🌿Line 2, etc., assigned sequentially by display order. PGN import variations are automatically parsed and displayed as 🌿Lines with proper move numbering. Toggle the Variations switch to show or hide them.
 
 ## Features
 
@@ -41,6 +41,7 @@ Download the latest APK from [GitHub Releases](https://github.com/YDW99/Regalia/
 
 - Android 5.0 (API 21) or later
 - ARM64 device (arm64-v8a)
+- ~80 MB storage
 
 ## Building
 
@@ -89,9 +90,12 @@ Regalia/
 │   ├── java/com/Regalia/
 │   │   ├── MainActivity.java   # WebView host, immersive mode, lifecycle
 │   │   ├── StockfishNative.java # Engine process management, UCI protocol, SAF file I/O
+│   │   ├── StatsActivity.java  # Fullscreen WebView for 📊统计 statistics page
 │   │   ├── ChessWebViewClient.java # Page load handler
 │   │   ├── EngineService.java  # Foreground service for engine stability
-│   │   └── ChessApp.java       # Application class, crash protection
+│   │   ├── ChessApp.java       # Application class, crash protection
+│   │   ├── TlsSecurityHelper.java # TLS 1.2+ enforcement for tablebase API
+│   │   └── RootDetector.java   # Informational root detection (About dialog)
 │   ├── cpp/
 │   │   ├── engine_jni.cpp      # JNI native chmod/renice (from DroidFish)
 │   │   └── CMakeLists.txt
@@ -145,7 +149,7 @@ Per GPL v3 Section 13, these licenses are compatible for combination. Each compo
 - **Lichess Tablebase API** — Endgame tablebase queries (public API, requires network)
 - **lichess-org/chess-openings** — ECO opening classification data (CC0)
 
-See [NOTICE](NOTICE) for full attribution details. More declaration are preserved in [NOTICE-DroidFish](NOTICE-DroidFish) and [AUTHORS-stockfish](AUTHORS-stockfish).
+See [NOTICE](NOTICE) for full attribution details. More declaration documents are preserved in [NOTICE-DroidFish](NOTICE-DroidFish) and [AUTHORS-stockfish](AUTHORS-stockfish).
 
 ## Contributing
 
@@ -157,4 +161,4 @@ Contributions are welcome! Please ensure:
 
 ## Version
 
-**v1.0.1**
+**v1.0.2**

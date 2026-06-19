@@ -63,6 +63,10 @@ _ecoRecCache.clear();
 setupHistory=[];setupErrors=[];
 _ecoEnabled=false; // FEN import — disable ECO recognition
 reviewBaseState=cloneS(gameState);
+// v1.0.2 FIX: Black-to-move opening move record fix.
+// If the imported FEN has black to move, prepend null placeholder so the first
+// real move (black's) lands in the black slot (moveRecords[1]), not the white slot.
+_prependBlackToMovePlaceholder();
 render();requestEngineEval();
 if(gameState.currentTurn!==playerColor)doAIMove();
 }else{showToast(T('fen_invalid'),2000)}
@@ -552,6 +556,10 @@ function importPGN(pgnText){
   setupHistory=[];setupErrors=[];
   _ecoEnabled=false;
   reviewBaseState=cloneS(gameState);
+  // v1.0.2 FIX: Black-to-move opening move record fix.
+  // If the PGN's [FEN] header (or the start position) has black to move, prepend
+  // null placeholder so the first replayed move (black's) lands in the black slot.
+  _prependBlackToMovePlaceholder();
   
   // Replay all moves using the _parsePGN results which already have
   // validated moves with correct notation and post-move states.
@@ -594,6 +602,8 @@ function importPGN(pgnText){
       const branchMoveIsWhite=preMoveState.currentTurn==='white';
       const branchMoveNum=preMoveState.fullMoveNumber||Math.floor(moveIdx/2)+1;
       for(let vi=0;vi<pgnVars.length;vi++){
+        let _typeBPrefixEllipsis=false; // v1.0.2: flag for Type B prefix "..."
+        let _typeBPrefixNum=0; // v1.0.2: the move number for the "N..." prefix
         // v1.0.1: Each entry is now an object with .sanTokens (was a bare array).
         // For nested variations, sanTokens already includes the parent variation's
         // prefix moves, so the entire array replays from the start position.
@@ -634,11 +644,25 @@ function importPGN(pgnText){
               startIdx=1;
             }else{
               // Attempt Type B: first token matches from postMoveState (opponent's side)
+              // v1.0.2 FIX (PGN spec): For Type B variations (continuation after the
+              // branching move), the variation should start with the owning move's
+              // move number. If the owning move is Black's and the variation starts
+              // with White, the display is "N... (N+1).WhiteMove BlackMove ..." where
+              // N... is the ellipsis prefix indicating the Black branch point.
               const tryB=_applySANMove(cloneS(postMoveState),vTokens[0]);
               if(tryB){
                 vState=tryB.state;
                 vIsWhite=!branchMoveIsWhite;
-                vMoveNum=branchMoveIsWhite?branchMoveNum:branchMoveNum+1;
+                // v1.0.2: varMoveNum should be the actual move number of the
+                // variation's first move. If owning is Black (branchMoveIsWhite=false),
+                // the variation's first White move is at branchMoveNum+1.
+                // If owning is White (branchMoveIsWhite=true), the variation's
+                // first Black move is at branchMoveNum.
+                vMoveNum=branchMoveIsWhite?branchMoveNum:(branchMoveNum+1);
+                // prefixEllipsis: show "N..." when the owning move is Black's
+                // and the variation starts with White's next move.
+                _typeBPrefixEllipsis=!branchMoveIsWhite;
+                _typeBPrefixNum=branchMoveNum;
                 startIdx=1;
                 sanParts.push(tryB.notation);
               }else{
@@ -655,7 +679,9 @@ function importPGN(pgnText){
                   makeMvInPlace(fbState,fbMatch);
                   vState=fbState;
                   vIsWhite=!branchMoveIsWhite;
-                  vMoveNum=branchMoveIsWhite?branchMoveNum:branchMoveNum+1;
+                  vMoveNum=branchMoveIsWhite?branchMoveNum:(branchMoveNum+1);
+                  _typeBPrefixEllipsis=!branchMoveIsWhite;
+                  _typeBPrefixNum=branchMoveNum;
                   startIdx=1;
                 }
               }
@@ -678,6 +704,12 @@ function importPGN(pgnText){
         // the first unparseable token were displayed.
         // Also unified the moveAlg fallback so EVERY token (not just the first)
         // gets the same forgiving matching that the first token already had.
+        // v1.0.2 FIX (first-principles re-audit): when a token is unparseable
+        // and skipped, the side-to-move and move number MUST still advance —
+        // otherwise the next token (which alternates side per PGN spec) would
+        // be assigned to the wrong side, desynchronizing the entire remaining
+        // variation. The skipped token still "occupies" a move slot in the
+        // variation sequence even though no actual move was made on the board.
         for(let ti=startIdx;ti<vTokens.length;ti++){
           const vToken=vTokens[ti];
           const vResult=_applySANMove(vState,vToken);
@@ -691,8 +723,12 @@ function importPGN(pgnText){
             }
             if(!vMatched){
               // v1.0.2: skip this token but CONTINUE parsing the rest of the
-              // variation — do not abort the whole variation.
+              // variation — do not abort the whole variation. Advance the
+              // side-to-move + move number so the next token is correctly
+              // attributed (a skipped move still consumes a turn per PGN spec).
               console.warn('importPGN: skipping unparseable variation token at',ti,'token=',vToken);
+              if(!vIsWhite)vMoveNum++;
+              vIsWhite=!vIsWhite;
               continue;
             }
             sanParts.push(moveAlg(vState,vMatched));
@@ -713,9 +749,16 @@ function importPGN(pgnText){
             san:sanParts.join(' '),
             varMoveNum:initialVMoveNum,
             firstMoveIsWhite:initialVIsWhite,
-            lineNum:vi+1
+            lineNum:vi+1,
+            // v1.0.2: prefixEllipsis — when true, prepend "N..." before the
+            // variation's first White move to indicate the Black move is the
+            // branch point (per PGN spec and user requirement).
+            prefixEllipsis:!!_typeBPrefixEllipsis,
+            prefixEllipsisNum:_typeBPrefixNum
           });
         }
+        _typeBPrefixEllipsis=false;
+        _typeBPrefixNum=0;
       }
     }
     
@@ -762,6 +805,117 @@ function importPGN(pgnText){
   }
   
   gameState=replayState;
+  
+  // v1.0.2 FIX: Post-process PGN variations — relocate each variation to the
+  // divergence point where the actual game moves diverge from the variation.
+  // The variation's moves are compared against the actual game moves starting
+  // from the move AFTER the owning move. Matching prefix is stripped. If the
+  // game fully follows the variation, the variation is removed (redundant).
+  // If the game diverges, the variation is moved to the divergence-point move.
+  // v1.0.2 FIX (second pass): Mark moved variations with _relocated=true to
+  // prevent them from being reprocessed when the loop reaches their new location.
+  // Without this, a variation moved from moveRecord[mi] to moveRecord[divergeIdx]
+  // would be processed AGAIN at divergeIdx, creating duplicates.
+  for(let mi=0;mi<moveRecords.length;mi++){
+    const mr=moveRecords[mi];
+    if(!mr||!mr.variations||mr.variations.length===0)continue;
+    const remainingVars=[];
+    for(const v of mr.variations){
+      if(v.group!=='pgn'){remainingVars.push(v);continue;}
+      // Skip variations that were already relocated from an earlier moveRecord
+      if(v._relocated){remainingVars.push(v);continue;}
+      // Parse the variation's SAN moves
+      const sanMoves=v.san.trim().split(/\s+/).filter(s=>s);
+      if(sanMoves.length===0){continue;}
+      let matchCount=0;
+      let divergeIdx=-1;
+      for(let vi=0;vi<sanMoves.length;vi++){
+        const actualIdx=mi+1+vi;
+        if(actualIdx>=moveRecords.length){
+          // Game ended before all variation moves were checked
+          divergeIdx=actualIdx;
+          break;
+        }
+        const actualMr=moveRecords[actualIdx];
+        if(!actualMr||actualMr===null){
+          // v1.0.2 FIX: Null placeholder means the actual move at this position
+          // is a "pass" (black-to-move opening). This is NOT a match — treat as
+          // divergence since the variation expects a real move here.
+          divergeIdx=actualIdx;
+          break;
+        }
+        const varSAN=sanMoves[vi].replace(/[+#!?]+$/,'');
+        const actualSAN=(actualMr.notation||'').replace(/[+#!?]+$/,'');
+        if(varSAN===actualSAN){
+          matchCount++;
+        }else{
+          divergeIdx=actualIdx;
+          break;
+        }
+      }
+      if(divergeIdx<0){
+        // All variation moves checked without divergence
+        if(matchCount>=sanMoves.length){
+          // All matched — redundant, remove
+          continue;
+        }else{
+          // Some moves weren't checked (shouldn't happen, but defensive)
+          // Remove the variation — it's incomplete
+          continue;
+        }
+      }
+      if(divergeIdx>=0&&divergeIdx<moveRecords.length){
+        // Move the variation to the divergence-point move
+        const remainingSAN=sanMoves.slice(matchCount).join(' ');
+        if(remainingSAN.length>0){
+          const targetMr=moveRecords[divergeIdx];
+          if(targetMr){
+            if(!targetMr.variations)targetMr.variations=[];
+            const isWhite=(divergeIdx%2===0);
+            const moveNum=Math.floor(divergeIdx/2)+1;
+            targetMr.variations.push({
+              group:'pgn',
+              san:remainingSAN,
+              varMoveNum:moveNum,
+              firstMoveIsWhite:isWhite,
+              lineNum:v.lineNum,
+              prefixEllipsis:false,
+              prefixEllipsisNum:0,
+              _relocated:true // Mark as relocated to prevent reprocessing
+            });
+          }
+        }
+        // Don't add to remainingVars (moved to new location)
+      }else if(divergeIdx>=0&&divergeIdx>=moveRecords.length){
+        // v1.0.2 FIX: Variation starts BEYOND the game end — the game hasn't
+        // reached the variation's starting move. Cache it (don't display).
+        // For PGN import, this means the variation is a hypothetical continuation
+        // that was never reached. Don't add to remainingVars (remove from display).
+        continue;
+      }else{
+        // No divergence found and not all matched — keep at original location
+        remainingVars.push(v);
+      }
+    }
+    mr.variations=remainingVars.length>0?remainingVars:undefined;
+  }
+  // Clean up _relocated flags (not needed for display)
+  // v1.0.2: Also deduplicate variations — remove identical SAN content
+  for(const mr of moveRecords){
+    if(mr&&mr.variations){
+      const seen=new Set();
+      const deduped=[];
+      for(const v of mr.variations){
+        if(v._relocated)delete v._relocated;
+        // v1.0.2: Deduplicate by group+san combination
+        const key=(v.group||'')+'|'+(v.san||'');
+        if(seen.has(key))continue; // Skip duplicate
+        seen.add(key);
+        deduped.push(v);
+      }
+      mr.variations=deduped.length>0?deduped:undefined;
+    }
+  }
   
   // Check for game over
   const st=gameStatus(gameState);
@@ -882,7 +1036,17 @@ async function probeTablebase(s){
 if(isTbOffline())return null;
 const fen=generateFEN(s);
 // Check cache first
-if(_tbCache.has(fen))return _tbCache.get(fen);
+// v1.0.2 FIX: Refresh LRU order on cache hit. Previously a hit just returned
+// the value without reordering, so frequently-accessed entries could be
+// evicted before rarely-accessed ones — defeating the LRU cache's purpose.
+// The delete+set pattern moves the entry to the "newest" position (Map
+// preserves insertion order in JS).
+if(_tbCache.has(fen)){
+  const v=_tbCache.get(fen);
+  _tbCache.delete(fen);
+  _tbCache.set(fen,v);
+  return v;
+}
 // Rate limit: ≥600ms between requests
 // FIX: Reserve the time slot immediately (before async wait) to prevent TOCTOU race
 // where two concurrent calls both compute wait=0 and bypass the rate limit.

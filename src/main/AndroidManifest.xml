@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- AI-GEN: AI assisted -->
+<!-- This code was AI-assisted and has been reviewed for AGPL v3 compliance. -->
+
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.Regalia"
     android:versionCode="102"
@@ -72,6 +75,18 @@
             android:foregroundServiceType="specialUse"
             android:exported="false"
             android:stopWithTask="true" />
+
+        <!-- v1.0.2 NEW FEATURE: StatsActivity — fullscreen WebView for the 📊统计
+             statistics page. Displays PGN with rich formatting + computed statistics.
+             PGN parsing in stats.html is derived from DroidFish (GPL v3). -->
+        <activity
+            android:name="com.Regalia.StatsActivity"
+            android:exported="false"
+            android:screenOrientation="unspecified"
+            android:configChanges="keyboardHidden|orientation|screenSize|smallestScreenSize|density|uiMode"
+            android:windowSoftInputMode="adjustPan"
+            android:hardwareAccelerated="true"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen" />
 
     </application>
 

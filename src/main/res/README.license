@@ -11,15 +11,24 @@ NOTE on README.license placement:
 
 Subdirectory license summary:
   - values/: AGPL v3 (original)
-      strings.xml — application name ("Regalia v1.0.2") and string resources.
+      strings.xml — application name ("Regalia v1.0.2") and string
+      resources. Contains app_name, dialog titles, button labels,
+      toast messages, ECO family names, and all user-facing strings
+      in both Chinese and English (selected at runtime via _lang).
   - xml/: AGPL v3 (original)
-      network_security_config.xml — TLS 1.2+ enforcement + cleartext block
-      for HTTPS connections to the Lichess Tablebase API.
+      network_security_config.xml — TLS 1.2+ enforcement + cleartext
+      block for HTTPS connections to the Lichess Tablebase API.
+      The config disables cleartext traffic entirely and trusts the
+      system CA store; TlsSecurityHelper.java additionally enforces
+      TLS 1.2+ via SSLSocketFactory on API 21-27 where the system
+      default might negotiate TLS 1.0/1.1.
   - mipmap-hdpi/ ... mipmap-xxxhdpi/: AGPL v3 (AI-generated assets)
       App launcher icons (ic_launcher, ic_launcher_round,
       ic_launcher_foreground) in 5 density buckets (hdpi, mdpi, xhdpi,
       xxhdpi, xxxhdpi). All icons are AI-generated and licensed under
-      AGPL v3 — NOT derived from DroidFish or Stockfish.
+      AGPL v3 — NOT derived from DroidFish or Stockfish. The ic_launcher
+      foreground depicts a gold crown on a dark rounded-square
+      background, matching the in-app ♔ header logo.
 
 Overall, all resources in this directory tree are original works licensed
 under AGPL v3. No DroidFish-derived or Stockfish-derived resources are

@@ -52,6 +52,16 @@ const _i18n={
 'opening_rec':{zh:'开局推荐',en:'Opening Rec.'},
 'move_history':{zh:'走法记录',en:'Move History'},
 'no_moves':{zh:'暂无走法记录',en:'No moves yet'},
+'stats':{zh:'统计',en:'Stats'},
+'stats_title':{zh:'📊统计数据',en:'📊Statistics'},
+'stats_export_html':{zh:'💾HTML',en:'💾HTML'},
+'stats_review':{zh:'🗂️复盘',en:'🗂️Review'},
+'stats_save_html':{zh:'保存HTML统计文件',en:'Save HTML stats file'},
+'stats_saved':{zh:'HTML统计文件已保存',en:'HTML stats file saved'},
+'save_pgn_prompt':{zh:'💾是否保存PGN文件？',en:'💾 Save PGN file?'},
+'save_pgn_yes':{zh:'是',en:'Yes'},
+'save_pgn_no':{zh:'否',en:'No'},
+'white_concedes_move':{zh:'白方让先（黑方先走）',en:'White concedes the move (black to move)'},
 'chess_tips':{zh:'棋理提示',en:'Chess Tips'},
 'ctrl_info':{zh:'格子控制信息',en:'Square Control'},
 'cur_square':{zh:'当前格子',en:'Square'},
@@ -633,8 +643,11 @@ let h=typeof s.hash==='number'?s.hash:computeHash(s);
 // 1. Remove piece from from-square
 h^=zobrist.pieceTable[from.row*8+from.col][pieceZobristIdx(piece)];
 // 2. Remove captured piece at to-square if any
-const captured=s.board[to.row][to.col];
-if(captured)h^=zobrist.pieceTable[to.row*8+to.col][pieceZobristIdx(captured)];
+// v1.0.2 CLEANUP: Use capPiece (already extracted at line 631 from
+// ns.board[to.row][to.col] before mutation) instead of re-reading from
+// s.board[to.row][to.col]. Since ns is a deep clone of s, the two values
+// are identical — the second read was redundant.
+if(capPiece)h^=zobrist.pieceTable[to.row*8+to.col][pieceZobristIdx(capPiece)];
 // 3. Place piece (or promoted piece) at to-square
 const placedPiece=promotion?{type:promotion,color:piece.color}:piece;
 h^=zobrist.pieceTable[to.row*8+to.col][pieceZobristIdx(placedPiece)];
@@ -836,37 +849,65 @@ const k=s.currentTurn==='white'?s.wk:s.bk;return inCheck(s.board,s.currentTurn,k
 // Covers: K vs K, K+minor vs K, K+B vs K+B (same color), K+B+B(same color) vs K
 // Note: K+N+N vs K is NOT a dead position (checkmate possible with opponent's help)
 function isDeadPosition(s){
-const pcs=[];for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=s.board[r][c];if(p)pcs.push({type:p.type,color:p.color,row:r,col:c})}
+// v1.0.2 PERF (first-principles): single-pass piece scan with early returns.
+// The previous code allocated a pcs[] array, then ran multiple .filter() /
+// .map() passes on it. The early-return logic below covers the same cases
+// (K vs K, K+minor vs K, K+B vs K+B same-color, K+B+B same-color vs K)
+// in a single 64-square scan with O(1) per-square work, and exits the
+// moment the position is provably NOT dead (e.g. a queen or rook present,
+// or a pawn present which can always promote).
+// Piece counters by color + type. We only need to know:
+//   - total piece count (must be ≤ 4 for any dead position)
+//   - per-side non-king piece counts + types
+//   - bishop square-color parity (for same-color bishop checks)
+let total=0;
+// Per-side: [pawn, knight, bishop, rook, queen, king] counts (index by type)
+const wCount={pawn:0,knight:0,bishop:0,rook:0,queen:0,king:0};
+const bCount={pawn:0,knight:0,bishop:0,rook:0,queen:0,king:0};
+let wBishopParity=-1,bBishopParity=-1; // -1 = no bishop seen yet
+let wBishopCount=0,bBishopCount=0;
+const b=s.board;
+for(let r=0;r<8;r++){
+  const row=b[r];if(!row)continue;
+  for(let c=0;c<8;c++){
+    const p=row[c];
+    if(!p)continue;
+    total++;
+    // Early exit: pawns / rooks / queens can always force or avoid checkmate
+    // → not a dead position. (K vs K is the only all-king case.)
+    if(p.type==='pawn'||p.type==='rook'||p.type==='queen')return false;
+    const cnt=p.color==='white'?wCount:bCount;
+    if(p.type==='king'){cnt.king++;continue;}
+    if(p.type==='knight'){cnt.knight++;continue;}
+    // Bishop — track count + square-color parity
+    if(p.color==='white'){
+      wBishopCount++;
+      const parity=(r+c)%2;
+      if(wBishopParity===-1)wBishopParity=parity;
+      else if(wBishopParity!==parity)wBishopParity=-2; // mixed-parity flag
+    }else{
+      bBishopCount++;
+      const parity=(r+c)%2;
+      if(bBishopParity===-1)bBishopParity=parity;
+      else if(bBishopParity!==parity)bBishopParity=-2;
+    }
+  }
+}
+// Sanity: dead positions require both kings present
+if(wCount.king!==1||bCount.king!==1)return false;
+const wMinor=wCount.knight+wBishopCount;
+const bMinor=bCount.knight+bBishopCount;
 // K vs K
-if(pcs.length===2)return true;
-const wP=pcs.filter(p=>p.color==='white');
-const bP=pcs.filter(p=>p.color==='black');
-const wT=wP.map(p=>p.type),bT=bP.map(p=>p.type);
-// Helper: does this side have only king + at most one minor piece?
-const onlyKingMinor=(types)=>{const nonKing=types.filter(t=>t!=='king');return nonKing.length===0||(nonKing.length===1&&(nonKing[0]==='bishop'||nonKing[0]==='knight'))};
-// K+minor vs K (either side)
-if(onlyKingMinor(wT)&&onlyKingMinor(bT)){
-  // Both sides have at most K+minor: check specific combinations
-  const wN=wT.filter(t=>t!=='king'),bN=bT.filter(t=>t!=='king');
-  // K vs K
-  if(wN.length===0&&bN.length===0)return true;
-  // K+minor vs K
-  if(wN.length===0||bN.length===0)return true;
-  // K+B vs K+B: draw only if bishops on same square color
-  if(wN.length===1&&bN.length===1&&wN[0]==='bishop'&&bN[0]==='bishop'){
-    const wB=wP.find(p=>p.type==='bishop'),bB=bP.find(p=>p.type==='bishop');
-    if(((wB.row+wB.col)%2)===((bB.row+bB.col)%2))return true;
-  }
-  return false; // K+N vs K+B, K+N vs K+N, etc. — checkmate possible
-}
+if(total===2)return true;
+// K+minor vs K (either side has only K, other has K + at most one minor)
+if(wMinor===0&&bMinor<=1)return true;
+if(bMinor===0&&wMinor<=1)return true;
+// K+B vs K+B (both sides have exactly 1 bishop, same square color)
+if(wMinor===1&&bMinor===1&&wBishopCount===1&&bBishopCount===1
+   &&wBishopParity>=0&&bBishopParity>=0&&wBishopParity===bBishopParity)return true;
 // K+B+B(same color) vs K — two same-color bishops cannot force checkmate
-for(const co of['white','black']){
-  const side=co==='white'?wP:bP,opp=co==='white'?bP:wP;
-  if(opp.length===1&&side.length===3){
-    const bishops=side.filter(p=>p.type==='bishop');
-    if(bishops.length===2&&((bishops[0].row+bishops[0].col)%2)===((bishops[1].row+bishops[1].col)%2))return true;
-  }
-}
+if(bMinor===0&&wBishopCount===2&&wBishopParity>=0)return true;
+if(wMinor===0&&bBishopCount===2&&bBishopParity>=0)return true;
 return false;
 }
 // PGN-standard SAN notation with proper disambiguation (DroidFish TextIO.moveToString algorithm)
@@ -881,9 +922,16 @@ if(piece.type==='king'&&Math.abs(to.col-from.col)===2){n=to.col===6?'O-O':'O-O-O
 if(piece.type!=='pawn'){
 n+=piece.type==='knight'?'N':piece.type[0].toUpperCase();
 // Disambiguation: find all same-type, same-color pieces with legal moves to same target
-// Uses pseudoMoves + board clone + inCheck filter (same as legalMoves but cheaper per candidate)
+// v1.0.2 PERF (first-principles): use makeMvInPlace/unmakeMv instead of cloneB
+// per candidate. The previous code cloned the entire 8×8 board for every
+// same-type piece that could reach the target (up to 8 clones per moveAlg
+// call, e.g. with 8 pawns on the 2nd rank all able to capture on the same
+// file). makeMvInPlace modifies the board in place + returns an undo object
+// that unmakeMv uses to restore — no board allocation at all.
+// This mirrors the optimization already applied to legalMoves() and
+// hasLegalMoves() (see comments above legalMoves).
 let numSameTarget=0,numSameFile=0,numSameRow=0;
-for(let r=0;r<8;r++)for(let c=0;c<8;c++){if(r===from.row&&c===from.col)continue;const p=s.board[r][c];if(p&&p.type===piece.type&&p.color===piece.color){const pm=pseudoMoves(s,{row:r,col:c});if(pm.some(m=>m.row===to.row&&m.col===to.col)){const b2=cloneB(s.board);b2[to.row][to.col]=b2[r][c];b2[r][c]=null;if(p.type==='pawn'&&s.enPassantTarget&&to.row===s.enPassantTarget.row&&to.col===s.enPassantTarget.col){const cr=p.color==='white'?to.row+1:to.row-1;b2[cr][to.col]=null}if(p.type==='king'&&Math.abs(to.col-c)===2){if(to.col===6){b2[r][5]=b2[r][7];b2[r][7]=null}else if(to.col===2){b2[r][3]=b2[r][0];b2[r][0]=null}}const kPos=p.type==='king'?{row:to.row,col:to.col}:(p.color==='white'?s.wk:s.bk);if(kPos&&!inCheck(b2,p.color,kPos)){numSameTarget++;if(c===from.col)numSameFile++;if(r===from.row)numSameRow++;}}}}
+for(let r=0;r<8;r++)for(let c=0;c<8;c++){if(r===from.row&&c===from.col)continue;const p=s.board[r][c];if(p&&p.type===piece.type&&p.color===piece.color){const pm=pseudoMoves(s,{row:r,col:c});if(pm.some(m=>m.row===to.row&&m.col===to.col)){const mv2={from:{row:r,col:c},to:{row:to.row,col:to.col},piece:p,promotion:undefined};const undo=makeMvInPlace(s,mv2);if(undo){const kPos=p.type==='king'?{row:to.row,col:to.col}:(p.color==='white'?s.wk:s.bk);if(kPos&&!inCheck(s.board,p.color,kPos)){numSameTarget++;if(c===from.col)numSameFile++;if(r===from.row)numSameRow++;}unmakeMv(s,undo);}}}}
 // PGN standard disambiguation: file first, then rank, then both
 if(numSameTarget>0){if(numSameFile===0)n+=String.fromCharCode(97+from.col);else if(numSameRow===0)n+=(8-from.row);else n+=String.fromCharCode(97+from.col)+(8-from.row)}
 }
@@ -955,8 +1003,16 @@ function initZobristTables(){
   return{pieceTable,side,castling,enPassant};
 }
 const zobrist=initZobristTables();
+// v1.0.2 PERF (first-principles): pre-compute piece→index map once at module
+// load instead of building a fresh {pawn:0,knight:1,...} object on every
+// pieceZobristIdx() call. pieceZobristIdx is called 32+ times per computeHash
+// (once per occupied square), and computeHash is called on every state clone
+// (syncHash) + every makeMv incremental update fallback. The object-literal
+// construction was a hidden per-call allocation that added up under heavy
+// engine search.
+const _PIECE_TYPE_IDX={pawn:0,knight:1,bishop:2,rook:3,queen:4,king:5};
 function pieceZobristIdx(p){
-  const typeIdx={pawn:0,knight:1,bishop:2,rook:3,queen:4,king:5}[p.type];
+  const typeIdx=_PIECE_TYPE_IDX[p.type];
   if(typeIdx===undefined) return 0;
   return typeIdx*2+(p.color==='white'?0:1);
 }
@@ -1289,5 +1345,40 @@ let _ecoComposing=false;let _ecoSearchFocused=false;let _ecoBlurTimer=0;let ecoS
 
 function posEmoji(ev){if(ev>600)return'🏆';if(ev>350)return'😄';if(ev>150)return'😊';if(ev>50)return'🙂';if(ev>-50)return'😐';if(ev>-150)return'😟';if(ev>-350)return'😰';if(ev>-600)return'😱';return'💀'}
 
+// v1.0.2 FIX: Black-to-move opening move record fix.
+//
+// When a new game starts with black to move (FEN with 'b' turn, setup mode with
+// turn=black, ECO opening with odd move count, or PGN with [FEN "... b ..."]),
+// moveRecords=[] is empty. When black's first move is later pushed by executeMove(),
+// it lands in moveRecords[0] — which is the WHITE slot — causing black's first move
+// to incorrectly appear in white's position in the move history and PGN export.
+//
+// Fix: At each of the 4 new-game entry points (startGame, _applyImportedFEN,
+// exitSetup, importPGN), call this helper AFTER gameState is fully set up and
+// BEFORE any move is executed. It prepends a `null` placeholder so that black's
+// first move correctly lands in moveRecords[1] (the black slot).
+//
+// The `null` placeholder renders as "..." (PGN skip marker) in both the UI move
+// history and the exported PGN string, correctly indicating that white conceded
+// the move (a "give odds" or "black to move" scenario).
+//
+// The helper is idempotent and only acts on an empty moveRecords — once real
+// moves have been pushed, calling it again is a no-op.
+function _prependBlackToMovePlaceholder(){
+  // Only act when (a) we have a gameState, (b) black is to move, and
+  // (c) moveRecords is still empty (no moves executed yet).
+  if(gameState && gameState.currentTurn==='black' && moveRecords.length===0){
+    moveRecords.push(null);
+    // Also sync stateHistory[0].moveRecords so undoing past the first move
+    // doesn't lose the placeholder. Without this, undoing all the way back
+    // would restore moveRecords=[] — then the next move (black's) would
+    // land in the white slot, reintroducing the original bug.
+    if(stateHistory.length>0 && stateHistory[0].moveRecords
+       && stateHistory[0].moveRecords.length===0){
+      stateHistory[0].moveRecords=[null];
+    }
+  }
+}
+
 // ---- Exports ----
-export {PV,OPP_COLOR,SQ_LIGHT,SQ_DARK,SQ_SEL,LBL_LIGHT,LBL_DARK,LBL_STROKE_LIGHT,LBL_STROKE_DARK,SYM,PN,PN_EN,pieceName,_principlesHTML,KNIGHT_OFFSETS,DIR_ROOK,DIR_BISHOP,DIR_QUEEN,ELO_MATCH,getAI_LEVELS,CELL,REVIEW_CELL,zobrist,initBoard,attacked,initState,validateSetupPosition,cloneB,cloneS,sqAttackedFast,inCheck,pseudoMoves,legalMoves,hasLegalMoves,moveAlg,getCtrlMap,makeMvInPlace,unmakeMv,gameStatus,isDeadPosition,_applyMoveToBoard,generateFEN,uciToCoords,fenToState,_esc,posAlg,algPos,inB,pieceZobristIdx,computeHash,syncHash,recomputeCastlingRights,_refreshStateAfterSetup,_recalcCellSize,getEffectiveAILevel,posEmoji,posDesc,T,toggleLang,_lang,_i18n};
+export {PV,OPP_COLOR,SQ_LIGHT,SQ_DARK,SQ_SEL,LBL_LIGHT,LBL_DARK,LBL_STROKE_LIGHT,LBL_STROKE_DARK,SYM,PN,PN_EN,pieceName,_principlesHTML,KNIGHT_OFFSETS,DIR_ROOK,DIR_BISHOP,DIR_QUEEN,ELO_MATCH,getAI_LEVELS,CELL,REVIEW_CELL,zobrist,initBoard,attacked,initState,validateSetupPosition,cloneB,cloneS,sqAttackedFast,inCheck,pseudoMoves,legalMoves,hasLegalMoves,moveAlg,getCtrlMap,makeMvInPlace,unmakeMv,gameStatus,isDeadPosition,_applyMoveToBoard,generateFEN,uciToCoords,fenToState,_esc,posAlg,algPos,inB,pieceZobristIdx,computeHash,syncHash,recomputeCastlingRights,_refreshStateAfterSetup,_recalcCellSize,getEffectiveAILevel,posEmoji,posDesc,T,toggleLang,_lang,_i18n,_prependBlackToMovePlaceholder};

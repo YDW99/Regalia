@@ -250,18 +250,18 @@ public class StockfishNative {
     private String currentEnginePath = null;
 
     // Auto config: when enabled, detectHardwareAndConfigure() is called automatically
-    private boolean autoConfigEnabled = true;
+    private volatile boolean autoConfigEnabled = true;
 
     // Current UCI option values (loaded from prefs or defaults)
-    private int engineThreads = 2;
-    private int engineHash = 64;
-    private int engineMoveOverhead = 30;
-    private int engineMultiPV = 1;
-    private boolean enginePonder = false;
-    private boolean engineShowWDL = true;
-    private int engineSkillLevel = 20;
-    private boolean engineLimitElo = false;
-    private int engineElo = 2800;
+    private volatile int engineThreads = 2;
+    private volatile int engineHash = 64;
+    private volatile int engineMoveOverhead = 30;
+    private volatile int engineMultiPV = 1;
+    private volatile boolean enginePonder = false;
+    private volatile boolean engineShowWDL = true;
+    private volatile int engineSkillLevel = 20;
+    private volatile boolean engineLimitElo = false;
+    private volatile int engineElo = 2800;
 
     // UCI option regex patterns for parsing engine capabilities
     private static final Pattern ID_NAME_PATTERN = Pattern.compile("^id\\s+name\\s+(.+)");
@@ -425,6 +425,24 @@ public class StockfishNative {
         } catch (Throwable e) {
             return false;
         }
+    }
+
+    // v1.0.2 FIX: Safe wrapper for Process.destroyForcibly() — that method is
+    // API 26+ only, but our minSdk is 21. On API 21-25, fall back to a second
+    // destroy() call (the OS will eventually reap the process). Also uses
+    // isProcessAlive() instead of engineProcess.isAlive() for the same reason.
+    private void destroyForciblySafe() {
+        if (engineProcess == null) return;
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                engineProcess.destroyForcibly();
+            } else {
+                // API 21-25: destroyForcibly() not available; second destroy()
+                // call is a no-op if the process is already dead, but kicks
+                // the OS to reap it if the first destroy() was graceful.
+                engineProcess.destroy();
+            }
+        } catch (Throwable ignored) {}
     }
 
     @JavascriptInterface
@@ -1032,7 +1050,10 @@ public class StockfishNative {
             try {
                 engineProcess.destroy();
                 try { Thread.sleep(100); } catch (InterruptedException ignored) {}
-                if (engineProcess.isAlive()) engineProcess.destroyForcibly();
+                // v1.0.2 FIX: use isProcessAlive() + destroyForciblySafe() —
+                // direct engineProcess.isAlive() / destroyForcibly() throw
+                // NoSuchMethodError on API 21-25 (minSdk).
+                if (isProcessAlive()) destroyForciblySafe();
             } catch (Throwable ignored) {}
             engineProcess = null;
         }
@@ -1259,14 +1280,12 @@ public class StockfishNative {
                     stopLatch.countDown();
                     return;
                 }
-                if (_isPondering) {
-                    _isPondering = false;
-                    synchronized (stateLock) {
-                        currentState = STATE_NONE;
-                    }
-                    Log.d(TAG, "Discarding bestmove from ponder stop");
-                    return;
-                }
+                // v1.0.2 CLEANUP: Removed the dead `if (_isPondering)` branch
+                // here. Both stopPonder() and stopAndWaitForBestmove() set
+                // _isPondering=false BEFORE sending "stop", so by the time the
+                // engine's bestmove arrives, _isPondering is always false. The
+                // actual discard path is the _discardingPonderBestmove check
+                // below, which is set by those same callers.
                 // FIX: Discard bestmove from a ponder stop that was initiated by
                 // stopAndWaitForBestmove(). When we stop pondering to start a new
                 // search (e.g., entering review mode), the ponder's bestmove arrives
@@ -1574,15 +1593,14 @@ public class StockfishNative {
         switch (state) {
             case STATE_GO:
                 postJsCallback("onBestMove(" + escapeJsString(uciMove) + ")");
-                {
-                    postJsCallback("onMultiPVResult(" + multiPVJson + ")");
-                }
+                // v1.0.2 CLEANUP: Removed unnecessary { } block (leftover from a
+                // removed `if` condition).
+                postJsCallback("onMultiPVResult(" + multiPVJson + ")");
                 break;
             case STATE_HINT:
                 postJsCallback("onHintMove(" + escapeJsString(uciMove) + ")");
-                {
-                    postJsCallback("onMultiPVResult(" + multiPVJson + ")");
-                }
+                // v1.0.2 CLEANUP: Removed unnecessary { } block.
+                postJsCallback("onMultiPVResult(" + multiPVJson + ")");
                 break;
             case STATE_EVAL:
                 if (_storedEvalMate != null) {
@@ -1592,9 +1610,8 @@ public class StockfishNative {
                 } else {
                     postJsCallback("onEngineEval(0, null, " + _lastEvalDepth + ", " + _storedWdlW + ", " + _storedWdlD + ", " + _storedWdlL + ")");
                 }
-                {
-                    postJsCallback("onMultiPVResult(" + multiPVJson + ")");
-                }
+                // v1.0.2 CLEANUP: Removed unnecessary { } block.
+                postJsCallback("onMultiPVResult(" + multiPVJson + ")");
                 _storedEvalCp = null;
                 _storedEvalMate = null;
                 _storedWdlW = -1; _storedWdlD = -1; _storedWdlL = -1;
@@ -1790,8 +1807,11 @@ public class StockfishNative {
             try {
                 engineProcess.destroy();
                 try { Thread.sleep(200); } catch (InterruptedException ignored) {}
-                if (engineProcess.isAlive()) {
-                    engineProcess.destroyForcibly();
+                // v1.0.2 FIX: use isProcessAlive() + destroyForciblySafe() —
+                // direct engineProcess.isAlive() / destroyForcibly() throw
+                // NoSuchMethodError on API 21-25 (minSdk).
+                if (isProcessAlive()) {
+                    destroyForciblySafe();
                     Log.w(TAG, "Engine process did not exit gracefully, force-killed");
                 }
             } catch (Throwable e) {
@@ -1848,7 +1868,10 @@ public class StockfishNative {
             try {
                 engineProcess.destroy();
                 try { Thread.sleep(100); } catch (InterruptedException ignored) {}
-                if (engineProcess.isAlive()) engineProcess.destroyForcibly();
+                // v1.0.2 FIX: use isProcessAlive() + destroyForciblySafe() —
+                // direct engineProcess.isAlive() / destroyForcibly() throw
+                // NoSuchMethodError on API 21-25 (minSdk).
+                if (isProcessAlive()) destroyForciblySafe();
             } catch (Throwable ignored) {}
             engineProcess = null;
         }
@@ -2458,7 +2481,12 @@ public class StockfishNative {
     public void saveLangPref(String lang) {
         if (lang == null) return;
         try {
-            SharedPreferences.Editor editor = context.getSharedPreferences("Regalia_prefs", Context.MODE_PRIVATE).edit();
+            // v1.0.2 FIX: Use the SAME SharedPreferences file as isEnglishMode() reads from.
+            // Previously this used "Regalia_prefs" while isEnglishMode() reads from "RegaliaEngine"
+            // (PREFS_NAME) — a mismatch that caused the language preference to be lost,
+            // manifesting as "正在应用引擎配置..." appearing in Chinese even when the user
+            // had previously switched to English mode.
+            SharedPreferences.Editor editor = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit();
             editor.putString("lang", lang);
             editor.apply();
         } catch (Throwable e) {
@@ -3297,6 +3325,18 @@ public class StockfishNative {
     static final int REQUEST_CODE_EXPORT_SETTINGS = 1002;
     /** v1.0.2 FEATURE (audit): Request code for PGN export via ACTION_CREATE_DOCUMENT */
     static final int REQUEST_CODE_EXPORT_PGN = 1004;
+    // v1.0.2 CLEANUP: Removed REQUEST_CODE_EXPORT_STATS_HTML (1005) — the stats
+    // HTML export path is now handled entirely inside StatsActivity's own JS
+    // bridge (StatsActivity.exportStatsHTML + onActivityResult), so the main
+    // activity never receives this request code.
+
+    // v1.0.2 CLEANUP: Removed _pendingStatsPayload and _pendingStatsHTML fields.
+    // _pendingStatsPayload was only read by the now-removed getStatsPayload()
+    // bridge method (StatsActivity has its own bridge that reads the payload
+    // from the Intent extra, not from this field). _pendingStatsHTML was only
+    // set by the now-removed exportStatsHTML() bridge method (StatsActivity has
+    // its own). Both were memory leaks — large PGN payloads could linger until
+    // the next call or engine shutdown.
 
     /** Pending export content — stored temporarily until SAF picker returns a URI */
     private volatile String _pendingExportContent = null;
@@ -3374,13 +3414,60 @@ public class StockfishNative {
     }
 
     /**
+     * v1.0.2 NEW FEATURE: Open the stats page (📊统计) in a new fullscreen WebView activity.
+     * The payload contains {pgn, evals, playerColor, lang} — StatsActivity reads it
+     * via its OWN AndroidBridge.getStatsPayload() (registered on StatsActivity's
+     * WebView, not this one). The payload is passed as an Intent extra.
+     */
+    @android.webkit.JavascriptInterface
+    public void openStatsPage(String payload) {
+        if (payload == null || payload.isEmpty()) {
+            Log.w(TAG, "openStatsPage: empty payload, skipping");
+            return;
+        }
+        try {
+            Activity activity = activityRef.get();
+            if (activity == null) {
+                Log.w(TAG, "openStatsPage: no valid Activity reference");
+                postJsCallback("if(typeof showToast==='function')showToast('Activity unavailable')");
+                return;
+            }
+            // Pass the payload as an Intent extra so StatsActivity can inject it
+            // into its own WebView without needing a reference to this engine instance.
+            android.content.Intent intent = new android.content.Intent(activity, com.Regalia.StatsActivity.class);
+            intent.putExtra("statsPayload", payload);
+            activity.startActivity(intent);
+            Log.i(TAG, "Stats page opened");
+        } catch (Throwable e) {
+            Log.e(TAG, "openStatsPage failed", e);
+            postJsCallback("if(typeof showToast==='function')showToast('Stats unavailable')");
+        }
+    }
+
+    // v1.0.2 CLEANUP: Removed the following dead bridge methods — StatsActivity
+    // has its own JS bridge that provides the same functionality, and its
+    // activityRef points to MainActivity (not StatsActivity), so these were
+    // either unreachable or no-ops:
+    //   - getStatsPayload()  — StatsActivity has its own at StatsActivity.java
+    //   - closeStatsPage()   — StatsActivity has its own (the instanceof check
+    //                           here always evaluated to false since activityRef
+    //                           points to MainActivity)
+    //   - exportStatsHTML()  — StatsActivity has its own
+    //   - statsRequestReview() — StatsActivity has its own
+
+    /**
      * Handle SAF file picker result for settings export.
      * Writes the pending export content to the user-chosen URI.
      *
      * v1.0.2 FEATURE: also handles PGN export (REQUEST_CODE_EXPORT_PGN) by
      * dispatching to onPGNExported() instead of onSettingsExported().
+     *
+     * v1.0.2 CLEANUP: Removed the stats HTML export branch — that path is now
+     * handled entirely inside StatsActivity (which has its own bridge and
+     * onActivityResult handler).
      */
     public void handleExportFilePickerResult(android.content.Intent data) {
+        // Normal settings/PGN export path
         String content = _pendingExportContent;
         String exportType = _pendingExportType;
         _pendingExportContent = null;
@@ -3849,26 +3936,25 @@ public class StockfishNative {
             } catch (Throwable e) {
                 Log.w(TAG, "takePersistableUriPermission failed", e);
             }
-            // Read file content via ContentResolver
-            java.io.InputStream is = context.getContentResolver().openInputStream(uri);
-            if (is != null) {
-                try {
-                    java.io.BufferedReader reader = new java.io.BufferedReader(
-                        new java.io.InputStreamReader(is, "UTF-8"));
-                    StringBuilder sb = new StringBuilder();
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        sb.append(line).append("\n");
-                    }
-                    String content = sb.toString();
-                    // Import the settings — onSettingsImported() callback in JS
-                    // will fire the appropriate toast (success or failure) and
-                    // reopen the engine config dialog. Do NOT duplicate here.
-                    importSettings(content);
-                } finally {
-                    is.close();
+            // v1.0.2 FIX: Use try-with-resources on BufferedReader so the reader
+            // (and its internal char buffer) is always closed, not just the
+            // underlying InputStream. The previous pattern (close `is` in
+            // finally) left the BufferedReader unclosed, relying on GC.
+            String content;
+            try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(
+                            context.getContentResolver().openInputStream(uri), "UTF-8"))) {
+                StringBuilder sb = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    sb.append(line).append("\n");
                 }
+                content = sb.toString();
             }
+            // Import the settings — onSettingsImported() callback in JS
+            // will fire the appropriate toast (success or failure) and
+            // reopen the engine config dialog. Do NOT duplicate here.
+            importSettings(content);
         } catch (Throwable e) {
             Log.e(TAG, "handleFilePickerResult failed", e);
             // Only fire an error toast if the file read itself failed (importSettings
@@ -3915,38 +4001,38 @@ public class StockfishNative {
             } catch (Throwable e) {
                 Log.w(TAG, "takePersistableUriPermission failed", e);
             }
-            java.io.InputStream is = context.getContentResolver().openInputStream(uri);
-            if (is != null) {
-                try {
-                    java.io.BufferedReader reader = new java.io.BufferedReader(
-                        new java.io.InputStreamReader(is, "UTF-8"));
-                    StringBuilder sb = new StringBuilder();
-                    String line;
-                    int lineCount = 0;
-                    final int MAX_LINES = 5000; // Prevent OOM on huge files
-                    while ((line = reader.readLine()) != null && lineCount < MAX_LINES) {
-                        sb.append(line).append("\n");
-                        lineCount++;
-                    }
-                    String content = sb.toString();
-                    // Sanitize: remove control characters that could break JS string parsing
-                    // (keep newline, tab, carriage return)
-                    content = content.replaceAll("[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F]", "");
-                    // Pass content to JavaScript onPGNFileRead callback
-                    // Use JSON encoding for safe JS string passing — avoids syntax errors from
-                    // unescaped newlines, quotes, and special characters in PGN content
-                    String jsonContent;
-                    try {
-                        jsonContent = new org.json.JSONObject().put("content", content).toString();
-                    } catch (Throwable je) {
-                        Log.e(TAG, "JSON encoding failed for PGN content", je);
-                        jsonContent = "{\"content\":\"\"}";
-                    }
-                    postJsCallback("if(typeof onPGNFileRead==='function'){try{var _d=" + jsonContent + ";onPGNFileRead(_d.content);}catch(e){console.error('PGN file read callback error:',e);}}");
-                } finally {
-                    is.close();
+            // v1.0.2 FIX: Use try-with-resources on BufferedReader so the reader
+            // (and its internal char buffer) is always closed, not just the
+            // underlying InputStream. The previous pattern (close `is` in
+            // finally) left the BufferedReader unclosed, relying on GC.
+            String content;
+            try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(
+                            context.getContentResolver().openInputStream(uri), "UTF-8"))) {
+                StringBuilder sb = new StringBuilder();
+                String line;
+                int lineCount = 0;
+                final int MAX_LINES = 5000; // Prevent OOM on huge files
+                while ((line = reader.readLine()) != null && lineCount < MAX_LINES) {
+                    sb.append(line).append("\n");
+                    lineCount++;
                 }
+                content = sb.toString();
             }
+            // Sanitize: remove control characters that could break JS string parsing
+            // (keep newline, tab, carriage return)
+            content = content.replaceAll("[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F]", "");
+            // Pass content to JavaScript onPGNFileRead callback
+            // Use JSON encoding for safe JS string passing — avoids syntax errors from
+            // unescaped newlines, quotes, and special characters in PGN content
+            String jsonContent;
+            try {
+                jsonContent = new org.json.JSONObject().put("content", content).toString();
+            } catch (Throwable je) {
+                Log.e(TAG, "JSON encoding failed for PGN content", je);
+                jsonContent = "{\"content\":\"\"}";
+            }
+            postJsCallback("if(typeof onPGNFileRead==='function'){try{var _d=" + jsonContent + ";onPGNFileRead(_d.content);}catch(e){console.error('PGN file read callback error:',e);}}");
         } catch (Throwable e) {
             Log.e(TAG, "handlePGNFilePickerResult failed", e);
             postJsCallback("if(typeof showToast==='function')showToast('Failed to read PGN file')");

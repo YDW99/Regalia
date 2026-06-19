@@ -519,7 +519,23 @@ public class MainActivity extends Activity {
             Log.i(TAG, "onResume: engine not initialized, retrying");
             initEngineAfterPermissions();
         }
+
+        // v1.0.2 FEATURE: Handle pending review request from StatsActivity.
+        // (The pendingStatsImportRequest path was removed in v1.0.2 — PGN import
+        // from the stats page now opens the SAF picker directly inside
+        // StatsActivity via statsSelectPGNFile(), so there's no longer a
+        // round-trip through MainActivity.)
+        if (pendingStatsReviewRequest) {
+            pendingStatsReviewRequest = false;
+            // Enter review mode on the main WebView
+            if (webView != null) {
+                webView.evaluateJavascript("if(typeof onStatsRequestReview==='function')onStatsRequestReview()", null);
+            }
+        }
     }
+
+    // v1.0.2 FEATURE: Static flag for cross-activity communication with StatsActivity
+    public static volatile boolean pendingStatsReviewRequest = false;
 
     @Override
     public void onPause() {
@@ -600,6 +616,9 @@ public class MainActivity extends Activity {
                     || requestCode == StockfishNative.REQUEST_CODE_EXPORT_PGN) {
                 // v1.0.2: route PGN export through the same handler — it dispatches
                 // to onSettingsExported() or onPGNExported() based on _pendingExportType.
+                // v1.0.2 CLEANUP: Removed REQUEST_CODE_EXPORT_STATS_HTML from this
+                // list — stats HTML export is now handled entirely inside
+                // StatsActivity's own onActivityResult, never reaching here.
                 stockfishEngine.handleExportFilePickerResult(data);
             } else if (requestCode == StockfishNative.REQUEST_CODE_IMPORT_PGN) {
                 stockfishEngine.handlePGNFilePickerResult(data);

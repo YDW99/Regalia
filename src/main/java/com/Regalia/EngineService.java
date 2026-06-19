@@ -54,6 +54,12 @@ public class EngineService extends Service {
     private static final String TAG = "EngineService";
     private static final int NOTIFICATION_ID = 1001;
     private static final String CHANNEL_ID = "regalia_engine_channel";
+    // v1.0.2 FIX: Must match StockfishNative.PREFS_NAME ("RegaliaEngine"). The
+    // previous code read from "Regalia_prefs" which is NEVER written to by any
+    // code path — saveLangPref() writes to "RegaliaEngine". This mismatch caused
+    // the foreground-service notification language to always fall back to the
+    // system default, ignoring the user's in-app language preference.
+    private static final String PREFS_NAME = "RegaliaEngine";
 
     private PowerManager.WakeLock wakeLock = null;
     private static boolean isRunning = false;
@@ -155,7 +161,11 @@ public class EngineService extends Service {
 
     private boolean isEnglishMode() {
         try {
-            SharedPreferences prefs = getSharedPreferences("Regalia_prefs", MODE_PRIVATE);
+            // v1.0.2 FIX: Read from PREFS_NAME ("RegaliaEngine") to match
+            // StockfishNative.saveLangPref(). Previously read from "Regalia_prefs"
+            // which is never written — caused the notification language to always
+            // fall back to system default, ignoring the user's in-app choice.
+            SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
             String lang = prefs.getString("lang", "");
             if (lang != null && !lang.isEmpty()) return "en".equals(lang);
             // Fallback: detect system language
@@ -293,13 +303,12 @@ public class EngineService extends Service {
                     (android.app.NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm == null) return;
 
-            boolean en = false;
-            try {
-                SharedPreferences prefs = context.getSharedPreferences("Regalia_prefs", Context.MODE_PRIVATE);
-                String lang = prefs.getString("lang", "");
-                if (lang != null && !lang.isEmpty()) en = "en".equals(lang);
-                else en = !java.util.Locale.getDefault().getLanguage().startsWith("zh");
-            } catch (Throwable e) { /* default to zh */ }
+            // v1.0.2 CLEANUP: Removed the dead `en` computation block — it read
+            // from the wrong prefs file ("Regalia_prefs") and the value was
+            // never used (the notification title is hardcoded "Regalia" and
+            // the content is the `info` string passed in by JS). The bilingual
+            // notification text is already handled by buildNotification() /
+            // isEnglishMode() when the service starts.
 
             String title = "Regalia";
 

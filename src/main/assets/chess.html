@@ -517,6 +517,16 @@ const _i18n={
 'opening_rec':{zh:'开局推荐',en:'Opening Rec.'},
 'move_history':{zh:'走法记录',en:'Move History'},
 'no_moves':{zh:'暂无走法记录',en:'No moves yet'},
+'stats':{zh:'统计',en:'Stats'},
+'stats_title':{zh:'📊统计数据',en:'📊Statistics'},
+'stats_export_html':{zh:'💾HTML',en:'💾HTML'},
+'stats_review':{zh:'🗂️复盘',en:'🗂️Review'},
+'stats_save_html':{zh:'保存HTML统计文件',en:'Save HTML stats file'},
+'stats_saved':{zh:'HTML统计文件已保存',en:'HTML stats file saved'},
+'save_pgn_prompt':{zh:'💾是否保存PGN文件？',en:'💾 Save PGN file?'},
+'save_pgn_yes':{zh:'是',en:'Yes'},
+'save_pgn_no':{zh:'否',en:'No'},
+'white_concedes_move':{zh:'白方让先（黑方先走）',en:'White concedes the move (black to move)'},
 'chess_tips':{zh:'棋理提示',en:'Chess Tips'},
 'ctrl_info':{zh:'格子控制信息',en:'Square Control'},
 'cur_square':{zh:'当前格子',en:'Square'},
@@ -1098,8 +1108,11 @@ let h=typeof s.hash==='number'?s.hash:computeHash(s);
 // 1. Remove piece from from-square
 h^=zobrist.pieceTable[from.row*8+from.col][pieceZobristIdx(piece)];
 // 2. Remove captured piece at to-square if any
-const captured=s.board[to.row][to.col];
-if(captured)h^=zobrist.pieceTable[to.row*8+to.col][pieceZobristIdx(captured)];
+// v1.0.2 CLEANUP: Use capPiece (already extracted at line 631 from
+// ns.board[to.row][to.col] before mutation) instead of re-reading from
+// s.board[to.row][to.col]. Since ns is a deep clone of s, the two values
+// are identical — the second read was redundant.
+if(capPiece)h^=zobrist.pieceTable[to.row*8+to.col][pieceZobristIdx(capPiece)];
 // 3. Place piece (or promoted piece) at to-square
 const placedPiece=promotion?{type:promotion,color:piece.color}:piece;
 h^=zobrist.pieceTable[to.row*8+to.col][pieceZobristIdx(placedPiece)];
@@ -1301,37 +1314,65 @@ const k=s.currentTurn==='white'?s.wk:s.bk;return inCheck(s.board,s.currentTurn,k
 // Covers: K vs K, K+minor vs K, K+B vs K+B (same color), K+B+B(same color) vs K
 // Note: K+N+N vs K is NOT a dead position (checkmate possible with opponent's help)
 function isDeadPosition(s){
-const pcs=[];for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=s.board[r][c];if(p)pcs.push({type:p.type,color:p.color,row:r,col:c})}
+// v1.0.2 PERF (first-principles): single-pass piece scan with early returns.
+// The previous code allocated a pcs[] array, then ran multiple .filter() /
+// .map() passes on it. The early-return logic below covers the same cases
+// (K vs K, K+minor vs K, K+B vs K+B same-color, K+B+B same-color vs K)
+// in a single 64-square scan with O(1) per-square work, and exits the
+// moment the position is provably NOT dead (e.g. a queen or rook present,
+// or a pawn present which can always promote).
+// Piece counters by color + type. We only need to know:
+//   - total piece count (must be ≤ 4 for any dead position)
+//   - per-side non-king piece counts + types
+//   - bishop square-color parity (for same-color bishop checks)
+let total=0;
+// Per-side: [pawn, knight, bishop, rook, queen, king] counts (index by type)
+const wCount={pawn:0,knight:0,bishop:0,rook:0,queen:0,king:0};
+const bCount={pawn:0,knight:0,bishop:0,rook:0,queen:0,king:0};
+let wBishopParity=-1,bBishopParity=-1; // -1 = no bishop seen yet
+let wBishopCount=0,bBishopCount=0;
+const b=s.board;
+for(let r=0;r<8;r++){
+  const row=b[r];if(!row)continue;
+  for(let c=0;c<8;c++){
+    const p=row[c];
+    if(!p)continue;
+    total++;
+    // Early exit: pawns / rooks / queens can always force or avoid checkmate
+    // → not a dead position. (K vs K is the only all-king case.)
+    if(p.type==='pawn'||p.type==='rook'||p.type==='queen')return false;
+    const cnt=p.color==='white'?wCount:bCount;
+    if(p.type==='king'){cnt.king++;continue;}
+    if(p.type==='knight'){cnt.knight++;continue;}
+    // Bishop — track count + square-color parity
+    if(p.color==='white'){
+      wBishopCount++;
+      const parity=(r+c)%2;
+      if(wBishopParity===-1)wBishopParity=parity;
+      else if(wBishopParity!==parity)wBishopParity=-2; // mixed-parity flag
+    }else{
+      bBishopCount++;
+      const parity=(r+c)%2;
+      if(bBishopParity===-1)bBishopParity=parity;
+      else if(bBishopParity!==parity)bBishopParity=-2;
+    }
+  }
+}
+// Sanity: dead positions require both kings present
+if(wCount.king!==1||bCount.king!==1)return false;
+const wMinor=wCount.knight+wBishopCount;
+const bMinor=bCount.knight+bBishopCount;
 // K vs K
-if(pcs.length===2)return true;
-const wP=pcs.filter(p=>p.color==='white');
-const bP=pcs.filter(p=>p.color==='black');
-const wT=wP.map(p=>p.type),bT=bP.map(p=>p.type);
-// Helper: does this side have only king + at most one minor piece?
-const onlyKingMinor=(types)=>{const nonKing=types.filter(t=>t!=='king');return nonKing.length===0||(nonKing.length===1&&(nonKing[0]==='bishop'||nonKing[0]==='knight'))};
-// K+minor vs K (either side)
-if(onlyKingMinor(wT)&&onlyKingMinor(bT)){
-  // Both sides have at most K+minor: check specific combinations
-  const wN=wT.filter(t=>t!=='king'),bN=bT.filter(t=>t!=='king');
-  // K vs K
-  if(wN.length===0&&bN.length===0)return true;
-  // K+minor vs K
-  if(wN.length===0||bN.length===0)return true;
-  // K+B vs K+B: draw only if bishops on same square color
-  if(wN.length===1&&bN.length===1&&wN[0]==='bishop'&&bN[0]==='bishop'){
-    const wB=wP.find(p=>p.type==='bishop'),bB=bP.find(p=>p.type==='bishop');
-    if(((wB.row+wB.col)%2)===((bB.row+bB.col)%2))return true;
-  }
-  return false; // K+N vs K+B, K+N vs K+N, etc. — checkmate possible
-}
+if(total===2)return true;
+// K+minor vs K (either side has only K, other has K + at most one minor)
+if(wMinor===0&&bMinor<=1)return true;
+if(bMinor===0&&wMinor<=1)return true;
+// K+B vs K+B (both sides have exactly 1 bishop, same square color)
+if(wMinor===1&&bMinor===1&&wBishopCount===1&&bBishopCount===1
+   &&wBishopParity>=0&&bBishopParity>=0&&wBishopParity===bBishopParity)return true;
 // K+B+B(same color) vs K — two same-color bishops cannot force checkmate
-for(const co of['white','black']){
-  const side=co==='white'?wP:bP,opp=co==='white'?bP:wP;
-  if(opp.length===1&&side.length===3){
-    const bishops=side.filter(p=>p.type==='bishop');
-    if(bishops.length===2&&((bishops[0].row+bishops[0].col)%2)===((bishops[1].row+bishops[1].col)%2))return true;
-  }
-}
+if(bMinor===0&&wBishopCount===2&&wBishopParity>=0)return true;
+if(wMinor===0&&bBishopCount===2&&bBishopParity>=0)return true;
 return false;
 }
 // PGN-standard SAN notation with proper disambiguation (DroidFish TextIO.moveToString algorithm)
@@ -1346,9 +1387,16 @@ if(piece.type==='king'&&Math.abs(to.col-from.col)===2){n=to.col===6?'O-O':'O-O-O
 if(piece.type!=='pawn'){
 n+=piece.type==='knight'?'N':piece.type[0].toUpperCase();
 // Disambiguation: find all same-type, same-color pieces with legal moves to same target
-// Uses pseudoMoves + board clone + inCheck filter (same as legalMoves but cheaper per candidate)
+// v1.0.2 PERF (first-principles): use makeMvInPlace/unmakeMv instead of cloneB
+// per candidate. The previous code cloned the entire 8×8 board for every
+// same-type piece that could reach the target (up to 8 clones per moveAlg
+// call, e.g. with 8 pawns on the 2nd rank all able to capture on the same
+// file). makeMvInPlace modifies the board in place + returns an undo object
+// that unmakeMv uses to restore — no board allocation at all.
+// This mirrors the optimization already applied to legalMoves() and
+// hasLegalMoves() (see comments above legalMoves).
 let numSameTarget=0,numSameFile=0,numSameRow=0;
-for(let r=0;r<8;r++)for(let c=0;c<8;c++){if(r===from.row&&c===from.col)continue;const p=s.board[r][c];if(p&&p.type===piece.type&&p.color===piece.color){const pm=pseudoMoves(s,{row:r,col:c});if(pm.some(m=>m.row===to.row&&m.col===to.col)){const b2=cloneB(s.board);b2[to.row][to.col]=b2[r][c];b2[r][c]=null;if(p.type==='pawn'&&s.enPassantTarget&&to.row===s.enPassantTarget.row&&to.col===s.enPassantTarget.col){const cr=p.color==='white'?to.row+1:to.row-1;b2[cr][to.col]=null}if(p.type==='king'&&Math.abs(to.col-c)===2){if(to.col===6){b2[r][5]=b2[r][7];b2[r][7]=null}else if(to.col===2){b2[r][3]=b2[r][0];b2[r][0]=null}}const kPos=p.type==='king'?{row:to.row,col:to.col}:(p.color==='white'?s.wk:s.bk);if(kPos&&!inCheck(b2,p.color,kPos)){numSameTarget++;if(c===from.col)numSameFile++;if(r===from.row)numSameRow++;}}}}
+for(let r=0;r<8;r++)for(let c=0;c<8;c++){if(r===from.row&&c===from.col)continue;const p=s.board[r][c];if(p&&p.type===piece.type&&p.color===piece.color){const pm=pseudoMoves(s,{row:r,col:c});if(pm.some(m=>m.row===to.row&&m.col===to.col)){const mv2={from:{row:r,col:c},to:{row:to.row,col:to.col},piece:p,promotion:undefined};const undo=makeMvInPlace(s,mv2);if(undo){const kPos=p.type==='king'?{row:to.row,col:to.col}:(p.color==='white'?s.wk:s.bk);if(kPos&&!inCheck(s.board,p.color,kPos)){numSameTarget++;if(c===from.col)numSameFile++;if(r===from.row)numSameRow++;}unmakeMv(s,undo);}}}}
 // PGN standard disambiguation: file first, then rank, then both
 if(numSameTarget>0){if(numSameFile===0)n+=String.fromCharCode(97+from.col);else if(numSameRow===0)n+=(8-from.row);else n+=String.fromCharCode(97+from.col)+(8-from.row)}
 }
@@ -1420,8 +1468,16 @@ function initZobristTables(){
   return{pieceTable,side,castling,enPassant};
 }
 const zobrist=initZobristTables();
+// v1.0.2 PERF (first-principles): pre-compute piece→index map once at module
+// load instead of building a fresh {pawn:0,knight:1,...} object on every
+// pieceZobristIdx() call. pieceZobristIdx is called 32+ times per computeHash
+// (once per occupied square), and computeHash is called on every state clone
+// (syncHash) + every makeMv incremental update fallback. The object-literal
+// construction was a hidden per-call allocation that added up under heavy
+// engine search.
+const _PIECE_TYPE_IDX={pawn:0,knight:1,bishop:2,rook:3,queen:4,king:5};
 function pieceZobristIdx(p){
-  const typeIdx={pawn:0,knight:1,bishop:2,rook:3,queen:4,king:5}[p.type];
+  const typeIdx=_PIECE_TYPE_IDX[p.type];
   if(typeIdx===undefined) return 0;
   return typeIdx*2+(p.color==='white'?0:1);
 }
@@ -1754,6 +1810,41 @@ let _ecoComposing=false;let _ecoSearchFocused=false;let _ecoBlurTimer=0;let ecoS
 
 function posEmoji(ev){if(ev>600)return'🏆';if(ev>350)return'😄';if(ev>150)return'😊';if(ev>50)return'🙂';if(ev>-50)return'😐';if(ev>-150)return'😟';if(ev>-350)return'😰';if(ev>-600)return'😱';return'💀'}
 
+// v1.0.2 FIX: Black-to-move opening move record fix.
+//
+// When a new game starts with black to move (FEN with 'b' turn, setup mode with
+// turn=black, ECO opening with odd move count, or PGN with [FEN "... b ..."]),
+// moveRecords=[] is empty. When black's first move is later pushed by executeMove(),
+// it lands in moveRecords[0] — which is the WHITE slot — causing black's first move
+// to incorrectly appear in white's position in the move history and PGN export.
+//
+// Fix: At each of the 4 new-game entry points (startGame, _applyImportedFEN,
+// exitSetup, importPGN), call this helper AFTER gameState is fully set up and
+// BEFORE any move is executed. It prepends a `null` placeholder so that black's
+// first move correctly lands in moveRecords[1] (the black slot).
+//
+// The `null` placeholder renders as "..." (PGN skip marker) in both the UI move
+// history and the exported PGN string, correctly indicating that white conceded
+// the move (a "give odds" or "black to move" scenario).
+//
+// The helper is idempotent and only acts on an empty moveRecords — once real
+// moves have been pushed, calling it again is a no-op.
+function _prependBlackToMovePlaceholder(){
+  // Only act when (a) we have a gameState, (b) black is to move, and
+  // (c) moveRecords is still empty (no moves executed yet).
+  if(gameState && gameState.currentTurn==='black' && moveRecords.length===0){
+    moveRecords.push(null);
+    // Also sync stateHistory[0].moveRecords so undoing past the first move
+    // doesn't lose the placeholder. Without this, undoing all the way back
+    // would restore moveRecords=[] — then the next move (black's) would
+    // land in the white slot, reintroducing the original bug.
+    if(stateHistory.length>0 && stateHistory[0].moveRecords
+       && stateHistory[0].moveRecords.length===0){
+      stateHistory[0].moveRecords=[null];
+    }
+  }
+}
+
 // ---- Exports ----
 ;
 
@@ -1797,9 +1888,55 @@ let _sfMateDistance=0;
 // We convert to White's perspective on receipt; this flag captures whose
 // turn it was when the eval was requested, so we can negate correctly.
 let _evalForBlackTurn=false;
-// Review eval cache: maps reviewStep → {eval: cpValue, mate: mateDistance}
-// Avoids re-requesting engine eval for previously visited steps
-let _reviewEvalCache=new function(){const m=new Map();const MAX=200;this.get=function(k){if(m.has(k)){const v=m.get(k);m.delete(k);m.set(k,v);return v;}return undefined;};this.has=k=>m.has(k);this.set=function(k,v){if(m.has(k))m.delete(k);m.set(k,v);if(m.size>MAX){const first=m.keys().next().value;m.delete(first);}};this.delete=function(k){const r=m.delete(k);return r;};Object.defineProperty(this,'size',{get:function(){return m.size;},configurable:true});this.clear=function(){m.clear();};this.keys=()=>m.keys();}();
+// Review eval cache: maps reviewStep → {eval: cpValue, mate: mateDistance, depth, wdlW, wdlD, wdlL}
+// Avoids re-requesting engine eval for previously visited steps.
+// v1.0.2: Persisted to localStorage so it survives app backgrounding / process kill
+// on aggressive memory managers (Xiaomi HyperOS 3). On page reload, the cache is
+// restored from localStorage and the eval values are immediately available for
+// review mode without re-running the engine.
+let _reviewEvalCache=new function(){
+  const m=new Map();
+  const MAX=200;
+  const STORAGE_KEY='Regalia_reviewEvalCache';
+  // v1.0.2: Load from localStorage on construction
+  try{
+    const saved=localStorage.getItem(STORAGE_KEY);
+    if(saved){
+      const arr=JSON.parse(saved);
+      if(Array.isArray(arr)){
+        for(const [k,v] of arr){
+          m.set(k,v);
+          if(m.size>=MAX)break;
+        }
+      }
+    }
+  }catch(e){}
+  // v1.0.2: Save to localStorage (debounced — called on set and clear)
+  let _saveTimer=null;
+  function _saveToStorage(){
+    if(_saveTimer)clearTimeout(_saveTimer);
+    _saveTimer=setTimeout(function(){
+      try{
+        const arr=Array.from(m.entries());
+        localStorage.setItem(STORAGE_KEY,JSON.stringify(arr));
+      }catch(e){}
+      _saveTimer=null;
+    },500);
+  }
+  this.get=function(k){if(m.has(k)){const v=m.get(k);m.delete(k);m.set(k,v);return v;}return undefined;};
+  // v1.0.2 PERF: peek() reads without refreshing LRU order. Use this in
+  // tight loops that iterate over many entries (e.g., _buildEvalTrendSVG,
+  // _findCriticalMoves) — calling get() in those loops would perform N
+  // delete+set operations just to read cached values, churning the Map
+  // and pushing other entries toward eviction for no benefit.
+  this.peek=function(k){return m.get(k);};
+  this.has=k=>m.has(k);
+  this.set=function(k,v){if(m.has(k))m.delete(k);m.set(k,v);if(m.size>MAX){const first=m.keys().next().value;m.delete(first);}_saveToStorage();};
+  this.delete=function(k){const r=m.delete(k);_saveToStorage();return r;};
+  Object.defineProperty(this,'size',{get:function(){return m.size;},configurable:true});
+  this.clear=function(){m.clear();_saveToStorage();};
+  this.keys=()=>m.keys();
+}();
 // Track which review step the eval was requested for — allows onEngineEval to
 // discard stale callbacks when the user has navigated to a different step.
 let _reviewEvalRequestedStep=-1;
@@ -2055,38 +2192,47 @@ let _emergencyFallbackTimerId=setTimeout(function(){
 function _buildPGNString(){
   if(!moveRecords||!moveRecords.length)return '';
   let pgn='';
+  // v1.0.2 FEATURE (first-principles): PGN evaluation annotations + thinking time.
+  // After each move, build a PGN comment that includes:
+  //   1. Thinking time (from moveRecords[i].time, e.g. "3.2s") — FIRST item
+  //   2. Eval annotation (score + eval word, or full SF18 line every 5 moves)
+  // Example: {3.2s +0.5 略优} or {3.2s SF18 D22 +1.0 8%W/91%D/1%L}
   for(let i=0;i<moveRecords.length;i+=2){
     const n=Math.floor(i/2)+1;
     const w=moveRecords[i];
     const b=moveRecords[i+1];
     pgn+=n+'. '+(w?w.notation:'...');
     // PGN RAV variations after white's move
-    // Mainline group → skip (not standard PGN, only for in-app display)
-    // All variations are 🌿 lines (including line 1 = mainline prediction).
-    // Ponder is fully decoupled from move records — never recorded as a variation.
-    // Skip 'analysis' group and 'ponder' group.
     if(showVariations&&w&&w.variations&&w.variations.length>0){
       for(const v of w.variations){
         if(!v.san)continue;
         if(v.group==='analysis'||v.group==='ponder')continue;
         const vmn = (v.varMoveNum!=null) ? v.varMoveNum : n;
         const fiw = (v.firstMoveIsWhite!=null) ? v.firstMoveIsWhite : false;
-        pgn+=' ('+_formatSANAsRAV(v.san,vmn,fiw)+')';
+        const prefix = v.prefixEllipsis ? ((v.prefixEllipsisNum||vmn)+'... ') : '';
+        pgn+=' ('+prefix+_formatSANAsRAV(v.san,vmn,fiw)+')';
       }
+    }
+    // v1.0.2: Build comment with thinking time + eval annotation
+    if(w){
+      const comment=_buildPGNComment(w,i+1,n);
+      if(comment)pgn+=' '+comment;
     }
     if(b){
       pgn+=' '+b.notation;
-      // PGN RAV variations after black's move
-      // Ponder is fully decoupled from move records.
       if(showVariations&&b&&b.variations&&b.variations.length>0){
         for(const v of b.variations){
           if(!v.san)continue;
           if(v.group==='analysis'||v.group==='ponder')continue;
           const vmn = (v.varMoveNum!=null) ? v.varMoveNum : (n+1);
           const fiw = (v.firstMoveIsWhite!=null) ? v.firstMoveIsWhite : true;
-          pgn+=' ('+_formatSANAsRAV(v.san,vmn,fiw)+')';
+          const prefix = v.prefixEllipsis ? (vmn+'... ') : '';
+          pgn+=' ('+prefix+_formatSANAsRAV(v.san,vmn,fiw)+')';
         }
       }
+      // v1.0.2: Build comment with thinking time + eval annotation
+      const comment=_buildPGNComment(b,i+2,n);
+      if(comment)pgn+=' '+comment;
     }
     pgn+=' ';
   }
@@ -2097,6 +2243,80 @@ function _buildPGNString(){
     else pgn+=' 1/2-1/2';
   }
   return pgn;
+}
+// v1.0.2: Build a PGN comment for a move, combining thinking time + eval annotation.
+// Returns a string like "{3.2s +0.5 略优}" or "{3.2s}" or "{+0.5 略优}" or "" if neither.
+function _buildPGNComment(mr,reviewStep,moveNum){
+  let parts=[];
+  // 1. Thinking time (first item in the comment)
+  if(mr&&mr.time){
+    parts.push(mr.time+'s');
+  }
+  // 2. Eval annotation
+  const evalAnn=_formatPGNEvalAnnotation(reviewStep,moveNum);
+  if(evalAnn){
+    // Strip the outer {} from the eval annotation and add to parts
+    const inner=evalAnn.replace(/^\{/,'').replace(/\}$/,'');
+    parts.push(inner);
+  }
+  if(parts.length===0)return '';
+  return '{'+parts.join(' ')+'}';
+}
+// v1.0.2 FEATURE: format a PGN comment annotation for the given review step.
+// Returns either:
+//   - `{+0.5 略优}` style (eval word only) for most moves
+//   - `{SF18 D22 +1.0 8%W/91%D/1%L}` style (full engine info) every 5 moves
+//   - empty string if no cached eval is available for this step
+// `moveNum` is the 1-based move number (1 for the first full move pair).
+// We use the actual move-pair count (n) so the "every 5 moves" cadence lines up
+// with chess convention (after move 5, 10, 15, …), not the half-move index.
+function _formatPGNEvalAnnotation(reviewStep,moveNum){
+  if(typeof _reviewEvalCache==='undefined')return '';
+  const cached=_reviewEvalCache.get(reviewStep);
+  if(!cached)return '';
+  // Format score: centipawns from White's perspective.
+  // Mate scores (|eval|>=90000) are shown as #M.
+  // v1.0.2 FIX (first-principles): parenthesize the mate-detection condition
+  // explicitly. The previous `cached.mate&&cached.mate!==0||Math.abs(ev)>=90000`
+  // parsed as `(cached.mate&&cached.mate!==0)||Math.abs(ev)>=90000` — which
+  // happened to be correct, but relied on JS operator precedence and was hard
+  // to read. Also normalize cached.mate to a number defensively (some callers
+  // pass it as a string from JSON deserialization).
+  const mateDist=Number(cached.mate)||0;
+  const ev=Number(cached.eval)||0;
+  const isMateScore=(mateDist!==0)||Math.abs(ev)>=90000;
+  let scoreStr;
+  if(isMateScore){
+    // Stockfish reports mate as ±99999 with _sfMateDistance holding the
+    // actual distance. If we have a real mate distance, use it; otherwise
+    // derive a best-effort distance from the eval sign.
+    const md=mateDist!==0?mateDist:(ev>0?1:-1);
+    scoreStr='#'+Math.abs(md);
+  }else{
+    // Centipawns → pawns with 1 decimal, signed
+    const pawns=(ev/100).toFixed(1);
+    scoreStr=(ev>=0?'+':'')+pawns;
+  }
+  // Every 5 moves (moveNum is 1-based; we want moves 5,10,15,…): full annotation
+  if(moveNum>0&&moveNum%5===0){
+    let wdlStr='';
+    if(cached.wdlW!=null&&cached.wdlW>=0&&cached.wdlD!=null&&cached.wdlD>=0&&cached.wdlL!=null&&cached.wdlL>=0){
+      const total=cached.wdlW+cached.wdlD+cached.wdlL;
+      if(total>0){
+        const wp=Math.round(cached.wdlW/total*100);
+        const dp=Math.round(cached.wdlD/total*100);
+        const lp=100-wp-dp;
+        wdlStr=wp+'%W/'+dp+'%D/'+lp+'%L';
+      }
+    }
+    const depthStr=cached.depth?('D'+cached.depth):'D?';
+    return '{SF18 '+depthStr+' '+scoreStr+(wdlStr?(' '+wdlStr):'')+'}';
+  }
+  // Otherwise: short eval-word annotation
+  // posDesc is defined in ui.js but is in scope (single bundled file)
+  let word='';
+  try{word=typeof posDesc==='function'?posDesc(ev):'';}catch(e){word='';}
+  return '{'+scoreStr+(word?(' '+word):'')+'}';
 }
 function copyMoveHistory(){
   const pgn=_buildPGNString();
@@ -2125,6 +2345,86 @@ function onPGNExported(success,fileName){
     showToast(T('settings_clipboard_fallback'));
   }
 }
+// v1.0.2 NEW FEATURE: 📊统计 — open a fullscreen stats page that renders the
+// current game's PGN with rich formatting + computes statistics (material
+// balance per move, control map, move classifications from cached evals, etc.).
+// The stats page is a separate HTML file (assets/stats.html) loaded into a new
+// WebView activity by the Java side. The PGN is passed via the bridge and
+// stored in a JS variable that stats.html reads on load.
+function openStatsPage(){
+  const pgn=_buildPGNString();
+  if(!pgn){showToast(T('no_move_records'));return}
+  // Also gather per-move eval cache data so the stats page can show
+  // classification + eval trend without re-running the engine.
+  const evalData=[];
+  if(typeof _reviewEvalCache!=='undefined'){
+    for(let i=0;i<moveRecords.length;i++){
+      // v1.0.2 PERF: use peek() — iterating over all moves, no need to refresh LRU.
+      const c=_reviewEvalCache.peek(i+1);
+      evalData.push(c?{eval:c.eval||0,mate:c.mate||0,depth:c.depth||0,wdlW:c.wdlW!=null?c.wdlW:-1,wdlD:c.wdlD!=null?c.wdlD:-1,wdlL:c.wdlL!=null?c.wdlL:-1}:null);
+    }
+  }
+  // v1.0.2 FIX: Also send the parsed move records (from/to/piece/captured/promotion/notation)
+  // so the stats page doesn't have to re-parse the PGN string with its simplified parser.
+  // The simplified parser in stats.html (applySANMove/canMoveTo) doesn't handle check
+  // detection, proper disambiguation, en passant edge cases, etc. — once one move fails
+  // to parse, the state doesn't advance and all subsequent moves cascade-fail. This was
+  // the root cause of the "total moves cannot exceed 98" bug: real games with complex
+  // middlegame/endgame moves would hit a parse failure around move 98-99 (typically a
+  // disambiguation or check-evasion move the simplified parser couldn't handle), and
+  // every move after that was silently dropped.
+  // By sending the authoritative move records from the main app (which uses the full
+  // legalMoves/moveAlg logic), the stats page can replay them correctly via its
+  // executeMove() (which correctly advances state) without any SAN parsing.
+  const moveData=[];
+  for(let i=0;i<moveRecords.length;i++){
+    const mr=moveRecords[i];
+    if(!mr){
+      // null placeholder (Black-to-move start) — preserve as null
+      moveData.push(null);
+    }else{
+      moveData.push({
+        from:mr.from,
+        to:mr.to,
+        piece:mr.piece?{type:mr.piece.type,color:mr.piece.color}:null,
+        captured:mr.captured?{type:mr.captured.type,color:mr.captured.color}:null,
+        promotion:mr.promotion||null,
+        notation:mr.notation||''
+      });
+    }
+  }
+  const payload=JSON.stringify({pgn:pgn,evals:evalData,moveRecords:moveData,playerColor:playerColor,lang:(typeof _lang!=='undefined'?_lang:'zh')});
+  _bridgeCall(function(bridge){
+    if(typeof bridge.openStatsPage==='function'){
+      bridge.openStatsPage(payload);
+    }else{
+      // Fallback: copy PGN to clipboard if stats page unavailable
+      safeCopyToClipboard(pgn,T('pgn_copied'));
+    }
+  });
+}
+// v1.0.2 NEW FEATURE: Stats page callbacks
+function onStatsHTMLExported(success,fileName){
+  if(success){
+    showToast(T('stats_saved')+': '+fileName);
+  }else{
+    showToast(T('settings_clipboard_fallback'));
+  }
+}
+// v1.0.2 NEW FEATURE: Stats page requests to enter review mode.
+// (The onStatsRequestImport handler was removed in v1.0.2 — PGN import from
+// the stats page now opens the SAF picker directly inside StatsActivity via
+// statsSelectPGNFile(), so the main WebView no longer needs to participate.)
+// v1.0.2 FIX: Show a toast when there are no moves to review, instead of
+// silently doing nothing — the user otherwise has no feedback that the tap
+// was registered but the request couldn't be honored.
+function onStatsRequestReview(){
+  if(moveRecords&&moveRecords.length>0){
+    enterReview();
+  }else{
+    showToast(T('no_move_records'));
+  }
+}
 function copyReviewPGN(){
   if(!moveRecords||!moveRecords.length){showToast(T('no_move_records'));return}
   copyMoveHistory();
@@ -2138,11 +2438,20 @@ function safeCopyToClipboard(text,successMsg){
   }else{fb()}
 }
 // HTML-escape helper: prevents XSS when inserting dynamic text into HTML/onclick attributes
-function _esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
+// v1.0.2 PERF (first-principles): single-pass regex with callback instead of
+// 5 chained .replace() calls. The previous version allocated 5 intermediate
+// strings per escape; _esc is called on every move notation, every file path,
+// every ECO name, etc. during render — at 64 squares × multiple labels per
+// square, this was a measurable allocation hotspot.
+const _ESC_MAP={'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
+const _ESC_RE=/[&<>"']/g;
+function _esc(s){return String(s).replace(_ESC_RE,c=>_ESC_MAP[c]);}
 // XSS-safe JS string escaper — for inserting paths into onclick='...' attributes
 // _esc() escapes for HTML, but paths in onclick JS strings need JS-level escaping
 // e.g. /sdcard/0'Brien/ — the single quote would break the onclick attribute
-function _escJs(s){return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;').replace(/\n/g,'\\n').replace(/\r/g,'\\r');}
+const _ESCJS_MAP={'\\':'\\\\',"'":"\\'",'"':'&quot;','\n':'\\n','\r':'\\r'};
+const _ESCJS_RE=/[\\'"\n\r]/g;
+function _escJs(s){return String(s).replace(_ESCJS_RE,c=>_ESCJS_MAP[c]);}
 
 /**
  * Format a variation for display in move records and review panel.
@@ -2254,43 +2563,35 @@ function _formatSANAsRAV(sanString, moveNum, firstMoveIsWhite){
 
 /**
  * Format variation groups for parallel display.
- * ALL variations are 🌿 lines with unified format:
- *   - mainline group (mpvIndex -1) → 🌿线1 (engine's predicted continuation)
- *   - multipv group (mpvIndex 1,2,3...) → 🌿线2, 🌿线3, etc. (alternative lines)
- * Ponder is fully decoupled from move records — never appears here.
- * 'analysis' group is skipped.
+ * ALL variations are 🌿 lines with unified format.
+ *
+ * v1.0.2 FIX: Line numbers are now assigned SEQUENTIALLY based on the order
+ * of variations in the move record's variations array (1, 2, 3, ...).
+ * Previously, the labels were derived from group/mpvIndex/lineNum fields,
+ * which could COLLIDE — e.g., a mainline group and a multipv[0] group both
+ * mapped to 线1, so when both were attached to the same move (a common case
+ * after Flip, when divergent mainline + MultiPV predictions end up on the
+ * same divergence-point move), the user saw two "🌿线1" labels. Sequential
+ * numbering guarantees uniqueness regardless of how the variations were
+ * produced.
+ *
+ * 'analysis' and 'ponder' groups are still skipped entirely.
  */
 function _formatVariationGroups(variations, moveNum, isAfterWhiteMove){
   if(!variations||!variations.length)return '';
-  // Collect all displayable variations into a single unified list
+  // Collect all displayable variations in their original array order.
   const displayLines=[];
-  // v1.0.2 FIX: Track the maximum engine-line number used so far so that
-  // PGN-imported variations don't collide with engine lines (previously
-  // mainline=1, multipv=2,3,..., pgn=lineNum=1,2,... — collisions caused
-  // duplicate "🌿 Line 1" labels when both engine and PGN vars existed).
-  let maxEngineLineNum=0;
   for(const v of variations){
     // Skip analysis and ponder groups entirely
     if(v.group==='analysis'||v.group==='ponder')continue;
-    // Mainline prediction → line 1
-    if(v.group==='mainline'){
-      displayLines.push({san:v.san, varMoveNum:v.varMoveNum, firstMoveIsWhite:v.firstMoveIsWhite, lineNum:1, _src:'mainline'});
-      maxEngineLineNum=Math.max(maxEngineLineNum,1);
-    }
-    // Secondary MultiPV → line 2, 3, etc.
-    // v1.0.2: include mpvIndex=0 (primary-as-alternative case from
-    // _processDeferredVariations when primary PV didn't start with bestmove).
-    else if(v.group==='multipv'&&v.mpvIndex>=0){
-      const ln=v.mpvIndex+1;
-      displayLines.push({san:v.san, varMoveNum:v.varMoveNum, firstMoveIsWhite:v.firstMoveIsWhite, lineNum:ln, _src:'multipv'});
-      maxEngineLineNum=Math.max(maxEngineLineNum,ln);
-    }
-    // PGN imported variations → 🌿 line N (offset to avoid engine-line collisions)
-    else if(v.group==='pgn'){
-      // PGN line numbers start AFTER the engine lines so they never collide.
-      const pgnLn=maxEngineLineNum+(v.lineNum||1);
-      displayLines.push({san:v.san, varMoveNum:v.varMoveNum, firstMoveIsWhite:v.firstMoveIsWhite, lineNum:pgnLn, _src:'pgn'});
-    }
+    if(!v.san)continue;
+    displayLines.push({
+      san:v.san,
+      varMoveNum:v.varMoveNum,
+      firstMoveIsWhite:v.firstMoveIsWhite,
+      prefixEllipsis:!!v.prefixEllipsis,
+      prefixEllipsisNum:v.prefixEllipsisNum||0
+    });
   }
   if(!displayLines.length)return '';
   // Fallback: if varMoveNum is not stored on the variation, compute it from the
@@ -2300,11 +2601,19 @@ function _formatVariationGroups(variations, moveNum, isAfterWhiteMove){
   // Fallback firstMoveIsWhite for legacy records
   function getFirstMoveIsWhite(v){ return (v.firstMoveIsWhite!=null) ? v.firstMoveIsWhite : !isAfterWhiteMove; }
   let h='';
-  // Render ALL lines with unified 🌿 format
-  for(const line of displayLines){
+  // Render ALL lines with unified 🌿 format, using SEQUENTIAL line numbers
+  // (1, 2, 3, ...) based on array position. This guarantees unique labels.
+  for(let i=0;i<displayLines.length;i++){
+    const line=displayLines[i];
+    const lineNum=i+1;
     const rav=_formatSANAsRAV(line.san, getVarMoveNum(line), getFirstMoveIsWhite(line));
     if(rav){
-      h+='<div class="mvar"><span style="color:#7eb8da;font-size:.6rem;font-weight:600">🌿 '+T('line_label')+' '+line.lineNum+'</span> <span style="font-size:.75rem">'+_esc(rav)+'</span></div>';
+      // v1.0.2: If prefixEllipsis is set (Type B variation after Black's move),
+      // prepend "N..." before the RAV text to indicate the branch point.
+      // N is the owning move's number (prefixEllipsisNum), and the variation
+      // content starts at N+1 for White's move.
+      const prefix = line.prefixEllipsis ? (line.prefixEllipsisNum+'... ') : '';
+      h+='<div class="mvar"><span style="color:#7eb8da;font-size:.6rem;font-weight:600">🌿 '+T('line_label')+' '+lineNum+'</span> <span style="font-size:.75rem">'+_esc(prefix+rav)+'</span></div>';
     }
   }
   return h;
@@ -2419,25 +2728,99 @@ function _convertPVtoSAN(pvString, state){
   return { sanMoves: sanParts.join(' '), finalState: currentState };
 }
 
+// v1.0.2 PERF (first-principles): PV variation cache + fork grafting.
+//
+// When MultiPV returns N PV lines, they typically share a common prefix
+// (e.g. PV1=e4 e5 Nf3 Nc6, PV2=e4 e5 Nf3 d5 — they share "e4 e5 Nf3").
+// Naively calling _convertPVtoSAN() on each line independently re-runs
+// makeMv/moveAlg for the shared prefix N times. With 8 MultiPV lines of
+// 10+ moves each, this is 80+ redundant state clones + moveAlg calls.
+//
+// _pvCache caches the converted SAN + post-state for every UCI prefix
+// encountered during a single _processDeferredVariations() call. The cache
+// is keyed by `(state.hash,uciPrefix)` so the same prefix from the same
+// starting state is converted exactly once. _checkPVDivergence finds the
+// longest shared prefix between two PV lines so the cache lookup is maximal.
+//
+// The cache is cleared at the start of each _processDeferredVariations()
+// call (per-search scope) to bound memory usage.
+let _pvCache=new Map();
+const _PV_CACHE_MAX=200; // Bound: ~8 PV lines × ~25 moves = 200 entries max
+
+// Convert a PV to SAN using the prefix cache. `stateHash` is the hash of
+// `state` so cache hits are correct only when both the starting state AND
+// the UCI prefix match — this is critical because the same UCI prefix
+// (e.g. "e2e4") applied from different states produces different SAN.
+function _convertPVtoSANCached(pvString, state, stateHash){
+  if(!pvString||!state) return { sanMoves: '', finalState: state };
+  const uciMoves=pvString.trim().split(/\s+/).filter(m=>m&&m.length>=4);
+  if(uciMoves.length===0) return { sanMoves: '', finalState: state };
+  const sanParts=[];
+  let currentState=state;
+  let currentHash=stateHash||state.hash||0;
+  // Walk the UCI moves; for each prefix, check the cache. On a miss, convert
+  // one move and store the result. On a hit, jump directly to the cached
+  // post-state and SAN.
+  for(let i=0;i<uciMoves.length;i++){
+    const prefix=uciMoves.slice(0,i+1).join(' ');
+    const cacheKey=currentHash+'|'+prefix;
+    let cached=_pvCache.get(cacheKey);
+    if(cached){
+      // Hit — reuse the cached SAN for this move and the cached post-state
+      sanParts.push(cached.san);
+      currentState=cached.postState;
+      currentHash=cached.postState.hash||currentHash;
+      continue;
+    }
+    // Miss — convert just this one move from currentState
+    const uci=uciMoves[i];
+    const result=_uciToSAN(uci, currentState);
+    sanParts.push(result.san);
+    currentState=result.postState;
+    currentHash=currentState.hash||currentHash;
+    // Store in cache (with bound check)
+    if(_pvCache.size<_PV_CACHE_MAX){
+      _pvCache.set(cacheKey,{san:result.san,postState:result.postState});
+    }
+  }
+  return { sanMoves: sanParts.join(' '), finalState: currentState };
+}
+
+// v1.0.2 CLEANUP: Removed the dead `_checkPVDivergence(pv1Moves, pv2Moves)`
+// function (which found the shared-prefix length between two PV arrays). It
+// was a no-arg-namesake of the active `_checkPVDivergence()` below (which
+// iterates over `_pendingEnginePVs`), and the JS second-declaration-wins rule
+// silently shadowed it — every call site used 0 args, so the dead version
+// was never reachable. The active `_convertPVtoSANCached()` finds shared
+// prefixes via its own `_pvCache` (keyed by hash+UCI-prefix), so it does not
+// need a separate prefix-length helper. Removing this eliminates the
+// confusion and the misleading "finds the longest shared prefix" comment.
+
 // ===================== STOCKFISH BRIDGE CALLBACKS =====================
 
 // Generate FEN string from game state
+// v1.0.2 PERF (first-principles): hoist the PIECE_FEN lookup table out of
+// generateFEN() into module scope. The previous code allocated a fresh
+// {white:{...},black:{...}} object on every generateFEN() call — and
+// generateFEN is called on every AI move, every hint, and every eval
+// request. Module-scope hoisting eliminates the per-call allocation.
+const _PIECE_FEN={white:{king:'K',queen:'Q',rook:'R',bishop:'B',knight:'N',pawn:'P'},black:{king:'k',queen:'q',rook:'r',bishop:'b',knight:'n',pawn:'p'}};
+const _DEFAULT_FEN='rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 /**
  * Generate a FEN string from game state.
  * @param {Object} s - Game state object with board, currentTurn, castlingRights, etc.
  * @returns {string} FEN string representation of the position
  */
 function generateFEN(s){
-  if(!s||!s.board)return 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-  if(!Array.isArray(s.board)||s.board.length!==8)return 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-  const PIECE_FEN={white:{king:'K',queen:'Q',rook:'R',bishop:'B',knight:'N',pawn:'P'},black:{king:'k',queen:'q',rook:'r',bishop:'b',knight:'n',pawn:'p'}};
+  if(!s||!s.board)return _DEFAULT_FEN;
+  if(!Array.isArray(s.board)||s.board.length!==8)return _DEFAULT_FEN;
   let fen='';
   for(let r=0;r<8;r++){
-    if(!s.board[r])return 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+    if(!s.board[r])return _DEFAULT_FEN;
     let empty=0;
     for(let c=0;c<8;c++){
       const p=s.board[r][c];
-      if(p&&PIECE_FEN[p.color]&&PIECE_FEN[p.color][p.type]){if(empty>0){fen+=empty;empty=0}fen+=PIECE_FEN[p.color][p.type]}
+      if(p&&_PIECE_FEN[p.color]&&_PIECE_FEN[p.color][p.type]){if(empty>0){fen+=empty;empty=0}fen+=_PIECE_FEN[p.color][p.type]}
       else{empty++}
     }
     if(empty>0)fen+=empty;
@@ -2499,6 +2882,12 @@ function onEngineRestarting(){
   _reviewEvalCache.clear();_reviewEvalRequestedStep=-1;
   _multiPVLines=[];_multiPVResult=null;_lastEngineVariation=null;
   if(_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
+  // v1.0.2 FIX: Reset AI retry counter on engine restart. Without this, if the
+  // engine crashed mid-AI-move (where _aiRetryCount had already incremented to
+  // 1 or 2), the next doAIMove() after recovery would increment to 2 or 3 and
+  // potentially hit the 3-retry cap immediately, showing "AI timeout" even
+  // though the engine just recovered.
+  _aiRetryCount=0;
   render();
 }
 
@@ -2525,6 +2914,10 @@ function onEngineReady(){
   if(_evalLoading){_evalLoading=false;_sfEvalReady=false;}
   _ponderGen++;_ponderMoveSAN='';_ponderBarInfo='';_pendingPonderMoveUCI=null;
   if(_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
+  // v1.0.2 FIX: Reset AI retry counter on engine ready (covers crash-recovery
+  // path where onEngineRestarting → onEngineReady fires). Ensures the next
+  // doAIMove() starts with a fresh retry budget.
+  _aiRetryCount=0;
   _updateLoadingStatus(T('engine_ready'),100);
   // Sync language preference to SharedPreferences for notification i18n
   try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.saveLangPref)AndroidBridge.saveLangPref(_lang);}catch(e){}
@@ -2577,23 +2970,29 @@ function onBestMove(uciMove){
   _multiPVLines=[];
 
   // Process variations in onMultiPVResult() (called after onBestMove)
-  if(moveRecords.length>0){
-    const lastIdx=moveRecords.length-1;
-    const isAfterWhiteMove=(lastIdx%2===0);
-    const moveNum=Math.floor(lastIdx/2)+1;
-    // Save pre-move game state for SAN conversion later
-    // Deep clone gameState to prevent mutation by executeMove()
-    _pendingBestMoveInfo={
-      uciMove:uciMove,
-      lastIdx:lastIdx,
-      isAfterWhiteMove:isAfterWhiteMove,
-      moveNum:moveNum,
-      preMoveState:cloneS(gameState),
-      ponderMove:_lastPonderMoveFromEngine,
-      ponderEnabled:!!(engineSettingsData&&engineSettingsData.ponder),
-      multiPVEnabled:!!(engineSettingsData&&engineSettingsData.multiPV&&engineSettingsData.multiPV>1)
-    };
-  }
+  // v1.0.2 FIX: Removed the `moveRecords.length > 0` guard — it skipped
+  // variation tracking when the AI played the very first move of the game
+  // (i.e., when the player chose Black). With the guard, _pendingBestMoveInfo
+  // was never set → _processDeferredVariations() early-returned → no 🌿
+  // variation lines were attached to the AI's first move. The fix uses
+  // lastIdx = -1 in that case, which _processDeferredVariations() correctly
+  // resolves to aiMoveIdx = 0 (the AI's first move record, added by
+  // executeMove below).
+  const lastIdx = moveRecords.length > 0 ? moveRecords.length - 1 : -1;
+  const isAfterWhiteMove=(lastIdx%2===0);
+  const moveNum=Math.floor(lastIdx/2)+1;
+  // Save pre-move game state for SAN conversion later
+  // Deep clone gameState to prevent mutation by executeMove()
+  _pendingBestMoveInfo={
+    uciMove:uciMove,
+    lastIdx:lastIdx,
+    isAfterWhiteMove:isAfterWhiteMove,
+    moveNum:moveNum,
+    preMoveState:cloneS(gameState),
+    ponderMove:_lastPonderMoveFromEngine,
+    ponderEnabled:!!(engineSettingsData&&engineSettingsData.ponder),
+    multiPVEnabled:!!(engineSettingsData&&engineSettingsData.multiPV&&engineSettingsData.multiPV>1)
+  };
 
   if(!uciMove||uciMove==='(none)'||uciMove==='0000'){
     render();
@@ -3125,11 +3524,18 @@ function _fileBrowserSelect(filePath){
   _bridgeCall(function(bridge){
     const content=bridge.readTextFile(filePath);
     if(content){
+      // v1.0.2 FIX (first-principles): DO NOT call showToast() here.
+      // bridge.importSettings(content) asynchronously triggers the
+      // onSettingsImported(result) JS callback (see below), which already
+      // shows the success/failure toast and refreshes the engine-config UI.
+      // The previous duplicate showToast(T('settings_imported_ok')) here
+      // raced with the callback and showed TWO toasts — exactly the bug
+      // the changelog claims to have fixed but didn't, because the duplicate
+      // was in this file-picker entry path, not in the clipboard-import path.
+      // We also can't refresh _cachedMultiPV here synchronously because
+      // importSettings() is async on the Java side (engine executor thread).
+      // The onSettingsImported callback handles the cache refresh too.
       bridge.importSettings(content);
-      // FIX: Update _cachedMultiPV after settings import, since multiPV may have changed
-      try{const s=JSON.parse(bridge.getEngineSettings());_cachedMultiPV=s.multiPV||1;}catch(e){}
-      showToast(T('settings_imported_ok'));
-      openEngineConfig();
     }else{
       showToast(T('settings_read_fail'));
     }
@@ -3267,21 +3673,9 @@ function onEngineSwitched(result){
   showToast(T('built_in_only'));
 }
 function onSettingsImported(result){
-  // v1.0.2 FIX: Refresh cached engineSettingsData + _cachedMultiPV after import,
-  // so the engine-config UI reflects the new values immediately. Previously the
-  // UI showed stale values until the user closed+reopened the dialog manually.
   try{
     const r=JSON.parse(result);
     if(r.success){
-      // Refresh cached settings from the Java side (single source of truth)
-      try{
-        if(typeof AndroidBridge!=='undefined'&&AndroidBridge.isEngineReady&&AndroidBridge.isEngineReady()){
-          const s=AndroidBridge.getEngineSettings();
-          if(s){engineSettingsData=JSON.parse(s);}
-          _cachedMultiPV=engineSettingsData?engineSettingsData.multiPV||1:1;
-        }
-      }catch(e){console.warn('onSettingsImported: refresh cached settings failed',e);}
-      // Show the optional informational suffix (e.g. "autoConfig disabled to honor ...")
       const baseMsg=T('settings_imported');
       let suffix='';
       if(r.message){
@@ -3289,7 +3683,33 @@ function onSettingsImported(result){
         if(m)suffix=' ('+m[1]+')';
       }
       showToast(baseMsg+suffix);
-      openEngineConfig();
+      // v1.0.2: Close the config dialog aggressively.
+      // Set state, remove dialog from DOM directly, then render.
+      showEngineConfig=false;
+      // Force-remove any open dialog overlay from the DOM
+      var dov=document.querySelector('.dov[role="dialog"]');
+      if(dov){dov.remove();}
+      // Refresh cached data
+      if(typeof AndroidBridge!=='undefined'){
+        try{var info=AndroidBridge.getEngineInfo();if(info)engineConfigData=JSON.parse(info);}catch(e){}
+        try{var s=AndroidBridge.getEngineSettings();if(s)engineSettingsData=JSON.parse(s);}catch(e){}
+      }
+      if(engineSettingsData){
+        _cachedMultiPV=engineSettingsData.multiPV||1;
+      }
+      // Call renderInternal directly to bypass any throttle
+      if(typeof renderInternal==='function'){
+        renderInternal();
+      }else{
+        render();
+      }
+      // Safety net: force close again after 100ms
+      setTimeout(function(){
+        showEngineConfig=false;
+        var dov2=document.querySelector('.dov[role="dialog"]');
+        if(dov2){dov2.remove();}
+        render();
+      },100);
     }else{
       showToast(T('settings_import_fail')+': '+(r.message||'unknown'));
     }
@@ -3346,6 +3766,12 @@ function _processDeferredVariations(){
   const info=_pendingBestMoveInfo;
   _pendingBestMoveInfo=null; // Clear immediately to prevent re-processing
 
+  // v1.0.2 PERF: clear the PV cache at the start of each variation-processing
+  // call. The cache is only valid within a single search's MultiPV result set;
+  // keeping it across searches would bloat memory and risk stale-state hits
+  // if the engine's hash happened to collide between unrelated positions.
+  _pvCache.clear();
+
   const{uciMove,lastIdx,isAfterWhiteMove,moveNum,preMoveState,ponderMove,ponderEnabled,multiPVEnabled}=info;
 
   // The move record at lastIdx should exist (it was the last record before the bestmove was executed)
@@ -3382,32 +3808,36 @@ function _processDeferredVariations(){
   const primaryPV=_lastEngineVariation||(_multiPVResult&&_multiPVResult.length>0?_multiPVResult[0].pv:null);
 
   // --- Mainline prediction: continuation after the played move ---
-  // Primary PV starts with the bestmove. Strip it to get continuation.
-  // v1.0.2 FIX: If primary PV does NOT start with bestmove, the engine is
-  // suggesting an ALTERNATIVE first move (rare but happens with MultiPV when
-  // different lines converge). Previously the code fabricated a fake "mainline"
-  // variation by treating the first move as already-played, which produced a
-  // confusing duplicate. Now we skip mainline creation and let the MultiPV
-  // iteration (which now starts from index 0 in this case) handle it as an
-  // alternative line.
+  // v1.0.2 FIX: The mainline prediction should NOT be displayed immediately.
+  // Instead, it should be registered for divergence tracking and only displayed
+  // when the actual game moves diverge from the prediction. This matches the
+  // user's requirement: "在匹配到正确位置前缓存于后台，不显示"
   let primaryStartedWithBestmove=false;
   if(primaryPV){
     const uciMoves=primaryPV.trim().split(/\s+/);
     if(uciMoves.length>0 && uciMoves[0]===uciMove){
       primaryStartedWithBestmove=true;
       // Strip bestmove, convert remaining to SAN using post-bestmove state
-      const afterBestState=_uciToSAN(uciMove,preMoveState).postState;
+      const afterBestResult=_uciToSAN(uciMove,preMoveState);
+      const afterBestState=afterBestResult.postState;
+      const afterBestHash=afterBestState.hash||0;
+      if(_pvCache.size<_PV_CACHE_MAX){
+        _pvCache.set((preMoveState.hash||0)+'|'+uciMove,{san:afterBestResult.san,postState:afterBestState});
+      }
       const remainingUci=uciMoves.slice(1);
       if(remainingUci.length>0){
-        const sanResult=_convertPVtoSAN(remainingUci.join(' '),afterBestState);
+        const sanResult=_convertPVtoSANCached(remainingUci.join(' '),afterBestState,afterBestHash);
         if(sanResult.sanMoves){
-          variations.push({
-            type:'mainline',
+          // v1.0.2: DON'T push to variations array. Instead, register for
+          // divergence tracking. The variation will be displayed at the
+          // divergence point via _checkPVDivergence.
+          // We store it as a pending PV with the SAN already computed.
+          _pendingEngineSANs.push({
             san:sanResult.sanMoves,
+            fromMoveIdx:aiMoveIdx,
             firstMoveIsWhite:contFirstIsWhite,
             varMoveNum:contVarMoveNum,
-            group:'mainline',
-            mpvIndex:-1
+            matchedUpTo:0
           });
         }
       }
@@ -3423,8 +3853,14 @@ function _processDeferredVariations(){
   // v1.0.2 FIX: When the primary PV didn't start with bestmove, include it in
   // the iteration as an alternative line (mpvIndex=0). Otherwise iterate from
   // index 1 as before (primary was already handled as mainline above).
+  // v1.0.2 PERF: each MultiPV line is converted via _convertPVtoSANCached()
+  // which transparently reuses the converted SAN + post-state of any shared
+  // prefix with previously-converted lines (including the mainline above).
+  // For 8 lines sharing a 5-move prefix, this saves ~35 makeMv+moveAlg calls.
   if(_multiPVResult&&_multiPVResult.length>1){
     const startIdx=primaryStartedWithBestmove?1:0;
+    // Pre-compute the preMoveState hash for cache keys
+    const preMoveHash=preMoveState.hash||0;
     for(let vi=startIdx;vi<_multiPVResult.length;vi++){
       const mpv=_multiPVResult[vi];
       if(!mpv.pv)continue;
@@ -3435,15 +3871,15 @@ function _processDeferredVariations(){
       // — UNLESS this is the primary that didn't start with bestmove, in which
       // case its first move is also an alternative (also same side).
       // Convert the ENTIRE PV to SAN starting from preMoveState.
-      const sanResult=_convertPVtoSAN(mpv.pv,preMoveState);
+      const sanResult=_convertPVtoSANCached(mpv.pv,preMoveState,preMoveHash);
       if(sanResult.sanMoves){
-        variations.push({
-          type:'multipv',
+        // v1.0.2: DON'T push MultiPV to display array either. Cache for divergence.
+        _pendingEngineSANs.push({
           san:sanResult.sanMoves,
-          firstMoveIsWhite:aiIsAfterWhiteMove, // First move is from the same side as AI's move
-          varMoveNum:aiMoveNum,  // Same move number as the played move
-          group:'multipv',
-          mpvIndex:vi
+          fromMoveIdx:aiMoveIdx,
+          firstMoveIsWhite:aiIsAfterWhiteMove,
+          varMoveNum:aiMoveNum,
+          matchedUpTo:0
         });
       }
     }
@@ -3464,8 +3900,275 @@ function _processDeferredVariations(){
     lastRec.variations=variations;
   }
 
+  // v1.0.2 NEW FEATURE: Register the engine's primary PV for divergence tracking.
+  // The PV will be compared against future actual game moves. If the game
+  // diverges from the PV, the divergent portion will be attached as a variation
+  // to the divergence-point move record.
+  if(primaryPV&&primaryStartedWithBestmove){
+    _registerEnginePVForDivergence(primaryPV,aiMoveIdx,preMoveState);
+  }
+
+  // v1.0.2 NEW FEATURE: Engine PV divergence detection.
+  // After the AI's move is recorded, check if the engine's PV (stored in
+  // _lastEnginePVBeforeMove) matches the actual game moves so far. If the
+  // game has diverged from the PV, attach the divergent portion of the PV
+  // as a variation to the move record AT THE DIVERGENCE POINT.
+  // If the game hasn't diverged yet (still following the PV), cache the PV
+  // for future comparison — don't display it yet.
+  _checkPVDivergence();
+  // v1.0.2: Also check SAN-based engine variations (mainline + MultiPV)
+  _checkPVDivergenceSANs();
+
   // Re-render
   requestAnimationFrame(function(){render();});
+}
+
+// v1.0.2: Check pending SAN-based engine variations for divergence.
+// Compare each pending variation's SAN moves against actual game moves.
+// If divergence found, attach the remaining variation to the divergence-point move.
+// If all match, remove (redundant). If game hasn't reached variation's start, keep cached.
+function _checkPVDivergenceSANs(){
+  if(_pendingEngineSANs.length===0)return;
+  if(!moveRecords||moveRecords.length===0)return;
+  const newPending=[];
+  for(const pending of _pendingEngineSANs){
+    const sanMoves=pending.san.trim().split(/\s+/).filter(s=>s);
+    if(sanMoves.length===0)continue;
+    let matchCount=pending.matchedUpTo||0;
+    let divergeIdx=-1;
+    for(let vi=matchCount;vi<sanMoves.length;vi++){
+      const actualIdx=pending.fromMoveIdx+1+vi;
+      if(actualIdx>=moveRecords.length){
+        // Game hasn't reached this point yet — keep cached
+        break;
+      }
+      const actualMr=moveRecords[actualIdx];
+      if(!actualMr||actualMr===null)continue;
+      const varSAN=sanMoves[vi].replace(/[+#!?]+$/,'');
+      const actualSAN=(actualMr.notation||'').replace(/[+#!?]+$/,'');
+      if(varSAN===actualSAN){
+        matchCount=vi+1;
+      }else{
+        divergeIdx=actualIdx;
+        break;
+      }
+    }
+    if(divergeIdx>=0&&divergeIdx<moveRecords.length){
+      // Divergence found — attach remaining SAN to the divergence-point move
+      const remainingSAN=sanMoves.slice(matchCount).join(' ');
+      if(remainingSAN.length>0){
+        const targetMr=moveRecords[divergeIdx];
+        if(targetMr){
+          if(!targetMr.variations)targetMr.variations=[];
+          // v1.0.2 FIX: Skip if an identical variation (same SAN content) is
+          // already attached. Without this guard, the same divergence could
+          // be attached multiple times if multiple pending PVs diverged at
+          // the same move with the same SAN remainder — causing duplicate
+          // 🌿 line entries.
+          let alreadyExists=false;
+          for(const ex of targetMr.variations){
+            if(ex.san===remainingSAN){alreadyExists=true;break;}
+          }
+          if(!alreadyExists){
+            const isWhite=(divergeIdx%2===0);
+            const moveNum=Math.floor(divergeIdx/2)+1;
+            targetMr.variations.push({
+              group:'multipv',
+              san:remainingSAN,
+              varMoveNum:moveNum,
+              firstMoveIsWhite:isWhite,
+              lineNum:1,
+              prefixEllipsis:false,
+              prefixEllipsisNum:0
+            });
+          }
+        }
+      }
+      // Don't keep in pending (resolved)
+    }else if(matchCount>=sanMoves.length){
+      // All matched — redundant, remove
+    }else{
+      // Still matching or game hasn't reached — keep cached
+      pending.matchedUpTo=matchCount;
+      if(newPending.length<10)newPending.push(pending);
+    }
+  }
+  _pendingEngineSANs=newPending;
+}
+
+// v1.0.2 NEW FEATURE: Engine PV divergence tracker.
+// _pendingEnginePVs stores PVs from recent engine analyses that haven't yet
+// diverged from the actual game. Each entry: {pvUci, fromMoveIdx, preMoveState}
+// — the PV in UCI format, the moveRecords index it started from, and the
+// game state at that point (for SAN conversion).
+// When a new move is played, we check each pending PV: if the new move matches
+// the next PV move, the PV is still being followed (advance the pointer); if
+// it doesn't match, the PV has diverged — attach the remaining PV moves as a
+// variation to the divergence-point move record.
+// If no divergence yet, keep cached (don't display).
+let _pendingEnginePVs=[];
+
+// v1.0.2: _pendingEngineSANs stores engine variations in SAN format (already
+// converted from UCI). These are the mainline + MultiPV predictions that should
+// NOT be displayed immediately — they're cached until divergence.
+// Each entry: {san, fromMoveIdx, firstMoveIsWhite, varMoveNum, matchedUpTo}
+let _pendingEngineSANs=[];
+
+// Called from onBestMove (via _processDeferredVariations) to register a new
+// PV for divergence tracking. The PV starts from the position BEFORE the
+// bestmove was played, so the first PV move should be the bestmove itself.
+function _registerEnginePVForDivergence(pvUci,fromMoveIdx,preMoveState){
+  if(!pvUci||!preMoveState)return;
+  // Don't track PVs that are too short (just the bestmove — no continuation)
+  const moves=pvUci.trim().split(/\s+/).filter(m=>m&&m.length>=4);
+  if(moves.length<2)return; // Need at least bestmove + 1 continuation move
+  _pendingEnginePVs.push({
+    pvUci:moves.join(' '),
+    pvMoves:moves,
+    fromMoveIdx:fromMoveIdx,
+    preMoveState:cloneS(preMoveState),
+    matchedUpTo:0 // index into pvMoves that has been matched (0 = bestmove)
+  });
+}
+
+// Called after each move (player or AI) to check if any pending PV has
+// diverged. If so, attach the divergent portion as a variation to the
+// divergence-point move record.
+function _checkPVDivergence(){
+  if(_pendingEnginePVs.length===0)return;
+  if(!moveRecords||moveRecords.length===0)return;
+
+  const newPending=[];
+  for(const pending of _pendingEnginePVs){
+    // The PV started at fromMoveIdx. The bestmove (pvMoves[0]) was played as
+    // moveRecords[fromMoveIdx]. Now check subsequent moves.
+    // pending.matchedUpTo = how many PV moves have been matched so far.
+    // Next expected: pvMoves[matchedUpTo+1] should be moveRecords[fromMoveIdx + matchedUpTo + 1]... wait, that's not quite right.
+    // Actually: pvMoves[0] = bestmove = moveRecords[fromMoveIdx].
+    // pvMoves[1] = opponent's predicted reply = should match moveRecords[fromMoveIdx+1] if played.
+    // pvMoves[2] = our predicted next move = should match moveRecords[fromMoveIdx+2] if played.
+    // So pvMoves[k] should match moveRecords[fromMoveIdx + k].
+    // We check from pending.matchedUpTo+1 onwards (the first unmatched PV move).
+
+    let stillMatching=true;
+    let divergeAtIdx=-1; // moveRecords index where divergence happened
+    let divergePVRemainder=[]; // remaining PV moves from divergence point
+
+    for(let k=pending.matchedUpTo+1;k<pending.pvMoves.length;k++){
+      const mrIdx=pending.fromMoveIdx+k;
+      if(mrIdx>=moveRecords.length){
+        // Not enough moves played yet — PV still potentially being followed
+        stillMatching=true;
+        break;
+      }
+      const mr=moveRecords[mrIdx];
+      if(mr===null){
+        // Placeholder — skip (treat as match for black-to-move scenarios)
+        continue;
+      }
+      // Convert mr.from/mr.to to UCI for comparison
+      const mrUci=_mrToUci(mr);
+      const pvMove=pending.pvMoves[k];
+      if(mrUci===pvMove){
+        // Still matching — advance
+        pending.matchedUpTo=k;
+        continue;
+      }else{
+        // Divergence! The actual move (mrUci) differs from PV move (pvMove).
+        // The divergence point is at moveRecords[mrIdx].
+        // The PV remainder starts from pvMoves[k] (the predicted move that
+        // wasn't played).
+        stillMatching=false;
+        divergeAtIdx=mrIdx;
+        divergePVRemainder=pending.pvMoves.slice(k);
+        break;
+      }
+    }
+
+    if(!stillMatching&&divergeAtIdx>=0&&divergePVRemainder.length>0){
+      // Divergence detected — attach the PV remainder as a variation to the
+      // divergence-point move record.
+      _attachDivergentPV(divergeAtIdx,divergePVRemainder,pending);
+      // Don't keep this PV in pending — it's been resolved.
+    }else if(stillMatching){
+      // PV is still being followed or not enough moves yet — keep tracking.
+      // But cap the number of pending PVs to avoid unbounded growth.
+      if(newPending.length<5)newPending.push(pending);
+    }
+  }
+  _pendingEnginePVs=newPending;
+}
+
+// Convert a move record's from/to to UCI format (e.g., "e2e4", "e7e8q").
+// v1.0.2 FIX: Map promotion piece-type names to UCI letters explicitly.
+// Previously this used mr.promotion[0] which produced 'k' for knight (correct
+// UCI is 'n'), causing false divergence detection for any knight-promotion
+// move — the comparison `mrUci === pvMove` would always fail because the
+// engine PV uses 'n' for knight promotions. This silently attached spurious
+// alternative-line variations to the divergence-point move record.
+function _mrToUci(mr){
+  if(!mr||!mr.from||!mr.to)return '';
+  const promoMap={queen:'q',rook:'r',bishop:'b',knight:'n'};
+  return mr.from+mr.to+(mr.promotion?(promoMap[mr.promotion]||''):'');
+}
+
+// Attach a divergent PV as a variation to the move record at divergeAtIdx.
+// divergePVRemainder is an array of UCI moves starting from the predicted
+// move that wasn't played.
+function _attachDivergentPV(divergeAtIdx,pvRemainder,pending){
+  if(divergeAtIdx<0||divergeAtIdx>=moveRecords.length)return;
+  const mr=moveRecords[divergeAtIdx];
+  if(!mr)return;
+
+  // The PV remainder starts from the predicted move that diverged.
+  // We need to convert it to SAN. The starting state is the game state
+  // BEFORE the move at divergeAtIdx was played.
+  // pending.preMoveState is the state before pvMoves[0] (the bestmove).
+  // We need to replay pvMoves[0..k-1] to get the state before pvMoves[k].
+  let state=cloneS(pending.preMoveState);
+  for(let i=0;i<pending.matchedUpTo+1&&i<pending.pvMoves.length;i++){
+    // Replay matched PV moves to advance the state
+    const uci=pending.pvMoves[i];
+    const coords=uciToCoords(uci);
+    if(!coords)break;
+    const piece=state.board[coords.from.row][coords.from.col];
+    if(!piece)break;
+    const mv={from:coords.from,to:coords.to,piece,promotion:coords.promotion};
+    makeMvInPlace(state,mv);
+  }
+  // Now state is the position before the divergent PV move.
+  // The divergent PV starts with the PREDICTED move (alternative to the
+  // actual move). Convert the entire remainder to SAN from this state.
+  const sanResult=_convertPVtoSANCached(pvRemainder.join(' '),state,state.hash||0);
+  if(!sanResult.sanMoves)return;
+
+  // Determine the move number and side at the divergence point.
+  // divergeAtIdx is the moveRecords index. The move at this index was the
+  // ACTUAL move. The PV remainder's first move is an ALTERNATIVE to it
+  // (same side, same move number).
+  const isWhite=(divergeAtIdx%2===0);
+  const moveNum=Math.floor(divergeAtIdx/2)+1;
+
+  // Build the variation entry — same format as PGN variations.
+  const varEntry={
+    group:'multipv', // treat engine PV as MultiPV-style alternative line
+    san:sanResult.sanMoves,
+    varMoveNum:moveNum,
+    firstMoveIsWhite:isWhite,
+    mpvIndex:0, // primary alternative
+    lineNum:1
+  };
+
+  // Attach to the move record. If the record already has variations, append.
+  if(!mr.variations)mr.variations=[];
+  // Avoid duplicates — check if an identical engine variation already exists.
+  let exists=false;
+  for(const v of mr.variations){
+    if(v.group==='multipv'&&v.san===varEntry.san){exists=true;break;}
+  }
+  if(!exists){
+    mr.variations.push(varEntry);
+  }
 }
 
 // Update display with MultiPV lines
@@ -3903,6 +4606,10 @@ _ecoRecCache.clear();
 setupHistory=[];setupErrors=[];
 _ecoEnabled=false; // FEN import — disable ECO recognition
 reviewBaseState=cloneS(gameState);
+// v1.0.2 FIX: Black-to-move opening move record fix.
+// If the imported FEN has black to move, prepend null placeholder so the first
+// real move (black's) lands in the black slot (moveRecords[1]), not the white slot.
+_prependBlackToMovePlaceholder();
 render();requestEngineEval();
 if(gameState.currentTurn!==playerColor)doAIMove();
 }else{showToast(T('fen_invalid'),2000)}
@@ -4392,6 +5099,10 @@ function importPGN(pgnText){
   setupHistory=[];setupErrors=[];
   _ecoEnabled=false;
   reviewBaseState=cloneS(gameState);
+  // v1.0.2 FIX: Black-to-move opening move record fix.
+  // If the PGN's [FEN] header (or the start position) has black to move, prepend
+  // null placeholder so the first replayed move (black's) lands in the black slot.
+  _prependBlackToMovePlaceholder();
   
   // Replay all moves using the _parsePGN results which already have
   // validated moves with correct notation and post-move states.
@@ -4434,6 +5145,8 @@ function importPGN(pgnText){
       const branchMoveIsWhite=preMoveState.currentTurn==='white';
       const branchMoveNum=preMoveState.fullMoveNumber||Math.floor(moveIdx/2)+1;
       for(let vi=0;vi<pgnVars.length;vi++){
+        let _typeBPrefixEllipsis=false; // v1.0.2: flag for Type B prefix "..."
+        let _typeBPrefixNum=0; // v1.0.2: the move number for the "N..." prefix
         // v1.0.1: Each entry is now an object with .sanTokens (was a bare array).
         // For nested variations, sanTokens already includes the parent variation's
         // prefix moves, so the entire array replays from the start position.
@@ -4474,11 +5187,25 @@ function importPGN(pgnText){
               startIdx=1;
             }else{
               // Attempt Type B: first token matches from postMoveState (opponent's side)
+              // v1.0.2 FIX (PGN spec): For Type B variations (continuation after the
+              // branching move), the variation should start with the owning move's
+              // move number. If the owning move is Black's and the variation starts
+              // with White, the display is "N... (N+1).WhiteMove BlackMove ..." where
+              // N... is the ellipsis prefix indicating the Black branch point.
               const tryB=_applySANMove(cloneS(postMoveState),vTokens[0]);
               if(tryB){
                 vState=tryB.state;
                 vIsWhite=!branchMoveIsWhite;
-                vMoveNum=branchMoveIsWhite?branchMoveNum:branchMoveNum+1;
+                // v1.0.2: varMoveNum should be the actual move number of the
+                // variation's first move. If owning is Black (branchMoveIsWhite=false),
+                // the variation's first White move is at branchMoveNum+1.
+                // If owning is White (branchMoveIsWhite=true), the variation's
+                // first Black move is at branchMoveNum.
+                vMoveNum=branchMoveIsWhite?branchMoveNum:(branchMoveNum+1);
+                // prefixEllipsis: show "N..." when the owning move is Black's
+                // and the variation starts with White's next move.
+                _typeBPrefixEllipsis=!branchMoveIsWhite;
+                _typeBPrefixNum=branchMoveNum;
                 startIdx=1;
                 sanParts.push(tryB.notation);
               }else{
@@ -4495,7 +5222,9 @@ function importPGN(pgnText){
                   makeMvInPlace(fbState,fbMatch);
                   vState=fbState;
                   vIsWhite=!branchMoveIsWhite;
-                  vMoveNum=branchMoveIsWhite?branchMoveNum:branchMoveNum+1;
+                  vMoveNum=branchMoveIsWhite?branchMoveNum:(branchMoveNum+1);
+                  _typeBPrefixEllipsis=!branchMoveIsWhite;
+                  _typeBPrefixNum=branchMoveNum;
                   startIdx=1;
                 }
               }
@@ -4518,6 +5247,12 @@ function importPGN(pgnText){
         // the first unparseable token were displayed.
         // Also unified the moveAlg fallback so EVERY token (not just the first)
         // gets the same forgiving matching that the first token already had.
+        // v1.0.2 FIX (first-principles re-audit): when a token is unparseable
+        // and skipped, the side-to-move and move number MUST still advance —
+        // otherwise the next token (which alternates side per PGN spec) would
+        // be assigned to the wrong side, desynchronizing the entire remaining
+        // variation. The skipped token still "occupies" a move slot in the
+        // variation sequence even though no actual move was made on the board.
         for(let ti=startIdx;ti<vTokens.length;ti++){
           const vToken=vTokens[ti];
           const vResult=_applySANMove(vState,vToken);
@@ -4531,8 +5266,12 @@ function importPGN(pgnText){
             }
             if(!vMatched){
               // v1.0.2: skip this token but CONTINUE parsing the rest of the
-              // variation — do not abort the whole variation.
+              // variation — do not abort the whole variation. Advance the
+              // side-to-move + move number so the next token is correctly
+              // attributed (a skipped move still consumes a turn per PGN spec).
               console.warn('importPGN: skipping unparseable variation token at',ti,'token=',vToken);
+              if(!vIsWhite)vMoveNum++;
+              vIsWhite=!vIsWhite;
               continue;
             }
             sanParts.push(moveAlg(vState,vMatched));
@@ -4553,9 +5292,16 @@ function importPGN(pgnText){
             san:sanParts.join(' '),
             varMoveNum:initialVMoveNum,
             firstMoveIsWhite:initialVIsWhite,
-            lineNum:vi+1
+            lineNum:vi+1,
+            // v1.0.2: prefixEllipsis — when true, prepend "N..." before the
+            // variation's first White move to indicate the Black move is the
+            // branch point (per PGN spec and user requirement).
+            prefixEllipsis:!!_typeBPrefixEllipsis,
+            prefixEllipsisNum:_typeBPrefixNum
           });
         }
+        _typeBPrefixEllipsis=false;
+        _typeBPrefixNum=0;
       }
     }
     
@@ -4602,6 +5348,117 @@ function importPGN(pgnText){
   }
   
   gameState=replayState;
+  
+  // v1.0.2 FIX: Post-process PGN variations — relocate each variation to the
+  // divergence point where the actual game moves diverge from the variation.
+  // The variation's moves are compared against the actual game moves starting
+  // from the move AFTER the owning move. Matching prefix is stripped. If the
+  // game fully follows the variation, the variation is removed (redundant).
+  // If the game diverges, the variation is moved to the divergence-point move.
+  // v1.0.2 FIX (second pass): Mark moved variations with _relocated=true to
+  // prevent them from being reprocessed when the loop reaches their new location.
+  // Without this, a variation moved from moveRecord[mi] to moveRecord[divergeIdx]
+  // would be processed AGAIN at divergeIdx, creating duplicates.
+  for(let mi=0;mi<moveRecords.length;mi++){
+    const mr=moveRecords[mi];
+    if(!mr||!mr.variations||mr.variations.length===0)continue;
+    const remainingVars=[];
+    for(const v of mr.variations){
+      if(v.group!=='pgn'){remainingVars.push(v);continue;}
+      // Skip variations that were already relocated from an earlier moveRecord
+      if(v._relocated){remainingVars.push(v);continue;}
+      // Parse the variation's SAN moves
+      const sanMoves=v.san.trim().split(/\s+/).filter(s=>s);
+      if(sanMoves.length===0){continue;}
+      let matchCount=0;
+      let divergeIdx=-1;
+      for(let vi=0;vi<sanMoves.length;vi++){
+        const actualIdx=mi+1+vi;
+        if(actualIdx>=moveRecords.length){
+          // Game ended before all variation moves were checked
+          divergeIdx=actualIdx;
+          break;
+        }
+        const actualMr=moveRecords[actualIdx];
+        if(!actualMr||actualMr===null){
+          // v1.0.2 FIX: Null placeholder means the actual move at this position
+          // is a "pass" (black-to-move opening). This is NOT a match — treat as
+          // divergence since the variation expects a real move here.
+          divergeIdx=actualIdx;
+          break;
+        }
+        const varSAN=sanMoves[vi].replace(/[+#!?]+$/,'');
+        const actualSAN=(actualMr.notation||'').replace(/[+#!?]+$/,'');
+        if(varSAN===actualSAN){
+          matchCount++;
+        }else{
+          divergeIdx=actualIdx;
+          break;
+        }
+      }
+      if(divergeIdx<0){
+        // All variation moves checked without divergence
+        if(matchCount>=sanMoves.length){
+          // All matched — redundant, remove
+          continue;
+        }else{
+          // Some moves weren't checked (shouldn't happen, but defensive)
+          // Remove the variation — it's incomplete
+          continue;
+        }
+      }
+      if(divergeIdx>=0&&divergeIdx<moveRecords.length){
+        // Move the variation to the divergence-point move
+        const remainingSAN=sanMoves.slice(matchCount).join(' ');
+        if(remainingSAN.length>0){
+          const targetMr=moveRecords[divergeIdx];
+          if(targetMr){
+            if(!targetMr.variations)targetMr.variations=[];
+            const isWhite=(divergeIdx%2===0);
+            const moveNum=Math.floor(divergeIdx/2)+1;
+            targetMr.variations.push({
+              group:'pgn',
+              san:remainingSAN,
+              varMoveNum:moveNum,
+              firstMoveIsWhite:isWhite,
+              lineNum:v.lineNum,
+              prefixEllipsis:false,
+              prefixEllipsisNum:0,
+              _relocated:true // Mark as relocated to prevent reprocessing
+            });
+          }
+        }
+        // Don't add to remainingVars (moved to new location)
+      }else if(divergeIdx>=0&&divergeIdx>=moveRecords.length){
+        // v1.0.2 FIX: Variation starts BEYOND the game end — the game hasn't
+        // reached the variation's starting move. Cache it (don't display).
+        // For PGN import, this means the variation is a hypothetical continuation
+        // that was never reached. Don't add to remainingVars (remove from display).
+        continue;
+      }else{
+        // No divergence found and not all matched — keep at original location
+        remainingVars.push(v);
+      }
+    }
+    mr.variations=remainingVars.length>0?remainingVars:undefined;
+  }
+  // Clean up _relocated flags (not needed for display)
+  // v1.0.2: Also deduplicate variations — remove identical SAN content
+  for(const mr of moveRecords){
+    if(mr&&mr.variations){
+      const seen=new Set();
+      const deduped=[];
+      for(const v of mr.variations){
+        if(v._relocated)delete v._relocated;
+        // v1.0.2: Deduplicate by group+san combination
+        const key=(v.group||'')+'|'+(v.san||'');
+        if(seen.has(key))continue; // Skip duplicate
+        seen.add(key);
+        deduped.push(v);
+      }
+      mr.variations=deduped.length>0?deduped:undefined;
+    }
+  }
   
   // Check for game over
   const st=gameStatus(gameState);
@@ -4722,7 +5579,17 @@ async function probeTablebase(s){
 if(isTbOffline())return null;
 const fen=generateFEN(s);
 // Check cache first
-if(_tbCache.has(fen))return _tbCache.get(fen);
+// v1.0.2 FIX: Refresh LRU order on cache hit. Previously a hit just returned
+// the value without reordering, so frequently-accessed entries could be
+// evicted before rarely-accessed ones — defeating the LRU cache's purpose.
+// The delete+set pattern moves the entry to the "newest" position (Map
+// preserves insertion order in JS).
+if(_tbCache.has(fen)){
+  const v=_tbCache.get(fen);
+  _tbCache.delete(fen);
+  _tbCache.set(fen,v);
+  return v;
+}
 // Rate limit: ≥600ms between requests
 // FIX: Reserve the time slot immediately (before async wait) to prevent TOCTOU race
 // where two concurrent calls both compute wait=0 and bypass the rate limit.
@@ -5087,12 +5954,22 @@ function _invalidateElCache() {
   _cachedElements = {};
 }
 
-// Cached board square elements [row][col] — invalidated on full render
+// v1.0.2 (qw3.7max audit): Cached board square elements — 1D array indexed by
+// (row*8+col) instead of 2D array-of-arrays. A 1D array has better memory
+// locality (contiguous) and avoids the second pointer dereference on every
+// access. With 10-50 engine progress callbacks/sec, this shaves a small but
+// measurable amount off the hot incremental-update path.
+// Invalidated on full render.
 let _sqElCache = null;
+// v1.0.2 (qw3.7max audit): Cached review-moves-list element — avoids
+// getElementById('reviewMovesList') on every render's scroll-into-view path.
+// Assigned after full render (when the element is freshly created), cleared
+// on cache invalidation.
+let _rListEl = null;
 
 /**
  * Get or build the cached board square elements array.
- * @returns {Array<Array<HTMLElement>>|null} 2D array: _sqElCache[displayRow][displayCol]
+ * @returns {Array<HTMLElement>|null} 1D array: _sqElCache[displayRow*8 + displayCol]
  */
 function _getSqElCache() {
   if (_sqElCache) return _sqElCache;
@@ -5100,12 +5977,11 @@ function _getSqElCache() {
   if (!grid) return null;
   const sqs = grid.querySelectorAll('.sq');
   if (sqs.length !== 64) return null;
-  _sqElCache = [];
-  for (let r = 0; r < 8; r++) {
-    _sqElCache[r] = [];
-    for (let c = 0; c < 8; c++) {
-      _sqElCache[r][c] = sqs[r * 8 + c];
-    }
+  // v1.0.2 (qw3.7max audit): 1D array — single contiguous allocation, no
+  // nested array objects. Index as _sqElCache[r*8 + c].
+  _sqElCache = new Array(64);
+  for (let i = 0; i < 64; i++) {
+    _sqElCache[i] = sqs[i];
   }
   return _sqElCache;
 }
@@ -5136,7 +6012,8 @@ function _updateBoardIncremental() {
     for (let c = 0; c < 8; c++) {
       const rr = flip ? 7 - r : r;
       const cc = flip ? 7 - c : c;
-      const el = sqCache[r][c];
+      // v1.0.2 (qw3.7max audit): 1D array access — _sqElCache[r*8+c]
+      const el = sqCache[r * 8 + c];
       if (!el) continue;
       const p = gameState.board[rr][cc];
       const isL = (r + c) % 2 === 0;
@@ -5291,9 +6168,12 @@ function _buildEvalTrendSVG(width, height) {
   }
 
   // Collect eval data points (only within the visible window)
+  // v1.0.2 PERF: use peek() instead of get() — this is a read-only iteration
+  // over many entries, so refreshing LRU order on each access would just
+  // churn the Map and push other entries toward eviction for no benefit.
   const points = [];
   for (let i = localStepMin; i <= localStepMax; i++) {
-    const ev = _reviewEvalCache.get(i);
+    const ev = _reviewEvalCache.peek(i);
     if (ev != null) {
       points.push({step: i, eval: ev.eval || 0, mate: ev.mate, mateDistance: ev.mateDistance});
     }
@@ -5541,7 +6421,9 @@ return null;
 function _applyGameOver(cachedSt){
   const st=cachedSt||gameStatus(gameState);
   const goStr=_gameOverStrFromStatus(st);
-  if(goStr){gameOver=goStr;_gameOverStatusKey=st;if((st==='checkmate'||goStr.includes('将杀')||goStr.includes('Checkmate'))&&moveRecords.length>0){const last=moveRecords[moveRecords.length-1];if(last.notation&&!last.notation.endsWith('#')){last.notation=last.notation.replace(/\+$/,'')+'#';}_sfMateDistance=0;_sfDepth=0;_sfEval=gameState.currentTurn==='black'?99999:-99999;_sfEvalReady=true;}}
+  if(goStr){gameOver=goStr;_gameOverStatusKey=st;if((st==='checkmate'||goStr.includes('将杀')||goStr.includes('Checkmate'))&&moveRecords.length>0){const last=moveRecords[moveRecords.length-1];// v1.0.2 FIX: null-safe — last entry may be the black-to-move null placeholder
+      // in pathological edge cases (no real moves executed). Skip notation patching if so.
+      if(last&&last.notation&&!last.notation.endsWith('#')){last.notation=last.notation.replace(/\+$/,'')+'#';}_sfMateDistance=0;_sfDepth=0;_sfEval=gameState.currentTurn==='black'?99999:-99999;_sfEvalReady=true;}}
 }
 
 // ===================== GAME STATE =====================
@@ -5550,6 +6432,8 @@ let gameState=initState(),stateHistory=[],playerColor='white',selectedSquare=nul
     legalMvs=[],legalSet=new Set(),moveRecords=[],gameOver=null,_gameOverStatusKey=null,lastMove=null,
     pendingPromotion=null,isAIThinking=false,showNewGameDialog=false,
     showCtrlMap=false,aiLevel=4;
+// v1.0.2: PGN save prompt state — when true, shows "💾是否保存PGN文件？" dialog
+let showSavePGNPrompt=false,_pendingActionAfterSave=null,_skipPGNSavePrompt=false;
 // Setup mode state
 let setupMode=false,setupPiece=null,setupColor='white',setupErrors=[],
     setupHistory=[],setupRedoStack=[];
@@ -5664,7 +6548,7 @@ const oppC=OPP_COLOR[playerColor];
 const flip=playerColor==='black';
 // Arrows computed separately by _updateArrows() — no inline computation needed
 
-let h='<div class="hdr" role="banner"><div class="hdr-top"><div class="hdr-l"><span style="font-size:1.3rem;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text;border:3px solid transparent;border-image:linear-gradient(145deg,#8b6914,#d4a017,#ffd700,#fff8dc,#ffd700,#d4a017,#8b6914) 1;padding:3px 6px;background:linear-gradient(145deg,rgba(139,105,20,.18),rgba(255,215,0,.08),rgba(139,105,20,.18));box-shadow:0 0 6px rgba(212,160,23,.35),0 0 12px rgba(255,215,0,.12),inset 0 0 3px rgba(255,215,0,.1),inset 0 1px 0 rgba(255,248,220,.15);position:relative">♔&#xFE0E;</span><h1>'+T('app_name')+'<span class="ver">v1.0.2</span><button onclick="showAboutPage=true;render()" style="font-size:.6rem;color:var(--accent);background:rgba(212,160,23,.15);padding:2px 8px;border-radius:4px;border:1px solid rgba(212,160,23,.3);margin-left:4px;cursor:pointer;font-family:system-ui,-apple-system,sans-serif;letter-spacing:1px">ℹ️</button></h1></div><button onclick="toggleLang()" style="font-size:.65rem;color:var(--accent);background:rgba(212,160,23,.15);padding:2px 6px;border-radius:4px;border:1px solid rgba(212,160,23,.3);cursor:pointer;font-family:system-ui,-apple-system,sans-serif;letter-spacing:1px;flex-shrink:0">'+(_lang==='zh'?'↔️中':'↔️EN')+'</button><div class="ev" id="eval-disp" role="status" aria-label="'+T('evaluating')+'">'+(setupMode?T('setup_label'):(isAIThinking?'<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>':'<span class="ev-e">'+pe+'</span><span>'+pd+'</span><span style="color:var(--muted)">('+scoreStr+')</span>'+_hdrDepthStr+_hdrProgressStr))+'</div></div><div class="hdr-tools" role="toolbar" aria-label="'+T('ctrl_range')+'">'+(setupMode?'':'<div class="diff-sel" role="radiogroup" aria-label="AI">'+getAI_LEVELS().map(l=>'<button class="diff-b'+(getEffectiveAILevel()===l.id?' act':'')+'" onclick="if(!isAIThinking){'+(l.id===8?'openEngineConfig()':('aiLevel='+l.id+';try{AndroidBridge.syncGameDifficulty('+l.id+')}catch(e){}render()'))+'}" title="'+l.desc+'" role="radio" aria-checked="'+(getEffectiveAILevel()===l.id)+'">'+(l.id===8?'⚙️':l.id===7?'SL':l.id)+'</button>').join('')+'</div>')+'<button type="button" class="btn" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()" aria-label="'+T('new_game')+'"><span style="font-size:1.4rem">⚔️</span> '+T('new_game')+'</button>'+'<button class="btn" onclick="quickFreeOpening()" aria-label="'+T('free_opening')+'">'+(playerColor==='white'?'<span style=\"font-size:1.4rem;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text\">♔&#xFE0E;</span>':'<span style=\"font-size:1.4rem;font-weight:400;color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans Symbol&#x27;,sans-serif;font-variant-emoji:text\">♚&#xFE0E;</span>')+' '+T('free_opening')+'</button>'+(setupMode?'':'<button class="btn" onclick="undoMove()" aria-label="'+T('undo')+'"><span style="font-size:1.4rem">↩️</span> '+T('undo')+'</button><button class="btn" onclick="redoMove()" aria-label="'+T('redo')+'" id="redoBtn"><span style="font-size:1.4rem">↪️</span> '+T('redo')+'</button>')+'<button class="btn" onclick="flipBoard()" aria-label="'+T('flip')+'"><span style="font-size:1.4rem">🔃</span> '+T('flip')+'</button>'+'<button class="btn" onclick="getHint()" aria-label="'+T('ai_hint')+'"><span style="font-size:1.4rem">💡</span> '+T('ai_hint')+'</button>'+(setupMode?'':'<button class="btn" onclick="toggleSound()" id="btnSound" aria-label="'+T('sound')+'">'+(soundOn?'<span style="font-size:1.4rem">🔊</span> '+T('sound'):'<span style="font-size:1.4rem">🔇</span> '+T('sound'))+'</button>')+'<button class="btn" onclick="showCtrlMap=!showCtrlMap;cachedCtrlKey=&quot;&quot;;render()" aria-label="'+T('ctrl_range')+'" title="'+T('ctrl_range')+'">'+(showCtrlMap?'<span style="font-size:1.4rem">🌈</span> '+T('ctrl_range'):'<span style="font-size:1.4rem">🌗</span> '+T('ctrl_range'))+'</button>'+'<button class="btn" onclick="copyFEN()" title="'+T('copy_fen')+'" aria-label="'+T('copy_fen')+'"><span style="font-size:1.4rem">📝</span> FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="'+T('import_fen')+'" aria-label="'+T('import_fen')+'"><span style="font-size:1.4rem">🗃️</span> '+T('import_label')+'</button><button class="btn" onclick="'+(setupMode?'exitSetup()':'toggleSetup()')+'" aria-label="'+(setupMode?T('setup_done'):T('setup_mode'))+'">'+(setupMode?'<span style="font-size:1.4rem">✓</span> '+T('setup_done'):'<span style="font-size:1.4rem">🏗️</span> '+T('setup_mode'))+'</button></div></div>';
+let h='<div class="hdr" role="banner"><div class="hdr-top"><div class="hdr-l"><span style="font-size:1.3rem;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text;border:3px solid transparent;border-image:linear-gradient(145deg,#8b6914,#d4a017,#ffd700,#fff8dc,#ffd700,#d4a017,#8b6914) 1;padding:3px 6px;background:linear-gradient(145deg,rgba(139,105,20,.18),rgba(255,215,0,.08),rgba(139,105,20,.18));box-shadow:0 0 6px rgba(212,160,23,.35),0 0 12px rgba(255,215,0,.12),inset 0 0 3px rgba(255,215,0,.1),inset 0 1px 0 rgba(255,248,220,.15);position:relative">♔&#xFE0E;</span><h1>'+T('app_name')+'<span class="ver">v1.0.2</span><button onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showAboutPage=true;render()" style="font-size:.6rem;color:var(--accent);background:rgba(212,160,23,.15);padding:2px 8px;border-radius:4px;border:1px solid rgba(212,160,23,.3);margin-left:4px;cursor:pointer;font-family:system-ui,-apple-system,sans-serif;letter-spacing:1px">ℹ️</button></h1></div><button onclick="toggleLang()" style="font-size:.65rem;color:var(--accent);background:rgba(212,160,23,.15);padding:2px 6px;border-radius:4px;border:1px solid rgba(212,160,23,.3);cursor:pointer;font-family:system-ui,-apple-system,sans-serif;letter-spacing:1px;flex-shrink:0">'+(_lang==='zh'?'↔️中':'↔️EN')+'</button><div class="ev" id="eval-disp" role="status" aria-label="'+T('evaluating')+'">'+(setupMode?T('setup_label'):(isAIThinking?'<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>':'<span class="ev-e">'+pe+'</span><span>'+pd+'</span><span style="color:var(--muted)">('+scoreStr+')</span>'+_hdrDepthStr+_hdrProgressStr))+'</div></div><div class="hdr-tools" role="toolbar" aria-label="'+T('ctrl_range')+'">'+(setupMode?'':'<div class="diff-sel" role="radiogroup" aria-label="AI">'+getAI_LEVELS().map(l=>'<button class="diff-b'+(getEffectiveAILevel()===l.id?' act':'')+'" onclick="if(!isAIThinking){'+(l.id===8?'openEngineConfig()':('aiLevel='+l.id+';try{AndroidBridge.syncGameDifficulty('+l.id+')}catch(e){}render()'))+'}" title="'+l.desc+'" role="radio" aria-checked="'+(getEffectiveAILevel()===l.id)+'">'+(l.id===8?'⚙️':l.id===7?'SL':l.id)+'</button>').join('')+'</div>')+'<button type="button" class="btn" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()" aria-label="'+T('new_game')+'"><span style="font-size:1.4rem">⚔️</span> '+T('new_game')+'</button>'+'<button class="btn" onclick="quickFreeOpening()" aria-label="'+T('free_opening')+'">'+(playerColor==='white'?'<span style=\"font-size:1.4rem;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text\">♔&#xFE0E;</span>':'<span style=\"font-size:1.4rem;font-weight:400;color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans Symbol&#x27;,sans-serif;font-variant-emoji:text\">♚&#xFE0E;</span>')+' '+T('free_opening')+'</button>'+(setupMode?'':'<button class="btn" onclick="undoMove()" aria-label="'+T('undo')+'"><span style="font-size:1.4rem">↩️</span> '+T('undo')+'</button><button class="btn" onclick="redoMove()" aria-label="'+T('redo')+'" id="redoBtn"><span style="font-size:1.4rem">↪️</span> '+T('redo')+'</button>')+'<button class="btn" onclick="flipBoard()" aria-label="'+T('flip')+'"><span style="font-size:1.4rem">🔃</span> '+T('flip')+'</button>'+'<button class="btn" onclick="getHint()" aria-label="'+T('ai_hint')+'"><span style="font-size:1.4rem">💡</span> '+T('ai_hint')+'</button>'+(setupMode?'':'<button class="btn" onclick="toggleSound()" id="btnSound" aria-label="'+T('sound')+'">'+(soundOn?'<span style="font-size:1.4rem">🔊</span> '+T('sound'):'<span style="font-size:1.4rem">🔇</span> '+T('sound'))+'</button>')+'<button class="btn" onclick="showCtrlMap=!showCtrlMap;cachedCtrlKey=&quot;&quot;;render()" aria-label="'+T('ctrl_range')+'" title="'+T('ctrl_range')+'">'+(showCtrlMap?'<span style="font-size:1.4rem">🌈</span> '+T('ctrl_range'):'<span style="font-size:1.4rem">🌗</span> '+T('ctrl_range'))+'</button>'+'<button class="btn" onclick="copyFEN()" title="'+T('copy_fen')+'" aria-label="'+T('copy_fen')+'"><span style="font-size:1.4rem">📝</span> FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="'+T('import_fen')+'" aria-label="'+T('import_fen')+'"><span style="font-size:1.4rem">🗃️</span> '+T('import_label')+'</button><button class="btn" onclick="'+(setupMode?'exitSetup()':'toggleSetup()')+'" aria-label="'+(setupMode?T('setup_done'):T('setup_mode'))+'">'+(setupMode?'<span style="font-size:1.4rem">✓</span> '+T('setup_done'):'<span style="font-size:1.4rem">🏗️</span> '+T('setup_mode'))+'</button></div></div>';
 h+=`<div class="main" role="main"><div class="bsec">`;
 {const _aiCapHtml=capturedPiecesHtml(gameState.board,oppC,playerColor);h+=`<div class="pbar" id="ai-bar" role="status" aria-label="AI" style="flex-wrap:wrap"><span class="pico">${playerColor==='white'?'<span style="color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55)">♚&#xFE0E;</span>':'<span style="color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55)">♔&#xFE0E;</span>'}</span><div style="flex:1;min-width:0;display:flex;flex-direction:column"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><div class="pname">${T('ai_opponent')}</div><div class="pbar-sub">${getEffectiveAILevel()===8?T('manual_config'):getEffectiveAILevel()===7?'SL':('Lv.'+getEffectiveAILevel())}</div>${gameState.currentTurn!==playerColor&&!gameOver&&!isAIThinking?'<span class="tind">'+T('waiting')+'</span>':''}${isAIThinking?'<span class="tind">'+(_aiBarInfo||T('thinking'))+'</span>':''}</div>${_aiCapHtml}<div id="ai-ponder-info" style="display:flex;justify-content:flex-end;text-align:right;font-size:.65rem;color:var(--muted);font-family:monospace,system-ui,-apple-system,sans-serif;letter-spacing:.5px;padding-top:2px;line-height:1.3;min-height:1.3em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;flex:0 0 auto">${(!isAIThinking&&!isHintLoading&&!hintText&&_ponderMoveSAN&&_ponderBarInfo&&!gameOver&&!setupMode&&!reviewMode)?('🔮 '+_esc(_ponderMoveSAN)+' '+_esc(_ponderBarInfo)):''}</div></div></div>`;}
 h+=`<div class="flbl" style="margin-left:28px">${(flip?'hgfedcba':'abcdefgh').split('').map(f=>`<span style="width:${CELL}px">${f}</span>`).join('')}</div>`;
@@ -5693,7 +6577,7 @@ h+=`</div>`}}
 h+=`</div>`;
 // Arrows are now handled by persistent SVG overlay via _updateArrows() — no inline SVG here
 if(gameOver&&lastMove&&!gameOverSoundPlayed){gameOverSoundPlayed=true;playSound('gameover');HapticManager.fire('GAME_OVER');}
-if(gameOver&&!setupMode){h+=`<div class="gover" role="alert" aria-live="assertive"><div class="ge">${_gameOverStatusKey==='checkmate'?(gameState.currentTurn==='black'?'♔\uFE0E':'♚\uFE0E'):'🤝'}</div><div class="gt">${gameOver}</div><button type="button" class="btn btn-p" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()">${T('play_again')}</button><button type="button" class="btn btn-g" onclick="enterReview()">📑 ${T('review')}</button></div>`;}
+if(gameOver&&!setupMode){h+=`<div class="gover" role="alert" aria-live="assertive"><div class="ge" style="${_gameOverStatusKey==='checkmate'?(gameState.currentTurn==='black'?'color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55)':'color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55)'):'font-family:system-ui,sans-serif'};font-family:'DejaVu Sans','Noto Sans','Segoe UI Symbol',sans-serif;font-variant-emoji:text;font-weight:400">${_gameOverStatusKey==='checkmate'?(gameState.currentTurn==='black'?'♔\uFE0E':'♚\uFE0E'):'🤝'}</div><div class="gt">${gameOver}</div><button type="button" class="btn btn-p" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()">⚔️ ${T('play_again')}</button><button type="button" class="btn btn-g" onclick="enterReview()">📑 ${T('review')}</button></div>`;}
 if(setupMode){
 const spPieces=[{t:'pawn',w:'♙\uFE0E',b:'♟\uFE0E'},{t:'knight',w:'♘\uFE0E',b:'♞\uFE0E'},{t:'bishop',w:'♗\uFE0E',b:'♝\uFE0E'},{t:'rook',w:'♖\uFE0E',b:'♜\uFE0E'},{t:'queen',w:'♕\uFE0E',b:'♛\uFE0E'},{t:'king',w:'♔\uFE0E',b:'♚\uFE0E'}];
 h+=`<div class="setup-panel" style="width:${8*CELL+8}px;max-width:100%;box-sizing:border-box"><div class="setup-row" style="justify-content:flex-start"><span class="setup-label">${T('piece')}</span>`;
@@ -5701,7 +6585,7 @@ for(const p of spPieces)h+=`<button class="setup-btn${setupPiece===p.t?' act':''
 h+=`<button class="setup-del${setupPiece==='delete'?' act':''}" onclick="setupPiece='delete';render()">🗑️</button></div>`;
 h+=`<div class="setup-row"><span class="setup-label">${T('color')}</span><button class="setup-clr${setupColor==='white'?' act':''}" onclick="setupColor='white';render()">${T('white_side')}</button><button class="setup-clr${setupColor==='black'?' act':''}" onclick="setupColor='black';render()">${T('black_side')}</button></div>`;
 h+=`<div class="setup-row"><span class="setup-label">${T('turn_side')}</span><button class="setup-clr${gameState.currentTurn==='white'?' act':''}" onclick="gameState.currentTurn='white';_refreshStateAfterSetup(gameState);render()">${T('white_side')}</button><button class="setup-clr${gameState.currentTurn==='black'?' act':''}" onclick="gameState.currentTurn='black';_refreshStateAfterSetup(gameState);render()">${T('black_side')}</button></div>`;
-h+=`<div class="setup-row" style="justify-content:center;gap:12px"><button class="btn" onclick="undoSetupClick()"${setupHistory.length===0?' disabled style="opacity:0.4"':''}><span style="font-size:1.4rem">↩️</span> ${T('undo_setup')}</button><button class="btn" onclick="redoSetupClick()"${setupRedoStack.length===0?' disabled style="opacity:0.4"':''}><span style="font-size:1.4rem">↪️</span> ${T('redo_setup')}</button><button class="btn" onclick="gameState=initState();gameState.moveHistory=[];setupErrors=[];setupHistory=[];render()"><span style="font-size:1.4rem">♻️</span> ${T('reset_board')}</button><button class="btn" onclick="for(let r=0;r<8;r++)for(let c=0;c<8;c++)gameState.board[r][c]=null;gameState.wk=null;gameState.bk=null;gameState.enPassantTarget=null;gameState.halfMoveClock=0;_refreshStateAfterSetup(gameState);setupErrors=[];setupHistory=[];render()"><span style="font-size:1.4rem">🧹</span> ${T('clear_board')}</button></div><div class="setup-row" style="justify-content:center;gap:8px;margin-top:6px"><button class="btn" onclick="copyFEN()"><span style="font-size:1.4rem">📝</span> ${T('copy_fen_btn')}</button><button class="btn" onclick="importFEN()"><span style="font-size:1.4rem">📋</span> ${T('import_fen_btn')}</button></div></div>`;
+h+=`<div class="setup-row" style="justify-content:center;gap:12px"><button class="btn" onclick="undoSetupClick()"${setupHistory.length===0?' disabled style="opacity:0.4"':''}><span style="font-size:1.4rem">↩️</span> ${T('undo_setup')}</button><button class="btn" onclick="redoSetupClick()"${setupRedoStack.length===0?' disabled style="opacity:0.4"':''}><span style="font-size:1.4rem">↪️</span> ${T('redo_setup')}</button><button class="btn" onclick="gameState=initState();gameState.moveHistory=[];setupErrors=[];setupHistory=[];render()"><span style="font-size:1.4rem">♻️</span> ${T('reset_board')}</button><button class="btn" onclick="for(let r=0;r<8;r++)for(let c=0;c<8;c++)gameState.board[r][c]=null;gameState.wk=null;gameState.bk=null;gameState.enPassantTarget=null;gameState.halfMoveClock=0;_refreshStateAfterSetup(gameState);setupErrors=[];setupHistory=[];render()"><span style="font-size:1.4rem">🧹</span> ${T('clear_board')}</button></div><div class="setup-row" style="justify-content:center;gap:8px;margin-top:6px"><button class="btn" onclick="copyFEN()"><span style="font-size:1.4rem">📝</span> ${T('copy_fen_btn')}</button><button class="btn" onclick="_importFENWithSaveCheck()"><span style="font-size:1.4rem">📋</span> ${T('import_fen_btn')}</button></div></div>`;
 if(setupErrors.length>0)h+=`<div class="setup-errors"><strong>${T('setup_error_title')}</strong><ul>${setupErrors.map(e=>`<li>${_esc(e)}</li>`).join('')}</ul><button class="btn" onclick="setupErrors=[];render()" style="margin-top:4px">${T('understood')}</button></div>`;
 }
 h+=`</div></div>`;
@@ -5779,9 +6663,9 @@ if(ecoInfo){h+=`<div class="card"><div class="card-t"><span class="ico">📖</sp
 }
 
 // Move history
-h+=`<div class="card"><div class="card-t"><span class="ico">📜</span>${T('move_history')}<button class="btn" style="margin-left:auto;padding:3px 10px;font-size:.7rem;min-height:24px" onclick="copyMoveHistory()" title="${T('pgn_copied')||'Copy PGN'}">📝 PGN</button><button class="btn" style="margin-left:4px;padding:3px 10px;font-size:.7rem;min-height:24px" onclick="exportPGNToFile()" title="${T('export_pgn')||'Export PGN to file'}">💾</button><div class="toggle" style="margin-left:6px;padding:2px 6px;font-size:.65rem" onclick="showVariations=!showVariations;HapticManager.fire(showVariations?'TOGGLE_ON':'TOGGLE_OFF');render()"><span>${T('variation_toggle')}</span><div class="toggle-sw${showVariations?' on':''}" style="width:30px;height:16px"></div></div></div><div class="mlist">`;
+h+=`<div class="card"><div class="card-t"><span class="ico">📜</span>${T('move_history')}<button class="btn" style="margin-left:auto;padding:3px 10px;font-size:.7rem;min-height:24px" onclick="copyMoveHistory()" title="${T('pgn_copied')||'Copy PGN'}">📝 PGN</button><button class="btn" style="margin-left:4px;padding:3px 10px;font-size:.7rem;min-height:24px" onclick="exportPGNToFile()" title="${T('export_pgn')||'Export PGN to file'}">💾</button><button class="btn" style="margin-left:4px;padding:3px 10px;font-size:.7rem;min-height:24px" onclick="openStatsPage()" title="${T('stats')}">📊</button><div class="toggle" style="margin-left:6px;padding:2px 6px;font-size:.65rem" onclick="showVariations=!showVariations;HapticManager.fire(showVariations?'TOGGLE_ON':'TOGGLE_OFF');render()"><span>${T('variation_toggle')}</span><div class="toggle-sw${showVariations?' on':''}" style="width:30px;height:16px"></div></div></div><div class="mlist">`;
 const pairs=[];for(let i=0;i<moveRecords.length;i+=2){pairs.push({n:Math.floor(i/2)+1,w:moveRecords[i],b:moveRecords[i+1]})}
-for(const pr of pairs){h+='<div class="mrow"><span class="mnum">'+pr.n+'.</span>';if(pr.w){h+='<span class="mw" onclick="if(!isAIThinking&&!setupMode&&!reviewMode){showNewGameDialog=false;enterReview();reviewGoTo('+(pr.n*2-1)+');event.stopPropagation()}">'+_esc(pr.w.notation)+(pr.w.time?'<span style="font-size:.6rem;color:var(--muted);margin-left:2px">'+pr.w.time+'s</span>':'')+'</span>';if(showVariations&&pr.w&&pr.w.variations&&pr.w.variations.length>0){h+=_formatVariationGroups(pr.w.variations,pr.n,true);}}if(pr.b){h+='<span class="mb" onclick="if(!isAIThinking&&!setupMode&&!reviewMode){showNewGameDialog=false;enterReview();reviewGoTo('+(pr.n*2)+');event.stopPropagation()}">'+_esc(pr.b.notation)+(pr.b.time?'<span style="font-size:.6rem;color:var(--muted);margin-left:2px">'+pr.b.time+'s</span>':'')+'</span>';if(showVariations&&pr.b&&pr.b.variations&&pr.b.variations.length>0){h+=_formatVariationGroups(pr.b.variations,pr.n,false);}}h+='</div>'}
+for(const pr of pairs){h+='<div class="mrow"><span class="mnum">'+pr.n+'.</span>';if(pr.w){h+='<span class="mw" onclick="if(!isAIThinking&&!setupMode&&!reviewMode){showNewGameDialog=false;enterReview();reviewGoTo('+(pr.n*2-1)+');event.stopPropagation()}">'+_esc(pr.w.notation)+(pr.w.time?'<span style="font-size:.6rem;color:var(--muted);margin-left:2px">'+pr.w.time+'s</span>':'')+'</span>';if(showVariations&&pr.w&&pr.w.variations&&pr.w.variations.length>0){h+=_formatVariationGroups(pr.w.variations,pr.n,true);}}else if(pr.w===null){h+='<span class="mw" style="opacity:.55;font-style:italic" title="'+T('white_concedes_move')+'">...</span>';}if(pr.b){h+='<span class="mb" onclick="if(!isAIThinking&&!setupMode&&!reviewMode){showNewGameDialog=false;enterReview();reviewGoTo('+(pr.n*2)+');event.stopPropagation()}">'+_esc(pr.b.notation)+(pr.b.time?'<span style="font-size:.6rem;color:var(--muted);margin-left:2px">'+pr.b.time+'s</span>':'')+'</span>';if(showVariations&&pr.b&&pr.b.variations&&pr.b.variations.length>0){h+=_formatVariationGroups(pr.b.variations,pr.n,false);}}h+='</div>'}
 if(!pairs.length)h+=`<div style="color:#64748b;font-size:.85rem">${T('no_moves')}</div>`;
 h+=`</div></div>`;
 // Tips
@@ -5815,12 +6699,15 @@ h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="About"><div cla
 // Import dialog — paste FEN, paste PGN, or select PGN file
 if(showImportDialog){
 h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="${T('import_title')}" onclick="if(event.target===this){showImportDialog=false;render()}"><div class="dlg" style="max-width:420px"><h2>${T('import_title')}</h2><div class="dlg-sec" style="gap:10px;display:flex;flex-direction:column">
-<button class="btn" style="width:100%;justify-content:center;gap:8px;padding:12px;font-size:.9rem" onclick="showImportDialog=false;importFEN()"><span style="font-size:1.3rem">📋</span> ${T('paste_fen_opt')}</button>
+<button class="btn" style="width:100%;justify-content:center;gap:8px;padding:12px;font-size:.9rem" onclick="showImportDialog=false;_importFENWithSaveCheck()"><span style="font-size:1.3rem">📋</span> ${T('paste_fen_opt')}</button>
 <button class="btn" style="width:100%;justify-content:center;gap:8px;padding:12px;font-size:.9rem" onclick="showImportDialog=false;_doPastePGN()"><span style="font-size:1.3rem">📜</span> ${T('paste_pgn_opt')}</button>
-<button class="btn" style="width:100%;justify-content:center;gap:8px;padding:12px;font-size:.9rem" onclick="showImportDialog=false;importPGNFile()"><span style="font-size:1.3rem">📂</span> ${T('select_pgn_file')}</button>
+<button class="btn" style="width:100%;justify-content:center;gap:8px;padding:12px;font-size:.9rem" onclick="showImportDialog=false;_importPGNFileWithSaveCheck()"><span style="font-size:1.3rem">📂</span> ${T('select_pgn_file')}</button>
 </div><div class="dlg-btns"><button type="button" class="btn btn-s" onclick="showImportDialog=false;render()" style="flex:1;justify-content:center">${T('cancel')}</button></div></div></div>`;
 }
 if(pendingPromotion){const co=pendingPromotion.piece.color;const pcls=co==='white'?'w-prom':'bk-prom';h+=`<div class="prom-dov" role="dialog" aria-modal="true" aria-label="${T('select_promotion')}" onclick="if(event.target===this){pendingPromotion=null;render()}"><div class="prom-dlg"><h3>${T('select_promotion')}</h3><div class="prom-row">`;for(const t of['queen','rook','bishop','knight'])h+=`<button class="prom-btn ${pcls}" onclick="doPromotion('${t}')">${SYM[co][t]}</button>`;h+=`</div><button class="btn" style="margin-top:12px;font-size:.8rem" onclick="pendingPromotion=null;render()">${T('cancel')}</button></div></div>`}
+
+// v1.0.2: PGN save prompt dialog — shown before clearing move records
+if(showSavePGNPrompt){h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="${T('save_pgn_prompt')}" onclick="if(event.target===this){showSavePGNPrompt=false;_savePGNNo()}"><div class="dlg" style="max-width:320px"><h2>${T('save_pgn_prompt')}</h2><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="_savePGNYes()">${T('save_pgn_yes')}</button><button type="button" class="btn btn-s" onclick="_savePGNNo()">${T('save_pgn_no')}</button></div></div></div>`;}
 
 if(reviewMode){
 const safeStep=Math.max(0,Math.min(reviewStep,reviewStates.length-1));
@@ -5829,7 +6716,7 @@ const rs=reviewStates[safeStep];
 if(!rs){reviewMode=false;render();return}
 const rBoard=rs.state.board;const rLast=rs.lastMove;
 h+='<div class="review-overlay">';
-h+=`<div class="review-hdr"><h2>${T('review_analysis')}</h2><div style="display:flex;gap:6px;align-items:center"><div class="toggle" style="padding:2px 6px;font-size:.65rem" onclick="showVariations=!showVariations;HapticManager.fire(showVariations?'TOGGLE_ON':'TOGGLE_OFF');render()"><span>${T('variation_toggle')}</span><div class="toggle-sw${showVariations?' on':''}" style="width:30px;height:16px"></div></div><button class="btn" onclick="copyReviewPGN()" title="${T('copy_review_pgn')}">📝 PGN</button><button class="btn" onclick="copyReviewFEN()" title="${T('copy_review_fen')}">📝 FEN</button><button class="btn" onclick="exitReview()">${T('return_game')}</button></div></div>`;
+h+=`<div class="review-hdr"><h2>${T('review_analysis')}</h2><div style="display:flex;gap:6px;align-items:center"><div class="toggle" style="padding:2px 6px;font-size:.65rem" onclick="showVariations=!showVariations;HapticManager.fire(showVariations?'TOGGLE_ON':'TOGGLE_OFF');render()"><span>${T('variation_toggle')}</span><div class="toggle-sw${showVariations?' on':''}" style="width:30px;height:16px"></div></div><button class="btn" onclick="copyReviewPGN()" title="${T('copy_review_pgn')}">📝 PGN</button><button class="btn" onclick="exportPGNToFile()" title="${T('export_pgn')||'Export PGN to file'}">💾</button><button class="btn" onclick="showCtrlMap=!showCtrlMap;cachedCtrlKey=&quot;&quot;;render()" title="${T('ctrl_range')}">${showCtrlMap?'🌈':'🌗'}</button><button class="btn" onclick="copyReviewFEN()" title="${T('copy_review_fen')}">📝 FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="${T('import_label')}">🗃️</button><button class="btn" onclick="openStatsPage()" title="${T('stats')}">📊</button><button class="btn" onclick="exitReview()">${T('return_game')}</button></div></div>`;
 h+='<div class="review-body">';
 // P0 FIX: Wrap board + controls in .review-left for proper landscape flex layout
 h+='<div class="review-left">';
@@ -5855,11 +6742,46 @@ if (_isLandscapeReview) {
 }
 h+='<div class="review-board">';
 h+='<div class="bgrid" style="grid-template-columns:repeat(8,'+_rvCell+'px);grid-template-rows:repeat(8,'+_rvCell+'px)">';
+// v1.0.2: When showCtrlMap is enabled (🌈), color the review board squares with
+// the control map — same as the main board. Compute the control map for the
+// review position's board state.
+const _rvCtrlKey=showCtrlMap?(rs.state.hash||'rv'):'off';
+let _rvCm=null;
+if(showCtrlMap){
+  // Use a separate cache key for review positions to avoid collision with main board cache
+  if(cachedCtrlKey!==_rvCtrlKey){
+    cachedCtrlMap=getCtrlMap(rBoard);
+    cachedCtrlKey=_rvCtrlKey;
+  }
+  _rvCm=cachedCtrlMap;
+}
 for(let r=0;r<8;r++){for(let c=0;c<8;c++){
 const rr=flip?7-r:r;const cc=flip?7-c:c;
 const p=rBoard[rr][cc];const isL=(r+c)%2===0;
 let bg=isL?SQ_LIGHT:SQ_DARK;
-// No last-move square coloring in review — CSS last-from/last-to borders are sufficient
+// v1.0.2: Apply control map coloring in review mode
+if(_rvCm){
+  const e=_rvCm[rr][cc];
+  if(e){
+    const wc=e.white.length,bc=e.black.length;
+    const myC=playerColor==='white'?wc:bc;
+    const opC=playerColor==='white'?bc:wc;
+    const net=myC-opC;
+    const total=myC+opC;
+    const adv=total>0?net/total:0;
+    const str=Math.min(1,total/8);
+    let hue;
+    if(myC===0&&opC===0){
+      bg='#3a2020';
+    }else{
+      if(adv>=0)hue=280-adv*60;else hue=280-adv*80;
+      if(hue>=360)hue-=360;
+      const sat=0.50+str*0.40;
+      const lit=0.48-str*0.12;
+      bg='hsl('+Math.round(hue)+','+Math.round(sat*100)+'%,'+Math.round(lit*100)+'%)';
+    }
+  }
+}
 h+='<div style="background:'+bg+';width:'+_rvCell+'px;height:'+_rvCell+'px;display:flex;align-items:center;justify-content:center;font-size:1.5rem">';
 if(p){h+='<span class="'+(p.color==='white'?'rv-w':'rv-bk')+'" style="pointer-events:none">'+SYM[p.color][p.type]+'</span>';}
 h+='</div>';
@@ -5934,6 +6856,12 @@ const _criticalReasons=new Map();reviewCritical.forEach(c=>_criticalReasons.set(
 h+='<div class="review-moves" id="reviewMovesList">';
 for(let i=0;i<moveRecords.length;i++){
 const mr=moveRecords[i];const isW=i%2===0;const moveNum=Math.floor(i/2)+1;
+// v1.0.2 FIX: null placeholder (black-to-move opening) — render as a non-interactive
+// "..." marker, skip eval/variations logic, but keep index alignment with reviewStates.
+if(mr===null){
+  h+='<div class="rmv-block" style="opacity:.5" data-step="'+(i+1)+'"><span class="rmv-num">'+(isW?moveNum+'.':'')+'</span><div class="rmv-detail"><span class="rmv-notation" style="font-style:italic">...</span></div></div>';
+  continue;
+}
 const isAct=reviewStep===i+1;
 const isCritical=_criticalSteps.has(i+1);
 const criticalFlag=isCritical?' style="border-left:3px solid var(--accent2);padding-left:7px"':'';
@@ -5945,17 +6873,25 @@ if(isCritical&&_criticalReasons.has(i+1)){h+='<span style="font-size:.65rem;colo
 // Ponder is fully decoupled from move records — never appears here.
 if(showVariations&&mr.variations&&mr.variations.length>0){h+=_formatVariationGroups(mr.variations,moveNum,isW);}
 // Show per-move eval if cached
-const _mvEval=_reviewEvalCache.get(i+1);
-const _prevMvEval=_reviewEvalCache.get(i);
+// v1.0.2 PERF: use peek() — this is inside a render loop over all moves, so
+// refreshing LRU on every access would be wasteful.
+const _mvEval=_reviewEvalCache.peek(i+1);
+const _prevMvEval=_reviewEvalCache.peek(i);
 if(_mvEval!=null&&_prevMvEval!=null){
   h+=_formatEvalDelta(_mvEval.eval,_prevMvEval.eval,'.6rem');
   // Move classification label — ALWAYS from mover's perspective
   // reviewStep parity: odd step = White moved, even step = Black moved
   // i+1 is the reviewStep for this move (move index i corresponds to step i+1)
   const _mvDelta=_mvEval.eval-(_prevMvEval?_prevMvEval.eval:0);
-  const _isMoverWhite=((i+1)%2)===1; // step is odd → White moved
+  // v1.0.2 (qw3.7max audit): simplified — (i+1)%2===1 is mathematically
+  // equivalent to i%2===0 (i is 0-based: even index = White moved).
+  const _isMoverWhite=(i%2)===0;
   const _mcls=_classifyMove(_mvDelta,_isMoverWhite);
-  h+='<span style="font-size:.6rem;font-weight:700;color:'+_mcls.color+';margin-left:4px">'+_mcls.label+'</span>';
+  // v1.0.2 (qw3.7max audit): use template literal + _esc() for defensive
+  // XSS protection. _mcls comes from _classifyMove (internal constants) so
+  // escaping is technically redundant now, but guards against future changes
+  // that might introduce user-controlled data into classification labels/colors.
+  h+=`<span style="font-size:.6rem;font-weight:700;color:${_esc(_mcls.color)};margin-left:4px">${_esc(_mcls.label)}</span>`;
 }
 h+='</div></div>';
 }
@@ -5976,18 +6912,24 @@ _prevHoverSq=hoveredSquare?{row:hoveredSquare.row,col:hoveredSquare.col}:null;
 _prevSelSq=selectedSquare?{row:selectedSquare.row,col:selectedSquare.col}:null;
 _prevLegalSet=new Set();if(selectedSquare){for(const m of legalMvs)_prevLegalSet.add(m.row*8+m.col);}
 // Review scrolling: scroll the active move into view after DOM rebuild.
-// FIX: Use requestAnimationFrame + setTimeout to ensure layout is complete
-// before scrolling. Synchronous scrollIntoView immediately after innerHTML
-// can be lost because the browser hasn't performed layout yet.
+// v1.0.2 (qw3.7max audit): Use double requestAnimationFrame instead of
+// rAF+setTimeout(0). The first rAF fires after the browser computes layout
+// for the new DOM; the second rAF fires after paint. Reading layout info
+// (scrollIntoView) in the second rAF guarantees no forced synchronous layout
+// (layout thrashing). The old rAF+setTimeout(0) pattern couldn't guarantee
+// layout was complete because setTimeout is a macrotask that may run before
+// the browser's layout/paint step.
+// Also use the module-level _rListEl cache instead of getElementById on every
+// render (avoids a DOM tree walk on the scroll path).
 if(reviewMode){
   requestAnimationFrame(function(){
-    setTimeout(function(){
-      const _rList=document.getElementById('reviewMovesList');
+    requestAnimationFrame(function(){
+      const _rList=_rListEl||document.getElementById('reviewMovesList');
       if(_rList){
         const _rAct=_rList.querySelector('.rmv-block.act');
-        if(_rAct)_rAct.scrollIntoView({block:'center',behavior:'instant'});
+        if(_rAct)_rAct.scrollIntoView({block:'center',behavior:'auto'});
       }
-    },0);
+    });
   });
 }
 // Render arrows into the new DOM using persistent SVG overlay
@@ -5995,6 +6937,9 @@ _updateArrows(hoveredSquare||selectedSquare);
 // Invalidate DOM element cache and update board state tracking after full render
 // v1.0.2 PERF (audit): use boardVersion integer instead of JSON.stringify
 _invalidateElCache(); _sqElCache = null; _prevBoardVersion = gameState.boardVersion || 0;
+// v1.0.2 (qw3.7max audit): cache the review-moves-list element for the
+// scroll-into-view path (avoids getElementById on every render).
+_rListEl = document.getElementById('reviewMovesList');
 // Restore focus for ECO search input using pre-rebuild state
 if(_wasEcoFocused){const el=document.getElementById('ecoSearch');if(el){el.focus();_ecoSearchFocused=true;try{el.setSelectionRange(el.value.length,el.value.length)}catch(e){}}}
 // Auto-scroll opening list to selected opening (skip during review mode)
@@ -6007,28 +6952,45 @@ if(showNewGameDialog&&dlgOpeningId&&!reviewMode){setTimeout(()=>{const list=docu
 // Only updates squares that actually changed — avoids 5-15ms DOM rebuild per move
 let _fullRenderTimer=0;
 
-let _sqBgCache=null;function _getSqBg(rr,cc,cm,isL,lastMove){
+// v1.0.2 REDUNDANCY (first-principles): removed unused `_sqBgCache` declaration
+// — it was declared but never assigned or read (leftover from an abandoned
+// caching attempt). The actual background computation is cheap enough that
+// per-square caching wasn't worth the bookkeeping, especially now that
+// _updateSingleSq skips the DOM write entirely when the square's signature
+// hasn't changed.
+function _getSqBg(rr,cc,cm,isL,lastMove){
   let bg=isL?SQ_LIGHT:SQ_DARK;
   let ctrlBg=null;
   if(cm){const e=cm[rr][cc];if(e){const wc=e.white.length,bc=e.black.length;const myC=playerColor==='white'?wc:bc;const opC=playerColor==='white'?bc:wc;const net=myC-opC;const total=myC+opC;const adv=total>0?net/total:0;const str=Math.min(1,total/8);let hue;if(myC===0&&opC===0){ctrlBg='#3a2020'}else{if(adv>=0)hue=280-adv*60;else hue=280-adv*80;if(hue>=360)hue-=360;const sat=0.50+str*0.40;const lit=0.48-str*0.12;ctrlBg=`hsl(${Math.round(hue)},${Math.round(sat*100)}%,${Math.round(lit*100)}%)`}}}
-  let lastFrom=false,lastTo=false;if(lastMove){if(rr===lastMove.from.row&&cc===lastMove.from.col)lastFrom=true;if(rr===lastMove.to.row&&cc===lastMove.to.col)lastTo=true;}
   if(ctrlBg){bg=ctrlBg}
   return bg;
 }
 
 function _updateSingleSq(el,p,rr,cc,cm,isL,lastMove,_checkKingPos){
-  const bg=_getSqBg(rr,cc,cm,isL,lastMove);
+  // v1.0.2 PERF (first-principles): build a cheap signature string capturing
+  // everything that affects this square's visual state. Only when the signature
+  // changes do we touch the DOM (style.background, className, innerHTML).
+  // Previously this function unconditionally rebuilt innerHTML for all 64
+  // squares on every engine-progress callback (~10-50/sec), even though most
+  // squares don't change between callbacks.
   const isSel=selectedSquare&&rr===selectedSquare.row&&cc===selectedSquare.col;
   const lastFrom=lastMove&&rr===lastMove.from.row&&cc===lastMove.from.col;
   const lastTo=lastMove&&lastMove.to.row===rr&&lastMove.to.col===cc;
   const isCheckSq=_checkKingPos&&rr===_checkKingPos.row&&cc===_checkKingPos.col;
+  const isLegal=legalSet.has(rr*8+cc);
+  const animCls=(_lastAnimPieceType&&_lastAnimTarget&&lastTo&&rr===_lastAnimTarget.row&&cc===_lastAnimTarget.col&&p&&p.type===_lastAnimPieceType)?' anim-'+p.type:'';
+  // Signature: piece color+type, selection, last-move from/to, check, legal,
+  // control-map presence (cm), anim class. All cheap field reads — no DOM writes.
+  const sig=(p?p.color[0]+p.type:'--')+'|'+(isSel?1:0)+(lastFrom?1:0)+(lastTo?1:0)+(isCheckSq?1:0)+(isLegal?1:0)+(cm?1:0)+animCls;
+  if(el._sig===sig)return; // No change — skip DOM writes entirely
+  el._sig=sig;
+  // Compute background only when we're going to write
+  const bg=_getSqBg(rr,cc,cm,isL,lastMove);
   el.style.background=isSel?SQ_SEL:bg;
   el.className='sq'+(lastFrom?' last-from':'')+(lastTo?' last-to':'')+(isCheckSq?' in-check':'');
   const lbl=String.fromCharCode(97+cc)+(8-rr);
-  const isLegal=legalSet.has(rr*8+cc);
   let inner=`<span class="lbl" style="color:${isL?LBL_LIGHT:LBL_DARK};-webkit-text-stroke:.6px ${isL?LBL_STROKE_LIGHT:LBL_STROKE_DARK};paint-order:stroke fill;text-shadow:0 0 2px ${isL?LBL_STROKE_LIGHT:LBL_STROKE_DARK}">${lbl}</span>`;
   if(p){
-    const animCls=(_lastAnimPieceType&&_lastAnimTarget&&lastTo&&rr===_lastAnimTarget.row&&cc===_lastAnimTarget.col&&p.type===_lastAnimPieceType)?' anim-'+p.type:'';
     inner+=`<span class="pc ${p.color==='white'?'w':'bk'}${animCls}">${SYM[p.color][p.type]}</span>`;
     if(animCls){_landingAnimActive=true;_startLandingTimer(_lastAnimPieceType);}
   }
@@ -6085,6 +7047,10 @@ function updateAfterMove(){requestEngineEval();
       bh+=`</div>`}}
     gridEl.innerHTML=bh;
     _sqElCache=null;
+    // v1.0.2 (qw3.7max audit): clear _rListEl too — the board-only rebuild
+    // path doesn't touch the review-moves list, but clearing keeps the cache
+    // honest if the element was removed from the DOM by a higher-level rebuild.
+    _rListEl=null;
   }
   // Update eval display
   _updateEvalDisplay();
@@ -6264,15 +7230,18 @@ function _updateBoardLightweight(){
   const oldInfoSq=_prevHoverSq||_prevSelSq;
   const newInfoSq=hoveredSquare||selectedSquare;
   // P2 PERF: Early-exit when nothing meaningful changed (avoids unnecessary DOM work)
-  const _selChanged=!!selectedSquare!==!!_prevSelSq||(selectedSquare&&_prevSelSq&&(selectedSquare.row!==_prevSelSq.row||selectedSquare.col!==_prevSelSq.col));
-  const _newHover=!oldInfoSq&&newInfoSq||!!oldInfoSq&&!newInfoSq||oldInfoSq&&newInfoSq&&(oldInfoSq.row!==newInfoSq.row||oldInfoSq.col!==newInfoSq.col);
+  // v1.0.2 (qw3.7max audit): use optional chaining for cleaner null-safe comparison.
+  // When both are null, undefined !== undefined is false — covers all edge cases.
+  // Renamed _newHover → _infoChanged (the variable tracks info-square changes, not just hover).
+  const _selChanged=(selectedSquare?.row!==_prevSelSq?.row)||(selectedSquare?.col!==_prevSelSq?.col);
+  const _infoChanged=(oldInfoSq?.row!==newInfoSq?.row)||(oldInfoSq?.col!==newInfoSq?.col);
   // Compute current legal positions
   const curLegalSet=new Set();
   if(selectedSquare){for(const m of legalMvs)curLegalSet.add(m.row*8+m.col);}
   // Check if legal moves changed
   let _legalChanged=_selChanged;
   if(!_legalChanged){if(curLegalSet.size!==_prevLegalSet.size){_legalChanged=true;}else{for(const p of curLegalSet){if(!_prevLegalSet.has(p)){_legalChanged=true;break;}}}}
-  if(!_selChanged&&!_newHover&&!_legalChanged)return; // Nothing changed, skip
+  if(!_selChanged&&!_infoChanged&&!_legalChanged)return; // Nothing changed, skip
   // Invalidate arrow cache if selection changed
   if(_selChanged)_invalidateArrowCache();
   // Update only changed squares
@@ -6379,7 +7348,13 @@ if(typeof AndroidBridge!=='undefined'&&AndroidBridge.isEngineReady()&&typeof And
     // search, defeating the entire ponder optimization.
     // Fix: use the JS-side cached value (_lastPonderMoveFromEngine) instead.
     const ponderMove=(typeof _lastPonderMoveFromEngine!=='undefined'&&_lastPonderMoveFromEngine)?_lastPonderMoveFromEngine:null;
-    const moveUCI=String.fromCharCode(97+from.col)+(8-from.row)+String.fromCharCode(97+to.col)+(8-to.row)+(promotion||'');
+    // v1.0.2 FIX: Map promotion piece-type names to UCI letters (q/r/b/n).
+    // Previously this appended the full piece name (e.g., "e7e8queen") which
+    // never matched the engine's UCI ponder move (e.g., "e7e8q"), so ponderHit
+    // never fired for any promotion move — every promotion fell back to
+    // stopPonder() + a fresh search, defeating the ponder optimization.
+    const promoChar=promotion?{queen:'q',rook:'r',bishop:'b',knight:'n'}[promotion]||'':'';
+    const moveUCI=String.fromCharCode(97+from.col)+(8-from.row)+String.fromCharCode(97+to.col)+(8-to.row)+promoChar;
     if(ponderMove&&ponderMove===moveUCI){
       // Player played the expected move — hit ponder and continue analysis
       AndroidBridge.ponderHit();
@@ -6433,6 +7408,13 @@ const _gsKey=gameState.hash+'|'+gameState.currentTurn;_cachedStatus=gsr;_cachedS
 if(gsr&&!gameOver){
 gameOverSoundPlayed=false;_applyGameOver(gsr);
 requestAnimationFrame(()=>{updateAfterMove();});
+// v1.0.2 NEW FEATURE: After a player move, check if any pending engine PV
+// has diverged from the actual game. This must be called AFTER the move is
+// pushed to moveRecords (which happens before this setTimeout).
+// We call it here (in the deferred callback) because the move record needs
+// to be fully populated first.
+try{if(typeof _checkPVDivergence==='function')_checkPVDivergence();}catch(e){console.warn('PVDivergence check failed:',e);}
+try{if(typeof _checkPVDivergenceSANs==='function')_checkPVDivergenceSANs();}catch(e){console.warn('PVDivergenceSANs check failed:',e);}
 if(!gameOver&&gameState.currentTurn!==playerColor){setTimeout(doAIMove,0);}
 }
 },ANIMATION_DEFER_MS);
@@ -6446,7 +7428,14 @@ function _clearAnimationState(){
   if(_fullRenderTimer){clearTimeout(_fullRenderTimer);_fullRenderTimer=0;}
 }
 function undoMove(){
-if(isAIThinking&&!setupMode)return;_cachedStatus=null;_cachedStatusKey='';_updateEvalDisplay(); // _resetEvalState now inside requestEngineEval()
+if(isAIThinking&&!setupMode)return;
+// v1.0.2 FIX: When undo is at the end (no more history), give BUTTON_PRESS
+// feedback instead of the normal undo (PIECE_SELECT) feedback.
+if(stateHistory.length===0){
+  HapticManager.fire('BUTTON_PRESS');
+  return;
+}
+_cachedStatus=null;_cachedStatusKey='';_updateEvalDisplay(); // _resetEvalState now inside requestEngineEval()
 _clearAnimationState();
 if(pendingPromotion)pendingPromotion=null;
 let steps=0;
@@ -6506,8 +7495,14 @@ if(_playerMoveFrom&&!gameOver){
 }
 render();requestEngineEval();if(!gameOver&&!setupMode&&gameState.currentTurn!==playerColor){doAIMove();}}
 function redoMove(){
-if(isAIThinking||_redoStack.length===0)return;
-_cachedStatus=null;_cachedStatusKey='';_updateEvalDisplay(); // _resetEvalState now inside requestEngineEval()
+if(isAIThinking)return;
+// v1.0.2 FIX: When redo is at the end (empty redo stack), give BUTTON_PRESS
+// feedback instead of the normal redo feedback — consistent with undo behavior.
+if(_redoStack.length===0){
+  HapticManager.fire('BUTTON_PRESS');
+  return;
+}
+_cachedStatus=null;_cachedStatusKey='';_updateEvalDisplay();
 _clearAnimationState();
 // Pop from redo stack and restore
 const nxt=_redoStack.pop();
@@ -6529,8 +7524,23 @@ if(selectedSquare){
   }
 }else{legalMvs=[];legalSet=new Set();}
 moveRecords=nxt.moveRecords;lastMove=nxt.lastMove;gameOver=null;_gameOverStatusKey=null;gameOverSoundPlayed=false;
-render();requestEngineEval();if(!gameOver&&!setupMode&&gameState.currentTurn!==playerColor){doAIMove();}}
-// === Flip board: switch player perspective ===
+// v1.0.2 FIX (first-principles): Redo must NOT trigger AI.
+// The redo stack contains moves that were ALREADY played (and then undone).
+// Each redo pops one entry and restores the corresponding state. Undo always
+// runs in pairs (player move + AI reply) so that after undo it's the player's
+// turn; therefore redo also runs in pairs (AI reply + player move), so after
+// redo it's STILL the player's turn — AI has nothing to do.
+// The previous `if(gameState.currentTurn!==playerColor){doAIMove();}` was a
+// misfire: in the rare case where the redo stack only had ONE entry (e.g.,
+// player undid right after their own move, before AI replied), this would
+// trigger a FRESH AI search instead of letting the user redo the AI's
+// pre-recorded reply from the stack — corrupting the redo stack and losing
+// the original AI move. Removed entirely; requestEngineEval() still refreshes
+// the eval bar for the restored position.
+render();requestEngineEval();
+// v1.0.2: Haptic feedback for successful redo (matching undo's PIECE_SELECT)
+HapticManager.fire('PIECE_SELECT');
+}
 function flipBoard(){
   playerColor=OPP_COLOR[playerColor];
   selectedSquare=null;legalMvs=[];legalSet=new Set();
@@ -6590,7 +7600,9 @@ if(setupMode){setupPiece='pawn';setupColor='white';selectedSquare=null;legalMvs=
 // a direct call which internally decides whether to apply game-over.
 _applyGameOver(gameStatus(gameState));
 _sfEvalReady=false;_evalLoading=true;requestEngineEval();if(!gameOver&&gameState.currentTurn!==playerColor){doAIMove()}}render()}
-function exitSetup(){setupErrors=validateSetupPosition(gameState);if(setupErrors.length>0){render();return}// When finishing setup mode, reset the game to use the setup position
+function exitSetup(){setupErrors=validateSetupPosition(gameState);if(setupErrors.length>0){render();return}
+_withPGNSaveCheck(_exitSetupImpl);}
+function _exitSetupImpl(){// When finishing setup mode, reset the game to use the setup position
 // as the new starting position (step 0). This means:
 // - moveRecords is cleared (no move history from before setup)
 // - stateHistory is reset with the setup position as the initial state
@@ -6607,6 +7619,10 @@ gameOverSoundPlayed=false;
 _ecoEnabled=false; // Setup mode — disable ECO recognition
 reviewBaseState=cloneS(gameState);
 _reviewEvalCache.clear();_reviewEvalRequestedStep=-1; // Clear eval cache on board setup complete
+// v1.0.2 FIX: Black-to-move opening move record fix.
+// If the setup position has black to move, prepend null placeholder so the first
+// real move (black's) lands in the black slot, not the white slot.
+_prependBlackToMovePlaceholder();
 toggleSetup()}
 function setupClick(r,c){
 if(!setupMode||isAIThinking)return;
@@ -6656,7 +7672,7 @@ if(moveRecords.length===0)return;
 // exact position they were at (not the initial position).
 _preReviewSnapshot={
   gameState:cloneS(gameState),
-  moveRecords:moveRecords.map(function(r){const c=Object.assign({},r);if(r.variations)c.variations=r.variations.map(function(v){return Object.assign({},v);});return c;}),
+  moveRecords:moveRecords.map(function(r){if(r===null)return null;const c=Object.assign({},r);if(r.variations)c.variations=r.variations.map(function(v){return Object.assign({},v);});return c;}),
   lastMove:lastMove?{from:{row:lastMove.from.row,col:lastMove.from.col},to:{row:lastMove.to.row,col:lastMove.to.col}}:null,
   stateHistory:stateHistory.map(function(s){return{state:cloneS(s.state),selectedSquare:s.selectedSquare?{row:s.selectedSquare.row,col:s.selectedSquare.col}:null,legalMvs:s.legalMvs?[].concat(s.legalMvs):[],moveRecords:s.moveRecords?[].concat(s.moveRecords):[],lastMove:s.lastMove?(s.lastMove.from?{from:{row:s.lastMove.from.row,col:s.lastMove.from.col},to:{row:s.lastMove.to.row,col:s.lastMove.to.col}}:s.lastMove):null,gameOver:s.gameOver};}),
   _redoStack:_redoStack.map(function(s){return{state:cloneS(s.state),moveRecords:[].concat(s.moveRecords),lastMove:s.lastMove?(s.lastMove.from?{from:{row:s.lastMove.from.row,col:s.lastMove.from.col},to:{row:s.lastMove.to.row,col:s.lastMove.to.col}}:s.lastMove):null};}),
@@ -6690,6 +7706,9 @@ let s=reviewBaseState?cloneS(reviewBaseState):cloneS(gameState);
 reviewStates.push({state:cloneS(s),lastMove:null});
 for(let i=0;i<moveRecords.length;i++){
 const mr=moveRecords[i];
+// v1.0.2 FIX: null placeholder (black-to-move opening) — push current state unchanged
+// so reviewStates indices stay aligned with moveRecords. No move is applied.
+if(mr===null){reviewStates.push({state:s,lastMove:null});continue;}
 // Robust from/to parsing: mr.from/mr.to may be strings ("e2") or objects ({row:6,col:4}).
 // After PGN import they're always strings (posAlg output). During play they may be objects.
 let from=null,to=null;
@@ -6743,11 +7762,16 @@ function _findCriticalMoves(){
   if(!reviewStates||reviewStates.length<2)return critical;
   let prevEval=0;
   for(let i=1;i<reviewStates.length;i++){
-    const ev=_reviewEvalCache.get(i);
-    const prevEv=_reviewEvalCache.get(i-1);
+    // v1.0.2 PERF: use peek() — this loop iterates over all review steps to
+    // find critical moves, so refreshing LRU on each access is wasteful.
+    const ev=_reviewEvalCache.peek(i);
+    const prevEv=_reviewEvalCache.peek(i-1);
     if(ev!=null&&prevEv!=null){
       const delta=ev.eval-prevEv.eval;
-      const isMoverWhite=((i)%2)===1; // step is odd → White moved
+      // v1.0.2 (qw3.7max audit): simplified — i%2===1 is equivalent to
+      // (i+1)%2===0; since i is 1-based here (loop starts at i=1), odd i
+      // means White moved (step 1 = White's first move).
+      const isMoverWhite=(i%2)===1; // step is odd → White moved
       const moverDelta=isMoverWhite?delta:-delta;
       const ad=Math.abs(moverDelta);
       if(moverDelta<-300){
@@ -6795,7 +7819,43 @@ function _classifyMove(evalDelta,isMoverWhite){
  * Start a new game based on dialog settings.
  * Called from the new game dialog button "开始游戏".
  */
+// v1.0.2: PGN save prompt — called before clearing move records.
+// Checks if there are any moves; if so, shows a "💾是否保存PGN文件？" dialog.
+// The callback is executed after the user chooses (or immediately if no moves).
+function _withPGNSaveCheck(callback){
+  if(_skipPGNSavePrompt||!moveRecords||!moveRecords.some(function(r){return r!==null&&r!==undefined;})){
+    callback();
+    return;
+  }
+  _pendingActionAfterSave=callback;
+  showSavePGNPrompt=true;
+  render();
+}
+function _savePGNYes(){
+  showSavePGNPrompt=false;
+  _skipPGNSavePrompt=true;
+  // Export PGN to file (same as clicking 💾)
+  try{exportPGNToFile();}catch(e){console.warn('PGN export during save prompt failed',e);}
+  // Execute the pending action after a short delay (allow export to start)
+  var cb=_pendingActionAfterSave;
+  _pendingActionAfterSave=null;
+  if(cb){setTimeout(function(){cb();_skipPGNSavePrompt=false;},200);}
+  else{_skipPGNSavePrompt=false;}
+  render();
+}
+function _savePGNNo(){
+  showSavePGNPrompt=false;
+  _skipPGNSavePrompt=true;
+  var cb=_pendingActionAfterSave;
+  _pendingActionAfterSave=null;
+  if(cb){cb();}
+  setTimeout(function(){_skipPGNSavePrompt=false;},100);
+  render();
+}
 function startGame(){
+  _withPGNSaveCheck(_startGameImpl);
+}
+function _startGameImpl(){
   showNewGameDialog=false;
   playerColor=dlgPlayerColor;
   useBookMoves=dlgBookMoves;
@@ -6822,7 +7882,14 @@ function startGame(){
       }
       // Fallback: if exact name not found, use first variant with that code
       if(!opening)opening=opList[0];
-      // Apply all moves from the opening's coordinate array
+      // Apply all moves from the opening's coordinate array.
+      // v1.0.2 NEW FEATURE: ECO openings record every move in their `moves` array,
+      // so we auto-fill the in-game moveRecords with proper SAN notation as we
+      // replay each move. This means the user sees the full opening sequence in
+      // the move history from move #1, with correct PGN numbering — no "..."
+      // placeholder is needed even when the opening's last move was Black's.
+      // (The black-to-move placeholder only kicks in when NO ECO moves are
+      // applied — i.e., for FEN/setup/PGN imports with black to move.)
       const mv=opening.moves;
       for(let i=0;i+3<mv.length;i+=4){
         const from={row:mv[i],col:mv[i+1]};
@@ -6830,12 +7897,39 @@ function startGame(){
         const piece=gameState.board[from.row]?gameState.board[from.row][from.col]:null;
         if(piece){
           const moveObj={from:from,to:to,piece:piece};
-          gameState=makeMv(gameState,moveObj);
+          // Snapshot state BEFORE the move (matches executeMove's order)
+          stateHistory.push({state:cloneS(gameState),selectedSquare:null,legalMvs:[],moveRecords:[...moveRecords],lastMove:lastMove?{...lastMove}:null,gameOver:null});
+          if(stateHistory.length>200)stateHistory.shift();
+          // Apply the move
+          const ns=makeMv(gameState,moveObj);
+          const notation=moveAlg(gameState,moveObj,ns);
+          const opp=OPP_COLOR[piece.color];
+          const ic=inCheck(ns.board,opp,opp==='white'?ns.wk:ns.bk);
+          const cast=piece.type==='king'&&Math.abs(to.col-from.col)===2;
+          const epCap=piece.type==='pawn'&&gameState.enPassantTarget&&to.row===gameState.enPassantTarget.row&&to.col===gameState.enPassantTarget.col;
+          // Build the move record exactly like executeMove (without the time field
+          // since these are pre-played opening moves, not user/AI moves)
+          moveRecords.push({
+            notation:notation,
+            from:posAlg(from),
+            to:posAlg(to),
+            piece:piece,
+            captured:gameState.board[to.row][to.col]||(epCap?gameState.board[piece.color==='white'?to.row+1:to.row-1][to.col]:undefined),
+            isCheck:ic,
+            isCastling:cast,
+            promotion:null,
+            time:null
+          });
+          gameState=ns;
+          lastMove={from:{...from},to:{...to}};
         }else{
           console.warn('[startGame] ECO move #'+(i/4+1)+' invalid at',from,'— skipping remaining moves');
           break;
         }
       }
+      // If the opening had moves, clear the stale stateHistory[0] entry so that
+      // undo back to the start position correctly restores the initial position
+      // (stateHistory[0] is still the initial state, which is correct).
     }else{
       console.warn('[startGame] ECO code not found:',ecoCode);
     }
@@ -6845,6 +7939,12 @@ function startGame(){
   _reviewEvalCache.clear();_reviewEvalRequestedStep=-1; // Clear eval cache on new game
   _resetGameUIState();
   _resetEvalState();
+  // v1.0.2 FIX: Black-to-move opening move record fix.
+  // Only relevant when NO ECO moves were applied — e.g., a free opening with
+  // a custom starting FEN that has black to move. When ECO moves ARE applied
+  // (the common case), moveRecords already has all moves correctly placed
+  // and _prependBlackToMovePlaceholder() is a no-op (moveRecords is non-empty).
+  _prependBlackToMovePlaceholder();
   render();
   requestEngineEval();
   if(gameState.currentTurn!==playerColor){
@@ -6855,6 +7955,13 @@ function startGame(){
 /**
  * Reset all game UI state variables.
  * Called from startGame(), exitReview(), and tablebase.js importFEN().
+ *
+ * v1.0.2 FIX: Also reset stale AI/ponder/eval/MultiPV state. Previously, if
+ * the user started a new game (or imported FEN/PGN) while the AI was thinking,
+ * isAIThinking stayed true → the new game's doAIMove() early-returned → the
+ * AI never moved on the new game; the old 15s safety timer was still pending
+ * and could fire on the new gameState; and stale ponder/MultiPV data leaked
+ * into the new game's UI. Resetting everything here ensures a clean slate.
  */
 function _resetGameUIState(){
   selectedSquare=null;
@@ -6879,6 +7986,22 @@ function _resetGameUIState(){
   // Clear redo stack on game reset to prevent stale redo entries
   // from corrupting gameState when redoMove() is called after a new game.
   _redoStack=[];
+  // v1.0.2 FIX: Reset stale AI/ponder/eval/MultiPV state to prevent leak
+  // into the new game. Without this, starting a new game during AI thinking
+  // left isAIThinking=true (blocking new doAIMove calls) and kept the old
+  // safety timer running (which could fire on the new gameState).
+  isAIThinking=false;
+  if(typeof _aiSafetyTimerId!=='undefined'&&_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
+  if(typeof _aiRetryCount!=='undefined')_aiRetryCount=0;
+  if(typeof _evalLoading!=='undefined')_evalLoading=false;
+  if(typeof _sfEvalReady!=='undefined')_sfEvalReady=false;
+  if(typeof _ponderGen!=='undefined')_ponderGen++;
+  if(typeof _ponderMoveSAN!=='undefined')_ponderMoveSAN='';
+  if(typeof _ponderBarInfo!=='undefined')_ponderBarInfo='';
+  if(typeof _pendingPonderMoveUCI!=='undefined')_pendingPonderMoveUCI=null;
+  if(typeof _multiPVLines!=='undefined')_multiPVLines=[];
+  if(typeof _multiPVResult!=='undefined')_multiPVResult=null;
+  if(typeof _lastEngineVariation!=='undefined')_lastEngineVariation=null;
 }
 
 /**
@@ -6911,7 +8034,7 @@ function reviewGoTo(step){
       const listEl=document.getElementById('reviewMovesList');
       if(!listEl)return;
       const activeEl=listEl.querySelector('.rmv-block.act');
-      if(activeEl)activeEl.scrollIntoView({block:'center',behavior:'instant'});
+      if(activeEl)activeEl.scrollIntoView({block:'center',behavior:'auto'});
     }catch(e){}
   },50);
 }
@@ -7128,27 +8251,39 @@ function _cleanupEventListeners(){
 }
 
 // Paste PGN from clipboard — uses prompt() for simplicity
+// v1.0.2: Wrapped with _withPGNSaveCheck to prompt save before clearing
 function _doPastePGN(){
-  const text=prompt(T('pgn_paste_hint'));
-  if(!text)return;
-  // PGN-only: reject FEN input — FEN should be imported via the "Paste FEN" button instead
-  const trimmed=text.trim();
-  // Bug 5 fix: Improved FEN rejection heuristic.
-  // Check for PGN-specific markers first (move numbers with dots, header tags, variations).
-  // Only reject as FEN if it lacks ALL PGN markers AND looks like a FEN string.
-  const hasPGNMoveNumbers=!!trimmed.match(/\d+\.\s*[a-zA-ZNBRQOKO]/);
-  const hasPGNHeaders=/\[/.test(trimmed);
-  const hasPGNVariations=/\(/.test(trimmed);
-  const hasPGNMarkers=hasPGNMoveNumbers||hasPGNHeaders||hasPGNVariations;
-  // A FEN has exactly one line with 8 ranks separated by '/', no PGN markers
-  const isLikelyFEN=!hasPGNMarkers&&trimmed.includes('/')&&
-    (trimmed.split('\n').length<=2)&& // FEN is typically single-line
-    trimmed.split('/').length>=8; // 8 ranks
-  if(fenToState(trimmed)||isLikelyFEN){
-    showToast(T('pgn_fen_rejected'),2500);
-    return;
-  }
-  importPGN(text);
+  _withPGNSaveCheck(function(){
+    const text=prompt(T('pgn_paste_hint'));
+    if(!text)return;
+    const trimmed=text.trim();
+    const hasPGNMoveNumbers=!!trimmed.match(/\d+\.\s*[a-zA-ZNBRQOKO]/);
+    const hasPGNHeaders=/\[/.test(trimmed);
+    const hasPGNVariations=/\(/.test(trimmed);
+    const hasPGNMarkers=hasPGNMoveNumbers||hasPGNHeaders||hasPGNVariations;
+    const isLikelyFEN=!hasPGNMarkers&&trimmed.includes('/')&&
+      (trimmed.split('\n').length<=2)&&
+      trimmed.split('/').length>=8;
+    if(fenToState(trimmed)||isLikelyFEN){
+      showToast(T('pgn_fen_rejected'),2500);
+      return;
+    }
+    importPGN(text);
+  });
+}
+
+// v1.0.2: Wrapper for importFEN with PGN save check
+function _importFENWithSaveCheck(){
+  _withPGNSaveCheck(function(){
+    importFEN();
+  });
+}
+
+// v1.0.2: Wrapper for importPGNFile with PGN save check
+function _importPGNFileWithSaveCheck(){
+  _withPGNSaveCheck(function(){
+    importPGNFile();
+  });
 }
 
 // ---- Exports ----

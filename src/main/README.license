@@ -10,6 +10,14 @@ Subdirectory license summary:
   - res/: AGPL v3 (original code and AI-generated assets)
       See res/README.license for details.
   - AndroidManifest.xml: AGPL v3 (original configuration)
+      Permissions: INTERNET + ACCESS_NETWORK_STATE (Lichess Tablebase API),
+      WAKE_LOCK (keep screen on during play), VIBRATE (haptic feedback),
+      FOREGROUND_SERVICE + FOREGROUND_SERVICE_SPECIAL_USE (engine stability
+      on Android 14/15 / Xiaomi HyperOS 3), POST_NOTIFICATIONS (Android 13+
+      foreground-service notification). WRITE_EXTERNAL_STORAGE /
+      READ_EXTERNAL_STORAGE are scoped to legacy Android versions only;
+      READ_MEDIA_IMAGES was removed in v1.0.2 (the built-in file browser
+      queries MediaStore.Files, not MediaStore.Images).
 
 Overall, the application is a combined work under dual AGPL v3 + GPL v3
 licensing. Only files containing DroidFish-derived code use GPL v3;
