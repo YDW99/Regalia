@@ -1,0 +1,2163 @@
+<!--
+  Regalia v1.0.2 User Manual
+  Copyright (C) 2026 Regalia
+
+  This document is part of the Regalia project, licensed under
+  GNU Affero General Public License v3 (AGPL v3).
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU Affero General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+  GNU Affero General Public License for more details.
+
+  You should have received a copy of the GNU Affero General Public License
+  along with this program. If not, see <https://www.gnu.org/licenses/>.
+-->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Regalia v1.0.2 User Manual</title>
+<style>
+:root {
+  --bg: #1a0a0a;
+  --card: #221015;
+  --text: #f5e6c8;
+  --muted: #a08050;
+  --accent: #d4a017;
+  --accent2: #ffd700;
+  --border: #8b6914;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0; padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", "DejaVu Sans", sans-serif;
+  font-size: 15px; line-height: 1.8;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ===== COVER ===== */
+.cover {
+  width: 100%; min-height: 100vh;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  background:
+    radial-gradient(ellipse at 50% 30%, rgba(212,160,23,0.07) 0%, transparent 60%),
+    radial-gradient(ellipse at 20% 80%, rgba(139,105,20,0.05) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 80%, rgba(139,105,20,0.05) 0%, transparent 50%),
+    linear-gradient(135deg, #1a0a0a 0%, #0d0807 40%, #1a1008 100%);
+  text-align: center;
+  position: relative; overflow: hidden;
+  padding: 40px 20px;
+}
+.cover::before {
+  content: "";
+  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  background:
+    repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(212,160,23,0.025) 39px, rgba(212,160,23,0.025) 40px),
+    repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(212,160,23,0.025) 39px, rgba(212,160,23,0.025) 40px);
+  pointer-events: none; z-index: 0;
+}
+.cover-deco {
+  font-size: 16pt; color: rgba(212,160,23,0.18);
+  letter-spacing: 18px; margin-bottom: 20px;
+  position: relative; z-index: 1;
+}
+.cover-crown {
+  width: 96px; height: 96px;
+  border: 3px solid transparent;
+  border-image: linear-gradient(145deg, #8b6914, #d4a017, #ffd700, #fff8dc, #ffd700, #d4a017, #8b6914) 1;
+  padding: 3px 6px;
+  background: linear-gradient(145deg, rgba(139,105,20,.18), rgba(255,215,0,.08), rgba(139,105,20,.18));
+  border-radius: 0;
+  font-size: 46pt; color: #E8E8F0;
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 18px;
+  position: relative; z-index: 1;
+}
+.cover-title {
+  font-size: 30pt; font-weight: 900; letter-spacing: 6px;
+  color: #ffd700; text-shadow: 0 0 18px rgba(212,160,23,.3);
+  position: relative; z-index: 1;
+}
+.cover-version {
+  font-size: 20pt; color: var(--accent); margin-top: 6px;
+  letter-spacing: 3px;
+  position: relative; z-index: 1;
+}
+.cover-divider {
+  display: flex; align-items: center; justify-content: center;
+  margin: 20px auto; gap: 0;
+  position: relative; z-index: 1;
+}
+.cover-divider-line {
+  width: 60px; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border));
+}
+.cover-divider-line:last-child {
+  background: linear-gradient(90deg, var(--border), transparent);
+}
+.cover-divider-icon {
+  font-size: 10pt; color: var(--accent); padding: 0 12px;
+}
+.cover-subtitle {
+  font-size: 14pt; color: #b8a080; letter-spacing: 8px;
+  position: relative; z-index: 1;
+}
+.cover-platform {
+  font-size: 10pt; color: #887860; margin-top: 12px;
+  position: relative; z-index: 1;
+}
+.cover-compat {
+  font-size: 10pt; color: #887860; margin-top: 2px;
+  position: relative; z-index: 1;
+}
+.cover-engine {
+  font-size: 10pt; color: #887860; margin-top: 2px;
+  position: relative; z-index: 1;
+}
+
+/* ===== TOC ===== */
+.toc {
+  background: var(--card);
+  border: 1px solid #3a2a18;
+  border-radius: 8px;
+  padding: 28px 32px;
+  margin: 0 20px;
+  max-width: 680px;
+  margin-left: auto; margin-right: auto;
+}
+.toc h2 {
+  text-align: center;
+  font-size: 16pt; letter-spacing: 4px;
+  color: var(--accent2); margin-bottom: 20px;
+}
+.toc-list {
+  list-style: none; padding: 0;
+  counter-reset: toc;
+}
+.toc-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 7px 0; border-bottom: 1px solid #2a1a0a;
+  counter-increment: toc;
+}
+.toc-item:last-child { border-bottom: none; }
+.toc-num {
+  font-size: 12pt; font-weight: 700;
+  color: var(--accent); min-width: 24px; text-align: right;
+}
+.toc-label { font-size: 10.5pt; }
+.toc-label a { color: var(--text); text-decoration: none; }
+.toc-label a:hover { color: var(--accent2); }
+
+/* ===== CONTENT ===== */
+.content {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 20px 40px;
+}
+.section { margin: 0; }
+.section-header {
+  text-align: center;
+  margin: 36px 0 24px;
+}
+.section-num {
+  font-size: 9pt; letter-spacing: 3px;
+  color: #887860; text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.section-title {
+  font-size: 20pt; font-weight: 900;
+  letter-spacing: 2px; color: var(--accent2);
+  margin: 0;
+}
+h3 {
+  font-size: 14pt; color: var(--accent);
+  margin: 24px 0 10px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #2a1a0a;
+}
+h4 {
+  font-size: 12pt; color: #b8a080;
+  margin: 18px 0 8px;
+}
+
+p { margin: 10px 0; text-align: justify; }
+
+/* Feature list */
+.feature-list {
+  list-style: none; padding-left: 0;
+}
+.feature-list li {
+  padding: 5px 0 5px 20px;
+  position: relative;
+}
+.feature-list li::before {
+  content: "◆"; position: absolute; left: 0;
+  color: var(--accent); font-size: 8pt; top: 8px;
+}
+.feature-list li strong { color: var(--accent); }
+
+/* Step list */
+.step-list {
+  counter-reset: step; list-style: none; padding-left: 0;
+}
+.step-list li {
+  padding: 6px 0 6px 36px;
+  position: relative; counter-increment: step;
+}
+.step-list li::before {
+  content: counter(step) ".";
+  position: absolute; left: 0; font-weight: 700;
+  color: var(--accent); font-size: 12pt;
+}
+
+/* Table */
+table {
+  width: 100%; border-collapse: collapse;
+  margin: 14px 0; font-size: 13px;
+}
+th, td {
+  padding: 9px 12px; text-align: left;
+  border-bottom: 1px solid #2a1a0a;
+}
+th {
+  background: #1a1008; color: var(--accent);
+  font-weight: 700; font-size: 12px;
+  text-transform: uppercase; letter-spacing: 1px;
+}
+
+/* Tip box */
+.tip-box {
+  background: rgba(212,160,23,0.06);
+  border: 1px solid rgba(212,160,23,0.2);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 6px 6px 0;
+  padding: 12px 16px; margin: 14px 0;
+  font-size: 13px;
+}
+.tip-label {
+  color: var(--accent); font-weight: 700;
+  margin-right: 6px;
+}
+
+/* New tag */
+.new-tag {
+  display: inline-block;
+  background: var(--accent); color: #1a0a0a;
+  padding: 1px 7px; border-radius: 3px;
+  font-size: 10px; font-weight: 700;
+  margin-left: 6px; vertical-align: middle;
+}
+
+/* Card row */
+.card-row {
+  display: flex; gap: 20px; justify-content: center;
+  margin: 24px 0; flex-wrap: wrap;
+}
+.stat-card {
+  background: #1a1008; border: 1px solid #3a2a18;
+  border-radius: 8px; padding: 18px 26px;
+  text-align: center; min-width: 110px;
+}
+.stat-card .stat-num {
+  font-size: 22pt; font-weight: 700; color: var(--accent); display: block;
+}
+.stat-card .stat-label {
+  font-size: 9pt; color: #887860; display: block; margin-top: 4px;
+}
+
+/* Code block */
+.code-block {
+  background: #1a1508; border: 1px solid #3a2a18;
+  border-left: 3px solid var(--accent);
+  border-radius: 0 4px 4px 0;
+  padding: 12px 16px; margin: 14px 0;
+  font-family: "Sarasa Mono SC", "Noto Sans SC", monospace;
+  font-size: 12px; line-height: 1.7;
+  color: var(--text); word-break: break-all; white-space: pre-wrap;
+}
+.code-block .code-label {
+  display: block; font-size: 9pt; color: #887860;
+  margin-bottom: 6px; letter-spacing: 1px; text-transform: uppercase;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+/* Wireframe */
+.wireframe {
+  background: var(--bg); border: 1px solid #3a2a18;
+  border-radius: 6px; padding: 18px; margin: 18px 0;
+  font-size: 12px; color: var(--muted);
+}
+.wireframe-title {
+  text-align: center; font-size: 9pt; color: #887860;
+  letter-spacing: 2px; text-transform: uppercase; margin-bottom: 14px;
+}
+.wf-box {
+  border: 1px dashed #3a2a18; border-radius: 3px;
+  padding: 8px 10px; margin: 6px 0;
+  text-align: center; font-size: 11px; color: #b8a080;
+}
+.wf-box-highlight {
+  border: 1px solid var(--accent); background: rgba(212,160,23,0.06);
+  border-radius: 3px; padding: 8px 10px; margin: 6px 0;
+  text-align: center; font-size: 11px; color: var(--accent);
+}
+.wf-row { display: flex; gap: 8px; margin: 6px 0; }
+.wf-row > * { flex: 1; }
+.wf-btn {
+  display: inline-block; background: var(--card);
+  border: 1px solid #3a2a18; border-radius: 3px;
+  padding: 4px 10px; font-size: 11px; color: var(--muted);
+}
+.wf-toggle {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 12px; color: #b8a080; margin: 10px 0;
+}
+.wf-toggle-track {
+  width: 40px; height: 18px; border-radius: 9px;
+  background: #2a1a0a; border: 1px solid #3a2a18;
+  position: relative; display: inline-block;
+}
+.wf-toggle-thumb {
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--accent); position: absolute; top: 1px; right: 2px;
+}
+.wf-nav-btns {
+  display: flex; gap: 8px; justify-content: center;
+  margin: 10px 0; flex-wrap: wrap;
+}
+.wf-slider {
+  width: 100%; height: 4px; background: #2a1a0a;
+  border-radius: 2px; margin: 8px 0; position: relative;
+}
+.wf-slider-thumb {
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--accent); position: absolute; top: -5px; left: 40%;
+}
+.wf-tab {
+  display: inline-block; background: var(--card);
+  border: 1px solid #3a2a18; border-radius: 3px 3px 0 0;
+  padding: 4px 14px; font-size: 11px; color: #b8a080;
+  margin-right: 2px;
+}
+.wf-tab-active {
+  display: inline-block; background: #1a1008;
+  border: 1px solid var(--accent); border-bottom: 1px solid #1a1008;
+  border-radius: 3px 3px 0 0;
+  padding: 4px 14px; font-size: 11px; color: var(--accent);
+  font-weight: 700; margin-right: 2px;
+}
+.wf-tab-content {
+  border: 1px solid #3a2a18; border-top: 1px solid var(--accent);
+  border-radius: 0 0 3px 3px; padding: 10px;
+}
+.wf-field {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 4px 0; font-size: 11px; color: #b8a080;
+}
+.wf-field-label { color: var(--muted); }
+.wf-field-value { font-weight: 700; color: var(--text); }
+.wf-adj-btn {
+  display: inline-block; background: var(--card);
+  border: 1px solid #3a2a18; border-radius: 3px;
+  padding: 1px 8px; font-size: 11px; color: var(--muted);
+}
+
+/* Inline code */
+code {
+  background: #1a1508; padding: 2px 6px; border-radius: 3px;
+  font-size: 0.9em; color: var(--accent2);
+}
+
+/* Section divider */
+.section-divider {
+  border: none; height: 1px; margin: 48px 0;
+  background: linear-gradient(90deg, transparent, var(--border), transparent);
+}
+
+/* Emoji scale */
+.emoji-scale {
+  display: flex; align-items: center; justify-content: center;
+  flex-wrap: wrap; gap: 4px; margin: 18px 0;
+}
+.emoji-block { text-align: center; min-width: 80px; padding: 8px 6px; }
+.emoji-block .em { font-size: 20pt; display: block; }
+.emoji-block .em-label { font-size: 9pt; color: #b8a080; display: block; margin-top: 3px; }
+.emoji-block .em-range { font-size: 8pt; color: #6a5a40; display: block; }
+
+/* Color swatch */
+.color-swatch {
+  display: inline-block; width: 16px; height: 16px;
+  border-radius: 3px; vertical-align: middle; margin: 0 2px;
+  border: 1px solid #3a2a18;
+}
+
+/* Implementation section */
+.impl-section {
+  background: #1a1208; border: 1px solid #2a1a0a;
+  border-radius: 6px; padding: 16px; margin: 16px 0;
+}
+.impl-section h4 {
+  font-size: 11pt; color: var(--accent); margin: 0 0 8px;
+  padding-bottom: 4px; border-bottom: 1px solid #2a1a0a;
+}
+.impl-section p {
+  font-size: 13px; margin: 6px 0;
+}
+.module-diagram {
+  background: #1a0a0a; border: 1px solid #2a1a0a;
+  border-radius: 4px; padding: 10px; margin: 8px 0;
+  font-family: "Sarasa Mono SC", monospace; font-size: 11px;
+  line-height: 1.6; color: #b8a080; white-space: pre;
+  overflow-x: auto;
+}
+.module-box {
+  display: inline-block; padding: 2px 8px;
+  border: 1px solid #3a2a18; border-radius: 3px;
+  margin: 1px 2px; font-size: 11px;
+}
+
+/* Principle list */
+.principle-list { list-style: none; padding-left: 0; counter-reset: principle; }
+.principle-list li { padding: 8px 0 8px 40px; position: relative; counter-increment: principle; }
+.principle-list li::before {
+  content: counter(principle) "."; position: absolute; left: 0;
+  color: var(--accent); font-weight: 700; font-size: 12pt;
+}
+.principle-list li strong { color: var(--accent); }
+
+/* Nav table */
+.nav-table td:first-child { white-space: nowrap; font-weight: 600; color: var(--accent); }
+
+/* Back to top */
+.back-top {
+  display: block; text-align: center; margin: 40px auto;
+  color: var(--muted); text-decoration: none; font-size: 12px;
+  transition: color 0.2s;
+}
+.back-top:hover { color: var(--accent2); }
+
+/* Responsive */
+@media (max-width: 640px) {
+  .cover-title { font-size: 22pt; letter-spacing: 3px; }
+  .cover-version { font-size: 17pt; }
+  .cover-crown { width: 72px; height: 72px; font-size: 34pt; }
+  .toc { padding: 20px 18px; }
+  .content { padding: 0 14px 40px; }
+  .section-title { font-size: 17pt; letter-spacing: 1px; }
+  h3 { font-size: 13pt; }
+  .card-row { gap: 10px; }
+  .stat-card { padding: 12px 16px; min-width: 90px; }
+  table { font-size: 12px; }
+  th, td { padding: 7px 8px; }
+}
+details { margin: 8px 0; }
+details summary { cursor: pointer; color: var(--accent); font-weight: 600; font-size: 0.9rem; padding: 4px 0; }
+details summary:hover { color: var(--accent2); }
+</style>
+</head>
+<body>
+
+<!-- ===== COVER ===== -->
+<div class="cover" id="top">
+  <div class="cover-deco">&#9816; &#9814; &#9812; &#9815; &#9813;</div>
+  <div class="cover-crown">&#9812;</div>
+  <div class="cover-title">Regalia</div>
+  <div class="cover-version">v1.0.2</div>
+  <div class="cover-divider">
+    <div class="cover-divider-line"></div>
+    <div class="cover-divider-icon">&#9830;</div>
+    <div class="cover-divider-line"></div>
+  </div>
+  <div class="cover-subtitle">用户说明书</div>
+  <div class="cover-platform">支持 Android 5.0 - 15</div>
+  <div class="cover-compat">兼容 Xiaomi HyperOS 3</div>
+  <div class="cover-engine">内置 Stockfish 18 引擎</div>
+</div>
+
+<!-- ===== TABLE OF CONTENTS ===== -->
+<div class="toc">
+  
+<h2>目 录</h2>
+  <ol class="toc-list">
+    <li class="toc-item"><span class="toc-num">1</span><span class="toc-label"><a href="#sec1">应用简介</a></span></li>
+    <li class="toc-item"><span class="toc-num">2</span><span class="toc-label"><a href="#sec2">安装与启动</a></span></li>
+    <li class="toc-item"><span class="toc-num">3</span><span class="toc-label"><a href="#sec3">界面布局</a></span></li>
+    <li class="toc-item"><span class="toc-num">4</span><span class="toc-label"><a href="#sec4">基本操作</a></span></li>
+    <li class="toc-item"><span class="toc-num">5</span><span class="toc-label"><a href="#sec5">AI对手系统</a></span></li>
+    <li class="toc-item"><span class="toc-num">6</span><span class="toc-label"><a href="#sec6">引擎配置</a></span></li>
+    <li class="toc-item"><span class="toc-num">7</span><span class="toc-label"><a href="#sec7">变例系统</a></span></li>
+    <li class="toc-item"><span class="toc-num">8</span><span class="toc-label"><a href="#sec8">复盘分析</a></span></li>
+    <li class="toc-item"><span class="toc-num">9</span><span class="toc-label"><a href="#sec9">开局库</a></span></li>
+    <li class="toc-item"><span class="toc-num">10</span><span class="toc-label"><a href="#sec10">辅助功能</a></span></li>
+    <li class="toc-item"><span class="toc-num">11</span><span class="toc-label"><a href="#sec11">法律许可</a></span></li>
+    <li class="toc-item"><span class="toc-num">12</span><span class="toc-label"><a href="#sec12">Ponder 预判实现机制 / Ponder Implementation Mechanism</a></span></li>
+    <li class="toc-item"><span class="toc-num">13</span><span class="toc-label"><a href="#sec13">复盘模式分析 / Review Mode Analysis</a></span></li>
+    <li class="toc-item"><span class="toc-num">14</span><span class="toc-label"><a href="#sec14">设置导入 / Settings Import</a></span></li>
+    <li class="toc-item"><span class="toc-num">15</span><span class="toc-label"><a href="#sec15">PGN 导入 / PGN Import</a></span></li>
+      <li class="toc-item"><span class="toc-num">A</span><span class="toc-label"><a href="#appendix-changelog">附录 A：版本更新日志</a></span></li>
+</ol>
+</div>
+
+<!-- ===== MAIN CONTENT ===== -->
+<div class="content">
+
+<!-- ============================================================ -->
+<!-- SECTION 1: 应用简介 -->
+<!-- ============================================================ -->
+<div class="section" id="sec1">
+  <div class="section-header">
+    <div class="section-num">第一章</div>
+    <div class="section-title">应用简介</div>
+  </div>
+
+  <p>Regaliav1.0.2 是一款功能强大的 Android 国际象棋对弈与分析应用。本版本内置世界顶级开源棋力引擎 <strong>Stockfish 18</strong>（arm64-v8a-dotprod 原生编译），为从初学者到高级棋手提供专业级的对弈、复盘与训练体验。</p>
+
+  <div class="card-row">
+    <div class="stat-card">
+      <span class="stat-num">18</span>
+      <span class="stat-label">Stockfish 引擎版本</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-num">6+SL</span>
+      <span class="stat-label">AI 难度等级</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-num">8</span>
+      <span class="stat-label">MultiPV 线数</span>
+    </div>
+  </div>
+
+  <h3>核心特性</h3>
+  <ul class="feature-list">
+    <li>内置 Stockfish 18 引擎，arm64-v8a-dotprod 原生编译，自动利用 NEON 加速指令集</li>
+    <li>6 级预设 AI 难度 + SL档（Skill Level 自定义）+ ⚙️手动设置，适合各水平棋手</li>
+    <li>AI 思考进度条实时显示搜索深度、节点数、速度与评估分数</li>
+    <li>Ponder（预判）模式，AI 在对手回合继续思考，充电时推荐开启以加速后续走法</li>
+    <li>MultiPV 多线分析（1-8 线），同时展示多条引擎推荐变化</li>
+    <li>变例系统：走法记录与复盘中展示引擎预测续着和备选变化（💬变例 开关控制）</li>
+    <li>完整复盘模式：逐步导航、评估趋势图、走法分类与关键着标注、全部分析</li>
+    <li>ECO 开局库，含搜索、开局推荐与家族筛选</li>
+    <li>Syzygy 在线残局库查询（7子及以下残局必胜/和棋/必败判定）</li>
+    <li>WDL 胜和负概率显示（默认开启），直观了解局面优劣</li>
+    <li>评估分数含 <span style="font-size:.6rem;color:#d4a017;border:1px solid rgba(212,160,23,.3);padding:0 3px;border-radius:2px;background:rgba(212,160,23,.08)">SF18</span> 引擎标识徽章、搜索深度 D 标识、节点与速度信息</li>
+    <li>格子控制范围热力图（🌈/🌗 切换），含箭头指示与格子控制信息面板</li>
+    <li>AI 提示多线展示，显示所有推荐走法及评分</li>
+    <li>棋理提示面板，实时提供十大棋理原则提醒</li>
+    <li>引擎配置导出/导入（key=value 文本格式），方便多设备同步</li>
+    <li>FEN 复制/导入，支持任意局面快速还原</li>
+    <li>摆棋模式，自由编辑棋盘局面，含撤销/恢复/重置/清空</li>
+    <li>兼容 Android 5.0 至 Android 15，适配 Xiaomi HyperOS 3</li>
+  </ul>
+
+  <div class="impl-section">
+    <h4>实现原理：模块架构</h4>
+    <p>应用采用<strong>多模块分层架构</strong>，源代码位于 <code>assets/chess.src/</code> 目录下，通过构建脚本 <code>build-chess.sh</code> 合并为单一 <code>chess.html</code> 文件，由 Android WebView 加载运行：</p>
+    <div class="module-diagram">┌─────────────────────────────────────────────────────┐
+│  MainActivity.java  (Android 宿主)                    │
+│  ├─ ChessWebView  ← 加载 chess.html                  │
+│  ├─ StockfishNative.java  (UCI 引擎管理)              │
+│  │   ├─ 进程启停、UCI 通信、引擎切换                    │
+│  │   └─ engine_jni.cpp  (chmod / renice)              │
+│  └─ AndroidBridge  (JS↔Java 桥接接口)                 │
+└─────────────────────────────────────────────────────┘
+        ↕ JavaScript↔Java Bridge
+┌─────────────────────────────────────────────────────┐
+│  chess.html  (WebView 单页应用)                       │
+│  ├─ index.html.tpl  (CSS 样式模板)                    │
+│  ├─ game-logic.js   (纯棋理，无UI/引擎依赖)           │
+│  │   ├─ 棋盘表示、走法生成、合法性检验                  │
+│  │   ├─ Zobrist 哈希、FEN 生成/解析                   │
+│  │   ├─ AI_LEVELS、ELO_MATCH、控制范围计算             │
+│  │   └─ 棋理提示 _principlesHTML() (i18n)              │
+│  ├─ ai-bridge.js    (引擎通信层)                      │
+│  │   ├─ UCI 参数配置、导出/导入                        │
+│  │   ├─ 引擎回调：onBestMove / onEngineEval /         │
+│  │   │   onEngineProgress / onPonderProgress          │
+│  │   ├─ 评估状态管理、WDL 转换、缓存                  │
+│  │   └─ 引擎心跳监测、崩溃恢复                        │
+│  ├─ tablebase.js    (Syzygy 残局库查询)               │
+│  ├─ eco-data.js     (ECO 开局库数据)                  │
+│  └─ ui.js           (渲染与交互)                      │
+│      ├─ render() 全量渲染 + 增量更新                  │
+│      ├─ _getSqBg() 控制范围热力图着色                 │
+│      ├─ _updateArrows() SVG 箭头叠加层               │
+│      ├─ _buildEvalTrendSVG() 复盘趋势图              │
+│      ├─ _classifyMove() 走法分类                     │
+│      ├─ playSound() Web Audio API 音效合成            │
+│      └─ 触控/点击/滑动事件处理                        │
+└─────────────────────────────────────────────────────┘</div>
+
+    <p>模块间的数据流遵循严格的单向依赖：<code>ui.js</code> 调用 <code>game-logic.js</code> 的纯函数获取棋局状态，通过 <code>ai-bridge.js</code> 与引擎通信，<code>ai-bridge.js</code> 再通过 <code>AndroidBridge</code> 与 Java 层的 Stockfish 进程交互。</p>
+
+    <div class="code-block">
+      <span class="code-label">build-chess.py — 构建脚本核心逻辑</span>
+# 合并 JS 模块 → chess.html
+modules = [
+    "game-logic.js",
+    "ai-bridge.js", 
+    "tablebase.js",
+    "eco-data.js",
+    "ui.js",
+]</div>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<!-- ============================================================ -->
+<!-- SECTION 2: 安装与启动 -->
+<!-- ============================================================ -->
+<div class="section" id="sec2">
+  <div class="section-header">
+    <div class="section-num">第二章</div>
+    <div class="section-title">安装与启动</div>
+  </div>
+
+  <h3>系统要求</h3>
+  <table>
+    <tr><th>项目</th><th>要求</th></tr>
+    <tr><td>操作系统</td><td>Android 5.0（API 21）至 Android 15（API 35）</td></tr>
+    <tr><td>CPU 架构</td><td>arm64-v8a（推荐支持 dotprod 指令集）</td></tr>
+    <tr><td>存储空间</td><td>约 30 MB</td></tr>
+    <tr><td>兼容系统</td><td>Xiaomi HyperOS 3（Android 14 基础）已验证</td></tr>
+  </table>
+
+  <h3>APK 签名</h3>
+  <p>本版本 APK 采用 <strong>v1 / v2 / v3 三重签名方案</strong>，确保在所有支持的 Android 版本上均可正常安装与验证：</p>
+  <ul class="feature-list">
+    <li><strong>v1 签名（JAR 签名）</strong>：兼容 Android 5.0-6.0 设备</li>
+    <li><strong>v2 签名（APK 签名方案 v2）</strong>：Android 7.0+ 增量验证，安装更快</li>
+    <li><strong>v3 签名（APK 签名方案 v3）</strong>：Android 9.0+ 密钥轮转支持</li>
+  </ul>
+
+  <div class="tip-box">
+    <span class="tip-label">提示：</span>Xiaomi HyperOS 3 对 APK 签名验证较为严格，v2+v3 签名确保安装过程顺利通过系统验证。如遇安装问题，请在系统设置中允许"安装未知来源应用"。
+  </div>
+
+  <h3>安装步骤</h3>
+  <ol class="step-list">
+    <li>将 APK 文件传输至 Android 设备</li>
+    <li>在文件管理器中点击 APK 文件</li>
+    <li>如系统提示"未知来源"，前往设置允许安装</li>
+    <li>按照安装向导完成安装</li>
+    <li>启动应用，引擎将自动初始化</li>
+  </ol>
+
+  <h3>首次启动</h3>
+  <p>首次启动时，应用显示加载画面：♔ 国王图标（<span class="color-swatch" style="background:#E8E8F0"></span> <code>#E8E8F0</code>）+ 应用名 + 进度条（<span class="color-swatch" style="background:linear-gradient(90deg,#d4a017,#ffd700)"></span> <code>#d4a017→#ffd700</code> 渐变）。引擎二进制文件自动释放至本地私有目录并赋予执行权限，进度条达到 100% 后显示"引擎就绪！"，加载画面 0.5 秒淡出。</p>
+
+  <div class="impl-section">
+    <h4>实现原理：引擎初始化流程</h4>
+    <p><code>StockfishNative.java</code> 在 <code>onCreate()</code> 中将 assets 中的引擎二进制文件复制到应用私有目录（<code>context.getFilesDir()</code>），通过 JNI 调用 <code>nativeChmod()</code> 赋予执行权限。WebView 加载 <code>chess.html</code> 后，JS 层调用 <code>AndroidBridge.startEngine()</code> 启动 UCI 进程，引擎通过 stdout 返回 <code>uciok</code> 后标记 <code>_engineReady=true</code>。</p>
+    <div class="code-block">
+      <span class="code-label">ai-bridge.js — 引擎就绪回调</span>
+function onEngineReady(){
+  _engineReady=true;
+  _needNewGameForEngine=true; // 崩溃恢复后需重新 ucinewgame
+  _updateLoadingStatus('引擎就绪！',100);
+  // 0.5s 淡出加载画面
+  setTimeout(function(){_hideLoadingOverlay()},500);
+}</div>
+  </div>
+
+  <h3>前台服务通知 <span class="new-tag">v1.0.1 增强</span></h3>
+  <p>当引擎进程运行时，应用会显示一个前台服务通知（Foreground Service Notification），在系统通知栏中持续展示引擎状态信息。该通知的作用是告知 Android 系统引擎进程正在执行重要计算，防止系统因内存回收或省电策略而终止引擎进程，确保对局与分析过程不被中断。</p>
+  <div class="tip-box">
+    <span class="tip-label">v1.0.1 简化状态：</span>通知栏现仅显示三种引擎状态——<strong>"引擎就绪！"</strong>（就绪）、<strong>"分析中"</strong>（AI 思考 / Ponder 预判 / 复盘分析中）、<strong>"引擎错误: ..."</strong>（异常时显示截断后的错误消息）。不再显示搜索深度、节点数、速度等数值。详细的深度/节点/速度/评分仍在 APP 内顶部评估栏实时显示，通知栏保持极简风格，避免频繁更新打扰用户。
+  </div>
+  <div class="tip-box">
+    <span class="tip-label">点击跳转：</span>点击通知可跳转至 APP 主界面（<code>PendingIntent</code> + <code>FLAG_ACTIVITY_NEW_TASK | SINGLE_TOP | CLEAR_TOP</code>），方便用户从其他应用快速回到棋局。
+  </div>
+  <div class="tip-box">
+    <span class="tip-label">不可手动移除：</span>通知设置 <code>setOngoing(true)</code> + <code>FLAG_NO_CLEAR</code>，正常情况下无法被用户划掉。在 Android 14+（含小米澎湃OS 3）上系统可能允许用户手动划除，但前台服务本身仍持续运行，下次状态更新时通知会自动重新出现。
+  </div>
+  <div class="tip-box">
+    <span class="tip-label">双语通知：</span>前台服务通知的文本内容为双语显示，跟随应用当前的语言设置（保存在 <code>SharedPreferences</code> 中，由 JS 端 <code>saveLangPref</code> 同步）。中文模式下通知文本为中文，英文模式下为英文，与界面语言保持一致。
+  </div>
+  <div class="tip-box">
+    <span class="tip-label">通知权限：</span>在 Android 13（API 33）及以上版本中，应用首次启动引擎时会主动请求通知权限（POST_NOTIFICATIONS），以确保前台服务通知能够正常显示。如果用户拒绝授权，引擎仍可正常运行，但系统通知栏不会显示引擎状态信息，此时引擎进程被系统终止的风险会略有增加。
+  </div>
+
+</div>
+
+<hr class="section-divider">
+
+<!-- ============================================================ -->
+<!-- SECTION 3: 界面布局 -->
+<!-- ============================================================ -->
+<div class="section" id="sec3">
+  <div class="section-header">
+    <div class="section-num">第三章</div>
+    <div class="section-title">界面布局</div>
+  </div>
+
+  <p>应用界面由顶部标题栏、工具栏、棋盘区域、侧面板四大区域组成，整体采用暗色主题配色体系：</p>
+
+  <table>
+    <tr><th>角色</th><th>CSS 变量</th><th>色号</th><th>示例</th></tr>
+    <tr><td>背景</td><td><code>--bg</code></td><td><code>#1a0a0a</code></td><td><span class="color-swatch" style="background:#1a0a0a"></span></td></tr>
+    <tr><td>卡片背景</td><td><code>--card</code></td><td><code>#221015</code></td><td><span class="color-swatch" style="background:#221015"></span></td></tr>
+    <tr><td>正文</td><td><code>--text</code></td><td><code>#f5e6c8</code></td><td><span class="color-swatch" style="background:#f5e6c8"></span></td></tr>
+    <tr><td>次要文字</td><td><code>--muted</code></td><td><code>#a08050</code></td><td><span class="color-swatch" style="background:#a08050"></span></td></tr>
+    <tr><td>强调色</td><td><code>--accent</code></td><td><code>#d4a017</code></td><td><span class="color-swatch" style="background:#d4a017"></span></td></tr>
+    <tr><td>金色高亮</td><td><code>--accent2</code></td><td><code>#ffd700</code></td><td><span class="color-swatch" style="background:#ffd700"></span></td></tr>
+    <tr><td>边框</td><td><code>--border</code></td><td><code>#8b6914</code></td><td><span class="color-swatch" style="background:#8b6914"></span></td></tr>
+    <tr><td>蓝色（我方）</td><td><code>--blue</code></td><td><code>#4a90d9</code></td><td><span class="color-swatch" style="background:#4a90d9"></span></td></tr>
+    <tr><td>红色（对方/危险）</td><td><code>--red</code></td><td><code>#c0392b</code></td><td><span class="color-swatch" style="background:#c0392b"></span></td></tr>
+    <tr><td>紫色（ECO标签）</td><td><code>--purple</code></td><td><code>#8e44ad</code></td><td><span class="color-swatch" style="background:#8e44ad"></span></td></tr>
+    <tr><td>绿色（好着/必胜）</td><td><code>--green</code></td><td><code>#27ae60</code></td><td><span class="color-swatch" style="background:#27ae60"></span></td></tr>
+  </table>
+
+  <h3>标题栏</h3>
+  <p>标题栏位于界面最上方，包含应用标识和实时评估信息：</p>
+
+  <div class="wireframe">
+    <div class="wireframe-title">标题栏</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;border:1px solid #3a2a18;border-radius:3px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:1.1rem;color:#E8E8F0;border:2px solid #d4a017;padding:2px 4px;background:linear-gradient(145deg,rgba(139,105,20,.18),rgba(255,215,0,.08))">♔</span>
+        <span style="font-weight:900;color:#ffd700;letter-spacing:2px;font-size:1rem">Regalia</span>
+        <span style="font-size:.55rem;color:#d4a017;background:rgba(212,160,23,.15);padding:1px 6px;border-radius:3px;border:1px solid rgba(212,160,23,.3)">v1.0.2</span>
+        <span style="font-size:.55rem;color:#d4a017;background:rgba(212,160,23,.15);padding:1px 6px;border-radius:3px;border:1px solid rgba(212,160,23,.3);cursor:pointer">ℹ️</span>
+      </div>
+      <span style="font-size:.55rem;color:#d4a017;background:rgba(212,160,23,.15);padding:1px 6px;border-radius:3px;border:1px solid rgba(212,160,23,.3);cursor:pointer;flex-shrink:0">↔️中</span>
+      <div style="font-size:.8rem;color:var(--text)">
+        <span style="color:#27ae60">😊</span> 优势 <span style="color:#a08050">(+0.85)</span>
+        <span style="font-size:.5rem;color:#d4a017;border:1px solid rgba(212,160,23,.3);padding:0 3px;border-radius:2px;background:rgba(212,160,23,.08);margin-left:3px">SF18</span>
+        <span style="font-size:.6rem;color:#a08050;margin-left:3px">D18</span>
+        <span style="font-size:.55rem;color:#a08050;margin-left:2px">4.5M 1.2M/s</span>
+      </div>
+    </div>
+  </div>
+
+  <h3>棋盘颜色</h3>
+  <p>棋盘采用暖金色调配色，浅色格和深色格均使用渐变效果：</p>
+  <table>
+    <tr><th>元素</th><th>色号/渐变</th><th>示例</th></tr>
+    <tr><td>浅色格</td><td><code>linear-gradient(135deg,#e8d5b0,#f0dcc0,#e8d5b0)</code></td><td><span class="color-swatch" style="background:linear-gradient(135deg,#e8d5b0,#f0dcc0,#e8d5b0);width:40px"></span></td></tr>
+    <tr><td>深色格</td><td><code>linear-gradient(135deg,#8b6914,#7a5c12,#8b6914)</code></td><td><span class="color-swatch" style="background:linear-gradient(135deg,#8b6914,#7a5c12,#8b6914);width:40px"></span></td></tr>
+    <tr><td>选中格</td><td><code>#5a4030</code></td><td><span class="color-swatch" style="background:#5a4030"></span></td></tr>
+    <tr><td>白方棋子</td><td><code>#E8E8F0</code>，描边 <code>rgba(30,15,0,.85)</code></td><td><span class="color-swatch" style="background:#E8E8F0"></span></td></tr>
+    <tr><td>黑方棋子</td><td><code>#1A1A2E</code>，描边 <code>rgba(255,230,150,.85)</code></td><td><span class="color-swatch" style="background:#1A1A2E"></span></td></tr>
+    <tr><td>上一步起始格</td><td>金色内边框 <code>3px solid #ffd700</code></td><td><span class="color-swatch" style="background:#8b6914;box-shadow:inset 0 0 0 3px #ffd700"></span></td></tr>
+    <tr><td>上一步目标格</td><td>绿色内边框 <code>3px solid #27ae60</code></td><td><span class="color-swatch" style="background:#8b6914;box-shadow:inset 0 0 0 3px #27ae60"></span></td></tr>
+    <tr><td>合法走法点</td><td><code>radial-gradient(rgba(255,140,0,.6),rgba(255,140,0,.35))</code></td><td><span class="color-swatch" style="background:radial-gradient(rgba(255,140,0,.6),rgba(255,140,0,.35));border-radius:50%"></span></td></tr>
+    <tr><td>合法吃子环</td><td><code>3px solid rgba(255,140,0,.55)</code></td><td><span class="color-swatch" style="background:#8b6914;box-shadow:inset 0 0 0 3px rgba(255,140,0,.55);border-radius:50%"></span></td></tr>
+    <tr><td>将军脉冲</td><td>红色脉冲动画 <code>rgba(192,57,43,.22)</code></td><td><span class="color-swatch" style="background:rgba(192,57,43,.22)"></span></td></tr>
+    <tr><td>坐标标签（浅格）</td><td><code>#4a3a0a</code>，描边 <code>rgba(255,230,150,.85)</code></td><td><span class="color-swatch" style="background:#4a3a0a"></span></td></tr>
+    <tr><td>坐标标签（深格）</td><td><code>#f0dcb0</code>，描边 <code>rgba(30,15,0,.85)</code></td><td><span class="color-swatch" style="background:#f0dcb0"></span></td></tr>
+  </table>
+
+  <h3>控制范围热力图</h3>
+  <p>点击工具栏 🌈 按钮启用控制范围显示，棋盘格子将根据双方控制强度动态着色。热力图使用 HSL 色彩空间，通过色相（Hue）、饱和度（Saturation）和明度（Lightness）三个维度编码控制信息。</p>
+
+
+
+  <h4>热力图着色算法</h4>
+  <p>热力图颜色由三个参数决定：</p>
+  <ul class="feature-list">
+    <li><strong>优势方向（adv）</strong>：我方控制数 − 对方控制数 ÷ 总控制数。adv &gt; 0 为我方优势，adv &lt; 0 为对方优势。决定色相（Hue）</li>
+    <li><strong>控制强度（str）</strong>：总控制数 ÷ 8（封顶 1.0）。决定饱和度（Saturation）和明度（Lightness）</li>
+    <li><strong>无人控制</strong>：双方均无控制时，使用固定色 <span class="color-swatch" style="background:#3a2020"></span> <code>#3a2020</code></li>
+  </ul>
+
+  <table>
+    <tr><th>参数</th><th>公式</th><th>范围</th><th>效果</th></tr>
+    <tr><td>色相 Hue</td><td>adv≥0: <code>280 − adv×60</code><br>adv&lt;0: <code>280 − adv×80</code></td><td>≈220°~340°</td><td>紫蓝=均势，偏蓝=我方优势，偏红=对方优势</td></tr>
+    <tr><td>饱和度 Sat</td><td><code>0.50 + str×0.40</code></td><td>50%~90%</td><td>控制数越多越鲜艳</td></tr>
+    <tr><td>明度 Lit</td><td><code>0.48 − str×0.12</code></td><td>36%~48%</td><td>控制数越多越深</td></tr>
+  </table>
+
+  <h4>色相含义对照</h4>
+  <table>
+    <tr><th>色相范围</th><th>颜色</th><th>含义</th><th>示例</th></tr>
+    <tr><td>H ≈ 220°</td><td>蓝紫</td><td>我方强烈控制</td><td><span class="color-swatch" style="background:hsl(220,80%,36%);width:30px"></span> <code>hsl(220,80%,36%)</code></td></tr>
+    <tr><td>H ≈ 260°</td><td>紫色</td><td>双方均势 / 中等控制</td><td><span class="color-swatch" style="background:hsl(260,65%,42%);width:30px"></span> <code>hsl(260,65%,42%)</code></td></tr>
+    <tr><td>H ≈ 280°</td><td>紫红</td><td>微弱优势 / 基线色</td><td><span class="color-swatch" style="background:hsl(280,55%,46%);width:30px"></span> <code>hsl(280,55%,46%)</code></td></tr>
+    <tr><td>H ≈ 320°</td><td>红紫</td><td>对方中等控制</td><td><span class="color-swatch" style="background:hsl(320,70%,38%);width:30px"></span> <code>hsl(320,70%,38%)</code></td></tr>
+    <tr><td>H ≈ 340°</td><td>红色</td><td>对方强烈控制</td><td><span class="color-swatch" style="background:hsl(340,80%,36%);width:30px"></span> <code>hsl(340,80%,36%)</code></td></tr>
+    <tr><td>—</td><td>暗红棕</td><td>双方均无控制</td><td><span class="color-swatch" style="background:#3a2020;width:30px"></span> <code>#3a2020</code></td></tr>
+  </table>
+
+  <h4>箭头含义</h4>
+  <p>悬停或选中某格时，棋盘上方叠加 SVG 箭头层，显示哪些棋子控制该格子：</p>
+  <table>
+    <tr><th>箭头颜色</th><th>色号</th><th>示例</th><th>含义</th></tr>
+    <tr><td>暖金色</td><td><code>#D4A017</code></td><td><span style="display:inline-block;width:40px;height:4px;background:#D4A017;border-radius:2px;vertical-align:middle"></span></td><td>我方（执棋方）棋子的控制箭头 — 从控制棋子指向目标格</td></tr>
+    <tr><td>冷银蓝色</td><td><code>#8A9BAE</code></td><td><span style="display:inline-block;width:40px;height:4px;background:#8A9BAE;border-radius:2px;vertical-align:middle"></span></td><td>对方棋子的控制箭头 — 从对方棋子指向目标格</td></tr>
+  </table>
+  <p>箭头透明度为 0.85，宽度 4px，使用 SVG <code>&lt;line&gt;</code> 元素绘制，末端带三角形箭头标记。箭头起始于控制棋子中心，终止于目标格中心偏移 14px 处，避免箭头与棋子重叠。</p>
+
+  <div class="impl-section">
+    <h4>实现原理：控制范围热力图</h4>
+    <p><code>game-logic.js</code> 中的 <code>getCtrlMap()</code> 遍历棋盘所有格子，对每个有棋子的格调用 <code>attacked()</code> 获取其攻击目标，汇总成 8×8 控制矩阵。矩阵每个元素记录 <code>{white: [{piece, position}], black: [{piece, position}]}</code>。</p>
+    <p><code>ui.js</code> 中的 <code>_getSqBg()</code> 根据控制矩阵计算 HSL 颜色覆盖棋盘格背景；<code>_updateArrows()</code> 在 SVG 叠加层绘制控制箭头，使用持久化 SVG 元素避免重复创建 DOM。</p>
+    <div class="code-block">
+      <span class="code-label">game-logic.js — getCtrlMap() 控制范围计算</span>
+function getCtrlMap(b){
+  const cm=[];
+  for(let r=0;r&lt;8;r++){
+    cm[r]=[];
+    for(let c=0;c&lt;8;c++)
+      cm[r][c]={white:[],black:[]};
+  }
+  for(let r=0;r&lt;8;r++)
+    for(let c=0;c&lt;8;c++){
+      const p=b[r][c];
+      if(p){
+        const atks=attacked(b,{row:r,col:c});
+        for(const a of atks){
+          cm[a.row][a.col][p.color].push(
+            {piece:p,position:{row:r,col:c}});
+        }
+      }
+    }
+  return cm;
+}</div>
+    <div class="code-block">
+      <span class="code-label">ui.js — _getSqBg() 热力图着色算法</span>
+function _getSqBg(rr,cc,cm,isL,lastMove){
+  let bg=isL?SQ_LIGHT:SQ_DARK;
+  let ctrlBg=null;
+  if(cm){
+    const e=cm[rr][cc];
+    if(e){
+      const wc=e.white.length, bc=e.black.length;
+      const myC=playerColor==='white'?wc:bc;
+      const opC=playerColor==='white'?bc:wc;
+      const net=myC-opC;
+      const total=myC+opC;
+      const adv=total&gt;0?net/total:0;
+      const str=Math.min(1,total/8);
+      let hue;
+      if(myC===0&amp;&amp;opC===0){
+        ctrlBg='#3a2020';  // 无控制
+      }else{
+        if(adv&gt;=0) hue=280-adv*60;
+        else hue=280-adv*80;
+        if(hue&gt;=360) hue-=360;
+        const sat=0.50+str*0.40;  // 50%~90%
+        const lit=0.48-str*0.12;  // 36%~48%
+        ctrlBg=`hsl(${Math.round(hue)},${Math.round(sat*100)}%,${Math.round(lit*100)}%)`;
+      }
+    }
+  }
+  if(ctrlBg) bg=ctrlBg;
+  return bg;
+}</div>
+    <div class="code-block">
+      <span class="code-label">ui.js — _updateArrows() SVG 箭头绘制</span>
+// 友方箭头: 暖金 #D4A017，对方箭头: 冷银蓝 #8A9BAE
+for(const c of e[playerColor])
+  arrows.push({from:c.position,to:infoSq,isFriendly:true});
+for(const c of e[oppC])
+  arrows.push({from:c.position,to:infoSq,isFriendly:false});
+for(const ar of arrows){
+  const line=document.createElementNS('http://www.w3.org/2000/svg','line');
+  line.setAttribute('stroke',ar.isFriendly?'#D4A017':'#8A9BAE');
+  line.setAttribute('stroke-width','4');
+  line.setAttribute('stroke-opacity','0.85');
+  line.setAttribute('marker-end',ar.isFriendly?'url(#ah-b)':'url(#ah-r)');
+  svgEl.appendChild(line);
+}</div>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<!-- ============================================================ -->
+<!-- SECTION 4: 基本操作 -->
+<!-- ============================================================ -->
+<div class="section" id="sec4">
+  <div class="section-header">
+    <div class="section-num">第四章</div>
+    <div class="section-title">基本操作</div>
+  </div>
+
+  <h3>新游戏</h3>
+  <p>点击工具栏 <strong>⚔️ 新游戏</strong> 按钮，弹出"新游戏设置"对话框，可配置执棋颜色、ECO开局库开关、经典开局选择：</p>
+
+  <div class="wireframe">
+    <div class="wireframe-title">新游戏设置对话框</div>
+    <div style="border:1px solid #3a2a18;border-radius:4px;padding:12px">
+      <div style="text-align:center;font-weight:700;color:#ffd700;margin-bottom:10px">⚔️ 新游戏设置</div>
+      <div style="margin-bottom:8px">
+        <div style="font-size:.8rem;color:#b8a080;margin-bottom:4px">执棋颜色</div>
+        <div style="display:flex;gap:6px">
+          <span class="wf-btn" style="flex:1">♔ 白方（先手）</span>
+          <span class="wf-btn" style="flex:1">♚ 黑方（后手）</span>
+        </div>
+      </div>
+      <div style="margin-bottom:8px">
+        <div class="wf-toggle"><span>使用ECO开局库</span><div class="wf-toggle-track"><div class="wf-toggle-thumb" style="left:1px;right:auto"></div></div></div>
+        <div style="font-size:.65rem;color:#887860;margin-top:2px">开启后，AI将优先从ECO开局库中选择开局走法，使开局更规范</div>
+      </div>
+      <div style="margin-bottom:8px">
+        <div style="font-size:.8rem;color:#b8a080;margin-bottom:4px">经典开局（可选）</div>
+        <div style="border:1px dashed #3a2a18;border-radius:3px;padding:4px 8px;font-size:.75rem;color:#a08050;margin-bottom:4px">输入ECO编号或开局名搜索</div>
+        <div style="border:1px dashed #3a2a18;border-radius:3px;padding:4px 8px;font-size:.75rem;color:#a08050;margin-bottom:4px">所有分类 ▾</div>
+        <div style="border:1px dashed #3a2a18;border-radius:3px;padding:4px 8px;font-size:.7rem;color:#b8a080;margin-bottom:2px;font-weight:600">自由开局 — 从初始局面开始</div>
+      </div>
+      <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:10px">
+        <span class="wf-btn">取消</span>
+        <span class="wf-btn" style="border-color:#d4a017;color:#d4a017">开始游戏 ♟</span>
+      </div>
+    </div>
+  </div>
+
+  <h3>走棋</h3>
+  <p>采用<strong>点击走棋</strong>方式：先点击要移动的棋子（棋子高亮显示合法走法），再点击目标格子完成移动。当兵到达底线时，弹出升变选择对话框（后→车→象→马）。</p>
+
+  <h3>工具栏按钮一览</h3>
+  <table>
+    <tr><th>按钮</th><th>名称</th><th>功能</th></tr>
+    <tr><td>⚔️</td><td>新游戏</td><td>打开新游戏设置对话框</td></tr>
+    <tr><td>♔/♚</td><td>自由开局</td><td>跳过设置直接开始新对局</td></tr>
+    <tr><td>↩️</td><td>悔棋</td><td>撤销上一步走法（自动回退到玩家上一手；摆棋模式隐藏）。v1.0.1：悔棋后会自动选中"被悔的那步棋移动的棋子"所在的格子，方便重走。点击该格可解除选中。</td></tr>
+    <tr><td>↪️</td><td>撤悔</td><td>重做已撤销的走法（摆棋模式隐藏）</td></tr>
+    <tr><td>🔃</td><td>翻转</td><td>翻转棋盘方向</td></tr>
+    <tr><td>💡</td><td>AI提示</td><td>引擎分析当前局面（多线展示）</td></tr>
+    <tr><td>🔊/🔇</td><td>音效</td><td>开关走棋音效（摆棋模式隐藏）</td></tr>
+    <tr><td>🌈/🌗</td><td>控制范围</td><td>🌈=开启热力图，🌗=关闭</td></tr>
+    <tr><td>📝</td><td>FEN</td><td>复制当前局面 FEN 到剪贴板</td></tr>
+    <tr><td>🗃️</td><td>导入</td><td>从剪贴板导入 FEN 还原局面</td></tr>
+    <tr><td>🏗️/✓</td><td>摆棋/完成</td><td>进入/退出摆棋模式</td></tr>
+  </table>
+
+  <h3>音效系统</h3>
+  <table>
+    <tr><th>操作</th><th>音色</th><th>频率</th></tr>
+    <tr><td>普通走棋</td><td>正弦波</td><td>300→500 Hz</td></tr>
+    <tr><td>吃子</td><td>方波</td><td>200→100 Hz</td></tr>
+    <tr><td>将军</td><td>锯齿波</td><td>440→554→659 Hz</td></tr>
+    <tr><td>王车易位</td><td>三角波</td><td>260→520 Hz</td></tr>
+    <tr><td>升变</td><td>正弦波</td><td>523→659→784→1047 Hz</td></tr>
+    <tr><td>对局结束</td><td>正弦波</td><td>523→440→349→262 Hz</td></tr>
+    <tr><td>AI提示</td><td>正弦波</td><td>600→900 Hz</td></tr>
+  </table>
+
+  <h3>摆棋模式</h3>
+  <div class="wireframe">
+    <div class="wireframe-title">摆棋面板</div>
+    <div style="border:1px solid #3a2a18;border-radius:3px;padding:8px">
+      <div style="display:flex;align-items:center;gap:4px;margin-bottom:6px;flex-wrap:wrap">
+        <span style="font-size:.75rem;color:#a08050">棋子:</span>
+        <span class="wf-btn" style="font-size:1rem">♙</span>
+        <span class="wf-btn" style="font-size:1rem">♘</span>
+        <span class="wf-btn" style="font-size:1rem">♗</span>
+        <span class="wf-btn" style="font-size:1rem">♖</span>
+        <span class="wf-btn" style="font-size:1rem">♕</span>
+        <span class="wf-btn" style="font-size:1rem">♔</span>
+        <span class="wf-btn" style="font-size:.9rem;border-color:#c0392b">🗑️</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;margin-bottom:6px">
+        <span style="font-size:.75rem;color:#a08050">颜色:</span>
+        <span class="wf-btn">⚪ 白方</span>
+        <span class="wf-btn">⚫ 黑方</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;margin-bottom:6px">
+        <span style="font-size:.75rem;color:#a08050">走棋方:</span>
+        <span class="wf-btn">⚪ 白方</span>
+        <span class="wf-btn">⚫ 黑方</span>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-bottom:6px">
+        <span class="wf-btn">↩️ 撤销</span><span class="wf-btn">↪️ 恢复</span>
+        <span class="wf-btn">♻️ 重置</span><span class="wf-btn">🧹 清空</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="impl-section">
+    <h4>实现原理：走棋与摆棋</h4>
+    <p><code>ui.js</code> 中的 <code>sqClick()</code> 处理棋盘点击事件，根据当前模式（走棋/摆棋）分发到不同逻辑。走棋模式下调用 <code>game-logic.js</code> 的 <code>legalMoves()</code> 生成合法走法集合，点击目标格后调用 <code>makeMvInPlace()</code> 执行走法。</p>
+    <p>摆棋模式下 <code>setupClick()</code> 根据 <code>setupPiece</code> 和 <code>setupColor</code> 在目标格放置棋子，放置国王时自动移除同色旧王。退出摆棋时调用 <code>validateSetupPosition()</code> 校验局面合法性。</p>
+    <div class="code-block">
+      <span class="code-label">game-logic.js — 走法执行核心</span>
+function makeMvInPlace(state, move){
+  state.board[move.from.row][move.from.col]=null;
+  state.board[move.to.row][move.to.col]=move.piece;
+  if(move.enPassant){
+    const epRow=move.piece.color==='white'?
+      move.to.row+1:move.to.row-1;
+    state.board[epRow][move.to.col]=null;
+  }
+  if(move.castling){
+    const rookFromCol=move.castling==='kingside'?7:0;
+    const rookToCol=move.castling==='kingside'?5:3;
+    state.board[move.from.row][rookToCol]=
+      state.board[move.from.row][rookFromCol];
+    state.board[move.from.row][rookFromCol]=null;
+  }
+  if(move.promotion){
+    state.board[move.to.row][move.to.col]=
+      {type:move.promotion,color:move.piece.color};
+  }
+}</div>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<!-- ============================================================ -->
+<!-- SECTION 5: AI对手系统 -->
+<!-- ============================================================ -->
+<div class="section" id="sec5">
+  <div class="section-header">
+    <div class="section-num">第五章</div>
+    <div class="section-title">AI对手系统</div>
+  </div>
+
+  <h3>难度等级</h3>
+  <p>工具栏 AI 难度选择器包含 6 个预设按钮、SL档和 ⚙️ 手动设置：</p>
+  <div class="emoji-scale">
+    <div class="emoji-block"><span class="em">😊</span><span class="em-label">Lv.1 初学者</span><span class="em-range">ELO 800</span></div>
+    <div class="emoji-block"><span class="em">🙂</span><span class="em-label">Lv.2 新手</span><span class="em-range">ELO 1350</span></div>
+    <div class="emoji-block"><span class="em">🤔</span><span class="em-label">Lv.3 俱乐部棋手</span><span class="em-range">ELO 1700</span></div>
+    <div class="emoji-block"><span class="em">😎</span><span class="em-label">Lv.4 高级棋手</span><span class="em-range">ELO 2000</span></div>
+    <div class="emoji-block"><span class="em">🧐</span><span class="em-label">Lv.5 候选大师</span><span class="em-range">ELO 2200</span></div>
+    <div class="emoji-block"><span class="em">🤖</span><span class="em-label">Lv.6 大师</span><span class="em-range">ELO 2350</span></div>
+    <div class="emoji-block"><span class="em">⚙️</span><span class="em-label">SL档</span><span class="em-range">Skill Level</span></div>
+    <div class="emoji-block"><span class="em">🔧</span><span class="em-label">⚙️ 手动</span><span class="em-range">自定义ELO</span></div>
+  </div>
+
+  <h3>评估显示详解</h3>
+  <p>标题栏评估区域采用统一格式，评估以执棋者视角呈现：</p>
+  <table>
+    <tr><th>评估范围</th><th>表情</th><th>描述</th></tr>
+    <tr><td>&gt;600 cp</td><td>🏆</td><td>胜势</td></tr>
+    <tr><td>351~600</td><td>😄</td><td>大优</td></tr>
+    <tr><td>151~350</td><td>😊</td><td>优势</td></tr>
+    <tr><td>51~150</td><td>🙂</td><td>微优</td></tr>
+    <tr><td>-50~50</td><td>😐</td><td>均势</td></tr>
+    <tr><td>-150~-51</td><td>😟</td><td>微劣</td></tr>
+    <tr><td>-350~-151</td><td>😰</td><td>劣势</td></tr>
+    <tr><td>-600~-351</td><td>😱</td><td>大劣</td></tr>
+    <tr><td>&lt;-600</td><td>💀</td><td>败势</td></tr>
+  </table>
+
+  <div class="wireframe">
+    <div class="wireframe-title">评估显示完整格式</div>
+    <div class="wf-box">
+      😊 优势 (+0.85) <span style="font-size:.5rem;color:#d4a017;border:1px solid rgba(212,160,23,.3);padding:0 2px;border-radius:2px;background:rgba(212,160,23,.08)">SF18</span> D18 4.5M 1.2M/s (62%W/28%D/10%L)
+    </div>
+  </div>
+
+  <h3>Ponder 预判模式<span class="new-tag">v1.0.1</span></h3>
+  <p>启用后 AI 在自己走完棋后继续思考对手可能的应手。玩家回合时，AI 对手栏第二行右对齐显示预判搜索信息（不显示预判走法）；若同时使用 AI 提示功能，AI 提示栏也会显示预判信息并展示预判走法。推荐充电时开启。</p>
+
+  <div class="impl-section">
+    <h4>实现原理：AI 对手与引擎通信</h4>
+    <p>AI 走棋流程：<code>ui.js</code> 调用 <code>doAIMove()</code> → 通过 <code>AndroidBridge</code> 发送 <code>go depth N</code> 指令 → Java 层 <code>StockfishNative</code> 管理 UCI 进程 → 引擎通过 stdout 返回 <code>bestmove</code> → Java 回调 JS 层 <code>onBestMove()</code> → <code>ui.js</code> 执行走法并更新界面。</p>
+    <p>评估流程：<code>requestEngineEval()</code> 发送 <code>go depth 22</code> → 引擎通过 <code>info</code> 行实时回调 <code>onEngineProgress()</code> 更新进度 → 最终回调 <code>onEngineEval()</code> 返回完整评估结果（含 WDL、深度）。</p>
+    <div class="code-block">
+      <span class="code-label">ai-bridge.js — 引擎评估回调</span>
+function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL){
+  _lastEngineCallbackTime=Date.now(); // 心跳监测
+  if(reviewMode&amp;&amp;_reviewEvalRequestedStep!==reviewStep)
+    return; // 丢弃过期回调
+  _evalLoading=false;
+  _sfWdlW=(wdlW!=null&amp;&amp;wdlW&gt;=0)?wdlW:-1;
+  _sfWdlD=(wdlD!=null&amp;&amp;wdlD&gt;=0)?wdlD:-1;
+  _sfWdlL=(wdlL!=null&amp;&amp;wdlL&gt;=0)?wdlL:-1;
+  // 从走棋方视角转为白方视角
+  if(_evalForBlackTurn&amp;&amp;_sfWdlW&gt;=0){
+    const tmp=_sfWdlW; _sfWdlW=_sfWdlL; _sfWdlL=tmp;
+  }
+  // 缓存复盘评估
+  if(reviewMode){
+    _reviewEvalCache.set(reviewStep,{
+      eval:_sfEval,mate:_sfMateDistance,
+      wdlW:_sfWdlW,wdlD:_sfWdlD,wdlL:_sfWdlL,depth:_sfDepth
+    });
+  }
+}</div>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<!-- ============================================================ -->
+<!-- SECTION 6: 引擎配置 -->
+<!-- ============================================================ -->
+<div class="section" id="sec6">
+  <div class="section-header">
+    <div class="section-num">第六章</div>
+    <div class="section-title">引擎配置</div>
+  </div>
+
+  <p>点击 ⚙️ 按钮进入引擎配置界面，采用<strong>双标签页</strong>设计：</p>
+
+  <h3>标签页：引擎</h3>
+  <p>显示引擎基本信息（名称 <span style="color:#d4a017;font-size:.65rem">[内置]</span>、作者、线程、哈希）和 🔄 重启引擎按钮。</p>
+
+  <h3>标签页：高级设置</h3>
+  <table>
+    <tr><th>参数</th><th>默认值</th><th>范围</th><th>说明</th></tr>
+    <tr><td>Threads</td><td>2</td><td>1-64</td><td>CPU 线程数，默认配置自动设定</td></tr>
+    <tr><td>Hash</td><td>128 MB</td><td>1-4096 MB</td><td>置换表大小，默认配置自动设定（Stockfish 18 最佳实践：hashfull &lt; 30% 时强度最优）</td></tr>
+    <tr><td>MultiPV</td><td>1</td><td>1-8</td><td>多线分析，对局建议1，分析建议2-5</td></tr>
+    <tr><td>Move Overhead</td><td>60 ms</td><td>0-5000 ms</td><td>通信延迟补偿（Android JNI 开销约 10-20ms）</td></tr>
+    <tr><td>Ponder</td><td>关闭</td><td>开/关</td><td>对手回合继续思考</td></tr>
+    <tr><td>Show WDL</td><td><strong>开启</strong></td><td>开/关</td><td>显示胜/平/负概率</td></tr>
+    <tr><td>Skill Level</td><td>20</td><td>0-20</td><td>引擎棋力（限制ELO时自动决定）</td></tr>
+    <tr><td>限制Elo</td><td>关闭</td><td>500-3200</td><td>ELO上限，默认 2800</td></tr>
+  </table>
+
+  <h3>配置导出与导入</h3>
+  <p>支持导出/导入 key=value 文本格式配置文件。导出时优先写入公共 Downloads 目录，若失败则回退到应用专属目录，最终回退到剪贴板。导入时可通过两种方式选择配置文件：</p>
+  <ul>
+    <li><strong>内置文件浏览器</strong>：浏览文件系统目录，支持按 Android 返回键逐级返回上级目录，到达根目录时再按返回键则关闭浏览器。导航历史会被记录，确保返回操作精确回到上一级。</li>
+    <li><strong>系统文件选择器</strong>（推荐）：点击「📂 系统选择器」按钮调用 Android 系统文件选择器，可正确显示所有文件类型（包括 .txt 文件），在 Android 11+ 分区存储环境下尤为推荐使用此方式。</li>
+  </ul>
+  <div class="code-block">
+    <span class="code-label">配置导出示例</span>
+# Regalia Engine Settings
+engine.threads=4
+engine.hash=128
+engine.multiPV=3
+engine.moveOverhead=60
+engine.ponder=true
+engine.showWDL=true
+engine.skillLevel=20
+engine.limitStrength=false
+engine.elo=2800
+engine.autoConfig=true</div>
+
+  <div class="impl-section">
+    <h4>实现原理：引擎配置管理</h4>
+    <p><code>ai-bridge.js</code> 维护 <code>engineSettingsData</code> 对象存储当前配置，每次修改参数立即通过 <code>AndroidBridge</code> 同步到引擎进程。导出时调用 <code>bridge.exportSettings()</code> 获取 key=value 文本，优先写入公共 Downloads 目录，失败时自动回退到应用专属目录，最终回退到剪贴板。</p>
+    <div class="code-block">
+      <span class="code-label">ai-bridge.js — 导出设置（简化）</span>
+function exportEngineSettings(){
+  _bridgeCall(function(bridge){
+    const txt=bridge.exportSettings();
+    let saved=false, savedPath='';
+    // Try 1: Public Downloads directory
+    try{
+      saved=bridge.writeTextFile('/storage/emulated/0/Download/Regalia_engine_settings.txt',txt);
+      if(saved) savedPath='/storage/emulated/0/Download/...';
+    }catch(e){}
+    // Try 2: App-specific export directory (always works)
+    if(!saved){
+      try{
+        savedPath=bridge.getExportPath()+'/Regalia_engine_settings.txt';
+        saved=bridge.writeTextFile(savedPath,txt);
+      }catch(e){}
+    }
+    // Try 3: Clipboard fallback
+    if(!saved){ try{navigator.clipboard.writeText(txt);}catch(e){} }
+  },null,false);
+}
+    </div>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<!-- ============================================================ -->
+<!-- SECTION 7: 变例系统 -->
+<!-- ============================================================ -->
+<div class="section" id="sec7">
+  <div class="section-header">
+    <div class="section-num">第七章</div>
+    <div class="section-title">变例系统</div>
+  </div>
+
+  <p>变例系统通过 <strong>💬变例</strong> 开关控制，在走法记录和复盘中展示引擎预测续着和备选变化。</p>
+
+  <div class="wireframe">
+    <div class="wireframe-title">变例显示格式</div>
+    <div class="wf-box">1. e4 e5 2. Nf3 Nc6 3. Bb5</div>
+    <div class="wf-box-highlight" style="text-align:left;padding-left:14px">
+      🌿 线1 a6 4. Ba4 Nf6 5. O-O
+    </div>
+    <div class="wf-box" style="text-align:left;padding-left:14px">
+      🌿 线2 f5 4. Bxc6 dxc6 5. d3
+    </div>
+  </div>
+
+  <p>变例标签颜色 <span class="color-swatch" style="background:#7eb8da"></span> <code>#7eb8da</code>，变例按显示顺序编号为 线1、线2、线3…（不再区分主线/备选，保证标签唯一）。</p>
+
+  <div class="impl-section">
+    <h4>实现原理：变例记录与展示</h4>
+    <p>引擎通过 MultiPV 机制返回多条 <code>info</code> 行，<code>ai-bridge.js</code> 中的 <code>onMultiPVResult()</code> 将每条结果解析为变例文本，存储到走法记录的 <code>variations</code> 数组中。<code>ui.js</code> 渲染走法列表时，若 <code>showVariations=true</code>，调用 <code>_formatVariationGroups()</code> 在每步走法下方添加 🌿 变例行。变例行号按数组顺序分配（1、2、3…），保证唯一。</p>
+    <div class="code-block">
+      <span class="code-label">ui.js — 变例渲染逻辑</span>
+// 走法记录卡片头部
+h+='&lt;div class="card"&gt;';
+h+='&lt;div class="card-t"&gt;';
+h+='&lt;span class="ico"&gt;📜&lt;/span&gt;走法记录';
+h+='&lt;button onclick="copyMoveHistory()"&gt;📝 PGN&lt;/button&gt;';
+h+='&lt;div class="toggle" onclick="showVariations=!showVariations;render()"&gt;';
+h+='&lt;span&gt;💬变例&lt;/span&gt;';
+h+='&lt;div class="toggle-sw'+(showVariations?' on':'')+'"';
+h+=' style="width:30px;height:16px"&gt;&lt;/div&gt;&lt;/div&gt;';
+h+='&lt;/div&gt;&lt;/div&gt;';</div>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<!-- ============================================================ -->
+<!-- SECTION 8: 复盘分析 -->
+<!-- ============================================================ -->
+<div class="section" id="sec8">
+  <div class="section-header">
+    <div class="section-num">第八章</div>
+    <div class="section-title">复盘分析</div>
+  </div>
+
+  <p>复盘模式采用左右分栏布局，左面板包含棋盘+评估+趋势图+导航，右面板为走法列表。导航走法时，走法列表会自动滚动至当前选中的走法位置，确保当前步骤始终可见。</p>
+
+  <h3>评估趋势图</h3>
+  <p>SVG 折线图，纵轴白方视角评估，横轴步数。<strong>↹全局</strong> 开关控制局部/全局视图。折线颜色随走棋方变化：白方段 <span class="color-swatch" style="background:#E8E8F0"></span> <code>#E8E8F0</code>，黑方段 <span class="color-swatch" style="background:#1A1A2E;border:1px solid #3a2a18"></span> <code>#1A1A2E</code>，交叉点 <span class="color-swatch" style="background:#888"></span> <code>#888</code>。</p>
+  <div class="tip-box">
+    <span class="tip-label">横屏适配：</span>评估趋势图已适配横屏方向。图表高度根据可用视口空间动态计算，SVG 渲染采用等比缩放确保折线形态正确，不会出现拉伸变形或内容截断。横屏复盘中，棋盘占据左侧面板约 45% 宽度，右侧走法列表获得更多空间。左面板控件（评估条、滑块、趋势图、按钮）经过紧凑布局优化，间距和尺寸均根据横屏可用高度动态调整，确保趋势图始终可见且不被推出视口。
+  </div>
+
+  <h3>走法分类</h3>
+  <table>
+    <tr><th>分类</th><th>条件</th><th>颜色</th><th>示例</th></tr>
+    <tr><td>妙着</td><td>偏差 ≥300（好）</td><td style="color:#00cfff"><code>#00cfff</code></td><td><span class="color-swatch" style="background:#00cfff"></span></td></tr>
+    <tr><td>好着</td><td>偏差 150-299（好）</td><td style="color:#27ae60"><code>#27ae60</code></td><td><span class="color-swatch" style="background:#27ae60"></span></td></tr>
+    <tr><td>正着</td><td>偏差 50-149（好）</td><td style="color:#a0c060"><code>#a0c060</code></td><td><span class="color-swatch" style="background:#a0c060"></span></td></tr>
+    <tr><td>标准</td><td>偏差 &lt;50</td><td style="color:#a08050"><code>var(--muted)</code></td><td><span class="color-swatch" style="background:#a08050"></span></td></tr>
+    <tr><td>缓着</td><td>偏差 50-149（差）</td><td style="color:#f0c040"><code>#f0c040</code></td><td><span class="color-swatch" style="background:#f0c040"></span></td></tr>
+    <tr><td>错着</td><td>偏差 150-299（差）</td><td style="color:#e67e22"><code>#e67e22</code></td><td><span class="color-swatch" style="background:#e67e22"></span></td></tr>
+    <tr><td>漏着</td><td>偏差 ≥300（差）</td><td style="color:#c0392b"><code>#c0392b</code></td><td><span class="color-swatch" style="background:#c0392b"></span></td></tr>
+  </table>
+
+  <p>关键着以金色左边框 <span class="color-swatch" style="background:#ffd700;width:4px;height:20px"></span> <code>3px solid #ffd700</code> 高亮标注。评估增量：正值绿色 <code>#27ae60</code>，负值红色 <code>#c0392b</code>，将杀 <code>→将杀</code> 绿色，脱杀 <code>←脱杀</code> 红色。</p>
+
+  <div class="impl-section">
+    <h4>实现原理：复盘与评估缓存</h4>
+    <p><code>ui.js</code> 中的 <code>enterReview()</code> 保存当前游戏状态为 <code>reviewBaseState</code>，构建每步棋的快照数组 <code>reviewStates</code>。每次导航到新步骤时调用 <code>requestEngineEval()</code> 请求引擎评估，结果缓存到 <code>_reviewEvalCache</code>（LRU Map，上限 200 条）。</p>
+    <p>全部分析 <code>reviewAnalyzeAll()</code> 按顺序逐步发送 <code>go depth 22</code>，利用回调驱动机制在每步评估完成后自动推进到下一步，避免并发请求导致引擎混乱。缓存退出复盘后保留，仅在新对局开始时清空。</p>
+    <div class="code-block">
+      <span class="code-label">ui.js — 走法分类算法</span>
+function _classifyMove(evalDelta,isMoverWhite){
+  const isGood=isMoverWhite?
+    (evalDelta&gt;=0):(evalDelta&lt;=0);
+  const absD=Math.abs(evalDelta);
+  if(absD&gt;=300){
+    if(isGood) return{cls:'brilliant',label:'妙着',color:'#00cfff'};
+    return{cls:'blunder',label:'漏着',color:'#c0392b'};
+  }
+  if(absD&gt;=150){
+    if(isGood) return{cls:'great',label:'好着',color:'#27ae60'};
+    return{cls:'mistake',label:'错着',color:'#e67e22'};
+  }
+  if(absD&gt;=50){
+    if(isGood) return{cls:'good',label:'正着',color:'#a0c060'};
+    return{cls:'inaccuracy',label:'缓着',color:'#f0c040'};
+  }
+  return{cls:'book',label:'标准',color:'var(--muted)'};
+}</div>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<!-- ============================================================ -->
+<!-- SECTION 9: 开局库 -->
+<!-- ============================================================ -->
+<div class="section" id="sec9">
+  <div class="section-header">
+    <div class="section-num">第九章</div>
+    <div class="section-title">开局库</div>
+  </div>
+
+  <p>内置 ECO 开局库（A00-E99，500 个变例），含搜索、家族筛选、开局识别和推荐功能。</p>
+
+  <h3>开局识别卡片</h3>
+  <p>v1.0.1 起，ECO 开局识别卡片与开局推荐栏仅在以下情况显示：</p>
+  <ul class="feature-list">
+    <li><strong>自由开局模式</strong>：未选择特定开局时，根据当前局面自动识别 ECO 编码</li>
+    <li><strong>自选 ECO 开局</strong>：在新游戏设置中选择了内置 ECO 开局时，显示当前开局的 ECO 信息</li>
+  </ul>
+  <p>当通过 FEN 导入或摆棋模式开始游戏时，ECO 开局识别与推荐功能不会显示，避免对非标准开局产生误导。</p>
+  <div class="wireframe">
+    <div class="wireframe-title">ECO 开局识别卡片</div>
+    <div style="border:1px solid #3a2a18;border-radius:4px;padding:10px">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+        <span style="font-size:.85rem">📖</span>
+        <span style="font-weight:700;font-size:.85rem">ECO开局识别</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <span style="background:linear-gradient(145deg,#8e44ad,#6c3483);color:#ffd700;font-size:.72rem;border-radius:4px;border:1px solid rgba(255,215,0,.3);padding:2px 8px;letter-spacing:1px">C42</span>
+        <span style="font-weight:600;font-size:.85rem">俄罗斯防御</span>
+      </div>
+      <div style="color:#a08050;font-size:.8rem">俄罗斯防御家族</div>
+    </div>
+  </div>
+  <p>ECO 标签使用紫色渐变背景 <span class="color-swatch" style="background:linear-gradient(145deg,#8e44ad,#6c3483)"></span> <code>linear-gradient(145deg,#8e44ad,#6c3483)</code> + 金色文字 <span class="color-swatch" style="background:#ffd700"></span> <code>#ffd700</code>，边框 <code>1px solid rgba(255,215,0,.3)</code>。</p>
+
+  <div class="impl-section">
+    <h4>实现原理：ECO 开局库</h4>
+    <p><code>eco-data.js</code> 导出 <code>ECO_DATA</code> 数组（500 条开局记录）和 <code>ECO_BY_FAMILY</code> 家族分组映射。对弈过程中 <code>ui.js</code> 将当前走法序列与 ECO 数据进行前缀匹配，匹配成功后在侧面板显示识别卡片和推荐栏。</p>
+    <div class="code-block">
+      <span class="code-label">eco-data.js — 数据结构</span>
+const ECO_DATA=[
+  {id:'A00',name:'波兰开局/奥兰斯基开局',
+   moves:'b4',family:'波兰开局'},
+  {id:'A01',name:'尼姆佐维奇-拉尔森进攻',
+   moves:'b3',family:'尼姆佐维奇-拉尔森进攻'},
+  // ... 500 entries total
+];
+const ECO_BY_FAMILY={
+  '波兰开局':['A00'],
+  '西西里防御':['B20','B21',...,'B99'],
+  // ...
+};</div>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<!-- ============================================================ -->
+<!-- SECTION 10: 辅助功能 -->
+<!-- ============================================================ -->
+<div class="section" id="sec10">
+  <div class="section-header">
+    <div class="section-num">第十章</div>
+    <div class="section-title">辅助功能</div>
+  </div>
+
+  <h3>Syzygy 在线残局库</h3>
+  <p>≤7 子时侧面板显示查询栏，向 <code>tablebase.lichess.ovh</code> 查询精确残局判定：</p>
+  <table>
+    <tr><th>判定</th><th>中文</th><th>颜色</th><th>示例</th></tr>
+    <tr><td>win</td><td>必胜</td><td style="color:#27ae60"><code>#27ae60</code></td><td><span class="color-swatch" style="background:#27ae60"></span></td></tr>
+    <tr><td>draw</td><td>和棋</td><td style="color:#d4a017"><code>#d4a017</code></td><td><span class="color-swatch" style="background:#d4a017"></span></td></tr>
+    <tr><td>loss</td><td>必败</td><td style="color:#c0392b"><code>#c0392b</code></td><td><span class="color-swatch" style="background:#c0392b"></span></td></tr>
+  </table>
+
+  <h3>AI 提示</h3>
+  <p>MultiPV &gt; 1 时多线展示：⭐ 第一线金色 <span class="color-swatch" style="background:#ffd700"></span> <code>#ffd700</code>，后续线灰色 <span class="color-swatch" style="background:#a08050"></span> <code>var(--muted)</code>。v1.0.1 起，多线分析中的走法采用 PGN 标准代数记谱法（SAN）格式显示，而非引擎原始 UCI 格式。例如显示 <code>Nf3 e5 d4</code> 而非 <code>g1f3 e7e5 d2d4</code>。</p>
+
+  <h3>🔮 Ponder 预判提示</h3>
+  <p>当引擎配置中开启 Ponder（预判）模式后，AI 对手走棋完毕时，引擎会继续在后台分析对手可能的应手。预判信息根据当前局面分别显示在不同的区域：</p>
+  <table>
+    <tr><th>显示位置</th><th>触发条件</th><th>显示内容</th></tr>
+    <tr><td>AI 对手栏第二行（右对齐）</td><td>玩家回合，未使用 AI 提示</td><td>🔮 对手预判走法（SAN 格式，如 <code>e5</code>）+ 搜索深度、节点数、评估变化</td></tr>
+    <tr><td>AI 提示栏</td><td>玩家回合，使用 AI 提示功能</td><td>🔮 预判搜索深度、节点数、搜索速度、评估变化 + <strong>预判走法</strong>（SAN 格式，如 <code>e5</code>）</td></tr>
+  </table>
+  <div class="tip-box">
+    <span class="tip-label">提示：</span>Ponder 信息仅在 AI 对手走棋后、玩家思考期间显示。当 AI 正在思考或正在加载提示时，AI 对手栏的 Ponder 信息会自动隐藏，避免干扰。若玩家走出引擎预判的应手，引擎会立即利用已分析的结果（Ponder Hit），实现近乎零延迟的后续回应。
+  </div>
+  <div class="tip-box">
+    <span class="tip-label">条件显示：</span>AI 提示栏中的 Ponder 预判走法在两种场景下显示：(1) 当用户请求提示（💡 AI 提示）时，若引擎返回的 bestmove 后附带 ponder 信息，提示文本会同时显示推荐走法和预判走法（格式：🔦 推荐: Nf3 🔮 预判: e5）；(2) AI 对手栏第二行在引擎后台 Ponder 搜索活跃时显示预判信息。当无预判信息时，不会显示任何 Ponder 相关内容，保持界面简洁。
+  </div>
+  <div class="tip-box">
+    <span class="tip-label">数据时效：</span>Ponder 预判信息始终来自最近一次引擎反馈的 bestmove 响应中的 ponder 字段。每次引擎返回新的 bestmove 时，旧的预判数据会立即清除，仅当新 bestmove 包含 ponder 信息时才会更新显示，确保预判数据不会残留过期信息。在提示场景中，ponder 走法在引擎返回 bestmove 时即被转换为 SAN 格式（基于推荐走法执行后的局面进行转换，确保着法正确性），直接嵌入提示文本，无需等待 Ponder 搜索进度回调。
+  </div>
+
+  <div class="impl-section">
+    <h4>实现原理：Ponder 预判机制</h4>
+    <p>Ponder（预判）功能基于 UCI（Universal Chess Interface）协议的 <code>go ponder</code> 命令实现。完整数据流如下：</p>
+    <ol>
+      <li><strong>引擎返回最佳走法</strong>：引擎通过 stdout 输出 <code>bestmove e2e4 ponder e7e5</code>，其中 <code>e2e4</code> 是推荐走法，<code>e7e5</code> 是引擎预测对手的应手。</li>
+      <li><strong>Java 层解析</strong>：<code>StockfishNative.processEngineLine()</code> 使用正则 <code>^bestmove\s+(\S+)(?:\s+ponder\s+(\S+))?</code> 解析出 ponder 走法，存入 <code>_lastPonderMove</code> 字段。若无 ponder 字段则置 <code>null</code>。</li>
+      <li><strong>JS 层获取 ponder 数据</strong>：<code>onBestMove()</code> 和 <code>onHintMove()</code> 均通过 <code>AndroidBridge.getLastPonderMove()</code> 获取当前 ponder 走法。<code>getLastPonderMove()</code> 为一次性读取（读取后自动清空），防止旧数据泄漏到后续搜索。获取到的 UCI 走法暂存于 <code>_pendingPonderMoveUCI</code>，等待首个 <code>onPonderProgress()</code> 回调时再转换为 SAN 格式并赋值 <code>_ponderMoveSAN</code>，确保 <code>_ponderMoveSAN</code> 和 <code>_ponderBarInfo</code> 始终同步更新，避免仅有走法而无搜索进度的部分显示。</li>
+      <li><strong>启动 ponder 搜索</strong>：AI 走棋后，<code>onBestMove()</code> 将 ponder 走法应用到当前局面（通过 <code>makeMv()</code> 模拟对手走棋），生成新 FEN，调用 <code>AndroidBridge.startPonder(fen)</code>。Java 层向引擎发送 <code>position fen &lt;FEN&gt;</code> 和 <code>go ponder</code> 命令，引擎进入无限搜索模式。</li>
+      <li><strong>Ponder 进度回调与延迟转换</strong>：引擎搜索时通过 <code>info</code> 行实时回调 <code>onPonderProgress()</code>，更新 <code>_ponderBarInfo</code>（搜索深度、节点数、评估值）。首次回调时，若 <code>_pendingPonderMoveUCI</code> 存在，则将其转换为 SAN 格式赋值 <code>_ponderMoveSAN</code>（一次性，转换后清空）。此延迟机制确保预判走法和搜索进度在同一时刻出现，避免 UI 显示不完整。</li>
+      <li><strong>Ponder Hit / Stop</strong>：玩家走棋时，<code>executeMove()</code> 检查是否匹配 ponder 走法。匹配则调用 <code>AndroidBridge.ponderHit()</code>（引擎利用已有搜索结果继续分析）；不匹配则调用 <code>AndroidBridge.stopPonder()</code>（引擎停止搜索）。</li>
+      <li><strong>显示条件</strong>：AI 对手栏第二行仅当同时存在 <code>_ponderMoveSAN</code>（SAN 格式的预判走法）和 <code>_ponderBarInfo</code>（搜索进度）时才显示 🔮 预判信息。当 AI 正在思考、提示加载中、复盘模式或游戏结束时，自动隐藏。提示场景中，<code>onHintMove()</code> 将 ponder 走法直接转换为 SAN 并嵌入 <code>hintText</code>，与推荐走法一同显示（如「🔦 推荐: Nf3 🔮 预判: e5」），无需等待 Ponder 搜索进度。</li>
+      <li><strong>防陈旧数据机制</strong>：为防止 ponder 数据残留，实现多层防护：(a) 每次清除 ponder 变量时立即调用 <code>_updateAIThinkDisplay()</code> 更新 DOM，避免变量已清除但 DOM 仍显示旧值；(b) <code>onPonderProgress()</code> 增加代际守卫（<code>_ponderGen</code> / <code>_ponderStartGen</code>），若当前回调的代际与启动时不一致，说明 ponder 已被其他流程清除，回调应丢弃；(c) <code>onEngineProgress()</code> 在 AI 思考或提示加载期间主动清除残留 ponder 数据；(d) Java 层增加 <code>_discardingPonderBestmove</code> 标志，防止 ponder 停止后的 bestmove 被错误路由到正常搜索处理流程；(e) 提示区域现在要求 <code>_ponderMoveSAN</code> 和 <code>_ponderBarInfo</code> 同时存在才显示 🔮 预判，避免新 ponder 会话启动后但首帧进度尚未到达时显示旧 ponder 数据。</li>
+    </ol>
+    <div class="code-block">
+      <span class="code-label">UCI Ponder 交互示例</span>
+// AI 走 Nf3，引擎预测对手会走 e5
+→ position startpos moves e2e4 e7e5 g1f3
+→ go ponder                              // 引擎进入无限搜索
+← info depth 15 ... pv e7e5 d2d4 ...    // onPonderProgress() 实时更新
+// 玩家走了 e5（匹配 ponder 预判）
+→ ponderhit                              // 引擎立即利用已有分析
+← bestmove d2d4 ponder b8c6             // 几乎零延迟返回下一走法
+
+// 若玩家走了不同走法（不匹配预判）
+→ stop                                   // 引擎停止搜索
+← bestmove ...                           // 丢弃 ponder 结果，重新分析</div>
+  </div>
+
+  <h3>🌐 中/英语言切换</h3>
+  <p>v1.0.1 新增全局中英文切换功能。点击评估栏左侧（评估栏外部）的切换按钮即可切换语言模式：</p>
+  <table>
+    <tr><th>当前模式</th><th>按钮显示</th><th>切换后</th></tr>
+    <tr><td>中文模式</td><td><code>↔️中</code></td><td>切换至英文模式</td></tr>
+    <tr><td>英文模式</td><td><code>↔️EN</code></td><td>切换至中文模式</td></tr>
+  </table>
+  <p>切换至英文模式后，界面上所有用户可见的文字均会显示为英文，包括：</p>
+  <ul class="feature-list">
+    <li>工具栏按钮文字（New Game, Undo, Flip, AI Hint 等）</li>
+    <li>AI 对手栏和玩家栏标签</li>
+    <li>侧面板卡片标题（ECO Opening, Move History, Chess Tips 等）</li>
+    <li>新游戏对话框所有选项</li>
+    <li>引擎配置对话框所有标签和说明</li>
+    <li>游戏结束提示语</li>
+    <li>所有 Toast 通知消息</li>
+    <li>关于页面信息</li>
+  </ul>
+  <div class="tip-box">
+    <span class="tip-label">自动检测：</span>应用首次启动时，会根据 Android 系统语言设置自动选择界面语言：系统语言为中文时默认中文模式，其他语言默认英文模式。之后语言偏好会保存在本地存储中，手动切换后不再自动变更。
+  </div>
+
+  <h3>格子控制信息</h3>
+  <p>开启 🌈 后显示 📍 控制信息卡片：我方 <span class="color-swatch" style="background:#4a90d9"></span> <code>#4a90d9</code>，对方 <span class="color-swatch" style="background:#c0392b"></span> <code>#c0392b</code>。控制信息面板中的棋子名称（PN）显示支持国际化：中文模式下显示中文棋子名称（王、后、车、象、马、兵），英文模式下显示英文缩写（K、Q、R、B、N、P），与界面语言设置保持一致。</p>
+
+  <h3>棋理提示</h3>
+  <p>十大棋理原则按四大战略维度编排，随界面语言自动切换：中文模式显示中文棋理，英文模式显示英文棋理。</p>
+  <details>
+  <summary>中文版棋理原则</summary>
+  <p style="color:var(--muted);font-size:13px;margin-bottom:8px">一、开局三大黄金法则（奠定胜局基石）</p>
+  <ol class="principle-list">
+    <li><strong>中心控制</strong>：尽早控制中心格(d4,d5,e4,e5)，最大化子力效能，限制对手发展空间</li>
+    <li><strong>快速出子</strong>：尽快出动轻子（马、象）投入战斗，避免重复走子，尽早王车易位确保王安全</li>
+    <li><strong>王的安全</strong>：不要轻率推进王城兵（f,g,h兵），尽早易位将王藏于兵盾之后</li>
+  </ol>
+  <p style="color:var(--muted);font-size:13px;margin:10px 0 8px">二、兵型与空间管理（位置战的灵魂）</p>
+  <ol class="principle-list" style="counter-reset:principle 3">
+    <li><strong>兵链完整</strong>：避免孤兵、叠兵和落后兵，维持相互保护的兵链以确保阵地稳固</li>
+    <li><strong>空间优势</strong>：用兵链向前推进挤压对手空间，使其子力互相干涉、协调困难</li>
+    <li><strong>通路兵</strong>：制造并推进通路兵（尤其是连接通路兵），它是中残局的终极武器</li>
+  </ol>
+  <p style="color:var(--muted);font-size:13px;margin:10px 0 8px">三、子力运用与协同（战术与攻击的利刃）</p>
+  <ol class="principle-list" style="counter-reset:principle 6">
+    <li><strong>子力协调</strong>：棋子间相互支援、合力攻击同一目标，避免单子盲目深入而无后援</li>
+    <li><strong>开放线</strong>：迅速用车（或双车重叠）占领开放线和半开放线，入侵敌方底线</li>
+  </ol>
+  <p style="color:var(--muted);font-size:13px;margin:10px 0 8px">四、中局战略与局面判断（高阶博弈智慧）</p>
+  <ol class="principle-list" style="counter-reset:principle 8">
+    <li><strong>侧翼突破</strong>：中心封闭时，沿兵链指向的侧翼发起兵突破，打开战线</li>
+    <li><strong>兑换原则</strong>：占优时主动兑换简化局面导入胜势残局，劣势时保留复杂以寻找反击</li>
+  </ol>
+  </details>
+  <details>
+  <summary>English Chess Principles</summary>
+  <p style="color:var(--muted);font-size:13px;margin-bottom:8px">I. Three Golden Opening Rules (Foundation of Victory)</p>
+  <ol class="principle-list">
+    <li><strong>Center Control</strong>: Seize center squares (d4, d5, e4, e5) early to maximize piece efficiency and restrict the opponent's development</li>
+    <li><strong>Piece Development</strong>: Develop minor pieces (Knights, Bishops) quickly into battle; avoid moving the same piece twice; castle early to safeguard the King</li>
+    <li><strong>King Safety</strong>: Do not push kingside pawns (f, g, h) prematurely; castle early to tuck the King behind the pawn shield</li>
+  </ol>
+  <p style="color:var(--muted);font-size:13px;margin:10px 0 8px">II. Pawn Structure &amp; Space Management (Soul of Positional Play)</p>
+  <ol class="principle-list" style="counter-reset:principle 3">
+    <li><strong>Pawn Structure</strong>: Avoid isolated, doubled, and backward pawns; maintain a mutually protective pawn chain to secure your position</li>
+    <li><strong>Space Advantage</strong>: Advance your pawn chain to squeeze the opponent's space, causing their pieces to interfere with each other</li>
+    <li><strong>Passed Pawns</strong>: Create and advance passed pawns (especially connected passed pawns) — they are the ultimate weapon in the middlegame and endgame</li>
+  </ol>
+  <p style="color:var(--muted);font-size:13px;margin:10px 0 8px">III. Piece Play &amp; Coordination (Tactical Edge)</p>
+  <ol class="principle-list" style="counter-reset:principle 6">
+    <li><strong>Piece Coordination</strong>: Ensure pieces support each other and attack the same target; avoid sending a single piece deep without backup</li>
+    <li><strong>Open Files</strong>: Quickly occupy open and semi-open files with Rooks (or doubled Rooks) to invade the opponent's back rank</li>
+  </ol>
+  <p style="color:var(--muted);font-size:13px;margin:10px 0 8px">IV. Middlegame Strategy &amp; Judgment (Advanced Wisdom)</p>
+  <ol class="principle-list" style="counter-reset:principle 8">
+    <li><strong>Flank Breakthrough</strong>: When the center is locked, launch a pawn break on the flank where your pawn chain points</li>
+    <li><strong>Exchange Principle</strong>: Simplify into a winning endgame when ahead; keep the position complex to find counterplay when behind</li>
+  </ol>
+  </details>
+
+  <div class="impl-section">
+    <h4>实现原理：Syzygy 残局库</h4>
+    <p><code>tablebase.js</code> 通过 <code>fetch()</code> 请求 Lichess Tablebase API（<code>https://tablebase.lichess.ovh/standard</code>），返回 JSON 格式的残局数据。查询结果按 FEN 缓存到 <code>_tbCache</code>（Map），避免重复请求。</p>
+    <div class="code-block">
+      <span class="code-label">tablebase.js — 残局库查询</span>
+async function queryTablebase(fen){
+  const url='https://tablebase.lichess.ovh/standard?fen='
+    +encodeURIComponent(fen);
+  const resp=await fetch(url);
+  const data=await resp.json();
+  _tbCache.set(fen,data); // 缓存结果
+  return data;
+}</div>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<!-- ============================================================ -->
+<!-- SECTION 11: 法律许可 -->
+<!-- ============================================================ -->
+<div class="section" id="sec11">
+  <div class="section-header">
+    <div class="section-num">第十一章</div>
+    <div class="section-title">法律许可</div>
+  </div>
+
+  <p>Regalia 是一款开源软件，整体采用 <strong>GNU AGPL v3</strong> 发布。本项目为 AGPL v3 与 GPL v3 双重许可组合作品：整体同时受两份协议约束，但因 AGPL v3 的网络交互条款（第13条）更为严格，其要求实质上覆盖整个组合作品，确保用户通过网络访问时同样享有获取源代码的权利。</p>
+
+  <div style="text-align:center;margin:20px 0">
+    <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiIHN0YW5kYWxvbmU9Im5vIj8+CjwhLS0gQ3JlYXRlZCB3aXRoIElua3NjYXBlIChodHRwOi8vd3d3Lmlua3NjYXBlLm9yZy8pIC0tPgoKPHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4NjQiIGhlaWdodD0iMzU4IiB2ZXJzaW9uPSIxLjEiPgogIDxnIGlkPSJnMSIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoLTg4LjI0Nzk1NywtMTc2MS4xOTI5KSI+CiAgICA8ZyBpZD0iZzIiIHRyYW5zZm9ybT0ic2NhbGUoMi41OTY0LDIuNTk2NCkiPgogICAgICA8cGF0aCBpZD0icGF0aDEiIHN0eWxlPSJmaWxsOiM2NjMzNjYiIGQ9Im0gNjIuNzc3MjYxLDY4Mi42NjYzOCBjIDAsMCAtMjIuODQzMzksOTkuNjY1MzEgLTIyLjg0MzM5LDk5LjY2NTMxIDAuMDA2NiwwIDYwLjA5MTQxOSwwIDYwLjEwNDU1OSwwIDI2LjQyNDg0LDAgMTA1LjY3ODg0LDAgMTA1LjY3ODg0LDAgMS4yZS00LDAgNTQuOTYzNzEsMCA1NC45NjM3MSwwIC02LjU0Nzk2LC0wLjU3MTQ1IC0xMS43MTc2NSwtMi44NzAxMSAtMTQuNzk3OTEsLTcuMDYwMjcgLTAuNTcxMzMsLTAuNzc1MDkgLTEuMDQzNDYsLTEuNjA5OTkgLTEuNDU3MTUsLTIuNDgzNDggLTAuMjYyNzcsLTAuNjQzNTkgLTAuNTA5OCwtMS4yOTMgLTAuNzU5NDUsLTEuOTQ5NzEgLTAuNjU2ODIsLTIuMDg4NjMgLTAuOTE4NjksLTQuNDA2MTMgLTAuODAwNDMsLTYuODc1NjggMC4zMjg0MiwtNi44ODMgMy41NTgxLC0xNS4wNzAyOCA5LjE1MzgxLC0yMy42NDM4NiA1Ljk0Mzc1LC05LjExMTM0IDE0LjU1ODE5LC0xOC42NjEwMiAyNS4yMjQxNywtMjcuNTIyODMgMi4zOTA2NywtMS45ODQ3NSA0Ljg2MjYyLC0zLjk0NDczIDcuNDUwMjEsLTUuODQ5NDcgMy4xOTg1MiwtMi4zNTMxMSA2LjQyMTcsLTQuNTIwMzkgOS42NDYzNywtNi41NDcxNSAxMS44ODEsLTcuNDgwMDEgMjMuNzMyNTQsLTEyLjcxMzk3IDM0LjIzNDM3LC0xNS4zNzI1NSAtMTAuMDM1NTIsMy4yNzM5NyAtMjEuMzA5OCw4LjgzMjEyIC0zMi40NDg3LDE2LjM5ODc3IC0wLjQwMDY3LDAuMjcwNTQgLTAuNzk2MzIsMC41NDc3IC0xLjE5MDQ5LDAuODIwOTggLTYuMTgwMTYsNC4yODIxNiAtMTEuNzc5MTcsOC44Mjk5NiAtMTYuNjY1NTQsMTMuNDIyNzMgLTE1LjcyMzIzLDE0Ljc4Mzk4IC0yNC4wMzM4LDMwLjEwMzIyIC0yMC4yNTczMiwzOS4wNzgwNCAwLjI2OTI4LDAuNjE3MzMgMC41OTAyNywxLjIwNjgxIDAuOTY0NTgsMS43NjUxMyA0LjA1ODg4LDUuOTcgMTQuMTE4MTQsNy4wMDE5MyAyNi44NjYxMiwzLjc5NjkgMC44NjY5OCwtMC4yMTY2NiAxLjczMzk2LC0wLjQ2MjIgMi42MjcwOCwtMC43MTgzNSA0LjA3MjAxLC0xLjE3NTU0IDguMzk1MjcsLTIuNzYzMzggMTIuODQ4MiwtNC43MjA1MSAxLjA3MDUyLC0wLjQ3MjkzIDIuMTUyNTYsLTAuOTU4ODcgMy4yNDI4MiwtMS40Nzc4IDAuMTExNjQsLTAuMDUyNSAwLjIxNjY2LC0wLjEwNTAyIDAuMzI4MywtMC4xNjQxNSAxNC4wNTUwMSwtNi45ODM0NSAyNC44NTY0OCwtMTUuMDE4OTEgMjcuMTk0NTMsLTE5Ljg0Njg0IDAuNTEyMzIsLTEuMDUwMTkgMC42MzU0OCwtMS45NDU1OSAwLjI4NzMyLC0yLjY0NzYzIC0xLjY2ODIxLC0zLjM4MjQyIC0xMy4zNDE0NSwtMS4wOTczMyAtMjcuNDgxODUsNS4wMjgzOCAtMS4xMzYxNSwwLjQ5MjY3IC0yLjI4NTU0LDAuOTk5NTEgLTMuNDQ4MDYsMS41MzkzMyAwLjk0NTc0LC0wLjg3ODA1IDEuOTMwMTksLTEuNzU5NTMgMi45MzQ5NSwtMi42MjcwOCAxLjYwMjU3LC0xLjM4MDU1IDMuMjYxNzYsLTIuNzMwNTEgNS4wMjg0OCwtNC4wNjM4IDIuNzY0OTgsLTIuMDkzNzYgNS41NjAzMiwtMy45ODY2MiA4LjMxMjI5LC01LjY2NDY1IDEyLjg4NTg3LC05LjcyMTU5IDE5LjQwMDI3LC0xOC45MTc2NCAxOC4wNDA3MiwtMjIuMzMwMzEgLTAuMjU2MTUsLTAuNjQzMDEgLTAuODAxMjIsLTEuMDg1MjQgLTEuNjQxOTUsLTEuMzU0NjQgLTIuNjg2MjEsLTAuODU0NDIgLTcuNTg5MDIsMC4xNjU0MSAtMTMuNTQ1OSwyLjYwNjY1IC00LjkxMjc0LDIuMDE1MDEgLTEwLjU1NTI0LDUuMDAzMzggLTE2LjI3NTcyLDguNzIyNzcgMCwwIC0wLjc3OTg4LDAuNTEzMTIgLTAuNzc5ODgsMC41MTMxMiAwLDAgLTAuMTQzNzIsMC4wODIxIC0wLjE0MzcyLDAuMDgyMSAwLDAgLTIuNzUwMTMsMS44MjY2NSAtMi43NTAxMywxLjgyNjY1IDAsMCAxLjU4MDMxLC0yLjg5Mzg1IDEuNTgwMzEsLTIuODkzODUgMi4zNDQ2NywtNC4yOTIxIDYuMTYzODQsLTguNzcwMjYgMTAuOTE4ODIsLTEyLjkzMDI4IDMuNDg3NDQsLTMuMDQxNTcgNy40NzE2NywtNS45MDczNCAxMS43NjAzNCwtOC40MTQ5MSAxLjYyMjIsLTAuOTQ5NzQgMy4yNDIwMSwtMS44MzE3OCA0Ljg2NDIyLC0yLjYyNzA4IDEuNjYxNywtMC44MTE4NCAzLjMyNDA5LC0xLjUzMzI4IDQuOTQ2MywtMi4xNzU2MSA0LjcxMzA4LC0xLjg2Mzg3IDkuODkwNTQsLTQuMjE3NjcgMTMuODE0MDQsLTQuNTI1NjUgLTAuMzU3MywwIC0xMS42OTk5NiwxLjIyMTMxIC0xMS42OTk5NiwxLjIyMTMxIDAsMCAtMzcuMTQ4NzcsMCAtMzcuMTQ4NzcsMCAwLDAgLTE2My44MDMyNiwwIC0xNjMuODAzMjYsMCAwLDAgLTczLjA3NTg3OSwwIC03My4wNzU4NzksMCB6IG0gMTc3LjkzMzcxOSwwLjE0MzcxIGMgLTAuNjQzNTksOS44MjMzMSAxLjI2MTAzLDI0LjIxMTUzIDUuNTgyNTgsNDAuMTg2MjMgMC43Njg0NiwyLjg0MjQ5IDEuNjA0OTcsNS43MzUzMSAyLjUyNDQ2LDguNjYxMjQgMC41NzE0NCwxLjgwNjc5IDEuMTYwOTIsMy41ODUyNyAxLjc2NTEyLDUuMzM2MjQgLTAuMzU0NjcsMC41MjE0NSAtMC43MTE3MywxLjAzOTY5IC0xLjA0Njc3LDEuNTU5ODggLTUuMzkyMDYsOC4yNjM0MyAtOC41NDM3OCwxNi4wNzI4NyAtOS4zMzg1LDIyLjg2Mzg2IC0yLjI3OTA0LC03LjYzMTcxIC0zLjk5NDczLC0xNS45OTA5MSAtNC45NjY4NSwtMjQuODU0NzcgLTAuMjc1NzksLTIuNTM5NjUgLTAuNDkxNjUsLTUuMDUwOTggLTAuNjM2MTYsLTcuNTMyMjkgLTEuMDY0MDEsLTE4LjAyMzgzIDEuMjg4ODgsLTM0LjM2MjQ1IDYuMTE2MTIsLTQ2LjIyMDM5IHogbSAtMTA3LjYwODA5LDEyLjc4NjQ1IGMgMC4xMjI5NCwtMC4wMDMgMC4yNDQxNywwIDAuMzY5NCwwIDAsMCAyNC4yODAxMywwIDI0LjI4MDEzLDAgMi4wNzUzOSwwIDMuNjgwMzYsMC4zODkwMyA0LjgyMzEzLDEuMTY5OTQgMS4xMzYxNSwwLjc4NTQ4IDEuNTYyMjgsMS44MDE1NCAxLjI5Mjk5LDMuMDM3NTcgMCwwIC0yLjg5Mzg1LDEzLjA3Mzg4IC0yLjg5Mzg1LDEzLjA3Mzg4IDAsMCAtOC41NTg2MiwwIC04LjU1ODYyLDAgMCwwIDIuODExNzgsLTEyLjcyNDkyIDIuODExNzgsLTEyLjcyNDkyIDAsMCAtMjEuNDI3MTUsMCAtMjEuNDI3MTUsMCAwLDAgLTcuNzM3NjQsMzQuOTczMDUgLTcuNzM3NjQsMzQuOTczMDUgMCwwIC0yLjc5MTM1LDEyLjY2MzUgLTIuNzkxMzUsMTIuNjYzNSAwLDAgMjEuNDA2NzEsMCAyMS40MDY3MSwwIDAsMCAwLjAyMDYsLTAuMDgyMSAwLjAyMDYsLTAuMDgyMSAwLDAgNC4yODk1OCwtMTkuMzc0OTMgNC4yODk1OCwtMTkuMzc0OTMgMCwwIC0xMC4wNTY4NSwwIC0xMC4wNTY4NSwwIDAsMCAwLjk2NDY5LC00LjM3MTU1IDAuOTY0NjksLTQuMzcxNTUgMCwtMS4xZS00IDE4LjYxNTM3LDAgMTguNjE1MzcsMCAwLC0xLjFlLTQgLTUuMzM2MjQsMjQuMTc3NCAtNS4zMzYyNCwyNC4xNzc0IC0wLjA3MjMsMC4zNDQxNyAtMC4xOTg3NCwwLjY1NTkyIC0wLjM2OTUxLDAuOTY0NyAtMC40NDAwNiwwLjgwMTIyIC0xLjIwNzYxLDEuNDg3NSAtMi4yNzgxMiwyLjA1MjQ0IC0xLjQ4NDMxLDAuNzgxNDggLTMuMjYwODUsMS4xNjk4MiAtNS4zMzYzNiwxLjE2OTgyIDAsMCAtMjQuMjU5NDcsMCAtMjQuMjU5NDcsMCAtMi4wNzUzOSwwIC0zLjY4MDM2LC0wLjM4ODM0IC00LjgyMzI0LC0xLjE2OTgyIC0xLjEzNjE1LC0wLjc4MTYgLTEuNTY4ODQsLTEuNzc5NzQgLTEuMjkyOTksLTMuMDE3MTQgMCwwIDEwLjY5MzE0LC00OC4zMzQzNiAxMC42OTMxNCwtNDguMzM0MzYgMC4yNzU3OSwtMS4yMzYwMyAxLjEzNjE1LC0yLjI1MjA5IDIuNjI2OTYsLTMuMDM3NTcgMC4wNTI2LC0wLjAyODMgMC4xMTE3NiwtMC4wMzQ3IDAuMTY0MjcsLTAuMDYxNSAxLjM2MDgsLTAuNjgxNiAyLjk1Nzc4LC0xLjA2NDggNC44MDI2OSwtMS4xMDg0MSB6IG0gMzguMDUxODMsMCBjIC0xLjJlLTQsMCAzMC41NjA0LDAgMzAuNTYwNCwwIDIuMDQ5MTMsMCAzLjY1OTgxLDAuMzg5MDMgNC44MDI3LDEuMTY5OTQgMS4xNDkyNywwLjc4NTQ4IDEuNTg5MzMsMS44MDE1NCAxLjMxMzU0LDMuMDM3NTcgMCwwIC01LjcwNTc1LDI1Ljc3ODM3IC01LjcwNTc1LDI1Ljc3ODM3IC0wLjI2OTI4LDEuMjI4MTYgLTEuMTUwMTksMi4yMzAxOCAtMi42NDc2MywzLjAxNzAzIC0xLjQ5NzQ0LDAuNzg5NDcgLTMuMjYwMDUsMS4xOTAzNyAtNS4zMTU4MSwxLjE5MDM3IDAsMCAtMjIuMjA3MTQsMCAtMjIuMjA3MTQsMCAwLDAgLTQuMjg5NDcsMTkuMzU0MjcgLTQuMjg5NDcsMTkuMzU0MjcgMCwwIC0wLjY5NzgxLDMuMTgxMjggLTAuNjk3ODEsMy4xODEyOCAwLDAgLTguMzczOTIsMCAtOC4zNzM5MiwwIDAsMCAwLjYzNjI4LC0yLjg3MzQyIDAuNjM2MjgsLTIuODczNDIgMCwwIDExLjkyNDYxLC01My44NTU0MSAxMS45MjQ2MSwtNTMuODU1NDEgeiBtIDQyLjIxODEyLDAgYyAwLDAgOC4zNzM4MSwwIDguMzczODEsMCAwLDAgLTkuNDgyMTEsNDIuODMzOTcgLTkuNDgyMTEsNDIuODMzOTcgMCwwIC0yLjA3Mjk5LDkuMzU5MDUgLTIuMDcyOTksOS4zNTkwNSAwLDAgMjAuMDMxNjUsMCAyMC4wMzE2NSwwIDAuMjEwMTUsMS41MzYxNCAwLjQ1NTU3LDMuMDQ1IDAuNzE4MzUsNC41MzU4MSAwLDAgLTMwLjEyOTQ4LDAgLTMwLjEyOTQ4LDAgMCwwIDIuMzgwNzQsLTEwLjc1NDY2IDIuMzgwNzQsLTEwLjc1NDY2IDAsMCAxMC4xODAwMywtNDUuOTc0MTcgMTAuMTgwMDMsLTQ1Ljk3NDE3IHogbSAtMzQuODQ5OTksNC41NTY0NyBjIDAsMCAtNS41NjIxNCwyNS4wODA0NSAtNS41NjIxNCwyNS4wODA0NSAwLDAgMjAuODczMTYsMCAyMC44NzMxNiwwIDAsMCA1LjU0MTQ5LC0yNS4wODA0NSA1LjU0MTQ5LC0yNS4wODA0NSAwLDAgLTIwLjg1MjUxLDAgLTIwLjg1MjUxLDAgeiBtIC00NC41MDkwMyw1OS4xOTQyOCBjIDAuMDgyLC0wLjAwMyAwLjE2MzgxLDAgMC4yNDYzNCwwIDAuOTcyLDAgMS44MjA5NCwwLjE3MDY1IDIuNTAzOTEsMC40OTI1NiAwLjcyOTA5LDAuMzQxNTQgMS4yNTA0MiwwLjg0ODgzIDEuNTM5MzQsMS41MTg3OSAwLjI4MjQxLDAuNjUwMiAwLjM1NjI2LDEuMzg4MTkgMC4yMDUyNCwyLjE5NjA0IDAsMCAtMC4wNjE1LDAuMzA3ODcgLTAuMDYxNSwwLjMwNzg3IDAsMCAtMi40MDEyOSwwIC0yLjQwMTI5LDAgLTEuMWUtNCwwIDAuMDIwNCwtMC4yODczMiAwLjAyMDQsLTAuMjg3MzIgMC4wNjIxLC0wLjU2NDQ4IC0wLjAwOCwtMS4wMDgzIC0wLjIyNTY3LC0xLjMxMzU0IC0wLjAyODQsLTAuMDM4MiAtMC4wNjk2LC0wLjA4ODggLTAuMTAyNzQsLTAuMTIzMTcgLTAuMDU0MSwtMC4wNTU0IC0wLjEzNTUsLTAuMTE4NDkgLTAuMjA1MTMsLTAuMTY0MTUgLTAuMzM2MDYsLTAuMjExNzUgLTAuODYxNjEsLTAuMzI4NDEgLTEuNTM5MzMsLTAuMzI4NDEgLTAuODk5ODYsMCAtMS41NzIyMSwwLjE1NjczIC0yLjAzMTksMC40NzIwMSAtMC40NDY2NywwLjMwODY3IC0wLjcyOTA4LDAuNjUzNTIgLTAuODIwOTgsMS4wNjczMiAtMC4wOTIsMC40MjAzIDAuMDU5LDAuNjQxMTkgMC4xNjQxNSwwLjc1OTMzIDAuMDAzLDAuMDAzIDAuMDE2NiwwLjAxNjkgMC4wMjA1LDAuMDIwNSAwLjEzMzEsMC4xMTMzNSAwLjU5NTE5LDAuMzc5MzMgMi4wMzE5LDAuNzE4MzYgMS4zMDA0MSwwLjMxNTI4IDIuMTYxNTcsMC41OTg0OSAyLjY0NzYzLDAuODQxNTIgMC43MzU1OSwwLjM3NDMgMS4yNDk1LDAuODU5NTYgMS41MTg3OCwxLjQ1NzE0IDAuMjY5MjksMC41OTEyIDAuMzI4NDIsMS4yODMxOCAwLjE2NDE1LDIuMDMxOSAtMC4xNjQxNSwwLjcyOTA5IC0wLjUzNjA1LDEuNDAxNDQgLTEuMDg3NzUsMi4wMzE5IC0wLjU0NTA3LDAuNjMwNDYgLTEuMjM4NzcsMS4xMjk2NCAtMi4wNzI5OSwxLjQ3NzggLTAuODI3NDgsMC4zNDE1NCAtMS43MzU0NCwwLjUzMzU1IC0yLjY2ODA2LDAuNTMzNTUgLTEuMTgyMjcsMCAtMi4xMzEzMiwtMC4xNzg4OCAtMi44NzM0MiwtMC41MzM1NSAtMC43NzQ5OCwtMC4zNjc3OSAtMS4zMzQwOSwtMC45NDgyNSAtMS42NjIzOSwtMS43MDM1OSAtMC4zMTUyOSwtMC43MzU0OCAtMC4zODI2MywtMS41NzA1IC0wLjIwNTM2LC0yLjQ4MzM3IDAsMCAwLjA2MTYsLTAuMjg3MzIgMC4wNjE2LC0wLjI4NzMyIDAsMCAyLjM2MDMxLDAgMi4zNjAzMSwwIDAsMCAtMC4wMjA1LDAuMjg3MzIgLTAuMDIwNSwwLjI4NzMyIC0wLjA1OTEsMC41NDUwNyAtOGUtNCwwLjk4NTEzIDAuMTQzNiwxLjMxMzU0IDAuMTM4MDEsMC4zMTUyOSAwLjQwMDY3LDAuNTc2MzUgMC44MjA5OCwwLjc3OTg4IDAuNDQ2NjcsMC4yMTY3OCAxLjAwNDg3LDAuMzI4NDIgMS42NDE5NSwwLjMyODQyIDAuNTcxNDQsMCAxLjA5MzU3LC0wLjA5NiAxLjU1OTg4LC0wLjI2Njc3IDAuNDU5NjksLTAuMTY0MjcgMC44MjUwOSwtMC4zODA5MyAxLjA4Nzc1LC0wLjY1NjgzIDAuMjU2MTYsLTAuMjc1NzkgMC40MDYzOCwtMC41NjczMyAwLjQ3MjAyLC0wLjg4MjUxIDAuMDY1NywtMC4yODI0MSAwLjA1MDEsLTAuNTIxMzMgLTAuMDYxNSwtMC43MTgzNSAtMC4xMjQ3NywtMC4yMTAxNSAtMC4zNzE5MSwtMC4zOTY1NiAtMC43NTk0NSwtMC41NTQwOSAwLC0xLjJlLTQgLTIuMDExMzUsLTAuNTk1MyAtMi4wMTEzNSwtMC41OTUzIC0xLjEyMzAyLC0wLjI4MjQxIC0xLjg3OTE2LC0wLjU1MTcgLTIuMzE5MjEsLTAuODIwOTggLTAuNTk3NywtMC4zNTQ1NiAtMS4wMjg2MiwtMC44MDk0NSAtMS4yNTIwMiwtMS4zNTQ1MiAtMC4yMjMyOCwtMC41Mzg1NyAtMC4yNDcwMiwtMS4xMzU0NyAtMC4xMDI1MSwtMS43ODU2NyAwLjE1MTAzLC0wLjY5NjIxIDAuNDg2NzUsLTEuMzU4NjMgMS4wMDU2OCwtMS45NDk3MSAwLjUyNTQ0LC0wLjU5NzcgMS4yMDM1LC0xLjA2NjUyIDIuMDExMzUsLTEuMzc1MTggMC43MTQyNCwtMC4yNjc4IDEuNDY1ODIsLTAuNDI0ODggMi4yNTc1NywtMC40NTE0NyB6IG0gMjEuNTUwNDMsMC4wNDEgYyAwLjEyOTksLTAuMDEgMC4yNTIwNSwwIDAuMzg5OTQsMCAwLDAgMS40Nzc2OSwwLjE2NDE1IDEuNDc3NjksMC4xNjQxNSAwLDAgMC40OTI1NywwLjA0MTEgMC40OTI1NywwLjA0MTEgMS4xZS00LDAgLTAuNzE4MjUsMS44MjY2NSAtMC43MTgyNSwxLjgyNjY1IDAsMCAtMC4xNDM3MSwwLjI4NzMyIC0wLjE0MzcxLDAuMjg3MzIgMCwwIC0xLjEyODg1LC0wLjEwMjYyIC0xLjEyODg1LC0wLjEwMjYyIC0wLjMzMzMyLDAgLTAuNTc4MTcsMC4wNTE1IC0wLjczODksMC4xNjQyNyAtMC4wMTA2LDAuMDA4IC0wLjAzMTIsMC4wMzI0IC0wLjA0MSwwLjA0MSAtMC4wMjE2LDAuMDE4OSAtMC4wNTc4LDAuMDUxOCAtMC4wODIxLDAuMDgyMiAtMC4wOTg5LDAuMTI5NTcgLTAuMjE5MTcsMC4zNjExOCAtMC4zMDc4NywwLjc3OTg5IDAsMCAtMC4wNDI3LDAuMTc3MjcgLTAuMDgyMSwwLjMyODQxIDAuNTE4ODEsMCAxLjc2NTAxLDAgMS43NjUwMSwwIDAsMCAtMC40NTE0NywyLjAzMTkgLTAuNDUxNDcsMi4wMzE5IDAsMCAtMS4yOTA2LDAgLTEuNzI0MDMsMCAtMC4xMzEzOSwwLjU5MTA3IC0xLjc0NDU4LDcuODE5NiAtMS43NDQ1OCw3LjgxOTYgMCwwIC0yLjM4MDg2LDAgLTIuMzgwODYsMCAwLDAgMS41NDc1NSwtNi45NDYxMiAxLjc0NDU4LC03LjgxOTYgLTAuNDAwNjcsMCAtMS4zNzUwNywwIC0xLjM3NTA3LDAgMCwwIDAuNDUxNDcsLTIuMDMxOSAwLjQ1MTQ3LC0yLjAzMTkgMCwwIDAuOTgwMjIsMCAxLjM1NDY0LDAgMC4wNjU2LC0wLjI4MjQxIDAuMTY0MTQsLTAuNjM2MjggMC4xNjQxNCwtMC42MzYyOCAwLjE0NDUyLC0wLjY1NjgzIDAuMjk1NTQsLTEuMTI4ODQgMC40OTI1NywtMS40NTcyNiAwLjI2OTQsLTAuNDUzMTggMC42NDk0MSwtMC44MzIzOSAxLjEyODg0LC0xLjEwODI5IDAuMzk0OTcsLTAuMjI5NDUgMC44OTQzOCwtMC4zNjY2NiAxLjQ1NzI2LC0wLjQxMDQ5IHogbSA1LjY4NTIsMC4xMDI2MiBjIDAsMCAtMC42MjIzNSwyLjgwMDM2IC0wLjc3OTg4LDMuNTA5NyAwLjQ1OTY5LDAgMS41MzkyMiwwIDEuNTM5MjIsMCAwLDAgLTAuNDUxNDcsMi4wMzE5IC0wLjQ1MTQ3LDIuMDMxOSAwLDAgLTEuMTMyMTYsMCAtMS41MzkzNCwwIC0wLjEyNDc2LDAuNTY0NyAtMS4xMDgyOSw0Ljk0NjMgLTEuMTA4MjksNC45NDYzIDAsMCAtMC4wODIxLDAuNTI2MjMgLTAuMDgyMSwwLjY3NzI2IDEuMmUtNCwwLjAwNSAtNC41ZS00LDAuMDE2OCAwLDAuMDIwNSAzLjRlLTQsMC4wMDIgLTQuNWUtNCwwLjAxOTIgMCwwLjAyMDUgNS43ZS00LDEwZS00IDAuMDE5NiwtOGUtNCAwLjAyMDQsMCAwLDAgMC4yNDYzMywwLjAyMDQgMC4yNDYzMywwLjAyMDQgMCwwIDEuMTI4ODUsLTAuMDgyMSAxLjEyODg1LC0wLjA4MjEgMCwwIC0wLjEyMzE3LDEuODI2NjUgLTAuMTIzMTcsMS44MjY2NSAwLDAgMC4wMjA1LDAuMzI4NDEgMC4wMjA1LDAuMzI4NDEgMCwwIC0xLjYyMTQxLDAuMTg0NyAtMS42MjE0MSwwLjE4NDcgLTAuNjQzNTksMCAtMS4xMTU3MiwtMC4xMDUwMiAtMS40NTcyNiwtMC4zMjg0MSAtMC4zNjExNywtMC4yMzY0MSAtMC41NzEzMywtMC41NDk5OCAtMC42NTY3MSwtMC45NDQwNCAtMC4wMTMxLC0wLjA3MjMgLTAuMDQxMSwtMC4xNzczOSAtMC4wNDExLC0wLjMyODQxIDAsLTAuMjk1NTQgMC4wNTU4LC0wLjc5NTUyIDAuMjQ2MzQsLTEuNjYyNSAwLDAgMC44NjI3NiwtMy44NjUwNiAxLjA0NjY2LC00LjY3OTQxIC0wLjMwODY3LDAgLTEuMTI4NzMsMCAtMS4xMjg3MywwIDAsMCAwLjQ1MTQ3LC0yLjAzMTkgMC40NTE0NywtMi4wMzE5IDAsMCAwLjgwMDQzLDAgMS4xMjg4NCwwIDAuMTA1MTMsLTAuNDcyOTMgMC40NzIwMiwtMi4wOTM1NCAwLjQ3MjAyLC0yLjA5MzU0IDAsMCAxLjkwODg0LC0xLjAwNTY3IDEuOTA4ODQsLTEuMDA1NjcgMCwwIDAuNzc5ODgsLTAuNDEwNDkgMC43Nzk4OCwtMC40MTA0OSB6IG0gLTc1LjYzMTUzOSwwLjA4MjEgYyAwLDAgOS4yMzU4NywwIDkuMjM1ODcsMCAwLDAgLTAuNTEzMSwyLjI5ODc5IC0wLjUxMzEsMi4yOTg3OSAwLDAgLTYuMTYxMzUsMCAtNi43NTI0NSwwIC0wLjEwNTA2LDAuNDY2MzEgLTAuNTI2MjIsMi4zNTQ0OSAtMC42NzcyOCwzLjAzNzU3IDAuODUzODEsMCA1Ljg0OTM3LDAgNS44NDkzNywwIDAsMCAtMC41MTMxMSwyLjI5ODY3IC0wLjUxMzExLDIuMjk4NjcgMCwwIC01LjI1ODI3LDAgLTUuODQ5MzcsMCAtMC4xMjQ3OSwwLjU3MTQ0IC0xLjI1MTk4LDUuNjQ0MSAtMS4yNTE5OCw1LjY0NDEgMCwwIC0yLjQ4MzQzLDAgLTIuNDgzNDMsMCAwLDAgMi45NTU0OCwtMTMuMjc5MTMgMi45NTU0OCwtMTMuMjc5MTMgeiBtIDEyLjM3NjA4LDMuMjQyOTMgYyAwLjA5MjY2LC0wLjAxMTQgMC4xOTM5MiwwIDAuMjg3MzEsMCAwLjU5MTEsMCAxLjEzNzA3LDAuMTc5NzkgMS42NjI0OCwwLjU1NDEgMCwwIDAuMzI4Mzg5LDAuMjI1NzkgMC4zMjgzODksMC4yMjU3OSAwLDAgLTEuMjcyNTA5LDIuMDkzNDIgLTEuMjcyNTA5LDIuMDkzNDIgMCwwIC0wLjM0ODkyLC0wLjI0NjM0IC0wLjM0ODkyLC0wLjI0NjM0IC0wLjI1NjEyLC0wLjE2NDE1IC0wLjUzMTk2LC0wLjI0NjIyIC0wLjgyMDk1LC0wLjI0NjIyIC0wLjI0OTU4LDAgLTAuNDgxOSwwLjA4ODcgLTAuNzE4MzQsMC4yNDYyMiAtMC4yNDk1OCwwLjE2NDI3IC0wLjQ1ODExLDAuMzgxODQgLTAuNjE1NzEsMC42NzczOCAtMC4yNzU4NSwwLjUwNTY5IC0wLjQ3NzgzLDEuMDcyMTEgLTAuNjE1NzUsMS42ODI5MyAwLDAgLTEuMTA4MzIsNS4wNDg5MiAtMS4xMDgzMiw1LjA0ODkyIDAsMCAtMi4zODA3OSwwIC0yLjM4MDc5LDAgMCwwIDIuMTk2MTEsLTkuODUxNSAyLjE5NjExLC05Ljg1MTUgMCwwIDIuMjE2NiwwIDIuMjE2NiwwIDAsMCAtMC4wNzYzOCwwLjI5ODc0IC0wLjEwMjY0LDAuNDEwMzggMC4xMDUxMSwtMC4wNzg4IDAuMjE1OTEsLTAuMTg3MSAwLjMwNzg5LC0wLjI0NjIzIDAuMzE4MSwtMC4xODk4MyAwLjY1NDExLC0wLjMwODMyIDAuOTg1MTUsLTAuMzQ4ODUgeiBtIDcuMDYwMjk5LDAgYyAwLjE0MzM1LC0wLjAxMDkgMC4yODQ0NiwwIDAuNDMxMDIsMCAxLjMzOTgsMCAyLjM1MzY4LDAuNDY5NTEgMy4wMTcwMywxLjM5NTYyIDAuNDEzNzcsMC41OTc1OCAwLjYzNjI4LDEuMzM2NDkgMC42MzYyOCwyLjIxNjU5IDAsMC40ODU5NSAtMC4wNTk5LDEuMDA4OTkgLTAuMTg0NzIsMS41ODAzMiAwLDAgLTAuMTg0NzIsMC43MTgzNSAtMC4xODQ3MiwwLjcxODM1IDAsMCAtNi4wMjA5NywwIC02LjY5MDksMCAtMC4wMTMxLDAuMTM3OSAtMC4wMjA1LDAuMjg1NzIgLTAuMDIwNSwwLjQxMDQ5IDAsMC41MTIzMSAwLjEwNTExLDAuOTE1MzggMC4zMjgzOCwxLjIxMDkyIDAuMTA2MTIsMC4xNDQ1MSAwLjIyOTE0LDAuMjc0NjUgMC4zNjk0NCwwLjM2OTM5IDAuMjY0NTQsMC4xNzI2IDAuNjA2MDEsMC4yNjY4OSAxLjAwNTcyLDAuMjY2ODkgMC40ODU5OSwwIDAuOTEyOSwtMC4xMzM5IDEuMzEzNTMsLTAuMzg5OTQgMC4zODA5MSwtMC4yNDMwMyAwLjc0NTQzLC0wLjYzMTM3IDEuMDY3MjYsLTEuMTY5OTQgMCwwIDIuNTQ0OTksMCAyLjU0NDk5LDAgMCwwIC0wLjIyNTc0LDAuNDkyNTYgLTAuMjI1NzQsMC40OTI1NiAtMC40ODYwMywwLjk4NTI0IC0xLjE2NDE3LDEuNzUzNiAtMi4wMTEzOSwyLjI5ODc5IC0wLjg0NzIyLDAuNTQ1MDcgLTEuODU5NDgsMC44NDE0MSAtMi45NzYwMSwwLjg0MTQxIC0xLjQ1MTQ1LDAgLTIuNTMxODUsLTAuNDY5NTEgLTMuMjAxNzUsLTEuMzk1NjIgLTAuNjYzMzQ5LC0wLjkwNjM2IC0wLjgwNjE5OSwtMi4xNTkxNyAtMC40NTE1NTksLTMuNzM1MzggMC4zNTQ2OTksLTEuNjAyNTcgMS4wNjIzMzksLTIuODgzMjQgMi4wOTM0NjksLTMuNzc2NDcgMC45MjQyMiwtMC44MDEzNSAxLjk3Mjk1LC0xLjI0NTg1IDMuMTQwMjEsLTEuMzMzOTggeiBtIDEwLjY5MzEzLDAgYyAwLjE0MzI2LC0wLjAxMDkgMC4yODQ0NiwwIDAuNDMwOTIsMCAxLjMzOTkxLDAgMi4zNTM4LDAuNDY5NTEgMy4wMTcxNCwxLjM5NTYyIDAuNDEzNzksMC41OTc1OCAwLjYzNjE2LDEuMzM2NDkgMC42MzYxNiwyLjIxNjU5IDAsMC40Nzk0NCAtMC4wNTk5LDAuOTk0OTUgLTAuMTg0NywxLjU1OTc3IDAsMCAtMC4xODQ2OSwwLjczODkgLTAuMTg0NjksMC43Mzg5IDAsMCAtNi4wMjA5NywwIC02LjY5MDg3LDAgLTAuMDA3LDAuMDkyIC0wLjAxNCwwLjE3NDg4IC0wLjAyMDUsMC4yNjY3NyAtMC4wMDUsMC4wMzQ1IDAuMDAyLDAuMDg2OSAwLDAuMTIzMTcgLTEuOWUtNCwwLjAwNiAwLDAuMDE0OCAwLDAuMDIwNSAwLDAuMDk4NSAwLjAxMzksMC4xOTU0MyAwLjAyMDUsMC4yODczMiAwLjAzMjgsMC4zNzQ0MiAwLjEzMDU0LDAuNjg3MTkgMC4zMDc4NiwwLjkyMzYgMC4wMzM4LDAuMDQ2IDAuMDY1NSwwLjEwMjc0IDAuMTAyNiwwLjE0MzcyIDAuMzAwODEsMC4zMjE3OSAwLjcyNjU2LDAuNDkyNTYgMS4yNzI1MSwwLjQ5MjU2IDAuNDg2MDIsMCAwLjkxOTQ1LC0wLjEzMzkgMS4zMTM1LC0wLjM4OTk0IDAuMzgxMDQsLTAuMjQzMDMgMC43NDU1MiwtMC42MzEzNyAxLjA2NzMyLC0xLjE2OTk0IDAsMCAyLjU2NTQ0LDAgMi41NjU0NCwwIDAsMCAtMC4yNDYyMywwLjQ5MjU2IC0wLjI0NjIzLDAuNDkyNTYgLTAuNDg2MDYsMC45ODUyNCAtMS4xNjQxMiwxLjc1MzYgLTIuMDExMzUsMi4yOTg3OSAtMC44NDcyMywwLjU0NTA3IC0xLjg1OTUzLDAuODQxNDEgLTIuOTc2LDAuODQxNDEgLTEuNDUxNDksMCAtMi41MzE4OSwtMC40Njk1MSAtMy4yMDE3OCwtMS4zOTU2MiAtMC40MzM0NiwtMC41OTEwOCAtMC42MzYyNCwtMS4zNDM5MSAtMC42MzYyNCwtMi4yMzcxNCAwLC0wLjEzNzkgMC4wMDcsLTAuMjg2NTIgMC4wMjA1LC0wLjQzMTA0IDAuMDI2MywtMC4zNDE0MiAwLjA3ODgsLTAuNjg2MjggMC4xNjQxOSwtMS4wNjcyIDAuMzU0NjUsLTEuNTk1OTUgMS4wNDE4LC0yLjg4MzI0IDIuMDcyOTMsLTMuNzc2NDcgMC45MjQxOSwtMC44MDEzNSAxLjk5MzQ0LC0xLjI0NTg1IDMuMTYwNzYsLTEuMzMzOTggeiBtIDI5LjEyMzY5LDAgYyAwLjE0NjY5LC0wLjAxMTMgMC4yODE2MSwwIDAuNDMxMDQsMCAxLjM2NjE2LDAgMi40MTYxMywwLjQ2MjA5IDMuMDk5MSwxLjM3NTA3IDAuNjc2NTcsMC45MTI4NyAwLjg0MDcyLDIuMTQ0MzQgMC40OTI2NywzLjY5NDI5IC0wLjI2OTI4LDEuMjA4NTIgLTAuNjU4NDIsMi4xODQ2MyAtMS4xOTA0OCwyLjg5Mzk3IC0wLjUzMTk1LDAuNzA5MzMgLTEuMjEwMDEsMS4yODg4OCAtMi4wMTEzNSwxLjY4MjkzIC0wLjc5NDYxLDAuMzk0MDUgLTEuNjM2MTQsMC41OTUxOSAtMi40ODMzNywwLjU5NTE5IC0xLjM5MjQyLDAgLTIuNDI5MjUsLTAuNDc2MTMgLTMuMDk5MjEsLTEuMzk1NjIgLTAuNDMzNDMsLTAuNTg0NTcgLTAuNjU2NzEsLTEuMzM3MjggLTAuNjU2NzEsLTIuMjM3MTQgMCwtMC40ODU5NCAwLjA1MzMsLTEuMDAyMzYgMC4xODQ2OSwtMS41ODAzMSAwLjM5NDA1LC0xLjc2MDIyIDEuMTk4NTksLTMuMTAwODEgMi4zODA3NSwtMy45NjExNyAwLjg2Nzc4LC0wLjYyNjQ3IDEuODI2MTksLTAuOTg4MzMgMi44NTI4NywtMS4wNjcyMSB6IG0gMzYuMDYxMDIsMCBjIDAuMTczMTcsLTAuMDEwNyAwLjMzMzQ0LDAgMC41MTMxMSwwIDAuODI3NDksMCAxLjQ3NzY5LDAuMDgzNyAxLjk3MDI2LDAuMjg3MzIgMC41MjU0NCwwLjIxMDE2IDAuODk4MTQsMC41MDcyOSAxLjEwODI5LDAuODYxOTYgMC4yMDM2NSwwLjMzNDkyIDAuMzA3ODcsMC43NDYzMiAwLjMwNzg3LDEuMjUyMDEgMCwwIC0wLjI0NjIyLDEuNDk4MjQgLTAuMjQ2MjIsMS40OTgyNCAwLDAgLTAuNDUxNTksMi4wMzE5IC0wLjQ1MTU5LDIuMDMxOSAtMC4zODc1NCwxLjczMzg1IC0wLjQ3MjgxLDIuMzg0MDUgLTAuNDkyNTYsMi42MjcwOCAtMC4wMTk3LDAuMzI4NDEgMC4wMTA2LDAuNjQ4NSAwLjEwMjYyLDAuOTQ0MTUgMCwwIDAuMTY0MTUsMC41MzM1NCAwLjE2NDE1LDAuNTMzNTQgMCwwIC0yLjQyMTg0LDAgLTIuNDIxODQsMCAwLDAgLTAuMTAyNjIsLTAuMzA3ODYgLTAuMTAyNjIsLTAuMzA3ODYgLTAuMDM5NCwtMC4xNDQ0MSAtMC4wMjc5LC0wLjMyODMgLTAuMDQxLC0wLjQ5MjU3IC0wLjQ1OTgsMC4yODI0MSAtMC45MjAyOSwwLjUzMjg2IC0xLjMzNDA5LDAuNjc3MjYgLTAuNjEwODIsMC4yMTAyNyAtMS4yNDQ1OSwwLjMyODQyIC0xLjg4ODI5LDAuMzI4NDIgLTEuMTE2NCwwIC0xLjk0MzIsLTAuMjkwNjMgLTIuNDQyMzksLTAuODYxOTYgLTAuMzgwODEsLTAuNDIwMzEgLTAuNTU0MDksLTAuOTM0MjIgLTAuNTU0MDksLTEuNTE4NzkgMCwtMC4yMjMyOCAwLjAyOTYsLTAuNDU0NzggMC4wODIxLC0wLjY5NzggMC4xMTE2NCwtMC40OTkxOSAwLjMxNDQ5LC0wLjk2MTM5IDAuNjM2MjgsLTEuMzc1MTkgMC4zMTUyOCwtMC40MDcxOCAwLjY4Nzk5LC0wLjc0MjEgMS4xMDgyOSwtMC45ODUxMyAwLjQwNzE4LC0wLjI0MzAyIDAuODYxMTYsLTAuNDE1MzkgMS4zMzQwOSwtMC41MzM2NSAwLDAgMS40NTcyNiwtMC4yNDYyMyAxLjQ1NzI2LC0wLjI0NjIzIDEuMTIzMDIsLTAuMTMxMzkgMS45NjEyNCwtMC4yOTQ3NCAyLjU2NTQ0LC0wLjQ3MjEzIDAuMDEzMSwtMC4wNjU2IDAuMDQxMSwtMC4xNDM2IDAuMDQxMSwtMC4xNDM2IDAuMDk1MiwtMC40MjI1OSAwLjA4MzMsLTAuNzQwMjcgLTAuMDIwNSwtMC45MDMwNSAtMC4wMDgsLTAuMDEwNSAtMC4wMzI0LC0wLjAzMjEgLTAuMDQxMSwtMC4wNDExIC0wLjAyMjEsLTAuMDIzNiAtMC4wNTYyLC0wLjA2MDcgLTAuMDgyMSwtMC4wODIxIC0wLjI0NzAyLC0wLjE5NTQzIC0wLjY2ODI0LC0wLjI4NzMyIC0xLjIzMTQ3LC0wLjI4NzMyIC0wLjYzNzA4LDAgLTEuMTA4MjksMC4xMDQyMiAtMS40MzY1OSwwLjMwNzg2IC0wLjMyMTkxLDAuMjAzNTQgLTAuNjE5ODUsMC41NzYyNCAtMC44ODI2MiwxLjEwODMgMCwwIC0yLjQ4MzM3LDAgLTIuNDgzMzcsMCAwLDAgMC4yMjU2OCwtMC40OTI1NiAwLjIyNTY4LC0wLjQ5MjU2IDAuMjk1NTQsLTAuNjgzMDggMC42NDc4MSwtMS4yNDk2MiAxLjA4Nzg2LC0xLjY4MzA1IDAuNDQwMDYsLTAuNDMzNDMgMS4wMzQ0NCwtMC43NjkyNyAxLjcyNDAzLC0xLjAwNTY4IDAuNTI4NDEsLTAuMTc0NDIgMS4xMDU1NiwtMC4yOTAxNyAxLjcyNDAzLC0wLjMyODMgeiBtIDEwLjQwNTcxLDAgYyAwLjA5MjcsLTAuMDExNCAwLjE5Mzk0LDAgMC4yODczMiwwIDAuNTk3NywwIDEuMTU3NjEsMC4xNzk3OSAxLjY4MzA1LDAuNTU0MSAwLDAgMC4zMDc4NiwwLjIyNTc5IDAuMzA3ODYsMC4yMjU3OSAwLDAgLTEuMjcyNTYsMi4wOTM0MiAtMS4yNzI1NiwyLjA5MzQyIDAsMCAtMC4zNDg4NCwtMC4yNDYzNCAtMC4zNDg4NCwtMC4yNDYzNCAtMC4yNTYxNiwtMC4xNjQxNSAtMC41MTgxNCwtMC4yNDYyMiAtMC44MDA0MywtMC4yNDYyMiAtMC4yNDk2NSwwIC0wLjQ5NTk5LDAuMDg4NyAtMC43Mzg5MSwwLjI0NjIyIC0wLjI0OTY1LDAuMTY0MjcgLTAuNDMxMDMsMC4zODE4NCAtMC41OTUxOCwwLjY3NzM4IC0wLjI2OTI5LDAuNTA1NjkgLTAuNDc3ODQsMS4wNzIxMSAtMC42MTU3NCwxLjY4MjkzIDAsMCAtMS4xMjg4NCw1LjA0ODkyIC0xLjEyODg0LDUuMDQ4OTIgMCwwIC0yLjM4MDg2LDAgLTIuMzgwODYsMCAwLDAgMi4xOTYxNiwtOS44NTE1IDIuMTk2MTYsLTkuODUxNSAwLDAgMi4yMTY2LDAgMi4yMTY2LDAgMCwwIC0wLjA1NTgsMC4yOTg3NCAtMC4wODIxLDAuNDEwMzggMC4xMDUwMiwtMC4wNzg4IDAuMjA5MzYsLTAuMTg3MSAwLjMwNzg3LC0wLjI0NjIzIDAuMzEzLC0wLjE4OTgzIDAuNjMzNzcsLTAuMzA4MzIgMC45NjQ1OCwtMC4zNDg4NSB6IG0gNy4wMzk4MywwIGMgMC4xNDMxNSwtMC4wMTA5IDAuMjg0NDcsMCAwLjQzMDkzLDAgMS4zMzk5MSwwIDIuMzYwMzEsMC40Njk1MSAzLjAxNzEzLDEuMzk1NjIgMC40MjAzMSwwLjU5NzU4IDAuNjM2MTcsMS4zMzY0OSAwLjYzNjE3LDIuMjE2NTkgMCwwLjQ4NTk1IC0wLjA4MDQsMS4wMDg5OSAtMC4yMDUyNCwxLjU4MDMyIDAsMCAtMC4xNjQxNSwwLjcxODM1IC0wLjE2NDE1LDAuNzE4MzUgMCwwIC02LjAyNzU0LDAgLTYuNjkwODgsMCAtMC4wMTMxLDAuMTM3OSAtMC4wNDExLDAuMjg1NzIgLTAuMDQxMSwwLjQxMDQ5IDAsMC41MTIzMSAwLjExMTc1LDAuOTE1MzggMC4zMjg0MSwxLjIxMDkyIDAuMDMzOCwwLjA0NiAwLjA4NiwwLjEwMjc0IDAuMTIzMTcsMC4xNDM3MiAwLjAyMTYsMC4wMjI5IDAuMDU5NCwwLjA2MDcgMC4wODIxLDAuMDgyMSAwLjI5MzYsMC4yNjY4OSAwLjY5MzI1LDAuNDEwNDkgMS4xOTAzOCwwLjQxMDQ5IDAuNDg2MDUsMCAwLjkxMjk4LC0wLjEzMzkgMS4zMTM1NCwtMC4zODk5NCAwLjM4MTA0LC0wLjI0MzAzIDAuNzM4OSwtMC42MzEzNyAxLjA2NzMxLC0xLjE2OTk0IDAsMCAyLjU2NTU2LDAgMi41NjU1NiwwIDAsMCAtMC4yNDYzNCwwLjQ5MjU2IC0wLjI0NjM0LDAuNDkyNTYgLTAuNDg2MDYsMC45ODUyNCAtMS4xNzA3NCwxLjc1MzYgLTIuMDExMzUsMi4yOTg3OSAtMC44NTM4NSwwLjU0NTA3IC0xLjg1MjkxLDAuODQxNDEgLTIuOTc2MDQsMC44NDE0MSAtMS40NTE0NCwwIC0yLjUxMTM0LC0wLjQ2OTUxIC0zLjE4MTE4LC0xLjM5NTYyIC0wLjY2MzMzLC0wLjkwNjM2IC0wLjgyMDE3LC0yLjE1OTE3IC0wLjQ3MjEzLC0zLjczNTM4IDAuMzU0NjcsLTEuNjAyNTcgMS4wNDE4NiwtMi44ODMyNCAyLjA3Mjk5LC0zLjc3NjQ3IDAuOTMsLTAuODAxMzUgMS45OTQ1NywtMS4yNDU4NSAzLjE2MDc0LC0xLjMzMzk4IHogbSAtMzUuOTM3ODUsMC4xODQ3IGMgMCwwIDIuNDQyMzksMCAyLjQ0MjM5LDAgMCwwIDAuMzAxMjQsNS44NDYwNCAwLjMwNzg2LDUuOTMxNDMgMC4wOTg1LC0wLjIwOTM2IDAuMTc1LC0wLjM4NTQ5IDAuMTg0NywtMC40MTA0OSAwLDAgMi42ODg3MiwtNS41MjA5NCAyLjY4ODcyLC01LjUyMDk0IDAsMCAyLjIzNzE0LDAgMi4yMzcxNCwwIDAsMCAwLjIwNTI1LDUuNzc1MzggMC4yMDUyNSw1LjgwODI2IDAuMDY1NiwtMC4xMTgxNSAzLjA1OCwtNS44MDgyNiAzLjA1OCwtNS44MDgyNiAwLDAgMi40MjE4NCwwIDIuNDIxODQsMCAwLDAgLTUuMzM2MjQsOS44NTE1IC01LjMzNjI0LDkuODUxNSAwLDAgLTIuMTk2MDQsMCAtMi4xOTYwNCwwIDAsMCAtMC4yMTI2NywtNS4zNDE5NCAtMC4yMjU4LC01LjY0NDEgLTAuOTA2MzYsMS44NTg3MiAtMi43NTAyNSw1LjY0NDEgLTIuNzUwMjUsNS42NDQxIDAsMCAtMi4yNTc2OSwwIC0yLjI1NzY5LDAgMCwwIC0wLjc3OTg4LC05Ljg1MTUgLTAuNzc5ODgsLTkuODUxNSB6IG0gLTU3LjM0NDQ4LDEuODY3NjMgYyAtMC41NjU3NSwwLjAyMzkgLTEuMDc5NTksMC4yMjc4NSAtMS41NTk4NCwwLjYxNTc0IC0wLjM4MDkxLDAuMzAyMTYgLTAuNjM3ODksMC43MTY3NSAtMC44NDE0OCwxLjE2OTgyIDAsMS4yZS00IDQuMDQzMjQsMCA0LjA0MzI0LDAgMC4wMDcsLTAuMDcyMSAwLjAyMDUsLTAuMTYwMDQgMC4wMjA1LC0wLjIyNTY4IDAsLTAuMzc0NDEgLTAuMDY2NSwtMC42NjUwNCAtMC4xODQ3MiwtMC44NjIwNyAtMC4yODg5NCwtMC40NzI4MSAtMC43MTc1LC0wLjY5NzgxIC0xLjM1NDU5LC0wLjY5NzgxIC0wLjAzODIsMCAtMC4wODU0LC0wLjAwMiAtMC4xMjMxMywwIHogbSAxMC42OTMwNiwwIGMgLTAuNTY1NzQsMC4wMjM5IC0xLjA3OTUzLDAuMjI3ODUgLTEuNTU5ODMsMC42MTU3NCAtMC4zODA5MSwwLjMwMjE2IC0wLjYzMTMsMC43MTY3NSAtMC44NDE0OCwxLjE2OTgyIDAsMS4yZS00IDQuMDQzMjYsMCA0LjA0MzI2LDAgMC4wMDcsLTAuMDcyMSAwLjAyMDYsLTAuMTYwMDQgMC4wMjA2LC0wLjIyNTY4IDAsLTAuMzc0NDEgLTAuMDU5OSwtMC42NjUwNCAtMC4xODQ3LC0wLjg2MjA3IC0wLjA1NzQsLTAuMDk2IC0wLjEzNTA0LC0wLjE5MTU0IC0wLjIwNTI0LC0wLjI2Njc3IC0wLjI3NDMxLC0wLjI4MzMyIC0wLjY1MTY5LC0wLjQzMTA0IC0xLjE0OTM5LC0wLjQzMTA0IC0wLjAzODIsMCAtMC4wODU0LC0wLjAwMiAtMC4xMjMxNywwIHogbSA4Mi43MTI0NCwwIGMgLTAuNTgxODMsMC4wMTc5IC0xLjEyNTE5LDAuMjE0OTUgLTEuNjIxNTIsMC42MTU3NCAtMC4zNzQzLDAuMzAyMTYgLTAuNjMxMjYsMC43MTY3NSAtMC44NDE0MSwxLjE2OTgyIDAsMS4yZS00IDQuMDIyNywwIDQuMDIyNywwIDAuMDA3LC0wLjA3MjEgMC4wMjA2LC0wLjE2MDA0IDAuMDIwNiwtMC4yMjU2OCAwLC0wLjM3NDQxIC0wLjA1OTksLTAuNjY1MDQgLTAuMTg0NywtMC44NjIwNyAtMC4yODI0MSwtMC40NjYzMSAtMC43MTc1NiwtMC42OTExOSAtMS4zNTQ2NCwtMC42OTc4MSAtMC4wMTg4LDIuM2UtNCAtMC4wMjIzLC01LjdlLTQgLTAuMDQxLDAgeiBtIC01My43NzMzMywwLjA0MTEgYyAtMC41NDI5MSwwLjA2NDQgLTEuMDQ3OCwwLjMxMjIgLTEuNTE4NzksMC43Mzg3OSAtMC41NjQ4MiwwLjUxMjMxIC0wLjk3NDUxLDEuMzE2ODUgLTEuMjEwOTIsMi4zODA4NSAtMC4wOTg1LDAuNDQ2NTYgLTAuMTQzNzEsMC44Mjg0IC0wLjE0MzcxLDEuMTY5ODMgMCwwLjQ2NjMxIDAuMDg5NSwwLjgzMjUgMC4yNjY4OCwxLjEwODI5IDAuMDQ3MSwwLjA3MDkgMC4xMDk4MiwwLjE0NTY2IDAuMTY0MTUsMC4yMDUyNSAwLjI5MiwwLjMxMDAzIDAuNjk5NjQsMC40NzIxMyAxLjIxMDkyLDAuNDcyMTMgMC42NjMzNCwwIDEuMjQ3OTEsLTAuMjQ3MTQgMS44MDYxMSwtMC43NTk0NSAwLjU2NDgyLC0wLjUxODgyIDAuOTY3ODksLTEuMzMxNTggMS4yMTA5MiwtMi40MjE4NCAwLjIyMzI4LC0wLjk5ODI1IDAuMTkyMTEsLTEuNzQzNjYgLTAuMTIzMTcsLTIuMjE2NTkgLTAuMzAyMDUsLTAuNDU5NjkgLTAuNzQzODEsLTAuNjc3MjYgLTEuMzU0NTMsLTAuNjc3MjYgLTAuMTAzNjQsMCAtMC4yMDcyOSwtMC4wMTIgLTAuMzA3ODYsMCB6IG0gMzcuMDg3MTMsMy41OTE2NiBjIC0wLjU1ODIsMC4xNTExNCAtMS4xODM4NywwLjI3ODMgLTIuMDExMzUsMC4zOTAwNiAtMC42MTczMywwLjA5MTkgLTEuMDU3MzksMC4xODg4IC0xLjMxMzU0LDAuMjg3MzEgLTAuMjIzMjgsMC4wOTE5IC0wLjQwMzA3LDAuMjE5MTggLTAuNTU0MjEsMC4zODk5NSAtMC4xNDQ0LDAuMTY0MTUgLTAuMjQxMzEsMC4zMzY1MSAtMC4yODczMiwwLjUzMzY1IC0wLjAxMzEsMC4wNzg4IC0wLjAyMDUsMC4xNjAwNCAtMC4wMjA1LDAuMjI1NjggMCwwLjAwNSAtMS4yZS00LDAuMDE1MyAwLDAuMDIwNSA2LjhlLTQsMC4wMTU2IC0wLjAwMiwwLjA0NjUgMCwwLjA2MTYgMC4wMDQsMC4wMjk3IDAuMDEyNCwwLjA3NDggMC4wMjA1LDAuMTAyNTEgMC4wMDMsMC4wMDkgMC4wMTcxLDAuMDMyMiAwLjAyMDUsMC4wNDExIDAuMDA3LDAuMDE3NyAwLjAxMTYsMC4wNDQ4IDAuMDIwNiwwLjA2MTYgMC4wMDksMC4wMTY2IDAuMDMsMC4wNDU1IDAuMDQxLDAuMDYxNSAwLjAxNzIsMC4wMjM2IDAuMDQwNiwwLjA1OTkgMC4wNjE2LDAuMDgyMSAwLjE2NDE1LDAuMTgzOSAwLjQ5MTc2LDAuMjY2NzcgMC45NjQ1OCwwLjI2Njc3IDAuNTE4OTMsMCAxLjAxOCwtMC4wOTg1IDEuNDc3OCwtMC4zMjgzIDAuNDUzMTksLTAuMjIzMzkgMC44MTg0NywtMC41NTY3MiAxLjA4Nzc1LC0wLjk0NDE1IDAuMTk3MDMsLTAuMjc1NzkgMC4zNTQ2NywtMC43MDAzMiAwLjQ5MjU3LC0xLjI1MjAxIHogbSAtMTI1LjM2NDY1OSwtMTYuNDU2MTIgNTUuMDgyNTk5LC01Ni44NzE5OSA4Ljk5NTE4LDAgLTEzLjI5OTgsNTYuODcxOTkgLTcuMzk4NjI5LDAgMy43NzYzMzksLTE2LjM3MTA2IC0yMy4wOTE1MTgsMCAtMTUuNjkyMDMyLDE2LjM3MTA2IC04LjM3MjEzOSwwIG0gMjkuNjc1Njc5LC0yMi4yMjg5NiAxOC44ODU5OCwwIDMuNDg0NDksLTE0LjI3NjE4IGMgMS40MDYyOSwtNS42NjM4OCAyLjc1OTk2LC0xMC4zODM4MSA0LjA2MTAyLC0xNC4xNTk4IC0yLjYwMDA3LDMuMjU4NzMgLTYuMDQwMDEsNy4xMjUyIC0xMC4zMTk4MiwxMS41OTkzOSBMIDg2LjEyNTY2LDcyOS44MTU5IiAvPgogICAgICA8cGF0aCBpZD0icGF0aDIiIHN0eWxlPSJmaWxsOm5vbmU7c3Ryb2tlOiM2NjMzNjY7c3Ryb2tlLXdpZHRoOjMuMjgzODY1NDU7c3Ryb2tlLWxpbmVjYXA6YnV0dDtzdHJva2UtbGluZWpvaW46bWl0ZXI7c3Ryb2tlLW1pdGVybGltaXQ6NDsiIGQ9Im0gMjQyLjI3MzcxLDc3Mi4wMDQwNiBjIDAuMjY2NjYsMC42ODUzNyAwLjUzMzIsMS4zNjk3IDAuODEwOTMsMi4wMzg5NyAwLjQyNzczLDAuOTA5MzMgMC45MjIsMS43Nzk3NCAxLjUxNjM5LDIuNTkyMjcgMy4yMTA1MSw0LjM2NDEzIDguNTg3MTYsNi43NTM2NiAxNS40MTM1Myw3LjM0ODYyIDAsMCA3LjM0MzAyLDAgNy4zNDMwMiwwIDIuMzIxNzMsLTAuMTgxMTYgNC43NTQ2NCwtMC41MTg4MiA3LjI3NjM2LC0xLjAxMjA3IDQuMzQ5MDYsLTAuODUwNDMgOC45NTkyOSwtMi4xNTY3OCAxMy43NDcyNiwtMy45MDI2MSAzLjYyNzA1LC0xLjMyMjQ1IDcuMzU0MSwtMi44ODcxMiAxMS4xMzY2MiwtNC43MDU2NyA4LjIzNzI5LC0zLjk0ODczIDE2Ljc0NjcxLC05LjA0MTQ4IDI1LjA5NTA2LC0xNS4xODc1MSAyLjc0OTQ2LC0yLjAyMjQyIDUuMzg3NzIsLTQuMDk3NTggNy45MjA2MywtNi4yMDc2NyAyLjMyMTczLC0xLjkzMTc5IDQuNTQ5MDUsLTMuODkzNzEgNi42NzY0OSwtNS44NzcyIDUuOTM3NTksLTUuNzIyMTkgMTAuNDIwMDksLTExLjUzMzc2IDEyLjk1ODQ4LC0xNi42MzY2NyAyLjY0Mzg2LC01LjMxMzk4IDMuMTcxNTgsLTkuODU3NDQgMS4wMDUzMywtMTIuNzE5NjcgLTEuMzI3NDcsLTEuNzU2OSAtMy41NDkzMSwtMi42OTg0MyAtNi40MDk4MywtMi45MTk5OSAxMi44ODYzMywtOS42NjkyIDIwLjM5NTksLTIxLjM5ODUgMTcuNzAyMDQsLTI4Ljc5MzY5IC0wLjg1NTQ1LC0yLjM2MDA4IC0yLjczODM4LC00LjEyMDg2IC01LjQzNzg0LC01LjA5NDU4IC0xLjE5OTczLC0wLjQzMTQ5IC0yLjU0OTQ2LC0wLjcwNDg4IC00LjAyMTQ0LC0wLjgyOTMxIDAsMCAtMy45NjU4NSwwIC0zLjk2NTg1LDAgLTUuNTM3NzIsMC4zOTk0MiAtMTMuNTkwNzYsMi4zODIzNCAtMjAuNDIyNzMsNS43MzA1MiIgLz4KICAgIDwvZz4KICAgIDxnIGlkPSJnMyIgc3R5bGU9ImZpbGw6IzY2MzM2NiIgdHJhbnNmb3JtPSJtYXRyaXgoMS43MDUyMjIsMCwwLDEuNzA1MjIyLDg1OC4yMDAzLDI3ODYuNDUwOCkiPgogICAgICA8cGF0aCBpZD0icGF0aDMiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC00NTEuMzY3OCwtNDI3LjUwNzcpIiBkPSJtIDAsMzYgYyAwLDAgNy40NiwwIDcuNDYsMCAwLDAgMy4zNSwtMTQgMy4zNSwtMTQgMCwwIDEyLjEyLDAgMTIuMTIsMCAwLDAgMS41NiwtNiAxLjU2LC02IDAsMCAtMTIuMTcsMCAtMTIuMTcsMCAwLDAgMi4wMiwtOSAyLjAyLC05IDAsMCAxMi45NSwwIDEyLjk1LDAgMCwwIDEuNTYsLTcgMS41NiwtNyBDIDI4Ljg1LDAgOC40LDAgOC40LDAgOC40LDAgMCwzNiAwLDM2IHoiIC8+CiAgICAgIDxwYXRoIGlkPSJwYXRoNCIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoLTQyNS40MTc4LC00MTcuNTA3NykiIGQ9Im0gNy41MSwyNiBjIDAsMCAyLjI0LC05LjQgMi4yNCwtOS40IDEuMTgsLTUuMDkgMy42NywtOS42IDguMzgsLTkuNiAwLjQyLDAgMC44MywwLjIxIDEuMTQsMC4yNiAwLDAgMS44MiwtNy4yMSAxLjgyLC03LjIxIC0wLjQyLDAgLTAuODgsLTAuMDUgLTEuNCwtMC4wNSAtMy40NywwIC02LjM4LDIuNDQgLTguMzIsNS45NCAwLDAgLTAuMiwwIC0wLjIsMCBDIDExLjQ2LDQuMjMgMTEuNzEsMi42MSAxMS45LDEgMTEuOSwxIDUuNDcsMSA1LjQ3LDEgNS4xLDMuMDggNC41Myw3LjE1IDMuNjYsMTAuODIgMy42NiwxMC44MiAwLDI2IDAsMjYgYyAwLDAgNy41MSwwIDcuNTEsMCB6IiAvPgogICAgICA8cGF0aCBpZD0icGF0aDUiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC00MDQuNzg3OCwtNDE3LjUwNzcpIiBkPSJNIDIwLjA2LDE5LjI1IEMgMTcuOTksMjAuMjYgMTUuNjMsMjAgMTIuODgsMjAgMTAuNzEsMjAgOS4wMywxOS42MiA4LjExLDE4Ljg4IDcuNjMsMTguMDcgNy40MywxNi44MSA3LjQ3LDE2IDE3LjYsMTYuMjcgMjMuOTksMTMuOTMgMjQuMzEsNy41MyAyNC41NSwyLjcgMjEuMDIsMCAxNS44OSwwIDYuNzMsMCAwLjczLDguMDggMC4zNCwxNS44NiAwLDIyLjY1IDMuNTIsMjYgMTAuNzgsMjYgYyAyLjc5LDAgNi40OSwtMC4zMiA5LjUyLC0xLjIzIDAsMCAtMC4yNCwtNS41MiAtMC4yNCwtNS41MiB6IE0gMTcuMzIsNy41MyBDIDE3LjIsOS45MSAxNC4yNiwxMC4wNSA4LjQ3LDEwIDkuMSw3LjkxIDExLjIyLDYgMTQuNjksNiBjIDEuNzEsMCAyLjY5LDAuNjUgMi42MywxLjUzIHoiIC8+CiAgICAgIDxwYXRoIGlkPSJwYXRoNiIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoLTM3OC4yNjc4LC00MTcuNTA3NykiIGQ9Ik0gMjAuMDUsMTkuMjUgQyAxNy45OCwyMC4yNiAxNS42MiwyMCAxMi44OCwyMCAxMC43LDIwIDkuMDMsMTkuNjIgOC4xMSwxOC44OCA3LjYzLDE4LjA3IDcuNDIsMTYuODEgNy40NiwxNiAxNy42LDE2LjI3IDIzLjk4LDEzLjkzIDI0LjMxLDcuNTMgMjQuNTUsMi43IDIxLjAyLDAgMTUuODksMCA2LjcyLDAgMC43Miw4LjA4IDAuMzMsMTUuODYgMCwyMi42NSAzLjUyLDI2IDEwLjc3LDI2IGMgMi44LDAgNi41LC0wLjMyIDkuNTMsLTEuMjMgMCwwIC0wLjI1LC01LjUyIC0wLjI1LC01LjUyIHogTSAxNy4zMiw3LjUzIEMgMTcuMiw5LjkxIDE0LjI2LDEwLjA1IDguNDYsMTAgOS4xLDcuOTEgMTEuMjEsNiAxNC42OCw2IGMgMS43MSwwIDIuNywwLjY1IDIuNjQsMS41MyB6IiAvPgogICAgICA8cGF0aCBpZD0icGF0aDciIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0zNDIuMzU3OCwtNDE3LjUwNzcpIiBkPSJNIDIyLjc0LDI2IEMgMjIuOCwyMi44MyAyMy41NiwxNy44NSAyNC4zNSwxNC41OCAyNC4zNSwxNC41OCAyNy41NiwxIDI3LjU2LDEgMjUuNTIsMC4zMSAyMi4zNCwwIDE5LjI4LDAgNi44NiwwIDAuNyw5LjIgMC4yNywxNy44MiAwLDIzLjIzIDIuOTMsMjYgNy40OSwyNiBjIDIuOTUsMCA2LjI4LC0xLjQzIDguODcsLTUuNzMgMCwwIDAuMTEsMCAwLjExLDAgLTAuMiwyLjA3IC0wLjQ0LDQuMDggLTAuNTcsNS43MyAwLDAgNi44NCwwIDYuODQsMCB6IE0gMTcuNjEsMTEuNzIgQyAxNi4xNSwxOC4wOCAxMy4xNywyMCAxMC45NSwyMCA4Ljg4LDIwIDcuOTgsMTguNTMgOC4xLDE2LjM5IDguMzQsMTEuNTYgMTIuMTYsNiAxNi45OCw2IGMgMC43OCwwIDEuMzksLTAuMTQgMS45NiwtMC4yOCAwLDAgLTEuMzMsNiAtMS4zMyw2IHoiIC8+CiAgICAgIDxwYXRoIGlkPSJwYXRoOCIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoLTMxNC43Mjc4LC00MTcuNTA3NykiIGQ9Im0gMCwyNC44MiBjIDEuNDQsMS4xMiA0LjQ2LDEuMTMgNy42MSwxLjE4IDYuNzMsMC4wNSAxMS44MSwtMi44OSAxMi4xMSwtOC4yOSAwLjE3LC0zLjYgLTIuNjIsLTUuNzMgLTUuMzUsLTcuMTYgQyAxMi40LDkuNiAxMS40MSw4LjY5IDExLjQ2LDcuNjMgMTEuNTMsNi4yIDEyLjg3LDYgMTQuODQsNiBjIDIuMjIsMCA0LDAuMjcgNS4wMiwwLjQ3IDAsMCAyLjAyLC01LjQyIDIuMDIsLTUuNDIgQyAyMC43MywwLjM2IDE4LjQzLDAgMTUuNDgsMCA4Ljk1LDAgNC4xNywzLjQ1IDMuOSw4LjY5IGMgLTAuMTYsMy4yNCAyLjE3LDUuNDIgNC45OSw2LjkgMi4yOCwxLjE3IDMuMDYsMi4wNyAzLDMuMzQgQyAxMS44MiwyMC4yMSAxMC42OCwyMCA4LjYxLDIwIDYuMTgsMjAgMy40OSwxOS42OCAyLjA3LDE5LjQ2IDIuMDcsMTkuNDYgMCwyNC44MiAwLDI0LjgyIHoiIC8+CiAgICAgIDxwYXRoIGlkPSJwYXRoOSIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoLTI4Mi4yNzc4LC00MjguNTA3NykiIGQ9Im0gNy40NSwzNyBjIDAsMCA2LjA1LC0yNSA2LjA1LC0yNSAwLDAgLTcuNDEsMCAtNy40MSwwIDAsMCAtNi4wOSwyNSAtNi4wOSwyNSAwLDAgNy40NSwwIDcuNDUsMCB6IE0gMTAuOTIsOSBDIDEzLjQ2LDkgMTUuNzIsNi45IDE1Ljg2LDMuMyAxNS45OCwwLjg2IDE0LjQsMCAxMi4wNywwIDkuNjQsMCA3LjQyLDEuNTggNy4yOSwzLjk0IDcuMTcsNi4zMiA4Ljc1LDkgMTAuOTIsOSB6IiAvPgogICAgICA8cGF0aCBpZD0icGF0aDEwIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtMjY3Ljk4NzgsLTQxNi44MTc3KSIgZD0ibSA3LjQ2LDI1LjMxIGMgMCwwIDIuNjQsLTExLjI2IDIuNjQsLTExLjI2IDEuMzcsLTUuNzMgNC4zMiwtNy43NCA2Ljc1LC03Ljc0IDEuOTIsMCAyLjQ4LDAuODIgMi4zOSwyLjAxIC0wLjA1LDAuOTYgLTAuMiwxLjk3IC0wLjQsMi44NyAwLDAgLTMuMzYsMTQuMTIgLTMuMzYsMTQuMTIgMCwwIDcuNDYsMCA3LjQ2LDAgMCwwIDMuNTQsLTE0LjgxIDMuNTQsLTE0LjgxIEMgMjYuNzUsOS4yMiAyNy4wNSw3LjMxIDI3LjExLDYuMTUgMjcuMzMsMS42NCAyNS4wOCwwIDIwLjk0LDAgYyAtMy4zMiwwIC02LjU1LDEuNTQgLTkuMSw0Ljg4IDAsMCAtMC4xLDAgLTAuMSwwIDAsMCAwLjY4LC00LjU3IDAuNjgsLTQuNTcgMCwwIC02LjU4LDAgLTYuNTgsMCBDIDUuNDEsMi40NSA0Ljg2LDUuMDQgNC4wOCw4LjA2IDQuMDgsOC4wNiAwLDI1LjMxIDAsMjUuMzEgYyAwLDAgNy40NiwwIDcuNDYsMCB6IiAvPgogICAgICA8cGF0aCBpZD0icGF0aDExIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtMjI4LjQyNzgsLTQyNy41MDc3KSIgZD0ibSAwLDM2IGMgMCwwIDcuNDYsMCA3LjQ2LDAgMCwwIDMuMzYsLTE0IDMuMzYsLTE0IDAsMCAxMi4xMSwwIDEyLjExLDAgMCwwIDEuNTYsLTYgMS41NiwtNiAwLDAgLTEyLjE3LDAgLTEyLjE3LDAgMCwwIDIuMDIsLTkgMi4wMiwtOSAwLDAgMTIuOTUsMCAxMi45NSwwIDAsMCAxLjU2LC03IDEuNTYsLTcgQyAyOC44NSwwIDguNCwwIDguNCwwIDguNCwwIDAsMzYgMCwzNiB6IiAvPgogICAgICA8cGF0aCBpZD0icGF0aDEyIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtMjAyLjQ3NzgsLTQxNy41MDc3KSIgZD0ibSA3LjUxLDI2IGMgMCwwIDIuMjQsLTkuNCAyLjI0LC05LjQgMS4xOCwtNS4wOSAzLjY3LC05LjYgOC4zOCwtOS42IDAuNDIsMCAwLjgzLDAuMjEgMS4xNCwwLjI2IDAsMCAxLjgyLC03LjIxIDEuODIsLTcuMjEgLTAuNDIsMCAtMC44OCwtMC4wNSAtMS40LC0wLjA1IC0zLjQ3LDAgLTYuMzgsMi40NCAtOC4zMiw1Ljk0IDAsMCAtMC4yLDAgLTAuMiwwIEMgMTEuNDYsNC4yMyAxMS43MSwyLjYxIDExLjksMSAxMS45LDEgNS40NywxIDUuNDcsMSA1LjExLDMuMDggNC41Myw3LjE1IDMuNjYsMTAuODIgMy42NiwxMC44MiAwLDI2IDAsMjYgYyAwLDAgNy41MSwwIDcuNTEsMCB6IiAvPgogICAgICA8cGF0aCBpZD0icGF0aDEzIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtMTgxLjg0NzgsLTQxNy41MDc3KSIgZD0iTSAyMC4wNiwxOS4yNSBDIDE3Ljk5LDIwLjI2IDE1LjYzLDIwIDEyLjg4LDIwIDEwLjcxLDIwIDkuMDMsMTkuNjIgOC4xMSwxOC44OCA3LjYzLDE4LjA3IDcuNDMsMTYuODEgNy40NywxNiAxNy42LDE2LjI3IDIzLjk5LDEzLjkzIDI0LjMxLDcuNTMgMjQuNTUsMi43IDIxLjAyLDAgMTUuODksMCA2LjczLDAgMC43Myw4LjA4IDAuMzQsMTUuODYgMCwyMi42NSAzLjUzLDI2IDEwLjc4LDI2IGMgMi43OSwwIDYuNSwtMC4zMiA5LjUyLC0xLjIzIDAsMCAtMC4yNCwtNS41MiAtMC4yNCwtNS41MiB6IE0gMTcuMzIsNy41MyBDIDE3LjIsOS45MSAxNC4yNiwxMC4wNSA4LjQ3LDEwIDkuMSw3LjkxIDExLjIyLDYgMTQuNjksNiBjIDEuNzEsMCAyLjY5LDAuNjUgMi42MywxLjUzIHoiIC8+CiAgICAgIDxwYXRoIGlkPSJwYXRoMTQiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0xNTUuMzI3OCwtNDE3LjUwNzcpIiBkPSJNIDIwLjA1LDE5LjI1IEMgMTcuOTgsMjAuMjYgMTUuNjIsMjAgMTIuODgsMjAgMTAuNywyMCA5LjAzLDE5LjYyIDguMTEsMTguODggNy42MywxOC4wNyA3LjQyLDE2LjgxIDcuNDYsMTYgMTcuNiwxNi4yNyAyMy45OCwxMy45MyAyNC4zMSw3LjUzIDI0LjU1LDIuNyAyMS4wMiwwIDE1Ljg5LDAgNi43MiwwIDAuNzIsOC4wOCAwLjMzLDE1Ljg2IDAsMjIuNjUgMy41MiwyNiAxMC43NywyNiBjIDIuOCwwIDYuNSwtMC4zMiA5LjUzLC0xLjIzIDAsMCAtMC4yNSwtNS41MiAtMC4yNSwtNS41MiB6IE0gMTcuMzIsNy41MyBDIDE3LjIsOS45MSAxNC4yNiwxMC4wNSA4LjQ2LDEwIDkuMSw3LjkxIDExLjIxLDYgMTQuNjgsNiBjIDEuNzEsMCAyLjcsMC42NSAyLjY0LDEuNTMgeiIgLz4KICAgICAgPHBhdGggaWQ9InBhdGgxNSIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoLTEyOC45NDc4LC00MjguNTA3NykiIGQ9Ik0gMjMuMzEsMCBDIDIzLjMxLDAgMjAuNSwxMS4zNiAyMC41LDExLjM2IDE5LjQ4LDEwLjk0IDE4LjE1LDExIDE3LjExLDExIDcuNTMsMTEgMC43NSwxOS4yIDAuMywyOC4wOCAwLDM0LjM0IDMuMzQsMzcgNy42NCwzNyBjIDMuMDEsMCA2LjE4LC0xLjMzIDguNTgsLTQuNzcgMCwwIDAuMSwwIDAuMSwwIDAsMCAtMC41Nyw0Ljc3IC0wLjU3LDQuNzcgMCwwIDYuNzgsMCA2Ljc4LDAgMC4zMSwtMyAwLjk2LC02LjU3IDEuNjksLTkuODMgMCwwIDYuNDksLTI3LjE3IDYuNDksLTI3LjE3IDAsMCAtNy40LDAgLTcuNCwwIHogTSAxNy40NywyNC40MiBDIDE2LjMsMjkuMzUgMTMuNTQsMzEgMTEuMzYsMzEgOS4xOSwzMSA3Ljk4LDI5LjQ5IDguMTMsMjYuOCA4LjM4LDIxLjgyIDExLjgsMTcgMTYuMjUsMTcgYyAxLjI1LDAgMi4zMiwwLjE5IDIuOTEsMC40NyAwLDAgLTEuNjksNi45NSAtMS42OSw2Ljk1IHoiIC8+CiAgICAgIDxwYXRoIGlkPSJwYXRoMTYiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC05OS4yMzc4LC00MTcuNTA3NykiIGQ9Ik0gMTAuNjEsMjYgQyAxOS4zMSwyNiAyNi4wMiwxOS40MSAyNi40OSwxMC40NCAyNi43OCw0LjUgMjMuMDgsMCAxNi4yNSwwIDcuMjMsMCAwLjc2LDcuMyAwLjMxLDE2LjEyIDAsMjIuNTQgNC4xNCwyNiAxMC42MSwyNiB6IG0gMS4xNywtNiBDIDkuMjQsMjAgNy44NCwxOC4zOCA3Ljk5LDE1Ljk2IDguMTksMTEuOTMgMTAuNjgsNiAxNC45Nyw2IGMgMi45NiwwIDMuODcsMi4yNyAzLjc1LDQuNSAtMC4yMiw0LjQgLTIuOSw5LjUgLTYuOTQsOS41IHoiIC8+CiAgICAgIDxwYXRoIGlkPSJwYXRoMTciIHRyYW5zZm9ybT0idHJhbnNsYXRlKC03MC42Nzc4LC00MTcuNTA3NykiIGQ9Ik0gNy4yLDI2IEMgNy4yLDI2IDkuOSwxNC41OCA5LjksMTQuNTggMTEuMDMsOS40OSAxMy44NSw2IDE2LjM4LDYgYyAxLjgyLDAgMi4zMiwxLjMzIDIuMjMsMy4wNyAtMC4wNSwwLjkgLTAuMjUsMS45MSAtMC40NiwyLjkxIDAsMCAtMy4zNCwxNC4wMiAtMy4zNCwxNC4wMiAwLDAgNy4yLDAgNy4yLDAgMCwwIDIuNywtMTEuNDcgMi43LC0xMS40NyBDIDI1Ljk1LDkuMjggMjguNjEsNiAzMS4wOSw2IGMgMS43MSwwIDIuNDIsMS4yMiAyLjM0LDIuOTYgLTAuMDUsMS4wMSAtMC4yNiwyLjEyIC0wLjUyLDMuMTMgMCwwIC0zLjI0LDEzLjkxIC0zLjI0LDEzLjkxIDAsMCA3LjI1LDAgNy4yNSwwIDAsMCAzLjQ5LC0xNC44MSAzLjQ5LC0xNC44MSAwLjI3LC0xLjMzIDAuNTgsLTMuNCAwLjYzLC00LjQ2IEMgNDEuMjYsMi4zMyAzOS4xMSwwIDM1LjIzLDAgMzEuOTEsMCAyOC42OCwxLjUgMjYuMjMsNC42NiAyNi4xNCwyLjM4IDI0LjUxLDAgMjAuNDcsMCAxNy4yLDAgMTQuMDgsMS40OCAxMS41OCw0LjgzIGMgMCwwIC0wLjEsMCAtMC4xLDAgMCwwIDAuNjcsLTMuODMgMC42NywtMy44MyAwLDAgLTYuNDIsMCAtNi40MiwwIEMgNS4zMSwzLjE0IDQuOCw1LjczIDQuMDIsOC43NSA0LjAyLDguNzUgMCwyNiAwLDI2IGMgMCwwIDcuMiwwIDcuMiwwIHoiIC8+CiAgICA8L2c+CiAgPC9nPgo8L3N2Zz4K" alt="AGPL v3 Logo" style="width:180px;height:auto;opacity:.9" />
+  </div>
+
+  <h3>应用原创代码：AGPL v3</h3>
+  <p>Regalia 的原创代码采用 <strong>GNU Affero General Public License Version 3（AGPL v3）</strong>授权。AGPL v3 是 GPL v3 的扩展版本，额外要求通过网络提供服务时也必须公开源代码。</p>
+  <ul class="feature-list">
+    <li>自由使用、研究、修改和分发本软件</li>
+    <li>修改后的版本必须以相同许可发布</li>
+    <li>通过网络提供服务时必须向用户提供源代码</li>
+    <li>完整许可文本：<a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2)">https://www.gnu.org/licenses/agpl-3.0.html</a></li>
+  </ul>
+  <p>AGPL v3 涵盖的原创文件：</p>
+  <ul class="feature-list">
+    <li><strong>Java</strong>：MainActivity.java、ChessApp.java、ChessWebViewClient.java、EngineService.java</li>
+    <li><strong>JavaScript</strong>：eco-data.js（ECO数据源自 lichess-org/chess-openings，CC0）、index.html.tpl</li>
+    <li><strong>C++</strong>：CMakeLists.txt（构建配置）</li>
+    <li><strong>构建脚本</strong>：build-chess.py、build-chess.sh</li>
+    <li><strong>其他</strong>：用户手册、资源文件（strings.xml、AndroidManifest.xml）</li>
+  </ul>
+
+  <h3>DroidFish 衍生代码：GPL v3</h3>
+  <p>部分代码源自 Peter Österlund 开发的 <strong>DroidFish</strong> 项目，遵循 <strong>GPL v3</strong> 授权。修改声明已附于相关源文件头部。</p>
+  <ul class="feature-list">
+    <li>DroidFish 源代码：<a href="https://github.com/peterosterlund2/droidfish" style="color:var(--accent2)">https://github.com/peterosterlund2/droidfish</a></li>
+    <li>GPL v3 完整文本：<a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2)">https://www.gnu.org/licenses/gpl-3.0.html</a></li>
+  </ul>
+  <p>GPL v3 涵盖的 DroidFish 衍生文件：</p>
+  <ul class="feature-list">
+    <li><strong>Java</strong>：StockfishNative.java — 引擎管理逻辑（源自 DroidFish 的 ExternalEngine.java、InternalStockFish.java、UCIEngineBase.java、EngineUtil.java、DroidComputerPlayer.java）</li>
+    <li><strong>C++</strong>：engine_jni.cpp — nativeChmod/nativeRenice（源自 DroidFish 的 nativeutil.cpp）；JNI 桥接（dlopen/dlsym/pipe）为原创代码</li>
+    <li><strong>JavaScript</strong>：game-logic.js — PGN 消岐与 SAN 走法记号逻辑</li>
+    <li><strong>JavaScript</strong>：ai-bridge.js — 引擎通信模式（UCI 协议处理、评估解析）</li>
+    <li><strong>JavaScript</strong>：ui.js — UI 布局与交互模式</li>
+    <li><strong>JavaScript</strong>：tablebase.js — PGN 解析逻辑（GameTree/PgnToken/PgnScanner）</li>
+  </ul>
+
+  <h3>Stockfish 引擎：GPL v3</h3>
+  <p>内置的 Stockfish 18 国际象棋引擎由 T. Romstad、M. Costalba、J. Kiiski、G. Linscott 等开发，采用 <strong>GPL v3</strong> 授权。</p>
+  <ul class="feature-list">
+    <li>Stockfish 是自由开源的 UCI 国际象棋引擎</li>
+    <li>源代码：<a href="https://github.com/official-stockfish/Stockfish" style="color:var(--accent2)">https://github.com/official-stockfish/Stockfish</a></li>
+    <li>本应用使用 Stockfish sf_18 arm64-v8a-dotprod 构建</li>
+    <li>完整作者名单见项目源代码中的 AUTHORS-stockfish 文件</li>
+  </ul>
+
+  <h3>双许可组合说明</h3>
+  <p>根据 GPL v3 第13条，AGPL v3 与 GPL v3 是兼容的，可以组合为单一作品。各组件保留其原始许可：AGPL v3 部分保持 AGPL v3，GPL v3 部分保持 GPL v3。但由于 AGPL v3 施加了更严格的要求（包括网络交互条款第13条），其义务实质上覆盖整个组合作品，确保用户通过网络访问时同样享有获取源代码的权利。</p>
+
+  <h3>ECO 开局数据：CC0</h3>
+  <p>ECO 开局分类数据源自 <a href="https://github.com/lichess-org/chess-openings" style="color:var(--accent2)">lichess-org/chess-openings</a>，采用 <strong>CC0</strong>（公共领域贡献）授权。eco-data.js 中的代码为原创实现，采用 AGPL v3。</p>
+
+  <div class="tip-box">
+    <span class="tip-label">声明：</span>本软件按"原样"提供，不提供任何明示或暗示的保证。详见 AGPL v3 第15-16条。如需获取源代码或了解更多许可详情，请访问项目代码仓库。
+  </div>
+
+  <h3>AI 生成声明 / AI Generation Declaration</h3>
+  <p>Regalia 的所有原创源代码文件均在文件头部标注了 <code>AI-GEN: AI assisted</code> 声明，表明这些代码由 AI 辅助生成并经过人工审核，确保符合相应开源许可协议的要求。源自 DroidFish 的代码文件同时保留了原始版权声明并添加了修改声明（如 <code>Modified by Regalia on 2026-06-15</code>）。</p>
+  <p><em>All original source code files in Regalia are marked with an <code>AI-GEN: AI assisted</code> declaration in the file header, indicating the code was AI-assisted and has been reviewed for compliance with the applicable open-source license. DroidFish-derived code files preserve the original copyright notice and add a modification declaration (e.g., <code>Modified by Regalia on 2026-06-15</code>).</em></p>
+
+  <h3>AI 生成资源 / AI-Generated Assets</h3>
+  <p>应用图标（mipmap 资源：ic_launcher.png、ic_launcher_foreground.png、ic_launcher_round.png，覆盖所有密度桶 mdpi/hdpi/xhdpi/xxhdpi/xxxhdpi）均由 AI 图像生成工具创建，不含人工创作美术作品。此声明已记录在项目 NOTICE 文件中。</p>
+  <p><em>All application icon files (mipmap resources: ic_launcher.png, ic_launcher_foreground.png, ic_launcher_round.png across all density buckets mdpi/hdpi/xhdpi/xxhdpi/xxxhdpi) were generated by AI image generation tools. No human-created artwork is included in these icon assets. This declaration is recorded in the project's NOTICE file.</em></p>
+
+<hr class="section-divider">
+
+<!-- ============================================================ -->
+<!-- SECTION 12: Ponder 预判实现机制 / Ponder Implementation Mechanism -->
+<!-- ============================================================ -->
+<div class="section" id="sec12">
+  <div class="section-header">
+    <div class="section-num">第十二章 / Chapter 12</div>
+    <div class="section-title">Ponder 预判实现机制</div>
+  </div>
+
+  <h3>什么是 Ponder？/ What is Ponder?</h3>
+  <p>Ponder（预判/后台思考）是 UCI（Universal Chess Interface）协议中定义的一项功能：当引擎完成自己的走法后，可以继续在后台预测对手的应手，并提前对该预测局面进行搜索分析。如果对手实际走出的棋与引擎预测一致（Ponder Hit），引擎可立即利用已分析的结果，几乎零延迟地返回下一步走法；若不一致（Ponder Miss），引擎停止后台搜索并重新分析新局面。</p>
+  <p><em>Ponder (background thinking) is a feature defined in the UCI (Universal Chess Interface) protocol: after the engine completes its move, it can continue in the background to predict the opponent's reply and pre-analyze that predicted position. If the opponent's actual move matches the engine's prediction (Ponder Hit), the engine can immediately use the already-analyzed result and return the next move with near-zero latency; if not (Ponder Miss), the engine stops the background search and re-analyzes the new position.</em></p>
+
+  <h3>Regalia 中的 Ponder 实现 / Ponder Implementation in Regalia</h3>
+  <p>Regalia 的 Ponder 实现遵循 UCI 协议标准，完整数据流如下：</p>
+  <p><em>Regalia's Ponder implementation follows the UCI protocol standard. The complete data flow is as follows:</em></p>
+
+  <ol class="step-list">
+    <li><strong>引擎输出最佳走法 / Engine outputs best move</strong>：AI 思考完成后，引擎通过 stdout 输出 <code>bestmove X ponder Y</code>，其中 <code>X</code> 为推荐走法，<code>Y</code> 为引擎预测对手的应手（ponder move）。若引擎未提供 ponder 字段，则 <code>Y</code> 为空。</li>
+    <li><strong>解析与存储 / Parse and store</strong>：Java 层 <code>StockfishNative.processEngineLine()</code> 使用正则表达式从 <code>bestmove</code> 行中提取 ponder 走法，存入 <code>_lastPonderMove</code> 字段。若不存在则置 <code>null</code>。</li>
+    <li><strong>启动后台 Ponder 搜索 / Start background ponder search</strong>：AI 走棋后，<code>onBestMove()</code> 将 ponder 走法应用到当前局面（模拟对手走出该步），生成新 FEN，调用 <code>AndroidBridge.startPonder(fen)</code>。Java 层向引擎发送 <code>position fen &lt;FEN&gt;</code> 和 <code>go ponder</code> 命令，引擎进入无限搜索模式。</li>
+    <li><strong>Ponder 进度回调 / Ponder progress callback</strong>：引擎搜索时通过 <code>info</code> 行实时回调 <code>onPonderProgress()</code>，更新 <code>_ponderBarInfo</code>（搜索深度、节点数、评估值）。首次回调时将 UCI 格式的 ponder 走法转换为 SAN 格式赋值 <code>_ponderMoveSAN</code>，确保走法与进度同步显示。</li>
+    <li><strong>Ponder Hit / Stop</strong>：玩家走棋时，检查是否匹配 ponder 走法。匹配则发送 <code>ponderhit</code>；不匹配则发送 <code>stop</code>。</li>
+  </ol>
+
+  <h3>Ponder 走法显示 / Ponder Move Display</h3>
+  <p>Ponder 走法以 PGN 标准代数记谱法（SAN）格式显示在 AI 对手栏中，使用省略号前缀标识为预判走法，例如 <code>...e5</code> 表示引擎预测对手会走 e5。</p>
+  <p><em>The ponder move is displayed in PGN Standard Algebraic Notation (SAN) format in the AI opponent bar, with an ellipsis prefix to identify it as a predicted move, e.g. <code>...e5</code> indicates the engine predicts the opponent will play e5.</em></p>
+
+  <div class="wireframe">
+    <div class="wireframe-title">AI 对手栏 Ponder 显示 / AI Opponent Bar Ponder Display</div>
+    <div style="border:1px solid #3a2a18;border-radius:3px;padding:8px 10px">
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="font-size:.8rem;color:var(--text)">🤖 AI 对手 (Lv.4)</span>
+      </div>
+      <div style="display:flex;justify-content:flex-end;text-align:right;font-size:.65rem;color:var(--muted);font-family:monospace;padding-top:2px">
+        🔮 ...e5 D18 4.5M 1.2M/s
+      </div>
+    </div>
+    <div class="tip-box" style="margin-top:8px">
+      <span class="tip-label">布局说明：</span>Ponder 信息总是在 AI 对手栏的第二行右对齐显示（<code>justify-content:flex-end; text-align:right</code>），第一行显示对手名称和等级。这种双行布局确保 Ponder 信息不会与对手名称挤在同一行，保持界面整洁。<br>
+      <em>Ponder info is always displayed right-aligned on the second line of the AI opponent bar, with the opponent name and level on the first line. This two-row layout ensures Ponder info doesn't crowd the opponent name, maintaining a clean interface.</em>
+    </div>
+  </div>
+
+  <h3>条件显示机制 / Conditional Display Mechanism</h3>
+  <p>Ponder 信息仅在<strong>同时满足</strong>以下条件时才会显示：</p>
+  <p><em>Ponder info is displayed only when <strong>all</strong> of the following conditions are met:</em></p>
+  <ul class="feature-list">
+    <li><strong>Ponder 走法（SAN）存在</strong>：引擎返回的 <code>bestmove</code> 包含 ponder 字段，且已成功转换为 SAN 格式（<code>_ponderMoveSAN</code> 非空）</li>
+    <li><strong>搜索进度数据存在</strong>：已收到至少一次 <code>onPonderProgress()</code> 回调，<code>_ponderBarInfo</code> 非空（包含搜索深度、节点数等）</li>
+    <li><strong>当前为玩家回合</strong>：AI 对手已走完棋，等待玩家走棋</li>
+    <li><strong>未在复盘模式</strong>：Ponder 信息不在复盘模式中显示</li>
+  </ul>
+  <div class="tip-box">
+    <span class="tip-label">双语提示 / Bilingual Tip：</span>Ponder 信息仅在预判走法 SAN 和搜索进度数据同时可用时才显示，包括 🔮 图标。若任一数据缺失，界面不会显示任何 Ponder 相关内容，保持简洁。<br>
+    <em>Ponder info only appears when both the ponder move (SAN) and progress data (depth/nodes) are available, including the 🔮 icon. If either is missing, no Ponder-related content is displayed, keeping the UI clean.</em>
+  </div>
+
+  <h3>Ponder 显示清除时机 / Ponder Display Clear Timing</h3>
+  <p>Ponder 显示在以下情况会立即清除：</p>
+  <p><em>Ponder display is cleared immediately under the following circumstances:</em></p>
+  <table>
+    <tr><th>触发事件 / Trigger Event</th><th>中文说明</th><th>English Description</th></tr>
+    <tr><td>玩家走棋 / Player makes a move</td><td>玩家走出任意一步棋时，Ponder 显示立即清除，同时根据匹配结果发送 <code>ponderhit</code> 或 <code>stop</code></td><td>When the player makes any move, Ponder display is cleared immediately, and <code>ponderhit</code> or <code>stop</code> is sent based on match result</td></tr>
+    <tr><td>请求 AI 提示 / New hint requested</td><td>玩家点击 💡 按钮请求 AI 提示时，Ponder 数据清除，切换为提示搜索模式</td><td>When the player clicks 💡 to request an AI hint, Ponder data is cleared and the engine switches to hint search mode</td></tr>
+    <tr><td>进入复盘模式 / Enter review mode</td><td>进入复盘模式时，Ponder 搜索停止，所有 Ponder 显示清除</td><td>Upon entering review mode, Ponder search is stopped and all Ponder display is cleared</td></tr>
+    <tr><td>AI 开始思考 / AI starts thinking</td><td>轮到 AI 思考时，Ponder 信息自动隐藏</td><td>When it's the AI's turn to think, Ponder info is automatically hidden</td></tr>
+    <tr><td>游戏结束 / Game ends</td><td>对局结束时，所有 Ponder 活动停止并清除</td><td>When the game ends, all Ponder activity is stopped and cleared</td></tr>
+  </table>
+
+  <h3>世代计数器（Generation Counter）防陈旧机制</h3>
+  <h3 style="font-size:11pt;color:#b8a080;border:none;margin-top:-6px">Generation Counter Anti-Stale Mechanism</h3>
+  <p>为防止陈旧的 Ponder 数据被错误显示，Regalia 引入了<strong>世代计数器</strong>（Generation Counter）机制。每次启动新的 Ponder 搜索时，计数器递增；所有 Ponder 回调携带当前世代标识，仅当回调的世代与当前活跃世代匹配时，数据才会被接受并显示。</p>
+  <p><em>To prevent stale Ponder data from being incorrectly displayed, Regalia introduces a <strong>Generation Counter</strong> mechanism. Each time a new Ponder search is started, the counter increments; all Ponder callbacks carry the current generation identifier, and data is only accepted and displayed when the callback's generation matches the currently active generation.</em></p>
+
+  <ul class="feature-list">
+    <li><strong>世代递增 / Generation increment</strong>：每次 <code>startPonder()</code> 调用时，<code>_ponderGeneration</code> 递增，新的 <code>onPonderProgress()</code> 回调必须携带相同世代才有效</li>
+    <li><strong>陈旧回调丢弃 / Stale callback discard</strong>：若 <code>onPonderProgress()</code> 回调的世代不匹配当前活跃世代，该回调被立即丢弃，不会更新 <code>_ponderBarInfo</code> 或 <code>_ponderMoveSAN</code></li>
+    <li><strong>停止时递增 / Increment on stop</strong>：调用 <code>stopPonder()</code> 或 <code>ponderHit()</code> 时同样递增世代计数器，确保停止后的任何延迟回调被自动忽略</li>
+    <li><strong>与一次性读取协同 / Synergy with one-time read</strong>：世代计数器与 <code>getLastPonderMove()</code> 的一次性读取机制协同工作，形成双层防护：Java 层防止旧 ponder 走法泄漏，JS 层防止旧搜索进度残留</li>
+  </ul>
+
+  <div class="impl-section">
+    <h4>实现原理：世代计数器防陈旧数据</h4>
+    <h4 style="font-size:10pt;color:#887860;border:none;margin-top:-4px">Implementation: Generation Counter Anti-Stale Data</h4>
+    <div class="code-block">
+      <span class="code-label">ai-bridge.js — 世代计数器核心逻辑 / Generation Counter Core Logic</span>
+// 世代计数器：防止陈旧 Ponder 回调更新当前显示
+// Generation counter: prevents stale Ponder callbacks
+// from updating current display
+let _ponderGeneration = 0;
+
+function startPonderSearch(fen) {
+  _ponderGeneration++; // 递增世代 / Increment generation
+  const myGen = _ponderGeneration;
+  AndroidBridge.startPonder(fen);
+  // 回调闭包捕获当前世代 / Callback closure captures current gen
+}
+
+function onPonderProgress(depth, nodes, speed, scoreCp) {
+  // 世代不匹配则丢弃 / Discard if generation mismatch
+  if (this._gen !== _ponderGeneration) return;
+  _ponderBarInfo = { depth, nodes, speed, scoreCp };
+  // 首次回调时转换 UCI → SAN / Convert UCI→SAN on first callback
+  if (_pendingPonderMoveUCI) {
+    _ponderMoveSAN = uciToSan(_pendingPonderMoveUCI);
+    _pendingPonderMoveUCI = null;
+  }
+  _updateAIThinkDisplay();
+}
+
+function stopPonder() {
+  _ponderGeneration++; // 停止时递增 / Increment on stop
+  AndroidBridge.stopPonder();
+  _ponderMoveSAN = null;
+  _ponderBarInfo = null;
+  _updateAIThinkDisplay();
+}</div>
+  </div>
+
+  <div class="impl-section">
+    <h4>实现原理：多层防陈旧数据防护体系</h4>
+    <h4 style="font-size:10pt;color:#887860;border:none;margin-top:-4px">Implementation: Multi-Layer Anti-Stale Data Protection</h4>
+    <p>Regalia 采用四层防护确保 Ponder 数据不会残留过期信息：</p>
+    <p><em>Regalia employs four layers of protection to ensure Ponder data never shows stale information:</em></p>
+    <ol>
+      <li><strong>世代计数器 / Generation Counter</strong>：JS 层核心防线，所有 <code>onPonderProgress()</code> 回调必须通过世代校验才能更新显示数据</li>
+      <li><strong>一次性读取 / One-time read</strong>：<code>getLastPonderMove()</code> 读取后自动清空，防止旧 ponder 走法泄漏到后续搜索</li>
+      <li><strong>即时 DOM 更新 / Immediate DOM update</strong>：清除 ponder 变量时立即调用 <code>_updateAIThinkDisplay()</code>，避免变量已清除但 DOM 仍显示旧值</li>
+      <li><strong>Java 层标志位 / Java-layer flag</strong>：<code>_discardingPonderBestmove</code> 标志防止 ponder 停止后的 <code>bestmove</code> 被错误路由到正常搜索处理流程</li>
+    </ol>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<!-- ============================================================ -->
+<!-- SECTION 13: 复盘模式分析 / Review Mode Analysis -->
+<!-- ============================================================ -->
+<div class="section" id="sec13">
+  <div class="section-header">
+    <div class="section-num">第十三章 / Chapter 13</div>
+    <div class="section-title">复盘模式分析</div>
+  </div>
+
+  <h3>自动引擎分析 / Automatic Engine Analysis</h3>
+  <p>复盘模式中，导航到任意一步未分析的走法时，系统会<strong>自动启动引擎分析</strong>。无需手动触发，选中即分析，实现无缝的复盘体验。</p>
+  <p><em>In review mode, navigating to any unanalyzed move automatically starts engine analysis. No manual trigger is needed — selecting a move initiates analysis, providing a seamless review experience.</em></p>
+
+  <ul class="feature-list">
+    <li><strong>自动触发 / Auto-trigger</strong>：导航到新步骤时，若该步骤尚无缓存评估结果，<code>requestEngineEval()</code> 自动发送 <code>go depth 22</code> 给引擎</li>
+    <li><strong>实时进度 / Real-time progress</strong>：分析过程中，评估进度条实时显示搜索深度和节点数</li>
+    <li><strong>过期回调防护 / Stale callback guard</strong>：<code>_reviewEvalRequestedStep</code> 记录当前请求的步骤编号，若回调到达时步骤已变更，过期结果被自动丢弃</li>
+    <li><strong>非阻塞导航 / Non-blocking navigation</strong>：导航到新步骤会取消前一步的评估请求，避免并发请求导致引擎混乱</li>
+  </ul>
+
+  <div class="impl-section">
+    <h4>实现原理：复盘自动分析</h4>
+    <h4 style="font-size:10pt;color:#887860;border:none;margin-top:-4px">Implementation: Review Auto-Analysis</h4>
+    <div class="code-block">
+      <span class="code-label">ui.js — 复盘导航自动分析 / Review Navigation Auto-Analysis</span>
+function navigateReview(step) {
+  reviewStep = step;
+  // 恢复该步骤的快照 / Restore snapshot for this step
+  restoreState(reviewStates[step]);
+  // 检查缓存 / Check cache
+  if (_reviewEvalCache.has(step)) {
+    // 使用缓存结果 / Use cached result
+    applyEvalData(_reviewEvalCache.get(step));
+  } else {
+    // 自动请求引擎分析 / Auto-request engine analysis
+    _reviewEvalRequestedStep = step;
+    requestEngineEval(22);
+  }
+  render();
+}</div>
+  </div>
+
+  <h3>评估缓存持久化 / Evaluation Cache Persistence</h3>
+  <p>复盘评估结果在退出复盘后<strong>不会丢失</strong>，缓存跨复盘会话持久保留，仅在新对局开始时清空。这使得用户可以反复进入复盘模式查看已有分析结果，无需重新计算。</p>
+  <p><em>Review evaluation results are <strong>not lost</strong> when exiting review mode. The cache persists across review sessions and is only cleared when a new game starts. This allows users to re-enter review mode and view existing analysis results without re-computation.</em></p>
+
+  <table>
+    <tr><th>场景 / Scenario</th><th>缓存行为 / Cache Behavior</th><th>说明 / Description</th></tr>
+    <tr><td>退出复盘再进入 / Exit & re-enter review</td><td>缓存保留 / Cache retained</td><td>之前分析的步骤无需重新计算 / Previously analyzed steps need no re-computation</td></tr>
+    <tr><td>对局中进入复盘 / Enter review during game</td><td>缓存保留 / Cache retained</td><td>可随时复盘而不丢失分析进度 / Review anytime without losing analysis progress</td></tr>
+    <tr><td>开始新对局 / Start new game</td><td>缓存清空 / Cache cleared</td><td>旧对局的分析结果不再适用 / Old game's analysis results no longer apply</td></tr>
+    <tr><td>缓存上限 / Cache limit</td><td>LRU 200 条 / LRU 200 entries</td><td>超出时淘汰最久未使用的条目 / Least recently used entries evicted when exceeded</td></tr>
+  </table>
+
+  <div class="impl-section">
+    <h4>实现原理：评估缓存管理</h4>
+    <h4 style="font-size:10pt;color:#887860;border:none;margin-top:-4px">Implementation: Evaluation Cache Management</h4>
+    <div class="code-block">
+      <span class="code-label">ai-bridge.js — 复盘评估缓存 / Review Evaluation Cache</span>
+// LRU Map，上限 200 条 / LRU Map, max 200 entries
+const _reviewEvalCache = new Map();
+const REVIEW_CACHE_LIMIT = 200;
+
+function onEngineEval(scoreCp, scoreMate, depth, wdlW, wdlD, wdlL) {
+  // ... 评估数据处理 / Evaluation data processing ...
+  if (reviewMode) {
+    _reviewEvalCache.set(reviewStep, {
+      eval: _sfEval, mate: _sfMateDistance,
+      wdlW: _sfWdlW, wdlD: _sfWdlD, wdlL: _sfWdlL,
+      depth: _sfDepth
+    });
+    // LRU 淘汰 / LRU eviction
+    if (_reviewEvalCache.size > REVIEW_CACHE_LIMIT) {
+      const firstKey = _reviewEvalCache.keys().next().value;
+      _reviewEvalCache.delete(firstKey);
+    }
+  }
+}
+
+// 新对局时清空缓存 / Clear cache on new game
+function clearReviewCache() {
+  _reviewEvalCache.clear();
+}</div>
+  </div>
+
+  <h3>全部分析（Analyze All）</h3>
+  <p>复盘模式中的"全部分析"功能可一键分析对局中的<strong>每一步走法</strong>，为所有步骤生成引擎评估、走法分类和关键着标注。</p>
+  <p><em>The "Analyze All" feature in review mode analyzes <strong>every move</strong> in the game with one click, generating engine evaluations, move classifications, and key move annotations for all steps.</em></p>
+
+  <ul class="feature-list">
+    <li><strong>顺序分析 / Sequential analysis</strong>：<code>reviewAnalyzeAll()</code> 按步骤顺序逐一发送 <code>go depth 22</code>，利用回调驱动机制在每步评估完成后自动推进到下一步，避免并发请求导致引擎混乱</li>
+    <li><strong>进度显示 / Progress display</strong>：分析过程中显示当前进度（如"分析中 5/30"），让用户了解整体进度</li>
+    <li><strong>可中断 / Interruptible</strong>：用户可随时退出复盘模式中断全部分析，已完成的步骤结果保留在缓存中</li>
+    <li><strong>增量分析 / Incremental analysis</strong>：已有缓存结果的步骤会被跳过，仅分析未缓存的步骤，提高效率</li>
+    <li><strong>走法分类 / Move classification</strong>：每步分析完成后，根据评估偏差自动分类为妙着、好着、正着、标准、缓着、错着或漏着</li>
+  </ul>
+
+  <div class="impl-section">
+    <h4>实现原理：全部分析回调驱动机制</h4>
+    <h4 style="font-size:10pt;color:#887860;border:none;margin-top:-4px">Implementation: Analyze All Callback-Driven Mechanism</h4>
+    <div class="code-block">
+      <span class="code-label">ui.js — 全部分析流程 / Analyze All Flow</span>
+function reviewAnalyzeAll() {
+  _analyzeAllActive = true;
+  _analyzeAllStep = 0;
+  _analyzeAllNext();
+}
+
+function _analyzeAllNext() {
+  if (!_analyzeAllActive || _analyzeAllStep >= reviewStates.length) {
+    _analyzeAllActive = false;
+    render(); // 最终渲染 / Final render
+    return;
+  }
+  reviewStep = _analyzeAllStep;
+  restoreState(reviewStates[reviewStep]);
+  // 跳过已有缓存的步骤 / Skip already cached steps
+  if (_reviewEvalCache.has(reviewStep)) {
+    _analyzeAllStep++;
+    _analyzeAllNext(); // 递归推进 / Recursive advance
+    return;
+  }
+  _reviewEvalRequestedStep = reviewStep;
+  requestEngineEval(22); // 回调完成后自动推进 / Auto-advance after callback
+  render();
+}
+
+// onEngineEval() 中追加 / Appended in onEngineEval()
+if (_analyzeAllActive) {
+  _analyzeAllStep++;
+  _analyzeAllNext();
+}</div>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<!-- ============================================================ -->
+<!-- SECTION 14: 设置导入 / Settings Import -->
+<!-- ============================================================ -->
+<div class="section" id="sec14">
+  <div class="section-header">
+    <div class="section-num">第十四章 / Chapter 14</div>
+    <div class="section-title">设置导入</div>
+  </div>
+
+  <h3>自动权限请求 / Automatic Permission Request</h3>
+  <p>当用户点击导入或导出按钮时，应用会<strong>自动检测并请求</strong>所需的存储权限，无需用户手动前往系统设置授权。</p>
+  <p><em>When the user clicks the import or export button, the app <strong>automatically detects and requests</strong> required storage permissions. No manual trip to system settings is needed.</em></p>
+  <ul class="feature-list">
+    <li><strong>导入设置</strong>：使用 Android 系统 SAF 文件选择器（<code>ACTION_OPEN_DOCUMENT</code>），无需任何特殊权限即可浏览和读取文件。Android 5-9 设备会自动请求 <code>READ_EXTERNAL_STORAGE</code> 权限作为兼容处理</li>
+    <li><strong>导出设置</strong>：使用 Android 系统 SAF 文件选择器（<code>ACTION_CREATE_DOCUMENT</code>），用户可直接选择保存位置（如 Download 目录），无需任何特殊权限。导出内容同时自动复制到剪贴板作为备份</li>
+  </ul>
+  <div class="tip-box">
+    <span class="tip-label">重要更新 / Important Update：</span>v1.0.1 已移除 <code>MANAGE_EXTERNAL_STORAGE</code>（所有文件访问）权限。此权限对于设置文件的导入/导出并非必需，且在 Google Play 等应用商店中需要额外审核。现在所有文件操作均通过 SAF（Storage Access Framework）完成，这是 Android 推荐的文件访问方式，在所有 Android 版本（API 19+）上均可正常工作，无需任何特殊权限。<br>
+    <em>v1.0.1 has removed the <code>MANAGE_EXTERNAL_STORAGE</code> (All Files Access) permission. This permission is not necessary for settings import/export and requires additional review on app stores like Google Play. All file operations now use SAF (Storage Access Framework), which is Android's recommended file access method, works on all Android versions (API 19+), and requires no special permissions.</em>
+  </div>
+
+  <div class="tip-box">
+    <span class="tip-label">修复说明 / Fix Note：</span>此前版本中，<code>openSystemFilePicker()</code> 使用 <code>context instanceof Activity</code> 检查上下文类型，但由于 v18.5.0 起 <code>context</code> 已改为 Application Context，该检查始终为 <code>false</code>，导致系统文件选择器无法打开。现已改用 <code>activityRef.get()</code>（WeakReference）获取 Activity 引用，确保在所有 Android 版本上均能正确调用 <code>startActivityForResult()</code>。同时，所有 <code>@JavascriptInterface</code> 方法中的 <code>checkCallingOrSelfPermission()</code> 已替换为 <code>checkSelfPermission()</code>，因为在 JS Bridge 线程上下文中前者使用 WebView 的调用者身份而非应用自身 UID，会导致权限检查误判。<br>
+    <em>In previous versions, <code>openSystemFilePicker()</code> used <code>context instanceof Activity</code> to check context type, but since v18.5.0 changed <code>context</code> to Application Context, this check always returned <code>false</code>, preventing the system file picker from opening. Now uses <code>activityRef.get()</code> (WeakReference) to obtain the Activity reference, ensuring <code>startActivityForResult()</code> works on all Android versions. Additionally, all <code>checkCallingOrSelfPermission()</code> calls in <code>@JavascriptInterface</code> methods have been replaced with <code>checkSelfPermission()</code>, because the former uses the WebView's caller identity instead of the app's own UID in the JS Bridge thread context, causing permission check false negatives.</em>
+  </div>
+
+  <div class="tip-box">
+    <span class="tip-label">双语提示 / Bilingual Tip：</span>使用 SAF 文件选择器时，<strong>不会有任何延迟</strong>——系统选择器立即弹出，无需等待权限授予。SAF 是 Android 推荐的文件访问方式，完全兼容小米澎湃OS3等严格分区存储环境。<br>
+    <em>When using the SAF file picker, there is <strong>zero delay</strong> — the system picker opens immediately, no permission granting needed. SAF is Android's recommended file access method, fully compatible with strict scoped storage environments like Xiaomi HyperOS 3.</em>
+  </div>
+  <div class="tip-box">
+    <span class="tip-label">v1.0.2 修复 / v1.0.2 Fix：</span>修复"导入设置偶尔提示成功但未生效"的根因。此前若用户在引擎思考中（AI 走棋进行时）点击导入，<code>setoption</code> + <code>isready</code> 等不到 <code>readyok</code>（引擎仅在空闲时响应 isready），3 秒超时后设置被静默丢弃——表现为"toast 显示成功但实际未生效"。v1.0.2 在 <code>importSettings()</code> 调用 <code>applySettings()</code> 前先 <code>stopAndWaitForBestmove("importSettings")</code> 让引擎进入空闲态；并新增显式值优先逻辑——若 TXT 中显式指定 <code>engine.threads</code> 或 <code>engine.hash</code>，则本次应用时自动关闭 autoConfig 以免被硬件检测覆盖；同时统一由 <code>onSettingsImported</code> 回调负责 toast 与对话框刷新，消除文件选择器入口的重复提示。<br>
+    <em>Fixes the root cause of "import settings occasionally reports success but does not take effect". Previously, if the user clicked Import while the engine was thinking (AI move in flight), <code>setoption</code> + <code>isready</code> could not get <code>readyok</code> (the engine only responds to isready when idle), and the 3-second timeout silently dropped the settings. v1.0.2 calls <code>stopAndWaitForBestmove("importSettings")</code> before <code>applySettings()</code> to bring the engine to idle; adds explicit-value-priority logic — if the TXT explicitly sets <code>engine.threads</code> or <code>engine.hash</code>, autoConfig is auto-disabled for this apply cycle to prevent silent override by hardware detection; the toast and dialog refresh are now unified under the <code>onSettingsImported</code> callback, eliminating duplicate prompts from the file-picker entry.</em>
+  </div>
+
+
+  <h3>内置文件浏览器 / Built-in File Browser</h3>
+  <p>Regalia 提供内置文件浏览器，用于浏览文件系统并选择配置文件进行导入。浏览器具有以下特性：</p>
+  <p><em>Regalia provides a built-in file browser for browsing the file system and selecting configuration files for import. The browser has the following features:</em></p>
+
+  <ul class="feature-list">
+    <li><strong>支持的文件格式 / Supported file formats</strong>：仅显示 <code>.txt</code> 和 <code>.cfg</code> 文件，与引擎配置导出的文件格式一致，避免用户误选无关文件</li>
+    <li><strong>目录导航 / Directory navigation</strong>：点击目录进入子目录，按 Android 返回键逐级返回上级目录；导航历史被完整记录，确保返回操作精确回到上一级</li>
+    <li><strong>根目录退出 / Exit at root</strong>：到达根目录时再按返回键则关闭浏览器</li>
+    <li><strong>文件选择 / File selection</strong>：点击 <code>.txt</code> 或 <code>.cfg</code> 文件即可读取内容并解析为引擎配置参数</li>
+  </ul>
+
+  <div class="wireframe">
+    <div class="wireframe-title">内置文件浏览器 / Built-in File Browser</div>
+    <div style="border:1px solid #3a2a18;border-radius:4px;padding:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;border-bottom:1px solid #2a1a0a;padding-bottom:6px">
+        <span style="font-size:.8rem;color:var(--accent);cursor:pointer">← 返回上级</span>
+        <span style="font-size:.7rem;color:#887860">/storage/emulated/0/Download/</span>
+        <span style="font-size:.7rem;color:#887860;cursor:pointer">✕</span>
+      </div>
+      <div style="font-size:.75rem;color:#b8a080;padding:3px 0;border-bottom:1px solid #1a1008">📁 Android/</div>
+      <div style="font-size:.75rem;color:#b8a080;padding:3px 0;border-bottom:1px solid #1a1008">📁 Documents/</div>
+      <div style="font-size:.75rem;color:var(--accent);padding:3px 0;border-bottom:1px solid #1a1008;font-weight:600">📄 Regalia_engine_settings.txt</div>
+      <div style="font-size:.75rem;color:var(--accent);padding:3px 0;border-bottom:1px solid #1a1008;font-weight:600">📄 stockfish.cfg</div>
+      <div style="font-size:.7rem;color:#6a5a40;padding:3px 0">📷 photo.jpg <span style="color:#4a3a2a;font-size:.6rem">（已过滤）</span></div>
+    </div>
+  </div>
+
+  <h3>SAF 文件选择器 / SAF File Picker</h3>
+  <p>Regalia 使用 Android 系统 SAF（Storage Access Framework）文件选择器进行设置的导入和导出，这是 Android 推荐的文件访问方式，无需任何特殊权限。</p>
+  <p><em>Regalia uses the Android system SAF (Storage Access Framework) file picker for settings import and export, which is Android's recommended file access method and requires no special permissions.</em></p>
+  <ul class="feature-list">
+    <li><strong>导入设置</strong>：使用 <code>ACTION_OPEN_DOCUMENT</code> 系统选择器，用户可浏览设备上的所有文件并选择 <code>.txt</code> 配置文件</li>
+    <li><strong>导出设置</strong>：使用 <code>ACTION_CREATE_DOCUMENT</code> 系统选择器，用户可选择保存位置（如 Download 目录），默认文件名为 <code>Regalia_engine_settings.txt</code>。导出内容同时复制到剪贴板</li>
+    <li><strong>权限</strong>：SAF 无需 <code>MANAGE_EXTERNAL_STORAGE</code> 或其他特殊权限，在所有 Android 版本上均可正常工作</li>
+  </ul>
+
+  <div class="impl-section">
+    <h4>实现原理：SAF 文件选择器</h4>
+    <h4 style="font-size:10pt;color:#887860;border:none;margin-top:-4px">Implementation: SAF File Picker</h4>
+    <div class="code-block">
+      <span class="code-label">StockfishNative.java — SAF 导出 / SAF Export</span>
+// ACTION_CREATE_DOCUMENT — 用户选择保存位置
+@JavascriptInterface
+public void openExportFilePicker(String content) {
+  Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+  intent.addCategory(Intent.CATEGORY_OPENABLE);
+  intent.setType("text/plain");
+  intent.putExtra(Intent.EXTRA_TITLE, "Regalia_engine_settings.txt");
+  activity.startActivityForResult(intent, REQUEST_CODE_EXPORT_SETTINGS);
+}
+
+// 处理导出结果 — 写入用户选择的位置
+public void handleExportFilePickerResult(Intent data) {
+  Uri uri = data.getData();
+  try (OutputStream os = context.getContentResolver().openOutputStream(uri);
+       OutputStreamWriter writer = new OutputStreamWriter(os, "UTF-8")) {
+    writer.write(pendingContent);
+  }
+  // 通知 JS 导出成功
+  postJsCallback("onSettingsExported(true, fileName)");
+}</div>
+    <div class="code-block">
+      <span class="code-label">StockfishNative.java — SAF 导入 / SAF Import</span>
+// ACTION_OPEN_DOCUMENT — 用户选择导入文件
+@JavascriptInterface
+public void openSystemFilePicker() {
+  Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+  intent.addCategory(Intent.CATEGORY_OPENABLE);
+  intent.setType("*/*");
+  intent.putExtra(Intent.EXTRA_MIME_TYPES,
+    new String[]{"text/plain", "application/octet-stream"});
+  activity.startActivityForResult(intent, REQUEST_CODE_IMPORT_SETTINGS);
+}
+
+// 处理导入结果 — 读取用户选择的文件
+public void handleFilePickerResult(Intent data) {
+  Uri uri = data.getData();
+  InputStream is = context.getContentResolver().openInputStream(uri);
+  // 读取并解析 key=value 格式 / Read and parse key=value format
+  String content = readFully(is);
+  importSettings(content);
+}</div>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<!-- ============================================================ -->
+<!-- SECTION 15: PGN 导入 / PGN Import -->
+<!-- ============================================================ -->
+<div class="section" id="sec15">
+  <div class="section-header">
+    <div class="section-num">第十五章 / Chapter 15</div>
+    <div class="section-title">PGN 导入 / PGN Import</div>
+  <div class="tip-box">
+    <span class="tip-label">v1.0.2 修复 / v1.0.2 Fix：</span>修复 PGN 变例"片段不完整"问题。此前若一条变例中间某个 SAN 写得不规范（缺歧义消除符、非标准后缀等），变例续着循环遇到首个无法解析的 token 时会 <code>break</code>，导致从该 token 起的所有剩余走法被全部丢弃——表现就是"🌿 变例只显示前半段"。v1.0.2 改为 <code>continue</code>（仅跳过该 token，继续解析后续走法），并对每个 token 统一应用 <code>moveAlg</code> 容错匹配。同时修复 MultiPV 变例提取不完整：主 PV 不以 bestmove 开头时不再伪造"主线"，而是作为独立备选行纳入 MultiPV 迭代；<code>_formatVariationGroups</code> 修复 mainline + multipv + pgn 行号冲突，PGN 变例行号统一从引擎最大行号 +1 起。<br>
+    <em>Fixes the "PGN variation segments incomplete" issue. Previously, if a single SAN in the middle of a variation was non-standard (missing disambiguation, non-standard suffix, etc.), the variation continuation loop would <code>break</code> on the first unparseable token, dropping all remaining moves from that point on — manifesting as "🌿 variation shows only the first half". v1.0.2 changes this to <code>continue</code> (skip only that token, keep parsing the rest), and applies the <code>moveAlg</code> forgiving fallback uniformly to every token. Also fixes MultiPV variation extraction: when the primary PV does not start with bestmove, no longer fabricates a "mainline" — instead includes the primary PV as an independent alternative line in the MultiPV iteration; <code>_formatVariationGroups</code> resolves the mainline + multipv + pgn line-number collision, PGN variation line numbers now start at max-engine-line + 1.</em>
+  </div>
+
+  </div>
+
+  <p>Regalia 支持通过 🗃️ 导入按钮导入 PGN（Portable Game Notation）棋谱，完整还原对局过程并在走法记录中显示变例。PGN 导入功能提供三种导入方式：</p>
+  <p><em>Regalia supports importing PGN (Portable Game Notation) games via the 🗃️ Import button, fully restoring the game and displaying variations in the move list. Three import methods are available:</em></p>
+
+  <ul class="feature-list">
+    <li><strong>粘贴 FEN / Paste FEN</strong>：从剪贴板粘贴 FEN 字符串，快速还原任意局面。适用于从其他棋类应用或网站复制的局面编码</li>
+    <li><strong>粘贴 PGN / Paste PGN</strong>：从剪贴板粘贴完整的 PGN 棋谱文本。支持标准 PGN 格式，包含头部标签（如 [FEN "..."]）、走法、注释和变例</li>
+    <li><strong>📂 选择 PGN 文件 / 📂 Select PGN File</strong>：通过 Android SAF 文件选择器从设备中选择 .pgn 文件。自动识别 FEN 和 PGN 格式</li>
+  </ul>
+
+  <h3>PGN 变例支持 / PGN Variation Support</h3>
+  <p>导入的 PGN 棋谱中包含的变例（即括号内的走法，RAV — Recursive Annotation Variation）会自动在走法记录中显示为 🌿线，与引擎分析线采用相同的展示格式。变例仅显示为文本走法序列，不会触发引擎评估或在棋盘上显示，确保界面简洁清晰。</p>
+  <p><em>Variations in the imported PGN (moves in parentheses, RAV — Recursive Annotation Variation) are automatically displayed as 🌿 lines in the move record, using the same display format as engine analysis lines. Variations are shown only as text move sequences — they do not trigger engine evaluation or appear on the board, keeping the interface clean.</em></p>
+
+  <div class="tip-box">
+    <span class="tip-label">变例显示开关 / Variation Toggle：</span>走法记录区域提供变例显示开关（🌿线），可随时切换是否显示变例内容。此开关同时控制引擎分析线和 PGN 导入变例的显示。<br>
+    <em>The move record area provides a variation toggle (🌿线) to show or hide variation content at any time. This toggle controls both engine analysis lines and PGN import variations.</em>
+  </div>
+
+  <h3>PGN 解析流程 / PGN Parsing Process</h3>
+  <p>PGN 导入的解析流程经过精心设计，确保对各种 PGN 格式的兼容性：</p>
+  <p><em>The PGN import parsing process is carefully designed for compatibility with various PGN formats:</em></p>
+  <ul class="feature-list">
+    <li>自动移除 BOM（字节顺序标记）和头部标签</li>
+    <li>提取 FEN 头部（如有）以还原非标准起始局面</li>
+    <li>移除注释（花括号内容）和 NAG 符号（$1, $2 等）</li>
+    <li>在移除变例内容前先提取并保存变例，将其关联到对应的主走法</li>
+    <li>逐着验证走法的合法性，遇到无法识别的走法时跳过而非中断</li>
+    <li><span class="new-tag">v1.0.1</span> 递归变例树解析：每个 <code>(</code> 开启一个新的变例帧，附加到父上下文中"最后一步走法"。嵌套 <code>(</code> 附加到父变例中正确的走法（而非主线走法），符合 PGN 规范 §8.2.5</li>
+    <li><span class="new-tag">v1.0.1</span> 变例首 token 匹配三重 fallback：Type A（同侧替代）→ Type A moveAlg 模糊匹配 → Type B（对手应着）→ Type B moveAlg 模糊匹配。处理非标准 SAN（缺少消歧符、+/# 后缀等）</li>
+    <li><span class="new-tag">v1.0.1</span> mainTokenIdx 索引追踪：即使主线某步走法无法解析被跳过，后续变例仍能正确关联到对应的主走法</li>
+    <li><span class="new-tag">v1.0.1</span> 诊断日志：变例首 token 无法匹配时输出 <code>console.warn</code>，便于排查 PGN 输入问题</li>
+  </ul>
+
+  <h3>导入后的行为 / Post-Import Behavior</h3>
+  <p>PGN 导入完成后，应用会执行以下操作：</p>
+  <p><em>After PGN import, the app performs the following:</em></p>
+  <ul class="feature-list">
+    <li>走法记录同步更新，显示导入的所有走法及变例</li>
+    <li>棋盘显示对局的最终局面</li>
+    <li>自动请求引擎评估当前局面</li>
+    <li>不会自动触发 AI 走棋，用户可自由浏览或开始新游戏</li>
+    <li>支持复盘模式浏览导入的对局</li>
+    <li><span class="new-tag">v1.0.1</span> 悔棋正常工作：导入后可逐步悔棋至白方首步并清空走法记录（修复了 v1.0.0 中 stateHistory 快照顺序错误导致的悔棋失效问题）</li>
+  </ul>
+</div>
+
+<hr class="section-divider">
+
+
+<hr class="section-divider">
+
+<!-- ============================================================ -->
+<!-- APPENDIX A: 版本更新日志 -->
+<!-- ============================================================ -->
+<div class="section" id="appendix-changelog">
+  <div class="section-header">
+    <div class="section-num">附录 A</div>
+    <div class="section-title">版本更新日志</div>
+  </div>
+  <p>本附录按版本号倒序汇总 Regalia 的全部更新日志详情。</p>
+
+<!-- v1.0.2 Changelog -->
+<div class="card" style="margin: 20px 0; padding: 16px; background: linear-gradient(145deg, rgba(139,105,20,.12), rgba(255,215,0,.06)); border: 1px solid rgba(212,160,23,.4); border-radius: 8px;">
+  <h3 style="color:#ffd700; margin-bottom: 12px; font-size: 1.1rem;">v1.0.2 更新日志</h3>
+  <ul style="line-height: 1.7; font-size: .9rem; color: var(--text); padding-left: 20px;">
+    <li><strong>TXT 设置导入修复</strong>：修复"导入设置偶尔提示成功但未生效"的根本原因——引擎在搜索中（<code>go</code> 进行时）<code>setoption + isready</code> 等不到 <code>readyok</code>，3 秒超时后设置被静默丢弃。现在导入流程会先 <code>stopAndWaitForBestmove</code> 让引擎进入空闲态再应用设置；并新增 <em>"用户显式导入 threads/hash 时自动关闭 autoConfig"</em> 保护，避免自动检测覆盖用户显式值；同时消除文件选择器入口的重复 toast。</li>
+    <li><strong>PGN 变例解析完善</strong>：将变例续着循环中遇到首个无法解析的 token 时 <code>break</code>（截断整条变例）的行为改为 <code>continue</code>（仅跳过该 token，继续解析后续走法），并为每个 token 统一应用 <code>moveAlg</code> 容错匹配。修复"PGN 变例片段不完整"问题——此前一条变例只要中间有一个 SAN 写得不规范，从该处起的剩余走法会被全部丢弃。</li>
+    <li><strong>MultiPV 变例提取完善</strong>：当主 PV 未以 bestmove 开头时（MultiPV 收敛罕见情形），不再伪造一条"主线"变例，而是把主 PV 作为一条独立备选行纳入 MultiPV 迭代（从 index 0 开始）；同时为 <code>_lastEngineVariation</code> 为空时回退到 <code>_multiPVResult[0].pv</code>；修复显示层 <code>_formatVariationGroups</code> 中 mainline(1) + multipv(2,3) + pgn(1,2) 的"🌿 Line 1"标签冲突，PGN 变例行号现统一从引擎最大行号 +1 起。</li>
+    <li><strong>前端审查完善</strong>（参考 qw3.7max v1.01 审查报告）：
+      <ul>
+        <li><code>render()</code> 节流回调末尾新增"脏检查"——若 <code>rAF</code> 回调执行期间又有新渲染请求挂起，触发补偿渲染，避免 UI 与状态脱节。</li>
+        <li><code>executeMove</code> 中 <code>setTimeout(..., 420)</code> 回调加入 <code>gameState.hash</code> 守卫，防止用户在动画窗口内 undo/redo/flip 时旧回调覆盖新状态（"幽灵将杀横幅" bug）。</li>
+        <li>将 <code>doAIMove()</code> 从 <code>rAF</code> 回调中移到 <code>setTimeout(0)</code>，让浏览器先完成 post-move 绘制再让引擎思考，消除"走棋后画面卡顿一下"。</li>
+        <li><code>toggleSetup()</code> 提取公共重置；将 <code>if(gameState.wk && gameState.bk){_applyGameOver();}</code> 改为先 <code>gameStatus()</code> 判断终局态再应用，逻辑更直观。</li>
+        <li><code>infoCtrl</code> 直接引用 control-map 表项而非每次渲染 <code>new</code> 一个 <code>{white,black}</code> 对象，减少 GC 压力。</li>
+        <li><code>_cachedBwrap</code> 存在性检查由 <code>parentNode</code> 改为 <code>document.body.contains()</code>，更严谨。</li>
+      </ul>
+    </li>
+    <li><strong>README.license 文件体系完善</strong>：在 <code>src/main/res/</code>、<code>src/main/res/values/</code>、<code>src/main/res/xml/</code>、<code>src/main/res/mipmap-*/</code> 等每个不止包含文件夹的目录补全 README.license（注：由于 AAPT2 严格要求 <code>res/</code> 子目录内文件名以 <code>.xml</code> / <code>.png</code> 结尾，最终采取在 <code>res/README.license</code> 单文件汇总的方案）；<code>java/com/Regalia/README.license</code> 补全 <code>TlsSecurityHelper.java</code>、<code>RootDetector.java</code> 的许可证条目。</li>
+    <li><strong>版本号同步</strong>：APP 本体（<code>build.gradle</code> 的 <code>versionCode=102</code> / <code>versionName="1.0.2"</code>、<code>AndroidManifest.xml</code>）、APP 内 UI 显示（顶部 <code>&lt;span class="ver"&gt;</code> 标签、关于页 <code>v1.0.2</code>、加载页标题、<code>built_in_only</code> 提示）、安装包签名版本——全部同步至 v1.0.2。</li>
+      <li><strong>Ponder-Hit 修复（关键 bug）</strong>：发现 <code>executeMove</code> 中调用 <code>AndroidBridge.getLastPonderMove()</code> 检查玩家走法是否匹配 ponder 预测——但该方法是<strong>一次性读取</strong>（返回后清空 Java 字段），而 <code>onBestMove</code> 早已消费过它（存入 <code>_lastPonderMoveFromEngine</code>）。结果：<code>ponderHit()</code> 从未触发，每次玩家走法都 <code>stopPonder()</code> 后重新搜索——整个 ponder 优化静默失效。v1.0.2 改用 JS 端缓存的 <code>_lastPonderMoveFromEngine</code> 而非再次调用 Java 端方法。</li>
+    <li><strong>引擎崩溃后恢复"AI 不走棋"修复</strong>：<code>_discardingPonderBestmove</code> 标志在 ponder 被 stop 时置 <code>true</code>，等下一帧 bestmove 到达时清 <code>false</code>。但若引擎在等待期间崩溃（EOF/IO 异常/僵尸进程），bestmove 永不到达，标志卡在 <code>true</code>——恢复后<em>新引擎的第一个真实 bestmove 被当作残留 ponder bestmove 静默丢弃</em>，表现为"AI 永远不走棋"。v1.0.2 在 <code>cleanupEngineResources()</code> 中统一重置 <code>_isPondering</code>、<code>_discardingPonderBestmove</code>、<code>_lastPonderMove</code>、<code>_stopLatch</code>、<code>readyOkLatchHolder</code>、<code>uciOkLatchHolder</code>。</li>
+    <li><strong>引擎重启后复盘评分缓存清理</strong>：<code>restartCurrentEngine()</code> 和 <code>onEngineRestarting()</code> 此前未清理 <code>_reviewEvalCache</code>——重启后复盘模式仍显示<em>旧引擎</em>的评分（哈希表状态、时间预算不同 → 评分可能不同）。v1.0.2 两处均添加 <code>_reviewEvalCache.clear(); _reviewEvalRequestedStep=-1;</code>，并顺带清理 <code>_multiPVLines</code>、<code>_multiPVResult</code>、<code>_lastEngineVariation</code>。</li>
+    <li><strong>RejectedExecutionException 兜底</strong>：<code>engineGo</code>/<code>engineEval</code>/<code>engineHint</code>/<code>startPonder</code>/<code>importSettings</code> 等 <code>@JavascriptInterface</code> 方法此前直接 <code>_engineExecutor.execute(...)</code>，若引擎正在 restart/shutdown 会抛 <code>RejectedExecutionException</code> 传播到 WebView JS 线程，JS 端 loading 标志卡死。v1.0.2 抽出 <code>_safeExecute(Runnable, tag)</code> 包装方法，捕获异常并通过 <code>onEngineError</code> 回调通知 JS 重置状态。</li>
+    <li><strong>boardVersion 性能优化</strong>：<code>_updateBoardIncremental</code> 此前用 <code>JSON.stringify(gameState.board)</code> 做"棋盘是否变化"的脏检查——8×8 数组序列化为 ~1KB 字符串，引擎进度回调每秒 10-50 次时产生显著 GC 压力。v1.0.2 在 game state 中新增 <code>boardVersion</code> 整数（<code>makeMv</code>/<code>makeMvInPlace</code> 递增、<code>unmakeMv</code> 恢复、<code>_refreshStateAfterSetup</code> 递增、<code>fenToState</code> 初始化为 1），脏检查改为整数比较——~100x 更快。</li>
+    <li><strong>MultiPV 进度回调 StringBuilder 优化</strong>：<code>processInfoLine</code> 此前每条 MultiPV info 行都 <code>new JSONObject()</code> + 8 次 <code>put()</code>——搜索期间 10-50 行/秒产生 500-2500 次 JSONObject 分配/秒。v1.0.2 改用 <code>StringBuilder</code> 直接拼装 JSON 字符串（仅 <code>pv</code> 字段用 <code>JSONObject.quote()</code> 转义），消除 HashMap 分配。</li>
+    <li><strong>detectBigCoreCount 缓存</strong>：CPU 拓扑在设备生命周期内不变，但 <code>detectBigCoreCount()</code> 每次被 <code>detectHardwareAndConfigure()</code> 调用时都重新解析 <code>/proc/cpuinfo</code>。v1.0.2 加入 <code>_cachedBigCoreCount</code> 字段缓存首次结果。</li>
+    <li><strong>engine_jni.cpp 死代码清理</strong>：v18.5.0 移除引擎导入功能后，<code>engine_jni.cpp</code> 中 500+ 行实现 <code>nativeLoadEngine</code>/<code>nativeStartEngine</code>/<code>nativeSendCommand</code>/<code>nativeReadOutput</code>/<code>nativeDestroyEngine</code>/<code>nativeIsEngineRunning</code>/<code>nativeGetEngineEntryType</code> + <code>findEngineEntryPoint</code>（8 种策略）+ <code>engineThreadFunc</code>（<code>dup2</code>/<code>pipe</code>/<code>pthread_create</code>）+ <code>EngineHandle</code>/<code>EngineEntryType</code> 结构体的代码完全无人调用——<code>StockfishNative.java</code> 仅声明 <code>nativeChmod</code> 和 <code>nativeRenice</code>。v1.0.2 删除全部死代码（25.5KB → 4.2KB），CMakeLists 同步移除 <code>dl</code> 链接。</li>
+    <li><strong>applySettings 分支合并</strong>：<code>applySettings()</code> 此前 <code>if(autoConfig)/else</code> 两分支各 ~50 行近乎相同代码，唯一差异是 Threads/Hash 的来源。v1.0.2 抽出公共选项应用逻辑，仅 Threads/Hash 按条件分支——减少 ~30 行重复。</li>
+    <li><strong>死 API 移除</strong>：<code>postJsCallbackJson()</code>（零调用）、<code>ChessApp.checkEngineThreadCrash()</code> + <code>engineThreadCrashed</code> + <code>engineThreadCrashMessage</code>（标志被设置但从未被检查，心跳机制已覆盖）——全部删除。<code>AndroidManifest.xml</code> 移除未使用的 <code>READ_MEDIA_IMAGES</code> 权限（内置文件浏览器查询 <code>MediaStore.Files</code> 而非 <code>MediaStore.Images</code>，Android 13+ 不需要此权限）。</li>
+    <li><strong>PGN 导出到文件（新功能）</strong>：原 <code>copyMoveHistory()</code> 仅复制 PGN 到剪贴板。v1.0.2 抽出 <code>_buildPGNString()</code> 共享逻辑，新增 <code>exportPGNToFile()</code> 调用 Java 端 <code>openPGNExportFilePicker(content)</code> → SAF <code>ACTION_CREATE_DOCUMENT</code> 让用户选择保存位置（与设置导出流程对称）。新增 <code>REQUEST_CODE_EXPORT_PGN=1004</code> 与 <code>_pendingExportType</code> 区分设置/PGN 导出回调（<code>onSettingsExported</code> vs <code>onPGNExported</code>）。走法记录卡新增 💾 按钮。</li>
+    <li><strong>toggleSetup 简化</strong>：<code>if(_exitSt && _exitSt!=='play')</code> 中的 <code>'play'</code> 是 <code>gameStatus()</code> 从不返回的值——死检查。<code>_applyGameOver()</code> 内部已对非终局态（<code>'check'</code>/<code>'ongoing'</code>）返回 null 无操作。v1.0.2 简化为直接 <code>_applyGameOver(gameStatus(gameState))</code>。</li>
+    <li><strong>黑方先走开局走法记录修复（关键 bug）</strong>：当以黑方先走的 ECO / FEN 开局、摆棋模式（轮到黑方）或带 <code>[FEN "... b ..."]</code> 头的 PGN 开始新游戏时，走法记录不会自动将白方首步槽位标记为 <code>...</code>。<em>根因</em>：<code>moveRecords=[]</code> 为空时，黑方首步被 <code>executeMove</code> 推入 <code>moveRecords[0]</code>（本应是白方首步槽位），导致黑方首步错误显示在白方位置；PGN 导出也变成 <code>1. e5</code> 而非规范的 <code>1. ... e5</code>。v1.0.2 在 4 处新游戏入口（<code>startGame</code>、<code>_applyImportedFEN</code>、<code>exitSetup</code>、<code>importPGN</code>）均添加：<em>若 <code>gameState.currentTurn==='black'</code> 则向 <code>moveRecords</code> 前置 <code>null</code> 占位符</em>，使黑方首步落入 <code>moveRecords[1]</code>（黑方槽位）；<code>null</code> 在 UI 走法列表与导出 PGN 中均渲染为 <code>...</code>（PGN 跳过标记），正确表示白方让先。同时同步更新 <code>stateHistory[0].moveRecords</code>，避免悔棋至开局后占位符丢失导致 bug 重现；render 层与 <code>enterReview</code> 复盘循环也加入 <code>null</code> 安全检查，保证 UI/复盘/PGN 三处索引一致。</li>
+    <li><strong>ECO 开局走法自动填入走法记录（新功能）</strong>：当新游戏所选的 ECO 开局在数据中记录有每一步走法（<code>moves</code> 数组非空）时，<code>startGame</code> 在重放 ECO 走法的同时<em>同步构建 <code>moveRecords</code></em>——每一步都生成正确的 SAN 记号（含吃子 <code>x</code>、将军 <code>+</code>、将杀 <code>#</code>、王车易位 <code>O-O</code>/<code>O-O-O</code>、升变 <code>=Q</code> 等），并附带 <code>from/to/piece/captured/isCheck/isCastling</code> 元数据。开局重放完毕后，用户立即能在走法记录中看到完整开局序列（如 <code>1. e4 e5 2. Nf3 Nc6 3. Bb5</code>），并可悔棋/重做、进入复盘模式分析每一步。此场景下<em>无需任何 <code>...</code> 占位符</em>——因为 ECO 走法已填满对应槽位；黑方先走占位符仅在<em>无 ECO 走法</em>的 FEN/摆棋/PGN 导入路径生效。<code>stateHistory</code> 也同步推入每一步的快照，悔棋至开局能正确恢复初始局面。</li>
+    <li><strong>多项此前未生效的修复（第一性原理复查）</strong>：本次复查发现 v1.0.2 更新日志中声称已实施、但实际未生效或未完整实施的 4 项修复，已逐项根因分析与精确修复：
+      <ul>
+        <li><strong>"再来一局"按钮加⚔️</strong>：游戏结束横幅的"再来一局"按钮此前仅显示纯文本 <code>${T('play_again')}</code>，未添加 <code>⚔️</code> 前缀。已修正为 <code>⚔️ ${T('play_again')}</code>，与新游戏工具栏按钮风格一致。</li>
+        <li><strong>Redo 不触发 AI</strong>：<code>redoMove()</code> 末尾仍保留 <code>if(!gameOver&&!setupMode&&gameState.currentTurn!==playerColor){doAIMove();}</code>——这会在重做栈仅剩单步（如玩家在 AI 回应前悔棋）时触发<em>全新</em> AI 搜索，而非重做栈中预录的 AI 走法，导致重做栈损坏、原 AI 走法丢失。已完整移除该调用（<code>requestEngineEval()</code> 仍刷新评估栏）。</li>
+        <li><strong>设置导入消除重复 toast</strong>：<code>_fileBrowserSelect()</code>（文件选择器入口）在调用 <code>bridge.importSettings(content)</code> 后<em>立即</em>调用了 <code>showToast(T('settings_imported_ok'))</code>——但 <code>importSettings()</code> 是异步的，最终会触发 <code>onSettingsImported(result)</code> 回调，回调本身也会显示 toast。结果用户看到<em>两个</em> toast：一个"设置已导入"（来自文件选择器入口）+ 一个"设置已导入（含 autoConfig 关闭提示等）"（来自回调）。已移除文件选择器入口的 <code>showToast</code> 与同步的 <code>_cachedMultiPV</code> 刷新（缓存刷新也移到回调中，因为引擎应用设置是异步的）。</li>
+        <li><strong>PGN 导出评估注释</strong>：<code>_buildPGNString()</code> 此前仅输出走法记号与 RAV 变例，<em>未</em>实现更新日志声称的 <code>{分数 评价词}</code> 与每 5 回合 <code>{SF18 D22 +1.0 8%W/91%D/1%L}</code> 注释。已新增 <code>_formatPGNEvalAnnotation(reviewStep, moveNum)</code> 辅助函数：从 <code>_reviewEvalCache</code> 读取该步的缓存评估，每一步输出 <code>{+0.5 略优}</code> 风格注释（分数用 <code>posDesc()</code> 转为评价词，与 APP 内评估栏一致），每 5 回合（<code>moveNum % 5 === 0</code>）输出完整 <code>{SF18 D22 +1.0 8%W/91%D/1%L}</code> 注释（含引擎名 SF18、深度 D<em>n</em>、分数、W/D/L 概率）。无缓存评估的步骤不输出注释，保证向后兼容。</li>
+      </ul>
+    </li>
+    <li><strong>README.license 文件体系更新</strong>：更新全部 6 个 <code>README.license</code> 纯文本文件（<code>src/main/</code>、<code>src/main/assets/</code>、<code>src/main/assets/chess.src/</code>、<code>src/main/cpp/</code>、<code>src/main/java/com/Regalia/</code>、<code>src/main/res/</code>），逐文件补充 v1.0.2 的具体修改点（ECO 自动填入、PGN 评估注释、Redo 不触发 AI、设置导入去重 toast、<code>boardVersion</code> 性能优化、<code>_safeExecute</code> 异常兜底、<code>stopAndWaitForBestmove</code>、<code>cleanupEngineResources</code> 重置 ponder 标志、<code>detectBigCoreCount</code> 缓存、<code>engine_jni.cpp</code> 死代码清理、<code>applySettings</code> 分支合并、死 API 移除、<code>READ_MEDIA_IMAGES</code> 权限移除等），便于后续维护者快速定位每项修改的许可证归属。</li>
+    <li><strong>第一性原理逐行复查与性能突破</strong>：在 16 项清单复查通过后，对每个源文件逐行复查设计意图，按"bug 修复 > 功能完善 > 性能突破 > 冗余清理 > 简化代码"的优先级实施优化：
+      <ul>
+        <li><strong>PV 变例缓存与分叉嫁接（性能突破）</strong>：新增 <code>_pvCache</code>（Map）+ <code>_convertPVtoSANCached()</code> + <code>_checkPVDivergence()</code>。MultiPV 返回的 N 条 PV 通常共享公共前缀（如 PV1=e4 e5 Nf3 Nc6、PV2=e4 e5 Nf3 d5 共享 "e4 e5 Nf3"）。此前每条 PV 独立调用 <code>_convertPVtoSAN</code>，对共享前缀重复执行 <code>makeMv</code>+<code>moveAlg</code>。新方案按 <code>(state.hash, uciPrefix)</code> 缓存每条 UCI 前缀的已转换 SAN + post-state，共享前缀只转换一次。8 条 MultiPV × 10+ 步的典型场景，节省 ~35 次 <code>makeMv</code>+<code>moveAlg</code> 调用。缓存按搜索作用域清理（上限 200 条）。</li>
+        <li><strong>moveAlg 消歧义性能突破</strong>：原 <code>moveAlg</code> 在消歧义检查中对每个同类型同色棋子调用 <code>cloneB(s.board)</code> 克隆整个 8×8 棋盘——8 个兵能吃同一格时就是 8 次克隆。改为 <code>makeMvInPlace</code>/<code>unmakeMv</code> 原地修改 + 撤销，零棋盘分配（与 <code>legalMoves</code>、<code>hasLegalMoves</code> 已采用的优化对齐）。</li>
+        <li><strong>_updateSingleSq 签名脏检查（性能突破）</strong>：原 <code>_updateSingleSq</code> 无条件对每个格子重建 <code>innerHTML</code>（设置 <code>style.background</code>、<code>className</code>、构造完整 innerHTML 字符串）——引擎进度回调每秒 10-50 次时，64 个格子 × 每格 innerHTML 重建产生显著 GC + 布局抖动。新方案为每格构造廉价签名字符串（棋子+选中+last-move+将军+合法+控制图+动画），仅当签名变化时才写 DOM。大多数回调下 0 个格子需要写入。</li>
+        <li><strong>isDeadPosition 单遍扫描（性能突破）</strong>：原实现分配 <code>pcs[]</code> 数组后多次 <code>.filter()</code>/<code>.map()</code>。改为单遍 64 格扫描 + 早返回（遇兵/车/后即返回 false），象的格子颜色奇偶性内联跟踪。相同 FIDE 5.2.2 覆盖，~3x 更快。13 项边界用例测试全部通过。</li>
+        <li><strong>generateFEN / pieceZobristIdx / _esc 查表外提（性能突破）</strong>：<code>generateFEN</code> 每次调用都构造 <code>{white:{...},black:{...}}</code> 棋子映射；<code>pieceZobristIdx</code> 每次构造 <code>{pawn:0,knight:1,...}</code> 类型索引；<code>_esc</code>/<code>_escJs</code> 各用 5 次链式 <code>.replace()</code> 分配 5 个中间字符串。三者全部外提到模块作用域（<code>_PIECE_FEN</code>、<code>_PIECE_TYPE_IDX</code>、<code>_ESC_MAP</code>+<code>_ESC_RE</code>、<code>_ESCJS_MAP</code>+<code>_ESCJS_RE</code>），单次正则 + 回调查表完成转义。</li>
+        <li><strong>PGN 变例跳过 token 时同步轮次（bug 修复）</strong>：原 <code>importPGN</code> 变例续着循环遇到无法解析的 token 时 <code>continue</code> 跳过，但<em>不推进</em> <code>vIsWhite</code>/<code>vMoveNum</code>——下一个 token 会被错误归属到对方。修复：被跳过的 token 仍按 PGN 规范占用一个回合，轮次与回合数必须推进，否则后续变例全部错位。</li>
+        <li><strong>_formatPGNEvalAnnotation 显式括号 + 类型归一（bug 修复）</strong>：原 mate 检测条件 <code>cached.mate&&cached.mate!==0||Math.abs(ev)>=90000</code> 依赖 JS 运算符优先级（恰好正确但难读）；<code>cached.mate</code>/<code>cached.eval</code> 来自 JSON 反序列化可能是字符串。改为显式 <code>(mateDist!==0)||Math.abs(ev)>=90000</code> + <code>Number()</code> 归一。</li>
+        <li><strong>_getSqBg 死代码清理（冗余清理）</strong>：移除未使用的 <code>_sqBgCache</code> 声明（曾尝试缓存但从未赋值/读取）+ 函数内 <code>lastFrom</code>/<code>lastTo</code> 计算（计算后从未用于返回值）。</li>
+      </ul>
+    </li>
+    <li><strong>统计页 PGN 导入流程优化（UX 修复）</strong>：统计数据页面的"📂 选择 PGN 文件"按钮原本会先关闭统计页、回到主界面，再由主界面弹出 SAF 文件选择器——一次跳转 + 一次返回，体验割裂。改为在 <code>StatsActivity</code> 内直接调用 <code>ACTION_OPEN_DOCUMENT</code>，用户选完文件后由 <code>onActivityResult</code> 读取内容并通过 <code>onStatsPGNFileRead(content)</code> 回调就地刷新统计页，整个导入流程不再离开统计视图。同时清理因此变成孤儿的 <code>statsRequestImport()</code> Java 桥接方法、<code>MainActivity.pendingStatsImportRequest</code> 静态标志、主 WebView 的 <code>onStatsRequestImport()</code> 处理器，以及 <code>_statsPastePGN()</code> 中残留的 <code>AndroidBridge.statsRequestImport</code> 特性检测（粘贴流程现在完全在 stats.html 内完成）。</li>
+    <li><strong>变例标签顺序编号修复（关键 bug）</strong>：当同一走法同时挂载多条变例（典型场景：玩家翻转棋盘后，引擎重新评估并产生新的分叉预测；或多条 MultiPV 预测同时分叉到同一走法）时，<code>_formatVariationGroups()</code> 此前按 <code>group</code>/<code>mpvIndex</code>/<code>lineNum</code> 字段派生行号——mainline 恒为 1，<code>mpvIndex=0</code> 也是 1，导致两条变例都被标为"🌿线1"。改为<strong>按变例在数组中的顺序</strong>分配 1、2、3…，保证标签唯一。同时在 <code>_checkPVDivergenceSANs()</code> 中加入"相同 SAN 内容不再重复挂载"的去重保护，从源头避免冗余变例。</li>
+    <li><strong>升变 UCI 字母修复（关键 bug）</strong>：<code>_mrToUci()</code>（用于把走法记录转 UCI 与引擎 PV 对比）此前用 <code>mr.promotion[0]</code> 取首字母——'queen'→'q' 正确，但 'knight'→'k' <em>错误</em>（UCI 规范是 'n'）。结果所有马升变的对比恒为不等，触发假分叉，在分叉点挂载多余的"备选线"变例。改用 <code>{queen:'q',rook:'r',bishop:'b',knight:'n'}</code> 显式映射。<code>executeMove()</code> 中 ponder-hit 检测的 <code>moveUCI</code> 拼装有同样问题（拼接完整单词 'queen' 而非字母 'q'），导致升变走法永远不会命中 ponder 预测，每次升变都退化为 stopPonder + 全新搜索——ponder 优化对升变完全失效。两处统一修复。</li>
+    <li><strong>新游戏时残留 AI 态清理（关键 bug）</strong>：<code>_resetGameUIState()</code> 此前不重置 <code>isAIThinking</code>、<code>_aiSafetyTimerId</code>、<code>_aiRetryCount</code>、<code>_evalLoading</code>、<code>_sfEvalReady</code>、<code>_ponderGen</code>、<code>_ponderMoveSAN</code>、<code>_ponderBarInfo</code>、<code>_pendingPonderMoveUCI</code>、<code>_multiPVLines</code>、<code>_multiPVResult</code>、<code>_lastEngineVariation</code>。若用户在 AI 思考中开始新游戏 / 导入 FEN / 导入 PGN：<code>isAIThinking=true</code> 会让新游戏的 <code>doAIMove()</code> 早返回，AI 永远不走棋；旧的 15 秒安全定时器仍在挂起，可能在<em>新</em> <code>gameState</code> 上触发；残留 ponder / MultiPV 数据泄露到新游戏的 UI。现在统一重置，保证干净开局。</li>
+    <li><strong>AI 首步变例缺失修复（关键 bug）</strong>：<code>onBestMove()</code> 此前用 <code>if(moveRecords.length&gt;0)</code> 守卫 <code>_pendingBestMoveInfo</code> 的赋值——当玩家执黑、AI 执白先走时，<code>moveRecords.length===0</code>，守卫直接跳过，后续 <code>_processDeferredVariations()</code> 因 <code>_pendingBestMoveInfo</code> 为 null 早返回，AI 的第一步永远没有任何 🌿 变例线。改为允许 <code>lastIdx=-1</code>（<code>_processDeferredVariations</code> 已正确解析为 <code>aiMoveIdx=0</code>），执黑开局也能看到 AI 首步的预测续着。</li>
+    <li><strong>引擎重启后 AI 重试计数器重置</strong>：<code>_aiRetryCount</code> 此前仅在 bestmove 成功、3 次超时、引擎错误时重置——<em>不</em>在引擎自动重启（<code>onEngineRestarting</code>/<code>onEngineReady</code>）时重置。若引擎在 AI 思考中崩溃自愈（<code>_aiRetryCount</code> 已递增到 1 或 2），恢复后下一次 <code>doAIMove()</code> 会立即递增到 2 或 3，可能直接撞到 3 次重试上限显示"AI 超时"，尽管引擎刚恢复。两处都添加 <code>_aiRetryCount=0</code> 重置。</li>
+    <li><strong>复盘请求空走法提示</strong>：<code>onStatsRequestReview()</code> 在 <code>moveRecords</code> 为空时此前静默返回——用户点了"🗂️复盘"但什么都没发生，没有任何反馈。改为 <code>showToast(T('no_move_records'))</code>，明确告知"暂无走法记录"。</li>
+    <li><strong>tablebase 缓存 LRU 命中刷新</strong>：<code>_tbCache</code>（Map）命中时只 <code>get</code> 不 <code>delete+set</code>，频繁访问的条目可能比冷条目先被淘汰，违背 LRU 语义。改为命中时 delete + set 把条目移到"最新"位置（Map 保留插入顺序），与 <code>_reviewEvalCache</code> 的实现一致。</li>
+    <li><strong>_reviewEvalCache 新增 peek() 方法</strong>：原 <code>get()</code> 每次访问都会刷新 LRU 顺序（delete + set）。在 <code>_buildEvalTrendSVG</code>、<code>_findCriticalMoves</code>、走法列表渲染、<code>openStatsPage</code> 收集评估数据等遍历循环中，每次 <code>get</code> 都触发一次 Map delete+set——100 步复盘就是 100 次无谓的 Map 操作，还会把当前迭代的条目推到最新位置、把其它条目推向淘汰。新增 <code>peek(k)</code> 只读不刷新 LRU，遍历循环统一改用 <code>peek()</code>。</li>
+    <li><strong>makeMv 冗余 captured 变量清理</strong>：<code>makeMv</code> 在第 631 行已用 <code>capPiece=ns.board[to.row][to.col]</code> 提取被吃棋子（突变前），第 646 行的 Zobrist 哈希更新却又用 <code>captured=s.board[to.row][to.col]</code> 从原始 state 再读一次——<code>ns</code> 是 <code>s</code> 的深克隆，两者值完全相同。改为直接复用 <code>capPiece</code>，消除冗余读取。</li>
+    <li><strong>语言偏好 SharedPreferences 文件统一（回归修复）</strong>：<code>StockfishNative.saveLangPref()</code> 在 v1.0.2 改为写入 <code>"RegaliaEngine"</code>（与 <code>isEnglishMode()</code> 读取的文件一致），但 <code>EngineService.isEnglishMode()</code> 和 <code>updateNotification()</code> 仍从 <code>"Regalia_prefs"</code> 读取——<em>这个文件从未被任何代码写入</em>。结果前台服务通知的语言始终回落到系统默认，忽略用户在 APP 内选择的语言。统一改为 <code>PREFS_NAME="RegaliaEngine"</code>。同时移除 <code>updateNotification()</code> 中读取错误 prefs 文件且计算结果从未被使用的 <code>en</code> 死代码块。</li>
+    <li><strong>统计页震动反馈尊重用户偏好</strong>：<code>StatsActivity.performHaptic()</code> 此前无脑 <code>v.vibrate(30)</code>，不检查 <code>hapticFeedbackEnabled</code> 偏好、不检查系统震动设置、忽略 <code>type</code> 参数、使用 API 26+ 已弃用的 <code>vibrate(long)</code>。用户在主应用设置中关闭震动后，统计页按钮仍会震动。改为读取同一 <code>"RegaliaEngine"</code> prefs 的 <code>hapticFeedbackEnabled</code> + 系统 <code>HAPTIC_FEEDBACK_ENABLED</code>，二者皆开才震动；API 26+ 改用 <code>VibrationEffect.createOneShot</code>。</li>
+    <li><strong>统计页 HTML 导出回调 JS 注入修复</strong>：<code>StatsActivity</code> 导出 HTML 后用 <code>displayName.replace("'", "\\'")</code> 拼接 JS 字符串——只转义单引号不转义反斜杠/换行/控制字符。文件名含 <code>\</code>、<code>\'</code> 或字面换行时会破坏 JS 字符串字面量。改用 JSON 编码（与同文件 PGN 导入路径、<code>StockfishNative.escapeJsString()</code> 一致），所有特殊字符安全转义。</li>
+    <li><strong>Process.isAlive/destroyForcibly 在 API 21-25 上崩溃修复</strong>：<code>Process.isAlive()</code> 和 <code>destroyForcibly()</code> 都是 API 26+ API，但 <code>minSdk=21</code>。三处引擎关闭路径直接调用 <code>engineProcess.isAlive()</code>/<code>destroyForcibly()</code>，在 API 21-25 上每次关闭都抛 <code>NoSuchMethodError</code>（被 <code>catch(Throwable)</code> 静默吞掉，但 <code>destroyForcibly()</code> 永远不会执行）。新增 <code>destroyForciblySafe()</code> 包装：API 26+ 调用真方法，API 21-25 回落到第二次 <code>destroy()</code>。三处关闭路径统一改用 <code>isProcessAlive()</code> + <code>destroyForciblySafe()</code>。</li>
+    <li><strong>BufferedReader 资源泄漏修复</strong>：<code>StockfishNative.handleFilePickerResult()</code> 和 <code>handlePGNFilePickerResult()</code> 此前用 <code>try { BufferedReader reader = ...; ... } finally { is.close(); }</code>——<code>is.close()</code> 关闭底层流，但 <code>BufferedReader</code> 自身（及其内部 char 缓冲）未显式关闭，依赖 GC 回收。改用 try-with-resources 直接包裹 <code>BufferedReader</code>，与 <code>StatsActivity</code> 中的同路径写法一致。</li>
+    <li><strong>StockfishNative 死统计代码清理（~80 行）</strong>：v1.0.2 重构把统计页迁移到 <code>StatsActivity</code> 自带的 JS 桥接后，<code>StockfishNative</code> 中遗留下列死代码：<code>getStatsPayload()</code>、<code>closeStatsPage()</code>（<code>activityRef</code> 永远指向 <code>MainActivity</code>，<code>instanceof StatsActivity</code> 恒为 false）、<code>exportStatsHTML()</code>、<code>statsRequestReview()</code>、<code>_pendingStatsPayload</code>（仅被已删除的 <code>getStatsPayload()</code> 读取）、<code>_pendingStatsHTML</code>（仅被已删除的 <code>exportStatsHTML()</code> 设置）、<code>REQUEST_CODE_EXPORT_STATS_HTML</code>、<code>handleExportFilePickerResult()</code> 中的统计 HTML 分支——全部删除。<code>_pendingStatsPayload</code>/<code>_pendingStatsHTML</code> 同时是内存泄漏（大 PGN 棋谱会一直占着内存直到下次调用或引擎关闭）。</li>
+    <li><strong>processEngineLine 死分支清理</strong>：<code>if (_isPondering) { ... return; }</code> 分支不可达——<code>stopPonder()</code> 和 <code>stopAndWaitForBestmove()</code> 在发送 <code>stop</code> 前<em>都</em>把 <code>_isPondering=false</code>，bestmove 到达时该标志恒为 false。真正的丢弃路径是 <code>_discardingPonderBestmove</code> 检查（同一对调用者设置）。删除死分支。</li>
+    <li><strong>handleBestMove 冗余 <code>{ }</code> 块清理</strong>：<code>switch(state)</code> 三个 case 中的 <code>postJsCallback("onMultiPVResult(...)")</code> 都被包在多余的 <code>{ }</code> 块里——是从某个已删除 <code>if</code> 条件留下的残留。删除多余块。</li>
+    <li><strong>ai-bridge.js 重复函数定义清理</strong>：<code>_checkPVDivergence(pv1Moves, pv2Moves)</code>（找两条 PV 数组的最长公共前缀）和 <code>_checkPVDivergence()</code>（遍历 <code>_pendingEnginePVs</code> 挂载分叉变例）同名——JS 后定义胜出规则下前者被静默遮蔽，所有调用点都用 0 参数，前者从不被调用。前者及配套的"finds the longest shared prefix"注释一并删除（活动函数 <code>_convertPVtoSANCached()</code> 通过自己的 <code>_pvCache</code> 找公共前缀，不需要这个辅助函数）。</li>
+    <li><strong>统计数据界面总步数无法超过 98 步修复（关键 bug）</strong>：统计数据页面的 <code>parsePGN()</code> 使用简化的 SAN 解析器（<code>applySANMove</code>/<code>canMoveTo</code>），不处理将军检测、消歧义、吃过路兵等复杂场景。一旦某一步解析失败，局面状态不前进，后续所有走法级联失败——表现为"总步数卡在 98 步左右"。根因修复：<code>openStatsPage()</code> 现在同时发送主 APP 已解析的权威走法记录（<code>from/to/piece/captured/promotion/notation</code>），统计页面通过 <code>parseFromMoveRecords()</code> 直接重放这些走法（使用 <code>executeMove()</code> 正确推进状态），完全绕过简化 SAN 解析器。对于粘贴/导入 PGN 的场景（无走法记录），仍回退到简化解析器。</li>
+    <li><strong>统计数据界面 PGN 文本栏棋子符号样式修复</strong>：PGN 文本栏的棋子符号（♔♚♘♞等）此前与走法目标格文字（如"f3"）同色（均为 <code>var(--text)</code> 奶油色），没有主界面棋盘上棋子的颜色/描边/微光。根因：CSS 特异性不足——<code>.pgn-display .move</code>（特异性 0,2,0）覆盖了 <code>.piece-white</code>/<code>.piece-black</code>（特异性 0,1,0）。修复：(1) 提升 CSS 特异性为 <code>.pgn-display .move .piece-white</code>；(2) 重构 <code>renderSAN()</code> 让棋子符号独占一个 <code>&lt;span class="piece-white/piece-black"&gt;</code>，目标格/吃子/将军后缀保持默认文字色——与主界面棋盘"棋子符号 vs 格子标签"的分离方式一致。</li>
+    <li><strong>说明书章节布局调整</strong>：将分散在目录前的 v1.0.2 和 v1.0.1 更新日志详情合并为<strong>附录 A：版本更新日志</strong>，置于说明书末尾（第十五章之后、页脚之前）。目录页新增"附录 A"条目。页脚版本号从 v1.0.1 更新为 v1.0.2。变例线框图说明同步更新为顺序编号（不再区分主线/备选）。</li>
+    <li><strong>qw3.7max 外部代码审查报告 7 项优化全部实施</strong>：根据外部审查报告（qw3.7max v1.0.2审查报告.md），按 bug 修复 > 功能完善 > 性能突破 > 冗余清理 > 简化代码 的优先级逐项实施：
+      <ul>
+        <li><strong>P1-1 状态对比逻辑简化</strong>：<code>_updateBoardLightweight()</code> 中 <code>_selChanged</code>/<code>_newHover</code> 的冗长空值判断（多重 <code>!!</code> 转换 + 短路计算）改为可选链 <code>selectedSquare?.row !== _prevSelSq?.row</code>。同时将 <code>_newHover</code> 重命名为 <code>_infoChanged</code>（该变量跟踪的是信息格变化，不仅是 Hover 状态）。</li>
+        <li><strong>P1-2 innerHTML XSS 防护</strong>：复盘走法分类 span 的 <code>_mcls.color</code>/<code>_mcls.label</code> 用 <code>_esc()</code> 转义。虽然 <code>_classifyMove</code> 当前返回内部常量（转义技术上冗余），但为未来可能引入用户可控数据提供防御性保护。</li>
+        <li><strong>P2-1 scrollIntoView 兼容性</strong>：复盘模式自动滚动处 <code>behavior:'instant'</code>（CSSOM View 较新规范，部分旧 WebView 不识别）改为 <code>behavior:'auto'</code>，2 处调用点同步更新。</li>
+        <li><strong>P3-1 消除强制同步布局（性能突破）</strong>：复盘自动滚动的 <code>rAF + setTimeout(0)</code> 改为<strong>双 rAF</strong>（<code>requestAnimationFrame(function(){ requestAnimationFrame(function(){ ... }) })</code>）。第一帧浏览器计算布局，第二帧绘制；在第二帧读取布局信息（scrollIntoView）保证不引发强制同步布局（布局抖动）。旧模式的 <code>setTimeout</code> 是宏任务，不能保证布局已完成。</li>
+        <li><strong>P3-2 DOM 缓存降维（性能突破）</strong>：<code>_sqElCache</code> 从二维数组 <code>_sqElCache[r][c]</code>（数组的数组，两次指针解引用，内存不连续）改为<strong>一维数组</strong> <code>_sqElCache[r*8+c]</code>（单次连续分配，一次解引用）。引擎进度回调每秒 10-50 次的增量更新热路径上减少微小但可测的开销。</li>
+        <li><strong>P4-1 模运算简化</strong>：<code>((i+1)%2)===1</code> 简化为 <code>(i%2)===0</code>（数学等价，消除多余的 +1）。2 处调用点同步更新。</li>
+        <li><strong>P4-2 DOM 查询缓存</strong>：复盘走法列表元素 <code>_rListEl</code> 提升为模块级变量，全量渲染后赋值、缓存失效时清空。避免每次渲染的 scroll-into-view 路径都 <code>getElementById('reviewMovesList')</code> 遍历 DOM 树。</li>
+        <li><strong>P5-1 模板字符串</strong>：复盘走法分类 span 的字符串拼接（<code>+= '</span>'</code>）改为 ES6 模板字符串，可读性更好。</li>
+      </ul>
+    </li>
+</ul>
+</div>
+
+<!-- v1.0.1 Changelog -->
+<div class="card" style="margin: 20px 0; padding: 16px; background: linear-gradient(145deg, rgba(139,105,20,.08), rgba(255,215,0,.04)); border: 1px solid rgba(212,160,23,.3); border-radius: 8px;">
+  <h3 style="color:#ffd700; margin-bottom: 12px; font-size: 1.1rem;">v1.0.1 更新日志</h3>
+  <ul style="line-height: 1.7; font-size: .9rem; color: var(--text); padding-left: 20px;">
+    <li><strong>通知栏引擎条精简</strong>：常驻通知现仅显示三种状态——<strong>就绪</strong> / <strong>分析中</strong> / <strong>报错</strong>，不再显示搜索深度与速度。详细的深度/节点/速度/评分仍在 APP 内评估栏显示，通知栏保持极简，避免打扰用户。</li>
+    <li><strong>悔棋自动选中棋子修复</strong>：修复悔棋后未自动选中原棋子的 bug。现在悔棋后会自动选中"被悔的那步棋移动的棋子（所在的格子）"，连续悔多步同样生效。自动选中后可正常点击该格解除选中（与其他选中状态一致）。</li>
+    <li><strong>PGN 变例解析完善</strong>：修复 PGN 导入时变例丢失或附加到错误走法的问题，新增 Type A fallback（<code>moveAlg</code> 匹配）、<code>mainTokenIdx</code> 索引追踪（处理主行包含非法走法的情况）、无法匹配首 token 时的诊断日志。嵌套变例（RAV）符合 PGN 规范 §8.2.5。</li>
+    <li><strong>PGN 导入悔棋修复</strong>：修复 PGN 导入后无法悔白方首步走法的根本原因——<code>stateHistory</code> 的快照顺序错误（在 <code>moveRecords.push</code> 之后才推入），导致悔棋恢复的 <code>moveRecords</code> 仍包含被悔的走法。现按 <code>executeMove</code> 一致的方式先快照再推入。</li>
+    <li><strong>走棋动画流畅度优化</strong>：为棋子动画启用 GPU 合成层（<code>translateZ(0)</code>、<code>will-change</code>、<code>backface-visibility</code>），添加 <code>contain:layout style paint</code> 限制重绘范围，移除昂贵的 <code>box-shadow</code> 过渡。减少卡顿，提升响应速度。</li>
+    <li><strong>前台服务通知增强</strong>：常驻通知支持<strong>点击跳转至 APP</strong>、<strong>不可手动移除</strong>（<code>setOngoing(true)</code> + <code>FLAG_NO_CLEAR</code>）。在小米澎湃OS 3 上即使被系统允许划掉，前台服务本身仍持续运行，下次状态更新时通知自动恢复。</li>
+    <li><strong>语言切换振动反馈</strong>：点击中英文切换按钮时触发 <code>TOGGLE_ON</code> 振动反馈，与其它按钮交互体验一致。</li>
+    <li><strong>MobSF 安全检查修复</strong>：补全 5 项静态扫描缺陷：JavaScript 接口安全文档化、TLS 证书固定代码引用、Certificate Transparency 引用、SafetyNet 不适用性说明、ChessApp 异常日志精简。</li>
+    <li><strong>术语同步</strong>：英文模式下走法评价 "Book" 改为 "Mediocre"（v1.0.0 起）。</li>
+  </ul>
+</div>
+
+
+</div>
+
+<!-- ===== FOOTER ===== -->
+<div style="text-align: center; padding: 40px 0 20px; color: #6a5a40; font-size: 12px;">
+  <p style="margin: 4px 0;">Regalia v1.0.2 用户说明书 (User Manual)</p>
+  <p style="margin: 4px 0;">Built with Stockfish 18 &nbsp;|&nbsp; AGPL v3</p>
+  <p style="margin: 4px 0;">Compatible with Android 5.0-15 &nbsp;|&nbsp; Xiaomi HyperOS 3</p>
+  <a href="#top" class="back-top">&#9650; 返回顶部</a>
+</div>
+
+</div><!-- /content -->
+
+</body>
+</html>
