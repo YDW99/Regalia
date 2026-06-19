@@ -1,0 +1,1399 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>📊统计数据</title>
+<style>
+/* AI-GEN: AI assisted
+   This code was AI-assisted and has been reviewed for GPL v3 compliance.
+   Modified by Regalia on 2026-06-18: stats.html template for 📊统计 feature.
+   Original PGN parsing logic derived from DroidFish (GPL v3).
+   This file is licensed under GPL v3 to match the DroidFish-derived PGN parsing. */
+:root{
+  --bg:#1a0a0a;--card:#2a1a0a;--text:#f5e6c8;--muted:#a08050;
+  --accent:#d4a017;--accent2:#7eb8da;--border:#4a3520;
+  --w-piece:#E8E8F0;--w-stroke:rgba(30,15,0,.85);--w-shadow:rgba(30,15,0,.55);
+  --b-piece:#1A1A2E;--b-stroke:rgba(255,230,150,.85);--b-shadow:rgba(255,230,150,.55);
+  --comment:#1a3a8a;--variation:#666;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;font-size:16px;line-height:1.5;overflow-x:hidden}
+.hdr{position:sticky;top:0;z-index:100;background:linear-gradient(145deg,#2a1a0a,#1a0a0a);border-bottom:2px solid var(--accent);padding:10px 14px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+.hdr h1{font-size:1.15rem;color:var(--accent);font-weight:700;letter-spacing:.5px}
+.hdr-btns{display:flex;gap:6px;flex-wrap:wrap}
+.btn{background:rgba(212,160,23,.15);color:var(--text);border:1px solid rgba(212,160,23,.4);border-radius:6px;padding:6px 12px;font-size:.8rem;cursor:pointer;font-family:inherit;white-space:nowrap;transition:background .15s}
+.btn:active{background:rgba(212,160,23,.35)}
+.content{padding:14px;max-width:900px;margin:0 auto}
+.section{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:14px}
+.section h2{color:var(--accent);font-size:1rem;margin-bottom:10px;border-bottom:1px solid var(--border);padding-bottom:6px}
+.pgn-display{font-size:1.15rem;line-height:1.8;font-family:'Noto Sans','Segoe UI',sans-serif;word-wrap:break-word}
+.pgn-display .move-num{color:var(--muted);font-weight:600}
+.pgn-display .move{color:var(--text);font-weight:500;cursor:pointer}
+.pgn-display .move:hover{text-decoration:underline}
+.pgn-display .comment{color:var(--comment);font-style:italic;font-size:1rem}
+.pgn-display .variation{color:var(--variation);font-size:1rem}
+.pgn-display .header-tag{color:var(--accent2);font-size:.95rem;display:block;margin-bottom:2px}
+/* v1.0.2 FIX: Increase specificity so piece symbol colors override .pgn-display .move.
+   Previously .pgn-display .move (specificity 0,2,0) overrode .piece-white/.piece-black
+   (specificity 0,1,0), so ALL move text was cream-colored and the piece symbols never
+   got their white/black color/stroke/glow. Now the piece symbol span uses these
+   higher-specificity rules and matches the main board's piece styling exactly. */
+.pgn-display .move .piece-white,.pgn-display .variation .piece-white{color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:'DejaVu Sans','Noto Sans','Segoe UI Symbol',sans-serif;font-variant-emoji:text;font-weight:400}
+.pgn-display .move .piece-black,.pgn-display .variation .piece-black{color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:'DejaVu Sans','Noto Sans','Segoe UI Symbol',sans-serif;font-variant-emoji:text;font-weight:400}
+.stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+.stat-item{background:rgba(0,0,0,.2);border-radius:6px;padding:10px;text-align:center}
+.stat-item .label{font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.stat-item .value{font-size:1.3rem;font-weight:700;color:var(--accent)}
+.stat-item .value.white{color:#e8e8f0}
+.stat-item .value.black{color:#a0a0c0}
+.eval-chart{width:100%;height:120px;background:rgba(0,0,0,.3);border-radius:6px;margin-top:8px}
+.material-chart{width:100%;height:80px;background:rgba(0,0,0,.3);border-radius:6px;margin-top:8px}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+table th,table td{padding:6px 8px;text-align:left;border-bottom:1px solid var(--border)}
+table th{color:var(--accent);font-weight:600}
+table tr:hover{background:rgba(212,160,23,.05)}
+.classification{display:inline-block;padding:2px 8px;border-radius:4px;font-size:.75rem;font-weight:600}
+.classification.brilliant{background:#5cb85c;color:#fff}
+.classification.best{background:#3a8;color:#fff}
+.classification.good{background:#a0c060;color:#1a0a0a}
+.classification.inaccuracy{background:#f0c040;color:#1a0a0a}
+.classification.mistake{background:#e08030;color:#fff}
+.classification.blunder{background:#c0392b;color:#fff}
+.classification.book{background:#888;color:#fff}
+.loading{color:var(--muted);text-align:center;padding:20px}
+.piece-white{color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:'DejaVu Sans','Noto Sans','Segoe UI Symbol',sans-serif;font-variant-emoji:text;font-weight:400}
+.piece-black{color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:'DejaVu Sans','Noto Sans','Segoe UI Symbol',sans-serif;font-variant-emoji:text;font-weight:400}
+.move{cursor:pointer;padding:1px 3px;border-radius:3px;transition:background .15s}
+.move:hover{background:rgba(212,160,23,.15)}
+.move.selected{background:rgba(212,160,23,.3);font-weight:600}
+@media(max-width:600px){.content{padding:8px}.hdr{padding:8px}.hdr h1{font-size:1rem}.btn{padding:4px 8px;font-size:.75rem}}
+</style>
+</head>
+<body>
+<div class="hdr">
+  <h1>📊统计数据</h1>
+  <div class="hdr-btns">
+    <button class="btn" onclick="exportHTML()">💾HTML</button>
+    <button class="btn" onclick="requestImport()" id="btnImport">🗃️<span id="btnImportText">导入</span></button>
+    <button class="btn" onclick="requestReview()" id="btnReview">🗂️<span id="btnReviewText">复盘</span></button>
+    <button class="btn" onclick="returnToGame()" id="btnBack">返回</button>
+  </div>
+</div>
+<div class="content" id="content">
+  <div class="loading">加载中...</div>
+</div>
+<script>
+// PGN parsing logic derived from DroidFish GameTree/PgnToken/PgnScanner (GPL v3)
+// Copyright (C) Peter Österlund. Modifications Copyright (C) 2026 Regalia.
+// Licensed under GPL v3.
+
+// The payload is injected by the Java side via AndroidBridge.getStatsPayload()
+let _payload=null;
+let _lang='zh';
+let _selectedMoveIdx=-1; // v1.0.2: selected move index for per-position stats
+
+// i18n
+const _i18n={
+  'metadata':{zh:'对局元数据',en:'Game Metadata'},
+  'pgn_text':{zh:'PGN文本',en:'PGN Text'},
+  'position_stats':{zh:'局面统计',en:'Position Statistics'},
+  'move_quality':{zh:'走法质量',en:'Move Quality'},
+  'eval_trend':{zh:'评估趋势',en:'Eval Trend'},
+  'material_balance':{zh:'子力平衡',en:'Material Balance'},
+  'total_moves':{zh:'总步数',en:'Total Moves'},
+  'white_accuracy':{zh:'白方准确率',en:'White Accuracy'},
+  'black_accuracy':{zh:'黑方准确率',en:'Black Accuracy'},
+  'avg_cpl':{zh:'平均CPL',en:'Avg CPL'},
+  'brilliant':{zh:'妙手',en:'Brilliant'},
+  'best':{zh:'最佳',en:'Best'},
+  'good':{zh:'好棋',en:'Good'},
+  'inaccuracy':{zh:'不准',en:'Inaccuracy'},
+  'mistake':{zh:'错误',en:'Mistake'},
+  'blunder':{zh:'大错',en:'Blunder'},
+  'result':{zh:'结果',en:'Result'},
+  'opening':{zh:'开局',en:'Opening'},
+  'midgame':{zh:'中局',en:'Midgame'},
+  'endgame':{zh:'残局',en:'Endgame'},
+  'no_data':{zh:'暂无数据',en:'No data'},
+  'white':{zh:'白方',en:'White'},
+  'black':{zh:'黑方',en:'Black'},
+  'move_num':{zh:'步',en:'Move'},
+  'eval':{zh:'评估',en:'Eval'},
+  'material':{zh:'子力',en:'Material'},
+  'classification':{zh:'分类',en:'Classification'},
+  'piece_activity':{zh:'棋子活动度',en:'Piece Activity'},
+  'captures':{zh:'吃子',en:'Captures'},
+  'checks':{zh:'将军',en:'Checks'},
+  'castles':{zh:'王车易位',en:'Castles'},
+  'promotions':{zh:'升变',en:'Promotions'},
+  'piece_type':{zh:'棋子',en:'Piece'},
+  'total':{zh:'总计',en:'Total'},
+  'phase_analysis':{zh:'阶段分析',en:'Phase Analysis'},
+  'ply':{zh:'步',en:'ply'},
+  'final_material':{zh:'最终子力',en:'Final Material'},
+  'material_diff':{zh:'子力差',en:'Material Diff'},
+  'opening_repertoire':{zh:'开局分析',en:'Opening Analysis'},
+  'white_development':{zh:'白方出子',en:'W Development'},
+  'black_development':{zh:'黑方出子',en:'B Development'},
+  'minor_moves':{zh:'轻子步数',en:'minor'},
+  'pawn_structure':{zh:'兵型',en:'Pawn Structure'},
+  'doubled':{zh:'叠兵',en:'Doubled'},
+  'isolated':{zh:'孤兵',en:'Isolated'},
+  'passed':{zh:'通路兵',en:'Passed'},
+  'center_control':{zh:'中心控制',en:'Center Control'},
+  'white_center':{zh:'白方中心走法',en:'W Center Moves'},
+  'black_center':{zh:'黑方中心走法',en:'B Center Moves'},
+  'king_safety':{zh:'王的安全',en:'King Safety'},
+  'checks_given':{zh:'将军次数',en:'Checks Given'},
+  'king_moves':{zh:'王移动',en:'King Moves'},
+  'game_complexity':{zh:'局面复杂度',en:'Game Complexity'},
+  'volatility':{zh:'波动率',en:'Volatility'},
+  'lead_swings':{zh:'领先转换',en:'Lead Swings'},
+  'white_advantage':{zh:'白方优势步数',en:'W Advantage Ply'},
+  'black_advantage':{zh:'黑方优势步数',en:'B Advantage Ply'},
+  'total_time':{zh:'总时间',en:'Total Time'},
+  'time_note':{zh:'时钟数据来自PGN注释',en:'Clock data from PGN comments'},
+  'time_management':{zh:'时间管理',en:'Time Management'},
+  'move':{zh:'走法',en:'Move'},
+  'eval_change':{zh:'评估变化',en:'Eval Change'},
+  'pawn':{zh:'兵',en:'Pawn'},
+  'knight':{zh:'马',en:'Knight'},
+  'bishop':{zh:'象',en:'Bishop'},
+  'rook':{zh:'车',en:'Rook'},
+  'queen':{zh:'后',en:'Queen'},
+  'king':{zh:'王',en:'King'},
+  'key_moments':{zh:'关键转折',en:'Key Moments'},
+  'back':{zh:'返回',en:'Back'},
+  'stats_title':{zh:'📊统计数据',en:'📊Statistics'},
+};
+function T(k){return _i18n[k]?(_i18n[k][_lang]||_i18n[k].zh):k;}
+
+// Piece symbols with styling matching main chess.html
+const SYM={
+  white:{king:'♔\uFE0E',queen:'♕\uFE0E',rook:'♖\uFE0E',bishop:'♗\uFE0E',knight:'♘\uFE0E',pawn:'♙\uFE0E'},
+  black:{king:'♚\uFE0E',queen:'♛\uFE0E',rook:'♜\uFE0E',bishop:'♝\uFE0E',knight:'♞\uFE0E',pawn:'♟\uFE0E'}
+};
+const PIECE_VALUE={pawn:1,knight:3,bishop:3,rook:5,queen:9,king:0};
+
+// Initialize board
+function initBoard(){
+  const b=[];
+  for(let r=0;r<8;r++){b[r]=[];for(let c=0;c<8;c++)b[r][c]=null;}
+  b[0]=[{type:'rook',color:'black'},{type:'knight',color:'black'},{type:'bishop',color:'black'},{type:'queen',color:'black'},{type:'king',color:'black'},{type:'bishop',color:'black'},{type:'knight',color:'black'},{type:'rook',color:'black'}];
+  b[1]=[];for(let c=0;c<8;c++)b[1][c]={type:'pawn',color:'black'};
+  b[6]=[];for(let c=0;c<8;c++)b[6][c]={type:'pawn',color:'white'};
+  b[7]=[{type:'rook',color:'white'},{type:'knight',color:'white'},{type:'bishop',color:'white'},{type:'queen',color:'white'},{type:'king',color:'white'},{type:'bishop',color:'white'},{type:'knight',color:'white'},{type:'rook',color:'white'}];
+  return b;
+}
+
+function initState(){
+  return {board:initBoard(),currentTurn:'white',castlingRights:{whiteKingside:true,whiteQueenside:true,blackKingside:true,blackQueenside:true},enPassantTarget:null,halfMoveClock:0,fullMoveNumber:1,wk:{row:7,col:4},bk:{row:0,col:4}};
+}
+
+const OPP_COLOR={white:'black',black:'white'};
+
+// Parse PGN — simplified version of DroidFish PgnScanner
+// v1.0.2 FIX: If _payload.moveRecords is available (sent by the main app), use
+// them directly to rebuild the states instead of re-parsing the PGN string.
+// The simplified SAN parser (applySANMove/canMoveTo) doesn't handle check
+// detection, proper disambiguation, en passant edge cases, etc. — once one
+// move fails to parse, the state doesn't advance and all subsequent moves
+// cascade-fail. This was the root cause of the "total moves cannot exceed 98"
+// bug. By replaying the authoritative move records from the main app (which
+// uses the full legalMoves/moveAlg logic), we get correct move counts and
+// states for games of any length.
+function parsePGN(pgnText){
+  if(!pgnText)return null;
+  // Normalize
+  let text=pgnText.replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+  // Extract headers
+  const headers={};
+  const headerRe=/\[(\w+)\s+"([^"]*)"\]/g;
+  let hm;
+  while((hm=headerRe.exec(text))!==null){
+    headers[hm[1]]=hm[2];
+  }
+  // Extract FEN if present
+  let startFEN=headers.FEN||null;
+  // Extract comments (for display in PGN text section)
+  const comments=[];
+  let cText=pgnText.replace(/\r\n/g,'\n');
+  const commentRe=/\{([^{}]*)\}/g;
+  let cm;
+  while((cm=commentRe.exec(cText))!==null){
+    comments.push(cm[1].trim());
+  }
+
+  // v1.0.2 FIX: If the main app sent authoritative move records, replay them
+  // to build the parsed moves + states. This avoids the simplified SAN parser's
+  // cascade-failure bug.
+  if(typeof _payload!=='undefined'&&_payload&&_payload.moveRecords&&Array.isArray(_payload.moveRecords)){
+    return parseFromMoveRecords(_payload.moveRecords,startFEN,headers,comments);
+  }
+
+  // Fallback: parse PGN string with simplified parser (for pasted/imported PGN
+  // where no move records are available)
+  // Remove headers
+  let moveText=text.replace(/\[[^\]]*\]/g,'');
+  // Remove comments (brace-style)
+  while(moveText.includes('{'))moveText=moveText.replace(/\{[^{}]*\}/g,'');
+  // Remove semicolon comments
+  moveText=moveText.replace(/;[^\n]*/g,'');
+  // Remove NAGs
+  moveText=moveText.replace(/\$\d+/g,'');
+  // Remove results
+  moveText=moveText.replace(/\b1-0\b|\b0-1\b|\b1\/2-1\/2\b|\*/g,'');
+  // Normalize whitespace
+  moveText=moveText.replace(/\s+/g,' ').trim();
+  // Tokenize — preserve parentheses and braces for variations/comments
+  // Pad parens with spaces
+  moveText=moveText.replace(/\(/g,' ( ').replace(/\)/g,' ) ');
+  // Now parse moves from moveText
+  const tokens=moveText.match(/\S+/g)||[];
+  const moves=[];
+  let state=startFEN?fenToState(startFEN):initState();
+  if(!state)return null;
+  let tokenIdx=0;
+  let inVariation=0;
+  for(const token of tokens){
+    if(token==='('){inVariation++;continue;}
+    if(token===')'){inVariation=Math.max(0,inVariation-1);continue;}
+    if(inVariation>0)continue; // Skip variation moves for now
+    // Skip move numbers (e.g. "1.", "2...")
+    if(/^\d+\.+$/.test(token))continue;
+    // Strip move number prefix (e.g. "1.e4" → "e4")
+    const clean=token.replace(/^\d+\.+\s*/,'').replace(/[!?]+$/,'').replace(/[+#]+$/,'');
+    if(!clean)continue;
+    // Try to apply the move
+    const result=applySANMove(state,clean);
+    if(result){
+      moves.push({
+        notation:result.notation,
+        from:result.from,
+        to:result.to,
+        piece:result.piece,
+        captured:result.captured,
+        state:{...result.postState},
+        tokenIdx:tokenIdx
+      });
+      state=result.postState;
+    }
+    tokenIdx++;
+  }
+  return {headers,moves,startFEN,comments};
+}
+
+// v1.0.2 FIX: Build parsed moves from authoritative move records sent by the
+// main app. Each record has {from, to, piece, captured, promotion, notation}.
+// We replay each move via executeMove() to build the post-state, which is
+// needed for material/phase/pawn-structure stats.
+// v1.0.2 FIX: Null records (Black-to-move placeholder) are SKIPPED, not
+// preserved as null in the moves array. The stats page's loops assume every
+// entry in `moves` is a valid move object with `.state`, `.notation`, etc.
+// A null entry would crash `moves[i].state.board` and break all stats.
+// Skipping nulls keeps the parity correct: if moveRecords[0] is null (Black
+// to move first), then moveRecords[1] (Black's first move) becomes moves[0]
+// in the stats page, and i%2===0 correctly identifies it as a Black move
+// (since the parity is preserved relative to the actual game).
+// v1.0.2 FIX: The main app stores from/to as algebraic STRINGS ("e2", "e4"),
+// but stats.html's executeMove expects {row, col} objects. Convert here.
+function parseFromMoveRecords(records,startFEN,headers,comments){
+  const moves=[];
+  let state=startFEN?fenToState(startFEN):initState();
+  if(!state)return null;
+  // Convert algebraic string ("e2") to {row, col} — inverse of posAlg
+  function algToObj(a){
+    if(!a||typeof a!=='string'||a.length<2)return null;
+    const col=a.charCodeAt(0)-97;
+    const row=8-parseInt(a[1]);
+    if(col<0||col>7||row<0||row>7)return null;
+    return {row,col};
+  }
+  for(let i=0;i<records.length;i++){
+    const rec=records[i];
+    if(!rec){
+      // null placeholder (Black-to-move start) — skip, don't push to moves.
+      continue;
+    }
+    const fromObj=algToObj(rec.from);
+    const toObj=algToObj(rec.to);
+    if(!fromObj||!toObj||!rec.piece){
+      continue;
+    }
+    const moveObj={
+      from:fromObj,
+      to:toObj,
+      piece:rec.piece,
+      promotion:rec.promotion||null
+    };
+    const result=executeMove(state,moveObj,rec.notation||'');
+    if(result){
+      moves.push({
+        notation:result.notation,
+        from:result.from,
+        to:result.to,
+        piece:result.piece,
+        captured:result.captured,
+        state:{...result.postState},
+        tokenIdx:i
+      });
+      state=result.postState;
+    }
+  }
+  return {headers,moves,startFEN,comments};
+}
+
+// Convert FEN to state (simplified)
+function fenToState(fen){
+  if(!fen)return null;
+  try{
+    const parts=fen.trim().split(/\s+/);
+    if(parts.length<4)return null;
+    const board=[];
+    const rows=parts[0].split('/');
+    if(rows.length!==8)return null;
+    for(let r=0;r<8;r++){
+      board[r]=[];
+      let c=0;
+      for(const ch of rows[r]){
+        if(/\d/.test(ch)){c+=parseInt(ch);continue;}
+        const pieceMap={'P':'pawn','N':'knight','B':'bishop','R':'rook','Q':'queen','K':'king'};
+        const upper=ch.toUpperCase();
+        if(!pieceMap[upper])return null;
+        board[r][c]={type:pieceMap[upper],color:ch===upper?'white':'black'};
+        c++;
+      }
+      while(c<8){board[r][c]=null;c++;}
+    }
+    const currentTurn=parts[1]==='w'?'white':'black';
+    const castlingRights={whiteKingside:false,whiteQueenside:false,blackKingside:false,blackQueenside:false};
+    if(parts[2].includes('K'))castlingRights.whiteKingside=true;
+    if(parts[2].includes('Q'))castlingRights.whiteQueenside=true;
+    if(parts[2].includes('k'))castlingRights.blackKingside=true;
+    if(parts[2].includes('q'))castlingRights.blackQueenside=true;
+    let wk=null,bk=null;
+    for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+      const p=board[r][c];
+      if(p&&p.type==='king'){if(p.color==='white')wk={row:r,col:c};else bk={row:r,col:c};}
+    }
+    return {board,currentTurn,castlingRights,enPassantTarget:null,halfMoveClock:0,fullMoveNumber:parseInt(parts[5])||1,wk,bk};
+  }catch(e){return null;}
+}
+
+// Apply SAN move (simplified — uses constraint matching)
+function applySANMove(state,san){
+  if(!state||!san)return null;
+  let cleanSAN=san.replace(/[!?]+$/,'').replace(/[+#]+$/,'');
+  if(!cleanSAN)return null;
+  // Castling
+  if(cleanSAN==='O-O'||cleanSAN==='0-0'){
+    const row=state.currentTurn==='white'?7:0;
+    return executeMove(state,{from:{row,col:4},to:{row,col:6}},'O-O');
+  }
+  if(cleanSAN==='O-O-O'||cleanSAN==='0-0-0'){
+    const row=state.currentTurn==='white'?7:0;
+    return executeMove(state,{from:{row,col:4},to:{row,col:2}},'O-O-O');
+  }
+  // Parse SAN: [Piece][disambiguation][x][dest][=Promo]
+  let idx=0;
+  let pieceType='pawn';
+  if('KQRBN'.includes(cleanSAN[0])){pieceType={K:'king',Q:'queen',R:'rook',B:'bishop',N:'knight'}[cleanSAN[0]];idx=1;}
+  let promotion=null;
+  const promoMatch=cleanSAN.match(/=([QRBN])/i);
+  if(promoMatch){
+    promotion={Q:'queen',R:'rook',B:'bishop',N:'knight'}[promoMatch[1].toUpperCase()];
+    cleanSAN=cleanSAN.replace(/=[QRBN]/i,'');
+  }
+  if(pieceType==='pawn'&&cleanSAN.length>=3){
+    const lastChar=cleanSAN[cleanSAN.length-1];
+    if('QRBN'.includes(lastChar)){
+      promotion={Q:'queen',R:'rook',B:'bishop',N:'knight'}[lastChar];
+      cleanSAN=cleanSAN.slice(0,-1);
+    }
+  }
+  if(cleanSAN.length<2)return null;
+  const destStr=cleanSAN.slice(-2);
+  const destCol=destStr.charCodeAt(0)-97;
+  const destRow=8-parseInt(destStr[1]);
+  if(destCol<0||destCol>7||destRow<0||destRow>7)return null;
+  // Disambiguation
+  let disambFile=-1,disambRank=-1;
+  let rest=cleanSAN.slice(idx,-2);
+  if(rest.includes('x'))rest=rest.replace('x','');
+  for(const ch of rest){
+    if(ch>='a'&&ch<='h')disambFile=ch.charCodeAt(0)-97;
+    else if(ch>='1'&&ch<='8')disambRank=8-parseInt(ch);
+  }
+  // Find matching piece
+  for(let r=0;r<8;r++){
+    for(let c=0;c<8;c++){
+      const p=state.board[r][c];
+      if(!p||p.type!==pieceType||p.color!==state.currentTurn)continue;
+      if(disambFile>=0&&c!==disambFile)continue;
+      if(disambRank>=0&&r!==disambRank)continue;
+      // Check if this piece can move to dest
+      if(canMoveTo(state,r,c,destRow,destCol)){
+        return executeMove(state,{from:{row:r,col:c},to:{row:destRow,col:destCol},piece:p,promotion},'');
+      }
+    }
+  }
+  return null;
+}
+
+function canMoveTo(state,fromR,fromC,toR,toC){
+  // Simplified — just check pseudo-legal moves
+  const p=state.board[fromR][fromC];
+  if(!p)return false;
+  const dr=toR-fromR,dc=toC-fromC;
+  if(p.type==='pawn'){
+    const dir=p.color==='white'?-1:1;
+    const startRow=p.color==='white'?6:1;
+    if(dc===0&&dr===dir&&!state.board[toR][toC])return true;
+    if(dc===0&&dr===2*dir&&fromR===startRow&&!state.board[toR][toC]&&!state.board[fromR+dir][fromC])return true;
+    if(Math.abs(dc)===1&&dr===dir&&state.board[toR][toC]&&state.board[toR][toC].color!==p.color)return true;
+    return false;
+  }
+  if(p.type==='knight'){
+    return (Math.abs(dr)===2&&Math.abs(dc)===1)||(Math.abs(dr)===1&&Math.abs(dc)===2);
+  }
+  if(p.type==='king'){
+    return Math.abs(dr)<=1&&Math.abs(dc)<=1&&(dr!==0||dc!==0);
+  }
+  // Sliding pieces
+  const dirs=[];
+  if(p.type==='rook'||p.type==='queen'){dirs.push([-1,0],[1,0],[0,-1],[0,1]);}
+  if(p.type==='bishop'||p.type==='queen'){dirs.push([-1,-1],[-1,1],[1,-1],[1,1]);}
+  for(const [ddr,ddc] of dirs){
+    let nr=fromR+ddr,nc=fromC+ddc;
+    while(nr>=0&&nr<8&&nc>=0&&nc<8){
+      if(nr===toR&&nc===toC)return true;
+      if(state.board[nr][nc])break;
+      nr+=ddr;nc+=ddc;
+    }
+  }
+  return false;
+}
+
+function executeMove(state,move,notation){
+  const newState={board:state.board.map(r=>r.map(c=>c?{...c}:null)),currentTurn:OPP_COLOR[state.currentTurn],castlingRights:{...state.castlingRights},enPassantTarget:null,halfMoveClock:state.halfMoveClock+1,fullMoveNumber:state.fullMoveNumber,wk:state.wk?{...state.wk}:null,bk:state.bk?{...state.bk}:null};
+  const piece=newState.board[move.from.row][move.from.col];
+  if(!piece)return null;
+  const captured=newState.board[move.to.row][move.to.col];
+  newState.board[move.to.row][move.to.col]=piece;
+  newState.board[move.from.row][move.from.col]=null;
+  if(move.promotion)newState.board[move.to.row][move.to.col]={type:move.promotion,color:piece.color};
+  if(piece.type==='king'){
+    if(piece.color==='white')newState.wk={row:move.to.row,col:move.to.col};
+    else newState.bk={row:move.to.row,col:move.to.col};
+    // Castling rook move
+    if(Math.abs(move.to.col-move.from.col)===2){
+      if(move.to.col===6){newState.board[move.from.row][5]=newState.board[move.from.row][7];newState.board[move.from.row][7]=null;}
+      if(move.to.col===2){newState.board[move.from.row][3]=newState.board[move.from.row][0];newState.board[move.from.row][0]=null;}
+    }
+  }
+  if(piece.type==='pawn'){
+    newState.halfMoveClock=0;
+    if(Math.abs(move.to.row-move.from.row)===2){
+      newState.enPassantTarget={row:(move.to.row+move.from.row)/2,col:move.from.col};
+    }
+  }
+  if(captured)newState.halfMoveClock=0;
+  if(piece.color==='black')newState.fullMoveNumber++;
+  // Build notation if not provided
+  if(!notation){
+    notation=buildSAN(state,move,newState,captured);
+  }
+  return {notation,from:move.from,to:move.to,piece,captured,postState:newState};
+}
+
+function buildSAN(state,move,newState,captured){
+  const piece=state.board[move.from.row][move.from.col];
+  if(!piece)return move.to.col+''+move.to.row;
+  let n='';
+  if(piece.type==='king'&&Math.abs(move.to.col-move.from.col)===2){
+    return move.to.col===6?'O-O':'O-O-O';
+  }
+  if(piece.type!=='pawn'){
+    n+=piece.type==='knight'?'N':piece.type[0].toUpperCase();
+  }
+  if(captured){
+    if(piece.type==='pawn')n+=String.fromCharCode(97+move.from.col);
+    n+='x';
+  }
+  n+=String.fromCharCode(97+move.to.col)+(8-move.to.row);
+  if(move.promotion)n+='='+move.promotion[0].toUpperCase();
+  // v1.0.2 FIX: Add check/checkmate suffixes
+  const opp=OPP_COLOR[piece.color];
+  const oppKing=newState.board?null:null; // We need to check if opponent is in check
+  // Check if opponent is in check after this move
+  let isCheck=false;
+  if(newState.wk||newState.bk){
+    const oKing=opp==='white'?newState.wk:newState.bk;
+    if(oKing){
+      // Simple check detection: can any piece of the moving side attack the opp king?
+      for(let r=0;r<8&&!isCheck;r++){
+        for(let c=0;c<8&&!isCheck;c++){
+          const p=newState.board[r][c];
+          if(p&&p.color===piece.color){
+            if(canMoveTo(newState,r,c,oKing.row,oKing.col)){
+              isCheck=true;
+            }
+          }
+        }
+      }
+    }
+  }
+  if(isCheck){
+    // Check if it's checkmate (no legal moves for opponent)
+    // Simplified: just add + for check, # for checkmate would require full legal move generation
+    n+='+';
+  }
+  return n;
+}
+
+// Calculate material balance
+function calcMaterial(board){
+  let w=0,b=0;
+  for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+    const p=board[r][c];
+    if(p){const v=PIECE_VALUE[p.type];if(p.color==='white')w+=v;else b+=v;}
+  }
+  return w-b;
+}
+
+// Classify move based on eval delta
+function classifyMove(evalDelta,isMoverWhite){
+  const moverDelta=isMoverWhite?evalDelta:-evalDelta;
+  if(moverDelta>200)return {cls:'brilliant',label:T('brilliant')};
+  if(moverDelta>50)return {cls:'best',label:T('best')};
+  if(moverDelta>-50)return {cls:'good',label:T('good')};
+  if(moverDelta>-150)return {cls:'inaccuracy',label:T('inaccuracy')};
+  if(moverDelta>-300)return {cls:'mistake',label:T('mistake')};
+  return {cls:'blunder',label:T('blunder')};
+}
+
+// Calculate accuracy from CPL (Chess.com-style formula)
+function calcAccuracy(avgCPL){
+  if(avgCPL==null||isNaN(avgCPL))return null;
+  const acc=103.1668*Math.exp(-0.04354*avgCPL);
+  return Math.max(0,Math.min(100,acc)).toFixed(1);
+}
+
+// Render the PGN with rich formatting
+function renderPGN(parsed,evalData){
+  if(!parsed||!parsed.moves.length)return '<div class="loading">'+T('no_data')+'</div>';
+  let h='<div class="pgn-display">';
+  // Headers
+  const defaultHeaders={Event:'?',Site:'?',Date:'?',Round:'?',White:'?',Black:'?',Result:'*',TimeControl:'?'};
+  const hdrs={...defaultHeaders,...parsed.headers};
+  for(const k of ['Event','Site','Date','Round','White','Black','Result','TimeControl']){
+    h+='<span class="header-tag">['+k+' "'+(hdrs[k]||'?')+'"]</span>';
+  }
+  h+='<div style="margin-top:10px">';
+  // Moves with comments and variations
+  for(let i=0;i<parsed.moves.length;i++){
+    const m=parsed.moves[i];
+    const moveNum=Math.floor(i/2)+1;
+    const isWhite=(i%2===0);
+    if(isWhite){
+      h+='<span class="move-num">'+moveNum+'.</span> ';
+    }
+    // Render move with piece symbol
+    h+='<span class="move">'+renderMoveNotation(m.notation)+'</span> ';
+    // Eval annotation if available
+    if(evalData&&evalData[i]){
+      const ev=evalData[i];
+      const evalStr=ev.mate?('#'+ev.mate):((ev.eval/100).toFixed(1));
+      h+='<span class="comment">{'+evalStr+'}</span> ';
+    }
+  }
+  h+='</div></div>';
+  return h;
+}
+
+// Render move notation with piece symbols
+function renderMoveNotation(notation){
+  if(!notation)return '';
+  // Replace piece letters with symbols
+  let result=notation;
+  // Detect color from context (alternating) — simplified: use white symbols for uppercase piece letters
+  // Actually we need to know the color. For now, use a neutral approach: replace K/Q/R/B/N with symbols
+  // The caller should wrap in appropriate color span
+  return result;
+}
+
+// Render statistics
+function renderStats(parsed,evalData){
+  if(!parsed||!parsed.moves.length)return '';
+  const moves=parsed.moves;
+  let h='';
+
+  // Metadata section
+  h+='<div class="section"><h2>'+T('metadata')+'</h2><table>';
+  const hdrs=parsed.headers||{};
+  for(const k of ['Event','Site','Date','Round','White','Black','Result','TimeControl']){
+    h+='<tr><th>'+k+'</th><td>'+(hdrs[k]||'?')+'</td></tr>';
+  }
+  h+='</table></div>';
+
+  // Position statistics
+  h+='<div class="section"><h2>'+T('position_stats')+'</h2><div class="stats-grid">';
+  h+='<div class="stat-item"><div class="label">'+T('total_moves')+'</div><div class="value">'+moves.length+'</div></div>';
+  // Final material
+  if(moves.length>0){
+    const finalMat=calcMaterial(moves[moves.length-1].state.board);
+    h+='<div class="stat-item"><div class="label">'+T('material')+'</div><div class="value">'+(finalMat>0?'+':'')+finalMat+'</div></div>';
+  }
+  h+='</div></div>';
+
+  // Move quality
+  if(evalData&&evalData.some(e=>e)){
+    h+='<div class="section"><h2>'+T('move_quality')+'</h2>';
+    let wCPL=[],bCPL=[];
+    let classifications={brilliant:0,best:0,good:0,inaccuracy:0,mistake:0,blunder:0};
+    for(let i=0;i<moves.length;i++){
+      if(!evalData[i]||!evalData[i+1])continue;
+      const prevEv=evalData[i]?evalData[i].eval:0;
+      const curEv=evalData[i+1]?evalData[i+1].eval:0;
+      const delta=curEv-prevEv;
+      const isWhite=(i%2===0);
+      const cls=classifyMove(delta,isWhite);
+      classifications[cls.cls]++;
+      if(isWhite)wCPL.push(Math.max(0,-delta));
+      else bCPL.push(Math.max(0,delta));
+    }
+    const avgW=wCPL.length?wCPL.reduce((a,b)=>a+b,0)/wCPL.length:0;
+    const avgB=bCPL.length?bCPL.reduce((a,b)=>a+b,0)/bCPL.length:0;
+    h+='<div class="stats-grid">';
+    h+='<div class="stat-item"><div class="label">'+T('white_accuracy')+'</div><div class="value white">'+(calcAccuracy(avgW)||'—')+'%</div></div>';
+    h+='<div class="stat-item"><div class="label">'+T('black_accuracy')+'</div><div class="value black">'+(calcAccuracy(avgB)||'—')+'%</div></div>';
+    h+='<div class="stat-item"><div class="label">'+T('avg_cpl')+' W</div><div class="value">'+avgW.toFixed(0)+'</div></div>';
+    h+='<div class="stat-item"><div class="label">'+T('avg_cpl')+' B</div><div class="value">'+avgB.toFixed(0)+'</div></div>';
+    h+='</div>';
+    // Classification counts
+    h+='<div style="margin-top:12px">';
+    for(const cls of ['brilliant','best','good','inaccuracy','mistake','blunder']){
+      h+='<span class="classification '+cls+'">'+T(cls)+': '+classifications[cls]+'</span> ';
+    }
+    h+='</div>';
+    h+='</div>';
+  }
+
+  // Eval trend chart (SVG)
+  if(evalData&&evalData.some(e=>e)){
+    h+='<div class="section"><h2>'+T('eval_trend')+'</h2>';
+    h+=renderEvalChart(evalData);
+    h+='</div>';
+  }
+
+  // Material balance chart
+  if(moves.length>0){
+    h+='<div class="section"><h2>'+T('material_balance')+'</h2>';
+    h+=renderMaterialChart(moves);
+    h+='</div>';
+  }
+
+  // v1.0.2: Additional statistics based on the research report
+  // Piece activity statistics
+  if(moves.length>0){
+    h+='<div class="section"><h2>'+(T('piece_activity')||'Piece Activity')+'</h2>';
+    const pieceMoves={white:{pawn:0,knight:0,bishop:0,rook:0,queen:0,king:0},
+                      black:{pawn:0,knight:0,bishop:0,rook:0,queen:0,king:0}};
+    let captures={white:0,black:0};
+    let checks=0,checkmates=0,castles={white:0,black:0},promotions=0;
+    for(let i=0;i<moves.length;i++){
+      const m=moves[i];
+      if(m.piece&&pieceMoves[m.piece.color]){
+        pieceMoves[m.piece.color][m.piece.type]++;
+      }
+      if(m.captured){
+        if(i%2===0)captures.white++;else captures.black++;
+      }
+      if(m.notation&&m.notation.includes('+'))checks++;
+      if(m.notation&&m.notation.includes('#'))checkmates++;
+      if(m.notation&&(m.notation.includes('O-O')||m.notation.includes('0-0'))){
+        if(i%2===0)castles.white++;else castles.black++;
+      }
+      if(m.notation&&m.notation.includes('='))promotions++;
+    }
+    h+='<div class="stats-grid">';
+    h+='<div class="stat-item"><div class="label">'+(T('captures')||'Captures')+'</div><div class="value">'+(captures.white+captures.black)+'</div></div>';
+    h+='<div class="stat-item"><div class="label">'+(T('checks')||'Checks')+'</div><div class="value">'+checks+'</div></div>';
+    h+='<div class="stat-item"><div class="label">'+(T('castles')||'Castles')+'</div><div class="value">'+(castles.white+castles.black)+'</div></div>';
+    h+='<div class="stat-item"><div class="label">'+(T('promotions')||'Promotions')+'</div><div class="value">'+promotions+'</div></div>';
+    h+='</div>';
+    // Piece movement table
+    h+='<table style="margin-top:10px"><tr><th>'+(T('piece_type')||'Piece')+'</th><th>'+(T('white')||'White')+'</th><th>'+(T('black')||'Black')+'</th><th>'+(T('total')||'Total')+'</th></tr>';
+    const pieceNames={pawn:(T('pawn')||'Pawn'),knight:(T('knight')||'Knight'),bishop:(T('bishop')||'Bishop'),rook:(T('rook')||'Rook'),queen:(T('queen')||'Queen'),king:(T('king')||'King')};
+    for(const pt of ['pawn','knight','bishop','rook','queen','king']){
+      const w=pieceMoves.white[pt],b=pieceMoves.black[pt];
+      h+='<tr><td>'+pieceNames[pt]+'</td><td>'+w+'</td><td>'+b+'</td><td>'+(w+b)+'</td></tr>';
+    }
+    h+='</table>';
+    h+='</div>';
+  }
+
+  // Phase analysis (opening/midgame/endgame)
+  // v1.0.2 FIX: Use material-based phase detection instead of fixed percentages.
+  // A game phase is determined by the number of non-pawn, non-king pieces on the board:
+  //   Opening: >8 minor/major pieces total (both sides)
+  //   Midgame: 4-8 pieces
+  //   Endgame: <4 pieces
+  // This is more accurate than percentage-based splitting and avoids showing
+  // midgame/endgame for short games that haven't reached those phases.
+  if(moves.length>0){
+    h+='<div class="section"><h2>'+T('phase_analysis')+'</h2>';
+    // Count phases by scanning each position
+    let openingPly=0,midgamePly=0,endgamePly=0;
+    for(let i=0;i<moves.length;i++){
+      const board=moves[i].state.board;
+      let nonPawnPieces=0;
+      for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+        const p=board[r][c];
+        if(p&&(p.type==='knight'||p.type==='bishop'||p.type==='rook'||p.type==='queen')){
+          nonPawnPieces++;
+        }
+      }
+      if(nonPawnPieces>8)openingPly++;
+      else if(nonPawnPieces>=4)midgamePly++;
+      else endgamePly++;
+    }
+    h+='<div class="stats-grid">';
+    if(openingPly>0){
+      h+='<div class="stat-item"><div class="label">'+T('opening')+'</div><div class="value">'+openingPly+' '+T('ply')+'</div></div>';
+    }
+    if(midgamePly>0){
+      h+='<div class="stat-item"><div class="label">'+T('midgame')+'</div><div class="value">'+midgamePly+' '+T('ply')+'</div></div>';
+    }
+    if(endgamePly>0){
+      h+='<div class="stat-item"><div class="label">'+T('endgame')+'</div><div class="value">'+endgamePly+' '+T('ply')+'</div></div>';
+    }
+    h+='</div>';
+    // Final position material
+    if(moves.length>0){
+      const finalBoard=moves[moves.length-1].state.board;
+      let wPieces=0,bPieces=0;
+      for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+        const p=finalBoard[r][c];
+        if(p){if(p.color==='white')wPieces++;else bPieces++;}
+      }
+      h+='<div class="stats-grid" style="margin-top:10px">';
+      h+='<div class="stat-item"><div class="label">'+(T('final_material')||'Final Material')+'</div><div class="value">W:'+wPieces+' B:'+bPieces+'</div></div>';
+      const finalMat=calcMaterial(finalBoard);
+      h+='<div class="stat-item"><div class="label">'+(T('material_diff')||'Material Diff')+'</div><div class="value">'+(finalMat>0?'+':'')+finalMat+'</div></div>';
+      h+='</div>';
+    }
+    h+='</div>';
+  }
+
+  // Key moments (biggest eval swings)
+  if(evalData&&evalData.some(e=>e)){
+    h+='<div class="section"><h2>'+(T('key_moments')||'Key Moments')+'</h2>';
+    const swings=[];
+    for(let i=1;i<evalData.length;i++){
+      if(!evalData[i]||!evalData[i-1])continue;
+      const prev=evalData[i-1].mate?(evalData[i-1].mate>0?90000:-90000):evalData[i-1].eval;
+      const curr=evalData[i].mate?(evalData[i].mate>0?90000:-90000):evalData[i].eval;
+      const delta=Math.abs(curr-prev);
+      if(delta>=100){
+        swings.push({move:i,delta:delta,prev:prev,curr:curr});
+      }
+    }
+    swings.sort((a,b)=>b.delta-a.delta);
+    if(swings.length>0){
+      h+='<table><tr><th>#</th><th>'+(T('move')||'Move')+'</th><th>'+(T('eval_change')||'Eval Change')+'</th><th>'+(T('classification')||'Classification')+'</th></tr>';
+      for(let i=0;i<Math.min(10,swings.length);i++){
+        const s=swings[i];
+        const moveNum=Math.floor((s.move-1)/2)+1;
+        const isWhite=(s.move-1)%2===0;
+        const moverDelta=isWhite?s.curr-s.prev:s.prev-s.curr;
+        const cls=classifyMove(s.curr-s.prev,isWhite);
+        h+='<tr><td>'+(i+1)+'</td><td>'+moveNum+(isWhite?'.':'...')+'</td><td>'+(s.delta/100).toFixed(1)+' cp</td><td><span class="classification '+cls.cls+'">'+cls.label+'</span></td></tr>';
+      }
+      h+='</table>';
+    }else{
+      h+='<div class="loading">'+T('no_data')+'</div>';
+    }
+    h+='</div>';
+  }
+
+  // Time management (if time data available in PGN comments)
+  if(parsed.comments&&parsed.comments.length>0){
+    h+='<div class="section"><h2>'+(T('time_management')||'Time Management')+'</h2>';
+    // Try to extract time from comments like "[%clk 0:05:30]"
+    let times=[];
+    for(const c of parsed.comments){
+      const m=c.match(/\[%clk\s+([0-9:]+\.?[0-9]*)\]/);
+      if(m)times.push(m[1]);
+    }
+    if(times.length>0){
+      h+='<div class="stats-grid">';
+      h+='<div class="stat-item"><div class="label">'+(T('total_time')||'Total Time')+'</div><div class="value">'+times.length+' moves</div></div>';
+      h+='</div>';
+      h+='<p style="color:var(--muted);font-size:.8rem;margin-top:8px">'+(T('time_note')||'Clock data from PGN comments')+'</p>';
+    }else{
+      h+='<div class="loading">'+T('no_data')+'</div>';
+    }
+    h+='</div>';
+  }
+
+  // v1.0.2: Advanced statistics — extract hidden information from PGN
+  // Opening repertoire analysis
+  if(moves.length>=2){
+    h+='<div class="section"><h2>'+(T('opening_repertoire')||'Opening Repertoire')+'</h2>';
+    // Determine opening phase (first 8 plies)
+    const openingPlies=Math.min(8,moves.length);
+    let firstMoves='';
+    for(let i=0;i<openingPlies;i++){
+      const m=moves[i];
+      const moveNum=Math.floor(i/2)+1;
+      if(i%2===0)firstMoves+=moveNum+'. ';
+      firstMoves+=m.notation+' ';
+    }
+    h+='<p style="font-size:.85rem;color:var(--text);margin-bottom:8px">'+firstMoves.trim()+'</p>';
+    // Piece development speed
+    let wDev=0,bDev=0;
+    const wStartSquares=[[7,1],[7,2],[7,5],[7,6],[7,3],[7,4]]; // Nb1,Nc1,Nf1,Ng1,Bc1,Bf1 — wait, let me use correct
+    // White minor pieces start at: Nb1(7,1), Ng1(7,6), Bc1(7,2), Bf1(7,5), Qd1(7,3), Ke1(7,4)
+    // Black minor pieces start at: Nb8(0,1), Ng8(0,6), Bc8(0,2), Bf8(0,5), Qd8(0,3), Ke8(0,4)
+    for(let i=0;i<moves.length;i++){
+      const m=moves[i];
+      if(m.piece&&(m.piece.type==='knight'||m.piece.type==='bishop')){
+        if(m.piece.color==='white')wDev++;
+        else bDev++;
+      }
+      if(i>=15)break; // Only count opening phase
+    }
+    h+='<div class="stats-grid">';
+    h+='<div class="stat-item"><div class="label">'+(T('white_development')||'W Development')+'</div><div class="value white">'+wDev+' '+(T('minor_moves')||'minor')+'</div></div>';
+    h+='<div class="stat-item"><div class="label">'+(T('black_development')||'B Development')+'</div><div class="value black">'+bDev+' '+(T('minor_moves')||'minor')+'</div></div>';
+    h+='</div>';
+    h+='</div>';
+  }
+
+  // Pawn structure analysis
+  if(moves.length>0){
+    h+='<div class="section"><h2>'+(T('pawn_structure')||'Pawn Structure')+'</h2>';
+    const finalBoard=moves[moves.length-1].state.board;
+    // Count pawn structure features
+    let wDoubled=0,bDoubled=0,wIsolated=0,bIsolated=0,wPassed=0,bPassed=0,wBackward=0,bBackward=0;
+    const wPawns=[],bPawns=[];
+    for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+      const p=finalBoard[r][c];
+      if(p&&p.type==='pawn'){
+        if(p.color==='white')wPawns.push({r,c});else bPawns.push({r,c});
+      }
+    }
+    // Doubled pawns: same file, same color
+    for(let c=0;c<8;c++){
+      const wInFile=wPawns.filter(p=>p.c===c);
+      const bInFile=bPawns.filter(p=>p.c===c);
+      if(wInFile.length>1)wDoubled+=wInFile.length-1;
+      if(bInFile.length>1)bDoubled+=bInFile.length-1;
+    }
+    // Isolated pawns: no friendly pawns on adjacent files
+    for(const p of wPawns){
+      const hasAdjacent=wPawns.some(p2=>p2.c!==p.c&&Math.abs(p2.c-p.c)===1);
+      if(!hasAdjacent)wIsolated++;
+    }
+    for(const p of bPawns){
+      const hasAdjacent=bPawns.some(p2=>p2.c!==p.c&&Math.abs(p2.c-p.c)===1);
+      if(!hasAdjacent)bIsolated++;
+    }
+    // Passed pawns: no enemy pawns ahead on same or adjacent files
+    for(const p of wPawns){
+      const isPassed=!bPawns.some(bp=>bp.c>=p.c-1&&bp.c<=p.c+1&&bp.r<p.r);
+      if(isPassed)wPassed++;
+    }
+    for(const p of bPawns){
+      const isPassed=!wPawns.some(wp=>wp.c>=p.c-1&&wp.c<=p.c+1&&wp.r>p.r);
+      if(isPassed)bPassed++;
+    }
+    h+='<div class="stats-grid">';
+    h+='<div class="stat-item"><div class="label">'+(T('doubled')||'Doubled')+'</div><div class="value">W:'+wDoubled+' B:'+bDoubled+'</div></div>';
+    h+='<div class="stat-item"><div class="label">'+(T('isolated')||'Isolated')+'</div><div class="value">W:'+wIsolated+' B:'+bIsolated+'</div></div>';
+    h+='<div class="stat-item"><div class="label">'+(T('passed')||'Passed')+'</div><div class="value">W:'+wPassed+' B:'+bPassed+'</div></div>';
+    h+='</div>';
+    h+='</div>';
+  }
+
+  // Center control analysis
+  if(moves.length>0){
+    h+='<div class="section"><h2>'+(T('center_control')||'Center Control')+'</h2>';
+    // Count how many moves targeted center squares (d4, e4, d5, e5)
+    let wCenter=0,bCenter=0;
+    for(let i=0;i<moves.length;i++){
+      const m=moves[i];
+      if(m.to){
+        // m.to is {row, col} — center squares: d4(4,3), e4(4,4), d5(3,3), e5(3,4)
+        const r=m.to.row,c=m.to.col;
+        if((r===4&&c===3)||(r===4&&c===4)||(r===3&&c===3)||(r===3&&c===4)){
+          if(i%2===0)wCenter++;else bCenter++;
+        }
+      }
+    }
+    h+='<div class="stats-grid">';
+    h+='<div class="stat-item"><div class="label">'+(T('white_center')||'W Center Moves')+'</div><div class="value white">'+wCenter+'</div></div>';
+    h+='<div class="stat-item"><div class="label">'+(T('black_center')||'B Center Moves')+'</div><div class="value black">'+bCenter+'</div></div>';
+    h+='</div>';
+    h+='</div>';
+  }
+
+  // King safety analysis
+  if(moves.length>0){
+    h+='<div class="section"><h2>'+(T('king_safety')||'King Safety')+'</h2>';
+    // Count checks delivered and king moves
+    let wChecks=0,bChecks=0,wKingMoves=0,bKingMoves=0;
+    for(let i=0;i<moves.length;i++){
+      const m=moves[i];
+      if(m.notation&&m.notation.includes('+')){
+        if(i%2===0)wChecks++;else bChecks++;
+      }
+      if(m.piece&&m.piece.type==='king'){
+        if(i%2===0)wKingMoves++;else bKingMoves++;
+      }
+    }
+    h+='<div class="stats-grid">';
+    h+='<div class="stat-item"><div class="label">'+(T('checks_given')||'Checks Given')+'</div><div class="value">W:'+wChecks+' B:'+bChecks+'</div></div>';
+    h+='<div class="stat-item"><div class="label">'+(T('king_moves')||'King Moves')+'</div><div class="value">W:'+wKingMoves+' B:'+bKingMoves+'</div></div>';
+    h+='</div>';
+    h+='</div>';
+  }
+
+  // Game complexity (eval volatility)
+  if(evalData&&evalData.some(e=>e)){
+    h+='<div class="section"><h2>'+(T('game_complexity')||'Game Complexity')+'</h2>';
+    const validEvals=evalData.filter(e=>e).map(e=>e.mate?(e.mate>0?90000:-90000):e.eval);
+    if(validEvals.length>=3){
+      // Volatility: standard deviation of eval changes
+      const changes=[];
+      for(let i=1;i<validEvals.length;i++){
+        changes.push(Math.abs(validEvals[i]-validEvals[i-1]));
+      }
+      const avgChange=changes.reduce((a,b)=>a+b,0)/changes.length;
+      const variance=changes.reduce((a,b)=>a+(b-avgChange)*(b-avgChange),0)/changes.length;
+      const stdDev=Math.sqrt(variance);
+      // Lead swings: number of times the eval crosses zero
+      let swings=0;
+      for(let i=1;i<validEvals.length;i++){
+        if((validEvals[i-1]>50&&validEvals[i]<-50)||(validEvals[i-1]<-50&&validEvals[i]>50))swings++;
+      }
+      // Advantage duration: how many plies one side was ahead
+      let wAhead=0,bAhead=0;
+      for(const e of validEvals){
+        if(e>50)wAhead++;else if(e<-50)bAhead++;
+      }
+      h+='<div class="stats-grid">';
+      h+='<div class="stat-item"><div class="label">'+(T('volatility')||'Volatility')+'</div><div class="value">'+stdDev.toFixed(0)+' cp</div></div>';
+      h+='<div class="stat-item"><div class="label">'+(T('lead_swings')||'Lead Swings')+'</div><div class="value">'+swings+'</div></div>';
+      h+='<div class="stat-item"><div class="label">'+(T('white_advantage')||'W Advantage Ply')+'</div><div class="value white">'+wAhead+'</div></div>';
+      h+='<div class="stat-item"><div class="label">'+(T('black_advantage')||'B Advantage Ply')+'</div><div class="value black">'+bAhead+'</div></div>';
+      h+='</div>';
+    }
+    h+='</div>';
+  }
+
+  return h;
+}
+
+function renderEvalChart(evalData){
+  const w=600,h=120,pad=20;
+  const validEvals=evalData.filter(e=>e).map(e=>e.mate?(e.mate>0?90000:-90000):e.eval);
+  if(validEvals.length<2)return '<div class="loading">'+T('no_data')+'</div>';
+  const maxEv=Math.max(...validEvals,500);
+  const minEv=Math.min(...validEvals,-500);
+  const range=maxEv-minEv||1;
+  let points='';
+  for(let i=0;i<validEvals.length;i++){
+    const x=pad+(i/(validEvals.length-1))*(w-2*pad);
+    const y=h-pad-((validEvals[i]-minEv)/range)*(h-2*pad);
+    points+=x+','+y+' ';
+  }
+  // Zero line
+  const zeroY=h-pad-((0-minEv)/range)*(h-2*pad);
+  let svg='<svg class="eval-chart" viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="none">';
+  svg+='<rect x="0" y="0" width="'+w+'" height="'+h+'" fill="rgba(0,0,0,.3)"/>';
+  // Zero line (green if visible)
+  if(zeroY>0&&zeroY<h){
+    svg+='<line x1="'+pad+'" y1="'+zeroY+'" x2="'+(w-pad)+'" y2="'+zeroY+'" stroke="#444" stroke-width="1" stroke-dasharray="2,2"/>';
+  }
+  // Eval line
+  svg+='<polyline points="'+points+'" fill="none" stroke="#d4a017" stroke-width="2"/>';
+  svg+='</svg>';
+  return svg;
+}
+
+function renderMaterialChart(moves){
+  const w=600,h=80,pad=15;
+  const materials=moves.map(m=>calcMaterial(m.state.board));
+  if(materials.length<2)return '<div class="loading">'+T('no_data')+'</div>';
+  const maxMat=Math.max(...materials,3);
+  const minMat=Math.min(...materials,-3);
+  const range=maxMat-minMat||1;
+  let points='';
+  for(let i=0;i<materials.length;i++){
+    const x=pad+(i/(materials.length-1))*(w-2*pad);
+    const y=h-pad-((materials[i]-minMat)/range)*(h-2*pad);
+    points+=x+','+y+' ';
+  }
+  const zeroY=h-pad-((0-minMat)/range)*(h-2*pad);
+  let svg='<svg class="material-chart" viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="none">';
+  svg+='<rect x="0" y="0" width="'+w+'" height="'+h+'" fill="rgba(0,0,0,.3)"/>';
+  if(zeroY>0&&zeroY<h){
+    svg+='<line x1="'+pad+'" y1="'+zeroY+'" x2="'+(w-pad)+'" y2="'+zeroY+'" stroke="#444" stroke-width="1" stroke-dasharray="2,2"/>';
+  }
+  svg+='<polyline points="'+points+'" fill="none" stroke="#7eb8da" stroke-width="2"/>';
+  svg+='</svg>';
+  return svg;
+}
+
+// PGN text section (raw with formatting)
+function renderPGNText(parsed,evalData,comments){
+  if(!parsed)return '<div class="loading">'+T('no_data')+'</div>';
+  // v1.0.2: Display the COMPLETE PGN text from the original payload, preserving
+  // ALL comments ({} blocks), variations (()), NAGs ($1), and move numbers.
+  // Replace piece letters with symbols (♔♚♕♛♖♜♗♝♘♞) and prepend ♙/♟ for pawn moves.
+  // Comments are displayed as-is (原文) with dark-blue italic styling.
+  let h='<div class="section"><h2>'+T('pgn_text')+'</h2><div class="pgn-display">';
+  h+='<div style="margin-top:0;white-space:pre-wrap;word-break:break-word">';
+  let rawPGN=_payload.pgn||'';
+  // Remove header tags [...] (already shown in metadata section)
+  let movetext=rawPGN.replace(/\[[^\]]*\]\s*/g,'').trim();
+  // Piece symbol mapping: uppercase = White, lowercase = Black
+  const pieceSym={K:'♔\uFE0E',Q:'♕\uFE0E',R:'♖\uFE0E',B:'♗\uFE0E',N:'♘\uFE0E'};
+  // Track whose turn it is to determine pawn symbol color
+  // In PGN, White moves first (move 1.), then Black, alternating.
+  // We track the side by counting moves: odd move count = White, even = Black.
+  // But variations and comments make this tricky. We use a simpler approach:
+  // After a "N." (White move number), the next move is White's.
+  // After a "N..." (Black move number), the next move is Black's.
+  // If no move number prefix, alternate based on the last known side.
+  let nextSide='white'; // default: first move is White's
+  let result='';
+  let i=0;
+  let _moveIdx=0; // v1.0.2: track move index for click selection
+  // v1.0.2 FIX: renderSAN now returns HTML with the piece symbol wrapped in its
+  // own <span class="piece-white/piece-black"> so the symbol gets the correct
+  // color/stroke/glow (matching the main board), while the rest of the move
+  // notation (destination square, capture marker, check/mate suffix, promotion)
+  // stays in the default move text color. This matches how the main board
+  // separates piece symbol from square label.
+  const blackSym={K:'♚\uFE0E',Q:'♛\uFE0E',R:'♜\uFE0E',B:'♝\uFE0E',N:'♞\uFE0E'};
+  function renderSAN(move,side){
+    const pieceClass=side==='white'?'piece-white':'piece-black';
+    const isCastling=move.startsWith('O-O')||move.startsWith('0-0');
+    if(isCastling){
+      // v1.0.2: Castling display: short = ♔-♖, long = ♔-O-♖
+      // Both king and rook symbols get the piece-color styling.
+      const wk=side==='white'?'♔\uFE0E':'♚\uFE0E';
+      const wr=side==='white'?'♖\uFE0E':'♜\uFE0E';
+      // Long castling (O-O-O or 0-0-0)
+      if(move.startsWith('O-O-O')||move.startsWith('0-0-0')){
+        return '<span class="'+pieceClass+'">'+wk+'</span>-O-<span class="'+pieceClass+'">'+wr+'</span>';
+      }
+      // Short castling (O-O or 0-0)
+      return '<span class="'+pieceClass+'">'+wk+'</span>-<span class="'+pieceClass+'">'+wr+'</span>';
+    }
+    const isFirstPiece='KQRBN'.includes(move[0]||'');
+    if(!isFirstPiece){
+      // Pawn move — prepend ♙ (White) or ♟ (Black), wrapped in piece-color span.
+      // The rest of the move (e.g. "e4", "exd5", "e8=Q+") stays in default color.
+      const pawnSym=side==='white'?'♙\uFE0E':'♟\uFE0E';
+      return '<span class="'+pieceClass+'">'+pawnSym+'</span>'+move;
+    }else{
+      // Replace the first piece letter with the correct-colored symbol (wrapped),
+      // keep the rest of the move in default color.
+      const letter=move[0];
+      const sym2=side==='white'?pieceSym[letter]:blackSym[letter];
+      return '<span class="'+pieceClass+'">'+sym2+'</span>'+move.substring(1);
+    }
+  }
+  while(i<movetext.length){
+    // Comment block {...} — display as-is (原文)
+    if(movetext[i]==='{'){
+      let end=movetext.indexOf('}',i);
+      if(end<0)end=movetext.length-1;
+      const comment=movetext.substring(i+1,end);
+      result+='<span class="comment">{'+comment+'}</span>';
+      i=end+1;
+      continue;
+    }
+    // Variation block (...) — recursively render with side tracking
+    if(movetext[i]==='('){
+      let depth=1;
+      let j=i+1;
+      while(j<movetext.length&&depth>0){
+        if(movetext[j]==='(')depth++;
+        if(movetext[j]===')')depth--;
+        j++;
+      }
+      const variationText=movetext.substring(i+1,j-1);
+      // Render variation text with piece symbol substitution
+      let varRendered='';
+      let vi=0;
+      let varSide=nextSide; // Start from current side
+      while(vi<variationText.length){
+        if(variationText[vi]==='{'){
+          let vEnd=variationText.indexOf('}',vi);
+          if(vEnd<0)vEnd=variationText.length-1;
+          varRendered+='<span class="comment">{'+variationText.substring(vi+1,vEnd)+'}</span>';
+          vi=vEnd+1;
+          continue;
+        }
+        let vNumMatch=variationText.substring(vi).match(/^(\d+\.+)/);
+        if(vNumMatch){
+          varRendered+='<span class="move-num">'+vNumMatch[0]+'</span> ';
+          // If it ends with "...", next side is Black; otherwise White
+          varSide=vNumMatch[0].includes('...')?'black':'white';
+          vi+=vNumMatch[0].length;
+          continue;
+        }
+        let vMoveMatch=variationText.substring(vi).match(/^([KQRBN][a-h]?[1-8]?x?[a-h][1-8][+#]?=?[QRBN]?|O-O(?:-O)?|0-0(?:-0)?|[a-h]x?[a-h][1-8](?:=[QRBN])?[+#]?|[a-h][1-8][+#]?)/);
+        if(vMoveMatch){
+          // v1.0.2 FIX: Don't put piece-white/piece-black on the move span —
+          // renderSAN now wraps the piece symbol in its own styled span.
+          // The move span keeps the default text color for the destination
+          // square / capture marker / check suffix.
+          varRendered+='<span class="move">'+renderSAN(vMoveMatch[0],varSide)+'</span> ';
+          varSide=varSide==='white'?'black':'white';
+          vi+=vMoveMatch[0].length;
+          continue;
+        }
+        if(variationText[vi]==='$'){
+          let vj=vi+1;
+          while(vj<variationText.length&&/\d/.test(variationText[vj]))vj++;
+          varRendered+='<span style="color:var(--accent2)">'+variationText.substring(vi,vj)+'</span>';
+          vi=vj;
+          continue;
+        }
+        varRendered+=variationText[vi];
+        vi++;
+      }
+      result+='<span class="variation">('+varRendered+')</span>';
+      i=j;
+      continue;
+    }
+    // NAG ($1, $2, etc.)
+    if(movetext[i]==='$'){
+      let j=i+1;
+      while(j<movetext.length&&/\d/.test(movetext[j]))j++;
+      result+='<span style="color:var(--accent2)">'+movetext.substring(i,j)+'</span>';
+      i=j;
+      continue;
+    }
+    // Result markers
+    if(movetext.substring(i).match(/^(1-0|0-1|1\/2-1\/2|\*)\b/)){
+      let m=movetext.substring(i).match(/^(1-0|0-1|1\/2-1\/2|\*)/);
+      result+='<span style="color:var(--accent);font-weight:600">'+m[0]+'</span>';
+      i+=m[0].length;
+      continue;
+    }
+    // Move number (e.g. "1.", "2...", "12.")
+    let numMatch=movetext.substring(i).match(/^(\d+\.+)/);
+    if(numMatch){
+      result+='<span class="move-num">'+numMatch[0]+'</span> ';
+      // If it ends with "...", next side is Black; otherwise White
+      nextSide=numMatch[0].includes('...')?'black':'white';
+      i+=numMatch[0].length;
+      continue;
+    }
+    // Piece move
+    let moveMatch=movetext.substring(i).match(/^([KQRBN][a-h]?[1-8]?x?[a-h][1-8][+#]?=?[QRBN]?|O-O(?:-O)?|0-0(?:-0)?|[a-h]x?[a-h][1-8](?:=[QRBN])?[+#]?|[a-h][1-8][+#]?)/);
+    if(moveMatch){
+      let renderedSAN=renderSAN(moveMatch[0],nextSide);
+      // v1.0.2 FIX: Don't put piece-white/piece-black on the move span —
+      // renderSAN now wraps the piece symbol in its own styled span. The move
+      // span keeps the default text color for destination/capture/check text.
+      result+='<span class="move'+(_moveIdx===_selectedMoveIdx?' selected':'')+'" onclick="selectMove('+_moveIdx+')">'+renderedSAN+'</span> ';
+      _moveIdx++;
+      nextSide=nextSide==='white'?'black':'white';
+      i+=moveMatch[0].length;
+      continue;
+    }
+    // Pass through other characters
+    result+=movetext[i];
+    i++;
+  }
+  h+=result;
+  h+='</div></div></div>';
+  return h;
+}
+
+// Main render
+function render(){
+  if(!_payload){
+    document.getElementById('content').innerHTML='<div class="loading">'+T('no_data')+'</div>';
+    return;
+  }
+  const parsed=parsePGN(_payload.pgn);
+  if(!parsed){
+    document.getElementById('content').innerHTML='<div class="loading">PGN parse error</div>';
+    return;
+  }
+  // v1.0.2: If a move is selected, use only moves up to that point for stats
+  let statsParsed=parsed;
+  let statsEvalData=_payload.evals;
+  if(_selectedMoveIdx>=0&&_selectedMoveIdx<parsed.moves.length){
+    statsParsed={headers:parsed.headers,moves:parsed.moves.slice(0,_selectedMoveIdx+1),startFEN:parsed.startFEN,comments:parsed.comments};
+    statsEvalData=_payload.evals?_payload.evals.slice(0,_selectedMoveIdx+1):null;
+  }
+  let h='';
+  h+=renderPGNText(parsed,_payload.evals,_payload.comments);
+  h+=renderStats(statsParsed,statsEvalData);
+  document.getElementById('content').innerHTML=h;
+}
+
+// v1.0.2: Select a move for per-position statistics
+function selectMove(idx){
+  _haptic('BUTTON_PRESS');
+  _selectedMoveIdx=(_selectedMoveIdx===idx)?-1:idx; // Toggle selection
+  render();
+}
+
+// Button handlers
+// v1.0.2: Haptic feedback helper for stats page buttons
+function _haptic(type){
+  try{
+    if(typeof AndroidBridge!=='undefined'&&AndroidBridge.performHaptic){
+      AndroidBridge.performHaptic(type);
+    }
+  }catch(e){}
+}
+function exportHTML(){
+  _haptic('BUTTON_PRESS');
+  const html='<!DOCTYPE html>\n'+document.documentElement.outerHTML;
+  if(typeof AndroidBridge!=='undefined'&&AndroidBridge.exportStatsHTML){
+    AndroidBridge.exportStatsHTML(html);
+  }
+}
+function requestImport(){
+  _haptic('BUTTON_PRESS');
+  // v1.0.2: Show the import dialog WITHIN the stats page (not on the main page)
+  // The dialog has only PGN options (paste PGN, select PGN file) — no FEN option
+  _showStatsImportDialog();
+}
+
+// v1.0.2: Show import dialog within stats page
+function _showStatsImportDialog(){
+  var overlay=document.createElement('div');
+  overlay.className='dov';
+  overlay.setAttribute('role','dialog');
+  overlay.setAttribute('aria-modal','true');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:10000';
+  overlay.onclick=function(e){if(e.target===overlay)overlay.remove();};
+  var dlg=document.createElement('div');
+  dlg.className='dlg';
+  dlg.style.cssText='max-width:420px;background:#221015;border:1px solid #d4a017;border-radius:12px;padding:20px;width:90%';
+  var html='<h2 style="color:#ffd700;margin-bottom:16px;font-size:1.1rem">'+(_lang==='zh'?'导入PGN':'Import PGN')+'</h2>';
+  html+='<div style="display:flex;flex-direction:column;gap:10px">';
+  html+='<button class="btn" style="width:100%;justify-content:center;gap:8px;padding:12px;font-size:.9rem" onclick="_statsPastePGN()"><span style="font-size:1.3rem">📜</span> '+(_lang==='zh'?'粘贴PGN':'Paste PGN')+'</button>';
+  html+='<button class="btn" style="width:100%;justify-content:center;gap:8px;padding:12px;font-size:.9rem" onclick="_statsSelectPGNFile()"><span style="font-size:1.3rem">📂</span> '+(_lang==='zh'?'选择PGN文件':'Select PGN File')+'</button>';
+  html+='</div>';
+  html+='<div style="margin-top:12px;text-align:center"><button class="btn" onclick="_haptic(\x27BUTTON_PRESS\x27);this.closest(\x27.dov\x27).remove()">'+(_lang==='zh'?'取消':'Cancel')+'</button></div>';
+  dlg.innerHTML=html;
+  overlay.appendChild(dlg);
+  document.body.appendChild(overlay);
+}
+
+function _statsPastePGN(){
+  _haptic('BUTTON_PRESS');
+  var overlay=document.querySelector('.dov[role="dialog"]');
+  if(overlay)overlay.remove();
+  var text=prompt(_lang==='zh'?'粘贴PGN文本:':'Paste PGN text:');
+  // v1.0.2 CLEANUP: Removed the AndroidBridge.statsRequestImport feature check
+  // — it was leftover from an earlier design where paste sent the PGN to the
+  // main WebView. Paste now stays entirely inside stats.html: just update the
+  // payload and re-render. The check had the side effect of silently dropping
+  // the paste if the bridge method was absent (which it now is — see the
+  // statsSelectPGNFile cleanup).
+  if(text){
+    _payload.pgn=text;
+    _selectedMoveIdx=-1;
+    render();
+  }
+}
+
+function _statsSelectPGNFile(){
+  _haptic('BUTTON_PRESS');
+  var overlay=document.querySelector('.dov[role="dialog"]');
+  if(overlay)overlay.remove();
+  // v1.0.2 FIX: Open SAF file picker directly from StatsActivity — no longer
+  // bounces back to the main activity. The Java side reads the file and calls
+  // onStatsPGNFileRead(content) which updates _payload.pgn and re-renders.
+  if(typeof AndroidBridge!=='undefined'&&AndroidBridge.statsSelectPGNFile){
+    AndroidBridge.statsSelectPGNFile();
+  }
+}
+
+// v1.0.2 FIX: Callback invoked by StatsActivity.onActivityResult after a PGN
+// file has been picked and read. Updates the payload and re-renders the stats
+// page with the imported PGN (mirrors _statsPastePGN behavior).
+function onStatsPGNFileRead(content){
+  if(!content){
+    // Empty content = picker cancelled or read failed — no state change.
+    return;
+  }
+  _payload.pgn=content;
+  _selectedMoveIdx=-1;
+  render();
+}
+function requestReview(){
+  _haptic('BUTTON_PRESS');
+  if(typeof AndroidBridge!=='undefined'&&AndroidBridge.statsRequestReview){
+    AndroidBridge.statsRequestReview();
+  }
+}
+function returnToGame(){
+  _haptic('BUTTON_PRESS');
+  if(typeof AndroidBridge!=='undefined'&&AndroidBridge.closeStatsPage){
+    AndroidBridge.closeStatsPage();
+  }
+}
+
+// Initialize — get payload from Java bridge
+function init(){
+  if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getStatsPayload){
+    try{
+      const payloadStr=AndroidBridge.getStatsPayload();
+      if(payloadStr){
+        _payload=JSON.parse(payloadStr);
+        if(_payload.lang)_lang=_payload.lang;
+      }
+    }catch(e){console.error('init error:',e);}
+  }
+  // Update button text based on language
+  _updateButtonText();
+  render();
+}
+
+// Update button text based on current language
+function _updateButtonText(){
+  const importText=document.getElementById('btnImportText');
+  if(importText)importText.textContent=_lang==='zh'?'导入':'Import';
+  const reviewText=document.getElementById('btnReviewText');
+  if(reviewText)reviewText.textContent=_lang==='zh'?'复盘':'Review';
+  const backBtn=document.getElementById('btnBack');
+  if(backBtn)backBtn.textContent=_lang==='zh'?'返回':'Back';
+  // Update title
+  const titleEl=document.querySelector('.hdr h1');
+  if(titleEl)titleEl.textContent=_lang==='zh'?'📊统计数据':'📊Statistics';
+  // Update loading text
+  const loadingEl=document.getElementById('content');
+  if(loadingEl&&loadingEl.querySelector('.loading')){
+    loadingEl.innerHTML='<div class="loading">'+(_lang==='zh'?'加载中...':'Loading...')+'</div>';
+  }
+}
+
+// Handle Android back button — return to main game
+document.addEventListener('keydown',function(e){
+  if(e.key==='Backspace'||e.keyCode===8){
+    e.preventDefault();
+    returnToGame();
+  }
+});
+
+window.addEventListener('load',init);
+</script>
+</body>
+</html>

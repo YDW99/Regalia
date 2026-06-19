@@ -6,10 +6,118 @@ License classification by file:
       InternalStockFish.java, UCIEngineBase.java, EngineUtil.java,
       DroidComputerPlayer.java). Copyright (C) Peter Österlund.
       Modifications Copyright (C) 2026 Regalia.
+      v1.0.2 additions:
+        - _safeExecute(Runnable, tag): wraps _engineExecutor.execute()
+          to catch RejectedExecutionException when the engine is
+          mid-restart/shutdown. Notifies JS via onEngineError callback
+          so the JS-side loading flags are reset instead of stuck.
+          Used by engineGo / engineEval / engineHint / startPonder /
+          importSettings.
+        - stopAndWaitForBestmove(callerTag): blocks the calling thread
+          until the engine's in-flight `go` command emits its bestmove,
+          used by importSettings() before applying new settings so the
+          engine is idle and can respond to `isready` with `readyok`
+          (previously the 3-second timeout silently dropped settings).
+        - importSettings() now honors user-explicit threads/hash values
+          by auto-disabling autoConfig for that apply cycle, preventing
+          silent override by hardware detection.
+        - onSettingsImported callback is the single source of truth for
+          the import-result toast (file-picker entry path no longer
+          shows a duplicate toast).
+        - cleanupEngineResources() resets _isPondering,
+          _discardingPonderBestmove, _lastPonderMove, _stopLatch,
+          readyOkLatchHolder, uciOkLatchHolder — prevents the
+          "AI never moves after engine crash" bug where a stale
+          _discardingPonderBestmove=true flag silently discarded the
+          new engine's first real bestmove.
+        - detectBigCoreCount() result cached in _cachedBigCoreCount
+          (CPU topology is fixed for the device's lifetime).
+        - MultiPV progress callback uses StringBuilder instead of
+          JSONObject for the high-frequency onMultiPVProgress path
+          (10-50 info lines/sec during search).
+        - applySettings() branches consolidated — only Threads/Hash
+          differ between autoConfig/manual paths.
+        - Dead API removal: postJsCallbackJson() (zero callers),
+          ChessApp.checkEngineThreadCrash() + engineThreadCrashed +
+          engineThreadCrashMessage (flag set but never checked).
   - MainActivity.java: AGPL v3 (original)
+      WebView host, immersive mode, lifecycle, SAF file-picker routing.
+      v1.0.2: REQUEST_CODE_EXPORT_PGN=1004 + _pendingExportType
+      distinguish settings vs PGN export SAF callbacks.
   - ChessApp.java: AGPL v3 (original)
+      Application class, crash protection, locale detection.
+      v1.0.2: removed dead checkEngineThreadCrash() / engineThreadCrashed /
+      engineThreadCrashMessage (heartbeat mechanism covers engine death).
   - ChessWebViewClient.java: AGPL v3 (original)
+      Page load handler, JS bridge registration.
   - EngineService.java: AGPL v3 (original)
+      Foreground service that keeps the engine subprocess alive on
+      Android 14/15 (Xiaomi HyperOS 3) when the app goes to background.
+  - TlsSecurityHelper.java: AGPL v3 (original)
+      TLS 1.2+ enforcement helper for HTTPS connections to the Lichless
+      Tablebase API on older Android versions (API 21-27).
+  - RootDetector.java: AGPL v3 (original)
+      Non-blocking root detection. The result is informational only —
+      the app never refuses to run on a rooted device because it is an
+      offline chess app with no sensitive data to protect. The check
+      is reported to the user via the About dialog.
 
 See the root-level LICENSE-AGPL v3, LICENSE-GPL v3, and NOTICE files
 for full license texts and attribution details.
+
+v1.0.2 NEW FEATURE additions:
+  - StatsActivity.java: AGPL v3 (original)
+      Fullscreen WebView activity that hosts the 📊统计 statistics page.
+      Loads assets/stats.html and passes the game PGN + eval data + move
+      records via Intent extra. Handles 💾HTML export, 🗃️import (Paste PGN /
+      Select PGN File), 🗂️复盘, and 返回对局 button actions. Android back
+      button finishes the activity.
+      v1.0.2 updates:
+        - 📂 Select PGN File button now opens ACTION_OPEN_DOCUMENT directly
+          from StatsActivity (no longer bounces through MainActivity).
+          onActivityResult reads the file and calls onStatsPGNFileRead(content)
+          JS callback to refresh the stats page in place.
+        - performHaptic() now respects the user's haptic preference (reads
+          hapticFeedbackEnabled from "RegaliaEngine" prefs + system
+          HAPTIC_FEEDBACK_ENABLED) and uses VibrationEffect on API 26+.
+        - HTML export callback uses JSON encoding (not string concatenation)
+          to prevent JS injection from filenames with special characters.
+        - REQUEST_CODE_IMPORT_PGN=2002 for the in-activity SAF picker.
+      This file is original Regalia code (AGPL v3) — it only hosts the
+      WebView and delegates all PGN parsing to stats.html (which is GPL v3
+      due to DroidFish-derived code).
+
+v1.0.2 bug-fix updates to existing files:
+  - StockfishNative.java:
+      - _mrToUci() / promotion UCI letter: knight 'k' → 'n' (was causing
+        false PV divergence and spurious variation attachments for knight
+        promotions).
+      - destroyForciblySafe() wrapper: Process.destroyForcibly() is API 26+
+        but minSdk=21. Three engine-shutdown paths now use isProcessAlive()
+        + destroyForciblySafe() instead of direct engineProcess.isAlive() /
+        destroyForcibly() which threw NoSuchMethodError on API 21-25.
+      - handleFilePickerResult() / handlePGNFilePickerResult(): switched to
+        try-with-resources on BufferedReader (was leaking the reader's
+        internal char buffer, relying on GC).
+      - Removed dead stats code (~80 lines): getStatsPayload(),
+        closeStatsPage() (instanceof StatsActivity always false since
+        activityRef points to MainActivity), exportStatsHTML(),
+        statsRequestReview(), _pendingStatsPayload, _pendingStatsHTML,
+        REQUEST_CODE_EXPORT_STATS_HTML, and the stats-HTML branch in
+        handleExportFilePickerResult(). StatsActivity has its own bridge
+        for all of these.
+      - Removed dead `if (_isPondering)` branch in processEngineLine
+        (unreachable: stopPonder/stopAndWaitForBestmove set _isPondering=false
+        before sending "stop").
+      - Removed redundant { } blocks in handleBestMove switch cases.
+  - MainActivity.java:
+      - Removed pendingStatsImportRequest static flag and its onResume
+        handler (stats import now stays inside StatsActivity).
+      - Removed REQUEST_CODE_EXPORT_STATS_HTML from onActivityResult routing
+        (handled by StatsActivity).
+  - EngineService.java:
+      - PREFS_NAME = "RegaliaEngine" (was "Regalia_prefs" which is never
+        written to) — fixes foreground-service notification language always
+        falling back to system default.
+      - Removed dead `en` computation block in updateNotification() (read
+        from wrong prefs file, value never used).

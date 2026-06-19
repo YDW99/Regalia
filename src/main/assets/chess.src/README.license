@@ -5,20 +5,234 @@ License classification by file:
   - game-logic.js: GPL v3 (derived from DroidFish)
       PGN disambiguation and SAN notation logic from DroidFish.
       Copyright (C) Peter Österlund. Modifications Copyright (C) 2026 Regalia.
+      v1.0.2 additions:
+        - _prependBlackToMovePlaceholder(): prepends a null placeholder to
+          moveRecords when a new game starts with Black to move (FEN/setup
+          /PGN import paths). Syncs stateHistory[0].moveRecords so the
+          placeholder survives undo back to the opening.
+        - boardVersion integer on game state (incremented by makeMv /
+          makeMvInPlace / _refreshStateAfterSetup, restored by unmakeMv,
+          initialized to 1 by fenToState / initState) — used by the
+          _updateBoardIncremental dirty check for ~100x faster render ticks.
+        - moveAlg() disambiguation: replaced cloneB-per-candidate with
+          makeMvInPlace/unmakeMv — eliminates up to 8 board clones per
+          moveAlg call (e.g. 8 pawns that could capture on the same file).
+        - pieceZobristIdx(): hoisted the {pawn:0,knight:1,...} type-index
+          lookup to module scope (_PIECE_TYPE_IDX) instead of building a
+          fresh object literal on every call (32+ calls per computeHash).
+        - isDeadPosition(): single-pass 64-square scan with early returns
+          (pawns/rooks/queens → not dead) instead of allocating a pcs[]
+          array + multiple .filter()/.map() passes. Bishop square-color
+          parity tracked inline. Same FIDE 5.2.2 coverage, ~3x faster.
   - ai-bridge.js: GPL v3 (derived from DroidFish)
       Engine communication patterns from DroidFish.
       Copyright (C) Peter Österlund. Modifications Copyright (C) 2026 Regalia.
+      v1.0.2 additions:
+        - _buildPGNString() now appends `{score eval_word}` after every
+          move with a cached eval in _reviewEvalCache, and
+          `{SF18 D22 +1.0 8%W/91%D/1%L}` every 5 moves (engine name,
+          depth, score, WDL). Helper: _formatPGNEvalAnnotation().
+        - exportPGNToFile() + onPGNExported() for SAF-based PGN export.
+        - _fileBrowserSelect() no longer calls showToast() after
+          bridge.importSettings() — the onSettingsImported callback is
+          the single source of truth for the import result toast,
+          eliminating the duplicate-toast bug.
+        - _safeExecute() wrapper in Java side catches
+          RejectedExecutionException from engineExecutor and notifies
+          JS via onEngineError (see StockfishNative.java).
+        - restartCurrentEngine() and onEngineRestarting() both clear
+          _reviewEvalCache, _multiPVLines, _multiPVResult,
+          _lastEngineVariation to prevent stale evals from the old
+          engine instance.
+        - Ponder-Hit fix: uses JS-side cached _lastPonderMoveFromEngine
+          instead of re-calling Java getLastPonderMove() (which is a
+          one-shot read).
+        - PV variation cache + fork grafting: _pvCache (Map) +
+          _convertPVtoSANCached() + _checkPVDivergence(). Caches the
+          converted SAN + post-state for every UCI prefix encountered
+          during a single _processDeferredVariations() call, keyed by
+          (state.hash, uciPrefix). MultiPV lines sharing a common prefix
+          (e.g. e4 e5 Nf3) now convert the prefix exactly once instead
+          of N times. Cache is cleared per-search (bounded at 200 entries).
+        - generateFEN(): hoisted the PIECE_FEN lookup table to module
+          scope (_PIECE_FEN) instead of allocating a fresh
+          {white:{...},black:{...}} object on every call. generateFEN
+          is called on every AI move, hint, and eval request.
+        - _esc() / _escJs(): single-pass regex with callback + lookup
+          map instead of 5 chained .replace() calls (5 intermediate
+          string allocations → 1). These helpers are called on every
+          move notation, file path, and ECO name during render.
+        - _formatPGNEvalAnnotation(): explicit parenthesization of the
+          mate-detection condition + Number() coercion of cached
+          mate/eval values (defensive against JSON string values).
   - ui.js: GPL v3 (derived from DroidFish)
       UI layout and interaction patterns from DroidFish.
       Copyright (C) Peter Österlund. Modifications Copyright (C) 2026 Regalia.
+      v1.0.2 additions:
+        - startGame() now auto-fills ECO opening moves into moveRecords
+          with proper SAN notation as it replays each move — the user
+          sees the full opening sequence from move #1, no "..."
+          placeholder needed.
+        - _prependBlackToMovePlaceholder() called at 4 new-game entry
+          points (startGame, _applyImportedFEN, exitSetup, importPGN).
+        - redoMove() no longer calls doAIMove() — the redo stack
+          contains pre-recorded moves; triggering a fresh AI search
+          would corrupt the stack.
+        - "Play Again" button now shows ⚔️ prefix.
+        - executeMove() setTimeout(420ms) callback captures
+          gameState.hash before the timeout and aborts if it changes,
+          preventing stale callbacks from overwriting new state during
+          undo/redo/flip (the "ghost game-over banner" bug).
+        - doAIMove() moved out of the rAF callback into setTimeout(0)
+          so the browser can paint the post-move UI before the engine
+          starts thinking.
+        - toggleSetup() simplified — removed dead 'play' status check.
+        - infoCtrl now references the control-map entry directly
+          instead of allocating a fresh {white,black} object per render.
+        - _cachedBwrap liveness check changed from parentNode to
+          document.body.contains() for stricter validation.
+        - _updateSingleSq(): signature-based dirty check — builds a
+          cheap signature string (piece + selection + last-move +
+          check + legal + control-map + anim) and skips all DOM writes
+          (style.background, className, innerHTML) when the signature
+          hasn't changed. Previously rebuilt innerHTML for all 64
+          squares on every engine-progress callback (~10-50/sec).
+        - _getSqBg(): removed unused _sqBgCache declaration + dead
+          lastFrom/lastTo computation (variables were computed but
+          never used in the return value).
   - tablebase.js: GPL v3 (derived from DroidFish)
       PGN parsing logic (GameTree/PgnToken/PgnScanner) from DroidFish.
       Copyright (C) Peter Österlund. Modifications Copyright (C) 2026 Regalia.
+      v1.0.2 additions:
+        - _applyImportedFEN() and importPGN() call
+          _prependBlackToMovePlaceholder() when the imported position
+          has Black to move.
+        - PGN variation continuation loop changed from `break` (truncate
+          entire variation on first unparseable token) to `continue`
+          (skip only that token, keep parsing the rest). moveAlg-based
+          forgiving fallback applied uniformly to every token.
+        - When an unparseable token is skipped, the side-to-move and
+          move number now advance — a skipped move still consumes a
+          turn per PGN spec, otherwise the next token would be
+          attributed to the wrong side, desynchronizing the variation.
+        - _tbCache (tablebase LRU cache) now refreshes on hit (delete +
+          set) so frequently-accessed entries don't get evicted before
+          cold entries. Previously only `get` was called without
+          reordering, defeating LRU semantics.
+  - ai-bridge.js: GPL v3 (derived from DroidFish)
+      v1.0.2 additional fixes (second-pass review):
+        - _formatVariationGroups(): variation line numbers are now assigned
+          SEQUENTIALLY (1, 2, 3, ...) based on array position, not derived
+          from group/mpvIndex/lineNum fields. The old scheme could collide
+          (mainline=1, mpvIndex=0 also=1) producing duplicate "🌿线1"
+          labels when both were attached to the same move (common after
+          Flip or when multiple MultiPV lines diverge at the same move).
+        - _checkPVDivergenceSANs(): added same-SAN dedup guard to prevent
+          the same variation from being attached multiple times.
+        - _mrToUci(): knight promotion letter 'k' → 'n' (UCI spec). Was
+          causing false PV divergence for every knight promotion.
+        - _resetGameUIState() in ui.js now resets isAIThinking,
+          _aiSafetyTimerId, _aiRetryCount, _evalLoading, _sfEvalReady,
+          _ponderGen, _ponderMoveSAN, _ponderBarInfo, _pendingPonderMoveUCI,
+          _multiPVLines, _multiPVResult, _lastEngineVariation — prevents
+          stale AI state from leaking into a new game (was causing "AI
+          never moves" if the user started a new game during AI thinking).
+        - onBestMove(): removed the `moveRecords.length > 0` guard so
+          variations are tracked even when the AI plays the first move
+          (player plays Black). Was causing no 🌿 variation lines for
+          the AI's first move when playing Black.
+        - _aiRetryCount reset added to onEngineReady() and
+          onEngineRestarting() — prevents the retry counter from
+          carrying over after a crash-recovery, which could immediately
+          hit the 3-retry cap and show "AI timeout" despite the engine
+          just having recovered.
+        - onStatsRequestReview(): shows a toast when moveRecords is empty
+          instead of silently returning.
+        - _reviewEvalCache gains a peek() method (read without LRU
+          refresh); iteration loops in _buildEvalTrendSVG,
+          _findCriticalMoves, move-list render, and openStatsPage use
+          peek() to avoid churning the Map.
+        - openStatsPage() now also sends moveRecords (from/to/piece/
+          captured/promotion/notation) in the payload — the stats page
+          uses them to replay moves correctly instead of re-parsing the
+          PGN string with its simplified parser (which cascade-failed
+          on complex moves, capping the total move count).
+        - Removed dead _checkPVDivergence(pv1, pv2) function (shadowed
+          by the no-arg _checkPVDivergence() that iterates
+          _pendingEnginePVs — JS last-declaration-wins rule made the
+          former unreachable).
+        - Removed onStatsRequestImport() and its export (stats import
+          now stays inside StatsActivity).
+        - executeMove() ponder-hit check: promotion piece name → UCI
+          letter (queen→'q' etc.) so promotion moves can match the
+          engine's UCI ponder move (was always failing, defeating
+          ponder for all promotions).
+        - makeMv() in game-logic.js: reuse capPiece for Zobrist hash
+          instead of re-reading from original state (redundant read).
+        - v1.0.2 (qw3.7max audit) — 7 optimizations from the external
+          code-review report, all implemented:
+          (1) _updateBoardLightweight(): state-comparison logic (_selChanged,
+              _newHover→_infoChanged) rewritten with optional chaining (?.)
+              for cleaner null-safe comparison; renamed _newHover to
+              _infoChanged (the variable tracks info-square changes, not
+              just hover).
+          (2) Review move-classification span: _mcls.color and _mcls.label
+              now wrapped in _esc() for defensive XSS protection (currently
+              redundant since _classifyMove returns internal constants, but
+              guards against future changes).
+          (3) scrollIntoView behavior:'instant' → 'auto' at 2 call sites
+              (review-mode auto-scroll) for broader compatibility with
+              older WebView engines that don't support the CSSOM View
+              'instant' value.
+          (4) Review auto-scroll: rAF+setTimeout(0) → double rAF. The first
+              rAF fires after layout, the second after paint — reading
+              layout info (scrollIntoView) in the second rAF guarantees no
+              forced synchronous layout (layout thrashing). The old
+              rAF+setTimeout(0) pattern couldn't guarantee layout was
+              complete because setTimeout is a macrotask that may run
+              before the browser's layout/paint step.
+          (5) _sqElCache: 2D array-of-arrays → 1D array indexed by (r*8+c).
+              Single contiguous allocation, no nested array objects, one
+              fewer pointer dereference per access. With 10-50 engine
+              progress callbacks/sec, this shaves a small but measurable
+              amount off the hot incremental-update path.
+          (6) _isMoverWhite: ((i+1)%2)===1 → (i%2)===0 (mathematically
+              equivalent, eliminates the unnecessary +1). Applied at 2
+              sites in ui.js (review move-list render + _findCriticalMoves).
+          (7) _rListEl: module-level cache of the review-moves-list element,
+              avoids getElementById('reviewMovesList') on every render's
+              scroll-into-view path. Assigned after full render, cleared on
+              cache invalidation.
+          (8) Review move-classification span: string concatenation (+=)
+              → ES6 template literal for readability (the span is built
+              once per reviewed move, not in a hot loop).
   - eco-data.js: AGPL v3 (original)
       ECO opening data from lichess-org/chess-openings (CC0).
       Code is original — not derived from DroidFish.
   - index.html.tpl: AGPL v3 (original CSS/HTML template)
-  - build-chess.sh: AGPL v3 (original build script)
+  - build-chess.sh / build-chess.py: AGPL v3 (original build scripts)
+
+v1.0.2 stats.html updates (GPL v3, DroidFish-derived PGN parsing):
+  - parsePGN() now checks for _payload.moveRecords (sent by the main
+    app). If present, calls parseFromMoveRecords() to replay the
+    authoritative move list via executeMove() — avoids the simplified
+    SAN parser's cascade-failure bug that capped total moves at ~98.
+  - parseFromMoveRecords(): converts algebraic strings ("e2") to
+    {row, col} objects (the main app stores from/to as strings; stats
+    executeMove expects objects). Skips null placeholders.
+  - renderPGNText() / renderSAN(): piece symbols now wrapped in their
+    own <span class="piece-white/piece-black"> with the same
+    color/stroke/glow as the main board. CSS specificity increased
+    (.pgn-display .move .piece-white) so the piece color overrides
+    .pgn-display .move. Previously the piece symbols were
+    cream-colored (same as the rest of the move text) because
+    .pgn-display .move (specificity 0,2,0) overrode .piece-white
+    (specificity 0,1,0).
+  - PGN import (📂 Select PGN File) now opens SAF picker directly
+    from StatsActivity via statsSelectPGNFile() bridge method.
+    onStatsPGNFileRead(content) callback updates the payload in place.
+  - _statsPastePGN() no longer checks AndroidBridge.statsRequestImport
+    (removed orphaned feature check).
 
 The combined output (chess.html) is a combined work. The GPL v3 JavaScript
 modules and AGPL v3 template retain their respective licenses. Since AGPL v3

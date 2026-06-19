@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- AI-GEN: AI assisted -->
+<!-- This code was AI-assisted and has been reviewed for AGPL v3 compliance. -->
+
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.Regalia"
-    android:versionCode="101"
-    android:versionName="1.0.1">
+    android:versionCode="102"
+    android:versionName="1.0.2">
 
     <!-- v18.5.0: Removed appcompat dependency — no more AndroidX permission injection issues -->
     <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="35" />
@@ -17,8 +20,10 @@
     <!-- Android 5-9: Storage permissions for settings export/import -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
-    <!-- Android 13+ (API 33): READ_MEDIA_IMAGES for MediaStore access (used by file browser to find .txt files) -->
-    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" android:minSdkVersion="33" />
+    <!-- v1.0.2 REDUNDANCY (audit): removed READ_MEDIA_IMAGES — the built-in file
+         browser queries MediaStore.Files (not MediaStore.Images), which does not
+         require READ_MEDIA_IMAGES on Android 13+. The SAF picker (the primary
+         import/export path) needs no permissions at all. -->
     <!-- v18.4.0: Request foreground service for engine stability on HyperOS -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" android:minSdkVersion="28" />
     <!-- v18.4.7: Android 14+ requires specifying foreground service type -->
@@ -70,6 +75,18 @@
             android:foregroundServiceType="specialUse"
             android:exported="false"
             android:stopWithTask="true" />
+
+        <!-- v1.0.2 NEW FEATURE: StatsActivity — fullscreen WebView for the 📊统计
+             statistics page. Displays PGN with rich formatting + computed statistics.
+             PGN parsing in stats.html is derived from DroidFish (GPL v3). -->
+        <activity
+            android:name="com.Regalia.StatsActivity"
+            android:exported="false"
+            android:screenOrientation="unspecified"
+            android:configChanges="keyboardHidden|orientation|screenSize|smallestScreenSize|density|uiMode"
+            android:windowSoftInputMode="adjustPan"
+            android:hardwareAccelerated="true"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen" />
 
     </application>
 

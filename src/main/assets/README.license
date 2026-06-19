@@ -2,12 +2,53 @@ This directory contains application assets loaded by the WebView.
 
 License classification by file:
   - chess.html: Combined work (AGPL v3 + GPL v3)
-      Built from chess.src/ modules. The HTML/CSS template is AGPL v3;
-      the embedded JavaScript modules include GPL v3 (DroidFish-derived)
-      and AGPL v3 (original) code. See chess.src/README.license for details.
+      Built from chess.src/ modules by build-chess.py / build-chess.sh.
+      The HTML/CSS template is AGPL v3; the embedded JavaScript modules
+      include GPL v3 (DroidFish-derived) and AGPL v3 (original) code.
+      See chess.src/README.license for per-module details.
   - AGPLv3_Logo.svg: FSF official AGPL v3 logo
       Used for license identification on the About page.
       Source: https://www.gnu.org/graphics/agplv3-with-text-162x68.png
+  - chess.src/: Source modules (see chess.src/README.license)
+
+v1.0.2 changes reflected in chess.html (rebuilt from chess.src/):
+  - ECO opening auto-fill: when a new game starts with a selected ECO
+    opening whose `moves` array contains full move data, the moves are
+    auto-filled into moveRecords with proper SAN notation — no "..."
+    placeholder is needed even when the opening's last move was Black's.
+  - Black-to-move opening placeholder: for FEN/setup/PGN imports with
+    Black to move (no ECO moves), a null placeholder is prepended to
+    moveRecords so Black's first move lands in the Black slot.
+  - PGN export evaluation annotations: _buildPGNString() now appends
+    `{score eval_word}` after every move with a cached eval, and
+    `{SF18 D22 +1.0 8%W/91%D/1%L}` every 5 moves (engine name, depth,
+    score, WDL).
+  - "Play Again" button now shows ⚔️ prefix (consistent with the
+    New Game button).
+  - Redo no longer triggers AI (prevents redo-stack corruption).
+  - Settings import via file picker no longer shows a duplicate toast
+    (the onSettingsImported callback is the single source of truth).
 
 See the root-level LICENSE-AGPL v3, LICENSE-GPL v3, and NOTICE files
 for full license texts and attribution details.
+
+v1.0.2 NEW FEATURE additions:
+  - stats.html: GPL v3 (PGN parsing derived from DroidFish)
+      Fullscreen statistics page opened by the 📊统计 button. Renders the
+      current game's PGN with rich formatting (piece symbols, comments,
+      variations) and computes statistics (material balance, eval trend,
+      move quality classification, accuracy).
+      PGN parsing logic (parsePGN function) is derived from DroidFish
+      GameTree/PgnToken/PgnScanner (Copyright (C) Peter Österlund, GPL v3).
+      Modifications Copyright (C) 2026 Regalia.
+      License: GPL v3 (to match the DroidFish-derived PGN parsing code).
+      v1.0.2 updates:
+        - parsePGN() now prefers _payload.moveRecords (authoritative move
+          list from the main app) over re-parsing the PGN string. The
+          simplified SAN parser's cascade-failure bug capped total moves
+          at ~98; using the authoritative move list fixes this.
+        - renderPGNText() piece symbols now use the same color/stroke/glow
+          as the main board (wrapped in <span class="piece-white/black">
+          with higher CSS specificity than .pgn-display .move).
+        - 📂 Select PGN File opens SAF picker directly from StatsActivity
+          (no longer bounces through MainActivity).

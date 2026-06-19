@@ -116,7 +116,7 @@ public class StockfishNative {
 
     // v18.4.0: ELO_MAP synced with JS ELO_MATCH for consistent level display
     private static final int[] ELO_MAP = {0, 800, 1350, 1700, 2000, 2200, 2350, 2800};
-    private static final String ENGINE_VERSION = "v1.0.1";
+    private static final String ENGINE_VERSION = "v1.0.2";
     // Movetime mapping: index 0 unused, 1-7 = game levels
     private static final int[] MOVETIME_MAP = {0, 500, 800, 1000, 1500, 2000, 3000, 5000};
 
@@ -202,6 +202,23 @@ public class StockfishNative {
         });
     }
 
+    /**
+     * v1.0.2 FIX (audit): Wrap _engineExecutor.execute() to catch RejectedExecutionException.
+     * If the executor is shutdown (during restartEngine/shutdown), the rejection would
+     * otherwise propagate to the WebView JS thread and leave JS-side loading flags stuck
+     * (e.g. _evalLoading=true forever). On rejection, fire onEngineError so JS resets.
+     */
+    private void _safeExecute(Runnable r, String tag) {
+        try {
+            _engineExecutor.execute(r);
+        } catch (java.util.concurrent.RejectedExecutionException e) {
+            Log.w(TAG, tag + ": executor rejected (shutdown in progress?)", e);
+            try {
+                postJsCallback("onEngineError(" + escapeJsString(isEnglishMode() ? "Engine busy, please retry" : "\u5f15\u64ce\u5fd9\uff0c\u8bf7\u91cd\u8bd5") + ")");
+            } catch (Throwable ignored) {}
+        }
+    }
+
     // v18.4.1: Extended bestmove pattern to capture optional ponder move
     private static final Pattern BESTMOVE_PATTERN = Pattern.compile("^bestmove\\s+(\\S+)(?:\\s+ponder\\s+(\\S+))?");
     private static final Pattern INFO_DEPTH_PATTERN = Pattern.compile("^info\\s+depth\\s+(\\d+)");
@@ -233,18 +250,18 @@ public class StockfishNative {
     private String currentEnginePath = null;
 
     // Auto config: when enabled, detectHardwareAndConfigure() is called automatically
-    private boolean autoConfigEnabled = true;
+    private volatile boolean autoConfigEnabled = true;
 
     // Current UCI option values (loaded from prefs or defaults)
-    private int engineThreads = 2;
-    private int engineHash = 64;
-    private int engineMoveOverhead = 30;
-    private int engineMultiPV = 1;
-    private boolean enginePonder = false;
-    private boolean engineShowWDL = true;
-    private int engineSkillLevel = 20;
-    private boolean engineLimitElo = false;
-    private int engineElo = 2800;
+    private volatile int engineThreads = 2;
+    private volatile int engineHash = 64;
+    private volatile int engineMoveOverhead = 30;
+    private volatile int engineMultiPV = 1;
+    private volatile boolean enginePonder = false;
+    private volatile boolean engineShowWDL = true;
+    private volatile int engineSkillLevel = 20;
+    private volatile boolean engineLimitElo = false;
+    private volatile int engineElo = 2800;
 
     // UCI option regex patterns for parsing engine capabilities
     private static final Pattern ID_NAME_PATTERN = Pattern.compile("^id\\s+name\\s+(.+)");
@@ -337,9 +354,9 @@ public class StockfishNative {
 
     // ===================== JS CALLBACK HELPERS =====================
 
-    private void postJsCallbackJson(String funcName, String jsonPayload) {
-        postJsCallback(funcName + "(" + jsonPayload + ")");
-    }
+    // v1.0.2 REDUNDANCY (audit): removed dead postJsCallbackJson() — zero callers
+    // after v18.5.0 cleanup. All callers use postJsCallback() directly with a
+    // pre-formatted JS expression string.
 
     @JavascriptInterface
     public void initEngine() {
@@ -410,6 +427,24 @@ public class StockfishNative {
         }
     }
 
+    // v1.0.2 FIX: Safe wrapper for Process.destroyForcibly() — that method is
+    // API 26+ only, but our minSdk is 21. On API 21-25, fall back to a second
+    // destroy() call (the OS will eventually reap the process). Also uses
+    // isProcessAlive() instead of engineProcess.isAlive() for the same reason.
+    private void destroyForciblySafe() {
+        if (engineProcess == null) return;
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                engineProcess.destroyForcibly();
+            } else {
+                // API 21-25: destroyForcibly() not available; second destroy()
+                // call is a no-op if the process is already dead, but kicks
+                // the OS to reap it if the first destroy() was graceful.
+                engineProcess.destroy();
+            }
+        } catch (Throwable ignored) {}
+    }
+
     @JavascriptInterface
     public void engineGo(final String fen, final int level) {
         engineGoInternal(fen, level, false);
@@ -425,7 +460,8 @@ public class StockfishNative {
      */
     @JavascriptInterface
     public void engineGoDepth(final String fen, final int depth) {
-        _engineExecutor.execute(new Runnable() {
+        // v1.0.2 FIX (audit): use _safeExecute to catch RejectedExecutionException
+        _safeExecute(new Runnable() { // tag: engineGoDepth
             public void run() {
                 if (!engineReady) {
                     postJsCallback("onEngineError(" + escapeJsString("Engine not ready") + ")");
@@ -445,7 +481,7 @@ public class StockfishNative {
                 sendUciCommand("position fen " + fen);
                 sendUciCommand("go depth " + depth);
             }
-        });
+        }, "engineGoDepth");
     }
 
     private void stopAndWaitForBestmove(String callerTag) {
@@ -490,7 +526,8 @@ public class StockfishNative {
     }
 
     private void engineGoInternal(final String fen, final int level, final boolean needNewGame) {
-        _engineExecutor.execute(new Runnable() {
+        // v1.0.2 FIX (audit): use _safeExecute to catch RejectedExecutionException
+        _safeExecute(new Runnable() { // tag: engineGoInternal
             public void run() {
                 if (!engineReady) {
                     postJsCallback("onEngineError(" + escapeJsString("Engine not ready") + ")");
@@ -519,12 +556,13 @@ public class StockfishNative {
                 int movetime = (level >= 1 && level < MOVETIME_MAP.length) ? MOVETIME_MAP[level] : 5000;
                 sendUciCommand("go movetime " + movetime);
             }
-        });
+        }, "engineGoInternal");
     }
 
     @JavascriptInterface
     public void engineHint(final String fen) {
-        _engineExecutor.execute(new Runnable() {
+        // v1.0.2 FIX (audit): use _safeExecute to catch RejectedExecutionException
+        _safeExecute(new Runnable() { // tag: engineHint
             public void run() {
                 if (!engineReady) {
                     postJsCallback("onEngineError(" + escapeJsString("Engine not ready") + ")");
@@ -539,12 +577,13 @@ public class StockfishNative {
                 sendUciCommand("position fen " + fen);
                 sendUciCommand("go movetime 5000");
             }
-        });
+        }, "engineHint");
     }
 
     @JavascriptInterface
     public void engineEval(final String fen) {
-        _engineExecutor.execute(new Runnable() {
+        // v1.0.2 FIX (audit): use _safeExecute to catch RejectedExecutionException
+        _safeExecute(new Runnable() { // tag: engineEval
             public void run() {
                 if (!engineReady) {
                     postJsCallback("onEngineError(" + escapeJsString("Engine not ready") + ")");
@@ -564,12 +603,13 @@ public class StockfishNative {
                 sendUciCommand("position fen " + fen);
                 sendUciCommand("go depth 15");
             }
-        });
+        }, "engineEval");
     }
 
     @JavascriptInterface
     public void engineEvalDeep(final String fen) {
-        _engineExecutor.execute(new Runnable() {
+        // v1.0.2 FIX (audit): use _safeExecute to catch RejectedExecutionException
+        _safeExecute(new Runnable() { // tag: engineEvalDeep
             public void run() {
                 if (!engineReady) {
                     postJsCallback("onEngineError(" + escapeJsString("Engine not ready") + ")");
@@ -589,7 +629,7 @@ public class StockfishNative {
                 sendUciCommand("position fen " + fen);
                 sendUciCommand("go depth 22");
             }
-        });
+        }, "engineEvalDeep");
     }
 
     /**
@@ -1010,7 +1050,10 @@ public class StockfishNative {
             try {
                 engineProcess.destroy();
                 try { Thread.sleep(100); } catch (InterruptedException ignored) {}
-                if (engineProcess.isAlive()) engineProcess.destroyForcibly();
+                // v1.0.2 FIX: use isProcessAlive() + destroyForciblySafe() —
+                // direct engineProcess.isAlive() / destroyForcibly() throw
+                // NoSuchMethodError on API 21-25 (minSdk).
+                if (isProcessAlive()) destroyForciblySafe();
             } catch (Throwable ignored) {}
             engineProcess = null;
         }
@@ -1030,6 +1073,18 @@ public class StockfishNative {
         engineReader = null;
         engineReady = false;
         initStarted = false;
+        // v1.0.2 FIX (audit): Reset ponder/discarded-bestmove flags so a crashed
+        // engine doesn't leave _discardingPonderBestmove=true, which would cause
+        // the FIRST bestmove from the recovered engine to be silently dropped
+        // (manifesting as "AI never moves" after recovery). Also clear latch
+        // holders so a stale latch from the dead engine doesn't block the new
+        // engine's isready handshake.
+        _isPondering = false;
+        _discardingPonderBestmove = false;
+        _lastPonderMove = null;
+        _stopLatch = null;
+        readyOkLatchHolder = null;
+        uciOkLatchHolder = null;
     }
 
     /**
@@ -1225,14 +1280,12 @@ public class StockfishNative {
                     stopLatch.countDown();
                     return;
                 }
-                if (_isPondering) {
-                    _isPondering = false;
-                    synchronized (stateLock) {
-                        currentState = STATE_NONE;
-                    }
-                    Log.d(TAG, "Discarding bestmove from ponder stop");
-                    return;
-                }
+                // v1.0.2 CLEANUP: Removed the dead `if (_isPondering)` branch
+                // here. Both stopPonder() and stopAndWaitForBestmove() set
+                // _isPondering=false BEFORE sending "stop", so by the time the
+                // engine's bestmove arrives, _isPondering is always false. The
+                // actual discard path is the _discardingPonderBestmove check
+                // below, which is set by those same callers.
                 // FIX: Discard bestmove from a ponder stop that was initiated by
                 // stopAndWaitForBestmove(). When we stop pondering to start a new
                 // search (e.g., entering review mode), the ponder's bestmove arrives
@@ -1431,17 +1484,24 @@ public class StockfishNative {
                 case STATE_GO:
                 case STATE_HINT:
                     if (engineMultiPV > 1 && multiPVIndex > 1) {
+                        // v1.0.2 PERF (audit): build JSON via StringBuilder instead of
+                        // JSONObject allocation (saves ~8 JSONObject.put calls + a
+                        // HashMap allocation per info line — significant at 10-50
+                        // info lines/sec during MultiPV search).
                         try {
-                            JSONObject pvInfo = new JSONObject();
-                            pvInfo.put("index", multiPVIndex);
-                            pvInfo.put("depth", depth);
-                            pvInfo.put("scoreCp", hasCp ? scoreCp : JSONObject.NULL);
-                            pvInfo.put("scoreMate", hasMate ? scoreMate : JSONObject.NULL);
-                            pvInfo.put("wdlW", wdlW);
-                            pvInfo.put("wdlD", wdlD);
-                            pvInfo.put("wdlL", wdlL);
-                            pvInfo.put("pv", pvMoves);
-                            postJsCallback("onMultiPVProgress(" + pvInfo.toString() + ")");
+                            StringBuilder sb = new StringBuilder(128);
+                            sb.append("{\"index\":").append(multiPVIndex);
+                            sb.append(",\"depth\":").append(depth);
+                            if (hasCp) sb.append(",\"scoreCp\":").append(scoreCp);
+                            else sb.append(",\"scoreCp\":null");
+                            if (hasMate) sb.append(",\"scoreMate\":").append(scoreMate);
+                            else sb.append(",\"scoreMate\":null");
+                            sb.append(",\"wdlW\":").append(wdlW);
+                            sb.append(",\"wdlD\":").append(wdlD);
+                            sb.append(",\"wdlL\":").append(wdlL);
+                            sb.append(",\"pv\":").append(JSONObject.quote(pvMoves));
+                            sb.append("}");
+                            postJsCallback("onMultiPVProgress(" + sb.toString() + ")");
                         } catch (Throwable e) {
                             Log.w(TAG, "Error sending MultiPV progress", e);
                         }
@@ -1478,17 +1538,21 @@ public class StockfishNative {
                         }
                     }
                     if (engineMultiPV > 1 && multiPVIndex > 1) {
+                        // v1.0.2 PERF (audit): StringBuilder instead of JSONObject
                         try {
-                            JSONObject pvInfo = new JSONObject();
-                            pvInfo.put("index", multiPVIndex);
-                            pvInfo.put("depth", depth);
-                            pvInfo.put("scoreCp", hasCp ? scoreCp : JSONObject.NULL);
-                            pvInfo.put("scoreMate", hasMate ? scoreMate : JSONObject.NULL);
-                            pvInfo.put("wdlW", wdlW);
-                            pvInfo.put("wdlD", wdlD);
-                            pvInfo.put("wdlL", wdlL);
-                            pvInfo.put("pv", pvMoves);
-                            postJsCallback("onMultiPVProgress(" + pvInfo.toString() + ")");
+                            StringBuilder sb = new StringBuilder(128);
+                            sb.append("{\"index\":").append(multiPVIndex);
+                            sb.append(",\"depth\":").append(depth);
+                            if (hasCp) sb.append(",\"scoreCp\":").append(scoreCp);
+                            else sb.append(",\"scoreCp\":null");
+                            if (hasMate) sb.append(",\"scoreMate\":").append(scoreMate);
+                            else sb.append(",\"scoreMate\":null");
+                            sb.append(",\"wdlW\":").append(wdlW);
+                            sb.append(",\"wdlD\":").append(wdlD);
+                            sb.append(",\"wdlL\":").append(wdlL);
+                            sb.append(",\"pv\":").append(JSONObject.quote(pvMoves));
+                            sb.append("}");
+                            postJsCallback("onMultiPVProgress(" + sb.toString() + ")");
                         } catch (Throwable e) {
                             Log.w(TAG, "Error sending MultiPV progress", e);
                         }
@@ -1529,15 +1593,14 @@ public class StockfishNative {
         switch (state) {
             case STATE_GO:
                 postJsCallback("onBestMove(" + escapeJsString(uciMove) + ")");
-                {
-                    postJsCallback("onMultiPVResult(" + multiPVJson + ")");
-                }
+                // v1.0.2 CLEANUP: Removed unnecessary { } block (leftover from a
+                // removed `if` condition).
+                postJsCallback("onMultiPVResult(" + multiPVJson + ")");
                 break;
             case STATE_HINT:
                 postJsCallback("onHintMove(" + escapeJsString(uciMove) + ")");
-                {
-                    postJsCallback("onMultiPVResult(" + multiPVJson + ")");
-                }
+                // v1.0.2 CLEANUP: Removed unnecessary { } block.
+                postJsCallback("onMultiPVResult(" + multiPVJson + ")");
                 break;
             case STATE_EVAL:
                 if (_storedEvalMate != null) {
@@ -1547,9 +1610,8 @@ public class StockfishNative {
                 } else {
                     postJsCallback("onEngineEval(0, null, " + _lastEvalDepth + ", " + _storedWdlW + ", " + _storedWdlD + ", " + _storedWdlL + ")");
                 }
-                {
-                    postJsCallback("onMultiPVResult(" + multiPVJson + ")");
-                }
+                // v1.0.2 CLEANUP: Removed unnecessary { } block.
+                postJsCallback("onMultiPVResult(" + multiPVJson + ")");
                 _storedEvalCp = null;
                 _storedEvalMate = null;
                 _storedWdlW = -1; _storedWdlD = -1; _storedWdlL = -1;
@@ -1745,8 +1807,11 @@ public class StockfishNative {
             try {
                 engineProcess.destroy();
                 try { Thread.sleep(200); } catch (InterruptedException ignored) {}
-                if (engineProcess.isAlive()) {
-                    engineProcess.destroyForcibly();
+                // v1.0.2 FIX: use isProcessAlive() + destroyForciblySafe() —
+                // direct engineProcess.isAlive() / destroyForcibly() throw
+                // NoSuchMethodError on API 21-25 (minSdk).
+                if (isProcessAlive()) {
+                    destroyForciblySafe();
                     Log.w(TAG, "Engine process did not exit gracefully, force-killed");
                 }
             } catch (Throwable e) {
@@ -1803,7 +1868,10 @@ public class StockfishNative {
             try {
                 engineProcess.destroy();
                 try { Thread.sleep(100); } catch (InterruptedException ignored) {}
-                if (engineProcess.isAlive()) engineProcess.destroyForcibly();
+                // v1.0.2 FIX: use isProcessAlive() + destroyForciblySafe() —
+                // direct engineProcess.isAlive() / destroyForcibly() throw
+                // NoSuchMethodError on API 21-25 (minSdk).
+                if (isProcessAlive()) destroyForciblySafe();
             } catch (Throwable ignored) {}
             engineProcess = null;
         }
@@ -2106,7 +2174,13 @@ public class StockfishNative {
     /**
      * Detect the number of "big" cores on big.LITTLE ARM architectures.
      */
+    // v1.0.2 PERF (audit): cache detectBigCoreCount() result — CPU topology
+    // is fixed for the device's lifetime, no need to re-parse /proc/cpuinfo
+    // every time detectHardwareAndConfigure() is called.
+    private volatile int _cachedBigCoreCount = -1;
+
     private int detectBigCoreCount() {
+        if (_cachedBigCoreCount >= 0) return _cachedBigCoreCount;
         int bigCores = 0;
         try {
             java.util.List<Long> frequencies = new java.util.ArrayList<>();
@@ -2162,6 +2236,7 @@ public class StockfishNative {
         } catch (Throwable e) {
             Log.d(TAG, "big.LITTLE detection failed (non-fatal): " + e.getMessage());
         }
+        _cachedBigCoreCount = bigCores; // v1.0.2 PERF: cache result
         return bigCores;
     }
 
@@ -2186,6 +2261,14 @@ public class StockfishNative {
 
     /**
      * Apply all current settings to the engine in the correct order.
+     *
+     * v1.0.2 SIMPLIFY (audit): consolidated the two near-identical branches
+     * (autoConfig on/off) into one. The ONLY difference was how Threads/Hash
+     * are determined: autoConfig calls detectHardwareAndConfigure() (which
+     * sets Threads/Hash from device hardware); the else branch applies the
+     * user-specified Threads/Hash directly. All other options (Move Overhead,
+     * MultiPV, Ponder, UCI_ShowWDL, Skill Level, UCI_LimitStrength, UCI_Elo)
+     * were applied identically in both branches — duplicated ~50 lines.
      */
     private void applySettings() {
         if (!engineReady) {
@@ -2195,36 +2278,10 @@ public class StockfishNative {
 
         Log.i(TAG, "Applying engine settings (autoConfig=" + autoConfigEnabled + ")");
 
+        // Threads + Hash: source depends on autoConfig
         if (autoConfigEnabled) {
             detectHardwareAndConfigure();
             if (!engineReady) return;
-            if (engineSupportsOption("Move Overhead")) {
-                sendSetOptionAndWait("Move Overhead", String.valueOf(engineMoveOverhead));
-                if (!engineReady) return;
-            }
-            if (engineSupportsOption("MultiPV")) {
-                sendSetOptionAndWait("MultiPV", String.valueOf(engineMultiPV));
-                if (!engineReady) return;
-            }
-            if (engineSupportsOption("Ponder")) {
-                sendSetOptionAndWait("Ponder", String.valueOf(enginePonder));
-                if (!engineReady) return;
-            }
-            if (engineSupportsOption("UCI_ShowWDL")) {
-                sendSetOptionAndWait("UCI_ShowWDL", String.valueOf(engineShowWDL));
-                if (!engineReady) return;
-            }
-            if (engineSupportsOption("Skill Level")) {
-                sendSetOptionAndWait("Skill Level", String.valueOf(engineSkillLevel));
-                if (!engineReady) return;
-            }
-            if (engineSupportsOption("UCI_LimitStrength")) {
-                sendSetOptionAndWait("UCI_LimitStrength", String.valueOf(engineLimitElo));
-                if (!engineReady) return;
-                if (engineLimitElo && engineSupportsOption("UCI_Elo")) {
-                    sendSetOptionAndWait("UCI_Elo", String.valueOf(engineElo));
-                }
-            }
         } else {
             if (engineSupportsOption("Threads")) {
                 sendSetOptionAndWait("Threads", String.valueOf(engineThreads));
@@ -2234,32 +2291,34 @@ public class StockfishNative {
                 sendSetOptionAndWait("Hash", String.valueOf(engineHash));
                 if (!engineReady) return;
             }
-            if (engineSupportsOption("Move Overhead")) {
-                sendSetOptionAndWait("Move Overhead", String.valueOf(engineMoveOverhead));
-                if (!engineReady) return;
-            }
-            if (engineSupportsOption("MultiPV")) {
-                sendSetOptionAndWait("MultiPV", String.valueOf(engineMultiPV));
-                if (!engineReady) return;
-            }
-            if (engineSupportsOption("Ponder")) {
-                sendSetOptionAndWait("Ponder", String.valueOf(enginePonder));
-                if (!engineReady) return;
-            }
-            if (engineSupportsOption("UCI_ShowWDL")) {
-                sendSetOptionAndWait("UCI_ShowWDL", String.valueOf(engineShowWDL));
-                if (!engineReady) return;
-            }
-            if (engineSupportsOption("Skill Level")) {
-                sendSetOptionAndWait("Skill Level", String.valueOf(engineSkillLevel));
-                if (!engineReady) return;
-            }
-            if (engineSupportsOption("UCI_LimitStrength")) {
-                sendSetOptionAndWait("UCI_LimitStrength", String.valueOf(engineLimitElo));
-                if (!engineReady) return;
-                if (engineLimitElo && engineSupportsOption("UCI_Elo")) {
-                    sendSetOptionAndWait("UCI_Elo", String.valueOf(engineElo));
-                }
+        }
+
+        // Common options (applied identically regardless of autoConfig)
+        if (engineSupportsOption("Move Overhead")) {
+            sendSetOptionAndWait("Move Overhead", String.valueOf(engineMoveOverhead));
+            if (!engineReady) return;
+        }
+        if (engineSupportsOption("MultiPV")) {
+            sendSetOptionAndWait("MultiPV", String.valueOf(engineMultiPV));
+            if (!engineReady) return;
+        }
+        if (engineSupportsOption("Ponder")) {
+            sendSetOptionAndWait("Ponder", String.valueOf(enginePonder));
+            if (!engineReady) return;
+        }
+        if (engineSupportsOption("UCI_ShowWDL")) {
+            sendSetOptionAndWait("UCI_ShowWDL", String.valueOf(engineShowWDL));
+            if (!engineReady) return;
+        }
+        if (engineSupportsOption("Skill Level")) {
+            sendSetOptionAndWait("Skill Level", String.valueOf(engineSkillLevel));
+            if (!engineReady) return;
+        }
+        if (engineSupportsOption("UCI_LimitStrength")) {
+            sendSetOptionAndWait("UCI_LimitStrength", String.valueOf(engineLimitElo));
+            if (!engineReady) return;
+            if (engineLimitElo && engineSupportsOption("UCI_Elo")) {
+                sendSetOptionAndWait("UCI_Elo", String.valueOf(engineElo));
             }
         }
 
@@ -2332,7 +2391,8 @@ public class StockfishNative {
     @JavascriptInterface
     public void startPonder(final String fenWithPonderMove) {
         if (!engineReady || !enginePonder) return;
-        _engineExecutor.execute(new Runnable() {
+        // v1.0.2 FIX (audit): use _safeExecute to catch RejectedExecutionException
+        _safeExecute(new Runnable() { // tag: startPonder
             public void run() {
                 if (_isPondering) {
                     Log.w(TAG, "Already pondering, skipping startPonder");
@@ -2346,7 +2406,7 @@ public class StockfishNative {
                 sendUciCommand("position fen " + fenWithPonderMove);
                 sendUciCommand("go ponder");
             }
-        });
+        }, "startPonder");
     }
 
     @JavascriptInterface
@@ -2421,7 +2481,12 @@ public class StockfishNative {
     public void saveLangPref(String lang) {
         if (lang == null) return;
         try {
-            SharedPreferences.Editor editor = context.getSharedPreferences("Regalia_prefs", Context.MODE_PRIVATE).edit();
+            // v1.0.2 FIX: Use the SAME SharedPreferences file as isEnglishMode() reads from.
+            // Previously this used "Regalia_prefs" while isEnglishMode() reads from "RegaliaEngine"
+            // (PREFS_NAME) — a mismatch that caused the language preference to be lost,
+            // manifesting as "正在应用引擎配置..." appearing in Chinese even when the user
+            // had previously switched to English mode.
+            SharedPreferences.Editor editor = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit();
             editor.putString("lang", lang);
             editor.apply();
         } catch (Throwable e) {
@@ -2566,16 +2631,27 @@ public class StockfishNative {
 
     @JavascriptInterface
     public void importSettings(String txtContent) {
-        _engineExecutor.execute(new Runnable() {
+        // v1.0.2 FIX (audit): use _safeExecute to catch RejectedExecutionException
+        _safeExecute(new Runnable() { // tag: importSettings
             public void run() {
                 boolean success = false;
                 String message = "";
                 int appliedCount = 0;
+                int skippedAutoConfigCount = 0;
 
                 try {
                     if (txtContent == null || txtContent.trim().isEmpty()) {
                         throw new IllegalArgumentException("Empty settings content");
                     }
+
+                    // v1.0.2 FIX: Track explicitly-imported keys so we can report
+                    // which ones were silently overridden by autoConfig. Without
+                    // this, a user importing "engine.threads=4" while autoConfig
+                    // is on would see "Imported N settings successfully" but the
+                    // threads value would be silently replaced by the detected
+                    // hardware value — manifesting as "import reports success but
+                    // has no effect".
+                    java.util.Set<String> explicitlySet = new java.util.HashSet<>();
 
                     String[] lines = txtContent.split("\\r?\\n");
                     for (String line : lines) {
@@ -2593,11 +2669,13 @@ public class StockfishNative {
                                 case "engine.threads":
                                     engineThreads = Math.max(1, Math.min(1024, Integer.parseInt(value)));
                                     saveIntSetting("engineThreads", engineThreads);
+                                    explicitlySet.add("engine.threads");
                                     appliedCount++;
                                     break;
                                 case "engine.hash":
                                     engineHash = Math.max(1, Math.min(1048576, Integer.parseInt(value)));
                                     saveIntSetting("engineHash", engineHash);
+                                    explicitlySet.add("engine.hash");
                                     appliedCount++;
                                     break;
                                 case "engine.moveOverhead":
@@ -2648,12 +2726,49 @@ public class StockfishNative {
                         }
                     }
 
+                    // v1.0.2 FIX: If autoConfig is enabled AND the user explicitly
+                    // imported engine.threads/engine.hash, those explicit values
+                    // would be silently overridden by detectHardwareAndConfigure()
+                    // in applySettings(). Honor the user's explicit import by
+                    // disabling autoConfig for this apply cycle only.
+                    if (autoConfigEnabled) {
+                        if (explicitlySet.contains("engine.threads") || explicitlySet.contains("engine.hash")) {
+                            Log.i(TAG, "User explicitly imported threads/hash — disabling autoConfig for this apply cycle");
+                            skippedAutoConfigCount = 1;
+                            // Persist the change so the engine-config UI reflects it
+                            autoConfigEnabled = false;
+                            saveBoolSetting("autoConfig", false);
+                        }
+                    }
+
                     if (engineReady) {
+                        // v1.0.2 CRITICAL FIX: Stop any in-flight search BEFORE applying
+                        // settings. Otherwise sendSetOptionAndWait() times out waiting
+                        // for readyok (engine only responds to isready when idle), and
+                        // the settings silently fail to apply — manifesting as
+                        // "import reports success but does not take effect".
+                        try {
+                            stopAndWaitForBestmove("importSettings");
+                        } catch (Throwable t) {
+                            Log.w(TAG, "stopAndWaitForBestmove during import failed", t);
+                        }
                         applySettings();
+                        notifyEngineInfo();
+                    } else {
+                        // v1.0.2 FIX: Engine not ready yet — settings are saved to
+                        // prefs and will be applied automatically by startEngine()'s
+                        // call to applySettings() once the engine finishes initializing.
+                        Log.i(TAG, "Engine not ready — settings saved, will apply on next engineReady");
                     }
 
                     success = true;
                     message = "Imported " + appliedCount + " settings successfully";
+                    if (skippedAutoConfigCount > 0) {
+                        message += " (autoConfig disabled to honor explicit threads/hash)";
+                    }
+                    if (!engineReady) {
+                        message += " (engine not ready — will apply on next start)";
+                    }
                     Log.i(TAG, message);
                 } catch (Throwable e) {
                     Log.e(TAG, "Error importing settings", e);
@@ -2669,7 +2784,7 @@ public class StockfishNative {
                     Log.w(TAG, "Error posting settings imported callback", e);
                 }
             }
-        });
+        }, "importSettings");
     }
 
     /**
@@ -3208,9 +3323,26 @@ public class StockfishNative {
 
     /** Request code for SAF file picker (export settings via ACTION_CREATE_DOCUMENT) */
     static final int REQUEST_CODE_EXPORT_SETTINGS = 1002;
+    /** v1.0.2 FEATURE (audit): Request code for PGN export via ACTION_CREATE_DOCUMENT */
+    static final int REQUEST_CODE_EXPORT_PGN = 1004;
+    // v1.0.2 CLEANUP: Removed REQUEST_CODE_EXPORT_STATS_HTML (1005) — the stats
+    // HTML export path is now handled entirely inside StatsActivity's own JS
+    // bridge (StatsActivity.exportStatsHTML + onActivityResult), so the main
+    // activity never receives this request code.
+
+    // v1.0.2 CLEANUP: Removed _pendingStatsPayload and _pendingStatsHTML fields.
+    // _pendingStatsPayload was only read by the now-removed getStatsPayload()
+    // bridge method (StatsActivity has its own bridge that reads the payload
+    // from the Intent extra, not from this field). _pendingStatsHTML was only
+    // set by the now-removed exportStatsHTML() bridge method (StatsActivity has
+    // its own). Both were memory leaks — large PGN payloads could linger until
+    // the next call or engine shutdown.
 
     /** Pending export content — stored temporarily until SAF picker returns a URI */
     private volatile String _pendingExportContent = null;
+    /** v1.0.2 FEATURE: pending export type — "settings" or "pgn" — so handleExportFilePickerResult
+     *  fires the correct JS callback (onSettingsExported vs onPGNExported). */
+    private volatile String _pendingExportType = "settings";
 
     /**
      * Open the system SAF file picker for exporting settings to a TXT file.
@@ -3225,6 +3357,7 @@ public class StockfishNative {
             return;
         }
         _pendingExportContent = content;
+        _pendingExportType = "settings";
         try {
             Activity activity = activityRef.get();
             if (activity == null) {
@@ -3241,17 +3374,104 @@ public class StockfishNative {
         } catch (Throwable e) {
             Log.e(TAG, "openExportFilePicker failed", e);
             _pendingExportContent = null;
+            _pendingExportType = "settings";
             postJsCallback("if(typeof showToast==='function')showToast('File picker unavailable')");
         }
     }
 
     /**
+     * v1.0.2 FEATURE (audit): Open the system SAF file picker for exporting a PGN game.
+     * Mirrors openExportFilePicker but uses .pgn extension and a separate request code
+     * so handleExportFilePickerResult can fire onPGNExported() instead of onSettingsExported().
+     */
+    @JavascriptInterface
+    public void openPGNExportFilePicker(String content) {
+        if (content == null || content.isEmpty()) {
+            Log.w(TAG, "openPGNExportFilePicker: empty content, skipping");
+            return;
+        }
+        _pendingExportContent = content;
+        _pendingExportType = "pgn";
+        try {
+            Activity activity = activityRef.get();
+            if (activity == null) {
+                Log.w(TAG, "openPGNExportFilePicker: no valid Activity reference");
+                postJsCallback("if(typeof showToast==='function')showToast('Activity unavailable')");
+                return;
+            }
+            android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_CREATE_DOCUMENT);
+            intent.addCategory(android.content.Intent.CATEGORY_OPENABLE);
+            intent.setType("application/x-chess-pgn");
+            intent.putExtra(android.content.Intent.EXTRA_TITLE, "Regalia_game.pgn");
+            activity.startActivityForResult(intent, REQUEST_CODE_EXPORT_PGN);
+            Log.i(TAG, "SAF PGN export file picker opened");
+        } catch (Throwable e) {
+            Log.e(TAG, "openPGNExportFilePicker failed", e);
+            _pendingExportContent = null;
+            _pendingExportType = "settings";
+            postJsCallback("if(typeof showToast==='function')showToast('File picker unavailable')");
+        }
+    }
+
+    /**
+     * v1.0.2 NEW FEATURE: Open the stats page (📊统计) in a new fullscreen WebView activity.
+     * The payload contains {pgn, evals, playerColor, lang} — StatsActivity reads it
+     * via its OWN AndroidBridge.getStatsPayload() (registered on StatsActivity's
+     * WebView, not this one). The payload is passed as an Intent extra.
+     */
+    @android.webkit.JavascriptInterface
+    public void openStatsPage(String payload) {
+        if (payload == null || payload.isEmpty()) {
+            Log.w(TAG, "openStatsPage: empty payload, skipping");
+            return;
+        }
+        try {
+            Activity activity = activityRef.get();
+            if (activity == null) {
+                Log.w(TAG, "openStatsPage: no valid Activity reference");
+                postJsCallback("if(typeof showToast==='function')showToast('Activity unavailable')");
+                return;
+            }
+            // Pass the payload as an Intent extra so StatsActivity can inject it
+            // into its own WebView without needing a reference to this engine instance.
+            android.content.Intent intent = new android.content.Intent(activity, com.Regalia.StatsActivity.class);
+            intent.putExtra("statsPayload", payload);
+            activity.startActivity(intent);
+            Log.i(TAG, "Stats page opened");
+        } catch (Throwable e) {
+            Log.e(TAG, "openStatsPage failed", e);
+            postJsCallback("if(typeof showToast==='function')showToast('Stats unavailable')");
+        }
+    }
+
+    // v1.0.2 CLEANUP: Removed the following dead bridge methods — StatsActivity
+    // has its own JS bridge that provides the same functionality, and its
+    // activityRef points to MainActivity (not StatsActivity), so these were
+    // either unreachable or no-ops:
+    //   - getStatsPayload()  — StatsActivity has its own at StatsActivity.java
+    //   - closeStatsPage()   — StatsActivity has its own (the instanceof check
+    //                           here always evaluated to false since activityRef
+    //                           points to MainActivity)
+    //   - exportStatsHTML()  — StatsActivity has its own
+    //   - statsRequestReview() — StatsActivity has its own
+
+    /**
      * Handle SAF file picker result for settings export.
      * Writes the pending export content to the user-chosen URI.
+     *
+     * v1.0.2 FEATURE: also handles PGN export (REQUEST_CODE_EXPORT_PGN) by
+     * dispatching to onPGNExported() instead of onSettingsExported().
+     *
+     * v1.0.2 CLEANUP: Removed the stats HTML export branch — that path is now
+     * handled entirely inside StatsActivity (which has its own bridge and
+     * onActivityResult handler).
      */
     public void handleExportFilePickerResult(android.content.Intent data) {
+        // Normal settings/PGN export path
         String content = _pendingExportContent;
+        String exportType = _pendingExportType;
         _pendingExportContent = null;
+        _pendingExportType = "settings"; // reset to default
         if (data == null || data.getData() == null || content == null) {
             Log.w(TAG, "handleExportFilePickerResult: invalid data or no pending content");
             return;
@@ -3270,10 +3490,10 @@ public class StockfishNative {
                  java.io.OutputStreamWriter writer = new java.io.OutputStreamWriter(os, "UTF-8")) {
                 writer.write(content);
                 writer.flush();
-                Log.i(TAG, "Settings exported via SAF to: " + uri.toString());
+                Log.i(TAG, (exportType.equals("pgn") ? "PGN" : "Settings") + " exported via SAF to: " + uri.toString());
             }
             // Notify JS of success — include the display name if available
-            String displayName = "Regalia_engine_settings.txt";
+            String displayName = exportType.equals("pgn") ? "Regalia_game.pgn" : "Regalia_engine_settings.txt";
             try {
                 android.database.Cursor cursor = context.getContentResolver().query(uri, null, null, null, null);
                 if (cursor != null) {
@@ -3287,10 +3507,18 @@ public class StockfishNative {
                     }
                 }
             } catch (Throwable ignored) {}
-            postJsCallback("if(typeof onSettingsExported==='function')onSettingsExported(true," + escapeJsString(displayName) + ")");
+            if (exportType.equals("pgn")) {
+                postJsCallback("if(typeof onPGNExported==='function')onPGNExported(true," + escapeJsString(displayName) + ")");
+            } else {
+                postJsCallback("if(typeof onSettingsExported==='function')onSettingsExported(true," + escapeJsString(displayName) + ")");
+            }
         } catch (Throwable e) {
             Log.e(TAG, "handleExportFilePickerResult failed", e);
-            postJsCallback("if(typeof onSettingsExported==='function')onSettingsExported(false,'')");
+            if (exportType.equals("pgn")) {
+                postJsCallback("if(typeof onPGNExported==='function')onPGNExported(false,'')");
+            } else {
+                postJsCallback("if(typeof onSettingsExported==='function')onSettingsExported(false,'')");
+            }
         }
     }
 
@@ -3686,6 +3914,16 @@ public class StockfishNative {
     /**
      * FIX: Handle SAF file picker result — read the selected file and import settings.
      * Called from MainActivity.onActivityResult when REQUEST_CODE_IMPORT_SETTINGS result arrives.
+     *
+     * v1.0.2 FIX: Previously this method called importSettings() (which fires
+     * onSettingsImported callback with success/failure + message via postJsCallback)
+     * AND ALSO fired its own showToast('Settings imported') + openEngineConfig()
+     * directly. The result was: (1) duplicate toast ("Settings imported" appeared
+     * twice), (2) the "Settings imported" toast appeared BEFORE the async
+     * importSettings() actually finished, so on transient failure the user saw
+     * a success toast followed by a silent no-op. Now we let importSettings()
+     * own the toast/dialog via its onSettingsImported callback — single source
+     * of truth, fired only after the import truly completes.
      */
     public void handleFilePickerResult(android.content.Intent data) {
         if (data == null || data.getData() == null) return;
@@ -3698,28 +3936,29 @@ public class StockfishNative {
             } catch (Throwable e) {
                 Log.w(TAG, "takePersistableUriPermission failed", e);
             }
-            // Read file content via ContentResolver
-            java.io.InputStream is = context.getContentResolver().openInputStream(uri);
-            if (is != null) {
-                try {
-                    java.io.BufferedReader reader = new java.io.BufferedReader(
-                        new java.io.InputStreamReader(is, "UTF-8"));
-                    StringBuilder sb = new StringBuilder();
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        sb.append(line).append("\n");
-                    }
-                    String content = sb.toString();
-                    // Import the settings
-                    importSettings(content);
-                    postJsCallback("if(typeof showToast==='function')showToast('Settings imported')");
-                    postJsCallback("if(typeof openEngineConfig==='function')openEngineConfig()");
-                } finally {
-                    is.close();
+            // v1.0.2 FIX: Use try-with-resources on BufferedReader so the reader
+            // (and its internal char buffer) is always closed, not just the
+            // underlying InputStream. The previous pattern (close `is` in
+            // finally) left the BufferedReader unclosed, relying on GC.
+            String content;
+            try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(
+                            context.getContentResolver().openInputStream(uri), "UTF-8"))) {
+                StringBuilder sb = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    sb.append(line).append("\n");
                 }
+                content = sb.toString();
             }
+            // Import the settings — onSettingsImported() callback in JS
+            // will fire the appropriate toast (success or failure) and
+            // reopen the engine config dialog. Do NOT duplicate here.
+            importSettings(content);
         } catch (Throwable e) {
             Log.e(TAG, "handleFilePickerResult failed", e);
+            // Only fire an error toast if the file read itself failed (importSettings
+            // handles its own error reporting for parse/apply failures).
             postJsCallback("if(typeof showToast==='function')showToast('Failed to read file')");
         }
     }
@@ -3762,38 +4001,38 @@ public class StockfishNative {
             } catch (Throwable e) {
                 Log.w(TAG, "takePersistableUriPermission failed", e);
             }
-            java.io.InputStream is = context.getContentResolver().openInputStream(uri);
-            if (is != null) {
-                try {
-                    java.io.BufferedReader reader = new java.io.BufferedReader(
-                        new java.io.InputStreamReader(is, "UTF-8"));
-                    StringBuilder sb = new StringBuilder();
-                    String line;
-                    int lineCount = 0;
-                    final int MAX_LINES = 5000; // Prevent OOM on huge files
-                    while ((line = reader.readLine()) != null && lineCount < MAX_LINES) {
-                        sb.append(line).append("\n");
-                        lineCount++;
-                    }
-                    String content = sb.toString();
-                    // Sanitize: remove control characters that could break JS string parsing
-                    // (keep newline, tab, carriage return)
-                    content = content.replaceAll("[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F]", "");
-                    // Pass content to JavaScript onPGNFileRead callback
-                    // Use JSON encoding for safe JS string passing — avoids syntax errors from
-                    // unescaped newlines, quotes, and special characters in PGN content
-                    String jsonContent;
-                    try {
-                        jsonContent = new org.json.JSONObject().put("content", content).toString();
-                    } catch (Throwable je) {
-                        Log.e(TAG, "JSON encoding failed for PGN content", je);
-                        jsonContent = "{\"content\":\"\"}";
-                    }
-                    postJsCallback("if(typeof onPGNFileRead==='function'){try{var _d=" + jsonContent + ";onPGNFileRead(_d.content);}catch(e){console.error('PGN file read callback error:',e);}}");
-                } finally {
-                    is.close();
+            // v1.0.2 FIX: Use try-with-resources on BufferedReader so the reader
+            // (and its internal char buffer) is always closed, not just the
+            // underlying InputStream. The previous pattern (close `is` in
+            // finally) left the BufferedReader unclosed, relying on GC.
+            String content;
+            try (java.io.BufferedReader reader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(
+                            context.getContentResolver().openInputStream(uri), "UTF-8"))) {
+                StringBuilder sb = new StringBuilder();
+                String line;
+                int lineCount = 0;
+                final int MAX_LINES = 5000; // Prevent OOM on huge files
+                while ((line = reader.readLine()) != null && lineCount < MAX_LINES) {
+                    sb.append(line).append("\n");
+                    lineCount++;
                 }
+                content = sb.toString();
             }
+            // Sanitize: remove control characters that could break JS string parsing
+            // (keep newline, tab, carriage return)
+            content = content.replaceAll("[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F]", "");
+            // Pass content to JavaScript onPGNFileRead callback
+            // Use JSON encoding for safe JS string passing — avoids syntax errors from
+            // unescaped newlines, quotes, and special characters in PGN content
+            String jsonContent;
+            try {
+                jsonContent = new org.json.JSONObject().put("content", content).toString();
+            } catch (Throwable je) {
+                Log.e(TAG, "JSON encoding failed for PGN content", je);
+                jsonContent = "{\"content\":\"\"}";
+            }
+            postJsCallback("if(typeof onPGNFileRead==='function'){try{var _d=" + jsonContent + ";onPGNFileRead(_d.content);}catch(e){console.error('PGN file read callback error:',e);}}");
         } catch (Throwable e) {
             Log.e(TAG, "handlePGNFilePickerResult failed", e);
             postJsCallback("if(typeof showToast==='function')showToast('Failed to read PGN file')");

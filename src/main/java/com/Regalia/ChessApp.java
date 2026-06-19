@@ -28,11 +28,15 @@ import android.util.Log;
 /**
  * ChessApp - Custom Application class for Regalia.
  *
- * v18.4.2 CRITICAL FIX: Enhanced UncaughtExceptionHandler — detects engine
- * thread ("SF-" prefix) deaths and sets a flag that MainActivity can check
- * to notify the UI. For ALL threads, logs the exception with FULL stack trace.
- * Previously, non-main thread exceptions were silently swallowed, meaning key
- * threads like SF-Reader dying would go unnoticed.
+ * v18.4.2 CRITICAL FIX: Enhanced UncaughtExceptionHandler — logs FULL stack
+ * trace for ALL threads. Previously, non-main thread exceptions were silently
+ * swallowed, meaning key threads like SF-Reader dying would go unnoticed.
+ *
+ * v1.0.2 REDUNDANCY (audit): removed the dead `engineThreadCrashed` flag +
+ * `checkEngineThreadCrash()` API. The flag was set in the handler but no
+ * caller ever checked it — the heartbeat in StockfishNative already detects
+ * dead engine processes via isProcessAlive(). The SF- thread detection
+ * branch is kept for diagnostic logging only.
  *
  * v18.4.1: Adds global UncaughtExceptionHandler to prevent hard crashes (闪退)
  * on Xiaomi HyperOS 3 and other devices.
@@ -44,25 +48,9 @@ public class ChessApp extends Application {
     // Keep reference to the original handler so we can chain to it
     private Thread.UncaughtExceptionHandler defaultHandler;
 
-    // v18.4.2: Flag set when an engine thread dies with an uncaught exception.
-    // MainActivity can check this flag to notify the UI (show error toast, etc.)
-    private static volatile boolean engineThreadCrashed = false;
-    private static volatile String engineThreadCrashMessage = null;
-
-    /**
-     * Check if an engine thread has crashed since the last check.
-     * Resets the flag after reading.
-     * @return Crash message if engine thread crashed, null otherwise
-     */
-    public static String checkEngineThreadCrash() {
-        if (engineThreadCrashed) {
-            engineThreadCrashed = false;
-            String msg = engineThreadCrashMessage;
-            engineThreadCrashMessage = null;
-            return msg;
-        }
-        return null;
-    }
+    // v1.0.2 REDUNDANCY (audit): removed engineThreadCrashed flag +
+    // checkEngineThreadCrash() — dead API, no caller ever checked it.
+    // The heartbeat in StockfishNative already detects dead engine processes.
 
     @Override
     public void onCreate() {
@@ -82,12 +70,11 @@ public class ChessApp extends Application {
                 String excType = throwable.getClass().getSimpleName();
                 Log.e(TAG, "Uncaught exception in thread " + threadName + ": " + excType);
 
-                // v18.4.2: Detect engine thread deaths ("SF-" prefix)
-                // These are critical — the engine is dead and needs recovery
+                // v18.4.2: Detect engine thread deaths ("SF-" prefix) for
+                // diagnostic logging. The actual recovery is handled by
+                // StockfishNative's heartbeat (isProcessAlive check).
                 if (threadName.startsWith("SF-")) {
                     Log.e(TAG, "Engine thread died: " + threadName);
-                    engineThreadCrashed = true;
-                    engineThreadCrashMessage = "Engine thread " + threadName + " crashed: " + excType;
                 }
 
                 // On Xiaomi HyperOS 3, some "crashes" are actually non-fatal
@@ -108,7 +95,7 @@ public class ChessApp extends Application {
             }
         });
 
-        Log.i(TAG, "ChessApp initialized — crash protection active (v1.0.1)");
+        Log.i(TAG, "ChessApp initialized — crash protection active (v1.0.2)");
 
         // SECURITY (MobSF #4): Non-blocking root detection. The result is computed
         // once and cached; the app never refuses to run on a rooted device because

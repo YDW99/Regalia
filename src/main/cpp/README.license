@@ -6,9 +6,19 @@ License classification by file:
       Copyright (C) Peter Österlund.
       JNI bridge (dlopen/dlsym/pipe) is original code.
       Modifications Copyright (C) 2026 Regalia.
+      v1.0.2: 500+ lines of dead code implementing the removed
+      engine-import feature (nativeLoadEngine / nativeStartEngine /
+      nativeSendCommand / nativeReadOutput / nativeDestroyEngine /
+      nativeIsEngineRunning / nativeGetEngineEntryType +
+      findEngineEntryPoint + engineThreadFunc + EngineHandle +
+      EngineEntryType structs) were deleted (25.5KB → 4.2KB).
+      Only nativeChmod and nativeRenice remain, matching the
+      declarations in StockfishNative.java.
   - CMakeLists.txt: AGPL v3 (original build configuration)
       Note: this CMake file builds engine_jni.cpp which is GPL v3,
       but the CMake file itself is original and uses AGPL v3.
+      v1.0.2: removed the `dl` link (no longer needed after the
+      engine-import dead-code removal — dlopen/dlsym are gone).
 
 See the root-level LICENSE-AGPL v3, LICENSE-GPL v3, and NOTICE files
 for full license texts and attribution details.

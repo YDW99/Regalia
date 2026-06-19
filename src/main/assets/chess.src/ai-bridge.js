@@ -38,9 +38,55 @@ let _sfMateDistance=0;
 // We convert to White's perspective on receipt; this flag captures whose
 // turn it was when the eval was requested, so we can negate correctly.
 let _evalForBlackTurn=false;
-// Review eval cache: maps reviewStep → {eval: cpValue, mate: mateDistance}
-// Avoids re-requesting engine eval for previously visited steps
-let _reviewEvalCache=new function(){const m=new Map();const MAX=200;this.get=function(k){if(m.has(k)){const v=m.get(k);m.delete(k);m.set(k,v);return v;}return undefined;};this.has=k=>m.has(k);this.set=function(k,v){if(m.has(k))m.delete(k);m.set(k,v);if(m.size>MAX){const first=m.keys().next().value;m.delete(first);}};this.delete=function(k){const r=m.delete(k);return r;};Object.defineProperty(this,'size',{get:function(){return m.size;},configurable:true});this.clear=function(){m.clear();};this.keys=()=>m.keys();}();
+// Review eval cache: maps reviewStep → {eval: cpValue, mate: mateDistance, depth, wdlW, wdlD, wdlL}
+// Avoids re-requesting engine eval for previously visited steps.
+// v1.0.2: Persisted to localStorage so it survives app backgrounding / process kill
+// on aggressive memory managers (Xiaomi HyperOS 3). On page reload, the cache is
+// restored from localStorage and the eval values are immediately available for
+// review mode without re-running the engine.
+let _reviewEvalCache=new function(){
+  const m=new Map();
+  const MAX=200;
+  const STORAGE_KEY='Regalia_reviewEvalCache';
+  // v1.0.2: Load from localStorage on construction
+  try{
+    const saved=localStorage.getItem(STORAGE_KEY);
+    if(saved){
+      const arr=JSON.parse(saved);
+      if(Array.isArray(arr)){
+        for(const [k,v] of arr){
+          m.set(k,v);
+          if(m.size>=MAX)break;
+        }
+      }
+    }
+  }catch(e){}
+  // v1.0.2: Save to localStorage (debounced — called on set and clear)
+  let _saveTimer=null;
+  function _saveToStorage(){
+    if(_saveTimer)clearTimeout(_saveTimer);
+    _saveTimer=setTimeout(function(){
+      try{
+        const arr=Array.from(m.entries());
+        localStorage.setItem(STORAGE_KEY,JSON.stringify(arr));
+      }catch(e){}
+      _saveTimer=null;
+    },500);
+  }
+  this.get=function(k){if(m.has(k)){const v=m.get(k);m.delete(k);m.set(k,v);return v;}return undefined;};
+  // v1.0.2 PERF: peek() reads without refreshing LRU order. Use this in
+  // tight loops that iterate over many entries (e.g., _buildEvalTrendSVG,
+  // _findCriticalMoves) — calling get() in those loops would perform N
+  // delete+set operations just to read cached values, churning the Map
+  // and pushing other entries toward eviction for no benefit.
+  this.peek=function(k){return m.get(k);};
+  this.has=k=>m.has(k);
+  this.set=function(k,v){if(m.has(k))m.delete(k);m.set(k,v);if(m.size>MAX){const first=m.keys().next().value;m.delete(first);}_saveToStorage();};
+  this.delete=function(k){const r=m.delete(k);_saveToStorage();return r;};
+  Object.defineProperty(this,'size',{get:function(){return m.size;},configurable:true});
+  this.clear=function(){m.clear();_saveToStorage();};
+  this.keys=()=>m.keys();
+}();
 // Track which review step the eval was requested for — allows onEngineEval to
 // discard stale callbacks when the user has navigated to a different step.
 let _reviewEvalRequestedStep=-1;
@@ -291,41 +337,52 @@ let _emergencyFallbackTimerId=setTimeout(function(){
     }
   },200);
 })();
-function copyMoveHistory(){
-  if(!moveRecords||!moveRecords.length){showToast(T('no_move_records'));return}
+// v1.0.2 FEATURE (audit): extracted PGN-building logic into _buildPGNString() so
+// it can be shared by copyMoveHistory (clipboard) and exportPGNToFile (SAF file).
+function _buildPGNString(){
+  if(!moveRecords||!moveRecords.length)return '';
   let pgn='';
+  // v1.0.2 FEATURE (first-principles): PGN evaluation annotations + thinking time.
+  // After each move, build a PGN comment that includes:
+  //   1. Thinking time (from moveRecords[i].time, e.g. "3.2s") — FIRST item
+  //   2. Eval annotation (score + eval word, or full SF18 line every 5 moves)
+  // Example: {3.2s +0.5 略优} or {3.2s SF18 D22 +1.0 8%W/91%D/1%L}
   for(let i=0;i<moveRecords.length;i+=2){
     const n=Math.floor(i/2)+1;
     const w=moveRecords[i];
     const b=moveRecords[i+1];
     pgn+=n+'. '+(w?w.notation:'...');
     // PGN RAV variations after white's move
-    // Mainline group → skip (not standard PGN, only for in-app display)
-    // All variations are 🌿 lines (including line 1 = mainline prediction).
-    // Ponder is fully decoupled from move records — never recorded as a variation.
-    // Skip 'analysis' group and 'ponder' group.
     if(showVariations&&w&&w.variations&&w.variations.length>0){
       for(const v of w.variations){
         if(!v.san)continue;
         if(v.group==='analysis'||v.group==='ponder')continue;
         const vmn = (v.varMoveNum!=null) ? v.varMoveNum : n;
         const fiw = (v.firstMoveIsWhite!=null) ? v.firstMoveIsWhite : false;
-        pgn+=' ('+_formatSANAsRAV(v.san,vmn,fiw)+')';
+        const prefix = v.prefixEllipsis ? ((v.prefixEllipsisNum||vmn)+'... ') : '';
+        pgn+=' ('+prefix+_formatSANAsRAV(v.san,vmn,fiw)+')';
       }
+    }
+    // v1.0.2: Build comment with thinking time + eval annotation
+    if(w){
+      const comment=_buildPGNComment(w,i+1,n);
+      if(comment)pgn+=' '+comment;
     }
     if(b){
       pgn+=' '+b.notation;
-      // PGN RAV variations after black's move
-      // Ponder is fully decoupled from move records.
       if(showVariations&&b&&b.variations&&b.variations.length>0){
         for(const v of b.variations){
           if(!v.san)continue;
           if(v.group==='analysis'||v.group==='ponder')continue;
           const vmn = (v.varMoveNum!=null) ? v.varMoveNum : (n+1);
           const fiw = (v.firstMoveIsWhite!=null) ? v.firstMoveIsWhite : true;
-          pgn+=' ('+_formatSANAsRAV(v.san,vmn,fiw)+')';
+          const prefix = v.prefixEllipsis ? (vmn+'... ') : '';
+          pgn+=' ('+prefix+_formatSANAsRAV(v.san,vmn,fiw)+')';
         }
       }
+      // v1.0.2: Build comment with thinking time + eval annotation
+      const comment=_buildPGNComment(b,i+2,n);
+      if(comment)pgn+=' '+comment;
     }
     pgn+=' ';
   }
@@ -335,7 +392,188 @@ function copyMoveHistory(){
     else if(gameOver.includes(T('black_wins'))||gameOver.includes('Black wins'))pgn+=' 0-1';
     else pgn+=' 1/2-1/2';
   }
+  return pgn;
+}
+// v1.0.2: Build a PGN comment for a move, combining thinking time + eval annotation.
+// Returns a string like "{3.2s +0.5 略优}" or "{3.2s}" or "{+0.5 略优}" or "" if neither.
+function _buildPGNComment(mr,reviewStep,moveNum){
+  let parts=[];
+  // 1. Thinking time (first item in the comment)
+  if(mr&&mr.time){
+    parts.push(mr.time+'s');
+  }
+  // 2. Eval annotation
+  const evalAnn=_formatPGNEvalAnnotation(reviewStep,moveNum);
+  if(evalAnn){
+    // Strip the outer {} from the eval annotation and add to parts
+    const inner=evalAnn.replace(/^\{/,'').replace(/\}$/,'');
+    parts.push(inner);
+  }
+  if(parts.length===0)return '';
+  return '{'+parts.join(' ')+'}';
+}
+// v1.0.2 FEATURE: format a PGN comment annotation for the given review step.
+// Returns either:
+//   - `{+0.5 略优}` style (eval word only) for most moves
+//   - `{SF18 D22 +1.0 8%W/91%D/1%L}` style (full engine info) every 5 moves
+//   - empty string if no cached eval is available for this step
+// `moveNum` is the 1-based move number (1 for the first full move pair).
+// We use the actual move-pair count (n) so the "every 5 moves" cadence lines up
+// with chess convention (after move 5, 10, 15, …), not the half-move index.
+function _formatPGNEvalAnnotation(reviewStep,moveNum){
+  if(typeof _reviewEvalCache==='undefined')return '';
+  const cached=_reviewEvalCache.get(reviewStep);
+  if(!cached)return '';
+  // Format score: centipawns from White's perspective.
+  // Mate scores (|eval|>=90000) are shown as #M.
+  // v1.0.2 FIX (first-principles): parenthesize the mate-detection condition
+  // explicitly. The previous `cached.mate&&cached.mate!==0||Math.abs(ev)>=90000`
+  // parsed as `(cached.mate&&cached.mate!==0)||Math.abs(ev)>=90000` — which
+  // happened to be correct, but relied on JS operator precedence and was hard
+  // to read. Also normalize cached.mate to a number defensively (some callers
+  // pass it as a string from JSON deserialization).
+  const mateDist=Number(cached.mate)||0;
+  const ev=Number(cached.eval)||0;
+  const isMateScore=(mateDist!==0)||Math.abs(ev)>=90000;
+  let scoreStr;
+  if(isMateScore){
+    // Stockfish reports mate as ±99999 with _sfMateDistance holding the
+    // actual distance. If we have a real mate distance, use it; otherwise
+    // derive a best-effort distance from the eval sign.
+    const md=mateDist!==0?mateDist:(ev>0?1:-1);
+    scoreStr='#'+Math.abs(md);
+  }else{
+    // Centipawns → pawns with 1 decimal, signed
+    const pawns=(ev/100).toFixed(1);
+    scoreStr=(ev>=0?'+':'')+pawns;
+  }
+  // Every 5 moves (moveNum is 1-based; we want moves 5,10,15,…): full annotation
+  if(moveNum>0&&moveNum%5===0){
+    let wdlStr='';
+    if(cached.wdlW!=null&&cached.wdlW>=0&&cached.wdlD!=null&&cached.wdlD>=0&&cached.wdlL!=null&&cached.wdlL>=0){
+      const total=cached.wdlW+cached.wdlD+cached.wdlL;
+      if(total>0){
+        const wp=Math.round(cached.wdlW/total*100);
+        const dp=Math.round(cached.wdlD/total*100);
+        const lp=100-wp-dp;
+        wdlStr=wp+'%W/'+dp+'%D/'+lp+'%L';
+      }
+    }
+    const depthStr=cached.depth?('D'+cached.depth):'D?';
+    return '{SF18 '+depthStr+' '+scoreStr+(wdlStr?(' '+wdlStr):'')+'}';
+  }
+  // Otherwise: short eval-word annotation
+  // posDesc is defined in ui.js but is in scope (single bundled file)
+  let word='';
+  try{word=typeof posDesc==='function'?posDesc(ev):'';}catch(e){word='';}
+  return '{'+scoreStr+(word?(' '+word):'')+'}';
+}
+function copyMoveHistory(){
+  const pgn=_buildPGNString();
+  if(!pgn){showToast(T('no_move_records'));return}
   safeCopyToClipboard(pgn,T('pgn_copied'));
+}
+// v1.0.2 FEATURE (audit): export the current game's PGN to a user-chosen file
+// via Android SAF (ACTION_CREATE_DOCUMENT). Mirrors the settings-export flow.
+function exportPGNToFile(){
+  const pgn=_buildPGNString();
+  if(!pgn){showToast(T('no_move_records'));return}
+  _bridgeCall(function(bridge){
+    if(typeof bridge.openPGNExportFilePicker==='function'){
+      bridge.openPGNExportFilePicker(pgn);
+    }else{
+      // Fallback: copy to clipboard if SAF unavailable
+      safeCopyToClipboard(pgn,T('pgn_copied'));
+    }
+  });
+}
+// v1.0.2 FEATURE: callback for PGN export result (mirrors onSettingsExported)
+function onPGNExported(success,fileName){
+  if(success){
+    showToast(T('pgn_exported')+': '+fileName);
+  }else{
+    showToast(T('settings_clipboard_fallback'));
+  }
+}
+// v1.0.2 NEW FEATURE: 📊统计 — open a fullscreen stats page that renders the
+// current game's PGN with rich formatting + computes statistics (material
+// balance per move, control map, move classifications from cached evals, etc.).
+// The stats page is a separate HTML file (assets/stats.html) loaded into a new
+// WebView activity by the Java side. The PGN is passed via the bridge and
+// stored in a JS variable that stats.html reads on load.
+function openStatsPage(){
+  const pgn=_buildPGNString();
+  if(!pgn){showToast(T('no_move_records'));return}
+  // Also gather per-move eval cache data so the stats page can show
+  // classification + eval trend without re-running the engine.
+  const evalData=[];
+  if(typeof _reviewEvalCache!=='undefined'){
+    for(let i=0;i<moveRecords.length;i++){
+      // v1.0.2 PERF: use peek() — iterating over all moves, no need to refresh LRU.
+      const c=_reviewEvalCache.peek(i+1);
+      evalData.push(c?{eval:c.eval||0,mate:c.mate||0,depth:c.depth||0,wdlW:c.wdlW!=null?c.wdlW:-1,wdlD:c.wdlD!=null?c.wdlD:-1,wdlL:c.wdlL!=null?c.wdlL:-1}:null);
+    }
+  }
+  // v1.0.2 FIX: Also send the parsed move records (from/to/piece/captured/promotion/notation)
+  // so the stats page doesn't have to re-parse the PGN string with its simplified parser.
+  // The simplified parser in stats.html (applySANMove/canMoveTo) doesn't handle check
+  // detection, proper disambiguation, en passant edge cases, etc. — once one move fails
+  // to parse, the state doesn't advance and all subsequent moves cascade-fail. This was
+  // the root cause of the "total moves cannot exceed 98" bug: real games with complex
+  // middlegame/endgame moves would hit a parse failure around move 98-99 (typically a
+  // disambiguation or check-evasion move the simplified parser couldn't handle), and
+  // every move after that was silently dropped.
+  // By sending the authoritative move records from the main app (which uses the full
+  // legalMoves/moveAlg logic), the stats page can replay them correctly via its
+  // executeMove() (which correctly advances state) without any SAN parsing.
+  const moveData=[];
+  for(let i=0;i<moveRecords.length;i++){
+    const mr=moveRecords[i];
+    if(!mr){
+      // null placeholder (Black-to-move start) — preserve as null
+      moveData.push(null);
+    }else{
+      moveData.push({
+        from:mr.from,
+        to:mr.to,
+        piece:mr.piece?{type:mr.piece.type,color:mr.piece.color}:null,
+        captured:mr.captured?{type:mr.captured.type,color:mr.captured.color}:null,
+        promotion:mr.promotion||null,
+        notation:mr.notation||''
+      });
+    }
+  }
+  const payload=JSON.stringify({pgn:pgn,evals:evalData,moveRecords:moveData,playerColor:playerColor,lang:(typeof _lang!=='undefined'?_lang:'zh')});
+  _bridgeCall(function(bridge){
+    if(typeof bridge.openStatsPage==='function'){
+      bridge.openStatsPage(payload);
+    }else{
+      // Fallback: copy PGN to clipboard if stats page unavailable
+      safeCopyToClipboard(pgn,T('pgn_copied'));
+    }
+  });
+}
+// v1.0.2 NEW FEATURE: Stats page callbacks
+function onStatsHTMLExported(success,fileName){
+  if(success){
+    showToast(T('stats_saved')+': '+fileName);
+  }else{
+    showToast(T('settings_clipboard_fallback'));
+  }
+}
+// v1.0.2 NEW FEATURE: Stats page requests to enter review mode.
+// (The onStatsRequestImport handler was removed in v1.0.2 — PGN import from
+// the stats page now opens the SAF picker directly inside StatsActivity via
+// statsSelectPGNFile(), so the main WebView no longer needs to participate.)
+// v1.0.2 FIX: Show a toast when there are no moves to review, instead of
+// silently doing nothing — the user otherwise has no feedback that the tap
+// was registered but the request couldn't be honored.
+function onStatsRequestReview(){
+  if(moveRecords&&moveRecords.length>0){
+    enterReview();
+  }else{
+    showToast(T('no_move_records'));
+  }
 }
 function copyReviewPGN(){
   if(!moveRecords||!moveRecords.length){showToast(T('no_move_records'));return}
@@ -350,11 +588,20 @@ function safeCopyToClipboard(text,successMsg){
   }else{fb()}
 }
 // HTML-escape helper: prevents XSS when inserting dynamic text into HTML/onclick attributes
-function _esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
+// v1.0.2 PERF (first-principles): single-pass regex with callback instead of
+// 5 chained .replace() calls. The previous version allocated 5 intermediate
+// strings per escape; _esc is called on every move notation, every file path,
+// every ECO name, etc. during render — at 64 squares × multiple labels per
+// square, this was a measurable allocation hotspot.
+const _ESC_MAP={'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'};
+const _ESC_RE=/[&<>"']/g;
+function _esc(s){return String(s).replace(_ESC_RE,c=>_ESC_MAP[c]);}
 // XSS-safe JS string escaper — for inserting paths into onclick='...' attributes
 // _esc() escapes for HTML, but paths in onclick JS strings need JS-level escaping
 // e.g. /sdcard/0'Brien/ — the single quote would break the onclick attribute
-function _escJs(s){return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;').replace(/\n/g,'\\n').replace(/\r/g,'\\r');}
+const _ESCJS_MAP={'\\':'\\\\',"'":"\\'",'"':'&quot;','\n':'\\n','\r':'\\r'};
+const _ESCJS_RE=/[\\'"\n\r]/g;
+function _escJs(s){return String(s).replace(_ESCJS_RE,c=>_ESCJS_MAP[c]);}
 
 /**
  * Format a variation for display in move records and review panel.
@@ -466,31 +713,35 @@ function _formatSANAsRAV(sanString, moveNum, firstMoveIsWhite){
 
 /**
  * Format variation groups for parallel display.
- * ALL variations are 🌿 lines with unified format:
- *   - mainline group (mpvIndex -1) → 🌿线1 (engine's predicted continuation)
- *   - multipv group (mpvIndex 1,2,3...) → 🌿线2, 🌿线3, etc. (alternative lines)
- * Ponder is fully decoupled from move records — never appears here.
- * 'analysis' group is skipped.
+ * ALL variations are 🌿 lines with unified format.
+ *
+ * v1.0.2 FIX: Line numbers are now assigned SEQUENTIALLY based on the order
+ * of variations in the move record's variations array (1, 2, 3, ...).
+ * Previously, the labels were derived from group/mpvIndex/lineNum fields,
+ * which could COLLIDE — e.g., a mainline group and a multipv[0] group both
+ * mapped to 线1, so when both were attached to the same move (a common case
+ * after Flip, when divergent mainline + MultiPV predictions end up on the
+ * same divergence-point move), the user saw two "🌿线1" labels. Sequential
+ * numbering guarantees uniqueness regardless of how the variations were
+ * produced.
+ *
+ * 'analysis' and 'ponder' groups are still skipped entirely.
  */
 function _formatVariationGroups(variations, moveNum, isAfterWhiteMove){
   if(!variations||!variations.length)return '';
-  // Collect all displayable variations into a single unified list
+  // Collect all displayable variations in their original array order.
   const displayLines=[];
   for(const v of variations){
     // Skip analysis and ponder groups entirely
     if(v.group==='analysis'||v.group==='ponder')continue;
-    // Mainline prediction → line 1
-    if(v.group==='mainline'){
-      displayLines.push({san:v.san, varMoveNum:v.varMoveNum, firstMoveIsWhite:v.firstMoveIsWhite, lineNum:1});
-    }
-    // Secondary MultiPV → line 2, 3, etc.
-    else if(v.group==='multipv'&&v.mpvIndex>0){
-      displayLines.push({san:v.san, varMoveNum:v.varMoveNum, firstMoveIsWhite:v.firstMoveIsWhite, lineNum:v.mpvIndex+1});
-    }
-    // PGN imported variations → 🌿 line N
-    else if(v.group==='pgn'){
-      displayLines.push({san:v.san, varMoveNum:v.varMoveNum, firstMoveIsWhite:v.firstMoveIsWhite, lineNum:v.lineNum||1});
-    }
+    if(!v.san)continue;
+    displayLines.push({
+      san:v.san,
+      varMoveNum:v.varMoveNum,
+      firstMoveIsWhite:v.firstMoveIsWhite,
+      prefixEllipsis:!!v.prefixEllipsis,
+      prefixEllipsisNum:v.prefixEllipsisNum||0
+    });
   }
   if(!displayLines.length)return '';
   // Fallback: if varMoveNum is not stored on the variation, compute it from the
@@ -500,11 +751,19 @@ function _formatVariationGroups(variations, moveNum, isAfterWhiteMove){
   // Fallback firstMoveIsWhite for legacy records
   function getFirstMoveIsWhite(v){ return (v.firstMoveIsWhite!=null) ? v.firstMoveIsWhite : !isAfterWhiteMove; }
   let h='';
-  // Render ALL lines with unified 🌿 format
-  for(const line of displayLines){
+  // Render ALL lines with unified 🌿 format, using SEQUENTIAL line numbers
+  // (1, 2, 3, ...) based on array position. This guarantees unique labels.
+  for(let i=0;i<displayLines.length;i++){
+    const line=displayLines[i];
+    const lineNum=i+1;
     const rav=_formatSANAsRAV(line.san, getVarMoveNum(line), getFirstMoveIsWhite(line));
     if(rav){
-      h+='<div class="mvar"><span style="color:#7eb8da;font-size:.6rem;font-weight:600">🌿 '+T('line_label')+' '+line.lineNum+'</span> <span style="font-size:.75rem">'+_esc(rav)+'</span></div>';
+      // v1.0.2: If prefixEllipsis is set (Type B variation after Black's move),
+      // prepend "N..." before the RAV text to indicate the branch point.
+      // N is the owning move's number (prefixEllipsisNum), and the variation
+      // content starts at N+1 for White's move.
+      const prefix = line.prefixEllipsis ? (line.prefixEllipsisNum+'... ') : '';
+      h+='<div class="mvar"><span style="color:#7eb8da;font-size:.6rem;font-weight:600">🌿 '+T('line_label')+' '+lineNum+'</span> <span style="font-size:.75rem">'+_esc(prefix+rav)+'</span></div>';
     }
   }
   return h;
@@ -619,25 +878,99 @@ function _convertPVtoSAN(pvString, state){
   return { sanMoves: sanParts.join(' '), finalState: currentState };
 }
 
+// v1.0.2 PERF (first-principles): PV variation cache + fork grafting.
+//
+// When MultiPV returns N PV lines, they typically share a common prefix
+// (e.g. PV1=e4 e5 Nf3 Nc6, PV2=e4 e5 Nf3 d5 — they share "e4 e5 Nf3").
+// Naively calling _convertPVtoSAN() on each line independently re-runs
+// makeMv/moveAlg for the shared prefix N times. With 8 MultiPV lines of
+// 10+ moves each, this is 80+ redundant state clones + moveAlg calls.
+//
+// _pvCache caches the converted SAN + post-state for every UCI prefix
+// encountered during a single _processDeferredVariations() call. The cache
+// is keyed by `(state.hash,uciPrefix)` so the same prefix from the same
+// starting state is converted exactly once. _checkPVDivergence finds the
+// longest shared prefix between two PV lines so the cache lookup is maximal.
+//
+// The cache is cleared at the start of each _processDeferredVariations()
+// call (per-search scope) to bound memory usage.
+let _pvCache=new Map();
+const _PV_CACHE_MAX=200; // Bound: ~8 PV lines × ~25 moves = 200 entries max
+
+// Convert a PV to SAN using the prefix cache. `stateHash` is the hash of
+// `state` so cache hits are correct only when both the starting state AND
+// the UCI prefix match — this is critical because the same UCI prefix
+// (e.g. "e2e4") applied from different states produces different SAN.
+function _convertPVtoSANCached(pvString, state, stateHash){
+  if(!pvString||!state) return { sanMoves: '', finalState: state };
+  const uciMoves=pvString.trim().split(/\s+/).filter(m=>m&&m.length>=4);
+  if(uciMoves.length===0) return { sanMoves: '', finalState: state };
+  const sanParts=[];
+  let currentState=state;
+  let currentHash=stateHash||state.hash||0;
+  // Walk the UCI moves; for each prefix, check the cache. On a miss, convert
+  // one move and store the result. On a hit, jump directly to the cached
+  // post-state and SAN.
+  for(let i=0;i<uciMoves.length;i++){
+    const prefix=uciMoves.slice(0,i+1).join(' ');
+    const cacheKey=currentHash+'|'+prefix;
+    let cached=_pvCache.get(cacheKey);
+    if(cached){
+      // Hit — reuse the cached SAN for this move and the cached post-state
+      sanParts.push(cached.san);
+      currentState=cached.postState;
+      currentHash=cached.postState.hash||currentHash;
+      continue;
+    }
+    // Miss — convert just this one move from currentState
+    const uci=uciMoves[i];
+    const result=_uciToSAN(uci, currentState);
+    sanParts.push(result.san);
+    currentState=result.postState;
+    currentHash=currentState.hash||currentHash;
+    // Store in cache (with bound check)
+    if(_pvCache.size<_PV_CACHE_MAX){
+      _pvCache.set(cacheKey,{san:result.san,postState:result.postState});
+    }
+  }
+  return { sanMoves: sanParts.join(' '), finalState: currentState };
+}
+
+// v1.0.2 CLEANUP: Removed the dead `_checkPVDivergence(pv1Moves, pv2Moves)`
+// function (which found the shared-prefix length between two PV arrays). It
+// was a no-arg-namesake of the active `_checkPVDivergence()` below (which
+// iterates over `_pendingEnginePVs`), and the JS second-declaration-wins rule
+// silently shadowed it — every call site used 0 args, so the dead version
+// was never reachable. The active `_convertPVtoSANCached()` finds shared
+// prefixes via its own `_pvCache` (keyed by hash+UCI-prefix), so it does not
+// need a separate prefix-length helper. Removing this eliminates the
+// confusion and the misleading "finds the longest shared prefix" comment.
+
 // ===================== STOCKFISH BRIDGE CALLBACKS =====================
 
 // Generate FEN string from game state
+// v1.0.2 PERF (first-principles): hoist the PIECE_FEN lookup table out of
+// generateFEN() into module scope. The previous code allocated a fresh
+// {white:{...},black:{...}} object on every generateFEN() call — and
+// generateFEN is called on every AI move, every hint, and every eval
+// request. Module-scope hoisting eliminates the per-call allocation.
+const _PIECE_FEN={white:{king:'K',queen:'Q',rook:'R',bishop:'B',knight:'N',pawn:'P'},black:{king:'k',queen:'q',rook:'r',bishop:'b',knight:'n',pawn:'p'}};
+const _DEFAULT_FEN='rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 /**
  * Generate a FEN string from game state.
  * @param {Object} s - Game state object with board, currentTurn, castlingRights, etc.
  * @returns {string} FEN string representation of the position
  */
 function generateFEN(s){
-  if(!s||!s.board)return 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-  if(!Array.isArray(s.board)||s.board.length!==8)return 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
-  const PIECE_FEN={white:{king:'K',queen:'Q',rook:'R',bishop:'B',knight:'N',pawn:'P'},black:{king:'k',queen:'q',rook:'r',bishop:'b',knight:'n',pawn:'p'}};
+  if(!s||!s.board)return _DEFAULT_FEN;
+  if(!Array.isArray(s.board)||s.board.length!==8)return _DEFAULT_FEN;
   let fen='';
   for(let r=0;r<8;r++){
-    if(!s.board[r])return 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+    if(!s.board[r])return _DEFAULT_FEN;
     let empty=0;
     for(let c=0;c<8;c++){
       const p=s.board[r][c];
-      if(p&&PIECE_FEN[p.color]&&PIECE_FEN[p.color][p.type]){if(empty>0){fen+=empty;empty=0}fen+=PIECE_FEN[p.color][p.type]}
+      if(p&&_PIECE_FEN[p.color]&&_PIECE_FEN[p.color][p.type]){if(empty>0){fen+=empty;empty=0}fen+=_PIECE_FEN[p.color][p.type]}
       else{empty++}
     }
     if(empty>0)fen+=empty;
@@ -693,7 +1026,18 @@ function onEngineRestarting(){
   if(isHintLoading){isHintLoading=false;_hintBarInfo='';}
   if(_evalLoading){_evalLoading=false;_sfEvalReady=false;}
   _ponderGen++;_ponderMoveSAN='';_ponderBarInfo='';_pendingPonderMoveUCI=null;
+  // v1.0.2 FIX (audit): Parity with restartCurrentEngine() — clear review eval
+  // cache + MultiPV state so the recovered engine's evaluations are re-fetched
+  // instead of showing stale values from the pre-crash engine.
+  _reviewEvalCache.clear();_reviewEvalRequestedStep=-1;
+  _multiPVLines=[];_multiPVResult=null;_lastEngineVariation=null;
   if(_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
+  // v1.0.2 FIX: Reset AI retry counter on engine restart. Without this, if the
+  // engine crashed mid-AI-move (where _aiRetryCount had already incremented to
+  // 1 or 2), the next doAIMove() after recovery would increment to 2 or 3 and
+  // potentially hit the 3-retry cap immediately, showing "AI timeout" even
+  // though the engine just recovered.
+  _aiRetryCount=0;
   render();
 }
 
@@ -720,6 +1064,10 @@ function onEngineReady(){
   if(_evalLoading){_evalLoading=false;_sfEvalReady=false;}
   _ponderGen++;_ponderMoveSAN='';_ponderBarInfo='';_pendingPonderMoveUCI=null;
   if(_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
+  // v1.0.2 FIX: Reset AI retry counter on engine ready (covers crash-recovery
+  // path where onEngineRestarting → onEngineReady fires). Ensures the next
+  // doAIMove() starts with a fresh retry budget.
+  _aiRetryCount=0;
   _updateLoadingStatus(T('engine_ready'),100);
   // Sync language preference to SharedPreferences for notification i18n
   try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.saveLangPref)AndroidBridge.saveLangPref(_lang);}catch(e){}
@@ -772,23 +1120,29 @@ function onBestMove(uciMove){
   _multiPVLines=[];
 
   // Process variations in onMultiPVResult() (called after onBestMove)
-  if(moveRecords.length>0){
-    const lastIdx=moveRecords.length-1;
-    const isAfterWhiteMove=(lastIdx%2===0);
-    const moveNum=Math.floor(lastIdx/2)+1;
-    // Save pre-move game state for SAN conversion later
-    // Deep clone gameState to prevent mutation by executeMove()
-    _pendingBestMoveInfo={
-      uciMove:uciMove,
-      lastIdx:lastIdx,
-      isAfterWhiteMove:isAfterWhiteMove,
-      moveNum:moveNum,
-      preMoveState:cloneS(gameState),
-      ponderMove:_lastPonderMoveFromEngine,
-      ponderEnabled:!!(engineSettingsData&&engineSettingsData.ponder),
-      multiPVEnabled:!!(engineSettingsData&&engineSettingsData.multiPV&&engineSettingsData.multiPV>1)
-    };
-  }
+  // v1.0.2 FIX: Removed the `moveRecords.length > 0` guard — it skipped
+  // variation tracking when the AI played the very first move of the game
+  // (i.e., when the player chose Black). With the guard, _pendingBestMoveInfo
+  // was never set → _processDeferredVariations() early-returned → no 🌿
+  // variation lines were attached to the AI's first move. The fix uses
+  // lastIdx = -1 in that case, which _processDeferredVariations() correctly
+  // resolves to aiMoveIdx = 0 (the AI's first move record, added by
+  // executeMove below).
+  const lastIdx = moveRecords.length > 0 ? moveRecords.length - 1 : -1;
+  const isAfterWhiteMove=(lastIdx%2===0);
+  const moveNum=Math.floor(lastIdx/2)+1;
+  // Save pre-move game state for SAN conversion later
+  // Deep clone gameState to prevent mutation by executeMove()
+  _pendingBestMoveInfo={
+    uciMove:uciMove,
+    lastIdx:lastIdx,
+    isAfterWhiteMove:isAfterWhiteMove,
+    moveNum:moveNum,
+    preMoveState:cloneS(gameState),
+    ponderMove:_lastPonderMoveFromEngine,
+    ponderEnabled:!!(engineSettingsData&&engineSettingsData.ponder),
+    multiPVEnabled:!!(engineSettingsData&&engineSettingsData.multiPV&&engineSettingsData.multiPV>1)
+  };
 
   if(!uciMove||uciMove==='(none)'||uciMove==='0000'){
     render();
@@ -1320,11 +1674,18 @@ function _fileBrowserSelect(filePath){
   _bridgeCall(function(bridge){
     const content=bridge.readTextFile(filePath);
     if(content){
+      // v1.0.2 FIX (first-principles): DO NOT call showToast() here.
+      // bridge.importSettings(content) asynchronously triggers the
+      // onSettingsImported(result) JS callback (see below), which already
+      // shows the success/failure toast and refreshes the engine-config UI.
+      // The previous duplicate showToast(T('settings_imported_ok')) here
+      // raced with the callback and showed TWO toasts — exactly the bug
+      // the changelog claims to have fixed but didn't, because the duplicate
+      // was in this file-picker entry path, not in the clipboard-import path.
+      // We also can't refresh _cachedMultiPV here synchronously because
+      // importSettings() is async on the Java side (engine executor thread).
+      // The onSettingsImported callback handles the cache refresh too.
       bridge.importSettings(content);
-      // FIX: Update _cachedMultiPV after settings import, since multiPV may have changed
-      try{const s=JSON.parse(bridge.getEngineSettings());_cachedMultiPV=s.multiPV||1;}catch(e){}
-      showToast(T('settings_imported_ok'));
-      openEngineConfig();
     }else{
       showToast(T('settings_read_fail'));
     }
@@ -1346,6 +1707,14 @@ function restartCurrentEngine(){
       isHintLoading=false;_hintBarInfo='';
       _evalLoading=false;_sfEvalReady=false;
       _ponderGen++;_ponderMoveSAN='';_ponderBarInfo='';_pendingPonderMoveUCI=null;
+      // v1.0.2 FIX (audit): Clear review eval cache so the new engine instance's
+      // evaluations are re-fetched. Without this, stale eval values from the
+      // pre-restart engine remained in the cache and were displayed in review
+      // mode even after the engine was replaced.
+      _reviewEvalCache.clear();_reviewEvalRequestedStep=-1;
+      // v1.0.2 FIX (audit): Clear MultiPV variation state — the old engine's
+      // in-flight PV lines are invalid after restart.
+      _multiPVLines=[];_multiPVResult=null;_lastEngineVariation=null;
       if(_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
     }else{
       showToast(T('engine_unavailable_bridge'));
@@ -1454,7 +1823,47 @@ function onEngineSwitched(result){
   showToast(T('built_in_only'));
 }
 function onSettingsImported(result){
-  try{const r=JSON.parse(result);showToast(r.success?T('settings_imported'):T('settings_import_fail')+': '+r.message);if(r.success){openEngineConfig();}}catch(e){showToast(T('settings_import_done'));}
+  try{
+    const r=JSON.parse(result);
+    if(r.success){
+      const baseMsg=T('settings_imported');
+      let suffix='';
+      if(r.message){
+        const m=r.message.match(/\(([^)]+)\)\s*$/);
+        if(m)suffix=' ('+m[1]+')';
+      }
+      showToast(baseMsg+suffix);
+      // v1.0.2: Close the config dialog aggressively.
+      // Set state, remove dialog from DOM directly, then render.
+      showEngineConfig=false;
+      // Force-remove any open dialog overlay from the DOM
+      var dov=document.querySelector('.dov[role="dialog"]');
+      if(dov){dov.remove();}
+      // Refresh cached data
+      if(typeof AndroidBridge!=='undefined'){
+        try{var info=AndroidBridge.getEngineInfo();if(info)engineConfigData=JSON.parse(info);}catch(e){}
+        try{var s=AndroidBridge.getEngineSettings();if(s)engineSettingsData=JSON.parse(s);}catch(e){}
+      }
+      if(engineSettingsData){
+        _cachedMultiPV=engineSettingsData.multiPV||1;
+      }
+      // Call renderInternal directly to bypass any throttle
+      if(typeof renderInternal==='function'){
+        renderInternal();
+      }else{
+        render();
+      }
+      // Safety net: force close again after 100ms
+      setTimeout(function(){
+        showEngineConfig=false;
+        var dov2=document.querySelector('.dov[role="dialog"]');
+        if(dov2){dov2.remove();}
+        render();
+      },100);
+    }else{
+      showToast(T('settings_import_fail')+': '+(r.message||'unknown'));
+    }
+  }catch(e){showToast(T('settings_import_done'));}
 }
 
 // MultiPV progress callback — receives secondary PV lines during search
@@ -1507,6 +1916,12 @@ function _processDeferredVariations(){
   const info=_pendingBestMoveInfo;
   _pendingBestMoveInfo=null; // Clear immediately to prevent re-processing
 
+  // v1.0.2 PERF: clear the PV cache at the start of each variation-processing
+  // call. The cache is only valid within a single search's MultiPV result set;
+  // keeping it across searches would bloat memory and risk stale-state hits
+  // if the engine's hash happened to collide between unrelated positions.
+  _pvCache.clear();
+
   const{uciMove,lastIdx,isAfterWhiteMove,moveNum,preMoveState,ponderMove,ponderEnabled,multiPVEnabled}=info;
 
   // The move record at lastIdx should exist (it was the last record before the bestmove was executed)
@@ -1537,26 +1952,42 @@ function _processDeferredVariations(){
   const variations=[];
 
   // Get primary PV data
+  // v1.0.2 FIX: Fall back to _multiPVResult[0].pv when _lastEngineVariation is
+  // empty. Previously, if the bestmove didn't carry a PV (some Stockfish builds
+  // omit it when MultiPV is on), the mainline variation was silently dropped.
   const primaryPV=_lastEngineVariation||(_multiPVResult&&_multiPVResult.length>0?_multiPVResult[0].pv:null);
 
   // --- Mainline prediction: continuation after the played move ---
-  // Primary PV starts with the bestmove. Strip it to get continuation.
+  // v1.0.2 FIX: The mainline prediction should NOT be displayed immediately.
+  // Instead, it should be registered for divergence tracking and only displayed
+  // when the actual game moves diverge from the prediction. This matches the
+  // user's requirement: "在匹配到正确位置前缓存于后台，不显示"
+  let primaryStartedWithBestmove=false;
   if(primaryPV){
     const uciMoves=primaryPV.trim().split(/\s+/);
     if(uciMoves.length>0 && uciMoves[0]===uciMove){
+      primaryStartedWithBestmove=true;
       // Strip bestmove, convert remaining to SAN using post-bestmove state
-      const afterBestState=_uciToSAN(uciMove,preMoveState).postState;
+      const afterBestResult=_uciToSAN(uciMove,preMoveState);
+      const afterBestState=afterBestResult.postState;
+      const afterBestHash=afterBestState.hash||0;
+      if(_pvCache.size<_PV_CACHE_MAX){
+        _pvCache.set((preMoveState.hash||0)+'|'+uciMove,{san:afterBestResult.san,postState:afterBestState});
+      }
       const remainingUci=uciMoves.slice(1);
       if(remainingUci.length>0){
-        const sanResult=_convertPVtoSAN(remainingUci.join(' '),afterBestState);
+        const sanResult=_convertPVtoSANCached(remainingUci.join(' '),afterBestState,afterBestHash);
         if(sanResult.sanMoves){
-          variations.push({
-            type:'mainline',
+          // v1.0.2: DON'T push to variations array. Instead, register for
+          // divergence tracking. The variation will be displayed at the
+          // divergence point via _checkPVDivergence.
+          // We store it as a pending PV with the SAN already computed.
+          _pendingEngineSANs.push({
             san:sanResult.sanMoves,
+            fromMoveIdx:aiMoveIdx,
             firstMoveIsWhite:contFirstIsWhite,
             varMoveNum:contVarMoveNum,
-            group:'mainline',
-            mpvIndex:-1
+            matchedUpTo:0
           });
         }
       }
@@ -1564,46 +1995,41 @@ function _processDeferredVariations(){
       if(!lastRec.variation){
         lastRec.variation=remainingUci.join(' ');
       }
-    }else if(uciMoves.length>1){
-      // PV doesn't start with bestmove — strip first move as alternative
-      // The remaining moves are the continuation from the opposite side
-      const afterFirstState=_uciToSAN(uciMoves[0],preMoveState).postState;
-      const remainingUci=uciMoves.slice(1);
-      const sanResult=_convertPVtoSAN(remainingUci.join(' '),afterFirstState);
-      if(sanResult.sanMoves){
-        variations.push({
-          type:'mainline',
-          san:sanResult.sanMoves,
-          firstMoveIsWhite:contFirstIsWhite,
-          varMoveNum:contVarMoveNum,
-          group:'mainline',
-          mpvIndex:-1
-        });
-      }
     }
   }
   _lastEngineVariation=null;
 
-  // --- MultiPV secondary variations (index 1+) ---
-  // These start with alternative first moves (NOT the bestmove)
+  // --- MultiPV secondary variations (and primary if it didn't start with bestmove) ---
+  // v1.0.2 FIX: When the primary PV didn't start with bestmove, include it in
+  // the iteration as an alternative line (mpvIndex=0). Otherwise iterate from
+  // index 1 as before (primary was already handled as mainline above).
+  // v1.0.2 PERF: each MultiPV line is converted via _convertPVtoSANCached()
+  // which transparently reuses the converted SAN + post-state of any shared
+  // prefix with previously-converted lines (including the mainline above).
+  // For 8 lines sharing a 5-move prefix, this saves ~35 makeMv+moveAlg calls.
   if(_multiPVResult&&_multiPVResult.length>1){
-    for(let vi=1;vi<_multiPVResult.length;vi++){
+    const startIdx=primaryStartedWithBestmove?1:0;
+    // Pre-compute the preMoveState hash for cache keys
+    const preMoveHash=preMoveState.hash||0;
+    for(let vi=startIdx;vi<_multiPVResult.length;vi++){
       const mpv=_multiPVResult[vi];
       if(!mpv.pv)continue;
       const uciMoves=mpv.pv.trim().split(/\s+/);
       if(uciMoves.length===0)continue;
 
       // Secondary PV's first move is an alternative to bestmove (same side)
-      // Convert the ENTIRE PV to SAN starting from preMoveState
-      const sanResult=_convertPVtoSAN(mpv.pv,preMoveState);
+      // — UNLESS this is the primary that didn't start with bestmove, in which
+      // case its first move is also an alternative (also same side).
+      // Convert the ENTIRE PV to SAN starting from preMoveState.
+      const sanResult=_convertPVtoSANCached(mpv.pv,preMoveState,preMoveHash);
       if(sanResult.sanMoves){
-        variations.push({
-          type:'multipv',
+        // v1.0.2: DON'T push MultiPV to display array either. Cache for divergence.
+        _pendingEngineSANs.push({
           san:sanResult.sanMoves,
-          firstMoveIsWhite:aiIsAfterWhiteMove, // First move is from the same side as AI's move
-          varMoveNum:aiMoveNum,  // Same move number as the played move
-          group:'multipv',
-          mpvIndex:vi
+          fromMoveIdx:aiMoveIdx,
+          firstMoveIsWhite:aiIsAfterWhiteMove,
+          varMoveNum:aiMoveNum,
+          matchedUpTo:0
         });
       }
     }
@@ -1624,8 +2050,275 @@ function _processDeferredVariations(){
     lastRec.variations=variations;
   }
 
+  // v1.0.2 NEW FEATURE: Register the engine's primary PV for divergence tracking.
+  // The PV will be compared against future actual game moves. If the game
+  // diverges from the PV, the divergent portion will be attached as a variation
+  // to the divergence-point move record.
+  if(primaryPV&&primaryStartedWithBestmove){
+    _registerEnginePVForDivergence(primaryPV,aiMoveIdx,preMoveState);
+  }
+
+  // v1.0.2 NEW FEATURE: Engine PV divergence detection.
+  // After the AI's move is recorded, check if the engine's PV (stored in
+  // _lastEnginePVBeforeMove) matches the actual game moves so far. If the
+  // game has diverged from the PV, attach the divergent portion of the PV
+  // as a variation to the move record AT THE DIVERGENCE POINT.
+  // If the game hasn't diverged yet (still following the PV), cache the PV
+  // for future comparison — don't display it yet.
+  _checkPVDivergence();
+  // v1.0.2: Also check SAN-based engine variations (mainline + MultiPV)
+  _checkPVDivergenceSANs();
+
   // Re-render
   requestAnimationFrame(function(){render();});
+}
+
+// v1.0.2: Check pending SAN-based engine variations for divergence.
+// Compare each pending variation's SAN moves against actual game moves.
+// If divergence found, attach the remaining variation to the divergence-point move.
+// If all match, remove (redundant). If game hasn't reached variation's start, keep cached.
+function _checkPVDivergenceSANs(){
+  if(_pendingEngineSANs.length===0)return;
+  if(!moveRecords||moveRecords.length===0)return;
+  const newPending=[];
+  for(const pending of _pendingEngineSANs){
+    const sanMoves=pending.san.trim().split(/\s+/).filter(s=>s);
+    if(sanMoves.length===0)continue;
+    let matchCount=pending.matchedUpTo||0;
+    let divergeIdx=-1;
+    for(let vi=matchCount;vi<sanMoves.length;vi++){
+      const actualIdx=pending.fromMoveIdx+1+vi;
+      if(actualIdx>=moveRecords.length){
+        // Game hasn't reached this point yet — keep cached
+        break;
+      }
+      const actualMr=moveRecords[actualIdx];
+      if(!actualMr||actualMr===null)continue;
+      const varSAN=sanMoves[vi].replace(/[+#!?]+$/,'');
+      const actualSAN=(actualMr.notation||'').replace(/[+#!?]+$/,'');
+      if(varSAN===actualSAN){
+        matchCount=vi+1;
+      }else{
+        divergeIdx=actualIdx;
+        break;
+      }
+    }
+    if(divergeIdx>=0&&divergeIdx<moveRecords.length){
+      // Divergence found — attach remaining SAN to the divergence-point move
+      const remainingSAN=sanMoves.slice(matchCount).join(' ');
+      if(remainingSAN.length>0){
+        const targetMr=moveRecords[divergeIdx];
+        if(targetMr){
+          if(!targetMr.variations)targetMr.variations=[];
+          // v1.0.2 FIX: Skip if an identical variation (same SAN content) is
+          // already attached. Without this guard, the same divergence could
+          // be attached multiple times if multiple pending PVs diverged at
+          // the same move with the same SAN remainder — causing duplicate
+          // 🌿 line entries.
+          let alreadyExists=false;
+          for(const ex of targetMr.variations){
+            if(ex.san===remainingSAN){alreadyExists=true;break;}
+          }
+          if(!alreadyExists){
+            const isWhite=(divergeIdx%2===0);
+            const moveNum=Math.floor(divergeIdx/2)+1;
+            targetMr.variations.push({
+              group:'multipv',
+              san:remainingSAN,
+              varMoveNum:moveNum,
+              firstMoveIsWhite:isWhite,
+              lineNum:1,
+              prefixEllipsis:false,
+              prefixEllipsisNum:0
+            });
+          }
+        }
+      }
+      // Don't keep in pending (resolved)
+    }else if(matchCount>=sanMoves.length){
+      // All matched — redundant, remove
+    }else{
+      // Still matching or game hasn't reached — keep cached
+      pending.matchedUpTo=matchCount;
+      if(newPending.length<10)newPending.push(pending);
+    }
+  }
+  _pendingEngineSANs=newPending;
+}
+
+// v1.0.2 NEW FEATURE: Engine PV divergence tracker.
+// _pendingEnginePVs stores PVs from recent engine analyses that haven't yet
+// diverged from the actual game. Each entry: {pvUci, fromMoveIdx, preMoveState}
+// — the PV in UCI format, the moveRecords index it started from, and the
+// game state at that point (for SAN conversion).
+// When a new move is played, we check each pending PV: if the new move matches
+// the next PV move, the PV is still being followed (advance the pointer); if
+// it doesn't match, the PV has diverged — attach the remaining PV moves as a
+// variation to the divergence-point move record.
+// If no divergence yet, keep cached (don't display).
+let _pendingEnginePVs=[];
+
+// v1.0.2: _pendingEngineSANs stores engine variations in SAN format (already
+// converted from UCI). These are the mainline + MultiPV predictions that should
+// NOT be displayed immediately — they're cached until divergence.
+// Each entry: {san, fromMoveIdx, firstMoveIsWhite, varMoveNum, matchedUpTo}
+let _pendingEngineSANs=[];
+
+// Called from onBestMove (via _processDeferredVariations) to register a new
+// PV for divergence tracking. The PV starts from the position BEFORE the
+// bestmove was played, so the first PV move should be the bestmove itself.
+function _registerEnginePVForDivergence(pvUci,fromMoveIdx,preMoveState){
+  if(!pvUci||!preMoveState)return;
+  // Don't track PVs that are too short (just the bestmove — no continuation)
+  const moves=pvUci.trim().split(/\s+/).filter(m=>m&&m.length>=4);
+  if(moves.length<2)return; // Need at least bestmove + 1 continuation move
+  _pendingEnginePVs.push({
+    pvUci:moves.join(' '),
+    pvMoves:moves,
+    fromMoveIdx:fromMoveIdx,
+    preMoveState:cloneS(preMoveState),
+    matchedUpTo:0 // index into pvMoves that has been matched (0 = bestmove)
+  });
+}
+
+// Called after each move (player or AI) to check if any pending PV has
+// diverged. If so, attach the divergent portion as a variation to the
+// divergence-point move record.
+function _checkPVDivergence(){
+  if(_pendingEnginePVs.length===0)return;
+  if(!moveRecords||moveRecords.length===0)return;
+
+  const newPending=[];
+  for(const pending of _pendingEnginePVs){
+    // The PV started at fromMoveIdx. The bestmove (pvMoves[0]) was played as
+    // moveRecords[fromMoveIdx]. Now check subsequent moves.
+    // pending.matchedUpTo = how many PV moves have been matched so far.
+    // Next expected: pvMoves[matchedUpTo+1] should be moveRecords[fromMoveIdx + matchedUpTo + 1]... wait, that's not quite right.
+    // Actually: pvMoves[0] = bestmove = moveRecords[fromMoveIdx].
+    // pvMoves[1] = opponent's predicted reply = should match moveRecords[fromMoveIdx+1] if played.
+    // pvMoves[2] = our predicted next move = should match moveRecords[fromMoveIdx+2] if played.
+    // So pvMoves[k] should match moveRecords[fromMoveIdx + k].
+    // We check from pending.matchedUpTo+1 onwards (the first unmatched PV move).
+
+    let stillMatching=true;
+    let divergeAtIdx=-1; // moveRecords index where divergence happened
+    let divergePVRemainder=[]; // remaining PV moves from divergence point
+
+    for(let k=pending.matchedUpTo+1;k<pending.pvMoves.length;k++){
+      const mrIdx=pending.fromMoveIdx+k;
+      if(mrIdx>=moveRecords.length){
+        // Not enough moves played yet — PV still potentially being followed
+        stillMatching=true;
+        break;
+      }
+      const mr=moveRecords[mrIdx];
+      if(mr===null){
+        // Placeholder — skip (treat as match for black-to-move scenarios)
+        continue;
+      }
+      // Convert mr.from/mr.to to UCI for comparison
+      const mrUci=_mrToUci(mr);
+      const pvMove=pending.pvMoves[k];
+      if(mrUci===pvMove){
+        // Still matching — advance
+        pending.matchedUpTo=k;
+        continue;
+      }else{
+        // Divergence! The actual move (mrUci) differs from PV move (pvMove).
+        // The divergence point is at moveRecords[mrIdx].
+        // The PV remainder starts from pvMoves[k] (the predicted move that
+        // wasn't played).
+        stillMatching=false;
+        divergeAtIdx=mrIdx;
+        divergePVRemainder=pending.pvMoves.slice(k);
+        break;
+      }
+    }
+
+    if(!stillMatching&&divergeAtIdx>=0&&divergePVRemainder.length>0){
+      // Divergence detected — attach the PV remainder as a variation to the
+      // divergence-point move record.
+      _attachDivergentPV(divergeAtIdx,divergePVRemainder,pending);
+      // Don't keep this PV in pending — it's been resolved.
+    }else if(stillMatching){
+      // PV is still being followed or not enough moves yet — keep tracking.
+      // But cap the number of pending PVs to avoid unbounded growth.
+      if(newPending.length<5)newPending.push(pending);
+    }
+  }
+  _pendingEnginePVs=newPending;
+}
+
+// Convert a move record's from/to to UCI format (e.g., "e2e4", "e7e8q").
+// v1.0.2 FIX: Map promotion piece-type names to UCI letters explicitly.
+// Previously this used mr.promotion[0] which produced 'k' for knight (correct
+// UCI is 'n'), causing false divergence detection for any knight-promotion
+// move — the comparison `mrUci === pvMove` would always fail because the
+// engine PV uses 'n' for knight promotions. This silently attached spurious
+// alternative-line variations to the divergence-point move record.
+function _mrToUci(mr){
+  if(!mr||!mr.from||!mr.to)return '';
+  const promoMap={queen:'q',rook:'r',bishop:'b',knight:'n'};
+  return mr.from+mr.to+(mr.promotion?(promoMap[mr.promotion]||''):'');
+}
+
+// Attach a divergent PV as a variation to the move record at divergeAtIdx.
+// divergePVRemainder is an array of UCI moves starting from the predicted
+// move that wasn't played.
+function _attachDivergentPV(divergeAtIdx,pvRemainder,pending){
+  if(divergeAtIdx<0||divergeAtIdx>=moveRecords.length)return;
+  const mr=moveRecords[divergeAtIdx];
+  if(!mr)return;
+
+  // The PV remainder starts from the predicted move that diverged.
+  // We need to convert it to SAN. The starting state is the game state
+  // BEFORE the move at divergeAtIdx was played.
+  // pending.preMoveState is the state before pvMoves[0] (the bestmove).
+  // We need to replay pvMoves[0..k-1] to get the state before pvMoves[k].
+  let state=cloneS(pending.preMoveState);
+  for(let i=0;i<pending.matchedUpTo+1&&i<pending.pvMoves.length;i++){
+    // Replay matched PV moves to advance the state
+    const uci=pending.pvMoves[i];
+    const coords=uciToCoords(uci);
+    if(!coords)break;
+    const piece=state.board[coords.from.row][coords.from.col];
+    if(!piece)break;
+    const mv={from:coords.from,to:coords.to,piece,promotion:coords.promotion};
+    makeMvInPlace(state,mv);
+  }
+  // Now state is the position before the divergent PV move.
+  // The divergent PV starts with the PREDICTED move (alternative to the
+  // actual move). Convert the entire remainder to SAN from this state.
+  const sanResult=_convertPVtoSANCached(pvRemainder.join(' '),state,state.hash||0);
+  if(!sanResult.sanMoves)return;
+
+  // Determine the move number and side at the divergence point.
+  // divergeAtIdx is the moveRecords index. The move at this index was the
+  // ACTUAL move. The PV remainder's first move is an ALTERNATIVE to it
+  // (same side, same move number).
+  const isWhite=(divergeAtIdx%2===0);
+  const moveNum=Math.floor(divergeAtIdx/2)+1;
+
+  // Build the variation entry — same format as PGN variations.
+  const varEntry={
+    group:'multipv', // treat engine PV as MultiPV-style alternative line
+    san:sanResult.sanMoves,
+    varMoveNum:moveNum,
+    firstMoveIsWhite:isWhite,
+    mpvIndex:0, // primary alternative
+    lineNum:1
+  };
+
+  // Attach to the move record. If the record already has variations, append.
+  if(!mr.variations)mr.variations=[];
+  // Avoid duplicates — check if an identical engine variation already exists.
+  let exists=false;
+  for(const v of mr.variations){
+    if(v.group==='multipv'&&v.san===varEntry.san){exists=true;break;}
+  }
+  if(!exists){
+    mr.variations.push(varEntry);
+  }
 }
 
 // Update display with MultiPV lines
@@ -1996,4 +2689,4 @@ function _updateAIThinkDisplay(){
 
 
 // ---- Exports ----
-export {showToast,_bridgeCall,_showLoadingOverlay,_updateLoadingStatus,_hideLoadingOverlay,_attemptEngineInit,onInitProgress,onEngineReady,onBestMove,onHintMove,onEngineProgress,onPonderProgress,onEngineEval,onEngineInfo,onEngineSwitched,onSettingsImported,onSettingsExported,onGameDifficultyChanged,onEngineError,onMultiPVProgress,onMultiPVResult,copyMoveHistory,copyReviewPGN,playSound,handleBackPress,renderEngineConfig,renderEngineConfigAndUpdate,openEngineConfig,closeEngineConfig,scanEngines,switchEngine,importExternalEngine,restartCurrentEngine,setConfigThreads,setConfigHash,setConfigMultiPV,setConfigMoveOverhead,togglePonder,toggleShowWDL,setConfigSkillLevel,toggleLimitElo,setConfigElo,toggleAutoConfig,exportEngineSettings,importEngineSettings,requestEngineEval,_updateEvalDisplay,_updateReviewEvalUI,formatEval,_resetEvalState,_updateAllEvalDisplays,copyFEN,copyReviewFEN,importFEN,_startEngineHeartbeat,_cleanupEventListeners,_formatVariationGroups};
+export {showToast,_bridgeCall,_showLoadingOverlay,_updateLoadingStatus,_hideLoadingOverlay,_attemptEngineInit,onInitProgress,onEngineReady,onBestMove,onHintMove,onEngineProgress,onPonderProgress,onEngineEval,onEngineInfo,onEngineSwitched,onSettingsImported,onSettingsExported,onPGNExported,onStatsHTMLExported,onStatsRequestReview,onGameDifficultyChanged,onEngineError,onMultiPVProgress,onMultiPVResult,copyMoveHistory,copyReviewPGN,exportPGNToFile,openStatsPage,playSound,handleBackPress,renderEngineConfig,renderEngineConfigAndUpdate,openEngineConfig,closeEngineConfig,scanEngines,switchEngine,importExternalEngine,restartCurrentEngine,setConfigThreads,setConfigHash,setConfigMultiPV,setConfigMoveOverhead,togglePonder,toggleShowWDL,setConfigSkillLevel,toggleLimitElo,setConfigElo,toggleAutoConfig,exportEngineSettings,importEngineSettings,requestEngineEval,_updateEvalDisplay,_updateReviewEvalUI,formatEval,_resetEvalState,_updateAllEvalDisplays,copyFEN,copyReviewFEN,importFEN,_startEngineHeartbeat,_cleanupEventListeners,_formatVariationGroups};

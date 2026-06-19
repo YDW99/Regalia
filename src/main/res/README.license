@@ -1,0 +1,38 @@
+This directory contains Android resource files used by the Regalia app.
+
+NOTE on README.license placement:
+  Android's AAPT2 resource merger strictly requires every file directly
+  inside res/ subfolders to end in .xml, .png, .webp, or .9.png. Plain-text
+  files like README.license fail this validation, so per-subfolder
+  README.license files cannot live inside res/values/, res/xml/, or
+  res/mipmap-*/. Instead, this single README.license at the res/ root
+  documents the license for ALL res/ subfolders. The same license
+  information is also mirrored in src/main/README.license.
+
+Subdirectory license summary:
+  - values/: AGPL v3 (original)
+      strings.xml — application name ("Regalia v1.0.2") and string
+      resources. Contains app_name, dialog titles, button labels,
+      toast messages, ECO family names, and all user-facing strings
+      in both Chinese and English (selected at runtime via _lang).
+  - xml/: AGPL v3 (original)
+      network_security_config.xml — TLS 1.2+ enforcement + cleartext
+      block for HTTPS connections to the Lichess Tablebase API.
+      The config disables cleartext traffic entirely and trusts the
+      system CA store; TlsSecurityHelper.java additionally enforces
+      TLS 1.2+ via SSLSocketFactory on API 21-27 where the system
+      default might negotiate TLS 1.0/1.1.
+  - mipmap-hdpi/ ... mipmap-xxxhdpi/: AGPL v3 (AI-generated assets)
+      App launcher icons (ic_launcher, ic_launcher_round,
+      ic_launcher_foreground) in 5 density buckets (hdpi, mdpi, xhdpi,
+      xxhdpi, xxxhdpi). All icons are AI-generated and licensed under
+      AGPL v3 — NOT derived from DroidFish or Stockfish. The ic_launcher
+      foreground depicts a gold crown on a dark rounded-square
+      background, matching the in-app ♔ header logo.
+
+Overall, all resources in this directory tree are original works licensed
+under AGPL v3. No DroidFish-derived or Stockfish-derived resources are
+present here.
+
+See the root-level LICENSE-AGPL v3, LICENSE-GPL v3, and NOTICE files
+for full license texts and attribution details.

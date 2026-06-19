@@ -169,12 +169,22 @@ function _invalidateElCache() {
   _cachedElements = {};
 }
 
-// Cached board square elements [row][col] — invalidated on full render
+// v1.0.2 (qw3.7max audit): Cached board square elements — 1D array indexed by
+// (row*8+col) instead of 2D array-of-arrays. A 1D array has better memory
+// locality (contiguous) and avoids the second pointer dereference on every
+// access. With 10-50 engine progress callbacks/sec, this shaves a small but
+// measurable amount off the hot incremental-update path.
+// Invalidated on full render.
 let _sqElCache = null;
+// v1.0.2 (qw3.7max audit): Cached review-moves-list element — avoids
+// getElementById('reviewMovesList') on every render's scroll-into-view path.
+// Assigned after full render (when the element is freshly created), cleared
+// on cache invalidation.
+let _rListEl = null;
 
 /**
  * Get or build the cached board square elements array.
- * @returns {Array<Array<HTMLElement>>|null} 2D array: _sqElCache[displayRow][displayCol]
+ * @returns {Array<HTMLElement>|null} 1D array: _sqElCache[displayRow*8 + displayCol]
  */
 function _getSqElCache() {
   if (_sqElCache) return _sqElCache;
@@ -182,26 +192,29 @@ function _getSqElCache() {
   if (!grid) return null;
   const sqs = grid.querySelectorAll('.sq');
   if (sqs.length !== 64) return null;
-  _sqElCache = [];
-  for (let r = 0; r < 8; r++) {
-    _sqElCache[r] = [];
-    for (let c = 0; c < 8; c++) {
-      _sqElCache[r][c] = sqs[r * 8 + c];
-    }
+  // v1.0.2 (qw3.7max audit): 1D array — single contiguous allocation, no
+  // nested array objects. Index as _sqElCache[r*8 + c].
+  _sqElCache = new Array(64);
+  for (let i = 0; i < 64; i++) {
+    _sqElCache[i] = sqs[i];
   }
   return _sqElCache;
 }
 
 // ===================== INCREMENTAL BOARD UPDATE =====================
-let _prevBoardState = null; // JSON string of last rendered board state
+// v1.0.2 PERF (audit): replaced JSON.stringify(gameState.board) dirty check
+// with a monotonic boardVersion integer (incremented in makeMv/makeMvInPlace,
+// restored in unmakeMv). At 10-50 engine progress callbacks/sec this avoids
+// ~50 board serializations/sec of ~1KB each.
+let _prevBoardVersion = -1;
 
 /**
  * Incrementally update only the board squares that changed.
- * Compares current gameState.board with previously rendered state.
+ * Compares current gameState.boardVersion with previously rendered version.
  */
 function _updateBoardIncremental() {
-  const currentBoardJSON = JSON.stringify(gameState.board);
-  if (currentBoardJSON === _prevBoardState) return; // No change
+  const currentBoardVersion = gameState.boardVersion || 0;
+  if (currentBoardVersion === _prevBoardVersion) return; // No change
 
   const sqCache = _getSqElCache();
   if (!sqCache) { markDirty(DIRTY_FULL); return; }
@@ -214,7 +227,8 @@ function _updateBoardIncremental() {
     for (let c = 0; c < 8; c++) {
       const rr = flip ? 7 - r : r;
       const cc = flip ? 7 - c : c;
-      const el = sqCache[r][c];
+      // v1.0.2 (qw3.7max audit): 1D array access — _sqElCache[r*8+c]
+      const el = sqCache[r * 8 + c];
       if (!el) continue;
       const p = gameState.board[rr][cc];
       const isL = (r + c) % 2 === 0;
@@ -222,7 +236,7 @@ function _updateBoardIncremental() {
     }
   }
 
-  _prevBoardState = currentBoardJSON;
+  _prevBoardVersion = currentBoardVersion;
   _updateArrows(hoveredSquare || selectedSquare);
 }
 
@@ -274,7 +288,7 @@ function _updateEvalDisplayIncremental() {
       if (app) {
         app.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#1a0a0a;color:#f5e6c8;padding:20px;text-align:center;font-family:system-ui,sans-serif">' +
           '<div style="font-size:3rem;margin-bottom:16px">♔</div>' +
-          '<h2 style="color:#ffd700;margin-bottom:12px">'+T('app_name')+' v1.0.1</h2>' +
+          '<h2 style="color:#ffd700;margin-bottom:12px">'+T('app_name')+' v1.0.2</h2>' +
           '<p style="color:#a08050;margin-bottom:20px;max-width:300px">'+T('render_error')+'</p>' +
           '<button onclick="location.reload()" style="padding:12px 24px;background:#c49512;color:#1a0a0a;border:none;border-radius:6px;font-size:1rem;font-weight:700;cursor:pointer">'+T('refresh_page')+'</button>' +
           '</div>';
@@ -369,9 +383,12 @@ function _buildEvalTrendSVG(width, height) {
   }
 
   // Collect eval data points (only within the visible window)
+  // v1.0.2 PERF: use peek() instead of get() — this is a read-only iteration
+  // over many entries, so refreshing LRU order on each access would just
+  // churn the Map and push other entries toward eviction for no benefit.
   const points = [];
   for (let i = localStepMin; i <= localStepMax; i++) {
-    const ev = _reviewEvalCache.get(i);
+    const ev = _reviewEvalCache.peek(i);
     if (ev != null) {
       points.push({step: i, eval: ev.eval || 0, mate: ev.mate, mateDistance: ev.mateDistance});
     }
@@ -619,7 +636,9 @@ return null;
 function _applyGameOver(cachedSt){
   const st=cachedSt||gameStatus(gameState);
   const goStr=_gameOverStrFromStatus(st);
-  if(goStr){gameOver=goStr;_gameOverStatusKey=st;if((st==='checkmate'||goStr.includes('将杀')||goStr.includes('Checkmate'))&&moveRecords.length>0){const last=moveRecords[moveRecords.length-1];if(last.notation&&!last.notation.endsWith('#')){last.notation=last.notation.replace(/\+$/,'')+'#';}_sfMateDistance=0;_sfDepth=0;_sfEval=gameState.currentTurn==='black'?99999:-99999;_sfEvalReady=true;}}
+  if(goStr){gameOver=goStr;_gameOverStatusKey=st;if((st==='checkmate'||goStr.includes('将杀')||goStr.includes('Checkmate'))&&moveRecords.length>0){const last=moveRecords[moveRecords.length-1];// v1.0.2 FIX: null-safe — last entry may be the black-to-move null placeholder
+      // in pathological edge cases (no real moves executed). Skip notation patching if so.
+      if(last&&last.notation&&!last.notation.endsWith('#')){last.notation=last.notation.replace(/\+$/,'')+'#';}_sfMateDistance=0;_sfDepth=0;_sfEval=gameState.currentTurn==='black'?99999:-99999;_sfEvalReady=true;}}
 }
 
 // ===================== GAME STATE =====================
@@ -628,6 +647,8 @@ let gameState=initState(),stateHistory=[],playerColor='white',selectedSquare=nul
     legalMvs=[],legalSet=new Set(),moveRecords=[],gameOver=null,_gameOverStatusKey=null,lastMove=null,
     pendingPromotion=null,isAIThinking=false,showNewGameDialog=false,
     showCtrlMap=false,aiLevel=4;
+// v1.0.2: PGN save prompt state — when true, shows "💾是否保存PGN文件？" dialog
+let showSavePGNPrompt=false,_pendingActionAfterSave=null,_skipPGNSavePrompt=false;
 // Setup mode state
 let setupMode=false,setupPiece=null,setupColor='white',setupErrors=[],
     setupHistory=[],setupRedoStack=[];
@@ -717,7 +738,7 @@ function capturedPiecesHtml(board, pieceColor, playerColor) {
  * Multiple rapid calls are coalesced via requestAnimationFrame.
  * @side-effect Rebuilds the entire app DOM
  */
-function render(){if(renderPending){lastRenderRequest=Date.now();return}if(animationInProgress||_landingAnimActive){if(!renderPending){renderPending=true;setTimeout(()=>{renderPending=false;lastRenderTime=Date.now();render();},200);}return;}const now=Date.now();if(now-lastRenderTime<20){renderPending=true;renderTimerId=requestAnimationFrame(()=>{renderPending=false;renderTimerId=null;lastRenderTime=Date.now();lastRenderRequest=0;renderInternal()});return}lastRenderTime=now;renderInternal()}
+function render(){if(renderPending){lastRenderRequest=Date.now();return}if(animationInProgress||_landingAnimActive){if(!renderPending){renderPending=true;setTimeout(()=>{renderPending=false;lastRenderTime=Date.now();render();},200);}return;}const now=Date.now();if(now-lastRenderTime<20){renderPending=true;renderTimerId=requestAnimationFrame(()=>{renderPending=false;renderTimerId=null;lastRenderTime=Date.now();const _reqAtTick=lastRenderRequest;lastRenderRequest=0;renderInternal();if(_reqAtTick>lastRenderTime){lastRenderTime=Date.now();renderInternal();}});return}lastRenderTime=now;renderInternal()}
 /**
  * Internal render function — builds the entire UI HTML string and sets innerHTML.
  * @side-effect Rebuilds entire app DOM, invalidates element cache
@@ -735,12 +756,14 @@ const _fe=formatEval();const pe=_fe.emoji,pd=_fe.desc,scoreStr=_fe.score;const _
 if(!gameOver&&!setupMode&&!isAIThinking&&!reviewMode){const _gsKey=gameState.hash+'|'+gameState.currentTurn;if(_cachedStatusKey!==_gsKey){_cachedStatus=gameStatus(gameState);_cachedStatusKey=_gsKey;}_applyGameOver(_cachedStatus);}
 const ctrlKey=showCtrlMap?gameState.hash:'off';if(ctrlKey!==cachedCtrlKey){cachedCtrlMap=showCtrlMap?getCtrlMap(gameState.board):null;cachedCtrlKey=ctrlKey}const cm=cachedCtrlMap;
 const infoSq=hoveredSquare||selectedSquare;let infoCtrl=null;
-if(infoSq&&cm){const e=cm[infoSq.row][infoSq.col];if(e)infoCtrl={white:e.white,black:e.black}}
+// v1.0.2 FIX (audit): reuse the control-map entry directly instead of
+// allocating a fresh {white,black} object on every render.
+if(infoSq&&cm){const e=cm[infoSq.row][infoSq.col];if(e)infoCtrl=e;}
 const oppC=OPP_COLOR[playerColor];
 const flip=playerColor==='black';
 // Arrows computed separately by _updateArrows() — no inline computation needed
 
-let h='<div class="hdr" role="banner"><div class="hdr-top"><div class="hdr-l"><span style="font-size:1.3rem;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text;border:3px solid transparent;border-image:linear-gradient(145deg,#8b6914,#d4a017,#ffd700,#fff8dc,#ffd700,#d4a017,#8b6914) 1;padding:3px 6px;background:linear-gradient(145deg,rgba(139,105,20,.18),rgba(255,215,0,.08),rgba(139,105,20,.18));box-shadow:0 0 6px rgba(212,160,23,.35),0 0 12px rgba(255,215,0,.12),inset 0 0 3px rgba(255,215,0,.1),inset 0 1px 0 rgba(255,248,220,.15);position:relative">♔&#xFE0E;</span><h1>'+T('app_name')+'<span class="ver">v1.0.1</span><button onclick="showAboutPage=true;render()" style="font-size:.6rem;color:var(--accent);background:rgba(212,160,23,.15);padding:2px 8px;border-radius:4px;border:1px solid rgba(212,160,23,.3);margin-left:4px;cursor:pointer;font-family:system-ui,-apple-system,sans-serif;letter-spacing:1px">ℹ️</button></h1></div><button onclick="toggleLang()" style="font-size:.65rem;color:var(--accent);background:rgba(212,160,23,.15);padding:2px 6px;border-radius:4px;border:1px solid rgba(212,160,23,.3);cursor:pointer;font-family:system-ui,-apple-system,sans-serif;letter-spacing:1px;flex-shrink:0">'+(_lang==='zh'?'↔️中':'↔️EN')+'</button><div class="ev" id="eval-disp" role="status" aria-label="'+T('evaluating')+'">'+(setupMode?T('setup_label'):(isAIThinking?'<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>':'<span class="ev-e">'+pe+'</span><span>'+pd+'</span><span style="color:var(--muted)">('+scoreStr+')</span>'+_hdrDepthStr+_hdrProgressStr))+'</div></div><div class="hdr-tools" role="toolbar" aria-label="'+T('ctrl_range')+'">'+(setupMode?'':'<div class="diff-sel" role="radiogroup" aria-label="AI">'+getAI_LEVELS().map(l=>'<button class="diff-b'+(getEffectiveAILevel()===l.id?' act':'')+'" onclick="if(!isAIThinking){'+(l.id===8?'openEngineConfig()':('aiLevel='+l.id+';try{AndroidBridge.syncGameDifficulty('+l.id+')}catch(e){}render()'))+'}" title="'+l.desc+'" role="radio" aria-checked="'+(getEffectiveAILevel()===l.id)+'">'+(l.id===8?'⚙️':l.id===7?'SL':l.id)+'</button>').join('')+'</div>')+'<button type="button" class="btn" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()" aria-label="'+T('new_game')+'"><span style="font-size:1.4rem">⚔️</span> '+T('new_game')+'</button>'+'<button class="btn" onclick="quickFreeOpening()" aria-label="'+T('free_opening')+'">'+(playerColor==='white'?'<span style=\"font-size:1.4rem;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text\">♔&#xFE0E;</span>':'<span style=\"font-size:1.4rem;font-weight:400;color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans Symbol&#x27;,sans-serif;font-variant-emoji:text\">♚&#xFE0E;</span>')+' '+T('free_opening')+'</button>'+(setupMode?'':'<button class="btn" onclick="undoMove()" aria-label="'+T('undo')+'"><span style="font-size:1.4rem">↩️</span> '+T('undo')+'</button><button class="btn" onclick="redoMove()" aria-label="'+T('redo')+'" id="redoBtn"><span style="font-size:1.4rem">↪️</span> '+T('redo')+'</button>')+'<button class="btn" onclick="flipBoard()" aria-label="'+T('flip')+'"><span style="font-size:1.4rem">🔃</span> '+T('flip')+'</button>'+'<button class="btn" onclick="getHint()" aria-label="'+T('ai_hint')+'"><span style="font-size:1.4rem">💡</span> '+T('ai_hint')+'</button>'+(setupMode?'':'<button class="btn" onclick="toggleSound()" id="btnSound" aria-label="'+T('sound')+'">'+(soundOn?'<span style="font-size:1.4rem">🔊</span> '+T('sound'):'<span style="font-size:1.4rem">🔇</span> '+T('sound'))+'</button>')+'<button class="btn" onclick="showCtrlMap=!showCtrlMap;cachedCtrlKey=&quot;&quot;;render()" aria-label="'+T('ctrl_range')+'" title="'+T('ctrl_range')+'">'+(showCtrlMap?'<span style="font-size:1.4rem">🌈</span> '+T('ctrl_range'):'<span style="font-size:1.4rem">🌗</span> '+T('ctrl_range'))+'</button>'+'<button class="btn" onclick="copyFEN()" title="'+T('copy_fen')+'" aria-label="'+T('copy_fen')+'"><span style="font-size:1.4rem">📝</span> FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="'+T('import_fen')+'" aria-label="'+T('import_fen')+'"><span style="font-size:1.4rem">🗃️</span> '+T('import_label')+'</button><button class="btn" onclick="'+(setupMode?'exitSetup()':'toggleSetup()')+'" aria-label="'+(setupMode?T('setup_done'):T('setup_mode'))+'">'+(setupMode?'<span style="font-size:1.4rem">✓</span> '+T('setup_done'):'<span style="font-size:1.4rem">🏗️</span> '+T('setup_mode'))+'</button></div></div>';
+let h='<div class="hdr" role="banner"><div class="hdr-top"><div class="hdr-l"><span style="font-size:1.3rem;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text;border:3px solid transparent;border-image:linear-gradient(145deg,#8b6914,#d4a017,#ffd700,#fff8dc,#ffd700,#d4a017,#8b6914) 1;padding:3px 6px;background:linear-gradient(145deg,rgba(139,105,20,.18),rgba(255,215,0,.08),rgba(139,105,20,.18));box-shadow:0 0 6px rgba(212,160,23,.35),0 0 12px rgba(255,215,0,.12),inset 0 0 3px rgba(255,215,0,.1),inset 0 1px 0 rgba(255,248,220,.15);position:relative">♔&#xFE0E;</span><h1>'+T('app_name')+'<span class="ver">v1.0.2</span><button onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showAboutPage=true;render()" style="font-size:.6rem;color:var(--accent);background:rgba(212,160,23,.15);padding:2px 8px;border-radius:4px;border:1px solid rgba(212,160,23,.3);margin-left:4px;cursor:pointer;font-family:system-ui,-apple-system,sans-serif;letter-spacing:1px">ℹ️</button></h1></div><button onclick="toggleLang()" style="font-size:.65rem;color:var(--accent);background:rgba(212,160,23,.15);padding:2px 6px;border-radius:4px;border:1px solid rgba(212,160,23,.3);cursor:pointer;font-family:system-ui,-apple-system,sans-serif;letter-spacing:1px;flex-shrink:0">'+(_lang==='zh'?'↔️中':'↔️EN')+'</button><div class="ev" id="eval-disp" role="status" aria-label="'+T('evaluating')+'">'+(setupMode?T('setup_label'):(isAIThinking?'<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>':'<span class="ev-e">'+pe+'</span><span>'+pd+'</span><span style="color:var(--muted)">('+scoreStr+')</span>'+_hdrDepthStr+_hdrProgressStr))+'</div></div><div class="hdr-tools" role="toolbar" aria-label="'+T('ctrl_range')+'">'+(setupMode?'':'<div class="diff-sel" role="radiogroup" aria-label="AI">'+getAI_LEVELS().map(l=>'<button class="diff-b'+(getEffectiveAILevel()===l.id?' act':'')+'" onclick="if(!isAIThinking){'+(l.id===8?'openEngineConfig()':('aiLevel='+l.id+';try{AndroidBridge.syncGameDifficulty('+l.id+')}catch(e){}render()'))+'}" title="'+l.desc+'" role="radio" aria-checked="'+(getEffectiveAILevel()===l.id)+'">'+(l.id===8?'⚙️':l.id===7?'SL':l.id)+'</button>').join('')+'</div>')+'<button type="button" class="btn" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()" aria-label="'+T('new_game')+'"><span style="font-size:1.4rem">⚔️</span> '+T('new_game')+'</button>'+'<button class="btn" onclick="quickFreeOpening()" aria-label="'+T('free_opening')+'">'+(playerColor==='white'?'<span style=\"font-size:1.4rem;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text\">♔&#xFE0E;</span>':'<span style=\"font-size:1.4rem;font-weight:400;color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans Symbol&#x27;,sans-serif;font-variant-emoji:text\">♚&#xFE0E;</span>')+' '+T('free_opening')+'</button>'+(setupMode?'':'<button class="btn" onclick="undoMove()" aria-label="'+T('undo')+'"><span style="font-size:1.4rem">↩️</span> '+T('undo')+'</button><button class="btn" onclick="redoMove()" aria-label="'+T('redo')+'" id="redoBtn"><span style="font-size:1.4rem">↪️</span> '+T('redo')+'</button>')+'<button class="btn" onclick="flipBoard()" aria-label="'+T('flip')+'"><span style="font-size:1.4rem">🔃</span> '+T('flip')+'</button>'+'<button class="btn" onclick="getHint()" aria-label="'+T('ai_hint')+'"><span style="font-size:1.4rem">💡</span> '+T('ai_hint')+'</button>'+(setupMode?'':'<button class="btn" onclick="toggleSound()" id="btnSound" aria-label="'+T('sound')+'">'+(soundOn?'<span style="font-size:1.4rem">🔊</span> '+T('sound'):'<span style="font-size:1.4rem">🔇</span> '+T('sound'))+'</button>')+'<button class="btn" onclick="showCtrlMap=!showCtrlMap;cachedCtrlKey=&quot;&quot;;render()" aria-label="'+T('ctrl_range')+'" title="'+T('ctrl_range')+'">'+(showCtrlMap?'<span style="font-size:1.4rem">🌈</span> '+T('ctrl_range'):'<span style="font-size:1.4rem">🌗</span> '+T('ctrl_range'))+'</button>'+'<button class="btn" onclick="copyFEN()" title="'+T('copy_fen')+'" aria-label="'+T('copy_fen')+'"><span style="font-size:1.4rem">📝</span> FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="'+T('import_fen')+'" aria-label="'+T('import_fen')+'"><span style="font-size:1.4rem">🗃️</span> '+T('import_label')+'</button><button class="btn" onclick="'+(setupMode?'exitSetup()':'toggleSetup()')+'" aria-label="'+(setupMode?T('setup_done'):T('setup_mode'))+'">'+(setupMode?'<span style="font-size:1.4rem">✓</span> '+T('setup_done'):'<span style="font-size:1.4rem">🏗️</span> '+T('setup_mode'))+'</button></div></div>';
 h+=`<div class="main" role="main"><div class="bsec">`;
 {const _aiCapHtml=capturedPiecesHtml(gameState.board,oppC,playerColor);h+=`<div class="pbar" id="ai-bar" role="status" aria-label="AI" style="flex-wrap:wrap"><span class="pico">${playerColor==='white'?'<span style="color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55)">♚&#xFE0E;</span>':'<span style="color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55)">♔&#xFE0E;</span>'}</span><div style="flex:1;min-width:0;display:flex;flex-direction:column"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><div class="pname">${T('ai_opponent')}</div><div class="pbar-sub">${getEffectiveAILevel()===8?T('manual_config'):getEffectiveAILevel()===7?'SL':('Lv.'+getEffectiveAILevel())}</div>${gameState.currentTurn!==playerColor&&!gameOver&&!isAIThinking?'<span class="tind">'+T('waiting')+'</span>':''}${isAIThinking?'<span class="tind">'+(_aiBarInfo||T('thinking'))+'</span>':''}</div>${_aiCapHtml}<div id="ai-ponder-info" style="display:flex;justify-content:flex-end;text-align:right;font-size:.65rem;color:var(--muted);font-family:monospace,system-ui,-apple-system,sans-serif;letter-spacing:.5px;padding-top:2px;line-height:1.3;min-height:1.3em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;flex:0 0 auto">${(!isAIThinking&&!isHintLoading&&!hintText&&_ponderMoveSAN&&_ponderBarInfo&&!gameOver&&!setupMode&&!reviewMode)?('🔮 '+_esc(_ponderMoveSAN)+' '+_esc(_ponderBarInfo)):''}</div></div></div>`;}
 h+=`<div class="flbl" style="margin-left:28px">${(flip?'hgfedcba':'abcdefgh').split('').map(f=>`<span style="width:${CELL}px">${f}</span>`).join('')}</div>`;
@@ -769,7 +792,7 @@ h+=`</div>`}}
 h+=`</div>`;
 // Arrows are now handled by persistent SVG overlay via _updateArrows() — no inline SVG here
 if(gameOver&&lastMove&&!gameOverSoundPlayed){gameOverSoundPlayed=true;playSound('gameover');HapticManager.fire('GAME_OVER');}
-if(gameOver&&!setupMode){h+=`<div class="gover" role="alert" aria-live="assertive"><div class="ge">${_gameOverStatusKey==='checkmate'?(gameState.currentTurn==='black'?'♔\uFE0E':'♚\uFE0E'):'🤝'}</div><div class="gt">${gameOver}</div><button type="button" class="btn btn-p" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()">${T('play_again')}</button><button type="button" class="btn btn-g" onclick="enterReview()">📑 ${T('review')}</button></div>`;}
+if(gameOver&&!setupMode){h+=`<div class="gover" role="alert" aria-live="assertive"><div class="ge" style="${_gameOverStatusKey==='checkmate'?(gameState.currentTurn==='black'?'color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55)':'color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55)'):'font-family:system-ui,sans-serif'};font-family:'DejaVu Sans','Noto Sans','Segoe UI Symbol',sans-serif;font-variant-emoji:text;font-weight:400">${_gameOverStatusKey==='checkmate'?(gameState.currentTurn==='black'?'♔\uFE0E':'♚\uFE0E'):'🤝'}</div><div class="gt">${gameOver}</div><button type="button" class="btn btn-p" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()">⚔️ ${T('play_again')}</button><button type="button" class="btn btn-g" onclick="enterReview()">📑 ${T('review')}</button></div>`;}
 if(setupMode){
 const spPieces=[{t:'pawn',w:'♙\uFE0E',b:'♟\uFE0E'},{t:'knight',w:'♘\uFE0E',b:'♞\uFE0E'},{t:'bishop',w:'♗\uFE0E',b:'♝\uFE0E'},{t:'rook',w:'♖\uFE0E',b:'♜\uFE0E'},{t:'queen',w:'♕\uFE0E',b:'♛\uFE0E'},{t:'king',w:'♔\uFE0E',b:'♚\uFE0E'}];
 h+=`<div class="setup-panel" style="width:${8*CELL+8}px;max-width:100%;box-sizing:border-box"><div class="setup-row" style="justify-content:flex-start"><span class="setup-label">${T('piece')}</span>`;
@@ -777,7 +800,7 @@ for(const p of spPieces)h+=`<button class="setup-btn${setupPiece===p.t?' act':''
 h+=`<button class="setup-del${setupPiece==='delete'?' act':''}" onclick="setupPiece='delete';render()">🗑️</button></div>`;
 h+=`<div class="setup-row"><span class="setup-label">${T('color')}</span><button class="setup-clr${setupColor==='white'?' act':''}" onclick="setupColor='white';render()">${T('white_side')}</button><button class="setup-clr${setupColor==='black'?' act':''}" onclick="setupColor='black';render()">${T('black_side')}</button></div>`;
 h+=`<div class="setup-row"><span class="setup-label">${T('turn_side')}</span><button class="setup-clr${gameState.currentTurn==='white'?' act':''}" onclick="gameState.currentTurn='white';_refreshStateAfterSetup(gameState);render()">${T('white_side')}</button><button class="setup-clr${gameState.currentTurn==='black'?' act':''}" onclick="gameState.currentTurn='black';_refreshStateAfterSetup(gameState);render()">${T('black_side')}</button></div>`;
-h+=`<div class="setup-row" style="justify-content:center;gap:12px"><button class="btn" onclick="undoSetupClick()"${setupHistory.length===0?' disabled style="opacity:0.4"':''}><span style="font-size:1.4rem">↩️</span> ${T('undo_setup')}</button><button class="btn" onclick="redoSetupClick()"${setupRedoStack.length===0?' disabled style="opacity:0.4"':''}><span style="font-size:1.4rem">↪️</span> ${T('redo_setup')}</button><button class="btn" onclick="gameState=initState();gameState.moveHistory=[];setupErrors=[];setupHistory=[];render()"><span style="font-size:1.4rem">♻️</span> ${T('reset_board')}</button><button class="btn" onclick="for(let r=0;r<8;r++)for(let c=0;c<8;c++)gameState.board[r][c]=null;gameState.wk=null;gameState.bk=null;gameState.enPassantTarget=null;gameState.halfMoveClock=0;_refreshStateAfterSetup(gameState);setupErrors=[];setupHistory=[];render()"><span style="font-size:1.4rem">🧹</span> ${T('clear_board')}</button></div><div class="setup-row" style="justify-content:center;gap:8px;margin-top:6px"><button class="btn" onclick="copyFEN()"><span style="font-size:1.4rem">📝</span> ${T('copy_fen_btn')}</button><button class="btn" onclick="importFEN()"><span style="font-size:1.4rem">📋</span> ${T('import_fen_btn')}</button></div></div>`;
+h+=`<div class="setup-row" style="justify-content:center;gap:12px"><button class="btn" onclick="undoSetupClick()"${setupHistory.length===0?' disabled style="opacity:0.4"':''}><span style="font-size:1.4rem">↩️</span> ${T('undo_setup')}</button><button class="btn" onclick="redoSetupClick()"${setupRedoStack.length===0?' disabled style="opacity:0.4"':''}><span style="font-size:1.4rem">↪️</span> ${T('redo_setup')}</button><button class="btn" onclick="gameState=initState();gameState.moveHistory=[];setupErrors=[];setupHistory=[];render()"><span style="font-size:1.4rem">♻️</span> ${T('reset_board')}</button><button class="btn" onclick="for(let r=0;r<8;r++)for(let c=0;c<8;c++)gameState.board[r][c]=null;gameState.wk=null;gameState.bk=null;gameState.enPassantTarget=null;gameState.halfMoveClock=0;_refreshStateAfterSetup(gameState);setupErrors=[];setupHistory=[];render()"><span style="font-size:1.4rem">🧹</span> ${T('clear_board')}</button></div><div class="setup-row" style="justify-content:center;gap:8px;margin-top:6px"><button class="btn" onclick="copyFEN()"><span style="font-size:1.4rem">📝</span> ${T('copy_fen_btn')}</button><button class="btn" onclick="_importFENWithSaveCheck()"><span style="font-size:1.4rem">📋</span> ${T('import_fen_btn')}</button></div></div>`;
 if(setupErrors.length>0)h+=`<div class="setup-errors"><strong>${T('setup_error_title')}</strong><ul>${setupErrors.map(e=>`<li>${_esc(e)}</li>`).join('')}</ul><button class="btn" onclick="setupErrors=[];render()" style="margin-top:4px">${T('understood')}</button></div>`;
 }
 h+=`</div></div>`;
@@ -855,9 +878,9 @@ if(ecoInfo){h+=`<div class="card"><div class="card-t"><span class="ico">📖</sp
 }
 
 // Move history
-h+=`<div class="card"><div class="card-t"><span class="ico">📜</span>${T('move_history')}<button class="btn" style="margin-left:auto;padding:3px 10px;font-size:.7rem;min-height:24px" onclick="copyMoveHistory()">📝 PGN</button><div class="toggle" style="margin-left:6px;padding:2px 6px;font-size:.65rem" onclick="showVariations=!showVariations;HapticManager.fire(showVariations?'TOGGLE_ON':'TOGGLE_OFF');render()"><span>${T('variation_toggle')}</span><div class="toggle-sw${showVariations?' on':''}" style="width:30px;height:16px"></div></div></div><div class="mlist">`;
+h+=`<div class="card"><div class="card-t"><span class="ico">📜</span>${T('move_history')}<button class="btn" style="margin-left:auto;padding:3px 10px;font-size:.7rem;min-height:24px" onclick="copyMoveHistory()" title="${T('pgn_copied')||'Copy PGN'}">📝 PGN</button><button class="btn" style="margin-left:4px;padding:3px 10px;font-size:.7rem;min-height:24px" onclick="exportPGNToFile()" title="${T('export_pgn')||'Export PGN to file'}">💾</button><button class="btn" style="margin-left:4px;padding:3px 10px;font-size:.7rem;min-height:24px" onclick="openStatsPage()" title="${T('stats')}">📊</button><div class="toggle" style="margin-left:6px;padding:2px 6px;font-size:.65rem" onclick="showVariations=!showVariations;HapticManager.fire(showVariations?'TOGGLE_ON':'TOGGLE_OFF');render()"><span>${T('variation_toggle')}</span><div class="toggle-sw${showVariations?' on':''}" style="width:30px;height:16px"></div></div></div><div class="mlist">`;
 const pairs=[];for(let i=0;i<moveRecords.length;i+=2){pairs.push({n:Math.floor(i/2)+1,w:moveRecords[i],b:moveRecords[i+1]})}
-for(const pr of pairs){h+='<div class="mrow"><span class="mnum">'+pr.n+'.</span>';if(pr.w){h+='<span class="mw" onclick="if(!isAIThinking&&!setupMode&&!reviewMode){showNewGameDialog=false;enterReview();reviewGoTo('+(pr.n*2-1)+');event.stopPropagation()}">'+_esc(pr.w.notation)+(pr.w.time?'<span style="font-size:.6rem;color:var(--muted);margin-left:2px">'+pr.w.time+'s</span>':'')+'</span>';if(showVariations&&pr.w&&pr.w.variations&&pr.w.variations.length>0){h+=_formatVariationGroups(pr.w.variations,pr.n,true);}}if(pr.b){h+='<span class="mb" onclick="if(!isAIThinking&&!setupMode&&!reviewMode){showNewGameDialog=false;enterReview();reviewGoTo('+(pr.n*2)+');event.stopPropagation()}">'+_esc(pr.b.notation)+(pr.b.time?'<span style="font-size:.6rem;color:var(--muted);margin-left:2px">'+pr.b.time+'s</span>':'')+'</span>';if(showVariations&&pr.b&&pr.b.variations&&pr.b.variations.length>0){h+=_formatVariationGroups(pr.b.variations,pr.n,false);}}h+='</div>'}
+for(const pr of pairs){h+='<div class="mrow"><span class="mnum">'+pr.n+'.</span>';if(pr.w){h+='<span class="mw" onclick="if(!isAIThinking&&!setupMode&&!reviewMode){showNewGameDialog=false;enterReview();reviewGoTo('+(pr.n*2-1)+');event.stopPropagation()}">'+_esc(pr.w.notation)+(pr.w.time?'<span style="font-size:.6rem;color:var(--muted);margin-left:2px">'+pr.w.time+'s</span>':'')+'</span>';if(showVariations&&pr.w&&pr.w.variations&&pr.w.variations.length>0){h+=_formatVariationGroups(pr.w.variations,pr.n,true);}}else if(pr.w===null){h+='<span class="mw" style="opacity:.55;font-style:italic" title="'+T('white_concedes_move')+'">...</span>';}if(pr.b){h+='<span class="mb" onclick="if(!isAIThinking&&!setupMode&&!reviewMode){showNewGameDialog=false;enterReview();reviewGoTo('+(pr.n*2)+');event.stopPropagation()}">'+_esc(pr.b.notation)+(pr.b.time?'<span style="font-size:.6rem;color:var(--muted);margin-left:2px">'+pr.b.time+'s</span>':'')+'</span>';if(showVariations&&pr.b&&pr.b.variations&&pr.b.variations.length>0){h+=_formatVariationGroups(pr.b.variations,pr.n,false);}}h+='</div>'}
 if(!pairs.length)h+=`<div style="color:#64748b;font-size:.85rem">${T('no_moves')}</div>`;
 h+=`</div></div>`;
 // Tips
@@ -887,16 +910,19 @@ if(showAboutPage){
 // Load AGPL v3 SVG via AndroidBridge as base64 (CSP-compliant)
 let _gplSvgSrc='';
 try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.loadAssetAsBase64){const b64=AndroidBridge.loadAssetAsBase64('AGPLv3_Logo.svg');if(b64)_gplSvgSrc='data:image/svg+xml;base64,'+b64;}}catch(e){}
-h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="About"><div class="dlg" style="max-width:460px"><h2>${T('about_title')}</h2><div class="dlg-sec"><div class="crow"><span class="lb">${T('about_app')}</span><span class="vl">${T('app_name')} v1.0.1</span></div><div class="crow"><span class="lb">${T('about_engine')}</span><span class="vl">Stockfish 18 (arm64-v8a-dotprod)</span></div><div class="crow"><span class="lb">${T('about_platform')}</span><span class="vl">Android arm64-v8a</span></div></div><div class="dlg-sec"><h3>${T('copyright_license')}</h3>`+(_gplSvgSrc?`<div style="text-align:center;margin-bottom:10px"><img src="${_gplSvgSrc}" alt="AGPL v3 Logo" style="width:120px;height:auto;opacity:.9" /></div>`:'')+`<div style="font-size:.75rem;color:var(--text);line-height:1.6"><p style="margin-bottom:8px">${T('about_copyright')}</p><p style="margin-bottom:8px">${T('about_source_code')}</p><p style="margin-bottom:8px">${T('about_agpl')} <a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank">GNU AGPL v3</a>${T('about_agpl_desc')}</p><p style="margin-bottom:8px">${T('about_droidfish')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank">GPL v3</a>${T('about_droidfish_desc')}</p><p style="margin-bottom:8px">${T('about_stockfish')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank">GPL v3</a> ${T('about_gplv3')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_disclaimer')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_ai')}</p></div></div><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="showAboutPage=false;render()" style="flex:1;justify-content:center">${T('close')}</button></div></div></div>`;}
+h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="About"><div class="dlg" style="max-width:460px"><h2>${T('about_title')}</h2><div class="dlg-sec"><div class="crow"><span class="lb">${T('about_app')}</span><span class="vl">${T('app_name')} v1.0.2</span></div><div class="crow"><span class="lb">${T('about_engine')}</span><span class="vl">Stockfish 18 (arm64-v8a-dotprod)</span></div><div class="crow"><span class="lb">${T('about_platform')}</span><span class="vl">Android arm64-v8a</span></div></div><div class="dlg-sec"><h3>${T('copyright_license')}</h3>`+(_gplSvgSrc?`<div style="text-align:center;margin-bottom:10px"><img src="${_gplSvgSrc}" alt="AGPL v3 Logo" style="width:120px;height:auto;opacity:.9" /></div>`:'')+`<div style="font-size:.75rem;color:var(--text);line-height:1.6"><p style="margin-bottom:8px">${T('about_copyright')}</p><p style="margin-bottom:8px">${T('about_source_code')}</p><p style="margin-bottom:8px">${T('about_agpl')} <a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank">GNU AGPL v3</a>${T('about_agpl_desc')}</p><p style="margin-bottom:8px">${T('about_droidfish')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank">GPL v3</a>${T('about_droidfish_desc')}</p><p style="margin-bottom:8px">${T('about_stockfish')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank">GPL v3</a> ${T('about_gplv3')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_disclaimer')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_ai')}</p></div></div><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="showAboutPage=false;render()" style="flex:1;justify-content:center">${T('close')}</button></div></div></div>`;}
 // Import dialog — paste FEN, paste PGN, or select PGN file
 if(showImportDialog){
 h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="${T('import_title')}" onclick="if(event.target===this){showImportDialog=false;render()}"><div class="dlg" style="max-width:420px"><h2>${T('import_title')}</h2><div class="dlg-sec" style="gap:10px;display:flex;flex-direction:column">
-<button class="btn" style="width:100%;justify-content:center;gap:8px;padding:12px;font-size:.9rem" onclick="showImportDialog=false;importFEN()"><span style="font-size:1.3rem">📋</span> ${T('paste_fen_opt')}</button>
+<button class="btn" style="width:100%;justify-content:center;gap:8px;padding:12px;font-size:.9rem" onclick="showImportDialog=false;_importFENWithSaveCheck()"><span style="font-size:1.3rem">📋</span> ${T('paste_fen_opt')}</button>
 <button class="btn" style="width:100%;justify-content:center;gap:8px;padding:12px;font-size:.9rem" onclick="showImportDialog=false;_doPastePGN()"><span style="font-size:1.3rem">📜</span> ${T('paste_pgn_opt')}</button>
-<button class="btn" style="width:100%;justify-content:center;gap:8px;padding:12px;font-size:.9rem" onclick="showImportDialog=false;importPGNFile()"><span style="font-size:1.3rem">📂</span> ${T('select_pgn_file')}</button>
+<button class="btn" style="width:100%;justify-content:center;gap:8px;padding:12px;font-size:.9rem" onclick="showImportDialog=false;_importPGNFileWithSaveCheck()"><span style="font-size:1.3rem">📂</span> ${T('select_pgn_file')}</button>
 </div><div class="dlg-btns"><button type="button" class="btn btn-s" onclick="showImportDialog=false;render()" style="flex:1;justify-content:center">${T('cancel')}</button></div></div></div>`;
 }
 if(pendingPromotion){const co=pendingPromotion.piece.color;const pcls=co==='white'?'w-prom':'bk-prom';h+=`<div class="prom-dov" role="dialog" aria-modal="true" aria-label="${T('select_promotion')}" onclick="if(event.target===this){pendingPromotion=null;render()}"><div class="prom-dlg"><h3>${T('select_promotion')}</h3><div class="prom-row">`;for(const t of['queen','rook','bishop','knight'])h+=`<button class="prom-btn ${pcls}" onclick="doPromotion('${t}')">${SYM[co][t]}</button>`;h+=`</div><button class="btn" style="margin-top:12px;font-size:.8rem" onclick="pendingPromotion=null;render()">${T('cancel')}</button></div></div>`}
+
+// v1.0.2: PGN save prompt dialog — shown before clearing move records
+if(showSavePGNPrompt){h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="${T('save_pgn_prompt')}" onclick="if(event.target===this){showSavePGNPrompt=false;_savePGNNo()}"><div class="dlg" style="max-width:320px"><h2>${T('save_pgn_prompt')}</h2><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="_savePGNYes()">${T('save_pgn_yes')}</button><button type="button" class="btn btn-s" onclick="_savePGNNo()">${T('save_pgn_no')}</button></div></div></div>`;}
 
 if(reviewMode){
 const safeStep=Math.max(0,Math.min(reviewStep,reviewStates.length-1));
@@ -905,7 +931,7 @@ const rs=reviewStates[safeStep];
 if(!rs){reviewMode=false;render();return}
 const rBoard=rs.state.board;const rLast=rs.lastMove;
 h+='<div class="review-overlay">';
-h+=`<div class="review-hdr"><h2>${T('review_analysis')}</h2><div style="display:flex;gap:6px;align-items:center"><div class="toggle" style="padding:2px 6px;font-size:.65rem" onclick="showVariations=!showVariations;HapticManager.fire(showVariations?'TOGGLE_ON':'TOGGLE_OFF');render()"><span>${T('variation_toggle')}</span><div class="toggle-sw${showVariations?' on':''}" style="width:30px;height:16px"></div></div><button class="btn" onclick="copyReviewPGN()" title="${T('copy_review_pgn')}">📝 PGN</button><button class="btn" onclick="copyReviewFEN()" title="${T('copy_review_fen')}">📝 FEN</button><button class="btn" onclick="exitReview()">${T('return_game')}</button></div></div>`;
+h+=`<div class="review-hdr"><h2>${T('review_analysis')}</h2><div style="display:flex;gap:6px;align-items:center"><div class="toggle" style="padding:2px 6px;font-size:.65rem" onclick="showVariations=!showVariations;HapticManager.fire(showVariations?'TOGGLE_ON':'TOGGLE_OFF');render()"><span>${T('variation_toggle')}</span><div class="toggle-sw${showVariations?' on':''}" style="width:30px;height:16px"></div></div><button class="btn" onclick="copyReviewPGN()" title="${T('copy_review_pgn')}">📝 PGN</button><button class="btn" onclick="exportPGNToFile()" title="${T('export_pgn')||'Export PGN to file'}">💾</button><button class="btn" onclick="showCtrlMap=!showCtrlMap;cachedCtrlKey=&quot;&quot;;render()" title="${T('ctrl_range')}">${showCtrlMap?'🌈':'🌗'}</button><button class="btn" onclick="copyReviewFEN()" title="${T('copy_review_fen')}">📝 FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="${T('import_label')}">🗃️</button><button class="btn" onclick="openStatsPage()" title="${T('stats')}">📊</button><button class="btn" onclick="exitReview()">${T('return_game')}</button></div></div>`;
 h+='<div class="review-body">';
 // P0 FIX: Wrap board + controls in .review-left for proper landscape flex layout
 h+='<div class="review-left">';
@@ -931,11 +957,46 @@ if (_isLandscapeReview) {
 }
 h+='<div class="review-board">';
 h+='<div class="bgrid" style="grid-template-columns:repeat(8,'+_rvCell+'px);grid-template-rows:repeat(8,'+_rvCell+'px)">';
+// v1.0.2: When showCtrlMap is enabled (🌈), color the review board squares with
+// the control map — same as the main board. Compute the control map for the
+// review position's board state.
+const _rvCtrlKey=showCtrlMap?(rs.state.hash||'rv'):'off';
+let _rvCm=null;
+if(showCtrlMap){
+  // Use a separate cache key for review positions to avoid collision with main board cache
+  if(cachedCtrlKey!==_rvCtrlKey){
+    cachedCtrlMap=getCtrlMap(rBoard);
+    cachedCtrlKey=_rvCtrlKey;
+  }
+  _rvCm=cachedCtrlMap;
+}
 for(let r=0;r<8;r++){for(let c=0;c<8;c++){
 const rr=flip?7-r:r;const cc=flip?7-c:c;
 const p=rBoard[rr][cc];const isL=(r+c)%2===0;
 let bg=isL?SQ_LIGHT:SQ_DARK;
-// No last-move square coloring in review — CSS last-from/last-to borders are sufficient
+// v1.0.2: Apply control map coloring in review mode
+if(_rvCm){
+  const e=_rvCm[rr][cc];
+  if(e){
+    const wc=e.white.length,bc=e.black.length;
+    const myC=playerColor==='white'?wc:bc;
+    const opC=playerColor==='white'?bc:wc;
+    const net=myC-opC;
+    const total=myC+opC;
+    const adv=total>0?net/total:0;
+    const str=Math.min(1,total/8);
+    let hue;
+    if(myC===0&&opC===0){
+      bg='#3a2020';
+    }else{
+      if(adv>=0)hue=280-adv*60;else hue=280-adv*80;
+      if(hue>=360)hue-=360;
+      const sat=0.50+str*0.40;
+      const lit=0.48-str*0.12;
+      bg='hsl('+Math.round(hue)+','+Math.round(sat*100)+'%,'+Math.round(lit*100)+'%)';
+    }
+  }
+}
 h+='<div style="background:'+bg+';width:'+_rvCell+'px;height:'+_rvCell+'px;display:flex;align-items:center;justify-content:center;font-size:1.5rem">';
 if(p){h+='<span class="'+(p.color==='white'?'rv-w':'rv-bk')+'" style="pointer-events:none">'+SYM[p.color][p.type]+'</span>';}
 h+='</div>';
@@ -1010,6 +1071,12 @@ const _criticalReasons=new Map();reviewCritical.forEach(c=>_criticalReasons.set(
 h+='<div class="review-moves" id="reviewMovesList">';
 for(let i=0;i<moveRecords.length;i++){
 const mr=moveRecords[i];const isW=i%2===0;const moveNum=Math.floor(i/2)+1;
+// v1.0.2 FIX: null placeholder (black-to-move opening) — render as a non-interactive
+// "..." marker, skip eval/variations logic, but keep index alignment with reviewStates.
+if(mr===null){
+  h+='<div class="rmv-block" style="opacity:.5" data-step="'+(i+1)+'"><span class="rmv-num">'+(isW?moveNum+'.':'')+'</span><div class="rmv-detail"><span class="rmv-notation" style="font-style:italic">...</span></div></div>';
+  continue;
+}
 const isAct=reviewStep===i+1;
 const isCritical=_criticalSteps.has(i+1);
 const criticalFlag=isCritical?' style="border-left:3px solid var(--accent2);padding-left:7px"':'';
@@ -1021,17 +1088,25 @@ if(isCritical&&_criticalReasons.has(i+1)){h+='<span style="font-size:.65rem;colo
 // Ponder is fully decoupled from move records — never appears here.
 if(showVariations&&mr.variations&&mr.variations.length>0){h+=_formatVariationGroups(mr.variations,moveNum,isW);}
 // Show per-move eval if cached
-const _mvEval=_reviewEvalCache.get(i+1);
-const _prevMvEval=_reviewEvalCache.get(i);
+// v1.0.2 PERF: use peek() — this is inside a render loop over all moves, so
+// refreshing LRU on every access would be wasteful.
+const _mvEval=_reviewEvalCache.peek(i+1);
+const _prevMvEval=_reviewEvalCache.peek(i);
 if(_mvEval!=null&&_prevMvEval!=null){
   h+=_formatEvalDelta(_mvEval.eval,_prevMvEval.eval,'.6rem');
   // Move classification label — ALWAYS from mover's perspective
   // reviewStep parity: odd step = White moved, even step = Black moved
   // i+1 is the reviewStep for this move (move index i corresponds to step i+1)
   const _mvDelta=_mvEval.eval-(_prevMvEval?_prevMvEval.eval:0);
-  const _isMoverWhite=((i+1)%2)===1; // step is odd → White moved
+  // v1.0.2 (qw3.7max audit): simplified — (i+1)%2===1 is mathematically
+  // equivalent to i%2===0 (i is 0-based: even index = White moved).
+  const _isMoverWhite=(i%2)===0;
   const _mcls=_classifyMove(_mvDelta,_isMoverWhite);
-  h+='<span style="font-size:.6rem;font-weight:700;color:'+_mcls.color+';margin-left:4px">'+_mcls.label+'</span>';
+  // v1.0.2 (qw3.7max audit): use template literal + _esc() for defensive
+  // XSS protection. _mcls comes from _classifyMove (internal constants) so
+  // escaping is technically redundant now, but guards against future changes
+  // that might introduce user-controlled data into classification labels/colors.
+  h+=`<span style="font-size:.6rem;font-weight:700;color:${_esc(_mcls.color)};margin-left:4px">${_esc(_mcls.label)}</span>`;
 }
 h+='</div></div>';
 }
@@ -1052,24 +1127,34 @@ _prevHoverSq=hoveredSquare?{row:hoveredSquare.row,col:hoveredSquare.col}:null;
 _prevSelSq=selectedSquare?{row:selectedSquare.row,col:selectedSquare.col}:null;
 _prevLegalSet=new Set();if(selectedSquare){for(const m of legalMvs)_prevLegalSet.add(m.row*8+m.col);}
 // Review scrolling: scroll the active move into view after DOM rebuild.
-// FIX: Use requestAnimationFrame + setTimeout to ensure layout is complete
-// before scrolling. Synchronous scrollIntoView immediately after innerHTML
-// can be lost because the browser hasn't performed layout yet.
+// v1.0.2 (qw3.7max audit): Use double requestAnimationFrame instead of
+// rAF+setTimeout(0). The first rAF fires after the browser computes layout
+// for the new DOM; the second rAF fires after paint. Reading layout info
+// (scrollIntoView) in the second rAF guarantees no forced synchronous layout
+// (layout thrashing). The old rAF+setTimeout(0) pattern couldn't guarantee
+// layout was complete because setTimeout is a macrotask that may run before
+// the browser's layout/paint step.
+// Also use the module-level _rListEl cache instead of getElementById on every
+// render (avoids a DOM tree walk on the scroll path).
 if(reviewMode){
   requestAnimationFrame(function(){
-    setTimeout(function(){
-      const _rList=document.getElementById('reviewMovesList');
+    requestAnimationFrame(function(){
+      const _rList=_rListEl||document.getElementById('reviewMovesList');
       if(_rList){
         const _rAct=_rList.querySelector('.rmv-block.act');
-        if(_rAct)_rAct.scrollIntoView({block:'center',behavior:'instant'});
+        if(_rAct)_rAct.scrollIntoView({block:'center',behavior:'auto'});
       }
-    },0);
+    });
   });
 }
 // Render arrows into the new DOM using persistent SVG overlay
 _updateArrows(hoveredSquare||selectedSquare);
 // Invalidate DOM element cache and update board state tracking after full render
-_invalidateElCache(); _sqElCache = null; _prevBoardState = JSON.stringify(gameState.board);
+// v1.0.2 PERF (audit): use boardVersion integer instead of JSON.stringify
+_invalidateElCache(); _sqElCache = null; _prevBoardVersion = gameState.boardVersion || 0;
+// v1.0.2 (qw3.7max audit): cache the review-moves-list element for the
+// scroll-into-view path (avoids getElementById on every render).
+_rListEl = document.getElementById('reviewMovesList');
 // Restore focus for ECO search input using pre-rebuild state
 if(_wasEcoFocused){const el=document.getElementById('ecoSearch');if(el){el.focus();_ecoSearchFocused=true;try{el.setSelectionRange(el.value.length,el.value.length)}catch(e){}}}
 // Auto-scroll opening list to selected opening (skip during review mode)
@@ -1082,28 +1167,45 @@ if(showNewGameDialog&&dlgOpeningId&&!reviewMode){setTimeout(()=>{const list=docu
 // Only updates squares that actually changed — avoids 5-15ms DOM rebuild per move
 let _fullRenderTimer=0;
 
-let _sqBgCache=null;function _getSqBg(rr,cc,cm,isL,lastMove){
+// v1.0.2 REDUNDANCY (first-principles): removed unused `_sqBgCache` declaration
+// — it was declared but never assigned or read (leftover from an abandoned
+// caching attempt). The actual background computation is cheap enough that
+// per-square caching wasn't worth the bookkeeping, especially now that
+// _updateSingleSq skips the DOM write entirely when the square's signature
+// hasn't changed.
+function _getSqBg(rr,cc,cm,isL,lastMove){
   let bg=isL?SQ_LIGHT:SQ_DARK;
   let ctrlBg=null;
   if(cm){const e=cm[rr][cc];if(e){const wc=e.white.length,bc=e.black.length;const myC=playerColor==='white'?wc:bc;const opC=playerColor==='white'?bc:wc;const net=myC-opC;const total=myC+opC;const adv=total>0?net/total:0;const str=Math.min(1,total/8);let hue;if(myC===0&&opC===0){ctrlBg='#3a2020'}else{if(adv>=0)hue=280-adv*60;else hue=280-adv*80;if(hue>=360)hue-=360;const sat=0.50+str*0.40;const lit=0.48-str*0.12;ctrlBg=`hsl(${Math.round(hue)},${Math.round(sat*100)}%,${Math.round(lit*100)}%)`}}}
-  let lastFrom=false,lastTo=false;if(lastMove){if(rr===lastMove.from.row&&cc===lastMove.from.col)lastFrom=true;if(rr===lastMove.to.row&&cc===lastMove.to.col)lastTo=true;}
   if(ctrlBg){bg=ctrlBg}
   return bg;
 }
 
 function _updateSingleSq(el,p,rr,cc,cm,isL,lastMove,_checkKingPos){
-  const bg=_getSqBg(rr,cc,cm,isL,lastMove);
+  // v1.0.2 PERF (first-principles): build a cheap signature string capturing
+  // everything that affects this square's visual state. Only when the signature
+  // changes do we touch the DOM (style.background, className, innerHTML).
+  // Previously this function unconditionally rebuilt innerHTML for all 64
+  // squares on every engine-progress callback (~10-50/sec), even though most
+  // squares don't change between callbacks.
   const isSel=selectedSquare&&rr===selectedSquare.row&&cc===selectedSquare.col;
   const lastFrom=lastMove&&rr===lastMove.from.row&&cc===lastMove.from.col;
   const lastTo=lastMove&&lastMove.to.row===rr&&lastMove.to.col===cc;
   const isCheckSq=_checkKingPos&&rr===_checkKingPos.row&&cc===_checkKingPos.col;
+  const isLegal=legalSet.has(rr*8+cc);
+  const animCls=(_lastAnimPieceType&&_lastAnimTarget&&lastTo&&rr===_lastAnimTarget.row&&cc===_lastAnimTarget.col&&p&&p.type===_lastAnimPieceType)?' anim-'+p.type:'';
+  // Signature: piece color+type, selection, last-move from/to, check, legal,
+  // control-map presence (cm), anim class. All cheap field reads — no DOM writes.
+  const sig=(p?p.color[0]+p.type:'--')+'|'+(isSel?1:0)+(lastFrom?1:0)+(lastTo?1:0)+(isCheckSq?1:0)+(isLegal?1:0)+(cm?1:0)+animCls;
+  if(el._sig===sig)return; // No change — skip DOM writes entirely
+  el._sig=sig;
+  // Compute background only when we're going to write
+  const bg=_getSqBg(rr,cc,cm,isL,lastMove);
   el.style.background=isSel?SQ_SEL:bg;
   el.className='sq'+(lastFrom?' last-from':'')+(lastTo?' last-to':'')+(isCheckSq?' in-check':'');
   const lbl=String.fromCharCode(97+cc)+(8-rr);
-  const isLegal=legalSet.has(rr*8+cc);
   let inner=`<span class="lbl" style="color:${isL?LBL_LIGHT:LBL_DARK};-webkit-text-stroke:.6px ${isL?LBL_STROKE_LIGHT:LBL_STROKE_DARK};paint-order:stroke fill;text-shadow:0 0 2px ${isL?LBL_STROKE_LIGHT:LBL_STROKE_DARK}">${lbl}</span>`;
   if(p){
-    const animCls=(_lastAnimPieceType&&_lastAnimTarget&&lastTo&&rr===_lastAnimTarget.row&&cc===_lastAnimTarget.col&&p.type===_lastAnimPieceType)?' anim-'+p.type:'';
     inner+=`<span class="pc ${p.color==='white'?'w':'bk'}${animCls}">${SYM[p.color][p.type]}</span>`;
     if(animCls){_landingAnimActive=true;_startLandingTimer(_lastAnimPieceType);}
   }
@@ -1160,6 +1262,10 @@ function updateAfterMove(){requestEngineEval();
       bh+=`</div>`}}
     gridEl.innerHTML=bh;
     _sqElCache=null;
+    // v1.0.2 (qw3.7max audit): clear _rListEl too — the board-only rebuild
+    // path doesn't touch the review-moves list, but clearing keeps the cache
+    // honest if the element was removed from the DOM by a higher-level rebuild.
+    _rListEl=null;
   }
   // Update eval display
   _updateEvalDisplay();
@@ -1188,7 +1294,9 @@ let _prevSelSq=null;      // track previous selected square for targeted update
 // Initialize or retrieve the persistent SVG overlay
 function _getSvgOverlay(){
   // Validate cached bwrap: if detached from DOM, re-query
-  if(_cachedBwrap&&!_cachedBwrap.parentNode)_cachedBwrap=null;
+  // v1.0.2 FIX (audit): use document.body.contains() instead of parentNode —
+  // parentNode is still set if the node was moved into an off-DOM fragment.
+  if(_cachedBwrap&&!document.body.contains(_cachedBwrap))_cachedBwrap=null;
   const bwrapEl=_cachedBwrap||(_cachedBwrap=document.querySelector('.bwrap'));
   if(!bwrapEl)return null;
   if(_cachedSvgEl&&_cachedSvgEl.parentNode===bwrapEl){_cachedSvgEl.setAttribute('width',8*CELL);_cachedSvgEl.setAttribute('height',8*CELL);return _cachedSvgEl;}
@@ -1337,15 +1445,18 @@ function _updateBoardLightweight(){
   const oldInfoSq=_prevHoverSq||_prevSelSq;
   const newInfoSq=hoveredSquare||selectedSquare;
   // P2 PERF: Early-exit when nothing meaningful changed (avoids unnecessary DOM work)
-  const _selChanged=!!selectedSquare!==!!_prevSelSq||(selectedSquare&&_prevSelSq&&(selectedSquare.row!==_prevSelSq.row||selectedSquare.col!==_prevSelSq.col));
-  const _newHover=!oldInfoSq&&newInfoSq||!!oldInfoSq&&!newInfoSq||oldInfoSq&&newInfoSq&&(oldInfoSq.row!==newInfoSq.row||oldInfoSq.col!==newInfoSq.col);
+  // v1.0.2 (qw3.7max audit): use optional chaining for cleaner null-safe comparison.
+  // When both are null, undefined !== undefined is false — covers all edge cases.
+  // Renamed _newHover → _infoChanged (the variable tracks info-square changes, not just hover).
+  const _selChanged=(selectedSquare?.row!==_prevSelSq?.row)||(selectedSquare?.col!==_prevSelSq?.col);
+  const _infoChanged=(oldInfoSq?.row!==newInfoSq?.row)||(oldInfoSq?.col!==newInfoSq?.col);
   // Compute current legal positions
   const curLegalSet=new Set();
   if(selectedSquare){for(const m of legalMvs)curLegalSet.add(m.row*8+m.col);}
   // Check if legal moves changed
   let _legalChanged=_selChanged;
   if(!_legalChanged){if(curLegalSet.size!==_prevLegalSet.size){_legalChanged=true;}else{for(const p of curLegalSet){if(!_prevLegalSet.has(p)){_legalChanged=true;break;}}}}
-  if(!_selChanged&&!_newHover&&!_legalChanged)return; // Nothing changed, skip
+  if(!_selChanged&&!_infoChanged&&!_legalChanged)return; // Nothing changed, skip
   // Invalidate arrow cache if selection changed
   if(_selChanged)_invalidateArrowCache();
   // Update only changed squares
@@ -1376,7 +1487,8 @@ if(!showCtrlMap){var cc=document.getElementById('ctrl-info-card');if(cc)cc.style
   const infoSq=hoveredSquare||selectedSquare;
   const cm=showCtrlMap?cachedCtrlMap:null;
   let infoCtrl=null;
-  if(infoSq&&cm){const e=cm[infoSq.row][infoSq.col];if(e)infoCtrl={white:e.white,black:e.black}}
+  // v1.0.2 FIX (audit): reuse the control-map entry directly (no new object).
+  if(infoSq&&cm){const e=cm[infoSq.row][infoSq.col];if(e)infoCtrl=e;}
   const oppC=OPP_COLOR[playerColor];
   if(infoSq){
     const al=posAlg(infoSq);const pc=gameState.board[infoSq.row][infoSq.col];
@@ -1443,9 +1555,21 @@ try{
 // Handle Ponder mode — if engine is pondering, check if the move matches the ponder move
 if(typeof AndroidBridge!=='undefined'&&AndroidBridge.isEngineReady()&&typeof AndroidBridge.isPondering==='function'){
   if(AndroidBridge.isPondering()){
-    // Check if the player's move matches the ponder move
-    const ponderMove=typeof AndroidBridge.getLastPonderMove==='function'?AndroidBridge.getLastPonderMove():null;
-    const moveUCI=String.fromCharCode(97+from.col)+(8-from.row)+String.fromCharCode(97+to.col)+(8-to.row)+(promotion||'');
+    // v1.0.2 CRITICAL FIX (audit): getLastPonderMove() is a one-shot read that
+    // CLEARS the Java field after returning. onBestMove() already consumed it
+    // (ai-bridge.js:778) and stored the value in _lastPonderMoveFromEngine.
+    // Re-calling getLastPonderMove() here always returned null → ponderHit()
+    // never fired → every player move stopPonder()'d and started a fresh
+    // search, defeating the entire ponder optimization.
+    // Fix: use the JS-side cached value (_lastPonderMoveFromEngine) instead.
+    const ponderMove=(typeof _lastPonderMoveFromEngine!=='undefined'&&_lastPonderMoveFromEngine)?_lastPonderMoveFromEngine:null;
+    // v1.0.2 FIX: Map promotion piece-type names to UCI letters (q/r/b/n).
+    // Previously this appended the full piece name (e.g., "e7e8queen") which
+    // never matched the engine's UCI ponder move (e.g., "e7e8q"), so ponderHit
+    // never fired for any promotion move — every promotion fell back to
+    // stopPonder() + a fresh search, defeating the ponder optimization.
+    const promoChar=promotion?{queen:'q',rook:'r',bishop:'b',knight:'n'}[promotion]||'':'';
+    const moveUCI=String.fromCharCode(97+from.col)+(8-from.row)+String.fromCharCode(97+to.col)+(8-to.row)+promoChar;
     if(ponderMove&&ponderMove===moveUCI){
       // Player played the expected move — hit ponder and continue analysis
       AndroidBridge.ponderHit();
@@ -1484,13 +1608,31 @@ animateMove(from,to,SYM[piece.color][piece.type],piece.type,!!(gameState.board[t
 _updateEvalDisplay(); // _resetEvalState now called inside requestEngineEval()
 
 // Heavy computation deferred until after animation completes
+// v1.0.2 FIX (audit): Capture gameState.hash BEFORE the timeout — if the user
+// undoes/redoes/flips during the 420ms animation window, the stale callback
+// would otherwise compute gameStatus() on the OLD state and overwrite the new
+// gameOver/_cachedStatus, manifesting as a "ghost" game-over banner.
+// Also moved doAIMove() out of the rAF callback into setTimeout(0) so the
+// browser can paint the post-move UI before the engine starts computing.
+const ANIMATION_DEFER_MS=420;
+const _hashAtSched=gameState.hash;
 setTimeout(()=>{
+if(gameState.hash!==_hashAtSched)return; // stale — abort
 const gsr=!setupMode&&gameStatus(gameState);
 const _gsKey=gameState.hash+'|'+gameState.currentTurn;_cachedStatus=gsr;_cachedStatusKey=_gsKey;
 if(gsr&&!gameOver){
 gameOverSoundPlayed=false;_applyGameOver(gsr);
-requestAnimationFrame(()=>{updateAfterMove();if(!gameOver&&gameState.currentTurn!==playerColor){doAIMove();}});
-}},420);
+requestAnimationFrame(()=>{updateAfterMove();});
+// v1.0.2 NEW FEATURE: After a player move, check if any pending engine PV
+// has diverged from the actual game. This must be called AFTER the move is
+// pushed to moveRecords (which happens before this setTimeout).
+// We call it here (in the deferred callback) because the move record needs
+// to be fully populated first.
+try{if(typeof _checkPVDivergence==='function')_checkPVDivergence();}catch(e){console.warn('PVDivergence check failed:',e);}
+try{if(typeof _checkPVDivergenceSANs==='function')_checkPVDivergenceSANs();}catch(e){console.warn('PVDivergenceSANs check failed:',e);}
+if(!gameOver&&gameState.currentTurn!==playerColor){setTimeout(doAIMove,0);}
+}
+},ANIMATION_DEFER_MS);
 }catch(e){console.error('executeMove error:',e)}}
 let _redoStack=[]; // Stack for redo (stores states pushed by undoMove)
 // P3: Common animation cleanup for undo/redo/flip operations
@@ -1501,7 +1643,14 @@ function _clearAnimationState(){
   if(_fullRenderTimer){clearTimeout(_fullRenderTimer);_fullRenderTimer=0;}
 }
 function undoMove(){
-if(isAIThinking&&!setupMode)return;_cachedStatus=null;_cachedStatusKey='';_updateEvalDisplay(); // _resetEvalState now inside requestEngineEval()
+if(isAIThinking&&!setupMode)return;
+// v1.0.2 FIX: When undo is at the end (no more history), give BUTTON_PRESS
+// feedback instead of the normal undo (PIECE_SELECT) feedback.
+if(stateHistory.length===0){
+  HapticManager.fire('BUTTON_PRESS');
+  return;
+}
+_cachedStatus=null;_cachedStatusKey='';_updateEvalDisplay(); // _resetEvalState now inside requestEngineEval()
 _clearAnimationState();
 if(pendingPromotion)pendingPromotion=null;
 let steps=0;
@@ -1561,8 +1710,14 @@ if(_playerMoveFrom&&!gameOver){
 }
 render();requestEngineEval();if(!gameOver&&!setupMode&&gameState.currentTurn!==playerColor){doAIMove();}}
 function redoMove(){
-if(isAIThinking||_redoStack.length===0)return;
-_cachedStatus=null;_cachedStatusKey='';_updateEvalDisplay(); // _resetEvalState now inside requestEngineEval()
+if(isAIThinking)return;
+// v1.0.2 FIX: When redo is at the end (empty redo stack), give BUTTON_PRESS
+// feedback instead of the normal redo feedback — consistent with undo behavior.
+if(_redoStack.length===0){
+  HapticManager.fire('BUTTON_PRESS');
+  return;
+}
+_cachedStatus=null;_cachedStatusKey='';_updateEvalDisplay();
 _clearAnimationState();
 // Pop from redo stack and restore
 const nxt=_redoStack.pop();
@@ -1584,8 +1739,23 @@ if(selectedSquare){
   }
 }else{legalMvs=[];legalSet=new Set();}
 moveRecords=nxt.moveRecords;lastMove=nxt.lastMove;gameOver=null;_gameOverStatusKey=null;gameOverSoundPlayed=false;
-render();requestEngineEval();if(!gameOver&&!setupMode&&gameState.currentTurn!==playerColor){doAIMove();}}
-// === Flip board: switch player perspective ===
+// v1.0.2 FIX (first-principles): Redo must NOT trigger AI.
+// The redo stack contains moves that were ALREADY played (and then undone).
+// Each redo pops one entry and restores the corresponding state. Undo always
+// runs in pairs (player move + AI reply) so that after undo it's the player's
+// turn; therefore redo also runs in pairs (AI reply + player move), so after
+// redo it's STILL the player's turn — AI has nothing to do.
+// The previous `if(gameState.currentTurn!==playerColor){doAIMove();}` was a
+// misfire: in the rare case where the redo stack only had ONE entry (e.g.,
+// player undid right after their own move, before AI replied), this would
+// trigger a FRESH AI search instead of letting the user redo the AI's
+// pre-recorded reply from the stack — corrupting the redo stack and losing
+// the original AI move. Removed entirely; requestEngineEval() still refreshes
+// the eval bar for the restored position.
+render();requestEngineEval();
+// v1.0.2: Haptic feedback for successful redo (matching undo's PIECE_SELECT)
+HapticManager.fire('PIECE_SELECT');
+}
 function flipBoard(){
   playerColor=OPP_COLOR[playerColor];
   selectedSquare=null;legalMvs=[];legalSet=new Set();
@@ -1634,8 +1804,20 @@ function getHint(){
     render();
   },10);
 }
-function toggleSetup(){if(isAIThinking&&!setupMode)return;_cachedStatus=null;_cachedStatusKey='';setupMode=!setupMode;if(setupMode){setupPiece='pawn';setupColor='white';selectedSquare=null;legalMvs=[];legalSet=new Set();gameOver=null;_gameOverStatusKey=null;lastMove=null;gameOverSoundPlayed=false;setupErrors=[];setupHistory=[]}else{gameOver=null;_gameOverStatusKey=null;if(gameState.wk&&gameState.bk){_applyGameOver();}_sfEvalReady=false;_evalLoading=true;requestEngineEval();if(!gameOver&&gameState.currentTurn!==playerColor){doAIMove()}}render()}
-function exitSetup(){setupErrors=validateSetupPosition(gameState);if(setupErrors.length>0){render();return}// When finishing setup mode, reset the game to use the setup position
+function toggleSetup(){if(isAIThinking&&!setupMode)return;_cachedStatus=null;_cachedStatusKey='';setupMode=!setupMode;
+// v1.0.2 FIX (audit): extract common reset out of both branches.
+gameOver=null;_gameOverStatusKey=null;
+if(setupMode){setupPiece='pawn';setupColor='white';selectedSquare=null;legalMvs=[];legalSet=new Set();lastMove=null;gameOverSoundPlayed=false;setupErrors=[];setupHistory=[]}else{
+// v1.0.2 SIMPLIFY (audit): _applyGameOver() already no-ops for non-terminal
+// statuses (returns null from _gameOverStrFromStatus for 'check'/'ongoing').
+// The previous `if(_exitSt && _exitSt!=='play')` guard was checking against
+// a 'play' value that gameStatus() never returns — dead check. Simplified to
+// a direct call which internally decides whether to apply game-over.
+_applyGameOver(gameStatus(gameState));
+_sfEvalReady=false;_evalLoading=true;requestEngineEval();if(!gameOver&&gameState.currentTurn!==playerColor){doAIMove()}}render()}
+function exitSetup(){setupErrors=validateSetupPosition(gameState);if(setupErrors.length>0){render();return}
+_withPGNSaveCheck(_exitSetupImpl);}
+function _exitSetupImpl(){// When finishing setup mode, reset the game to use the setup position
 // as the new starting position (step 0). This means:
 // - moveRecords is cleared (no move history from before setup)
 // - stateHistory is reset with the setup position as the initial state
@@ -1652,6 +1834,10 @@ gameOverSoundPlayed=false;
 _ecoEnabled=false; // Setup mode — disable ECO recognition
 reviewBaseState=cloneS(gameState);
 _reviewEvalCache.clear();_reviewEvalRequestedStep=-1; // Clear eval cache on board setup complete
+// v1.0.2 FIX: Black-to-move opening move record fix.
+// If the setup position has black to move, prepend null placeholder so the first
+// real move (black's) lands in the black slot, not the white slot.
+_prependBlackToMovePlaceholder();
 toggleSetup()}
 function setupClick(r,c){
 if(!setupMode||isAIThinking)return;
@@ -1701,7 +1887,7 @@ if(moveRecords.length===0)return;
 // exact position they were at (not the initial position).
 _preReviewSnapshot={
   gameState:cloneS(gameState),
-  moveRecords:moveRecords.map(function(r){const c=Object.assign({},r);if(r.variations)c.variations=r.variations.map(function(v){return Object.assign({},v);});return c;}),
+  moveRecords:moveRecords.map(function(r){if(r===null)return null;const c=Object.assign({},r);if(r.variations)c.variations=r.variations.map(function(v){return Object.assign({},v);});return c;}),
   lastMove:lastMove?{from:{row:lastMove.from.row,col:lastMove.from.col},to:{row:lastMove.to.row,col:lastMove.to.col}}:null,
   stateHistory:stateHistory.map(function(s){return{state:cloneS(s.state),selectedSquare:s.selectedSquare?{row:s.selectedSquare.row,col:s.selectedSquare.col}:null,legalMvs:s.legalMvs?[].concat(s.legalMvs):[],moveRecords:s.moveRecords?[].concat(s.moveRecords):[],lastMove:s.lastMove?(s.lastMove.from?{from:{row:s.lastMove.from.row,col:s.lastMove.from.col},to:{row:s.lastMove.to.row,col:s.lastMove.to.col}}:s.lastMove):null,gameOver:s.gameOver};}),
   _redoStack:_redoStack.map(function(s){return{state:cloneS(s.state),moveRecords:[].concat(s.moveRecords),lastMove:s.lastMove?(s.lastMove.from?{from:{row:s.lastMove.from.row,col:s.lastMove.from.col},to:{row:s.lastMove.to.row,col:s.lastMove.to.col}}:s.lastMove):null};}),
@@ -1735,6 +1921,9 @@ let s=reviewBaseState?cloneS(reviewBaseState):cloneS(gameState);
 reviewStates.push({state:cloneS(s),lastMove:null});
 for(let i=0;i<moveRecords.length;i++){
 const mr=moveRecords[i];
+// v1.0.2 FIX: null placeholder (black-to-move opening) — push current state unchanged
+// so reviewStates indices stay aligned with moveRecords. No move is applied.
+if(mr===null){reviewStates.push({state:s,lastMove:null});continue;}
 // Robust from/to parsing: mr.from/mr.to may be strings ("e2") or objects ({row:6,col:4}).
 // After PGN import they're always strings (posAlg output). During play they may be objects.
 let from=null,to=null;
@@ -1788,11 +1977,16 @@ function _findCriticalMoves(){
   if(!reviewStates||reviewStates.length<2)return critical;
   let prevEval=0;
   for(let i=1;i<reviewStates.length;i++){
-    const ev=_reviewEvalCache.get(i);
-    const prevEv=_reviewEvalCache.get(i-1);
+    // v1.0.2 PERF: use peek() — this loop iterates over all review steps to
+    // find critical moves, so refreshing LRU on each access is wasteful.
+    const ev=_reviewEvalCache.peek(i);
+    const prevEv=_reviewEvalCache.peek(i-1);
     if(ev!=null&&prevEv!=null){
       const delta=ev.eval-prevEv.eval;
-      const isMoverWhite=((i)%2)===1; // step is odd → White moved
+      // v1.0.2 (qw3.7max audit): simplified — i%2===1 is equivalent to
+      // (i+1)%2===0; since i is 1-based here (loop starts at i=1), odd i
+      // means White moved (step 1 = White's first move).
+      const isMoverWhite=(i%2)===1; // step is odd → White moved
       const moverDelta=isMoverWhite?delta:-delta;
       const ad=Math.abs(moverDelta);
       if(moverDelta<-300){
@@ -1840,7 +2034,43 @@ function _classifyMove(evalDelta,isMoverWhite){
  * Start a new game based on dialog settings.
  * Called from the new game dialog button "开始游戏".
  */
+// v1.0.2: PGN save prompt — called before clearing move records.
+// Checks if there are any moves; if so, shows a "💾是否保存PGN文件？" dialog.
+// The callback is executed after the user chooses (or immediately if no moves).
+function _withPGNSaveCheck(callback){
+  if(_skipPGNSavePrompt||!moveRecords||!moveRecords.some(function(r){return r!==null&&r!==undefined;})){
+    callback();
+    return;
+  }
+  _pendingActionAfterSave=callback;
+  showSavePGNPrompt=true;
+  render();
+}
+function _savePGNYes(){
+  showSavePGNPrompt=false;
+  _skipPGNSavePrompt=true;
+  // Export PGN to file (same as clicking 💾)
+  try{exportPGNToFile();}catch(e){console.warn('PGN export during save prompt failed',e);}
+  // Execute the pending action after a short delay (allow export to start)
+  var cb=_pendingActionAfterSave;
+  _pendingActionAfterSave=null;
+  if(cb){setTimeout(function(){cb();_skipPGNSavePrompt=false;},200);}
+  else{_skipPGNSavePrompt=false;}
+  render();
+}
+function _savePGNNo(){
+  showSavePGNPrompt=false;
+  _skipPGNSavePrompt=true;
+  var cb=_pendingActionAfterSave;
+  _pendingActionAfterSave=null;
+  if(cb){cb();}
+  setTimeout(function(){_skipPGNSavePrompt=false;},100);
+  render();
+}
 function startGame(){
+  _withPGNSaveCheck(_startGameImpl);
+}
+function _startGameImpl(){
   showNewGameDialog=false;
   playerColor=dlgPlayerColor;
   useBookMoves=dlgBookMoves;
@@ -1867,7 +2097,14 @@ function startGame(){
       }
       // Fallback: if exact name not found, use first variant with that code
       if(!opening)opening=opList[0];
-      // Apply all moves from the opening's coordinate array
+      // Apply all moves from the opening's coordinate array.
+      // v1.0.2 NEW FEATURE: ECO openings record every move in their `moves` array,
+      // so we auto-fill the in-game moveRecords with proper SAN notation as we
+      // replay each move. This means the user sees the full opening sequence in
+      // the move history from move #1, with correct PGN numbering — no "..."
+      // placeholder is needed even when the opening's last move was Black's.
+      // (The black-to-move placeholder only kicks in when NO ECO moves are
+      // applied — i.e., for FEN/setup/PGN imports with black to move.)
       const mv=opening.moves;
       for(let i=0;i+3<mv.length;i+=4){
         const from={row:mv[i],col:mv[i+1]};
@@ -1875,12 +2112,39 @@ function startGame(){
         const piece=gameState.board[from.row]?gameState.board[from.row][from.col]:null;
         if(piece){
           const moveObj={from:from,to:to,piece:piece};
-          gameState=makeMv(gameState,moveObj);
+          // Snapshot state BEFORE the move (matches executeMove's order)
+          stateHistory.push({state:cloneS(gameState),selectedSquare:null,legalMvs:[],moveRecords:[...moveRecords],lastMove:lastMove?{...lastMove}:null,gameOver:null});
+          if(stateHistory.length>200)stateHistory.shift();
+          // Apply the move
+          const ns=makeMv(gameState,moveObj);
+          const notation=moveAlg(gameState,moveObj,ns);
+          const opp=OPP_COLOR[piece.color];
+          const ic=inCheck(ns.board,opp,opp==='white'?ns.wk:ns.bk);
+          const cast=piece.type==='king'&&Math.abs(to.col-from.col)===2;
+          const epCap=piece.type==='pawn'&&gameState.enPassantTarget&&to.row===gameState.enPassantTarget.row&&to.col===gameState.enPassantTarget.col;
+          // Build the move record exactly like executeMove (without the time field
+          // since these are pre-played opening moves, not user/AI moves)
+          moveRecords.push({
+            notation:notation,
+            from:posAlg(from),
+            to:posAlg(to),
+            piece:piece,
+            captured:gameState.board[to.row][to.col]||(epCap?gameState.board[piece.color==='white'?to.row+1:to.row-1][to.col]:undefined),
+            isCheck:ic,
+            isCastling:cast,
+            promotion:null,
+            time:null
+          });
+          gameState=ns;
+          lastMove={from:{...from},to:{...to}};
         }else{
           console.warn('[startGame] ECO move #'+(i/4+1)+' invalid at',from,'— skipping remaining moves');
           break;
         }
       }
+      // If the opening had moves, clear the stale stateHistory[0] entry so that
+      // undo back to the start position correctly restores the initial position
+      // (stateHistory[0] is still the initial state, which is correct).
     }else{
       console.warn('[startGame] ECO code not found:',ecoCode);
     }
@@ -1890,6 +2154,12 @@ function startGame(){
   _reviewEvalCache.clear();_reviewEvalRequestedStep=-1; // Clear eval cache on new game
   _resetGameUIState();
   _resetEvalState();
+  // v1.0.2 FIX: Black-to-move opening move record fix.
+  // Only relevant when NO ECO moves were applied — e.g., a free opening with
+  // a custom starting FEN that has black to move. When ECO moves ARE applied
+  // (the common case), moveRecords already has all moves correctly placed
+  // and _prependBlackToMovePlaceholder() is a no-op (moveRecords is non-empty).
+  _prependBlackToMovePlaceholder();
   render();
   requestEngineEval();
   if(gameState.currentTurn!==playerColor){
@@ -1900,6 +2170,13 @@ function startGame(){
 /**
  * Reset all game UI state variables.
  * Called from startGame(), exitReview(), and tablebase.js importFEN().
+ *
+ * v1.0.2 FIX: Also reset stale AI/ponder/eval/MultiPV state. Previously, if
+ * the user started a new game (or imported FEN/PGN) while the AI was thinking,
+ * isAIThinking stayed true → the new game's doAIMove() early-returned → the
+ * AI never moved on the new game; the old 15s safety timer was still pending
+ * and could fire on the new gameState; and stale ponder/MultiPV data leaked
+ * into the new game's UI. Resetting everything here ensures a clean slate.
  */
 function _resetGameUIState(){
   selectedSquare=null;
@@ -1924,6 +2201,22 @@ function _resetGameUIState(){
   // Clear redo stack on game reset to prevent stale redo entries
   // from corrupting gameState when redoMove() is called after a new game.
   _redoStack=[];
+  // v1.0.2 FIX: Reset stale AI/ponder/eval/MultiPV state to prevent leak
+  // into the new game. Without this, starting a new game during AI thinking
+  // left isAIThinking=true (blocking new doAIMove calls) and kept the old
+  // safety timer running (which could fire on the new gameState).
+  isAIThinking=false;
+  if(typeof _aiSafetyTimerId!=='undefined'&&_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
+  if(typeof _aiRetryCount!=='undefined')_aiRetryCount=0;
+  if(typeof _evalLoading!=='undefined')_evalLoading=false;
+  if(typeof _sfEvalReady!=='undefined')_sfEvalReady=false;
+  if(typeof _ponderGen!=='undefined')_ponderGen++;
+  if(typeof _ponderMoveSAN!=='undefined')_ponderMoveSAN='';
+  if(typeof _ponderBarInfo!=='undefined')_ponderBarInfo='';
+  if(typeof _pendingPonderMoveUCI!=='undefined')_pendingPonderMoveUCI=null;
+  if(typeof _multiPVLines!=='undefined')_multiPVLines=[];
+  if(typeof _multiPVResult!=='undefined')_multiPVResult=null;
+  if(typeof _lastEngineVariation!=='undefined')_lastEngineVariation=null;
 }
 
 /**
@@ -1956,7 +2249,7 @@ function reviewGoTo(step){
       const listEl=document.getElementById('reviewMovesList');
       if(!listEl)return;
       const activeEl=listEl.querySelector('.rmv-block.act');
-      if(activeEl)activeEl.scrollIntoView({block:'center',behavior:'instant'});
+      if(activeEl)activeEl.scrollIntoView({block:'center',behavior:'auto'});
     }catch(e){}
   },50);
 }
@@ -2173,27 +2466,39 @@ function _cleanupEventListeners(){
 }
 
 // Paste PGN from clipboard — uses prompt() for simplicity
+// v1.0.2: Wrapped with _withPGNSaveCheck to prompt save before clearing
 function _doPastePGN(){
-  const text=prompt(T('pgn_paste_hint'));
-  if(!text)return;
-  // PGN-only: reject FEN input — FEN should be imported via the "Paste FEN" button instead
-  const trimmed=text.trim();
-  // Bug 5 fix: Improved FEN rejection heuristic.
-  // Check for PGN-specific markers first (move numbers with dots, header tags, variations).
-  // Only reject as FEN if it lacks ALL PGN markers AND looks like a FEN string.
-  const hasPGNMoveNumbers=!!trimmed.match(/\d+\.\s*[a-zA-ZNBRQOKO]/);
-  const hasPGNHeaders=/\[/.test(trimmed);
-  const hasPGNVariations=/\(/.test(trimmed);
-  const hasPGNMarkers=hasPGNMoveNumbers||hasPGNHeaders||hasPGNVariations;
-  // A FEN has exactly one line with 8 ranks separated by '/', no PGN markers
-  const isLikelyFEN=!hasPGNMarkers&&trimmed.includes('/')&&
-    (trimmed.split('\n').length<=2)&& // FEN is typically single-line
-    trimmed.split('/').length>=8; // 8 ranks
-  if(fenToState(trimmed)||isLikelyFEN){
-    showToast(T('pgn_fen_rejected'),2500);
-    return;
-  }
-  importPGN(text);
+  _withPGNSaveCheck(function(){
+    const text=prompt(T('pgn_paste_hint'));
+    if(!text)return;
+    const trimmed=text.trim();
+    const hasPGNMoveNumbers=!!trimmed.match(/\d+\.\s*[a-zA-ZNBRQOKO]/);
+    const hasPGNHeaders=/\[/.test(trimmed);
+    const hasPGNVariations=/\(/.test(trimmed);
+    const hasPGNMarkers=hasPGNMoveNumbers||hasPGNHeaders||hasPGNVariations;
+    const isLikelyFEN=!hasPGNMarkers&&trimmed.includes('/')&&
+      (trimmed.split('\n').length<=2)&&
+      trimmed.split('/').length>=8;
+    if(fenToState(trimmed)||isLikelyFEN){
+      showToast(T('pgn_fen_rejected'),2500);
+      return;
+    }
+    importPGN(text);
+  });
+}
+
+// v1.0.2: Wrapper for importFEN with PGN save check
+function _importFENWithSaveCheck(){
+  _withPGNSaveCheck(function(){
+    importFEN();
+  });
+}
+
+// v1.0.2: Wrapper for importPGNFile with PGN save check
+function _importPGNFileWithSaveCheck(){
+  _withPGNSaveCheck(function(){
+    importPGNFile();
+  });
 }
 
 // ---- Exports ----

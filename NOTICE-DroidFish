@@ -127,3 +127,13 @@ WebView-based architecture. Key architectural differences:
 
 All modifications are Copyright (C) 2026 Regalia and licensed under GPL v3
 as required by the original DroidFish license.
+
+JavaScript (in stats.html):
+  - stats.html: PGN parsing logic (parsePGN function) derived from
+    DroidFish's GameTree/PgnToken/PgnScanner. Used in the 📊统计
+    statistics page for rendering PGN text and computing game statistics.
+    Modifications: simplified for single-game analysis, added piece symbol
+    substitution, statistics computation (material balance, eval trend,
+    move quality classification, pawn structure analysis, center control,
+    king safety, game complexity).
+    Licensed under GPL v3 to match the DroidFish-derived PGN parsing code.

@@ -37,6 +37,11 @@ GPL v3 (DroidFish-derived or Stockfish):
       UI layout and interaction patterns from DroidFish
   - src/main/assets/chess.src/tablebase.js
       PGN parsing logic from DroidFish (GameTree/PgnToken/PgnScanner)
+  - src/main/assets/stats.html
+      PGN parsing logic (parsePGN function) derived from DroidFish
+      GameTree/PgnToken/PgnScanner. Statistics rendering and analysis
+      are original code. Licensed under GPL v3 to match the
+      DroidFish-derived PGN parsing code.
   - libstockfish.so (Stockfish 18 engine binary, GPL v3)
 
 AGPL v3 (original code):
@@ -44,6 +49,12 @@ AGPL v3 (original code):
   - src/main/java/com/Regalia/ChessApp.java
   - src/main/java/com/Regalia/ChessWebViewClient.java
   - src/main/java/com/Regalia/EngineService.java
+  - src/main/java/com/Regalia/StatsActivity.java
+      Fullscreen WebView activity hosting stats.html. Original code
+      that only hosts the WebView and delegates PGN parsing to
+      stats.html (which is GPL v3 due to DroidFish-derived code).
+  - src/main/java/com/Regalia/RootDetector.java
+  - src/main/java/com/Regalia/TlsSecurityHelper.java
   - src/main/assets/chess.src/eco-data.js
       ECO data from lichess-org/chess-openings (CC0); code is original
   - src/main/assets/chess.src/index.html.tpl

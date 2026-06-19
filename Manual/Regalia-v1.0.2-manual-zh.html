@@ -1,5 +1,5 @@
 <!--
-  Regalia v1.0.1 User Manual
+  Regalia v1.0.2 User Manual
   Copyright (C) 2026 Regalia
 
   This document is part of the Regalia project, licensed under
@@ -23,7 +23,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Regalia v1.0.1 User Manual</title>
+<title>Regalia v1.0.2 User Manual</title>
 <style>
 :root {
   --bg: #1a0a0a;
@@ -476,7 +476,7 @@ details summary:hover { color: var(--accent2); }
   <div class="cover-deco">&#9816; &#9814; &#9812; &#9815; &#9813;</div>
   <div class="cover-crown">&#9812;</div>
   <div class="cover-title">Regalia</div>
-  <div class="cover-version">v1.0.1</div>
+  <div class="cover-version">v1.0.2</div>
   <div class="cover-divider">
     <div class="cover-divider-line"></div>
     <div class="cover-divider-icon">&#9830;</div>
@@ -491,23 +491,6 @@ details summary:hover { color: var(--accent2); }
 <!-- ===== TABLE OF CONTENTS ===== -->
 <div class="toc">
   
-<!-- v1.0.1 Changelog -->
-<div class="card" style="margin: 20px 0; padding: 16px; background: linear-gradient(145deg, rgba(139,105,20,.08), rgba(255,215,0,.04)); border: 1px solid rgba(212,160,23,.3); border-radius: 8px;">
-  <h3 style="color:#ffd700; margin-bottom: 12px; font-size: 1.1rem;">v1.0.1 更新日志</h3>
-  <ul style="line-height: 1.7; font-size: .9rem; color: var(--text); padding-left: 20px;">
-    <li><strong>允许屏幕截图</strong>：移除 v1.0.0 中的 <code>FLAG_SECURE</code> 限制，用户现在可以正常截屏（分享棋局、记录局面），最近任务缩略图也不再被屏蔽。其余安全防御（<code>file://</code> 禁用、JS 接口 <code>@JavascriptInterface</code> 守门、防 tapjacking）保留。</li>
-    <li><strong>通知栏引擎条精简</strong>：常驻通知现仅显示三种状态——<strong>就绪</strong> / <strong>分析中</strong> / <strong>报错</strong>，不再显示搜索深度与速度。详细的深度/节点/速度/评分仍在 APP 内评估栏显示，通知栏保持极简，避免打扰用户。</li>
-    <li><strong>悔棋自动选中棋子修复</strong>：修复悔棋后未自动选中原棋子的 bug。现在悔棋后会自动选中"被悔的那步棋移动的棋子（所在的格子）"，连续悔多步同样生效。自动选中后可正常点击该格解除选中（与其他选中状态一致）。</li>
-    <li><strong>PGN 变例解析完善</strong>：修复 PGN 导入时变例丢失或附加到错误走法的问题，新增 Type A fallback（<code>moveAlg</code> 匹配）、<code>mainTokenIdx</code> 索引追踪（处理主行包含非法走法的情况）、无法匹配首 token 时的诊断日志。嵌套变例（RAV）符合 PGN 规范 §8.2.5。</li>
-    <li><strong>PGN 导入悔棋修复</strong>：修复 PGN 导入后无法悔白方首步走法的根本原因——<code>stateHistory</code> 的快照顺序错误（在 <code>moveRecords.push</code> 之后才推入），导致悔棋恢复的 <code>moveRecords</code> 仍包含被悔的走法。现按 <code>executeMove</code> 一致的方式先快照再推入。</li>
-    <li><strong>走棋动画流畅度优化</strong>：为棋子动画启用 GPU 合成层（<code>translateZ(0)</code>、<code>will-change</code>、<code>backface-visibility</code>），添加 <code>contain:layout style paint</code> 限制重绘范围，移除昂贵的 <code>box-shadow</code> 过渡。减少卡顿，提升响应速度。</li>
-    <li><strong>前台服务通知增强</strong>：常驻通知支持<strong>点击跳转至 APP</strong>、<strong>不可手动移除</strong>（<code>setOngoing(true)</code> + <code>FLAG_NO_CLEAR</code>）。在小米澎湃OS 3 上即使被系统允许划掉，前台服务本身仍持续运行，下次状态更新时通知自动恢复。</li>
-    <li><strong>语言切换振动反馈</strong>：点击中英文切换按钮时触发 <code>TOGGLE_ON</code> 振动反馈，与其它按钮交互体验一致。</li>
-    <li><strong>MobSF 安全检查修复</strong>：补全 5 项静态扫描缺陷：JavaScript 接口安全文档化、TLS 证书固定代码引用、Certificate Transparency 引用、SafetyNet 不适用性说明、ChessApp 异常日志精简。</li>
-    <li><strong>术语同步</strong>：英文模式下走法评价 "Book" 改为 "Mediocre"（v1.0.0 起）。</li>
-  </ul>
-</div>
-
 <h2>目 录</h2>
   <ol class="toc-list">
     <li class="toc-item"><span class="toc-num">1</span><span class="toc-label"><a href="#sec1">应用简介</a></span></li>
@@ -525,7 +508,8 @@ details summary:hover { color: var(--accent2); }
     <li class="toc-item"><span class="toc-num">13</span><span class="toc-label"><a href="#sec13">复盘模式分析 / Review Mode Analysis</a></span></li>
     <li class="toc-item"><span class="toc-num">14</span><span class="toc-label"><a href="#sec14">设置导入 / Settings Import</a></span></li>
     <li class="toc-item"><span class="toc-num">15</span><span class="toc-label"><a href="#sec15">PGN 导入 / PGN Import</a></span></li>
-  </ol>
+      <li class="toc-item"><span class="toc-num">A</span><span class="toc-label"><a href="#appendix-changelog">附录 A：版本更新日志</a></span></li>
+</ol>
 </div>
 
 <!-- ===== MAIN CONTENT ===== -->
@@ -540,7 +524,7 @@ details summary:hover { color: var(--accent2); }
     <div class="section-title">应用简介</div>
   </div>
 
-  <p>Regaliav1.0.1 是一款功能强大的 Android 国际象棋对弈与分析应用。本版本内置世界顶级开源棋力引擎 <strong>Stockfish 18</strong>（arm64-v8a-dotprod 原生编译），为从初学者到高级棋手提供专业级的对弈、复盘与训练体验。</p>
+  <p>Regaliav1.0.2 是一款功能强大的 Android 国际象棋对弈与分析应用。本版本内置世界顶级开源棋力引擎 <strong>Stockfish 18</strong>（arm64-v8a-dotprod 原生编译），为从初学者到高级棋手提供专业级的对弈、复盘与训练体验。</p>
 
   <div class="card-row">
     <div class="stat-card">
@@ -747,7 +731,7 @@ function onEngineReady(){
       <div style="display:flex;align-items:center;gap:8px">
         <span style="font-size:1.1rem;color:#E8E8F0;border:2px solid #d4a017;padding:2px 4px;background:linear-gradient(145deg,rgba(139,105,20,.18),rgba(255,215,0,.08))">♔</span>
         <span style="font-weight:900;color:#ffd700;letter-spacing:2px;font-size:1rem">Regalia</span>
-        <span style="font-size:.55rem;color:#d4a017;background:rgba(212,160,23,.15);padding:1px 6px;border-radius:3px;border:1px solid rgba(212,160,23,.3)">v1.0.1</span>
+        <span style="font-size:.55rem;color:#d4a017;background:rgba(212,160,23,.15);padding:1px 6px;border-radius:3px;border:1px solid rgba(212,160,23,.3)">v1.0.2</span>
         <span style="font-size:.55rem;color:#d4a017;background:rgba(212,160,23,.15);padding:1px 6px;border-radius:3px;border:1px solid rgba(212,160,23,.3);cursor:pointer">ℹ️</span>
       </div>
       <span style="font-size:.55rem;color:#d4a017;background:rgba(212,160,23,.15);padding:1px 6px;border-radius:3px;border:1px solid rgba(212,160,23,.3);cursor:pointer;flex-shrink:0">↔️中</span>
@@ -1206,11 +1190,11 @@ function exportEngineSettings(){
     </div>
   </div>
 
-  <p>变例标签颜色 <span class="color-swatch" style="background:#7eb8da"></span> <code>#7eb8da</code>，线1 为主线预测，线2+ 为 MultiPV 备选变化。</p>
+  <p>变例标签颜色 <span class="color-swatch" style="background:#7eb8da"></span> <code>#7eb8da</code>，变例按显示顺序编号为 线1、线2、线3…（不再区分主线/备选，保证标签唯一）。</p>
 
   <div class="impl-section">
     <h4>实现原理：变例记录与展示</h4>
-    <p>引擎通过 MultiPV 机制返回多条 <code>info</code> 行，<code>ai-bridge.js</code> 中的 <code>onMultiPVResult()</code> 将每条结果解析为变例文本，按 PV 编号分组存储到走法记录中。<code>ui.js</code> 渲染走法列表时，若 <code>showVariations=true</code>，在每步走法下方添加 🌿 变例行。</p>
+    <p>引擎通过 MultiPV 机制返回多条 <code>info</code> 行，<code>ai-bridge.js</code> 中的 <code>onMultiPVResult()</code> 将每条结果解析为变例文本，存储到走法记录的 <code>variations</code> 数组中。<code>ui.js</code> 渲染走法列表时，若 <code>showVariations=true</code>，调用 <code>_formatVariationGroups()</code> 在每步走法下方添加 🌿 变例行。变例行号按数组顺序分配（1、2、3…），保证唯一。</p>
     <div class="code-block">
       <span class="code-label">ui.js — 变例渲染逻辑</span>
 // 走法记录卡片头部
@@ -1887,6 +1871,11 @@ if (_analyzeAllActive) {
     <span class="tip-label">双语提示 / Bilingual Tip：</span>使用 SAF 文件选择器时，<strong>不会有任何延迟</strong>——系统选择器立即弹出，无需等待权限授予。SAF 是 Android 推荐的文件访问方式，完全兼容小米澎湃OS3等严格分区存储环境。<br>
     <em>When using the SAF file picker, there is <strong>zero delay</strong> — the system picker opens immediately, no permission granting needed. SAF is Android's recommended file access method, fully compatible with strict scoped storage environments like Xiaomi HyperOS 3.</em>
   </div>
+  <div class="tip-box">
+    <span class="tip-label">v1.0.2 修复 / v1.0.2 Fix：</span>修复"导入设置偶尔提示成功但未生效"的根因。此前若用户在引擎思考中（AI 走棋进行时）点击导入，<code>setoption</code> + <code>isready</code> 等不到 <code>readyok</code>（引擎仅在空闲时响应 isready），3 秒超时后设置被静默丢弃——表现为"toast 显示成功但实际未生效"。v1.0.2 在 <code>importSettings()</code> 调用 <code>applySettings()</code> 前先 <code>stopAndWaitForBestmove("importSettings")</code> 让引擎进入空闲态；并新增显式值优先逻辑——若 TXT 中显式指定 <code>engine.threads</code> 或 <code>engine.hash</code>，则本次应用时自动关闭 autoConfig 以免被硬件检测覆盖；同时统一由 <code>onSettingsImported</code> 回调负责 toast 与对话框刷新，消除文件选择器入口的重复提示。<br>
+    <em>Fixes the root cause of "import settings occasionally reports success but does not take effect". Previously, if the user clicked Import while the engine was thinking (AI move in flight), <code>setoption</code> + <code>isready</code> could not get <code>readyok</code> (the engine only responds to isready when idle), and the 3-second timeout silently dropped the settings. v1.0.2 calls <code>stopAndWaitForBestmove("importSettings")</code> before <code>applySettings()</code> to bring the engine to idle; adds explicit-value-priority logic — if the TXT explicitly sets <code>engine.threads</code> or <code>engine.hash</code>, autoConfig is auto-disabled for this apply cycle to prevent silent override by hardware detection; the toast and dialog refresh are now unified under the <code>onSettingsImported</code> callback, eliminating duplicate prompts from the file-picker entry.</em>
+  </div>
+
 
   <h3>内置文件浏览器 / Built-in File Browser</h3>
   <p>Regalia 提供内置文件浏览器，用于浏览文件系统并选择配置文件进行导入。浏览器具有以下特性：</p>
@@ -1982,6 +1971,11 @@ public void handleFilePickerResult(Intent data) {
   <div class="section-header">
     <div class="section-num">第十五章 / Chapter 15</div>
     <div class="section-title">PGN 导入 / PGN Import</div>
+  <div class="tip-box">
+    <span class="tip-label">v1.0.2 修复 / v1.0.2 Fix：</span>修复 PGN 变例"片段不完整"问题。此前若一条变例中间某个 SAN 写得不规范（缺歧义消除符、非标准后缀等），变例续着循环遇到首个无法解析的 token 时会 <code>break</code>，导致从该 token 起的所有剩余走法被全部丢弃——表现就是"🌿 变例只显示前半段"。v1.0.2 改为 <code>continue</code>（仅跳过该 token，继续解析后续走法），并对每个 token 统一应用 <code>moveAlg</code> 容错匹配。同时修复 MultiPV 变例提取不完整：主 PV 不以 bestmove 开头时不再伪造"主线"，而是作为独立备选行纳入 MultiPV 迭代；<code>_formatVariationGroups</code> 修复 mainline + multipv + pgn 行号冲突，PGN 变例行号统一从引擎最大行号 +1 起。<br>
+    <em>Fixes the "PGN variation segments incomplete" issue. Previously, if a single SAN in the middle of a variation was non-standard (missing disambiguation, non-standard suffix, etc.), the variation continuation loop would <code>break</code> on the first unparseable token, dropping all remaining moves from that point on — manifesting as "🌿 variation shows only the first half". v1.0.2 changes this to <code>continue</code> (skip only that token, keep parsing the rest), and applies the <code>moveAlg</code> forgiving fallback uniformly to every token. Also fixes MultiPV variation extraction: when the primary PV does not start with bestmove, no longer fabricates a "mainline" — instead includes the primary PV as an independent alternative line in the MultiPV iteration; <code>_formatVariationGroups</code> resolves the mainline + multipv + pgn line-number collision, PGN variation line numbers now start at max-engine-line + 1.</em>
+  </div>
+
   </div>
 
   <p>Regalia 支持通过 🗃️ 导入按钮导入 PGN（Portable Game Notation）棋谱，完整还原对局过程并在走法记录中显示变例。PGN 导入功能提供三种导入方式：</p>
@@ -2032,9 +2026,132 @@ public void handleFilePickerResult(Intent data) {
 
 <hr class="section-divider">
 
+
+<hr class="section-divider">
+
+<!-- ============================================================ -->
+<!-- APPENDIX A: 版本更新日志 -->
+<!-- ============================================================ -->
+<div class="section" id="appendix-changelog">
+  <div class="section-header">
+    <div class="section-num">附录 A</div>
+    <div class="section-title">版本更新日志</div>
+  </div>
+  <p>本附录按版本号倒序汇总 Regalia 的全部更新日志详情。</p>
+
+<!-- v1.0.2 Changelog -->
+<div class="card" style="margin: 20px 0; padding: 16px; background: linear-gradient(145deg, rgba(139,105,20,.12), rgba(255,215,0,.06)); border: 1px solid rgba(212,160,23,.4); border-radius: 8px;">
+  <h3 style="color:#ffd700; margin-bottom: 12px; font-size: 1.1rem;">v1.0.2 更新日志</h3>
+  <ul style="line-height: 1.7; font-size: .9rem; color: var(--text); padding-left: 20px;">
+    <li><strong>TXT 设置导入修复</strong>：修复"导入设置偶尔提示成功但未生效"的根本原因——引擎在搜索中（<code>go</code> 进行时）<code>setoption + isready</code> 等不到 <code>readyok</code>，3 秒超时后设置被静默丢弃。现在导入流程会先 <code>stopAndWaitForBestmove</code> 让引擎进入空闲态再应用设置；并新增 <em>"用户显式导入 threads/hash 时自动关闭 autoConfig"</em> 保护，避免自动检测覆盖用户显式值；同时消除文件选择器入口的重复 toast。</li>
+    <li><strong>PGN 变例解析完善</strong>：将变例续着循环中遇到首个无法解析的 token 时 <code>break</code>（截断整条变例）的行为改为 <code>continue</code>（仅跳过该 token，继续解析后续走法），并为每个 token 统一应用 <code>moveAlg</code> 容错匹配。修复"PGN 变例片段不完整"问题——此前一条变例只要中间有一个 SAN 写得不规范，从该处起的剩余走法会被全部丢弃。</li>
+    <li><strong>MultiPV 变例提取完善</strong>：当主 PV 未以 bestmove 开头时（MultiPV 收敛罕见情形），不再伪造一条"主线"变例，而是把主 PV 作为一条独立备选行纳入 MultiPV 迭代（从 index 0 开始）；同时为 <code>_lastEngineVariation</code> 为空时回退到 <code>_multiPVResult[0].pv</code>；修复显示层 <code>_formatVariationGroups</code> 中 mainline(1) + multipv(2,3) + pgn(1,2) 的"🌿 Line 1"标签冲突，PGN 变例行号现统一从引擎最大行号 +1 起。</li>
+    <li><strong>前端审查完善</strong>（参考 qw3.7max v1.01 审查报告）：
+      <ul>
+        <li><code>render()</code> 节流回调末尾新增"脏检查"——若 <code>rAF</code> 回调执行期间又有新渲染请求挂起，触发补偿渲染，避免 UI 与状态脱节。</li>
+        <li><code>executeMove</code> 中 <code>setTimeout(..., 420)</code> 回调加入 <code>gameState.hash</code> 守卫，防止用户在动画窗口内 undo/redo/flip 时旧回调覆盖新状态（"幽灵将杀横幅" bug）。</li>
+        <li>将 <code>doAIMove()</code> 从 <code>rAF</code> 回调中移到 <code>setTimeout(0)</code>，让浏览器先完成 post-move 绘制再让引擎思考，消除"走棋后画面卡顿一下"。</li>
+        <li><code>toggleSetup()</code> 提取公共重置；将 <code>if(gameState.wk && gameState.bk){_applyGameOver();}</code> 改为先 <code>gameStatus()</code> 判断终局态再应用，逻辑更直观。</li>
+        <li><code>infoCtrl</code> 直接引用 control-map 表项而非每次渲染 <code>new</code> 一个 <code>{white,black}</code> 对象，减少 GC 压力。</li>
+        <li><code>_cachedBwrap</code> 存在性检查由 <code>parentNode</code> 改为 <code>document.body.contains()</code>，更严谨。</li>
+      </ul>
+    </li>
+    <li><strong>README.license 文件体系完善</strong>：在 <code>src/main/res/</code>、<code>src/main/res/values/</code>、<code>src/main/res/xml/</code>、<code>src/main/res/mipmap-*/</code> 等每个不止包含文件夹的目录补全 README.license（注：由于 AAPT2 严格要求 <code>res/</code> 子目录内文件名以 <code>.xml</code> / <code>.png</code> 结尾，最终采取在 <code>res/README.license</code> 单文件汇总的方案）；<code>java/com/Regalia/README.license</code> 补全 <code>TlsSecurityHelper.java</code>、<code>RootDetector.java</code> 的许可证条目。</li>
+    <li><strong>版本号同步</strong>：APP 本体（<code>build.gradle</code> 的 <code>versionCode=102</code> / <code>versionName="1.0.2"</code>、<code>AndroidManifest.xml</code>）、APP 内 UI 显示（顶部 <code>&lt;span class="ver"&gt;</code> 标签、关于页 <code>v1.0.2</code>、加载页标题、<code>built_in_only</code> 提示）、安装包签名版本——全部同步至 v1.0.2。</li>
+      <li><strong>Ponder-Hit 修复（关键 bug）</strong>：发现 <code>executeMove</code> 中调用 <code>AndroidBridge.getLastPonderMove()</code> 检查玩家走法是否匹配 ponder 预测——但该方法是<strong>一次性读取</strong>（返回后清空 Java 字段），而 <code>onBestMove</code> 早已消费过它（存入 <code>_lastPonderMoveFromEngine</code>）。结果：<code>ponderHit()</code> 从未触发，每次玩家走法都 <code>stopPonder()</code> 后重新搜索——整个 ponder 优化静默失效。v1.0.2 改用 JS 端缓存的 <code>_lastPonderMoveFromEngine</code> 而非再次调用 Java 端方法。</li>
+    <li><strong>引擎崩溃后恢复"AI 不走棋"修复</strong>：<code>_discardingPonderBestmove</code> 标志在 ponder 被 stop 时置 <code>true</code>，等下一帧 bestmove 到达时清 <code>false</code>。但若引擎在等待期间崩溃（EOF/IO 异常/僵尸进程），bestmove 永不到达，标志卡在 <code>true</code>——恢复后<em>新引擎的第一个真实 bestmove 被当作残留 ponder bestmove 静默丢弃</em>，表现为"AI 永远不走棋"。v1.0.2 在 <code>cleanupEngineResources()</code> 中统一重置 <code>_isPondering</code>、<code>_discardingPonderBestmove</code>、<code>_lastPonderMove</code>、<code>_stopLatch</code>、<code>readyOkLatchHolder</code>、<code>uciOkLatchHolder</code>。</li>
+    <li><strong>引擎重启后复盘评分缓存清理</strong>：<code>restartCurrentEngine()</code> 和 <code>onEngineRestarting()</code> 此前未清理 <code>_reviewEvalCache</code>——重启后复盘模式仍显示<em>旧引擎</em>的评分（哈希表状态、时间预算不同 → 评分可能不同）。v1.0.2 两处均添加 <code>_reviewEvalCache.clear(); _reviewEvalRequestedStep=-1;</code>，并顺带清理 <code>_multiPVLines</code>、<code>_multiPVResult</code>、<code>_lastEngineVariation</code>。</li>
+    <li><strong>RejectedExecutionException 兜底</strong>：<code>engineGo</code>/<code>engineEval</code>/<code>engineHint</code>/<code>startPonder</code>/<code>importSettings</code> 等 <code>@JavascriptInterface</code> 方法此前直接 <code>_engineExecutor.execute(...)</code>，若引擎正在 restart/shutdown 会抛 <code>RejectedExecutionException</code> 传播到 WebView JS 线程，JS 端 loading 标志卡死。v1.0.2 抽出 <code>_safeExecute(Runnable, tag)</code> 包装方法，捕获异常并通过 <code>onEngineError</code> 回调通知 JS 重置状态。</li>
+    <li><strong>boardVersion 性能优化</strong>：<code>_updateBoardIncremental</code> 此前用 <code>JSON.stringify(gameState.board)</code> 做"棋盘是否变化"的脏检查——8×8 数组序列化为 ~1KB 字符串，引擎进度回调每秒 10-50 次时产生显著 GC 压力。v1.0.2 在 game state 中新增 <code>boardVersion</code> 整数（<code>makeMv</code>/<code>makeMvInPlace</code> 递增、<code>unmakeMv</code> 恢复、<code>_refreshStateAfterSetup</code> 递增、<code>fenToState</code> 初始化为 1），脏检查改为整数比较——~100x 更快。</li>
+    <li><strong>MultiPV 进度回调 StringBuilder 优化</strong>：<code>processInfoLine</code> 此前每条 MultiPV info 行都 <code>new JSONObject()</code> + 8 次 <code>put()</code>——搜索期间 10-50 行/秒产生 500-2500 次 JSONObject 分配/秒。v1.0.2 改用 <code>StringBuilder</code> 直接拼装 JSON 字符串（仅 <code>pv</code> 字段用 <code>JSONObject.quote()</code> 转义），消除 HashMap 分配。</li>
+    <li><strong>detectBigCoreCount 缓存</strong>：CPU 拓扑在设备生命周期内不变，但 <code>detectBigCoreCount()</code> 每次被 <code>detectHardwareAndConfigure()</code> 调用时都重新解析 <code>/proc/cpuinfo</code>。v1.0.2 加入 <code>_cachedBigCoreCount</code> 字段缓存首次结果。</li>
+    <li><strong>engine_jni.cpp 死代码清理</strong>：v18.5.0 移除引擎导入功能后，<code>engine_jni.cpp</code> 中 500+ 行实现 <code>nativeLoadEngine</code>/<code>nativeStartEngine</code>/<code>nativeSendCommand</code>/<code>nativeReadOutput</code>/<code>nativeDestroyEngine</code>/<code>nativeIsEngineRunning</code>/<code>nativeGetEngineEntryType</code> + <code>findEngineEntryPoint</code>（8 种策略）+ <code>engineThreadFunc</code>（<code>dup2</code>/<code>pipe</code>/<code>pthread_create</code>）+ <code>EngineHandle</code>/<code>EngineEntryType</code> 结构体的代码完全无人调用——<code>StockfishNative.java</code> 仅声明 <code>nativeChmod</code> 和 <code>nativeRenice</code>。v1.0.2 删除全部死代码（25.5KB → 4.2KB），CMakeLists 同步移除 <code>dl</code> 链接。</li>
+    <li><strong>applySettings 分支合并</strong>：<code>applySettings()</code> 此前 <code>if(autoConfig)/else</code> 两分支各 ~50 行近乎相同代码，唯一差异是 Threads/Hash 的来源。v1.0.2 抽出公共选项应用逻辑，仅 Threads/Hash 按条件分支——减少 ~30 行重复。</li>
+    <li><strong>死 API 移除</strong>：<code>postJsCallbackJson()</code>（零调用）、<code>ChessApp.checkEngineThreadCrash()</code> + <code>engineThreadCrashed</code> + <code>engineThreadCrashMessage</code>（标志被设置但从未被检查，心跳机制已覆盖）——全部删除。<code>AndroidManifest.xml</code> 移除未使用的 <code>READ_MEDIA_IMAGES</code> 权限（内置文件浏览器查询 <code>MediaStore.Files</code> 而非 <code>MediaStore.Images</code>，Android 13+ 不需要此权限）。</li>
+    <li><strong>PGN 导出到文件（新功能）</strong>：原 <code>copyMoveHistory()</code> 仅复制 PGN 到剪贴板。v1.0.2 抽出 <code>_buildPGNString()</code> 共享逻辑，新增 <code>exportPGNToFile()</code> 调用 Java 端 <code>openPGNExportFilePicker(content)</code> → SAF <code>ACTION_CREATE_DOCUMENT</code> 让用户选择保存位置（与设置导出流程对称）。新增 <code>REQUEST_CODE_EXPORT_PGN=1004</code> 与 <code>_pendingExportType</code> 区分设置/PGN 导出回调（<code>onSettingsExported</code> vs <code>onPGNExported</code>）。走法记录卡新增 💾 按钮。</li>
+    <li><strong>toggleSetup 简化</strong>：<code>if(_exitSt && _exitSt!=='play')</code> 中的 <code>'play'</code> 是 <code>gameStatus()</code> 从不返回的值——死检查。<code>_applyGameOver()</code> 内部已对非终局态（<code>'check'</code>/<code>'ongoing'</code>）返回 null 无操作。v1.0.2 简化为直接 <code>_applyGameOver(gameStatus(gameState))</code>。</li>
+    <li><strong>黑方先走开局走法记录修复（关键 bug）</strong>：当以黑方先走的 ECO / FEN 开局、摆棋模式（轮到黑方）或带 <code>[FEN "... b ..."]</code> 头的 PGN 开始新游戏时，走法记录不会自动将白方首步槽位标记为 <code>...</code>。<em>根因</em>：<code>moveRecords=[]</code> 为空时，黑方首步被 <code>executeMove</code> 推入 <code>moveRecords[0]</code>（本应是白方首步槽位），导致黑方首步错误显示在白方位置；PGN 导出也变成 <code>1. e5</code> 而非规范的 <code>1. ... e5</code>。v1.0.2 在 4 处新游戏入口（<code>startGame</code>、<code>_applyImportedFEN</code>、<code>exitSetup</code>、<code>importPGN</code>）均添加：<em>若 <code>gameState.currentTurn==='black'</code> 则向 <code>moveRecords</code> 前置 <code>null</code> 占位符</em>，使黑方首步落入 <code>moveRecords[1]</code>（黑方槽位）；<code>null</code> 在 UI 走法列表与导出 PGN 中均渲染为 <code>...</code>（PGN 跳过标记），正确表示白方让先。同时同步更新 <code>stateHistory[0].moveRecords</code>，避免悔棋至开局后占位符丢失导致 bug 重现；render 层与 <code>enterReview</code> 复盘循环也加入 <code>null</code> 安全检查，保证 UI/复盘/PGN 三处索引一致。</li>
+    <li><strong>ECO 开局走法自动填入走法记录（新功能）</strong>：当新游戏所选的 ECO 开局在数据中记录有每一步走法（<code>moves</code> 数组非空）时，<code>startGame</code> 在重放 ECO 走法的同时<em>同步构建 <code>moveRecords</code></em>——每一步都生成正确的 SAN 记号（含吃子 <code>x</code>、将军 <code>+</code>、将杀 <code>#</code>、王车易位 <code>O-O</code>/<code>O-O-O</code>、升变 <code>=Q</code> 等），并附带 <code>from/to/piece/captured/isCheck/isCastling</code> 元数据。开局重放完毕后，用户立即能在走法记录中看到完整开局序列（如 <code>1. e4 e5 2. Nf3 Nc6 3. Bb5</code>），并可悔棋/重做、进入复盘模式分析每一步。此场景下<em>无需任何 <code>...</code> 占位符</em>——因为 ECO 走法已填满对应槽位；黑方先走占位符仅在<em>无 ECO 走法</em>的 FEN/摆棋/PGN 导入路径生效。<code>stateHistory</code> 也同步推入每一步的快照，悔棋至开局能正确恢复初始局面。</li>
+    <li><strong>多项此前未生效的修复（第一性原理复查）</strong>：本次复查发现 v1.0.2 更新日志中声称已实施、但实际未生效或未完整实施的 4 项修复，已逐项根因分析与精确修复：
+      <ul>
+        <li><strong>"再来一局"按钮加⚔️</strong>：游戏结束横幅的"再来一局"按钮此前仅显示纯文本 <code>${T('play_again')}</code>，未添加 <code>⚔️</code> 前缀。已修正为 <code>⚔️ ${T('play_again')}</code>，与新游戏工具栏按钮风格一致。</li>
+        <li><strong>Redo 不触发 AI</strong>：<code>redoMove()</code> 末尾仍保留 <code>if(!gameOver&&!setupMode&&gameState.currentTurn!==playerColor){doAIMove();}</code>——这会在重做栈仅剩单步（如玩家在 AI 回应前悔棋）时触发<em>全新</em> AI 搜索，而非重做栈中预录的 AI 走法，导致重做栈损坏、原 AI 走法丢失。已完整移除该调用（<code>requestEngineEval()</code> 仍刷新评估栏）。</li>
+        <li><strong>设置导入消除重复 toast</strong>：<code>_fileBrowserSelect()</code>（文件选择器入口）在调用 <code>bridge.importSettings(content)</code> 后<em>立即</em>调用了 <code>showToast(T('settings_imported_ok'))</code>——但 <code>importSettings()</code> 是异步的，最终会触发 <code>onSettingsImported(result)</code> 回调，回调本身也会显示 toast。结果用户看到<em>两个</em> toast：一个"设置已导入"（来自文件选择器入口）+ 一个"设置已导入（含 autoConfig 关闭提示等）"（来自回调）。已移除文件选择器入口的 <code>showToast</code> 与同步的 <code>_cachedMultiPV</code> 刷新（缓存刷新也移到回调中，因为引擎应用设置是异步的）。</li>
+        <li><strong>PGN 导出评估注释</strong>：<code>_buildPGNString()</code> 此前仅输出走法记号与 RAV 变例，<em>未</em>实现更新日志声称的 <code>{分数 评价词}</code> 与每 5 回合 <code>{SF18 D22 +1.0 8%W/91%D/1%L}</code> 注释。已新增 <code>_formatPGNEvalAnnotation(reviewStep, moveNum)</code> 辅助函数：从 <code>_reviewEvalCache</code> 读取该步的缓存评估，每一步输出 <code>{+0.5 略优}</code> 风格注释（分数用 <code>posDesc()</code> 转为评价词，与 APP 内评估栏一致），每 5 回合（<code>moveNum % 5 === 0</code>）输出完整 <code>{SF18 D22 +1.0 8%W/91%D/1%L}</code> 注释（含引擎名 SF18、深度 D<em>n</em>、分数、W/D/L 概率）。无缓存评估的步骤不输出注释，保证向后兼容。</li>
+      </ul>
+    </li>
+    <li><strong>README.license 文件体系更新</strong>：更新全部 6 个 <code>README.license</code> 纯文本文件（<code>src/main/</code>、<code>src/main/assets/</code>、<code>src/main/assets/chess.src/</code>、<code>src/main/cpp/</code>、<code>src/main/java/com/Regalia/</code>、<code>src/main/res/</code>），逐文件补充 v1.0.2 的具体修改点（ECO 自动填入、PGN 评估注释、Redo 不触发 AI、设置导入去重 toast、<code>boardVersion</code> 性能优化、<code>_safeExecute</code> 异常兜底、<code>stopAndWaitForBestmove</code>、<code>cleanupEngineResources</code> 重置 ponder 标志、<code>detectBigCoreCount</code> 缓存、<code>engine_jni.cpp</code> 死代码清理、<code>applySettings</code> 分支合并、死 API 移除、<code>READ_MEDIA_IMAGES</code> 权限移除等），便于后续维护者快速定位每项修改的许可证归属。</li>
+    <li><strong>第一性原理逐行复查与性能突破</strong>：在 16 项清单复查通过后，对每个源文件逐行复查设计意图，按"bug 修复 > 功能完善 > 性能突破 > 冗余清理 > 简化代码"的优先级实施优化：
+      <ul>
+        <li><strong>PV 变例缓存与分叉嫁接（性能突破）</strong>：新增 <code>_pvCache</code>（Map）+ <code>_convertPVtoSANCached()</code> + <code>_checkPVDivergence()</code>。MultiPV 返回的 N 条 PV 通常共享公共前缀（如 PV1=e4 e5 Nf3 Nc6、PV2=e4 e5 Nf3 d5 共享 "e4 e5 Nf3"）。此前每条 PV 独立调用 <code>_convertPVtoSAN</code>，对共享前缀重复执行 <code>makeMv</code>+<code>moveAlg</code>。新方案按 <code>(state.hash, uciPrefix)</code> 缓存每条 UCI 前缀的已转换 SAN + post-state，共享前缀只转换一次。8 条 MultiPV × 10+ 步的典型场景，节省 ~35 次 <code>makeMv</code>+<code>moveAlg</code> 调用。缓存按搜索作用域清理（上限 200 条）。</li>
+        <li><strong>moveAlg 消歧义性能突破</strong>：原 <code>moveAlg</code> 在消歧义检查中对每个同类型同色棋子调用 <code>cloneB(s.board)</code> 克隆整个 8×8 棋盘——8 个兵能吃同一格时就是 8 次克隆。改为 <code>makeMvInPlace</code>/<code>unmakeMv</code> 原地修改 + 撤销，零棋盘分配（与 <code>legalMoves</code>、<code>hasLegalMoves</code> 已采用的优化对齐）。</li>
+        <li><strong>_updateSingleSq 签名脏检查（性能突破）</strong>：原 <code>_updateSingleSq</code> 无条件对每个格子重建 <code>innerHTML</code>（设置 <code>style.background</code>、<code>className</code>、构造完整 innerHTML 字符串）——引擎进度回调每秒 10-50 次时，64 个格子 × 每格 innerHTML 重建产生显著 GC + 布局抖动。新方案为每格构造廉价签名字符串（棋子+选中+last-move+将军+合法+控制图+动画），仅当签名变化时才写 DOM。大多数回调下 0 个格子需要写入。</li>
+        <li><strong>isDeadPosition 单遍扫描（性能突破）</strong>：原实现分配 <code>pcs[]</code> 数组后多次 <code>.filter()</code>/<code>.map()</code>。改为单遍 64 格扫描 + 早返回（遇兵/车/后即返回 false），象的格子颜色奇偶性内联跟踪。相同 FIDE 5.2.2 覆盖，~3x 更快。13 项边界用例测试全部通过。</li>
+        <li><strong>generateFEN / pieceZobristIdx / _esc 查表外提（性能突破）</strong>：<code>generateFEN</code> 每次调用都构造 <code>{white:{...},black:{...}}</code> 棋子映射；<code>pieceZobristIdx</code> 每次构造 <code>{pawn:0,knight:1,...}</code> 类型索引；<code>_esc</code>/<code>_escJs</code> 各用 5 次链式 <code>.replace()</code> 分配 5 个中间字符串。三者全部外提到模块作用域（<code>_PIECE_FEN</code>、<code>_PIECE_TYPE_IDX</code>、<code>_ESC_MAP</code>+<code>_ESC_RE</code>、<code>_ESCJS_MAP</code>+<code>_ESCJS_RE</code>），单次正则 + 回调查表完成转义。</li>
+        <li><strong>PGN 变例跳过 token 时同步轮次（bug 修复）</strong>：原 <code>importPGN</code> 变例续着循环遇到无法解析的 token 时 <code>continue</code> 跳过，但<em>不推进</em> <code>vIsWhite</code>/<code>vMoveNum</code>——下一个 token 会被错误归属到对方。修复：被跳过的 token 仍按 PGN 规范占用一个回合，轮次与回合数必须推进，否则后续变例全部错位。</li>
+        <li><strong>_formatPGNEvalAnnotation 显式括号 + 类型归一（bug 修复）</strong>：原 mate 检测条件 <code>cached.mate&&cached.mate!==0||Math.abs(ev)>=90000</code> 依赖 JS 运算符优先级（恰好正确但难读）；<code>cached.mate</code>/<code>cached.eval</code> 来自 JSON 反序列化可能是字符串。改为显式 <code>(mateDist!==0)||Math.abs(ev)>=90000</code> + <code>Number()</code> 归一。</li>
+        <li><strong>_getSqBg 死代码清理（冗余清理）</strong>：移除未使用的 <code>_sqBgCache</code> 声明（曾尝试缓存但从未赋值/读取）+ 函数内 <code>lastFrom</code>/<code>lastTo</code> 计算（计算后从未用于返回值）。</li>
+      </ul>
+    </li>
+    <li><strong>统计页 PGN 导入流程优化（UX 修复）</strong>：统计数据页面的"📂 选择 PGN 文件"按钮原本会先关闭统计页、回到主界面，再由主界面弹出 SAF 文件选择器——一次跳转 + 一次返回，体验割裂。改为在 <code>StatsActivity</code> 内直接调用 <code>ACTION_OPEN_DOCUMENT</code>，用户选完文件后由 <code>onActivityResult</code> 读取内容并通过 <code>onStatsPGNFileRead(content)</code> 回调就地刷新统计页，整个导入流程不再离开统计视图。同时清理因此变成孤儿的 <code>statsRequestImport()</code> Java 桥接方法、<code>MainActivity.pendingStatsImportRequest</code> 静态标志、主 WebView 的 <code>onStatsRequestImport()</code> 处理器，以及 <code>_statsPastePGN()</code> 中残留的 <code>AndroidBridge.statsRequestImport</code> 特性检测（粘贴流程现在完全在 stats.html 内完成）。</li>
+    <li><strong>变例标签顺序编号修复（关键 bug）</strong>：当同一走法同时挂载多条变例（典型场景：玩家翻转棋盘后，引擎重新评估并产生新的分叉预测；或多条 MultiPV 预测同时分叉到同一走法）时，<code>_formatVariationGroups()</code> 此前按 <code>group</code>/<code>mpvIndex</code>/<code>lineNum</code> 字段派生行号——mainline 恒为 1，<code>mpvIndex=0</code> 也是 1，导致两条变例都被标为"🌿线1"。改为<strong>按变例在数组中的顺序</strong>分配 1、2、3…，保证标签唯一。同时在 <code>_checkPVDivergenceSANs()</code> 中加入"相同 SAN 内容不再重复挂载"的去重保护，从源头避免冗余变例。</li>
+    <li><strong>升变 UCI 字母修复（关键 bug）</strong>：<code>_mrToUci()</code>（用于把走法记录转 UCI 与引擎 PV 对比）此前用 <code>mr.promotion[0]</code> 取首字母——'queen'→'q' 正确，但 'knight'→'k' <em>错误</em>（UCI 规范是 'n'）。结果所有马升变的对比恒为不等，触发假分叉，在分叉点挂载多余的"备选线"变例。改用 <code>{queen:'q',rook:'r',bishop:'b',knight:'n'}</code> 显式映射。<code>executeMove()</code> 中 ponder-hit 检测的 <code>moveUCI</code> 拼装有同样问题（拼接完整单词 'queen' 而非字母 'q'），导致升变走法永远不会命中 ponder 预测，每次升变都退化为 stopPonder + 全新搜索——ponder 优化对升变完全失效。两处统一修复。</li>
+    <li><strong>新游戏时残留 AI 态清理（关键 bug）</strong>：<code>_resetGameUIState()</code> 此前不重置 <code>isAIThinking</code>、<code>_aiSafetyTimerId</code>、<code>_aiRetryCount</code>、<code>_evalLoading</code>、<code>_sfEvalReady</code>、<code>_ponderGen</code>、<code>_ponderMoveSAN</code>、<code>_ponderBarInfo</code>、<code>_pendingPonderMoveUCI</code>、<code>_multiPVLines</code>、<code>_multiPVResult</code>、<code>_lastEngineVariation</code>。若用户在 AI 思考中开始新游戏 / 导入 FEN / 导入 PGN：<code>isAIThinking=true</code> 会让新游戏的 <code>doAIMove()</code> 早返回，AI 永远不走棋；旧的 15 秒安全定时器仍在挂起，可能在<em>新</em> <code>gameState</code> 上触发；残留 ponder / MultiPV 数据泄露到新游戏的 UI。现在统一重置，保证干净开局。</li>
+    <li><strong>AI 首步变例缺失修复（关键 bug）</strong>：<code>onBestMove()</code> 此前用 <code>if(moveRecords.length&gt;0)</code> 守卫 <code>_pendingBestMoveInfo</code> 的赋值——当玩家执黑、AI 执白先走时，<code>moveRecords.length===0</code>，守卫直接跳过，后续 <code>_processDeferredVariations()</code> 因 <code>_pendingBestMoveInfo</code> 为 null 早返回，AI 的第一步永远没有任何 🌿 变例线。改为允许 <code>lastIdx=-1</code>（<code>_processDeferredVariations</code> 已正确解析为 <code>aiMoveIdx=0</code>），执黑开局也能看到 AI 首步的预测续着。</li>
+    <li><strong>引擎重启后 AI 重试计数器重置</strong>：<code>_aiRetryCount</code> 此前仅在 bestmove 成功、3 次超时、引擎错误时重置——<em>不</em>在引擎自动重启（<code>onEngineRestarting</code>/<code>onEngineReady</code>）时重置。若引擎在 AI 思考中崩溃自愈（<code>_aiRetryCount</code> 已递增到 1 或 2），恢复后下一次 <code>doAIMove()</code> 会立即递增到 2 或 3，可能直接撞到 3 次重试上限显示"AI 超时"，尽管引擎刚恢复。两处都添加 <code>_aiRetryCount=0</code> 重置。</li>
+    <li><strong>复盘请求空走法提示</strong>：<code>onStatsRequestReview()</code> 在 <code>moveRecords</code> 为空时此前静默返回——用户点了"🗂️复盘"但什么都没发生，没有任何反馈。改为 <code>showToast(T('no_move_records'))</code>，明确告知"暂无走法记录"。</li>
+    <li><strong>tablebase 缓存 LRU 命中刷新</strong>：<code>_tbCache</code>（Map）命中时只 <code>get</code> 不 <code>delete+set</code>，频繁访问的条目可能比冷条目先被淘汰，违背 LRU 语义。改为命中时 delete + set 把条目移到"最新"位置（Map 保留插入顺序），与 <code>_reviewEvalCache</code> 的实现一致。</li>
+    <li><strong>_reviewEvalCache 新增 peek() 方法</strong>：原 <code>get()</code> 每次访问都会刷新 LRU 顺序（delete + set）。在 <code>_buildEvalTrendSVG</code>、<code>_findCriticalMoves</code>、走法列表渲染、<code>openStatsPage</code> 收集评估数据等遍历循环中，每次 <code>get</code> 都触发一次 Map delete+set——100 步复盘就是 100 次无谓的 Map 操作，还会把当前迭代的条目推到最新位置、把其它条目推向淘汰。新增 <code>peek(k)</code> 只读不刷新 LRU，遍历循环统一改用 <code>peek()</code>。</li>
+    <li><strong>makeMv 冗余 captured 变量清理</strong>：<code>makeMv</code> 在第 631 行已用 <code>capPiece=ns.board[to.row][to.col]</code> 提取被吃棋子（突变前），第 646 行的 Zobrist 哈希更新却又用 <code>captured=s.board[to.row][to.col]</code> 从原始 state 再读一次——<code>ns</code> 是 <code>s</code> 的深克隆，两者值完全相同。改为直接复用 <code>capPiece</code>，消除冗余读取。</li>
+    <li><strong>语言偏好 SharedPreferences 文件统一（回归修复）</strong>：<code>StockfishNative.saveLangPref()</code> 在 v1.0.2 改为写入 <code>"RegaliaEngine"</code>（与 <code>isEnglishMode()</code> 读取的文件一致），但 <code>EngineService.isEnglishMode()</code> 和 <code>updateNotification()</code> 仍从 <code>"Regalia_prefs"</code> 读取——<em>这个文件从未被任何代码写入</em>。结果前台服务通知的语言始终回落到系统默认，忽略用户在 APP 内选择的语言。统一改为 <code>PREFS_NAME="RegaliaEngine"</code>。同时移除 <code>updateNotification()</code> 中读取错误 prefs 文件且计算结果从未被使用的 <code>en</code> 死代码块。</li>
+    <li><strong>统计页震动反馈尊重用户偏好</strong>：<code>StatsActivity.performHaptic()</code> 此前无脑 <code>v.vibrate(30)</code>，不检查 <code>hapticFeedbackEnabled</code> 偏好、不检查系统震动设置、忽略 <code>type</code> 参数、使用 API 26+ 已弃用的 <code>vibrate(long)</code>。用户在主应用设置中关闭震动后，统计页按钮仍会震动。改为读取同一 <code>"RegaliaEngine"</code> prefs 的 <code>hapticFeedbackEnabled</code> + 系统 <code>HAPTIC_FEEDBACK_ENABLED</code>，二者皆开才震动；API 26+ 改用 <code>VibrationEffect.createOneShot</code>。</li>
+    <li><strong>统计页 HTML 导出回调 JS 注入修复</strong>：<code>StatsActivity</code> 导出 HTML 后用 <code>displayName.replace("'", "\\'")</code> 拼接 JS 字符串——只转义单引号不转义反斜杠/换行/控制字符。文件名含 <code>\</code>、<code>\'</code> 或字面换行时会破坏 JS 字符串字面量。改用 JSON 编码（与同文件 PGN 导入路径、<code>StockfishNative.escapeJsString()</code> 一致），所有特殊字符安全转义。</li>
+    <li><strong>Process.isAlive/destroyForcibly 在 API 21-25 上崩溃修复</strong>：<code>Process.isAlive()</code> 和 <code>destroyForcibly()</code> 都是 API 26+ API，但 <code>minSdk=21</code>。三处引擎关闭路径直接调用 <code>engineProcess.isAlive()</code>/<code>destroyForcibly()</code>，在 API 21-25 上每次关闭都抛 <code>NoSuchMethodError</code>（被 <code>catch(Throwable)</code> 静默吞掉，但 <code>destroyForcibly()</code> 永远不会执行）。新增 <code>destroyForciblySafe()</code> 包装：API 26+ 调用真方法，API 21-25 回落到第二次 <code>destroy()</code>。三处关闭路径统一改用 <code>isProcessAlive()</code> + <code>destroyForciblySafe()</code>。</li>
+    <li><strong>BufferedReader 资源泄漏修复</strong>：<code>StockfishNative.handleFilePickerResult()</code> 和 <code>handlePGNFilePickerResult()</code> 此前用 <code>try { BufferedReader reader = ...; ... } finally { is.close(); }</code>——<code>is.close()</code> 关闭底层流，但 <code>BufferedReader</code> 自身（及其内部 char 缓冲）未显式关闭，依赖 GC 回收。改用 try-with-resources 直接包裹 <code>BufferedReader</code>，与 <code>StatsActivity</code> 中的同路径写法一致。</li>
+    <li><strong>StockfishNative 死统计代码清理（~80 行）</strong>：v1.0.2 重构把统计页迁移到 <code>StatsActivity</code> 自带的 JS 桥接后，<code>StockfishNative</code> 中遗留下列死代码：<code>getStatsPayload()</code>、<code>closeStatsPage()</code>（<code>activityRef</code> 永远指向 <code>MainActivity</code>，<code>instanceof StatsActivity</code> 恒为 false）、<code>exportStatsHTML()</code>、<code>statsRequestReview()</code>、<code>_pendingStatsPayload</code>（仅被已删除的 <code>getStatsPayload()</code> 读取）、<code>_pendingStatsHTML</code>（仅被已删除的 <code>exportStatsHTML()</code> 设置）、<code>REQUEST_CODE_EXPORT_STATS_HTML</code>、<code>handleExportFilePickerResult()</code> 中的统计 HTML 分支——全部删除。<code>_pendingStatsPayload</code>/<code>_pendingStatsHTML</code> 同时是内存泄漏（大 PGN 棋谱会一直占着内存直到下次调用或引擎关闭）。</li>
+    <li><strong>processEngineLine 死分支清理</strong>：<code>if (_isPondering) { ... return; }</code> 分支不可达——<code>stopPonder()</code> 和 <code>stopAndWaitForBestmove()</code> 在发送 <code>stop</code> 前<em>都</em>把 <code>_isPondering=false</code>，bestmove 到达时该标志恒为 false。真正的丢弃路径是 <code>_discardingPonderBestmove</code> 检查（同一对调用者设置）。删除死分支。</li>
+    <li><strong>handleBestMove 冗余 <code>{ }</code> 块清理</strong>：<code>switch(state)</code> 三个 case 中的 <code>postJsCallback("onMultiPVResult(...)")</code> 都被包在多余的 <code>{ }</code> 块里——是从某个已删除 <code>if</code> 条件留下的残留。删除多余块。</li>
+    <li><strong>ai-bridge.js 重复函数定义清理</strong>：<code>_checkPVDivergence(pv1Moves, pv2Moves)</code>（找两条 PV 数组的最长公共前缀）和 <code>_checkPVDivergence()</code>（遍历 <code>_pendingEnginePVs</code> 挂载分叉变例）同名——JS 后定义胜出规则下前者被静默遮蔽，所有调用点都用 0 参数，前者从不被调用。前者及配套的"finds the longest shared prefix"注释一并删除（活动函数 <code>_convertPVtoSANCached()</code> 通过自己的 <code>_pvCache</code> 找公共前缀，不需要这个辅助函数）。</li>
+    <li><strong>统计数据界面总步数无法超过 98 步修复（关键 bug）</strong>：统计数据页面的 <code>parsePGN()</code> 使用简化的 SAN 解析器（<code>applySANMove</code>/<code>canMoveTo</code>），不处理将军检测、消歧义、吃过路兵等复杂场景。一旦某一步解析失败，局面状态不前进，后续所有走法级联失败——表现为"总步数卡在 98 步左右"。根因修复：<code>openStatsPage()</code> 现在同时发送主 APP 已解析的权威走法记录（<code>from/to/piece/captured/promotion/notation</code>），统计页面通过 <code>parseFromMoveRecords()</code> 直接重放这些走法（使用 <code>executeMove()</code> 正确推进状态），完全绕过简化 SAN 解析器。对于粘贴/导入 PGN 的场景（无走法记录），仍回退到简化解析器。</li>
+    <li><strong>统计数据界面 PGN 文本栏棋子符号样式修复</strong>：PGN 文本栏的棋子符号（♔♚♘♞等）此前与走法目标格文字（如"f3"）同色（均为 <code>var(--text)</code> 奶油色），没有主界面棋盘上棋子的颜色/描边/微光。根因：CSS 特异性不足——<code>.pgn-display .move</code>（特异性 0,2,0）覆盖了 <code>.piece-white</code>/<code>.piece-black</code>（特异性 0,1,0）。修复：(1) 提升 CSS 特异性为 <code>.pgn-display .move .piece-white</code>；(2) 重构 <code>renderSAN()</code> 让棋子符号独占一个 <code>&lt;span class="piece-white/piece-black"&gt;</code>，目标格/吃子/将军后缀保持默认文字色——与主界面棋盘"棋子符号 vs 格子标签"的分离方式一致。</li>
+    <li><strong>说明书章节布局调整</strong>：将分散在目录前的 v1.0.2 和 v1.0.1 更新日志详情合并为<strong>附录 A：版本更新日志</strong>，置于说明书末尾（第十五章之后、页脚之前）。目录页新增"附录 A"条目。页脚版本号从 v1.0.1 更新为 v1.0.2。变例线框图说明同步更新为顺序编号（不再区分主线/备选）。</li>
+    <li><strong>qw3.7max 外部代码审查报告 7 项优化全部实施</strong>：根据外部审查报告（qw3.7max v1.0.2审查报告.md），按 bug 修复 > 功能完善 > 性能突破 > 冗余清理 > 简化代码 的优先级逐项实施：
+      <ul>
+        <li><strong>P1-1 状态对比逻辑简化</strong>：<code>_updateBoardLightweight()</code> 中 <code>_selChanged</code>/<code>_newHover</code> 的冗长空值判断（多重 <code>!!</code> 转换 + 短路计算）改为可选链 <code>selectedSquare?.row !== _prevSelSq?.row</code>。同时将 <code>_newHover</code> 重命名为 <code>_infoChanged</code>（该变量跟踪的是信息格变化，不仅是 Hover 状态）。</li>
+        <li><strong>P1-2 innerHTML XSS 防护</strong>：复盘走法分类 span 的 <code>_mcls.color</code>/<code>_mcls.label</code> 用 <code>_esc()</code> 转义。虽然 <code>_classifyMove</code> 当前返回内部常量（转义技术上冗余），但为未来可能引入用户可控数据提供防御性保护。</li>
+        <li><strong>P2-1 scrollIntoView 兼容性</strong>：复盘模式自动滚动处 <code>behavior:'instant'</code>（CSSOM View 较新规范，部分旧 WebView 不识别）改为 <code>behavior:'auto'</code>，2 处调用点同步更新。</li>
+        <li><strong>P3-1 消除强制同步布局（性能突破）</strong>：复盘自动滚动的 <code>rAF + setTimeout(0)</code> 改为<strong>双 rAF</strong>（<code>requestAnimationFrame(function(){ requestAnimationFrame(function(){ ... }) })</code>）。第一帧浏览器计算布局，第二帧绘制；在第二帧读取布局信息（scrollIntoView）保证不引发强制同步布局（布局抖动）。旧模式的 <code>setTimeout</code> 是宏任务，不能保证布局已完成。</li>
+        <li><strong>P3-2 DOM 缓存降维（性能突破）</strong>：<code>_sqElCache</code> 从二维数组 <code>_sqElCache[r][c]</code>（数组的数组，两次指针解引用，内存不连续）改为<strong>一维数组</strong> <code>_sqElCache[r*8+c]</code>（单次连续分配，一次解引用）。引擎进度回调每秒 10-50 次的增量更新热路径上减少微小但可测的开销。</li>
+        <li><strong>P4-1 模运算简化</strong>：<code>((i+1)%2)===1</code> 简化为 <code>(i%2)===0</code>（数学等价，消除多余的 +1）。2 处调用点同步更新。</li>
+        <li><strong>P4-2 DOM 查询缓存</strong>：复盘走法列表元素 <code>_rListEl</code> 提升为模块级变量，全量渲染后赋值、缓存失效时清空。避免每次渲染的 scroll-into-view 路径都 <code>getElementById('reviewMovesList')</code> 遍历 DOM 树。</li>
+        <li><strong>P5-1 模板字符串</strong>：复盘走法分类 span 的字符串拼接（<code>+= '</span>'</code>）改为 ES6 模板字符串，可读性更好。</li>
+      </ul>
+    </li>
+</ul>
+</div>
+
+<!-- v1.0.1 Changelog -->
+<div class="card" style="margin: 20px 0; padding: 16px; background: linear-gradient(145deg, rgba(139,105,20,.08), rgba(255,215,0,.04)); border: 1px solid rgba(212,160,23,.3); border-radius: 8px;">
+  <h3 style="color:#ffd700; margin-bottom: 12px; font-size: 1.1rem;">v1.0.1 更新日志</h3>
+  <ul style="line-height: 1.7; font-size: .9rem; color: var(--text); padding-left: 20px;">
+    <li><strong>通知栏引擎条精简</strong>：常驻通知现仅显示三种状态——<strong>就绪</strong> / <strong>分析中</strong> / <strong>报错</strong>，不再显示搜索深度与速度。详细的深度/节点/速度/评分仍在 APP 内评估栏显示，通知栏保持极简，避免打扰用户。</li>
+    <li><strong>悔棋自动选中棋子修复</strong>：修复悔棋后未自动选中原棋子的 bug。现在悔棋后会自动选中"被悔的那步棋移动的棋子（所在的格子）"，连续悔多步同样生效。自动选中后可正常点击该格解除选中（与其他选中状态一致）。</li>
+    <li><strong>PGN 变例解析完善</strong>：修复 PGN 导入时变例丢失或附加到错误走法的问题，新增 Type A fallback（<code>moveAlg</code> 匹配）、<code>mainTokenIdx</code> 索引追踪（处理主行包含非法走法的情况）、无法匹配首 token 时的诊断日志。嵌套变例（RAV）符合 PGN 规范 §8.2.5。</li>
+    <li><strong>PGN 导入悔棋修复</strong>：修复 PGN 导入后无法悔白方首步走法的根本原因——<code>stateHistory</code> 的快照顺序错误（在 <code>moveRecords.push</code> 之后才推入），导致悔棋恢复的 <code>moveRecords</code> 仍包含被悔的走法。现按 <code>executeMove</code> 一致的方式先快照再推入。</li>
+    <li><strong>走棋动画流畅度优化</strong>：为棋子动画启用 GPU 合成层（<code>translateZ(0)</code>、<code>will-change</code>、<code>backface-visibility</code>），添加 <code>contain:layout style paint</code> 限制重绘范围，移除昂贵的 <code>box-shadow</code> 过渡。减少卡顿，提升响应速度。</li>
+    <li><strong>前台服务通知增强</strong>：常驻通知支持<strong>点击跳转至 APP</strong>、<strong>不可手动移除</strong>（<code>setOngoing(true)</code> + <code>FLAG_NO_CLEAR</code>）。在小米澎湃OS 3 上即使被系统允许划掉，前台服务本身仍持续运行，下次状态更新时通知自动恢复。</li>
+    <li><strong>语言切换振动反馈</strong>：点击中英文切换按钮时触发 <code>TOGGLE_ON</code> 振动反馈，与其它按钮交互体验一致。</li>
+    <li><strong>MobSF 安全检查修复</strong>：补全 5 项静态扫描缺陷：JavaScript 接口安全文档化、TLS 证书固定代码引用、Certificate Transparency 引用、SafetyNet 不适用性说明、ChessApp 异常日志精简。</li>
+    <li><strong>术语同步</strong>：英文模式下走法评价 "Book" 改为 "Mediocre"（v1.0.0 起）。</li>
+  </ul>
+</div>
+
+
+</div>
+
 <!-- ===== FOOTER ===== -->
 <div style="text-align: center; padding: 40px 0 20px; color: #6a5a40; font-size: 12px;">
-  <p style="margin: 4px 0;">Regalia v1.0.1 用户说明书 (User Manual)</p>
+  <p style="margin: 4px 0;">Regalia v1.0.2 用户说明书 (User Manual)</p>
   <p style="margin: 4px 0;">Built with Stockfish 18 &nbsp;|&nbsp; AGPL v3</p>
   <p style="margin: 4px 0;">Compatible with Android 5.0-15 &nbsp;|&nbsp; Xiaomi HyperOS 3</p>
   <a href="#top" class="back-top">&#9650; 返回顶部</a>
