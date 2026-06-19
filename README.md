@@ -41,7 +41,6 @@ Download the latest APK from [GitHub Releases](https://github.com/YDW99/Regalia/
 
 - Android 5.0 (API 21) or later
 - ARM64 device (arm64-v8a)
-- ~80 MB storage
 
 ## Building
 
