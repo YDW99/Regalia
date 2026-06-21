@@ -46,6 +46,10 @@ _applyImportedFEN(f);
 function _applyImportedFEN(fenStr){
 const ns=fenToState(fenStr);
 if(ns){
+// v1.0.3: Track FEN's starting move number for correct display numbering.
+if(typeof _importedStartMoveNum!=='undefined'){
+  _importedStartMoveNum=(ns.fullMoveNumber&&ns.fullMoveNumber>0)?ns.fullMoveNumber:1;
+}
 gameState=ns;_resetGameUIState();gameOverSoundPlayed=false;
 _cachedStatus=null;_cachedStatusKey='';
 _sfEval=0;_sfMateDistance=0;_sfDepth=0;_sfEvalReady=false;_evalLoading=false;_updateEvalDisplay();
@@ -120,9 +124,9 @@ function _parsePGN(pgnText){
   let moveText=pgnText.replace(/\[[^\]]*\]/g,'').trim();
   // Remove line continuation markers (\ at end of line)
   moveText=moveText.replace(/\\\s*\n/g,' ');
-  // Remove comments (brace-style { ... }) — handle nested braces gracefully by matching innermost first
-  while(moveText.includes('{'))moveText=moveText.replace(/\{[^{}]*\}/g,'');
-  // Remove semicolon-style comments (; to end of line) — DroidFish line comment handling
+  // Remove comments (brace-style { ... }) — match innermost first for nesting.
+  // v1.0.3-p9 audit: iteration cap prevents infinite loop on unmatched `{`.
+  {let _braceIter=0;while(moveText.includes('{')&&_braceIter++<10)moveText=moveText.replace(/\{[^{}]*\}/g,'');}
   moveText=moveText.replace(/;[^\n]*/g,'');
   
   // Strip NAGs ($1, $2, etc.)
@@ -142,8 +146,9 @@ function _parsePGN(pgnText){
   
   // Normalize: ensure space after move number dots (e.g. "1.e4" → "1. e4", "2...Nf6" → "2... Nf6")
   text=text.replace(/(\d+\.+(?=[a-zA-Z]))/g,'$1 ');
-  // Also handle "1.e4" without dots after move number for non-standard PGN
-  text=text.replace(/(\d+)(\.[^\d])/g,'$1.$2');
+  // v1.0.3-p5 audit: removed a buggy regex here that added an extra dot to
+  // move numbers (turned "1. e4" into "1.. e4"). The first regex above already
+  // handles "1.e4" → "1. e4", and the next regex handles "1 e4" → "1. e4".
   // Handle move numbers without dots (e.g. "1 e4 e5 2 Nf3") — add a dot so the
   // move-number regex can detect them. Pattern: standalone number followed by a piece/pawn letter.
   text=text.replace(/(^|\s)(\d+)\s+(?=[a-hKQRBN])/g,'$1$2. ');
@@ -302,7 +307,7 @@ function _parsePGN(pgnText){
   let state=startFEN?fenToState(startFEN):initState();
   if(!state)return null;
   
-  const moves=[]; // array of { notation, move, state (post-move), mainTokenIdx }
+  const moves=[]; // array of { notation, move, state (post-move), mainTokenIdx, skipped?:true }
   
   // v1.0.1 FIX: Track the original mainToken index for each valid move.
   // If a main-line token fails to parse (rare but possible with malformed PGN),
@@ -310,15 +315,52 @@ function _parsePGN(pgnText){
   // `variations` Map. Without this tracking, variations attached to moves
   // AFTER the invalid token would be looked up at the wrong index and silently
   // dropped — manifesting as "incomplete variations" after PGN import.
+  //
+  // v1.0.3 patch FIX (cascade-failure): when a token fails to parse, we now
+  // (1) push a "skipped" placeholder entry so moveRecords indices stay aligned
+  // with PGN move numbers (the display layer renders these as a dimmed "—"
+  // marker, similar to the null black-to-move placeholder);
+  // (2) ADVANCE the side-to-move (and fullMoveNumber if black was to move) so
+  // subsequent tokens have a chance to parse.
+  // Previously, a single invalid token would leave the side-to-move unchanged,
+  // causing EVERY subsequent token to also fail (because it'd be the wrong
+  // side's move) — manifesting as "only the first N moves import, the rest
+  // are silently dropped". With this fix, a malformed PGN (e.g., one illegal
+  // move) imports all the OTHER moves correctly, with a single "—" marker
+  // where the illegal move was.
+  let _consecutiveSkips=0;
   for(let ti=0;ti<mainTokens.length;ti++){
     const token=mainTokens[ti];
     const result=_applySANMove(state,token);
     if(!result){
-      // Could not parse — skip this token (DroidFish-style lazy validation: silently drop invalid)
-      // Log so we can diagnose which token failed.
+      // Could not parse — skip this token (DroidFish-style lazy validation).
+      // v1.0.3 patch: advance the side-to-move so subsequent tokens (which
+      // belong to the OTHER side per PGN alternation) have a chance to
+      // parse. Without this advance, a single bad token derails the entire
+      // rest of the game. Also bump fullMoveNumber when black was to move,
+      // so move-number display stays in sync with PGN move numbers.
       console.warn('_parsePGN: skipping invalid main-line token at index',ti,':',token);
+      // Push a "skipped" placeholder so moveRecords indices stay aligned
+      // with PGN move numbers. The display layer renders this as a dimmed
+      // "—" marker, making it clear to the user that this specific move
+      // failed to parse (rather than silently dropping it and shifting
+      // all subsequent move numbers).
+      moves.push({notation:null,move:null,state:state,mainTokenIdx:ti,skipped:true,skippedSAN:token});
+      if(state.currentTurn==='black'){
+        state.fullMoveNumber=(state.fullMoveNumber||1)+1;
+      }
+      state.currentTurn=state.currentTurn==='white'?'black':'white';
+      _consecutiveSkips++;
+      // Safety: if 5+ consecutive tokens fail, the PGN is hopelessly broken —
+      // stop trying to avoid an infinite wrong-side cascade that produces
+      // a garbage game state.
+      if(_consecutiveSkips>=5){
+        console.warn('_parsePGN: 5 consecutive invalid tokens — stopping parse');
+        break;
+      }
       continue;
     }
+    _consecutiveSkips=0;
     result.mainTokenIdx=ti;
     moves.push(result);
     state=result.state;
@@ -496,8 +538,8 @@ function _executeAndRecord(state,move,notation){
   const undoInfo=makeMvInPlace(state,move);
   // makeMvInPlace mutates state in place and returns undo info, NOT the post-move state.
   // After the call, 'state' IS the post-move state.
-  const captured=undoInfo?undoInfo.capPiece:null;
-  const isCapture=!!captured||move.enPassant;
+  // v1.0.3-p5 audit: removed dead `isCapture` computation (was never read, and
+  // move.enPassant is always undefined since legalMoves doesn't set it).
   // Determine check status using the mutated post-move state
   // After makeMvInPlace, currentTurn has already switched to the opponent's turn
   const oppColor=state.currentTurn; // side to move next (might be in check)
@@ -538,6 +580,16 @@ function importPGN(pgnText){
   const startState=result.startFEN?fenToState(result.startFEN):initState();
   if(!startState){showToast(T('pgn_invalid'),2000);return;}
   
+  // v1.0.3: Track the FEN's starting move number so the move list / PGN export
+  // can display correct move numbers (e.g., "4. Bxf7+ Kxf7 5. Ne5" instead of
+  // "1. Bxf7+ Kxf7 2. Ne5" when the FEN starts at move 4). For the standard
+  // initial position, this is 1 (no change in behavior).
+  if(typeof _importedStartMoveNum!=='undefined'){
+    _importedStartMoveNum=(startState.fullMoveNumber&&startState.fullMoveNumber>0)?startState.fullMoveNumber:1;
+    // If black is to move at the start, the FIRST displayed pair is move N
+    // with white's slot showing "..." — Math.floor(0/2)+N=N is correct.
+  }
+  
   // Reset game state
   gameState=startState;_resetGameUIState();gameOverSoundPlayed=false;
   _cachedStatus=null;_cachedStatusKey='';
@@ -567,6 +619,16 @@ function importPGN(pgnText){
   let replayState=startState;
   
   for(const parsedMove of result.moves){
+    // v1.0.3 patch: handle "skipped" placeholder moves (invalid SAN that
+    // couldn't be parsed). Push a null moveRecord so moveRecords indices
+    // stay aligned with PGN move numbers. The display layer renders null
+    // entries as a dimmed "—" marker (same as the black-to-move placeholder).
+    if(parsedMove&&parsedMove.skipped){
+      stateHistory.push({state:cloneS(replayState),moveRecords:[...moveRecords],lastMove:lastMove?{...lastMove}:null,selectedSquare:null});
+      moveRecords.push(null);
+      moveIdx++;
+      continue;
+    }
     // Bug 2 fix: Null check for parsedMove.move.from/to before accessing .row
     if(!parsedMove||!parsedMove.move||!parsedMove.move.from||!parsedMove.move.to){
       console.error('importPGN: skipping move with null from/to at index',moveIdx);
@@ -816,6 +878,15 @@ function importPGN(pgnText){
   // prevent them from being reprocessed when the loop reaches their new location.
   // Without this, a variation moved from moveRecord[mi] to moveRecord[divergeIdx]
   // would be processed AGAIN at divergeIdx, creating duplicates.
+  //
+  // v1.0.3 FIX (Type A vs Type B): The relocate logic only makes sense for
+  // Type B variations (continuations after the owning move — firstMoveIsWhite
+  // matches the side of mi+1). Type A variations (alternatives to the owning
+  // move — firstMoveIsWhite matches the side of mi) must be KEPT at mi. The
+  // previous code relocated Type A variations to mi+1 with the wrong side
+  // label, producing nonsensical displays like "7... hxg3 Qxh1 8.Nc3 ..."
+  // for a variation that is actually "7. hxg3 Qxh1 8.Nc3 ..." (alternative
+  // to 7.Kf2, not a continuation after 7...h5).
   for(let mi=0;mi<moveRecords.length;mi++){
     const mr=moveRecords[mi];
     if(!mr||!mr.variations||mr.variations.length===0)continue;
@@ -824,6 +895,15 @@ function importPGN(pgnText){
       if(v.group!=='pgn'){remainingVars.push(v);continue;}
       // Skip variations that were already relocated from an earlier moveRecord
       if(v._relocated){remainingVars.push(v);continue;}
+      // v1.0.3: Type A variation — alternative to owning move.
+      //   owning move mi is white  ⇔  mi%2===0  ⇔  firstMoveIsWhite===true
+      //   owning move mi is black  ⇔  mi%2===1  ⇔  firstMoveIsWhite===false
+      // Type A means firstMoveIsWhite matches (mi%2===0). Keep at mi.
+      const _owningSideIsWhite=(mi%2===0);
+      if(v.firstMoveIsWhite===_owningSideIsWhite){
+        remainingVars.push(v);
+        continue;
+      }
       // Parse the variation's SAN moves
       const sanMoves=v.san.trim().split(/\s+/).filter(s=>s);
       if(sanMoves.length===0){continue;}
@@ -922,6 +1002,12 @@ function importPGN(pgnText){
   if(st&&st!=='play'){_applyGameOver(st);}
   
   render();
+  // v1.0.3: Cache the original PGN text so the stats page can access the
+  // complete PGN with all headers ([FEN], [SetUp], [TimeControl], [%clk]
+  // comments, etc.) — not just the rebuilt move text from _buildPGNString().
+  if(typeof _cachedOriginalPGN!=='undefined'){
+    _cachedOriginalPGN=pgnText;
+  }
   showToast(T('pgn_imported'),2000);
   requestEngineEval();
   }catch(e){

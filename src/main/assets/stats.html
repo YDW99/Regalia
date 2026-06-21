@@ -8,6 +8,9 @@
 /* AI-GEN: AI assisted
    This code was AI-assisted and has been reviewed for GPL v3 compliance.
    Modified by Regalia on 2026-06-18: stats.html template for 📊统计 feature.
+   v1.0.3 (2026-06-20): time-management analysis from PGN {1.0s ...} comments,
+   clickable variation moves with synthetic-mainline reconstruction,
+   FEN panel below PGN text panel, bilingual UI.
    Original PGN parsing logic derived from DroidFish (GPL v3).
    This file is licensed under GPL v3 to match the DroidFish-derived PGN parsing. */
 :root{
@@ -32,7 +35,7 @@ body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,
 .pgn-display .move{color:var(--text);font-weight:500;cursor:pointer}
 .pgn-display .move:hover{text-decoration:underline}
 .pgn-display .comment{color:var(--comment);font-style:italic;font-size:1rem}
-.pgn-display .variation{color:var(--variation);font-size:1rem}
+.pgn-display .variation{color:var(--variation);font-size:1rem;font-style:italic}
 .pgn-display .header-tag{color:var(--accent2);font-size:.95rem;display:block;margin-bottom:2px}
 /* v1.0.2 FIX: Increase specificity so piece symbol colors override .pgn-display .move.
    Previously .pgn-display .move (specificity 0,2,0) overrode .piece-white/.piece-black
@@ -67,7 +70,38 @@ table tr:hover{background:rgba(212,160,23,.05)}
 .move{cursor:pointer;padding:1px 3px;border-radius:3px;transition:background .15s}
 .move:hover{background:rgba(212,160,23,.15)}
 .move.selected{background:rgba(212,160,23,.3);font-weight:600}
-@media(max-width:600px){.content{padding:8px}.hdr{padding:8px}.hdr h1{font-size:1rem}.btn{padding:4px 8px;font-size:.75rem}}
+/* v1.0.3: FEN inline display in PGN text — smaller font, monospace, selectable */
+.fen-inline{background:rgba(126,184,218,.1);border:1px solid rgba(126,184,218,.3)}
+.fen-inline:hover{background:rgba(126,184,218,.2)}
+.fen-inline.selected{background:rgba(126,184,218,.3);font-weight:600}
+/* v1.0.3: variation moves are now clickable — give them a subtle underline-on-hover
+   and a slightly different background when selected, so the user can tell apart
+   "mainline move selected" vs "variation move selected". */
+.pgn-display .variation .move:hover{background:rgba(126,184,218,.18)}
+.pgn-display .variation .move.selected{background:rgba(126,184,218,.32);font-weight:600}
+/* v1.0.3: "var-included" — variation moves from index 0 up to (but not including)
+   the clicked move. These are ALSO part of the synthetic sequence that replaces
+   the mainline move. We give them a lighter highlight than "selected" so the
+   user can see the entire series is being used, not just the clicked move. */
+.pgn-display .variation .move.var-included{background:rgba(126,184,218,.15);font-weight:500}
+/* v1.0.3: FEN panel — below the PGN text panel. Monospace, selectable,
+   word-break so long FENs wrap on small screens. The copy button is placed
+   at the BOTTOM-right via flexbox (not absolute top-right) so it never
+   overlaps the FEN text on long FENs. */
+.fen-panel{background:rgba(0,0,0,.28);border:1px solid var(--border);border-radius:6px;padding:10px 12px;margin-bottom:14px;font-family:'Sarasa Mono SC','Noto Sans Mono','DejaVu Sans Mono',monospace;font-size:.82rem;line-height:1.5;color:var(--accent2);word-break:break-all;user-select:text;-webkit-user-select:text;cursor:text;position:relative;display:flex;flex-direction:column;gap:6px}
+.fen-panel .fen-label{display:block;font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-bottom:0;font-family:system-ui,-apple-system,sans-serif}
+.fen-panel .fen-value{display:block;color:var(--accent2);font-family:inherit;white-space:pre-wrap}
+/* v1.0.3: copy button row — aligned to the bottom-right, never overlaps FEN text */
+.fen-panel .fen-copy-row{display:flex;justify-content:flex-end;margin-top:2px}
+.fen-panel .fen-copy{background:rgba(212,160,23,.15);color:var(--accent);border:1px solid rgba(212,160,23,.4);border-radius:4px;padding:3px 10px;font-size:.7rem;cursor:pointer;font-family:system-ui,-apple-system,sans-serif}
+.fen-panel .fen-copy:active{background:rgba(212,160,23,.35)}
+.fen-panel .fen-hint{color:var(--muted);font-style:italic;font-size:.78rem}
+/* v1.0.3: time-management chart — bar chart of per-move thinking time. */
+.time-chart{width:100%;height:120px;background:rgba(0,0,0,.3);border-radius:6px;margin-top:8px}
+.time-chart-bar{fill:#d4a017;transition:fill .15s}
+.time-chart-bar.white{fill:#E8E8F0}
+.time-chart-bar.black{fill:#7eb8da}
+@media(max-width:600px){.content{padding:8px}.hdr{padding:8px}.hdr h1{font-size:1rem}.btn{padding:4px 8px;font-size:.75rem}.fen-panel{font-size:.75rem;padding:8px}.fen-panel .fen-copy{font-size:.65rem;padding:2px 8px}}
 </style>
 </head>
 <body>
@@ -92,6 +126,18 @@ table tr:hover{background:rgba(212,160,23,.05)}
 let _payload=null;
 let _lang='zh';
 let _selectedMoveIdx=-1; // v1.0.2: selected move index for per-position stats
+// v1.0.3: variation selection state
+//   _variationMoves: when non-null, overrides parsed.moves for stats computation.
+//     Built by selectVariationMove() as: mainline[0..k-1] + variation moves up to clicked.
+//   _variationMeta: {mainIdxReplaced: k, varClickedIdx: n} for display in selection banner.
+//   _variations: array of {mainIdxBefore, moves:[SAN], sideAtStart, sanDisplay:[rendered]} 
+//     built by _parsePGNVariations() during renderPGNText().
+let _variationMoves=null;
+let _variationMeta=null;
+let _variations=[];
+// v1.0.3: When true, the initial position (FEN) is "selected" — stats show
+// the initial position with 0 moves. Set by selectInitialPosition().
+let _fenSelected=false;
 
 // i18n
 const _i18n={
@@ -166,6 +212,44 @@ const _i18n={
   'key_moments':{zh:'关键转折',en:'Key Moments'},
   'back':{zh:'返回',en:'Back'},
   'stats_title':{zh:'📊统计数据',en:'📊Statistics'},
+  // v1.0.3: new strings for time-management analysis, FEN panel, variation selection
+  'fen_label':{zh:'局面 FEN',en:'Position FEN'},
+  'fen_hint':{zh:'点击上方任意走法（含变例走法）以生成对应局面的 FEN',en:'Tap any move above (including variation moves) to generate the FEN for that position'},
+  'fen_initial':{zh:'初始局面 FEN',en:'Initial Position FEN'},
+  'fen_copy':{zh:'复制',en:'Copy'},
+  'fen_copied':{zh:'FEN 已复制',en:'FEN copied'},
+  'fen_copy_failed':{zh:'复制失败，请手动选择文本',en:'Copy failed, please select text manually'},
+  'variation_marker':{zh:'[变例]',en:'[var]'},
+  'variation_replaced':{zh:'已用变例首步替换主线走法',en:'Replaced mainline move with variation first move'},
+  'time_total_used':{zh:'总用时',en:'Total Time Used'},
+  'time_white_used':{zh:'白方用时',en:'White Time'},
+  'time_black_used':{zh:'黑方用时',en:'Black Time'},
+  'time_avg_per_move':{zh:'平均每步',en:'Avg / Move'},
+  'time_white_avg':{zh:'白方平均',en:'White Avg'},
+  'time_black_avg':{zh:'黑方平均',en:'Black Avg'},
+  'time_max_move':{zh:'最长用时步',en:'Slowest Move'},
+  'time_min_move':{zh:'最短用时步',en:'Fastest Move'},
+  'time_opening_used':{zh:'开局用时',en:'Opening Time'},
+  'time_midgame_used':{zh:'中局用时',en:'Midgame Time'},
+  'time_endgame_used':{zh:'残局用时',en:'Endgame Time'},
+  'time_chart_title':{zh:'每步用时分布',en:'Time per Move'},
+  'time_phase_dist':{zh:'各阶段用时占比',en:'Time by Phase'},
+  'time_pct':{zh:'%',en:'%'},
+  'time_sec_short':{zh:'秒',en:'s'},
+  'time_no_data':{zh:'PGN 注释中未识别到用时数据（需 {1.0s ...} 格式注释或带 [TimeControl] 头的 [%clk] 注释）',en:'No time data found in PGN comments (need {1.0s ...} comments or [%clk] with [TimeControl] header)'},
+  'time_format_hint':{zh:'已识别每步用时（来自 PGN 注释 {1.0s ...} 格式）',en:'Per-move times extracted from PGN comments ({1.0s ...} format)'},
+  'time_format_hint_clk':{zh:'已识别每步用时（由 [TimeControl] 头 + [%clk] 注释推算：用时 = 上次剩余 + 增量 - 本次剩余）',en:'Per-move times derived from [TimeControl] header + [%clk] comments (used = previous clock + increment - current clock)'},
+  'time_control_header':{zh:'时间控制',en:'Time Control'},
+  'time_base_time':{zh:'基础总时间',en:'Base Time'},
+  'time_increment':{zh:'每步增量',en:'Increment / Move'},
+  'time_format_unknown':{zh:'未知格式',en:'unknown format'},
+  'time_no_increment':{zh:'无增量',en:'no increment'},
+  'time_volatility':{zh:'用时波动',en:'Time Volatility'},
+  'time_stddev':{zh:'标准差',en:'Std Dev'},
+  'time_long_moves':{zh:'长考步数 (>10s)',en:'Long Think Moves (>10s)'},
+  'time_fast_moves':{zh:'秒走步数 (<1s)',en:'Quick Moves (<1s)'},
+  'select_hint':{zh:'已选中第 %d 步',en:'Move %d selected'},
+  'select_var_hint':{zh:'已选中变例第 1–%d 步（共 %d 步，已替换主线第 %d 步）',en:'Variation moves 1–%d selected (%d moves, replaced mainline move %d)'},
 };
 function T(k){return _i18n[k]?(_i18n[k][_lang]||_i18n[k].zh):k;}
 
@@ -216,6 +300,16 @@ function parsePGN(pgnText){
   }
   // Extract FEN if present
   let startFEN=headers.FEN||null;
+  // v1.0.3: Detect Black-to-move start. Two signals:
+  //   (a) FEN header with side-to-move = 'b'
+  //   (b) PGN movetext starts with a "N..." move-number prefix (Black's move first)
+  // When isBlackToMoveStart is true, the first move (moves[0]) is Black's,
+  // so the i%2 side-identification in renderStats must be inverted.
+  let isBlackToMoveStart=false;
+  if(startFEN){
+    const fenParts=startFEN.split(/\s+/);
+    if(fenParts.length>=2&&fenParts[1]==='b')isBlackToMoveStart=true;
+  }
   // Extract comments (for display in PGN text section)
   const comments=[];
   let cText=pgnText.replace(/\r\n/g,'\n');
@@ -229,7 +323,25 @@ function parsePGN(pgnText){
   // to build the parsed moves + states. This avoids the simplified SAN parser's
   // cascade-failure bug.
   if(typeof _payload!=='undefined'&&_payload&&_payload.moveRecords&&Array.isArray(_payload.moveRecords)){
-    return parseFromMoveRecords(_payload.moveRecords,startFEN,headers,comments);
+    // v1.0.3: Detect Black-to-move from moveRecords — if records[0] is null
+    // (the Black-to-move placeholder), the first real move is Black's.
+    if(_payload.moveRecords.length>0&&!_payload.moveRecords[0]){
+      isBlackToMoveStart=true;
+    }
+    const result=parseFromMoveRecords(_payload.moveRecords,startFEN,headers,comments);
+    if(result)result.isBlackToMoveStart=isBlackToMoveStart;
+    return result;
+  }
+
+  // v1.0.3: If no FEN header, detect Black-to-move from the movetext.
+  // A Black-to-move PGN starts with "1..." (or "N...") before the first move.
+  if(!isBlackToMoveStart){
+    // Strip headers, then check if the first move-number token ends with "..."
+    let mtCheck=text.replace(/^\[.*\]$/gm,'').trim();
+    const firstNumMatch=mtCheck.match(/^(\d+\.+)/);
+    if(firstNumMatch&&firstNumMatch[1].includes('...')){
+      isBlackToMoveStart=true;
+    }
   }
 
   // Fallback: parse PGN string with simplified parser (for pasted/imported PGN
@@ -281,7 +393,7 @@ function parsePGN(pgnText){
     }
     tokenIdx++;
   }
-  return {headers,moves,startFEN,comments};
+  return {headers,moves,startFEN,comments,isBlackToMoveStart};
 }
 
 // v1.0.2 FIX: Build parsed moves from authoritative move records sent by the
@@ -562,6 +674,292 @@ function calcMaterial(board){
   return w-b;
 }
 
+// v1.0.3: Generate FEN string from a game state.
+//   Board placement (rank 8 → rank 1, '/'-separated), side to move,
+//   castling rights, en passant target, halfmove clock, fullmove number.
+//   Mirrors generateFEN() in chess.src/game-logic.js (GPL v3, DroidFish-derived).
+//   NOTE: stats.html's state object is structurally compatible (see initState()
+//   and executeMove above) — same field names as the main app.
+function stateToFEN(state){
+  if(!state||!state.board)return '';
+  let fen='';
+  // Board placement: rank 8 (row 0) first, down to rank 1 (row 7)
+  for(let r=0;r<8;r++){
+    let empty=0;
+    for(let c=0;c<8;c++){
+      const p=state.board[r][c];
+      if(!p){empty++;continue;}
+      if(empty>0){fen+=empty;empty=0;}
+      const letter=p.type==='knight'?'n':p.type[0];
+      fen+=p.color==='white'?letter.toUpperCase():letter.toLowerCase();
+    }
+    if(empty>0)fen+=empty;
+    if(r<7)fen+='/';
+  }
+  // Side to move
+  fen+=' '+(state.currentTurn==='white'?'w':'b');
+  // Castling rights
+  let cr='';
+  if(state.castlingRights){
+    if(state.castlingRights.whiteKingside)cr+='K';
+    if(state.castlingRights.whiteQueenside)cr+='Q';
+    if(state.castlingRights.blackKingside)cr+='k';
+    if(state.castlingRights.blackQueenside)cr+='q';
+  }
+  fen+=' '+(cr||'-');
+  // En passant target
+  if(state.enPassantTarget){
+    const sq=String.fromCharCode(97+state.enPassantTarget.col)+(8-state.enPassantTarget.row);
+    fen+=' '+sq;
+  }else{
+    fen+=' -';
+  }
+  // Halfmove clock
+  fen+=' '+(state.halfMoveClock!=null?state.halfMoveClock:0);
+  // Fullmove number
+  fen+=' '+(state.fullMoveNumber!=null?state.fullMoveNumber:1);
+  return fen;
+}
+
+// v1.0.3: Extract per-move thinking times from PGN comments.
+//   Recognizes TWO PGN time-comment conventions:
+//
+//   1. Direct "used time" format (v1.0.3 native):
+//        {3.2s +0.5 略优}  — the "3.2s" is the actual seconds spent on the move.
+//        Also recognizes the earlier em-dash variant {3.2s——...}.
+//      No header is needed; each comment directly states the move's used time.
+//
+//   2. Clock-remaining format (standard PGN, requires [TimeControl] header):
+//        [TimeControl "7200+60"]
+//        1. d3 {[%clk 02:01:00]} 1... d6 {[%clk 02:00:58]}
+//      The header "7200+60" means: each player starts with 7200 seconds of
+//      base time, and gains 60 seconds of increment after each move.
+//      Each [%clk HH:MM:SS] is the REMAINING clock AFTER the move.
+//      To derive used time, we track each player's previous remaining clock
+//      (initialized to baseTime) and compute:
+//          used = (previousClock + increment) - currentClk
+//      For move 1 (White): previousClock = baseTime (7200), increment = 60,
+//        currentClk = 02:01:00 (7260s) → used = (7200 + 60) - 7260 = 0s
+//        (White thought for <1s, so the +60 increment exactly offset to 7260).
+//      For move 1...d6 (Black): previousClock = baseTime (7200), increment = 60,
+//        currentClk = 02:00:58 (7258s) → used = (7200 + 60) - 7258 = 2s.
+//
+//   When [TimeControl] is present and a move has a [%clk] comment, the
+//   increment-based calculation is used. When [TimeControl] is absent OR a
+//   move has a direct {N.Ns} comment instead, the direct format wins for
+//   that move.
+//
+//   Returns: {usedTimes: [num|null], clkTimes: [num|null], hasTimeControl: bool,
+//             baseTime: num|null, increment: num|null}
+//   - usedTimes[i] = seconds spent on move i (or null if unknown)
+//   - clkTimes[i] = remaining clock after move i (or null)
+//   - hasTimeControl = true if a [TimeControl "...+..."] header was found
+//   - baseTime / increment = parsed from the header (null if absent)
+//   - isBlackToMoveStart = true if the PGN starts with Black to move (detected
+//     via FEN "... b ..." header or "1..." move-number prefix)
+// v1.0.3: isBlackToMoveStart is detected inside the function (from FEN header
+// or "1..." prefix) and used to correctly identify White/Black moves for the
+// increment-based clock calculation. For Black-to-move games, move index 0
+// is Black's move, so the parity is inverted.
+function extractMoveTimes(pgnText){
+  if(!pgnText)return {usedTimes:[],clkTimes:[],hasTimeControl:false,baseTime:null,increment:null,isBlackToMoveStart:false};
+  let text=pgnText.replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+  // v1.0.3: Detect Black-to-move start for correct White/Black identification
+  // in the increment-based clock calculation.
+  let isBlackToMoveStart=false;
+  const fenMatch=text.match(/\[FEN\s+"([^"]+)"\]/);
+  if(fenMatch){
+    const fenParts=fenMatch[1].split(/\s+/);
+    if(fenParts.length>=2&&fenParts[1]==='b')isBlackToMoveStart=true;
+  }
+  if(!isBlackToMoveStart){
+    // Check if movetext starts with "N..." (Black's move first)
+    let mtCheck=text.replace(/^\[.*\]$/gm,'').trim();
+    const firstNumMatch=mtCheck.match(/^(\d+\.+)/);
+    if(firstNumMatch&&firstNumMatch[1].includes('...'))isBlackToMoveStart=true;
+  }
+  // --- Parse [TimeControl "BASE+INC"] header (or "BASE" with no increment) ---
+  //   Examples: "7200+60", "1800", "300+5", "40/7200" (moves-per-time, treated as no increment here)
+  let baseTime=null,increment=0,hasTimeControl=false;
+  const tcMatch=text.match(/\[TimeControl\s+"([^"]+)"\]/);
+  if(tcMatch){
+    const tc=tcMatch[1].trim();
+    // Standard format: "BASE+INC" where both are integers (seconds).
+    // Some PGNs use "40/7200" (40 moves in 7200s) — we extract the base time
+    // from after the slash and treat increment as 0.
+    const incMatch=tc.match(/^(\d+)\+(\d+)$/);
+    const noIncMatch=tc.match(/^(\d+)$/);
+    const movesPerTimeMatch=tc.match(/^\d+\/(\d+)$/);
+    if(incMatch){
+      baseTime=parseInt(incMatch[1]);
+      increment=parseInt(incMatch[2]);
+      hasTimeControl=true;
+    }else if(noIncMatch){
+      baseTime=parseInt(noIncMatch[1]);
+      increment=0;
+      hasTimeControl=true;
+    }else if(movesPerTimeMatch){
+      baseTime=parseInt(movesPerTimeMatch[1]);
+      increment=0;
+      hasTimeControl=true;
+    }
+    // Other formats ("?", "SD/nn", "ourn") leave hasTimeControl=false
+    // — we'll fall back to direct {Ns} parsing only.
+  }
+  // --- Walk the movetext (headers stripped) and collect per-move times ---
+  // Remove header tags [...] (anything in square brackets at line start)
+  // so they don't interfere with the movetext walk below.
+  let moveText=text.replace(/^\[.*\]$/gm,'');
+  const usedTimes=[];
+  const clkTimes=[];
+  let i=0;
+  const sanRe=/^([KQRBN][a-h]?[1-8]?x?[a-h][1-8][+#]?=?[QRBN]?|O-O(?:-O)?|0-0(?:-0)?|[a-h]x?[a-h][1-8](?:=[QRBN])?[+#]?|[a-h][1-8][+#]?)/;
+  const moveNumRe=/^(\d+\.+)/;
+  const resultRe=/^(1-0|0-1|1\/2-1\/2|\*)\b/;
+  // Track each player's PREVIOUS remaining clock, for increment-based used-time
+  // calculation. Initialized to baseTime when the first [%clk] is seen.
+  // (We lazy-init so that PGNs without [TimeControl] don't fabricate times.)
+  let prevClkWhite=null,prevClkBlack=null;
+  let clkInitialized=false;
+  function initClkIfNeeded(){
+    if(!clkInitialized&&hasTimeControl&&baseTime!=null){
+      prevClkWhite=baseTime;
+      prevClkBlack=baseTime;
+      clkInitialized=true;
+    }
+  }
+  while(i<moveText.length){
+    const ch=moveText[i];
+    if(/\s/.test(ch)){i++;continue;}
+    // Comment block {...}
+    if(ch==='{'){
+      let end=moveText.indexOf('}',i);
+      if(end<0)end=moveText.length-1;
+      const comment=moveText.substring(i+1,end);
+      // Direct used-time format: "<number>s" (e.g. "3.2s", "0.5s", "12s").
+      // This is the v1.0.3 native format. We match the FIRST <number>s in the
+      // comment — but NOT "D22" (no 's' suffix) or "0:05:30" (no 's' suffix).
+      const timeMatch=comment.match(/(\d+(?:\.\d+)?)s/);
+      // Clock-remaining format: [%clk HH:MM:SS]
+      const clkMatch=comment.match(/\[%clk\s+([0-9]+):([0-9]+):([0-9]+\.?[0-9]*)\]/);
+      // The comment belongs to the move that JUST HAPPENED — i.e., the
+      // previous mainline move. So we attach it to usedTimes[len-1].
+      // If no mainline move yet, attach to index 0 (initial position comment).
+      const targetIdx=Math.max(0,usedTimes.length-1);
+      // Determine which color made this move (for increment-based calc).
+      // v1.0.3: For Black-to-move-start games, move index 0 is Black's,
+      // so the parity is inverted.
+      const isWhite=isBlackToMoveStart?(targetIdx%2===1):(targetIdx%2===0);
+      if(clkMatch){
+        const h=parseInt(clkMatch[1]),m=parseInt(clkMatch[2]),s=parseFloat(clkMatch[3]);
+        const totalSec=h*3600+m*60+s;
+        if(!isNaN(totalSec)){
+          if(clkTimes[targetIdx]==null)clkTimes[targetIdx]=totalSec;
+          // If we have a TimeControl header, derive used time via increment:
+          //   used = (previousClock + increment) - currentClk
+          // The "previousClock" is the player's clock BEFORE this move (i.e.,
+          // their remaining time after their previous move, or baseTime for
+          // their first move). After this move they gain `increment` seconds,
+          // so the relationship is: currentClk = previousClock - used + increment
+          // → used = previousClock + increment - currentClk.
+          if(hasTimeControl&&baseTime!=null){
+            initClkIfNeeded();
+            const prevClk=isWhite?prevClkWhite:prevClkBlack;
+            if(prevClk!=null){
+              const used=prevClk+increment-totalSec;
+              // Only set if the direct {Ns} format hasn't already filled this slot
+              // (direct format takes precedence — it's more authoritative).
+              if(usedTimes[targetIdx]==null){
+                // Clamp to >= 0 (a negative used time would indicate data corruption
+                // or a clock that went up — shouldn't happen in valid PGN).
+                usedTimes[targetIdx]=Math.max(0,used);
+              }
+            }
+            // Update the player's previous-clock for their NEXT move.
+            if(isWhite)prevClkWhite=totalSec;else prevClkBlack=totalSec;
+          }
+        }
+      }
+      if(timeMatch){
+        const sec=parseFloat(timeMatch[1]);
+        if(!isNaN(sec)){
+          // Direct format takes precedence over the increment-derived value.
+          usedTimes[targetIdx]=sec;
+        }
+      }
+      i=end+1;
+      continue;
+    }
+    // Semicolon comment (rest of line)
+    if(ch===';'){
+      let end=moveText.indexOf('\n',i);
+      if(end<0)end=moveText.length;
+      i=end;
+      continue;
+    }
+    // Variation block (...) — skip entirely for mainline time tracking.
+    if(ch==='('){
+      let depth=1,j=i+1;
+      while(j<moveText.length&&depth>0){
+        if(moveText[j]==='(')depth++;
+        if(moveText[j]===')')depth--;
+        j++;
+      }
+      i=j;
+      continue;
+    }
+    // NAG ($1, $2, ...)
+    if(ch==='$'){
+      let j=i+1;
+      while(j<moveText.length&&/\d/.test(moveText[j]))j++;
+      i=j;
+      continue;
+    }
+    // Move number (1. or 1...)
+    const numM=moveText.substring(i).match(moveNumRe);
+    if(numM){
+      i+=numM[0].length;
+      continue;
+    }
+    // Result marker
+    const resM=moveText.substring(i).match(resultRe);
+    if(resM){
+      i+=resM[0].length;
+      continue;
+    }
+    // SAN move — push a slot for it
+    const sanM=moveText.substring(i).match(sanRe);
+    if(sanM){
+      // Push null initially; the comment that follows will fill it.
+      usedTimes.push(null);
+      clkTimes.push(null);
+      i+=sanM[0].length;
+      continue;
+    }
+    // Unknown character — skip
+    i++;
+  }
+  return {usedTimes,clkTimes,hasTimeControl,baseTime,increment,isBlackToMoveStart};
+}
+
+// v1.0.3: Format seconds into a human-readable time string.
+//   < 60s: "12.3s"
+//   < 60min: "3m 25s"
+//   >= 60min: "1h 12m 30s"
+function formatTime(sec){
+  if(sec==null||isNaN(sec))return '—';
+  if(sec<60)return sec.toFixed(1)+T('time_sec_short');
+  if(sec<3600){
+    const m=Math.floor(sec/60);
+    const s=Math.floor(sec%60);
+    return m+'m '+s+'s';
+  }
+  const h=Math.floor(sec/3600);
+  const m=Math.floor((sec%3600)/60);
+  const s=Math.floor(sec%60);
+  return h+'h '+m+'m '+s+'s';
+}
+
 // Classify move based on eval delta
 function classifyMove(evalDelta,isMoverWhite){
   const moverDelta=isMoverWhite?evalDelta:-evalDelta;
@@ -571,6 +969,27 @@ function classifyMove(evalDelta,isMoverWhite){
   if(moverDelta>-150)return {cls:'inaccuracy',label:T('inaccuracy')};
   if(moverDelta>-300)return {cls:'mistake',label:T('mistake')};
   return {cls:'blunder',label:T('blunder')};
+}
+
+// v1.0.3 FIX: Determine which color made the move at index i in the moves array.
+//   For a standard White-to-move-start game: i%2===0 → White, i%2===1 → Black.
+//   For a Black-to-move-start game (FEN "... b ..." or PGN starts with "1..."):
+//   the first move (moves[0]) is Black's, so the parity is INVERTED:
+//   i%2===0 → Black, i%2===1 → White.
+//   `parsed` is the parsed object from parsePGN() (may be the effective parsed
+//   object for a variation selection). `isBlackToMoveStart` is read from it;
+//   if absent (old callers), defaults to false (White-to-move).
+function moverIsWhite(i,parsed){
+  const blackStart=parsed&&parsed.isBlackToMoveStart;
+  return blackStart?(i%2===1):(i%2===0);
+}
+// v1.0.3 FIX: Build the move-number display string for move index i.
+//   For White-to-move-start: move 1 = White (i=0 → "1."), move 1 = Black (i=1 → "1...")
+//   For Black-to-move-start: move 1 = Black (i=0 → "1..."), move 1 = White (i=1 → "1.")
+//   Returns "N." for White moves, "N..." for Black moves.
+function moveNumDisplay(i,parsed){
+  const moveNum=Math.floor(i/2)+1;
+  return moverIsWhite(i,parsed)?(moveNum+'.'):(moveNum+'...');
 }
 
 // Calculate accuracy from CPL (Chess.com-style formula)
@@ -595,7 +1014,7 @@ function renderPGN(parsed,evalData){
   for(let i=0;i<parsed.moves.length;i++){
     const m=parsed.moves[i];
     const moveNum=Math.floor(i/2)+1;
-    const isWhite=(i%2===0);
+    const isWhite=moverIsWhite(i,parsed);
     if(isWhite){
       h+='<span class="move-num">'+moveNum+'.</span> ';
     }
@@ -625,8 +1044,8 @@ function renderMoveNotation(notation){
 
 // Render statistics
 function renderStats(parsed,evalData){
-  if(!parsed||!parsed.moves.length)return '';
-  const moves=parsed.moves;
+  if(!parsed)return '';
+  const moves=parsed.moves||[];
   let h='';
 
   // Metadata section
@@ -640,10 +1059,14 @@ function renderStats(parsed,evalData){
   // Position statistics
   h+='<div class="section"><h2>'+T('position_stats')+'</h2><div class="stats-grid">';
   h+='<div class="stat-item"><div class="label">'+T('total_moves')+'</div><div class="value">'+moves.length+'</div></div>';
-  // Final material
+  // Final material — use last move's state, or initial state if no moves (FEN selected)
   if(moves.length>0){
     const finalMat=calcMaterial(moves[moves.length-1].state.board);
     h+='<div class="stat-item"><div class="label">'+T('material')+'</div><div class="value">'+(finalMat>0?'+':'')+finalMat+'</div></div>';
+  }else if(parsed.initialState){
+    // v1.0.3: FEN selected — show material from the initial position
+    const initMat=calcMaterial(parsed.initialState.board);
+    h+='<div class="stat-item"><div class="label">'+T('material')+'</div><div class="value">'+(initMat>0?'+':'')+initMat+'</div></div>';
   }
   h+='</div></div>';
 
@@ -653,11 +1076,19 @@ function renderStats(parsed,evalData){
     let wCPL=[],bCPL=[];
     let classifications={brilliant:0,best:0,good:0,inaccuracy:0,mistake:0,blunder:0};
     for(let i=0;i<moves.length;i++){
-      if(!evalData[i]||!evalData[i+1])continue;
-      const prevEv=evalData[i]?evalData[i].eval:0;
-      const curEv=evalData[i+1]?evalData[i+1].eval:0;
+      // v1.0.3 FIX: evalData[i] is the eval AFTER move i (reviewStep = i+1).
+      // The eval BEFORE move i is evalData[i-1] (or the initial eval if i=0,
+      // but we don't have that — so skip i=0 if no prior eval).
+      // delta = evalData[i] - evalData[i-1] = change caused by move i.
+      if(i===0){
+        // No prior eval to compare — skip (can't compute CPL for first move)
+        continue;
+      }
+      if(!evalData[i]||!evalData[i-1])continue;
+      const prevEv=evalData[i-1].eval;
+      const curEv=evalData[i].eval;
       const delta=curEv-prevEv;
-      const isWhite=(i%2===0);
+      const isWhite=moverIsWhite(i,parsed);
       const cls=classifyMove(delta,isWhite);
       classifications[cls.cls]++;
       if(isWhite)wCPL.push(Math.max(0,-delta));
@@ -666,8 +1097,12 @@ function renderStats(parsed,evalData){
     const avgW=wCPL.length?wCPL.reduce((a,b)=>a+b,0)/wCPL.length:0;
     const avgB=bCPL.length?bCPL.reduce((a,b)=>a+b,0)/bCPL.length:0;
     h+='<div class="stats-grid">';
-    h+='<div class="stat-item"><div class="label">'+T('white_accuracy')+'</div><div class="value white">'+(calcAccuracy(avgW)||'—')+'%</div></div>';
-    h+='<div class="stat-item"><div class="label">'+T('black_accuracy')+'</div><div class="value black">'+(calcAccuracy(avgB)||'—')+'%</div></div>';
+    // v1.0.3 FIX: when there are no White/Black moves in the selection (e.g. a
+    // variation selection that only has White moves), show "—" instead of a
+    // misleading "100.0%". calcAccuracy(0) returns "100.0" which is wrong when
+    // there are zero moves to average over.
+    h+='<div class="stat-item"><div class="label">'+T('white_accuracy')+'</div><div class="value white">'+(wCPL.length?(calcAccuracy(avgW)+'%'):'—')+'</div></div>';
+    h+='<div class="stat-item"><div class="label">'+T('black_accuracy')+'</div><div class="value black">'+(bCPL.length?(calcAccuracy(avgB)+'%'):'—')+'</div></div>';
     h+='<div class="stat-item"><div class="label">'+T('avg_cpl')+' W</div><div class="value">'+avgW.toFixed(0)+'</div></div>';
     h+='<div class="stat-item"><div class="label">'+T('avg_cpl')+' B</div><div class="value">'+avgB.toFixed(0)+'</div></div>';
     h+='</div>';
@@ -708,12 +1143,12 @@ function renderStats(parsed,evalData){
         pieceMoves[m.piece.color][m.piece.type]++;
       }
       if(m.captured){
-        if(i%2===0)captures.white++;else captures.black++;
+        if(moverIsWhite(i,parsed))captures.white++;else captures.black++;
       }
       if(m.notation&&m.notation.includes('+'))checks++;
       if(m.notation&&m.notation.includes('#'))checkmates++;
       if(m.notation&&(m.notation.includes('O-O')||m.notation.includes('0-0'))){
-        if(i%2===0)castles.white++;else castles.black++;
+        if(moverIsWhite(i,parsed))castles.white++;else castles.black++;
       }
       if(m.notation&&m.notation.includes('='))promotions++;
     }
@@ -805,8 +1240,18 @@ function renderStats(parsed,evalData){
       h+='<table><tr><th>#</th><th>'+(T('move')||'Move')+'</th><th>'+(T('eval_change')||'Eval Change')+'</th><th>'+(T('classification')||'Classification')+'</th></tr>';
       for(let i=0;i<Math.min(10,swings.length);i++){
         const s=swings[i];
-        const moveNum=Math.floor((s.move-1)/2)+1;
-        const isWhite=(s.move-1)%2===0;
+        // v1.0.3 FIX: s.move is the evalData index where the swing was detected.
+        // evalData[s.move] is the eval AFTER move (s.move) [0-indexed], and
+        // evalData[s.move-1] is the eval BEFORE that move. So the move that
+        // CAUSED the swing is at index s.move-1 in the moves array... wait:
+        // evalData[0] = eval after move 0, evalData[1] = eval after move 1.
+        // Swing between evalData[i-1] and evalData[i] is caused by move i-1? No!
+        // evalData[i-1] is the eval after move (i-1). evalData[i] is the eval
+        // after move i. So the swing is caused by move i (0-indexed).
+        // s.move = i (the loop variable), so moveIdx = s.move.
+        const moveIdx=s.move; // 0-based move index
+        const moveNum=Math.floor(moveIdx/2)+1;
+        const isWhite=moverIsWhite(moveIdx,parsed);
         const moverDelta=isWhite?s.curr-s.prev:s.prev-s.curr;
         const cls=classifyMove(s.curr-s.prev,isWhite);
         h+='<tr><td>'+(i+1)+'</td><td>'+moveNum+(isWhite?'.':'...')+'</td><td>'+(s.delta/100).toFixed(1)+' cp</td><td><span class="classification '+cls.cls+'">'+cls.label+'</span></td></tr>';
@@ -818,22 +1263,133 @@ function renderStats(parsed,evalData){
     h+='</div>';
   }
 
-  // Time management (if time data available in PGN comments)
-  if(parsed.comments&&parsed.comments.length>0){
-    h+='<div class="section"><h2>'+(T('time_management')||'Time Management')+'</h2>';
-    // Try to extract time from comments like "[%clk 0:05:30]"
-    let times=[];
-    for(const c of parsed.comments){
-      const m=c.match(/\[%clk\s+([0-9:]+\.?[0-9]*)\]/);
-      if(m)times.push(m[1]);
+  // v1.0.3: Time management — comprehensive analysis using per-move thinking
+  // times extracted from PGN comments. Supports two formats:
+  //   1. Direct {1.0s ...} format (v1.0.3 native)
+  //   2. [%clk HH:MM:SS] format with [TimeControl "BASE+INC"] header —
+  //      used time is derived via increment calculation.
+  // We extract times from the ORIGINAL PGN text (_payload.pgn) so that
+  // imported PGNs with custom time annotations also work — not just the
+  // current game's PGN built by the main app.
+  // v1.0.3 FIX: When a variation or mainline move is selected, the time
+  // management section must show times that correspond to the SAME move
+  // sequence as the rest of the stats (effectiveParsed.moves). We slice
+  // the times array to match the effective move count.
+  if(_payload&&_payload.pgn){
+    const tm=extractMoveTimes(_payload.pgn);
+    let times=tm.usedTimes;
+    // v1.0.3 FIX: Slice times to match the effective parsed moves length.
+    // When a variation is selected, _variationMoves may have a different
+    // length than the mainline. When a mainline move is selected, the
+    // moves are sliced. We must align the times array to the same length
+    // as effectiveParsed.moves to avoid showing times for moves that aren't
+    // in the current selection.
+    const effMoveCount=moves.length; // moves = effectiveParsed.moves
+    if(times.length>effMoveCount){
+      times=times.slice(0,effMoveCount);
     }
-    if(times.length>0){
-      h+='<div class="stats-grid">';
-      h+='<div class="stat-item"><div class="label">'+(T('total_time')||'Total Time')+'</div><div class="value">'+times.length+' moves</div></div>';
-      h+='</div>';
-      h+='<p style="color:var(--muted);font-size:.8rem;margin-top:8px">'+(T('time_note')||'Clock data from PGN comments')+'</p>';
+    const hasAnyTime=times.some(t=>t!=null);
+    h+='<div class="section"><h2>'+T('time_management')+'</h2>';
+    if(!hasAnyTime){
+      h+='<div class="loading">'+T('time_no_data')+'</div>';
     }else{
-      h+='<div class="loading">'+T('no_data')+'</div>';
+      // v1.0.3: If a [TimeControl] header was found, show the time-control
+      // info (base time + increment) at the top of the section.
+      if(tm.hasTimeControl&&tm.baseTime!=null){
+        h+='<div style="background:rgba(126,184,218,.08);border:1px solid rgba(126,184,218,.3);border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:.82rem">';
+        h+='<span style="color:var(--accent2);font-weight:600">'+T('time_control_header')+': </span>';
+        h+='<span style="color:var(--text)">'+T('time_base_time')+' = <strong>'+formatTime(tm.baseTime)+'</strong>';
+        if(tm.increment>0){
+          h+='；'+T('time_increment')+' = <strong>+'+tm.increment+T('time_sec_short')+'</strong>';
+        }else{
+          h+='；'+T('time_increment')+' = <strong>'+T('time_no_increment')+'</strong>';
+        }
+        h+='</span></div>';
+      }
+      // Compute aggregates — only over moves that have a time.
+      // White moves are at even indices, Black at odd indices.
+      let total=0,whiteTotal=0,blackTotal=0;
+      let whiteCount=0,blackCount=0;
+      let maxT=-1,maxIdx=-1,minT=Number.MAX_SAFE_INTEGER,minIdx=-1;
+      // Phase buckets — opening/midgame/endgame based on move count heuristics:
+      //   Opening: first 20 plies (10 full moves)
+      //   Midgame: plies 21-60 (moves 11-30)
+      //   Endgame: ply 61+ (move 31+)
+      let openT=0,midT=0,endT=0,openN=0,midN=0,endN=0;
+      let longMoves=0,fastMoves=0;
+      const allVals=[];
+      for(let i=0;i<times.length;i++){
+        const t=times[i];
+        if(t==null)continue;
+        total+=t;allVals.push(t);
+        if(moverIsWhite(i,parsed)){whiteTotal+=t;whiteCount++;}
+        else{blackTotal+=t;blackCount++;}
+        if(t>maxT){maxT=t;maxIdx=i;}
+        if(t<minT){minT=t;minIdx=i;}
+        if(i<20){openT+=t;openN++;}
+        else if(i<60){midT+=t;midN++;}
+        else{endT+=t;endN++;}
+        if(t>10)longMoves++;
+        if(t<1)fastMoves++;
+      }
+      // Standard deviation (volatility)
+      let stdDev=0;
+      if(allVals.length>1){
+        const mean=total/allVals.length;
+        const variance=allVals.reduce((a,b)=>a+(b-mean)*(b-mean),0)/allVals.length;
+        stdDev=Math.sqrt(variance);
+      }
+      // Summary stats grid
+      const wAvg=whiteCount>0?whiteTotal/whiteCount:0;
+      const bAvg=blackCount>0?blackTotal/blackCount:0;
+      const overallAvg=allVals.length>0?total/allVals.length:0;
+      h+='<div class="stats-grid">';
+      h+='<div class="stat-item"><div class="label">'+T('time_total_used')+'</div><div class="value">'+formatTime(total)+'</div></div>';
+      h+='<div class="stat-item"><div class="label">'+T('time_white_used')+'</div><div class="value white">'+formatTime(whiteTotal)+'</div></div>';
+      h+='<div class="stat-item"><div class="label">'+T('time_black_used')+'</div><div class="value black">'+formatTime(blackTotal)+'</div></div>';
+      h+='<div class="stat-item"><div class="label">'+T('time_avg_per_move')+'</div><div class="value">'+formatTime(overallAvg)+'</div></div>';
+      h+='<div class="stat-item"><div class="label">'+T('time_white_avg')+'</div><div class="value white">'+formatTime(wAvg)+'</div></div>';
+      h+='<div class="stat-item"><div class="label">'+T('time_black_avg')+'</div><div class="value black">'+formatTime(bAvg)+'</div></div>';
+      h+='</div>';
+      // Slowest / fastest move
+      h+='<div class="stats-grid" style="margin-top:10px">';
+      if(maxIdx>=0){
+        const maxMoveNum=Math.floor(maxIdx/2)+1;
+        const maxIsWhite=moverIsWhite(maxIdx,parsed);
+        h+='<div class="stat-item"><div class="label">'+T('time_max_move')+'</div><div class="value">'+maxMoveNum+(maxIsWhite?'.':'...')+'<br><span style="font-size:.85rem">'+formatTime(maxT)+'</span></div></div>';
+      }
+      if(minIdx>=0){
+        const minMoveNum=Math.floor(minIdx/2)+1;
+        const minIsWhite=moverIsWhite(minIdx,parsed);
+        h+='<div class="stat-item"><div class="label">'+T('time_min_move')+'</div><div class="value">'+minMoveNum+(minIsWhite?'.':'...')+'<br><span style="font-size:.85rem">'+formatTime(minT)+'</span></div></div>';
+      }
+      h+='<div class="stat-item"><div class="label">'+T('time_volatility')+'</div><div class="value">'+T('time_stddev')+': '+formatTime(stdDev)+'</div></div>';
+      h+='<div class="stat-item"><div class="label">'+T('time_long_moves')+'</div><div class="value">'+longMoves+'</div></div>';
+      h+='<div class="stat-item"><div class="label">'+T('time_fast_moves')+'</div><div class="value">'+fastMoves+'</div></div>';
+      h+='</div>';
+      // Phase distribution
+      h+='<div style="margin-top:14px"><h3 style="font-size:.85rem;color:var(--accent);margin-bottom:6px">'+T('time_phase_dist')+'</h3>';
+      h+='<div class="stats-grid">';
+      if(openN>0){
+        const pct=Math.round(openT/total*100);
+        h+='<div class="stat-item"><div class="label">'+T('opening')+' ('+openN+' '+T('ply')+')</div><div class="value">'+formatTime(openT)+'<br><span style="font-size:.8rem">'+pct+T('time_pct')+'</span></div></div>';
+      }
+      if(midN>0){
+        const pct=Math.round(midT/total*100);
+        h+='<div class="stat-item"><div class="label">'+T('midgame')+' ('+midN+' '+T('ply')+')</div><div class="value">'+formatTime(midT)+'<br><span style="font-size:.8rem">'+pct+T('time_pct')+'</span></div></div>';
+      }
+      if(endN>0){
+        const pct=Math.round(endT/total*100);
+        h+='<div class="stat-item"><div class="label">'+T('endgame')+' ('+endN+' '+T('ply')+')</div><div class="value">'+formatTime(endT)+'<br><span style="font-size:.8rem">'+pct+T('time_pct')+'</span></div></div>';
+      }
+      h+='</div></div>';
+      // Per-move time bar chart
+      h+='<div style="margin-top:14px"><h3 style="font-size:.85rem;color:var(--accent);margin-bottom:6px">'+T('time_chart_title')+'</h3>';
+      h+=renderTimeChart(times,parsed);
+      h+='</div>';
+      // Format hint — choose the appropriate one based on which format was used
+      const hint=tm.hasTimeControl?T('time_format_hint_clk'):T('time_format_hint');
+      h+='<p style="color:var(--muted);font-size:.78rem;margin-top:10px">'+hint+'</p>';
     }
     h+='</div>';
   }
@@ -848,15 +1404,12 @@ function renderStats(parsed,evalData){
     for(let i=0;i<openingPlies;i++){
       const m=moves[i];
       const moveNum=Math.floor(i/2)+1;
-      if(i%2===0)firstMoves+=moveNum+'. ';
+      if(moverIsWhite(i,parsed))firstMoves+=moveNum+'. ';
       firstMoves+=m.notation+' ';
     }
     h+='<p style="font-size:.85rem;color:var(--text);margin-bottom:8px">'+firstMoves.trim()+'</p>';
     // Piece development speed
     let wDev=0,bDev=0;
-    const wStartSquares=[[7,1],[7,2],[7,5],[7,6],[7,3],[7,4]]; // Nb1,Nc1,Nf1,Ng1,Bc1,Bf1 — wait, let me use correct
-    // White minor pieces start at: Nb1(7,1), Ng1(7,6), Bc1(7,2), Bf1(7,5), Qd1(7,3), Ke1(7,4)
-    // Black minor pieces start at: Nb8(0,1), Ng8(0,6), Bc8(0,2), Bf8(0,5), Qd8(0,3), Ke8(0,4)
     for(let i=0;i<moves.length;i++){
       const m=moves[i];
       if(m.piece&&(m.piece.type==='knight'||m.piece.type==='bishop')){
@@ -877,7 +1430,7 @@ function renderStats(parsed,evalData){
     h+='<div class="section"><h2>'+(T('pawn_structure')||'Pawn Structure')+'</h2>';
     const finalBoard=moves[moves.length-1].state.board;
     // Count pawn structure features
-    let wDoubled=0,bDoubled=0,wIsolated=0,bIsolated=0,wPassed=0,bPassed=0,wBackward=0,bBackward=0;
+    let wDoubled=0,bDoubled=0,wIsolated=0,bIsolated=0,wPassed=0,bPassed=0;
     const wPawns=[],bPawns=[];
     for(let r=0;r<8;r++)for(let c=0;c<8;c++){
       const p=finalBoard[r][c];
@@ -929,7 +1482,7 @@ function renderStats(parsed,evalData){
         // m.to is {row, col} — center squares: d4(4,3), e4(4,4), d5(3,3), e5(3,4)
         const r=m.to.row,c=m.to.col;
         if((r===4&&c===3)||(r===4&&c===4)||(r===3&&c===3)||(r===3&&c===4)){
-          if(i%2===0)wCenter++;else bCenter++;
+          if(moverIsWhite(i,parsed))wCenter++;else bCenter++;
         }
       }
     }
@@ -948,10 +1501,10 @@ function renderStats(parsed,evalData){
     for(let i=0;i<moves.length;i++){
       const m=moves[i];
       if(m.notation&&m.notation.includes('+')){
-        if(i%2===0)wChecks++;else bChecks++;
+        if(moverIsWhite(i,parsed))wChecks++;else bChecks++;
       }
       if(m.piece&&m.piece.type==='king'){
-        if(i%2===0)wKingMoves++;else bKingMoves++;
+        if(moverIsWhite(i,parsed))wKingMoves++;else bKingMoves++;
       }
     }
     h+='<div class="stats-grid">';
@@ -1048,6 +1601,110 @@ function renderMaterialChart(moves){
   return svg;
 }
 
+// v1.0.3: Render per-move thinking-time bar chart.
+//   times: array of seconds-per-move (null entries are skipped — bar shows gap).
+//   White moves get white bars, Black moves get blue bars.
+//   The y-axis auto-scales to the maximum time. The x-axis is move index (0-based).
+//   Hovering a bar shows the move number and time (via <title> element).
+//   `parsed` is passed to determine White/Black via moverIsWhite (handles
+//   Black-to-move-start games where the parity is inverted).
+function renderTimeChart(times,parsed){
+  const w=600,h=120,pad=20;
+  if(!times||times.length===0)return '<div class="loading">'+T('no_data')+'</div>';
+  const valid=times.filter(t=>t!=null);
+  if(valid.length===0)return '<div class="loading">'+T('no_data')+'</div>';
+  const maxT=Math.max(...valid,1);
+  const n=times.length;
+  const barW=Math.max(2,(w-2*pad)/n);
+  let svg='<svg class="time-chart" viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="none">';
+  svg+='<rect x="0" y="0" width="'+w+'" height="'+h+'" fill="rgba(0,0,0,.3)"/>';
+  // Zero line (bottom)
+  svg+='<line x1="'+pad+'" y1="'+(h-pad)+'" x2="'+(w-pad)+'" y2="'+(h-pad)+'" stroke="#444" stroke-width="1"/>';
+  // Bars
+  for(let i=0;i<n;i++){
+    const t=times[i];
+    if(t==null)continue;
+    const x=pad+i*barW;
+    const barH=Math.max(1,(t/maxT)*(h-2*pad));
+    const y=h-pad-barH;
+    const isWhite=moverIsWhite(i,parsed);
+    const cls=isWhite?'white':'black';
+    const moveNum=Math.floor(i/2)+1;
+    const side=isWhite?'.':'...';
+    svg+='<rect class="time-chart-bar '+cls+'" x="'+x+'" y="'+y+'" width="'+(barW*0.85)+'" height="'+barH+'" rx="1"><title>'+moveNum+side+' '+formatTime(t)+'</title></rect>';
+  }
+  svg+='</svg>';
+  return svg;
+}
+
+// v1.0.3: Render the FEN panel — below the PGN text panel.
+//   Shows the FEN of the position after the currently selected move.
+//   If no move is selected, shows the initial position FEN + a hint.
+//   If a variation move is selected, shows the FEN after that variation move
+//   (computed from the synthetic _variationMoves array).
+function renderFENPanel(effectiveParsed,selectedIdx){
+  let fen='';
+  let hint='';
+  if(selectedIdx>=0&&effectiveParsed.moves&&effectiveParsed.moves[selectedIdx]){
+    fen=stateToFEN(effectiveParsed.moves[selectedIdx].state);
+  }else if(effectiveParsed.startFEN){
+    fen=effectiveParsed.startFEN;
+    hint=T('fen_hint');
+  }else{
+    fen='rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+    hint=T('fen_hint');
+  }
+  let h='<div class="fen-panel">';
+  h+='<span class="fen-label">'+T('fen_label')+(hint?' <span style="font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0">'+hint+'</span>':'')+'</span>';
+  h+='<span class="fen-value" id="fenValue">'+_escFEN(fen)+'</span>';
+  // v1.0.3: copy button in its own row at the bottom-right, so it never overlaps the FEN text
+  h+='<div class="fen-copy-row"><button class="fen-copy" onclick="copyFENToClipboard()">'+T('fen_copy')+'</button></div>';
+  h+='</div>';
+  return h;
+}
+// v1.0.3: escape FEN for safe HTML display (FEN contains only [a-zA-Z0-9 /-], but
+// defensive escaping never hurts).
+function _escFEN(s){
+  if(!s)return '';
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+// v1.0.3: Copy FEN to clipboard. Uses navigator.clipboard if available,
+// falls back to a hidden textarea + document.execCommand('copy').
+// Shows a toast via the standard _haptic + a temporary banner.
+function copyFENToClipboard(){
+  _haptic('BUTTON_PRESS');
+  const el=document.getElementById('fenValue');
+  if(!el)return;
+  const text=el.textContent||'';
+  if(!text)return;
+  function showMsg(ok){
+    const banner=document.createElement('div');
+    banner.style.cssText='position:fixed;bottom:60px;left:50%;transform:translateX(-50%);background:'+(ok?'rgba(39,174,96,.95)':'rgba(192,57,43,.95)')+';color:#fff;padding:8px 16px;border-radius:6px;font-size:.8rem;z-index:10001;box-shadow:0 2px 8px rgba(0,0,0,.4)';
+    banner.textContent=ok?T('fen_copied'):T('fen_copy_failed');
+    document.body.appendChild(banner);
+    setTimeout(()=>{if(banner.parentNode)banner.parentNode.removeChild(banner);},1500);
+  }
+  try{
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(text).then(()=>showMsg(true)).catch(()=>fallbackCopy(text,showMsg));
+    }else{
+      fallbackCopy(text,showMsg);
+    }
+  }catch(e){fallbackCopy(text,showMsg);}
+}
+function fallbackCopy(text,cb){
+  try{
+    const ta=document.createElement('textarea');
+    ta.value=text;
+    ta.style.cssText='position:fixed;left:-9999px;top:0';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok=document.execCommand('copy');
+    document.body.removeChild(ta);
+    cb(ok);
+  }catch(e){cb(false);}
+}
+
 // PGN text section (raw with formatting)
 function renderPGNText(parsed,evalData,comments){
   if(!parsed)return '<div class="loading">'+T('no_data')+'</div>';
@@ -1058,7 +1715,20 @@ function renderPGNText(parsed,evalData,comments){
   let h='<div class="section"><h2>'+T('pgn_text')+'</h2><div class="pgn-display">';
   h+='<div style="margin-top:0;white-space:pre-wrap;word-break:break-word">';
   let rawPGN=_payload.pgn||'';
-  // Remove header tags [...] (already shown in metadata section)
+  // v1.0.3: Extract [FEN "..."] header for display BEFORE moves.
+  // The FEN is shown in a smaller font, selectable (clicking shows stats
+  // for the initial position with 0 moves), followed by a blank line.
+  const fenMatch=rawPGN.match(/\[FEN\s+"([^"]+)"\]/);
+  if(fenMatch){
+    const fenText=fenMatch[1].trim();
+    // v1.0.3: Check if FEN is explicitly selected via _fenSelected toggle.
+    // When _fenSelected is true, the FEN is highlighted as selected.
+    // When a move or variation is selected, _fenSelected is false.
+    const isFenSelected=_fenSelected;
+    h+='<span class="fen-inline'+(isFenSelected?' selected':'')+'" onclick="selectInitialPosition()" style="font-size:.75rem;color:'+(isFenSelected?'#fff':'var(--accent2)')+';font-family:\'Sarasa Mono SC\',\'Noto Sans Mono\',monospace;cursor:pointer;padding:2px 6px;border-radius:3px;display:inline-block;margin-bottom:4px;border:1px solid '+(isFenSelected?'var(--accent2)':'rgba(126,184,218,.3)')+';background:'+(isFenSelected?'rgba(126,184,218,.3)':'rgba(126,184,218,.1)')+'">'+_escFEN(fenText)+'</span>';
+    h+='<div style="height:8px"></div>'; // blank line separator
+  }
+  // Remove header tags [...] (already shown in metadata section + FEN above)
   let movetext=rawPGN.replace(/\[[^\]]*\]\s*/g,'').trim();
   // Piece symbol mapping: uppercase = White, lowercase = Black
   const pieceSym={K:'♔\uFE0E',Q:'♕\uFE0E',R:'♖\uFE0E',B:'♗\uFE0E',N:'♘\uFE0E'};
@@ -1119,7 +1789,19 @@ function renderPGNText(parsed,evalData,comments){
       i=end+1;
       continue;
     }
-    // Variation block (...) — recursively render with side tracking
+    // Variation block (...) — recursively render with side tracking.
+    // v1.0.3: Variation moves are now CLICKABLE. Each variation is registered
+    //   in the _variations[] array with metadata needed to reconstruct the
+    //   synthetic move sequence on click:
+    //     - mainIdxBefore: index of the mainline move that the variation's
+    //       first move REPLACES (i.e., the move immediately to the LEFT of `(`).
+    //       This is `_moveIdx - 1` if any mainline move has been rendered, else 0.
+    //     - moves: array of SAN strings inside the variation (cleaned of
+    //       move-number prefixes, NAGs, comments).
+    //     - sideAtStart: whose turn at the start of the variation.
+    //   On click, selectVariationMove(varId, varMoveIdx) builds:
+    //     mainline[0..mainIdxBefore-1] + variation moves[0..varMoveIdx]
+    //   and re-renders stats with this synthetic sequence.
     if(movetext[i]==='('){
       let depth=1;
       let j=i+1;
@@ -1129,10 +1811,23 @@ function renderPGNText(parsed,evalData,comments){
         j++;
       }
       const variationText=movetext.substring(i+1,j-1);
+      // v1.0.3: Register this variation
+      const varId=_variations.length;
+      const mainIdxBefore=Math.max(0,_moveIdx-1);
+      const varMoves=[];
       // Render variation text with piece symbol substitution
       let varRendered='';
       let vi=0;
-      let varSide=nextSide; // Start from current side
+      let varSide=nextSide; // Start from current side (will be overridden by move number prefix if present)
+      // v1.0.3: If the variation does NOT start with a move number, infer the
+      // side from mainIdxBefore. The variation's first move is an ALTERNATIVE
+      // to mainline[mainIdxBefore] (the move to the LEFT of `(`), so it has
+      // the SAME side as that move.
+      // Uses moverIsWhite to handle Black-to-move-start games correctly.
+      // (This inference is only applied when no move-number prefix is found
+      //  in the variation text — the prefix takes precedence when present.)
+      let sideInferred=moverIsWhite(mainIdxBefore,parsed)?'white':'black';
+      let varSideSet=false; // becomes true once we determine the side
       while(vi<variationText.length){
         if(variationText[vi]==='{'){
           let vEnd=variationText.indexOf('}',vi);
@@ -1146,16 +1841,42 @@ function renderPGNText(parsed,evalData,comments){
           varRendered+='<span class="move-num">'+vNumMatch[0]+'</span> ';
           // If it ends with "...", next side is Black; otherwise White
           varSide=vNumMatch[0].includes('...')?'black':'white';
+          varSideSet=true;
           vi+=vNumMatch[0].length;
           continue;
         }
         let vMoveMatch=variationText.substring(vi).match(/^([KQRBN][a-h]?[1-8]?x?[a-h][1-8][+#]?=?[QRBN]?|O-O(?:-O)?|0-0(?:-0)?|[a-h]x?[a-h][1-8](?:=[QRBN])?[+#]?|[a-h][1-8][+#]?)/);
         if(vMoveMatch){
+          // v1.0.3: First variation move without a preceding move number — use
+          // the inferred side from mainIdxBefore.
+          if(!varSideSet){
+            varSide=sideInferred;
+            varSideSet=true;
+          }
           // v1.0.2 FIX: Don't put piece-white/piece-black on the move span —
           // renderSAN now wraps the piece symbol in its own styled span.
           // The move span keeps the default text color for the destination
           // square / capture marker / check suffix.
-          varRendered+='<span class="move">'+renderSAN(vMoveMatch[0],varSide)+'</span> ';
+          // v1.0.3: Make the variation move clickable. Each variation move has
+          // a unique (varId, varMoveIdx) pair; selectVariationMove uses these
+          // to reconstruct the synthetic move sequence.
+          // v1.0.3: When a variation move is selected, ALL variation moves from
+          // index 0 up to and including the clicked index are highlighted as
+          // "included" (class "var-included"), and the clicked move gets
+          // "selected" on top. This visually communicates that the ENTIRE
+          // series (not just the clicked move) replaces the mainline move.
+          const varMoveIdx=varMoves.length;
+          varMoves.push(vMoveMatch[0]);
+          // Determine highlight state:
+          //   - "selected": the exact move the user clicked
+          //   - "var-included": moves before the clicked move in the same
+          //     variation — these are ALSO part of the synthetic sequence
+          const isVarSelected=_variationMeta&&_variationMeta.varId===varId&&_variationMeta.varClickedIdx===varMoveIdx;
+          const isVarIncluded=_variationMeta&&_variationMeta.varId===varId&&_variationMeta.varClickedIdx>varMoveIdx;
+          let moveCls='move';
+          if(isVarSelected)moveCls+=' selected';
+          else if(isVarIncluded)moveCls+=' var-included';
+          varRendered+='<span class="'+moveCls+'" onclick="selectVariationMove('+varId+','+varMoveIdx+')">'+renderSAN(vMoveMatch[0],varSide)+'</span> ';
           varSide=varSide==='white'?'black':'white';
           vi+=vMoveMatch[0].length;
           continue;
@@ -1170,6 +1891,10 @@ function renderPGNText(parsed,evalData,comments){
         varRendered+=variationText[vi];
         vi++;
       }
+      // v1.0.3: Register the variation AFTER collecting its moves.
+      _variations.push({mainIdxBefore,moves:varMoves,sideAtStart:sideInferred});
+      // v1.0.3: If this variation is currently selected, also mark the mainline
+      // moves [0..mainIdxBefore-1] as part of the selection context (visual cue).
       result+='<span class="variation">('+varRendered+')</span>';
       i=j;
       continue;
@@ -1231,23 +1956,168 @@ function render(){
     document.getElementById('content').innerHTML='<div class="loading">PGN parse error</div>';
     return;
   }
-  // v1.0.2: If a move is selected, use only moves up to that point for stats
-  let statsParsed=parsed;
-  let statsEvalData=_payload.evals;
-  if(_selectedMoveIdx>=0&&_selectedMoveIdx<parsed.moves.length){
-    statsParsed={headers:parsed.headers,moves:parsed.moves.slice(0,_selectedMoveIdx+1),startFEN:parsed.startFEN,comments:parsed.comments};
-    statsEvalData=_payload.evals?_payload.evals.slice(0,_selectedMoveIdx+1):null;
+  // v1.0.3: Reset the _variations array before each render — it gets repopulated
+  // by renderPGNText() as it walks the PGN text. Without this reset, stale
+  // variation entries from a previous render would persist and break the
+  // (varId, varMoveIdx) → variation lookup.
+  _variations=[];
+  // v1.0.3: Determine the "effective" parsed object for stats computation.
+  //   - If a variation move is selected (_variationMoves != null), use that
+  //     synthetic sequence. Eval data is mainline-only, so it's null'd out
+  //     to avoid misalignment.
+  //   - Otherwise, if a mainline move is selected, slice parsed.moves up to
+  //     _selectedMoveIdx (inclusive) and slice _payload.evals the same way.
+  //   - Otherwise, use the full parsed object and full eval data.
+  let effectiveParsed=parsed;
+  let effectiveEvalData=_payload.evals;
+  let effectiveSelectedIdx=_selectedMoveIdx;
+  // v1.0.3: isBlackToMoveStart is propagated to effectiveParsed so that
+  // renderStats / renderTimeChart / etc. can correctly identify White/Black
+  // moves via moverIsWhite(i, effectiveParsed).
+  const blackStart=parsed.isBlackToMoveStart;
+  if(_fenSelected){
+    // v1.0.3: FEN (initial position) is selected — show stats for the
+    // starting position with 0 moves. Build an effectiveParsed with an
+    // empty moves array but a startFEN so renderStats can compute
+    // material/phase/pawn-structure stats from the initial position.
+    const startState=parsed.startFEN?fenToState(parsed.startFEN):initState();
+    effectiveParsed={headers:parsed.headers,moves:[],startFEN:parsed.startFEN,comments:parsed.comments,isBlackToMoveStart:blackStart,initialState:startState};
+    effectiveEvalData=null;
+    effectiveSelectedIdx=-1;
+  }else if(_variationMoves){
+    effectiveParsed={headers:parsed.headers,moves:_variationMoves,startFEN:parsed.startFEN,comments:parsed.comments,isBlackToMoveStart:blackStart};
+    effectiveEvalData=null; // evals are mainline-only — can't reuse for variation
+    // The selected index in the variation context is the LAST move in the
+    // synthetic sequence (the variation move the user clicked).
+    effectiveSelectedIdx=_variationMoves.length-1;
+  }else if(_selectedMoveIdx>=0&&_selectedMoveIdx<parsed.moves.length){
+    effectiveParsed={headers:parsed.headers,moves:parsed.moves.slice(0,_selectedMoveIdx+1),startFEN:parsed.startFEN,comments:parsed.comments,isBlackToMoveStart:blackStart};
+    effectiveEvalData=_payload.evals?_payload.evals.slice(0,_selectedMoveIdx+1):null;
   }
   let h='';
+  // v1.0.3: Selection banner — shows what move is currently selected (mainline
+  // or variation) so the user understands the stats below correspond to that
+  // specific position. Hidden when no move is selected.
+  if(_variationMeta){
+    // v1.0.3: The banner shows the RANGE of variation moves (1 to varClickedIdx+1)
+    // and the total count, making it clear that the ENTIRE series replaces the
+    // single mainline move — not just the clicked move.
+    const varCount=_variationMeta.varClickedIdx+1; // total variation moves used
+    const varEndNum=_variationMeta.varClickedIdx+1; // 1-based end of range
+    const mainReplacedNum=_variationMeta.mainIdxReplaced+1; // 1-based mainline move number
+    // select_var_hint has 3 %d placeholders: end-of-range, count, mainline-replaced
+    const hint=T('select_var_hint').replace('%d',varEndNum).replace('%d',varCount).replace('%d',mainReplacedNum);
+    h+='<div style="background:rgba(126,184,218,.12);border:1px solid rgba(126,184,218,.4);border-radius:6px;padding:8px 12px;margin-bottom:14px;font-size:.82rem;color:var(--accent2)"><span style="font-weight:600">'+T('variation_marker')+'</span> '+_escFEN(hint)+'</div>';
+  }else if(_selectedMoveIdx>=0){
+    const moveNum=Math.floor(_selectedMoveIdx/2)+1;
+    const isWhite=moverIsWhite(_selectedMoveIdx,parsed);
+    const hint=T('select_hint').replace('%d',moveNum+(isWhite?'.':'...'));
+    h+='<div style="background:rgba(212,160,23,.12);border:1px solid rgba(212,160,23,.4);border-radius:6px;padding:8px 12px;margin-bottom:14px;font-size:.82rem;color:var(--accent)">'+_escFEN(hint)+'</div>';
+  }
   h+=renderPGNText(parsed,_payload.evals,_payload.comments);
-  h+=renderStats(statsParsed,statsEvalData);
+  // v1.0.3: FEN panel — below PGN text panel, above stats.
+  h+=renderFENPanel(effectiveParsed,effectiveSelectedIdx);
+  h+=renderStats(effectiveParsed,effectiveEvalData);
   document.getElementById('content').innerHTML=h;
 }
 
-// v1.0.2: Select a move for per-position statistics
+// v1.0.2: Select a mainline move for per-position statistics.
+//   v1.0.3: Clears any variation selection first (mutually exclusive).
 function selectMove(idx){
   _haptic('BUTTON_PRESS');
+  // v1.0.3: Clear variation + FEN selection — mutually exclusive.
+  _variationMoves=null;
+  _variationMeta=null;
+  _fenSelected=false;
   _selectedMoveIdx=(_selectedMoveIdx===idx)?-1:idx; // Toggle selection
+  render();
+}
+
+// v1.0.3: Select the initial position (FEN) — shows stats for the starting
+// position with 0 moves. This is used when the PGN has a [FEN] header and
+// the user clicks on the FEN text in the PGN text panel.
+function selectInitialPosition(){
+  _haptic('BUTTON_PRESS');
+  _fenSelected=!_fenSelected; // Toggle
+  if(_fenSelected){
+    _variationMoves=null;
+    _variationMeta=null;
+    _selectedMoveIdx=-1;
+  }
+  render();
+}
+
+// v1.0.3: Select a variation move for per-position statistics.
+//   Builds a synthetic move sequence:
+//     mainline[0..mainIdxBefore-1] + variation moves[0..varClickedIdx]
+//   where mainIdxBefore = the index of the mainline move that the variation's
+//   first move REPLACES (the move immediately to the LEFT of `(`).
+//   The variation moves are re-parsed via applySANMove() starting from the
+//   state after mainline[mainIdxBefore-1].
+//   If a variation move fails to parse (applySANMove returns null), we stop
+//   adding moves — this prevents broken stats from a partial sequence.
+function selectVariationMove(varId,varClickedIdx){
+  _haptic('BUTTON_PRESS');
+  // Toggle off if the same variation move is clicked again.
+  if(_variationMeta&&_variationMeta.varId===varId&&_variationMeta.varClickedIdx===varClickedIdx){
+    _variationMoves=null;
+    _variationMeta=null;
+    _selectedMoveIdx=-1;
+    render();
+    return;
+  }
+  if(!_variations[varId])return;
+  const v=_variations[varId];
+  // Get the mainline parsed object to source mainline moves + starting state.
+  const parsed=parsePGN(_payload.pgn);
+  if(!parsed)return;
+  // Starting state: state AFTER mainline[mainIdxBefore-1] (or initial state
+  // if mainIdxBefore === 0).
+  let state;
+  if(v.mainIdxBefore>0&&parsed.moves[v.mainIdxBefore-1]){
+    // Deep-copy the state to avoid mutating the cached parsed.moves entry.
+    state=JSON.parse(JSON.stringify(parsed.moves[v.mainIdxBefore-1].state));
+  }else{
+    state=parsed.startFEN?fenToState(parsed.startFEN):initState();
+  }
+  // Build the synthetic move sequence.
+  const synthMoves=[];
+  // 1. Take mainline moves [0..mainIdxBefore-1] as-is.
+  for(let i=0;i<v.mainIdxBefore;i++){
+    synthMoves.push(parsed.moves[i]);
+  }
+  // 2. Re-parse variation moves[0..varClickedIdx] via applySANMove.
+  //    The variation's first move REPLACES mainline[mainIdxBefore].
+  //    applySANMove handles castling, promotion, captures, disambiguation.
+  //    It uses state.currentTurn (inherited from the starting state) to
+  //    determine which side is moving — no explicit side parameter needed.
+  //    If a move fails to parse, we break out (partial sequence is still useful).
+  for(let i=0;i<=varClickedIdx&&i<v.moves.length;i++){
+    const san=v.moves[i];
+    const result=applySANMove(state,san);
+    if(result){
+      synthMoves.push({
+        notation:result.notation,
+        from:result.from,
+        to:result.to,
+        piece:result.piece,
+        captured:result.captured,
+        state:{...result.postState},
+        tokenIdx:-1,
+        isVariation:true
+      });
+      state=result.postState;
+    }else{
+      // Failed to parse — stop adding moves. The synthetic sequence is still
+      // valid up to this point (it just doesn't extend to varClickedIdx).
+      break;
+    }
+  }
+  // Set the variation selection state.
+  _variationMoves=synthMoves;
+  _variationMeta={varId,varClickedIdx,mainIdxReplaced:v.mainIdxBefore};
+  _selectedMoveIdx=-1; // Clear mainline selection (mutually exclusive)
+  _fenSelected=false; // Clear FEN selection (mutually exclusive)
   render();
 }
 
@@ -1260,13 +2130,120 @@ function _haptic(type){
     }
   }catch(e){}
 }
+// v1.0.3: Show the 💾HTML export dialog with two options + GPL v3 notice
 function exportHTML(){
   _haptic('BUTTON_PRESS');
-  const html='<!DOCTYPE html>\n'+document.documentElement.outerHTML;
-  if(typeof AndroidBridge!=='undefined'&&AndroidBridge.exportStatsHTML){
-    AndroidBridge.exportStatsHTML(html);
-  }
+  _showStatsExportDialog();
 }
+
+function _showStatsExportDialog(){
+  var overlay=document.createElement('div');
+  overlay.className='dov';
+  overlay.setAttribute('role','dialog');
+  overlay.setAttribute('aria-modal','true');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:10000';
+  overlay.onclick=function(e){if(e.target===overlay)overlay.remove();};
+  var dlg=document.createElement('div');
+  dlg.className='dlg';
+  dlg.style.cssText='max-width:440px;background:#221015;border:1px solid #d4a017;border-radius:12px;padding:20px;width:90%';
+  var html='<h2 style="color:#ffd700;margin-bottom:16px;font-size:1.1rem">💾HTML</h2>';
+  html+='<div style="display:flex;flex-direction:column;gap:10px">';
+  html+='<button class="btn" style="width:100%;justify-content:center;gap:8px;padding:12px;font-size:.9rem" onclick="_haptic(\'BUTTON_PRESS\');this.closest(\'.dov\').remove();_exportStaticHTML()">📄 '+(_lang==='zh'?'导出此FEN的统计数据':'Export current position stats')+'</button>';
+  html+='<button class="btn" style="width:100%;justify-content:center;gap:8px;padding:12px;font-size:.9rem" onclick="_haptic(\'BUTTON_PRESS\');this.closest(\'.dov\').remove();_exportFullHTML()">📊 '+(_lang==='zh'?'导出全PGN的统计数据':'Export full PGN stats')+'</button>';
+  html+='</div>';
+  // GPL v3 notice
+  html+='<div style="margin-top:14px;padding:10px;background:rgba(192,57,43,.08);border:1px solid rgba(192,57,43,.3);border-radius:6px;font-size:.72rem;color:var(--text);line-height:1.5">';
+  var notice=_lang==='zh'?'⚠️导出的HTML文件采用GPL v3授权（与DroidFish衍生的PGN解析一致）。分发导出的HTML文件时，您必须遵守许可证要求，包括完整的许可证文本和其他必要内容。您可通过以下渠道获取——':'⚠️The exported HTML file is licensed under GPL v3 to match the DroidFish-derived PGN parsing. When distributing exported HTML files, you must comply with the license requirements by including the full license text and other required contents. You may obtain them through the following channels——';
+  html+='<span style="color:var(--text)">'+notice+'</span>';
+  html+='<br><a href="https://github.com/YDW99/Regalia/blame/main/LICENSE%26NOTICE.zip" style="color:var(--accent2);word-break:break-all" target="_blank">https://github.com/YDW99/Regalia/blame/main/LICENSE%26NOTICE.zip</a>';
+  html+='</div>';
+  // GPL v3 logo at the bottom
+  html+='<div style="text-align:center;margin-top:10px" id="_gplLogoHolder"></div>';
+  html+='<div style="margin-top:12px;text-align:center"><button class="btn" onclick="_haptic(\'BUTTON_PRESS\');this.closest(\'.dov\').remove()">'+(_lang==='zh'?'取消':'Cancel')+'</button></div>';
+  dlg.innerHTML=html;
+  overlay.appendChild(dlg);
+  document.body.appendChild(overlay);
+  // Load GPL v3 logo — display at bottom of dialog
+  try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.loadAssetAsBase64){var b64=AndroidBridge.loadAssetAsBase64('GPLv3_Logo.svg');if(b64){var holder=document.getElementById('_gplLogoHolder');if(holder)holder.innerHTML='<img src="data:image/svg+xml;base64,'+b64+'" alt="GPL v3" style="width:140px;height:auto;opacity:.95" />';}}}catch(e){}
+}
+
+// v1.0.3: Export static HTML (current selection frozen, no JS, no buttons, no hint, no copy)
+function _exportStaticHTML(){
+  let styleCSS='';
+  const styleEl=document.querySelector('style');
+  if(styleEl)styleCSS=styleEl.textContent;
+  const contentEl=document.getElementById('content');
+  let contentHTML='<div class="loading">No data</div>';
+  if(contentEl){
+    const contentClone=contentEl.cloneNode(true);
+    contentClone.querySelectorAll('[onclick]').forEach(function(el){el.removeAttribute('onclick');});
+    // v1.0.3: Remove FEN panel hint text, label, and copy button from export.
+    // The hint is inside .fen-label as a nested <span> (no class), so we
+    // remove the entire .fen-label, .fen-copy-row, and .fen-hint.
+    contentClone.querySelectorAll('.fen-hint').forEach(function(el){el.remove();});
+    contentClone.querySelectorAll('.fen-copy-row').forEach(function(el){el.remove();});
+    // Remove the hint span inside fen-label (the span with muted color text)
+    contentClone.querySelectorAll('.fen-label > span').forEach(function(el){el.remove();});
+    contentHTML=contentClone.innerHTML;
+  }
+  const langAttr=_lang==='zh'?'zh':'en';
+  const title=_lang==='zh'?'📊统计数据 — 静态导出':'📊Statistics — Static Export';
+  const staticHTML='<!DOCTYPE html>\n<html lang="'+langAttr+'">\n<head>\n<meta charset="UTF-8">\n<meta name="viewport" content="width=device-width, initial-scale=1.0">\n<title>'+title+'</title>\n<style>\nbody{background:#1a0a0a;margin:0;padding:0}\n'+styleCSS+'\n</style>\n</head>\n<body>\n<div class="content">'+contentHTML+'</div>\n</body>\n</html>';
+  if(typeof AndroidBridge!=='undefined'&&AndroidBridge.exportStatsHTML){AndroidBridge.exportStatsHTML(staticHTML);}
+}
+
+// v1.0.3: Export full interactive HTML — selectable moves, no header buttons
+function _exportFullHTML(){
+  let styleCSS='';
+  const styleEl=document.querySelector('style');
+  if(styleEl)styleCSS=styleEl.textContent;
+  const pgnText=_payload?_payload.pgn:'';
+  const lang=_lang||'zh';
+  // Extract the script from current page
+  const scriptEl=document.querySelector('script');
+  let scriptJS=scriptEl?scriptEl.textContent:'';
+  // v1.0.3 FIX: Instead of regex-stripping AndroidBridge calls (which corrupts
+  // init() due to nested braces), we simply DON'T define AndroidBridge in the
+  // exported HTML. The `typeof AndroidBridge!=='undefined'` checks will all
+  // return false, so the code inside those blocks is naturally skipped.
+  // We only need to:
+  // 1. Remove the conflicting `let _payload=null;` and `let _lang='zh';`
+  // 2. Prepend our embedded payload
+  // 3. Replace a few button functions with empty stubs (for cleanliness)
+  scriptJS=scriptJS.replace(/let _payload=null;/,'');
+  scriptJS=scriptJS.replace(/let _lang='zh';/,'');
+  // Replace button functions with empty stubs
+  scriptJS=scriptJS.replace(/function exportHTML\(\)\{[\s\S]*?\n\}/m,'function exportHTML(){}');
+  scriptJS=scriptJS.replace(/function requestImport\(\)\{[\s\S]*?\n\}/m,'function requestImport(){}');
+  scriptJS=scriptJS.replace(/function requestReview\(\)\{[\s\S]*?\n\}/m,'function requestReview(){}');
+  scriptJS=scriptJS.replace(/function returnToGame\(\)\{[\s\S]*?\n\}/m,'function returnToGame(){}');
+  scriptJS=scriptJS.replace(/function _showStatsImportDialog\(\)\{[\s\S]*?\n\}/m,'function _showStatsImportDialog(){}');
+  scriptJS=scriptJS.replace(/function _showStatsExportDialog\(\)\{[\s\S]*?\n\}/m,'function _showStatsExportDialog(){}');
+  scriptJS=scriptJS.replace(/function _exportStaticHTML\(\)\{[\s\S]*?\n\}/m,'function _exportStaticHTML(){}');
+  scriptJS=scriptJS.replace(/function _exportFullHTML\(\)\{[\s\S]*?\n\}/m,'function _exportFullHTML(){}');
+  scriptJS=scriptJS.replace(/function _updateButtonText\(\)\{[\s\S]*?\n\}/m,'function _updateButtonText(){}');
+  // Prepend embedded payload
+  scriptJS='var _payload={pgn:'+JSON.stringify(pgnText)+',lang:'+JSON.stringify(lang)+'};\n'+
+    'var _lang='+JSON.stringify(lang)+';\n'+
+    scriptJS;
+
+  const title=lang==='zh'?'📊统计数据 — 完整导出':'📊Statistics — Full Export';
+  const fullHTML='<!DOCTYPE html>\n'+
+    '<html lang="'+lang+'">\n'+
+    '<head>\n'+
+    '<meta charset="UTF-8">\n'+
+    '<meta name="viewport" content="width=device-width, initial-scale=1.0">\n'+
+    '<title>'+title+'</title>\n'+
+    '<style>\n'+styleCSS+'\n</style>\n'+
+    '</head>\n'+
+    '<body>\n'+
+    '<div class="content" id="content"><div class="loading">'+(lang==='zh'?'加载中...':'Loading...')+'</div></div>\n'+
+    '<scr'+'ipt>\n'+scriptJS+'\n</scr'+'ipt>\n'+
+    '</body>\n'+
+    '</html>';
+  if(typeof AndroidBridge!=='undefined'&&AndroidBridge.exportStatsHTML){AndroidBridge.exportStatsHTML(fullHTML);}
+}
+
 function requestImport(){
   _haptic('BUTTON_PRESS');
   // v1.0.2: Show the import dialog WITHIN the stats page (not on the main page)
@@ -1285,7 +2262,7 @@ function _showStatsImportDialog(){
   var dlg=document.createElement('div');
   dlg.className='dlg';
   dlg.style.cssText='max-width:420px;background:#221015;border:1px solid #d4a017;border-radius:12px;padding:20px;width:90%';
-  var html='<h2 style="color:#ffd700;margin-bottom:16px;font-size:1.1rem">'+(_lang==='zh'?'导入PGN':'Import PGN')+'</h2>';
+  var html='<h2 style="color:#ffd700;margin-bottom:16px;font-size:1.1rem">'+(_lang==='zh'?'🗃️ 导入PGN':'🗃️ Import PGN')+'</h2>';
   html+='<div style="display:flex;flex-direction:column;gap:10px">';
   html+='<button class="btn" style="width:100%;justify-content:center;gap:8px;padding:12px;font-size:.9rem" onclick="_statsPastePGN()"><span style="font-size:1.3rem">📜</span> '+(_lang==='zh'?'粘贴PGN':'Paste PGN')+'</button>';
   html+='<button class="btn" style="width:100%;justify-content:center;gap:8px;padding:12px;font-size:.9rem" onclick="_statsSelectPGNFile()"><span style="font-size:1.3rem">📂</span> '+(_lang==='zh'?'选择PGN文件':'Select PGN File')+'</button>';
@@ -1309,7 +2286,19 @@ function _statsPastePGN(){
   // statsSelectPGNFile cleanup).
   if(text){
     _payload.pgn=text;
+    // v1.0.3 FIX: Clear moveRecords + evals from the PREVIOUS game when a new
+    // PGN is pasted. Without this, parsePGN() would detect _payload.moveRecords
+    // as non-null and call parseFromMoveRecords() — replaying the STALE records
+    // instead of parsing the newly pasted PGN text. This was the root cause of
+    // "imported PGN not recognized" — the metadata (headers) was extracted from
+    // the new PGN but the moves/positions came from the old game's moveRecords.
+    // Clearing moveRecords forces parsePGN to fall back to the simplified SAN
+    // parser, which correctly parses the pasted text.
+    _payload.moveRecords=null;
+    _payload.evals=null;
     _selectedMoveIdx=-1;
+    _variationMoves=null;
+    _variationMeta=null;
     render();
   }
 }
@@ -1335,7 +2324,15 @@ function onStatsPGNFileRead(content){
     return;
   }
   _payload.pgn=content;
+  // v1.0.3 FIX: Clear moveRecords + evals from the PREVIOUS game when a new
+  // PGN is imported via file picker. Same root cause as _statsPastePGN —
+  // see the detailed comment there. Without this clear, parsePGN() would
+  // replay stale moveRecords instead of parsing the newly imported PGN.
+  _payload.moveRecords=null;
+  _payload.evals=null;
   _selectedMoveIdx=-1;
+  _variationMoves=null;
+  _variationMeta=null;
   render();
 }
 function requestReview(){

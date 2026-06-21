@@ -181,7 +181,7 @@ const _i18n={
 'requesting_storage':{zh:'正在请求存储权限...',en:'Requesting storage permission...'},
 'settings_exported':{zh:'设置已导出到',en:'Settings exported to'},
 'settings_clipboard_fallback':{zh:'设置已复制到剪贴板（文件写入失败）',en:'Settings copied to clipboard (file write failed)'},
-'built_in_only':{zh:'v1.0.2: 仅支持内置引擎',en:'v1.0.2: Built-in engine only'},
+'built_in_only':{zh:'v1.0.3: 仅支持内置引擎',en:'v1.0.3: Built-in engine only'},
 'engine_error_restart':{zh:'引擎错误，正在重启',en:'Engine error, restarting'},
 'engine_error':{zh:'引擎错误',en:'Engine error'},
 'view_white':{zh:'视角: 白方(下方)',en:'View: White (bottom)'},
@@ -279,7 +279,7 @@ const _i18n={
 'elo_target':{zh:'Elo目标',en:'ELO Target'},
 'export_settings_btn':{zh:'📤 导出设置',en:'📤 Export'},
 'import_settings_btn':{zh:'📥 导入设置',en:'📥 Import'},
-'loading_title':{zh:'Regalia v1.0.2',en:'Regalia v1.0.2'},
+'loading_title':{zh:'Regalia v1.0.3',en:'Regalia v1.0.3'},
 'click_skip_loading':{zh:'点击跳过加载',en:'Click to skip loading'},
 'white_checkmate':{zh:'白方将杀获胜',en:'White wins by checkmate'},
 'black_checkmate':{zh:'黑方将杀获胜',en:'Black wins by checkmate'},
@@ -342,7 +342,7 @@ const _i18n={
 'setup_white':{zh:'白',en:'White'},
 'setup_black':{zh:'黑',en:'Black'},
 // PGN Import
-'import_title':{zh:'导入',en:'Import'},
+'import_title':{zh:'🗃️ 导入',en:'🗃️ Import'},
 'paste_fen_opt':{zh:'粘贴FEN（局面文本）',en:'Paste FEN (position text)'},
 'paste_pgn_opt':{zh:'粘贴PGN（对局记录）',en:'Paste PGN (game record)'},
 'select_pgn_file':{zh:'选择PGN文件',en:'Select PGN File'},
@@ -1253,6 +1253,15 @@ function queryECOBookMove(s) {
       const k2 = hist.slice(0, 2).map(h => h.from.row + ',' + h.from.col + ',' + h.to.row + ',' + h.to.col).join(',');
       const idx2 = ecoHashMap2.get(k2);
       if (idx2) searchSet = idx2;
+      // v1.0.3-p5 audit FIX: fall through to level-1 index when level-3 and
+      // level-2 both miss. Previously this branch ended without checking
+      // ecoHashMap, degrading to a full ECO_OPENINGS scan.
+      else if (ecoHashMap) {
+        const h0 = hist[0];
+        const key1 = h0.from.row + ',' + h0.from.col + ',' + h0.to.row + ',' + h0.to.col;
+        const idx1 = ecoHashMap.get(key1);
+        if (idx1) searchSet = idx1;
+      }
     }
   } else if (hist.length >= 2 && ecoHashMap2) {
     const k2 = hist.slice(0, 2).map(h => h.from.row + ',' + h.from.col + ',' + h.to.row + ',' + h.to.col).join(',');

@@ -18,6 +18,7 @@ Subdirectory license summary:
       READ_EXTERNAL_STORAGE are scoped to legacy Android versions only;
       READ_MEDIA_IMAGES was removed in v1.0.2 (the built-in file browser
       queries MediaStore.Files, not MediaStore.Images).
+      v1.0.3: versionCode 102 → 103, versionName "1.0.2" → "1.0.3".
 
 Overall, the application is a combined work under dual AGPL v3 + GPL v3
 licensing. Only files containing DroidFish-derived code use GPL v3;
@@ -27,3 +28,42 @@ effectively extend to the entire combined work.
 
 See the root-level LICENSE-AGPL v3, LICENSE-GPL v3, and NOTICE files
 for full license texts and attribution details.
+
+v1.0.3 changes:
+  - AndroidManifest.xml: versionCode/versionName bumped to 103 / "1.0.3".
+  - res/values/strings.xml: app_name string updated to "Regalia v1.0.3".
+  - assets/stats.html: NEW time-management analysis supporting TWO PGN time
+    formats: (a) v1.0.3 direct {1.0s ...} format, (b) standard PGN
+    [%clk HH:MM:SS] format with [TimeControl "BASE+INC"] header (used time
+    derived via increment calculation). Also: clickable variation moves
+    with synthetic-mainline reconstruction, FEN panel below the PGN text
+    panel, variation text (...) rendered in italic. Bilingual UI strings
+    added for all new features.
+  - assets/chess.src/ai-bridge.js: _buildPGNComment() now uses a single
+    space as separator between thinking time and eval annotation, e.g.
+    "{3.2s +0.5 略优}". Backward-compatible with v1.0.2's space-separated
+    format on the stats-page parsing side.
+  - assets/chess.src/ui.js, game-logic.js: version strings updated to
+    v1.0.3 (header badge, about dialog, loading title, built_in_only
+    string).
+  - assets/chess.src/index.html.tpl: <title> updated to "Regalia v1.0.3".
+
+v1.0.3 patch changes (version number unchanged — still v1.0.3 / versionCode 103):
+  - assets/chess.src/tablebase.js (GPL v3): Type A variation fix + embedded
+    FEN fullMoveNumber offset for move-number display.
+  - assets/chess.src/ai-bridge.js (GPL v3): _buildPGNString uses
+    _importedStartMoveNum offset; new _importedStartMoveNum global.
+  - assets/chess.src/ui.js (GPL v3): move-list display uses
+    _importedStartMoveNum offset; landscape review board sizing reworked
+    (removed 360px cap, tightened control budget 152→132px); click-to-review
+    onclick handlers now use moveRecords index `i` for reviewStep.
+  - assets/chess.src/index.html.tpl (AGPL v3): landscape review CSS
+    reworked (removed max-width cap on .review-moves, .review-left
+    overflow-y:auto → overflow:hidden, chart flex-shrink:1, board
+    flex-shrink:0, raised min-width on .review-moves for wide screens).
+  - assets/chess.html: rebuilt from the above chess.src/ changes.
+  - java/com/Regalia/StockfishNative.java (GPL v3): ENGINE_VERSION
+    "v1.0.2" → "v1.0.3".
+  - java/com/Regalia/MainActivity.java (AGPL v3): VERSION
+    "v1.0.2" → "v1.0.3".
+  - No changes to AndroidManifest.xml, cpp/, res/, or stats.html.

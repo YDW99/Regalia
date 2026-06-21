@@ -129,6 +129,183 @@ Source: https://github.com/official-stockfish/Stockfish
 This application uses Stockfish 18 (arm64-v8a-dotprod build).
 Stockfish is a free, open-source UCI chess engine.
 
+The engine binary is downloaded from the official Stockfish GitHub releases:
+  https://github.com/official-stockfish/Stockfish/releases/download/sf_18/stockfish-android-armv8-dotprod.tar
+and packaged as lib/arm64-v8a/libstockfish.so inside the APK.
+
+===== VERSION HISTORY SUMMARY ================================================
+
+  v1.0.3 (current):
+    - Portrait chart width cap removed (v1.0.3-p12): removed the 400px cap
+      and -48 offset from portrait chart width calculation; now uses
+      window.innerWidth - 12 for both orientations.
+    - Chart full-width + portrait move-list scroll root cause fix (v1.0.3-p11):
+      reduced eval trend chart SVG left/right padding from 36px to 8px (chart
+      points/lines use full horizontal space). Fixed portrait move-list scroll:
+      replaced offsetParent walk (which failed because .review-moves has
+      position:static, so offsetParent jumped to .review-overlay) with
+      getBoundingClientRect() for robust offset calculation in both orientations.
+    - Review nav buttons full-width in portrait + unified scroll logic (v1.0.3-p10):
+      the .review-nav CSS (flex:1 1 0 for button stretching) was promoted from
+      the landscape media query to base CSS, so nav buttons stretch full width
+      in both portrait and landscape. The move-list scroll-to-active logic now
+      walks up the DOM accumulating offsetTop (instead of relying on offsetTop
+      alone), working correctly in both orientations.
+    - Review body scroll preservation + move-list scroll isolation (v1.0.3-p9):
+      the landscape review body (.review-body) now preserves its scrollTop
+      across re-renders. scrollIntoView was replaced with manual scrollTop
+      computation on the move-list container only, so navigating to a
+      different step no longer yanks the review body back to the top.
+      First-principles audit: onBestMove staleness check moved before safety
+      timer clear (prevents doAIMove hang on stale bestmove); brace-comment
+      loop iteration cap (prevents infinite loop on unmatched `{`); stale
+      comment cleanup.
+    - Review board touch-slide scroll (v1.0.3-p8): sliding on the review board
+      now scrolls the whole review body. The global touchmove handler skips
+      preventDefault when reviewMode is true; the review board's .bgrid gets
+      touch-action:pan-y (overriding the base touch-action:none). Main-game
+      mode is unaffected.
+    - Landscape review: two-layer scroll (v1.0.3-p7): the body (.review-body)
+      now scrolls vertically (overflow-y:auto) so the user can scroll to see
+      the chart, slider, eval bar, nav buttons, and analyze button. The move
+      list keeps its own independent scroll viewport (height = board height
+      via --rv-board-h CSS var). Board sizing: board takes 60% of viewport
+      width (always > move-list width which gets 40%), not capped by
+      REVIEW_CELL or viewport height. Board + moves fill 100% of viewport
+      width edge-to-edge. If the board is taller than the viewport, the user
+      scrolls the body to see the board's bottom + chart + controls.
+    - Review move-list independent scroll (v1.0.3-p6): the REAL root cause of
+      the "move list doesn't have independent scroll" bug was that
+      scrollIntoView was called on EVERY render (10-50x/sec during engine
+      analysis), yanking the move list back to the active move and preventing
+      the user from scrolling independently. Now scrollIntoView only fires when
+      reviewStep CHANGES (tracked via _lastReviewStepScrolled). Also removed
+      the redundant setTimeout(50) scrollIntoView in reviewGoTo.
+    - Landscape review: independent move-list scroll viewport (v1.0.3-p5):
+      the move list now has its OWN independent scroll viewport. .review-body
+      changed from overflow-y:auto (whole-body scroll) to overflow:hidden.
+      .review-top changed from flex:0 0 auto to flex:1 1 0 (fills all height
+      above .review-bottom). .review-moves gets height:100% + min-height:0
+      so it fills the row height and scrolls internally. The board stays
+      fixed while only the move list scrolls. .review-bottom stays pinned
+      at the bottom.
+    - First-principles code audit fixes (v1.0.3-p5):
+      - tablebase.js: removed a buggy regex that added an extra dot to move
+        numbers (turned "1. e4" into "1.. e4").
+      - tablebase.js: removed dead `isCapture` computation in _executeAndRecord.
+      - game-logic.js: queryECOBookMove now falls through to the level-1
+        hash index when level-3 and level-2 both miss (was degrading to a
+        full ECO_OPENINGS scan).
+    - Main-UI move-list scroll preservation (v1.0.3-p4): fixed the bug where
+      the main-UI move-history list (.mlist) kept scrolling back to the top
+      on its own. Root cause: every renderInternal() call does
+      app.innerHTML=h which rebuilds the DOM and resets .mlist.scrollTop to 0.
+      The engine triggers render() 10-50x/sec during search, each time
+      resetting the user's scroll position. Fix: capture .mlist.scrollTop
+      BEFORE innerHTML replacement and restore it AFTER. Only runs in
+      non-review mode.
+    - Landscape review layout: board+moves fill full width (v1.0.3-p4):
+      removed the max-width cap on .review-moves; move list now takes ALL
+      remaining width via flex:1 1 0. Board + moves together span 100% of
+      viewport width edge-to-edge with no gap. Board flush-left, moves
+      flush-right. Board width cap changed from 65% to 55% of viewport width.
+      Move list scrolls vertically when content overflows.
+    - App startup black-screen fix (v1.0.3-p3 hotfix): fixed a JavaScript
+      syntax error introduced by v1.0.3-p2's landscape review refactor.
+      The if/else split for landscape/portrait move-list rendering forgot
+      the closing `}` for the `if(reviewMode){` block, breaking the
+      renderInternal() try/catch structure and causing a SyntaxError that
+      made the entire chess.html script fail to parse (app showed a black
+      screen on startup). Added the missing `} // close if(reviewMode)`.
+    - PGN import: FIX — cascade-failure when a main-line token fails to
+      parse. Previously, a single invalid token left the side-to-move
+      unchanged, causing EVERY subsequent token to also fail (wrong
+      side's move) — manifesting as "only the first N moves import, the
+      rest are silently dropped". Now, when a token fails, a "skipped"
+      placeholder is pushed (so moveRecords indices stay aligned with
+      PGN move numbers) AND the side-to-move advances (with fullMoveNumber
+      bump if black was to move) so subsequent tokens have a chance to
+      parse. Safety cap: 5 consecutive skips stops the parse. Symptom
+      was: app-exported PGNs with one illegal move imported only the
+      prefix up to that move; now all OTHER moves import with a single
+      "—" marker where the illegal move was.
+    - PGN import: FIX — Type A variations (alternatives to the owning move,
+      e.g. "(7.hxg3 Qxh1 8.Nc3 ...)" after "7. Kf2") are no longer
+      incorrectly relocated to the next move and mislabeled as Type B
+      continuations. The relocate post-processing now skips Type A
+      variations (whose firstMoveIsWhite matches the owning move's side)
+      so they remain attached to the owning move with correct move
+      numbers. Symptom was: app-exported PGNs with variations failed to
+      round-trip — variations appeared as "7... hxg3 ..." (Black's move)
+      instead of "7. hxg3 ..." (White's alternative to 7.Kf2).
+    - PGN import: support for embedded [FEN] headers — the FEN's
+      fullMoveNumber is now used as the starting move number for the
+      move list, review mode, and PGN export. A PGN starting at FEN
+      "... w ... 4" now displays "4. Bxf7+ Kxf7 5. Ne5 ..." instead of
+      the previous "1. Bxf7+ Kxf7 2. Ne5 ...". A new global
+      _importedStartMoveNum tracks this offset and is reset by startGame.
+    - Landscape review layout: COMPLETE REDESIGN — split into .review-top
+      (board + moves, side by side) and .review-bottom (chart + slider +
+      eval + nav + analyze, FULL width edge-to-edge). The whole .review-body
+      scrolls vertically when content overflows. Chart now spans full
+      viewport width (edge-to-edge, no gaps) with ~35% of viewport height.
+      Move list width capped at 90% of board width (always narrower than
+      the board). Nav buttons (⏮ ◀ ▶ ⏭) stretch horizontally via flex:1 1 0
+      to fill the full width. Board sizing: 60% of viewport height for the
+      board+moves row, 65% of viewport width for the board.
+    - Stale version strings: MainActivity.VERSION, StockfishNative.ENGINE_VERSION,
+      and ChessApp.java crash-protection log message updated from "v1.0.2"
+      to "v1.0.3" to match the application version.
+    - Stats page: time-management analysis supporting TWO PGN time formats:
+      (a) v1.0.3 direct {3.2s +0.5 略优} format (time + space + eval)
+      (b) Standard PGN [%clk HH:MM:SS] format with [TimeControl "BASE+INC"]
+          header — used time derived via increment calculation:
+          used = previousClock + increment - currentClk
+          (supports "7200+60", "1800", "40/7200" TimeControl notations)
+    - Stats page: variation text (...) rendered in italic for visual distinction
+    - Stats page: clickable variation moves with synthetic-mainline
+      reconstruction (entire variation series replaces the single
+      mainline move to the left of ())
+    - Stats page: FEN panel below PGN text panel (auto-generated FEN)
+    - Stats page: bilingual UI strings for all new features
+    - Stats page: FIX — clear stale _payload.moveRecords on PGN import
+      (was causing imported PGN to show old game's moves/positions)
+    - Stats page: FEN-embedded PGN support ([FEN] header displayed before
+      moves, selectable for initial-position stats)
+    - Stats page: 💾HTML export dialog with 2 options (static snapshot /
+      full interactive), GPL v3 notice + GPLv3_Logo.svg
+    - Stats page: cached original PGN text (_cachedOriginalPGN) so stats
+      page gets complete PGN with headers + [%clk] from any import path
+    - Main app: _fileBrowserSelect closes settings dialog before async import
+    - Main app: handleFilePickerResult posts immediate JS close callback
+    - Main app: onEngineInfo guarded by showEngineConfig
+    - Main app: review-mode z-index fix (.dov z-index:300 > .review-overlay 200)
+    - Main app: 🗃️ emoji added to import dialog titles
+    - PGN comment format: single space separator between thinking time
+      and eval (e.g. {3.2s +0.5 略优})
+    - GPLv3_Logo.svg added to assets (for 💾HTML export dialog)
+    - Version bumped to 1.0.3 (versionCode 103)
+
+  v1.0.2:
+    - Statistics page (StatsActivity + stats.html) — fullscreen game analysis
+    - PGN export to file via SAF picker
+    - ECO opening auto-fill
+    - 6 critical bug fixes (ponder-hit, variation labels, 98-move cap,
+      promotion UCI, stale AI state, AI first-move variations)
+    - 8 performance breakthroughs (PV cache, board signature, 1D DOM cache,
+      double-rAF scroll, moveAlg disambiguation, isDeadPosition, etc.)
+    - ~200 lines of dead code removed
+    - qw3.7max external code review — all 7 suggestions implemented
+    - Bilingual manuals restructured with Appendix A: Version Changelogs
+    - All 6 README.license files updated with v1.0.2 details
+
+  v1.0.1:
+    - Manual PGN variation parsing (recursive RAV tree, Type A/B fallback)
+    - PGN export/import via SAF
+    - Ponder mode notification refinement
+    - Bilingual UI toggle
+    - Multiple bug fixes and stability improvements
+
 ===== OTHER THIRD-PARTY COMPONENTS ============================================
 
 Lichess Tablebase API

@@ -101,6 +101,22 @@ let showImportDialog=false;
 let engineConfigData=null;
 let engineSettingsData=null;
 let engineConfigTab='engine';
+// v1.0.3: Cache the original PGN text from imports so the stats page can
+// access the complete PGN with all headers ([FEN], [SetUp], [TimeControl],
+// [%clk] comments, etc.) — not just the rebuilt move text from _buildPGNString().
+// Set by importPGN/importPGNFile, cleared by startGame.
+let _cachedOriginalPGN=null;
+// v1.0.3: Cached FEN from setup mode — when the user sets up a custom position
+// and then plays moves, this FEN is included in the exported PGN as [FEN] and
+// [SetUp "1"] headers. Set by exitSetup, cleared by startGame.
+let _setupFEN=null;
+// v1.0.3: Starting move number for display when a PGN with [FEN] header is
+// imported (or a FEN with fullMoveNumber>1 is pasted). The move list and PGN
+// export use Math.floor(i/2) + _importedStartMoveNum for the move pair number,
+// so a PGN starting at FEN "... w ... 4" will display "4. Bxf7+ Kxf7 5. Ne5 ..."
+// instead of "1. Bxf7+ Kxf7 2. Ne5 ...".
+// Default 1 (standard initial position). Reset by startGame.
+let _importedStartMoveNum=1;
 let showVariations=false; // 💬显示变例 toggle state
 let _reviewAnalyzeSafetyTimer=null; // Safety timeout for reviewAnalyzeAll (prevents infinite hang)
 let _lastEngineCallbackTime=0; // Timestamp of last engine callback — used by heartbeat monitor
@@ -342,13 +358,21 @@ let _emergencyFallbackTimerId=setTimeout(function(){
 function _buildPGNString(){
   if(!moveRecords||!moveRecords.length)return '';
   let pgn='';
+  // v1.0.3: Include [FEN] and [SetUp "1"] headers if the game started from
+  // a setup position (not the standard initial position).
+  if(_setupFEN){
+    pgn+='[SetUp "1"]\n[FEN "'+_setupFEN+'"]\n\n';
+  }
   // v1.0.2 FEATURE (first-principles): PGN evaluation annotations + thinking time.
   // After each move, build a PGN comment that includes:
   //   1. Thinking time (from moveRecords[i].time, e.g. "3.2s") — FIRST item
   //   2. Eval annotation (score + eval word, or full SF18 line every 5 moves)
   // Example: {3.2s +0.5 略优} or {3.2s SF18 D22 +1.0 8%W/91%D/1%L}
+  // v1.0.3: Use _importedStartMoveNum as the move-pair number offset so PGN
+  // exports from a FEN-started game preserve the original move numbers.
+  const _pgnMvStartOffset=(typeof _importedStartMoveNum!=='undefined'&&_importedStartMoveNum>0)?_importedStartMoveNum:1;
   for(let i=0;i<moveRecords.length;i+=2){
-    const n=Math.floor(i/2)+1;
+    const n=Math.floor(i/2)+_pgnMvStartOffset;
     const w=moveRecords[i];
     const b=moveRecords[i+1];
     pgn+=n+'. '+(w?w.notation:'...');
@@ -395,22 +419,44 @@ function _buildPGNString(){
   return pgn;
 }
 // v1.0.2: Build a PGN comment for a move, combining thinking time + eval annotation.
-// Returns a string like "{3.2s +0.5 略优}" or "{3.2s}" or "{+0.5 略优}" or "" if neither.
+// v1.0.3: Format uses a single space as separator between thinking time and eval
+//   annotation (reverted from the earlier '——' em-dash proposal after user
+//   feedback — the space-separated format is simpler and matches the v1.0.2
+//   convention). Examples:
+//     "{3.2s +0.5 略优}"   (time + short eval)
+//     "{3.2s SF18 D22 +1.0 8%W/91%D/1%L}"  (time + full SF18 line, every 5 moves)
+//     "{3.2s}"             (time only — NO trailing space inside the braces)
+//     "{+0.5 略优}"         (eval only — no time available)
+//   stats.html's extractMoveTimes() recognizes the "<number>s" pattern inside
+//   {} comments regardless of separator, so both space-separated and the
+//   earlier em-dash format parse correctly.
 function _buildPGNComment(mr,reviewStep,moveNum){
-  let parts=[];
+  let timePart='';
   // 1. Thinking time (first item in the comment)
   if(mr&&mr.time){
-    parts.push(mr.time+'s');
+    timePart=mr.time+'s';
   }
   // 2. Eval annotation
   const evalAnn=_formatPGNEvalAnnotation(reviewStep,moveNum);
+  let evalInner='';
   if(evalAnn){
-    // Strip the outer {} from the eval annotation and add to parts
-    const inner=evalAnn.replace(/^\{/,'').replace(/\}$/,'');
-    parts.push(inner);
+    // Strip the outer {} from the eval annotation
+    evalInner=evalAnn.replace(/^\{/,'').replace(/\}$/,'');
   }
-  if(parts.length===0)return '';
-  return '{'+parts.join(' ')+'}';
+  // v1.0.3: Build the comment with a single space separator if both time and
+  // eval are present.
+  //   - time + eval → "{time eval}"
+  //   - time only → "{time}"  (no trailing space)
+  //   - eval only → "{eval}"
+  //   - neither → ""
+  if(timePart&&evalInner){
+    return '{'+timePart+' '+evalInner+'}';
+  }else if(timePart){
+    return '{'+timePart+'}';
+  }else if(evalInner){
+    return '{'+evalInner+'}';
+  }
+  return '';
 }
 // v1.0.2 FEATURE: format a PGN comment annotation for the given review step.
 // Returns either:
@@ -502,7 +548,14 @@ function onPGNExported(success,fileName){
 // WebView activity by the Java side. The PGN is passed via the bridge and
 // stored in a JS variable that stats.html reads on load.
 function openStatsPage(){
-  const pgn=_buildPGNString();
+  // v1.0.3: Use the cached original PGN text if available (from importPGN/importPGNFile).
+  // This preserves all headers ([FEN], [SetUp], [TimeControl], [%clk] comments, etc.)
+  // that _buildPGNString() would lose. Fall back to _buildPGNString() for games
+  // played in-app (no import).
+  let pgn=_cachedOriginalPGN;
+  if(!pgn){
+    pgn=_buildPGNString();
+  }
   if(!pgn){showToast(T('no_move_records'));return}
   // Also gather per-move eval cache data so the stats page can show
   // classification + eval trend without re-running the engine.
@@ -1089,11 +1142,13 @@ function onEngineReady(){
 // Callback: Best move received from engine (AI move)
 function onBestMove(uciMove){
   console.log('onBestMove:',uciMove);
-  // Cancel safety timeout — engine responded
-  if(_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
-  // Discard stale responses from previous engine searches
+  // v1.0.3-p9 audit fix: check staleness BEFORE clearing the safety timer.
+  // If a stale bestmove arrives, the real bestmove is still pending and the
+  // safety timer must remain active to catch a potential timeout.
   if(_aiMoveRequestId!==_currentAiRequestId){console.warn('Discarding stale bestmove');return;}
-  isAIThinking=false;_aiBarInfo='';_aiRetryCount=0; // Reset retry count on successful bestmove
+  // Cancel safety timeout — engine responded (and it's the current request)
+  if(_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
+  isAIThinking=false;_aiBarInfo='';_aiRetryCount=0;
 
   // CRITICAL FIX: Always clear ponder display state at the start of onBestMove.
   // Increment _ponderGen to invalidate any in-flight onPonderProgress() callbacks
@@ -1670,21 +1725,20 @@ function _fileBrowserInputPath(){
 function _fileBrowserSelect(filePath){
   const overlay=document.getElementById('_fileBrowserOverlay');
   if(overlay)overlay.remove();
+  // v1.0.3 FIX: Close the settings dialog IMMEDIATELY when a file is selected
+  // from the built-in browser, before the async importSettings starts.
+  // The old approach waited for onSettingsImported (seconds later), during
+  // which the dialog stayed open.
+  showEngineConfig=false;
+  var dov=document.querySelector('.dov[role="dialog"]');
+  if(dov)dov.remove();
+  render();
   // FIX: Use requireEngine=false — file reading doesn't need engine
   _bridgeCall(function(bridge){
     const content=bridge.readTextFile(filePath);
     if(content){
-      // v1.0.2 FIX (first-principles): DO NOT call showToast() here.
-      // bridge.importSettings(content) asynchronously triggers the
-      // onSettingsImported(result) JS callback (see below), which already
-      // shows the success/failure toast and refreshes the engine-config UI.
-      // The previous duplicate showToast(T('settings_imported_ok')) here
-      // raced with the callback and showed TWO toasts — exactly the bug
-      // the changelog claims to have fixed but didn't, because the duplicate
-      // was in this file-picker entry path, not in the clipboard-import path.
-      // We also can't refresh _cachedMultiPV here synchronously because
-      // importSettings() is async on the Java side (engine executor thread).
-      // The onSettingsImported callback handles the cache refresh too.
+      // importSettings() is async on the Java side — onSettingsImported
+      // callback will fire the success/failure toast.
       bridge.importSettings(content);
     }else{
       showToast(T('settings_read_fail'));
@@ -1815,7 +1869,18 @@ function importEngineSettings(){
 }
 // JS callbacks from Java
 function onEngineInfo(info){
-  try{engineConfigData=JSON.parse(info);renderEngineConfigAndUpdate();}catch(e){console.error('onEngineInfo error:',e);}
+  try{engineConfigData=JSON.parse(info);
+    // v1.0.3 FIX: Only update the config dialog if showEngineConfig is still true.
+    // After settings import, onSettingsImported sets showEngineConfig=false and
+    // removes the dialog overlay. But onEngineInfo may fire BEFORE onSettingsImported
+    // (both are posted via postJsCallback, in order). If onEngineInfo fires first,
+    // it calls renderEngineConfigAndUpdate() which updates the dialog content —
+    // but this is harmless because onSettingsImported will remove the overlay next.
+    // The real issue is if onEngineInfo fires AFTER onSettingsImported (e.g., from
+    // a delayed engine restart). In that case, showEngineConfig is already false,
+    // so we should NOT re-render the dialog.
+    if(showEngineConfig){renderEngineConfigAndUpdate();}
+  }catch(e){console.error('onEngineInfo error:',e);}
 }
 // onEngineSwitched stub — engine switching removed
 // Kept as a minimal stub to prevent JS errors if Java callback fires.
@@ -1833,12 +1898,15 @@ function onSettingsImported(result){
         if(m)suffix=' ('+m[1]+')';
       }
       showToast(baseMsg+suffix);
-      // v1.0.2: Close the config dialog aggressively.
+      // v1.0.3: Close the config dialog aggressively and immediately.
       // Set state, remove dialog from DOM directly, then render.
       showEngineConfig=false;
       // Force-remove any open dialog overlay from the DOM
       var dov=document.querySelector('.dov[role="dialog"]');
       if(dov){dov.remove();}
+      // Also remove any file-browser overlay that might still be open
+      var fb=document.getElementById('_fileBrowserOverlay');
+      if(fb){fb.remove();}
       // Refresh cached data
       if(typeof AndroidBridge!=='undefined'){
         try{var info=AndroidBridge.getEngineInfo();if(info)engineConfigData=JSON.parse(info);}catch(e){}
@@ -1853,13 +1921,19 @@ function onSettingsImported(result){
       }else{
         render();
       }
-      // Safety net: force close again after 100ms
+      // v1.0.3: Safety net — force close again after 100ms AND 300ms to handle
+      // late-arriving onEngineInfo callbacks that might re-render the dialog.
       setTimeout(function(){
         showEngineConfig=false;
         var dov2=document.querySelector('.dov[role="dialog"]');
         if(dov2){dov2.remove();}
         render();
       },100);
+      setTimeout(function(){
+        showEngineConfig=false;
+        var dov3=document.querySelector('.dov[role="dialog"]');
+        if(dov3){dov3.remove();}
+      },300);
     }else{
       showToast(T('settings_import_fail')+': '+(r.message||'unknown'));
     }

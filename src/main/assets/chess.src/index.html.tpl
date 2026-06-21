@@ -29,7 +29,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://tablebase.lichess.ovh; img-src data: file:; frame-ancestors 'none'; base-uri 'self'">
-<title>Regalia v1.0.2</title>
+<title>Regalia v1.0.3</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{color-scheme:dark;--bg:#1a0a0a;--card:#221015;--border:#8b6914;--border2:#d4a017;--text:#f5e6c8;--muted:#a08050;--accent:#d4a017;--accent2:#ffd700;--blue:#4a90d9;--red:#c0392b;--purple:#8e44ad;--green:#27ae60;--danger:#c0392b}
@@ -65,7 +65,6 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .toggle-sw.on{background:#c49512;border-color:#ffd700;box-shadow:none}
 .toggle-sw::after{content:"";position:absolute;top:1px;left:1px;width:16px;height:16px;border-radius:50%;background:var(--accent2);transition:all .3s;box-shadow:0 1px 4px rgba(0,0,0,.5)}
 .toggle-sw.on::after{left:19px;background:#1a0a0a}
-/* hint-btn removed — all buttons use consistent .btn styling */
 .main{display:flex;flex:1;gap:14px;padding:14px;justify-content:center;flex-wrap:wrap}
 .bsec{display:flex;flex-direction:column;gap:8px}
 .pbar{display:flex;align-items:center;gap:10px;padding:8px 14px;background:#221015;border-radius:6px;border:1px solid var(--border);box-shadow:inset 0 1px 0 rgba(255,215,0,.05)}
@@ -158,7 +157,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .rmv-var{font-size:.6rem;color:var(--accent);font-style:italic;padding:1px 0;line-height:1.4;margin-top:2px}
 .hint-area{background:#221015;border:1px solid var(--accent2);border-radius:6px;padding:10px 12px;position:relative;overflow:hidden;box-shadow:none}
 .hint-text{font-family:system-ui,-apple-system,sans-serif;font-size:.8rem;color:var(--accent2);margin-top:4px;line-height:1.5}
-.dov{position:fixed;inset:0;background:rgba(26,10,10,.97);display:flex;align-items:center;justify-content:center;z-index:100;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+.dov{position:fixed;inset:0;background:rgba(26,10,10,.97);display:flex;align-items:center;justify-content:center;z-index:300;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
 .dlg{background:#1a0a0a;border:2px solid var(--border2);border-radius:10px;padding:24px;max-width:500px;width:90%;max-height:85vh;overflow-y:auto;box-shadow:0 0 6px rgba(212,160,23,.06),0 6px 16px rgba(0,0,0,.40);position:relative}
 .dlg h2{font-family:system-ui,-apple-system,sans-serif;font-size:1.2rem;font-weight:900;margin-bottom:14px;color:var(--accent2);letter-spacing:2px;text-shadow:0 0 3px rgba(255,215,0,.06)}
 .dlg-sec{margin-bottom:14px}
@@ -219,6 +218,9 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .rmv-num{font-size:.75rem;color:var(--muted);min-width:28px;font-weight:700;padding-top:2px}
 .rmv-notation{font-size:.95rem;font-weight:700;flex:1}
 .rmv-detail{display:flex;flex-direction:column;flex:1}
+/* v1.0.3-p10: review nav buttons stretch full width in ALL orientations */
+.review-nav{display:flex;gap:4px;width:100%}
+.review-nav .btn{flex:1 1 0;min-width:0}
 ::-webkit-scrollbar{width:5px}
 ::-webkit-scrollbar-track{background:rgba(26,10,10,.5)}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
@@ -306,7 +308,23 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
   .diff-sel { padding: 1px; }
   .diff-b { padding: 2px 5px; font-size: .58rem; min-width: 20px; }
 
-  /* Review overlay: board left, moves right — optimized for landscape */
+  /* Review overlay: v1.0.3-p7 redesign — TWO-LAYER SCROLL.
+     Layer 1 (outer): .review-body scrolls vertically (overflow-y:auto) so the
+       user can scroll to see the chart, slider, eval bar, nav buttons, and
+       analyze button when they don't all fit in the viewport.
+     Layer 2 (inner): .review-moves has its OWN independent scroll viewport
+       (overflow-y:auto with a height matching the board) so the move list
+       scrolls independently of the page scroll.
+     Board sizing: board width is ALWAYS greater than move-list width (board
+     ~60% of viewport, moves ~40%). Board + moves together fill 100% of the
+     viewport width, edge-to-edge, no gap.
+     Layout:
+       review-body (vertical flex, SCROLLABLE — overflow-y:auto)
+       ├─ review-top (horizontal flex, flex:0 0 auto — height = board height)
+       │  ├─ review-left (board, ~60% width)
+       │  └─ review-moves (INDEPENDENT scroll, ~40% width, height = board height)
+       └─ review-bottom (full-width chart + slider + eval + nav + analyze)
+  */
   .review-overlay { flex-direction: column; height: 100vh; }
   .review-hdr {
     padding: 2px 8px;
@@ -314,57 +332,106 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
     min-height: 24px;
   }
   .review-hdr h2 { font-size: .65rem; letter-spacing: 1px; }
-  .review-hdr .btn { padding: 2px 5px; font-size: .5rem; min-height: 18px; }
+  .review-hdr .btn { padding: 2px 10px; font-size: .5rem; min-height: 18px; min-width: 32px; }
   .review-body {
-    flex-direction: row !important;
-    overflow: hidden;
-    gap: 4px;
+    flex-direction: column !important;
+    overflow-y: auto;          /* v1.0.3-p7: LAYER 1 — whole body scrolls to reveal chart/buttons */
+    overflow-x: hidden;
+    gap: 0;
     flex: 1;
     min-height: 0;
-    /* Use full remaining height after header */
     max-height: calc(100vh - 28px);
+    width: 100%;
+    padding: 0;
+    /* v1.0.3-p7: edge-to-edge — no horizontal padding so board+moves AND chart
+       all span full width with no gaps. */
   }
+  /* Top section: board left + moves right — FILL 100% width, edge-to-edge.
+     flex:0 0 auto so its height is determined by the board's intrinsic height
+     (not stretched to fill). This lets the body scroll reveal the bottom
+     controls when they don't fit. */
+  .review-body > .review-top {
+    display: flex;
+    flex-direction: row;
+    flex: 0 0 auto;            /* v1.0.3-p7: height = board height (intrinsic) */
+    width: 100%;
+    gap: 0;
+    padding: 0;
+    min-height: 0;
+    align-items: flex-start;   /* v1.0.3-p7: top-align so board doesn't stretch */
+  }
+  /* v1.0.3-p7: board takes ~60% of viewport width (ALWAYS > move list width).
+     flex:0 0 auto + width set by JS via --rv-board-w. */
   .review-left {
     flex: 0 0 auto;
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 2px 4px;
-    gap: 2px;
-    overflow-y: auto;
+    justify-content: flex-start;
+    padding: 0;
+    gap: 0;
+    overflow: hidden;
     min-width: unset !important;
-    max-height: 100%;
-    /* Optimize — let review-left shrink to fit its content,
-       so the moves list gets maximum space */
     flex-shrink: 0;
+    margin: 0;
   }
-  /* Chart gets explicit height from JS via style attribute. min-height ensures
-     it's never invisible. overflow:hidden clips SVG cleanly. */
-  .review-chart { min-height: 30px; overflow: hidden; flex-shrink: 0; }
-  input[type="range"].review-slider { height: 16px; }
-  .review-board { padding: 0; }
-  .review-board .bgrid { max-width: none; }
+  .review-left .review-board { padding: 0; flex-shrink: 0; margin: 0; }
+  .review-left .review-board .bgrid { max-width: none; }
+  /* v1.0.3-p8: allow vertical pan (scroll) on the review board so the user
+     can slide on the board to scroll the whole review body. The base .bgrid
+     has touch-action:none (for the main game where board slides should NOT
+     scroll the page); in review mode we override to touch-action:pan-y so
+     vertical slides scroll the body. Horizontal slides are still blocked to
+     avoid interfering with any potential horizontal gestures. */
+  .review-left .review-board .bgrid { touch-action: pan-y; }
+  /* v1.0.3-p7: move list takes ALL remaining width (flex:1 1 0) — board + moves
+     together fill 100% of viewport width edge-to-edge. The move list has its
+     OWN independent scroll viewport: height matches the board height (set via
+     JS --rv-board-h), overflow-y:auto. Board width is always > move list width. */
   .review-moves {
     flex: 1 1 0;
-    overflow-y: auto;
-    padding: 3px 4px;
-    min-width: 120px;
-    /* OPT: Use maximum available space */
-    max-height: 100%;
-    /* CONSTRAINT: moves list width must always be less than board width.
-       Board = 8 * REVIEW_CELL ≈ 320px, so cap at 45% of viewport width
-       to ensure it stays narrower than the board in landscape. */
-    max-width: 45vw;
+    overflow-y: auto;          /* v1.0.3-p7: LAYER 2 — independent scroll */
+    padding: 2px 2px 2px 4px;
+    min-width: 80px;
+    min-height: 0;
+    height: var(--rv-board-h, 320px);  /* v1.0.3-p7: match board height, set by JS */
+    margin: 0;
   }
   .rmv-block { padding: 3px 5px; }
   .rmv-notation { font-size: .72rem; }
   .rmv-num { font-size: .62rem; min-width: 20px; }
-  .review-left #review-eval-bar {
-    margin: 1px 0 !important;
-    font-size: .6rem !important;
-    padding: 1px 4px !important;
+  /* Bottom section: full-width chart + controls, edge-to-edge. flex:0 0 auto
+     so it takes its content height. Visible by scrolling the body. */
+  .review-body > .review-bottom {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    flex: 0 0 auto;
+    padding: 4px 6px;
+    gap: 4px;
   }
-  .review-left .btn { padding: 2px 5px; font-size: .5rem; min-height: 20px; }
+  .review-chart { min-height: 40px; overflow: hidden; flex-shrink: 1; width: 100%; }
+  input[type="range"].review-slider { height: 18px; width: 100%; }
+  /* v1.0.3-p7: nav buttons stretched horizontally for better space use */
+  .review-bottom .review-nav {
+    display: flex;
+    gap: 4px;
+    width: 100%;
+  }
+  .review-bottom .review-nav .btn {
+    flex: 1 1 0;
+    padding: 4px 8px;
+    font-size: .7rem;
+    min-height: 28px;
+    min-width: 0;
+  }
+  .review-bottom #review-eval-bar {
+    margin: 1px 0 !important;
+    font-size: .7rem !important;
+    padding: 2px 6px !important;
+    width: 100%;
+  }
+  .review-bottom .btn { padding: 3px 10px; font-size: .55rem; min-height: 22px; min-width: 36px; }
 }
 
 /* --- VERY COMPACT LANDSCAPE (phone with keyboard overlay) --- */
@@ -382,10 +449,9 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
   .pbar { padding: 2px 4px; }
   .pname { font-size: .6rem; }
   .mlist { max-height: 50px; }
-  .review-hdr { min-height: 20px; }
-  .review-body { gap: 3px; }
-  .review-left { padding: 2px; gap: 2px; overflow-y: auto; }
-  .review-moves { min-width: 100px; padding: 2px 3px; }
+  /* Review mode inherits from base landscape rule — the new layout
+     (board+moves top, chart+controls bottom, vertical scroll) works
+     at any height without per-size tweaks. */
 }
 
 /* --- STANDARD PHONE LANDSCAPE --- */
@@ -410,12 +476,10 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
   .pico { font-size: 1.2rem; }
   .pname { font-size: .78rem; }
   .mlist { max-height: 140px; }
+  /* Review mode: larger fonts on tall tablets, layout unchanged */
   .review-hdr { padding: 6px 14px; min-height: 40px; }
   .review-hdr h2 { font-size: .85rem; }
   .review-hdr .btn { padding: 4px 8px; font-size: .65rem; min-height: 28px; }
-  .review-body { gap: 10px; }
-  .review-left { padding: 8px; gap: 6px; overflow-y: auto; }
-  .review-moves { min-width: 180px; padding: 8px; }
   .rmv-block { padding: 6px 10px; }
   .rmv-notation { font-size: .82rem; }
   .rmv-num { font-size: .7rem; min-width: 24px; }
@@ -432,9 +496,6 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
   .card-t { font-size: .78rem; }
   .crow { font-size: .78rem; }
   .mlist { max-height: 200px; }
-  .review-body { gap: 14px; }
-  .review-left { padding: 12px; gap: 8px; overflow-y: auto; }
-  .review-moves { min-width: 240px; padding: 12px; }
 }
 
 /* Last move highlight - baroque gold glow */

@@ -1,5 +1,8 @@
 # Regalia ♔
 
+<!-- AI-GEN: AI assisted
+     This document was AI-assisted and has been reviewed for AGPL v3 compliance. -->
+
 A standalone, open-source chess app for Android — play offline against Stockfish 18, analyze your games, and explore openings. No account, no network, no tracking.
 
 "Regalia" is used solely as a project name for this open-source chess app. No trademark rights are claimed. Anyone is free to fork and rename their own version.
@@ -12,7 +15,7 @@ A standalone, open-source chess app for Android — play offline against Stockfi
 
 *Portrait mode — evaluation bar, move history, AI opponent display with ponder info, and Control heatmap*
 
-**Control Heatmap** — Tap the 🌗/🌈 button on the toolbar to toggle the control heatmap. Each square is dynamically colored by HSL to indicate which side controls it: blue-purple = your control, red = opponent's control, purple = contested. Hovering a square shows SVG arrows from each controlling piece to that square (warm gold for your pieces, cool silver-blue for opponent's). The info card below the board shows per-piece control contributions with position labels.
+**Control Heatmap** — Tap the 🌈 button on the toolbar to toggle the control heatmap. Each square is dynamically colored by HSL to indicate which side controls it: blue-purple = your control, red = opponent's control, purple = contested. Hovering a square shows SVG arrows from each controlling piece to that square (warm gold for your pieces, cool silver-blue for opponent's). The info card below the board shows per-piece control contributions with position labels.
 
 **🌿Line** — In the move record, 🌿 lines appear below each move showing engine analysis variations (MultiPV) and PGN import variations (RAV). Each variation is labeled 🌿Line 1, 🌿Line 2, etc., assigned sequentially by display order. PGN import variations are automatically parsed and displayed as 🌿Lines with proper move numbering. Toggle the Variations switch to show or hide them.
 
@@ -41,6 +44,7 @@ Download the latest APK from [GitHub Releases](https://github.com/YDW99/Regalia/
 
 - Android 5.0 (API 21) or later
 - ARM64 device (arm64-v8a)
+- ~80 MB storage
 
 ## Building
 
@@ -78,14 +82,16 @@ Regalia/
 │   ├── assets/
 │   │   ├── chess.src/          # Source files (JS + CSS + HTML template)
 │   │   │   ├── game-logic.js   # Chess rules, move generation, i18n
-│   │   │   ├── ai-bridge.js    # Engine communication, eval display
-│   │   │   ├── ui.js           # Rendering, dialogs, interaction
+│   │   │   ├── ai-bridge.js    # Engine communication, eval display, PGN export
+│   │   │   ├── ui.js           # Rendering, dialogs, interaction, review mode
 │   │   │   ├── eco-data.js     # ECO opening classification data
 │   │   │   ├── tablebase.js    # Lichess Syzygy tablebase queries + PGN import
 │   │   │   ├── index.html.tpl  # CSS template
 │   │   │   └── build-chess.sh  # Build script → chess.html
 │   │   ├── chess.html          # Built output (combined JS+CSS+HTML)
-│   │   └── AGPLv3_Logo.svg  # AGPL logo for About page
+│   │   ├── stats.html          # Statistics page (📊统计) — fullscreen WebView
+│   │   ├── AGPLv3_Logo.svg     # AGPL logo for About page
+│   │   └── GPLv3_Logo.svg      # GPL logo for 💾HTML export dialog
 │   ├── java/com/Regalia/
 │   │   ├── MainActivity.java   # WebView host, immersive mode, lifecycle
 │   │   ├── StockfishNative.java # Engine process management, UCI protocol, SAF file I/O
@@ -103,9 +109,13 @@ Regalia/
 │   └── AndroidManifest.xml
 ├── NOTICE                      # Third-party component notices
 ├── NOTICE-DroidFish            # Original DroidFish notice
+├── NOTICE-gradle               # Gradle notice (Apache v2.0)
 ├── AUTHORS-stockfish           # Stockfish project authors list
 ├── LICENSE-AGPL v3             # AGPL v3 full text (application)
 ├── LICENSE-GPL v3              # GPL v3 full text (engine components)
+├── LICENSE-Apache v2.0         # Apache v2.0 full text (Gradle)
+├── PRIVACY.md                  # Privacy policy
+├── build-chess.py              # Python build script (alternative to build-chess.sh)
 └── README.md
 ```
 
@@ -160,4 +170,22 @@ Contributions are welcome! Please ensure:
 
 ## Version
 
-**v1.0.2**
+**v1.0.3** (with patch revision — version number unchanged)
+
+The v1.0.3 patch revision addresses three specific issues reported after the
+initial v1.0.3 release, with no version bump:
+
+1. **PGN import — Type A variation mis-relocation**: app-exported PGNs with
+   variations (RAV) now round-trip correctly on re-import. Variations that
+   are alternatives to the owning move (e.g. `7. Kf2 (7.hxg3 Qxh1 ...)`) are
+   no longer mis-relocated to the next move with the wrong side label.
+2. **PGN import — embedded FEN move numbers**: PGNs with a `[FEN "..."]`
+   header now display correct move numbers in the move list, review mode,
+   and PGN export (e.g. `4. Bxf7+ Kxf7 5. Ne5` for a FEN starting at move 4).
+3. **Landscape review layout**: removed the `max-width` cap on the move list
+   that wasted hundreds of pixels on wide screens. The board can now scale
+   up to 60% of the viewport width, and the chart flex-shrinks instead of
+   pushing the board off-screen.
+
+See `NOTICE` (VERSION HISTORY SUMMARY → v1.0.3) and the per-module
+`README.license` files for full patch details.
