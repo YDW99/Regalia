@@ -6,9 +6,17 @@ License classification by file:
       The HTML/CSS template is AGPL v3; the embedded JavaScript modules
       include GPL v3 (DroidFish-derived) and AGPL v3 (original) code.
       See chess.src/README.license for per-module details.
+  - stats.html: GPL v3 (PGN parsing derived from DroidFish)
+      Fullscreen statistics page (📊统计). Contains time-management analysis,
+      clickable variation moves, FEN panel, FEN-embedded PGN support,
+      static HTML export dialog with GPL v3 notice. PGN parsing logic
+      derived from DroidFish GameTree/PgnToken/PgnScanner (GPL v3).
   - AGPLv3_Logo.svg: FSF official AGPL v3 logo
       Used for license identification on the About page.
       Source: https://www.gnu.org/graphics/agplv3-with-text-162x68.png
+  - GPLv3_Logo.svg: FSF official GPL v3 logo
+      Used for license identification on the 💾HTML export dialog.
+      Source: https://www.gnu.org/graphics/gplv3-127x51.png
   - chess.src/: Source modules (see chess.src/README.license)
 
 v1.0.2 changes reflected in chess.html (rebuilt from chess.src/):
@@ -52,3 +60,103 @@ v1.0.2 NEW FEATURE additions:
           with higher CSS specificity than .pgn-display .move).
         - 📂 Select PGN File opens SAF picker directly from StatsActivity
           (no longer bounces through MainActivity).
+
+v1.0.3 changes (reflected in stats.html and rebuilt chess.html):
+  - stats.html: NEW time-management analysis feature.
+      extractMoveTimes(pgnText) parses per-move thinking times from PGN
+      comments. Two conventions are supported:
+        1. v1.0.3 direct format: `{3.2s +0.5 略优}` (time + space + eval).
+           No header needed; the `<number>s` pattern is the move's used time.
+        2. Standard PGN clock format (requires [TimeControl] header):
+           `[%clk HH:MM:SS]` gives the player's REMAINING clock after the
+           move. The app parses `[TimeControl "BASE+INC"]` to get the base
+           time and per-move increment, tracks each player's previous
+           remaining clock (initialized to baseTime), and derives used time
+           via `used = previousClock + increment - currentClk`. Three
+           TimeControl notations are supported: "7200+60" (base+increment),
+           "1800" (base only), "40/7200" (moves-per-time, treated as no
+           increment). Without a [TimeControl] header, [%clk] values are
+           recorded as clock-remaining only — not used to derive used time.
+           If a move has both a {N.Ns} direct comment and a [%clk], the
+           direct format takes precedence.
+      Also recognizes the earlier em-dash format `{<sec>s——...}` for
+      backward compatibility, and standard `[%clk HH:MM:SS]`.
+      The Time Management section shows: total/White/Black time used,
+      average per move, slowest/fastest move (with move number), time
+      volatility (standard deviation), long-think count (>10s), quick-move
+      count (<1s), phase distribution (opening/midgame/endgame), and an
+      SVG bar chart of per-move thinking time. When a [TimeControl] header
+      is present, a blue info bar at the top lists the base time and
+      per-move increment.
+  - stats.html: NEW clickable variation moves.
+      Previously only mainline moves were clickable for per-position
+      statistics. In v1.0.3, variation moves inside `(...)` are also
+      clickable. On click, selectVariationMove(varId, varMoveIdx) builds
+      a synthetic move sequence: mainline[0..mainIdxBefore-1] + ALL
+      variation moves[0..varClickedIdx] (the ENTIRE series from the
+      variation's first move to the clicked move, not just the clicked
+      move). mainIdxBefore is the index of the mainline move that the
+      variation's first move REPLACES (the move immediately to the LEFT
+      of `(`). The synthetic sequence is then used for ALL stats
+      computation. Variation moves from index 0 to varClickedIdx are
+      visually highlighted (class "var-included" for moves before the
+      clicked one, "selected" for the clicked one) to communicate that
+      the entire series is being used.
+  - stats.html: Variation text rendered in italic.
+      The `.pgn-display .variation` CSS rule now includes `font-style:italic`
+      so the `()` parentheses and all content inside are visually distinct
+      from mainline moves.
+  - stats.html: NEW FEN panel below the PGN text panel.
+      renderFENPanel() generates a FEN string from the selected move's
+      post-state via stateToFEN(state). The panel shows the FEN of the
+      position right after the selected move (mainline or variation),
+      with a copy-to-clipboard button. If no move is selected, shows the
+      initial position FEN + a hint.
+  - stats.html: NEW selection banner.
+      A small banner above the PGN text panel shows the currently selected
+      move number (mainline or variation), making it clear which position
+      the stats below correspond to. For variation selections, the banner
+      shows the RANGE of variation moves (1 to N) and the total count,
+      explicitly noting that the entire series replaces the single
+      mainline move.
+  - stats.html: v1.0.3 FIX — clear stale moveRecords on PGN import.
+      When a new PGN is imported (via _statsPastePGN or onStatsPGNFileRead),
+      _payload.moveRecords and _payload.evals are now cleared to null.
+      Without this clear, parsePGN() would detect the stale moveRecords
+      from the PREVIOUS game and call parseFromMoveRecords() — replaying
+      the old game's moves instead of parsing the newly imported PGN text.
+      This was the root cause of "imported PGN not recognized": the
+      metadata (headers) was extracted from the new PGN (correct) but the
+      moves/positions came from the old game's moveRecords (wrong), and
+      [%clk]/[TimeControl] time analysis showed the right times but for
+      the wrong number of moves. Also clears _variationMoves and
+      _variationMeta to reset the variation-selection state.
+  - stats.html: Bilingual UI strings added for all new features (fen_label,
+      fen_hint, fen_copy, time_*, time_control_header, time_base_time,
+      time_increment, variation_marker, select_hint, select_var_hint, etc.)
+      — supports the existing ↔️ Chinese/English language toggle.
+  - chess.src/ai-bridge.js: _buildPGNComment() format uses a single space
+      as separator between thinking time and eval annotation.
+      Examples:
+        "{3.2s +0.5 略优}"   (time + short eval)
+        "{3.2s SF18 D22 +1.0 8%W/91%D/1%L}"  (time + full SF18 line)
+        "{3.2s}"             (time only — no trailing space)
+        "{+0.5 略优}"         (eval only — no separator)
+  - chess.src/ui.js, game-logic.js, index.html.tpl: version strings
+    updated from v1.0.2 → v1.0.3 (header badge, about dialog, loading
+    title, built_in_only string, <title>).
+
+v1.0.3 patch changes (version number unchanged — still v1.0.3 / versionCode 103):
+  - chess.html (rebuilt from chess.src/):
+      * PGN import: Type A variations (alternatives to the owning move)
+        are no longer incorrectly relocated to the next move. App-exported
+        PGNs with variations now round-trip correctly on re-import.
+      * PGN import: embedded [FEN] header support — the FEN's
+        fullMoveNumber is used as the starting move number for the move
+        list, review mode, and PGN export.
+      * Landscape review layout: removed the max-width cap on .review-moves
+        so the move list takes all remaining horizontal space (was capped
+        to board_width - 8px, wasting hundreds of pixels on tablets/wide
+        screens). Also removed the 360px hard cap on board width.
+  - No changes to stats.html in this patch.
+  - No changes to AGPLv3_Logo.svg or GPLv3_Logo.svg.

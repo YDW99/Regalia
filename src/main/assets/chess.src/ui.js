@@ -35,6 +35,9 @@ document.addEventListener('click', function(e) {
 }, true);
 
 // Touch scroll prevention: block default scroll when touch moves >10px on board
+// (main game mode only). In REVIEW mode, we WANT the board to be scrollable
+// (the whole review body scrolls when the user slides on the board), so we
+// skip the preventDefault.
 (function(){
   let _touchStartX=0, _touchStartY=0, _touchOnBoard=false;
   document.addEventListener('touchstart',function(e){
@@ -44,6 +47,11 @@ document.addEventListener('click', function(e) {
   },{passive:true});
   document.addEventListener('touchmove',function(e){
     if(!_touchOnBoard)return;
+    // v1.0.3-p8: in review mode, allow touch-slide on the board to scroll the
+    // whole review body (the user explicitly requested this). Only block the
+    // default scroll in non-review modes (main game, setup) where board slides
+    // should NOT scroll the page.
+    if(typeof reviewMode!=='undefined'&&reviewMode)return;
     const t=e.touches[0];
     const dx=Math.abs(t.clientX-_touchStartX);
     const dy=Math.abs(t.clientY-_touchStartY);
@@ -52,9 +60,6 @@ document.addEventListener('click', function(e) {
     }
   },{passive:false});
 })();
-
-
-// ---- Exports ----
 
 
 // ===================== CHESS ENGINE =====================
@@ -288,7 +293,7 @@ function _updateEvalDisplayIncremental() {
       if (app) {
         app.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#1a0a0a;color:#f5e6c8;padding:20px;text-align:center;font-family:system-ui,sans-serif">' +
           '<div style="font-size:3rem;margin-bottom:16px">♔</div>' +
-          '<h2 style="color:#ffd700;margin-bottom:12px">'+T('app_name')+' v1.0.2</h2>' +
+          '<h2 style="color:#ffd700;margin-bottom:12px">'+T('app_name')+' v1.0.3</h2>' +
           '<p style="color:#a08050;margin-bottom:20px;max-width:300px">'+T('render_error')+'</p>' +
           '<button onclick="location.reload()" style="padding:12px 24px;background:#c49512;color:#1a0a0a;border:none;border-radius:6px;font-size:1rem;font-weight:700;cursor:pointer">'+T('refresh_page')+'</button>' +
           '</div>';
@@ -341,9 +346,9 @@ function playSound(type){if(!soundOn)return;try{const ctx=getAudioCtx();if(ctx.s
 function _buildEvalTrendSVG(width, height) {
   if (!reviewStates || reviewStates.length < 2) return '';
 
-  // Equal left/right padding so chart endpoints are equidistant
-  // from borders. The chart should fully utilize the available width.
-  const padding = {top: 12, right: 36, bottom: 4, left: 36};
+  // v1.0.3-p11: reduced left/right padding from 36 to 8 so the chart points
+  // and lines fully utilize the horizontal space with minimal edge gaps.
+  const padding = {top: 12, right: 8, bottom: 4, left: 8};
   const chartW = width - padding.left - padding.right;
   const chartH = height - padding.top - padding.bottom;
   const midY = padding.top + chartH / 2;
@@ -667,6 +672,11 @@ let _heartbeatRunning=false; // Flag for engine heartbeat monitor state
 let _turnStartTime=Date.now(),dlgPlayerColor='white',dlgOpeningId=null,
     dlgBookMoves=false;
 let reviewMode=false,reviewStep=0,reviewStates=[],reviewCritical=[];
+// v1.0.3-p6: track the last reviewStep we scrolled into view, so scrollIntoView
+// only fires when the user navigates to a DIFFERENT step — not on every render
+// (which would yank the move list back to the active move and prevent the user
+// from scrolling the move list independently).
+let _lastReviewStepScrolled=-2;
 let _reviewAnalyzeAllActive=false; // Flag for reviewAnalyzeAll batch analysis
 // Track the game-over status key so we can re-localize gameOver on language switch.
 // Toggle for global eval trend display in review mode.
@@ -763,7 +773,7 @@ const oppC=OPP_COLOR[playerColor];
 const flip=playerColor==='black';
 // Arrows computed separately by _updateArrows() — no inline computation needed
 
-let h='<div class="hdr" role="banner"><div class="hdr-top"><div class="hdr-l"><span style="font-size:1.3rem;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text;border:3px solid transparent;border-image:linear-gradient(145deg,#8b6914,#d4a017,#ffd700,#fff8dc,#ffd700,#d4a017,#8b6914) 1;padding:3px 6px;background:linear-gradient(145deg,rgba(139,105,20,.18),rgba(255,215,0,.08),rgba(139,105,20,.18));box-shadow:0 0 6px rgba(212,160,23,.35),0 0 12px rgba(255,215,0,.12),inset 0 0 3px rgba(255,215,0,.1),inset 0 1px 0 rgba(255,248,220,.15);position:relative">♔&#xFE0E;</span><h1>'+T('app_name')+'<span class="ver">v1.0.2</span><button onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showAboutPage=true;render()" style="font-size:.6rem;color:var(--accent);background:rgba(212,160,23,.15);padding:2px 8px;border-radius:4px;border:1px solid rgba(212,160,23,.3);margin-left:4px;cursor:pointer;font-family:system-ui,-apple-system,sans-serif;letter-spacing:1px">ℹ️</button></h1></div><button onclick="toggleLang()" style="font-size:.65rem;color:var(--accent);background:rgba(212,160,23,.15);padding:2px 6px;border-radius:4px;border:1px solid rgba(212,160,23,.3);cursor:pointer;font-family:system-ui,-apple-system,sans-serif;letter-spacing:1px;flex-shrink:0">'+(_lang==='zh'?'↔️中':'↔️EN')+'</button><div class="ev" id="eval-disp" role="status" aria-label="'+T('evaluating')+'">'+(setupMode?T('setup_label'):(isAIThinking?'<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>':'<span class="ev-e">'+pe+'</span><span>'+pd+'</span><span style="color:var(--muted)">('+scoreStr+')</span>'+_hdrDepthStr+_hdrProgressStr))+'</div></div><div class="hdr-tools" role="toolbar" aria-label="'+T('ctrl_range')+'">'+(setupMode?'':'<div class="diff-sel" role="radiogroup" aria-label="AI">'+getAI_LEVELS().map(l=>'<button class="diff-b'+(getEffectiveAILevel()===l.id?' act':'')+'" onclick="if(!isAIThinking){'+(l.id===8?'openEngineConfig()':('aiLevel='+l.id+';try{AndroidBridge.syncGameDifficulty('+l.id+')}catch(e){}render()'))+'}" title="'+l.desc+'" role="radio" aria-checked="'+(getEffectiveAILevel()===l.id)+'">'+(l.id===8?'⚙️':l.id===7?'SL':l.id)+'</button>').join('')+'</div>')+'<button type="button" class="btn" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()" aria-label="'+T('new_game')+'"><span style="font-size:1.4rem">⚔️</span> '+T('new_game')+'</button>'+'<button class="btn" onclick="quickFreeOpening()" aria-label="'+T('free_opening')+'">'+(playerColor==='white'?'<span style=\"font-size:1.4rem;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text\">♔&#xFE0E;</span>':'<span style=\"font-size:1.4rem;font-weight:400;color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans Symbol&#x27;,sans-serif;font-variant-emoji:text\">♚&#xFE0E;</span>')+' '+T('free_opening')+'</button>'+(setupMode?'':'<button class="btn" onclick="undoMove()" aria-label="'+T('undo')+'"><span style="font-size:1.4rem">↩️</span> '+T('undo')+'</button><button class="btn" onclick="redoMove()" aria-label="'+T('redo')+'" id="redoBtn"><span style="font-size:1.4rem">↪️</span> '+T('redo')+'</button>')+'<button class="btn" onclick="flipBoard()" aria-label="'+T('flip')+'"><span style="font-size:1.4rem">🔃</span> '+T('flip')+'</button>'+'<button class="btn" onclick="getHint()" aria-label="'+T('ai_hint')+'"><span style="font-size:1.4rem">💡</span> '+T('ai_hint')+'</button>'+(setupMode?'':'<button class="btn" onclick="toggleSound()" id="btnSound" aria-label="'+T('sound')+'">'+(soundOn?'<span style="font-size:1.4rem">🔊</span> '+T('sound'):'<span style="font-size:1.4rem">🔇</span> '+T('sound'))+'</button>')+'<button class="btn" onclick="showCtrlMap=!showCtrlMap;cachedCtrlKey=&quot;&quot;;render()" aria-label="'+T('ctrl_range')+'" title="'+T('ctrl_range')+'">'+(showCtrlMap?'<span style="font-size:1.4rem">🌈</span> '+T('ctrl_range'):'<span style="font-size:1.4rem">🌗</span> '+T('ctrl_range'))+'</button>'+'<button class="btn" onclick="copyFEN()" title="'+T('copy_fen')+'" aria-label="'+T('copy_fen')+'"><span style="font-size:1.4rem">📝</span> FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="'+T('import_fen')+'" aria-label="'+T('import_fen')+'"><span style="font-size:1.4rem">🗃️</span> '+T('import_label')+'</button><button class="btn" onclick="'+(setupMode?'exitSetup()':'toggleSetup()')+'" aria-label="'+(setupMode?T('setup_done'):T('setup_mode'))+'">'+(setupMode?'<span style="font-size:1.4rem">✓</span> '+T('setup_done'):'<span style="font-size:1.4rem">🏗️</span> '+T('setup_mode'))+'</button></div></div>';
+let h='<div class="hdr" role="banner"><div class="hdr-top"><div class="hdr-l"><span style="font-size:1.3rem;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text;border:3px solid transparent;border-image:linear-gradient(145deg,#8b6914,#d4a017,#ffd700,#fff8dc,#ffd700,#d4a017,#8b6914) 1;padding:3px 6px;background:linear-gradient(145deg,rgba(139,105,20,.18),rgba(255,215,0,.08),rgba(139,105,20,.18));box-shadow:0 0 6px rgba(212,160,23,.35),0 0 12px rgba(255,215,0,.12),inset 0 0 3px rgba(255,215,0,.1),inset 0 1px 0 rgba(255,248,220,.15);position:relative">♔&#xFE0E;</span><h1>'+T('app_name')+'<span class="ver">v1.0.3</span><button onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showAboutPage=true;render()" style="font-size:.6rem;color:var(--accent);background:rgba(212,160,23,.15);padding:2px 8px;border-radius:4px;border:1px solid rgba(212,160,23,.3);margin-left:4px;cursor:pointer;font-family:system-ui,-apple-system,sans-serif;letter-spacing:1px">ℹ️</button></h1></div><button onclick="toggleLang()" style="font-size:.65rem;color:var(--accent);background:rgba(212,160,23,.15);padding:2px 6px;border-radius:4px;border:1px solid rgba(212,160,23,.3);cursor:pointer;font-family:system-ui,-apple-system,sans-serif;letter-spacing:1px;flex-shrink:0">'+(_lang==='zh'?'↔️中':'↔️EN')+'</button><div class="ev" id="eval-disp" role="status" aria-label="'+T('evaluating')+'">'+(setupMode?T('setup_label'):(isAIThinking?'<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>':'<span class="ev-e">'+pe+'</span><span>'+pd+'</span><span style="color:var(--muted)">('+scoreStr+')</span>'+_hdrDepthStr+_hdrProgressStr))+'</div></div><div class="hdr-tools" role="toolbar" aria-label="'+T('ctrl_range')+'">'+(setupMode?'':'<div class="diff-sel" role="radiogroup" aria-label="AI">'+getAI_LEVELS().map(l=>'<button class="diff-b'+(getEffectiveAILevel()===l.id?' act':'')+'" onclick="if(!isAIThinking){'+(l.id===8?'openEngineConfig()':('aiLevel='+l.id+';try{AndroidBridge.syncGameDifficulty('+l.id+')}catch(e){}render()'))+'}" title="'+l.desc+'" role="radio" aria-checked="'+(getEffectiveAILevel()===l.id)+'">'+(l.id===8?'⚙️':l.id===7?'SL':l.id)+'</button>').join('')+'</div>')+'<button type="button" class="btn" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()" aria-label="'+T('new_game')+'"><span style="font-size:1.4rem">⚔️</span> '+T('new_game')+'</button>'+'<button class="btn" onclick="quickFreeOpening()" aria-label="'+T('free_opening')+'">'+(playerColor==='white'?'<span style=\"font-size:1.4rem;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text\">♔&#xFE0E;</span>':'<span style=\"font-size:1.4rem;font-weight:400;color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans Symbol&#x27;,sans-serif;font-variant-emoji:text\">♚&#xFE0E;</span>')+' '+T('free_opening')+'</button>'+(setupMode?'':'<button class="btn" onclick="undoMove()" aria-label="'+T('undo')+'"><span style="font-size:1.4rem">↩️</span> '+T('undo')+'</button><button class="btn" onclick="redoMove()" aria-label="'+T('redo')+'" id="redoBtn"><span style="font-size:1.4rem">↪️</span> '+T('redo')+'</button>')+'<button class="btn" onclick="flipBoard()" aria-label="'+T('flip')+'"><span style="font-size:1.4rem">🔃</span> '+T('flip')+'</button>'+'<button class="btn" onclick="getHint()" aria-label="'+T('ai_hint')+'"><span style="font-size:1.4rem">💡</span> '+T('ai_hint')+'</button>'+(setupMode?'':'<button class="btn" onclick="toggleSound()" id="btnSound" aria-label="'+T('sound')+'">'+(soundOn?'<span style="font-size:1.4rem">🔊</span> '+T('sound'):'<span style="font-size:1.4rem">🔇</span> '+T('sound'))+'</button>')+'<button class="btn" onclick="showCtrlMap=!showCtrlMap;cachedCtrlKey=&quot;&quot;;render()" aria-label="'+T('ctrl_range')+'" title="'+T('ctrl_range')+'">'+(showCtrlMap?'<span style="font-size:1.4rem">🌈</span> '+T('ctrl_range'):'<span style="font-size:1.4rem">🌗</span> '+T('ctrl_range'))+'</button>'+'<button class="btn" onclick="copyFEN()" title="'+T('copy_fen')+'" aria-label="'+T('copy_fen')+'"><span style="font-size:1.4rem">📝</span> FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="'+T('import_fen')+'" aria-label="'+T('import_fen')+'"><span style="font-size:1.4rem">🗃️</span> '+T('import_label')+'</button><button class="btn" onclick="'+(setupMode?'exitSetup()':'toggleSetup()')+'" aria-label="'+(setupMode?T('setup_done'):T('setup_mode'))+'">'+(setupMode?'<span style="font-size:1.4rem">✓</span> '+T('setup_done'):'<span style="font-size:1.4rem">🏗️</span> '+T('setup_mode'))+'</button></div></div>';
 h+=`<div class="main" role="main"><div class="bsec">`;
 {const _aiCapHtml=capturedPiecesHtml(gameState.board,oppC,playerColor);h+=`<div class="pbar" id="ai-bar" role="status" aria-label="AI" style="flex-wrap:wrap"><span class="pico">${playerColor==='white'?'<span style="color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55)">♚&#xFE0E;</span>':'<span style="color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55)">♔&#xFE0E;</span>'}</span><div style="flex:1;min-width:0;display:flex;flex-direction:column"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><div class="pname">${T('ai_opponent')}</div><div class="pbar-sub">${getEffectiveAILevel()===8?T('manual_config'):getEffectiveAILevel()===7?'SL':('Lv.'+getEffectiveAILevel())}</div>${gameState.currentTurn!==playerColor&&!gameOver&&!isAIThinking?'<span class="tind">'+T('waiting')+'</span>':''}${isAIThinking?'<span class="tind">'+(_aiBarInfo||T('thinking'))+'</span>':''}</div>${_aiCapHtml}<div id="ai-ponder-info" style="display:flex;justify-content:flex-end;text-align:right;font-size:.65rem;color:var(--muted);font-family:monospace,system-ui,-apple-system,sans-serif;letter-spacing:.5px;padding-top:2px;line-height:1.3;min-height:1.3em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;flex:0 0 auto">${(!isAIThinking&&!isHintLoading&&!hintText&&_ponderMoveSAN&&_ponderBarInfo&&!gameOver&&!setupMode&&!reviewMode)?('🔮 '+_esc(_ponderMoveSAN)+' '+_esc(_ponderBarInfo)):''}</div></div></div>`;}
 h+=`<div class="flbl" style="margin-left:28px">${(flip?'hgfedcba':'abcdefgh').split('').map(f=>`<span style="width:${CELL}px">${f}</span>`).join('')}</div>`;
@@ -879,8 +889,15 @@ if(ecoInfo){h+=`<div class="card"><div class="card-t"><span class="ico">📖</sp
 
 // Move history
 h+=`<div class="card"><div class="card-t"><span class="ico">📜</span>${T('move_history')}<button class="btn" style="margin-left:auto;padding:3px 10px;font-size:.7rem;min-height:24px" onclick="copyMoveHistory()" title="${T('pgn_copied')||'Copy PGN'}">📝 PGN</button><button class="btn" style="margin-left:4px;padding:3px 10px;font-size:.7rem;min-height:24px" onclick="exportPGNToFile()" title="${T('export_pgn')||'Export PGN to file'}">💾</button><button class="btn" style="margin-left:4px;padding:3px 10px;font-size:.7rem;min-height:24px" onclick="openStatsPage()" title="${T('stats')}">📊</button><div class="toggle" style="margin-left:6px;padding:2px 6px;font-size:.65rem" onclick="showVariations=!showVariations;HapticManager.fire(showVariations?'TOGGLE_ON':'TOGGLE_OFF');render()"><span>${T('variation_toggle')}</span><div class="toggle-sw${showVariations?' on':''}" style="width:30px;height:16px"></div></div></div><div class="mlist">`;
-const pairs=[];for(let i=0;i<moveRecords.length;i+=2){pairs.push({n:Math.floor(i/2)+1,w:moveRecords[i],b:moveRecords[i+1]})}
-for(const pr of pairs){h+='<div class="mrow"><span class="mnum">'+pr.n+'.</span>';if(pr.w){h+='<span class="mw" onclick="if(!isAIThinking&&!setupMode&&!reviewMode){showNewGameDialog=false;enterReview();reviewGoTo('+(pr.n*2-1)+');event.stopPropagation()}">'+_esc(pr.w.notation)+(pr.w.time?'<span style="font-size:.6rem;color:var(--muted);margin-left:2px">'+pr.w.time+'s</span>':'')+'</span>';if(showVariations&&pr.w&&pr.w.variations&&pr.w.variations.length>0){h+=_formatVariationGroups(pr.w.variations,pr.n,true);}}else if(pr.w===null){h+='<span class="mw" style="opacity:.55;font-style:italic" title="'+T('white_concedes_move')+'">...</span>';}if(pr.b){h+='<span class="mb" onclick="if(!isAIThinking&&!setupMode&&!reviewMode){showNewGameDialog=false;enterReview();reviewGoTo('+(pr.n*2)+');event.stopPropagation()}">'+_esc(pr.b.notation)+(pr.b.time?'<span style="font-size:.6rem;color:var(--muted);margin-left:2px">'+pr.b.time+'s</span>':'')+'</span>';if(showVariations&&pr.b&&pr.b.variations&&pr.b.variations.length>0){h+=_formatVariationGroups(pr.b.variations,pr.n,false);}}h+='</div>'}
+// v1.0.3: Use _importedStartMoveNum as the move-pair number offset, so PGN
+// imports with [FEN "... w ... 4"] display "4. <move> 5. <move>" instead of
+// "1. <move> 2. <move>". Defaults to 1 (standard initial position).
+const _mvStartOffset=(typeof _importedStartMoveNum!=='undefined'&&_importedStartMoveNum>0)?_importedStartMoveNum:1;
+// v1.0.3: pairs store the moveRecords index `i` so the onclick handlers can
+// compute the correct reviewStep (= i + 1, since reviewStates[0] is the
+// starting position) regardless of the FEN-based move-number offset.
+const pairs=[];for(let i=0;i<moveRecords.length;i+=2){pairs.push({n:Math.floor(i/2)+_mvStartOffset,wi:i,bi:i+1,w:moveRecords[i],b:moveRecords[i+1]})}
+for(const pr of pairs){h+='<div class="mrow"><span class="mnum">'+pr.n+'.</span>';if(pr.w){h+='<span class="mw" onclick="if(!isAIThinking&&!setupMode&&!reviewMode){showNewGameDialog=false;enterReview();reviewGoTo('+(pr.wi+1)+');event.stopPropagation()}">'+_esc(pr.w.notation)+(pr.w.time?'<span style="font-size:.6rem;color:var(--muted);margin-left:2px">'+pr.w.time+'s</span>':'')+'</span>';if(showVariations&&pr.w&&pr.w.variations&&pr.w.variations.length>0){h+=_formatVariationGroups(pr.w.variations,pr.n,true);}}else if(pr.w===null){h+='<span class="mw" style="opacity:.55;font-style:italic" title="'+T('white_concedes_move')+'">...</span>';}if(pr.b){h+='<span class="mb" onclick="if(!isAIThinking&&!setupMode&&!reviewMode){showNewGameDialog=false;enterReview();reviewGoTo('+(pr.bi+1)+');event.stopPropagation()}">'+_esc(pr.b.notation)+(pr.b.time?'<span style="font-size:.6rem;color:var(--muted);margin-left:2px">'+pr.b.time+'s</span>':'')+'</span>';if(showVariations&&pr.b&&pr.b.variations&&pr.b.variations.length>0){h+=_formatVariationGroups(pr.b.variations,pr.n,false);}}h+='</div>'}
 if(!pairs.length)h+=`<div style="color:#64748b;font-size:.85rem">${T('no_moves')}</div>`;
 h+=`</div></div>`;
 // Tips
@@ -910,7 +927,7 @@ if(showAboutPage){
 // Load AGPL v3 SVG via AndroidBridge as base64 (CSP-compliant)
 let _gplSvgSrc='';
 try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.loadAssetAsBase64){const b64=AndroidBridge.loadAssetAsBase64('AGPLv3_Logo.svg');if(b64)_gplSvgSrc='data:image/svg+xml;base64,'+b64;}}catch(e){}
-h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="About"><div class="dlg" style="max-width:460px"><h2>${T('about_title')}</h2><div class="dlg-sec"><div class="crow"><span class="lb">${T('about_app')}</span><span class="vl">${T('app_name')} v1.0.2</span></div><div class="crow"><span class="lb">${T('about_engine')}</span><span class="vl">Stockfish 18 (arm64-v8a-dotprod)</span></div><div class="crow"><span class="lb">${T('about_platform')}</span><span class="vl">Android arm64-v8a</span></div></div><div class="dlg-sec"><h3>${T('copyright_license')}</h3>`+(_gplSvgSrc?`<div style="text-align:center;margin-bottom:10px"><img src="${_gplSvgSrc}" alt="AGPL v3 Logo" style="width:120px;height:auto;opacity:.9" /></div>`:'')+`<div style="font-size:.75rem;color:var(--text);line-height:1.6"><p style="margin-bottom:8px">${T('about_copyright')}</p><p style="margin-bottom:8px">${T('about_source_code')}</p><p style="margin-bottom:8px">${T('about_agpl')} <a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank">GNU AGPL v3</a>${T('about_agpl_desc')}</p><p style="margin-bottom:8px">${T('about_droidfish')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank">GPL v3</a>${T('about_droidfish_desc')}</p><p style="margin-bottom:8px">${T('about_stockfish')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank">GPL v3</a> ${T('about_gplv3')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_disclaimer')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_ai')}</p></div></div><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="showAboutPage=false;render()" style="flex:1;justify-content:center">${T('close')}</button></div></div></div>`;}
+h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="About"><div class="dlg" style="max-width:460px"><h2>${T('about_title')}</h2><div class="dlg-sec"><div class="crow"><span class="lb">${T('about_app')}</span><span class="vl">${T('app_name')} v1.0.3</span></div><div class="crow"><span class="lb">${T('about_engine')}</span><span class="vl">Stockfish 18 (arm64-v8a-dotprod)</span></div><div class="crow"><span class="lb">${T('about_platform')}</span><span class="vl">Android arm64-v8a</span></div></div><div class="dlg-sec"><h3>${T('copyright_license')}</h3>`+(_gplSvgSrc?`<div style="text-align:center;margin-bottom:10px"><img src="${_gplSvgSrc}" alt="AGPL v3 Logo" style="width:120px;height:auto;opacity:.9" /></div>`:'')+`<div style="font-size:.75rem;color:var(--text);line-height:1.6"><p style="margin-bottom:8px">${T('about_copyright')}</p><p style="margin-bottom:8px">${T('about_source_code')}</p><p style="margin-bottom:8px">${T('about_agpl')} <a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank">GNU AGPL v3</a>${T('about_agpl_desc')}</p><p style="margin-bottom:8px">${T('about_droidfish')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank">GPL v3</a>${T('about_droidfish_desc')}</p><p style="margin-bottom:8px">${T('about_stockfish')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank">GPL v3</a> ${T('about_gplv3')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_disclaimer')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_ai')}</p></div></div><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="showAboutPage=false;render()" style="flex:1;justify-content:center">${T('close')}</button></div></div></div>`;}
 // Import dialog — paste FEN, paste PGN, or select PGN file
 if(showImportDialog){
 h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="${T('import_title')}" onclick="if(event.target===this){showImportDialog=false;render()}"><div class="dlg" style="max-width:420px"><h2>${T('import_title')}</h2><div class="dlg-sec" style="gap:10px;display:flex;flex-direction:column">
@@ -932,31 +949,50 @@ if(!rs){reviewMode=false;render();return}
 const rBoard=rs.state.board;const rLast=rs.lastMove;
 h+='<div class="review-overlay">';
 h+=`<div class="review-hdr"><h2>${T('review_analysis')}</h2><div style="display:flex;gap:6px;align-items:center"><div class="toggle" style="padding:2px 6px;font-size:.65rem" onclick="showVariations=!showVariations;HapticManager.fire(showVariations?'TOGGLE_ON':'TOGGLE_OFF');render()"><span>${T('variation_toggle')}</span><div class="toggle-sw${showVariations?' on':''}" style="width:30px;height:16px"></div></div><button class="btn" onclick="copyReviewPGN()" title="${T('copy_review_pgn')}">📝 PGN</button><button class="btn" onclick="exportPGNToFile()" title="${T('export_pgn')||'Export PGN to file'}">💾</button><button class="btn" onclick="showCtrlMap=!showCtrlMap;cachedCtrlKey=&quot;&quot;;render()" title="${T('ctrl_range')}">${showCtrlMap?'🌈':'🌗'}</button><button class="btn" onclick="copyReviewFEN()" title="${T('copy_review_fen')}">📝 FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="${T('import_label')}">🗃️</button><button class="btn" onclick="openStatsPage()" title="${T('stats')}">📊</button><button class="btn" onclick="exitReview()">${T('return_game')}</button></div></div>`;
-h+='<div class="review-body">';
-// P0 FIX: Wrap board + controls in .review-left for proper landscape flex layout
-h+='<div class="review-left">';
-// Calculate REVIEW_CELL dynamically based on available viewport height.
-// In landscape review mode, the board + eval bar + slider + chart + buttons must ALL fit
-// within the viewport height. Previously, REVIEW_CELL=CELL*0.8 was too large, causing
-// the chart to be pushed off-screen or invisible. Now we calculate the max cell size
-// that leaves enough room for the chart (minimum 40px) and other controls (~160px total).
+// v1.0.3 FIX: Move _rvCell calculation BEFORE its first use (the --rv-board-w
+// CSS variable on .review-body below). Previously, _rvCell was declared with
+// `let` on line 944 but referenced on line 935 — causing a ReferenceError
+// (temporal dead zone) when entering review mode.
 const _isLandscapeReview = window.innerWidth > window.innerHeight;
 let _rvCell = REVIEW_CELL; // Default from game-logic.js
 if (_isLandscapeReview) {
-  // OPT: In landscape, maximize board size while ensuring chart + controls fit.
-  // Available height = viewport height - review header (~28px).
-  // Control budget: eval bar(~16px) + slider(~20px) + step label(~12px) + chart(min 30px)
-  // + toggle row(~16px) + nav buttons(~20px) + analyze button(~22px) + gaps(~16px) = ~152px.
-  const _rvAvailH = window.innerHeight - 28;
-  const _rvCtrlBudget = 152;
-  const _rvMaxCellH = Math.floor((_rvAvailH - _rvCtrlBudget) / 8);
-  // Width: Use up to 45% of viewport width for the board (was 50%), leaving more room
-  // for the moves list. The board doesn't need to be extremely large in landscape review.
-  const _rvMaxCellW = Math.floor((Math.min(window.innerWidth * 0.45, 360)) / 8);
-  _rvCell = Math.max(22, Math.min(_rvMaxCellH, _rvMaxCellW, REVIEW_CELL));
+  // v1.0.3-p7 redesign: TWO-LAYER SCROLL. Board width is ALWAYS > move-list
+  // width. Board takes ~60% of viewport width, move list takes ~40%. Together
+  // they fill 100% of viewport width edge-to-edge.
+  //
+  // v1.0.3-p7: the board is sized to 60% of viewport width (so board > moves),
+  // NOT capped by viewport height. If the board is taller than the viewport,
+  // the user scrolls the body (layer 1) to see the board's bottom edge + the
+  // chart + controls. This is the "two-layer scroll" design the user requested:
+  //   - Layer 1 (body scroll): reveals chart, slider, eval, nav, analyze (and
+  //     the board's bottom edge if the board is taller than the viewport).
+  //   - Layer 2 (move list independent scroll): scrolls the move list without
+  //     affecting the board.
+  //
+  // We do NOT cap by REVIEW_CELL here — REVIEW_CELL is sized for the main-game
+  // layout (which reserves width for the side panel) and would unnecessarily
+  // limit the review board to a small size.
+  const _rvMaxCellW = Math.floor((window.innerWidth * 0.60) / 8);
+  _rvCell = Math.max(22, _rvMaxCellW);
 }
-h+='<div class="review-board">';
-h+='<div class="bgrid" style="grid-template-columns:repeat(8,'+_rvCell+'px);grid-template-rows:repeat(8,'+_rvCell+'px)">';
+// v1.0.3 patch: new DOM structure for landscape — .review-top (board+moves) +
+// .review-bottom (chart+controls full width). In portrait, fall back to the
+// original stacked layout (.review-left with everything inline, .review-moves below).
+if(_isLandscapeReview){
+  h+='<div class="review-body" style="--rv-board-w:'+(_rvCell*8)+'px;--rv-board-h:'+(_rvCell*8)+'px">';
+  h+='<div class="review-top">';
+  // .review-left holds ONLY the board (no inline controls — they moved to .review-bottom)
+  h+='<div class="review-left">';
+  h+='<div class="review-board">';
+  h+='<div class="bgrid" style="grid-template-columns:repeat(8,'+_rvCell+'px);grid-template-rows:repeat(8,'+_rvCell+'px)">';
+}else{
+  // Portrait: original stacked layout. review-body is vertical, review-left holds
+  // everything (board + eval + slider + chart + nav), review-moves is below.
+  h+='<div class="review-body" style="--rv-board-w:'+(_rvCell*8)+'px;--rv-board-h:'+(_rvCell*8)+'px">';
+  h+='<div class="review-left">';
+  h+='<div class="review-board">';
+  h+='<div class="bgrid" style="grid-template-columns:repeat(8,'+_rvCell+'px);grid-template-rows:repeat(8,'+_rvCell+'px)">';
+}
 // v1.0.2: When showCtrlMap is enabled (🌈), color the review board squares with
 // the control map — same as the main board. Compute the control map for the
 // review position's board state.
@@ -1001,8 +1037,13 @@ h+='<div style="background:'+bg+';width:'+_rvCell+'px;height:'+_rvCell+'px;displ
 if(p){h+='<span class="'+(p.color==='white'?'rv-w':'rv-bk')+'" style="pointer-events:none">'+SYM[p.color][p.type]+'</span>';}
 h+='</div>';
 }}
-h+='</div>';
-h+='</div>';
+h+='</div>'; // close .bgrid
+h+='</div>'; // close .review-board
+
+// v1.0.3 patch: build the eval bar, slider, chart, nav buttons, and analyze
+// button HTML as STRINGS so they can be placed in either .review-left (portrait)
+// or .review-bottom (landscape) depending on orientation.
+
 // Rich eval display — reuse formatEval() for consistency with in-game eval bar
 const _re=formatEval();
 let _rDelta='';
@@ -1014,106 +1055,172 @@ const _rDepthStr=_sfDepth>0?'<span style="font-size:.65rem;color:var(--muted);ma
 // Build WDL string for review eval bar (same as main eval bar)
 let _rWdlStr='';
 if(_sfWdlW>=0&&_sfWdlD>=0&&_sfWdlL>=0){const _rt=_sfWdlW+_sfWdlD+_sfWdlL;const _rw=Math.round(_sfWdlW/_rt*100);const _rd=Math.round(_sfWdlD/_rt*100);const _rl=100-_rw-_rd;_rWdlStr='<span style="font-size:.65rem;color:var(--muted);margin-left:4px">('+_rw+'%W/'+_rd+'%D/'+_rl+'%L)</span>';}
-h+='<div class="ev" id="review-eval-bar" style="margin:6px 0;font-size:.85rem"><span class="ev-e">'+_re.emoji+'</span><span>'+_re.desc+'</span><span style="color:var(--muted)">('+_re.score+')</span>'+_rDepthStr+_rWdlStr+_rDelta+'</div>';
+const _rvEvalBarHTML='<div class="ev" id="review-eval-bar" style="margin:6px 0;font-size:.85rem"><span class="ev-e">'+_re.emoji+'</span><span>'+_re.desc+'</span><span style="color:var(--muted)">('+_re.score+')</span>'+_rDepthStr+_rWdlStr+_rDelta+'</div>';
+
 // Review step slider
-h+='<div style="width:100%;margin:6px 0">';
-h+='<input type="range" class="review-slider" min="0" max="' + (reviewStates.length-1) + '" value="' + reviewStep + '" style="width:100%;accent-color:#d4a017" oninput="reviewGoTo(parseInt(this.value))">';
-h+='<div style="display:flex;justify-content:space-between;font-size:.65rem;color:var(--muted)"><span>'+T('start_pos')+'</span><span>'+T('step_label')+' '+ reviewStep + ' / ' + (reviewStates.length-1) + '</span><span>'+T('end_pos')+'</span></div>';
-h+='</div>';
-// Eval trend chart
-// Use full available width — the chart container is inside .review-left
-// which takes the full width of the review body. Remove the 280px cap so the
-// chart fully utilizes the right-side space.
-// Calculate chart width based on actual container.
-// In landscape review mode, the chart is in .review-left which is narrower.
-// Use _rvCell (dynamically calculated) instead of REVIEW_CELL for board width.
+const _rvSliderHTML='<div style="width:100%;margin:6px 0">'+
+  '<input type="range" class="review-slider" min="0" max="' + (reviewStates.length-1) + '" value="' + reviewStep + '" style="width:100%;accent-color:#d4a017" oninput="reviewGoTo(parseInt(this.value))">'+
+  '<div style="display:flex;justify-content:space-between;font-size:.65rem;color:var(--muted)"><span>'+T('start_pos')+'</span><span>'+T('step_label')+' '+ reviewStep + ' / ' + (reviewStates.length-1) + '</span><span>'+T('end_pos')+'</span></div>'+
+  '</div>';
+
+// Eval trend chart — v1.0.3 patch: in landscape, the chart now lives in
+// .review-bottom which spans the FULL viewport width. This gives the chart
+// a much wider canvas (edge-to-edge) than the previous design where it was
+// squeezed under the board.
 const _isLandscapeTrend = window.innerWidth > window.innerHeight;
 const _boardWidthPx = _rvCell * 8;
-// Primary: use board width (always reliable). Fallback: clientWidth if available and non-zero.
-const _trendContainer = document.querySelector('.review-left');
-const _containerW = (_trendContainer && _trendContainer.clientWidth > 40) ? _trendContainer.clientWidth : 0;
-const _estimatedTrendW = _isLandscapeTrend
-  ? Math.max(120, (_containerW > 40 ? _containerW : _boardWidthPx) - 12)
-  : Math.max(120, (_containerW > 40 ? _containerW : Math.min(window.innerWidth - 48, 400)) - 12);
-const _trendW = _estimatedTrendW > 0 ? _estimatedTrendW : 300; // Fallback to 300px
-// Dynamic chart height based on actual available space after board and controls.
-// Uses _rvCell (dynamically sized for landscape) instead of REVIEW_CELL.
-// Board = 8*_rvCell, controls ~90px (eval + slider + buttons). Remaining for chart.
-const _landscapeAvailH = Math.max(0, window.innerHeight - 30 - (8 * _rvCell) - 100);
+// v1.0.3-p12: in BOTH portrait and landscape, use FULL viewport width for
+// the chart (minus 12px for container padding). Previously portrait was
+// capped at min(viewportW-48, 400)-12 which wasted horizontal space.
+const _estimatedTrendW = Math.max(120, window.innerWidth - 12);
+const _trendW = _estimatedTrendW > 0 ? _estimatedTrendW : 300;
+// v1.0.3 patch: in landscape, the chart gets ~40% of viewport height (generous).
+// In portrait, same as before (~120px max).
 const _trendH = _isLandscapeTrend
-  ? Math.max(40, Math.min(120, _landscapeAvailH))
+  ? Math.max(60, Math.min(180, Math.floor((window.innerHeight - 28) * 0.35)))
   : Math.max(40, Math.min(120, window.innerHeight - 154));
 const _trendSVG = _buildEvalTrendSVG(_trendW, _trendH);
+let _rvChartHTML='';
 if (_trendSVG) {
-  // Toggle row above chart (left-aligned, independent of chart SVG)
-  h+='<div style="display:flex;justify-content:flex-start;padding:0 4px">';
-  h+='<div class="toggle" style="font-size:.6rem;padding:2px 4px" onclick="_reviewEvalGlobal=!_reviewEvalGlobal;HapticManager.fire(_reviewEvalGlobal?\'TOGGLE_ON\':\'TOGGLE_OFF\');render()"><span>'+T('chart_global')+'</span><div class="toggle-sw'+(_reviewEvalGlobal?' on':'')+'" style="width:28px;height:16px"><div style="position:absolute;top:1px;left:'+(_reviewEvalGlobal?'13px':'1px')+';width:12px;height:12px;border-radius:50%;background:'+(_reviewEvalGlobal?'#1a0a0a':'var(--accent2)')+';transition:all .3s;box-shadow:0 1px 4px rgba(0,0,0,.5)"></div></div></div>';
-  h+='</div>';
-  h+='<div class="review-chart" style="width:100%;height:'+_trendH+'px;margin:4px 0;background:#1a0a0a;border:1px solid var(--border);border-radius:4px;padding:2px;overflow:hidden">';
-  h+=_trendSVG;
-  h+='</div>';
+  _rvChartHTML+='<div style="display:flex;justify-content:flex-start;padding:0 4px">';
+  _rvChartHTML+='<div class="toggle" style="font-size:.6rem;padding:2px 4px" onclick="_reviewEvalGlobal=!_reviewEvalGlobal;HapticManager.fire(_reviewEvalGlobal?\'TOGGLE_ON\':\'TOGGLE_OFF\');render()"><span>'+T('chart_global')+'</span><div class="toggle-sw'+(_reviewEvalGlobal?' on':'')+'" style="width:28px;height:16px"><div style="position:absolute;top:1px;left:'+(_reviewEvalGlobal?'13px':'1px')+';width:12px;height:12px;border-radius:50%;background:'+(_reviewEvalGlobal?'#1a0a0a':'var(--accent2)')+';transition:all .3s;box-shadow:0 1px 4px rgba(0,0,0,.5)"></div></div></div>';
+  _rvChartHTML+='</div>';
+  _rvChartHTML+='<div class="review-chart" style="width:100%;height:'+_trendH+'px;margin:4px 0;background:#1a0a0a;border:1px solid var(--border);border-radius:4px;padding:2px;overflow:hidden">';
+  _rvChartHTML+=_trendSVG;
+  _rvChartHTML+='</div>';
 }
-h+='<div style="display:flex;gap:4px;margin-top:6px;flex-wrap:wrap">';
-h+='<button class="btn btn-d" onclick="reviewGoTo(0)">⏮</button>';
-h+='<button class="btn btn-d" onclick="reviewGoTo(Math.max(0,reviewStep-1))">◀</button>';
-h+='<button class="btn btn-d" onclick="reviewGoTo(Math.min(reviewStates.length-1,reviewStep+1))">▶</button>';
-h+='<button class="btn btn-d" onclick="reviewGoTo(reviewStates.length-1)">⏭</button>';
-h+='</div>';
+
+// Nav buttons — v1.0.3 patch: wrapped in .review-nav for landscape stretching
+const _rvNavHTML='<div class="review-nav" style="display:flex;gap:4px;margin-top:6px">'+
+  '<button class="btn btn-d" onclick="reviewGoTo(0)">⏮</button>'+
+  '<button class="btn btn-d" onclick="reviewGoTo(Math.max(0,reviewStep-1))">◀</button>'+
+  '<button class="btn btn-d" onclick="reviewGoTo(Math.min(reviewStates.length-1,reviewStep+1))">▶</button>'+
+  '<button class="btn btn-d" onclick="reviewGoTo(reviewStates.length-1)">⏭</button>'+
+  '</div>';
+
 // Analyze all steps button
 const _cachedCount=_reviewEvalCache.size;
 const _totalSteps=reviewStates.length;
 const _allCached=_cachedCount>=_totalSteps;
-h+='<button class="btn" style="margin-top:4px;width:100%;font-size:.7rem;min-height:28px" onclick="reviewAnalyzeAll()">'+(_allCached?T('all_analyzed'):(T('analyze_all_steps')+' '+_totalSteps+(_cachedCount>0?' ('+_cachedCount+'/'+_totalSteps+')':'')))+'</button>';
-h+='</div>'; // Close review-left — review-moves will be a sibling, not child
-// Build a set of critical move steps for quick lookup
-const _criticalSteps=new Set(reviewCritical.map(c=>c.step));
-const _criticalReasons=new Map();reviewCritical.forEach(c=>_criticalReasons.set(c.step,c.reason));
-h+='<div class="review-moves" id="reviewMovesList">';
-for(let i=0;i<moveRecords.length;i++){
-const mr=moveRecords[i];const isW=i%2===0;const moveNum=Math.floor(i/2)+1;
-// v1.0.2 FIX: null placeholder (black-to-move opening) — render as a non-interactive
-// "..." marker, skip eval/variations logic, but keep index alignment with reviewStates.
-if(mr===null){
-  h+='<div class="rmv-block" style="opacity:.5" data-step="'+(i+1)+'"><span class="rmv-num">'+(isW?moveNum+'.':'')+'</span><div class="rmv-detail"><span class="rmv-notation" style="font-style:italic">...</span></div></div>';
-  continue;
+const _rvAnalyzeHTML='<button class="btn" style="margin-top:4px;width:100%;font-size:.7rem;min-height:28px" onclick="reviewAnalyzeAll()">'+(_allCached?T('all_analyzed'):(T('analyze_all_steps')+' '+_totalSteps+(_cachedCount>0?' ('+_cachedCount+'/'+_totalSteps+')':'')))+'</button>';
+
+if(_isLandscapeReview){
+  // Landscape: close .review-left (board only), then .review-moves, then .review-top.
+  // Open .review-bottom with chart + controls (full width, edge-to-edge).
+  h+='</div>'; // close .review-left
+  // Build a set of critical move steps for quick lookup
+  const _criticalSteps=new Set(reviewCritical.map(c=>c.step));
+  const _criticalReasons=new Map();reviewCritical.forEach(c=>_criticalReasons.set(c.step,c.reason));
+  h+='<div class="review-moves" id="reviewMovesList">';
+  // v1.0.3: Use _importedStartMoveNum offset for move-pair display numbering.
+  const _rvMvStartOffset=(typeof _importedStartMoveNum!=='undefined'&&_importedStartMoveNum>0)?_importedStartMoveNum:1;
+  for(let i=0;i<moveRecords.length;i++){
+    const mr=moveRecords[i];const isW=i%2===0;const moveNum=Math.floor(i/2)+_rvMvStartOffset;
+    if(mr===null){
+      h+='<div class="rmv-block" style="opacity:.5" data-step="'+(i+1)+'"><span class="rmv-num">'+(isW?moveNum+'.':'')+'</span><div class="rmv-detail"><span class="rmv-notation" style="font-style:italic">...</span></div></div>';
+      continue;
+    }
+    const isAct=reviewStep===i+1;
+    const isCritical=_criticalSteps.has(i+1);
+    const criticalFlag=isCritical?' style="border-left:3px solid var(--accent2);padding-left:7px"':'';
+    h+='<div class="rmv-block'+(isAct?' act':'')+'" onclick="reviewGoTo('+(i+1)+')" data-step="'+(i+1)+'"'+criticalFlag+'>';
+    h+='<span class="rmv-num">'+(isW?moveNum+'.':'')+'</span>';
+    h+='<div class="rmv-detail"><span class="rmv-notation">'+_esc(mr.notation)+'</span>';
+    if(isCritical&&_criticalReasons.has(i+1)){h+='<span style="font-size:.65rem;color:var(--accent);display:block;margin-top:1px">'+_criticalReasons.get(i+1)+'</span>';}
+    if(showVariations&&mr.variations&&mr.variations.length>0){h+=_formatVariationGroups(mr.variations,moveNum,isW);}
+    const _mvEval=_reviewEvalCache.peek(i+1);
+    const _prevMvEval=_reviewEvalCache.peek(i);
+    if(_mvEval!=null&&_prevMvEval!=null){
+      h+=_formatEvalDelta(_mvEval.eval,_prevMvEval.eval,'.6rem');
+      const _mvDelta=_mvEval.eval-(_prevMvEval?_prevMvEval.eval:0);
+      const _isMoverWhite=(i%2)===0;
+      const _mcls=_classifyMove(_mvDelta,_isMoverWhite);
+      h+=`<span style="font-size:.6rem;font-weight:700;color:${_esc(_mcls.color)};margin-left:4px">${_esc(_mcls.label)}</span>`;
+    }
+    h+='</div></div>';
+  }
+  h+='</div>'; // close .review-moves
+  h+='</div>'; // close .review-top
+  // .review-bottom: full-width chart + controls, edge-to-edge
+  h+='<div class="review-bottom">';
+  h+=_rvEvalBarHTML;
+  h+=_rvSliderHTML;
+  h+=_rvChartHTML;
+  h+=_rvNavHTML;
+  h+=_rvAnalyzeHTML;
+  h+='</div>'; // close .review-bottom
+}else{
+  // Portrait: original stacked layout — everything in .review-left, then .review-moves below.
+  h+=_rvEvalBarHTML;
+  h+=_rvSliderHTML;
+  h+=_rvChartHTML;
+  h+=_rvNavHTML;
+  h+=_rvAnalyzeHTML;
+  h+='</div>'; // close .review-left
+  // Build a set of critical move steps for quick lookup
+  const _criticalSteps=new Set(reviewCritical.map(c=>c.step));
+  const _criticalReasons=new Map();reviewCritical.forEach(c=>_criticalReasons.set(c.step,c.reason));
+  h+='<div class="review-moves" id="reviewMovesList">';
+  // v1.0.3: Use _importedStartMoveNum offset for move-pair display numbering.
+  const _rvMvStartOffset=(typeof _importedStartMoveNum!=='undefined'&&_importedStartMoveNum>0)?_importedStartMoveNum:1;
+  for(let i=0;i<moveRecords.length;i++){
+    const mr=moveRecords[i];const isW=i%2===0;const moveNum=Math.floor(i/2)+_rvMvStartOffset;
+    if(mr===null){
+      h+='<div class="rmv-block" style="opacity:.5" data-step="'+(i+1)+'"><span class="rmv-num">'+(isW?moveNum+'.':'')+'</span><div class="rmv-detail"><span class="rmv-notation" style="font-style:italic">...</span></div></div>';
+      continue;
+    }
+    const isAct=reviewStep===i+1;
+    const isCritical=_criticalSteps.has(i+1);
+    const criticalFlag=isCritical?' style="border-left:3px solid var(--accent2);padding-left:7px"':'';
+    h+='<div class="rmv-block'+(isAct?' act':'')+'" onclick="reviewGoTo('+(i+1)+')" data-step="'+(i+1)+'"'+criticalFlag+'>';
+    h+='<span class="rmv-num">'+(isW?moveNum+'.':'')+'</span>';
+    h+='<div class="rmv-detail"><span class="rmv-notation">'+_esc(mr.notation)+'</span>';
+    if(isCritical&&_criticalReasons.has(i+1)){h+='<span style="font-size:.65rem;color:var(--accent);display:block;margin-top:1px">'+_criticalReasons.get(i+1)+'</span>';}
+    if(showVariations&&mr.variations&&mr.variations.length>0){h+=_formatVariationGroups(mr.variations,moveNum,isW);}
+    const _mvEval=_reviewEvalCache.peek(i+1);
+    const _prevMvEval=_reviewEvalCache.peek(i);
+    if(_mvEval!=null&&_prevMvEval!=null){
+      h+=_formatEvalDelta(_mvEval.eval,_prevMvEval.eval,'.6rem');
+      const _mvDelta=_mvEval.eval-(_prevMvEval?_prevMvEval.eval:0);
+      const _isMoverWhite=(i%2)===0;
+      const _mcls=_classifyMove(_mvDelta,_isMoverWhite);
+      h+=`<span style="font-size:.6rem;font-weight:700;color:${_esc(_mcls.color)};margin-left:4px">${_esc(_mcls.label)}</span>`;
+    }
+    h+='</div></div>';
+  }
+  h+='</div>'; // close .review-moves
 }
-const isAct=reviewStep===i+1;
-const isCritical=_criticalSteps.has(i+1);
-const criticalFlag=isCritical?' style="border-left:3px solid var(--accent2);padding-left:7px"':'';
-h+='<div class="rmv-block'+(isAct?' act':'')+'" onclick="reviewGoTo('+(i+1)+')" data-step="'+(i+1)+'"'+criticalFlag+'>';
-h+='<span class="rmv-num">'+(isW?moveNum+'.':'')+'</span>';
-h+='<div class="rmv-detail"><span class="rmv-notation">'+_esc(mr.notation)+'</span>';
-if(isCritical&&_criticalReasons.has(i+1)){h+='<span style="font-size:.65rem;color:var(--accent);display:block;margin-top:1px">'+_criticalReasons.get(i+1)+'</span>';}
-// Show proper variations array (🌿 line 1 = mainline prediction, 🌿 line 2+ = MultiPV).
-// Ponder is fully decoupled from move records — never appears here.
-if(showVariations&&mr.variations&&mr.variations.length>0){h+=_formatVariationGroups(mr.variations,moveNum,isW);}
-// Show per-move eval if cached
-// v1.0.2 PERF: use peek() — this is inside a render loop over all moves, so
-// refreshing LRU on every access would be wasteful.
-const _mvEval=_reviewEvalCache.peek(i+1);
-const _prevMvEval=_reviewEvalCache.peek(i);
-if(_mvEval!=null&&_prevMvEval!=null){
-  h+=_formatEvalDelta(_mvEval.eval,_prevMvEval.eval,'.6rem');
-  // Move classification label — ALWAYS from mover's perspective
-  // reviewStep parity: odd step = White moved, even step = Black moved
-  // i+1 is the reviewStep for this move (move index i corresponds to step i+1)
-  const _mvDelta=_mvEval.eval-(_prevMvEval?_prevMvEval.eval:0);
-  // v1.0.2 (qw3.7max audit): simplified — (i+1)%2===1 is mathematically
-  // equivalent to i%2===0 (i is 0-based: even index = White moved).
-  const _isMoverWhite=(i%2)===0;
-  const _mcls=_classifyMove(_mvDelta,_isMoverWhite);
-  // v1.0.2 (qw3.7max audit): use template literal + _esc() for defensive
-  // XSS protection. _mcls comes from _classifyMove (internal constants) so
-  // escaping is technically redundant now, but guards against future changes
-  // that might introduce user-controlled data into classification labels/colors.
-  h+=`<span style="font-size:.6rem;font-weight:700;color:${_esc(_mcls.color)};margin-left:4px">${_esc(_mcls.label)}</span>`;
-}
-h+='</div></div>';
-}
-h+='</div></div></div>'; // review-moves, review-body, review-overlay
-}
+h+='</div></div>'; // close .review-body, .review-overlay
+} // close if(reviewMode)
 const _wasEcoFocused=_ecoSearchFocused;if(_ecoBlurTimer){clearTimeout(_ecoBlurTimer);_ecoBlurTimer=0}
+// v1.0.3-p4 FIX: preserve the main-UI move-list (.mlist) scroll position across
+// full re-renders. app.innerHTML=h recreates the .mlist DOM element from
+// scratch, resetting its scrollTop to 0. We capture scrollTop BEFORE innerHTML
+// replacement and restore it AFTER.
+// v1.0.3-p9 FIX: also preserve the review-body (.review-body) scroll position.
+// In landscape review mode, .review-body scrolls (two-layer scroll). Every
+// render() rebuilds the DOM and resets .review-body.scrollTop to 0, yanking
+// the user back to the top. Now we capture & restore it too.
+let _savedMlistScroll=0;
+let _savedReviewBodyScroll=0;
+if(!reviewMode){
+  const _oldMlist=document.querySelector('.mlist');
+  if(_oldMlist){_savedMlistScroll=_oldMlist.scrollTop;}
+}else{
+  const _oldReviewBody=document.querySelector('.review-body');
+  if(_oldReviewBody){_savedReviewBodyScroll=_oldReviewBody.scrollTop;}
+}
 app.innerHTML=h;
+// v1.0.3-p4: restore .mlist scroll position after DOM rebuild
+if(!reviewMode&&_savedMlistScroll>0){
+  const _newMlist=document.querySelector('.mlist');
+  if(_newMlist){_newMlist.scrollTop=_savedMlistScroll;}
+}
+// v1.0.3-p9: restore .review-body scroll position after DOM rebuild
+if(reviewMode&&_savedReviewBodyScroll>0){
+  const _newReviewBody=document.querySelector('.review-body');
+  if(_newReviewBody){_newReviewBody.scrollTop=_savedReviewBodyScroll;}
+}
 // Invalidate all cached DOM refs since DOM was rebuilt by full render
 _cachedBwrap=null;_cachedSvgEl=null;_cachedSvgLines=[];_cachedArrowKey='';_cachedCtrlCard=null;
 // Do NOT reset _prevSelSq/_prevLegalSet to null/empty after render().
@@ -1136,13 +1243,36 @@ _prevLegalSet=new Set();if(selectedSquare){for(const m of legalMvs)_prevLegalSet
 // the browser's layout/paint step.
 // Also use the module-level _rListEl cache instead of getElementById on every
 // render (avoids a DOM tree walk on the scroll path).
-if(reviewMode){
+//
+// v1.0.3-p6: only scroll when reviewStep CHANGES, not on every render.
+// v1.0.3-p9: scroll ONLY the move-list container, NOT the review-body.
+// v1.0.3-p11: use getBoundingClientRect for robust offset calculation —
+//   the offsetParent walk (p10) failed in portrait because .review-moves
+//   has position:static, so .rmv-block's offsetParent skips it and jumps
+//   to .review-overlay (position:fixed). getBoundingClientRect gives the
+//   absolute position of both elements; their difference is the scroll
+//   offset within the container, regardless of CSS positioning.
+if(reviewMode && reviewStep !== _lastReviewStepScrolled){
+  _lastReviewStepScrolled = reviewStep;
   requestAnimationFrame(function(){
     requestAnimationFrame(function(){
       const _rList=_rListEl||document.getElementById('reviewMovesList');
       if(_rList){
         const _rAct=_rList.querySelector('.rmv-block.act');
-        if(_rAct)_rAct.scrollIntoView({block:'center',behavior:'auto'});
+        if(_rAct){
+          // v1.0.3-p11: use getBoundingClientRect to compute the active
+          // element's position relative to the scroll container. This works
+          // regardless of offsetParent / position CSS, in both portrait
+          // and landscape.
+          const _rListRect=_rList.getBoundingClientRect();
+          const _rActRect=_rAct.getBoundingClientRect();
+          // The active element's top relative to the container's content top
+          // = (active's absolute top) - (container's absolute top) + current scrollTop
+          const _offsetTop = _rActRect.top - _rListRect.top + _rList.scrollTop;
+          // Center the active move within the container
+          const _target = _offsetTop - (_rList.clientHeight/2) + (_rAct.offsetHeight/2);
+          _rList.scrollTop = Math.max(0, _target);
+        }
       }
     });
   });
@@ -1825,6 +1955,18 @@ function _exitSetupImpl(){// When finishing setup mode, reset the game to use th
 // - lastMove is cleared
 // - _redoStack is cleared
 // This ensures the user starts fresh from the setup position.
+// v1.0.3: Cache the setup position FEN for PGN export with [FEN]/[SetUp] headers.
+if(typeof _setupFEN!=='undefined'&&typeof generateFEN==='function'){
+  _setupFEN=generateFEN(gameState);
+}
+// v1.0.3: Track the setup position's starting move number for display.
+// When the user places pieces in setup mode, gameState.fullMoveNumber is
+// preserved from the FEN-derived or default value (typically 1). Setting
+// this explicitly ensures the move list uses correct numbering even when
+// the user starts from a FEN with fullMoveNumber>1.
+if(typeof _importedStartMoveNum!=='undefined'){
+  _importedStartMoveNum=(gameState.fullMoveNumber&&gameState.fullMoveNumber>0)?gameState.fullMoveNumber:1;
+}
 moveRecords=[];
 stateHistory=[{state:cloneS(gameState),selectedSquare:null,legalMvs:[],moveRecords:[],lastMove:null,gameOver:null}];
 lastMove=null;
@@ -1952,6 +2094,10 @@ if(piece){
 }
 }
 reviewStep=reviewStates.length-1;
+// v1.0.3-p6: reset _lastReviewStepScrolled so the first render after entering
+// review mode scrolls the active move into view (rather than skipping the
+// scroll because _lastReviewStepScrolled happens to equal reviewStep).
+_lastReviewStepScrolled=-2;
 // FIX: Stop any ongoing ponder before entering review mode.
 // When entering review right after the AI makes a move, the engine might still
 // be pondering. The eval request sends "stop" then "position fen X" then "go depth 22",
@@ -2075,6 +2221,13 @@ function _startGameImpl(){
   playerColor=dlgPlayerColor;
   useBookMoves=dlgBookMoves;
   _ecoEnabled=true; // Free opening or ECO-selected — enable ECO recognition
+  // v1.0.3: Clear cached original PGN and setup FEN — new game means no imported PGN.
+  if(typeof _cachedOriginalPGN!=='undefined')_cachedOriginalPGN=null;
+  if(typeof _setupFEN!=='undefined')_setupFEN=null;
+  // v1.0.3: Reset the imported-start-move-number offset — a fresh game from the
+  // initial position starts at move 1. Subsequent ECO opening moves (if any)
+  // also start from move 1.
+  if(typeof _importedStartMoveNum!=='undefined')_importedStartMoveNum=1;
   gameState=initState();
   stateHistory=[{state:cloneS(gameState),selectedSquare:null,legalMvs:[],moveRecords:[],lastMove:null,gameOver:null}];
   moveRecords=[];
@@ -2243,15 +2396,10 @@ function reviewGoTo(step){
     requestEngineEval();
   }
   render();
-  // Scroll the active move into view — must wait for render() DOM rebuild
-  setTimeout(function(){
-    try{
-      const listEl=document.getElementById('reviewMovesList');
-      if(!listEl)return;
-      const activeEl=listEl.querySelector('.rmv-block.act');
-      if(activeEl)activeEl.scrollIntoView({block:'center',behavior:'auto'});
-    }catch(e){}
-  },50);
+  // v1.0.3-p6: removed redundant setTimeout scrollIntoView — renderInternal()
+  // now handles the scroll via the _lastReviewStepScrolled guard, which only
+  // fires when reviewStep changes. The old setTimeout(50) here was redundant
+  // and could fight with the renderInternal scroll, causing scroll jank.
 }
 
 /**

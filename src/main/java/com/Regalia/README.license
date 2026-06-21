@@ -121,3 +121,27 @@ v1.0.2 bug-fix updates to existing files:
         falling back to system default.
       - Removed dead `en` computation block in updateNotification() (read
         from wrong prefs file, value never used).
+
+v1.0.3 changes:
+  - No Java source files were modified in v1.0.3. All v1.0.3 feature work
+    is in stats.html (assets/) and the chess.src/*.js modules (rebuilt into
+    chess.html). The StatsActivity.java bridge methods used by the new
+    stats.html features (getStatsPayload, closeStatsPage, performHaptic,
+    exportStatsHTML, statsSelectPGNFile, statsRequestReview) were already
+    present from v1.0.2.
+  - AndroidManifest.xml: versionCode 102 → 103, versionName "1.0.2" → "1.0.3".
+
+v1.0.3 patch changes (version number unchanged — still v1.0.3 / versionCode 103):
+  - StockfishNative.java (GPL v3):
+      * ENGINE_VERSION constant updated from "v1.0.2" → "v1.0.3" to match
+        the application version. This string is included in engine config
+        export comments (`# Version: v1.0.3`) and was stale.
+  - MainActivity.java (AGPL v3):
+      * VERSION constant updated from "v1.0.2" → "v1.0.3" to match the
+        application version. This string is displayed in the app title
+        bar (`Regalia v1.0.3`) and was stale.
+  - ChessApp.java (AGPL v3):
+      * Crash-protection startup log message updated from
+        "crash protection active (v1.0.2)" → "crash protection active (v1.0.3)"
+        to match the application version.
+  - No other Java source files were modified in this patch.

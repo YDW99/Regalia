@@ -229,6 +229,25 @@ public class StatsActivity extends Activity {
                     }
                 });
             }
+
+            // v1.0.3: Load an asset file as base64 — used for GPL v3 logo in export dialog
+            @JavascriptInterface
+            public String loadAssetAsBase64(String assetPath) {
+                try {
+                    java.io.InputStream is = getAssets().open(assetPath);
+                    java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
+                    byte[] buffer = new byte[4096];
+                    int len;
+                    while ((len = is.read(buffer)) != -1) {
+                        baos.write(buffer, 0, len);
+                    }
+                    is.close();
+                    return android.util.Base64.encodeToString(baos.toByteArray(), android.util.Base64.NO_WRAP);
+                } catch (Throwable e) {
+                    Log.w(TAG, "loadAssetAsBase64 failed: " + assetPath, e);
+                    return null;
+                }
+            }
         }, "AndroidBridge");
 
         // Set WebViewClient to load stats.html from assets

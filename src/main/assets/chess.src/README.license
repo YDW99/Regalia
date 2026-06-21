@@ -234,6 +234,254 @@ v1.0.2 stats.html updates (GPL v3, DroidFish-derived PGN parsing):
   - _statsPastePGN() no longer checks AndroidBridge.statsRequestImport
     (removed orphaned feature check).
 
+v1.0.3 changes (in stats.html and chess.src/*.js):
+  - ai-bridge.js: _buildPGNComment() format uses a single space as
+    separator between thinking time and eval annotation.
+    Examples: "{3.2s +0.5 略优}", "{3.2s SF18 D22 +1.0 8%W/91%D/1%L}",
+    "{3.2s}", "{+0.5 略优}" (eval only — no separator). Backward
+    compatible with the earlier em-dash format on the parsing side.
+  - game-logic.js: loading_title and built_in_only strings updated
+    from v1.0.2 → v1.0.3.
+  - ui.js: version badge (<span class="ver">v1.0.3</span>), about
+    dialog (v1.0.3), and render-error fallback page (v1.0.3) updated.
+  - index.html.tpl: <title>Regalia v1.0.3</title>.
+  - stats.html (NOT in chess.src/, lives in assets/ directly):
+      * stateToFEN(state): NEW — generates a FEN string from a game
+        state (board placement, side to move, castling, en passant,
+        halfmove clock, fullmove number).
+      * extractMoveTimes(pgnText): NEW — extracts per-move thinking
+        times from PGN comments in the {<sec>s ...} (v1.0.3),
+        {<sec>s——...} (earlier em-dash format, back-compat), and [%clk HH:MM:SS]
+        formats. Returns {usedTimes, clkTimes} arrays indexed by
+        mainline move index.
+      * formatTime(sec): NEW — human-readable time formatting
+        (e.g. "12.3s", "3m 25s", "1h 12m 30s").
+      * renderTimeChart(times): NEW — SVG bar chart of per-move
+        thinking time. White moves = white bars, Black = blue bars.
+      * renderFENPanel(effectiveParsed, selectedIdx): NEW — FEN
+        display panel below the PGN text panel. Shows the FEN of the
+        position after the selected move (mainline or variation),
+        auto-generated from the post-state. Includes a copy-to-clipboard
+        button (uses navigator.clipboard with execCommand fallback).
+      * selectVariationMove(varId, varClickedIdx): NEW — handles
+        variation-move clicks. Builds a synthetic move sequence:
+        mainline[0..mainIdxBefore-1] + variation moves[0..varClickedIdx],
+        where mainIdxBefore is the index of the mainline move that the
+        variation's first move REPLACES. The synthetic sequence is used
+        for ALL stats computation, giving per-position statistics for
+        variation lines.
+      * _variations[] array: NEW — registered by renderPGNText() as it
+        walks the PGN. Each entry has {mainIdxBefore, moves:[SAN],
+        sideAtStart}. Used by selectVariationMove() to reconstruct the
+        synthetic sequence.
+      * _variationMoves / _variationMeta: NEW state variables holding
+        the current variation selection (mutually exclusive with
+        _selectedMoveIdx for mainline selection).
+      * renderStats() Time Management section: REPLACED the v1.0.2
+        placeholder (which only counted [%clk] comments) with a
+        comprehensive analysis: total/White/Black time, avg per move,
+        slowest/fastest move, volatility (stddev), long-think count,
+        quick-move count, phase distribution (opening/midgame/endgame),
+        per-move time bar chart.
+      * render() function: now resets _variations before each render,
+        computes effectiveParsed (mainline slice, variation synthetic,
+        or full), adds a selection banner above the PGN text panel,
+        and inserts the FEN panel between PGN text and stats.
+      * Bilingual UI strings: 30+ new i18n keys added (fen_label,
+        fen_hint, fen_copy, time_*, variation_marker, select_hint,
+        select_var_hint, etc.) for the existing ↔️ Chinese/English
+        language toggle.
+      * CSS: new .fen-panel, .time-chart-bar styles; responsive
+        @media tweaks for small screens.
+
+v1.0.3 patch changes (in addition to the v1.0.3 baseline above):
+  - tablebase.js (GPL v3):
+      * importPGN() variation post-process: Type A vs Type B distinction.
+        The relocate loop now skips Type A variations (alternatives to the
+        owning move — firstMoveIsWhite matches (mi%2===0)) so they remain
+        attached to the owning move with correct move numbers. Previously
+        Type A variations were incorrectly relocated to mi+1 and mislabeled
+        as Type B continuations, producing nonsensical displays like
+        "7... hxg3 Qxh1 8.Nc3 ..." for a variation that should be
+        "7. hxg3 Qxh1 8.Nc3 ..." (White's alternative to 7.Kf2). This
+        was the root cause of app-exported PGNs with variations failing
+        to round-trip on re-import.
+      * importPGN() and _applyImportedFEN(): set the new global
+        _importedStartMoveNum from the FEN's fullMoveNumber so the move
+        list, review mode, and PGN export display correct move numbers
+        (e.g. "4. Bxf7+ Kxf7 5. Ne5" for a FEN starting at move 4,
+        instead of "1. Bxf7+ Kxf7 2. Ne5").
+      * _parsePGN() Phase 4 (cascade-failure fix): when a main-line token
+        fails to parse, push a "skipped" placeholder entry (with
+        skipped:true + skippedSAN) so moveRecords indices stay aligned
+        with PGN move numbers, AND advance the side-to-move (bump
+        fullMoveNumber if black was to move) so subsequent tokens have a
+        chance to parse. Previously, a single invalid token would leave
+        the side-to-move unchanged, causing EVERY subsequent token to
+        also fail (wrong side's move) — manifesting as "only the first N
+        moves import, the rest are silently dropped". Safety cap: 5
+        consecutive skips stops the parse. Symptom was: app-exported
+        PGNs with one illegal move imported only the prefix up to that
+        move; now all OTHER moves import with a single "—" marker where
+        the illegal move was.
+      * importPGN() replay loop: handle "skipped" placeholder moves by
+        pushing a null moveRecord (same as the black-to-move placeholder)
+        so the display layer renders a dimmed "..." marker, keeping
+        moveRecords indices aligned with PGN move numbers.
+  - ai-bridge.js (GPL v3):
+      * _buildPGNString(): uses _importedStartMoveNum as the move-pair
+        number offset so PGN exports from a FEN-started game preserve the
+        original move numbers from the FEN header.
+      * New global _importedStartMoveNum (default 1) tracks the starting
+        move number for PGN/FEN imports. Reset to 1 by startGame() and
+        exitSetup() in ui.js.
+  - ui.js (GPL v3):
+      * Move history list (main mode + review mode): move-pair numbers
+        now use _importedStartMoveNum as the offset. Click-to-review
+        onclick handlers now use the moveRecords index `i` (stored in
+        pair.wi / pair.bi) instead of computing reviewStep from pr.n,
+        so the reviewStep is correct regardless of the FEN offset.
+      * _exitSetupImpl() and _startGameImpl(): reset/set
+        _importedStartMoveNum to track the starting move number for
+        setup-mode positions and to reset to 1 for fresh games.
+      * Landscape review mode: COMPLETE REDESIGN. The old layout put
+        board + chart + controls all in .review-left (left column) with
+        the move list in .review-moves (right column). The new layout
+        splits into .review-top (board + moves, side by side) and
+        .review-bottom (chart + slider + eval + nav + analyze, full
+        width edge-to-edge). The whole .review-body scrolls vertically
+        when content overflows. Key changes:
+        - Chart now spans FULL viewport width (edge-to-edge, no gaps)
+          instead of being squeezed under the board.
+        - Chart height is ~35% of viewport height (generous).
+        - Move list width is capped at 90% of board width (always
+          narrower than the board, per user requirement).
+        - Nav buttons (⏮ ◀ ▶ ⏭) are wrapped in .review-nav with
+          flex:1 1 0 on each button so they stretch horizontally to
+          fill the full width.
+        - Board sizing: 60% of viewport height for the board+moves row,
+          65% of viewport width for the board (leaving 35% for moves).
+      * Portrait review mode: unchanged (original stacked layout).
+      * v1.0.3-p3 hotfix: fixed a syntax error introduced by v1.0.3-p2's
+        landscape review refactor — the if/else split for landscape/portrait
+        move-list rendering forgot the closing `}` for the `if(reviewMode){`
+        block, breaking the renderInternal() try/catch structure and causing
+        a SyntaxError that made the entire chess.html script fail to parse
+        (app showed a black screen on startup). Added the missing
+        `} // close if(reviewMode)` after the move-list rendering branches.
+      * v1.0.3-p4: landscape review layout — board+moves now FILL the full
+        viewport width edge-to-edge. Removed the max-width cap on .review-moves
+        (was calc(var(--rv-board-w) * 0.90)); move list now takes ALL remaining
+        width via flex:1 1 0. .review-left padding changed from 2px 4px to 0
+        so the board is flush with the screen's left edge. .review-moves
+        padding tightened to 2px 2px 2px 4px so it's flush with the right
+        edge. Board + moves together span 100% of viewport width with no
+        gap between them. Board width cap changed from 65% to 55% of viewport
+        width (move list gets ~45%). Move list scrolls vertically when
+        content overflows (overflow-y:auto on .review-moves).
+      * v1.0.3-p4: main-UI move-list scroll-position preservation. Before
+        app.innerHTML=h, capture .mlist.scrollTop; after innerHTML replacement,
+        restore it. This fixes the "move list keeps scrolling back to the top"
+        bug caused by engine search triggering render() 10-50x/sec, each time
+        rebuilding the DOM and resetting scrollTop to 0. Only runs in non-review
+        mode (review mode has its own scrollIntoView logic).
+      * v1.0.3-p5: landscape review layout — move list now has its OWN
+        INDEPENDENT scroll viewport. .review-body changed from overflow-y:auto
+        (whole-body scroll) to overflow:hidden (no body scroll). .review-top
+        changed from flex:0 0 auto to flex:1 1 0 (fills all height above
+        .review-bottom). .review-moves gets height:100% + min-height:0 so it
+        fills the row height and scrolls internally via overflow-y:auto.
+        .review-left gets height:100% + justify-content:center so the board is
+        vertically centered in the row. The board stays fixed while only the
+        move list scrolls. .review-bottom stays pinned at the bottom
+        (flex:0 0 auto, no scroll).
+      * v1.0.3-p5 audit fixes (first-principles code audit):
+        - tablebase.js: removed a buggy regex that added an extra dot to move
+          numbers (turned "1. e4" into "1.. e4"). The first regex already
+          handles "1.e4" → "1. e4" and the third handles "1 e4" → "1. e4".
+        - tablebase.js: removed dead `isCapture` computation in
+          _executeAndRecord (was never read; move.enPassant is always undefined).
+        - game-logic.js: queryECOBookMove now falls through to the level-1
+          hash index when level-3 and level-2 both miss. Previously it degraded
+          to a full ECO_OPENINGS scan, hurting ECO lookup performance for
+          3+ move openings not in the level-3 index.
+      * v1.0.3-p6: review move-list independent scroll — the REAL root cause
+        was that scrollIntoView was called on EVERY render (10-50x/sec during
+        engine analysis), yanking the move list back to the active move and
+        preventing the user from scrolling independently. Now scrollIntoView
+        only fires when reviewStep CHANGES (tracked via _lastReviewStepScrolled).
+        Also removed the redundant setTimeout(50) scrollIntoView in reviewGoTo
+        (renderInternal now handles it via the guard). enterReview resets
+        _lastReviewStepScrolled to -2 so the first render after entering review
+        mode scrolls the active move into view.
+      * v1.0.3-p7: landscape review — TWO-LAYER SCROLL design. The body
+        (.review-body) now scrolls vertically (overflow-y:auto, was overflow:
+        hidden) so the user can scroll to see the chart, slider, eval bar, nav
+        buttons, and analyze button when they don't all fit. The move list
+        (.review-moves) keeps its OWN independent scroll viewport
+        (overflow-y:auto with height = board height via --rv-board-h CSS var).
+        Board sizing: board takes 60% of viewport width (ALWAYS > move-list
+        width which gets 40%), NOT capped by REVIEW_CELL or viewport height.
+        If the board is taller than the viewport, the user scrolls the body to
+        see the board's bottom + chart + controls. Board + moves together fill
+        100% of viewport width edge-to-edge, no gap. JS sets --rv-board-h CSS
+        variable on .review-body so the move list height matches the board.
+      * v1.0.3-p8: touch-slide on the review board now scrolls the whole
+        review body. Two changes: (1) the global touchmove handler that
+        preventDefault's board touches now SKIPS the preventDefault when
+        reviewMode is true (so the browser's native scroll takes over);
+        (2) the review board's .bgrid gets touch-action:pan-y (overriding the
+        base .bgrid's touch-action:none) so vertical pans are handled by the
+        browser as scroll. Horizontal pans are still blocked. Main-game mode
+        is unaffected — board slides still don't scroll the page there.
+      * v1.0.3-p9: review-body scroll preservation — capture
+        .review-body.scrollTop before app.innerHTML=h and restore after,
+        parallel to the v1.0.3-p4 .mlist preservation. Prevents the review
+        body from yanking back to top on every render in landscape review mode.
+      * v1.0.3-p9: move-list scroll isolation — replaced
+        scrollIntoView({block:'center'}) (which scrolled ALL ancestors
+        including .review-body) with a manual scrollTop computation on the
+        move-list container only: _rList.scrollTop = _rAct.offsetTop -
+        (_rList.clientHeight/2) + (_rAct.offsetHeight/2). This preserves the
+        user's .review-body scroll position.
+      * v1.0.3-p9 audit fixes: onBestMove staleness check moved before safety
+        timer clear (ai-bridge.js — prevents doAIMove hang on stale bestmove);
+        brace-comment loop iteration cap (tablebase.js — prevents infinite loop
+        on unmatched `{`); stale comment cleanup (ui.js, index.html.tpl).
+      * v1.0.3-p10: review nav buttons stretch full width in ALL orientations —
+        promoted .review-nav and .review-nav .btn CSS from the landscape media
+        query to base CSS (outside media queries). Nav buttons now fill the
+        full row width in both portrait and landscape.
+      * v1.0.3-p10: move-list scroll-to-active logic unified for both
+        orientations — replaced single offsetTop read with a DOM walk that
+        accumulates offsetTop from the active element up to the scroll
+        container. Works correctly regardless of which element is the
+        offsetParent (which differs between portrait and landscape layouts).
+      * v1.0.3-p12: portrait chart width cap removed — was capped at
+        min(viewportW-48, 400)-12 (max ~352px); now uses viewportW-12 for
+        both orientations (unified with landscape).
+      * v1.0.3-p11: eval trend chart SVG left/right padding reduced from
+        36px to 8px — chart points and lines fully utilize horizontal space.
+      * v1.0.3-p11: portrait move-list scroll root cause fix — the p10
+        offsetParent walk failed in portrait because .review-moves has
+        position:static, so .rmv-block's offsetParent jumped to
+        .review-overlay (position:fixed), skipping the container. Replaced
+        with getBoundingClientRect(): _offsetTop = _rActRect.top -
+        _rListRect.top + _rList.scrollTop. Works in both orientations.
+  - index.html.tpl (AGPL v3):
+      * Landscape review CSS: complete redesign (see ui.js changes above).
+        New classes: .review-top, .review-bottom, .review-nav.
+        v1.0.3-p7: .review-body is overflow-y:auto (TWO-LAYER SCROLL — body
+        scrolls to reveal chart/buttons). .review-top is flex:0 0 auto (height
+        = board height, intrinsic). .review-moves has height:var(--rv-board-h)
+        + min-height:0 + overflow-y:auto (INDEPENDENT scroll viewport matching
+        board height). .review-bottom is flex:0 0 auto (pinned, visible via
+        body scroll).
+      * Removed the old per-size review overrides in compact/standard/
+        tablet/large-tablet media queries (the new layout works at any
+        size without per-size tweaks; only font sizes need adjustment
+        on tall tablets, which remains).
+
 The combined output (chess.html) is a combined work. The GPL v3 JavaScript
 modules and AGPL v3 template retain their respective licenses. Since AGPL v3
 imposes stricter requirements, its obligations effectively cover the entire

@@ -116,7 +116,8 @@ public class StockfishNative {
 
     // v18.4.0: ELO_MAP synced with JS ELO_MATCH for consistent level display
     private static final int[] ELO_MAP = {0, 800, 1350, 1700, 2000, 2200, 2350, 2800};
-    private static final String ENGINE_VERSION = "v1.0.2";
+    // v1.0.3: Synced with the application version (was stale at v1.0.2).
+    private static final String ENGINE_VERSION = "v1.0.3";
     // Movetime mapping: index 0 unused, 1-7 = game levels
     private static final int[] MOVETIME_MAP = {0, 500, 800, 1000, 1500, 2000, 3000, 5000};
 
@@ -3936,6 +3937,15 @@ public class StockfishNative {
             } catch (Throwable e) {
                 Log.w(TAG, "takePersistableUriPermission failed", e);
             }
+            // v1.0.3 FIX: Close the settings dialog IMMEDIATELY before starting the
+            // async import. The old approach waited for onSettingsImported (which fires
+            // after the engine thread finishes applying settings — potentially seconds
+            // later). During that wait, the dialog stayed open and the user saw no
+            // feedback. Now we close the dialog right away, and the import continues
+            // in the background. The onSettingsImported callback still fires to show
+            // the success/failure toast.
+            postJsCallback("try{showEngineConfig=false;var d=document.querySelector('.dov[role=\"dialog\"]');if(d)d.remove();var fb=document.getElementById('_fileBrowserOverlay');if(fb)fb.remove();if(typeof render==='function')render();}catch(e){}");
+
             // v1.0.2 FIX: Use try-with-resources on BufferedReader so the reader
             // (and its internal char buffer) is always closed, not just the
             // underlying InputStream. The previous pattern (close `is` in
@@ -3952,8 +3962,7 @@ public class StockfishNative {
                 content = sb.toString();
             }
             // Import the settings — onSettingsImported() callback in JS
-            // will fire the appropriate toast (success or failure) and
-            // reopen the engine config dialog. Do NOT duplicate here.
+            // will fire the appropriate toast (success or failure).
             importSettings(content);
         } catch (Throwable e) {
             Log.e(TAG, "handleFilePickerResult failed", e);

@@ -14,11 +14,18 @@ License classification by file:
       EngineEntryType structs) were deleted (25.5KB → 4.2KB).
       Only nativeChmod and nativeRenice remain, matching the
       declarations in StockfishNative.java.
+      v1.0.3: no changes — only the rebuilt libengine_bridge.so is
+      packaged (the source is unchanged from v1.0.2).
   - CMakeLists.txt: AGPL v3 (original build configuration)
       Note: this CMake file builds engine_jni.cpp which is GPL v3,
       but the CMake file itself is original and uses AGPL v3.
       v1.0.2: removed the `dl` link (no longer needed after the
       engine-import dead-code removal — dlopen/dlsym are gone).
+      v1.0.3: no changes.
 
 See the root-level LICENSE-AGPL v3, LICENSE-GPL v3, and NOTICE files
 for full license texts and attribution details.
+
+v1.0.3 patch: no changes to cpp/ sources (engine_jni.cpp and CMakeLists.txt
+are unchanged from v1.0.2). The libengine_bridge.so packaged in the APK is
+the same v1.0.2-built binary.

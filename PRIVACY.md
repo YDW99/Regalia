@@ -2,6 +2,9 @@
   Privacy Policy — Regalia
   Copyright (C) 2026 Regalia
   Licensed under GNU Affero General Public License v3 (AGPL v3)
+
+  AI-GEN: AI assisted
+  This document was AI-assisted and has been reviewed for AGPL v3 compliance.
 -->
 # Privacy Policy — Regalia
 
