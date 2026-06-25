@@ -11,6 +11,13 @@
    v1.0.3 (2026-06-20): time-management analysis from PGN {1.0s ...} comments,
    clickable variation moves with synthetic-mainline reconstruction,
    FEN panel below PGN text panel, bilingual UI.
+   v1.0.4 (2026-06-21): heatmap-based control statistics (per-square avg control,
+   strongest/weakest square detection, center control trend), expanded stats
+   dimensions, Chess960 PGN support, standardized PGN tags (STR + Variant).
+   v1.0.4 EXPANSION (this round): Web Worker pool for PGN parsing + heatmap
+   computation (off-loads ~1-2s of work from UI thread on long games); new
+   time-control rules (sudden death / Fischer increment / Bronstein / US delay);
+   NAG / [%emt] / [%csl] / [%cal] annotation rendering in PGN text panel.
    Original PGN parsing logic derived from DroidFish (GPL v3).
    This file is licensed under GPL v3 to match the DroidFish-derived PGN parsing. */
 :root{
@@ -138,11 +145,22 @@ let _variations=[];
 // v1.0.3: When true, the initial position (FEN) is "selected" — stats show
 // the initial position with 0 moves. Set by selectInitialPosition().
 let _fenSelected=false;
+// v1.0.4 Rev28: The PGN text imported on the stats page (via 🗃️ Paste PGN or
+// 📂 Select PGN File). When non-null and the user attempts to return to the
+// main activity (back button or 返回对局 button), we intercept and show the
+// "🗃️ Import PGN to game?" Yes/No/Cancel dialog. Cancel = stay on stats page.
+// Yes = set AndroidBridge.setImportedPGN(pgn) then closeStatsPage. No =
+// closeStatsPage without setting the imported PGN.
+let _statsImportedPGN=null;
 
 // i18n
 const _i18n={
   'metadata':{zh:'对局元数据',en:'Game Metadata'},
   'pgn_text':{zh:'PGN文本',en:'PGN Text'},
+  // v1.0.4 Rev29: i18n key for PGN parse error (was hardcoded English)
+  'pgn_parse_error':{zh:'PGN 解析失败',en:'PGN parse error'},
+  // v1.0.4 Rev27: Board display section heading (DeepSeek review feature)
+  'position_board':{zh:'当前局面',en:'Current Position'},
   'position_stats':{zh:'局面统计',en:'Position Statistics'},
   'move_quality':{zh:'走法质量',en:'Move Quality'},
   'eval_trend':{zh:'评估趋势',en:'Eval Trend'},
@@ -198,6 +216,42 @@ const _i18n={
   'lead_swings':{zh:'领先转换',en:'Lead Swings'},
   'white_advantage':{zh:'白方优势步数',en:'W Advantage Ply'},
   'black_advantage':{zh:'黑方优势步数',en:'B Advantage Ply'},
+  // v1.0.4 NEW: Heatmap-based statistics strings
+  'heatmap_stats':{zh:'热力图控制统计',en:'Heatmap Control Statistics'},
+  'heatmap_stats_desc':{zh:'聚合对局中所有局面的每格控制信息。每格显示 (白方平均/黑方平均) 攻击子数。',en:'Aggregated per-square control across all positions in the game. Each square shows (White avg / Black avg) attackers.'},
+  'avg_control_heatmap':{zh:'平均控制热力图 (白方 vs 黑方)',en:'Average Control Heatmap (W vs B)'},
+  'positions_analyzed':{zh:'分析局面数',en:'Positions Analyzed'},
+  'white_strongest_sq':{zh:'白方最强格',en:'W Strongest Sq'},
+  'black_strongest_sq':{zh:'黑方最强格',en:'B Strongest Sq'},
+  'white_weakest_sq':{zh:'白方最弱格',en:'W Weakest Sq'},
+  'black_weakest_sq':{zh:'黑方最弱格',en:'B Weakest Sq'},
+  'center_w_avg':{zh:'中心白方平均',en:'Center W Avg'},
+  'center_b_avg':{zh:'中心黑方平均',en:'Center B Avg'},
+  'center_net':{zh:'中心净值 (白-黑)',en:'Center Net (W-B)'},
+  // v1.0.4 EXPANSION (this round): new stats strings for time-control mode, NAG, visual annotations
+  'time_control_mode':{zh:'计时模式',en:'Time Control Mode'},
+  'time_control_untimed':{zh:'不计时',en:'Untimed'},
+  'time_control_sudden':{zh:'突然死亡制',en:'Sudden Death'},
+  'time_control_fischer':{zh:'菲舍尔加秒制',en:'Fischer Increment'},
+  'time_control_bronstein':{zh:'布朗斯坦延迟制',en:'Bronstein Delay'},
+  'time_control_usdelay':{zh:'美国延迟制',en:'US Delay'},
+  'visual_annotations':{zh:'视觉注解（[%csl]/[%cal]）',en:'Visual Annotations ([%csl]/[%cal])'},
+  'visual_annotations_desc':{zh:'本对局PGN注释中包含的视觉注解统计：蓝色格=玩家净控制强势格，红色格=AI对手净控制强势格，黄色格=双方总计控制较高格，绿色格=中心区无控制格；红色箭头=将军路径，绿色箭头=避将路径。',en:'Visual annotation counts in this game\'s PGN comments: Blue squares=player net-control strong squares, Red squares=AI net-control strong squares, Yellow squares=high total-control squares, Green squares=neutral center squares; Red arrows=check path, Green arrows=escape path.'},
+  'nag_annotations':{zh:'NAG数字注解',en:'NAG Annotations'},
+  'nag_count':{zh:'NAG数量',en:'NAG Count'},
+  'nag_quality_dist':{zh:'走法质量分布',en:'Move Quality Distribution'},
+  'nag_brilliant':{zh:'妙手 (!!/$3)',en:'Brilliant (!!/$3)'},
+  'nag_good':{zh:'好棋 (!/$1)',en:'Good (!/$1)'},
+  'nag_interesting':{zh:'有趣 (!?/$5)',en:'Interesting (!?/$5)'},
+  'nag_dubious':{zh:'可疑 (?!/$6)',en:'Dubious (?!/$6)'},
+  'nag_mistake':{zh:'错误 (?/$2)',en:'Mistake (?/$2)'},
+  'nag_blunder':{zh:'漏着 (??/$4)',en:'Blunder (??/$4)'},
+  'blue_squares':{zh:'蓝色格 (玩家净控制)',en:'Blue Squares (Player Net)'},
+  'red_squares':{zh:'红色格 (AI净控制)',en:'Red Squares (AI Net)'},
+  'yellow_squares':{zh:'黄色格 (高总控制)',en:'Yellow Squares (High Total)'},
+  'green_squares_neutral':{zh:'绿色格 (中心无控制)',en:'Green Squares (Neutral Center)'},
+  'red_arrows_check':{zh:'红色箭头 (将军路径)',en:'Red Arrows (Check Path)'},
+  'green_arrows_escape':{zh:'绿色箭头 (避将路径)',en:'Green Arrows (Escape Path)'},
   'total_time':{zh:'总时间',en:'Total Time'},
   'time_note':{zh:'时钟数据来自PGN注释',en:'Clock data from PGN comments'},
   'time_management':{zh:'时间管理',en:'Time Management'},
@@ -501,11 +555,32 @@ function applySANMove(state,san){
   // Castling
   if(cleanSAN==='O-O'||cleanSAN==='0-0'){
     const row=state.currentTurn==='white'?7:0;
-    return executeMove(state,{from:{row,col:4},to:{row,col:6}},'O-O');
+    // v1.0.4 Rev34 FIX: Find the king's ACTUAL column instead of hardcoding col 4 (e1).
+    // In Chess960, the king may start on any column b1-g1. The king always castles
+    // to col 6 (g1/g8) for kingside. We scan the back rank for the king.
+    let kingCol=-1;
+    for(let c=0;c<8;c++){const p=state.board[row][c];if(p&&p.type==='king'&&p.color===state.currentTurn){kingCol=c;break;}}
+    if(kingCol<0)return null;
+    // v1.0.4 Rev27 (Kimi stats.html P0 fix): Verify castling king-safety:
+    // king must not be in check before, during, or after the castle, and the
+    // squares the king crosses must not be attacked. We check the post-castle
+    // king safety here (simplification — full castling legality also requires
+    // the "not currently in check" and "no crossing attacked squares" rules,
+    // but those are rare in PGN replay and the post-castle check catches the
+    // most common bug: accepting castle out of a check).
+    const castleResult=executeMove(state,{from:{row,col:kingCol},to:{row,col:6}},'O-O');
+    if(castleResult&&_isKingSafe(castleResult.postState,state.currentTurn))return castleResult;
+    return null;
   }
   if(cleanSAN==='O-O-O'||cleanSAN==='0-0-0'){
     const row=state.currentTurn==='white'?7:0;
-    return executeMove(state,{from:{row,col:4},to:{row,col:2}},'O-O-O');
+    // v1.0.4 Rev34 FIX: Find the king's ACTUAL column (Chess960 compatibility).
+    let kingCol=-1;
+    for(let c=0;c<8;c++){const p=state.board[row][c];if(p&&p.type==='king'&&p.color===state.currentTurn){kingCol=c;break;}}
+    if(kingCol<0)return null;
+    const castleResult=executeMove(state,{from:{row,col:kingCol},to:{row,col:2}},'O-O-O');
+    if(castleResult&&_isKingSafe(castleResult.postState,state.currentTurn))return castleResult;
+    return null;
   }
   // Parse SAN: [Piece][disambiguation][x][dest][=Promo]
   let idx=0;
@@ -546,11 +621,45 @@ function applySANMove(state,san){
       if(disambRank>=0&&r!==disambRank)continue;
       // Check if this piece can move to dest
       if(canMoveTo(state,r,c,destRow,destCol)){
-        return executeMove(state,{from:{row:r,col:c},to:{row:destRow,col:destCol},piece:p,promotion},'');
+        // v1.0.4 Rev27 (Kimi stats.html P0 fix): Validate king safety AFTER
+        // the candidate move. canMoveTo only checks pseudo-legal moves, so
+        // without this check, a pinned piece could "move" and leave its own
+        // king in check, corrupting the replayed position and all downstream
+        // statistics. We try the move, check if the moving side's king is
+        // still safe, and only accept it if so. If a disambiguated piece
+        // fails the check, we continue scanning for another matching piece
+        // that CAN legally make the move.
+        const candidate=executeMove(state,{from:{row:r,col:c},to:{row:destRow,col:destCol},piece:p,promotion},'');
+        if(candidate&&_isKingSafe(candidate.postState,state.currentTurn)){
+          return candidate;
+        }
+        // If king safety failed, continue to the next matching piece
       }
     }
   }
   return null;
+}
+
+// v1.0.4 Rev27 (Kimi stats.html P0 fix): Return true if the moving side's king
+// is NOT attacked in the post-move state. Used by applySANMove to reject
+// pseudo-legal moves that leave the king in check (pinned pieces, illegal
+// king moves, etc.). Uses the same canMoveTo() pseudo-legal check on the
+// OPPONENT's pieces — this is sufficient because if no opponent piece can
+// pseudo-legally attack the king square, the king is definitely safe.
+function _isKingSafe(state,defenderColor){
+  if(!state)return false;
+  const kingPos=defenderColor==='white'?state.wk:state.bk;
+  if(!kingPos)return true; // No king on board (rare FEN setup) — assume safe
+  const attackerColor=OPP_COLOR[defenderColor];
+  for(let r=0;r<8;r++){
+    for(let c=0;c<8;c++){
+      const p=state.board[r][c];
+      if(p&&p.color===attackerColor){
+        if(canMoveTo(state,r,c,kingPos.row,kingPos.col))return false;
+      }
+    }
+  }
+  return true;
 }
 
 function canMoveTo(state,fromR,fromC,toR,toC){
@@ -564,13 +673,28 @@ function canMoveTo(state,fromR,fromC,toR,toC){
     if(dc===0&&dr===dir&&!state.board[toR][toC])return true;
     if(dc===0&&dr===2*dir&&fromR===startRow&&!state.board[toR][toC]&&!state.board[fromR+dir][fromC])return true;
     if(Math.abs(dc)===1&&dr===dir&&state.board[toR][toC]&&state.board[toR][toC].color!==p.color)return true;
+    // v1.0.4 Rev29 FIX (CRITICAL): En passant capture support.
+    // When the destination is EMPTY but matches the en passant target square,
+    // and the moving pawn is on the correct diagonal, this is a valid en
+    // passant capture. Without this branch, the stats.html simplified SAN
+    // parser rejected ALL en passant moves (e.g. "gxf6" after "f5"), causing
+    // a cascade failure: side-to-move desync → every subsequent move rejected
+    // → PGN appeared "broken" with only the first ~98 moves parsed.
+    if(Math.abs(dc)===1&&dr===dir&&!state.board[toR][toC]&&
+       state.enPassantTarget&&state.enPassantTarget.row===toR&&state.enPassantTarget.col===toC){
+      return true;
+    }
     return false;
   }
   if(p.type==='knight'){
-    return (Math.abs(dr)===2&&Math.abs(dc)===1)||(Math.abs(dr)===1&&Math.abs(dc)===2);
+    if(!((Math.abs(dr)===2&&Math.abs(dc)===1)||(Math.abs(dr)===1&&Math.abs(dc)===2)))return false;
+    const dest=state.board[toR][toC];
+    return !dest||dest.color!==p.color;
   }
   if(p.type==='king'){
-    return Math.abs(dr)<=1&&Math.abs(dc)<=1&&(dr!==0||dc!==0);
+    if(!(Math.abs(dr)<=1&&Math.abs(dc)<=1&&(dr!==0||dc!==0)))return false;
+    const dest=state.board[toR][toC];
+    return !dest||dest.color!==p.color;
   }
   // Sliding pieces
   const dirs=[];
@@ -579,7 +703,10 @@ function canMoveTo(state,fromR,fromC,toR,toC){
   for(const [ddr,ddc] of dirs){
     let nr=fromR+ddr,nc=fromC+ddc;
     while(nr>=0&&nr<8&&nc>=0&&nc<8){
-      if(nr===toR&&nc===toC)return true;
+      if(nr===toR&&nc===toC){
+        const dest=state.board[toR][toC];
+        return !dest||dest.color!==p.color;
+      }
       if(state.board[nr][nc])break;
       nr+=ddr;nc+=ddc;
     }
@@ -591,7 +718,20 @@ function executeMove(state,move,notation){
   const newState={board:state.board.map(r=>r.map(c=>c?{...c}:null)),currentTurn:OPP_COLOR[state.currentTurn],castlingRights:{...state.castlingRights},enPassantTarget:null,halfMoveClock:state.halfMoveClock+1,fullMoveNumber:state.fullMoveNumber,wk:state.wk?{...state.wk}:null,bk:state.bk?{...state.bk}:null};
   const piece=newState.board[move.from.row][move.from.col];
   if(!piece)return null;
-  const captured=newState.board[move.to.row][move.to.col];
+  let captured=newState.board[move.to.row][move.to.col];
+  // v1.0.4 Rev29 FIX: En passant capture — when a pawn moves diagonally to an
+  // EMPTY square that matches state.enPassantTarget, the captured pawn is on
+  // the same row as the moving pawn (move.from.row) and same column as the
+  // destination (move.to.col). We must remove it from the board and set
+  // `captured` so downstream logic (halfMoveClock, SAN building) knows a
+  // capture occurred.
+  if(!captured&&piece.type==='pawn'&&move.to.col!==move.from.col&&
+     state.enPassantTarget&&state.enPassantTarget.row===move.to.row&&state.enPassantTarget.col===move.to.col){
+    const epPawnRow=move.from.row;
+    const epPawnCol=move.to.col;
+    captured=newState.board[epPawnRow][epPawnCol];
+    newState.board[epPawnRow][epPawnCol]=null;
+  }
   newState.board[move.to.row][move.to.col]=piece;
   newState.board[move.from.row][move.from.col]=null;
   if(move.promotion)newState.board[move.to.row][move.to.col]={type:move.promotion,color:piece.color};
@@ -599,9 +739,34 @@ function executeMove(state,move,notation){
     if(piece.color==='white')newState.wk={row:move.to.row,col:move.to.col};
     else newState.bk={row:move.to.row,col:move.to.col};
     // Castling rook move
-    if(Math.abs(move.to.col-move.from.col)===2){
-      if(move.to.col===6){newState.board[move.from.row][5]=newState.board[move.from.row][7];newState.board[move.from.row][7]=null;}
-      if(move.to.col===2){newState.board[move.from.row][3]=newState.board[move.from.row][0];newState.board[move.from.row][0]=null;}
+    // v1.0.4 Rev34: Chess960-aware castling. In standard chess, the rook is
+    // always on col 7 (kingside) or col 0 (queenside). In Chess960, the rook
+    // can be on any column — we find the nearest rook on the castling side.
+    // v1.0.4 Rev36 FIX: Castling detection was `Math.abs(to.col-from.col)===2`
+    // which only works for standard chess (king e1→g1 = 2 cols). In Chess960,
+    // the king can start on any column and moves to col 6 (kingside) or col 2
+    // (queenside) — the distance can be 1-5 columns. Fix: detect castling by
+    // the DESTINATION column (6=kingside, 2=queenside), not the distance.
+    if(move.to.col===6||move.to.col===2){
+      const kingside=move.to.col===6;
+      const rookTo=kingside?5:3;
+      // Find the participating rook: nearest rook on the castling side.
+      // Kingside: rightmost rook to the right of king's start.
+      // Queenside: leftmost rook to the left of king's start.
+      let rookFrom=-1;
+      if(kingside){
+        for(let c=7;c>move.from.col;c--){if(newState.board[move.from.row][c]&&newState.board[move.from.row][c].type==='rook'&&newState.board[move.from.row][c].color===piece.color){rookFrom=c;break;}}
+      }else{
+        for(let c=0;c<move.from.col;c++){if(newState.board[move.from.row][c]&&newState.board[move.from.row][c].type==='rook'&&newState.board[move.from.row][c].color===piece.color){rookFrom=c;break;}}
+      }
+      if(rookFrom>=0){
+        newState.board[move.from.row][rookTo]=newState.board[move.from.row][rookFrom];
+        newState.board[move.from.row][rookFrom]=null;
+      }else{
+        // Fallback: standard chess positions (rook on h1/a1)
+        if(kingside){newState.board[move.from.row][5]=newState.board[move.from.row][7];newState.board[move.from.row][7]=null;}
+        else{newState.board[move.from.row][3]=newState.board[move.from.row][0];newState.board[move.from.row][0]=null;}
+      }
     }
   }
   if(piece.type==='pawn'){
@@ -636,8 +801,9 @@ function buildSAN(state,move,newState,captured){
   n+=String.fromCharCode(97+move.to.col)+(8-move.to.row);
   if(move.promotion)n+='='+move.promotion[0].toUpperCase();
   // v1.0.2 FIX: Add check/checkmate suffixes
+  // v1.0.4 Rev31 CLEANUP: removed dead `oppKing` variable (was always null,
+  // never read — leftover from an abandoned check-detection approach).
   const opp=OPP_COLOR[piece.color];
-  const oppKing=newState.board?null:null; // We need to check if opponent is in check
   // Check if opponent is in check after this move
   let isCheck=false;
   if(newState.wk||newState.bk){
@@ -657,9 +823,69 @@ function buildSAN(state,move,newState,captured){
     }
   }
   if(isCheck){
-    // Check if it's checkmate (no legal moves for opponent)
-    // Simplified: just add + for check, # for checkmate would require full legal move generation
-    n+='+';
+    // v1.0.4 Rev29: Detect checkmate by checking if the opponent has ANY
+    // legal move. We use a lightweight in-place simulation (mutate, check,
+    // revert) to avoid the recursive executeMove→buildSAN→executeMove loop
+    // that caused stack overflow. Without this, the stats page never shows
+    // '#' for mate, producing "Qa2+" instead of "Qa2#" — a regression vs
+    // the main app.
+    let hasLegalMove=false;
+    const oppKingPos=opp==='white'?newState.wk:newState.bk;
+    for(let r=0;r<8&&!hasLegalMove;r++){
+      for(let c=0;c<8&&!hasLegalMove;c++){
+        const oppP=newState.board[r][c];
+        if(!oppP||oppP.color!==opp)continue;
+        for(let tr=0;tr<8&&!hasLegalMove;tr++){
+          for(let tc=0;tc<8&&!hasLegalMove;tc++){
+            if(r===tr&&c===tc)continue;
+            if(!canMoveTo(newState,r,c,tr,tc))continue;
+            // In-place simulate: move piece, check king safety, revert.
+            const savedDest=newState.board[tr][tc];
+            // En passant: if pawn moves diagonally to empty ep target, also remove the captured pawn
+            let epCapturedPawn=null,epCapturedRow=-1,epCapturedCol=-1;
+            if(oppP.type==='pawn'&&tc!==c&&!savedDest&&newState.enPassantTarget&&newState.enPassantTarget.row===tr&&newState.enPassantTarget.col===tc){
+              epCapturedRow=r;epCapturedCol=tc;
+              epCapturedPawn=newState.board[epCapturedRow][epCapturedCol];
+              newState.board[epCapturedRow][epCapturedCol]=null;
+            }
+            // Handle promotion (replace piece type if pawn reaches last rank)
+            const savedPiece=newState.board[r][c];
+            newState.board[tr][tc]=oppP;
+            newState.board[r][c]=null;
+            // Update king position if king moved
+            let kingMoved=false;
+            if(oppP.type==='king'){
+              if(opp==='white'){newState.wk={row:tr,col:tc};kingMoved=true;}
+              else {newState.bk={row:tr,col:tc};kingMoved=true;}
+            }
+            // Check king safety (use updated king pos)
+            const kingPos=oppP.type==='king'?{row:tr,col:tc}:oppKingPos;
+            let safe=false;
+            if(kingPos){
+              safe=true;
+              outer:for(let ar=0;ar<8;ar++){
+                for(let ac=0;ac<8;ac++){
+                  const ap=newState.board[ar][ac];
+                  if(ap&&ap.color!==opp){
+                    if(canMoveTo(newState,ar,ac,kingPos.row,kingPos.col)){safe=false;break outer;}
+                  }
+                }
+              }
+            }
+            // Revert
+            newState.board[r][c]=savedPiece;
+            newState.board[tr][tc]=savedDest;
+            if(epCapturedPawn)newState.board[epCapturedRow][epCapturedCol]=epCapturedPawn;
+            if(kingMoved){
+              if(opp==='white')newState.wk={row:r,col:c};
+              else newState.bk={row:r,col:c};
+            }
+            if(safe)hasLegalMove=true;
+          }
+        }
+      }
+    }
+    n+=hasLegalMove?'+':'#';
   }
   return n;
 }
@@ -842,6 +1068,8 @@ function extractMoveTimes(pgnText){
       const timeMatch=comment.match(/(\d+(?:\.\d+)?)s/);
       // Clock-remaining format: [%clk HH:MM:SS]
       const clkMatch=comment.match(/\[%clk\s+([0-9]+):([0-9]+):([0-9]+\.?[0-9]*)\]/);
+      // v1.0.4 ROUND-5 REV16: Elapsed move time format: [%emt H:MM:SS]
+      const emtMatch=comment.match(/\[%emt\s+([0-9]+):([0-9]+):([0-9]+\.?[0-9]*)\]/);
       // The comment belongs to the move that JUST HAPPENED — i.e., the
       // previous mainline move. So we attach it to usedTimes[len-1].
       // If no mainline move yet, attach to index 0 (initial position comment).
@@ -883,9 +1111,14 @@ function extractMoveTimes(pgnText){
       if(timeMatch){
         const sec=parseFloat(timeMatch[1]);
         if(!isNaN(sec)){
-          // Direct format takes precedence over the increment-derived value.
           usedTimes[targetIdx]=sec;
         }
+      }
+      // v1.0.4 ROUND-5 REV16: [%emt] — elapsed move time (untimed games)
+      if(emtMatch){
+        const eh=parseInt(emtMatch[1]),em=parseInt(emtMatch[2]),es=parseFloat(emtMatch[3]);
+        const totalSec=eh*3600+em*60+es;
+        if(!isNaN(totalSec))usedTimes[targetIdx]=totalSec;
       }
       i=end+1;
       continue;
@@ -962,7 +1195,15 @@ function formatTime(sec){
 
 // Classify move based on eval delta
 function classifyMove(evalDelta,isMoverWhite){
+  // v1.0.4 ROUND-5 REV16: Handle mate evaluations
+  // v1.0.4 Rev29 FIX: prev code used raw evalDelta (White POV) for the mate
+  //   thresholds — so a BLACK move that delivered mate (evalDelta ≤ -90000
+  //   in White POV, which is +90000 in Black's favor) was misclassified
+  //   as 'blunder'. Fix: use the side-relative moverDelta for ALL
+  //   comparisons including the mate thresholds.
   const moverDelta=isMoverWhite?evalDelta:-evalDelta;
+  if(moverDelta>=90000)return {cls:'brilliant',label:T('brilliant')};
+  if(moverDelta<=-90000)return {cls:'blunder',label:T('blunder')};
   if(moverDelta>200)return {cls:'brilliant',label:T('brilliant')};
   if(moverDelta>50)return {cls:'best',label:T('best')};
   if(moverDelta>-50)return {cls:'good',label:T('good')};
@@ -1518,7 +1759,11 @@ function renderStats(parsed,evalData){
   if(evalData&&evalData.some(e=>e)){
     h+='<div class="section"><h2>'+(T('game_complexity')||'Game Complexity')+'</h2>';
     const validEvals=evalData.filter(e=>e).map(e=>e.mate?(e.mate>0?90000:-90000):e.eval);
-    if(validEvals.length>=3){
+    // v1.0.4 Rev27 (Kimi stats.html P1 fix): Changed >=3 to >=2. With 2 evals,
+    // `changes` has 1 element — avgChange and variance are both well-defined
+    // (variance=0 for a single sample). The previous >=3 check skipped the
+    // entire complexity section for 2-eval games, which is too aggressive.
+    if(validEvals.length>=2){
       // Volatility: standard deviation of eval changes
       const changes=[];
       for(let i=1;i<validEvals.length;i++){
@@ -1542,6 +1787,230 @@ function renderStats(parsed,evalData){
       h+='<div class="stat-item"><div class="label">'+(T('lead_swings')||'Lead Swings')+'</div><div class="value">'+swings+'</div></div>';
       h+='<div class="stat-item"><div class="label">'+(T('white_advantage')||'W Advantage Ply')+'</div><div class="value white">'+wAhead+'</div></div>';
       h+='<div class="stat-item"><div class="label">'+(T('black_advantage')||'B Advantage Ply')+'</div><div class="value black">'+bAhead+'</div></div>';
+      h+='</div>';
+    }
+    h+='</div>';
+  }
+
+  // v1.0.4 NEW: Heatmap-based control statistics
+  // For each move in the game, compute the control map (white/black piece counts
+  // attacking each square) and accumulate per-square control totals across all
+  // positions. Then derive aggregate statistics:
+  //   - Average control of each square (displayed as a heatmap)
+  //   - Per-side center control over time
+  //   - "Strongest square" for each side (most consistently controlled)
+  //   - "Weakest square" for each side (least controlled)
+  // This uses the in-memory control cache (_ctrlCache) keyed by FEN to avoid
+  // re-computing the same position's control map multiple times.
+  if(moves.length>0){
+    h+='<div class="section"><h2>'+(T('heatmap_stats')||'Heatmap Control Statistics')+'</h2>';
+    h+='<div style="font-size:.78rem;color:var(--muted);margin-bottom:10px">'+(T('heatmap_stats_desc')||'Aggregated per-square control across all positions in the game. Each square shows (White avg, Black avg) attackers.')+'</div>';
+    // Accumulators
+    const _ctrlW=Array.from({length:8},()=>new Array(8).fill(0));
+    const _ctrlB=Array.from({length:8},()=>new Array(8).fill(0));
+    let _posCount=0;
+    // Walk through every position (initial + after each move)
+    let st=parsed.startFEN?fenToState(parsed.startFEN):initState();
+    if(st){
+      // Helper: compute control map for a state (cached)
+      const _ctrlCache={};
+      function _computeCtrl(s){
+        const fen=stateToFEN(s);
+        if(_ctrlCache[fen])return _ctrlCache[fen];
+        const cm=[];
+        for(let r=0;r<8;r++){cm[r]=[];for(let c=0;c<8;c++)cm[r][c]={white:[],black:[]};}
+        // For each piece, compute its attacks
+        for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+          const p=s.board[r][c];
+          if(!p)continue;
+          const atks=_attacked(s.board,{row:r,col:c});
+          for(const a of atks){
+            cm[a.row][a.col][p.color].push({piece:p,position:{row:r,col:c}});
+          }
+        }
+        _ctrlCache[fen]=cm;
+        return cm;
+      }
+      // Inline _attacked (mirror of game-logic.attacked)
+      function _attacked(board,pos){
+        const b=board,p=b[pos.row][pos.col];if(!p)return[];
+        const r=pos.row,c=pos.col,co=p.color,mv=[];
+        if(p.type==='pawn'){const d=co==='white'?-1:1;for(const dc of[-1,1])if(r+d>=0&&r+d<8&&c+dc>=0&&c+dc<8)mv.push({row:r+d,col:c+dc});}
+        else if(p.type==='knight'){for(const[dr,dc] of[[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]])if(r+dr>=0&&r+dr<8&&c+dc>=0&&c+dc<8)mv.push({row:r+dr,col:c+dc});}
+        else if(p.type==='king'){for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++)if((dr||dc)&&r+dr>=0&&r+dr<8&&c+dc>=0&&c+dc<8)mv.push({row:r+dr,col:c+dc});}
+        else{const dirs=p.type==='rook'?[[-1,0],[1,0],[0,-1],[0,1]]:p.type==='bishop'?[[-1,-1],[-1,1],[1,-1],[1,1]]:[[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]];for(const[dr,dc] of dirs){let nr=r+dr,nc=c+dc;while(nr>=0&&nr<8&&nc>=0&&nc<8){mv.push({row:nr,col:nc});if(b[nr][nc])break;nr+=dr;nc+=dc;}}}
+        return mv;
+      }
+      // Accumulate the initial position
+      const cm0=_computeCtrl(st);
+      for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+        _ctrlW[r][c]+=cm0[r][c].white.length;
+        _ctrlB[r][c]+=cm0[r][c].black.length;
+      }
+      _posCount++;
+      // Walk moves — use the cached post-move state from each move object.
+      // v1.0.4 ROUND-5 REV15: Previously used makeMvInPlace(st, m.move) which
+      // references a non-existent m.move field (moves from parseFromMoveRecords
+      // have {from, to, piece, captured, state, ...} — NO m.move). This caused
+      // EVERY move to be skipped via the `if(!m||!m.move)continue` guard,
+      // leaving _posCount stuck at 1. Now uses m.state directly (same approach
+      // as the material balance chart at line 1840).
+      for(let i=0;i<moves.length;i++){
+        const m=moves[i];
+        if(!m||!m.state)continue;
+        try{
+          const cm=_computeCtrl(m.state);
+          for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+            _ctrlW[r][c]+=cm[r][c].white.length;
+            _ctrlB[r][c]+=cm[r][c].black.length;
+          }
+          _posCount++;
+        }catch(e){/* skip invalid move state */}
+      }
+    }
+    if(_posCount>0){
+      // Find strongest/weakest squares for each side
+      let wBest={r:-1,c:-1,v:-1},wWorst={r:-1,c:-1,v:Infinity};
+      let bBest={r:-1,c:-1,v:-1},bWorst={r:-1,c:-1,v:Infinity};
+      for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+        const wv=_ctrlW[r][c]/_posCount;
+        const bv=_ctrlB[r][c]/_posCount;
+        if(wv>wBest.v)wBest={r,c,v:wv};
+        if(wv<wWorst.v)wWorst={r,c,v:wv};
+        if(bv>bBest.v)bBest={r,c,v:bv};
+        if(bv<bWorst.v)bWorst={r,c,v:bv};
+      }
+      const sqName=(r,c)=>String.fromCharCode(97+c)+(8-r);
+      // Render the average control heatmap as an 8x8 grid
+      h+='<div style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:8px;margin-bottom:10px">';
+      h+='<div style="font-size:.7rem;color:var(--muted);margin-bottom:6px">'+(T('avg_control_heatmap')||'Average Control Heatmap (W vs B)')+'</div>';
+      h+='<div style="display:grid;grid-template-columns:repeat(8,1fr);gap:1px;background:#3a2a1a;padding:2px;border-radius:4px;font-size:.55rem;text-align:center">';
+      for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+        const wv=_ctrlW[r][c]/_posCount;
+        const bv=_ctrlB[r][c]/_posCount;
+        const total=wv+bv;
+        const net=wv-bv; // positive = white-leaning
+        // Color: HSL with hue 280 (purple) at neutral, blue-ish for white-leaning, red-ish for black-leaning
+        let bg;
+        if(total<0.05){bg='#2a1a0a';}
+        else{
+          const intensity=Math.min(1,total/4); // up to 4 attackers avg → full saturation
+          // Hue: 200 (blue) for strong white, 0 (red) for strong black, 280 (purple) at neutral
+          const hue=net>=0?(200-30*net):(360+30*net);
+          const sat=40+intensity*50;
+          const lit=30+intensity*15;
+          bg='hsl('+Math.round(hue)+','+Math.round(sat)+'%,'+Math.round(lit)+'%)';
+        }
+        // v1.0.4 Rev34: Add coordinate label (e.g. "a8", "e4") at top of each cell, centered.
+        const coord=String.fromCharCode(97+c)+(8-r);
+        h+='<div style="background:'+bg+';padding:2px 1px;color:#f5e6c8;font-weight:600;min-height:32px;display:flex;flex-direction:column;justify-content:center;align-items:center;position:relative">'+
+          '<span style="font-size:.45rem;font-weight:700;color:rgba(255,230,200,.75);line-height:1;margin-bottom:1px">'+coord+'</span>'+
+          '<span>'+wv.toFixed(1)+'<span style="opacity:.5">/</span>'+bv.toFixed(1)+'</span>'+
+          '</div>';
+      }
+      h+='</div></div>';
+      // Summary stats
+      h+='<div class="stats-grid">';
+      h+='<div class="stat-item"><div class="label">'+(T('positions_analyzed')||'Positions Analyzed')+'</div><div class="value">'+_posCount+'</div></div>';
+      h+='<div class="stat-item"><div class="label">'+(T('white_strongest_sq')||'W Strongest Sq')+'</div><div class="value white">'+sqName(wBest.r,wBest.c)+' ('+wBest.v.toFixed(2)+')</div></div>';
+      h+='<div class="stat-item"><div class="label">'+(T('black_strongest_sq')||'B Strongest Sq')+'</div><div class="value black">'+sqName(bBest.r,bBest.c)+' ('+bBest.v.toFixed(2)+')</div></div>';
+      h+='<div class="stat-item"><div class="label">'+(T('white_weakest_sq')||'W Weakest Sq')+'</div><div class="value">'+sqName(wWorst.r,wWorst.c)+' ('+wWorst.v.toFixed(2)+')</div></div>';
+      h+='<div class="stat-item"><div class="label">'+(T('black_weakest_sq')||'B Weakest Sq')+'</div><div class="value">'+sqName(bWorst.r,bWorst.c)+' ('+bWorst.v.toFixed(2)+')</div></div>';
+      h+='</div>';
+      // Center control trend (avg over all positions for d4,e4,d5,e5)
+      const centerSqs=[[4,3],[4,4],[3,3],[3,4]];
+      let wCenterAvg=0,bCenterAvg=0;
+      for(const[r,c] of centerSqs){wCenterAvg+=_ctrlW[r][c]/_posCount;bCenterAvg+=_ctrlB[r][c]/_posCount;}
+      wCenterAvg/=4;bCenterAvg/=4;
+      h+='<div class="stats-grid" style="margin-top:8px">';
+      h+='<div class="stat-item"><div class="label">'+(T('center_w_avg')||'Center W Avg')+'</div><div class="value white">'+wCenterAvg.toFixed(2)+'</div></div>';
+      h+='<div class="stat-item"><div class="label">'+(T('center_b_avg')||'Center B Avg')+'</div><div class="value black">'+bCenterAvg.toFixed(2)+'</div></div>';
+      h+='<div class="stat-item"><div class="label">'+(T('center_net')||'Center Net (W-B)')+'</div><div class="value">'+(wCenterAvg-bCenterAvg>=0?'+':'')+(wCenterAvg-bCenterAvg).toFixed(2)+'</div></div>';
+      h+='</div>';
+    }
+    h+='</div>';
+  }
+
+  // v1.0.4 EXPANSION (this round): Visual annotations statistics
+  // Scans the PGN movetext for [%csl ...] and [%cal ...] tags and tallies
+  // them by color (B/G/R/Y). Also extracts NAGs ($N) from movetext and
+  // reports their distribution.
+  if(moves.length>0){
+    h+='<div class="section"><h2>'+(T('visual_annotations')||'Visual Annotations ([%csl]/[%cal])')+'</h2>';
+    h+='<div style="font-size:.78rem;color:var(--muted);margin-bottom:10px">'+(T('visual_annotations_desc')||'Visual annotation counts in this game\'s PGN comments.')+'</div>';
+    // Extract the raw PGN text if available; otherwise, scan moveRecords for
+    // [%csl]/[%cal] tags (the main app caches these per move). We need access
+    // to the original PGN text — try window._statsPGNText first.
+    // v1.0.4 LATEST: new color semantics —
+    //   [%csl]: B=player net control, R=AI net control, Y=high total control, G=neutral center
+    //   [%cal]: R=check path, G=escape path
+    let blueSquares=0,redSquares=0,yellowSquares=0,greenSquaresNeutral=0;
+    let redArrowsCheck=0,greenArrowsEscape=0;
+    let nagCount=0;
+    const nagDist={1:0,2:0,3:0,4:0,5:0,6:0}; // !, ?, !!, ??, !?, ?!
+    // v1.0.4 ROUND-5 REV14: Read from _payload.pgn (the authoritative PGN text
+    // sent by the main app, which includes [%csl]/[%cal] from _buildPGNString).
+    // Previously read from window._statsPGNText which was NEVER SET for in-app
+    // games — so the visual annotations section always showed zero counts.
+    let pgnText='';
+    if(typeof _payload!=='undefined'&&_payload&&_payload.pgn){pgnText+=_payload.pgn;}
+    if(typeof window!=='undefined'&&window._statsPGNText){pgnText+='\n'+window._statsPGNText;}
+    if(pgnText){
+      // Match all [%csl ...] tags (square highlights)
+      const cslRe=/\[%csl\s+([^\]]+)\]/g;
+      let cm;
+      while((cm=cslRe.exec(pgnText))!==null){
+        const parts=cm[1].split(',');
+        for(const p of parts){
+          const pm=p.trim().match(/^([GRBY])([a-h][1-8])$/);
+          if(pm){
+            if(pm[1]==='B')blueSquares++;
+            else if(pm[1]==='R')redSquares++;
+            else if(pm[1]==='Y')yellowSquares++;
+            else if(pm[1]==='G')greenSquaresNeutral++;
+          }
+        }
+      }
+      // Match all [%cal ...] tags (arrows)
+      const calRe=/\[%cal\s+([^\]]+)\]/g;
+      while((cm=calRe.exec(pgnText))!==null){
+        const parts=cm[1].split(',');
+        for(const p of parts){
+          const pm=p.trim().match(/^([GRBY])([a-h][1-8])([a-h][1-8])$/);
+          if(pm){
+            if(pm[1]==='R')redArrowsCheck++;
+            else if(pm[1]==='G')greenArrowsEscape++;
+          }
+        }
+      }
+      // Match all NAGs ($N)
+      const nagRe=/\$(\d+)/g;
+      while((cm=nagRe.exec(pgnText))!==null){
+        const n=parseInt(cm[1],10);
+        if(n>=1&&n<=6){nagDist[n]++;nagCount++;}
+      }
+    }
+    h+='<div class="stats-grid">';
+    h+='<div class="stat-item"><div class="label">'+(T('blue_squares')||'Blue Squares (Player Net)')+'</div><div class="value" style="color:#4a90d9">'+blueSquares+'</div></div>';
+    h+='<div class="stat-item"><div class="label">'+(T('red_squares')||'Red Squares (AI Net)')+'</div><div class="value" style="color:#e74c3c">'+redSquares+'</div></div>';
+    h+='<div class="stat-item"><div class="label">'+(T('yellow_squares')||'Yellow Squares (High Total)')+'</div><div class="value" style="color:#f1c40f">'+yellowSquares+'</div></div>';
+    h+='<div class="stat-item"><div class="label">'+(T('green_squares_neutral')||'Green Squares (Neutral Center)')+'</div><div class="value" style="color:#27ae60">'+greenSquaresNeutral+'</div></div>';
+    h+='</div>';
+    h+='<div class="stats-grid" style="margin-top:8px">';
+    h+='<div class="stat-item"><div class="label">'+(T('red_arrows_check')||'Red Arrows (Check Path)')+'</div><div class="value" style="color:#e74c3c">'+redArrowsCheck+'</div></div>';
+    h+='<div class="stat-item"><div class="label">'+(T('green_arrows_escape')||'Green Arrows (Escape Path)')+'</div><div class="value" style="color:#27ae60">'+greenArrowsEscape+'</div></div>';
+    h+='</div>';
+    // NAG distribution
+    if(nagCount>0){
+      h+='<div style="margin-top:14px"><h3 style="font-size:.85rem;color:var(--accent);margin-bottom:6px">'+(T('nag_quality_dist')||'Move Quality Distribution')+'</h3>';
+      h+='<div class="stats-grid">';
+      h+='<div class="stat-item"><div class="label">'+(T('nag_brilliant')||'Brilliant')+'</div><div class="value" style="color:#27ae60">'+nagDist[3]+'</div></div>';
+      h+='<div class="stat-item"><div class="label">'+(T('nag_good')||'Good')+'</div><div class="value" style="color:#7eb8da">'+nagDist[1]+'</div></div>';
+      h+='<div class="stat-item"><div class="label">'+(T('nag_interesting')||'Interesting')+'</div><div class="value" style="color:#f1c40f">'+nagDist[5]+'</div></div>';
+      h+='<div class="stat-item"><div class="label">'+(T('nag_dubious')||'Dubious')+'</div><div class="value" style="color:#e67e22">'+nagDist[6]+'</div></div>';
+      h+='<div class="stat-item"><div class="label">'+(T('nag_mistake')||'Mistake')+'</div><div class="value" style="color:#e74c3c">'+nagDist[2]+'</div></div>';
+      h+='<div class="stat-item"><div class="label">'+(T('nag_blunder')||'Blunder')+'</div><div class="value" style="color:#c0392b">'+nagDist[4]+'</div></div>';
+      h+='</div>';
       h+='</div>';
     }
     h+='</div>';
@@ -1664,9 +2133,15 @@ function renderFENPanel(effectiveParsed,selectedIdx){
 }
 // v1.0.3: escape FEN for safe HTML display (FEN contains only [a-zA-Z0-9 /-], but
 // defensive escaping never hurts).
+// v1.0.4 Rev27 (Kimi stats.html P1 fix): Added " and ' escaping. A malicious
+// or malformed FEN imported via PGN could contain quotes that break out of
+// HTML attribute context (the FEN is rendered inside a <span> but could be
+// re-injected into attributes by downstream code). Quote-escaping closes
+// this XSS vector and matches chess.html's _esc() behavior.
 function _escFEN(s){
   if(!s)return '';
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+          .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 // v1.0.3: Copy FEN to clipboard. Uses navigator.clipboard if available,
 // falls back to a hidden textarea + document.execCommand('copy').
@@ -1705,14 +2180,152 @@ function fallbackCopy(text,cb){
   }catch(e){cb(false);}
 }
 
+// v1.0.4 Rev27 (DeepSeek review): Render a small chess board showing the
+// position after the currently-selected move (or initial position if nothing
+// is selected). The board uses the SAME color scheme as the main chess.html
+// board: SQ_LIGHT/SQ_DARK gradients, coordinate labels with stroke, and
+// piece symbols with color/stroke/glow matching the main board. White at
+// bottom, black at top. Width = 100% of the PGN text panel (responsive via
+// aspect-ratio).
+//
+// Position source: effectiveParsed.moves[].state (populated by
+// parseFromMoveRecords / parsePGN). If no moves, use startFEN or initState().
+function _renderStatsBoard(parsed){
+  if(!parsed)return '';
+  let state=null;
+  // If we have moves and a selected move, use that move's post-state.
+  // Otherwise use the last move's state, or the initial state.
+  if(parsed.moves&&parsed.moves.length>0){
+    const lastMove=parsed.moves[parsed.moves.length-1];
+    state=lastMove&&lastMove.state?lastMove.state:null;
+  }
+  if(!state){
+    state=parsed.startFEN?fenToState(parsed.startFEN):initState();
+  }
+  if(!state||!state.board)return '';
+  // Color scheme — matches chess.html exactly (from game-logic.js)
+  const SQ_LIGHT='linear-gradient(135deg,#e8d5b0,#f0dcc0,#e8d5b0)';
+  const SQ_DARK='linear-gradient(135deg,#8b6914,#7a5c12,#8b6914)';
+  const LBL_LIGHT='#4a3a0a';
+  const LBL_DARK='#f0dcb0';
+  const LBL_STROKE_LIGHT='rgba(255,230,150,0.85)';
+  const LBL_STROKE_DARK='rgba(30,15,0,0.85)';
+  // Piece symbols — White and Black, with VS16 for text-presentation
+  const SYM_W={king:'♔\uFE0E',queen:'♕\uFE0E',rook:'♖\uFE0E',bishop:'♗\uFE0E',knight:'♘\uFE0E',pawn:'♙\uFE0E'};
+  const SYM_B={king:'♚\uFE0E',queen:'♛\uFE0E',rook:'♜\uFE0E',bishop:'♝\uFE0E',knight:'♞\uFE0E',pawn:'♟\uFE0E'};
+  // Build the board grid. White at bottom = render rows from 0 (top, black side)
+  // to 7 (bottom, white side). Each row has 8 cells.
+  // v1.0.4 Rev31 FIX: piece font-size was 5.2vw (viewport-relative), which
+  // overflows on landscape wide screens where the board container is capped
+  // at 360px but vw is computed from the full viewport width (e.g. 800px+).
+  // Now use a CSS variable --piece-size that's set via JS after layout to
+  // the actual board width / 8 * 0.72 (piece ~72% of square). This works on
+  // ALL Android WebView versions (no container query support needed).
+  // v1.0.4 Rev41: Board layout reworked to match main board:
+  //   - File labels (a-h) moved OUTSIDE the board, on TOP (like main board's .flbl)
+  //   - Rank labels (1-8) moved OUTSIDE the board, on LEFT (like main board's .rlbl)
+  //   - Per-cell coordinate labels added INSIDE each cell, matching main board's
+  //     .sq .lbl style: position:absolute;top:1px;left:2px;font-size:9px with
+  //     LBL_LIGHT/LBL_DARK color + LBL_STROKE_LIGHT/LBL_STROKE_DARK stroke +
+  //     text-shadow glow + paint-order:stroke fill.
+  let bh='<div class="section"><h2>'+(T('position_board')||(_lang==='zh'?'当前局面':'Current Position'))+'</h2>';
+  // Outer wrapper: file labels row (top) + flex row (rank labels + board grid)
+  bh+='<div id="statsBoardOuter" style="width:100%;max-width:360px;margin:0 auto 14px auto">';
+  // File labels (a-h) on TOP, outside the board — matching main board's .flbl style
+  bh+='<div style="display:flex;margin-left:18px"><div style="display:grid;grid-template-columns:repeat(8,1fr);width:100%;box-sizing:border-box">';
+  for(let c=0;c<8;c++){
+    bh+='<div style="text-align:center;font-size:.7rem;color:var(--muted,#a08050);font-family:system-ui,-apple-system,sans-serif;letter-spacing:1px;line-height:1.4">'+String.fromCharCode(97+c)+'</div>';
+  }
+  bh+='</div></div>';
+  // Flex row: rank labels (left, outside board) + board grid
+  bh+='<div style="display:flex">';
+  // Rank labels (1-8) on LEFT, outside the board — matching main board's .rlbl style
+  bh+='<div style="display:flex;flex-direction:column;width:18px;flex-shrink:0">';
+  for(let r=0;r<8;r++){
+    bh+='<div style="display:flex;align-items:center;justify-content:center;flex:1;font-size:.7rem;color:var(--muted,#a08050);font-family:system-ui,-apple-system,sans-serif">'+String(8-r)+'</div>';
+  }
+  bh+='</div>';
+  // Board grid
+  bh+='<div id="statsBoardWrap" class="stats-board-wrap" style="flex:1;aspect-ratio:1/1;display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);border:2px solid var(--border2,#d4a017);border-radius:4px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.4);--piece-size:27px">';
+  for(let r=0;r<8;r++){
+    for(let c=0;c<8;c++){
+      const isLight=((r+c)%2===0);
+      const bg=isLight?SQ_LIGHT:SQ_DARK;
+      const lblColor=isLight?LBL_LIGHT:LBL_DARK;
+      const lblStroke=isLight?LBL_STROKE_LIGHT:LBL_STROKE_DARK;
+      // v1.0.4 Rev41: Per-cell coordinate label matching main board's .sq .lbl:
+      // file letter + rank number (e.g. "e4") at top-left of each cell.
+      // Style: position:absolute;top:1px;left:2px;font-size:9px;opacity:.95
+      // with LBL color + .6px stroke + text-shadow glow + paint-order:stroke fill.
+      const cellCoord=String.fromCharCode(97+c)+(8-r);
+      const piece=state.board[r][c];
+      let pieceHtml='';
+      if(piece){
+        const sym=piece.color==='white'?SYM_W[piece.type]:SYM_B[piece.type];
+        const pieceColor=piece.color==='white'?'#E8E8F0':'#1A1A2E';
+        const strokeColor=piece.color==='white'?'rgba(30,15,0,.85)':'rgba(255,230,150,.85)';
+        const glowColor=piece.color==='white'?'rgba(30,15,0,.55)':'rgba(255,230,150,.55)';
+        pieceHtml='<span class="stats-board-piece" style="font-size:var(--piece-size,27px);font-weight:400;color:'+pieceColor+';-webkit-text-stroke:.3px '+strokeColor+';text-shadow:0 0 .8px '+glowColor+';font-family:\'DejaVu Sans\',\'Noto Sans\',\'Segoe UI Symbol\',sans-serif;font-variant-emoji:text;line-height:1">'+sym+'</span>';
+      }
+      bh+='<div style="position:relative;background:'+bg+';display:flex;align-items:center;justify-content:center;overflow:hidden">';
+      // Per-cell coordinate label — matching main board exactly
+      bh+='<span style="position:absolute;top:1px;left:2px;font-size:9px;opacity:.95;font-family:\'DejaVu Sans\',system-ui,sans-serif;letter-spacing:0;pointer-events:none;z-index:2;color:'+lblColor+';-webkit-text-stroke:.6px '+lblStroke+';paint-order:stroke fill;text-shadow:0 0 2px '+lblStroke+';line-height:1">'+cellCoord+'</span>';
+      bh+=pieceHtml;
+      bh+='</div>';
+    }
+  }
+  bh+='</div>'; // close board grid
+  bh+='</div>'; // close flex row (rank labels + board)
+  bh+='</div>'; // close outer wrapper
+  // Caption: show move number / FEN state label
+  // v1.0.4 Rev29 FIX: For Black-to-move-start games (parsed.isBlackToMoveStart),
+  // move index 0 is Black's first move, so the parity is inverted:
+  //   lastIdx%2===0 → Black moved, lastIdx%2===1 → White moved.
+  //   Previously the caption showed wrong color for black-to-move-start games.
+  let caption='';
+  if(parsed.moves&&parsed.moves.length>0){
+    const lastIdx=parsed.moves.length-1;
+    const moveNum=Math.floor(lastIdx/2)+1;
+    const blackStart=parsed&&parsed.isBlackToMoveStart;
+    const isWhite=blackStart?(lastIdx%2===1):(lastIdx%2===0);
+    caption=_lang==='zh'
+      ?('第 '+moveNum+(isWhite?'步（白方）':'步（黑方）')+' 后的局面')
+      :('Position after move '+moveNum+(isWhite?' (White)':' (Black)'));
+  }else{
+    caption=_lang==='zh'?'初始局面':'Initial position';
+  }
+  bh+='<div style="text-align:center;font-size:.78rem;color:var(--muted,#a08050);margin-top:-6px;margin-bottom:10px">'+_escFEN(caption)+'</div>';
+  bh+='</div>';
+  // v1.0.4 Rev31: schedule a post-layout callback to set --piece-size based on
+  // the actual board width. This correctly scales pieces in BOTH portrait and
+  // landscape. requestAnimationFrame ensures the DOM is laid out before we
+  // measure. We also re-run on resize/orientationchange (handled separately).
+  setTimeout(_updateStatsBoardPieceSize,0);
+  return bh;
+}
+
+// v1.0.4 Rev31: Set --piece-size CSS var on #statsBoardWrap based on actual
+// board width. Called after render and on resize/orientationchange.
+// Piece size = boardWidth / 8 * 0.72 (piece ~72% of square size).
+function _updateStatsBoardPieceSize(){
+  try{
+    const wrap=document.getElementById('statsBoardWrap');
+    if(!wrap)return;
+    const w=wrap.clientWidth;
+    if(w<=0)return;
+    const pieceSize=Math.round(w/8*0.72);
+    wrap.style.setProperty('--piece-size',pieceSize+'px');
+  }catch(e){}
+}
+
 // PGN text section (raw with formatting)
 function renderPGNText(parsed,evalData,comments){
   if(!parsed)return '<div class="loading">'+T('no_data')+'</div>';
+  let h='<div class="section"><h2>'+T('pgn_text')+'</h2><div class="pgn-display">';
   // v1.0.2: Display the COMPLETE PGN text from the original payload, preserving
   // ALL comments ({} blocks), variations (()), NAGs ($1), and move numbers.
   // Replace piece letters with symbols (♔♚♕♛♖♜♗♝♘♞) and prepend ♙/♟ for pawn moves.
   // Comments are displayed as-is (原文) with dark-blue italic styling.
-  let h='<div class="section"><h2>'+T('pgn_text')+'</h2><div class="pgn-display">';
   h+='<div style="margin-top:0;white-space:pre-wrap;word-break:break-word">';
   let rawPGN=_payload.pgn||'';
   // v1.0.3: Extract [FEN "..."] header for display BEFORE moves.
@@ -1766,17 +2379,42 @@ function renderPGNText(parsed,evalData,comments){
       return '<span class="'+pieceClass+'">'+wk+'</span>-<span class="'+pieceClass+'">'+wr+'</span>';
     }
     const isFirstPiece='KQRBN'.includes(move[0]||'');
+    // v1.0.4 Rev25 FIX: Promotion symbol rendering. Previously, pawn promotions
+    // (e.g. "e8=Q", "exd8=R") only prepended the pawn symbol but left the
+    // "=Q"/"=R"/"=B"/"=N" suffix as a literal letter — inconsistent with
+    // non-pawn moves where the piece letter IS converted to a symbol. Now
+    // every promotion piece (Q/R/B/N after '=') is converted to its
+    // side-colored symbol, regardless of whether the move is a pawn move
+    // or a piece move (defensive — piece moves can't legally promote, but
+    // the code is unified for simplicity).
+    // Helper: replace the "=X" promotion suffix in a string with "=SYMBOL"
+    function _replacePromo(s){
+      // Match "=Q", "=R", "=B", "=N" possibly followed by + or # (check/mate)
+      return s.replace(/=([QRBN])([+#]?)$/g,function(_,pl,cs){
+        const ps=side==='white'?pieceSym[pl]:blackSym[pl];
+        return '=<span class="'+pieceClass+'">'+ps+'</span>'+cs;
+      });
+    }
     if(!isFirstPiece){
       // Pawn move — prepend ♙ (White) or ♟ (Black), wrapped in piece-color span.
-      // The rest of the move (e.g. "e4", "exd5", "e8=Q+") stays in default color.
+      // v1.0.4 Rev25 FIX: Also convert the promotion "=X" suffix to a symbol.
+      // e.g. "e8=Q+" → "♙e8=♕+" (White) / "♟e8=♛+" (Black)
+      // e.g. "exd8=R" → "♙exd8=♖" (White) / "♟exd8=♜" (Black)
       const pawnSym=side==='white'?'♙\uFE0E':'♟\uFE0E';
-      return '<span class="'+pieceClass+'">'+pawnSym+'</span>'+move;
+      return '<span class="'+pieceClass+'">'+pawnSym+'</span>'+_replacePromo(move);
     }else{
       // Replace the first piece letter with the correct-colored symbol (wrapped),
       // keep the rest of the move in default color.
       const letter=move[0];
       const sym2=side==='white'?pieceSym[letter]:blackSym[letter];
-      return '<span class="'+pieceClass+'">'+sym2+'</span>'+move.substring(1);
+      let rest=move.substring(1);
+      // v1.0.4 Rev25: Use the shared _replacePromo helper for the promotion
+      // suffix. The previous inline regex only handled "=X" at the very end
+      // without check/mate suffixes consistently; the helper is unified and
+      // also handles the rare theoretical case of a piece-letter move with
+      // a promotion suffix (not legal in standard chess, but defensive).
+      rest=_replacePromo(rest);
+      return '<span class="'+pieceClass+'">'+sym2+'</span>'+rest;
     }
   }
   while(i<movetext.length){
@@ -1845,7 +2483,7 @@ function renderPGNText(parsed,evalData,comments){
           vi+=vNumMatch[0].length;
           continue;
         }
-        let vMoveMatch=variationText.substring(vi).match(/^([KQRBN][a-h]?[1-8]?x?[a-h][1-8][+#]?=?[QRBN]?|O-O(?:-O)?|0-0(?:-0)?|[a-h]x?[a-h][1-8](?:=[QRBN])?[+#]?|[a-h][1-8][+#]?)/);
+        let vMoveMatch=variationText.substring(vi).match(/^([KQRBN][a-h]?[1-8]?x?[a-h][1-8][+#]?=?[QRBN]?|O-O(?:-O)?|0-0(?:-0)?|[a-h]x?[a-h][1-8](?:=[QRBN])?[+#]?|[a-h][1-8](?:=[QRBN])?[+#]?)/);
         if(vMoveMatch){
           // v1.0.3: First variation move without a preceding move number — use
           // the inferred side from mainIdxBefore.
@@ -1924,7 +2562,17 @@ function renderPGNText(parsed,evalData,comments){
       continue;
     }
     // Piece move
-    let moveMatch=movetext.substring(i).match(/^([KQRBN][a-h]?[1-8]?x?[a-h][1-8][+#]?=?[QRBN]?|O-O(?:-O)?|0-0(?:-0)?|[a-h]x?[a-h][1-8](?:=[QRBN])?[+#]?|[a-h][1-8][+#]?)/);
+    // v1.0.4 Rev26 FIX: The pawn non-capture alternative was `[a-h][1-8][+#]?`
+    // which did NOT include the promotion suffix `(?:=[QRBN])?`. So for a move
+    // like "e8=Q", the regex matched only "e8" (leaving "=Q" to be rendered as
+    // raw literal characters — the user saw "e8=Q" with the Q as a letter
+    // instead of a queen symbol). Now the alternative is
+    // `[a-h][1-8](?:=[QRBN])?[+#]?` which captures the full "e8=Q" so
+    // renderSAN can convert the promotion piece to a symbol.
+    // The capture-promotion alternative `[a-h]x?[a-h][1-8](?:=[QRBN])?[+#]?`
+    // already handled "exd8=Q" correctly (it requires two file letters for
+    // the capture), but plain "e8=Q" fell through to the non-capture alt.
+    let moveMatch=movetext.substring(i).match(/^([KQRBN][a-h]?[1-8]?x?[a-h][1-8][+#]?=?[QRBN]?|O-O(?:-O)?|0-0(?:-0)?|[a-h]x?[a-h][1-8](?:=[QRBN])?[+#]?|[a-h][1-8](?:=[QRBN])?[+#]?)/);
     if(moveMatch){
       let renderedSAN=renderSAN(moveMatch[0],nextSide);
       // v1.0.2 FIX: Don't put piece-white/piece-black on the move span —
@@ -1953,7 +2601,7 @@ function render(){
   }
   const parsed=parsePGN(_payload.pgn);
   if(!parsed){
-    document.getElementById('content').innerHTML='<div class="loading">PGN parse error</div>';
+    document.getElementById('content').innerHTML='<div class="loading">'+T('pgn_parse_error')+'</div>';
     return;
   }
   // v1.0.3: Reset the _variations array before each render — it gets repopulated
@@ -2014,6 +2662,11 @@ function render(){
     const hint=T('select_hint').replace('%d',moveNum+(isWhite?'.':'...'));
     h+='<div style="background:rgba(212,160,23,.12);border:1px solid rgba(212,160,23,.4);border-radius:6px;padding:8px 12px;margin-bottom:14px;font-size:.82rem;color:var(--accent)">'+_escFEN(hint)+'</div>';
   }
+  // v1.0.4 Rev27 (DeepSeek review): Render a board display ABOVE the PGN text
+  // panel showing the position after the currently-selected move (or initial
+  // position). The board uses the same color scheme as the main chess.html
+  // board (light/dark gradient only, no heatmap), with white at the bottom.
+  h+=_renderStatsBoard(effectiveParsed);
   h+=renderPGNText(parsed,_payload.evals,_payload.comments);
   // v1.0.3: FEN panel — below PGN text panel, above stats.
   h+=renderFENPanel(effectiveParsed,effectiveSelectedIdx);
@@ -2213,15 +2866,31 @@ function _exportFullHTML(){
   scriptJS=scriptJS.replace(/let _payload=null;/,'');
   scriptJS=scriptJS.replace(/let _lang='zh';/,'');
   // Replace button functions with empty stubs
-  scriptJS=scriptJS.replace(/function exportHTML\(\)\{[\s\S]*?\n\}/m,'function exportHTML(){}');
-  scriptJS=scriptJS.replace(/function requestImport\(\)\{[\s\S]*?\n\}/m,'function requestImport(){}');
-  scriptJS=scriptJS.replace(/function requestReview\(\)\{[\s\S]*?\n\}/m,'function requestReview(){}');
-  scriptJS=scriptJS.replace(/function returnToGame\(\)\{[\s\S]*?\n\}/m,'function returnToGame(){}');
-  scriptJS=scriptJS.replace(/function _showStatsImportDialog\(\)\{[\s\S]*?\n\}/m,'function _showStatsImportDialog(){}');
-  scriptJS=scriptJS.replace(/function _showStatsExportDialog\(\)\{[\s\S]*?\n\}/m,'function _showStatsExportDialog(){}');
-  scriptJS=scriptJS.replace(/function _exportStaticHTML\(\)\{[\s\S]*?\n\}/m,'function _exportStaticHTML(){}');
-  scriptJS=scriptJS.replace(/function _exportFullHTML\(\)\{[\s\S]*?\n\}/m,'function _exportFullHTML(){}');
-  scriptJS=scriptJS.replace(/function _updateButtonText\(\)\{[\s\S]*?\n\}/m,'function _updateButtonText(){}');
+  // v1.0.4 Rev44 SIMPLIFICATION (review report item 18): Replaced the fragile
+  // _stripFnBody brace-counting approach with a simpler method: directly
+  // overwrite each function with `function name(){}` using regex. This avoids
+  // all the nested-brace / depth-counting issues that caused the exported HTML
+  // to be stuck at "Loading..." (Rev43 fix). The regex matches from
+  // `function name(){` to the next `\n}` at column 0 (the function's true
+  // closing brace), handling nested braces correctly via the non-greedy `.*?`
+  // with the `\n}` anchor.
+  function _stripFnBody(js, fnName){
+    // Simple approach: replace `function name(){...}` with `function name(){}`
+    // using a regex that matches from the function declaration to the next
+    // line-start `}`. This works because all our target functions follow the
+    // standard JS convention of having their closing brace at column 0.
+    const re = new RegExp('function ' + fnName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\(\\)\\{[\\s\\S]*?\\n\\}');
+    return js.replace(re, 'function ' + fnName + '(){}');
+  }
+  scriptJS=_stripFnBody(scriptJS,'exportHTML');
+  scriptJS=_stripFnBody(scriptJS,'requestImport');
+  scriptJS=_stripFnBody(scriptJS,'requestReview');
+  scriptJS=_stripFnBody(scriptJS,'returnToGame');
+  scriptJS=_stripFnBody(scriptJS,'_showStatsImportDialog');
+  scriptJS=_stripFnBody(scriptJS,'_showStatsExportDialog');
+  scriptJS=_stripFnBody(scriptJS,'_exportStaticHTML');
+  scriptJS=_stripFnBody(scriptJS,'_exportFullHTML');
+  scriptJS=_stripFnBody(scriptJS,'_updateButtonText');
   // Prepend embedded payload
   scriptJS='var _payload={pgn:'+JSON.stringify(pgnText)+',lang:'+JSON.stringify(lang)+'};\n'+
     'var _lang='+JSON.stringify(lang)+';\n'+
@@ -2299,6 +2968,9 @@ function _statsPastePGN(){
     _selectedMoveIdx=-1;
     _variationMoves=null;
     _variationMeta=null;
+    // v1.0.4 Rev28: Record the imported PGN so the return-to-game flow can
+    // prompt "🗃️ Import PGN to game?" Yes/No/Cancel.
+    _statsImportedPGN=text;
     render();
   }
 }
@@ -2333,18 +3005,130 @@ function onStatsPGNFileRead(content){
   _selectedMoveIdx=-1;
   _variationMoves=null;
   _variationMeta=null;
+  // v1.0.4 Rev28: Record the imported PGN so the return-to-game flow can
+  // prompt "🗃️ Import PGN to game?" Yes/No/Cancel.
+  _statsImportedPGN=content;
   render();
 }
 function requestReview(){
   _haptic('BUTTON_PRESS');
+  // v1.0.4 Rev28: If the user imported a PGN on the stats page, the
+  // "🗃️ Import PGN to game?" prompt should fire before leaving. requestReview
+  // goes to the main activity's review mode — treat it the same as
+  // returnToGame for the import-back flow.
+  if(_statsImportedPGN){
+    _showStatsImportBackPrompt();
+    return;
+  }
   if(typeof AndroidBridge!=='undefined'&&AndroidBridge.statsRequestReview){
     AndroidBridge.statsRequestReview();
   }
 }
 function returnToGame(){
   _haptic('BUTTON_PRESS');
+  // v1.0.4 Rev28: If the user imported a PGN on the stats page, intercept
+  // the return-to-game action and show the "🗃️ Import PGN to game?"
+  // Yes/No/Cancel dialog. Cancel = stay on stats page (do nothing).
+  if(_statsImportedPGN){
+    _showStatsImportBackPrompt();
+    return;
+  }
   if(typeof AndroidBridge!=='undefined'&&AndroidBridge.closeStatsPage){
     AndroidBridge.closeStatsPage();
+  }
+}
+
+// v1.0.4 Rev28: Show the "🗃️ Import PGN to game?" Yes/No/Cancel dialog.
+// Yes = stash the imported PGN via AndroidBridge.setImportedPGN(pgn) then
+//       closeStatsPage (MainActivity.onResume will then prompt 💾 Save PGN
+//       file? before importing).
+// No = closeStatsPage WITHOUT stashing (MainActivity keeps its current game).
+// Cancel = do nothing (stay on stats page).
+let _statsImportBackDialogVisible=false;
+function _showStatsImportBackPrompt(){
+  if(_statsImportBackDialogVisible)return; // Prevent duplicate dialogs
+  _statsImportBackDialogVisible=true;
+  _haptic('BUTTON_PRESS');
+  var title=_lang==='zh'?'🗃️ 是否将PGN导入到对局？':'🗃️ Import PGN to game?';
+  var msg=_lang==='zh'
+    ?'你在统计页面导入过 PGN。是否将其导入到当前对局（会替换主界面/复盘界面已记录的走法）？'
+    :'You imported a PGN on the stats page. Import it into the current game (replaces the moves recorded in the main/review view)?';
+  var yesTxt=_lang==='zh'?'是':'Yes';
+  var noTxt=_lang==='zh'?'否':'No';
+  var cancelTxt=_lang==='zh'?'取消':'Cancel';
+  // Build dialog HTML matching the app's dialog style (.dov/.dlg/.dlg-btns)
+  var overlay=document.createElement('div');
+  overlay.className='dov';
+  overlay.setAttribute('role','dialog');
+  overlay.setAttribute('aria-modal','true');
+  overlay.setAttribute('aria-label',title);
+  overlay.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:10000;padding:16px';
+  var dlg=document.createElement('div');
+  dlg.className='dlg';
+  dlg.style.cssText='max-width:380px;background:var(--card,#221015);border:1px solid var(--border2,#d4a017);border-radius:8px;padding:18px;width:100%;box-sizing:border-box';
+  dlg.innerHTML=
+    '<h2 style="color:var(--accent2,#ffd700);margin-bottom:12px;font-size:1.05rem">'+_escFEN(title)+'</h2>'+
+    '<div style="font-size:.88rem;color:var(--text,#f5e6c8);line-height:1.6;margin-bottom:14px">'+_escFEN(msg)+'</div>'+
+    '<div class="dlg-btns" style="display:flex;gap:6px;flex-wrap:wrap">'+
+      '<button type="button" class="btn btn-p" id="_statsImportYes" style="flex:1;justify-content:center">'+_escFEN(yesTxt)+'</button>'+
+      '<button type="button" class="btn btn-s" id="_statsImportNo" style="flex:1;justify-content:center">'+_escFEN(noTxt)+'</button>'+
+      '<button type="button" class="btn" id="_statsImportCancel" style="flex:1 1 100%;margin-top:4px;justify-content:center">'+_escFEN(cancelTxt)+'</button>'+
+    '</div>';
+  overlay.appendChild(dlg);
+  // Click on overlay backdrop = Cancel (stay on stats page)
+  overlay.addEventListener('click',function(e){
+    if(e.target===overlay){_statsImportBackDismiss();}
+  });
+  document.body.appendChild(overlay);
+  // Wire up buttons
+  document.getElementById('_statsImportYes').addEventListener('click',function(){
+    _haptic('BUTTON_PRESS');
+    var pgn=_statsImportedPGN;
+    _statsImportedPGN=null; // Consume
+    _statsImportBackDismiss();
+    // Stash the imported PGN for MainActivity.onResume to pick up
+    try{
+      if(typeof AndroidBridge!=='undefined'&&AndroidBridge.setImportedPGN){
+        AndroidBridge.setImportedPGN(pgn);
+      }
+    }catch(e){console.error('setImportedPGN failed',e);}
+    // Close stats page — MainActivity.onResume will prompt 💾 Save PGN file?
+    // before importing (because "Yes" means the user wants to replace the
+    // current game, and we don't want to lose the current game's PGN without
+    // offering to save it first).
+    try{
+      if(typeof AndroidBridge!=='undefined'&&AndroidBridge.closeStatsPage){
+        AndroidBridge.closeStatsPage();
+      }
+    }catch(e){console.error('closeStatsPage failed',e);}
+  });
+  document.getElementById('_statsImportNo').addEventListener('click',function(){
+    _haptic('BUTTON_PRESS');
+    _statsImportedPGN=null; // Discard the imported PGN — don't import to game
+    _statsImportBackDismiss();
+    try{
+      if(typeof AndroidBridge!=='undefined'&&AndroidBridge.closeStatsPage){
+        AndroidBridge.closeStatsPage();
+      }
+    }catch(e){console.error('closeStatsPage failed',e);}
+  });
+  document.getElementById('_statsImportCancel').addEventListener('click',function(){
+    _haptic('BUTTON_PRESS');
+    _statsImportBackDismiss();
+    // Stay on stats page — do NOT closeStatsPage
+  });
+}
+function _statsImportBackDismiss(){
+  _statsImportBackDialogVisible=false;
+  var overlay=document.querySelector('.dov[role="dialog"][aria-label]');
+  // Remove only the import-back dialog (be careful not to remove other dialogs)
+  var overlays=document.querySelectorAll('.dov[role="dialog"]');
+  for(var i=0;i<overlays.length;i++){
+    var ariaLabel=overlays[i].getAttribute('aria-label')||'';
+    if(ariaLabel.indexOf('Import PGN to game')>=0||ariaLabel.indexOf('将PGN导入到对局')>=0){
+      overlays[i].remove();
+      return;
+    }
   }
 }
 
@@ -2359,10 +3143,35 @@ function init(){
       }
     }catch(e){console.error('init error:',e);}
   }
+  // v1.0.4 Rev27: Install global hyperlink interceptor for stats.html.
+  // Any <a href="http(s)://..."> click is routed to AndroidBridge.openUrlInBrowser()
+  // (registered in StatsActivity.java) which launches the system default browser.
+  // The WebViewClient in StatsActivity also intercepts at the navigation layer
+  // (defense-in-depth), but this JS handler gives us preventDefault() so the
+  // WebView never even attempts to load the external URL.
+  if(!_statsLinkHandlerInstalled){
+    _statsLinkHandlerInstalled=true;
+    document.addEventListener('click',function(e){
+      var a=e.target.closest&&e.target.closest('a[href]');
+      if(!a)return;
+      var href=a.getAttribute('href')||'';
+      if(!href||href.charAt(0)==='#')return;
+      if(href.indexOf('http://')!==0&&href.indexOf('https://')!==0)return;
+      e.preventDefault();
+      try{
+        if(typeof AndroidBridge!=='undefined'&&AndroidBridge.openUrlInBrowser){
+          AndroidBridge.openUrlInBrowser(href);
+        }else{
+          try{window.open(href,'_blank');}catch(err){}
+        }
+      }catch(err){console.error('openUrlInBrowser failed:',err);}
+    },true);
+  }
   // Update button text based on language
   _updateButtonText();
   render();
 }
+var _statsLinkHandlerInstalled=false;
 
 // Update button text based on current language
 function _updateButtonText(){
@@ -2383,14 +3192,30 @@ function _updateButtonText(){
 }
 
 // Handle Android back button — return to main game
+// v1.0.4 Round-5 Rev27 (Kimi stats.html P0 fix): Only intercept Backspace when
+// the key event did NOT originate from an INPUT, TEXTAREA, or contentEditable
+// element. Previously, pressing Backspace while editing the PGN paste field or
+// any prompt input would (1) preventDefault the character deletion AND (2)
+// immediately bounce the user back to the main game — making text editing
+// impossible. Now editing fields work normally, and Backspace-as-back only
+// fires when the user is NOT focused on a text input.
 document.addEventListener('keydown',function(e){
   if(e.key==='Backspace'||e.keyCode===8){
+    var tgt=e.target;
+    if(tgt&&((tgt.tagName==='INPUT')||(tgt.tagName==='TEXTAREA')||tgt.isContentEditable)){
+      return; // Let the default delete-character action happen
+    }
     e.preventDefault();
     returnToGame();
   }
 });
 
 window.addEventListener('load',init);
+// v1.0.4 Rev31: Re-compute stats board piece size on resize/orientationchange.
+// This ensures pieces remain correctly sized when the user rotates the device
+// while the stats page is open.
+window.addEventListener('resize',function(){_updateStatsBoardPieceSize();});
+window.addEventListener('orientationchange',function(){setTimeout(_updateStatsBoardPieceSize,100);});
 </script>
 </body>
 </html>

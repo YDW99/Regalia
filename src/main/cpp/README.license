@@ -29,3 +29,84 @@ for full license texts and attribution details.
 v1.0.3 patch: no changes to cpp/ sources (engine_jni.cpp and CMakeLists.txt
 are unchanged from v1.0.2). The libengine_bridge.so packaged in the APK is
 the same v1.0.2-built binary.
+
+v1.0.4 Round-5 Rev23: no changes to cpp/ sources (engine_jni.cpp and
+CMakeLists.txt are unchanged). The libengine_bridge.so packaged in the APK
+is rebuilt from the same source but is functionally identical.
+
+v1.0.4 Round-5 Rev24: no changes to cpp/ sources. The Stockfish engine
+binary (src/main/jniLibs/arm64-v8a/libstockfish.so) is updated to the
+official sf_18 arm64-v8a-dotprod release (NDK r27c build, 114 MB, NEON+
+dotprod acceleration). engine_jni.cpp and CMakeLists.txt are unchanged.
+
+v1.0.4 Round-5 Rev25: no changes to cpp/ sources.
+
+v1.0.4 Round-5 Rev26: no changes to cpp/ sources.
+
+v1.0.4 Round-5 Rev27: no changes to cpp/ sources.
+
+v1.0.4 Round-5 Rev28: no changes to cpp/ sources.
+
+v1.0.4 Round-5 Rev29: no changes to cpp/ sources. All Rev29 changes are
+in the JS layer (chess.src/tablebase.js, chess.src/ai-bridge.js, stats.html).
+
+v1.0.4 Round-5 Rev30: no changes to cpp/ sources. All Rev30 changes are
+in the Java layer (ChessWebViewClient.java) and JS layer (chess.src/ui.js,
+chess.src/chess960.js).
+
+v1.0.4 Round-5 Rev31: no changes to cpp/ sources. All Rev31 changes are
+in the Java layer (StockfishNative.java) and JS layer (chess.src/ai-bridge.js,
+chess.src/tablebase.js, chess.src/pgn-standard.js, chess.src/game-logic.js,
+stats.html).
+
+v1.0.4 Round-5 Rev32: no changes to cpp/ sources. All Rev32 changes are
+in the Java layer (StockfishNative.java) and JS layer (chess.src/
+game-logic.js).
+
+v1.0.4 Round-5 Rev33: no changes to cpp/ sources. All Rev33 changes are
+in the Java layer (StockfishNative.java) and JS layer (chess.src/
+ai-bridge.js, chess.src/ui.js).
+
+v1.0.4 Round-5 Rev34: no changes to cpp/ sources. All Rev34 changes are
+in the JS layer (chess.src/chess960.js, stats.html).
+
+v1.0.4 Round-5 Rev35: no changes to cpp/ sources. All Rev35 changes are
+in the Java layer (StockfishNative.java) and JS layer (chess.src/
+ai-bridge.js, chess.src/game-logic.js, chess.src/ui.js).
+
+v1.0.4 Round-5 Rev36: no changes to cpp/ sources. All Rev36 changes are
+in the Java layer (StockfishNative.java) and JS layer (chess.src/
+ai-bridge.js, chess.src/ui.js, stats.html).
+
+v1.0.4 Round-5 Rev37: no changes to cpp/ sources. All Rev37 changes are
+in the JS layer (chess.src/ui.js).
+
+v1.0.4 Round-5 Rev38: no changes to cpp/ sources. All Rev38 changes are
+in the JS layer (chess.src/ui.js, chess.src/index.html.tpl).
+
+v1.0.4 Round-5 Rev39: no changes to cpp/ sources. All Rev39 changes are
+in the JS layer (chess.src/ui.js).
+
+v1.0.4 Round-5 Rev40: no changes to cpp/ sources. All Rev40 changes are
+in the JS layer (chess.src/ui.js).
+
+v1.0.4 Round-5 Rev41: no changes to cpp/ sources. All Rev41 changes are
+in the JS layer (chess.src/ui.js, stats.html).
+
+v1.0.4 Round-5 Rev42: no changes to cpp/ sources. All Rev42 changes are
+in the JS layer (chess.src/ui.js).
+
+v1.0.4 Round-5 Rev43: no changes to cpp/ sources. All Rev43 changes are
+in stats.html.
+
+v1.0.4 Round-5 Rev44: no changes to cpp/ sources. All Rev44 changes are
+in the JS layer (chess.src/ai-bridge.js, chess.src/worker-pool.js, stats.html).
+
+v1.0.4 Round-5 Rev45: no changes to cpp/ sources. All Rev45 changes are
+in the JS layer (chess.src/game-logic.js, chess.src/ai-bridge.js).
+
+v1.0.4 Round-5 Rev46: no changes to cpp/ sources. All Rev46 changes are
+in the JS layer (chess.src/ui.js, chess.src/game-logic.js, chess.src/ai-bridge.js).
+
+v1.0.4 Round-5 Rev47: no changes to cpp/ sources. All Rev47 changes are
+in the JS layer.

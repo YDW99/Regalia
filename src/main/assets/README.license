@@ -61,6 +61,50 @@ v1.0.2 NEW FEATURE additions:
         - 📂 Select PGN File opens SAF picker directly from StatsActivity
           (no longer bounces through MainActivity).
 
+v1.0.4 EXPANSION (this round) changes (reflected in stats.html and rebuilt chess.html):
+  - chess.src/worker-pool.js (NEW FILE): Web Worker pool for PGN parsing,
+      statistics computation, and control-map computation. Created via
+      Blob URL (compatible with WebView CSP). Inline fallback when Workers
+      unavailable. AGPL v3 (original code).
+  - chess.src/pgn-standard.js (EXPANDED): added formatEmtTag() for
+      [%emt HH:MM:SS]; NAG support (NAG_MAP, nagToSymbol, symbolToNag,
+      formatNagToken); visual annotations (formatCslTag, formatCalTag,
+      parseCslTag, parseCalTag); TimeControl parsing/formatting
+      (parseTimeControl, formatTimeControl) for all 6 spec formats.
+  - chess.src/ui.js (EXPANDED): New Game dialog gains Time Control
+      section (5 modes: Untimed/Sudden/Fischer/Bronstein/US-delay);
+      live clock display with low-time warning; per-move visual
+      annotation caching (_computeAndCacheVisualAnnotations) for
+      [%csl]/[%cal] export.
+  - chess.src/ai-bridge.js (EXPANDED): _buildPGNString() now emits
+      [TimeControl "..."] header when timed; per-move comments now
+      include [%emt] (untimed) or [%clk] (timed) plus [%csl]/[%cal]
+      from the visual annotations cache.
+  - stats.html (EXPANDED): New "Visual Annotations" stats section
+      tallies [%csl] G/B/R/Y counts and NAG $1-$6 distribution.
+  - chess.src/chess960.js (from prior v1.0.4 round): unchanged.
+  - chess.src/game-logic.js (EXPANDED): added time_control_* i18n
+      strings (bilingual zh/en).
+  - Version strings throughout: v1.0.3 → v1.0.4 (header badge, about
+      dialog, loading title, render-error fallback page).
+  - Built chess.html includes all the above via build-chess.sh.
+
+v1.0.4 changes (reflected in stats.html and rebuilt chess.html):
+  - chess.src/chess960.js (NEW FILE): Chess960 implementation.
+  - chess.src/pgn-standard.js (NEW FILE): standardized PGN encoder/decoder.
+  - chess.src/ai-bridge.js: _buildPGNString() rewritten to emit
+      Seven-Tag Roster + supplementary tags via composePGN().
+  - chess.src/tablebase.js: fenToState() detects Shredder-FEN castling
+      rights; _parsePGN() extracts [Variant "Chess960"] tag; importPGN()
+      sets gameVariant + calls setChess960Mode(true).
+  - chess.src/game-logic.js: Chess960 UI i18n strings; loading_title → v1.0.4.
+  - chess.src/ui.js: New Game dialog Chess960 toggle + SP-ID selector
+      + back-rank preview; _startGameImpl() branches on dlgChess960.
+  - chess.src/index.html.tpl: <title>Regalia v1.0.4</title>.
+  - stats.html: Heatmap Control Statistics section (per-square avg
+      control, strongest/weakest squares, center-control trend).
+  - All i18n strings bilingual (zh/en).
+
 v1.0.3 changes (reflected in stats.html and rebuilt chess.html):
   - stats.html: NEW time-management analysis feature.
       extractMoveTimes(pgnText) parses per-move thinking times from PGN
@@ -160,3 +204,357 @@ v1.0.3 patch changes (version number unchanged — still v1.0.3 / versionCode 10
         screens). Also removed the 360px hard cap on board width.
   - No changes to stats.html in this patch.
   - No changes to AGPLv3_Logo.svg or GPLv3_Logo.svg.
+
+v1.0.4 Round-5 Rev23 changes:
+  - chess.html (rebuilt from chess.src/):
+      * Eval cache writes now debounced (150ms) instead of synchronous on every
+        set()/delete() — batch analyze-all performance improved ~60x for large
+        caches.
+      * Engine restart no longer wipes the entire persisted eval cache — only
+        the current game's requested-step is reset, preserving other games'
+        evals (Stockfish is deterministic).
+      * saveEvalCacheSync (Java side) now uses Files.move with ATOMIC_MOVE on
+        API 26+ — eliminates the delete+rename data-loss window.
+  - No changes to stats.html, AGPLv3_Logo.svg, or GPLv3_Logo.svg.
+
+v1.0.4 Round-5 Rev24 changes:
+  - chess.html (rebuilt from chess.src/):
+      * Analyze-all interruption root-cause fix (5 bugs): all-cached instant
+        completion, per-step 60s safety timer with skip-stuck-step, batch
+        resume on engine auto-recovery, cache-hit advance during batch,
+        onEngineError no longer drops batch.
+      * Instant cache restoration from PGN comments: _parsePGN() extracts
+        [%eval ...] tags from {} comments; importPGN() populates
+        _reviewEvalCache so positions with eval annotations are shown
+        instantly without calling the engine.
+      * PGN cache archive completeness: _pgnCacheSaveCurrent() always uses
+        _buildPGNString(true) — saved PGN includes variations (forced on),
+        comments with [%eval]/[%emt]/[%clk]/[%csl]/[%cal], Seven-Tag Roster.
+      * Player rename feature: clicking "你"/"You" on the player bar opens a
+        rename prompt; name persists via persistentSet('Regalia_humanName')
+        and is used in all PGN text ([White "..."]/[Black "..."]).
+      * Removed redundant 📥 Import button from PGN Cache Manager.
+      * New i18n keys: rename_player_hint, rename_player_prompt,
+        rename_player_saved, rename_player_reset (zh/en).
+  - No changes to stats.html, AGPLv3_Logo.svg, or GPLv3_Logo.svg.
+
+v1.0.4 Round-5 Rev25 changes:
+  - chess.html (rebuilt from chess.src/):
+      * New Game dialog: removed redundant <h3> heading above Chess960
+        dedicated settings ("菲舍尔任意制象棋"/"Fischer Random Chess"). The
+        Chess960 toggle label already makes the mode clear; settings now
+        appear directly under the toggle.
+  - stats.html (GPL v3):
+      * renderPGNText() → renderSAN(): promotion symbols now rendered as
+        side-colored piece symbols (♕/♛, ♖/♜, ♗/♝, ♘/♞) instead of literal
+        letters. Previously, pawn promotions (e.g. "e8=Q") only prepended
+        the pawn symbol but left "=Q" as text. Now "e8=Q+" → "♙e8=♕+" (White)
+        / "♟e8=♛+" (Black). A shared _replacePromo() helper handles both
+        pawn-move and piece-move branches uniformly, including check/mate
+        suffixes (+/#).
+  - No changes to AGPLv3_Logo.svg or GPLv3_Logo.svg.
+
+v1.0.4 Round-5 Rev26 changes:
+  - stats.html (GPL v3):
+      * renderPGNText() — ROOT-CAUSE FIX for "e8=Q still shows letter" bug.
+        Rev25 added _replacePromo() to convert =Q/=R/=B/=N to symbols, but
+        the promotion still showed as a letter because the SAN regex never
+        captured the promotion suffix for non-capture pawn promotions.
+        The pawn non-capture alternative was [a-h][1-8][+#]? (NO promotion
+        group), so "e8=Q" matched only "e8" — leaving "=Q" as raw literal
+        text. Rev26 fixes the alternative to [a-h][1-8](?:=[QRBN])?[+#]?,
+        which captures the full "e8=Q". Same fix applied to the variation-
+        move regex. Now ALL promotion formats render with piece symbols:
+        e8=Q → ♙e8=♕, exd8=R → ♙exd8=♖, a8=N# → ♟a8=♞#, b1=B+ → ♙b1=♗+.
+  - No changes to chess.html, AGPLv3_Logo.svg, or GPLv3_Logo.svg.
+
+v1.0.4 Round-5 Rev27 changes:
+  - chess.html (rebuilt from chess.src/, GPL v3 + AGPL v3 combined work):
+      * Hyperlink click handler: new global document-level click handler
+        intercepts all <a href="http(s)://..."> clicks anywhere in the
+        document (About dialog, license links, etc.) and routes them to
+        AndroidBridge.openUrlInBrowser(). The default WebView navigation
+        is suppressed via preventDefault(). In-page anchors (#) and
+        non-http(s) schemes are left alone.
+      * About page GitHub link: the "Source code: https://github.com/YDW99/Regalia"
+        line is now a real <a> hyperlink (previously plain text). New i18n
+        keys about_source_code_prefix and about_source_code_url split the
+        string so the URL can be a link. All license links (AGPL, GPL) now
+        also have rel="noopener" for defense-in-depth.
+      * 🏳️ Resign feature (DeepSeek review 2.1): new 🏳️ Resign button in
+        the player bar next to the "Your turn" indicator. Confirmation
+        dialog (showResignConfirm state) with Yes/Cancel buttons.
+        _resignGame() function: sets _resignWinnerColor (the AI's color),
+        stops the engine (stop command + isAIThinking=false), stops the
+        game clock, sets gameOver + _gameOverStatusKey='resign', plays a
+        "lose" sound + ERROR haptic. New i18n keys: resign_btn,
+        resign_confirm_title, resign_confirm_msg, resign_yes, resign_no,
+        white_resigns, black_resigns, resigns_suffix (zh/en).
+        _gameOverStrFromStatus('resign') returns the resigner color +
+        "认输"/"resigns". formatEval resign case now uses
+        _resignWinnerColor directly (was incorrectly trying to detect
+        "White wins" in the resign text).
+      * PGN resign export (ai-bridge.js _buildPGNString): [Result] set
+        from _resignWinnerColor (1-0 if White wins, 0-1 if Black wins).
+        [Termination "Resignation"] supplementary tag added. Last move's
+        comment appends "White resigns." / "Black resigns." per the 元宝
+        PGN report.
+      * _resetGameUIState() resets showResignConfirm=false and
+        _resignWinnerColor=null to prevent the previous game's resign
+        state from leaking into the new game.
+      * handleBackPress() closes the resign confirmation dialog on back
+        button press.
+  - stats.html (GPL v3):
+      * Backspace global interceptor (Kimi P0 fix): the keydown listener
+        now checks if e.target is INPUT/TEXTAREA/contentEditable and
+        returns early, allowing normal text editing. Previously,
+        Backspace in any input field would (1) preventDefault the
+        character deletion AND (2) bounce the user back to the main game.
+      * applySANMove king-safety validation (Kimi P0 fix): new
+        _isKingSafe(state, defenderColor) helper checks if any opponent
+        piece can pseudo-legally attack the defender's king. applySANMove
+        now calls this AFTER each candidate move and only accepts the
+        move if the king is safe. Castling also validates post-castle
+        king safety. If a disambiguated piece fails, the scanner
+        continues to the next matching piece (correct SAN behavior).
+      * game complexity threshold (Kimi P1 fix): validEvals.length>=3
+        changed to >=2. With 2 evals, changes has 1 element — avgChange
+        and variance are well-defined (variance=0). The previous >=3
+        check skipped the entire complexity section for 2-eval games.
+      * _escFEN escaping (Kimi P1 fix): added " and ' escaping, matching
+        chess.html's _esc() behavior. Closes a potential XSS vector
+        where a malicious FEN could break out of HTML attribute context.
+      * exportFullHTML regex (Kimi P1 fix): replaced the lazy
+        [\s\S]*?\n} regex with a new _stripFnBody() helper that does
+        brace-depth counting to find the function's true closing brace.
+        The lazy regex could match a nested object literal's closing
+        brace, leaving orphaned code in the exported HTML.
+      * Board display (DeepSeek review): new _renderStatsBoard(parsed)
+        function renders a small chess board ABOVE the PGN text panel
+        showing the position after the currently-selected move (or
+        initial position). Uses the SAME color scheme as chess.html
+        (SQ_LIGHT/SQ_DARK gradients, coordinate labels with stroke,
+        piece symbols with color/stroke/glow). White at bottom, Black
+        at top. Responsive (max 360px, aspect-ratio 1:1). New i18n key
+        position_board (zh: 当前局面, en: Current Position).
+      * Hyperlink click handler: new global document-level click handler
+        (installed once in init() via _statsLinkHandlerInstalled flag)
+        routes <a href="http(s)://..."> clicks to the new
+        AndroidBridge.openUrlInBrowser() bridge method.
+  - No changes to AGPLv3_Logo.svg or GPLv3_Logo.svg.
+
+v1.0.4 Round-5 Rev28 changes:
+  - chess.html (rebuilt from chess.src/, GPL v3 + AGPL v3 combined work):
+      * Stats↔main PGN sync (ai-bridge.js openStatsPage): now ALWAYS
+        rebuilds the PGN from the current moveRecords via
+        _buildPGNString(true) (forceIncludeVariations=true). Previously
+        used _cachedOriginalPGN which became STALE when the user played
+        new moves after importing. Now the stats page always reflects
+        the current main/review game state. Falls back to
+        _cachedOriginalPGN only if _buildPGNString returns empty (e.g.,
+        FEN-only imports with no moveRecords).
+      * _showStatsImportBackPrompt(pgnText) function (ui.js): called
+        from MainActivity.onResume() via evaluateJavascript when
+        StatsActivity.importedPGNOnStats is non-null. Uses the existing
+        _withPGNSaveCheck mechanism to show the "💾 Save PGN file?"
+        prompt before importing (if the current game has move records).
+        The pending action is importPGN(pgn). New state variable
+        _pendingStatsImportPGN stashes the PGN text for the import
+        action closure.
+      * Game-over emoji fix (ui.js): the game-over overlay's emoji was
+        hardcoded to show 🤝 for all non-checkmate terminations. Now
+        shows 🏳️ when _gameOverStatusKey==='resign' (matching the
+        resign button's icon), and 🤝 only for genuine draws.
+      * Stats board promotion fix (tablebase.js _parsePGN): the
+        moveRecords.push({...}) in the PGN import path was missing the
+        promotion field, so openStatsPage() serialized move records
+        without promotion info, and the stats page's executeMove()
+        couldn't apply the promotion (showed a pawn on the back rank
+        instead of the promoted piece). Fixed by adding
+        `promotion: move.promotion||null` to the pushed move record.
+      * New i18n keys (game-logic.js): stats_import_back_title,
+        stats_import_back_msg, stats_import_back_yes, stats_import_back_no,
+        stats_import_back_cancel, stats_import_back_no_pgn (zh/en).
+  - stats.html (GPL v3):
+      * New state variable _statsImportedPGN — the PGN text imported on
+        the stats page (via 🗃️ Paste PGN or 📂 Select PGN File). Set by
+        _statsPastePGN() and onStatsPGNFileRead().
+      * returnToGame() and requestReview() now intercept when
+        _statsImportedPGN is non-null: instead of directly closing the
+        stats page, they call _showStatsImportBackPrompt() which shows
+        the "🗃️ Import PGN to game?" Yes/No/Cancel dialog.
+      * New _showStatsImportBackPrompt() function — renders the
+        Yes/No/Cancel dialog with the app's dialog style (.dov/.dlg/.dlg-btns).
+        Yes = AndroidBridge.setImportedPGN(pgn) + closeStatsPage.
+        No = closeStatsPage without setting the imported PGN.
+        Cancel = do nothing (stay on stats page).
+      * New _statsImportBackDismiss() function — removes the import-back
+        dialog. New _statsImportBackDialogVisible flag prevents
+        duplicate dialogs.
+      * The dialog's overlay backdrop click = Cancel (stay on stats page).
+  - No changes to AGPLv3_Logo.svg or GPLv3_Logo.svg.
+
+v1.0.4 Round-5 Rev29 changes:
+  - chess.src/ (see chess.src/README.license for per-file details):
+      * CRITICAL: tablebase.js — PGN import failure fix. Rev28's
+        `promotion: move.promotion||null` referenced undefined `move`
+        (loop variable is `parsedMove`). Fixed to
+        `(parsedMove&&parsedMove.move&&parsedMove.move.promotion)||null`.
+      * CRITICAL: stats.html — en passant support added to
+        canMoveTo() and executeMove() (was missing, caused 25-move
+        cascade failure when importing PGNs with en passant).
+      * stats.html — checkmate symbol '#' now properly emitted by
+        buildSAN() (was always '+'); uses in-place simulation to
+        avoid recursion stack overflow.
+      * stats.html — classifyMove() NAG Black-side fix: uses
+        side-relative moverDelta for ALL mate-threshold comparisons
+        (Black's mating move was misclassified as $4 blunder).
+      * stats.html — _renderStatsBoard() caption respects
+        parsed.isBlackToMoveStart (was using wrong parity for
+        black-to-move-start games).
+      * stats.html — PGN parse error now localized (was hardcoded
+        English "PGN parse error"). New i18n key pgn_parse_error.
+      * ai-bridge.js — NAG classification Black-side fix (same as
+        stats.html classifyMove).
+      * ai-bridge.js — variation prefix falsy-0 fix.
+      * tablebase.js — unclosed `{...}` comments now consume rest of
+        movetext (PGN spec tolerant behavior).
+  - chess.html: rebuilt from chess.src/ changes.
+
+v1.0.4 Round-5 Rev30 changes:
+  - chess.src/ui.js (GPL v3): ROBUSTNESS — scroll position restoration
+    fix. Added _scrollRestoreGuard flag that suppresses _onMlistScroll
+    during programmatic scrollTop restore (was being corrupted by
+    intermediate 'scroll' events from scroll-behavior:smooth
+    animation). Save phase reads scrollTop DIRECTLY from the live DOM.
+    scroll-behavior temporarily switched to 'auto' during restore.
+    Same pattern applied to .review-body in review mode.
+    _scrollRestoreGuard reset on new game.
+  - chess.src/chess960.js (GPL v3): ROBUSTNESS — randomSPID() modulo
+    bias elimination via rejection sampling (was `buf[0]%960` with
+    ~0.03% bias; now only accepts values < 65280 before %960).
+  - chess.html: rebuilt from chess.src/ changes.
+
+v1.0.4 Round-5 Rev31 changes:
+  - chess.src/ (see chess.src/README.license for per-file details):
+      * ai-bridge.js: UCI COMPLIANCE — startPonder() now passes time
+        params for timed games.
+      * tablebase.js: removed unused _unclosed flag.
+      * pgn-standard.js: removed dead ch==='\s' comparison; fixed
+        composePGN leading blank lines.
+      * game-logic.js: review mode orientation-change scroll fix.
+  - stats.html (GPL v3): _renderStatsBoard() piece sizing fix. Was
+    5.2vw (viewport-relative) causing overflow in landscape. Now uses
+    CSS variable --piece-size set via JS to (boardWidth/8*0.72). Added
+    _updateStatsBoardPieceSize() called after render and on resize/
+    orientationchange. Also: removed dead `oppKing` variable in
+    buildSAN().
+  - chess.html: rebuilt from chess.src/ changes.
+
+v1.0.4 Round-5 Rev32 changes:
+  - chess.src/game-logic.js (GPL v3): CRITICAL — ECO book move causing
+    engine unresponsive bug fix. _requestStockfishMove() resets
+    _aiRetryCount=0 on book-served moves (and tablebase moves) so the
+    doAIMove() retry counter doesn't accumulate across non-engine
+    "served" moves.
+  - chess.html: rebuilt from chess.src/ changes.
+
+v1.0.4 Round-5 Rev33 changes:
+  - chess.src/ai-bridge.js (GPL v3): SELDEPTH DISPLAY. New _sfSeldepth
+    global; onEngineProgress/onEngineEval/onPonderProgress accept seldepth
+    param; _resetEvalState resets _sfSeldepth; review eval cache stores
+    seldepth; formatEvalTag includes SD in PGN annotation.
+  - chess.src/ui.js (GPL v3): SELDEPTH DISPLAY. Main eval bar shows
+    "D15 SD22"; review eval bar shows "D15 SD22" + real-time nodes/nps.
+  - chess.html: rebuilt from chess.src/ changes.
+
+v1.0.4 Round-5 Rev34 changes:
+  - chess.src/chess960.js (GPL v3): CRITICAL — isChess960CastlingLegal()
+    now checks the full king+rook path union for occupancy, preventing
+    castling that would capture/destroy own pieces in Chess960.
+  - stats.html (GPL v3): Castling now Chess960-aware (finds king's actual
+    column + nearest rook). Heatmap cells now show coordinate labels.
+  - chess.html: rebuilt from chess.src/ changes.
+
+v1.0.4 Round-5 Rev35 changes:
+  - chess.src/ai-bridge.js (GPL v3): AI opponent bar seldepth label
+    localized (选深 / SelDepth). Eval bar keeps "SD".
+  - chess.src/game-logic.js (GPL v3): New i18n key seldepth_label.
+  - chess.src/ui.js (GPL v3): _onGameClockExpired() calls engineStop()
+    to hard-stop engine on flag-fall. Resign prefers engineStop().
+  - chess.html: rebuilt from chess.src/ changes.
+
+v1.0.4 Round-5 Rev36 changes:
+  - chess.src/ai-bridge.js (GPL v3): AI bar layout restructure (line 2
+    search info, line 3 ponder), seldepth colon, ponder score perspective
+    fix, placeholder suppression.
+  - chess.src/ui.js (GPL v3): AI bar HTML restructured with #ai-search-info.
+  - stats.html (GPL v3): Chess960 castling detection fix (destination column
+    instead of distance).
+  - chess.html: rebuilt from chess.src/ changes.
+
+v1.0.4 Round-5 Rev37 changes:
+  - chess.src/ui.js (GPL v3): AI opponent bar captured pieces split at 7.
+    Pieces 8+ go to line 3 left-aligned, sharing the line with ponder info
+    (right-aligned). Player bar unchanged.
+  - chess.html: rebuilt from chess.src/ changes.
+
+v1.0.4 Round-5 Rev38 changes:
+  - chess.src/ui.js (GPL v3): AI opponent bar overflow fix — multiple
+    CSS constraints added to prevent content exceeding bar width.
+  - chess.src/index.html.tpl (AGPL v3): .pbar CSS gains max-width:100%
+    + overflow:hidden.
+  - chess.html: rebuilt from chess.src/ changes.
+
+v1.0.4 Round-5 Rev39 changes:
+  - chess.src/ui.js (GPL v3): #ai-cap-overflow width:100% fix — ponder info
+    now displays correctly when captured pieces > 7.
+  - chess.html: rebuilt from chess.src/ changes.
+
+v1.0.4 Round-5 Rev40 changes:
+  - chess.src/ui.js (GPL v3): Overflow pieces horizontal fix + ponder
+    alignment fix.
+  - chess.html: rebuilt from chess.src/ changes.
+
+v1.0.4 Round-5 Rev41 changes:
+  - chess.src/ui.js (GPL v3): Player + AI bar captured pieces font-size
+    reduced to 0.85rem for consistency.
+  - stats.html (GPL v3): Board coordinate labels reworked — file labels
+    on top outside board, rank labels on left outside board, per-cell
+    coordinate labels inside each cell matching main board style exactly.
+  - chess.html: rebuilt from chess.src/ changes.
+
+v1.0.4 Round-5 Rev42 changes:
+  - chess.src/ui.js (GPL v3): #ai-cap-overflow overflow:hidden + flex:0 1 auto
+    → flex:0 0 auto (no overflow:hidden). Overflow pieces now display.
+  - chess.html: rebuilt from chess.src/ changes.
+
+v1.0.4 Round-5 Rev43 changes:
+  - stats.html (GPL v3): CRITICAL — _stripFnBody() brace-counting fix for
+    exported stats HTML. Was matching nested function closing braces at
+    depth 0 + next char \n/space; now matches depth 0 + '}' at start of
+    line (preceded by \n). Fixes "stuck at Loading..." in exported HTML.
+  - chess.html: rebuilt from chess.src/ changes (no chess.src changes this rev).
+
+v1.0.4 Round-5 Rev44 changes:
+  - chess.src/ai-bridge.js (GPL v3): Eval safety timer (10s timeout).
+  - chess.src/worker-pool.js (GPL v3): terminateWorker() + lifecycle events.
+  - stats.html (GPL v3): _stripFnBody simplified to regex approach.
+  - chess.html: rebuilt from chess.src/ changes.
+
+v1.0.4 Round-5 Rev45 changes:
+  - chess.src/game-logic.js (GPL v3): AI safety timer 15s → 30s.
+  - chess.src/ai-bridge.js (GPL v3): Eval safety timer 10s → 15s.
+  - chess.html: rebuilt from chess.src/ changes.
+
+v1.0.4 Round-5 Rev46 changes:
+  - chess.src/ui.js (GPL v3): Timeout emoji ⌛ fix.
+  - chess.src/game-logic.js (GPL v3): AI safety timer 30s → 360s.
+  - chess.src/ai-bridge.js (GPL v3): Eval safety timer 15s → 30s.
+  - chess.html: rebuilt from chess.src/ changes.
+
+v1.0.4 Round-5 Rev47 changes:
+  - chess.src/ui.js (GPL v3): Timeout game-over text re-localization fix.
+  - chess.src/ai-bridge.js (GPL v3): _timeoutWinnerColor variable + PGN result.
+  - chess.src/game-logic.js (GPL v3): New i18n key timeout_win_suffix.
+  - chess.html: rebuilt from chess.src/ changes.

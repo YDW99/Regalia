@@ -22,13 +22,14 @@ android {
     namespace 'com.Regalia'
     compileSdk 35
     buildToolsVersion "34.0.0"
+    ndkVersion "27.2.12479018"
 
     defaultConfig {
         applicationId "com.Regalia"
         minSdk 21
         targetSdk 35
-        versionCode 103
-        versionName "1.0.3"
+        versionCode 104
+        versionName "1.0.4"
 
         ndk {
             abiFilters 'arm64-v8a'
@@ -79,6 +80,16 @@ android {
     // The NDK/CMake build is skipped — we use the .so files extracted
     // from the previous APK's lib/arm64-v8a/ directory.
     // This avoids the need to download the ~663MB NDK.
+    // v1.0.4 Round-5 Rev20: Re-enabled externalNativeBuild to compile engine_bridge.so
+    // from source (engine_jni.cpp). The NDK is now installed at
+    // /home/z/my-project/android-sdk/ndk/27.2.12479018/.
+    externalNativeBuild {
+        cmake {
+            path "src/main/cpp/CMakeLists.txt"
+            version "3.22.1"
+        }
+    }
+
     packaging {
         jniLibs {
             useLegacyPackaging true

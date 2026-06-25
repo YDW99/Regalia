@@ -34,6 +34,35 @@ document.addEventListener('click', function(e) {
   }
 }, true);
 
+// v1.0.4 Round-5 Rev27: Global hyperlink interceptor.
+// Any <a href="http(s)://..."> clicked anywhere in the document (About dialog,
+// license links, etc.) is routed to AndroidBridge.openUrlInBrowser() which
+// launches the system default browser. The default WebView navigation is
+// suppressed via preventDefault() so the WebView itself never tries to load
+// the external URL (which would either fail or be blocked by CSP).
+// Internal anchor links (href="#...") and empty hrefs are left alone.
+document.addEventListener('click', function(e) {
+  const a = e.target.closest && e.target.closest('a[href]');
+  if (!a) return;
+  const href = a.getAttribute('href') || '';
+  // Skip in-page anchors and empty links
+  if (!href || href.charAt(0) === '#') return;
+  // Only intercept http(s) links — let mailto:/tel: etc. be handled by the OS
+  // through shouldOverrideUrlLoading in ChessWebViewClient.
+  if (href.indexOf('http://') !== 0 && href.indexOf('https://') !== 0) return;
+  e.preventDefault();
+  try {
+    if (typeof AndroidBridge !== 'undefined' && AndroidBridge.openUrlInBrowser) {
+      AndroidBridge.openUrlInBrowser(href);
+    } else {
+      // Fallback for desktop debugging: open in a new tab
+      try { window.open(href, '_blank'); } catch (err) {}
+    }
+  } catch (err) {
+    console.error('openUrlInBrowser failed:', err);
+  }
+}, true);
+
 // Touch scroll prevention: block default scroll when touch moves >10px on board
 // (main game mode only). In REVIEW mode, we WANT the board to be scrollable
 // (the whole review body scrolls when the user slides on the board), so we
@@ -126,7 +155,8 @@ function _performDirtyRender() {
       // If more than 2 components are dirty, full render is likely faster
       Integer_bitcount(_dirtyFlags) > 2) {
     _dirtyFlags = DIRTY_NONE;
-    renderInternal();
+    // v1.0.4 ROUND-5 REV13: Route through render() to share throttle
+    render();
     return;
   }
 
@@ -186,6 +216,26 @@ let _sqElCache = null;
 // Assigned after full render (when the element is freshly created), cleared
 // on cache invalidation.
 let _rListEl = null;
+
+// v1.0.4 ROUND-5 REV13: Persistent .mlist scroll state — the scroll EVENT
+// LISTENER is the AUTHORITATIVE source. The save phase only seeds on first render.
+// v1.0.4 Rev30 ROBUSTNESS FIX: Added _scrollRestoreGuard flag. When we
+// programmatically set scrollTop during the restore phase, the browser fires
+// 'scroll' events with INTERMEDIATE values (especially with scroll-behavior:
+// smooth on .mlist). These intermediate events were overwriting
+// _mlistScrollState.scrollTop, causing the NEXT render to restore to a stale
+// intermediate position — manifesting as "list repeatedly jumps back to top".
+// The guard suppresses scroll-event handling during programmatic restoration.
+let _mlistScrollState={scrollTop:0,atBottom:false,valid:false};
+let _scrollRestoreGuard=false; // true while we're programmatically restoring scroll
+function _onMlistScroll(e){
+  if(_scrollRestoreGuard)return; // ignore events from our own programmatic scroll
+  const el=e.target;
+  if(!el||el.scrollHeight===0||el.clientHeight===0)return;
+  _mlistScrollState.scrollTop=el.scrollTop;
+  _mlistScrollState.atBottom=(el.scrollTop+el.clientHeight>=el.scrollHeight-40);
+  _mlistScrollState.valid=true;
+}
 
 /**
  * Get or build the cached board square elements array.
@@ -253,7 +303,9 @@ function _updateEvalDisplayIncremental() {
   if (!evalEl) { markDirty(DIRTY_FULL); return; }
   const _fe = formatEval();
   const pe = _fe.emoji, pd = _fe.desc, scoreStr = _fe.score;
-  const _hdrDepthStr = _sfDepth > 0 ? '<span style="font-size:.65rem;color:var(--muted);margin-left:4px">D' + _sfDepth + '</span>' : '';
+  // v1.0.4 Rev33: display "D15 SD22" — depth + seldepth (tactical depth).
+  // SD only shown when > 0 AND > depth (seldepth == depth is redundant).
+  const _hdrDepthStr = _sfDepth > 0 ? '<span style="font-size:.65rem;color:var(--muted);margin-left:4px">D' + _sfDepth + '</span>' + (_sfSeldepth > 0 && _sfSeldepth > _sfDepth ? '<span style="font-size:.65rem;color:var(--muted);margin-left:2px">SD' + _sfSeldepth + '</span>' : '') : '';
   if (setupMode) {
     evalEl.innerHTML = T('setup_label');
   } else if (isAIThinking) {
@@ -284,7 +336,10 @@ function _updateEvalDisplayIncremental() {
         aiLevel: aiLevel,
         timestamp: Date.now()
       };
-      localStorage.setItem('Regalia_recovery', JSON.stringify(recoveryData));
+      const recoveryJson = JSON.stringify(recoveryData);
+      localStorage.setItem('Regalia_recovery', recoveryJson);
+      // v1.0.4 Round-5 Rev16: Also persist to Java side (HyperOS 3 cache-wipe proof)
+      try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_recovery',recoveryJson);}catch(e){}
     } catch(e) {}
 
     // If this is a render error (indicated by the stack trace), show recovery UI
@@ -293,7 +348,7 @@ function _updateEvalDisplayIncremental() {
       if (app) {
         app.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#1a0a0a;color:#f5e6c8;padding:20px;text-align:center;font-family:system-ui,sans-serif">' +
           '<div style="font-size:3rem;margin-bottom:16px">♔</div>' +
-          '<h2 style="color:#ffd700;margin-bottom:12px">'+T('app_name')+' v1.0.3</h2>' +
+          '<h2 style="color:#ffd700;margin-bottom:12px">'+T('app_name')+' v1.0.4</h2>' +
           '<p style="color:#a08050;margin-bottom:20px;max-width:300px">'+T('render_error')+'</p>' +
           '<button onclick="location.reload()" style="padding:12px 24px;background:#c49512;color:#1a0a0a;border:none;border-radius:6px;font-size:1rem;font-weight:700;cursor:pointer">'+T('refresh_page')+'</button>' +
           '</div>';
@@ -309,7 +364,11 @@ function _updateEvalDisplayIncremental() {
 // Auto-recover from localStorage on startup
 (function _tryRecovery() {
   try {
-    const saved = localStorage.getItem('Regalia_recovery');
+    let saved = localStorage.getItem('Regalia_recovery');
+    // v1.0.4 Round-5 Rev16: Fall back to persistent Java store if HyperOS 3 wiped localStorage
+    if(!saved){
+      try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentGet){const persisted=AndroidBridge.persistentGet('Regalia_recovery');if(persisted){saved=persisted;try{localStorage.setItem('Regalia_recovery',persisted);}catch(e){}}}}catch(e){}
+    }
     if (saved) {
       const data = JSON.parse(saved);
       if (data && data.gameState && Date.now() - data.timestamp < 3600000) {
@@ -318,7 +377,8 @@ function _updateEvalDisplayIncremental() {
       // Clear recovery data after successful load
       setTimeout(function() {
         if (_engineReady || document.getElementById('board-grid')) {
-          localStorage.removeItem('Regalia_recovery');
+          try{localStorage.removeItem('Regalia_recovery');}catch(e){}
+          try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentRemove)AndroidBridge.persistentRemove('Regalia_recovery');}catch(e){}
         }
       }, 5000);
     }
@@ -608,7 +668,45 @@ function formatEval(){
       const mateStr=md>0?(whiteWins?'#+'+md:'#-'+md):(whiteWins?'#+':'#-');
       return{emoji:playerWins?'🏆':'💀',desc:playerWins?T('winning'):T('losing'),score:mateStr};
     }
+    // v1.0.4 LATEST FIX: timeout win was incorrectly showing as draw (🤝).
+    // The timeout case has _gameOverStatusKey==='timeout' and gameOver text
+    // like "白方超时胜" / "White wins by timeout". Detect it and show the
+    // correct win/lose emoji (🏆/💀) instead of the draw emoji (🤝).
+    // v1.0.4 Rev46: changed eval bar emoji from 🏆/💀 to ⌛ for timeout —
+    // the game-over overlay also shows ⌛ for timeout (not 🤝).
+    if(_gameOverStatusKey==='timeout'||gameOver.includes('超时')||gameOver.toLowerCase().includes('timeout')){
+      const whiteWins=gameOver.includes(T('white_wins'))||gameOver.includes('White wins')||gameOver.includes('白方');
+      const playerWins=(playerColor==='white')===whiteWins;
+      return{emoji:'⌛',desc:playerWins?T('winning'):T('losing'),score:playerWins?'+∞':'-∞'};
+    }
+    // v1.0.4 FIX: resignation also needs win/lose emoji, not draw.
+    if(_gameOverStatusKey==='resign'||gameOver.includes('认输')||gameOver.toLowerCase().includes('resign')){
+      // v1.0.4 Rev27: Use _resignWinnerColor directly (set by _resignGame()).
+      // The gameOver text only contains "resigns", not "wins", so the old
+      // .includes('White wins') check always returned false — making the
+      // player always appear to lose even when they won (e.g. AI resigns).
+      const whiteWins=(typeof _resignWinnerColor!=='undefined'&&_resignWinnerColor==='white');
+      const playerWins=(playerColor==='white')===whiteWins;
+      return{emoji:playerWins?'🏆':'💀',desc:playerWins?T('winning'):T('losing'),score:playerWins?'+∞':'-∞'};
+    }
+    // Genuine draws (stalemate, 50-move, repetition, insufficient material, agreement)
     return{emoji:'🤝',desc:T('draw_game'),score:'0.0'};
+  }
+  // v1.0.4 ROUND-5 REV15: In review mode, check cache FIRST before showing "analyzing".
+  // If the cache has the eval for the current reviewStep, return it immediately —
+  // don't show "analyzing" even if _evalLoading is true (e.g. from a stale debounce
+  // timer or a race condition between reviewGoTo and render throttle).
+  if(reviewMode&&typeof reviewStep!=='undefined'&&typeof _reviewEvalCache!=='undefined'){
+    const cachedReview=_reviewEvalCache.peek(reviewStep);
+    if(cachedReview!=null){
+      const evP=playerColor==='white'?cachedReview.eval:-cachedReview.eval;
+      if(Math.abs(cachedReview.eval)>=90000){
+        const md=cachedReview.mate!=null?cachedReview.mate:0;
+        const mateLabel=md>0?'#+'+Math.abs(md):md<0?'#-'+Math.abs(md):(cachedReview.eval>0?'#+':'#-');
+        return{emoji:posEmoji(evP),desc:posDesc(evP),score:mateLabel};
+      }
+      return{emoji:posEmoji(evP),desc:posDesc(evP),score:(evP/100).toFixed(2)};
+    }
   }
   if(_evalLoading||!_sfEvalReady)return{emoji:'🔬',desc:T('analyzing_ellipsis'),score:'--'};
   const evP=playerColor==='white'?_sfEval:-_sfEval;
@@ -635,6 +733,33 @@ if(st==='draw_75move')return T('seventy_five_move_draw');
 if(st==='draw_repetition')return T('threefold_draw');
 if(st==='draw_5fold')return T('fivefold_draw');
 if(st==='draw_insufficient')return T('insufficient_draw');
+// v1.0.4 Rev27: Resign — display "白方认输" / "White resigns" style.
+// The resigner color is stored in _resignWinnerColor ('white' or 'black'
+// meaning which color WINS). The loser is the opposite.
+if(st==='resign'){
+  if(typeof _resignWinnerColor!=='undefined'&&_resignWinnerColor){
+    // The winner is _resignWinnerColor; the resigner is the opposite color.
+    const resignerColor=_resignWinnerColor==='white'?'black':'white';
+    const resignerStr=resignerColor==='white'?T('white_short'):T('black_side');
+    // Returns e.g. "⚪ 白方认输" / "⚪ White resigns"
+    return resignerStr+T('resigns_suffix');
+  }
+  return T('resigns_suffix');
+}
+// v1.0.4 Rev47: Timeout — display "白方超时胜" / "White wins by timeout" style.
+// The winner color is stored in _timeoutWinnerColor ('white' or 'black').
+// This was previously set directly in _onGameClockExpired() using _lang
+// instead of T(), so switching language didn't re-localize the text.
+// Now _gameOverStrFromStatus handles it, and the render-time re-localization
+// (line ~1019: `if(gameOver&&_gameOverStatusKey){const _reLocStr=...}`)
+// will call this function to re-localize on language toggle.
+if(st==='timeout'){
+  if(typeof _timeoutWinnerColor!=='undefined'&&_timeoutWinnerColor){
+    const winnerStr=_timeoutWinnerColor==='white'?T('white_short'):T('black_side');
+    return winnerStr+T('timeout_win_suffix');
+  }
+  return T('timeout_win_suffix');
+}
 return null;
 }
 // Helper: apply game-over string and ensure checkmate notation (accepts cached status to avoid redundant gameStatus() call)
@@ -643,7 +768,7 @@ function _applyGameOver(cachedSt){
   const goStr=_gameOverStrFromStatus(st);
   if(goStr){gameOver=goStr;_gameOverStatusKey=st;if((st==='checkmate'||goStr.includes('将杀')||goStr.includes('Checkmate'))&&moveRecords.length>0){const last=moveRecords[moveRecords.length-1];// v1.0.2 FIX: null-safe — last entry may be the black-to-move null placeholder
       // in pathological edge cases (no real moves executed). Skip notation patching if so.
-      if(last&&last.notation&&!last.notation.endsWith('#')){last.notation=last.notation.replace(/\+$/,'')+'#';}_sfMateDistance=0;_sfDepth=0;_sfEval=gameState.currentTurn==='black'?99999:-99999;_sfEvalReady=true;}}
+      if(last&&last.notation&&!last.notation.endsWith('#')){last.notation=last.notation.replace(/\+$/,'')+'#';}_sfMateDistance=0;_sfDepth=0;_sfSeldepth=0;_sfEval=gameState.currentTurn==='black'?99999:-99999;_sfEvalReady=true;}}
 }
 
 // ===================== GAME STATE =====================
@@ -671,6 +796,24 @@ let _heartbeatRunning=false; // Flag for engine heartbeat monitor state
 // Dialog state
 let _turnStartTime=Date.now(),dlgPlayerColor='white',dlgOpeningId=null,
     dlgBookMoves=false;
+// v1.0.4 NEW: Chess960 (Fischer Random Chess) dialog state
+//   dlgChess960      — boolean: is the user starting a Chess960 game?
+//   dlgChess960SPID  — integer 0..959: the user-selected SP-ID, or -1 for random
+//   gameVariant      — 'chess960' or null: tracks the current game's variant for PGN export
+//   gameSPID         — the actual SP-ID of the current game (set when dlgChess960SPID is -1 → random)
+let dlgChess960=false,dlgChess960SPID=-1;
+let gameVariant=null,gameSPID=null;
+// v1.0.4 EXPANSION (this round): Time Control state
+//   dlgTimeControl      — object describing the chosen time control (null = untimed)
+//                          {type:'off'|'sudden'|'fischer'|'bronstein'|'usdelay', baseSec, incrementSec, delaySec}
+//   gameClocks          — {white:{remainingSec, lastMoveTimestamp}, black:{...}}
+//                          null when game is untimed
+//   gameClockTimerId    — interval ID for the per-second clock display refresh
+//   gameClockExpired    — 'white' | 'black' | null  (which side flagged out)
+let dlgTimeControl={type:'off',baseSec:300,incrementSec:3,delaySec:3};
+let gameClocks=null;
+let gameClockTimerId=null;
+let gameClockExpired=null;
 let reviewMode=false,reviewStep=0,reviewStates=[],reviewCritical=[];
 // v1.0.3-p6: track the last reviewStep we scrolled into view, so scrollIntoView
 // only fires when the user navigates to a DIFFERENT step — not on every render
@@ -692,15 +835,71 @@ let _ecoEnabled=true; // ECO opening recognition enabled — only true for free/
 
 // ===================== CAPTURED PIECES DISPLAY =====================
 /**
- * Compute captured pieces for a given color by comparing the current board
- * against the standard starting position piece counts.
- * Returns an array of piece type strings in order: queen, rook, bishop, knight, pawn.
- * Each type appears once for each captured piece of that type.
+ * Compute captured pieces for a given color.
+ *
+ * v1.0.4 FIX (this round): The previous implementation compared the current
+ * board piece counts against the standard starting counts. This was WRONG in
+ * two scenarios involving pawn promotion:
+ *
+ *   1. Pawn promotes to Queen: board shows 2Q + 7P (started 1Q + 8P).
+ *      Old code: diff_Q = 1-2 = -1 → 0 captured queens (correct, but
+ *      coincidentally); diff_P = 8-7 = 1 → 1 captured pawn (WRONG: the
+ *      pawn wasn't captured, it promoted).
+ *
+ *   2. Pawn promotes to Rook/Knight/Bishop: e.g. promote to Rook → board
+ *      shows 3R + 7P. Old code: diff_R = 2-3 = -1 → 0 captured rooks
+ *      (coincidentally correct); diff_P = 8-7 = 1 → 1 captured pawn (WRONG).
+ *
+ *   3. A queen is captured AND a pawn promotes to queen: board shows 1Q + 7P.
+ *      Old code: diff_Q = 1-1 = 0 → 0 captured queens (WRONG: 1 queen was
+ *      captured, but the promoted pawn masked it); diff_P = 1 → 1 captured
+ *      pawn (WRONG: the pawn promoted, wasn't captured).
+ *
+ * The fix: use moveRecords (which records the ACTUAL captured piece for each
+ * move, including the promoted-piece type at the moment of capture) as the
+ * source of truth. The board-diff method is retained ONLY as a fallback for
+ * setup-mode / FEN-imported positions where no moveRecords exist.
+ *
+ * @param {Array} board — 8x8 board array (used only for fallback)
+ * @param {string} color — color of the captured pieces to return
+ * @param {Array} [moveRecordsArg] — optional moveRecords array; if present,
+ *        used as the authoritative source (handles promotion correctly).
+ * @returns {Array} piece type strings in order: queen, rook, bishop, knight, pawn
  */
-function getCapturedPieces(board, color) {
-  // Starting piece counts per color
+function getCapturedPieces(board, color, moveRecordsArg) {
+  // v1.0.4 FIX: prefer moveRecords-based accounting when available.
+  // moveRecords[i].captured is the actual piece object {type, color} that was
+  // captured on move i (or undefined if no capture). This correctly handles:
+  //   - pawn promotion (the captured piece is whatever was on the destination,
+  //     which may be a promoted queen/rook/etc.)
+  //   - en passant (captured is the enemy pawn)
+  //   - no-capture moves (captured is undefined, skipped)
+  // The color parameter is the color of the pieces we want to DISPLAY as
+  // captured — i.e., the OPPONENT of the side whose bar we're rendering.
+  // moveRecords[i].captured.color tells us which side lost the piece.
+  if (moveRecordsArg && Array.isArray(moveRecordsArg) && moveRecordsArg.length > 0) {
+    const order = ['queen','rook','bishop','knight','pawn'];
+    const counts = { queen:0, rook:0, bishop:0, knight:0, pawn:0 };
+    for (let i = 0; i < moveRecordsArg.length; i++) {
+      const mr = moveRecordsArg[i];
+      if (!mr || !mr.captured) continue;
+      // mr.captured is {type, color} — verify color matches the requested color
+      if (mr.captured.color !== color) continue;
+      const t = mr.captured.type;
+      if (t && counts[t] !== undefined) counts[t]++;
+    }
+    // Build captured list in canonical order
+    const result = [];
+    for (const t of order) {
+      for (let i = 0; i < counts[t]; i++) result.push(t);
+    }
+    return result;
+  }
+  // Fallback: board-diff method (used only for setup mode / FEN import where
+  // there's no move history). NOTE: this method has the known promotion bug,
+  // but for setup-mode display it's acceptable since the user is constructing
+  // a position manually (not playing through moves).
   const startCounts = { queen:1, rook:2, bishop:2, knight:2, pawn:8 };
-  // Count pieces currently on the board for this color
   const currentCounts = { queen:0, rook:0, bishop:0, knight:0, pawn:0 };
   for (let r = 0; r < 8; r++) {
     for (let c = 0; c < 8; c++) {
@@ -710,7 +909,6 @@ function getCapturedPieces(board, color) {
       }
     }
   }
-  // Build captured list (order: queen, rook, bishop, knight, pawn)
   const order = ['queen','rook','bishop','knight','pawn'];
   const result = [];
   for (const t of order) {
@@ -725,18 +923,63 @@ function getCapturedPieces(board, color) {
  * Uses the same color/stroke/glow style as the ♔/♚ icon in the bar header.
  * Pieces are rendered at the same font-size as .pico (1.4rem desktop).
  * Left-aligned on first row; other bar info wraps below.
+ *
+ * v1.0.4 FIX (this round): now passes moveRecords to getCapturedPieces() so
+ * pawn promotions are handled correctly (the captured list reflects ACTUAL
+ * captures, not board-diff inferences).
+ *
+ * v1.0.4 Rev37: AI opponent bar captured pieces split into two rows when
+ * count > 7. Pieces 1-7 on the first captured row; pieces 8+ on a second
+ * captured row (which becomes line 3 of the AI bar, left-aligned). The
+ * player bar keeps the original single-row wrap behavior (unchanged).
+ * The `splitAt` parameter controls the split point (0 = no split).
  */
-function capturedPiecesHtml(board, pieceColor, playerColor) {
-  const captured = getCapturedPieces(board, pieceColor);
+function capturedPiecesHtml(board, pieceColor, playerColor, splitAt) {
+  // v1.0.4 FIX: pass moveRecords (global) as the authoritative source
+  const captured = getCapturedPieces(board, pieceColor, (typeof moveRecords !== 'undefined') ? moveRecords : null);
   if (!captured.length) return '';
   // Style: same color scheme as the king icon in the bar
   const isW = pieceColor === 'white';
   const symStyle = isW
     ? 'color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55)'
     : 'color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55)';
+
+  // v1.0.4 Rev37: If splitAt > 0 and captured count exceeds splitAt, render
+  // two separate flex rows. The first row contains pieces 1..splitAt; the
+  // second row contains pieces splitAt+1..end. Each row is a separate div
+  // so the AI bar layout can place search/ponder info on the same lines
+  // (right-aligned) via the parent flex container.
+  if (splitAt > 0 && captured.length > splitAt) {
+    let html = '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:1px;padding-top:2px;line-height:1">';
+    for (let i = 0; i < splitAt; i++) {
+      html += '<span style="font-size:.85rem;font-family:\'DejaVu Sans\',\'Noto Sans\',\'Segoe UI Symbol\',sans-serif;font-variant-emoji:text;' + symStyle + '">' + SYM[pieceColor][captured[i]] + '</span>';
+    }
+    html += '</div>';
+    // Second row: pieces 8+ (left-aligned, will be on line 3 of AI bar)
+    // v1.0.4 Rev39 FIX: was width:100% + flex:0 0 auto — caused overflow div to
+    // take ALL width, pushing #ai-ponder-info off-screen.
+    // v1.0.4 Rev40 FIX: was flex-wrap:wrap — caused pieces to stack VERTICALLY.
+    // v1.0.4 Rev42 FIX: overflow:hidden was CLIPPING the overflow pieces so they
+    // didn't display at all. Removed overflow:hidden from this div — the parent
+    // line-3 container handles clipping. Also removed flex:0 1 auto (which caused
+    // shrink-to-fit that could make pieces invisible when space was tight).
+    // Now using flex:0 0 auto (natural width, no shrink) so all pieces display.
+    // The parent container's overflow:hidden clips anything truly exceeding the
+    // bar width, but the pieces themselves are never hidden by their own div.
+    html += '<div id="ai-cap-overflow" style="display:flex;flex-wrap:nowrap;align-items:center;gap:1px;padding-top:1px;line-height:1;flex:0 0 auto">';
+    for (let i = splitAt; i < captured.length; i++) {
+      html += '<span style="font-size:.85rem;font-family:\'DejaVu Sans\',\'Noto Sans\',\'Segoe UI Symbol\',sans-serif;font-variant-emoji:text;' + symStyle + '">' + SYM[pieceColor][captured[i]] + '</span>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  // Default: single flex-wrap row (player bar, or AI bar with ≤7 pieces)
+  // v1.0.4 Rev41: font-size reduced from 1.1rem to 0.85rem to match AI bar
+  // overflow pieces font-size (Rev40), keeping both bars visually consistent.
   let html = '<div style="display:flex;flex-wrap:wrap;align-items:center;gap:1px;padding-top:2px;line-height:1">';
   for (const t of captured) {
-    html += '<span style="font-size:1.1rem;font-family:\'DejaVu Sans\',\'Noto Sans\',\'Segoe UI Symbol\',sans-serif;font-variant-emoji:text;' + symStyle + '">' + SYM[pieceColor][t] + '</span>';
+    html += '<span style="font-size:.85rem;font-family:\'DejaVu Sans\',\'Noto Sans\',\'Segoe UI Symbol\',sans-serif;font-variant-emoji:text;' + symStyle + '">' + SYM[pieceColor][t] + '</span>';
   }
   html += '</div>';
   return html;
@@ -748,7 +991,36 @@ function capturedPiecesHtml(board, pieceColor, playerColor) {
  * Multiple rapid calls are coalesced via requestAnimationFrame.
  * @side-effect Rebuilds the entire app DOM
  */
-function render(){if(renderPending){lastRenderRequest=Date.now();return}if(animationInProgress||_landingAnimActive){if(!renderPending){renderPending=true;setTimeout(()=>{renderPending=false;lastRenderTime=Date.now();render();},200);}return;}const now=Date.now();if(now-lastRenderTime<20){renderPending=true;renderTimerId=requestAnimationFrame(()=>{renderPending=false;renderTimerId=null;lastRenderTime=Date.now();const _reqAtTick=lastRenderRequest;lastRenderRequest=0;renderInternal();if(_reqAtTick>lastRenderTime){lastRenderTime=Date.now();renderInternal();}});return}lastRenderTime=now;renderInternal()}
+// v1.0.4 ROUND-5 REV12: Unified render throttle — 8ms (120fps cap), single
+// renderInternal per frame (removed the double-renderInternal that caused
+// the scroll-to-top bug). The previous code called renderInternal() TWICE
+// in the same rAF callback when _reqAtTick>lastRenderTime — the second
+// call's save phase read scrollTop=0 from the just-rebuilt DOM.
+function render(){
+  if(renderPending){lastRenderRequest=Date.now();return;}
+  if(animationInProgress||_landingAnimActive){
+    if(!renderPending){
+      renderPending=true;
+      setTimeout(()=>{renderPending=false;lastRenderTime=Date.now();render();},200);
+    }
+    return;
+  }
+  const now=Date.now();
+  if(now-lastRenderTime<8){
+    renderPending=true;
+    renderTimerId=requestAnimationFrame(()=>{
+      renderPending=false;renderTimerId=null;
+      lastRenderTime=Date.now();
+      // v1.0.4 REV12: Only call renderInternal() ONCE per frame.
+      // The previous "if(_reqAtTick>lastRenderTime){renderInternal()}" double-call
+      // was the root cause of the recurring scroll-to-top bug.
+      renderInternal();
+    });
+    return;
+  }
+  lastRenderTime=now;
+  renderInternal();
+}
 /**
  * Internal render function — builds the entire UI HTML string and sets innerHTML.
  * @side-effect Rebuilds entire app DOM, invalidates element cache
@@ -761,7 +1033,11 @@ if(setupMode){gameOver=null;_gameOverStatusKey=null;}
 if(gameOver&&_gameOverStatusKey){const _reLocStr=_gameOverStrFromStatus(_gameOverStatusKey);if(_reLocStr)gameOver=_reLocStr;}
 const app=document.getElementById('app');if(!app)return;
 // Score from White's perspective (UCI side-to-move → White conversion done in onEngineEval); emoji/desc reflect player's advantage
-const _fe=formatEval();const pe=_fe.emoji,pd=_fe.desc,scoreStr=_fe.score;const _hdrDepthStr=_sfDepth>0?'<span style="font-size:.65rem;color:var(--muted);margin-left:4px">D'+_sfDepth+'</span>':'';let _hdrProgressStr='';if(_evalLoading&&_sfDepth>0){let _hpp=[];if(_lastProgressNodes!=null){const _ns=_lastProgressNodes>=1000000?(_lastProgressNodes/1000000).toFixed(1)+'M':_lastProgressNodes>=1000?Math.round(_lastProgressNodes/1000)+'K':String(_lastProgressNodes);_hpp.push(_ns);}if(_lastProgressNps!=null){const _ns=_lastProgressNps>=1000000?(_lastProgressNps/1000000).toFixed(1)+'M/s':_lastProgressNps>=1000?Math.round(_lastProgressNps/1000)+'K/s':String(_lastProgressNps);_hpp.push(_ns);}if(_hpp.length)_hdrProgressStr='<span style="font-size:.6rem;color:var(--muted);margin-left:3px">'+_hpp.join(' ')+'</span>';}
+const _fe=formatEval();const pe=_fe.emoji,pd=_fe.desc,scoreStr=_fe.score;
+// v1.0.4 Rev33: display "D15 SD22" — depth + seldepth (tactical depth).
+// SD only shown when > 0 AND > depth (seldepth == depth is redundant).
+const _hdrDepthStr=_sfDepth>0?'<span style="font-size:.65rem;color:var(--muted);margin-left:4px">D'+_sfDepth+'</span>'+(_sfSeldepth>0&&_sfSeldepth>_sfDepth?'<span style="font-size:.65rem;color:var(--muted);margin-left:2px">SD'+_sfSeldepth+'</span>':''):'';
+let _hdrProgressStr='';if(_evalLoading&&_sfDepth>0){let _hpp=[];if(_lastProgressNodes!=null){const _ns=_lastProgressNodes>=1000000?(_lastProgressNodes/1000000).toFixed(1)+'M':_lastProgressNodes>=1000?Math.round(_lastProgressNodes/1000)+'K':String(_lastProgressNodes);_hpp.push(_ns);}if(_lastProgressNps!=null){const _ns=_lastProgressNps>=1000000?(_lastProgressNps/1000000).toFixed(1)+'M/s':_lastProgressNps>=1000?Math.round(_lastProgressNps/1000)+'K/s':String(_lastProgressNps);_hpp.push(_ns);}if(_hpp.length)_hdrProgressStr='<span style="font-size:.6rem;color:var(--muted);margin-left:3px">'+_hpp.join(' ')+'</span>';}
 
 if(!gameOver&&!setupMode&&!isAIThinking&&!reviewMode){const _gsKey=gameState.hash+'|'+gameState.currentTurn;if(_cachedStatusKey!==_gsKey){_cachedStatus=gameStatus(gameState);_cachedStatusKey=_gsKey;}_applyGameOver(_cachedStatus);}
 const ctrlKey=showCtrlMap?gameState.hash:'off';if(ctrlKey!==cachedCtrlKey){cachedCtrlMap=showCtrlMap?getCtrlMap(gameState.board):null;cachedCtrlKey=ctrlKey}const cm=cachedCtrlMap;
@@ -773,9 +1049,38 @@ const oppC=OPP_COLOR[playerColor];
 const flip=playerColor==='black';
 // Arrows computed separately by _updateArrows() — no inline computation needed
 
-let h='<div class="hdr" role="banner"><div class="hdr-top"><div class="hdr-l"><span style="font-size:1.3rem;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text;border:3px solid transparent;border-image:linear-gradient(145deg,#8b6914,#d4a017,#ffd700,#fff8dc,#ffd700,#d4a017,#8b6914) 1;padding:3px 6px;background:linear-gradient(145deg,rgba(139,105,20,.18),rgba(255,215,0,.08),rgba(139,105,20,.18));box-shadow:0 0 6px rgba(212,160,23,.35),0 0 12px rgba(255,215,0,.12),inset 0 0 3px rgba(255,215,0,.1),inset 0 1px 0 rgba(255,248,220,.15);position:relative">♔&#xFE0E;</span><h1>'+T('app_name')+'<span class="ver">v1.0.3</span><button onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showAboutPage=true;render()" style="font-size:.6rem;color:var(--accent);background:rgba(212,160,23,.15);padding:2px 8px;border-radius:4px;border:1px solid rgba(212,160,23,.3);margin-left:4px;cursor:pointer;font-family:system-ui,-apple-system,sans-serif;letter-spacing:1px">ℹ️</button></h1></div><button onclick="toggleLang()" style="font-size:.65rem;color:var(--accent);background:rgba(212,160,23,.15);padding:2px 6px;border-radius:4px;border:1px solid rgba(212,160,23,.3);cursor:pointer;font-family:system-ui,-apple-system,sans-serif;letter-spacing:1px;flex-shrink:0">'+(_lang==='zh'?'↔️中':'↔️EN')+'</button><div class="ev" id="eval-disp" role="status" aria-label="'+T('evaluating')+'">'+(setupMode?T('setup_label'):(isAIThinking?'<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>':'<span class="ev-e">'+pe+'</span><span>'+pd+'</span><span style="color:var(--muted)">('+scoreStr+')</span>'+_hdrDepthStr+_hdrProgressStr))+'</div></div><div class="hdr-tools" role="toolbar" aria-label="'+T('ctrl_range')+'">'+(setupMode?'':'<div class="diff-sel" role="radiogroup" aria-label="AI">'+getAI_LEVELS().map(l=>'<button class="diff-b'+(getEffectiveAILevel()===l.id?' act':'')+'" onclick="if(!isAIThinking){'+(l.id===8?'openEngineConfig()':('aiLevel='+l.id+';try{AndroidBridge.syncGameDifficulty('+l.id+')}catch(e){}render()'))+'}" title="'+l.desc+'" role="radio" aria-checked="'+(getEffectiveAILevel()===l.id)+'">'+(l.id===8?'⚙️':l.id===7?'SL':l.id)+'</button>').join('')+'</div>')+'<button type="button" class="btn" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()" aria-label="'+T('new_game')+'"><span style="font-size:1.4rem">⚔️</span> '+T('new_game')+'</button>'+'<button class="btn" onclick="quickFreeOpening()" aria-label="'+T('free_opening')+'">'+(playerColor==='white'?'<span style=\"font-size:1.4rem;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text\">♔&#xFE0E;</span>':'<span style=\"font-size:1.4rem;font-weight:400;color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans Symbol&#x27;,sans-serif;font-variant-emoji:text\">♚&#xFE0E;</span>')+' '+T('free_opening')+'</button>'+(setupMode?'':'<button class="btn" onclick="undoMove()" aria-label="'+T('undo')+'"><span style="font-size:1.4rem">↩️</span> '+T('undo')+'</button><button class="btn" onclick="redoMove()" aria-label="'+T('redo')+'" id="redoBtn"><span style="font-size:1.4rem">↪️</span> '+T('redo')+'</button>')+'<button class="btn" onclick="flipBoard()" aria-label="'+T('flip')+'"><span style="font-size:1.4rem">🔃</span> '+T('flip')+'</button>'+'<button class="btn" onclick="getHint()" aria-label="'+T('ai_hint')+'"><span style="font-size:1.4rem">💡</span> '+T('ai_hint')+'</button>'+(setupMode?'':'<button class="btn" onclick="toggleSound()" id="btnSound" aria-label="'+T('sound')+'">'+(soundOn?'<span style="font-size:1.4rem">🔊</span> '+T('sound'):'<span style="font-size:1.4rem">🔇</span> '+T('sound'))+'</button>')+'<button class="btn" onclick="showCtrlMap=!showCtrlMap;cachedCtrlKey=&quot;&quot;;render()" aria-label="'+T('ctrl_range')+'" title="'+T('ctrl_range')+'">'+(showCtrlMap?'<span style="font-size:1.4rem">🌈</span> '+T('ctrl_range'):'<span style="font-size:1.4rem">🌗</span> '+T('ctrl_range'))+'</button>'+'<button class="btn" onclick="copyFEN()" title="'+T('copy_fen')+'" aria-label="'+T('copy_fen')+'"><span style="font-size:1.4rem">📝</span> FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="'+T('import_fen')+'" aria-label="'+T('import_fen')+'"><span style="font-size:1.4rem">🗃️</span> '+T('import_label')+'</button><button class="btn" onclick="'+(setupMode?'exitSetup()':'toggleSetup()')+'" aria-label="'+(setupMode?T('setup_done'):T('setup_mode'))+'">'+(setupMode?'<span style="font-size:1.4rem">✓</span> '+T('setup_done'):'<span style="font-size:1.4rem">🏗️</span> '+T('setup_mode'))+'</button></div></div>';
+let h='<div class="hdr" role="banner"><div class="hdr-top"><div class="hdr-l"><span style="font-size:1.3rem;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text;border:3px solid transparent;border-image:linear-gradient(145deg,#8b6914,#d4a017,#ffd700,#fff8dc,#ffd700,#d4a017,#8b6914) 1;padding:3px 6px;background:linear-gradient(145deg,rgba(139,105,20,.18),rgba(255,215,0,.08),rgba(139,105,20,.18));box-shadow:0 0 6px rgba(212,160,23,.35),0 0 12px rgba(255,215,0,.12),inset 0 0 3px rgba(255,215,0,.1),inset 0 1px 0 rgba(255,248,220,.15);position:relative">♔&#xFE0E;</span><h1>'+T('app_name')+'<span class="ver">v1.0.4</span><button onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showAboutPage=true;render()" style="font-size:.6rem;color:var(--accent);background:rgba(212,160,23,.15);padding:2px 8px;border-radius:4px;border:1px solid rgba(212,160,23,.3);margin-left:4px;cursor:pointer;font-family:system-ui,-apple-system,sans-serif;letter-spacing:1px">ℹ️</button></h1></div><button onclick="toggleLang()" style="font-size:.65rem;color:var(--accent);background:rgba(212,160,23,.15);padding:2px 6px;border-radius:4px;border:1px solid rgba(212,160,23,.3);cursor:pointer;font-family:system-ui,-apple-system,sans-serif;letter-spacing:1px;flex-shrink:0">'+(_lang==='zh'?'↔️中':'↔️EN')+'</button><div class="ev" id="eval-disp" role="status" aria-label="'+T('evaluating')+'">'+(setupMode?T('setup_label'):(isAIThinking?'<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>':'<span class="ev-e">'+pe+'</span><span>'+pd+'</span><span style="color:var(--muted)">('+scoreStr+')</span>'+_hdrDepthStr+_hdrProgressStr))+'</div></div><div class="hdr-tools" role="toolbar" aria-label="'+T('ctrl_range')+'">'+(setupMode?'':'<div class="diff-sel" role="radiogroup" aria-label="AI">'+getAI_LEVELS().map(l=>'<button class="diff-b'+(getEffectiveAILevel()===l.id?' act':'')+'" onclick="if(!isAIThinking){'+(l.id===8?'openEngineConfig()':('aiLevel='+l.id+';try{AndroidBridge.syncGameDifficulty('+l.id+')}catch(e){}render()'))+'}" title="'+l.desc+'" role="radio" aria-checked="'+(getEffectiveAILevel()===l.id)+'">'+(l.id===8?'⚙️':l.id===7?'SL':l.id)+'</button>').join('')+'</div>')+'<button type="button" class="btn" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()" aria-label="'+T('new_game')+'"><span style="font-size:1.4rem">⚔️</span> '+T('new_game')+'</button>'+'<button class="btn" onclick="quickFreeOpening()" aria-label="'+T('free_opening')+'">'+(playerColor==='white'?'<span style=\"font-size:1.4rem;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text\">♔&#xFE0E;</span>':'<span style=\"font-size:1.4rem;font-weight:400;color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans Symbol&#x27;,sans-serif;font-variant-emoji:text\">♚&#xFE0E;</span>')+' '+T('free_opening')+'</button>'+(setupMode?'':'<button class="btn" onclick="undoMove()" aria-label="'+T('undo')+'"><span style="font-size:1.4rem">↩️</span> '+T('undo')+'</button><button class="btn" onclick="redoMove()" aria-label="'+T('redo')+'" id="redoBtn"><span style="font-size:1.4rem">↪️</span> '+T('redo')+'</button>')+'<button class="btn" onclick="flipBoard()" aria-label="'+T('flip')+'"><span style="font-size:1.4rem">🔃</span> '+T('flip')+'</button>'+'<button class="btn" onclick="getHint()" aria-label="'+T('ai_hint')+'"><span style="font-size:1.4rem">💡</span> '+T('ai_hint')+'</button>'+(setupMode?'':'<button class="btn" onclick="toggleSound()" id="btnSound" aria-label="'+T('sound')+'">'+(soundOn?'<span style="font-size:1.4rem">🔊</span> '+T('sound'):'<span style="font-size:1.4rem">🔇</span> '+T('sound'))+'</button>')+'<button class="btn" onclick="showCtrlMap=!showCtrlMap;cachedCtrlKey=&quot;&quot;;render()" aria-label="'+T('ctrl_range')+'" title="'+T('ctrl_range')+'">'+(showCtrlMap?'<span style="font-size:1.4rem">🌈</span> '+T('ctrl_range'):'<span style="font-size:1.4rem">🌗</span> '+T('ctrl_range'))+'</button>'+'<button class="btn" onclick="copyFEN()" title="'+T('copy_fen')+'" aria-label="'+T('copy_fen')+'"><span style="font-size:1.4rem">📝</span> FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="'+T('import_fen')+'" aria-label="'+T('import_fen')+'"><span style="font-size:1.4rem">🗃️</span> '+T('import_label')+'</button><button class="btn" onclick="'+(setupMode?'exitSetup()':'toggleSetup()')+'" aria-label="'+(setupMode?T('setup_done'):T('setup_mode'))+'">'+(setupMode?'<span style="font-size:1.4rem">✓</span> '+T('setup_done'):'<span style="font-size:1.4rem">🏗️</span> '+T('setup_mode'))+'</button></div></div>';
 h+=`<div class="main" role="main"><div class="bsec">`;
-{const _aiCapHtml=capturedPiecesHtml(gameState.board,oppC,playerColor);h+=`<div class="pbar" id="ai-bar" role="status" aria-label="AI" style="flex-wrap:wrap"><span class="pico">${playerColor==='white'?'<span style="color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55)">♚&#xFE0E;</span>':'<span style="color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55)">♔&#xFE0E;</span>'}</span><div style="flex:1;min-width:0;display:flex;flex-direction:column"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><div class="pname">${T('ai_opponent')}</div><div class="pbar-sub">${getEffectiveAILevel()===8?T('manual_config'):getEffectiveAILevel()===7?'SL':('Lv.'+getEffectiveAILevel())}</div>${gameState.currentTurn!==playerColor&&!gameOver&&!isAIThinking?'<span class="tind">'+T('waiting')+'</span>':''}${isAIThinking?'<span class="tind">'+(_aiBarInfo||T('thinking'))+'</span>':''}</div>${_aiCapHtml}<div id="ai-ponder-info" style="display:flex;justify-content:flex-end;text-align:right;font-size:.65rem;color:var(--muted);font-family:monospace,system-ui,-apple-system,sans-serif;letter-spacing:.5px;padding-top:2px;line-height:1.3;min-height:1.3em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;width:100%;flex:0 0 auto">${(!isAIThinking&&!isHintLoading&&!hintText&&_ponderMoveSAN&&_ponderBarInfo&&!gameOver&&!setupMode&&!reviewMode)?('🔮 '+_esc(_ponderMoveSAN)+' '+_esc(_ponderBarInfo)):''}</div></div></div>`;}
+// v1.0.4 Rev37: AI bar captured pieces split at 7 — pieces 8+ go to line 3.
+{const _aiCapHtml=capturedPiecesHtml(gameState.board,oppC,playerColor,7);
+// v1.0.4 FIX (this round): render the AI's clock display element when the game is timed.
+// The element has id="clock-black" or "clock-white" depending on which color the AI plays.
+// _updateClockDisplay() updates its textContent live (200ms poll) without full re-render.
+const _aiClockColor=oppC;
+const _aiClockId=_aiClockColor==='white'?'clock-white':'clock-black';
+const _aiClockHtml=(typeof gameClocks!=='undefined'&&gameClocks)?`<span id="${_aiClockId}" style="font-family:monospace,system-ui,-apple-system,sans-serif;font-size:.85rem;font-weight:700;color:var(--text);background:rgba(0,0,0,.3);padding:2px 8px;border-radius:4px;border:1px solid var(--border);min-width:48px;text-align:center">${formatClock(gameClocks[_aiClockColor]?gameClocks[_aiClockColor].remainingSec:0)}</span>`:'';
+// v1.0.4 Rev36 LAYOUT: AI opponent bar restructured for cleaner multi-line display.
+// Line 1: AI name + level + clock + waiting/thinking indicator (compact status).
+// Line 2: Engine search real-time info (_aiBarInfo / _hintBarInfo) — right-aligned.
+// Line 3: Ponder info (🔮 move + progress) — right-aligned.
+// v1.0.4 Rev37: When AI captured pieces > 7, pieces 8+ go on line 3 left-aligned
+// (sharing the line with ponder info which is right-aligned). The _aiCapHtml
+// may contain two divs: the first (pieces 1-7) and #ai-cap-overflow (pieces 8+).
+// We extract the overflow div and place it in line 3 alongside #ai-ponder-info.
+// v1.0.4 Rev38 FIX: Overflow issues — search info and ponder info could exceed
+// the bar width because the inner column div didn't have overflow:hidden, and
+// the search/ponder text used white-space:nowrap without a bounded max-width.
+// Fix: add overflow:hidden to the inner column, add max-width:100% to search/
+// ponder info, and make the line-3 container properly shrinkable (min-width:0).
+// v1.0.4 Rev40 FIX: Line-3 layout — was justify-content:space-between which put
+// #ai-ponder-info at LEFT when no overflow (single child). Changed to
+// margin-left:auto on #ai-ponder-info so it's ALWAYS right-aligned regardless
+// of whether overflow pieces exist. Also removed justify-content from container.
+// Extract overflow captured pieces (if any) from _aiCapHtml for line 3 placement.
+const _aiCapOverflowMatch=_aiCapHtml.match(/<div id="ai-cap-overflow"[^>]*>[\s\S]*?<\/div>/);
+const _aiCapOverflow=_aiCapOverflowMatch?_aiCapOverflowMatch[0]:'';
+const _aiCapMain=_aiCapOverflowMatch?_aiCapHtml.replace(_aiCapOverflowMatch[0],''):_aiCapHtml;
+h+=`<div class="pbar" id="ai-bar" role="status" aria-label="AI" style="flex-wrap:wrap"><span class="pico">${playerColor==='white'?'<span style="color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55)">♚&#xFE0E;</span>':'<span style="color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55)">♔&#xFE0E;</span>'}</span><div style="flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><div class="pname">${T('ai_opponent')}</div><div class="pbar-sub">${getEffectiveAILevel()===8?T('manual_config'):getEffectiveAILevel()===7?'SL':('Lv.'+getEffectiveAILevel())}</div>${_aiClockHtml}${gameState.currentTurn!==playerColor&&!gameOver&&!isAIThinking?'<span class="tind">'+T('waiting')+'</span>':''}${isAIThinking?'<span class="tind">'+T('thinking')+'</span>':''}</div>${_aiCapMain}<div id="ai-search-info" style="display:flex;justify-content:flex-end;text-align:right;font-size:.65rem;color:var(--accent2);font-family:monospace,system-ui,-apple-system,sans-serif;letter-spacing:.5px;padding-top:2px;line-height:1.3;min-height:1.3em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;width:100%;box-sizing:border-box">${isAIThinking&&_aiBarInfo?_esc(_aiBarInfo):''}</div><div style="display:flex;align-items:center;width:100%;gap:6px;min-width:0;overflow:hidden">${_aiCapOverflow}<div id="ai-ponder-info" style="text-align:right;font-size:.65rem;color:var(--muted);font-family:monospace,system-ui,-apple-system,sans-serif;letter-spacing:.5px;padding-top:1px;line-height:1.3;min-height:1.3em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto;min-width:0;margin-left:auto">${(!isAIThinking&&!isHintLoading&&!hintText&&_ponderMoveSAN&&_ponderBarInfo&&!gameOver&&!setupMode&&!reviewMode)?('🔮 '+_esc(_ponderMoveSAN)+' '+_esc(_ponderBarInfo)):''}</div></div></div></div>`;}
 h+=`<div class="flbl" style="margin-left:28px">${(flip?'hgfedcba':'abcdefgh').split('').map(f=>`<span style="width:${CELL}px">${f}</span>`).join('')}</div>`;
 h+=`<div style="display:flex"><div class="rlbl">${(flip?'12345678':'87654321').split('').map(r=>`<span style="height:${CELL}px">${r}</span>`).join('')}</div>`;
 h+=`<div class="bwrap"><div class="bgrid" id="board-grid" role="grid" aria-label="${T('board')}" style="grid-template-columns:repeat(8,${CELL}px);grid-template-rows:repeat(8,${CELL}px)">`;
@@ -802,7 +1107,7 @@ h+=`</div>`}}
 h+=`</div>`;
 // Arrows are now handled by persistent SVG overlay via _updateArrows() — no inline SVG here
 if(gameOver&&lastMove&&!gameOverSoundPlayed){gameOverSoundPlayed=true;playSound('gameover');HapticManager.fire('GAME_OVER');}
-if(gameOver&&!setupMode){h+=`<div class="gover" role="alert" aria-live="assertive"><div class="ge" style="${_gameOverStatusKey==='checkmate'?(gameState.currentTurn==='black'?'color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55)':'color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55)'):'font-family:system-ui,sans-serif'};font-family:'DejaVu Sans','Noto Sans','Segoe UI Symbol',sans-serif;font-variant-emoji:text;font-weight:400">${_gameOverStatusKey==='checkmate'?(gameState.currentTurn==='black'?'♔\uFE0E':'♚\uFE0E'):'🤝'}</div><div class="gt">${gameOver}</div><button type="button" class="btn btn-p" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()">⚔️ ${T('play_again')}</button><button type="button" class="btn btn-g" onclick="enterReview()">📑 ${T('review')}</button></div>`;}
+if(gameOver&&!setupMode){h+=`<div class="gover" role="alert" aria-live="assertive"><div class="ge" style="${_gameOverStatusKey==='checkmate'?(gameState.currentTurn==='black'?'color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55)':'color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55)'):'font-family:system-ui,sans-serif'};font-family:'DejaVu Sans','Noto Sans','Segoe UI Symbol',sans-serif;font-variant-emoji:text;font-weight:400">${_gameOverStatusKey==='checkmate'?(gameState.currentTurn==='black'?'♔\uFE0E':'♚\uFE0E'):_gameOverStatusKey==='resign'?'🏳️':_gameOverStatusKey==='timeout'?'⌛':'🤝'}</div><div class="gt">${gameOver}</div><button type="button" class="btn btn-p" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()">⚔️ ${T('play_again')}</button><button type="button" class="btn btn-g" onclick="enterReview()">📑 ${T('review')}</button></div>`;}
 if(setupMode){
 const spPieces=[{t:'pawn',w:'♙\uFE0E',b:'♟\uFE0E'},{t:'knight',w:'♘\uFE0E',b:'♞\uFE0E'},{t:'bishop',w:'♗\uFE0E',b:'♝\uFE0E'},{t:'rook',w:'♖\uFE0E',b:'♜\uFE0E'},{t:'queen',w:'♕\uFE0E',b:'♛\uFE0E'},{t:'king',w:'♔\uFE0E',b:'♚\uFE0E'}];
 h+=`<div class="setup-panel" style="width:${8*CELL+8}px;max-width:100%;box-sizing:border-box"><div class="setup-row" style="justify-content:flex-start"><span class="setup-label">${T('piece')}</span>`;
@@ -864,7 +1169,18 @@ h+=`<div style="padding:6px 12px;background:#221015;border:1px solid var(--purpl
 // when the engine provides "bestmove X ponder Y". No separate display needed here.
 // Show MultiPV alternative lines if available
 if(_multiPVLines.length>=1){h+='<div style="margin-top:6px;border-top:1px solid rgba(212,160,23,.15);padding-top:6px"><div style="font-size:.65rem;color:var(--muted);margin-bottom:4px">'+T('multi_analysis')+'</div>';for(const pv of _multiPVLines){let scoreStr='';if(pv.scoreMate!=null&&pv.scoreMate!==null){const m=parseInt(pv.scoreMate);scoreStr=m>0?'#+'+Math.abs(m):m<0?'#-'+Math.abs(m):'#0';}else if(pv.scoreCp!=null&&pv.scoreCp!==null){const pd=(pv.scoreCp/100).toFixed(1);scoreStr=(pv.scoreCp>0?'+':'')+pd;} let pvSAN='';if(pv.pv){try{const _conv=_convertPVtoSAN(pv.pv,gameState);pvSAN=_conv.sanMoves.split(/\s+/).slice(0,3).join(' ');}catch(e){pvSAN=pv.pv.split(/\s+/).slice(0,3).join(' ');}} h+='<div style="font-size:.65rem;color:'+(pv.index===1?'var(--accent2)':'var(--muted)')+';margin-bottom:2px">'+(pv.index===1?'⭐':'·')+' '+scoreStr+(pvSAN?' <span style="font-family:monospace;font-size:.6rem">'+_esc(pvSAN)+'</span>':'')+'</div>';}h+='</div>';} h+='</div>';}}// Player bar
-{const _plCapHtml=capturedPiecesHtml(gameState.board,playerColor,playerColor);h+=`<div class="pbar" id="player-bar" style="flex-wrap:wrap"><span class="pico">${playerColor==='white'?'<span style="color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55)">♔&#xFE0E;</span>':'<span style="color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55)">♚&#xFE0E;</span>'}</span><div style="flex:1;min-width:0;display:flex;flex-direction:column"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><div class="pname">${T('you')}</div></div>${_plCapHtml}</div>${gameState.currentTurn===playerColor&&!gameOver?'<span class="tind" style="color:#4ade80">'+T('your_turn')+'</span>':''}</div>`;}
+{const _plCapHtml=capturedPiecesHtml(gameState.board,playerColor,playerColor);
+// v1.0.4 FIX (this round): render the player's clock display element when timed.
+const _plClockColor=playerColor;
+const _plClockId=_plClockColor==='white'?'clock-white':'clock-black';
+const _plClockHtml=(typeof gameClocks!=='undefined'&&gameClocks)?`<span id="${_plClockId}" style="font-family:monospace,system-ui,-apple-system,sans-serif;font-size:.85rem;font-weight:700;color:var(--text);background:rgba(0,0,0,.3);padding:2px 8px;border-radius:4px;border:1px solid var(--border);min-width:48px;text-align:center">${formatClock(gameClocks[_plClockColor]?gameClocks[_plClockColor].remainingSec:0)}</span>`:'';
+// v1.0.4 Rev24: Player name display — uses _humanPlayerName (rename feature)
+// if set, otherwise the default "你"/"You". Clicking the name opens a rename
+// prompt. The name is persisted via AndroidBridge.persistentSet and used in
+// all PGN text ([White "..."] / [Black "..."]).
+const _plName=(typeof _humanPlayerName!=='undefined'&&_humanPlayerName)?_humanPlayerName:T('you');
+const _plNameEsc=_escapeHTML(_plName);
+h+=`<div class="pbar" id="player-bar" style="flex-wrap:wrap"><span class="pico">${playerColor==='white'?'<span style="color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55)">♔&#xFE0E;</span>':'<span style="color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55)">♚&#xFE0E;</span>'}</span><div style="flex:1;min-width:0;display:flex;flex-direction:column"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><div class="pname" style="cursor:pointer;text-decoration:underline dotted rgba(212,160,23,.5);text-underline-offset:3px" onclick="_renameHumanPlayer()" title="${T('rename_player_hint')}">${_plNameEsc}</div>${_plClockHtml}</div>${_plCapHtml}</div>${gameState.currentTurn===playerColor&&!gameOver&&!setupMode?'<span class="tind" style="color:#4ade80">'+T('your_turn')+'</span><button type="button" class="btn" onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showResignConfirm=true;render()" title="'+T('resign_btn')+'" aria-label="'+T('resign_btn')+'" style="padding:4px 10px;font-size:.75rem;min-height:30px;border-color:rgba(192,57,43,.6);color:#e57373;background:rgba(192,57,43,.12)">'+T('resign_btn')+'</button>':''}</div>`;}
 h+=`</div>`;
 // Side panel
 h+=`<div class="panel" role="complementary">`;
@@ -898,7 +1214,7 @@ const _mvStartOffset=(typeof _importedStartMoveNum!=='undefined'&&_importedStart
 // starting position) regardless of the FEN-based move-number offset.
 const pairs=[];for(let i=0;i<moveRecords.length;i+=2){pairs.push({n:Math.floor(i/2)+_mvStartOffset,wi:i,bi:i+1,w:moveRecords[i],b:moveRecords[i+1]})}
 for(const pr of pairs){h+='<div class="mrow"><span class="mnum">'+pr.n+'.</span>';if(pr.w){h+='<span class="mw" onclick="if(!isAIThinking&&!setupMode&&!reviewMode){showNewGameDialog=false;enterReview();reviewGoTo('+(pr.wi+1)+');event.stopPropagation()}">'+_esc(pr.w.notation)+(pr.w.time?'<span style="font-size:.6rem;color:var(--muted);margin-left:2px">'+pr.w.time+'s</span>':'')+'</span>';if(showVariations&&pr.w&&pr.w.variations&&pr.w.variations.length>0){h+=_formatVariationGroups(pr.w.variations,pr.n,true);}}else if(pr.w===null){h+='<span class="mw" style="opacity:.55;font-style:italic" title="'+T('white_concedes_move')+'">...</span>';}if(pr.b){h+='<span class="mb" onclick="if(!isAIThinking&&!setupMode&&!reviewMode){showNewGameDialog=false;enterReview();reviewGoTo('+(pr.bi+1)+');event.stopPropagation()}">'+_esc(pr.b.notation)+(pr.b.time?'<span style="font-size:.6rem;color:var(--muted);margin-left:2px">'+pr.b.time+'s</span>':'')+'</span>';if(showVariations&&pr.b&&pr.b.variations&&pr.b.variations.length>0){h+=_formatVariationGroups(pr.b.variations,pr.n,false);}}h+='</div>'}
-if(!pairs.length)h+=`<div style="color:#64748b;font-size:.85rem">${T('no_moves')}</div>`;
+if(!pairs.length)h+=`<div style="color:#64748b;font-size:.85rem;cursor:pointer;padding:4px 0;text-decoration:underline dotted rgba(100,116,139,.4);text-underline-offset:3px" onclick="if(!isAIThinking&&!setupMode&&!reviewMode){showNewGameDialog=false;enterReview();event.stopPropagation()}" title="${T('enter_review_hint')}">${T('no_moves')}</div>`;
 h+=`</div></div>`;
 // Tips
 h+=`<div class="card"><div class="card-t"><span class="ico">💡</span>${T('chess_tips')}</div><div class="tips">`;
@@ -910,24 +1226,111 @@ h+=`</div></div>`;
 if(showNewGameDialog){
 h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="${T('new_game_settings')}" onclick="if(event.target===this){showNewGameDialog=false;render()}"><div class="dlg"><h2>⚔️ ${T('new_game_settings')}</h2>`;
 h+=`<div class="dlg-sec"><h3>${T('play_color')}</h3><div class="clr-row"><button class="clr-btn${dlgPlayerColor==='white'?' act':''}" onclick="dlgPlayerColor='white';render()"><span style="color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text;font-size:1.6rem">♔&#xFE0E;</span>${T('white_first')}</button><button class="clr-btn${dlgPlayerColor==='black'?' act':''}" onclick="dlgPlayerColor='black';render()"><span style="color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text;font-size:1.6rem">♚&#xFE0E;</span>${T('black_second')}</button></div></div>`;
-h+=`<div class="dlg-sec"><h3>${T('ai_book')}</h3><div class="toggle" onclick="dlgBookMoves=!dlgBookMoves;HapticManager.fire(dlgBookMoves?'TOGGLE_ON':'TOGGLE_OFF');render()" style="margin-bottom:10px"><span>${T('book_moves')}</span><div class="toggle-sw${dlgBookMoves?' on':''}"></div></div></div><div style="font-size:.72rem;color:var(--muted);margin-bottom:10px">${T('eco_book_desc')}</div></div>`;
-h+=`<div class="dlg-sec"><h3>${T('classic_openings')}</h3><div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap"><form onsubmit="event.preventDefault();if(!_ecoComposing){_ecoDoSearch()}" style="flex:1;min-width:200px;display:flex;gap:4px"><input id="ecoSearch" type="text" inputmode="search" placeholder="${T('eco_search_ph')}" style="flex:1;padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;touch-action:manipulation" enterkeyhint="search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="if(!_ecoComposing){setEcoQuery(this.value)}" onfocus="_ecoSearchFocused=true;if(_ecoBlurTimer){clearTimeout(_ecoBlurTimer);_ecoBlurTimer=0}" onblur="_ecoBlurTimer=setTimeout(function(){_ecoSearchFocused=false;_ecoBlurTimer=0},200)" oncompositionstart="_ecoComposing=true" oncompositionend="_ecoComposing=false;setEcoQuery(this.value)" onkeydown="if((event.key==='Enter'||event.keyCode===13)&&!event.isComposing&&!_ecoComposing){event.preventDefault();setEcoQuery(this.value);_ecoDoSearch()}" value="${(window.ecoSearchQuery||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c]))}"></form><select id="ecoFamily" style="padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;cursor:pointer" onchange="window.ecoFamilyFilter=this.value;ecoShowCount=30;_ecoUpdateResults()"><option value="">${T('all_categories')}</option>${Object.keys(ECO_BY_FAMILY).sort().map(f=>`<option value="${f}"${(window.ecoFamilyFilter||'')===f?' selected':''}>${f}</option>`).join('')}</select></div><div class="op-list"><button class="op-btn${!dlgOpeningId?' act':''}" onclick="dlgOpeningId=null;window.ecoSearchQuery='';window.ecoFamilyFilter='';ecoShowCount=30;_ecoUpdateResults()"><div class="on">${T('free_opening_btn')}</div><div class="os">${T('from_start')}</div></button>`;
-_ensureEcoParsed();ecoDisplayList=ECO_OPENINGS;
-if(window.ecoSearchQuery){const q=window.ecoSearchQuery.trim().toUpperCase();ecoDisplayList=searchEco(q)}
-else if(window.ecoFamilyFilter){ecoDisplayList=ECO_BY_FAMILY[window.ecoFamilyFilter]||[]}
-for(const o of ecoDisplayList.slice(0,ecoShowCount))h+=`<button class="op-btn${dlgOpeningId===o.id+'|'+o.name?' act':''}" onclick="dlgOpeningId='${_escJs(o.id)}|${_escJs(o.name)}';_ecoUpdateResults()"><div class="on">${_esc(o.id)} ${_esc(o.name)}</div><div class="os">${_esc(o.family)}</div></button>`;
-if(ecoDisplayList.length>ecoShowCount)h+=`<button class="btn btn-d" style="width:100%;margin-top:4px" onclick="ecoShowCount+=30;_ecoUpdateResults()">${T('load_more')} (+${ecoDisplayList.length-ecoShowCount})</button>`;
-h+=`</div></div>`;
+// v1.0.4 FIX (this round): Chess960 toggle is now placed DIRECTLY BELOW the
+// play_color section (per user request). The "Use ECO Book" toggle below
+// remains mutually exclusive — when it is ON, this Chess960 toggle is grayed out.
+// When Chess960 is ON, the dedicated Chess960 settings (SP-ID, preview, note)
+// replace the Classic Openings section further below (existing behavior, unchanged).
+const _ch960Grayed=dlgBookMoves;
+h+=`<div class="dlg-sec"${_ch960Grayed?' style="opacity:.4;pointer-events:none"':''}><h3>${T('chess960_label')}</h3><div class="toggle" onclick="dlgChess960=!dlgChess960;HapticManager.fire(dlgChess960?'TOGGLE_ON':'TOGGLE_OFF');if(dlgChess960){dlgOpeningId=null;}render()" style="margin-bottom:10px"><span>${T('chess960_enable')}</span><div class="toggle-sw${dlgChess960?' on':''}"></div></div></div>`;
+// v1.0.4 EXPANSION (this round): Time Control selector
+//   - Type dropdown: Untimed / Sudden Death / Fischer Increment / Bronstein Delay / US Delay
+//   - Base time input (minutes), shown when type != 'off'
+//   - Increment input (sec/move), shown for 'fischer'
+//   - Delay input (sec/move), shown for 'bronstein' and 'usdelay'
+//   - When time control is active, the in-game UI shows live clocks; PGN export
+//     emits [TimeControl "..."] header + per-move [%clk HH:MM:SS] comments.
+//   - When untimed, PGN export emits [%emt HH:MM:SS] (elapsed move time) comments.
+h+=`<div class="dlg-sec"><h3>${T('time_control_label')}</h3>`;
+h+=`<select id="timeControlType" style="width:100%;padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;cursor:pointer;margin-bottom:10px" onchange="HapticManager.fire('BUTTON_PRESS');dlgTimeControl.type=this.value;render()">`;
+const _tcTypes=[['off','time_control_off'],['sudden','time_control_sudden'],['fischer','time_control_fischer'],['bronstein','time_control_bronstein'],['usdelay','time_control_usdelay']];
+for(const [v,key] of _tcTypes){
+  h+=`<option value="${v}"${dlgTimeControl.type===v?' selected':''}>${T(key)}</option>`;
+}
+h+=`</select>`;
+if(dlgTimeControl.type!=='off'){
+  // Base time (minutes)
+  h+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><label style="font-size:.78rem;color:var(--muted);flex:1">${T('time_control_base_min')}</label><input type="number" min="1" max="600" value="${Math.round((dlgTimeControl.baseSec||300)/60)}" style="width:80px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;text-align:center" oninput="const v=parseInt(this.value,10);if(!isNaN(v)&&v>=1){dlgTimeControl.baseSec=v*60;}"></div>`;
+  if(dlgTimeControl.type==='fischer'){
+    h+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><label style="font-size:.78rem;color:var(--muted);flex:1">${T('time_control_inc_sec')}</label><input type="number" min="0" max="60" value="${dlgTimeControl.incrementSec||0}" style="width:80px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;text-align:center" oninput="const v=parseInt(this.value,10);if(!isNaN(v)&&v>=0){dlgTimeControl.incrementSec=v;}"></div>`;
+  }
+  if(dlgTimeControl.type==='bronstein'||dlgTimeControl.type==='usdelay'){
+    h+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><label style="font-size:.78rem;color:var(--muted);flex:1">${T('time_control_delay_sec')}</label><input type="number" min="0" max="60" value="${dlgTimeControl.delaySec||0}" style="width:80px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;text-align:center" oninput="const v=parseInt(this.value,10);if(!isNaN(v)&&v>=0){dlgTimeControl.delaySec=v;}"></div>`;
+  }
+}
+h+=`<div style="font-size:.7rem;color:var(--muted);margin-top:4px">${T('time_control_note')}</div>`;
+h+=`</div>`;
+// v1.0.4 FIX (this round): AI Book Moves toggle.
+//   - When Chess960 is enabled, this toggle is grayed out (Chess960 has no fixed opening theory).
+//   - When this toggle is ON, the Chess960 toggle (above) is grayed out (mutual exclusivity).
+//   - Visual: grayed-out toggle has reduced opacity and pointer-events:none.
+const _ecoGrayed=dlgChess960;
+h+=`<div class="dlg-sec"${_ecoGrayed?' style="opacity:.4;pointer-events:none"':''}><h3>${T('ai_book')}</h3><div class="toggle" onclick="dlgBookMoves=!dlgBookMoves;HapticManager.fire(dlgBookMoves?'TOGGLE_ON':'TOGGLE_OFF');render()" style="margin-bottom:10px"><span>${T('book_moves')}</span><div class="toggle-sw${dlgBookMoves?' on':''}"></div></div></div><div style="font-size:.72rem;color:var(--muted);margin-bottom:10px">${T('eco_book_desc')}</div></div>`;
+// v1.0.4 FIX (this round): The "Classic Openings" section and the "Chess960" section
+// are MUTUALLY EXCLUSIVE — when Chess960 is ON, the Classic Openings area is
+// REPLACED by the Chess960-specific settings (SP-ID input, back-rank preview, note).
+// When Chess960 is OFF, the Classic Openings area shows as before (now WITHOUT
+// the redundant "Classic Openings (Optional)" heading — it was a residual title
+// since the user already knows they're in classic mode).
+// The Chess960 toggle itself is shown above (directly below play_color).
+// When "Use ECO Book" is ON, the Chess960 toggle is grayed out (mutual exclusivity).
+if(dlgChess960&&!dlgBookMoves){
+  // Chess960 is ON — show Chess960-specific settings INSTEAD of Classic Openings.
+  // v1.0.4 Rev25 FIX: Removed the <h3>${T('chess960_label')}</h3> section heading.
+  // The Chess960 toggle above (with its own label "菲舍尔任意制象棋"/"Fischer Random
+  // Chess") already makes it clear what mode the user is in. The redundant
+  // heading consumed vertical space and duplicated information. The settings
+  // (SP-ID input, back-rank preview, note) now appear directly under the toggle.
+  const curSPID=dlgChess960SPID>=0?dlgChess960SPID:-1;
+  const previewSPID=curSPID>=0?curSPID:518; // default preview = traditional position
+  const backRank=spidToBackRank(previewSPID);
+  const pieceSym={rook:'♖',knight:'♘',bishop:'♗',queen:'♕',king:'♔'};
+  h+=`<div class="dlg-sec">`;
+  h+=`<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap">`;
+  h+=`<label style="font-size:.78rem;color:var(--muted)">${T('chess960_spid')}: </label>`;
+  h+=`<button class="btn" style="padding:4px 10px;font-size:.78rem;${curSPID===-1?'background:var(--accent);color:#1a0a0a;font-weight:700':''}" onclick="HapticManager.fire('BUTTON_PRESS');dlgChess960SPID=-1;render()">${T('chess960_random')}</button>`;
+  h+=`<input type="number" min="0" max="959" value="${curSPID>=0?curSPID:''}" placeholder="0-959" style="width:80px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;text-align:center" oninput="const v=parseInt(this.value,10);if(!isNaN(v)&&v>=0&&v<960){dlgChess960SPID=v;render();}else if(this.value===''){dlgChess960SPID=-1;render();}">`;
+  h+=`<button class="btn" style="padding:4px 10px;font-size:.78rem" onclick="HapticManager.fire('BUTTON_PRESS');dlgChess960SPID=Math.floor(Math.random()*960);render();">🎲</button>`;
+  h+=`</div>`;
+  // Back-rank preview — responsive grid; piece symbols use board piece styling
+  const _wPieceStyle="color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:'DejaVu Sans','Noto Sans','Segoe UI Symbol',sans-serif;font-variant-emoji:text;font-weight:400";
+  h+=`<div style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:6px;margin-bottom:6px"><div style="font-size:.7rem;color:var(--muted);margin-bottom:4px">${T('chess960_preview')} (SP-ID ${previewSPID})</div><div style="display:grid;grid-template-columns:repeat(8,1fr);gap:0;font-size:1.4rem;background:#3a2a1a;padding:4px;border-radius:4px">`;
+  for(let c=0;c<8;c++){
+    const p=backRank[c];
+    h+=`<span style="text-align:center;${_wPieceStyle}">${pieceSym[p]||''}</span>`;
+  }
+  h+=`</div><div style="display:grid;grid-template-columns:repeat(8,1fr);gap:0;font-size:.6rem;color:var(--muted);margin-top:2px">`;
+  for(let c=0;c<8;c++)h+=`<span style="text-align:center">${'abcdefgh'[c]}</span>`;
+  h+=`</div></div>`;
+  h+=`<div style="font-size:.7rem;color:var(--muted);margin-top:4px">${T('chess960_note')}</div>`;
+  h+=`</div>`;
+}else{
+  // Chess960 is OFF — show Classic Openings list.
+  // v1.0.4 FIX (this round): Removed the redundant <h3>${T('classic_openings')}</h3>
+  // heading — it was a residual title. The section is self-evident from the ECO
+  // search box and openings list below.
+  h+=`<div class="dlg-sec"><div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap"><form onsubmit="event.preventDefault();if(!_ecoComposing){_ecoDoSearch()}" style="flex:1;min-width:200px;display:flex;gap:4px"><input id="ecoSearch" type="text" inputmode="search" placeholder="${T('eco_search_ph')}" style="flex:1;padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;touch-action:manipulation" enterkeyhint="search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="if(!_ecoComposing){setEcoQuery(this.value)}" onfocus="_ecoSearchFocused=true;if(_ecoBlurTimer){clearTimeout(_ecoBlurTimer);_ecoBlurTimer=0}" onblur="_ecoBlurTimer=setTimeout(function(){_ecoSearchFocused=false;_ecoBlurTimer=0},200)" oncompositionstart="_ecoComposing=true" oncompositionend="_ecoComposing=false;setEcoQuery(this.value)" onkeydown="if((event.key==='Enter'||event.keyCode===13)&&!event.isComposing&&!_ecoComposing){event.preventDefault();setEcoQuery(this.value);_ecoDoSearch()}" value="${(window.ecoSearchQuery||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c]))}"></form><select id="ecoFamily" style="padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;cursor:pointer" onchange="window.ecoFamilyFilter=this.value;ecoShowCount=30;_ecoUpdateResults()"><option value="">${T('all_categories')}</option>${Object.keys(ECO_BY_FAMILY).sort().map(f=>`<option value="${f}"${(window.ecoFamilyFilter||'')===f?' selected':''}>${f}</option>`).join('')}</select></div><div class="op-list"><button class="op-btn${!dlgOpeningId?' act':''}" onclick="dlgOpeningId=null;window.ecoSearchQuery='';window.ecoFamilyFilter='';ecoShowCount=30;_ecoUpdateResults()"><div class="on">${T('free_opening_btn')}</div><div class="os">${T('from_start')}</div></button>`;
+  _ensureEcoParsed();ecoDisplayList=ECO_OPENINGS;
+  if(window.ecoSearchQuery){const q=window.ecoSearchQuery.trim().toUpperCase();ecoDisplayList=searchEco(q)}
+  else if(window.ecoFamilyFilter){ecoDisplayList=ECO_BY_FAMILY[window.ecoFamilyFilter]||[]}
+  for(const o of ecoDisplayList.slice(0,ecoShowCount))h+=`<button class="op-btn${dlgOpeningId===o.id+'|'+o.name?' act':''}" onclick="dlgOpeningId='${_escJs(o.id)}|${_escJs(o.name)}';_ecoUpdateResults()"><div class="on">${_esc(o.id)} ${_esc(o.name)}</div><div class="os">${_esc(o.family)}</div></button>`;
+  if(ecoDisplayList.length>ecoShowCount)h+=`<button class="btn btn-d" style="width:100%;margin-top:4px" onclick="ecoShowCount+=30;_ecoUpdateResults()">${T('load_more')} (+${ecoDisplayList.length-ecoShowCount})</button>`;
+  h+=`</div></div>`;
+}
 h+=`<div class="dlg-btns"><button type="button" class="btn btn-s" onclick="showNewGameDialog=false;dlgOpeningId=null;render()">${T('cancel')}</button><button type="button" class="btn btn-p" onclick="startGame()">${T('start_game_pawn')}</button></div>`;
 h+=`</div></div>`}
 
 // Promotion dialog
 if(showEngineConfig){h+=renderEngineConfig();}
+// v1.0.4 Rev27: Resign confirmation dialog (DeepSeek review 2.1)
+if(showResignConfirm){
+h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="${T('resign_confirm_title')}" onclick="if(event.target===this){showResignConfirm=false;render()}"><div class="dlg" style="max-width:380px"><h2>${T('resign_confirm_title')}</h2><div class="dlg-sec"><p style="font-size:.9rem;line-height:1.6;color:var(--text)">${T('resign_confirm_msg')}</p></div><div class="dlg-btns"><button type="button" class="btn" onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showResignConfirm=false;render()" style="flex:1;justify-content:center">${T('resign_no')}</button><button type="button" class="btn btn-p" onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showResignConfirm=false;_resignGame();render()" style="flex:1;justify-content:center;background:#c0392b;border-color:#a93226;color:#fff">${T('resign_yes')}</button></div></div></div>`;
+}
 if(showAboutPage){
 // Load AGPL v3 SVG via AndroidBridge as base64 (CSP-compliant)
 let _gplSvgSrc='';
 try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.loadAssetAsBase64){const b64=AndroidBridge.loadAssetAsBase64('AGPLv3_Logo.svg');if(b64)_gplSvgSrc='data:image/svg+xml;base64,'+b64;}}catch(e){}
-h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="About"><div class="dlg" style="max-width:460px"><h2>${T('about_title')}</h2><div class="dlg-sec"><div class="crow"><span class="lb">${T('about_app')}</span><span class="vl">${T('app_name')} v1.0.3</span></div><div class="crow"><span class="lb">${T('about_engine')}</span><span class="vl">Stockfish 18 (arm64-v8a-dotprod)</span></div><div class="crow"><span class="lb">${T('about_platform')}</span><span class="vl">Android arm64-v8a</span></div></div><div class="dlg-sec"><h3>${T('copyright_license')}</h3>`+(_gplSvgSrc?`<div style="text-align:center;margin-bottom:10px"><img src="${_gplSvgSrc}" alt="AGPL v3 Logo" style="width:120px;height:auto;opacity:.9" /></div>`:'')+`<div style="font-size:.75rem;color:var(--text);line-height:1.6"><p style="margin-bottom:8px">${T('about_copyright')}</p><p style="margin-bottom:8px">${T('about_source_code')}</p><p style="margin-bottom:8px">${T('about_agpl')} <a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank">GNU AGPL v3</a>${T('about_agpl_desc')}</p><p style="margin-bottom:8px">${T('about_droidfish')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank">GPL v3</a>${T('about_droidfish_desc')}</p><p style="margin-bottom:8px">${T('about_stockfish')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank">GPL v3</a> ${T('about_gplv3')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_disclaimer')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_ai')}</p></div></div><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="showAboutPage=false;render()" style="flex:1;justify-content:center">${T('close')}</button></div></div></div>`;}
+h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="About"><div class="dlg" style="max-width:460px"><h2>${T('about_title')}</h2><div class="dlg-sec"><div class="crow"><span class="lb">${T('about_app')}</span><span class="vl">${T('app_name')} v1.0.4</span></div><div class="crow"><span class="lb">${T('about_engine')}</span><span class="vl">Stockfish 18 (arm64-v8a-dotprod)</span></div><div class="crow"><span class="lb">${T('about_platform')}</span><span class="vl">Android arm64-v8a</span></div></div><div class="dlg-sec"><h3>${T('copyright_license')}</h3>`+(_gplSvgSrc?`<div style="text-align:center;margin-bottom:10px"><img src="${_gplSvgSrc}" alt="AGPL v3 Logo" style="width:120px;height:auto;opacity:.9" /></div>`:'')+`<div style="font-size:.75rem;color:var(--text);line-height:1.6"><p style="margin-bottom:8px">${T('about_copyright')}</p><p style="margin-bottom:8px">${T('about_source_code_prefix')}<a href="${T('about_source_code_url')}" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">${T('about_source_code_url')}</a></p><p style="margin-bottom:8px">${T('about_agpl')} <a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GNU AGPL v3</a>${T('about_agpl_desc')}</p><p style="margin-bottom:8px">${T('about_droidfish')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a>${T('about_droidfish_desc')}</p><p style="margin-bottom:8px">${T('about_stockfish')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a> ${T('about_gplv3')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_disclaimer')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_ai')}</p></div></div><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="showAboutPage=false;render()" style="flex:1;justify-content:center">${T('close')}</button></div></div></div>`;}
 // Import dialog — paste FEN, paste PGN, or select PGN file
 if(showImportDialog){
 h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="${T('import_title')}" onclick="if(event.target===this){showImportDialog=false;render()}"><div class="dlg" style="max-width:420px"><h2>${T('import_title')}</h2><div class="dlg-sec" style="gap:10px;display:flex;flex-direction:column">
@@ -939,7 +1342,10 @@ h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="${T('import_tit
 if(pendingPromotion){const co=pendingPromotion.piece.color;const pcls=co==='white'?'w-prom':'bk-prom';h+=`<div class="prom-dov" role="dialog" aria-modal="true" aria-label="${T('select_promotion')}" onclick="if(event.target===this){pendingPromotion=null;render()}"><div class="prom-dlg"><h3>${T('select_promotion')}</h3><div class="prom-row">`;for(const t of['queen','rook','bishop','knight'])h+=`<button class="prom-btn ${pcls}" onclick="doPromotion('${t}')">${SYM[co][t]}</button>`;h+=`</div><button class="btn" style="margin-top:12px;font-size:.8rem" onclick="pendingPromotion=null;render()">${T('cancel')}</button></div></div>`}
 
 // v1.0.2: PGN save prompt dialog — shown before clearing move records
-if(showSavePGNPrompt){h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="${T('save_pgn_prompt')}" onclick="if(event.target===this){showSavePGNPrompt=false;_savePGNNo()}"><div class="dlg" style="max-width:320px"><h2>${T('save_pgn_prompt')}</h2><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="_savePGNYes()">${T('save_pgn_yes')}</button><button type="button" class="btn btn-s" onclick="_savePGNNo()">${T('save_pgn_no')}</button></div></div></div>`;}
+if(showSavePGNPrompt){h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="${T('save_pgn_prompt')}" onclick="if(event.target===this){_savePGNCancel()}"><div class="dlg" style="max-width:320px"><h2>${T('save_pgn_prompt')}</h2><div class="dlg-btns" style="flex-wrap:wrap;gap:6px"><button type="button" class="btn btn-p" onclick="HapticManager.fire('BUTTON_PRESS');_savePGNYes()">${T('save_pgn_yes')}</button><button type="button" class="btn btn-s" onclick="HapticManager.fire('BUTTON_PRESS');_savePGNNo()">${T('save_pgn_no')}</button><button type="button" class="btn" onclick="HapticManager.fire('BUTTON_PRESS');_savePGNCancel()" style="flex:1 1 100%;margin-top:4px">${T('cancel')}</button></div></div></div>`;}
+
+// v1.0.4 Round-5 Rev18: PGN cache manager modal
+if(showPGNCacheManager){h+=_renderPGNCacheManager();}
 
 if(reviewMode){
 const safeStep=Math.max(0,Math.min(reviewStep,reviewStates.length-1));
@@ -948,7 +1354,7 @@ const rs=reviewStates[safeStep];
 if(!rs){reviewMode=false;render();return}
 const rBoard=rs.state.board;const rLast=rs.lastMove;
 h+='<div class="review-overlay">';
-h+=`<div class="review-hdr"><h2>${T('review_analysis')}</h2><div style="display:flex;gap:6px;align-items:center"><div class="toggle" style="padding:2px 6px;font-size:.65rem" onclick="showVariations=!showVariations;HapticManager.fire(showVariations?'TOGGLE_ON':'TOGGLE_OFF');render()"><span>${T('variation_toggle')}</span><div class="toggle-sw${showVariations?' on':''}" style="width:30px;height:16px"></div></div><button class="btn" onclick="copyReviewPGN()" title="${T('copy_review_pgn')}">📝 PGN</button><button class="btn" onclick="exportPGNToFile()" title="${T('export_pgn')||'Export PGN to file'}">💾</button><button class="btn" onclick="showCtrlMap=!showCtrlMap;cachedCtrlKey=&quot;&quot;;render()" title="${T('ctrl_range')}">${showCtrlMap?'🌈':'🌗'}</button><button class="btn" onclick="copyReviewFEN()" title="${T('copy_review_fen')}">📝 FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="${T('import_label')}">🗃️</button><button class="btn" onclick="openStatsPage()" title="${T('stats')}">📊</button><button class="btn" onclick="exitReview()">${T('return_game')}</button></div></div>`;
+h+=`<div class="review-hdr"><h2>${T('review_analysis')}</h2><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><div class="toggle" style="padding:2px 6px;font-size:.65rem" onclick="showVariations=!showVariations;HapticManager.fire(showVariations?'TOGGLE_ON':'TOGGLE_OFF');render()"><span>${T('variation_toggle')}</span><div class="toggle-sw${showVariations?' on':''}" style="width:30px;height:16px"></div></div><button class="btn" onclick="showCtrlMap=!showCtrlMap;cachedCtrlKey=&quot;&quot;;render()" title="${T('ctrl_range')}">${showCtrlMap?'🌈':'🌗'}</button><button class="btn" onclick="copyReviewPGN()" title="${T('copy_review_pgn')}">📝 PGN</button><button class="btn" onclick="exportPGNToFile()" title="${T('export_pgn')||'Export PGN to file'}">💾</button><button class="btn" onclick="openPGNCacheManager()" title="${T('pgn_cache_manager')}" style="font-weight:700">📚</button><button class="btn" onclick="copyReviewFEN()" title="${T('copy_review_fen')}">📝 FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="${T('import_label')}">🗃️</button><button class="btn" onclick="openStatsPage()" title="${T('stats')}">📊</button><button class="btn" onclick="exitReview()">${T('return_game')}</button></div></div>`;
 // v1.0.3 FIX: Move _rvCell calculation BEFORE its first use (the --rv-board-w
 // CSS variable on .review-body below). Previously, _rvCell was declared with
 // `let` on line 944 but referenced on line 935 — causing a ReferenceError
@@ -1051,11 +1457,24 @@ if(_sfEvalReady&&!_evalLoading&&reviewStep>0){
   const _prevEv=_reviewEvalCache.get(reviewStep-1);
   if(_prevEv!=null) _rDelta=' '+_formatEvalDelta(_sfEval,_prevEv.eval);
 }
-const _rDepthStr=_sfDepth>0?'<span style="font-size:.65rem;color:var(--muted);margin-left:4px">D'+_sfDepth+'</span>':'';
+// v1.0.4 Rev33: review eval bar now shows real-time depth (D), seldepth (SD),
+// nodes, and nps — matching the main eval bar's display style. During active
+// analysis (_evalLoading), the depth/seldepth/nodes/nps update in real-time
+// via onEngineProgress; when analysis completes, the final values are shown.
+// SD only shown when > 0 AND > depth (seldepth == depth is redundant).
+const _rDepthStr=_sfDepth>0?'<span style="font-size:.65rem;color:var(--muted);margin-left:4px">D'+_sfDepth+'</span>'+(_sfSeldepth>0&&_sfSeldepth>_sfDepth?'<span style="font-size:.65rem;color:var(--muted);margin-left:2px">SD'+_sfSeldepth+'</span>':''):'';
+// v1.0.4 Rev33: real-time nodes + nps display during review analysis.
+let _rProgressStr='';
+if(_evalLoading&&_sfDepth>0){
+  let _rpp=[];
+  if(_lastProgressNodes!=null){const _ns=_lastProgressNodes>=1000000?(_lastProgressNodes/1000000).toFixed(1)+'M':_lastProgressNodes>=1000?Math.round(_lastProgressNodes/1000)+'K':String(_lastProgressNodes);_rpp.push(_ns);}
+  if(_lastProgressNps!=null){const _ns=_lastProgressNps>=1000000?(_lastProgressNps/1000000).toFixed(1)+'M/s':_lastProgressNps>=1000?Math.round(_lastProgressNps/1000)+'K/s':String(_lastProgressNps);_rpp.push(_ns);}
+  if(_rpp.length)_rProgressStr='<span style="font-size:.6rem;color:var(--muted);margin-left:3px">'+_rpp.join(' ')+'</span>';
+}
 // Build WDL string for review eval bar (same as main eval bar)
 let _rWdlStr='';
 if(_sfWdlW>=0&&_sfWdlD>=0&&_sfWdlL>=0){const _rt=_sfWdlW+_sfWdlD+_sfWdlL;const _rw=Math.round(_sfWdlW/_rt*100);const _rd=Math.round(_sfWdlD/_rt*100);const _rl=100-_rw-_rd;_rWdlStr='<span style="font-size:.65rem;color:var(--muted);margin-left:4px">('+_rw+'%W/'+_rd+'%D/'+_rl+'%L)</span>';}
-const _rvEvalBarHTML='<div class="ev" id="review-eval-bar" style="margin:6px 0;font-size:.85rem"><span class="ev-e">'+_re.emoji+'</span><span>'+_re.desc+'</span><span style="color:var(--muted)">('+_re.score+')</span>'+_rDepthStr+_rWdlStr+_rDelta+'</div>';
+const _rvEvalBarHTML='<div class="ev" id="review-eval-bar" style="margin:6px 0;font-size:.85rem"><span class="ev-e">'+_re.emoji+'</span><span>'+_re.desc+'</span><span style="color:var(--muted)">('+_re.score+')</span>'+_rDepthStr+_rProgressStr+_rWdlStr+_rDelta+'</div>';
 
 // Review step slider
 const _rvSliderHTML='<div style="width:100%;margin:6px 0">'+
@@ -1201,26 +1620,92 @@ const _wasEcoFocused=_ecoSearchFocused;if(_ecoBlurTimer){clearTimeout(_ecoBlurTi
 // In landscape review mode, .review-body scrolls (two-layer scroll). Every
 // render() rebuilds the DOM and resets .review-body.scrollTop to 0, yanking
 // the user back to the top. Now we capture & restore it too.
-let _savedMlistScroll=0;
+//
+// v1.0.4 FIX (this round): the previous logic captured _savedMlistScroll from
+// the OLD .mlist element, but if the user was near the bottom AND a new move
+// was just added (making the list taller), the restored scrollTop would be
+// too small relative to the new content height, causing the list to appear
+// stuck at an old position rather than following the new move. More
+// importantly, when render() was throttled (deferred 200ms via setTimeout),
+// the OLD .mlist element may have already been detached by a prior partial
+// update, so _oldMlist.scrollTop read 0 — causing the "scroll to top" bug.
+//
+// Fix: track whether the user was at/near the bottom before the render. If so,
+// scroll to the BOTTOM after rebuild (so the newest move is visible). If the
+// user was scrolled up (reading old moves), preserve their exact position.
+// This matches the behavior of chess.com / lichess move lists.
 let _savedReviewBodyScroll=0;
+// v1.0.4 Rev30 ROBUSTNESS: save phase reads scrollTop DIRECTLY from the DOM
+// (not just from _mlistScrollState). The scroll-event handler is the
+// authoritative source during normal user scrolling, but it can be missed if:
+//   - The user scrolled during a throttled render (event fired on detached element)
+//   - A programmatic scroll restoration is in progress (guard suppressed it)
+//   - The browser hasn't fired the event yet after a fast scroll
+// Reading from the live DOM here is the most reliable snapshot.
 if(!reviewMode){
   const _oldMlist=document.querySelector('.mlist');
-  if(_oldMlist){_savedMlistScroll=_oldMlist.scrollTop;}
+  if(_oldMlist&&_oldMlist.scrollHeight>0&&_oldMlist.clientHeight>0){
+    // ALWAYS read the current scrollTop from the live DOM — this is the
+    // authoritative snapshot at the moment of render.
+    _mlistScrollState.scrollTop=_oldMlist.scrollTop;
+    _mlistScrollState.atBottom=(_oldMlist.scrollTop + _oldMlist.clientHeight >= _oldMlist.scrollHeight - 40);
+    _mlistScrollState.valid=true;
+  }
 }else{
   const _oldReviewBody=document.querySelector('.review-body');
   if(_oldReviewBody){_savedReviewBodyScroll=_oldReviewBody.scrollTop;}
 }
 app.innerHTML=h;
+// v1.0.4 ROUND-5 REV13: Re-attach active animation elements after DOM rebuild
+if(typeof _reattachActiveAnimations==='function'){try{_reattachActiveAnimations();}catch(e){}}
 // v1.0.3-p4: restore .mlist scroll position after DOM rebuild
-if(!reviewMode&&_savedMlistScroll>0){
+// v1.0.4 FIX: if the user was at the bottom, scroll to the bottom (not the old
+// scrollTop) so the newest move is visible. Otherwise preserve the old position.
+// v1.0.4 Rev30 ROBUSTNESS: Use _scrollRestoreGuard to suppress intermediate
+// scroll events fired by the browser during programmatic scrollTop assignment.
+// Also temporarily set scroll-behavior:auto to avoid smooth-animation
+// intermediate events corrupting _mlistScrollState. After the restore, clear
+// the guard so user scrolling is tracked normally again.
+if(!reviewMode){
   const _newMlist=document.querySelector('.mlist');
-  if(_newMlist){_newMlist.scrollTop=_savedMlistScroll;}
+  if(_newMlist){
+    _newMlist.addEventListener('scroll',_onMlistScroll,{passive:true});
+    if(_mlistScrollState.valid){
+      _scrollRestoreGuard=true;
+      // Temporarily disable smooth scrolling so programmatic restore is instant
+      const _savedBehavior=_newMlist.style.scrollBehavior;
+      _newMlist.style.scrollBehavior='auto';
+      try{
+        if(_mlistScrollState.atBottom){
+          _newMlist.scrollTop=_newMlist.scrollHeight;
+        }else{
+          const _maxScroll=Math.max(0,_newMlist.scrollHeight-_newMlist.clientHeight);
+          _newMlist.scrollTop=Math.min(_mlistScrollState.scrollTop,_maxScroll);
+        }
+      }catch(e){}
+      // Restore original scroll-behavior (let user scrolling stay smooth)
+      _newMlist.style.scrollBehavior=_savedBehavior;
+      // Clear guard on next frame — by then the programmatic scroll has settled
+      requestAnimationFrame(()=>{requestAnimationFrame(()=>{_scrollRestoreGuard=false;});});
+    }
+  }
 }
 // v1.0.3-p9: restore .review-body scroll position after DOM rebuild
-if(reviewMode&&_savedReviewBodyScroll>0){
+// v1.0.4 Rev30 ROBUSTNESS: also use guard for review-body scroll restore
+// v1.0.4 Rev31 FIX: skip restore on orientation change — the saved scrollTop
+// is from the OLD layout and would point to a wrong position in the NEW layout.
+// The active-move scroll-into-view logic (below) handles re-centering instead.
+if(reviewMode&&_savedReviewBodyScroll>0&&!_skipReviewBodyScrollRestore){
   const _newReviewBody=document.querySelector('.review-body');
-  if(_newReviewBody){_newReviewBody.scrollTop=_savedReviewBodyScroll;}
+  if(_newReviewBody){
+    const _savedBehavior=_newReviewBody.style.scrollBehavior;
+    _newReviewBody.style.scrollBehavior='auto';
+    try{_newReviewBody.scrollTop=_savedReviewBodyScroll;}catch(e){}
+    _newReviewBody.style.scrollBehavior=_savedBehavior;
+  }
 }
+// Always clear the skip flag after one render cycle
+_skipReviewBodyScrollRestore=false;
 // Invalidate all cached DOM refs since DOM was rebuilt by full render
 _cachedBwrap=null;_cachedSvgEl=null;_cachedSvgLines=[];_cachedArrowKey='';_cachedCtrlCard=null;
 // Do NOT reset _prevSelSq/_prevLegalSet to null/empty after render().
@@ -1409,7 +1894,7 @@ function updateAfterMove(){requestEngineEval();
   // Use markDirty for delayed panel/moves update
   // Schedule a full render later for move history + other side panel updates
   if(_fullRenderTimer)clearTimeout(_fullRenderTimer);
-  _fullRenderTimer=setTimeout(()=>{if(!animationInProgress&&!_landingAnimActive&&!isAIThinking)markDirty(DIRTY_MOVES|DIRTY_PANEL|DIRTY_EVAL);},600);
+  _fullRenderTimer=setTimeout(()=>{if(!animationInProgress&&!_landingAnimActive&&!isAIThinking)markDirty(DIRTY_MOVES|DIRTY_PANEL|DIRTY_EVAL);},350);
   }catch(e){render();}
 }
 
@@ -1732,6 +2217,17 @@ const ns=makeMv(gameState,mv);const notation=moveAlg(gameState,mv,ns);
 const opp=OPP_COLOR[piece.color];const ic=inCheck(ns.board,opp,opp==='white'?ns.wk:ns.bk);const cast=piece.type==='king'&&Math.abs(to.col-from.col)===2;
 const epCap=piece.type==='pawn'&&gameState.enPassantTarget&&to.row===gameState.enPassantTarget.row&&to.col===gameState.enPassantTarget.col;
 const _elapsed=((Date.now()-_turnStartTime)/1000).toFixed(1);moveRecords.push({notation,from:posAlg(from),to:posAlg(to),piece,captured:gameState.board[to.row][to.col]||(epCap?gameState.board[piece.color==='white'?to.row+1:to.row-1][to.col]:undefined),isCheck:ic,isCastling:cast,promotion:promotion||null,time:_elapsed});_turnStartTime=Date.now();
+// v1.0.4 EXPANSION (this round): commit the elapsed time to the moving side's clock.
+// This applies Fischer increment / Bronstein-US-delay deduction rules.
+if(typeof recordMoveEnd==='function')recordMoveEnd(piece.color);
+// v1.0.4 EXPANSION (this round): compute and cache visual annotations
+// ([%csl]/[%cal]) for this move. The cache key is the moveRecords index.
+// Selection rules:
+//   - Blue arrows: top piece→square control paths (e.g., knight to center)
+//   - Red arrow: if this move gives check, the checker → checked king path
+//   - Green arrows: the checked king's escape squares
+//   - Yellow arrows: if this move threatens the opponent's queen, the mover → queen path
+if(typeof _computeAndCacheVisualAnnotations==='function')_computeAndCacheVisualAnnotations(moveRecords.length-1);
 if(cast)playSound('castle');else if(promotion)playSound('promote');else if(ic){playSound('check');HapticManager.fire('CHECK_ALERT');}else if(gameState.board[to.row][to.col]||epCap){playSound('capture');HapticManager.fire('PIECE_CAPTURE');}else{playSound('move');HapticManager.fire('PIECE_MOVE');}
 animateMove(from,to,SYM[piece.color][piece.type],piece.type,!!(gameState.board[to.row][to.col]||epCap),ic,piece.color);gameState=ns;_cachedStatus=null;_cachedStatusKey='';lastMove={from,to};selectedSquare=null;legalMvs=[];legalSet=new Set();
 // Immediately mark eval as stale — show "分析中" until engine gives final evaluation
@@ -1744,7 +2240,7 @@ _updateEvalDisplay(); // _resetEvalState now called inside requestEngineEval()
 // gameOver/_cachedStatus, manifesting as a "ghost" game-over banner.
 // Also moved doAIMove() out of the rAF callback into setTimeout(0) so the
 // browser can paint the post-move UI before the engine starts computing.
-const ANIMATION_DEFER_MS=420;
+const ANIMATION_DEFER_MS=300;
 const _hashAtSched=gameState.hash;
 setTimeout(()=>{
 if(gameState.hash!==_hashAtSched)return; // stale — abort
@@ -2023,7 +2519,13 @@ function redoSetupClick(){if(!setupMode||setupRedoStack.length===0)return;const 
  * @side-effect Sets reviewMode=true, populates reviewStates, requests engine eval
  */
 function enterReview(){_cachedStatus=null;_cachedStatusKey='';
-if(moveRecords.length===0)return;
+// v1.0.4 Round-5 Rev19: Allow entering review mode with zero move records.
+// Previously this returned early, blocking the user from reaching the review
+// toolbar (which hosts the 📚 PGN Cache Manager and 🗃️ import buttons) when
+// no moves had been played yet. Now we fall through — reviewStates will have
+// exactly one entry (the starting position), reviewStep=0, and the user can
+// immediately use 📚/🗃️ to import a PGN. After import, exitReview()+enterReview()
+// re-run with the new moveRecords.
 // Save a complete snapshot of the game state before entering review mode.
 // exitReview() will restore from this snapshot so the player returns to the
 // exact position they were at (not the initial position).
@@ -2109,6 +2611,11 @@ try{
   }
 }catch(e){}
 _ponderGen++;_ponderMoveSAN='';_ponderBarInfo='';_pendingPonderMoveUCI=null;
+// v1.0.4 ROUND-5 REV14: Clear stale AI thinking state before entering review.
+// When returning from stats page, isAIThinking might be true if the AI was
+// thinking when the user opened stats. enterReview() must clear it to prevent
+// the eval bar from showing "⏳ analyzing" even when the cache has the eval.
+isAIThinking=false;_aiBarInfo='';
 if(typeof _updateAIThinkDisplay==='function')_updateAIThinkDisplay();
 reviewCritical=_findCriticalMoves();requestEngineEval();render(); // _resetEvalState now inside requestEngineEval()
 }
@@ -2213,6 +2720,16 @@ function _savePGNNo(){
   setTimeout(function(){_skipPGNSavePrompt=false;},100);
   render();
 }
+// v1.0.4 LATEST: Cancel button — returns to the original screen WITHOUT
+// clearing any cache or executing the pending action. The user stays exactly
+// where they were before the save prompt appeared.
+function _savePGNCancel(){
+  showSavePGNPrompt=false;
+  _pendingActionAfterSave=null; // discard the pending action — do NOT execute it
+  // Do NOT set _skipPGNSavePrompt=true — we want the prompt to appear again
+  // next time the user tries to start a new game / import FEN / import PGN.
+  render();
+}
 function startGame(){
   _withPGNSaveCheck(_startGameImpl);
 }
@@ -2228,15 +2745,35 @@ function _startGameImpl(){
   // initial position starts at move 1. Subsequent ECO opening moves (if any)
   // also start from move 1.
   if(typeof _importedStartMoveNum!=='undefined')_importedStartMoveNum=1;
-  gameState=initState();
+  // v1.0.4 Rev24: Clear imported player names — a new game uses the default
+  // "你"/"AI对手" (or _humanPlayerName if set via rename). Don't clear
+  // _humanPlayerName itself — that's a persistent user preference.
+  if(typeof playerWhite!=='undefined')playerWhite=undefined;
+  if(typeof playerBlack!=='undefined')playerBlack=undefined;
+  // v1.0.4 NEW: Chess960 mode handling.
+  // - If dlgChess960 is true, build a Chess960 starting position.
+  // - If dlgChess960SPID is set (0..959), use it; otherwise pick a random SP-ID.
+  // - Tell StockfishNative to enable UCI_Chess960 so castling works correctly.
+  // - For Chess960 we skip ECO openings (they assume the standard start position).
+  if(typeof dlgChess960!=='undefined'&&dlgChess960){
+    const spid=(typeof dlgChess960SPID!=='undefined'&&dlgChess960SPID>=0&&dlgChess960SPID<960)?dlgChess960SPID:randomSPID();
+    if(typeof setChess960Mode==='function')setChess960Mode(true);
+    gameState=initChess960State(spid);
+    // Track game variant for PGN export
+    if(typeof gameVariant!=='undefined')gameVariant='chess960';
+    if(typeof gameSPID!=='undefined')gameSPID=spid;
+  }else{
+    if(typeof setChess960Mode==='function')setChess960Mode(false);
+    gameState=initState();
+    if(typeof gameVariant!=='undefined')gameVariant=null;
+    if(typeof gameSPID!=='undefined')gameSPID=null;
+  }
   stateHistory=[{state:cloneS(gameState),selectedSquare:null,legalMvs:[],moveRecords:[],lastMove:null,gameOver:null}];
   moveRecords=[];
   gameOver=null;_gameOverStatusKey=null;
-  // If an opening is selected, apply ECO opening moves
-  // dlgOpeningId format: "A00|Van Geet Opening" — parse ECO code + name,
-  // look up the opening object from ECO_BY_ID, then iterate its moves array
-  // (coordinate format: [fromRow, fromCol, toRow, toCol, ...]) and apply each move.
-  if(dlgOpeningId){
+  // If an opening is selected AND we're NOT in Chess960 mode, apply ECO opening moves.
+  // (ECO openings assume the standard start position — they don't make sense in Chess960.)
+  if(dlgOpeningId&&!(typeof dlgChess960!=='undefined'&&dlgChess960)){
     _ensureEcoParsed();
     const pipeIdx=dlgOpeningId.indexOf('|');
     const ecoCode=pipeIdx>=0?dlgOpeningId.substring(0,pipeIdx):dlgOpeningId;
@@ -2307,6 +2844,10 @@ function _startGameImpl(){
   _reviewEvalCache.clear();_reviewEvalRequestedStep=-1; // Clear eval cache on new game
   _resetGameUIState();
   _resetEvalState();
+  // v1.0.4 EXPANSION (this round): Initialize the game clocks based on dlgTimeControl.
+  // If type === 'off', gameClocks remains null and PGN export will use [%emt] (elapsed
+  // move time). Otherwise, both clocks start at baseSec and tick down on each move.
+  initGameClocks();
   // v1.0.2 FIX: Black-to-move opening move record fix.
   // Only relevant when NO ECO moves were applied — e.g., a free opening with
   // a custom starting FEN that has black to move. When ECO moves ARE applied
@@ -2331,6 +2872,334 @@ function _startGameImpl(){
  * and could fire on the new gameState; and stale ponder/MultiPV data leaked
  * into the new game's UI. Resetting everything here ensures a clean slate.
  */
+// v1.0.4 EXPANSION (this round): Time Control management
+//
+// We support 4 time control types:
+//   - 'sudden'    : Sudden Death — fixed base time, no increment
+//   - 'fischer'   : Fischer Increment — base time + increment sec/move (added AFTER each move)
+//   - 'bronstein' : Bronstein Delay — base time + delay sec/move (delay not added to remaining)
+//   - 'usdelay'   : US Delay — base time + delay sec/move (delay deducted BEFORE clock starts)
+//
+// Implementation notes:
+//   - The clock only ticks for the side-to-move; we update gameClocks[color].remainingSec
+//     on every render tick (1s interval) when it's that color's turn.
+//   - For 'fischer': after a move, remaining += incrementSec
+//   - For 'bronstein': if elapsedThisMove <= delaySec, no time deducted; otherwise
+//     remaining -= (elapsedThisMove - delaySec)
+//   - For 'usdelay': remaining -= max(0, elapsedThisMove - delaySec)
+//   - For 'sudden': remaining -= elapsedThisMove
+//   - When remaining <= 0: gameClockExpired = color, game ends with timeout result
+//
+// The PGN export uses gameClocks[color].remainingSec AFTER each move to emit [%clk HH:MM:SS].
+// For untimed games, moveRecords[i].time (elapsedSec) is emitted as [%emt HH:MM:SS].
+
+function initGameClocks(){
+  // Stop any existing clock timer
+  if(gameClockTimerId){clearInterval(gameClockTimerId);gameClockTimerId=null;}
+  gameClockExpired=null;
+  if(!dlgTimeControl||dlgTimeControl.type==='off'){
+    gameClocks=null;
+    return;
+  }
+  const base=dlgTimeControl.baseSec||300;
+  gameClocks={
+    white:{remainingSec:base,displayRemainingSec:base,lastMoveTimestamp:Date.now()},
+    black:{remainingSec:base,displayRemainingSec:base,lastMoveTimestamp:Date.now()},
+    type:dlgTimeControl.type,
+    baseSec:base, // v1.0.4 FIX (this round): store baseSec on gameClocks so PGN export can emit the correct [TimeControl] header without relying on dlgTimeControl (which may be stale after import).
+    incrementSec:dlgTimeControl.incrementSec||0,
+    delaySec:dlgTimeControl.delaySec||0
+  };
+  // Start a 200ms-poll timer (the actual deduction happens on each move; the
+  // timer is only for refreshing the displayed clock so the user sees the
+  // seconds tick down live for the side to move).
+  gameClockTimerId=setInterval(_tickGameClock,200);
+}
+
+// Tick function: deduct time from the side-to-move's clock based on wall-clock
+// elapsed since the last move. This is the source of truth for "time remaining".
+// On each tick we also check for flag-fall (remaining <= 0).
+function _tickGameClock(){
+  if(!gameClocks||gameClockExpired)return;
+  if(gameOver||setupMode||reviewMode)return;
+  const color=gameState.currentTurn;
+  const clock=gameClocks[color];
+  if(!clock)return;
+  const now=Date.now();
+  const elapsedMs=now-clock.lastMoveTimestamp;
+  const elapsedSec=elapsedMs/1000;
+  // For US delay / Bronstein: subtract delay first
+  let deductSec=elapsedSec;
+  if(gameClocks.type==='bronstein'||gameClocks.type==='usdelay'){
+    deductSec=Math.max(0,elapsedSec-gameClocks.delaySec);
+  }
+  // Update the displayed remaining time (NOT the committed remaining; the
+  // committed remaining is updated only on each move via recordMoveEnd).
+  clock.displayRemainingSec=Math.max(0,clock.remainingSec-deductSec);
+  // Check for flag fall
+  if(clock.displayRemainingSec<=0&&!gameClockExpired){
+    gameClockExpired=color;
+    _onGameClockExpired(color);
+  }
+  // Update the clock display in the header (lightweight DOM update)
+  _updateClockDisplay();
+}
+
+// Called when a side's clock runs out
+function _onGameClockExpired(color){
+  if(gameClockTimerId){clearInterval(gameClockTimerId);gameClockTimerId=null;}
+  // v1.0.4 Rev35 FIX (CRITICAL): Stop the engine IMMEDIATELY when the clock
+  // expires. Previously, the engine continued searching after flag-fall
+  // because no "stop" command was sent. The engine's internal wtime-based
+  // time management may not align perfectly with the GUI's wall-clock
+  // deduction (especially under HyperOS 3's aggressive CPU throttling),
+  // causing the engine to search far past the 0-second mark. This made
+  // timed games feel "broken" — the engine kept thinking after time was up.
+  // Now we send a hard "stop" via engineStop() so the engine returns
+  // bestmove immediately and the game-over overlay shows promptly.
+  try{
+    if(typeof AndroidBridge!=='undefined'&&AndroidBridge.isEngineReady&&AndroidBridge.isEngineReady()){
+      if(typeof AndroidBridge.engineStop==='function'){
+        AndroidBridge.engineStop();
+      }else if(typeof AndroidBridge.sendToEngine==='function'){
+        // Fallback for older builds: send raw "stop"
+        AndroidBridge.sendToEngine('stop');
+      }
+    }
+    // Clear AI thinking state so UI updates promptly
+    isAIThinking=false;
+    if(typeof _aiBarInfo!=='undefined')_aiBarInfo='';
+    if(typeof _aiSafetyTimerId!=='undefined'&&_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
+  }catch(e){console.warn('engineStop on clock expiry failed:',e);}
+  // Game over: the OTHER side wins by time
+  // v1.0.4 Rev47: Use _gameOverStrFromStatus() for proper T()-based localization
+  // instead of hardcoding _lang. This ensures the text re-localizes when the
+  // user toggles language after the game-over overlay is shown.
+  const winner=color==='white'?'black':'white';
+  if(typeof _timeoutWinnerColor!=='undefined')_timeoutWinnerColor=winner;
+  _gameOverStatusKey='timeout';
+  gameOver=_gameOverStrFromStatus('timeout');
+  render();
+}
+
+// Called by executeMove() right AFTER applying a move: commits the elapsed time
+// deduction to the moving side's clock, applies increment for Fischer, and
+// resets the timestamp for the next side.
+function recordMoveEnd(color){
+  if(!gameClocks||gameClockExpired)return;
+  const clock=gameClocks[color];
+  if(!clock)return;
+  const now=Date.now();
+  const elapsedSec=(now-clock.lastMoveTimestamp)/1000;
+  let deductSec=elapsedSec;
+  if(gameClocks.type==='bronstein'||gameClocks.type==='usdelay'){
+    deductSec=Math.max(0,elapsedSec-gameClocks.delaySec);
+  }
+  clock.remainingSec=Math.max(0,clock.remainingSec-deductSec);
+  // Fischer increment: add AFTER the deduction
+  if(gameClocks.type==='fischer'){
+    clock.remainingSec+=gameClocks.incrementSec||0;
+  }
+  clock.displayRemainingSec=clock.remainingSec;
+  clock.lastMoveTimestamp=now;
+  // Reset the OTHER side's timestamp too (it'll start ticking from now)
+  const otherColor=color==='white'?'black':'white';
+  if(gameClocks[otherColor])gameClocks[otherColor].lastMoveTimestamp=now;
+}
+
+// Format a clock value as M:SS or H:MM:SS
+function formatClock(sec){
+  if(sec==null||!isFinite(sec))return '--:--';
+  const s=Math.max(0,Math.floor(sec));
+  const h=Math.floor(s/3600);
+  const m=Math.floor((s%3600)/60);
+  const ss=s%60;
+  const pad=n=>(n<10?'0':'')+n;
+  if(h>0)return h+':'+pad(m)+':'+pad(ss);
+  return m+':'+pad(ss);
+}
+
+// Lightweight DOM update for clock display (avoid full render() on every tick)
+function _updateClockDisplay(){
+  if(!gameClocks)return;
+  const wEl=document.getElementById('clock-white');
+  const bEl=document.getElementById('clock-black');
+  const wRem=gameClocks.white.displayRemainingSec!=null?gameClocks.white.displayRemainingSec:gameClocks.white.remainingSec;
+  const bRem=gameClocks.black.displayRemainingSec!=null?gameClocks.black.displayRemainingSec:gameClocks.black.remainingSec;
+  if(wEl)wEl.textContent=formatClock(wRem);
+  if(bEl)bEl.textContent=formatClock(bRem);
+  // Highlight low-time clocks (< 30s)
+  if(wEl)wEl.style.color=(wRem<30)?'#e74c3c':'var(--text)';
+  if(bEl)bEl.style.color=(bRem<30)?'#e74c3c':'var(--text)';
+}
+
+// v1.0.4 EXPANSION (this round): Visual Annotations cache & selector
+// ===========================================================================
+// Per spec extension: [%csl ...] highlights squares, [%cal ...] draws arrows.
+// We compute these on each move and cache by moveRecords index, so PGN export
+// can include them without recomputing.
+//
+// v1.0.4 LATEST REVISION (this round) — new color semantics:
+//   SQUARE HIGHLIGHTS ([%csl]):
+//     B (Blue)   — player's net-control strong squares (player controls, AI doesn't)
+//     R (Red)    — AI opponent's net-control strong squares (AI controls, player doesn't)
+//     Y (Yellow) — high total-control squares (both sides combined have many attackers)
+//     G (Green)  — center-area squares with NO control from either side (neutral center)
+//   ARROWS ([%cal]):
+//     R (Red)    — checker → checked king path (when current move gives check)
+//     G (Green)  — checked king position → escape square (avoidance paths)
+//
+// "Player" = playerColor (the human's color); "AI" = opponent of playerColor.
+// The moverColor (side that just moved) is used to determine check/escape logic.
+//
+// Selection algorithm:
+//   1. Compute the control map for the POST-MOVE position.
+//   2. For each square, compute: playerAttackers, aiAttackers, totalAttackers.
+//   3. Blue squares: top 3 where (playerAttackers > 0 && aiAttackers === 0) — player dominates.
+//      Ranked by playerAttackers count, center squares preferred.
+//   4. Red squares: top 3 where (aiAttackers > 0 && playerAttackers === 0) — AI dominates.
+//      Ranked by aiAttackers count, center squares preferred.
+//   5. Yellow squares: top 3 where totalAttackers is highest (both sides combined).
+//   6. Green squares: center squares (d4/e4/d5/e5) where totalAttackers === 0 (neutral center).
+//   7. Red arrow (if check): mover → opponent king.
+//   8. Green arrows (if check): opponent king position → each escape square.
+const _visualAnnotationsCache=new Map(); // moveIdx → {csl:[...], cal:[...]}
+
+function _computeAndCacheVisualAnnotations(moveIdx){
+  if(!moveRecords||moveIdx<0||moveIdx>=moveRecords.length)return;
+  // v1.0.4 ROUND-5 REV16: null check for Black-to-move placeholders
+  if(!moveRecords[moveIdx]){_visualAnnotationsCache.set(moveIdx,{csl,cal});return;}
+  let postState=null;
+  if(typeof reviewStates!=='undefined'&&reviewStates[moveIdx+1]){
+    postState=reviewStates[moveIdx+1].state;
+  }
+  if(!postState){
+    try{
+      let st=(typeof _setupFEN!=='undefined'&&_setupFEN)?fenToState(_setupFEN):initState();
+      if(!st)return;
+      for(let i=0;i<=moveIdx;i++){
+        const mr=moveRecords[i];
+        if(!mr)continue;
+        const from=algPos(mr.from);
+        const to=algPos(mr.to);
+        if(!from||!to)continue;
+        const piece=st.board[from.row][from.col];
+        if(!piece)continue;
+        const mv={from,to,piece,promotion:mr.promotion};
+        st=makeMv(st,mv);
+        if(!st)break;
+      }
+      postState=st;
+    }catch(e){
+      console.warn('_computeAndCacheVisualAnnotations: failed to replay moves',e);
+      return;
+    }
+  }
+  if(!postState)return;
+  const csl=[];  // [{color, square}]
+  const cal=[];  // [{color, from, to}]
+  const moverColor=postState.currentTurn==='white'?'black':'white';
+  const oppColor=moverColor==='white'?'black':'white';
+  const oppKingPos=moverColor==='white'?postState.bk:postState.wk;
+  // v1.0.4 LATEST: "player" and "AI" are based on playerColor (human's color).
+  const playerCol=(typeof playerColor!=='undefined')?playerColor:'white';
+  const aiCol=playerCol==='white'?'black':'white';
+  // Compute control map
+  let cm=null;
+  try{
+    if(typeof getCtrlMap==='function'){
+      cm=getCtrlMap(postState.board);
+    }
+  }catch(e){cm=null;}
+  // Square highlights: Blue (player net control), Red (AI net control),
+  // Yellow (high total control), Green (neutral center)
+  if(cm){
+    const centerSquares=[[3,3],[3,4],[4,3],[4,4]]; // d5,e5,d4,e4 (row 3=rank5, row4=rank4)
+    const isCenter=(r,c)=>(r===3||r===4)&&(c===3||c===4);
+    const isExtendedCenter=(r,c)=>r>=2&&r<=5&&c>=2&&c<=5;
+    // Collect candidates
+    const blueCandidates=[]; // {r,c,score}
+    const redCandidates=[];  // {r,c,score}
+    const yellowCandidates=[]; // {r,c,total}
+    for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+      const entry=cm[r][c];
+      if(!entry)continue;
+      const pAtk=entry[playerCol].length;
+      const aAtk=entry[aiCol].length;
+      const total=pAtk+aAtk;
+      // Blue: player dominates (pAtk>0, aAtk===0)
+      if(pAtk>0&&aAtk===0){
+        let score=pAtk*2;
+        if(isCenter(r,c))score+=3;
+        else if(isExtendedCenter(r,c))score+=1;
+        blueCandidates.push({r,c,score});
+      }
+      // Red: AI dominates (aAtk>0, pAtk===0)
+      if(aAtk>0&&pAtk===0){
+        let score=aAtk*2;
+        if(isCenter(r,c))score+=3;
+        else if(isExtendedCenter(r,c))score+=1;
+        redCandidates.push({r,c,score});
+      }
+      // Yellow: high total control (both sides combined)
+      if(total>=2){
+        yellowCandidates.push({r,c,total});
+      }
+    }
+    // Sort and pick top 3 for each color
+    blueCandidates.sort((a,b)=>b.score-a.score);
+    redCandidates.sort((a,b)=>b.score-a.score);
+    yellowCandidates.sort((a,b)=>b.total-a.total);
+    for(const sq of blueCandidates.slice(0,3)){
+      csl.push({color:'B',square:posAlg({row:sq.r,col:sq.c})});
+    }
+    for(const sq of redCandidates.slice(0,3)){
+      csl.push({color:'R',square:posAlg({row:sq.r,col:sq.c})});
+    }
+    for(const sq of yellowCandidates.slice(0,3)){
+      csl.push({color:'Y',square:posAlg({row:sq.r,col:sq.c})});
+    }
+    // Green: center squares with NO control from either side
+    for(const [r,c] of centerSquares){
+      const entry=cm[r][c];
+      if(entry&&entry.white.length===0&&entry.black.length===0){
+        csl.push({color:'G',square:posAlg({row:r,col:c})});
+      }
+    }
+  }
+  // Red arrow + Green arrows: if the move gives check
+  const moverTo=algPos(moveRecords[moveIdx].to);
+  if(oppKingPos&&moveRecords[moveIdx].isCheck){
+    // Red arrow: mover → opponent king
+    if(moverTo){
+      cal.push({color:'R',from:posAlg(moverTo),to:posAlg(oppKingPos)});
+    }
+    // Green arrows: opponent king position → each escape square (avoidance paths)
+    if(cm){
+      for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){
+        if(!dr&&!dc)continue;
+        const er=oppKingPos.row+dr,ec=oppKingPos.col+dc;
+        if(er<0||er>=8||ec<0||ec>=8)continue;
+        const p=postState.board[er][ec];
+        if(p&&p.color===oppColor)continue; // king can't capture own piece
+        // Square must NOT be attacked by the mover's side
+        const attackers=cm[er][ec][moverColor];
+        if(!attackers||attackers.length===0){
+          // Green ARROW from king position to escape square (not a square highlight)
+          cal.push({color:'G',from:posAlg(oppKingPos),to:posAlg({row:er,col:ec})});
+        }
+      }
+    }
+  }
+  // Cache the result
+  _visualAnnotationsCache.set(moveIdx,{csl,cal});
+}
+
+// Get cached visual annotations for a move (returns {csl:[], cal:[]} or null)
+function _getVisualAnnotations(moveIdx){
+  return _visualAnnotationsCache.get(moveIdx)||null;
+}
+
 function _resetGameUIState(){
   selectedSquare=null;
   legalMvs=[];
@@ -2354,6 +3223,12 @@ function _resetGameUIState(){
   // Clear redo stack on game reset to prevent stale redo entries
   // from corrupting gameState when redoMove() is called after a new game.
   _redoStack=[];
+  // v1.0.4 Rev27: Reset resign state — prevent the previous game's resign
+  // result from leaking into the new game's PGN / display.
+  showResignConfirm=false;
+  if(typeof _resignWinnerColor!=='undefined'){_resignWinnerColor=null;}
+  // v1.0.4 Rev47: Reset timeout winner color too
+  if(typeof _timeoutWinnerColor!=='undefined'){_timeoutWinnerColor=null;}
   // v1.0.2 FIX: Reset stale AI/ponder/eval/MultiPV state to prevent leak
   // into the new game. Without this, starting a new game during AI thinking
   // left isAIThinking=true (blocking new doAIMove calls) and kept the old
@@ -2370,6 +3245,22 @@ function _resetGameUIState(){
   if(typeof _multiPVLines!=='undefined')_multiPVLines=[];
   if(typeof _multiPVResult!=='undefined')_multiPVResult=null;
   if(typeof _lastEngineVariation!=='undefined')_lastEngineVariation=null;
+  // v1.0.4 FIX (this round): clear the visual annotations cache on game reset.
+  // Without this, stale [%csl]/[%cal] entries from a previous game could leak
+  // into the new game's PGN export (the cache is keyed by moveRecords index,
+  // and a new game reuses indices 0, 1, 2, ... starting from 0).
+  if(typeof _visualAnnotationsCache!=='undefined'&&_visualAnnotationsCache)_visualAnnotationsCache.clear();
+  // v1.0.4 REV13: Reset scroll state on new game
+  // v1.0.4 Rev30: also reset the restore guard (in case a render is in flight)
+  if(typeof _mlistScrollState!=='undefined'){_mlistScrollState.scrollTop=0;_mlistScrollState.atBottom=false;_mlistScrollState.valid=false;}
+  if(typeof _scrollRestoreGuard!=='undefined')_scrollRestoreGuard=false;
+  // v1.0.4 FIX (this round): also clear the game clocks on game reset.
+  // Without this, a timed game's clock timer would keep running after the
+  // user starts a new untimed game (or a new timed game with different
+  // settings). initGameClocks() is called separately from _startGameImpl()
+  // to set up the new game's clocks; here we just stop the old timer.
+  if(typeof gameClockTimerId!=='undefined'&&gameClockTimerId){clearInterval(gameClockTimerId);gameClockTimerId=null;}
+  if(typeof gameClockExpired!=='undefined')gameClockExpired=null;
 }
 
 /**
@@ -2405,40 +3296,87 @@ function reviewGoTo(step){
 /**
  * Analyze all steps in review mode using engine evaluation.
  * Uses callback-driven approach: requests eval for one step, advances on completion.
+ *
+ * v1.0.4 Rev24 FIRST-PRINCIPLES REWRITE — fixes "interrupted at a certain point":
+ *   Root cause 1: The old startStep loop set startStep=0 when ALL steps were
+ *     cached, but requestEngineEval() then early-returned on the cache hit
+ *     WITHOUT calling _reviewAnalyzeAdvance(), stalling the batch silently
+ *     until the safety timer fired ("analysis_timeout"). Now we detect the
+ *     all-cached case up front and short-circuit to completion instantly.
+ *   Root cause 2: The safety timer was set ONCE with min(N*8s, 300s) — capped
+ *     at 5 minutes. For long games with depth-22 evals (5-15s/step), the 5min
+ *     cap fired mid-analysis. Now the per-step safety timer RESETS on every
+ *     advance, and the cap is 60s/step (generous) with no global cap.
+ *   Root cause 3: If the engine auto-recovered (onEngineReady after restart)
+ *     the batch was silently dropped. Now onEngineReady resumes the batch
+ *     if _reviewAnalyzeAllActive is still true.
+ *   Root cause 4: If requestEngineEval() hit cache during batch (rare race
+ *     or re-entry), it returned without advancing. Now requestEngineEval
+ *     detects _reviewAnalyzeAllActive + cache hit and calls _reviewAnalyzeAdvance.
  */
 function reviewAnalyzeAll(){
   if(!reviewMode||!reviewStates||reviewStates.length===0)return;
+  // v1.0.4 Rev24: If every step is already cached, complete INSTANTLY.
+  // This is the "instant recovery from cache" requirement — no engine calls,
+  // no safety timer, no async wait. The user sees "Analysis complete!" immediately.
+  let _uncachedCount=0;
+  for(let i=0;i<reviewStates.length;i++){
+    if(!_reviewEvalCache.has(i))_uncachedCount++;
+  }
+  if(_uncachedCount===0){
+    showToast(T('analysis_done')+' '+reviewStates.length+' '+T('step'));
+    try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+    render();
+    return;
+  }
   _reviewAnalyzeAllActive=true;
   // Save the step the user was on so we can return to it after analysis
   let _preAnalyzeStep=reviewStep;
   // Find first un-analyzed step (skip cached steps for efficiency)
-  let startStep=0;
+  let startStep=-1;
   for(let i=0;i<reviewStates.length;i++){
     if(!_reviewEvalCache.has(i)){startStep=i;break;}
-    if(i===reviewStates.length-1)startStep=0; // All cached — re-analyze from start
   }
+  if(startStep<0)startStep=0; // Defensive — shouldn't happen given the all-cached check above
   reviewStep=startStep;
   gameState=cloneS(reviewStates[reviewStep].state);
-  // Set safety timeout to prevent infinite hang if engine stops responding
-  // during batch analysis. Clears any previous safety timer first.
-  if(_reviewAnalyzeSafetyTimer){clearTimeout(_reviewAnalyzeSafetyTimer);}
-  _reviewAnalyzeSafetyTimer=setTimeout(function(){
-    if(_reviewAnalyzeAllActive){
-      _reviewAnalyzeAllActive=false;
-      showToast(T('analysis_timeout'));
-    }
-    _reviewAnalyzeSafetyTimer=null;
-  },Math.min(reviewStates.length*8000,300000)); // 8s per step max, capped at 5 minutes total
+  // v1.0.4 Rev24: Per-step safety timer (60s) that RESETS on each advance.
+  // The old global cap of 5 minutes was the primary root cause of "interrupted
+  // at a certain point" for long games. 60s/step is generous — depth-22 evals
+  // typically complete in 5-15s; if a single step takes >60s, the engine is
+  // stuck and we should abort that step (not the whole batch).
+  _reviewAnalyzeResetSafetyTimer();
   // Store pre-analyze step for restoration on completion
   window._reviewAnalyzeReturnStep=_preAnalyzeStep;
-  showToast(T('analyzing_all')+' (0/'+reviewStates.length+')');
+  showToast(T('analyzing_all')+' ('+_reviewEvalCache.size+'/'+reviewStates.length+')');
   render();
   requestEngineEval();
 }
 
 /**
+ * v1.0.4 Rev24: Reset the per-step safety timer. Called on every advance
+ * so a stuck engine on step N doesn't abort the entire batch — only step N.
+ * 60 seconds per step is generous; depth-22 evals typically finish in 5-15s.
+ */
+function _reviewAnalyzeResetSafetyTimer(){
+  if(_reviewAnalyzeSafetyTimer){clearTimeout(_reviewAnalyzeSafetyTimer);}
+  _reviewAnalyzeSafetyTimer=setTimeout(function(){
+    if(_reviewAnalyzeAllActive){
+      // v1.0.4 Rev24: Don't abort the whole batch — skip the stuck step and
+      // continue. This is more resilient than the old behavior (abort all).
+      console.warn('Analyze-all: step '+reviewStep+' timed out, skipping');
+      _reviewAnalyzeAdvance();
+    }else{
+      _reviewAnalyzeSafetyTimer=null;
+    }
+  },60000); // 60s per step
+}
+
+/**
  * Advance to the next review step during analyze-all.
  * Called from onEngineEval when _reviewAnalyzeAllActive is true.
+ * v1.0.4 Rev24: Also called from requestEngineEval() when a cache hit occurs
+ * during batch mode (previously stalled silently).
  */
 function _reviewAnalyzeAdvance(){
   if(!_reviewAnalyzeAllActive)return;
@@ -2463,6 +3401,8 @@ function _reviewAnalyzeAdvance(){
   }
   reviewStep=nextStep;
   gameState=cloneS(reviewStates[reviewStep].state);
+  // v1.0.4 Rev24: Reset the per-step safety timer for the new step.
+  _reviewAnalyzeResetSafetyTimer();
   // Update progress toast periodically (every 3 steps or at end)
   if(reviewStep%3===0||nextStep>=reviewStates.length-1){
     const cachedCount=_reviewEvalCache.size;
@@ -2521,11 +3461,466 @@ function exitReview(){
   }
 }
 
+// ===================== PGN CACHE MANAGER (v1.0.4 Round-5 Rev18) =====================
+// Modal dialog that lets the user:
+//   - View all saved PGN cache entries (name, size, mtime)
+//   - Save the current game's PGN to the cache with a user-chosen name
+//   - Click an entry to import it (review + main move list are both updated)
+//   - Select multiple entries via checkbox and delete them
+//
+// Backed by Java-side AndroidBridge.listPGNCaches / savePGNCache / getPGNCache /
+// deletePGNCaches (files in /data/data/com.Regalia/files/pgn_cache/, HyperOS-proof).
+function openPGNCacheManager(){
+  try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+  _pgnCacheSelected=new Set();
+  // v1.0.4 Rev21: Reset filter state when (re)opening the manager.
+  _pgnCacheFilter='';
+  _pgnCacheFilterInput='';
+  _refreshPGNCacheList();
+  showPGNCacheManager=true;
+  render();
+}
+
+function _refreshPGNCacheList(){
+  try{
+    if(typeof AndroidBridge==='undefined'||!AndroidBridge.listPGNCaches){
+      _pgnCacheList=[];
+      return;
+    }
+    const json=AndroidBridge.listPGNCaches();
+    _pgnCacheList=JSON.parse(json||'[]');
+  }catch(e){
+    _pgnCacheList=[];
+  }
+}
+
+function _formatPGNCacheSize(bytes){
+  if(bytes<1024)return bytes+' B';
+  if(bytes<1024*1024)return (bytes/1024).toFixed(1)+' KB';
+  return (bytes/(1024*1024)).toFixed(1)+' MB';
+}
+
+function _formatPGNCacheMtime(mtime){
+  try{
+    const d=new Date(mtime);
+    const now=new Date();
+    const yyyy=d.getFullYear();
+    const mm=String(d.getMonth()+1).padStart(2,'0');
+    const dd=String(d.getDate()).padStart(2,'0');
+    const hh=String(d.getHours()).padStart(2,'0');
+    const mi=String(d.getMinutes()).padStart(2,'0');
+    if(yyyy===now.getFullYear()){
+      return mm+'-'+dd+' '+hh+':'+mi;
+    }
+    return yyyy+'-'+mm+'-'+dd;
+  }catch(e){return '';}
+}
+
+function _pgnCacheToggleSel(name){
+  if(_pgnCacheSelected.has(name))_pgnCacheSelected.delete(name);
+  else _pgnCacheSelected.add(name);
+  try{HapticManager.fire('TOGGLE_ON');}catch(e){}
+  render();
+}
+
+function _pgnCacheSelectAll(){
+  // v1.0.4 Rev21: Only select visible (filtered) entries, not all entries.
+  // Rationale: if a filter is active, "select all" should mean "select all
+  // visible" — selecting hidden entries would be confusing (the delete count
+  // wouldn't match what the user sees).
+  const list=_pgnCacheFilter
+    ? _pgnCacheList.filter(e=>_pgnCacheEntryMatchesFilter(e,_pgnCacheFilter))
+    : _pgnCacheList;
+  for(const e of list)_pgnCacheSelected.add(e.name);
+  render();
+}
+
+function _pgnCacheSelectNone(){
+  _pgnCacheSelected.clear();
+  render();
+}
+
+function _pgnCacheSaveCurrent(){
+  let name='';
+  try{name=prompt(T('pgn_cache_name_prompt'),T('pgn_cache_save_default'))||'';}catch(e){name='';}
+  name=name.trim();
+  if(!name)return;
+  // v1.0.4 Rev24: ALWAYS use _buildPGNString() for the saved PGN.
+  // Previously, _cachedOriginalPGN (the imported text) was preferred — but
+  // that loses NEW moves played after import. _buildPGNString() now includes:
+  //   - All moveRecords (including post-import moves)
+  //   - Variations (forced on below — independent of showVariations UI toggle)
+  //   - Comments with [%eval ...] from the review eval cache
+  //   - Comments with [%emt]/[%clk], [%csl], [%cal]
+  //   - Seven-Tag Roster + supplementary tags ([TimeControl], [FEN], [SetUp], etc.)
+  // This satisfies the "PGN cache archive should include complete PGN text —
+  // variations (), comments {}, no PGN info omitted" requirement.
+  let pgn='';
+  try{
+    if(typeof _buildPGNString==='function')pgn=_buildPGNString(true); // forceIncludeVariations=true
+  }catch(e){pgn='';}
+  if(!pgn){
+    showToast(T('pgn_cache_save_failed'),2500);
+    return;
+  }
+  let ok=false;
+  try{
+    if(typeof AndroidBridge!=='undefined'&&AndroidBridge.savePGNCache){
+      ok=!!AndroidBridge.savePGNCache(name,pgn);
+    }
+  }catch(e){ok=false;}
+  if(ok){
+    _refreshPGNCacheList();
+    showToast(T('pgn_cache_saved')+'：'+name,2000);
+    try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+    render();
+  }else{
+    showToast(T('pgn_cache_save_failed'),2500);
+  }
+}
+
+function _pgnCacheImport(name){
+  if(!name)return;
+  let pgn=null;
+  try{
+    if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getPGNCache){
+      pgn=AndroidBridge.getPGNCache(name);
+    }
+  }catch(e){pgn=null;}
+  if(!pgn){
+    showToast(T('pgn_cache_import_failed'),2500);
+    return;
+  }
+  showPGNCacheManager=false;
+  // Import via the standard PGN import path — this updates both the main move
+  // list (moveRecords) and (if currently in review mode) the review state.
+  // After importPGN, if we were in review mode we re-enter review on the new game.
+  const wasReviewMode=typeof reviewMode!=='undefined'&&reviewMode;
+  try{
+    if(wasReviewMode&&typeof exitReview==='function')exitReview();
+  }catch(e){}
+  try{
+    if(typeof importPGN==='function')importPGN(pgn);
+  }catch(e){
+    showToast(T('pgn_cache_import_failed'),2500);
+    return;
+  }
+  // After import, if we were in review mode, re-enter review on the new game
+  if(wasReviewMode){
+    try{
+      if(typeof enterReview==='function'){
+        // Slight delay to let importPGN settle
+        setTimeout(()=>{try{enterReview();}catch(e){}},100);
+      }
+    }catch(e){}
+  }
+  showToast(T('pgn_cache_imported')+'：'+name,2000);
+  try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+  render();
+}
+
+function _pgnCacheDeleteSelected(){
+  if(_pgnCacheSelected.size===0)return;
+  let ok=confirm(T('pgn_cache_confirm_delete'));
+  if(!ok)return;
+  const names=Array.from(_pgnCacheSelected);
+  let deleted=0;
+  try{
+    if(typeof AndroidBridge!=='undefined'&&AndroidBridge.deletePGNCaches){
+      deleted=AndroidBridge.deletePGNCaches(JSON.stringify(names));
+    }
+  }catch(e){deleted=0;}
+  _pgnCacheSelected.clear();
+  _refreshPGNCacheList();
+  try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+  showToast(T('pgn_cache_deleted')+'：'+deleted,2000);
+  render();
+}
+
+function _pgnCacheClose(){
+  showPGNCacheManager=false;
+  _pgnCacheSelected.clear();
+  // v1.0.4 Rev21: Reset filter state on close so next open shows all entries.
+  _pgnCacheFilter='';
+  _pgnCacheFilterInput='';
+  render();
+}
+
+// v1.0.4 Round-5 Rev20: Rename a PGN cache entry.
+// Prompts for a new name; refuses to overwrite an existing entry.
+function _pgnCacheRename(oldName){
+  if(!oldName)return;
+  let newName='';
+  try{newName=prompt(T('pgn_cache_rename_prompt'),oldName)||'';}catch(e){newName='';}
+  newName=newName.trim();
+  if(!newName||newName===oldName)return;
+  let ok=false;
+  try{
+    if(typeof AndroidBridge!=='undefined'&&AndroidBridge.renamePGNCache){
+      ok=!!AndroidBridge.renamePGNCache(oldName,newName);
+    }
+  }catch(e){ok=false;}
+  if(ok){
+    _refreshPGNCacheList();
+    showToast(T('pgn_cache_renamed')+'：'+newName,2000);
+    try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+    render();
+  }else{
+    showToast(T('pgn_cache_rename_failed'),2500);
+  }
+}
+
+// v1.0.4 Round-5 Rev20: Tag editor for a PGN cache entry.
+// Shows a prompt pre-filled with current tags (comma-separated);
+// the user can add/remove tags. Tags are stored as a JSON array on the Java side.
+function _pgnCacheEditTags(name){
+  if(!name)return;
+  // Find current tags from the in-memory list
+  let currentTags=[];
+  for(const e of _pgnCacheList){
+    if(e.name===name&&Array.isArray(e.tags)){currentTags=e.tags;break;}
+  }
+  const promptStr=T('pgn_cache_tags_prompt');
+  const defaultStr=currentTags.join(', ');
+  let input='';
+  try{input=prompt(promptStr,defaultStr)||'';}catch(e){input='';}
+  // Parse comma-separated input into tags (trim, dedupe, limit length)
+  const tags=[];
+  const seen=new Set();
+  for(const raw of input.split(',')){
+    const t=raw.trim();
+    if(!t)continue;
+    if(t.length>30)continue; // Skip overly long tags
+    if(seen.has(t.toLowerCase()))continue; // Dedupe (case-insensitive)
+    seen.add(t.toLowerCase());
+    tags.push(t);
+    if(tags.length>=10)break; // Max 10 tags per entry
+  }
+  let ok=false;
+  try{
+    if(typeof AndroidBridge!=='undefined'&&AndroidBridge.setPGNCacheTags){
+      ok=!!AndroidBridge.setPGNCacheTags(name,JSON.stringify(tags));
+    }
+  }catch(e){ok=false;}
+  if(ok){
+    _refreshPGNCacheList();
+    showToast(T('pgn_cache_tags_saved')+'：'+name,2000);
+    try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+    render();
+  }else{
+    showToast(T('pgn_cache_tags_save_failed'),2500);
+  }
+}
+
+// v1.0.4 Round-5 Rev21: Tag filter / search functions.
+// _pgnCacheFilterInput handles live typing in the search box (no re-render
+// to preserve cursor focus). _pgnCacheApplyFilter commits the input as the
+// active filter (re-renders the list). _pgnCacheClearFilter clears it.
+// _pgnCacheFilterByTag(tag) sets the filter to a specific tag (used when
+// clicking a tag chip).
+function _pgnCacheOnSearchInput(v){
+  _pgnCacheFilterInput=v||'';
+  // No render — would lose input focus. The user must press Enter (search key
+  // on soft keyboard, via enterkeyhint="search") to apply the filter
+  // (calls _pgnCacheApplyFilter). Rev22 removed the redundant 🔍 button.
+}
+function _pgnCacheApplyFilter(){
+  _pgnCacheFilter=_pgnCacheFilterInput.trim();
+  // Clear selection — selected items might no longer be visible after filter.
+  _pgnCacheSelected.clear();
+  try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+  render();
+}
+function _pgnCacheClearFilter(){
+  _pgnCacheFilter='';
+  _pgnCacheFilterInput='';
+  try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+  render();
+}
+function _pgnCacheFilterByTag(tag){
+  if(!tag)return;
+  _pgnCacheFilter=String(tag);
+  _pgnCacheFilterInput=String(tag);
+  _pgnCacheSelected.clear();
+  try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+  render();
+}
+// Returns true if an entry matches the current filter.
+// Filter matches if any tag matches case-insensitively OR the entry name
+// contains the filter (case-insensitive substring match).
+function _pgnCacheEntryMatchesFilter(entry,filter){
+  if(!filter)return true; // No filter = match all
+  const fl=filter.toLowerCase();
+  // Check name (substring)
+  if(entry.name&&String(entry.name).toLowerCase().includes(fl))return true;
+  // Check tags (exact match preferred, but substring also works for partial typing)
+  if(Array.isArray(entry.tags)){
+    for(const t of entry.tags){
+      if(String(t).toLowerCase().includes(fl))return true;
+    }
+  }
+  return false;
+}
+// Collect all unique tags across all entries (for the tag-chips quick filter row).
+function _pgnCacheCollectAllTags(){
+  const set=new Set();
+  for(const e of _pgnCacheList){
+    if(Array.isArray(e.tags)){
+      for(const t of e.tags){
+        if(t)set.add(t);
+      }
+    }
+  }
+  return Array.from(set).sort((a,b)=>a.localeCompare(b));
+}
+
+function _renderPGNCacheManager(){
+  if(!showPGNCacheManager)return '';
+  // Use the same .dov / .dlg modal pattern as the rest of the app
+  const total=_pgnCacheList.length;
+  const selCount=_pgnCacheSelected.size;
+  // v1.0.4 Rev21: Apply filter to get the visible subset.
+  const filtered=_pgnCacheFilter
+    ? _pgnCacheList.filter(e=>_pgnCacheEntryMatchesFilter(e,_pgnCacheFilter))
+    : _pgnCacheList;
+  const visibleCount=filtered.length;
+  const allTags=_pgnCacheCollectAllTags();
+  // Build search/filter row HTML (Rev21)
+  let filterHtml='';
+  if(total>0){
+    // Search box with enterkeyhint="search" (keyboard Enter shows as 🔍 search key).
+    // v1.0.4 FIX (this round): Removed the redundant 🔍 button — Enter key on the
+    // soft keyboard now triggers the search directly (handled by onkeydown + the
+    // input's enterkeyhint="search" attribute which makes the IME show a search
+    // icon instead of "Enter"). The ✕ clear button still appears when a filter
+    // is active.
+    const filterActive=_pgnCacheFilter!=='';
+    // Encode current filter input for safe embedding in the input value attribute
+    const filterInputEsc=_escapeHTML(_pgnCacheFilterInput);
+    filterHtml=`<div style="display:flex;gap:6px;margin:8px 0;align-items:center;flex-wrap:wrap">
+      <input type="search" id="_pgnCacheSearchInput" placeholder="${T('pgn_cache_search_placeholder')}" value="${filterInputEsc}" enterkeyhint="search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="_pgnCacheOnSearchInput(this.value)" onkeydown="if(event.key==='Enter'||event.keyCode===13){event.preventDefault();_pgnCacheApplyFilter()}" style="flex:1;min-width:120px;background:rgba(42,21,32,.6);color:var(--text);border:1px solid rgba(212,160,23,.3);border-radius:4px;padding:5px 8px;font-size:.78rem;font-family:inherit" />
+      ${filterActive?`<button class="btn" style="padding:5px 10px;font-size:.75rem;color:#ff8080;border-color:rgba(255,100,100,.4)" onclick="_pgnCacheClearFilter()" title="${T('pgn_cache_search_clear')}">✕</button>`:''}
+    </div>`;
+    // Tag-chip quick filter row (only show if there are tags AND no active filter, OR always show so user can switch tags)
+    if(allTags.length>0){
+      let chipsHtml=`<div style="display:flex;flex-wrap:wrap;gap:4px;margin:4px 0 8px;font-size:.68rem">`;
+      // Add an "All" chip to clear the filter
+      const allActive=_pgnCacheFilter==='';
+      chipsHtml+=`<button class="btn" style="padding:2px 8px;font-size:.68rem;${allActive?'background:rgba(212,160,23,.4);color:#1a0a0a;border-color:#d4a017':'background:rgba(212,160,23,.15);color:var(--accent);border-color:rgba(212,160,23,.3)'}" onclick="_pgnCacheClearFilter()">${T('pgn_cache_filter_all')}</button>`;
+      for(const t of allTags){
+        // Encode tag for safe embedding in onclick attribute
+        const tagJs=_jsAttrEncode(t);
+        const isActive=_pgnCacheFilter===t;
+        chipsHtml+=`<button class="btn" style="padding:2px 8px;font-size:.68rem;${isActive?'background:rgba(212,160,23,.4);color:#1a0a0a;border-color:#d4a017':'background:rgba(212,160,23,.15);color:var(--accent);border-color:rgba(212,160,23,.3)'}" onclick="_pgnCacheFilterByTag(${tagJs})" title="${T('pgn_cache_filter_by_tag')}">${_escapeHTML(t)}</button>`;
+      }
+      chipsHtml+=`</div>`;
+      filterHtml+=chipsHtml;
+    }
+    // Filter status line (when filter active)
+    if(filterActive){
+      filterHtml+=`<div style="font-size:.72rem;color:var(--muted);margin:0 0 6px;padding:3px 8px;background:rgba(212,160,23,.08);border-radius:3px;border-left:2px solid var(--accent)">${T('pgn_cache_filter_status').replace('{count}',visibleCount).replace('{total}',total).replace('{filter}',_escapeHTML(_pgnCacheFilter))}</div>`;
+    }
+  }
+  let listHtml='';
+  if(total===0){
+    listHtml=`<div style="text-align:center;padding:30px 10px;color:var(--muted);font-size:.85rem;line-height:1.6">${T('pgn_cache_empty')}</div>`;
+  }else if(visibleCount===0){
+    // Filter active but no matches
+    listHtml=`<div style="text-align:center;padding:30px 10px;color:var(--muted);font-size:.85rem;line-height:1.6">${T('pgn_cache_filter_no_match')}</div>`;
+  }else{
+    listHtml='<div style="display:flex;flex-direction:column;gap:6px;max-height:50vh;overflow-y:auto;padding:4px 4px 4px 0">';
+    for(const e of filtered){
+      const checked=_pgnCacheSelected.has(e.name);
+      const sizeStr=_formatPGNCacheSize(e.size);
+      const timeStr=_formatPGNCacheMtime(e.mtime);
+      // v1.0.4 Round-5 Rev19 FIX: HTML-escape the JSON string's double quotes
+      // so they don't terminate the double-quoted onclick attribute.
+      const nameJs=_jsAttrEncode(e.name);
+      // v1.0.4 Round-5 Rev20: Display tags (if any) below the name.
+      // v1.0.4 Rev21: Tag chips are now CLICKABLE to filter by that tag.
+      const tagsArr=Array.isArray(e.tags)?e.tags:[];
+      const tagsHtml=tagsArr.length>0
+        ?'<div style="font-size:.68rem;color:var(--accent);margin-top:2px;display:flex;flex-wrap:wrap;gap:3px">'
+          +tagsArr.map(t=>{
+            const tagJs=_jsAttrEncode(t);
+            return `<span style="background:rgba(212,160,23,.18);padding:1px 6px;border-radius:8px;border:1px solid rgba(212,160,23,.3);white-space:nowrap;cursor:pointer" onclick="event.stopPropagation();_pgnCacheFilterByTag(${tagJs})" title="${T('pgn_cache_filter_by_tag')}">${_escapeHTML(t)}</span>`;
+          }).join('')
+          +'</div>'
+        :'';
+      listHtml+=`<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:rgba(42,21,32,.5);border:1px solid rgba(212,160,23,.25);border-radius:6px;cursor:pointer" onclick="_pgnCacheToggleSel(${nameJs})">`;
+      listHtml+=`<input type="checkbox" ${checked?'checked':''} onclick="event.stopPropagation();_pgnCacheToggleSel(${nameJs})" style="cursor:pointer;flex-shrink:0;width:18px;height:18px;margin-top:2px" />`;
+      listHtml+=`<div style="flex:1;min-width:0" onclick="event.stopPropagation();_pgnCacheImport(${nameJs})">`;
+      listHtml+=`<div style="font-weight:600;color:var(--text);font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_escapeHTML(e.name)}</div>`;
+      listHtml+=`<div style="font-size:.72rem;color:var(--muted);margin-top:2px">${sizeStr} · ${timeStr}</div>`;
+      listHtml+=tagsHtml;
+      listHtml+=`</div>`;
+      // v1.0.4 Rev24: Removed the redundant 📥 Import button. Clicking the
+      // entry's name (the inner div above with onclick="_pgnCacheImport(...)")
+      // already imports the entry — the separate 📥 button was redundant and
+      // took horizontal space. The ✏️ Rename and 🔖 Tags buttons remain.
+      // Horizontal layout matches the toolbar pattern.
+      listHtml+=`<div style="display:flex;flex-direction:row;gap:4px;flex-shrink:0;align-items:flex-start">`;
+      listHtml+=`<button class="btn" style="padding:4px 8px;font-size:.7rem" onclick="event.stopPropagation();_pgnCacheRename(${nameJs})" title="${T('pgn_cache_rename')}">✏️</button>`;
+      listHtml+=`<button class="btn" style="padding:4px 8px;font-size:.7rem" onclick="event.stopPropagation();_pgnCacheEditTags(${nameJs})" title="${T('pgn_cache_tags')}">🔖</button>`;
+      listHtml+=`</div>`;
+      listHtml+=`</div>`;
+    }
+    listHtml+='</div>';
+  }
+  // Toolbar: select all/none, count info
+  let toolbarHtml='';
+  if(total>0){
+    toolbarHtml=`<div style="display:flex;align-items:center;gap:8px;margin:8px 0;font-size:.78rem;color:var(--muted);flex-wrap:wrap">
+      <button class="btn" style="padding:4px 10px;font-size:.75rem" onclick="_pgnCacheSelectAll()">${T('pgn_cache_select_all')}</button>
+      <button class="btn" style="padding:4px 10px;font-size:.75rem" onclick="_pgnCacheSelectNone()">${T('pgn_cache_select_none')}</button>
+      <span style="margin-left:auto">${visibleCount===total?total+' '+T('pgn_cache_count'):visibleCount+'/'+total+' '+T('pgn_cache_count')}${selCount>0?(' · '+selCount+' '+T('pgn_cache_delete_sel')):''}</span>
+    </div>`;
+  }
+  // Bottom buttons
+  let bottomBtns='';
+  bottomBtns+=`<button type="button" class="btn btn-p" onclick="_pgnCacheSaveCurrent()" style="flex:1;justify-content:center"><span style="font-size:1.1rem">💾</span> ${T('pgn_cache_save_current')}</button>`;
+  if(selCount>0){
+    bottomBtns+=`<button type="button" class="btn" onclick="_pgnCacheDeleteSelected()" style="flex:1;justify-content:center;color:#ff8080;border-color:rgba(255,100,100,.4)"><span style="font-size:1.1rem">🗑️</span> ${T('pgn_cache_delete_sel')} (${selCount})</button>`;
+  }
+  bottomBtns+=`<button type="button" class="btn btn-s" onclick="_pgnCacheClose()" style="flex:1;justify-content:center">${T('pgn_cache_close')}</button>`;
+  return `<div class="dov" role="dialog" aria-modal="true" aria-label="${T('pgn_cache_manager')}" onclick="if(event.target===this){_pgnCacheClose()}"><div class="dlg" style="max-width:520px"><h2>${T('pgn_cache_manager')}</h2><div class="dlg-sec" style="padding-top:8px">${filterHtml}${toolbarHtml}${listHtml}</div><div class="dlg-btns" style="flex-wrap:wrap;gap:6px">${bottomBtns}</div></div></div>`;
+}
+
+// Simple HTML escape for cache names (prevent XSS from user-controlled strings)
+function _escapeHTML(s){
+  if(s==null)return '';
+  return String(s).replace(/[&<>"']/g,function(c){
+    return c==='&'?'&amp;':c==='<'?'&lt;':c==='>'?'&gt;':c==='"'?'&quot;':c==='\''?'&#39;':c;
+  });
+}
+
+// v1.0.4 Round-5 Rev19: Encode a string for safe embedding as a JS string literal
+// inside a double-quoted HTML attribute (e.g. onclick="func(ENCODED)").
+// Produces a JSON string ("...") with all double quotes HTML-escaped to &quot;,
+// so the HTML attribute parser doesn't terminate early. When the browser parses
+// the attribute, it decodes &quot; back to " before passing to the JS engine,
+// so JS sees a valid string literal: func("name").
+// Also handles & < > to be safe in attribute context.
+function _jsAttrEncode(s){
+  if(s==null)s='';
+  return JSON.stringify(String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 /**
  * Handle Android back button press.
  * Closes open dialogs/overlays, exits review/setup modes.
  */
 function handleBackPress(){
+  if(showPGNCacheManager){
+    _pgnCacheClose();
+    return;
+  }
+  // v1.0.4 Rev27: Close resign confirmation dialog on back press
+  if(showResignConfirm){
+    showResignConfirm=false;
+    render();
+    return;
+  }
   if(showEngineConfig){
     showEngineConfig=false;
     render();
@@ -2564,6 +3959,156 @@ function handleBackPress(){
     return;
   }
   // No action — could show exit confirmation in the future
+}
+
+/**
+ * v1.0.4 Rev24 NEW: Rename the human player.
+ * Opens a prompt pre-filled with the current name (or default "你"/"You").
+ * The new name is:
+ *   - Trimmed and length-capped (30 chars)
+ *   - Persisted via AndroidBridge.persistentSet('Regalia_humanName', ...)
+ *   - Stored in the global _humanPlayerName variable
+ *   - Reflected in all subsequent PGN text ([White "..."] / [Black "..."])
+ *   - Reflected in PGN cache archives and clipboard copies
+ *
+ * Passing an empty string or cancelling the prompt RESETS the name to the
+ * default "你"/"You" (clears the persisted preference).
+ */
+function _renameHumanPlayer(){
+  try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+  const _current=(typeof _humanPlayerName!=='undefined'&&_humanPlayerName)?_humanPlayerName:T('you');
+  let _newName='';
+  try{_newName=prompt(T('rename_player_prompt'),_current)||'';}catch(e){_newName='';}
+  _newName=_newName.trim();
+  if(_newName.length>30)_newName=_newName.substring(0,30);
+  // If the user typed the default name or cancelled, clear the rename
+  if(!_newName||_newName===T('you')||_newName==='你'||_newName==='You'){
+    _humanPlayerName=null;
+    try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentRemove)AndroidBridge.persistentRemove('Regalia_humanName');}catch(e){}
+    showToast(T('rename_player_reset'),2000);
+  }else{
+    _humanPlayerName=_newName;
+    try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_humanName',_newName);}catch(e){}
+    showToast(T('rename_player_saved')+'：'+_newName,2000);
+  }
+  render();
+}
+
+/**
+ * v1.0.4 Round-5 Rev28: Show the "💾 Save PGN file?" prompt before importing
+ * a PGN that was imported on the stats page.
+ *
+ * Called from MainActivity.onResume() via evaluateJavascript when
+ * StatsActivity.importedPGNOnStats is non-null (i.e., the user tapped "Yes"
+ * on the stats page's "🗃️ Import PGN to game?" dialog).
+ *
+ * Flow:
+ *   1. If the current game has move records, show the existing "💾 Save PGN
+ *      file?" prompt (showSavePGNPrompt) with the import as the pending
+ *      action. This gives the user a chance to save the current game's PGN
+ *      before it gets replaced.
+ *   2. If the current game is empty (no moves), skip the save prompt and
+ *      import directly.
+ *   3. The pending action (executed after the save prompt's Yes/No/Cancel)
+ *      is: importPGN(pgn). Cancel = don't import (the user stays on the
+ *      current game).
+ *
+ * @param {string} pgnText — The PGN text imported on the stats page.
+ */
+function _showStatsImportBackPrompt(pgnText){
+  if(!pgnText){
+    showToast(T('stats_import_back_no_pgn'));
+    return;
+  }
+  // Stash the PGN text — the pending action closure will read it.
+  _pendingStatsImportPGN=pgnText;
+  // Define the actual import action (executed after the save prompt resolves)
+  var importAction=function(){
+    var pgn=_pendingStatsImportPGN;
+    _pendingStatsImportPGN=null;
+    if(pgn){
+      try{
+        if(typeof importPGN==='function'){
+          importPGN(pgn);
+        }else{
+          console.error('importPGN function not available for stats import-back');
+          showToast(T('pgn_invalid'));
+        }
+      }catch(e){
+        console.error('Stats import-back failed:',e);
+        showToast(T('pgn_invalid'));
+      }
+    }
+  };
+  // Use the existing _withPGNSaveCheck mechanism: if there are move records,
+  // show the "💾 Save PGN file?" prompt first; otherwise import directly.
+  _withPGNSaveCheck(importAction);
+}
+// v1.0.4 Rev28: Stash for the PGN text being imported from the stats page.
+// Read by the importAction closure inside _showStatsImportBackPrompt.
+let _pendingStatsImportPGN=null;
+
+/**
+ * v1.0.4 Round-5 Rev27: Resign the current game (DeepSeek review 2.1).
+ *
+ * Called from the resign confirmation dialog when the user taps "Yes, Resign".
+ * Implements PGN resignation per the 元宝 PGN report:
+ *   - [Result "0-1"] if White (human) resigns → Black (AI) wins
+ *   - [Result "1-0"] if Black (human) resigns → White (AI) wins
+ *   - [Termination "Resignation"] supplementary tag
+ *   - "{White resigns.}" / "{Black resigns.}" comment on the last move
+ *
+ * Side effects:
+ *   - Sets gameOver and _gameOverStatusKey='resign' so the game-over overlay
+ *     shows the correct message and the eval display shows win/lose emoji.
+ *   - Sets _resignWinnerColor (the color that WINS) so _gameOverStrFromStatus
+ *     and _buildPGNString can produce the correct text and tags.
+ *   - Stops the engine: send 'stop' + isAIThinking=false so any in-flight
+ *     search is aborted.
+ *   - Stops the game clock (sets gameClocks.running=false).
+ *   - Plays a soft "lose" sound if sound is enabled.
+ */
+function _resignGame(){
+  if(gameOver)return; // Already over — no-op
+  // The resigner is the human player (playerColor). The winner is the AI.
+  _resignWinnerColor = (playerColor==='white') ? 'black' : 'white';
+  // Stop any in-flight engine search
+  try{
+    isAIThinking=false;
+    if(typeof _engineReady!=='undefined'&&_engineReady){
+      // v1.0.4 Rev35: prefer engineStop() (hard stop, discards bestmove) over
+      // sendToEngine('stop') (soft stop, bestmove still processed). engineStop()
+      // was added in Rev35 specifically for cases like resign/game-over where
+      // the engine's bestmove should be silently discarded.
+      try{
+        if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.engineStop==='function'){
+          AndroidBridge.engineStop();
+        }else if(typeof AndroidBridge!=='undefined'&&AndroidBridge.sendToEngine){
+          AndroidBridge.sendToEngine('stop');
+        }
+      }catch(e){}
+    }
+  }catch(e){}
+  // Stop the game clock
+  try{
+    if(typeof gameClocks!=='undefined'&&gameClocks){
+      gameClocks.running=false;
+    }
+  }catch(e){}
+  // Set game-over state
+  _gameOverStatusKey='resign';
+  gameOver=_gameOverStrFromStatus('resign');
+  // Play a soft "lose" sound
+  try{
+    if(typeof soundOn!=='undefined'&&soundOn&&typeof _playSound==='function'){
+      _playSound('lose');
+    }
+  }catch(e){}
+  // Haptic feedback for the loss
+  try{HapticManager.fire('ERROR');}catch(e){}
+  // Force a full re-render to show the game-over overlay
+  markDirty(DIRTY_FULL);
+  console.log('Player resigned — winner:',_resignWinnerColor);
 }
 
 /**

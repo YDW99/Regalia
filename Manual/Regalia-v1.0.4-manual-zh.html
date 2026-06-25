@@ -1,0 +1,3151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Regalia v1.0.4 用户说明书</title>
+<style>
+:root {
+  --bg: #1a0a0a;
+  --card: #221015;
+  --text: #f5e6c8;
+  --muted: #a08050;
+  --accent: #d4a017;
+  --accent2: #ffd700;
+  --border: #8b6914;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0; padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", "DejaVu Sans", sans-serif;
+  font-size: 15px; line-height: 1.8;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ===== COVER ===== */
+.cover {
+  width: 100%; min-height: 100vh;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  background:
+    radial-gradient(ellipse at 50% 30%, rgba(212,160,23,0.07) 0%, transparent 60%),
+    radial-gradient(ellipse at 20% 80%, rgba(139,105,20,0.05) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 80%, rgba(139,105,20,0.05) 0%, transparent 50%),
+    linear-gradient(135deg, #1a0a0a 0%, #0d0807 40%, #1a1008 100%);
+  text-align: center;
+  position: relative; overflow: hidden;
+  padding: 40px 20px;
+}
+.cover::before {
+  content: "";
+  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  background:
+    repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(212,160,23,0.025) 39px, rgba(212,160,23,0.025) 40px),
+    repeating-linear-gradient(90deg, transparent, transparent 39px, rgba(212,160,23,0.025) 39px, rgba(212,160,23,0.025) 40px);
+  pointer-events: none; z-index: 0;
+}
+.cover-deco {
+  font-size: 16pt; color: rgba(212,160,23,0.18);
+  letter-spacing: 18px; margin-bottom: 20px;
+  position: relative; z-index: 1;
+}
+.cover-crown {
+  width: 96px; height: 96px;
+  border: 3px solid transparent;
+  border-image: linear-gradient(145deg, #8b6914, #d4a017, #ffd700, #fff8dc, #ffd700, #d4a017, #8b6914) 1;
+  padding: 3px 6px;
+  background: linear-gradient(145deg, rgba(139,105,20,.18), rgba(255,215,0,.08), rgba(139,105,20,.18));
+  border-radius: 0;
+  font-size: 46pt; color: #E8E8F0;
+  display: flex; align-items: center; justify-content: center;
+  margin: 0 auto 18px;
+  position: relative; z-index: 1;
+}
+.cover-title {
+  font-size: 30pt; font-weight: 900; letter-spacing: 6px;
+  color: #ffd700; text-shadow: 0 0 18px rgba(212,160,23,.3);
+  position: relative; z-index: 1;
+}
+.cover-version {
+  font-size: 20pt; color: var(--accent); margin-top: 6px;
+  letter-spacing: 3px;
+  position: relative; z-index: 1;
+}
+.cover-divider {
+  display: flex; align-items: center; justify-content: center;
+  margin: 20px auto; gap: 0;
+  position: relative; z-index: 1;
+}
+.cover-divider-line {
+  width: 60px; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border));
+}
+.cover-divider-line:last-child {
+  background: linear-gradient(90deg, var(--border), transparent);
+}
+.cover-divider-icon {
+  font-size: 10pt; color: var(--accent); padding: 0 12px;
+}
+.cover-subtitle {
+  font-size: 14pt; color: #b8a080; letter-spacing: 8px;
+  position: relative; z-index: 1;
+}
+.cover-platform {
+  font-size: 10pt; color: #887860; margin-top: 12px;
+  position: relative; z-index: 1;
+}
+.cover-compat {
+  font-size: 10pt; color: #887860; margin-top: 2px;
+  position: relative; z-index: 1;
+}
+.cover-engine {
+  font-size: 10pt; color: #887860; margin-top: 2px;
+  position: relative; z-index: 1;
+}
+
+/* ===== TOC ===== */
+.toc {
+  background: var(--card);
+  border: 1px solid #3a2a18;
+  border-radius: 8px;
+  padding: 28px 32px;
+  margin: 0 20px;
+  max-width: 680px;
+  margin-left: auto; margin-right: auto;
+}
+.toc h2 {
+  text-align: center;
+  font-size: 16pt; letter-spacing: 4px;
+  color: var(--accent2); margin-bottom: 20px;
+}
+.toc-list {
+  list-style: none; padding: 0;
+  counter-reset: toc;
+}
+.toc-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 7px 0; border-bottom: 1px solid #2a1a0a;
+  counter-increment: toc;
+}
+.toc-item:last-child { border-bottom: none; }
+.toc-num {
+  font-size: 12pt; font-weight: 700;
+  color: var(--accent); min-width: 24px; text-align: right;
+}
+.toc-label { font-size: 10.5pt; }
+.toc-label a { color: var(--text); text-decoration: none; }
+.toc-label a:hover { color: var(--accent2); }
+
+/* ===== CONTENT ===== */
+.content {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 20px 40px;
+}
+.section { margin: 0; }
+.section-header {
+  text-align: center;
+  margin: 36px 0 24px;
+}
+.section-num {
+  font-size: 9pt; letter-spacing: 3px;
+  color: #887860; text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.section-title {
+  font-size: 20pt; font-weight: 900;
+  letter-spacing: 2px; color: var(--accent2);
+  margin: 0;
+}
+h3 {
+  font-size: 14pt; color: var(--accent);
+  margin: 24px 0 10px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid #2a1a0a;
+}
+h4 {
+  font-size: 12pt; color: #b8a080;
+  margin: 18px 0 8px;
+}
+
+p { margin: 10px 0; text-align: justify; }
+
+/* Feature list */
+.feature-list {
+  list-style: none; padding-left: 0;
+}
+.feature-list li {
+  padding: 5px 0 5px 20px;
+  position: relative;
+}
+.feature-list li::before {
+  content: "◆"; position: absolute; left: 0;
+  color: var(--accent); font-size: 8pt; top: 8px;
+}
+.feature-list li strong { color: var(--accent); }
+
+/* Step list */
+.step-list {
+  counter-reset: step; list-style: none; padding-left: 0;
+}
+.step-list li {
+  padding: 6px 0 6px 36px;
+  position: relative; counter-increment: step;
+}
+.step-list li::before {
+  content: counter(step) ".";
+  position: absolute; left: 0; font-weight: 700;
+  color: var(--accent); font-size: 12pt;
+}
+
+/* Table */
+table {
+  width: 100%; border-collapse: collapse;
+  margin: 14px 0; font-size: 13px;
+}
+th, td {
+  padding: 9px 12px; text-align: left;
+  border-bottom: 1px solid #2a1a0a;
+}
+th {
+  background: #1a1008; color: var(--accent);
+  font-weight: 700; font-size: 12px;
+  text-transform: uppercase; letter-spacing: 1px;
+}
+
+/* Tip box */
+.tip-box {
+  background: rgba(212,160,23,0.06);
+  border: 1px solid rgba(212,160,23,0.2);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 6px 6px 0;
+  padding: 12px 16px; margin: 14px 0;
+  font-size: 13px;
+}
+.tip-label {
+  color: var(--accent); font-weight: 700;
+  margin-right: 6px;
+}
+
+/* New tag */
+.new-tag {
+  display: inline-block;
+  background: var(--accent); color: #1a0a0a;
+  padding: 1px 7px; border-radius: 3px;
+  font-size: 10px; font-weight: 700;
+  margin-left: 6px; vertical-align: middle;
+}
+
+/* Card row */
+.card-row {
+  display: flex; gap: 20px; justify-content: center;
+  margin: 24px 0; flex-wrap: wrap;
+}
+.stat-card {
+  background: #1a1008; border: 1px solid #3a2a18;
+  border-radius: 8px; padding: 18px 26px;
+  text-align: center; min-width: 110px;
+}
+.stat-card .stat-num {
+  font-size: 22pt; font-weight: 700; color: var(--accent); display: block;
+}
+.stat-card .stat-label {
+  font-size: 9pt; color: #887860; display: block; margin-top: 4px;
+}
+
+/* Code block */
+.code-block {
+  background: #1a1508; border: 1px solid #3a2a18;
+  border-left: 3px solid var(--accent);
+  border-radius: 0 4px 4px 0;
+  padding: 12px 16px; margin: 14px 0;
+  font-family: "Sarasa Mono SC", "Noto Sans SC", monospace;
+  font-size: 12px; line-height: 1.7;
+  color: var(--text); word-break: break-all; white-space: pre-wrap;
+}
+.code-block .code-label {
+  display: block; font-size: 9pt; color: #887860;
+  margin-bottom: 6px; letter-spacing: 1px; text-transform: uppercase;
+  font-family: "Noto Sans SC", sans-serif;
+}
+
+/* Wireframe */
+.wireframe {
+  background: var(--bg); border: 1px solid #3a2a18;
+  border-radius: 6px; padding: 18px; margin: 18px 0;
+  font-size: 12px; color: var(--muted);
+}
+.wireframe-title {
+  text-align: center; font-size: 9pt; color: #887860;
+  letter-spacing: 2px; text-transform: uppercase; margin-bottom: 14px;
+}
+.wf-box {
+  border: 1px dashed #3a2a18; border-radius: 3px;
+  padding: 8px 10px; margin: 6px 0;
+  text-align: center; font-size: 11px; color: #b8a080;
+}
+.wf-box-highlight {
+  border: 1px solid var(--accent); background: rgba(212,160,23,0.06);
+  border-radius: 3px; padding: 8px 10px; margin: 6px 0;
+  text-align: center; font-size: 11px; color: var(--accent);
+}
+.wf-row { display: flex; gap: 8px; margin: 6px 0; }
+.wf-row > * { flex: 1; }
+.wf-btn {
+  display: inline-block; background: var(--card);
+  border: 1px solid #3a2a18; border-radius: 3px;
+  padding: 4px 10px; font-size: 11px; color: var(--muted);
+}
+.wf-toggle {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 12px; color: #b8a080; margin: 10px 0;
+}
+.wf-toggle-track {
+  width: 40px; height: 18px; border-radius: 9px;
+  background: #2a1a0a; border: 1px solid #3a2a18;
+  position: relative; display: inline-block;
+}
+.wf-toggle-thumb {
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--accent); position: absolute; top: 1px; right: 2px;
+}
+.wf-nav-btns {
+  display: flex; gap: 8px; justify-content: center;
+  margin: 10px 0; flex-wrap: wrap;
+}
+.wf-slider {
+  width: 100%; height: 4px; background: #2a1a0a;
+  border-radius: 2px; margin: 8px 0; position: relative;
+}
+.wf-slider-thumb {
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--accent); position: absolute; top: -5px; left: 40%;
+}
+.wf-tab {
+  display: inline-block; background: var(--card);
+  border: 1px solid #3a2a18; border-radius: 3px 3px 0 0;
+  padding: 4px 14px; font-size: 11px; color: #b8a080;
+  margin-right: 2px;
+}
+.wf-tab-active {
+  display: inline-block; background: #1a1008;
+  border: 1px solid var(--accent); border-bottom: 1px solid #1a1008;
+  border-radius: 3px 3px 0 0;
+  padding: 4px 14px; font-size: 11px; color: var(--accent);
+  font-weight: 700; margin-right: 2px;
+}
+.wf-tab-content {
+  border: 1px solid #3a2a18; border-top: 1px solid var(--accent);
+  border-radius: 0 0 3px 3px; padding: 10px;
+}
+.wf-field {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 4px 0; font-size: 11px; color: #b8a080;
+}
+.wf-field-label { color: var(--muted); }
+.wf-field-value { font-weight: 700; color: var(--text); }
+.wf-adj-btn {
+  display: inline-block; background: var(--card);
+  border: 1px solid #3a2a18; border-radius: 3px;
+  padding: 1px 8px; font-size: 11px; color: var(--muted);
+}
+
+/* Inline code */
+code {
+  background: #1a1508; padding: 2px 6px; border-radius: 3px;
+  font-size: 0.9em; color: var(--accent2);
+}
+
+/* Section divider */
+.section-divider {
+  border: none; height: 1px; margin: 48px 0;
+  background: linear-gradient(90deg, transparent, var(--border), transparent);
+}
+
+/* Emoji scale */
+.emoji-scale {
+  display: flex; align-items: center; justify-content: center;
+  flex-wrap: wrap; gap: 4px; margin: 18px 0;
+}
+.emoji-block { text-align: center; min-width: 80px; padding: 8px 6px; }
+.emoji-block .em { font-size: 20pt; display: block; }
+.emoji-block .em-label { font-size: 9pt; color: #b8a080; display: block; margin-top: 3px; }
+.emoji-block .em-range { font-size: 8pt; color: #6a5a40; display: block; }
+
+/* Color swatch */
+.color-swatch {
+  display: inline-block; width: 16px; height: 16px;
+  border-radius: 3px; vertical-align: middle; margin: 0 2px;
+  border: 1px solid #3a2a18;
+}
+
+/* Implementation section */
+.impl-section {
+  background: #1a1208; border: 1px solid #2a1a0a;
+  border-radius: 6px; padding: 16px; margin: 16px 0;
+}
+.impl-section h4 {
+  font-size: 11pt; color: var(--accent); margin: 0 0 8px;
+  padding-bottom: 4px; border-bottom: 1px solid #2a1a0a;
+}
+.impl-section p {
+  font-size: 13px; margin: 6px 0;
+}
+.module-diagram {
+  background: #1a0a0a; border: 1px solid #2a1a0a;
+  border-radius: 4px; padding: 10px; margin: 8px 0;
+  font-family: "Sarasa Mono SC", monospace; font-size: 11px;
+  line-height: 1.6; color: #b8a080; white-space: pre;
+  overflow-x: auto;
+}
+.module-box {
+  display: inline-block; padding: 2px 8px;
+  border: 1px solid #3a2a18; border-radius: 3px;
+  margin: 1px 2px; font-size: 11px;
+}
+
+/* Principle list */
+.principle-list { list-style: none; padding-left: 0; counter-reset: principle; }
+.principle-list li { padding: 8px 0 8px 40px; position: relative; counter-increment: principle; }
+.principle-list li::before {
+  content: counter(principle) "."; position: absolute; left: 0;
+  color: var(--accent); font-weight: 700; font-size: 12pt;
+}
+.principle-list li strong { color: var(--accent); }
+
+/* Nav table */
+.nav-table td:first-child { white-space: nowrap; font-weight: 600; color: var(--accent); }
+
+/* Back to top */
+.back-top {
+  display: block; text-align: center; margin: 40px auto;
+  color: var(--muted); text-decoration: none; font-size: 12px;
+  transition: color 0.2s;
+}
+.back-top:hover { color: var(--accent2); }
+
+/* Collapsible */
+details { margin: 8px 0; }
+details summary { cursor: pointer; color: var(--accent); font-weight: 600; font-size: 0.9rem; padding: 4px 0; }
+details summary:hover { color: var(--accent2); }
+
+/* Changelog card */
+.cl-card {
+  margin: 20px 0; padding: 16px;
+  border-radius: 8px;
+  border: 1px solid;
+}
+.cl-card h3 { border: none; padding: 0; margin: 0 0 6px; font-size: 1.05rem; }
+.cl-card .cl-sub { font-size:.82rem; color:#a08050; margin-bottom:10px; font-style: italic; }
+.cl-card ul { line-height: 1.7; font-size: .88rem; color: var(--text); padding-left: 20px; }
+
+/* Responsive */
+@media (max-width: 640px) {
+  .cover-title { font-size: 22pt; letter-spacing: 3px; }
+  .cover-version { font-size: 17pt; }
+  .cover-crown { width: 72px; height: 72px; font-size: 34pt; }
+  .toc { padding: 20px 18px; }
+  .content { padding: 0 14px 40px; }
+  .section-title { font-size: 17pt; letter-spacing: 1px; }
+  h3 { font-size: 13pt; }
+  .card-row { gap: 10px; }
+  .stat-card { padding: 12px 16px; min-width: 90px; }
+  table { font-size: 12px; }
+  th, td { padding: 7px 8px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ===== COVER ===== -->
+<div class="cover" id="top">
+  <div class="cover-deco">&#9816; &#9814; &#9812; &#9815; &#9813;</div>
+  <div class="cover-crown">&#9812;</div>
+  <div class="cover-title">Regalia</div>
+  <div class="cover-version">v1.0.4</div>
+  <div class="cover-divider">
+    <div class="cover-divider-line"></div>
+    <div class="cover-divider-icon">&#9830;</div>
+    <div class="cover-divider-line"></div>
+  </div>
+  <div class="cover-subtitle">用户说明书</div>
+  <div class="cover-platform">支持 Android 5.0 - 15</div>
+  <div class="cover-compat">兼容 Xiaomi HyperOS 3</div>
+  <div class="cover-engine">内置 Stockfish 18 引擎</div>
+</div>
+
+<!-- ===== TABLE OF CONTENTS ===== -->
+<div class="toc">
+  <h2>目 录</h2>
+  <ol class="toc-list">
+    <li class="toc-item"><span class="toc-num">1</span><span class="toc-label"><a href="#sec1">应用简介</a></span></li>
+    <li class="toc-item"><span class="toc-num">2</span><span class="toc-label"><a href="#sec2">安装与启动</a></span></li>
+    <li class="toc-item"><span class="toc-num">3</span><span class="toc-label"><a href="#sec3">界面布局</a></span></li>
+    <li class="toc-item"><span class="toc-num">4</span><span class="toc-label"><a href="#sec4">基本操作</a></span></li>
+    <li class="toc-item"><span class="toc-num">5</span><span class="toc-label"><a href="#sec5">AI对手系统</a></span></li>
+    <li class="toc-item"><span class="toc-num">6</span><span class="toc-label"><a href="#sec6">引擎配置</a></span></li>
+    <li class="toc-item"><span class="toc-num">7</span><span class="toc-label"><a href="#sec7">变例系统</a></span></li>
+    <li class="toc-item"><span class="toc-num">8</span><span class="toc-label"><a href="#sec8">复盘分析</a></span></li>
+    <li class="toc-item"><span class="toc-num">9</span><span class="toc-label"><a href="#sec9">开局库</a></span></li>
+    <li class="toc-item"><span class="toc-num">10</span><span class="toc-label"><a href="#sec10">辅助功能</a></span></li>
+    <li class="toc-item"><span class="toc-num">11</span><span class="toc-label"><a href="#sec11">法律许可</a></span></li>
+    <li class="toc-item"><span class="toc-num">12</span><span class="toc-label"><a href="#sec12">菲舍尔任意制象棋（Chess960）</a></span></li>
+    <li class="toc-item"><span class="toc-num">13</span><span class="toc-label"><a href="#sec13">计时赛（Time Control）</a></span></li>
+    <li class="toc-item"><span class="toc-num">14</span><span class="toc-label"><a href="#sec14">PGN 导入与导出</a></span></li>
+    <li class="toc-item"><span class="toc-num">15</span><span class="toc-label"><a href="#sec15">统计数据页面</a></span></li>
+    <li class="toc-item"><span class="toc-num">16</span><span class="toc-label"><a href="#sec16">Ponder 预判实现机制</a></span></li>
+    <li class="toc-item"><span class="toc-num">A</span><span class="toc-label"><a href="#appendix-changelog">附录 A：版本更新日志</a></span></li>
+  </ol>
+</div>
+
+<!-- ===== MAIN CONTENT ===== -->
+<div class="content">
+
+<!-- ============================================================ -->
+<!-- SECTION 1: 应用简介 -->
+<!-- ============================================================ -->
+<div class="section" id="sec1">
+  <div class="section-header">
+    <div class="section-num">第一章</div>
+    <div class="section-title">应用简介</div>
+  </div>
+
+  <p>Regalia v1.0.4 是一款功能强大的 Android 国际象棋对弈与分析应用。本版本内置世界顶级开源棋力引擎 <strong>Stockfish 18</strong>（arm64-v8a-dotprod 原生编译），为从初学者到高级棋手提供专业级的对弈、复盘与训练体验。v1.0.4 新增 <strong>菲舍尔任意制象棋（Chess960）</strong>模式、<strong>计时赛（Time Control）</strong>、规范化 PGN 导入/导出（符合 1994 PGN 规范）、基于棋盘控制范围热力图的统计数据、Seldepth（选深）显示、视觉注解（NAG &amp; <code>[%csl]</code>/<code>[%cal]</code>）、Web Worker 并行计算、PGN 缓存管理器、玩家重命名、中英双语 UI、认输（🏳️ Resign）等多项改进。</p>
+
+  <div class="card-row">
+    <div class="stat-card">
+      <span class="stat-num">18</span>
+      <span class="stat-label">Stockfish 引擎版本</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-num">6+SL</span>
+      <span class="stat-label">AI 难度等级</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-num">960</span>
+      <span class="stat-label">Chess960 起始位置</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-num">8</span>
+      <span class="stat-label">MultiPV 线数</span>
+    </div>
+  </div>
+
+  <h3>核心特性</h3>
+  <ul class="feature-list">
+    <li>内置 Stockfish 18 引擎，arm64-v8a-dotprod 原生编译，自动利用 NEON 加速指令集</li>
+    <li><strong>菲舍尔任意制象棋（Chess960 / Fischer Random Chess）</strong>：960 种随机起始位置，符合官方 Chess960 王车易位规则，PGN 导入/导出含 <code>[Variant "Chess960"]</code> 头标签与 Shredder-FEN 易位权编码 <span class="new-tag">v1.0.4</span></li>
+    <li><strong>计时赛（Time Control）</strong>：支持 5 种时钟模式——不计时 / 突然死亡制 / 菲舍尔加秒制 / 布朗斯坦延迟制 / 美国延迟制，AI 通过 <code>go wtime/btime/winc/binc</code> UCI 指令由 Stockfish 18 自主管理时间分配 <span class="new-tag">v1.0.4</span></li>
+    <li><strong>规范化 PGN 处理</strong>：导出含七标签阵容（Seven Tag Roster）、~78 列换行、<code>[%eval]</code> 与 <code>[%clk]</code> 内嵌标签、<code>[%csl]</code>/<code>[%cal]</code> 视觉注解、NAG 数字注解（$1-$6 走法质量，$10-$18 局面评估） <span class="new-tag">v1.0.4</span></li>
+    <li><strong>Seldepth（选深 / SD）显示</strong>：评估栏与 AI 对手栏现在显示 <code>D15 SD22</code> 格式（主迭代深度 + 选择性搜索深度），完整反映引擎战术搜索深度 <span class="new-tag">v1.0.4</span></li>
+    <li><strong>热力图统计</strong>：统计页面新增"热力图控制统计"区块，遍历对局每个实际局面计算每格双方攻击子数，渲染 8×8 平均控制热力图与最强/最弱格统计 <span class="new-tag">v1.0.4</span></li>
+    <li><strong>认输（🏳️ Resign）</strong>：工具栏新增 🏳️ 按钮，认输时优先调用 <code>engineStop()</code> 硬停止引擎 <span class="new-tag">v1.0.4</span></li>
+    <li><strong>PGN 缓存管理器（📚）</strong>：复盘界面新增 📚 按钮，弹出缓存管理窗口，支持保存/导入/重命名/添加标签/搜索/筛选/批量删除 PGN 缓存条目；存储于应用私有目录 <code>/data/data/com.Regalia/files/pgn_cache/</code>，不被 HyperOS 3 缓存清理器清除 <span class="new-tag">v1.0.4</span></li>
+    <li><strong>玩家重命名（📝）</strong>：可重命名 PGN 头部 [White] / [Black] 玩家名；导出的 PGN 中 AI 对手名称现包含难度档位后缀（如 <code>[Black "AI对手 Lv.4"]</code>） <span class="new-tag">v1.0.4</span></li>
+    <li><strong>中英双语 UI（🌐 ↔️中 / ↔️EN）</strong>：评估栏左侧的切换按钮可一键切换中英文模式，所有 UI 文本（工具栏、AI 对手栏、侧面板、新游戏对话框、引擎配置、Toast 通知、关于页、前台服务通知）均双语化 <span class="new-tag">v1.0.1</span></li>
+    <li><strong>Web Worker 并行计算</strong>：新增 <code>worker-pool.js</code>，将 PGN 解析、统计计算、控制图计算等重型任务移至 Web Worker 线程，避免阻塞 UI 渲染 <span class="new-tag">v1.0.4</span></li>
+    <li>6 级预设 AI 难度 + SL档（Skill Level 自定义）+ ⚙️手动设置，适合各水平棋手</li>
+    <li>AI 思考进度条实时显示搜索深度、节点数、速度与评估分数</li>
+    <li>Ponder（预判）模式，AI 在对手回合继续思考，充电时推荐开启以加速后续走法</li>
+    <li>MultiPV 多线分析（1-8 线），同时展示多条引擎推荐变化</li>
+    <li>变例系统：走法记录与复盘中展示引擎预测续着和备选变化（💬变例 开关控制）</li>
+    <li>完整复盘模式：逐步导航、评估趋势图、走法分类与关键着标注、全部分析</li>
+    <li>ECO 开局库，含搜索、开局推荐与家族筛选</li>
+    <li>Syzygy 在线残局库查询（7子及以下残局必胜/和棋/必败判定）</li>
+    <li>WDL 胜和负概率显示（默认开启），直观了解局面优劣</li>
+    <li>评估分数含 <span style="font-size:.6rem;color:#d4a017;border:1px solid rgba(212,160,23,.3);padding:0 3px;border-radius:2px;background:rgba(212,160,23,.08)">SF18</span> 引擎标识徽章、搜索深度 D 标识、Seldepth SD 标识、节点与速度信息</li>
+    <li>格子控制范围热力图（🌈/🌗 切换），含箭头指示与格子控制信息面板</li>
+    <li>AI 提示多线展示，显示所有推荐走法及评分（SAN 格式）</li>
+    <li>棋理提示面板，实时提供十大棋理原则提醒（中英双语）</li>
+    <li>引擎配置导出/导入（key=value 文本格式），方便多设备同步</li>
+    <li>FEN 复制/导入，支持任意局面快速还原</li>
+    <li>摆棋模式，自由编辑棋盘局面，含撤销/恢复/重置/清空</li>
+    <li>兼容 Android 5.0 至 Android 15，适配 Xiaomi HyperOS 3</li>
+  </ul>
+
+  <div class="impl-section">
+    <h4>实现原理：模块架构</h4>
+    <p>应用采用<strong>多模块分层架构</strong>，源代码位于 <code>assets/chess.src/</code> 目录下，通过构建脚本 <code>build-chess.py</code> 合并为单一 <code>chess.html</code> 文件，由 Android WebView 加载运行：</p>
+    <div class="module-diagram">┌─────────────────────────────────────────────────────────┐
+│  MainActivity.java  (Android 宿主)                        │
+│  ├─ ChessWebView  ← 加载 chess.html                      │
+│  ├─ StatsActivity   ← 加载 stats.html (统计页面)          │
+│  ├─ StockfishNative.java  (UCI 引擎管理 + PGN 缓存)        │
+│  │   ├─ 进程启停、UCI 通信、引擎切换                       │
+│  │   ├─ engine_jni.cpp  (chmod / renice)                  │
+│  │   ├─ PGN Cache: listPGNCaches / savePGNCache /         │
+│  │   │             getPGNCache / deletePGNCaches           │
+│  │   └─ Persistent Store: persistentGet / persistentSet   │
+│  └─ AndroidBridge  (JS↔Java 桥接接口)                     │
+└─────────────────────────────────────────────────────────┘
+        ↕ JavaScript↔Java Bridge
+┌─────────────────────────────────────────────────────────┐
+│  chess.html  (WebView 单页应用)                            │
+│  ├─ index.html.tpl  (CSS 样式模板)                        │
+│  ├─ game-logic.js   (纯棋理，无UI/引擎依赖)                │
+│  │   ├─ 棋盘表示、走法生成、合法性检验                       │
+│  │   ├─ Zobrist 哈希、FEN 生成/解析                        │
+│  │   ├─ AI_LEVELS、ELO_MATCH、控制范围计算                  │
+│  │   ├─ 棋理提示 _principlesHTML() (i18n)                  │
+│  │   └─ 语言偏好: toggleLang() + 持久化                    │
+│  ├─ chess960.js     (Chess960 规则) [v1.0.4 新增]          │
+│  │   ├─ SP-ID 生成器 (0..959)                              │
+│  │   ├─ Shredder-FEN 易位权编码/解码                       │
+│  │   ├─ isChess960CastlingLegal()                          │
+│  │   └─ chess960CastlingRookMove() / findCastlingRooks()   │
+│  ├─ pgn-standard.js (规范 PGN) [v1.0.4 新增]               │
+│  │   ├─ 七标签阵容 (Seven Tag Roster)                      │
+│  │   ├─ ~78 列换行、结果标记                               │
+│  │   ├─ 容错解析: 嵌套注释、未闭合注释、0-0→O-O             │
+│  │   ├─ NAG_MAP / nagToSymbol / formatNagToken             │
+│  │   ├─ formatCslTag / formatCalTag / parseCslTag /        │
+│  │   │ parseCalTag (视觉注解)                              │
+│  │   └─ TimeControl 解析/格式化 (6 种格式)                  │
+│  ├─ worker-pool.js  (Web Worker 并行计算) [v1.0.4 新增]    │
+│  │   ├─ workerParsePGN()                                   │
+│  │   ├─ workerComputeHeatmapStats()                        │
+│  │   ├─ workerGetCtrlMap()                                 │
+│  │   ├─ terminateWorker() (pagehide/beforeunload)          │
+│  │   └─ 同步回退 (Worker 不可用时)                          │
+│  ├─ ai-bridge.js    (引擎通信层)                           │
+│  │   ├─ UCI 参数配置、导出/导入 (key=value)                │
+│  │   ├─ 引擎回调: onBestMove / onEngineEval /              │
+│  │   │   onEngineProgress / onPonderProgress               │
+│  │   ├─ 评估状态管理、WDL 转换、seldepth 解析              │
+│  │   ├─ 复盘评估缓存 _reviewEvalCache (无上限)             │
+│  │   └─ 引擎心跳监测、崩溃恢复                             │
+│  ├─ tablebase.js    (Syzygy 残局库查询)                    │
+│  ├─ eco-data.js     (ECO 开局库数据)                       │
+│  └─ ui.js           (渲染与交互)                           │
+│      ├─ render() 全量渲染 + 增量更新                       │
+│      ├─ _getSqBg() 控制范围热力图着色                      │
+│      ├─ _updateArrows() SVG 箭头叠加层                     │
+│      ├─ _buildEvalTrendSVG() 复盘趋势图                    │
+│      ├─ _classifyMove() 走法分类                           │
+│      ├─ playSound() Web Audio API 音效合成                 │
+│      ├─ 计时赛时钟 UI 渲染 (gameClocks)                    │
+│      ├─ PGN 缓存管理器 UI (📚)                             │
+│      └─ 触控/点击/滑动事件处理                             │
+└─────────────────────────────────────────────────────────┘</div>
+
+    <p>模块间的数据流遵循严格的单向依赖：<code>ui.js</code> 调用 <code>game-logic.js</code> 的纯函数获取棋局状态，通过 <code>ai-bridge.js</code> 与引擎通信，<code>ai-bridge.js</code> 再通过 <code>AndroidBridge</code> 与 Java 层的 Stockfish 进程交互。重型计算任务（PGN 解析、统计、热力图）通过 <code>worker-pool.js</code> 委托给 Web Worker 线程，避免阻塞 UI 渲染。</p>
+
+    <div class="code-block">
+      <span class="code-label">build-chess.py — 构建脚本核心逻辑</span>
+# 合并 JS 模块 → chess.html
+modules = [
+    "game-logic.js",
+    "chess960.js",       # v1.0.4 新增
+    "pgn-standard.js",   # v1.0.4 新增
+    "worker-pool.js",    # v1.0.4 新增
+    "ai-bridge.js",
+    "tablebase.js",
+    "eco-data.js",
+    "ui.js",
+]
+with open("index.html.tpl","r",encoding="utf-8") as f:
+    html = f.read()
+js = "\n".join(
+    open(f"chess.src/{m}","r",encoding="utf-8").read()
+    for m in modules
+)
+html = html.replace("/*__JS__*/", js)
+with open("chess.html","w",encoding="utf-8") as f:
+    f.write(html)</div>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<!-- ============================================================ -->
+<!-- SECTION 2: 安装与启动 -->
+<!-- ============================================================ -->
+<div class="section" id="sec2">
+  <div class="section-header">
+    <div class="section-num">第二章</div>
+    <div class="section-title">安装与启动</div>
+  </div>
+
+  <h3>系统要求</h3>
+  <table>
+    <tr><th>项目</th><th>要求</th></tr>
+    <tr><td>操作系统</td><td>Android 5.0（API 21）至 Android 15（API 35）</td></tr>
+    <tr><td>CPU 架构</td><td>arm64-v8a（推荐支持 dotprod 指令集）</td></tr>
+    <tr><td>存储空间</td><td>约 30 MB（不含 PGN 缓存）</td></tr>
+    <tr><td>兼容系统</td><td>Xiaomi HyperOS 3（Android 14 基础）已验证</td></tr>
+  </table>
+
+  <h3>APK 签名</h3>
+  <p>本版本 APK 采用 <strong>v1 / v2 / v3 三重签名方案</strong>，确保在所有支持的 Android 版本上均可正常安装与验证：</p>
+  <ul class="feature-list">
+    <li><strong>v1 签名（JAR 签名）</strong>：兼容 Android 5.0-6.0 设备</li>
+    <li><strong>v2 签名（APK 签名方案 v2）</strong>：Android 7.0+ 增量验证，安装更快</li>
+    <li><strong>v3 签名（APK 签名方案 v3）</strong>：Android 9.0+ 密钥轮转支持</li>
+  </ul>
+
+  <div class="tip-box">
+    <span class="tip-label">提示：</span>Xiaomi HyperOS 3 对 APK 签名验证较为严格，v2+v3 签名确保安装过程顺利通过系统验证。如遇安装问题，请在系统设置中允许"安装未知来源应用"。
+  </div>
+
+  <h3>安装步骤</h3>
+  <ol class="step-list">
+    <li>将 APK 文件传输至 Android 设备</li>
+    <li>在文件管理器中点击 APK 文件</li>
+    <li>如系统提示"未知来源"，前往设置允许安装</li>
+    <li>按照安装向导完成安装</li>
+    <li>启动应用，引擎将自动初始化</li>
+  </ol>
+
+  <h3>首次启动</h3>
+  <p>首次启动时，应用显示加载画面：♔ 国王图标（<span class="color-swatch" style="background:#E8E8F0"></span> <code>#E8E8F0</code>）+ 应用名 + 进度条（<span class="color-swatch" style="background:linear-gradient(90deg,#d4a017,#ffd700)"></span> <code>#d4a017→#ffd700</code> 渐变）。引擎二进制文件自动释放至本地私有目录并赋予执行权限，进度条达到 100% 后显示"引擎就绪！"，加载画面 0.5 秒淡出。</p>
+
+  <div class="impl-section">
+    <h4>实现原理：引擎初始化流程</h4>
+    <p><code>StockfishNative.java</code> 在 <code>onCreate()</code> 中将 assets 中的引擎二进制文件复制到应用私有目录（<code>context.getFilesDir()</code>），通过 JNI 调用 <code>nativeChmod()</code> 赋予执行权限。WebView 加载 <code>chess.html</code> 后，JS 层调用 <code>AndroidBridge.startEngine()</code> 启动 UCI 进程，引擎通过 stdout 返回 <code>uciok</code> 后标记 <code>_engineReady=true</code>。</p>
+    <div class="code-block">
+      <span class="code-label">ai-bridge.js — 引擎就绪回调</span>
+function onEngineReady(){
+  _engineReady=true;
+  _needNewGameForEngine=true; // 崩溃恢复后需重新 ucinewgame
+  _updateLoadingStatus('引擎就绪！',100);
+  // 0.5s 淡出加载画面
+  setTimeout(function(){_hideLoadingOverlay()},500);
+}</div>
+  </div>
+
+  <h3>前台服务通知 <span class="new-tag">v1.0.1 增强</span></h3>
+  <p>当引擎进程运行时，应用会显示一个前台服务通知（Foreground Service Notification），在系统通知栏中持续展示引擎状态信息。该通知的作用是告知 Android 系统引擎进程正在执行重要计算，防止系统因内存回收或省电策略而终止引擎进程，确保对局与分析过程不被中断。</p>
+  <div class="tip-box">
+    <span class="tip-label">v1.0.1 简化状态：</span>通知栏现仅显示三种引擎状态——<strong>"引擎就绪！"</strong>（就绪）、<strong>"分析中"</strong>（AI 思考 / Ponder 预判 / 复盘分析中）、<strong>"引擎错误: ..."</strong>（异常时显示截断后的错误消息）。不再显示搜索深度、节点数、速度等数值。详细的深度/节点/速度/评分仍在 APP 内顶部评估栏实时显示，通知栏保持极简风格，避免频繁更新打扰用户。
+  </div>
+  <div class="tip-box">
+    <span class="tip-label">点击跳转：</span>点击通知可跳转至 APP 主界面（<code>PendingIntent</code> + <code>FLAG_ACTIVITY_NEW_TASK | SINGLE_TOP | CLEAR_TOP</code>），方便用户从其他应用快速回到棋局。
+  </div>
+  <div class="tip-box">
+    <span class="tip-label">不可手动移除：</span>通知设置 <code>setOngoing(true)</code> + <code>FLAG_NO_CLEAR</code>，正常情况下无法被用户划掉。在 Android 14+（含小米澎湃OS 3）上系统可能允许用户手动划除，但前台服务本身仍持续运行，下次状态更新时通知会自动重新出现。
+  </div>
+  <div class="tip-box">
+    <span class="tip-label">双语通知：</span>前台服务通知的文本内容为双语显示，跟随应用当前的语言设置（保存在 <code>SharedPreferences</code> 中，由 JS 端 <code>saveLangPref</code> 同步）。中文模式下通知文本为中文，英文模式下为英文，与界面语言保持一致。
+  </div>
+  <div class="tip-box">
+    <span class="tip-label">通知权限：</span>在 Android 13（API 33）及以上版本中，应用首次启动引擎时会主动请求通知权限（POST_NOTIFICATIONS），以确保前台服务通知能够正常显示。如果用户拒绝授权，引擎仍可正常运行，但系统通知栏不会显示引擎状态信息，此时引擎进程被系统终止的风险会略有增加。
+  </div>
+
+</div>
+
+<hr class="section-divider">
+
+<!-- ============================================================ -->
+<!-- SECTION 3: 界面布局 -->
+<!-- ============================================================ -->
+<div class="section" id="sec3">
+  <div class="section-header">
+    <div class="section-num">第三章</div>
+    <div class="section-title">界面布局</div>
+  </div>
+
+  <p>应用界面由顶部标题栏、工具栏、棋盘区域、侧面板四大区域组成，整体采用暗色主题配色体系：</p>
+
+  <table>
+    <tr><th>角色</th><th>CSS 变量</th><th>色号</th><th>示例</th></tr>
+    <tr><td>背景</td><td><code>--bg</code></td><td><code>#1a0a0a</code></td><td><span class="color-swatch" style="background:#1a0a0a"></span></td></tr>
+    <tr><td>卡片背景</td><td><code>--card</code></td><td><code>#221015</code></td><td><span class="color-swatch" style="background:#221015"></span></td></tr>
+    <tr><td>正文</td><td><code>--text</code></td><td><code>#f5e6c8</code></td><td><span class="color-swatch" style="background:#f5e6c8"></span></td></tr>
+    <tr><td>次要文字</td><td><code>--muted</code></td><td><code>#a08050</code></td><td><span class="color-swatch" style="background:#a08050"></span></td></tr>
+    <tr><td>强调色</td><td><code>--accent</code></td><td><code>#d4a017</code></td><td><span class="color-swatch" style="background:#d4a017"></span></td></tr>
+    <tr><td>金色高亮</td><td><code>--accent2</code></td><td><code>#ffd700</code></td><td><span class="color-swatch" style="background:#ffd700"></span></td></tr>
+    <tr><td>边框</td><td><code>--border</code></td><td><code>#8b6914</code></td><td><span class="color-swatch" style="background:#8b6914"></span></td></tr>
+    <tr><td>蓝色（我方）</td><td><code>--blue</code></td><td><code>#4a90d9</code></td><td><span class="color-swatch" style="background:#4a90d9"></span></td></tr>
+    <tr><td>红色（对方/危险）</td><td><code>--red</code></td><td><code>#c0392b</code></td><td><span class="color-swatch" style="background:#c0392b"></span></td></tr>
+    <tr><td>紫色（ECO标签）</td><td><code>--purple</code></td><td><code>#8e44ad</code></td><td><span class="color-swatch" style="background:#8e44ad"></span></td></tr>
+    <tr><td>绿色（好着/必胜）</td><td><code>--green</code></td><td><code>#27ae60</code></td><td><span class="color-swatch" style="background:#27ae60"></span></td></tr>
+    <tr><td>蓝色（变例/Ponder）</td><td><code>--pond</code></td><td><code>#7eb8da</code></td><td><span class="color-swatch" style="background:#7eb8da"></span></td></tr>
+  </table>
+
+  <h3>标题栏</h3>
+  <p>标题栏位于界面最上方，包含应用标识、语言切换按钮和实时评估信息。评估栏现显示 <strong>D15 SD22</strong> 格式（主迭代深度 + 选择性搜索深度），完整反映引擎战术搜索深度：</p>
+
+  <div class="wireframe">
+    <div class="wireframe-title">标题栏（含 D15 SD22 seldepth 显示）</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:6px 10px;border:1px solid #3a2a18;border-radius:3px;flex-wrap:wrap;gap:6px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:1.1rem;color:#E8E8F0;border:2px solid #d4a017;padding:2px 4px;background:linear-gradient(145deg,rgba(139,105,20,.18),rgba(255,215,0,.08))">♔</span>
+        <span style="font-weight:900;color:#ffd700;letter-spacing:2px;font-size:1rem">Regalia</span>
+        <span style="font-size:.55rem;color:#d4a017;background:rgba(212,160,23,.15);padding:1px 6px;border-radius:3px;border:1px solid rgba(212,160,23,.3)">v1.0.4</span>
+        <span style="font-size:.55rem;color:#d4a017;background:rgba(212,160,23,.15);padding:1px 6px;border-radius:3px;border:1px solid rgba(212,160,23,.3);cursor:pointer">ℹ️</span>
+      </div>
+      <span style="font-size:.55rem;color:#d4a017;background:rgba(212,160,23,.15);padding:1px 6px;border-radius:3px;border:1px solid rgba(212,160,23,.3);cursor:pointer;flex-shrink:0">↔️中</span>
+      <div style="font-size:.8rem;color:var(--text)">
+        <span style="color:#27ae60">😊</span> 优势 <span style="color:#a08050">(+0.85)</span>
+        <span style="font-size:.5rem;color:#d4a017;border:1px solid rgba(212,160,23,.3);padding:0 3px;border-radius:2px;background:rgba(212,160,23,.08);margin-left:3px">SF18</span>
+        <span style="font-size:.6rem;color:#a08050;margin-left:3px">D15</span>
+        <span style="font-size:.6rem;color:#7eb8da;margin-left:2px">SD22</span>
+        <span style="font-size:.55rem;color:#a08050;margin-left:2px">4.5M 1.2M/s</span>
+      </div>
+    </div>
+    <p style="font-size:.7rem;color:#887860;text-align:center;margin-top:6px">D15 为主迭代深度 (depth)，SD22 为选择性搜索深度 (seldepth)；SD 仅在 &gt; 0 且 &gt; depth 时显示</p>
+  </div>
+
+  <h3>棋盘颜色</h3>
+  <p>棋盘采用暖金色调配色，浅色格和深色格均使用渐变效果：</p>
+  <table>
+    <tr><th>元素</th><th>色号/渐变</th><th>示例</th></tr>
+    <tr><td>浅色格</td><td><code>linear-gradient(135deg,#e8d5b0,#f0dcc0,#e8d5b0)</code></td><td><span class="color-swatch" style="background:linear-gradient(135deg,#e8d5b0,#f0dcc0,#e8d5b0);width:40px"></span></td></tr>
+    <tr><td>深色格</td><td><code>linear-gradient(135deg,#8b6914,#7a5c12,#8b6914)</code></td><td><span class="color-swatch" style="background:linear-gradient(135deg,#8b6914,#7a5c12,#8b6914);width:40px"></span></td></tr>
+    <tr><td>选中格</td><td><code>#5a4030</code></td><td><span class="color-swatch" style="background:#5a4030"></span></td></tr>
+    <tr><td>白方棋子</td><td><code>#E8E8F0</code>，描边 <code>rgba(30,15,0,.85)</code></td><td><span class="color-swatch" style="background:#E8E8F0"></span></td></tr>
+    <tr><td>黑方棋子</td><td><code>#1A1A2E</code>，描边 <code>rgba(255,230,150,.85)</code></td><td><span class="color-swatch" style="background:#1A1A2E"></span></td></tr>
+    <tr><td>上一步起始格</td><td>金色内边框 <code>3px solid #ffd700</code></td><td><span class="color-swatch" style="background:#8b6914;box-shadow:inset 0 0 0 3px #ffd700"></span></td></tr>
+    <tr><td>上一步目标格</td><td>绿色内边框 <code>3px solid #27ae60</code></td><td><span class="color-swatch" style="background:#8b6914;box-shadow:inset 0 0 0 3px #27ae60"></span></td></tr>
+    <tr><td>合法走法点</td><td><code>radial-gradient(rgba(255,140,0,.6),rgba(255,140,0,.35))</code></td><td><span class="color-swatch" style="background:radial-gradient(rgba(255,140,0,.6),rgba(255,140,0,.35));border-radius:50%"></span></td></tr>
+    <tr><td>合法吃子环</td><td><code>3px solid rgba(255,140,0,.55)</code></td><td><span class="color-swatch" style="background:#8b6914;box-shadow:inset 0 0 0 3px rgba(255,140,0,.55);border-radius:50%"></span></td></tr>
+    <tr><td>将军脉冲</td><td>红色脉冲动画 <code>rgba(192,57,43,.22)</code></td><td><span class="color-swatch" style="background:rgba(192,57,43,.22)"></span></td></tr>
+    <tr><td>坐标标签（浅格）</td><td><code>#4a3a0a</code>，描边 <code>rgba(255,230,150,.85)</code></td><td><span class="color-swatch" style="background:#4a3a0a"></span></td></tr>
+    <tr><td>坐标标签（深格）</td><td><code>#f0dcb0</code>，描边 <code>rgba(30,15,0,.85)</code></td><td><span class="color-swatch" style="background:#f0dcb0"></span></td></tr>
+  </table>
+
+  <h3>控制范围热力图</h3>
+  <p>点击工具栏 🌈 按钮启用控制范围显示，棋盘格子将根据双方控制强度动态着色。热力图使用 HSL 色彩空间，通过色相（Hue）、饱和度（Saturation）和明度（Lightness）三个维度编码控制信息。</p>
+
+  <h4>热力图着色算法</h4>
+  <p>热力图颜色由三个参数决定：</p>
+  <ul class="feature-list">
+    <li><strong>优势方向（adv）</strong>：我方控制数 − 对方控制数 ÷ 总控制数。adv &gt; 0 为我方优势，adv &lt; 0 为对方优势。决定色相（Hue）</li>
+    <li><strong>控制强度（str）</strong>：总控制数 ÷ 8（封顶 1.0）。决定饱和度（Saturation）和明度（Lightness）</li>
+    <li><strong>无人控制</strong>：双方均无控制时，使用固定色 <span class="color-swatch" style="background:#3a2020"></span> <code>#3a2020</code></li>
+  </ul>
+
+  <table>
+    <tr><th>参数</th><th>公式</th><th>范围</th><th>效果</th></tr>
+    <tr><td>色相 Hue</td><td>adv≥0: <code>280 − adv×60</code><br>adv&lt;0: <code>280 − adv×80</code></td><td>≈220°~340°</td><td>紫蓝=均势，偏蓝=我方优势，偏红=对方优势</td></tr>
+    <tr><td>饱和度 Sat</td><td><code>0.50 + str×0.40</code></td><td>50%~90%</td><td>控制数越多越鲜艳</td></tr>
+    <tr><td>明度 Lit</td><td><code>0.48 − str×0.12</code></td><td>36%~48%</td><td>控制数越多越深</td></tr>
+  </table>
+
+  <h4>色相含义对照</h4>
+  <table>
+    <tr><th>色相范围</th><th>颜色</th><th>含义</th><th>示例</th></tr>
+    <tr><td>H ≈ 220°</td><td>蓝紫</td><td>我方强烈控制</td><td><span class="color-swatch" style="background:hsl(220,80%,36%);width:30px"></span> <code>hsl(220,80%,36%)</code></td></tr>
+    <tr><td>H ≈ 260°</td><td>紫色</td><td>双方均势 / 中等控制</td><td><span class="color-swatch" style="background:hsl(260,65%,42%);width:30px"></span> <code>hsl(260,65%,42%)</code></td></tr>
+    <tr><td>H ≈ 280°</td><td>紫红</td><td>微弱优势 / 基线色</td><td><span class="color-swatch" style="background:hsl(280,55%,46%);width:30px"></span> <code>hsl(280,55%,46%)</code></td></tr>
+    <tr><td>H ≈ 320°</td><td>红紫</td><td>对方中等控制</td><td><span class="color-swatch" style="background:hsl(320,70%,38%);width:30px"></span> <code>hsl(320,70%,38%)</code></td></tr>
+    <tr><td>H ≈ 340°</td><td>红色</td><td>对方强烈控制</td><td><span class="color-swatch" style="background:hsl(340,80%,36%);width:30px"></span> <code>hsl(340,80%,36%)</code></td></tr>
+    <tr><td>—</td><td>暗红棕</td><td>双方均无控制</td><td><span class="color-swatch" style="background:#3a2020;width:30px"></span> <code>#3a2020</code></td></tr>
+  </table>
+
+  <h4>箭头含义</h4>
+  <p>悬停或选中某格时，棋盘上方叠加 SVG 箭头层，显示哪些棋子控制该格子：</p>
+  <table>
+    <tr><th>箭头颜色</th><th>色号</th><th>示例</th><th>含义</th></tr>
+    <tr><td>暖金色</td><td><code>#D4A017</code></td><td><span style="display:inline-block;width:40px;height:4px;background:#D4A017;border-radius:2px;vertical-align:middle"></span></td><td>我方（执棋方）棋子的控制箭头 — 从控制棋子指向目标格</td></tr>
+    <tr><td>冷银蓝色</td><td><code>#8A9BAE</code></td><td><span style="display:inline-block;width:40px;height:4px;background:#8A9BAE;border-radius:2px;vertical-align:middle"></span></td><td>对方棋子的控制箭头 — 从对方棋子指向目标格</td></tr>
+  </table>
+  <p>箭头透明度为 0.85，宽度 4px，使用 SVG <code>&lt;line&gt;</code> 元素绘制，末端带三角形箭头标记。箭头起始于控制棋子中心，终止于目标格中心偏移 14px 处，避免箭头与棋子重叠。</p>
+
+  <div class="impl-section">
+    <h4>实现原理：控制范围热力图</h4>
+    <p><code>game-logic.js</code> 中的 <code>getCtrlMap()</code> 遍历棋盘所有格子，对每个有棋子的格调用 <code>attacked()</code> 获取其攻击目标，汇总成 8×8 控制矩阵。矩阵每个元素记录 <code>{white: [{piece, position}], black: [{piece, position}]}</code>。</p>
+    <p><code>ui.js</code> 中的 <code>_getSqBg()</code> 根据控制矩阵计算 HSL 颜色覆盖棋盘格背景；<code>_updateArrows()</code> 在 SVG 叠加层绘制控制箭头，使用持久化 SVG 元素避免重复创建 DOM。重型计算（如统计页面的全对局热力图遍历）通过 <code>worker-pool.js</code> 委托给 Web Worker，避免阻塞 UI。</p>
+    <div class="code-block">
+      <span class="code-label">game-logic.js — getCtrlMap() 控制范围计算</span>
+function getCtrlMap(b){
+  const cm=[];
+  for(let r=0;r&lt;8;r++){
+    cm[r]=[];
+    for(let c=0;c&lt;8;c++)
+      cm[r][c]={white:[],black:[]};
+  }
+  for(let r=0;r&lt;8;r++)
+    for(let c=0;c&lt;8;c++){
+      const p=b[r][c];
+      if(p){
+        const atks=attacked(b,{row:r,col:c});
+        for(const a of atks){
+          cm[a.row][a.col][p.color].push(
+            {piece:p,position:{row:r,col:c}});
+        }
+      }
+    }
+  return cm;
+}</div>
+    <div class="code-block">
+      <span class="code-label">ui.js — _getSqBg() 热力图着色算法</span>
+function _getSqBg(rr,cc,cm,isL,lastMove){
+  let bg=isL?SQ_LIGHT:SQ_DARK;
+  let ctrlBg=null;
+  if(cm){
+    const e=cm[rr][cc];
+    if(e){
+      const wc=e.white.length, bc=e.black.length;
+      const myC=playerColor==='white'?wc:bc;
+      const opC=playerColor==='white'?bc:wc;
+      const net=myC-opC;
+      const total=myC+opC;
+      const adv=total&gt;0?net/total:0;
+      const str=Math.min(1,total/8);
+      let hue;
+      if(myC===0&amp;&amp;opC===0){
+        ctrlBg='#3a2020';  // 无控制
+      }else{
+        if(adv&gt;=0) hue=280-adv*60;
+        else hue=280-adv*80;
+        if(hue&gt;=360) hue-=360;
+        const sat=0.50+str*0.40;  // 50%~90%
+        const lit=0.48-str*0.12;  // 36%~48%
+        ctrlBg=`hsl(${Math.round(hue)},${Math.round(sat*100)}%,${Math.round(lit*100)}%)`;
+      }
+    }
+  }
+  if(ctrlBg) bg=ctrlBg;
+  return bg;
+}</div>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<!-- ============================================================ -->
+<!-- SECTION 4: 基本操作 -->
+<!-- ============================================================ -->
+<div class="section" id="sec4">
+  <div class="section-header">
+    <div class="section-num">第四章</div>
+    <div class="section-title">基本操作</div>
+  </div>
+
+  <h3>新游戏</h3>
+  <p>点击工具栏 <strong>⚔️ 新游戏</strong> 按钮，弹出"新游戏设置"对话框，可配置执棋颜色、Chess960 开关、计时赛、ECO 开局库开关、经典开局选择。v1.0.4 Rev22 调整：Chess960 开关（及相关文字）现在直接位于"执棋颜色"下方；Chess960 开启时仅 ECO 开关置灰（互斥，因 Chess960 无固定开局理论），计时赛仍可正常使用。</p>
+
+  <div class="wireframe">
+    <div class="wireframe-title">新游戏设置对话框（Chess960 关闭）</div>
+    <div style="border:1px solid #3a2a18;border-radius:4px;padding:12px">
+      <div style="text-align:center;font-weight:700;color:#ffd700;margin-bottom:10px">⚔️ 新游戏设置</div>
+      <div style="margin-bottom:8px">
+        <div style="font-size:.8rem;color:#b8a080;margin-bottom:4px">执棋颜色</div>
+        <div style="display:flex;gap:6px">
+          <span class="wf-btn" style="flex:1">♔ 白方（先手）</span>
+          <span class="wf-btn" style="flex:1">♚ 黑方（后手）</span>
+        </div>
+      </div>
+      <div style="margin-bottom:8px">
+        <div style="font-size:.8rem;color:#b8a080;margin-bottom:4px">菲舍尔任意制象棋</div>
+        <div class="wf-toggle"><span>启用 Chess960 模式</span><div class="wf-toggle-track"><div class="wf-toggle-thumb" style="left:1px;right:auto"></div></div></div>
+      </div>
+      <div style="margin-bottom:8px">
+        <div style="font-size:.8rem;color:#b8a080;margin-bottom:4px">计时赛</div>
+        <div style="border:1px dashed #3a2a18;border-radius:3px;padding:4px 8px;font-size:.75rem;color:#a08050;margin-bottom:4px">不计时 ▾</div>
+      </div>
+      <div style="margin-bottom:8px">
+        <div class="wf-toggle"><span>使用ECO开局库</span><div class="wf-toggle-track"><div class="wf-toggle-thumb" style="left:1px;right:auto"></div></div></div>
+        <div style="font-size:.65rem;color:#887860;margin-top:2px">开启后，AI将优先从ECO开局库中选择开局走法，使开局更规范</div>
+      </div>
+      <div style="margin-bottom:8px">
+        <div style="border:1px dashed #3a2a18;border-radius:3px;padding:4px 8px;font-size:.75rem;color:#a08050;margin-bottom:4px">输入ECO编号或开局名搜索</div>
+        <div style="border:1px dashed #3a2a18;border-radius:3px;padding:4px 8px;font-size:.75rem;color:#a08050;margin-bottom:4px">所有分类 ▾</div>
+        <div style="border:1px dashed #3a2a18;border-radius:3px;padding:4px 8px;font-size:.7rem;color:#b8a080;margin-bottom:2px;font-weight:600">自由开局 — 从初始局面开始</div>
+      </div>
+      <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:10px">
+        <span class="wf-btn">取消</span>
+        <span class="wf-btn" style="border-color:#d4a017;color:#d4a017">开始游戏 ♟</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="wireframe">
+    <div class="wireframe-title">新游戏设置对话框（Chess960 开启，显示专属设置）</div>
+    <div style="border:1px solid #3a2a18;border-radius:4px;padding:12px">
+      <div style="text-align:center;font-weight:700;color:#ffd700;margin-bottom:10px">⚔️ 新游戏设置</div>
+      <div style="margin-bottom:8px">
+        <div style="font-size:.8rem;color:#b8a080;margin-bottom:4px">执棋颜色</div>
+        <div style="display:flex;gap:6px">
+          <span class="wf-btn" style="flex:1">♔ 白方（先手）</span>
+          <span class="wf-btn" style="flex:1">♚ 黑方（后手）</span>
+        </div>
+      </div>
+      <div style="margin-bottom:8px">
+        <div style="font-size:.8rem;color:#b8a080;margin-bottom:4px">菲舍尔任意制象棋</div>
+        <div class="wf-toggle"><span>启用 Chess960 模式</span><div class="wf-toggle-track" style="background:#c49512;border-color:#ffd700"><div class="wf-toggle-thumb" style="left:19px;right:1px;background:#1a0a0a"></div></div></div>
+      </div>
+      <div style="margin-bottom:8px">
+        <div style="font-size:.8rem;color:#b8a080;margin-bottom:4px">计时赛</div>
+        <div style="border:1px dashed #3a2a18;border-radius:3px;padding:4px 8px;font-size:.75rem;color:#a08050;margin-bottom:4px">不计时 ▾</div>
+      </div>
+      <div style="margin-bottom:8px;opacity:.4;pointer-events:none">
+        <div class="wf-toggle"><span>使用ECO开局库</span><div class="wf-toggle-track"><div class="wf-toggle-thumb" style="left:1px;right:auto"></div></div></div>
+        <div style="font-size:.65rem;color:#887860;margin-top:2px">Chess960 模式下不使用 ECO 开局库（无固定开局理论）</div>
+      </div>
+      <div style="margin-bottom:8px">
+        <div style="font-size:.8rem;color:#b8a080;margin-bottom:4px">菲舍尔任意制象棋</div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+          <span style="font-size:.78rem;color:#b8a080">起始位置编号: </span>
+          <span class="wf-btn" style="padding:2px 8px;font-size:.72rem;background:#d4a017;color:#1a0a0a">随机</span>
+          <span style="border:1px dashed #3a2a18;border-radius:3px;padding:2px 6px;font-size:.75rem;color:#a08050;min-width:60px;text-align:center">0-959</span>
+          <span class="wf-btn" style="padding:2px 8px;font-size:.72rem">🎲</span>
+        </div>
+        <div style="background:#3a2a1a;border-radius:4px;padding:4px;margin-bottom:4px">
+          <div style="font-size:.65rem;color:#887860;margin-bottom:2px">起始排列预览 (SP-ID 518)</div>
+          <div style="display:grid;grid-template-columns:repeat(8,1fr);gap:0;font-size:1.1rem;text-align:center;color:#E8E8F0">♖&nbsp;♘&nbsp;♗&nbsp;♕&nbsp;♔&nbsp;♗&nbsp;♘&nbsp;♖</div>
+          <div style="display:grid;grid-template-columns:repeat(8,1fr);gap:0;font-size:.55rem;color:#887860;text-align:center;margin-top:1px">a b c d e f g h</div>
+        </div>
+        <div style="font-size:.65rem;color:#887860">Chess960 模式下不使用 ECO 开局库（无固定开局理论）。王车易位规则：王走至 g1/c1，车走至 f1/d1，与标准象棋终点相同。</div>
+      </div>
+      <div style="display:flex;gap:6px;justify-content:flex-end;margin-top:10px">
+        <span class="wf-btn">取消</span>
+        <span class="wf-btn" style="border-color:#d4a017;color:#d4a017">开始游戏 ♟</span>
+      </div>
+    </div>
+  </div>
+  <p style="font-size:.78rem;color:#a08050;margin-top:8px"><em>示意图：新游戏设置对话框在 Chess960 关闭（上）与开启（下）两种状态下的显示效果。Rev22 调整：Chess960 开关直接位于"执棋颜色"下方；Chess960 开启时，仅 ECO 开局库开关置灰（互斥），计时赛仍可正常使用；下方显示"菲舍尔任意制象棋"专属设置区。</em></p>
+
+  <h3>走棋</h3>
+  <p>采用<strong>点击走棋</strong>方式：先点击要移动的棋子（棋子高亮显示合法走法），再点击目标格子完成移动。当兵到达底线时，弹出升变选择对话框（后→车→象→马）。Chess960 模式下，王车易位规则按官方 Chess960 规则执行：王终至 g1/c1，车终至 f1/d1，但起始位置随机。</p>
+
+  <h3>工具栏按钮一览</h3>
+  <table>
+    <tr><th>按钮</th><th>名称</th><th>功能</th></tr>
+    <tr><td>⚔️</td><td>新游戏</td><td>打开新游戏设置对话框</td></tr>
+    <tr><td>♔/♚</td><td>自由开局</td><td>跳过设置直接开始新对局</td></tr>
+    <tr><td>↩️</td><td>悔棋</td><td>撤销上一步走法（自动回退到玩家上一手；摆棋模式隐藏）。v1.0.1：悔棋后会自动选中"被悔的那步棋移动的棋子"所在的格子，方便重走。点击该格可解除选中。</td></tr>
+    <tr><td>↪️</td><td>撤悔</td><td>重做已撤销的走法（摆棋模式隐藏）</td></tr>
+    <tr><td>🏳️</td><td>认输 (Resign) <span class="new-tag">v1.0.4</span></td><td>玩家认输判负；优先调用 <code>engineStop()</code> 硬停止引擎（丢弃 bestmove），结束当前对局</td></tr>
+    <tr><td>🔃</td><td>翻转</td><td>翻转棋盘方向</td></tr>
+    <tr><td>💡</td><td>AI提示</td><td>引擎分析当前局面（多线展示，SAN 格式）</td></tr>
+    <tr><td>🔊/🔇</td><td>音效</td><td>开关走棋音效（摆棋模式隐藏）</td></tr>
+    <tr><td>🌈/🌗</td><td>控制范围</td><td>🌈=开启热力图，🌗=关闭</td></tr>
+    <tr><td>📊</td><td>统计数据 (Stats) <span class="new-tag">v1.0.4</span></td><td>打开统计数据页面（<code>StatsActivity</code> + <code>stats.html</code>），全屏 WebView 显示对局深度统计</td></tr>
+    <tr><td>📝</td><td>FEN</td><td>复制当前局面 FEN 到剪贴板</td></tr>
+    <tr><td>🗃️</td><td>导入</td><td>从剪贴板/PGN 文件导入 FEN/PGN 还原局面</td></tr>
+    <tr><td>🏗️/✓</td><td>摆棋/完成</td><td>进入/退出摆棋模式</td></tr>
+  </table>
+
+  <div class="wireframe">
+    <div class="wireframe-title">主界面工具栏布局</div>
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:center;font-size:.78rem;padding:10px;border:1px solid #3a2a18;border-radius:4px">
+      <span style="background:rgba(212,160,23,.15);color:#d4a017;border:1px solid rgba(212,160,23,.3);border-radius:4px;padding:4px 10px;cursor:pointer">⚔️ 新游戏</span>
+      <span style="background:rgba(212,160,23,.15);color:#d4a017;border:1px solid rgba(212,160,23,.3);border-radius:4px;padding:4px 10px;cursor:pointer">♔/♚</span>
+      <span style="background:rgba(212,160,23,.15);color:#d4a017;border:1px solid rgba(212,160,23,.3);border-radius:4px;padding:4px 10px;cursor:pointer">↩️</span>
+      <span style="background:rgba(212,160,23,.15);color:#d4a017;border:1px solid rgba(212,160,23,.3);border-radius:4px;padding:4px 10px;cursor:pointer">↪️</span>
+      <span style="background:rgba(192,57,43,.18);color:#e07060;border:1px solid rgba(192,57,43,.4);border-radius:4px;padding:4px 10px;cursor:pointer">🏳️</span>
+      <span style="background:rgba(212,160,23,.15);color:#d4a017;border:1px solid rgba(212,160,23,.3);border-radius:4px;padding:4px 10px;cursor:pointer">🔃</span>
+      <span style="background:rgba(212,160,23,.15);color:#d4a017;border:1px solid rgba(212,160,23,.3);border-radius:4px;padding:4px 10px;cursor:pointer">💡</span>
+      <span style="background:rgba(212,160,23,.15);color:#d4a017;border:1px solid rgba(212,160,23,.3);border-radius:4px;padding:4px 10px;cursor:pointer">🔊</span>
+      <span style="background:rgba(212,160,23,.15);color:#d4a017;border:1px solid rgba(212,160,23,.3);border-radius:4px;padding:4px 10px;cursor:pointer">🌈</span>
+      <span style="background:rgba(212,160,23,.15);color:#d4a017;border:1px solid rgba(212,160,23,.3);border-radius:4px;padding:4px 10px;cursor:pointer">📊</span>
+      <span style="background:rgba(212,160,23,.15);color:#d4a017;border:1px solid rgba(212,160,23,.3);border-radius:4px;padding:4px 10px;cursor:pointer">📝</span>
+      <span style="background:rgba(212,160,23,.15);color:#d4a017;border:1px solid rgba(212,160,23,.3);border-radius:4px;padding:4px 10px;cursor:pointer">🗃️</span>
+      <span style="background:rgba(212,160,23,.15);color:#d4a017;border:1px solid rgba(212,160,23,.3);border-radius:4px;padding:4px 10px;cursor:pointer">🏗️</span>
+      <span style="background:rgba(212,160,23,.15);color:#d4a017;border:1px solid rgba(212,160,23,.3);border-radius:4px;padding:4px 10px;cursor:pointer">⚙️</span>
+    </div>
+    <p style="font-size:.7rem;color:#887860;text-align:center;margin-top:6px">v1.0.4 工具栏：🏳️ 认输（红色边框，对局中可见）、📊 统计数据（v1.0.4 新增）</p>
+  </div>
+
+  <h3>音效系统</h3>
+  <table>
+    <tr><th>操作</th><th>音色</th><th>频率</th></tr>
+    <tr><td>普通走棋</td><td>正弦波</td><td>300→500 Hz</td></tr>
+    <tr><td>吃子</td><td>方波</td><td>200→100 Hz</td></tr>
+    <tr><td>将军</td><td>锯齿波</td><td>440→554→659 Hz</td></tr>
+    <tr><td>王车易位</td><td>三角波</td><td>260→520 Hz</td></tr>
+    <tr><td>升变</td><td>正弦波</td><td>523→659→784→1047 Hz</td></tr>
+    <tr><td>对局结束</td><td>正弦波</td><td>523→440→349→262 Hz</td></tr>
+    <tr><td>AI提示</td><td>正弦波</td><td>600→900 Hz</td></tr>
+  </table>
+
+  <h3>摆棋模式</h3>
+  <div class="wireframe">
+    <div class="wireframe-title">摆棋面板</div>
+    <div style="border:1px solid #3a2a18;border-radius:3px;padding:8px">
+      <div style="display:flex;align-items:center;gap:4px;margin-bottom:6px;flex-wrap:wrap">
+        <span style="font-size:.75rem;color:#a08050">棋子:</span>
+        <span class="wf-btn" style="font-size:1rem">♙</span>
+        <span class="wf-btn" style="font-size:1rem">♘</span>
+        <span class="wf-btn" style="font-size:1rem">♗</span>
+        <span class="wf-btn" style="font-size:1rem">♖</span>
+        <span class="wf-btn" style="font-size:1rem">♕</span>
+        <span class="wf-btn" style="font-size:1rem">♔</span>
+        <span class="wf-btn" style="font-size:.9rem;border-color:#c0392b">🗑️</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;margin-bottom:6px">
+        <span style="font-size:.75rem;color:#a08050">颜色:</span>
+        <span class="wf-btn">⚪ 白方</span>
+        <span class="wf-btn">⚫ 黑方</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;margin-bottom:6px">
+        <span style="font-size:.75rem;color:#a08050">走棋方:</span>
+        <span class="wf-btn">⚪ 白方</span>
+        <span class="wf-btn">⚫ 黑方</span>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-bottom:6px">
+        <span class="wf-btn">↩️ 撤销</span><span class="wf-btn">↪️ 恢复</span>
+        <span class="wf-btn">♻️ 重置</span><span class="wf-btn">🧹 清空</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="impl-section">
+    <h4>实现原理：走棋与摆棋</h4>
+    <p><code>ui.js</code> 中的 <code>sqClick()</code> 处理棋盘点击事件，根据当前模式（走棋/摆棋）分发到不同逻辑。走棋模式下调用 <code>game-logic.js</code> 的 <code>legalMoves()</code> 生成合法走法集合，点击目标格后调用 <code>makeMvInPlace()</code> 执行走法。Chess960 模式下，<code>chess960.js</code> 的 <code>isChess960CastlingLegal()</code> / <code>chess960CastlingRookMove()</code> / <code>findCastlingRooks()</code> 接入 <code>pseudoMoves</code>、<code>makeMv</code>、<code>makeMvInPlace</code> 的 <code>gameVariant==='chess960'</code> 分支。</p>
+    <p>摆棋模式下 <code>setupClick()</code> 根据 <code>setupPiece</code> 和 <code>setupColor</code> 在目标格放置棋子，放置国王时自动移除同色旧王。退出摆棋时调用 <code>validateSetupPosition()</code> 校验局面合法性。</p>
+    <div class="code-block">
+      <span class="code-label">game-logic.js — 走法执行核心</span>
+function makeMvInPlace(state, move){
+  state.board[move.from.row][move.from.col]=null;
+  state.board[move.to.row][move.to.col]=move.piece;
+  if(move.enPassant){
+    const epRow=move.piece.color==='white'?
+      move.to.row+1:move.to.row-1;
+    state.board[epRow][move.to.col]=null;
+  }
+  if(move.castling){
+    // Chess960: rookFrom / rookTo 由 chess960CastlingRookMove() 计算
+    // 标准象棋: kingside → rookFromCol=7, rookToCol=5
+    const rookFromCol=move.castling==='kingside'?7:0;
+    const rookToCol=move.castling==='kingside'?5:3;
+    state.board[move.from.row][rookToCol]=
+      state.board[move.from.row][rookFromCol];
+    state.board[move.from.row][rookFromCol]=null;
+  }
+  if(move.promotion){
+    state.board[move.to.row][move.to.col]=
+      {type:move.promotion,color:move.piece.color};
+  }
+}</div>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<!-- ============================================================ -->
+<!-- SECTION 5: AI对手系统 -->
+<!-- ============================================================ -->
+<div class="section" id="sec5">
+  <div class="section-header">
+    <div class="section-num">第五章</div>
+    <div class="section-title">AI对手系统</div>
+  </div>
+
+  <h3>难度等级</h3>
+  <p>工具栏 AI 难度选择器包含 6 个预设按钮、SL档和 ⚙️ 手动设置：</p>
+  <div class="emoji-scale">
+    <div class="emoji-block"><span class="em">😊</span><span class="em-label">Lv.1 初学者</span><span class="em-range">ELO 800</span></div>
+    <div class="emoji-block"><span class="em">🙂</span><span class="em-label">Lv.2 新手</span><span class="em-range">ELO 1350</span></div>
+    <div class="emoji-block"><span class="em">🤔</span><span class="em-label">Lv.3 俱乐部棋手</span><span class="em-range">ELO 1700</span></div>
+    <div class="emoji-block"><span class="em">😎</span><span class="em-label">Lv.4 高级棋手</span><span class="em-range">ELO 2000</span></div>
+    <div class="emoji-block"><span class="em">🧐</span><span class="em-label">Lv.5 候选大师</span><span class="em-range">ELO 2200</span></div>
+    <div class="emoji-block"><span class="em">🤖</span><span class="em-label">Lv.6 大师</span><span class="em-range">ELO 2350</span></div>
+    <div class="emoji-block"><span class="em">⚙️</span><span class="em-label">SL档</span><span class="em-range">Skill Level</span></div>
+    <div class="emoji-block"><span class="em">🔧</span><span class="em-label">⚙️ 手动</span><span class="em-range">自定义ELO</span></div>
+  </div>
+
+  <h3>评估显示详解</h3>
+  <p>标题栏评估区域采用统一格式，评估以执棋者视角呈现。v1.0.4 Rev33 起评估显示新增 Seldepth（选深 / SD）信息：</p>
+  <table>
+    <tr><th>评估范围</th><th>表情</th><th>描述</th></tr>
+    <tr><td>&gt;600 cp</td><td>🏆</td><td>胜势</td></tr>
+    <tr><td>351~600</td><td>😄</td><td>大优</td></tr>
+    <tr><td>151~350</td><td>😊</td><td>优势</td></tr>
+    <tr><td>51~150</td><td>🙂</td><td>微优</td></tr>
+    <tr><td>-50~50</td><td>😐</td><td>均势</td></tr>
+    <tr><td>-150~-51</td><td>😟</td><td>微劣</td></tr>
+    <tr><td>-350~-151</td><td>😰</td><td>劣势</td></tr>
+    <tr><td>-600~-351</td><td>😱</td><td>大劣</td></tr>
+    <tr><td>&lt;-600</td><td>💀</td><td>败势</td></tr>
+  </table>
+
+  <div class="wireframe">
+    <div class="wireframe-title">评估显示完整格式（含 D15 SD22 seldepth）</div>
+    <div class="wf-box">
+      😊 优势 (+0.85) <span style="font-size:.5rem;color:#d4a017;border:1px solid rgba(212,160,23,.3);padding:0 2px;border-radius:2px;background:rgba(212,160,23,.08)">SF18</span> D15 SD22 4.5M 1.2M/s (62%W/28%D/10%L)
+    </div>
+    <p style="font-size:.7rem;color:#887860;text-align:center;margin-top:6px">D15 为主迭代深度 (depth)，SD22 为选择性搜索深度 (seldepth)；SD 仅在 &gt; 0 且 &gt; depth 时显示，否则省略</p>
+  </div>
+
+  <h3>AI 对手栏（3 行布局）<span class="new-tag">v1.0.4 Rev36-Rev42</span></h3>
+  <p>v1.0.4 Rev36 起 AI 对手栏重构为 <strong>3 行布局</strong>，信息层次更清晰：</p>
+  <ul class="feature-list">
+    <li><strong>第一行</strong>：紧凑状态——AI 名称 + 难度档位 + 时钟（计时赛时）+ "思考中"指示器（.tind）</li>
+    <li><strong>第二行</strong>：引擎搜索实时信息右对齐（<code>#ai-search-info</code>）——D15 SD22 + 节点数 + 速度 + 评估</li>
+    <li><strong>第三行</strong>：溢出被吃子（左对齐，仅被吃子 &gt;7 个时显示，<code>#ai-cap-overflow</code>）+ Ponder 预判信息（右对齐，<code>#ai-ponder-info</code>）</li>
+  </ul>
+  <p>Rev37 调整：被吃子数量超过 7 个时，第 8 个起显示在第三行左对齐。Rev38 修复信息溢出。Rev39 修复被吃棋子 &gt;7 时 ponder 信息未显示。Rev40 修复溢出棋子竖向排列 + ponder 信息在无溢出时的对齐。Rev42 修复被吃棋子 &gt;7 时溢出棋子未显示。</p>
+
+  <div class="wireframe">
+    <div class="wireframe-title">AI 对手栏 3 行布局</div>
+    <div style="border:1px solid #3a2a18;border-radius:4px;padding:8px;background:#1a1008">
+      <!-- 第一行 -->
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 6px;border-bottom:1px solid #2a1a0a">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:.95rem">🤖</span>
+          <span style="font-weight:700;font-size:.85rem;color:#f5e6c8">AI 对手 Lv.4</span>
+          <span style="font-size:.7rem;color:#d4a017;background:rgba(212,160,23,.15);padding:1px 6px;border-radius:3px;border:1px solid rgba(212,160,23,.3)">⏱ 05:23</span>
+        </div>
+        <span style="font-size:.7rem;color:#7eb8da;font-weight:700;animation:pulse 1.5s infinite">⏳ 思考中</span>
+      </div>
+      <!-- 第二行 (右对齐) -->
+      <div id="ai-search-info" style="text-align:right;padding:3px 6px;font-size:.7rem;color:#a08050;border-bottom:1px solid #2a1a0a;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;box-sizing:border-box">
+        <span style="color:#a08050">D15</span>
+        <span style="color:#7eb8da;margin-left:2px">选深:22</span>
+        <span style="color:#a08050;margin-left:4px">1.5M</span>
+        <span style="color:#a08050;margin-left:2px">1.5M/s</span>
+        <span style="color:#27ae60;margin-left:4px">(+0.85)</span>
+      </div>
+      <!-- 第三行 (overflow captured pieces left + ponder right) -->
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:3px 6px;min-width:0">
+        <div id="ai-cap-overflow" style="flex:0 0 auto;min-width:0;display:flex;gap:1px;font-size:.85rem">
+          <span style="color:#E8E8F0">♙</span>
+          <span style="color:#E8E8F0">♙</span>
+          <span style="color:#E8E8F0">♘</span>
+        </div>
+        <div id="ai-ponder-info" style="margin-left:auto;font-size:.7rem;color:#7eb8da;min-width:0">
+          🔮 预判: e5 D12 800K 900K/s (+0.3)
+        </div>
+      </div>
+    </div>
+    <p style="font-size:.7rem;color:#887860;text-align:center;margin-top:6px">第一行：AI 名称 + 等级 + 时钟 + "思考中"指示器；第二行：引擎搜索信息（D15 SD22 选深 + 节点数 + 速度 + 评估）右对齐；第三行：溢出被吃子（&gt;7 个时左对齐）+ Ponder 预判信息右对齐</p>
+  </div>
+
+  <table>
+    <tr><th>行</th><th>显示内容</th><th>对齐</th><th>DOM 元素</th></tr>
+    <tr><td>第一行</td><td>AI 名称 + 难度档位 + 时钟（计时赛）+ 思考中指示器</td><td>两端对齐</td><td>原有 .pbar 容器</td></tr>
+    <tr><td>第二行</td><td>D15 SD22 选深:22 + 节点数 + 速度 + 评估</td><td>右对齐</td><td><code>#ai-search-info</code></td></tr>
+    <tr><td>第三行</td><td>溢出被吃子（&gt;7 时）+ Ponder 预判信息</td><td>space-between</td><td><code>#ai-cap-overflow</code> + <code>#ai-ponder-info</code></td></tr>
+  </table>
+
+  <h3>Ponder 预判模式<span class="new-tag">v1.0.1</span></h3>
+  <p>启用后 AI 在自己走完棋后继续思考对手可能的应手。AI 对手栏第二行右对齐显示预判搜索信息（不显示预判走法）；若同时使用 AI 提示功能，AI 提示栏也会显示预判信息并展示预判走法。推荐充电时开启。</p>
+
+  <div class="impl-section">
+    <h4>实现原理：AI 对手与引擎通信</h4>
+    <p>AI 走棋流程：<code>ui.js</code> 调用 <code>doAIMove()</code> → 通过 <code>AndroidBridge</code> 发送 <code>go depth N</code> 指令（计时赛时改为 <code>go wtime/btime/winc/binc</code>）→ Java 层 <code>StockfishNative</code> 管理 UCI 进程 → 引擎通过 stdout 返回 <code>bestmove</code> → Java 回调 JS 层 <code>onBestMove()</code> → <code>ui.js</code> 执行走法并更新界面。</p>
+    <p>评估流程：<code>requestEngineEval()</code> 发送 <code>go depth 22</code>（先 <code>setoption MultiPV=1</code>、<code>setoption Contempt=0</code>）→ 引擎通过 <code>info</code> 行实时回调 <code>onEngineProgress()</code> 更新进度（含 seldepth）→ 最终回调 <code>onEngineEval()</code> 返回完整评估结果（含 WDL、深度、seldepth）→ 恢复对弈选项（<code>Contempt=24</code>、原 MultiPV）。</p>
+    <p>v1.0.4 Rev32 评估模式优化：评估搜索前强制 <code>Contempt=0</code>（客观评估）+ <code>MultiPV=1</code>（最大搜索深度）+ <code>UCI_ShowWDL=true</code>（输出 WDL 概率）。评估完成后恢复对弈选项。</p>
+    <div class="code-block">
+      <span class="code-label">ai-bridge.js — 引擎评估回调（含 seldepth）</span>
+function onEngineEval(scoreCp,scoreMate,depth,seldepth,
+                       wdlW,wdlD,wdlL){
+  _lastEngineCallbackTime=Date.now(); // 心跳监测
+  if(reviewMode&amp;&amp;_reviewEvalRequestedStep!==reviewStep)
+    return; // 丢弃过期回调
+  _evalLoading=false;
+  _sfDepth=depth||0;
+  _sfSeldepth=seldepth||0;  // v1.0.4 Rev33 新增
+  _sfWdlW=(wdlW!=null&amp;&amp;wdlW&gt;=0)?wdlW:-1;
+  _sfWdlD=(wdlD!=null&amp;&amp;wdlD&gt;=0)?wdlD:-1;
+  _sfWdlL=(wdlL!=null&amp;&amp;wdlL&gt;=0)?wdlL:-1;
+  // 从走棋方视角转为白方视角
+  if(_evalForBlackTurn&amp;&amp;_sfWdlW&gt;=0){
+    const tmp=_sfWdlW; _sfWdlW=_sfWdlL; _sfWdlL=tmp;
+  }
+  // 缓存复盘评估
+  if(reviewMode){
+    _reviewEvalCache.set(reviewStep,{
+      eval:_sfEval,mate:_sfMateDistance,
+      depth:_sfDepth,seldepth:_sfSeldepth,
+      wdlW:_sfWdlW,wdlD:_sfWdlD,wdlL:_sfWdlL
+    });
+  }
+}</div>
+    <div class="code-block">
+      <span class="code-label">ui.js — seldepth 显示逻辑（formatEval）</span>
+// SD 显示规则: seldepth &gt; 0 且 seldepth &gt; depth 时显示
+let depthStr = 'D' + _sfDepth;
+if (_sfSeldepth &gt; 0 &amp;&amp; _sfSeldepth &gt; _sfDepth) {
+  depthStr += ' SD' + _sfSeldepth;
+}
+// AI 对手栏第二行使用本地化标签: 选深 / SelDepth
+let seldepthLabel = T('seldepth_label'); // 中:选深, 英:SelDepth
+let searchInfo = 'D' + _sfDepth + ' ' + seldepthLabel + ':' + _sfSeldepth
+                + ' ' + formatNodes(_sfNodes)
+                + ' ' + formatNps(_sfNps)
+                + ' (' + formatEval(_sfEval) + ')';</div>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<!-- ============================================================ -->
+<!-- SECTION 6: 引擎配置 -->
+<!-- ============================================================ -->
+<div class="section" id="sec6">
+  <div class="section-header">
+    <div class="section-num">第六章</div>
+    <div class="section-title">引擎配置</div>
+  </div>
+
+  <p>点击 ⚙️ 按钮进入引擎配置界面，采用<strong>双标签页</strong>设计：</p>
+
+  <h3>标签页：引擎</h3>
+  <p>显示引擎基本信息（名称 <span style="color:#d4a017;font-size:.65rem">[内置]</span>、作者、线程、哈希）和 🔄 重启引擎按钮。</p>
+
+  <h3>标签页：高级设置</h3>
+  <table>
+    <tr><th>参数</th><th>默认值</th><th>范围</th><th>说明</th></tr>
+    <tr><td>Threads</td><td>2</td><td>1-64</td><td>CPU 线程数，默认配置自动设定</td></tr>
+    <tr><td>Hash</td><td>128 MB</td><td>1-4096 MB</td><td>置换表大小，默认配置自动设定（Stockfish 18 最佳实践：hashfull &lt; 30% 时强度最优）</td></tr>
+    <tr><td>MultiPV</td><td>1</td><td>1-8</td><td>多线分析，对局建议1，分析建议2-5</td></tr>
+    <tr><td>Move Overhead</td><td>60 ms</td><td>0-5000 ms</td><td>通信延迟补偿（Android JNI 开销约 10-20ms）</td></tr>
+    <tr><td>Ponder</td><td>关闭</td><td>开/关</td><td>对手回合继续思考</td></tr>
+    <tr><td>Show WDL</td><td><strong>开启</strong></td><td>开/关</td><td>显示胜/平/负概率</td></tr>
+    <tr><td>Skill Level</td><td>20</td><td>0-20</td><td>引擎棋力（限制ELO时自动决定）</td></tr>
+    <tr><td>限制Elo</td><td>关闭</td><td>500-3200</td><td>ELO上限，默认 2800</td></tr>
+    <tr><td>UCI_Chess960 <span class="new-tag">v1.0.4</span></td><td>false</td><td>true/false</td><td>开启 Chess960 模式时自动设为 true，引擎（自动）重启后自动重新应用</td></tr>
+    <tr><td>Contempt <span class="new-tag">v1.0.4 Rev32</span></td><td>24</td><td>-100~100</td><td>对弈时进取（24），评估搜索时自动设为 0（客观评估）</td></tr>
+  </table>
+
+  <h3>配置导出与导入</h3>
+  <p>支持导出/导入 key=value 文本格式配置文件。导出时优先写入公共 Downloads 目录，若失败则回退到应用专属目录，最终回退到剪贴板。导入时可通过两种方式选择配置文件：</p>
+  <ul>
+    <li><strong>内置文件浏览器</strong>：浏览文件系统目录，支持按 Android 返回键逐级返回上级目录，到达根目录时再按返回键则关闭浏览器。导航历史会被记录，确保返回操作精确回到上一级。</li>
+    <li><strong>系统文件选择器</strong>（推荐）：点击「📂 系统选择器」按钮调用 Android 系统文件选择器，可正确显示所有文件类型（包括 .txt 文件），在 Android 11+ 分区存储环境下尤为推荐使用此方式。</li>
+  </ul>
+  <div class="code-block">
+    <span class="code-label">配置导出示例</span>
+# Regalia Engine Settings
+engine.threads=4
+engine.hash=128
+engine.multiPV=3
+engine.moveOverhead=60
+engine.ponder=true
+engine.showWDL=true
+engine.skillLevel=20
+engine.limitStrength=false
+engine.elo=2800
+engine.autoConfig=true</div>
+
+  <div class="impl-section">
+    <h4>实现原理：引擎配置管理</h4>
+    <p><code>ai-bridge.js</code> 维护 <code>engineSettingsData</code> 对象存储当前配置，每次修改参数立即通过 <code>AndroidBridge</code> 同步到引擎进程。导出时调用 <code>bridge.exportSettings()</code> 获取 key=value 文本，优先写入公共 Downloads 目录，失败时自动回退到应用专属目录，最终回退到剪贴板。</p>
+    <div class="code-block">
+      <span class="code-label">ai-bridge.js — 导出设置（简化）</span>
+function exportEngineSettings(){
+  _bridgeCall(function(bridge){
+    const txt=bridge.exportSettings();
+    let saved=false, savedPath='';
+    // Try 1: Public Downloads directory
+    try{
+      saved=bridge.writeTextFile('/storage/emulated/0/Download/Regalia_engine_settings.txt',txt);
+      if(saved) savedPath='/storage/emulated/0/Download/...';
+    }catch(e){}
+    // Try 2: App-specific export directory (always works)
+    if(!saved){
+      try{
+        savedPath=bridge.getExportPath()+'/Regalia_engine_settings.txt';
+        saved=bridge.writeTextFile(savedPath,txt);
+      }catch(e){}
+    }
+    // Try 3: Clipboard fallback
+    if(!saved){ try{navigator.clipboard.writeText(txt);}catch(e){} }
+  },null,false);
+}</div>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<!-- ============================================================ -->
+<!-- SECTION 7: 变例系统 -->
+<!-- ============================================================ -->
+<div class="section" id="sec7">
+  <div class="section-header">
+    <div class="section-num">第七章</div>
+    <div class="section-title">变例系统</div>
+  </div>
+
+  <p>变例系统通过 <strong>💬变例</strong> 开关控制，在走法记录和复盘中展示引擎预测续着和备选变化。</p>
+
+  <div class="wireframe">
+    <div class="wireframe-title">变例显示格式</div>
+    <div class="wf-box">1. e4 e5 2. Nf3 Nc6 3. Bb5</div>
+    <div class="wf-box-highlight" style="text-align:left;padding-left:14px">
+      🌿 线1 a6 4. Ba4 Nf6 5. O-O
+    </div>
+    <div class="wf-box" style="text-align:left;padding-left:14px">
+      🌿 线2 f5 4. Bxc6 dxc6 5. d3
+    </div>
+  </div>
+
+  <p>变例标签颜色 <span class="color-swatch" style="background:#7eb8da"></span> <code>#7eb8da</code>，变例按显示顺序编号为 线1、线2、线3…（不再区分主线/备选，保证标签唯一）。</p>
+
+  <div class="impl-section">
+    <h4>实现原理：变例记录与展示</h4>
+    <p>引擎通过 MultiPV 机制返回多条 <code>info</code> 行，<code>ai-bridge.js</code> 中的 <code>onMultiPVResult()</code> 将每条结果解析为变例文本，存储到走法记录的 <code>variations</code> 数组中。<code>ui.js</code> 渲染走法列表时，若 <code>showVariations=true</code>，调用 <code>_formatVariationGroups()</code> 在每步走法下方添加 🌿 变例行。变例行号按数组顺序分配（1、2、3…），保证唯一。</p>
+    <p>v1.0.2 修复 PGN 变例"片段不完整"问题：变例续着循环遇到首个无法解析的 token 时改为 <code>continue</code>（仅跳过该 token，继续解析后续走法），并对每个 token 统一应用 <code>moveAlg</code> 容错匹配。MultiPV 变例提取主 PV 不以 bestmove 开头时不再伪造"主线"，而是作为独立备选行纳入 MultiPV 迭代。</p>
+    <div class="code-block">
+      <span class="code-label">ui.js — 变例渲染逻辑</span>
+// 走法记录卡片头部
+h+='&lt;div class="card"&gt;';
+h+='&lt;div class="card-t"&gt;';
+h+='&lt;span class="ico"&gt;📜&lt;/span&gt;走法记录';
+h+='&lt;button onclick="copyMoveHistory()"&gt;📝 PGN&lt;/button&gt;';
+h+='&lt;div class="toggle" onclick="showVariations=!showVariations;render()"&gt;';
+h+='&lt;span&gt;💬变例&lt;/span&gt;';
+h+='&lt;div class="toggle-sw'+(showVariations?' on':'')+'"';
+h+=' style="width:30px;height:16px"&gt;&lt;/div&gt;&lt;/div&gt;';
+h+='&lt;/div&gt;&lt;/div&gt;';</div>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<!-- ============================================================ -->
+<!-- SECTION 8: 复盘分析 -->
+<!-- ============================================================ -->
+<div class="section" id="sec8">
+  <div class="section-header">
+    <div class="section-num">第八章</div>
+    <div class="section-title">复盘分析</div>
+  </div>
+
+  <p>复盘模式采用左右分栏布局，左面板包含棋盘+评估+趋势图+导航，右面板为走法列表。导航走法时，走法列表会自动滚动至当前选中的走法位置，确保当前步骤始终可见。</p>
+
+  <h3>评估趋势图</h3>
+  <p>SVG 折线图，纵轴白方视角评估，横轴步数。<strong>↹全局</strong> 开关控制局部/全局视图。折线颜色随走棋方变化：白方段 <span class="color-swatch" style="background:#E8E8F0"></span> <code>#E8E8F0</code>，黑方段 <span class="color-swatch" style="background:#1A1A2E;border:1px solid #3a2a18"></span> <code>#1A1A2E</code>，交叉点 <span class="color-swatch" style="background:#888"></span> <code>#888</code>。</p>
+  <div class="tip-box">
+    <span class="tip-label">横屏适配：</span>评估趋势图已适配横屏方向。图表高度根据可用视口空间动态计算，SVG 渲染采用等比缩放确保折线形态正确，不会出现拉伸变形或内容截断。横屏复盘中，棋盘占据左侧面板约 45% 宽度，右侧走法列表获得更多空间。左面板控件（评估条、滑块、趋势图、按钮）经过紧凑布局优化，间距和尺寸均根据横屏可用高度动态调整，确保趋势图始终可见且不被推出视口。
+  </div>
+  <div class="tip-box">
+    <span class="tip-label">v1.0.3 复盘评估栏实时搜索信息：</span>v1.0.4 Rev33 起，复盘界面的评估栏现在显示实时的搜索深度（D）、战术深度（SD）、节点数量、搜索速度。此前复盘评估栏仅显示 D（无节点/速度信息）。现在用户在复盘时可以完整看到引擎的搜索进度。
+  </div>
+
+  <h3>走法分类</h3>
+  <table>
+    <tr><th>分类</th><th>条件</th><th>颜色</th><th>示例</th></tr>
+    <tr><td>妙着</td><td>偏差 ≥300（好）</td><td style="color:#00cfff"><code>#00cfff</code></td><td><span class="color-swatch" style="background:#00cfff"></span></td></tr>
+    <tr><td>好着</td><td>偏差 150-299（好）</td><td style="color:#27ae60"><code>#27ae60</code></td><td><span class="color-swatch" style="background:#27ae60"></span></td></tr>
+    <tr><td>正着</td><td>偏差 50-149（好）</td><td style="color:#a0c060"><code>#a0c060</code></td><td><span class="color-swatch" style="background:#a0c060"></span></td></tr>
+    <tr><td>标准</td><td>偏差 &lt;50</td><td style="color:#a08050"><code>var(--muted)</code></td><td><span class="color-swatch" style="background:#a08050"></span></td></tr>
+    <tr><td>缓着</td><td>偏差 50-149（差）</td><td style="color:#f0c040"><code>#f0c040</code></td><td><span class="color-swatch" style="background:#f0c040"></span></td></tr>
+    <tr><td>错着</td><td>偏差 150-299（差）</td><td style="color:#e67e22"><code>#e67e22</code></td><td><span class="color-swatch" style="background:#e67e22"></span></td></tr>
+    <tr><td>漏着</td><td>偏差 ≥300（差）</td><td style="color:#c0392b"><code>#c0392b</code></td><td><span class="color-swatch" style="background:#c0392b"></span></td></tr>
+  </table>
+
+  <p>关键着以金色左边框 <span class="color-swatch" style="background:#ffd700;width:4px;height:20px"></span> <code>3px solid #ffd700</code> 高亮标注。评估增量：正值绿色 <code>#27ae60</code>，负值红色 <code>#c0392b</code>，将杀 <code>→将杀</code> 绿色，脱杀 <code>←脱杀</code> 红色。</p>
+
+  <div class="impl-section">
+    <h4>实现原理：复盘与评估缓存</h4>
+    <p><code>ui.js</code> 中的 <code>enterReview()</code> 保存当前游戏状态为 <code>reviewBaseState</code>，构建每步棋的快照数组 <code>reviewStates</code>。每次导航到新步骤时调用 <code>requestEngineEval()</code> 请求引擎评估，结果缓存到 <code>_reviewEvalCache</code>（v1.0.4 Rev18 起无上限，原 LRU 200 条上限已移除以适配 📚 PGN 缓存管理器的跨会话复盘）。</p>
+    <p>全部分析 <code>reviewAnalyzeAll()</code> 按顺序逐步发送 <code>go depth 22</code>，利用回调驱动机制在每步评估完成后自动推进到下一步，避免并发请求导致引擎混乱。缓存退出复盘后保留，仅在新对局开始时清空。</p>
+    <p>v1.0.4 Rev17 新增持久化存储层：复盘评估缓存现通过 <code>AndroidBridge.persistentSet/persistentGet</code>（SharedPreferences）持久化到 <code>/data/data/com.Regalia/shared_prefs/RegaliaEngine.xml</code>，避免被 Xiaomi HyperOS 3 缓存清理器清除。JS 侧采用<strong>双写 + 回退读取</strong>模式：写入时同时写 localStorage + 持久存储；读取时先读 localStorage（快速路径），失败时回退到持久存储（生存保证）并回写 localStorage。</p>
+    <div class="code-block">
+      <span class="code-label">ui.js — 走法分类算法</span>
+function _classifyMove(evalDelta,isMoverWhite){
+  const isGood=isMoverWhite?
+    (evalDelta&gt;=0):(evalDelta&lt;=0);
+  const absD=Math.abs(evalDelta);
+  if(absD&gt;=300){
+    if(isGood) return{cls:'brilliant',label:'妙着',color:'#00cfff'};
+    return{cls:'blunder',label:'漏着',color:'#c0392b'};
+  }
+  if(absD&gt;=150){
+    if(isGood) return{cls:'great',label:'好着',color:'#27ae60'};
+    return{cls:'mistake',label:'错着',color:'#e67e22'};
+  }
+  if(absD&gt;=50){
+    if(isGood) return{cls:'good',label:'正着',color:'#a0c060'};
+    return{cls:'inaccuracy',label:'缓着',color:'#f0c040'};
+  }
+  return{cls:'book',label:'标准',color:'var(--muted)'};
+}</div>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<!-- ============================================================ -->
+<!-- SECTION 9: 开局库 -->
+<!-- ============================================================ -->
+<div class="section" id="sec9">
+  <div class="section-header">
+    <div class="section-num">第九章</div>
+    <div class="section-title">开局库</div>
+  </div>
+
+  <p>内置 ECO 开局库（A00-E99，500 个变例），含搜索、家族筛选、开局识别和推荐功能。<strong>注意：Chess960 模式下不使用 ECO 开局库</strong>（无固定开局理论）。</p>
+
+  <h3>开局识别卡片</h3>
+  <p>v1.0.1 起，ECO 开局识别卡片与开局推荐栏仅在以下情况显示：</p>
+  <ul class="feature-list">
+    <li><strong>自由开局模式</strong>：未选择特定开局时，根据当前局面自动识别 ECO 编码</li>
+    <li><strong>自选 ECO 开局</strong>：在新游戏设置中选择了内置 ECO 开局时，显示当前开局的 ECO 信息</li>
+  </ul>
+  <p>当通过 FEN 导入或摆棋模式开始游戏时，ECO 开局识别与推荐功能不会显示，避免对非标准开局产生误导。</p>
+  <div class="wireframe">
+    <div class="wireframe-title">ECO 开局识别卡片</div>
+    <div style="border:1px solid #3a2a18;border-radius:4px;padding:10px">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+        <span style="font-size:.85rem">📖</span>
+        <span style="font-weight:700;font-size:.85rem">ECO开局识别</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <span style="background:linear-gradient(145deg,#8e44ad,#6c3483);color:#ffd700;font-size:.72rem;border-radius:4px;border:1px solid rgba(255,215,0,.3);padding:2px 8px;letter-spacing:1px">C42</span>
+        <span style="font-weight:600;font-size:.85rem">俄罗斯防御</span>
+      </div>
+      <div style="color:#a08050;font-size:.8rem">俄罗斯防御家族</div>
+    </div>
+  </div>
+  <p>ECO 标签使用紫色渐变背景 <span class="color-swatch" style="background:linear-gradient(145deg,#8e44ad,#6c3483)"></span> <code>linear-gradient(145deg,#8e44ad,#6c3483)</code> + 金色文字 <span class="color-swatch" style="background:#ffd700"></span> <code>#ffd700</code>，边框 <code>1px solid rgba(255,215,0,.3)</code>。</p>
+
+  <div class="impl-section">
+    <h4>实现原理：ECO 开局库</h4>
+    <p><code>eco-data.js</code> 导出 <code>ECO_DATA</code> 数组（500 条开局记录）和 <code>ECO_BY_FAMILY</code> 家族分组映射。对弈过程中 <code>ui.js</code> 将当前走法序列与 ECO 数据进行前缀匹配，匹配成功后在侧面板显示识别卡片和推荐栏。</p>
+    <p>v1.0.4 Rev32 修复：当开启"AI优先从ECO开局库中选择开局走法"后，连续 3 步由开局库提供 AI 走法后，<code>_aiRetryCount</code> 不再累积——开局库提供走法时重置 <code>_aiRetryCount=0</code>，避免误判"AI 连续 3 次超时失败"导致 AI 不再走棋。</p>
+    <div class="code-block">
+      <span class="code-label">eco-data.js — 数据结构</span>
+const ECO_DATA=[
+  {id:'A00',name:'波兰开局/奥兰斯基开局',
+   moves:'b4',family:'波兰开局'},
+  {id:'A01',name:'尼姆佐维奇-拉尔森进攻',
+   moves:'b3',family:'尼姆佐维奇-拉尔森进攻'},
+  // ... 500 entries total
+];
+const ECO_BY_FAMILY={
+  '波兰开局':['A00'],
+  '西西里防御':['B20','B21',...,'B99'],
+  // ...
+};</div>
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<!-- ============================================================ -->
+<!-- SECTION 10: 辅助功能 -->
+<!-- ============================================================ -->
+<div class="section" id="sec10">
+  <div class="section-header">
+    <div class="section-num">第十章</div>
+    <div class="section-title">辅助功能</div>
+  </div>
+
+  <h3>Syzygy 在线残局库</h3>
+  <p>≤7 子时侧面板显示查询栏，向 <code>tablebase.lichess.ovh</code> 查询精确残局判定：</p>
+  <table>
+    <tr><th>判定</th><th>中文</th><th>颜色</th><th>示例</th></tr>
+    <tr><td>win</td><td>必胜</td><td style="color:#27ae60"><code>#27ae60</code></td><td><span class="color-swatch" style="background:#27ae60"></span></td></tr>
+    <tr><td>draw</td><td>和棋</td><td style="color:#d4a017"><code>#d4a017</code></td><td><span class="color-swatch" style="background:#d4a017"></span></td></tr>
+    <tr><td>loss</td><td>必败</td><td style="color:#c0392b"><code>#c0392b</code></td><td><span class="color-swatch" style="background:#c0392b"></span></td></tr>
+  </table>
+
+  <h3>AI 提示</h3>
+  <p>MultiPV &gt; 1 时多线展示：⭐ 第一线金色 <span class="color-swatch" style="background:#ffd700"></span> <code>#ffd700</code>，后续线灰色 <span class="color-swatch" style="background:#a08050"></span> <code>var(--muted)</code>。v1.0.1 起，多线分析中的走法采用 PGN 标准代数记谱法（SAN）格式显示，而非引擎原始 UCI 格式。例如显示 <code>Nf3 e5 d4</code> 而非 <code>g1f3 e7e5 d2d4</code>。</p>
+
+  <h3>🔮 Ponder 预判提示</h3>
+  <p>当引擎配置中开启 Ponder（预判）模式后，AI 对手走棋完毕时，引擎会继续在后台分析对手可能的应手。预判信息根据当前局面分别显示在不同的区域：</p>
+  <table>
+    <tr><th>显示位置</th><th>触发条件</th><th>显示内容</th></tr>
+    <tr><td>AI 对手栏第三行（右对齐）</td><td>玩家回合，未使用 AI 提示</td><td>🔮 对手预判走法（SAN 格式，如 <code>e5</code>）+ 搜索深度、节点数、评估变化</td></tr>
+    <tr><td>AI 提示栏</td><td>玩家回合，使用 AI 提示功能</td><td>🔮 预判搜索深度、节点数、搜索速度、评估变化 + <strong>预判走法</strong>（SAN 格式，如 <code>e5</code>）</td></tr>
+  </table>
+  <div class="tip-box">
+    <span class="tip-label">提示：</span>Ponder 信息仅在 AI 对手走棋后、玩家思考期间显示。当 AI 正在思考或正在加载提示时，AI 对手栏的 Ponder 信息会自动隐藏，避免干扰。若玩家走出引擎预判的应手，引擎会立即利用已分析的结果（Ponder Hit），实现近乎零延迟的后续回应。
+  </div>
+  <div class="tip-box">
+    <span class="tip-label">条件显示：</span>AI 提示栏中的 Ponder 预判走法在两种场景下显示：(1) 当用户请求提示（💡 AI 提示）时，若引擎返回的 bestmove 后附带 ponder 信息，提示文本会同时显示推荐走法和预判走法（格式：🔦 推荐: Nf3 🔮 预判: e5）；(2) AI 对手栏第三行在引擎后台 Ponder 搜索活跃时显示预判信息。当无预判信息时，不会显示任何 Ponder 相关内容，保持界面简洁。
+  </div>
+
+  <h3>🌐 中/英语言切换</h3>
+  <p>v1.0.1 新增全局中英文切换功能。点击评估栏左侧（评估栏外部）的切换按钮即可切换语言模式：</p>
+  <table>
+    <tr><th>当前模式</th><th>按钮显示</th><th>切换后</th></tr>
+    <tr><td>中文模式</td><td><code>↔️中</code></td><td>切换至英文模式</td></tr>
+    <tr><td>英文模式</td><td><code>↔️EN</code></td><td>切换至中文模式</td></tr>
+  </table>
+  <p>切换至英文模式后，界面上所有用户可见的文字均会显示为英文，包括：工具栏按钮文字、AI 对手栏和玩家栏标签、侧面板卡片标题、新游戏对话框所有选项、引擎配置对话框所有标签和说明、游戏结束提示语、Toast 通知消息、关于页面信息、前台服务通知。</p>
+  <div class="tip-box">
+    <span class="tip-label">自动检测：</span>应用首次启动时，会根据 Android 系统语言设置自动选择界面语言：系统语言为中文时默认中文模式，其他语言默认英文模式。之后语言偏好会保存在本地存储中，手动切换后不再自动变更。
+  </div>
+  <div class="tip-box">
+    <span class="tip-label">v1.0.4 Rev17 持久化：</span>语言偏好现通过 SharedPreferences 持久化（<code>kv_Regalia_lang</code>），避免被 HyperOS 3 缓存清理器清除。JS 侧采用<strong>双写 + 回退读取</strong>模式。
+  </div>
+
+  <h3>格子控制信息</h3>
+  <p>开启 🌈 后显示 📍 控制信息卡片：我方 <span class="color-swatch" style="background:#4a90d9"></span> <code>#4a90d9</code>，对方 <span class="color-swatch" style="background:#c0392b"></span> <code>#c0392b</code>。控制信息面板中的棋子名称（PN）显示支持国际化：中文模式下显示中文棋子名称（王、后、车、象、马、兵），英文模式下显示英文缩写（K、Q、R、B、N、P），与界面语言设置保持一致。</p>
+
+  <h3>棋理提示</h3>
+  <p>十大棋理原则按四大战略维度编排，随界面语言自动切换：中文模式显示中文棋理，英文模式显示英文棋理。</p>
+  <details>
+  <summary>中文版棋理原则</summary>
+  <p style="color:var(--muted);font-size:13px;margin-bottom:8px">一、开局三大黄金法则（奠定胜局基石）</p>
+  <ol class="principle-list">
+    <li><strong>中心控制</strong>：尽早控制中心格(d4,d5,e4,e5)，最大化子力效能，限制对手发展空间</li>
+    <li><strong>快速出子</strong>：尽快出动轻子（马、象）投入战斗，避免重复走子，尽早王车易位确保王安全</li>
+    <li><strong>王的安全</strong>：不要轻率推进王城兵（f,g,h兵），尽早易位将王藏于兵盾之后</li>
+  </ol>
+  <p style="color:var(--muted);font-size:13px;margin:10px 0 8px">二、兵型与空间管理（位置战的灵魂）</p>
+  <ol class="principle-list" style="counter-reset:principle 3">
+    <li><strong>兵链完整</strong>：避免孤兵、叠兵和落后兵，维持相互保护的兵链以确保阵地稳固</li>
+    <li><strong>空间优势</strong>：用兵链向前推进挤压对手空间，使其子力互相干涉、协调困难</li>
+    <li><strong>通路兵</strong>：制造并推进通路兵（尤其是连接通路兵），它是中残局的终极武器</li>
+  </ol>
+  <p style="color:var(--muted);font-size:13px;margin:10px 0 8px">三、子力运用与协同（战术与攻击的利刃）</p>
+  <ol class="principle-list" style="counter-reset:principle 6">
+    <li><strong>子力协调</strong>：棋子间相互支援、合力攻击同一目标，避免单子盲目深入而无后援</li>
+    <li><strong>开放线</strong>：迅速用车（或双车重叠）占领开放线和半开放线，入侵敌方底线</li>
+  </ol>
+  <p style="color:var(--muted);font-size:13px;margin:10px 0 8px">四、中局战略与局面判断（高阶博弈智慧）</p>
+  <ol class="principle-list" style="counter-reset:principle 8">
+    <li><strong>侧翼突破</strong>：中心封闭时，沿兵链指向的侧翼发起兵突破，打开战线</li>
+    <li><strong>兑换原则</strong>：占优时主动兑换简化局面导入胜势残局，劣势时保留复杂以寻找反击</li>
+  </ol>
+  </details>
+  <details>
+  <summary>English Chess Principles</summary>
+  <p style="color:var(--muted);font-size:13px;margin-bottom:8px">I. Three Golden Opening Rules (Foundation of Victory)</p>
+  <ol class="principle-list">
+    <li><strong>Center Control</strong>: Seize center squares (d4, d5, e4, e5) early to maximize piece efficiency and restrict the opponent's development</li>
+    <li><strong>Piece Development</strong>: Develop minor pieces (Knights, Bishops) quickly into battle; avoid moving the same piece twice; castle early to safeguard the King</li>
+    <li><strong>King Safety</strong>: Do not push kingside pawns (f, g, h) prematurely; castle early to tuck the King behind the pawn shield</li>
+  </ol>
+  <p style="color:var(--muted);font-size:13px;margin:10px 0 8px">II. Pawn Structure &amp; Space Management (Soul of Positional Play)</p>
+  <ol class="principle-list" style="counter-reset:principle 3">
+    <li><strong>Pawn Structure</strong>: Avoid isolated, doubled, and backward pawns; maintain a mutually protective pawn chain to secure your position</li>
+    <li><strong>Space Advantage</strong>: Advance your pawn chain to squeeze the opponent's space, causing their pieces to interfere with each other</li>
+    <li><strong>Passed Pawns</strong>: Create and advance passed pawns (especially connected passed pawns) — they are the ultimate weapon in the middlegame and endgame</li>
+  </ol>
+  <p style="color:var(--muted);font-size:13px;margin:10px 0 8px">III. Piece Play &amp; Coordination (Tactical Edge)</p>
+  <ol class="principle-list" style="counter-reset:principle 6">
+    <li><strong>Piece Coordination</strong>: Ensure pieces support each other and attack the same target; avoid sending a single piece deep without backup</li>
+    <li><strong>Open Files</strong>: Quickly occupy open and semi-open files with Rooks (or doubled Rooks) to invade the opponent's back rank</li>
+  </ol>
+  <p style="color:var(--muted);font-size:13px;margin:10px 0 8px">IV. Middlegame Strategy &amp; Judgment (Advanced Wisdom)</p>
+  <ol class="principle-list" style="counter-reset:principle 8">
+    <li><strong>Flank Breakthrough</strong>: When the center is locked, launch a pawn break on the flank where your pawn chain points</li>
+    <li><strong>Exchange Principle</strong>: Simplify into a winning endgame when ahead; keep the position complex to find counterplay when behind</li>
+  </ol>
+  </details>
+
+  <div class="impl-section">
+    <h4>实现原理：Syzygy 残局库</h4>
+    <p><code>tablebase.js</code> 通过 <code>fetch()</code> 请求 Lichess Tablebase API（<code>https://tablebase.lichess.ovh/standard</code>），返回 JSON 格式的残局数据。查询结果按 FEN 缓存到 <code>_tbCache</code>（Map），避免重复请求。</p>
+    <div class="code-block">
+      <span class="code-label">tablebase.js — 残局库查询</span>
+async function queryTablebase(fen){
+  const url='https://tablebase.lichess.ovh/standard?fen='
+    +encodeURIComponent(fen);
+  const resp=await fetch(url);
+  const data=await resp.json();
+  _tbCache.set(fen,data); // 缓存结果
+  return data;
+}</div>
+  </div>
+
+  <h3>📚 PGN 缓存管理 / PGN Cache Manager <span class="new-tag">v1.0.4 Rev18 + Rev20 + Rev21 + Rev22</span></h3>
+  <p>复盘界面的工具栏中，<code>💬变例</code> 开关右侧新增 <strong>🌗/🌈 控制范围</strong>按钮、<strong>📝 PGN</strong> 按钮，紧随其后为 <strong>📚 按钮</strong>（PGN 缓存管理）。点击 📚 弹出"📚PGN缓存管理"窗口。此功能让用户可以将当前对局的 PGN 保存为命名缓存条目，之后随时一键导入，避免重复粘贴 PGN 文本。缓存文件存储于应用私有目录 <code>/data/data/com.Regalia/files/pgn_cache/</code>，与第17次修订的 SharedPreferences 持久化层同属<strong>不会被</strong>小米澎湃OS 3 缓存清理器清除的目录。第20次修订（Rev20）新增<strong>重命名</strong>（✏️）与<strong>添加标签</strong>（🔖）功能。第21次修订（Rev21）新增<strong>按标签筛选/搜索</strong>功能。第22次修订（Rev22）<strong>移除冗余的 🔍 按钮</strong>（键盘回车键直接触发搜索，软键盘显示搜索键图标），并将 ✏️/🔖/📥 三个按钮从纵向排列改为<strong>同一行横向排列</strong>。</p>
+
+  <div class="impl-section">
+    <h4>缓存管理窗口示意图 / Cache Manager Mockup</h4>
+    <h4 style="font-size:10pt;color:#887860;border:none;margin-top:-4px">Cache Manager UI Mockup (Rev22 — 回车键触发搜索 + 按钮横向排列)</h4>
+    <div style="background:#1a0a0a;border:1px solid rgba(212,160,23,.4);border-radius:8px;padding:16px;margin:12px 0;font-family:system-ui,-apple-system,sans-serif;max-width:520px">
+      <!-- Modal title -->
+      <div style="text-align:center;color:#ffd700;font-size:1rem;font-weight:700;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid rgba(212,160,23,.25)">📚PGN缓存管理</div>
+      <!-- v1.0.4 Rev22: Search box (removed redundant 🔍 button — Enter key triggers search directly) -->
+      <div style="display:flex;gap:6px;margin:8px 0;align-items:center;flex-wrap:wrap">
+        <input type="search" placeholder="搜索名称或标签…" enterkeyhint="search" style="flex:1;min-width:120px;background:rgba(42,21,32,.6);color:#f5e6c8;border:1px solid rgba(212,160,23,.3);border-radius:4px;padding:5px 8px;font-size:.78rem" />
+      </div>
+      <!-- v1.0.4 Rev21: Tag chips quick-filter row -->
+      <div style="display:flex;flex-wrap:wrap;gap:4px;margin:4px 0 8px;font-size:.68rem">
+        <button style="background:rgba(212,160,23,.4);color:#1a0a0a;border:1px solid #d4a017;border-radius:4px;padding:2px 8px;font-size:.68rem;cursor:pointer">全部</button>
+        <button style="background:rgba(212,160,23,.15);color:#d4a017;border:1px solid rgba(212,160,23,.3);border-radius:4px;padding:2px 8px;font-size:.68rem;cursor:pointer">开局</button>
+        <button style="background:rgba(212,160,23,.15);color:#d4a017;border:1px solid rgba(212,160,23,.3);border-radius:4px;padding:2px 8px;font-size:.68rem;cursor:pointer">残局</button>
+        <button style="background:rgba(212,160,23,.15);color:#d4a017;border:1px solid rgba(212,160,23,.3);border-radius:4px;padding:2px 8px;font-size:.68rem;cursor:pointer">战术</button>
+        <button style="background:rgba(212,160,23,.15);color:#d4a017;border:1px solid rgba(212,160,23,.3);border-radius:4px;padding:2px 8px;font-size:.68rem;cursor:pointer">学习</button>
+        <button style="background:rgba(212,160,23,.15);color:#d4a017;border:1px solid rgba(212,160,23,.3);border-radius:4px;padding:2px 8px;font-size:.68rem;cursor:pointer">白方胜</button>
+      </div>
+      <!-- Toolbar -->
+      <div style="display:flex;align-items:center;gap:6px;margin:8px 0;font-size:.72rem;color:#a08050;flex-wrap:wrap">
+        <button style="background:rgba(212,160,23,.15);color:#d4a017;border:1px solid rgba(212,160,23,.3);border-radius:4px;padding:4px 10px;font-size:.7rem;cursor:pointer">全选</button>
+        <button style="background:rgba(212,160,23,.15);color:#d4a017;border:1px solid rgba(212,160,23,.3);border-radius:4px;padding:4px 10px;font-size:.7rem;cursor:pointer">全不选</button>
+        <span style="margin-left:auto">3 个缓存</span>
+      </div>
+      <!-- Cache list -->
+      <div style="display:flex;flex-direction:column;gap:6px;max-height:320px;overflow-y:auto">
+        <!-- Entry 1 (with tags) -->
+        <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:rgba(42,21,32,.5);border:1px solid rgba(212,160,23,.25);border-radius:6px">
+          <input type="checkbox" checked style="cursor:pointer;flex-shrink:0;width:18px;height:18px;margin-top:2px" />
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:600;color:#f5e6c8;font-size:.88rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">我的对局</div>
+            <div style="font-size:.7rem;color:#a08050;margin-top:2px">1.2 KB · 06-22 15:30</div>
+            <div style="font-size:.68rem;color:#d4a017;margin-top:3px;display:flex;flex-wrap:wrap;gap:3px">
+              <span style="background:rgba(212,160,23,.18);padding:1px 6px;border-radius:8px;border:1px solid rgba(212,160,23,.3);white-space:nowrap;cursor:pointer">开局</span>
+              <span style="background:rgba(212,160,23,.18);padding:1px 6px;border-radius:8px;border:1px solid rgba(212,160,23,.3);white-space:nowrap;cursor:pointer">白方胜</span>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:row;gap:4px;flex-shrink:0;align-items:flex-start">
+            <button style="background:rgba(212,160,23,.15);color:#d4a017;border:1px solid rgba(212,160,23,.3);border-radius:4px;padding:4px 8px;font-size:.7rem;cursor:pointer">✏️</button>
+            <button style="background:rgba(212,160,23,.15);color:#d4a017;border:1px solid rgba(212,160,23,.3);border-radius:4px;padding:4px 8px;font-size:.7rem;cursor:pointer">🔖</button>
+            <button style="background:rgba(212,160,23,.15);color:#d4a017;border:1px solid rgba(212,160,23,.3);border-radius:4px;padding:4px 8px;font-size:.7rem;cursor:pointer">📥</button>
+          </div>
+        </div>
+        <!-- Entry 2 -->
+        <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:rgba(42,21,32,.5);border:1px solid rgba(212,160,23,.25);border-radius:6px">
+          <input type="checkbox" style="cursor:pointer;flex-shrink:0;width:18px;height:18px;margin-top:2px" />
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:600;color:#f5e6c8;font-size:.88rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">卡尔斯巴德结构</div>
+            <div style="font-size:.7rem;color:#a08050;margin-top:2px">2.8 KB · 06-21 14:15</div>
+            <div style="font-size:.68rem;color:#d4a017;margin-top:3px;display:flex;flex-wrap:wrap;gap:3px">
+              <span style="background:rgba(212,160,23,.18);padding:1px 6px;border-radius:8px;border:1px solid rgba(212,160,23,.3);white-space:nowrap;cursor:pointer">残局</span>
+              <span style="background:rgba(212,160,23,.18);padding:1px 6px;border-radius:8px;border:1px solid rgba(212,160,23,.3);white-space:nowrap;cursor:pointer">战术</span>
+              <span style="background:rgba(212,160,23,.18);padding:1px 6px;border-radius:8px;border:1px solid rgba(212,160,23,.3);white-space:nowrap;cursor:pointer">学习</span>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:row;gap:4px;flex-shrink:0;align-items:flex-start">
+            <button style="background:rgba(212,160,23,.15);color:#d4a017;border:1px solid rgba(212,160,23,.3);border-radius:4px;padding:4px 8px;font-size:.7rem;cursor:pointer">✏️</button>
+            <button style="background:rgba(212,160,23,.15);color:#d4a017;border:1px solid rgba(212,160,23,.3);border-radius:4px;padding:4px 8px;font-size:.7rem;cursor:pointer">🔖</button>
+            <button style="background:rgba(212,160,23,.15);color:#d4a017;border:1px solid rgba(212,160,23,.3);border-radius:4px;padding:4px 8px;font-size:.7rem;cursor:pointer">📥</button>
+          </div>
+        </div>
+        <!-- Entry 3 (no tags) -->
+        <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:rgba(42,21,32,.5);border:1px solid rgba(212,160,23,.25);border-radius:6px">
+          <input type="checkbox" checked style="cursor:pointer;flex-shrink:0;width:18px;height:18px;margin-top:2px" />
+          <div style="flex:1;min-width:0">
+            <div style="font-weight:600;color:#f5e6c8;font-size:.88rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">西西里防御·实测</div>
+            <div style="font-size:.7rem;color:#a08050;margin-top:2px">3.5 KB · 06-20 09:45</div>
+          </div>
+          <div style="display:flex;flex-direction:row;gap:4px;flex-shrink:0;align-items:flex-start">
+            <button style="background:rgba(212,160,23,.15);color:#d4a017;border:1px solid rgba(212,160,23,.3);border-radius:4px;padding:4px 8px;font-size:.7rem;cursor:pointer">✏️</button>
+            <button style="background:rgba(212,160,23,.15);color:#d4a017;border:1px solid rgba(212,160,23,.3);border-radius:4px;padding:4px 8px;font-size:.7rem;cursor:pointer">🔖</button>
+            <button style="background:rgba(212,160,23,.15);color:#d4a017;border:1px solid rgba(212,160,23,.3);border-radius:4px;padding:4px 8px;font-size:.7rem;cursor:pointer">📥</button>
+          </div>
+        </div>
+      </div>
+      <!-- Bottom buttons -->
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px;padding-top:10px;border-top:1px solid rgba(212,160,23,.25)">
+        <button style="background:linear-gradient(145deg,#d4a017,#8b6914);color:#1a0a0a;border:none;border-radius:4px;padding:8px 12px;font-size:.82rem;font-weight:700;cursor:pointer;flex:1">💾 保存当前PGN到缓存</button>
+        <button style="background:rgba(255,100,100,.15);color:#ff8080;border:1px solid rgba(255,100,100,.4);border-radius:4px;padding:8px 12px;font-size:.82rem;cursor:pointer;flex:1">🗑️ 删除选中 (2)</button>
+        <button style="background:rgba(212,160,23,.15);color:#a08050;border:1px solid rgba(212,160,23,.3);border-radius:4px;padding:8px 12px;font-size:.82rem;cursor:pointer;flex:1">关闭</button>
+      </div>
+    </div>
+    <p style="font-size:.78rem;color:#a08050;margin-top:8px"><em>示意图：缓存管理窗口在中文模式下的显示效果（Rev24 版本）。<strong>顶部搜索栏 + 标签胶囊快筛行</strong>——输入关键词后<strong>按软键盘上的搜索键（回车键）直接应用筛选</strong>（Rev22 移除了冗余的 🔍 按钮），或直接点击任一标签胶囊按该标签筛选。条目下方的标签胶囊也可点击触发筛选。<strong>点击条目名称即可导入该条目</strong>（Rev24 移除了冗余的 📥 按钮——直接点击条目名称即可完成导入）。每条目右侧<strong>同一行横向排列</strong>两个图标按钮：<strong>✏️ 重命名</strong>、<strong>🔖 添加标签</strong>。</em></p>
+
+    <h4>复盘工具栏按钮布局 / Review Toolbar Button Layout</h4>
+    <div style="background:#1a0a0a;border:1px solid rgba(212,160,23,.4);border-radius:8px;padding:12px;margin:12px 0;font-family:system-ui,-apple-system,sans-serif">
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:center;font-size:.78rem">
+        <span style="color:#a08050">💬变例</span>
+        <span style="background:rgba(212,160,23,.15);color:#d4a017;border:1px solid rgba(212,160,23,.3);border-radius:4px;padding:4px 10px">🌗</span>
+        <span style="background:rgba(212,160,23,.15);color:#d4a017;border:1px solid rgba(212,160,23,.3);border-radius:4px;padding:4px 10px">📝 PGN</span>
+        <span style="background:rgba(212,160,23,.15);color:#d4a017;border:1px solid rgba(212,160,23,.3);border-radius:4px;padding:4px 10px">💾</span>
+        <span style="background:linear-gradient(145deg,rgba(155,89,182,.4),rgba(155,89,182,.2));color:#bb8fce;border:2px solid rgba(155,89,182,.7);border-radius:4px;padding:4px 10px;font-weight:700">📚</span>
+        <span style="background:rgba(212,160,23,.15);color:#d4a017;border:1px solid rgba(212,160,23,.3);border-radius:4px;padding:4px 10px">📝 FEN</span>
+        <span style="background:rgba(212,160,23,.15);color:#d4a017;border:1px solid rgba(212,160,23,.3);border-radius:4px;padding:4px 10px">🗃️</span>
+        <span style="background:rgba(212,160,23,.15);color:#d4a017;border:1px solid rgba(212,160,23,.3);border-radius:4px;padding:4px 10px">📊</span>
+        <span style="background:rgba(212,160,23,.15);color:#d4a017;border:1px solid rgba(212,160,23,.3);border-radius:4px;padding:4px 10px">返回对局</span>
+      </div>
+      <p style="text-align:center;font-size:.72rem;color:#a08050;margin-top:8px">v1.0.4 Rev20 按钮顺序：<code>💬变例 → 🌗/🌈 → 📝 PGN → 💾 → 📚 → 📝 FEN → 🗃️ → 📊 → 返回对局</code>。🌗/🌈 已调整至变例开关右侧、📝 PGN 左侧。</p>
+    </div>
+  </div>
+
+  <table>
+    <tr><th>操作 / Action</th><th>触发方式 / Trigger</th><th>效果 / Effect</th></tr>
+    <tr><td>打开缓存管理器 / Open cache manager</td><td>点击 📚 按钮 / Click 📚 button</td><td>弹出模态窗口，加载缓存列表（含标签）/ Opens modal, loads cache list (with tags)</td></tr>
+    <tr><td>保存当前 PGN / Save current PGN</td><td>点击"💾 保存当前PGN到缓存" / Click "💾 Save current PGN to cache"</td><td>弹出命名对话框，保存到 pgn_cache/&lt;name&gt;.pgn / Prompts for name, saves to pgn_cache/&lt;name&gt;.pgn</td></tr>
+    <tr><td>导入缓存 / Import cache</td><td>点击条目名或"📥"按钮 / Click entry name or "📥" button</td><td>同步更新复盘与主界面走法记录 / Syncs both review and main move list</td></tr>
+    <tr><td><strong>重命名 / Rename</strong> <span class="new-tag">v1.0.4 Rev20</span></td><td>点击"✏️"按钮 / Click "✏️" button</td><td>弹出对话框预填原名，输入新名后原子重命名 PGN 文件 + 关联标签文件 / Prompts with current name; atomically renames both .pgn and .tags.json</td></tr>
+    <tr><td><strong>添加标签 / Add Tags</strong> <span class="new-tag">v1.0.4 Rev20</span></td><td>点击"🔖"按钮 / Click "🔖" button</td><td>弹出对话框预填已有标签（逗号分隔），输入后保存到 pgn_cache/&lt;name&gt;.tags.json；最多 10 个标签，每个 ≤30 字符</td></tr>
+    <tr><td><strong>文本搜索 / Text search</strong> <span class="new-tag">v1.0.4 Rev21 + Rev22</span></td><td>在搜索框输入关键词，<strong>按软键盘搜索键（回车键）</strong></td><td>筛选匹配名称（子串）或标签（子串）的条目，大小写不敏感。Rev22 移除了冗余的 🔍 按钮，回车键直接触发搜索</td></tr>
+    <tr><td><strong>按标签胶囊快筛 / Filter by tag chip</strong> <span class="new-tag">v1.0.4 Rev21</span></td><td>点击顶部标签胶囊行中的任一标签 / Click any tag chip in the top quick-filter row</td><td>仅显示含该标签的条目；激活的胶囊高亮显示；点击"全部"清除筛选</td></tr>
+    <tr><td><strong>条目内标签胶囊可点击 / Clickable in-entry tag chips</strong> <span class="new-tag">v1.0.4 Rev21</span></td><td>点击条目下方的任一标签胶囊 / Click any tag chip below an entry's name</td><td>立即按该标签筛选，无需打开搜索框</td></tr>
+    <tr><td><strong>清除筛选 / Clear filter</strong> <span class="new-tag">v1.0.4 Rev21</span></td><td>点击 ✕ 按钮（筛选激活时显示）或"全部"胶囊</td><td>清除当前筛选，显示所有条目</td></tr>
+    <tr><td>选择条目 / Select entry</td><td>点击复选框或条目行</td><td>切换选中状态，底部显示"删除选中(N)"按钮</td></tr>
+    <tr><td>全选/全不选 / Select All / None</td><td>点击工具栏按钮</td><td>批量选中或清除所有条目（筛选激活时仅操作可见条目）</td></tr>
+    <tr><td>批量删除 / Batch delete</td><td>点击"🗑️ 删除选中(N)"</td><td>弹出确认对话框，确认后删除（含关联标签文件）</td></tr>
+    <tr><td>关闭窗口 / Close modal</td><td>点击"关闭"按钮 / 点击遮罩层外部 / Android 返回键</td><td>关闭窗口，清除选中状态与筛选状态</td></tr>
+  </table>
+
+  <div class="impl-section">
+    <h4>实现原理：缓存底层存储</h4>
+    <p>缓存文件存储于应用私有目录 <code>/data/data/com.Regalia/files/pgn_cache/&lt;name&gt;.pgn</code>。该目录与 SharedPreferences（<code>/data/data/com.Regalia/shared_prefs/</code>）同属应用私有数据区，<strong>不会被</strong>小米澎湃OS 3 的缓存清理器清除——仅能由应用自身或用户执行"清除数据"（非"清除缓存"）操作删除。</p>
+    <div class="code-block">
+      <span class="code-label">StockfishNative.java — PGN 缓存 Java 接口</span>
+@JavascriptInterface
+public String listPGNCaches() {
+  // 返回 JSON: [{name, size, mtime}, ...] 按 mtime 倒序
+  File dir = new File(context.getFilesDir(), "pgn_cache");
+  File[] files = dir.listFiles();
+  // ... 构建并返回 JSON 数组 ...
+}
+
+@JavascriptInterface
+public boolean savePGNCache(String name, String pgn) {
+  String safe = _sanitizeCacheName(name); // 剥离路径分隔符 + 控制字符
+  File file = new File(_pgnCacheDir(), safe + ".pgn");
+  // 写入 UTF-8 文本 ...
+}
+
+@JavascriptInterface
+public String getPGNCache(String name) { /* 读取 PGN 文本 */ }
+
+@JavascriptInterface
+public int deletePGNCaches(String namesJson) {
+  // 接收 JSON 字符串数组，批量删除，返回删除数量
+}</div>
+    <p>JS 侧通过 <code>AndroidBridge.listPGNCaches/savePGNCache/getPGNCache/deletePGNCaches</code> 调用上述方法。所有调用包在 <code>try/catch</code> 中，确保极老 WebView 不支持 Java 接口时不会崩溃。</p>
+  </div>
+
+  <div class="tip-box">
+    <span class="tip-label">跨会话复盘：</span>结合第17次修订的 SharedPreferences 持久化层，缓存管理器实现了完整的跨会话复盘工作流：1) 在某次复盘时点击 📚 → "保存当前PGN到缓存" → 命名保存；2) 退出应用、重启手机、清理加速——这些操作都不会清除缓存；3) 下次打开应用 → 进入复盘 → 点击 📚 → 点击缓存条目 → 一键导入，立即恢复对局。
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<!-- ============================================================ -->
+<!-- SECTION 11: 法律许可 -->
+<!-- ============================================================ -->
+<div class="section" id="sec11">
+  <div class="section-header">
+    <div class="section-num">第十一章</div>
+    <div class="section-title">法律许可</div>
+  </div>
+
+  <p>Regalia 是一款<strong>双重许可</strong>（AGPL v3 + GPL v3）的开源组合作品。其开发与分发遵循以下许可协议：</p>
+
+  <h3>组合作品许可</h3>
+  <p>Regalia 是一个组合作品，不同组件采用不同许可：</p>
+  <table>
+    <tr><th>组件</th><th>许可</th><th>许可文件</th></tr>
+    <tr><td>原创应用代码（UI、WebView、服务、构建脚本）</td><td>AGPL v3</td><td>LICENSE-AGPL v3</td></tr>
+    <tr><td>DroidFish 衍生代码（引擎管理、棋理逻辑、PGN 解析、UI 模式）</td><td>GPL v3</td><td>LICENSE-GPL v3</td></tr>
+    <tr><td>Stockfish 18 引擎二进制</td><td>GPL v3</td><td>LICENSE-GPL v3</td></tr>
+    <tr><td>ECO 开局数据</td><td>CC0（数据）/ AGPL v3（代码）</td><td>—</td></tr>
+    <tr><td>应用图标</td><td>AI 生成 / AGPL v3</td><td>—</td></tr>
+  </table>
+  <p>根据 GPL v3 第 13 条，这些许可对于组合使用是兼容的。每个组件保留其原始许可。由于 AGPL v3 施加更严格的网络交互条款（第 13 条），其义务实际上扩展到整个组合作品，确保通过网络访问作品的用户保留获取源代码的权利。</p>
+
+  <p><strong>源代码仓库：</strong><a href="https://github.com/YDW99/Regalia" style="color:var(--accent2)">https://github.com/YDW99/Regalia</a></p>
+
+  <h3>GPL v3 文件（DroidFish 衍生）</h3>
+  <ul class="feature-list">
+    <li><code>StockfishNative.java</code> — 引擎管理逻辑</li>
+    <li><code>engine_jni.cpp</code> — DroidFish 衍生的原生 chmod/renice</li>
+    <li><code>game-logic.js</code> — PGN 消歧与 SAN 记谱</li>
+    <li><code>ai-bridge.js</code> — 引擎通信模式</li>
+    <li><code>ui.js</code> — UI 布局与交互模式</li>
+    <li><code>tablebase.js</code> — PGN 解析（GameTree/PgnToken/PgnScanner）</li>
+  </ul>
+
+  <h3>AGPL v3 文件（原创）</h3>
+  <ul class="feature-list">
+    <li><code>MainActivity.java</code>、<code>ChessApp.java</code>、<code>ChessWebViewClient.java</code>、<code>EngineService.java</code></li>
+    <li><code>eco-data.js</code>、<code>index.html.tpl</code>、<code>CMakeLists.txt</code></li>
+    <li><code>build-chess.py</code>、<code>build-chess.sh</code></li>
+    <li>所有其他未在上文列出的项目文件</li>
+  </ul>
+
+  <div class="code-block">
+    <span class="code-label">AGPL v3 许可声明</span>
+Regalia v1.0.4 User Manual
+Copyright (C) 2026 Regalia
+
+This document is part of the Regalia project, licensed under
+GNU Affero General Public License v3 (AGPL v3).
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program. If not, see &lt;https://www.gnu.org/licenses/&gt;.</div>
+
+  <h3>第三方组件</h3>
+  <table>
+    <tr><th>组件</th><th>许可</th><th>用途</th></tr>
+    <tr><td>DroidFish</td><td>GPL v3</td><td>引擎管理、棋理逻辑、PGN 解析、UI 模式（Copyright © Peter Österlund）</td></tr>
+    <tr><td>Stockfish 18</td><td>GPL v3</td><td>国际象棋引擎（arm64-v8a-dotprod 原生编译）（Copyright © T. Romstad, M. Costalba, J. Kiiski, G. Linscott）</td></tr>
+    <tr><td>Lichess Tablebase API</td><td>公开 API</td><td>Syzygy 在线残局库查询（需网络）</td></tr>
+    <tr><td>lichess-org/chess-openings</td><td>CC0</td><td>ECO 开局分类数据</td></tr>
+    <tr><td>Gradle</td><td>Apache 2.0</td><td>构建工具</td></tr>
+  </table>
+  <p>完整归属详情见 <code>NOTICE</code> 文件。更多声明文件保存在 <code>NOTICE-DroidFish</code> 和 <code>AUTHORS-stockfish</code> 中。</p>
+
+  <div style="text-align:center;margin:20px 0">
+    <div style="display:inline-block;border:3px solid #d4a017;padding:14px 24px;background:linear-gradient(145deg,rgba(139,105,20,.18),rgba(255,215,0,.08));border-radius:0">
+      <div style="font-size:14pt;font-weight:900;color:#ffd700;letter-spacing:4px">AGPL v3</div>
+      <div style="font-size:9pt;color:#b8a080;margin-top:4px;letter-spacing:2px">GNU Affero General Public License v3</div>
+    </div>
+  </div>
+
+  <h3>商标声明</h3>
+  <p>"Regalia" 仅作为本开源国际象棋应用的项目名称使用，不主张任何商标权利。任何人都可以自由 fork 并重命名自己的版本。Stockfish 是 Stockfish 开源社区的商标。Android 是 Google LLC 的商标。Xiaomi HyperOS 是小米公司的商标。本应用与上述商标持有人无任何从属或认可关系。</p>
+
+  <h3>免责声明</h3>
+  <p>本应用按"现状"提供，不附带任何明示或暗示的担保。在适用法律允许的最大范围内，作者不对因使用本应用而产生的任何直接、间接、附带、特殊或后果性损害承担责任。本应用内置的 Stockfish 18 引擎按 GPLv3 许可分发，其性能与准确性由 Stockfish 开源社区维护。</p>
+
+  <h3>开源贡献</h3>
+  <p>Regalia 欢迎社区贡献。源代码仓库地址、issue tracker 与 pull request 流程详见项目 README。提交贡献即表示您同意将您的贡献按 AGPL v3 许可发布。</p>
+</div>
+
+<hr class="section-divider">
+
+<!-- ============================================================ -->
+<!-- SECTION 12: 菲舍尔任意制象棋 (Chess960) -->
+<!-- ============================================================ -->
+<div class="section" id="sec12">
+  <div class="section-header">
+    <div class="section-num">第十二章</div>
+    <div class="section-title">菲舍尔任意制象棋（Chess960）</div>
+  </div>
+
+  <p><strong>菲舍尔任意制象棋</strong>（Fischer Random Chess，又称 Chess960 / FR Chess）由前世界冠军鲍比·菲舍尔（Bobby Fischer）于 1996 年提出，旨在消除开局理论记忆的优势，让对局从第一步起即考验棋手的实战创造力。其核心创新是：将后排棋子的起始位置在 960 种合法排列中随机选取，但保留双方对称性、保留王车易位后的标准终点（王终至 g1/c1，车终至 f1/d1）。</p>
+
+  <h3>960 种起始位置的命名</h3>
+  <p>每种合法起始位置以 <strong>SP-ID（Starting Position Identifier）</strong> 编号 0..959 标识。SP-ID 518 即为标准国际象棋的起始位置（RNBQKBNR），用于回归测试与对照。</p>
+  <table>
+    <tr><th>SP-ID</th><th>白方底排排列</th><th>说明</th></tr>
+    <tr><td>0</td><td>BBQNNRKR</td><td>象在同色格的最左排列之一</td></tr>
+    <tr><td>518</td><td>RNBQKBNR</td><td>标准国际象棋起始位置（回归测试基准）</td></tr>
+    <tr><td>959</td><td>RKRNNQBB</td><td>编号最大的一种排列</td></tr>
+  </table>
+
+  <h3>合法起始位置的约束</h3>
+  <p>Chess960 的合法起始位置必须满足以下四条规则（共生成 960 种排列）：</p>
+  <ul class="feature-list">
+    <li><strong>双象异色格</strong>：两个象必须分别位于浅色格和深色格（避免同色格双象）</li>
+    <li><strong>双车夹王</strong>：王必须位于两个车之间（不能在最左或最右）</li>
+    <li><strong>对称性</strong>：黑方底排排列与白方镜像（如白方 BBQNNRKR 对应黑方 bbqnnrkr）</li>
+    <li><strong>棋子总数</strong>：每方底排恰好 1 王、1 后、2 车、2 象、2 马</li>
+  </ul>
+
+  <h3>SP-ID 选择方式</h3>
+  <p>新游戏对话框中开启 Chess960 后，下方显示"菲舍尔任意制象棋"专属设置区，提供以下三种方式选择 SP-ID：</p>
+  <ol class="step-list">
+    <li><strong>🎲 随机按钮</strong>：从 0..959 中均匀随机选取一个 SP-ID（推荐，最纯粹的 Chess960 体验）</li>
+    <li><strong>手动输入</strong>：在文本框中输入 0..959 范围内的整数</li>
+    <li><strong>预览</strong>：底排棋子图示实时显示当前 SP-ID 的起始排列（SP-ID 518 显示 <code>♖&nbsp;♘&nbsp;♗&nbsp;♕&nbsp;♔&nbsp;♗&nbsp;♘&nbsp;♖</code>）</li>
+  </ol>
+
+  <h3>Chess960 王车易位规则 <span class="new-tag">v1.0.4 Rev34 修复</span></h3>
+  <p>Chess960 的王车易位规则是初学者最易混淆的部分。核心原则：王车易位后王与车的<strong>终点</strong>与标准象棋完全相同——短易位（O-O）王终至 g1，车终至 f1；长易位（O-O-O）王终至 c1，车终至 d1。但<strong>起始位置</strong>因 SP-ID 不同而变化。</p>
+  <table>
+    <tr><th>项目</th><th>标准象棋</th><th>Chess960</th></tr>
+    <tr><td>王起始列</td><td>固定 e1（列 4）</td><td>SP-ID 决定（b1-g1 任意列）</td></tr>
+    <tr><td>短易位车起始列</td><td>固定 h1（列 7）</td><td>SP-ID 决定（王右侧最近的车）</td></tr>
+    <tr><td>长易位车起始列</td><td>固定 a1（列 0）</td><td>SP-ID 决定（王左侧最近的车）</td></tr>
+    <tr><td>王终点</td><td>g1 / c1</td><td>g1 / c1（与标准象棋相同）</td></tr>
+    <tr><td>车终点</td><td>f1 / d1</td><td>f1 / d1（与标准象棋相同）</td></tr>
+  </table>
+
+  <h4>易位合法性条件</h4>
+  <ol class="principle-list">
+    <li><strong>王与车均未移动过</strong>（易位权完整）</li>
+    <li><strong>王与车之间无任何棋子</strong>（清空路径）</li>
+    <li><strong>王当前所在格不被将军</strong>（不能在将军中易位）</li>
+    <li><strong>王易位路径上的所有格子不被对方攻击</strong>（王不能"经过"被攻击的格子）</li>
+    <li><strong>王易位后的目标格不被对方攻击</strong>（不能"落入"将军格）</li>
+    <li><strong>Rev34 关键修复</strong>：王路径与车路径的<strong>并集</strong>中，除王和车各自的起始位置外，每个格子必须为空——这是 Chess960 特有约束，因为王与车可能起始位置很近（如王在 b1，车在 c1），王的路径（b1→g1）会经过 d1、e1、f1 等可能被其他棋子占据的格子</li>
+  </ol>
+
+  <div class="tip-box">
+    <span class="tip-label">Rev34 关键 bug 修复：</span>原实现仅检查王与车之间的格子是否为空，但<strong>未检查</strong>王的目的地和车的目的地是否有其他棋子。在 Chess960 中，王和车可能起始位置很近（如王在 b1，车在 c1），王的路径（b1→g1）远远超出车的位置——经过 d1、e1、f1 等可能被其他棋子占据的格子。<code>makeMv()</code> 会直接覆盖这些格子，<strong>等于销毁己方棋子</strong>。修复后检查王路径和车路径的并集。
+  </div>
+
+  <h3>Shredder-FEN 易位权编码</h3>
+  <p>Chess960 的 FEN 使用 Shredder-FEN 格式编码易位权（用大写字母表示白方车所在列，小写字母表示黑方车所在列），与标准 FEN 的 KQkq 编码不同：</p>
+  <table>
+    <tr><th>格式</th><th>示例</th><th>说明</th></tr>
+    <tr><td>标准 FEN</td><td><code>rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1</code></td><td>KQkq 表示白方王翼/后翼 + 黑方王翼/后翼易位权</td></tr>
+    <tr><td>Shredder-FEN</td><td><code>rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w HAha - 0 1</code></td><td>HAha 表示白方 h1+a1 车 + 黑方 h8+a8 车的易位权（按列字母编码）</td></tr>
+    <tr><td>SP-ID 518 Shredder-FEN</td><td><code>rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w HAha - 0 1</code></td><td>与标准象棋完全等价（H=A 车在 h1/a1，与 KQ 一致）</td></tr>
+  </table>
+
+  <h3>PGN 头标签规范</h3>
+  <p>Chess960 对局的 PGN 必须包含以下头标签以标识变体：</p>
+  <div class="code-block">
+    <span class="code-label">Chess960 PGN 头标签示例</span>
+[Event "Casual Game"]
+[Site "Regalia"]
+[Date "2026.06.25"]
+[Round "1"]
+[White "Player"]
+[Black "AI对手 Lv.4"]
+[Result "1-0"]
+[Variant "Chess960"]      # 必需: 标识 Chess960 变体
+[SetUp "1"]               # 必需: 标识非标准起始位置
+[FEN "rnbkrqnq/pppppppp/8/8/8/8/PPPPPPPP/RNBKRQNQ w HAah - 0 1"]   # Shredder-FEN
+
+1. d4 d5 2. Nf3 Nf6 ... 1-0</div>
+  <p>PGN 导入时识别以下所有 Variant 别名：<code>[Variant "Chess960"]</code>、<code>[Variant "Fischerandom"]</code>、<code>[Variant "Fischer Random"]</code>、<code>[Variant "FRC"]</code>，并自动推导 SP-ID。</p>
+
+  <div class="impl-section">
+    <h4>实现原理：Chess960 模块架构</h4>
+    <p>v1.0.4 新增 <code>chess960.js</code> 模块，封装 Chess960 的所有规则逻辑：</p>
+    <ul class="feature-list">
+      <li><strong>SP-ID 生成器</strong>：从 0..959 生成对应的合法起始排列</li>
+      <li><strong>Shredder-FEN 编码/解码</strong>：易位权字段在 HAah 格式与内部状态间转换</li>
+      <li><strong>isChess960CastlingLegal(board, from, to)</strong>：检查 Chess960 王车易位合法性（含 Rev34 关键修复——王路径与车路径并集为空检查）</li>
+      <li><strong>chess960CastlingRookMove(board, kingFrom, kingTo)</strong>：根据王起点终点计算车起点终点</li>
+      <li><strong>findCastlingRooks(board, kingRow)</strong>：扫描底排找出王两侧最近的两辆车</li>
+    </ul>
+    <p>这些函数接入 <code>game-logic.js</code> 的 <code>pseudoMoves()</code>、<code>makeMv()</code>、<code>makeMvInPlace()</code> 的 <code>gameVariant==='chess960'</code> 分支，包括 <code>rookFrom!==rookTo</code> 守卫和 Chess960 易位权更新。</p>
+    <div class="code-block">
+      <span class="code-label">chess960.js — 王车易位合法性检测</span>
+function isChess960CastlingLegal(state, kingFrom, kingTo) {
+  // 1. 王与车均未移动过（易位权）
+  if (!hasCastlingRight(state, kingFrom.color, side))
+    return false;
+  // 2. 王当前不被将军
+  if (isSquareAttacked(state, kingFrom, oppColor))
+    return false;
+  // 3. 计算王路径 + 车路径并集（Rev34 修复）
+  const rookFrom = findCastlingRook(state, kingFrom, side);
+  const rookTo   = chess960CastlingRookMove(kingFrom, kingTo);
+  const path = new Set();
+  // 王路径
+  for (let c = Math.min(kingFrom.col, kingTo.col);
+       c &lt;= Math.max(kingFrom.col, kingTo.col); c++)
+    path.add(kingFrom.row + ',' + c);
+  // 车路径
+  for (let c = Math.min(rookFrom.col, rookTo.col);
+       c &lt;= Math.max(rookFrom.col, rookTo.col); c++)
+    path.add(rookFrom.row + ',' + c);
+  // 4. 路径中除王和车起始位置外必须为空
+  for (const sq of path) {
+    if (sq === kingFrom.row+','+kingFrom.col) continue;
+    if (sq === rookFrom.row+','+rookFrom.col) continue;
+    const [r,c] = sq.split(',').map(Number);
+    if (state.board[r][c]) return false;
+  }
+  // 5. 王路径上每个格子不被对方攻击
+  for (const sq of kingPath(state, kingFrom, kingTo))
+    if (isSquareAttacked(state, sq, oppColor)) return false;
+  return true;
+}</div>
+  </div>
+
+  <h3>UCI_Chess960 引擎选项</h3>
+  <p>Chess960 模式下，<code>AndroidBridge.setChess960Mode(true)</code> 调用 Stockfish 的 <code>setoption name UCI_Chess960 value true</code> 选项。引擎（自动）重启后会自动重新应用 960 模式，避免崩溃恢复后丢设置。此项必须在 <code>uciok</code> 之后、<code>ucinewgame</code> 之前设置。</p>
+
+  <div class="tip-box">
+    <span class="tip-label">互斥规则：</span>Chess960 与 ECO 开局库<strong>互斥</strong>——开启 Chess960 时 ECO 开关置灰，反之亦然。原因：Chess960 无固定开局理论，ECO 编码（A00-E99）仅适用于标准象棋起始位置。
+  </div>
+</div>
+
+<hr class="section-divider">
+
+<!-- ============================================================ -->
+<!-- SECTION 13: 计时赛 (Time Control) -->
+<!-- ============================================================ -->
+<div class="section" id="sec13">
+  <div class="section-header">
+    <div class="section-num">第十三章</div>
+    <div class="section-title">计时赛（Time Control）</div>
+  </div>
+
+  <p><strong>计时赛（Time Control）</strong>是 v1.0.4 新增的核心功能之一。新游戏设置界面新增"计时赛设置"区块，支持下拉选择 5 种计时模式。启用计时赛后，对局界面显示双方时钟（实时倒计时），剩余时间 &lt; 30 秒时变红警告；超时则判负。</p>
+
+  <h3>5 种计时模式</h3>
+  <table>
+    <tr><th>模式</th><th>英文</th><th>规则</th><th>典型 TimeControl 头</th></tr>
+    <tr><td>不计时</td><td>Untimed</td><td>无时钟约束，玩家可任意思考</td><td>无 [TimeControl] 头</td></tr>
+    <tr><td>突然死亡制</td><td>Sudden Death</td><td>固定总时长，用完即输；每步按实际用时扣时</td><td><code>"1800"</code>（30 分钟）</td></tr>
+    <tr><td>菲舍尔加秒制</td><td>Fischer Increment</td><td>基础总时长 + 每步增量；每步走完后获得增量秒数</td><td><code>"300+3"</code>（5 分钟 + 每步 3 秒）</td></tr>
+    <tr><td>布朗斯坦延迟制</td><td>Bronstein Delay</td><td>每步前有延迟期；延迟期内不扣时，延迟期后按实际用时扣时</td><td><code>"1800+10d"</code>（30 分钟 + 10 秒延迟）</td></tr>
+    <tr><td>美国延迟制</td><td>US Delay</td><td>与布朗斯坦类似但延迟期"使用即扣"——延迟期开始即从总时长扣除，未用完的延迟时间不返还</td><td><code>"1800+5D"</code>（30 分钟 + 5 秒美国延迟）</td></tr>
+  </table>
+
+  <h3>时钟 UI 显示</h3>
+  <p>启用计时赛后，对局界面在 AI 对手栏第一行与玩家信息栏中分别显示双方时钟（实时倒计时）：</p>
+  <div class="wireframe">
+    <div class="wireframe-title">计时赛时钟 UI</div>
+    <div style="border:1px solid #3a2a18;border-radius:4px;padding:8px;background:#1a1008">
+      <!-- AI 对手栏 -->
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 6px;border-bottom:1px solid #2a1a0a">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:.95rem">🤖</span>
+          <span style="font-weight:700;font-size:.85rem;color:#f5e6c8">AI 对手 Lv.4</span>
+          <span style="font-size:.7rem;color:#d4a017;background:rgba(212,160,23,.15);padding:1px 6px;border-radius:3px;border:1px solid rgba(212,160,23,.3)">⏱ 05:23</span>
+        </div>
+        <span style="font-size:.7rem;color:#7eb8da;font-weight:700">⏳ 思考中</span>
+      </div>
+      <!-- 玩家栏 -->
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 6px;margin-top:4px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:.95rem">♔</span>
+          <span style="font-weight:700;font-size:.85rem;color:#f5e6c8">玩家</span>
+          <span style="font-size:.7rem;color:#c0392b;background:rgba(192,57,43,.15);padding:1px 6px;border-radius:3px;border:1px solid rgba(192,57,43,.4)">⏱ 00:18</span>
+        </div>
+        <span style="font-size:.7rem;color:#27ae60;font-weight:700">轮到你</span>
+      </div>
+    </div>
+    <p style="font-size:.7rem;color:#887860;text-align:center;margin-top:6px">剩余时间 &lt; 30 秒时变红警告；超时则判负</p>
+  </div>
+
+  <h3>Stockfish 18 时间管理 UCI 指令 <span class="new-tag">v1.0.4 Rev35</span></h3>
+  <p>计时赛模式下，AI 走棋现使用 <code>go wtime &lt;ms&gt; btime &lt;ms&gt; winc &lt;ms&gt; binc &lt;ms&gt;</code> UCI 指令，让 Stockfish 18 自主管理时间分配（关键局面多思考、简单局面少思考），而非固定 movetime。新增 <code>AndroidBridge.engineGoTimed()</code> 桥接方法。</p>
+
+  <div class="impl-section">
+    <h4>实现原理：5 种计时模式的扣时规则</h4>
+    <p>每种计时模式有独立的扣时逻辑，全部通过 <code>gameClocks</code> 全局对象管理：</p>
+    <div class="code-block">
+      <span class="code-label">ui.js — 计时赛扣时规则（伪代码）</span>
+function applyMoveTimeControl(color, moveDurationMs) {
+  const clk = gameClocks[color];
+  switch (timeControlMode) {
+    case 'untimed':
+      // 无操作
+      break;
+    case 'sudden_death':
+      // 每步按实际用时扣时
+      clk.remaining -= moveDurationMs;
+      break;
+    case 'fischer':
+      // 每步走完后加秒
+      clk.remaining -= moveDurationMs;
+      clk.remaining += incrementMs;
+      break;
+    case 'bronstein':
+      // 延迟期内不扣时，延迟期后按实际用时扣时
+      if (moveDurationMs &lt;= delayMs) {
+        // 整步在延迟期内，不扣时
+      } else {
+        clk.remaining -= (moveDurationMs - delayMs);
+      }
+      break;
+    case 'us_delay':
+      // 延迟期"使用即扣"——延迟期开始即从总时长扣除，
+      // 未用完的延迟时间不返还
+      const effective = Math.max(0, moveDurationMs - delayMs);
+      clk.remaining -= effective;
+      break;
+  }
+  // 超时检测
+  if (clk.remaining &lt;= 0) {
+    clk.remaining = 0;
+    _onGameClockExpired(color);
+  }
+}</div>
+  </div>
+
+  <h3>时钟到期处理 <span class="new-tag">v1.0.4 Rev35</span></h3>
+  <p>Rev35 修复了时钟到期未发送 stop 指令的严重 bug。原实现 <code>_onGameClockExpired()</code> 仅设置 gameOver 状态，<strong>未向引擎发送 stop 指令</strong>。引擎继续基于内部 wtime 估算搜索，可能远远超过 GUI 的 0 秒标记。修复后 <code>_onGameClockExpired()</code> 现在调用 <code>AndroidBridge.engineStop()</code> 立即硬停止引擎，同时清除 <code>isAIThinking</code> 和 AI 安全计时器。</p>
+
+  <div class="tip-box">
+    <span class="tip-label">Rev35 关键修复：</span>JS 调用 <code>engineGoTimed()</code> 时测量时钟，但 "go" 指令实际发送时（经过 <code>stopAndWaitForBestmove</code> + <code>ucinewgame</code> + <code>readyok</code> 等待，最长 6 秒），真实时钟已经减少。引擎基于过时（偏大）的 wtime 过度分配搜索时间。修复：<code>engineGoTimed()</code> 现在记录 JS 调用时间戳，在发送 "go" 前从 wtime/btime 中扣除设置开销（setup overhead），并添加安全余量（<code>engineMoveOverhead</code>，最小 50ms）确保引擎的 bestmove 在 GUI 时钟归零前返回。
+  </div>
+
+  <h3>Ponder 计时赛合规性 <span class="new-tag">v1.0.4 Rev31</span></h3>
+  <p>原实现 <code>startPonder()</code> 仅发送 <code>"go ponder"</code> 而不带时间参数——违反 UCI 规范。UCI 规范要求 <code>go ponder</code> 必须包含 <code>wtime/btime/winc/binc</code> 参数，以便引擎在收到 <code>ponderhit</code> 时能切换到正常计时搜索。不带时间参数会导致：(a) 引擎在 ponderhit 后<strong>无限搜索</strong>（无时间压力），或 (b) 引擎在 ponderhit 后<strong>瞬间返回 bestmove</strong>（panic 模式）——两者均为计时赛异常行为。Rev31 修复：<code>startPonder()</code> 新增 4 个时间参数；JS 侧传入当前 <code>gameClocks</code> 值。对于非计时赛，传入全 0，Java 侧检测后发送 <code>"go ponder"</code>（不带时间参数）。</p>
+
+  <h3>PGN 时间控制头标签</h3>
+  <p>启用计时赛后，PGN 导出包含 <code>[TimeControl "..."]</code> 头（如 <code>"300+3"</code>）和每步的 <code>[%clk HH:MM:SS]</code> 注释。未启用计时赛时，PGN 注释使用 <code>[%emt HH:MM:SS]</code>（每步实际用时）—— 这是 PGN 规范 §10.2.7 定义的 "Elapsed Move Time" 标签。</p>
+
+  <div class="code-block">
+    <span class="code-label">计时赛 PGN 导出示例</span>
+[Event "Casual Game"]
+[Site "Regalia"]
+[Date "2026.06.25"]
+[Round "1"]
+[White "Player"]
+[Black "AI对手 Lv.4"]
+[Result "1-0"]
+[TimeControl "300+3"]      # 5 分钟 + 每步 3 秒增量
+
+1. e4 {[%clk 00:05:03]} e5 {[%clk 00:05:02]}
+2. Nf3 {[%clk 00:05:05]} Nc6 {[%clk 00:05:04]} 1-0</div>
+
+  <div class="code-block">
+    <span class="code-label">非计时赛 PGN 导出示例（[%emt] 标签）</span>
+[Event "Casual Game"]
+[Site "Regalia"]
+[Date "2026.06.25"]
+[Round "1"]
+[White "Player"]
+[Black "AI对手 Lv.4"]
+[Result "1-0"]
+
+1. e4 {[%emt 0:00:02]} e5 {[%emt 0:00:03]}
+2. Nf3 {[%emt 0:00:05]} Nc6 {[%emt 0:00:04]} 1-0</div>
+
+  <h3>TimeControl 头解析与格式化</h3>
+  <p><code>pgn-standard.js</code> 支持全部 6 种 TimeControl 格式解析与格式化：</p>
+  <table>
+    <tr><th>格式</th><th>示例</th><th>说明</th></tr>
+    <tr><td>突然死亡</td><td><code>"1800"</code></td><td>仅基础总时间（秒），无增量</td></tr>
+    <tr><td>菲舍尔加秒</td><td><code>"300+3"</code></td><td>基础 + 增量（秒）</td></tr>
+    <tr><td>布朗斯坦延迟</td><td><code>"1800+10d"</code></td><td>基础 + 延迟（秒，d 后缀）</td></tr>
+    <tr><td>美国延迟</td><td><code>"1800+5D"</code></td><td>基础 + 延迟（秒，D 后缀）</td></tr>
+    <tr><td>阶段制</td><td><code>"40/7200+30"</code></td><td>40 步内 7200 秒 + 每步 30 秒增量</td></tr>
+    <tr><td>沙漏</td><td><code>"*180"</code></td><td>180 秒沙漏（不常用）</td></tr>
+  </table>
+</div>
+
+<hr class="section-divider">
+
+<!-- ============================================================ -->
+<!-- SECTION 14: PGN 导入与导出 -->
+<!-- ============================================================ -->
+<div class="section" id="sec14">
+  <div class="section-header">
+    <div class="section-num">第十四章</div>
+    <div class="section-title">PGN 导入与导出</div>
+  </div>
+
+  <p>v1.0.4 新增 <code>pgn-standard.js</code> 模块，实现 1994 PGN 规范的严格编码与容错解码。本章节详细描述 PGN 导入/导出的完整流程、规范遵循度与容错策略。</p>
+
+  <h3>PGN 规范遵循度</h3>
+  <table>
+    <tr><th>项目</th><th>规范要求</th><th>Regalia 实现</th></tr>
+    <tr><td>七标签阵容</td><td>必须有 Event/Site/Date/Round/White/Black/Result</td><td>导出始终包含完整七标签</td></tr>
+    <tr><td>棋步换行</td><td>~78 列换行</td><td>导出按 78 列换行</td></tr>
+    <tr><td>结果标记</td><td>最后一个 token 必须是 1-0 / 0-1 / 1/2-1/2 / *</td><td>始终作为最后一个 token</td></tr>
+    <tr><td>标签值转义</td><td>\ → \\, " → \"，强制单行</td><td>严格转义</td></tr>
+    <tr><td>SAN 记谱</td><td>消歧义、王车易位 O-O/O-O-O、升变 =Q/=R/=B/=N、将军 +/将死 #</td><td>完整 SAN 支持</td></tr>
+    <tr><td>NAG 数字注解</td><td>$1-$6 走法质量，$10-$18 局面评估</td><td>NAG_MAP / nagToSymbol 双向转换</td></tr>
+    <tr><td>视觉注解</td><td>[%csl ...] 格子高亮，[%cal ...] 箭头</td><td>formatCslTag / formatCalTag / parseCslTag / parseCalTag</td></tr>
+    <tr><td>评估注解</td><td>[%eval ...] Lichess/Chessbase 标准</td><td>formatEvalTag 内嵌评估数据</td></tr>
+    <tr><td>时钟注解</td><td>[%clk HH:MM:SS] 标准时钟格式</td><td>计时赛模式自动生成</td></tr>
+    <tr><td>用时注解</td><td>[%emt HH:MM:SS] 每步实际用时</td><td>非计时赛模式自动生成</td></tr>
+    <tr><td>变体支持</td><td>[Variant "..."] 头标签</td><td>支持 Chess960 / Fischerandom / Fischer Random / FRC</td></tr>
+    <tr><td>非标准起始</td><td>[SetUp "1"] + [FEN "..."] 头标签</td><td>FEN 使用 Shredder 易位权格式</td></tr>
+  </table>
+
+  <h3>PGN 导入</h3>
+  <p>Regalia 支持通过 🗃️ 导入按钮导入 PGN（Portable Game Notation）棋谱，完整还原对局过程并在走法记录中显示变例。PGN 导入功能提供三种导入方式：</p>
+  <ul class="feature-list">
+    <li><strong>粘贴 FEN / Paste FEN</strong>：从剪贴板粘贴 FEN 字符串，快速还原任意局面。适用于从其他棋类应用或网站复制的局面编码</li>
+    <li><strong>粘贴 PGN / Paste PGN</strong>：从剪贴板粘贴完整的 PGN 棋谱文本。支持标准 PGN 格式，包含头部标签（如 [FEN "..."]）、走法、注释和变例</li>
+    <li><strong>📂 选择 PGN 文件 / 📂 Select PGN File</strong>：通过 Android SAF 文件选择器从设备中选择 .pgn 文件。自动识别 FEN 和 PGN 格式</li>
+  </ul>
+
+  <h3>PGN 变例支持</h3>
+  <p>导入的 PGN 棋谱中包含的变例（即括号内的走法，RAV — Recursive Annotation Variation）会自动在走法记录中显示为 🌿线，与引擎分析线采用相同的展示格式。变例仅显示为文本走法序列，不会触发引擎评估或在棋盘上显示，确保界面简洁清晰。</p>
+
+  <div class="tip-box">
+    <span class="tip-label">v1.0.2 修复：</span>修复 PGN 变例"片段不完整"问题。此前若一条变例中间某个 SAN 写得不规范（缺歧义消除符、非标准后缀等），变例续着循环遇到首个无法解析的 token 时会 <code>break</code>，导致从该 token 起的所有剩余走法被全部丢弃——表现就是"🌿 变例只显示前半段"。v1.0.2 改为 <code>continue</code>（仅跳过该 token，继续解析后续走法），并对每个 token 统一应用 <code>moveAlg</code> 容错匹配。
+  </div>
+
+  <h3>PGN 解析流程</h3>
+  <p>PGN 导入的解析流程经过精心设计，确保对各种 PGN 格式的兼容性：</p>
+  <ul class="feature-list">
+    <li>自动移除 BOM（字节顺序标记）和头部标签</li>
+    <li>提取 FEN 头部（如有）以还原非标准起始局面</li>
+    <li>移除注释（花括号内容）和 NAG 符号（$1, $2 等）</li>
+    <li>在移除变例内容前先提取并保存变例，将其关联到对应的主走法</li>
+    <li>逐着验证走法的合法性，遇到无法识别的走法时跳过而非中断</li>
+    <li><span class="new-tag">v1.0.1</span> 递归变例树解析：每个 <code>(</code> 开启一个新的变例帧，附加到父上下文中"最后一步走法"。嵌套 <code>(</code> 附加到父变例中正确的走法（而非主线走法），符合 PGN 规范 §8.2.5</li>
+    <li><span class="new-tag">v1.0.1</span> 变例首 token 匹配三重 fallback：Type A（同侧替代）→ Type A moveAlg 模糊匹配 → Type B（对手应着）→ Type B moveAlg 模糊匹配。处理非标准 SAN（缺少消歧符、+/# 后缀等）</li>
+    <li><span class="new-tag">v1.0.1</span> mainTokenIdx 索引追踪：即使主线某步走法无法解析被跳过，后续变例仍能正确关联到对应的主走法</li>
+    <li><span class="new-tag">v1.0.1</span> 诊断日志：变例首 token 无法匹配时输出 <code>console.warn</code>，便于排查 PGN 输入问题</li>
+  </ul>
+
+  <h3>PGN 导出（七标签阵容）</h3>
+  <p>导出 PGN 始终包含<strong>七标签阵容 (Seven Tag Roster)</strong>：</p>
+  <div class="code-block">
+    <span class="code-label">pgn-standard.js — 七标签阵容</span>
+const SEVEN_TAG_ROSTER = [
+  'Event',   # 赛事名称
+  'Site',    # 比赛地点
+  'Date',    # 日期 YYYY.MM.DD
+  'Round',   # 轮次
+  'White',   # 白方姓名（AI 对手含难度档位后缀，如 "AI对手 Lv.4"）
+  'Black',   # 黑方姓名
+  'Result'   # 结果: 1-0 / 0-1 / 1/2-1/2 / *
+];</div>
+
+  <h3>NAG 数字注解系统</h3>
+  <p>NAG（Numeric Annotation Glyphs）是 PGN 规范定义的数字注解符号，用于标记走法质量与局面评估：</p>
+  <table>
+    <tr><th>NAG</th><th>符号</th><th>含义</th><th>说明</th></tr>
+    <tr><td>$1</td><td>!</td><td>好着</td><td>Good move</td></tr>
+    <tr><td>$2</td><td>?</td><td>错着</td><td>Mistake</td></tr>
+    <tr><td>$3</td><td>!!</td><td>妙着</td><td>Brilliant move</td></tr>
+    <tr><td>$4</td><td>??</td><td>漏着</td><td>Blunder</td></tr>
+    <tr><td>$5</td><td>!?</td><td>有趣着</td><td>Interesting move</td></tr>
+    <tr><td>$6</td><td>?!</td><td>可疑着</td><td>Dubious move</td></tr>
+    <tr><td>$10</td><td>=</td><td>均势</td><td>Equal position</td></tr>
+    <tr><td>$11</td><td>⩲</td><td>白方略优</td><td>White slightly better</td></tr>
+    <tr><td>$12</td><td>⩱</td><td>黑方略优</td><td>Black slightly better</td></tr>
+    <tr><td>$13</td><td>±</td><td>白方优势</td><td>White clearly better</td></tr>
+    <tr><td>$14</td><td>∓</td><td>黑方优势</td><td>Black clearly better</td></tr>
+    <tr><td>$15</td><td>+−</td><td>白方胜势</td><td>White winning</td></tr>
+    <tr><td>$16</td><td>−+</td><td>黑方胜势</td><td>Black winning</td></tr>
+  </table>
+
+  <h3>视觉注解（[%csl] / [%cal]）</h3>
+  <p>视觉注解遵循 Lichess/Chessbase 事实标准格式。Regalia 自动筛选并缓存每步的视觉注解：</p>
+  <table>
+    <tr><th>颜色</th><th>缩写</th><th>用途</th><th>示例</th></tr>
+    <tr><td>蓝色 (B)</td><td>B</td><td>本方棋子对重要格子的控制路径</td><td><code>[%cal Be2e4]</code></td></tr>
+    <tr><td>红色 (R)</td><td>R</td><td>将军子 → 被将的王</td><td><code>[%cal Rb4e1]</code></td></tr>
+    <tr><td>绿色 (G)</td><td>G</td><td>避将路径（被将方王的安全格）</td><td><code>[%csl Gf2]</code></td></tr>
+    <tr><td>黄色 (Y)</td><td>Y</td><td>走子方 → 对方后的位置（威胁）</td><td><code>[%cal Yd1d8]</code></td></tr>
+  </table>
+
+  <h4>视觉注解颜色语义（Rev14 重定义）</h4>
+  <p>v1.0.4 补丁修订重定义了视觉注解的颜色语义：</p>
+  <table>
+    <tr><th>颜色</th><th>原语义</th><th>新语义</th></tr>
+    <tr><td>绿色箭头</td><td>避将改为绿色格</td><td>避将改为<strong>绿色箭头</strong>（被将的王位置→避将格）</td></tr>
+    <tr><td>红色格</td><td>—</td><td>AI对手净控制强势格</td></tr>
+    <tr><td>蓝色格</td><td>—</td><td>玩家净控制强势格</td></tr>
+    <tr><td>黄色格</td><td>—</td><td>双方总计控制数较高格</td></tr>
+    <tr><td>绿色格</td><td>—</td><td>中心区无控制格</td></tr>
+    <tr><td>红色箭头</td><td>将军子→被将的王</td><td>保留（同原语义）</td></tr>
+  </table>
+
+  <h3>导入后的行为</h3>
+  <p>PGN 导入完成后，应用会执行以下操作：</p>
+  <ul class="feature-list">
+    <li>走法记录同步更新，显示导入的所有走法及变例</li>
+    <li>棋盘显示对局的最终局面</li>
+    <li>自动请求引擎评估当前局面</li>
+    <li>不会自动触发 AI 走棋，用户可自由浏览或开始新游戏</li>
+    <li>支持复盘模式浏览导入的对局</li>
+    <li><span class="new-tag">v1.0.1</span> 悔棋正常工作：导入后可逐步悔棋至白方首步并清空走法记录（修复了 v1.0.0 中 stateHistory 快照顺序错误导致的悔棋失效问题）</li>
+  </ul>
+
+  <div class="impl-section">
+    <h4>实现原理：容错解析</h4>
+    <p>PGN 解析器（容错模式）：</p>
+    <ul class="feature-list">
+      <li>自动修复嵌套 <code>{}</code> 注释（规范禁止）</li>
+      <li>未闭合注释（自动闭合）</li>
+      <li><code>0-0</code> 数字零 → <code>O-O</code> 字母 O（Chessbase 兼容）</li>
+      <li>跳过无效 SAN 而非整体失败</li>
+      <li>缺失 Result 默认为 <code>*</code></li>
+      <li>缺失 <code>[SetUp "1"]</code> 自动容错</li>
+    </ul>
+    <p>v1.0.4 Rev16 修复：PGN 注释标签保留。<code>parseStandardPGN</code> 的头部标签剥离正则从 <code>/\[[^\]]*\]/g</code> 改为 <code>/^\[[^\]]*\]/gm</code>（行首锚定），不再误删注释内的 <code>[%csl]</code>/<code>[%cal]</code>/<code>[%emt]</code>/<code>[%clk]</code>/<code>[%eval]</code>。</p>
+    <div class="code-block">
+      <span class="code-label">pgn-standard.js — 容错正则修复</span>
+// 旧版（误删注释内的 [%csl] / [%cal] 等内嵌标签）
+const text = pgn.replace(/\[[^\]]*\]/g, '');
+
+// v1.0.4 Rev16 修复版（行首锚定，仅剥离 PGN 头部 [Tag "Value"] 标签）
+const text = pgn.replace(/^\[[^\]]*\]/gm, '');</div>
+  </div>
+
+  <h3>玩家重命名 <span class="new-tag">v1.0.4</span></h3>
+  <p>导出 PGN 时，<code>[White]</code> / <code>[Black]</code> 标签的玩家名称可由用户重命名。AI 对手名称现包含难度档位后缀：</p>
+  <table>
+    <tr><th>难度</th><th>PGN 头部标签</th></tr>
+    <tr><td>初学者 Lv.1</td><td><code>[Black "AI对手 Lv.1"]</code></td></tr>
+    <tr><td>新手 Lv.2</td><td><code>[Black "AI对手 Lv.2"]</code></td></tr>
+    <tr><td>俱乐部棋手 Lv.3</td><td><code>[Black "AI对手 Lv.3"]</code></td></tr>
+    <tr><td>高级棋手 Lv.4</td><td><code>[Black "AI对手 Lv.4"]</code></td></tr>
+    <tr><td>候选大师 Lv.5</td><td><code>[Black "AI对手 Lv.5"]</code></td></tr>
+    <tr><td>大师 Lv.6</td><td><code>[Black "AI对手 Lv.6"]</code></td></tr>
+    <tr><td>SL 档</td><td><code>[Black "AI对手 SL"]</code></td></tr>
+    <tr><td>手动档</td><td><code>[Black "AI对手 Custom"]</code></td></tr>
+  </table>
+</div>
+
+<hr class="section-divider">
+
+<!-- ============================================================ -->
+<!-- SECTION 15: 统计数据页面 -->
+<!-- ============================================================ -->
+<div class="section" id="sec15">
+  <div class="section-header">
+    <div class="section-num">第十五章</div>
+    <div class="section-title">统计数据页面</div>
+  </div>
+
+  <p>统计数据页面（<code>StatsActivity</code> + <code>stats.html</code>）是一个全屏 WebView Activity，通过主界面走法记录卡的 <strong>📊</strong> 按钮或复盘工具栏的 <strong>📊</strong> 按钮进入。它独立于主对局 WebView，自带最小化的 JS 桥接，将繁重的 PGN 解析逻辑与主对局隔离。重型计算任务（热力图统计等）通过 <code>worker-pool.js</code> 委托给 Web Worker。</p>
+
+  <h3>页面布局</h3>
+  <p>统计数据页面从上到下依次为：</p>
+  <ol class="step-list">
+    <li><strong>顶部标题栏</strong>：左侧"📊统计数据"标题，右侧四个按钮：<code>💾HTML</code>（导出整页为 HTML 文件）、<code>🗃️导入</code>（粘贴 PGN 或选择 PGN 文件）、<code>🗂️复盘</code>（关闭统计页并通知主界面进入复盘模式）、<code>返回</code>。</li>
+    <li><strong>选择提示横幅</strong>（v1.0.3 新增）：仅当用户选中某步走法时显示。主线选中显示金色横幅（"已选中第 N 步"），变例选中显示蓝色横幅（"已选中变例第 N 步（已替换主线第 N 步）"），让用户清楚下方统计对应哪个具体局面。</li>
+    <li><strong>PGN 文本栏</strong>：完整渲染当前对局的 PGN 文本，含走法编号、走法（♔/♚ 等棋子符号样式与主棋盘一致）、注释 <code>{}</code>（深蓝斜体）、变例 <code>()</code>（灰色）、NAG（<code>$1</code> 等，浅蓝色）、结果（1-0/0-1/1/2-1/2/*，金色加粗）。v1.0.3 起变例走法也可点击。</li>
+    <li><strong>局面 FEN 栏</strong>（v1.0.3 新增）：位于 PGN 文本栏下方。等宽字体显示当前选中走法刚刚走出后的局面的 FEN（后台通过 <code>stateToFEN()</code> 自动生成）。"复制"按钮位于右下角（独立一行，flexbox 右对齐），避免与 FEN 文本重叠。无选中走法时显示初始局面 FEN + 提示文字。</li>
+    <li><strong>对局元数据</strong>：表格显示 [Event]、[Site]、[Date]、[Round]、[White]、[Black]、[Result]、[TimeControl] 头标签内容。</li>
+    <li><strong>局面统计</strong>：总步数、最终子力、子力差。</li>
+    <li><strong>走法质量</strong>：白方/黑方准确率（Chess.com 风格 CPL 公式）、平均 CPL、6 级分类计数（妙手/最佳/好棋/不准/错误/大错）。仅在有评估数据时显示。</li>
+    <li><strong>评估趋势图</strong>：SVG 折线图，横轴为步数，纵轴为评估值（白方视角，单位百兵）。</li>
+    <li><strong>子力平衡图</strong>：SVG 折线图，横轴为步数，纵轴为白方-黑方子力差。</li>
+    <li><strong>棋子活动度</strong>：吃子数、将军数、王车易位数、升变数；按棋子类型（兵/马/象/车/后/王）分别统计白黑双方的移动次数表格。</li>
+    <li><strong>阶段分析</strong>：基于棋盘上非兵非王棋子数量判定阶段（开局 &gt;8、中局 4-8、残局 &lt;4），统计各阶段的步数（ply）。</li>
+    <li><strong>关键转折</strong>：评估变化最大的 10 步（含步号、评估变化值、分类标签）。</li>
+    <li><strong>时间管理</strong>（v1.0.3 升级）：详见 15.3。</li>
+    <li><strong>开局分析</strong>：前 8 步走法序列、白黑双方轻子（马/象）出子数。</li>
+    <li><strong>兵型</strong>：叠兵/孤兵/通路兵计数（白黑分别统计）。</li>
+    <li><strong>中心控制</strong>：白黑双方走法落在中心格（d4/e4/d5/e5）的次数。</li>
+    <li><strong>王的安全</strong>：白黑双方将军次数、王移动次数。</li>
+    <li><strong>局面复杂度</strong>：评估波动率（标准差）、领先转换次数、白方/黑方优势步数。</li>
+    <li><strong>热力图控制统计</strong>（v1.0.4 新增）：8×8 平均控制热力图，每格显示 <code>(白方平均 / 黑方平均)</code> 攻击子数，背景色用 HSL 表示控制净值。</li>
+    <li><strong>视觉注解</strong>（v1.0.4 新增）：NAG 分布、各色箭头/格子计数。</li>
+  </ol>
+
+  <h3>选中走法查看逐局面统计</h3>
+  <p>点击 PGN 文本栏中的任意走法（主线或变例），下方的全部统计模块（局面统计、走法质量、评估趋势图、子力平衡图、棋子活动度、阶段分析、关键转折、时间管理、开局分析、兵型、中心控制、王的安全、局面复杂度）会自动重新计算，仅包含到该步走法为止的走法序列。再次点击同一走法可取消选中，恢复全局统计。</p>
+
+  <div class="wireframe">
+    <div class="wireframe-title">v1.0.3 统计数据页面布局示意</div>
+<pre style="background:#1a0a0a; color:#f5e6c8; padding:12px; border-radius:6px; font-size:.7rem; overflow-x:auto; line-height:1.5; margin:0">
+┌──────────────────────────────────────────────────────────┐
+│ 📊统计数据              💾HTML 🗃️导入 🗂️复盘 返回          │  顶部标题栏
+├──────────────────────────────────────────────────────────┤
+│ [蓝色] [变例] 已选中变例第 1–3 步（共 3 步，已替换主线第 5 步）│  选择提示横幅 (v1.0.3)
+├──────────────────────────────────────────────────────────┤
+│ PGN文本                                                  │
+│ [Event "..."]  [Site "..."]  [Date "..."]  ...           │
+│ 1. ♙e4 ♟e5 2. ♘Nf3 ♘Nc6 3. ♗Bb5 {3.2s +0.5 略优}       │  主线走法可点击
+│   (3... a6 {0.8s} 4. ♗Ba4) 3... a6 {2.1s -0.2 略劣}  │  变例走法也可点击
+│   ...                                                    │
+├──────────────────────────────────────────────────────────┤
+│ 局面 FEN                                                  │  局面 FEN 栏 (v1.0.3)
+│ r1bqkbnr/pppp1ppp/2n5/...                                │
+│                                              [复制]       │  复制按钮在右下角
+├──────────────────────────────────────────────────────────┤
+│ 对局元数据 / 局面统计 / 走法质量 / 评估趋势图 / ...        │  全部按选中走法重算
+│                                                          │
+│ 时间管理（v1.0.3 升级）                                   │
+│ ┌────────┬────────┬────────┬────────┐                   │
+│ │总用时  │白方用时│黑方用时│平均每步│                   │
+│ │ 5m 23s │ 2m 51s │ 2m 32s │ 8.5s   │                   │
+│ └────────┴────────┴────────┴────────┘                   │
+│ ▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌  每步用时柱状图（白=白棋 蓝=黑棋）   │
+├──────────────────────────────────────────────────────────┤
+│ 热力图控制统计 (v1.0.4 NEW)                                │
+│ 8×8 平均控制热力图 + 最强/最弱格统计                       │
+├──────────────────────────────────────────────────────────┤
+│ 视觉注解统计 (v1.0.4 NEW)                                  │
+│ NAG 分布 + 各色箭头/格子计数                              │
+└──────────────────────────────────────────────────────────┘
+</pre>
+  </div>
+
+  <h3>时间管理分析（v1.0.3 升级）</h3>
+  <p>v1.0.3 起时间管理模块从 v1.0.2 的"仅显示 <code>[%clk]</code> 计数"升级为完整的时间分析。新增 <code>extractMoveTimes()</code> 函数自动识别 PGN 注释 <code>{}</code> 内的用时数据，支持以下格式（按识别优先级）：</p>
+  <ol class="step-list">
+    <li><strong>v1.0.3 直述格式</strong>：<code>{3.2s +0.5 略优}</code>（用时 + 空格 + 评估）。这是 v1.0.3 起 APP 自身导出 PGN 时使用的格式。<code>extractMoveTimes()</code> 取注释内第一个 <code>数字s</code> 模式作为该步用时。无需任何头部。</li>
+    <li><strong>标准 PGN 时钟格式</strong>（需 <code>[TimeControl]</code> 头）：<code>[%clk HH:MM:SS]</code> 表示走完该步后该棋手剩余时钟时间。APP 通过 <code>[TimeControl "BASE+INC"]</code> 头推算每步实际用时。支持 <code>"7200+60"</code>（基础+增量）、<code>"1800"</code>（仅基础，无增量）、<code>"40/7200"</code>（40 步内 7200 秒，按无增量处理）三种 TimeControl 写法。无 <code>[TimeControl]</code> 头时，<code>[%clk]</code> 仅记录时钟剩余值，不推算用时。</li>
+    <li><strong>早期破折号格式</strong>：<code>{3.2s——+0.5 略优}</code>（用时 + 破折号 + 评估）。向后兼容——早期 v1.0.3 测试版导出的 PGN 仍能正确解析。</li>
+  </ol>
+
+  <h4>展示内容</h4>
+  <ul class="feature-list">
+    <li><strong>总用时 / 白方用时 / 黑方用时</strong>：三色统计卡片</li>
+    <li><strong>平均每步 / 白方平均 / 黑方平均</strong>：每步平均用时</li>
+    <li><strong>最长用时步</strong>：含步号（如"5."或"5..."）与用时</li>
+    <li><strong>最短用时步</strong>：含步号与用时</li>
+    <li><strong>用时波动</strong>：标准差，反映用时分布的离散程度</li>
+    <li><strong>长考步数 (&gt;10s)</strong>：超过 10 秒的走法数</li>
+    <li><strong>秒走步数 (&lt;1s)</strong>：少于 1 秒的走法数</li>
+    <li><strong>各阶段用时占比</strong>：开局（前 20 步）/ 中局（21-60 步）/ 残局（61 步起）</li>
+    <li><strong>每步用时柱状图</strong>：SVG 柱状图，白棋走法用白色柱，黑棋走法用蓝色柱</li>
+  </ul>
+
+  <h3>点击变例走法查看变例统计（v1.0.3 新增）</h3>
+  <p>v1.0.2 仅主线走法可点击选中查看逐局面统计。v1.0.3 起 <code>()</code> 内的变例走法也可点击。点击变例走法时，统计页按以下规则构造合成走法序列：</p>
+  <ol class="step-list">
+    <li>取主线走法 <code>[0..mainIdxBefore-1]</code>，其中 <code>mainIdxBefore</code> 为 <code>()</code> 左侧相邻主线走法的索引（即被变例首步替换的那步走法）。</li>
+    <li>追加变例走法 <code>[0..clickedIdx]</code>（从变例首步到被点击的那一步）。变例走法通过 <code>applySANMove()</code> 重新解析（支持王车易位、升变、吃子、消歧义等）。</li>
+    <li>用合成序列重新计算全部统计模块。</li>
+  </ol>
+  <p>例如 PGN <code>1. e4 e5 2. Nf3 (2. Bc4 Nf6 3. d3) Nc6</code> 中，用户点击变例内的 <code>3. d3</code>：</p>
+  <ul class="feature-list">
+    <li><code>mainIdxBefore = 3</code>（即主线第 4 步 <code>Nf3</code>，索引 3）</li>
+    <li>合成序列 = 主线前 3 步 [e4, e5, Nf3] + 变例前 3 步 [Bc4, Nf6, d3] = <strong>6 步</strong></li>
+    <li>统计模块显示 <code>3.d3</code> 走完后的局面统计</li>
+  </ul>
+
+  <h3>局面 FEN 栏（v1.0.3 新增）</h3>
+  <p>局面 FEN 栏位于 PGN 文本栏下方，显示当前选中走法刚刚走出后的局面的 FEN 字符串。FEN 由后台 <code>stateToFEN()</code> 函数自动从选中走法的 <code>postState</code> 生成，包含 6 个字段：</p>
+  <ol class="step-list">
+    <li>棋盘摆放（rank 8 → rank 1，<code>/</code> 分隔，空格用数字表示）</li>
+    <li>轮走方（<code>w</code> 或 <code>b</code>）</li>
+    <li>王车易位权（<code>KQkq</code> 或 <code>-</code>，Chess960 使用 Shredder-FEN 格式如 <code>HAah</code>）</li>
+    <li>吃过路兵目标格（如 <code>e3</code> 或 <code>-</code>）</li>
+    <li>半步计数器（halfmove clock）</li>
+    <li>回合数（fullmove number）</li>
+  </ol>
+
+  <h3>统计页面棋盘坐标标签（v1.0.4 Rev41 修复）<span class="new-tag">v1.0.4 Rev41</span></h3>
+  <p>v1.0.4 Rev41 重构统计页面棋盘的坐标标签布局，与主界面棋盘<strong>完全一致</strong>：</p>
+  <ul class="feature-list">
+    <li><strong>字母 a-h 移到棋盘外上方</strong>：文件标签（a-h）从棋盘内部移到棋盘外上方，与主界面的 <code>.flbl</code> 样式一致（字号 .7rem、颜色 <code>var(--muted)</code>、system-ui 字体、letter-spacing:1px）</li>
+    <li><strong>数字 1-8 移到棋盘外左侧</strong>：等级标签（1-8）从棋盘内部移到棋盘外左侧，与主界面的 <code>.rlbl</code> 样式一致（同上字号/颜色/字体，flex 列布局）</li>
+    <li><strong>每个格子内部显示坐标编号</strong>：每个格子内部左上角显示坐标编号（如 <code>e4</code>），与主界面的 <code>.sq .lbl</code> 样式<strong>完全一致</strong>——位置 <code>absolute top:1px left:2px</code>、字号 9px、透明度 .95、DejaVu Sans 字体、LBL_LIGHT/LBL_DARK 颜色、.6px 描边、text-shadow 微光、<code>paint-order:stroke fill</code></li>
+  </ul>
+
+  <h3>热力图控制统计 <span class="new-tag">v1.0.4</span></h3>
+  <p>统计页面新增"热力图控制统计"区块，遍历对局每个实际局面（含初始局面与每步走后局面），计算每格的双方攻击子数，按 FEN 缓存避免重复计算。</p>
+  <ul class="feature-list">
+    <li>渲染 8×8 平均控制热力图：每格显示 <code>(白方平均 / 黑方平均)</code> 攻击子数，背景色用 HSL 表示控制净值（白偏蓝、黑偏红、均势紫色）</li>
+    <li>新增"白/黑方最强格"与"白/黑方最弱格"统计，按所有局面的平均控制力排序</li>
+    <li>新增"中心白/黑方平均"与"中心净值 (W-B)"，按 d4/e4/d5/e5 四格的均值计算</li>
+    <li>v1.0.4 Rev34 新增：热力图控制统计矩阵的每个格子现在在<strong>顶部居中</strong>显示坐标编号（如 <code>a8</code>、<code>e4</code>），方便用户识别每个热力图格子代表哪个棋盘格</li>
+  </ul>
+
+  <h3>Web Worker 并行计算 <span class="new-tag">v1.0.4</span></h3>
+  <p>v1.0.4 新增 <code>worker-pool.js</code> 模块，将 PGN 解析、统计计算、控制图计算等重型任务移至 Web Worker 线程，避免阻塞 UI 渲染：</p>
+  <ul class="feature-list">
+    <li>Worker 通过 Blob URL 创建（兼容 WebView 的 <code>script-src 'unsafe-inline'</code> CSP）</li>
+    <li>自带一份精简的国际象棋原语（attacked、getCtrlMap、makeMvInPlace、fenToState 等），无需共享主线程作用域</li>
+    <li>所有公共 API（<code>workerParsePGN</code>、<code>workerComputeHeatmapStats</code>、<code>workerGetCtrlMap</code>）均返回 Promise</li>
+    <li>若 Worker 不可用（极老设备），自动回退到内联同步执行，保证功能一致</li>
+    <li><span class="new-tag">v1.0.4 Rev44</span> 修复内存泄漏：新增 <code>terminateWorker()</code> 函数，在 <code>pagehide</code> 和 <code>beforeunload</code> 事件中注册。页面退出时终止 Worker 并撤销 Blob URL，防止内存泄漏</li>
+  </ul>
+
+  <div class="impl-section">
+    <h4>实现原理：Stats 页面架构</h4>
+    <p>统计页面通过 <code>openStatsPage()</code> 启动一个新的 <code>StatsActivity</code>，传入主 APP 已解析的权威走法记录（<code>from/to/piece/captured/promotion/notation</code>）。统计页面通过 <code>parseFromMoveRecords()</code> 直接重放这些走法（使用 <code>executeMove()</code> 正确推进状态），完全绕过简化 SAN 解析器。对于粘贴/导入 PGN 的场景（无走法记录），仍回退到简化解析器。</p>
+    <p>v1.0.4 Rev34 修复 Chess960 兼容性：<code>applySANMove()</code> 不再硬编码王起始列 4（e1），改为扫描底线寻找王的实际列。<code>executeMove()</code> 不再总是从列 7（h1）或列 0（a1）取车，改为扫描易位方向上最近的车。</p>
+    <div class="code-block">
+      <span class="code-label">stats.html — Chess960 兼容的王车易位检测</span>
+// 旧版（仅适用于标准象棋）
+function isCastling(from, to) {
+  return Math.abs(to.col - from.col) === 2;
+}
+
+// v1.0.4 Rev34 修复版（按目标列检测，Chess960 兼容）
+function isCastling(from, to) {
+  // 目标列 6 = 短易位 (O-O), 目标列 2 = 长易位 (O-O-O)
+  // Chess960 中王起始位置任意，但终点固定为 g1/c1
+  return to.col === 6 || to.col === 2;
+}
+
+// Chess960 兼容的车移动
+function moveRookForCastling(state, kingFrom, kingTo) {
+  // 扫描易位方向上最近的车
+  const side = kingTo.col === 6 ? 'kingside' : 'queenside';
+  const dir = side === 'kingside' ? 1 : -1;
+  let rookCol = -1;
+  for (let c = kingFrom.col + dir; c &gt;= 0 &amp;&amp; c &lt;= 7; c += dir) {
+    if (state.board[kingFrom.row][c] &amp;&amp;
+        state.board[kingFrom.row][c].type === 'rook') {
+      rookCol = c; break;
+    }
+  }
+  if (rookCol === -1) return; // 找不到车（回退到标准位置）
+  const rookTo = side === 'kingside' ? 5 : 3;
+  state.board[kingFrom.row][rookTo] =
+    state.board[kingFrom.row][rookCol];
+  state.board[kingFrom.row][rookCol] = null;
+}</div>
+  </div>
+
+  <h3>💾HTML 导出改为静态快照</h3>
+  <p>💾HTML 按钮不再复制整个页面（含 JS 代码），而是输出一个<strong>纯静态 HTML 文件</strong>——仅包含当前选中状态下的所有 UI 与统计数据（CSS + 内容），不含任何 <code>&lt;script&gt;</code> 标签、函数或接口。导出文件可在任意浏览器中打开查看，定格在导出时的选中状态。</p>
+  <p>v1.0.4 Rev43 修复了导出 HTML 卡在"加载中"的严重 bug：原 <code>_stripFnBody()</code> 使用花括号计数法在嵌套函数处截断。Rev43 改为正则方法 <code>function name(){...}</code> → <code>function name(){}</code>。Rev44 进一步简化：通过非贪婪匹配到下一个行首 <code>\n}</code>。</p>
+</div>
+
+<hr class="section-divider">
+
+<!-- ============================================================ -->
+<!-- SECTION 16: Ponder 预判实现机制 -->
+<!-- ============================================================ -->
+<div class="section" id="sec16">
+  <div class="section-header">
+    <div class="section-num">第十六章</div>
+    <div class="section-title">Ponder 预判实现机制</div>
+  </div>
+
+  <p>Ponder（预判）功能基于 UCI（Universal Chess Interface）协议的 <code>go ponder</code> 命令实现。本章节详细描述完整数据流、四层防护机制与计时赛合规性。</p>
+
+  <h3>完整数据流</h3>
+  <ol class="step-list">
+    <li><strong>引擎返回最佳走法</strong>：引擎通过 stdout 输出 <code>bestmove e2e4 ponder e7e5</code>，其中 <code>e2e4</code> 是推荐走法，<code>e7e5</code> 是引擎预测对手的应手。</li>
+    <li><strong>Java 层解析</strong>：<code>StockfishNative.processEngineLine()</code> 使用正则 <code>^bestmove\s+(\S+)(?:\s+ponder\s+(\S+))?</code> 解析出 ponder 走法，存入 <code>_lastPonderMove</code> 字段。若无 ponder 字段则置 <code>null</code>。</li>
+    <li><strong>JS 层获取 ponder 数据</strong>：<code>onBestMove()</code> 和 <code>onHintMove()</code> 均通过 <code>AndroidBridge.getLastPonderMove()</code> 获取当前 ponder 走法。<code>getLastPonderMove()</code> 为一次性读取（读取后自动清空），防止旧数据泄漏到后续搜索。获取到的 UCI 走法暂存于 <code>_pendingPonderMoveUCI</code>，等待首个 <code>onPonderProgress()</code> 回调时再转换为 SAN 格式并赋值 <code>_ponderMoveSAN</code>。</li>
+    <li><strong>启动 ponder 搜索</strong>：AI 走棋后，<code>onBestMove()</code> 将 ponder 走法应用到当前局面（通过 <code>makeMv()</code> 模拟对手走棋），生成新 FEN，调用 <code>AndroidBridge.startPonder(fen)</code>。Java 层向引擎发送 <code>position fen &lt;FEN&gt;</code> 和 <code>go ponder</code> 命令，引擎进入无限搜索模式。</li>
+    <li><strong>Ponder 进度回调与延迟转换</strong>：引擎搜索时通过 <code>info</code> 行实时回调 <code>onPonderProgress()</code>，更新 <code>_ponderBarInfo</code>（搜索深度、节点数、评估值）。首次回调时，若 <code>_pendingPonderMoveUCI</code> 存在，则将其转换为 SAN 格式赋值 <code>_ponderMoveSAN</code>（一次性，转换后清空）。此延迟机制确保预判走法和搜索进度在同一时刻出现，避免 UI 显示不完整。</li>
+    <li><strong>Ponder Hit / Stop</strong>：玩家走棋时，<code>executeMove()</code> 检查是否匹配 ponder 走法。匹配则调用 <code>AndroidBridge.ponderHit()</code>（引擎利用已有搜索结果继续分析）；不匹配则调用 <code>AndroidBridge.stopPonder()</code>（引擎停止搜索）。</li>
+    <li><strong>显示条件</strong>：AI 对手栏第三行仅当同时存在 <code>_ponderMoveSAN</code>（SAN 格式的预判走法）和 <code>_ponderBarInfo</code>（搜索进度）时才显示 🔮 预判信息。当 AI 正在思考、提示加载中、复盘模式或游戏结束时，自动隐藏。</li>
+  </ol>
+
+  <h3>四层防护机制</h3>
+  <p>Regalia 采用四层防护确保 Ponder 数据不会残留过期信息：</p>
+  <ol class="principle-list">
+    <li><strong>世代计数器 / Generation Counter</strong>：JS 层核心防线，所有 <code>onPonderProgress()</code> 回调必须通过世代校验才能更新显示数据。每次启动新的 ponder 会话时 <code>_ponderGen++</code>，回调时若 <code>_ponderGen !== _ponderStartGen</code> 则丢弃。</li>
+    <li><strong>一次性读取 / One-time read</strong>：<code>getLastPonderMove()</code> 读取后自动清空，防止旧 ponder 走法泄漏到后续搜索。</li>
+    <li><strong>即时 DOM 更新 / Immediate DOM update</strong>：清除 ponder 变量时立即调用 <code>_updateAIThinkDisplay()</code>，避免变量已清除但 DOM 仍显示旧值。</li>
+    <li><strong>Java 层标志位 / Java-layer flag</strong>：<code>_discardingPonderBestmove</code> 标志防止 ponder 停止后的 <code>bestmove</code> 被错误路由到正常搜索处理流程。</li>
+  </ol>
+
+  <h3>UCI Ponder 交互示例</h3>
+  <div class="code-block">
+    <span class="code-label">UCI Ponder 交互示例</span>
+// AI 走 Nf3，引擎预测对手会走 e5
+→ position startpos moves e2e4 e7e5 g1f3
+→ go ponder                              // 引擎进入无限搜索
+← info depth 15 ... pv e7e5 d2d4 ...    // onPonderProgress() 实时更新
+// 玩家走了 e5（匹配 ponder 预判）
+→ ponderhit                              // 引擎立即利用已有分析
+← bestmove d2d4 ponder b8c6             // 几乎零延迟返回下一走法
+
+// 若玩家走了不同走法（不匹配预判）
+→ stop                                   // 引擎停止搜索
+← bestmove ...                           // 丢弃 ponder 结果，重新分析</div>
+
+  <h3>提示场景中的 Ponder 显示</h3>
+  <p>提示场景中，<code>onHintMove()</code> 将 ponder 走法直接转换为 SAN 并嵌入 <code>hintText</code>，与推荐走法一同显示（如「🔦 推荐: Nf3 🔮 预判: e5」），无需等待 Ponder 搜索进度。条件显示：</p>
+  <ul class="feature-list">
+    <li><strong>AI 提示栏</strong>：当用户请求提示（💡 AI 提示）时，若引擎返回的 bestmove 后附带 ponder 信息，提示文本会同时显示推荐走法和预判走法</li>
+    <li><strong>AI 对手栏第三行</strong>：在引擎后台 Ponder 搜索活跃时显示预判信息</li>
+    <li><strong>无预判信息时</strong>：不会显示任何 Ponder 相关内容，保持界面简洁</li>
+  </ul>
+
+  <h3>Ponder 数据时效性</h3>
+  <p>Ponder 预判信息始终来自最近一次引擎反馈的 bestmove 响应中的 ponder 字段。每次引擎返回新的 bestmove 时，旧的预判数据会立即清除，仅当新 bestmove 包含 ponder 信息时才会更新显示，确保预判数据不会残留过期信息。在提示场景中，ponder 走法在引擎返回 bestmove 时即被转换为 SAN 格式（基于推荐走法执行后的局面进行转换，确保着法正确性），直接嵌入提示文本，无需等待 Ponder 搜索进度回调。</p>
+
+  <h3>防陈旧数据机制（多层防护）</h3>
+  <ol class="principle-list">
+    <li><strong>每次清除 ponder 变量时立即调用 <code>_updateAIThinkDisplay()</code></strong>更新 DOM，避免变量已清除但 DOM 仍显示旧值</li>
+    <li><strong><code>onPonderProgress()</code> 增加代际守卫</strong>（<code>_ponderGen</code> / <code>_ponderStartGen</code>），若当前回调的代际与启动时不一致，说明 ponder 已被其他流程清除，回调应丢弃</li>
+    <li><strong><code>onEngineProgress()</code> 在 AI 思考或提示加载期间主动清除残留 ponder 数据</strong></li>
+    <li><strong>Java 层增加 <code>_discardingPonderBestmove</code> 标志</strong>，防止 ponder 停止后的 bestmove 被错误路由到正常搜索处理流程</li>
+    <li><strong>提示区域现在要求 <code>_ponderMoveSAN</code> 和 <code>_ponderBarInfo</code> 同时存在才显示 🔮 预判</strong>，避免新 ponder 会话启动后但首帧进度尚未到达时显示旧 ponder 数据</li>
+  </ol>
+
+  <h3>计时赛 Ponder 合规性 <span class="new-tag">v1.0.4 Rev31</span></h3>
+  <p>原实现 <code>startPonder()</code> 仅发送 <code>"go ponder"</code> 而不带时间参数——违反 UCI 规范。UCI 规范要求 <code>go ponder</code> 必须包含 <code>wtime/btime/winc/binc</code> 参数，以便引擎在收到 <code>ponderhit</code> 时能切换到正常计时搜索。Rev31 修复：<code>startPonder()</code> 新增 4 个时间参数；JS 侧传入当前 <code>gameClocks</code> 值。对于非计时赛，传入全 0，Java 侧检测后发送 <code>"go ponder"</code>（不带时间参数）。保留 <code>@deprecated</code> 单参数 <code>startPonder(fen)</code> 重载以向后兼容。</p>
+
+  <h3>Ponder 分数视角修复 <span class="new-tag">v1.0.4 Rev36</span></h3>
+  <p>Rev36 修复 <code>onPonderProgress</code> 分数视角反转的严重 bug：<code>onPonderProgress</code> 中 <code>isBlackToMove=(playerColor==='black')</code> 是<strong>反转的</strong>。ponder 局面是玩家预测走法之后的局面，所以 side-to-move 是 AI（playerColor 的对方）。当玩家是白方时，AI 是黑方，ponder 局面轮到黑方（AI）→ isBlackToMove 应为 true。旧代码返回 false，导致<strong>ponder 分数显示符号错误</strong>（AI 赢面显示为输面）。修复：改为 <code>(playerColor==='white')</code>。</p>
+
+  <h3>engineStop 空闲状态修复 <span class="new-tag">v1.0.4 Rev36</span></h3>
+  <p>Rev36 修复 <code>engineStop()</code> 空闲状态误丢弃 bestmove 的严重 bug：<code>engineStop()</code> 此前在引擎空闲状态（STATE_NONE）下也会设置 <code>_discardingPonderBestmove=true</code>。该标志只能由 bestmove 丢弃或崩溃恢复清除，因此在玩家自己回合（引擎空闲）调用 engineStop()（如认输/超时）后，该标志残留，导致<strong>下一局的第一步 bestmove 被静默丢弃</strong>——表现为新游戏 AI 第一步延迟 15 秒（安全计时器超时）。修复：仅在 <code>stateBefore != STATE_NONE</code> 时设置标志并发送 stop。</p>
+</div>
+
+<hr class="section-divider">
+
+<!-- ============================================================ -->
+<!-- APPENDIX A: 版本更新日志 -->
+<!-- ============================================================ -->
+<div class="section" id="appendix-changelog">
+  <div class="section-header">
+    <div class="section-num">附录 A</div>
+    <div class="section-title">版本更新日志</div>
+  </div>
+  <p>本附录按版本号倒序汇总 Regalia 的全部更新日志详情。v1.0.4 内部进行了 47 次补丁修订（版本号不变，versionCode 仍为 104），每次修订解决特定 bug 或新增特定功能。</p>
+
+  <div style="background:rgba(192,57,43,.08);border:1px solid rgba(192,57,43,.4);border-radius:6px;padding:12px 16px;margin:14px 0;font-size:.9rem;color:var(--text);line-height:1.7">
+    <strong style="color:#e74c3c">⚠️ 版本号约定：</strong>曾在开发阶段使用版本号：<b>v18.x.x</b>，未来版本号超过<b>v17.x.x</b>以后，<span style="color:red; font-weight:bold;">应当跳过 v18.x.x</span>，从<b>v19.x.x</b>继续。
+  </div>
+
+  <!-- ============================== -->
+  <!-- v1.0.4 Rev47 -->
+  <!-- ============================== -->
+  <div class="cl-card" style="background:linear-gradient(145deg,rgba(120,180,200,.18),rgba(80,140,160,.09));border-color:rgba(140,200,220,.55)">
+    <h3 style="color:#80b0c0">v1.0.4 第5轮第47次修订（版本号不变）</h3>
+    <p class="cl-sub">本次修订修复超时获胜文字不随语言模式即时切换的问题。</p>
+    <ul>
+      <li><strong>超时获胜文字语言切换修复（bug 修复）</strong>：结算画面中"白方/黑方超时胜""White/Black wins by timeout"这段话此前在 <code>_onGameClockExpired()</code> 中直接使用 <code>_lang</code> 设置，而非 <code>T()</code> 函数。当用户在游戏结束后切换语言时，渲染时的重新本地化逻辑（调用 <code>_gameOverStrFromStatus()</code>）对 <code>'timeout'</code> 返回 <code>null</code>（因为该函数没有 <code>'timeout'</code> 分支），导致文字保持原语言不变。修复：在 <code>_gameOverStrFromStatus()</code> 中添加 <code>'timeout'</code> 分支，使用新的 <code>_timeoutWinnerColor</code> 变量和新的 i18n 键 <code>timeout_win_suffix</code>（中：超时胜，英：wins by timeout）。更新 <code>_onGameClockExpired()</code> 设置 <code>_timeoutWinnerColor</code> 并调用 <code>_gameOverStrFromStatus('timeout')</code>。更新 <code>_buildPGNString()</code> 使用 <code>_timeoutWinnerColor</code> 生成 PGN [Result] 标签。</li>
+      <li><strong>中文/英文说明书与源代码匹配度审查</strong>：本说明书与英文版说明书均已同步至 Rev47 修订内容。</li>
+    </ul>
+  </div>
+
+  <!-- ============================== -->
+  <!-- v1.0.4 Rev46 -->
+  <!-- ============================== -->
+  <div class="cl-card" style="background:linear-gradient(145deg,rgba(200,160,120,.18),rgba(160,120,80,.09));border-color:rgba(220,180,140,.55)">
+    <h3 style="color:#e0b080">v1.0.4 第5轮第46次修订（版本号不变）</h3>
+    <p class="cl-sub">本次修订将一方超时获胜时弹窗中的 emoji 从🤝改为⌛，并将引擎超时阈值延长至 360 秒。</p>
+    <ul>
+      <li><strong>超时获胜 emoji 修复（UI 修复）</strong>：当一方超时获胜时，游戏结束弹窗和评估栏此前显示 🤝（和棋 emoji）。修复：现在显示 <strong>⌛</strong>（沙漏 emoji），与超时语义一致。弹窗的 emoji 逻辑此前仅检查 checkmate 和 resign，超时情况落入默认的和棋分支。</li>
+      <li><strong>引擎超时阈值延长至 360 秒（功能优化）</strong>：AI 安全计时器从 30 秒延长至 <strong>360 秒</strong>（6 分钟），以完全适应长时间计时赛（如 5+3 菲舍尔加秒制中，引擎可能需要在复杂中局局面思考 2-4 分钟）。评估安全计时器同步从 15 秒延长至 <strong>30 秒</strong>。</li>
+      <li><strong>中文/英文说明书与源代码匹配度审查</strong>：本说明书与英文版说明书均已同步至 Rev46 修订内容。</li>
+    </ul>
+  </div>
+
+  <!-- ============================== -->
+  <!-- v1.0.4 Rev45 -->
+  <!-- ============================== -->
+  <div class="cl-card" style="background:linear-gradient(145deg,rgba(140,180,140,.18),rgba(100,140,100,.09));border-color:rgba(160,200,160,.55)">
+    <h3 style="color:#90c090">v1.0.4 第5轮第45次修订（版本号不变）</h3>
+    <p class="cl-sub">本次修订延长引擎超时阈值，以便于计时赛模式下引擎更好地利用时间。</p>
+    <ul>
+      <li><strong>引擎超时阈值延长（功能优化）</strong>：AI 安全计时器从 15 秒延长至 <strong>30 秒</strong>，以便于计时赛模式下引擎更好地利用时间进行深度搜索（尤其在较高难度等级下，复杂中局局面可能需要 20-25 秒）。评估安全计时器同步从 10 秒延长至 <strong>15 秒</strong>（深度 15/22 的评估搜索在复杂局面下可能需要 10-12 秒）。</li>
+      <li><strong>中文/英文说明书与源代码匹配度审查</strong>：本说明书与英文版说明书均已同步至 Rev45 修订内容。</li>
+    </ul>
+  </div>
+
+  <!-- ============================== -->
+  <!-- v1.0.4 Rev44 -->
+  <!-- ============================== -->
+  <div class="cl-card" style="background:linear-gradient(145deg,rgba(160,140,200,.18),rgba(120,100,160,.09));border-color:rgba(180,160,220,.55)">
+    <h3 style="color:#a090c0">v1.0.4 第5轮第44次修订（版本号不变）</h3>
+    <p class="cl-sub">本次修订修复评估栏分析中途卡住的问题，修复 Web Worker 内存泄漏，并简化导出 HTML 的函数剥离逻辑。</p>
+    <ul>
+      <li><strong>评估栏分析中途卡住修复（bug 修复）</strong>：主界面评估栏有时会在分析中途卡住，一直显示"分析中"。根因：<code>requestEngineEval()</code> 调用 <code>AndroidBridge.engineEval()</code> 后，Java 侧的 <code>stopAndWaitForBestmove()</code> 可能阻塞最多 1 秒（等待上一次搜索的 bestmove）。如果引擎未能响应（崩溃、执行器拒绝、状态混乱），<code>_evalLoading</code> 永远保持 true，没有超时机制重置。修复：新增 JS 侧评估安全计时器（10 秒），如果 <code>onEngineEval</code> 未到达则重置 <code>_evalLoading=false</code>。计时器在 <code>onEngineEval</code> 成功时清除。</li>
+      <li><strong>Web Worker 内存泄漏修复（审查报告第 1 项）</strong>：<code>worker-pool.js</code> 创建的 Web Worker 从未被终止——在 Android WebView 中，Worker 线程在页面卸载后仍然存在，导致反复加载页面后 OOM。修复：新增 <code>terminateWorker()</code> 函数，在 <code>pagehide</code> 和 <code>beforeunload</code> 事件中注册。页面退出时终止 Worker 并撤销 Blob URL，防止内存泄漏。</li>
+      <li><strong>_stripFnBody 简化（审查报告第 18 项）</strong>：将脆弱的花括号计数 <code>_stripFnBody</code> 替换为简单的正则方法：<code>function name(){...}</code> → <code>function name(){}</code>，通过非贪婪匹配到下一个行首 <code>\n}</code>。消除所有嵌套花括号深度计数问题，经验证对全部 9 个目标函数均正确工作。</li>
+      <li><strong>中文/英文说明书与源代码匹配度审查</strong>：本说明书与英文版说明书均已同步至 Rev44 修订内容；示意图描述已核对——评估栏不再卡住；Worker 内存泄漏已修复；导出 HTML 的函数剥离逻辑已简化。</li>
+    </ul>
+  </div>
+
+  <!-- ============================== -->
+  <!-- v1.0.4 Rev43 -->
+  <!-- ============================== -->
+  <div class="cl-card" style="background:linear-gradient(145deg,rgba(100,180,160,.18),rgba(60,140,120,.09));border-color:rgba(120,200,180,.55)">
+    <h3 style="color:#80c0a0">v1.0.4 第5轮第43次修订（版本号不变）</h3>
+    <p class="cl-sub">本次修订修复统计数据界面导出的完整 PGN 的 HTML 文件无法正常显示（一直卡在加载中）的严重 bug。</p>
+    <ul>
+      <li><strong>导出的统计数据 HTML 卡在加载中修复（关键 bug 修复）</strong>：统计数据界面导出的完整 PGN 的 HTML 文件无法正常显示统计数据，一直卡在"加载中"。根因分析：<code>_exportFullHTML()</code> 中的 <code>_stripFnBody()</code> 函数使用花括号计数来查找函数的闭合花括号。旧逻辑匹配 <code>depth===0</code> + 下一个字符为 <code>\n</code> 或空格。这对于 <code>_exportFullHTML</code> 本身（包含嵌套的 <code>_stripFnBody</code> 函数定义）<strong>失败</strong>——嵌套函数的闭合 <code>}</code> 在 depth 0 时被误认为外层函数的闭合花括号，导致剥离在函数中间截断。截断后残留的孤立代码（注释 + 嵌套函数体）导致 JS 语法错误，整个脚本无法执行——页面永远停留在"加载中"。修复：将结束条件改为 <code>depth===0</code> 且 <code>}</code> 位于<strong>行首</strong>（前面是 <code>\n</code>）——这是顶层函数闭合花括号的标准 JS 约定。嵌套函数的闭合花括号通常有缩进（不在行首），不会误匹配。经验证：所有 9 个被剥离的函数现在都正确剥离，完整导出的 JS 通过语法验证。</li>
+      <li><strong>中文/英文说明书与源代码匹配度审查</strong>：本说明书与英文版说明书均已同步至 Rev43 修订内容；示意图描述已核对——导出的完整 PGN 的 HTML 文件现在可以正常显示棋盘、棋子、统计数据并可正常交互。</li>
+    </ul>
+  </div>
+
+  <!-- ============================== -->
+  <!-- v1.0.4 Rev42 -->
+  <!-- ============================== -->
+  <div class="cl-card" style="background:linear-gradient(145deg,rgba(220,160,100,.18),rgba(180,120,60,.09));border-color:rgba(240,180,120,.55)">
+    <h3 style="color:#e0b080">v1.0.4 第5轮第42次修订（版本号不变）</h3>
+    <p class="cl-sub">本次修订修复 AI 对手栏被吃棋子大于 7 个的部分未正确显示的问题。</p>
+    <ul>
+      <li><strong>被吃棋子 &gt;7 时溢出棋子未显示修复（关键 bug 修复）</strong>：当 AI 的被吃棋子超过 7 个时，溢出的被吃子 div（<code>#ai-cap-overflow</code>）设置了 <code>overflow:hidden</code>（裁剪了棋子使其完全不显示）和 <code>flex:0 1 auto</code>（收缩至 0 宽度）。修复：移除 <code>overflow:hidden</code>（由父容器处理裁剪），改为 <code>flex:0 0 auto</code>（自然宽度，不收缩），确保所有溢出棋子以自然尺寸正确显示。</li>
+      <li><strong>中文/英文说明书与源代码匹配度审查</strong>：本说明书与英文版说明书均已同步至 Rev42 修订内容；示意图描述已核对——被吃棋子 &gt;7 时溢出棋子正确显示在 AI 对手栏第三行。</li>
+    </ul>
+  </div>
+
+  <!-- ============================== -->
+  <!-- v1.0.4 Rev41 -->
+  <!-- ============================== -->
+  <div class="cl-card" style="background:linear-gradient(145deg,rgba(200,180,140,.18),rgba(160,140,100,.09));border-color:rgba(220,200,160,.55)">
+    <h3 style="color:#d0c090">v1.0.4 第5轮第41次修订（版本号不变）</h3>
+    <p class="cl-sub">本次修订统一玩家栏与 AI 对手栏的被吃子字号，并重构统计页面棋盘的坐标标签布局以完全匹配主界面棋盘。</p>
+    <ul>
+      <li><strong>玩家栏被吃子字号统一（UI 优化）</strong>：玩家栏上显示的被吃棋子字号从 1.1rem 减至 0.85rem，与 AI 对手栏保持一致。AI 对手栏第一行（第 1-7 个棋子）也同步调整为 0.85rem。两个栏的被吃子现在视觉风格完全统一。</li>
+      <li><strong>统计页面棋盘坐标标签重构（UI 优化）</strong>：统计数据界面的棋盘坐标标签布局完全重构，与主界面棋盘保持一致：
+        <ul>
+          <li><strong>字母 a-h 移到棋盘外上方</strong>：文件标签（a-h）从棋盘内部移到棋盘外上方，与主界面的 <code>.flbl</code> 样式一致（字号 .7rem、颜色 var(--muted)、system-ui 字体、letter-spacing:1px）</li>
+          <li><strong>数字 1-8 移到棋盘外左侧</strong>：等级标签（1-8）从棋盘内部移到棋盘外左侧，与主界面的 <code>.rlbl</code> 样式一致（同上字号/颜色/字体，flex 列布局）</li>
+          <li><strong>每个格子内部显示坐标编号</strong>：每个格子内部左上角显示坐标编号（如 <code>e4</code>），与主界面的 <code>.sq .lbl</code> 样式<strong>完全一致</strong>——位置 absolute top:1px left:2px、字号 9px、透明度 .95、DejaVu Sans 字体、LBL_LIGHT/LBL_DARK 颜色、.6px 描边、text-shadow 微光、paint-order:stroke fill</li>
+        </ul>
+      </li>
+      <li><strong>中文/英文说明书与源代码匹配度审查</strong>：本说明书与英文版说明书均已同步至 Rev41 修订内容；示意图描述已核对——玩家栏与 AI 对手栏被吃子字号一致；统计页面棋盘坐标标签布局与主界面棋盘完全一致。</li>
+    </ul>
+  </div>
+
+  <!-- ============================== -->
+  <!-- v1.0.4 Rev40 -->
+  <!-- ============================== -->
+  <div class="cl-card" style="background:linear-gradient(145deg,rgba(180,200,220,.18),rgba(140,160,180,.09));border-color:rgba(200,220,240,.55)">
+    <h3 style="color:#90b0d0">v1.0.4 第5轮第40次修订（版本号不变）</h3>
+    <p class="cl-sub">本次修订修复被吃棋子超过 7 个时溢出棋子竖向排列的问题，并修复 ponder 信息在无溢出时的对齐问题。</p>
+    <ul>
+      <li><strong>溢出被吃子竖向排列修复（bug 修复）</strong>：当 AI 的被吃棋子超过 7 个时，溢出的被吃子 div（<code>#ai-cap-overflow</code>）使用了 <code>flex-wrap:wrap</code>，导致容器变窄时棋子<strong>竖向堆叠</strong>。修复：改为 <code>flex-wrap:nowrap</code> + <code>overflow:hidden</code>，棋子始终保持横向排列（多余的截断）。同时将溢出棋子的字号从 1.1rem 减小到 0.85rem，以便横向容纳更多棋子。</li>
+      <li><strong>ponder 信息对齐修复（bug 修复）</strong>：第三行容器使用了 <code>justify-content:space-between</code>。当无溢出棋子时（被吃子 ≤7），仅有一个子元素（<code>#ai-ponder-info</code>），<code>space-between</code> 将其放在<strong>左侧</strong>而非右侧。修复：改为在 <code>#ai-ponder-info</code> 上使用 <code>margin-left:auto</code>，无论是否有溢出棋子，ponder 信息<strong>始终右对齐</strong>。</li>
+      <li><strong>中文/英文说明书与源代码匹配度审查</strong>：本说明书与英文版说明书均已同步至 Rev40 修订内容；示意图描述已核对——被吃棋子 &gt;7 时溢出棋子横向排列，ponder 信息始终右对齐。</li>
+    </ul>
+  </div>
+
+  <!-- ============================== -->
+  <!-- v1.0.4 Rev39 -->
+  <!-- ============================== -->
+  <div class="cl-card" style="background:linear-gradient(145deg,rgba(200,160,120,.18),rgba(160,120,80,.09));border-color:rgba(220,180,140,.55)">
+    <h3 style="color:#d0b080">v1.0.4 第5轮第39次修订（版本号不变）</h3>
+    <p class="cl-sub">本次修订修复被吃棋子大于 7 个时 ponder 信息未正确显示在 AI 对手栏的问题。</p>
+    <ul>
+      <li><strong>被吃棋子 &gt;7 时 ponder 信息未显示修复（关键 bug 修复）</strong>：当 AI 的被吃棋子超过 7 个时，溢出的被吃子 div（<code>#ai-cap-overflow</code>）设置了 <code>width:100%</code> + <code>flex:0 0 auto</code>，导致它占用了第三行 flex 容器的<strong>全部可用宽度</strong>，将 <code>#ai-ponder-info</code> 挤出屏幕——ponder 信息在被吃棋子 &gt;7 时完全不显示。修复：移除 <code>width:100%</code>，改为 <code>flex:0 1 auto</code>（按需收缩）+ <code>min-width:0</code>。现在溢出的被吃子只占用所需空间，为右侧的 ponder 信息留出空间。</li>
+      <li><strong>中文/英文说明书与源代码匹配度审查</strong>：本说明书与英文版说明书均已同步至 Rev39 修订内容；示意图描述已核对——被吃棋子 &gt;7 时 ponder 信息正确显示在 AI 对手栏第三行右对齐。</li>
+    </ul>
+  </div>
+
+  <!-- ============================== -->
+  <!-- v1.0.4 Rev38 -->
+  <!-- ============================== -->
+  <div class="cl-card" style="background:linear-gradient(145deg,rgba(160,200,160,.18),rgba(120,160,120,.09));border-color:rgba(180,220,180,.55)">
+    <h3 style="color:#90c090">v1.0.4 第5轮第38次修订（版本号不变）</h3>
+    <p class="cl-sub">本次修订修复 AI 对手栏部分信息超出显示宽度的问题。</p>
+    <ul>
+      <li><strong>AI 对手栏信息溢出修复（bug 修复）</strong>：部分信息超出了 AI 对手栏的显示宽度。根因分析：
+        <ul>
+          <li>内部列容器（<code>flex:1;min-width:0</code>）缺少 <code>overflow:hidden</code>，长搜索信息/ponder 信息字符串可将内容推到栏边界之外</li>
+          <li><code>#ai-search-info</code> 和 <code>#ai-ponder-info</code> 使用了 <code>white-space:nowrap + overflow:hidden + text-overflow:ellipsis</code>，但缺少 <code>max-width:100%</code> 和 <code>box-sizing:border-box</code>，导致省略号在部分 flex 上下文中未正确激活</li>
+          <li>第三行容器（溢出被吃子 + ponder 信息）使用 <code>flex:0 0 auto</code>（不可收缩），栏窄时无法压缩，且缺少 <code>min-width:0</code> 和 <code>overflow:hidden</code></li>
+          <li><code>.pbar</code> CSS 缺少 <code>max-width:100%</code> 和 <code>overflow:hidden</code>，栏本身可被内部内容推宽</li>
+        </ul>
+        修复：内部列容器添加 <code>overflow:hidden</code>；<code>#ai-search-info</code> 添加 <code>max-width:100% + box-sizing:border-box</code>；第三行容器改为可收缩（<code>min-width:0 + overflow:hidden</code>）；<code>#ai-ponder-info</code> 添加 <code>min-width:0</code>；<code>.pbar</code> CSS 添加 <code>max-width:100% + overflow:hidden</code>。现在所有文本在栏窄时正确以省略号截断。</li>
+      <li><strong>中文/英文说明书与源代码匹配度审查</strong>：本说明书与英文版说明书均已同步至 Rev38 修订内容；示意图描述已核对——AI 对手栏信息不再超出显示宽度。</li>
+    </ul>
+  </div>
+
+  <!-- ============================== -->
+  <!-- v1.0.4 Rev37 -->
+  <!-- ============================== -->
+  <div class="cl-card" style="background:linear-gradient(145deg,rgba(220,180,100,.18),rgba(180,140,60,.09));border-color:rgba(240,200,120,.55)">
+    <h3 style="color:#e0c080">v1.0.4 第5轮第37次修订（版本号不变）</h3>
+    <p class="cl-sub">本次修订调整 AI 对手栏的被吃子显示布局：棋子数量超过 7 个时，第 8 个起显示在第三行左对齐。</p>
+    <ul>
+      <li><strong>AI 对手栏被吃子分行显示（UI 优化）</strong>：当 AI 对手栏上的被吃子棋子数量达到 7 个以后，从第 8 个开始显示在<strong>第三行左对齐</strong>。第 1-7 个棋子保持在原行（第二行区域）。第三行现在同时包含溢出的被吃子（左对齐）和 ponder 信息（右对齐），使用 flex space-between 布局。玩家栏保持现状不变（单行 wrap）。新增 <code>capturedPiecesHtml()</code> 的 <code>splitAt</code> 参数（AI 栏 = 7，玩家栏 = 0/省略 = 不分行）。</li>
+      <li><strong>中文/英文说明书与源代码匹配度审查</strong>：本说明书与英文版说明书均已同步至 Rev37 修订内容；示意图描述已核对——AI 对手栏被吃子超过 7 个时第 8 个起在第三行左对齐显示。</li>
+    </ul>
+  </div>
+
+  <!-- ============================== -->
+  <!-- v1.0.4 Rev36 -->
+  <!-- ============================== -->
+  <div class="cl-card" style="background:linear-gradient(145deg,rgba(180,160,220,.18),rgba(140,120,180,.09));border-color:rgba(200,180,240,.55)">
+    <h3 style="color:#b0a0e0">v1.0.4 第5轮第36次修订（版本号不变）</h3>
+    <p class="cl-sub">本次修订重构 AI 对手栏布局，补充 seldepth 冒号格式，并修复两个关键 bug（engineStop 空闲状态误丢弃 bestmove、ponder 分数视角反转）。</p>
+    <ul>
+      <li><strong>AI 对手栏布局重构（UI 优化）</strong>：AI 对手栏的引擎搜索实时信息调整为<strong>第二行右对齐</strong>显示，ponder 实时信息顺延至<strong>第三行右对齐</strong>。第一行仅显示紧凑状态（AI 名称 + 等级 + 时钟 + "思考中"指示器）。此前引擎搜索信息内联在第一行（拥挤、难读），现在独立成行，信息层次更清晰。新增 DOM 元素 <code>#ai-search-info</code> 用于第二行。</li>
+      <li><strong>seldepth 标签冒号格式统一（UI 优化）</strong>：在 AI 对手栏显示的"选深"/"SelDepth"与数值之间补充冒号（如 <code>选深:22</code> / <code>SelDepth:22</code>），与深度/节点/速度的格式一致（均使用"标签:值"格式）。</li>
+      <li><strong>engineStop() 空闲状态误丢弃 bestmove 修复（关键 bug 修复）</strong>：<code>engineStop()</code> 此前在引擎空闲状态（STATE_NONE）下也会设置 <code>_discardingPonderBestmove=true</code>。该标志只能由 bestmove 丢弃或崩溃恢复清除，因此在玩家自己回合（引擎空闲）调用 engineStop()（如认输/超时）后，该标志残留，导致<strong>下一局的第一步 bestmove 被静默丢弃</strong>——表现为新游戏 AI 第一步延迟 15 秒（安全计时器超时）。修复：仅在 <code>stateBefore != STATE_NONE</code> 时设置标志并发送 stop。</li>
+      <li><strong>onPonderProgress 分数视角反转修复（关键 bug 修复）</strong>：<code>onPonderProgress</code> 中 <code>isBlackToMove=(playerColor==='black')</code> 是<strong>反转的</strong>。ponder 局面是玩家预测走法之后的局面，所以 side-to-move 是 AI（playerColor 的对方）。当玩家是白方时，AI 是黑方，ponder 局面轮到黑方（AI）→ isBlackToMove 应为 true。旧代码返回 false，导致<strong>ponder 分数显示符号错误</strong>（AI 赢面显示为输面）。修复：改为 <code>(playerColor==='white')</code>。</li>
+      <li><strong>stats.html Chess960 王车易位检测修复（bug 修复）</strong>：<code>executeMove()</code> 的王车易位检测 <code>Math.abs(to.col-from.col)===2</code> 仅适用于标准象棋。在 Chess960 中，王可以从任意列起始并移动到 col 6/2——距离可以是 1-5 列。修复：改为按<strong>目标列</strong>检测（6=短易位，2=长易位），不再按距离检测。</li>
+      <li><strong>冗余清理</strong>：<code>_updateAIThinkDisplay()</code> 不再在第二行显示"思考中"占位符（第一行的 .tind 已显示），仅显示实际搜索数据（含":"）。</li>
+      <li><strong>中文/英文说明书与源代码匹配度审查</strong>：本说明书与英文版说明书均已同步至 Rev36 修订内容；示意图描述已核对——AI 对手栏第二行显示引擎搜索信息（右对齐），第三行显示 ponder 信息（右对齐）；seldepth 标签带冒号。</li>
+    </ul>
+  </div>
+
+  <!-- ============================== -->
+  <!-- v1.0.4 Rev35 -->
+  <!-- ============================== -->
+  <div class="cl-card" style="background:linear-gradient(145deg,rgba(100,200,220,.18),rgba(60,160,180,.09));border-color:rgba(120,220,240,.55)">
+    <h3 style="color:#80d0e0">v1.0.4 第5轮第35次修订（版本号不变）</h3>
+    <p class="cl-sub">本次修订修复计时赛模式下引擎搜索超过时钟时间的严重 bug，并将 AI 对手栏的 seldepth 标签本地化。</p>
+    <ul>
+      <li><strong>计时赛引擎搜索超时 bug 修复（关键 bug 修复）</strong>：计时赛模式下，引擎有时在可用时间不多时仍搜索很久。根因分析（两个独立原因）：
+        <ul>
+          <li><strong>原因 1：时钟耗尽时未发送 stop 指令</strong>。GUI 时钟到期（超时）时，<code>_onGameClockExpired()</code> 仅设置 gameOver 状态，<strong>未向引擎发送 stop 指令</strong>。引擎继续基于内部 wtime 估算搜索，可能远远超过 GUI 的 0 秒标记——尤其在小米澎湃OS 3 的 CPU 节流下，引擎的时间分配会偏离墙上时钟。修复：<code>_onGameClockExpired()</code> 现在调用 <code>AndroidBridge.engineStop()</code> 立即硬停止引擎。同时清除 <code>isAIThinking</code> 和 AI 安全计时器，让游戏结束浮层立即显示。</li>
+          <li><strong>原因 2：发送给引擎的 wtime/btime 是过时值</strong>。JS 调用 <code>engineGoTimed()</code> 时测量时钟，但 "go" 指令实际发送时（经过 <code>stopAndWaitForBestmove</code> + <code>ucinewgame</code> + <code>readyok</code> 等待，最长 6 秒），真实时钟已经减少。引擎基于过时（偏大）的 wtime 过度分配搜索时间。修复：<code>engineGoTimed()</code> 现在记录 JS 调用时间戳，在发送 "go" 前从 wtime/btime 中扣除设置开销（setup overhead），并添加安全余量（<code>engineMoveOverhead</code>，最小 50ms）确保引擎的 bestmove 在 GUI 时钟归零前返回。</li>
+        </ul>
+      </li>
+      <li><strong>新增 Java 接口</strong>：
+        <ul>
+          <li><code>engineStop()</code>：硬停止任何引擎状态（STATE_GO/HINT/EVAL/PONDER），设置 <code>_discardingPonderBestmove=true</code> 使 bestmove 被静默消费并丢弃。用于时钟到期或用户认输。</li>
+          <li><code>sendToEngine(String command)</code>：原始 UCI 指令发送器（回退用）。</li>
+        </ul>
+      </li>
+      <li><strong>认输路径优化</strong>：认输时优先调用 <code>engineStop()</code>（硬停止，丢弃 bestmove）而非 <code>sendToEngine('stop')</code>（软停止，bestmove 仍被处理）。</li>
+      <li><strong>AI 对手栏 seldepth 标签本地化（UI 优化）</strong>：AI 对手栏（显示 AI 思考/提示/预判时的引擎搜索进度）现在使用本地化标签显示 seldepth：中文模式下显示"<strong>选深</strong>"，英文模式下显示"<strong>SelDepth</strong>"。此前两种语言均显示缩写"SD"。评估栏（顶部标题栏）保持缩写"SD"以保持紧凑。新增 i18n 键：<code>seldepth_label</code>（中：选深，英：SelDepth）。</li>
+      <li><strong>中文/英文说明书与源代码匹配度审查</strong>：本说明书与英文版说明书均已同步至 Rev35 修订内容；示意图描述已核对——计时赛模式下引擎不再超过时钟时间搜索；AI 对手栏现在显示"选深"/"SelDepth"。</li>
+    </ul>
+  </div>
+
+  <!-- ============================== -->
+  <!-- v1.0.4 Rev34 -->
+  <!-- ============================== -->
+  <div class="cl-card" style="background:linear-gradient(145deg,rgba(200,120,160,.18),rgba(160,80,120,.09));border-color:rgba(220,140,180,.55)">
+    <h3 style="color:#e090b0">v1.0.4 第5轮第34次修订（版本号不变）</h3>
+    <p class="cl-sub">本次修订修复菲舍尔任意制（Chess960）王车易位可能吃掉自己棋子的严重 bug，并为统计页面热力图增加坐标编号显示。</p>
+    <ul>
+      <li><strong>Chess960 王车易位吃子 bug 修复（关键 bug 修复）</strong>：参考上传的《菲舍尔任意制国际象棋的王车易位规则》和《易位后它们的最终位置上已有棋子的话怎么办？》两份 PDF 文档，修复 <code>chess960.js isChess960CastlingLegal()</code> 的严重缺陷。原实现仅检查王与车<strong>之间</strong>的格子是否为空，但<strong>未检查</strong>王的目的地和车的目的地是否有其他棋子。在 Chess960 中，王和车可能起始位置很近（如王在 b1，车在 c1），王的路径（b1→g1）远远超出车的位置——经过 d1、e1、f1 等可能被其他棋子占据的格子。<code>makeMv()</code> 会直接覆盖这些格子，<strong>等于销毁己方棋子</strong>。修复：现在检查<strong>王路径和车路径的并集</strong>——每个格子必须为空，除了王和车各自的起始位置（它们会移走）。符合官方 Chess960 规则：目标格上不能有第三个棋子。</li>
+      <li><strong>统计页面王车易位 Chess960 兼容性修复</strong>：
+        <ul>
+          <li><code>stats.html applySANMove()</code>：王车易位不再硬编码王起始列 4（e1），改为扫描底线寻找王的实际列——Chess960 中王可能起始在 b1-g1 任意列。</li>
+          <li><code>stats.html executeMove()</code>：王车易位的车移动现在支持 Chess960。不再总是从列 7（h1）或列 0（a1）取车，改为扫描易位方向上最近的车。找不到时回退到标准象棋位置。</li>
+        </ul>
+      </li>
+      <li><strong>统计页面热力图坐标编号显示（新功能）</strong>：统计数据页面的热力图控制统计矩阵的每个格子现在在<strong>顶部居中</strong>显示坐标编号（如 <code>a8</code>、<code>e4</code>），方便用户识别每个热力图格子代表哪个棋盘格。坐标格式为字母+数字（a-h + 1-8），与标准国际象棋记谱一致。</li>
+      <li><strong>中文/英文说明书与源代码匹配度审查</strong>：本说明书与英文版说明书均已同步至 Rev34 修订内容；示意图描述已核对——Chess960 王车易位不再吃掉己方棋子；统计页面热力图现在显示坐标编号。</li>
+    </ul>
+  </div>
+
+  <!-- ============================== -->
+  <!-- v1.0.4 Rev33 -->
+  <!-- ============================== -->
+  <div class="cl-card" style="background:linear-gradient(145deg,rgba(140,180,100,.18),rgba(100,140,60,.09));border-color:rgba(160,200,120,.55)">
+    <h3 style="color:#a0e080">v1.0.4 第5轮第33次修订（版本号不变）</h3>
+    <p class="cl-sub">本次修订为评估显示增加战术深度（seldepth）信息，延续现有 D（depth）简写风格，新增 SD（seldepth）简写显示在 D 之后。</p>
+    <ul>
+      <li><strong>seldepth 解析与显示（新功能）</strong>：参考 Stockfish 18 局面评估最佳实践文档，新增 seldepth（选择性搜索深度 / 战术深度）的解析与显示。seldepth 反映引擎在战术变例中实际触及的最大深度（通常 &gt;= depth）。显示为 <code>SD&lt;N&gt;</code>，紧跟在 <code>D&lt;N&gt;</code> 之后，延续现有简写风格（如 <code>D15 SD22</code>）。SD 仅在 <code>&gt; 0 且 &gt; depth</code> 时显示（seldepth == depth 时冗余，不显示）。</li>
+      <li><strong>主界面评估栏 + AI对手栏 seldepth 显示</strong>：主界面顶部评估栏和 AI 对手栏现在在引擎搜索时显示 <code>D15 SD22</code>（depth + seldepth）。SD 紧跟在 D 之后，与现有的 D15 风格一致。</li>
+      <li><strong>复盘界面评估栏实时搜索信息显示（新功能）</strong>：复盘界面的评估栏现在显示实时的：
+        <ul>
+          <li><strong>搜索深度（D）</strong>：主迭代深度，如 <code>D15</code></li>
+          <li><strong>战术深度（SD）</strong>：选择性搜索深度，如 <code>SD22</code>（紧跟在 D 之后）</li>
+          <li><strong>节点数量</strong>：已搜索节点数，如 <code>1.5M</code></li>
+          <li><strong>搜索速度</strong>：每秒节点数，如 <code>1.5M/s</code></li>
+        </ul>
+        此前复盘评估栏仅显示 D（无节点/速度信息）。现在用户在复盘时可以完整看到引擎的搜索进度。</li>
+      <li><strong>PGN 评估注释包含 seldepth</strong>：<code>formatEvalTag()</code> 现在在 PGN 评估注释中包含 <code>SD&lt;N&gt;</code>，当 seldepth &gt; depth 时。例如：<code>{SF18 D15 SD22 +0.5 50%W/30%D/20%L}</code>。</li>
+      <li><strong>实现细节</strong>：
+        <ul>
+          <li><code>StockfishNative.java</code>：新增 <code>SELDEPTH_PATTERN</code> 正则；<code>processInfoLine()</code> 解析 seldepth；<code>onEngineProgress</code> 新增第 9 参数（seldepth）；<code>onPonderProgress</code> 新增第 6 参数（seldepth）；<code>onEngineEval</code> 新增第 7 参数（seldepth）；MultiPV JSON 包含 seldepth 字段。</li>
+          <li><code>ai-bridge.js</code>：新增 <code>_sfSeldepth</code> 全局变量；<code>onEngineProgress</code> / <code>onEngineEval</code> / <code>onPonderProgress</code> 更新以接收 seldepth；<code>_resetEvalState</code> 重置 <code>_sfSeldepth=0</code>；复盘评估缓存存储 seldepth；<code>formatEvalTag()</code> 在 seldepth &gt; depth 时包含 <code>SD&lt;N&gt;</code>。</li>
+          <li><code>ui.js</code>：主界面评估栏（<code>_updateEvalDisplayIncremental</code> 和完整 <code>renderInternal</code>）显示 <code>D15 SD22</code>；复盘评估栏显示 <code>D15 SD22</code> 加实时 nodes + nps；将杀/和棋缓存路径重置 <code>_sfSeldepth=0</code>。</li>
+        </ul>
+      </li>
+      <li><strong>中文/英文说明书与源代码匹配度审查</strong>：本说明书与英文版说明书均已同步至 Rev33 修订内容；示意图描述已核对——评估栏现在显示 <code>D&lt;N&gt; SD&lt;N&gt;</code> 格式；复盘评估栏现在显示实时 depth/seldepth/nodes/nps。</li>
+    </ul>
+  </div>
+
+  <!-- ============================== -->
+  <!-- v1.0.4 Rev32 -->
+  <!-- ============================== -->
+  <div class="cl-card" style="background:linear-gradient(145deg,rgba(220,140,80,.18),rgba(180,100,40,.09));border-color:rgba(240,160,80,.55)">
+    <h3 style="color:#e0a080">v1.0.4 第5轮第32次修订（版本号不变）</h3>
+    <p class="cl-sub">本次修订修复开启 ECO 开局库后引擎有时无反应的严重 bug，并参考 Stockfish 18 局面评估最佳实践文档精确优化评估功能。</p>
+    <ul>
+      <li><strong>ECO 开局库导致引擎无反应 bug 修复（关键 bug 修复）</strong>：当开启"AI优先从ECO开局库中选择开局走法"后，连续 3 步由开局库提供 AI 走法后，引擎<strong>有时无反应</strong>——AI 不再走棋。根因分析：<code>doAIMove()</code> 每次调用都递增 <code>_aiRetryCount</code>（期望由 <code>onBestMove</code> 重置）。当 ECO 开局库提供走法时，<strong>引擎未被调用</strong>，<code>onBestMove</code> 从未触发，<code>_aiRetryCount</code> 持续累积。3 步开局库走法后，<code>_aiRetryCount&gt;=3</code> → <code>doAIMove()</code> 误判"AI 连续 3 次超时失败" → 显示 <code>ai_timeout</code> 提示并<strong>直接返回，不调用引擎</strong>。修复：开局库提供走法时（及残局库提供走法时）重置 <code>_aiRetryCount=0</code>——"请求"已由开局库满足，只是没有调用引擎而已。现在开启 ECO 开局库后引擎不会再无反应。</li>
+      <li><strong>UCI 评估功能优化（参考 SF18 评估最佳实践文档）</strong>：参考上传的 Stockfish 18 局面评估开发建议文档，在保持现有评估功能设计框架的前提下，精确优化评估功能：
+        <ul>
+          <li><strong>Contempt=0 客观评估</strong>：<code>engineEval()</code> 和 <code>engineEvalDeep()</code> 现在在评估搜索前设置 <code>Contempt=0</code>。SF18 默认 <code>Contempt=24</code> 会让引擎主动避免和棋，<strong>扭曲分析分数的客观性</strong>——看似均势的局面可能显示一方优势。设为 0 确保评估分数客观反映局面实际优劣。评估完成后，<code>handleBestMove()</code> 的 STATE_EVAL 分支调用 <code>restoreGameplayOptions()</code> 恢复 <code>Contempt=24</code>（对弈时进取），不影响实际对弈表现。</li>
+          <li><strong>MultiPV=1 最大搜索深度</strong>：评估时强制 <code>MultiPV=1</code>。MultiPV&gt;1 会将搜索 effort 分散到 N 条线路，<strong>降低搜索深度</strong>。评估场景需要最大深度以获得最准确的分数。评估完成后恢复用户设置的 MultiPV 值。</li>
+          <li><strong>UCI_ShowWDL=true 胜率和概率</strong>：确保 <code>UCI_ShowWDL=true</code>，使 info 行包含 <code>wdl W D L</code> 字段（胜/和/负千分比概率）。APP 评估栏已支持 WDL 显示，此设置确保引擎始终输出 WDL 数据。</li>
+          <li>新增私有方法：<code>applyEvalModeOptions()</code>（评估前设置客观选项）、<code>restoreGameplayOptions()</code>（评估后恢复对弈选项）。</li>
+        </ul>
+      </li>
+      <li><strong>中文/英文说明书与源代码匹配度审查</strong>：本说明书与英文版说明书均已同步至 Rev32 修订内容；示意图描述已核对——开启 ECO 开局库后引擎不再无反应；评估分数现在客观反映局面实际优劣（不受 Contempt 扭曲）。</li>
+    </ul>
+  </div>
+
+  <!-- ============================== -->
+  <!-- v1.0.4 Rev31 -->
+  <!-- ============================== -->
+  <div class="cl-card" style="background:linear-gradient(145deg,rgba(100,160,220,.18),rgba(60,120,180,.09));border-color:rgba(100,180,240,.55)">
+    <h3 style="color:#80b0e0">v1.0.4 第5轮第31次修订（版本号不变）</h3>
+    <p class="cl-sub">本次修订聚焦三大核心问题：统计页面横屏棋子尺寸、复盘界面横竖屏切换走法列表滚动复位、计时赛模式 UCI 引擎通信合规性，并完成全面冗余代码清理。</p>
+    <ul>
+      <li><strong>统计页面横屏棋盘棋子尺寸修复（关键 UI 修复）</strong>：统计数据页面的棋盘棋子原先使用 <code>font-size:5.2vw</code>（视口相对单位）。在横屏模式下，视口宽度很大（如 800px+），但棋盘容器被限制为 <code>max-width:360px</code>——5.2vw 计算出 41px+ 的字体大小，导致棋子<strong>溢出棋格</strong>，视觉混乱。修复：棋子字体大小改用 CSS 变量 <code>--piece-size</code>，由 JS 在布局后设置为 <code>(boardWidth / 8 * 0.72)</code>（棋子约为棋格的 72%）。此方案<strong>正确适应棋盘容器实际尺寸</strong>，横竖屏均表现一致，兼容所有 Android WebView 版本（无需 container query 支持）。新增 <code>_updateStatsBoardPieceSize()</code> 函数，在渲染后及 resize/orientationchange 事件中调用。</li>
+      <li><strong>复盘界面横竖屏切换走法列表滚动复位 bug 修复（关键 UX 修复）</strong>：复盘界面在横竖屏切换后，走法列表<strong>跳转到错误的滚动位置</strong>，偏离当前选中的走法。根因分析：<code>render()</code> 重建 DOM 时，保存阶段从<strong>旧布局</strong>的 <code>.review-body</code> 读取 <code>scrollTop</code>，恢复阶段将该像素偏移应用到<strong>新布局</strong>——但同一像素偏移在新布局中指向<strong>不同的走法</strong>（因 scrollHeight 不同）。修复方案：（1）orientationchange 时强制 <code>_lastReviewStepScrolled=-2</code>（哨兵值"从未滚动"），使下一次 render 的 scroll-into-view 逻辑在新布局中<strong>重新居中当前走法</strong>；（2）使 <code>_mlistScrollState.valid=false</code> 失效，主走法列表从新 DOM 重新快照；（3）设置 <code>_skipReviewBodyScrollRestore</code> 标志，复盘体不恢复旧的 scrollTop（由 scroll-into-view 处理重新居中）。</li>
+      <li><strong>计时赛模式 UCI 引擎通信合规性修复（关键功能修复）</strong>：参考 UCI 协议规范与 Stockfish 18 引擎最佳实践文档，修复计时赛模式下的 Ponder 功能。原实现 <code>startPonder()</code> 仅发送 <code>"go ponder"</code> 而不带时间参数——违反 UCI 规范。UCI 规范要求 <code>go ponder</code> 必须包含 <code>wtime/btime/winc/binc</code> 参数，以便引擎在收到 <code>ponderhit</code> 时能切换到正常计时搜索。不带时间参数会导致：（a）引擎在 ponderhit 后<strong>无限搜索</strong>（无时间压力），或（b）引擎在 ponderhit 后<strong>瞬间返回 bestmove</strong>（panic 模式）——两者均为计时赛异常行为。修复：<code>startPonder()</code> 新增 4 个时间参数；JS 侧传入当前 <code>gameClocks</code> 值（使用 displayRemainingSec 获取最准确的当前值）。对于非计时赛，传入全 0，Java 侧检测后发送 <code>"go ponder"</code>（不带时间参数）。保留 <code>@deprecated</code> 单参数 <code>startPonder(fen)</code> 重载以向后兼容。</li>
+      <li><strong>全面冗余代码清理（代码质量）</strong>：精确清理每个文件中残留的无用冗余：
+        <ul>
+          <li><code>tablebase.js _parsePGN()</code>：移除未使用的 <code>_unclosed</code> 标志（已设置但从未读取）。</li>
+          <li><code>stats.html buildSAN()</code>：移除死变量 <code>oppKing</code>（始终为 null，从未读取——废弃检测逻辑的残留）。</li>
+          <li><code>pgn-standard.js</code>：移除死比较 <code>ch==='\s'</code>（单个字符永远不等于 2 字符字符串 "\s"——正则 \s 类的笔误，但显式的 ' ' / '\t' / '\n' 检查已覆盖所有情况）。</li>
+          <li><code>pgn-standard.js composePGN()</code>：修复当 <code>tagPairs</code> 为空时产生前导空行的问题（原返回 <code>'\n\n&lt;movetext&gt;\n'</code>，现返回 <code>'&lt;movetext&gt;\n'</code>）。</li>
+        </ul>
+      </li>
+      <li><strong>中文/英文说明书与源代码匹配度审查</strong>：本说明书与英文版说明书均已同步至 Rev31 修订内容；示意图描述已核对——统计页面棋盘的棋子尺寸现在符合修复后的实际情况（横竖屏均正确适应棋盘容器）；复盘界面横竖屏切换后走法列表不再跳转到错误位置；计时赛模式下的 Ponder 功能现在符合 UCI 规范。</li>
+    </ul>
+  </div>
+
+  <!-- ============================== -->
+  <!-- v1.0.4 Rev30 -->
+  <!-- ============================== -->
+  <div class="cl-card" style="background:linear-gradient(145deg,rgba(180,220,160,.18),rgba(140,180,120,.09));border-color:rgba(200,240,180,.55)">
+    <h3 style="color:#a0d080">v1.0.4 第5轮第30次修订（版本号不变）</h3>
+    <p class="cl-sub">本次修订统一了 i18n 文案中的 PGN 关键字大小写，并完善了 PGN 头部 TimeControl 字段的解析与导出。</p>
+    <ul>
+      <li><strong>i18n 文案 PGN 关键字大小写统一（i18n 修复）</strong>：审查所有翻译键中提及 PGN 关键字的字符串（如 <code>[%emt]</code>、<code>[%clk]</code>、<code>[%eval]</code>、<code>[%csl]</code>、<code>[%cal]</code>），统一为 PGN 规范要求的小写格式（已符合规范）。同时将 i18n 文案中"Pgn"误用统一为"PGN"大写形式（缩写应全大写）。</li>
+      <li><strong>PGN 头部 TimeControl 字段解析与导出完善</strong>：<code>pgn-standard.js</code> 新增完整的 TimeControl 头标签解析与格式化支持，覆盖全部 6 种格式：突然死亡 / 菲舍尔加秒 / 布朗斯坦延迟 / 美国延迟 / 阶段制 / 沙漏。导出时根据 <code>gameClocks</code> 与 <code>timeControlMode</code> 自动生成正确的 TimeControl 头标签。</li>
+      <li><strong>中文/英文说明书与源代码匹配度审查</strong>：本说明书与英文版说明书均已同步至 Rev30 修订内容。</li>
+    </ul>
+  </div>
+
+  <!-- ============================== -->
+  <!-- v1.0.4 Rev29 -->
+  <!-- ============================== -->
+  <div class="cl-card" style="background:linear-gradient(145deg,rgba(200,180,220,.18),rgba(160,140,180,.09));border-color:rgba(220,200,240,.55)">
+    <h3 style="color:#b0a0d0">v1.0.4 第5轮第29次修订（版本号不变）</h3>
+    <p class="cl-sub">本次修订修复 PGN 导入后部分变例首 token 解析失败时静默跳过的诊断日志缺失，并完善了 Chess960 PGN 导入时的 SP-ID 自动推导逻辑。</p>
+    <ul>
+      <li><strong>变例首 token 解析失败的诊断日志完善（开发体验）</strong>：当 PGN 导入时遇到变例首 token 无法匹配三重 fallback（Type A 同侧替代 / Type A moveAlg 模糊匹配 / Type B 对手应着 / Type B moveAlg 模糊匹配）时，原先仅静默跳过——开发者难以排查 PGN 输入问题。修复：所有变例首 token 匹配失败时输出 <code>console.warn</code> 日志，包含变例在 PGN 中的位置、首 token 文本、上下文主线走法等信息。</li>
+      <li><strong>Chess960 PGN 导入时 SP-ID 自动推导完善</strong>：导入 PGN 时识别 <code>[Variant "Chess960"]</code> / <code>[Variant "Fischerandom"]</code> / <code>[Variant "Fischer Random"]</code> / <code>[Variant "FRC"]</code> 头标签后，自动从 Shredder-FEN 易位权字段推导 SP-ID。原先推导算法对部分边缘情况（双象同色格、王在边角）处理不完整，现修复。</li>
+      <li><strong>中文/英文说明书与源代码匹配度审查</strong>：本说明书与英文版说明书均已同步至 Rev29 修订内容。</li>
+    </ul>
+  </div>
+
+  <!-- ============================== -->
+  <!-- v1.0.4 Base -->
+  <!-- ============================== -->
+  <div class="cl-card" style="background:linear-gradient(145deg,rgba(80,180,80,.18),rgba(40,140,40,.09));border-color:rgba(80,200,80,.55)">
+    <h3 style="color:#80e080">v1.0.4 更新日志（主版本发布）</h3>
+    <p class="cl-sub">本版本为 v1.0.4 主版本发布，versionCode 升级至 104。主要新增 Chess960 模式、规范化 PGN 处理、热力图统计与多项统计维度扩充。</p>
+    <ul>
+      <li><strong>菲舍尔任意制象棋 (Chess960 / Fischer Random Chess) 模式（新功能）</strong>：
+        <ul>
+          <li>新游戏设置界面新增 Chess960 选项，可选择 SP-ID（0..959）或随机起始位置；选中后显示起始排列预览（底排棋子图示）。</li>
+          <li>正确实现 Chess960 王车易位规则：王终至 g1/c1，车终至 f1/d1（与标准象棋终点相同），但起始位置随机；通过新增 <code>chess960.js</code> 模块实现 SP-ID 生成器、Shredder-FEN 易位权编码/解码、960 易位合法性检测。</li>
+          <li>新增 <code>AndroidBridge.setChess960Mode(boolean)</code> JavascriptInterface，调用 Stockfish 的 <code>UCI_Chess960</code> 选项；引擎（自动）重启后会自动重新应用 960 模式，避免崩溃恢复后丢设置。</li>
+          <li>PGN 导出对 Chess960 对局自动加入 <code>[Variant "Chess960"]</code> + <code>[SetUp "1"]</code> + <code>[FEN "..."]</code>（FEN 使用 Shredder 易位权格式，如 <code>HAah</code>）；PGN 导入时识别 <code>[Variant "Chess960"]</code>、<code>[Variant "Fischerandom"]</code>、<code>[Variant "Fischer Random"]</code>、<code>[Variant "FRC"]</code>，并自动推导 SP-ID。</li>
+          <li>UI 文案双语（中/英）完整适配。</li>
+        </ul>
+      </li>
+      <li><strong>规范化 PGN 处理（重构）</strong>：
+        <ul>
+          <li>新增 <code>pgn-standard.js</code> 模块，实现 1994 PGN 规范的严格编码与容错解码。</li>
+          <li>导出 PGN 始终包含<strong>七标签阵容 (Seven Tag Roster)</strong>：<code>[Event]</code>、<code>[Site]</code>、<code>[Date]</code>、<code>[Round]</code>、<code>[White]</code>、<code>[Black]</code>、<code>[Result]</code>。</li>
+          <li>棋步文本以 ~78 列换行（规范建议），结果标记 (<code>1-0</code>/<code>0-1</code>/<code>1/2-1/2</code>/<code>*</code>) 始终作为最后一个 token。</li>
+          <li>注释内嵌入 <code>[%eval ...]</code> 标签（Lichess/Chessbase 事实标准格式），将已缓存的引擎评估信息持久化到 PGN 中，提高信息密度。</li>
+          <li>注释内嵌入 <code>[%clk ...]</code> 框架（计时赛模式自动生成）；非计时赛模式使用 <code>[%emt ...]</code>（每步实际用时，PGN 规范 §10.2.7）。</li>
+          <li>标签值严格转义（<code>\</code> → <code>\\</code>，<code>"</code> → <code>\"</code>），并强制单行。</li>
+          <li>PGN 解析器（容错模式）：自动修复嵌套 <code>{}</code> 注释（规范禁止）、未闭合注释（自动闭合）、<code>0-0</code> 数字零 → <code>O-O</code>、跳过无效 SAN 而非整体失败、缺失 Result 默认为 <code>*</code>、缺失 <code>[SetUp "1"]</code> 自动容错。</li>
+          <li>舍弃了 v1.0.3 之前 PGN 导出不规范的设计（不完整的标签、缺结果标记等）。</li>
+        </ul>
+      </li>
+      <li><strong>基于热力图的控制统计（新功能）</strong>：
+        <ul>
+          <li>统计页面新增"热力图控制统计"区块，遍历对局每个实际局面（含初始局面与每步走后局面），计算每格的双方攻击子数，按 FEN 缓存避免重复计算。</li>
+          <li>渲染 8×8 平均控制热力图：每格显示 <code>(白方平均 / 黑方平均)</code> 攻击子数，背景色用 HSL 表示控制净值（白偏蓝、黑偏红、均势紫色）。</li>
+          <li>新增"白/黑方最强格"与"白/黑方最弱格"统计，按所有局面的平均控制力排序。</li>
+          <li>新增"中心白/黑方平均"与"中心净值 (W-B)"，按 d4/e4/d5/e5 四格的均值计算。</li>
+        </ul>
+      </li>
+      <li><strong>统计维度扩充</strong>：在已有物质平衡、走法质量、评估趋势、时间管理、开局库、兵型、中心控制、王的安全、局面复杂度等维度基础上，新增热力图控制统计区块。</li>
+      <li><strong>Web Worker 并行计算（新功能）</strong>：
+        <ul>
+          <li>新增 <code>worker-pool.js</code> 模块，将 PGN 解析、统计计算、控制图计算等重型任务移至 Web Worker 线程，避免阻塞 UI 渲染。</li>
+          <li>Worker 通过 Blob URL 创建（兼容 WebView 的 <code>script-src 'unsafe-inline'</code> CSP），自带一份精简的国际象棋原语（attacked、getCtrlMap、makeMvInPlace、fenToState 等），无需共享主线程作用域。</li>
+          <li>所有公共 API（<code>workerParsePGN</code>、<code>workerComputeHeatmapStats</code>、<code>workerGetCtrlMap</code>）均返回 Promise；若 Worker 不可用（极老设备），自动回退到内联同步执行，保证功能一致。</li>
+        </ul>
+      </li>
+      <li><strong>计时赛支持（新功能）</strong>：
+        <ul>
+          <li>新游戏设置界面新增"计时赛设置"区块，支持下拉选择 5 种计时模式：不计时 / 突然死亡制 / 菲舍尔加秒制 / 布朗斯坦延迟制 / 美国延迟制。</li>
+          <li>启用计时赛后，对局界面显示双方时钟（实时倒计时），剩余时间 &lt; 30 秒时变红警告；超时则判负。</li>
+          <li>对每一种计时模式正确实现扣时规则：菲舍尔制每步后加秒；布朗斯坦/美国延迟制每步延迟期内不扣时；突然死亡制每步按实际用时扣时。</li>
+          <li>启用计时赛后，PGN 导出包含 <code>[TimeControl "..."]</code> 头（如 <code>"300+3"</code>）和每步的 <code>[%clk HH:MM:SS]</code> 注释。</li>
+          <li>未启用计时赛时，PGN 注释使用 <code>[%emt HH:MM:SS]</code>（每步实际用时）—— 这是规范 §10.2.7 定义的"Elapsed Move Time"标签。</li>
+        </ul>
+      </li>
+      <li><strong>PGN 注解系统扩充（新功能）</strong>：
+        <ul>
+          <li>NAG（数字注解符号）支持：新增 <code>NAG_MAP</code>、<code>nagToSymbol</code>、<code>symbolToNag</code>、<code>formatNagToken</code>，覆盖走法质量 ($1-$6: !/ ?/ !!/ ??/ !?/ ?!) 与局面评估 ($10-$18: =/ ⩲/ ⩱/ ±/ ∓/ +-/ -+)。</li>
+          <li>视觉注解 <code>[%csl ...]</code> 与 <code>[%cal ...]</code> 支持：新增 <code>formatCslTag</code>、<code>formatCalTag</code>、<code>parseCslTag</code>、<code>parseCalTag</code>，遵循 Lichess/Chessbase 事实标准格式（如 <code>[%csl Gb4,Rc5]</code>、<code>[%cal Ge2e4,Rg1f3]</code>）。</li>
+          <li>自动筛选并缓存每步的视觉注解（缓存键 = moveRecords 索引）：
+            <ul>
+              <li><strong>蓝色箭头 (B)</strong>：本方棋子对重要格子的控制路径，按"中心 +3 / 扩展中心 +1 / 双方争夺 +1"的重要性评分排序，取前 3 条。</li>
+              <li><strong>红色箭头 (R)</strong>：当本步产生将军时，从将军子指向被将方的王。</li>
+              <li><strong>绿色高亮格 (G)</strong>：被将方王的相邻安全格（未被将军方攻击的空格或可吃子格），即"避将路径"。</li>
+              <li><strong>黄色箭头 (Y)</strong>：当本步威胁到对方的后时，从走子方指向对方后的位置。</li>
+            </ul>
+          </li>
+          <li>所有视觉注解在 PGN 导出时自动写入对应棋步的 <code>{}</code> 注释内，统计页面新增"视觉注解"区块汇总各类颜色计数与 NAG 分布。</li>
+          <li>[TimeControl] 头解析/格式化支持全部 6 种格式：突然死亡 / 菲舍尔加秒 / 布朗斯坦延迟 / 美国延迟 / 阶段制 / 沙漏。</li>
+        </ul>
+      </li>
+      <li><strong>版本号同步</strong>：APP 内部版本号 (<code>versionCode</code>)、用户可见版本号 (<code>versionName</code>)、AndroidManifest、build.gradle、APP 内多处 UI 显示（标题栏、关于对话框、加载页、错误页）、Java 文件内 <code>VERSION</code> 常量、README、NOTICE、各 <code>README.license</code> 文件、HTML 说明书——全部同步至 v1.0.4。</li>
+      <li><strong>Stockfish 引擎</strong>：使用 Stockfish 18 官方 <code>arm64-v8a-dotprod</code> 版本（与 v1.0.3 相同），NEON 加速。</li>
+      <li><strong>签名</strong>：APK 采用 v1 / v2 / v3 三重签名方案，兼容小米澎湃OS 3 与所有支持的 Android 版本。</li>
+    </ul>
+  </div>
+
+  <!-- ============================== -->
+  <!-- v1.0.4 Patch Revisions -->
+  <!-- ============================== -->
+  <div class="cl-card" style="background:linear-gradient(145deg,rgba(126,184,218,.10),rgba(80,140,180,.05));border-color:rgba(126,184,218,.45)">
+    <h3 style="color:#7eb8da">v1.0.4 补丁修订（版本号不变）</h3>
+    <p class="cl-sub">本次补丁在不升级版本号的前提下修复了三类问题：被吃棋子统计的兵升变 bug、v1.0.4 新增 UI 的风格一致性、以及若干代码质量问题。本轮追加：走法记录滚动修复、新游戏对话框布局重构、视觉注解颜色语义重定义、PGN保存弹窗取消键、AI对手名称含难度档位、超时胜评估栏修复、Stockfish时间管理UCI指令、所有新增按钮震动反馈。</p>
+    <ul>
+      <li><strong>走法记录自动滚动修复（bug 修复）</strong>：主界面走法记录栏在 AI 思考等频繁渲染时有时会自己滚动回顶部。根因：<code>render()</code> 被节流延迟 200ms 后，旧 <code>.mlist</code> 元素的 <code>scrollTop</code> 可能已过期或为 0。修复：新增"是否在底部"检测——用户在底部时渲染后自动滚到底部显示最新走法；用户在上方浏览旧走法时保留原位置。</li>
+      <li><strong>新游戏对话框布局重构（功能完善）</strong>：Chess960 设置（SP-ID 输入、起始排列预览、说明文字）不再显示在"执棋颜色"下方，改为在开启 Chess960 时替换整个"经典开局（可选）"区域。Chess960 开关与"使用 ECO 开局库"开关互斥置灰：开启 Chess960 时 ECO 开关置灰，开启 ECO 时 Chess960 开关置灰。<em>注：第22次修订（Rev22）进一步调整——Chess960 开关本身移至"执棋颜色"选项正下方，"经典开局（可选）"残留标题移除，Chess960 开启时专属设置区标题从"经典开局（可选）"改为"菲舍尔任意制象棋"（T('chess960_label')）。</em></li>
+      <li><strong>视觉注解颜色语义重定义（功能完善）</strong>：
+        <ul>
+          <li>避将改为<strong>绿色箭头</strong>（被将的王位置→避将格），不再是绿色格。</li>
+          <li>新增<strong>红色格</strong>=AI对手净控制强势格，<strong>蓝色格</strong>=玩家净控制强势格，<strong>黄色格</strong>=双方总计控制数较高格，<strong>绿色格</strong>=中心区无控制格。</li>
+          <li>红色箭头保留=将军子→被将的王。</li>
+          <li>📊统计数据页"视觉注解"区块同步更新为新语义。</li>
+        </ul>
+      </li>
+      <li><strong>PGN保存弹窗增加取消键（功能完善）</strong>：新游戏/FEN导入/PGN导入前弹出的"是否保存PGN"弹窗新增"取消"按钮。点击取消则返回原界面，不清除任何缓存，不执行任何操作。</li>
+      <li><strong>AI对手名称含难度档位（功能完善）</strong>：导出的 PGN 中 AI 对手名称现包含难度档位后缀，如 <code>[Black "AI对手 SL"]</code>、<code>[White "AI对手 Lv.4"]</code>、<code>[Black "AI对手 Custom"]</code>。</li>
+      <li><strong>超时胜评估栏修复（bug 修复）</strong>：一方时间用尽判另一方胜时，评估栏原先错误显示和棋 emoji（🤝）。现已正确显示胜方🏆/负方💀emoji 与"获胜/失败"文字。</li>
+      <li><strong>Stockfish 18 时间管理 UCI 指令（功能完善）</strong>：计时赛模式下，AI 走棋现使用 <code>go wtime &lt;ms&gt; btime &lt;ms&gt; winc &lt;ms&gt; binc &lt;ms&gt;</code> UCI 指令，让 Stockfish 18 自主管理时间分配（关键局面多思考、简单局面少思考），而非固定 movetime。新增 <code>AndroidBridge.engineGoTimed()</code> 桥接方法。</li>
+      <li><strong>新增按钮震动反馈（功能完善）</strong>：Chess960 随机按钮、SP-ID 随机按钮、计时赛下拉选择、PGN保存弹窗三按钮（是/否/取消）均已添加 <code>HapticManager.fire('BUTTON_PRESS')</code> 触觉反馈，服从安卓系统全局震动偏好设置。</li>
+      <li><strong>被吃棋子统计修复（bug 修复）</strong>：原 <code>getCapturedPieces()</code> 通过比较当前棋盘子力数与初始子力数推断被吃棋子，无法正确处理兵升变。修复方案：优先使用 <code>moveRecords[i].captured</code> 作为权威数据源。</li>
+      <li><strong>棋子符号显示样式统一</strong>：Chess960 起始排列预览中的棋子符号使用与棋盘棋子完全一致的样式（颜色+描边+微光+字体+字重）。</li>
+      <li><strong>计时赛时钟 UI 渲染</strong>：修复了计时赛时钟从未在界面上显示的功能缺失，现已在对局双方信息栏中添加实时时钟显示。</li>
+    </ul>
+  </div>
+
+  <!-- ============================== -->
+  <!-- v1.0.3 -->
+  <!-- ============================== -->
+  <div class="cl-card" style="background:linear-gradient(145deg,rgba(139,105,20,.18),rgba(255,215,0,.09));border-color:rgba(212,160,23,.55)">
+    <h3 style="color:#ffd700">v1.0.3 更新日志</h3>
+    <p class="cl-sub">本版本在 v1.0.3 首次发布后追加了一次补丁修订（版本号保持 v1.0.3 不变，versionCode 仍为 103）。补丁修订内容见下方"<strong>v1.0.3 补丁修订</strong>"小节。</p>
+    <ul>
+      <li><strong>统计页时间管理分析（新功能）</strong>：统计数据页面的"时间管理"模块从 v1.0.2 仅展示 <code>[%clk]</code> 计数升级为完整的时间分析。新增 <code>extractMoveTimes()</code> 函数自动识别 PGN 注释 <code>{}</code> 内的用时数据，支持 v1.0.3 直述格式、标准 PGN 时钟格式（需 <code>[TimeControl]</code> 头）、早期破折号格式三种。展示内容：总用时、白方/黑方各自用时、平均每步用时、最长/最短用时步（含步号）、用时波动率（标准差）、长考步数（&gt;10s）、秒走步数（&lt;1s）、各阶段（开局/中局/残局）用时占比、每步用时 SVG 柱状图（白棋白色柱、黑棋蓝色柱，悬停显示步号与用时）。含 <code>[TimeControl]</code> 头时顶部额外显示蓝色信息条列出基础总时间与每步增量。</li>
+      <li><strong>统计页 PGN 文本变例斜体显示</strong>：v1.0.3 起 PGN 文本栏中 <code>()</code> 包裹的变例部分（含括号本身及内部所有内容）以斜体显示，与主线走法视觉区分。</li>
+      <li><strong>统计页导入 PGN 修复（关键 bug）</strong>：修复"导入新 PGN 后统计数据仍显示旧对局"的根本原因——<code>_statsPastePGN()</code> / <code>onStatsPGNFileRead()</code> 仅更新 <code>_payload.pgn</code>，<strong>未清除</strong> <code>_payload.moveRecords</code>。v1.0.3 在两处导入入口均添加 <code>_payload.moveRecords=null; _payload.evals=null;</code> 以及变例选中状态重置，强制 <code>parsePGN</code> 回退到简化 SAN 解析器解析新文本。</li>
+      <li><strong>复盘界面崩溃修复（关键 bug）</strong>：修复进入复盘界面时崩溃的问题——<code>ui.js</code> 中 <code>_rvCell</code> 变量在声明之前被引用，JavaScript 的暂时性死区（Temporal Dead Zone）导致 <code>ReferenceError</code>。</li>
+      <li><strong>设置导入后自动关闭窗口</strong>：导入设置完成后立即自动关闭设置窗口。新增 300ms 二次安全检查。</li>
+      <li><strong>💾HTML 导出改为静态快照</strong>：💾HTML 按钮不再复制整个页面（含 JS 代码），而是输出一个<strong>纯静态 HTML 文件</strong>——仅包含当前选中状态下的所有 UI 与统计数据（CSS + 内容），不含任何 <code>&lt;script&gt;</code> 标签、函数或接口。</li>
+      <li><strong>统计页变例走法可点击（新功能）</strong>：v1.0.2 仅主线走法可点击选中查看对应局面的统计。v1.0.3 起 <code>()</code> 内的变例走法也可点击。点击变例走法时，统计页自动用<strong>变例首步至选中走法的整段走法序列</strong>替换 <code>()</code> 左侧相邻的主线走法，构造合成走法序列。</li>
+      <li><strong>统计页局面 FEN 栏（新功能）</strong>：在 PGN 文本栏下方新增局面 FEN 栏，显示当前选中走法刚刚走出后的局面的 FEN（后台自动通过 <code>stateToFEN()</code> 生成）。</li>
+      <li><strong>统计页选择提示横幅（新功能）</strong>：在 PGN 文本栏上方新增选择提示横幅，显示当前选中的步号（主线走法或变例走法）。</li>
+      <li><strong>PGN 注释格式</strong>：<code>_buildPGNComment()</code> 使用<strong>空格</strong>作为用时与评估之间的分隔符，例如 <code>{3.2s +0.5 略优}</code>。</li>
+      <li><strong>双语适配</strong>：所有新增 UI 文本均提供中英文双语字符串。</li>
+      <li><strong>版本号同步</strong>：APP 本体（<code>build.gradle</code> 的 <code>versionCode=103</code> / <code>versionName="1.0.3"</code>）、APP 内 UI 显示、说明书——全部同步至 v1.0.3。</li>
+      <li><strong>README/LICENSE/NOTICE 文件审查</strong>：审查所有文件名包含 README / LICENSE / NOTICE 的文件，逐个补充 v1.0.3 修改点；NOTICE 文件新增"VERSION HISTORY SUMMARY"小节汇总各版本要点。</li>
+    </ul>
+  </div>
+
+  <!-- ============================== -->
+  <!-- v1.0.3 Patch -->
+  <!-- ============================== -->
+  <div class="cl-card" style="background:linear-gradient(145deg,rgba(126,184,218,.12),rgba(126,184,218,.05));border-color:rgba(126,184,218,.45)">
+    <h3 style="color:#7eb8da">v1.0.3 补丁修订（版本号不变）</h3>
+    <p class="cl-sub">本次修订未升级版本号（仍为 v1.0.3 / versionCode 103）。补丁分十二轮，主要修复复盘界面横竖屏布局与折线图宽度计算。</p>
+    <h4 style="color:#7eb8da; margin-top: 16px; margin-bottom: 8px; font-size: 1rem;">v1.0.3-p12（本轮补丁）</h4>
+    <ul>
+      <li><strong>复盘界面：竖屏折线图宽度限制移除</strong>：v1.0.3-p11 仅减小了折线图 SVG 内部的左右内边距，但竖屏模式下折线图的<strong>宽度计算</strong>仍受 <code>Math.min(window.innerWidth - 48, 400) - 12</code> 限制（最大约 352px），在宽屏设备上左右仍有大量空余。v1.0.3-p12 移除竖屏的 400px 上限与 -48 偏移，统一使用 <code>window.innerWidth - 12</code> 计算折线图宽度，使竖屏折线图也充分利用横向空间。</li>
+    </ul>
+    <h4 style="color:#7eb8da; margin-top: 16px; margin-bottom: 8px; font-size: 1rem;">v1.0.3-p11（上一轮补丁）</h4>
+    <ul>
+      <li><strong>复盘界面：折线图充分利用横向空间</strong>：将折线图 SVG 的左右内边距（padding）从 36px 减少到 8px。</li>
+      <li><strong>复盘界面：竖屏走法列表滚动跳转根本原因修复（关键 bug）</strong>：v1.0.3-p10 的走法列表滚动跳转逻辑使用 <code>offsetParent</code> 遍历累加 <code>offsetTop</code>，但在竖屏布局中 <code>.review-moves</code> 的 CSS <code>position</code> 为 <code>static</code>，因此 <code>.rmv-block</code> 的 <code>offsetParent</code> 直接跳到 <code>.review-overlay</code>，跳过了 <code>.review-moves</code> 容器。v1.0.3-p11 改用 <code>getBoundingClientRect()</code> 计算激活走法相对于滚动容器的绝对位置。</li>
+    </ul>
+    <h4 style="color:#7eb8da; margin-top: 16px; margin-bottom: 8px; font-size: 1rem;">v1.0.3-p10 及更早</h4>
+    <ul>
+      <li><strong>v1.0.3-p10</strong>：复盘界面竖屏下按钮也均匀占满宽度 + 走法列表滚动跳转逻辑横竖屏统一。</li>
+      <li><strong>v1.0.3-p1 至 v1.0.3-p9</strong>：分九轮修复复盘界面横屏布局、按钮宽度、走法列表滚动跳转、评估趋势图坐标轴等问题。</li>
+    </ul>
+  </div>
+
+  <!-- ============================== -->
+  <!-- v1.0.2 -->
+  <!-- ============================== -->
+  <div class="cl-card" style="background:linear-gradient(145deg,rgba(46,204,113,.10),rgba(46,204,113,.05));border-color:rgba(46,204,113,.45)">
+    <h3 style="color:#2ecc71">v1.0.2 更新日志</h3>
+    <p class="cl-sub">本版本主要修复 PGN 变例解析的"片段不完整"问题，并新增了 PGN 缓存管理器初步框架。</p>
+    <ul>
+      <li><strong>PGN 变例片段不完整修复（关键 bug）</strong>：修复 PGN 变例"片段不完整"问题。此前若一条变例中间某个 SAN 写得不规范（缺歧义消除符、非标准后缀等），变例续着循环遇到首个无法解析的 token 时会 <code>break</code>，导致从该 token 起的所有剩余走法被全部丢弃——表现就是"🌿 变例只显示前半段"。v1.0.2 改为 <code>continue</code>（仅跳过该 token，继续解析后续走法），并对每个 token 统一应用 <code>moveAlg</code> 容错匹配。同时修复 MultiPV 变例提取不完整：主 PV 不以 bestmove 开头时不再伪造"主线"，而是作为独立备选行纳入 MultiPV 迭代；<code>_formatVariationGroups</code> 修复 mainline + multipv + pgn 行号冲突，PGN 变例行号统一从引擎最大行号 +1 起。</li>
+      <li><strong>设置导入偶发不生效修复（关键 bug）</strong>：修复"导入设置偶尔提示成功但未生效"的根因。此前若用户在引擎思考中（AI 走棋进行时）点击导入，<code>setoption</code> + <code>isready</code> 等不到 <code>readyok</code>（引擎仅在空闲时响应 isready），3 秒超时后设置被静默丢弃——表现为"toast 显示成功但实际未生效"。v1.0.2 在 <code>importSettings()</code> 调用 <code>applySettings()</code> 前先 <code>stopAndWaitForBestmove("importSettings")</code> 让引擎进入空闲态；并新增显式值优先逻辑——若 TXT 中显式指定 <code>engine.threads</code> 或 <code>engine.hash</code>，则本次应用时自动关闭 autoConfig 以免被硬件检测覆盖；同时统一由 <code>onSettingsImported</code> 回调负责 toast 与对话框刷新，消除文件选择器入口的重复提示。</li>
+      <li><strong>统计数据界面总步数无法超过 98 步修复（关键 bug）</strong>：统计数据页面的 <code>parsePGN()</code> 使用简化的 SAN 解析器（<code>applySANMove</code>/<code>canMoveTo</code>），不处理将军检测、消歧义、吃过路兵等复杂场景。一旦某一步解析失败，局面状态不前进，后续所有走法级联失败——表现为"总步数卡在 98 步左右"。根因修复：<code>openStatsPage()</code> 现在同时发送主 APP 已解析的权威走法记录（<code>from/to/piece/captured/promotion/notation</code>），统计页面通过 <code>parseFromMoveRecords()</code> 直接重放这些走法（使用 <code>executeMove()</code> 正确推进状态），完全绕过简化 SAN 解析器。对于粘贴/导入 PGN 的场景（无走法记录），仍回退到简化解析器。</li>
+      <li><strong>统计数据界面 PGN 文本栏棋子符号样式修复</strong>：PGN 文本栏的棋子符号（♔♚♘♞等）此前与走法目标格文字（如"f3"）同色（均为 <code>var(--text)</code> 奶油色），没有主界面棋盘上棋子的颜色/描边/微光。根因：CSS 特异性不足——<code>.pgn-display .move</code>（特异性 0,2,0）覆盖了 <code>.piece-white</code>/<code>.piece-black</code>（特异性 0,1,0）。修复：(1) 提升 CSS 特异性为 <code>.pgn-display .move .piece-white</code>；(2) 重构 <code>renderSAN()</code> 让棋子符号独占一个 <code>&lt;span class="piece-white/piece-black"&gt;</code>，目标格/吃子/将军后缀保持默认文字色——与主界面棋盘"棋子符号 vs 格子标签"的分离方式一致。</li>
+      <li><strong>说明书章节布局调整</strong>：将分散在目录前的 v1.0.2 和 v1.0.1 更新日志详情合并为<strong>附录 A：版本更新日志</strong>，置于说明书末尾（第十五章之后、页脚之前）。目录页新增"附录 A"条目。页脚版本号从 v1.0.1 更新为 v1.0.2。变例线框图说明同步更新为顺序编号（不再区分主线/备选）。</li>
+      <li><strong>qw3.7max 外部代码审查报告 7 项优化全部实施</strong>：根据外部审查报告，按 bug 修复 > 功能完善 > 性能突破 > 冗余清理 > 简化代码 的优先级逐项实施：状态对比逻辑简化（可选链）、innerHTML XSS 防护（_esc 转义）、scrollIntoView 兼容性（behavior:'auto'）、消除强制同步布局（双 rAF）等。</li>
+    </ul>
+  </div>
+
+  <!-- ============================== -->
+  <!-- v1.0.1 -->
+  <!-- ============================== -->
+  <div class="cl-card" style="background:linear-gradient(145deg,rgba(155,89,182,.10),rgba(155,89,182,.05));border-color:rgba(155,89,182,.45)">
+    <h3 style="color:#9b59b6">v1.0.1 更新日志</h3>
+    <p class="cl-sub">本版本为 Regalia 项目首次正式公开发布的版本（v1.0.0 之后的快速迭代版）。主要新增中英双语切换、前台服务通知、PGN SAN 格式化、悔棋后自动选中、ECO 开局识别条件显示、棋理提示双语适配等。</p>
+    <ul>
+      <li><strong>中/英语言切换（新功能）</strong>：新增全局中英文切换功能。点击评估栏左侧（评估栏外部）的切换按钮即可切换语言模式：中文模式显示 <code>↔️中</code>，英文模式显示 <code>↔️EN</code>。切换后界面上所有用户可见的文字均会显示为对应语言。语言偏好保存在本地存储中，首次启动时根据 Android 系统语言自动选择（中文系统默认中文，其他默认英文）。</li>
+      <li><strong>前台服务通知增强（功能完善）</strong>：常驻通知支持<strong>点击跳转至 APP</strong>、<strong>不可手动移除</strong>（<code>setOngoing(true)</code> + <code>FLAG_NO_CLEAR</code>）。在小米澎湃OS 3 上即使被系统允许划掉，前台服务本身仍持续运行，下次状态更新时通知自动恢复。通知栏现仅显示三种引擎状态——"引擎就绪！"、"分析中"、"引擎错误: ..."。</li>
+      <li><strong>AI 提示采用 SAN 格式（功能完善）</strong>：v1.0.1 起，多线分析中的走法采用 PGN 标准代数记谱法（SAN）格式显示，而非引擎原始 UCI 格式。例如显示 <code>Nf3 e5 d4</code> 而非 <code>g1f3 e7e5 d2d4</code>。</li>
+      <li><strong>PGN 变例递归解析（功能完善）</strong>：递归变例树解析：每个 <code>(</code> 开启一个新的变例帧，附加到父上下文中"最后一步走法"。嵌套 <code>(</code> 附加到父变例中正确的走法（而非主线走法），符合 PGN 规范 §8.2.5。变例首 token 匹配三重 fallback：Type A（同侧替代）→ Type A moveAlg 模糊匹配 → Type B（对手应着）→ Type B moveAlg 模糊匹配。处理非标准 SAN（缺少消歧符、+/# 后缀等）。</li>
+      <li><strong>悔棋后自动选中（功能完善）</strong>：悔棋后会自动选中"被悔的那步棋移动的棋子"所在的格子，方便重走。点击该格可解除选中。</li>
+      <li><strong>ECO 开局识别条件显示（功能完善）</strong>：v1.0.1 起，ECO 开局识别卡片与开局推荐栏仅在自由开局模式或自选 ECO 开局时显示。当通过 FEN 导入或摆棋模式开始游戏时，ECO 开局识别与推荐功能不会显示，避免对非标准开局产生误导。</li>
+      <li><strong>棋理提示双语适配</strong>：十大棋理原则按四大战略维度编排，随界面语言自动切换：中文模式显示中文棋理，英文模式显示英文棋理。</li>
+      <li><strong>Ponder 预判模式（新功能）</strong>：启用后 AI 在自己走完棋后继续思考对手可能的应手。AI 对手栏第二行右对齐显示预判搜索信息（不显示预判走法）；若同时使用 AI 提示功能，AI 提示栏也会显示预判信息并展示预判走法。推荐充电时开启。</li>
+      <li><strong>语言切换振动反馈</strong>：点击中英文切换按钮时触发 <code>TOGGLE_ON</code> 振动反馈，与其它按钮交互体验一致。</li>
+      <li><strong>MobSF 安全检查修复</strong>：补全 5 项静态扫描缺陷：JavaScript 接口安全文档化、TLS 证书固定代码引用、Certificate Transparency 引用、SafetyNet 不适用性说明、ChessApp 异常日志精简。</li>
+      <li><strong>术语同步</strong>：英文模式下走法评价 "Book" 改为 "Mediocre"（v1.0.0 起）。</li>
+    </ul>
+  </div>
+
+  <!-- ============================== -->
+  <!-- v1.0.0 (提及) -->
+  <!-- ============================== -->
+  <div class="cl-card" style="background:linear-gradient(145deg,rgba(80,80,80,.10),rgba(80,80,80,.05));border-color:rgba(120,120,120,.45)">
+    <h3 style="color:#a0a0a0">v1.0.0 起源版本</h3>
+    <p class="cl-sub">v1.0.0 为 Regalia 项目（前身为 ChessMaster v18.x.x 开发代号）首次以 AGPL v3 许可公开发布的版本。版本号约定见附录开头。本版本将原开发版本号 v18.x.x 重命名为 v1.0.0，并整理代码、补充 LICENSE / NOTICE / README 文件，正式以开源 AGPL v3 许可发布。</p>
+    <ul>
+      <li>原有功能：内置 Stockfish 18 引擎、6 级 AI 难度 + SL档 + 手动设置、AI 思考进度条、MultiPV 多线分析、变例系统、完整复盘模式、ECO 开局库、Syzygy 在线残局库、WDL 胜和负概率显示、SF18 引擎标识徽章、控制范围热力图、棋理提示、引擎配置导出/导入、FEN 复制/导入、摆棋模式。</li>
+      <li>开源许可变更：从 GPLv3（ChessMaster 时期）切换至 AGPL v3（Regalia 时期），更严格地保护网络使用场景下的衍生作品开源义务。</li>
+    </ul>
+  </div>
+
+  <a href="#top" class="back-top">&#9650; 返回顶部</a>
+</div>
+
+<!-- ===== FOOTER ===== -->
+<div style="text-align: center; padding: 40px 0 20px; color: #6a5a40; font-size: 12px;">
+  <p style="margin: 4px 0;">Regalia v1.0.4 用户说明书 (User Manual)</p>
+  <p style="margin: 4px 0;">Built with Stockfish 18 &nbsp;|&nbsp; AGPL v3</p>
+  <p style="margin: 4px 0;">Compatible with Android 5.0-15 &nbsp;|&nbsp; Xiaomi HyperOS 3</p>
+  <p style="margin: 4px 0;">Chess960 &nbsp;|&nbsp; Time Control &nbsp;|&nbsp; Standardized PGN &nbsp;|&nbsp; Seldepth &nbsp;|&nbsp; Web Worker Pool</p>
+  <a href="#top" class="back-top">&#9650; 返回顶部</a>
+</div>
+
+</div><!-- /content -->
+
+</body>
+</html>

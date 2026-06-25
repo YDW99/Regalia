@@ -19,6 +19,7 @@ Subdirectory license summary:
       READ_MEDIA_IMAGES was removed in v1.0.2 (the built-in file browser
       queries MediaStore.Files, not MediaStore.Images).
       v1.0.3: versionCode 102 → 103, versionName "1.0.2" → "1.0.3".
+      v1.0.4: versionCode 103 → 104, versionName "1.0.3" → "1.0.4".
 
 Overall, the application is a combined work under dual AGPL v3 + GPL v3
 licensing. Only files containing DroidFish-derived code use GPL v3;
@@ -28,6 +29,102 @@ effectively extend to the entire combined work.
 
 See the root-level LICENSE-AGPL v3, LICENSE-GPL v3, and NOTICE files
 for full license texts and attribution details.
+
+v1.0.4 EXPANSION (this round):
+  - assets/chess.src/worker-pool.js (NEW FILE): Web Worker pool. The worker
+      source is inlined as a string and instantiated via Blob URL (works
+      with the WebView CSP `script-src 'unsafe-inline'`). The worker ships
+      with a slim copy of chess primitives (attacked, getCtrlMap,
+      makeMvInPlace, fenToState, stateToFEN, parsePGN, computeHeatmapStats)
+      and handles 3 task types: 'parsePGN', 'computeHeatmapStats',
+      'getCtrlMap'. Public Promise-based APIs: workerParsePGN(),
+      workerComputeHeatmapStats(), workerGetCtrlMap(). Falls back to inline
+      synchronous execution when Workers are unavailable.
+  - assets/chess.src/pgn-standard.js (EXPANDED): added formatEmtTag() for
+      [%emt HH:MM:SS] (spec §10.2.7, used for untimed games); NAG_MAP,
+      nagToSymbol(), symbolToNag(), formatNagToken() for $1-$19 NAGs;
+      formatCslTag()/formatCalTag()/parseCslTag()/parseCalTag() for
+      Lichess/Chessbase [%csl ...] and [%cal ...] visual annotations;
+      parseTimeControl()/formatTimeControl() supporting all 6 TimeControl
+      formats (sudden/fischer/bronstein/usdelay/staged/hourglass).
+  - assets/chess.src/ui.js (EXPANDED): New Game dialog gains a "Time
+      Control" section (5-mode dropdown + base-time/increment/delay inputs).
+      New state vars: dlgTimeControl, gameClocks, gameClockTimerId,
+      gameClockExpired. New functions: initGameClocks(), _tickGameClock(),
+      _onGameClockExpired(), recordMoveEnd(), formatClock(),
+      _updateClockDisplay(). executeMove() now calls recordMoveEnd() and
+      _computeAndCacheVisualAnnotations() per move.
+  - assets/chess.src/ai-bridge.js (EXPANDED): _buildPGNString() now emits
+      [TimeControl "..."] header when game is timed; per-move comments now
+      include [%emt] (untimed) or [%clk] (timed), plus [%csl] and [%cal]
+      from the visual annotations cache.
+  - assets/stats.html (EXPANDED): New "Visual Annotations" stats section
+      tallies [%csl] G/B/R/Y counts and NAG $1-$6 distribution from the
+      PGN text. New i18n strings: time_control_mode, visual_annotations,
+      nag_*, blue_arrows, red_arrows, green_squares, yellow_arrows.
+  - assets/chess.src/game-logic.js (EXPANDED): New i18n strings:
+      time_control_label, time_control_off, time_control_sudden,
+      time_control_fischer, time_control_bronstein, time_control_usdelay,
+      time_control_base_min, time_control_inc_sec, time_control_delay_sec,
+      time_control_note, time_control_white_clock, time_control_black_clock,
+      time_control_flag_fell, time_control_low.
+
+v1.0.4 changes:
+  - AndroidManifest.xml: versionCode/versionName bumped to 104 / "1.0.4".
+  - res/values/strings.xml: app_name string updated to "Regalia v1.0.4".
+  - assets/chess.src/chess960.js (NEW FILE): Chess960 implementation —
+      SP-ID generator (0..959), Shredder-FEN castling rights encoder/
+      decoder (HAah format), 960 castling legality checker (King ends on
+      g1/c1, Rook ends on f1/d1 — same final squares as standard chess),
+      initChess960State() to build a complete game state from SP-ID,
+      setChess960Mode()/isChess960Mode() bridge helpers.
+  - assets/chess.src/pgn-standard.js (NEW FILE): Standardized PGN encoder/
+      decoder following the 1994 PGN spec. sevenTagRoster() always emits
+      the mandatory 7 tags. composePGN() builds movetext with ~78-column
+      wrapping + Result terminator. parseStandardPGN() tolerant parser
+      auto-corrects nested {} comments, unclosed comments, 0-0 → O-O,
+      invalid SAN tokens, missing Result, missing [SetUp "1"].
+  - assets/chess.src/ai-bridge.js: _buildPGNString() rewritten to use
+      composePGN() — emits Seven-Tag Roster + supplementary tags
+      ([Variant "Chess960"], [SetUp "1"], [FEN "..."], [PlyCount "..."]) +
+      [%eval] annotations inside comments. Chess960 FEN uses Shredder
+      castling format via toShredderCastling().
+  - assets/chess.src/tablebase.js: fenToState() now detects Shredder-FEN
+      castling rights (any letter A-H/a-h in the castling field) and
+      parses them via parseShredderCastling(). _parsePGN() extracts the
+      [Variant "Chess960"] tag and returns it in the result; importPGN()
+      calls setChess960Mode(true) + sets gameVariant='chess960' +
+      derives SP-ID from the FEN back-rank.
+  - assets/chess.src/game-logic.js: Added i18n strings for Chess960 UI
+      (chess960_label, chess960_enable, chess960_spid, chess960_random,
+      chess960_preview, chess960_note). Loading title updated to v1.0.4.
+  - assets/chess.src/ui.js: New Game dialog gains Chess960 toggle,
+      SP-ID input (0..959 or Random), and back-rank preview. _startGameImpl()
+      now branches on dlgChess960: if true, calls initChess960State(spid)
+      + setChess960Mode(true) + sets gameVariant/gameSPID; if false,
+      calls initState() + setChess960Mode(false) and clears variant
+      state. ECO openings are skipped in Chess960 mode (they assume
+      the standard start position). Version badge → v1.0.4 (header,
+      About dialog, render-error fallback page).
+  - assets/chess.src/index.html.tpl: <title>Regalia v1.0.4</title>.
+  - assets/stats.html: New "Heatmap Control Statistics" section that
+      walks every position in the game, computes per-square attacker
+      counts (cached by FEN), renders an 8x8 average-control heatmap
+      (HSL background: blue=White-leaning, red=Black-leaning, purple=
+      contested), and reports strongest/weakest squares for each side
+      plus center-control trend (d4/e4/d5/e5 averages). New i18n
+      strings added for all heatmap stats.
+  - java/com/Regalia/StockfishNative.java: New @JavascriptInterface
+      methods setChess960Mode(boolean) and isChess960Mode(). The
+      _pendingChess960 flag is re-applied to the engine after every
+      (auto-)restart via the new block in startEngine() after
+      applySettings(). ENGINE_VERSION constant updated to "v1.0.4".
+  - java/com/Regalia/MainActivity.java: VERSION constant updated to
+      "v1.0.4".
+  - java/com/Regalia/ChessApp.java: Log message updated to v1.0.4.
+  - build.gradle: versionCode 104, versionName "1.0.4".
+  - README.md, NOTICE, Regalia-v1.0.4-manual-zh.html,
+      Regalia-v1.0.4-manual-en.html: all updated to v1.0.4.
 
 v1.0.3 changes:
   - AndroidManifest.xml: versionCode/versionName bumped to 103 / "1.0.3".
@@ -67,3 +164,68 @@ v1.0.3 patch changes (version number unchanged — still v1.0.3 / versionCode 10
   - java/com/Regalia/MainActivity.java (AGPL v3): VERSION
     "v1.0.2" → "v1.0.3".
   - No changes to AndroidManifest.xml, cpp/, res/, or stats.html.
+
+v1.0.4 Round-5 Rev23 changes:
+  - assets/chess.src/ai-bridge.js (GPL v3): eval cache debounce restored (150ms);
+    onEngineRestarting/restartCurrentEngine no longer clear the entire cache;
+    requestEngineEval dead second cache check removed; _buildPGNString dead
+    `moveNum` variable removed.
+  - assets/chess.src/ui.js (GPL v3): _pgnCacheOnSearchInput stale 🔍 comment fixed.
+  - assets/chess.html: rebuilt from the above chess.src/ changes.
+  - java/com/Regalia/StockfishNative.java (GPL v3): saveEvalCacheSync() now uses
+    Files.move() with ATOMIC_MOVE + REPLACE_EXISTING on API 26+ for true
+    POSIX-atomic rename (eliminates the delete+rename data-loss window).
+  - No changes to AndroidManifest.xml, cpp/, res/, or stats.html.
+
+v1.0.4 Round-5 Rev24 changes:
+  - assets/chess.src/ai-bridge.js (GPL v3): analyze-all root-cause fix (5
+    distinct bugs: all-cached short-circuit, per-step safety timer with
+    skip-stuck-step, onEngineReady batch resume, cache-hit advance during
+    batch, onEngineError no longer drops batch). New globals _humanPlayerName,
+    playerWhite, playerBlack. _buildPGNString(forceIncludeVariations) —
+    new parameter for PGN cache archive completeness. requestEngineEval()
+    cache-hit-during-batch advance. onEngineReady() batch resume.
+  - assets/chess.src/game-logic.js (GPL v3): NEW i18n keys for rename feature
+    (rename_player_hint, rename_player_prompt, rename_player_saved,
+    rename_player_reset — zh/en).
+  - assets/chess.src/tablebase.js (GPL v3): _parsePGN() extracts [%eval ...]
+    tags from {} comments BEFORE stripping them (returns extractedEvals array).
+    importPGN() populates _reviewEvalCache from extracted evals (selectively
+    clearing only current game's entries, preserving other games' caches).
+    Also extracts playerWhite/playerBlack from PGN headers and populates
+    _humanPlayerName if the human player's slot has a non-default name.
+  - assets/chess.src/ui.js (GPL v3): reviewAnalyzeAll() rewritten (all-cached
+    short-circuit + per-step safety timer). _reviewAnalyzeResetSafetyTimer()
+    new helper. Player bar uses _humanPlayerName; clicking opens
+    _renameHumanPlayer() prompt. _pgnCacheSaveCurrent() ALWAYS uses
+    _buildPGNString(true). Removed redundant 📥 Import button from PGN Cache
+    Manager. _startGameImpl() clears playerWhite/playerBlack.
+  - assets/chess.html: rebuilt from the above chess.src/ changes.
+  - jniLibs/arm64-v8a/libstockfish.so (GPL v3): updated to the official
+    Stockfish 18 sf_18 release, arm64-v8a-dotprod variant (NDK r27c build,
+    114 MB, NEON+dotprod acceleration for optimal performance on modern
+    ARM64 devices).
+  - No changes to AndroidManifest.xml, cpp/, res/, java/, or stats.html.
+
+v1.0.4 Round-5 Rev25 changes:
+  - assets/chess.src/ui.js (GPL v3): New Game dialog — removed redundant
+    <h3>${T('chess960_label')} heading above Chess960 dedicated settings.
+    The Chess960 toggle label already makes the mode clear; settings now
+    appear directly under the toggle.
+  - assets/chess.html: rebuilt from the above chess.src/ changes.
+  - assets/stats.html (GPL v3): renderPGNText() → renderSAN() — promotion
+    symbols now rendered as side-colored piece symbols (♕/♛, ♖/♜, ♗/♝,
+    ♘/♞) instead of literal letters. Shared _replacePromo() helper handles
+    both pawn-move and piece-move branches uniformly.
+  - No changes to AndroidManifest.xml, cpp/, res/, java/, or jniLibs/.
+
+v1.0.4 Round-5 Rev26 changes:
+  - assets/stats.html (GPL v3): renderPGNText() — ROOT-CAUSE FIX for
+    "e8=Q still shows letter" bug. The SAN regex's pawn non-capture
+    alternative was [a-h][1-8][+#]? (NO promotion group), so "e8=Q"
+    matched only "e8" — leaving "=Q" as raw literal text. Rev26 fixes the
+    alternative to [a-h][1-8](?:=[QRBN])?[+#]?, which captures the full
+    "e8=Q" so renderSAN()/_replacePromo() can convert the promotion piece
+    to a symbol. Same fix applied to the variation-move regex.
+  - No changes to AndroidManifest.xml, cpp/, res/, java/, jniLibs/, or
+    chess.html.

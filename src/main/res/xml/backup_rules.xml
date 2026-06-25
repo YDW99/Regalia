@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Regalia Backup Rules
+
+  v1.0.4 Round-5 Rev16: Explicitly declare which data should be backed up.
+  SharedPreferences (RegaliaEngine.xml) contains engine settings, language
+  pref, AND the new persistent kv_* keys backing the JS localStorage cache.
+  WebView LocalStorage is also included for in-progress migration data.
+
+  v1.0.4 Round-5 Rev20: Also include the dedicated eval cache file
+  (eval_cache.json) and the PGN cache directory (pgn_cache/). Both live under
+  /data/data/com.Regalia/files/ which is app-private user data, but declaring
+  them explicitly here ensures backup tools treat them as user data (not cache).
+-->
+<full-backup-content>
+    <include domain="sharedpref" path="."/>
+    <include domain="database" path="webview.db"/>
+    <include domain="file" path="app_webview/Local Storage/"/>
+    <include domain="file" path="eval_cache.json"/>
+    <include domain="file" path="pgn_cache/"/>
+</full-backup-content>

@@ -120,13 +120,181 @@ function _parsePGN(pgnText){
     if(fenNoQuoteMatch){startFEN=fenNoQuoteMatch[1].trim();}
   }
   
+  // v1.0.4 NEW: Extract Variant tag for Chess960 detection.
+  //   [Variant "Chess960"]  → Fischer Random Chess
+  //   [Variant "Fischerandom"] or [Variant "Fisher Random"] → also Chess960
+  // When a Chess960 variant is detected, we set the global gameVariant flag
+  // and call setChess960Mode(true) on the engine before the first AI move.
+  let pgnVariant=null;
+  const variantMatch=pgnText.match(/\[Variant\s+"([^"]+)"\]/i);
+  if(variantMatch){
+    const v=variantMatch[1].toLowerCase();
+    if(v==='chess960'||v==='fischerandom'||v==='fischer random'||v==='frc'){
+      pgnVariant='chess960';
+    }
+  }
+  
+  // v1.0.4 NEW: Extract SetUp tag (must be "1" if FEN is present, per spec)
+  // We use this to validate the FEN/SetUp pairing, but don't reject malformed
+  // PGNs that omit SetUp — auto-correct by treating the FEN as authoritative.
+  // (Spec §10: "If the SetUp tag is set to "1", the FEN tag MUST be present.")
+  // The inverse (FEN present but SetUp missing) is also auto-corrected silently.
+  
   // Remove header tags — handle multi-line headers and various formats
-  let moveText=pgnText.replace(/\[[^\]]*\]/g,'').trim();
+  // v1.0.4 Round-5 Rev16: Anchor to start-of-line so [%csl ...]/[%cal ...]
+  // inside brace comments are NOT stripped (only header lines starting with [).
+  let moveText=pgnText.replace(/^\[[^\]]*\]/gm,'').trim();
   // Remove line continuation markers (\ at end of line)
   moveText=moveText.replace(/\\\s*\n/g,' ');
+  
+  // v1.0.4 Rev24 NEW: Normalize "1.e4" → "1. e4" and "2...Nf6" → "2... Nf6"
+  // BEFORE the eval-extraction loop, so each move is a separate token. Without
+  // this, "1.e4" starts with '1' and the loop's /[a-hKQRBNBO]/ check skips it,
+  // missing the eval attachment for that move.
+  moveText=moveText.replace(/(\d+\.+)(?=[a-hKQRBNBO])/gi,'$1 ');
+  
+  // v1.0.4 Rev24 NEW: Extract [%eval ...] tags from comments BEFORE stripping
+  // them, so we can populate the review eval cache and skip engine analysis
+  // for those positions. This implements the "instant recovery from PGN
+  // comments" requirement.
+  //
+  // Format (Lichess convention):
+  //   [%eval 0.35]    — 0.35 pawns (35 centipawns), White's perspective
+  //   [%eval -1.5]    — -1.5 pawns (-150 cp)
+  //   [%eval #5]      — mate in 5 for White
+  //   [%eval #-3]     — mate in 3 for Black
+  //   [%eval +M5]     — alternate mate notation (rare)
+  //
+  // Comments are attached to the move that FOLLOWS them in PGN. So a comment
+  // like "1. e4 {[%eval 0.2]} e5 {[%eval 0.0]}" attaches the 0.2 eval to the
+  // position AFTER e4 (reviewStep 1) and the 0.0 eval to the position AFTER
+  // e5 (reviewStep 2). A comment BEFORE the first move attaches to the
+  // starting position (reviewStep 0).
+  //
+  // We walk the movetext tracking "pending eval" — when we see a {[%eval X]},
+  // we remember it; when we see the next move SAN, we attach the eval to the
+  // post-move position (reviewStep = moveIdx + 1).
+  const _extractedEvals=[]; // array of {reviewStep, eval, mate, ...}
+  let _pendingEval=null;
+  // Walk character-by-character, identifying brace comments and SAN moves.
+  // We use a simplified scan: find each `{` ... `}` block, extract any
+  // [%eval ...] inside, then advance to the next SAN-like token.
+  {
+    let _moveCount=0; // main-line move count (will be set properly later)
+    let _depth=0; // paren depth
+    let _i=0;
+    const _mt=moveText;
+    while(_i<_mt.length){
+      const _ch=_mt[_i];
+      if(_ch==='{'){
+        // Read until matching '}' (no nesting in standard PGN, but be tolerant)
+        // v1.0.4 Rev29: If we reach end-of-string without finding the matching
+        // '}', this is an UNCLOSED comment. We treat the rest as the comment
+        // body (so any [%eval ...] inside is still extracted), then advance
+        // _i past the end of the string to terminate the outer loop.
+        // v1.0.4 Rev31 CLEANUP: removed unused `_unclosed` flag (was set but
+        // never read — the post-loop logic handles both closed and unclosed
+        // cases uniformly via _j and _d).
+        let _j=_i+1,_d=1,_body='';
+        while(_j<_mt.length&&_d>0){
+          if(_mt[_j]==='{')_d++;
+          else if(_mt[_j]==='}')_d--;
+          if(_d>0)_body+=_mt[_j];
+          _j++;
+        }
+        // Extract [%eval ...] from body
+        const _em=_body.match(/\[%eval\s+([^\]]+)\]/i);
+        if(_em){
+          const _val=_em[1].trim();
+          let _ev=null,_mate=null;
+          if(_val.startsWith('#')){
+            // Mate notation: #5, #-3
+            const _mn=parseInt(_val.substring(1),10);
+            if(!isNaN(_mn)){
+              _mate=_mn;
+              _ev=_mn>0?99999:-99999;
+            }
+          }else if(/^[-+]?M\d+$/i.test(_val)){
+            // Alternate mate notation: M5, -M3, +M5 (rare, some engines)
+            const _sign=_val.startsWith('-')?-1:1;
+            const _mn=parseInt(_val.replace(/^[-+]*M/i,''),10);
+            if(!isNaN(_mn)){
+              _mate=_sign*_mn;
+              _ev=_sign>0?99999:-99999;
+            }
+          }else{
+            // Centipawn / pawn value: 0.35, -1.5, +2.00
+            const _pawns=parseFloat(_val);
+            if(!isNaN(_pawns)){
+              _ev=Math.round(_pawns*100);
+              _mate=0;
+            }
+          }
+          if(_ev!=null){
+            _pendingEval={eval:_ev,mate:_mate||0,depth:0,wdlW:-1,wdlD:-1,wdlL:-1};
+          }
+        }
+        _i=_j+1;
+        continue;
+      }
+      if(_ch==='('){_depth++;_i++;continue;}
+      if(_ch===')'){_depth=Math.max(0,_depth-1);_i++;continue;}
+      // Outside parens (depth 0): a non-whitespace token starting a move
+      if(_depth===0&&/[a-hKQRBNBO]/.test(_ch)){
+        // Check if this looks like a SAN move (not a move number, result, etc.)
+        // Read the token
+        let _j=_i;
+        let _tok='';
+        while(_j<_mt.length&&!/[\s{}()]/.test(_mt[_j])){_tok+=_mt[_j];_j++;}
+        // Skip move numbers (e.g., "1.", "2..."), results, NAGs
+        const _isMoveNum=/^\d+\.+$/.test(_tok);
+        const _isResult=/^(1-0|0-1|1\/2-1\/2|\*)$/.test(_tok);
+        const _isNag=/^\$\d+$/.test(_tok);
+        const _isEllipsis=/^\.+$/.test(_tok);
+        if(!_isMoveNum&&!_isResult&&!_isNag&&!_isEllipsis&&_tok.length>0){
+          // This is a main-line move. Attach pending eval to the post-move
+          // position (reviewStep = moveCount + 1).
+          _moveCount++;
+          if(_pendingEval){
+            _extractedEvals.push({reviewStep:_moveCount,eval:_pendingEval.eval,mate:_pendingEval.mate,depth:_pendingEval.depth,wdlW:_pendingEval.wdlW,wdlD:_pendingEval.wdlD,wdlL:_pendingEval.wdlL});
+            _pendingEval=null;
+          }
+        }
+        _i=_j;
+        continue;
+      }
+      _i++;
+    }
+    // Trailing pending eval (comment after the last move) attaches to the
+    // position after the last move.
+    if(_pendingEval&&_moveCount>=0){
+      _extractedEvals.push({reviewStep:_moveCount+1,eval:_pendingEval.eval,mate:_pendingEval.mate,depth:_pendingEval.depth,wdlW:_pendingEval.wdlW,wdlD:_pendingEval.wdlD,wdlL:_pendingEval.wdlL});
+    }
+    // Also handle pending eval at the START (before any move) — attaches to
+    // reviewStep 0 (the starting position).
+    // The above loop already handles this: if _pendingEval is set before
+    // the first move, it gets attached when the first move is seen.
+    // If no move was seen at all, _pendingEval is lost (acceptable — a PGN
+    // with only comments and no moves is malformed anyway).
+  }
+  
   // Remove comments (brace-style { ... }) — match innermost first for nesting.
   // v1.0.3-p9 audit: iteration cap prevents infinite loop on unmatched `{`.
+  // v1.0.4 Rev29: After 10 iterations of innermost-first removal, if any `{`
+  // remains, it's an UNCLOSED comment. We must remove it AND everything after
+  // it (to end of string) — otherwise the unclosed brace's content gets
+  // tokenized as bogus move tokens (e.g. "1. e4 {unclosed comment e5 2. Nf3"
+  // was producing tokens "{unclosed", "comment", "e5", "2.", "Nf3" — all
+  // rejected as invalid SAN, generating useless NULL placeholders).
   {let _braceIter=0;while(moveText.includes('{')&&_braceIter++<10)moveText=moveText.replace(/\{[^{}]*\}/g,'');}
+  // v1.0.4 Rev29: Remove unclosed brace + everything to end-of-string.
+  // This is the PGN spec's tolerant behavior: an unclosed comment consumes
+  // the rest of the movetext. We log a warning so the user knows.
+  if(moveText.includes('{')){
+    console.warn('_parsePGN: unclosed brace comment detected — truncating movetext from first unclosed {');
+    const _idx=moveText.indexOf('{');
+    moveText=moveText.substring(0,_idx);
+  }
   moveText=moveText.replace(/;[^\n]*/g,'');
   
   // Strip NAGs ($1, $2, etc.)
@@ -367,7 +535,7 @@ function _parsePGN(pgnText){
   }
   
   if(moves.length===0)return null;
-  return{moves,startFEN,variations};
+  return{moves,startFEN,variations,variant:pgnVariant,extractedEvals:_extractedEvals};
 }
 
 // Apply a single SAN move to a game state, returning the new state + notation + move
@@ -576,9 +744,49 @@ function importPGN(pgnText){
   const result=_parsePGN(pgnText);
   if(!result||!result.moves||!result.moves.length){showToast(T('pgn_invalid'),2000);return;}
   
+  // v1.0.4 NEW: Detect Chess960 variant from PGN [Variant] tag.
+  // If detected, enable Chess960 engine mode and set gameVariant for PGN round-trip.
+  if(result.variant==='chess960'){
+    if(typeof setChess960Mode==='function')setChess960Mode(true);
+    if(typeof gameVariant!=='undefined')gameVariant='chess960';
+    if(typeof gameSPID!=='undefined'){
+      // Try to derive SP-ID from the starting FEN's back rank
+      if(result.startFEN&&typeof backRankToSPID==='function'){
+        // FEN row 8 (top) is for black; we look at row 1 (bottom) for white's pieces
+        const fenRows=result.startFEN.split(' ')[0].split('/');
+        if(fenRows.length===8){
+          // White's back rank is fenRows[7] (last element, row 1 in chess notation)
+          const whiteRow=fenRows[7];
+          const backRank=[];
+          let idx=0;
+          for(const ch of whiteRow){
+            if(ch>='1'&&ch<='8'){for(let k=0;k<parseInt(ch);k++){backRank[idx++]=null;}}
+            else{
+              const t=ch.toLowerCase()==='r'?'rook':ch.toLowerCase()==='n'?'knight':ch.toLowerCase()==='b'?'bishop':ch.toLowerCase()==='q'?'queen':ch.toLowerCase()==='k'?'king':null;
+              if(t)backRank[idx++]=t;
+            }
+          }
+          if(idx===8){
+            const spid=backRankToSPID(backRank);
+            if(spid>=0)gameSPID=spid;
+          }
+        }
+      }
+    }
+  }else{
+    if(typeof setChess960Mode==='function')setChess960Mode(false);
+    if(typeof gameVariant!=='undefined')gameVariant=null;
+    if(typeof gameSPID!=='undefined')gameSPID=null;
+  }
+  
   // Start from FEN or initial position
   const startState=result.startFEN?fenToState(result.startFEN):initState();
   if(!startState){showToast(T('pgn_invalid'),2000);return;}
+  // v1.0.4: If the PGN declared Chess960, mark the start state too
+  if(result.variant==='chess960'){
+    startState.chess960=true;
+    if(typeof gameSPID!=='undefined'&&gameSPID!=null)startState.spid=gameSPID;
+  }
   
   // v1.0.3: Track the FEN's starting move number so the move list / PGN export
   // can display correct move numbers (e.g., "4. Bxf7+ Kxf7 5. Ne5" instead of
@@ -594,7 +802,13 @@ function importPGN(pgnText){
   gameState=startState;_resetGameUIState();gameOverSoundPlayed=false;
   _cachedStatus=null;_cachedStatusKey='';
   _sfEval=0;_sfMateDistance=0;_sfDepth=0;_sfEvalReady=false;_evalLoading=false;_updateEvalDisplay();
-  _reviewEvalCache.clear();_reviewEvalRequestedStep=-1;
+  // v1.0.4 Rev24: Do NOT clear _reviewEvalCache here. We populate it below
+  // from the PGN's [%eval ...] comments. The old _reviewEvalCache.clear()
+  // destroyed ALL cached evals (from other games too), which was wasteful
+  // and broke the "instant recovery from PGN comments" feature.
+  // Instead, we selectively clear only the entries for the CURRENT game's
+  // review steps (0..N) AFTER importing, then populate from extracted evals.
+  _reviewEvalRequestedStep=-1;
   reviewMode=false;setupMode=false;showNewGameDialog=false;
   _needNewGameForEngine=true;
   gameOver=null;_gameOverStatusKey=null;selectedSquare=null;legalMvs=[];legalSet=new Set();
@@ -608,6 +822,35 @@ function importPGN(pgnText){
   setupHistory=[];setupErrors=[];
   _ecoEnabled=false;
   reviewBaseState=cloneS(gameState);
+  
+  // v1.0.4 Rev24: Extract player names from PGN headers — used by _buildPGNString
+  // for [White "..."]/[Black "..."] tags, and to detect if the human player's
+  // name should be updated. We use the global playerWhite/playerBlack variables
+  // (declared in ai-bridge.js). If the PGN's White/Black matches the human
+  // player's slot, we also update _humanPlayerName (the rename feature).
+  try{
+    if(typeof playerWhite!=='undefined'){
+      // Parse headers from the raw PGN text (the result object doesn't expose them directly)
+      const _wm=pgnText.match(/\[White\s+"([^"]*)"\]/i);
+      const _bm=pgnText.match(/\[Black\s+"([^"]*)"\]/i);
+      if(_wm)playerWhite=_wm[1];
+      else playerWhite=undefined;
+      if(_bm)playerBlack=_bm[1];
+      else playerBlack=undefined;
+      // If the human player's slot has a name (and it's not the default "你"/"You"
+      // or "AI对手"/"AI Opponent"), persist it as the renamed human name.
+      const _humanSlot=playerColor;
+      const _humanName=_humanSlot==='white'?playerWhite:playerBlack;
+      if(_humanName&&typeof _humanPlayerName!=='undefined'){
+        const _isDefault=(_humanName===T('you')||_humanName==='你'||_humanName==='You'||_humanName===T('ai_opponent')||_humanName==='AI对手'||_humanName==='AI Opponent'||/Lv\.\d/.test(_humanName)||/SL/.test(_humanName));
+        if(!_isDefault){
+          _humanPlayerName=_humanName;
+          try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_humanName',_humanName);}catch(e){}
+        }
+      }
+    }
+  }catch(e){console.warn('importPGN: player name extraction failed',e);}
+  
   // v1.0.2 FIX: Black-to-move opening move record fix.
   // If the PGN's [FEN] header (or the start position) has black to move, prepend
   // null placeholder so the first replayed move (black's) lands in the black slot.
@@ -845,6 +1088,17 @@ function importPGN(pgnText){
       to:toAlg,
       piece:piece,
       captured:capPiece,
+      // v1.0.4 Rev28: Include promotion field so openStatsPage() serializes it
+      // to the stats page. Without this, the stats page board shows a pawn on
+      // the back rank instead of the promoted piece (queen/rook/bishop/knight).
+      // The parsed move's promotion field comes from _applySANMove
+      // (which extracts =Q/=R/=B/=N or trailing Q/R/B/N from the SAN).
+      // v1.0.4 Rev29 FIX (CRITICAL): was `move.promotion` but `move` is NOT in
+      // scope here — the loop variable is `parsedMove`. This ReferenceError
+      // was caught by the surrounding try/catch and surfaced to the user as
+      // "PGN invalid" — making EVERY PGN import fail. Fixed to use
+      // parsedMove.move.promotion (the move object on the parsed result).
+      promotion:(parsedMove&&parsedMove.move&&parsedMove.move.promotion)||null,
       time:null,
       variations:varEntries
     });
@@ -1001,10 +1255,45 @@ function importPGN(pgnText){
   const st=gameStatus(gameState);
   if(st&&st!=='play'){_applyGameOver(st);}
   
+  // v1.0.4 Rev24: Populate _reviewEvalCache from extracted [%eval ...] tags.
+  // This implements the "instant recovery from PGN comments" requirement —
+  // when the user enters review mode after import, all positions with
+  // [%eval ...] annotations are immediately shown with their cached eval,
+  // WITHOUT calling the engine. The engine is only invoked for positions
+  // that have no [%eval ...] annotation.
+  //
+  // We clear only the current game's review steps (0..moveRecords.length)
+  // first, to avoid stale entries from a previous import overwriting the
+  // new game's positions. Other games' entries (e.g., from analyze-all on
+  // a different game) are preserved.
+  try{
+    if(result.extractedEvals&&result.extractedEvals.length>0&&typeof _reviewEvalCache!=='undefined'){
+      // Clear current game's review-step entries (0..N+1)
+      const _maxStep=moveRecords.length+1;
+      for(let _i=0;_i<=_maxStep;_i++){
+        if(_reviewEvalCache.has(_i))_reviewEvalCache.delete(_i);
+      }
+      // Populate from extracted evals
+      let _populated=0;
+      for(const _e of result.extractedEvals){
+        if(_e.reviewStep>=0&&_e.reviewStep<=_maxStep){
+          _reviewEvalCache.set(_e.reviewStep,{eval:_e.eval,mate:_e.mate||0,depth:_e.depth||0,wdlW:_e.wdlW!=null?_e.wdlW:-1,wdlD:_e.wdlD!=null?_e.wdlD:-1,wdlL:_e.wdlL!=null?_e.wdlL:-1});
+          _populated++;
+        }
+      }
+      if(_populated>0){
+        console.log('importPGN: populated '+_populated+' eval entries from PGN comments');
+      }
+    }
+  }catch(e){console.warn('importPGN: eval cache population failed',e);}
+  
   render();
   // v1.0.3: Cache the original PGN text so the stats page can access the
   // complete PGN with all headers ([FEN], [SetUp], [TimeControl], [%clk]
   // comments, etc.) — not just the rebuilt move text from _buildPGNString().
+  // v1.0.4 Rev24: We still cache the original PGN for the stats page, BUT
+  // for PGN cache save (📚) we use _buildPGNString() which includes the
+  // latest moveRecords + variations + [%eval] from the review cache.
   if(typeof _cachedOriginalPGN!=='undefined'){
     _cachedOriginalPGN=pgnText;
   }
@@ -1078,7 +1367,18 @@ if(c!==8)return null;
 if(!wk||!bk)return null;
 const turn=parts[1]==='b'?'black':'white';
 const crStr=parts[2]||'-';
-const castlingRights={whiteKingside:crStr.includes('K'),whiteQueenside:crStr.includes('Q'),blackKingside:crStr.includes('k'),blackQueenside:crStr.includes('q')};
+// v1.0.4 NEW: Detect Shredder-FEN castling rights (Chess960 format).
+// Shredder uses the rook's source file letter (uppercase=White, lowercase=Black)
+// instead of K/Q/k/q. If crStr contains any letter A-H or a-h (besides the
+// standard K/Q/k/q), parse it as Shredder format.
+const _isShredder=/[A-Ha-h]/.test(crStr)&&!/[KQkq]/.test(crStr.replace(/[A-Ha-h]/g,''));
+let castlingRights;
+if(_isShredder&&typeof parseShredderCastling==='function'){
+  castlingRights=parseShredderCastling(crStr,board);
+}else{
+  // Standard KQkq format
+  castlingRights={whiteKingside:crStr.includes('K'),whiteQueenside:crStr.includes('Q'),blackKingside:crStr.includes('k'),blackQueenside:crStr.includes('q')};
+}
 let enPassantTarget=null;
 if(parts[3]&&parts[3]!=='-'){const ec=parts[3].charCodeAt(0)-97;const er=8-parseInt(parts[3][1]);if(er>=0&&er<8&&ec>=0&&ec<8){
 // Validate: en passant row must be rank 6 (er=2) for white's turn or rank 3 (er=5) for black's turn

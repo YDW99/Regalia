@@ -29,7 +29,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://tablebase.lichess.ovh; img-src data: file:; frame-ancestors 'none'; base-uri 'self'">
-<title>Regalia v1.0.3</title>
+<title>Regalia v1.0.4</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{color-scheme:dark;--bg:#1a0a0a;--card:#221015;--border:#8b6914;--border2:#d4a017;--text:#f5e6c8;--muted:#a08050;--accent:#d4a017;--accent2:#ffd700;--blue:#4a90d9;--red:#c0392b;--purple:#8e44ad;--green:#27ae60;--danger:#c0392b}
@@ -67,7 +67,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .toggle-sw.on::after{left:19px;background:#1a0a0a}
 .main{display:flex;flex:1;gap:14px;padding:14px;justify-content:center;flex-wrap:wrap}
 .bsec{display:flex;flex-direction:column;gap:8px}
-.pbar{display:flex;align-items:center;gap:10px;padding:8px 14px;background:#221015;border-radius:6px;border:1px solid var(--border);box-shadow:inset 0 1px 0 rgba(255,215,0,.05)}
+.pbar{display:flex;align-items:center;gap:10px;padding:8px 14px;background:#221015;border-radius:6px;border:1px solid var(--border);box-shadow:inset 0 1px 0 rgba(255,215,0,.05);max-width:100%;overflow:hidden}
 .pico{font-size:1.4rem}
 .pname{font-family:system-ui,-apple-system,sans-serif;font-weight:700;font-size:.85rem;color:var(--accent2)}
 .pbar-sub{font-size:.7rem;color:var(--muted);font-family:system-ui,-apple-system,sans-serif}
@@ -84,7 +84,10 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .rlbl{display:flex;flex-direction:column}
 .rlbl span{display:flex;align-items:center;justify-content:center;width:28px;font-size:.7rem;color:var(--muted);font-family:system-ui,-apple-system,sans-serif}
 .bwrap{position:relative;border:4px solid var(--border2);border-radius:4px;overflow:hidden;box-shadow:0 0 6px rgba(212,160,23,.08),0 4px 14px rgba(0,0,0,.40),inset 0 0 4px rgba(0,0,0,.08);background:#1a0a0a;transform:translateZ(0)}
-.bgrid{display:grid;transform:translateZ(0);touch-action:none;will-change:transform;backface-visibility:hidden}
+/* v1.0.4 ROUND-5 REV12: Removed will-change:transform from .bgrid — it was
+   promoting the ENTIRE 8x8 grid to a GPU layer, causing jank on high-end
+   displays. Only individual .move-anim elements need GPU promotion. */
+.bgrid{display:grid;transform:translateZ(0);touch-action:none;backface-visibility:hidden}
 .sq{display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;user-select:none;font-size:2rem;line-height:1;transition:background .15s;touch-action:manipulation;contain:layout style paint;transform:translateZ(0)}
 .sq:hover{background-color:rgba(255,215,0,.04)}
 .sq .lbl{position:absolute;top:1px;left:2px;font-size:9px;opacity:.95;font-family:"DejaVu Sans",system-ui,sans-serif;pointer-events:none;z-index:2;letter-spacing:0}
@@ -254,7 +257,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
     flex-wrap: nowrap;
   }
   .hdr h1 { font-size: .85rem; letter-spacing: 1px; }
-  .ver { display: none; }
+  .ver { font-size: .5rem; padding: 1px 5px; }
   .hdr-tools { gap: 3px; flex-wrap: nowrap; overflow-x: auto; }
   .btn { padding: 3px 7px; font-size: .62rem; min-height: 26px; gap: 2px; white-space: nowrap; }
   .ev { font-size: .68rem; padding: 2px 6px; gap: 3px; }
@@ -506,12 +509,14 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 /* Move animation overlay - per-piece types, GPU-accelerated */
 .move-anim{position:absolute;display:flex;align-items:center;justify-content:center;font-size:2rem;z-index:20;pointer-events:none;will-change:transform;backface-visibility:hidden;-webkit-backface-visibility:hidden;transform:translate3d(0,0,0);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text;-webkit-font-variant-emoji:text;font-weight:400}
 
-.move-anim.anim-pawn{transition:transform .24s cubic-bezier(.25,.1,.25,1)}
-.move-anim.anim-knight{transition:transform .30s cubic-bezier(.25,.1,.25,1)}
-.move-anim.anim-bishop{transition:transform .27s cubic-bezier(.25,.1,.25,1)}
-.move-anim.anim-rook{transition:transform .24s cubic-bezier(.25,.1,.25,1)}
-.move-anim.anim-queen{transition:transform .32s cubic-bezier(.25,.1,.25,1)}
-.move-anim.anim-king{transition:transform .27s cubic-bezier(.25,.1,.25,1)}
+/* v1.0.4 ROUND-5 REV12: Match JS durations exactly (game-logic.js animateMove).
+   180-260ms for smooth 120fps. will-change:transform ensures GPU compositing. */
+.move-anim.anim-pawn{transition:transform .18s cubic-bezier(.25,.1,.25,1)}
+.move-anim.anim-knight{transition:transform .24s cubic-bezier(.25,.1,.25,1)}
+.move-anim.anim-bishop{transition:transform .21s cubic-bezier(.25,.1,.25,1)}
+.move-anim.anim-rook{transition:transform .18s cubic-bezier(.25,.1,.25,1)}
+.move-anim.anim-queen{transition:transform .26s cubic-bezier(.25,.1,.25,1)}
+.move-anim.anim-king{transition:transform .21s cubic-bezier(.25,.1,.25,1)}
 /* Opening display */
 .opening-tag{background:linear-gradient(145deg,var(--purple),#6c3483);color:#ffd700;font-size:.72rem;padding:3px 12px;border-radius:4px;font-weight:700;white-space:nowrap;border:1px solid rgba(255,215,0,.3);font-family:system-ui,-apple-system,sans-serif;letter-spacing:1px;box-shadow:0 0 2px rgba(142,68,173,.08)}
 /* Sound button integrated into toolbar - no longer floating */

@@ -55,6 +55,17 @@ AGPL v3 (original code):
       stats.html (which is GPL v3 due to DroidFish-derived code).
   - src/main/java/com/Regalia/RootDetector.java
   - src/main/java/com/Regalia/TlsSecurityHelper.java
+  - src/main/assets/chess.src/chess960.js (v1.0.4 NEW)
+      Original Chess960 implementation: SP-ID generator, Shredder-FEN
+      castling-rights encoder/decoder, 960 castling legality checker.
+  - src/main/assets/chess.src/pgn-standard.js (v1.0.4 NEW)
+      Original standardized PGN encoder/decoder following the 1994 PGN spec.
+      v1.0.4 EXPANSION: adds NAG support, [%emt]/[%csl]/[%cal] tags,
+      parseTimeControl()/formatTimeControl() for all 6 TimeControl formats.
+  - src/main/assets/chess.src/worker-pool.js (v1.0.4 NEW)
+      Original Web Worker pool implementation: Blob-URL-based worker
+      instantiation, Promise-wrapping public API, inline fallback when
+      Workers are unavailable.
   - src/main/assets/chess.src/eco-data.js
       ECO data from lichess-org/chess-openings (CC0); code is original
   - src/main/assets/chess.src/index.html.tpl
@@ -135,7 +146,691 @@ and packaged as lib/arm64-v8a/libstockfish.so inside the APK.
 
 ===== VERSION HISTORY SUMMARY ================================================
 
-  v1.0.3 (current):
+  v1.0.4 (current):
+    - Chess960 (Fischer Random Chess) mode: full implementation via new
+      chess960.js module — SP-ID generator (0..959), Shredder-FEN castling
+      rights encoder/decoder (HAah format), 960 castling legality checker
+      (King ends on g1/c1, Rook ends on f1/d1 — same final squares as standard
+      chess but starting position randomized). New Game dialog gains a
+      Chess960 toggle with SP-ID selector and back-rank preview.
+    - StockfishNative bridge: new setChess960Mode(boolean) /
+      isChess960Mode() JavascriptInterface methods. Toggles Stockfish's
+      UCI_Chess960 option. The flag is automatically re-applied after engine
+      (auto-)restarts so crash recovery does not silently drop the 960 setting.
+    - Standardized PGN: new pgn-standard.js module implementing the 1994 PGN
+      spec. Exported PGN always contains the Seven-Tag Roster (Event/Site/
+      Date/Round/White/Black/Result), with [%eval] / [%clk] annotations
+      embedded inside comments, Result terminator enforced, movetext wrapped
+      at ~78 columns. Tolerant parser auto-corrects: nested {} comments,
+      unclosed comments, 0-0 numeric zeros → O-O, invalid SAN tokens skipped,
+      missing Result defaults to *, missing [SetUp "1"] tolerated.
+    - PGN Chess960 support: export emits [Variant "Chess960"] + [SetUp "1"] +
+      [FEN "..."] (Shredder castling format). Import recognizes [Variant
+      "Chess960"], [Variant "Fischerandom"], [Variant "Fischer Random"],
+      [Variant "FRC"], and auto-derives SP-ID.
+    - Heatmap-based control statistics: stats.html gains a new section that
+      walks every position in the game, computes per-square attacker counts
+      (cached by FEN), renders an 8×8 average-control heatmap, and reports
+      strongest/weakest squares for each side plus center-control trend.
+    - Web Worker pool: new worker-pool.js module offloads PGN parsing,
+      statistics computation (heatmap walk), and control-map computation to
+      a Web Worker thread created via Blob URL (compatible with the WebView's
+      script-src 'unsafe-inline' CSP). Falls back to inline synchronous
+      execution on devices without Worker support. Public APIs:
+      workerParsePGN(), workerComputeHeatmapStats(), workerGetCtrlMap().
+    - Time-control chess: New Game dialog gains a Time Control dropdown with
+      5 modes (Untimed / Sudden Death / Fischer Increment / Bronstein Delay /
+      US Delay). In-game UI shows live clocks with low-time warning (<30s
+      turns red) and flag-fall game-over. PGN export emits [TimeControl "..."]
+      header (e.g. "300+3") and per-move [%clk HH:MM:SS] annotations when
+      timed; [%emt HH:MM:SS] (elapsed move time, spec §10.2.7) when untimed.
+      TimeControl tag parsing/formatting supports all 6 spec formats
+      (sudden / fischer / bronstein / usdelay / staged / hourglass).
+    - NAG support: new NAG_MAP, nagToSymbol(), symbolToNag(),
+      formatNagToken() cover move-quality ($1-$6) and position-evaluation
+      ($10-$18) glyphs.
+    - Visual annotations: new formatCslTag(), formatCalTag(), parseCslTag(),
+      parseCalTag() implement the Lichess/Chessbase [%csl ...] and [%cal ...]
+      de-facto standard. Per-move automatic selection & caching:
+        Blue (B) = top-3 own-piece→important-square control paths (center +3,
+                   extended-center +1, contested +1 per opponent attacker)
+        Red (R)  = checker → checked king path (when current move gives check)
+        Green (G) = checked king's adjacent safe squares (escape paths)
+        Yellow (Y) = mover → opponent's queen path (queen threat)
+      All visual annotations are written into the corresponding move's
+      {} comment on PGN export. stats.html gains a "Visual Annotations"
+      section tallying each color count plus the NAG distribution.
+    - Version sync: versionCode=104, versionName="1.0.4" across build.gradle,
+      AndroidManifest.xml, strings.xml, every in-app UI display (header bar,
+      About dialog, loading page, error page), Java file VERSION constants,
+      README, NOTICE, every README.license file, and HTML manuals.
+    - Stockfish 18 arm64-v8a-dotprod binary (same engine version as v1.0.3).
+
+  v1.0.4 patch revision (version number unchanged — still v1.0.4 / versionCode 104):
+    - Captured-piece statistics fix: getCapturedPieces() now prefers
+      moveRecords[i].captured (actual captured piece per move, handles pawn
+      promotion correctly) as the authoritative source. The board-diff
+      method is retained only as a fallback for setup mode / FEN import.
+    - v1.0.4 new-UI style consistency: removed emoji from Chess960 and
+      Time-Control <h3> dialog section headings, and from Heatmap Stats
+      and Visual Annotations <h2> stats section headings, matching the
+      existing convention (15+ existing section headings have no emoji).
+      Emojis retained on toolbar/inline buttons. Chess960 back-rank preview
+      changed from fixed-width to responsive grid for narrow-landscape.
+    - chess960.js parseShredderCastling(): removed dead code
+      (cr.blackQueenside=false||cr.blackQueenside was a no-op);
+      consolidated into a single else if symmetric with white-side logic.
+    - chess960.js backRankToSPID(): rewrote to remove 3 dead-code
+      variables; added piece-count and opposite-color-bishops validation.
+    - stats.html NAG regex: fixed /\$ (\d+)/g (had a space, never matched)
+      to /\$(\d+)/g per PGN spec §8.2.4 ($N with no space).
+    - ui.js _computeAndCacheVisualAnnotations(): removed dead-code
+      variables pieceAtTo and myKingPos.
+    - ui.js _resetGameUIState(): now clears _visualAnnotationsCache,
+      gameClockTimerId, and gameClockExpired to prevent stale state
+      leaking into a new game.
+    - ui.js initGameClocks(): added baseSec field to gameClocks object so
+      PGN export's [TimeControl] header doesn't depend on the potentially-
+      stale dlgTimeControl.baseSec.
+
+  v1.0.4 Round-5 Revision 17 (version number unchanged — still v1.0.4 / versionCode 104):
+    - Xiaomi HyperOS 3 cache-clearing fix (critical). HyperOS 3's memory
+      manager / cache cleaner periodically wipes WebView localStorage at
+      /data/data/com.Regalia/app_webview/Local Storage/, causing the
+      review-eval cache (Regalia_reviewEvalCache), language preference
+      (Regalia_lang), and crash-recovery state (Regalia_recovery) to be
+      abnormally cleared — sometimes within minutes of the app going to
+      background. This is a system-level behavior, not an app bug, and
+      cannot be fixed by changing WebView settings.
+    - Java-side persistent storage layer added: three new
+      @JavascriptInterface methods in StockfishNative.java —
+      persistentGet(key) / persistentSet(key, value) / persistentRemove(key).
+      Backed by SharedPreferences (MODE_PRIVATE) at
+      /data/data/com.Regalia/shared_prefs/RegaliaEngine.xml, prefixed with
+      "kv_" to avoid collision with engine-settings keys. SharedPreferences
+      files are NEVER cleared by HyperOS 3 cache management — they are
+      treated as immutable user data, removable only by the app itself or
+      by "Clear data" (not "Clear cache").
+    - JS-side dual-write + fallback-read: ai-bridge.js _reviewEvalCache,
+      game-logic.js toggleLang/startup, and ui.js error-boundary _tryRecovery
+      all updated to dual-write to both localStorage (fast) and the
+      persistent store (durable), with fallback read on localStorage miss
+      that rehydrates localStorage for the fast path.
+    - AndroidManifest.xml backup rules: added res/xml/backup_rules.xml
+      (<full-backup-content>) and res/xml/data_extraction_rules.xml
+      (<data-extraction-rules>, Android 12+). Both declare the sharedpref
+      domain and app_webview/Local Storage/ directory as user data (not
+      cache) to be preserved during cloud backup and device transfer.
+      The <application> tag gains android:fullBackupContent and
+      android:dataExtractionRules attributes.
+    - tablebase.js _parsePGN regex sync: changed header-strip regex from
+      /\[[^\]]*\]/g to /^\[[^\]]*\]/gm (line-anchored) to match the
+      previous round's pgn-standard.js fix — no longer strips
+      [%csl]/[%cal]/[%emt]/[%clk]/[%eval] from brace comments.
+    - worker-pool.js stringified parsePGN regex synced (double-escaped
+      /^\\[[^\\]]*\\]/gm because it lives inside a JS string template).
+
+  v1.0.4 Round-5 Revision 18 (version number unchanged — still v1.0.4 / versionCode 104):
+    - 📚 PGN Cache Manager (new feature): new modal dialog accessible
+      from the review toolbar (📚 button between 🌗/🌈 and 📝 FEN).
+      Lets users:
+        * Save the current game's PGN to a named cache entry
+        * List all saved entries (with file size + modification time)
+        * Click any entry (or its 📥 Import button) to import it —
+          the import path syncs both review-mode move list and main-
+          game move list (moveRecords)
+        * Select multiple entries via checkbox and delete them in batch
+      Backed by four new @JavascriptInterface methods in
+      StockfishNative.java:
+        - listPGNCaches() returns JSON array of {name, size, mtime}
+        - savePGNCache(name, pgn) writes to filesDir/pgn_cache/<name>.pgn
+        - getPGNCache(name) returns the raw PGN text
+        - deletePGNCache(name) / deletePGNCaches(namesJson)
+      The pgn_cache/ directory is app-private (HyperOS 3 cache-clearing
+      proof, same as SharedPreferences). Names are sanitized (path
+      separators and control chars stripped, 100-char limit) to prevent
+      filesystem issues.
+    - Cache size cap removed: _reviewEvalCache in ai-bridge.js was
+      previously capped at 200 entries (LRU eviction). Now unlimited.
+      With the PGN cache manager letting users save arbitrary games for
+      cross-session review, capping the eval cache means revisiting an
+      old game would re-run Stockfish evaluations unnecessarily. Modern
+      device memory is more than sufficient (each entry ~200 bytes;
+      1000 games × 60 moves = 60k entries × 200B ≈ 12MB).
+    - Black-screen bug fix: a typo in toggleLang() —
+      "AndroidBridge!==='undefined'" (triple-equals with undefined) —
+      caused a SyntaxError on page load, resulting in a completely
+      black screen. Fixed to the correct "AndroidBridge!=='undefined'".
+    - i18n: 18 new translation keys added for the cache manager UI
+      (pgn_cache_manager, pgn_cache_save_current, pgn_cache_import,
+      pgn_cache_delete_sel, pgn_cache_close, pgn_cache_select_all,
+      pgn_cache_select_none, pgn_cache_count, pgn_cache_confirm_delete,
+      pgn_cache_saved, pgn_cache_deleted, pgn_cache_imported,
+      pgn_cache_save_failed, pgn_cache_import_failed, pgn_cache_empty,
+      pgn_cache_name_prompt, pgn_cache_save_default, pgn_cache_btn).
+      All strings provided in both Chinese (zh) and English (en).
+    - handleBackPress() updated: Android back button now closes the
+      cache manager modal first before falling through to other dialogs.
+
+  v1.0.4 Round-5 Revision 19 (version number unchanged — still v1.0.4 / versionCode 104):
+    - PGN Cache Manager onclick syntax error fix (critical bug). The Rev18
+      implementation used JSON.stringify(e.name) to embed cache entry names
+      in onclick attributes, producing HTML like:
+        onclick="_pgnCacheToggleSel("我的对局")"
+      The HTML parser terminated the attribute at the first embedded ",
+      leaving JS with "_pgnCacheToggleSel(" — which threw
+      "Uncaught SyntaxError: Unexpected end of input (line:1)" when clicked.
+      Affected all 4 onclick handlers in the cache list (toggle checkbox,
+      click row, click name area, click Import button).
+      Fix: new _jsAttrEncode(s) helper produces a JSON string with all
+      double quotes HTML-escaped to &quot; (also & < > for safety).
+      The browser decodes &quot; back to " before passing to JS, so
+      JS sees a valid string literal: _pgnCacheToggleSel("我的对局").
+    - "暂无走法记录" click-to-enter-review feature (new). The main UI
+      move list's empty-state text ("暂无走法记录" / "No moves yet")
+      is now clickable. Clicking it calls enterReview(), which (after
+      the Rev19 fix below) no longer returns early on empty moveRecords.
+      This lets users reach the review toolbar (📚 Cache Manager, 🗃️
+      Import) even before any move is played — useful for importing a
+      saved PGN immediately after app install. The text has a dotted
+      underline and a tooltip explaining the action.
+    - enterReview() empty-moveRecords fix. Previously
+      "if(moveRecords.length===0)return;" blocked entering review mode
+      with zero moves. This guard is removed. With zero moves,
+      reviewStates has exactly one entry (the starting position from
+      reviewBaseState or the gameState fallback), reviewStep=0. All
+      downstream code (reviewGoTo, _findCriticalMoves, requestEngineEval,
+      reviewAnalyzeAll) handles reviewStates.length===1 correctly via
+      existing guards (length<2 early returns, length===0 early returns).
+    - New i18n key: enter_review_hint (zh: "点击进入复盘界面（可使用 📚
+      缓存管理器或 🗃️ 导入 PGN）", en: "Click to enter review mode
+      (use 📚 Cache Manager or 🗃️ to import PGN)").
+    - PRIVACY.md updated: Local Data section now mentions the
+      /data/data/com.Regalia/files/pgn_cache/ directory and clarifies
+      that PGN cache entries contain only chess game records (no
+      personal/device-identifying info, never uploaded).
+    - chess.src/README.license updated: added "v1.0.4 Round-5 Rev17-19
+      changes" section documenting per-file modifications across the
+      three revisions (ai-bridge.js, game-logic.js, ui.js, tablebase.js,
+      worker-pool.js).
+
+  v1.0.4 Round-5 Revision 20 (version number unchanged — still v1.0.4 / versionCode 104):
+    - HyperOS 3 eval-cache loss root cause fix (critical bug). First-principles
+      analysis revealed four contributing factors:
+      (1) WebView localStorage at app_webview/Local Storage/ is classified as
+          "clearable cache" by HyperOS 3 — wiped within seconds of backgrounding.
+      (2) The Rev17 SharedPreferences persistence layer uses editor.apply()
+          (asynchronous disk write) — if HyperOS 3 SIGKILLs the app before
+          the background flush, the data is LOST.
+      (3) The 500ms debounce meant rapid eval updates were coalesced — if the
+          app died within 500ms, the latest eval never reached disk.
+      (4) SharedPreferences is not designed for large JSON blobs (eval cache
+          can reach 12MB) — full load into memory at construction slows startup.
+      Fix (four-layer defense):
+      - Layer 1 (core): dedicated file storage. Eval cache is now stored at
+        /data/data/com.Regalia/files/eval_cache.json using atomic write
+        (write .tmp -> fsync -> rename). HyperOS 3 never touches app-private
+        files directory.
+      - Layer 2 (core): synchronous writes. New saveEvalCacheSync(json) Java
+        interface uses FileDescriptor.sync() to flush to disk before returning.
+        HyperOS 3 cannot SIGKILL the app before sync completes.
+      - Layer 3 (defensive): critical-event flush. Java's onPause/onStop/
+        onUserLeaveHint and JS's pagehide/visibilitychange/beforeunload
+        handlers call _flushReviewEvalCache() for immediate write. Also calls
+        persistentFlush() to drain any pending SharedPreferences writes.
+      - Layer 4 (perf): 150ms debounce (reduced from 500ms) to balance
+        batching and timeliness.
+      New Java interfaces: persistentSetSync(key,value) (synchronous
+      SharedPreferences write using commit() instead of apply()),
+      persistentFlush() (drain pending writes), loadEvalCacheSync()
+      (synchronous read of eval cache file), saveEvalCacheSync(json)
+      (atomic write of eval cache file).
+    - Instant review eval cache recovery (performance optimization). The eval
+      cache is loaded synchronously via JNI at JS module construction. When
+      rendering the review UI, formatEval(), _buildEvalTrendSVG(),
+      _findCriticalMoves(), reviewGoTo() and all other paths read the
+      in-memory cache first — no JNI call, no async wait, INSTANT recovery
+      of all previously-analyzed evals. Engine invoked only on cache miss.
+    - PGN Cache Manager: Rename feature (new). Each cache entry has a
+      ✏️ Rename button. Calls AndroidBridge.renamePGNCache(oldName, newName).
+      Java side atomically renames the .pgn file AND the associated .tags.json
+      file. Refuses to overwrite if target name already exists.
+    - PGN Cache Manager: Add Tags feature (new). Each cache entry has a
+      🔖 Add Tags button (emoji-adorned). Max 10 tags, each ≤30 chars,
+      case-insensitive dedup. Tags displayed as gold capsule chips below
+      entry name. Tags stored separately in pgn_cache/<name>.tags.json,
+      decoupled from the PGN file. listPGNCaches() returns all tags in one
+      call (O(N) load, avoiding N file reads).
+    - Review toolbar button order adjustment (UI optimization).
+      Old: 💬Vars -> 📝 PGN -> 💾 -> 🌗/🌈 -> 📚 -> 📝 FEN -> 🗃️ -> 📊 -> Return.
+      New: 💬Vars -> 🌗/🌈 -> 📝 PGN -> 💾 -> 📚 -> 📝 FEN -> 🗃️ -> 📊 -> Return.
+      🌗/🌈 moved to right of Vars toggle, left of 📝 PGN — groups "display"
+      buttons (Vars, Heatmap) together, followed by "action" buttons.
+    - backup_rules.xml / data_extraction_rules.xml completed: added
+      <include domain="file" path="eval_cache.json"/> and
+      <include domain="file" path="pgn_cache/"/> to declare eval cache file
+      and PGN cache directory as user data (not cache) for cloud backup and
+      device migration preservation.
+    - Dead code cleanup: removed _pgnCacheToast (declared but never used).
+    - New i18n keys: pgn_cache_rename, pgn_cache_rename_prompt,
+      pgn_cache_renamed, pgn_cache_rename_failed, pgn_cache_tags,
+      pgn_cache_tags_prompt, pgn_cache_tags_saved,
+      pgn_cache_tags_save_failed (all zh/en).
+    - build.gradle: re-enabled externalNativeBuild, using NDK 27.2.12479018
+      to compile engine_jni.cpp into libengine_bridge.so from source.
+
+  v1.0.4 Round-5 Revision 21 (version number unchanged — still v1.0.4 / versionCode 104):
+    - Eval cache writes changed from debounced to immediate synchronous
+      (critical improvement). Rev20 retained a 150ms debounce on
+      _reviewEvalCache.set()/.delete()/.clear() — meaning new evals were
+      delayed up to 150ms before reaching disk. Under HyperOS 3 extreme
+      scenarios, this 150ms window could still lose the latest eval.
+      Rev21 completely removes the debounce: all three mutation methods
+      now trigger immediate synchronous write to eval_cache.json (atomic
+      write: tmp -> fsync -> rename). Performance: each eval arrives ~1/sec
+      via onEngineEval; sync write overhead is ~1-5ms — imperceptible to
+      the user. JS event loop single-threaded serializes writes, so no
+      concurrency risk during batch analyze-all. The debounce code path
+      is retained as a fallback (currently all callers use forceSync=true).
+    - PGN Cache Manager: tag filter/search functionality (new). The cache
+      manager modal now has a new search bar + tag-chip quick-filter row:
+      * Text search box: type a keyword and click 🔍 (or press Enter) to
+        apply the filter. Search matches both entry names (substring) and
+        tags (substring), case-insensitive.
+      * Tag-chip quick-filter row: automatically collects all tags across
+        all cache entries, deduplicates and sorts alphabetically, displayed
+        as gold capsule chips. Click any chip to filter by that tag; click
+        the "All" chip to clear. Active filter chip is highlighted.
+      * Clickable in-entry tag chips: tag chips below each entry name are
+        also clickable — click to filter by that tag, no need to open the
+        search box first.
+      * Filter status bar: when filter is active, shows a status line
+        like "Filtering: 2/5 match "opening"".
+      * Smart Select All/None: when filter is active, "Select All" only
+        selects visible (filtered) entries, not hidden ones.
+      * Smart count display: "2/5 cache(s)" when filtered, "5 cache(s)"
+        when no filter.
+      * Empty result hint: "No matching cache entries..." when no matches.
+      * Auto-clears filter on close/reopen.
+      New JS functions: _pgnCacheOnSearchInput(v), _pgnCacheApplyFilter(),
+      _pgnCacheClearFilter(), _pgnCacheFilterByTag(tag),
+      _pgnCacheEntryMatchesFilter(entry,filter), _pgnCacheCollectAllTags().
+    - New i18n keys: pgn_cache_search_placeholder, pgn_cache_search_apply,
+      pgn_cache_search_clear, pgn_cache_filter_all, pgn_cache_filter_by_tag,
+      pgn_cache_filter_status, pgn_cache_filter_no_match (all zh/en).
+    - Bilingual UI adaptation: all new UI text is bilingual (zh/en).
+
+  v1.0.4 Round-5 Revision 22 (version number unchanged — still v1.0.4 / versionCode 104):
+    - New Game dialog layout adjustment: Chess960 toggle moved to be directly
+      below the "Play Color" section (was below AI Book Moves). The existing
+      mutual-exclusivity gray-out behavior is preserved (Book Moves ON →
+      Chess960 grayed out and vice versa). The "Classic Openings (Optional)"
+      residual title in the Chess960-OFF branch is removed (the section is
+      self-evident from the ECO search box and openings list). The Chess960-ON
+      dedicated-settings section heading is changed from T('classic_openings')
+      to T('chess960_label') — it is the Chess960 settings area, not classic
+      openings.
+    - HyperOS 3 eval-cache defense strengthened: MainActivity.onDestroy() now
+      also calls _flushReviewEvalCache() + persistentFlush() before destroying
+      the WebView. Previously onDestroy only called _cleanupEventListeners()
+      and stockfishEngine.shutdown() — any eval data that arrived between
+      onStop and onDestroy (e.g., during low-memory kill where onStop may be
+      skipped) could be lost. The four-layer defense is now: (1) dedicated
+      file eval_cache.json with atomic write (tmp + fsync + rename); (2)
+      synchronous saveEvalCacheSync() using FileDescriptor.sync(); (3)
+      critical-event flush on Java onPause/onStop/onUserLeaveHint/onDestroy
+      AND JS pagehide/visibilitychange/beforeunload; (4) Rev21's per-set
+      synchronous write (no debounce — every eval is on disk before the next
+      line of JS executes).
+    - PGN Cache Manager search box: removed the redundant 🔍 apply button
+      (the soft-keyboard Enter key now triggers search directly via
+      enterkeyhint="search" + onkeydown Enter handler). Input type changed
+      from "text" to "search" for native search-input affordances. The ✕
+      clear button still appears when a filter is active. The ✏️ Rename,
+      🔖 Tags, and 📥 Import buttons per entry now share the SAME ROW (was
+      a vertical column) — horizontal layout matches the toolbar pattern,
+      takes less vertical space, and is easier to tap on short screens.
+    - HTML manuals: removed the obsolete "Stockfish engine binary" paragraph
+      from the v1.0.3 changelog <ul> in both Regalia-v1.0.4-manual-zh.html
+      and Regalia-v1.0.4-manual-en.html. The paragraph described re-downloading
+      the sf_18 stockfish-android-armv8-dotprod binary, which is no longer
+      a per-release action (the engine binary has been stable since v1.0.3).
+
+  v1.0.4 Round-5 Revision 23 (version number unchanged — still v1.0.4 / versionCode 104):
+    - Engine restart no longer wipes the entire eval cache (critical bug fix).
+      onEngineRestarting() and restartCurrentEngine() previously called
+      _reviewEvalCache.clear() — destroying the ENTIRE persisted cache (all
+      games' eval data), not just the current game's stale data. The eval
+      cache is keyed by reviewStep (a per-game index), and Stockfish is
+      deterministic (same FEN → same eval), so other games' evals remain
+      valid. Rev23 now only resets _reviewEvalRequestedStep=-1, letting
+      requestEngineEval() re-fetch the current step while preserving all
+      other games' caches.
+    - Eval cache writes switched to 150ms debounce (performance breakthrough).
+      Rev21 changed set()/delete() to synchronously write the entire Map on
+      every call. For a 60k-entry cache (~12MB JSON), this meant every eval
+      callback (~1/sec) serialized 12MB + JNI string transfer. Rev23 restores
+      Rev20's 150ms debounce: set()/delete() use the debounced path, while
+      _flushSync() (called from lifecycle/visibility handlers) forces an
+      immediate synchronous write. Rev21's SIGKILL concern is fully covered
+      by Rev22's onDestroy flush + JS pagehide/visibilitychange/beforeunload.
+    - Atomic file write strengthened (bug fix). saveEvalCacheSync() now uses
+      Files.move() with ATOMIC_MOVE + REPLACE_EXISTING on API 26+ for true
+      POSIX-atomic rename. The old delete+renameTo sequence had a brief window
+      where neither old nor new file existed. API 21-25 retains the legacy
+      path.
+    - Removed redundant cache check in requestEngineEval() (the second cache
+      check after _resetEvalState() was dead code — the first check already
+      returned on hit).
+    - Removed dead variable `moveNum` in _buildPGNString() (computed but never
+      read; the actual move number used is `_moveNum`). Also simplified the
+      `_isBlackStart` ternary (both branches identical) to a direct formula.
+    - Fixed stale comment in _pgnCacheOnSearchInput() (referenced the removed
+      🔍 button).
+
+  v1.0.4 Round-5 Revision 24 (current):
+    - Analyze-all interruption root-cause fix (5 distinct bugs). First-
+      principles analysis of the "分析全部 interrupted at a certain point"
+      symptom revealed:
+      (1) reviewAnalyzeAll() set startStep=0 when all steps were cached,
+          but requestEngineEval() then early-returned on the cache hit
+          WITHOUT calling _reviewAnalyzeAdvance(), stalling the batch
+          silently until the safety timer fired. Fix: detect all-cached
+          case up front and short-circuit to completion INSTANTLY.
+      (2) The safety timer was set ONCE with min(N*8s, 300s) — capped at
+          5 minutes. For long games with depth-22 evals (5-15s/step), the
+          5min cap fired mid-analysis. Fix: per-step safety timer (60s)
+          that RESETS on every advance; a stuck step is SKIPPED, not
+          aborting the whole batch.
+      (3) If the engine auto-recovered (onEngineReady after Java
+          recoverEngine()), the batch was silently dropped. Fix:
+          onEngineReady now resumes the batch if _reviewAnalyzeAllActive.
+      (4) If requestEngineEval() hit cache during batch (rare race), it
+          returned without advancing. Fix: detect _reviewAnalyzeAllActive
+          + cache hit and call _reviewAnalyzeAdvance.
+      (5) onEngineError cleared _reviewAnalyzeAllActive, dropping the
+          batch on any transient error. Fix: keep the flag, reset the
+          safety timer to give the engine time to recover.
+    - Instant cache restoration from PGN comments. tablebase.js _parsePGN()
+      now extracts [%eval ...] tags from {} comments BEFORE stripping them,
+      and importPGN() populates _reviewEvalCache from the extracted evals.
+      Positions with [%eval ...] annotations are shown INSTANTLY in review
+      mode without calling the engine. Supports all Lichess eval formats:
+      [%eval 0.35], [%eval -1.5], [%eval #5], [%eval #-3], [%eval M5].
+      Engine is only invoked for positions WITHOUT [%eval ...].
+    - PGN cache archive completeness. _pgnCacheSaveCurrent() now ALWAYS
+      uses _buildPGNString(true) (forceIncludeVariations=true). The
+      previous behavior preferred _cachedOriginalPGN (the imported text),
+      which lost NEW moves played after import. _buildPGNString() now
+      includes all moveRecords, variations (forced on), [%eval ...] from
+      the review cache, [%emt]/[%clk]/[%csl]/[%cal], and Seven-Tag Roster
+      + supplementary tags. The saved PGN archive contains the COMPLETE
+      game record (variations (), comments {}, no PGN info omitted).
+    - Player rename feature. Clicking the "你"/"You" name on the main
+      interface player bar opens a rename prompt. The new name is persisted
+      via AndroidBridge.persistentSet('Regalia_humanName', ...) and used in
+      all PGN text ([White "..."] / [Black "..."]). Loaded synchronously at
+      JS module init. Entering an empty string resets to "你"/"You". PGN
+      import with explicit [White "..."]/[Black "..."] headers also
+      populates _humanPlayerName if the human player's slot has a
+      non-default name. New globals: _humanPlayerName, playerWhite,
+      playerBlack. New i18n keys: rename_player_hint, rename_player_prompt,
+      rename_player_saved, rename_player_reset.
+    - Redundant 📥 button removed from PGN Cache Manager. The entry's name
+      div already had onclick="_pgnCacheImport(...)" — the separate 📥
+      button was redundant. ✏️ Rename and 🔖 Tags buttons remain.
+    - importPGN() no longer calls _reviewEvalCache.clear() — instead, it
+      selectively clears only the current game's review-step entries
+      (0..N+1) and populates from extracted evals. Other games' evals are
+      preserved (Stockfish is deterministic).
+    - Stockfish 18 arm64-v8a-dotprod engine binary updated to the official
+      sf_18 release (NDK r27c build, 114 MB, NEON+dotprod acceleration).
+
+  v1.0.4 Round-5 Revision 25 (current):
+    - Stats page promotion symbol fix (bug fix). In stats.html
+      renderPGNText() → renderSAN(), pawn promotions (e.g. "e8=Q",
+      "exd8=R") previously only prepended the pawn symbol but left the
+      "=Q"/"=R"/"=B"/"=N" suffix as a literal letter — inconsistent with
+      non-pawn moves where the piece letter IS converted to a symbol. Now
+      every promotion piece (Q/R/B/N after '=') is converted to its
+      side-colored symbol (♕/♛, ♖/♜, ♗/♝, ♘/♞). A shared _replacePromo()
+      helper handles both pawn-move and piece-move branches uniformly,
+      including the check/mate suffix (+/#).
+    - Chess960 dialog heading removed (redundancy cleanup). In the New Game
+      dialog, when Chess960 is enabled, the dedicated settings section
+      previously had a redundant <h3> heading ("菲舍尔任意制象棋" /
+      "Fischer Random Chess"). The Chess960 toggle above already makes the
+      mode clear. Rev25 removes the heading in both Chinese and English
+      modes; settings (SP-ID input, back-rank preview, note) now appear
+      directly under the toggle.
+
+  v1.0.4 Round-5 Revision 26:
+    - Stats page promotion symbol root-cause fix. Rev25 added a
+      _replacePromo() helper to convert =Q/=R/=B/=N suffixes to piece
+      symbols, but the promotion STILL showed as a letter because the
+      underlying SAN regex in stats.html renderPGNText() never captured
+      the promotion suffix for non-capture pawn promotions. The regex's
+      pawn non-capture alternative was [a-h][1-8][+#]? (NO promotion
+      group), so for "e8=Q" it matched only "e8" — leaving "=Q" to be
+      rendered as raw literal characters via the "pass through other
+      characters" fallback. Rev26 fixes the regex alternative to
+      [a-h][1-8](?:=[QRBN])?[+#]?, which captures the full "e8=Q" so
+      renderSAN() (and its _replacePromo helper) can convert the promotion
+      piece to a symbol. The same fix is applied to the variation-move
+      regex. Now ALL promotion formats render correctly: e8=Q → ♙e8=♕,
+      exd8=R → ♙exd8=♖, a8=N# → ♟a8=♞#, b1=B+ → ♙b1=♗+.
+
+  v1.0.4 Round-5 Revision 27:
+    - Hyperlinks open in system browser. The About page's
+      "Source code: https://github.com/YDW99/Regalia" is now a real <a>
+      hyperlink (previously plain text). ALL hyperlinks anywhere in the
+      app (About dialog's AGPL/GPL license links, stats.html links, etc.)
+      are intercepted by a new global click handler that calls
+      AndroidBridge.openUrlInBrowser(url) — a new @JavascriptInterface
+      method in StockfishNative.java and StatsActivity.java that launches
+      the system default browser via Intent.ACTION_VIEW. Defense-in-depth:
+      ChessWebViewClient.shouldOverrideUrlLoading() and the stats
+      WebView's WebViewClient also intercept http(s) URLs at the
+      navigation layer. URLs are strictly validated to be http(s) only.
+    - 🏳️ Resign feature (DeepSeek review 2.1). A new 🏳️ Resign button
+      appears in the player bar next to the "Your turn" indicator.
+      Tapping it opens a confirmation dialog; confirming ends the game
+      with the opponent winning. PGN export follows the 元宝 PGN report
+      convention: [Result "0-1"] if White resigns / [Result "1-0"] if
+      Black resigns, [Termination "Resignation"] supplementary tag, and
+      a {White resigns.} / {Black resigns.} comment on the last move.
+      Stops the engine (stop command + isAIThinking=false) and the game
+      clock. The game-over overlay shows the correct resign text and
+      win/lose emoji.
+    - Stats page board display (DeepSeek review). A small chess board
+      now appears ABOVE the PGN text panel in 📊统计, showing the
+      position after the currently-selected move (or initial position
+      if nothing is selected). The board uses the SAME color scheme as
+      the main chess.html board (SQ_LIGHT/SQ_DARK gradients, coordinate
+      labels with stroke, piece symbols with color/stroke/glow), with
+      White at the bottom and Black at the top. Width is responsive
+      (max 360px, aspect ratio 1:1).
+    - Kimi stats.html P0 fix — Backspace global interceptor. The
+      keydown listener that turns Backspace into "return to main game"
+      now checks whether the key event originated from an INPUT,
+      TEXTAREA, or contentEditable element. Previously, pressing
+      Backspace while editing the PGN paste field or any prompt input
+      would (1) prevent the character deletion AND (2) immediately
+      bounce the user back to the main game — making text editing
+      impossible.
+    - Kimi stats.html P0 fix — applySANMove king-safety validation.
+      applySANMove now validates that the moving side's king is NOT in
+      check AFTER the candidate move, by calling a new _isKingSafe()
+      helper. Previously, canMoveTo only checked pseudo-legal moves, so
+      a pinned piece could "move" and leave its own king in check —
+      corrupting the replayed position and all downstream statistics.
+      Castling also now checks post-castle king safety. If a
+      disambiguated piece fails the check, the scanner continues to
+      the next matching piece (correct SAN disambiguation behavior).
+    - Kimi stats.html P1 fix — game complexity threshold. Changed
+      validEvals.length>=3 to >=2. With 2 evals, changes has 1
+      element — avgChange and variance are both well-defined
+      (variance=0 for a single sample). The previous >=3 check skipped
+      the entire complexity section for 2-eval games.
+    - Kimi stats.html P1 fix — _escFEN escaping. Added " and '
+      escaping to _escFEN(), matching chess.html's _esc() behavior.
+      Closes a potential XSS vector where a malicious FEN imported via
+      PGN could break out of HTML attribute context.
+    - Kimi stats.html P1 fix — exportFullHTML regex. Replaced the
+      lazy [\s\S]*?\n} regex (which could match a nested object
+      literal's closing brace instead of the function's) with a new
+      _stripFnBody() helper that does brace-depth counting to find the
+      function's true closing brace. Prevents orphaned code from
+      leaking into the exported HTML.
+    - Stats.html hyperlink interceptor. New global click handler in
+      stats.html routes <a href="http(s)://..."> clicks to the new
+      AndroidBridge.openUrlInBrowser() bridge method.
+    - formatEval resign fix. The resign case in formatEval() now uses
+      _resignWinnerColor directly (set by _resignGame()) instead of
+      trying to detect "White wins" / "Black wins" in the gameOver
+      text (which only contains "resigns"). Fixes a bug where the
+      player always appeared to lose even when they won (e.g. AI
+      resigns).
+
+  v1.0.4 Round-5 Revision 28 (current):
+    - Stats↔main PGN sync. openStatsPage() now ALWAYS rebuilds the PGN
+      from the current moveRecords via _buildPGNString(true)
+      (forceIncludeVariations=true). Previously, it used
+      _cachedOriginalPGN (the text from the last importPGN/importPGNFile
+      call), which became STALE when the user played new moves after
+      importing — the stats page would show the imported PGN's moves,
+      not the current game's moves. Now the stats page always reflects
+      the current main/review game state.
+    - Stats→main PGN import-back prompt. When the user imports a PGN on
+      the stats page (via 🗃️ Paste PGN or 📂 Select PGN File) and then
+      returns to the main activity (back button or 返回对局 button), a
+      new "🗃️ Import PGN to game?" dialog appears with Yes/No/Cancel.
+      Cancel = stay on the stats page. No = return to main without
+      importing. Yes = return to main AND trigger the existing "💾 Save
+      PGN file?" prompt (to avoid losing the main/review's current PGN),
+      then import the stats-page PGN via importPGN(). The dialog UI
+      matches the app's existing dialog style. The Android back button
+      is intercepted: if the import-back dialog is visible, back =
+      Cancel (dismiss); otherwise back = returnToGame() (which may show
+      the import-back dialog if a PGN was imported).
+    - New @JavascriptInterface method setImportedPGN(String) in
+      StatsActivity.java — stashes the stats-page-imported PGN in a
+      static volatile field (importedPGNOnStats) for MainActivity.onResume
+      to read.
+    - New static volatile field StatsActivity.importedPGNOnStats —
+      one-shot consumption by MainActivity.onResume (cleared after read).
+    - MainActivity.onResume() now checks StatsActivity.importedPGNOnStats;
+      if non-null, reads it, clears it, and calls the JS-side
+      _showStatsImportBackPrompt(pgn) function via evaluateJavascript.
+    - New JS function _showStatsImportBackPrompt(pgnText) in ui.js —
+      uses the existing _withPGNSaveCheck mechanism to show the "💾 Save
+      PGN file?" prompt before importing (if the current game has move
+      records). The pending action is importPGN(pgn).
+    - New JS state variables in stats.html: _statsImportedPGN (the PGN
+      text imported on the stats page),
+      _statsImportBackDialogVisible (prevents duplicate dialogs).
+    - New JS functions in stats.html: _showStatsImportBackPrompt()
+      (renders the Yes/No/Cancel dialog), _statsImportBackDismiss()
+      (removes the dialog). returnToGame() and requestReview() now
+      intercept when _statsImportedPGN is non-null.
+    - _statsPastePGN() and onStatsPGNFileRead() now set
+      _statsImportedPGN=text/content after updating _payload.pgn.
+    - StatsActivity.onKeyDown() for KEYCODE_BACK now delegates to the
+      JS-side returnToGame() (instead of directly finishing the
+      activity), so the import-back interceptor can fire. If the
+      import-back dialog is visible, back = Cancel (dismiss).
+    - Resign game-over emoji fix. The game-over overlay's emoji was
+      hardcoded to show 🤝 for all non-checkmate terminations. Now it
+      shows 🏳️ when _gameOverStatusKey==='resign' (matching the resign
+      button's icon), and 🤝 only for genuine draws (stalemate, 50-move,
+      repetition, insufficient material, agreement).
+    - Stats board promotion fix. The stats page board display (added in
+      Rev27) showed a pawn on the back rank instead of the promoted
+      piece for promotion moves. Root cause: the moveRecords.push({...})
+      in tablebase.js _parsePGN() (the PGN import path) was missing the
+      promotion field, so openStatsPage() serialized move records
+      without promotion info, and the stats page's executeMove()
+      couldn't apply the promotion. Fixed by adding
+      promotion: move.promotion||null to the pushed move record.
+    - New i18n keys: stats_import_back_title, stats_import_back_msg,
+      stats_import_back_yes, stats_import_back_no, stats_import_back_cancel,
+      stats_import_back_no_pgn (zh/en).
+
+  v1.0.4 Round-5 Revision 29:
+    - CRITICAL: PGN import failure root cause fix. Rev28's addition of
+      `promotion: move.promotion||null` to tablebase.js importPGN's
+      moveRecords.push({...}) referenced an undefined variable `move`
+      (the loop variable is `parsedMove`). The ReferenceError was caught
+      by the surrounding try/catch and shown to the user as "Invalid PGN
+      format" — EVERY PGN import failed. Fixed to
+      `(parsedMove&&parsedMove.move&&parsedMove.move.promotion)||null`.
+    - CRITICAL: stats.html en passant support. The simplified SAN parser's
+      canMoveTo() and executeMove() did not handle en passant captures.
+      Importing a PGN with en passant (e.g. move 48 gxf6 in the user's
+      Regalia_game 3Ω.pgn) caused parsing to fail at move 94 → side-to-move
+      desync → 25 subsequent moves all rejected → stats page showed only
+      the first 98 moves. Added en passant branch to canMoveTo() and
+      captured-pawn removal to executeMove(). Now parses all 123 moves.
+    - Stats page checkmate symbol fix. buildSAN() previously never emitted
+      '#' (checkmate) — all checks shown as '+'. Added full checkmate
+      detection via in-place simulation (mutate→check king safety→revert)
+      to avoid the recursive executeMove→buildSAN→executeMove loop that
+      caused stack overflow with the naive approach.
+    - NAG Black-side fix. ai-bridge.js _buildPGNString() and stats.html
+      classifyMove() used raw White-POV delta for mate thresholds. A BLACK
+      mating move (delta -90000 White-POV = +90000 Black-POV) was
+      misclassified as $4 (blunder) instead of $3 (brilliant). Fixed to
+      use side-relative moverDelta for ALL comparisons.
+    - Stats page Black-to-move-start caption fix. _renderStatsBoard()
+      caption used lastIdx%2===0 for White/Black, ignoring
+      parsed.isBlackToMoveStart. For black-to-move-start games, the color
+      was inverted. Fixed to respect parsed.isBlackToMoveStart.
+    - PGN parsing tolerance improvement. Unclosed `{...}` comments
+      previously survived the multi-iteration regex removal, and the
+      residual content was tokenized into bogus move tokens generating
+      meaningless NULL placeholders. Now follows PGN spec's tolerant
+      behavior: an unclosed `{` consumes the rest of the movetext.
+    - Variation prefix number falsy-0 fix. `v.prefixEllipsisNum||vmn`
+      in _buildPGNString() incorrectly fell back to vmn when
+      prefixEllipsisNum===0 (legitimate rare value). Fixed to explicit
+      null check.
+    - stats.html PGN parse error i18n. Was hardcoded English "PGN parse
+      error". Added i18n key pgn_parse_error (zh: "PGN 解析失败").
+    - PGN import high-tolerance. Invalid moves are skipped with NULL
+      placeholders (shown as dimmed "—") and side-to-move is auto-advanced
+      to avoid cascade failure. Nested variations supported via recursive
+      descent parser. App self-exported PGN re-imports perfectly (123
+      moves → export → re-import → 123 moves, lossless).
+
+  v1.0.4 Round-5 Revision 30 (current):
+    - ROBUSTNESS: Scroll position restoration fix. The .mlist move list
+      repeatedly jumped back to top during re-renders. Root cause: with
+      scroll-behavior:smooth on .mlist, programmatic scrollTop assignment
+      during restore fired intermediate 'scroll' events that overwrote
+      _mlistScrollState.scrollTop, causing the NEXT render to restore to
+      a stale intermediate position. Fixed with a _scrollRestoreGuard
+      flag that suppresses _onMlistScroll during programmatic restore,
+      plus temporarily switching scroll-behavior to 'auto' for instant
+      restoration. The save phase now also reads scrollTop DIRECTLY from
+      the live DOM (not just from the event handler) for the most
+      reliable snapshot. Same pattern applied to .review-body in review
+      mode. _scrollRestoreGuard is reset on new game.
+    - ROBUSTNESS: ChessWebViewClient.shouldOverrideUrlLoading now also
+      overrides the newer WebResourceRequest-based overload (API 24+).
+      The deprecated String-based overload only fires on API 21-23; on
+      API 24+ only the WebResourceRequest overload is invoked. Without
+      this override, http(s) links clicked on API 24+ devices would NOT
+      be redirected to the system browser. The new overload delegates
+      to the String overload for consistent behavior.
+    - ROBUSTNESS: chess960.js randomSPID() modulo bias elimination.
+      Previously buf[0]%960 had a slight bias (65536 isn't a multiple of
+      960; values 0..255 were ~0.03% more likely than 256..959). Now
+      uses rejection sampling: only accept values < 65280 (the largest
+      multiple of 960 ≤ 65536) before applying %960. Bounded retry
+      count (8) prevents infinite loops; fallback to %960 if all retries
+      exceed (extremely unlikely — P ≈ 0.4%).
+
+  v1.0.3:
     - Portrait chart width cap removed (v1.0.3-p12): removed the 400px cap
       and -48 offset from portrait chart width calculation; now uses
       window.innerWidth - 12 for both orientations.
@@ -330,3 +1025,335 @@ icon assets.
 AGPLv3_Logo.svg is the official GNU AGPL v3 logo by the Free Software
 Foundation, used for license identification on the About page.
 Source: https://www.gnu.org/graphics/agplv3-with-text-162x68.png
+
+  v1.0.4 Round-5 Revision 31:
+    - STATS BOARD PIECE SIZING FIX: stats.html _renderStatsBoard() piece
+      font-size was 5.2vw (viewport-relative). In landscape, the viewport
+      is wide (e.g. 800px+) but the board container is capped at 360px,
+      so pieces overflowed squares. Fixed: piece font-size now uses a CSS
+      variable --piece-size set via JS to (boardWidth / 8 * 0.72). This
+      scales correctly with the ACTUAL board container in both portrait
+      and landscape, on all Android WebView versions (no container query
+      support needed). Added _updateStatsBoardPieceSize() called after
+      render and on resize/orientationchange.
+    - REVIEW MODE ORIENTATION CHANGE SCROLL BUG FIX: After orientation
+      change, the review move list jumped to a wrong scroll position
+      because the save phase read scrollTop from the OLD layout and the
+      restore phase applied that pixel offset to the NEW layout (where
+      it points to a different move). The review-moves-list scroll-into-
+      view logic didn't fire either (no reviewStep change). Fixed:
+      (1) on orientationchange, force _lastReviewStepScrolled=-2 so the
+      next render re-centers the active move in the NEW layout;
+      (2) invalidate _mlistScrollState.valid so the main move list
+      re-snapshots from the new DOM;
+      (3) set _skipReviewBodyScrollRestore flag so the review-body
+      doesn't restore the stale scrollTop (the active-move scroll-into-
+      view handles re-centering instead).
+    - UCI COMPLIANCE: Timed-game ponder fix. Per UCI spec, `go ponder`
+      MUST include time params (wtime/btime/winc/binc) so the engine can
+      switch to normal time management when `ponderhit` fires. Previously
+      startPonder() sent only "go ponder" with no time params — breaking
+      timed-game ponder (engine searched indefinitely or panicked after
+      ponderhit). Fixed: startPonder() now accepts 4 time params; JS side
+      passes current gameClocks values. For untimed games, all zeros are
+      passed and Java side sends plain "go ponder". Added @deprecated
+      legacy single-arg startPonder() overload for backward compat.
+    - DEAD CODE CLEANUP: Removed unused `_unclosed` flag in tablebase.js
+      _parsePGN (was set but never read). Removed dead `oppKing` variable
+      in stats.html buildSAN() (was always null, never read — leftover
+      from abandoned check-detection). Removed dead `ch==='\s'` comparison
+      in pgn-standard.js (a single char can never equal the 2-char string
+      "\s" — typo for regex \s class). Fixed composePGN() to avoid leading
+      blank lines when tagPairs is empty.
+
+  v1.0.4 Round-5 Revision 32:
+    - CRITICAL: ECO book move causing engine unresponsive bug fix. When
+      "AI优先从ECO开局库中选择开局走法" is enabled, after 3 consecutive
+      book-served AI moves, the engine appeared "unresponsive" — no AI
+      move was made. Root cause: doAIMove() increments _aiRetryCount on
+      EVERY call (expecting it to be reset by onBestMove). When the ECO
+      book provides a move, the engine is NOT called, so onBestMove never
+      fires, and _aiRetryCount accumulates. After 3 book moves,
+      _aiRetryCount>=3 → doAIMove() falsely concludes "AI move failed
+      after 3 consecutive timeouts" → shows ai_timeout toast and RETURNS
+      WITHOUT CALLING THE ENGINE. Fix: reset _aiRetryCount=0 on a
+      successful book move (and tablebase move) — the "request" was
+      satisfied, just by the book/tablebase instead of the engine.
+    - UCI EVAL OPTIMIZATION (per SF18 best-practices doc): engineEval()
+      and engineEvalDeep() now set Contempt=0 (objective eval, default
+      24 biases by avoiding draws), MultiPV=1 (max depth, MultiPV>1
+      reduces depth), UCI_ShowWDL=true (Win/Draw/Loss output) BEFORE the
+      eval search. After the eval, handleBestMove()'s STATE_EVAL case
+      calls restoreGameplayOptions() to restore Contempt=24 (aggressive
+      gameplay) and the user's MultiPV setting. New methods:
+      applyEvalModeOptions(), restoreGameplayOptions().
+
+  v1.0.4 Round-5 Revision 33:
+    - SELDEPTH DISPLAY: Added seldepth (selective search depth / tactical
+      depth) parsing and display throughout the app. Per SF18 eval best-
+      practices doc: depth is the main iteration depth, seldepth reflects
+      the actual max depth reached in tactical variations (usually >= depth).
+      Displayed as "SD<N>" right after "D<N>" to match the existing
+      abbreviated depth style (e.g., "D15 SD22").
+      * StockfishNative.java: new SELDEPTH_PATTERN regex; processInfoLine()
+        parses seldepth; onEngineProgress gains 9th param (seldepth);
+        onPonderProgress gains 6th param (seldepth); onEngineEval gains
+        7th param (seldepth); MultiPV JSON includes seldepth field.
+      * ai-bridge.js: new _sfSeldepth global; onEngineProgress/onEngineEval/
+        onPonderProgress updated to accept seldepth; _resetEvalState resets
+        _sfSeldepth=0; review eval cache stores seldepth; formatEvalTag()
+        includes "SD<N>" in PGN eval annotation when seldepth > depth.
+      * ui.js: main eval bar (both _updateEvalDisplayIncremental and full
+        renderInternal) shows "D15 SD22"; review eval bar shows "D15 SD22"
+        plus real-time nodes + nps during analysis (previously review eval
+        bar only showed D, no nodes/nps); checkmate/draw cache paths reset
+        _sfSeldepth=0.
+
+  v1.0.4 Round-5 Revision 34:
+    - CRITICAL: Chess960 castling could capture own pieces. The
+      isChess960CastlingLegal() function in chess960.js only checked that
+      squares BETWEEN the king and rook were empty, but did NOT check that
+      the king's destination and rook's destination were clear of other
+      pieces. In Chess960, the king and rook can start close together
+      (e.g., king on b1, rook on c1), so the king's path (b1→g1) extends
+      FAR beyond the rook — through squares d1, e1, f1 that may be
+      occupied by other pieces. makeMv() would blindly overwrite those
+      squares, effectively DESTROYING own pieces. Fix: isChess960CastlingLegal()
+      now checks the UNION of the king's path and the rook's path — every
+      square must be empty except the king's and rook's own starting
+      positions (which they vacate). Per the official Chess960 rules
+      (uploaded reference PDFs): target squares must be clear of any third
+      piece.
+    - stats.html applySANMove(): Castling no longer hardcodes king from col
+      4 (e1). Now scans the back rank for the king's actual column —
+      required for Chess960 positions where the king may start on b1-g1.
+    - stats.html executeMove(): Castling rook move is now Chess960-aware.
+      Instead of always taking the rook from col 7 (h1) or col 0 (a1), it
+      scans for the nearest rook on the castling side. Falls back to
+      standard chess positions if no rook found.
+    - stats.html heatmap: Each cell now displays its coordinate label
+      (e.g., "a8", "e4") at the top, centered. This helps users identify
+      which square each heatmap cell represents.
+
+  v1.0.4 Round-5 Revision 35:
+    - CRITICAL: Timed-game engine search exceeded clock time. Two root causes:
+      (1) When the GUI clock expired (flag-fall), no "stop" command was sent
+          to the engine. The engine continued searching based on its internal
+          wtime estimate, which could run past the GUI's 0-second mark —
+          especially under HyperOS 3's CPU throttling where the engine's
+          time allocation drifts from wall-clock time. Fix: _onGameClockExpired()
+          now calls AndroidBridge.engineStop() to hard-stop the engine
+          immediately. Also clears isAIThinking and the AI safety timer so
+          the game-over overlay shows promptly.
+      (2) The wtime/btime values sent to the engine were STALE — measured
+          when JS called engineGoTimed(), but by the time "go" is actually
+          sent (after stopAndWaitForBestmove + ucinewgame + readyok wait,
+          which can take up to 6 seconds), the real clock has decreased.
+          The engine then over-allocates search time. Fix: engineGoTimed()
+          now records the JS-call timestamp and deducts the setup overhead
+          from wtime/btime before sending "go". Also adds a safety margin
+          (engineMoveOverhead, min 50ms) to ensure the engine's bestmove
+          arrives before the GUI clock hits 0.
+    - New @JavascriptInterface methods: engineStop() (hard-stop any engine
+      state, discards bestmove), sendToEngine(String) (raw UCI command,
+      used as fallback).
+    - Resign path updated to prefer engineStop() over sendToEngine('stop').
+    - AI OPPONENT BAR SD LABEL LOCALIZATION: The AI opponent bar (which
+      shows engine search progress during AI thinking / hint / ponder) now
+      uses a localized label for seldepth: "选深" in Chinese mode,
+      "SelDepth" in English mode. Previously showed the abbreviated "SD"
+      in both languages. The eval bar (top header) keeps the abbreviated
+      "SD" for compactness. New i18n key: seldepth_label (zh: 选深, en:
+      SelDepth).
+
+  v1.0.4 Round-5 Revision 36:
+    - AI OPPONENT BAR LAYOUT RESTRUCTURE: Engine search real-time info
+      (depth/seldepth/nodes/nps) moved from inline on line 1 to its own
+      line 2, right-aligned. Ponder info (🔮 move + progress) moved to
+      line 3, right-aligned. Line 1 now shows only compact status (AI
+      name + level + clock + "思考中"/"Thinking" indicator). New DOM
+      element #ai-search-info for line 2. _updateAIThinkDisplay() updated
+      to write to #ai-search-info instead of injecting .tind span.
+    - SELDEPTH LABEL COLON: Added ':' between seldepth label and value
+      in AI opponent bar (选深:22 / SelDepth:22) for format consistency
+      with depth/nodes/nps (all use "label:value" format).
+    - CRITICAL: engineStop() no longer sets _discardingPonderBestmove
+      when engine is idle (STATE_NONE). Previously, calling engineStop()
+      during idle (e.g. clock expiry on player's own turn) would set the
+      flag, causing the NEXT game's first bestmove to be silently
+      discarded — manifesting as a 15s safety-timer delay on the AI's
+      first move of the new game. Fix: only set the flag + send "stop"
+      when stateBefore != STATE_NONE.
+    - CRITICAL: onPonderProgress score perspective was INVERTED.
+      isBlackToMove was (playerColor==='black') but should be
+      (playerColor==='white'). The ponder position is AFTER the player's
+      predicted move, so side-to-move is the AI (opposite of playerColor).
+      When player is white, AI is black, ponder position is AI's turn
+      (black) → isBlackToMove should be true. Old code returned false,
+      causing ponder scores to display with the WRONG SIGN (AI winning
+      showed as losing). Fix: corrected to (playerColor==='white').
+    - STATS.HTML CHESS960 CASTLING DETECTION: executeMove() castling
+      detection was Math.abs(to.col-from.col)===2 which only works for
+      standard chess. In Chess960, the king can start on any column and
+      moves to col 6/2 — distance can be 1-5 columns. Fix: detect
+      castling by DESTINATION column (6=kingside, 2=queenside) instead
+      of distance.
+    - REDUNDANCY: _updateAIThinkDisplay() no longer shows the "thinking"
+      placeholder on line 2 (line 1's .tind already shows it). Only
+      actual search data (with ":") is shown on line 2.
+
+  v1.0.4 Round-5 Revision 37:
+    - AI OPPONENT BAR CAPTURED PIECES SPLIT: When the AI's captured pieces
+      count exceeds 7, pieces 8+ are displayed on a separate line (line 3
+      of the AI bar), left-aligned. Pieces 1-7 remain on their original
+      row (line 2 area). Line 3 now contains both the overflow captured
+      pieces (left-aligned) and ponder info (right-aligned) in a flex
+      space-between layout. The player bar keeps the original single-row
+      wrap behavior (unchanged). capturedPiecesHtml() gains a `splitAt`
+      parameter (0 = no split, 7 = AI bar split point).
+
+  v1.0.4 Round-5 Revision 38:
+    - AI OPPONENT BAR OVERFLOW FIX: Some information was exceeding the AI
+      opponent bar's display width, causing visual overflow. Root causes:
+      (1) The inner column div (flex:1;min-width:0) lacked overflow:hidden,
+          so long search info / ponder info strings could push content past
+          the bar boundary.
+      (2) #ai-search-info and #ai-ponder-info used white-space:nowrap +
+          overflow:hidden + text-overflow:ellipsis but lacked max-width:100%
+          and box-sizing:border-box, so the ellipsis didn't activate properly
+          in all flex contexts.
+      (3) The line-3 container (overflow captured pieces + ponder info) used
+          flex:0 0 auto (non-shrinkable), so it couldn't compress when the
+          bar was narrow. Also lacked min-width:0 and overflow:hidden.
+      (4) .pbar CSS lacked max-width:100% and overflow:hidden, so the bar
+          itself could be pushed wider than its parent by internal content.
+      Fix: Added overflow:hidden to the inner column div, max-width:100% +
+      box-sizing:border-box to #ai-search-info, min-width:0 + overflow:hidden
+      to the line-3 container, min-width:0 to #ai-ponder-info, and
+      max-width:100% + overflow:hidden to .pbar CSS. Now all text properly
+      truncates with ellipsis when the bar is too narrow.
+
+  v1.0.4 Round-5 Revision 39:
+    - AI OPPONENT BAR PONDER INFO NOT DISPLAYED WHEN CAPTURED PIECES > 7:
+      When the AI's captured pieces exceeded 7, the overflow captured pieces
+      div (#ai-cap-overflow) had width:100% + flex:0 0 auto, causing it to
+      take ALL available width in the line-3 flex container. This pushed
+      #ai-ponder-info off-screen — ponder info was not displayed at all when
+      captured pieces > 7. Fix: removed width:100%, changed to flex:0 1 auto
+      (shrink-to-fit) + min-width:0. Now the overflow pieces only take the
+      space they need, leaving room for ponder info on the right.
+
+  v1.0.4 Round-5 Revision 40:
+    - AI OPPONENT BAR OVERFLOW PIECES VERTICAL WRAPPING + PONDER ALIGNMENT:
+      Two fixes:
+      (1) When captured pieces > 7, overflow pieces (#ai-cap-overflow) used
+          flex-wrap:wrap which caused them to stack VERTICALLY when the
+          container narrowed. Changed to flex-wrap:nowrap + overflow:hidden
+          so pieces always stay horizontal (excess clipped). Also reduced
+          font-size from 1.1rem to 0.85rem for overflow pieces to fit more
+          horizontally.
+      (2) Line-3 container used justify-content:space-between. When no
+          overflow pieces existed (≤7 captured), the single child
+          (#ai-ponder-info) was placed at LEFT instead of right. Changed
+          to margin-left:auto on #ai-ponder-info so it's ALWAYS right-
+          aligned regardless of whether overflow pieces exist.
+
+  v1.0.4 Round-5 Revision 41:
+    - PLAYER BAR CAPTURED PIECES FONT-SIZE: Reduced from 1.1rem to 0.85rem
+      to match the AI opponent bar's captured pieces font-size (Rev40),
+      keeping both bars visually consistent.
+    - STATS PAGE BOARD COORDINATE LABELS REWORK: Board layout reworked to
+      match the main board exactly:
+      (1) File labels (a-h) moved OUTSIDE the board, on TOP — matching
+          main board's .flbl style (font-size:.7rem, color:var(--muted),
+          system-ui font, letter-spacing:1px).
+      (2) Rank labels (1-8) moved OUTSIDE the board, on LEFT — matching
+          main board's .rlbl style (same font/color as .flbl, flex column).
+      (3) Per-cell coordinate labels (e.g. "e4") added INSIDE each cell,
+          matching main board's .sq .lbl style EXACTLY: position:absolute;
+          top:1px;left:2px;font-size:9px;opacity:.95; DejaVu Sans font;
+          LBL_LIGHT/LBL_DARK color; .6px LBL_STROKE_LIGHT/LBL_STROKE_DARK
+          stroke; text-shadow:0 0 2px glow; paint-order:stroke fill.
+
+  v1.0.4 Round-5 Revision 42:
+    - AI OPPONENT BAR OVERFLOW PIECES NOT DISPLAYED: When captured pieces > 7,
+      the overflow pieces (#ai-cap-overflow) had overflow:hidden + flex:0 1 auto
+      (shrink-to-fit). The overflow:hidden CLIPPED the pieces so they didn't
+      display at all, and flex:0 1 auto caused the div to shrink to 0 width
+      when space was tight. Fix: removed overflow:hidden from the overflow div
+      (parent container handles clipping), changed flex:0 1 auto to flex:0 0 auto
+      (natural width, no shrink) so all pieces display at their natural size.
+
+  v1.0.4 Round-5 Revision 43:
+    - CRITICAL: Exported stats HTML stuck at "Loading...". The _stripFnBody()
+      function in _exportFullHTML() uses brace-counting to find a function's
+      closing brace. The previous logic matched depth===0 + next char being
+      \n or space. This FAILED for _exportFullHTML itself (which contains a
+      nested _stripFnBody function definition) — the nested function's
+      closing '}' at depth 0 was mistaken for the outer function's closing
+      brace, truncating the strip mid-function. This left orphaned code
+      (comments + nested function body) in the exported JS, causing a JS
+      syntax error that prevented the entire script from executing — the
+      page stayed at "Loading..." forever.
+      Fix: Changed the end condition to match depth===0 AND the '}' being
+      at the START of a line (preceded by \n). This is the standard JS
+      convention for top-level function closing braces. Nested functions'
+      closing braces are typically indented (not at column 0), so they
+      won't match. Verified: all 9 stripped functions now strip correctly,
+      and the full exported JS passes syntax validation.
+
+  v1.0.4 Round-5 Revision 44:
+    - EVAL BAR STUCK MID-ANALYSIS FIX: The main UI eval bar sometimes got
+      stuck at "分析中" (analyzing) during position evaluation. Root cause:
+      when requestEngineEval() called AndroidBridge.engineEval(), the Java
+      side's stopAndWaitForBestmove() could block for up to 1s (waiting for
+      a previous search's bestmove). If the engine failed to respond (crash,
+      executor rejection, or state corruption), _evalLoading stayed true
+      forever with no timeout to reset it. Fix: added a JS-side eval safety
+      timer (10s) that resets _evalLoading=false if onEngineEval doesn't
+      arrive. The timer is cleared by onEngineEval on success.
+    - WORKER MEMORY LEAK FIX (review report item 1): The Web Worker created
+      by worker-pool.js was never terminated — in Android WebView, Worker
+      threads persist after page unload, causing OOM after repeated page
+      loads. Fix: added terminateWorker() function registered on pagehide
+      and beforeunload events. The worker is terminated and its Blob URL
+      revoked on page exit, preventing the memory leak.
+    - _stripFnBody SIMPLIFICATION (review report item 18): Replaced the
+      fragile brace-counting _stripFnBody with a simple regex approach:
+      `function name(){...}` → `function name(){}` via non-greedy match
+      to the next `\n}` at column 0. This eliminates all nested-brace
+      depth-counting issues and is verified to work for all 9 target
+      functions.
+
+  v1.0.4 Round-5 Revision 45:
+    - ENGINE TIMEOUT THRESHOLD EXTENDED: AI safety timer extended from 15s to
+      30s to better accommodate timed-game mode where the engine may use
+      significant time for critical moves (especially at higher difficulty
+      levels with deep search). 15s was too short for blitz games with 3+
+      minute base time. Eval safety timer also extended from 10s to 15s to
+      match (eval searches at depth 15/22 can take 10-12s on complex positions).
+
+  v1.0.4 Round-5 Revision 46:
+    - TIMEOUT EMOJI FIX: When a player wins by timeout, the game-over overlay
+      and eval bar now show ⌛ (hourglass) instead of 🤝 (handshake/draw).
+      Previously, timeout wins fell through to the default draw emoji because
+      the overlay's ternary only checked 'checkmate' and 'resign'.
+    - ENGINE TIMEOUT THRESHOLD EXTENDED: AI safety timer extended from 30s to
+      360s (6 minutes) to fully accommodate long timed games where the engine
+      may use several minutes for a critical move. Eval safety timer extended
+      from 15s to 30s to match proportionally.
+
+  v1.0.4 Round-5 Revision 47:
+    - TIMEOUT GAME-OVER TEXT NOT RE-LOCALIZING ON LANGUAGE TOGGLE: The timeout
+      game-over text ("白方超时胜" / "White wins by timeout") was set directly
+      in _onGameClockExpired() using _lang, not T(). When the user toggled
+      language after the game-over overlay appeared, the render-time
+      re-localization (which calls _gameOverStrFromStatus()) returned null for
+      'timeout' because that function had no 'timeout' branch — so the text
+      stayed in the original language. Fix: added 'timeout' branch to
+      _gameOverStrFromStatus() using new _timeoutWinnerColor variable and
+      new i18n key 'timeout_win_suffix' (zh: 超时胜, en: wins by timeout).
+      Updated _onGameClockExpired() to set _timeoutWinnerColor and call
+      _gameOverStrFromStatus('timeout'). Updated _buildPGNString() to use
+      _timeoutWinnerColor for PGN [Result] tag. Updated _resetGameUIState()
+      to clear _timeoutWinnerColor on new game.
