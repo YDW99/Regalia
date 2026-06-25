@@ -30,7 +30,10 @@ with open(TPL, 'r') as f:
 # Build the combined JS - order matters!
 modules = [
     "game-logic.js",
-    "ai-bridge.js", 
+    "chess960.js",
+    "pgn-standard.js",
+    "worker-pool.js",
+    "ai-bridge.js",
     "tablebase.js",
     "eco-data.js",
     "ui.js",

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Regalia Data Extraction Rules (Android 12+)
+
+  v1.0.4 Round-5 Rev16: Mirrors backup_rules.xml for Android 12+ (API 31+).
+  Declares that SharedPreferences and WebView Local Storage are USER data,
+  so they survive device-to-device migration AND cloud backup.
+
+  v1.0.4 Round-5 Rev20: Also include eval_cache.json and pgn_cache/ — see
+  backup_rules.xml for details.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="sharedpref" path="."/>
+        <include domain="database" path="webview.db"/>
+        <include domain="file" path="app_webview/Local Storage/"/>
+        <include domain="file" path="eval_cache.json"/>
+        <include domain="file" path="pgn_cache/"/>
+    </cloud-backup>
+    <device-transfer>
+        <include domain="sharedpref" path="."/>
+        <include domain="database" path="webview.db"/>
+        <include domain="file" path="app_webview/Local Storage/"/>
+        <include domain="file" path="eval_cache.json"/>
+        <include domain="file" path="pgn_cache/"/>
+    </device-transfer>
+</data-extraction-rules>

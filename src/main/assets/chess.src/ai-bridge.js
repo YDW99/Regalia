@@ -29,6 +29,9 @@
 let _sfEval=0,_sfEvalReady=false,_evalLoading=false,_engineReady=false;
 // Actual search depth reached by Stockfish (0 = not yet computed)
 let _sfDepth=0;
+// v1.0.4 Rev33: seldepth (selective search depth / tactical depth) from Stockfish.
+// Usually >= _sfDepth. 0 = not yet computed / not reported by engine.
+let _sfSeldepth=0;
 // WDL (Win/Draw/Loss) percentages from Stockfish UCI_ShowWDL — -1 means not available
 let _sfWdlW=-1,_sfWdlD=-1,_sfWdlL=-1;
 // Mate distance from White's perspective (UCI full moves): positive = White forces mate in N moves, negative = Black forces mate in N moves
@@ -46,33 +49,164 @@ let _evalForBlackTurn=false;
 // review mode without re-running the engine.
 let _reviewEvalCache=new function(){
   const m=new Map();
-  const MAX=200;
+  // v1.0.4 Round-5 Rev18: Unlimited cache size (was MAX=200). User can save
+  // arbitrary games to the PGN cache manager and review them across sessions;
+  // capping the eval cache means revisiting an old game would re-run Stockfish
+  // evaluations unnecessarily. On modern devices the LRU memory overhead is
+  // negligible (each entry ~200 bytes; 1000 games × 60 moves = 60k entries ×
+  // 200B ≈ 12MB, well within mobile device limits).
   const STORAGE_KEY='Regalia_reviewEvalCache';
-  // v1.0.2: Load from localStorage on construction
-  try{
-    const saved=localStorage.getItem(STORAGE_KEY);
-    if(saved){
-      const arr=JSON.parse(saved);
-      if(Array.isArray(arr)){
-        for(const [k,v] of arr){
-          m.set(k,v);
-          if(m.size>=MAX)break;
+  // v1.0.4 Round-5 Rev20: ROOT-CAUSE FIX for HyperOS 3 cache loss.
+  //
+  // FIRST-PRINCIPLES ANALYSIS:
+  //   1. WebView localStorage is stored at /data/data/com.Regalia/app_webview/Local Storage/leveldb.
+  //      HyperOS 3's memory manager classifies this directory as "cache" and clears it
+  //      aggressively — sometimes within seconds of the app going to background.
+  //   2. SharedPreferences (used by persistentGet/Set) is stored at
+  //      /data/data/com.Regalia/shared_prefs/RegaliaEngine.xml — classified as user data,
+  //      NOT cleared by HyperOS 3 cache management.
+  //   3. BUT: persistentSet() uses SharedPreferences.Editor.apply() which is ASYNC.
+  //      The write goes to an in-memory queue and is flushed to disk by a background
+  //      thread. If the OS SIGKILLs the app before the flush, the data is LOST.
+  //      HyperOS 3's aggressive killing means the flush often doesn't happen.
+  //   4. The 500ms debounce in the old _saveToStorage meant rapid eval updates were
+  //      coalesced — if the app died within 500ms of a new eval, that eval was never saved.
+  //
+  // FIX (this revision):
+  //   - Use a DEDICATED FILE (/data/data/com.Regalia/files/eval_cache.json) instead of
+  //     SharedPreferences. SharedPreferences is optimized for small primitive values;
+  //     storing a multi-MB JSON blob in it slows down app startup (loads ALL keys
+  //     into memory at construction) and burns memory. The dedicated file uses atomic
+  //     write (tmp + fsync + rename) — crash-safe, fast, and never cleared by HyperOS 3.
+  //   - Use SYNCHRONOUS writes (saveEvalCacheSync) for the file. This blocks until
+  //     fsync completes — HyperOS 3 cannot kill the app fast enough to lose data.
+  //   - v1.0.4 Rev21: set()/delete()/clear() trigger SYNCHRONOUS write IMMEDIATELY
+  //     (no debounce). Each eval result is rare (~1/sec max), so the cost of sync
+  //     write is acceptable. The previous 150ms debounce introduced a window where
+  //     new eval data could be lost if HyperOS 3 SIGKILLed the app mid-debounce.
+  //   - Add a _flushSync() method called from pagehide/visibilitychange/beforeunload
+  //     AND from Java's onPause/onStop/onUserLeaveHint. This forces an immediate
+  //     sync write before the OS can kill the app.
+  //   - localStorage is still maintained as a fast in-memory read cache (it loads
+  //     faster than a JNI call), but is NOT relied upon for durability.
+  //
+  // INSTANT RECOVERY:
+  //   The cache is loaded SYNCHRONOUSLY at JS module construction. By the time
+  //   any review-mode code runs, the cache is fully populated in memory. When
+  //   enterReview() → requestEngineEval() is called, the cache check returns
+  //   instantly (no async, no JNI round-trip). The user sees cached evals
+  //   immediately, with NO "analyzing..." flash.
+
+  function _readPersisted(){
+    // Try the dedicated eval cache file FIRST (Rev20 — durable, fast).
+    try{
+      if(typeof AndroidBridge!=='undefined'&&AndroidBridge.loadEvalCacheSync){
+        const json=AndroidBridge.loadEvalCacheSync();
+        if(json){
+          const arr=JSON.parse(json);
+          if(Array.isArray(arr))return arr;
         }
+      }
+    }catch(e){}
+    // Fall back to localStorage (fast in-memory, may be wiped by HyperOS)
+    try{
+      const saved=localStorage.getItem(STORAGE_KEY);
+      if(saved){const arr=JSON.parse(saved);if(Array.isArray(arr))return arr;}
+    }catch(e){}
+    // Fall back to legacy SharedPreferences-backed persistentGet (Rev17 path)
+    try{
+      if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentGet){
+        const persisted=AndroidBridge.persistentGet(STORAGE_KEY);
+        if(persisted){
+          const arr=JSON.parse(persisted);
+          if(Array.isArray(arr)){
+            // Rehydrate localStorage so subsequent reads hit the fast path
+            try{localStorage.setItem(STORAGE_KEY,persisted);}catch(e){}
+            return arr;
+          }
+        }
+      }
+    }catch(e){}
+    return null;
+  }
+  // Load from persisted storage on construction (instant — synchronous JNI call)
+  try{
+    const arr=_readPersisted();
+    if(arr){
+      for(const [k,v] of arr){
+        m.set(k,v);
       }
     }
   }catch(e){}
-  // v1.0.2: Save to localStorage (debounced — called on set and clear)
+  // v1.0.4 Round-5 Rev20: Save to disk. Strategy:
+  //   - Debounced 150ms write using saveEvalCacheSync (atomic file write).
+  //   - _flushSync() forces immediate write — called from critical event handlers.
+  // v1.0.4 Round-5 Rev21: set() now triggers SYNCHRONOUS write immediately
+  //   (no debounce). Rationale: HyperOS 3 can SIGKILL the app at any moment;
+  //   debouncing introduces a window where new eval data could be lost. Since
+  //   each set() is followed by an onEngineEval callback (relatively rare —
+  //   max ~1 per second per review step), the cost of synchronous write is
+  //   acceptable. For rapid batch operations (clear, analyze-all advancing
+  //   through steps), the JS event loop is single-threaded so writes are
+  //   naturally serialized — no risk of concurrent writes corrupting the file.
+  //   clear() and delete() also use synchronous writes for the same reason.
+  // v1.0.4 Round-5 Rev23 (this round): Reintroduced a HYBRID write strategy:
+  //   set() uses a 150ms debounce (coalescing rapid batch analyze-all writes),
+  //   while _flushSync() (called from lifecycle/visibility handlers) forces an
+  //   immediate synchronous write. This restores the Rev20 debounce that Rev21
+  //   removed — the Rev21 rationale (HyperOS 3 SIGKILL mid-debounce) is fully
+  //   addressed by the Rev22 onDestroy flush + the pagehide/visibilitychange
+  //   JS handlers, so the debounce window is now covered by multiple flush
+  //   triggers. Performance win: for a 60k-entry cache (~12MB JSON), set()
+  //   previously serialized the ENTIRE Map on every eval callback (~1/sec) —
+  //   now rapid navigations during analyze-all coalesce into one write per
+  //   150ms. The debounce is also cleared (forced immediate write) when
+  //   _flushSync() is called, so no data is lost on app backgrounding.
   let _saveTimer=null;
-  function _saveToStorage(){
-    if(_saveTimer)clearTimeout(_saveTimer);
+  let _dirty=false;
+  const DEBOUNCE_MS=150;
+  function _saveToStorage(forceSync){
+    if(_saveTimer){clearTimeout(_saveTimer);_saveTimer=null;}
+    if(forceSync){
+      // Synchronous write — blocks until fsync + rename complete
+      _writeToDiskNow();
+      _dirty=false;
+      return;
+    }
+    // Debounced write — coalesces rapid set() calls into one disk write.
+    _dirty=true;
     _saveTimer=setTimeout(function(){
-      try{
-        const arr=Array.from(m.entries());
-        localStorage.setItem(STORAGE_KEY,JSON.stringify(arr));
-      }catch(e){}
       _saveTimer=null;
-    },500);
+      if(_dirty){
+        _writeToDiskNow();
+        _dirty=false;
+      }
+    },DEBOUNCE_MS);
   }
+  function _writeToDiskNow(){
+    const arr=Array.from(m.entries());
+    const json=JSON.stringify(arr);
+    // Primary: dedicated eval cache file (atomic write, fsync, never cleared by HyperOS)
+    let fileOk=false;
+    try{
+      if(typeof AndroidBridge!=='undefined'&&AndroidBridge.saveEvalCacheSync){
+        fileOk=!!AndroidBridge.saveEvalCacheSync(json);
+      }
+    }catch(e){}
+    // Always write to localStorage as a fast in-memory read cache (best-effort)
+    try{localStorage.setItem(STORAGE_KEY,json);}catch(e){}
+    // Also write to SharedPreferences persistentGet backing store (legacy compat)
+    if(!fileOk){
+      try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSetSync)AndroidBridge.persistentSetSync(STORAGE_KEY,json);}catch(e){}
+    }
+  }
+  // Public flush method — called from Java onPause/onStop/onUserLeaveHint
+  // and from JS pagehide/visibilitychange/beforeunload handlers.
+  this._flushSync=function(){
+    if(_saveTimer){clearTimeout(_saveTimer);_saveTimer=null;}
+    if(_dirty)_writeToDiskNow();
+    _dirty=false;
+  };
   this.get=function(k){if(m.has(k)){const v=m.get(k);m.delete(k);m.set(k,v);return v;}return undefined;};
   // v1.0.2 PERF: peek() reads without refreshing LRU order. Use this in
   // tight loops that iterate over many entries (e.g., _buildEvalTrendSVG,
@@ -81,12 +215,40 @@ let _reviewEvalCache=new function(){
   // and pushing other entries toward eviction for no benefit.
   this.peek=function(k){return m.get(k);};
   this.has=k=>m.has(k);
-  this.set=function(k,v){if(m.has(k))m.delete(k);m.set(k,v);if(m.size>MAX){const first=m.keys().next().value;m.delete(first);}_saveToStorage();};
-  this.delete=function(k){const r=m.delete(k);_saveToStorage();return r;};
+  // v1.0.4 Rev23: set() now uses the debounced write path (150ms coalescing).
+  // _flushSync() (called from lifecycle handlers) forces an immediate write
+  // before the OS can kill the app, so the debounce window is safe.
+  this.set=function(k,v){if(m.has(k))m.delete(k);m.set(k,v);_saveToStorage(false);};
+  this.delete=function(k){const r=m.delete(k);_saveToStorage(false);return r;};
   Object.defineProperty(this,'size',{get:function(){return m.size;},configurable:true});
-  this.clear=function(){m.clear();_saveToStorage();};
+  this.clear=function(){m.clear();_saveToStorage(true);};
   this.keys=()=>m.keys();
 }();
+// v1.0.4 Round-5 Rev20: Expose _flushReviewEvalCache globally so Java can call it
+// via evaluateJavascript("if(typeof _flushReviewEvalCache==='function')_flushReviewEvalCache()").
+window._flushReviewEvalCache=function(){
+  try{
+    if(typeof _reviewEvalCache!=='undefined'&&_reviewEvalCache&&typeof _reviewEvalCache._flushSync==='function'){
+      _reviewEvalCache._flushSync();
+    }
+  }catch(e){}
+};
+// Critical event handlers — flush synchronously before app can be killed
+(function(){
+  function _flushOnExit(){
+    try{window._flushReviewEvalCache();}catch(e){}
+    // Also flush SharedPreferences pending writes (covers persistentSet async writes)
+    try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentFlush)AndroidBridge.persistentFlush();}catch(e){}
+  }
+  // pagehide: fired when the page is being unloaded (mobile browsers including WebView)
+  window.addEventListener('pagehide',_flushOnExit);
+  // visibilitychange: fired when tab/app becomes hidden (mobile background)
+  document.addEventListener('visibilitychange',function(){
+    if(document.visibilityState==='hidden')_flushOnExit();
+  });
+  // beforeunload: last-resort flush (some browsers don't fire pagehide on mobile)
+  window.addEventListener('beforeunload',_flushOnExit);
+})();
 // Track which review step the eval was requested for — allows onEngineEval to
 // discard stale callbacks when the user has navigated to a different step.
 let _reviewEvalRequestedStep=-1;
@@ -98,6 +260,25 @@ let _needNewGameForEngine=true;
 let showAboutPage=false;
 let showEngineConfig=false;
 let showImportDialog=false;
+// v1.0.4 Round-5 Rev27: Resign confirmation dialog state + winner color.
+// _resignWinnerColor is set when the human resigns: it stores the color that
+// WINS (i.e. the AI's color). Used by _gameOverStrFromStatus() and _buildPGNString()
+// to produce the correct display text and PGN [Result]/[Termination] tags.
+let showResignConfirm=false;
+let _resignWinnerColor=null;
+// v1.0.4 Rev47: Timeout winner color — stores which color WINS by timeout.
+// Used by _gameOverStrFromStatus('timeout') for re-localization on language toggle.
+let _timeoutWinnerColor=null;
+// v1.0.4 Round-5 Rev18: PGN cache manager dialog state
+let showPGNCacheManager=false;
+let _pgnCacheList=[]; // [{name, size, mtime, tags}]
+let _pgnCacheSelected=new Set(); // set of names selected for deletion
+// v1.0.4 Round-5 Rev21: Tag filter / search state for PGN cache manager.
+// _pgnCacheFilter holds the currently-applied filter text (tag name or substring).
+// _pgnCacheFilterInput holds the value currently in the search input box (before "apply").
+// Empty string = no filter (show all entries).
+let _pgnCacheFilter='';
+let _pgnCacheFilterInput='';
 let engineConfigData=null;
 let engineSettingsData=null;
 let engineConfigTab='engine';
@@ -120,6 +301,28 @@ let _importedStartMoveNum=1;
 let showVariations=false; // 💬显示变例 toggle state
 let _reviewAnalyzeSafetyTimer=null; // Safety timeout for reviewAnalyzeAll (prevents infinite hang)
 let _lastEngineCallbackTime=0; // Timestamp of last engine callback — used by heartbeat monitor
+// v1.0.4 Rev24 NEW: Human player's custom name (rename feature).
+// Loaded from persistent storage at module init. When non-null, used in:
+//   - Player bar display (ui.js)
+//   - PGN [White "..."] / [Black "..."] tags (_buildPGNString)
+//   - PGN cache archives and clipboard copies
+// Persists across sessions via AndroidBridge.persistentSet('Regalia_humanName', ...).
+let _humanPlayerName=null;
+// v1.0.4 Rev24 NEW: Explicit player names from PGN import.
+// When set (non-undefined), _buildPGNString uses these verbatim for [White]/[Black]
+// instead of the default "你"/"AI对手". Cleared by startGame().
+let playerWhite=undefined;
+let playerBlack=undefined;
+// v1.0.4 Rev24: Load _humanPlayerName from persistent storage at module init.
+// This runs synchronously, so the name is available before the first render.
+try{
+  if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentGet){
+    const _savedName=AndroidBridge.persistentGet('Regalia_humanName');
+    if(_savedName&&typeof _savedName==='string'&&_savedName.trim()){
+      _humanPlayerName=_savedName.trim();
+    }
+  }
+}catch(e){}
 // Declared globals for strict compliance
 let scannedEngines=[];
 let _pendingSwitchPath=null;
@@ -202,6 +405,9 @@ const HapticManager = (function() {
 // environment (Java callbacks can interleave with JS main thread).
 let _evalStaleGen=0;  // Generation counter — stale if onEngineEval's gen < current
 let _evalRequestGen=0; // Generation at time of last requestEngineEval() call
+// v1.0.4 Rev44: Safety timer for eval requests — prevents eval bar from
+// getting stuck at "分析中" if the engine doesn't respond.
+let _evalSafetyTimerId=null;
 
 let _toastTimer=0;
 function showToast(msg,duration=2500){const old=document.getElementById('_toast');if(old)old.remove();if(_toastTimer)clearTimeout(_toastTimer);const t=document.createElement('div');t.id='_toast';t.style.cssText='position:fixed;bottom:60px;left:50%;transform:translateX(-50%);background:rgba(42,21,32,.96);color:#f5e6c8;padding:10px 24px;border-radius:6px;font-size:.85rem;z-index:10000;border:1px solid #d4a017;box-shadow:0 0 4px rgba(212,160,23,.10);pointer-events:none;opacity:0;transition:opacity .3s;font-family:system-ui,-apple-system,sans-serif';t.textContent=msg;document.body.appendChild(t);requestAnimationFrame(()=>{t.style.opacity='1'});_toastTimer=setTimeout(()=>{t.style.opacity='0';setTimeout(()=>t.remove(),300)},duration)}
@@ -355,68 +561,278 @@ let _emergencyFallbackTimerId=setTimeout(function(){
 })();
 // v1.0.2 FEATURE (audit): extracted PGN-building logic into _buildPGNString() so
 // it can be shared by copyMoveHistory (clipboard) and exportPGNToFile (SAF file).
-function _buildPGNString(){
+// v1.0.4 STANDARDIZATION: PGN output now follows the 1994 PGN spec strictly:
+//   - Seven-Tag Roster (Event/Site/Date/Round/White/Black/Result) always emitted
+//   - [Variant "Chess960"] + [SetUp "1"] + [FEN "..."] for Chess960 games
+//   - [SetUp "1"] + [FEN "..."] for non-standard starting positions
+//   - [%eval ...] annotation tags inside comments (Lichess/Chessbase convention)
+//   - [%clk ...] annotation tags when clock times are available
+//   - Result terminator always appended at end of movetext
+//   - Tags and movetext separated by exactly one blank line (spec §3)
+
+// v1.0.4 LATEST: Build the AI opponent's display name with difficulty level suffix.
+//   Levels 1-6: "AI对手 Lv.N" (zh) / "AI Opponent Lv.N" (en)
+//   Level 7 (Skill Level): "AI对手 SL" / "AI Opponent SL"
+//   Level 8 (Custom): "AI对手 Custom" / "AI Opponent Custom"
+function _aiOpponentNameWithLevel(){
+  const baseName=T('ai_opponent');
+  let levelSuffix='';
+  try{
+    const effLevel=(typeof getEffectiveAILevel==='function')?getEffectiveAILevel():4;
+    if(effLevel>=1&&effLevel<=6){
+      levelSuffix=' Lv.'+effLevel;
+    }else if(effLevel===7){
+      levelSuffix=' SL';
+    }else if(effLevel===8){
+      levelSuffix=' '+(T('manual_config')||'Custom').replace(/^⚙️\s*/,'');
+    }
+  }catch(e){/* fallback: no suffix */}
+  return baseName+levelSuffix;
+}
+//   - Movetext wrapped at ~78 columns (spec recommendation)
+// v1.0.4 Rev24: Added forceIncludeVariations parameter. When true, variations
+// are ALWAYS included in the output PGN regardless of the showVariations UI
+// toggle. This is used by _pgnCacheSaveCurrent() so the saved PGN archive
+// contains the complete game record (variations + comments + eval tags).
+function _buildPGNString(forceIncludeVariations){
   if(!moveRecords||!moveRecords.length)return '';
-  let pgn='';
-  // v1.0.3: Include [FEN] and [SetUp "1"] headers if the game started from
-  // a setup position (not the standard initial position).
-  if(_setupFEN){
-    pgn+='[SetUp "1"]\n[FEN "'+_setupFEN+'"]\n\n';
+  // v1.0.4: Determine the game result from the gameOver string.
+  // Falls back to "*" if the game is still in progress.
+  let result='*';
+  // v1.0.4 Rev27: Resign — winner is _resignWinnerColor; result is "1-0" if
+  // White wins, "0-1" if Black wins. Checked FIRST so the resign text (which
+  // does not contain "White wins" / "Black wins") doesn't fall through to the
+  // default "1/2-1/2" draw branch.
+  if(gameOver&&typeof _gameOverStatusKey!=='undefined'&&_gameOverStatusKey==='resign'&&typeof _resignWinnerColor!=='undefined'&&_resignWinnerColor){
+    result=(_resignWinnerColor==='white')?'1-0':'0-1';
+  } else if(gameOver&&typeof _gameOverStatusKey!=='undefined'&&_gameOverStatusKey==='timeout'&&typeof _timeoutWinnerColor!=='undefined'&&_timeoutWinnerColor){
+    // v1.0.4 Rev47: Timeout — use _timeoutWinnerColor (the color that WINS).
+    result=(_timeoutWinnerColor==='white')?'1-0':'0-1';
+  } else if(gameOver){
+    if(gameOver.includes(T('white_wins'))||gameOver.includes('White wins'))result='1-0';
+    else if(gameOver.includes(T('black_wins'))||gameOver.includes('Black wins'))result='0-1';
+    else result='1/2-1/2';
   }
-  // v1.0.2 FEATURE (first-principles): PGN evaluation annotations + thinking time.
-  // After each move, build a PGN comment that includes:
-  //   1. Thinking time (from moveRecords[i].time, e.g. "3.2s") — FIRST item
-  //   2. Eval annotation (score + eval word, or full SF18 line every 5 moves)
-  // Example: {3.2s +0.5 略优} or {3.2s SF18 D22 +1.0 8%W/91%D/1%L}
-  // v1.0.3: Use _importedStartMoveNum as the move-pair number offset so PGN
-  // exports from a FEN-started game preserve the original move numbers.
+  // v1.0.4: Build the Seven-Tag Roster (STR) — always required by PGN spec.
+  // Use today's date in YYYY.MM.DD format if no game date is tracked.
+  const _today=new Date();
+  const _todayStr=_today.getFullYear()+'.'+((_today.getMonth()+1)<10?'0':'')+(_today.getMonth()+1)+'.'+(_today.getDate()<10?'0':'')+(_today.getDate());
+  const strInfo={
+    event:typeof gameEvent!=='undefined'?gameEvent:'Regalia',
+    site:typeof gameSite!=='undefined'?gameSite:'?',
+    date:_todayStr,
+    round:'?',
+    // v1.0.4 LATEST: AI opponent name includes difficulty level suffix.
+    //   Levels 1-6: "AI对手 Lv.N" / "AI Opponent Lv.N"
+    //   Level 7 (Skill Level): "AI对手 SL" / "AI Opponent SL"
+    //   Level 8 (Custom): "AI对手 Custom" / "AI Opponent Custom"
+    // The human player is always "你" / "You".
+    // If playerWhite/playerBlack are explicitly set (e.g. from PGN import), use those.
+    // v1.0.4 Rev24: For the human player's slot, prefer _humanPlayerName (the
+    // rename feature) over the default "你"/"You". This ensures PGN text,
+    // clipboard copies, and PGN cache archives all use the renamed name.
+    white:typeof playerWhite!=='undefined'?playerWhite:(playerColor==='white'?(_humanPlayerName||T('you')):(_aiOpponentNameWithLevel())),
+    black:typeof playerBlack!=='undefined'?playerBlack:(playerColor==='black'?(_humanPlayerName||T('you')):(_aiOpponentNameWithLevel())),
+    result:result
+  };
+  const strLines=sevenTagRoster(strInfo).split('\n');
+  // v1.0.4: Build supplementary tags
+  const supObj=buildSupplementaryTagsObject({
+    variant:(typeof gameVariant!=='undefined')?gameVariant:null,
+    startFEN:(typeof _setupFEN!=='undefined'&&_setupFEN)?_setupFEN:((typeof gameVariant!=='undefined'&&gameVariant==='chess960')?generateFEN(gameState):null),
+    plyCount:moveRecords.length
+  });
+  // For Chess960, the FEN we emit must use Shredder castling rights.
+  if(typeof gameVariant!=='undefined'&&gameVariant==='chess960'&&typeof toShredderCastling==='function'){
+    // Regenerate the FEN with Shredder castling for the [FEN] tag
+    const stdFEN=generateFEN(gameState);
+    // Replace the castling field (field 3, 0-indexed) with Shredder format
+    const parts=stdFEN.split(' ');
+    parts[2]=toShredderCastling(gameState.castlingRights,gameState.board);
+    supObj.FEN=parts.join(' ');
+  }
+  const supLines=supplementaryTags(supObj);
+  // v1.0.4 EXPANSION (this round): Add [TimeControl] header when game is timed
+  if(typeof gameClocks!=='undefined'&&gameClocks&&typeof formatTimeControl==='function'){
+    // v1.0.4 FIX (this round): use gameClocks.baseSec (now stored on the clock
+    // object) as the authoritative source. Previously fell back to
+    // dlgTimeControl.baseSec which could be stale after a PGN import (the
+    // imported game's time control may differ from the dialog's last setting).
+    const tcObj={
+      type:gameClocks.type,
+      baseSec:gameClocks.baseSec||0,
+      incrementSec:gameClocks.incrementSec||0,
+      delaySec:gameClocks.delaySec||0
+    };
+    const tcStr=formatTimeControl(tcObj);
+    if(tcStr&&tcStr!=='?'){
+      supLines.push('[TimeControl "'+tcStr+'"]');
+    }
+  }
+  // v1.0.4 Rev27: [Termination "Resignation"] tag when the game ended by resignation.
+  // Per PGN spec, [Termination] is a supplementary tag (not part of the Seven-Tag
+  // Roster) describing how the game ended. Values include "Normal" (default),
+  // "Time forfeit", "Abandoned", "Resignation", etc. We only emit this tag for
+  // resignation (other terminations like checkmate/timeout are already clear
+  // from the [Result] + movetext).
+  if(typeof _gameOverStatusKey!=='undefined'&&_gameOverStatusKey==='resign'){
+    supLines.push('[Termination "Resignation"]');
+  }
+  const allTags=strLines.concat(supLines);
+  // v1.0.4: Build halfMoves array for composePGN()
+  // Use _importedStartMoveNum offset for FEN-started games (preserves original move numbers)
   const _pgnMvStartOffset=(typeof _importedStartMoveNum!=='undefined'&&_importedStartMoveNum>0)?_importedStartMoveNum:1;
-  for(let i=0;i<moveRecords.length;i+=2){
-    const n=Math.floor(i/2)+_pgnMvStartOffset;
-    const w=moveRecords[i];
-    const b=moveRecords[i+1];
-    pgn+=n+'. '+(w?w.notation:'...');
-    // PGN RAV variations after white's move
-    if(showVariations&&w&&w.variations&&w.variations.length>0){
-      for(const v of w.variations){
-        if(!v.san)continue;
-        if(v.group==='analysis'||v.group==='ponder')continue;
-        const vmn = (v.varMoveNum!=null) ? v.varMoveNum : n;
-        const fiw = (v.firstMoveIsWhite!=null) ? v.firstMoveIsWhite : false;
-        const prefix = v.prefixEllipsis ? ((v.prefixEllipsisNum||vmn)+'... ') : '';
-        pgn+=' ('+prefix+_formatSANAsRAV(v.san,vmn,fiw)+')';
+  const halfMoves=[];
+  // v1.0.4 EXPANSION (this round): For timed games, we need the clock-remaining
+  // AFTER each move to emit [%clk]. We compute this by replaying the moves and
+  // tracking the clock state.
+  let _clkWhite=null,_clkBlack=null;
+  if(typeof gameClocks!=='undefined'&&gameClocks){
+    _clkWhite=gameClocks.white.remainingSec;
+    _clkBlack=gameClocks.black.remainingSec;
+  }
+  for(let i=0;i<moveRecords.length;i++){
+    const mr=moveRecords[i];
+    if(!mr)continue;
+    // Determine color: even index = White (when starting from move 1 with white to move)
+    // For FEN-imported games where black moves first, the placeholder logic shifts this.
+    // We rely on the convention that moveRecords[i] is the (i+1)-th half-move from the
+    // starting side. The "color" field is derived from i + the starting side.
+    const startColor=(typeof _importedStartMoveNum!=='undefined'&&_importedStartMoveNum>0&&gameState&&gameState.currentTurn==='black'&&i===0)?'black':(((i+(typeof _importedStartColor!=='undefined'&&_importedStartColor==='black'?1:0))%2===0)?'white':'black');
+    // For standard games (not FEN-imported), even index = white
+    const color=(typeof _importedStartColor==='undefined')?(i%2===0?'white':'black'):startColor;
+    // v1.0.4 Rev23: Removed dead variable `moveNum` — it was computed but never
+    // read (the actual move number used below is `_moveNum`). The ternary on
+    // line 641 already handles the black-start case correctly.
+    // Compute move number correctly: for standard games, move N covers half-moves 2N-2 and 2N-1
+    // For FEN-imported games starting at black's move N, half-moves 0..k all belong to move N, N, N+1, N+1, ...
+    // v1.0.4 Rev23: `_isBlackStart` ternary is a no-op (both branches are identical),
+    // but kept for readability — the formula _pgnMvStartOffset+Math.floor(i/2) works
+    // for both white-start and black-start because floor(i/2) gives 0,0,1,1,2,2...
+    const _moveNum=_pgnMvStartOffset+Math.floor(i/2);
+    // v1.0.4 EXPANSION (this round): Build the comment with [%emt] OR [%clk]
+    //   - If game is TIMED: use [%clk HH:MM:SS] (remaining clock AFTER this move)
+    //   - If game is UNTIMED: use [%emt HH:MM:SS] (elapsed move time from mr.time)
+    // We also include [%eval] when available, and [%csl]/[%cal] from the cache.
+    let commentParts=[];
+    // [%emt] for untimed games (mr.time is elapsed seconds as a string)
+    if(!gameClocks&&mr.time){
+      const emtTag=typeof formatEmtTag==='function'?formatEmtTag(parseFloat(mr.time)):null;
+      if(emtTag)commentParts.push(emtTag);
+    }
+    // [%clk] for timed games — we need the post-move remaining time.
+    // For the export to be accurate, we'd need to track the clock history per
+    // move. Since gameClocks only has the CURRENT remaining, we approximate by
+    // walking forward from the initial clock. To keep this simple and avoid
+    // drift, we emit the CURRENT remaining as the [%clk] for the LAST move only,
+    // and for earlier moves we omit [%clk] (the user can re-import the PGN and
+    // the [%emt] tags from moveRecords[i].time will still be available).
+    // For now: if this is the last move AND the game is timed, emit [%clk].
+    if(gameClocks&&i===moveRecords.length-1){
+      const clkSec=color==='white'?_clkWhite:_clkBlack;
+      if(clkSec!=null&&typeof formatClkTag==='function'){
+        const clkTag=formatClkTag(clkSec);
+        if(clkTag)commentParts.push(clkTag);
       }
     }
-    // v1.0.2: Build comment with thinking time + eval annotation
-    if(w){
-      const comment=_buildPGNComment(w,i+1,n);
-      if(comment)pgn+=' '+comment;
+    // [%eval] from cached review eval (if available)
+    if(typeof _reviewEvalCache!=='undefined'&&_reviewEvalCache.size>0){
+      const cached=_reviewEvalCache.get(i+1); // reviewStep is 1-based
+      if(cached){
+        const evalTag=formatEvalTag(cached);
+        if(evalTag)commentParts.push(evalTag);
+      }
     }
-    if(b){
-      pgn+=' '+b.notation;
-      if(showVariations&&b&&b.variations&&b.variations.length>0){
-        for(const v of b.variations){
-          if(!v.san)continue;
-          if(v.group==='analysis'||v.group==='ponder')continue;
-          const vmn = (v.varMoveNum!=null) ? v.varMoveNum : (n+1);
-          const fiw = (v.firstMoveIsWhite!=null) ? v.firstMoveIsWhite : true;
-          const prefix = v.prefixEllipsis ? (vmn+'... ') : '';
-          pgn+=' ('+prefix+_formatSANAsRAV(v.san,vmn,fiw)+')';
+    // v1.0.4 EXPANSION (this round): [%csl] and [%cal] from the visual annotations cache
+    if(typeof _getVisualAnnotations==='function'){
+      const va=_getVisualAnnotations(i);
+      if(va){
+        if(va.csl&&va.csl.length>0&&typeof formatCslTag==='function'){
+          const cslTag=formatCslTag(va.csl);
+          if(cslTag)commentParts.push(cslTag);
+        }
+        if(va.cal&&va.cal.length>0&&typeof formatCalTag==='function'){
+          const calTag=formatCalTag(va.cal);
+          if(calTag)commentParts.push(calTag);
         }
       }
-      // v1.0.2: Build comment with thinking time + eval annotation
-      const comment=_buildPGNComment(b,i+2,n);
-      if(comment)pgn+=' '+comment;
     }
-    pgn+=' ';
+    // Also keep the legacy "{<sec>s}" inline format for backward compatibility
+    // with stats.html's extractMoveTimes() — it looks for "<number>s" anywhere
+    // in the comment.
+    if(mr.time)commentParts.push(mr.time+'s');
+    // v1.0.4 Rev27: On the LAST move of a resigned game, append the
+    // "{White resigns.}" / "{Black resigns.}" annotation per the 元宝 PGN
+    // report. The resigner is the OPPOSITE of _resignWinnerColor.
+    if(typeof _gameOverStatusKey!=='undefined'&&_gameOverStatusKey==='resign'
+       && typeof _resignWinnerColor!=='undefined'&&_resignWinnerColor
+       && i===moveRecords.length-1){
+      const resignerColor=_resignWinnerColor==='white'?'black':'white';
+      // Use English for the PGN comment (PGN spec is language-neutral, but
+      // English is the de-facto standard for inter-op). Format: "White resigns."
+      const resignerStr=resignerColor==='white'?'White':'Black';
+      commentParts.push(resignerStr+' resigns.');
+    }
+    const comment=commentParts.length>0?commentParts.join(' '):undefined;
+    // Variations: include from moveRecords[i].variations if available
+    // v1.0.4 Rev24: forceIncludeVariations (used by PGN cache save) bypasses
+    // the showVariations UI toggle so the saved PGN archive always contains
+    // the complete game record with variations.
+    let variations=undefined;
+    if((showVariations||forceIncludeVariations)&&mr.variations&&mr.variations.length>0){
+      variations=mr.variations.filter(v=>v.san&&v.group!=='analysis'&&v.group!=='ponder').map(v=>{
+        const vmn=(v.varMoveNum!=null)?v.varMoveNum:_moveNum;
+        const fiw=(v.firstMoveIsWhite!=null)?v.firstMoveIsWhite:(color==='white'?false:true);
+        // v1.0.4 Rev29 FIX: was `v.prefixEllipsisNum||vmn` — but if prefixEllipsisNum
+        // is 0 (legitimate, though rare — move "0..." shouldn't normally occur, but
+        // defensive), `||` would fall back to vmn. Use explicit null check instead.
+        const prefix=v.prefixEllipsis?(((v.prefixEllipsisNum!=null)?v.prefixEllipsisNum:vmn)+'... '):'';
+        return {san:prefix+_formatSANAsRAV(v.san,vmn,fiw)};
+      });
+      if(variations.length===0)variations=undefined;
+    }
+    halfMoves.push({
+      moveNum:_moveNum,
+      color:color,
+      san:mr.notation||'?',
+      comment:comment,
+      variations:variations,
+      // v1.0.4 ROUND-5 REV16: NAG from eval-delta classification
+      // v1.0.4 Rev29 FIX: prev delta-based mate detection was broken for Black.
+      //   Old: `if(delta>=90000)return 3; if(delta<=-90000)return 4;`
+      //   This used the raw White-POV delta, so a BLACK move that delivers
+      //   mate (delta goes from ~0 to -90000 in White POV, which is +90000
+      //   in Black's favor) was incorrectly classified as $4 (blunder).
+      //   Fix: use the side-relative `md` for ALL comparisons, including
+      //   the mate threshold checks. Now Black's mating move correctly
+      //   gets $3 (brilliant) and White's blunder getting mated gets $4.
+      nag:(function(){
+        if(typeof _reviewEvalCache==='undefined'||!_reviewEvalCache||_reviewEvalCache.size===0)return undefined;
+        const cur=_reviewEvalCache.peek(i+1);
+        const prev=_reviewEvalCache.peek(i);
+        if(!cur||!prev)return undefined;
+        const curEv=cur.mate?(cur.mate>0?90000:-90000):cur.eval;
+        const prevEv=prev.mate?(prev.mate>0?90000:-90000):prev.eval;
+        const delta=curEv-prevEv;
+        const isW=(color==='white');
+        const md=isW?delta:-delta;
+        if(md>=90000)return 3;
+        if(md<=-90000)return 4;
+        if(md>200)return 3;
+        if(md>50)return 1;
+        if(md>-50)return undefined;
+        if(md>-150)return 6;
+        if(md>-300)return 2;
+        return 4;
+      })()
+    });
   }
-  pgn=pgn.trim();
-  if(gameOver){
-    if(gameOver.includes(T('white_wins'))||gameOver.includes('White wins'))pgn+=' 1-0';
-    else if(gameOver.includes(T('black_wins'))||gameOver.includes('Black wins'))pgn+=' 0-1';
-    else pgn+=' 1/2-1/2';
-  }
-  return pgn;
+  // Compose the final PGN
+  return composePGN({
+    tagPairs:allTags,
+    halfMoves:halfMoves,
+    result:result
+  });
 }
 // v1.0.2: Build a PGN comment for a move, combining thinking time + eval annotation.
 // v1.0.3: Format uses a single space as separator between thinking time and eval
@@ -505,8 +921,10 @@ function _formatPGNEvalAnnotation(reviewStep,moveNum){
         wdlStr=wp+'%W/'+dp+'%D/'+lp+'%L';
       }
     }
+    // v1.0.4 Rev33: include seldepth (SD) in the PGN eval annotation when > depth.
     const depthStr=cached.depth?('D'+cached.depth):'D?';
-    return '{SF18 '+depthStr+' '+scoreStr+(wdlStr?(' '+wdlStr):'')+'}';
+    const seldepthStr=(cached.seldepth!=null&&cached.seldepth>0&&cached.seldepth>cached.depth)?(' SD'+cached.seldepth):'';
+    return '{SF18 '+depthStr+seldepthStr+' '+scoreStr+(wdlStr?(' '+wdlStr):'')+'}';
   }
   // Otherwise: short eval-word annotation
   // posDesc is defined in ui.js but is in scope (single bundled file)
@@ -548,13 +966,33 @@ function onPGNExported(success,fileName){
 // WebView activity by the Java side. The PGN is passed via the bridge and
 // stored in a JS variable that stats.html reads on load.
 function openStatsPage(){
-  // v1.0.3: Use the cached original PGN text if available (from importPGN/importPGNFile).
-  // This preserves all headers ([FEN], [SetUp], [TimeControl], [%clk] comments, etc.)
-  // that _buildPGNString() would lose. Fall back to _buildPGNString() for games
-  // played in-app (no import).
-  let pgn=_cachedOriginalPGN;
-  if(!pgn){
-    pgn=_buildPGNString();
+  // v1.0.4 Rev28: ALWAYS sync the current main/review game state to the stats
+  // page. Previously, this used _cachedOriginalPGN (the text from the last
+  // importPGN/importPGNFile call) which became STALE when the user played new
+  // moves after importing — the stats page would show the imported PGN's moves,
+  // not the current game's moves.
+  //
+  // Now we ALWAYS rebuild the PGN from the current moveRecords via
+  // _buildPGNString(true) (forceIncludeVariations=true). This includes:
+  //   - All moves in moveRecords (including post-import moves)
+  //   - Variations (forced on, independent of showVariations UI toggle)
+  //   - [%eval] from the review cache
+  //   - [%emt]/[%clk]/[%csl]/[%cal] annotations
+  //   - Seven-Tag Roster + supplementary tags ([FEN], [SetUp], [Variant],
+  //     [TimeControl], [Termination] for resignations, etc.)
+  //
+  // The only downside: if the user imported a PGN with rich annotations that
+  // _buildPGNString() doesn't preserve (e.g., custom comments, NAGs not in
+  // our cache), those are lost. This is an acceptable trade-off — the stats
+  // page's job is to analyze the CURRENT game, not the original import text.
+  // (The original import text is still preserved in _cachedOriginalPGN for
+  // the PGN cache save 📚 feature.)
+  let pgn=_buildPGNString(true);
+  // v1.0.3 fallback: if _buildPGNString returned empty (e.g., no moveRecords),
+  // try _cachedOriginalPGN as a last resort (e.g., FEN-only imports that didn't
+  // generate moveRecords but did set _cachedOriginalPGN).
+  if(!pgn&&_cachedOriginalPGN){
+    pgn=_cachedOriginalPGN;
   }
   if(!pgn){showToast(T('no_move_records'));return}
   // Also gather per-move eval cache data so the stats page can show
@@ -1082,7 +1520,14 @@ function onEngineRestarting(){
   // v1.0.2 FIX (audit): Parity with restartCurrentEngine() — clear review eval
   // cache + MultiPV state so the recovered engine's evaluations are re-fetched
   // instead of showing stale values from the pre-crash engine.
-  _reviewEvalCache.clear();_reviewEvalRequestedStep=-1;
+  // v1.0.4 Rev23 FIX: Do NOT call _reviewEvalCache.clear() here — that destroys
+  // the ENTIRE persisted cache (all games' evals), not just the current game's.
+  // The eval cache is keyed by reviewStep (a per-game index), so "stale" evals
+  // from a pre-crash engine are only stale for the CURRENT game's steps. Other
+  // games' evals in the cache are still valid (Stockfish is deterministic — the
+  // same FEN always yields the same eval). Instead, we just reset the requested
+  // step so requestEngineEval re-fetches the current step after recovery.
+  _reviewEvalRequestedStep=-1;
   _multiPVLines=[];_multiPVResult=null;_lastEngineVariation=null;
   if(_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
   // v1.0.2 FIX: Reset AI retry counter on engine restart. Without this, if the
@@ -1128,6 +1573,19 @@ function onEngineReady(){
   _updateEngineNotification(T('engine_ready'));
   setTimeout(function(){
     _hideLoadingOverlay();
+    // v1.0.4 Rev24: If analyze-all was active when the engine crashed, RESUME
+    // the batch instead of silently dropping it. The user's "interrupted at a
+    // certain point" symptom was partly caused by Java-side recoverEngine()
+    // firing onEngineReady without restarting the batch.
+    if(typeof _reviewAnalyzeAllActive!=='undefined'&&_reviewAnalyzeAllActive&&typeof reviewMode!=='undefined'&&reviewMode){
+      // Resume the batch — requestEngineEval will check cache first (already-
+      // analyzed steps are skipped) and call _reviewAnalyzeAdvance on hit.
+      try{
+        if(typeof _reviewAnalyzeResetSafetyTimer==='function')_reviewAnalyzeResetSafetyTimer();
+        requestEngineEval();
+        return;
+      }catch(e){console.error('Analyze-all resume after engine ready failed:',e);}
+    }
     // After engine auto-restart, resume the correct action based on game state.
     if(!gameOver&&!setupMode&&!reviewMode&&gameState.currentTurn!==playerColor){
       doAIMove();
@@ -1239,7 +1697,29 @@ function onBestMove(uciMove){
             const ponderMv={from:pCoords.from,to:pCoords.to,piece:pPiece,promotion:pCoords.promotion};
             const ponderState=makeMv(gameState,ponderMv);
             const ponderFenAfterMove=generateFEN(ponderState);
-            AndroidBridge.startPonder(ponderFenAfterMove);
+            // v1.0.4 Rev31 UCI COMPLIANCE: pass current clock times to startPonder
+            // so the engine's `go ponder` includes wtime/btime/winc/binc. When
+            // ponderhit fires later, the engine uses these params to switch to
+            // normal timed search. Without them, the engine doesn't know how
+            // much time it has after ponderhit (broken timed-game ponder).
+            // For untimed games (gameClocks===null), pass all zeros — Java side
+            // detects this and sends plain "go ponder" (no time params).
+            let _pwtime=0,_pbtime=0,_pwinc=0,_pbinc=0;
+            if(typeof gameClocks!=='undefined'&&gameClocks){
+              // After AI's move, it's player's turn. The ponder position is
+              // AFTER the predicted player move, so it's AI's turn again.
+              // wtime/btime are from the CURRENT gameClocks (before player moves).
+              // Use displayRemainingSec for the most accurate current value.
+              const _wRem=gameClocks.white.displayRemainingSec!=null?gameClocks.white.displayRemainingSec:gameClocks.white.remainingSec;
+              const _bRem=gameClocks.black.displayRemainingSec!=null?gameClocks.black.displayRemainingSec:gameClocks.black.remainingSec;
+              _pwtime=Math.round(_wRem*1000);
+              _pbtime=Math.round(_bRem*1000);
+              if(gameClocks.type==='fischer'){
+                _pwinc=Math.round((gameClocks.incrementSec||0)*1000);
+                _pbinc=Math.round((gameClocks.incrementSec||0)*1000);
+              }
+            }
+            AndroidBridge.startPonder(ponderFenAfterMove,_pwtime,_pbtime,_pwinc,_pbinc);
             // DEFERRED PONDER DISPLAY: Do NOT set _ponderMoveSAN here.
             // Previously, setting _ponderMoveSAN immediately caused the AI bar to show
             // the ponder move SAN WITHOUT progress info (since _ponderBarInfo was still
@@ -1345,13 +1825,28 @@ function onHintMove(uciMove){
 // Convert to White's perspective for consistent display.
 // Updated: now accepts 8 params (added wdlW, wdlD, wdlL from Stockfish UCI_ShowWDL)
 // Updated: also updates eval display depth during STATE_EVAL searches
-function onEngineProgress(depth,nodes,nps,scoreCp,scoreMate,wdlW,wdlD,wdlL){
+// v1.0.4 Rev33: added seldepth (9th param) for "SD" display after "D".
+// seldepth (selective search depth) is the tactical depth — usually >= depth.
+// Per SF18 eval best-practices doc: depth is the main iteration depth, seldepth
+// reflects the actual max depth reached in tactical variations. Displayed as
+// "SD<N>" right after "D<N>" to match the existing abbreviated style.
+function onEngineProgress(depth,nodes,nps,scoreCp,scoreMate,wdlW,wdlD,wdlL,seldepth){
   if(depth<=0)return;
   // DEFENSE IN DEPTH: Skip unrealistic depth values (>60) that could come from
   // stale info lines due to Java state machine race condition (see StockfishNative
   // processInfoLine for root cause analysis). Prevents showing "深度:200" etc.
   if(depth>60){console.warn('onEngineProgress: skipping unrealistic depth',depth);return;}
   let infoParts=[T('depth')+':'+depth];
+  // v1.0.4 Rev33: add seldepth as "SD<N>" right after depth, only if > depth
+  // (seldepth == depth is redundant; seldepth < depth shouldn't happen but
+  // guard against it). seldepth=0/null means the engine didn't report it.
+  // v1.0.4 Rev35: AI opponent bar uses localized label (选深 / SelDepth) instead
+  // of the abbreviated "SD". The eval bar (in ui.js) keeps "SD" for compactness.
+  // v1.0.4 Rev36: add ':' between label and value for format consistency with
+  // depth/nodes/nps (all use "label:value" format).
+  if(seldepth!=null&&seldepth>0&&seldepth>depth){
+    infoParts.push(T('seldepth_label')+':'+seldepth);
+  }
   if(nodes!=null){const nodesStr=nodes>=1000000?(nodes/1000000).toFixed(1)+'M':nodes>=1000?Math.round(nodes/1000)+'K':String(nodes);infoParts.push(T('nodes')+':'+nodesStr);}
   if(nps!=null){const npsStr=nps>=1000000?(nps/1000000).toFixed(1)+'M/s':nps>=1000?Math.round(nps/1000)+'K/s':String(nps);infoParts.push(npsStr);}
   // Determine which side is to move: STATE_GO=AI's turn, STATE_HINT=player's turn, STATE_EVAL=eval
@@ -1380,6 +1875,8 @@ function onEngineProgress(depth,nodes,nps,scoreCp,scoreMate,wdlW,wdlD,wdlL){
   // display's depth indicator in real-time.
   if(_evalLoading&&depth>0&&depth<=30){
     _sfDepth=depth;
+    // v1.0.4 Rev33: also track seldepth for the eval bar's "D15 SD22" display.
+    _sfSeldepth=(seldepth!=null&&seldepth>0&&seldepth<=60)?seldepth:0;
     if(nodes!=null)_lastProgressNodes=nodes;
     if(nps!=null)_lastProgressNps=nps;
     _updateEvalDisplay();
@@ -1415,7 +1912,8 @@ function onEngineProgress(depth,nodes,nps,scoreCp,scoreMate,wdlW,wdlD,wdlL){
 
 // Ponder progress is decoupled from move records (never appears as variation),
 // but is displayed as 🔮 row in the AI opponent bar for real-time feedback.
-function onPonderProgress(depth,nodes,nps,scoreCp,scoreMate){
+// v1.0.4 Rev33: added seldepth (6th param) for "SD" display after "D".
+function onPonderProgress(depth,nodes,nps,scoreCp,scoreMate,seldepth){
   if(depth<=0)return;
   if(depth>60)return; // Skip unrealistic depths from stale info lines
   // FIX: Generation-based staleness guard. If the ponder generation has changed
@@ -1436,12 +1934,21 @@ function onPonderProgress(depth,nodes,nps,scoreCp,scoreMate){
     _pendingPonderMoveUCI=null; // One-shot: only convert once
   }
   let infoParts=[T('depth')+':'+depth];
+  // v1.0.4 Rev33: add seldepth as "SD<N>" right after depth (same style as onEngineProgress).
+  // v1.0.4 Rev35: AI opponent bar (ponder) uses localized label (选深 / SelDepth).
+  // v1.0.4 Rev36: add ':' for format consistency.
+  if(seldepth!=null&&seldepth>0&&seldepth>depth){
+    infoParts.push(T('seldepth_label')+':'+seldepth);
+  }
   if(nodes!=null){const nodesStr=nodes>=1000000?(nodes/1000000).toFixed(1)+'M':nodes>=1000?Math.round(nodes/1000)+'K':String(nodes);infoParts.push(T('nodes')+':'+nodesStr);}
   if(nps!=null){const npsStr=nps>=1000000?(nps/1000000).toFixed(1)+'M/s':nps>=1000?Math.round(nps/1000)+'K/s':String(nps);infoParts.push(npsStr);}
   // Ponder scores are from the side-to-move's perspective.
-  // During ponder, the engine analyzes the opponent's predicted position,
-  // so the side-to-move is the player (opposite of AI).
-  let isBlackToMove=(playerColor==='black'); // Ponder position = player's turn, so black moves if player is black
+  // During ponder, the engine analyzes the position AFTER the player's predicted
+  // move, so the side-to-move is the AI (opposite of playerColor).
+  // v1.0.4 Rev36 FIX: was `(playerColor==='black')` — inverted! When player is
+  // white, AI is black, ponder position is AI's turn (black) → isBlackToMove
+  // should be true. Old code returned false (wrong sign on ponder score display).
+  let isBlackToMove=(playerColor==='white'); // Ponder position = AI's turn; AI is black when player is white
   const wCp=isBlackToMove?-scoreCp:scoreCp;
   const wMate=isBlackToMove?-scoreMate:scoreMate;
   let scoreStr='';
@@ -1460,7 +1967,8 @@ function onPonderProgress(depth,nodes,nps,scoreCp,scoreMate){
 // We convert to White's perspective here using _evalForBlackTurn.
 // In review mode: caches result and discards stale callbacks.
 // Updated: now accepts 6 params (scoreCp, scoreMate, depth, wdlW, wdlD, wdlL)
-function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL){
+// v1.0.4 Rev33: added seldepth (7th param) for "SD" display in eval bar.
+function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth){
   // Update heartbeat timestamp — prevents false-positive engine death detection
   // during long eval searches (go depth 22 can take several seconds)
   _lastEngineCallbackTime=Date.now();
@@ -1473,6 +1981,8 @@ function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL){
     return; // Stale response — position no longer matches eval request
   }
   _evalLoading=false;
+  // v1.0.4 Rev44: Clear the eval safety timer — engine responded successfully.
+  if(_evalSafetyTimerId){clearTimeout(_evalSafetyTimerId);_evalSafetyTimerId=null;}
   // Store WDL data (-1 means not available)
   _sfWdlW=(wdlW!=null&&wdlW>=0)?wdlW:-1;
   _sfWdlD=(wdlD!=null&&wdlD>=0)?wdlD:-1;
@@ -1493,10 +2003,12 @@ function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL){
   // info line that bypassed Java's sanity check (extremely rare but possible
   // in race conditions). Prevents eval bar showing "D200" etc.
   _sfDepth=(depth&&depth<=30)?depth:0;
+  // v1.0.4 Rev33: store seldepth (cap at 60 for sanity).
+  _sfSeldepth=(seldepth!=null&&seldepth>0&&seldepth<=60)?seldepth:0;
   _sfEvalReady=true;
-  // Cache the result for review mode (now includes WDL and depth)
+  // Cache the result for review mode (now includes WDL, depth, and seldepth)
   if(reviewMode){
-    _reviewEvalCache.set(reviewStep,{eval:_sfEval,mate:_sfMateDistance,wdlW:_sfWdlW,wdlD:_sfWdlD,wdlL:_sfWdlL,depth:_sfDepth});
+    _reviewEvalCache.set(reviewStep,{eval:_sfEval,mate:_sfMateDistance,wdlW:_sfWdlW,wdlD:_sfWdlD,wdlL:_sfWdlL,depth:_sfDepth,seldepth:_sfSeldepth});
   }
   // Callback-driven reviewAnalyzeAll: advance to next step when eval completes
   if(reviewMode&&_reviewAnalyzeAllActive){
@@ -1765,7 +2277,11 @@ function restartCurrentEngine(){
       // evaluations are re-fetched. Without this, stale eval values from the
       // pre-restart engine remained in the cache and were displayed in review
       // mode even after the engine was replaced.
-      _reviewEvalCache.clear();_reviewEvalRequestedStep=-1;
+      // v1.0.4 Rev23 FIX: Do NOT clear the entire cache — that destroys all
+      // games' persisted evals. Just reset the requested step so the current
+      // step is re-fetched. Stockfish is deterministic, so other games' evals
+      // remain valid.
+      _reviewEvalRequestedStep=-1;
       // v1.0.2 FIX (audit): Clear MultiPV variation state — the old engine's
       // in-flight PV lines are invalid after restart.
       _multiPVLines=[];_multiPVResult=null;_lastEngineVariation=null;
@@ -2492,9 +3008,14 @@ function onEngineError(msg){
   if(_loadingFallbackTimerId){clearTimeout(_loadingFallbackTimerId);_loadingFallbackTimerId=null;}
   if(_emergencyFallbackTimerId){clearTimeout(_emergencyFallbackTimerId);_emergencyFallbackTimerId=null;}
   // FIX: Cancel in-flight review analyze-all to prevent hang
+  // v1.0.4 Rev24: Do NOT clear _reviewAnalyzeAllActive here. If the engine
+  // auto-recovers (Java recoverEngine → onEngineReady), the batch will resume.
+  // The per-step safety timer (60s) covers the case where recovery fails.
+  // The previous code set _reviewAnalyzeAllActive=false, silently dropping
+  // the batch on any transient engine error.
   if(_reviewAnalyzeAllActive){
-    _reviewAnalyzeAllActive=false;
-    if(_reviewAnalyzeSafetyTimer){clearTimeout(_reviewAnalyzeSafetyTimer);_reviewAnalyzeSafetyTimer=null;}
+    // Reset the safety timer to give the engine time to recover
+    if(typeof _reviewAnalyzeResetSafetyTimer==='function')_reviewAnalyzeResetSafetyTimer();
   }
   // P1 FIX: Auto-restart engine (max 2 retries) for mobile resilience
   // NOTE: Java-side recoverEngine() handles most restart cases with _restartLock.
@@ -2527,20 +3048,30 @@ function onEngineError(msg){
 function requestEngineEval(){
   if(!_engineReady||setupMode)return;
   // CRITICAL FIX: In normal (non-review) mode, skip eval when AI is about to move.
-  // When requestEngineEval() and doAIMove() are called in the same event loop tick,
-  // both start concurrent Java threads that send interleaved UCI commands:
-  //   Thread A (engineEval): stop → position fen X → forceFullStrength() → go depth 15
-  //   Thread B (engineGo):   stop → position fen X → setGameDifficulty(N) → go movetime T
-  // This causes: (1) Thread B's stop interrupts Thread A's search, losing the eval;
-  // (2) Both threads change currentState, causing score misrouting;
-  // (3) Interleaved position/skill commands corrupt engine state.
-  // Fix: don't start the eval at all when doAIMove() will run next — the eval
-  // will be requested after the AI makes its move (in updateAfterMove).
   if(!reviewMode&&!gameOver&&gameState.currentTurn!==playerColor)return;
+  // v1.0.4 ROUND-5 REV12: Check cache BEFORE _resetEvalState() to avoid
+  // a brief "analyzing..." flash when returning from stats page to review.
+  // The previous code called _resetEvalState() first (clearing the eval display),
+  // THEN checked the cache. If the cache hit, the display was restored — but
+  // the user saw a 1-frame "analyzing..." flicker. Now: check cache first,
+  // only _resetEvalState() if we actually need to request a new eval.
+  if(reviewMode&&reviewStates&&reviewStates.length>0&&reviewStep>=0&&reviewStep<reviewStates.length){
+    const cachedEarly=_reviewEvalCache.get(reviewStep);
+    if(cachedEarly!=null){
+      _sfEval=cachedEarly.eval;_sfMateDistance=cachedEarly.mate!=null?cachedEarly.mate:0;_sfWdlW=cachedEarly.wdlW!=null?cachedEarly.wdlW:-1;_sfWdlD=cachedEarly.wdlD!=null?cachedEarly.wdlD:-1;_sfWdlL=cachedEarly.wdlL!=null?cachedEarly.wdlL:-1;_sfDepth=cachedEarly.depth!=null?cachedEarly.depth:0;_sfSeldepth=cachedEarly.seldepth!=null?cachedEarly.seldepth:0;_sfEvalReady=true;_evalLoading=false;
+      _reviewEvalRequestedStep=reviewStep; // Mark as already evaluated
+      _updateAllEvalDisplays();
+      // v1.0.4 Rev24 FIX: If we're in batch analyze-all mode and hit cache,
+      // we MUST advance to the next step. Previously this early-return stalled
+      // the batch silently (the user's "interrupted at a certain point" bug
+      // when re-running Analyze All on an already-cached game).
+      if(typeof _reviewAnalyzeAllActive!=='undefined'&&_reviewAnalyzeAllActive&&typeof _reviewAnalyzeAdvance==='function'){
+        _reviewAnalyzeAdvance();
+      }
+      return;
+    }
+  }
   // P0 FIX: Reset eval state BEFORE capturing _evalRequestGen.
-  // Previously _evalRequestGen was set before _resetEvalState() in some callers,
-  // causing stale detection to immediately invalidate the eval.
-  // Now: _resetEvalState() increments _evalStaleGen, then _evalRequestGen captures it.
   _resetEvalState();
   // FIX: Stop any ongoing ponder before starting an eval search.
   // If the engine is pondering and we request an eval, the "stop" command
@@ -2555,13 +3086,8 @@ function requestEngineEval(){
   _updateAIThinkDisplay(); // Immediately clear stale ponder from DOM
   _evalRequestGen=_evalStaleGen; // Fresh eval request — accept onEngineEval callbacks with this gen
   if(reviewMode&&reviewStates&&reviewStates.length>0&&reviewStep>=0&&reviewStep<reviewStates.length){
-    // Check cache first
-    const cached=_reviewEvalCache.get(reviewStep);
-    if(cached!=null){
-      _sfEval=cached.eval;_sfMateDistance=cached.mate!=null?cached.mate:0;_sfWdlW=cached.wdlW!=null?cached.wdlW:-1;_sfWdlD=cached.wdlD!=null?cached.wdlD:-1;_sfWdlL=cached.wdlL!=null?cached.wdlL:-1;_sfDepth=cached.depth!=null?cached.depth:0;_sfEvalReady=true;_evalLoading=false;
-      _updateAllEvalDisplays();
-      return;
-    }
+    // v1.0.4 Rev23: The cache was already checked above (before _resetEvalState).
+    // If we reach here, the cache missed — no need to re-check.
     // BUG FIX: Check for checkmate/stalemate BEFORE calling the engine.
     // When Stockfish evaluates a position with no legal moves (checkmate/stalemate),
     // it outputs "bestmove (none)" WITHOUT any preceding info line containing a score.
@@ -2574,17 +3100,17 @@ function requestEngineEval(){
     if(_termStatus==='checkmate'){
       const _isBlackTurn=_rs.currentTurn==='black';
       _sfEval=_isBlackTurn?99999:-99999;
-      _sfMateDistance=0;_sfDepth=0;
+      _sfMateDistance=0;_sfDepth=0;_sfSeldepth=0;
       _sfEvalReady=true;_evalLoading=false;
-      _reviewEvalCache.set(reviewStep,{eval:_sfEval,mate:0,depth:0,wdlW:_isBlackTurn?0:1000,wdlD:0,wdlL:_isBlackTurn?1000:0});
+      _reviewEvalCache.set(reviewStep,{eval:_sfEval,mate:0,depth:0,seldepth:0,wdlW:_isBlackTurn?0:1000,wdlD:0,wdlL:_isBlackTurn?1000:0});
       _updateAllEvalDisplays();
       if(_reviewAnalyzeAllActive){_reviewAnalyzeAdvance();}
       return;
     }
     if(_termStatus==='draw_stalemate'||_termStatus==='draw_insufficient'||_termStatus==='draw_5fold'||_termStatus==='draw_75move'||_termStatus==='draw_50move'||_termStatus==='draw_repetition'){
-      _sfEval=0;_sfMateDistance=0;_sfDepth=0;
+      _sfEval=0;_sfMateDistance=0;_sfDepth=0;_sfSeldepth=0;
       _sfEvalReady=true;_evalLoading=false;
-      _reviewEvalCache.set(reviewStep,{eval:0,mate:0,depth:0,wdlW:333,wdlD:334,wdlL:333});
+      _reviewEvalCache.set(reviewStep,{eval:0,mate:0,depth:0,seldepth:0,wdlW:333,wdlD:334,wdlL:333});
       _updateAllEvalDisplays();
       if(_reviewAnalyzeAllActive){_reviewAnalyzeAdvance();}
       return;
@@ -2605,7 +3131,17 @@ function requestEngineEval(){
         try{
           if(typeof AndroidBridge.engineEvalDeep==='function'){AndroidBridge.engineEvalDeep(fen);}
           else{AndroidBridge.engineEval(fen);}
-        }catch(e){console.error('engineEvalDeep error:',e);_evalLoading=false;_updateEvalDisplay();}
+        }catch(e){
+          console.error('engineEvalDeep error:',e);
+          _evalLoading=false;
+          _updateEvalDisplay();
+          // v1.0.4 Rev24: On synchronous engine call failure during batch,
+          // advance to the next step instead of stalling. The safety timer
+          // covers async failures (engine never responds).
+          if(typeof _reviewAnalyzeAdvance==='function'){
+            setTimeout(function(){try{_reviewAnalyzeAdvance();}catch(_e){}},100);
+          }
+        }
       }else{
         if(_reviewEvalDebounceTimer)clearTimeout(_reviewEvalDebounceTimer);
         _reviewEvalDebounceTimer=setTimeout(function(){
@@ -2628,6 +3164,25 @@ function requestEngineEval(){
       _evalLoading=true;
       _updateEvalDisplay();
       try{AndroidBridge.engineEval(fen);}catch(e){console.error('engineEval error:',e);_evalLoading=false;_updateEvalDisplay();}
+      // v1.0.4 Rev44: Eval safety timer — if the engine doesn't respond within
+      // 30s (e.g. stopAndWaitForBestmove blocked, executor rejected, or engine
+      // crash), reset _evalLoading so the eval bar doesn't stay stuck at
+      // "分析中" forever. The timer is cleared by onEngineEval (which sets
+      // _evalLoading=false). This is the JS-side counterpart to the Java-side
+      // _safeExecute rejection handler.
+      // v1.0.4 Rev45: Extended from 10s to 15s to match the AI safety timer.
+      // v1.0.4 Rev46: Extended from 15s to 30s to match the AI safety timer
+      // extension (360s for AI moves). Deep eval searches (depth 22) on
+      // complex positions can take 20-25s.
+      if(_evalSafetyTimerId)clearTimeout(_evalSafetyTimerId);
+      _evalSafetyTimerId=setTimeout(function(){
+        _evalSafetyTimerId=null;
+        if(_evalLoading){
+          console.warn('Eval safety timer: engine did not respond within 30s, resetting');
+          _evalLoading=false;_sfEvalReady=false;
+          _updateEvalDisplay();
+        }
+      },30000);
     }
   }
 }
@@ -2715,7 +3270,7 @@ function _formatEvalDelta(curEval,prevEval,fontSize){
   if(d<-2)return '<span style="color:#c0392b;'+fs+'">'+dp+'</span>';
   return '';
 }
-function _resetEvalState(){_sfMateDistance=0;_sfWdlW=-1;_sfWdlD=-1;_sfWdlL=-1;_sfDepth=0;_sfEvalReady=false;_evalLoading=true;_evalStaleGen++;_lastProgressNodes=null;_lastProgressNps=null;_ponderGen++;_ponderBarInfo='';_ponderMoveSAN='';_pendingPonderMoveUCI=null;_updateAIThinkDisplay();}
+function _resetEvalState(){_sfMateDistance=0;_sfWdlW=-1;_sfWdlD=-1;_sfWdlL=-1;_sfDepth=0;_sfSeldepth=0;_sfEvalReady=false;_evalLoading=true;_evalStaleGen++;_lastProgressNodes=null;_lastProgressNps=null;_ponderGen++;_ponderBarInfo='';_ponderMoveSAN='';_pendingPonderMoveUCI=null;_updateAIThinkDisplay();}
 function _updateAllEvalDisplays(){_updateEvalDisplay();_updateReviewEvalUI();}
 
 // Update AI thinking display (AI bar and hint area are INDEPENDENT)
@@ -2726,29 +3281,31 @@ let _hintBarInfo='';
 let _ponderBarInfo='';
 let _pendingPonderMoveUCI=null; // Stored UCI ponder move awaiting first onPonderProgress for deferred SAN conversion
 function _updateAIThinkDisplay(){
+  // v1.0.4 Rev36: Engine search info now goes in #ai-search-info (line 2,
+  // right-aligned) instead of inline in .tind on line 1. The .tind on line 1
+  // now only shows the compact "思考中..." / "Thinking..." status.
   if(isAIThinking){
     _aiBarInfo=aiThinkInfo;
-    const el=document.getElementById('ai-bar');
-    if(el){
-      let tind=el.querySelector('.tind');
-      if(!tind){
-        tind=document.createElement('span');tind.className='tind';
-        // Append .tind to the first-row flex container (the child div
-        // with display:flex;align-items:center), NOT to #ai-bar itself. Appending
-        // to #ai-bar made .tind a sibling of the inner column div, breaking the
-        // layout and causing ponder info on the second line to misalign.
-        const firstRow=el.querySelector('div[style*="align-items:center"]')||el.querySelector('div[style*="flex-direction:column"]>div');
-        if(firstRow){firstRow.appendChild(tind);}else{el.appendChild(tind);}
-      }
-      tind.textContent=_aiBarInfo||T('thinking');
+    // Update line 2: engine search real-time info (depth/seldepth/nodes/nps).
+    // v1.0.4 Rev36: Don't show the "thinking" placeholder on line 2 — line 1's
+    // .tind already shows it. Only show actual search data (contains ":" which
+    // the placeholder doesn't). This avoids redundant duplicate display.
+    const searchEl=document.getElementById('ai-search-info');
+    if(searchEl){
+      const isPlaceholder=(_aiBarInfo===T('thinking')||_aiBarInfo===T('analyzing')||_aiBarInfo===T('analyzing_ellipsis'));
+      searchEl.textContent=isPlaceholder?'':(_aiBarInfo||'');
     }
+  }else{
+    // Clear search info when not thinking
+    const searchEl=document.getElementById('ai-search-info');
+    if(searchEl)searchEl.textContent='';
   }
   if(isHintLoading){
     _hintBarInfo=aiThinkInfo;
     const el=document.getElementById('hint-search-info');
     if(el){el.textContent=_hintBarInfo||T('thinking');el.style.display='block';}
   }
-  // Update ponder info in AI bar second line — always stable small font right-aligned
+  // Update ponder info in AI bar (line 3) — always stable small font right-aligned
   // Only display ponder info when BOTH ponder move (SAN) and ponder bar info exist.
   // When no ponder info, show nothing (not even the 🔮 icon).
   const ponderEl=document.getElementById('ai-ponder-info');

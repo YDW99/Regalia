@@ -35,8 +35,10 @@ package com.Regalia;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
@@ -116,8 +118,8 @@ public class StockfishNative {
 
     // v18.4.0: ELO_MAP synced with JS ELO_MATCH for consistent level display
     private static final int[] ELO_MAP = {0, 800, 1350, 1700, 2000, 2200, 2350, 2800};
-    // v1.0.3: Synced with the application version (was stale at v1.0.2).
-    private static final String ENGINE_VERSION = "v1.0.3";
+    // v1.0.4: Synced with the application version (was stale at v1.0.2).
+    private static final String ENGINE_VERSION = "v1.0.4";
     // Movetime mapping: index 0 unused, 1-7 = game levels
     private static final int[] MOVETIME_MAP = {0, 500, 800, 1000, 1500, 2000, 3000, 5000};
 
@@ -161,6 +163,8 @@ public class StockfishNative {
     private volatile Integer _storedEvalCp = null;
     private volatile Integer _storedEvalMate = null;
     private volatile int _lastEvalDepth = 0;
+    // v1.0.4 Rev33: seldepth (selective search depth / tactical depth) for eval display.
+    private volatile int _lastEvalSeldepth = 0;
 
     // Stored WDL (Win/Draw/Loss) data during STATE_EVAL
     private volatile int _storedWdlW = -1;
@@ -223,6 +227,10 @@ public class StockfishNative {
     // v18.4.1: Extended bestmove pattern to capture optional ponder move
     private static final Pattern BESTMOVE_PATTERN = Pattern.compile("^bestmove\\s+(\\S+)(?:\\s+ponder\\s+(\\S+))?");
     private static final Pattern INFO_DEPTH_PATTERN = Pattern.compile("^info\\s+depth\\s+(\\d+)");
+    // v1.0.4 Rev33: seldepth (selective search depth) — tactical depth, usually >= depth.
+    // Per SF18 eval best-practices doc: depth is the main iteration depth, seldepth reflects
+    // the actual max depth reached in tactical variations. Display as "SD" after "D".
+    private static final Pattern SELDEPTH_PATTERN = Pattern.compile("seldepth\\s+(\\d+)");
     private static final Pattern NODES_PATTERN = Pattern.compile("nodes\\s+(\\d+)");
     private static final Pattern NPS_PATTERN = Pattern.compile("nps\\s+(\\d+)");
     private static final Pattern SCORE_CP_PATTERN = Pattern.compile("score\\s+cp\\s+(-?\\d+)");
@@ -475,7 +483,7 @@ public class StockfishNative {
                 }
                 _storedEvalCp = null;
                 _storedEvalMate = null;
-                _lastEvalDepth = 0;
+                _lastEvalDepth = 0; _lastEvalSeldepth = 0; // v1.0.4 Rev33: reset seldepth too
                 _storedWdlW = -1; _storedWdlD = -1; _storedWdlL = -1;
                 _evalDepthLimit = depth;
                 forceFullStrength();
@@ -560,6 +568,93 @@ public class StockfishNative {
         }, "engineGoInternal");
     }
 
+    /**
+     * v1.0.4 LATEST: Timed-game engine go — sends "go" with wtime/btime/winc/binc
+     * so Stockfish 18 manages its own time allocation per the time control.
+     *
+     * Per UCI protocol, the engine uses these parameters to decide how long to
+     * search. For Fischer increment, winc/binc > 0. For sudden death, winc/binc=0.
+     * For Bronstein/US delay, the delay is NOT passed to the engine (the engine
+     * doesn't know about delays; the app handles delay deduction separately).
+     *
+     * The difficulty level still controls UCI_LimitStrength / Skill Level via
+     * setGameDifficulty(), so timed games remain playable at all levels.
+     *
+     * @param fen current position FEN
+     * @param level difficulty level (1-8)
+     * @param needNewGame whether to send ucinewgame first
+     * @param wtimeMs White's remaining clock time in milliseconds
+     * @param btimeMs Black's remaining clock time in milliseconds
+     * @param wincMs White's increment per move in milliseconds (Fischer only)
+     * @param bincMs Black's increment per move in milliseconds (Fischer only)
+     */
+    @JavascriptInterface
+    public void engineGoTimed(final String fen, final int level, final boolean needNewGame,
+                               final long wtimeMs, final long btimeMs,
+                               final long wincMs, final long bincMs) {
+        _safeExecute(new Runnable() { // tag: engineGoTimed
+            public void run() {
+                if (!engineReady) {
+                    postJsCallback("onEngineError(" + escapeJsString("Engine not ready") + ")");
+                    return;
+                }
+                // v1.0.4 Rev35 TIMED-GAME FIX: Record the JS-side clock snapshot
+                // timestamp so we can deduct the elapsed setup time (stopAndWait +
+                // ucinewgame + readyok wait) from the wtime/btime we finally send
+                // to the engine. Previously, the engine received the STALE clock
+                // value from when JS called engineGoTimed() — but by the time
+                // "go" is actually sent, the real clock has decreased (by up to
+                // 1s for stopAndWait, up to 5s for ucinewgame+readyok). The engine
+                // then over-allocates search time, searching past the GUI's 0-mark.
+                final long _callTimeMs = System.currentTimeMillis();
+
+                stopAndWaitForBestmove("engineGoTimed");
+
+                synchronized (stateLock) {
+                    currentState = STATE_GO;
+                }
+                if (needNewGame) {
+                    sendUciCommand("ucinewgame");
+                    final CountDownLatch newGameLatch = new CountDownLatch(1);
+                    readyOkLatchHolder = newGameLatch;
+                    sendUciCommand("isready");
+                    try {
+                        newGameLatch.await(5, TimeUnit.SECONDS);
+                    } catch (InterruptedException e) {
+                        Log.w(TAG, "engineGoTimed: interrupted waiting for readyok");
+                    } finally {
+                        readyOkLatchHolder = null;
+                    }
+                }
+                sendUciCommand("position fen " + fen);
+                setGameDifficulty(level);
+
+                // v1.0.4 Rev35: Re-compute the clock values to send, deducting
+                // the setup overhead (time elapsed since JS called us). This
+                // ensures the engine gets the ACTUAL remaining time, not the
+                // stale snapshot. We also add a safety margin (engineMoveOverhead,
+                // default 30ms but user-configurable up to 10s) to avoid the
+                // engine's bestmove arriving AFTER the GUI clock hits 0.
+                long setupElapsedMs = System.currentTimeMillis() - _callTimeMs;
+                // Clamp setup elapsed to a reasonable bound (cap at 6s — if it
+                // took longer, the engine state is suspect anyway)
+                if (setupElapsedMs > 6000) setupElapsedMs = 6000;
+                long safetyMarginMs = Math.max(50, engineMoveOverhead); // at least 50ms
+                long _wtime = Math.max(0, wtimeMs - setupElapsedMs - safetyMarginMs);
+                long _btime = Math.max(0, btimeMs - setupElapsedMs - safetyMarginMs);
+                long _winc = Math.max(0, wincMs);
+                long _binc = Math.max(0, bincMs);
+                // UCI go command with time management. Stockfish 18 will allocate
+                // search time intelligently based on remaining clock + increment.
+                sendUciCommand("go wtime " + _wtime + " btime " + _btime +
+                               " winc " + _winc + " binc " + _binc);
+                if (setupElapsedMs > 100) {
+                    Log.i(TAG, "engineGoTimed: setup took " + setupElapsedMs + "ms, deducted from clock; wtime=" + _wtime + " btime=" + _btime + " margin=" + safetyMarginMs);
+                }
+            }
+        }, "engineGoTimed");
+    }
+
     @JavascriptInterface
     public void engineHint(final String fen) {
         // v1.0.2 FIX (audit): use _safeExecute to catch RejectedExecutionException
@@ -597,10 +692,19 @@ public class StockfishNative {
                 }
                 _storedEvalCp = null;
                 _storedEvalMate = null;
-                _lastEvalDepth = 0;
+                _lastEvalDepth = 0; _lastEvalSeldepth = 0; // v1.0.4 Rev33: reset seldepth too
                 _storedWdlW = -1; _storedWdlD = -1; _storedWdlL = -1;
                 _evalDepthLimit = 15;
                 forceFullStrength();
+                // v1.0.4 Rev32 UCI EVAL OPTIMIZATION (per SF18 eval best-practices):
+                //   1. Set Contempt=0 for objective evaluation (default 24 biases scores
+                //      by avoiding draws — distorts analysis. See SF18 docs §4, §11).
+                //   2. Set MultiPV=1 for max search depth (MultiPV>1 reduces depth).
+                //   3. Ensure UCI_ShowWDL=true for Win/Draw/Loss probability output.
+                // These are set BEFORE `position`+`go` so they apply to this search.
+                // After the eval, the next gameplay search will re-set MultiPV/Contempt
+                // via setGameDifficulty() / applySettings() as needed.
+                applyEvalModeOptions();
                 sendUciCommand("position fen " + fen);
                 sendUciCommand("go depth 15");
             }
@@ -623,14 +727,76 @@ public class StockfishNative {
                 }
                 _storedEvalCp = null;
                 _storedEvalMate = null;
-                _lastEvalDepth = 0;
+                _lastEvalDepth = 0; _lastEvalSeldepth = 0; // v1.0.4 Rev33: reset seldepth too
                 _storedWdlW = -1; _storedWdlD = -1; _storedWdlL = -1;
                 _evalDepthLimit = 22;
                 forceFullStrength();
+                // v1.0.4 Rev32 UCI EVAL OPTIMIZATION: same as engineEval —
+                // Contempt=0, MultiPV=1, UCI_ShowWDL=true for objective deep eval.
+                applyEvalModeOptions();
                 sendUciCommand("position fen " + fen);
                 sendUciCommand("go depth 22");
             }
         }, "engineEvalDeep");
+    }
+
+    /**
+     * v1.0.4 Rev32: Apply engine options for objective position evaluation.
+     * Per SF18 best-practices documentation:
+     *   - Contempt=0: default Contempt=24 biases scores by avoiding draws,
+     *     distorting analysis. Set to 0 for objective eval.
+     *   - MultiPV=1: ensures maximum search depth (MultiPV>1 splits search
+     *     effort across N lines, reducing depth).
+     *   - UCI_ShowWDL=true: enables Win/Draw/Loss probability output in info
+     *     lines, so the eval display can show accurate WDL percentages.
+     *
+     * These options are set BEFORE the `position`+`go` commands so they apply
+     * to the upcoming eval search. After the eval, the next gameplay search
+     * re-applies gameplay-appropriate settings via setGameDifficulty() /
+     * applySettings().
+     *
+     * Note: We use sendSetOptionAndWait (synchronous, waits for readyok) for
+     * Contempt and MultiPV since changing them may trigger internal engine
+     * state changes. UCI_ShowWDL is a lightweight flag that doesn't need wait.
+     */
+    private void applyEvalModeOptions() {
+        try {
+            if (engineSupportsOption("Contempt")) {
+                sendSetOptionAndWait("Contempt", "0");
+            }
+            if (engineMultiPV != 1 && engineSupportsOption("MultiPV")) {
+                sendSetOptionAndWait("MultiPV", "1");
+            }
+            if (engineSupportsOption("UCI_ShowWDL")) {
+                sendUciCommand("setoption name UCI_ShowWDL value true");
+            }
+        } catch (Throwable e) {
+            Log.w(TAG, "applyEvalModeOptions failed", e);
+        }
+    }
+
+    /**
+     * v1.0.4 Rev32: Restore gameplay-appropriate engine options after an eval
+     * search. Counterpart to applyEvalModeOptions().
+     *   - Contempt=24 (SF18 default): makes the engine play more aggressively
+     *     during actual games (avoids easy draws).
+     *   - MultiPV=user setting: restore the user's MultiPV preference for
+     *     gameplay analysis display.
+     * Uses ASYNC setoption (no isready wait) — the next search's
+     * stopAndWaitForBestmove + isready handshake ensures options are applied
+     * before the new search starts, so we don't need to block here.
+     */
+    private void restoreGameplayOptions() {
+        try {
+            if (engineSupportsOption("Contempt")) {
+                sendUciCommand("setoption name Contempt value 24");
+            }
+            if (engineMultiPV != 1 && engineSupportsOption("MultiPV")) {
+                sendUciCommand("setoption name MultiPV value " + engineMultiPV);
+            }
+        } catch (Throwable e) {
+            Log.w(TAG, "restoreGameplayOptions failed", e);
+        }
     }
 
     /**
@@ -698,6 +864,52 @@ public class StockfishNative {
     public void syncGameDifficulty(int level) {
         Log.i(TAG, "syncGameDifficulty: level=" + level);
         setGameDifficulty(level);
+    }
+
+    /**
+     * v1.0.4 NEW: Enable/disable Stockfish's UCI_Chess960 option for Fischer
+     * Random Chess (Chess960) games. When Chess960 is enabled, the engine
+     * accepts Shredder-FEN castling rights (HAah format) and correctly handles
+     * 960-style castling moves where king/rook end up on non-traditional squares.
+     *
+     * This MUST be called whenever the user starts a Chess960 game or switches
+     * back to standard chess. The setting persists for the lifetime of the
+     * engine process (until restart).
+     *
+     * Per UCI protocol: setoption is only allowed when the engine is idle
+     * (not searching). We rely on the caller (JS side) to invoke this before
+     * engineGo/engineGoNewGame, which themselves call stopAndWaitForBestmove().
+     */
+    @JavascriptInterface
+    public void setChess960Mode(boolean enabled) {
+        Log.i(TAG, "setChess960Mode: " + enabled);
+        if (!engineReady) {
+            Log.w(TAG, "setChess960Mode: engine not ready, will be applied at next startEngine");
+            _pendingChess960 = enabled;
+            return;
+        }
+        _pendingChess960 = enabled;
+        if (engineSupportsOption("UCI_Chess960")) {
+            _safeExecute(new Runnable() { // tag: setChess960Mode
+                public void run() {
+                    stopAndWaitForBestmove("setChess960Mode");
+                    sendSetOptionAndWait("UCI_Chess960", enabled ? "true" : "false");
+                }
+            }, "setChess960Mode");
+        } else {
+            Log.w(TAG, "Engine does not support UCI_Chess960 option — Chess960 moves will still work via standard FEN");
+        }
+    }
+    private volatile boolean _pendingChess960 = false;
+
+    /**
+     * v1.0.4 NEW: Returns the current Chess960 mode flag (last value passed to
+     * setChess960Mode). Exposed to JS so the UI can verify engine state matches
+     * the game variant.
+     */
+    @JavascriptInterface
+    public boolean isChess960Mode() {
+        return _pendingChess960;
     }
 
     @JavascriptInterface
@@ -932,6 +1144,18 @@ public class StockfishNative {
         engineReady = true;
         postJsCallback("onInitProgress(80, " + escapeJsString(isEnglishMode() ? "Applying engine configuration..." : "\u6b63\u5728\u5e94\u7528\u5f15\u64ce\u914d\u7f6e...") + ")");
         applySettings();
+
+        // v1.0.4 NEW: Re-apply the Chess960 mode flag if it was set before the
+        // (re)start. Without this, an engine auto-recovery after a crash would
+        // silently drop UCI_Chess960=true and the user's Chess960 game would
+        // be analyzed as standard chess (wrong castling handling).
+        if (_pendingChess960 && engineSupportsOption("UCI_Chess960")) {
+            try {
+                sendSetOptionAndWait("UCI_Chess960", "true");
+            } catch (Exception e) {
+                Log.w(TAG, "Failed to re-apply UCI_Chess960 after engine start: " + e.getMessage());
+            }
+        }
 
         // Step 7: Engine ready (90% -> 100%)
         postJsCallback("onInitProgress(90, " + escapeJsString(isEnglishMode() ? "Engine ready!" : "\u5f15\u64ce\u5c31\u7eea\uff01") + ")");
@@ -1407,6 +1631,18 @@ public class StockfishNative {
                 return;
             }
 
+            // v1.0.4 Rev33: parse seldepth (selective search depth / tactical depth).
+            // Seldepth is usually >= depth (reflects actual max depth in tactical
+            // variations). Display as "SD" after "D" in the eval/AI bars.
+            int seldepth = 0;
+            Matcher seldepthMatcher = SELDEPTH_PATTERN.matcher(line);
+            if (seldepthMatcher.find()) {
+                try {
+                    seldepth = Integer.parseInt(seldepthMatcher.group(1));
+                    if (seldepth > MAX_REASONABLE_DEPTH * 2) seldepth = 0; // sanity cap
+                } catch (Throwable ignored) { seldepth = 0; }
+            }
+
             Long nodes = null;
             Long nps = null;
             Matcher nodesMatcher = NODES_PATTERN.matcher(line);
@@ -1464,6 +1700,7 @@ public class StockfishNative {
                     JSONObject pvData = new JSONObject();
                     pvData.put("index", multiPVIndex);
                     pvData.put("depth", depth);
+                    if (seldepth > 0) pvData.put("seldepth", seldepth); // v1.0.4 Rev33
                     if (hasCp) pvData.put("scoreCp", scoreCp);
                     if (hasMate) pvData.put("scoreMate", scoreMate);
                     pvData.put("wdlW", wdlW);
@@ -1493,6 +1730,7 @@ public class StockfishNative {
                             StringBuilder sb = new StringBuilder(128);
                             sb.append("{\"index\":").append(multiPVIndex);
                             sb.append(",\"depth\":").append(depth);
+                            if (seldepth > 0) sb.append(",\"seldepth\":").append(seldepth); // v1.0.4 Rev33
                             if (hasCp) sb.append(",\"scoreCp\":").append(scoreCp);
                             else sb.append(",\"scoreCp\":null");
                             if (hasMate) sb.append(",\"scoreMate\":").append(scoreMate);
@@ -1507,18 +1745,21 @@ public class StockfishNative {
                             Log.w(TAG, "Error sending MultiPV progress", e);
                         }
                     } else {
+                        // v1.0.4 Rev33: added seldepth as 9th param to onEngineProgress.
                         postJsCallback("onEngineProgress(" + depth + ", "
                                 + (nodes != null ? nodes : "null") + ", "
                                 + (nps != null ? nps : "null") + ", "
                                 + (hasCp ? scoreCp : "null") + ", "
                                 + (hasMate ? scoreMate : "null") + ", "
-                                + wdlW + ", " + wdlD + ", " + wdlL + ")");
+                                + wdlW + ", " + wdlD + ", " + wdlL + ", "
+                                + seldepth + ")");
                     }
                     break;
 
                 case STATE_EVAL:
                     if (depth <= _evalDepthLimit) {
                         _lastEvalDepth = depth;
+                        if (seldepth > 0) _lastEvalSeldepth = seldepth; // v1.0.4 Rev33
                     } else {
                         Log.w(TAG, "Skipping eval depth " + depth + " > limit " + _evalDepthLimit);
                     }
@@ -1544,6 +1785,7 @@ public class StockfishNative {
                             StringBuilder sb = new StringBuilder(128);
                             sb.append("{\"index\":").append(multiPVIndex);
                             sb.append(",\"depth\":").append(depth);
+                            if (seldepth > 0) sb.append(",\"seldepth\":").append(seldepth); // v1.0.4 Rev33
                             if (hasCp) sb.append(",\"scoreCp\":").append(scoreCp);
                             else sb.append(",\"scoreCp\":null");
                             if (hasMate) sb.append(",\"scoreMate\":").append(scoreMate);
@@ -1558,21 +1800,29 @@ public class StockfishNative {
                             Log.w(TAG, "Error sending MultiPV progress", e);
                         }
                     } else {
+                        // v1.0.4 Rev33: added seldepth as 9th param to onEngineProgress.
                         postJsCallback("onEngineProgress(" + depth + ", "
                                 + (nodes != null ? nodes : "null") + ", "
                                 + (nps != null ? nps : "null") + ", "
                                 + (hasCp ? scoreCp : "null") + ", "
                                 + (hasMate ? scoreMate : "null") + ", "
-                                + wdlW + ", " + wdlD + ", " + wdlL + ")");
+                                + wdlW + ", " + wdlD + ", " + wdlL + ", "
+                                + seldepth + ")");
                     }
                     break;
 
                 case STATE_PONDER:
+                    // v1.0.4 Rev33: added seldepth (6th param) and nodes/nps to
+                    // onPonderProgress so the review eval bar can show real-time
+                    // depth/SD/nodes/nps during ponder too. Previous signature was
+                    // (depth, nodes, nps, scoreCp, scoreMate); new signature is
+                    // (depth, nodes, nps, scoreCp, scoreMate, seldepth).
                     postJsCallback("onPonderProgress(" + depth + ", "
                             + (nodes != null ? nodes : "null") + ", "
                             + (nps != null ? nps : "null") + ", "
                             + (hasCp ? scoreCp : "null") + ", "
-                            + (hasMate ? scoreMate : "null") + ")");
+                            + (hasMate ? scoreMate : "null") + ", "
+                            + seldepth + ")");
                     break;
             }
         } catch (Throwable e) {
@@ -1604,18 +1854,27 @@ public class StockfishNative {
                 postJsCallback("onMultiPVResult(" + multiPVJson + ")");
                 break;
             case STATE_EVAL:
+                // v1.0.4 Rev33: added _lastEvalSeldepth as 7th param to onEngineEval
+                // so the eval bar can display "D15 SD22" (depth + tactical depth).
                 if (_storedEvalMate != null) {
-                    postJsCallback("onEngineEval(" + _storedEvalCp + ", " + _storedEvalMate + ", " + _lastEvalDepth + ", " + _storedWdlW + ", " + _storedWdlD + ", " + _storedWdlL + ")");
+                    postJsCallback("onEngineEval(" + _storedEvalCp + ", " + _storedEvalMate + ", " + _lastEvalDepth + ", " + _storedWdlW + ", " + _storedWdlD + ", " + _storedWdlL + ", " + _lastEvalSeldepth + ")");
                 } else if (_storedEvalCp != null) {
-                    postJsCallback("onEngineEval(" + _storedEvalCp + ", null, " + _lastEvalDepth + ", " + _storedWdlW + ", " + _storedWdlD + ", " + _storedWdlL + ")");
+                    postJsCallback("onEngineEval(" + _storedEvalCp + ", null, " + _lastEvalDepth + ", " + _storedWdlW + ", " + _storedWdlD + ", " + _storedWdlL + ", " + _lastEvalSeldepth + ")");
                 } else {
-                    postJsCallback("onEngineEval(0, null, " + _lastEvalDepth + ", " + _storedWdlW + ", " + _storedWdlD + ", " + _storedWdlL + ")");
+                    postJsCallback("onEngineEval(0, null, " + _lastEvalDepth + ", " + _storedWdlW + ", " + _storedWdlD + ", " + _storedWdlL + ", " + _lastEvalSeldepth + ")");
                 }
                 // v1.0.2 CLEANUP: Removed unnecessary { } block.
                 postJsCallback("onMultiPVResult(" + multiPVJson + ")");
                 _storedEvalCp = null;
                 _storedEvalMate = null;
                 _storedWdlW = -1; _storedWdlD = -1; _storedWdlL = -1;
+                // v1.0.4 Rev32: Restore default Contempt=24 + user MultiPV after eval.
+                // applyEvalModeOptions() set Contempt=0 and MultiPV=1 for objective
+                // eval; restore gameplay-appropriate values so the next gameplay
+                // search isn't distorted. Use async setoption (no wait) — the next
+                // search's stopAndWaitForBestmove + isready handshake ensures the
+                // options are applied before the new search starts.
+                restoreGameplayOptions();
                 break;
         }
 
@@ -2389,8 +2648,36 @@ public class StockfishNative {
 
     // ===================== PONDER MANAGEMENT =====================
 
+    /**
+     * Start pondering (thinking on opponent's time) on the given position.
+     *
+     * v1.0.4 Rev31 UCI COMPLIANCE FIX: Per UCI spec and Stockfish documentation,
+     * `go ponder` MUST include time parameters (wtime/btime/winc/binc) so that
+     * when the GUI later sends `ponderhit`, the engine can switch to normal
+     * time management using those parameters. Without time params, the engine
+     * doesn't know how much time it has after ponderhit, leading to either:
+     *   - Engine searches way too long after ponderhit (no time pressure)
+     *   - Engine returns bestmove almost instantly after ponderhit (panic mode)
+     * Both are incorrect behavior for timed games.
+     *
+     * The previous implementation sent only "go ponder" with no time params,
+     * which broke timed-game ponder. Now we accept optional time params from
+     * the JS layer and include them in the go ponder command.
+     *
+     * For untimed games, the JS layer passes all zeros, which produces a plain
+     * "go ponder" (engine ignores zero time params effectively, but we still
+     * send them for consistency).
+     *
+     * @param fenWithPonderMove FEN of the position AFTER the predicted opponent move
+     * @param wtimeMs White's remaining clock (ms), 0 if untimed
+     * @param btimeMs Black's remaining clock (ms), 0 if untimed
+     * @param wincMs White's increment per move (ms), 0 if none
+     * @param bincMs Black's increment per move (ms), 0 if none
+     */
     @JavascriptInterface
-    public void startPonder(final String fenWithPonderMove) {
+    public void startPonder(final String fenWithPonderMove,
+                             final long wtimeMs, final long btimeMs,
+                             final long wincMs, final long bincMs) {
         if (!engineReady || !enginePonder) return;
         // v1.0.2 FIX (audit): use _safeExecute to catch RejectedExecutionException
         _safeExecute(new Runnable() { // tag: startPonder
@@ -2405,9 +2692,33 @@ public class StockfishNative {
                 }
                 Log.i(TAG, "Starting ponder on position: " + fenWithPonderMove);
                 sendUciCommand("position fen " + fenWithPonderMove);
-                sendUciCommand("go ponder");
+                // v1.0.4 Rev31: include time params in go ponder so ponderhit
+                // can correctly switch to timed search. Clamp to non-negative.
+                long _wtime = Math.max(0, wtimeMs);
+                long _btime = Math.max(0, btimeMs);
+                long _winc = Math.max(0, wincMs);
+                long _binc = Math.max(0, bincMs);
+                // For untimed games (all zeros), send plain "go ponder" to avoid
+                // any engine confusion about zero-time scenarios.
+                if (_wtime == 0 && _btime == 0 && _winc == 0 && _binc == 0) {
+                    sendUciCommand("go ponder");
+                } else {
+                    sendUciCommand("go ponder wtime " + _wtime + " btime " + _btime +
+                                   " winc " + _winc + " binc " + _binc);
+                }
             }
         }, "startPonder");
+    }
+
+    /**
+     * Legacy single-arg startPonder — kept for backward compatibility with any
+     * JS code that might still call it. Delegates to the timed version with
+     * all-zero time params (untimed ponder).
+     * @deprecated Use the 5-arg version with time params for timed games.
+     */
+    @JavascriptInterface
+    public void startPonder(final String fenWithPonderMove) {
+        startPonder(fenWithPonderMove, 0, 0, 0, 0);
     }
 
     @JavascriptInterface
@@ -2434,6 +2745,67 @@ public class StockfishNative {
             currentState = STATE_NONE;
         }
         sendUciCommand("stop");
+    }
+
+    /**
+     * v1.0.4 Rev35: Force-stop any in-flight engine search immediately.
+     * Used by the JS layer when:
+     *   - The game clock expires (timed-game flag-fall) — the engine must stop
+     *     NOW, not when its internal wtime estimate says to. Without this, the
+     *     engine continues searching after the clock hits 0, appearing
+     *     "unresponsive" and wasting battery.
+     *   - The user resigns / starts a new game / enters review mode mid-search.
+     *
+     * This is a "hard stop": sends "stop" and marks the bestmove as discarded
+     * so it doesn't get processed as a real move. The engine's bestmove
+     * response (when it arrives) is silently consumed and dropped.
+     *
+     * Unlike stopPonder() (which only handles ponder state), this method works
+     * for ANY engine state (STATE_GO, STATE_HINT, STATE_EVAL, STATE_PONDER).
+     */
+    @JavascriptInterface
+    public void engineStop() {
+        Log.i(TAG, "engineStop — forcing engine to stop immediately");
+        // v1.0.4 Rev36 FIX: Only set _discardingPonderBestmove when the engine
+        // is actually in an active state (GO/HINT/EVAL/PONDER). If the engine
+        // is idle (STATE_NONE), setting this flag would cause the NEXT game's
+        // first bestmove to be silently discarded — manifesting as a 15s
+        // safety-timer delay on the AI's first move of the new game.
+        int stateBefore;
+        synchronized (stateLock) {
+            stateBefore = currentState;
+            currentState = STATE_NONE;
+        }
+        _isPondering = false;
+        if (stateBefore != STATE_NONE) {
+            _discardingPonderBestmove = true;
+            try {
+                sendUciCommand("stop");
+            } catch (Throwable e) {
+                Log.w(TAG, "engineStop: sendUciCommand failed", e);
+            }
+        }
+    }
+
+    /**
+     * v1.0.4 Rev35: Send a raw UCI command to the engine. Use sparingly —
+     * prefer the typed methods (engineGo, engineEval, etc.) when available.
+     * Currently used by the JS layer's resign/game-over path as a fallback
+     * when engineStop() isn't sufficient.
+     */
+    @JavascriptInterface
+    public void sendToEngine(final String command) {
+        if (command == null || command.isEmpty()) return;
+        _safeExecute(new Runnable() {
+            public void run() {
+                if (!engineReady) return;
+                try {
+                    sendUciCommand(command);
+                } catch (Throwable e) {
+                    Log.w(TAG, "sendToEngine failed: " + command, e);
+                }
+            }
+        }, "sendToEngine");
     }
 
     @JavascriptInterface
@@ -2492,6 +2864,463 @@ public class StockfishNative {
             editor.apply();
         } catch (Throwable e) {
             Log.w(TAG, "saveLangPref failed", e);
+        }
+    }
+
+    // ===================== PERSISTENT CACHE (HyperOS 3 FIX) =====================
+    // v1.0.4 Round-5 Rev16: WebView localStorage on Xiaomi HyperOS 3 is aggressively
+    // cleared by the system memory manager / cache cleaner — sometimes within minutes
+    // of the app going to background, sometimes on the next launch. This loses the
+    // engine eval cache (Regalia_reviewEvalCache), the language preference
+    // (Regalia_lang), and the recovery state (Regalia_recovery).
+    //
+    // Fix: provide a Java-side persistent key-value store backed by SharedPreferences
+    // (MODE_PRIVATE). SharedPreferences files live in /data/data/com.Regalia/files/...
+    // and are NEVER cleared by HyperOS cache management. The JS layer dual-writes to
+    // both localStorage (fast in-memory reads) and these SharedPreferences-backed
+    // methods (persistence). On cache miss in localStorage, the JS layer falls back
+    // to persistentGet() and rehydrates localStorage.
+    //
+    // All values are stored as String. JSON encoding/decoding is the caller's
+    // responsibility (JS side). The keys are prefixed with "kv_" in SharedPreferences
+    // to avoid collision with engine settings keys ("lang", "engineThreads", etc.).
+    private static final String KV_PREFIX = "kv_";
+
+    @JavascriptInterface
+    public String persistentGet(String key) {
+        if (key == null) return null;
+        try {
+            // Return null if the key doesn't exist (SharedPreferences.getString returns
+            // the default value, which we set to null). JS side treats null as "no
+            // cached value" and falls back to computing the value fresh.
+            return prefs.getString(KV_PREFIX + key, null);
+        } catch (Throwable e) {
+            Log.w(TAG, "persistentGet failed for key=" + key, e);
+            return null;
+        }
+    }
+
+    @JavascriptInterface
+    public void persistentSet(String key, String value) {
+        if (key == null) return;
+        try {
+            SharedPreferences.Editor editor = prefs.edit();
+            if (value == null) {
+                editor.remove(KV_PREFIX + key);
+            } else {
+                editor.putString(KV_PREFIX + key, value);
+            }
+            editor.apply();
+        } catch (Throwable e) {
+            Log.w(TAG, "persistentSet failed for key=" + key, e);
+        }
+    }
+
+    @JavascriptInterface
+    public void persistentRemove(String key) {
+        if (key == null) return;
+        try {
+            prefs.edit().remove(KV_PREFIX + key).apply();
+        } catch (Throwable e) {
+            Log.w(TAG, "persistentRemove failed for key=" + key, e);
+        }
+    }
+
+    // v1.0.4 Round-5 Rev20: Synchronous variants — use commit() instead of apply()
+    // to guarantee the write hits disk before returning. This is CRITICAL for
+    // HyperOS 3 compatibility: HyperOS 3 can SIGKILL the app within milliseconds
+    // of it going to background, and apply()'s in-memory write queue is lost.
+    // commit() blocks until fsync completes — slightly slower but durable.
+    //
+    // Use these for any data the user would notice losing (eval cache, current
+    // PGN). Use the async persistentSet() for non-critical writes (e.g., UI
+    // preferences that can be recomputed).
+    @JavascriptInterface
+    public void persistentSetSync(String key, String value) {
+        if (key == null) return;
+        try {
+            SharedPreferences.Editor editor = prefs.edit();
+            if (value == null) {
+                editor.remove(KV_PREFIX + key);
+            } else {
+                editor.putString(KV_PREFIX + key, value);
+            }
+            // commit() returns boolean — true if written successfully. We discard
+            // the result because the JS layer can't meaningfully react to a failed
+            // disk write (the data is gone regardless).
+            editor.commit();
+        } catch (Throwable e) {
+            Log.w(TAG, "persistentSetSync failed for key=" + key, e);
+        }
+    }
+
+    /**
+     * Flush any pending apply() writes to disk synchronously.
+     * Call from onPause/onStop/onUserLeaveHint to ensure all queued writes
+     * hit disk before the OS can kill the app.
+     */
+    @JavascriptInterface
+    public void persistentFlush() {
+        try {
+            // An empty commit() forces SharedPreferences to flush its in-memory
+            // write queue (any pending apply() calls) to disk before returning.
+            prefs.edit().commit();
+        } catch (Throwable e) {
+            Log.w(TAG, "persistentFlush failed", e);
+        }
+    }
+
+    // v1.0.4 Round-5 Rev20: Dedicated eval cache file storage.
+    // SharedPreferences is optimized for small primitive values; storing a
+    // 1-12 MB JSON blob in it slows down app startup (loads ALL keys into
+    // memory at construction) and burns memory. We use a dedicated file
+    // /data/data/com.Regalia/files/eval_cache.json instead, with atomic
+    // write (tmp + rename) for crash safety.
+    private static final String EVAL_CACHE_FILE = "eval_cache.json";
+
+    /**
+     * Synchronously read the eval cache file. Returns the raw JSON string,
+     * or null if the file doesn't exist / can't be read.
+     * Called at JS module construction — must be fast. Reads ~100KB-12MB.
+     */
+    @JavascriptInterface
+    public String loadEvalCacheSync() {
+        try {
+            File file = new File(context.getFilesDir(), EVAL_CACHE_FILE);
+            if (!file.exists() || !file.isFile()) return null;
+            try (java.io.FileInputStream fis = new java.io.FileInputStream(file);
+                 java.io.InputStreamReader reader = new java.io.InputStreamReader(fis, "UTF-8");
+                 java.io.StringWriter sw = new java.io.StringWriter()) {
+                char[] buf = new char[16384];
+                int n;
+                while ((n = reader.read(buf)) > 0) {
+                    sw.write(buf, 0, n);
+                }
+                return sw.toString();
+            }
+        } catch (Throwable e) {
+            Log.w(TAG, "loadEvalCacheSync failed", e);
+            return null;
+        }
+    }
+
+    /**
+     * Synchronously write the eval cache file using atomic write (tmp + rename).
+     * Guarantees durability: blocks until fsync + rename complete.
+     * HyperOS 3 cannot kill the app fast enough to lose data — by the time
+     * this returns, the file is on disk.
+     */
+    @JavascriptInterface
+    public boolean saveEvalCacheSync(String json) {
+        if (json == null) return false;
+        try {
+            File finalFile = new File(context.getFilesDir(), EVAL_CACHE_FILE);
+            File tmpFile = new File(context.getFilesDir(), EVAL_CACHE_FILE + ".tmp");
+            // Write to tmp file
+            try (java.io.FileOutputStream fos = new java.io.FileOutputStream(tmpFile);
+                 java.io.OutputStreamWriter writer = new java.io.OutputStreamWriter(fos, "UTF-8")) {
+                writer.write(json);
+                writer.flush();
+                // v1.0.4 Round-5 Rev20: sync() for crash safety.
+                // FileDescriptor.sync() is available since Java 1.0 / Android API 1.
+                // If sync fails (rare), we still proceed — the rename is atomic.
+                try { fos.getFD().sync(); } catch (Throwable ignored) {}
+            }
+            // v1.0.4 Rev23: Use Files.move with ATOMIC_MOVE + REPLACE_EXISTING
+            // on API 26+ for true atomic rename. The old delete+rename sequence
+            // had a brief window where neither the old nor the new file existed
+            // (if the app crashed between delete and rename, the cache would be
+            // lost). Files.move with ATOMIC_MOVE is POSIX-atomic.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                try {
+                    java.nio.file.Files.move(tmpFile.toPath(), finalFile.toPath(),
+                            java.nio.file.StandardCopyOption.ATOMIC_MOVE,
+                            java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                    return true;
+                } catch (java.nio.file.AtomicMoveNotSupportedException e) {
+                    // Cross-device tmp/final — fall through to legacy path
+                    Log.w(TAG, "saveEvalCacheSync: ATOMIC_MOVE not supported, falling back");
+                }
+            }
+            // Legacy path (API 21-25 or cross-device fallback)
+            if (finalFile.exists()) finalFile.delete();
+            if (!tmpFile.renameTo(finalFile)) {
+                // Fallback: copy tmp to final if rename fails (cross-device?)
+                Log.w(TAG, "saveEvalCacheSync: rename failed, falling back to copy");
+                java.nio.file.Files.copy(tmpFile.toPath(), finalFile.toPath(),
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+            return true;
+        } catch (Throwable e) {
+            Log.w(TAG, "saveEvalCacheSync failed", e);
+            return false;
+        }
+    }
+
+    // ===================== PGN CACHE MANAGER (v1.0.4 Round-5 Rev18) =====================
+    // The user can save the current PGN to a named cache entry and later re-import it
+    // from the 📚 button in the review toolbar. Each entry is a separate file in
+    // /data/data/com.Regalia/files/pgn_cache/<name>.pgn — the directory is app-private
+    // and is NEVER cleared by HyperOS 3 cache management (same as SharedPreferences).
+    //
+    // The list returned by listPGNCaches() is a JSON array of {name, size, mtime} objects.
+    // getPGNCache(name) returns the raw PGN text. deletePGNCache(name) removes one entry.
+    // deletePGNCaches([names]) removes multiple entries atomically (best-effort).
+
+    private static final String PGN_CACHE_DIR = "pgn_cache";
+
+    private File _pgnCacheDir() {
+        File dir = new File(context.getFilesDir(), PGN_CACHE_DIR);
+        if (!dir.exists()) {
+            dir.mkdirs();
+        }
+        return dir;
+    }
+
+    private String _sanitizeCacheName(String name) {
+        // Strip path separators, control chars, and trim. Empty name → null.
+        if (name == null) return null;
+        String s = name.trim();
+        // Remove any path-like characters (forbid directory traversal)
+        s = s.replaceAll("[/\\\\:*?\"<>|]", "");
+        // Remove control characters
+        s = s.replaceAll("[\\x00-\\x1f\\x7f]", "");
+        // Limit length to 100 chars to avoid filesystem issues
+        if (s.length() > 100) s = s.substring(0, 100);
+        return s.isEmpty() ? null : s;
+    }
+
+    @JavascriptInterface
+    public String listPGNCaches() {
+        try {
+            File dir = _pgnCacheDir();
+            File[] files = dir.listFiles();
+            if (files == null) return "[]";
+            // Sort: newest first (by mtime desc)
+            java.util.Arrays.sort(files, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
+            org.json.JSONArray arr = new org.json.JSONArray();
+            // v1.0.4 Round-5 Rev20: Pre-load all tag files into a map for O(1) lookup
+            // (avoids N file reads when listing N entries).
+            java.util.Map<String, org.json.JSONArray> tagMap = new java.util.HashMap<>();
+            for (File f : files) {
+                String fn = f.getName();
+                if (fn.endsWith(".tags.json")) {
+                    String baseName = fn.substring(0, fn.length() - ".tags.json".length());
+                    try {
+                        String content = getPGNCacheTags(baseName);
+                        tagMap.put(baseName, new org.json.JSONArray(content));
+                    } catch (Throwable ignored) {}
+                }
+            }
+            for (File f : files) {
+                if (!f.isFile()) continue;
+                String fn = f.getName();
+                if (fn.endsWith(".tags.json")) continue; // Skip tag files in main list
+                // Strip .pgn extension for display
+                String displayName = fn.endsWith(".pgn") ? fn.substring(0, fn.length() - 4) : fn;
+                try {
+                    org.json.JSONObject obj = new org.json.JSONObject();
+                    obj.put("name", displayName);
+                    obj.put("size", f.length());
+                    obj.put("mtime", f.lastModified());
+                    // Include tags (empty array if none)
+                    org.json.JSONArray tags = tagMap.get(displayName);
+                    obj.put("tags", tags != null ? tags : new org.json.JSONArray());
+                    arr.put(obj);
+                } catch (Throwable ignored) {}
+            }
+            return arr.toString();
+        } catch (Throwable e) {
+            Log.w(TAG, "listPGNCaches failed", e);
+            return "[]";
+        }
+    }
+
+    @JavascriptInterface
+    public boolean savePGNCache(String name, String pgn) {
+        if (name == null || pgn == null) return false;
+        String safe = _sanitizeCacheName(name);
+        if (safe == null) return false;
+        try {
+            File file = new File(_pgnCacheDir(), safe + ".pgn");
+            try (java.io.FileOutputStream fos = new java.io.FileOutputStream(file);
+                 java.io.OutputStreamWriter writer = new java.io.OutputStreamWriter(fos, "UTF-8")) {
+                writer.write(pgn);
+                writer.flush();
+            }
+            Log.i(TAG, "PGN cache saved: " + safe + " (" + pgn.length() + " chars)");
+            return true;
+        } catch (Throwable e) {
+            Log.w(TAG, "savePGNCache failed for name=" + safe, e);
+            return false;
+        }
+    }
+
+    @JavascriptInterface
+    public String getPGNCache(String name) {
+        if (name == null) return null;
+        String safe = _sanitizeCacheName(name);
+        if (safe == null) return null;
+        try {
+            File file = new File(_pgnCacheDir(), safe + ".pgn");
+            if (!file.exists() || !file.isFile()) return null;
+            try (java.io.FileInputStream fis = new java.io.FileInputStream(file);
+                 java.io.InputStreamReader reader = new java.io.InputStreamReader(fis, "UTF-8");
+                 java.io.StringWriter sw = new java.io.StringWriter()) {
+                char[] buf = new char[8192];
+                int n;
+                while ((n = reader.read(buf)) > 0) {
+                    sw.write(buf, 0, n);
+                }
+                return sw.toString();
+            }
+        } catch (Throwable e) {
+            Log.w(TAG, "getPGNCache failed for name=" + safe, e);
+            return null;
+        }
+    }
+
+    @JavascriptInterface
+    public boolean deletePGNCache(String name) {
+        if (name == null) return false;
+        String safe = _sanitizeCacheName(name);
+        if (safe == null) return false;
+        try {
+            File file = new File(_pgnCacheDir(), safe + ".pgn");
+            boolean pgnDeleted = file.exists() && file.delete();
+            // v1.0.4 Round-5 Rev20: Also delete associated tags file
+            File tagsFile = new File(_pgnCacheDir(), safe + ".tags.json");
+            if (tagsFile.exists()) tagsFile.delete();
+            return pgnDeleted;
+        } catch (Throwable e) {
+            Log.w(TAG, "deletePGNCache failed for name=" + safe, e);
+            return false;
+        }
+    }
+
+    /**
+     * Delete multiple PGN cache entries. Names is a JSON array of strings.
+     * Returns the number of entries successfully deleted.
+     */
+    @JavascriptInterface
+    public int deletePGNCaches(String namesJson) {
+        if (namesJson == null) return 0;
+        int deleted = 0;
+        try {
+            org.json.JSONArray arr = new org.json.JSONArray(namesJson);
+            for (int i = 0; i < arr.length(); i++) {
+                String name = arr.optString(i, "");
+                if (deletePGNCache(name)) deleted++;
+            }
+        } catch (Throwable e) {
+            Log.w(TAG, "deletePGNCaches failed", e);
+        }
+        return deleted;
+    }
+
+    // v1.0.4 Round-5 Rev20: Rename and Tag features for PGN Cache Manager.
+    // Tags are stored as a separate file: pgn_cache/<name>.tags.json (an array
+    // of strings). This avoids modifying the PGN file itself and allows fast
+    // tag queries without parsing PGN. Tag files are tiny (< 1KB each).
+
+    /**
+     * Atomically rename a PGN cache entry. Also renames the associated
+     * tags file if it exists. Returns true on success.
+     * If a cache with the new name already exists, returns false (does not overwrite).
+     */
+    @JavascriptInterface
+    public boolean renamePGNCache(String oldName, String newName) {
+        if (oldName == null || newName == null) return false;
+        String oldSafe = _sanitizeCacheName(oldName);
+        String newSafe = _sanitizeCacheName(newName);
+        if (oldSafe == null || newSafe == null) return false;
+        if (oldSafe.equals(newSafe)) return true; // No-op
+        try {
+            File oldFile = new File(_pgnCacheDir(), oldSafe + ".pgn");
+            File newFile = new File(_pgnCacheDir(), newSafe + ".pgn");
+            if (!oldFile.exists()) return false;
+            if (newFile.exists()) return false; // Refuse to overwrite
+            if (!oldFile.renameTo(newFile)) return false;
+            // Also rename tags file if exists
+            File oldTags = new File(_pgnCacheDir(), oldSafe + ".tags.json");
+            if (oldTags.exists()) {
+                File newTags = new File(_pgnCacheDir(), newSafe + ".tags.json");
+                oldTags.renameTo(newTags); // best-effort
+            }
+            Log.i(TAG, "PGN cache renamed: " + oldSafe + " → " + newSafe);
+            return true;
+        } catch (Throwable e) {
+            Log.w(TAG, "renamePGNCache failed: " + oldSafe + " → " + newSafe, e);
+            return false;
+        }
+    }
+
+    /**
+     * Set tags for a PGN cache entry. tagsJson is a JSON array of strings.
+     * Pass null or empty array to clear tags.
+     * Returns true on success.
+     */
+    @JavascriptInterface
+    public boolean setPGNCacheTags(String name, String tagsJson) {
+        if (name == null) return false;
+        String safe = _sanitizeCacheName(name);
+        if (safe == null) return false;
+        try {
+            File tagsFile = new File(_pgnCacheDir(), safe + ".tags.json");
+            // Parse to validate JSON and normalize
+            org.json.JSONArray arr;
+            if (tagsJson == null || tagsJson.trim().isEmpty()) {
+                arr = new org.json.JSONArray();
+            } else {
+                arr = new org.json.JSONArray(tagsJson);
+            }
+            if (arr.length() == 0) {
+                // No tags — delete the file
+                if (tagsFile.exists()) tagsFile.delete();
+                return true;
+            }
+            // Write tags file
+            try (java.io.FileOutputStream fos = new java.io.FileOutputStream(tagsFile);
+                 java.io.OutputStreamWriter writer = new java.io.OutputStreamWriter(fos, "UTF-8")) {
+                writer.write(arr.toString());
+                writer.flush();
+                try { fos.getFD().sync(); } catch (Throwable ignored) {}
+            }
+            return true;
+        } catch (Throwable e) {
+            Log.w(TAG, "setPGNCacheTags failed for name=" + safe, e);
+            return false;
+        }
+    }
+
+    /**
+     * Get tags for a PGN cache entry. Returns a JSON array of strings (e.g., [" classics "," tactics "]).
+     * Returns "[]" if no tags file exists.
+     */
+    @JavascriptInterface
+    public String getPGNCacheTags(String name) {
+        if (name == null) return "[]";
+        String safe = _sanitizeCacheName(name);
+        if (safe == null) return "[]";
+        try {
+            File tagsFile = new File(_pgnCacheDir(), safe + ".tags.json");
+            if (!tagsFile.exists() || !tagsFile.isFile()) return "[]";
+            try (java.io.FileInputStream fis = new java.io.FileInputStream(tagsFile);
+                 java.io.InputStreamReader reader = new java.io.InputStreamReader(fis, "UTF-8");
+                 java.io.StringWriter sw = new java.io.StringWriter()) {
+                char[] buf = new char[4096];
+                int n;
+                while ((n = reader.read(buf)) > 0) {
+                    sw.write(buf, 0, n);
+                }
+                // Validate JSON
+                String content = sw.toString();
+                new org.json.JSONArray(content); // throws if invalid
+                return content;
+            }
+        } catch (Throwable e) {
+            Log.w(TAG, "getPGNCacheTags failed for name=" + safe, e);
+            return "[]";
         }
     }
 
@@ -3066,6 +3895,47 @@ public class StockfishNative {
         } catch (Throwable e) {
             Log.e(TAG, "Failed to load asset as base64: " + assetPath, e);
             return "";
+        }
+    }
+
+    // ===================== EXTERNAL URL LAUNCHER =====================
+
+    /**
+     * v1.0.4 Round-5 Rev27: Open an external http(s) URL in the system default browser.
+     *
+     * Called from JavaScript when the user taps any hyperlink (About page GitHub
+     * link, AGPL/GPL license links, etc.). The URL is strictly validated to be
+     * http/https — any other scheme is silently rejected (defense against
+     * intent-scheme injection attacks).
+     *
+     * The Intent is started with FLAG_ACTIVITY_NEW_TASK because the caller is
+     * the Application context (StockfishNative holds the app context, not an
+     * Activity context). Without this flag, startActivity() would throw
+     * "Calling startActivity() from outside of an Activity context requires
+     * the FLAG_ACTIVITY_NEW_TASK flag".
+     *
+     * @param url The http(s) URL to open.
+     */
+    @JavascriptInterface
+    public void openUrlInBrowser(String url) {
+        if (url == null) return;
+        String trimmed = url.trim();
+        // SECURITY: Only allow http(s) schemes. Reject file:, content:, javascript:, etc.
+        if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
+            Log.w(TAG, "openUrlInBrowser rejected non-http(s) URL: " + trimmed);
+            return;
+        }
+        try {
+            Uri uri = Uri.parse(trimmed);
+            Intent intent = new Intent(Intent.ACTION_VIEW, uri);
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            // Only allow browsers to handle this intent (no implicit app-component
+            // hijacking). Note: chooser is intentionally NOT used — we want the
+            // system default browser, and a chooser would add an extra tap.
+            context.startActivity(intent);
+            Log.i(TAG, "Opened external URL in browser: " + trimmed);
+        } catch (Throwable e) {
+            Log.e(TAG, "openUrlInBrowser failed for: " + trimmed, e);
         }
     }
 

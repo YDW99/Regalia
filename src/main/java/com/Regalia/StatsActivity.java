@@ -72,6 +72,12 @@ public class StatsActivity extends Activity {
     private WebView webView;
     private String statsPayload;
     private String pendingExportHTML;
+    // v1.0.4 Rev28: The PGN text imported on the stats page (via 🗃️ Paste PGN or
+    // 📂 Select PGN File). When the user returns to the main activity, if this is
+    // non-null, MainActivity prompts "🗃️ Import PGN to game?" Yes/No/Cancel.
+    // Cleared to null when MainActivity reads it (one-shot consumption).
+    // Static so MainActivity can access it without holding a StatsActivity ref.
+    public static volatile String importedPGNOnStats = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -248,13 +254,66 @@ public class StatsActivity extends Activity {
                     return null;
                 }
             }
+
+            // v1.0.4 Rev28: Record the PGN text imported on the stats page (via
+            // 🗃️ Paste PGN or 📂 Select PGN File). Called from stats.html's
+            // _statsPastePGN() and onStatsPGNFileRead() handlers. The imported
+            // PGN is stashed in the static importedPGNOnStats field; when the
+            // user returns to MainActivity, MainActivity.onResume() checks this
+            // field and prompts "🗃️ Import PGN to game?" if non-null.
+            // One-shot: MainActivity clears the field after reading it.
+            @JavascriptInterface
+            public void setImportedPGN(String pgnText) {
+                importedPGNOnStats = pgnText;
+                Log.i(TAG, "Recorded imported PGN on stats page (" +
+                        (pgnText != null ? pgnText.length() : 0) + " chars)");
+            }
+
+            // v1.0.4 Round-5 Rev27: Open an external http(s) URL in the system default
+            // browser. Called from JS when the user taps any hyperlink in stats.html
+            // (e.g. license links). Same security model as StockfishNative.openUrlInBrowser:
+            // only http(s) URLs are allowed; all other schemes are silently rejected.
+            @JavascriptInterface
+            public void openUrlInBrowser(String url) {
+                if (url == null) return;
+                String trimmed = url.trim();
+                if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
+                    Log.w(TAG, "openUrlInBrowser rejected non-http(s) URL: " + trimmed);
+                    return;
+                }
+                try {
+                    Uri uri = Uri.parse(trimmed);
+                    Intent intent = new Intent(Intent.ACTION_VIEW, uri);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    startActivity(intent);
+                    Log.i(TAG, "Opened external URL in browser: " + trimmed);
+                } catch (Throwable e) {
+                    Log.e(TAG, "openUrlInBrowser failed for: " + trimmed, e);
+                }
+            }
         }, "AndroidBridge");
 
-        // Set WebViewClient to load stats.html from assets
+        // Set WebViewClient to load stats.html from assets.
+        // v1.0.4 Rev27: External http(s) URLs are now opened in the system browser
+        // (defense-in-depth alongside the JS-side openUrlInBrowser bridge).
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                return true; // Block all URL navigation
+                String url = (request != null && request.getUrl() != null) ? request.getUrl().toString() : "";
+                if (url.startsWith("file:///android_asset/")) {
+                    return false;
+                }
+                if (url.startsWith("http://") || url.startsWith("https://")) {
+                    try {
+                        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        startActivity(intent);
+                    } catch (Throwable e) {
+                        Log.w(TAG, "Failed to open external URL from stats WebView: " + url, e);
+                    }
+                    return true;
+                }
+                return true; // Block all other URL navigation
             }
         });
 
@@ -365,8 +424,24 @@ public class StatsActivity extends Activity {
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
-        // Handle Android back button — return to main game
+        // Handle Android back button.
+        // v1.0.4 Rev28: Delegate to the JS-side returnToGame() so the
+        // "🗃️ Import PGN to game?" interceptor can fire when a PGN was
+        // imported on the stats page. returnToGame() either closes the
+        // activity (no import) or shows the Yes/No/Cancel dialog (Cancel =
+        // stay on stats page). If the import-back dialog is already visible,
+        // back button = Cancel (dismiss dialog, stay on stats page).
         if (keyCode == KeyEvent.KEYCODE_BACK) {
+            if (webView != null) {
+                webView.evaluateJavascript(
+                    "if(typeof _statsImportBackDialogVisible!=='undefined'&&_statsImportBackDialogVisible){" +
+                    "  _statsImportBackDismiss();" +
+                    "} else if(typeof returnToGame==='function'){" +
+                    "  returnToGame();" +
+                    "}",
+                    null);
+                return true;
+            }
             finish();
             return true;
         }

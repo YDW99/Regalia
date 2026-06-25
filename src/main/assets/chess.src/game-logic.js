@@ -28,7 +28,7 @@
 // ===================== i18n SYSTEM =====================
 let _lang='zh';
 function T(key){return _i18n[key]?.[_lang]||_i18n[key]?.zh||key;}
-function toggleLang(){_lang=(_lang==='zh')?'en':'zh';try{localStorage.setItem('Regalia_lang',_lang);}catch(e){}try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.saveLangPref)AndroidBridge.saveLangPref(_lang);}catch(e){}try{if(typeof HapticManager!=='undefined'&&HapticManager.fire)HapticManager.fire('TOGGLE_ON');}catch(e){}render();}
+function toggleLang(){_lang=(_lang==='zh')?'en':'zh';try{localStorage.setItem('Regalia_lang',_lang);}catch(e){}try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.saveLangPref)AndroidBridge.saveLangPref(_lang);}catch(e){}try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_lang',_lang);}catch(e){}try{if(typeof HapticManager!=='undefined'&&HapticManager.fire)HapticManager.fire('TOGGLE_ON');}catch(e){}render();}
 const _i18n={
 'app_name':{zh:'Regalia',en:'Regalia'},
 'new_game':{zh:'新游戏',en:'New Game'},
@@ -52,6 +52,7 @@ const _i18n={
 'opening_rec':{zh:'开局推荐',en:'Opening Rec.'},
 'move_history':{zh:'走法记录',en:'Move History'},
 'no_moves':{zh:'暂无走法记录',en:'No moves yet'},
+'enter_review_hint':{zh:'点击进入复盘界面（可使用 📚 缓存管理器或 🗃️ 导入 PGN）',en:'Click to enter review mode (use 📚 Cache Manager or 🗃️ to import PGN)'},
 'stats':{zh:'统计',en:'Stats'},
 'stats_title':{zh:'📊统计数据',en:'📊Statistics'},
 'stats_export_html':{zh:'💾HTML',en:'💾HTML'},
@@ -78,6 +79,28 @@ const _i18n={
 'ponder_desc':{zh:'开启后，引擎在AI走棋后继续分析对手可能的应手，提升后续走棋质量。会增加耗电，建议充电时开启',en:'Engine continues analyzing opponent\'s likely reply after AI moves. Improves subsequent move quality. Uses more battery, recommended when charging'},
 'book_moves':{zh:'使用ECO开局库',en:'Use ECO Book'},
 'eco_book_desc':{zh:'开启后，AI将优先从ECO开局库中选择开局走法，使开局更规范',en:'AI prioritizes ECO opening book moves for more standard openings'},
+// v1.0.4 NEW: Chess960 (Fischer Random Chess) UI strings
+'chess960_label':{zh:'菲舍尔任意制象棋',en:'Fischer Random (Chess960)'},
+'chess960_enable':{zh:'启用 Chess960 模式',en:'Enable Chess960 mode'},
+'chess960_spid':{zh:'起始位置编号',en:'Start Position ID'},
+'chess960_random':{zh:'随机',en:'Random'},
+'chess960_preview':{zh:'起始排列预览',en:'Starting arrangement preview'},
+'chess960_note':{zh:'Chess960 模式下不使用 ECO 开局库（无固定开局理论）。王车易位规则：王走至 g1/c1，车走至 f1/d1，与标准象棋终点相同。',en:'Chess960 mode disables ECO opening book (no fixed opening theory). Castling: King ends on g1/c1, Rook ends on f1/d1 — same final squares as standard chess.'},
+// v1.0.4 EXPANSION (this round): Time Control UI strings
+'time_control_label':{zh:'计时赛设置',en:'Time Control'},
+'time_control_off':{zh:'不计时（日常对局）',en:'Untimed (casual)'},
+'time_control_sudden':{zh:'突然死亡制',en:'Sudden Death'},
+'time_control_fischer':{zh:'菲舍尔加秒制',en:'Fischer Increment'},
+'time_control_bronstein':{zh:'布朗斯坦延迟制',en:'Bronstein Delay'},
+'time_control_usdelay':{zh:'美国延迟制',en:'US Delay'},
+'time_control_base_min':{zh:'基础时间（分钟）',en:'Base Time (minutes)'},
+'time_control_inc_sec':{zh:'每步加秒',en:'Increment (sec/move)'},
+'time_control_delay_sec':{zh:'每步延迟秒数',en:'Delay (sec/move)'},
+'time_control_note':{zh:'启用计时赛后，PGN 导出将包含 [TimeControl] 头与每步的 [%clk] 注释（剩余时间）；未启用计时赛时，PGN 注释使用 [%emt]（每步实际用时）。',en:'With time control enabled, PGN export includes [TimeControl] header and per-move [%clk] annotations (remaining clock). Without time control, PGN comments use [%emt] (elapsed move time).'},
+'time_control_white_clock':{zh:'白方时钟',en:'White Clock'},
+'time_control_black_clock':{zh:'黑方时钟',en:'Black Clock'},
+'time_control_flag_fell':{zh:'超时！',en:'Time out!'},
+'time_control_low':{zh:'时间紧张！',en:'Time trouble!'},
 'classic_openings':{zh:'经典开局（可选）',en:'Classic Openings'},
 'free_opening_btn':{zh:'自由开局',en:'Free Play'},
 'from_start':{zh:'从初始局面开始',en:'From starting position'},
@@ -113,6 +136,9 @@ const _i18n={
 'depth':{zh:'深度',en:'Depth'},
 'nodes':{zh:'节点',en:'Nodes'},
 'eval_label':{zh:'评估',en:'Eval'},
+// v1.0.4 Rev35: seldepth label for AI opponent bar (选深 / SelDepth).
+// The eval bar keeps the abbreviated "SD" for compactness.
+'seldepth_label':{zh:'选深',en:'SelDepth'},
 'evaluating':{zh:'局势评估',en:'Position Eval'},
 'lang_toggle_zh':{zh:'↔️中',en:'↔️中'},
 'lang_toggle_en':{zh:'↔️EN',en:'↔️EN'},
@@ -158,6 +184,12 @@ const _i18n={
 'about_copyright':{zh:'© 2026 Regalia. All rights reserved.',en:'© 2026 Regalia. All rights reserved.'},
 'about_agpl':{zh:'本应用整体采用',en:'This application is licensed under'},
 'about_source_code':{zh:'源代码：https://github.com/YDW99/Regalia',en:'Source code: https://github.com/YDW99/Regalia'},
+// v1.0.4 Round-5 Rev27: Split source-code line into prefix + URL so the URL
+// can be rendered as a real <a> hyperlink that opens in the system browser
+// via AndroidBridge.openUrlInBrowser(). The full-string variant above is
+// kept for backward compatibility (other call sites that don't need the link).
+'about_source_code_prefix':{zh:'源代码：',en:'Source code: '},
+'about_source_code_url':{zh:'https://github.com/YDW99/Regalia',en:'https://github.com/YDW99/Regalia'},
 'about_agpl_desc':{zh:'发布。本项目为 AGPL v3 与 GPL v3 双重许可组合作品：整体同时受两份协议约束，但因 AGPL v3 的网络交互条款（第13条）更为严格，其要求实质上覆盖整个组合作品，确保用户通过网络访问时同样享有获取源代码的权利。',en:'. This project is a combined work under AGPL v3 and GPL v3: the combined work is subject to both licenses, but since AGPL v3 imposes stricter network interaction provisions (Section 13), its requirements effectively cover the entire combination, ensuring users who access the work over a network retain the right to obtain source code.'},
 'about_droidfish':{zh:'部分代码源自开源项目 DroidFish (Copyright © Peter Österlund)，采用',en:'Some code derived from DroidFish (Copyright © Peter Österlund), licensed under'},
 'about_droidfish_desc':{zh:'协议。涉及引擎管理（Java/C++）、棋局逻辑、PGN解析、引擎通信及UI交互。修改声明已附于相关源文件头部。',en:'. Covers engine management (Java/C++), game logic, PGN parsing, engine communication, and UI interaction. Modifications noted in source file headers.'},
@@ -248,6 +280,46 @@ const _i18n={
 'copy_review_pgn':{zh:'复制走法记录PGN',en:'Copy PGN'},
 'copy_review_fen':{zh:'复制当前复盘局面的FEN',en:'Copy FEN'},
 'return_game':{zh:'返回对局',en:'Return to Game'},
+'pgn_cache_manager':{zh:'📚PGN缓存管理',en:'📚PGN Cache Manager'},
+'pgn_cache_btn':{zh:'PGN缓存',en:'PGN Cache'},
+'pgn_cache_empty':{zh:'暂无缓存的PGN对局。点击下方"保存当前PGN到缓存"按钮以创建。',en:'No cached PGN games yet. Click "Save current PGN to cache" below to create one.'},
+'pgn_cache_name_prompt':{zh:'请输入缓存名称（如：经典对局1）：',en:'Enter cache name (e.g.: Classic Game 1):'},
+'pgn_cache_save_default':{zh:'我的对局',en:'My Game'},
+'pgn_cache_save_current':{zh:'保存当前PGN到缓存',en:'Save current PGN to cache'},
+'pgn_cache_import':{zh:'导入',en:'Import'},
+'pgn_cache_delete_sel':{zh:'删除选中',en:'Delete Selected'},
+'pgn_cache_close':{zh:'关闭',en:'Close'},
+'pgn_cache_select_all':{zh:'全选',en:'Select All'},
+'pgn_cache_select_none':{zh:'全不选',en:'Select None'},
+'pgn_cache_count':{zh:'个缓存',en:'cache(s)'},
+'pgn_cache_confirm_delete':{zh:'确定要删除选中的缓存吗？此操作不可撤销。',en:'Delete selected cache entries? This cannot be undone.'},
+'pgn_cache_saved':{zh:'已保存到缓存',en:'Saved to cache'},
+'pgn_cache_deleted':{zh:'已删除',en:'deleted'},
+'pgn_cache_imported':{zh:'已导入PGN缓存',en:'PGN cache imported'},
+'pgn_cache_save_failed':{zh:'保存失败',en:'Save failed'},
+'pgn_cache_import_failed':{zh:'导入失败：缓存不存在或为空',en:'Import failed: cache not found or empty'},
+// v1.0.4 Round-5 Rev20: Rename and Tag features
+'pgn_cache_rename':{zh:'重命名',en:'Rename'},
+'pgn_cache_rename_prompt':{zh:'请输入新的缓存名称：',en:'Enter new cache name:'},
+'pgn_cache_renamed':{zh:'已重命名为',en:'Renamed to'},
+'pgn_cache_rename_failed':{zh:'重命名失败：名称已存在或无效',en:'Rename failed: name already exists or invalid'},
+'pgn_cache_tags':{zh:'标签',en:'Tags'},
+'pgn_cache_tags_prompt':{zh:'请输入标签（用逗号分隔，最多10个，每个≤30字符）：',en:'Enter tags (comma-separated, max 10, each ≤30 chars):'},
+'pgn_cache_tags_saved':{zh:'已保存标签',en:'Tags saved for'},
+'pgn_cache_tags_save_failed':{zh:'标签保存失败',en:'Failed to save tags'},
+// v1.0.4 Round-5 Rev21: Tag filter / search
+'pgn_cache_search_placeholder':{zh:'搜索名称或标签…',en:'Search name or tags…'},
+'pgn_cache_search_apply':{zh:'应用搜索',en:'Apply search'},
+'pgn_cache_search_clear':{zh:'清除筛选',en:'Clear filter'},
+'pgn_cache_filter_all':{zh:'全部',en:'All'},
+'pgn_cache_filter_by_tag':{zh:'点击按此标签筛选',en:'Click to filter by this tag'},
+'pgn_cache_filter_status':{zh:'筛选中：{count}/{total} 个匹配「{filter}」',en:'Filtering: {count}/{total} match "{filter}"'},
+'pgn_cache_filter_no_match':{zh:'没有匹配的缓存条目。请尝试其他关键词或清除筛选。',en:'No matching cache entries. Try a different keyword or clear the filter.'},
+// v1.0.4 Rev24 NEW: Human player rename feature i18n keys
+'rename_player_hint':{zh:'点击重命名',en:'Click to rename'},
+'rename_player_prompt':{zh:'输入你的名字（留空重置为"你"）：',en:'Enter your name (empty to reset to "You"):'},
+'rename_player_saved':{zh:'已重命名为',en:'Renamed to'},
+'rename_player_reset':{zh:'已重置为默认名称',en:'Reset to default name'},
 'start_pos':{zh:'起始',en:'Start'},
 'end_pos':{zh:'终局',en:'End'},
 'step':{zh:'步',en:'step'},
@@ -279,7 +351,7 @@ const _i18n={
 'elo_target':{zh:'Elo目标',en:'ELO Target'},
 'export_settings_btn':{zh:'📤 导出设置',en:'📤 Export'},
 'import_settings_btn':{zh:'📥 导入设置',en:'📥 Import'},
-'loading_title':{zh:'Regalia v1.0.3',en:'Regalia v1.0.3'},
+'loading_title':{zh:'Regalia v1.0.4',en:'Regalia v1.0.4'},
 'click_skip_loading':{zh:'点击跳过加载',en:'Click to skip loading'},
 'white_checkmate':{zh:'白方将杀获胜',en:'White wins by checkmate'},
 'black_checkmate':{zh:'黑方将杀获胜',en:'Black wins by checkmate'},
@@ -356,10 +428,30 @@ const _i18n={
 'checkmate_excl':{zh:'将杀！',en:'Checkmate! '},
 'wins_excl':{zh:'获胜！',en:' wins!'},
 'white_short':{zh:'⚪ 白方',en:'⚪ White'},
+// v1.0.4 Round-5 Rev27: Resign feature (DeepSeek review 2.1)
+'resign_btn':{zh:'🏳️ 认输',en:'🏳️ Resign'},
+'resign_confirm_title':{zh:'确认认输',en:'Confirm Resignation'},
+'resign_confirm_msg':{zh:'你确定要认输吗？这将结束当前对局，对方获胜。',en:'Are you sure you want to resign? This ends the current game; your opponent wins.'},
+'resign_yes':{zh:'确认认输',en:'Yes, Resign'},
+'resign_no':{zh:'取消',en:'Cancel'},
+'white_resigns':{zh:'白方认输',en:'White resigns'},
+'black_resigns':{zh:'黑方认输',en:'Black resigns'},
+'resigns_suffix':{zh:'认输',en:'resigns'},
+// v1.0.4 Rev47: Timeout win suffix for _gameOverStrFromStatus('timeout')
+'timeout_win_suffix':{zh:'超时胜',en:'wins by timeout'},
+// v1.0.4 Round-5 Rev28: Stats page → main/review PGN import-back prompt
+'stats_import_back_title':{zh:'🗃️ 是否将PGN导入到对局？',en:'🗃️ Import PGN to game?'},
+'stats_import_back_msg':{zh:'你在统计页面导入过 PGN。是否将其导入到当前对局（会替换主界面/复盘界面已记录的走法）？',en:'You imported a PGN on the stats page. Import it into the current game (replaces the moves recorded in the main/review view)?'},
+'stats_import_back_yes':{zh:'是',en:'Yes'},
+'stats_import_back_no':{zh:'否',en:'No'},
+'stats_import_back_cancel':{zh:'取消',en:'Cancel'},
+'stats_import_back_no_pgn':{zh:'统计页面未导入新 PGN，无需同步。',en:'No new PGN imported on the stats page; nothing to sync.'},
 };
 // Auto-detect language on startup
 (function(){
   try{const saved=localStorage.getItem('Regalia_lang');if(saved==='zh'||saved==='en'){_lang=saved;return;}}catch(e){}
+  // v1.0.4 Round-5 Rev16: Fall back to persistent Java store when HyperOS 3 wiped localStorage
+  try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentGet){const persisted=AndroidBridge.persistentGet('Regalia_lang');if(persisted==='zh'||persisted==='en'){_lang=persisted;try{localStorage.setItem('Regalia_lang',persisted);}catch(e){}return;}}}catch(e){}
   try{if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.getSystemLanguage==='function'){const sysLang=AndroidBridge.getSystemLanguage();_lang=(sysLang&&sysLang.startsWith('zh'))?'zh':'en';return;}}catch(e){}
   try{const navLang=navigator.language||navigator.userLanguage||'';_lang=navLang.startsWith('zh')?'zh':'en';}catch(e){_lang='zh';}
 })();
@@ -466,7 +558,49 @@ function _recalcCellSize(){
   REVIEW_CELL=Math.max(28,Math.round(CELL*0.8));
 }
 _recalcCellSize();
-let _resizeTimer=0;window.addEventListener('resize',()=>{clearTimeout(_resizeTimer);_resizeTimer=setTimeout(()=>{const _oldCell=CELL;_recalcCellSize();if(CELL!==_oldCell)render()},150)});
+// v1.0.4 Rev31 FIX: orientation change / resize scroll restoration bug.
+// Previously: after orientation change, render() rebuilt the DOM. The save
+// phase read _oldReviewBody.scrollTop from the OLD (portrait/landscape)
+// layout, then the restore phase applied that scrollTop to the NEW layout
+// — where the same pixel offset points to a DIFFERENT move (or no move at
+// all, since scrollHeight differs between portrait and landscape). The
+// review-moves-list scroll-into-view logic didn't fire either, because
+// _lastReviewStepScrolled still matched reviewStep (no step change).
+// Result: the review move list appeared at a wrong/random scroll position
+// after orientation change, "jumping away" from the active move.
+//
+// Fix: on resize/orientationchange, force _lastReviewStepScrolled=-2 (the
+// sentinel "never scrolled" value) so that the next render's scroll-into-
+// view logic re-centers the active move in the NEW layout. Also reset
+// _mlistScrollState.valid=false so the main move list doesn't restore a
+// stale pixel offset (it'll re-snapshot from the new DOM). For review-body,
+// we DON'T restore the old scrollTop on orientation change (the active-move
+// scroll-into-view handles re-centering instead).
+let _resizeTimer=0;let _isOrientationChange=false;
+// v1.0.4 Rev31: flag set by orientationchange, consumed by the next render()
+// cycle to skip the stale-scrollTop restore for .review-body (the active-move
+// scroll-into-view logic handles re-centering instead).
+let _skipReviewBodyScrollRestore=false;
+window.addEventListener('resize',()=>{
+  clearTimeout(_resizeTimer);
+  _resizeTimer=setTimeout(()=>{
+    const _oldCell=CELL;
+    _recalcCellSize();
+    if(CELL!==_oldCell||_isOrientationChange){
+      // Force re-scroll of the active review move after layout change
+      if(typeof _lastReviewStepScrolled!=='undefined')_lastReviewStepScrolled=-2;
+      // Invalidate main move-list scroll state so it re-snapshots
+      if(typeof _mlistScrollState!=='undefined'){_mlistScrollState.valid=false;}
+      // Skip the stale review-body scrollTop restore on this render
+      _skipReviewBodyScrollRestore=true;
+      _isOrientationChange=false;
+      render();
+    }
+  },150);
+});
+// orientationchange fires before resize on most Android devices; use it as
+// a signal that the layout change is a rotation (not a keyboard popup etc.)
+window.addEventListener('orientationchange',()=>{_isOrientationChange=true;});
 const KNIGHT_OFFSETS=[[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
 const DIR_ROOK=[[0,1],[0,-1],[1,0],[-1,0]];
 const DIR_BISHOP=[[1,1],[1,-1],[-1,1],[-1,-1]];
@@ -491,8 +625,11 @@ let _landingAnimActive=false;
 let _landingAnimTimer=null;
 function _startLandingTimer(pieceType){
 if(_landingAnimTimer)clearTimeout(_landingAnimTimer);
-const _maxDur=({pawn:600,knight:800,bishop:700,rook:600,queen:800,king:700}[pieceType]||700);
-_landingAnimTimer=setTimeout(()=>{_landingAnimActive=false;_landingAnimTimer=null;render();},_maxDur+50);
+// v1.0.4 ROUND-5 REV13: Reduced from 600-800ms to 200-300ms — the CSS
+// @keyframes still plays visually, but renders are no longer blocked for
+// the full keyframe duration. Only block long enough for the initial paint.
+const _maxDur=({pawn:200,knight:250,bishop:220,rook:200,queen:280,king:220}[pieceType]||220);
+_landingAnimTimer=setTimeout(()=>{_landingAnimActive=false;_landingAnimTimer=null;render();},_maxDur+30);
 }
 function animateMove(from,to,pieceSym,pieceType,isCapture,isCheck,pieceColor){
 animationInProgress=true;
@@ -502,6 +639,7 @@ _landingAnimActive=false;
 if(_landingAnimTimer){clearTimeout(_landingAnimTimer);_landingAnimTimer=null;}
 _lastCaptureFlag=!!isCapture;
 _lastCheckFlag=!!isCheck;
+_activeAnimEls=[]; // v1.0.4 REV13: track for re-attachment
 // Hide source piece during animation (overlay replaces it); also hide captured piece & castling rook
 const _srcPc=document.querySelector('.sq[data-r="'+from.row+'"][data-c="'+from.col+'"] .pc');
 if(_srcPc)_srcPc.style.opacity='0';
@@ -516,6 +654,7 @@ const el=document.createElement('div');el.className='move-anim anim-'+_lastAnimP
 el.textContent=pieceSym;
 el.style.cssText='left:'+(_fc*cs)+'px;top:'+(_fr*cs)+'px;width:'+cs+'px;height:'+cs+'px;transform:translate3d(0,0,0);opacity:1;will-change:transform';
 bwrap.appendChild(el);
+_activeAnimEls.push({el,from,dx,dy});
 // Castling: also animate the rook
 let rookEl=null;
 const isCastling=pieceType==='king'&&Math.abs(to.col-from.col)===2;
@@ -534,14 +673,16 @@ rookEl.style.cssText='left:'+(_rfc*cs)+'px;top:'+(_rfr*cs)+'px;width:'+cs+'px;he
 // Compute rook deltas here alongside rookEl creation (cleaner than separate block)
 rookEl._rdx=(_rtc-_rfc)*cs;rookEl._rdy=(_rtr-_rfr)*cs;
 bwrap.appendChild(rookEl);
+_activeAnimEls.push({el:rookEl,from:rFrom,dx:rookEl._rdx,dy:rookEl._rdy});
 }
 }
-const durations={pawn:240,knight:300,bishop:270,rook:240,queen:320,king:270};
+const durations={pawn:180,knight:240,bishop:210,rook:180,queen:260,king:210};
 const dur=durations[_lastAnimPieceType]||240;
 let _animDone=false;
 function _finishAnim(){
 if(_animDone)return;_animDone=true;
 el.remove();if(rookEl)rookEl.remove();animationInProgress=false;_lastAnimTarget={row:to.row,col:to.col};
+_activeAnimEls=[]; // v1.0.4 REV13: clear tracking
 if(_lastCaptureFlag){
 const sq=document.querySelector(`.sq[data-r="${to.row}"][data-c="${to.col}"]`);
 if(sq)sq.classList.add('capture-flash');setTimeout(()=>{if(sq)sq.classList.remove('capture-flash')},1200);
@@ -552,11 +693,31 @@ if(ck){const ksq=document.querySelector(`.sq[data-r="${ck.row}"][data-c="${ck.co
 }
 }
 el.addEventListener('transitionend',function(e){if(e.propertyName==='transform')_finishAnim()},{once:true});
+// v1.0.4 REV13: Double-rAF ensures initial position is painted before transition starts
+requestAnimationFrame(()=>{
 requestAnimationFrame(()=>{
 el.style.transform='translate3d('+dx+'px,'+dy+'px,0)';
 if(rookEl)rookEl.style.transform='translate3d('+rookEl._rdx+'px,'+rookEl._rdy+'px,0)';
 });
+});
 setTimeout(_finishAnim,dur+60);
+}
+
+// v1.0.4 ROUND-5 REV13: Re-attach active animation elements after DOM rebuild
+let _activeAnimEls=[];
+function _reattachActiveAnimations(){
+  if(!_activeAnimEls.length)return;
+  const bwrap=_cachedBwrap||(_cachedBwrap=document.querySelector('.bwrap'));
+  if(!bwrap||!bwrap.parentNode){_cachedBwrap=null;return;}
+  const cs=CELL;const _flip=playerColor==='black';
+  for(const a of _activeAnimEls){
+    if(!a.el||!a.el.parentNode){
+      const _fc=_flip?7-a.from.col:a.from.col,_fr=_flip?7-a.from.row:a.from.row;
+      a.el.style.left=(_fc*cs)+'px';a.el.style.top=(_fr*cs)+'px';
+      a.el.style.width=cs+'px';a.el.style.height=cs+'px';
+      bwrap.appendChild(a.el);
+    }
+  }
 }
 
 function initBoard(){const b=Array.from({length:8},()=>Array(8).fill(null));const backRank=['rook','knight','bishop','queen','king','bishop','knight','rook'];for(let c=0;c<8;c++){b[0][c]={type:backRank[c],color:'black'};b[1][c]={type:'pawn',color:'black'};b[6][c]={type:'pawn',color:'white'};b[7][c]={type:backRank[c],color:'white'}}return b}
@@ -587,7 +748,17 @@ if(p.type==='pawn'){
 if(inB(r+d,c)&&!b[r+d][c]){if(r+d===pr)for(const pt of['queen','rook','bishop','knight'])mv.push({row:r+d,col:c,promotion:pt});else{mv.push({row:r+d,col:c});if(r===(co==='white'?6:1)&&!b[r+2*d][c])mv.push({row:r+2*d,col:c})}}
 for(const dc of[-1,1])if(inB(r+d,c+dc)){if(b[r+d][c+dc]&&b[r+d][c+dc].color!==co){if(r+d===pr)for(const pt of['queen','rook','bishop','knight'])mv.push({row:r+d,col:c+dc,promotion:pt});else mv.push({row:r+d,col:c+dc})}if(s.enPassantTarget&&s.enPassantTarget.row===r+d&&s.enPassantTarget.col===c+dc)mv.push({row:r+d,col:c+dc})}}
 else if(p.type==='knight'){for(const[dr,dc]of KNIGHT_OFFSETS)if(inB(r+dr,c+dc)&&(!b[r+dr][c+dc]||b[r+dr][c+dc].color!==co))mv.push({row:r+dr,col:c+dc})}
-else if(p.type==='king'){for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++)if((dr||dc)&&inB(r+dr,c+dc)&&(!b[r+dr][c+dc]||b[r+dr][c+dc].color!==co))mv.push({row:r+dr,col:c+dc});const hr=co==='white'?7:0;if(r===hr&&c===4){const cr=s.castlingRights;if(cr[co+'Kingside']&&!b[hr][5]&&!b[hr][6]&&b[hr][7]&&b[hr][7].type==='rook'&&b[hr][7].color===co&&!sqAttackedFast(b,{row:hr,col:4},opp)&&!sqAttackedFast(b,{row:hr,col:5},opp)&&!sqAttackedFast(b,{row:hr,col:6},opp))mv.push({row:hr,col:6});if(cr[co+'Queenside']&&!b[hr][3]&&!b[hr][2]&&!b[hr][1]&&b[hr][0]&&b[hr][0].type==='rook'&&b[hr][0].color===co&&!sqAttackedFast(b,{row:hr,col:4},opp)&&!sqAttackedFast(b,{row:hr,col:3},opp)&&!sqAttackedFast(b,{row:hr,col:2},opp))mv.push({row:hr,col:2})}}
+else if(p.type==='king'){for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++)if((dr||dc)&&inB(r+dr,c+dc)&&(!b[r+dr][c+dc]||b[r+dr][c+dc].color!==co))mv.push({row:r+dr,col:c+dc});
+// v1.0.4 ROUND-5 REV16: Chess960 castling
+const hr=co==='white'?7:0;
+if(typeof gameVariant!=='undefined'&&gameVariant==='chess960'&&typeof isChess960CastlingLegal==='function'){
+  if(r===hr){
+    if(s.castlingRights[co+'Kingside']&&isChess960CastlingLegal(s,co,'kingside'))mv.push({row:hr,col:6});
+    if(s.castlingRights[co+'Queenside']&&isChess960CastlingLegal(s,co,'queenside'))mv.push({row:hr,col:2});
+  }
+}else{
+  if(r===hr&&c===4){const cr=s.castlingRights;if(cr[co+'Kingside']&&!b[hr][5]&&!b[hr][6]&&b[hr][7]&&b[hr][7].type==='rook'&&b[hr][7].color===co&&!sqAttackedFast(b,{row:hr,col:4},opp)&&!sqAttackedFast(b,{row:hr,col:5},opp)&&!sqAttackedFast(b,{row:hr,col:6},opp))mv.push({row:hr,col:6});if(cr[co+'Queenside']&&!b[hr][3]&&!b[hr][2]&&!b[hr][1]&&b[hr][0]&&b[hr][0].type==='rook'&&b[hr][0].color===co&&!sqAttackedFast(b,{row:hr,col:4},opp)&&!sqAttackedFast(b,{row:hr,col:3},opp)&&!sqAttackedFast(b,{row:hr,col:2},opp))mv.push({row:hr,col:2})}
+}}
 else{const dirs=p.type==='rook'?DIR_ROOK:p.type==='bishop'?DIR_BISHOP:DIR_QUEEN;for(const[dr,dc]of dirs){let nr=r+dr,nc=c+dc;while(inB(nr,nc)){if(!b[nr][nc])mv.push({row:nr,col:nc});else{if(b[nr][nc].color!==co)mv.push({row:nr,col:nc});break}nr+=dr;nc+=dc}}}
 return mv}
 // Optimized: uses makeMvInPlace/unmakeMv instead of cloneB per candidate move
@@ -630,11 +801,40 @@ function hasLegalMoves(s){for(let r=0;r<8;r++){for(let c=0;c<8;c++){const p=s.bo
  */
 function makeMv(s,mv){const ns=cloneS(s);const{from,to,piece,promotion}=mv;if(!piece||!ns.board[from.row]||!ns.board[from.row][from.col])return ns;const capPiece=ns.board[to.row][to.col];ns.board[to.row][to.col]=ns.board[from.row][from.col];ns.board[from.row][from.col]=null;
 if(piece.type==='pawn'&&s.enPassantTarget&&to.row===s.enPassantTarget.row&&to.col===s.enPassantTarget.col){const cr=piece.color==='white'?to.row+1:to.row-1;const epP=ns.board[cr][to.col];if(epP&&epP.type==='pawn'&&epP.color!==piece.color){ns.board[cr][to.col]=null}else if(epP){console.error('[En Passant Bug] Target set but captured piece is not an opposing pawn:',epP)}}
-if(piece.type==='king'&&Math.abs(to.col-from.col)===2){if(to.col===6){ns.board[from.row][5]=ns.board[from.row][7];ns.board[from.row][7]=null}if(to.col===2){ns.board[from.row][3]=ns.board[from.row][0];ns.board[from.row][0]=null}}
+if(piece.type==='king'&&Math.abs(to.col-from.col)===2){
+if(typeof gameVariant!=='undefined'&&gameVariant==='chess960'&&typeof chess960CastlingRookMove==='function'){
+  const side=to.col===6?'kingside':'queenside';
+  const rm=chess960CastlingRookMove(s,piece.color,side);
+  if(rm&&rm.rookFrom!==rm.rookTo){ns.board[rm.row][rm.rookTo]=ns.board[rm.row][rm.rookFrom];ns.board[rm.row][rm.rookFrom]=null;}
+}else{
+  if(to.col===6){ns.board[from.row][5]=ns.board[from.row][7];ns.board[from.row][7]=null}
+  if(to.col===2){ns.board[from.row][3]=ns.board[from.row][0];ns.board[from.row][0]=null}
+}
+}
 if(promotion)ns.board[to.row][to.col]={type:promotion,color:piece.color};
 if(piece.type==='king'){if(piece.color==='white'){ns.wk={row:to.row,col:to.col};ns.castlingRights.whiteKingside=false;ns.castlingRights.whiteQueenside=false}else{ns.bk={row:to.row,col:to.col};ns.castlingRights.blackKingside=false;ns.castlingRights.blackQueenside=false}}
-if(piece.type==='rook'){if(from.row===7&&from.col===0)ns.castlingRights.whiteQueenside=false;if(from.row===7&&from.col===7)ns.castlingRights.whiteKingside=false;if(from.row===0&&from.col===0)ns.castlingRights.blackQueenside=false;if(from.row===0&&from.col===7)ns.castlingRights.blackKingside=false}
-if(capPiece&&capPiece.type==='rook'){if(capPiece.color==='white'){if(to.row===7&&to.col===0)ns.castlingRights.whiteQueenside=false;if(to.row===7&&to.col===7)ns.castlingRights.whiteKingside=false}else{if(to.row===0&&to.col===0)ns.castlingRights.blackQueenside=false;if(to.row===0&&to.col===7)ns.castlingRights.blackKingside=false}}
+if(piece.type==='rook'){
+if(typeof gameVariant!=='undefined'&&gameVariant==='chess960'&&typeof findCastlingRooks==='function'){
+  const rooks=findCastlingRooks(s.board,piece.color);
+  if(rooks){
+    if(piece.color==='white'){if(from.col===rooks.kingside)ns.castlingRights.whiteKingside=false;if(from.col===rooks.queenside)ns.castlingRights.whiteQueenside=false;}
+    else{if(from.col===rooks.kingside)ns.castlingRights.blackKingside=false;if(from.col===rooks.queenside)ns.castlingRights.blackQueenside=false;}
+  }
+}else{
+  if(from.row===7&&from.col===0)ns.castlingRights.whiteQueenside=false;if(from.row===7&&from.col===7)ns.castlingRights.whiteKingside=false;if(from.row===0&&from.col===0)ns.castlingRights.blackQueenside=false;if(from.row===0&&from.col===7)ns.castlingRights.blackKingside=false;
+}
+}
+if(capPiece&&capPiece.type==='rook'){
+if(typeof gameVariant!=='undefined'&&gameVariant==='chess960'&&typeof findCastlingRooks==='function'){
+  const rooks=findCastlingRooks(s.board,capPiece.color);
+  if(rooks){
+    if(capPiece.color==='white'){if(to.col===rooks.kingside)ns.castlingRights.whiteKingside=false;if(to.col===rooks.queenside)ns.castlingRights.whiteQueenside=false;}
+    else{if(to.col===rooks.kingside)ns.castlingRights.blackKingside=false;if(to.col===rooks.queenside)ns.castlingRights.blackQueenside=false;}
+  }
+}else{
+  if(capPiece.color==='white'){if(to.row===7&&to.col===0)ns.castlingRights.whiteQueenside=false;if(to.row===7&&to.col===7)ns.castlingRights.whiteKingside=false}else{if(to.row===0&&to.col===0)ns.castlingRights.blackQueenside=false;if(to.row===0&&to.col===7)ns.castlingRights.blackKingside=false}
+}
+}
 if(piece.type==='pawn'&&Math.abs(to.row-from.row)===2){const epRow=(from.row+to.row)/2;const opp=OPP_COLOR[piece.color];const pd=opp==='white'?1:-1;let _epH=false;for(const dc of[-1,1]){const cr=epRow+pd,cc=from.col+dc;if(inB(cr,cc)&&ns.board[cr][cc]&&ns.board[cr][cc].type==='pawn'&&ns.board[cr][cc].color===opp){_epH=true;break;}}ns.enPassantTarget=_epH?{row:epRow,col:from.col}:null;}else{ns.enPassantTarget=null;}
 const cap=!!capPiece||(piece.type==='pawn'&&s.enPassantTarget&&to.row===s.enPassantTarget.row&&to.col===s.enPassantTarget.col);ns.halfMoveClock=(piece.type==='pawn'||cap)?0:ns.halfMoveClock+1;if(piece.color==='black')ns.fullMoveNumber++;
 ns.currentTurn=OPP_COLOR[ns.currentTurn];ns.moveHistory=[...s.moveHistory,{from,to,piece,promotion}];
@@ -719,8 +919,17 @@ s.board[cr][to.col]=null;
 }
 // 3. Castling: move rook
 if(piece.type==='king'&&Math.abs(to.col-from.col)===2){
-if(to.col===6){s.board[from.row][5]=s.board[from.row][7];s.board[from.row][7]=null;undo.castlingRook={from:{r:from.row,c:7},to:{r:from.row,c:5}}}
-if(to.col===2){s.board[from.row][3]=s.board[from.row][0];s.board[from.row][0]=null;undo.castlingRook={from:{r:from.row,c:0},to:{r:from.row,c:3}}}
+if(typeof gameVariant!=='undefined'&&gameVariant==='chess960'&&typeof chess960CastlingRookMove==='function'){
+  const side=to.col===6?'kingside':'queenside';
+  const rm=chess960CastlingRookMove(s,piece.color,side);
+  if(rm&&rm.rookFrom!==rm.rookTo){
+    s.board[rm.row][rm.rookTo]=s.board[rm.row][rm.rookFrom];s.board[rm.row][rm.rookFrom]=null;
+    undo.castlingRook={from:{r:rm.row,c:rm.rookFrom},to:{r:rm.row,c:rm.rookTo}};
+  }
+}else{
+  if(to.col===6){s.board[from.row][5]=s.board[from.row][7];s.board[from.row][7]=null;undo.castlingRook={from:{r:from.row,c:7},to:{r:from.row,c:5}}}
+  if(to.col===2){s.board[from.row][3]=s.board[from.row][0];s.board[from.row][0]=null;undo.castlingRook={from:{r:from.row,c:0},to:{r:from.row,c:3}}}
+}
 }
 // 4. Promotion
 if(promotion)s.board[to.row][to.col]={type:promotion,color:piece.color};
@@ -731,15 +940,31 @@ else{s.bk={row:to.row,col:to.col};s.castlingRights.blackKingside=false;s.castlin
 }
 // 6. Update castling rights for rook moves
 if(piece.type==='rook'){
-if(from.row===7&&from.col===0)s.castlingRights.whiteQueenside=false;
-if(from.row===7&&from.col===7)s.castlingRights.whiteKingside=false;
-if(from.row===0&&from.col===0)s.castlingRights.blackQueenside=false;
-if(from.row===0&&from.col===7)s.castlingRights.blackKingside=false;
+if(typeof gameVariant!=='undefined'&&gameVariant==='chess960'&&typeof findCastlingRooks==='function'){
+  const rooks=findCastlingRooks(s.board,piece.color);
+  if(rooks){
+    if(piece.color==='white'){if(from.col===rooks.kingside)s.castlingRights.whiteKingside=false;if(from.col===rooks.queenside)s.castlingRights.whiteQueenside=false;}
+    else{if(from.col===rooks.kingside)s.castlingRights.blackKingside=false;if(from.col===rooks.queenside)s.castlingRights.blackQueenside=false;}
+  }
+}else{
+  if(from.row===7&&from.col===0)s.castlingRights.whiteQueenside=false;
+  if(from.row===7&&from.col===7)s.castlingRights.whiteKingside=false;
+  if(from.row===0&&from.col===0)s.castlingRights.blackQueenside=false;
+  if(from.row===0&&from.col===7)s.castlingRights.blackKingside=false;
+}
 }
 // 7. Update castling rights for rook captures
 if(capPiece&&capPiece.type==='rook'){
-if(capPiece.color==='white'){if(to.row===7&&to.col===0)s.castlingRights.whiteQueenside=false;if(to.row===7&&to.col===7)s.castlingRights.whiteKingside=false}
-else{if(to.row===0&&to.col===0)s.castlingRights.blackQueenside=false;if(to.row===0&&to.col===7)s.castlingRights.blackKingside=false}
+if(typeof gameVariant!=='undefined'&&gameVariant==='chess960'&&typeof findCastlingRooks==='function'){
+  const rooks=findCastlingRooks(s.board,capPiece.color);
+  if(rooks){
+    if(capPiece.color==='white'){if(to.col===rooks.kingside)s.castlingRights.whiteKingside=false;if(to.col===rooks.queenside)s.castlingRights.whiteQueenside=false;}
+    else{if(to.col===rooks.kingside)s.castlingRights.blackKingside=false;if(to.col===rooks.queenside)s.castlingRights.blackQueenside=false;}
+  }
+}else{
+  if(capPiece.color==='white'){if(to.row===7&&to.col===0)s.castlingRights.whiteQueenside=false;if(to.row===7&&to.col===7)s.castlingRights.whiteKingside=false}
+  else{if(to.row===0&&to.col===0)s.castlingRights.blackQueenside=false;if(to.row===0&&to.col===7)s.castlingRights.blackKingside=false}
+}
 }
 // 8. Set en passant target (only if an enemy pawn can actually capture)
 const oldEP=s.enPassantTarget;
@@ -1059,13 +1284,53 @@ function _requestStockfishMove(){
 if(useBookMoves){
 try{
 const bookMove=queryECOBookMove(gameState);
-if(bookMove){isAIThinking=false;_aiBarInfo='';if(_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}executeMove(bookMove.from,bookMove.to,bookMove.promotion);return;}
+if(bookMove){
+  // v1.0.4 Rev32 FIX (CRITICAL): "Engine sometimes unresponsive" bug.
+  // When the ECO book provides a move, the engine is NOT called, so onBestMove
+  // never fires. The doAIMove() caller increments _aiRetryCount on EVERY call
+  // (expecting it to be reset by onBestMove). After 3 consecutive book moves,
+  // _aiRetryCount reaches 3 → doAIMove() falsely concludes "AI move failed
+  // after 3 consecutive timeouts" → shows ai_timeout toast and RETURNS WITHOUT
+  // CALLING THE ENGINE. The engine appears "unresponsive" — but it's actually
+  // the retry counter that's stuck.
+  // Fix: reset _aiRetryCount=0 on a successful book move (the "request" was
+  // satisfied, just by the book instead of the engine). Also clear the safety
+  // timer (already done) so it doesn't fire a spurious retry.
+  isAIThinking=false;_aiBarInfo='';_aiRetryCount=0;
+  if(_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
+  executeMove(bookMove.from,bookMove.to,bookMove.promotion);
+  return;
+}
 }catch(e){console.error('ECO book move lookup error:',e);}
 }
 if(typeof AndroidBridge!=='undefined'&&AndroidBridge.isEngineReady()){
 const fen=generateFEN(gameState);
-// After startGame()/importFEN(), first engineGo must include ucinewgame
-// atomically on the SAME Java thread to prevent command interleaving
+// v1.0.4 LATEST: if the game is timed, use engineGoTimed() so Stockfish 18
+// manages its own time allocation via UCI wtime/btime/winc/binc parameters.
+// This is the correct way to play timed games — the engine will think longer
+// in critical positions and shorter in simple ones, just like a human.
+if(typeof gameClocks!=='undefined'&&gameClocks&&typeof AndroidBridge.engineGoTimed==='function'){
+  const wMs=Math.round(gameClocks.white.remainingSec*1000);
+  const bMs=Math.round(gameClocks.black.remainingSec*1000);
+  const wincMs=(gameClocks.type==='fischer')?Math.round((gameClocks.incrementSec||0)*1000):0;
+  const bincMs=(gameClocks.type==='fischer')?Math.round((gameClocks.incrementSec||0)*1000):0;
+  try{
+    if(_needNewGameForEngine){
+      _needNewGameForEngine=false;
+      AndroidBridge.engineGoTimed(fen,aiLevel,true,wMs,bMs,wincMs,bincMs);
+    }else{
+      AndroidBridge.engineGoTimed(fen,aiLevel,false,wMs,bMs,wincMs,bincMs);
+    }
+  }catch(e){
+    console.error('engineGoTimed error:',e);
+    // Fallback to untimed engineGo
+    if(_needNewGameForEngine){_needNewGameForEngine=false;try{AndroidBridge.engineGoNewGame(fen,aiLevel);}catch(e2){}}
+    else{try{AndroidBridge.engineGo(fen,aiLevel);}catch(e2){}}
+    isAIThinking=false;_aiBarInfo='';render();
+  }
+  return;
+}
+// Untimed game — use the original movetime-based engineGo
 if(_needNewGameForEngine){_needNewGameForEngine=false;try{AndroidBridge.engineGoNewGame(fen,aiLevel);}catch(e){console.error('engineGoNewGame error:',e);isAIThinking=false;_aiBarInfo='';render();}return;}
 else{try{AndroidBridge.engineGo(fen,aiLevel);}catch(e){console.error('engineGo error:',e);isAIThinking=false;_aiBarInfo='';render();}return;}
 }
@@ -1092,7 +1357,13 @@ aiThinkInfo=T('thinking');_aiBarInfo=T('thinking');_updateAIThinkDisplay();
 // _updateAIThinkDisplay() handles the "思考中..." indicator.
 // Full render is deferred until _startLandingTimer completes or AI responds.
 if(!_landingAnimActive)render();
-// Safety timeout: if engine doesn't respond within 15s, reset AI state and retry
+// Safety timeout: if engine doesn't respond within 360s, reset AI state and retry
+// v1.0.4 Rev45: Extended from 15s to 30s to better accommodate timed-game mode.
+// v1.0.4 Rev46: Extended from 30s to 360s (6 minutes) to fully accommodate
+// long timed games where the engine may use several minutes for a critical
+// move at high difficulty levels. In a 5+3 Fischer game, the engine can
+// legitimately use 2-4 minutes on a complex middlegame position. 30s was
+// still too short for long time controls.
 _aiRetryCount++;
 if(_aiRetryCount>=3){
   console.error('AI move failed after 3 consecutive timeouts');
@@ -1107,7 +1378,7 @@ const _aiSafetyTimer=setTimeout(()=>{
     isAIThinking=false;_aiBarInfo='';
     doAIMove();
   }
-},15000);
+},360000);
 _aiSafetyTimerId=_aiSafetyTimer;
 _currentAiRequestId=++_aiMoveRequestId;
 setTimeout(()=>{
@@ -1127,7 +1398,9 @@ if(tbMove){
 const coords=uciToCoords(tbMove.uci);
 // Use saved board reference to validate move still applies
 if(coords&&_tbSavedBoard[coords.from.row]&&_tbSavedBoard[coords.from.row][coords.from.col]){
-isAIThinking=false;_aiBarInfo='';if(_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
+// v1.0.4 Rev32 FIX: same as ECO book move — reset _aiRetryCount so the
+// safety-counter doesn't accumulate across tablebase-served moves.
+isAIThinking=false;_aiBarInfo='';_aiRetryCount=0;if(_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
 executeMove(coords.from,coords.to,coords.promotion);
 return;
 }
@@ -1390,4 +1663,4 @@ function _prependBlackToMovePlaceholder(){
 }
 
 // ---- Exports ----
-export {PV,OPP_COLOR,SQ_LIGHT,SQ_DARK,SQ_SEL,LBL_LIGHT,LBL_DARK,LBL_STROKE_LIGHT,LBL_STROKE_DARK,SYM,PN,PN_EN,pieceName,_principlesHTML,KNIGHT_OFFSETS,DIR_ROOK,DIR_BISHOP,DIR_QUEEN,ELO_MATCH,getAI_LEVELS,CELL,REVIEW_CELL,zobrist,initBoard,attacked,initState,validateSetupPosition,cloneB,cloneS,sqAttackedFast,inCheck,pseudoMoves,legalMoves,hasLegalMoves,moveAlg,getCtrlMap,makeMvInPlace,unmakeMv,gameStatus,isDeadPosition,_applyMoveToBoard,generateFEN,uciToCoords,fenToState,_esc,posAlg,algPos,inB,pieceZobristIdx,computeHash,syncHash,recomputeCastlingRights,_refreshStateAfterSetup,_recalcCellSize,getEffectiveAILevel,posEmoji,posDesc,T,toggleLang,_lang,_i18n,_prependBlackToMovePlaceholder};
+export {PV,OPP_COLOR,SQ_LIGHT,SQ_DARK,SQ_SEL,LBL_LIGHT,LBL_DARK,LBL_STROKE_LIGHT,LBL_STROKE_DARK,SYM,PN,PN_EN,pieceName,_principlesHTML,KNIGHT_OFFSETS,DIR_ROOK,DIR_BISHOP,DIR_QUEEN,ELO_MATCH,getAI_LEVELS,CELL,REVIEW_CELL,zobrist,initBoard,attacked,initState,validateSetupPosition,cloneB,cloneS,sqAttackedFast,inCheck,pseudoMoves,legalMoves,hasLegalMoves,moveAlg,getCtrlMap,makeMvInPlace,unmakeMv,gameStatus,isDeadPosition,_applyMoveToBoard,generateFEN,uciToCoords,fenToState,_esc,posAlg,algPos,inB,pieceZobristIdx,computeHash,syncHash,recomputeCastlingRights,_refreshStateAfterSetup,_recalcCellSize,getEffectiveAILevel,posEmoji,posDesc,T,toggleLang,_lang,_i18n,_prependBlackToMovePlaceholder,_reattachActiveAnimations,_activeAnimEls};

@@ -4,8 +4,8 @@
 
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.Regalia"
-    android:versionCode="103"
-    android:versionName="1.0.3">
+    android:versionCode="104"
+    android:versionName="1.0.4">
 
     <!-- v18.5.0: Removed appcompat dependency — no more AndroidX permission injection issues -->
     <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="35" />
@@ -46,6 +46,8 @@
         android:hardwareAccelerated="true"
         android:usesCleartextTraffic="false"
         android:networkSecurityConfig="@xml/network_security_config"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:requestLegacyExternalStorage="true">
 
         <!-- v18.5.0 FIX: Changed from "portrait" to "unspecified" — the previous

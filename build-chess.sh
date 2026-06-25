@@ -39,7 +39,7 @@ with open(tpl_path, 'r') as f:
 
 # Build combined JS - order matters!
 js_parts = []
-module_order = ['game-logic.js', 'ai-bridge.js', 'tablebase.js', 'eco-data.js', 'ui.js']
+module_order = ['game-logic.js', 'chess960.js', 'pgn-standard.js', 'worker-pool.js', 'ai-bridge.js', 'tablebase.js', 'eco-data.js', 'ui.js']
 for mod in module_order:
     with open(f'{src_dir}/{mod}', 'r') as f:
         js_parts.append(f.read())

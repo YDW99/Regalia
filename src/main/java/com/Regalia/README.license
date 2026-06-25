@@ -122,6 +122,84 @@ v1.0.2 bug-fix updates to existing files:
       - Removed dead `en` computation block in updateNotification() (read
         from wrong prefs file, value never used).
 
+v1.0.4 Round-5 Rev20 changes:
+  - StockfishNative.java (Rev20, GPL v3): added 7 new @JavascriptInterface
+      methods:
+      • persistentSetSync(key, value): synchronous SharedPreferences write
+        using commit() instead of apply(). Use for any data the user would
+        notice losing (eval cache, current PGN). HyperOS 3 cannot SIGKILL
+        the app before commit() returns.
+      • persistentFlush(): forces flush of any pending apply() writes by
+        calling commit() on an empty edit. Called from MainActivity's
+        onPause/onStop/onUserLeaveHint.
+      • loadEvalCacheSync(): synchronously reads the eval cache file
+        (/data/data/com.Regalia/files/eval_cache.json). Returns null if
+        file doesn't exist. Called at JS module construction for instant
+        cache recovery.
+      • saveEvalCacheSync(json): atomically writes the eval cache file
+        using tmp + FileDescriptor.sync() + rename. HyperOS 3-proof.
+      • renamePGNCache(oldName, newName): atomically renames a PGN cache
+        entry's .pgn file AND its associated .tags.json file. Refuses to
+        overwrite if target name already exists.
+      • setPGNCacheTags(name, tagsJson): writes tags to
+        pgn_cache/<name>.tags.json. Empty array deletes the file.
+      • getPGNCacheTags(name): reads tags from .tags.json. Returns "[]"
+        if no tags file exists.
+      Modified listPGNCaches() to include tags in the returned JSON
+      (pre-loads all tag files in one pass for O(N) load). Modified
+      deletePGNCache() to also delete the associated .tags.json file.
+  - MainActivity.java (Rev20, AGPL v3): added onStop() and
+      onUserLeaveHint() overrides that call stockfishEngine.persistentFlush()
+      and evaluateJavascript("_flushReviewEvalCache()") before calling
+      super. onPause() also now does the same. This ensures pending eval
+      cache writes are flushed to disk before HyperOS 3 can SIGKILL the
+      app.
+  - build.gradle (Rev20): re-enabled externalNativeBuild to compile
+      engine_jni.cpp into libengine_bridge.so from source using NDK
+      27.2.12479018.
+  - res/xml/backup_rules.xml and res/xml/data_extraction_rules.xml
+      (Rev20): added <include domain="file" path="eval_cache.json"/> and
+      <include domain="file" path="pgn_cache/"/> to declare eval cache
+      and PGN cache directory as user data for cloud backup / device
+      migration preservation.
+
+v1.0.4 Round-5 Rev17-19 changes:
+  - StockfishNative.java (Rev17-18, GPL v3): added 7 new
+      @JavascriptInterface methods:
+      • persistentGet(key), persistentSet(key, value), persistentRemove(key):
+        SharedPreferences-backed key-value store (kv_* prefix) for
+        HyperOS 3-resistant persistence of JS localStorage data.
+      • listPGNCaches(), savePGNCache(name, pgn), getPGNCache(name),
+        deletePGNCache(name), deletePGNCaches(namesJson): PGN cache
+        manager backed by /data/data/com.Regalia/files/pgn_cache/<name>.pgn.
+  - MainActivity.java (Rev17, AGPL v3): no changes; backup rules are
+      declared in AndroidManifest.xml (fullBackupContent +
+      dataExtractionRules attributes).
+
+v1.0.4 EXPANSION (this round) changes:
+  - StockfishNative.java (EXPANDED, GPL v3): no new bridge methods in
+      this round. The previously-added setChess960Mode() /
+      isChess960Mode() / _pendingChess960 fields (from prior v1.0.4
+      round) remain in place; the engine restart path still re-applies
+      UCI_Chess960 from _pendingChess960 after every (auto-)restart.
+  - ChessApp.java: Log message updated to "(v1.0.4)".
+  - MainActivity.java: VERSION constant updated to "v1.0.4".
+  - StockfishNative.java: ENGINE_VERSION constant updated to "v1.0.4".
+  - AndroidManifest.xml: versionCode 103 → 104, versionName "1.0.3" → "1.0.4".
+
+v1.0.4 changes:
+  - StockfishNative.java (EXPANDED, GPL v3): new @JavascriptInterface
+      methods setChess960Mode(boolean) and isChess960Mode(). New
+      private volatile field _pendingChess960 caches the current mode
+      and is re-applied to the engine (via sendSetOptionAndWait) inside
+      startEngine() after applySettings() on every (auto-)restart, so
+      crash recovery does not silently drop UCI_Chess960=true. New
+      Chess960-specific block in startEngine() (Step 6.5) handles this.
+      ENGINE_VERSION constant updated to "v1.0.4".
+  - ChessApp.java: Log message updated to "(v1.0.4)".
+  - MainActivity.java: VERSION constant updated to "v1.0.4".
+  - AndroidManifest.xml: versionCode 103 → 104, versionName "1.0.3" → "1.0.4".
+
 v1.0.3 changes:
   - No Java source files were modified in v1.0.3. All v1.0.3 feature work
     is in stats.html (assets/) and the chess.src/*.js modules (rebuilt into
@@ -145,3 +223,225 @@ v1.0.3 patch changes (version number unchanged — still v1.0.3 / versionCode 10
         "crash protection active (v1.0.2)" → "crash protection active (v1.0.3)"
         to match the application version.
   - No other Java source files were modified in this patch.
+
+  v1.0.4 Round-5 Rev22 changes:
+    - MainActivity.java: onDestroy() now calls _flushReviewEvalCache() (via
+      webView.evaluateJavascript) and stockfishEngine.persistentFlush() BEFORE
+      calling _cleanupEventListeners() and stockfishEngine.shutdown(). This
+      ensures any eval data that arrived between onStop and onDestroy (e.g.,
+      during low-memory kill where onStop may be skipped) is flushed to disk
+      before the WebView is destroyed.
+
+  v1.0.4 Round-5 Rev23 changes:
+    - StockfishNative.java: saveEvalCacheSync() now uses Files.move() with
+      ATOMIC_MOVE + REPLACE_EXISTING on API 26+ for true POSIX-atomic rename.
+      The old delete+renameTo sequence had a brief window where neither old
+      nor new file existed (app crash in that window = cache lost). API 21-25
+      retains the legacy path (renameTo is still POSIX-atomic on same FS, but
+      Java's renameTo doesn't overwrite — hence the delete).
+
+  v1.0.4 Round-5 Rev24 changes:
+    - No changes to Java sources in this revision. All Rev24 changes are in
+      the JS layer (chess.src/) and the Stockfish engine binary
+      (src/main/jniLibs/arm64-v8a/libstockfish.so, updated to the official
+      sf_18 arm64-v8a-dotprod release, 114 MB, NDK r27c build).
+    - The existing Java-side persistent storage APIs (persistentGet/Set/
+      Remove/SetSync/Flush, saveEvalCacheSync/loadEvalCacheSync,
+      savePGNCache/getPGNCache/listPGNCaches/deletePGNCaches/renamePGNCache/
+      setPGNCacheTags/getPGNCacheTags) are reused as-is by the new JS
+      features (player rename, PGN-comment eval extraction, analyze-all
+      resilience). No new @JavascriptInterface methods were needed.
+
+  v1.0.4 Round-5 Rev25 changes:
+    - No changes to Java sources. All Rev25 changes are in the JS layer
+      (chess.src/ui.js — Chess960 dialog heading removal) and stats.html
+      (promotion symbol rendering fix).
+
+  v1.0.4 Round-5 Rev26 changes:
+    - No changes to Java sources. The Rev26 fix is entirely in stats.html
+      (SAN regex alternative for non-capture pawn promotions).
+
+  v1.0.4 Round-5 Rev27 changes:
+    - StockfishNative.java (Rev27, GPL v3): added new @JavascriptInterface
+      method openUrlInBrowser(String url). Launches the system default
+      browser via Intent.ACTION_VIEW with FLAG_ACTIVITY_NEW_TASK. URLs are
+      strictly validated to be http(s) only — file:, content:, javascript:,
+      intent: schemes are silently rejected (defense against intent-scheme
+      injection). Called from JS when the user taps any hyperlink in the
+      About dialog or anywhere in chess.html.
+    - ChessWebViewClient.java (Rev27, AGPL v3): shouldOverrideUrlLoading()
+      now OPENS external http(s) URLs in the system default browser instead
+      of silently blocking them. This is defense-in-depth alongside the
+      JS-side openUrlInBrowser bridge — if a link is triggered by other
+      means (meta refresh, JS window.open), this WebViewClient layer
+      catches it. URLs are validated to be http(s); all other schemes are
+      blocked.
+    - StatsActivity.java (Rev27, AGPL v3): added new @JavascriptInterface
+      method openUrlInBrowser(String url) to the inline JS bridge object —
+      same security model as StockfishNative.openUrlInBrowser (http(s)
+      only). Also updated the WebViewClient's shouldOverrideUrlLoading to
+      open http(s) URLs in the system browser (matching the main WebView's
+      behavior).
+    - No changes to other Java sources (MainActivity, ChessApp, EngineService,
+      RootDetector, TlsSecurityHelper). All other Rev27 changes are in the
+      JS layer (chess.src/ui.js, chess.src/ai-bridge.js, chess.src/game-logic.js
+      — resign feature, hyperlink click handler, About page GitHub link,
+      i18n keys) and stats.html (Backspace fix, applySANMove king-safety,
+      _escFEN escaping, exportFullHTML regex, board display, hyperlink
+      click handler, i18n key for board section heading).
+
+  v1.0.4 Round-5 Rev28 changes:
+    - StatsActivity.java (Rev28, AGPL v3): added new static volatile field
+      `importedPGNOnStats` (String) — stashes the PGN text imported on the
+      stats page for MainActivity.onResume to read. Added new
+      @JavascriptInterface method `setImportedPGN(String pgnText)` that
+      sets the field. Updated `onKeyDown(KEYCODE_BACK)` to delegate to the
+      JS-side returnToGame() (via evaluateJavascript) so the import-back
+      interceptor can fire; if the import-back dialog is visible, back =
+      Cancel (dismiss dialog).
+    - MainActivity.java (Rev28, AGPL v3): onResume() now checks
+      StatsActivity.importedPGNOnStats; if non-null, reads it, clears it
+      (one-shot consumption), JSON-encodes it, and calls the JS-side
+      `_showStatsImportBackPrompt(pgn)` function via evaluateJavascript.
+      The JSON encoding uses org.json.JSONObject for safe JS string passing.
+    - No changes to other Java sources (StockfishNative, ChessApp,
+      ChessWebViewClient, EngineService, RootDetector, TlsSecurityHelper).
+      All other Rev28 changes are in the JS layer (chess.src/ui.js —
+      _showStatsImportBackPrompt; chess.src/ai-bridge.js — openStatsPage
+      always rebuilds from moveRecords; chess.src/game-logic.js — i18n
+      keys; chess.src/tablebase.js — promotion field in moveRecords.push;
+      ui.js game-over emoji fix) and stats.html (import-back dialog,
+      _statsImportedPGN tracking, returnToGame/requestReview interception).
+
+  v1.0.4 Round-5 Rev29 changes:
+    - No changes to any Java sources. All Rev29 changes are in the JS
+      layer:
+      * tablebase.js (GPL v3): CRITICAL PGN import fix (move.promotion →
+        parsedMove.move.promotion); unclosed brace comment tolerance.
+      * ai-bridge.js (GPL v3): NAG Black-side fix; variation prefix
+        falsy-0 fix.
+      * stats.html (GPL v3): en passant support; checkmate symbol fix;
+        classifyMove NAG fix; _renderStatsBoard caption fix; PGN parse
+        error i18n.
+
+  v1.0.4 Round-5 Rev30 changes:
+    - ChessWebViewClient.java (AGPL v3): ROBUSTNESS — added override of
+      the newer `shouldOverrideUrlLoading(WebView, WebResourceRequest)`
+      overload (API 24+). The deprecated String-based overload only
+      fires on API 21-23; on API 24+ only the WebResourceRequest
+      overload is invoked. Without this override, http(s) links clicked
+      on API 24+ devices would NOT be redirected to the system browser.
+      The new overload delegates to the String overload for consistent
+      behavior. Added imports for android.os.Build, android.webkit.
+      WebResourceRequest (Build import retained for potential future
+      SDK_INT checks).
+    - No changes to other Java sources (MainActivity, StatsActivity,
+      StockfishNative, ChessApp, EngineService, RootDetector,
+      TlsSecurityHelper). All other Rev30 changes are in the JS layer
+      (chess.src/ui.js — scroll restoration fix; chess.src/chess960.js
+      — randomSPID modulo bias fix).
+
+  v1.0.4 Round-5 Rev31 changes:
+    - StockfishNative.java (Rev31, GPL v3): UCI COMPLIANCE —
+      startPonder() now has a 5-arg overload
+      startPonder(fen, wtime, btime, winc, binc) that includes time
+      params in the `go ponder` command. Per UCI spec, `go ponder` MUST
+      include time params so the engine can switch to normal time
+      management when `ponderhit` fires. The legacy single-arg
+      startPonder(fen) is kept as @deprecated for backward compat
+      (delegates to the 5-arg version with all zeros). For untimed
+      games (all zeros), Java sends plain "go ponder" (no time params).
+    - No changes to other Java sources (MainActivity, StatsActivity,
+      ChessApp, ChessWebViewClient, EngineService, RootDetector,
+      TlsSecurityHelper).
+
+  v1.0.4 Round-5 Rev32 changes:
+    - StockfishNative.java (Rev32, GPL v3): UCI EVAL OPTIMIZATION per
+      SF18 best-practices documentation:
+      * engineEval() and engineEvalDeep() now call applyEvalModeOptions()
+        BEFORE the eval search to set Contempt=0 (objective eval, default
+        24 biases by avoiding draws), MultiPV=1 (max depth), UCI_ShowWDL=
+        true (WDL output).
+      * handleBestMove()'s STATE_EVAL case calls restoreGameplayOptions()
+        to restore Contempt=24 (aggressive gameplay) and the user's
+        MultiPV setting after the eval completes.
+      * New private methods: applyEvalModeOptions(), restoreGameplayOptions().
+    - No changes to other Java sources.
+
+  v1.0.4 Round-5 Rev33 changes:
+    - StockfishNative.java (Rev33, GPL v3): SELDEPTH DISPLAY. New
+      SELDEPTH_PATTERN regex. processInfoLine() parses seldepth.
+      onEngineProgress gains 9th param (seldepth). onPonderProgress gains
+      6th param (seldepth). onEngineEval gains 7th param (seldepth).
+      MultiPV JSON includes seldepth field. New _lastEvalSeldepth field
+      (reset alongside _lastEvalDepth).
+    - No changes to other Java sources.
+
+  v1.0.4 Round-5 Rev34 changes:
+    - No changes to Java sources. All Rev34 changes are in the JS layer
+      (chess.src/chess960.js, stats.html).
+
+  v1.0.4 Round-5 Rev35 changes:
+    - StockfishNative.java (Rev35, GPL v3): TIMED-GAME ENGINE STOP FIX.
+      New @JavascriptInterface methods:
+      * engineStop(): hard-stop any engine state (STATE_GO/HINT/EVAL/
+        PONDER). Sets _discardingPonderBestmove=true so the bestmove is
+        silently consumed and dropped. Used by JS when clock expires or
+        user resigns.
+      * sendToEngine(String command): raw UCI command sender (fallback).
+      engineGoTimed() now records the JS-call timestamp and deducts the
+      setup overhead (stopAndWait + ucinewgame + readyok wait, up to 6s)
+      from wtime/btime before sending "go". Also adds a safety margin
+      (engineMoveOverhead, min 50ms). This prevents the engine from
+      over-allocating search time based on stale clock values.
+    - No changes to other Java sources.
+
+  v1.0.4 Round-5 Rev36 changes:
+    - StockfishNative.java (Rev36, GPL v3): engineStop() no longer sets
+      _discardingPonderBestmove when engine is idle (STATE_NONE). Only
+      sets the flag + sends "stop" when stateBefore != STATE_NONE.
+      Prevents the next game's first bestmove from being silently
+      discarded after an idle engineStop() call.
+    - No changes to other Java sources.
+
+  v1.0.4 Round-5 Rev37 changes:
+    - No changes to Java sources. All Rev37 changes are in the JS layer
+      (chess.src/ui.js).
+
+  v1.0.4 Round-5 Rev38 changes:
+    - No changes to Java sources. All Rev38 changes are in the JS layer
+      (chess.src/ui.js, chess.src/index.html.tpl).
+
+  v1.0.4 Round-5 Rev39 changes:
+    - No changes to Java sources. All Rev39 changes are in the JS layer
+      (chess.src/ui.js).
+
+  v1.0.4 Round-5 Rev40 changes:
+    - No changes to Java sources. All Rev40 changes are in the JS layer
+      (chess.src/ui.js).
+
+  v1.0.4 Round-5 Rev41 changes:
+    - No changes to Java sources. All Rev41 changes are in the JS layer
+      (chess.src/ui.js, stats.html).
+
+  v1.0.4 Round-5 Rev42 changes:
+    - No changes to Java sources. All Rev42 changes are in the JS layer
+      (chess.src/ui.js).
+
+  v1.0.4 Round-5 Rev43 changes:
+    - No changes to Java sources. All Rev43 changes are in stats.html.
+
+  v1.0.4 Round-5 Rev44 changes:
+    - No changes to Java sources. All Rev44 changes are in the JS layer
+      (chess.src/ai-bridge.js, chess.src/worker-pool.js, stats.html).
+
+  v1.0.4 Round-5 Rev45 changes:
+    - No changes to Java sources. All Rev45 changes are in the JS layer
+      (chess.src/game-logic.js, chess.src/ai-bridge.js).
+
+  v1.0.4 Round-5 Rev46 changes:
+    - No changes to Java sources. All Rev46 changes are in the JS layer
+      (chess.src/ui.js, chess.src/game-logic.js, chess.src/ai-bridge.js).
+
+  v1.0.4 Round-5 Rev47 changes:
+    - No changes to Java sources. All Rev47 changes are in the JS layer.

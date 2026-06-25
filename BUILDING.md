@@ -1,4 +1,4 @@
-# Building Regalia v1.0.3 from source
+# Building Regalia v1.0.4 from source
 
 <!-- AI-GEN: AI assisted
      This document was AI-assisted and has been reviewed for AGPL v3 compliance. -->
@@ -17,14 +17,36 @@ chmod +x src/main/jniLibs/arm64-v8a/libstockfish.so
 
 ## Build chess.html asset
 ```
-cd src/main/assets/chess.src/
 bash build-chess.sh
+# (or equivalently: python3 build-chess.py)
 ```
+The build script merges `src/main/assets/chess.src/*.js` (in order:
+game-logic → chess960 → pgn-standard → worker-pool → ai-bridge → tablebase → eco-data → ui)
+into `src/main/assets/chess.html`, stripping `export` statements.
 
 ## Build APK
 ```
 ./gradlew assembleRelease
 ```
+The signed APK (v1+v2+v3 signed with `../debug.keystore`) will be at
+`build/outputs/apk/release/`.
 
 ## Requirements
 - Android SDK API 35, NDK r27c, Gradle 8.x, JDK 21
+- The APK is signed with a debug keystore by default. For production,
+  replace `signingConfigs.release` in `build.gradle` with your own keystore.
+
+## v1.0.4 build notes
+- New modules `chess960.js`, `pgn-standard.js`, and `worker-pool.js` are
+  bundled before `ai-bridge.js` so their functions (e.g. `composePGN`,
+  `sevenTagRoster`, `toShredderCastling`, `initChess960State`,
+  `workerParsePGN`, `formatEmtTag`, `formatCslTag`, `formatCalTag`,
+  `formatTimeControl`) are in scope when `ai-bridge.js` and `ui.js`
+  reference them.
+- The Stockfish 18 `arm64-v8a-dotprod` binary is the same version as
+  v1.0.3 — no engine re-download is needed when upgrading from v1.0.3.
+- The `worker-pool.js` module creates a Web Worker via Blob URL. This
+  works under the WebView's `script-src 'unsafe-inline'` CSP. If the
+  device's WebView does not support Workers (Android 4.4 / API 19
+  predecessors — but minSdk is 21 so this is moot), all worker calls
+  fall back to inline synchronous execution.

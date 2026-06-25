@@ -25,6 +25,14 @@ Subdirectory license summary:
       TLS 1.2+ via SSLSocketFactory on API 21-27 where the system
       default might negotiate TLS 1.0/1.1.
       v1.0.3: no changes.
+      v1.0.4 Round-5 Rev17: backup_rules.xml and data_extraction_rules.xml
+      added. backup_rules.xml (<full-backup-content>) declares the
+      sharedpref domain and app_webview/Local Storage/ directory as
+      user data to be preserved during cloud backup.
+      data_extraction_rules.xml (<data-extraction-rules>, Android 12+)
+      mirrors this for cloud-backup and device-transfer scenarios.
+      Referenced by AndroidManifest.xml's android:fullBackupContent and
+      android:dataExtractionRules attributes.
   - mipmap-hdpi/ ... mipmap-xxxhdpi/: AGPL v3 (AI-generated assets)
       App launcher icons (ic_launcher, ic_launcher_round,
       ic_launcher_foreground) in 5 density buckets (hdpi, mdpi, xhdpi,
@@ -43,3 +51,88 @@ for full license texts and attribution details.
 
 v1.0.3 patch: no changes to res/ files (strings.xml, network_security_config.xml,
 and all mipmap launcher icons are unchanged from v1.0.3 baseline).
+
+v1.0.4 Round-5 Rev17: added res/xml/backup_rules.xml and
+res/xml/data_extraction_rules.xml (both AGPL v3, original configuration
+declaring SharedPreferences and WebView Local Storage as user data).
+network_security_config.xml and all mipmap icons unchanged.
+
+
+v1.0.4 Round-5 Rev23: no changes to res/ files (backup_rules.xml,
+data_extraction_rules.xml, network_security_config.xml, strings.xml, and all
+mipmap launcher icons are unchanged from the Rev22 baseline).
+
+v1.0.4 Round-5 Rev24: no changes to res/ files. All Rev24 changes are in
+the JS layer (chess.src/) and the Stockfish engine binary.
+
+v1.0.4 Round-5 Rev25: no changes to res/ files.
+
+v1.0.4 Round-5 Rev26: no changes to res/ files.
+
+v1.0.4 Round-5 Rev27: no changes to res/ files.
+
+v1.0.4 Round-5 Rev28: no changes to res/ files.
+
+v1.0.4 Round-5 Rev29: no changes to res/ files. All Rev29 changes are in
+the JS layer (chess.src/tablebase.js, chess.src/ai-bridge.js, stats.html).
+
+v1.0.4 Round-5 Rev30: no changes to res/ files. All Rev30 changes are in
+the Java layer (ChessWebViewClient.java) and JS layer (chess.src/ui.js,
+chess.src/chess960.js).
+
+v1.0.4 Round-5 Rev31: no changes to res/ files. All Rev31 changes are in
+the Java layer (StockfishNative.java) and JS layer (chess.src/ai-bridge.js,
+chess.src/tablebase.js, chess.src/pgn-standard.js, chess.src/game-logic.js,
+stats.html).
+
+v1.0.4 Round-5 Rev32: no changes to res/ files. All Rev32 changes are in
+the Java layer (StockfishNative.java) and JS layer (chess.src/
+game-logic.js).
+
+v1.0.4 Round-5 Rev33: no changes to res/ files. All Rev33 changes are in
+the Java layer (StockfishNative.java) and JS layer (chess.src/
+ai-bridge.js, chess.src/ui.js).
+
+v1.0.4 Round-5 Rev34: no changes to res/ files. All Rev34 changes are in
+the JS layer (chess.src/chess960.js, stats.html).
+
+v1.0.4 Round-5 Rev35: no changes to res/ files. All Rev35 changes are in
+the Java layer (StockfishNative.java) and JS layer (chess.src/
+ai-bridge.js, chess.src/game-logic.js, chess.src/ui.js).
+
+v1.0.4 Round-5 Rev36: no changes to res/ files. All Rev36 changes are in
+the Java layer (StockfishNative.java) and JS layer (chess.src/
+ai-bridge.js, chess.src/ui.js, stats.html).
+
+v1.0.4 Round-5 Rev37: no changes to res/ files. All Rev37 changes are in
+the JS layer (chess.src/ui.js).
+
+v1.0.4 Round-5 Rev38: no changes to res/ files. All Rev38 changes are in
+the JS layer (chess.src/ui.js, chess.src/index.html.tpl).
+
+v1.0.4 Round-5 Rev39: no changes to res/ files. All Rev39 changes are in
+the JS layer (chess.src/ui.js).
+
+v1.0.4 Round-5 Rev40: no changes to res/ files. All Rev40 changes are in
+the JS layer (chess.src/ui.js).
+
+v1.0.4 Round-5 Rev41: no changes to res/ files. All Rev41 changes are in
+the JS layer (chess.src/ui.js, stats.html).
+
+v1.0.4 Round-5 Rev42: no changes to res/ files. All Rev42 changes are in
+the JS layer (chess.src/ui.js).
+
+v1.0.4 Round-5 Rev43: no changes to res/ files. All Rev43 changes are in
+stats.html.
+
+v1.0.4 Round-5 Rev44: no changes to res/ files. All Rev44 changes are in
+the JS layer (chess.src/ai-bridge.js, chess.src/worker-pool.js, stats.html).
+
+v1.0.4 Round-5 Rev45: no changes to res/ files. All Rev45 changes are in
+the JS layer (chess.src/game-logic.js, chess.src/ai-bridge.js).
+
+v1.0.4 Round-5 Rev46: no changes to res/ files. All Rev46 changes are in
+the JS layer (chess.src/ui.js, chess.src/game-logic.js, chess.src/ai-bridge.js).
+
+v1.0.4 Round-5 Rev47: no changes to res/ files. All Rev47 changes are in
+the JS layer.

@@ -57,7 +57,7 @@ import android.widget.TextView;
 public class MainActivity extends Activity {
 
     private static final String TAG = "Regalia";
-    private static final String VERSION = "v1.0.3";
+    private static final String VERSION = "v1.0.4";
 
     private WebView webView;
     private StockfishNative stockfishEngine;
@@ -532,6 +532,38 @@ public class MainActivity extends Activity {
                 webView.evaluateJavascript("if(typeof onStatsRequestReview==='function')onStatsRequestReview()", null);
             }
         }
+
+        // v1.0.4 Rev28: If the user imported a PGN on the stats page (via 🗃️
+        // Paste PGN or 📂 Select PGN File) and then returned to the main
+        // activity, prompt "🗃️ Import PGN to game?" Yes/No/Cancel.
+        // The imported PGN text is stashed in StatsActivity.importedPGNOnStats
+        // (a static volatile field) by the stats page's setImportedPGN() bridge
+        // method. We read it here (one-shot — clear immediately so a subsequent
+        // resume without a new import doesn't re-prompt).
+        // The actual Yes/No/Cancel dialog is rendered in JS (see ui.js
+        // showStatsImportBackPrompt) so it matches the app's dialog style.
+        // Cancel = stay on stats page is NOT possible from here (we're already
+        // back on MainActivity); Cancel in this context = dismiss the prompt
+        // without importing. The "stay on stats" behavior is handled in
+        // stats.html's returnToGame() interceptor.
+        if (StatsActivity.importedPGNOnStats != null) {
+            final String importedPGN = StatsActivity.importedPGNOnStats;
+            StatsActivity.importedPGNOnStats = null; // One-shot consume
+            if (webView != null && importedPGN.length() > 0) {
+                // JSON-encode the PGN text for safe JS string passing.
+                String jsonPGN;
+                try {
+                    jsonPGN = new org.json.JSONObject().put("pgn", importedPGN).toString();
+                } catch (Throwable je) {
+                    Log.e(TAG, "JSON encoding failed for stats import-back PGN", je);
+                    jsonPGN = "{\"pgn\":\"\"}";
+                }
+                webView.evaluateJavascript(
+                    "if(typeof _showStatsImportBackPrompt==='function'){try{var _d=" + jsonPGN +
+                    ";_showStatsImportBackPrompt(_d.pgn);}catch(e){console.error('stats import-back prompt error:',e);}}",
+                    null);
+            }
+        }
     }
 
     // v1.0.2 FEATURE: Static flag for cross-activity communication with StatsActivity
@@ -540,12 +572,67 @@ public class MainActivity extends Activity {
     @Override
     public void onPause() {
         super.onPause();
+        // v1.0.4 Round-5 Rev20: Flush any pending JS localStorage writes to the
+        // persistent Java store BEFORE the OS can kill the app. HyperOS 3 is
+        // aggressive about killing backgrounded apps — without this flush, any
+        // writes queued by persistentSet() (which uses async apply()) would be lost.
+        if (stockfishEngine != null) {
+            try {
+                stockfishEngine.persistentFlush();
+            } catch (Throwable e) {
+                Log.w(TAG, "persistentFlush on pause failed", e);
+            }
+        }
+        // Also notify JS to flush its in-memory _reviewEvalCache to disk synchronously
+        if (webView != null) {
+            try {
+                webView.evaluateJavascript("try{if(typeof _flushReviewEvalCache==='function')_flushReviewEvalCache();}catch(e){}", null);
+            } catch (Throwable ignored) {}
+        }
         if (webView != null) {
             try {
                 webView.onPause();
             } catch (Throwable e) {
                 Log.w(TAG, "webView.onPause failed", e);
             }
+        }
+    }
+
+    @Override
+    public void onStop() {
+        super.onStop();
+        // v1.0.4 Round-5 Rev20: onStop is called when the activity is no longer
+        // visible. HyperOS 3 may SIGKILL the app at this point without further
+        // callbacks. Do a final synchronous flush.
+        if (stockfishEngine != null) {
+            try {
+                stockfishEngine.persistentFlush();
+            } catch (Throwable e) {
+                Log.w(TAG, "persistentFlush on stop failed", e);
+            }
+        }
+        if (webView != null) {
+            try {
+                webView.evaluateJavascript("try{if(typeof _flushReviewEvalCache==='function')_flushReviewEvalCache();}catch(e){}", null);
+            } catch (Throwable ignored) {}
+        }
+    }
+
+    @Override
+    public void onUserLeaveHint() {
+        super.onUserLeaveHint();
+        // v1.0.4 Round-5 Rev20: User pressed Home — same risk as onPause/onStop.
+        if (stockfishEngine != null) {
+            try {
+                stockfishEngine.persistentFlush();
+            } catch (Throwable e) {
+                Log.w(TAG, "persistentFlush on UserLeaveHint failed", e);
+            }
+        }
+        if (webView != null) {
+            try {
+                webView.evaluateJavascript("try{if(typeof _flushReviewEvalCache==='function')_flushReviewEvalCache();}catch(e){}", null);
+            } catch (Throwable ignored) {}
         }
     }
 
@@ -559,6 +646,24 @@ public class MainActivity extends Activity {
         if (initRetryHandler != null) {
             initRetryHandler.removeCallbacksAndMessages(null);
             initRetryHandler = null;
+        }
+        // v1.0.4 Round-5 Rev22 (this round): Final flush of eval cache + persistent
+        // store BEFORE the WebView is destroyed. onDestroy may be the last callback
+        // we get if the OS skips onStop (e.g., low-memory kill). Without this flush,
+        // any eval data that arrived between onStop and onDestroy could be lost.
+        // Order matters: flush JS first (writes to eval_cache.json via saveEvalCacheSync),
+        // then flush SharedPreferences pending writes (persistentFlush).
+        if (webView != null) {
+            try {
+                webView.evaluateJavascript("try{if(typeof _flushReviewEvalCache==='function')_flushReviewEvalCache();}catch(e){}", null);
+            } catch (Throwable ignored) {}
+        }
+        if (stockfishEngine != null) {
+            try {
+                stockfishEngine.persistentFlush();
+            } catch (Throwable e) {
+                Log.w(TAG, "persistentFlush on destroy failed", e);
+            }
         }
         // Notify JS to clean up event listeners and timers before destroying WebView
         if (webView != null) {
