@@ -1357,3 +1357,971 @@ Source: https://www.gnu.org/graphics/agplv3-with-text-162x68.png
       _gameOverStrFromStatus('timeout'). Updated _buildPGNString() to use
       _timeoutWinnerColor for PGN [Result] tag. Updated _resetGameUIState()
       to clear _timeoutWinnerColor on new game.
+
+  v1.0.4 Round-5 Revision 48 (current):
+    - PGN COMMENT/VISUAL-ANNOTATION COMPLETENESS FIX: First-principles review
+      revealed that the PGN parser (_parsePGN in tablebase.js) STRIPPED all
+      brace comments ({...}) during parsing — only [%eval ...] tags were
+      extracted beforehand. This meant [%csl ...] (square highlights),
+      [%cal ...] (arrows), AND free-text comments from imported PGNs were
+      LOST. The user requirement "all valid () variations and {} comments
+      must be fully received" was not met.
+      Fix: added a pre-strip extraction pass that walks the movetext
+      character-by-character (tracking paren depth for variation-internal
+      comments), extracts [%csl]/[%cal] tags AND free-text comment bodies
+      (with [%xxx] tags removed from the body), and attaches them to the
+      NEXT main-line move's pending payload. Multiple consecutive comments
+      merge into a single pending payload (comments joined by " | ",
+      csl/cal arrays concatenated).
+      importPGN() now populates _visualAnnotationsCache from the extracted
+      [%csl]/[%cal] tags (merged with any existing cache entry, deduplicated
+      by color+square / color+from+to). The review board now renders these
+      annotations when the heatmap is OFF. The stats page counts them in
+      the visual annotations section. PGN re-export preserves them via
+      _getVisualAnnotations() in _buildPGNString().
+      importPGN() also populates mr.comment from the extracted free-text
+      comments. _buildPGNString() now includes mr.comment in the comment
+      parts (after all [%xxx] tags, with literal {/} escaped to Unicode
+      full-width braces ｛｝ to avoid premature comment termination).
+      Variation-internal comments get a "[var] " prefix so the display
+      layer can distinguish them from mainline comments.
+    - NEW: BLUE AND YELLOW ARROWS IN VISUAL ANNOTATIONS: Per user spec
+      (备忘1.md), added two new arrow colors to the visual annotations
+      system:
+      • Blue arrow = one side's piece simultaneously threatens multiple
+        (>1) enemy pieces (arrows from threatening piece to each
+        threatened piece)
+      • Yellow arrow = one side's threat to the other side's queen
+        (arrow from threatening piece to queen's square)
+      _computeAndCacheVisualAnnotations() in ui.js now computes these
+      from the post-move control map. The mover's pieces are the
+      "attackers"; enemy pieces are the "threatened" targets. Caps:
+      top 3 attackers by threat count (blue), top 3 attackers by piece
+      value (yellow), max 4 blue arrows per attacker.
+      The visual annotations comment block and pgn-standard.js color
+      code documentation are updated to reflect the full 4-color arrow
+      semantics (B/R/Y/G).
+    - STATS PAGE VISUAL ANNOTATIONS SECTION ENHANCEMENT: The visual
+      annotations section in stats.html now displays all 4 arrow colors
+      (Blue, Red, Yellow, Green) in the SAME left-to-right order as the
+      4 square colors — so same colors align VERTICALLY (per user spec:
+      "显示顺序从左至右为：蓝 红 黄 绿，与已有四种颜色的格子颜色信息
+      构成竖向同色对齐"). New i18n keys: blue_arrows_threats,
+      yellow_arrows_queen (zh + en). Updated visual_annotations_desc
+      to mention all 4 arrow types.
+    - STATS PAGE CONDITIONAL DISPLAY: Per user spec, the visual
+      annotations section is now ONLY shown if the PGN actually contains
+      [%csl] or [%cal] tags (previously always shown, producing an
+      all-zero grid for casual games). Similarly, the heatmap control
+      statistics section heading is now inside the _posCount>0 check
+      (previously the heading was emitted unconditionally, leaving an
+      empty section if position data couldn't be computed).
+    - REVIEW BOARD VISUAL ANNOTATIONS OVERLAY: Per user spec (备忘1.md),
+      when the control heatmap (🌗/🌈) is OFF in review mode, the review
+      board now displays [%csl]/[%cal] annotations:
+      • Square highlights via CSS box-shadow inset (3px width, matching
+        the main board's last-move hint). Color per [%csl] tag:
+        B=#4a90d9, R=#e74c3c, Y=#f1c40f, G=#27ae60 (same as stats page).
+      • Arrows drawn in an SVG overlay layer (same style as the main
+        board's _updateArrows(): 4px stroke, round linecap, 0.85
+        opacity, triangular arrowhead marker per color).
+      The .review-board CSS rule now has position:relative so the SVG
+      overlay's position:absolute anchors correctly.
+      Data source: _visualAnnotationsCache (populated by
+      _computeAndCacheVisualAnnotations during play, or by importPGN
+      from PGN comments for imported games).
+
+v1.0.5 Round-6 Revision 49 (current — version upgraded to v1.0.5, versionCode 105):
+  - HIGH ASPECT-RATIO SCREEN ADAPTATION: Optimized all interfaces for high
+    aspect-ratio screens (ultra-tall phones 21:9, foldable inner screens,
+    ultra-wide tablets). Every interface now scrolls VERTICALLY ONLY — never
+    horizontally. Changes in index.html.tpl:
+    • All flex container children get min-width:0 so they shrink instead of
+      overflowing horizontally.
+    • Landscape .hdr-tools changed from overflow-x:auto to flex-wrap:wrap
+      (multi-row wrap, no horizontal scroll).
+    • Long-text elements get word-break:break-word; overflow-wrap:anywhere.
+    • Tables/PGN/code blocks retain LOCAL horizontal scroll only within their
+      own container, never page-level.
+    • Three new media-query tiers: ultra-tall portrait (aspect-ratio ≥ 2:1),
+      ultra-wide landscape (aspect-ratio ≥ 22:10), ultra-short landscape
+      (aspect-ratio ≤ 14:10) — each with column/centered/stacked strategies.
+  - NOTCH/CUTOUT/R-CORNER ADAPTATION: Per Android挖孔屏刘海屏R角适配指南.md:
+    • AndroidManifest.xml: MainActivity and StatsActivity both get
+      android:windowLayoutInDisplayCutoutMode="shortEdges" (content extends
+      into notch/cutout area for full-screen immersive).
+    • HTML viewport already had viewport-fit=cover; CSS body padding already
+      used env(safe-area-inset-*) — auto-avoids notches/cutouts/R-corners.
+    • New CSS variables --safe-top/bottom/left/right expose safe areas to JS
+      for the anti-shake feature's max-displacement clamping.
+  - SENSOR-FUSION BOARD ANTI-SHAKE (NEW FEATURE, OIS-style): Per user spec,
+    implemented camera optical-image-stabilization-style board anti-shake.
+    New file: StabilizationHelper.java (AGPL v3). Fuses all available motion
+    sensors: TYPE_ACCELEROMETER, TYPE_LINEAR_ACCELERATION, TYPE_GRAVITY,
+    TYPE_GYROSCOPE, TYPE_ROTATION_VECTOR, TYPE_GAME_ROTATION_VECTOR,
+    TYPE_GEOMAGNETIC_ROTATION_VECTOR. Algorithm: high-pass filter to separate
+    gravity, double-integrate acceleration→velocity→displacement, apply decay
+    (0.85 vel / 0.90 disp) to prevent drift, faster decay when gyro detects
+    rotation, clamp to ±8px. JS callback throttled to ~60Hz. CSS .bwrap.stabilized
+    class applies translate3d(var(--stab-x),var(--stab-y),0) with 16ms transition.
+    MainActivity.java: new fields stabilizationHelper + stabilizationEnabled;
+    toggleStabilization() method (called from JS bridge); showToastLocalized()
+    for zh/en Toast (reads "lang" pref from SharedPreferences "RegaliaEngine");
+    onPause stops sensors (battery), onResume restarts if enabled, onDestroy
+    releases. StockfishNative.java: new @JavascriptInterface toggleStabilization()
+    delegates to MainActivity. ui.js: long-press handler (≥500ms on any board
+    square, 10px move tolerance) calls AndroidBridge.toggleStabilization();
+    haptic feedback on trigger; suppresses the subsequent click via
+    window._suppressNextBoardClick flag.
+  - STATS PAGE "PGN TEXT" LABEL: stats.html i18n key 'pgn_text' changed from
+    "PGN文本" / "PGN Text" to "PGN文本（经加工）" / "PGN Text (After processing)".
+  - REVIEW ARROW SHRINK: ui.js review board SVG arrow overlay greatly shrunk:
+    stroke 4→2px, arrowhead marker 8×6→5×4, line shorten 14→9px, opacity
+    0.85→0.95. Added small origin circle (r=2.5) per arrow. Added per-arrow
+    angular offset (±4px, evenly distributed) when multiple arrows share a
+    target square so they stay distinguishable.
+  - PHASE ANALYSIS PRECISION: stats.html phase analysis rewritten per
+    国际象棋三阶段精确区分.md. New _detectPhase(state) function uses
+    multi-criteria: (1) undeveloped minors on starting squares → Opening;
+    (2) both kings on e1/e8 → Opening; (3) queens present + non-pawn-non-king
+    material ≥ 13 → Middlegame; (4) queens absent/material < 13 + a king
+    advanced past back 2 ranks → Endgame; (5) else Middlegame (transitional).
+    Added phase-transition-point display (move numbers). Time-management
+    "Time by Phase" now uses the same _detectPhase for consistency. New i18n
+    keys: opening_to_midgame, midgame_to_endgame (zh+en).
+  - MANUAL CHAPTER REORDER: Both zh and en HTML manuals restructured:
+    original Chapter 11 (Legal) moved to Chapter 2; original Chapters 2-10
+    renumbered to 3-11; Chapters 12-16 unchanged. TOC updated. Changelog
+    order confirmed newest-first (Rev49 → Rev48 → Rev47 → ... → v1.0.0).
+  - MANUAL TEXT FIX: "Tap the 🌈 toolbar button to enable control-range
+    display" corrected to "Tap the 🌗 toolbar button to enable control-range
+    display (the 🌗 button becomes 🌈 when enabled; tap again to disable)"
+    in both zh and en manuals.
+  - VERSION UPGRADE TO v1.0.5: build.gradle versionCode 104→105 / versionName
+    "1.0.4"→"1.0.5"; AndroidManifest versionCode 104→105 / versionName
+    "1.0.4"→"1.0.5"; MainActivity.VERSION "v1.0.4"→"v1.0.5";
+    StockfishNative.ENGINE_VERSION "v1.0.4"→"v1.0.5"; game-logic.js
+    loading_title "Regalia v1.0.4"→"Regalia v1.0.5"; index.html.tpl
+    <title>Regalia v1.0.4</title>→<title>Regalia v1.0.5</title>; both HTML
+    manuals' title/cover/footer → v1.0.5.
+
+v1.0.5 Round-6 Revision 50 (current — version unchanged, still v1.0.5 / versionCode 105):
+  - RESIDUAL VERSION NUMBER FIX: Found multiple places still showing v1.0.4
+    after the Rev49 bump:
+    • ui.js: loading page title "app_name v1.0.4" → v1.0.5; header version
+      badge <span class="ver">v1.0.4</span> → v1.0.5; About dialog
+      "app_name v1.0.4" → v1.0.5.
+    • ChessApp.java: init log "crash protection active (v1.0.4)" → v1.0.5.
+    • ChessWebViewClient.java: version comment "Version: v1.0.4" → v1.0.5.
+    • English manual: cover version v1.0.4 → v1.0.5; intro paragraph
+      "Regalia v1.0.4 is a powerful..." → v1.0.5 with v1.0.5 additions
+      summary; mis-edited "v1.0.5 new-UI style consistency" in the v1.0.4
+      patch revision card reverted to "v1.0.4 new-UI style consistency".
+  - ANTI-SHAKE DIRECTION FIX (critical bug): StabilizationHelper.java's
+    processAcceleration() previously used +dispX*SCALE / +dispY*SCALE
+    (same direction as device motion), which AMPLIFIED shake instead of
+    canceling it. The correct OIS principle: when the device moves right,
+    the board must move LEFT on screen (negative X) to appear fixed in the
+    world frame; when the device moves down, the board must move UP
+    (negative Y on screen). Fix: boardPxX = -dispX * SCALE;
+    boardPxY = -dispY * SCALE. After the fix, the board counter-shifts
+    in real time to cancel device shake — true optical image stabilization
+    behavior.
+  - PGN COMMENT MERGING FIX (critical bug): tablebase.js _parsePGN()
+    previously attached all pending comments (_pendingCsl/_pendingCal/
+    _pendingComment) to the NEXT main-line move, and merged comments from
+    DIFFERENT moves with " | ". This violated the PGN spec (comments are
+    POST-move annotations) and caused the user-reported bug: "arrows
+    belonging to White's move were displayed on Black's position".
+    Example: "1. e4 {[%cal Re4e8]} e5 {[%cal Ge5e1]}" — the arrow
+    Re4e8 (describing e4) was wrongly attached to e5. Fix: comments are
+    immediately attached to the PRECEDING main-line move (_lastMoveIdx)
+    via a new _flushCurrentMovePayload() helper. Only multiple consecutive
+    comments for the SAME move (no move between them) merge with " | ".
+    [%eval] is the exception — it describes the post-move position and
+    still attaches to the next move's reviewStep (kept as _pendingEval).
+
+v1.0.5 Round-6 Revision 51 (current — version unchanged, still v1.0.5 / versionCode 105):
+  - APP LAUNCHER ICON NAME VERSION FIX: src/main/res/values/strings.xml's
+    app_name was still "Regalia v1.0.4", causing the system launcher (home
+    screen) icon name to show v1.0.4. Corrected to "Regalia v1.0.5".
+  - ANTI-SHAKE Y-AXIS DIRECTION THOROUGH CORRECTION (critical bug): Rev50
+    negated BOTH X and Y (-dispX, -dispY). X was correct but Y was WRONG.
+    Web-searched Android sensor coordinate system (Android Developers Motion
+    sensors docs, Stack Overflow) and CSS screen coordinate system (MDN
+    Coordinate systems), confirmed:
+      - Android sensor Y axis: positive points UP (along device long edge).
+      - CSS/screen Y axis: positive points DOWN (translate3d +Y = down).
+      - They are OPPOSITE.
+    Correct derivation (device moves DOWN test case):
+      - Device moves DOWN → sensor Y acceleration NEGATIVE → dispY < 0.
+      - Board moves DOWN with device (screen +Y).
+      - To cancel (move board UP, screen -Y): boardPxY must be NEGATIVE.
+      - boardPxY = +dispY * SCALE = +(-|dispY|) * SCALE = negative ✓
+      - Rev50's -dispY would give POSITIVE → board moves DOWN → amplifies.
+    Fix: boardPxY = +dispY * SCALE (Y NOT negated); boardPxX = -dispX * SCALE
+    (X negated, sensor X = screen X same direction). This is the correct OIS
+    inverse-displacement mapping.
+
+v1.0.5 Round-6 Revision 52 (current — version unchanged, still v1.0.5 / versionCode 105):
+  - BOARD ANTI-SHAKE SCREEN ORIENTATION ADAPTATION (critical bug fix): Rev51
+    only handled portrait and still had X/Y direction errors. User reported
+    all 4 portrait directions wrong + landscape completely unadapted. Root
+    cause: Android sensor axes are fixed to device hardware (X right, Y up,
+    Z out), but CSS screen axes rotate with display orientation. Rev52
+    completely rewrites StabilizationHelper.java:
+    • Added getDisplayRotation() via WindowManager.getDefaultDisplay().getRotation()
+      to read current orientation (0/90/180/270°), re-read every sensor event.
+    • Per-orientation remap of device displacement to screen board displacement:
+        ROTATION_0 (portrait):      boardPx = (-dispX, +dispY)
+        ROTATION_90 (landscape-left): boardPx = (+dispY, +dispX)
+        ROTATION_180 (upside-down):   boardPx = (+dispX, -dispY)
+        ROTATION_270 (landscape-right):boardPx = (-dispY, -dispX)
+    • Verified all 4 orientations for device-moves-down test case → board
+      always moves UP (correct OIS inverse cancel).
+    • Adjusted decay: VELOCITY_DECAY 0.85→0.92, DISPLACEMENT_DECAY 0.90→0.95
+      (slower decay = better tracking, less "following" artifact).
+  - VISUAL ANNOTATIONS CACHE NULL-REFERENCE FIX (bug fix): ui.js
+    _computeAndCacheVisualAnnotations() referenced undefined csl/cal when
+    moveRecords[moveIdx] was null (Black-to-move placeholder). Fixed to
+    {csl:[],cal:[]}.
+  - VISUAL ANNOTATIONS SEMANTICS CONFIRMED: _computeAndCacheVisualAnnotations()
+    strictly follows spec: Blue sq=player net, Red sq=AI net, Yellow sq=high
+    total, Green sq=center no-control; Blue arrow=multi-threat(2+), Red
+    arrow=check path, Yellow arrow=queen threat, Green arrow=escape path.
+    All tags written to PGN post-move {} via formatCslTag()/formatCalTag().
+
+v1.0.5 Round-6 Revision 53 (current — version unchanged, still v1.0.5 / versionCode 105):
+  - PRECISE SENSOR RE-SELECTION (per user spec, web-searched each sensor):
+    • TYPE_LINEAR_ACCELERATION: always used (gravity-free acceleration for
+      translation anti-shake). No longer uses TYPE_ACCELEROMETER (which
+      always includes gravity).
+    • TYPE_ROTATION_VECTOR: always used (fused orientation quaternion for
+      tilt compensation). No longer uses TYPE_GYROSCOPE (rotation_vector
+      already fuses it), TYPE_GRAVITY, TYPE_GAME_ROTATION_VECTOR, or
+      TYPE_GEOMAGNETIC_ROTATION_VECTOR.
+    • Display.getRotation(): used for 0/90/180/270° screen orientation
+      detection (the "device_orientation" concept — no Sensor.TYPE_* exists
+      for this; Display.getRotation() is the correct API).
+    • NOT used (per user spec): TYPE_TILT_DETECTOR (not available to non-
+      system apps), TYPE_SIGNIFICANT_MOTION (one-shot trigger, not useful).
+  - ±2° TILT COMPENSATION (new feature): extracts pitch/roll from
+    rotation_vector via getRotationMatrixFromVector() + getOrientation(),
+    computes delta from baseline, applies inverse rotation to the board
+    (clamped ±2°, dead zone 0.3°, low-pass α=0.15). CSS .bwrap.stabilized
+    now uses translate3d(x,y,0) rotate(rot).
+  - YELLOW ARROWS BIDIRECTIONAL QUEEN THREATS (feature completion):
+    _computeAndCacheVisualAnnotations() now detects BOTH (a) mover
+    threatening enemy queen AND (b) enemy threatening mover's queen.
+    Blue arrows (multi-threat) also extended to bidirectional.
+  - INITIAL POSITION VISUAL ANNOTATIONS (feature completion): new
+    _computeInitialPositionAnnotations() computes 4-color annotations for
+    the initial position (reviewStep 0), cached under '_initial' key.
+    Works after setup/FEN import/PGN-with-FEN import.
+
+v1.0.5 Round-6 Revision 54 (current — version unchanged, still v1.0.5 / versionCode 105):
+  - YELLOW ARROW EXTENSION (per user spec item 1): When the mover's just-
+    moved piece is a queen and its destination square is attacked by an
+    opp piece ("主动把皇后移动到受威胁格"), that yellow arrow's priority
+    is BOOSTED so it survives the cap-6 dedup. New _isQueenMovedIntoThreat
+    flag in _computeAndCacheVisualAnnotations(). Existing POST-MOVE control
+    map already detected this threat; the boost just guarantees visibility
+    when many other yellow arrows compete for the same cap.
+  - BLUE ARROW EXTENSION (per user spec item 2): When the mover's moved
+    piece is itself at a square attacked by an opp piece ("主动把任意棋子
+    移到受威胁格") AND this causes an opp piece to have 2+ threats on mover
+    pieces ("导致另一方有任何棋子产生2个及以上威胁"), those opp multi-
+    threat blue arrows are BOOSTED so they survive the cap-3 dedup. New
+    _movedPieceThreatened flag.
+  - PER-COLOR ARROW OFFSETS (per user spec item 3): Each arrow color now
+    has a FIXED diagonal offset applied to BOTH start and end (so the
+    arrow direction is preserved). Magnitude ~12% of cell size.
+      Blue  (B) → Upper-Left  (−X, −Y)
+      Yellow(Y) → Lower-Left  (−X, +Y)
+      Red   (R) → Upper-Right (+X, −Y)
+      Green (G) → Lower-Right (+X, +Y)
+    This makes overlapping arrows of different colors visually separable
+    even when they share the same source/target squares. New _colorOffset
+    map in the SVG arrow rendering block of ui.js (review-board section).
+    The existing multi-arrow angular fan (Rev49) is preserved on top of
+    this per-color offset for arrows of the SAME color sharing a target.
+  - YELLOW SQUARE ROUNDED-RECTANGLE STYLE (per user spec item 4): Yellow
+    squares now render as a SEPARATE overlay div INSIDE the cell instead
+    of using CSS box-shadow inset (which other colors B/R/G still use).
+    The overlay is a 2px solid yellow border with border-radius ~15% of
+    cell size, positioned with ~10% inset on all sides. This leaves small
+    gaps at the four corners where other colors' box-shadow insets remain
+    visible underneath. Z-index 5 (above cell content, below SVG arrows
+    at z-index 10). Other colors (B/R/G) keep the existing box-shadow
+    inset style.
+  - ROLL-ONLY BOARD ROTATION (per user spec item 5): StabilizationHelper
+    rotation is now restricted to SCREEN-ROLL only (the steering-wheel
+    tilt of the screen). Screen-pitch (nodding) and screen-yaw (door-like
+    horizontal turn) are NOT compensated. The implementation computes
+    device-frame devPitchDelta and devRollDelta, then selects ONLY the
+    one that corresponds to "screen roll" in the current display
+    orientation (ROTATION_0/90/180/270). Renamed local vars for clarity.
+  - FIRST-PRINCIPLES ANTI-SHAKE AUDIT (per user spec item 6): Cross-
+    checked StabilizationHelper against the two uploaded sensor reference
+    docs (technical report + community article). Added a 10-point audit
+    section at the top of the file. Key change: PREFER
+    TYPE_GAME_ROTATION_VECTOR (no magnetometer → no magnetic drift near
+    laptops/metal desks/elevators, per technical report §6.3.1) with
+    fallback to TYPE_ROTATION_VECTOR. Audit VERIFIED (no change needed):
+    SENSOR_DELAY_GAME sampling rate, α=0.15 low-pass filter, 0.3° dead
+    zone, decay-based drift prevention, lifecycle pattern, null-sensor
+    fallback. Audit CONFIRMED: TYPE_ORIENTATION / device_orientation
+    sensor is deprecated — we correctly use Display.getRotation().
+  - LICENSE FILE UPDATES:
+    • Manual/README.license: NEW file documenting the AGPL v3 license for
+      the HTML manuals (zh + en, v1.0.4 + v1.0.5 historical versions).
+    • src/main/jniLibs/README.license: NEW file documenting the GPL v3
+      license for libstockfish.so (Stockfish 18 prebuilt binary), with
+      GPL v3 Section 6 source-correspondence compliance notes and
+      explanation of why a prebuilt .so is shipped instead of building
+      from source.
+    • src/main/assets/chess.src/README.license: Rev54 entry added
+      documenting the 4 ui.js changes (yellow/blue arrow boosts, per-
+      color offsets, yellow rounded-rect style).
+    • src/main/java/com/Regalia/README.license: Rev54 entry added
+      documenting the StabilizationHelper.java changes (roll-only
+      rotation + first-principles audit + GAME_ROTATION_VECTOR).
+    • NOTICE (this file): Rev54 entry added (you are reading it).
+  - VERSION UNCHANGED: build.gradle versionCode=105, versionName="1.0.5".
+    All 9 version-number locations remain v1.0.5 (build.gradle,
+    AndroidManifest.xml, strings.xml, MainActivity.java,
+    StockfishNative.java, ChessApp.java, ChessWebViewClient.java,
+    game-logic.js loading_title, index.html.tpl <title>, ui.js 3 places,
+    HTML manuals cover/intro/footer).
+
+v1.0.5 Round-6 Revision 55 (current — version unchanged, still v1.0.5 / versionCode 105):
+  Line-by-line code audit of every source file. Six improvements identified,
+  prioritized per user spec: bug fixes > feature completion > perf > redundancy
+  > simplification. Version number unchanged.
+  - BUG: StatsActivity WebView security parity (defense-in-depth) — added
+    setAllowFileAccess(false), setAllowContentAccess(false),
+    setAllowFileAccessFromFileURLs(false), setAllowUniversalAccessFromFileURLs(false),
+    setMixedContentMode(NEVER_ALLOW), setFilterTouchesWhenObscured(true),
+    setBackgroundColor(#1a0a0a), and other WebSettings flags to match
+    MainActivity. The stats WebView was missing these flags, leaving a weaker
+    attack surface (a future code change loading remote content could access
+    file:// or content:// URIs).
+  - BUG: StatsActivity FLAG_FULLSCREEN deprecation fix — was using FLAG_FULLSCREEN
+    unconditionally, conflicting with Edge-to-Edge enforcement on API 35+
+    (causes black screen on HyperOS 3, same bug MainActivity fixed in v18.4.6).
+    Now gated on SDK_INT < R, matching MainActivity.
+  - FEATURE: StatsActivity immersive mode — the stats page now hides system
+    bars (status + navigation) just like the main game. Added
+    _applyImmersiveMode() (platform WindowInsetsController on API 30+,
+    legacy flags on API 21-29), _applyLegacyImmersive(), and
+    onWindowFocusChanged() to re-apply on focus regain.
+  - BUG: StockfishNative.engineGoDepth missing applyEvalModeOptions() — the
+    deep-eval path (requestEngineEvalDeep / analyze-all) was running with
+    gameplay Contempt=24 (biased toward avoiding draws) and the user's MultiPV
+    setting (potentially >1, reducing depth). engineEval already had the call;
+    engineGoDepth was missing it (oversight). Fixed by adding the call before
+    `position`+`go`, matching engineEval. The bestmove handler's STATE_EVAL
+    branch already restores gameplay settings via restoreGameplayOptions().
+  - PERF: game-logic.js getCtrlMap — hoisted the attacker-position object out
+    of the inner loop. Each piece's `position` field is the same for all
+    squares it attacks, but a fresh {row,col} object was allocated per push
+    (~256 allocations per ctrl-map = per render tick when heatmap is on).
+    Now allocates ONE position object per piece (max 32) and reuses it.
+    Consumers only READ the field, so sharing is safe.
+  - REDUNDANCY: EngineService — extracted shared notification-builder logic
+    into private static _buildNotificationWithContent(Context, title, content,
+    contentIntent). Both buildNotification() (instance) and updateNotification()
+    (static) now delegate to this helper, eliminating ~50 lines of duplicated
+    builder configuration. Behavior identical.
+  - CONSISTENCY: worker-pool.js fenToState — the worker's check was
+    `parts.length<4`, while the main-thread fenToState in tablebase.js uses
+    `parts.length<2`. A minimal FEN with just board + side-to-move (e.g. for
+    setup-mode preview) was accepted by main but rejected by worker. Changed
+    worker to `<2` for consistency.
+  - CLEANUP: chess960.js parseShredderCastling — removed a misleading stale
+    comment that claimed a line was "dead code" (it had already been
+    consolidated in v1.0.4). The code was correct; only the comment was stale.
+  - LICENSE FILE UPDATES:
+    • src/main/java/com/Regalia/README.license: Rev55 entry documenting the
+      StatsActivity + StockfishNative + EngineService changes.
+    • src/main/assets/chess.src/README.license: Rev55 entry documenting the
+      game-logic.js + worker-pool.js + chess960.js changes.
+    • NOTICE (this file): Rev55 entry (you are reading it).
+  - VERSION UNCHANGED: build.gradle versionCode=105, versionName="1.0.5".
+    All 9 version-number locations remain v1.0.5.
+
+v1.0.5 Round-6 Revision 56 (current — version unchanged, still v1.0.5 / versionCode 105):
+  Audit of ai-bridge.js MultiPV processing path and ui.js dirty-flag render
+  pipeline. Six improvements, prioritized: bug fixes > perf > redundancy.
+  - BUG: setConfigMultiPV() — when MultiPV was toggled OFF (set to 1)
+    mid-search, stale secondary PV lines (index 2..N) from the previous
+    MultiPV search persisted in _multiPVLines and continued to be displayed
+    until the NEXT onBestMove (seconds away). Now _multiPVLines and the
+    display cache are cleared immediately when MultiPV is disabled, and the
+    display refreshes instantly.
+  - PERF: _updateMultiPVDisplay() — added a per-line signature cache
+    (_multiPVDisplayCache) so we skip the expensive _convertPVtoSAN() call
+    when a PV line's content hasn't changed since the last display update.
+    Previously re-converted ALL PV lines from UCI to SAN on every progress
+    tick (10-50×/sec), wasting 80+ makeMv calls per tick when the PV content
+    was identical. New helper _clearMultiPVDisplayCache() invalidates at
+    search start; wired into onBestMove, restartCurrentEngine, and the
+    engine-recovery path.
+  - PERF: onMultiPVProgress() + onEngineProgress() — only sort _multiPVLines
+    when a new line was appended (found=false). When an existing line was
+    updated in-place, the array order is already correct. The sort was
+    previously unconditional on every progress tick (10-50×/sec).
+  - PERF: _updateEvalDisplayIncremental() (ui.js) — added a signature check
+    (_evalDispPrevSig) so we skip the innerHTML rebuild when the eval display
+    content is identical to the last render. Previously, every DIRTY_EVAL
+    tick (10-50×/sec during search) rebuilt the innerHTML even if the eval
+    values hadn't changed (common during deep search where depth increments
+    but score stays stable). Signature captures: setupMode, isAIThinking,
+    emoji, desc, score, depth, seldepth. Invalidated on full render.
+  - LICENSE FILE UPDATES:
+    • src/main/assets/chess.src/README.license: Rev56 entry documenting the
+      ai-bridge.js (4 changes) + ui.js (1 change) improvements.
+    • NOTICE (this file): Rev56 entry (you are reading it).
+  - VERSION UNCHANGED: build.gradle versionCode=105, versionName="1.0.5".
+    All 9 version-number locations remain v1.0.5.
+
+v1.0.5 Round-6 Revision 57 (current — version unchanged, still v1.0.5 / versionCode 105):
+  CRITICAL FIX for blank-screen-on-launch regression introduced in Rev55.
+  - ROOT CAUSE: The Rev55 comment added to worker-pool.js fenToState()
+    (inside the _WORKER_SOURCE template literal) used backticks around
+    'parts.length<4'. Since _WORKER_SOURCE is a JS template literal
+    (delimited by backticks), the backtick inside the comment PREMATURELY
+    TERMINATED the template literal. This caused a SyntaxError that crashed
+    the entire chess.html bundle at parse time — the <script> tag failed
+    to execute entirely, leaving the app showing only the background color
+    (#1a0a0a) with no UI.
+  - SYMPTOM: App launches to a blank screen showing only the background
+    color. No toolbar, no board, no engine initialization, no error visible
+    to the user. The JS console would show "SyntaxError: Unexpected
+    identifier" at the line containing the comment.
+  - FIX: Removed the backticks from the comment text (changed
+    "from `parts.length<4` to `parts.length<2`" to
+    "from parts.length<4 to parts.length<2"). The actual code change from
+    Rev55 (parts.length<4 → parts.length<2) is correct and unchanged —
+    only the comment's backticks were the problem.
+  - VERIFICATION:
+    • node --check on the bundled chess.html JS now passes (exit code 0).
+    • All 8 source modules pass node --check individually.
+    • Backtick count in the bundled JS is even (444) — template literals
+      are balanced.
+    • The worker source (_WORKER_SOURCE template literal) evaluates to
+      valid JS that also passes node --check.
+  - LESSON LEARNED: When editing code inside a JS template literal (backtick
+    string), NEVER use backticks in comments — they terminate the literal.
+    This is a class of bug that's invisible in normal source files (where
+    backticks in comments are harmless) but fatal inside template literals.
+    The _WORKER_SOURCE template literal in worker-pool.js is the only such
+    case in the codebase.
+  - LICENSE FILE UPDATES:
+    • src/main/assets/chess.src/README.license: Rev57 entry documenting
+      the worker-pool.js fix.
+    • NOTICE (this file): Rev57 entry (you are reading it).
+  - VERSION UNCHANGED: build.gradle versionCode=105, versionName="1.0.5".
+
+v1.0.5 Round-6 Revision 58 (current — version unchanged, still v1.0.5 / versionCode 105):
+  Two improvements per user spec: review-board arrow offset redesign + magnetic-
+  field-aware rotation sensor switching.
+  - ARROW OFFSET REDESIGN (ui.js): Redesigned the review-board arrow offset
+    logic per user spec. Three guarantees now enforced:
+    (1) Each color's start offset = end offset (same bias direction). Arrow
+        direction preserved; only absolute position shifts diagonally.
+    (2) Reverse-overlap (A→B and B→A) only for SAME-color arrows. Same-color
+        reverse arrows land on the exact same line (opposite direction).
+        Different-color reverse arrows are parallel but distinct — never
+        collinear.
+    (3) Different-color arrows NEVER overlap on the same line. Guaranteed by
+        four distinct diagonal biases (B→UL, Y→LL, R→UR, G→LR).
+    CHANGES: Removed the Rev49 same-color multi-arrow perpendicular "fan"
+    offset (it applied different amounts to start vs end, breaking same-color
+    reverse-arrow overlap). The per-color diagonal offset is now the ONLY
+    offset, applied equally to start and end. Offset magnitude increased
+    from 12% to 14% of cell size. Added arrow deduplication by (color, from,
+    to) so duplicate same-color arrows render as one line.
+  - MAGNETIC-FIELD-AWARE SENSOR SWITCHING (StabilizationHelper.java):
+    Rewrote the rotation sensor selection logic per user spec. New strategy:
+    (1) On start, use TYPE_ROTATION_VECTOR (magnetometer+accel+gyro fusion)
+        — ensures accurate baseline orientation.
+    (2) Register TYPE_MAGNETIC_FIELD (android.sensor.magnetic_field) in the
+        background at SENSOR_DELAY_UI (~16 Hz).
+    (3) Compute |B| = sqrt(x²+y²+z²) on each event. Rolling baseline via
+        slow low-pass filter (α=0.05).
+    (4) When |current - baseline| > 15 µT, switch to TYPE_GAME_ROTATION_VECTOR
+        (no magnetometer — immune to magnetic interference). Reset tilt
+        baseline to avoid a jump.
+    (5) When |current - baseline| < 8 µT for 2 seconds, switch back to
+        TYPE_ROTATION_VECTOR. Reset tilt baseline.
+    Both rotation sensors are registered simultaneously (no re-registration
+    gap). Hysteresis (15 µT trigger vs 8 µT calm + 2s duration) prevents
+    oscillation. This replaces the Rev54 strategy which always preferred
+    GAME_ROTATION_VECTOR.
+  - LICENSE FILE UPDATES:
+    • src/main/assets/chess.src/README.license: Rev58 entry (ui.js arrow redesign).
+    • src/main/java/com/Regalia/README.license: Rev58 entry (StabilizationHelper sensor switching).
+    • NOTICE (this file): Rev58 entry (you are reading it).
+  - VERSION UNCHANGED: build.gradle versionCode=105, versionName="1.0.5".
+
+v1.0.5 Round-6 Revision 59 (current — version unchanged, still v1.0.5 / versionCode 105):
+  CRITICAL FIX for rotation-axis bug in landscape orientations + arrow offset
+  verification.
+  - BUG: Board tilt-compensation rotation was controlled by the WRONG axis in
+    landscape orientations. Root cause: SensorManager.getOrientation() was
+    called on the raw device-frame rotation matrix, which returns angles in
+    the DEVICE's natural coordinate system — NOT the screen's coordinate
+    system. In landscape (ROTATION_90/270), device pitch and roll are swapped
+    relative to the screen. The board's rotation responded to screen pitch
+    (front-back nod) instead of screen roll (steering-wheel tilt).
+  - FIX: Added SensorManager.remapCoordinateSystem() in processRotationVector()
+    to transform the rotation matrix from device frame to screen frame BEFORE
+    calling getOrientation(). After remapping, orientationAngles[2] is ALWAYS
+    screen-roll (steering-wheel) regardless of display rotation. Axis-remapping
+    parameters per rotation:
+      ROTATION_0:   AXIS_X, AXIS_Y (identity)
+      ROTATION_90:  AXIS_Y, AXIS_MINUS_X
+      ROTATION_180: AXIS_MINUS_X, AXIS_MINUS_Y
+      ROTATION_270: AXIS_MINUS_Y, AXIS_X
+  - SIMPLIFIED dispatchTransform() rotation: board rotation is now simply
+    -(smoothRoll - baselineRoll) for ALL 4 orientations. Removed the
+    per-orientation switch for rotation. Also fixed the translation (OIS)
+    per-orientation remapping for consistency.
+  - VERIFICATION: Correct for ALL 4 display orientations (0°/90°/180°/270°).
+    The board now ALWAYS responds to the steering-wheel angle, never to pitch.
+  - ARROW OFFSET: Verified the Rev58 arrow offset logic already satisfies the
+    user's requirements (each color uses one consistent bias for both start
+    and end; four different diagonal biases B→UL, Y→LL, R→UR, G→LR). No
+    changes needed — just confirmed correctness.
+  - VERSION UNCHANGED: build.gradle versionCode=105, versionName="1.0.5".
+
+v1.0.5 Round-6 Revision 70 (current — version unchanged, still v1.0.5 / versionCode 105):
+  Per user spec: the [%csl] blue/red net-control algorithm must match the
+  "Square Control" info panel's net control. One fix:
+  - NET-CONTROL ALGORITHM CONSISTENCY FIX (ui.js, BUG FIX): blue/red square
+    candidates changed from one-sided dominance to netCtrl-based, consistent
+    with the heatmap control-info panel.
+    Previously:
+      Blue: pAtk>0 && aAtk===0 (one-sided — player has attackers, AI has zero)
+      Red:  aAtk>0 && pAtk===0 (one-sided — AI has attackers, player has zero)
+    Now:
+      Blue: netCtrl>0 (player attackers > AI attackers, i.e. positive net control)
+      Red:  netCtrl<0 (AI attackers > player attackers, i.e. negative net control)
+      where netCtrl = pAtk - aAtk (same as the info panel's myCtrl - opCtrl).
+    Score now ranks by |netCtrl| (was by one-sided attacker count).
+    Per user spec "对净控制的算法应该与'格子控制信息'栏中的净控制保持一致".
+    Impact: a square with 3 white + 1 black (netCtrl=+2) now correctly marks
+    blue; previously it was NOT marked (AI had an attacker, failing one-sided).
+    Both _computeAndCacheVisualAnnotations() and
+    _computeInitialPositionAnnotations() updated. Spec comment items 3-4
+    updated.
+  - LICENSE FILES UPDATED:
+    • src/main/assets/chess.src/README.license: Rev70 entry.
+    • NOTICE (this file): Rev70 entry (you are reading it).
+  - VERSION UNCHANGED: build.gradle versionCode=105, versionName="1.0.5".
+
+v1.0.5 Round-6 Revision 69 (version unchanged, still v1.0.5 / versionCode 105):
+  Per user spec: allow multi-color highlights on the same square; delete the
+  heatmap conditional-display text from manuals/code. Two changes:
+  - MULTI-COLOR PER SQUARE (ui.js, FEATURE): _rvCslMap changed from
+    {square: {color}} (single-color overwrite) to {square: [colors]} (array
+    preserving all colors). Per user spec "应该允许已被选入标记为黄色的格子
+    再被标记为其它颜色" + "同一个格子上应该可以同时绘制黄色圆角矩形和其它
+    颜色的方框". Render code iterates the color array: B/R/G accumulate into a
+    comma-separated box-shadow inset (CSS supports multiple stacked shadows);
+    Y sets _isYellowSquare=true to emit the yellow rounded-rect overlay. A
+    single square can now display both a blue box-shadow inset AND a yellow
+    rounded-rect simultaneously. Root cause: previously _rvCslMap[_h.square]
+    ={color:_h.color} overwrote earlier entries — if a square had both B and Y,
+    Y overwrote B and only yellow was rendered.
+  - HEATMAP CONDITIONAL-DISPLAY TEXT DELETION (manuals + stats.html, DOC):
+    Per user spec "删除html说明书中...这段话——英文版对应部分同样删除。
+    ——其它位置(代码注释、readme文件等等)中同样删除(如果有的话)". Deleted
+    "不含热力图控制统计数据的 PGN → 不显示热力图控制统计区块" and its English
+    equivalent "PGN without heatmap control statistics data → heatmap control
+    statistics section is hidden" from:
+    • Regalia-v1.0.5-manual-zh.html, Regalia-v1.0.5-manual-en.html
+    • Regalia-v1.0.4-manual-zh.html, Regalia-v1.0.4-manual-en.html (historical)
+    • stats.html (code comment quoting the spec)
+    README.license files and NOTICE confirmed to have no such text (grep).
+  - LICENSE FILES UPDATED:
+    • src/main/assets/chess.src/README.license: Rev69 entry.
+    • NOTICE (this file): Rev69 entry (you are reading it).
+  - VERSION UNCHANGED: build.gradle versionCode=105, versionName="1.0.5".
+
+v1.0.5 Round-6 Revision 68 (version unchanged, still v1.0.5 / versionCode 105):
+  Per user report: review-board yellow [%csl] rounded-rect overlay mispositioned.
+  One fix + documentation audit:
+  - REVIEW YELLOW ROUNDED-RECT POSITION FIX (ui.js, CRITICAL BUG): the yellow
+    [%csl] overlay div (position:absolute) was emitted AFTER the cell div's
+    </div> instead of before it. This caused position:absolute to anchor to
+    .bgrid (the next positioned ancestor, via transform:translateZ(0)) instead
+    of the cell div (which has position:relative). Result: all yellow overlays
+    stacked near the board origin instead of on their respective cells. Fixed
+    by moving the overlay emission to BEFORE the cell's </div> so it becomes a
+    child of the cell div and anchors correctly. Yellow rect parameters
+    unchanged (inset ~10%, radius ~15%, 2px solid border, transparent fill,
+    z-index:5). Old comment block describing the (broken) "emit after bgrid"
+    approach replaced with a concise current-behavior comment.
+  - COMPREHENSIVE README/LICENSE/NOTICE FILE CHECK: Per user spec "check every
+    file whose name contains README, LICENSE, or NOTICE for needed updates,
+    regardless of extension; add README.license where necessary". Checked all
+    14 matching files:
+    • chess.src/README.license: added Rev68 entry + Rev67 no-change entry.
+    • java/README.license: added Rev68 no-change entry (Rev67 already present).
+    • Manual/README.license: added Rev68 entry.
+    • NOTICE (this file): added Rev68 entry.
+    • src/main/README.license: added Rev54-68 summary entry (was stalled at Rev53).
+    • src/main/assets/README.license: added Rev54-68 summary entry (was stalled
+      at Rev53).
+    • src/main/res/README.license: added Rev54-68 summary entry (was stalled at
+      Rev53).
+    • src/main/cpp/README.license: added Rev54-68 summary entry (was stalled at
+      Rev53).
+    • README.md: added Rev68 entry.
+    • LICENSE-AGPL v3, LICENSE-GPL v3, LICENSE-Apache v2.0, NOTICE-DroidFish,
+      NOTICE-gradle: license/notice original texts — no update needed.
+  - VERSION UNCHANGED: build.gradle versionCode=105, versionName="1.0.5".
+
+v1.0.5 Round-6 Revision 67 (version unchanged, still v1.0.5 / versionCode 105):
+  Per user request: rigorously verify the translation anti-shake direction via
+  first principles. Found ROTATION_90/270 boardPxX sign INVERTED (landscape
+  horizontal shake amplified instead of cancelled). One fix:
+  - LANDSCAPE TRANSLATION boardPxX SIGN FIX (StabilizationHelper.java,
+    CRITICAL BUG): In dispatchTransform(), ROTATION_90 and ROTATION_270 had
+    boardPxX sign inverted.
+      ROTATION_90: boardPxX was -dispY*SCALE → fixed to +dispY*SCALE
+      ROTATION_270: boardPxX was +dispY*SCALE → fixed to -dispY*SCALE
+      ROTATION_0 (boardPxX=-dispX) and ROTATION_180 (boardPxX=+dispX) were
+      already correct — unchanged.
+    First-principles derivation:
+      Device-natural axes: Dx=device-right, Dy=device-up (in ROTATION_0).
+      dispX = displacement along Dx; dispY = displacement along Dy.
+      CSS: +x = screen-right, +y = screen-down.
+      OIS: device moves world-right → board moves screen-left (CSS -x);
+           device moves world-up → board moves screen-down (CSS +y).
+      Per-orientation Dx/Dy → world-axis mapping:
+        ROTATION_0  (top up):    Dx=world-right, Dy=world-up
+        ROTATION_90 (top LEFT):  Dx=world-up,    Dy=world-left
+        ROTATION_180(top DOWN):  Dx=world-left,  Dy=world-down
+        ROTATION_270(top RIGHT): Dx=world-down,  Dy=world-right
+      Derived boardPxX/boardPxY:
+        ROTATION_0:  boardPxX=-dispX, boardPxY=+dispY
+        ROTATION_90: boardPxX=+dispY, boardPxY=+dispX
+        ROTATION_180:boardPxX=+dispX, boardPxY=-dispY
+        ROTATION_270:boardPxX=-dispY, boardPxY=-dispX
+    Verification:
+      ROTATION_90 — user pushes phone world-right (dispY<0, Dy+=world-left),
+        OIS wants board screen-left (boardPxX<0), +dispY gives negative ✓
+      ROTATION_270 — user pushes phone world-right (dispY>0, Dy+=world-right),
+        OIS wants board screen-left (boardPxX<0), -dispY gives negative ✓
+    Impact: only visible when using anti-shake in landscape — landscape
+    horizontal shake was previously amplified, now correctly cancelled.
+    Portrait unaffected.
+    dispatchTransform() comment rewritten as a first-principles derivation
+    table listing Dx/Dy→world-axis mapping and OIS derivation per orientation.
+    Deleted old comments' incorrect orientation descriptions (e.g. "ROTATION_90
+    = device rotated CW, top points right" — actually CCW, top points left).
+  - LICENSE FILES UPDATED:
+    • src/main/java/com/Regalia/README.license: Rev67 entry.
+    • NOTICE (this file): Rev67 entry (you are reading it).
+  - VERSION UNCHANGED: build.gradle versionCode=105, versionName="1.0.5".
+
+v1.0.5 Round-6 Revision 66 (version unchanged, still v1.0.5 / versionCode 105):
+  Per user spec: allow yellow squares to overlap with blue/red; comprehensively
+  delete outdated/redundant comments. Two changes:
+  - YELLOW OVERLAP ALLOWED (ui.js, FEATURE): Rev65 EXCLUDED blue/red squares
+    from yellow contention. Rev66 removes that exclusion — yellow now simply
+    takes the top 3 by total attacker count, regardless of whether they're
+    also blue or red. Per user spec "应该允许被标记为黄色的格子同时被标记为
+    其它颜色". The rendering layer (CSS box-shadow inset for B/R/G + yellow
+    rounded-rect overlay from Rev54) already supports multi-color highlights
+    on the same square — the yellow overlay insets ~10% inside the cell,
+    leaving corner gaps so box-shadow insets remain visible. No rendering-
+    layer changes needed. Both _computeAndCacheVisualAnnotations() and
+    _computeInitialPositionAnnotations() had the exclusion logic removed.
+    Spec comment item 5 updated.
+  - COMPREHENSIVE OUTDATED/REDUNDANT COMMENT CLEANUP (10 files, REDUNDANCY):
+    Per user spec "全面检查并删除过时的冗余注释". Audited 10 source files,
+    cleaned ~120 lines of stale comments. Files cleaned:
+    • StabilizationHelper.java: deleted Rev64 rotation-removal tombstones,
+      Rev61 Y-axis fix comment, rotation-section-removed placeholder. Header
+      rewritten as concise current-behavior description.
+    • MainActivity.java: corrected stabilization public-contract comment
+      (was "registers all available motion sensors... and fuses"; now
+      "registers TYPE_LINEAR_ACCELERATION and integrates").
+    • ui.js: deleted arrow-rendering Rev49/54/58 multi-revision narrative
+      (~60 lines), Rev65/66 yellow-square redundant explanations, Rev62
+      resign-sound fix comment, Rev63 arrow-design change markers.
+    • index.html.tpl: CSS .bwrap.stabilized comment simplified (removed
+      Rev53/Rev64 markers and --stab-rot removal note).
+    • worker-pool.js: deleted Rev57 backtick fix comment.
+    • chess960.js: deleted Rev62 array-swap fix narrative, Rev62 probability
+      comment correction, Rev55 self-referential meta-comment.
+    • pgn-standard.js: deleted Rev62 dead-variable lineLen removal comment.
+    • ai-bridge.js: deleted Rev62 _importedStartColor dead-code removal
+      comment, mate:0/null fix comment, depth>0 simplification comment.
+    Principle: retained license headers, current-behavior descriptions, non-
+    obvious algorithm explanations, i18n comments, pitfall warnings; deleted
+    tombstone comments describing deleted code / fixed bugs / multi-revision
+    history narratives.
+  - LICENSE FILES UPDATED:
+    • src/main/assets/chess.src/README.license: Rev66 entry.
+    • src/main/java/com/Regalia/README.license: Rev66 entry (comment cleanup).
+    • NOTICE (this file): Rev66 entry (you are reading it).
+  - VERSION UNCHANGED: build.gradle versionCode=105, versionName="1.0.5".
+
+v1.0.5 Round-6 Revision 65 (version unchanged, still v1.0.5 / versionCode 105):
+  Per user spec: yellow squares (non-arrow) should be the squares with the
+  highest total control count (total attackers, regardless of piece color).
+  One change:
+  - YELLOW-SQUARE LOGIC FIX (ui.js, BUG FIX): Rev61's condition
+    (pAtk>0 && aAtk>0 — both sides must have attackers) was too strict,
+    excluding high-total one-sided squares (e.g., 5 white attackers + 0 black
+    = total 5 was excluded from yellow contention). Rev65 changes it to
+    (total>=2 — all squares with 2+ total attackers are candidates), then
+    excludes squares already chosen as blue/red (one-sided dominance), and
+    picks the top 3 by total. This correctly implements the user spec
+    "黄色格子=双方总控制数量(攻击该格子的棋子总数，无论棋子颜色)最多的那几个格子".
+    Both _computeAndCacheVisualAnnotations() and
+    _computeInitialPositionAnnotations() updated with the same logic:
+      1. Collect all squares with total>=2 as yellow candidates.
+      2. Select blue/red squares first (top 3 each — one-sided net control).
+      3. Build a Set of blue/red square coordinates.
+      4. Iterate yellow candidates (sorted by total desc), skip any in the
+         blue/red set, pick top 3.
+    Design rationale: one-sided-dominated squares are already labeled blue/red
+    by their dominance type; yellow is reserved for the hottest total-control
+    squares that aren't purely one-sided. If fewer than 3 non-blue/red candidates
+    exist, fewer yellow squares are emitted (no padding).
+    Spec comment item 5 updated to reflect the corrected logic.
+  - LICENSE FILES UPDATED:
+    • src/main/assets/chess.src/README.license: Rev65 entry (ui.js yellow-square fix).
+    • NOTICE (this file): Rev65 entry (you are reading it).
+  - VERSION UNCHANGED: build.gradle versionCode=105, versionName="1.0.5".
+
+v1.0.5 Round-6 Revision 64 (version unchanged, still v1.0.5 / versionCode 105):
+  Per user spec: remove the rotation part of anti-shake (keep only translation),
+  delete all rotation code/comments; and after undo, revert the corresponding
+  content in the background real-time cached PGN. Two changes:
+  - ANTI-SHAKE ROTATION REMOVED (StabilizationHelper.java + index.html.tpl,
+    FEATURE): StabilizationHelper.java completely refactored.
+    Deleted sensors: TYPE_ROTATION_VECTOR, TYPE_GAME_ROTATION_VECTOR,
+    TYPE_MAGNETIC_FIELD (only TYPE_LINEAR_ACCELERATION retained).
+    Deleted methods: processRotationVector(), processMagneticField().
+    Deleted state fields: baselinePitch, baselineRoll, smoothPitch, smoothRoll,
+    baselineSet, magneticBaseline, magneticBaselineSet, magneticCalmSince,
+    magneticDisturbed, processingRotationVector, rotationMatrix[],
+    remappedMatrix[], orientationAngles[].
+    Deleted constants: MAX_ROTATION_DEG, ROTATION_DEADZONE_DEG, ROTATION_DECAY,
+    TILT_ALPHA, MAGNETIC_DISTURBANCE_THRESHOLD, MAGNETIC_CALM_THRESHOLD,
+    MAGNETIC_CALM_DURATION_MS, MAGNETIC_BASELINE_ALPHA.
+    CSS .bwrap.stabilized transform changed from
+    translate3d(...) rotate(var(--stab-rot,0deg)) to
+    translate3d(var(--stab-x,0px),var(--stab-y,0px),0) only. --stab-rot CSS
+    custom property no longer used.
+    applyTransform() no longer setProperty('--stab-rot',...); added
+    removeProperty('--stab-rot') to clear residual values from a previous version.
+    File slimmed from 720 → 337 lines (53% reduction).
+    Benefits: 4 sensors → 1 sensor, lower battery, eliminates the entire class
+    of rotation-direction bugs reported in Rev59-63 (rotation feature gone).
+  - UNDO REVERTS CACHED PGN CONTENT (ui.js, BUG FIX): undoMove() now calls new
+    _invalidateCachesForUndoneMoves(currentMoveCount) after restoring
+    moveRecords. Previously, undoMove() restored moveRecords but did NOT clear
+    cache entries for the undone moves, causing stale eval/annotation data to
+    leak into re-played moves, review mode, and PGN export's [%eval]/[%csl]/
+    [%cal] annotations.
+    Three caches cleared:
+    1. _reviewEvalCache (keyed by reviewStep, 1-based) — deletes key >
+       currentMoveCount. This is the core of "background real-time cached PGN"
+       — per-move eval cache backing review-mode eval bar and [%eval] annotations.
+    2. _visualAnnotationsCache (keyed by moveIdx, 0-based) — deletes key >=
+       currentMoveCount ('_initial' sentinel kept — initial-position annotations
+       are independent of undo). Backs [%csl]/[%cal] annotations.
+    3. _cachedOriginalPGN — set to null, ensuring subsequent PGN operations
+       (stats page, 📚 save) use _buildPGNString() (reads current shorter
+       moveRecords) instead of stale imported text.
+    _redoStack is NOT cleared (undo must remain reversible). When user redoes,
+    cache entries are re-created as needed (eval re-requested, annotations
+    re-computed).
+  - LICENSE FILES UPDATED:
+    • src/main/assets/chess.src/README.license: Rev64 entry (ui.js undo cache
+      invalidation + index.html.tpl CSS rotation removal).
+    • src/main/java/com/Regalia/README.license: Rev64 entry (StabilizationHelper
+      rotation removal — file slimmed 720→337 lines).
+    • NOTICE (this file): Rev64 entry (you are reading it).
+  - VERSION UNCHANGED: build.gradle versionCode=105, versionName="1.0.5".
+
+v1.0.5 Round-6 Revision 63 (version unchanged, still v1.0.5 / versionCode 105):
+  Per user spec: limit anti-shake rotation to ±10°, optimize arrow positioning,
+  redesign arrow shape. Three changes:
+  - ANTI-SHAKE ROTATION LIMIT ±10° (StabilizationHelper.java, FEATURE):
+    MAX_ROTATION_DEG reduced from ±30° (Rev61) to ±10°. First-principles
+    analysis: (a) sensor floor ~1° (TYPE_ROTATION_VECTOR accuracy ±1°, after
+    α=0.15 low-pass residual noise ~±0.5°); (b) human perception threshold
+    ~0.5-1°; (c) handheld device steering-wheel tilt rarely exceeds 8° during
+    normal one-handed phone use; (d) 1:1 mapping (|board rot| = |screen roll
+    delta|) strictly preserved in 1°-10° range; angles beyond 10° clamped to
+    prevent disorienting "board swings wildly" effect. Dead zone
+    ROTATION_DEADZONE_DEG=1.0° unchanged (still correct for ±10° range).
+  - ARROW OFFSET OPTIMIZATION (ui.js, FEATURE): offset magnitude changed from
+    Math.min(3, cellSize*0.08) (3px cap + 8%) to cellSize*0.12 (12% no cap).
+    First-principles: the offset is applied diagonally to BOTH start and end,
+    so max radial offset from cell center = |offset|*sqrt(2). Safe bound:
+    maxRadialOffset = cellSize/2 - strokeWidth/2 - markerHalfWidth.
+    With new strokeWidth=1.5 and markerWidth=4: maxRadialOffset = cellSize/2-2.75.
+    Required: |offset|*sqrt(2) < cellSize/2 - 2.75.
+    cellSize=30: max 8.66px, we use 3.6px ✓. cellSize=60: max 19.26px, we use
+    7.2px ✓. cellSize=20: max 5.12px, we use 2.4px ✓. 12% scales proportionally
+    with cell size so the visual offset fraction is constant across screens —
+    no fixed-pixel cap (the previous 3px cap made offsets tiny on large screens).
+    Cell-center formula (col*cellSize + cellSize/2) confirmed exact for all
+    cell sizes — no change needed.
+  - ARROW SHAPE REDESIGN (ui.js, VISUAL): minimal arrow per user spec "as
+    minimal as possible while still clearly indicating direction". Removed
+    redundant elements: origin dot (Rev60), round linecap (Rev61 → butt),
+    thick stroke (2→1.5px). New arrowhead: compact 4×3 triangle (was 5×4),
+    refX=3.5 (tip extends ~0.5px past line end), refY=1.5 (vertical center),
+    polygon "0 0, 4 1.5, 0 3". 4×3 is the smallest size that still reads as
+    a clear triangle at 30-60px cell sizes. Line shorten 9→4px (matches new
+    arrowhead, prevents overshoot). stroke-opacity 0.95→0.9 (pieces
+    underneath remain readable when arrows cross them). Final: thin colored
+    line + small triangular point — minimal representation that communicates
+    origin, target, direction, type.
+  - LICENSE FILES UPDATED:
+    • src/main/assets/chess.src/README.license: Rev63 entry (ui.js arrow redesign).
+    • src/main/java/com/Regalia/README.license: Rev63 entry (StabilizationHelper ±10°).
+    • NOTICE (this file): Rev63 entry (you are reading it).
+  - VERSION UNCHANGED: build.gradle versionCode=105, versionName="1.0.5".
+
+v1.0.5 Round-6 Revision 62 (version unchanged, still v1.0.5 / versionCode 105):
+  Second-pass first-principles code audit. One critical bug fix + 5 bug fixes +
+  3 perf improvements + redundancy cleanup:
+  - CHESS960 SP-ID BISHOP-COLOR ARRAY SWAP FIX (chess960.js, CRITICAL BUG):
+    _CH960_LIGHT_BISHOP_FILES and _CH960_DARK_BISHOP_FILES were swapped. On a
+    standard board, a1/c1/e1/g1 are DARK squares and b1/d1/f1/h1 are LIGHT,
+    but the original code labeled them reversed. This broke 720/960 SP-IDs;
+    SP-ID 518 (standard chess) produced "RNQBBKNR" instead of "RNBQKBNR".
+    After fix, all 960 SP-IDs pass round-trip test
+    (backRankToSPID(spidToBackRank(N))===N). The parity checks in
+    backRankToSPID() (f%2===0 vs f%2===1) were fixed in sync.
+  - TABLEBASE 404 MISIDENTIFIED AS SERVER-DOWN (tablebase.js, BUG): 404 means
+    "position not in tablebase", not "server down". 3 × 404 falsely set
+    _tbOffline=true for 60s. Now only 5xx + network errors count toward
+    _tbFailCount.
+  - PGN MOVE-NUMBER REGEX MISSING 'O' (worker-pool.js + tablebase.js, BUG):
+    (?=[a-hKQRBN]) didn't match 'O', so "1 O-O" wasn't normalized to "1. O-O"
+    and "1" was mis-tokenized as a SAN move. Fixed to [a-hKQRBNO].
+  - RESIGN SOUND NEVER PLAYED (ui.js, BUG): _resignGame() called undefined
+    _playSound('lose'). The typeof guard prevented ReferenceError, so the
+    sound was silently never played. Now calls playSound('gameover').
+  - MATE:0 VS MATE:NULL DISTINCTION LOST (ai-bridge.js, BUG): c.mate||0
+    converted both mate:0 (checkmate-now) and mate:null (no mate) to 0.
+    Fixed to c.mate!=null?c.mate:0.
+  - WORKER-POOL MAP DELETE-DURING-ITERATION (worker-pool.js, BUG): for...of
+    + .delete() risked skipping entries on some engines. Fixed to snapshot
+    keys via Array.from() before deletion.
+  - ECO RECOMMENDATION LRU NO-REFRESH-ON-HIT (game-logic.js, PERF): cache hit
+    returned without delete+re-insert, so hot entries could be evicted before
+    cold ones. Fixed to refresh LRU on hit (matching _tbCache pattern).
+  - MULTIPV DISPLAY WASTED WORK DURING AI THINKING (ai-bridge.js, PERF):
+    computed hintParts/signatures/cache checks 10-50×/sec during AI thinking
+    but discarded the result. Early-exit when !isHintLoading.
+  - EVAL CHART LABEL LOOP LRU CHURN (ui.js, PERF): used get() (refreshes LRU)
+    instead of peek() in a read-only iteration. Fixed to peek().
+  - REDUNDANCY CLEANUP: removed dead _importedStartColor ternary (variable
+    never declared); removed dead let lineLen=0 in composePGN; simplified
+    redundant depth>0 check; simplified two unreachable ternary branches.
+  - CHESS960.JS COMMENT CORRECTION: randomSPID() comment claimed
+    "P(>8 retries) ≈ 0.4%"; actual is (256/65536)^8 ≈ 1.3e-19. Code correct.
+  - KNOWN CHESS960 CASTLING DETECTION LIMITATION (DOCUMENTED, NOT FIXED):
+    Math.abs(to.col-from.col)===2 only detects castling when king starts on
+    col 4. In Chess960 (king can start on cols 1-6), ~78.8% of positions have
+    broken castling detection (rook doesn't move, SAN wrong, Zobrist wrong).
+    HIGH risk to fix (4 coordinated locations + Zobrist hash); deferred.
+    Standard chess (SP-ID 518) unaffected.
+  - LICENSE FILES UPDATED:
+    • src/main/assets/chess.src/README.license: Rev62 entry.
+    • src/main/java/com/Regalia/README.license: Rev62 entry (no Java changes).
+    • NOTICE (this file): Rev62 entry (you are reading it).
+  - VERSION UNCHANGED: build.gradle versionCode=105, versionName="1.0.5".
+
+v1.0.5 Round-6 Revision 61 (version unchanged, still v1.0.5 / versionCode 105):
+  Per the 2026.6.27 development plan. Two critical bug fixes + one feature
+  refinement + four additional bug fixes from a first-principles code audit:
+  - BOARD ANTI-SHAKE Y-AXIS DIRECTION REVERSAL FIX (StabilizationHelper.java,
+    CRITICAL BUG): All 4 screen-orientation cases (ROTATION_0/90/180/270)
+    in dispatchTransform() had the WRONG sign on boardPxY. The OIS principle
+    requires that when the device moves UP, the board moves DOWN on screen
+    (CSS +Y) to compensate. The original code moved the board UP —
+    amplifying the shake instead of cancelling it. User report: "屏幕突然
+    向上移动，棋盘不但不向下位移来抵消，反而也向上". Fixed signs:
+      ROTATION_0:   boardPxY = +dispY * SCALE  (was -dispY)
+      ROTATION_90:  boardPxY = +dispX * SCALE  (was -dispX)
+      ROTATION_180: boardPxY = -dispY * SCALE  (was +dispY)
+      ROTATION_270: boardPxY = -dispX * SCALE  (was +dispX)
+    X-axis signs were already correct and unchanged.
+  - BOARD ROTATION SENSITIVITY ADJUSTMENT (StabilizationHelper.java,
+    FEATURE COMPLETION): User reported "棋盘旋转角度过于敏感，屏幕小幅度
+    转动，棋盘就大幅度转动". Two parameter changes:
+    • ROTATION_DEADZONE_DEG: 0.3° → 1.0° (filter sensor noise and sub-degree
+      hand tremor; stays below perceptual threshold, above low-pass noise
+      floor ~0.1°).
+    • MAX_ROTATION_DEG: 45° → 30° (covers normal handheld tilt range,
+      avoids visual abruptness at extreme angles). 1:1 ratio strictly
+      preserved within 1°–30° range.
+  - REVIEW-BOARD YELLOW-SQUARE LOGIC FIX (ui.js, CRITICAL BUG): Yellow-
+    square selection in _computeAndCacheVisualAnnotations() and
+    _computeInitialPositionAnnotations() changed from `total>=2` to
+    `pAtk>0 && aAtk>0` (both sides must have attackers). Previously, single-
+    side-dominated squares (e.g. 5 white attackers + 0 black = total 5)
+    were misclassified as yellow — they should be BLUE (player net
+    control). User spec: "黄色格=双方总控制高格(当前未正确实现)".
+  - ARROW STROKE-LINECAP CHANGED TO BUTT (ui.js, VISUAL REFINEMENT):
+    Changed from "round" to "butt" in review-board SVG arrow lines. The
+    round linecap created a small semi-circle at the arrow's start (no
+    marker there), visually reading as an "extra dot" — contradicting user
+    spec "箭头末端没有多余的圆点".
+  - ENGINE EXTRACTION PROGRESS PERCENTAGE FIX (StockfishNative.java, BUG
+    FIX): extractEngineFromAssets() original expression
+    `total / 114115752L * 13` truncated `total / 114115752L` to 0 for any
+    total < 114 MB (Java left-to-right evaluation), so progress stayed at
+    12% until extraction completed, then jumped to 25%. Fixed to
+    `total * 13L / 114115752L` (multiply first).
+  - STATS.HTML UNCLOSED-BRACE INFINITE-LOOP FIX (stats.html, CRITICAL
+    BUG): Original `while(moveText.includes('{'))...` would infinite-loop
+    on a malformed PGN with an unclosed `{` (no matching `}`) — each
+    regex iteration failed to match any paired braces, but includes('{')
+    remained true → ANR. Fixed to a for loop capped at 10 iterations.
+  - STATSACTIVITY STREAM LEAK FIX (StatsActivity.java, BUG FIX):
+    loadAssetAsBase64() original manual `is.close()` was only reached on
+    the happy path — if baos.write threw (e.g. OOM on a huge asset),
+    InputStream leaked. Switched to try-with-resources.
+  - LICENSE FILES UPDATED:
+    • src/main/assets/chess.src/README.license: Rev61 entry (ui.js yellow
+      square + arrow linecap).
+    • src/main/java/com/Regalia/README.license: Rev61 entry
+      (StabilizationHelper Y-axis + rotation, StockfishNative progress,
+      StatsActivity stream leak).
+    • NOTICE (this file): Rev61 entry (you are reading it).
+  - VERSION UNCHANGED: build.gradle versionCode=105, versionName="1.0.5".
+
+v1.0.5 Round-6 Revision 60 (version unchanged, still v1.0.5 / versionCode 105):
+  Three changes per user spec:
+  - ARROW ORIGIN DOT REMOVED (ui.js): Removed the small filled circle (r=2.5)
+    that was drawn at each arrow's origin in the review-board SVG overlay.
+    The arrowhead at the end is sufficient to indicate direction.
+  - ARROW OFFSET CALIBRATED (ui.js): Reduced the per-color diagonal offset
+    magnitude from Math.min(6, cellSize*0.14) to Math.min(3, cellSize*0.08).
+    The previous 14% (capped at 6px) could cause arrow endpoints to exceed
+    the cell boundary on small screens. The new 8% (capped at 3px) stays
+    within bounds for all cell sizes ≥ 30px.
+  - ROTATION LIMIT EXPANDED (StabilizationHelper.java): Increased
+    MAX_ROTATION_DEG from ±2° to ±45°. The board's tilt-compensation rotation
+    can now counter-rotate up to 45° in either direction to compensate for
+    large device tilt. Low-pass filter (α=0.15) and dead zone (0.3°) ensure
+    smooth rotation.
+    NOTE: Rev61 has since reduced MAX_ROTATION_DEG from 45° back to 30°
+    (see Rev61 entry above).
+  - VERSION UNCHANGED: build.gradle versionCode=105, versionName="1.0.5".

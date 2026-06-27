@@ -37,9 +37,14 @@
 //   6. The remaining 3 slots are filled: ROOK, KING, ROOK (in that order, since King must be between two rooks).
 // The traditional chess start position (RNBQKBNR) is SP-ID 518.
 
-// Quick lookup tables for the 4-step decomposition
-const _CH960_LIGHT_BISHOP_FILES=[0,2,4,6];   // a, c, e, g  (white squares from White's POV)
-const _CH960_DARK_BISHOP_FILES=[1,3,5,7];    // b, d, f, h  (black squares)
+// Quick lookup tables for the 4-step decomposition.
+// On a standard chess board, from White's perspective:
+//   a1 = DARK square, b1 = LIGHT, c1 = DARK, d1 = LIGHT,
+//   e1 = DARK,  f1 = LIGHT, g1 = DARK, h1 = LIGHT
+// So the LIGHT (white) bishop files are b,d,f,h = {1,3,5,7}, and the
+// DARK bishop files are a,c,e,g = {0,2,4,6}.
+const _CH960_LIGHT_BISHOP_FILES=[1,3,5,7];   // b, d, f, h  (LIGHT squares from White's POV)
+const _CH960_DARK_BISHOP_FILES=[0,2,4,6];    // a, c, e, g  (DARK squares)
 const _BINOMIAL_5_2 = [
   [0,1],[0,2],[0,3],[0,4],
   [1,2],[1,3],[1,4],
@@ -114,10 +119,11 @@ function backRankToSPID(backRank){
   for(let i=0;i<8;i++)if(backRank[i]==='bishop')bishFiles.push(i);
   if(bishFiles.length!==2)return -1;
   if(bishFiles[0]%2===bishFiles[1]%2)return -1; // same-color bishops — invalid
-  // 4. Derive SP-ID components
-  // Light bishop (on an even-indexed file: 0,2,4,6 = a,c,e,g)
-  const lightBishFile=bishFiles.find(f=>f%2===0);
-  const darkBishFile =bishFiles.find(f=>f%2===1);
+  // 4. Derive SP-ID components.
+  // Light (white-square) bishop is on an ODD file (1,3,5,7);
+  // dark (black-square) bishop is on an EVEN file (0,2,4,6).
+  const lightBishFile=bishFiles.find(f=>f%2===1);
+  const darkBishFile =bishFiles.find(f=>f%2===0);
   if(lightBishFile===undefined||darkBishFile===undefined)return -1;
   const lightBishopIdx=_CH960_LIGHT_BISHOP_FILES.indexOf(lightBishFile);
   const darkBishopIdx =_CH960_DARK_BISHOP_FILES.indexOf(darkBishFile);
@@ -161,7 +167,7 @@ function randomSPID(){
       const buf=new Uint16Array(1);
       // Rejection-sample to eliminate modulo bias
       const LIMIT=65280; // largest multiple of 960 ≤ 65536
-      for(let _i=0;_i<8;_i++){ // bounded retries (8 is plenty — P(>8 retries) ≈ 0.4%)
+      for(let _i=0;_i<8;_i++){ // bounded retries (8 is plenty — P(>8 retries) ≈ 0)
         crypto.getRandomValues(buf);
         if(buf[0]<LIMIT)return buf[0]%960;
       }
@@ -248,10 +254,6 @@ function parseShredderCastling(str,board){
     }else{
       if(bKing<0)continue;
       if(file>bKing)cr.blackKingside=true;
-      // v1.0.4 FIX (this round): the previous line was dead code
-      // (`cr.blackQueenside=false||cr.blackQueenside` is a no-op), and the
-      // actual assignment was on a separate `if` statement below. Consolidated
-      // into a single `else if` to match the white-side pattern.
       else if(file<bKing)cr.blackQueenside=true;
     }
   }

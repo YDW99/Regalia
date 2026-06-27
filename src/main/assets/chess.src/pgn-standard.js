@@ -264,11 +264,18 @@ function formatNagToken(nag){
 //   [%cal Ge2e4]    → draw Green arrow from e2 to e4
 //   [%cal Ge2e4,Rg1f3] → multiple arrows
 //
-// Color codes (case-sensitive first letter):
-//   G = Green   — checked king's escape squares (avoidance paths)
-//   R = Red     — checker → checked king path (current move gives check)
-//   B = Blue    — important piece → square control path (e.g., center control)
-//   Y = Yellow  — piece → opponent's queen path (queen threat)
+// Color codes (case-sensitive first letter) — v1.0.4 Round-5 Rev48 full semantics:
+//   SQUARE HIGHLIGHTS ([%csl]):
+//     B = Blue   — player's net-control strong squares (player controls, AI doesn't)
+//     R = Red    — AI opponent's net-control strong squares (AI controls, player doesn't)
+//     Y = Yellow — high total-control squares (both sides combined have many attackers)
+//     G = Green  — center-area squares with NO control from either side (neutral center)
+//   ARROWS ([%cal]):
+//     B = Blue   — mover's piece threatens 2+ enemy pieces (multi-threat):
+//                  arrows from threatening piece to each threatened piece
+//     R = Red    — checker → checked king path (current move gives check)
+//     Y = Yellow — mover's piece threatens enemy queen (arrow from attacker to queen)
+//     G = Green  — checked king position → escape square (avoidance paths)
 
 const _CSL_COLOR_CODES={G:'G',R:'R',B:'B',Y:'Y'};
 
@@ -461,7 +468,6 @@ function composePGN(params){
   }
   tokens.push(params.result||'*');
   // Wrap movetext at ~78 columns (PGN spec recommends ≤80)
-  let lineLen=0;
   const lines=[];
   let curLine='';
   for(const tok of tokens){

@@ -229,3 +229,60 @@ v1.0.4 Round-5 Rev26 changes:
     to a symbol. Same fix applied to the variation-move regex.
   - No changes to AndroidManifest.xml, cpp/, res/, java/, jniLibs/, or
     chess.html.
+
+v1.0.4 Round-5 Rev48 changes:
+  - src/main/assets/chess.src/tablebase.js (GPL v3): PGN comment completeness fix.
+  - src/main/assets/chess.src/ai-bridge.js (GPL v3): mr.comment in _buildPGNString.
+  - src/main/assets/chess.src/ui.js (GPL v3): Blue/Yellow arrows; review board overlay.
+  - src/main/assets/chess.src/pgn-standard.js (AGPL v3): Updated color docs.
+  - src/main/assets/chess.src/index.html.tpl (AGPL v3): .review-board position:relative.
+  - src/main/assets/stats.html (AGPL v3): 4-color arrow display; conditional sections.
+  - src/main/assets/chess.html: rebuilt from chess.src/ changes.
+  - No changes to AndroidManifest.xml, cpp/, res/, java/, or jniLibs/.
+
+v1.0.5 Round-6 Rev49 changes:
+  - src/main/AndroidManifest.xml: versionCode 104→105, versionName "1.0.4"→"1.0.5".
+    MainActivity and StatsActivity get android:windowLayoutInDisplayCutoutMode="shortEdges".
+  - src/main/java/com/Regalia/MainActivity.java: stabilization fields + toggle + lifecycle.
+  - src/main/java/com/Regalia/StockfishNative.java: toggleStabilization bridge.
+  - src/main/java/com/Regalia/StabilizationHelper.java (NEW): sensor-fusion anti-shake.
+  - src/main/assets/chess.src/index.html.tpl: high aspect-ratio + anti-shake CSS.
+  - src/main/assets/chess.src/ui.js: long-press toggle + review arrow shrink.
+  - src/main/assets/chess.src/game-logic.js: loading_title → v1.0.5.
+  - src/main/assets/stats.html: PGN Text label + phase analysis rewrite.
+  - src/main/assets/chess.html: rebuilt.
+  - No changes to cpp/, res/, or jniLibs/.
+
+v1.0.5 Round-6 Rev50 changes:
+  - src/main/java/com/Regalia/StabilizationHelper.java: anti-shake direction fix.
+  - src/main/java/com/Regalia/ChessApp.java: init log version → v1.0.5.
+  - src/main/java/com/Regalia/ChessWebViewClient.java: version comment → v1.0.5.
+  - src/main/assets/chess.src/ui.js: version strings → v1.0.5.
+  - src/main/assets/chess.src/tablebase.js: PGN comment attachment fix.
+  - src/main/assets/chess.html: rebuilt.
+  - No changes to AndroidManifest.xml, cpp/, res/, jniLibs/.
+
+v1.0.5 Round-6 Rev51 changes:
+  - src/main/res/values/strings.xml: app_name → "Regalia v1.0.5".
+  - src/main/java/com/Regalia/StabilizationHelper.java: anti-shake Y-axis fix.
+  - No changes to AndroidManifest.xml, cpp/, jniLibs/, or assets/.
+
+v1.0.5 Round-6 Rev52 changes:
+  - src/main/java/com/Regalia/StabilizationHelper.java: complete rewrite with orientation adaptation.
+  - src/main/assets/chess.src/ui.js: visual annotations null-reference fix.
+  - src/main/assets/chess.html: rebuilt.
+  - No changes to AndroidManifest.xml, res/, cpp/, jniLibs/.
+
+v1.0.5 Round-6 Rev53 changes:
+  - src/main/java/com/Regalia/StabilizationHelper.java: rewrite (sensor re-selection + tilt).
+  - src/main/assets/chess.src/index.html.tpl: rotate transform CSS.
+  - src/main/assets/chess.src/ui.js: bidirectional arrows + initial position annotations.
+  - src/main/assets/chess.html: rebuilt.
+  - No changes to AndroidManifest.xml, res/, cpp/, jniLibs/.
+
+v1.0.5 Round-6 Rev54 through Rev68: no changes to AndroidManifest.xml or res/.
+Changes in this range were in java/ (StabilizationHelper.java, MainActivity.java,
+StockfishNative.java, StatsActivity.java) and assets/chess.src/ (ui.js,
+chess960.js, game-logic.js, tablebase.js, worker-pool.js, pgn-standard.js,
+ai-bridge.js, index.html.tpl) + assets/chess.html (rebuilt). See per-subdirectory
+README.license files for details.

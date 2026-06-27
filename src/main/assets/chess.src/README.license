@@ -981,3 +981,492 @@ for full license texts and attribution details.
       _buildPGNString() to use _timeoutWinnerColor for timeout result.
     - game-logic.js (GPL v3): New i18n key 'timeout_win_suffix'.
     - chess.html: rebuilt from the above chess.src/ changes.
+
+  v1.0.4 Round-5 Rev48 changes:
+    - tablebase.js (GPL v3): PGN comment/visual-annotation completeness fix.
+      _parsePGN() now extracts [%csl]/[%cal] tags AND free-text comments
+      BEFORE stripping brace comments. New arrays: _extractedAnnotations,
+      _extractedComments. Returned in the parsed result object.
+      importPGN() now populates _visualAnnotationsCache from extracted
+      [%csl]/[%cal] tags (merged + deduplicated), and mr.comment from
+      extracted free-text comments.
+    - ai-bridge.js (GPL v3): _buildPGNString() now includes mr.comment in
+      the comment parts (after all [%xxx] tags). Literal {/} in the comment
+      body are escaped to Unicode full-width braces ｛｝ to avoid premature
+      comment termination.
+    - ui.js (GPL v3): _computeAndCacheVisualAnnotations() now computes
+      Blue arrows (multi-threat: one piece threatens 2+ enemy pieces)
+      and Yellow arrows (queen threat) from the post-move control map.
+      Caps: top 3 attackers by threat count (blue), top 3 by piece value
+      (yellow), max 4 blue arrows per attacker. Review board rendering
+      now displays [%csl]/[%cal] annotations when heatmap is OFF:
+      square highlights via CSS box-shadow inset (3px), arrows via SVG
+      overlay (4px stroke, per-color arrowhead markers). New constant
+      _RV_VA_COLORS for the 4 annotation colors.
+    - pgn-standard.js (AGPL v3): Updated color code documentation comment
+      block to reflect the full 4-color arrow semantics (B/R/Y/G).
+    - index.html.tpl (AGPL v3): .review-board CSS rule now has
+      position:relative so the SVG arrow overlay's position:absolute
+      anchors correctly.
+    - chess.html: rebuilt from the above chess.src/ changes.
+
+  v1.0.5 Round-6 Rev49 changes:
+    - index.html.tpl (AGPL v3): High aspect-ratio screen adaptation (min-width:0
+      on flex children, flex-wrap:wrap on .hdr-tools, word-break on long text,
+      3 new media-query tiers for ultra-tall/wide/short aspect ratios). New
+      --safe-top/bottom/left/right CSS variables. New .bwrap.stabilized CSS
+      rule for anti-shake transform. .review-board position:relative (already
+      added in Rev48).
+    - ui.js (GPL v3): Long-press handler (≥500ms on board square) calls
+      AndroidBridge.toggleStabilization(). sqClick() checks
+      window._suppressNextBoardClick to suppress click after long-press.
+      Review board SVG arrows shrunk (4→2px, 8×6→5×4 head, per-arrow angular
+      offset for multi-arrow targets, origin circle r=2.5).
+    - game-logic.js (GPL v3): loading_title i18n key "Regalia v1.0.4"→"v1.0.5".
+    - chess.html: rebuilt from chess.src/ changes.
+    - No changes to ai-bridge.js, tablebase.js, chess960.js, eco-data.js,
+      worker-pool.js, pgn-standard.js (all unchanged from Rev48).
+
+  v1.0.5 Round-6 Rev50 changes:
+    - ui.js (GPL v3): Loading page title v1.0.4→v1.0.5; header version badge
+      v1.0.4→v1.0.5; About dialog version v1.0.4→v1.0.5.
+    - tablebase.js (GPL v3): CRITICAL FIX — PGN comment-to-move attachment.
+      Comments now attach to the PRECEDING move (per PGN spec: post-move
+      annotation) instead of the NEXT move. New _flushCurrentMovePayload()
+      helper. New state: _lastMoveIdx, _currentMoveCsl/Cal/Comment,
+      _currentMoveFlushed. Only same-move comments merge with " | ".
+      [%eval] still attaches to next move (post-move position).
+    - chess.html: rebuilt from chess.src/ changes.
+    - No changes to ai-bridge.js, chess960.js, eco-data.js, game-logic.js,
+      worker-pool.js, pgn-standard.js, index.html.tpl.
+
+  v1.0.5 Round-6 Rev51: no changes to chess.src/ files.
+
+  v1.0.5 Round-6 Rev52 changes:
+    - ui.js (GPL v3): Fixed null-reference in _computeAndCacheVisualAnnotations()
+      when moveRecords[moveIdx] is null (now uses {csl:[],cal:[]}).
+    - chess.html: rebuilt.
+
+  v1.0.5 Round-6 Rev53 changes:
+    - index.html.tpl (AGPL v3): .bwrap.stabilized CSS updated to
+      translate3d(x,y,0) rotate(var(--stab-rot,0deg)).
+    - ui.js (GPL v3): Yellow arrows now bidirectional (both sides' queens).
+      Blue arrows also bidirectional. New _computeInitialPositionAnnotations()
+      for initial position (reviewStep 0). Review board renders initial
+      position annotations via '_initial' cache key.
+    - chess.html: rebuilt.
+
+  v1.0.5 Round-6 Rev54 changes (this round, per user spec):
+    - ui.js (GPL v3): SIX improvements per user spec items 1-4 + audit:
+      (1) Yellow arrow extension — when the mover's just-moved piece is a
+          queen and its destination square is attacked by an opp piece
+          ("主动把皇后移动到受威胁格"), that yellow arrow's priority is
+          BOOSTED so it survives the cap-6 dedup. New _isQueenMovedIntoThreat
+          flag computed from moveRecords[moveIdx].to + postState.board.
+      (2) Blue arrow extension — when the mover's moved piece is itself at
+          a square attacked by an opp piece ("主动把任意棋子移到受威胁格"),
+          and this causes an opp piece to have 2+ threats on mover pieces,
+          those opp multi-threat blue arrows are BOOSTED so they survive
+          the cap-3 dedup. New _movedPieceThreatened flag.
+      (3) Per-color arrow offsets — each color has a FIXED diagonal offset
+          applied to BOTH start and end (so arrow direction is preserved):
+            Blue  (B) → Upper-Left  (−X, −Y)
+            Yellow(Y) → Lower-Left  (−X, +Y)
+            Red   (R) → Upper-Right (+X, −Y)
+            Green (G) → Lower-Right (+X, +Y)
+          Magnitude ~12% of cell size. Makes overlapping arrows of different
+          colors visually separable. New _colorOffsetMag + _colorOffset map
+          in the SVG arrow rendering block.
+      (4) Yellow square style — instead of CSS box-shadow inset (same as
+          B/R/G), yellow squares now render as a SEPARATE overlay div inside
+          the cell: rounded rectangle (border-radius ~15% of cell), 2px
+          solid yellow border, positioned with ~10% inset on all sides so
+          the four corners leave gaps where other colors' box-shadow insets
+          remain visible underneath. Z-index 5 (above cell, below SVG
+          arrows at z-index 10). New _isYellowSquare flag + overlay div
+          emission in the cell render loop.
+      (5) (Roll-only rotation is implemented in StabilizationHelper.java,
+          not in chess.src/ — see java/com/Regalia/README.license.)
+      (6) (First-principles anti-shake audit is implemented in
+          StabilizationHelper.java — see java/com/Regalia/README.license.)
+    - chess.html: rebuilt from chess.src/ changes.
+    - No changes to ai-bridge.js, chess960.js, eco-data.js, game-logic.js,
+      worker-pool.js, pgn-standard.js, tablebase.js, index.html.tpl.
+
+  v1.0.5 Round-6 Rev55 changes (line-by-line code audit):
+    - game-logic.js (GPL v3): PERF optimization in getCtrlMap — hoisted the
+      attacker-position object out of the inner loop. Each piece at (r,c)
+      attacks multiple squares, but its `position` field is the SAME for all
+      those pushes. Previously allocated a fresh {row:r,col:c} object on every
+      push (~256 allocations per ctrl-map = per render tick when heatmap is on).
+      Now allocates ONE position object per piece (max 32) and reuses it.
+      Consumers (ui.js visual annotation code, worker-pool) only READ the
+      position field, so sharing is safe.
+    - worker-pool.js (AGPL v3): consistency fix — the worker's fenToState()
+      checked `parts.length<4`, while the main-thread fenToState in
+      tablebase.js checks `parts.length<2`. A minimal FEN with just board +
+      side-to-move (e.g. for setup-mode preview) was accepted by main but
+      rejected by worker. Changed worker to `<2` for consistency.
+    - chess960.js (AGPL v3): cleaned up misleading stale comment in
+      parseShredderCastling() — the comment claimed the prior line was "dead
+      code" but that was already consolidated in v1.0.4 into a single `else
+      if`. The code was correct; only the comment was stale.
+    - No changes to ai-bridge.js, tablebase.js, pgn-standard.js, eco-data.js,
+      ui.js, index.html.tpl.
+    - chess.html: rebuilt from chess.src/ changes.
+
+  v1.0.5 Round-6 Rev56 changes (MultiPV + dirty-flag pipeline audit):
+    - ai-bridge.js (AGPL v3): FOUR improvements to the MultiPV processing path:
+      (1) PERF: _updateMultiPVDisplay() — added a per-line signature cache
+          (_multiPVDisplayCache) so we skip the expensive _convertPVtoSAN()
+          call when a PV line's content hasn't changed since the last display
+          update. Previously, _updateMultiPVDisplay was called on every
+          onMultiPVProgress AND on every onEngineProgress (when
+          _cachedMultiPV>1), re-converting ALL PV lines from UCI to SAN on
+          every tick (10-50×/sec). Each conversion clones the game state and
+          runs makeMv/moveAlg for every move in the PV — with 8 MultiPV lines
+          of 10+ moves each, that's 80+ makeMv calls per tick, completely
+          wasted when the PV content is identical to last tick. New helper
+          _clearMultiPVDisplayCache() invalidates the cache at search start.
+      (2) BUG FIX: setConfigMultiPV() — when MultiPV is toggled OFF (set to 1)
+          mid-search, the stale secondary PV lines (index 2..N) from the
+          previous MultiPV search would persist in _multiPVLines and continue
+          to be displayed until the NEXT onBestMove (seconds away). Now
+          _multiPVLines and the display cache are cleared immediately when
+          MultiPV is disabled, and the display refreshes instantly.
+      (3) PERF: onMultiPVProgress() + onEngineProgress() — only sort
+          _multiPVLines when a new line was appended (found=false). When an
+          existing line was updated in-place, the array order is already
+          correct (indices don't change). The sort was previously
+          unconditional on every progress tick (10-50×/sec).
+      (4) Also wired _clearMultiPVDisplayCache() into all three MultiPV-reset
+          paths: onBestMove, restartCurrentEngine, and the engine-recovery
+          path (so a recovered engine doesn't inherit stale display-cache
+          signatures from the pre-crash engine).
+    - ui.js (GPL v3): TWO improvements to the dirty-flag render pipeline:
+      (1) PERF: _updateEvalDisplayIncremental() — added a signature check
+          (_evalDispPrevSig) so we skip the innerHTML rebuild when the eval
+          display content is identical to the last render. Previously, every
+          DIRTY_EVAL tick (10-50×/sec during search) rebuilt the innerHTML
+          even if the eval values hadn't changed (common during deep search
+          where depth increments but score stays stable). The signature
+          captures: setupMode, isAIThinking, emoji, desc, score, depth,
+          seldepth. Invalidated on full render (renderInternal's cache-bust
+          path).
+      (2) No changes to _performDirtyRender's flag-routing logic — the
+          "DIRTY_TOOLBAR/PANEL/MOVES → full render" branches are technically
+          dead code (those flags are always accompanied by others that
+          trigger the bitcount>2 full-render path), but removing them would
+          make the intent less clear and risk a future regression if someone
+          sets them in isolation. Left as-is.
+    - chess.html: rebuilt from chess.src/ changes.
+    - No changes to game-logic.js, chess960.js, pgn-standard.js, tablebase.js,
+      eco-data.js, worker-pool.js, index.html.tpl.
+
+  v1.0.5 Round-6 Rev57 changes (CRITICAL blank-screen fix):
+    - worker-pool.js (AGPL v3): CRITICAL FIX — the Rev55 comment added to
+      fenToState() inside the _WORKER_SOURCE template literal used backticks
+      around 'parts.length<4' (i.e. `parts.length<4`). Since _WORKER_SOURCE
+      is a JS template literal (delimited by backticks), the backtick inside
+      the comment PREMATURELY TERMINATED the template literal, causing a
+      SyntaxError that crashed the entire chess.html bundle at parse time.
+      Symptom: app launches to a blank screen showing only the background
+      color (#1a0a0a) — no UI, no engine init, no error visible to the user.
+      Root cause: the template literal started at `const _WORKER_SOURCE = \``
+      and the first backtick in the comment closed it, then the remaining
+      content was parsed as top-level JS code (all invalid), producing a
+      cascade of syntax errors that prevented the <script> from executing
+      at all.
+      Fix: removed the backticks from the comment (changed
+      "from `parts.length<4` to `parts.length<2`" to
+      "from parts.length<4 to parts.length<2"). The actual code change from
+      Rev55 (parts.length<4 → parts.length<2) is correct and unchanged.
+      Verification: node --check on the bundled chess.html JS now passes
+      with exit code 0 (was failing before the fix).
+    - chess.html: rebuilt from chess.src/ changes.
+    - No changes to other modules.
+
+  v1.0.5 Round-6 Rev58 changes (arrow offset redesign):
+    - ui.js (GPL v3): REDESIGNED the review-board arrow offset logic per user
+      spec. Three guarantees now enforced:
+      (1) Each color's start offset = end offset (same bias direction).
+          Arrow direction is preserved; only absolute position shifts
+          diagonally by color.
+      (2) Reverse-overlap (A→B and B→A) only happens for SAME-color arrows.
+          With same-color same-bias offset, two same-color reverse arrows
+          land on the exact same line (opposite direction). Different-color
+          reverse arrows land on parallel but distinct lines (different
+          diagonal bias) — never collinear.
+      (3) Different-color arrows NEVER overlap on the same line. Guaranteed
+          by four distinct diagonal biases (B→UL, Y→LL, R→UR, G→LR).
+      CHANGES from Rev54/56:
+      - REMOVED the same-color multi-arrow perpendicular "fan" offset (Rev49
+        feature). That offset applied DIFFERENT amounts to start (30%) vs
+        end (100%), which meant same-color reverse arrows did NOT perfectly
+        overlap — violating requirement (2). Now all same-color arrows
+        sharing the same source+target pair overlap EXACTLY.
+      - The per-color diagonal offset is the ONLY offset, applied equally
+        to start and end. Offset magnitude increased from 12% to 14% of
+        cell size for better visual distinction.
+      - Added arrow deduplication by (color, from, to) — multiple same-color
+        arrows on the same source→target pair render as ONE line.
+    - chess.html: rebuilt from chess.src/ changes.
+    - No changes to other modules.
+
+  v1.0.5 Round-6 Rev70 changes (2026.6.27 net-control algorithm consistency fix):
+    - ui.js (GPL v3, DroidFish-derived): ONE change (BUG FIX):
+      (1) NET-CONTROL ALGORITHM CONSISTENCY — blue/red square candidates in
+          _computeAndCacheVisualAnnotations() and _computeInitialPositionAnnotations()
+          changed from one-sided dominance to netCtrl-based, consistent with the
+          heatmap control-info panel. Per user spec "对净控制的算法应该与'格子
+          控制信息'栏中的净控制保持一致".
+          Previously:
+            Blue: pAtk>0 && aAtk===0 (one-sided — player has attackers, AI zero)
+            Red:  aAtk>0 && pAtk===0 (one-sided — AI has attackers, player zero)
+          Now:
+            Blue: netCtrl>0 (player attackers > AI attackers)
+            Red:  netCtrl<0 (AI attackers > player attackers)
+            where netCtrl = pAtk - aAtk (same as info panel's myCtrl - opCtrl).
+          Score ranks by |netCtrl| (was by one-sided attacker count). Impact: a
+          square with 3 white + 1 black (netCtrl=+2) now correctly marks blue;
+          previously it was NOT marked (AI had an attacker, failing one-sided).
+          Spec comment items 3-4 updated.
+    - chess.html: rebuilt from chess.src/ changes.
+    - No changes to other JS modules.
+
+  v1.0.5 Round-6 Rev69 changes (2026.6.27 multi-color per square + heatmap text deletion):
+    - ui.js (GPL v3, DroidFish-derived): TWO changes:
+      (1) MULTI-COLOR PER SQUARE — _rvCslMap changed from {square: {color}}
+          (single-color overwrite) to {square: [colors]} (array preserving all
+          colors). Per user spec "应该允许已被选入标记为黄色的格子再被标记为
+          其它颜色" + "同一个格子上应该可以同时绘制黄色圆角矩形和其它颜色
+          的方框". Render code iterates the color array: B/R/G accumulate into
+          comma-separated box-shadow inset; Y sets _isYellowSquare=true. A
+          square can now show both blue box-shadow AND yellow rounded-rect.
+          Root cause: _rvCslMap[_h.square]={color} overwrote earlier entries.
+      (2) HEATMAP TEXT DELETION — no code change in ui.js itself (the heatmap
+          conditional-display text was in manuals + stats.html). See below.
+    - stats.html (GPL v3): deleted the code comment quoting the heatmap
+      conditional-display spec ("不含热力图控制统计数据的 PGN → 不显示热力图
+      控制统计区块"). The actual conditional-display logic (_posCount===0 check)
+      is unchanged — only the comment quoting the user spec was removed.
+    - chess.html: rebuilt from chess.src/ changes.
+    - No changes to other JS modules.
+
+  v1.0.5 Round-6 Rev68 changes (2026.6.27 yellow rounded-rect position fix):
+    - ui.js (GPL v3, DroidFish-derived): ONE change (CRITICAL BUG FIX):
+      (1) YELLOW ROUNDED-RECT OVERLAY POSITION FIX — the yellow [%csl] overlay
+          div was being emitted AFTER the cell div's </div> instead of INSIDE
+          it. This caused position:absolute to anchor to .bgrid (the next
+          positioned ancestor, via transform:translateZ(0)) instead of the cell
+          div (which has position:relative). Result: all yellow overlays stacked
+          near the board origin instead of on their respective cells. Fixed by
+          moving the overlay emission to BEFORE the cell's </div> so it becomes
+          a child of the cell div and anchors correctly. The old comment block
+          describing the (broken) "emit after bgrid" approach was replaced with
+          a concise current-behavior comment.
+    - chess.html: rebuilt from chess.src/ changes.
+    - No changes to other JS modules.
+
+  v1.0.5 Round-6 Rev67 changes (2026.6.27 landscape translation direction fix):
+    - No changes to chess.src/ files. All Rev67 changes were in
+      StabilizationHelper.java (Java layer). See
+      src/main/java/com/Regalia/README.license for the Rev67 entry.
+
+  v1.0.5 Round-6 Rev66 changes (2026.6.27 yellow overlap + comment cleanup):
+    - ui.js (GPL v3, DroidFish-derived): TWO changes:
+      (1) YELLOW OVERLAP ALLOWED — removed Rev65's blue/red exclusion from
+          yellow-square selection. Per user spec "应该允许被标记为黄色的格子
+          同时被标记为其它颜色", yellow now simply takes the top 3 by total
+          attacker count, regardless of whether they're also blue or red. Both
+          _computeAndCacheVisualAnnotations() and
+          _computeInitialPositionAnnotations() updated. Spec comment item 5
+          updated.
+      (2) COMMENT CLEANUP — deleted ~80 lines of stale comments: arrow-rendering
+          Rev49/54/58 multi-revision narrative, Rev65/66 yellow-square redundant
+          explanations, Rev62 resign-sound fix comment, Rev63 arrow-design
+          change markers. Current-behavior descriptions retained.
+    - index.html.tpl (AGPL v3, original): COMMENT CLEANUP — CSS
+      .bwrap.stabilized comment simplified (removed Rev53/Rev64 markers and
+      --stab-rot removal note).
+    - chess.html: rebuilt from chess.src/ changes.
+    - No changes to other JS modules (game-logic.js, chess960.js, pgn-standard.js,
+      worker-pool.js, ai-bridge.js, tablebase.js, eco-data.js had only comment
+      cleanup — see chess.src/README.license Rev66 entries for those files
+      where applicable; chess960.js/pgn-standard.js/worker-pool.js/ai-bridge.js
+      comment cleanups are documented here for completeness).
+
+  v1.0.5 Round-6 Rev65 changes (2026.6.27 yellow-square logic fix):
+    - ui.js (GPL v3, DroidFish-derived): ONE change (bug fix):
+      (1) YELLOW-SQUARE LOGIC FIX in _computeAndCacheVisualAnnotations() and
+          _computeInitialPositionAnnotations(). Per user spec: "黄色格子应该为
+          双方总控制数量(攻击该格子的棋子总数，无论棋子颜色)最多的那几个格子".
+          Rev61's condition (pAtk>0 && aAtk>0 — both sides must have attackers)
+          was too strict — it excluded high-total one-sided squares (e.g., 5
+          white attackers + 0 black = total 5 was excluded). Rev65 changes it
+          to (total>=2 — all squares with 2+ total attackers are candidates),
+          then excludes squares already chosen as blue/red (one-sided dominance),
+          and picks the top 3 by total. Both functions updated with the same
+          logic:
+            a. Collect all squares with total>=2 as yellow candidates.
+            b. Select blue/red squares first (top 3 each — one-sided net control).
+            c. Build a Set of blue/red square coordinates.
+            d. Iterate yellow candidates (sorted by total desc), skip any in the
+               blue/red set, pick top 3.
+          Design rationale: one-sided-dominated squares are already labeled
+          blue/red by their dominance type; yellow is reserved for the hottest
+          total-control squares that aren't purely one-sided. If fewer than 3
+          non-blue/red candidates exist, fewer yellow squares are emitted.
+          Spec comment item 5 (around line 3503) updated to reflect the
+          corrected logic.
+    - chess.html: rebuilt from chess.src/ changes.
+    - No changes to other JS modules.
+
+  v1.0.5 Round-6 Rev64 changes (2026.6.27 remove rotation + undo cache sync):
+    - ui.js (GPL v3, DroidFish-derived): ONE change (bug fix):
+      (1) UNDO REVERTS CACHED PGN CONTENT — undoMove() now calls new
+          _invalidateCachesForUndoneMoves(currentMoveCount) after restoring
+          moveRecords. Previously, undoMove() restored moveRecords but did NOT
+          clear cache entries for the undone moves, causing stale eval/annotation
+          data to leak into re-played moves, review mode, and PGN export's
+          [%eval]/[%csl]/[%cal] annotations.
+          Three caches cleared:
+            a. _reviewEvalCache (keyed by reviewStep, 1-based) — deletes key >
+               currentMoveCount. This is the core of "background real-time
+               cached PGN" — per-move eval cache backing review-mode eval bar
+               and [%eval] annotations.
+            b. _visualAnnotationsCache (keyed by moveIdx, 0-based) — deletes
+               key >= currentMoveCount ('_initial' sentinel kept — initial-
+               position annotations are independent of undo). Backs [%csl]/
+               [%cal] annotations.
+            c. _cachedOriginalPGN — set to null, ensuring subsequent PGN
+               operations (stats page, 📚 save) use _buildPGNString() (reads
+               current shorter moveRecords) instead of stale imported text.
+          _redoStack is NOT cleared (undo must remain reversible). When user
+          redoes, cache entries are re-created as needed.
+          New function _invalidateCachesForUndoneMoves(currentMoveCount) added
+          near _resetGameUIState().
+    - index.html.tpl (AGPL v3, original): ONE change:
+      (1) CSS .bwrap.stabilized transform changed from
+          translate3d(...) rotate(var(--stab-rot,0deg)) to
+          translate3d(var(--stab-x,0px),var(--stab-y,0px),0) only.
+          --stab-rot CSS custom property no longer used (Rev64 removed rotation
+          from anti-shake per user spec). Comment updated.
+    - chess.html: rebuilt from chess.src/ changes.
+    - No changes to other JS modules.
+
+  v1.0.5 Round-6 Rev63 changes (2026.6.27 anti-shake + arrow optimization):
+    - ui.js (GPL v3, DroidFish-derived): THREE changes per user spec:
+      (1) ARROW OFFSET OPTIMIZATION — offset magnitude changed from
+          Math.min(3, cellSize*0.08) (3px cap + 8%) to cellSize*0.12 (12%
+          no cap). Scales proportionally with cell size so the visual offset
+          fraction is constant across screens. Verified safe for cellSize
+          20-60px: max radial offset = cellSize/2 - 2.75 (with new strokeWidth
+          1.5 and markerWidth 4); we use 12% which is well within bound.
+          Cell-center formula (col*cellSize + cellSize/2) confirmed exact for
+          all cell sizes — no change needed.
+      (2) ARROW SHAPE REDESIGN — minimal arrow per user spec. Removed
+          redundant elements: origin dot (Rev60), round linecap (Rev61→butt),
+          thick stroke (2→1.5px). New arrowhead: compact 4×3 triangle (was
+          5×4), refX=3.5, refY=1.5, polygon "0 0, 4 1.5, 0 3". 4×3 is the
+          smallest size that still reads as a clear triangle at 30-60px cell
+          sizes. Line shorten 9→4px (matches new arrowhead). stroke-opacity
+          0.95→0.9 (pieces underneath remain readable). Final: thin colored
+          line + small triangular point — minimal representation that
+          communicates origin, target, direction, type.
+      (3) No changes to the four diagonal bias directions (B→UL, Y→LL,
+          R→UR, G→LR) — these guarantee different-color arrows never overlap
+          on the same line.
+    - chess.html: rebuilt from chess.src/ changes.
+    - No changes to other JS modules.
+
+  v1.0.5 Round-6 Rev62 changes (2026.6.27 second-pass audit):
+    - chess960.js (AGPL v3, original): CRITICAL FIX —
+      _CH960_LIGHT_BISHOP_FILES and _CH960_DARK_BISHOP_FILES arrays were
+      swapped. On a standard board, a1/c1/e1/g1 are DARK squares and
+      b1/d1/f1/h1 are LIGHT, but the original code labeled them reversed.
+      This broke 720/960 SP-IDs; SP-ID 518 produced "RNQBBKNR" instead of
+      "RNBQKBNR". After fix, all 960 SP-IDs pass round-trip test. The parity
+      checks in backRankToSPID() (f%2===0 vs f%2===1) were fixed in sync.
+      Also corrected randomSPID() comment: P(>8 retries) is (256/65536)^8 ≈
+      1.3e-19, not 0.4% as previously stated. Code was always correct.
+    - game-logic.js (GPL v3, DroidFish-derived): PERF — _ecoRecCache LRU
+      no-refresh-on-hit. Cache hit returned without delete+re-insert, so hot
+      entries could be evicted before cold ones. Fixed to refresh LRU on hit
+      (matching _tbCache pattern). NOTE: the Chess960 castling detection
+      limitation (Math.abs(to.col-from.col)===2 only works when king starts
+      on col 4) was documented but NOT fixed in this round — HIGH risk,
+      requires coordinated changes in 4 locations + Zobrist hash. Standard
+      chess (SP-ID 518) is unaffected.
+    - tablebase.js (GPL v3, DroidFish-derived): TWO fixes —
+      (1) BUG: probeTablebase() 404 misidentified as server-down. 404 means
+      "position not in tablebase", not "server down". 3 × 404 falsely set
+      _tbOffline=true for 60s. Now only 5xx + network errors count toward
+      _tbFailCount.
+      (2) BUG: PGN move-number regex (?=[a-hKQRBN]) missing 'O'. "1 O-O"
+      wasn't normalized to "1. O-O" and "1" was mis-tokenized. Fixed to
+      [a-hKQRBNO].
+    - worker-pool.js (AGPL v3, original): TWO fixes —
+      (1) BUG: PGN move-number regex same fix as tablebase.js (added 'O').
+      (2) BUG: worker onerror handler called .delete() on _workerPending Map
+      during for...of iteration. Fixed to snapshot keys via Array.from()
+      before deletion.
+    - pgn-standard.js (AGPL v3, original): REDUNDANCY — removed dead
+      `let lineLen=0` in composePGN() (wrapping logic uses curLine.length,
+      never reads lineLen).
+    - ai-bridge.js (GPL v3, DroidFish-derived): FOUR fixes —
+      (1) BUG: c.mate||0 lost the mate:0 vs mate:null distinction. Fixed to
+      c.mate!=null?c.mate:0.
+      (2) REDUNDANCY: removed dead _importedStartColor ternary (variable
+      never declared, typeof guard always true, entire startColor computation
+      was dead code).
+      (3) SIMPLIFY: removed redundant depth>0 check in onEngineProgress
+      (already guaranteed by line 1854 if(depth<=0)return).
+      (4) PERF: _updateMultiPVDisplay() early-exit when !isHintLoading —
+      previously computed hintParts/signatures/cache checks 10-50×/sec
+      during AI thinking but discarded the result.
+    - ui.js (GPL v3, DroidFish-derived): THREE fixes —
+      (1) BUG: _resignGame() called undefined _playSound('lose'). The typeof
+      guard prevented ReferenceError, so the resign sound was silently never
+      played. Now calls playSound('gameover').
+      (2) PERF: eval chart label loop used _reviewEvalCache.get() (refreshes
+      LRU) instead of peek() in a read-only iteration. Fixed to peek().
+      (3) SIMPLIFY: two instances of _prevMvEval?_prevMvEval.eval:0 ternary
+      simplified to _prevMvEval.eval (outer if already guarantees non-null).
+    - chess.html: rebuilt from chess.src/ changes.
+    - No changes to eco-data.js, index.html.tpl.
+
+  v1.0.5 Round-6 Rev61 changes (2026.6.27 development plan):
+    - ui.js (GPL v3): THREE changes:
+      (1) YELLOW SQUARE LOGIC FIX in _computeAndCacheVisualAnnotations() and
+          _computeInitialPositionAnnotations(): yellow-square selection
+          changed from `total>=2` to `pAtk>0 && aAtk>0` (both sides must
+          have attackers). Previously, single-side-dominated squares (e.g.
+          5 white attackers + 0 black = total 5) were misclassified as
+          yellow — they should be BLUE (player net control). Per user spec
+          "黄色格=双方总控制高格(当前未正确实现)". Now correctly distinguishes
+          one-sided dominance (blue/red) from contested heat (yellow).
+      (2) ARROW STROKE-LINECAP changed from "round" to "butt" in the
+          review-board SVG arrow lines. The round linecap created a small
+          semi-circle at the arrow's start (no marker there), visually
+          reading as an "extra dot" — contradicting user spec "箭头末端没有
+          多余的圆点". Butt linecap eliminates the visible dot.
+      (3) No other changes to the arrow offset logic (same four diagonal
+          biases: B→UL, Y→LL, R→UR, G→LR; same cap of 3px / 8% of cell size).
+    - chess.html: rebuilt from chess.src/ changes.
+
+  v1.0.5 Round-6 Rev60 changes (arrow cleanup + rotation limit):
+    - ui.js (GPL v3): THREE changes per user spec:
+      (1) REMOVED the origin dot (circle element) from the review-board SVG
+          arrows. Previously each arrow had a small filled circle (r=2.5) at
+          its origin to mark the source. User requested removal — the
+          arrowhead at the end is sufficient to indicate direction.
+      (2) CALIBRATED the per-color diagonal offset magnitude to stay within
+          cell bounds. Reduced from Math.min(6, cellSize*0.14) to
+          Math.min(3, cellSize*0.08). The previous 14% (capped at 6px) could
+          cause arrow endpoints to exceed the cell boundary on small screens.
+          The new 8% (capped at 3px) is well within the safe zone for all
+          cell sizes ≥ 30px.
+      (3) No other changes to the arrow offset logic (same four diagonal
+          biases: B→UL, Y→LL, R→UR, G→LR).
+    - chess.html: rebuilt from chess.src/ changes.

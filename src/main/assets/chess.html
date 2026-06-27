@@ -29,7 +29,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://tablebase.lichess.ovh; img-src data: file:; frame-ancestors 'none'; base-uri 'self'">
-<title>Regalia v1.0.4</title>
+<title>Regalia v1.0.5</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{color-scheme:dark;--bg:#1a0a0a;--card:#221015;--border:#8b6914;--border2:#d4a017;--text:#f5e6c8;--muted:#a08050;--accent:#d4a017;--accent2:#ffd700;--blue:#4a90d9;--red:#c0392b;--purple:#8e44ad;--green:#27ae60;--danger:#c0392b}
@@ -210,7 +210,9 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .review-hdr{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:#221015;border-bottom:2px solid var(--border2)}
 .review-hdr h2{font-family:system-ui,-apple-system,sans-serif;font-size:1rem;font-weight:700;color:var(--accent2);letter-spacing:2px}
 .review-body{display:flex;flex:1;overflow:hidden}
-.review-board{flex-shrink:0;padding:12px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:8px}
+.review-board{flex-shrink:0;padding:12px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:8px;position:relative}
+/* v1.0.4 Round-5 Rev48: position:relative so the SVG arrow overlay (absolute)
+   anchors to .review-board, not the viewport. */
 /* P0: Review-left wraps board + controls; in portrait it stacks naturally,
    in landscape it becomes the left column via media query. */
 .review-left{display:flex;flex-direction:column;align-items:center;gap:8px}
@@ -508,6 +510,82 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .tip-item{margin-bottom:4px}
 /* Move animation overlay - per-piece types, GPU-accelerated */
 .move-anim{position:absolute;display:flex;align-items:center;justify-content:center;font-size:2rem;z-index:20;pointer-events:none;will-change:transform;backface-visibility:hidden;-webkit-backface-visibility:hidden;transform:translate3d(0,0,0);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text;-webkit-font-variant-emoji:text;font-weight:400}
+
+/* v1.0.5 Round-6 Rev49: High aspect-ratio screen adaptation.
+   Goal: every interface scrolls VERTICALLY ONLY — never horizontal scroll,
+   regardless of portrait or landscape, on any aspect ratio (including
+   ultra-tall phones 21:9, 22:9, foldable inner screens, ultra-wide tablets).
+   Strategy:
+   1. Body and #app always have overflow-x:hidden (already set above).
+   2. All flex containers use min-width:0 on children so they shrink instead
+      of overflowing horizontally.
+   3. The header toolbar (.hdr-tools) wraps to multiple rows on narrow
+      widths instead of horizontal scroll.
+   4. Long text elements use word-break:break-word and overflow-wrap:anywhere.
+   5. Tables and code blocks use overflow-x:auto ONLY on their own container
+      (not the whole page) so horizontal scroll is localized to where it's
+      genuinely needed (e.g., PGN text), never the main layout.
+   6. The board never overflows — it's sized to min(viewport-width, viewport-height).
+*/
+:root{
+  /* v1.0.5 Rev49: Safe-area CSS variables for notch/cutout/R-corner.
+     These read the system's safe-area insets (set by AndroidManifest's
+     shortEdges mode + viewport-fit=cover) and expose them to JS for
+     the anti-shake feature's max-displacement clamping. */
+  --safe-top:env(safe-area-inset-top,0px);
+  --safe-bottom:env(safe-area-inset-bottom,0px);
+  --safe-left:env(safe-area-inset-left,0px);
+  --safe-right:env(safe-area-inset-right,0px);
+}
+/* v1.0.5 Rev49: Ensure all flex children can shrink — prevents horizontal
+   overflow when content is wider than the flex container. */
+.hdr-top,.hdr-tools,.main,.bsec,.panel,.review-top,.review-bottom,.review-nav,.pbar,.card,.crow,.mlist,.review-body{min-width:0}
+/* v1.0.5 Rev49: Header toolbar wraps instead of horizontal-scrolling.
+   Previously .hdr-tools had overflow-x:auto in landscape, causing a
+   horizontal scrollbar on ultra-wide screens. Now it wraps to multiple
+   rows, keeping everything visible without horizontal scroll. */
+@media(orientation:landscape){.hdr-tools{gap:3px;flex-wrap:wrap;overflow-x:hidden}}
+/* v1.0.5 Rev49: Long text breaks instead of overflowing. */
+.crow,.pname,.tind,.tips,.tip-item,.rmv-notation,.rmv-comment,.ec-name{word-break:break-word;overflow-wrap:anywhere}
+/* v1.0.5 Rev49: Tables and PGN/code blocks keep LOCAL horizontal scroll
+   (only when their own content is too wide), never triggering page-level
+   horizontal scroll. */
+.mlist,.review-moves,.dlg{overflow-wrap:break-word;word-break:break-word}
+
+/* Anti-shake stabilization layer. When _stabilizationEnabled is true (toggled
+   by long-pressing any board square), the .bwrap element gets a CSS class
+   .stabilized that applies a CSS transform for translation anti-shake (±8px).
+   Values are set dynamically by JS via CSS custom properties --stab-x, --stab-y. */
+.bwrap.stabilized{
+  transition:transform 16ms linear;
+  transform:translate3d(var(--stab-x,0px),var(--stab-y,0px),0);
+  will-change:transform;
+}
+/* v1.0.5 Rev49: Ultra-tall portrait (aspect ratio >= 2.0, e.g., 21:9 phones).
+   On such screens the board would leave huge empty space above/below.
+   Strategy: cap board size to a reasonable max (so it doesn't dominate),
+   and let the panel below take more vertical space for move history. */
+@media(orientation:portrait) and (min-aspect-ratio:2/1){
+  .main{gap:10px;padding:8px}
+  .bsec{align-self:center;max-width:90vw}
+  .panel{max-width:480px;margin:0 auto;width:100%}
+}
+/* v1.0.5 Rev49: Ultra-wide landscape (aspect ratio >= 2.2, e.g., 21:9 phones
+   in landscape, foldable inner screens). Cap panel width so the move list
+   doesn't stretch absurdly wide; center the whole main row. */
+@media(orientation:landscape) and (min-aspect-ratio:22/10){
+  .main{justify-content:center;gap:16px}
+  .panel{max-width:520px;flex:0 1 520px}
+  .bsec{flex:0 0 auto}
+}
+/* v1.0.5 Rev49: Ultra-short landscape (aspect ratio <= 1.4 in landscape,
+   e.g., some foldable outer screens, square-ish tablets in landscape).
+   Stack board ABOVE panel (column layout) so neither is too cramped. */
+@media(orientation:landscape) and (max-aspect-ratio:14/10){
+  .main{flex-direction:column!important;align-items:center;height:auto}
+  .bsec{align-self:center}
+  .panel{width:100%;max-width:520px;max-height:none}
+}
 
 /* v1.0.4 ROUND-5 REV12: Match JS durations exactly (game-logic.js animateMove).
    180-260ms for smooth 120fps. will-change:transform ensures GPU compositing. */
@@ -882,7 +960,7 @@ const _i18n={
 'elo_target':{zh:'Elo目标',en:'ELO Target'},
 'export_settings_btn':{zh:'📤 导出设置',en:'📤 Export'},
 'import_settings_btn':{zh:'📥 导入设置',en:'📥 Import'},
-'loading_title':{zh:'Regalia v1.0.4',en:'Regalia v1.0.4'},
+'loading_title':{zh:'Regalia v1.0.5',en:'Regalia v1.0.5'},
 'click_skip_loading':{zh:'点击跳过加载',en:'Click to skip loading'},
 'white_checkmate':{zh:'白方将杀获胜',en:'White wins by checkmate'},
 'black_checkmate':{zh:'黑方将杀获胜',en:'Black wins by checkmate'},
@@ -1699,7 +1777,12 @@ const ps=postState;
 if(ps){const opp=OPP_COLOR[piece.color];const kPos=opp==='white'?ps.wk:ps.bk;if(kPos&&inCheck(ps.board,opp,kPos)){n+=hasLegalMoves(ps)?'+':'#'}}
 return n}
 function getCtrlMap(b){const cm=[];for(let r=0;r<8;r++){cm[r]=[];for(let c=0;c<8;c++)cm[r][c]={white:[],black:[]}}
-for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=b[r][c];if(p){const atks=attacked(b,{row:r,col:c});for(const a of atks){cm[a.row][a.col][p.color].push({piece:p,position:{row:r,col:c}})}
+// v1.0.5 Rev55 PERF: hoist the attacker-position object out of the inner loop.
+// Each piece at (r,c) attacks multiple squares, but its `position` field is the
+// SAME for all those pushes. Previously we allocated a fresh {row:r,col:c} object
+// on every push (≈256 allocations per ctrl-map = per render tick when heatmap
+// is on). Now we allocate ONE position object per piece (max 32) and reuse it.
+for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=b[r][c];if(p){const atks=attacked(b,{row:r,col:c});const _pos={row:r,col:c};for(const a of atks){cm[a.row][a.col][p.color].push({piece:p,position:_pos})}
 }}return cm}
 
 
@@ -2107,7 +2190,12 @@ _ensureEcoParsed();
 const hist=s.moveHistory||[];
 if(!hist.length)return null;
 const ck=hist.map(h=>''+h.from.row+h.from.col+h.to.row+h.to.col).join(',');
-if(_ecoRecCache.has(ck))return _ecoRecCache.get(ck);if(_ecoRecCache.size>=_ECO_REC_CACHE_MAX){const firstKey=_ecoRecCache.keys().next().value;_ecoRecCache.delete(firstKey);}
+// v1.0.5 Round-6 Rev62 (2026.6.27) PERF: refresh LRU order on cache hit.
+// Previously, a cache hit returned immediately without delete+re-insert,
+// so frequently-accessed entries could be evicted before rarely-accessed
+// ones. The tablebase cache (_tbCache) already has this fix applied.
+if(_ecoRecCache.has(ck)){const v=_ecoRecCache.get(ck);_ecoRecCache.delete(ck);_ecoRecCache.set(ck,v);return v;}
+if(_ecoRecCache.size>=_ECO_REC_CACHE_MAX){const firstKey=_ecoRecCache.keys().next().value;_ecoRecCache.delete(firstKey);}
 if(!ecoHashMap)buildEcoHashMap();
 // Find matching opening lines that have a next move for the player
 const candidates=[];
@@ -2235,9 +2323,14 @@ function _prependBlackToMovePlaceholder(){
 //   6. The remaining 3 slots are filled: ROOK, KING, ROOK (in that order, since King must be between two rooks).
 // The traditional chess start position (RNBQKBNR) is SP-ID 518.
 
-// Quick lookup tables for the 4-step decomposition
-const _CH960_LIGHT_BISHOP_FILES=[0,2,4,6];   // a, c, e, g  (white squares from White's POV)
-const _CH960_DARK_BISHOP_FILES=[1,3,5,7];    // b, d, f, h  (black squares)
+// Quick lookup tables for the 4-step decomposition.
+// On a standard chess board, from White's perspective:
+//   a1 = DARK square, b1 = LIGHT, c1 = DARK, d1 = LIGHT,
+//   e1 = DARK,  f1 = LIGHT, g1 = DARK, h1 = LIGHT
+// So the LIGHT (white) bishop files are b,d,f,h = {1,3,5,7}, and the
+// DARK bishop files are a,c,e,g = {0,2,4,6}.
+const _CH960_LIGHT_BISHOP_FILES=[1,3,5,7];   // b, d, f, h  (LIGHT squares from White's POV)
+const _CH960_DARK_BISHOP_FILES=[0,2,4,6];    // a, c, e, g  (DARK squares)
 const _BINOMIAL_5_2 = [
   [0,1],[0,2],[0,3],[0,4],
   [1,2],[1,3],[1,4],
@@ -2312,10 +2405,11 @@ function backRankToSPID(backRank){
   for(let i=0;i<8;i++)if(backRank[i]==='bishop')bishFiles.push(i);
   if(bishFiles.length!==2)return -1;
   if(bishFiles[0]%2===bishFiles[1]%2)return -1; // same-color bishops — invalid
-  // 4. Derive SP-ID components
-  // Light bishop (on an even-indexed file: 0,2,4,6 = a,c,e,g)
-  const lightBishFile=bishFiles.find(f=>f%2===0);
-  const darkBishFile =bishFiles.find(f=>f%2===1);
+  // 4. Derive SP-ID components.
+  // Light (white-square) bishop is on an ODD file (1,3,5,7);
+  // dark (black-square) bishop is on an EVEN file (0,2,4,6).
+  const lightBishFile=bishFiles.find(f=>f%2===1);
+  const darkBishFile =bishFiles.find(f=>f%2===0);
   if(lightBishFile===undefined||darkBishFile===undefined)return -1;
   const lightBishopIdx=_CH960_LIGHT_BISHOP_FILES.indexOf(lightBishFile);
   const darkBishopIdx =_CH960_DARK_BISHOP_FILES.indexOf(darkBishFile);
@@ -2359,7 +2453,7 @@ function randomSPID(){
       const buf=new Uint16Array(1);
       // Rejection-sample to eliminate modulo bias
       const LIMIT=65280; // largest multiple of 960 ≤ 65536
-      for(let _i=0;_i<8;_i++){ // bounded retries (8 is plenty — P(>8 retries) ≈ 0.4%)
+      for(let _i=0;_i<8;_i++){ // bounded retries (8 is plenty — P(>8 retries) ≈ 0)
         crypto.getRandomValues(buf);
         if(buf[0]<LIMIT)return buf[0]%960;
       }
@@ -2446,10 +2540,6 @@ function parseShredderCastling(str,board){
     }else{
       if(bKing<0)continue;
       if(file>bKing)cr.blackKingside=true;
-      // v1.0.4 FIX (this round): the previous line was dead code
-      // (`cr.blackQueenside=false||cr.blackQueenside` is a no-op), and the
-      // actual assignment was on a separate `if` statement below. Consolidated
-      // into a single `else if` to match the white-side pattern.
       else if(file<bKing)cr.blackQueenside=true;
     }
   }
@@ -2913,11 +3003,18 @@ function formatNagToken(nag){
 //   [%cal Ge2e4]    → draw Green arrow from e2 to e4
 //   [%cal Ge2e4,Rg1f3] → multiple arrows
 //
-// Color codes (case-sensitive first letter):
-//   G = Green   — checked king's escape squares (avoidance paths)
-//   R = Red     — checker → checked king path (current move gives check)
-//   B = Blue    — important piece → square control path (e.g., center control)
-//   Y = Yellow  — piece → opponent's queen path (queen threat)
+// Color codes (case-sensitive first letter) — v1.0.4 Round-5 Rev48 full semantics:
+//   SQUARE HIGHLIGHTS ([%csl]):
+//     B = Blue   — player's net-control strong squares (player controls, AI doesn't)
+//     R = Red    — AI opponent's net-control strong squares (AI controls, player doesn't)
+//     Y = Yellow — high total-control squares (both sides combined have many attackers)
+//     G = Green  — center-area squares with NO control from either side (neutral center)
+//   ARROWS ([%cal]):
+//     B = Blue   — mover's piece threatens 2+ enemy pieces (multi-threat):
+//                  arrows from threatening piece to each threatened piece
+//     R = Red    — checker → checked king path (current move gives check)
+//     Y = Yellow — mover's piece threatens enemy queen (arrow from attacker to queen)
+//     G = Green  — checked king position → escape square (avoidance paths)
 
 const _CSL_COLOR_CODES={G:'G',R:'R',B:'B',Y:'Y'};
 
@@ -3110,7 +3207,6 @@ function composePGN(params){
   }
   tokens.push(params.result||'*');
   // Wrap movetext at ~78 columns (PGN spec recommends ≤80)
-  let lineLen=0;
   const lines=[];
   let curLine='';
   for(const tok of tokens){
@@ -3554,8 +3650,12 @@ function initState(){
 
 function fenToState(fen){
   if(!fen||typeof fen!=='string')return null;
+  // Accept minimal FENs (board + side-to-move only); castling/en-passant/clock
+  // fields are optional and default sensibly. Consistent with the main-thread
+  // fenToState in tablebase.js. NOTE: no backticks in this comment — it lives
+  // inside the _WORKER_SOURCE template literal.
   const parts=fen.trim().split(/\\s+/);
-  if(parts.length<4)return null;
+  if(parts.length<2)return null;
   const rows=parts[0].split('/');
   if(rows.length!==8)return null;
   const board=Array.from({length:8},()=>Array(8).fill(null));
@@ -3694,7 +3794,14 @@ function parsePGN(pgnText){
   text=text.replace(/\\b1\\s+-\\s+0\\b/g,'').replace(/\\b0\\s+-\\s+1\\b/g,'').replace(/\\b1\\/2\\s+-\\s+1\\/2\\b/g,'');
   text=text.replace(/\\s+/g,' ').trim();
   text=text.replace(/(\\d+\\.+(?=[a-zA-Z]))/g,'$1 ');
-  text=text.replace(/(^|\\s)(\\d+)\\s+(?=[a-hKQRBN])/g,'$1$2. ');
+  // v1.0.5 Round-6 Rev62 (2026.6.27) FIX: add 'O' to the character class so
+  // PGN move numbers followed by castling notation (e.g. "1 O-O" without a
+  // dot) are correctly normalized to "1. O-O". Previously the regex
+  // (?=[a-hKQRBN]) did not match 'O', so "1 O-O" would not get the ". "
+  // inserted, causing the "1" to be mis-tokenized as a SAN move and skipped.
+  // NOTE: no backticks in this comment — it lives inside the _WORKER_SOURCE
+  // template literal, and backticks would prematurely terminate it (Rev57 bug).
+  text=text.replace(/(^|\\s)(\\d+)\\s+(?=[a-hKQRBNO])/g,'$1$2. ');
   text=text.replace(/\\s[!?]{1,5}\\s/g,' ');
   text=text.replace(/^[!?]{1,5}\\s/g,'').replace(/\\s[!?]{1,5}$/g,'');
   if(!text)return null;
@@ -3817,9 +3924,16 @@ function _initWorker(){
     };
     _workerInstance.onerror=function(e){
       console.error('Worker error:',e.message||e);
-      // Reject ALL pending tasks — the worker is in an unknown state
-      for(const [id,pending] of _workerPending){
-        pending.reject(new Error('Worker error: '+(e.message||'unknown')));
+      // Reject ALL pending tasks — the worker is in an unknown state.
+      // v1.0.5 Round-6 Rev62 (2026.6.27) FIX: collect keys first, then delete.
+      // Modifying a Map during for...of iteration is spec-allowed but some
+      // engines may skip entries or behave unexpectedly. Array.from() takes
+      // a snapshot of the keys before any deletion, guaranteeing all pending
+      // tasks are rejected.
+      const ids=Array.from(_workerPending.keys());
+      for(const id of ids){
+        const pending=_workerPending.get(id);
+        if(pending)pending.reject(new Error('Worker error: '+(e.message||'unknown')));
         _workerPending.delete(id);
       }
     };
@@ -4674,13 +4788,11 @@ function _buildPGNString(forceIncludeVariations){
   for(let i=0;i<moveRecords.length;i++){
     const mr=moveRecords[i];
     if(!mr)continue;
-    // Determine color: even index = White (when starting from move 1 with white to move)
-    // For FEN-imported games where black moves first, the placeholder logic shifts this.
-    // We rely on the convention that moveRecords[i] is the (i+1)-th half-move from the
-    // starting side. The "color" field is derived from i + the starting side.
-    const startColor=(typeof _importedStartMoveNum!=='undefined'&&_importedStartMoveNum>0&&gameState&&gameState.currentTurn==='black'&&i===0)?'black':(((i+(typeof _importedStartColor!=='undefined'&&_importedStartColor==='black'?1:0))%2===0)?'white':'black');
-    // For standard games (not FEN-imported), even index = white
-    const color=(typeof _importedStartColor==='undefined')?(i%2===0?'white':'black'):startColor;
+    // Determine color: even index = White (when starting from move 1 with white to move).
+    // For FEN-imported games where black moves first, the _prependBlackToMovePlaceholder()
+    // mechanism in game-logic.js shifts this. We rely on the convention that moveRecords[i]
+    // is the (i+1)-th half-move from the starting side.
+    const color=i%2===0?'white':'black';
     // v1.0.4 Rev23: Removed dead variable `moveNum` — it was computed but never
     // read (the actual move number used below is `_moveNum`). The ternary on
     // line 641 already handles the black-start case correctly.
@@ -4741,6 +4853,21 @@ function _buildPGNString(forceIncludeVariations){
     // with stats.html's extractMoveTimes() — it looks for "<number>s" anywhere
     // in the comment.
     if(mr.time)commentParts.push(mr.time+'s');
+    // v1.0.4 Round-5 Rev48: Preserve the free-text comment from imported PGNs.
+    // mr.comment is populated by importPGN() from {} comments in the source
+    // PGN. We append it AFTER all [%xxx] tags so the structured tags remain
+    // at the front (some PGN readers expect [%xxx] tags first in a comment).
+    // The "[var] " prefix (used for variation-internal comments) is preserved
+    // as-is so downstream consumers can distinguish mainline vs variation
+    // comments if needed.
+    if(mr.comment){
+      // Escape braces in the comment body — PGN spec forbids literal { or }
+      // inside a brace comment (they would terminate the comment prematurely).
+      // Replace with Unicode full-width braces (visually similar, semantically
+      // distinct) so the comment text is still readable.
+      const _escComment=mr.comment.replace(/\{/g,'｛').replace(/\}/g,'｝');
+      commentParts.push(_escComment);
+    }
     // v1.0.4 Rev27: On the LAST move of a resigned game, append the
     // "{White resigns.}" / "{Black resigns.}" annotation per the 元宝 PGN
     // report. The resigner is the OPPOSITE of _resignWinnerColor.
@@ -4982,7 +5109,8 @@ function openStatsPage(){
     for(let i=0;i<moveRecords.length;i++){
       // v1.0.2 PERF: use peek() — iterating over all moves, no need to refresh LRU.
       const c=_reviewEvalCache.peek(i+1);
-      evalData.push(c?{eval:c.eval||0,mate:c.mate||0,depth:c.depth||0,wdlW:c.wdlW!=null?c.wdlW:-1,wdlD:c.wdlD!=null?c.wdlD:-1,wdlL:c.wdlL!=null?c.wdlL:-1}:null);
+      // Use !=null so mate:0 (checkmate-now) is distinct from mate:null (no mate).
+      evalData.push(c?{eval:c.eval||0,mate:c.mate!=null?c.mate:0,depth:c.depth||0,wdlW:c.wdlW!=null?c.wdlW:-1,wdlD:c.wdlD!=null?c.wdlD:-1,wdlL:c.wdlL!=null?c.wdlL:-1}:null);
     }
   }
   // v1.0.2 FIX: Also send the parsed move records (from/to/piece/captured/promotion/notation)
@@ -5509,6 +5637,8 @@ function onEngineRestarting(){
   // step so requestEngineEval re-fetches the current step after recovery.
   _reviewEvalRequestedStep=-1;
   _multiPVLines=[];_multiPVResult=null;_lastEngineVariation=null;
+  // v1.0.5 Rev56: Clear the MultiPV display cache (companion to _multiPVLines=[]).
+  _clearMultiPVDisplayCache();
   if(_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
   // v1.0.2 FIX: Reset AI retry counter on engine restart. Without this, if the
   // engine crashed mid-AI-move (where _aiRetryCount had already incremented to
@@ -5611,6 +5741,9 @@ function onBestMove(uciMove){
 
   // Clear MultiPV progress lines for next search
   _multiPVLines=[];
+  // v1.0.5 Rev56: Also clear the MultiPV display cache so the next search's
+  // first progress tick is not falsely skipped by a stale-signature hit.
+  _clearMultiPVDisplayCache();
 
   // Process variations in onMultiPVResult() (called after onBestMove)
   // v1.0.2 FIX: Removed the `moveRecords.length > 0` guard — it skipped
@@ -5853,7 +5986,7 @@ function onEngineProgress(depth,nodes,nps,scoreCp,scoreMate,wdlW,wdlD,wdlL,selde
   // so the user saw "分析中" with no depth/nodes/speed info during eval searches.
   // Now Java dispatches onEngineProgress for all states, and we update the eval
   // display's depth indicator in real-time.
-  if(_evalLoading&&depth>0&&depth<=30){
+  if(_evalLoading&&depth<=30){
     _sfDepth=depth;
     // v1.0.4 Rev33: also track seldepth for the eval bar's "D15 SD22" display.
     _sfSeldepth=(seldepth!=null&&seldepth>0&&seldepth<=60)?seldepth:0;
@@ -5885,7 +6018,11 @@ function onEngineProgress(depth,nodes,nps,scoreCp,scoreMate,wdlW,wdlD,wdlL,selde
       if(_multiPVLines[i].index===1){_multiPVLines[i]=primaryLine;found=true;break;}
     }
     if(!found)_multiPVLines.push(primaryLine);
-    _multiPVLines.sort(function(a,b){return a.index-b.index;});
+    // v1.0.5 Rev56 PERF: only sort when a new line was appended (same
+    // optimization as onMultiPVProgress above).
+    if(!found){
+      _multiPVLines.sort(function(a,b){return a.index-b.index;});
+    }
     _updateMultiPVDisplay();
   }
 }
@@ -6265,6 +6402,9 @@ function restartCurrentEngine(){
       // v1.0.2 FIX (audit): Clear MultiPV variation state — the old engine's
       // in-flight PV lines are invalid after restart.
       _multiPVLines=[];_multiPVResult=null;_lastEngineVariation=null;
+      // v1.0.5 Rev56: Clear the MultiPV display cache too (companion to the
+      // _multiPVLines=[] reset above).
+      _clearMultiPVDisplayCache();
       if(_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
     }else{
       showToast(T('engine_unavailable_bridge'));
@@ -6279,7 +6419,29 @@ function restartCurrentEngine(){
 }
 function setConfigThreads(v){v=Math.max(1,Math.min(64,parseInt(v)||1));if(engineSettingsData)engineSettingsData.threads=v;_bridgeCall(function(bridge){bridge.setEngineThreads(v);});renderEngineConfigAndUpdate();}
 function setConfigHash(v){v=Math.max(1,Math.min(4096,parseInt(v)||64));if(engineSettingsData)engineSettingsData.hash=v;_bridgeCall(function(bridge){bridge.setEngineHash(v);});renderEngineConfigAndUpdate();}
-function setConfigMultiPV(v){v=Math.max(1,Math.min(8,parseInt(v)||1));if(engineSettingsData)engineSettingsData.multiPV=v;_cachedMultiPV=v;_bridgeCall(function(bridge){bridge.setEngineMultiPV(v);});renderEngineConfigAndUpdate();}
+function setConfigMultiPV(v){
+  v=Math.max(1,Math.min(8,parseInt(v)||1));
+  if(engineSettingsData)engineSettingsData.multiPV=v;
+  _cachedMultiPV=v;
+  // v1.0.5 Rev56 BUG FIX: When MultiPV is toggled OFF (set to 1) mid-search,
+  // the stale secondary PV lines (index 2..N) from the previous MultiPV
+  // search would persist in _multiPVLines and continue to be displayed via
+  // _updateMultiPVDisplay. They were only cleared on the NEXT onBestMove,
+  // which could be seconds away. Now we clear immediately when MultiPV is
+  // disabled, so the display reverts to single-line mode instantly.
+  if(v<=1){
+    _multiPVLines=[];
+    _clearMultiPVDisplayCache();
+    // Trigger a display refresh so the stale secondary lines disappear now
+    // rather than on the next progress tick (which won't come if MultiPV
+    // is off — onEngineProgress only calls _updateMultiPVDisplay when
+    // _cachedMultiPV>1).
+    _hintBarInfo='';
+    if(typeof _updateAIThinkDisplay==='function')_updateAIThinkDisplay();
+  }
+  _bridgeCall(function(bridge){bridge.setEngineMultiPV(v);});
+  renderEngineConfigAndUpdate();
+}
 function setConfigMoveOverhead(v){v=Math.max(0,Math.min(5000,parseInt(v)||30));if(engineSettingsData)engineSettingsData.moveOverhead=v;_bridgeCall(function(bridge){bridge.setEngineMoveOverhead(v);});renderEngineConfigAndUpdate();}
 function togglePonder(){
   const newVal=!(engineSettingsData&&engineSettingsData.ponder);
@@ -6450,8 +6612,15 @@ function onMultiPVProgress(pvInfo){
       if(_multiPVLines[i].index===idx){_multiPVLines[i]=info;found=true;break;}
     }
     if(!found)_multiPVLines.push(info);
-    // Sort by index
-    _multiPVLines.sort(function(a,b){return a.index-b.index;});
+    // v1.0.5 Rev56 PERF: Only sort when a new line was appended (found=false).
+    // When an existing line was updated in-place, the array order is already
+    // correct (indices don't change). The sort was previously unconditional
+    // on every progress tick (10-50×/sec) — for 8 MultiPV lines, the
+    // Array.sort comparison runs ~25 comparisons per call, all wasted when
+    // the array was already sorted.
+    if(!found){
+      _multiPVLines.sort(function(a,b){return a.index-b.index;});
+    }
     // Update hint display with all PV lines
     _updateMultiPVDisplay();
   }catch(e){console.error('onMultiPVProgress error:',e);}
@@ -6892,11 +7061,45 @@ function _attachDivergentPV(divergeAtIdx,pvRemainder,pending){
 }
 
 // Update display with MultiPV lines
+// v1.0.5 Rev56 PERF: Added a per-line signature cache so we skip the expensive
+// _convertPVtoSAN() call when a PV line's content hasn't changed since the last
+// display update. Previously, _updateMultiPVDisplay was called on every
+// onMultiPVProgress AND on every onEngineProgress (when _cachedMultiPV>1),
+// re-converting ALL PV lines from UCI to SAN on every tick (10-50×/sec). Each
+// conversion clones the game state and runs makeMv/moveAlg for every move in
+// the PV — with 8 MultiPV lines of 10+ moves each, that's 80+ makeMv calls
+// per tick, completely wasted when the PV content is identical to last tick.
+// The signature is `(pv, scoreCp, scoreMate, index)` — if all four match the
+// cached values, the line's display text is reused verbatim.
+let _multiPVDisplayCache = {}; // {index: {sig, text}}
 function _updateMultiPVDisplay(){
   if(_multiPVLines.length<1)return; // Show even single line when MultiPV enabled
+  // v1.0.5 Round-6 Rev62 (2026.6.27) PERF: early-exit when !isHintLoading.
+  // MultiPV display is only shown in the hint bar (`_hintBarInfo`), which is
+  // hidden during AI thinking. Previously, every progress tick (10-50/sec)
+  // during AI thinking would compute hintParts for all PV lines, build
+  // signatures, and check the cache — all wasted work since `isHintLoading`
+  // is false and the result is discarded at line 3044. Skip the entire
+  // computation when the hint bar isn't active.
+  if(typeof isHintLoading!=='undefined'&&!isHintLoading)return;
   // Build hint text with all PV lines
   let hintParts=[];
+  let cacheDirty=false;
   for(const pv of _multiPVLines){
+    // v1.0.5 Rev56: skip lines with no PV content — they contribute nothing
+    // to the display except an empty score string, and would trigger a
+    // wasteful _convertPVtoSAN('') call.
+    const hasPV = pv.pv && pv.pv.length>0;
+    // Build a cheap signature to detect whether this line actually changed
+    const sig = (pv.index||0)+'|'+(pv.scoreCp!=null?pv.scoreCp:'')+'|'+(pv.scoreMate!=null?pv.scoreMate:'')+'|'+(hasPV?pv.pv:'');
+    const cached = _multiPVDisplayCache[pv.index];
+    if(cached && cached.sig === sig){
+      // Cache hit — reuse the previously computed display text
+      hintParts.push(cached.text);
+      continue;
+    }
+    cacheDirty = true;
+    // Cache miss — compute the display text for this line
     let scoreStr='';
     if(pv.scoreMate!=null){
       const m=parseInt(pv.scoreMate);
@@ -6905,13 +7108,38 @@ function _updateMultiPVDisplay(){
       const pd=(pv.scoreCp/100).toFixed(1);
       scoreStr=(pv.scoreCp>0?'+':'')+pd;
     }
-    // Convert PV UCI moves to SAN format
+    // Convert PV UCI moves to SAN format (only when PV is non-empty)
     let pvPreview='';
-    if(pv.pv){try{const _conv=_convertPVtoSAN(pv.pv,gameState);pvPreview=_conv.sanMoves.split(/\s+/).slice(0,4).join(' ');}catch(e){pvPreview=pv.pv.split(/\s+/).slice(0,4).join(' ');}}
-    hintParts.push((pv.index===1?'⭐':'📌')+' '+scoreStr+(pvPreview?' '+pvPreview:''));
+    if(hasPV){
+      try{
+        const _conv=_convertPVtoSAN(pv.pv,gameState);
+        pvPreview=_conv.sanMoves.split(/\s+/).slice(0,4).join(' ');
+      }catch(e){
+        pvPreview=pv.pv.split(/\s+/).slice(0,4).join(' ');
+      }
+    }
+    const text=(pv.index===1?'⭐':'📌')+' '+scoreStr+(pvPreview?' '+pvPreview:'');
+    hintParts.push(text);
+    _multiPVDisplayCache[pv.index]={sig:sig,text:text};
+  }
+  // v1.0.5 Rev56: if no line changed, skip the DOM write entirely.
+  // _hintBarInfo / _aiBarInfo assignment + _updateAIThinkDisplay() would
+  // rebuild innerHTML even though the content is byte-identical.
+  if(!cacheDirty){
+    // All lines identical to last update — nothing to do.
+    return;
   }
   if(isHintLoading)_hintBarInfo=hintParts.join(' | ');
   _updateAIThinkDisplay();
+}
+
+// v1.0.5 Rev56: Clear the MultiPV display cache when a new search starts
+// (called from onBestMove where _multiPVLines=[] is already reset).
+// Without this, the cache would retain stale signatures from the previous
+// search, causing the first progress tick of the new search to be skipped
+// (false cache hit).
+function _clearMultiPVDisplayCache(){
+  _multiPVDisplayCache = {};
 }
 
 // Store the last engine variation (PV) for move records
@@ -7480,6 +7708,61 @@ function _parsePGN(pgnText){
   // post-move position (reviewStep = moveIdx + 1).
   const _extractedEvals=[]; // array of {reviewStep, eval, mate, ...}
   let _pendingEval=null;
+  // v1.0.4 Round-5 Rev48 NEW: Extract [%csl ...] and [%cal ...] visual
+  // annotation tags AND free-text comments from brace comments BEFORE
+  // stripping them. This implements the user requirement: "all valid ()
+  // variations and {} comments must be fully received".
+  //
+  // v1.0.5 Rev50 CRITICAL FIX — comment-to-move attachment:
+  // The previous (Rev48) version attached each comment to the NEXT move
+  // (treating comments as "pre-move" annotations). This was WRONG per the
+  // PGN spec and caused the user-reported bug: "arrows belonging to White's
+  // move were displayed on Black's position". In PGN, a comment `{...}`
+  // appears AFTER the move it describes (post-move annotation). So:
+  //   `1. e4 {[%cal Re4e8]} e5 {[%cal Ge5e1]}`
+  //   - `{[%cal Re4e8]}` describes move e4 (moveIdx 0), NOT e5 (moveIdx 1)
+  //   - `{[%cal Ge5e1]}` describes move e5 (moveIdx 1), NOT the next move
+  // The fix: each comment is attached to the PRECEDING main-line move
+  // (the last move seen before the comment). A comment BEFORE the first
+  // move attaches to the starting position (moveIdx -1, which we store
+  // separately and the display layer handles as "no move" / initial position).
+  //
+  // v1.0.5 Rev50 CRITICAL FIX — comment merging:
+  // The previous version merged ALL pending comments (across different moves)
+  // into a single payload. This caused comments from different moves to be
+  // concatenated with " | ". The fix: comments are attached IMMEDIATELY when
+  // seen (to the preceding move), and only comments that genuinely belong to
+  // the SAME move (multiple consecutive `{...}` blocks with no move between
+  // them) are merged with " | ". This preserves each comment's relative
+  // position with respect to moves, so arrows correctly match their move.
+  //
+  // We extract three kinds of payload from each `{...}` block:
+  //   1. [%csl ...] tags  → array of {color, square}
+  //   2. [%cal ...] tags  → array of {color, from, to}
+  //   3. Free-text comment (the body minus all [%xxx] tags, trimmed)
+  //
+  // Variation-internal comments (inside parentheses) are also captured:
+  // they attach to the variation's owning main-line move (the last main-line
+  // move seen before the variation started), with the comment body prefixed
+  // by "[var]" so the display layer can show them inline. The visual
+  // annotations from variation comments are MERGED with the main-line move's
+  // own annotations (deduplicated by color+square / color+from+to).
+  const _extractedAnnotations=[]; // array of {moveIdx, csl:[], cal:[]}
+  const _extractedComments=[];    // array of {moveIdx, comment}
+  // v1.0.5 Rev50: _lastMoveIdx tracks the index of the last main-line move
+  // seen. -1 means "no move seen yet" (comment is pre-first-move → attaches
+  // to starting position, stored as moveIdx -1).
+  let _lastMoveIdx=-1;
+  // v1.0.5 Rev50: per-move pending payload. When a comment is seen, it is
+  // immediately attached to _lastMoveIdx. But if MULTIPLE consecutive
+  // comments appear for the same move (no move between them), they merge.
+  // We track _currentMoveCsl/_currentMoveCal/_currentMoveComment which
+  // accumulate for the move at _lastMoveIdx. When a NEW move is seen,
+  // we flush (finalize) the current per-move payload and start fresh.
+  let _currentMoveCsl=[];         // [%csl] for the move at _lastMoveIdx
+  let _currentMoveCal=[];         // [%cal] for the move at _lastMoveIdx
+  let _currentMoveComment=null;   // free-text comment for the move at _lastMoveIdx
+  let _currentMoveFlushed=true;   // true = no pending per-move payload
   // Walk character-by-character, identifying brace comments and SAN moves.
   // We use a simplified scan: find each `{` ... `}` block, extract any
   // [%eval ...] inside, then advance to the next SAN-like token.
@@ -7488,6 +7771,30 @@ function _parsePGN(pgnText){
     let _depth=0; // paren depth
     let _i=0;
     const _mt=moveText;
+    // v1.0.5 Rev50: Helper to flush (finalize) the current per-move payload.
+    // Called when a NEW move is seen (so the previous move's accumulated
+    // comments are committed) or at end-of-loop (trailing comments).
+    // If _currentMoveFlushed is true, there's nothing to flush (no comment
+    // was seen since the last flush).
+    function _flushCurrentMovePayload(){
+      if(_currentMoveFlushed)return; // nothing pending
+      if(_lastMoveIdx>=0){
+        // Attach to the move at _lastMoveIdx
+        if(_currentMoveCsl.length>0||_currentMoveCal.length>0){
+          _extractedAnnotations.push({moveIdx:_lastMoveIdx,csl:_currentMoveCsl.slice(),cal:_currentMoveCal.slice()});
+        }
+        if(_currentMoveComment){
+          _extractedComments.push({moveIdx:_lastMoveIdx,comment:_currentMoveComment});
+        }
+      }
+      // else: comment before the first move — drop (no move to attach to;
+      // the display layer has no "initial position annotation" concept).
+      // Reset per-move accumulator
+      _currentMoveCsl=[];
+      _currentMoveCal=[];
+      _currentMoveComment=null;
+      _currentMoveFlushed=true;
+    }
     while(_i<_mt.length){
       const _ch=_mt[_i];
       if(_ch==='{'){
@@ -7538,6 +7845,62 @@ function _parsePGN(pgnText){
             _pendingEval={eval:_ev,mate:_mate||0,depth:0,wdlW:-1,wdlD:-1,wdlL:-1};
           }
         }
+        // v1.0.5 Rev50: Extract [%csl ...] and [%cal ...] visual annotations
+        // from the comment body. Multiple tags in the same comment are
+        // concatenated. Tag format (Lichess/Chessbase standard):
+        //   [%csl Gb4,Rc5]    — highlights b4 (Green), c5 (Red)
+        //   [%cal Ge2e4,Rg1f3] — arrows e2→e4 (Green), g1→f3 (Red)
+        // Color codes: G=Green, R=Red, B=Blue, Y=Yellow (case-sensitive).
+        //
+        // v1.0.5 Rev50: The extracted annotations accumulate into
+        // _currentMoveCsl/_currentMoveCal (per-move, NOT global pending).
+        // Multiple consecutive comments for the SAME move merge (because
+        // _currentMoveFlushed is false after the first comment, and we keep
+        // accumulating into the same arrays). A NEW move triggers a flush.
+        {
+          const _cslRe=/\[%csl\s+([^\]]+)\]/gi;
+          let _cm;
+          while((_cm=_cslRe.exec(_body))!==null){
+            const _parts=_cm[1].split(',');
+            for(const _p of _parts){
+              const _pm=_p.trim().match(/^([GRBY])([a-h][1-8])$/);
+              if(_pm){
+                _currentMoveCsl.push({color:_pm[1],square:_pm[2]});
+                _currentMoveFlushed=false;
+              }
+            }
+          }
+          const _calRe=/\[%cal\s+([^\]]+)\]/gi;
+          while((_cm=_calRe.exec(_body))!==null){
+            const _parts=_cm[1].split(',');
+            for(const _p of _parts){
+              const _pm=_p.trim().match(/^([GRBY])([a-h][1-8])([a-h][1-8])$/);
+              if(_pm){
+                _currentMoveCal.push({color:_pm[1],from:_pm[2],to:_pm[3]});
+                _currentMoveFlushed=false;
+              }
+            }
+          }
+        }
+        // v1.0.5 Rev50: Extract free-text comment (body minus all [%xxx] tags).
+        // Multiple consecutive comments for the SAME move merge with " | "
+        // separator (only when _currentMoveFlushed is false, meaning a comment
+        // was already seen for this move). Comments inside variations
+        // (depth>0) get a "[var] " prefix so the user can distinguish them.
+        {
+          let _ft=_body.replace(/\[%[a-zA-Z]+\s+[^\]]*\]/g,'').trim();
+          // Also strip any leftover [CLK:...], [EMT:...] non-bracketed formats
+          _ft=_ft.replace(/\[(?:CLK|EMT|CLOCK|TIME):[^\]]*\]/gi,'').trim();
+          if(_ft){
+            const _prefix=(_depth>0)?'[var] ':'';
+            if(_currentMoveComment){
+              _currentMoveComment+=' | '+_prefix+_ft;
+            }else{
+              _currentMoveComment=_prefix+_ft;
+            }
+            _currentMoveFlushed=false;
+          }
+        }
         _i=_j+1;
         continue;
       }
@@ -7556,9 +7919,26 @@ function _parsePGN(pgnText){
         const _isNag=/^\$\d+$/.test(_tok);
         const _isEllipsis=/^\.+$/.test(_tok);
         if(!_isMoveNum&&!_isResult&&!_isNag&&!_isEllipsis&&_tok.length>0){
-          // This is a main-line move. Attach pending eval to the post-move
-          // position (reviewStep = moveCount + 1).
+          // v1.0.5 Rev50: This is a NEW main-line move. First, flush the
+          // per-move payload accumulated for the PREVIOUS move (comments
+          // that appeared after the previous move but before this one).
+          _flushCurrentMovePayload();
+          // Now advance _lastMoveIdx to this new move.
           _moveCount++;
+          _lastMoveIdx=_moveCount-1;
+          // Reset per-move accumulator for the new move (already done by
+          // _flushCurrentMovePayload, but be explicit for clarity).
+          _currentMoveCsl=[];
+          _currentMoveCal=[];
+          _currentMoveComment=null;
+          _currentMoveFlushed=true;
+          // Attach pending eval to the post-move position (reviewStep = moveCount).
+          // NOTE: [%eval] is a special case — it attaches to the position AFTER
+          // the move (reviewStep = _moveCount), NOT to the move itself. This is
+          // because [%eval] describes the evaluation of the resulting position.
+          // The "attach to next move" pattern was correct for [%eval] but wrong
+          // for [%csl]/[%cal]/free-text. We keep _pendingEval as a separate
+          // pre-move accumulator ONLY for [%eval].
           if(_pendingEval){
             _extractedEvals.push({reviewStep:_moveCount,eval:_pendingEval.eval,mate:_pendingEval.mate,depth:_pendingEval.depth,wdlW:_pendingEval.wdlW,wdlD:_pendingEval.wdlD,wdlL:_pendingEval.wdlL});
             _pendingEval=null;
@@ -7569,6 +7949,10 @@ function _parsePGN(pgnText){
       }
       _i++;
     }
+    // v1.0.5 Rev50: End-of-loop — flush any trailing per-move payload
+    // (comments that appeared after the LAST move). This attaches them to
+    // the last move (_lastMoveIdx), which is correct per PGN spec.
+    _flushCurrentMovePayload();
     // Trailing pending eval (comment after the last move) attaches to the
     // position after the last move.
     if(_pendingEval&&_moveCount>=0){
@@ -7623,7 +8007,10 @@ function _parsePGN(pgnText){
   // handles "1.e4" → "1. e4", and the next regex handles "1 e4" → "1. e4".
   // Handle move numbers without dots (e.g. "1 e4 e5 2 Nf3") — add a dot so the
   // move-number regex can detect them. Pattern: standalone number followed by a piece/pawn letter.
-  text=text.replace(/(^|\s)(\d+)\s+(?=[a-hKQRBN])/g,'$1$2. ');
+  // v1.0.5 Round-6 Rev62 (2026.6.27) FIX: add 'O' to character class (same fix
+  // as worker-pool.js line 269). PGN move numbers followed by castling "O-O"
+  // without a dot were not being normalized to "1. O-O".
+  text=text.replace(/(^|\s)(\d+)\s+(?=[a-hKQRBNO])/g,'$1$2. ');
   // Strip any remaining standalone annotation symbols that survived earlier cleaning
   // Handle 1-5 character annotations (!, !!, !?, ?!, ??, !!!, etc.)
   text=text.replace(/\s[!?]{1,5}\s/g,' ');
@@ -7839,7 +8226,13 @@ function _parsePGN(pgnText){
   }
   
   if(moves.length===0)return null;
-  return{moves,startFEN,variations,variant:pgnVariant,extractedEvals:_extractedEvals};
+  // v1.0.4 Round-5 Rev48: also return the extracted visual annotations and
+  // free-text comments so importPGN can populate the visual annotations cache
+  // and mr.comment field — preserving all {} comment information.
+  return{moves,startFEN,variations,variant:pgnVariant,
+         extractedEvals:_extractedEvals,
+         extractedAnnotations:_extractedAnnotations,
+         extractedComments:_extractedComments};
 }
 
 // Apply a single SAN move to a game state, returning the new state + notation + move
@@ -8590,6 +8983,82 @@ function importPGN(pgnText){
       }
     }
   }catch(e){console.warn('importPGN: eval cache population failed',e);}
+
+  // v1.0.4 Round-5 Rev48 NEW: Populate _visualAnnotationsCache from
+  // extracted [%csl]/[%cal] tags. This implements the user requirement:
+  // "all valid {} comments must be fully received" — previously, imported
+  // PGNs with [%csl]/[%cal] tags had their visual annotation info LOST
+  // during parsing (the comment-stripping phase removed them).
+  //
+  // Now: each move with [%csl]/[%cal] in its PGN comment gets the cache
+  // entry set, so:
+  //   - PGN re-export preserves the tags (via _getVisualAnnotations)
+  //   - The review board can render the annotations (when heatmap is off)
+  //   - The stats page can count them in the visual annotations section
+  //
+  // If a moveIdx has BOTH auto-generated annotations (from
+  // _computeAndCacheVisualAnnotations, called during executeMove) AND
+  // imported annotations, the IMPORTED ones take precedence (they came
+  // from the PGN author's explicit annotation, not from our heuristic).
+  try{
+    if(result.extractedAnnotations&&result.extractedAnnotations.length>0&&typeof _visualAnnotationsCache!=='undefined'){
+      let _populatedVa=0;
+      for(const _a of result.extractedAnnotations){
+        if(_a.moveIdx>=0&&_a.moveIdx<moveRecords.length){
+          // Merge with any existing cache entry (e.g., if there were multiple
+          // comments for the same move). Deduplicate by color+square /
+          // color+from+to.
+          const _existing=_visualAnnotationsCache.get(_a.moveIdx)||{csl:[],cal:[]};
+          const _cslSeen=new Set(_existing.csl.map(x=>x.color+x.square));
+          for(const _c of _a.csl){
+            const _k=_c.color+_c.square;
+            if(!_cslSeen.has(_k)){
+              _existing.csl.push({color:_c.color,square:_c.square});
+              _cslSeen.add(_k);
+            }
+          }
+          const _calSeen=new Set(_existing.cal.map(x=>x.color+x.from+x.to));
+          for(const _c of _a.cal){
+            const _k=_c.color+_c.from+_c.to;
+            if(!_calSeen.has(_k)){
+              _existing.cal.push({color:_c.color,from:_c.from,to:_c.to});
+              _calSeen.add(_k);
+            }
+          }
+          _visualAnnotationsCache.set(_a.moveIdx,_existing);
+          _populatedVa++;
+        }
+      }
+      if(_populatedVa>0){
+        console.log('importPGN: populated '+_populatedVa+' visual annotation entries from PGN comments');
+      }
+    }
+  }catch(e){console.warn('importPGN: visual annotations cache population failed',e);}
+
+  // v1.0.4 Round-5 Rev48 NEW: Populate mr.comment from extracted free-text
+  // comments. This preserves the human-readable annotation text from the
+  // PGN so it can be:
+  //   - Displayed inline in the move list / review mode
+  //   - Re-exported in _buildPGNString() (so PGN round-trip is lossless)
+  try{
+    if(result.extractedComments&&result.extractedComments.length>0){
+      let _populatedCm=0;
+      for(const _c of result.extractedComments){
+        if(_c.moveIdx>=0&&_c.moveIdx<moveRecords.length&&moveRecords[_c.moveIdx]){
+          if(moveRecords[_c.moveIdx].comment){
+            // Append to existing comment (multiple comments for the same move)
+            moveRecords[_c.moveIdx].comment+=' | '+_c.comment;
+          }else{
+            moveRecords[_c.moveIdx].comment=_c.comment;
+          }
+          _populatedCm++;
+        }
+      }
+      if(_populatedCm>0){
+        console.log('importPGN: populated '+_populatedCm+' free-text comments from PGN');
+      }
+    }
+  }catch(e){console.warn('importPGN: comment population failed',e);}
   
   render();
   // v1.0.3: Cache the original PGN text so the stats page can access the
@@ -8748,7 +9217,19 @@ const ctrl=typeof AbortController!=='undefined'?new AbortController():null;
 const tmr=ctrl?setTimeout(()=>ctrl.abort(),5000):null;
 const resp=await fetch(`https://tablebase.lichess.ovh/standard?fen=${encodeURIComponent(fen)}`,{signal:ctrl?ctrl.signal:undefined});
 if(tmr)clearTimeout(tmr);
-if(!resp.ok){_tbFailCount++;if(_tbFailCount>=3){_tbOffline=true;_tbOfflineSince=Date.now();}return null;}
+// v1.0.5 Round-6 Rev62 (2026.6.27) FIX: a 404 response means "position not in
+// tablebase" (e.g., 8-piece position that slipped past the pieceCountLE7
+// pre-filter), NOT "server is down". Previously, 3 consecutive 404s would
+// falsely set _tbOffline=true for 60 seconds, blocking ALL tablebase queries
+// even though the server is healthy. Now only 5xx errors and network errors
+// (caught below) count toward _tbFailCount; 4xx errors return null silently.
+if(!resp.ok){
+  if(resp.status>=500){
+    _tbFailCount++;
+    if(_tbFailCount>=3){_tbOffline=true;_tbOfflineSince=Date.now();}
+  }
+  return null;
+}
 const data=await resp.json();
 // LRU cache: evict oldest when full
 if(_tbCache.size>=_TB_CACHE_MAX){const firstKey=_tbCache.keys().next().value;_tbCache.delete(firstKey);}
@@ -8999,27 +9480,75 @@ document.addEventListener('click', function(e) {
 // (main game mode only). In REVIEW mode, we WANT the board to be scrollable
 // (the whole review body scrolls when the user slides on the board), so we
 // skip the preventDefault.
+//
+// v1.0.5 Round-6 Rev49 NEW: Long-press on any board square toggles the
+// board anti-shake stabilization on/off. The long-press is detected by
+// holding the touch for ≥500ms without moving >10px. When triggered, we
+// call AndroidBridge.toggleStabilization() (Java handles sensor registration
+// and shows a Toast in the current language). A haptic feedback is fired
+// so the user knows the long-press was registered.
 (function(){
   let _touchStartX=0, _touchStartY=0, _touchOnBoard=false;
+  // v1.0.5 Rev49: long-press detection state
+  let _longPressTimer=null;
+  let _longPressFired=false;
+  const _LONG_PRESS_MS=500; // 500ms hold = long-press
+  const _LONG_PRESS_MOVE_TOLERANCE=10; // px — cancel if moved more than this
   document.addEventListener('touchstart',function(e){
     const t=e.touches[0];
     _touchStartX=t.clientX; _touchStartY=t.clientY;
     _touchOnBoard=!!(e.target.closest&&e.target.closest('.bgrid'));
+    // v1.0.5 Rev49: start long-press timer if touch is on the board
+    if(_touchOnBoard){
+      _longPressFired=false;
+      if(_longPressTimer)clearTimeout(_longPressTimer);
+      _longPressTimer=setTimeout(function(){
+        _longPressFired=true;
+        // Fire haptic feedback so the user knows the long-press registered
+        try{if(typeof HapticManager!=='undefined'&&HapticManager.fire)HapticManager.fire('BUTTON_PRESS');}catch(_e){}
+        // Toggle stabilization via the Java bridge
+        try{
+          if(typeof AndroidBridge!=='undefined'&&AndroidBridge.toggleStabilization){
+            AndroidBridge.toggleStabilization();
+          }
+        }catch(_e){console.warn('toggleStabilization bridge call failed',_e);}
+      },_LONG_PRESS_MS);
+    }
   },{passive:true});
   document.addEventListener('touchmove',function(e){
     if(!_touchOnBoard)return;
+    const t=e.touches[0];
+    const dx=Math.abs(t.clientX-_touchStartX);
+    const dy=Math.abs(t.clientY-_touchStartY);
+    // v1.0.5 Rev49: cancel long-press if moved too much
+    if(dx>_LONG_PRESS_MOVE_TOLERANCE||dy>_LONG_PRESS_MOVE_TOLERANCE){
+      if(_longPressTimer){clearTimeout(_longPressTimer);_longPressTimer=null;}
+    }
     // v1.0.3-p8: in review mode, allow touch-slide on the board to scroll the
     // whole review body (the user explicitly requested this). Only block the
     // default scroll in non-review modes (main game, setup) where board slides
     // should NOT scroll the page.
     if(typeof reviewMode!=='undefined'&&reviewMode)return;
-    const t=e.touches[0];
-    const dx=Math.abs(t.clientX-_touchStartX);
-    const dy=Math.abs(t.clientY-_touchStartY);
     if(dx>10||dy>10){
       e.preventDefault();
     }
   },{passive:false});
+  document.addEventListener('touchend',function(e){
+    // v1.0.5 Rev49: clear long-press timer on touch end
+    if(_longPressTimer){clearTimeout(_longPressTimer);_longPressTimer=null;}
+    // If long-press fired, suppress the click (so the square doesn't also
+    // get selected/deselected). We do this by setting a flag that sqClick()
+    // checks. Since click fires after touchend, we use a short-lived flag.
+    if(_longPressFired){
+      _longPressFired=false;
+      // Set a flag to suppress the next click on a board square
+      window._suppressNextBoardClick=true;
+      setTimeout(function(){window._suppressNextBoardClick=false;},300);
+    }
+  },{passive:true});
+  document.addEventListener('touchcancel',function(e){
+    if(_longPressTimer){clearTimeout(_longPressTimer);_longPressTimer=null;}
+  },{passive:true});
 })();
 
 
@@ -9229,12 +9758,26 @@ function _updateBoardIncremental() {
 
 /**
  * Incrementally update eval display without full render.
+ * v1.0.5 Rev56 PERF: Added a signature check so we skip the innerHTML rebuild
+ * when the eval display content is identical to the last render. Previously,
+ * every DIRTY_EVAL tick (10-50×/sec during search) rebuilt the innerHTML even
+ * if the eval values hadn't changed (common during deep search where depth
+ * increments but score stays stable). The signature captures all fields that
+ * affect the displayed text: emoji, desc, score, depth, seldepth, setupMode,
+ * isAIThinking, and the localized strings (which change on language toggle).
  */
+let _evalDispPrevSig = '';
 function _updateEvalDisplayIncremental() {
   const evalEl = _el(_EL_EVAL_DISP);
   if (!evalEl) { markDirty(DIRTY_FULL); return; }
   const _fe = formatEval();
   const pe = _fe.emoji, pd = _fe.desc, scoreStr = _fe.score;
+  // v1.0.5 Rev56: build the signature BEFORE the innerHTML string so we can
+  // short-circuit on a cache hit. The signature must include every value that
+  // flows into the innerHTML — if any changes, the signature changes.
+  const _sig = (setupMode?'S':'N')+'|'+(isAIThinking?'A':'I')+'|'+pe+'|'+pd+'|'+scoreStr+'|'+_sfDepth+'|'+_sfSeldepth;
+  if(_evalDispPrevSig === _sig) return; // No change — skip DOM write
+  _evalDispPrevSig = _sig;
   // v1.0.4 Rev33: display "D15 SD22" — depth + seldepth (tactical depth).
   // SD only shown when > 0 AND > depth (seldepth == depth is redundant).
   const _hdrDepthStr = _sfDepth > 0 ? '<span style="font-size:.65rem;color:var(--muted);margin-left:4px">D' + _sfDepth + '</span>' + (_sfSeldepth > 0 && _sfSeldepth > _sfDepth ? '<span style="font-size:.65rem;color:var(--muted);margin-left:2px">SD' + _sfSeldepth + '</span>' : '') : '';
@@ -9280,7 +9823,7 @@ function _updateEvalDisplayIncremental() {
       if (app) {
         app.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#1a0a0a;color:#f5e6c8;padding:20px;text-align:center;font-family:system-ui,sans-serif">' +
           '<div style="font-size:3rem;margin-bottom:16px">♔</div>' +
-          '<h2 style="color:#ffd700;margin-bottom:12px">'+T('app_name')+' v1.0.4</h2>' +
+          '<h2 style="color:#ffd700;margin-bottom:12px">'+T('app_name')+' v1.0.5</h2>' +
           '<p style="color:#a08050;margin-bottom:20px;max-width:300px">'+T('render_error')+'</p>' +
           '<button onclick="location.reload()" style="padding:12px 24px;background:#c49512;color:#1a0a0a;border:none;border-radius:6px;font-size:1rem;font-weight:700;cursor:pointer">'+T('refresh_page')+'</button>' +
           '</div>';
@@ -9480,7 +10023,12 @@ function _buildEvalTrendSVG(width, height) {
     for (const p of points) {
       const x = stepToX(p.step);
       const y = evalToY(p.eval);
-      const ev = _reviewEvalCache.get(p.step);
+      // v1.0.5 Round-6 Rev62 (2026.6.27) PERF: use peek() instead of get().
+      // This is a read-only iteration over all eval points for label layout —
+      // refreshing LRU order on each access would just churn the Map (per the
+      // design principle documented at lines 513-515). Same pattern as the
+      // review-moves-list loop at line 1845.
+      const ev = _reviewEvalCache.peek(p.step);
       const _isCurrentStep = (p.step === reviewStep);
       if (!ev) continue;
 
@@ -9981,7 +10529,7 @@ const oppC=OPP_COLOR[playerColor];
 const flip=playerColor==='black';
 // Arrows computed separately by _updateArrows() — no inline computation needed
 
-let h='<div class="hdr" role="banner"><div class="hdr-top"><div class="hdr-l"><span style="font-size:1.3rem;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text;border:3px solid transparent;border-image:linear-gradient(145deg,#8b6914,#d4a017,#ffd700,#fff8dc,#ffd700,#d4a017,#8b6914) 1;padding:3px 6px;background:linear-gradient(145deg,rgba(139,105,20,.18),rgba(255,215,0,.08),rgba(139,105,20,.18));box-shadow:0 0 6px rgba(212,160,23,.35),0 0 12px rgba(255,215,0,.12),inset 0 0 3px rgba(255,215,0,.1),inset 0 1px 0 rgba(255,248,220,.15);position:relative">♔&#xFE0E;</span><h1>'+T('app_name')+'<span class="ver">v1.0.4</span><button onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showAboutPage=true;render()" style="font-size:.6rem;color:var(--accent);background:rgba(212,160,23,.15);padding:2px 8px;border-radius:4px;border:1px solid rgba(212,160,23,.3);margin-left:4px;cursor:pointer;font-family:system-ui,-apple-system,sans-serif;letter-spacing:1px">ℹ️</button></h1></div><button onclick="toggleLang()" style="font-size:.65rem;color:var(--accent);background:rgba(212,160,23,.15);padding:2px 6px;border-radius:4px;border:1px solid rgba(212,160,23,.3);cursor:pointer;font-family:system-ui,-apple-system,sans-serif;letter-spacing:1px;flex-shrink:0">'+(_lang==='zh'?'↔️中':'↔️EN')+'</button><div class="ev" id="eval-disp" role="status" aria-label="'+T('evaluating')+'">'+(setupMode?T('setup_label'):(isAIThinking?'<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>':'<span class="ev-e">'+pe+'</span><span>'+pd+'</span><span style="color:var(--muted)">('+scoreStr+')</span>'+_hdrDepthStr+_hdrProgressStr))+'</div></div><div class="hdr-tools" role="toolbar" aria-label="'+T('ctrl_range')+'">'+(setupMode?'':'<div class="diff-sel" role="radiogroup" aria-label="AI">'+getAI_LEVELS().map(l=>'<button class="diff-b'+(getEffectiveAILevel()===l.id?' act':'')+'" onclick="if(!isAIThinking){'+(l.id===8?'openEngineConfig()':('aiLevel='+l.id+';try{AndroidBridge.syncGameDifficulty('+l.id+')}catch(e){}render()'))+'}" title="'+l.desc+'" role="radio" aria-checked="'+(getEffectiveAILevel()===l.id)+'">'+(l.id===8?'⚙️':l.id===7?'SL':l.id)+'</button>').join('')+'</div>')+'<button type="button" class="btn" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()" aria-label="'+T('new_game')+'"><span style="font-size:1.4rem">⚔️</span> '+T('new_game')+'</button>'+'<button class="btn" onclick="quickFreeOpening()" aria-label="'+T('free_opening')+'">'+(playerColor==='white'?'<span style=\"font-size:1.4rem;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text\">♔&#xFE0E;</span>':'<span style=\"font-size:1.4rem;font-weight:400;color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans Symbol&#x27;,sans-serif;font-variant-emoji:text\">♚&#xFE0E;</span>')+' '+T('free_opening')+'</button>'+(setupMode?'':'<button class="btn" onclick="undoMove()" aria-label="'+T('undo')+'"><span style="font-size:1.4rem">↩️</span> '+T('undo')+'</button><button class="btn" onclick="redoMove()" aria-label="'+T('redo')+'" id="redoBtn"><span style="font-size:1.4rem">↪️</span> '+T('redo')+'</button>')+'<button class="btn" onclick="flipBoard()" aria-label="'+T('flip')+'"><span style="font-size:1.4rem">🔃</span> '+T('flip')+'</button>'+'<button class="btn" onclick="getHint()" aria-label="'+T('ai_hint')+'"><span style="font-size:1.4rem">💡</span> '+T('ai_hint')+'</button>'+(setupMode?'':'<button class="btn" onclick="toggleSound()" id="btnSound" aria-label="'+T('sound')+'">'+(soundOn?'<span style="font-size:1.4rem">🔊</span> '+T('sound'):'<span style="font-size:1.4rem">🔇</span> '+T('sound'))+'</button>')+'<button class="btn" onclick="showCtrlMap=!showCtrlMap;cachedCtrlKey=&quot;&quot;;render()" aria-label="'+T('ctrl_range')+'" title="'+T('ctrl_range')+'">'+(showCtrlMap?'<span style="font-size:1.4rem">🌈</span> '+T('ctrl_range'):'<span style="font-size:1.4rem">🌗</span> '+T('ctrl_range'))+'</button>'+'<button class="btn" onclick="copyFEN()" title="'+T('copy_fen')+'" aria-label="'+T('copy_fen')+'"><span style="font-size:1.4rem">📝</span> FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="'+T('import_fen')+'" aria-label="'+T('import_fen')+'"><span style="font-size:1.4rem">🗃️</span> '+T('import_label')+'</button><button class="btn" onclick="'+(setupMode?'exitSetup()':'toggleSetup()')+'" aria-label="'+(setupMode?T('setup_done'):T('setup_mode'))+'">'+(setupMode?'<span style="font-size:1.4rem">✓</span> '+T('setup_done'):'<span style="font-size:1.4rem">🏗️</span> '+T('setup_mode'))+'</button></div></div>';
+let h='<div class="hdr" role="banner"><div class="hdr-top"><div class="hdr-l"><span style="font-size:1.3rem;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text;border:3px solid transparent;border-image:linear-gradient(145deg,#8b6914,#d4a017,#ffd700,#fff8dc,#ffd700,#d4a017,#8b6914) 1;padding:3px 6px;background:linear-gradient(145deg,rgba(139,105,20,.18),rgba(255,215,0,.08),rgba(139,105,20,.18));box-shadow:0 0 6px rgba(212,160,23,.35),0 0 12px rgba(255,215,0,.12),inset 0 0 3px rgba(255,215,0,.1),inset 0 1px 0 rgba(255,248,220,.15);position:relative">♔&#xFE0E;</span><h1>'+T('app_name')+'<span class="ver">v1.0.5</span><button onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showAboutPage=true;render()" style="font-size:.6rem;color:var(--accent);background:rgba(212,160,23,.15);padding:2px 8px;border-radius:4px;border:1px solid rgba(212,160,23,.3);margin-left:4px;cursor:pointer;font-family:system-ui,-apple-system,sans-serif;letter-spacing:1px">ℹ️</button></h1></div><button onclick="toggleLang()" style="font-size:.65rem;color:var(--accent);background:rgba(212,160,23,.15);padding:2px 6px;border-radius:4px;border:1px solid rgba(212,160,23,.3);cursor:pointer;font-family:system-ui,-apple-system,sans-serif;letter-spacing:1px;flex-shrink:0">'+(_lang==='zh'?'↔️中':'↔️EN')+'</button><div class="ev" id="eval-disp" role="status" aria-label="'+T('evaluating')+'">'+(setupMode?T('setup_label'):(isAIThinking?'<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>':'<span class="ev-e">'+pe+'</span><span>'+pd+'</span><span style="color:var(--muted)">('+scoreStr+')</span>'+_hdrDepthStr+_hdrProgressStr))+'</div></div><div class="hdr-tools" role="toolbar" aria-label="'+T('ctrl_range')+'">'+(setupMode?'':'<div class="diff-sel" role="radiogroup" aria-label="AI">'+getAI_LEVELS().map(l=>'<button class="diff-b'+(getEffectiveAILevel()===l.id?' act':'')+'" onclick="if(!isAIThinking){'+(l.id===8?'openEngineConfig()':('aiLevel='+l.id+';try{AndroidBridge.syncGameDifficulty('+l.id+')}catch(e){}render()'))+'}" title="'+l.desc+'" role="radio" aria-checked="'+(getEffectiveAILevel()===l.id)+'">'+(l.id===8?'⚙️':l.id===7?'SL':l.id)+'</button>').join('')+'</div>')+'<button type="button" class="btn" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()" aria-label="'+T('new_game')+'"><span style="font-size:1.4rem">⚔️</span> '+T('new_game')+'</button>'+'<button class="btn" onclick="quickFreeOpening()" aria-label="'+T('free_opening')+'">'+(playerColor==='white'?'<span style=\"font-size:1.4rem;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text\">♔&#xFE0E;</span>':'<span style=\"font-size:1.4rem;font-weight:400;color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans Symbol&#x27;,sans-serif;font-variant-emoji:text\">♚&#xFE0E;</span>')+' '+T('free_opening')+'</button>'+(setupMode?'':'<button class="btn" onclick="undoMove()" aria-label="'+T('undo')+'"><span style="font-size:1.4rem">↩️</span> '+T('undo')+'</button><button class="btn" onclick="redoMove()" aria-label="'+T('redo')+'" id="redoBtn"><span style="font-size:1.4rem">↪️</span> '+T('redo')+'</button>')+'<button class="btn" onclick="flipBoard()" aria-label="'+T('flip')+'"><span style="font-size:1.4rem">🔃</span> '+T('flip')+'</button>'+'<button class="btn" onclick="getHint()" aria-label="'+T('ai_hint')+'"><span style="font-size:1.4rem">💡</span> '+T('ai_hint')+'</button>'+(setupMode?'':'<button class="btn" onclick="toggleSound()" id="btnSound" aria-label="'+T('sound')+'">'+(soundOn?'<span style="font-size:1.4rem">🔊</span> '+T('sound'):'<span style="font-size:1.4rem">🔇</span> '+T('sound'))+'</button>')+'<button class="btn" onclick="showCtrlMap=!showCtrlMap;cachedCtrlKey=&quot;&quot;;render()" aria-label="'+T('ctrl_range')+'" title="'+T('ctrl_range')+'">'+(showCtrlMap?'<span style="font-size:1.4rem">🌈</span> '+T('ctrl_range'):'<span style="font-size:1.4rem">🌗</span> '+T('ctrl_range'))+'</button>'+'<button class="btn" onclick="copyFEN()" title="'+T('copy_fen')+'" aria-label="'+T('copy_fen')+'"><span style="font-size:1.4rem">📝</span> FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="'+T('import_fen')+'" aria-label="'+T('import_fen')+'"><span style="font-size:1.4rem">🗃️</span> '+T('import_label')+'</button><button class="btn" onclick="'+(setupMode?'exitSetup()':'toggleSetup()')+'" aria-label="'+(setupMode?T('setup_done'):T('setup_mode'))+'">'+(setupMode?'<span style="font-size:1.4rem">✓</span> '+T('setup_done'):'<span style="font-size:1.4rem">🏗️</span> '+T('setup_mode'))+'</button></div></div>';
 h+=`<div class="main" role="main"><div class="bsec">`;
 // v1.0.4 Rev37: AI bar captured pieces split at 7 — pieces 8+ go to line 3.
 {const _aiCapHtml=capturedPiecesHtml(gameState.board,oppC,playerColor,7);
@@ -10262,7 +10810,7 @@ if(showAboutPage){
 // Load AGPL v3 SVG via AndroidBridge as base64 (CSP-compliant)
 let _gplSvgSrc='';
 try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.loadAssetAsBase64){const b64=AndroidBridge.loadAssetAsBase64('AGPLv3_Logo.svg');if(b64)_gplSvgSrc='data:image/svg+xml;base64,'+b64;}}catch(e){}
-h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="About"><div class="dlg" style="max-width:460px"><h2>${T('about_title')}</h2><div class="dlg-sec"><div class="crow"><span class="lb">${T('about_app')}</span><span class="vl">${T('app_name')} v1.0.4</span></div><div class="crow"><span class="lb">${T('about_engine')}</span><span class="vl">Stockfish 18 (arm64-v8a-dotprod)</span></div><div class="crow"><span class="lb">${T('about_platform')}</span><span class="vl">Android arm64-v8a</span></div></div><div class="dlg-sec"><h3>${T('copyright_license')}</h3>`+(_gplSvgSrc?`<div style="text-align:center;margin-bottom:10px"><img src="${_gplSvgSrc}" alt="AGPL v3 Logo" style="width:120px;height:auto;opacity:.9" /></div>`:'')+`<div style="font-size:.75rem;color:var(--text);line-height:1.6"><p style="margin-bottom:8px">${T('about_copyright')}</p><p style="margin-bottom:8px">${T('about_source_code_prefix')}<a href="${T('about_source_code_url')}" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">${T('about_source_code_url')}</a></p><p style="margin-bottom:8px">${T('about_agpl')} <a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GNU AGPL v3</a>${T('about_agpl_desc')}</p><p style="margin-bottom:8px">${T('about_droidfish')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a>${T('about_droidfish_desc')}</p><p style="margin-bottom:8px">${T('about_stockfish')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a> ${T('about_gplv3')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_disclaimer')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_ai')}</p></div></div><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="showAboutPage=false;render()" style="flex:1;justify-content:center">${T('close')}</button></div></div></div>`;}
+h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="About"><div class="dlg" style="max-width:460px"><h2>${T('about_title')}</h2><div class="dlg-sec"><div class="crow"><span class="lb">${T('about_app')}</span><span class="vl">${T('app_name')} v1.0.5</span></div><div class="crow"><span class="lb">${T('about_engine')}</span><span class="vl">Stockfish 18 (arm64-v8a-dotprod)</span></div><div class="crow"><span class="lb">${T('about_platform')}</span><span class="vl">Android arm64-v8a</span></div></div><div class="dlg-sec"><h3>${T('copyright_license')}</h3>`+(_gplSvgSrc?`<div style="text-align:center;margin-bottom:10px"><img src="${_gplSvgSrc}" alt="AGPL v3 Logo" style="width:120px;height:auto;opacity:.9" /></div>`:'')+`<div style="font-size:.75rem;color:var(--text);line-height:1.6"><p style="margin-bottom:8px">${T('about_copyright')}</p><p style="margin-bottom:8px">${T('about_source_code_prefix')}<a href="${T('about_source_code_url')}" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">${T('about_source_code_url')}</a></p><p style="margin-bottom:8px">${T('about_agpl')} <a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GNU AGPL v3</a>${T('about_agpl_desc')}</p><p style="margin-bottom:8px">${T('about_droidfish')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a>${T('about_droidfish_desc')}</p><p style="margin-bottom:8px">${T('about_stockfish')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a> ${T('about_gplv3')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_disclaimer')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_ai')}</p></div></div><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="showAboutPage=false;render()" style="flex:1;justify-content:center">${T('close')}</button></div></div></div>`;}
 // Import dialog — paste FEN, paste PGN, or select PGN file
 if(showImportDialog){
 h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="${T('import_title')}" onclick="if(event.target===this){showImportDialog=false;render()}"><div class="dlg" style="max-width:420px"><h2>${T('import_title')}</h2><div class="dlg-sec" style="gap:10px;display:flex;flex-direction:column">
@@ -10344,6 +10892,62 @@ if(showCtrlMap){
   }
   _rvCm=cachedCtrlMap;
 }
+// v1.0.4 Round-5 Rev48 NEW: When heatmap is OFF, display [%csl]/[%cal] visual
+// annotations on the review board. Per user spec (备忘1.md):
+//   - High-highlight squares use CSS box-shadow inset (3px, matching the
+//     last-move hint width)
+//   - Arrows drawn in an SVG overlay layer (same style as the main board's
+//     heatmap-on selected-square arrows)
+// The visual annotations come from _visualAnnotationsCache (populated either
+// by _computeAndCacheVisualAnnotations during play, or by importPGN from PGN
+// comments). The cache key is moveRecords index (0-based); review step N
+// (1-based) corresponds to moveIdx = N-1.
+let _rvVa=null;
+let _rvCslMap=null; // {squareKey -> color} for O(1) lookup during cell render
+let _rvCalList=null; // array of {color, from, to} for SVG rendering
+if(!showCtrlMap&&typeof _getVisualAnnotations==='function'&&typeof reviewStep!=='undefined'){
+  // v1.0.5 Rev53: reviewStep 0 = initial position. We now compute annotations
+  // for the initial position too (per user spec: "初始局面... APP都要在后台
+  // 实施对四色视觉注解的记录"). The initial position's annotations are computed
+  // on-demand using the current gameState (which is the initial position when
+  // reviewStep=0).
+  // reviewStep N (N>0) = position after move N (moveRecords index N-1).
+  if(reviewStep>0){
+    _rvVa=_getVisualAnnotations(reviewStep-1);
+  }else if(reviewStep===0){
+    // Compute annotations for the initial position on demand.
+    // Use a special key '_initial' to cache so we don't recompute every render.
+    _rvVa=_getVisualAnnotations('_initial');
+    if(!_rvVa&&typeof _computeInitialPositionAnnotations==='function'){
+      _computeInitialPositionAnnotations();
+      _rvVa=_getVisualAnnotations('_initial');
+    }
+  }
+  if(_rvVa){
+    if(_rvVa.csl&&_rvVa.csl.length>0){
+      // v1.0.5 Round-6 Rev69 (2026.6.27): store ALL colors per square (was
+      // single-color overwrite). Per user spec "应该允许已被选入标记为黄色的
+      // 格子再被标记为其它颜色" + "同一个格子上应该可以同时绘制黄色圆角矩形
+      // 和其它颜色的方框", a square can carry multiple colors simultaneously
+      // (e.g. both B and Y). Previously _rvCslMap[sq]={color} overwrote earlier
+      // entries; now _rvCslMap[sq]=[colors] preserves all.
+      _rvCslMap={};
+      for(const _h of _rvVa.csl){
+        if(_h&&_h.color&&_h.square){
+          if(!_rvCslMap[_h.square])_rvCslMap[_h.square]=[];
+          _rvCslMap[_h.square].push(_h.color);
+        }
+      }
+    }
+    if(_rvVa.cal&&_rvVa.cal.length>0){
+      _rvCalList=_rvVa.cal;
+    }
+  }
+}
+// v1.0.4 Round-5 Rev48: Color palette for visual annotations — must match
+// stats.html's per-color value colors exactly so the visual association is
+// consistent across the app.
+const _RV_VA_COLORS={B:'#4a90d9',R:'#e74c3c',Y:'#f1c40f',G:'#27ae60'};
 for(let r=0;r<8;r++){for(let c=0;c<8;c++){
 const rr=flip?7-r:r;const cc=flip?7-c:c;
 const p=rBoard[rr][cc];const isL=(r+c)%2===0;
@@ -10371,11 +10975,129 @@ if(_rvCm){
     }
   }
 }
-h+='<div style="background:'+bg+';width:'+_rvCell+'px;height:'+_rvCell+'px;display:flex;align-items:center;justify-content:center;font-size:1.5rem">';
+// [%csl] square highlights. A square can carry MULTIPLE colors simultaneously
+// (e.g. both B and Y). B/R/G use CSS box-shadow inset (3px) on the cell div,
+// stacked via comma-separated shadows. Y uses a separate rounded-rect overlay
+// div INSIDE the cell (emitted before the cell's </div> so position:absolute
+// anchors correctly). The yellow overlay insets ~10% leaving corner gaps so
+// B/R/G insets remain visible underneath.
+let _boxShadowParts=[];
+let _isYellowSquare=false;
+if(_rvCslMap){
+  const _sqKey=String.fromCharCode(97+cc)+(8-rr);
+  const _colors=_rvCslMap[_sqKey];
+  if(_colors&&Array.isArray(_colors)){
+    for(const _color of _colors){
+      if(_color==='Y'){
+        _isYellowSquare=true;
+      }else{
+        const _col=_RV_VA_COLORS[_color]||'#ffffff';
+        _boxShadowParts.push('inset 0 0 0 3px '+_col+',inset 0 0 6px '+_col+'66');
+      }
+    }
+  }
+}
+let _boxShadow=_boxShadowParts.length?'box-shadow:'+_boxShadowParts.join(',')+';':'';
+h+='<div style="background:'+bg+';'+_boxShadow+'width:'+_rvCell+'px;height:'+_rvCell+'px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;position:relative">';
 if(p){h+='<span class="'+(p.color==='white'?'rv-w':'rv-bk')+'" style="pointer-events:none">'+SYM[p.color][p.type]+'</span>';}
+// Yellow rounded-rect overlay INSIDE the cell div (before </div>) so
+// position:absolute anchors to THIS cell (position:relative). Multiple B/R/G
+// box-shadow insets are on the cell div itself; the yellow overlay paints on
+// top of them but insets ~10% so the B/R/G insets remain visible at corners.
+// z-index:5 keeps it above cell background but below SVG arrow layer (z-index:10).
+if(_isYellowSquare){
+  const _inset=Math.max(3, _rvCell*0.10);
+  const _radius=Math.max(3, _rvCell*0.15);
+  const _yw=_rvCell-_inset*2;
+  const _yh=_rvCell-_inset*2;
+  h+='<div style="position:absolute;left:'+_inset.toFixed(1)+'px;top:'+_inset.toFixed(1)+'px;width:'+_yw.toFixed(1)+'px;height:'+_yh.toFixed(1)+'px;border-radius:'+_radius.toFixed(1)+'px;border:2px solid '+_RV_VA_COLORS.Y+';box-shadow:0 0 4px '+_RV_VA_COLORS.Y+'66;pointer-events:none;z-index:5"></div>';
+}
 h+='</div>';
 }}
 h+='</div>'; // close .bgrid
+// SVG arrow overlay for [%cal] visual annotations. Drawn when heatmap is OFF
+// and the current review step has cached visual annotations with arrows. The
+// SVG uses the same coordinate system as the bgrid (8*_rvCell pixels square),
+// positioned absolutely over the board.
+//
+// Arrow design (minimal): a thin colored line + small triangular arrowhead at
+// the target end. The line's color communicates the type (B/Y/R/G). No origin
+// dot, no round linecap — those added visual noise without information.
+//
+// Per-color diagonal offset (applied equally to start and end so arrow
+// direction is preserved):
+//   Blue  (B) → Upper-Left  (−X, −Y)
+//   Yellow(Y) → Lower-Left  (−X, +Y)
+//   Red   (R) → Upper-Right (+X, −Y)
+//   Green (G) → Lower-Right (+X, +Y)
+// These four distinct diagonal biases guarantee different-color arrows never
+// overlap on the same line (they become parallel-but-distinct lines). Same-
+// color arrows sharing the same source+target pair overlap exactly (correct —
+// they represent the same threat). The offset magnitude is 12% of cell size,
+// which scales proportionally across screen sizes and stays within cell bounds.
+if(_rvCalList&&_rvCalList.length>0){
+  const _rvBoardPx=_rvCell*8;
+  h+='<svg style="position:absolute;left:0;top:0;width:'+_rvBoardPx+'px;height:'+_rvBoardPx+'px;pointer-events:none;z-index:10" width="'+_rvBoardPx+'" height="'+_rvBoardPx+'" viewBox="0 0 '+_rvBoardPx+' '+_rvBoardPx+'">';
+  // Compact 4×3 triangular arrowhead per color. 4×3 is the smallest size that
+  // still reads as a clear triangle at typical cell sizes (30-60px). refX=3.5
+  // so the tip extends ~0.5px past the line endpoint (clean point, no overshoot).
+  h+='<defs>';
+  for(const _col of ['B','R','Y','G']){
+    const _hex=_RV_VA_COLORS[_col];
+    h+='<marker id="rvah-'+_col+'" markerWidth="4" markerHeight="3" refX="3.5" refY="1.5" orient="auto"><polygon points="0 0,4 1.5,0 3" fill="'+_hex+'"/></marker>';
+  }
+  h+='</defs>';
+  // Offset magnitude: 12% of cell size (scales proportionally, no fixed cap).
+  // Safety: max radial offset = |offset|*sqrt(2); safe bound = cellSize/2 - 2.75
+  // (with strokeWidth=1.5, markerWidth=4). 12% is well within bound for all
+  // realistic cell sizes (≥20px): cellSize=30 → 3.6px (max 8.66px); cellSize=60
+  // → 7.2px (max 19.26px); cellSize=20 → 2.4px (max 5.12px).
+  const _colorOffsetMag=_rvCell*0.12;
+  const _colorOffset={
+    B:{x:-_colorOffsetMag, y:-_colorOffsetMag}, // Upper-Left
+    Y:{x:-_colorOffsetMag, y: _colorOffsetMag}, // Lower-Left
+    R:{x: _colorOffsetMag, y:-_colorOffsetMag}, // Upper-Right
+    G:{x: _colorOffsetMag, y: _colorOffsetMag}  // Lower-Right
+  };
+  // Deduplicate arrows by (color, from, to).
+  const _seenArrowKeys=new Set();
+  const _allArrows=[];
+  for(const _a of _rvCalList){
+    if(!_a||!_a.color||!_a.from||!_a.to)continue;
+    if(_a.from.length!==2||_a.to.length!==2)continue;
+    const _fc=_a.from.charCodeAt(0)-97, _fr=8-parseInt(_a.from[1],10);
+    const _tc=_a.to.charCodeAt(0)-97, _tr=8-parseInt(_a.to[1],10);
+    if(_fc<0||_fc>7||_fr<0||_fr>7||_tc<0||_tc>7||_tr<0||_tr>7)continue;
+    const _dedupKey=_a.color+'|'+_a.from+'|'+_a.to;
+    if(_seenArrowKeys.has(_dedupKey))continue;
+    _seenArrowKeys.add(_dedupKey);
+    _allArrows.push(_a);
+  }
+  // Render each arrow with the per-color diagonal offset.
+  for(const _a of _allArrows){
+    const _fc=_a.from.charCodeAt(0)-97, _fr=8-parseInt(_a.from[1],10);
+    const _tc=_a.to.charCodeAt(0)-97, _tr=8-parseInt(_a.to[1],10);
+    // Apply flip (display position)
+    const _dfc=flip?7-_fc:_fc, _dfr=flip?7-_fr:_fr;
+    const _dtc=flip?7-_tc:_tc, _dtr=flip?7-_tr:_tr;
+    // Pixel centers — exact cell-center formula (scales with any cell size).
+    let _fx=_dfc*_rvCell+_rvCell/2, _fy=_dfr*_rvCell+_rvCell/2;
+    let _tx=_dtc*_rvCell+_rvCell/2, _ty=_dtr*_rvCell+_rvCell/2;
+    // Apply per-color diagonal offset to BOTH start and end equally.
+    const _co=_colorOffset[_a.color]||{x:0,y:0};
+    _fx+=_co.x; _fy+=_co.y;
+    _tx+=_co.x; _ty+=_co.y;
+    // Shorten the line by 4px so the 4×3 arrowhead doesn't overshoot the
+    // target cell center.
+    const _dx=_tx-_fx, _dy=_ty-_fy, _len=Math.sqrt(_dx*_dx+_dy*_dy);
+    const _sh=4, _rt=_len>0?(_len-_sh)/_len:1;
+    const _ex=_fx+_dx*_rt, _ey=_fy+_dy*_rt;
+    const _hex=_RV_VA_COLORS[_a.color]||'#ffffff';
+    // Minimal arrow: 1.5px stroke, butt linecap, 0.9 opacity, 4×3 arrowhead.
+    h+='<line x1="'+_fx.toFixed(1)+'" y1="'+_fy.toFixed(1)+'" x2="'+_ex.toFixed(1)+'" y2="'+_ey.toFixed(1)+'" stroke="'+_hex+'" stroke-width="1.5" stroke-opacity="0.9" stroke-linecap="butt" marker-end="url(#rvah-'+_a.color+')"/>';
+  }
+  h+='</svg>';
+}
 h+='</div>'; // close .review-board
 
 // v1.0.3 patch: build the eval bar, slider, chart, nav buttons, and analyze
@@ -10483,7 +11205,7 @@ if(_isLandscapeReview){
     const _prevMvEval=_reviewEvalCache.peek(i);
     if(_mvEval!=null&&_prevMvEval!=null){
       h+=_formatEvalDelta(_mvEval.eval,_prevMvEval.eval,'.6rem');
-      const _mvDelta=_mvEval.eval-(_prevMvEval?_prevMvEval.eval:0);
+      const _mvDelta=_mvEval.eval-_prevMvEval.eval;
       const _isMoverWhite=(i%2)===0;
       const _mcls=_classifyMove(_mvDelta,_isMoverWhite);
       h+=`<span style="font-size:.6rem;font-weight:700;color:${_esc(_mcls.color)};margin-left:4px">${_esc(_mcls.label)}</span>`;
@@ -10532,7 +11254,7 @@ if(_isLandscapeReview){
     const _prevMvEval=_reviewEvalCache.peek(i);
     if(_mvEval!=null&&_prevMvEval!=null){
       h+=_formatEvalDelta(_mvEval.eval,_prevMvEval.eval,'.6rem');
-      const _mvDelta=_mvEval.eval-(_prevMvEval?_prevMvEval.eval:0);
+      const _mvDelta=_mvEval.eval-_prevMvEval.eval;
       const _isMoverWhite=(i%2)===0;
       const _mcls=_classifyMove(_mvDelta,_isMoverWhite);
       h+=`<span style="font-size:.6rem;font-weight:700;color:${_esc(_mcls.color)};margin-left:4px">${_esc(_mcls.label)}</span>`;
@@ -10699,6 +11421,11 @@ _updateArrows(hoveredSquare||selectedSquare);
 // Invalidate DOM element cache and update board state tracking after full render
 // v1.0.2 PERF (audit): use boardVersion integer instead of JSON.stringify
 _invalidateElCache(); _sqElCache = null; _prevBoardVersion = gameState.boardVersion || 0;
+// v1.0.5 Rev56: Invalidate the eval-display signature cache. The full render
+// rebuilt the eval element's innerHTML directly (not via _updateEvalDisplayIncremental),
+// so the cached signature no longer matches what's on screen. Without this
+// invalidation, the next DIRTY_EVAL tick would falsely skip the update.
+_evalDispPrevSig = '';
 // v1.0.2 (qw3.7max audit): cache the review-moves-list element for the
 // scroll-into-view path (avoids getElementById on every render).
 _rListEl = document.getElementById('reviewMovesList');
@@ -11056,6 +11783,12 @@ if(!showCtrlMap){var cc=document.getElementById('ctrl-info-card');if(cc)cc.style
 
 function sqClick(r,c){
 if(animationInProgress)return;
+// v1.0.5 Round-6 Rev49: if a long-press just fired (toggling stabilization),
+// suppress this click so the square doesn't also get selected/deselected.
+if(window._suppressNextBoardClick){
+  window._suppressNextBoardClick=false;
+  return;
+}
 if(setupMode){setupClick(r,c);return}
 const pos={row:r,col:c};const p=gameState.board[r][c];
 const canMove=!gameOver&&!isAIThinking&&!pendingPromotion&&!reviewMode&&gameState.currentTurn===playerColor;
@@ -11247,6 +11980,61 @@ if(_undoneMove&&_undoneMove.from){
 moveRecords=prev.moveRecords||[];lastMove=prev.lastMove;gameOver=null;_gameOverStatusKey=null;gameOverSoundPlayed=false;
 steps++;
 if(gameState.currentTurn===playerColor)break;
+}
+// v1.0.5 Round-6 Rev64 (2026.6.27): Invalidate cached PGN-related data for the
+// undone moves. After undo, moveRecords is shorter; any cache entries keyed by
+// move index beyond the new length correspond to moves that no longer exist.
+// Without this, the user could undo a move, then re-play a different move at
+// the same index, and see stale eval/annotation data from the undone move.
+//
+// Three caches are invalidated:
+//   1. _reviewEvalCache — keyed by reviewStep (1-based move index). Entries
+//      with key > moveRecords.length are for undone moves and must be deleted.
+//      This is the "后台实时缓存的PGN" the user referred to — the real-time
+//      per-move evaluation cache that backs the review-mode eval bar and the
+//      PGN's [%eval ...] annotations.
+//   2. _visualAnnotationsCache — keyed by moveIdx (0-based). Entries with
+//      key >= moveRecords.length are for undone moves and must be deleted.
+//      These back the [%csl]/[%cal] annotations in the PGN.
+//   3. _cachedOriginalPGN — if set (from a PGN import), it represents the
+//      imported text. After undo, the current game diverges from the import,
+//      so we null it to ensure _buildPGNString() (which reads moveRecords)
+//      is used for all subsequent PGN operations (stats page, 📚 save, etc.).
+//      This was already partially handled by openStatsPage()/_pgnCacheSaveCurrent()
+//      which always use _buildPGNString(true), but nulling here is belt-and-
+//      suspenders and makes the intent explicit.
+//
+// Note: _redoStack preserves the undone moves' data so redoMove() can restore
+// them. We do NOT clear _redoStack here — that would make undo irreversible.
+// If the user redoes, the cache entries will be re-created as needed (eval
+// re-requested, annotations re-computed).
+if(typeof _invalidateCachesForUndoneMoves==='function'){
+  _invalidateCachesForUndoneMoves(moveRecords.length);
+}else{
+  // Inline fallback (in case the function isn't defined yet — defensive)
+  try{
+    if(typeof _reviewEvalCache!=='undefined'&&_reviewEvalCache){
+      const _keysToDelete=[];
+      if(typeof _reviewEvalCache.keys==='function'){
+        for(const k of _reviewEvalCache.keys()){
+          if(typeof k==='number'&&k>moveRecords.length)_keysToDelete.push(k);
+        }
+      }
+      for(const k of _keysToDelete)_reviewEvalCache.delete(k);
+    }
+  }catch(e){console.warn('undoMove: eval cache invalidation failed',e);}
+  try{
+    if(typeof _visualAnnotationsCache!=='undefined'&&_visualAnnotationsCache){
+      const _vaKeysToDelete=[];
+      for(const k of _visualAnnotationsCache.keys()){
+        if(typeof k==='number'&&k>=moveRecords.length)_vaKeysToDelete.push(k);
+      }
+      for(const k of _vaKeysToDelete)_visualAnnotationsCache.delete(k);
+    }
+  }catch(e){console.warn('undoMove: visual annotation cache invalidation failed',e);}
+  try{
+    if(typeof _cachedOriginalPGN!=='undefined')_cachedOriginalPGN=null;
+  }catch(e){}
 }
 // After undo, select the piece at the player's original (from) position.
 // This is the position the piece was at BEFORE the player moved it, so the user
@@ -11971,14 +12759,18 @@ function _updateClockDisplay(){
 // We compute these on each move and cache by moveRecords index, so PGN export
 // can include them without recomputing.
 //
-// v1.0.4 LATEST REVISION (this round) — new color semantics:
+// v1.0.4 LATEST REVISION (Round-5 Rev48) — full color semantics:
 //   SQUARE HIGHLIGHTS ([%csl]):
 //     B (Blue)   — player's net-control strong squares (player controls, AI doesn't)
 //     R (Red)    — AI opponent's net-control strong squares (AI controls, player doesn't)
 //     Y (Yellow) — high total-control squares (both sides combined have many attackers)
 //     G (Green)  — center-area squares with NO control from either side (neutral center)
 //   ARROWS ([%cal]):
+//     B (Blue)   — mover's piece threatens 2+ enemy pieces (multi-threat):
+//                  arrows from threatening piece to each threatened piece
 //     R (Red)    — checker → checked king path (when current move gives check)
+//     Y (Yellow) — mover's piece threatens enemy queen:
+//                  arrow from threatening piece to queen's square
 //     G (Green)  — checked king position → escape square (avoidance paths)
 //
 // "Player" = playerColor (the human's color); "AI" = opponent of playerColor.
@@ -11987,20 +12779,30 @@ function _updateClockDisplay(){
 // Selection algorithm:
 //   1. Compute the control map for the POST-MOVE position.
 //   2. For each square, compute: playerAttackers, aiAttackers, totalAttackers.
-//   3. Blue squares: top 3 where (playerAttackers > 0 && aiAttackers === 0) — player dominates.
-//      Ranked by playerAttackers count, center squares preferred.
-//   4. Red squares: top 3 where (aiAttackers > 0 && playerAttackers === 0) — AI dominates.
-//      Ranked by aiAttackers count, center squares preferred.
-//   5. Yellow squares: top 3 where totalAttackers is highest (both sides combined).
+//   3. Blue squares: top 3 where netCtrl > 0 (player has more attackers than AI).
+//      Ranked by netCtrl magnitude, center squares preferred. Consistent with
+//      the heatmap control-info panel's "net control" definition.
+//   4. Red squares: top 3 where netCtrl < 0 (AI has more attackers than player).
+//      Ranked by |netCtrl| magnitude, center squares preferred.
+//   5. Yellow squares: top 3 where totalAttackers is highest (both sides combined),
+//      ALLOWED to overlap with blue/red. Per user spec: "黄色格子应该为双方总控制
+//      数量(攻击该格子的棋子总数，无论棋子颜色)最多的那几个格子" and "应该允许
+//      被标记为黄色的格子同时被标记为其它颜色".
 //   6. Green squares: center squares (d4/e4/d5/e5) where totalAttackers === 0 (neutral center).
 //   7. Red arrow (if check): mover → opponent king.
 //   8. Green arrows (if check): opponent king position → each escape square.
+//   9. Yellow arrows: for each mover piece threatening an enemy queen, draw
+//      arrow from attacker to queen (cap: top 3 attackers by piece value).
+//  10. Blue arrows: for each mover piece threatening 2+ enemy pieces, draw
+//      arrows from attacker to each threatened piece (cap: top 3 attackers
+//      by threat count, max 4 targets per attacker).
 const _visualAnnotationsCache=new Map(); // moveIdx → {csl:[...], cal:[...]}
 
 function _computeAndCacheVisualAnnotations(moveIdx){
   if(!moveRecords||moveIdx<0||moveIdx>=moveRecords.length)return;
   // v1.0.4 ROUND-5 REV16: null check for Black-to-move placeholders
-  if(!moveRecords[moveIdx]){_visualAnnotationsCache.set(moveIdx,{csl,cal});return;}
+  // v1.0.5 Rev52 FIX: was referencing undefined `csl`/`cal` — use empty arrays.
+  if(!moveRecords[moveIdx]){_visualAnnotationsCache.set(moveIdx,{csl:[],cal:[]});return;}
   let postState=null;
   if(typeof reviewStates!=='undefined'&&reviewStates[moveIdx+1]){
     postState=reviewStates[moveIdx+1].state;
@@ -12036,6 +12838,16 @@ function _computeAndCacheVisualAnnotations(moveIdx){
   // v1.0.4 LATEST: "player" and "AI" are based on playerColor (human's color).
   const playerCol=(typeof playerColor!=='undefined')?playerColor:'white';
   const aiCol=playerCol==='white'?'black':'white';
+  // v1.0.5 Rev54: Identify the moved piece and its destination square.
+  // This is used to BOOST the priority of yellow/blue arrows that involve
+  // the just-moved piece — i.e., "actively moving INTO a threatened square"
+  // (per user spec). Without this boost, the cap (top 6 yellow / top 3 blue
+  // attackers) could drop the move-related arrow when many other threats
+  // already exist on the board.
+  const _movedToAlg=moveRecords[moveIdx].to;
+  const _movedToPos=algPos(_movedToAlg);
+  const _movedPiece=_movedToPos?postState.board[_movedToPos.row][_movedToPos.col]:null;
+  const _isQueenMovedIntoThreat=_movedPiece&&_movedPiece.type==='queen'&&_movedPiece.color===moverColor;
   // Compute control map
   let cm=null;
   try{
@@ -12059,21 +12871,37 @@ function _computeAndCacheVisualAnnotations(moveIdx){
       const pAtk=entry[playerCol].length;
       const aAtk=entry[aiCol].length;
       const total=pAtk+aAtk;
-      // Blue: player dominates (pAtk>0, aAtk===0)
-      if(pAtk>0&&aAtk===0){
-        let score=pAtk*2;
+      const netCtrl=pAtk-aAtk; // same as heatmap panel's myCtrl-opCtrl
+      // Blue: player net control (netCtrl>0, i.e. more player attackers than AI).
+      // v1.0.5 Round-6 Rev70 (2026.6.27): Per user spec "对净控制的算法应该与
+      // '格子控制信息'栏中的净控制保持一致" — the heatmap control-info panel
+      // computes net = myCtrl - opCtrl (any nonzero difference), NOT one-sided
+      // dominance. Previously blue required pAtk>0 && aAtk===0 (one-sided only),
+      // which was INCONSISTENT with the panel. Now blue = netCtrl>0 (player has
+      // more attackers, regardless of whether AI also has some). A square with
+      // 3 white + 1 black = netCtrl +2 → blue (was NOT blue before). This matches
+      // the panel's "net control +2 → player" classification.
+      if(netCtrl>0){
+        let score=netCtrl*2;
         if(isCenter(r,c))score+=3;
         else if(isExtendedCenter(r,c))score+=1;
         blueCandidates.push({r,c,score});
       }
-      // Red: AI dominates (aAtk>0, pAtk===0)
-      if(aAtk>0&&pAtk===0){
-        let score=aAtk*2;
+      // Red: AI net control (netCtrl<0, i.e. more AI attackers than player).
+      // Same consistency fix as blue — was aAtk>0 && pAtk===0 (one-sided only),
+      // now netCtrl<0 (AI has more attackers).
+      if(netCtrl<0){
+        let score=(-netCtrl)*2;
         if(isCenter(r,c))score+=3;
         else if(isExtendedCenter(r,c))score+=1;
         redCandidates.push({r,c,score});
       }
-      // Yellow: high total control (both sides combined)
+      // Yellow: top squares by TOTAL attacker count (both sides combined,
+      // regardless of piece color). Per user spec: "黄色格子应该为双方总控制
+      // 数量(攻击该格子的棋子总数，无论棋子颜色)最多的那几个格子". Yellow
+      // MAY overlap with blue/red — per user spec "应该允许被标记为黄色的格子
+      // 同时被标记为其它颜色", a square can carry both a blue/red highlight
+      // (one-sided dominance) AND a yellow highlight (top total control).
       if(total>=2){
         yellowCandidates.push({r,c,total});
       }
@@ -12088,6 +12916,9 @@ function _computeAndCacheVisualAnnotations(moveIdx){
     for(const sq of redCandidates.slice(0,3)){
       csl.push({color:'R',square:posAlg({row:sq.r,col:sq.c})});
     }
+    // Yellow = top 3 highest-total squares, ALLOWED to overlap with blue/red.
+    // The rendering layer (CSS box-shadow inset per color + yellow rounded-rect
+    // overlay) handles multiple highlights on the same square.
     for(const sq of yellowCandidates.slice(0,3)){
       csl.push({color:'Y',square:posAlg({row:sq.r,col:sq.c})});
     }
@@ -12123,6 +12954,167 @@ function _computeAndCacheVisualAnnotations(moveIdx){
       }
     }
   }
+  // v1.0.4 Round-5 Rev48 NEW: Blue arrows (multi-threat) and Yellow arrows (queen threat).
+  // v1.0.5 Rev53: Yellow arrows now include threats to BOTH sides' queens
+  //   (enemy queen threatened by mover, AND mover's queen threatened by enemy).
+  //
+  // v1.0.5 Rev54 (this round): Three extensions per user spec:
+  //   (1) Yellow arrow extension — "主动把皇后移动到受威胁格":
+  //       When the mover's just-moved piece is a queen and its destination
+  //       square is attacked by an opp piece, we BOOST that yellow arrow's
+  //       priority so it survives the cap-6 dedup. The existing POST-MOVE
+  //       control map already detects this threat; the boost just guarantees
+  //       visibility.
+  //   (2) Blue arrow extension — "主动把任意棋子移到受威胁格, 导致另一方有
+  //       任何棋子产生2+威胁": When the mover's moved piece is itself at a
+  //       square attacked by an opp piece (i.e., the mover "walked into a
+  //       threat"), we BOOST any opp multi-threat arrows (opp piece that now
+  //       threatens 2+ mover pieces) so they survive the cap-3 dedup. The
+  //       existing threatByOpp logic already detects these; the boost ensures
+  //       visibility specifically when caused by the just-made move.
+  //   (3) Per-color arrow offsets (UL/LL/UR/LR): see SVG rendering block below.
+  //
+  // Per user spec (备忘1.md + Rev53 clarification):
+  //   Blue arrow  = one side's piece simultaneously threatens multiple (>1) enemy
+  //                  pieces (arrows from threatening piece to each threatened piece)
+  //   Yellow arrow = queen threat — includes:
+  //                  (a) mover's piece threatening enemy queen, AND
+  //                  (b) enemy's piece threatening mover's queen (including when
+  //                      the mover's queen just moved INTO a threatened square).
+  //                  Arrow from threatening piece to queen's square.
+  //
+  // We compute these from the POST-MOVE position's control map. Both sides
+  // are examined as potential attackers (not just the mover), so that threats
+  // to the mover's own queen are also annotated.
+  //
+  // Caps to keep the board readable:
+  //   - Top 3 attackers by threat count (blue)
+  //   - Top 6 queen-threat attackers (yellow)
+  //   - Max 4 blue arrows per attacker
+  if(cm){
+    // Build threat maps for BOTH directions:
+    //   threatByMover: mover's pieces threatening oppColor pieces
+    //   threatByOpp: oppColor pieces threatening mover's pieces
+    const threatByMover=new Map(); // attacker pos key → {attacker, targets:[{piece,position}]}
+    const threatByOpp=new Map();
+    let moverQueens=[]; // mover's queen positions threatened by opp
+    let oppQueens=[];   // opp's queen positions threatened by mover
+    // v1.0.5 Rev54: Track whether the mover's just-moved piece is itself
+    // threatened (i.e., the mover walked INTO a threatened square). This
+    // is used to boost blue-arrow priority per user spec item (2).
+    let _movedPieceThreatened=false;
+    if(_movedToPos){
+      const _atkOnMoved=cm[_movedToPos.row][_movedToPos.col][oppColor]||[];
+      if(_atkOnMoved.length>0)_movedPieceThreatened=true;
+    }
+    for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+      const p=postState.board[r][c];
+      if(!p||p.type==='king')continue; // skip kings (check arrows handle them)
+      if(p.color===moverColor){
+        // This is a mover piece. Check if oppColor attacks it.
+        const oppAttackers=cm[r][c][oppColor]||[];
+        if(oppAttackers.length>0){
+          for(const atk of oppAttackers){
+            const k=atk.position.row+','+atk.position.col;
+            if(!threatByOpp.has(k))threatByOpp.set(k,{attacker:atk,targets:[]});
+            threatByOpp.get(k).targets.push({piece:p,position:{row:r,col:c}});
+          }
+          if(p.type==='queen'){
+            moverQueens.push({position:{row:r,col:c},attackers:oppAttackers.slice()});
+          }
+        }
+      }else if(p.color===oppColor){
+        // This is an opp piece. Check if moverColor attacks it.
+        const moverAttackers=cm[r][c][moverColor]||[];
+        if(moverAttackers.length>0){
+          for(const atk of moverAttackers){
+            const k=atk.position.row+','+atk.position.col;
+            if(!threatByMover.has(k))threatByMover.set(k,{attacker:atk,targets:[]});
+            threatByMover.get(k).targets.push({piece:p,position:{row:r,col:c}});
+          }
+          if(p.type==='queen'){
+            oppQueens.push({position:{row:r,col:c},attackers:moverAttackers.slice()});
+          }
+        }
+      }
+    }
+    // Yellow arrows: threats to queens from BOTH sides.
+    // (a) mover threatening opp queen: arrow from mover attacker → opp queen
+    // (b) opp threatening mover queen: arrow from opp attacker → mover queen
+    //     (this includes the case where the mover's queen just moved INTO a
+    //      threatened square — _isQueenMovedIntoThreat is used for priority boost)
+    const _pieceVal={pawn:1,knight:3,bishop:3,rook:5,queen:9,king:0};
+    const yellowAttackers=[];
+    for(const q of oppQueens){
+      for(const atk of q.attackers){
+        // v1.0.5 Rev54: Boost if this opp queen is at the mover's destination
+        // (rare: only when the mover captured an opp queen that was defended).
+        const _isAtMovedDest=_movedToPos&&q.position.row===_movedToPos.row&&q.position.col===_movedToPos.col;
+        yellowAttackers.push({attacker:atk,queen:q.position,boost:_isAtMovedDest?1:0});
+      }
+    }
+    for(const q of moverQueens){
+      for(const atk of q.attackers){
+        // v1.0.5 Rev54: Boost if this mover queen IS the just-moved piece
+        // (i.e., the mover actively moved their queen INTO a threatened square).
+        const _isMovedQueen=_isQueenMovedIntoThreat
+          &&_movedToPos
+          &&q.position.row===_movedToPos.row
+          &&q.position.col===_movedToPos.col;
+        yellowAttackers.push({attacker:atk,queen:q.position,boost:_isMovedQueen?1:0});
+      }
+    }
+    // Deduplicate by attacker→queen key
+    const yaSeen=new Set();
+    const yaDedup=[];
+    for(const ya of yellowAttackers){
+      const k=ya.attacker.position.row+','+ya.attacker.position.col+'->'+ya.queen.row+','+ya.queen.col;
+      if(yaSeen.has(k))continue;
+      yaSeen.add(k);
+      yaDedup.push(ya);
+    }
+    // v1.0.5 Rev54: Sort with boost first (boosted entries win ties), then by
+    // attacker piece value descending (higher-value attacker = more notable).
+    yaDedup.sort((a,b)=>{
+      if(a.boost!==b.boost)return b.boost-a.boost;
+      return _pieceVal[b.attacker.piece.type]-_pieceVal[a.attacker.piece.type];
+    });
+    for(const ya of yaDedup.slice(0,6)){ // cap 6 (3 per side typically)
+      cal.push({color:'Y',from:posAlg(ya.attacker.position),to:posAlg(ya.queen)});
+    }
+    // Blue arrows: multi-threat from BOTH sides (combine threatByMover + threatByOpp)
+    // v1.0.5 Rev54: Boost opp multi-threats when the mover's moved piece is itself
+    // threatened (the mover "walked into a threat", possibly exposing other pieces
+    // to the same opp attacker). Per user spec item (2).
+    const multiThreats=[];
+    for(const v of threatByMover.values()){
+      if(v.targets.length>=2) multiThreats.push({attacker:v.attacker,targets:v.targets,boost:0});
+    }
+    for(const v of threatByOpp.values()){
+      if(v.targets.length>=2){
+        // Boost if the mover's destination square is one of this opp attacker's
+        // targets (i.e., the opp attacker threatens the moved piece) — this is
+        // the case where moving INTO a threat also exposes other pieces to the
+        // same attacker, satisfying user spec item (2).
+        let _boost=_movedPieceThreatened?1:0;
+        if(_movedToPos&&_boost){
+          // Verify the opp attacker actually threatens the moved piece's square
+          const _threatensMoved=v.targets.some(t=>t.position.row===_movedToPos.row&&t.position.col===_movedToPos.col);
+          if(!_threatensMoved)_boost=0;
+        }
+        multiThreats.push({attacker:v.attacker,targets:v.targets,boost:_boost});
+      }
+    }
+    multiThreats.sort((a,b)=>{
+      if(a.boost!==b.boost)return b.boost-a.boost;
+      return b.targets.length-a.targets.length;
+    });
+    for(const mt of multiThreats.slice(0,3)){
+      for(const tgt of mt.targets.slice(0,4)){
+        cal.push({color:'B',from:posAlg(mt.attacker.position),to:posAlg(tgt.position)});
+      }
+    }
+  }
   // Cache the result
   _visualAnnotationsCache.set(moveIdx,{csl,cal});
 }
@@ -12130,6 +13122,171 @@ function _computeAndCacheVisualAnnotations(moveIdx){
 // Get cached visual annotations for a move (returns {csl:[], cal:[]} or null)
 function _getVisualAnnotations(moveIdx){
   return _visualAnnotationsCache.get(moveIdx)||null;
+}
+
+// v1.0.5 Rev53 NEW: Compute visual annotations for the INITIAL position
+// (reviewStep 0). Per user spec, annotations must be computed for the
+// initial position too (setup complete / FEN import / PGN with FEN import).
+// We reuse the same logic as _computeAndCacheVisualAnnotations but feed it
+// the initial gameState directly. The result is cached under key '_initial'.
+function _computeInitialPositionAnnotations(){
+  if(_visualAnnotationsCache.has('_initial'))return; // already computed
+  try{
+    const st=(typeof gameState!=='undefined'&&gameState)?gameState:null;
+    if(!st)return;
+    // Determine "mover" and "opp" for the initial position. At the start,
+    // it's the side to move's turn. We compute annotations from BOTH sides'
+    // perspectives (the threat detection in _computeAndCacheVisualAnnotations
+    // already examines both directions for blue/yellow arrows).
+    // We synthesize a moveIdx that doesn't exist in moveRecords (-1 sentinel)
+    // and call the compute function with a custom state.
+    // Since _computeAndCacheVisualAnnotations reads moveRecords[moveIdx], we
+    // can't call it directly with moveIdx=-1. Instead, we inline a simplified
+    // version that uses the current gameState.
+    const csl=[];  // [{color, square}]
+    const cal=[];  // [{color, from, to}]
+    const moverColor=st.currentTurn||'white';
+    const oppColor=moverColor==='white'?'black':'white';
+    const playerCol=(typeof playerColor!=='undefined')?playerColor:'white';
+    const aiCol=playerCol==='white'?'black':'white';
+    let cm=null;
+    try{
+      if(typeof getCtrlMap==='function')cm=getCtrlMap(st.board);
+    }catch(e){cm=null;}
+    if(cm){
+      const centerSquares=[[3,3],[3,4],[4,3],[4,4]];
+      const isCenter=(r,c)=>(r===3||r===4)&&(c===3||c===4);
+      const isExtendedCenter=(r,c)=>r>=2&&r<=5&&c>=2&&c<=5;
+      const blueCandidates=[],redCandidates=[],yellowCandidates=[];
+      for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+        const entry=cm[r][c];
+        if(!entry)continue;
+        const pAtk=entry[playerCol].length;
+        const aAtk=entry[aiCol].length;
+        const total=pAtk+aAtk;
+        const netCtrl=pAtk-aAtk; // same as heatmap panel's myCtrl-opCtrl
+        // Blue/red: net control (consistent with heatmap control-info panel).
+        // (See _computeAndCacheVisualAnnotations for the full rationale.)
+        if(netCtrl>0){
+          let score=netCtrl*2;
+          if(isCenter(r,c))score+=3;else if(isExtendedCenter(r,c))score+=1;
+          blueCandidates.push({r,c,score});
+        }
+        if(netCtrl<0){
+          let score=(-netCtrl)*2;
+          if(isCenter(r,c))score+=3;else if(isExtendedCenter(r,c))score+=1;
+          redCandidates.push({r,c,score});
+        }
+        // Yellow = top squares by TOTAL attacker count (both sides combined,
+        // regardless of piece color), ALLOWED to overlap with blue/red.
+        // (See _computeAndCacheVisualAnnotations for the full rationale.)
+        if(total>=2)yellowCandidates.push({r,c,total});
+      }
+      blueCandidates.sort((a,b)=>b.score-a.score);
+      redCandidates.sort((a,b)=>b.score-a.score);
+      yellowCandidates.sort((a,b)=>b.total-a.total);
+      for(const sq of blueCandidates.slice(0,3))csl.push({color:'B',square:posAlg({row:sq.r,col:sq.c})});
+      for(const sq of redCandidates.slice(0,3))csl.push({color:'R',square:posAlg({row:sq.r,col:sq.c})});
+      for(const sq of yellowCandidates.slice(0,3))csl.push({color:'Y',square:posAlg({row:sq.r,col:sq.c})});
+      for(const [r,c] of centerSquares){
+        const entry=cm[r][c];
+        if(entry&&entry.white.length===0&&entry.black.length===0){
+          csl.push({color:'G',square:posAlg({row:r,col:c})});
+        }
+      }
+      // Arrows: blue (multi-threat) + yellow (queen threat) from both sides.
+      // (No red/green check arrows for initial position — no move was just made.)
+      const threatByWhite=new Map();
+      const threatByBlack=new Map();
+      let whiteQueensThreatened=[],blackQueensThreatened=[];
+      for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+        const p=st.board[r][c];
+        if(!p||p.type==='king')continue;
+        const enemyColor=p.color==='white'?'black':'white';
+        const enemyAttackers=cm[r][c][enemyColor]||[];
+        if(enemyAttackers.length===0)continue;
+        const map=p.color==='white'?threatByWhite:threatByBlack;
+        for(const atk of enemyAttackers){
+          const k=atk.position.row+','+atk.position.col;
+          if(!map.has(k))map.set(k,{attacker:atk,targets:[]});
+          map.get(k).targets.push({piece:p,position:{row:r,col:c}});
+        }
+        if(p.type==='queen'){
+          if(p.color==='white')whiteQueensThreatened.push({position:{row:r,col:c},attackers:enemyAttackers.slice()});
+          else blackQueensThreatened.push({position:{row:r,col:c},attackers:enemyAttackers.slice()});
+        }
+      }
+      const _pieceVal={pawn:1,knight:3,bishop:3,rook:5,queen:9,king:0};
+      const yellowAttackers=[];
+      for(const q of whiteQueensThreatened)for(const atk of q.attackers)yellowAttackers.push({attacker:atk,queen:q.position});
+      for(const q of blackQueensThreatened)for(const atk of q.attackers)yellowAttackers.push({attacker:atk,queen:q.position});
+      const yaSeen=new Set();
+      const yaDedup=[];
+      for(const ya of yellowAttackers){
+        const k=ya.attacker.position.row+','+ya.attacker.position.col+'->'+ya.queen.row+','+ya.queen.col;
+        if(yaSeen.has(k))continue;
+        yaSeen.add(k);yaDedup.push(ya);
+      }
+      yaDedup.sort((a,b)=>_pieceVal[b.attacker.piece.type]-_pieceVal[a.attacker.piece.type]);
+      for(const ya of yaDedup.slice(0,6))cal.push({color:'Y',from:posAlg(ya.attacker.position),to:posAlg(ya.queen)});
+      const multiThreats=[];
+      for(const v of threatByWhite.values())if(v.targets.length>=2)multiThreats.push(v);
+      for(const v of threatByBlack.values())if(v.targets.length>=2)multiThreats.push(v);
+      multiThreats.sort((a,b)=>b.targets.length-a.targets.length);
+      for(const mt of multiThreats.slice(0,3)){
+        for(const tgt of mt.targets.slice(0,4)){
+          cal.push({color:'B',from:posAlg(mt.attacker.position),to:posAlg(tgt.position)});
+        }
+      }
+    }
+    _visualAnnotationsCache.set('_initial',{csl,cal});
+  }catch(e){
+    console.warn('_computeInitialPositionAnnotations failed',e);
+  }
+}
+
+// v1.0.5 Round-6 Rev64 (2026.6.27): Invalidate cached PGN-related data for
+// undone moves. Called from undoMove() after moveRecords is restored to a
+// shorter length. Removes cache entries whose key (move index) is beyond the
+// new moveRecords length — those correspond to moves that no longer exist.
+// See the detailed comment in undoMove() for the rationale.
+function _invalidateCachesForUndoneMoves(currentMoveCount){
+  try{
+    // 1. _reviewEvalCache — keyed by reviewStep (1-based). Delete entries
+    //    with key > currentMoveCount.
+    if(typeof _reviewEvalCache!=='undefined'&&_reviewEvalCache){
+      const _keysToDelete=[];
+      if(typeof _reviewEvalCache.keys==='function'){
+        for(const k of _reviewEvalCache.keys()){
+          if(typeof k==='number'&&k>currentMoveCount)_keysToDelete.push(k);
+        }
+      }
+      for(const k of _keysToDelete)_reviewEvalCache.delete(k);
+    }
+  }catch(e){console.warn('_invalidateCachesForUndoneMoves: eval cache failed',e);}
+  try{
+    // 2. _visualAnnotationsCache — keyed by moveIdx (0-based). Delete entries
+    //    with key >= currentMoveCount. Also delete the '_initial' sentinel
+    //    only if currentMoveCount===0 (no moves at all — initial position).
+    if(typeof _visualAnnotationsCache!=='undefined'&&_visualAnnotationsCache){
+      const _vaKeysToDelete=[];
+      for(const k of _visualAnnotationsCache.keys()){
+        if(k==='_initial'){
+          // Keep '_initial' unless we're back to the very start (no moves).
+          // The initial-position annotations are valid regardless of undo
+          // (they describe the starting position, which hasn't changed).
+          continue;
+        }
+        if(typeof k==='number'&&k>=currentMoveCount)_vaKeysToDelete.push(k);
+      }
+      for(const k of _vaKeysToDelete)_visualAnnotationsCache.delete(k);
+    }
+  }catch(e){console.warn('_invalidateCachesForUndoneMoves: visual annotation cache failed',e);}
+  try{
+    // 3. _cachedOriginalPGN — null it so subsequent PGN operations use
+    //    _buildPGNString() (which reads the current, shorter moveRecords).
+    if(typeof _cachedOriginalPGN!=='undefined')_cachedOriginalPGN=null;
+  }catch(e){}
 }
 
 function _resetGameUIState(){
@@ -13030,10 +14187,10 @@ function _resignGame(){
   // Set game-over state
   _gameOverStatusKey='resign';
   gameOver=_gameOverStrFromStatus('resign');
-  // Play a soft "lose" sound
+  // Play a soft "gameover" sound for the loss.
   try{
-    if(typeof soundOn!=='undefined'&&soundOn&&typeof _playSound==='function'){
-      _playSound('lose');
+    if(typeof soundOn!=='undefined'&&soundOn&&typeof playSound==='function'){
+      playSound('gameover');
     }
   }catch(e){}
   // Haptic feedback for the loss

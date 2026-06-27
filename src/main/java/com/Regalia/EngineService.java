@@ -210,38 +210,12 @@ public class EngineService extends Service {
         }
 
         PendingIntent contentIntent = buildContentIntent();
-        Notification notification;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            Notification.Builder builder = new Notification.Builder(this, CHANNEL_ID)
-                    .setContentTitle(title)
-                    .setContentText(contentText)
-                    .setSmallIcon(R.mipmap.ic_launcher)
-                    .setOngoing(true)              // v1.0.1: non-dismissable while service runs
-                    .setShowWhen(false)            // v1.0.1: cleaner look — no timestamp
-                    .setOnlyAlertOnce(true)        // v1.0.1: don't re-sound on every update
-                    .setLocalOnly(true)            // v1.0.1: don't mirror to other devices
-                    .setCategory(Notification.CATEGORY_SERVICE)
-                    .setPriority(Notification.PRIORITY_LOW);
-            if (contentIntent != null) builder.setContentIntent(contentIntent);
-            notification = builder.build();
-        } else {
-            // Pre-Android 8: use deprecated constructor
-            Notification.Builder builder = new Notification.Builder(this)
-                    .setContentTitle(title)
-                    .setContentText(contentText)
-                    .setSmallIcon(R.mipmap.ic_launcher)
-                    .setOngoing(true)
-                    .setPriority(Notification.PRIORITY_LOW);
-            if (contentIntent != null) builder.setContentIntent(contentIntent);
-            notification = builder.build();
-        }
-        // FLAG_NO_CLEAR: prevent the notification from being cleared by "Clear all"
-        // (in addition to setOngoing which prevents swipe-dismiss on most Android versions).
-        // Note: Android 14+ may still allow user dismissal of foreground service
-        // notifications, but the foreground service itself stays alive. Re-posting
-        // via updateNotification() restores the notification.
-        notification.flags |= Notification.FLAG_NO_CLEAR;
-        return notification;
+        // v1.0.5 Rev55: Use the shared notification-builder helper to avoid
+        // duplicating the builder configuration between buildNotification()
+        // and updateNotification(). Both methods construct identical
+        // notifications (same title, content, icon, flags, channel) — only
+        // the content text differs, which is passed as a parameter.
+        return _buildNotificationWithContent(this, title, contentText, contentIntent);
     }
 
     /**
@@ -303,18 +277,9 @@ public class EngineService extends Service {
                     (android.app.NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm == null) return;
 
-            // v1.0.2 CLEANUP: Removed the dead `en` computation block — it read
-            // from the wrong prefs file ("Regalia_prefs") and the value was
-            // never used (the notification title is hardcoded "Regalia" and
-            // the content is the `info` string passed in by JS). The bilingual
-            // notification text is already handled by buildNotification() /
-            // isEnglishMode() when the service starts.
-
             String title = "Regalia";
 
-            // v1.0.1: Build PendingIntent to open MainActivity on tap.
-            // Re-built per update because the context may differ (passed in by JS bridge).
-            // Cheap operation; uses FLAG_IMMUTABLE on API 23+ per Android security requirements.
+            // v1.0.5 Rev55: Build PendingIntent to open MainActivity on tap.
             PendingIntent contentIntent = null;
             try {
                 Intent intent = new Intent(context, MainActivity.class);
@@ -327,34 +292,67 @@ public class EngineService extends Service {
                 contentIntent = PendingIntent.getActivity(context, 0, intent, piFlags);
             } catch (Throwable e) { /* fallback: no content intent */ }
 
-            Notification notification;
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                Notification.Builder builder = new Notification.Builder(context, CHANNEL_ID)
-                        .setContentTitle(title)
-                        .setContentText(info)
-                        .setSmallIcon(R.mipmap.ic_launcher)
-                        .setOngoing(true)              // v1.0.1: non-dismissable while service runs
-                        .setShowWhen(false)
-                        .setOnlyAlertOnce(true)
-                        .setLocalOnly(true)
-                        .setCategory(Notification.CATEGORY_SERVICE)
-                        .setPriority(Notification.PRIORITY_LOW);
-                if (contentIntent != null) builder.setContentIntent(contentIntent);
-                notification = builder.build();
-            } else {
-                Notification.Builder builder = new Notification.Builder(context)
-                        .setContentTitle(title)
-                        .setContentText(info)
-                        .setSmallIcon(R.mipmap.ic_launcher)
-                        .setOngoing(true)
-                        .setPriority(Notification.PRIORITY_LOW);
-                if (contentIntent != null) builder.setContentIntent(contentIntent);
-                notification = builder.build();
-            }
-            notification.flags |= Notification.FLAG_NO_CLEAR;
+            // v1.0.5 Rev55: Use the shared helper (was duplicated inline here).
+            Notification notification = _buildNotificationWithContent(context, title, info, contentIntent);
             nm.notify(NOTIFICATION_ID, notification);
         } catch (Throwable e) {
             Log.w(TAG, "Failed to update notification", e);
         }
+    }
+
+    /**
+     * v1.0.5 Rev55: Shared notification builder — used by both buildNotification()
+     * (instance method, called from onCreate) and updateNotification() (static
+     * method, called from JS bridge with a possibly-different context).
+     *
+     * Builds a notification with the standard Regalia engine-service configuration:
+     *   - Title: "Regalia"
+     *   - Content: passed in (one of "ready" / "analyzing" / "error: ...")
+     *   - Small icon: app launcher icon
+     *   - Ongoing (non-dismissable while service runs)
+     *   - No timestamp, no re-alert, local-only, service category, low priority
+     *   - FLAG_NO_CLEAR (defense-in-depth on top of setOngoing)
+     *
+     * @param context    Context for the Notification.Builder
+     * @param title      Notification title
+     * @param contentText Notification content text
+     * @param contentIntent PendingIntent fired on tap (may be null)
+     * @return configured Notification
+     */
+    private static Notification _buildNotificationWithContent(Context context, String title,
+                                                              String contentText,
+                                                              PendingIntent contentIntent) {
+        Notification notification;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Notification.Builder builder = new Notification.Builder(context, CHANNEL_ID)
+                    .setContentTitle(title)
+                    .setContentText(contentText)
+                    .setSmallIcon(R.mipmap.ic_launcher)
+                    .setOngoing(true)              // non-dismissable while service runs
+                    .setShowWhen(false)            // cleaner look — no timestamp
+                    .setOnlyAlertOnce(true)        // don't re-sound on every update
+                    .setLocalOnly(true)            // don't mirror to other devices
+                    .setCategory(Notification.CATEGORY_SERVICE)
+                    .setPriority(Notification.PRIORITY_LOW);
+            if (contentIntent != null) builder.setContentIntent(contentIntent);
+            notification = builder.build();
+        } else {
+            // Pre-Android 8: use deprecated constructor (no channel)
+            Notification.Builder builder = new Notification.Builder(context)
+                    .setContentTitle(title)
+                    .setContentText(contentText)
+                    .setSmallIcon(R.mipmap.ic_launcher)
+                    .setOngoing(true)
+                    .setPriority(Notification.PRIORITY_LOW);
+            if (contentIntent != null) builder.setContentIntent(contentIntent);
+            notification = builder.build();
+        }
+        // FLAG_NO_CLEAR: prevent the notification from being cleared by "Clear all"
+        // (in addition to setOngoing which prevents swipe-dismiss on most Android versions).
+        // Note: Android 14+ may still allow user dismissal of foreground service
+        // notifications, but the foreground service itself stays alive. Re-posting
+        // via updateNotification() restores the notification.
+        notification.flags |= Notification.FLAG_NO_CLEAR;
+        return notification;
     }
 }

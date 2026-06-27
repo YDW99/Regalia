@@ -57,7 +57,7 @@ import android.widget.TextView;
 public class MainActivity extends Activity {
 
     private static final String TAG = "Regalia";
-    private static final String VERSION = "v1.0.4";
+    private static final String VERSION = "v1.0.5";
 
     private WebView webView;
     private StockfishNative stockfishEngine;
@@ -68,6 +68,10 @@ public class MainActivity extends Activity {
     private int initRetryCount = 0;
     // OPT: P0 - Track if Activity is destroyed to prevent post-delayed callbacks from executing
     private volatile boolean isDestroyed = false;
+    // v1.0.5 Round-6 Rev49: Sensor-based board anti-shake helper.
+    // Null until first toggle on; recreated on each start() to reset state.
+    private StabilizationHelper stabilizationHelper = null;
+    private boolean stabilizationEnabled = false;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -514,6 +518,12 @@ public class MainActivity extends Activity {
         }
         enableImmersiveMode();
 
+        // v1.0.5 Round-6 Rev49: Re-start sensor-based stabilization if it was
+        // enabled before pause (battery-saving stop in onPause).
+        if (stabilizationEnabled && stabilizationHelper != null) {
+            try { stabilizationHelper.start(); } catch (Throwable e) { Log.w(TAG, "stab restart on resume failed", e); }
+        }
+
         // Retry engine init if not ready (handles case where init failed previously)
         if (stockfishEngine != null && !stockfishEngine.isEngineReady() && !engineInitialized) {
             Log.i(TAG, "onResume: engine not initialized, retrying");
@@ -572,6 +582,11 @@ public class MainActivity extends Activity {
     @Override
     public void onPause() {
         super.onPause();
+        // v1.0.5 Round-6 Rev49: Stop sensor-based stabilization when backgrounded
+        // (battery saving). onResume will restart it IF it was enabled.
+        if (stabilizationEnabled && stabilizationHelper != null) {
+            try { stabilizationHelper.stop(); } catch (Throwable e) { Log.w(TAG, "stab stop on pause failed", e); }
+        }
         // v1.0.4 Round-5 Rev20: Flush any pending JS localStorage writes to the
         // persistent Java store BEFORE the OS can kill the app. HyperOS 3 is
         // aggressive about killing backgrounded apps — without this flush, any
@@ -640,6 +655,13 @@ public class MainActivity extends Activity {
     public void onDestroy() {
         // OPT: P0 - Set destroyed flag first so delayed callbacks check it before executing.
         isDestroyed = true;
+
+        // v1.0.5 Round-6 Rev49: Stop sensor-based stabilization and release sensors.
+        if (stabilizationHelper != null) {
+            try { stabilizationHelper.stop(); } catch (Throwable e) { Log.w(TAG, "stab stop on destroy failed", e); }
+            stabilizationHelper = null;
+        }
+        stabilizationEnabled = false;
 
         // OPT: P0 - Cancel any pending init retry callbacks and release Handler reference
         // to prevent memory leaks and late callback execution.
@@ -735,5 +757,110 @@ public class MainActivity extends Activity {
 
     public WebView getWebView() {
         return webView;
+    }
+
+    // ========================================================================
+    // v1.0.5 Round-6 Rev49: Sensor-based board anti-shake (OIS-style).
+    // ========================================================================
+    //
+    // The user long-presses any board square to toggle stabilization on/off.
+    // The JS-side long-press handler (in ui.js) calls AndroidBridge.toggleStabilization(),
+    // which dispatches to toggleStabilization() below.
+    //
+    // When ON: registers TYPE_LINEAR_ACCELERATION (gravity already removed by
+    // OS) and integrates its readings to compute an inverse board displacement.
+    // The board's .bwrap element gets a CSS transform that counter-shifts the
+    // board in real time, so it appears "locked" to the world frame — mimicking
+    // camera optical image stabilization (translation only).
+    //
+    // When OFF: unregisters the sensor and resets the board to center.
+    //
+    // Toast notifications (zh/en) are shown on toggle, using the current
+    // language preference (read from SharedPreferences "RegaliaEngine" → "lang").
+    //
+    // Lifecycle: onPause stops stabilization (battery saving); onResume
+    // restarts it IF it was enabled before pause. onDestroy stops it.
+
+    /**
+     * Toggle the board anti-shake stabilization on/off.
+     * Called from the JS long-press handler via AndroidBridge.toggleStabilization().
+     * Shows a Toast in the current language (zh/en).
+     */
+    public void toggleStabilization() {
+        if (stabilizationEnabled) {
+            // Turn OFF
+            if (stabilizationHelper != null) {
+                try { stabilizationHelper.stop(); } catch (Throwable e) { Log.w(TAG, "stab stop failed", e); }
+            }
+            stabilizationEnabled = false;
+            showToastLocalized("stabilization_off");
+        } else {
+            // Turn ON
+            if (stabilizationHelper == null && webView != null) {
+                try {
+                    stabilizationHelper = new StabilizationHelper(this, webView);
+                } catch (Throwable e) {
+                    Log.e(TAG, "StabilizationHelper creation failed", e);
+                    showToastLocalized("stabilization_unavailable");
+                    return;
+                }
+            }
+            if (stabilizationHelper != null) {
+                boolean ok = false;
+                try { ok = stabilizationHelper.start(); } catch (Throwable e) { Log.e(TAG, "stab start failed", e); }
+                if (ok) {
+                    stabilizationEnabled = true;
+                    showToastLocalized("stabilization_on");
+                } else {
+                    showToastLocalized("stabilization_unavailable");
+                }
+            }
+        }
+    }
+
+    /**
+     * Show a Toast in the current language (zh/en).
+     * @param key one of: "stabilization_on", "stabilization_off", "stabilization_unavailable"
+     */
+    private void showToastLocalized(String key) {
+        // Read language preference (same prefs as StockfishNative.saveLangPref)
+        String lang = "zh"; // default
+        try {
+            android.content.SharedPreferences prefs = getSharedPreferences("RegaliaEngine", MODE_PRIVATE);
+            String saved = prefs.getString("lang", null);
+            if (saved != null) lang = saved;
+            else {
+                // Auto-detect from system locale
+                java.util.Locale sys = getResources().getConfiguration().locale;
+                if (sys != null && sys.getLanguage() != null && sys.getLanguage().startsWith("en")) lang = "en";
+            }
+        } catch (Throwable e) {
+            Log.w(TAG, "showToastLocalized: lang read failed, defaulting to zh", e);
+        }
+        String msg;
+        if ("stabilization_on".equals(key)) {
+            msg = "en".equals(lang) ? "Board stabilization ON" : "棋盘防抖已开启";
+        } else if ("stabilization_off".equals(key)) {
+            msg = "en".equals(lang) ? "Board stabilization OFF" : "棋盘防抖已关闭";
+        } else if ("stabilization_unavailable".equals(key)) {
+            msg = "en".equals(lang) ? "Sensors unavailable — stabilization disabled"
+                                     : "传感器不可用 — 防抖已禁用";
+        } else {
+            msg = key;
+        }
+        try {
+            runOnUiThread(new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        android.widget.Toast.makeText(MainActivity.this, msg, android.widget.Toast.LENGTH_SHORT).show();
+                    } catch (Throwable e) {
+                        Log.w(TAG, "Toast show failed", e);
+                    }
+                }
+            });
+        } catch (Throwable e) {
+            Log.w(TAG, "showToastLocalized post failed", e);
+        }
     }
 }

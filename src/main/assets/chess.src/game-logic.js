@@ -351,7 +351,7 @@ const _i18n={
 'elo_target':{zh:'Elo目标',en:'ELO Target'},
 'export_settings_btn':{zh:'📤 导出设置',en:'📤 Export'},
 'import_settings_btn':{zh:'📥 导入设置',en:'📥 Import'},
-'loading_title':{zh:'Regalia v1.0.4',en:'Regalia v1.0.4'},
+'loading_title':{zh:'Regalia v1.0.5',en:'Regalia v1.0.5'},
 'click_skip_loading':{zh:'点击跳过加载',en:'Click to skip loading'},
 'white_checkmate':{zh:'白方将杀获胜',en:'White wins by checkmate'},
 'black_checkmate':{zh:'黑方将杀获胜',en:'Black wins by checkmate'},
@@ -1168,7 +1168,12 @@ const ps=postState;
 if(ps){const opp=OPP_COLOR[piece.color];const kPos=opp==='white'?ps.wk:ps.bk;if(kPos&&inCheck(ps.board,opp,kPos)){n+=hasLegalMoves(ps)?'+':'#'}}
 return n}
 function getCtrlMap(b){const cm=[];for(let r=0;r<8;r++){cm[r]=[];for(let c=0;c<8;c++)cm[r][c]={white:[],black:[]}}
-for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=b[r][c];if(p){const atks=attacked(b,{row:r,col:c});for(const a of atks){cm[a.row][a.col][p.color].push({piece:p,position:{row:r,col:c}})}
+// v1.0.5 Rev55 PERF: hoist the attacker-position object out of the inner loop.
+// Each piece at (r,c) attacks multiple squares, but its `position` field is the
+// SAME for all those pushes. Previously we allocated a fresh {row:r,col:c} object
+// on every push (≈256 allocations per ctrl-map = per render tick when heatmap
+// is on). Now we allocate ONE position object per piece (max 32) and reuse it.
+for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=b[r][c];if(p){const atks=attacked(b,{row:r,col:c});const _pos={row:r,col:c};for(const a of atks){cm[a.row][a.col][p.color].push({piece:p,position:_pos})}
 }}return cm}
 
 
@@ -1576,7 +1581,12 @@ _ensureEcoParsed();
 const hist=s.moveHistory||[];
 if(!hist.length)return null;
 const ck=hist.map(h=>''+h.from.row+h.from.col+h.to.row+h.to.col).join(',');
-if(_ecoRecCache.has(ck))return _ecoRecCache.get(ck);if(_ecoRecCache.size>=_ECO_REC_CACHE_MAX){const firstKey=_ecoRecCache.keys().next().value;_ecoRecCache.delete(firstKey);}
+// v1.0.5 Round-6 Rev62 (2026.6.27) PERF: refresh LRU order on cache hit.
+// Previously, a cache hit returned immediately without delete+re-insert,
+// so frequently-accessed entries could be evicted before rarely-accessed
+// ones. The tablebase cache (_tbCache) already has this fix applied.
+if(_ecoRecCache.has(ck)){const v=_ecoRecCache.get(ck);_ecoRecCache.delete(ck);_ecoRecCache.set(ck,v);return v;}
+if(_ecoRecCache.size>=_ECO_REC_CACHE_MAX){const firstKey=_ecoRecCache.keys().next().value;_ecoRecCache.delete(firstKey);}
 if(!ecoHashMap)buildEcoHashMap();
 // Find matching opening lines that have a next move for the player
 const candidates=[];

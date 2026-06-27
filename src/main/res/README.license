@@ -136,3 +136,27 @@ the JS layer (chess.src/ui.js, chess.src/game-logic.js, chess.src/ai-bridge.js).
 
 v1.0.4 Round-5 Rev47: no changes to res/ files. All Rev47 changes are in
 the JS layer.
+
+v1.0.4 Round-5 Rev48: no changes to res/ files. All Rev48 changes are in
+the JS/HTML layer (chess.src/ + stats.html).
+
+v1.0.5 Round-6 Rev49: no changes to res/ files. All Rev49 changes are in
+the Java layer and the JS/HTML layer.
+
+v1.0.5 Round-6 Rev50: no changes to res/ files.
+
+v1.0.5 Round-6 Rev51 changes:
+  - values/strings.xml: app_name "Regalia v1.0.4" → "Regalia v1.0.5".
+    (This is the APP launcher icon name shown on the system home screen.)
+
+v1.0.5 Round-6 Rev52: no changes to res/ files.
+
+v1.0.5 Round-6 Rev53: no changes to res/ files.
+
+v1.0.5 Round-6 Rev54 through Rev68: no changes to res/ files. All changes in
+this range were in the Java layer (StabilizationHelper.java, MainActivity.java,
+StockfishNative.java, StatsActivity.java) and/or the JS layer (chess.src/
+ui.js, chess960.js, game-logic.js, tablebase.js, worker-pool.js, pgn-standard.js,
+ai-bridge.js, index.html.tpl). strings.xml, network_security_config.xml,
+backup_rules.xml, data_extraction_rules.xml, and all mipmap launcher icons
+remain unchanged from the Rev53 baseline.

@@ -4,8 +4,8 @@
 
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.Regalia"
-    android:versionCode="104"
-    android:versionName="1.0.4">
+    android:versionCode="105"
+    android:versionName="1.0.5">
 
     <!-- v18.5.0: Removed appcompat dependency — no more AndroidX permission injection issues -->
     <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="35" />
@@ -62,7 +62,8 @@
             android:configChanges="keyboardHidden|orientation|screenSize|smallestScreenSize|density|uiMode"
             android:windowSoftInputMode="adjustPan"
             android:hardwareAccelerated="true"
-            android:resizeableActivity="true">
+            android:resizeableActivity="true"
+            android:windowLayoutInDisplayCutoutMode="shortEdges">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -88,7 +89,8 @@
             android:configChanges="keyboardHidden|orientation|screenSize|smallestScreenSize|density|uiMode"
             android:windowSoftInputMode="adjustPan"
             android:hardwareAccelerated="true"
-            android:theme="@android:style/Theme.NoTitleBar.Fullscreen" />
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+            android:windowLayoutInDisplayCutoutMode="shortEdges" />
 
     </application>
 

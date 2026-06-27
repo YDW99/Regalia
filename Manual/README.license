@@ -1,7 +1,174 @@
-This directory contains non-main source artifacts.
+This directory contains the user-facing HTML manuals for the Regalia app
+(Chinese and English versions). Each manual is a self-contained HTML file
+with embedded CSS and JavaScript (no external resources).
 
-  - Regalia-v1.0.4-manual-zh.html: AGPL v3 (original chinese user manual)
-  - Regalia-v1.0.4-manual-en.html: AGPL v3 (original english user manual)
+License classification by file:
+  - Regalia-v1.0.5-manual-zh.html: AGPL v3 (original Regalia work)
+      Chinese user manual for Regalia v1.0.5.
+      Copyright (C) 2026 Regalia.
+  - Regalia-v1.0.5-manual-en.html: AGPL v3 (original Regalia work)
+      English user manual for Regalia v1.0.5.
+      Copyright (C) 2026 Regalia.
+  
+The manuals are AGPL v3 because they are original documentation created by
+the Regalia project, not derived from any third-party GPL work. The embedded
+diagrams, wireframes, and changelog text are all original.
 
-See the root-level LICENSE-AGPL v3, LICENSE-GPL v3, and NOTICE files
-for full license texts and attribution details.
+v1.0.5 Round-6 Rev54 changes:
+  - Regalia-v1.0.5-manual-zh.html: Updated with Rev54 changelog entry
+    (yellow/blue arrow extensions, per-color arrow offsets, yellow
+    rounded-rect square style, roll-only board rotation, first-principles
+    anti-shake audit with GAME_ROTATION_VECTOR preference).
+  - Regalia-v1.0.5-manual-en.html: Synced with Chinese version.
+  - No changes to v1.0.4 manuals (historical reference only).
+
+v1.0.5 Round-6 Rev55 changes:
+  - Regalia-v1.0.5-manual-zh.html: Added Rev55 changelog entry documenting
+    the line-by-line code audit findings (StatsActivity security parity +
+    FLAG_FULLSCREEN fix + immersive mode, engineGoDepth eval-mode options,
+    getCtrlMap perf, EngineService notification builder redundancy,
+    worker-pool fenToState consistency, chess960.js stale comment cleanup).
+  - Regalia-v1.0.5-manual-en.html: Synced with Chinese version.
+  - No changes to v1.0.4 manuals (historical reference only).
+
+v1.0.5 Round-6 Rev56 changes:
+  - Regalia-v1.0.5-manual-zh.html: Added Rev56 changelog entry documenting
+    the ai-bridge.js MultiPV path audit (stale-lines cleanup bug,
+    display signature cache perf, sort skip perf, cache invalidation
+    paths) and ui.js dirty-flag pipeline audit (eval display signature
+    cache perf, pipeline routing conclusion).
+  - Regalia-v1.0.5-manual-en.html: Synced with Chinese version.
+  - No changes to v1.0.4 manuals (historical reference only).
+
+v1.0.5 Round-6 Rev57 changes:
+  - Regalia-v1.0.5-manual-zh.html: Added Rev57 changelog entry documenting
+    the critical blank-screen fix (Rev55's backtick-in-template-literal
+    SyntaxError in worker-pool.js _WORKER_SOURCE).
+  - Regalia-v1.0.5-manual-en.html: Synced with Chinese version.
+  - No changes to v1.0.4 manuals (historical reference only).
+
+v1.0.5 Round-6 Rev58 changes:
+  - Regalia-v1.0.5-manual-zh.html: Added Rev58 changelog entry documenting
+    the review-board arrow offset redesign (three guarantees: same-color
+    same-bias, reverse-overlap only for same color, different colors never
+    collinear) and the magnetic-field-aware rotation sensor switching
+    strategy (ROTATION_VECTOR → GAME_ROTATION_VECTOR on disturbance → back
+    when calm, with hysteresis).
+  - Regalia-v1.0.5-manual-en.html: Synced with Chinese version.
+  - No changes to v1.0.4 manuals (historical reference only).
+
+v1.0.5 Round-6 Rev59 changes:
+  - Regalia-v1.0.5-manual-zh.html: Added Rev59 changelog entry documenting
+    the critical rotation-axis fix (remapCoordinateSystem for screen-frame
+    angles, correct for all 4 orientations, steering-wheel only) and arrow
+    offset verification (Rev58 logic confirmed correct).
+  - Regalia-v1.0.5-manual-en.html: Synced with Chinese version.
+  - No changes to v1.0.4 manuals (historical reference only).
+
+v1.0.5 Round-6 Rev60 changes:
+  - Regalia-v1.0.5-manual-zh.html: Added Rev60 changelog entry (arrow origin
+    dot removed, arrow offset calibrated to 8%/3px, rotation limit expanded
+    to ±45°).
+  - Regalia-v1.0.5-manual-en.html: Synced with Chinese version.
+  - No changes to v1.0.4 manuals (historical reference only).
+
+v1.0.5 Round-6 Rev70 changes (2026.6.27 net-control algorithm consistency fix):
+  - Regalia-v1.0.5-manual-zh.html: Added Rev70 changelog entry (net-control
+    algorithm consistency — blue/red changed from one-sided dominance to
+    netCtrl-based, matching the heatmap control-info panel). The Rev69 entry
+    was updated to remove "current revision" marker.
+  - Regalia-v1.0.5-manual-en.html: Synced with Chinese version.
+  - No changes to v1.0.4 manuals (historical reference only).
+
+v1.0.5 Round-6 Rev69 changes (2026.6.27 multi-color per square + heatmap text deletion):
+  - Regalia-v1.0.5-manual-zh.html: Added Rev69 changelog entry (multi-color per
+    square — _rvCslMap array; deleted "不含热力图控制统计数据的 PGN → 不显示
+    热力图控制统计区块" line). The Rev68 entry was updated to remove "current
+    revision" marker.
+  - Regalia-v1.0.5-manual-en.html: Synced with Chinese version.
+  - Regalia-v1.0.4-manual-zh.html, Regalia-v1.0.4-manual-en.html (historical):
+    synced deletion of the heatmap conditional-display line.
+  - No changes to v1.0.4 manuals other than the deleted line.
+
+v1.0.5 Round-6 Rev68 changes (2026.6.27 review yellow rounded-rect position fix):
+  - Regalia-v1.0.5-manual-zh.html: Added Rev68 changelog entry (review-board
+    yellow [%csl] rounded-rect overlay position fix — overlay was emitted after
+    cell </div> causing it to anchor to .bgrid instead of the cell; moved
+    inside cell div. Also: comprehensive README/LICENSE/NOTICE file audit —
+    added Rev54-68 summary entries to 4 stalled README.license files). The
+    Rev67 entry was updated to remove "current revision" marker.
+  - Regalia-v1.0.5-manual-en.html: Synced with Chinese version.
+  - No changes to v1.0.4 manuals (historical reference only).
+
+v1.0.5 Round-6 Rev67 changes (2026.6.27 landscape translation direction fix):
+  - Regalia-v1.0.5-manual-zh.html: Added Rev67 changelog entry (landscape
+    translation anti-shake boardPxX sign fix for ROTATION_90/270 via
+    first-principles derivation; ROTATION_0/180 already correct). The Rev66
+    entry was updated to remove "current revision" marker.
+  - Regalia-v1.0.5-manual-en.html: Synced with Chinese version.
+  - No changes to v1.0.4 manuals (historical reference only).
+
+v1.0.5 Round-6 Rev66 changes (2026.6.27 yellow overlap + comment cleanup):
+  - Regalia-v1.0.5-manual-zh.html: Added Rev66 changelog entry (yellow squares
+    allowed to overlap with blue/red — Rev65's exclusion removed; comprehensive
+    outdated/redundant comment cleanup across 10 source files ~120 lines). The
+    Rev65 entry was updated to note Rev66 removed the blue/red exclusion.
+  - Regalia-v1.0.5-manual-en.html: Synced with Chinese version.
+  - The Rev65 entry was updated to remove "current revision" marker.
+  - No changes to v1.0.4 manuals (historical reference only).
+
+v1.0.5 Round-6 Rev65 changes (2026.6.27 yellow-square logic fix):
+  - Regalia-v1.0.5-manual-zh.html: Added Rev65 changelog entry (yellow-square
+    logic fix — Rev61's pAtk>0&&aAtk>0 was too strict; Rev65 changes to
+    total>=2 with blue/red exclusion, correctly implementing "双方总控制数量
+    最多的那几个格子"). The Rev64 entry was updated to remove "current revision"
+    marker.
+  - Regalia-v1.0.5-manual-en.html: Synced with Chinese version.
+  - No changes to v1.0.4 manuals (historical reference only).
+
+v1.0.5 Round-6 Rev64 changes (2026.6.27 remove rotation + undo cache sync):
+  - Regalia-v1.0.5-manual-zh.html: Added Rev64 changelog entry (anti-shake
+    rotation completely removed — StabilizationHelper.java slimmed 720→337
+    lines, 3 sensors deleted, only TYPE_LINEAR_ACCELERATION retained, CSS
+    transform no longer has rotate(), --stab-rot property removed; undoMove
+    now calls _invalidateCachesForUndoneMoves to clear _reviewEvalCache,
+    _visualAnnotationsCache, _cachedOriginalPGN for undone moves). The Rev63
+    entry was updated to note Rev64 removed the rotation part.
+  - Regalia-v1.0.5-manual-en.html: Synced with Chinese version.
+  - The Rev63 entry was updated to remove "current revision" marker.
+  - No changes to v1.0.4 manuals (historical reference only).
+
+v1.0.5 Round-6 Rev63 changes (2026.6.27 anti-shake + arrow optimization):
+  - Regalia-v1.0.5-manual-zh.html: Added Rev63 changelog entry (anti-shake
+    rotation limit ±30°→±10° with first-principles analysis; arrow offset
+    optimization 8%+3px-cap→12%-no-cap with safety verification for cellSize
+    20-60px; arrow shape redesign with minimal 1.5px line + 4×3 triangle
+    arrowhead, removed origin dot/round linecap/thick stroke).
+  - Regalia-v1.0.5-manual-en.html: Synced with Chinese version.
+  - The Rev62 entry was updated to remove "current revision" marker.
+  - No changes to v1.0.4 manuals (historical reference only).
+
+v1.0.5 Round-6 Rev62 changes (2026.6.27 second-pass audit):
+  - Regalia-v1.0.5-manual-zh.html: Added Rev62 changelog entry (Chess960
+    SP-ID bishop-color array swap fix affecting 720/960 positions; tablebase
+    404 misidentified as server-down; PGN move-number regex missing 'O';
+    resign sound never played; mate:0 vs mate:null distinction lost;
+    worker-pool Map delete-during-iteration; ECO LRU no-refresh-on-hit;
+    MultiPV wasted work during AI thinking; eval chart label LRU churn;
+    redundancy cleanup; Chess960 castling detection limitation documented
+    as HIGH risk deferred).
+  - Regalia-v1.0.5-manual-en.html: Synced with Chinese version.
+  - The Rev61 entry was updated to remove "current revision" marker.
+  - No changes to v1.0.4 manuals (historical reference only).
+
+v1.0.5 Round-6 Rev61 changes (2026.6.27):
+  - Regalia-v1.0.5-manual-zh.html: Added Rev61 changelog entry (board
+    anti-shake Y-axis direction reversal fix in all 4 orientations;
+    rotation sensitivity adjustment dead-zone 0.3°→1.0°, max 45°→30°;
+    yellow-square logic fix requiring both sides attackers; arrow
+    stroke-linecap round→butt; engine extraction progress integer-division
+    fix; stats.html unclosed-brace infinite-loop fix; StatsActivity stream
+    leak fix). The Rev60 entry was updated to remove "current revision"
+    marker and to note that Rev61 reverted ±45° to ±30°.
+  - Regalia-v1.0.5-manual-en.html: Synced with Chinese version.
+  - No changes to v1.0.4 manuals (historical reference only).

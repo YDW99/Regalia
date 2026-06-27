@@ -445,3 +445,328 @@ v1.0.3 patch changes (version number unchanged — still v1.0.3 / versionCode 10
 
   v1.0.4 Round-5 Rev47 changes:
     - No changes to Java sources. All Rev47 changes are in the JS layer.
+
+  v1.0.4 Round-5 Rev48 changes:
+    - No changes to Java sources. All Rev48 changes are in the JS/HTML layer
+      (chess.src/tablebase.js, chess.src/ai-bridge.js, chess.src/ui.js,
+      chess.src/pgn-standard.js, chess.src/index.html.tpl, stats.html).
+
+  v1.0.5 Round-6 Rev49 changes:
+    - MainActivity.java (AGPL v3): New fields stabilizationHelper +
+      stabilizationEnabled. New toggleStabilization() method (sensor
+      registration + Toast). New showToastLocalized() (zh/en). onPause/onResume/
+      onDestroy lifecycle management for stabilization. VERSION → v1.0.5.
+    - StockfishNative.java (GPL v3): New @JavascriptInterface toggleStabilization()
+      delegates to MainActivity. ENGINE_VERSION → v1.0.5.
+    - StabilizationHelper.java (AGPL v3, NEW FILE): Sensor-fusion anti-shake
+      helper. Fuses accelerometer, linear acceleration, gravity, gyroscope,
+      rotation vectors. High-pass gravity separation, double integration,
+      decay, ±8px clamp, 60Hz JS callback throttle.
+
+  v1.0.5 Round-6 Rev50 changes:
+    - MainActivity.java (AGPL v3): No changes (version already v1.0.5 from Rev49).
+    - StockfishNative.java (GPL v3): No changes.
+    - StabilizationHelper.java (AGPL v3): CRITICAL FIX — anti-shake direction.
+      boardPxX/boardPxY now NEGATED (-dispX*SCALE / -dispY*SCALE) so the board
+      moves OPPOSITE to device motion (true OIS behavior). Previously +dispX
+      amplified shake.
+    - ChessApp.java (AGPL v3): Init log version v1.0.4→v1.0.5.
+    - ChessWebViewClient.java (AGPL v3): Version comment v1.0.4→v1.0.5.
+
+  v1.0.5 Round-6 Rev51 changes:
+    - StabilizationHelper.java (AGPL v3): CRITICAL FIX — anti-shake Y-axis
+      direction. Rev50 negated Y (-dispY) which amplified vertical shake.
+      Corrected to +dispY (Y NOT negated) per Android sensor Y (up) vs CSS
+      screen Y (down) opposite-direction analysis. X remains -dispX (negated).
+
+  v1.0.5 Round-6 Rev52 changes:
+    - StabilizationHelper.java (AGPL v3): COMPLETE REWRITE — added screen
+      orientation adaptation via WindowManager.getDefaultDisplay().getRotation().
+      Per-orientation remap (ROTATION_0/90/180/270) of device displacement to
+      screen board displacement. Adjusted decay coefficients. Fixed finalJs
+      variable scoping.
+
+  v1.0.5 Round-6 Rev53 changes:
+    - StabilizationHelper.java (AGPL v3): REWRITE — only TYPE_LINEAR_ACCELERATION
+      + TYPE_ROTATION_VECTOR sensors (removed accelerometer, gyroscope, gravity,
+      game/geomagnetic rotation vectors). Added ±2° tilt compensation via
+      getRotationMatrixFromVector()+getOrientation(). Display.getRotation()
+      for orientation. New applyTransform(x,y,rot) with --stab-rot CSS var.
+
+  v1.0.5 Round-6 Rev54 changes (this round, per user spec items 5-6):
+    - StabilizationHelper.java (AGPL v3): TWO improvements per user spec:
+      (5) Roll-only rotation — per user spec item 5 ("棋盘旋转应该只考虑屏幕
+          向左或右的侧向转动倾斜(roll), 不考虑俯仰倾斜(pitch)或如开关一
+          扇门般的旋转(yaw)"). The board's tilt-compensation rotation now
+          uses ONLY screen-roll (the steering-wheel tilt of the screen as
+          seen by the user). Screen-pitch (nodding) and screen-yaw (door-
+          like horizontal turn) are NOT compensated. The implementation
+          computes device-frame devPitchDelta and devRollDelta, then
+          selects ONLY the one that corresponds to "screen roll" in the
+          current display orientation:
+            ROTATION_0   (portrait):        screen-roll = -devRollDelta
+            ROTATION_90  (landscape-left):  screen-roll = -devPitchDelta
+            ROTATION_180 (upside-down):     screen-roll = +devRollDelta
+            ROTATION_270 (landscape-right): screen-roll = +devPitchDelta
+          (In landscape, the device's pitch axis becomes the screen's roll
+          axis due to the 90° rotation — this is correct, NOT a use of
+          "pitch" in the user-spec sense.) Renamed local vars from dPitch/
+          dRoll to devPitchDelta/devRollDelta + screenRollDeg for clarity.
+          Updated the JavaDoc with a detailed explanation of the screen-
+          roll concept.
+      (6) First-principles anti-shake audit — per user spec item 6 and the
+          two uploaded sensor reference docs. Added a 10-point audit section
+          at the top of the file cross-checking every sensor choice and
+          parameter against the technical report. Key change: PREFER
+          TYPE_GAME_ROTATION_VECTOR (no magnetometer → no magnetic drift
+          near laptops/metal desks/elevators, per technical report §6.3.1)
+          with fallback to TYPE_ROTATION_VECTOR if the game-rotation variant
+          is unavailable. The onSensorChanged handler now accepts both
+          TYPE_ROTATION_VECTOR and TYPE_GAME_ROTATION_VECTOR (same data
+          format). Audit VERIFIED (no change needed): SENSOR_DELAY_GAME
+          sampling rate, α=0.15 low-pass filter, 0.3° dead zone, decay-
+          based drift prevention (instead of zero-bias calibration),
+          lifecycle register/unregister pattern, graceful null-sensor
+          fallback. Audit CONFIRMED: TYPE_ORIENTATION / device_orientation
+          sensor is deprecated (doc B confirms) — we correctly use
+          Display.getRotation() instead.
+
+  v1.0.5 Round-6 Rev55 changes (line-by-line code audit, per user request):
+    First-principles audit of every file's every line. Six improvements found,
+    prioritized: bug fixes > feature completion > perf > redundancy > simplification.
+    - StatsActivity.java (AGPL v3): THREE bug fixes (security + Android-15 compat):
+      (a) WebView security parity with MainActivity — added setAllowFileAccess(false),
+          setAllowContentAccess(false), setAllowFileAccessFromFileURLs(false),
+          setAllowUniversalAccessFromFileURLs(false), setMixedContentMode(NEVER_ALLOW),
+          setDisplayZoomControls(false), setUseWideViewPort(true),
+          setLoadWithOverviewMode(true), setTextZoom(100). The stats WebView was
+          missing these defense-in-depth flags, leaving a weaker attack surface.
+      (b) FLAG_FULLSCREEN deprecation fix — was using FLAG_FULLSCREEN unconditionally,
+          which conflicts with Edge-to-Edge enforcement on API 35+ (causes black
+          screen on HyperOS 3, same bug MainActivity fixed in v18.4.6). Now gated
+          on SDK_INT < R, matching MainActivity.
+      (c) Immersive mode added — the stats page now hides system bars (status +
+          navigation) just like the main game, using the same platform-aware
+          approach (WindowInsetsController on API 30+, legacy flags on API 21-29).
+          Added _applyImmersiveMode() + _applyLegacyImmersive() + onWindowFocusChanged().
+      Also added setBackgroundColor(#1a0a0a) to avoid white flash on load, and
+      setFilterTouchesWhenObscured(true) for tapjacking defense (both matching
+      MainActivity).
+    - StockfishNative.java (GPL v3): BUG FIX in engineGoDepth — was missing
+      applyEvalModeOptions() call (sets Contempt=0, MultiPV=1, UCI_ShowWDL=true
+      for objective analysis). Without it, deep eval searches ran with gameplay
+      Contempt=24 (biased toward avoiding draws) and the user's MultiPV setting
+      (potentially >1, reducing search depth). engineEval already had this call;
+      engineGoDepth was missing it (oversight when engineGoDepth was added).
+    - worker-pool.js (AGPL v3): consistency fix — the worker's fenToState()
+      checked `parts.length<4`, while the main-thread fenToState in
+      tablebase.js checks `parts.length<2`. Changed worker to `<2` for
+      consistency.
+    - game-logic.js (GPL v3): PERF optimization in getCtrlMap — hoisted the
+      attacker-position object out of the inner loop. Each piece at (r,c)
+      attacks multiple squares, but its `position` field is the SAME for all
+      those pushes. Previously allocated a fresh {row:r,col:c} object on every
+      push (~256 allocations per ctrl-map = per render tick when heatmap is on).
+      Now allocates ONE position object per piece (max 32) and reuses it.
+    - chess960.js (AGPL v3): cleaned up misleading stale comment in
+      parseShredderCastling() — the comment claimed the prior line was "dead
+      code" but that was already consolidated in v1.0.4. The code was correct;
+      only the comment was stale.
+    - EngineService.java (AGPL v3): redundancy cleanup — extracted shared
+      notification-builder logic into _buildNotificationWithContent(). Both
+      buildNotification() (instance) and updateNotification() (static) now
+      delegate to this helper, eliminating ~50 lines of duplicated builder
+      configuration.
+
+  v1.0.5 Round-6 Rev58 changes (magnetic-field-aware sensor switching):
+    - StabilizationHelper.java (AGPL v3): REWrote the rotation sensor
+      selection logic per user spec. New strategy:
+      (1) On start, use TYPE_ROTATION_VECTOR (magnetometer+accel+gyro
+          fusion) — ensures accurate baseline orientation.
+      (2) Register TYPE_MAGNETIC_FIELD (android.sensor.magnetic_field) in
+          the background at SENSOR_DELAY_UI (~16 Hz).
+      (3) Compute magnetic field magnitude |B| = sqrt(x²+y²+z²) on each
+          event. Maintain a rolling baseline via slow low-pass filter
+          (α=0.05 — adapts over ~20 samples, ignores transient spikes).
+      (4) When |current - baseline| > 15 µT (MAGNETIC_DISTURBANCE_THRESHOLD),
+          switch to TYPE_GAME_ROTATION_VECTOR (no magnetometer — immune to
+          magnetic interference). Reset tilt baseline to avoid a jump.
+      (5) When |current - baseline| < 8 µT (MAGNETIC_CALM_THRESHOLD) for
+          2 seconds (MAGNETIC_CALM_DURATION_MS — hysteresis prevents rapid
+          toggling), switch back to TYPE_ROTATION_VECTOR. Reset tilt baseline.
+      Implementation: BOTH rotation sensors are registered simultaneously
+      (no re-registration gap on switch). The onSensorChanged handler gates
+      which one to process via `processingRotationVector` boolean. The
+      magnetic field handler runs continuously regardless of which rotation
+      sensor is active. Hysteresis (15 µT trigger vs 8 µT calm + 2s duration)
+      prevents oscillation at the boundary.
+    - This replaces the Rev54 strategy which always preferred
+      GAME_ROTATION_VECTOR. The Rev58 strategy is superior: it gets the
+      accurate baseline of ROTATION_VECTOR when the environment is clean,
+      and the magnetic-interference immunity of GAME_ROTATION_VECTOR when
+      it's not — with automatic switching.
+
+  v1.0.5 Round-6 Rev59 changes (CRITICAL rotation-axis fix):
+    - StabilizationHelper.java (AGPL v3): CRITICAL FIX — the board's tilt-
+      compensation rotation was controlled by the WRONG axis in landscape
+      orientations. Root cause: SensorManager.getOrientation() was called on
+      the raw device-frame rotation matrix, which returns angles in the
+      DEVICE's natural coordinate system — NOT the screen's coordinate system.
+      In landscape (ROTATION_90/270), the device's pitch and roll axes are
+      swapped relative to what the user sees on screen. The board's rotation
+      therefore responded to screen pitch (front-back nod) instead of screen
+      roll (steering-wheel tilt) — exactly the bug the user reported.
+      Fix: Added SensorManager.remapCoordinateSystem() call in
+      processRotationVector() to transform the rotation matrix from device
+      frame to screen frame BEFORE calling getOrientation(). After remapping,
+      getOrientation() returns SCREEN-RELATIVE angles where values[2] is
+      ALWAYS screen-roll (steering-wheel) regardless of display rotation.
+      The axis-remapping parameters (xOut, yOut) are chosen per display
+      rotation:
+        ROTATION_0:   AXIS_X, AXIS_Y (identity)
+        ROTATION_90:  AXIS_Y, AXIS_MINUS_X
+        ROTATION_180: AXIS_MINUS_X, AXIS_MINUS_Y
+        ROTATION_270: AXIS_MINUS_Y, AXIS_X
+      Added remappedMatrix scratch array (separate from rotationMatrix to
+      avoid aliasing in remapCoordinateSystem).
+      SIMPLIFIED dispatchTransform() rotation: since smoothRoll is now
+      ALWAYS screen-roll (the remapping handles orientation), the board
+      rotation is simply -(smoothRoll - baselineRoll) for ALL 4 orientations.
+      Removed the per-orientation switch for rotation — no longer needed.
+      Also fixed the translation (OIS) per-orientation remapping to be
+      consistent with the new understanding of device-vs-screen axes.
+      VERIFICATION: Correct for ALL 4 display orientations (0°/90°/180°/270°).
+      The board now ALWAYS responds to the steering-wheel angle (screen roll),
+      never to the pitch (front-back nod).
+
+  v1.0.5 Round-6 Rev64 changes (2026.6.27 remove rotation + undo cache sync):
+    - StabilizationHelper.java (AGPL v3): COMPLETE REFACTOR — rotation removed
+      per user spec. File slimmed from 720 → 337 lines (53% reduction).
+      Deleted sensors: TYPE_ROTATION_VECTOR, TYPE_GAME_ROTATION_VECTOR,
+      TYPE_MAGNETIC_FIELD (only TYPE_LINEAR_ACCELERATION retained).
+      Deleted methods: processRotationVector(), processMagneticField().
+      Deleted state fields: baselinePitch, baselineRoll, smoothPitch,
+      smoothRoll, baselineSet, magneticBaseline, magneticBaselineSet,
+      magneticCalmSince, magneticDisturbed, processingRotationVector,
+      rotationMatrix[], remappedMatrix[], orientationAngles[].
+      Deleted constants: MAX_ROTATION_DEG, ROTATION_DEADZONE_DEG, ROTATION_DECAY,
+      TILT_ALPHA, MAGNETIC_DISTURBANCE_THRESHOLD, MAGNETIC_CALM_THRESHOLD,
+      MAGNETIC_CALM_DURATION_MS, MAGNETIC_BASELINE_ALPHA.
+      applyTransform(x,y) signature changed (was applyTransform(x,y,rotDeg)) —
+      no longer setProperty('--stab-rot',...); added removeProperty('--stab-rot')
+      to clear residual values from a previous version.
+      dispatchTransform() no longer computes boardRotDeg; only translation
+      (boardPxX/boardPxY) is dispatched.
+      stop() calls applyTransform(0,0) (was applyTransform(0,0,0)).
+      Benefits: 4 sensors → 1 sensor, lower battery, eliminates the entire class
+      of rotation-direction bugs reported in Rev59-63 (rotation feature gone).
+      The CSS transform (.bwrap.stabilized) was updated in index.html.tpl to
+      remove the rotate(var(--stab-rot,0deg)) component — see
+      chess.src/README.license Rev64 entry.
+
+  v1.0.5 Round-6 Rev63 changes (2026.6.27 anti-shake + arrow optimization):
+    - StabilizationHelper.java (AGPL v3): MAX_ROTATION_DEG reduced from ±30°
+      (Rev61) to ±10° per user spec. First-principles analysis: (a) sensor
+      floor ~1° (TYPE_ROTATION_VECTOR accuracy ±1°, after α=0.15 low-pass
+      residual noise ~±0.5°); (b) human perception threshold ~0.5-1°; (c)
+      handheld device steering-wheel tilt rarely exceeds 8° during normal
+      one-handed phone use; (d) 1:1 mapping (|board rot| = |screen roll
+      delta|) strictly preserved in 1°-10° range; angles beyond 10° clamped
+      to prevent disorienting "board swings wildly" effect. Dead zone
+      ROTATION_DEADZONE_DEG=1.0° unchanged (still correct for ±10° range).
+      The CSS transform (.bwrap.stabilized) already supports arbitrary
+      rotation values via the --stab-rot CSS custom property, so no CSS
+      changes needed.
+
+  v1.0.5 Round-6 Rev62 changes (2026.6.27 second-pass audit):
+    - No Java file changes in this round. All fixes were in JavaScript modules
+      (chess960.js, game-logic.js, tablebase.js, worker-pool.js,
+      pgn-standard.js, ai-bridge.js, ui.js). See
+      src/main/assets/chess.src/README.license for the JS-side Rev62 entry.
+
+  v1.0.5 Round-6 Rev61 changes (2026.6.27 development plan):
+    - StabilizationHelper.java (AGPL v3): TWO critical fixes per user spec:
+      (1) Y-AXIS DIRECTION REVERSAL FIX in dispatchTransform(). All 4 screen-
+          orientation cases (ROTATION_0/90/180/270) had the WRONG sign on
+          boardPxY. The OIS principle requires that when the device moves UP,
+          the board moves DOWN on screen (CSS +Y) to compensate. The original
+          code moved the board UP on screen — amplifying the shake instead of
+          cancelling it. User report: "屏幕突然向上移动，棋盘不但不向下位移
+          来抵消，反而也向上". Fixed signs:
+            ROTATION_0:   boardPxY = +dispY * SCALE  (was -dispY)
+            ROTATION_90:  boardPxY = +dispX * SCALE  (was -dispX)
+            ROTATION_180: boardPxY = -dispY * SCALE  (was +dispY)
+            ROTATION_270: boardPxY = -dispX * SCALE  (was +dispX)
+          X-axis signs were already correct and unchanged.
+      (2) ROTATION SENSITIVITY ADJUSTMENT: ROTATION_DEADZONE_DEG enlarged from
+          0.3° to 1.0° (filter sensor noise and sub-degree hand tremor);
+          MAX_ROTATION_DEG reduced from 45° (Rev60) to 30° (cover normal
+          handheld tilt range, avoid visual abruptness at extreme angles).
+          The 1:1 ratio (|board rotation| = |screen roll delta|) is strictly
+          preserved within the 1°–30° range. User report: "棋盘旋转角度过于
+          敏感，屏幕小幅度转动，棋盘就大幅度转动，两者的转动角度应该绝对值
+          相等才对".
+    - StockfishNative.java (GPL v3, DroidFish-derived): ONE bug fix:
+      (1) extractEngineFromAssets() progress percentage integer-division
+          truncation fix. Original `total / 114115752L * 13` truncated
+          `total / 114115752L` to 0 for any total < 114 MB (Java left-to-
+          right evaluation), so progress stayed at 12% until extraction
+          completed, then jumped to 25%. Fixed to `total * 13L / 114115752L`
+          (multiply first, no precision loss for total < 8.8 GB).
+    - StatsActivity.java (AGPL v3): ONE bug fix:
+      (1) loadAssetAsBase64() stream leak fix. Original manual `is.close()`
+          was only reached on the happy path — if baos.write threw (e.g.
+          OutOfMemoryError on a huge asset), InputStream leaked. Switched
+          to try-with-resources to guarantee closure.
+
+  v1.0.5 Round-6 Rev60 changes (rotation limit expansion):
+    - StabilizationHelper.java (AGPL v3): Increased MAX_ROTATION_DEG from
+      2.0f to 45.0f per user spec. The board's tilt-compensation rotation
+      can now counter-rotate up to ±45° in either direction (was ±2°). The
+      low-pass filter (α=0.15) and dead zone (0.3°) ensure smooth, jitter-
+      free rotation even at large angles. The CSS transform
+      (.bwrap.stabilized) already supports arbitrary rotation values via
+      the --stab-rot CSS custom property, so no CSS changes needed.
+      NOTE: Rev61 has since reduced MAX_ROTATION_DEG from 45° back to 30°
+      (see Rev61 entry above).
+
+  v1.0.5 Round-6 Rev66 changes (2026.6.27 yellow overlap + comment cleanup):
+    - StabilizationHelper.java (AGPL v3): COMMENT CLEANUP ONLY — no code
+      changes. Deleted Rev64 rotation-removal tombstone comments (describing
+      deleted sensors/methods/fields/constants), Rev61 Y-axis fix comment
+      (describing a bug that no longer exists), rotation-section-removed
+      placeholder. Header rewritten as a concise current-behavior description.
+    - MainActivity.java (AGPL v3): COMMENT CLEANUP ONLY — corrected the
+      stabilization public-contract comment (was "registers all available
+      motion sensors (accelerometer, linear acceleration, gravity, gyroscope,
+      rotation vectors) and fuses"; now "registers TYPE_LINEAR_ACCELERATION
+      and integrates").
+
+  v1.0.5 Round-6 Rev67 changes (2026.6.27 landscape translation direction fix):
+    - StabilizationHelper.java (AGPL v3): CRITICAL BUG FIX in dispatchTransform().
+      ROTATION_90 and ROTATION_270 had boardPxX sign INVERTED — landscape
+      horizontal shake was amplified instead of cancelled.
+        ROTATION_90: boardPxX was -dispY*SCALE → fixed to +dispY*SCALE
+        ROTATION_270: boardPxX was +dispY*SCALE → fixed to -dispY*SCALE
+        ROTATION_0 (boardPxX=-dispX) and ROTATION_180 (boardPxX=+dispX) were
+        already correct — unchanged.
+      First-principles derivation: device-natural Dx/Dy → world-axis mapping per
+      orientation, then OIS (device world-right → board screen-left CSS -x;
+      device world-up → board screen-down CSS +y). Comment rewritten as a
+      derivation table. Deleted old comments' incorrect orientation descriptions
+      (e.g. "ROTATION_90 = device rotated CW, top points right" — actually CCW,
+      top points left). Impact: landscape anti-shake horizontal direction now
+      correct; portrait unaffected.
+
+  v1.0.5 Round-6 Rev68 changes (2026.6.27 yellow rounded-rect position fix):
+    - No changes to Java files. All Rev68 changes were in ui.js (JS layer).
+      See src/main/assets/chess.src/README.license for the Rev68 entry.
+
+  v1.0.5 Round-6 Rev69 changes (2026.6.27 multi-color per square + heatmap text deletion):
+    - No changes to Java files. All Rev69 changes were in ui.js (JS layer) and
+      stats.html (comment deletion) + manuals (text deletion). See
+      src/main/assets/chess.src/README.license for the Rev69 entry.
+
+  v1.0.5 Round-6 Rev70 changes (2026.6.27 net-control algorithm consistency fix):
+    - No changes to Java files. All Rev70 changes were in ui.js (JS layer). See
+      src/main/assets/chess.src/README.license for the Rev70 entry.

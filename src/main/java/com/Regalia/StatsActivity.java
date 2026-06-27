@@ -31,6 +31,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.util.Log;
 import android.view.KeyEvent;
+import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
@@ -83,10 +84,21 @@ public class StatsActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Fullscreen immersive mode
-        requestWindowFeature(Window.FEATURE_NO_TITLE);
-        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
-                WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        // v1.0.5 Rev55: Fullscreen immersive mode — match MainActivity's
+        // Android-15-aware approach. Previously used deprecated FLAG_FULLSCREEN
+        // which conflicts with Edge-to-Edge enforcement on API 35+ (causes
+        // black screen / offset viewport on HyperOS 3).
+        try {
+            requestWindowFeature(Window.FEATURE_NO_TITLE);
+        } catch (Throwable e) {
+            Log.w(TAG, "requestWindowFeature failed", e);
+        }
+        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) {
+            // FLAG_FULLSCREEN is valid on API 21-29 only; on API 30+ it
+            // conflicts with Edge-to-Edge.
+            getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
+                    WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        }
 
         // Get the stats payload from the Intent
         statsPayload = getIntent().getStringExtra("statsPayload");
@@ -98,17 +110,38 @@ public class StatsActivity extends Activity {
 
         // Create WebView
         webView = new WebView(this);
+        // v1.0.5 Rev55: Match MainActivity's background color to avoid white flash.
+        webView.setBackgroundColor(android.graphics.Color.parseColor("#1a0a0a"));
+        // v1.0.5 Rev55: tapjacking defense (match MainActivity).
+        webView.setFilterTouchesWhenObscured(true);
         setContentView(webView);
 
-        // Configure WebView
+        // v1.0.5 Rev55: WebView security configuration — defense-in-depth parity
+        // with MainActivity. The stats page also loads only local asset content,
+        // but the security defaults should be identical to prevent a weaker
+        // attack surface on the stats activity. Without these flags, a
+        // compromised WebView (or a future code change that loads remote content)
+        // could access file:// or content:// URIs.
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
+        // SECURITY: Disable all file/content access (same as MainActivity).
+        // The stats page loads only from file:///android_asset/stats.html and
+        // never needs file:// or content:// access — all PGN file I/O goes
+        // through the JS bridge via SAF (Storage Access Framework).
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(false);
+        settings.setAllowFileAccessFromFileURLs(false);
+        settings.setAllowUniversalAccessFromFileURLs(false);
+        // SECURITY: Block mixed content (no http subresource loads over https).
+        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setSupportZoom(false);
         settings.setBuiltInZoomControls(false);
+        settings.setDisplayZoomControls(false);
+        settings.setUseWideViewPort(true);
+        settings.setLoadWithOverviewMode(true);
+        settings.setTextZoom(100);
 
         // Register a minimal JS bridge for the stats page
         webView.addJavascriptInterface(new Object() {
@@ -239,15 +272,17 @@ public class StatsActivity extends Activity {
             // v1.0.3: Load an asset file as base64 — used for GPL v3 logo in export dialog
             @JavascriptInterface
             public String loadAssetAsBase64(String assetPath) {
-                try {
-                    java.io.InputStream is = getAssets().open(assetPath);
+                // v1.0.5 Round-6 Rev61 (2026.6.27): use try-with-resources to
+                // guarantee InputStream is closed even if baos.write throws
+                // (e.g. OutOfMemoryError on a huge asset). The previous manual
+                // close at line 283 was only reached on the happy path.
+                try (java.io.InputStream is = getAssets().open(assetPath)) {
                     java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
                     byte[] buffer = new byte[4096];
                     int len;
                     while ((len = is.read(buffer)) != -1) {
                         baos.write(buffer, 0, len);
                     }
-                    is.close();
                     return android.util.Base64.encodeToString(baos.toByteArray(), android.util.Base64.NO_WRAP);
                 } catch (Throwable e) {
                     Log.w(TAG, "loadAssetAsBase64 failed: " + assetPath, e);
@@ -322,7 +357,73 @@ public class StatsActivity extends Activity {
         // Load the stats.html asset
         webView.loadUrl("file:///android_asset/stats.html");
 
+        // v1.0.5 Rev55: Apply immersive mode (hide system bars) — match MainActivity.
+        // The user expects the stats page to be fully immersive too.
+        _applyImmersiveMode();
+
         Log.i(TAG, "StatsActivity created, loading stats.html");
+    }
+
+    /**
+     * v1.0.5 Rev55: Apply immersive mode to hide system bars.
+     * Mirrors MainActivity.enableImmersiveMode() — uses platform
+     * WindowInsetsController on API 30+, legacy flags on API 21-29.
+     */
+    @android.annotation.SuppressLint("NewApi")
+    private void _applyImmersiveMode() {
+        try {
+            if (android.os.Build.VERSION.SDK_INT >= 35) {
+                // Android 15+: Edge-to-Edge enforced, just hide system bars.
+                try {
+                    getWindow().getInsetsController().hide(android.view.WindowInsets.Type.systemBars());
+                    getWindow().getInsetsController().setSystemBarsBehavior(
+                            android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                } catch (Throwable e) {
+                    Log.w(TAG, "Android 15+ immersive mode failed", e);
+                    _applyLegacyImmersive();
+                }
+                return;
+            }
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                try {
+                    getWindow().setDecorFitsSystemWindows(false);
+                    getWindow().getInsetsController().hide(android.view.WindowInsets.Type.systemBars());
+                    getWindow().getInsetsController().setSystemBarsBehavior(
+                            android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+                } catch (Throwable e) {
+                    Log.w(TAG, "API 30-34 immersive mode failed", e);
+                    _applyLegacyImmersive();
+                }
+                return;
+            }
+            _applyLegacyImmersive();
+        } catch (Throwable e) {
+            Log.w(TAG, "_applyImmersiveMode failed", e);
+        }
+    }
+
+    private void _applyLegacyImmersive() {
+        try {
+            View decorView = getWindow().getDecorView();
+            if (decorView != null) {
+                decorView.setSystemUiVisibility(
+                        View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                                | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                                | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                                | View.SYSTEM_UI_FLAG_FULLSCREEN
+                );
+            }
+        } catch (Throwable e) {
+            Log.w(TAG, "_applyLegacyImmersive failed", e);
+        }
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) _applyImmersiveMode();
     }
 
     @Override

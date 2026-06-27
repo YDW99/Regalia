@@ -694,13 +694,11 @@ function _buildPGNString(forceIncludeVariations){
   for(let i=0;i<moveRecords.length;i++){
     const mr=moveRecords[i];
     if(!mr)continue;
-    // Determine color: even index = White (when starting from move 1 with white to move)
-    // For FEN-imported games where black moves first, the placeholder logic shifts this.
-    // We rely on the convention that moveRecords[i] is the (i+1)-th half-move from the
-    // starting side. The "color" field is derived from i + the starting side.
-    const startColor=(typeof _importedStartMoveNum!=='undefined'&&_importedStartMoveNum>0&&gameState&&gameState.currentTurn==='black'&&i===0)?'black':(((i+(typeof _importedStartColor!=='undefined'&&_importedStartColor==='black'?1:0))%2===0)?'white':'black');
-    // For standard games (not FEN-imported), even index = white
-    const color=(typeof _importedStartColor==='undefined')?(i%2===0?'white':'black'):startColor;
+    // Determine color: even index = White (when starting from move 1 with white to move).
+    // For FEN-imported games where black moves first, the _prependBlackToMovePlaceholder()
+    // mechanism in game-logic.js shifts this. We rely on the convention that moveRecords[i]
+    // is the (i+1)-th half-move from the starting side.
+    const color=i%2===0?'white':'black';
     // v1.0.4 Rev23: Removed dead variable `moveNum` — it was computed but never
     // read (the actual move number used below is `_moveNum`). The ternary on
     // line 641 already handles the black-start case correctly.
@@ -761,6 +759,21 @@ function _buildPGNString(forceIncludeVariations){
     // with stats.html's extractMoveTimes() — it looks for "<number>s" anywhere
     // in the comment.
     if(mr.time)commentParts.push(mr.time+'s');
+    // v1.0.4 Round-5 Rev48: Preserve the free-text comment from imported PGNs.
+    // mr.comment is populated by importPGN() from {} comments in the source
+    // PGN. We append it AFTER all [%xxx] tags so the structured tags remain
+    // at the front (some PGN readers expect [%xxx] tags first in a comment).
+    // The "[var] " prefix (used for variation-internal comments) is preserved
+    // as-is so downstream consumers can distinguish mainline vs variation
+    // comments if needed.
+    if(mr.comment){
+      // Escape braces in the comment body — PGN spec forbids literal { or }
+      // inside a brace comment (they would terminate the comment prematurely).
+      // Replace with Unicode full-width braces (visually similar, semantically
+      // distinct) so the comment text is still readable.
+      const _escComment=mr.comment.replace(/\{/g,'｛').replace(/\}/g,'｝');
+      commentParts.push(_escComment);
+    }
     // v1.0.4 Rev27: On the LAST move of a resigned game, append the
     // "{White resigns.}" / "{Black resigns.}" annotation per the 元宝 PGN
     // report. The resigner is the OPPOSITE of _resignWinnerColor.
@@ -1002,7 +1015,8 @@ function openStatsPage(){
     for(let i=0;i<moveRecords.length;i++){
       // v1.0.2 PERF: use peek() — iterating over all moves, no need to refresh LRU.
       const c=_reviewEvalCache.peek(i+1);
-      evalData.push(c?{eval:c.eval||0,mate:c.mate||0,depth:c.depth||0,wdlW:c.wdlW!=null?c.wdlW:-1,wdlD:c.wdlD!=null?c.wdlD:-1,wdlL:c.wdlL!=null?c.wdlL:-1}:null);
+      // Use !=null so mate:0 (checkmate-now) is distinct from mate:null (no mate).
+      evalData.push(c?{eval:c.eval||0,mate:c.mate!=null?c.mate:0,depth:c.depth||0,wdlW:c.wdlW!=null?c.wdlW:-1,wdlD:c.wdlD!=null?c.wdlD:-1,wdlL:c.wdlL!=null?c.wdlL:-1}:null);
     }
   }
   // v1.0.2 FIX: Also send the parsed move records (from/to/piece/captured/promotion/notation)
@@ -1529,6 +1543,8 @@ function onEngineRestarting(){
   // step so requestEngineEval re-fetches the current step after recovery.
   _reviewEvalRequestedStep=-1;
   _multiPVLines=[];_multiPVResult=null;_lastEngineVariation=null;
+  // v1.0.5 Rev56: Clear the MultiPV display cache (companion to _multiPVLines=[]).
+  _clearMultiPVDisplayCache();
   if(_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
   // v1.0.2 FIX: Reset AI retry counter on engine restart. Without this, if the
   // engine crashed mid-AI-move (where _aiRetryCount had already incremented to
@@ -1631,6 +1647,9 @@ function onBestMove(uciMove){
 
   // Clear MultiPV progress lines for next search
   _multiPVLines=[];
+  // v1.0.5 Rev56: Also clear the MultiPV display cache so the next search's
+  // first progress tick is not falsely skipped by a stale-signature hit.
+  _clearMultiPVDisplayCache();
 
   // Process variations in onMultiPVResult() (called after onBestMove)
   // v1.0.2 FIX: Removed the `moveRecords.length > 0` guard — it skipped
@@ -1873,7 +1892,7 @@ function onEngineProgress(depth,nodes,nps,scoreCp,scoreMate,wdlW,wdlD,wdlL,selde
   // so the user saw "分析中" with no depth/nodes/speed info during eval searches.
   // Now Java dispatches onEngineProgress for all states, and we update the eval
   // display's depth indicator in real-time.
-  if(_evalLoading&&depth>0&&depth<=30){
+  if(_evalLoading&&depth<=30){
     _sfDepth=depth;
     // v1.0.4 Rev33: also track seldepth for the eval bar's "D15 SD22" display.
     _sfSeldepth=(seldepth!=null&&seldepth>0&&seldepth<=60)?seldepth:0;
@@ -1905,7 +1924,11 @@ function onEngineProgress(depth,nodes,nps,scoreCp,scoreMate,wdlW,wdlD,wdlL,selde
       if(_multiPVLines[i].index===1){_multiPVLines[i]=primaryLine;found=true;break;}
     }
     if(!found)_multiPVLines.push(primaryLine);
-    _multiPVLines.sort(function(a,b){return a.index-b.index;});
+    // v1.0.5 Rev56 PERF: only sort when a new line was appended (same
+    // optimization as onMultiPVProgress above).
+    if(!found){
+      _multiPVLines.sort(function(a,b){return a.index-b.index;});
+    }
     _updateMultiPVDisplay();
   }
 }
@@ -2285,6 +2308,9 @@ function restartCurrentEngine(){
       // v1.0.2 FIX (audit): Clear MultiPV variation state — the old engine's
       // in-flight PV lines are invalid after restart.
       _multiPVLines=[];_multiPVResult=null;_lastEngineVariation=null;
+      // v1.0.5 Rev56: Clear the MultiPV display cache too (companion to the
+      // _multiPVLines=[] reset above).
+      _clearMultiPVDisplayCache();
       if(_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
     }else{
       showToast(T('engine_unavailable_bridge'));
@@ -2299,7 +2325,29 @@ function restartCurrentEngine(){
 }
 function setConfigThreads(v){v=Math.max(1,Math.min(64,parseInt(v)||1));if(engineSettingsData)engineSettingsData.threads=v;_bridgeCall(function(bridge){bridge.setEngineThreads(v);});renderEngineConfigAndUpdate();}
 function setConfigHash(v){v=Math.max(1,Math.min(4096,parseInt(v)||64));if(engineSettingsData)engineSettingsData.hash=v;_bridgeCall(function(bridge){bridge.setEngineHash(v);});renderEngineConfigAndUpdate();}
-function setConfigMultiPV(v){v=Math.max(1,Math.min(8,parseInt(v)||1));if(engineSettingsData)engineSettingsData.multiPV=v;_cachedMultiPV=v;_bridgeCall(function(bridge){bridge.setEngineMultiPV(v);});renderEngineConfigAndUpdate();}
+function setConfigMultiPV(v){
+  v=Math.max(1,Math.min(8,parseInt(v)||1));
+  if(engineSettingsData)engineSettingsData.multiPV=v;
+  _cachedMultiPV=v;
+  // v1.0.5 Rev56 BUG FIX: When MultiPV is toggled OFF (set to 1) mid-search,
+  // the stale secondary PV lines (index 2..N) from the previous MultiPV
+  // search would persist in _multiPVLines and continue to be displayed via
+  // _updateMultiPVDisplay. They were only cleared on the NEXT onBestMove,
+  // which could be seconds away. Now we clear immediately when MultiPV is
+  // disabled, so the display reverts to single-line mode instantly.
+  if(v<=1){
+    _multiPVLines=[];
+    _clearMultiPVDisplayCache();
+    // Trigger a display refresh so the stale secondary lines disappear now
+    // rather than on the next progress tick (which won't come if MultiPV
+    // is off — onEngineProgress only calls _updateMultiPVDisplay when
+    // _cachedMultiPV>1).
+    _hintBarInfo='';
+    if(typeof _updateAIThinkDisplay==='function')_updateAIThinkDisplay();
+  }
+  _bridgeCall(function(bridge){bridge.setEngineMultiPV(v);});
+  renderEngineConfigAndUpdate();
+}
 function setConfigMoveOverhead(v){v=Math.max(0,Math.min(5000,parseInt(v)||30));if(engineSettingsData)engineSettingsData.moveOverhead=v;_bridgeCall(function(bridge){bridge.setEngineMoveOverhead(v);});renderEngineConfigAndUpdate();}
 function togglePonder(){
   const newVal=!(engineSettingsData&&engineSettingsData.ponder);
@@ -2470,8 +2518,15 @@ function onMultiPVProgress(pvInfo){
       if(_multiPVLines[i].index===idx){_multiPVLines[i]=info;found=true;break;}
     }
     if(!found)_multiPVLines.push(info);
-    // Sort by index
-    _multiPVLines.sort(function(a,b){return a.index-b.index;});
+    // v1.0.5 Rev56 PERF: Only sort when a new line was appended (found=false).
+    // When an existing line was updated in-place, the array order is already
+    // correct (indices don't change). The sort was previously unconditional
+    // on every progress tick (10-50×/sec) — for 8 MultiPV lines, the
+    // Array.sort comparison runs ~25 comparisons per call, all wasted when
+    // the array was already sorted.
+    if(!found){
+      _multiPVLines.sort(function(a,b){return a.index-b.index;});
+    }
     // Update hint display with all PV lines
     _updateMultiPVDisplay();
   }catch(e){console.error('onMultiPVProgress error:',e);}
@@ -2912,11 +2967,45 @@ function _attachDivergentPV(divergeAtIdx,pvRemainder,pending){
 }
 
 // Update display with MultiPV lines
+// v1.0.5 Rev56 PERF: Added a per-line signature cache so we skip the expensive
+// _convertPVtoSAN() call when a PV line's content hasn't changed since the last
+// display update. Previously, _updateMultiPVDisplay was called on every
+// onMultiPVProgress AND on every onEngineProgress (when _cachedMultiPV>1),
+// re-converting ALL PV lines from UCI to SAN on every tick (10-50×/sec). Each
+// conversion clones the game state and runs makeMv/moveAlg for every move in
+// the PV — with 8 MultiPV lines of 10+ moves each, that's 80+ makeMv calls
+// per tick, completely wasted when the PV content is identical to last tick.
+// The signature is `(pv, scoreCp, scoreMate, index)` — if all four match the
+// cached values, the line's display text is reused verbatim.
+let _multiPVDisplayCache = {}; // {index: {sig, text}}
 function _updateMultiPVDisplay(){
   if(_multiPVLines.length<1)return; // Show even single line when MultiPV enabled
+  // v1.0.5 Round-6 Rev62 (2026.6.27) PERF: early-exit when !isHintLoading.
+  // MultiPV display is only shown in the hint bar (`_hintBarInfo`), which is
+  // hidden during AI thinking. Previously, every progress tick (10-50/sec)
+  // during AI thinking would compute hintParts for all PV lines, build
+  // signatures, and check the cache — all wasted work since `isHintLoading`
+  // is false and the result is discarded at line 3044. Skip the entire
+  // computation when the hint bar isn't active.
+  if(typeof isHintLoading!=='undefined'&&!isHintLoading)return;
   // Build hint text with all PV lines
   let hintParts=[];
+  let cacheDirty=false;
   for(const pv of _multiPVLines){
+    // v1.0.5 Rev56: skip lines with no PV content — they contribute nothing
+    // to the display except an empty score string, and would trigger a
+    // wasteful _convertPVtoSAN('') call.
+    const hasPV = pv.pv && pv.pv.length>0;
+    // Build a cheap signature to detect whether this line actually changed
+    const sig = (pv.index||0)+'|'+(pv.scoreCp!=null?pv.scoreCp:'')+'|'+(pv.scoreMate!=null?pv.scoreMate:'')+'|'+(hasPV?pv.pv:'');
+    const cached = _multiPVDisplayCache[pv.index];
+    if(cached && cached.sig === sig){
+      // Cache hit — reuse the previously computed display text
+      hintParts.push(cached.text);
+      continue;
+    }
+    cacheDirty = true;
+    // Cache miss — compute the display text for this line
     let scoreStr='';
     if(pv.scoreMate!=null){
       const m=parseInt(pv.scoreMate);
@@ -2925,13 +3014,38 @@ function _updateMultiPVDisplay(){
       const pd=(pv.scoreCp/100).toFixed(1);
       scoreStr=(pv.scoreCp>0?'+':'')+pd;
     }
-    // Convert PV UCI moves to SAN format
+    // Convert PV UCI moves to SAN format (only when PV is non-empty)
     let pvPreview='';
-    if(pv.pv){try{const _conv=_convertPVtoSAN(pv.pv,gameState);pvPreview=_conv.sanMoves.split(/\s+/).slice(0,4).join(' ');}catch(e){pvPreview=pv.pv.split(/\s+/).slice(0,4).join(' ');}}
-    hintParts.push((pv.index===1?'⭐':'📌')+' '+scoreStr+(pvPreview?' '+pvPreview:''));
+    if(hasPV){
+      try{
+        const _conv=_convertPVtoSAN(pv.pv,gameState);
+        pvPreview=_conv.sanMoves.split(/\s+/).slice(0,4).join(' ');
+      }catch(e){
+        pvPreview=pv.pv.split(/\s+/).slice(0,4).join(' ');
+      }
+    }
+    const text=(pv.index===1?'⭐':'📌')+' '+scoreStr+(pvPreview?' '+pvPreview:'');
+    hintParts.push(text);
+    _multiPVDisplayCache[pv.index]={sig:sig,text:text};
+  }
+  // v1.0.5 Rev56: if no line changed, skip the DOM write entirely.
+  // _hintBarInfo / _aiBarInfo assignment + _updateAIThinkDisplay() would
+  // rebuild innerHTML even though the content is byte-identical.
+  if(!cacheDirty){
+    // All lines identical to last update — nothing to do.
+    return;
   }
   if(isHintLoading)_hintBarInfo=hintParts.join(' | ');
   _updateAIThinkDisplay();
+}
+
+// v1.0.5 Rev56: Clear the MultiPV display cache when a new search starts
+// (called from onBestMove where _multiPVLines=[] is already reset).
+// Without this, the cache would retain stale signatures from the previous
+// search, causing the first progress tick of the new search to be skipped
+// (false cache hit).
+function _clearMultiPVDisplayCache(){
+  _multiPVDisplayCache = {};
 }
 
 // Store the last engine variation (PV) for move records

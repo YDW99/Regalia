@@ -117,8 +117,12 @@ function initState(){
 
 function fenToState(fen){
   if(!fen||typeof fen!=='string')return null;
+  // Accept minimal FENs (board + side-to-move only); castling/en-passant/clock
+  // fields are optional and default sensibly. Consistent with the main-thread
+  // fenToState in tablebase.js. NOTE: no backticks in this comment — it lives
+  // inside the _WORKER_SOURCE template literal.
   const parts=fen.trim().split(/\\s+/);
-  if(parts.length<4)return null;
+  if(parts.length<2)return null;
   const rows=parts[0].split('/');
   if(rows.length!==8)return null;
   const board=Array.from({length:8},()=>Array(8).fill(null));
@@ -257,7 +261,14 @@ function parsePGN(pgnText){
   text=text.replace(/\\b1\\s+-\\s+0\\b/g,'').replace(/\\b0\\s+-\\s+1\\b/g,'').replace(/\\b1\\/2\\s+-\\s+1\\/2\\b/g,'');
   text=text.replace(/\\s+/g,' ').trim();
   text=text.replace(/(\\d+\\.+(?=[a-zA-Z]))/g,'$1 ');
-  text=text.replace(/(^|\\s)(\\d+)\\s+(?=[a-hKQRBN])/g,'$1$2. ');
+  // v1.0.5 Round-6 Rev62 (2026.6.27) FIX: add 'O' to the character class so
+  // PGN move numbers followed by castling notation (e.g. "1 O-O" without a
+  // dot) are correctly normalized to "1. O-O". Previously the regex
+  // (?=[a-hKQRBN]) did not match 'O', so "1 O-O" would not get the ". "
+  // inserted, causing the "1" to be mis-tokenized as a SAN move and skipped.
+  // NOTE: no backticks in this comment — it lives inside the _WORKER_SOURCE
+  // template literal, and backticks would prematurely terminate it (Rev57 bug).
+  text=text.replace(/(^|\\s)(\\d+)\\s+(?=[a-hKQRBNO])/g,'$1$2. ');
   text=text.replace(/\\s[!?]{1,5}\\s/g,' ');
   text=text.replace(/^[!?]{1,5}\\s/g,'').replace(/\\s[!?]{1,5}$/g,'');
   if(!text)return null;
@@ -380,9 +391,16 @@ function _initWorker(){
     };
     _workerInstance.onerror=function(e){
       console.error('Worker error:',e.message||e);
-      // Reject ALL pending tasks — the worker is in an unknown state
-      for(const [id,pending] of _workerPending){
-        pending.reject(new Error('Worker error: '+(e.message||'unknown')));
+      // Reject ALL pending tasks — the worker is in an unknown state.
+      // v1.0.5 Round-6 Rev62 (2026.6.27) FIX: collect keys first, then delete.
+      // Modifying a Map during for...of iteration is spec-allowed but some
+      // engines may skip entries or behave unexpectedly. Array.from() takes
+      // a snapshot of the keys before any deletion, guaranteeing all pending
+      // tasks are rejected.
+      const ids=Array.from(_workerPending.keys());
+      for(const id of ids){
+        const pending=_workerPending.get(id);
+        if(pending)pending.reject(new Error('Worker error: '+(e.message||'unknown')));
         _workerPending.delete(id);
       }
     };

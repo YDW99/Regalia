@@ -156,7 +156,10 @@ let _statsImportedPGN=null;
 // i18n
 const _i18n={
   'metadata':{zh:'对局元数据',en:'Game Metadata'},
-  'pgn_text':{zh:'PGN文本',en:'PGN Text'},
+  // v1.0.5 Round-6 Rev49: "PGN文本" → "PGN文本（经加工）" / "PGN Text (After processing)"
+  // to clarify that this is the reconstructed/processed PGN (with [%csl]/[%cal]/
+  // [%eval] annotations, Seven-Tag Roster, etc.), not the raw imported text.
+  'pgn_text':{zh:'PGN文本（经加工）',en:'PGN Text (After processing)'},
   // v1.0.4 Rev29: i18n key for PGN parse error (was hardcoded English)
   'pgn_parse_error':{zh:'PGN 解析失败',en:'PGN parse error'},
   // v1.0.4 Rev27: Board display section heading (DeepSeek review feature)
@@ -194,6 +197,9 @@ const _i18n={
   'piece_type':{zh:'棋子',en:'Piece'},
   'total':{zh:'总计',en:'Total'},
   'phase_analysis':{zh:'阶段分析',en:'Phase Analysis'},
+  // v1.0.5 Round-6 Rev49: Phase transition labels (per 国际象棋三阶段精确区分.md)
+  'opening_to_midgame':{zh:'开局→中局',en:'Opening→Midgame'},
+  'midgame_to_endgame':{zh:'中局→残局',en:'Midgame→Endgame'},
   'ply':{zh:'步',en:'ply'},
   'final_material':{zh:'最终子力',en:'Final Material'},
   'material_diff':{zh:'子力差',en:'Material Diff'},
@@ -236,7 +242,7 @@ const _i18n={
   'time_control_bronstein':{zh:'布朗斯坦延迟制',en:'Bronstein Delay'},
   'time_control_usdelay':{zh:'美国延迟制',en:'US Delay'},
   'visual_annotations':{zh:'视觉注解（[%csl]/[%cal]）',en:'Visual Annotations ([%csl]/[%cal])'},
-  'visual_annotations_desc':{zh:'本对局PGN注释中包含的视觉注解统计：蓝色格=玩家净控制强势格，红色格=AI对手净控制强势格，黄色格=双方总计控制较高格，绿色格=中心区无控制格；红色箭头=将军路径，绿色箭头=避将路径。',en:'Visual annotation counts in this game\'s PGN comments: Blue squares=player net-control strong squares, Red squares=AI net-control strong squares, Yellow squares=high total-control squares, Green squares=neutral center squares; Red arrows=check path, Green arrows=escape path.'},
+  'visual_annotations_desc':{zh:'本对局PGN注释中包含的视觉注解统计：蓝色格=玩家净控制强势格，红色格=AI对手净控制强势格，黄色格=双方总计控制较高格，绿色格=中心区无控制格；蓝色箭头=一方棋子同时威胁另一方多个棋子，红色箭头=将军路径，黄色箭头=对后的威胁，绿色箭头=避将路径。',en:'Visual annotation counts in this game\'s PGN comments: Blue squares=player net-control strong squares, Red squares=AI net-control strong squares, Yellow squares=high total-control squares, Green squares=neutral center squares; Blue arrows=multi-threat (one piece threatens 2+ enemy pieces), Red arrows=check path, Yellow arrows=queen threat, Green arrows=escape path.'},
   'nag_annotations':{zh:'NAG数字注解',en:'NAG Annotations'},
   'nag_count':{zh:'NAG数量',en:'NAG Count'},
   'nag_quality_dist':{zh:'走法质量分布',en:'Move Quality Distribution'},
@@ -250,7 +256,11 @@ const _i18n={
   'red_squares':{zh:'红色格 (AI净控制)',en:'Red Squares (AI Net)'},
   'yellow_squares':{zh:'黄色格 (高总控制)',en:'Yellow Squares (High Total)'},
   'green_squares_neutral':{zh:'绿色格 (中心无控制)',en:'Green Squares (Neutral Center)'},
+  // v1.0.4 Round-5 Rev48: arrow color order is Blue, Red, Yellow, Green — vertically
+  // aligned with the same-color square cells above (per user spec).
+  'blue_arrows_threats':{zh:'蓝色箭头 (多重威胁)',en:'Blue Arrows (Multi-Threat)'},
   'red_arrows_check':{zh:'红色箭头 (将军路径)',en:'Red Arrows (Check Path)'},
+  'yellow_arrows_queen':{zh:'黄色箭头 (对后威胁)',en:'Yellow Arrows (Queen Threat)'},
   'green_arrows_escape':{zh:'绿色箭头 (避将路径)',en:'Green Arrows (Escape Path)'},
   'total_time':{zh:'总时间',en:'Total Time'},
   'time_note':{zh:'时钟数据来自PGN注释',en:'Clock data from PGN comments'},
@@ -402,8 +412,18 @@ function parsePGN(pgnText){
   // where no move records are available)
   // Remove headers
   let moveText=text.replace(/\[[^\]]*\]/g,'');
-  // Remove comments (brace-style)
-  while(moveText.includes('{'))moveText=moveText.replace(/\{[^{}]*\}/g,'');
+  // Remove comments (brace-style).
+  // v1.0.5 Round-6 Rev61 (2026.6.27) FIX: was `while(moveText.includes('{'))...`
+  // which infinite-loops on a malformed PGN with an unclosed `{` (no matching `}`).
+  // Each iteration of the regex leaves the unclosed `{` untouched, so
+  // `includes('{')` is always true → ANR. Cap to 10 iterations (well-formed
+  // PGN clears in 1 iteration; deeply nested comments clear in ≤ depth
+  // iterations). Any residual `{` after the cap is left in place and gets
+  // stripped by the later whitespace-normalization pass (it'll be a no-op
+  // token that the move tokenizer ignores).
+  for(let _braceIter=0;_braceIter<10&&moveText.includes('{');_braceIter++){
+    moveText=moveText.replace(/\{[^{}]*\}/g,'');
+  }
   // Remove semicolon comments
   moveText=moveText.replace(/;[^\n]*/g,'');
   // Remove NAGs
@@ -1411,29 +1431,133 @@ function renderStats(parsed,evalData){
   }
 
   // Phase analysis (opening/midgame/endgame)
-  // v1.0.2 FIX: Use material-based phase detection instead of fixed percentages.
-  // A game phase is determined by the number of non-pawn, non-king pieces on the board:
-  //   Opening: >8 minor/major pieces total (both sides)
-  //   Midgame: 4-8 pieces
-  //   Endgame: <4 pieces
-  // This is more accurate than percentage-based splitting and avoids showing
-  // midgame/endgame for short games that haven't reached those phases.
+  // v1.0.5 Round-6 Rev49: REWRITTEN per 国际象棋三阶段精确区分.md.
+  //
+  // The previous implementation used a crude piece-count threshold (>8 pieces
+  // = opening, 4-8 = midgame, <4 = endgame). This is inaccurate because:
+  //   1. It ignores the King's position (the #1 midgame→endgame signal per
+  //      the guide: "王转化为进攻子" — king becomes an attacking piece).
+  //   2. It ignores whether minor pieces have been developed (the #1
+  //      opening→midgame signal: "出子完成度" — development completion).
+  //   3. It ignores queen presence (a key midgame→endgame signal: "后被交换").
+  //   4. It treats phase as a per-ply label, but the guide emphasizes that
+  //      phases are continuous and can even reverse (e.g., a queen promotion
+  //      transitions endgame back to midgame-like density).
+  //
+  // New multi-criteria detection (per the guide's flowchart in section 九):
+  //   For each position (after each move), evaluate in order:
+  //     1. OPENING if either side has an undeveloped minor piece on its
+  //        starting square (knights on b1/g1/b8/g8, bishops on c1/f1/c8/f8).
+  //        This is the guide's "判据一：出子完成度".
+  //     2. Else, if BOTH kings are still on their starting squares (e1/e8)
+  //        OR castling hasn't happened (kings on e1/e8 with no king-side
+  //        move), the position is still opening-like — the guide's
+  //        "判据：王已完成易位且仍处于易位位置" is the midgame signal, so
+  //        its negation means opening.
+  //     3. Else, if queens are present AND total non-pawn-non-king material
+  //        >= 13 (≈ both sides have a queen + a rook + a minor, or similar),
+  //        the position is MIDDLEGAME.
+  //     4. Else, if queens have been exchanged (no queens on board) OR
+  //        total non-pawn-non-king material < 13, AND at least one king has
+  //        left its starting/castled square, the position is ENDGAME.
+  //     5. Else (queens present but material low, kings not advanced) →
+  //        MIDDLEGAME (default for transitional positions, per the guide's
+  //        "中残过渡" gray zone guidance).
+  //
+  // We also track the "king advancement" metric: a king is "advanced" if it
+  // has left the back two ranks (rows 0-1 for black, rows 6-7 for white).
+  // This implements the guide's "王活跃度" metric (王活跃度=2 = endgame).
+  //
+  // The result is a per-ply phase label, and we also report:
+  //   - Opening ply count, midgame ply count, endgame ply count
+  //   - The ply at which each phase transition occurred (opening→midgame,
+  //     midgame→endgame)
+  //   - Whether the game reached each phase at all
   if(moves.length>0){
     h+='<div class="section"><h2>'+T('phase_analysis')+'</h2>';
-    // Count phases by scanning each position
-    let openingPly=0,midgamePly=0,endgamePly=0;
-    for(let i=0;i<moves.length;i++){
-      const board=moves[i].state.board;
-      let nonPawnPieces=0;
-      for(let r=0;r<8;r++)for(let c=0;c<8;c++){
-        const p=board[r][c];
-        if(p&&(p.type==='knight'||p.type==='bishop'||p.type==='rook'||p.type==='queen')){
-          nonPawnPieces++;
+    // v1.0.5 Rev49: Multi-criteria phase detection per 国际象棋三阶段精确区分.md
+    // Helper: detect phase for a single position
+    function _detectPhase(state){
+      const board=state.board;
+      // 1. Count non-pawn-non-king pieces and check queen presence
+      let nonPawnNonKing=0;
+      let queensOnBoard=0;
+      let wKingPos=null, bKingPos=null;
+      // 2. Check for undeveloped minor pieces on starting squares
+      //    White: knights b1/g1, bishops c1/f1. Black: knights b8/g8, bishops c8/f8.
+      //    Row indices: white back rank = row 7, black back rank = row 0.
+      const _startSquares=[
+        {r:7,c:1,type:'knight',color:'white'}, // b1
+        {r:7,c:6,type:'knight',color:'white'}, // g1
+        {r:7,c:2,type:'bishop',color:'white'}, // c1
+        {r:7,c:5,type:'bishop',color:'white'}, // f1
+        {r:0,c:1,type:'knight',color:'black'}, // b8
+        {r:0,c:6,type:'knight',color:'black'}, // g8
+        {r:0,c:2,type:'bishop',color:'black'}, // c8
+        {r:0,c:5,type:'bishop',color:'black'}, // f8
+      ];
+      let undevelopedMinors=0;
+      for(const ss of _startSquares){
+        const p=board[ss.r][ss.c];
+        if(p&&p.type===ss.type&&p.color===ss.color){
+          undevelopedMinors++;
         }
       }
-      if(nonPawnPieces>8)openingPly++;
-      else if(nonPawnPieces>=4)midgamePly++;
+      // Walk the board for material/king/queen info
+      for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+        const p=board[r][c];
+        if(!p)continue;
+        if(p.type==='king'){
+          if(p.color==='white')wKingPos={r,c};
+          else bKingPos={r,c};
+        }else if(p.type==='queen'){
+          queensOnBoard++;
+          nonPawnNonKing++;
+        }else if(p.type==='rook'||p.type==='bishop'||p.type==='knight'){
+          nonPawnNonKing++;
+        }
+      }
+      // 3. King advancement: king is "advanced" if it has left the back 2 ranks
+      //    White back 2 ranks = rows 6,7. Black back 2 ranks = rows 0,1.
+      let wKingAdvanced=wKingPos?(wKingPos.r<6):false; // white advanced if row < 6
+      let bKingAdvanced=bKingPos?(bKingPos.r>1):false; // black advanced if row > 1
+      // 4. King on starting square (e1/e8)? Castled king is on g1/c1/g8/c8.
+      let wKingOnStart=wKingPos&&(wKingPos.r===7&&wKingPos.c===4);
+      let bKingOnStart=bKingPos&&(bKingPos.r===0&&bKingPos.c===4);
+      let bothKingsOnStart=wKingOnStart&&bKingOnStart;
+      // Phase decision (per guide flowchart):
+      // 1. If undeveloped minors exist → OPENING
+      if(undevelopedMinors>0)return 'opening';
+      // 2. If both kings on starting square → still OPENING (no castling done)
+      //    (Per guide: "王是否已完成易位且仍处于易位位置？否 → 中局（或开局末期）"
+      //     — but with undeveloped minors = 0 AND no castling, it's "opening末期".
+      //     We classify as opening to be conservative.)
+      if(bothKingsOnStart)return 'opening';
+      // 3. If queens present AND material >= 13 → MIDDLEGAME
+      //    (13 ≈ queen(9) + rook(5) - 1, or queen + 2 bishops + knight, etc.)
+      if(queensOnBoard>0&&nonPawnNonKing>=13)return 'midgame';
+      // 4. If queens absent OR material < 13, AND a king has advanced → ENDGAME
+      if((queensOnBoard===0||nonPawnNonKing<13)&&(wKingAdvanced||bKingAdvanced))return 'endgame';
+      // 5. Default: MIDDLEGAME (transitional per guide's "中残过渡" guidance)
+      return 'midgame';
+    }
+    // Walk all positions and label each
+    let openingPly=0,midgamePly=0,endgamePly=0;
+    let openingEndPly=-1, midgameEndPly=-1; // ply at which each phase ended
+    let lastPhase='opening';
+    const phaseLabels=[];
+    for(let i=0;i<moves.length;i++){
+      const ph=_detectPhase(moves[i].state);
+      phaseLabels.push(ph);
+      if(ph==='opening')openingPly++;
+      else if(ph==='midgame')midgamePly++;
       else endgamePly++;
+      // Track phase transitions
+      if(ph!==lastPhase){
+        if(lastPhase==='opening'&&ph==='midgame')openingEndPly=i;
+        if(lastPhase==='midgame'&&ph==='endgame')midgameEndPly=i;
+        lastPhase=ph;
+      }
     }
     h+='<div class="stats-grid">';
     if(openingPly>0){
@@ -1446,6 +1570,19 @@ function renderStats(parsed,evalData){
       h+='<div class="stat-item"><div class="label">'+T('endgame')+'</div><div class="value">'+endgamePly+' '+T('ply')+'</div></div>';
     }
     h+='</div>';
+    // v1.0.5 Rev49: Show phase transition points (move numbers)
+    if(openingEndPly>=0||midgameEndPly>=0){
+      h+='<div class="stats-grid" style="margin-top:8px">';
+      if(openingEndPly>=0){
+        const moveNum=Math.floor(openingEndPly/2)+1;
+        h+='<div class="stat-item"><div class="label">'+(T('opening_to_midgame')||'Opening→Midgame')+'</div><div class="value">'+T('move')+' '+moveNum+'</div></div>';
+      }
+      if(midgameEndPly>=0){
+        const moveNum=Math.floor(midgameEndPly/2)+1;
+        h+='<div class="stat-item"><div class="label">'+(T('midgame_to_endgame')||'Midgame→Endgame')+'</div><div class="value">'+T('move')+' '+moveNum+'</div></div>';
+      }
+      h+='</div>';
+    }
     // Final position material
     if(moves.length>0){
       const finalBoard=moves[moves.length-1].state.board;
@@ -1552,10 +1689,14 @@ function renderStats(parsed,evalData){
       let total=0,whiteTotal=0,blackTotal=0;
       let whiteCount=0,blackCount=0;
       let maxT=-1,maxIdx=-1,minT=Number.MAX_SAFE_INTEGER,minIdx=-1;
-      // Phase buckets — opening/midgame/endgame based on move count heuristics:
-      //   Opening: first 20 plies (10 full moves)
-      //   Midgame: plies 21-60 (moves 11-30)
-      //   Endgame: ply 61+ (move 31+)
+      // v1.0.5 Round-6 Rev49: Phase buckets now use the SAME multi-criteria phase
+      // detection as the Phase Analysis section (per 国际象棋三阶段精确区分.md),
+      // instead of the old fixed-ply heuristic (first 20 = opening, 21-60 = midgame,
+      // 61+ = endgame). This ensures the time-per-phase breakdown is consistent
+      // with the phase-ply counts shown above.
+      // We re-detect the phase for each move's post-state (same _detectPhase
+      // function defined in the Phase Analysis section — it's in scope here
+      // because both are in the same render function).
       let openT=0,midT=0,endT=0,openN=0,midN=0,endN=0;
       let longMoves=0,fastMoves=0;
       const allVals=[];
@@ -1567,9 +1708,18 @@ function renderStats(parsed,evalData){
         else{blackTotal+=t;blackCount++;}
         if(t>maxT){maxT=t;maxIdx=i;}
         if(t<minT){minT=t;minIdx=i;}
-        if(i<20){openT+=t;openN++;}
-        else if(i<60){midT+=t;midN++;}
-        else{endT+=t;endN++;}
+        // v1.0.5 Rev49: use position-based phase detection
+        if(moves&&moves[i]&&moves[i].state&&typeof _detectPhase==='function'){
+          const ph=_detectPhase(moves[i].state);
+          if(ph==='opening'){openT+=t;openN++;}
+          else if(ph==='midgame'){midT+=t;midN++;}
+          else{endT+=t;endN++;}
+        }else{
+          // Fallback (no moves/state available): use old fixed-ply heuristic
+          if(i<20){openT+=t;openN++;}
+          else if(i<60){midT+=t;midN++;}
+          else{endT+=t;endN++;}
+        }
         if(t>10)longMoves++;
         if(t<1)fastMoves++;
       }
@@ -1802,9 +1952,10 @@ function renderStats(parsed,evalData){
   //   - "Weakest square" for each side (least controlled)
   // This uses the in-memory control cache (_ctrlCache) keyed by FEN to avoid
   // re-computing the same position's control map multiple times.
+  // v1.0.4 Round-5 Rev48: Conditional display — the entire heatmap section
+  // (including heading) is hidden if _posCount === 0 (no position data could
+  // be computed).
   if(moves.length>0){
-    h+='<div class="section"><h2>'+(T('heatmap_stats')||'Heatmap Control Statistics')+'</h2>';
-    h+='<div style="font-size:.78rem;color:var(--muted);margin-bottom:10px">'+(T('heatmap_stats_desc')||'Aggregated per-square control across all positions in the game. Each square shows (White avg, Black avg) attackers.')+'</div>';
     // Accumulators
     const _ctrlW=Array.from({length:8},()=>new Array(8).fill(0));
     const _ctrlB=Array.from({length:8},()=>new Array(8).fill(0));
@@ -1869,6 +2020,8 @@ function renderStats(parsed,evalData){
       }
     }
     if(_posCount>0){
+    h+='<div class="section"><h2>'+(T('heatmap_stats')||'Heatmap Control Statistics')+'</h2>';
+    h+='<div style="font-size:.78rem;color:var(--muted);margin-bottom:10px">'+(T('heatmap_stats_desc')||'Aggregated per-square control across all positions in the game. Each square shows (White avg, Black avg) attackers.')+'</div>';
       // Find strongest/weakest squares for each side
       let wBest={r:-1,c:-1,v:-1},wWorst={r:-1,c:-1,v:Infinity};
       let bBest={r:-1,c:-1,v:-1},bWorst={r:-1,c:-1,v:Infinity};
@@ -1927,34 +2080,38 @@ function renderStats(parsed,evalData){
       h+='<div class="stat-item"><div class="label">'+(T('center_b_avg')||'Center B Avg')+'</div><div class="value black">'+bCenterAvg.toFixed(2)+'</div></div>';
       h+='<div class="stat-item"><div class="label">'+(T('center_net')||'Center Net (W-B)')+'</div><div class="value">'+(wCenterAvg-bCenterAvg>=0?'+':'')+(wCenterAvg-bCenterAvg).toFixed(2)+'</div></div>';
       h+='</div>';
-    }
     h+='</div>';
+    } // end _posCount>0
   }
 
   // v1.0.4 EXPANSION (this round): Visual annotations statistics
   // Scans the PGN movetext for [%csl ...] and [%cal ...] tags and tallies
   // them by color (B/G/R/Y). Also extracts NAGs ($N) from movetext and
   // reports their distribution.
+  // v1.0.4 Round-5 Rev48: Added Blue arrows (multi-threat) and Yellow arrows
+  // (queen threat) counts. Display order is Blue → Red → Yellow → Green for
+  // BOTH squares and arrows, so same colors align vertically (per user spec).
+  // v1.0.4 Round-5 Rev48: Conditional display — the visual annotations section
+  // is ONLY shown if the PGN actually contains [%csl] or [%cal] tags. A PGN
+  // with no visual annotations (e.g., a quick casual game) doesn't show this
+  // section, avoiding an all-zero grid.
   if(moves.length>0){
-    h+='<div class="section"><h2>'+(T('visual_annotations')||'Visual Annotations ([%csl]/[%cal])')+'</h2>';
-    h+='<div style="font-size:.78rem;color:var(--muted);margin-bottom:10px">'+(T('visual_annotations_desc')||'Visual annotation counts in this game\'s PGN comments.')+'</div>';
-    // Extract the raw PGN text if available; otherwise, scan moveRecords for
-    // [%csl]/[%cal] tags (the main app caches these per move). We need access
-    // to the original PGN text — try window._statsPGNText first.
-    // v1.0.4 LATEST: new color semantics —
-    //   [%csl]: B=player net control, R=AI net control, Y=high total control, G=neutral center
-    //   [%cal]: R=check path, G=escape path
-    let blueSquares=0,redSquares=0,yellowSquares=0,greenSquaresNeutral=0;
-    let redArrowsCheck=0,greenArrowsEscape=0;
-    let nagCount=0;
-    const nagDist={1:0,2:0,3:0,4:0,5:0,6:0}; // !, ?, !!, ??, !?, ?!
-    // v1.0.4 ROUND-5 REV14: Read from _payload.pgn (the authoritative PGN text
-    // sent by the main app, which includes [%csl]/[%cal] from _buildPGNString).
-    // Previously read from window._statsPGNText which was NEVER SET for in-app
-    // games — so the visual annotations section always showed zero counts.
+    // First pass: scan PGN for ANY [%csl] or [%cal] tags — if none, skip the
+    // entire section (per user spec: "不含 [%csl]/[%cal] 的 PGN → 不显示视觉注解区块").
     let pgnText='';
     if(typeof _payload!=='undefined'&&_payload&&_payload.pgn){pgnText+=_payload.pgn;}
     if(typeof window!=='undefined'&&window._statsPGNText){pgnText+='\n'+window._statsPGNText;}
+    const hasVisualAnnotations=/\[%csl\s+/i.test(pgnText)||/\[%cal\s+/i.test(pgnText);
+    if(hasVisualAnnotations){
+    h+='<div class="section"><h2>'+(T('visual_annotations')||'Visual Annotations ([%csl]/[%cal])')+'</h2>';
+    h+='<div style="font-size:.78rem;color:var(--muted);margin-bottom:10px">'+(T('visual_annotations_desc')||'Visual annotation counts in this game\'s PGN comments.')+'</div>';
+    // v1.0.4 LATEST: full color semantics —
+    //   [%csl]: B=player net control, R=AI net control, Y=high total control, G=neutral center
+    //   [%cal]: B=multi-threat, R=check path, Y=queen threat, G=escape path
+    let blueSquares=0,redSquares=0,yellowSquares=0,greenSquaresNeutral=0;
+    let blueArrowsThreats=0,redArrowsCheck=0,yellowArrowsQueen=0,greenArrowsEscape=0;
+    let nagCount=0;
+    const nagDist={1:0,2:0,3:0,4:0,5:0,6:0}; // !, ?, !!, ??, !?, ?!
     if(pgnText){
       // Match all [%csl ...] tags (square highlights)
       const cslRe=/\[%csl\s+([^\]]+)\]/g;
@@ -1978,7 +2135,9 @@ function renderStats(parsed,evalData){
         for(const p of parts){
           const pm=p.trim().match(/^([GRBY])([a-h][1-8])([a-h][1-8])$/);
           if(pm){
-            if(pm[1]==='R')redArrowsCheck++;
+            if(pm[1]==='B')blueArrowsThreats++;
+            else if(pm[1]==='R')redArrowsCheck++;
+            else if(pm[1]==='Y')yellowArrowsQueen++;
             else if(pm[1]==='G')greenArrowsEscape++;
           }
         }
@@ -1990,14 +2149,18 @@ function renderStats(parsed,evalData){
         if(n>=1&&n<=6){nagDist[n]++;nagCount++;}
       }
     }
+    // Square highlights grid — order: Blue, Red, Yellow, Green
     h+='<div class="stats-grid">';
     h+='<div class="stat-item"><div class="label">'+(T('blue_squares')||'Blue Squares (Player Net)')+'</div><div class="value" style="color:#4a90d9">'+blueSquares+'</div></div>';
     h+='<div class="stat-item"><div class="label">'+(T('red_squares')||'Red Squares (AI Net)')+'</div><div class="value" style="color:#e74c3c">'+redSquares+'</div></div>';
     h+='<div class="stat-item"><div class="label">'+(T('yellow_squares')||'Yellow Squares (High Total)')+'</div><div class="value" style="color:#f1c40f">'+yellowSquares+'</div></div>';
     h+='<div class="stat-item"><div class="label">'+(T('green_squares_neutral')||'Green Squares (Neutral Center)')+'</div><div class="value" style="color:#27ae60">'+greenSquaresNeutral+'</div></div>';
     h+='</div>';
+    // Arrows grid — order: Blue, Red, Yellow, Green (vertically aligned with squares above)
     h+='<div class="stats-grid" style="margin-top:8px">';
+    h+='<div class="stat-item"><div class="label">'+(T('blue_arrows_threats')||'Blue Arrows (Multi-Threat)')+'</div><div class="value" style="color:#4a90d9">'+blueArrowsThreats+'</div></div>';
     h+='<div class="stat-item"><div class="label">'+(T('red_arrows_check')||'Red Arrows (Check Path)')+'</div><div class="value" style="color:#e74c3c">'+redArrowsCheck+'</div></div>';
+    h+='<div class="stat-item"><div class="label">'+(T('yellow_arrows_queen')||'Yellow Arrows (Queen Threat)')+'</div><div class="value" style="color:#f1c40f">'+yellowArrowsQueen+'</div></div>';
     h+='<div class="stat-item"><div class="label">'+(T('green_arrows_escape')||'Green Arrows (Escape Path)')+'</div><div class="value" style="color:#27ae60">'+greenArrowsEscape+'</div></div>';
     h+='</div>';
     // NAG distribution
@@ -2014,6 +2177,7 @@ function renderStats(parsed,evalData){
       h+='</div>';
     }
     h+='</div>';
+    } // end hasVisualAnnotations
   }
 
   return h;

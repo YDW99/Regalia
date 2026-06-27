@@ -29,7 +29,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://tablebase.lichess.ovh; img-src data: file:; frame-ancestors 'none'; base-uri 'self'">
-<title>Regalia v1.0.4</title>
+<title>Regalia v1.0.5</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{color-scheme:dark;--bg:#1a0a0a;--card:#221015;--border:#8b6914;--border2:#d4a017;--text:#f5e6c8;--muted:#a08050;--accent:#d4a017;--accent2:#ffd700;--blue:#4a90d9;--red:#c0392b;--purple:#8e44ad;--green:#27ae60;--danger:#c0392b}
@@ -210,7 +210,9 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .review-hdr{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;background:#221015;border-bottom:2px solid var(--border2)}
 .review-hdr h2{font-family:system-ui,-apple-system,sans-serif;font-size:1rem;font-weight:700;color:var(--accent2);letter-spacing:2px}
 .review-body{display:flex;flex:1;overflow:hidden}
-.review-board{flex-shrink:0;padding:12px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:8px}
+.review-board{flex-shrink:0;padding:12px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:8px;position:relative}
+/* v1.0.4 Round-5 Rev48: position:relative so the SVG arrow overlay (absolute)
+   anchors to .review-board, not the viewport. */
 /* P0: Review-left wraps board + controls; in portrait it stacks naturally,
    in landscape it becomes the left column via media query. */
 .review-left{display:flex;flex-direction:column;align-items:center;gap:8px}
@@ -508,6 +510,82 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .tip-item{margin-bottom:4px}
 /* Move animation overlay - per-piece types, GPU-accelerated */
 .move-anim{position:absolute;display:flex;align-items:center;justify-content:center;font-size:2rem;z-index:20;pointer-events:none;will-change:transform;backface-visibility:hidden;-webkit-backface-visibility:hidden;transform:translate3d(0,0,0);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text;-webkit-font-variant-emoji:text;font-weight:400}
+
+/* v1.0.5 Round-6 Rev49: High aspect-ratio screen adaptation.
+   Goal: every interface scrolls VERTICALLY ONLY — never horizontal scroll,
+   regardless of portrait or landscape, on any aspect ratio (including
+   ultra-tall phones 21:9, 22:9, foldable inner screens, ultra-wide tablets).
+   Strategy:
+   1. Body and #app always have overflow-x:hidden (already set above).
+   2. All flex containers use min-width:0 on children so they shrink instead
+      of overflowing horizontally.
+   3. The header toolbar (.hdr-tools) wraps to multiple rows on narrow
+      widths instead of horizontal scroll.
+   4. Long text elements use word-break:break-word and overflow-wrap:anywhere.
+   5. Tables and code blocks use overflow-x:auto ONLY on their own container
+      (not the whole page) so horizontal scroll is localized to where it's
+      genuinely needed (e.g., PGN text), never the main layout.
+   6. The board never overflows — it's sized to min(viewport-width, viewport-height).
+*/
+:root{
+  /* v1.0.5 Rev49: Safe-area CSS variables for notch/cutout/R-corner.
+     These read the system's safe-area insets (set by AndroidManifest's
+     shortEdges mode + viewport-fit=cover) and expose them to JS for
+     the anti-shake feature's max-displacement clamping. */
+  --safe-top:env(safe-area-inset-top,0px);
+  --safe-bottom:env(safe-area-inset-bottom,0px);
+  --safe-left:env(safe-area-inset-left,0px);
+  --safe-right:env(safe-area-inset-right,0px);
+}
+/* v1.0.5 Rev49: Ensure all flex children can shrink — prevents horizontal
+   overflow when content is wider than the flex container. */
+.hdr-top,.hdr-tools,.main,.bsec,.panel,.review-top,.review-bottom,.review-nav,.pbar,.card,.crow,.mlist,.review-body{min-width:0}
+/* v1.0.5 Rev49: Header toolbar wraps instead of horizontal-scrolling.
+   Previously .hdr-tools had overflow-x:auto in landscape, causing a
+   horizontal scrollbar on ultra-wide screens. Now it wraps to multiple
+   rows, keeping everything visible without horizontal scroll. */
+@media(orientation:landscape){.hdr-tools{gap:3px;flex-wrap:wrap;overflow-x:hidden}}
+/* v1.0.5 Rev49: Long text breaks instead of overflowing. */
+.crow,.pname,.tind,.tips,.tip-item,.rmv-notation,.rmv-comment,.ec-name{word-break:break-word;overflow-wrap:anywhere}
+/* v1.0.5 Rev49: Tables and PGN/code blocks keep LOCAL horizontal scroll
+   (only when their own content is too wide), never triggering page-level
+   horizontal scroll. */
+.mlist,.review-moves,.dlg{overflow-wrap:break-word;word-break:break-word}
+
+/* Anti-shake stabilization layer. When _stabilizationEnabled is true (toggled
+   by long-pressing any board square), the .bwrap element gets a CSS class
+   .stabilized that applies a CSS transform for translation anti-shake (±8px).
+   Values are set dynamically by JS via CSS custom properties --stab-x, --stab-y. */
+.bwrap.stabilized{
+  transition:transform 16ms linear;
+  transform:translate3d(var(--stab-x,0px),var(--stab-y,0px),0);
+  will-change:transform;
+}
+/* v1.0.5 Rev49: Ultra-tall portrait (aspect ratio >= 2.0, e.g., 21:9 phones).
+   On such screens the board would leave huge empty space above/below.
+   Strategy: cap board size to a reasonable max (so it doesn't dominate),
+   and let the panel below take more vertical space for move history. */
+@media(orientation:portrait) and (min-aspect-ratio:2/1){
+  .main{gap:10px;padding:8px}
+  .bsec{align-self:center;max-width:90vw}
+  .panel{max-width:480px;margin:0 auto;width:100%}
+}
+/* v1.0.5 Rev49: Ultra-wide landscape (aspect ratio >= 2.2, e.g., 21:9 phones
+   in landscape, foldable inner screens). Cap panel width so the move list
+   doesn't stretch absurdly wide; center the whole main row. */
+@media(orientation:landscape) and (min-aspect-ratio:22/10){
+  .main{justify-content:center;gap:16px}
+  .panel{max-width:520px;flex:0 1 520px}
+  .bsec{flex:0 0 auto}
+}
+/* v1.0.5 Rev49: Ultra-short landscape (aspect ratio <= 1.4 in landscape,
+   e.g., some foldable outer screens, square-ish tablets in landscape).
+   Stack board ABOVE panel (column layout) so neither is too cramped. */
+@media(orientation:landscape) and (max-aspect-ratio:14/10){
+  .main{flex-direction:column!important;align-items:center;height:auto}
+  .bsec{align-self:center}
+  .panel{width:100%;max-width:520px;max-height:none}
+}
 
 /* v1.0.4 ROUND-5 REV12: Match JS durations exactly (game-logic.js animateMove).
    180-260ms for smooth 120fps. will-change:transform ensures GPU compositing. */
