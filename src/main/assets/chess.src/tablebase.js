@@ -176,6 +176,61 @@ function _parsePGN(pgnText){
   // post-move position (reviewStep = moveIdx + 1).
   const _extractedEvals=[]; // array of {reviewStep, eval, mate, ...}
   let _pendingEval=null;
+  // v1.0.4 Round-5 Rev48 NEW: Extract [%csl ...] and [%cal ...] visual
+  // annotation tags AND free-text comments from brace comments BEFORE
+  // stripping them. This implements the user requirement: "all valid ()
+  // variations and {} comments must be fully received".
+  //
+  // v1.0.5 Rev50 CRITICAL FIX — comment-to-move attachment:
+  // The previous (Rev48) version attached each comment to the NEXT move
+  // (treating comments as "pre-move" annotations). This was WRONG per the
+  // PGN spec and caused the user-reported bug: "arrows belonging to White's
+  // move were displayed on Black's position". In PGN, a comment `{...}`
+  // appears AFTER the move it describes (post-move annotation). So:
+  //   `1. e4 {[%cal Re4e8]} e5 {[%cal Ge5e1]}`
+  //   - `{[%cal Re4e8]}` describes move e4 (moveIdx 0), NOT e5 (moveIdx 1)
+  //   - `{[%cal Ge5e1]}` describes move e5 (moveIdx 1), NOT the next move
+  // The fix: each comment is attached to the PRECEDING main-line move
+  // (the last move seen before the comment). A comment BEFORE the first
+  // move attaches to the starting position (moveIdx -1, which we store
+  // separately and the display layer handles as "no move" / initial position).
+  //
+  // v1.0.5 Rev50 CRITICAL FIX — comment merging:
+  // The previous version merged ALL pending comments (across different moves)
+  // into a single payload. This caused comments from different moves to be
+  // concatenated with " | ". The fix: comments are attached IMMEDIATELY when
+  // seen (to the preceding move), and only comments that genuinely belong to
+  // the SAME move (multiple consecutive `{...}` blocks with no move between
+  // them) are merged with " | ". This preserves each comment's relative
+  // position with respect to moves, so arrows correctly match their move.
+  //
+  // We extract three kinds of payload from each `{...}` block:
+  //   1. [%csl ...] tags  → array of {color, square}
+  //   2. [%cal ...] tags  → array of {color, from, to}
+  //   3. Free-text comment (the body minus all [%xxx] tags, trimmed)
+  //
+  // Variation-internal comments (inside parentheses) are also captured:
+  // they attach to the variation's owning main-line move (the last main-line
+  // move seen before the variation started), with the comment body prefixed
+  // by "[var]" so the display layer can show them inline. The visual
+  // annotations from variation comments are MERGED with the main-line move's
+  // own annotations (deduplicated by color+square / color+from+to).
+  const _extractedAnnotations=[]; // array of {moveIdx, csl:[], cal:[]}
+  const _extractedComments=[];    // array of {moveIdx, comment}
+  // v1.0.5 Rev50: _lastMoveIdx tracks the index of the last main-line move
+  // seen. -1 means "no move seen yet" (comment is pre-first-move → attaches
+  // to starting position, stored as moveIdx -1).
+  let _lastMoveIdx=-1;
+  // v1.0.5 Rev50: per-move pending payload. When a comment is seen, it is
+  // immediately attached to _lastMoveIdx. But if MULTIPLE consecutive
+  // comments appear for the same move (no move between them), they merge.
+  // We track _currentMoveCsl/_currentMoveCal/_currentMoveComment which
+  // accumulate for the move at _lastMoveIdx. When a NEW move is seen,
+  // we flush (finalize) the current per-move payload and start fresh.
+  let _currentMoveCsl=[];         // [%csl] for the move at _lastMoveIdx
+  let _currentMoveCal=[];         // [%cal] for the move at _lastMoveIdx
+  let _currentMoveComment=null;   // free-text comment for the move at _lastMoveIdx
+  let _currentMoveFlushed=true;   // true = no pending per-move payload
   // Walk character-by-character, identifying brace comments and SAN moves.
   // We use a simplified scan: find each `{` ... `}` block, extract any
   // [%eval ...] inside, then advance to the next SAN-like token.
@@ -184,6 +239,30 @@ function _parsePGN(pgnText){
     let _depth=0; // paren depth
     let _i=0;
     const _mt=moveText;
+    // v1.0.5 Rev50: Helper to flush (finalize) the current per-move payload.
+    // Called when a NEW move is seen (so the previous move's accumulated
+    // comments are committed) or at end-of-loop (trailing comments).
+    // If _currentMoveFlushed is true, there's nothing to flush (no comment
+    // was seen since the last flush).
+    function _flushCurrentMovePayload(){
+      if(_currentMoveFlushed)return; // nothing pending
+      if(_lastMoveIdx>=0){
+        // Attach to the move at _lastMoveIdx
+        if(_currentMoveCsl.length>0||_currentMoveCal.length>0){
+          _extractedAnnotations.push({moveIdx:_lastMoveIdx,csl:_currentMoveCsl.slice(),cal:_currentMoveCal.slice()});
+        }
+        if(_currentMoveComment){
+          _extractedComments.push({moveIdx:_lastMoveIdx,comment:_currentMoveComment});
+        }
+      }
+      // else: comment before the first move — drop (no move to attach to;
+      // the display layer has no "initial position annotation" concept).
+      // Reset per-move accumulator
+      _currentMoveCsl=[];
+      _currentMoveCal=[];
+      _currentMoveComment=null;
+      _currentMoveFlushed=true;
+    }
     while(_i<_mt.length){
       const _ch=_mt[_i];
       if(_ch==='{'){
@@ -234,6 +313,62 @@ function _parsePGN(pgnText){
             _pendingEval={eval:_ev,mate:_mate||0,depth:0,wdlW:-1,wdlD:-1,wdlL:-1};
           }
         }
+        // v1.0.5 Rev50: Extract [%csl ...] and [%cal ...] visual annotations
+        // from the comment body. Multiple tags in the same comment are
+        // concatenated. Tag format (Lichess/Chessbase standard):
+        //   [%csl Gb4,Rc5]    — highlights b4 (Green), c5 (Red)
+        //   [%cal Ge2e4,Rg1f3] — arrows e2→e4 (Green), g1→f3 (Red)
+        // Color codes: G=Green, R=Red, B=Blue, Y=Yellow (case-sensitive).
+        //
+        // v1.0.5 Rev50: The extracted annotations accumulate into
+        // _currentMoveCsl/_currentMoveCal (per-move, NOT global pending).
+        // Multiple consecutive comments for the SAME move merge (because
+        // _currentMoveFlushed is false after the first comment, and we keep
+        // accumulating into the same arrays). A NEW move triggers a flush.
+        {
+          const _cslRe=/\[%csl\s+([^\]]+)\]/gi;
+          let _cm;
+          while((_cm=_cslRe.exec(_body))!==null){
+            const _parts=_cm[1].split(',');
+            for(const _p of _parts){
+              const _pm=_p.trim().match(/^([GRBY])([a-h][1-8])$/);
+              if(_pm){
+                _currentMoveCsl.push({color:_pm[1],square:_pm[2]});
+                _currentMoveFlushed=false;
+              }
+            }
+          }
+          const _calRe=/\[%cal\s+([^\]]+)\]/gi;
+          while((_cm=_calRe.exec(_body))!==null){
+            const _parts=_cm[1].split(',');
+            for(const _p of _parts){
+              const _pm=_p.trim().match(/^([GRBY])([a-h][1-8])([a-h][1-8])$/);
+              if(_pm){
+                _currentMoveCal.push({color:_pm[1],from:_pm[2],to:_pm[3]});
+                _currentMoveFlushed=false;
+              }
+            }
+          }
+        }
+        // v1.0.5 Rev50: Extract free-text comment (body minus all [%xxx] tags).
+        // Multiple consecutive comments for the SAME move merge with " | "
+        // separator (only when _currentMoveFlushed is false, meaning a comment
+        // was already seen for this move). Comments inside variations
+        // (depth>0) get a "[var] " prefix so the user can distinguish them.
+        {
+          let _ft=_body.replace(/\[%[a-zA-Z]+\s+[^\]]*\]/g,'').trim();
+          // Also strip any leftover [CLK:...], [EMT:...] non-bracketed formats
+          _ft=_ft.replace(/\[(?:CLK|EMT|CLOCK|TIME):[^\]]*\]/gi,'').trim();
+          if(_ft){
+            const _prefix=(_depth>0)?'[var] ':'';
+            if(_currentMoveComment){
+              _currentMoveComment+=' | '+_prefix+_ft;
+            }else{
+              _currentMoveComment=_prefix+_ft;
+            }
+            _currentMoveFlushed=false;
+          }
+        }
         _i=_j+1;
         continue;
       }
@@ -252,9 +387,26 @@ function _parsePGN(pgnText){
         const _isNag=/^\$\d+$/.test(_tok);
         const _isEllipsis=/^\.+$/.test(_tok);
         if(!_isMoveNum&&!_isResult&&!_isNag&&!_isEllipsis&&_tok.length>0){
-          // This is a main-line move. Attach pending eval to the post-move
-          // position (reviewStep = moveCount + 1).
+          // v1.0.5 Rev50: This is a NEW main-line move. First, flush the
+          // per-move payload accumulated for the PREVIOUS move (comments
+          // that appeared after the previous move but before this one).
+          _flushCurrentMovePayload();
+          // Now advance _lastMoveIdx to this new move.
           _moveCount++;
+          _lastMoveIdx=_moveCount-1;
+          // Reset per-move accumulator for the new move (already done by
+          // _flushCurrentMovePayload, but be explicit for clarity).
+          _currentMoveCsl=[];
+          _currentMoveCal=[];
+          _currentMoveComment=null;
+          _currentMoveFlushed=true;
+          // Attach pending eval to the post-move position (reviewStep = moveCount).
+          // NOTE: [%eval] is a special case — it attaches to the position AFTER
+          // the move (reviewStep = _moveCount), NOT to the move itself. This is
+          // because [%eval] describes the evaluation of the resulting position.
+          // The "attach to next move" pattern was correct for [%eval] but wrong
+          // for [%csl]/[%cal]/free-text. We keep _pendingEval as a separate
+          // pre-move accumulator ONLY for [%eval].
           if(_pendingEval){
             _extractedEvals.push({reviewStep:_moveCount,eval:_pendingEval.eval,mate:_pendingEval.mate,depth:_pendingEval.depth,wdlW:_pendingEval.wdlW,wdlD:_pendingEval.wdlD,wdlL:_pendingEval.wdlL});
             _pendingEval=null;
@@ -265,6 +417,10 @@ function _parsePGN(pgnText){
       }
       _i++;
     }
+    // v1.0.5 Rev50: End-of-loop — flush any trailing per-move payload
+    // (comments that appeared after the LAST move). This attaches them to
+    // the last move (_lastMoveIdx), which is correct per PGN spec.
+    _flushCurrentMovePayload();
     // Trailing pending eval (comment after the last move) attaches to the
     // position after the last move.
     if(_pendingEval&&_moveCount>=0){
@@ -319,7 +475,10 @@ function _parsePGN(pgnText){
   // handles "1.e4" → "1. e4", and the next regex handles "1 e4" → "1. e4".
   // Handle move numbers without dots (e.g. "1 e4 e5 2 Nf3") — add a dot so the
   // move-number regex can detect them. Pattern: standalone number followed by a piece/pawn letter.
-  text=text.replace(/(^|\s)(\d+)\s+(?=[a-hKQRBN])/g,'$1$2. ');
+  // v1.0.5 Round-6 Rev62 (2026.6.27) FIX: add 'O' to character class (same fix
+  // as worker-pool.js line 269). PGN move numbers followed by castling "O-O"
+  // without a dot were not being normalized to "1. O-O".
+  text=text.replace(/(^|\s)(\d+)\s+(?=[a-hKQRBNO])/g,'$1$2. ');
   // Strip any remaining standalone annotation symbols that survived earlier cleaning
   // Handle 1-5 character annotations (!, !!, !?, ?!, ??, !!!, etc.)
   text=text.replace(/\s[!?]{1,5}\s/g,' ');
@@ -535,7 +694,13 @@ function _parsePGN(pgnText){
   }
   
   if(moves.length===0)return null;
-  return{moves,startFEN,variations,variant:pgnVariant,extractedEvals:_extractedEvals};
+  // v1.0.4 Round-5 Rev48: also return the extracted visual annotations and
+  // free-text comments so importPGN can populate the visual annotations cache
+  // and mr.comment field — preserving all {} comment information.
+  return{moves,startFEN,variations,variant:pgnVariant,
+         extractedEvals:_extractedEvals,
+         extractedAnnotations:_extractedAnnotations,
+         extractedComments:_extractedComments};
 }
 
 // Apply a single SAN move to a game state, returning the new state + notation + move
@@ -1286,6 +1451,82 @@ function importPGN(pgnText){
       }
     }
   }catch(e){console.warn('importPGN: eval cache population failed',e);}
+
+  // v1.0.4 Round-5 Rev48 NEW: Populate _visualAnnotationsCache from
+  // extracted [%csl]/[%cal] tags. This implements the user requirement:
+  // "all valid {} comments must be fully received" — previously, imported
+  // PGNs with [%csl]/[%cal] tags had their visual annotation info LOST
+  // during parsing (the comment-stripping phase removed them).
+  //
+  // Now: each move with [%csl]/[%cal] in its PGN comment gets the cache
+  // entry set, so:
+  //   - PGN re-export preserves the tags (via _getVisualAnnotations)
+  //   - The review board can render the annotations (when heatmap is off)
+  //   - The stats page can count them in the visual annotations section
+  //
+  // If a moveIdx has BOTH auto-generated annotations (from
+  // _computeAndCacheVisualAnnotations, called during executeMove) AND
+  // imported annotations, the IMPORTED ones take precedence (they came
+  // from the PGN author's explicit annotation, not from our heuristic).
+  try{
+    if(result.extractedAnnotations&&result.extractedAnnotations.length>0&&typeof _visualAnnotationsCache!=='undefined'){
+      let _populatedVa=0;
+      for(const _a of result.extractedAnnotations){
+        if(_a.moveIdx>=0&&_a.moveIdx<moveRecords.length){
+          // Merge with any existing cache entry (e.g., if there were multiple
+          // comments for the same move). Deduplicate by color+square /
+          // color+from+to.
+          const _existing=_visualAnnotationsCache.get(_a.moveIdx)||{csl:[],cal:[]};
+          const _cslSeen=new Set(_existing.csl.map(x=>x.color+x.square));
+          for(const _c of _a.csl){
+            const _k=_c.color+_c.square;
+            if(!_cslSeen.has(_k)){
+              _existing.csl.push({color:_c.color,square:_c.square});
+              _cslSeen.add(_k);
+            }
+          }
+          const _calSeen=new Set(_existing.cal.map(x=>x.color+x.from+x.to));
+          for(const _c of _a.cal){
+            const _k=_c.color+_c.from+_c.to;
+            if(!_calSeen.has(_k)){
+              _existing.cal.push({color:_c.color,from:_c.from,to:_c.to});
+              _calSeen.add(_k);
+            }
+          }
+          _visualAnnotationsCache.set(_a.moveIdx,_existing);
+          _populatedVa++;
+        }
+      }
+      if(_populatedVa>0){
+        console.log('importPGN: populated '+_populatedVa+' visual annotation entries from PGN comments');
+      }
+    }
+  }catch(e){console.warn('importPGN: visual annotations cache population failed',e);}
+
+  // v1.0.4 Round-5 Rev48 NEW: Populate mr.comment from extracted free-text
+  // comments. This preserves the human-readable annotation text from the
+  // PGN so it can be:
+  //   - Displayed inline in the move list / review mode
+  //   - Re-exported in _buildPGNString() (so PGN round-trip is lossless)
+  try{
+    if(result.extractedComments&&result.extractedComments.length>0){
+      let _populatedCm=0;
+      for(const _c of result.extractedComments){
+        if(_c.moveIdx>=0&&_c.moveIdx<moveRecords.length&&moveRecords[_c.moveIdx]){
+          if(moveRecords[_c.moveIdx].comment){
+            // Append to existing comment (multiple comments for the same move)
+            moveRecords[_c.moveIdx].comment+=' | '+_c.comment;
+          }else{
+            moveRecords[_c.moveIdx].comment=_c.comment;
+          }
+          _populatedCm++;
+        }
+      }
+      if(_populatedCm>0){
+        console.log('importPGN: populated '+_populatedCm+' free-text comments from PGN');
+      }
+    }
+  }catch(e){console.warn('importPGN: comment population failed',e);}
   
   render();
   // v1.0.3: Cache the original PGN text so the stats page can access the
@@ -1444,7 +1685,19 @@ const ctrl=typeof AbortController!=='undefined'?new AbortController():null;
 const tmr=ctrl?setTimeout(()=>ctrl.abort(),5000):null;
 const resp=await fetch(`https://tablebase.lichess.ovh/standard?fen=${encodeURIComponent(fen)}`,{signal:ctrl?ctrl.signal:undefined});
 if(tmr)clearTimeout(tmr);
-if(!resp.ok){_tbFailCount++;if(_tbFailCount>=3){_tbOffline=true;_tbOfflineSince=Date.now();}return null;}
+// v1.0.5 Round-6 Rev62 (2026.6.27) FIX: a 404 response means "position not in
+// tablebase" (e.g., 8-piece position that slipped past the pieceCountLE7
+// pre-filter), NOT "server is down". Previously, 3 consecutive 404s would
+// falsely set _tbOffline=true for 60 seconds, blocking ALL tablebase queries
+// even though the server is healthy. Now only 5xx errors and network errors
+// (caught below) count toward _tbFailCount; 4xx errors return null silently.
+if(!resp.ok){
+  if(resp.status>=500){
+    _tbFailCount++;
+    if(_tbFailCount>=3){_tbOffline=true;_tbOfflineSince=Date.now();}
+  }
+  return null;
+}
 const data=await resp.json();
 // LRU cache: evict oldest when full
 if(_tbCache.size>=_TB_CACHE_MAX){const firstKey=_tbCache.keys().next().value;_tbCache.delete(firstKey);}

@@ -15,7 +15,7 @@ A standalone, open-source chess app for Android — play offline against Stockfi
 
 *Portrait mode — evaluation bar, move history, AI opponent display with ponder info, and Control heatmap*
 
-**Control Heatmap** — Tap the 🌈 button on the toolbar to toggle the control heatmap. Each square is dynamically colored by HSL to indicate which side controls it: blue-purple = your control, red = opponent's control, purple = contested. Hovering a square shows SVG arrows from each controlling piece to that square (warm gold for your pieces, cool silver-blue for opponent's). The info card below the board shows per-piece control contributions with position labels.
+**Control Heatmap** — Tap the 🌗/🌈 button on the toolbar to toggle the control heatmap. Each square is dynamically colored by HSL to indicate which side controls it: blue-purple = your control, red = opponent's control, purple = contested. Hovering a square shows SVG arrows from each controlling piece to that square (warm gold for your pieces, cool silver-blue for opponent's). The info card below the board shows per-piece control contributions with position labels.
 
 **🌿Line** — In the move record, 🌿 lines appear below each move showing engine analysis variations (MultiPV) and PGN import variations (RAV). Each variation is labeled 🌿Line 1, 🌿Line 2, etc., assigned sequentially by display order. PGN import variations are automatically parsed and displayed as 🌿Lines with proper move numbering. Toggle the Variations switch to show or hide them.
 
@@ -24,7 +24,7 @@ A standalone, open-source chess app for Android — play offline against Stockfi
 - **Stockfish 18 Engine** — arm64-v8a-dotprod variant with NEON acceleration for optimal performance on modern devices
 - **Chess960 / Fischer Random Chess** (v1.0.4 NEW) — full support for the 960 starting positions with proper castling rules, SP-ID selector in New Game dialog, Shredder-FEN castling rights, and `UCI_Chess960` engine option
 - **Standardized PGN** (v1.0.4 NEW) — import/export follows the 1994 PGN spec strictly: Seven-Tag Roster always emitted, `[%eval]` / `[%clk]` / `[%emt]` annotations embedded, Result terminator enforced, tolerant parser auto-corrects malformed input
-- **NAG &amp; Visual Annotations** (v1.0.4 NEW) — NAG ($1-$19) support; automatic selection &amp; caching of `[%csl ...]` (square highlights) and `[%cal ...]` (arrows) per move: Blue=control paths, Red=check path, Green=escape squares, Yellow=queen-threat path
+- **NAG &amp; Visual Annotations** (v1.0.4 NEW) — NAG ($1-$19) support; automatic selection &amp; caching of `[%csl ...]` (square highlights) and `[%cal ...]` (arrows) per move: Square highlights — Blue=player net-control strong squares, Red=AI net-control strong squares, Yellow=high total-control squares, Green=neutral center squares; Arrows — Blue=multi-threat (one piece threatens 2+ enemy pieces), Red=check path, Yellow=queen-threat path, Green=escape squares
 - **Time-Control Chess** (v1.0.4 NEW) — Sudden Death / Fischer Increment / Bronstein Delay / US Delay modes; live clock display with low-time warning; auto-emits `[TimeControl "..."]` header and `[%clk HH:MM:SS]` per-move annotations; for untimed games, emits `[%emt HH:MM:SS]` (elapsed move time)
 - **Web Worker Pool** (v1.0.4 NEW) — `worker-pool.js` offloads PGN parsing, statistics computation, and control-map computation to a background thread; falls back to inline execution on devices without Worker support
 - **8 Difficulty Levels** — from beginner (800 ELO) to maximum strength (2800+ ELO), plus Skill Level mode
@@ -126,8 +126,8 @@ Regalia/
 ├── LICENSE-Apache v2.0         # Apache v2.0 full text (Gradle)
 ├── PRIVACY.md                  # Privacy policy
 ├── build-chess.py              # Python build script (alternative to build-chess.sh)
-├── Regalia-v1.0.4-manual-zh.html  # Chinese user manual
-├── Regalia-v1.0.4-manual-en.html  # English user manual
+├── Regalia-v1.0.5-manual-zh.html  # Chinese user manual
+├── Regalia-v1.0.5-manual-en.html  # English user manual
 └── README.md
 ```
 
@@ -182,7 +182,414 @@ Contributions are welcome! Please ensure:
 
 ## Version
 
-**v1.0.4** (versionCode 104) — major release
+**v1.0.5** (versionCode 105) — current release
+
+The v1.0.5 release adds (Round-6 Revision 49):
+
+1. **High aspect-ratio screen adaptation** — every interface scrolls vertically only,
+   never horizontally, on any aspect ratio (ultra-tall phones, foldable inner screens,
+   ultra-wide tablets).
+2. **Notch/cutout/R-corner adaptation** — `shortEdges` cutout mode in AndroidManifest,
+   `viewport-fit=cover` + `env(safe-area-inset-*)` CSS, auto-avoids notches/cutouts/R-corners.
+3. **Sensor-fusion board anti-shake (OIS-style)** — new `StabilizationHelper.java` fuses
+   `TYPE_LINEAR_ACCELERATION` (gravity-free translation) + `TYPE_GAME_ROTATION_VECTOR`
+   (preferred, no magnetometer) / `TYPE_ROTATION_VECTOR` (fallback) sensors;
+   board counter-shifts in real time to cancel device shake, plus ±2° roll-only
+   tilt compensation. Toggle by long-pressing any board square (Toast in zh/en).
+4. **Stats page "PGN Text" → "PGN Text (After processing)"** — clarifies the PGN is
+   reconstructed/processed, not raw.
+5. **Review arrow shrink** — arrows shrunk (4→2px stroke, 8×6→5×4 head) with per-arrow
+   angular offset when multiple arrows share a target, so they stay distinguishable.
+6. **Phase analysis precision** — rewritten per 国际象棋三阶段精确区分.md: multi-criteria
+   detection (undeveloped minors, king castled, queen present, king advanced) replaces
+   the old fixed material threshold.
+7. **Manual chapter reorder** — Legal chapter moved to ch.2; manual changelog newest-first.
+
+### Patch revisions under v1.0.5 (version number unchanged — still v1.0.5 / versionCode 105)
+
+Multiple patch revisions have been applied under the same v1.0.5 version number.
+The most significant recent revisions are:
+
+- **Round-6 Revision 50** — Version-number residual cleanup (`v1.0.4` → `v1.0.5`
+  in 3 UI locations); anti-shake Y-axis direction correction; PGN comment-merge
+  fix (comments now attach to the PRECEDING move per PGN spec; only same-move
+  comments merge with " | ").
+- **Round-6 Revision 51** — App-launcher icon label synchronized to
+  "Regalia v1.0.5"; anti-shake Y-axis direction further corrected.
+- **Round-6 Revision 52** — Anti-shake screen-orientation auto-adapt (4 display
+  rotations: 0°/90°/180°/270°); visual-annotation null-reference fix when
+  `moveRecords[moveIdx]` is null (now uses `{csl:[],cal:[]}`).
+- **Round-6 Revision 53** — Precise sensor re-selection: only
+  `TYPE_LINEAR_ACCELERATION` + `TYPE_ROTATION_VECTOR` + `Display.getRotation()`
+  (removed accelerometer/gyroscope/gravity/game-rot/geomagnetic-rot sensors).
+  ±2° tilt compensation via `getRotationMatrixFromVector()`+`getOrientation()`.
+  Yellow arrows extended to bidirectional queen threats (both sides' queens).
+  Blue arrows also bidirectional. New `_computeInitialPositionAnnotations()`
+  for the initial position (reviewStep 0).
+- **Round-6 Revision 54** — Six improvements per user spec:
+  1. **Yellow arrow extension** — when the mover's just-moved piece is a queen
+     and its destination is attacked by an opp piece ("主动把皇后移动到受威胁
+     格"), that yellow arrow's priority is BOOSTED to survive the cap-6 dedup.
+  2. **Blue arrow extension** — when the mover's moved piece is itself at a
+     threatened square ("主动把任意棋子移到受威胁格") AND this causes an opp
+     piece to have 2+ threats on mover pieces, those blue arrows are BOOSTED.
+  3. **Per-color arrow offsets** — each color has a FIXED diagonal offset
+     (Blue→Upper-Left, Yellow→Lower-Left, Red→Upper-Right, Green→Lower-Right)
+     applied to both start and end so overlapping arrows of different colors
+     are visually separable.
+  4. **Yellow square rounded-rectangle style** — yellow squares now render as
+     a separate rounded-rectangle overlay (2px solid border, ~15% border-
+     radius, ~10% inset) above the cell, leaving four-corner gaps so other
+     colors' box-shadow insets remain visible underneath.
+  5. **Roll-only board rotation** — `StabilizationHelper` rotation restricted
+     to SCREEN-ROLL only (the steering-wheel tilt). Screen-pitch (nodding)
+     and screen-yaw (door-like horizontal turn) are NOT compensated.
+  6. **First-principles anti-shake audit** — cross-checked every sensor
+     choice against the two uploaded sensor reference docs. Key change:
+     PREFER `TYPE_GAME_ROTATION_VECTOR` (no magnetometer → no magnetic
+     drift near laptops/metal desks) with `TYPE_ROTATION_VECTOR` fallback.
+     Verified: `SENSOR_DELAY_GAME`, α=0.15 low-pass filter, 0.3° dead zone,
+     decay-based drift prevention, lifecycle pattern, null-sensor fallback.
+     Confirmed: `TYPE_ORIENTATION` / `device_orientation` is deprecated —
+     we correctly use `Display.getRotation()`.
+- **Round-6 Revision 55** — Line-by-line code audit of every source
+  file, prioritized: bug fixes > features > perf > redundancy > simplification.
+  1. **StatsActivity security parity** (bug) — the stats WebView was missing
+     the defense-in-depth security flags that MainActivity has
+     (`setAllowFileAccess(false)`, `setAllowContentAccess(false)`,
+     `setAllowFileAccessFromFileURLs(false)`,
+     `setAllowUniversalAccessFromFileURLs(false)`,
+     `setMixedContentMode(NEVER_ALLOW)`, `setFilterTouchesWhenObscured(true)`).
+     Added all of them so the stats page has the same security posture as the
+     main game.
+  2. **StatsActivity FLAG_FULLSCREEN fix** (bug) — was using the deprecated
+     `FLAG_FULLSCREEN` unconditionally, which conflicts with Edge-to-Edge
+     enforcement on Android 15+ (same black-screen bug MainActivity fixed in
+     v18.4.6). Now gated on `SDK_INT < R`, matching MainActivity.
+  3. **StatsActivity immersive mode** (feature) — the stats page now hides
+     system bars (status + navigation) just like the main game, using the
+     same platform-aware approach (`WindowInsetsController` on API 30+,
+     legacy flags on API 21-29).
+  4. **engineGoDepth eval-mode options** (bug) — `StockfishNative.engineGoDepth`
+     (used for deep eval / analyze-all) was missing the
+     `applyEvalModeOptions()` call that `engineEval` has. Without it, deep
+     eval ran with gameplay `Contempt=24` (biased toward avoiding draws) and
+     the user's `MultiPV` setting (potentially >1, reducing depth). Fixed by
+     adding the call; the bestmove handler already restores gameplay settings.
+  5. **getCtrlMap perf** (perf) — hoisted the attacker-position object out of
+     the inner loop. Was allocating ~256 objects per ctrl-map (per render
+     tick when heatmap is on); now allocates max 32 (one per piece) and
+     reuses.
+  6. **EngineService notification builder** (redundancy) — extracted shared
+     `_buildNotificationWithContent()` helper used by both
+     `buildNotification()` and `updateNotification()`, eliminating ~50 lines
+     of duplicated builder configuration.
+  7. **worker-pool fenToState consistency** — worker's check was
+     `parts.length<4`, main thread's is `<2`. Changed worker to `<2` so
+     minimal FENs (board + side-to-move only) are accepted by both paths.
+  8. **chess960.js stale comment cleanup** — removed a misleading comment
+     that claimed a line was "dead code" (it had been consolidated in
+     v1.0.4). Code was correct; only the comment was stale.
+- **Round-6 Revision 56** — Audit of `ai-bridge.js` MultiPV
+  processing path and `ui.js` dirty-flag render pipeline. Six improvements:
+  1. **MultiPV toggle-off stale lines** (bug) — `setConfigMultiPV(1)` mid-search
+     left stale secondary PV lines (index 2..N) visible until the next
+     `onBestMove` (seconds away). Now `_multiPVLines` and the display cache
+     are cleared immediately, and the display refreshes instantly.
+  2. **MultiPV display signature cache** (perf) — `_updateMultiPVDisplay()`
+     was re-converting ALL PV lines from UCI to SAN on every progress tick
+     (10-50×/sec), wasting 80+ `makeMv` calls per tick when the PV content
+     was identical. Added `_multiPVDisplayCache` (per-line signature) to
+     skip the conversion + DOM write when nothing changed.
+  3. **MultiPV sort skip** (perf) — `onMultiPVProgress()` +
+     `onEngineProgress()` sorted `_multiPVLines` unconditionally on every
+     tick. Now only sort when a new line was appended (indices don't change
+     on in-place update).
+  4. **Eval display signature cache** (perf) —
+     `_updateEvalDisplayIncremental()` rebuilt `innerHTML` on every
+     `DIRTY_EVAL` tick even when eval values were unchanged (common during
+     deep search). Added `_evalDispPrevSig` signature check to skip the DOM
+     write; invalidated on full render.
+  5. **MultiPV cache invalidation** (robustness) — wired
+     `_clearMultiPVDisplayCache()` into all three MultiPV-reset paths
+     (`onBestMove`, `restartCurrentEngine`, engine-recovery) so a recovered
+     engine doesn't inherit stale display-cache signatures.
+  6. **Dirty-flag pipeline audit** — confirmed `_performDirtyRender`'s
+     flag-routing is correct; the TOOLBAR/PANEL/MOVES → full-render branches
+     are technically dead code (always accompanied by bitcount>2) but left
+     as-is for intent clarity and future-proofing.
+- **Round-6 Revision 57** — CRITICAL FIX for blank-screen-on-launch
+  regression introduced in Rev55. The Rev55 comment added to
+  `worker-pool.js fenToState()` (inside the `_WORKER_SOURCE` template literal)
+  used backticks around `parts.length<4`. Since `_WORKER_SOURCE` is a JS
+  template literal (delimited by backticks), the backtick inside the comment
+  **prematurely terminated** the template literal, causing a `SyntaxError`
+  that crashed the entire `chess.html` bundle at parse time. Symptom: app
+  launches to a blank screen showing only the background color. Fix: removed
+  the backticks from the comment text. The actual code change from Rev55
+  (`parts.length<4` → `parts.length<2`) is correct and unchanged. Verified
+  with `node --check` on the bundled JS (exit code 0).
+- **Round-6 Revision 58** — Two improvements per user spec:
+  1. **Review-board arrow offset redesign** (ui.js) — Redesigned the arrow
+     offset logic so: (a) each color's start offset = end offset (same bias
+     direction, arrow direction preserved); (b) reverse-overlap (A→B and
+     B→A) only happens for same-color arrows (they land on the exact same
+     line; different-color reverse arrows are parallel but never collinear);
+     (c) different-color arrows never overlap on the same line (guaranteed
+     by four distinct diagonal biases: B→UL, Y→LL, R→UR, G→LR). Removed the
+     Rev49 perpendicular "fan" offset that broke same-color reverse-arrow
+     overlap. Added arrow deduplication by (color, from, to).
+  2. **Magnetic-field-aware sensor switching** (StabilizationHelper.java) —
+     On start, uses `TYPE_ROTATION_VECTOR` (accurate baseline via
+     magnetometer). Background-monitors `TYPE_MAGNETIC_FIELD`; when magnetic
+     disturbance detected (|B| deviation > 15 µT from rolling baseline),
+     switches to `TYPE_GAME_ROTATION_VECTOR` (no magnetometer, immune to
+     interference). When field calms (< 8 µT for 2 seconds), switches back
+     to `TYPE_ROTATION_VECTOR`. Hysteresis prevents oscillation. Both sensors
+     registered simultaneously (no re-registration gap).
+
+- **Round-6 Revision 59** — CRITICAL FIX for rotation-axis bug
+  in landscape orientations. The board's tilt-compensation rotation was
+  controlled by the WRONG axis — it responded to screen pitch (front-back nod)
+  instead of screen roll (steering-wheel tilt). Root cause:
+  `SensorManager.getOrientation()` was called on the raw device-frame rotation
+  matrix, which returns angles in the DEVICE's natural coordinate system, not
+  the screen's. In landscape (ROTATION_90/270), device pitch and roll are
+  swapped relative to the screen. Fix: Added
+  `SensorManager.remapCoordinateSystem()` to transform the rotation matrix
+  from device frame to screen frame BEFORE calling `getOrientation()`. After
+  remapping, `orientationAngles[2]` is ALWAYS screen-roll (steering-wheel)
+  regardless of display rotation. Simplified `dispatchTransform()` rotation
+  to `-(smoothRoll - baselineRoll)` for ALL 4 orientations. Verified correct
+  for 0°/90°/180°/270°. Also verified the Rev58 arrow offset logic already
+  satisfies the user's requirements (same color = same bias for start+end;
+  different colors = different biases).
+
+- **Round-6 Revision 70** (current, 2026.6.27 net-control algorithm consistency fix) —
+  Per user spec: the [%csl] blue/red net-control algorithm must match the
+  "Square Control" info panel's net control. One fix:
+  1. **Net-control consistency** (ui.js, BUG FIX) — blue/red candidates changed
+     from one-sided dominance (`pAtk>0 && aAtk===0` / `aAtk>0 && pAtk===0`) to
+     netCtrl-based (`netCtrl>0` / `netCtrl<0`), where `netCtrl = pAtk - aAtk`.
+     This matches the info panel's `myCtrl - opCtrl`. A square with 3 white +
+     1 black (netCtrl=+2) now correctly marks blue; previously it didn't (AI
+     had an attacker, failing the one-sided condition). Score ranks by
+     `|netCtrl|`. Both `_computeAndCacheVisualAnnotations()` and
+     `_computeInitialPositionAnnotations()` updated. Spec comment items 3-4
+     updated.
+
+- **Round-6 Revision 69** (2026.6.27 multi-color per square + heatmap text deletion) —
+  Per user spec: allow multi-color highlights on the same square; delete the
+  heatmap conditional-display text from manuals/code. Two changes:
+  1. **Multi-color per square** (ui.js, FEATURE) — `_rvCslMap` changed from
+     `{square: {color}}` (single-color overwrite) to `{square: [colors]}`
+     (array preserving all colors). Render code iterates colors: B/R/G accumulate
+     into comma-separated box-shadow inset; Y emits yellow rounded-rect overlay.
+     A square can now show both blue box-shadow AND yellow rounded-rect.
+  2. **Heatmap text deletion** (manuals + stats.html, DOC) — deleted
+     "不含热力图控制统计数据的 PGN → 不显示热力图控制统计区块" / English
+     equivalent from v1.0.5 + v1.0.4 manuals (zh+en) and stats.html code comment.
+
+- **Round-6 Revision 68** (2026.6.27 review yellow rounded-rect position fix) —
+  Per user report: review-board yellow [%csl] rounded-rect overlay mispositioned.
+  One fix + documentation audit:
+  1. **Yellow rounded-rect position fix** (ui.js, CRITICAL BUG) — the yellow
+     overlay div was emitted AFTER the cell div's `</div>` instead of before,
+     so `position:absolute` anchored to `.bgrid` (via `transform:translateZ(0)`)
+     instead of the cell (`position:relative`). All yellow overlays stacked at
+     the board origin. Fixed by moving the overlay emission to before the cell's
+     `</div>` so it becomes a child of the cell div. Parameters unchanged.
+  2. **README/LICENSE/NOTICE audit** — checked all 14 matching files; added
+     Rev68 entries to chess.src/README.license, java/README.license,
+     Manual/README.license, NOTICE, README.md; added Rev54-68 summary entries
+     to src/main/README.license, src/main/assets/README.license,
+     src/main/res/README.license, src/main/cpp/README.license (were stalled at
+     Rev53). LICENSE-* and NOTICE-* original texts need no update.
+
+- **Round-6 Revision 67** (2026.6.27 landscape translation direction fix) —
+  Per user request: rigorously verify translation anti-shake direction via first
+  principles. Found ROTATION_90/270 boardPxX sign inverted (landscape horizontal
+  shake amplified instead of cancelled). One fix:
+  1. **Landscape boardPxX sign fix** (StabilizationHelper.java, CRITICAL BUG) —
+     ROTATION_90: `boardPxX = -dispY` → `+dispY`; ROTATION_270:
+     `boardPxX = +dispY` → `-dispY`. ROTATION_0/180 already correct. Derived
+     per-orientation from first principles: device-natural Dx/Dy → world-axis
+     mapping, then OIS (device world-right → board screen-left CSS -x; device
+     world-up → board screen-down CSS +y). Comment rewritten as derivation
+     table. Impact: landscape anti-shake horizontal direction now correct;
+     portrait unaffected.
+
+- **Round-6 Revision 66** (2026.6.27 yellow overlap + comment cleanup) —
+  Per user spec: allow yellow squares to overlap with blue/red; comprehensively
+  delete outdated/redundant comments. Two changes:
+  1. **Yellow overlap allowed** (ui.js, FEATURE) — Rev65 EXCLUDED blue/red
+     squares from yellow contention. Rev66 removes that exclusion — yellow now
+     simply takes the top 3 by total attacker count, regardless of whether
+     they're also blue or red. Rendering layer (box-shadow inset + yellow
+     rounded-rect overlay) already supports multi-color highlights. Both
+     `_computeAndCacheVisualAnnotations()` and
+     `_computeInitialPositionAnnotations()` updated. Spec comment item 5 updated.
+  2. **Comment cleanup** (10 files, REDUNDANCY) — audited and cleaned ~120
+     lines of stale comments: StabilizationHelper.java Rev64 tombstones +
+     Rev61 Y-axis fix; MainActivity.java wrong public-contract; ui.js
+     arrow-rendering Rev49/54/58 narrative + Rev65/66 yellow explanations +
+     Rev62 resign-sound + Rev63 arrow markers; index.html.tpl CSS multi-rev;
+     worker-pool.js Rev57 backtick; chess960.js Rev62 array-swap + Rev55 meta;
+     pgn-standard.js Rev62 lineLen; ai-bridge.js Rev62 _importedStartColor +
+     mate:0/null + depth>0. Principle: retained license headers, current-
+     behavior docs, algorithm explanations, i18n, pitfall warnings; deleted
+     tombstones describing deleted code / fixed bugs / multi-rev narratives.
+
+- **Round-6 Revision 65** (2026.6.27 yellow-square logic fix) —
+  Per user spec: yellow squares (non-arrow) should be the squares with the
+  highest total control count (total attackers, regardless of piece color).
+  One change:
+  1. **Yellow-square logic fix** (ui.js, BUG FIX) — Rev61's condition
+     `pAtk>0 && aAtk>0` (both sides must have attackers) was too strict,
+     excluding high-total one-sided squares. Rev65 changes it to `total>=2`
+     (all squares with 2+ total attackers are candidates), then excludes
+     squares already chosen as blue/red (one-sided dominance), and picks the
+     top 3 by total. This correctly implements "黄色格子=双方总控制数量最多的
+     那几个格子". Both `_computeAndCacheVisualAnnotations()` and
+     `_computeInitialPositionAnnotations()` updated. Spec comment item 5 updated.
+
+- **Round-6 Revision 64** (2026.6.27 remove rotation + undo cache sync) —
+  Per user spec: remove the rotation part of anti-shake (keep only translation),
+  delete all rotation code/comments; and after undo, revert the corresponding
+  content in the background real-time cached PGN. Two changes:
+  1. **Anti-shake rotation removed** (StabilizationHelper.java + index.html.tpl,
+     FEATURE) — `StabilizationHelper.java` completely refactored. Deleted
+     sensors: `TYPE_ROTATION_VECTOR`, `TYPE_GAME_ROTATION_VECTOR`,
+     `TYPE_MAGNETIC_FIELD` (only `TYPE_LINEAR_ACCELERATION` retained). Deleted
+     methods: `processRotationVector()`, `processMagneticField()`. Deleted all
+     rotation state fields, constants, scratch arrays. CSS `.bwrap.stabilized`
+     `transform` changed from `translate3d(...) rotate(var(--stab-rot,0deg))` to
+     `translate3d(var(--stab-x,0px),var(--stab-y,0px),0)` only. `applyTransform()`
+     no longer sets `--stab-rot`; added `removeProperty('--stab-rot')` to clear
+     residual values. File slimmed from 720 → 337 lines (53% reduction).
+     Benefits: 4 sensors → 1 sensor, lower battery, eliminates the entire class
+     of rotation-direction bugs from Rev59-63.
+  2. **Undo reverts cached PGN content** (ui.js, BUG FIX) — `undoMove()` now
+     calls new `_invalidateCachesForUndoneMoves(currentMoveCount)` after
+     restoring `moveRecords`. Clears three caches: `_reviewEvalCache` (key >
+     currentMoveCount), `_visualAnnotationsCache` (key >= currentMoveCount,
+     '_initial' sentinel kept), `_cachedOriginalPGN` (set to null). This
+     ensures stale eval/annotation data for undone moves doesn't leak into
+     re-played moves, review mode, or PGN export. `_redoStack` is NOT cleared
+     (undo must remain reversible).
+
+- **Round-6 Revision 63** (2026.6.27 anti-shake + arrow optimization) —
+  Per user spec: limit anti-shake rotation to ±10°, optimize arrow
+  positioning and redesign arrow shape. Three changes:
+  1. **Anti-shake rotation limit ±10°** (StabilizationHelper.java, FEATURE) —
+     `MAX_ROTATION_DEG` reduced from ±30° (Rev61) to ±10°. First-principles:
+     sensor floor ~1°, human perception ~0.5-1°, handheld tilt rarely >8°,
+     1:1 mapping preserved in 1°-10° range. Dead zone 1.0° unchanged.
+  2. **Arrow offset optimization** (ui.js, FEATURE) — offset magnitude changed
+     from `Math.min(3, cellSize*0.08)` (3px cap + 8%) to `cellSize*0.12` (12%
+     no cap). Scales proportionally with cell size so offset fraction is
+     constant across screens. Verified safe for cellSize 20-60px (max radial
+     offset = cellSize/2 - 2.75, we use 12% which is well within bound).
+     Cell-center formula `col*cellSize + cellSize/2` confirmed exact for all
+     cell sizes.
+  3. **Arrow shape redesign** (ui.js, VISUAL) — minimal arrow: thin 1.5px
+     line (was 2px) + compact 4×3 triangular arrowhead (was 5×4) + butt
+     linecap + no origin dot. Line shorten 9→4px (matches new arrowhead).
+     stroke-opacity 0.95→0.9 (pieces underneath remain readable). The minimal
+     representation that still communicates origin, target, direction, type.
+
+- **Round-6 Revision 62** (2026.6.27 second-pass audit) — Second-pass
+  first-principles code audit. One critical bug fix + 5 bug fixes + 3 perf
+  improvements + redundancy cleanup:
+  1. **Chess960 SP-ID bishop-color array swap fix** (chess960.js, CRITICAL BUG)
+     — `_CH960_LIGHT_BISHOP_FILES` and `_CH960_DARK_BISHOP_FILES` were swapped.
+     a1/c1/e1/g1 are DARK squares (not light), b1/d1/f1/h1 are LIGHT (not dark).
+     This broke 720/960 SP-IDs; SP-ID 518 produced "RNQBBKNR" instead of
+     "RNBQKBNR". After fix, all 960 SP-IDs pass round-trip test. The parity
+     checks in `backRankToSPID()` were fixed in sync.
+  2. **Tablebase 404 misidentified as server-down** (tablebase.js, BUG) — 404
+     means "position not in tablebase", not "server down". 3 × 404 falsely set
+     `_tbOffline=true` for 60s. Now only 5xx + network errors count.
+  3. **PGN move-number regex missing 'O'** (worker-pool.js + tablebase.js, BUG)
+     — `(?=[a-hKQRBN])` didn't match 'O', so "1 O-O" wasn't normalized to
+     "1. O-O" and "1" was mis-tokenized. Fixed to `[a-hKQRBNO]`.
+  4. **Resign sound never played** (ui.js, BUG) — `_resignGame()` called
+     undefined `_playSound('lose')`. Now calls `playSound('gameover')`.
+  5. **mate:0 vs mate:null distinction lost** (ai-bridge.js, BUG) — `c.mate||0`
+     lost the checkmate-now distinction. Fixed to `c.mate!=null?c.mate:0`.
+  6. **worker-pool Map delete-during-iteration** (worker-pool.js, BUG) —
+     `for...of` + `.delete()` risked skipping entries on some engines. Fixed
+     to snapshot keys via `Array.from()` first.
+  7. **ECO recommendation LRU no-refresh-on-hit** (game-logic.js, PERF) — cache
+     hit returned without delete+re-insert, so hot entries could be evicted
+     before cold ones. Fixed to refresh LRU on hit (matching `_tbCache` pattern).
+  8. **MultiPV display wasted work during AI thinking** (ai-bridge.js, PERF) —
+     computed hintParts/signatures/cache checks 10-50×/sec during AI thinking
+     but discarded the result. Early-exit when `!isHintLoading`.
+  9. **Eval chart label loop LRU churn** (ui.js, PERF) — used `get()` (refreshes
+     LRU) instead of `peek()` in a read-only iteration. Fixed to `peek()`.
+  10. **Redundancy cleanup** — removed dead `_importedStartColor` ternary
+      (variable never declared, guard always true); removed dead `let lineLen=0`
+      in composePGN; simplified redundant `depth>0` check; simplified two
+      unreachable ternary branches.
+  11. **chess960.js comment correction** — `randomSPID()` comment claimed
+      "P(>8 retries) ≈ 0.4%"; actual is (256/65536)^8 ≈ 1.3e-19. Code correct,
+      comment fixed.
+  12. **Known Chess960 castling detection limitation** (DOCUMENTED, NOT FIXED)
+      — `Math.abs(to.col-from.col)===2` only detects castling when king starts
+      on col 4. In Chess960 (king can start on cols 1-6), ~78.8% of positions
+      have broken castling detection. HIGH risk to fix (4 coordinated locations
+      + Zobrist hash); deferred to a dedicated task. Standard chess unaffected.
+
+- **Round-6 Revision 61** (2026.6.27) — Per the 2026.6.27
+  development plan. Two critical bug fixes + one feature refinement +
+  four additional bug fixes from a first-principles code audit:
+  1. **Board anti-shake Y-axis direction reversal fix** (StabilizationHelper.java,
+     CRITICAL BUG) — all 4 screen-orientation cases (ROTATION_0/90/180/270)
+     in `dispatchTransform()` had the WRONG sign on `boardPxY`. OIS requires
+     that when the device moves UP, the board moves DOWN (CSS +Y) to
+     compensate; the original code moved the board UP — amplifying the shake.
+     User report: "屏幕突然向上移动，棋盘不但不向下位移来抵消，反而也向上".
+     X-axis signs were already correct.
+  2. **Board rotation sensitivity adjustment** (StabilizationHelper.java,
+     FEATURE COMPLETION) — `ROTATION_DEADZONE_DEG` 0.3° → 1.0° (filter
+     sensor noise + sub-degree hand tremor); `MAX_ROTATION_DEG` 45° → 30°
+     (covers normal handheld tilt, avoids visual abruptness). 1:1 ratio
+     (|board rotation| = |screen roll delta|) strictly preserved within
+     1°–30° range. User report: "棋盘旋转角度过于敏感，屏幕小幅度转动，
+     棋盘就大幅度转动".
+  3. **Review-board yellow-square logic fix** (ui.js, CRITICAL BUG) —
+     yellow-square selection changed from `total>=2` to `pAtk>0 && aAtk>0`
+     (both sides must have attackers). Previously, single-side-dominated
+     squares (e.g. 5 white + 0 black = total 5) were misclassified as
+     yellow — they should be BLUE. User spec: "黄色格=双方总控制高格(当前
+     未正确实现)".
+  4. **Arrow stroke-linecap changed to butt** (ui.js, VISUAL REFINEMENT) —
+     changed from "round" to "butt" in review-board SVG arrows. The round
+     linecap created a small semi-circle at the arrow's start that read as
+     an "extra dot" — contradicting user spec "箭头末端没有多余的圆点".
+  5. **Engine extraction progress percentage fix** (StockfishNative.java,
+     BUG FIX) — `total / 114115752L * 13` truncated to 0 for total < 114 MB
+     (Java left-to-right evaluation). Fixed to `total * 13L / 114115752L`.
+  6. **stats.html unclosed-brace infinite-loop fix** (stats.html, CRITICAL
+     BUG) — `while(moveText.includes('{'))...` would ANR on malformed PGN
+     with unclosed `{`. Capped to 10 iterations.
+  7. **StatsActivity stream leak fix** (StatsActivity.java, BUG FIX) —
+     `loadAssetAsBase64()` switched to try-with-resources to guarantee
+     InputStream closure on exception paths.
+
+- **Round-6 Revision 60** — Three changes per user spec:
+  1. **Arrow origin dot removed** (ui.js) — removed the small filled circle
+     at each arrow's origin in the review-board SVG. The arrowhead suffices.
+  2. **Arrow offset calibrated** (ui.js) — reduced per-color diagonal offset
+     from 14%/6px-max to 8%/3px-max to prevent arrows from exceeding cell
+     boundaries on small screens.
+  3. **Rotation limit expanded** (StabilizationHelper.java) — increased
+     from ±2° to ±45°. The board can now counter-rotate
+     up to 45° to compensate for large device tilt.
+     (Note: Rev61 later reduced this back to ±30° — see Rev61 entry above.)
+
+**v1.0.4** (versionCode 104) — previous major release
 
 The v1.0.4 release adds:
 
@@ -809,3 +1216,51 @@ See `NOTICE` (VERSION HISTORY SUMMARY → v1.0.4) and the per-module
     game-over didn't update the text. Fix: added `'timeout'` branch to
     `_gameOverStrFromStatus()` with new `_timeoutWinnerColor` variable and
     new i18n key `timeout_win_suffix`. Now re-localizes correctly.
+- **Round-5 Revision 48** (current) — PGN comment completeness + Blue/Yellow
+  arrows + review board visual annotations + stats conditional display:
+  • **PGN comment/visual-annotation completeness fix**: First-principles
+    review revealed that `_parsePGN` in `tablebase.js` STRIPPED all brace
+    comments during parsing — only `[%eval ...]` tags were extracted
+    beforehand. This meant `[%csl ...]` (square highlights), `[%cal ...]`
+    (arrows), AND free-text comments from imported PGNs were LOST. The user
+    requirement "all valid () variations and {} comments must be fully
+    received" was not met. Fix: added a pre-strip extraction pass that
+    walks the movetext character-by-character (tracking paren depth for
+    variation-internal comments), extracts `[%csl]`/`[%cal]` tags AND
+    free-text comment bodies, and attaches them to the next main-line
+    move. `importPGN()` now populates `_visualAnnotationsCache` and
+    `mr.comment` from the extracted data. `_buildPGNString()` now includes
+    `mr.comment` in the comment parts (with literal `{`/`}` escaped to
+    Unicode full-width braces to avoid premature comment termination).
+    PGN round-trip is now lossless for comments and visual annotations.
+  • **NEW: Blue and Yellow arrows in visual annotations**: Per user spec
+    (备忘1.md), added two new arrow colors:
+    - Blue arrow = one side's piece simultaneously threatens multiple
+      (>1) enemy pieces (arrows from threatening piece to each
+      threatened piece)
+    - Yellow arrow = one side's threat to the other side's queen
+      (arrow from threatening piece to queen's square)
+    `_computeAndCacheVisualAnnotations()` in `ui.js` now computes these
+    from the post-move control map. Caps: top 3 attackers by threat
+    count (blue), top 3 attackers by piece value (yellow), max 4 blue
+    arrows per attacker.
+  • **Stats page visual annotations section enhancement**: The visual
+    annotations section in `stats.html` now displays all 4 arrow colors
+    (Blue, Red, Yellow, Green) in the SAME left-to-right order as the 4
+    square colors — so same colors align VERTICALLY (per user spec).
+    New i18n keys: `blue_arrows_threats`, `yellow_arrows_queen` (zh+en).
+    Updated `visual_annotations_desc` to mention all 4 arrow types.
+  • **Stats page conditional display**: Per user spec, the visual
+    annotations section is now ONLY shown if the PGN actually contains
+    `[%csl]` or `[%cal]` tags. Similarly, the heatmap control statistics
+    section heading is now inside the `_posCount>0` check.
+  • **Review board visual annotations overlay**: Per user spec (备忘1.md),
+    when the control heatmap is OFF in review mode, the review board now
+    displays `[%csl]`/`[%cal]` annotations:
+    - Square highlights via CSS box-shadow inset (3px, matching last-move
+      hint width). Colors: B=#4a90d9, R=#e74c3c, Y=#f1c40f, G=#27ae60.
+    - Arrows drawn in an SVG overlay layer (same style as the main board's
+      `_updateArrows()`: 4px stroke, round linecap, 0.85 opacity,
+      triangular arrowhead marker per color).
+    The `.review-board` CSS rule now has `position:relative` so the SVG
+    overlay's `position:absolute` anchors correctly.

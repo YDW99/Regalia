@@ -558,3 +558,65 @@ v1.0.4 Round-5 Rev47 changes:
   - chess.src/ai-bridge.js (GPL v3): _timeoutWinnerColor variable + PGN result.
   - chess.src/game-logic.js (GPL v3): New i18n key timeout_win_suffix.
   - chess.html: rebuilt from chess.src/ changes.
+
+v1.0.4 Round-5 Rev48 changes:
+  - chess.src/tablebase.js (GPL v3): PGN comment/visual-annotation completeness
+    fix — _parsePGN() now extracts [%csl]/[%cal] AND free-text comments before
+    stripping; importPGN() populates _visualAnnotationsCache + mr.comment.
+  - chess.src/ai-bridge.js (GPL v3): _buildPGNString() includes mr.comment.
+  - chess.src/ui.js (GPL v3): Blue/Yellow arrows in _computeAndCacheVisualAnnotations;
+    review board [%csl]/[%cal] overlay when heatmap is OFF.
+  - chess.src/pgn-standard.js (AGPL v3): Updated color code documentation.
+  - chess.src/index.html.tpl (AGPL v3): .review-board position:relative.
+  - stats.html (AGPL v3): 4-color arrow display (B/R/Y/G order), conditional
+    section display, new i18n keys blue_arrows_threats + yellow_arrows_queen.
+  - chess.html: rebuilt from chess.src/ changes.
+
+v1.0.5 Round-6 Rev49 changes:
+  - chess.src/index.html.tpl (AGPL v3): High aspect-ratio adaptation + anti-shake CSS.
+  - chess.src/ui.js (GPL v3): Long-press toggle + review arrow shrink.
+  - chess.src/game-logic.js (GPL v3): loading_title → v1.0.5.
+  - stats.html (AGPL v3): "PGN Text" → "PGN Text (After processing)"; phase
+    analysis rewritten with multi-criteria detection; new i18n keys
+    opening_to_midgame, midgame_to_endgame; time-phase-dist uses _detectPhase.
+  - chess.html: rebuilt from chess.src/ changes.
+
+v1.0.5 Round-6 Rev50 changes:
+  - chess.src/ui.js (GPL v3): Version strings v1.0.4→v1.0.5 (3 places).
+  - chess.src/tablebase.js (GPL v3): PGN comment attachment fix.
+  - chess.html: rebuilt.
+
+v1.0.5 Round-6 Rev51: no changes to assets/ files. All Rev51 changes are in
+res/values/strings.xml (app_name) and StabilizationHelper.java.
+
+v1.0.5 Round-6 Rev52 changes:
+  - chess.src/ui.js (GPL v3): visual annotations null-reference fix.
+  - chess.html: rebuilt.
+
+v1.0.5 Round-6 Rev53 changes:
+  - chess.src/index.html.tpl (AGPL v3): .bwrap.stabilized rotate transform.
+  - chess.src/ui.js (GPL v3): bidirectional yellow/blue arrows + initial position annotations.
+  - chess.html: rebuilt.
+
+v1.0.5 Round-6 Rev54 through Rev68 changes (reflected in chess.html rebuilds):
+  - Rev54-60: see chess.src/README.license for per-module details (arrow design,
+    sensor switching, rotation-axis fix, rotation limit, arrow shrink).
+  - Rev61: ui.js yellow-square logic (pAtk>0&&aAtk>0), arrow stroke-linecap butt,
+    anti-shake Y-axis direction fix (StabilizationHelper.java), engine progress %,
+    stats.html ANR fix, StatsActivity stream leak.
+  - Rev62: chess960.js SP-ID array swap, game-logic.js ECO LRU, tablebase.js 404
+    + PGN regex, worker-pool.js Map iteration + PGN regex, pgn-standard.js dead
+    var, ai-bridge.js mate:null + dead code + MultiPV early-exit, ui.js resign
+    sound + eval chart peek.
+  - Rev63: ui.js arrow offset 12% + arrow shape redesign (4×3 head, 1.5px stroke).
+    index.html.tpl CSS transform translation-only.
+  - Rev64: index.html.tpl CSS rotation removed. ui.js undoMove cache invalidation.
+    StabilizationHelper.java rotation removed (translation only).
+  - Rev65: ui.js yellow-square logic fix (total>=2 with blue/red exclusion).
+  - Rev66: ui.js yellow overlap allowed (exclusion removed) + comment cleanup.
+    index.html.tpl CSS comment simplified.
+  - Rev67: no changes to assets/ (StabilizationHelper.java landscape fix).
+  - Rev68: ui.js yellow rounded-rect overlay position fix (moved inside cell div).
+  - chess.html rebuilt after each revision.
+  - stats.html unchanged from Rev62 baseline.
+  - AGPLv3_Logo.svg, GPLv3_Logo.svg unchanged.

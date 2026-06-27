@@ -1,4 +1,4 @@
-# Building Regalia v1.0.4 from source
+# Building Regalia v1.0.5 from source
 
 <!-- AI-GEN: AI assisted
      This document was AI-assisted and has been reviewed for AGPL v3 compliance. -->
@@ -36,7 +36,21 @@ The signed APK (v1+v2+v3 signed with `../debug.keystore`) will be at
 - The APK is signed with a debug keystore by default. For production,
   replace `signingConfigs.release` in `build.gradle` with your own keystore.
 
-## v1.0.4 build notes
+## v1.0.5 build notes
+- All v1.0.4 build notes still apply (chess960.js, pgn-standard.js, worker-pool.js
+  are bundled before ai-bridge.js).
+- The Stockfish 18 `arm64-v8a-dotprod` binary is the official sf_18 release
+  (NDK r27c build, 114 MB, NEON+dotprod acceleration).
+- v1.0.5 Round-6 Rev61 (2026.6.27): The `chess.src/` modules are merged by
+  `build-chess.sh` into `chess.html`. If you modify any file in `chess.src/`,
+  re-run `bash build-chess.sh` before `./gradlew assembleRelease` to ensure
+  the latest JS is bundled into the APK.
+- The APK is signed with a debug keystore by default. For production,
+  replace `signingConfigs.release` in `build.gradle` with your own keystore.
+  The default debug keystore produces a fully valid v1+v2+v3 signed APK
+  that installs on Xiaomi HyperOS 3 (Android 15).
+
+## v1.0.4 build notes (historical)
 - New modules `chess960.js`, `pgn-standard.js`, and `worker-pool.js` are
   bundled before `ai-bridge.js` so their functions (e.g. `composePGN`,
   `sevenTagRoster`, `toShredderCastling`, `initChess960State`,

@@ -110,3 +110,21 @@ in the JS layer (chess.src/ui.js, chess.src/game-logic.js, chess.src/ai-bridge.j
 
 v1.0.4 Round-5 Rev47: no changes to cpp/ sources. All Rev47 changes are
 in the JS layer.
+
+v1.0.4 Round-5 Rev48: no changes to cpp/ sources. All Rev48 changes are
+in the JS/HTML layer (chess.src/ + stats.html).
+
+v1.0.5 Round-6 Rev49: no changes to cpp/ sources. All Rev49 changes are in
+the Java layer (MainActivity, StockfishNative, new StabilizationHelper) and
+the JS/HTML layer (chess.src/, stats.html).
+
+v1.0.5 Round-6 Rev50: no changes to cpp/ sources.
+
+v1.0.5 Round-6 Rev51: no changes to cpp/ sources.
+
+v1.0.5 Round-6 Rev52: no changes to cpp/ sources.
+
+v1.0.5 Round-6 Rev53: no changes to cpp/ sources.
+
+v1.0.5 Round-6 Rev54 through Rev68: no changes to cpp/ sources (engine_jni.cpp,
+CMakeLists.txt unchanged from Rev53 baseline).

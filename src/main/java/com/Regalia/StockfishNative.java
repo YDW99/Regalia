@@ -118,8 +118,8 @@ public class StockfishNative {
 
     // v18.4.0: ELO_MAP synced with JS ELO_MATCH for consistent level display
     private static final int[] ELO_MAP = {0, 800, 1350, 1700, 2000, 2200, 2350, 2800};
-    // v1.0.4: Synced with the application version (was stale at v1.0.2).
-    private static final String ENGINE_VERSION = "v1.0.4";
+    // v1.0.5: Synced with the application version (was stale at v1.0.2).
+    private static final String ENGINE_VERSION = "v1.0.5";
     // Movetime mapping: index 0 unused, 1-7 = game levels
     private static final int[] MOVETIME_MAP = {0, 500, 800, 1000, 1500, 2000, 3000, 5000};
 
@@ -466,6 +466,19 @@ public class StockfishNative {
 
     /**
      * v18.5.0: Go with a specific depth instead of movetime.
+     *
+     * v1.0.5 Rev55 FIX: This method is used by the JS layer for "deep eval"
+     * (requestEngineEvalDeep / analyze-all). It enters STATE_EVAL — the same
+     * state as engineEval — but was MISSING the applyEvalModeOptions() call
+     * that engineEval has. Without it, a deep eval search ran with the
+     * gameplay Contempt (default 24, biases scores by avoiding draws) and
+     * the user's MultiPV setting (which may be >1, reducing depth). The
+     * analysis was therefore BIASED and SHALLOWER than intended.
+     *
+     * Fix: call applyEvalModeOptions() before position+go (sets Contempt=0,
+     * MultiPV=1, UCI_ShowWDL=true), matching engineEval. The bestmove
+     * handler's STATE_EVAL branch already calls restoreGameplayOptions()
+     * which restores the user's settings for the next gameplay search.
      */
     @JavascriptInterface
     public void engineGoDepth(final String fen, final int depth) {
@@ -487,6 +500,10 @@ public class StockfishNative {
                 _storedWdlW = -1; _storedWdlD = -1; _storedWdlL = -1;
                 _evalDepthLimit = depth;
                 forceFullStrength();
+                // v1.0.5 Rev55: Apply eval-mode options for objective analysis.
+                // Without this, deep eval used gameplay Contempt=24 (biased)
+                // and the user's MultiPV (possibly >1, reducing depth).
+                applyEvalModeOptions();
                 sendUciCommand("position fen " + fen);
                 sendUciCommand("go depth " + depth);
             }
@@ -4063,7 +4080,14 @@ public class StockfishNative {
                 total += len;
                 if (total - lastProgress > 10485760) {
                     lastProgress = total;
-                    int pct = 12 + (int) (total / 114115752L * 13);
+                    // v1.0.5 Round-6 Rev61 (2026.6.27): FIX integer-division truncation.
+                    // Original `total / 114115752L * 13` evaluated left-to-right:
+                    //   total / 114115752L  → 0 for any total < 114 MB (integer truncation)
+                    //   0 * 13              → 0
+                    // So progress stayed at 12% until extraction completed, then jumped
+                    // to 25%. Reordered to `total * 13L / 114115752L` so the multiply
+                    // happens first (no precision loss for total < 8.8 GB).
+                    int pct = 12 + (int) (total * 13L / 114115752L);
                     postJsCallback("onInitProgress(" + pct + ", " + escapeJsString((isEnglishMode() ? "Extracting engine... " : "\u6b63\u5728\u63d0\u53d6\u5f15\u64ce... ") + (total / 1048576) + "MB") + ")");
                 }
             }
@@ -4863,6 +4887,26 @@ public class StockfishNative {
         } catch (Throwable e) {
             Log.e(TAG, "openPGNFilePicker failed", e);
             postJsCallback("if(typeof showToast==='function')showToast('File picker unavailable')");
+        }
+    }
+
+    /**
+     * v1.0.5 Round-6 Rev49 NEW: Toggle the board anti-shake stabilization on/off.
+     * Called from the JS long-press handler on any board square.
+     * Delegates to MainActivity.toggleStabilization() which handles sensor
+     * registration and Toast notification (zh/en).
+     */
+    @JavascriptInterface
+    public void toggleStabilization() {
+        try {
+            Activity activity = activityRef.get();
+            if (activity instanceof MainActivity) {
+                ((MainActivity) activity).toggleStabilization();
+            } else {
+                Log.w(TAG, "toggleStabilization: no MainActivity reference");
+            }
+        } catch (Throwable e) {
+            Log.e(TAG, "toggleStabilization failed", e);
         }
     }
 
