@@ -15,7 +15,7 @@ A standalone, open-source chess app for Android — play offline against Stockfi
 
 *Portrait mode — evaluation bar, move history, AI opponent display with ponder info, and Control heatmap*
 
-**Control Heatmap** — Tap the 🌗/🌈 button on the toolbar to toggle the control heatmap. Each square is dynamically colored by HSL to indicate which side controls it: blue-purple = your control, red = opponent's control, purple = contested. Hovering a square shows SVG arrows from each controlling piece to that square (warm gold for your pieces, cool silver-blue for opponent's). The info card below the board shows per-piece control contributions with position labels.
+**Control Heatmap** — Tap the 🌈 button on the toolbar to toggle the control heatmap. Each square is dynamically colored by HSL to indicate which side controls it: blue-purple = your control, red = opponent's control, purple = contested. Hovering a square shows SVG arrows from each controlling piece to that square (warm gold for your pieces, cool silver-blue for opponent's). The info card below the board shows per-piece control contributions with position labels.
 
 **🌿Line** — In the move record, 🌿 lines appear below each move showing engine analysis variations (MultiPV) and PGN import variations (RAV). Each variation is labeled 🌿Line 1, 🌿Line 2, etc., assigned sequentially by display order. PGN import variations are automatically parsed and displayed as 🌿Lines with proper move numbering. Toggle the Variations switch to show or hide them.
 
@@ -87,15 +87,15 @@ Regalia/
 ├── src/main/
 │   ├── assets/
 │   │   ├── chess.src/          # Source files (JS + CSS + HTML template)
-│   │   │   ├── game-logic.js   # Chess rules, move generation, i18n
+│   │   │   ├── game-logic.js   # Chess rules, move generation, i18n, castling detection
 │   │   │   ├── chess960.js     # Chess960 SP-ID, Shredder-FEN, 960 castling rules (v1.0.4 NEW)
 │   │   │   ├── pgn-standard.js # Standardized PGN encoder/decoder, NAG, [%csl]/[%cal], TimeControl (v1.0.4 NEW)
 │   │   │   ├── worker-pool.js  # Web Worker pool for PGN/stats/control-map offloading (v1.0.4 NEW)
-│   │   │   ├── ai-bridge.js    # Engine communication, eval display, PGN export
-│   │   │   ├── ui.js           # Rendering, dialogs, interaction, review mode, time-control UI
+│   │   │   ├── ai-bridge.js    # Engine communication, eval display, PGN export, FEN sanitization
+│   │   │   ├── ui.js           # Rendering, dialogs, interaction, review mode, castling gesture
 │   │   │   ├── eco-data.js     # ECO opening classification data
 │   │   │   ├── tablebase.js    # Lichess Syzygy tablebase queries + PGN import
-│   │   │   ├── index.html.tpl  # CSS template
+│   │   │   ├── index.html.tpl  # CSS template (portrait dialog CSS, castle-ring animation)
 │   │   │   └── build-chess.sh  # Build script → chess.html
 │   │   ├── chess.html          # Built output (combined JS+CSS+HTML)
 │   │   ├── stats.html          # Statistics page (📊统计) — fullscreen WebView
@@ -105,10 +105,12 @@ Regalia/
 │   │   ├── MainActivity.java   # WebView host, immersive mode, lifecycle
 │   │   ├── StockfishNative.java # Engine process management, UCI protocol, SAF file I/O
 │   │   │                       # v1.0.4: setChess960Mode() / isChess960Mode() bridge methods
+│   │   │                       # v1.0.6: getEngineSkillLevel() bridge method for SL mode display
 │   │   ├── StatsActivity.java  # Fullscreen WebView for 📊统计 statistics page
 │   │   ├── ChessWebViewClient.java # Page load handler
 │   │   ├── EngineService.java  # Foreground service for engine stability
 │   │   ├── ChessApp.java       # Application class, crash protection
+│   │   ├── StabilizationHelper.java # Sensor-fusion board anti-shake (v1.0.5 NEW)
 │   │   ├── TlsSecurityHelper.java # TLS 1.2+ enforcement for tablebase API
 │   │   └── RootDetector.java   # Informational root detection (About dialog)
 │   ├── cpp/
@@ -117,6 +119,14 @@ Regalia/
 │   ├── res/
 │   │   └── values/strings.xml
 │   └── AndroidManifest.xml
+├── Manual/                     # User manuals (HTML, self-contained)
+│   ├── Regalia-v1.0.6-manual-zh.html  # Chinese user manual (current)
+│   ├── Regalia-v1.0.6-manual-en.html  # English user manual (current)
+│   ├── Regalia-v1.0.5-manual-zh.html  # Chinese user manual (v1.0.5, historical)
+│   ├── Regalia-v1.0.5-manual-en.html  # English user manual (v1.0.5, historical)
+│   ├── Regalia-v1.0.4-manual-zh.html  # Chinese user manual (v1.0.4, historical)
+│   ├── Regalia-v1.0.4-manual-en.html  # English user manual (v1.0.4, historical)
+│   └── README.license          # Manual license classification
 ├── NOTICE                      # Third-party component notices
 ├── NOTICE-DroidFish            # Original DroidFish notice
 ├── NOTICE-gradle               # Gradle notice (Apache v2.0)
@@ -125,9 +135,9 @@ Regalia/
 ├── LICENSE-GPL v3              # GPL v3 full text (engine components)
 ├── LICENSE-Apache v2.0         # Apache v2.0 full text (Gradle)
 ├── PRIVACY.md                  # Privacy policy
+├── BUILDING.md                 # Build instructions
 ├── build-chess.py              # Python build script (alternative to build-chess.sh)
-├── Regalia-v1.0.5-manual-zh.html  # Chinese user manual
-├── Regalia-v1.0.5-manual-en.html  # English user manual
+├── build-chess.sh              # Shell build script (calls build-chess.py)
 └── README.md
 ```
 
@@ -182,7 +192,48 @@ Contributions are welcome! Please ensure:
 
 ## Version
 
-**v1.0.5** (versionCode 105) — current release
+**v1.0.6** (versionCode 106) — current release
+
+The v1.0.6 release adds:
+
+1. **Chess960 ECO suppression** — ECO opening recognition and opening move
+   recommendations are now hidden when Chess960 mode is active (Chess960 has
+   no fixed opening theory).
+2. **PGN `[SetUp]`/`[FEN]` round-trip preservation** — importing a PGN with
+   a `[FEN]` header and then exporting now correctly preserves both the
+   `[SetUp "1"]` and `[FEN "..."]` tags.
+3. **Stats page per-move selection** — clicking a move or the initial FEN in
+   the stats page's PGN text panel now shows the corresponding position on
+   the board and the statistics computed up to that move only.
+4. **Unified gray-out styling** — when a toggle or stepper is grayed out
+   (disabled), only the control itself is dimmed; surrounding labels,
+   descriptions, and explanations remain at full opacity. Added gray-out
+   explanations in the New Game dialog.
+5. **Portrait-optimized New Game dialog** — the dialog now has dedicated
+   portrait-mode styling (tighter padding, stacked inputs, wrapped ECO
+   search row) while the landscape layout is preserved.
+6. **Scroll-position preservation** — fixed a bug where scrollable windows
+   (dialogs, side panel, review move list, stats page) would suddenly jump
+   back to the top after a state change triggered a re-render.
+7. **Engine evaluation reliability** — added FEN sanitization that strips
+   inconsistent castling rights (e.g. `q` with no black rook on a8) before
+   sending to Stockfish, preventing the engine from hanging on positions
+   like `4k3/8/8/8/8/8/8/r1K4R w q - 1 3`.
+8. **King-then-rook castling gesture** — selecting a king that can castle
+   now visually marks the participating rook(s) with a golden dashed ring;
+   clicking a marked rook triggers castling directly. Essential for Chess960
+   positions where the king's destination square is occupied by the rook.
+9. **Chess960 castling detection fix** — replaced the legacy
+   `Math.abs(to.col-from.col)===2` pattern (which only works for standard
+   chess) with an explicit `castle` flag on castling moves plus a
+   `_castleSide()` helper, fixing castling detection in Chess960 where the
+   king may move only 1 column.
+10. **SL mode skill-level display** — when the AI opponent is in SL (Skill
+    Level) mode, the actual skill level value is now shown in the AI
+    opponent bar and in PGN `[White]`/`[Black]` tags (e.g. "SL20" instead
+    of just "SL").
+
+**v1.0.5** (versionCode 105) — previous release
 
 The v1.0.5 release adds (Round-6 Revision 49):
 

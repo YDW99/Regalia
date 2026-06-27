@@ -119,7 +119,7 @@ public class StockfishNative {
     // v18.4.0: ELO_MAP synced with JS ELO_MATCH for consistent level display
     private static final int[] ELO_MAP = {0, 800, 1350, 1700, 2000, 2200, 2350, 2800};
     // v1.0.5: Synced with the application version (was stale at v1.0.2).
-    private static final String ENGINE_VERSION = "v1.0.5";
+    private static final String ENGINE_VERSION = "v1.0.6";
     // Movetime mapping: index 0 unused, 1-7 = game levels
     private static final int[] MOVETIME_MAP = {0, 500, 800, 1000, 1500, 2000, 3000, 5000};
 
@@ -3374,6 +3374,14 @@ public class StockfishNative {
         if (engineReady) {
             sendSetOptionAndWait("Skill Level", String.valueOf(level));
         }
+    }
+
+    // v1.0.6 NEW: JS-side getter for the current Skill Level value.
+    // Used by _aiOpponentNameWithLevel() to render "SL<N>" in the AI opponent
+    // bar and in PGN [White]/[Black] tags when the AI is in SL mode.
+    @JavascriptInterface
+    public int getEngineSkillLevel() {
+        return engineSkillLevel;
     }
 
     @JavascriptInterface

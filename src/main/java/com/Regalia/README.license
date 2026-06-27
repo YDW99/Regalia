@@ -770,3 +770,17 @@ v1.0.3 patch changes (version number unchanged — still v1.0.3 / versionCode 10
   v1.0.5 Round-6 Rev70 changes (2026.6.27 net-control algorithm consistency fix):
     - No changes to Java files. All Rev70 changes were in ui.js (JS layer). See
       src/main/assets/chess.src/README.license for the Rev70 entry.
+
+  v1.0.6 (2026.6.27) changes:
+    - StockfishNative.java (GPL v3): NEW @JavascriptInterface method
+      getEngineSkillLevel() — returns the current engineSkillLevel int.
+      Used by the JS layer's _aiOpponentNameWithLevel() to render "SL<N>"
+      (e.g. "SL20") in the AI opponent bar and PGN [White]/[Black] tags
+      when the AI is in SL (Skill Level) mode. Previously only "SL" was
+      shown without the concrete level value.
+    - StockfishNative.java: ENGINE_VERSION constant updated to "v1.0.6".
+    - MainActivity.java: VERSION constant updated to "v1.0.6".
+    - ChessApp.java: init log message updated to "v1.0.6".
+    - ChessWebViewClient.java: version comment updated to "v1.0.6".
+    - No changes to other Java files (EngineService, StatsActivity,
+      RootDetector, TlsSecurityHelper, StabilizationHelper).

@@ -738,7 +738,29 @@ function executeMove(state,move,notation){
   const newState={board:state.board.map(r=>r.map(c=>c?{...c}:null)),currentTurn:OPP_COLOR[state.currentTurn],castlingRights:{...state.castlingRights},enPassantTarget:null,halfMoveClock:state.halfMoveClock+1,fullMoveNumber:state.fullMoveNumber,wk:state.wk?{...state.wk}:null,bk:state.bk?{...state.bk}:null};
   const piece=newState.board[move.from.row][move.from.col];
   if(!piece)return null;
-  let captured=newState.board[move.to.row][move.to.col];
+  // v1.0.6 FIX: Detect castling BEFORE moving the king. In Chess960, the
+  // rook's source may be the king's destination (e.g. rook on g1, king
+  // castles kingside to g1). Save the rook before the king overwrites it.
+  // Detection: king moving to col 6 (kingside) or col 2 (queenside).
+  let _isCastling=false,_kingside=false,_rookFrom=-1,_rookTo=-1,_savedRook=null;
+  if(piece.type==='king'&&(move.to.col===6||move.to.col===2)){
+    _isCastling=true;
+    _kingside=move.to.col===6;
+    _rookTo=_kingside?5:3;
+    // Find the participating rook on the ORIGINAL board (state, not newState).
+    if(_kingside){
+      for(let c=7;c>move.from.col;c--){if(state.board[move.from.row][c]&&state.board[move.from.row][c].type==='rook'&&state.board[move.from.row][c].color===piece.color){_rookFrom=c;break;}}
+    }else{
+      for(let c=0;c<move.from.col;c++){if(state.board[move.from.row][c]&&state.board[move.from.row][c].type==='rook'&&state.board[move.from.row][c].color===piece.color){_rookFrom=c;break;}}
+    }
+    if(_rookFrom<0){
+      // Fallback: standard chess positions (rook on h1/a1)
+      _rookFrom=_kingside?7:0;
+    }
+    // Save the rook from the NEW board (which is a clone of state, not yet mutated).
+    _savedRook=newState.board[move.from.row][_rookFrom];
+  }
+  let captured=_isCastling?null:newState.board[move.to.row][move.to.col];
   // v1.0.4 Rev29 FIX: En passant capture — when a pawn moves diagonally to an
   // EMPTY square that matches state.enPassantTarget, the captured pawn is on
   // the same row as the moving pawn (move.from.row) and same column as the
@@ -758,34 +780,13 @@ function executeMove(state,move,notation){
   if(piece.type==='king'){
     if(piece.color==='white')newState.wk={row:move.to.row,col:move.to.col};
     else newState.bk={row:move.to.row,col:move.to.col};
-    // Castling rook move
-    // v1.0.4 Rev34: Chess960-aware castling. In standard chess, the rook is
-    // always on col 7 (kingside) or col 0 (queenside). In Chess960, the rook
-    // can be on any column — we find the nearest rook on the castling side.
-    // v1.0.4 Rev36 FIX: Castling detection was `Math.abs(to.col-from.col)===2`
-    // which only works for standard chess (king e1→g1 = 2 cols). In Chess960,
-    // the king can start on any column and moves to col 6 (kingside) or col 2
-    // (queenside) — the distance can be 1-5 columns. Fix: detect castling by
-    // the DESTINATION column (6=kingside, 2=queenside), not the distance.
-    if(move.to.col===6||move.to.col===2){
-      const kingside=move.to.col===6;
-      const rookTo=kingside?5:3;
-      // Find the participating rook: nearest rook on the castling side.
-      // Kingside: rightmost rook to the right of king's start.
-      // Queenside: leftmost rook to the left of king's start.
-      let rookFrom=-1;
-      if(kingside){
-        for(let c=7;c>move.from.col;c--){if(newState.board[move.from.row][c]&&newState.board[move.from.row][c].type==='rook'&&newState.board[move.from.row][c].color===piece.color){rookFrom=c;break;}}
-      }else{
-        for(let c=0;c<move.from.col;c++){if(newState.board[move.from.row][c]&&newState.board[move.from.row][c].type==='rook'&&newState.board[move.from.row][c].color===piece.color){rookFrom=c;break;}}
-      }
-      if(rookFrom>=0){
-        newState.board[move.from.row][rookTo]=newState.board[move.from.row][rookFrom];
-        newState.board[move.from.row][rookFrom]=null;
-      }else{
-        // Fallback: standard chess positions (rook on h1/a1)
-        if(kingside){newState.board[move.from.row][5]=newState.board[move.from.row][7];newState.board[move.from.row][7]=null;}
-        else{newState.board[move.from.row][3]=newState.board[move.from.row][0];newState.board[move.from.row][0]=null;}
+    // v1.0.6 FIX: Castling rook move — use _savedRook (saved before king move).
+    // Place rook at destination, clear rook source (only if different from
+    // king destination, since the king already occupies that square).
+    if(_isCastling&&_savedRook&&_rookFrom>=0){
+      newState.board[move.from.row][_rookTo]=_savedRook;
+      if(_rookFrom!==move.to.col){
+        newState.board[move.from.row][_rookFrom]=null;
       }
     }
   }
@@ -2835,7 +2836,26 @@ function render(){
   // v1.0.3: FEN panel — below PGN text panel, above stats.
   h+=renderFENPanel(effectiveParsed,effectiveSelectedIdx);
   h+=renderStats(effectiveParsed,effectiveEvalData);
+  // v1.0.6: Preserve the document scroll position across re-renders.
+  // selectMove()/selectVariationMove()/selectInitialPosition() all call render()
+  // which replaces #content's innerHTML. If the new content is shorter than the
+  // old (e.g., selecting a variation reduces the stats), the browser would clamp
+  // scrollY to the new max — but if the user then deselects, the page would jump
+  // back to top instead of returning to their reading position. We capture
+  // scrollY BEFORE innerHTML replacement and restore it AFTER, clamped to the
+  // new max scroll.
+  const _savedScrollY=window.scrollY||window.pageYOffset||0;
+  const _savedMaxScroll=Math.max(0,document.documentElement.scrollHeight-window.innerHeight);
   document.getElementById('content').innerHTML=h;
+  // Restore scroll position (clamped to new max)
+  const _newMaxScroll=Math.max(0,document.documentElement.scrollHeight-window.innerHeight);
+  const _targetScroll=Math.min(_savedScrollY,_newMaxScroll);
+  if(_targetScroll>0&&Math.abs(_savedScrollY-_targetScroll)<(_savedMaxScroll+200)){
+    // Only restore if the saved position is still within a reasonable range
+    // of the new max — avoids restoring a stale position when the user switched
+    // between very different views (e.g., from a long variation back to mainline).
+    try{window.scrollTo(0,_targetScroll);}catch(e){}
+  }
 }
 
 // v1.0.2: Select a mainline move for per-position statistics.

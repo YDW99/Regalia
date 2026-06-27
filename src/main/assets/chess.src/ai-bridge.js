@@ -574,6 +574,10 @@ let _emergencyFallbackTimerId=setTimeout(function(){
 //   Levels 1-6: "AI对手 Lv.N" (zh) / "AI Opponent Lv.N" (en)
 //   Level 7 (Skill Level): "AI对手 SL" / "AI Opponent SL"
 //   Level 8 (Custom): "AI对手 Custom" / "AI Opponent Custom"
+// v1.0.6 NEW: When level is 7 (SL mode), append the actual Skill Level value
+//   from the engine config (e.g. "SL20" when skill level is 20). This makes
+//   the PGN [White]/[Black] tags and the in-game AI opponent bar carry the
+//   concrete strength value, which is useful for archival and review.
 function _aiOpponentNameWithLevel(){
   const baseName=T('ai_opponent');
   let levelSuffix='';
@@ -582,7 +586,17 @@ function _aiOpponentNameWithLevel(){
     if(effLevel>=1&&effLevel<=6){
       levelSuffix=' Lv.'+effLevel;
     }else if(effLevel===7){
-      levelSuffix=' SL';
+      // v1.0.6: Append the actual skill level value (0-20). Default to 20
+      // if engineSettingsData is unavailable (e.g. before engine init).
+      let _sl=20;
+      try{
+        if(typeof engineSettingsData!=='undefined'&&engineSettingsData&&engineSettingsData.skillLevel!=null){
+          _sl=engineSettingsData.skillLevel;
+        }else if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getEngineSkillLevel){
+          _sl=AndroidBridge.getEngineSkillLevel();
+        }
+      }catch(_e){}
+      levelSuffix=' SL'+_sl;
     }else if(effLevel===8){
       levelSuffix=' '+(T('manual_config')||'Custom').replace(/^⚙️\s*/,'');
     }
@@ -1299,8 +1313,21 @@ function _uciToSimple(uci){
   const pieceChar={knight:'N',bishop:'B',rook:'R',queen:'Q',king:'K',pawn:''}[pieceType]||'';
   const promoStr=promo?{q:'=Q',r:'=R',b:'=B',n:'=N'}[promo]||'':'';
   // Handle castling
-  if(pieceType==='king'&&Math.abs(toCol-fromCol)===2){
-    return toCol>fromCol?'O-O':'O-O-O';
+  // v1.0.6: Chess960-aware. In BOTH standard chess and Chess960, the king
+  // always ends on col 6 (kingside) or col 2 (queenside) after castling.
+  // However, a normal king move can also land on col 6/2, so we cannot
+  // rely on destination column alone. The reliable signal is the DISTANCE:
+  //   - Standard chess: king always moves exactly 2 cols to castle
+  //   - Chess960: king may move 1-5 cols to castle, BUT a 1-col king move
+  //     to g1/c1 is ambiguous (could be a normal king move). We only
+  //     treat it as castling if the king moved 2+ cols. The 1-col Chess960
+  //     castling case (e.g. king at f1 castling to g1) is handled by the
+  //     primary _uciToSAN() path which uses the board state, not this
+  //     fallback. This _uciToSimple fallback is only used when _uciToSAN
+  //     fails (state desync), so the 1-col ambiguity is acceptable.
+  if(pieceType==='king'&&Math.abs(toCol-fromCol)>=2){
+    if(toCol===6)return 'O-O';
+    if(toCol===2)return 'O-O-O';
   }
   // Handle pawn moves
   if(pieceType==='pawn'){
@@ -1495,6 +1522,93 @@ function generateFEN(s){
   fen+=' '+(s.halfMoveClock||0);
   fen+=' '+(s.fullMoveNumber||1);
   return fen;
+}
+
+// v1.0.6 NEW: Sanitize a FEN string before sending it to the Stockfish engine.
+// Stockfish tolerates most FEN quirks, but certain inconsistent castling
+// rights can cause the engine to enter a degraded state where it emits no
+// `info` lines and no `bestmove` (just hangs until the safety timer fires),
+// then retries indefinitely. The user reported this with the FEN
+// `4k3/8/8/8/8/8/8/r1K4R w q - 1 3` — black has castling right `q` (black
+// queenside) but no black rook on a8, so the right is meaningless.
+//
+// This function strips castling rights that don't match the actual board:
+//   - White Kingside (K): requires white king on e1 AND white rook on h1
+//   - White Queenside (Q): requires white king on e1 AND white rook on a1
+//   - Black Kingside (k): requires black king on e8 AND black rook on h8
+//   - Black Queenside (q): requires black king on e8 AND black rook on a8
+// For Chess960 (Shredder-FEN with letter-file castling), the validation is
+// more complex and left to the engine (Stockfish handles it natively).
+//
+// This is a defensive measure — under normal gameplay, generateFEN() always
+// produces consistent castling rights because makeMv/makeMvInPlace clear
+// them when the king or rook moves. The inconsistency can only arise from:
+//   1. Setup mode where the user places pieces manually
+//   2. Importing a FEN with inconsistent rights (fenToState doesn't validate)
+//   3. PGN import where the [FEN] tag has stale rights
+function _sanitizeFenForEngine(fen){
+  if(!fen||typeof fen!=='string')return fen;
+  const parts=fen.trim().split(/\s+/);
+  if(parts.length<2)return fen;
+  // Parse board
+  const rows=parts[0].split('/');
+  if(rows.length!==8)return fen;
+  const board=Array.from({length:8},()=>Array(8).fill(null));
+  for(let r=0;r<8;r++){
+    let c=0;
+    for(const ch of rows[r]){
+      if(ch>='1'&&ch<='8'){c+=parseInt(ch);continue;}
+      if(c>=8)break;
+      const isWhite=ch===ch.toUpperCase();
+      const type=ch.toLowerCase()==='p'?'pawn':ch.toLowerCase()==='n'?'knight':ch.toLowerCase()==='b'?'bishop':ch.toLowerCase()==='r'?'rook':ch.toLowerCase()==='q'?'queen':ch.toLowerCase()==='k'?'king':null;
+      if(!type)return fen; // malformed FEN — let engine handle
+      board[r][c]={type,color:isWhite?'white':'black'};
+      c++;
+    }
+  }
+  // Parse castling rights
+  const crRaw=parts[2]||'-';
+  if(crRaw==='-')return fen; // no castling rights — nothing to sanitize
+  // v1.0.6 SIMPLIFIED: Shredder-FEN (Chess960) uses file letters (A-H for
+  // white, a-h for black) instead of KQkq. If the castling field contains
+  // ANY character other than K/Q/k/q/-, it's Shredder — let the engine
+  // handle it (Stockfish validates Shredder natively).
+  if(!/^[KQkq-]+$/.test(crRaw)){
+    return fen; // Shredder-FEN or unknown format — let engine handle
+  }
+  // Validate standard KQkq rights
+  let cr='';
+  if(crRaw.includes('K')){
+    // White kingside: white king on e1 (row 7, col 4) AND white rook on h1 (row 7, col 7)
+    const wk=board[7][4], wr=board[7][7];
+    if(wk&&wk.type==='king'&&wk.color==='white'&&wr&&wr.type==='rook'&&wr.color==='white'){
+      cr+='K';
+    }
+  }
+  if(crRaw.includes('Q')){
+    // White queenside: white king on e1 (row 7, col 4) AND white rook on a1 (row 7, col 0)
+    const wk=board[7][4], wr=board[7][0];
+    if(wk&&wk.type==='king'&&wk.color==='white'&&wr&&wr.type==='rook'&&wr.color==='white'){
+      cr+='Q';
+    }
+  }
+  if(crRaw.includes('k')){
+    // Black kingside: black king on e8 (row 0, col 4) AND black rook on h8 (row 0, col 7)
+    const bk=board[0][4], br=board[0][7];
+    if(bk&&bk.type==='king'&&bk.color==='black'&&br&&br.type==='rook'&&br.color==='black'){
+      cr+='k';
+    }
+  }
+  if(crRaw.includes('q')){
+    // Black queenside: black king on e8 (row 0, col 4) AND black rook on a8 (row 0, col 0)
+    const bk=board[0][4], br=board[0][0];
+    if(bk&&bk.type==='king'&&bk.color==='black'&&br&&br.type==='rook'&&br.color==='black'){
+      cr+='q';
+    }
+  }
+  if(cr===crRaw)return fen; // no change needed
+  parts[2]=cr||'-';
+  return parts.join(' ');
 }
 
 // UCI move to internal coordinate converter (e.g., "e2e4" -> {from:{row:6,col:4},to:{row:4,col:4}})
@@ -1738,7 +1852,7 @@ function onBestMove(uciMove){
                 _pbinc=Math.round((gameClocks.incrementSec||0)*1000);
               }
             }
-            AndroidBridge.startPonder(ponderFenAfterMove,_pwtime,_pbtime,_pwinc,_pbinc);
+            AndroidBridge.startPonder((typeof _sanitizeFenForEngine==='function')?_sanitizeFenForEngine(ponderFenAfterMove):ponderFenAfterMove,_pwtime,_pbtime,_pwinc,_pbinc);
             // DEFERRED PONDER DISPLAY: Do NOT set _ponderMoveSAN here.
             // Previously, setting _ponderMoveSAN immediately caused the AI bar to show
             // the ponder move SAN WITHOUT progress info (since _ponderBarInfo was still
@@ -2089,7 +2203,13 @@ function renderEngineConfig(){
     // Show WDL
     h+='<div class="dlg-sec"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:.8rem">'+T('show_wdl_label')+'</span><div class="toggle" onclick="toggleShowWDL()"><div class="toggle-sw'+(settings.showWDL?' on':'')+'"></div></div></div><div style="font-size:.7rem;color:var(--muted)">'+T('show_wdl_desc')+'</div></div>';
     // Skill Level
-    h+='<div class="dlg-sec"><div style="margin-bottom:10px;opacity:'+(settings.limitStrength?'0.4':'1')+';pointer-events:'+(settings.limitStrength?'none':'auto')+'"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><span style="font-size:.8rem">'+T('skill_level_label')+'</span><div style="display:flex;align-items:center;gap:4px"><button class="btn" style="padding:2px 8px;min-height:28px;font-size:.9rem" onclick="setConfigSkillLevel('+(settings.skillLevel-1)+')">-</button><span style="min-width:24px;text-align:center;font-weight:700">'+(settings.skillLevel!=null?settings.skillLevel:20)+'</span><button class="btn" style="padding:2px 8px;min-height:28px;font-size:.9rem" onclick="setConfigSkillLevel('+(settings.skillLevel+1)+')">+</button></div></div><div style="font-size:.7rem;color:var(--muted)">'+T('skill_level_desc')+(settings.limitStrength?'<br><span style="color:var(--red)">'+T('skill_elo_note')+'</span>':'')+'</div></div></div>';
+    // v1.0.6 GRAY-OUT UNIFICATION: Only the +/- stepper buttons are dimmed and
+    // disabled when limitStrength is on — the label "技能等级"/"Skill Level",
+    // the description "降低引擎技术水平…"/"Lower engine skill level…", and the
+    // red warning "限制Elo开启时，Skill Level由UCI_Elo自动决定" remain at full
+    // opacity. The red warning color matches the new-game dialog's gray-out
+    // explanation color (var(--red)) for consistency across both dialogs.
+    h+='<div class="dlg-sec"><div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><span style="font-size:.8rem">'+T('skill_level_label')+'</span><div style="display:flex;align-items:center;gap:4px;opacity:'+(settings.limitStrength?'0.4':'1')+';pointer-events:'+(settings.limitStrength?'none':'auto')+'"><button class="btn" style="padding:2px 8px;min-height:28px;font-size:.9rem" onclick="setConfigSkillLevel('+(settings.skillLevel-1)+')">-</button><span style="min-width:24px;text-align:center;font-weight:700">'+(settings.skillLevel!=null?settings.skillLevel:20)+'</span><button class="btn" style="padding:2px 8px;min-height:28px;font-size:.9rem" onclick="setConfigSkillLevel('+(settings.skillLevel+1)+')">+</button></div></div><div style="font-size:.7rem;color:var(--muted)">'+T('skill_level_desc')+(settings.limitStrength?'<br><span style="color:var(--red)">'+T('skill_elo_note')+'</span>':'')+'</div></div></div>';
     // Limit Elo
     h+='<div class="dlg-sec"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:.8rem">'+T('limit_elo_label')+'</span><div class="toggle" onclick="toggleLimitElo()"><div class="toggle-sw'+(settings.limitStrength?' on':'')+'"></div></div></div>';
     if(settings.limitStrength){
@@ -3230,7 +3350,10 @@ function requestEngineEval(){
       return;
     }
     // Invalidate any stale in-flight callbacks
-    const fen=generateFEN(_rs);
+    // v1.0.6: Sanitize the FEN before sending to the engine to strip
+    // inconsistent castling rights (e.g. `q` with no black rook on a8)
+    // that can cause the engine to hang or emit no bestmove.
+    const fen=_sanitizeFenForEngine(generateFEN(_rs));
     _evalForBlackTurn=_rs.currentTurn==='black';
     _reviewEvalRequestedStep=reviewStep;
     if(typeof AndroidBridge!=='undefined'&&AndroidBridge.isEngineReady()){
@@ -3272,7 +3395,8 @@ function requestEngineEval(){
       }
     }
   }else{
-    const fen=generateFEN(gameState);
+    // v1.0.6: Sanitize the FEN before sending to the engine.
+    const fen=_sanitizeFenForEngine(generateFEN(gameState));
     _evalForBlackTurn=gameState.currentTurn==='black';
     if(typeof AndroidBridge!=='undefined'&&AndroidBridge.isEngineReady()){
       _evalLoading=true;

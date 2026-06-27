@@ -719,10 +719,15 @@ function _applySANMove(state,san){
   if(!cleanSAN)return null;
   
   // Castling — support multiple common notations (O-O, 0-0, o-o, etc.)
+  // v1.0.6: Chess960-aware — find the king's ACTUAL column instead of
+  // hardcoding col 4 (e1). In Chess960, the king can start on any column
+  // b1-g1. The king always castles to col 6 (kingside) or col 2 (queenside).
   const upperSAN=cleanSAN.toUpperCase();
   if(upperSAN==='O-O'||cleanSAN==='0-0'){
     const row=state.currentTurn==='white'?7:0;
-    const kingFrom={row,col:4};
+    let kingCol=4; // default: standard chess
+    for(let c=0;c<8;c++){const p=state.board[row][c];if(p&&p.type==='king'&&p.color===state.currentTurn){kingCol=c;break;}}
+    const kingFrom={row,col:kingCol};
     const kingTo={row,col:6};
     const move=_findLegalMove(state,kingFrom,kingTo,'king');
     if(move)return _executeAndRecord(state,move,'O-O');
@@ -730,7 +735,9 @@ function _applySANMove(state,san){
   }
   if(upperSAN==='O-O-O'||cleanSAN==='0-0-0'){
     const row=state.currentTurn==='white'?7:0;
-    const kingFrom={row,col:4};
+    let kingCol=4; // default: standard chess
+    for(let c=0;c<8;c++){const p=state.board[row][c];if(p&&p.type==='king'&&p.color===state.currentTurn){kingCol=c;break;}}
+    const kingFrom={row,col:kingCol};
     const kingTo={row,col:2};
     const move=_findLegalMove(state,kingFrom,kingTo,'king');
     if(move)return _executeAndRecord(state,move,'O-O-O');
@@ -947,6 +954,15 @@ function importPGN(pgnText){
   // Start from FEN or initial position
   const startState=result.startFEN?fenToState(result.startFEN):initState();
   if(!startState){showToast(T('pgn_invalid'),2000);return;}
+  // v1.0.6 FIX: Preserve the imported start FEN so PGN round-trip export
+  // includes the [SetUp "1"] and [FEN "..."] headers. Previously, importPGN()
+  // consumed result.startFEN to build startState but never assigned it to
+  // _setupFEN, so _buildPGNString() emitted neither header on export.
+  // _startGameImpl() (ui.js) clears _setupFEN=null on new game, so this
+  // assignment is safe — it only persists until the next new-game action.
+  if(result.startFEN && typeof _setupFEN!=='undefined'){
+    _setupFEN=result.startFEN;
+  }
   // v1.0.4: If the PGN declared Chess960, mark the start state too
   if(result.variant==='chess960'){
     startState.chess960=true;

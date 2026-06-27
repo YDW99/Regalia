@@ -239,6 +239,12 @@ const _i18n={
 'built_in':{zh:'内置',en:'Built-in'},
 'skill_level_desc':{zh:'降低引擎技术水平（0=最弱，20=最强）',en:'Reduce engine skill (0=weakest, 20=strongest)'},
 'skill_elo_note':{zh:'限制Elo开启时，Skill Level由UCI_Elo自动决定',en:'Skill Level auto-set by UCI_Elo when Limit Elo is on'},
+// v1.0.6 NEW: Gray-out explanations shown in the New Game dialog when a toggle
+// is grayed out. Color matches var(--red) — the same color used by the Engine
+// Configuration advanced settings dialog's "skill_elo_note" warning, so the
+// visual language is consistent across both dialogs.
+'gray_disabled_by_eco_book':{zh:'启用 AI 开局库时，Chess960 不可用（ECO 开局库要求标准初始局面）',en:'Chess960 is unavailable while AI Opening Book is enabled (ECO book requires the standard start position)'},
+'gray_disabled_by_chess960':{zh:'启用 Chess960 时，AI 开局库不可用（Chess960 没有固定的开局理论）',en:'AI Opening Book is unavailable while Chess960 is enabled (Chess960 has no fixed opening theory)'},
 'fen_invalid':{zh:'FEN格式无效',en:'Invalid FEN format'},
 'paste_fen':{zh:'粘贴FEN字符串:',en:'Paste FEN string:'},
 'render_error':{zh:'渲染出错，可以尝试刷新恢复对局',en:'Render error, try refreshing to recover'},
@@ -351,7 +357,7 @@ const _i18n={
 'elo_target':{zh:'Elo目标',en:'ELO Target'},
 'export_settings_btn':{zh:'📤 导出设置',en:'📤 Export'},
 'import_settings_btn':{zh:'📥 导入设置',en:'📥 Import'},
-'loading_title':{zh:'Regalia v1.0.5',en:'Regalia v1.0.5'},
+'loading_title':{zh:'Regalia v1.0.6',en:'Regalia v1.0.6'},
 'click_skip_loading':{zh:'点击跳过加载',en:'Click to skip loading'},
 'white_checkmate':{zh:'白方将杀获胜',en:'White wins by checkmate'},
 'black_checkmate':{zh:'黑方将杀获胜',en:'Black wins by checkmate'},
@@ -618,6 +624,7 @@ let _cachedBwrap=null;
 let animationInProgress=false;
 let _lastAnimPieceType='';
 let _lastAnimTarget=null;
+let _lastAnimMv=null; // v1.0.6: set by callers of animateMove for Chess960 castling detection
 let _lastCaptureFlag=false;
 let _lastCheckFlag=false;
 // Landing animation: block render() while CSS @keyframes is playing, then auto-render
@@ -632,6 +639,13 @@ const _maxDur=({pawn:200,knight:250,bishop:220,rook:200,queen:280,king:220}[piec
 _landingAnimTimer=setTimeout(()=>{_landingAnimActive=false;_landingAnimTimer=null;render();},_maxDur+30);
 }
 function animateMove(from,to,pieceSym,pieceType,isCapture,isCheck,pieceColor){
+// v1.0.6: Detect castling for animation. The caller may pass the mv object
+// via a global _lastAnimMv (set just before calling animateMove) so we can
+// use _castleSide() for Chess960 correctness. Fallback to the legacy
+// `Math.abs(to.col-from.col)===2` check for callers that don't set the global.
+let _castleside=null;
+try{if(typeof _lastAnimMv!=='undefined'&&_lastAnimMv&&typeof _castleSide==='function'){_castleside=_castleSide(_lastAnimMv);}}catch(e){}
+if(!_castleside&&pieceType==='king'&&Math.abs(to.col-from.col)===2){_castleside=to.col===6?'kingside':'queenside';}
 animationInProgress=true;
 _lastAnimPieceType=pieceType||'pawn';
 _lastAnimTarget=null;
@@ -655,13 +669,30 @@ el.textContent=pieceSym;
 el.style.cssText='left:'+(_fc*cs)+'px;top:'+(_fr*cs)+'px;width:'+cs+'px;height:'+cs+'px;transform:translate3d(0,0,0);opacity:1;will-change:transform';
 bwrap.appendChild(el);
 _activeAnimEls.push({el,from,dx,dy});
-// Castling: also animate the rook
+// Castling: also animate the rook (v1.0.6: use _castleside + Chess960 rook positions)
 let rookEl=null;
-const isCastling=pieceType==='king'&&Math.abs(to.col-from.col)===2;
+const isCastling=!!_castleside;
 if(isCastling&&pieceColor){
-let rFromCol,rToCol;
-if(to.col===6){rFromCol=7;rToCol=5;}else if(to.col===2){rFromCol=0;rToCol=3;}
-if(rFromCol!=null){
+let rFromCol=-1,rToCol=-1;
+// v1.0.6: For Chess960, derive the actual rook from/to via chess960CastlingRookMove.
+if(typeof gameVariant!=='undefined'&&gameVariant==='chess960'&&typeof chess960CastlingRookMove==='function'){
+  // Pass a board snapshot — note: at this point the move has NOT been applied to
+  // gameState yet (animateMove is called BEFORE gameState=ns), so we can read
+  // the rook's source column from gameState.board. However, animateMove is
+  // sometimes called AFTER makeMv has already mutated the board (the UI calls
+  // makeMv first, then animateMove). To be safe, we re-derive via the helper
+  // using the from-row's board state. If the rook has already moved, we fall
+  // back to the standard 0/3/5/7 mapping.
+  try{
+    const rm=chess960CastlingRookMove(gameState,pieceColor,_castleside);
+    if(rm){rFromCol=rm.rookFrom;rToCol=rm.rookTo;}
+  }catch(e){}
+}
+if(rFromCol<0){
+  if(_castleside==='kingside'){rFromCol=7;rToCol=5;}
+  else{rFromCol=0;rToCol=3;}
+}
+if(rFromCol>=0){
 // Hide castling rook at source during animation
 const _srcRookPc=document.querySelector('.sq[data-r="'+from.row+'"][data-c="'+rFromCol+'"] .pc');
 if(_srcRookPc)_srcRookPc.style.opacity='0';
@@ -682,6 +713,7 @@ let _animDone=false;
 function _finishAnim(){
 if(_animDone)return;_animDone=true;
 el.remove();if(rookEl)rookEl.remove();animationInProgress=false;_lastAnimTarget={row:to.row,col:to.col};
+_lastAnimMv=null; // v1.0.6: clear stale move reference after animation completes
 _activeAnimEls=[]; // v1.0.4 REV13: clear tracking
 if(_lastCaptureFlag){
 const sq=document.querySelector(`.sq[data-r="${to.row}"][data-c="${to.col}"]`);
@@ -750,14 +782,20 @@ for(const dc of[-1,1])if(inB(r+d,c+dc)){if(b[r+d][c+dc]&&b[r+d][c+dc].color!==co
 else if(p.type==='knight'){for(const[dr,dc]of KNIGHT_OFFSETS)if(inB(r+dr,c+dc)&&(!b[r+dr][c+dc]||b[r+dr][c+dc].color!==co))mv.push({row:r+dr,col:c+dc})}
 else if(p.type==='king'){for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++)if((dr||dc)&&inB(r+dr,c+dc)&&(!b[r+dr][c+dc]||b[r+dr][c+dc].color!==co))mv.push({row:r+dr,col:c+dc});
 // v1.0.4 ROUND-5 REV16: Chess960 castling
+// v1.0.6: Tag castling moves with an explicit `castle` flag so downstream
+// code (makeMv / makeMvInPlace / moveAlg / animateMove / _uciToSimple) can
+// unambiguously detect castling in Chess960 where the king may move only
+// 1 column (e.g. king at f1 castling kingside to g1). The legacy
+// `Math.abs(to.col-from.col)===2` check is still used as a fallback for
+// moves reconstructed from PGN that don't carry the flag.
 const hr=co==='white'?7:0;
 if(typeof gameVariant!=='undefined'&&gameVariant==='chess960'&&typeof isChess960CastlingLegal==='function'){
   if(r===hr){
-    if(s.castlingRights[co+'Kingside']&&isChess960CastlingLegal(s,co,'kingside'))mv.push({row:hr,col:6});
-    if(s.castlingRights[co+'Queenside']&&isChess960CastlingLegal(s,co,'queenside'))mv.push({row:hr,col:2});
+    if(s.castlingRights[co+'Kingside']&&isChess960CastlingLegal(s,co,'kingside'))mv.push({row:hr,col:6,castle:'kingside'});
+    if(s.castlingRights[co+'Queenside']&&isChess960CastlingLegal(s,co,'queenside'))mv.push({row:hr,col:2,castle:'queenside'});
   }
 }else{
-  if(r===hr&&c===4){const cr=s.castlingRights;if(cr[co+'Kingside']&&!b[hr][5]&&!b[hr][6]&&b[hr][7]&&b[hr][7].type==='rook'&&b[hr][7].color===co&&!sqAttackedFast(b,{row:hr,col:4},opp)&&!sqAttackedFast(b,{row:hr,col:5},opp)&&!sqAttackedFast(b,{row:hr,col:6},opp))mv.push({row:hr,col:6});if(cr[co+'Queenside']&&!b[hr][3]&&!b[hr][2]&&!b[hr][1]&&b[hr][0]&&b[hr][0].type==='rook'&&b[hr][0].color===co&&!sqAttackedFast(b,{row:hr,col:4},opp)&&!sqAttackedFast(b,{row:hr,col:3},opp)&&!sqAttackedFast(b,{row:hr,col:2},opp))mv.push({row:hr,col:2})}
+  if(r===hr&&c===4){const cr=s.castlingRights;if(cr[co+'Kingside']&&!b[hr][5]&&!b[hr][6]&&b[hr][7]&&b[hr][7].type==='rook'&&b[hr][7].color===co&&!sqAttackedFast(b,{row:hr,col:4},opp)&&!sqAttackedFast(b,{row:hr,col:5},opp)&&!sqAttackedFast(b,{row:hr,col:6},opp))mv.push({row:hr,col:6,castle:'kingside'});if(cr[co+'Queenside']&&!b[hr][3]&&!b[hr][2]&&!b[hr][1]&&b[hr][0]&&b[hr][0].type==='rook'&&b[hr][0].color===co&&!sqAttackedFast(b,{row:hr,col:4},opp)&&!sqAttackedFast(b,{row:hr,col:3},opp)&&!sqAttackedFast(b,{row:hr,col:2},opp))mv.push({row:hr,col:2,castle:'queenside'})}
 }}
 else{const dirs=p.type==='rook'?DIR_ROOK:p.type==='bishop'?DIR_BISHOP:DIR_QUEEN;for(const[dr,dc]of dirs){let nr=r+dr,nc=c+dc;while(inB(nr,nc)){if(!b[nr][nc])mv.push({row:nr,col:nc});else{if(b[nr][nc].color!==co)mv.push({row:nr,col:nc});break}nr+=dr;nc+=dc}}}
 return mv}
@@ -794,22 +832,99 @@ function legalMoves(s,pos){
 function hasLegalMoves(s){for(let r=0;r<8;r++){for(let c=0;c<8;c++){const p=s.board[r][c];if(p&&p.color===s.currentTurn){const pm=pseudoMoves(s,{row:r,col:c});for(const m of pm){const mv={from:{row:r,col:c},to:m,piece:p,promotion:m.promotion};const undo=makeMvInPlace(s,mv);if(!undo)continue;const kPos=p.type==='king'?{row:m.row,col:m.col}:s[p.color==='white'?'wk':'bk'];const legal=kPos?!inCheck(s.board,p.color,kPos):false;unmakeMv(s,undo);if(legal)return true}}}}return false}
 // Move execution
 /**
+ * v1.0.6: Detect whether a move is a castling move.
+ * Returns 'kingside' | 'queenside' | null.
+ * Primary signal: the explicit `mv.castle` flag set by pseudoMoves().
+ * Fallback: `piece.type==='king' && Math.abs(to.col-from.col)===2`
+ * (works for standard chess where king always moves 2 cols to castle;
+ * also works for Chess960 PGN replay where mv.castle may not be set on
+ * moves reconstructed from SAN, but the king destination col is 6 or 2
+ * AND the king moved 2+ cols — which is the common Chess960 case).
+ * For Chess960 positions where the king moved only 1 col (e.g. king at
+ * f1 castling kingside to g1), the SAN-based import path in tablebase.js
+ * now sets mv.castle explicitly based on the O-O / O-O-O token.
+ */
+function _castleSide(mv){
+  if(!mv||!mv.to||!mv.from||!mv.piece)return null;
+  // Primary signal: explicit castle flag set by pseudoMoves() or by the
+  // king-then-rook gesture handler in sqClick().
+  if(mv.castle)return mv.castle;
+  // Fallback: detect by piece type + destination column.
+  // In BOTH standard chess and Chess960, the king always ends on col 6
+  // (kingside) or col 2 (queenside) after castling. The distance the king
+  // travels varies (1-5 cols in Chess960, always 2 in standard), so we
+  // check the DESTINATION COLUMN rather than the distance.
+  // This is only applied when the piece is a king on its home rank (row 7
+  // for white, row 0 for black) moving to col 6 or col 2 — the castling
+  // destinations. A king moving to g1/c1 for other reasons (e.g. a normal
+  // one-square king move from f1 to g1) would NOT be on the home rank with
+  // a 2+ column shift in standard chess, so this is safe.
+  if(mv.piece.type==='king'){
+    const _homeRow=mv.piece.color==='white'?7:0;
+    if(mv.from.row===_homeRow&&mv.to.row===_homeRow){
+      // Standard chess: king moves 2 cols (e1→g1 or e1→c1)
+      // Chess960: king may move 1-5 cols to reach g1/c1
+      // We require the move to be at least 2 cols for the fallback, because
+      // a 1-col king move (e.g. e1→f1) is a normal king move, not castling.
+      // The explicit mv.castle flag (set by pseudoMoves) covers the 1-col
+      // Chess960 case; this fallback covers the 2+ col case for moves
+      // reconstructed from PGN or UCI that don't carry the flag.
+      if(mv.to.col===6&&Math.abs(mv.to.col-mv.from.col)>=2)return 'kingside';
+      if(mv.to.col===2&&Math.abs(mv.to.col-mv.from.col)>=2)return 'queenside';
+    }
+  }
+  return null;
+}
+/**
  * Apply a move to a game state, returning a new state (immutable).
  * @param {Object} s - Current game state
  * @param {Object} mv - Move object with from, to, piece, promotion, etc.
  * @returns {Object} New game state with the move applied
  */
-function makeMv(s,mv){const ns=cloneS(s);const{from,to,piece,promotion}=mv;if(!piece||!ns.board[from.row]||!ns.board[from.row][from.col])return ns;const capPiece=ns.board[to.row][to.col];ns.board[to.row][to.col]=ns.board[from.row][from.col];ns.board[from.row][from.col]=null;
-if(piece.type==='pawn'&&s.enPassantTarget&&to.row===s.enPassantTarget.row&&to.col===s.enPassantTarget.col){const cr=piece.color==='white'?to.row+1:to.row-1;const epP=ns.board[cr][to.col];if(epP&&epP.type==='pawn'&&epP.color!==piece.color){ns.board[cr][to.col]=null}else if(epP){console.error('[En Passant Bug] Target set but captured piece is not an opposing pawn:',epP)}}
-if(piece.type==='king'&&Math.abs(to.col-from.col)===2){
-if(typeof gameVariant!=='undefined'&&gameVariant==='chess960'&&typeof chess960CastlingRookMove==='function'){
-  const side=to.col===6?'kingside':'queenside';
-  const rm=chess960CastlingRookMove(s,piece.color,side);
-  if(rm&&rm.rookFrom!==rm.rookTo){ns.board[rm.row][rm.rookTo]=ns.board[rm.row][rm.rookFrom];ns.board[rm.row][rm.rookFrom]=null;}
-}else{
-  if(to.col===6){ns.board[from.row][5]=ns.board[from.row][7];ns.board[from.row][7]=null}
-  if(to.col===2){ns.board[from.row][3]=ns.board[from.row][0];ns.board[from.row][0]=null}
+function makeMv(s,mv){const ns=cloneS(s);const{from,to,piece,promotion}=mv;if(!piece||!ns.board[from.row]||!ns.board[from.row][from.col])return ns;
+// v1.0.6 FIX: Detect castling BEFORE moving the king. In Chess960, the
+// rook's source square may be the same as the king's destination square
+// (e.g. rook on g1, king castles kingside to g1). If we move the king
+// first (overwriting the rook), the rook is lost and the king ends up on
+// the wrong square. Fix: detect castling first, and if it IS castling,
+// (1) suppress the capture (castling never captures), (2) save the rook
+// before moving the king, (3) move the king, (4) place the rook at its
+// destination.
+const _cs=_castleSide(mv);
+let _rookFrom=-1,_rookTo=-1,_savedRook=null;
+if(_cs){
+  // Compute rook from/to BEFORE moving the king, and save the rook piece.
+  if(typeof gameVariant!=='undefined'&&gameVariant==='chess960'&&typeof chess960CastlingRookMove==='function'){
+    const rm=chess960CastlingRookMove(s,piece.color,_cs);
+    if(rm&&rm.rookFrom!==rm.rookTo){
+      _rookFrom=rm.rookFrom;_rookTo=rm.rookTo;
+      _savedRook=ns.board[rm.row][rm.rookFrom]; // save rook before king overwrites it
+    }
+  }else{
+    if(_cs==='kingside'){_rookFrom=7;_rookTo=5;}
+    else{_rookFrom=0;_rookTo=3;}
+    _savedRook=ns.board[from.row][_rookFrom]; // save rook
+  }
 }
+// For castling, there is no capture (the "capPiece" at king's destination
+// is the castling rook in Chess960, which is NOT captured — it moves).
+// For non-castling moves, capPiece is the actual captured piece (if any).
+const capPiece=_cs?null:ns.board[to.row][to.col];
+ns.board[to.row][to.col]=ns.board[from.row][from.col];
+ns.board[from.row][from.col]=null;
+if(piece.type==='pawn'&&s.enPassantTarget&&to.row===s.enPassantTarget.row&&to.col===s.enPassantTarget.col){const cr=piece.color==='white'?to.row+1:to.row-1;const epP=ns.board[cr][to.col];if(epP&&epP.type==='pawn'&&epP.color!==piece.color){ns.board[cr][to.col]=null}else if(epP){console.error('[En Passant Bug] Target set but captured piece is not an opposing pawn:',epP)}}
+// v1.0.6 FIX: Move the rook for castling. _savedRook was saved BEFORE the
+// king moved, so it's the actual rook piece (not the king that overwrote
+// it). Place it at the rook destination, clear the rook source.
+if(_cs&&_savedRook&&_rookFrom>=0&&_rookTo>=0){
+  ns.board[from.row][_rookTo]=_savedRook;
+  // Only clear rook source if it's different from king destination (the
+  // king destination was already cleared by the king move above when
+  // rookFrom !== to.col; when rookFrom === to.col, the king already
+  // occupies that square so we must NOT null it).
+  if(_rookFrom!==to.col){
+    ns.board[from.row][_rookFrom]=null;
+  }
 }
 if(promotion)ns.board[to.row][to.col]={type:promotion,color:piece.color};
 if(piece.type==='king'){if(piece.color==='white'){ns.wk={row:to.row,col:to.col};ns.castlingRights.whiteKingside=false;ns.castlingRights.whiteQueenside=false}else{ns.bk={row:to.row,col:to.col};ns.castlingRights.blackKingside=false;ns.castlingRights.blackQueenside=false}}
@@ -853,8 +968,12 @@ const placedPiece=promotion?{type:promotion,color:piece.color}:piece;
 h^=zobrist.pieceTable[to.row*8+to.col][pieceZobristIdx(placedPiece)];
 // 4. En passant capture: remove captured pawn (with defensive check)
 if(piece.type==='pawn'&&s.enPassantTarget&&to.row===s.enPassantTarget.row&&to.col===s.enPassantTarget.col){const cr=piece.color==='white'?to.row+1:to.row-1;const epPiece={type:'pawn',color:OPP_COLOR[piece.color]};const epP=s.board[cr][to.col];if(epP&&epP.type==='pawn'&&epP.color!==piece.color){h^=zobrist.pieceTable[cr*8+to.col][pieceZobristIdx(epPiece)]};}
-// 5. Castling: move rook
-if(piece.type==='king'&&Math.abs(to.col-from.col)===2){const rookColor=piece.color;const rookIdx=pieceZobristIdx({type:'rook',color:rookColor});if(to.col===6){h^=zobrist.pieceTable[from.row*8+7][rookIdx];h^=zobrist.pieceTable[from.row*8+5][rookIdx];}if(to.col===2){h^=zobrist.pieceTable[from.row*8+0][rookIdx];h^=zobrist.pieceTable[from.row*8+3][rookIdx];}}
+// 5. Castling: move rook (v1.0.6: use actual rook from/to cols for Chess960)
+if(_cs&&_rookFrom>=0&&_rookTo>=0){
+  const rookIdx=pieceZobristIdx({type:'rook',color:piece.color});
+  h^=zobrist.pieceTable[from.row*8+_rookFrom][rookIdx];
+  h^=zobrist.pieceTable[from.row*8+_rookTo][rookIdx];
+}
 // 6. Toggle side to move
 h^=zobrist.side;
 // 7. Update en passant file
@@ -886,7 +1005,26 @@ return ns}
 function makeMvInPlace(s,mv){
 const{from,to,piece,promotion}=mv;
 if(!piece||!s.board[from.row]||!s.board[from.row][from.col])return null;
-const capPiece=s.board[to.row][to.col];
+// v1.0.6 FIX: Detect castling BEFORE moving the king (same fix as makeMv).
+// In Chess960, the rook's source may be the king's destination. Save the
+// rook before the king overwrites it.
+const _cs=_castleSide(mv);
+let _rookFrom=-1,_rookTo=-1,_savedRook=null;
+if(_cs){
+  if(typeof gameVariant!=='undefined'&&gameVariant==='chess960'&&typeof chess960CastlingRookMove==='function'){
+    const rm=chess960CastlingRookMove(s,piece.color,_cs);
+    if(rm&&rm.rookFrom!==rm.rookTo){
+      _rookFrom=rm.rookFrom;_rookTo=rm.rookTo;
+      _savedRook=s.board[rm.row][rm.rookFrom];
+    }
+  }else{
+    if(_cs==='kingside'){_rookFrom=7;_rookTo=5;}
+    else{_rookFrom=0;_rookTo=3;}
+    _savedRook=s.board[from.row][_rookFrom];
+  }
+}
+// For castling, there is no capture (capPiece would be the rook in Chess960).
+const capPiece=_cs?null:s.board[to.row][to.col];
 // Capture undo info
 const undo={
 from:{r:from.row,c:from.col},to:{r:to.row,c:to.col},
@@ -905,7 +1043,7 @@ promotion:promotion||null,
 oldMoveHistoryLength:s.moveHistory?s.moveHistory.length:0,
 isBlackMove:piece.color==='black'
 };
-// 1. Move piece
+// 1. Move piece (king for castling)
 s.board[to.row][to.col]=s.board[from.row][from.col];
 s.board[from.row][from.col]=null;
 // 2. En passant capture
@@ -917,19 +1055,13 @@ undo.epCaptured={r:cr,c:to.col,piece:{type:epP.type,color:epP.color}};
 s.board[cr][to.col]=null;
 }
 }
-// 3. Castling: move rook
-if(piece.type==='king'&&Math.abs(to.col-from.col)===2){
-if(typeof gameVariant!=='undefined'&&gameVariant==='chess960'&&typeof chess960CastlingRookMove==='function'){
-  const side=to.col===6?'kingside':'queenside';
-  const rm=chess960CastlingRookMove(s,piece.color,side);
-  if(rm&&rm.rookFrom!==rm.rookTo){
-    s.board[rm.row][rm.rookTo]=s.board[rm.row][rm.rookFrom];s.board[rm.row][rm.rookFrom]=null;
-    undo.castlingRook={from:{r:rm.row,c:rm.rookFrom},to:{r:rm.row,c:rm.rookTo}};
+// 3. Castling: move rook (v1.0.6 FIX: use _savedRook saved before king move)
+if(_cs&&_savedRook&&_rookFrom>=0&&_rookTo>=0){
+  s.board[from.row][_rookTo]=_savedRook;
+  if(_rookFrom!==to.col){
+    s.board[from.row][_rookFrom]=null;
   }
-}else{
-  if(to.col===6){s.board[from.row][5]=s.board[from.row][7];s.board[from.row][7]=null;undo.castlingRook={from:{r:from.row,c:7},to:{r:from.row,c:5}}}
-  if(to.col===2){s.board[from.row][3]=s.board[from.row][0];s.board[from.row][0]=null;undo.castlingRook={from:{r:from.row,c:0},to:{r:from.row,c:3}}}
-}
+  undo.castlingRook={from:{r:from.row,c:_rookFrom},to:{r:from.row,c:_rookTo}};
 }
 // 4. Promotion
 if(promotion)s.board[to.row][to.col]={type:promotion,color:piece.color};
@@ -986,11 +1118,11 @@ h^=zobrist.pieceTable[to.row*8+to.col][pieceZobristIdx(placedPiece)];
 if(undo.epCaptured){
 h^=zobrist.pieceTable[undo.epCaptured.r*8+undo.epCaptured.c][pieceZobristIdx(undo.epCaptured.piece)];
 }
-// Castling hash
-if(piece.type==='king'&&Math.abs(to.col-from.col)===2){
+// Castling hash (v1.0.6: use actual rook from/to cols for Chess960)
+if(_cs&&_rookFrom>=0&&_rookTo>=0){
 const rookIdx=pieceZobristIdx({type:'rook',color:piece.color});
-if(to.col===6){h^=zobrist.pieceTable[from.row*8+7][rookIdx];h^=zobrist.pieceTable[from.row*8+5][rookIdx];}
-if(to.col===2){h^=zobrist.pieceTable[from.row*8+0][rookIdx];h^=zobrist.pieceTable[from.row*8+3][rookIdx];}
+h^=zobrist.pieceTable[from.row*8+_rookFrom][rookIdx];
+h^=zobrist.pieceTable[from.row*8+_rookTo][rookIdx];
 }
 // Side to move hash
 h^=zobrist.side;
@@ -1143,7 +1275,11 @@ return false;
 //   4. If neither suffices alone → both file AND rank (e.g., Qa1b2)
 // For pawns, file is only included on captures (e.g., exd5)
 function moveAlg(s,mv,postState){const{from,to,piece,promotion}=mv;const isCap=!!s.board[to.row][to.col]||(piece.type==='pawn'&&s.enPassantTarget&&to.row===s.enPassantTarget.row&&to.col===s.enPassantTarget.col);let n='';
-if(piece.type==='king'&&Math.abs(to.col-from.col)===2){n=to.col===6?'O-O':'O-O-O'}else{
+// v1.0.6: Use _castleSide() for unambiguous castling detection.
+// In Chess960, the king may move only 1 column when castling (e.g. f1→g1),
+// so `Math.abs(to.col-from.col)===2` alone is insufficient.
+const _cs=_castleSide(mv);
+if(_cs){n=_cs==='kingside'?'O-O':'O-O-O'}else{
 if(piece.type!=='pawn'){
 n+=piece.type==='knight'?'N':piece.type[0].toUpperCase();
 // Disambiguation: find all same-type, same-color pieces with legal moves to same target
@@ -1309,7 +1445,9 @@ if(bookMove){
 }catch(e){console.error('ECO book move lookup error:',e);}
 }
 if(typeof AndroidBridge!=='undefined'&&AndroidBridge.isEngineReady()){
-const fen=generateFEN(gameState);
+// v1.0.6: Sanitize the FEN before sending to the engine to strip
+// inconsistent castling rights that can cause the engine to hang.
+const fen=(typeof _sanitizeFenForEngine==='function')?_sanitizeFenForEngine(generateFEN(gameState)):generateFEN(gameState);
 // v1.0.4 LATEST: if the game is timed, use engineGoTimed() so Stockfish 18
 // manages its own time allocation via UCI wtime/btime/winc/binc parameters.
 // This is the correct way to play timed games — the engine will think longer

@@ -620,3 +620,14 @@ v1.0.5 Round-6 Rev54 through Rev68 changes (reflected in chess.html rebuilds):
   - chess.html rebuilt after each revision.
   - stats.html unchanged from Rev62 baseline.
   - AGPLv3_Logo.svg, GPLv3_Logo.svg unchanged.
+
+
+v1.0.6 (2026.6.27):
+  - chess.src/ changes: see src/main/assets/chess.src/README.license for
+    full per-file details. Key changes: Chess960 ECO suppression, PGN FEN
+    round-trip preservation, castling gesture + rook-save fix, analyze-all
+    off-by-one fix, SL mode skill-level display, gray-out unification,
+    portrait dialog CSS, scroll preservation, FEN sanitization.
+  - chess.html: rebuilt from chess.src/ changes.
+  - stats.html: executeMove() castling rook-save fix + scroll preservation.
+  - AGPLv3_Logo.svg, GPLv3_Logo.svg unchanged.
