@@ -3,16 +3,38 @@ This directory contains the user-facing HTML manuals for the Regalia app
 with embedded CSS and JavaScript (no external resources).
 
 License classification by file:
+  - Regalia-v1.0.6-manual-zh.html: AGPL v3 (original Regalia work)
+      Chinese user manual for Regalia v1.0.6.
+      Copyright (C) 2026 Regalia.
+  - Regalia-v1.0.6-manual-en.html: AGPL v3 (original Regalia work)
+      English user manual for Regalia v1.0.6.
+      Copyright (C) 2026 Regalia.
   - Regalia-v1.0.5-manual-zh.html: AGPL v3 (original Regalia work)
-      Chinese user manual for Regalia v1.0.5.
+      Chinese user manual for Regalia v1.0.5 (kept for historical reference).
       Copyright (C) 2026 Regalia.
   - Regalia-v1.0.5-manual-en.html: AGPL v3 (original Regalia work)
-      English user manual for Regalia v1.0.5.
+      English user manual for Regalia v1.0.5 (kept for historical reference).
       Copyright (C) 2026 Regalia.
-  
+  - Regalia-v1.0.4-manual-zh.html: AGPL v3 (original Regalia work)
+      Chinese user manual for Regalia v1.0.4 (kept for historical reference).
+      Copyright (C) 2026 Regalia.
+  - Regalia-v1.0.4-manual-en.html: AGPL v3 (original Regalia work)
+      English user manual for Regalia v1.0.4 (kept for historical reference).
+      Copyright (C) 2026 Regalia.
+
 The manuals are AGPL v3 because they are original documentation created by
 the Regalia project, not derived from any third-party GPL work. The embedded
 diagrams, wireframes, and changelog text are all original.
+
+v1.0.6 (2026.6.27) changes:
+  - Regalia-v1.0.6-manual-zh.html: New v1.0.6 manual with all v1.0.6
+    changelog entries (Chess960 ECO suppression, PGN FEN round-trip
+    preservation, stats.html per-move selection, unified gray-out styling,
+    portrait-optimized new game settings, scroll-position preservation,
+    engine-eval FEN sanitization, king-then-rook castling gesture,
+    Chess960 castling detection fix, SL mode skill-level display).
+  - Regalia-v1.0.6-manual-en.html: Synced with Chinese version.
+  - Regalia-v1.0.5 and v1.0.4 manuals: kept for historical reference only.
 
 v1.0.5 Round-6 Rev54 changes:
   - Regalia-v1.0.5-manual-zh.html: Updated with Rev54 changelog entry

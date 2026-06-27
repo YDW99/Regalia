@@ -286,3 +286,12 @@ StockfishNative.java, StatsActivity.java) and assets/chess.src/ (ui.js,
 chess960.js, game-logic.js, tablebase.js, worker-pool.js, pgn-standard.js,
 ai-bridge.js, index.html.tpl) + assets/chess.html (rebuilt). See per-subdirectory
 README.license files for details.
+
+
+v1.0.6 (2026.6.27):
+  - AndroidManifest.xml: versionCode=106, versionName="1.0.6".
+  - res/values/strings.xml: app_name="Regalia v1.0.6".
+  - No changes to res/ drawables, xml/, or cpp/ sources.
+  - java/ changes: see src/main/java/com/Regalia/README.license.
+  - assets/ changes: see src/main/assets/README.license and
+    src/main/assets/chess.src/README.license.

@@ -1470,3 +1470,61 @@ for full license texts and attribution details.
       (3) No other changes to the arrow offset logic (same four diagonal
           biases: B→UL, Y→LL, R→UR, G→LR).
     - chess.html: rebuilt from chess.src/ changes.
+
+
+  v1.0.6 (2026.6.27) changes:
+    - game-logic.js (GPL v3): NEW _castleSide(mv) helper — unambiguous
+      castling detection using explicit mv.castle flag (set by pseudoMoves)
+      with a destination-column+distance fallback for moves reconstructed
+      from PGN/UCI. Replaces the legacy Math.abs(to.col-from.col)===2
+      pattern which only works for standard chess (Chess960 king may move
+      1 col to castle). NEW _lastAnimMv global for animateMove castling
+      detection. pseudoMoves() now tags castling moves with castle:'kingside'/
+      'queenside'. makeMv()/makeMvInPlace() CRITICAL FIX: save the rook
+      BEFORE moving the king (Chess960 rook source may === king destination),
+      suppress capture for castling, place saved rook at destination after
+      king moves. moveAlg() uses _castleSide(). animateMove() uses
+      _lastAnimMv+_castleSide for Chess960 rook position. Zobrist hash
+      update uses actual rook from/to cols (was hardcoded 0/3/5/7).
+      _finishAnim() clears _lastAnimMv. loading_title updated to v1.0.6.
+      NEW i18n strings: gray_disabled_by_eco_book, gray_disabled_by_chess960.
+    - chess960.js (AGPL v3): No changes (castling helpers unchanged).
+    - pgn-standard.js (AGPL v3): No changes.
+    - worker-pool.js (AGPL v3): Comment fix — removed backtick from a
+      comment inside the _WORKER_SOURCE template literal (Rev57-class bug
+      that prematurely terminated the template string, causing blank screen).
+    - ai-bridge.js (GPL v3): NEW _sanitizeFenForEngine(fen) — strips
+      inconsistent castling rights (e.g. 'q' with no black rook on a8)
+      before sending to Stockfish, preventing engine hangs. Applied to all
+      engineEval/engineEvalDeep/engineHint/engineGo/engineGoTimed/startPonder
+      calls. _aiOpponentNameWithLevel() now appends the actual Skill Level
+      value (e.g. "SL20") for SL mode. _uciToSimple() castling detection
+      simplified to distance-based (2+ cols). Engine Config dialog Skill
+      Level gray-out unified (only buttons dimmed, not surrounding text).
+      ENGINE_VERSION updated to v1.0.6.
+    - tablebase.js (GPL v3): importPGN() FIX — now sets _setupFEN from
+      result.startFEN so PGN round-trip preserves [SetUp]/[FEN] headers.
+      applySANMove() Chess960 castling fix — finds king's actual column
+      instead of hardcoding col 4.
+    - eco-data.js (AGPL v3): No changes.
+    - ui.js (GPL v3): NEW _getCastlingRookSquares()/_getCastlingRookForClick()
+      for king-then-rook castling gesture. NEW _computeCastlingRookSetForSelection()
+      pure helper. _updateChangedSquares() FIX — now adds/removes castle-ring
+      marker in the lightweight update path (was only in renderInternal,
+      causing marker to not appear on selection and get stuck after appearing).
+      sqClick() castling gesture handler. executeMove() FIX — copies castle
+      flag from legalMvs to mv object. _computeAndCacheVisualAnnotations()
+      FIX — restores castle flag from moveRecords.isCastling. ECO panels
+      hidden in Chess960 mode. _startGameImpl() disables _ecoEnabled in
+      Chess960. New Game dialog gray-out unified (only toggle dimmed).
+      Portrait dialog CSS. Scroll preservation for .dlg/.panel/.review-moves/
+      .op-list. Analyze-all off-by-one fix (_totalSteps=moveRecords.length,
+      reviewAnalyzeAll iterates 1..N, _reviewAnalyzeAdvance terminates at
+      nextStep>N). Version strings updated to v1.0.6 (3 locations).
+    - index.html.tpl (AGPL v3): NEW .castle-ring CSS (golden dashed pulse
+      animation). Portrait New Game dialog CSS (max-width:460px, tighter
+      padding, stacked inputs, ECO search wrap). Title updated to v1.0.6.
+    - chess.html: rebuilt from chess.src/ changes.
+    - stats.html (GPL v3): executeMove() FIX — same castling rook-save fix
+      as game-logic.js makeMv(). Scroll position preservation (window.scrollY
+      saved/restored across #content innerHTML replacement).

@@ -29,7 +29,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://tablebase.lichess.ovh; img-src data: file:; frame-ancestors 'none'; base-uri 'self'">
-<title>Regalia v1.0.5</title>
+<title>Regalia v1.0.6</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{color-scheme:dark;--bg:#1a0a0a;--card:#221015;--border:#8b6914;--border2:#d4a017;--text:#f5e6c8;--muted:#a08050;--accent:#d4a017;--accent2:#ffd700;--blue:#4a90d9;--red:#c0392b;--purple:#8e44ad;--green:#27ae60;--danger:#c0392b}
@@ -104,6 +104,14 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .rv-w,.rv-bk{font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text;-webkit-font-variant-emoji:text;font-weight:400}
 .sq .dot{width:18px;height:18px;border-radius:50%;background:radial-gradient(circle,rgba(255,140,0,.6),rgba(255,140,0,.35));pointer-events:none;z-index:1;box-shadow:0 0 3px rgba(255,140,0,.2)}
 .sq .ring{position:absolute;inset:3px;border-radius:50%;border:3px solid rgba(255,140,0,.55);pointer-events:none;z-index:1;box-shadow:0 0 2px rgba(255,140,0,.10)}
+/* v1.0.6: Castling rook marker — golden dashed ring. Distinct from the orange
+   capture ring (.ring) so the user can tell "click to castle" apart from
+   "click to capture". Uses the same gold (#ffd700) as the app's accent color
+   to maintain visual consistency with the toolbar/headers. Dashed border
+   (3px, dash 6px/gap 4px) signals "special move" — a convention from
+   chess.com/lichess where castling indicators use dashed outlines. */
+.sq .castle-ring{position:absolute;inset:3px;border-radius:50%;border:3px dashed #ffd700;pointer-events:none;z-index:2;box-shadow:0 0 4px rgba(255,215,0,.5),inset 0 0 3px rgba(255,215,0,.3);animation:castlePulse 1.5s ease-in-out infinite}
+@keyframes castlePulse{0%,100%{box-shadow:0 0 4px rgba(255,215,0,.5),inset 0 0 3px rgba(255,215,0,.3)}50%{box-shadow:0 0 8px rgba(255,215,0,.8),inset 0 0 5px rgba(255,215,0,.5)}}
 /* Piece-specific animations */
 .sq .pc.anim-pawn{animation:pawnStep .6s cubic-bezier(.4,0,.2,1);will-change:transform,opacity}
 .sq .pc.anim-knight{animation:knightJump .8s cubic-bezier(.2,-.2,.2,1.2);will-change:transform,opacity}
@@ -235,7 +243,68 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
    — the previous rule forced .main{flex-direction:column} even in landscape, which broke
    the side-by-side landscape layout. Now landscape uses its own @media(orientation:landscape)
    rules which correctly set flex-direction:row. */
-@media(max-width:900px) and (orientation:portrait){.panel{width:100%;max-width:420px}.main{flex-direction:column;align-items:center}.hdr-tools{gap:4px}.btn{padding:6px 10px;font-size:.72rem}.review-body{flex-direction:column}.review-board{padding:8px}}
+@media(max-width:900px) and (orientation:portrait){.panel{width:100%;max-width:420px}.main{flex-direction:column;align-items:center}.hdr-tools{gap:4px}.btn{padding:6px 10px;font-size:.72rem}.review-body{flex-direction:column}.review-board{padding:8px}
+/* v1.0.6: Portrait-optimized New Game dialog.
+   - Full-width dialog with reduced horizontal padding for narrow screens.
+   - Time Control inputs use full-width stacked layout (no inline labels).
+   - Chess960 SP-ID input + Random button share a single row.
+   - ECO search box + family filter stack vertically on very narrow phones.
+   - The landscape layout (default .dlg{max-width:500px;width:90%}) remains
+     unchanged for orientation:landscape. */
+.dlg{max-width:460px;width:94%;padding:18px 16px}
+.dlg h2{font-size:1.05rem;margin-bottom:10px;letter-spacing:1.5px}
+.dlg-sec{margin-bottom:12px}
+.dlg-sec h3{font-size:.7rem;letter-spacing:1.2px;margin-bottom:6px}
+.clr-row{gap:8px;margin-bottom:6px}
+.clr-btn{padding:10px 6px}
+.clr-ico{font-size:1.3rem}
+.clr-nm{font-size:.78rem}
+.clr-sub{font-size:.6rem}
+.op-list{max-height:180px}
+.op-btn{padding:6px 8px}
+.on{font-size:.76rem}
+.os{font-size:.62rem}
+.dlg-btns{margin-top:12px}
+.dlg-btns .btn{padding:10px;font-size:.82rem}
+/* v1.0.6: Time Control input rows — on portrait, make labels and inputs
+   stack more compactly. The input width stays at 80px (enough for 3-digit
+   minutes) but the label gets more room. */
+.dlg-sec select{font-size:.8rem;padding:7px 10px}
+/* v1.0.6: Chess960 SP-ID row — ensure the Random button, input, and 🎲
+   button wrap gracefully on narrow screens. The flex-wrap is already set
+   inline; this just tightens the gap. */
+.dlg-sec > div[style*="flex-wrap:wrap"]{gap:4px}}
+@media(max-width:480px) and (orientation:portrait){
+  /* v1.0.6: Tighter spacing for very narrow portrait phones (<480px).
+     The New Game dialog's Chess960 SP-ID row uses flex-wrap so the input
+     and 🎲 button wrap to a new line if needed. The ECO search box and
+     family filter also wrap on narrow screens. */
+  .dlg{padding:14px 12px;max-width:96%;width:96%}
+  .dlg h2{font-size:.95rem;letter-spacing:1px;margin-bottom:8px}
+  .dlg-sec{margin-bottom:10px}
+  .dlg-sec h3{font-size:.68rem;margin-bottom:5px}
+  .clr-btn{padding:8px 4px}
+  .clr-ico{font-size:1.2rem}
+  .clr-nm{font-size:.72rem}
+  .clr-sub{font-size:.58rem}
+  .op-list{max-height:160px}
+  .op-btn{padding:5px 6px}
+  .on{font-size:.72rem}
+  .os{font-size:.6rem}
+  .dlg-btns{margin-top:10px;gap:6px}
+  .dlg-btns .btn{padding:9px;font-size:.78rem}
+  /* v1.0.6: Time Control inputs — on very narrow screens, reduce input
+     width to 70px and make labels smaller so the row fits without
+     horizontal scroll. */
+  .dlg-sec input[type="number"]{width:70px!important;font-size:.8rem;padding:3px 6px}
+  .dlg-sec select{font-size:.78rem;padding:6px 8px}
+  /* v1.0.6: ECO search row — force the search input and family filter
+     to stack vertically on very narrow screens (<480px portrait). The
+     flex-wrap is already set inline; this ensures the form takes full
+     width when wrapped. */
+  .dlg-sec form{min-width:100%!important}
+  .dlg-sec select{flex-basis:100%!important;margin-top:4px}
+}
 @media(max-width:480px){.hdr h1{font-size:1rem}.hdr-tools{gap:2px}.btn{padding:5px 7px;font-size:.68rem;min-height:32px}/* hint-btn removed, all buttons use .btn */.ev{font-size:.75rem;padding:4px 8px}.panel{gap:6px}.card{padding:8px}.diff-b{padding:4px 7px;font-size:.68rem;min-width:24px}.main{gap:8px;padding:8px}.bwrap{border-width:2px}.pbar{padding:5px 10px}.pname{font-size:.78rem}.setup-btn{width:36px;height:36px;font-size:1.4rem}.prom-btn{width:44px;height:44px;font-size:1.6rem}}
 /* ============================================================
    LANDSCAPE LAYOUT
@@ -848,6 +917,12 @@ const _i18n={
 'built_in':{zh:'内置',en:'Built-in'},
 'skill_level_desc':{zh:'降低引擎技术水平（0=最弱，20=最强）',en:'Reduce engine skill (0=weakest, 20=strongest)'},
 'skill_elo_note':{zh:'限制Elo开启时，Skill Level由UCI_Elo自动决定',en:'Skill Level auto-set by UCI_Elo when Limit Elo is on'},
+// v1.0.6 NEW: Gray-out explanations shown in the New Game dialog when a toggle
+// is grayed out. Color matches var(--red) — the same color used by the Engine
+// Configuration advanced settings dialog's "skill_elo_note" warning, so the
+// visual language is consistent across both dialogs.
+'gray_disabled_by_eco_book':{zh:'启用 AI 开局库时，Chess960 不可用（ECO 开局库要求标准初始局面）',en:'Chess960 is unavailable while AI Opening Book is enabled (ECO book requires the standard start position)'},
+'gray_disabled_by_chess960':{zh:'启用 Chess960 时，AI 开局库不可用（Chess960 没有固定的开局理论）',en:'AI Opening Book is unavailable while Chess960 is enabled (Chess960 has no fixed opening theory)'},
 'fen_invalid':{zh:'FEN格式无效',en:'Invalid FEN format'},
 'paste_fen':{zh:'粘贴FEN字符串:',en:'Paste FEN string:'},
 'render_error':{zh:'渲染出错，可以尝试刷新恢复对局',en:'Render error, try refreshing to recover'},
@@ -960,7 +1035,7 @@ const _i18n={
 'elo_target':{zh:'Elo目标',en:'ELO Target'},
 'export_settings_btn':{zh:'📤 导出设置',en:'📤 Export'},
 'import_settings_btn':{zh:'📥 导入设置',en:'📥 Import'},
-'loading_title':{zh:'Regalia v1.0.5',en:'Regalia v1.0.5'},
+'loading_title':{zh:'Regalia v1.0.6',en:'Regalia v1.0.6'},
 'click_skip_loading':{zh:'点击跳过加载',en:'Click to skip loading'},
 'white_checkmate':{zh:'白方将杀获胜',en:'White wins by checkmate'},
 'black_checkmate':{zh:'黑方将杀获胜',en:'Black wins by checkmate'},
@@ -1227,6 +1302,7 @@ let _cachedBwrap=null;
 let animationInProgress=false;
 let _lastAnimPieceType='';
 let _lastAnimTarget=null;
+let _lastAnimMv=null; // v1.0.6: set by callers of animateMove for Chess960 castling detection
 let _lastCaptureFlag=false;
 let _lastCheckFlag=false;
 // Landing animation: block render() while CSS @keyframes is playing, then auto-render
@@ -1241,6 +1317,13 @@ const _maxDur=({pawn:200,knight:250,bishop:220,rook:200,queen:280,king:220}[piec
 _landingAnimTimer=setTimeout(()=>{_landingAnimActive=false;_landingAnimTimer=null;render();},_maxDur+30);
 }
 function animateMove(from,to,pieceSym,pieceType,isCapture,isCheck,pieceColor){
+// v1.0.6: Detect castling for animation. The caller may pass the mv object
+// via a global _lastAnimMv (set just before calling animateMove) so we can
+// use _castleSide() for Chess960 correctness. Fallback to the legacy
+// `Math.abs(to.col-from.col)===2` check for callers that don't set the global.
+let _castleside=null;
+try{if(typeof _lastAnimMv!=='undefined'&&_lastAnimMv&&typeof _castleSide==='function'){_castleside=_castleSide(_lastAnimMv);}}catch(e){}
+if(!_castleside&&pieceType==='king'&&Math.abs(to.col-from.col)===2){_castleside=to.col===6?'kingside':'queenside';}
 animationInProgress=true;
 _lastAnimPieceType=pieceType||'pawn';
 _lastAnimTarget=null;
@@ -1264,13 +1347,30 @@ el.textContent=pieceSym;
 el.style.cssText='left:'+(_fc*cs)+'px;top:'+(_fr*cs)+'px;width:'+cs+'px;height:'+cs+'px;transform:translate3d(0,0,0);opacity:1;will-change:transform';
 bwrap.appendChild(el);
 _activeAnimEls.push({el,from,dx,dy});
-// Castling: also animate the rook
+// Castling: also animate the rook (v1.0.6: use _castleside + Chess960 rook positions)
 let rookEl=null;
-const isCastling=pieceType==='king'&&Math.abs(to.col-from.col)===2;
+const isCastling=!!_castleside;
 if(isCastling&&pieceColor){
-let rFromCol,rToCol;
-if(to.col===6){rFromCol=7;rToCol=5;}else if(to.col===2){rFromCol=0;rToCol=3;}
-if(rFromCol!=null){
+let rFromCol=-1,rToCol=-1;
+// v1.0.6: For Chess960, derive the actual rook from/to via chess960CastlingRookMove.
+if(typeof gameVariant!=='undefined'&&gameVariant==='chess960'&&typeof chess960CastlingRookMove==='function'){
+  // Pass a board snapshot — note: at this point the move has NOT been applied to
+  // gameState yet (animateMove is called BEFORE gameState=ns), so we can read
+  // the rook's source column from gameState.board. However, animateMove is
+  // sometimes called AFTER makeMv has already mutated the board (the UI calls
+  // makeMv first, then animateMove). To be safe, we re-derive via the helper
+  // using the from-row's board state. If the rook has already moved, we fall
+  // back to the standard 0/3/5/7 mapping.
+  try{
+    const rm=chess960CastlingRookMove(gameState,pieceColor,_castleside);
+    if(rm){rFromCol=rm.rookFrom;rToCol=rm.rookTo;}
+  }catch(e){}
+}
+if(rFromCol<0){
+  if(_castleside==='kingside'){rFromCol=7;rToCol=5;}
+  else{rFromCol=0;rToCol=3;}
+}
+if(rFromCol>=0){
 // Hide castling rook at source during animation
 const _srcRookPc=document.querySelector('.sq[data-r="'+from.row+'"][data-c="'+rFromCol+'"] .pc');
 if(_srcRookPc)_srcRookPc.style.opacity='0';
@@ -1291,6 +1391,7 @@ let _animDone=false;
 function _finishAnim(){
 if(_animDone)return;_animDone=true;
 el.remove();if(rookEl)rookEl.remove();animationInProgress=false;_lastAnimTarget={row:to.row,col:to.col};
+_lastAnimMv=null; // v1.0.6: clear stale move reference after animation completes
 _activeAnimEls=[]; // v1.0.4 REV13: clear tracking
 if(_lastCaptureFlag){
 const sq=document.querySelector(`.sq[data-r="${to.row}"][data-c="${to.col}"]`);
@@ -1359,14 +1460,20 @@ for(const dc of[-1,1])if(inB(r+d,c+dc)){if(b[r+d][c+dc]&&b[r+d][c+dc].color!==co
 else if(p.type==='knight'){for(const[dr,dc]of KNIGHT_OFFSETS)if(inB(r+dr,c+dc)&&(!b[r+dr][c+dc]||b[r+dr][c+dc].color!==co))mv.push({row:r+dr,col:c+dc})}
 else if(p.type==='king'){for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++)if((dr||dc)&&inB(r+dr,c+dc)&&(!b[r+dr][c+dc]||b[r+dr][c+dc].color!==co))mv.push({row:r+dr,col:c+dc});
 // v1.0.4 ROUND-5 REV16: Chess960 castling
+// v1.0.6: Tag castling moves with an explicit `castle` flag so downstream
+// code (makeMv / makeMvInPlace / moveAlg / animateMove / _uciToSimple) can
+// unambiguously detect castling in Chess960 where the king may move only
+// 1 column (e.g. king at f1 castling kingside to g1). The legacy
+// `Math.abs(to.col-from.col)===2` check is still used as a fallback for
+// moves reconstructed from PGN that don't carry the flag.
 const hr=co==='white'?7:0;
 if(typeof gameVariant!=='undefined'&&gameVariant==='chess960'&&typeof isChess960CastlingLegal==='function'){
   if(r===hr){
-    if(s.castlingRights[co+'Kingside']&&isChess960CastlingLegal(s,co,'kingside'))mv.push({row:hr,col:6});
-    if(s.castlingRights[co+'Queenside']&&isChess960CastlingLegal(s,co,'queenside'))mv.push({row:hr,col:2});
+    if(s.castlingRights[co+'Kingside']&&isChess960CastlingLegal(s,co,'kingside'))mv.push({row:hr,col:6,castle:'kingside'});
+    if(s.castlingRights[co+'Queenside']&&isChess960CastlingLegal(s,co,'queenside'))mv.push({row:hr,col:2,castle:'queenside'});
   }
 }else{
-  if(r===hr&&c===4){const cr=s.castlingRights;if(cr[co+'Kingside']&&!b[hr][5]&&!b[hr][6]&&b[hr][7]&&b[hr][7].type==='rook'&&b[hr][7].color===co&&!sqAttackedFast(b,{row:hr,col:4},opp)&&!sqAttackedFast(b,{row:hr,col:5},opp)&&!sqAttackedFast(b,{row:hr,col:6},opp))mv.push({row:hr,col:6});if(cr[co+'Queenside']&&!b[hr][3]&&!b[hr][2]&&!b[hr][1]&&b[hr][0]&&b[hr][0].type==='rook'&&b[hr][0].color===co&&!sqAttackedFast(b,{row:hr,col:4},opp)&&!sqAttackedFast(b,{row:hr,col:3},opp)&&!sqAttackedFast(b,{row:hr,col:2},opp))mv.push({row:hr,col:2})}
+  if(r===hr&&c===4){const cr=s.castlingRights;if(cr[co+'Kingside']&&!b[hr][5]&&!b[hr][6]&&b[hr][7]&&b[hr][7].type==='rook'&&b[hr][7].color===co&&!sqAttackedFast(b,{row:hr,col:4},opp)&&!sqAttackedFast(b,{row:hr,col:5},opp)&&!sqAttackedFast(b,{row:hr,col:6},opp))mv.push({row:hr,col:6,castle:'kingside'});if(cr[co+'Queenside']&&!b[hr][3]&&!b[hr][2]&&!b[hr][1]&&b[hr][0]&&b[hr][0].type==='rook'&&b[hr][0].color===co&&!sqAttackedFast(b,{row:hr,col:4},opp)&&!sqAttackedFast(b,{row:hr,col:3},opp)&&!sqAttackedFast(b,{row:hr,col:2},opp))mv.push({row:hr,col:2,castle:'queenside'})}
 }}
 else{const dirs=p.type==='rook'?DIR_ROOK:p.type==='bishop'?DIR_BISHOP:DIR_QUEEN;for(const[dr,dc]of dirs){let nr=r+dr,nc=c+dc;while(inB(nr,nc)){if(!b[nr][nc])mv.push({row:nr,col:nc});else{if(b[nr][nc].color!==co)mv.push({row:nr,col:nc});break}nr+=dr;nc+=dc}}}
 return mv}
@@ -1403,22 +1510,99 @@ function legalMoves(s,pos){
 function hasLegalMoves(s){for(let r=0;r<8;r++){for(let c=0;c<8;c++){const p=s.board[r][c];if(p&&p.color===s.currentTurn){const pm=pseudoMoves(s,{row:r,col:c});for(const m of pm){const mv={from:{row:r,col:c},to:m,piece:p,promotion:m.promotion};const undo=makeMvInPlace(s,mv);if(!undo)continue;const kPos=p.type==='king'?{row:m.row,col:m.col}:s[p.color==='white'?'wk':'bk'];const legal=kPos?!inCheck(s.board,p.color,kPos):false;unmakeMv(s,undo);if(legal)return true}}}}return false}
 // Move execution
 /**
+ * v1.0.6: Detect whether a move is a castling move.
+ * Returns 'kingside' | 'queenside' | null.
+ * Primary signal: the explicit `mv.castle` flag set by pseudoMoves().
+ * Fallback: `piece.type==='king' && Math.abs(to.col-from.col)===2`
+ * (works for standard chess where king always moves 2 cols to castle;
+ * also works for Chess960 PGN replay where mv.castle may not be set on
+ * moves reconstructed from SAN, but the king destination col is 6 or 2
+ * AND the king moved 2+ cols — which is the common Chess960 case).
+ * For Chess960 positions where the king moved only 1 col (e.g. king at
+ * f1 castling kingside to g1), the SAN-based import path in tablebase.js
+ * now sets mv.castle explicitly based on the O-O / O-O-O token.
+ */
+function _castleSide(mv){
+  if(!mv||!mv.to||!mv.from||!mv.piece)return null;
+  // Primary signal: explicit castle flag set by pseudoMoves() or by the
+  // king-then-rook gesture handler in sqClick().
+  if(mv.castle)return mv.castle;
+  // Fallback: detect by piece type + destination column.
+  // In BOTH standard chess and Chess960, the king always ends on col 6
+  // (kingside) or col 2 (queenside) after castling. The distance the king
+  // travels varies (1-5 cols in Chess960, always 2 in standard), so we
+  // check the DESTINATION COLUMN rather than the distance.
+  // This is only applied when the piece is a king on its home rank (row 7
+  // for white, row 0 for black) moving to col 6 or col 2 — the castling
+  // destinations. A king moving to g1/c1 for other reasons (e.g. a normal
+  // one-square king move from f1 to g1) would NOT be on the home rank with
+  // a 2+ column shift in standard chess, so this is safe.
+  if(mv.piece.type==='king'){
+    const _homeRow=mv.piece.color==='white'?7:0;
+    if(mv.from.row===_homeRow&&mv.to.row===_homeRow){
+      // Standard chess: king moves 2 cols (e1→g1 or e1→c1)
+      // Chess960: king may move 1-5 cols to reach g1/c1
+      // We require the move to be at least 2 cols for the fallback, because
+      // a 1-col king move (e.g. e1→f1) is a normal king move, not castling.
+      // The explicit mv.castle flag (set by pseudoMoves) covers the 1-col
+      // Chess960 case; this fallback covers the 2+ col case for moves
+      // reconstructed from PGN or UCI that don't carry the flag.
+      if(mv.to.col===6&&Math.abs(mv.to.col-mv.from.col)>=2)return 'kingside';
+      if(mv.to.col===2&&Math.abs(mv.to.col-mv.from.col)>=2)return 'queenside';
+    }
+  }
+  return null;
+}
+/**
  * Apply a move to a game state, returning a new state (immutable).
  * @param {Object} s - Current game state
  * @param {Object} mv - Move object with from, to, piece, promotion, etc.
  * @returns {Object} New game state with the move applied
  */
-function makeMv(s,mv){const ns=cloneS(s);const{from,to,piece,promotion}=mv;if(!piece||!ns.board[from.row]||!ns.board[from.row][from.col])return ns;const capPiece=ns.board[to.row][to.col];ns.board[to.row][to.col]=ns.board[from.row][from.col];ns.board[from.row][from.col]=null;
-if(piece.type==='pawn'&&s.enPassantTarget&&to.row===s.enPassantTarget.row&&to.col===s.enPassantTarget.col){const cr=piece.color==='white'?to.row+1:to.row-1;const epP=ns.board[cr][to.col];if(epP&&epP.type==='pawn'&&epP.color!==piece.color){ns.board[cr][to.col]=null}else if(epP){console.error('[En Passant Bug] Target set but captured piece is not an opposing pawn:',epP)}}
-if(piece.type==='king'&&Math.abs(to.col-from.col)===2){
-if(typeof gameVariant!=='undefined'&&gameVariant==='chess960'&&typeof chess960CastlingRookMove==='function'){
-  const side=to.col===6?'kingside':'queenside';
-  const rm=chess960CastlingRookMove(s,piece.color,side);
-  if(rm&&rm.rookFrom!==rm.rookTo){ns.board[rm.row][rm.rookTo]=ns.board[rm.row][rm.rookFrom];ns.board[rm.row][rm.rookFrom]=null;}
-}else{
-  if(to.col===6){ns.board[from.row][5]=ns.board[from.row][7];ns.board[from.row][7]=null}
-  if(to.col===2){ns.board[from.row][3]=ns.board[from.row][0];ns.board[from.row][0]=null}
+function makeMv(s,mv){const ns=cloneS(s);const{from,to,piece,promotion}=mv;if(!piece||!ns.board[from.row]||!ns.board[from.row][from.col])return ns;
+// v1.0.6 FIX: Detect castling BEFORE moving the king. In Chess960, the
+// rook's source square may be the same as the king's destination square
+// (e.g. rook on g1, king castles kingside to g1). If we move the king
+// first (overwriting the rook), the rook is lost and the king ends up on
+// the wrong square. Fix: detect castling first, and if it IS castling,
+// (1) suppress the capture (castling never captures), (2) save the rook
+// before moving the king, (3) move the king, (4) place the rook at its
+// destination.
+const _cs=_castleSide(mv);
+let _rookFrom=-1,_rookTo=-1,_savedRook=null;
+if(_cs){
+  // Compute rook from/to BEFORE moving the king, and save the rook piece.
+  if(typeof gameVariant!=='undefined'&&gameVariant==='chess960'&&typeof chess960CastlingRookMove==='function'){
+    const rm=chess960CastlingRookMove(s,piece.color,_cs);
+    if(rm&&rm.rookFrom!==rm.rookTo){
+      _rookFrom=rm.rookFrom;_rookTo=rm.rookTo;
+      _savedRook=ns.board[rm.row][rm.rookFrom]; // save rook before king overwrites it
+    }
+  }else{
+    if(_cs==='kingside'){_rookFrom=7;_rookTo=5;}
+    else{_rookFrom=0;_rookTo=3;}
+    _savedRook=ns.board[from.row][_rookFrom]; // save rook
+  }
 }
+// For castling, there is no capture (the "capPiece" at king's destination
+// is the castling rook in Chess960, which is NOT captured — it moves).
+// For non-castling moves, capPiece is the actual captured piece (if any).
+const capPiece=_cs?null:ns.board[to.row][to.col];
+ns.board[to.row][to.col]=ns.board[from.row][from.col];
+ns.board[from.row][from.col]=null;
+if(piece.type==='pawn'&&s.enPassantTarget&&to.row===s.enPassantTarget.row&&to.col===s.enPassantTarget.col){const cr=piece.color==='white'?to.row+1:to.row-1;const epP=ns.board[cr][to.col];if(epP&&epP.type==='pawn'&&epP.color!==piece.color){ns.board[cr][to.col]=null}else if(epP){console.error('[En Passant Bug] Target set but captured piece is not an opposing pawn:',epP)}}
+// v1.0.6 FIX: Move the rook for castling. _savedRook was saved BEFORE the
+// king moved, so it's the actual rook piece (not the king that overwrote
+// it). Place it at the rook destination, clear the rook source.
+if(_cs&&_savedRook&&_rookFrom>=0&&_rookTo>=0){
+  ns.board[from.row][_rookTo]=_savedRook;
+  // Only clear rook source if it's different from king destination (the
+  // king destination was already cleared by the king move above when
+  // rookFrom !== to.col; when rookFrom === to.col, the king already
+  // occupies that square so we must NOT null it).
+  if(_rookFrom!==to.col){
+    ns.board[from.row][_rookFrom]=null;
+  }
 }
 if(promotion)ns.board[to.row][to.col]={type:promotion,color:piece.color};
 if(piece.type==='king'){if(piece.color==='white'){ns.wk={row:to.row,col:to.col};ns.castlingRights.whiteKingside=false;ns.castlingRights.whiteQueenside=false}else{ns.bk={row:to.row,col:to.col};ns.castlingRights.blackKingside=false;ns.castlingRights.blackQueenside=false}}
@@ -1462,8 +1646,12 @@ const placedPiece=promotion?{type:promotion,color:piece.color}:piece;
 h^=zobrist.pieceTable[to.row*8+to.col][pieceZobristIdx(placedPiece)];
 // 4. En passant capture: remove captured pawn (with defensive check)
 if(piece.type==='pawn'&&s.enPassantTarget&&to.row===s.enPassantTarget.row&&to.col===s.enPassantTarget.col){const cr=piece.color==='white'?to.row+1:to.row-1;const epPiece={type:'pawn',color:OPP_COLOR[piece.color]};const epP=s.board[cr][to.col];if(epP&&epP.type==='pawn'&&epP.color!==piece.color){h^=zobrist.pieceTable[cr*8+to.col][pieceZobristIdx(epPiece)]};}
-// 5. Castling: move rook
-if(piece.type==='king'&&Math.abs(to.col-from.col)===2){const rookColor=piece.color;const rookIdx=pieceZobristIdx({type:'rook',color:rookColor});if(to.col===6){h^=zobrist.pieceTable[from.row*8+7][rookIdx];h^=zobrist.pieceTable[from.row*8+5][rookIdx];}if(to.col===2){h^=zobrist.pieceTable[from.row*8+0][rookIdx];h^=zobrist.pieceTable[from.row*8+3][rookIdx];}}
+// 5. Castling: move rook (v1.0.6: use actual rook from/to cols for Chess960)
+if(_cs&&_rookFrom>=0&&_rookTo>=0){
+  const rookIdx=pieceZobristIdx({type:'rook',color:piece.color});
+  h^=zobrist.pieceTable[from.row*8+_rookFrom][rookIdx];
+  h^=zobrist.pieceTable[from.row*8+_rookTo][rookIdx];
+}
 // 6. Toggle side to move
 h^=zobrist.side;
 // 7. Update en passant file
@@ -1495,7 +1683,26 @@ return ns}
 function makeMvInPlace(s,mv){
 const{from,to,piece,promotion}=mv;
 if(!piece||!s.board[from.row]||!s.board[from.row][from.col])return null;
-const capPiece=s.board[to.row][to.col];
+// v1.0.6 FIX: Detect castling BEFORE moving the king (same fix as makeMv).
+// In Chess960, the rook's source may be the king's destination. Save the
+// rook before the king overwrites it.
+const _cs=_castleSide(mv);
+let _rookFrom=-1,_rookTo=-1,_savedRook=null;
+if(_cs){
+  if(typeof gameVariant!=='undefined'&&gameVariant==='chess960'&&typeof chess960CastlingRookMove==='function'){
+    const rm=chess960CastlingRookMove(s,piece.color,_cs);
+    if(rm&&rm.rookFrom!==rm.rookTo){
+      _rookFrom=rm.rookFrom;_rookTo=rm.rookTo;
+      _savedRook=s.board[rm.row][rm.rookFrom];
+    }
+  }else{
+    if(_cs==='kingside'){_rookFrom=7;_rookTo=5;}
+    else{_rookFrom=0;_rookTo=3;}
+    _savedRook=s.board[from.row][_rookFrom];
+  }
+}
+// For castling, there is no capture (capPiece would be the rook in Chess960).
+const capPiece=_cs?null:s.board[to.row][to.col];
 // Capture undo info
 const undo={
 from:{r:from.row,c:from.col},to:{r:to.row,c:to.col},
@@ -1514,7 +1721,7 @@ promotion:promotion||null,
 oldMoveHistoryLength:s.moveHistory?s.moveHistory.length:0,
 isBlackMove:piece.color==='black'
 };
-// 1. Move piece
+// 1. Move piece (king for castling)
 s.board[to.row][to.col]=s.board[from.row][from.col];
 s.board[from.row][from.col]=null;
 // 2. En passant capture
@@ -1526,19 +1733,13 @@ undo.epCaptured={r:cr,c:to.col,piece:{type:epP.type,color:epP.color}};
 s.board[cr][to.col]=null;
 }
 }
-// 3. Castling: move rook
-if(piece.type==='king'&&Math.abs(to.col-from.col)===2){
-if(typeof gameVariant!=='undefined'&&gameVariant==='chess960'&&typeof chess960CastlingRookMove==='function'){
-  const side=to.col===6?'kingside':'queenside';
-  const rm=chess960CastlingRookMove(s,piece.color,side);
-  if(rm&&rm.rookFrom!==rm.rookTo){
-    s.board[rm.row][rm.rookTo]=s.board[rm.row][rm.rookFrom];s.board[rm.row][rm.rookFrom]=null;
-    undo.castlingRook={from:{r:rm.row,c:rm.rookFrom},to:{r:rm.row,c:rm.rookTo}};
+// 3. Castling: move rook (v1.0.6 FIX: use _savedRook saved before king move)
+if(_cs&&_savedRook&&_rookFrom>=0&&_rookTo>=0){
+  s.board[from.row][_rookTo]=_savedRook;
+  if(_rookFrom!==to.col){
+    s.board[from.row][_rookFrom]=null;
   }
-}else{
-  if(to.col===6){s.board[from.row][5]=s.board[from.row][7];s.board[from.row][7]=null;undo.castlingRook={from:{r:from.row,c:7},to:{r:from.row,c:5}}}
-  if(to.col===2){s.board[from.row][3]=s.board[from.row][0];s.board[from.row][0]=null;undo.castlingRook={from:{r:from.row,c:0},to:{r:from.row,c:3}}}
-}
+  undo.castlingRook={from:{r:from.row,c:_rookFrom},to:{r:from.row,c:_rookTo}};
 }
 // 4. Promotion
 if(promotion)s.board[to.row][to.col]={type:promotion,color:piece.color};
@@ -1595,11 +1796,11 @@ h^=zobrist.pieceTable[to.row*8+to.col][pieceZobristIdx(placedPiece)];
 if(undo.epCaptured){
 h^=zobrist.pieceTable[undo.epCaptured.r*8+undo.epCaptured.c][pieceZobristIdx(undo.epCaptured.piece)];
 }
-// Castling hash
-if(piece.type==='king'&&Math.abs(to.col-from.col)===2){
+// Castling hash (v1.0.6: use actual rook from/to cols for Chess960)
+if(_cs&&_rookFrom>=0&&_rookTo>=0){
 const rookIdx=pieceZobristIdx({type:'rook',color:piece.color});
-if(to.col===6){h^=zobrist.pieceTable[from.row*8+7][rookIdx];h^=zobrist.pieceTable[from.row*8+5][rookIdx];}
-if(to.col===2){h^=zobrist.pieceTable[from.row*8+0][rookIdx];h^=zobrist.pieceTable[from.row*8+3][rookIdx];}
+h^=zobrist.pieceTable[from.row*8+_rookFrom][rookIdx];
+h^=zobrist.pieceTable[from.row*8+_rookTo][rookIdx];
 }
 // Side to move hash
 h^=zobrist.side;
@@ -1752,7 +1953,11 @@ return false;
 //   4. If neither suffices alone → both file AND rank (e.g., Qa1b2)
 // For pawns, file is only included on captures (e.g., exd5)
 function moveAlg(s,mv,postState){const{from,to,piece,promotion}=mv;const isCap=!!s.board[to.row][to.col]||(piece.type==='pawn'&&s.enPassantTarget&&to.row===s.enPassantTarget.row&&to.col===s.enPassantTarget.col);let n='';
-if(piece.type==='king'&&Math.abs(to.col-from.col)===2){n=to.col===6?'O-O':'O-O-O'}else{
+// v1.0.6: Use _castleSide() for unambiguous castling detection.
+// In Chess960, the king may move only 1 column when castling (e.g. f1→g1),
+// so `Math.abs(to.col-from.col)===2` alone is insufficient.
+const _cs=_castleSide(mv);
+if(_cs){n=_cs==='kingside'?'O-O':'O-O-O'}else{
 if(piece.type!=='pawn'){
 n+=piece.type==='knight'?'N':piece.type[0].toUpperCase();
 // Disambiguation: find all same-type, same-color pieces with legal moves to same target
@@ -1918,7 +2123,9 @@ if(bookMove){
 }catch(e){console.error('ECO book move lookup error:',e);}
 }
 if(typeof AndroidBridge!=='undefined'&&AndroidBridge.isEngineReady()){
-const fen=generateFEN(gameState);
+// v1.0.6: Sanitize the FEN before sending to the engine to strip
+// inconsistent castling rights that can cause the engine to hang.
+const fen=(typeof _sanitizeFenForEngine==='function')?_sanitizeFenForEngine(generateFEN(gameState)):generateFEN(gameState);
 // v1.0.4 LATEST: if the game is timed, use engineGoTimed() so Stockfish 18
 // manages its own time allocation via UCI wtime/btime/winc/binc parameters.
 // This is the correct way to play timed games — the engine will think longer
@@ -3747,7 +3954,19 @@ function makeMvInPlace(s,mv){
       s.board[cr][to.col]=null;
     }
   }
-  // Castling: standard chess only (king moves 2 squares)
+  // Castling: standard chess only (king moves 2 squares).
+  // v1.0.6 NOTE: This worker is used for PGN parsing and heatmap computation
+  // in standard chess only. Chess960 PGN parsing goes through tablebase.js's
+  // _parsePGN() which uses the Chess960-aware makeMvInPlace from game-logic.js.
+  // The worker does NOT have access to gameVariant (it's a sandboxed inline
+  // worker), so it cannot detect Chess960 castling. This is acceptable because
+  // the worker is only used for: (1) PGN round-trip parsing (standard chess),
+  // (2) control heatmap computation (board-only, no castling). If Chess960
+  // support is ever needed here, the move object should carry a castle flag
+  // (set by the caller from the main thread pseudoMoves) — same pattern as
+  // game-logic.js _castleSide() helper.
+  // NOTE: no backticks in this comment — it lives inside the _WORKER_SOURCE
+  // template literal, and backticks would prematurely terminate it (Rev57 bug).
   if(piece.type==='king'&&Math.abs(to.col-from.col)===2){
     if(to.col===6){s.board[from.row][5]=s.board[from.row][7];s.board[from.row][7]=null;undo.castlingRook={from:{r:from.row,c:7},to:{r:from.row,c:5}}}
     if(to.col===2){s.board[from.row][3]=s.board[from.row][0];s.board[from.row][0]=null;undo.castlingRook={from:{r:from.row,c:0},to:{r:from.row,c:3}}}
@@ -4668,6 +4887,10 @@ let _emergencyFallbackTimerId=setTimeout(function(){
 //   Levels 1-6: "AI对手 Lv.N" (zh) / "AI Opponent Lv.N" (en)
 //   Level 7 (Skill Level): "AI对手 SL" / "AI Opponent SL"
 //   Level 8 (Custom): "AI对手 Custom" / "AI Opponent Custom"
+// v1.0.6 NEW: When level is 7 (SL mode), append the actual Skill Level value
+//   from the engine config (e.g. "SL20" when skill level is 20). This makes
+//   the PGN [White]/[Black] tags and the in-game AI opponent bar carry the
+//   concrete strength value, which is useful for archival and review.
 function _aiOpponentNameWithLevel(){
   const baseName=T('ai_opponent');
   let levelSuffix='';
@@ -4676,7 +4899,17 @@ function _aiOpponentNameWithLevel(){
     if(effLevel>=1&&effLevel<=6){
       levelSuffix=' Lv.'+effLevel;
     }else if(effLevel===7){
-      levelSuffix=' SL';
+      // v1.0.6: Append the actual skill level value (0-20). Default to 20
+      // if engineSettingsData is unavailable (e.g. before engine init).
+      let _sl=20;
+      try{
+        if(typeof engineSettingsData!=='undefined'&&engineSettingsData&&engineSettingsData.skillLevel!=null){
+          _sl=engineSettingsData.skillLevel;
+        }else if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getEngineSkillLevel){
+          _sl=AndroidBridge.getEngineSkillLevel();
+        }
+      }catch(_e){}
+      levelSuffix=' SL'+_sl;
     }else if(effLevel===8){
       levelSuffix=' '+(T('manual_config')||'Custom').replace(/^⚙️\s*/,'');
     }
@@ -5393,8 +5626,21 @@ function _uciToSimple(uci){
   const pieceChar={knight:'N',bishop:'B',rook:'R',queen:'Q',king:'K',pawn:''}[pieceType]||'';
   const promoStr=promo?{q:'=Q',r:'=R',b:'=B',n:'=N'}[promo]||'':'';
   // Handle castling
-  if(pieceType==='king'&&Math.abs(toCol-fromCol)===2){
-    return toCol>fromCol?'O-O':'O-O-O';
+  // v1.0.6: Chess960-aware. In BOTH standard chess and Chess960, the king
+  // always ends on col 6 (kingside) or col 2 (queenside) after castling.
+  // However, a normal king move can also land on col 6/2, so we cannot
+  // rely on destination column alone. The reliable signal is the DISTANCE:
+  //   - Standard chess: king always moves exactly 2 cols to castle
+  //   - Chess960: king may move 1-5 cols to castle, BUT a 1-col king move
+  //     to g1/c1 is ambiguous (could be a normal king move). We only
+  //     treat it as castling if the king moved 2+ cols. The 1-col Chess960
+  //     castling case (e.g. king at f1 castling to g1) is handled by the
+  //     primary _uciToSAN() path which uses the board state, not this
+  //     fallback. This _uciToSimple fallback is only used when _uciToSAN
+  //     fails (state desync), so the 1-col ambiguity is acceptable.
+  if(pieceType==='king'&&Math.abs(toCol-fromCol)>=2){
+    if(toCol===6)return 'O-O';
+    if(toCol===2)return 'O-O-O';
   }
   // Handle pawn moves
   if(pieceType==='pawn'){
@@ -5589,6 +5835,93 @@ function generateFEN(s){
   fen+=' '+(s.halfMoveClock||0);
   fen+=' '+(s.fullMoveNumber||1);
   return fen;
+}
+
+// v1.0.6 NEW: Sanitize a FEN string before sending it to the Stockfish engine.
+// Stockfish tolerates most FEN quirks, but certain inconsistent castling
+// rights can cause the engine to enter a degraded state where it emits no
+// `info` lines and no `bestmove` (just hangs until the safety timer fires),
+// then retries indefinitely. The user reported this with the FEN
+// `4k3/8/8/8/8/8/8/r1K4R w q - 1 3` — black has castling right `q` (black
+// queenside) but no black rook on a8, so the right is meaningless.
+//
+// This function strips castling rights that don't match the actual board:
+//   - White Kingside (K): requires white king on e1 AND white rook on h1
+//   - White Queenside (Q): requires white king on e1 AND white rook on a1
+//   - Black Kingside (k): requires black king on e8 AND black rook on h8
+//   - Black Queenside (q): requires black king on e8 AND black rook on a8
+// For Chess960 (Shredder-FEN with letter-file castling), the validation is
+// more complex and left to the engine (Stockfish handles it natively).
+//
+// This is a defensive measure — under normal gameplay, generateFEN() always
+// produces consistent castling rights because makeMv/makeMvInPlace clear
+// them when the king or rook moves. The inconsistency can only arise from:
+//   1. Setup mode where the user places pieces manually
+//   2. Importing a FEN with inconsistent rights (fenToState doesn't validate)
+//   3. PGN import where the [FEN] tag has stale rights
+function _sanitizeFenForEngine(fen){
+  if(!fen||typeof fen!=='string')return fen;
+  const parts=fen.trim().split(/\s+/);
+  if(parts.length<2)return fen;
+  // Parse board
+  const rows=parts[0].split('/');
+  if(rows.length!==8)return fen;
+  const board=Array.from({length:8},()=>Array(8).fill(null));
+  for(let r=0;r<8;r++){
+    let c=0;
+    for(const ch of rows[r]){
+      if(ch>='1'&&ch<='8'){c+=parseInt(ch);continue;}
+      if(c>=8)break;
+      const isWhite=ch===ch.toUpperCase();
+      const type=ch.toLowerCase()==='p'?'pawn':ch.toLowerCase()==='n'?'knight':ch.toLowerCase()==='b'?'bishop':ch.toLowerCase()==='r'?'rook':ch.toLowerCase()==='q'?'queen':ch.toLowerCase()==='k'?'king':null;
+      if(!type)return fen; // malformed FEN — let engine handle
+      board[r][c]={type,color:isWhite?'white':'black'};
+      c++;
+    }
+  }
+  // Parse castling rights
+  const crRaw=parts[2]||'-';
+  if(crRaw==='-')return fen; // no castling rights — nothing to sanitize
+  // v1.0.6 SIMPLIFIED: Shredder-FEN (Chess960) uses file letters (A-H for
+  // white, a-h for black) instead of KQkq. If the castling field contains
+  // ANY character other than K/Q/k/q/-, it's Shredder — let the engine
+  // handle it (Stockfish validates Shredder natively).
+  if(!/^[KQkq-]+$/.test(crRaw)){
+    return fen; // Shredder-FEN or unknown format — let engine handle
+  }
+  // Validate standard KQkq rights
+  let cr='';
+  if(crRaw.includes('K')){
+    // White kingside: white king on e1 (row 7, col 4) AND white rook on h1 (row 7, col 7)
+    const wk=board[7][4], wr=board[7][7];
+    if(wk&&wk.type==='king'&&wk.color==='white'&&wr&&wr.type==='rook'&&wr.color==='white'){
+      cr+='K';
+    }
+  }
+  if(crRaw.includes('Q')){
+    // White queenside: white king on e1 (row 7, col 4) AND white rook on a1 (row 7, col 0)
+    const wk=board[7][4], wr=board[7][0];
+    if(wk&&wk.type==='king'&&wk.color==='white'&&wr&&wr.type==='rook'&&wr.color==='white'){
+      cr+='Q';
+    }
+  }
+  if(crRaw.includes('k')){
+    // Black kingside: black king on e8 (row 0, col 4) AND black rook on h8 (row 0, col 7)
+    const bk=board[0][4], br=board[0][7];
+    if(bk&&bk.type==='king'&&bk.color==='black'&&br&&br.type==='rook'&&br.color==='black'){
+      cr+='k';
+    }
+  }
+  if(crRaw.includes('q')){
+    // Black queenside: black king on e8 (row 0, col 4) AND black rook on a8 (row 0, col 0)
+    const bk=board[0][4], br=board[0][0];
+    if(bk&&bk.type==='king'&&bk.color==='black'&&br&&br.type==='rook'&&br.color==='black'){
+      cr+='q';
+    }
+  }
+  if(cr===crRaw)return fen; // no change needed
+  parts[2]=cr||'-';
+  return parts.join(' ');
 }
 
 // UCI move to internal coordinate converter (e.g., "e2e4" -> {from:{row:6,col:4},to:{row:4,col:4}})
@@ -5832,7 +6165,7 @@ function onBestMove(uciMove){
                 _pbinc=Math.round((gameClocks.incrementSec||0)*1000);
               }
             }
-            AndroidBridge.startPonder(ponderFenAfterMove,_pwtime,_pbtime,_pwinc,_pbinc);
+            AndroidBridge.startPonder((typeof _sanitizeFenForEngine==='function')?_sanitizeFenForEngine(ponderFenAfterMove):ponderFenAfterMove,_pwtime,_pbtime,_pwinc,_pbinc);
             // DEFERRED PONDER DISPLAY: Do NOT set _ponderMoveSAN here.
             // Previously, setting _ponderMoveSAN immediately caused the AI bar to show
             // the ponder move SAN WITHOUT progress info (since _ponderBarInfo was still
@@ -6183,7 +6516,13 @@ function renderEngineConfig(){
     // Show WDL
     h+='<div class="dlg-sec"><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:.8rem">'+T('show_wdl_label')+'</span><div class="toggle" onclick="toggleShowWDL()"><div class="toggle-sw'+(settings.showWDL?' on':'')+'"></div></div></div><div style="font-size:.7rem;color:var(--muted)">'+T('show_wdl_desc')+'</div></div>';
     // Skill Level
-    h+='<div class="dlg-sec"><div style="margin-bottom:10px;opacity:'+(settings.limitStrength?'0.4':'1')+';pointer-events:'+(settings.limitStrength?'none':'auto')+'"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><span style="font-size:.8rem">'+T('skill_level_label')+'</span><div style="display:flex;align-items:center;gap:4px"><button class="btn" style="padding:2px 8px;min-height:28px;font-size:.9rem" onclick="setConfigSkillLevel('+(settings.skillLevel-1)+')">-</button><span style="min-width:24px;text-align:center;font-weight:700">'+(settings.skillLevel!=null?settings.skillLevel:20)+'</span><button class="btn" style="padding:2px 8px;min-height:28px;font-size:.9rem" onclick="setConfigSkillLevel('+(settings.skillLevel+1)+')">+</button></div></div><div style="font-size:.7rem;color:var(--muted)">'+T('skill_level_desc')+(settings.limitStrength?'<br><span style="color:var(--red)">'+T('skill_elo_note')+'</span>':'')+'</div></div></div>';
+    // v1.0.6 GRAY-OUT UNIFICATION: Only the +/- stepper buttons are dimmed and
+    // disabled when limitStrength is on — the label "技能等级"/"Skill Level",
+    // the description "降低引擎技术水平…"/"Lower engine skill level…", and the
+    // red warning "限制Elo开启时，Skill Level由UCI_Elo自动决定" remain at full
+    // opacity. The red warning color matches the new-game dialog's gray-out
+    // explanation color (var(--red)) for consistency across both dialogs.
+    h+='<div class="dlg-sec"><div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px"><span style="font-size:.8rem">'+T('skill_level_label')+'</span><div style="display:flex;align-items:center;gap:4px;opacity:'+(settings.limitStrength?'0.4':'1')+';pointer-events:'+(settings.limitStrength?'none':'auto')+'"><button class="btn" style="padding:2px 8px;min-height:28px;font-size:.9rem" onclick="setConfigSkillLevel('+(settings.skillLevel-1)+')">-</button><span style="min-width:24px;text-align:center;font-weight:700">'+(settings.skillLevel!=null?settings.skillLevel:20)+'</span><button class="btn" style="padding:2px 8px;min-height:28px;font-size:.9rem" onclick="setConfigSkillLevel('+(settings.skillLevel+1)+')">+</button></div></div><div style="font-size:.7rem;color:var(--muted)">'+T('skill_level_desc')+(settings.limitStrength?'<br><span style="color:var(--red)">'+T('skill_elo_note')+'</span>':'')+'</div></div></div>';
     // Limit Elo
     h+='<div class="dlg-sec"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:.8rem">'+T('limit_elo_label')+'</span><div class="toggle" onclick="toggleLimitElo()"><div class="toggle-sw'+(settings.limitStrength?' on':'')+'"></div></div></div>';
     if(settings.limitStrength){
@@ -7324,7 +7663,10 @@ function requestEngineEval(){
       return;
     }
     // Invalidate any stale in-flight callbacks
-    const fen=generateFEN(_rs);
+    // v1.0.6: Sanitize the FEN before sending to the engine to strip
+    // inconsistent castling rights (e.g. `q` with no black rook on a8)
+    // that can cause the engine to hang or emit no bestmove.
+    const fen=_sanitizeFenForEngine(generateFEN(_rs));
     _evalForBlackTurn=_rs.currentTurn==='black';
     _reviewEvalRequestedStep=reviewStep;
     if(typeof AndroidBridge!=='undefined'&&AndroidBridge.isEngineReady()){
@@ -7366,7 +7708,8 @@ function requestEngineEval(){
       }
     }
   }else{
-    const fen=generateFEN(gameState);
+    // v1.0.6: Sanitize the FEN before sending to the engine.
+    const fen=_sanitizeFenForEngine(generateFEN(gameState));
     _evalForBlackTurn=gameState.currentTurn==='black';
     if(typeof AndroidBridge!=='undefined'&&AndroidBridge.isEngineReady()){
       _evalLoading=true;
@@ -8251,10 +8594,15 @@ function _applySANMove(state,san){
   if(!cleanSAN)return null;
   
   // Castling — support multiple common notations (O-O, 0-0, o-o, etc.)
+  // v1.0.6: Chess960-aware — find the king's ACTUAL column instead of
+  // hardcoding col 4 (e1). In Chess960, the king can start on any column
+  // b1-g1. The king always castles to col 6 (kingside) or col 2 (queenside).
   const upperSAN=cleanSAN.toUpperCase();
   if(upperSAN==='O-O'||cleanSAN==='0-0'){
     const row=state.currentTurn==='white'?7:0;
-    const kingFrom={row,col:4};
+    let kingCol=4; // default: standard chess
+    for(let c=0;c<8;c++){const p=state.board[row][c];if(p&&p.type==='king'&&p.color===state.currentTurn){kingCol=c;break;}}
+    const kingFrom={row,col:kingCol};
     const kingTo={row,col:6};
     const move=_findLegalMove(state,kingFrom,kingTo,'king');
     if(move)return _executeAndRecord(state,move,'O-O');
@@ -8262,7 +8610,9 @@ function _applySANMove(state,san){
   }
   if(upperSAN==='O-O-O'||cleanSAN==='0-0-0'){
     const row=state.currentTurn==='white'?7:0;
-    const kingFrom={row,col:4};
+    let kingCol=4; // default: standard chess
+    for(let c=0;c<8;c++){const p=state.board[row][c];if(p&&p.type==='king'&&p.color===state.currentTurn){kingCol=c;break;}}
+    const kingFrom={row,col:kingCol};
     const kingTo={row,col:2};
     const move=_findLegalMove(state,kingFrom,kingTo,'king');
     if(move)return _executeAndRecord(state,move,'O-O-O');
@@ -8479,6 +8829,15 @@ function importPGN(pgnText){
   // Start from FEN or initial position
   const startState=result.startFEN?fenToState(result.startFEN):initState();
   if(!startState){showToast(T('pgn_invalid'),2000);return;}
+  // v1.0.6 FIX: Preserve the imported start FEN so PGN round-trip export
+  // includes the [SetUp "1"] and [FEN "..."] headers. Previously, importPGN()
+  // consumed result.startFEN to build startState but never assigned it to
+  // _setupFEN, so _buildPGNString() emitted neither header on export.
+  // _startGameImpl() (ui.js) clears _setupFEN=null on new game, so this
+  // assignment is safe — it only persists until the next new-game action.
+  if(result.startFEN && typeof _setupFEN!=='undefined'){
+    _setupFEN=result.startFEN;
+  }
   // v1.0.4: If the PGN declared Chess960, mark the start state too
   if(result.variant==='chess960'){
     startState.chess960=true;
@@ -9823,7 +10182,7 @@ function _updateEvalDisplayIncremental() {
       if (app) {
         app.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#1a0a0a;color:#f5e6c8;padding:20px;text-align:center;font-family:system-ui,sans-serif">' +
           '<div style="font-size:3rem;margin-bottom:16px">♔</div>' +
-          '<h2 style="color:#ffd700;margin-bottom:12px">'+T('app_name')+' v1.0.5</h2>' +
+          '<h2 style="color:#ffd700;margin-bottom:12px">'+T('app_name')+' v1.0.6</h2>' +
           '<p style="color:#a08050;margin-bottom:20px;max-width:300px">'+T('render_error')+'</p>' +
           '<button onclick="location.reload()" style="padding:12px 24px;background:#c49512;color:#1a0a0a;border:none;border-radius:6px;font-size:1rem;font-weight:700;cursor:pointer">'+T('refresh_page')+'</button>' +
           '</div>';
@@ -10529,7 +10888,7 @@ const oppC=OPP_COLOR[playerColor];
 const flip=playerColor==='black';
 // Arrows computed separately by _updateArrows() — no inline computation needed
 
-let h='<div class="hdr" role="banner"><div class="hdr-top"><div class="hdr-l"><span style="font-size:1.3rem;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text;border:3px solid transparent;border-image:linear-gradient(145deg,#8b6914,#d4a017,#ffd700,#fff8dc,#ffd700,#d4a017,#8b6914) 1;padding:3px 6px;background:linear-gradient(145deg,rgba(139,105,20,.18),rgba(255,215,0,.08),rgba(139,105,20,.18));box-shadow:0 0 6px rgba(212,160,23,.35),0 0 12px rgba(255,215,0,.12),inset 0 0 3px rgba(255,215,0,.1),inset 0 1px 0 rgba(255,248,220,.15);position:relative">♔&#xFE0E;</span><h1>'+T('app_name')+'<span class="ver">v1.0.5</span><button onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showAboutPage=true;render()" style="font-size:.6rem;color:var(--accent);background:rgba(212,160,23,.15);padding:2px 8px;border-radius:4px;border:1px solid rgba(212,160,23,.3);margin-left:4px;cursor:pointer;font-family:system-ui,-apple-system,sans-serif;letter-spacing:1px">ℹ️</button></h1></div><button onclick="toggleLang()" style="font-size:.65rem;color:var(--accent);background:rgba(212,160,23,.15);padding:2px 6px;border-radius:4px;border:1px solid rgba(212,160,23,.3);cursor:pointer;font-family:system-ui,-apple-system,sans-serif;letter-spacing:1px;flex-shrink:0">'+(_lang==='zh'?'↔️中':'↔️EN')+'</button><div class="ev" id="eval-disp" role="status" aria-label="'+T('evaluating')+'">'+(setupMode?T('setup_label'):(isAIThinking?'<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>':'<span class="ev-e">'+pe+'</span><span>'+pd+'</span><span style="color:var(--muted)">('+scoreStr+')</span>'+_hdrDepthStr+_hdrProgressStr))+'</div></div><div class="hdr-tools" role="toolbar" aria-label="'+T('ctrl_range')+'">'+(setupMode?'':'<div class="diff-sel" role="radiogroup" aria-label="AI">'+getAI_LEVELS().map(l=>'<button class="diff-b'+(getEffectiveAILevel()===l.id?' act':'')+'" onclick="if(!isAIThinking){'+(l.id===8?'openEngineConfig()':('aiLevel='+l.id+';try{AndroidBridge.syncGameDifficulty('+l.id+')}catch(e){}render()'))+'}" title="'+l.desc+'" role="radio" aria-checked="'+(getEffectiveAILevel()===l.id)+'">'+(l.id===8?'⚙️':l.id===7?'SL':l.id)+'</button>').join('')+'</div>')+'<button type="button" class="btn" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()" aria-label="'+T('new_game')+'"><span style="font-size:1.4rem">⚔️</span> '+T('new_game')+'</button>'+'<button class="btn" onclick="quickFreeOpening()" aria-label="'+T('free_opening')+'">'+(playerColor==='white'?'<span style=\"font-size:1.4rem;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text\">♔&#xFE0E;</span>':'<span style=\"font-size:1.4rem;font-weight:400;color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans Symbol&#x27;,sans-serif;font-variant-emoji:text\">♚&#xFE0E;</span>')+' '+T('free_opening')+'</button>'+(setupMode?'':'<button class="btn" onclick="undoMove()" aria-label="'+T('undo')+'"><span style="font-size:1.4rem">↩️</span> '+T('undo')+'</button><button class="btn" onclick="redoMove()" aria-label="'+T('redo')+'" id="redoBtn"><span style="font-size:1.4rem">↪️</span> '+T('redo')+'</button>')+'<button class="btn" onclick="flipBoard()" aria-label="'+T('flip')+'"><span style="font-size:1.4rem">🔃</span> '+T('flip')+'</button>'+'<button class="btn" onclick="getHint()" aria-label="'+T('ai_hint')+'"><span style="font-size:1.4rem">💡</span> '+T('ai_hint')+'</button>'+(setupMode?'':'<button class="btn" onclick="toggleSound()" id="btnSound" aria-label="'+T('sound')+'">'+(soundOn?'<span style="font-size:1.4rem">🔊</span> '+T('sound'):'<span style="font-size:1.4rem">🔇</span> '+T('sound'))+'</button>')+'<button class="btn" onclick="showCtrlMap=!showCtrlMap;cachedCtrlKey=&quot;&quot;;render()" aria-label="'+T('ctrl_range')+'" title="'+T('ctrl_range')+'">'+(showCtrlMap?'<span style="font-size:1.4rem">🌈</span> '+T('ctrl_range'):'<span style="font-size:1.4rem">🌗</span> '+T('ctrl_range'))+'</button>'+'<button class="btn" onclick="copyFEN()" title="'+T('copy_fen')+'" aria-label="'+T('copy_fen')+'"><span style="font-size:1.4rem">📝</span> FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="'+T('import_fen')+'" aria-label="'+T('import_fen')+'"><span style="font-size:1.4rem">🗃️</span> '+T('import_label')+'</button><button class="btn" onclick="'+(setupMode?'exitSetup()':'toggleSetup()')+'" aria-label="'+(setupMode?T('setup_done'):T('setup_mode'))+'">'+(setupMode?'<span style="font-size:1.4rem">✓</span> '+T('setup_done'):'<span style="font-size:1.4rem">🏗️</span> '+T('setup_mode'))+'</button></div></div>';
+let h='<div class="hdr" role="banner"><div class="hdr-top"><div class="hdr-l"><span style="font-size:1.3rem;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text;border:3px solid transparent;border-image:linear-gradient(145deg,#8b6914,#d4a017,#ffd700,#fff8dc,#ffd700,#d4a017,#8b6914) 1;padding:3px 6px;background:linear-gradient(145deg,rgba(139,105,20,.18),rgba(255,215,0,.08),rgba(139,105,20,.18));box-shadow:0 0 6px rgba(212,160,23,.35),0 0 12px rgba(255,215,0,.12),inset 0 0 3px rgba(255,215,0,.1),inset 0 1px 0 rgba(255,248,220,.15);position:relative">♔&#xFE0E;</span><h1>'+T('app_name')+'<span class="ver">v1.0.6</span><button onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showAboutPage=true;render()" style="font-size:.6rem;color:var(--accent);background:rgba(212,160,23,.15);padding:2px 8px;border-radius:4px;border:1px solid rgba(212,160,23,.3);margin-left:4px;cursor:pointer;font-family:system-ui,-apple-system,sans-serif;letter-spacing:1px">ℹ️</button></h1></div><button onclick="toggleLang()" style="font-size:.65rem;color:var(--accent);background:rgba(212,160,23,.15);padding:2px 6px;border-radius:4px;border:1px solid rgba(212,160,23,.3);cursor:pointer;font-family:system-ui,-apple-system,sans-serif;letter-spacing:1px;flex-shrink:0">'+(_lang==='zh'?'↔️中':'↔️EN')+'</button><div class="ev" id="eval-disp" role="status" aria-label="'+T('evaluating')+'">'+(setupMode?T('setup_label'):(isAIThinking?'<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>':'<span class="ev-e">'+pe+'</span><span>'+pd+'</span><span style="color:var(--muted)">('+scoreStr+')</span>'+_hdrDepthStr+_hdrProgressStr))+'</div></div><div class="hdr-tools" role="toolbar" aria-label="'+T('ctrl_range')+'">'+(setupMode?'':'<div class="diff-sel" role="radiogroup" aria-label="AI">'+getAI_LEVELS().map(l=>'<button class="diff-b'+(getEffectiveAILevel()===l.id?' act':'')+'" onclick="if(!isAIThinking){'+(l.id===8?'openEngineConfig()':('aiLevel='+l.id+';try{AndroidBridge.syncGameDifficulty('+l.id+')}catch(e){}render()'))+'}" title="'+l.desc+'" role="radio" aria-checked="'+(getEffectiveAILevel()===l.id)+'">'+(l.id===8?'⚙️':l.id===7?('SL'+(function(){try{let _sl=20;if(typeof engineSettingsData!=='undefined'&&engineSettingsData&&engineSettingsData.skillLevel!=null)_sl=engineSettingsData.skillLevel;else if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getEngineSkillLevel)_sl=AndroidBridge.getEngineSkillLevel();return _sl;}catch(e){return 20;}})()):l.id)+'</button>').join('')+'</div>')+'<button type="button" class="btn" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()" aria-label="'+T('new_game')+'"><span style="font-size:1.4rem">⚔️</span> '+T('new_game')+'</button>'+'<button class="btn" onclick="quickFreeOpening()" aria-label="'+T('free_opening')+'">'+(playerColor==='white'?'<span style=\"font-size:1.4rem;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text\">♔&#xFE0E;</span>':'<span style=\"font-size:1.4rem;font-weight:400;color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans Symbol&#x27;,sans-serif;font-variant-emoji:text\">♚&#xFE0E;</span>')+' '+T('free_opening')+'</button>'+(setupMode?'':'<button class="btn" onclick="undoMove()" aria-label="'+T('undo')+'"><span style="font-size:1.4rem">↩️</span> '+T('undo')+'</button><button class="btn" onclick="redoMove()" aria-label="'+T('redo')+'" id="redoBtn"><span style="font-size:1.4rem">↪️</span> '+T('redo')+'</button>')+'<button class="btn" onclick="flipBoard()" aria-label="'+T('flip')+'"><span style="font-size:1.4rem">🔃</span> '+T('flip')+'</button>'+'<button class="btn" onclick="getHint()" aria-label="'+T('ai_hint')+'"><span style="font-size:1.4rem">💡</span> '+T('ai_hint')+'</button>'+(setupMode?'':'<button class="btn" onclick="toggleSound()" id="btnSound" aria-label="'+T('sound')+'">'+(soundOn?'<span style="font-size:1.4rem">🔊</span> '+T('sound'):'<span style="font-size:1.4rem">🔇</span> '+T('sound'))+'</button>')+'<button class="btn" onclick="showCtrlMap=!showCtrlMap;cachedCtrlKey=&quot;&quot;;render()" aria-label="'+T('ctrl_range')+'" title="'+T('ctrl_range')+'">'+(showCtrlMap?'<span style="font-size:1.4rem">🌈</span> '+T('ctrl_range'):'<span style="font-size:1.4rem">🌗</span> '+T('ctrl_range'))+'</button>'+'<button class="btn" onclick="copyFEN()" title="'+T('copy_fen')+'" aria-label="'+T('copy_fen')+'"><span style="font-size:1.4rem">📝</span> FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="'+T('import_fen')+'" aria-label="'+T('import_fen')+'"><span style="font-size:1.4rem">🗃️</span> '+T('import_label')+'</button><button class="btn" onclick="'+(setupMode?'exitSetup()':'toggleSetup()')+'" aria-label="'+(setupMode?T('setup_done'):T('setup_mode'))+'">'+(setupMode?'<span style="font-size:1.4rem">✓</span> '+T('setup_done'):'<span style="font-size:1.4rem">🏗️</span> '+T('setup_mode'))+'</button></div></div>';
 h+=`<div class="main" role="main"><div class="bsec">`;
 // v1.0.4 Rev37: AI bar captured pieces split at 7 — pieces 8+ go to line 3.
 {const _aiCapHtml=capturedPiecesHtml(gameState.board,oppC,playerColor,7);
@@ -10560,12 +10919,21 @@ const _aiClockHtml=(typeof gameClocks!=='undefined'&&gameClocks)?`<span id="${_a
 const _aiCapOverflowMatch=_aiCapHtml.match(/<div id="ai-cap-overflow"[^>]*>[\s\S]*?<\/div>/);
 const _aiCapOverflow=_aiCapOverflowMatch?_aiCapOverflowMatch[0]:'';
 const _aiCapMain=_aiCapOverflowMatch?_aiCapHtml.replace(_aiCapOverflowMatch[0],''):_aiCapHtml;
-h+=`<div class="pbar" id="ai-bar" role="status" aria-label="AI" style="flex-wrap:wrap"><span class="pico">${playerColor==='white'?'<span style="color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55)">♚&#xFE0E;</span>':'<span style="color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55)">♔&#xFE0E;</span>'}</span><div style="flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><div class="pname">${T('ai_opponent')}</div><div class="pbar-sub">${getEffectiveAILevel()===8?T('manual_config'):getEffectiveAILevel()===7?'SL':('Lv.'+getEffectiveAILevel())}</div>${_aiClockHtml}${gameState.currentTurn!==playerColor&&!gameOver&&!isAIThinking?'<span class="tind">'+T('waiting')+'</span>':''}${isAIThinking?'<span class="tind">'+T('thinking')+'</span>':''}</div>${_aiCapMain}<div id="ai-search-info" style="display:flex;justify-content:flex-end;text-align:right;font-size:.65rem;color:var(--accent2);font-family:monospace,system-ui,-apple-system,sans-serif;letter-spacing:.5px;padding-top:2px;line-height:1.3;min-height:1.3em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;width:100%;box-sizing:border-box">${isAIThinking&&_aiBarInfo?_esc(_aiBarInfo):''}</div><div style="display:flex;align-items:center;width:100%;gap:6px;min-width:0;overflow:hidden">${_aiCapOverflow}<div id="ai-ponder-info" style="text-align:right;font-size:.65rem;color:var(--muted);font-family:monospace,system-ui,-apple-system,sans-serif;letter-spacing:.5px;padding-top:1px;line-height:1.3;min-height:1.3em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto;min-width:0;margin-left:auto">${(!isAIThinking&&!isHintLoading&&!hintText&&_ponderMoveSAN&&_ponderBarInfo&&!gameOver&&!setupMode&&!reviewMode)?('🔮 '+_esc(_ponderMoveSAN)+' '+_esc(_ponderBarInfo)):''}</div></div></div></div>`;}
+h+=`<div class="pbar" id="ai-bar" role="status" aria-label="AI" style="flex-wrap:wrap"><span class="pico">${playerColor==='white'?'<span style="color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55)">♚&#xFE0E;</span>':'<span style="color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55)">♔&#xFE0E;</span>'}</span><div style="flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><div class="pname">${T('ai_opponent')}</div><div class="pbar-sub">${getEffectiveAILevel()===8?T('manual_config'):getEffectiveAILevel()===7?('SL'+(function(){try{let _sl=20;if(typeof engineSettingsData!=='undefined'&&engineSettingsData&&engineSettingsData.skillLevel!=null)_sl=engineSettingsData.skillLevel;else if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getEngineSkillLevel)_sl=AndroidBridge.getEngineSkillLevel();return _sl;}catch(e){return 20;}})()):('Lv.'+getEffectiveAILevel())}</div>${_aiClockHtml}${gameState.currentTurn!==playerColor&&!gameOver&&!isAIThinking?'<span class="tind">'+T('waiting')+'</span>':''}${isAIThinking?'<span class="tind">'+T('thinking')+'</span>':''}</div>${_aiCapMain}<div id="ai-search-info" style="display:flex;justify-content:flex-end;text-align:right;font-size:.65rem;color:var(--accent2);font-family:monospace,system-ui,-apple-system,sans-serif;letter-spacing:.5px;padding-top:2px;line-height:1.3;min-height:1.3em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;width:100%;box-sizing:border-box">${isAIThinking&&_aiBarInfo?_esc(_aiBarInfo):''}</div><div style="display:flex;align-items:center;width:100%;gap:6px;min-width:0;overflow:hidden">${_aiCapOverflow}<div id="ai-ponder-info" style="text-align:right;font-size:.65rem;color:var(--muted);font-family:monospace,system-ui,-apple-system,sans-serif;letter-spacing:.5px;padding-top:1px;line-height:1.3;min-height:1.3em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto;min-width:0;margin-left:auto">${(!isAIThinking&&!isHintLoading&&!hintText&&_ponderMoveSAN&&_ponderBarInfo&&!gameOver&&!setupMode&&!reviewMode)?('🔮 '+_esc(_ponderMoveSAN)+' '+_esc(_ponderBarInfo)):''}</div></div></div></div>`;}
 h+=`<div class="flbl" style="margin-left:28px">${(flip?'hgfedcba':'abcdefgh').split('').map(f=>`<span style="width:${CELL}px">${f}</span>`).join('')}</div>`;
 h+=`<div style="display:flex"><div class="rlbl">${(flip?'12345678':'87654321').split('').map(r=>`<span style="height:${CELL}px">${r}</span>`).join('')}</div>`;
 h+=`<div class="bwrap"><div class="bgrid" id="board-grid" role="grid" aria-label="${T('board')}" style="grid-template-columns:repeat(8,${CELL}px);grid-template-rows:repeat(8,${CELL}px)">`;
 // Determine check state for king highlighting
 let _checkKingPos=getCheckKingPos(gameState);
+// v1.0.6: Identify castling rook squares for the selected king (if any).
+// These squares get a distinct golden ring marker so the user knows they
+// can click the rook to trigger castling (essential for Chess960).
+// v1.0.6 OPTIMIZATION: _getCastlingRookSquares() was redundantly re-iterating
+// legalMvs and re-calling chess960CastlingRookMove() to reconstruct the 'side'
+// field that _computeCastlingRookSetForSelection already computed but discarded.
+// Since renderInternal only needs the Set of row*8+col keys (the .side field
+// was never used), we now call _computeCastlingRookSetForSelection directly.
+const _castlingRookSet=_computeCastlingRookSetForSelection(selectedSquare,legalMvs);
 for(let r=0;r<8;r++){for(let c=0;c<8;c++){
 const rr=flip?7-r:r;const cc=flip?7-c:c;
 const p=gameState.board[rr][cc];const isL=(r+c)%2===0;
@@ -10574,15 +10942,20 @@ const lastFrom=lastMove&&rr===lastMove.from.row&&cc===lastMove.from.col;
 const lastTo=lastMove&&lastMove.to.row===rr&&lastMove.to.col===cc;
 const isLegal=legalSet.has(rr*8+cc);
 const isCheckSq=_checkKingPos&&rr===_checkKingPos.row&&cc===_checkKingPos.col;
+const isCastlingRook=_castlingRookSet.has(rr*8+cc);
 const lbl=String.fromCharCode(97+cc)+(8-rr);
-h+=`<div class="sq${lastFrom?' last-from':''}${lastTo?' last-to':''}${isCheckSq?' in-check':''}" role="gridcell" style="background:${bg}" data-r="${rr}" data-c="${cc}" onclick="sqClick(${rr},${cc})">`;
+h+=`<div class="sq${lastFrom?' last-from':''}${lastTo?' last-to':''}${isCheckSq?' in-check':''}${isCastlingRook?' castle-rook':''}" role="gridcell" style="background:${bg}" data-r="${rr}" data-c="${cc}" onclick="sqClick(${rr},${cc})">`;
 h+=`<span class="lbl" style="color:${isL?LBL_LIGHT:LBL_DARK};-webkit-text-stroke:.6px ${isL?LBL_STROKE_LIGHT:LBL_STROKE_DARK};paint-order:stroke fill;text-shadow:0 0 2px ${isL?LBL_STROKE_LIGHT:LBL_STROKE_DARK}">${lbl}</span>`;
 if(p){
 const animCls=(_lastAnimPieceType&&_lastAnimTarget&&lastTo&&rr===_lastAnimTarget.row&&cc===_lastAnimTarget.col&&p.type===_lastAnimPieceType)?' anim-'+p.type:'';
 h+=`<span class="pc ${p.color==='white'?'w':'bk'}${animCls}">${SYM[p.color][p.type]}</span>`;
 if(animCls){_landingAnimActive=true;_startLandingTimer(_lastAnimPieceType);}}
 if(isLegal&&!p)h+=`<div class="dot"></div>`;
-if(isLegal&&p)h+=`<div class="ring"></div>`;
+if(isLegal&&p&&!isCastlingRook)h+=`<div class="ring"></div>`;
+// v1.0.6: Castling rook marker — a golden dashed ring (distinct from the
+// solid green capture ring) that signals "click me to castle". Style
+// matches the existing ring/dot design language (CSS in index.html.tpl).
+if(isCastlingRook)h+=`<div class="castle-ring"></div>`;
 h+=`</div>`}}
 h+=`</div>`;
 // Arrows are now handled by persistent SVG overlay via _updateArrows() — no inline SVG here
@@ -10636,7 +11009,13 @@ else{_tbBarHtml='<span style="cursor:pointer;color:var(--accent);text-decoration
 h+=`<div style="padding:6px 12px;background:#221015;border:1px solid var(--border);border-radius:6px;font-size:.8rem;font-family:system-ui,-apple-system,sans-serif"><div style="display:flex;align-items:center;gap:6px;margin-bottom:3px"><span style="font-size:.85rem">🌐</span><span style="color:var(--accent2);font-weight:700;font-size:.75rem">${T('tb_library')}</span></div>${_tbBarHtml}</div>`;
 }
 // ECO Opening Recommendation bar (only when _ecoEnabled)
-if(!setupMode&&!gameOver&&!reviewMode&&_ecoEnabled&&gameState.currentTurn===playerColor){
+// v1.0.6: Suppress in Chess960 mode — Chess960 has no fixed opening theory,
+// so ECO recommendations are meaningless and were already disabled in the
+// new-game dialog (the ECO book toggle is grayed out when Chess960 is on).
+// This same gate now also covers the in-game recommendation bar so a game
+// that started as Chess960 (or was imported from a Chess960 PGN) never
+// shows ECO recommendations.
+if(!setupMode&&!gameOver&&!reviewMode&&_ecoEnabled&&!(typeof gameVariant!=='undefined'&&gameVariant==='chess960')&&gameState.currentTurn===playerColor){
 const _ecoRec=getECORecommendation(gameState);
 if(_ecoRec){
 h+=`<div style="padding:6px 12px;background:#221015;border:1px solid var(--purple);border-radius:6px;font-size:.8rem;font-family:system-ui,-apple-system,sans-serif"><div style="display:flex;align-items:center;gap:6px;margin-bottom:3px"><span style="font-size:.85rem">📖</span><span style="color:#ffd700;font-weight:700;font-size:.75rem">${T('opening_rec')}</span></div><span style="color:var(--muted);font-size:.85rem;margin-right:4px">🔍</span><span style="color:var(--text)">${_ecoRec.notation}</span><span style="color:var(--muted);font-size:.7rem;margin-left:6px">(${_ecoRec.name})</span></div>`;
@@ -10678,7 +11057,8 @@ if(infoCtrl){h+=`<div class="plist">`;for(const c of infoCtrl[playerColor])h+=`<
 else{h+=`<div style="color:#64748b;font-size:.85rem">${T('click_sq')}</div>`}
 h+=`</div>`;}
 // ECO Opening Info (only when _ecoEnabled)
-if(_ecoEnabled){
+// v1.0.6: Also suppress in Chess960 mode (no fixed opening theory).
+if(_ecoEnabled&&!(typeof gameVariant!=='undefined'&&gameVariant==='chess960')){
 const ecoInfo=queryECO(gameState);
 if(ecoInfo){h+=`<div class="card"><div class="card-t"><span class="ico">📖</span>${T('eco_id')}</div><div style="padding:12px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span class="opening-tag">${_esc(ecoInfo.id)}</span><span style="font-weight:600;font-size:.9rem">${_esc(ecoInfo.name)}</span></div><div style="color:var(--muted);font-size:.82rem">${_esc(ecoInfo.family)}</div></div></div>`}
 }
@@ -10711,8 +11091,14 @@ h+=`<div class="dlg-sec"><h3>${T('play_color')}</h3><div class="clr-row"><button
 // remains mutually exclusive — when it is ON, this Chess960 toggle is grayed out.
 // When Chess960 is ON, the dedicated Chess960 settings (SP-ID, preview, note)
 // replace the Classic Openings section further below (existing behavior, unchanged).
+// v1.0.6 GRAY-OUT UNIFICATION: Only the toggle button itself is dimmed and
+// disabled — the section heading "菲舍尔任意制象棋"/"Fischer Random (Chess960)"
+// and the description "启用 Chess960 模式"/"Enable Chess960 mode" remain at
+// full opacity. A new gray-out explanation is shown below the toggle when it
+// is grayed out, using the same color as the matching text in the Engine
+// Configuration advanced settings dialog.
 const _ch960Grayed=dlgBookMoves;
-h+=`<div class="dlg-sec"${_ch960Grayed?' style="opacity:.4;pointer-events:none"':''}><h3>${T('chess960_label')}</h3><div class="toggle" onclick="dlgChess960=!dlgChess960;HapticManager.fire(dlgChess960?'TOGGLE_ON':'TOGGLE_OFF');if(dlgChess960){dlgOpeningId=null;}render()" style="margin-bottom:10px"><span>${T('chess960_enable')}</span><div class="toggle-sw${dlgChess960?' on':''}"></div></div></div>`;
+h+=`<div class="dlg-sec"><h3>${T('chess960_label')}</h3><div class="toggle" onclick="${_ch960Grayed?'':`dlgChess960=!dlgChess960;HapticManager.fire(dlgChess960?'TOGGLE_ON':'TOGGLE_OFF');if(dlgChess960){dlgOpeningId=null;}render()`}" style="margin-bottom:10px;${_ch960Grayed?'opacity:.4;pointer-events:none':''}"><span>${T('chess960_enable')}</span><div class="toggle-sw${dlgChess960?' on':''}"></div></div>${_ch960Grayed?`<div style="font-size:.7rem;color:var(--red);margin-top:-4px;margin-bottom:6px">${T('gray_disabled_by_eco_book')}</div>`:''}</div>`;
 // v1.0.4 EXPANSION (this round): Time Control selector
 //   - Type dropdown: Untimed / Sudden Death / Fischer Increment / Bronstein Delay / US Delay
 //   - Base time input (minutes), shown when type != 'off'
@@ -10743,9 +11129,13 @@ h+=`</div>`;
 // v1.0.4 FIX (this round): AI Book Moves toggle.
 //   - When Chess960 is enabled, this toggle is grayed out (Chess960 has no fixed opening theory).
 //   - When this toggle is ON, the Chess960 toggle (above) is grayed out (mutual exclusivity).
-//   - Visual: grayed-out toggle has reduced opacity and pointer-events:none.
+//   - v1.0.6 GRAY-OUT UNIFICATION: Only the toggle button itself is dimmed and
+//     disabled — the section heading "AI开局库"/"AI Opening Book", the description
+//     "使用ECO开局库"/"Use ECO Book", and the explanation paragraph remain at
+//     full opacity. A new gray-out explanation appears below the toggle when it
+//     is grayed out.
 const _ecoGrayed=dlgChess960;
-h+=`<div class="dlg-sec"${_ecoGrayed?' style="opacity:.4;pointer-events:none"':''}><h3>${T('ai_book')}</h3><div class="toggle" onclick="dlgBookMoves=!dlgBookMoves;HapticManager.fire(dlgBookMoves?'TOGGLE_ON':'TOGGLE_OFF');render()" style="margin-bottom:10px"><span>${T('book_moves')}</span><div class="toggle-sw${dlgBookMoves?' on':''}"></div></div></div><div style="font-size:.72rem;color:var(--muted);margin-bottom:10px">${T('eco_book_desc')}</div></div>`;
+h+=`<div class="dlg-sec"><h3>${T('ai_book')}</h3><div class="toggle" onclick="${_ecoGrayed?'':`dlgBookMoves=!dlgBookMoves;HapticManager.fire(dlgBookMoves?'TOGGLE_ON':'TOGGLE_OFF');render()`}" style="margin-bottom:10px;${_ecoGrayed?'opacity:.4;pointer-events:none':''}"><span>${T('book_moves')}</span><div class="toggle-sw${dlgBookMoves?' on':''}"></div></div>${_ecoGrayed?`<div style="font-size:.7rem;color:var(--red);margin-top:-4px;margin-bottom:6px">${T('gray_disabled_by_chess960')}</div>`:''}</div><div style="font-size:.72rem;color:var(--muted);margin-bottom:10px">${T('eco_book_desc')}</div></div>`;
 // v1.0.4 FIX (this round): The "Classic Openings" section and the "Chess960" section
 // are MUTUALLY EXCLUSIVE — when Chess960 is ON, the Classic Openings area is
 // REPLACED by the Chess960-specific settings (SP-ID input, back-rank preview, note).
@@ -10789,7 +11179,7 @@ if(dlgChess960&&!dlgBookMoves){
   // v1.0.4 FIX (this round): Removed the redundant <h3>${T('classic_openings')}</h3>
   // heading — it was a residual title. The section is self-evident from the ECO
   // search box and openings list below.
-  h+=`<div class="dlg-sec"><div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap"><form onsubmit="event.preventDefault();if(!_ecoComposing){_ecoDoSearch()}" style="flex:1;min-width:200px;display:flex;gap:4px"><input id="ecoSearch" type="text" inputmode="search" placeholder="${T('eco_search_ph')}" style="flex:1;padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;touch-action:manipulation" enterkeyhint="search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="if(!_ecoComposing){setEcoQuery(this.value)}" onfocus="_ecoSearchFocused=true;if(_ecoBlurTimer){clearTimeout(_ecoBlurTimer);_ecoBlurTimer=0}" onblur="_ecoBlurTimer=setTimeout(function(){_ecoSearchFocused=false;_ecoBlurTimer=0},200)" oncompositionstart="_ecoComposing=true" oncompositionend="_ecoComposing=false;setEcoQuery(this.value)" onkeydown="if((event.key==='Enter'||event.keyCode===13)&&!event.isComposing&&!_ecoComposing){event.preventDefault();setEcoQuery(this.value);_ecoDoSearch()}" value="${(window.ecoSearchQuery||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c]))}"></form><select id="ecoFamily" style="padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;cursor:pointer" onchange="window.ecoFamilyFilter=this.value;ecoShowCount=30;_ecoUpdateResults()"><option value="">${T('all_categories')}</option>${Object.keys(ECO_BY_FAMILY).sort().map(f=>`<option value="${f}"${(window.ecoFamilyFilter||'')===f?' selected':''}>${f}</option>`).join('')}</select></div><div class="op-list"><button class="op-btn${!dlgOpeningId?' act':''}" onclick="dlgOpeningId=null;window.ecoSearchQuery='';window.ecoFamilyFilter='';ecoShowCount=30;_ecoUpdateResults()"><div class="on">${T('free_opening_btn')}</div><div class="os">${T('from_start')}</div></button>`;
+  h+=`<div class="dlg-sec"><div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap"><form onsubmit="event.preventDefault();if(!_ecoComposing){_ecoDoSearch()}" style="flex:1;min-width:160px;display:flex;gap:4px"><input id="ecoSearch" type="text" inputmode="search" placeholder="${T('eco_search_ph')}" style="flex:1;padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;touch-action:manipulation" enterkeyhint="search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="if(!_ecoComposing){setEcoQuery(this.value)}" onfocus="_ecoSearchFocused=true;if(_ecoBlurTimer){clearTimeout(_ecoBlurTimer);_ecoBlurTimer=0}" onblur="_ecoBlurTimer=setTimeout(function(){_ecoSearchFocused=false;_ecoBlurTimer=0},200)" oncompositionstart="_ecoComposing=true" oncompositionend="_ecoComposing=false;setEcoQuery(this.value)" onkeydown="if((event.key==='Enter'||event.keyCode===13)&&!event.isComposing&&!_ecoComposing){event.preventDefault();setEcoQuery(this.value);_ecoDoSearch()}" value="${(window.ecoSearchQuery||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c]))}"></form><select id="ecoFamily" style="padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;cursor:pointer;flex-shrink:0" onchange="window.ecoFamilyFilter=this.value;ecoShowCount=30;_ecoUpdateResults()"><option value="">${T('all_categories')}</option>${Object.keys(ECO_BY_FAMILY).sort().map(f=>`<option value="${f}"${(window.ecoFamilyFilter||'')===f?' selected':''}>${f}</option>`).join('')}</select></div><div class="op-list"><button class="op-btn${!dlgOpeningId?' act':''}" onclick="dlgOpeningId=null;window.ecoSearchQuery='';window.ecoFamilyFilter='';ecoShowCount=30;_ecoUpdateResults()"><div class="on">${T('free_opening_btn')}</div><div class="os">${T('from_start')}</div></button>`;
   _ensureEcoParsed();ecoDisplayList=ECO_OPENINGS;
   if(window.ecoSearchQuery){const q=window.ecoSearchQuery.trim().toUpperCase();ecoDisplayList=searchEco(q)}
   else if(window.ecoFamilyFilter){ecoDisplayList=ECO_BY_FAMILY[window.ecoFamilyFilter]||[]}
@@ -10810,7 +11200,7 @@ if(showAboutPage){
 // Load AGPL v3 SVG via AndroidBridge as base64 (CSP-compliant)
 let _gplSvgSrc='';
 try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.loadAssetAsBase64){const b64=AndroidBridge.loadAssetAsBase64('AGPLv3_Logo.svg');if(b64)_gplSvgSrc='data:image/svg+xml;base64,'+b64;}}catch(e){}
-h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="About"><div class="dlg" style="max-width:460px"><h2>${T('about_title')}</h2><div class="dlg-sec"><div class="crow"><span class="lb">${T('about_app')}</span><span class="vl">${T('app_name')} v1.0.5</span></div><div class="crow"><span class="lb">${T('about_engine')}</span><span class="vl">Stockfish 18 (arm64-v8a-dotprod)</span></div><div class="crow"><span class="lb">${T('about_platform')}</span><span class="vl">Android arm64-v8a</span></div></div><div class="dlg-sec"><h3>${T('copyright_license')}</h3>`+(_gplSvgSrc?`<div style="text-align:center;margin-bottom:10px"><img src="${_gplSvgSrc}" alt="AGPL v3 Logo" style="width:120px;height:auto;opacity:.9" /></div>`:'')+`<div style="font-size:.75rem;color:var(--text);line-height:1.6"><p style="margin-bottom:8px">${T('about_copyright')}</p><p style="margin-bottom:8px">${T('about_source_code_prefix')}<a href="${T('about_source_code_url')}" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">${T('about_source_code_url')}</a></p><p style="margin-bottom:8px">${T('about_agpl')} <a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GNU AGPL v3</a>${T('about_agpl_desc')}</p><p style="margin-bottom:8px">${T('about_droidfish')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a>${T('about_droidfish_desc')}</p><p style="margin-bottom:8px">${T('about_stockfish')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a> ${T('about_gplv3')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_disclaimer')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_ai')}</p></div></div><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="showAboutPage=false;render()" style="flex:1;justify-content:center">${T('close')}</button></div></div></div>`;}
+h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="About"><div class="dlg" style="max-width:460px"><h2>${T('about_title')}</h2><div class="dlg-sec"><div class="crow"><span class="lb">${T('about_app')}</span><span class="vl">${T('app_name')} v1.0.6</span></div><div class="crow"><span class="lb">${T('about_engine')}</span><span class="vl">Stockfish 18 (arm64-v8a-dotprod)</span></div><div class="crow"><span class="lb">${T('about_platform')}</span><span class="vl">Android arm64-v8a</span></div></div><div class="dlg-sec"><h3>${T('copyright_license')}</h3>`+(_gplSvgSrc?`<div style="text-align:center;margin-bottom:10px"><img src="${_gplSvgSrc}" alt="AGPL v3 Logo" style="width:120px;height:auto;opacity:.9" /></div>`:'')+`<div style="font-size:.75rem;color:var(--text);line-height:1.6"><p style="margin-bottom:8px">${T('about_copyright')}</p><p style="margin-bottom:8px">${T('about_source_code_prefix')}<a href="${T('about_source_code_url')}" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">${T('about_source_code_url')}</a></p><p style="margin-bottom:8px">${T('about_agpl')} <a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GNU AGPL v3</a>${T('about_agpl_desc')}</p><p style="margin-bottom:8px">${T('about_droidfish')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a>${T('about_droidfish_desc')}</p><p style="margin-bottom:8px">${T('about_stockfish')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a> ${T('about_gplv3')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_disclaimer')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_ai')}</p></div></div><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="showAboutPage=false;render()" style="flex:1;justify-content:center">${T('close')}</button></div></div></div>`;}
 // Import dialog — paste FEN, paste PGN, or select PGN file
 if(showImportDialog){
 h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="${T('import_title')}" onclick="if(event.target===this){showImportDialog=false;render()}"><div class="dlg" style="max-width:420px"><h2>${T('import_title')}</h2><div class="dlg-sec" style="gap:10px;display:flex;flex-direction:column">
@@ -11172,9 +11562,16 @@ const _rvNavHTML='<div class="review-nav" style="display:flex;gap:4px;margin-top
   '</div>';
 
 // Analyze all steps button
+// v1.0.6 FIX: _totalSteps must be moveRecords.length (the number of moves
+// to analyze), NOT reviewStates.length. reviewStates includes the initial
+// position at index 0, so reviewStates.length = moveRecords.length + 1.
+// The eval cache is keyed by reviewStep (1-based move index), so a fully-
+// analyzed game has moveRecords.length cache entries. Comparing
+// _cachedCount >= reviewStates.length was always false (off-by-one),
+// causing "全部分析完成" to never display after PGN re-import.
 const _cachedCount=_reviewEvalCache.size;
-const _totalSteps=reviewStates.length;
-const _allCached=_cachedCount>=_totalSteps;
+const _totalSteps=moveRecords.length;
+const _allCached=_totalSteps>0&&_cachedCount>=_totalSteps;
 const _rvAnalyzeHTML='<button class="btn" style="margin-top:4px;width:100%;font-size:.7rem;min-height:28px" onclick="reviewAnalyzeAll()">'+(_allCached?T('all_analyzed'):(T('analyze_all_steps')+' '+_totalSteps+(_cachedCount>0?' ('+_cachedCount+'/'+_totalSteps+')':'')))+'</button>';
 
 if(_isLandscapeReview){
@@ -11289,6 +11686,29 @@ const _wasEcoFocused=_ecoSearchFocused;if(_ecoBlurTimer){clearTimeout(_ecoBlurTi
 // user was scrolled up (reading old moves), preserve their exact position.
 // This matches the behavior of chess.com / lichess move lists.
 let _savedReviewBodyScroll=0;
+// v1.0.6: Save scroll positions of additional scrollable containers that
+// were previously NOT preserved across full re-renders:
+//   - .dlg (any open dialog: New Game, Engine Config, Import, About, etc.)
+//   - .panel (right-side info panel in landscape — contains control info,
+//     ECO info, move history, eval chart, etc.)
+//   - .review-moves (inner move list in review mode — outer is .review-body)
+//   - .op-list (opening selector inside New Game dialog)
+// Each entry stores {selector, scrollTop, scrollHeight, clientHeight} so we
+// can clamp the restore if the new content is shorter (avoiding negative
+// scroll positions that some WebViews clamp to 0 with a visible jump).
+let _savedContainerScrolls=[];
+try{
+  const _selectors=['.dlg','.panel','.review-moves','.op-list'];
+  for(const _sel of _selectors){
+    const _els=document.querySelectorAll(_sel);
+    for(let _i=0;_i<_els.length;_i++){
+      const _el=_els[_i];
+      if(_el&&_el.scrollHeight>0&&_el.clientHeight>0&&_el.scrollTop>0){
+        _savedContainerScrolls.push({sel:_sel,idx:_i,scrollTop:_el.scrollTop,scrollHeight:_el.scrollHeight,clientHeight:_el.clientHeight});
+      }
+    }
+  }
+}catch(e){}
 // v1.0.4 Rev30 ROBUSTNESS: save phase reads scrollTop DIRECTLY from the DOM
 // (not just from _mlistScrollState). The scroll-event handler is the
 // authoritative source during normal user scrolling, but it can be missed if:
@@ -11360,6 +11780,33 @@ if(reviewMode&&_savedReviewBodyScroll>0&&!_skipReviewBodyScrollRestore){
 }
 // Always clear the skip flag after one render cycle
 _skipReviewBodyScrollRestore=false;
+// v1.0.6: Restore scroll positions of additional containers (.dlg, .panel,
+// .review-moves, .op-list). This must run AFTER app.innerHTML=h so the new
+// DOM elements exist. We use requestAnimationFrame to ensure layout has
+// settled before reading scrollHeight/clientHeight for clamping.
+if(_savedContainerScrolls.length>0){
+  const _toRestore=_savedContainerScrolls;
+  _savedContainerScrolls=[]; // clear so re-renders don't double-restore
+  requestAnimationFrame(function(){
+    for(const _entry of _toRestore){
+      try{
+        const _els=document.querySelectorAll(_entry.sel);
+        const _el=_els[_entry.idx];
+        if(!_el)continue;
+        // Clamp: if the new content is shorter than the saved scrollTop,
+        // scroll to the bottom instead (avoid jumping to top on shorter content).
+        const _maxScroll=Math.max(0,_el.scrollHeight-_el.clientHeight);
+        const _target=Math.min(_entry.scrollTop,_maxScroll);
+        if(_target>0){
+          const _savedBehavior=_el.style.scrollBehavior;
+          _el.style.scrollBehavior='auto';
+          _el.scrollTop=_target;
+          _el.style.scrollBehavior=_savedBehavior;
+        }
+      }catch(e){}
+    }
+  });
+}
 // Invalidate all cached DOM refs since DOM was rebuilt by full render
 _cachedBwrap=null;_cachedSvgEl=null;_cachedSvgLines=[];_cachedArrowKey='';_cachedCtrlCard=null;
 // Do NOT reset _prevSelSq/_prevLegalSet to null/empty after render().
@@ -11671,6 +12118,54 @@ function _updateChangedSquares(oldInfoSq,newInfoSq,oldLegalSet,newLegalSet){
   const cm=showCtrlMap?cachedCtrlMap:null;
   const sqEls=gridEl.querySelectorAll('.sq');
   if(sqEls.length!==64)return; // safety check
+  // v1.0.6 FIX: Compute the castling-rook square set for the CURRENT selection
+  // state. This must match the logic in renderInternal() so the golden dashed
+  // ring marker stays in sync with selection changes. Without this, the marker
+  // was only added during full renders (renderInternal) and never updated by
+  // the lightweight path — causing it to not appear on king selection, and to
+  // get stuck after appearing (since _updateChangedSquares didn't remove it).
+  const _curCastlingRookSet=_computeCastlingRookSetForSelection(selectedSquare,legalMvs);
+  // Compute the PREVIOUS castling-rook set (based on the old selection state).
+  // We need this to know which squares to CLEAR the marker from when the
+  // selection changes away from a castling-capable king.
+  // v1.0.6 PERF: Instead of recomputing legalMoves() for the previous selection
+  // (which calls pseudoMoves + makeMvInPlace/unmakeMv for every candidate —
+  // expensive on rapid clicks), we derive the castling rooks from _prevLegalSet
+  // (the Set of row*8+col keys we already track). If the previous selection was
+  // a king and _prevLegalSet contains col 6 (kingside) or col 2 (queenside) on
+  // the home row, we know castling was legal and can compute the rook column
+  // without re-running the full legal-move generator.
+  let _prevCastlingRookSet=new Set();
+  if(_prevSelSq){
+    try{
+      const _prevPiece=gameState.board[_prevSelSq.row]&&gameState.board[_prevSelSq.row][_prevSelSq.col];
+      if(_prevPiece&&_prevPiece.type==='king'&&_prevPiece.color===playerColor){
+        const _homeRow=_prevPiece.color==='white'?7:0;
+        if(_prevSelSq.row===_homeRow){
+          // Check if kingside (col 6) or queenside (col 2) was in the legal set
+          const _ksKey=_homeRow*8+6;
+          const _qsKey=_homeRow*8+2;
+          if(_prevLegalSet.has(_ksKey)){
+            // Kingside castling was legal — find the rook column
+            let rCol=7; // standard chess default
+            if(typeof gameVariant!=='undefined'&&gameVariant==='chess960'&&typeof chess960CastlingRookMove==='function'){
+              const rm=chess960CastlingRookMove(gameState,_prevPiece.color,'kingside');
+              if(rm)rCol=rm.rookFrom;
+            }
+            _prevCastlingRookSet.add(_homeRow*8+rCol);
+          }
+          if(_prevLegalSet.has(_qsKey)){
+            let rCol=0; // standard chess default
+            if(typeof gameVariant!=='undefined'&&gameVariant==='chess960'&&typeof chess960CastlingRookMove==='function'){
+              const rm=chess960CastlingRookMove(gameState,_prevPiece.color,'queenside');
+              if(rm)rCol=rm.rookFrom;
+            }
+            _prevCastlingRookSet.add(_homeRow*8+rCol);
+          }
+        }
+      }
+    }catch(e){}
+  }
   // Collect logical positions that need updating
   const logicPositions=new Set();
   if(oldInfoSq)logicPositions.add(oldInfoSq.row*8+oldInfoSq.col);
@@ -11680,6 +12175,10 @@ function _updateChangedSquares(oldInfoSq,newInfoSq,oldLegalSet,newLegalSet){
   for(const pos of newLegalSet)logicPositions.add(pos);
   // Also include selected square itself
   if(selectedSquare)logicPositions.add(selectedSquare.row*8+selectedSquare.col);
+  // v1.0.6 FIX: Include castling-rook squares (both old and new) so the
+  // marker is added when a king is selected and removed when deselected.
+  for(const pos of _curCastlingRookSet)logicPositions.add(pos);
+  for(const pos of _prevCastlingRookSet)logicPositions.add(pos);
   for(const posKey of logicPositions){
     const lr=Math.floor(posKey/8),lc=posKey%8; // logical row, col
     // Convert logical position to display position (same formula as renderInternal)
@@ -11696,15 +12195,56 @@ function _updateChangedSquares(oldInfoSq,newInfoSq,oldLegalSet,newLegalSet){
     const isCheckSq=_checkKingPos&&lr===_checkKingPos.row&&lc===_checkKingPos.col;
     const lastFrom=lastMove&&lr===lastMove.from.row&&lc===lastMove.from.col;
     const lastTo=lastMove&&lastMove.to.row===lr&&lastMove.to.col===lc;
+    // v1.0.6 FIX: Add castle-rook class when this square is a castling rook
+    // for the currently-selected king. This keeps the marker in sync with
+    // selection changes via the lightweight update path.
+    const isCastlingRook=_curCastlingRookSet.has(lr*8+lc);
     el.style.background=bg;
-    el.className='sq'+(lastFrom?' last-from':'')+(lastTo?' last-to':'')+(isCheckSq?' in-check':'');
+    el.className='sq'+(lastFrom?' last-from':'')+(lastTo?' last-to':'')+(isCheckSq?' in-check':'')+(isCastlingRook?' castle-rook':'');
     const lbl=String.fromCharCode(97+lc)+(8-lr);
     let inner=`<span class="lbl" style="color:${isL?LBL_LIGHT:LBL_DARK};-webkit-text-stroke:.6px ${isL?LBL_STROKE_LIGHT:LBL_STROKE_DARK};paint-order:stroke fill;text-shadow:0 0 2px ${isL?LBL_STROKE_LIGHT:LBL_STROKE_DARK}">${lbl}</span>`;
     if(p){inner+=`<span class="pc ${p.color==='white'?'w':'bk'}">${SYM[p.color][p.type]}</span>`;}
-    if(isLegal&&!p)inner+=`<div class="dot"></div>`;
-    if(isLegal&&p)inner+=`<div class="ring"></div>`;
+    if(isLegal&&!p&&!isCastlingRook)inner+=`<div class="dot"></div>`;
+    if(isLegal&&p&&!isCastlingRook)inner+=`<div class="ring"></div>`;
+    // v1.0.6 FIX: Add castle-ring marker when this square is a castling rook.
+    // This matches renderInternal's logic. The marker is a golden dashed ring
+    // that signals "click me to castle".
+    if(isCastlingRook)inner+=`<div class="castle-ring"></div>`;
     el.innerHTML=inner;
   }
+}
+
+// v1.0.6 NEW: Pure helper that computes the castling-rook square set for a
+// given selection + legalMoves, WITHOUT mutating global state. Used by both
+// _updateChangedSquares (for current and previous selection) to keep the
+// marker in sync. Returns a Set of row*8+col keys.
+function _computeCastlingRookSetForSelection(selPos,moves){
+  const result=new Set();
+  if(!selPos||!gameState||!gameState.board)return result;
+  try{
+    const _p=gameState.board[selPos.row]&&gameState.board[selPos.row][selPos.col];
+    if(!_p||_p.type!=='king'||_p.color!==playerColor)return result;
+    if(gameOver||isAIThinking||reviewMode||setupMode||pendingPromotion)return result;
+    if(gameState.currentTurn!==playerColor)return result;
+    const _moves=moves||[];
+    for(const m of _moves){
+      if(m&&m.castle){
+        let rookCol=-1;
+        if(typeof gameVariant!=='undefined'&&gameVariant==='chess960'&&typeof chess960CastlingRookMove==='function'){
+          try{
+            const rm=chess960CastlingRookMove(gameState,_p.color,m.castle);
+            if(rm)rookCol=rm.rookFrom;
+          }catch(e){}
+        }else{
+          rookCol=m.castle==='kingside'?7:0;
+        }
+        if(rookCol>=0){
+          result.add(selPos.row*8+rookCol);
+        }
+      }
+    }
+  }catch(e){}
+  return result;
 }
 
 // Fast combined update for hover/selection changes: arrows + changed squares only
@@ -11792,6 +12332,31 @@ if(window._suppressNextBoardClick){
 if(setupMode){setupClick(r,c);return}
 const pos={row:r,col:c};const p=gameState.board[r][c];
 const canMove=!gameOver&&!isAIThinking&&!pendingPromotion&&!reviewMode&&gameState.currentTurn===playerColor;
+// v1.0.6 NEW: King-then-rook castling gesture.
+// When the user has selected a king that can castle, the castling-capable
+// rooks are visually marked (see _getCastlingRookSquares() below). Clicking
+// a marked rook triggers the castling move directly — this is essential for
+// Chess960 where some positions can ONLY be castled this way (e.g. when the
+// king's destination square is the same as the rook's source square, the
+// standard "click the king's destination" gesture is ambiguous).
+if(selectedSquare&&canMove){
+  const _selPiece=gameState.board[selectedSquare.row]&&gameState.board[selectedSquare.row][selectedSquare.col];
+  if(_selPiece&&_selPiece.type==='king'&&_selPiece.color===playerColor){
+    // Check if the clicked square is a castling rook for the selected king.
+    const _cr=_getCastlingRookForClick(selectedSquare,{row:r,col:c});
+    if(_cr){
+      // Trigger the castling move: king goes to col 6 (kingside) or col 2 (queenside).
+      const _kingToCol=_cr.side==='kingside'?6:2;
+      const _kingTo={row:selectedSquare.row,col:_kingToCol};
+      // Verify this is a legal move (defensive — _getCastlingRookForClick
+      // already checked legality, but double-check here).
+      if(legalSet.has(_kingTo.row*8+_kingTo.col)){
+        executeMove(selectedSquare,_kingTo);
+        return;
+      }
+    }
+  }
+}
 // Toggle deselection — clicking the already-selected piece deselects it.
 // Previously, clicking the selected piece would re-select it (same legalMvs, same highlight),
 // making it impossible to deselect. This was especially problematic after AI hint auto-selection,
@@ -11829,6 +12394,44 @@ if(canMove&&p&&p.color===playerColor){selectedSquare=pos;legalMvs=legalMoves(gam
 // Clicked empty/opponent square with no selection — allow for control info, but prefer deselect
 if(selectedSquare){selectedSquare=null;legalMvs=[];legalSet=new Set();HapticManager.fire('BUTTON_PRESS');_updateBoardLightweight();return}
 selectedSquare=pos;legalMvs=[];legalSet=new Set();HapticManager.fire('BUTTON_PRESS');_updateBoardLightweight();return
+}
+
+// v1.0.6 NEW: King-then-rook castling gesture helpers.
+// When a king is selected and can castle, we identify the rook(s) that
+// participate in castling. These rooks are visually marked (golden ring)
+// so the user can click them to trigger castling — essential for Chess960
+// positions where the king's castling destination is occupied by the rook.
+// v1.0.6 CLEANUP: _getCastlingRookSquares() was removed (dead code after
+// renderInternal switched to calling _computeCastlingRookSetForSelection
+// directly). The .side field it returned was never used by any caller.
+/**
+ * Given a clicked square, returns the castling side ('kingside'|'queenside')
+ * if the clicked square is a castling rook for the selected king. Null otherwise.
+ */
+function _getCastlingRookForClick(kingPos,clickedPos){
+  if(!kingPos||!clickedPos||!gameState||!gameState.board)return null;
+  try{
+  const _p=gameState.board[kingPos.row]&&gameState.board[kingPos.row][kingPos.col];
+  if(!_p||_p.type!=='king'||_p.color!==playerColor)return null;
+  const _moves=legalMvs||[];
+  for(const m of _moves){
+    if(m&&m.castle){
+      let rookCol=-1;
+      if(typeof gameVariant!=='undefined'&&gameVariant==='chess960'&&typeof chess960CastlingRookMove==='function'){
+        try{
+          const rm=chess960CastlingRookMove(gameState,_p.color,m.castle);
+          if(rm)rookCol=rm.rookFrom;
+        }catch(e){}
+      }else{
+        rookCol=m.castle==='kingside'?7:0;
+      }
+      if(rookCol>=0&&clickedPos.row===kingPos.row&&clickedPos.col===rookCol){
+        return {side:m.castle};
+      }
+    }
+  }
+  return null;
+  }catch(e){return null;}
 }
 function executeMove(from,to,promotion){
 try{
@@ -11877,9 +12480,24 @@ if(!piece)return;
 if(promotion&&piece.type!=='pawn')promotion=null;
 stateHistory.push({state:cloneS(gameState),selectedSquare:selectedSquare?{...selectedSquare}:null,legalMvs:[...legalMvs],moveRecords:[...moveRecords],lastMove:lastMove?{...lastMove}:null,gameOver});
 if(stateHistory.length>200)stateHistory.shift();
+// v1.0.6 FIX: Build mv with the castle flag preserved from legalMvs.
+// Without this, makeMv/moveAlg/_castleSide cannot detect Chess960 castling
+// where the king moves only 1 column (e.g. f1→g1). We look up the matching
+// legal move (same from/to) and copy its castle flag. This is O(n) but n is
+// small (max ~27 legal moves for a king) and executeMove is called at most
+// once per user interaction.
 const mv={from,to,piece,promotion};
+if(piece.type==='king'){
+  for(const _lm of (legalMvs||[])){
+    if(_lm&&_lm.castle&&_lm.row===to.row&&_lm.col===to.col){
+      mv.castle=_lm.castle;
+      break;
+    }
+  }
+}
 const ns=makeMv(gameState,mv);const notation=moveAlg(gameState,mv,ns);
-const opp=OPP_COLOR[piece.color];const ic=inCheck(ns.board,opp,opp==='white'?ns.wk:ns.bk);const cast=piece.type==='king'&&Math.abs(to.col-from.col)===2;
+// v1.0.6: Use _castleSide() for Chess960 correctness (king may move 1 col).
+const opp=OPP_COLOR[piece.color];const ic=inCheck(ns.board,opp,opp==='white'?ns.wk:ns.bk);const cast=!!(typeof _castleSide==='function'&&_castleSide(mv));
 const epCap=piece.type==='pawn'&&gameState.enPassantTarget&&to.row===gameState.enPassantTarget.row&&to.col===gameState.enPassantTarget.col;
 const _elapsed=((Date.now()-_turnStartTime)/1000).toFixed(1);moveRecords.push({notation,from:posAlg(from),to:posAlg(to),piece,captured:gameState.board[to.row][to.col]||(epCap?gameState.board[piece.color==='white'?to.row+1:to.row-1][to.col]:undefined),isCheck:ic,isCastling:cast,promotion:promotion||null,time:_elapsed});_turnStartTime=Date.now();
 // v1.0.4 EXPANSION (this round): commit the elapsed time to the moving side's clock.
@@ -11894,6 +12512,9 @@ if(typeof recordMoveEnd==='function')recordMoveEnd(piece.color);
 //   - Yellow arrows: if this move threatens the opponent's queen, the mover → queen path
 if(typeof _computeAndCacheVisualAnnotations==='function')_computeAndCacheVisualAnnotations(moveRecords.length-1);
 if(cast)playSound('castle');else if(promotion)playSound('promote');else if(ic){playSound('check');HapticManager.fire('CHECK_ALERT');}else if(gameState.board[to.row][to.col]||epCap){playSound('capture');HapticManager.fire('PIECE_CAPTURE');}else{playSound('move');HapticManager.fire('PIECE_MOVE');}
+// v1.0.6: Set _lastAnimMv so animateMove can detect castling via _castleSide()
+// (needed for Chess960 where the king may move only 1 column when castling).
+_lastAnimMv=mv;
 animateMove(from,to,SYM[piece.color][piece.type],piece.type,!!(gameState.board[to.row][to.col]||epCap),ic,piece.color);gameState=ns;_cachedStatus=null;_cachedStatusKey='';lastMove={from,to};selectedSquare=null;legalMvs=[];legalSet=new Set();
 // Immediately mark eval as stale — show "分析中" until engine gives final evaluation
 _updateEvalDisplay(); // _resetEvalState now called inside requestEngineEval()
@@ -12143,7 +12764,7 @@ function getHint(){
   render();
   setTimeout(()=>{
     if(typeof AndroidBridge!=='undefined'&&AndroidBridge.isEngineReady()){
-      try{AndroidBridge.engineHint(generateFEN(gameState));}catch(e){console.error('engineHint error:',e);isHintLoading=false;_hintBarInfo='';hintText=T('hint_request_failed');render();}
+      try{AndroidBridge.engineHint((typeof _sanitizeFenForEngine==='function')?_sanitizeFenForEngine(generateFEN(gameState)):generateFEN(gameState));}catch(e){console.error('engineHint error:',e);isHintLoading=false;_hintBarInfo='';hintText=T('hint_request_failed');render();}
       return;
     }
     isHintLoading=false;hintText=T('engine_unavailable_hint');
@@ -12457,7 +13078,14 @@ function _startGameImpl(){
   showNewGameDialog=false;
   playerColor=dlgPlayerColor;
   useBookMoves=dlgBookMoves;
-  _ecoEnabled=true; // Free opening or ECO-selected — enable ECO recognition
+  // v1.0.6: Disable ECO recognition entirely in Chess960 mode. The new-game
+  // dialog already grays out the ECO book toggle when Chess960 is on; this
+  // mirror ensures imported Chess960 PGNs (which never set dlgChess960) and
+  // any other entry point also keep ECO off. The UI gates in render() check
+  // gameVariant==='chess960' for defense in depth, but _ecoEnabled=false
+  // here is the primary switch so getECORecommendation() is never even
+  // called for Chess960 positions (saves CPU).
+  _ecoEnabled=!(typeof dlgChess960!=='undefined'&&dlgChess960);
   // v1.0.3: Clear cached original PGN and setup FEN — new game means no imported PGN.
   if(typeof _cachedOriginalPGN!=='undefined')_cachedOriginalPGN=null;
   if(typeof _setupFEN!=='undefined')_setupFEN=null;
@@ -12530,7 +13158,7 @@ function _startGameImpl(){
           const notation=moveAlg(gameState,moveObj,ns);
           const opp=OPP_COLOR[piece.color];
           const ic=inCheck(ns.board,opp,opp==='white'?ns.wk:ns.bk);
-          const cast=piece.type==='king'&&Math.abs(to.col-from.col)===2;
+          const cast=!!(typeof _castleSide==='function'&&_castleSide(moveObj));
           const epCap=piece.type==='pawn'&&gameState.enPassantTarget&&to.row===gameState.enPassantTarget.row&&to.col===gameState.enPassantTarget.col;
           // Build the move record exactly like executeMove (without the time field
           // since these are pre-played opening moves, not user/AI moves)
@@ -12819,7 +13447,14 @@ function _computeAndCacheVisualAnnotations(moveIdx){
         if(!from||!to)continue;
         const piece=st.board[from.row][from.col];
         if(!piece)continue;
+        // v1.0.6: Preserve the castle flag from moveRecords so makeMv can
+        // detect Chess960 castling (king may move only 1 col). mr.isCastling
+        // tells us this was a castling move; we derive the side from the
+        // king's destination column (6=kingside, 2=queenside).
         const mv={from,to,piece,promotion:mr.promotion};
+        if(mr.isCastling&&piece.type==='king'){
+          mv.castle=(to.col===6)?'kingside':'queenside';
+        }
         st=makeMv(st,mv);
         if(!st)break;
       }
@@ -13408,12 +14043,17 @@ function reviewAnalyzeAll(){
   // v1.0.4 Rev24: If every step is already cached, complete INSTANTLY.
   // This is the "instant recovery from cache" requirement — no engine calls,
   // no safety timer, no async wait. The user sees "Analysis complete!" immediately.
+  // v1.0.6 FIX: Only check steps 1..moveRecords.length (the moves). Step 0 is
+  // the initial position — it may or may not have an eval, but it's NOT a
+  // "move" that needs analysis. The old code checked 0..reviewStates.length-1,
+  // which always counted step 0 as uncached, preventing instant completion.
   let _uncachedCount=0;
-  for(let i=0;i<reviewStates.length;i++){
+  const _moveCount=moveRecords.length;
+  for(let i=1;i<=_moveCount;i++){
     if(!_reviewEvalCache.has(i))_uncachedCount++;
   }
   if(_uncachedCount===0){
-    showToast(T('analysis_done')+' '+reviewStates.length+' '+T('step'));
+    showToast(T('analysis_done')+' '+_moveCount+' '+T('step'));
     try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
     render();
     return;
@@ -13422,11 +14062,12 @@ function reviewAnalyzeAll(){
   // Save the step the user was on so we can return to it after analysis
   let _preAnalyzeStep=reviewStep;
   // Find first un-analyzed step (skip cached steps for efficiency)
+  // v1.0.6: Start from step 1 (first move), not step 0 (initial position).
   let startStep=-1;
-  for(let i=0;i<reviewStates.length;i++){
+  for(let i=1;i<=_moveCount;i++){
     if(!_reviewEvalCache.has(i)){startStep=i;break;}
   }
-  if(startStep<0)startStep=0; // Defensive — shouldn't happen given the all-cached check above
+  if(startStep<0)startStep=1; // Defensive — shouldn't happen given the all-cached check above
   reviewStep=startStep;
   gameState=cloneS(reviewStates[reviewStep].state);
   // v1.0.4 Rev24: Per-step safety timer (60s) that RESETS on each advance.
@@ -13469,13 +14110,17 @@ function _reviewAnalyzeResetSafetyTimer(){
  */
 function _reviewAnalyzeAdvance(){
   if(!_reviewAnalyzeAllActive)return;
+  // v1.0.6 FIX: The last analyzable step is moveRecords.length (the position
+  // after the last move). reviewStates.length = moveRecords.length + 1 (includes
+  // initial position at index 0). We iterate steps 1..moveRecords.length.
+  const _lastStep=moveRecords.length;
   // Skip already-cached steps for efficiency
   let nextStep=reviewStep+1;
-  while(nextStep<reviewStates.length){
+  while(nextStep<=_lastStep){
     if(!_reviewEvalCache.has(nextStep))break; // Found un-analyzed step
     nextStep++;
   }
-  if(nextStep>=reviewStates.length){
+  if(nextStep>_lastStep){
     _reviewAnalyzeAllActive=false;
     if(_reviewAnalyzeSafetyTimer){clearTimeout(_reviewAnalyzeSafetyTimer);_reviewAnalyzeSafetyTimer=null;}
     // Return to the step the user was viewing before analysis
@@ -13484,7 +14129,8 @@ function _reviewAnalyzeAdvance(){
       reviewStep=returnStep;
       gameState=cloneS(reviewStates[reviewStep].state);
     }
-    showToast(T('analysis_done')+' '+reviewStates.length+' '+T('step'));
+    // v1.0.6 FIX: show moveRecords.length (number of analyzed moves), not reviewStates.length
+    showToast(T('analysis_done')+' '+_lastStep+' '+T('step'));
     render();
     return;
   }
@@ -13493,9 +14139,10 @@ function _reviewAnalyzeAdvance(){
   // v1.0.4 Rev24: Reset the per-step safety timer for the new step.
   _reviewAnalyzeResetSafetyTimer();
   // Update progress toast periodically (every 3 steps or at end)
-  if(reviewStep%3===0||nextStep>=reviewStates.length-1){
+  // v1.0.6 FIX: use moveRecords.length for the total, not reviewStates.length
+  if(reviewStep%3===0||nextStep>=_lastStep){
     const cachedCount=_reviewEvalCache.size;
-    showToast(T('analyzing_progress')+' ('+cachedCount+'/'+reviewStates.length+')');
+    showToast(T('analyzing_progress')+' ('+cachedCount+'/'+_lastStep+')');
   }
   render();
   requestEngineEval();

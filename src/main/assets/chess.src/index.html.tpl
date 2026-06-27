@@ -29,7 +29,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://tablebase.lichess.ovh; img-src data: file:; frame-ancestors 'none'; base-uri 'self'">
-<title>Regalia v1.0.5</title>
+<title>Regalia v1.0.6</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{color-scheme:dark;--bg:#1a0a0a;--card:#221015;--border:#8b6914;--border2:#d4a017;--text:#f5e6c8;--muted:#a08050;--accent:#d4a017;--accent2:#ffd700;--blue:#4a90d9;--red:#c0392b;--purple:#8e44ad;--green:#27ae60;--danger:#c0392b}
@@ -104,6 +104,14 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .rv-w,.rv-bk{font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text;-webkit-font-variant-emoji:text;font-weight:400}
 .sq .dot{width:18px;height:18px;border-radius:50%;background:radial-gradient(circle,rgba(255,140,0,.6),rgba(255,140,0,.35));pointer-events:none;z-index:1;box-shadow:0 0 3px rgba(255,140,0,.2)}
 .sq .ring{position:absolute;inset:3px;border-radius:50%;border:3px solid rgba(255,140,0,.55);pointer-events:none;z-index:1;box-shadow:0 0 2px rgba(255,140,0,.10)}
+/* v1.0.6: Castling rook marker — golden dashed ring. Distinct from the orange
+   capture ring (.ring) so the user can tell "click to castle" apart from
+   "click to capture". Uses the same gold (#ffd700) as the app's accent color
+   to maintain visual consistency with the toolbar/headers. Dashed border
+   (3px, dash 6px/gap 4px) signals "special move" — a convention from
+   chess.com/lichess where castling indicators use dashed outlines. */
+.sq .castle-ring{position:absolute;inset:3px;border-radius:50%;border:3px dashed #ffd700;pointer-events:none;z-index:2;box-shadow:0 0 4px rgba(255,215,0,.5),inset 0 0 3px rgba(255,215,0,.3);animation:castlePulse 1.5s ease-in-out infinite}
+@keyframes castlePulse{0%,100%{box-shadow:0 0 4px rgba(255,215,0,.5),inset 0 0 3px rgba(255,215,0,.3)}50%{box-shadow:0 0 8px rgba(255,215,0,.8),inset 0 0 5px rgba(255,215,0,.5)}}
 /* Piece-specific animations */
 .sq .pc.anim-pawn{animation:pawnStep .6s cubic-bezier(.4,0,.2,1);will-change:transform,opacity}
 .sq .pc.anim-knight{animation:knightJump .8s cubic-bezier(.2,-.2,.2,1.2);will-change:transform,opacity}
@@ -235,7 +243,68 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
    — the previous rule forced .main{flex-direction:column} even in landscape, which broke
    the side-by-side landscape layout. Now landscape uses its own @media(orientation:landscape)
    rules which correctly set flex-direction:row. */
-@media(max-width:900px) and (orientation:portrait){.panel{width:100%;max-width:420px}.main{flex-direction:column;align-items:center}.hdr-tools{gap:4px}.btn{padding:6px 10px;font-size:.72rem}.review-body{flex-direction:column}.review-board{padding:8px}}
+@media(max-width:900px) and (orientation:portrait){.panel{width:100%;max-width:420px}.main{flex-direction:column;align-items:center}.hdr-tools{gap:4px}.btn{padding:6px 10px;font-size:.72rem}.review-body{flex-direction:column}.review-board{padding:8px}
+/* v1.0.6: Portrait-optimized New Game dialog.
+   - Full-width dialog with reduced horizontal padding for narrow screens.
+   - Time Control inputs use full-width stacked layout (no inline labels).
+   - Chess960 SP-ID input + Random button share a single row.
+   - ECO search box + family filter stack vertically on very narrow phones.
+   - The landscape layout (default .dlg{max-width:500px;width:90%}) remains
+     unchanged for orientation:landscape. */
+.dlg{max-width:460px;width:94%;padding:18px 16px}
+.dlg h2{font-size:1.05rem;margin-bottom:10px;letter-spacing:1.5px}
+.dlg-sec{margin-bottom:12px}
+.dlg-sec h3{font-size:.7rem;letter-spacing:1.2px;margin-bottom:6px}
+.clr-row{gap:8px;margin-bottom:6px}
+.clr-btn{padding:10px 6px}
+.clr-ico{font-size:1.3rem}
+.clr-nm{font-size:.78rem}
+.clr-sub{font-size:.6rem}
+.op-list{max-height:180px}
+.op-btn{padding:6px 8px}
+.on{font-size:.76rem}
+.os{font-size:.62rem}
+.dlg-btns{margin-top:12px}
+.dlg-btns .btn{padding:10px;font-size:.82rem}
+/* v1.0.6: Time Control input rows — on portrait, make labels and inputs
+   stack more compactly. The input width stays at 80px (enough for 3-digit
+   minutes) but the label gets more room. */
+.dlg-sec select{font-size:.8rem;padding:7px 10px}
+/* v1.0.6: Chess960 SP-ID row — ensure the Random button, input, and 🎲
+   button wrap gracefully on narrow screens. The flex-wrap is already set
+   inline; this just tightens the gap. */
+.dlg-sec > div[style*="flex-wrap:wrap"]{gap:4px}}
+@media(max-width:480px) and (orientation:portrait){
+  /* v1.0.6: Tighter spacing for very narrow portrait phones (<480px).
+     The New Game dialog's Chess960 SP-ID row uses flex-wrap so the input
+     and 🎲 button wrap to a new line if needed. The ECO search box and
+     family filter also wrap on narrow screens. */
+  .dlg{padding:14px 12px;max-width:96%;width:96%}
+  .dlg h2{font-size:.95rem;letter-spacing:1px;margin-bottom:8px}
+  .dlg-sec{margin-bottom:10px}
+  .dlg-sec h3{font-size:.68rem;margin-bottom:5px}
+  .clr-btn{padding:8px 4px}
+  .clr-ico{font-size:1.2rem}
+  .clr-nm{font-size:.72rem}
+  .clr-sub{font-size:.58rem}
+  .op-list{max-height:160px}
+  .op-btn{padding:5px 6px}
+  .on{font-size:.72rem}
+  .os{font-size:.6rem}
+  .dlg-btns{margin-top:10px;gap:6px}
+  .dlg-btns .btn{padding:9px;font-size:.78rem}
+  /* v1.0.6: Time Control inputs — on very narrow screens, reduce input
+     width to 70px and make labels smaller so the row fits without
+     horizontal scroll. */
+  .dlg-sec input[type="number"]{width:70px!important;font-size:.8rem;padding:3px 6px}
+  .dlg-sec select{font-size:.78rem;padding:6px 8px}
+  /* v1.0.6: ECO search row — force the search input and family filter
+     to stack vertically on very narrow screens (<480px portrait). The
+     flex-wrap is already set inline; this ensures the form takes full
+     width when wrapped. */
+  .dlg-sec form{min-width:100%!important}
+  .dlg-sec select{flex-basis:100%!important;margin-top:4px}
+}
 @media(max-width:480px){.hdr h1{font-size:1rem}.hdr-tools{gap:2px}.btn{padding:5px 7px;font-size:.68rem;min-height:32px}/* hint-btn removed, all buttons use .btn */.ev{font-size:.75rem;padding:4px 8px}.panel{gap:6px}.card{padding:8px}.diff-b{padding:4px 7px;font-size:.68rem;min-width:24px}.main{gap:8px;padding:8px}.bwrap{border-width:2px}.pbar{padding:5px 10px}.pname{font-size:.78rem}.setup-btn{width:36px;height:36px;font-size:1.4rem}.prom-btn{width:44px;height:44px;font-size:1.6rem}}
 /* ============================================================
    LANDSCAPE LAYOUT

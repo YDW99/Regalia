@@ -43,7 +43,7 @@ import java.lang.ref.WeakReference;
  * URLs in the system default browser (defense-in-depth alongside the JS-side
  * openUrlInBrowser bridge). Previously, external links were silently blocked.
  *
- * Version: v1.0.5
+ * Version: v1.0.6
  */
 public class ChessWebViewClient extends WebViewClient {
     private static final String TAG = "Regalia";

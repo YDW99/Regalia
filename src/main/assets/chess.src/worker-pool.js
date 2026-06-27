@@ -214,7 +214,19 @@ function makeMvInPlace(s,mv){
       s.board[cr][to.col]=null;
     }
   }
-  // Castling: standard chess only (king moves 2 squares)
+  // Castling: standard chess only (king moves 2 squares).
+  // v1.0.6 NOTE: This worker is used for PGN parsing and heatmap computation
+  // in standard chess only. Chess960 PGN parsing goes through tablebase.js's
+  // _parsePGN() which uses the Chess960-aware makeMvInPlace from game-logic.js.
+  // The worker does NOT have access to gameVariant (it's a sandboxed inline
+  // worker), so it cannot detect Chess960 castling. This is acceptable because
+  // the worker is only used for: (1) PGN round-trip parsing (standard chess),
+  // (2) control heatmap computation (board-only, no castling). If Chess960
+  // support is ever needed here, the move object should carry a castle flag
+  // (set by the caller from the main thread pseudoMoves) — same pattern as
+  // game-logic.js _castleSide() helper.
+  // NOTE: no backticks in this comment — it lives inside the _WORKER_SOURCE
+  // template literal, and backticks would prematurely terminate it (Rev57 bug).
   if(piece.type==='king'&&Math.abs(to.col-from.col)===2){
     if(to.col===6){s.board[from.row][5]=s.board[from.row][7];s.board[from.row][7]=null;undo.castlingRook={from:{r:from.row,c:7},to:{r:from.row,c:5}}}
     if(to.col===2){s.board[from.row][3]=s.board[from.row][0];s.board[from.row][0]=null;undo.castlingRook={from:{r:from.row,c:0},to:{r:from.row,c:3}}}
