@@ -784,3 +784,23 @@ v1.0.3 patch changes (version number unchanged — still v1.0.3 / versionCode 10
     - ChessWebViewClient.java: version comment updated to "v1.0.6".
     - No changes to other Java files (EngineService, StatsActivity,
       RootDetector, TlsSecurityHelper, StabilizationHelper).
+
+  v1.0.7 (2026.6.28-30) changes:
+    - StockfishNative.java: ENGINE_VERSION constant updated to "v1.0.7".
+    - MainActivity.java: VERSION constant updated to "v1.0.7".
+    - ChessApp.java: init log message updated to "v1.0.7".
+    - ChessWebViewClient.java: version comment updated to "v1.0.7".
+    - Phase 19 (thread safety): StockfishNative.java declared volatile on
+      engineProcess, engineReader, engineWriter, readerThread, _engineExecutor
+      (all written from multiple threads); stopAndWaitForBestmove now sets
+      _discardingPonderBestmove=true on timeout (prevents stale bestmove
+      corruption). ChessApp.java UncaughtExceptionHandler now chains Error
+      subclasses (OOM/StackOverflow) to the default handler instead of
+      silently swallowing them (prevents JVM-corrupted-state hangs).
+      EngineService.java lastStatusInfo declared volatile (written from JS
+      binder thread, read from service main thread).
+    - No changes to RootDetector, TlsSecurityHelper, StabilizationHelper,
+      StatsActivity, ChessWebViewClient (beyond the version comment).
+    - License classification: unchanged — StockfishNative.java and
+      engine_jni.cpp remain GPL v3 (DroidFish-derived); all other Java
+      files remain AGPL v3 (original). No new third-party code introduced.

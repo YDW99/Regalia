@@ -144,25 +144,33 @@ function fenToState(fen){
   if(!wk||!bk)return null;
   const turn=parts[1]==='b'?'black':'white';
   const crStr=parts[2]||'-';
-  // Support both standard KQkq and Shredder (HAah) formats
-  let castlingRights;
-  const isShredder=/[A-Ha-h]/.test(crStr)&&!/[KQkq]/.test(crStr.replace(/[A-Ha-h]/g,''));
-  if(isShredder){
-    castlingRights={whiteKingside:false,whiteQueenside:false,blackKingside:false,blackQueenside:false};
-    for(const ch of crStr){
-      const isUpper=(ch>='A'&&ch<='H');const isLower=(ch>='a'&&ch<='h');
-      if(!isUpper&&!isLower)continue;
-      const file=isUpper?ch.charCodeAt(0)-65:ch.charCodeAt(0)-97;
-      if(isUpper){
-        if(wk.col>=0&&file>wk.col)castlingRights.whiteKingside=true;
-        else if(wk.col>=0&&file<wk.col)castlingRights.whiteQueenside=true;
-      }else{
-        if(bk.col>=0&&file>bk.col)castlingRights.blackKingside=true;
-        else if(bk.col>=0&&file<bk.col)castlingRights.blackQueenside=true;
-      }
+  // v1.0.7 PHASE 4: X-FEN castling rights parsing.
+  // X-FEN supports both standard KQkq and Shredder (file-letter) notations,
+  // INCLUDING mixed (e.g. "KQah"). We parse each character independently:
+  //   - K/Q/k/q map to file h/a respectively (X-FEN backward-compatibility).
+  //   - A-H/a-h are Shredder file letters.
+  // We then map each file letter to kingside/queenside based on the king's
+  // column (file > king.col → kingside, file < king.col → queenside).
+  // This is the same logic as parseShredderCastling() in chess960.js, but
+  // inlined here because the worker is a sandboxed context without access
+  // to the main-thread function.
+  const castlingRights={whiteKingside:false,whiteQueenside:false,blackKingside:false,blackQueenside:false};
+  for(const ch of crStr){
+    let file=-1,isWhite=false;
+    if(ch==='K'){file=7;isWhite=true;}
+    else if(ch==='Q'){file=0;isWhite=true;}
+    else if(ch==='k'){file=7;isWhite=false;}
+    else if(ch==='q'){file=0;isWhite=false;}
+    else if(ch>='A'&&ch<='H'){file=ch.charCodeAt(0)-65;isWhite=true;}
+    else if(ch>='a'&&ch<='h'){file=ch.charCodeAt(0)-97;isWhite=false;}
+    else continue; // ignore '-' and unknown chars
+    if(isWhite){
+      if(wk.col>=0&&file>wk.col)castlingRights.whiteKingside=true;
+      else if(wk.col>=0&&file<wk.col)castlingRights.whiteQueenside=true;
+    }else{
+      if(bk.col>=0&&file>bk.col)castlingRights.blackKingside=true;
+      else if(bk.col>=0&&file<bk.col)castlingRights.blackQueenside=true;
     }
-  }else{
-    castlingRights={whiteKingside:crStr.includes('K'),whiteQueenside:crStr.includes('Q'),blackKingside:crStr.includes('k'),blackQueenside:crStr.includes('q')};
   }
   let enPassantTarget=null;
   if(parts[3]&&parts[3]!=='-'){const ec=parts[3].charCodeAt(0)-97;const er=8-parseInt(parts[3][1]);if(er>=0&&er<8&&ec>=0&&ec<8)enPassantTarget={row:er,col:ec}}
@@ -267,6 +275,10 @@ function parsePGN(pgnText){
   let moveText=pgnText.replace(/^\\[[^\\]]*\\]/gm,'').trim();
   moveText=moveText.replace(/\\\\\\s*\\n/g,' ');
   {let _i=0;while(moveText.includes('{')&&_i++<10)moveText=moveText.replace(/\\{[^{}]*\\}/g,'');}
+  // v1.0.7 PHASE 18 Task 3 (bug fix): Truncate at any unclosed brace, matching
+  // tablebase.js:460-464. Without this, an unclosed { survives the flattening
+  // loop and pollutes the token stream.
+  if(moveText.includes('{'))moveText=moveText.substring(0,moveText.indexOf('{'));
   moveText=moveText.replace(/;[^\\n]*/g,'');
   let text=moveText.replace(/\\$\\d+/g,'');
   text=text.replace(/\\b1-0\\b/g,'').replace(/\\b0-1\\b/g,'').replace(/\\b1\\/2-1\\/2\\b/g,'').replace(/\\*/g,'');
@@ -310,15 +322,12 @@ function parsePGN(pgnText){
     for(const sv of frame.subVars){const subPrefix=prefix.concat(frame.tokens.slice(0,sv.attachToMoveIdx));_flatten(sv.tree,subPrefix)}
   }
   for(const sv of rootFrame.subVars)_flatten(sv.tree,[]);
-  let mainTokens=[];let inVar=0;
-  for(const token of rawTokens){
-    if(token==='('){inVar++;continue}
-    if(token===')'){inVar=Math.max(0,inVar-1);continue}
-    if(inVar>0)continue;
-    if(moveNumRe.test(token)||ellipsisRe.test(token)||skipTokens.has(token))continue;
-    const clean=token.replace(moveNumPrefixRe,'').replace(annotRe,'');
-    if(clean)mainTokens.push(clean);
-  }
+  // v1.0.7 PHASE 16: The first loop already collected all non-variation
+  // tokens into rootFrame.tokens (variation-internal tokens went to their
+  // own frames via the stack push/pop on '(' / ')'). The old code walked
+  // rawTokens a SECOND time to rebuild the same list — redundant. Reuse
+  // rootFrame.tokens directly.
+  const mainTokens=rootFrame.tokens;
   if(mainTokens.length===0)return null;
   // Return raw main-line SAN tokens + variations map + startFEN + variant
   return {mainTokens,variations,startFEN,variant,tags};

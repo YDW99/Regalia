@@ -49,12 +49,9 @@ let _evalForBlackTurn=false;
 // review mode without re-running the engine.
 let _reviewEvalCache=new function(){
   const m=new Map();
-  // v1.0.4 Round-5 Rev18: Unlimited cache size (was MAX=200). User can save
-  // arbitrary games to the PGN cache manager and review them across sessions;
-  // capping the eval cache means revisiting an old game would re-run Stockfish
-  // evaluations unnecessarily. On modern devices the LRU memory overhead is
-  // negligible (each entry ~200 bytes; 1000 games × 60 moves = 60k entries ×
-  // 200B ≈ 12MB, well within mobile device limits).
+  // v1.0.7 PHASE 18: Soft cap MAX_ENTRIES=2000 with LRU eviction — see
+  // _evictIfOverCap below. Normal single-game use (~80 steps) never triggers
+  // eviction; the cap is a safety net for cross-session cache accumulation.
   const STORAGE_KEY='Regalia_reviewEvalCache';
   // v1.0.4 Round-5 Rev20: ROOT-CAUSE FIX for HyperOS 3 cache loss.
   //
@@ -215,14 +212,74 @@ let _reviewEvalCache=new function(){
   // and pushing other entries toward eviction for no benefit.
   this.peek=function(k){return m.get(k);};
   this.has=k=>m.has(k);
+  // v1.0.7 PHASE 18 Task 1: LRU eviction. The previous "Unlimited cache size"
+  // claim (v1.0.4 Rev18) underestimated JSON persistence size (~400B/entry,
+  // not ~200B), synchronous JSON.stringify blocking on a 24MB blob (100-300ms
+  // on mid-tier phones), and WebView localStorage ~5MB quota — exceeding the
+  // quota throws QuotaExceededError, which the code silently swallowed, so the
+  // localStorage backup path would silently fail with no user feedback.
+  //
+  // FIRST-PRINCIPLES FIX:
+  //   - MAX_ENTRIES=2000 is a SOFT cap (~800KB JSON, well under any quota).
+  //     Normal single-game use (~80 steps) never triggers eviction.
+  //   - Map.keys() iteration order === insertion order, and get()/set()
+  //     refresh insertion order by delete+set, so iteration order === LRU
+  //     order. We evict from the front (oldest first).
+  //   - SKIP the entry whose key matches _reviewEvalRequestedStep — that is
+  //     the step the user is currently viewing. Evicting it would cause the
+  //     in-flight engine eval to "miss" the cache on its return, producing a
+  //     brief "analyzing..." flash for the step the user is staring at.
+  //   - TDZ safety: _reviewEvalRequestedStep is declared with `let` LATER in
+  //     this module (line 254 in the original layout). _evictIfOverCap is a
+  //     closure that only reads _reviewEvalRequestedStep at runtime (when
+  //     set() is called), by which point the module has fully loaded and the
+  //     binding is initialized. The typeof guard + try/catch belt-and-braces
+  //     any edge case (e.g., a set() called during module init by a future
+  //     refactor).
+  //   - Type-robust comparison: persisted JSON parses keys as strings, while
+  //     fresh set() calls use numeric keys. Compare as String() on both sides
+  //     so the current step is correctly skipped regardless of key type.
+  //   - Backward compat: if a persisted file from a pre-Phase-18 version has
+  //     >2000 entries, the constructor loads them all (no migration needed);
+  //     the next set() call triggers _evictIfOverCap and trims back to 2000.
+  //   - Persistence preserves LRU order: _writeToDiskNow uses
+  //     Array.from(m.entries()), so the JSON array order === LRU order, and
+  //     on reload the order is restored exactly.
+  const MAX_ENTRIES=2000;
+  function _evictIfOverCap(){
+    if(m.size<=MAX_ENTRIES)return;
+    let _toEvict=m.size-MAX_ENTRIES;
+    const _victimKeys=[];
+    for(const k of m.keys()){
+      if(_toEvict<=0)break;
+      // Skip the step the user is currently viewing (in-flight eval).
+      let _isCurrent=false;
+      try{
+        if(typeof _reviewEvalRequestedStep!=='undefined'&&
+           String(k)===String(_reviewEvalRequestedStep)){
+          _isCurrent=true;
+        }
+      }catch(e){}
+      if(_isCurrent)continue;
+      _victimKeys.push(k);
+      _toEvict--;
+    }
+    for(const k of _victimKeys)m.delete(k);
+  }
   // v1.0.4 Rev23: set() now uses the debounced write path (150ms coalescing).
   // _flushSync() (called from lifecycle handlers) forces an immediate write
   // before the OS can kill the app, so the debounce window is safe.
-  this.set=function(k,v){if(m.has(k))m.delete(k);m.set(k,v);_saveToStorage(false);};
+  // v1.0.7 PHASE 18 Task 1: set() now also calls _evictIfOverCap() to enforce
+  // the soft MAX_ENTRIES cap. Eviction happens BEFORE the debounced save, so
+  // the persisted file never exceeds the cap (after the next flush).
+  this.set=function(k,v){if(m.has(k))m.delete(k);m.set(k,v);_evictIfOverCap();_saveToStorage(false);};
   this.delete=function(k){const r=m.delete(k);_saveToStorage(false);return r;};
   Object.defineProperty(this,'size',{get:function(){return m.size;},configurable:true});
   this.clear=function(){m.clear();_saveToStorage(true);};
   this.keys=()=>m.keys();
+  // v1.0.7 PHASE 18 Task 1: Expose _evictIfOverCap for tests / debug introspection.
+  this._evictIfOverCap=_evictIfOverCap;
+  this.MAX_ENTRIES=MAX_ENTRIES;
 }();
 // v1.0.4 Round-5 Rev20: Expose _flushReviewEvalCache globally so Java can call it
 // via evaluateJavascript("if(typeof _flushReviewEvalCache==='function')_flushReviewEvalCache()").
@@ -405,6 +462,12 @@ const HapticManager = (function() {
 // environment (Java callbacks can interleave with JS main thread).
 let _evalStaleGen=0;  // Generation counter — stale if onEngineEval's gen < current
 let _evalRequestGen=0; // Generation at time of last requestEngineEval() call
+// v1.0.7 PHASE 19 (bug fix): Capture the mode at request time so onEngineEval
+// can reject cross-mode stale callbacks. Previously, a review-mode eval callback
+// still in flight after exitReview() would pass the normal-mode gen check
+// (both gens equal in normal mode) and overwrite the correct game-position eval
+// with the wrong review-position eval for up to 30s.
+let _evalRequestReviewMode=false;
 // v1.0.4 Rev44: Safety timer for eval requests — prevents eval bar from
 // getting stuck at "分析中" if the engine doesn't respond.
 let _evalSafetyTimerId=null;
@@ -418,12 +481,34 @@ function showToast(msg,duration=2500){const old=document.getElementById('_toast'
 // actively updated with real-time engine status.
 let _lastNotificationInfo='';
 let _notificationThrottleTimer=0;
+let _pendingNotificationInfo=''; // v1.0.7 PHASE 19: buffer last info during throttle window
 function _updateEngineNotification(info){
   if(!info||info===_lastNotificationInfo)return;
+  // v1.0.7 BUG FIX (audit: 棋局前端代码审查.docx §4):
+  // Previously the cache was updated BEFORE the throttle check, so when a
+  // second change arrived during the throttle window we'd early-return on the
+  // (already-stale) cache compare and never push the new value to the system
+  // notification. After the throttle timer expired, a subsequent call with
+  // the same new value would be skipped because the cache already held it —
+  // the notification bar was stuck on the first value seen.
+  // Fix: only update the cache when we actually push the notification.
+  if(_notificationThrottleTimer){
+    // v1.0.7 PHASE 19 (bug fix): Buffer the latest info so it gets pushed when
+    // the throttle window expires. Without this, if the engine stops emitting
+    // progress during the 1s window, the last-seen info is silently dropped.
+    _pendingNotificationInfo=info;
+    return;
+  }
   _lastNotificationInfo=info;
   // Throttle: update notification at most once per second
-  if(_notificationThrottleTimer)return;
-  _notificationThrottleTimer=setTimeout(function(){_notificationThrottleTimer=0;},1000);
+  _notificationThrottleTimer=setTimeout(function(){
+    _notificationThrottleTimer=0;
+    // v1.0.7 PHASE 19: Flush any pending info that arrived during the throttle window
+    if(_pendingNotificationInfo&&_pendingNotificationInfo!==_lastNotificationInfo){
+      _updateEngineNotification(_pendingNotificationInfo);
+    }
+    _pendingNotificationInfo='';
+  },1000);
   try{
     if(typeof AndroidBridge!=='undefined'&&AndroidBridge.updateEngineNotification){
       AndroidBridge.updateEngineNotification('Stockfish 18 · '+info);
@@ -657,13 +742,65 @@ function _buildPGNString(forceIncludeVariations){
     plyCount:moveRecords.length
   });
   // For Chess960, the FEN we emit must use Shredder castling rights.
-  if(typeof gameVariant!=='undefined'&&gameVariant==='chess960'&&typeof toShredderCastling==='function'){
+  // v1.0.7 PHASE 3: Also use Shredder castling rights for non-Chess960 games
+  // whose starting position came from Setup mode with 🔁 markers on non-
+  // standard squares. In that case the standard "KQkq" notation is ambiguous
+  // (it implies rook on h1/a1 etc.), so we emit Shredder (file letters) to
+  // unambiguously identify which rook holds the rights. This is the only
+  // way to losslessly round-trip such positions through PGN/FEN.
+  // Detection: the setup position has a king or rook NOT on standard squares.
+  function _needsShredderFEN(s){
+    if(!s||!s.board||!s.castlingRights)return false;
+    // If no castling rights at all, no need for Shredder.
+    const cr=s.castlingRights;
+    if(!cr.whiteKingside&&!cr.whiteQueenside&&!cr.blackKingside&&!cr.blackQueenside)return false;
+    // Standard squares: white king e1 (7,4), white rooks a1 (7,0) & h1 (7,7);
+    // black king e8 (0,4), black rooks a8 (0,0) & h8 (0,7).
+    // If all rooks with rights are on standard squares AND king is on e1/e8,
+    // standard KQkq notation is sufficient.
+    if(cr.whiteKingside){
+      const wr=s.board[7]&&s.board[7][7];
+      if(!wr||wr.type!=='rook'||wr.color!=='white')return true; // not on h1
+    }
+    if(cr.whiteQueenside){
+      const wr=s.board[7]&&s.board[7][0];
+      if(!wr||wr.type!=='rook'||wr.color!=='white')return true; // not on a1
+    }
+    if(cr.blackKingside){
+      const br=s.board[0]&&s.board[0][7];
+      if(!br||br.type!=='rook'||br.color!=='black')return true;
+    }
+    if(cr.blackQueenside){
+      const br=s.board[0]&&s.board[0][0];
+      if(!br||br.type!=='rook'||br.color!=='black')return true;
+    }
+    // Also check king position
+    if(s.wk&&(s.wk.row!==7||s.wk.col!==4))return true;
+    if(s.bk&&(s.bk.row!==0||s.bk.col!==4))return true;
+    return false;
+  }
+  if(typeof toShredderCastling==='function'&&(typeof gameVariant!=='undefined'&&gameVariant==='chess960'||_needsShredderFEN(gameState))){
     // Regenerate the FEN with Shredder castling for the [FEN] tag
     const stdFEN=generateFEN(gameState);
     // Replace the castling field (field 3, 0-indexed) with Shredder format
     const parts=stdFEN.split(' ');
     parts[2]=toShredderCastling(gameState.castlingRights,gameState.board);
     supObj.FEN=parts.join(' ');
+    // Also update _setupFEN if it's the starting position, so the [FEN] tag
+    // in the PGN header uses Shredder castling too.
+    if(typeof _setupFEN!=='undefined'&&_setupFEN){
+      try{
+        const _sp=_setupFEN.split(' ');
+        if(_sp.length>=3){
+          // Re-parse the setup FEN to construct a state for toShredderCastling
+          // Easier: just replace the castling field with Shredder of the same state.
+          // Since _setupFEN was generated from the same gameState at setup time,
+          // and toShredderCastling takes (cr, board), we can re-derive.
+          // For simplicity, we leave _setupFEN as-is for now — it'll be regenerated
+          // below if needed. The PGN [FEN] tag will be supObj.FEN which is correct.
+        }
+      }catch(e){}
+    }
   }
   const supLines=supplementaryTags(supObj);
   // v1.0.4 EXPANSION (this round): Add [TimeControl] header when game is timed
@@ -749,7 +886,14 @@ function _buildPGNString(forceIncludeVariations){
     }
     // [%eval] from cached review eval (if available)
     if(typeof _reviewEvalCache!=='undefined'&&_reviewEvalCache.size>0){
-      const cached=_reviewEvalCache.get(i+1); // reviewStep is 1-based
+      // moveIdx i (0-based) → post-move reviewStep = i+1. (Step 0 = initial
+      // position; cacheable since v1.0.7 Phase 15, but not written to PGN
+      // as a per-move [%eval] — the initial position has its own [FEN] tag.)
+      // v1.0.7 PHASE 19 (perf): Use peek() not get() — PGN export is a read-only
+      // operation, not a review-session access. get() would refresh LRU order,
+      // pushing the current game's evals to the newest end and evicting OTHER
+      // games' evals toward the back. peek() reads without side effect.
+      const cached=_reviewEvalCache.peek(i+1);
       if(cached){
         const evalTag=formatEvalTag(cached);
         if(evalTag)commentParts.push(evalTag);
@@ -944,7 +1088,11 @@ function _formatPGNEvalAnnotation(reviewStep,moveNum){
       if(total>0){
         const wp=Math.round(cached.wdlW/total*100);
         const dp=Math.round(cached.wdlD/total*100);
-        const lp=100-wp-dp;
+        // v1.0.7 PHASE 19 (bug fix): Compute lp directly from raw value to avoid
+        // negative percentages at rounding boundaries (e.g. W=99.5,D=0.5,L=0 →
+        // wp=100,dp=1,lp=100-100-1=-1). The three may sum to 99 or 101, which
+        // is less visually jarring than a negative value.
+        const lp=Math.round(cached.wdlL/total*100);
         wdlStr=wp+'%W/'+dp+'%D/'+lp+'%L';
       }
     }
@@ -1325,9 +1473,31 @@ function _uciToSimple(uci){
   //     primary _uciToSAN() path which uses the board state, not this
   //     fallback. This _uciToSimple fallback is only used when _uciToSAN
   //     fails (state desync), so the 1-col ambiguity is acceptable.
-  if(pieceType==='king'&&Math.abs(toCol-fromCol)>=2){
-    if(toCol===6)return 'O-O';
-    if(toCol===2)return 'O-O-O';
+  // v1.0.7 PHASE 4: UCI_Chess960 "king-captures-rook" format. When the
+  // engine sends castling as "e1h1" (king moves to rook's square), the
+  // destination column is NOT 6/2 but the rook's column. We detect this
+  // case by checking if the destination square holds a same-color rook
+  // (in the current gameState) and the move is on the same rank. If so,
+  // we treat it as castling based on the rook's position relative to the
+  // king (right of king → kingside O-O; left → queenside O-O-O).
+  if(pieceType==='king'){
+    // v1.0.7 PHASE 4: Check for UCI_Chess960 king-captures-rook format first.
+    if(gameState&&gameState.board&&gameState.board[fromRow]&&gameState.board[toRow]){
+      const _fp=gameState.board[fromRow][fromCol];
+      const _tp=gameState.board[toRow][toCol];
+      if(_fp&&_fp.type==='king'&&_tp&&_tp.type==='rook'&&_fp.color===_tp.color&&fromRow===toRow){
+        // King "captures" own rook → Chess960 castling notation.
+        if(toCol>fromCol)return 'O-O';
+        if(toCol<fromCol)return 'O-O-O';
+      }
+    }
+    // Standard / post-rewrite detection: king moved 2+ cols and lands on
+    // col 6 (kingside) or col 2 (queenside). This works for both standard
+    // chess (e1g1) and Chess960 after uciToCoords rewrites the destination.
+    if(Math.abs(toCol-fromCol)>=2){
+      if(toCol===6)return 'O-O';
+      if(toCol===2)return 'O-O-O';
+    }
   }
   // Handle pawn moves
   if(pieceType==='pawn'){
@@ -1352,13 +1522,32 @@ function _uciToSAN(uci, state){
   if(!uci||typeof uci!=='string'||uci.length<4||!state||!state.board) return { san: _uciToSimple(uci), postState: state };
   const fromCol=uci.charCodeAt(0)-97;
   const fromRow=8-parseInt(uci[1]);
-  const toCol=uci.charCodeAt(2)-97;
-  const toRow=8-parseInt(uci[3]);
+  let toCol=uci.charCodeAt(2)-97;
+  let toRow=8-parseInt(uci[3]);
   // Bounds check
   if(fromRow<0||fromRow>7||fromCol<0||fromCol>7||toRow<0||toRow>7||toCol<0||toCol>7)
     return { san: _uciToSimple(uci), postState: state };
   if(!state.board[fromRow]) return { san: _uciToSimple(uci), postState: state };
   const piece=state.board[fromRow][fromCol];
+  // v1.0.7 PHASE 4: UCI_Chess960 "king-captures-rook" castling format.
+  // When UCI_Chess960=true, Stockfish sends castling as the king moving to
+  // the ROOK's source square (e.g. "e1h1" for kingside with rook on h1).
+  // We detect this case (king moves to a square occupied by a same-color
+  // rook on the same rank) and rewrite the destination to the king's actual
+  // castling destination (col 6 kingside, col 2 queenside). This makes the
+  // downstream makeMv/moveAlg correctly detect castling via _castleSide().
+  if(piece&&piece.type==='king'&&state.board[toRow]){
+    const toPiece=state.board[toRow][toCol];
+    if(toPiece&&toPiece.type==='rook'&&toPiece.color===piece.color&&fromRow===toRow){
+      if(toCol>fromCol){
+        // Kingside castling — king ends on col 6 (g1/g8)
+        toCol=6;
+      }else if(toCol<fromCol){
+        // Queenside castling — king ends on col 2 (c1/c8)
+        toCol=2;
+      }
+    }
+  }
   if(!piece){
     // Piece not found — use _uciToSimple() as fallback for notation,
     // AND try to create a minimal postState by moving whatever is at from-square.
@@ -1509,12 +1698,43 @@ function generateFEN(s){
     if(r<7)fen+='/';
   }
   fen+=' '+(s.currentTurn==='white'?'w':'b');
-  let castle='';
   const cr=s.castlingRights||{};
-  if(cr.whiteKingside)castle+='K';
-  if(cr.whiteQueenside)castle+='Q';
-  if(cr.blackKingside)castle+='k';
-  if(cr.blackQueenside)castle+='q';
+  // v1.0.7 PHASE 4: Output Shredder-FEN (X-FEN) castling rights when:
+  //   1. We're in explicit Chess960 mode (gameVariant === 'chess960' OR
+  //      isChess960Mode() returns true), OR
+  //   2. The position has castling rights on non-standard squares (king not
+  //      on e1/e8, or a castling-rights rook not on a1/h1/a8/h8).
+  // In both cases, standard KQkq notation is ambiguous (K implies rook on
+  // h1, but the rook may be elsewhere). Shredder notation (file letters
+  // A-H/a-h) explicitly names the rook's source file, which is the only
+  // lossless way to represent the position.
+  // Standard positions (king on e1/e8, rooks on a1/h1/a8/h8) continue to
+  // use KQkq for backward compatibility with v1.0.6 and earlier.
+  let _useShredder=false;
+  const _is960=(typeof gameVariant!=='undefined'&&gameVariant==='chess960')||(typeof isChess960Mode==='function'&&isChess960Mode());
+  if(_is960)_useShredder=true;
+  else{
+    const _hasRights=cr.whiteKingside||cr.whiteQueenside||cr.blackKingside||cr.blackQueenside;
+    if(_hasRights){
+      if(s.wk&&(s.wk.row!==7||s.wk.col!==4))_useShredder=true;
+      if(s.bk&&(s.bk.row!==0||s.bk.col!==4))_useShredder=true;
+      if(!_useShredder&&cr.whiteKingside){const wr=s.board[7]&&s.board[7][7];if(!wr||wr.type!=='rook'||wr.color!=='white')_useShredder=true;}
+      if(!_useShredder&&cr.whiteQueenside){const wr=s.board[7]&&s.board[7][0];if(!wr||wr.type!=='rook'||wr.color!=='white')_useShredder=true;}
+      if(!_useShredder&&cr.blackKingside){const br=s.board[0]&&s.board[0][7];if(!br||br.type!=='rook'||br.color!=='black')_useShredder=true;}
+      if(!_useShredder&&cr.blackQueenside){const br=s.board[0]&&s.board[0][0];if(!br||br.type!=='rook'||br.color!=='black')_useShredder=true;}
+    }
+  }
+  let castle;
+  if(_useShredder&&typeof toShredderCastling==='function'){
+    castle=toShredderCastling(cr,s.board);
+  }else{
+    let _std='';
+    if(cr.whiteKingside)_std+='K';
+    if(cr.whiteQueenside)_std+='Q';
+    if(cr.blackKingside)_std+='k';
+    if(cr.blackQueenside)_std+='q';
+    castle=_std||'-';
+  }
   fen+=' '+(castle||'-');
   let ep='-';
   if(s.enPassantTarget){const et=s.enPassantTarget;const capColor=s.currentTurn;const pd=capColor==='white'?1:-1;for(const dc of[-1,1]){const cr2=et.row+pd,cc2=et.col+dc;if(inB(cr2,cc2)&&s.board[cr2][cc2]&&s.board[cr2][cc2].type==='pawn'&&s.board[cr2][cc2].color===capColor){ep=String.fromCharCode(97+et.col)+(8-et.row);break;}}}
@@ -1623,6 +1843,47 @@ function uciToCoords(uci){
     const promoMap={'q':'queen','r':'rook','b':'bishop','n':'knight'};
     result.promotion=promoMap[uci[4].toLowerCase()]||'queen';
   }
+  // v1.0.7 PHASE 4: UCI_Chess960 "king-captures-rook" castling format.
+  // When UCI_Chess960=true, Stockfish represents castling as the king moving
+  // to the ROOK's source square (e.g. "e1h1" for kingside castling with the
+  // rook on h1, or "e1b1" for queenside castling with the rook on b1) — NOT
+  // to the king's final square (g1/c1). This disambiguates castling from a
+  // normal king move to g1/c1 in Chess960 where the king may already be
+  // close to g1/c1.
+  //
+  // We detect this case and rewrite the destination to the king's actual
+  // castling destination (col 6 for kingside, col 2 for queenside), so that
+  // downstream executeMove/makeMv correctly detect castling via _castleSide()
+  // (which checks for the king landing on col 6 or col 2).
+  //
+  // Detection criteria (all must hold):
+  //   1. The from-square holds a king of the side to move.
+  //   2. The to-square holds a same-color rook (i.e. "king captures own rook").
+  //   3. The king and rook are on the same rank (castling always happens on
+  //      the home rank).
+  //   4. The rook's column is on the king's RIGHT (→ kingside, king ends on
+  //      col 6) or LEFT (→ queenside, king ends on col 2).
+  //
+  // This detection is SAFE for standard chess too — in standard chess, the
+  // engine (with UCI_Chess960=false) sends "e1g1", which does NOT match
+  // (g1 doesn't hold a rook), so we don't rewrite. The rewrite only happens
+  // when the engine actually uses the Chess960 castling notation.
+  if(gameState&&gameState.board&&gameState.board[fr]&&gameState.board[tr]){
+    const fromPiece=gameState.board[fr][fc];
+    const toPiece=gameState.board[tr][tc];
+    if(fromPiece&&fromPiece.type==='king'&&toPiece&&toPiece.type==='rook'&&fromPiece.color===toPiece.color&&fr===tr){
+      // King "captures" own rook on the same rank → Chess960 castling notation.
+      if(tc>fc){
+        // Rook is to the right of king → kingside castling, king ends on col 6.
+        // Rewrite destination to (king's row, col 6) = g1/g8.
+        result.to={row:tr,col:6};
+      }else if(tc<fc){
+        // Rook is to the left of king → queenside castling, king ends on col 2.
+        result.to={row:tr,col:2};
+      }
+      // If tc === fc this is impossible (king and rook can't share a square).
+    }
+  }
   return result;
 }
 
@@ -1675,6 +1936,10 @@ function onEngineReady(){
   _engineReady=true;
   // Reset restart counter on successful engine init
   if(window._engineRestartCount)window._engineRestartCount=0;
+  // v1.0.7 PHASE 19 (bug fix): Cancel any pending error-restart timer. If the
+  // engine auto-recovered (Java recoverEngine) before the 1500ms onEngineError
+  // timer fired, that timer would spuriously restart an already-ready engine.
+  if(window._engineErrorRestartTimer){clearTimeout(window._engineErrorRestartTimer);window._engineErrorRestartTimer=null;}
   // FIX: After engine restart (crash recovery), the engine's internal hash
   // tables are empty. We MUST send ucinewgame before the next search to
   // prevent stale data from corrupting evaluations.
@@ -2109,6 +2374,13 @@ function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth){
   // Update heartbeat timestamp — prevents false-positive engine death detection
   // during long eval searches (go depth 22 can take several seconds)
   _lastEngineCallbackTime=Date.now();
+  // v1.0.7 PHASE 19 (bug fix): Cross-mode stale callback rejection. A review-mode
+  // eval callback still in flight after exitReview() would previously pass the
+  // normal-mode gen check (both gens equal in normal mode). Now we capture the
+  // mode at request time and reject if the current mode doesn't match.
+  if(_evalRequestReviewMode!==!!reviewMode){
+    return; // Mode mismatch — stale callback from the other mode
+  }
   // In review mode: discard stale callbacks from previous steps
   if(reviewMode&&_reviewEvalRequestedStep!==reviewStep){
     return; // Stale response — user has navigated to a different step
@@ -2152,6 +2424,14 @@ function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth){
     _reviewAnalyzeAdvance();
   }
   _updateAllEvalDisplays();
+  // v1.0.7 PHASE 17: Also live-refresh the "Analyze All" button label so it
+  // switches to "All Analyzed" the moment the last step's eval completes —
+  // whether via the batch reviewAnalyzeAll() path OR via the user manually
+  // clicking through moves one-by-one. Without this, the button stayed stuck
+  // at "Analyze All N (k/N)" until the next full render.
+  try{
+    if(typeof _updateReviewAnalyzeBtn==='function')_updateReviewAnalyzeBtn();
+  }catch(e){}
 }
 
 // Callback: Engine error
@@ -3259,7 +3539,13 @@ function onEngineError(msg){
   window._engineRestartCount++;
   if(window._engineRestartCount<=2){
     showToast(T('engine_error_restart')+' ('+window._engineRestartCount+'/2)...');
-    setTimeout(()=>{
+    // v1.0.7 PHASE 19 (bug fix): Track this timer so onEngineReady can cancel it.
+    // Without this, if the engine auto-recovers (Java recoverEngine → onEngineReady)
+    // before this 1500ms timer fires, the timer would call restartEngine() on an
+    // already-recovered engine, causing a spurious restart and burning a retry budget.
+    if(window._engineErrorRestartTimer){clearTimeout(window._engineErrorRestartTimer);}
+    window._engineErrorRestartTimer=setTimeout(()=>{
+      window._engineErrorRestartTimer=null;
       if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.restartEngine==='function'){
         try{AndroidBridge.restartEngine();}catch(e){
           console.error('JS restart failed (executor likely shutdown):',e);
@@ -3294,6 +3580,15 @@ function requestEngineEval(){
     if(cachedEarly!=null){
       _sfEval=cachedEarly.eval;_sfMateDistance=cachedEarly.mate!=null?cachedEarly.mate:0;_sfWdlW=cachedEarly.wdlW!=null?cachedEarly.wdlW:-1;_sfWdlD=cachedEarly.wdlD!=null?cachedEarly.wdlD:-1;_sfWdlL=cachedEarly.wdlL!=null?cachedEarly.wdlL:-1;_sfDepth=cachedEarly.depth!=null?cachedEarly.depth:0;_sfSeldepth=cachedEarly.seldepth!=null?cachedEarly.seldepth:0;_sfEvalReady=true;_evalLoading=false;
       _reviewEvalRequestedStep=reviewStep; // Mark as already evaluated
+      // v1.0.7 PHASE 19 (critical bug fix): Clear any pending debounce timer and
+      // invalidate in-flight callbacks. Without this, a stale debounce timer
+      // capturing a PRIOR step's FEN could fire after this cache-hit return,
+      // pass the staleness filter (reviewStep matches), and overwrite this
+      // step's correct cached eval with the prior step's engine result —
+      // permanently corrupting the cache.
+      if(_reviewEvalDebounceTimer){clearTimeout(_reviewEvalDebounceTimer);_reviewEvalDebounceTimer=null;}
+      _evalRequestReviewMode=true; // mark mode for cross-mode rejection
+      _evalStaleGen++; _evalRequestGen=_evalStaleGen; // invalidate any in-flight callback
       _updateAllEvalDisplays();
       // v1.0.4 Rev24 FIX: If we're in batch analyze-all mode and hit cache,
       // we MUST advance to the next step. Previously this early-return stalled
@@ -3319,6 +3614,7 @@ function requestEngineEval(){
   _ponderGen++;_ponderMoveSAN='';_ponderBarInfo='';_pendingPonderMoveUCI=null;
   _updateAIThinkDisplay(); // Immediately clear stale ponder from DOM
   _evalRequestGen=_evalStaleGen; // Fresh eval request — accept onEngineEval callbacks with this gen
+  _evalRequestReviewMode=!!reviewMode; // v1.0.7 PHASE 19: capture mode for cross-mode rejection
   if(reviewMode&&reviewStates&&reviewStates.length>0&&reviewStep>=0&&reviewStep<reviewStates.length){
     // v1.0.4 Rev23: The cache was already checked above (before _resetEvalState).
     // If we reach here, the cache missed — no need to re-check.
@@ -3331,11 +3627,21 @@ function requestEngineEval(){
     // correct evaluation directly and avoid the engine call entirely.
     const _rs=reviewStates[reviewStep].state;
     const _termStatus=gameStatus(_rs);
+    // v1.0.7 PHASE 19 (critical bug fix): Helper to invalidate in-flight callbacks
+    // on terminal fast paths. Same rationale as the cache-hit path above: a stale
+    // debounce timer or in-flight engine callback must not overwrite the terminal
+    // eval (±99999 / 0) with the engine's 0cp fallback.
+    const _invalidateInFlight=function(){
+      if(_reviewEvalDebounceTimer){clearTimeout(_reviewEvalDebounceTimer);_reviewEvalDebounceTimer=null;}
+      _evalRequestReviewMode=true;
+      _evalStaleGen++; _evalRequestGen=_evalStaleGen;
+    };
     if(_termStatus==='checkmate'){
       const _isBlackTurn=_rs.currentTurn==='black';
       _sfEval=_isBlackTurn?99999:-99999;
       _sfMateDistance=0;_sfDepth=0;_sfSeldepth=0;
       _sfEvalReady=true;_evalLoading=false;
+      _invalidateInFlight();
       _reviewEvalCache.set(reviewStep,{eval:_sfEval,mate:0,depth:0,seldepth:0,wdlW:_isBlackTurn?0:1000,wdlD:0,wdlL:_isBlackTurn?1000:0});
       _updateAllEvalDisplays();
       if(_reviewAnalyzeAllActive){_reviewAnalyzeAdvance();}
@@ -3344,6 +3650,7 @@ function requestEngineEval(){
     if(_termStatus==='draw_stalemate'||_termStatus==='draw_insufficient'||_termStatus==='draw_5fold'||_termStatus==='draw_75move'||_termStatus==='draw_50move'||_termStatus==='draw_repetition'){
       _sfEval=0;_sfMateDistance=0;_sfDepth=0;_sfSeldepth=0;
       _sfEvalReady=true;_evalLoading=false;
+      _invalidateInFlight();
       _reviewEvalCache.set(reviewStep,{eval:0,mate:0,depth:0,seldepth:0,wdlW:333,wdlD:334,wdlL:333});
       _updateAllEvalDisplays();
       if(_reviewAnalyzeAllActive){_reviewAnalyzeAdvance();}
@@ -3391,6 +3698,25 @@ function requestEngineEval(){
             if(typeof AndroidBridge.engineEvalDeep==='function'){AndroidBridge.engineEvalDeep(fen);}
             else{AndroidBridge.engineEval(fen);}
           }catch(e){console.error('engineEvalDeep error:',e);_evalLoading=false;_updateEvalDisplay();}
+          // v1.0.7 PHASE 18 Task 3 (bug fix): Add safety timer for single-step
+          // review eval. Previously, only normal game mode had a safety timer
+          // (30s). Review mode (depth 22) had NO safety net — if the engine
+          // hung, the eval bar stayed stuck at "analyzing..." forever and the
+          // user had no way to recover short of exiting and re-entering review
+          // mode. The batch analyze-all path has its own per-step timer
+          // (_reviewAnalyzeSafetyTimer, 60s), but single-step review eval was
+          // uncovered. 45s gives deep evals (20-25s on complex positions) a
+          // 20s margin while still unsticking the user in reasonable time.
+          // The timer is cleared by onEngineEval (line ~2358) on success.
+          if(_evalSafetyTimerId)clearTimeout(_evalSafetyTimerId);
+          _evalSafetyTimerId=setTimeout(function(){
+            _evalSafetyTimerId=null;
+            if(_evalLoading){
+              console.warn('Review eval safety timer: engine did not respond within 45s, resetting');
+              _evalLoading=false;_sfEvalReady=false;
+              _updateAllEvalDisplays();
+            }
+          },45000);
         },300);
       }
     }
@@ -3447,7 +3773,7 @@ function _buildEvalHTML(e,opts){
   }
   s+=progressStr;
   let wdlStr='';
-  if(_sfWdlW>=0&&_sfWdlD>=0&&_sfWdlL>=0){const total=_sfWdlW+_sfWdlD+_sfWdlL;const wP=Math.round(_sfWdlW/total*100);const dP=Math.round(_sfWdlD/total*100);const lP=100-wP-dP;wdlStr='<span style="font-size:.65rem;color:var(--muted);margin-left:4px">('+wP+'%W/'+dP+'%D/'+lP+'%L)</span>';}
+  if(_sfWdlW>=0&&_sfWdlD>=0&&_sfWdlL>=0){const total=_sfWdlW+_sfWdlD+_sfWdlL;const wP=Math.round(_sfWdlW/total*100);const dP=Math.round(_sfWdlD/total*100);const lP=Math.round(_sfWdlL/total*100);wdlStr='<span style="font-size:.65rem;color:var(--muted);margin-left:4px">('+wP+'%W/'+dP+'%D/'+lP+'%L)</span>';}
   s+=wdlStr;
   if(opts.delta)s+=opts.delta;
   return s;

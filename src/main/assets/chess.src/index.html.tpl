@@ -28,13 +28,43 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src https://tablebase.lichess.ovh; img-src data: file:; frame-ancestors 'none'; base-uri 'self'">
-<title>Regalia v1.0.6</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; worker-src blob:; connect-src https://tablebase.lichess.ovh; img-src data: file: blob:; frame-ancestors 'none'; base-uri 'self'">
+<title>Regalia v1.0.7</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 :root{color-scheme:dark;--bg:#1a0a0a;--card:#221015;--border:#8b6914;--border2:#d4a017;--text:#f5e6c8;--muted:#a08050;--accent:#d4a017;--accent2:#ffd700;--blue:#4a90d9;--red:#c0392b;--purple:#8e44ad;--green:#27ae60;--danger:#c0392b}
-body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);touch-action:pan-y;-webkit-tap-highlight-color:transparent}
-#app{min-height:100vh;display:flex;flex-direction:column;position:relative;z-index:1}
+/* v1.0.7: html + body + #app ALL get overflow-x:hidden. html uses max-width:100%
+   (NOT 100vw — 100vw includes safe-area insets and causes overflow on notched phones).
+   body gets padding for safe-area only (NOT the 3px finger-grip — that's handled
+   by #app's margin-right so content isn't clipped by body's overflow:hidden).
+   #app gets margin-right:calc(env(safe-area-inset-right) + 3px) for the 3px
+   finger-grip clearance, and margin-left for safe-area. This way body's
+   overflow:hidden doesn't clip content — the margin creates visible space. */
+html{overflow-x:hidden;max-width:100%}
+body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;max-width:100%;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom) 0;touch-action:pan-y;-webkit-tap-highlight-color:transparent}
+/* v1.0.7 PHASE 6 FIRST-PRINCIPLES FIX for "right-edge content cut off".
+   ROOT CAUSE (after 10+ prior failed attempts): #app used
+   `width:100% + margin-right:calc(env(safe-area-inset-right)+3px)`.
+   In the CSS box model, `width:100%` makes the element's content-box equal
+   to the parent's content-width. Adding a non-zero `margin-right` then
+   pushes the element's RIGHT EDGE past the parent's right edge by exactly
+   the margin amount. With body's `overflow-x:hidden`, the rightmost 3px+
+   of content gets CLIPPED — exactly the "h-file / right edge cut off"
+   symptom users reported in both portrait AND landscape.
+   FIX: Move the safe-area + 3px grip clearance from MARGIN to PADDING on
+   #app. With `box-sizing:border-box`, `width:100%` now INCLUDES the padding,
+   so the element's border-box exactly fits the parent (body) content area.
+   The content inside #app is then constrained to (100% - padding), and
+   nothing overflows. This is the standard responsive-layout pattern.
+   We also keep `min-width:0` so flex children can shrink below their
+   intrinsic min-content width (the universal flexbox "allow shrink" signal). */
+#app{min-height:100vh;display:flex;flex-direction:column;position:relative;z-index:1;overflow-x:hidden;max-width:100%;width:100%;min-width:0;padding-right:calc(env(safe-area-inset-right) + 3px);padding-left:env(safe-area-inset-left);box-sizing:border-box}
+#app *{box-sizing:border-box}
+/* v1.0.7: Defensive — clamp all direct children of #app to viewport width.
+   This is a SAFETY NET; the per-component CSS below already constrains
+   widths, but if any single child overshoots, this rule stops it from
+   forcing the entire page into horizontal-scroll mode. */
+#app > *{max-width:100%;min-width:0;overflow-x:hidden}
 .hdr{background:#1a0a0a;border-bottom:2px solid var(--border2);padding:10px 16px;position:relative;overflow:hidden}
 .hdr-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
 .hdr-l{display:flex;align-items:center;gap:10px}
@@ -87,7 +117,16 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 /* v1.0.4 ROUND-5 REV12: Removed will-change:transform from .bgrid — it was
    promoting the ENTIRE 8x8 grid to a GPU layer, causing jank on high-end
    displays. Only individual .move-anim elements need GPU promotion. */
-.bgrid{display:grid;transform:translateZ(0);touch-action:none;backface-visibility:hidden}
+/* v1.0.7 PHASE 17 (Kimi audit suggestion 2.1 — adopted, with caveat):
+   Added `content-visibility:auto` so when the board is scrolled off-screen
+   (e.g. long stats panels on small phones, or future split-view layouts)
+   the browser skips its rendering work. We do NOT add `contain:strict`
+   because .bgrid's grid sizing depends on its parent .bwrap (which itself
+   is sized by JS via CELL px). `contain:strict` would freeze the grid's
+   intrinsic size and break the responsive CELL recalculation. The .sq
+   cells already have `contain:layout style paint` so child-paint cost is
+   already optimized. */
+.bgrid{display:grid;transform:translateZ(0);touch-action:none;backface-visibility:hidden;content-visibility:auto;contain-intrinsic-size:auto}
 .sq{display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;user-select:none;font-size:2rem;line-height:1;transition:background .15s;touch-action:manipulation;contain:layout style paint;transform:translateZ(0)}
 .sq:hover{background-color:rgba(255,215,0,.04)}
 .sq .lbl{position:absolute;top:1px;left:2px;font-size:9px;opacity:.95;font-family:"DejaVu Sans",system-ui,sans-serif;pointer-events:none;z-index:2;letter-spacing:0}
@@ -168,8 +207,30 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .rmv-var{font-size:.6rem;color:var(--accent);font-style:italic;padding:1px 0;line-height:1.4;margin-top:2px}
 .hint-area{background:#221015;border:1px solid var(--accent2);border-radius:6px;padding:10px 12px;position:relative;overflow:hidden;box-shadow:none}
 .hint-text{font-family:system-ui,-apple-system,sans-serif;font-size:.8rem;color:var(--accent2);margin-top:4px;line-height:1.5}
-.dov{position:fixed;inset:0;background:rgba(26,10,10,.97);display:flex;align-items:center;justify-content:center;z-index:300;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
-.dlg{background:#1a0a0a;border:2px solid var(--border2);border-radius:10px;padding:24px;max-width:500px;width:90%;max-height:85vh;overflow-y:auto;box-shadow:0 0 6px rgba(212,160,23,.06),0 6px 16px rgba(0,0,0,.40);position:relative}
+/* v1.0.7: .dov (dialog overlay) — position:fixed covering full viewport.
+   Uses padding to respect safe-area + 3px finger-grip clearance. The dialog
+   inside is centered via justify-content:center. */
+.dov{position:fixed;inset:0;background:rgba(26,10,10,.97);display:flex;align-items:center;justify-content:center;z-index:300;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);overflow-x:hidden;padding:10px calc(env(safe-area-inset-right) + 3px) 10px env(safe-area-inset-left);box-sizing:border-box}
+/* v1.0.7: .dlg base — width:100% so dialog fills overlay content area.
+   max-width:500px prevents it from getting too wide on tablets.
+   box-sizing:border-box so padding is included in width.
+   margin:0 auto for centering (works with justify-content:center).
+   v1.0.7 FIRST-PRINCIPLES FIX for "dialog not centered / cut off on right
+   side of slim phones": The previous attempt used max-width:500px on the
+   base and max-width:600px inside the portrait media query. On ultra-tall
+   phones with CSS viewport ~360-420px, BOTH values leave the dialog
+   narrower than the viewport, but the right-side asymmetry reported by
+   the user (left=24px, right=732px in the screenshot) suggests the dialog
+   was being left-aligned. Root cause: when a flex item has `width:100%`
+   inside a `justify-content:center` flex container, AND the item's
+   max-width is < container width, the item's `margin:0 auto` is what
+   actually centers it horizontally. If margin:auto fails (e.g. due to
+   a parent's `padding` asymmetry), the dialog snaps left.
+   Fix: use `margin-left:auto; margin-right:auto` explicitly (not the
+   shorthand `margin:0 auto` which sets top/bottom to 0 — this can interact
+   badly with flex item alignment). Also add `align-self:center` as a
+   belt-and-suspenders fallback for flex item alignment. */
+.dlg{background:#1a0a0a;border:2px solid var(--border2);border-radius:10px;padding:24px;max-width:500px;width:100%;max-height:85vh;overflow-y:auto;overflow-x:hidden;box-shadow:0 0 6px rgba(212,160,23,.06),0 6px 16px rgba(0,0,0,.40);position:relative;box-sizing:border-box;margin-left:auto;margin-right:auto;align-self:center}
 .dlg h2{font-family:system-ui,-apple-system,sans-serif;font-size:1.2rem;font-weight:900;margin-bottom:14px;color:var(--accent2);letter-spacing:2px;text-shadow:0 0 3px rgba(255,215,0,.06)}
 .dlg-sec{margin-bottom:14px}
 .dlg-sec h3{font-family:system-ui,-apple-system,sans-serif;font-size:.72rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:8px}
@@ -206,6 +267,10 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .setup-clr.act{border-color:var(--accent2);background:rgba(212,160,23,.15)}
 .setup-del{width:44px;height:44px;font-size:1.2rem;border-radius:4px;border:2px solid var(--danger);background:rgba(192,57,43,.1);color:var(--danger);cursor:pointer;transition:all .2s}
 .setup-del:hover{background:rgba(192,57,43,.2);transform:scale(1.05)}
+/* v1.0.7 PHASE 6: selected state for the delete button — same highlight
+   style as .setup-btn.act (gold border + tinted background), but keeping
+   the red icon color so the user knows it's the delete tool. */
+.setup-del.act{border-color:var(--accent2);background:rgba(212,160,23,.15);transform:scale(1.05);box-shadow:none}
 .setup-errors{background:rgba(192,57,43,.12);border:2px solid var(--danger);border-radius:6px;padding:12px;margin:8px 0;font-size:.8rem;color:#f5a0a0;font-family:system-ui,-apple-system,sans-serif}
 .setup-errors strong{color:#e74c3c;display:block;margin-bottom:6px;font-size:.85rem}
 .setup-errors ul{margin:4px 0;padding-left:18px}
@@ -239,47 +304,252 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
 ::-webkit-scrollbar-thumb:hover{background:var(--accent)}
 /* Navigation UI */
-/* Portrait media query
-   — the previous rule forced .main{flex-direction:column} even in landscape, which broke
-   the side-by-side landscape layout. Now landscape uses its own @media(orientation:landscape)
-   rules which correctly set flex-direction:row. */
-@media(max-width:900px) and (orientation:portrait){.panel{width:100%;max-width:420px}.main{flex-direction:column;align-items:center}.hdr-tools{gap:4px}.btn{padding:6px 10px;font-size:.72rem}.review-body{flex-direction:column}.review-board{padding:8px}
-/* v1.0.6: Portrait-optimized New Game dialog.
-   - Full-width dialog with reduced horizontal padding for narrow screens.
-   - Time Control inputs use full-width stacked layout (no inline labels).
-   - Chess960 SP-ID input + Random button share a single row.
-   - ECO search box + family filter stack vertically on very narrow phones.
-   - The landscape layout (default .dlg{max-width:500px;width:90%}) remains
-     unchanged for orientation:landscape. */
-.dlg{max-width:460px;width:94%;padding:18px 16px}
-.dlg h2{font-size:1.05rem;margin-bottom:10px;letter-spacing:1.5px}
-.dlg-sec{margin-bottom:12px}
-.dlg-sec h3{font-size:.7rem;letter-spacing:1.2px;margin-bottom:6px}
-.clr-row{gap:8px;margin-bottom:6px}
-.clr-btn{padding:10px 6px}
-.clr-ico{font-size:1.3rem}
-.clr-nm{font-size:.78rem}
-.clr-sub{font-size:.6rem}
-.op-list{max-height:180px}
-.op-btn{padding:6px 8px}
-.on{font-size:.76rem}
-.os{font-size:.62rem}
-.dlg-btns{margin-top:12px}
-.dlg-btns .btn{padding:10px;font-size:.82rem}
-/* v1.0.6: Time Control input rows — on portrait, make labels and inputs
-   stack more compactly. The input width stays at 80px (enough for 3-digit
-   minutes) but the label gets more room. */
-.dlg-sec select{font-size:.8rem;padding:7px 10px}
-/* v1.0.6: Chess960 SP-ID row — ensure the Random button, input, and 🎲
-   button wrap gracefully on narrow screens. The flex-wrap is already set
-   inline; this just tightens the gap. */
-.dlg-sec > div[style*="flex-wrap:wrap"]{gap:4px}}
-@media(max-width:480px) and (orientation:portrait){
-  /* v1.0.6: Tighter spacing for very narrow portrait phones (<480px).
-     The New Game dialog's Chess960 SP-ID row uses flex-wrap so the input
-     and 🎲 button wrap to a new line if needed. The ECO search box and
-     family filter also wrap on narrow screens. */
-  .dlg{padding:14px 12px;max-width:96%;width:96%}
+/* v1.0.7 PHASE 3 — PORTRAIT UI COMPLETE REDESIGN (from-scratch).
+   Previous attempts used `@media(max-width:Npx) and (orientation:portrait)`
+   with various N values (900, 1200). All failed on certain devices because
+   the CSS viewport width depends on DPR and Android's density crop modes,
+   which can produce values like 412, 480, 915, or 1220px on what are all
+   "portrait phones". Hard-coded width thresholds cannot reliably classify
+   these devices.
+   First-principles fix: use `@media(orientation:portrait)` with NO width
+   threshold. ANY portrait orientation is a portrait layout, period. The
+   width-specific tweaks (font-size, padding) are now driven by
+   aspect-ratio media queries (which are DPR-independent) and by
+   `vw`-relative units (which scale with the actual viewport width).
+   This means:
+   - A 360×800 phone (DPR 2.0) gets the same portrait layout as
+   - A 1220×2712 phone (DPR 2.625, CSS viewport 465×1035) — both are portrait.
+   The layout adapts to the CSS viewport via vw units, not via hard-coded
+   pixel breakpoints. */
+@media(orientation:portrait){
+  /* Layout: vertical stack. Board on top, panel below. No side-by-side. */
+  .main{flex-direction:column;align-items:center;gap:8px;padding:8px}
+  .panel{width:100%;max-width:520px;margin:0 auto}
+  .bsec{align-self:center;max-width:100%}
+  /* Header: compact single column with wrapping toolbar. */
+  .hdr{padding:6px 8px;overflow:hidden}
+  .hdr-top{flex-wrap:wrap;gap:4px;margin-bottom:2px}
+  .hdr-l{flex:0 1 auto;min-width:0;overflow:hidden}
+  .hdr h1{font-size:1rem;letter-spacing:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ver{font-size:.55rem;padding:1px 6px;margin-left:4px}
+  .hdr-tools{gap:4px;flex-wrap:wrap;min-width:0}
+  .hdr-tools .btn{min-width:0;padding:5px 8px;font-size:.7rem;min-height:30px}
+  .btn{padding:5px 8px;font-size:.7rem;min-height:30px}
+  /* Eval display: full-width row below the title. Content wraps. */
+  .ev{flex:1 1 100%;min-width:0;max-width:100%;overflow:hidden;flex-wrap:wrap;font-size:.72rem;padding:4px 8px;gap:4px;order:99}
+  .ev-e{font-size:.95rem}
+  .ev span{white-space:nowrap}
+  /* Difficulty selector: wraps to multiple rows on narrow screens. */
+  .diff-sel{flex-wrap:wrap;max-width:100%;gap:2px;padding:2px}
+  .diff-b{padding:4px 7px;font-size:.68rem;min-width:24px}
+  /* Board container: v1.0.7 PHASE 5 — removed margin-right:6px because
+     _recalcCellSize already reserves the anti-shake clearance in CELL
+     calculation (the _antiShake=6 term in _rightClearance). Adding a
+     6px margin on top of that would double-count the clearance and make
+     the board smaller than necessary. The border is slightly thinner in
+     portrait to maximize board area. */
+  .bwrap{border-width:3px}
+  /* Review mode: stacked layout in portrait. */
+  .review-body{flex-direction:column}
+  .review-board{padding:6px}
+  /* Quick Toolbar (v1.0.7 PHASE 3): compact in portrait. */
+  .qtoolbar{gap:4px;padding:5px 6px}
+  .qtoolbar .btn{padding:5px 8px;font-size:.7rem;min-height:30px}
+  /* Setup-mode marker badges: smaller in portrait. */
+  .sq .setup-castle-mark,.sq .setup-ep-mark{font-size:.85rem;bottom:1px;right:1px}
+  /* === DIALOG (New Game Settings, etc.) — v1.0.7 PHASE 7 from-scratch redesign ===
+     Goal: dialog fills the ENTIRE .dov content area (which already accounts
+     for safe-area + 3px grip via .dov's padding). The Cancel / Start buttons
+     are pinned to the bottom as a sticky footer, so the content area above
+     can use the full width without competing with the buttons for horizontal
+     space.
+     Layout:
+       .dlg (flex column, fills .dov content)
+       ├─ h2 (header, fixed)
+       ├─ .dlg-content (scrollable, flex:1)
+       │   └─ .dlg-sec × N
+       └─ .dlg-btns (sticky footer, fixed, full width)
+     This is the standard mobile-app modal pattern and uses screen space
+     efficiently — no wasted horizontal space next to the buttons.
+     v1.0.7 PHASE 7 FIX: use width:100%;height:100% (NOT 100vh) so the dialog
+     fills .dov's content area, not the raw viewport. The previous height:100vh
+     caused the dialog to overflow .dov's padding, making buttons appear
+     outside the dialog window.
+     v1.0.7 PHASE 20 (UX): Only the FULLSCREEN dialog (New Game Settings, which
+     has NO inline max-width) gets height:100%. Smaller dialogs (resign, about,
+     import, save-pgn, pgn-cache — all have inline style="max-width:Npx") keep
+     their natural content height and are positioned "slightly above center"
+     by the .dov asymmetric padding rule (see Phase 21 fix above). */
+  .dlg:not([style*="max-width"]){max-width:100%;width:100%;height:100%;max-height:100%;padding:0;margin:0;border-radius:0;border:none;display:flex;flex-direction:column;overflow:hidden;align-self:stretch}
+  /* v1.0.7 PHASE 21 (bug fix): Fullscreen dialog cancels the .dov asymmetric
+     padding (padding-top:10px + padding-bottom:12vh) so it truly fills the
+     entire overlay (not just the content area between paddings). Negative
+     margins on all four sides cancel .dov's padding + safe-area insets. */
+  .dlg:not([style*="max-width"]){margin-top:-10px;margin-bottom:calc(-12vh);margin-left:calc(-1 * (env(safe-area-inset-right) + 3px));margin-right:calc(-1 * env(safe-area-inset-left))}
+  .dlg:not([style*="max-width"]) > h2{padding:14px 16px 10px;margin:0;border-bottom:2px solid var(--border2);flex-shrink:0;background:#1a0a0a;position:sticky;top:0;z-index:2}
+  .dlg:not([style*="max-width"]) > .dlg-content{flex:1 1 auto;overflow-y:auto;padding:12px 14px;-webkit-overflow-scrolling:touch;min-height:0}
+  .dlg:not([style*="max-width"]) > .dlg-btns{display:flex;gap:8px;padding:10px 14px;border-top:2px solid var(--border2);background:#1a0a0a;flex-shrink:0;margin:0;flex:0 0 auto}
+  .dlg:not([style*="max-width"]) > .dlg-btns .btn{flex:1;padding:14px;font-size:.9rem;min-height:44px;justify-content:center}
+  /* v1.0.7 PHASE 6: when .dlg-content wrapper is NOT used (older dialogs
+     like About / Import / Resign that put .dlg-sec directly inside .dlg),
+     fall back to the old scrollable behavior. */
+  .dlg > .dlg-sec{padding:0 14px}
+  .dlg > .dlg-sec:first-of-type{padding-top:12px}
+  .dlg h2{font-size:1.05rem;margin-bottom:10px;letter-spacing:1.5px;overflow-wrap:break-word}
+  .dlg-sec{margin-bottom:12px;max-width:100%}
+  .dlg-sec h3{font-size:.7rem;letter-spacing:1.2px;margin-bottom:6px}
+  .clr-row{gap:8px;margin-bottom:6px}
+  .clr-btn{padding:10px 6px;min-width:0}
+  .clr-ico{font-size:1.3rem}
+  .clr-nm{font-size:.78rem}
+  .clr-sub{font-size:.6rem}
+  .op-list{max-height:50vh;overflow-x:hidden;overflow-y:auto}
+  .op-btn{padding:6px 8px;max-width:100%}
+  .on{font-size:.76rem;overflow-wrap:break-word;word-break:break-word}
+  .os{font-size:.62rem}
+  .dlg-btns{margin-top:12px}
+  .dlg-btns .btn{padding:10px;font-size:.82rem;min-width:0}
+  /* ALL inputs/selects/forms inside .dlg-sec: force full width. */
+  .dlg-sec input[type="number"],
+  .dlg-sec input[type="text"],
+  .dlg-sec select,
+  .dlg-sec form,
+  .dlg-sec form > input{
+    width:100%!important;
+    max-width:100%!important;
+    min-width:0!important;
+    flex:1 1 100%!important;
+    flex-basis:100%!important;
+    box-sizing:border-box!important;
+  }
+  .dlg-sec input[type="number"]{padding:6px 10px;text-align:left}
+  /* v1.0.7 PHASE 7: Portrait dialog layout — better space utilization.
+     Uses a 2-column grid for label+input rows (label on left, input on right).
+     v1.0.7 PHASE 7 FIX: ECO search row (which contains a form + select) now
+     stacks vertically — search box full width on top, family filter below —
+     instead of being forced into a 2-column grid that clipped the search box.
+     The grid layout is only applied to rows that have a label + input pattern. */
+  .dlg-sec > div.portrait-stack,
+  .dlg-sec > div[style*="display:flex"]{
+    display:grid!important;
+    grid-template-columns:1fr auto!important;
+    align-items:center!important;
+    gap:8px 12px!important;
+    max-width:100%!important;
+  }
+  .dlg-sec > div.portrait-stack > *,
+  .dlg-sec > div[style*="display:flex"] > *{
+    max-width:100%!important;
+    min-width:0!important;
+    width:auto!important;
+    flex:0 0 auto!important;
+  }
+  /* Labels take the left column (1fr), inputs/buttons take the right (auto). */
+  .dlg-sec > div.portrait-stack > label,
+  .dlg-sec > div[style*="display:flex"] > label{
+    grid-column:1;
+    width:100%!important;
+  }
+  .dlg-sec > div.portrait-stack > form,
+  .dlg-sec > div[style*="display:flex"] > form{
+    /* v1.0.7 PHASE 7: form (ECO search box) gets FULL width on its own row. */
+    grid-column:1/-1;
+    width:100%!important;
+    display:flex!important;
+    gap:4px;
+    max-width:100%!important;
+  }
+  .dlg-sec > div.portrait-stack > input[type="number"],
+  .dlg-sec > div[style*="display:flex"] > input[type="number"]{
+    grid-column:2;
+    width:90px!important;
+    max-width:40%!important;
+    text-align:center;
+  }
+  .dlg-sec > div.portrait-stack > input[type="text"],
+  .dlg-sec > div[style*="display:flex"] > input[type="text"]{
+    grid-column:1/-1;
+    width:100%!important;
+  }
+  .dlg-sec > div.portrait-stack > select,
+  .dlg-sec > div[style*="display:flex"] > select{
+    /* v1.0.7 PHASE 7: select (ECO family filter) gets FULL width on its own row. */
+    grid-column:1/-1;
+    width:100%!important;
+    max-width:100%!important;
+  }
+  .dlg-sec > div.portrait-stack > .btn,
+  .dlg-sec > div[style*="display:flex"] > .btn{
+    grid-column:2;
+    justify-content:center;
+    width:auto!important;
+  }
+  /* Nested flex sub-wrappers (Chess960 input+🎲): keep side-by-side, spanning
+     both grid columns. */
+  .dlg-sec > div.portrait-stack > div[style*="display:flex"],
+  .dlg-sec > div[style*="display:flex"] > div[style*="display:flex"]{
+    grid-column:1/-1;
+    flex-direction:row!important;
+    max-width:100%!important;
+    display:flex!important;
+  }
+  .dlg-sec > div.portrait-stack > div[style*="display:flex"] > *,
+  .dlg-sec > div[style*="display:flex"] > div[style*="display:flex"] > *{
+    min-width:0!important;
+  }
+  /* ECO search row: search box + family filter now stack vertically (each
+     full width). The .op-list below gets a taller max-height. */
+  .dlg-sec .op-list{max-height:40vh}
+  /* Chess960 back-rank preview grid: constrain to dialog width. */
+  .dlg-sec div[style*="grid-template-columns:repeat(8,1fr)"]{
+    max-width:100%!important;
+  }
+  /* About dialog: .crow rows stack vertically. */
+  .dlg .crow{flex-direction:column;gap:2px;align-items:stretch;max-width:100%}
+  .dlg .crow .lb{font-size:.7rem}
+  .dlg .crow .vl{font-size:.8rem;overflow-wrap:break-word}
+}
+/* v1.0.7 PHASE 3: Width-relative adjustments inside portrait.
+   Use vw units so font sizes scale with the actual viewport width —
+   no hard-coded pixel thresholds. The clamp() function ensures the
+   sizes stay within readable bounds on extreme aspect ratios. */
+@media(orientation:portrait){
+  .hdr h1{font-size:clamp(.85rem, 3.6vw, 1.1rem)}
+  .btn{font-size:clamp(.65rem, 2.8vw, .8rem);padding:clamp(4px, 1.4vw, 7px) clamp(7px, 2.4vw, 11px)}
+  .diff-b{font-size:clamp(.6rem, 2.5vw, .75rem);padding:clamp(3px, 1vw, 5px) clamp(6px, 2vw, 9px)}
+  .ev{font-size:clamp(.65rem, 2.8vw, .82rem)}
+  .ev-e{font-size:clamp(.85rem, 3.5vw, 1.1rem)}
+  .pname{font-size:clamp(.7rem, 3vw, .9rem)}
+  .qtoolbar .btn{font-size:clamp(.65rem, 2.8vw, .8rem)}
+  /* v1.0.7 PHASE 21 (bug fix): Portrait dialog positioning — "slightly above
+     center" (弹窗中心约在屏幕 45vh 处).
+     PREVIOUS Phase 20 attempt used padding-top:18vh + padding-bottom:10px with
+     align-items:center. That placed the dialog center at 18 + (100-18-1)/2 ≈ 59vh
+     — i.e. BELOW center, not above. User reported "中央稍偏下".
+     CORRECT FIX: use align-items:center with padding-top:10px (small) and
+     padding-bottom:12vh (large). The effective content area is
+     [10px .. 100vh-12vh], whose center is at 10px + (88vh-10px)/2 ≈ 44vh.
+     This places the dialog center at ~44vh = "slightly above center".
+     Math: center = P_top + (100vh - P_top - P_bottom) / 2
+                     = 10px + (100vh - 10px - 12vh) / 2
+                     = 10px + (88vh - 10px) / 2
+                     ≈ 10px + 44vh - 5px = 44vh + 5px.
+     The fullscreen dialog (New Game Settings) uses negative margins to cancel
+     both paddings so it truly fills 100vh. */
+  .dov{align-items:center;padding-top:10px;padding-bottom:12vh}
+}
+/* v1.0.7 PHASE 3: Ultra-narrow portrait (<360px CSS viewport, e.g., Sony 21:9).
+   Further compact spacing. */
+@media(orientation:portrait) and (max-width:360px){
+  .hdr{padding:4px 6px}
+  .hdr h1{font-size:.85rem;letter-spacing:.5px}
+  .ver{font-size:.5rem;padding:1px 4px;margin-left:3px}
+  .ev{font-size:.65rem;padding:3px 6px;gap:3px}
+  .ev-e{font-size:.85rem}
+  .diff-b{padding:3px 6px;font-size:.62rem;min-width:20px}
+  .btn{padding:4px 7px;font-size:.65rem;min-height:28px}
+  .hdr-tools{gap:2px}
+  .dlg{padding:12px 10px}
   .dlg h2{font-size:.95rem;letter-spacing:1px;margin-bottom:8px}
   .dlg-sec{margin-bottom:10px}
   .dlg-sec h3{font-size:.68rem;margin-bottom:5px}
@@ -287,25 +557,27 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
   .clr-ico{font-size:1.2rem}
   .clr-nm{font-size:.72rem}
   .clr-sub{font-size:.58rem}
-  .op-list{max-height:160px}
+  .op-list{max-height:40vh}
   .op-btn{padding:5px 6px}
   .on{font-size:.72rem}
   .os{font-size:.6rem}
   .dlg-btns{margin-top:10px;gap:6px}
   .dlg-btns .btn{padding:9px;font-size:.78rem}
-  /* v1.0.6: Time Control inputs — on very narrow screens, reduce input
-     width to 70px and make labels smaller so the row fits without
-     horizontal scroll. */
-  .dlg-sec input[type="number"]{width:70px!important;font-size:.8rem;padding:3px 6px}
+  .dlg-sec input[type="number"]{font-size:.8rem;padding:5px 8px}
   .dlg-sec select{font-size:.78rem;padding:6px 8px}
-  /* v1.0.6: ECO search row — force the search input and family filter
-     to stack vertically on very narrow screens (<480px portrait). The
-     flex-wrap is already set inline; this ensures the form takes full
-     width when wrapped. */
-  .dlg-sec form{min-width:100%!important}
-  .dlg-sec select{flex-basis:100%!important;margin-top:4px}
+  .dlg-sec div[style*="grid-template-columns:repeat(8,1fr)"]{
+    font-size:1.2rem!important;
+    overflow:hidden;
+  }
+  .qtoolbar{gap:3px;padding:4px 5px}
+  .qtoolbar .btn{padding:4px 6px;font-size:.65rem;min-height:28px}
+  .sq .setup-castle-mark,.sq .setup-ep-mark{font-size:.7rem}
 }
-@media(max-width:480px){.hdr h1{font-size:1rem}.hdr-tools{gap:2px}.btn{padding:5px 7px;font-size:.68rem;min-height:32px}/* hint-btn removed, all buttons use .btn */.ev{font-size:.75rem;padding:4px 8px}.panel{gap:6px}.card{padding:8px}.diff-b{padding:4px 7px;font-size:.68rem;min-width:24px}.main{gap:8px;padding:8px}.bwrap{border-width:2px}.pbar{padding:5px 10px}.pname{font-size:.78rem}.setup-btn{width:36px;height:36px;font-size:1.4rem}.prom-btn{width:44px;height:44px;font-size:1.6rem}}
+/* v1.0.7 PHASE 3: Removed the legacy @media(max-width:480px) and (orientation:portrait)
+   block — its rules are now subsumed by the new orientation-only portrait block
+   above, plus the (orientation:portrait) and (max-width:360px) ultra-narrow block.
+   Also removed the @media(max-width:480px) (orientation-agnostic) block —
+   it conflicted with the new portrait-specific rules and is no longer needed. */
 /* ============================================================
    LANDSCAPE LAYOUT
    Strategy: Board fills available height on left, panel uses
@@ -318,7 +590,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 @media (orientation: landscape) {
   /* Header: ultra-compact single row */
   .hdr {
-    padding: 2px 10px;
+    padding: 2px 8px;
     border-bottom-width: 1px;
     flex-shrink: 0;
   }
@@ -329,7 +601,11 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
   }
   .hdr h1 { font-size: .85rem; letter-spacing: 1px; }
   .ver { font-size: .5rem; padding: 1px 5px; }
-  .hdr-tools { gap: 3px; flex-wrap: nowrap; overflow-x: auto; }
+  /* v1.0.7 PHASE 5: allow header toolbar to wrap to a second row instead of
+     overflowing horizontally. The previous `overflow-x:auto` caused content
+     to be clipped by #app's overflow-x:hidden on some devices. Wrapping is
+     more robust and keeps all buttons visible. */
+  .hdr-tools { gap: 3px; flex-wrap: wrap; overflow-x: hidden; max-width:100%; }
   .btn { padding: 3px 7px; font-size: .62rem; min-height: 26px; gap: 2px; white-space: nowrap; }
   .ev { font-size: .68rem; padding: 2px 6px; gap: 3px; }
   .ev-e { font-size: .85rem; }
@@ -340,11 +616,17 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
     align-items: stretch;
     flex-wrap: nowrap;
     gap: 6px;
-    padding: 4px 6px;
+    /* v1.0.7 PHASE 5: account for safe-area right + 3px grip in padding.
+       Previously only 6px right padding, which could cause the panel to
+       touch the screen edge (or be clipped by #app's margin on notched
+       devices). Now: safe-area-right + 3px grip + 6px gap. */
+    padding: 4px 6px 4px 6px;
     flex: 1;
     min-height: 0;
     /* Fill entire available space */
     height: calc(100vh - 36px);
+    max-width:100%;
+    overflow-x:hidden;
   }
 
   /* Board section: auto-size to fill available height */
@@ -356,7 +638,15 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
     /* Board section auto-sizes based on its content (board) */
     align-self: flex-start;
     max-height: 100%;
-    overflow: hidden;
+    /* v1.0.7 PHASE 21 (bug fix): overflow-x:visible so the anti-shake
+       transform (translate3d ±8px on .bwrap.stabilized) is NOT clipped by
+       .bsec. overflow-y:hidden remains to prevent vertical overflow from
+       breaking the landscape layout. The previous overflow:hidden clipped
+       the board's right edge when anti-shake shifted it rightward — adding
+       margin-right did NOT help because the clip happens at .bsec's own
+       boundary, not at the gap between .bsec and .panel. */
+    overflow-x: visible;
+    overflow-y: hidden;
   }
   .bwrap { flex-shrink: 0; }
 
@@ -368,6 +658,12 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
     max-width: none;
     max-height: 100%;
     overflow-y: auto;
+    /* v1.0.7 PHASE 21 (bug fix): overflow-x:auto so wide content (long move
+       notation, PGN text) scrolls WITHIN the panel instead of being clipped
+       by .main's overflow-x:hidden. Previously the panel had no overflow-x
+       setting, so wide content overflowed into .main and got cut off —
+       making the move history "显示不全" (partially hidden). */
+    overflow-x: auto;
     gap: 6px;
   }
   .card { padding: 5px 7px; gap: 3px; }
@@ -484,7 +780,10 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
     padding: 4px 6px;
     gap: 4px;
   }
-  .review-chart { min-height: 40px; overflow: hidden; flex-shrink: 1; width: 100%; }
+  /* v1.0.7 PHASE 14: chart min-height raised to 120px (was 80) — user
+     requires the trend chart to always be at least 120px tall. The JS
+     _trendH computation enforces max 200px in both orientations. */
+  .review-chart { min-height: 120px; overflow: hidden; flex-shrink: 1; width: 100%; }
   input[type="range"].review-slider { height: 18px; width: 100%; }
   /* v1.0.3-p7: nav buttons stretched horizontally for better space use */
   .review-bottom .review-nav {
@@ -499,13 +798,22 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
     min-height: 28px;
     min-width: 0;
   }
+  /* v1.0.7 PHASE 14: landscape eval-bar override — match the inline style
+     (font .7rem, padding 3px 8px, max-height 1.9em, single-line clip).
+     v1.0.7 PHASE 20 (UX): enlarged to .8rem font, 5px 10px padding, 2.4em
+     max-height for comfortable breathing room. */
   .review-bottom #review-eval-bar {
     margin: 1px 0 !important;
-    font-size: .7rem !important;
-    padding: 2px 6px !important;
+    font-size: .8rem !important;
+    padding: 5px 10px !important;
+    max-height: 2.4em !important;
+    overflow: hidden !important;
+    white-space: nowrap !important;
     width: 100%;
   }
-  .review-bottom .btn { padding: 3px 10px; font-size: .55rem; min-height: 22px; min-width: 36px; }
+  /* v1.0.7 PHASE 20 (UX): slightly larger bottom buttons to match the
+     enlarged eval bar and analyze button. */
+  .review-bottom .btn { padding: 4px 10px; font-size: .65rem; min-height: 26px; min-width: 36px; }
 }
 
 /* --- VERY COMPACT LANDSCAPE (phone with keyboard overlay) --- */
@@ -657,13 +965,15 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 }
 
 /* v1.0.4 ROUND-5 REV12: Match JS durations exactly (game-logic.js animateMove).
-   180-260ms for smooth 120fps. will-change:transform ensures GPU compositing. */
-.move-anim.anim-pawn{transition:transform .18s cubic-bezier(.25,.1,.25,1)}
-.move-anim.anim-knight{transition:transform .24s cubic-bezier(.25,.1,.25,1)}
-.move-anim.anim-bishop{transition:transform .21s cubic-bezier(.25,.1,.25,1)}
-.move-anim.anim-rook{transition:transform .18s cubic-bezier(.25,.1,.25,1)}
-.move-anim.anim-queen{transition:transform .26s cubic-bezier(.25,.1,.25,1)}
-.move-anim.anim-king{transition:transform .21s cubic-bezier(.25,.1,.25,1)}
+   v1.0.7 PHASE 20 (UX): Slowed ~30% for clearer visibility (was 180-260ms).
+   120fps high-frame-rate preserved via will-change:transform GPU compositing.
+   The cubic-bezier easing curve is unchanged — only duration is longer. */
+.move-anim.anim-pawn{transition:transform .24s cubic-bezier(.25,.1,.25,1)}
+.move-anim.anim-knight{transition:transform .32s cubic-bezier(.25,.1,.25,1)}
+.move-anim.anim-bishop{transition:transform .28s cubic-bezier(.25,.1,.25,1)}
+.move-anim.anim-rook{transition:transform .24s cubic-bezier(.25,.1,.25,1)}
+.move-anim.anim-queen{transition:transform .34s cubic-bezier(.25,.1,.25,1)}
+.move-anim.anim-king{transition:transform .28s cubic-bezier(.25,.1,.25,1)}
 /* Opening display */
 .opening-tag{background:linear-gradient(145deg,var(--purple),#6c3483);color:#ffd700;font-size:.72rem;padding:3px 12px;border-radius:4px;font-weight:700;white-space:nowrap;border:1px solid rgba(255,215,0,.3);font-family:system-ui,-apple-system,sans-serif;letter-spacing:1px;box-shadow:0 0 2px rgba(142,68,173,.08)}
 /* Sound button integrated into toolbar - no longer floating */
@@ -672,6 +982,25 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 
 .card:hover{border-color:rgba(212,160,23,.5);box-shadow:0 0 2px rgba(212,160,23,.04)}
 @media(prefers-reduced-motion:reduce){.sq .pc.anim-pawn,.sq .pc.anim-knight,.sq .pc.anim-bishop,.sq .pc.anim-rook,.sq .pc.anim-queen,.sq .pc.anim-king{animation:none!important}.sq.in-check{animation:none!important}.sq.capture-flash{animation:none!important}.move-anim{transition:none!important}.ge,.gt,.gover .btn{animation:none!important}}
+
+/* v1.0.7 — Quick Toolbar (below board, above player bar).
+   Holds the 5 over-the-board actions moved out of the header toolbar:
+   ↩️悔棋, ↪️撤悔, 🔃翻转, 💡AI提示, 🌗/🌈控制范围.
+   Layout: flex row, wraps on narrow screens, centered.
+   Visual: same .btn styling as the header toolbar — no new chrome. */
+.qtoolbar{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;align-items:center;padding:6px 8px;background:#221015;border:1px solid var(--border);border-radius:6px;max-width:100%;box-sizing:border-box;box-shadow:inset 0 1px 0 rgba(255,215,0,.05)}
+.qtoolbar .btn{flex:0 1 auto;min-width:0;justify-content:center}
+.qtoolbar .btn span{flex-shrink:0}
+
+/* v1.0.7 — Setup-mode castle-rights (🔁) and en-passant (⚡) markers.
+   Anchored to the bottom-right corner of the square so they don't obscure
+   the piece glyph (centered) or the legal-move ring (also centered).
+   Small font size (.55em of the square's piece font-size ~2rem → ~1.1rem)
+   makes them "小巧玲珑" as the spec requires. */
+.sq .setup-castle-mark,
+.sq .setup-ep-mark{position:absolute;bottom:1px;right:2px;font-size:1rem;line-height:1;pointer-events:none;z-index:3;font-family:'DejaVu Sans','Noto Sans','Segoe UI Symbol',sans-serif;font-variant-emoji:text;-webkit-font-variant-emoji:text;text-shadow:0 0 2px rgba(0,0,0,.85),0 0 4px rgba(0,0,0,.55);filter:drop-shadow(0 0 1px rgba(255,255,255,.45))}
+.sq .setup-castle-mark{color:#ffd700;-webkit-text-stroke:.4px rgba(255,255,255,.7);paint-order:stroke fill}
+.sq .setup-ep-mark{color:#9b59b6;-webkit-text-stroke:.4px rgba(255,255,255,.85);paint-order:stroke fill}
 </style>
 </head>
 <body>

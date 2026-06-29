@@ -1528,3 +1528,230 @@ for full license texts and attribution details.
     - stats.html (GPL v3): executeMove() FIX — same castling rook-save fix
       as game-logic.js makeMv(). Scroll position preservation (window.scrollY
       saved/restored across #content innerHTML replacement).
+
+v1.0.7 (2026.6.28-29) changes:
+  The v1.0.7 release spans 17 phases. Rather than duplicate the per-phase
+  detail here (which is already exhaustively documented in the HTML user
+  manuals at Manual/Regalia-v1.0.7-manual-{zh,en}.html, Appendix A
+  "版本更新日志" / "Version Changelog"), this file lists only the
+  license-relevant structural changes. See the HTML manuals for the full
+  per-phase changelog with user-facing descriptions.
+
+  Phase summary (newest first):
+    - Phase 17: Chess960 castling "king self-capture" critical bug fix +
+      review "Analyze All" button auto-refresh + adoption of 5 reasonable
+      Kimi-audit suggestions. Bug fixes:
+        * game-logic.js makeMv / makeMvInPlace: skip king move entirely
+          when castling AND from===to (king already on castling destination
+          square per Fischer Random Chess rule "castling in place").
+        * game-logic.js unmakeMv: detect castlingRook && from===to and skip
+          the king-position restore (rook is independently restored via
+          castlingRook field).
+        * game-logic.js animateMove: when castling AND from===to, skip the
+          king overlay (no dx=0,dy=0 "no-op" animation); also added
+          prefers-reduced-motion JS-side check that skips the entire
+          animation path when the user has reduced-motion enabled.
+        * ui.js: new _rvAnalyzeBtnLabel() pure function and
+          _updateReviewAnalyzeBtn() that refreshes the analyze-all button
+          via textContent (no DOM rebuild); button gets
+          id="review-analyze-btn".
+        * ai-bridge.js onEngineEval: now calls _updateReviewAnalyzeBtn()
+          after each eval so the button switches to "All Analyzed" the
+          moment the last step's eval completes (whether batch or manual).
+        * stats.html: _escFEN adds backtick escaping; new _cloneStatsState
+          replaces JSON.parse(JSON.stringify(state)) in selectVariationMove
+          (~10x faster, type-safe); board max-width 360px → 400px.
+        * index.html.tpl: .bgrid gets content-visibility:auto (off-screen
+          render skip; contain:strict NOT added to preserve responsive
+          CELL recalculation).
+      Files: game-logic.js, ai-bridge.js, ui.js, index.html.tpl, chess.html,
+      stats.html.
+    - Phase 18: _reviewEvalCache LRU eviction + review move-list virtual list
+      + 11 first-principles code-review fixes.
+      Performance breakthroughs:
+        * ai-bridge.js: _reviewEvalCache now has MAX_ENTRIES=2000 soft cap
+          with _evictIfOverCap() on set(); Map.keys() iteration order = LRU
+          order; skips _reviewEvalRequestedStep; persistence preserves LRU
+          order via Array.from(m.entries()); backward-compatible.
+        * ui.js: review move-list virtual list (RV_VIRTUAL_THRESHOLD=80,
+          RV_OVERSCAN=10). Shared _buildReviewMovesInnerHTML() eliminates
+          ~40 lines of landscape/portrait duplication; passive scroll
+          listener; 80ms-debounced _refreshReviewMovesOnly() replaces only
+          .review-moves innerHTML; first-render measures avgRowH via rAF;
+          _resetRvVirtualState() on enter/exit review, new game, import.
+      Bug fixes:
+        * game-logic.js unmakeMv: Chess960 board corruption when rook
+          destination = king source (~half of SP-ID positions). Fixed:
+          save rook piece in undo.castlingRook.piece; restore from saved
+          piece; only null cr.to if it doesn't coincide with king source.
+        * game-logic.js makeMvInPlace: castling-rights not cleared for rook
+          move/capture (findCastlingRooks called after mutation). Fixed:
+          snapshot delta before mutation (_movingRookSide/_capturedRookSide).
+        * game-logic.js animateMove: stale-_finishAnim race. Fixed:
+          _animFinishTimer + _animGen generation counter.
+        * ai-bridge.js: single-step review eval missing safety timer. Fixed:
+          45s timer. Also removed dead if(isCheck) block in reduced-motion
+          path.
+        * ui.js: virtual-list window forced back to active step on every
+          render → flicker. Fixed: track _lastRenderReviewStep. Also clear
+          _rvScrollRefreshTimer in renderInternal; _resetRvVirtualState in
+          import wrappers.
+        * pgn-standard.js: comment-flattening polluted movetext (latent).
+          Fixed: remove entire comment (braces + body) matching tablebase.js.
+        * worker-pool.js: missing unclosed-brace handling (latent). Fixed.
+      Files: ai-bridge.js, game-logic.js, ui.js, pgn-standard.js,
+      worker-pool.js, chess.html.
+    - Phase 19: comprehensive first-principles code review (7 subagents,
+      28k lines, 20+ critical fixes).
+      Critical bug fixes:
+        * ai-bridge.js: _reviewEvalCache corruption race (cache-hit/terminal
+          fast paths didn't clear debounce timer → stale callback overwrote
+          cache). Fixed: clear _reviewEvalDebounceTimer + increment
+          _evalStaleGen on both fast paths.
+        * ai-bridge.js: cross-mode stale callback race (review callback
+          passed normal-mode gen check after exitReview). Fixed: capture
+          _evalRequestReviewMode at request time; reject cross-mode.
+        * game-logic.js: animateMove reduced-motion path race (Phase 18
+          _animGen fix didn't cover reduced-motion early return). Fixed:
+          cancel timer + bump gen + set 3 missing flags.
+        * ui.js: reviewAnalyzeAll completion didn't restore eval vars from
+          cache → eval bar showed wrong step; reviewCritical not recomputed
+          → 💥/❌ markers missing. Fixed: call reviewGoTo(returnStep) +
+          _findCriticalMoves().
+        * tablebase.js: PGN [%eval] placeholder offset (FEN-start PGNs where
+          Black is to move had evals attach to wrong step). Fixed: apply
+          _placeholderOffset when populating eval/annotation/comment caches.
+        * ui.js: setupRedoStack not cleared on Reset/Clear Board. Fixed.
+        * ui.js: _resignGame clock leak (gameClocks.running=false no-op).
+          Fixed: clearInterval(gameClockTimerId).
+        * ui.js: _pendingStatsImportPGN global race. Fixed: close over
+          pgnText directly.
+        * stats.html: Backspace re-opened dismissed import-back dialog.
+          Fixed: check _statsImportBackDialogVisible flag.
+        * stats.html: double safe-area-inset-top → header jump on first
+          scroll. Fixed: body top padding 0; .hdr owns safe-area.
+        * StockfishNative.java: engineProcess/Reader/Writer/readerThread/
+          _engineExecutor all declared volatile (thread safety).
+        * StockfishNative.java: stopAndWaitForBestmove timeout stale-bestmove
+          corruption. Fixed: set _discardingPonderBestmove=true on timeout.
+        * ChessApp.java: UncaughtExceptionHandler swallowed Error (OOM/
+          StackOverflow) on worker threads. Fixed: chain Error to default
+          handler.
+        * EngineService.java: lastStatusInfo not volatile. Fixed.
+        * tablebase.js: probeTablebase JSON parse error miscounted as
+          offline. Fixed: separate try/catch for resp.json().
+      Performance & functionality:
+        * ai-bridge.js: notification throttle buffers pending info; PGN
+          export eval tag uses peek() not get() (LRU churn); WDL negative
+          percentage fix; onEngineError restart timer leak fix.
+        * stats.html: CSP added (defense-in-depth for XSS).
+      Redundancy cleanup:
+        * ai-bridge.js: removed stale "Unlimited cache size" comment.
+        * stats.html: removed dead renderPGN()/renderMoveNotation(); removed
+          duplicate body rule in portrait media query; added full Copyright
+          + GPL v3 license block to <head> (was missing).
+      Files: ai-bridge.js, game-logic.js, ui.js, tablebase.js, stats.html,
+      StockfishNative.java, ChessApp.java, EngineService.java, chess.html.
+    - Phase 20: UX refinements (4 items).
+        * ui.js: review eval bar font .75rem/.7rem → .85rem/.8rem (portrait/
+          landscape); emoji .95rem → 1.1rem/1.05rem; max-height 1.9em → 2.4em;
+          padding 3px 8px → 5px 10px. Analyze button font .7rem → .8rem;
+          min-height 28px → 34px; padding 6px 10px.
+        * game-logic.js: move animation durations slowed ~30% (pawn 180→240,
+          knight 240→320, bishop 210→280, rook 180→240, queen 260→340,
+          king 210→280). 120fps preserved (GPU-composited).
+        * index.html.tpl: CSS transition durations updated to match JS
+          (.18-.26s → .24-.34s). Landscape .bsec margin-right:10px for
+          anti-shake clearance. Portrait .dov asymmetric padding
+          (padding-top:18vh) for "slightly above center" dialog positioning.
+          .dlg:not([style*="max-width"]) selector distinguishes fullscreen
+          vs small dialogs; fullscreen uses negative margin to cancel
+          padding-top. Landscape .review-bottom buttons slightly enlarged.
+      Files: game-logic.js, ui.js, index.html.tpl, chess.html.
+    - Phase 21: bug fixes (3 items).
+        * index.html.tpl: Portrait dialog positioning precision fix —
+          padding-top:18vh/padding-bottom:10px → padding-top:10px/
+          padding-bottom:12vh (content center 59vh → 44vh, true "slightly
+          above center"). Fullscreen dialog negative margins updated to
+          cancel both paddings.
+        * index.html.tpl: Landscape .bsec overflow:hidden → overflow-x:
+          visible; overflow-y:hidden (anti-shake translate3d no longer
+          clipped by .bsec). Rolled back Phase 20's ineffective
+          margin-right:10px. .panel overflow-x:auto added (wide content
+          scrolls within panel, not clipped by .main).
+        * game-logic.js: _antiShake isLandscape?0:6 → 8 in BOTH
+          orientations (matches MAX_DISPLACEMENT_PX=8.0f in
+          StabilizationHelper.java). CELL calculation now reserves 8px for
+          anti-shake in landscape too.
+      Files: game-logic.js, index.html.tpl, chess.html.
+    - Phase 16: final comprehensive review. Bug fix: tablebase.js
+      _parsePGN [%eval] off-by-one (mid-branch used _moveCount instead of
+      _moveCount-1; trailing branch used _moveCount+1 instead of
+      _moveCount). Redundancy cleanup: worker-pool.js removed second
+      rawTokens walk (reuse rootFrame.tokens); tablebase.js removed
+      redundant selective cache-clear in importPGN; pgn-standard.js
+      removed unused varStack; ui.js removed dead ternary in
+      _findCriticalMoves; updated 4 stale "1-based" comments in
+      ai-bridge.js and ui.js; removed 3 debug console.logs and their
+      unused _populated/_populatedVa/_populatedCm counters in tablebase.js.
+      Files: tablebase.js, worker-pool.js, pgn-standard.js, ui.js,
+      ai-bridge.js, chess.html.
+    - Phase 15: review "Analyze All" now includes step 0 (the initial
+      position). _totalSteps changed from moveRecords.length to
+      moveRecords.length+1; reviewAnalyzeAll() and _reviewAnalyzeAdvance()
+      now iterate steps 0..N inclusive. Also fixes the first move's
+      delta/classification, the chart's x=0 data point, and critical-move
+      detection for the first move. Files: ui.js, chess.html.
+    - Phase 14: review eval-bar fonts enlarged (.75rem / .7rem), max-height
+      capped to single line (max-height:1.9em; overflow:hidden;
+      white-space:nowrap); review trend chart resized (min 120px, max 200px
+      in both orientations). Files: ui.js, index.html.tpl, chess.html.
+    - Phase 13: misreport cleanup — removed the setupMode defensive guard
+      in computeVisibleEpMark() (game-logic.js); fixed toggleSetup() exit
+      path to clear setupEpMark/setupCastleMarks (ui.js); simplified
+      enterReview() reviewBaseState/reviewStates cloneS comments (ui.js);
+      removed dead _boardWidthPx variable (ui.js); fixed enterReview()
+      no-piece branch to use cloneS (ui.js). No license classification
+      changes. Files: game-logic.js, ui.js, chess.html.
+    - Phase 12: ⚡ marker entering-setup-mode root-cause fix (toggleSetup
+      reverse-maps enPassantTarget back to pawn's square); review eval bar
+      width:100% + box-sizing:border-box; trend chart min height 80px.
+      Files: ui.js, index.html.tpl, chess.html.
+    - Phase 11: review eval bar/chart sizing (fonts .62rem/.58rem, chart
+      min 80px). (The ⚡ marker review-mode fix originally in this phase
+      was confirmed as a misreport in Phase 13 and cleaned up.)
+    - Phase 10: landscape board cap 60px, panel min 240px + 30% proportional,
+      review eval bar/chart sizing. (The ⚡ marker defensive fix originally
+      in this phase was confirmed as a misreport in Phase 13 and cleaned up;
+      the enPassantTarget pawn-color verification is retained as a valid
+      defense.)
+    - Phase 9: (REMOVED — was a misreport. enterReview() always deriving
+      reviewBaseState from stateHistory[0] and reviewStates cloneS deep
+      copies are retained as correct design, not misreport fixes.)
+    - Phase 8: landscape board oversize fix, dialog button fix, setup marker
+      polish. (The ⚡ marker review-mode fix originally in this phase was
+      confirmed as a misreport in Phase 13; the _exitSetupImpl() clear of
+      setupEpMark is retained as correct transient-field cleanup.)
+    - Phase 7: board sizing root-cause fix, dialog layout, setup marker
+      polish.
+    - Phase 6: landscape right-edge root-cause fix (body padding → #app
+      margin), setup marker feature polish.
+    - Phase 5: board sizing and portrait layout optimization.
+    - Phase 4: Chess960 / X-FEN rule correctness overhaul (findCastlingRooks,
+      findCastlingRookForSide, Shredder-FEN, UCI_Chess960 king-takes-rook).
+    - Phase 3: portrait UI redesign from scratch (@media(orientation:portrait)
+      no width threshold + vw/clamp()), computeVisibleCastleMarks/
+      computeVisibleEpMark pure functions, always-Chess960 castling rule.
+    - Phase 2: Quick Toolbar (Undo/Redo/Flip/AI-Hint/Control-Range moved
+      below board), setup-mode 🔁/⚡ manual marker buttons, removed
+      recomputeCastlingRights() dead function.
+    - Phase 1: code-review bug fixes (critical-move cache invalidation,
+      lightweight board update castling-rook marker, engine-notification
+      throttle cache, stats.html PGN comment XSS, CSP Blob Worker,
+      cross-game eval-cache pollution), About dialog GitHub hyperlinks,
+      back-button handling, merged duplicate HTML-escape functions.
+
+  License classification: unchanged from v1.0.6 — game-logic.js, ai-bridge.js,
+  pgn-standard.js, worker-pool.js, tablebase.js, stats.html remain GPL v3
+  (DroidFish-derived); chess960.js, eco-data.js, index.html.tpl remain AGPL v3
+  (original). No new third-party code was introduced in v1.0.7.

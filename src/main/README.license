@@ -295,3 +295,19 @@ v1.0.6 (2026.6.27):
   - java/ changes: see src/main/java/com/Regalia/README.license.
   - assets/ changes: see src/main/assets/README.license and
     src/main/assets/chess.src/README.license.
+
+v1.0.7 (2026.6.28-30):
+  - AndroidManifest.xml: versionCode=107, versionName="1.0.7".
+  - res/values/strings.xml: app_name="Regalia v1.0.7".
+  - No changes to res/ drawables, xml/, or cpp/ sources.
+  - java/ changes: see src/main/java/com/Regalia/README.license. Phase 19
+    thread-safety fixes: StockfishNative.java volatile fields +
+    stopAndWaitForBestmove timeout discard; ChessApp.java Error re-throw;
+    EngineService.java lastStatusInfo volatile.
+  - assets/ changes: see src/main/assets/README.license and
+    src/main/assets/chess.src/README.license. Phases 1-19 across all JS
+    modules + stats.html. Phase 19 stats.html: CSP added, safe-area fix,
+    Backspace dialog fix, dead code removal, full Copyright+GPL v3 license
+    block added to <head>.
+  - cpp/ changes: no changes to engine_jni.cpp (the native chmod/renice
+    bridge remains unchanged from the v1.0.4 baseline).
