@@ -119,7 +119,7 @@ public class StockfishNative {
     // v18.4.0: ELO_MAP synced with JS ELO_MATCH for consistent level display
     private static final int[] ELO_MAP = {0, 800, 1350, 1700, 2000, 2200, 2350, 2800};
     // v1.0.5: Synced with the application version (was stale at v1.0.2).
-    private static final String ENGINE_VERSION = "v1.0.6";
+    private static final String ENGINE_VERSION = "v1.0.7";
     // Movetime mapping: index 0 unused, 1-7 = game levels
     private static final int[] MOVETIME_MAP = {0, 500, 800, 1000, 1500, 2000, 3000, 5000};
 
@@ -147,10 +147,15 @@ public class StockfishNative {
     // in postJsCallback. The reference is updated whenever the WebView becomes available.
     private volatile WeakReference<WebView> cachedWebViewRef = new WeakReference<>(null);
 
-    private Process engineProcess;
-    private BufferedReader engineReader;
-    private OutputStreamWriter engineWriter;
-    private Thread readerThread;
+    // v1.0.7 PHASE 19 (thread safety): All four engine resource fields are now
+    // volatile. They are written from multiple threads (_engineExecutor worker,
+    // heartbeat thread, JS binder thread via shutdown/recoverEngine). Without
+    // volatile, a read on one thread may never observe a null write from another
+    // thread, producing NPEs or writes to a destroyed process's stream.
+    private volatile Process engineProcess;
+    private volatile BufferedReader engineReader;
+    private volatile OutputStreamWriter engineWriter;
+    private volatile Thread readerThread;
 
     private volatile int currentState = STATE_NONE;
     private volatile boolean engineReady = false;
@@ -197,7 +202,11 @@ public class StockfishNative {
     // v18.6.0: Single-thread executor for serialized UCI command execution
     // Replaces new Thread().start() calls to prevent engine hangs from concurrent UCI commands
     // Not final — must be recreated after shutdown() for restartEngine() to work.
-    private ExecutorService _engineExecutor = _createEngineExecutor();
+    // v1.0.7 PHASE 19 (thread safety): _engineExecutor is reassigned in
+    // initEngine/recoverEngine/restartEngine from multiple threads. Without
+    // volatile, one thread's reassignment may not be visible to another thread
+    // that then calls .execute() on the old (already-shutdown) executor.
+    private volatile ExecutorService _engineExecutor = _createEngineExecutor();
 
     private static ExecutorService _createEngineExecutor() {
         return Executors.newSingleThreadExecutor(r -> {
@@ -538,8 +547,19 @@ public class StockfishNative {
             _stopLatch = stopLatch;
             sendUciCommand("stop");
         }
+        boolean _timedOut = false;
         try {
-            stopLatch.await(1, TimeUnit.SECONDS);
+            if (!stopLatch.await(1, TimeUnit.SECONDS)) {
+                // v1.0.7 PHASE 19 (bug fix): Engine didn't respond to "stop" within
+                // 1 second — likely a frozen/zombie engine. Set the discard flag so
+                // the eventual late bestmove is NOT routed to handleBestMove as a
+                // real move. Without this, a late bestmove from the stopped search
+                // could corrupt the next position's game state (the bestmove is for
+                // the OLD position, not the new one the user is now on).
+                _discardingPonderBestmove = true;
+                _timedOut = true;
+                Log.w(TAG, callerTag + ": stopAndWaitForBestmove timed out — discarding late bestmove");
+            }
         } catch (InterruptedException e) {
             Log.w(TAG, callerTag + ": interrupted waiting for stop bestmove");
         } finally {

@@ -63,7 +63,11 @@ public class EngineService extends Service {
 
     private PowerManager.WakeLock wakeLock = null;
     private static boolean isRunning = false;
-    private static String lastStatusInfo = "";
+    // v1.0.7 PHASE 19 (thread safety): lastStatusInfo is written from the JS
+    // binder thread (via updateEngineNotification) and read from the service
+    // main thread (in buildNotification/onCreate). Without volatile, stale
+    // reads can cause the notification to display an old status.
+    private static volatile String lastStatusInfo = "";
 
     /**
      * v1.0.1: Build the PendingIntent that opens MainActivity when the user taps

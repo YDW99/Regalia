@@ -186,71 +186,128 @@ function randomSPID(){
 // For standard chess, "HAah" is equivalent to "KQkq".
 
 /**
- * Convert internal castlingRights object + king/rook positions to Shredder-FEN format.
+ * Convert internal castlingRights object + king/rook positions to Shredder-FEN
+ * (X-FEN) format.
+ *
+ * v1.0.7 PHASE 4 (Chess960 / X-FEN correctness fix):
+ *   - Letters MUST be sorted a→h (left-to-right) regardless of color, per the
+ *     X-FEN specification. The previous implementation emitted White-ks,
+ *     White-qs, Black-ks, Black-qs in that fixed order — which violated the
+ *     spec when, e.g., White's queenside rook was on file b and White's
+ *     kingside rook was on file f (correct output "BF", previous output "FB").
+ *   - A side's rook is the CLOSEST same-color rook on the relevant side of
+ *     the king (kingside = first rook to the right of the king; queenside =
+ *     first rook to the left). The previous code used `Array.find` which
+ *     returns the FIRST match in iteration order — for kingside that was the
+ *     closest-to-king rook (correct), but for queenside it was also the
+ *     closest-to-king rook (also correct, since iteration goes 0→7 and we
+ *     want the rightmost of the left-side rooks). Re-verified: this is right.
+ *   - Returns '-' if no rights are set OR if the required rook cannot be
+ *     found on the board (defensive — should not normally happen because
+ *     _validateSetupCastleMarks / makeMv keep rights and rooks in sync).
+ *
  * @param {Object} cr — {whiteKingside, whiteQueenside, blackKingside, blackQueenside}
  * @param {Array} board — 8x8 board array (used to locate rooks)
- * @returns {string} Shredder castling string, e.g. "HAah" or "-" if no rights
+ * @returns {string} Shredder castling string, e.g. "AHah" (sorted a→h) or "-"
  */
 function toShredderCastling(cr,board){
   if(!cr)return '-';
-  // Find white king + both rooks on rank 1 (row 7), and black on rank 8 (row 0)
-  let wKing=null,wRooks=[],bKing=null,bRooks=[];
+  // Find white king + rooks on rank 1 (row 7), and black on rank 8 (row 0)
+  let wKing=null,bKing=null;
+  const wRooks=[],bRooks=[];
   for(let c=0;c<8;c++){
     if(board[7][c]&&board[7][c].type==='king'&&board[7][c].color==='white')wKing=c;
     if(board[7][c]&&board[7][c].type==='rook'&&board[7][c].color==='white')wRooks.push(c);
     if(board[0][c]&&board[0][c].type==='king'&&board[0][c].color==='black')bKing=c;
     if(board[0][c]&&board[0][c].type==='rook'&&board[0][c].color==='black')bRooks.push(c);
   }
+  // Collect (file, isWhite) pairs for each right that's set + has a valid rook.
+  const pairs=[];
+  if(wKing!==null){
+    if(cr.whiteKingside){
+      // Closest white rook to the RIGHT of the king
+      for(const c of wRooks)if(c>wKing){pairs.push({file:c,isWhite:true});break;}
+    }
+    if(cr.whiteQueenside){
+      // Closest white rook to the LEFT of the king (rightmost of the left-side rooks)
+      let best=-1;
+      for(const c of wRooks)if(c<wKing&&c>best)best=c;
+      if(best>=0)pairs.push({file:best,isWhite:true});
+    }
+  }
+  if(bKing!==null){
+    if(cr.blackKingside){
+      for(const c of bRooks)if(c>bKing){pairs.push({file:c,isWhite:false});break;}
+    }
+    if(cr.blackQueenside){
+      let best=-1;
+      for(const c of bRooks)if(c<bKing&&c>best)best=c;
+      if(best>=0)pairs.push({file:best,isWhite:false});
+    }
+  }
+  if(pairs.length===0)return '-';
+  // Sort by file a→h (spec requirement). Ties (same file, both colors —
+  // impossible in a legal position) keep White before Black.
+  pairs.sort((a,b)=>a.file-b.file||(a.isWhite?0:1)-(b.isWhite?0:1));
   let str='';
-  // White kingside: rook to the right of the king
-  if(cr.whiteKingside){
-    const ksr=wRooks.find(c=>c>wKing);
-    if(ksr!==undefined)str+=String.fromCharCode(65+ksr); // uppercase A..H
-  }
-  // White queenside: rook to the left of the king
-  if(cr.whiteQueenside){
-    const qsr=wRooks.find(c=>c<wKing);
-    if(qsr!==undefined)str+=String.fromCharCode(65+qsr);
-  }
-  // Black kingside
-  if(cr.blackKingside){
-    const ksr=bRooks.find(c=>c>bKing);
-    if(ksr!==undefined)str+=String.fromCharCode(97+ksr); // lowercase a..h
-  }
-  // Black queenside
-  if(cr.blackQueenside){
-    const qsr=bRooks.find(c=>c<bKing);
-    if(qsr!==undefined)str+=String.fromCharCode(97+qsr);
+  for(const p of pairs){
+    str+=String.fromCharCode((p.isWhite?65:97)+p.file);
   }
   return str||'-';
 }
 
 /**
- * Parse a Shredder-FEN castling string into our internal castlingRights object.
- * Falls back to standard KQkq parsing for non-Chess960 FENs.
- * @param {string} str — castling field from FEN (e.g. "KQkq", "HAah", "-")
- * @param {Array} board — 8x8 board array (used to identify which rook is which side)
+ * Parse a Shredder-FEN (X-FEN) castling string into our internal castlingRights
+ * object. Also accepts the standard KQkq notation (X-FEN backward-compatibility
+ * mode: K maps to file h, Q maps to file a, k → h, q → a).
+ *
+ * v1.0.7 PHASE 4 (Chess960 / X-FEN correctness fix):
+ *   - The X-FEN spec allows MIXED notation: e.g. "KQah" is legal (White uses
+ *     traditional KQ because its rooks are on a1/h1; Black uses Shredder "ah"
+ *     because its rooks are NOT on a8/h8). The previous parser only handled
+ *     pure-Shredder OR pure-KQkq, not mixed. Now it handles each character
+ *     independently: K/Q/k/q are mapped to file h/a respectively and treated
+ *     as Shredder file letters.
+ *   - Validates that the indicated file actually has a same-color rook (defensive
+ *     against malformed FENs). If not, the right is silently dropped instead
+ *     of producing an inconsistent state that would later break move generation.
+ *
+ * @param {string} str — castling field from FEN (e.g. "KQkq", "AHah", "Bf", "-")
+ * @param {Array} board — 8x8 board array (used to identify king + rook positions)
  * @returns {Object} {whiteKingside, whiteQueenside, blackKingside, blackQueenside}
  */
 function parseShredderCastling(str,board){
   const cr={whiteKingside:false,whiteQueenside:false,blackKingside:false,blackQueenside:false};
   if(!str||str==='-')return cr;
-  // Locate kings
+  // Locate kings (required to map a file letter → kingside/queenside).
   let wKing=-1,bKing=-1;
   for(let c=0;c<8;c++){
     if(board[7][c]&&board[7][c].type==='king'&&board[7][c].color==='white')wKing=c;
     if(board[0][c]&&board[0][c].type==='king'&&board[0][c].color==='black')bKing=c;
   }
+  // Helper: does `color` have a rook on `file` of its home rank?
+  function _hasRookOn(color,file){
+    const row=color==='white'?7:0;
+    const p=board[row]&&board[row][file];
+    return !!(p&&p.type==='rook'&&p.color===color);
+  }
   for(const ch of str){
-    const isUpper=(ch>='A'&&ch<='H');
-    const isLower=(ch>='a'&&ch<='h');
-    if(!isUpper&&!isLower)continue;
-    const file=isUpper?ch.charCodeAt(0)-65:ch.charCodeAt(0)-97;
-    if(isUpper){
-      // White rook on `file`
+    // X-FEN backward compatibility: K/Q/k/q map to file h/a respectively.
+    let file=-1,isWhite=false;
+    if(ch==='K'){file=7;isWhite=true;}
+    else if(ch==='Q'){file=0;isWhite=true;}
+    else if(ch==='k'){file=7;isWhite=false;}
+    else if(ch==='q'){file=0;isWhite=false;}
+    else if(ch>='A'&&ch<='H'){file=ch.charCodeAt(0)-65;isWhite=true;}
+    else if(ch>='a'&&ch<='h'){file=ch.charCodeAt(0)-97;isWhite=false;}
+    else continue; // ignore unknown chars (e.g. '-')
+    // Defensive: drop the right if no same-color rook on the indicated file.
+    if(!_hasRookOn(isWhite?'white':'black',file))continue;
+    if(isWhite){
       if(wKing<0)continue;
       if(file>wKing)cr.whiteKingside=true;
       else if(file<wKing)cr.whiteQueenside=true;
+      // file === wKing is illegal (rook on king's square) — silently drop.
     }else{
       if(bKing<0)continue;
       if(file>bKing)cr.blackKingside=true;
@@ -278,9 +335,34 @@ function parseShredderCastling(str,board){
 
 /**
  * Identify which rook is the "kingside" / "queenside" rook for Chess960.
+ *
+ * v1.0.7 PHASE 4 (Chess960 correctness fix):
+ *   - The previous implementation REQUIRED both a kingside and a queenside
+ *     rook to be present, returning null otherwise. This is WRONG per the
+ *     user-quoted Chess960 rule reference: "对局进行中（执行易位时）：不需要"
+ *     ("during play (when executing castling): not required"). Castling to
+ *     one side only requires a rook on THAT side; the other side is
+ *     irrelevant (the rook there may have moved, been captured, or never
+ *     existed in the case of a non-standard setup position).
+ *   - The kingside rook is the CLOSEST same-color rook to the RIGHT of the
+ *     king (i.e. highest col among rooks with col > kingCol, but actually
+ *     the SMALLEST such col — the closest one to the king, since "kingside"
+ *     traditionally means the h-file side and the king castles toward h).
+ *     Wait — clarify: in Chess960, "kingside" castling always sends the
+ *     king to g1 (col 6). The rook that participates is the closest rook
+ *     on the king's RIGHT side (col > kingCol), because that rook's path
+ *     to f1 (col 5) is the shortest. If multiple rooks are on the right,
+ *     the one closest to the king is the canonical kingside rook.
+ *   - Similarly, the queenside rook is the closest same-color rook to the
+ *     LEFT of the king (largest col among rooks with col < kingCol).
+ *   - Returns {king, kingside, queenside} where kingside/queenside may be
+ *     `null` if no rook exists on that side. Previously returned `null`
+ *     entirely if either side was missing, which broke single-side castling.
+ *
  * @param {Array} board — 8x8 board
  * @param {string} color — 'white' or 'black'
- * @returns {Object} {kingside:col, queenside:col, king:col} or null if invalid
+ * @returns {Object|null} {king:col, kingside:col|null, queenside:col|null}
+ *   Returns null only if the king itself is missing.
  */
 function findCastlingRooks(board,color){
   const row=color==='white'?7:0;
@@ -291,33 +373,70 @@ function findCastlingRooks(board,color){
     if(p&&p.type==='king'&&p.color===color)kingCol=c;
     if(p&&p.type==='rook'&&p.color===color)rookCols.push(c);
   }
-  if(kingCol<0||rookCols.length<2)return null;
-  // Kingside rook = rightmost rook (>kingCol), Queenside = leftmost (<kingCol)
-  const ksr=rookCols.find(c=>c>kingCol);
-  const qsr=rookCols.find(c=>c<kingCol);
-  if(ksr===undefined||qsr===undefined)return null;
+  if(kingCol<0)return null;
+  // Kingside rook: closest rook to the RIGHT of the king (smallest col > kingCol).
+  // Queenside rook: closest rook to the LEFT of the king (largest col < kingCol).
+  let ksr=null,qsr=null;
+  for(const c of rookCols){
+    if(c>kingCol){
+      // right of king — pick the smallest such col (closest to king)
+      if(ksr===null||c<ksr)ksr=c;
+    }else if(c<kingCol){
+      // left of king — pick the largest such col (closest to king)
+      if(qsr===null||c>qsr)qsr=c;
+    }
+  }
   return {king:kingCol,kingside:ksr,queenside:qsr};
 }
 
 /**
+ * Find the rook that participates in a Chess960 castling move on the given side.
+ * Returns just that rook's column, or null if no rook exists on that side.
+ * This is the per-side variant of findCastlingRooks — used by isChess960CastlingLegal
+ * and chess960CastlingRookMove so that castling to one side works even when the
+ * other side has no rook (per the user's rule reference).
+ *
+ * v1.0.7 PHASE 4 NEW.
+ */
+function findCastlingRookForSide(board,color,side){
+  const rooks=findCastlingRooks(board,color);
+  if(!rooks)return null;
+  return side==='kingside'?rooks.kingside:rooks.queenside;
+}
+
+/**
  * Compute the rook source/dest for a Chess960 castling move.
+ *
+ * v1.0.7 PHASE 4: now uses findCastlingRookForSide so that castling to one
+ * side works even when the other side has no rook (e.g. the queenside rook
+ * was captured). Previously this called findCastlingRooks which returned null
+ * unless BOTH sides had rooks — blocking single-side castling.
+ *
  * @param {Object} s — game state
  * @param {string} color — 'white' or 'black'
  * @param {string} side — 'kingside' or 'queenside'
- * @returns {Object|null} {rookFrom:col, rookTo:col, kingTo:col} or null if invalid
+ * @returns {Object|null} {rookFrom:col, rookTo:col, kingTo:col, row} or null
  */
 function chess960CastlingRookMove(s,color,side){
   const row=color==='white'?7:0;
-  const rooks=findCastlingRooks(s.board,color);
-  if(!rooks)return null;
+  const rookFrom=findCastlingRookForSide(s.board,color,side);
+  if(rookFrom===null)return null;
   const kingTo=side==='kingside'?6:2;
   const rookTo=side==='kingside'?5:3;
-  const rookFrom=side==='kingside'?rooks.kingside:rooks.queenside;
   return {rookFrom,rookTo,kingTo,row};
 }
 
 /**
  * Check if a Chess960 castling is legal.
+ *
+ * v1.0.7 PHASE 4 (Chess960 correctness fix):
+ *   - Now uses findCastlingRookForSide instead of findCastlingRooks. This
+ *     means castling to one side is legal even if the other side has no rook
+ *     (e.g. the queenside rook was captured). Per the user-quoted rule
+ *     reference: "对局进行中（执行易位时）：不需要" — only the participating
+ *     rook must exist; the other side is irrelevant.
+ *   - If no rook exists on the requested side, returns false (cannot castle
+ *     without a rook to castle with).
  *
  * v1.0.4 Rev34 CRITICAL FIX: Per the official Chess960 castling rules (see
  * uploaded reference PDFs), castling is only legal when ALL of the following
@@ -352,14 +471,20 @@ function chess960CastlingRookMove(s,color,side){
  */
 function isChess960CastlingLegal(s,color,side){
   const opp=OPP_COLOR[color];
-  const rooks=findCastlingRooks(s.board,color);
-  if(!rooks)return false;
   const cr=s.castlingRights;
   if(side==='kingside'&&!cr[color+'Kingside'])return false;
   if(side==='queenside'&&!cr[color+'Queenside'])return false;
   const row=color==='white'?7:0;
-  const kingCol=rooks.king;
-  const rookCol=side==='kingside'?rooks.kingside:rooks.queenside;
+  // Locate the king (we need kingCol for path checks).
+  let kingCol=-1;
+  for(let c=0;c<8;c++){
+    const p=s.board[row][c];
+    if(p&&p.type==='king'&&p.color===color){kingCol=c;break;}
+  }
+  if(kingCol<0)return false;
+  // v1.0.7 PHASE 4: only need a rook on THIS side, not both sides.
+  const rookCol=findCastlingRookForSide(s.board,color,side);
+  if(rookCol===null)return false;
   const kingTo=side==='kingside'?6:2;
   const rookTo=side==='kingside'?5:3;
   const rookFrom=rookCol;
@@ -452,7 +577,7 @@ function initChess960State(spid){
 export {
   spidToBackRank, backRankToSPID, randomSPID,
   toShredderCastling, parseShredderCastling,
-  findCastlingRooks, chess960CastlingRookMove, isChess960CastlingLegal,
+  findCastlingRooks, findCastlingRookForSide, chess960CastlingRookMove, isChess960CastlingLegal,
   setChess960Mode, isChess960Mode,
   initChess960State
 };

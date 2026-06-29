@@ -532,10 +532,15 @@ public class StatsActivity extends Activity {
         // activity (no import) or shows the Yes/No/Cancel dialog (Cancel =
         // stay on stats page). If the import-back dialog is already visible,
         // back button = Cancel (dismiss dialog, stay on stats page).
+        // v1.0.7 UI: Route through the unified handleStatsBackPress() which
+        // also closes export/import dialogs created via DOM appendChild
+        // (previously these were orphaned by the back button — only the
+        // import-back Yes/No/Cancel was handled).
         if (keyCode == KeyEvent.KEYCODE_BACK) {
             if (webView != null) {
                 webView.evaluateJavascript(
-                    "if(typeof _statsImportBackDialogVisible!=='undefined'&&_statsImportBackDialogVisible){" +
+                    "if(typeof handleStatsBackPress==='function'){handleStatsBackPress();}" +
+                    "else if(typeof _statsImportBackDialogVisible!=='undefined'&&_statsImportBackDialogVisible){" +
                     "  _statsImportBackDismiss();" +
                     "} else if(typeof returnToGame==='function'){" +
                     "  returnToGame();" +

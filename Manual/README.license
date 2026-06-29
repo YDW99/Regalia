@@ -3,11 +3,17 @@ This directory contains the user-facing HTML manuals for the Regalia app
 with embedded CSS and JavaScript (no external resources).
 
 License classification by file:
+  - Regalia-v1.0.7-manual-zh.html: AGPL v3 (original Regalia work)
+      Chinese user manual for Regalia v1.0.7.
+      Copyright (C) 2026 Regalia.
+  - Regalia-v1.0.7-manual-en.html: AGPL v3 (original Regalia work)
+      English user manual for Regalia v1.0.7.
+      Copyright (C) 2026 Regalia.
   - Regalia-v1.0.6-manual-zh.html: AGPL v3 (original Regalia work)
-      Chinese user manual for Regalia v1.0.6.
+      Chinese user manual for Regalia v1.0.6 (kept for historical reference).
       Copyright (C) 2026 Regalia.
   - Regalia-v1.0.6-manual-en.html: AGPL v3 (original Regalia work)
-      English user manual for Regalia v1.0.6.
+      English user manual for Regalia v1.0.6 (kept for historical reference).
       Copyright (C) 2026 Regalia.
   - Regalia-v1.0.5-manual-zh.html: AGPL v3 (original Regalia work)
       Chinese user manual for Regalia v1.0.5 (kept for historical reference).
@@ -25,6 +31,36 @@ License classification by file:
 The manuals are AGPL v3 because they are original documentation created by
 the Regalia project, not derived from any third-party GPL work. The embedded
 diagrams, wireframes, and changelog text are all original.
+
+v1.0.7 (2026.6.28-30) changes:
+  - Regalia-v1.0.7-manual-zh.html: New v1.0.7 manual covering all phase
+    entries (code-review bug fixes, Quick Toolbar + setup markers, portrait
+    UI redesign, Chess960/X-FEN rule correctness, board sizing, landscape
+    right-edge root-cause fix, dialog layout, setup marker polish, eval
+    bar/chart optimization, ⚡ entering-setup-mode root-cause fix + review
+    eval bar width + line-chart min-height fix, misreport cleanup +
+    first-principles code review, review eval-bar font enlargement +
+    single-line height cap + trend chart min 120px / max 200px resizing,
+    review "Analyze All" now includes step 0 — the initial position, the
+    final comprehensive review: PGN [%eval] import off-by-one fix +
+    multiple redundancy cleanups, Phase 17: Chess960 castling "king self-
+    capture" critical bug fix + review "Analyze All" button auto-refresh +
+    5 Kimi-audit suggestions, Phase 18: _reviewEvalCache LRU eviction +
+    review move-list virtual list + 11 first-principles code-review fixes,
+    Phase 19: comprehensive 7-subagent 28k-line code review + 20+ critical
+    fixes, Phase 20: UX refinements — review eval bar/analyze button
+    enlarged, move animation slowed ~30% (120fps preserved), landscape
+    anti-shake clipping fix, portrait dialog repositioning, Phase 21:
+    bug fixes — portrait dialog positioning precision fix (Phase 20's
+    59vh center corrected to 44vh), landscape anti-shake clipping root-
+    cause fix (overflow-x:visible + _antiShake=8 both orientations),
+    move-history panel overflow-x:auto). Phase 9 entry
+    removed (was a misreport). Phases 8/10/11 had their misreported ⚡ items
+    removed. Toolbar wireframe split into Top Toolbar + Quick Toolbar to
+    reflect the v1.0.7 Phase 2 restructuring. Changelog section reordered
+    newest-to-oldest per user spec.
+  - Regalia-v1.0.7-manual-en.html: Synced with Chinese version.
+  - v1.0.6, v1.0.5, v1.0.4 manuals: kept for historical reference only.
 
 v1.0.6 (2026.6.27) changes:
   - Regalia-v1.0.6-manual-zh.html: New v1.0.6 manual with all v1.0.6

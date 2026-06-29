@@ -558,17 +558,22 @@ function parseStandardPGN(pgnText){
   moveText=moveText.replace(/\\\s*\n/g,' ');
   // Remove line-comments (;...)
   moveText=moveText.replace(/;[^\n]*/g,'');
-  // Flatten nested brace comments (spec violation auto-correction)
+  // v1.0.7 PHASE 18 Task 3 (bug fix): Flatten nested brace comments by REMOVING
+  // them entirely (braces + body), matching the proven-correct pattern in
+  // tablebase.js:456 and worker-pool.js:277. The old code stripped only the
+  // braces and left the comment body as bare text in moveText — the tokenizer
+  // then classified each whitespace-delimited comment word as a spurious SAN
+  // token, polluting the move list. (Latent: parseStandardPGN is currently
+  // unused, but this prevents a landmine if it's ever wired in.)
   {
     let _iter=0;
     while(moveText.includes('{')&&_iter++<20){
       const prev=moveText;
-      moveText=moveText.replace(/\{[^{}]*\}/g,function(s){
-        // Strip the braces themselves but keep the content (auto-flatten)
-        return ' '+s.slice(1,-1).replace(/[{}]/g,'')+' ';
-      });
+      moveText=moveText.replace(/\{[^{}]*\}/g,'');
       if(prev===moveText)break; // no more progress
     }
+    // Truncate at any unclosed brace (tolerant per PGN spec)
+    if(moveText.includes('{'))moveText=moveText.substring(0,moveText.indexOf('{'));
   }
   // Extract comments inline as we tokenize (so we don't lose them)
   // Strategy: tokenize the movetext into a stream of {type, value} tokens
@@ -647,7 +652,6 @@ function parseStandardPGN(pgnText){
   let curColor=startColor;
   let pendingComment='';
   let pendingVariations=[];
-  let varStack=null; // when inside a variation, we collect tokens into a buffer instead
 
   function _emitSan(sanTok){
     // Auto-correct common SAN errors:

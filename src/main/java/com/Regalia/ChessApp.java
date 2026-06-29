@@ -80,8 +80,22 @@ public class ChessApp extends Application {
                 // On Xiaomi HyperOS 3, some "crashes" are actually non-fatal
                 // exceptions from background threads that shouldn't kill the app.
                 // For worker threads (non-main), just log and don't kill the app.
+                // v1.0.7 PHASE 19 (bug fix): Re-throw Error subclasses (OOM,
+                // StackOverflow, NoClassDefFoundError) to the default handler so
+                // the process dies cleanly and restarts in a known-good state.
+                // Swallowing Error on a worker thread leaves the JVM in a
+                // corrupted state — e.g. if SF-Reader dies from OOM, the engine
+                // silently stops responding while isProcessAlive() still returns
+                // true, causing a 30-120s apparent hang before heartbeat recovery.
                 if (!threadName.equals("main")) {
-                    Log.w(TAG, "Non-main thread exception suppressed");
+                    if (throwable instanceof Error) {
+                        Log.e(TAG, "Non-main thread Error — chaining to default handler", throwable);
+                        if (defaultHandler != null) {
+                            defaultHandler.uncaughtException(thread, throwable);
+                        }
+                        return;
+                    }
+                    Log.w(TAG, "Non-main thread exception suppressed", throwable);
                     // Don't call defaultHandler — this prevents the crash dialog
                     // The thread will die but the app process continues
                     return;
@@ -95,7 +109,7 @@ public class ChessApp extends Application {
             }
         });
 
-        Log.i(TAG, "ChessApp initialized — crash protection active (v1.0.6)");
+        Log.i(TAG, "ChessApp initialized — crash protection active (v1.0.7)");
 
         // SECURITY (MobSF #4): Non-blocking root detection. The result is computed
         // once and cached; the app never refuses to run on a rooted device because

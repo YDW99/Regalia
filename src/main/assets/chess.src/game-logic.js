@@ -191,12 +191,14 @@ const _i18n={
 'about_source_code_prefix':{zh:'源代码：',en:'Source code: '},
 'about_source_code_url':{zh:'https://github.com/YDW99/Regalia',en:'https://github.com/YDW99/Regalia'},
 'about_agpl_desc':{zh:'发布。本项目为 AGPL v3 与 GPL v3 双重许可组合作品：整体同时受两份协议约束，但因 AGPL v3 的网络交互条款（第13条）更为严格，其要求实质上覆盖整个组合作品，确保用户通过网络访问时同样享有获取源代码的权利。',en:'. This project is a combined work under AGPL v3 and GPL v3: the combined work is subject to both licenses, but since AGPL v3 imposes stricter network interaction provisions (Section 13), its requirements effectively cover the entire combination, ensuring users who access the work over a network retain the right to obtain source code.'},
-'about_droidfish':{zh:'部分代码源自开源项目 DroidFish (Copyright © Peter Österlund)，采用',en:'Some code derived from DroidFish (Copyright © Peter Österlund), licensed under'},
-'about_droidfish_desc':{zh:'协议。涉及引擎管理（Java/C++）、棋局逻辑、PGN解析、引擎通信及UI交互。修改声明已附于相关源文件头部。',en:'. Covers engine management (Java/C++), game logic, PGN parsing, engine communication, and UI interaction. Modifications noted in source file headers.'},
-'about_stockfish':{zh:'引擎 Stockfish 由 Stockfish 开源社区开发，采用',en:'Stockfish engine by the Stockfish community, licensed under'},
+'about_droidfish':{zh:'部分代码源自开源项目 ',en:'Some code derived from the open-source project '},
+'about_droidfish_desc':{zh:' (Copyright © Peter Österlund)，采用',en:' (Copyright © Peter Österlund), licensed under'},
+'about_droidfish_tail':{zh:'协议。涉及引擎管理（Java/C++）、棋局逻辑、PGN解析、引擎通信及UI交互。修改声明已附于相关源文件头部。',en:' license. Covers engine management (Java/C++), game logic, PGN parsing, engine communication, and UI interaction. Modifications noted in source file headers.'},
+'about_stockfish':{zh:'引擎由 ',en:'Engine by '},
+'about_stockfish_desc':{zh:' 开源社区开发，采用',en:' community, licensed under'},
+'about_gplv3':{zh:'协议。',en:'license.'},
 'about_disclaimer':{zh:'本软件按"原样"提供，不提供任何明示或暗示的保证。详见 AGPL v3 第15-16条。',en:'This software is provided "as is", without warranty. See AGPL v3 Sections 15-16.'},
 'about_ai':{zh:'本项目的部分代码由 AI 辅助生成，并已进行人工审查与 AGPL v3 / GPL v3 合规确认。',en:'Some code was AI-assisted and reviewed for AGPL v3 / GPL v3 compliance.'},
-'about_gplv3':{zh:'协议',en:'license'},
 'loading_ui':{zh:'正在加载界面...',en:'Loading UI...'},
 'engine_ready':{zh:'引擎就绪！',en:'Engine ready!'},
 'engine_loading_timeout':{zh:'引擎加载超时，部分功能可能不可用',en:'Engine loading timeout, some features may be unavailable'},
@@ -357,7 +359,7 @@ const _i18n={
 'elo_target':{zh:'Elo目标',en:'ELO Target'},
 'export_settings_btn':{zh:'📤 导出设置',en:'📤 Export'},
 'import_settings_btn':{zh:'📥 导入设置',en:'📥 Import'},
-'loading_title':{zh:'Regalia v1.0.6',en:'Regalia v1.0.6'},
+'loading_title':{zh:'Regalia v1.0.7',en:'Regalia v1.0.7'},
 'click_skip_loading':{zh:'点击跳过加载',en:'Click to skip loading'},
 'white_checkmate':{zh:'白方将杀获胜',en:'White wins by checkmate'},
 'black_checkmate':{zh:'黑方将杀获胜',en:'Black wins by checkmate'},
@@ -452,6 +454,25 @@ const _i18n={
 'stats_import_back_no':{zh:'否',en:'No'},
 'stats_import_back_cancel':{zh:'取消',en:'Cancel'},
 'stats_import_back_no_pgn':{zh:'统计页面未导入新 PGN，无需同步。',en:'No new PGN imported on the stats page; nothing to sync.'},
+// v1.0.7 — Quick toolbar (below the board, above the player bar)
+'quick_toolbar':{zh:'快捷工具栏',en:'Quick Toolbar'},
+// v1.0.7 — Setup-mode castle-rights marker (🔁) and en-passant marker (⚡)
+'setup_castle_marker':{zh:'易位权',en:'Castle'},
+'setup_castle_marker_hint':{zh:'易位标记',en:'Castle Mark'},
+'setup_castle_marker_tip':{zh:'点击后，再点击格子添加/取消易位标记（仅对在初始行上的同色车生效）',en:'Tap, then tap a square to toggle the castle marker (only valid on same-color rooks on the initial rank)'},
+'setup_ep_marker':{zh:'可被吃过路兵',en:'En Passant'},
+'setup_ep_marker_hint':{zh:'过路兵标记',en:'En Passant Mark'},
+'setup_ep_marker_tip':{zh:'点击后，再点击格子添加/取消过路兵标记（棋盘上最多 1 个，必须与走棋方不同色的兵同格，该兵位于第 4/5 行，且其左或右侧有相邻的异色兵可吃过路兵）',en:'Tap, then tap a square to toggle the en-passant marker (max 1 on board; must share the square with an opposite-color pawn on rank 4/5, with an adjacent enemy pawn that can capture it)'},
+'setup_castle_err_not_rook':{zh:'易位标记必须与同色车在同一格',en:'Castle marker must share the square with a same-color rook'},
+'setup_castle_err_wrong_rank':{zh:'易位标记所在的同色车必须在初始行（白方 a1–h1；黑方 a8–h8）',en:'Rook with castle marker must be on the initial rank (white: a1–h1; black: a8–h8)'},
+'setup_castle_err_wrong_side':{zh:'易位标记所在的车与同色王的相对位置不合法',en:'Rook with castle marker is on the wrong side of the same-color king'},
+'setup_castle_err_dup_side':{zh:'同一侧的同色车不能同时存在两个易位标记',en:'Two same-color rooks on the same side cannot both carry castle markers'},
+'setup_castle_err_king_missing':{zh:'同色王不在棋盘上，无法判定易位标记的合法性',en:'Same-color king is missing — cannot validate castle marker'},
+'setup_ep_err_multiple':{zh:'棋盘上最多只能有一个过路兵标记',en:'At most one en-passant marker is allowed on the board'},
+'setup_ep_err_no_pawn':{zh:'过路兵标记必须与兵在同一格',en:'En-passant marker must share the square with a pawn'},
+'setup_ep_err_wrong_rank':{zh:'过路兵标记所在的兵必须在第 4 行（白兵）或第 5 行（黑兵）',en:'Pawn with en-passant marker must be on rank 4 (white) or rank 5 (black)'},
+'setup_ep_err_wrong_color':{zh:'过路兵标记所在的兵的颜色必须与走棋方不同',en:'Pawn with en-passant marker must be the opposite color of the side to move'},
+'setup_ep_err_no_capturer':{zh:'过路兵标记所在的兵的左或右侧必须有相邻的异色兵（可吃过路兵的兵）',en:'Pawn with en-passant marker must have an adjacent enemy pawn that can capture it'},
 };
 // Auto-detect language on startup
 (function(){
@@ -542,24 +563,132 @@ return _lang==='en'?en:zh;
 }
 let CELL=50;
 let REVIEW_CELL=40;
+// v1.0.7 PHASE 5: Read safe-area insets from CSS custom properties (set by
+// AndroidManifest shortEdges mode + viewport-fit=cover). These tell us how
+// much space the system reserves for notches/cutouts/R-corners. We must
+// subtract them from the available viewport when sizing the board, otherwise
+// the board's rightmost column (h-file) gets clipped by the safe-area inset.
+let _safeInsets={top:0,bottom:0,left:0,right:0};
+function _readSafeInsets(){
+  try{
+    const cs=getComputedStyle(document.documentElement);
+    const _parse=(v)=>{const m=parseFloat(v);return isNaN(m)?0:m;};
+    _safeInsets.top=_parse(cs.getPropertyValue('--safe-top'))||0;
+    _safeInsets.bottom=_parse(cs.getPropertyValue('--safe-bottom'))||0;
+    _safeInsets.left=_parse(cs.getPropertyValue('--safe-left'))||0;
+    _safeInsets.right=_parse(cs.getPropertyValue('--safe-right'))||0;
+  }catch(e){/* defaults stay 0 */}
+}
+// v1.0.7 PHASE 5: First-principles board sizing.
+// Available width = viewport width - safe-area insets - 3px finger-grip
+// clearance (right) - board border (4px total, 2px each side) - anti-shake
+// stabilization clearance (6px, only in portrait) - 28px row-label column
+// (the .rlbl div to the LEFT of the board).
+// Available height (portrait) = viewport height - safe-area insets - header
+// (~50px) - AI/player bars (~80px each = 160px) - quick toolbar (~40px) -
+// file labels (~16px) - some padding (~24px).
+// We then take the floor of (min(availW, availH) / 8) and clamp to [30, 90].
+// The previous implementation used hard-coded thresholds (vh>500?50:...) that
+// didn't account for safe-area insets, the 3px right grip clearance, OR the
+// 28px row-label column — causing the h-file to be clipped on notched phones
+// and on phones where the row labels pushed the board past the right edge.
 function _recalcCellSize(){
+  _readSafeInsets();
   const vw=window.innerWidth;
   const vh=window.innerHeight;
   const isLandscape=vw>vh;
+  // v1.0.7 PHASE 7: Use the ACTUAL available content width of #app, not
+  // window.innerWidth. #app has padding-right:calc(env(safe-area-inset-right)+3px)
+  // and padding-left:env(safe-area-inset-left). The previous code used
+  // window.innerWidth and then ALSO subtracted safe-area + 3px grip, which
+  // double-counted the #app padding. But the real problem was that .main
+  // ALSO has its own padding (8px in portrait, 6px in landscape), which was
+  // NOT being subtracted at all — causing the board to overflow by ~16px.
+  // Fix: read #app's computed content width directly, then subtract .main's
+  // padding. This is the ground-truth available width for the board + row labels.
+  let _appContentW=vw;
+  let _appContentH=vh;
+  try{
+    const appEl=document.getElementById('app');
+    if(appEl&&appEl.clientWidth>0){
+      const cs=getComputedStyle(appEl);
+      // With box-sizing:border-box, clientWidth = content + padding.
+      // Content width = clientWidth - paddingLeft - paddingRight.
+      const pl=parseFloat(cs.paddingLeft)||0;
+      const pr=parseFloat(cs.paddingRight)||0;
+      const pt=parseFloat(cs.paddingTop)||0;
+      const pb=parseFloat(cs.paddingBottom)||0;
+      _appContentW=appEl.clientWidth-pl-pr;
+      _appContentH=appEl.clientHeight-pt-pb;
+      // v1.0.7 PHASE 7: if the computed content width is unreasonably small
+      // (e.g. #app hasn't been laid out yet), fall back to vw-based calculation
+      // with safe-area subtraction.
+      if(_appContentW<100||_appContentH<100){
+        _appContentW=vw-_safeInsets.left-_safeInsets.right-3;
+        _appContentH=vh-_safeInsets.top-_safeInsets.bottom;
+      }
+    }else{
+      // #app not yet in DOM — use vw with safe-area subtraction.
+      _appContentW=vw-_safeInsets.left-_safeInsets.right-3;
+      _appContentH=vh-_safeInsets.top-_safeInsets.bottom;
+    }
+  }catch(e){
+    _appContentW=vw-_safeInsets.left-_safeInsets.right-3;
+    _appContentH=vh-_safeInsets.top-_safeInsets.bottom;
+  }
+  // .main padding (from CSS): portrait=8px each side, landscape=6px each side.
+  const _mainPad=isLandscape?6:8;
+  // Board border: 4px total (2px each side in base CSS, but portrait overrides
+  // to 3px). We use the larger value (4px) to be safe.
+  const _boardBorder=4;
+  // Anti-shake margin: 8px in BOTH orientations (matches MAX_DISPLACEMENT_PX
+  // in StabilizationHelper.java). Previously landscape was 0, which caused the
+  // board's right edge to be clipped when anti-shake shifted it rightward —
+  // the CELL calculation didn't reserve space for the ±8px translate3d.
+  // v1.0.7 PHASE 21 (bug fix): reserve 8px in landscape too.
+  const _antiShake=8;
+  // Row-label column (.rlbl): 28px wide, sits LEFT of the board.
+  const _rowLabelW=28;
+  // v1.0.7 PHASE 7: Total horizontal overhead = .main padding (left+right) +
+  // row labels + board border + anti-shake. We do NOT subtract safe-area or
+  // 3px grip again because #app's content width already excludes them (they're
+  // in #app's padding).
+  const _horizOverhead=(_mainPad*2)+_rowLabelW+_boardBorder+_antiShake;
   if(isLandscape){
-    // In landscape, board height is the primary constraint.
-    // Reserve ~36px for header + 24px for board labels/AI bar + 12px padding = ~72px overhead
-    const availH=vh-72;
+    // Landscape: board height is the primary constraint.
+    // v1.0.7 PHASE 10: Reserve enough vertical space for header (~36px) +
+    // file labels (~14px) + AI bar (~40px) + player bar (~40px) + quick
+    // toolbar (~36px) + gaps/padding (~24px) = ~190px. Plus .main padding
+    // (12px). Total vertical overhead = 202px.
+    // Also add a proportional reserve: on very tall screens (tablets), the
+    // board shouldn't dominate — cap at 60px so the panel gets enough room.
+    const _vertOverhead=202;
+    const availH=_appContentH-_vertOverhead-(_mainPad*2);
     const maxByHeight=Math.floor(availH/8);
-    // Also check width constraint — board should leave room for the panel (min 200px)
-    const availW=vw-200-32; // 200px min panel + 32px padding/gaps
+    // v1.0.7 PHASE 10: Increase panel minimum width to 240 so the
+    // "走法记录" (move history) panel has enough room. Also compute the
+    // panel width as a PROPORTION of the available width (at least 30%),
+    // so on wide tablets the panel grows with the screen.
+    const _panelMin=240;
+    const _panelProportional=Math.floor(_appContentW*0.30);
+    const _panelW=Math.max(_panelMin,_panelProportional);
+    const _gap=6;
+    const availW=_appContentW-_panelW-_gap-_horizOverhead;
     const maxByWidth=Math.floor(availW/8);
-    CELL=Math.max(36,Math.min(maxByHeight,maxByWidth,72)); // Cap at 72px per cell
+    // v1.0.7 PHASE 10: Lower the landscape cap from 72 to 60 to prevent the
+    // board from squeezing the move history panel on phones and tablets.
+    // 60px * 8 = 480px board, still very readable.
+    CELL=Math.max(30,Math.min(maxByHeight,maxByWidth,60));
   }else{
-    // Portrait: width is the primary constraint
-    const maxVW=Math.min(vw,600);
-    const maxByHeight=vh>500?50:vh>420?46:vh>360?42:vh>320?38:36;
-    CELL=Math.max(36,Math.min(maxByHeight,Math.floor((maxVW-32)/8)));
+    // Portrait: width is the primary constraint, but height also matters.
+    const availW=_appContentW-_horizOverhead;
+    const maxByWidth=Math.floor(availW/8);
+    // Available height: viewport - header (~50px) - AI bar (~50px) - player
+    // bar (~50px) - quick toolbar (~40px) - file labels (~16px) - padding.
+    const _vertOverhead=246;
+    const availH=_appContentH-_vertOverhead;
+    const maxByHeight=Math.floor(availH/8);
+    CELL=Math.max(30,Math.min(maxByWidth,maxByHeight,90));
   }
   REVIEW_CELL=Math.max(28,Math.round(CELL*0.8));
 }
@@ -630,6 +759,14 @@ let _lastCheckFlag=false;
 // Landing animation: block render() while CSS @keyframes is playing, then auto-render
 let _landingAnimActive=false;
 let _landingAnimTimer=null;
+// v1.0.7 PHASE 18 Task 3 (bug fix): Animation generation counter + finish-timer id.
+// These prevent a stale _finishAnim closure (from a prior animateMove call) from
+// corrupting the new animation's global state. Previously, the old setTimeout
+// was NOT cancelled when a new animateMove started within dur+60ms — the stale
+// timer would fire and set animationInProgress=false, _lastAnimTarget=oldTarget,
+// _activeAnimEls=[] (orphaning the new animation's overlay nodes).
+let _animFinishTimer=0;
+let _animGen=0;
 function _startLandingTimer(pieceType){
 if(_landingAnimTimer)clearTimeout(_landingAnimTimer);
 // v1.0.4 ROUND-5 REV13: Reduced from 600-800ms to 200-300ms — the CSS
@@ -639,6 +776,43 @@ const _maxDur=({pawn:200,knight:250,bishop:220,rook:200,queen:280,king:220}[piec
 _landingAnimTimer=setTimeout(()=>{_landingAnimActive=false;_landingAnimTimer=null;render();},_maxDur+30);
 }
 function animateMove(from,to,pieceSym,pieceType,isCapture,isCheck,pieceColor){
+// v1.0.7 PHASE 17 (Kimi audit suggestion 2.3 — adopted): Honor
+// prefers-reduced-motion on the JS side too. The CSS @media query already
+// disables the CSS animations, but the JS code path still creates overlay
+// <div>s, attaches transitionend listeners, and triggers double-rAF —
+// which is wasted work that also leaves the board in a transient state
+// (source piece hidden) for one frame. When the user has reduced-motion
+// enabled, skip ALL of that and just flip the board state directly.
+// Match the user's OS-level accessibility preference (Android "Remove
+// animations" / iOS "Reduce Motion" / desktop browser setting).
+try{
+  if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+    // Skip animation entirely. Mark the animation as not-in-progress so
+    // render() doesn't get throttled, set _lastAnimTarget so the landing
+    // animation logic has consistent state, and return.
+    // v1.0.7 PHASE 19 (bug fix): Cancel any pending _animFinishTimer from a
+    // prior non-reduced-motion animation and bump _animGen so the stale
+    // _finishAnim closure self-invalidates. Without this, if a prior animation
+    // is in flight (with a pending setTimeout(_finishAnim, dur+60)), the stale
+    // closure would fire and overwrite _lastAnimTarget with the OLD target.
+    if(_animFinishTimer){clearTimeout(_animFinishTimer);_animFinishTimer=0;}
+    ++_animGen; // invalidate any pending stale _finishAnim closure
+    animationInProgress=false;
+    _landingAnimActive=false;
+    if(_landingAnimTimer){clearTimeout(_landingAnimTimer);_landingAnimTimer=null;}
+    _lastAnimPieceType=pieceType||'pawn';
+    _lastCaptureFlag=!!isCapture;
+    _lastCheckFlag=!!isCheck;
+    _lastAnimTarget={row:to.row,col:to.col};
+    _lastAnimMv=null;
+    _activeAnimEls=[];
+    // v1.0.7 PHASE 18 Task 3 (redundancy cleanup): Removed dead `if(isCheck)`
+    // block that assigned `const ck = pieceColor==='white'?null:null` (always
+    // null, never read). The in-check visual cue is painted by render() on the
+    // next pass via the _checkKingPos mechanism — no work needed here.
+    return;
+  }
+}catch(e){}
 // v1.0.6: Detect castling for animation. The caller may pass the mv object
 // via a global _lastAnimMv (set just before calling animateMove) so we can
 // use _castleSide() for Chess960 correctness. Fallback to the legacy
@@ -646,6 +820,12 @@ function animateMove(from,to,pieceSym,pieceType,isCapture,isCheck,pieceColor){
 let _castleside=null;
 try{if(typeof _lastAnimMv!=='undefined'&&_lastAnimMv&&typeof _castleSide==='function'){_castleside=_castleSide(_lastAnimMv);}}catch(e){}
 if(!_castleside&&pieceType==='king'&&Math.abs(to.col-from.col)===2){_castleside=to.col===6?'kingside':'queenside';}
+// v1.0.7 PHASE 17: When castling with king already on its target square
+// (from === to, e.g. SP-ID where white king starts on g1 castling kingside),
+// the king does NOT move — only the rook moves. Per the Fischer Random Chess
+// rules: "原地易位 — 该棋子'原地不动'，另一枚棋子移动到指定位置". Skip the
+// king-move animation overlay; only animate the rook.
+const _kingStayedPut=!!_castleside&&from.row===to.row&&from.col===to.col;
 animationInProgress=true;
 _lastAnimPieceType=pieceType||'pawn';
 _lastAnimTarget=null;
@@ -656,7 +836,11 @@ _lastCheckFlag=!!isCheck;
 _activeAnimEls=[]; // v1.0.4 REV13: track for re-attachment
 // Hide source piece during animation (overlay replaces it); also hide captured piece & castling rook
 const _srcPc=document.querySelector('.sq[data-r="'+from.row+'"][data-c="'+from.col+'"] .pc');
-if(_srcPc)_srcPc.style.opacity='0';
+// v1.0.7 PHASE 17: When the king stays put, do NOT hide its source piece —
+// there's no overlay covering it (the king animation overlay is skipped
+// below). Leaving the king visible during the rook's animation matches the
+// actual game state (king is still on its square).
+if(!_kingStayedPut&&_srcPc)_srcPc.style.opacity='0';
 if(isCapture){const _tgtPc=document.querySelector('.sq[data-r="'+to.row+'"][data-c="'+to.col+'"] .pc');if(_tgtPc)_tgtPc.style.opacity='0';}
 const bwrap=_cachedBwrap||(_cachedBwrap=document.querySelector('.bwrap'));if(!bwrap||!bwrap.parentNode){_cachedBwrap=null;animationInProgress=false;if(_srcPc)_srcPc.style.opacity='';return;}
 // Remove stale animation elements
@@ -664,18 +848,27 @@ const oldAnims=bwrap.querySelectorAll('.move-anim');for(let i=0;i<oldAnims.lengt
 const cs=CELL;const _flip=playerColor==='black';
 const _fc=_flip?7-from.col:from.col,_fr=_flip?7-from.row:from.row,_tc=_flip?7-to.col:to.col,_tr=_flip?7-to.row:to.row;
 const dx=(_tc-_fc)*cs,dy=(_tr-_fr)*cs;
-const el=document.createElement('div');el.className='move-anim anim-'+_lastAnimPieceType+(pieceColor==='white'?' w-piece':' bk-piece');
-el.textContent=pieceSym;
-el.style.cssText='left:'+(_fc*cs)+'px;top:'+(_fr*cs)+'px;width:'+cs+'px;height:'+cs+'px;transform:translate3d(0,0,0);opacity:1;will-change:transform';
-bwrap.appendChild(el);
-_activeAnimEls.push({el,from,dx,dy});
+// v1.0.7 PHASE 17: Only create the king-move overlay when the king actually
+// moves. When _kingStayedPut is true (king already on castling target), skip
+// the overlay entirely — leaving the king visible at its square while the
+// rook animates from its source to its destination.
+let el=null;
+if(!_kingStayedPut){
+  el=document.createElement('div');el.className='move-anim anim-'+_lastAnimPieceType+(pieceColor==='white'?' w-piece':' bk-piece');
+  el.textContent=pieceSym;
+  el.style.cssText='left:'+(_fc*cs)+'px;top:'+(_fr*cs)+'px;width:'+cs+'px;height:'+cs+'px;transform:translate3d(0,0,0);opacity:1;will-change:transform';
+  bwrap.appendChild(el);
+  _activeAnimEls.push({el,from,dx,dy});
+}
 // Castling: also animate the rook (v1.0.6: use _castleside + Chess960 rook positions)
 let rookEl=null;
 const isCastling=!!_castleside;
 if(isCastling&&pieceColor){
 let rFromCol=-1,rToCol=-1;
 // v1.0.6: For Chess960, derive the actual rook from/to via chess960CastlingRookMove.
-if(typeof gameVariant!=='undefined'&&gameVariant==='chess960'&&typeof chess960CastlingRookMove==='function'){
+// v1.0.7 PHASE 3: Always use Chess960 castling rook move logic (Chess960 is a
+// superset of standard chess castling — see makeMv for the rationale).
+if(typeof chess960CastlingRookMove==='function'){
   // Pass a board snapshot — note: at this point the move has NOT been applied to
   // gameState yet (animateMove is called BEFORE gameState=ns), so we can read
   // the rook's source column from gameState.board. However, animateMove is
@@ -692,7 +885,7 @@ if(rFromCol<0){
   if(_castleside==='kingside'){rFromCol=7;rToCol=5;}
   else{rFromCol=0;rToCol=3;}
 }
-if(rFromCol>=0){
+if(rFromCol>=0&&rFromCol!==rToCol){
 // Hide castling rook at source during animation
 const _srcRookPc=document.querySelector('.sq[data-r="'+from.row+'"][data-c="'+rFromCol+'"] .pc');
 if(_srcRookPc)_srcRookPc.style.opacity='0';
@@ -707,12 +900,28 @@ bwrap.appendChild(rookEl);
 _activeAnimEls.push({el:rookEl,from:rFrom,dx:rookEl._rdx,dy:rookEl._rdy});
 }
 }
-const durations={pawn:180,knight:240,bishop:210,rook:180,queen:260,king:210};
-const dur=durations[_lastAnimPieceType]||240;
+// v1.0.7 PHASE 20 (UX): Slowed down piece-move animation ~30% so the human eye
+// can clearly see the smooth motion. Previous durations (180-260ms) were a bit
+// too fast to follow. New durations (240-340ms) give a comfortable, fluid feel
+// while still feeling snappy. The 120fps high-frame-rate is preserved — the
+// transition is GPU-composited (will-change:transform + translate3d) and the
+// browser renders at the display's native refresh rate. The cubic-bezier
+// easing curve (CSS .25,.1,.25,1) is unchanged — only the duration is longer.
+const durations={pawn:240,knight:320,bishop:280,rook:240,queen:340,king:280};
+const dur=durations[_lastAnimPieceType]||300;
 let _animDone=false;
+// v1.0.7 PHASE 18 Task 3 (bug fix): Cancel any pending finish-timer from a
+// prior animateMove call, and bump the generation counter so the old closure
+// self-invalidates if it ever fires (e.g. a stray transitionend from a
+// detached element).
+if(_animFinishTimer){clearTimeout(_animFinishTimer);_animFinishTimer=0;}
+const _myGen=++_animGen;
 function _finishAnim(){
 if(_animDone)return;_animDone=true;
-el.remove();if(rookEl)rookEl.remove();animationInProgress=false;_lastAnimTarget={row:to.row,col:to.col};
+// Self-invalidation: if a newer animation started, this closure is stale —
+// do NOT touch global state. The newer animation owns it now.
+if(_myGen!==_animGen)return;
+if(el)el.remove();if(rookEl)rookEl.remove();animationInProgress=false;_lastAnimTarget={row:to.row,col:to.col};
 _lastAnimMv=null; // v1.0.6: clear stale move reference after animation completes
 _activeAnimEls=[]; // v1.0.4 REV13: clear tracking
 if(_lastCaptureFlag){
@@ -724,15 +933,23 @@ const ck=gameState.currentTurn==='white'?gameState.wk:gameState.bk;
 if(ck){const ksq=document.querySelector(`.sq[data-r="${ck.row}"][data-c="${ck.col}"]`);if(ksq)ksq.classList.add('in-check')}
 }
 }
-el.addEventListener('transitionend',function(e){if(e.propertyName==='transform')_finishAnim()},{once:true});
+if(el){
+  el.addEventListener('transitionend',function(e){if(e.propertyName==='transform')_finishAnim()},{once:true});
+}
 // v1.0.4 REV13: Double-rAF ensures initial position is painted before transition starts
 requestAnimationFrame(()=>{
 requestAnimationFrame(()=>{
-el.style.transform='translate3d('+dx+'px,'+dy+'px,0)';
+if(el)el.style.transform='translate3d('+dx+'px,'+dy+'px,0)';
 if(rookEl)rookEl.style.transform='translate3d('+rookEl._rdx+'px,'+rookEl._rdy+'px,0)';
 });
 });
-setTimeout(_finishAnim,dur+60);
+// v1.0.7 PHASE 18 Task 3: Track the timer id so the next animateMove can
+// cancel it. Previously this was a fire-and-forget setTimeout, which left a
+// window where a stale _finishAnim could corrupt the new animation's state.
+_animFinishTimer=setTimeout(function(){
+  _animFinishTimer=0;
+  _finishAnim();
+},dur+60);
 }
 
 // v1.0.4 ROUND-5 REV13: Re-attach active animation elements after DOM rebuild
@@ -756,7 +973,248 @@ function initBoard(){const b=Array.from({length:8},()=>Array(8).fill(null));cons
 // Returns all squares this piece attacks
 function attacked(board,pos){const b=board,p=b[pos.row][pos.col];if(!p)return[];const r=pos.row,c=pos.col,co=p.color,mv=[];if(p.type==='pawn'){const d=co==='white'?-1:1;for(const dc of[-1,1])if(inB(r+d,c+dc))mv.push({row:r+d,col:c+dc})}else if(p.type==='knight'){for(const[dr,dc]of KNIGHT_OFFSETS)if(inB(r+dr,c+dc))mv.push({row:r+dr,col:c+dc})}else if(p.type==='king'){for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++)if((dr||dc)&&inB(r+dr,c+dc))mv.push({row:r+dr,col:c+dc})}else{const dirs=p.type==='rook'?DIR_ROOK:p.type==='bishop'?DIR_BISHOP:DIR_QUEEN;for(const[dr,dc]of dirs){let nr=r+dr,nc=c+dc;while(inB(nr,nc)){mv.push({row:nr,col:nc});if(b[nr][nc])break;nr+=dr;nc+=dc}}}return mv}
 function initState(){const s={board:initBoard(),currentTurn:'white',castlingRights:{whiteKingside:true,whiteQueenside:true,blackKingside:true,blackQueenside:true},enPassantTarget:null,halfMoveClock:0,fullMoveNumber:1,moveHistory:[],posCount:new Map(),wk:{row:7,col:4},bk:{row:0,col:4},hash:0,boardVersion:1};syncHash(s);s.posCount.set(s.hash,1);return s}
-function validateSetupPosition(s){for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=s.board[r][c];if(p&&p.type==='king'){if(p.color==='white')s.wk={row:r,col:c};else s.bk={row:r,col:c}}}const errs=[];const wPieces=[],bPieces=[];for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=s.board[r][c];if(p){if(p.color==='white')wPieces.push(p);else bPieces.push(p)}}const wk=s.wk,bk=s.bk;const wKingCount=wPieces.filter(p=>p.type==='king').length,bKingCount=bPieces.filter(p=>p.type==='king').length;if(wKingCount===0)errs.push(T('setup_no_white_king'));if(bKingCount===0)errs.push(T('setup_no_black_king'));if(wKingCount>1)errs.push(T('setup_white')+T('setup_king_count_over'));if(bKingCount>1)errs.push(T('setup_black')+T('setup_king_count_over'));if(wk&&bk&&Math.abs(wk.row-bk.row)<=1&&Math.abs(wk.col-bk.col)<=1)errs.push(T('setup_kings_adjacent'));const nonMoveColor=OPP_COLOR[s.currentTurn];const nonMoveKing=nonMoveColor==='white'?s.wk:s.bk;if(nonMoveKing&&inCheck(s.board,nonMoveColor,nonMoveKing))errs.push((nonMoveColor==='white'?T('setup_white'):T('setup_black'))+T('setup_check_impossible'));for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=s.board[r][c];if(p&&p.type==='pawn'){if(p.color==='white'&&r===0)errs.push(T('setup_white')+T('setup_pawn_on_rank')+'1'+T('setup_rank')+'('+posAlg({row:r,col:c})+')');if(p.color==='black'&&r===7)errs.push(T('setup_black')+T('setup_pawn_on_rank')+'8'+T('setup_rank')+'('+posAlg({row:r,col:c})+')')}}if(wPieces.length>16)errs.push(T('setup_white')+T('setup_piece_over_limit'));if(bPieces.length>16)errs.push(T('setup_black')+T('setup_piece_over_limit'));if(wPieces.filter(p=>p.type==='pawn').length>8)errs.push(T('setup_white')+T('setup_pawn_over_8'));if(bPieces.filter(p=>p.type==='pawn').length>8)errs.push(T('setup_black')+T('setup_pawn_over_8'));if(wPieces.filter(p=>p.type==='queen').length>9)errs.push(T('setup_white')+T('setup_queen_over_9'));if(bPieces.filter(p=>p.type==='queen').length>9)errs.push(T('setup_black')+T('setup_queen_over_9'));if(wPieces.filter(p=>p.type==='rook').length>10)errs.push(T('setup_white')+T('setup_rook_over_10'));if(bPieces.filter(p=>p.type==='rook').length>10)errs.push(T('setup_black')+T('setup_rook_over_10'));if(wPieces.filter(p=>p.type==='bishop').length>10)errs.push(T('setup_white')+T('setup_bishop_over_10'));if(bPieces.filter(p=>p.type==='bishop').length>10)errs.push(T('setup_black')+T('setup_bishop_over_10'));if(wPieces.filter(p=>p.type==='knight').length>10)errs.push(T('setup_white')+T('setup_knight_over_10'));if(bPieces.filter(p=>p.type==='knight').length>10)errs.push(T('setup_black')+T('setup_knight_over_10'));return errs}
+// v1.0.7: validateSetupPosition now also validates the manual 🔁 castle markers
+// and the ⚡ en-passant marker carried on s.setupCastleMarks (a Set of "r*8+c"
+// keys) and s.setupEpMark ({row,col}|null). Both validations follow the
+// Fischer-Random / Chess960 castling convention (king + rook on the initial
+// rank, king strictly between the two castle-marked rooks of that color, max
+// one marker per side per color). En-passant marker must share a square with
+// an opposite-color pawn on rank 4 (white) or rank 5 (black); only one marker
+// is allowed on the entire board.
+function validateSetupPosition(s){
+  // First pass: locate kings (existing behavior)
+  for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=s.board[r][c];if(p&&p.type==='king'){if(p.color==='white')s.wk={row:r,col:c};else s.bk={row:r,col:c}}}
+  const errs=[];
+  const wPieces=[],bPieces=[];
+  for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=s.board[r][c];if(p){if(p.color==='white')wPieces.push(p);else bPieces.push(p)}}
+  const wk=s.wk,bk=s.bk;
+  const wKingCount=wPieces.filter(p=>p.type==='king').length,bKingCount=bPieces.filter(p=>p.type==='king').length;
+  if(wKingCount===0)errs.push(T('setup_no_white_king'));
+  if(bKingCount===0)errs.push(T('setup_no_black_king'));
+  if(wKingCount>1)errs.push(T('setup_white')+T('setup_king_count_over'));
+  if(bKingCount>1)errs.push(T('setup_black')+T('setup_king_count_over'));
+  if(wk&&bk&&Math.abs(wk.row-bk.row)<=1&&Math.abs(wk.col-bk.col)<=1)errs.push(T('setup_kings_adjacent'));
+  const nonMoveColor=OPP_COLOR[s.currentTurn];
+  const nonMoveKing=nonMoveColor==='white'?s.wk:s.bk;
+  if(nonMoveKing&&inCheck(s.board,nonMoveColor,nonMoveKing))errs.push((nonMoveColor==='white'?T('setup_white'):T('setup_black'))+T('setup_check_impossible'));
+  for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=s.board[r][c];if(p&&p.type==='pawn'){if(p.color==='white'&&r===0)errs.push(T('setup_white')+T('setup_pawn_on_rank')+'1'+T('setup_rank')+'('+posAlg({row:r,col:c})+')');if(p.color==='black'&&r===7)errs.push(T('setup_black')+T('setup_pawn_on_rank')+'8'+T('setup_rank')+'('+posAlg({row:r,col:c})+')')}}
+  if(wPieces.length>16)errs.push(T('setup_white')+T('setup_piece_over_limit'));
+  if(bPieces.length>16)errs.push(T('setup_black')+T('setup_piece_over_limit'));
+  if(wPieces.filter(p=>p.type==='pawn').length>8)errs.push(T('setup_white')+T('setup_pawn_over_8'));
+  if(bPieces.filter(p=>p.type==='pawn').length>8)errs.push(T('setup_black')+T('setup_pawn_over_8'));
+  if(wPieces.filter(p=>p.type==='queen').length>9)errs.push(T('setup_white')+T('setup_queen_over_9'));
+  if(bPieces.filter(p=>p.type==='queen').length>9)errs.push(T('setup_black')+T('setup_queen_over_9'));
+  if(wPieces.filter(p=>p.type==='rook').length>10)errs.push(T('setup_white')+T('setup_rook_over_10'));
+  if(bPieces.filter(p=>p.type==='rook').length>10)errs.push(T('setup_black')+T('setup_rook_over_10'));
+  if(wPieces.filter(p=>p.type==='bishop').length>10)errs.push(T('setup_white')+T('setup_bishop_over_10'));
+  if(bPieces.filter(p=>p.type==='bishop').length>10)errs.push(T('setup_black')+T('setup_bishop_over_10'));
+  if(wPieces.filter(p=>p.type==='knight').length>10)errs.push(T('setup_white')+T('setup_knight_over_10'));
+  if(bPieces.filter(p=>p.type==='knight').length>10)errs.push(T('setup_black')+T('setup_knight_over_10'));
+  // v1.0.7 — Validate 🔁 castle markers and ⚡ en-passant marker
+  _validateSetupCastleMarks(s,errs);
+  _validateSetupEpMark(s,errs);
+  return errs
+}
+
+// v1.0.7: Validate Fischer-Random-style castle markers.
+// Marker source of truth: s.setupCastleMarks (a Set of "r*8+c" string keys).
+// For each marker:
+//   1. The square must hold a rook of SOME color.
+//   2. That rook must be on its initial rank (white: row 7 = rank 1; black: row 0 = rank 8).
+//   3. The same-color king must also be on its initial rank.
+//   4. The rook must be on the correct side of the same-color king:
+//      - kingside (h-side): rook's col > king's col
+//      - queenside (a-side): rook's col < king's col
+//   5. Two same-color rooks on the SAME side of the king cannot both carry markers
+//      (a side has only one castle right).
+// If valid, the corresponding castlingRights[color][side] flag is set true; all
+// other flags are set false. This explicit assignment overrides any prior
+// auto-computed rights — fully manual control per the v1.0.7 spec.
+function _validateSetupCastleMarks(s,errs){
+  if(!errs)return;
+  if(!s.setupCastleMarks||s.setupCastleMarks.size===0){
+    // No markers → no castling rights for either color.
+    s.castlingRights={whiteKingside:false,whiteQueenside:false,blackKingside:false,blackQueenside:false};
+    return;
+  }
+  // Reset all rights — only marker-validated rights will be set true.
+  s.castlingRights={whiteKingside:false,whiteQueenside:false,blackKingside:false,blackQueenside:false};
+  // Group markers by color of the rook on that square.
+  const byColor={white:[],black:[]};
+  for(const key of s.setupCastleMarks){
+    const idx=parseInt(key,10);
+    const r=idx>>3,c=idx&7;
+    const p=s.board[r]&&s.board[r][c];
+    if(!p){errs.push(T('setup_castle_err_not_rook')+' ('+posAlg({row:r,col:c})+')');continue;}
+    if(p.type!=='rook'){errs.push(T('setup_castle_err_not_rook')+' ('+posAlg({row:r,col:c})+')');continue;}
+    byColor[p.color].push({r,c});
+  }
+  // Validate per color
+  for(const color of ['white','black']){
+    const rooks=byColor[color];
+    if(!rooks.length)continue;
+    const king=color==='white'?s.wk:s.bk;
+    if(!king){errs.push(T('setup_castle_err_king_missing'));continue;}
+    const initRow=color==='white'?7:0;
+    if(king.row!==initRow){errs.push(T('setup_castle_err_wrong_rank'));continue;}
+    // Partition rooks into kingside (col>king.col) and queenside (col<king.col).
+    // Rooks on the same column as the king are illegal (no side).
+    const ksr=[],qsr=[];
+    for(const rook of rooks){
+      if(rook.r!==initRow){errs.push(T('setup_castle_err_wrong_rank')+' ('+posAlg({row:rook.r,col:rook.c})+')');continue;}
+      if(rook.c>king.col)ksr.push(rook);
+      else if(rook.c<king.col)qsr.push(rook);
+      else errs.push(T('setup_castle_err_wrong_side')+' ('+posAlg({row:rook.r,col:rook.c})+')');
+    }
+    if(ksr.length>1)errs.push(T('setup_castle_err_dup_side')+' ('+(color==='white'?'O-O':'o-o')+')');
+    if(qsr.length>1)errs.push(T('setup_castle_err_dup_side')+' ('+(color==='white'?'O-O-O':'o-o-o')+')');
+    // Mark valid rights (no error if exactly one rook on the side)
+    if(ksr.length===1)s.castlingRights[color+'Kingside']=true;
+    if(qsr.length===1)s.castlingRights[color+'Queenside']=true;
+  }
+}
+
+// v1.0.7: Validate the ⚡ en-passant marker.
+// Marker source of truth: s.setupEpMark ({row,col}|null) — the square where the
+// ⚡ marker is shown, which is the square of the pawn that just double-stepped
+// (the opponent's pawn that can be captured en passant).
+// Rules:
+//   1. At most one marker on the entire board.
+//   2. The marker must share its square with a pawn.
+//   3. That pawn must be on rank 4 (white pawn → row 4) or rank 5 (black pawn → row 3).
+//   4. The pawn's color must be the OPPOSITE of s.currentTurn.
+//   5. v1.0.7 PHASE 7 NEW: There must be an adjacent enemy pawn that can
+//      actually capture en passant. The enemy pawn must be on the SAME rank
+//      as the marked pawn, on an adjacent file (col±1), and of the color
+//      that is the side to move (s.currentTurn). Without this check, the user
+//      could place a ⚡ marker on a pawn that has no enemy pawn nearby — the
+//      en-passant target would be set but never usable, which is misleading.
+// If valid, s.enPassantTarget is set to the SKIPPED square (the square an
+// enemy pawn would land on after capturing en passant).
+function _validateSetupEpMark(s,errs){
+  if(!errs)return;
+  if(!s.setupEpMark){s.enPassantTarget=null;return;}
+  const {row,col}=s.setupEpMark;
+  const p=s.board[row]&&s.board[row][col];
+  if(!p||p.type!=='pawn'){errs.push(T('setup_ep_err_no_pawn')+' ('+posAlg({row,col})+')');s.enPassantTarget=null;return;}
+  if(p.color==='white'&&row!==4){errs.push(T('setup_ep_err_wrong_rank')+' ('+posAlg({row,col})+')');s.enPassantTarget=null;return;}
+  if(p.color==='black'&&row!==3){errs.push(T('setup_ep_err_wrong_rank')+' ('+posAlg({row,col})+')');s.enPassantTarget=null;return;}
+  if(p.color===s.currentTurn){errs.push(T('setup_ep_err_wrong_color')+' ('+posAlg({row,col})+')');s.enPassantTarget=null;return;}
+  // v1.0.7 PHASE 7: Check for an adjacent enemy pawn that can capture en passant.
+  // The capturing pawn must be on the SAME rank as the marked pawn, on an
+  // adjacent file (col-1 or col+1), and of the side-to-move color (s.currentTurn).
+  const capturerColor=s.currentTurn; // the side that would capture
+  let _hasCapturer=false;
+  for(const dc of [-1,1]){
+    const nc=col+dc;
+    if(nc<0||nc>7)continue;
+    const cp=s.board[row]&&s.board[row][nc];
+    if(cp&&cp.type==='pawn'&&cp.color===capturerColor){_hasCapturer=true;break;}
+  }
+  if(!_hasCapturer){
+    errs.push(T('setup_ep_err_no_capturer')+' ('+posAlg({row,col})+')');
+    s.enPassantTarget=null;return;
+  }
+  // v1.0.7 PHASE 6: en-passant target = the SKIPPED square.
+  const epTargetRow=p.color==='white'?row+1:row-1;
+  s.enPassantTarget={row:epTargetRow,col};
+}
+
+// v1.0.7 PHASE 3: Compute the visible 🔁 castle-rights marker set from the
+// current game state's castlingRights + king/rook positions. Used by the
+// renderer to display 🔁 markers in ALL modes (setup, play, review).
+//
+// In setup mode, the user's setupCastleMarks (Set of "r*8+c" string keys) is
+// the source of truth and is returned directly — that's the input.
+// In play/review mode, we derive markers FROM castlingRights:
+//   - For each side with castling rights, find the closest same-color rook on
+//     the relevant side of the king on the initial rank. If found, mark it.
+// This means markers automatically appear/disappear as castling rights are
+// gained/lost during play, satisfying the user's requirement that markers
+// "auto-remove when no longer eligible per the rules".
+function computeVisibleCastleMarks(s){
+  // Setup-mode input takes precedence
+  if(s.setupCastleMarks&&s.setupCastleMarks instanceof Set&&s.setupCastleMarks.size>0){
+    return s.setupCastleMarks;
+  }
+  const marks=new Set();
+  if(!s.castlingRights)return marks;
+  // White
+  if(s.wk&&s.wk.row===7){
+    const wkCol=s.wk.col;
+    if(s.castlingRights.whiteKingside){
+      // Find closest white rook to the right of king on row 7
+      for(let c=wkCol+1;c<8;c++){
+        const p=s.board[7][c];
+        if(p&&p.type==='rook'&&p.color==='white'){marks.add(String(7*8+c));break;}
+      }
+    }
+    if(s.castlingRights.whiteQueenside){
+      for(let c=wkCol-1;c>=0;c--){
+        const p=s.board[7][c];
+        if(p&&p.type==='rook'&&p.color==='white'){marks.add(String(7*8+c));break;}
+      }
+    }
+  }
+  // Black
+  if(s.bk&&s.bk.row===0){
+    const bkCol=s.bk.col;
+    if(s.castlingRights.blackKingside){
+      for(let c=bkCol+1;c<8;c++){
+        const p=s.board[0][c];
+        if(p&&p.type==='rook'&&p.color==='black'){marks.add(String(0*8+c));break;}
+      }
+    }
+    if(s.castlingRights.blackQueenside){
+      for(let c=bkCol-1;c>=0;c--){
+        const p=s.board[0][c];
+        if(p&&p.type==='rook'&&p.color==='black'){marks.add(String(0*8+c));break;}
+      }
+    }
+  }
+  return marks;
+}
+
+// v1.0.7 PHASE 3: Compute the visible ⚡ en-passant marker from the current
+// game state's enPassantTarget. Used by the renderer to display ⚡ in ALL
+// modes (setup, play, review).
+//
+// In setup mode, the user's setupEpMark ({row,col}|null) is the source of
+// truth (the pawn's square). setupEpMark is a setup-only transient field:
+// toggleSetup() sets it on entry and clears it on exit, and initState()/
+// fenToState()/cloneS() never populate it. So s.setupEpMark is truthy IFF
+// we're in setup mode — no separate setupMode guard is needed.
+// In play/review mode, we derive the marker FROM enPassantTarget (the square
+// BEHIND the pawn): convert it back to the pawn's current square. A white
+// pawn on row 4 has enPassantTarget on row 3; a black pawn on row 3 has
+// enPassantTarget on row 2.
+//
+// Returns {row,col}|null — the square where the ⚡ badge should be rendered
+// (the pawn's current square, not the FEN target square).
+function computeVisibleEpMark(s){
+  // Setup-mode input: setupEpMark is the user's marker placement (pawn's
+  // square). It is truthy only while setupMode===true (see lifecycle above).
+  if(s.setupEpMark)return s.setupEpMark;
+  if(!s.enPassantTarget)return null;
+  const {row,col}=s.enPassantTarget;
+  // Derive the pawn's square from enPassantTarget (the skipped square) and
+  // verify the pawn is actually there with the correct color. The
+  // double-stepped pawn is the OPPOSITE color of the side to move.
+  if(row===5){
+    // White pawn just double-stepped; pawn sits on row 4
+    const p=s.board[4]&&s.board[4][col];
+    if(p&&p.type==='pawn'&&p.color==='white'){
+      if(s.currentTurn==='black')return {row:4,col};
+    }
+  }else if(row===2){
+    // Black pawn just double-stepped; pawn sits on row 3
+    const p=s.board[3]&&s.board[3][col];
+    if(p&&p.type==='pawn'&&p.color==='black'){
+      if(s.currentTurn==='white')return {row:3,col};
+    }
+  }
+  return null;
+}
 // Piece objects are immutable (makeMv creates new objects for promotions)
 // Only clone array structure — reduces 64 object copies to 8 array slices per clone
 function cloneB(b){return b.map(r=>r.slice())}
@@ -789,12 +1247,32 @@ else if(p.type==='king'){for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++)if((d
 // `Math.abs(to.col-from.col)===2` check is still used as a fallback for
 // moves reconstructed from PGN that don't carry the flag.
 const hr=co==='white'?7:0;
-if(typeof gameVariant!=='undefined'&&gameVariant==='chess960'&&typeof isChess960CastlingLegal==='function'){
+// v1.0.7 PHASE 3: ALWAYS use the Chess960 castling rule (Fischer Random castling).
+// First-principles analysis: the user reported "有合法的🔁、⚡标记的棋子在对局中
+// 没有获得相应的可行走法" — when the user sets up a position via Setup mode and
+// marks a rook with 🔁 that is NOT on the standard h1/a1 square, the old
+// standard-chess-only castling generator (which hard-coded king on e1, rook on
+// h1/a1) would NOT generate castling moves, even though castlingRights were
+// correctly set by _validateSetupCastleMarks.
+//
+// The Chess960 castling rule (Fischer Random) is a SUPERSET of the standard
+// chess castling rule: when the king is on e1 and the rook is on h1, Chess960
+// castling produces the exact same result (king to g1, rook to f1) as standard
+// castling. So switching to Chess960 castling unconditionally is SAFE and does
+// not change the behavior of standard-chess games.
+//
+// This also fixes a latent bug: in standard chess, if the user uses Setup mode
+// to place the king on e1 and a rook on h1 (with 🔁 marker), the old code path
+// would only generate castling if `gameVariant === 'chess960'`, which is not
+// set when the user enters Setup mode from a standard-chess game. Now the
+// Chess960 rule is used universally, so castling works regardless of variant.
+if(typeof isChess960CastlingLegal==='function'){
   if(r===hr){
     if(s.castlingRights[co+'Kingside']&&isChess960CastlingLegal(s,co,'kingside'))mv.push({row:hr,col:6,castle:'kingside'});
     if(s.castlingRights[co+'Queenside']&&isChess960CastlingLegal(s,co,'queenside'))mv.push({row:hr,col:2,castle:'queenside'});
   }
 }else{
+  // Fallback (only used if chess960.js failed to load): original standard-chess logic
   if(r===hr&&c===4){const cr=s.castlingRights;if(cr[co+'Kingside']&&!b[hr][5]&&!b[hr][6]&&b[hr][7]&&b[hr][7].type==='rook'&&b[hr][7].color===co&&!sqAttackedFast(b,{row:hr,col:4},opp)&&!sqAttackedFast(b,{row:hr,col:5},opp)&&!sqAttackedFast(b,{row:hr,col:6},opp))mv.push({row:hr,col:6,castle:'kingside'});if(cr[co+'Queenside']&&!b[hr][3]&&!b[hr][2]&&!b[hr][1]&&b[hr][0]&&b[hr][0].type==='rook'&&b[hr][0].color===co&&!sqAttackedFast(b,{row:hr,col:4},opp)&&!sqAttackedFast(b,{row:hr,col:3},opp)&&!sqAttackedFast(b,{row:hr,col:2},opp))mv.push({row:hr,col:2,castle:'queenside'})}
 }}
 else{const dirs=p.type==='rook'?DIR_ROOK:p.type==='bishop'?DIR_BISHOP:DIR_QUEEN;for(const[dr,dc]of dirs){let nr=r+dr,nc=c+dc;while(inB(nr,nc)){if(!b[nr][nc])mv.push({row:nr,col:nc});else{if(b[nr][nc].color!==co)mv.push({row:nr,col:nc});break}nr+=dr;nc+=dc}}}
@@ -856,21 +1334,26 @@ function _castleSide(mv){
   // check the DESTINATION COLUMN rather than the distance.
   // This is only applied when the piece is a king on its home rank (row 7
   // for white, row 0 for black) moving to col 6 or col 2 — the castling
-  // destinations. A king moving to g1/c1 for other reasons (e.g. a normal
-  // one-square king move from f1 to g1) would NOT be on the home rank with
-  // a 2+ column shift in standard chess, so this is safe.
+  // destinations.
+  //
+  // v1.0.7 PHASE 4: In standard chess (gameVariant !== 'chess960'), keep
+  // the `Math.abs(to.col-from.col)>=2` requirement — a 1-col king move to
+  // g1/c1 in standard chess is a normal king move (the king cannot legally
+  // be on f1/d1 with castling rights still active in standard chess, since
+  // moving the king clears all castling rights). The `>=2` check prevents
+  // false-positive castling detection for normal king moves.
+  // In Chess960 mode, the king may start on col 5 (f1) and castle kingside
+  // to col 6 (g1) — a 1-col move — so we relax the requirement. The
+  // explicit mv.castle flag (set by pseudoMoves) is the primary signal;
+  // this fallback covers moves reconstructed from UCI/PGN that don't carry
+  // the flag.
   if(mv.piece.type==='king'){
     const _homeRow=mv.piece.color==='white'?7:0;
     if(mv.from.row===_homeRow&&mv.to.row===_homeRow){
-      // Standard chess: king moves 2 cols (e1→g1 or e1→c1)
-      // Chess960: king may move 1-5 cols to reach g1/c1
-      // We require the move to be at least 2 cols for the fallback, because
-      // a 1-col king move (e.g. e1→f1) is a normal king move, not castling.
-      // The explicit mv.castle flag (set by pseudoMoves) covers the 1-col
-      // Chess960 case; this fallback covers the 2+ col case for moves
-      // reconstructed from PGN or UCI that don't carry the flag.
-      if(mv.to.col===6&&Math.abs(mv.to.col-mv.from.col)>=2)return 'kingside';
-      if(mv.to.col===2&&Math.abs(mv.to.col-mv.from.col)>=2)return 'queenside';
+      const _is960=(typeof gameVariant!=='undefined'&&gameVariant==='chess960')||(typeof isChess960Mode==='function'&&isChess960Mode());
+      const _minDist=_is960?1:2;
+      if(mv.to.col===6&&Math.abs(mv.to.col-mv.from.col)>=_minDist)return 'kingside';
+      if(mv.to.col===2&&Math.abs(mv.to.col-mv.from.col)>=_minDist)return 'queenside';
     }
   }
   return null;
@@ -894,13 +1377,19 @@ const _cs=_castleSide(mv);
 let _rookFrom=-1,_rookTo=-1,_savedRook=null;
 if(_cs){
   // Compute rook from/to BEFORE moving the king, and save the rook piece.
-  if(typeof gameVariant!=='undefined'&&gameVariant==='chess960'&&typeof chess960CastlingRookMove==='function'){
+  // v1.0.7 PHASE 3: Always use Chess960 castling rook move logic (same
+  // first-principles rationale as pseudoMoves — Chess960 is a superset of
+  // standard chess castling). This ensures that when the user has used Setup
+  // mode to place a king + rook with 🔁 marker on non-standard squares,
+  // castling actually works in the resulting game.
+  if(typeof chess960CastlingRookMove==='function'){
     const rm=chess960CastlingRookMove(s,piece.color,_cs);
     if(rm&&rm.rookFrom!==rm.rookTo){
       _rookFrom=rm.rookFrom;_rookTo=rm.rookTo;
       _savedRook=ns.board[rm.row][rm.rookFrom]; // save rook before king overwrites it
     }
   }else{
+    // Fallback (only if chess960.js failed to load): standard chess rook positions
     if(_cs==='kingside'){_rookFrom=7;_rookTo=5;}
     else{_rookFrom=0;_rookTo=3;}
     _savedRook=ns.board[from.row][_rookFrom]; // save rook
@@ -910,12 +1399,43 @@ if(_cs){
 // is the castling rook in Chess960, which is NOT captured — it moves).
 // For non-castling moves, capPiece is the actual captured piece (if any).
 const capPiece=_cs?null:ns.board[to.row][to.col];
-ns.board[to.row][to.col]=ns.board[from.row][from.col];
-ns.board[from.row][from.col]=null;
+// v1.0.7 PHASE 17 FIX (Chess960 "king self-capture" bug): When the king is
+// ALREADY on its castling destination square (e.g. SP-ID where white king
+// starts on g1), `from === to` (from.row===to.row && from.col===to.col).
+// Per the Fischer Random Chess rules (see uploaded reference PDF
+// "菲舍尔任意制国际象棋的王车易位规则"): "只动王，车不动 / 只动车，王不动 /
+// 原地易位 — 如果王或车的初始位置刚好就是它们易位后的目标格，只要满足所有易位
+// 条件，依然可以宣布易位，此时该棋子'原地不动'，另一枚棋子移动到指定位置".
+//
+// The previous code unconditionally ran:
+//     ns.board[to.row][to.col] = ns.board[from.row][from.col];  // self-copy
+//     ns.board[from.row][from.col] = null;                       // ← BUG: nulled the king
+// When from === to, the second line NULLS the king's own square AFTER the
+// self-copy. The king vanishes, and downstream code sees an empty board.
+//
+// Fix: when castling AND from === to (king already on target), SKIP the
+// king move entirely (the rook move below handles the actual board change).
+// The king's piece object remains untouched at its square, the rook moves
+// from its source to its destination, and king pos / castling-rights are
+// still updated correctly at the king-handling block further below.
+if(_cs&&from.row===to.row&&from.col===to.col){
+  // King stays put — only the rook moves. Fall through to the rook-placement
+  // block (which uses _savedRook saved BEFORE this branch).
+}else{
+  ns.board[to.row][to.col]=ns.board[from.row][from.col];
+  ns.board[from.row][from.col]=null;
+}
 if(piece.type==='pawn'&&s.enPassantTarget&&to.row===s.enPassantTarget.row&&to.col===s.enPassantTarget.col){const cr=piece.color==='white'?to.row+1:to.row-1;const epP=ns.board[cr][to.col];if(epP&&epP.type==='pawn'&&epP.color!==piece.color){ns.board[cr][to.col]=null}else if(epP){console.error('[En Passant Bug] Target set but captured piece is not an opposing pawn:',epP)}}
 // v1.0.6 FIX: Move the rook for castling. _savedRook was saved BEFORE the
 // king moved, so it's the actual rook piece (not the king that overwrote
 // it). Place it at the rook destination, clear the rook source.
+// v1.0.7 PHASE 17 FIX: When `from === to` (king already on target square),
+// the king's square was NOT cleared above. The rook's source square may
+// STILL be different from the king's square (rook is on a different col),
+// so we still need to clear it. The existing `_rookFrom !== to.col` guard
+// already handles the case where rook source === king destination (which
+// happens when the rook source === the king's castling target — in that
+// case the king moved to that square, so we must NOT null it).
 if(_cs&&_savedRook&&_rookFrom>=0&&_rookTo>=0){
   ns.board[from.row][_rookTo]=_savedRook;
   // Only clear rook source if it's different from king destination (the
@@ -929,7 +1449,11 @@ if(_cs&&_savedRook&&_rookFrom>=0&&_rookTo>=0){
 if(promotion)ns.board[to.row][to.col]={type:promotion,color:piece.color};
 if(piece.type==='king'){if(piece.color==='white'){ns.wk={row:to.row,col:to.col};ns.castlingRights.whiteKingside=false;ns.castlingRights.whiteQueenside=false}else{ns.bk={row:to.row,col:to.col};ns.castlingRights.blackKingside=false;ns.castlingRights.blackQueenside=false}}
 if(piece.type==='rook'){
-if(typeof gameVariant!=='undefined'&&gameVariant==='chess960'&&typeof findCastlingRooks==='function'){
+// v1.0.7 PHASE 3: Always use Chess960 rook-position detection (findCastlingRooks)
+// so that castling rights are correctly cleared when a rook that holds castle
+// rights moves — even in non-Chess960 games where the user has used Setup mode
+// to place a rook with 🔁 marker on a non-standard square.
+if(typeof findCastlingRooks==='function'){
   const rooks=findCastlingRooks(s.board,piece.color);
   if(rooks){
     if(piece.color==='white'){if(from.col===rooks.kingside)ns.castlingRights.whiteKingside=false;if(from.col===rooks.queenside)ns.castlingRights.whiteQueenside=false;}
@@ -940,7 +1464,7 @@ if(typeof gameVariant!=='undefined'&&gameVariant==='chess960'&&typeof findCastli
 }
 }
 if(capPiece&&capPiece.type==='rook'){
-if(typeof gameVariant!=='undefined'&&gameVariant==='chess960'&&typeof findCastlingRooks==='function'){
+if(typeof findCastlingRooks==='function'){
   const rooks=findCastlingRooks(s.board,capPiece.color);
   if(rooks){
     if(capPiece.color==='white'){if(to.col===rooks.kingside)ns.castlingRights.whiteKingside=false;if(to.col===rooks.queenside)ns.castlingRights.whiteQueenside=false;}
@@ -1011,13 +1535,17 @@ if(!piece||!s.board[from.row]||!s.board[from.row][from.col])return null;
 const _cs=_castleSide(mv);
 let _rookFrom=-1,_rookTo=-1,_savedRook=null;
 if(_cs){
-  if(typeof gameVariant!=='undefined'&&gameVariant==='chess960'&&typeof chess960CastlingRookMove==='function'){
+  // v1.0.7 PHASE 3: Always use Chess960 castling rook move logic (Chess960
+  // castling is a superset of standard chess castling). See makeMv for the
+  // detailed first-principles rationale.
+  if(typeof chess960CastlingRookMove==='function'){
     const rm=chess960CastlingRookMove(s,piece.color,_cs);
     if(rm&&rm.rookFrom!==rm.rookTo){
       _rookFrom=rm.rookFrom;_rookTo=rm.rookTo;
       _savedRook=s.board[rm.row][rm.rookFrom];
     }
   }else{
+    // Fallback (only if chess960.js failed to load): standard chess rook positions
     if(_cs==='kingside'){_rookFrom=7;_rookTo=5;}
     else{_rookFrom=0;_rookTo=3;}
     _savedRook=s.board[from.row][_rookFrom];
@@ -1025,6 +1553,30 @@ if(_cs){
 }
 // For castling, there is no capture (capPiece would be the rook in Chess960).
 const capPiece=_cs?null:s.board[to.row][to.col];
+// v1.0.7 PHASE 18 Task 3 (bug fix): Snapshot castling-rights delta BEFORE
+// mutating the board. Previously, steps 6 & 7 called findCastlingRooks(s.board)
+// AFTER the rook had already moved (step 3) or been captured (step 1), so the
+// rook was no longer at its source square and findCastlingRooks would not
+// identify it — causing the castling right to NOT be cleared. This was a
+// latent bug masked by single-ply search, but would produce phantom castling
+// moves in any future deeper JS-side search. By snapshotting here (pre-mutation),
+// we correctly identify which side the moving/captured rook belongs to.
+let _movingRookSide=null;   // 'kingside' | 'queenside' | null
+let _capturedRookSide=null;
+if(!_cs && piece.type==='rook' && typeof findCastlingRooks==='function'){
+  const _r=findCastlingRooks(s.board,piece.color);
+  if(_r){
+    if(_r.kingside!==null&&_r.kingside===from.col)_movingRookSide='kingside';
+    else if(_r.queenside!==null&&_r.queenside===from.col)_movingRookSide='queenside';
+  }
+}
+if(!_cs && capPiece && capPiece.type==='rook' && typeof findCastlingRooks==='function'){
+  const _r=findCastlingRooks(s.board,capPiece.color);
+  if(_r){
+    if(_r.kingside!==null&&_r.kingside===to.col)_capturedRookSide='kingside';
+    else if(_r.queenside!==null&&_r.queenside===to.col)_capturedRookSide='queenside';
+  }
+}
 // Capture undo info
 const undo={
 from:{r:from.row,c:from.col},to:{r:to.row,c:to.col},
@@ -1044,8 +1596,17 @@ oldMoveHistoryLength:s.moveHistory?s.moveHistory.length:0,
 isBlackMove:piece.color==='black'
 };
 // 1. Move piece (king for castling)
-s.board[to.row][to.col]=s.board[from.row][from.col];
-s.board[from.row][from.col]=null;
+// v1.0.7 PHASE 17 FIX (Chess960 "king self-capture" bug — see makeMv for full
+// analysis): when castling AND from === to (king already on its castling
+// destination square, e.g. SP-ID where white king starts on g1), do NOT
+// null the king's own square. Skip the king move entirely; the rook move
+// below handles the only board change for this castling.
+if(_cs&&from.row===to.row&&from.col===to.col){
+  // King stays put — only the rook moves (handled in step 3 below).
+}else{
+  s.board[to.row][to.col]=s.board[from.row][from.col];
+  s.board[from.row][from.col]=null;
+}
 // 2. En passant capture
 if(piece.type==='pawn'&&s.enPassantTarget&&to.row===s.enPassantTarget.row&&to.col===s.enPassantTarget.col){
 const cr=piece.color==='white'?to.row+1:to.row-1;
@@ -1061,7 +1622,15 @@ if(_cs&&_savedRook&&_rookFrom>=0&&_rookTo>=0){
   if(_rookFrom!==to.col){
     s.board[from.row][_rookFrom]=null;
   }
-  undo.castlingRook={from:{r:from.row,c:_rookFrom},to:{r:from.row,c:_rookTo}};
+  // v1.0.7 PHASE 18 Task 3 (critical bug fix): Save the rook PIECE in the undo
+  // record, not just its from/to coordinates. Previously, unmakeMv read the rook
+  // back from s.board[cr.to] — but step 2 of unmakeMv may have already
+  // overwritten cr.to with the king (when the rook's destination coincides
+  // with the king's source square, which happens in ~half of all Chess960
+  // SP-ID positions, e.g. white king on f1 castling kingside: rook goes to f1
+  // = king's source). Saving the piece here lets unmakeMv restore correctly
+  // without relying on the board state at unmake time.
+  undo.castlingRook={from:{r:from.row,c:_rookFrom},to:{r:from.row,c:_rookTo},piece:{type:_savedRook.type,color:_savedRook.color}};
 }
 // 4. Promotion
 if(promotion)s.board[to.row][to.col]={type:promotion,color:piece.color};
@@ -1071,32 +1640,41 @@ if(piece.color==='white'){s.wk={row:to.row,col:to.col};s.castlingRights.whiteKin
 else{s.bk={row:to.row,col:to.col};s.castlingRights.blackKingside=false;s.castlingRights.blackQueenside=false}
 }
 // 6. Update castling rights for rook moves
-if(piece.type==='rook'){
-if(typeof gameVariant!=='undefined'&&gameVariant==='chess960'&&typeof findCastlingRooks==='function'){
-  const rooks=findCastlingRooks(s.board,piece.color);
-  if(rooks){
-    if(piece.color==='white'){if(from.col===rooks.kingside)s.castlingRights.whiteKingside=false;if(from.col===rooks.queenside)s.castlingRights.whiteQueenside=false;}
-    else{if(from.col===rooks.kingside)s.castlingRights.blackKingside=false;if(from.col===rooks.queenside)s.castlingRights.blackQueenside=false;}
+// v1.0.7 PHASE 18 Task 3 (bug fix): Use the pre-mutation snapshot
+// (_movingRookSide) instead of calling findCastlingRooks again. The old code
+// called findCastlingRooks(s.board) AFTER the rook had already moved, so it
+// could not find the rook at from.col and the castling right was NOT cleared.
+// This also removes two redundant findCastlingRooks scans per rook move/capture
+// (a small perf win).
+if(piece.type==='rook'&&_movingRookSide){
+  if(piece.color==='white'){
+    if(_movingRookSide==='kingside')s.castlingRights.whiteKingside=false;
+    else s.castlingRights.whiteQueenside=false;
+  }else{
+    if(_movingRookSide==='kingside')s.castlingRights.blackKingside=false;
+    else s.castlingRights.blackQueenside=false;
   }
-}else{
+}else if(piece.type==='rook'&&!_movingRookSide){
+  // Fallback: chess960.js not loaded OR rook not on a castling source square.
+  // Use standard-chess rook positions as a safe default.
   if(from.row===7&&from.col===0)s.castlingRights.whiteQueenside=false;
   if(from.row===7&&from.col===7)s.castlingRights.whiteKingside=false;
   if(from.row===0&&from.col===0)s.castlingRights.blackQueenside=false;
   if(from.row===0&&from.col===7)s.castlingRights.blackKingside=false;
 }
-}
 // 7. Update castling rights for rook captures
-if(capPiece&&capPiece.type==='rook'){
-if(typeof gameVariant!=='undefined'&&gameVariant==='chess960'&&typeof findCastlingRooks==='function'){
-  const rooks=findCastlingRooks(s.board,capPiece.color);
-  if(rooks){
-    if(capPiece.color==='white'){if(to.col===rooks.kingside)s.castlingRights.whiteKingside=false;if(to.col===rooks.queenside)s.castlingRights.whiteQueenside=false;}
-    else{if(to.col===rooks.kingside)s.castlingRights.blackKingside=false;if(to.col===rooks.queenside)s.castlingRights.blackQueenside=false;}
+if(capPiece&&capPiece.type==='rook'&&_capturedRookSide){
+  if(capPiece.color==='white'){
+    if(_capturedRookSide==='kingside')s.castlingRights.whiteKingside=false;
+    else s.castlingRights.whiteQueenside=false;
+  }else{
+    if(_capturedRookSide==='kingside')s.castlingRights.blackKingside=false;
+    else s.castlingRights.blackQueenside=false;
   }
-}else{
+}else if(capPiece&&capPiece.type==='rook'&&!_capturedRookSide){
+  // Fallback: standard-chess rook positions.
   if(capPiece.color==='white'){if(to.row===7&&to.col===0)s.castlingRights.whiteQueenside=false;if(to.row===7&&to.col===7)s.castlingRights.whiteKingside=false}
   else{if(to.row===0&&to.col===0)s.castlingRights.blackQueenside=false;if(to.row===0&&to.col===7)s.castlingRights.blackKingside=false}
-}
 }
 // 8. Set en passant target (only if an enemy pawn can actually capture)
 const oldEP=s.enPassantTarget;
@@ -1150,14 +1728,51 @@ const curCount=s.posCount.get(s.hash)||1;
 if(curCount<=1)s.posCount.delete(s.hash);else s.posCount.set(s.hash,curCount-1);
 // 2. Restore board
 const f=undo.from,t=undo.to;
-// Restore moved piece (original piece, not promoted)
-s.board[f.r][f.c]={...undo.piece};
-// Restore captured piece at destination
-if(undo.capPiece)s.board[t.r][t.c]={...undo.capPiece};else s.board[t.r][t.c]=null;
+// v1.0.7 PHASE 17 FIX: Detect the "king already on target" castling case
+// (from === to). Per the makeMv fix, in that scenario the king's square was
+// never cleared or overwritten by the king move — only the rook moved. So
+// unmake must NOT overwrite the king's square (which is also the to square)
+// with undo.piece OR null it via the capPiece branch. Detect this case via
+// undo.castlingRook presence + from===to.
+const _kingStayedPut=!!undo.castlingRook&&f.r===t.r&&f.c===t.c;
+// Restore moved piece (original piece, not promoted) at the from square.
+// Skip when the king stayed put — its piece is already at f===t.
+if(!_kingStayedPut){
+  s.board[f.r][f.c]={...undo.piece};
+  // Restore captured piece at destination (or null if no capture)
+  if(undo.capPiece)s.board[t.r][t.c]={...undo.capPiece};else s.board[t.r][t.c]=null;
+}
 // Restore en passant captured piece
 if(undo.epCaptured){const ep=undo.epCaptured;s.board[ep.r][ep.c]={...ep.piece};}
 // Restore castling rook
-if(undo.castlingRook){const cr=undo.castlingRook;s.board[cr.from.r][cr.from.c]=s.board[cr.to.r][cr.to.c];s.board[cr.to.r][cr.to.c]=null;}
+// v1.0.7 PHASE 18 Task 3 (critical bug fix): Restore the rook from the saved
+// piece in undo.castlingRook.piece, NOT by reading s.board[cr.to]. The old
+// code did: s.board[cr.from] = s.board[cr.to]; s.board[cr.to] = null;
+// This read the rook from its destination — but step 2 above may have already
+// overwritten cr.to with the king (when cr.to === f, i.e. the rook's
+// destination is the king's source square, which happens in ~half of all
+// Chess960 SP-ID positions). The old code would then copy the KING to the
+// rook's source and null the king's square — silently corrupting the board,
+// king position, and search state.
+//
+// The fix: use the saved piece. Also, only null cr.to if it does NOT coincide
+// with the king's source square f — because step 2 already restored the king
+// there (or, in the king-stayed-put case, the king was never moved). Nulling
+// f would remove the king.
+if(undo.castlingRook){
+  const cr=undo.castlingRook;
+  // Restore the rook at its source square from the saved piece.
+  if(cr.piece)s.board[cr.from.r][cr.from.c]={type:cr.piece.type,color:cr.piece.color};
+  else s.board[cr.from.r][cr.from.c]=null;
+  // Clear the rook's destination — UNLESS it coincides with the king's source
+  // (f), because step 2 already placed the king there (or the king never
+  // moved in the stayed-put case). Nulling it would remove the king.
+  // Also skip when the rook's destination === rook's source (rook didn't
+  // move, e.g. SP-ID where rook starts on its castling target).
+  if(!(cr.to.r===f.r&&cr.to.c===f.c)&&!(cr.to.r===cr.from.r&&cr.to.c===cr.from.c)){
+    s.board[cr.to.r][cr.to.c]=null;
+  }
+}
 // 3. Restore king positions
 s.wk=undo.oldWk?{row:undo.oldWk.r,col:undo.oldWk.c}:null;
 s.bk=undo.oldBk?{row:undo.oldBk.r,col:undo.oldBk.c}:null;
@@ -1397,20 +2012,34 @@ function computeHash(s){
 // Used as fallback when incremental updates may be unreliable
 function syncHash(s){s.hash=computeHash(s)}
 
-// Recompute castling rights from board position (used after setup mode edits)
-function recomputeCastlingRights(s){
-s.castlingRights={whiteKingside:false,whiteQueenside:false,blackKingside:false,blackQueenside:false};
-if(s.board[7]&&s.board[7][4]&&s.board[7][4].type==='king'&&s.board[7][4].color==='white'&&s.board[7][7]&&s.board[7][7].type==='rook'&&s.board[7][7].color==='white')s.castlingRights.whiteKingside=true;
-if(s.board[7]&&s.board[7][4]&&s.board[7][4].type==='king'&&s.board[7][4].color==='white'&&s.board[7][0]&&s.board[7][0].type==='rook'&&s.board[7][0].color==='white')s.castlingRights.whiteQueenside=true;
-if(s.board[0]&&s.board[0][4]&&s.board[0][4].type==='king'&&s.board[0][4].color==='black'&&s.board[0][7]&&s.board[0][7].type==='rook'&&s.board[0][7].color==='black')s.castlingRights.blackKingside=true;
-if(s.board[0]&&s.board[0][4]&&s.board[0][4].type==='king'&&s.board[0][4].color==='black'&&s.board[0][0]&&s.board[0][0].type==='rook'&&s.board[0][0].color==='black')s.castlingRights.blackQueenside=true;
-}
+// v1.0.7: recomputeCastlingRights has been REMOVED. The v1.0.6 auto-assignment
+// of castling rights ("when king + rook are on standard starting squares,
+// rights are auto-granted") is now superseded by fully manual control via
+// the 🔁 castle markers in setup mode (see _validateSetupCastleMarks). The
+// function's old behavior is preserved ONLY for the initial standard
+// position (initState) and Chess960 starting positions (initChess960State),
+// which still construct castlingRights={all:true} directly. For all other
+// setup-mode edits, castlingRights start at {all:false} and are validated
+// against the markers when the user taps "Done".
+// This avoids stale rights being silently retained after the user clears
+// the board or removes the king — the previous root cause of "phantom
+// castling" bugs reported during v1.0.6 QA.
 
-// Refresh game state after setup mode piece placement
+// Refresh game state after setup mode piece placement.
+// v1.0.7: No longer touches castlingRights — they are now owned entirely by
+// the 🔁 marker validation pass. We DO still reset enPassantTarget here
+// because en-passant is a transient state that doesn't survive board edits.
+// (The ⚡ marker is re-applied on "Done" via _validateSetupEpMark.)
 function _refreshStateAfterSetup(s){
 s.wk=null;s.bk=null;s.enPassantTarget=null;
 for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=s.board[r][c];if(p){if(p.type==='king'&&p.color==='white')s.wk={row:r,col:c};if(p.type==='king'&&p.color==='black')s.bk={row:r,col:c};}}
-recomputeCastlingRights(s);
+// v1.0.7: When the board is mutated (place/remove piece, clear, reset), any
+// previously-applied 🔁 marker may now point at a square that no longer holds
+// a rook. We DON'T auto-delete the marker — the validation pass on "Done"
+// will surface the error and let the user fix it. But we DO need to ensure
+// castlingRights are not left in a stale "true" state from a prior
+// validation pass. Reset them here; they'll be re-derived on "Done".
+s.castlingRights={whiteKingside:false,whiteQueenside:false,blackKingside:false,blackQueenside:false};
 syncHash(s);
 // v1.0.2 PERF (audit): bump boardVersion so _updateBoardIncremental detects
 // setup-mode board mutations (piece placement/deletion/clear-board/reset-board).
@@ -1811,4 +2440,4 @@ function _prependBlackToMovePlaceholder(){
 }
 
 // ---- Exports ----
-export {PV,OPP_COLOR,SQ_LIGHT,SQ_DARK,SQ_SEL,LBL_LIGHT,LBL_DARK,LBL_STROKE_LIGHT,LBL_STROKE_DARK,SYM,PN,PN_EN,pieceName,_principlesHTML,KNIGHT_OFFSETS,DIR_ROOK,DIR_BISHOP,DIR_QUEEN,ELO_MATCH,getAI_LEVELS,CELL,REVIEW_CELL,zobrist,initBoard,attacked,initState,validateSetupPosition,cloneB,cloneS,sqAttackedFast,inCheck,pseudoMoves,legalMoves,hasLegalMoves,moveAlg,getCtrlMap,makeMvInPlace,unmakeMv,gameStatus,isDeadPosition,_applyMoveToBoard,generateFEN,uciToCoords,fenToState,_esc,posAlg,algPos,inB,pieceZobristIdx,computeHash,syncHash,recomputeCastlingRights,_refreshStateAfterSetup,_recalcCellSize,getEffectiveAILevel,posEmoji,posDesc,T,toggleLang,_lang,_i18n,_prependBlackToMovePlaceholder,_reattachActiveAnimations,_activeAnimEls};
+export {PV,OPP_COLOR,SQ_LIGHT,SQ_DARK,SQ_SEL,LBL_LIGHT,LBL_DARK,LBL_STROKE_LIGHT,LBL_STROKE_DARK,SYM,PN,PN_EN,pieceName,_principlesHTML,KNIGHT_OFFSETS,DIR_ROOK,DIR_BISHOP,DIR_QUEEN,ELO_MATCH,getAI_LEVELS,CELL,REVIEW_CELL,zobrist,initBoard,attacked,initState,validateSetupPosition,cloneB,cloneS,sqAttackedFast,inCheck,pseudoMoves,legalMoves,hasLegalMoves,moveAlg,getCtrlMap,makeMvInPlace,unmakeMv,gameStatus,isDeadPosition,_applyMoveToBoard,generateFEN,uciToCoords,fenToState,_esc,posAlg,algPos,inB,pieceZobristIdx,computeHash,syncHash,_refreshStateAfterSetup,_recalcCellSize,getEffectiveAILevel,posEmoji,posDesc,T,toggleLang,_lang,_i18n,_prependBlackToMovePlaceholder,_reattachActiveAnimations,_activeAnimEls,computeVisibleCastleMarks,computeVisibleEpMark};

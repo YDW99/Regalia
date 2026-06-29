@@ -410,7 +410,7 @@ function _updateEvalDisplayIncremental() {
       if (app) {
         app.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#1a0a0a;color:#f5e6c8;padding:20px;text-align:center;font-family:system-ui,sans-serif">' +
           '<div style="font-size:3rem;margin-bottom:16px">♔</div>' +
-          '<h2 style="color:#ffd700;margin-bottom:12px">'+T('app_name')+' v1.0.6</h2>' +
+          '<h2 style="color:#ffd700;margin-bottom:12px">'+T('app_name')+' v1.0.7</h2>' +
           '<p style="color:#a08050;margin-bottom:20px;max-width:300px">'+T('render_error')+'</p>' +
           '<button onclick="location.reload()" style="padding:12px 24px;background:#c49512;color:#1a0a0a;border:none;border-radius:6px;font-size:1rem;font-weight:700;cursor:pointer">'+T('refresh_page')+'</button>' +
           '</div>';
@@ -454,6 +454,149 @@ function playSound(type){if(!soundOn)return;try{const ctx=getAudioCtx();if(ctx.s
 
 
 // ECO UI helper functions — already defined in game-logic.js with correct const declarations.
+
+// ===================== PHASE 18 TASK 2: VIRTUAL LIST HELPERS =====================
+// v1.0.7 PHASE 18 Task 2: Virtual list helpers for the review move list.
+// These are module-level so they can be called from render() (full rebuild),
+// from _refreshReviewMovesOnly() (scroll-driven partial refresh), and from
+// reviewGoTo() (force window to contain the new active step).
+//
+// The helpers operate on the module-level _rvVirtualState and read
+// moveRecords / reviewStep / reviewCritical directly. They are NO-OPs when
+// the virtual list is disabled (moveRecords.length <= RV_VIRTUAL_THRESHOLD).
+
+// Reset virtual state. Called from enterReview/exitReview/startGame/_doPastePGN
+// so each new review session starts with a fresh window.
+function _resetRvVirtualState(){
+  _rvVirtualState.avgRowH=44;
+  _rvVirtualState.scrollTop=0;
+  _rvVirtualState.windowStart=0;
+  _rvVirtualState.windowEnd=Infinity;
+  _rvVirtualState.measured=false;
+  _rvVirtualState.enabled=false;
+  if(_rvScrollRefreshTimer){clearTimeout(_rvScrollRefreshTimer);_rvScrollRefreshTimer=0;}
+}
+
+// Compute the visible window [start, end) based on the current scroll position
+// and avgRowH. Returns the clamped window. When the virtual list is disabled,
+// returns the full range.
+function _computeVirtualWindow(){
+  if(!_rvVirtualState.enabled)return {start:0,end:moveRecords.length};
+  const _rList=_rListEl||document.getElementById('reviewMovesList');
+  if(!_rList||_rvVirtualState.avgRowH<=0)return {start:0,end:moveRecords.length};
+  const _firstVisible=Math.floor(_rList.scrollTop/_rvVirtualState.avgRowH);
+  const _lastVisible=Math.ceil((_rList.scrollTop+_rList.clientHeight)/_rvVirtualState.avgRowH);
+  return {
+    start:Math.max(0,_firstVisible-RV_OVERSCAN),
+    end:Math.min(moveRecords.length,_lastVisible+RV_OVERSCAN),
+  };
+}
+
+// Build the inner HTML for the review move list, rendering only rows in
+// [startIdx, endIdx). When the virtual list is enabled, top/bottom spacer
+// <div>s are added so the total scroll height matches the full list.
+//
+// This function is the SINGLE SOURCE OF TRUTH for review-moves row rendering
+// — it replaces the two duplicated for-loops that previously existed in the
+// landscape and portrait branches of render(). Both branches now call this
+// helper, eliminating ~40 lines of code duplication.
+function _buildReviewMovesInnerHTML(startIdx,endIdx){
+  const _virtual=_rvVirtualState.enabled;
+  const _end=Math.min(endIdx,moveRecords.length);
+  const _start=Math.max(0,Math.min(startIdx,_end));
+  let h='';
+  // Top spacer: represents rows [0, _start) that are not rendered as DOM.
+  if(_virtual&&_start>0){
+    h+='<div class="rmv-spacer" style="height:'+(_start*_rvVirtualState.avgRowH)+'px"></div>';
+  }
+  // Critical-move lookup tables (computed once, used for every row).
+  const _criticalSteps=new Set(reviewCritical.map(c=>c.step));
+  const _criticalReasons=new Map();
+  reviewCritical.forEach(c=>_criticalReasons.set(c.step,c.reason));
+  // v1.0.3: Use _importedStartMoveNum offset for move-pair display numbering.
+  const _rvMvStartOffset=(typeof _importedStartMoveNum!=='undefined'&&_importedStartMoveNum>0)?_importedStartMoveNum:1;
+  for(let i=_start;i<_end;i++){
+    const mr=moveRecords[i];const isW=i%2===0;const moveNum=Math.floor(i/2)+_rvMvStartOffset;
+    if(mr===null){
+      h+='<div class="rmv-block" style="opacity:.5" data-step="'+(i+1)+'"><span class="rmv-num">'+(isW?moveNum+'.':'')+'</span><div class="rmv-detail"><span class="rmv-notation" style="font-style:italic">...</span></div></div>';
+      continue;
+    }
+    const isAct=reviewStep===i+1;
+    const isCritical=_criticalSteps.has(i+1);
+    const criticalFlag=isCritical?' style="border-left:3px solid var(--accent2);padding-left:7px"':'';
+    h+='<div class="rmv-block'+(isAct?' act':'')+'" onclick="reviewGoTo('+(i+1)+')" data-step="'+(i+1)+'"'+criticalFlag+'>';
+    h+='<span class="rmv-num">'+(isW?moveNum+'.':'')+'</span>';
+    h+='<div class="rmv-detail"><span class="rmv-notation">'+_esc(mr.notation)+'</span>';
+    if(isCritical&&_criticalReasons.has(i+1)){h+='<span style="font-size:.65rem;color:var(--accent);display:block;margin-top:1px">'+_criticalReasons.get(i+1)+'</span>';}
+    if(showVariations&&mr.variations&&mr.variations.length>0){h+=_formatVariationGroups(mr.variations,moveNum,isW);}
+    const _mvEval=_reviewEvalCache.peek(i+1);
+    const _prevMvEval=_reviewEvalCache.peek(i);
+    if(_mvEval!=null&&_prevMvEval!=null){
+      h+=_formatEvalDelta(_mvEval.eval,_prevMvEval.eval,'.6rem');
+      const _mvDelta=_mvEval.eval-_prevMvEval.eval;
+      const _isMoverWhite=(i%2)===0;
+      const _mcls=_classifyMove(_mvDelta,_isMoverWhite);
+      h+=`<span style="font-size:.6rem;font-weight:700;color:${_esc(_mcls.color)};margin-left:4px">${_esc(_mcls.label)}</span>`;
+    }
+    h+='</div></div>';
+  }
+  // Bottom spacer: represents rows [_end, moveRecords.length) that are not rendered.
+  if(_virtual&&_end<moveRecords.length){
+    const _remaining=moveRecords.length-_end;
+    h+='<div class="rmv-spacer" style="height:'+(_remaining*_rvVirtualState.avgRowH)+'px"></div>';
+  }
+  return h;
+}
+
+// Scroll-driven partial refresh: recompute the visible window and, if it has
+// changed, replace ONLY the .review-moves innerHTML (not app.innerHTML).
+// This keeps the board, eval bar, chart, nav buttons, and dialog state intact.
+// The scroll position is captured BEFORE the swap and restored AFTER, so the
+// user sees no visual jump.
+function _refreshReviewMovesOnly(){
+  if(!_rvVirtualState.enabled||!reviewMode)return;
+  const _rList=_rListEl||document.getElementById('reviewMovesList');
+  if(!_rList)return;
+  const _oldScrollTop=_rList.scrollTop;
+  const _newWindow=_computeVirtualWindow();
+  if(_newWindow.start===_rvVirtualState.windowStart&&
+     _newWindow.end===_rvVirtualState.windowEnd)return; // window unchanged
+  _rvVirtualState.windowStart=_newWindow.start;
+  _rvVirtualState.windowEnd=_newWindow.end;
+  _rvVirtualState.scrollTop=_oldScrollTop;
+  _rList.innerHTML=_buildReviewMovesInnerHTML(_newWindow.start,_newWindow.end);
+  // Restore scroll position (innerHTML reset zeroes scrollTop).
+  _rList.scrollTop=_oldScrollTop;
+}
+
+// Passive scroll handler — attached to .review-moves when virtual list is on.
+// Debounces the partial refresh to avoid swapping innerHTML on every scroll
+// event (which would thrash the DOM and could cause visible flicker).
+function _onReviewMovesScroll(){
+  if(!_rvVirtualState.enabled||!reviewMode)return;
+  if(_rvScrollRefreshTimer)clearTimeout(_rvScrollRefreshTimer);
+  _rvScrollRefreshTimer=setTimeout(_refreshReviewMovesOnly,RV_SCROLL_DEBOUNCE_MS);
+}
+
+// Force the virtual window to contain a specific 0-based move index.
+// Called from reviewGoTo() so the active move is always in the rendered
+// window (otherwise the scroll-into-view code can't find the .rmv-block.act
+// element because it's outside the window and was never created as DOM).
+function _forceReviewWindowToStep(targetMoveIdx){
+  if(!_rvVirtualState.enabled)return;
+  const _clamped=Math.max(0,Math.min(moveRecords.length-1,targetMoveIdx));
+  const _desiredStart=Math.max(0,_clamped-RV_OVERSCAN);
+  const _desiredEnd=Math.min(moveRecords.length,_clamped+1+RV_OVERSCAN);
+  if(_desiredStart>=_rvVirtualState.windowStart&&_desiredEnd<=_rvVirtualState.windowEnd)return;
+  _rvVirtualState.windowStart=_desiredStart;
+  _rvVirtualState.windowEnd=_desiredEnd;
+  const _rList=_rListEl||document.getElementById('reviewMovesList');
+  if(_rList){
+    const _oldScrollTop=_rList.scrollTop;
+    _rList.innerHTML=_buildReviewMovesInnerHTML(_desiredStart,_desiredEnd);
+    _rList.scrollTop=_oldScrollTop;
+  }
+}
 
 // ===================== KNOWLEDGE =====================
 // P2 PERF: ECO_OPENINGS is lazily parsed on first access to avoid blocking main thread
@@ -849,6 +992,11 @@ let showSavePGNPrompt=false,_pendingActionAfterSave=null,_skipPGNSavePrompt=fals
 // Setup mode state
 let setupMode=false,setupPiece=null,setupColor='white',setupErrors=[],
     setupHistory=[],setupRedoStack=[];
+// v1.0.7: setupMarkerMode — when active, clicking a board square toggles a
+// 🔁 castle-rights marker ('castle') or a ⚡ en-passant marker ('ep') instead
+// of placing the currently-selected piece. setupPiece and setupMarkerMode
+// are mutually exclusive: activating one clears the other.
+let setupMarkerMode=null;
 // Hint & UI state
 let hintText='',isHintLoading=false,hoveredSquare=null,aiThinkInfo='',
     gameOverSoundPlayed=false;
@@ -888,6 +1036,55 @@ let reviewMode=false,reviewStep=0,reviewStates=[],reviewCritical=[];
 // from scrolling the move list independently).
 let _lastReviewStepScrolled=-2;
 let _reviewAnalyzeAllActive=false; // Flag for reviewAnalyzeAll batch analysis
+// v1.0.7 PHASE 18 Task 3: Track the reviewStep at the time of the last render.
+// Used to decide whether to force the virtual-list window to contain the
+// active step (only when the step changed, not on every render — preserves
+// the user's scroll position across renders that don't change reviewStep).
+let _lastRenderReviewStep=-2;
+
+// v1.0.7 PHASE 18 Task 2: Virtual list state for the review move list.
+// When a game has more than RV_VIRTUAL_THRESHOLD moves, only the visible
+// window (plus RV_OVERSCAN rows above/below) is rendered as DOM nodes; the
+// rest are represented by two tall placeholder <div>s (top spacer + bottom
+// spacer) so the scrollbar still reflects the full content height and the
+// user can scroll naturally.
+//
+// FIRST-PRINCIPLES ANALYSIS:
+//   - The existing render pipeline builds a single HTML string and assigns to
+//     app.innerHTML, which recreates the entire DOM. For a 200-move game this
+//     is ~400 DOM nodes for the move list alone, rebuilt on every render().
+//   - The cost scales with O(total moves), not O(visible moves), so long
+//     games (analyzed endgames, 200+ moves) feel sluggish during navigation.
+//   - A virtual list reduces the move-list DOM cost to O(visible + overscan),
+//     decoupling render cost from game length.
+//   - Threshold 80 is conservative — short games never pay the virtual-list
+//     overhead (window math + scroll listener + spacer measurement); long
+//     games get the full benefit.
+//   - avgRowH is INITIALLY estimated at 44px (typical .rmv-block height
+//     without variations). After the first virtual render, we measure the
+//     actual height of the first few rendered rows and update avgRowH. This
+//     makes the spacer heights accurate even when variations (🌿) expand
+//     rows to 2-3x normal height.
+//   - The scroll listener is passive — it does NOT call preventDefault or
+//     stopPropagation, so it cannot break the existing scroll-restore
+//     mechanism (_savedContainerScrolls). It only schedules a debounced
+//     _refreshReviewMovesOnly() that swaps .review-moves innerHTML.
+//   - _refreshReviewMovesOnly ONLY replaces .review-moves innerHTML, NOT
+//     app.innerHTML — so the board, eval bar, chart, nav buttons, and dialog
+//     state are all preserved. The scroll position is captured BEFORE the
+//     swap and restored AFTER, so the user sees no jump.
+const RV_VIRTUAL_THRESHOLD=80;        // >80 moves → enable virtual list
+const RV_OVERSCAN=10;                 // extra rows above/below viewport
+const RV_SCROLL_DEBOUNCE_MS=80;       // debounce for scroll-triggered refresh
+let _rvVirtualState={
+  avgRowH:44,                         // initial estimate, measured after first render
+  scrollTop:0,
+  windowStart:0,
+  windowEnd:Infinity,
+  measured:false,                     // false until avgRowH is measured from real DOM
+  enabled:false,                      // true iff current move list exceeds threshold
+};
+let _rvScrollRefreshTimer=0;
 // Track the game-over status key so we can re-localize gameOver on language switch.
 // Toggle for global eval trend display in review mode.
 // When true: shows the entire game's eval trend uniformly aligned with the progress bar.
@@ -1116,7 +1313,7 @@ const oppC=OPP_COLOR[playerColor];
 const flip=playerColor==='black';
 // Arrows computed separately by _updateArrows() — no inline computation needed
 
-let h='<div class="hdr" role="banner"><div class="hdr-top"><div class="hdr-l"><span style="font-size:1.3rem;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text;border:3px solid transparent;border-image:linear-gradient(145deg,#8b6914,#d4a017,#ffd700,#fff8dc,#ffd700,#d4a017,#8b6914) 1;padding:3px 6px;background:linear-gradient(145deg,rgba(139,105,20,.18),rgba(255,215,0,.08),rgba(139,105,20,.18));box-shadow:0 0 6px rgba(212,160,23,.35),0 0 12px rgba(255,215,0,.12),inset 0 0 3px rgba(255,215,0,.1),inset 0 1px 0 rgba(255,248,220,.15);position:relative">♔&#xFE0E;</span><h1>'+T('app_name')+'<span class="ver">v1.0.6</span><button onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showAboutPage=true;render()" style="font-size:.6rem;color:var(--accent);background:rgba(212,160,23,.15);padding:2px 8px;border-radius:4px;border:1px solid rgba(212,160,23,.3);margin-left:4px;cursor:pointer;font-family:system-ui,-apple-system,sans-serif;letter-spacing:1px">ℹ️</button></h1></div><button onclick="toggleLang()" style="font-size:.65rem;color:var(--accent);background:rgba(212,160,23,.15);padding:2px 6px;border-radius:4px;border:1px solid rgba(212,160,23,.3);cursor:pointer;font-family:system-ui,-apple-system,sans-serif;letter-spacing:1px;flex-shrink:0">'+(_lang==='zh'?'↔️中':'↔️EN')+'</button><div class="ev" id="eval-disp" role="status" aria-label="'+T('evaluating')+'">'+(setupMode?T('setup_label'):(isAIThinking?'<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>':'<span class="ev-e">'+pe+'</span><span>'+pd+'</span><span style="color:var(--muted)">('+scoreStr+')</span>'+_hdrDepthStr+_hdrProgressStr))+'</div></div><div class="hdr-tools" role="toolbar" aria-label="'+T('ctrl_range')+'">'+(setupMode?'':'<div class="diff-sel" role="radiogroup" aria-label="AI">'+getAI_LEVELS().map(l=>'<button class="diff-b'+(getEffectiveAILevel()===l.id?' act':'')+'" onclick="if(!isAIThinking){'+(l.id===8?'openEngineConfig()':('aiLevel='+l.id+';try{AndroidBridge.syncGameDifficulty('+l.id+')}catch(e){}render()'))+'}" title="'+l.desc+'" role="radio" aria-checked="'+(getEffectiveAILevel()===l.id)+'">'+(l.id===8?'⚙️':l.id===7?('SL'+(function(){try{let _sl=20;if(typeof engineSettingsData!=='undefined'&&engineSettingsData&&engineSettingsData.skillLevel!=null)_sl=engineSettingsData.skillLevel;else if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getEngineSkillLevel)_sl=AndroidBridge.getEngineSkillLevel();return _sl;}catch(e){return 20;}})()):l.id)+'</button>').join('')+'</div>')+'<button type="button" class="btn" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()" aria-label="'+T('new_game')+'"><span style="font-size:1.4rem">⚔️</span> '+T('new_game')+'</button>'+'<button class="btn" onclick="quickFreeOpening()" aria-label="'+T('free_opening')+'">'+(playerColor==='white'?'<span style=\"font-size:1.4rem;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text\">♔&#xFE0E;</span>':'<span style=\"font-size:1.4rem;font-weight:400;color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans Symbol&#x27;,sans-serif;font-variant-emoji:text\">♚&#xFE0E;</span>')+' '+T('free_opening')+'</button>'+(setupMode?'':'<button class="btn" onclick="undoMove()" aria-label="'+T('undo')+'"><span style="font-size:1.4rem">↩️</span> '+T('undo')+'</button><button class="btn" onclick="redoMove()" aria-label="'+T('redo')+'" id="redoBtn"><span style="font-size:1.4rem">↪️</span> '+T('redo')+'</button>')+'<button class="btn" onclick="flipBoard()" aria-label="'+T('flip')+'"><span style="font-size:1.4rem">🔃</span> '+T('flip')+'</button>'+'<button class="btn" onclick="getHint()" aria-label="'+T('ai_hint')+'"><span style="font-size:1.4rem">💡</span> '+T('ai_hint')+'</button>'+(setupMode?'':'<button class="btn" onclick="toggleSound()" id="btnSound" aria-label="'+T('sound')+'">'+(soundOn?'<span style="font-size:1.4rem">🔊</span> '+T('sound'):'<span style="font-size:1.4rem">🔇</span> '+T('sound'))+'</button>')+'<button class="btn" onclick="showCtrlMap=!showCtrlMap;cachedCtrlKey=&quot;&quot;;render()" aria-label="'+T('ctrl_range')+'" title="'+T('ctrl_range')+'">'+(showCtrlMap?'<span style="font-size:1.4rem">🌈</span> '+T('ctrl_range'):'<span style="font-size:1.4rem">🌗</span> '+T('ctrl_range'))+'</button>'+'<button class="btn" onclick="copyFEN()" title="'+T('copy_fen')+'" aria-label="'+T('copy_fen')+'"><span style="font-size:1.4rem">📝</span> FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="'+T('import_fen')+'" aria-label="'+T('import_fen')+'"><span style="font-size:1.4rem">🗃️</span> '+T('import_label')+'</button><button class="btn" onclick="'+(setupMode?'exitSetup()':'toggleSetup()')+'" aria-label="'+(setupMode?T('setup_done'):T('setup_mode'))+'">'+(setupMode?'<span style="font-size:1.4rem">✓</span> '+T('setup_done'):'<span style="font-size:1.4rem">🏗️</span> '+T('setup_mode'))+'</button></div></div>';
+let h='<div class="hdr" role="banner"><div class="hdr-top"><div class="hdr-l"><span style="font-size:1.3rem;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text;border:3px solid transparent;border-image:linear-gradient(145deg,#8b6914,#d4a017,#ffd700,#fff8dc,#ffd700,#d4a017,#8b6914) 1;padding:3px 6px;background:linear-gradient(145deg,rgba(139,105,20,.18),rgba(255,215,0,.08),rgba(139,105,20,.18));box-shadow:0 0 6px rgba(212,160,23,.35),0 0 12px rgba(255,215,0,.12),inset 0 0 3px rgba(255,215,0,.1),inset 0 1px 0 rgba(255,248,220,.15);position:relative">♔&#xFE0E;</span><h1>'+T('app_name')+'<span class="ver">v1.0.7</span><button onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showAboutPage=true;render()" style="font-size:.6rem;color:var(--accent);background:rgba(212,160,23,.15);padding:2px 8px;border-radius:4px;border:1px solid rgba(212,160,23,.3);margin-left:4px;cursor:pointer;font-family:system-ui,-apple-system,sans-serif;letter-spacing:1px">ℹ️</button></h1></div><button onclick="toggleLang()" style="font-size:.65rem;color:var(--accent);background:rgba(212,160,23,.15);padding:2px 6px;border-radius:4px;border:1px solid rgba(212,160,23,.3);cursor:pointer;font-family:system-ui,-apple-system,sans-serif;letter-spacing:1px;flex-shrink:0">'+(_lang==='zh'?'↔️中':'↔️EN')+'</button><div class="ev" id="eval-disp" role="status" aria-label="'+T('evaluating')+'">'+(setupMode?T('setup_label'):(isAIThinking?'<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>':'<span class="ev-e">'+pe+'</span><span>'+pd+'</span><span style="color:var(--muted)">('+scoreStr+')</span>'+_hdrDepthStr+_hdrProgressStr))+'</div></div><div class="hdr-tools" role="toolbar" aria-label="'+T('ctrl_range')+'">'+(setupMode?'':'<div class="diff-sel" role="radiogroup" aria-label="AI">'+getAI_LEVELS().map(l=>'<button class="diff-b'+(getEffectiveAILevel()===l.id?' act':'')+'" onclick="if(!isAIThinking){'+(l.id===8?'openEngineConfig()':('aiLevel='+l.id+';try{AndroidBridge.syncGameDifficulty('+l.id+')}catch(e){}render()'))+'}" title="'+l.desc+'" role="radio" aria-checked="'+(getEffectiveAILevel()===l.id)+'">'+(l.id===8?'⚙️':l.id===7?('SL'+(function(){try{let _sl=20;if(typeof engineSettingsData!=='undefined'&&engineSettingsData&&engineSettingsData.skillLevel!=null)_sl=engineSettingsData.skillLevel;else if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getEngineSkillLevel)_sl=AndroidBridge.getEngineSkillLevel();return _sl;}catch(e){return 20;}})()):l.id)+'</button>').join('')+'</div>')+'<button type="button" class="btn" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()" aria-label="'+T('new_game')+'"><span style="font-size:1.4rem">⚔️</span> '+T('new_game')+'</button>'+'<button class="btn" onclick="quickFreeOpening()" aria-label="'+T('free_opening')+'">'+(playerColor==='white'?'<span style=\"font-size:1.4rem;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text\">♔&#xFE0E;</span>':'<span style=\"font-size:1.4rem;font-weight:400;color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans Symbol&#x27;,sans-serif;font-variant-emoji:text\">♚&#xFE0E;</span>')+' '+T('free_opening')+'</button>'+(setupMode?'':'<button class="btn" onclick="toggleSound()" id="btnSound" aria-label="'+T('sound')+'">'+(soundOn?'<span style="font-size:1.4rem">🔊</span> '+T('sound'):'<span style="font-size:1.4rem">🔇</span> '+T('sound'))+'</button>')+'<button class="btn" onclick="copyFEN()" title="'+T('copy_fen')+'" aria-label="'+T('copy_fen')+'"><span style="font-size:1.4rem">📝</span> FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="'+T('import_fen')+'" aria-label="'+T('import_fen')+'"><span style="font-size:1.4rem">🗃️</span> '+T('import_label')+'</button><button class="btn" onclick="'+(setupMode?'exitSetup()':'toggleSetup()')+'" aria-label="'+(setupMode?T('setup_done'):T('setup_mode'))+'">'+(setupMode?'<span style="font-size:1.4rem">✓</span> '+T('setup_done'):'<span style="font-size:1.4rem">🏗️</span> '+T('setup_mode'))+'</button></div></div>';
 h+=`<div class="main" role="main"><div class="bsec">`;
 // v1.0.4 Rev37: AI bar captured pieces split at 7 — pieces 8+ go to line 3.
 {const _aiCapHtml=capturedPiecesHtml(gameState.board,oppC,playerColor,7);
@@ -1162,6 +1359,17 @@ let _checkKingPos=getCheckKingPos(gameState);
 // Since renderInternal only needs the Set of row*8+col keys (the .side field
 // was never used), we now call _computeCastlingRookSetForSelection directly.
 const _castlingRookSet=_computeCastlingRookSetForSelection(selectedSquare,legalMvs);
+// v1.0.7 PHASE 3: Compute visible 🔁 / ⚡ markers ONCE per render pass.
+// These are derived from gameState.castlingRights / gameState.enPassantTarget
+// (during play) or from the user's setupCastleMarks / setupEpMark (during
+// setup mode). See computeVisibleCastleMarks/computeVisibleEpMark in
+// game-logic.js. The markers display in setup and play modes.
+// In review mode the main board is covered by the .review-overlay (a
+// 98%-opaque fixed-position layer), so we skip the computation for the main
+// board here as a minor performance optimization — the review board renders
+// its own markers from rs.state.
+const _visibleCastleMarks=(!reviewMode&&typeof computeVisibleCastleMarks==='function')?computeVisibleCastleMarks(gameState):new Set();
+const _visibleEpMark=(!reviewMode&&typeof computeVisibleEpMark==='function')?computeVisibleEpMark(gameState):null;
 for(let r=0;r<8;r++){for(let c=0;c<8;c++){
 const rr=flip?7-r:r;const cc=flip?7-c:c;
 const p=gameState.board[rr][cc];const isL=(r+c)%2===0;
@@ -1171,6 +1379,9 @@ const lastTo=lastMove&&lastMove.to.row===rr&&lastMove.to.col===cc;
 const isLegal=legalSet.has(rr*8+cc);
 const isCheckSq=_checkKingPos&&rr===_checkKingPos.row&&cc===_checkKingPos.col;
 const isCastlingRook=_castlingRookSet.has(rr*8+cc);
+// v1.0.7 PHASE 3: visible markers (work in all modes — setup, play, review)
+const hasCastleMark=_visibleCastleMarks.has(String(rr*8+cc));
+const hasEpMark=_visibleEpMark&&_visibleEpMark.row===rr&&_visibleEpMark.col===cc;
 const lbl=String.fromCharCode(97+cc)+(8-rr);
 h+=`<div class="sq${lastFrom?' last-from':''}${lastTo?' last-to':''}${isCheckSq?' in-check':''}${isCastlingRook?' castle-rook':''}" role="gridcell" style="background:${bg}" data-r="${rr}" data-c="${cc}" onclick="sqClick(${rr},${cc})">`;
 h+=`<span class="lbl" style="color:${isL?LBL_LIGHT:LBL_DARK};-webkit-text-stroke:.6px ${isL?LBL_STROKE_LIGHT:LBL_STROKE_DARK};paint-order:stroke fill;text-shadow:0 0 2px ${isL?LBL_STROKE_LIGHT:LBL_STROKE_DARK}">${lbl}</span>`;
@@ -1184,6 +1395,18 @@ if(isLegal&&p&&!isCastlingRook)h+=`<div class="ring"></div>`;
 // solid green capture ring) that signals "click me to castle". Style
 // matches the existing ring/dot design language (CSS in index.html.tpl).
 if(isCastlingRook)h+=`<div class="castle-ring"></div>`;
+// v1.0.7 PHASE 3: 🔁 castle-rights marker and ⚡ en-passant marker.
+// Both render as a small badge anchored to the bottom-right corner of the
+// square, so they don't obstruct the piece glyph (centered) or the legal-
+// move ring (also centered). See .sq .setup-castle-mark / .sq .setup-ep-mark
+// in index.html.tpl for the styling.
+// These markers now display in ALL modes (setup, play, review), derived from
+// gameState.castlingRights / gameState.enPassantTarget by computeVisibleCastleMarks
+// / computeVisibleEpMark (called once per render pass above). Markers auto-
+// remove when the underlying rights/target are lost (e.g., after the king or
+// rook moves, or after the en-passant opportunity passes).
+if(hasCastleMark)h+=`<span class="setup-castle-mark" aria-hidden="true">🔁</span>`;
+if(hasEpMark)h+=`<span class="setup-ep-mark" aria-hidden="true">⚡</span>`;
 h+=`</div>`}}
 h+=`</div>`;
 // Arrows are now handled by persistent SVG overlay via _updateArrows() — no inline SVG here
@@ -1191,12 +1414,31 @@ if(gameOver&&lastMove&&!gameOverSoundPlayed){gameOverSoundPlayed=true;playSound(
 if(gameOver&&!setupMode){h+=`<div class="gover" role="alert" aria-live="assertive"><div class="ge" style="${_gameOverStatusKey==='checkmate'?(gameState.currentTurn==='black'?'color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55)':'color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55)'):'font-family:system-ui,sans-serif'};font-family:'DejaVu Sans','Noto Sans','Segoe UI Symbol',sans-serif;font-variant-emoji:text;font-weight:400">${_gameOverStatusKey==='checkmate'?(gameState.currentTurn==='black'?'♔\uFE0E':'♚\uFE0E'):_gameOverStatusKey==='resign'?'🏳️':_gameOverStatusKey==='timeout'?'⌛':'🤝'}</div><div class="gt">${gameOver}</div><button type="button" class="btn btn-p" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()">⚔️ ${T('play_again')}</button><button type="button" class="btn btn-g" onclick="enterReview()">📑 ${T('review')}</button></div>`;}
 if(setupMode){
 const spPieces=[{t:'pawn',w:'♙\uFE0E',b:'♟\uFE0E'},{t:'knight',w:'♘\uFE0E',b:'♞\uFE0E'},{t:'bishop',w:'♗\uFE0E',b:'♝\uFE0E'},{t:'rook',w:'♖\uFE0E',b:'♜\uFE0E'},{t:'queen',w:'♕\uFE0E',b:'♛\uFE0E'},{t:'king',w:'♔\uFE0E',b:'♚\uFE0E'}];
+// v1.0.7: Ensure setupCastleMarks (Set) and setupEpMark ({row,col}|null) exist
+// on gameState. They are the source of truth for the manual 🔁 castle markers
+// and the ⚡ en-passant marker. Initialize once per setup session if missing.
+if(!gameState.setupCastleMarks||!(gameState.setupCastleMarks instanceof Set))gameState.setupCastleMarks=new Set();
+if(typeof gameState.setupEpMark==='undefined')gameState.setupEpMark=null;
 h+=`<div class="setup-panel" style="width:${8*CELL+8}px;max-width:100%;box-sizing:border-box"><div class="setup-row" style="justify-content:flex-start"><span class="setup-label">${T('piece')}</span>`;
-for(const p of spPieces)h+=`<button class="setup-btn${setupPiece===p.t?' act':''} ${setupColor==='white'?'sw':'sb'}" onclick="setupPiece='${p.t}';render()">${setupColor==='white'?p.w:p.b}</button>`;
-h+=`<button class="setup-del${setupPiece==='delete'?' act':''}" onclick="setupPiece='delete';render()">🗑️</button></div>`;
+// v1.0.7 PHASE 8: piece buttons toggle — clicking the already-selected piece
+// again deselects it (sets setupPiece=null). This matches the behavior of the
+// 🔁 and ⚡ marker buttons.
+for(const p of spPieces)h+=`<button class="setup-btn${setupPiece===p.t?' act':''} ${setupColor==='white'?'sw':'sb'}" onclick="setupPiece=(setupPiece==='${p.t}'?null:'${p.t}');render()">${setupColor==='white'?p.w:p.b}</button>`;
+// v1.0.7: 🔁 castle-rights marker toggle + ⚡ en-passant marker toggle.
+// v1.0.7 PHASE 8: 🗑️ delete button is MUTUALLY EXCLUSIVE with 🔁 and ⚡ markers.
+// Selecting 🗑️ clears any active marker mode, and selecting a marker clears 🗑️.
+// Piece selection and marker selection remain independent (can co-exist),
+// but 🗑️ cannot co-exist with either marker because deleting a piece also
+// clears its markers — mixing them would be confusing.
+h+=`<button class="setup-btn${setupMarkerMode==='castle'?' act':''}" onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);setupMarkerMode=(setupMarkerMode==='castle'?null:'castle');if(setupMarkerMode&&setupPiece==='delete')setupPiece=null;render()" title="${T('setup_castle_marker_tip')}" aria-label="${T('setup_castle_marker')}" style="font-size:1.2rem">🔁</button>`;
+h+=`<button class="setup-btn${setupMarkerMode==='ep'?' act':''}" onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);setupMarkerMode=(setupMarkerMode==='ep'?null:'ep');if(setupMarkerMode&&setupPiece==='delete')setupPiece=null;render()" title="${T('setup_ep_marker_tip')}" aria-label="${T('setup_ep_marker')}" style="font-size:1.2rem">⚡</button>`;
+h+=`<button class="setup-del${setupPiece==='delete'?' act':''}" onclick="setupPiece=(setupPiece==='delete'?null:'delete');if(setupPiece==='delete')setupMarkerMode=null;render()">🗑️</button></div>`;
+// v1.0.7: small-font usage hints for the two new marker buttons.
+h+=`<div class="setup-row" style="justify-content:center;gap:8px;margin-top:2px"><span style="font-size:.62rem;color:var(--muted);line-height:1.3;text-align:center;flex:1 1 100%;word-break:break-word">${T('setup_castle_marker_tip')}</span></div>`;
+h+=`<div class="setup-row" style="justify-content:center;gap:8px;margin-top:2px"><span style="font-size:.62rem;color:var(--muted);line-height:1.3;text-align:center;flex:1 1 100%;word-break:break-word">${T('setup_ep_marker_tip')}</span></div>`;
 h+=`<div class="setup-row"><span class="setup-label">${T('color')}</span><button class="setup-clr${setupColor==='white'?' act':''}" onclick="setupColor='white';render()">${T('white_side')}</button><button class="setup-clr${setupColor==='black'?' act':''}" onclick="setupColor='black';render()">${T('black_side')}</button></div>`;
 h+=`<div class="setup-row"><span class="setup-label">${T('turn_side')}</span><button class="setup-clr${gameState.currentTurn==='white'?' act':''}" onclick="gameState.currentTurn='white';_refreshStateAfterSetup(gameState);render()">${T('white_side')}</button><button class="setup-clr${gameState.currentTurn==='black'?' act':''}" onclick="gameState.currentTurn='black';_refreshStateAfterSetup(gameState);render()">${T('black_side')}</button></div>`;
-h+=`<div class="setup-row" style="justify-content:center;gap:12px"><button class="btn" onclick="undoSetupClick()"${setupHistory.length===0?' disabled style="opacity:0.4"':''}><span style="font-size:1.4rem">↩️</span> ${T('undo_setup')}</button><button class="btn" onclick="redoSetupClick()"${setupRedoStack.length===0?' disabled style="opacity:0.4"':''}><span style="font-size:1.4rem">↪️</span> ${T('redo_setup')}</button><button class="btn" onclick="gameState=initState();gameState.moveHistory=[];setupErrors=[];setupHistory=[];render()"><span style="font-size:1.4rem">♻️</span> ${T('reset_board')}</button><button class="btn" onclick="for(let r=0;r<8;r++)for(let c=0;c<8;c++)gameState.board[r][c]=null;gameState.wk=null;gameState.bk=null;gameState.enPassantTarget=null;gameState.halfMoveClock=0;_refreshStateAfterSetup(gameState);setupErrors=[];setupHistory=[];render()"><span style="font-size:1.4rem">🧹</span> ${T('clear_board')}</button></div><div class="setup-row" style="justify-content:center;gap:8px;margin-top:6px"><button class="btn" onclick="copyFEN()"><span style="font-size:1.4rem">📝</span> ${T('copy_fen_btn')}</button><button class="btn" onclick="_importFENWithSaveCheck()"><span style="font-size:1.4rem">📋</span> ${T('import_fen_btn')}</button></div></div>`;
+h+=`<div class="setup-row" style="justify-content:center;gap:12px"><button class="btn" onclick="undoSetupClick()"${setupHistory.length===0?' disabled style="opacity:0.4"':''}><span style="font-size:1.4rem">↩️</span> ${T('undo_setup')}</button><button class="btn" onclick="redoSetupClick()"${setupRedoStack.length===0?' disabled style="opacity:0.4"':''}><span style="font-size:1.4rem">↪️</span> ${T('redo_setup')}</button><button class="btn" onclick="gameState=initState();gameState.moveHistory=[];setupErrors=[];setupHistory=[];setupRedoStack=[];render()"><span style="font-size:1.4rem">♻️</span> ${T('reset_board')}</button><button class="btn" onclick="for(let r=0;r<8;r++)for(let c=0;c<8;c++)gameState.board[r][c]=null;gameState.wk=null;gameState.bk=null;gameState.enPassantTarget=null;gameState.halfMoveClock=0;gameState.setupCastleMarks=new Set();gameState.setupEpMark=null;_refreshStateAfterSetup(gameState);setupErrors=[];setupHistory=[];setupRedoStack=[];render()"><span style="font-size:1.4rem">🧹</span> ${T('clear_board')}</button></div><div class="setup-row" style="justify-content:center;gap:8px;margin-top:6px"><button class="btn" onclick="copyFEN()"><span style="font-size:1.4rem">📝</span> ${T('copy_fen_btn')}</button><button class="btn" onclick="_importFENWithSaveCheck()"><span style="font-size:1.4rem">📋</span> ${T('import_fen_btn')}</button></div></div>`;
 if(setupErrors.length>0)h+=`<div class="setup-errors"><strong>${T('setup_error_title')}</strong><ul>${setupErrors.map(e=>`<li>${_esc(e)}</li>`).join('')}</ul><button class="btn" onclick="setupErrors=[];render()" style="margin-top:4px">${T('understood')}</button></div>`;
 }
 h+=`</div></div>`;
@@ -1267,6 +1509,26 @@ const _plClockHtml=(typeof gameClocks!=='undefined'&&gameClocks)?`<span id="${_p
 // all PGN text ([White "..."] / [Black "..."]).
 const _plName=(typeof _humanPlayerName!=='undefined'&&_humanPlayerName)?_humanPlayerName:T('you');
 const _plNameEsc=_escapeHTML(_plName);
+// v1.0.7: Quick Toolbar — sits between the board and the player bar.
+// Originally these 5 buttons (↩️悔棋 / ↪️撤悔 / 🔃翻转 / 💡AI提示 / 🌗🌈控制范围)
+// lived in the top header toolbar. They have been MOVED here so the header
+// stays focused on game-level actions (New Game, Free Play, Sound, FEN,
+// Import, Setup) while in-game / over-the-board actions live next to the
+// board where the user's thumb naturally rests.
+// In setup mode, ↩️/↪️ are hidden (no moves to undo/redo), but 🔃/💡/🌗🌈 stay.
+// Review mode has its own toolbar inside .review-hdr, so this quick toolbar
+// is hidden entirely when reviewMode === true.
+if(!reviewMode){
+  h+=`<div class="qtoolbar" role="toolbar" aria-label="${T('quick_toolbar')}">`;
+  if(!setupMode){
+    h+=`<button class="btn" onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);undoMove()" aria-label="${T('undo')}" title="${T('undo')}"><span style="font-size:1.4rem">↩️</span> ${T('undo')}</button>`;
+    h+=`<button class="btn" onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);redoMove()" aria-label="${T('redo')}" id="redoBtnQt" title="${T('redo')}"><span style="font-size:1.4rem">↪️</span> ${T('redo')}</button>`;
+  }
+  h+=`<button class="btn" onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);flipBoard()" aria-label="${T('flip')}" title="${T('flip')}"><span style="font-size:1.4rem">🔃</span> ${T('flip')}</button>`;
+  h+=`<button class="btn" onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);getHint()" aria-label="${T('ai_hint')}" title="${T('ai_hint')}"><span style="font-size:1.4rem">💡</span> ${T('ai_hint')}</button>`;
+  h+=`<button class="btn" onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showCtrlMap=!showCtrlMap;cachedCtrlKey=&quot;&quot;;render()" aria-label="${T('ctrl_range')}" title="${T('ctrl_range')}">${showCtrlMap?'<span style="font-size:1.4rem">🌈</span> '+T('ctrl_range'):'<span style="font-size:1.4rem">🌗</span> '+T('ctrl_range')}</button>`;
+  h+=`</div>`;
+}
 h+=`<div class="pbar" id="player-bar" style="flex-wrap:wrap"><span class="pico">${playerColor==='white'?'<span style="color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55)">♔&#xFE0E;</span>':'<span style="color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55)">♚&#xFE0E;</span>'}</span><div style="flex:1;min-width:0;display:flex;flex-direction:column"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><div class="pname" style="cursor:pointer;text-decoration:underline dotted rgba(212,160,23,.5);text-underline-offset:3px" onclick="_renameHumanPlayer()" title="${T('rename_player_hint')}">${_plNameEsc}</div>${_plClockHtml}</div>${_plCapHtml}</div>${gameState.currentTurn===playerColor&&!gameOver&&!setupMode?'<span class="tind" style="color:#4ade80">'+T('your_turn')+'</span><button type="button" class="btn" onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showResignConfirm=true;render()" title="'+T('resign_btn')+'" aria-label="'+T('resign_btn')+'" style="padding:4px 10px;font-size:.75rem;min-height:30px;border-color:rgba(192,57,43,.6);color:#e57373;background:rgba(192,57,43,.12)">'+T('resign_btn')+'</button>':''}</div>`;}
 h+=`</div>`;
 // Side panel
@@ -1312,7 +1574,7 @@ h+=`</div></div>`;
 
 // New game dialog
 if(showNewGameDialog){
-h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="${T('new_game_settings')}" onclick="if(event.target===this){showNewGameDialog=false;render()}"><div class="dlg"><h2>⚔️ ${T('new_game_settings')}</h2>`;
+h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="${T('new_game_settings')}" onclick="if(event.target===this){showNewGameDialog=false;render()}"><div class="dlg"><h2>⚔️ ${T('new_game_settings')}</h2><div class="dlg-content">`;
 h+=`<div class="dlg-sec"><h3>${T('play_color')}</h3><div class="clr-row"><button class="clr-btn${dlgPlayerColor==='white'?' act':''}" onclick="dlgPlayerColor='white';render()"><span style="color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text;font-size:1.6rem">♔&#xFE0E;</span>${T('white_first')}</button><button class="clr-btn${dlgPlayerColor==='black'?' act':''}" onclick="dlgPlayerColor='black';render()"><span style="color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text;font-size:1.6rem">♚&#xFE0E;</span>${T('black_second')}</button></div></div>`;
 // v1.0.4 FIX (this round): Chess960 toggle is now placed DIRECTLY BELOW the
 // play_color section (per user request). The "Use ECO Book" toggle below
@@ -1344,12 +1606,12 @@ for(const [v,key] of _tcTypes){
 h+=`</select>`;
 if(dlgTimeControl.type!=='off'){
   // Base time (minutes)
-  h+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><label style="font-size:.78rem;color:var(--muted);flex:1">${T('time_control_base_min')}</label><input type="number" min="1" max="600" value="${Math.round((dlgTimeControl.baseSec||300)/60)}" style="width:80px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;text-align:center" oninput="const v=parseInt(this.value,10);if(!isNaN(v)&&v>=1){dlgTimeControl.baseSec=v*60;}"></div>`;
+  h+=`<div class="portrait-stack" style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><label style="font-size:.78rem;color:var(--muted);flex:1">${T('time_control_base_min')}</label><input type="number" min="1" max="600" value="${Math.round((dlgTimeControl.baseSec||300)/60)}" style="width:80px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;text-align:center" oninput="const v=parseInt(this.value,10);if(!isNaN(v)&&v>=1){dlgTimeControl.baseSec=v*60;}"></div>`;
   if(dlgTimeControl.type==='fischer'){
-    h+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><label style="font-size:.78rem;color:var(--muted);flex:1">${T('time_control_inc_sec')}</label><input type="number" min="0" max="60" value="${dlgTimeControl.incrementSec||0}" style="width:80px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;text-align:center" oninput="const v=parseInt(this.value,10);if(!isNaN(v)&&v>=0){dlgTimeControl.incrementSec=v;}"></div>`;
+    h+=`<div class="portrait-stack" style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><label style="font-size:.78rem;color:var(--muted);flex:1">${T('time_control_inc_sec')}</label><input type="number" min="0" max="60" value="${dlgTimeControl.incrementSec||0}" style="width:80px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;text-align:center" oninput="const v=parseInt(this.value,10);if(!isNaN(v)&&v>=0){dlgTimeControl.incrementSec=v;}"></div>`;
   }
   if(dlgTimeControl.type==='bronstein'||dlgTimeControl.type==='usdelay'){
-    h+=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><label style="font-size:.78rem;color:var(--muted);flex:1">${T('time_control_delay_sec')}</label><input type="number" min="0" max="60" value="${dlgTimeControl.delaySec||0}" style="width:80px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;text-align:center" oninput="const v=parseInt(this.value,10);if(!isNaN(v)&&v>=0){dlgTimeControl.delaySec=v;}"></div>`;
+    h+=`<div class="portrait-stack" style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><label style="font-size:.78rem;color:var(--muted);flex:1">${T('time_control_delay_sec')}</label><input type="number" min="0" max="60" value="${dlgTimeControl.delaySec||0}" style="width:80px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;text-align:center" oninput="const v=parseInt(this.value,10);if(!isNaN(v)&&v>=0){dlgTimeControl.delaySec=v;}"></div>`;
   }
 }
 h+=`<div style="font-size:.7rem;color:var(--muted);margin-top:4px">${T('time_control_note')}</div>`;
@@ -1379,16 +1641,28 @@ if(dlgChess960&&!dlgBookMoves){
   // Chess") already makes it clear what mode the user is in. The redundant
   // heading consumed vertical space and duplicated information. The settings
   // (SP-ID input, back-rank preview, note) now appear directly under the toggle.
+  // v1.0.7 PORTRAIT REDESIGN: The SP-ID row is restructured so that in portrait
+  // mode the CSS can stack "label + Random button" above "input + 🎲 button"
+  // (the latter two stay side-by-side in a sub-wrapper, since together they're
+  // ~120px wide and fit any phone viewport). In landscape, the outer flex row
+  // lays all 4 elements horizontally as before.
   const curSPID=dlgChess960SPID>=0?dlgChess960SPID:-1;
   const previewSPID=curSPID>=0?curSPID:518; // default preview = traditional position
   const backRank=spidToBackRank(previewSPID);
   const pieceSym={rook:'♖',knight:'♘',bishop:'♗',queen:'♕',king:'♔'};
   h+=`<div class="dlg-sec">`;
-  h+=`<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap">`;
+  // v1.0.7: outer flex row — in portrait, CSS forces flex-direction:column
+  // so label stacks above Random button, which stacks above the input+🎲 sub-row.
+  h+=`<div class="portrait-stack" style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap">`;
   h+=`<label style="font-size:.78rem;color:var(--muted)">${T('chess960_spid')}: </label>`;
   h+=`<button class="btn" style="padding:4px 10px;font-size:.78rem;${curSPID===-1?'background:var(--accent);color:#1a0a0a;font-weight:700':''}" onclick="HapticManager.fire('BUTTON_PRESS');dlgChess960SPID=-1;render()">${T('chess960_random')}</button>`;
-  h+=`<input type="number" min="0" max="959" value="${curSPID>=0?curSPID:''}" placeholder="0-959" style="width:80px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;text-align:center" oninput="const v=parseInt(this.value,10);if(!isNaN(v)&&v>=0&&v<960){dlgChess960SPID=v;render();}else if(this.value===''){dlgChess960SPID=-1;render();}">`;
-  h+=`<button class="btn" style="padding:4px 10px;font-size:.78rem" onclick="HapticManager.fire('BUTTON_PRESS');dlgChess960SPID=Math.floor(Math.random()*960);render();">🎲</button>`;
+  // v1.0.7: sub-wrapper for input + 🎲 button — NOT a direct child of .dlg-sec,
+  // so the portrait CSS stacking rule (.dlg-sec > div[style*="display:flex"])
+  // does NOT apply. This keeps input and 🎲 side-by-side in all orientations.
+  h+=`<div style="display:flex;gap:6px;align-items:center;flex:1;min-width:120px">`;
+  h+=`<input type="number" min="0" max="959" value="${curSPID>=0?curSPID:''}" placeholder="0-959" style="flex:1;width:80px;min-width:0;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;text-align:center" oninput="const v=parseInt(this.value,10);if(!isNaN(v)&&v>=0&&v<960){dlgChess960SPID=v;render();}else if(this.value===''){dlgChess960SPID=-1;render();}">`;
+  h+=`<button class="btn" style="padding:4px 10px;font-size:.78rem;flex-shrink:0" onclick="HapticManager.fire('BUTTON_PRESS');dlgChess960SPID=Math.floor(Math.random()*960);render();">🎲</button>`;
+  h+=`</div>`;
   h+=`</div>`;
   // Back-rank preview — responsive grid; piece symbols use board piece styling
   const _wPieceStyle="color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:'DejaVu Sans','Noto Sans','Segoe UI Symbol',sans-serif;font-variant-emoji:text;font-weight:400";
@@ -1407,7 +1681,7 @@ if(dlgChess960&&!dlgBookMoves){
   // v1.0.4 FIX (this round): Removed the redundant <h3>${T('classic_openings')}</h3>
   // heading — it was a residual title. The section is self-evident from the ECO
   // search box and openings list below.
-  h+=`<div class="dlg-sec"><div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap"><form onsubmit="event.preventDefault();if(!_ecoComposing){_ecoDoSearch()}" style="flex:1;min-width:160px;display:flex;gap:4px"><input id="ecoSearch" type="text" inputmode="search" placeholder="${T('eco_search_ph')}" style="flex:1;padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;touch-action:manipulation" enterkeyhint="search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="if(!_ecoComposing){setEcoQuery(this.value)}" onfocus="_ecoSearchFocused=true;if(_ecoBlurTimer){clearTimeout(_ecoBlurTimer);_ecoBlurTimer=0}" onblur="_ecoBlurTimer=setTimeout(function(){_ecoSearchFocused=false;_ecoBlurTimer=0},200)" oncompositionstart="_ecoComposing=true" oncompositionend="_ecoComposing=false;setEcoQuery(this.value)" onkeydown="if((event.key==='Enter'||event.keyCode===13)&&!event.isComposing&&!_ecoComposing){event.preventDefault();setEcoQuery(this.value);_ecoDoSearch()}" value="${(window.ecoSearchQuery||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c]))}"></form><select id="ecoFamily" style="padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;cursor:pointer;flex-shrink:0" onchange="window.ecoFamilyFilter=this.value;ecoShowCount=30;_ecoUpdateResults()"><option value="">${T('all_categories')}</option>${Object.keys(ECO_BY_FAMILY).sort().map(f=>`<option value="${f}"${(window.ecoFamilyFilter||'')===f?' selected':''}>${f}</option>`).join('')}</select></div><div class="op-list"><button class="op-btn${!dlgOpeningId?' act':''}" onclick="dlgOpeningId=null;window.ecoSearchQuery='';window.ecoFamilyFilter='';ecoShowCount=30;_ecoUpdateResults()"><div class="on">${T('free_opening_btn')}</div><div class="os">${T('from_start')}</div></button>`;
+  h+=`<div class="dlg-sec"><div class="portrait-stack" style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap"><form onsubmit="event.preventDefault();if(!_ecoComposing){_ecoDoSearch()}" style="flex:1;min-width:160px;display:flex;gap:4px"><input id="ecoSearch" type="text" inputmode="search" placeholder="${T('eco_search_ph')}" style="flex:1;padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;touch-action:manipulation" enterkeyhint="search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="if(!_ecoComposing){setEcoQuery(this.value)}" onfocus="_ecoSearchFocused=true;if(_ecoBlurTimer){clearTimeout(_ecoBlurTimer);_ecoBlurTimer=0}" onblur="_ecoBlurTimer=setTimeout(function(){_ecoSearchFocused=false;_ecoBlurTimer=0},200)" oncompositionstart="_ecoComposing=true" oncompositionend="_ecoComposing=false;setEcoQuery(this.value)" onkeydown="if((event.key==='Enter'||event.keyCode===13)&&!event.isComposing&&!_ecoComposing){event.preventDefault();setEcoQuery(this.value);_ecoDoSearch()}" value="${(window.ecoSearchQuery||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c]))}"></form><select id="ecoFamily" style="padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;cursor:pointer;flex-shrink:0" onchange="window.ecoFamilyFilter=this.value;ecoShowCount=30;_ecoUpdateResults()"><option value="">${T('all_categories')}</option>${Object.keys(ECO_BY_FAMILY).sort().map(f=>`<option value="${f}"${(window.ecoFamilyFilter||'')===f?' selected':''}>${f}</option>`).join('')}</select></div><div class="op-list"><button class="op-btn${!dlgOpeningId?' act':''}" onclick="dlgOpeningId=null;window.ecoSearchQuery='';window.ecoFamilyFilter='';ecoShowCount=30;_ecoUpdateResults()"><div class="on">${T('free_opening_btn')}</div><div class="os">${T('from_start')}</div></button>`;
   _ensureEcoParsed();ecoDisplayList=ECO_OPENINGS;
   if(window.ecoSearchQuery){const q=window.ecoSearchQuery.trim().toUpperCase();ecoDisplayList=searchEco(q)}
   else if(window.ecoFamilyFilter){ecoDisplayList=ECO_BY_FAMILY[window.ecoFamilyFilter]||[]}
@@ -1415,6 +1689,7 @@ if(dlgChess960&&!dlgBookMoves){
   if(ecoDisplayList.length>ecoShowCount)h+=`<button class="btn btn-d" style="width:100%;margin-top:4px" onclick="ecoShowCount+=30;_ecoUpdateResults()">${T('load_more')} (+${ecoDisplayList.length-ecoShowCount})</button>`;
   h+=`</div></div>`;
 }
+h+=`</div>`; // close .dlg-content
 h+=`<div class="dlg-btns"><button type="button" class="btn btn-s" onclick="showNewGameDialog=false;dlgOpeningId=null;render()">${T('cancel')}</button><button type="button" class="btn btn-p" onclick="startGame()">${T('start_game_pawn')}</button></div>`;
 h+=`</div></div>`}
 
@@ -1428,7 +1703,7 @@ if(showAboutPage){
 // Load AGPL v3 SVG via AndroidBridge as base64 (CSP-compliant)
 let _gplSvgSrc='';
 try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.loadAssetAsBase64){const b64=AndroidBridge.loadAssetAsBase64('AGPLv3_Logo.svg');if(b64)_gplSvgSrc='data:image/svg+xml;base64,'+b64;}}catch(e){}
-h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="About"><div class="dlg" style="max-width:460px"><h2>${T('about_title')}</h2><div class="dlg-sec"><div class="crow"><span class="lb">${T('about_app')}</span><span class="vl">${T('app_name')} v1.0.6</span></div><div class="crow"><span class="lb">${T('about_engine')}</span><span class="vl">Stockfish 18 (arm64-v8a-dotprod)</span></div><div class="crow"><span class="lb">${T('about_platform')}</span><span class="vl">Android arm64-v8a</span></div></div><div class="dlg-sec"><h3>${T('copyright_license')}</h3>`+(_gplSvgSrc?`<div style="text-align:center;margin-bottom:10px"><img src="${_gplSvgSrc}" alt="AGPL v3 Logo" style="width:120px;height:auto;opacity:.9" /></div>`:'')+`<div style="font-size:.75rem;color:var(--text);line-height:1.6"><p style="margin-bottom:8px">${T('about_copyright')}</p><p style="margin-bottom:8px">${T('about_source_code_prefix')}<a href="${T('about_source_code_url')}" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">${T('about_source_code_url')}</a></p><p style="margin-bottom:8px">${T('about_agpl')} <a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GNU AGPL v3</a>${T('about_agpl_desc')}</p><p style="margin-bottom:8px">${T('about_droidfish')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a>${T('about_droidfish_desc')}</p><p style="margin-bottom:8px">${T('about_stockfish')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a> ${T('about_gplv3')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_disclaimer')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_ai')}</p></div></div><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="showAboutPage=false;render()" style="flex:1;justify-content:center">${T('close')}</button></div></div></div>`;}
+h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="About"><div class="dlg" style="max-width:460px"><h2>${T('about_title')}</h2><div class="dlg-sec"><div class="crow"><span class="lb">${T('about_app')}</span><span class="vl">${T('app_name')} v1.0.7</span></div><div class="crow"><span class="lb">${T('about_engine')}</span><span class="vl">Stockfish 18 (arm64-v8a-dotprod)</span></div><div class="crow"><span class="lb">${T('about_platform')}</span><span class="vl">Android arm64-v8a</span></div></div><div class="dlg-sec"><h3>${T('copyright_license')}</h3>`+(_gplSvgSrc?`<div style="text-align:center;margin-bottom:10px"><img src="${_gplSvgSrc}" alt="AGPL v3 Logo" style="width:120px;height:auto;opacity:.9" /></div>`:'')+`<div style="font-size:.75rem;color:var(--text);line-height:1.6"><p style="margin-bottom:8px">${T('about_copyright')}</p><p style="margin-bottom:8px">${T('about_source_code_prefix')}<a href="${T('about_source_code_url')}" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">${T('about_source_code_url')}</a></p><p style="margin-bottom:8px">${T('about_agpl')} <a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GNU AGPL v3</a>${T('about_agpl_desc')}</p><p style="margin-bottom:8px">${T('about_droidfish')}<a href="https://github.com/peterosterlund2/droidfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">DroidFish</a>${T('about_droidfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a>${T('about_droidfish_tail')}</p><p style="margin-bottom:8px">${T('about_stockfish')}<a href="https://github.com/official-stockfish/Stockfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">Stockfish</a>${T('about_stockfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a> ${T('about_gplv3')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_disclaimer')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_ai')}</p></div></div><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="showAboutPage=false;render()" style="flex:1;justify-content:center">${T('close')}</button></div></div></div>`;}
 // Import dialog — paste FEN, paste PGN, or select PGN file
 if(showImportDialog){
 h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="${T('import_title')}" onclick="if(event.target===this){showImportDialog=false;render()}"><div class="dlg" style="max-width:420px"><h2>${T('import_title')}</h2><div class="dlg-sec" style="gap:10px;display:flex;flex-direction:column">
@@ -1519,7 +1794,8 @@ if(showCtrlMap){
 // The visual annotations come from _visualAnnotationsCache (populated either
 // by _computeAndCacheVisualAnnotations during play, or by importPGN from PGN
 // comments). The cache key is moveRecords index (0-based); review step N
-// (1-based) corresponds to moveIdx = N-1.
+// corresponds to moveIdx = N-1 for N≥1. Step 0 (initial position) uses the
+// '_initial' sentinel key (handled at line ~1618).
 let _rvVa=null;
 let _rvCslMap=null; // {squareKey -> color} for O(1) lookup during cell render
 let _rvCalList=null; // array of {color, from, to} for SVG rendering
@@ -1566,6 +1842,10 @@ if(!showCtrlMap&&typeof _getVisualAnnotations==='function'&&typeof reviewStep!==
 // stats.html's per-color value colors exactly so the visual association is
 // consistent across the app.
 const _RV_VA_COLORS={B:'#4a90d9',R:'#e74c3c',Y:'#f1c40f',G:'#27ae60'};
+// v1.0.7 PHASE 3: compute visible 🔁/⚡ markers for the review position.
+// reviewStates[safeStep].state is the source-of-truth game state at step N.
+const _rvVisibleCastle=(typeof computeVisibleCastleMarks==='function')?computeVisibleCastleMarks(rs.state):new Set();
+const _rvVisibleEp=(typeof computeVisibleEpMark==='function')?computeVisibleEpMark(rs.state):null;
 for(let r=0;r<8;r++){for(let c=0;c<8;c++){
 const rr=flip?7-r:r;const cc=flip?7-c:c;
 const p=rBoard[rr][cc];const isL=(r+c)%2===0;
@@ -1629,6 +1909,13 @@ if(_isYellowSquare){
   const _yw=_rvCell-_inset*2;
   const _yh=_rvCell-_inset*2;
   h+='<div style="position:absolute;left:'+_inset.toFixed(1)+'px;top:'+_inset.toFixed(1)+'px;width:'+_yw.toFixed(1)+'px;height:'+_yh.toFixed(1)+'px;border-radius:'+_radius.toFixed(1)+'px;border:2px solid '+_RV_VA_COLORS.Y+';box-shadow:0 0 4px '+_RV_VA_COLORS.Y+'66;pointer-events:none;z-index:5"></div>';
+}
+// v1.0.7 PHASE 3: visible 🔁/⚡ markers on the review board
+if(_rvVisibleCastle.has(String(rr*8+cc))){
+  h+='<span class="setup-castle-mark" aria-hidden="true" style="font-size:'+(_rvCell*0.4).toFixed(1)+'px">🔁</span>';
+}
+if(_rvVisibleEp&&_rvVisibleEp.row===rr&&_rvVisibleEp.col===cc){
+  h+='<span class="setup-ep-mark" aria-hidden="true" style="font-size:'+(_rvCell*0.4).toFixed(1)+'px">⚡</span>';
 }
 h+='</div>';
 }}
@@ -1734,19 +2021,47 @@ if(_sfEvalReady&&!_evalLoading&&reviewStep>0){
 // analysis (_evalLoading), the depth/seldepth/nodes/nps update in real-time
 // via onEngineProgress; when analysis completes, the final values are shown.
 // SD only shown when > 0 AND > depth (seldepth == depth is redundant).
-const _rDepthStr=_sfDepth>0?'<span style="font-size:.65rem;color:var(--muted);margin-left:4px">D'+_sfDepth+'</span>'+(_sfSeldepth>0&&_sfSeldepth>_sfDepth?'<span style="font-size:.65rem;color:var(--muted);margin-left:2px">SD'+_sfSeldepth+'</span>':''):'';
+// v1.0.7 PHASE 14: removed the .65rem font-size override so D/SD inherit the
+// eval-bar title size (.75rem / .7rem). Keeps the bar visually uniform.
+const _rDepthStr=_sfDepth>0?'<span style="color:var(--muted);margin-left:4px">D'+_sfDepth+'</span>'+(_sfSeldepth>0&&_sfSeldepth>_sfDepth?'<span style="color:var(--muted);margin-left:2px">SD'+_sfSeldepth+'</span>':''):'';
 // v1.0.4 Rev33: real-time nodes + nps display during review analysis.
+// v1.0.7 PHASE 14: removed the .6rem override (inherit title size).
 let _rProgressStr='';
 if(_evalLoading&&_sfDepth>0){
   let _rpp=[];
   if(_lastProgressNodes!=null){const _ns=_lastProgressNodes>=1000000?(_lastProgressNodes/1000000).toFixed(1)+'M':_lastProgressNodes>=1000?Math.round(_lastProgressNodes/1000)+'K':String(_lastProgressNodes);_rpp.push(_ns);}
   if(_lastProgressNps!=null){const _ns=_lastProgressNps>=1000000?(_lastProgressNps/1000000).toFixed(1)+'M/s':_lastProgressNps>=1000?Math.round(_lastProgressNps/1000)+'K/s':String(_lastProgressNps);_rpp.push(_ns);}
-  if(_rpp.length)_rProgressStr='<span style="font-size:.6rem;color:var(--muted);margin-left:3px">'+_rpp.join(' ')+'</span>';
+  if(_rpp.length)_rProgressStr='<span style="color:var(--muted);margin-left:3px">'+_rpp.join(' ')+'</span>';
 }
-// Build WDL string for review eval bar (same as main eval bar)
+// Build WDL string for review eval bar (same as main eval bar).
+// v1.0.7 PHASE 14: removed the .65rem override (inherit title size).
 let _rWdlStr='';
-if(_sfWdlW>=0&&_sfWdlD>=0&&_sfWdlL>=0){const _rt=_sfWdlW+_sfWdlD+_sfWdlL;const _rw=Math.round(_sfWdlW/_rt*100);const _rd=Math.round(_sfWdlD/_rt*100);const _rl=100-_rw-_rd;_rWdlStr='<span style="font-size:.65rem;color:var(--muted);margin-left:4px">('+_rw+'%W/'+_rd+'%D/'+_rl+'%L)</span>';}
-const _rvEvalBarHTML='<div class="ev" id="review-eval-bar" style="margin:6px 0;font-size:.85rem"><span class="ev-e">'+_re.emoji+'</span><span>'+_re.desc+'</span><span style="color:var(--muted)">('+_re.score+')</span>'+_rDepthStr+_rProgressStr+_rWdlStr+_rDelta+'</div>';
+if(_sfWdlW>=0&&_sfWdlD>=0&&_sfWdlL>=0){const _rt=_sfWdlW+_sfWdlD+_sfWdlL;const _rw=Math.round(_sfWdlW/_rt*100);const _rd=Math.round(_sfWdlD/_rt*100);const _rl=100-_rw-_rd;_rWdlStr='<span style="color:var(--muted);margin-left:4px">('+_rw+'%W/'+_rd+'%D/'+_rl+'%L)</span>';}
+// v1.0.7 PHASE 14: enlarge review eval-bar fonts and cap the bar's height
+// so it never grows beyond a single line of text. Previously the bar used
+// .62rem / .58rem with flex-wrap:wrap, which let long content (emoji + desc
+// + score + D + SD + progress + WDL + delta) wrap to 2-3 lines and eat
+// vertical space. Now:
+//   - Title font: .75rem (portrait) / .7rem (landscape) — was .62 / .58
+//   - Emoji: .95rem — was .78rem
+//   - All child spans inherit the title size (removed the .58/.6/.65rem
+//     overrides on depth/progress/WDL/delta so the bar reads uniformly)
+//   - max-height + overflow:hidden + white-space:nowrap force exactly one
+//     line; content that doesn't fit is clipped rather than wrapped
+//   - flex-wrap removed (no longer needed)
+// The landscape CSS override (.review-bottom #review-eval-bar) is updated
+// to match — see index.html.tpl.
+//
+// v1.0.7 PHASE 20 (UX): Further enlarged fonts and min-height so text + emoji
+// display fully with comfortable breathing room (was feeling cramped).
+//   - Portrait eval bar: .75rem → .85rem; emoji .95rem → 1.1rem
+//   - Landscape eval bar: .7rem → .8rem; emoji .95rem → 1.05rem
+//   - max-height 1.9em → 2.4em (accommodate larger font + slight padding)
+//   - padding 3px 8px → 5px 10px (more vertical breathing room)
+//   - Analyze button font .7rem → .8rem; min-height 28px → 34px
+const _rvEvalFontSize=_isLandscapeReview?'.8rem':'.85rem';
+const _rvEvalEmojiSize=_isLandscapeReview?'1.05rem':'1.1rem';
+const _rvEvalBarHTML='<div class="ev" id="review-eval-bar" style="margin:2px 0;width:100%;box-sizing:border-box;font-size:'+_rvEvalFontSize+'!important;padding:5px 10px!important;gap:5px;max-height:2.4em;overflow:hidden;white-space:nowrap"><span class="ev-e" style="font-size:'+_rvEvalEmojiSize+'">'+_re.emoji+'</span><span>'+_re.desc+'</span><span style="color:var(--muted)">('+_re.score+')</span>'+_rDepthStr+_rProgressStr+_rWdlStr+_rDelta+'</div>';
 
 // Review step slider
 const _rvSliderHTML='<div style="width:100%;margin:6px 0">'+
@@ -1759,17 +2074,15 @@ const _rvSliderHTML='<div style="width:100%;margin:6px 0">'+
 // a much wider canvas (edge-to-edge) than the previous design where it was
 // squeezed under the board.
 const _isLandscapeTrend = window.innerWidth > window.innerHeight;
-const _boardWidthPx = _rvCell * 8;
-// v1.0.3-p12: in BOTH portrait and landscape, use FULL viewport width for
-// the chart (minus 12px for container padding). Previously portrait was
-// capped at min(viewportW-48, 400)-12 which wasted horizontal space.
-const _estimatedTrendW = Math.max(120, window.innerWidth - 12);
+// v1.0.7 PHASE 14: chart sizing — min 120px, max 200px in BOTH orientations.
+// Previously min was 80px / max was 120 (landscape) or 180 (portrait), which
+// was too small for the trend line + labels to be readable. The user requires
+// min 120px / max 200px.
+const _estimatedTrendW = Math.max(120, window.innerWidth - 28);
 const _trendW = _estimatedTrendW > 0 ? _estimatedTrendW : 300;
-// v1.0.3 patch: in landscape, the chart gets ~40% of viewport height (generous).
-// In portrait, same as before (~120px max).
 const _trendH = _isLandscapeTrend
-  ? Math.max(60, Math.min(180, Math.floor((window.innerHeight - 28) * 0.35)))
-  : Math.max(40, Math.min(120, window.innerHeight - 154));
+  ? Math.max(120, Math.min(200, Math.floor((window.innerHeight - 28) * 0.30)))
+  : Math.max(120, Math.min(200, window.innerHeight - 140));
 const _trendSVG = _buildEvalTrendSVG(_trendW, _trendH);
 let _rvChartHTML='';
 if (_trendSVG) {
@@ -1789,54 +2102,81 @@ const _rvNavHTML='<div class="review-nav" style="display:flex;gap:4px;margin-top
   '<button class="btn btn-d" onclick="reviewGoTo(reviewStates.length-1)">⏭</button>'+
   '</div>';
 
-// Analyze all steps button
-// v1.0.6 FIX: _totalSteps must be moveRecords.length (the number of moves
-// to analyze), NOT reviewStates.length. reviewStates includes the initial
-// position at index 0, so reviewStates.length = moveRecords.length + 1.
-// The eval cache is keyed by reviewStep (1-based move index), so a fully-
-// analyzed game has moveRecords.length cache entries. Comparing
-// _cachedCount >= reviewStates.length was always false (off-by-one),
-// causing "全部分析完成" to never display after PGN re-import.
+// Analyze-all button.
+// v1.0.6 FIX: _totalSteps was moveRecords.length (off-by-one — reviewStates
+// includes the initial position at index 0, so a fully-analyzed game has
+// moveRecords.length cache entries for steps 1..N). This caused
+// "全部分析完成" to never display after PGN re-import.
+// v1.0.7 PHASE 15: Analyze-all now includes step 0 (the initial position).
+// Rationale: the eval of the initial position is genuinely useful — it's
+// the baseline against which the first move's delta is computed, and
+// without it the first move in the move list shows no delta/classification
+// (the _prevMvEval=peek(0) lookup returns null). Including step 0 makes
+// the move list complete and the trend chart start from x=0 with a real
+// data point instead of a gap.
+// _totalSteps is now moveRecords.length + 1 (steps 0..N, inclusive).
+// v1.0.7 PHASE 17: Button now has id="review-analyze-btn" so _updateReviewAnalyzeBtn()
+// can refresh its label in-place after each manual eval (without a full re-render).
+// Previously, when the user manually evaluated each step by clicking through the
+// move list, the cache was filled by onEngineEval but the button text stayed at
+// "Analyze All Steps N (k/N+1)" instead of switching to "All Analyzed" once
+// complete. The id + helper function close this gap.
 const _cachedCount=_reviewEvalCache.size;
-const _totalSteps=moveRecords.length;
-const _allCached=_totalSteps>0&&_cachedCount>=_totalSteps;
-const _rvAnalyzeHTML='<button class="btn" style="margin-top:4px;width:100%;font-size:.7rem;min-height:28px" onclick="reviewAnalyzeAll()">'+(_allCached?T('all_analyzed'):(T('analyze_all_steps')+' '+_totalSteps+(_cachedCount>0?' ('+_cachedCount+'/'+_totalSteps+')':'')))+'</button>';
+const _totalSteps=moveRecords.length+1;
+const _allCached=_cachedCount>=_totalSteps;
+// v1.0.7 PHASE 20 (UX): Enlarged font .7rem → .8rem and min-height 28px → 34px
+// so the button text + emoji display fully with comfortable breathing room.
+const _rvAnalyzeHTML='<button id="review-analyze-btn" class="btn" style="margin-top:4px;width:100%;font-size:.8rem;min-height:34px;padding:6px 10px" onclick="reviewAnalyzeAll()">'+(_rvAnalyzeBtnLabel())+'</button>';
+
+// v1.0.7 PHASE 18 Task 2: Enable virtual list when the move list exceeds the
+// threshold. When enabled, only the visible window (plus overscan) is rendered
+// as DOM nodes; the rest are represented by top/bottom spacer <div>s so the
+// scrollbar still reflects the full content height.
+//
+// v1.0.7 PHASE 18 Task 3 (bug fix): Only force the window to contain the
+// active step when reviewStep CHANGED (not on every render). Previously, every
+// render forced the window to the active step — discarding the user's scroll
+// position and causing a flicker (active-step rows → blank spacer → user-scrolled
+// rows). Now we track _lastRenderReviewStep and only re-center when the step
+// actually changes. Initial conditions (_curEnd===Infinity || !measured) still
+// force the window regardless. Scroll-position-based window recomputation
+// happens in _refreshReviewMovesOnly (triggered by the scroll listener).
+_rvVirtualState.enabled=moveRecords.length>RV_VIRTUAL_THRESHOLD;
+if(_rvVirtualState.enabled){
+  const _activeIdx=Math.max(0,Math.min(moveRecords.length-1,reviewStep-1));
+  const _curStart=_rvVirtualState.windowStart;
+  const _curEnd=_rvVirtualState.windowEnd;
+  // Force window recompute ONLY when: (a) first virtual render, (b) reviewStep
+  // changed since last render, or (c) the active step is outside the current
+  // window AND was never in it. Case (c) uses a separate guard so that a
+  // user-scrolled window (where active step is intentionally outside) is
+  // preserved across renders that don't change reviewStep.
+  const _stepChanged = reviewStep !== _lastRenderReviewStep;
+  if(_curEnd===Infinity||!_rvVirtualState.measured||_stepChanged){
+    const _desiredStart=Math.max(0,_activeIdx-RV_OVERSCAN);
+    const _desiredEnd=Math.min(moveRecords.length,_activeIdx+1+RV_OVERSCAN);
+    _rvVirtualState.windowStart=_desiredStart;
+    _rvVirtualState.windowEnd=_desiredEnd;
+  }
+  _lastRenderReviewStep=reviewStep;
+}else{
+  // Short list — full render, no windowing.
+  _rvVirtualState.windowStart=0;
+  _rvVirtualState.windowEnd=moveRecords.length;
+}
+const _rvStart=_rvVirtualState.windowStart;
+const _rvEnd=_rvVirtualState.windowEnd;
 
 if(_isLandscapeReview){
   // Landscape: close .review-left (board only), then .review-moves, then .review-top.
   // Open .review-bottom with chart + controls (full width, edge-to-edge).
   h+='</div>'; // close .review-left
-  // Build a set of critical move steps for quick lookup
-  const _criticalSteps=new Set(reviewCritical.map(c=>c.step));
-  const _criticalReasons=new Map();reviewCritical.forEach(c=>_criticalReasons.set(c.step,c.reason));
+  // v1.0.7 PHASE 18 Task 2: Both branches now delegate to the shared
+  // _buildReviewMovesInnerHTML helper. This eliminates ~40 lines of duplicated
+  // row-rendering code that previously existed in landscape vs portrait, and
+  // centralizes the virtual-list spacer logic in one place.
   h+='<div class="review-moves" id="reviewMovesList">';
-  // v1.0.3: Use _importedStartMoveNum offset for move-pair display numbering.
-  const _rvMvStartOffset=(typeof _importedStartMoveNum!=='undefined'&&_importedStartMoveNum>0)?_importedStartMoveNum:1;
-  for(let i=0;i<moveRecords.length;i++){
-    const mr=moveRecords[i];const isW=i%2===0;const moveNum=Math.floor(i/2)+_rvMvStartOffset;
-    if(mr===null){
-      h+='<div class="rmv-block" style="opacity:.5" data-step="'+(i+1)+'"><span class="rmv-num">'+(isW?moveNum+'.':'')+'</span><div class="rmv-detail"><span class="rmv-notation" style="font-style:italic">...</span></div></div>';
-      continue;
-    }
-    const isAct=reviewStep===i+1;
-    const isCritical=_criticalSteps.has(i+1);
-    const criticalFlag=isCritical?' style="border-left:3px solid var(--accent2);padding-left:7px"':'';
-    h+='<div class="rmv-block'+(isAct?' act':'')+'" onclick="reviewGoTo('+(i+1)+')" data-step="'+(i+1)+'"'+criticalFlag+'>';
-    h+='<span class="rmv-num">'+(isW?moveNum+'.':'')+'</span>';
-    h+='<div class="rmv-detail"><span class="rmv-notation">'+_esc(mr.notation)+'</span>';
-    if(isCritical&&_criticalReasons.has(i+1)){h+='<span style="font-size:.65rem;color:var(--accent);display:block;margin-top:1px">'+_criticalReasons.get(i+1)+'</span>';}
-    if(showVariations&&mr.variations&&mr.variations.length>0){h+=_formatVariationGroups(mr.variations,moveNum,isW);}
-    const _mvEval=_reviewEvalCache.peek(i+1);
-    const _prevMvEval=_reviewEvalCache.peek(i);
-    if(_mvEval!=null&&_prevMvEval!=null){
-      h+=_formatEvalDelta(_mvEval.eval,_prevMvEval.eval,'.6rem');
-      const _mvDelta=_mvEval.eval-_prevMvEval.eval;
-      const _isMoverWhite=(i%2)===0;
-      const _mcls=_classifyMove(_mvDelta,_isMoverWhite);
-      h+=`<span style="font-size:.6rem;font-weight:700;color:${_esc(_mcls.color)};margin-left:4px">${_esc(_mcls.label)}</span>`;
-    }
-    h+='</div></div>';
-  }
+  h+=_buildReviewMovesInnerHTML(_rvStart,_rvEnd);
   h+='</div>'; // close .review-moves
   h+='</div>'; // close .review-top
   // .review-bottom: full-width chart + controls, edge-to-edge
@@ -1855,42 +2195,19 @@ if(_isLandscapeReview){
   h+=_rvNavHTML;
   h+=_rvAnalyzeHTML;
   h+='</div>'; // close .review-left
-  // Build a set of critical move steps for quick lookup
-  const _criticalSteps=new Set(reviewCritical.map(c=>c.step));
-  const _criticalReasons=new Map();reviewCritical.forEach(c=>_criticalReasons.set(c.step,c.reason));
   h+='<div class="review-moves" id="reviewMovesList">';
-  // v1.0.3: Use _importedStartMoveNum offset for move-pair display numbering.
-  const _rvMvStartOffset=(typeof _importedStartMoveNum!=='undefined'&&_importedStartMoveNum>0)?_importedStartMoveNum:1;
-  for(let i=0;i<moveRecords.length;i++){
-    const mr=moveRecords[i];const isW=i%2===0;const moveNum=Math.floor(i/2)+_rvMvStartOffset;
-    if(mr===null){
-      h+='<div class="rmv-block" style="opacity:.5" data-step="'+(i+1)+'"><span class="rmv-num">'+(isW?moveNum+'.':'')+'</span><div class="rmv-detail"><span class="rmv-notation" style="font-style:italic">...</span></div></div>';
-      continue;
-    }
-    const isAct=reviewStep===i+1;
-    const isCritical=_criticalSteps.has(i+1);
-    const criticalFlag=isCritical?' style="border-left:3px solid var(--accent2);padding-left:7px"':'';
-    h+='<div class="rmv-block'+(isAct?' act':'')+'" onclick="reviewGoTo('+(i+1)+')" data-step="'+(i+1)+'"'+criticalFlag+'>';
-    h+='<span class="rmv-num">'+(isW?moveNum+'.':'')+'</span>';
-    h+='<div class="rmv-detail"><span class="rmv-notation">'+_esc(mr.notation)+'</span>';
-    if(isCritical&&_criticalReasons.has(i+1)){h+='<span style="font-size:.65rem;color:var(--accent);display:block;margin-top:1px">'+_criticalReasons.get(i+1)+'</span>';}
-    if(showVariations&&mr.variations&&mr.variations.length>0){h+=_formatVariationGroups(mr.variations,moveNum,isW);}
-    const _mvEval=_reviewEvalCache.peek(i+1);
-    const _prevMvEval=_reviewEvalCache.peek(i);
-    if(_mvEval!=null&&_prevMvEval!=null){
-      h+=_formatEvalDelta(_mvEval.eval,_prevMvEval.eval,'.6rem');
-      const _mvDelta=_mvEval.eval-_prevMvEval.eval;
-      const _isMoverWhite=(i%2)===0;
-      const _mcls=_classifyMove(_mvDelta,_isMoverWhite);
-      h+=`<span style="font-size:.6rem;font-weight:700;color:${_esc(_mcls.color)};margin-left:4px">${_esc(_mcls.label)}</span>`;
-    }
-    h+='</div></div>';
-  }
+  h+=_buildReviewMovesInnerHTML(_rvStart,_rvEnd);
   h+='</div>'; // close .review-moves
 }
 h+='</div></div>'; // close .review-body, .review-overlay
 } // close if(reviewMode)
 const _wasEcoFocused=_ecoSearchFocused;if(_ecoBlurTimer){clearTimeout(_ecoBlurTimer);_ecoBlurTimer=0}
+// v1.0.7 PHASE 18 Task 3 (bug fix): Clear any pending virtual-list scroll
+// refresh timer before rebuilding the DOM. Without this, a pending 80ms
+// debounce timer (set by _onReviewMovesScroll) could fire AFTER app.innerHTML=h
+// and rebuild .review-moves with a stale window that conflicts with the window
+// render() just computed — causing a visible flicker.
+if(_rvScrollRefreshTimer){clearTimeout(_rvScrollRefreshTimer);_rvScrollRefreshTimer=0;}
 // v1.0.3-p4 FIX: preserve the main-UI move-list (.mlist) scroll position across
 // full re-renders. app.innerHTML=h recreates the .mlist DOM element from
 // scratch, resetting its scrollTop to 0. We capture scrollTop BEFORE innerHTML
@@ -2068,6 +2385,13 @@ _prevLegalSet=new Set();if(selectedSquare){for(const m of legalMvs)_prevLegalSet
 //   offset within the container, regardless of CSS positioning.
 if(reviewMode && reviewStep !== _lastReviewStepScrolled){
   _lastReviewStepScrolled = reviewStep;
+  // v1.0.7 PHASE 18 Task 2: When the virtual list is enabled, the active move
+  // may be OUTSIDE the currently-rendered window (so .rmv-block.act does not
+  // exist in the DOM yet). Force the window to contain the active step FIRST,
+  // then proceed with the existing scroll-into-view logic.
+  if(_rvVirtualState.enabled){
+    _forceReviewWindowToStep(reviewStep-1); // 0-based idx
+  }
   requestAnimationFrame(function(){
     requestAnimationFrame(function(){
       const _rList=_rListEl||document.getElementById('reviewMovesList');
@@ -2104,6 +2428,40 @@ _evalDispPrevSig = '';
 // v1.0.2 (qw3.7max audit): cache the review-moves-list element for the
 // scroll-into-view path (avoids getElementById on every render).
 _rListEl = document.getElementById('reviewMovesList');
+// v1.0.7 PHASE 18 Task 2: When the virtual list is enabled, attach a passive
+// scroll listener so scrolling the move list triggers a debounced partial
+// refresh (_refreshReviewMovesOnly) instead of a full app.innerHTML rebuild.
+// The listener is passive — it cannot block scrolling or interfere with the
+// existing scroll-restore mechanism (_savedContainerScrolls).
+// Also schedule a one-shot avgRowH measurement on the first virtual render
+// so the spacer heights are accurate (the initial 44px estimate may be off
+// when variations expand rows to 2-3x normal height).
+if(reviewMode&&_rListEl&&_rvVirtualState.enabled){
+  _rListEl.addEventListener('scroll',_onReviewMovesScroll,{passive:true});
+  if(!_rvVirtualState.measured){
+    requestAnimationFrame(function(){
+      try{
+        const _blocks=_rListEl.querySelectorAll('.rmv-block');
+        if(_blocks.length>=5){
+          let _totalH=0;
+          const _n=Math.min(_blocks.length,10);
+          for(let i=0;i<_n;i++)_totalH+=_blocks[i].offsetHeight;
+          const _avg=_totalH/_n;
+          if(_avg>0){
+            _rvVirtualState.avgRowH=_avg;
+            _rvVirtualState.measured=true;
+            // Re-render the move list with accurate spacer heights. This is
+            // a one-time cost on the first virtual render; subsequent renders
+            // use the measured value directly.
+            const _oldScrollTop=_rListEl.scrollTop;
+            _rListEl.innerHTML=_buildReviewMovesInnerHTML(_rvVirtualState.windowStart,_rvVirtualState.windowEnd);
+            _rListEl.scrollTop=_oldScrollTop;
+          }
+        }
+      }catch(e){}
+    });
+  }
+}
 // Restore focus for ECO search input using pre-rebuild state
 if(_wasEcoFocused){const el=document.getElementById('ecoSearch');if(el){el.focus();_ecoSearchFocused=true;try{el.setSelectionRange(el.value.length,el.value.length)}catch(e){}}}
 // Auto-scroll opening list to selected opening (skip during review mode)
@@ -2142,24 +2500,67 @@ function _updateSingleSq(el,p,rr,cc,cm,isL,lastMove,_checkKingPos){
   const lastTo=lastMove&&lastMove.to.row===rr&&lastMove.to.col===cc;
   const isCheckSq=_checkKingPos&&rr===_checkKingPos.row&&cc===_checkKingPos.col;
   const isLegal=legalSet.has(rr*8+cc);
+  // v1.0.7 BUG FIX (audit: 代码审查结果与完善建议.docx §1.1):
+  // This lightweight single-square update path was missing the castle-rook
+  // marker logic that renderInternal() and _updateChangedSquares() have.
+  // Although the auto-clear-selection behavior after a move usually prevents
+  // this path from rendering the marker, the inconsistency is a latent bug
+  // that would surface if selection clearing changes. Use the same source of
+  // truth (_computeCastlingRookSetForSelection) so all four render paths
+  // produce identical output for castling-rook squares.
+  const isCastlingRook=(function(){
+    try{
+      if(!selectedSquare||!legalMvs||!legalMvs.length)return false;
+      const sp=gameState.board[selectedSquare.row]&&gameState.board[selectedSquare.row][selectedSquare.col];
+      if(!sp||sp.type!=='king')return false;
+      // Compute lazily and cache for the duration of one render pass via a
+      // closure-scoped field on the function object (cheap, avoids leaking
+      // to global scope and avoids recompute per square).
+      if(_updateSingleSq._cachedSelKey!==selectedSquare){
+        _updateSingleSq._cachedSelKey=selectedSquare;
+        _updateSingleSq._cachedSet=_computeCastlingRookSetForSelection(selectedSquare,legalMvs);
+      }
+      return _updateSingleSq._cachedSet.has(rr*8+cc);
+    }catch(e){return false;}
+  })();
   const animCls=(_lastAnimPieceType&&_lastAnimTarget&&lastTo&&rr===_lastAnimTarget.row&&cc===_lastAnimTarget.col&&p&&p.type===_lastAnimPieceType)?' anim-'+p.type:'';
+  // v1.0.7 PHASE 3: visible 🔁/⚡ markers (computed once per render pass and
+  // cached on the function object — see caller). Added to the signature so
+  // the marker is added/removed when the underlying rights/target change.
+  if(!_updateSingleSq._vmCache || _updateSingleSq._vmState!==gameState){
+    _updateSingleSq._vmCache={
+      castle:(typeof computeVisibleCastleMarks==='function')?computeVisibleCastleMarks(gameState):new Set(),
+      ep:(typeof computeVisibleEpMark==='function')?computeVisibleEpMark(gameState):null
+    };
+    _updateSingleSq._vmState=gameState;
+  }
+  const hasCM=_updateSingleSq._vmCache.castle.has(String(rr*8+cc));
+  const hasEM=_updateSingleSq._vmCache.ep&&_updateSingleSq._vmCache.ep.row===rr&&_updateSingleSq._vmCache.ep.col===cc;
   // Signature: piece color+type, selection, last-move from/to, check, legal,
-  // control-map presence (cm), anim class. All cheap field reads — no DOM writes.
-  const sig=(p?p.color[0]+p.type:'--')+'|'+(isSel?1:0)+(lastFrom?1:0)+(lastTo?1:0)+(isCheckSq?1:0)+(isLegal?1:0)+(cm?1:0)+animCls;
+  // control-map presence (cm), anim class, castling-rook marker, visible 🔁/⚡.
+  // v1.0.7: isCastlingRook added to signature so the marker flips on/off
+  // correctly when selection changes.
+  // v1.0.7 PHASE 3: hasCM/hasEM added so markers flip on/off when rights/target change.
+  const sig=(p?p.color[0]+p.type:'--')+'|'+(isSel?1:0)+(lastFrom?1:0)+(lastTo?1:0)+(isCheckSq?1:0)+(isLegal?1:0)+(cm?1:0)+(isCastlingRook?1:0)+(hasCM?1:0)+(hasEM?1:0)+animCls;
   if(el._sig===sig)return; // No change — skip DOM writes entirely
   el._sig=sig;
   // Compute background only when we're going to write
   const bg=_getSqBg(rr,cc,cm,isL,lastMove);
   el.style.background=isSel?SQ_SEL:bg;
-  el.className='sq'+(lastFrom?' last-from':'')+(lastTo?' last-to':'')+(isCheckSq?' in-check':'');
+  el.className='sq'+(lastFrom?' last-from':'')+(lastTo?' last-to':'')+(isCheckSq?' in-check':'')+(isCastlingRook?' castle-rook':'');
   const lbl=String.fromCharCode(97+cc)+(8-rr);
   let inner=`<span class="lbl" style="color:${isL?LBL_LIGHT:LBL_DARK};-webkit-text-stroke:.6px ${isL?LBL_STROKE_LIGHT:LBL_STROKE_DARK};paint-order:stroke fill;text-shadow:0 0 2px ${isL?LBL_STROKE_LIGHT:LBL_STROKE_DARK}">${lbl}</span>`;
   if(p){
     inner+=`<span class="pc ${p.color==='white'?'w':'bk'}${animCls}">${SYM[p.color][p.type]}</span>`;
     if(animCls){_landingAnimActive=true;_startLandingTimer(_lastAnimPieceType);}
   }
-  if(isLegal&&!p)inner+=`<div class="dot"></div>`;
-  if(isLegal&&p)inner+=`<div class="ring"></div>`;
+  if(isLegal&&!p&&!isCastlingRook)inner+=`<div class="dot"></div>`;
+  if(isLegal&&p&&!isCastlingRook)inner+=`<div class="ring"></div>`;
+  // v1.0.7: castle-ring marker, identical to renderInternal / _updateChangedSquares.
+  if(isCastlingRook)inner+=`<div class="castle-ring"></div>`;
+  // v1.0.7 PHASE 3: visible 🔁/⚡ markers (all modes)
+  if(hasCM)inner+=`<span class="setup-castle-mark" aria-hidden="true">🔁</span>`;
+  if(hasEM)inner+=`<span class="setup-ep-mark" aria-hidden="true">⚡</span>`;
   el.innerHTML=inner;
 }
 
@@ -2193,6 +2594,9 @@ function updateAfterMove(){requestEngineEval();
   }else{
     // Fallback: rebuild if grid structure is wrong
     let bh='';
+    // v1.0.7 PHASE 3: compute visible markers once per fallback rebuild
+    const _fbCastleMarks=(typeof computeVisibleCastleMarks==='function')?computeVisibleCastleMarks(gameState):new Set();
+    const _fbEpMark=(typeof computeVisibleEpMark==='function')?computeVisibleEpMark(gameState):null;
     for(let r=0;r<8;r++){for(let c=0;c<8;c++){
       const rr=flip?7-r:r;const cc=flip?7-c:c;
       const p=gameState.board[rr][cc];const isL=(r+c)%2===0;
@@ -2202,12 +2606,16 @@ function updateAfterMove(){requestEngineEval();
       const lastTo=lastMove&&lastMove.to.row===rr&&lastMove.to.col===cc;
       const isCheckSq=_checkKingPos&&rr===_checkKingPos.row&&cc===_checkKingPos.col;
       const isLegal=legalSet.has(rr*8+cc);
+      const _hasCM=_fbCastleMarks.has(String(rr*8+cc));
+      const _hasEM=_fbEpMark&&_fbEpMark.row===rr&&_fbEpMark.col===cc;
       const lbl=String.fromCharCode(97+cc)+(8-rr);
       bh+=`<div class="sq${lastFrom?' last-from':''}${lastTo?' last-to':''}${isCheckSq?' in-check':''}" style="background:${isSel?SQ_SEL:bg}" data-r="${rr}" data-c="${cc}" onclick="sqClick(${rr},${cc})">`;
       bh+=`<span class="lbl" style="color:${isL?LBL_LIGHT:LBL_DARK};-webkit-text-stroke:.6px ${isL?LBL_STROKE_LIGHT:LBL_STROKE_DARK};paint-order:stroke fill;text-shadow:0 0 2px ${isL?LBL_STROKE_LIGHT:LBL_STROKE_DARK}">${lbl}</span>`;
       if(p){const _ac=(_lastAnimPieceType&&_lastAnimTarget&&lastTo&&rr===_lastAnimTarget.row&&cc===_lastAnimTarget.col&&p.type===_lastAnimPieceType)?' anim-'+p.type:'';bh+=`<span class="pc ${p.color==='white'?'w':'bk'}${_ac}">${SYM[p.color][p.type]}</span>`;if(_ac){_landingAnimActive=true;_startLandingTimer(_lastAnimPieceType);}}
       if(isLegal&&!p)bh+=`<div class="dot"></div>`;
       if(isLegal&&p)bh+=`<div class="ring"></div>`;
+      if(_hasCM)bh+=`<span class="setup-castle-mark" aria-hidden="true">🔁</span>`;
+      if(_hasEM)bh+=`<span class="setup-ep-mark" aria-hidden="true">⚡</span>`;
       bh+=`</div>`}}
     gridEl.innerHTML=bh;
     _sqElCache=null;
@@ -2407,6 +2815,15 @@ function _updateChangedSquares(oldInfoSq,newInfoSq,oldLegalSet,newLegalSet){
   // marker is added when a king is selected and removed when deselected.
   for(const pos of _curCastlingRookSet)logicPositions.add(pos);
   for(const pos of _prevCastlingRookSet)logicPositions.add(pos);
+  // v1.0.7 PHASE 3: Include squares with visible 🔁/⚡ markers so they get
+  // updated by the lightweight path (not just by full re-renders). Also
+  // include any PREVIOUS marker squares (we'd need a previous-state cache
+  // for that — for simplicity we rely on the signature check inside
+  // _updateSingleSq / _updateChangedSquares to skip unchanged squares).
+  const _ucsCastleMarks=(typeof computeVisibleCastleMarks==='function')?computeVisibleCastleMarks(gameState):new Set();
+  const _ucsEpMark=(typeof computeVisibleEpMark==='function')?computeVisibleEpMark(gameState):null;
+  for(const pos of _ucsCastleMarks)logicPositions.add(pos);
+  if(_ucsEpMark)logicPositions.add(_ucsEpMark.row*8+_ucsEpMark.col);
   for(const posKey of logicPositions){
     const lr=Math.floor(posKey/8),lc=posKey%8; // logical row, col
     // Convert logical position to display position (same formula as renderInternal)
@@ -2427,6 +2844,9 @@ function _updateChangedSquares(oldInfoSq,newInfoSq,oldLegalSet,newLegalSet){
     // for the currently-selected king. This keeps the marker in sync with
     // selection changes via the lightweight update path.
     const isCastlingRook=_curCastlingRookSet.has(lr*8+lc);
+    // v1.0.7 PHASE 3: visible markers
+    const _hasCM=_ucsCastleMarks.has(String(lr*8+lc));
+    const _hasEM=_ucsEpMark&&_ucsEpMark.row===lr&&_ucsEpMark.col===lc;
     el.style.background=bg;
     el.className='sq'+(lastFrom?' last-from':'')+(lastTo?' last-to':'')+(isCheckSq?' in-check':'')+(isCastlingRook?' castle-rook':'');
     const lbl=String.fromCharCode(97+lc)+(8-lr);
@@ -2438,6 +2858,9 @@ function _updateChangedSquares(oldInfoSq,newInfoSq,oldLegalSet,newLegalSet){
     // This matches renderInternal's logic. The marker is a golden dashed ring
     // that signals "click me to castle".
     if(isCastlingRook)inner+=`<div class="castle-ring"></div>`;
+    // v1.0.7 PHASE 3: visible 🔁/⚡ markers (all modes)
+    if(_hasCM)inner+=`<span class="setup-castle-mark" aria-hidden="true">🔁</span>`;
+    if(_hasEM)inner+=`<span class="setup-ep-mark" aria-hidden="true">⚡</span>`;
     el.innerHTML=inner;
   }
 }
@@ -2837,11 +3260,13 @@ if(gameState.currentTurn===playerColor)break;
 // the same index, and see stale eval/annotation data from the undone move.
 //
 // Three caches are invalidated:
-//   1. _reviewEvalCache — keyed by reviewStep (1-based move index). Entries
-//      with key > moveRecords.length are for undone moves and must be deleted.
-//      This is the "后台实时缓存的PGN" the user referred to — the real-time
-//      per-move evaluation cache that backs the review-mode eval bar and the
-//      PGN's [%eval ...] annotations.
+//   1. _reviewEvalCache — keyed by reviewStep (0-based since v1.0.7 Phase 15:
+//      step 0 = initial position, steps 1..N = positions after each move).
+//      Entries with key > moveRecords.length are for undone moves and must
+//      be deleted. Step 0 is always retained (initial position doesn't
+//      change on undo). This is the "后台实时缓存的PGN" the user referred
+//      to — the real-time per-move evaluation cache that backs the
+//      review-mode eval bar and the PGN's [%eval ...] annotations.
 //   2. _visualAnnotationsCache — keyed by moveIdx (0-based). Entries with
 //      key >= moveRecords.length are for undone moves and must be deleted.
 //      These back the [%csl]/[%cal] annotations in the PGN.
@@ -2964,6 +3389,22 @@ function flipBoard(){
 // === Quick free opening: start new game with current color, no opening ===
 function quickFreeOpening(){
   if(isAIThinking)return;
+  // v1.0.7 PHASE 7: If in setup mode, exit setup FIRST before starting a new
+  // game. Previously, startGame() replaced gameState with initState() but
+  // left setupMode=true. When the user then exited setup, exitSetup() ran
+  // validateSetupPosition() on the new (standard) gameState which had no
+  // setupCastleMarks — causing _validateSetupCastleMarks to reset ALL
+  // castlingRights to false, making the 🔁 markers disappear.
+  // Fix: clear setupMode and related state BEFORE calling startGame(), so
+  // exitSetup() is never called on the new gameState.
+  if(typeof setupMode!=='undefined'&&setupMode){
+    setupMode=false;
+    setupMarkerMode=null;
+    setupPiece=null;
+    setupErrors=[];
+    setupHistory=[];
+    setupRedoStack=[];
+  }
   showNewGameDialog=false;
   dlgPlayerColor=playerColor;
   dlgOpeningId=null;
@@ -3002,7 +3443,102 @@ function getHint(){
 function toggleSetup(){if(isAIThinking&&!setupMode)return;_cachedStatus=null;_cachedStatusKey='';setupMode=!setupMode;
 // v1.0.2 FIX (audit): extract common reset out of both branches.
 gameOver=null;_gameOverStatusKey=null;
-if(setupMode){setupPiece='pawn';setupColor='white';selectedSquare=null;legalMvs=[];legalSet=new Set();lastMove=null;gameOverSoundPlayed=false;setupErrors=[];setupHistory=[]}else{
+if(setupMode){setupPiece='pawn';setupColor='white';selectedSquare=null;legalMvs=[];legalSet=new Set();lastMove=null;gameOverSoundPlayed=false;setupErrors=[];setupHistory=[];
+// v1.0.7: Initialize castle-marker set and en-passant marker on gameState.
+// If the user is entering setup mode from a normal game (e.g., to tweak the
+// position), seed the markers from the existing castlingRights + enPassantTarget
+// so the user sees the current state instead of an empty marker set.
+// For Chess960 positions, the king may be on any column; the kingside rook is
+// the rightmost same-color rook (col > king.col), the queenside rook is the
+// leftmost (col < king.col).
+if(!gameState.setupCastleMarks)gameState.setupCastleMarks=new Set();
+else gameState.setupCastleMarks.clear();
+if(typeof gameState.setupEpMark==='undefined')gameState.setupEpMark=null;
+// Seed castle markers from existing castlingRights — Chess960-aware.
+// For Chess960, the king may be on any column of the initial rank; the
+// kingside rook is the closest same-color rook to the right of the king,
+// the queenside rook is the closest to the left.
+if(gameState.castlingRights){
+  // White: scan rank 1 (row 7) for king and rooks
+  if(gameState.wk&&gameState.wk.row===7){
+    const wkCol=gameState.wk.col;
+    if(gameState.castlingRights.whiteKingside){
+      let best=-1;
+      for(let c=wkCol+1;c<8;c++){
+        const p=gameState.board[7][c];
+        if(p&&p.type==='rook'&&p.color==='white'){best=c;break;}
+      }
+      if(best>=0)gameState.setupCastleMarks.add(String(7*8+best));
+    }
+    if(gameState.castlingRights.whiteQueenside){
+      let best=-1;
+      for(let c=wkCol-1;c>=0;c--){
+        const p=gameState.board[7][c];
+        if(p&&p.type==='rook'&&p.color==='white'){best=c;break;}
+      }
+      if(best>=0)gameState.setupCastleMarks.add(String(7*8+best));
+    }
+  }
+  // Black: scan rank 8 (row 0) for king and rooks
+  if(gameState.bk&&gameState.bk.row===0){
+    const bkCol=gameState.bk.col;
+    if(gameState.castlingRights.blackKingside){
+      let best=-1;
+      for(let c=bkCol+1;c<8;c++){
+        const p=gameState.board[0][c];
+        if(p&&p.type==='rook'&&p.color==='black'){best=c;break;}
+      }
+      if(best>=0)gameState.setupCastleMarks.add(String(0*8+best));
+    }
+    if(gameState.castlingRights.blackQueenside){
+      let best=-1;
+      for(let c=bkCol-1;c>=0;c--){
+        const p=gameState.board[0][c];
+        if(p&&p.type==='rook'&&p.color==='black'){best=c;break;}
+      }
+      if(best>=0)gameState.setupCastleMarks.add(String(0*8+best));
+    }
+  }
+}
+// v1.0.7 PHASE 12 FIX: Seed ep marker from existing enPassantTarget.
+// BUG: The previous code did `{...gameState.enPassantTarget}` directly — but
+// enPassantTarget is the SKIPPED square (where a capturing pawn lands), while
+// setupEpMark must be the PAWN's current square (the double-stepped pawn).
+// This caused the ⚡ marker to render on the wrong square (the en-passant
+// capture target) when entering setup mode from an in-progress game.
+// Fix: convert enPassantTarget back to the pawn's square.
+//   White pawn (row 4) → enPassantTarget.row === 5
+//   Black pawn (row 3) → enPassantTarget.row === 2
+// We also defensively verify the pawn is actually on the expected square —
+// if not (state inconsistency), we leave setupEpMark null.
+if(gameState.enPassantTarget){
+  const _epT=gameState.enPassantTarget;
+  let _pawnRow=null;
+  if(_epT.row===5){
+    // White pawn just double-stepped; pawn sits on row 4
+    const _p=gameState.board[4]&&gameState.board[4][_epT.col];
+    if(_p&&_p.type==='pawn'&&_p.color==='white')_pawnRow=4;
+  }else if(_epT.row===2){
+    // Black pawn just double-stepped; pawn sits on row 3
+    const _p=gameState.board[3]&&gameState.board[3][_epT.col];
+    if(_p&&_p.type==='pawn'&&_p.color==='black')_pawnRow=3;
+  }
+  gameState.setupEpMark=_pawnRow!==null?{row:_pawnRow,col:_epT.col}:null;
+}else{
+  gameState.setupEpMark=null;
+}
+// Reset marker mode
+setupMarkerMode=null;
+}else{
+// Leaving setup mode via the toggle button (not via "Done"/exitSetup).
+// Clear the setup-mode transient input fields so they don't leak into
+// play/review mode. (_exitSetupImpl does the same clear when the user
+// taps Done; this mirrors it for the toggle-exit path.) Without this,
+// computeVisibleEpMark/computeVisibleCastleMarks would return the stale
+// setup-marker positions during play.
+setupMarkerMode=null;
+gameState.setupEpMark=null;
+gameState.setupCastleMarks=new Set();
 // v1.0.2 SIMPLIFY (audit): _applyGameOver() already no-ops for non-terminal
 // statuses (returns null from _gameOverStrFromStatus for 'check'/'ongoing').
 // The previous `if(_exitSt && _exitSt!=='play')` guard was checking against
@@ -3021,8 +3557,48 @@ function _exitSetupImpl(){// When finishing setup mode, reset the game to use th
 // - _redoStack is cleared
 // This ensures the user starts fresh from the setup position.
 // v1.0.3: Cache the setup position FEN for PGN export with [FEN]/[SetUp] headers.
+// v1.0.7 PHASE 3: If the setup position has castle rights on non-standard squares
+// (king not on e1/e8, or rook not on a1/h1/a8/h8), use Shredder-FEN castling
+// notation (file letters) instead of standard KQkq. Standard KQkq is ambiguous
+// in that case — it would imply rook on h1/a1 etc., which is not the actual
+// position. Shredder notation explicitly names the rook's source file, so the
+// position can be losslessly round-tripped through PGN/FEN.
 if(typeof _setupFEN!=='undefined'&&typeof generateFEN==='function'){
   _setupFEN=generateFEN(gameState);
+  if(typeof toShredderCastling==='function'&&gameState.castlingRights){
+    const cr=gameState.castlingRights;
+    const hasRights=cr.whiteKingside||cr.whiteQueenside||cr.blackKingside||cr.blackQueenside;
+    if(hasRights){
+      let needsShredder=false;
+      // Check king positions
+      if(gameState.wk&&(gameState.wk.row!==7||gameState.wk.col!==4))needsShredder=true;
+      if(gameState.bk&&(gameState.bk.row!==0||gameState.bk.col!==4))needsShredder=true;
+      // Check rook positions for each right that's set
+      if(!needsShredder&&cr.whiteKingside){
+        const wr=gameState.board[7]&&gameState.board[7][7];
+        if(!wr||wr.type!=='rook'||wr.color!=='white')needsShredder=true;
+      }
+      if(!needsShredder&&cr.whiteQueenside){
+        const wr=gameState.board[7]&&gameState.board[7][0];
+        if(!wr||wr.type!=='rook'||wr.color!=='white')needsShredder=true;
+      }
+      if(!needsShredder&&cr.blackKingside){
+        const br=gameState.board[0]&&gameState.board[0][7];
+        if(!br||br.type!=='rook'||br.color!=='black')needsShredder=true;
+      }
+      if(!needsShredder&&cr.blackQueenside){
+        const br=gameState.board[0]&&gameState.board[0][0];
+        if(!br||br.type!=='rook'||br.color!=='black')needsShredder=true;
+      }
+      if(needsShredder){
+        const parts=_setupFEN.split(' ');
+        if(parts.length>=3){
+          parts[2]=toShredderCastling(gameState.castlingRights,gameState.board);
+          _setupFEN=parts.join(' ');
+        }
+      }
+    }
+  }
 }
 // v1.0.3: Track the setup position's starting move number for display.
 // When the user places pieces in setup mode, gameState.fullMoveNumber is
@@ -3039,8 +3615,59 @@ _redoStack=[];
 gameOver=null;_gameOverStatusKey=null;
 gameOverSoundPlayed=false;
 _ecoEnabled=false; // Setup mode — disable ECO recognition
+// Clear the setup-mode transient input fields. setupEpMark and
+// setupCastleMarks are the user's marker placements during setup; after
+// validation, the authoritative state is enPassantTarget / castlingRights
+// (set by _validateSetupEpMark / _validateSetupCastleMarks). These
+// transient fields are setup-only and must not leak into play/review mode.
+gameState.setupEpMark=null;
+gameState.setupCastleMarks=new Set();
 reviewBaseState=cloneS(gameState);
 _reviewEvalCache.clear();_reviewEvalRequestedStep=-1; // Clear eval cache on board setup complete
+// v1.0.7 PHASE 4: Enable UCI_Chess960 on the engine if the setup position
+// has any castling rights on non-standard squares (king not on e1/e8, or a
+// castle-right rook not on a1/h1/a8/h8). Without UCI_Chess960=true, the
+// engine cannot correctly interpret castling in such positions — it would
+// assume standard king-on-e1/rook-on-a1h1 castling and either fail to
+// generate castling moves or produce illegal ones.
+// We ALSO keep UCI_Chess960 enabled for explicit Chess960 games (already
+// handled in startGame). For standard-position setups we leave it disabled
+// to preserve compatibility with the engine's standard-FEN parsing.
+if(typeof setChess960Mode==='function'&&typeof isChess960Mode==='function'){
+  const _cr=gameState.castlingRights||{};
+  const _hasRights=_cr.whiteKingside||_cr.whiteQueenside||_cr.blackKingside||_cr.blackQueenside;
+  let _needsChess960=false;
+  if(_hasRights){
+    if(gameState.wk&&(gameState.wk.row!==7||gameState.wk.col!==4))_needsChess960=true;
+    if(gameState.bk&&(gameState.bk.row!==0||gameState.bk.col!==4))_needsChess960=true;
+    if(!_needsChess960&&_cr.whiteKingside){
+      const wr=gameState.board[7]&&gameState.board[7][7];
+      if(!wr||wr.type!=='rook'||wr.color!=='white')_needsChess960=true;
+    }
+    if(!_needsChess960&&_cr.whiteQueenside){
+      const wr=gameState.board[7]&&gameState.board[7][0];
+      if(!wr||wr.type!=='rook'||wr.color!=='white')_needsChess960=true;
+    }
+    if(!_needsChess960&&_cr.blackKingside){
+      const br=gameState.board[0]&&gameState.board[0][7];
+      if(!br||br.type!=='rook'||br.color!=='black')_needsChess960=true;
+    }
+    if(!_needsChess960&&_cr.blackQueenside){
+      const br=gameState.board[0]&&gameState.board[0][0];
+      if(!br||br.type!=='rook'||br.color!=='black')_needsChess960=true;
+    }
+  }
+  // Only call setChess960Mode if the desired state differs from the current
+  // state, to avoid an unnecessary engine stop/wait cycle.
+  if(_needsChess960&&!isChess960Mode()){
+    setChess960Mode(true);
+    if(typeof gameVariant!=='undefined')gameVariant='chess960'; // treat as Chess960 for PGN export
+  }else if(!_needsChess960&&isChess960Mode()&&(typeof gameVariant==='undefined'||gameVariant!=='chess960')){
+    // Setup produced a standard position — disable Chess960 mode unless we're
+    // in an explicit Chess960 game (gameVariant === 'chess960').
+    setChess960Mode(false);
+  }
+}
 // v1.0.2 FIX: Black-to-move opening move record fix.
 // If the setup position has black to move, prepend null placeholder so the first
 // real move (black's) lands in the black slot, not the white slot.
@@ -3049,16 +3676,39 @@ toggleSetup()}
 function setupClick(r,c){
 if(!setupMode||isAIThinking)return;
 HapticManager.fire('PIECE_SELECT');
+// v1.0.7: Snapshot must also capture setupCastleMarks + setupEpMark so that
+// undo/redo correctly restores the marker state alongside the board.
+if(!gameState.setupCastleMarks)gameState.setupCastleMarks=new Set();
+if(typeof gameState.setupEpMark==='undefined')gameState.setupEpMark=null;
 // Save snapshot before each modification for undo
-setupRedoStack=[];setupHistory.push({board:gameState.board.map(row=>row.map(cell=>cell?{...cell}:null)),wk:gameState.wk?{...gameState.wk}:null,bk:gameState.bk?{...gameState.bk}:null,castlingRights:{...gameState.castlingRights},currentTurn:gameState.currentTurn,hash:gameState.hash});if(setupHistory.length>50)setupHistory.shift();
+setupRedoStack=[];setupHistory.push({
+  board:gameState.board.map(row=>row.map(cell=>cell?{...cell}:null)),
+  wk:gameState.wk?{...gameState.wk}:null,
+  bk:gameState.bk?{...gameState.bk}:null,
+  castlingRights:{...gameState.castlingRights},
+  currentTurn:gameState.currentTurn,
+  hash:gameState.hash,
+  setupCastleMarks:new Set(gameState.setupCastleMarks),
+  setupEpMark:gameState.setupEpMark?{...gameState.setupEpMark}:null
+});
+if(setupHistory.length>50)setupHistory.shift();
+// v1.0.7 PHASE 6: Marker mode and piece selection are INDEPENDENT.
+// If BOTH are active, we apply the piece first, then toggle the marker.
+// If only one is active, only that action is taken.
+// Delete mode is exclusive — it clears the square and its markers.
 if(setupPiece==='delete'){
 if(gameState.board[r][c]&&gameState.board[r][c].type==='king'){
 if(gameState.board[r][c].color==='white')gameState.wk=null;
 else gameState.bk=null;
 }
+// v1.0.7: When deleting a piece, also clear any castle/ep markers on that square.
+const key=String(r*8+c);
+gameState.setupCastleMarks.delete(key);
+if(gameState.setupEpMark&&gameState.setupEpMark.row===r&&gameState.setupEpMark.col===c)gameState.setupEpMark=null;
 gameState.board[r][c]=null;_refreshStateAfterSetup(gameState);render();return
 }
-if(setupPiece){
+// Place piece if a piece is selected (not delete, not null)
+if(setupPiece&&setupPiece!=='delete'){
 if(setupPiece==='king'){
 // Remove existing king of same color before placing new one
 if(setupColor==='white'&&gameState.wk){gameState.board[gameState.wk.row][gameState.wk.col]=null;gameState.wk=null}
@@ -3069,25 +3719,66 @@ if(setupPiece==='king'){
 if(setupColor==='white')gameState.wk={row:r,col:c};
 else gameState.bk={row:r,col:c};
 }
-_refreshStateAfterSetup(gameState);render()
-}}
+_refreshStateAfterSetup(gameState);
+// v1.0.7 PHASE 6: do NOT return here — fall through to marker toggle.
+}
+// Toggle marker if a marker mode is active
+if(setupMarkerMode==='castle'){
+  // Toggle castle marker on this square. Validation happens on "Done".
+  const key=String(r*8+c);
+  if(gameState.setupCastleMarks.has(key))gameState.setupCastleMarks.delete(key);
+  else gameState.setupCastleMarks.add(key);
+  setupErrors=[]; // clear stale errors so user sees fresh state
+  render();return;
+}
+if(setupMarkerMode==='ep'){
+  // Toggle ep marker. Only one allowed — clicking another square moves it.
+  if(gameState.setupEpMark&&gameState.setupEpMark.row===r&&gameState.setupEpMark.col===c){
+    gameState.setupEpMark=null;
+  }else{
+    gameState.setupEpMark={row:r,col:c};
+  }
+  setupErrors=[];
+  render();return;
+}
+// If we placed a piece but no marker mode, render now.
+if(setupPiece&&setupPiece!=='delete'){render();return}
+}
 function undoSetupClick(){
 if(!setupMode||setupHistory.length===0)return;
 // Save current state to redo stack before undoing
-var _curSnap={board:gameState.board.map(r=>r.map(c=>c?{...c}:null)),wk:gameState.wk?{...gameState.wk}:null,bk:gameState.bk?{...gameState.bk}:null,castlingRights:{...gameState.castlingRights},currentTurn:gameState.currentTurn,hash:gameState.hash};
+var _curSnap={board:gameState.board.map(r=>r.map(c=>c?{...c}:null)),wk:gameState.wk?{...gameState.wk}:null,bk:gameState.bk?{...gameState.bk}:null,castlingRights:{...gameState.castlingRights},currentTurn:gameState.currentTurn,hash:gameState.hash,setupCastleMarks:new Set(gameState.setupCastleMarks||[]),setupEpMark:gameState.setupEpMark?{...gameState.setupEpMark}:null};
 setupRedoStack.push(_curSnap);if(setupRedoStack.length>50)setupRedoStack.shift();
 const snap=setupHistory.pop();
 gameState.board=snap.board;gameState.wk=snap.wk;gameState.bk=snap.bk;gameState.castlingRights=snap.castlingRights;gameState.currentTurn=snap.currentTurn;
+// v1.0.7: Restore marker state from snapshot
+gameState.setupCastleMarks=snap.setupCastleMarks?new Set(snap.setupCastleMarks):new Set();
+gameState.setupEpMark=snap.setupEpMark?{...snap.setupEpMark}:null;
 _refreshStateAfterSetup(gameState);
 render();
 }
-function redoSetupClick(){if(!setupMode||setupRedoStack.length===0)return;const snap=setupRedoStack.pop();setupHistory.push({board:gameState.board.map(r=>r.map(c=>c?{...c}:null)),wk:gameState.wk?{...gameState.wk}:null,bk:gameState.bk?{...gameState.bk}:null,castlingRights:{...gameState.castlingRights},currentTurn:gameState.currentTurn,hash:gameState.hash});if(setupHistory.length>50)setupHistory.shift();gameState.board=snap.board.map(r=>r.map(c=>c?{type:c.type,color:c.color}:null));gameState.wk=snap.wk?{...snap.wk}:null;gameState.bk=snap.bk?{...snap.bk}:null;gameState.castlingRights={...snap.castlingRights};gameState.currentTurn=snap.currentTurn;gameState.hash=snap.hash;setupErrors=[];render();}
+function redoSetupClick(){if(!setupMode||setupRedoStack.length===0)return;
+const snap=setupRedoStack.pop();
+setupHistory.push({board:gameState.board.map(r=>r.map(c=>c?{...c}:null)),wk:gameState.wk?{...gameState.wk}:null,bk:gameState.bk?{...gameState.bk}:null,castlingRights:{...gameState.castlingRights},currentTurn:gameState.currentTurn,hash:gameState.hash,setupCastleMarks:new Set(gameState.setupCastleMarks||[]),setupEpMark:gameState.setupEpMark?{...gameState.setupEpMark}:null});
+if(setupHistory.length>50)setupHistory.shift();
+gameState.board=snap.board.map(r=>r.map(c=>c?{type:c.type,color:c.color}:null));
+gameState.wk=snap.wk?{...snap.wk}:null;gameState.bk=snap.bk?{...snap.bk}:null;
+gameState.castlingRights={...snap.castlingRights};
+gameState.currentTurn=snap.currentTurn;
+gameState.hash=snap.hash;
+// v1.0.7: Restore marker state from redo snapshot
+gameState.setupCastleMarks=snap.setupCastleMarks?new Set(snap.setupCastleMarks):new Set();
+gameState.setupEpMark=snap.setupEpMark?{...snap.setupEpMark}:null;
+setupErrors=[];render();}
 
 /**
  * Enter review mode — replay all moves and prepare review states.
  * @side-effect Sets reviewMode=true, populates reviewStates, requests engine eval
  */
 function enterReview(){_cachedStatus=null;_cachedStatusKey='';
+// v1.0.7 PHASE 18 Task 2: Reset virtual list state on entering review mode.
+// Each new review session starts with a fresh window centered on reviewStep=0.
+_resetRvVirtualState();
 // v1.0.4 Round-5 Rev19: Allow entering review mode with zero move records.
 // Previously this returned early, blocking the user from reaching the review
 // toolbar (which hosts the 📚 PGN Cache Manager and 🗃️ import buttons) when
@@ -3111,32 +3802,30 @@ _preReviewSnapshot={
   playerColor:playerColor,
   reviewBaseState:reviewBaseState?cloneS(reviewBaseState):null
 };
-// FIX: Defensive fallback — if reviewBaseState was lost (e.g., startGame()
-// threw before setting it), use the current gameState as a best-effort basis.
-// This allows review even when the initial state snapshot is missing.
-if(!reviewBaseState){
-  if(stateHistory.length>0&&stateHistory[0].state){
-    // Oldest snapshot in stateHistory is closest to the initial state
-    reviewBaseState=cloneS(stateHistory[0].state);
-    console.warn('enterReview: reviewBaseState was null, recovered from stateHistory[0]');
-  }else if(stateHistory.length>0&&stateHistory[0].board){
-    // Legacy format: stateHistory[0] is a raw gameState object (no .state wrapper)
-    reviewBaseState=cloneS(stateHistory[0]);
-    console.warn('enterReview: reviewBaseState was null, recovered from stateHistory[0] (raw format)');
-  }else{
-    reviewBaseState=cloneS(gameState);
-    console.warn('enterReview: reviewBaseState was null, using current gameState as fallback');
-  }
+// Derive reviewBaseState from stateHistory[0] (the initial position captured
+// at game start). Review replays moves from the initial position, so the
+// base must be the initial position — not the current gameState (which may
+// be mid-game after an undo). Falls back to gameState only if stateHistory
+// is empty (e.g., entering review immediately after game start with no
+// stateHistory entries yet).
+if(stateHistory.length>0&&stateHistory[0].state){
+  reviewBaseState=cloneS(stateHistory[0].state);
+}else if(stateHistory.length>0&&stateHistory[0].board){
+  reviewBaseState=cloneS(stateHistory[0]);
+}else{
+  reviewBaseState=cloneS(gameState);
 }
 reviewMode=true;reviewStates=[];
 _reviewEvalRequestedStep=-1; // Preserve _reviewEvalCache across review sessions
-let s=reviewBaseState?cloneS(reviewBaseState):cloneS(gameState);
+let s=cloneS(reviewBaseState);
 reviewStates.push({state:cloneS(s),lastMove:null});
 for(let i=0;i<moveRecords.length;i++){
 const mr=moveRecords[i];
 // v1.0.2 FIX: null placeholder (black-to-move opening) — push current state unchanged
 // so reviewStates indices stay aligned with moveRecords. No move is applied.
-if(mr===null){reviewStates.push({state:s,lastMove:null});continue;}
+// cloneS is required here because `s` is not reassigned in this branch —
+// without it, all null-placeholder entries would share the same `s` reference.
+if(mr===null){reviewStates.push({state:cloneS(s),lastMove:null});continue;}
 // Robust from/to parsing: mr.from/mr.to may be strings ("e2") or objects ({row:6,col:4}).
 // After PGN import they're always strings (posAlg output). During play they may be objects.
 let from=null,to=null;
@@ -3152,16 +3841,22 @@ try{
 if(!from||!to){console.error('enterReview: invalid move at index',i,'from=',mr.from,'to=',mr.to);
   // Bug 1 fix: Push a placeholder reviewState entry so indices stay aligned with moveRecords.
   // moveRecords[i] must map to reviewStates[i+1]; skipping would desynchronize them.
-  reviewStates.push({state:s,lastMove:null});
+  // cloneS required (same reason as the null-placeholder branch above).
+  reviewStates.push({state:cloneS(s),lastMove:null});
   continue;}
 const piece=s.board[from.row][from.col];
 if(piece){
   // Ensure promotion field is properly handled
   const promotion=(mr.promotion&&mr.promotion!=='null')?mr.promotion:null;
-  s=makeMv(s,{from,to,piece,promotion});reviewStates.push({state:s,lastMove:{from,to}});
+  // makeMv returns a fresh clone, so `s` here is already a new object;
+  // the cloneS is defensive (harmless if redundant) and keeps the three
+  // push sites uniform.
+  s=makeMv(s,{from,to,piece,promotion});reviewStates.push({state:cloneS(s),lastMove:{from,to}});
 }else{console.error('enterReview: no piece at',mr.from,'for move',i,mr);
-  // Bug 1 fix: Push placeholder to keep reviewStates indices aligned with moveRecords
-  reviewStates.push({state:s,lastMove:null});
+  // Bug 1 fix: Push placeholder to keep reviewStates indices aligned with moveRecords.
+  // cloneS required (same reason as the null-placeholder branch above — `s`
+  // is not reassigned in this branch).
+  reviewStates.push({state:cloneS(s),lastMove:null});
 }
 }
 reviewStep=reviewStates.length-1;
@@ -3216,7 +3911,8 @@ function _findCriticalMoves(){
         critical.push({step:i,reason:cls.label+' ('+(moverDelta/100).toFixed(1)+')'});
       }else if(moverDelta>300){
         const cls=_classifyMove(delta,isMoverWhite);
-        critical.push({step:i,reason:cls.label+' ('+(moverDelta>0?'+':'')+(moverDelta/100).toFixed(1)+')'});
+        // moverDelta>0 is always true in this branch (entry condition moverDelta>300)
+        critical.push({step:i,reason:cls.label+' (+'+(moverDelta/100).toFixed(1)+')'});
       }
     }
   }
@@ -3306,6 +4002,24 @@ function _startGameImpl(){
   showNewGameDialog=false;
   playerColor=dlgPlayerColor;
   useBookMoves=dlgBookMoves;
+  // v1.0.7 PHASE 18 Task 2: Reset virtual list state on new game.
+  _resetRvVirtualState();
+  // v1.0.7 BUG FIX (audit: 棋局前端代码审查.docx §10):
+  // _reviewEvalCache is keyed by reviewStep (0-based per-game index since
+  // v1.0.7 Phase 15: step 0 = initial position, steps 1..N = post-move).
+  // When the user starts a new game, the new game's reviewStep 0,1,2,...
+  // map to completely different positions than the previous game's, so the
+  // cache would return stale evals for the wrong positions. Clear the cache
+  // on every new game so review mode re-evaluates from scratch.
+  // Note: This intentionally trades cross-session eval persistence for
+  // correctness. The previous design assumed "same step index → same
+  // position", which is only true within ONE game.
+  try{
+    if(typeof _reviewEvalCache!=='undefined'&&_reviewEvalCache){
+      _reviewEvalCache.clear();
+    }
+    if(typeof _reviewEvalRequestedStep!=='undefined')_reviewEvalRequestedStep=-1;
+  }catch(e){console.warn('_startGameImpl: review eval cache clear failed',e);}
   // v1.0.6: Disable ECO recognition entirely in Chess960 mode. The new-game
   // dialog already grays out the ECO book toggle when Chess960 is on; this
   // mirror ensures imported Chess960 PGNs (which never set dlgChess960) and
@@ -4115,8 +4829,10 @@ function _computeInitialPositionAnnotations(){
 // See the detailed comment in undoMove() for the rationale.
 function _invalidateCachesForUndoneMoves(currentMoveCount){
   try{
-    // 1. _reviewEvalCache — keyed by reviewStep (1-based). Delete entries
-    //    with key > currentMoveCount.
+    // 1. _reviewEvalCache — keyed by reviewStep (0-based since v1.0.7 Phase 15:
+    //    step 0 = initial position, steps 1..N = positions after each move).
+    //    Delete entries with key > currentMoveCount. Step 0 (the initial
+    //    position) is always retained — it doesn't change on undo.
     if(typeof _reviewEvalCache!=='undefined'&&_reviewEvalCache){
       const _keysToDelete=[];
       if(typeof _reviewEvalCache.keys==='function'){
@@ -4150,6 +4866,16 @@ function _invalidateCachesForUndoneMoves(currentMoveCount){
     //    _buildPGNString() (which reads the current, shorter moveRecords).
     if(typeof _cachedOriginalPGN!=='undefined')_cachedOriginalPGN=null;
   }catch(e){}
+  // v1.0.7 BUG FIX (audit: 代码审查结果与完善建议.docx §1.4):
+  // After undo, the critical-moves list (reviewCritical) still contained
+  // entries for the now-undone moves, causing misaligned critical-move
+  // markers in review mode. Recompute reviewCritical from the new
+  // (shorter) moveRecords so review-mode annotations stay consistent.
+  try{
+    if(typeof _findCriticalMoves==='function'){
+      reviewCritical=_findCriticalMoves();
+    }
+  }catch(e){console.warn('_invalidateCachesForUndoneMoves: reviewCritical recompute failed',e);}
 }
 
 function _resetGameUIState(){
@@ -4224,6 +4950,11 @@ function reviewGoTo(step){
   step=Math.max(0,Math.min(step,reviewStates.length-1));
   reviewStep=step;
   gameState=cloneS(reviewStates[reviewStep].state);
+  // v1.0.7 PHASE 18 Task 3 (perf): Removed the redundant _forceReviewWindowToStep
+  // call. render()'s window-computation block (search for "_stepChanged")
+  // already detects that reviewStep changed and forces the window to contain
+  // the new active step. The old call here did an extra innerHTML replacement
+  // that was immediately overwritten by render()'s app.innerHTML=h — pure waste.
   // Update eval display from cache if available
   const cached=_reviewEvalCache.get(reviewStep);
   if(cached!=null){
@@ -4266,22 +4997,65 @@ function reviewGoTo(step){
  *     or re-entry), it returned without advancing. Now requestEngineEval
  *     detects _reviewAnalyzeAllActive + cache hit and calls _reviewAnalyzeAdvance.
  */
+/**
+ * v1.0.7 PHASE 17: Compute the "Analyze All" button label.
+ * Pulled out so _updateReviewAnalyzeBtn() can re-derive the label without
+ * rebuilding the whole review panel HTML.
+ *
+ * Mirrors the original inline ternary from renderInternal:
+ *   all-analyzed      if _cachedCount >= _totalSteps
+ *   "Analyze All N (k/N)" if some steps are cached
+ *   "Analyze All N"   if none cached
+ * Returns the localized HTML string.
+ */
+function _rvAnalyzeBtnLabel(){
+  if(!reviewMode)return '';
+  const _cachedCount=_reviewEvalCache.size;
+  const _totalSteps=(moveRecords?moveRecords.length:0)+1;
+  const _allCached=_cachedCount>=_totalSteps;
+  if(_allCached)return T('all_analyzed');
+  return T('analyze_all_steps')+' '+_totalSteps+(_cachedCount>0?' ('+_cachedCount+'/'+_totalSteps+')':'');
+}
+/**
+ * v1.0.7 PHASE 17: Live-refresh the "Analyze All" button label without
+ * triggering a full render. Called from onEngineEval after each manual eval
+ * completes — fixes the bug where the button stayed at "Analyze All (k/N)"
+ * even after the user had individually evaluated every step.
+ *
+ * First-principles analysis: the root cause was that onEngineEval calls
+ * _updateAllEvalDisplays() (which only updates the eval bar / move list),
+ * never the analyze button. The button label is recomputed ONLY inside the
+ * full renderInternal pass. After the user manually evaluates the LAST step
+ * by clicking its row, no event triggers a render, so the button never
+ * refreshes.
+ *
+ * Fix: re-derive the label and write it directly to the button's textContent.
+ * Cheap (one getElementById + one textContent write per eval), no DOM rebuild,
+ * no risk of interfering with the user's current scroll position.
+ */
+function _updateReviewAnalyzeBtn(){
+  if(!reviewMode)return;
+  const btn=document.getElementById('review-analyze-btn');
+  if(!btn)return;
+  btn.textContent=_rvAnalyzeBtnLabel();
+}
+
 function reviewAnalyzeAll(){
   if(!reviewMode||!reviewStates||reviewStates.length===0)return;
   // v1.0.4 Rev24: If every step is already cached, complete INSTANTLY.
   // This is the "instant recovery from cache" requirement — no engine calls,
   // no safety timer, no async wait. The user sees "Analysis complete!" immediately.
-  // v1.0.6 FIX: Only check steps 1..moveRecords.length (the moves). Step 0 is
-  // the initial position — it may or may not have an eval, but it's NOT a
-  // "move" that needs analysis. The old code checked 0..reviewStates.length-1,
-  // which always counted step 0 as uncached, preventing instant completion.
+  // v1.0.7 PHASE 15: Analyze-all now includes step 0 (the initial position).
+  // We check steps 0..moveRecords.length (inclusive). _lastStep is
+  // moveRecords.length (the position after the last move); step 0 is the
+  // initial position. Both are now part of the analysis scope.
+  const _lastStep=moveRecords.length; // = reviewStates.length - 1
   let _uncachedCount=0;
-  const _moveCount=moveRecords.length;
-  for(let i=1;i<=_moveCount;i++){
+  for(let i=0;i<=_lastStep;i++){
     if(!_reviewEvalCache.has(i))_uncachedCount++;
   }
   if(_uncachedCount===0){
-    showToast(T('analysis_done')+' '+_moveCount+' '+T('step'));
+    showToast(T('analysis_done')+' '+(_lastStep+1)+' '+T('step'));
     try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
     render();
     return;
@@ -4290,12 +5064,12 @@ function reviewAnalyzeAll(){
   // Save the step the user was on so we can return to it after analysis
   let _preAnalyzeStep=reviewStep;
   // Find first un-analyzed step (skip cached steps for efficiency)
-  // v1.0.6: Start from step 1 (first move), not step 0 (initial position).
+  // v1.0.7 PHASE 15: Start from step 0 (initial position), not step 1.
   let startStep=-1;
-  for(let i=1;i<=_moveCount;i++){
+  for(let i=0;i<=_lastStep;i++){
     if(!_reviewEvalCache.has(i)){startStep=i;break;}
   }
-  if(startStep<0)startStep=1; // Defensive — shouldn't happen given the all-cached check above
+  if(startStep<0)startStep=0; // Defensive — shouldn't happen given the all-cached check above
   reviewStep=startStep;
   gameState=cloneS(reviewStates[reviewStep].state);
   // v1.0.4 Rev24: Per-step safety timer (60s) that RESETS on each advance.
@@ -4306,7 +5080,7 @@ function reviewAnalyzeAll(){
   _reviewAnalyzeResetSafetyTimer();
   // Store pre-analyze step for restoration on completion
   window._reviewAnalyzeReturnStep=_preAnalyzeStep;
-  showToast(T('analyzing_all')+' ('+_reviewEvalCache.size+'/'+reviewStates.length+')');
+  showToast(T('analyzing_all')+' ('+_reviewEvalCache.size+'/'+(_lastStep+1)+')');
   render();
   requestEngineEval();
 }
@@ -4338,9 +5112,10 @@ function _reviewAnalyzeResetSafetyTimer(){
  */
 function _reviewAnalyzeAdvance(){
   if(!_reviewAnalyzeAllActive)return;
-  // v1.0.6 FIX: The last analyzable step is moveRecords.length (the position
-  // after the last move). reviewStates.length = moveRecords.length + 1 (includes
-  // initial position at index 0). We iterate steps 1..moveRecords.length.
+  // v1.0.7 PHASE 15: Analyze-all now includes step 0 (the initial position).
+  // _lastStep is moveRecords.length (= reviewStates.length - 1). We iterate
+  // steps 0.._lastStep inclusive. This covers the initial position (step 0)
+  // and every position after a move (steps 1..N).
   const _lastStep=moveRecords.length;
   // Skip already-cached steps for efficiency
   let nextStep=reviewStep+1;
@@ -4351,14 +5126,27 @@ function _reviewAnalyzeAdvance(){
   if(nextStep>_lastStep){
     _reviewAnalyzeAllActive=false;
     if(_reviewAnalyzeSafetyTimer){clearTimeout(_reviewAnalyzeSafetyTimer);_reviewAnalyzeSafetyTimer=null;}
+    // v1.0.7 PHASE 19 (bug fix): Recompute reviewCritical now that the eval cache
+    // is fully populated. Previously, entering review on a fresh game (empty cache)
+    // set reviewCritical=[], and Analyze All filled the cache but never recomputed
+    // reviewCritical — the 💥/❌ critical-move markers stayed missing until the
+    // user exited and re-entered review.
+    try{if(typeof _findCriticalMoves==='function')reviewCritical=_findCriticalMoves();}catch(e){}
     // Return to the step the user was viewing before analysis
     const returnStep=window._reviewAnalyzeReturnStep;
     if(typeof returnStep==='number'&&returnStep>=0&&returnStep<reviewStates.length){
-      reviewStep=returnStep;
-      gameState=cloneS(reviewStates[reviewStep].state);
+      // v1.0.7 PHASE 19 (bug fix): Use reviewGoTo() instead of manual assignment
+      // so the eval vars (_sfEval/_sfMateDistance/_sfWdl*/_sfDepth/etc.) are
+      // restored from cache. Without this, the eval bar would show the LAST
+      // analyzed step's eval instead of the returned step's eval.
+      reviewGoTo(returnStep);
+      // reviewGoTo already calls render(), so we just show the toast and return.
+      showToast(T('analysis_done')+' '+_reviewEvalCache.size+' '+T('step'));
+      return;
     }
-    // v1.0.6 FIX: show moveRecords.length (number of analyzed moves), not reviewStates.length
-    showToast(T('analysis_done')+' '+_lastStep+' '+T('step'));
+    // v1.0.7 PHASE 19: show actual cached count (may be < _lastStep+1 if some
+    // steps timed out and were skipped by the safety timer).
+    showToast(T('analysis_done')+' '+_reviewEvalCache.size+' '+T('step'));
     render();
     return;
   }
@@ -4367,10 +5155,10 @@ function _reviewAnalyzeAdvance(){
   // v1.0.4 Rev24: Reset the per-step safety timer for the new step.
   _reviewAnalyzeResetSafetyTimer();
   // Update progress toast periodically (every 3 steps or at end)
-  // v1.0.6 FIX: use moveRecords.length for the total, not reviewStates.length
+  // v1.0.7 PHASE 15: total is _lastStep+1 (steps 0..N inclusive)
   if(reviewStep%3===0||nextStep>=_lastStep){
     const cachedCount=_reviewEvalCache.size;
-    showToast(T('analyzing_progress')+' ('+cachedCount+'/'+_lastStep+')');
+    showToast(T('analyzing_progress')+' ('+cachedCount+'/'+(_lastStep+1)+')');
   }
   render();
   requestEngineEval();
@@ -4382,6 +5170,9 @@ function _reviewAnalyzeAdvance(){
 function exitReview(){
   reviewMode=false;
   _reviewAnalyzeAllActive=false;
+  // v1.0.7 PHASE 18 Task 2: Reset virtual list state on exiting review mode.
+  // Clears the scroll timer and window so the next review session starts fresh.
+  _resetRvVirtualState();
   if(_reviewAnalyzeSafetyTimer){clearTimeout(_reviewAnalyzeSafetyTimer);_reviewAnalyzeSafetyTimer=null;}
   // Restore the complete game state from the pre-review snapshot.
   // Previously, exitReview() only restored gameState from reviewBaseState (the
@@ -4851,11 +5642,15 @@ function _renderPGNCacheManager(){
 }
 
 // Simple HTML escape for cache names (prevent XSS from user-controlled strings)
+// v1.0.7 REDUNDANCY (audit: 代码审查结果与完善建议.docx §4.1): Unified with
+// _esc() (defined in ai-bridge.js). _esc uses a single-pass regex + lookup
+// table (faster, less allocation); _escapeHTML previously duplicated the
+// same logic with a slower 5-case replace callback. Now _escapeHTML simply
+// delegates to _esc, so there is one source of truth for HTML escaping.
+// Both names are kept for backward compatibility with existing call sites.
 function _escapeHTML(s){
   if(s==null)return '';
-  return String(s).replace(/[&<>"']/g,function(c){
-    return c==='&'?'&amp;':c==='<'?'&lt;':c==='>'?'&gt;':c==='"'?'&quot;':c==='\''?'&#39;':c;
-  });
+  return _esc(s);
 }
 
 // v1.0.4 Round-5 Rev19: Encode a string for safe embedding as a JS string literal
@@ -4875,6 +5670,21 @@ function _jsAttrEncode(s){
  * Closes open dialogs/overlays, exits review/setup modes.
  */
 function handleBackPress(){
+  // v1.0.7 UI: Promotion dialog takes highest priority — it blocks all other
+  // input and must be dismissed before any other overlay can be closed.
+  if(pendingPromotion){
+    pendingPromotion=null;
+    render();
+    return;
+  }
+  // v1.0.7 UI: Save-PGN prompt — back button = Cancel (matches the visible
+  // "Cancel" button behavior, so the user is not surprised by an implicit
+  // Yes/No decision).
+  if(showSavePGNPrompt){
+    if(typeof _savePGNCancel==='function')_savePGNCancel();
+    else{showSavePGNPrompt=false;render();}
+    return;
+  }
   if(showPGNCacheManager){
     _pgnCacheClose();
     return;
@@ -4884,6 +5694,25 @@ function handleBackPress(){
     showResignConfirm=false;
     render();
     return;
+  }
+  // v1.0.7 PHASE 6: If ANY setup-mode selection is active (marker mode OR
+  // piece selection OR delete mode OR color selection), back button cancels
+  // the selection first (instead of exiting setup). This covers:
+  //   - setupMarkerMode ('castle' / 'ep')
+  //   - setupPiece (any piece type, including 'delete')
+  // The user presses back again to actually exit setup mode.
+  // We cancel in priority order: marker mode → piece selection.
+  if(typeof setupMode!=='undefined'&&setupMode){
+    if(typeof setupMarkerMode!=='undefined'&&setupMarkerMode){
+      setupMarkerMode=null;
+      render();
+      return;
+    }
+    if(typeof setupPiece!=='undefined'&&setupPiece){
+      setupPiece=null;
+      render();
+      return;
+    }
   }
   if(showEngineConfig){
     showEngineConfig=false;
@@ -4984,24 +5813,21 @@ function _showStatsImportBackPrompt(pgnText){
     showToast(T('stats_import_back_no_pgn'));
     return;
   }
-  // Stash the PGN text — the pending action closure will read it.
-  _pendingStatsImportPGN=pgnText;
-  // Define the actual import action (executed after the save prompt resolves)
+  // v1.0.7 PHASE 19 (bug fix): Close over pgnText directly instead of stashing
+  // in a module-level global. The global stash had a race: if this function was
+  // called twice before the first save-prompt resolved, the second call would
+  // overwrite the stash and the first import would be silently lost.
   var importAction=function(){
-    var pgn=_pendingStatsImportPGN;
-    _pendingStatsImportPGN=null;
-    if(pgn){
-      try{
-        if(typeof importPGN==='function'){
-          importPGN(pgn);
-        }else{
-          console.error('importPGN function not available for stats import-back');
-          showToast(T('pgn_invalid'));
-        }
-      }catch(e){
-        console.error('Stats import-back failed:',e);
+    try{
+      if(typeof importPGN==='function'){
+        importPGN(pgnText);
+      }else{
+        console.error('importPGN function not available for stats import-back');
         showToast(T('pgn_invalid'));
       }
+    }catch(e){
+      console.error('Stats import-back failed:',e);
+      showToast(T('pgn_invalid'));
     }
   };
   // Use the existing _withPGNSaveCheck mechanism: if there are move records,
@@ -5009,8 +5835,8 @@ function _showStatsImportBackPrompt(pgnText){
   _withPGNSaveCheck(importAction);
 }
 // v1.0.4 Rev28: Stash for the PGN text being imported from the stats page.
-// Read by the importAction closure inside _showStatsImportBackPrompt.
-let _pendingStatsImportPGN=null;
+// v1.0.7 PHASE 19: _pendingStatsImportPGN removed — _showStatsImportBackPrompt
+// now closes over pgnText directly, eliminating the global stash race.
 
 /**
  * v1.0.4 Round-5 Rev27: Resign the current game (DeepSeek review 2.1).
@@ -5054,9 +5880,13 @@ function _resignGame(){
     }
   }catch(e){}
   // Stop the game clock
+  // v1.0.7 PHASE 19 (bug fix): gameClocks.running=false was a no-op (the field
+  // doesn't exist). The 200ms interval kept firing for the rest of the session,
+  // wasting CPU. Now properly clear the interval like _onGameClockExpired does.
   try{
-    if(typeof gameClocks!=='undefined'&&gameClocks){
-      gameClocks.running=false;
+    if(typeof gameClockTimerId!=='undefined'&&gameClockTimerId){
+      clearInterval(gameClockTimerId);
+      gameClockTimerId=null;
     }
   }catch(e){}
   // Set game-over state
@@ -5126,6 +5956,9 @@ function _cleanupEventListeners(){
 // v1.0.2: Wrapped with _withPGNSaveCheck to prompt save before clearing
 function _doPastePGN(){
   _withPGNSaveCheck(function(){
+    // v1.0.7 PHASE 18 Task 3 (bug fix): Reset virtual list state on PGN paste
+    // so stale avgRowH / window from a previous long game don't carry over.
+    _resetRvVirtualState();
     const text=prompt(T('pgn_paste_hint'));
     if(!text)return;
     const trimmed=text.trim();
@@ -5147,6 +5980,9 @@ function _doPastePGN(){
 // v1.0.2: Wrapper for importFEN with PGN save check
 function _importFENWithSaveCheck(){
   _withPGNSaveCheck(function(){
+    // v1.0.7 PHASE 18 Task 3 (bug fix): Reset virtual list state on FEN import
+    // so stale avgRowH / window from a previous long game don't carry over.
+    _resetRvVirtualState();
     importFEN();
   });
 }
@@ -5154,9 +5990,11 @@ function _importFENWithSaveCheck(){
 // v1.0.2: Wrapper for importPGNFile with PGN save check
 function _importPGNFileWithSaveCheck(){
   _withPGNSaveCheck(function(){
+    // v1.0.7 PHASE 18 Task 3 (bug fix): Reset virtual list state on PGN file import.
+    _resetRvVirtualState();
     importPGNFile();
   });
 }
 
 // ---- Exports ----
-export {render,markDirty,sqClick,executeMove,undoMove,redoMove,flipBoard,quickFreeOpening,toggleSound,doPromotion,getHint,toggleSetup,exitSetup,setupClick,enterReview,reviewGoTo,reviewAnalyzeAll,exitReview,startGame,_resetGameUIState,doAIMove,_requestStockfishMove,_buildEvalTrendSVG,handleBackPress,_startEngineHeartbeat,_cleanupEventListeners,_reviewAnalyzeAdvance,_doPastePGN};
+export {render,markDirty,sqClick,executeMove,undoMove,redoMove,flipBoard,quickFreeOpening,toggleSound,doPromotion,getHint,toggleSetup,exitSetup,setupClick,enterReview,reviewGoTo,reviewAnalyzeAll,exitReview,startGame,_resetGameUIState,doAIMove,_requestStockfishMove,_buildEvalTrendSVG,handleBackPress,_startEngineHeartbeat,_cleanupEventListeners,_reviewAnalyzeAdvance,_rvAnalyzeBtnLabel,_updateReviewAnalyzeBtn,_doPastePGN};

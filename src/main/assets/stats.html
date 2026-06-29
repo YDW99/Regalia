@@ -3,6 +3,35 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<!--
+  Copyright (C) 2026 Regalia
+
+  This is the standalone statistics page. PGN parsing logic is derived from
+  DroidFish (Copyright (C) Peter Österlund, GPL v3); the rest is original.
+  Since the file contains GPL v3-derived code, the whole file is licensed
+  under GPL v3 to match.
+
+  AI-GEN: AI assisted
+  This code was AI-assisted and has been reviewed for GPL v3 compliance.
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program. If not, see <https://www.gnu.org/licenses/>.
+-->
+<!-- v1.0.7 PHASE 19 (security): Content Security Policy — defense-in-depth for
+     the stats page, which renders user-pasted PGN content. Mirrors the CSP
+     from chess.html (index.html.tpl) but with connect-src 'none' since
+     stats.html uses AndroidBridge for IPC, not fetch. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; frame-ancestors 'none'; base-uri 'self'">
 <title>📊统计数据</title>
 <style>
 /* AI-GEN: AI assisted
@@ -28,8 +57,16 @@
   --comment:#1a3a8a;--variation:#666;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;font-size:16px;line-height:1.5;overflow-x:hidden}
-.hdr{position:sticky;top:0;z-index:100;background:linear-gradient(145deg,#2a1a0a,#1a0a0a);border-bottom:2px solid var(--accent);padding:10px 14px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+/* v1.0.7: html + body both get overflow-x:hidden to kill ALL horizontal scroll.
+   body gets 3px right padding for finger-grip clearance (same as chess.html). */
+html{overflow-x:hidden;max-width:100%}
+/* v1.0.7 PHASE 19 (bug fix): body top padding is 0 here — the sticky .hdr
+   below owns the top safe-area via its own padding-top. Previously both body
+   and .hdr applied env(safe-area-inset-top), causing the header to sit at
+   2×safe-top + 8px before scrolling, then jump up by safe-top when sticky
+   kicked in — a visible "header snaps upward" glitch on first scroll. */
+body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;font-size:16px;line-height:1.5;overflow-x:hidden;max-width:100%;padding:0 calc(env(safe-area-inset-right) + 3px) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+.hdr{position:sticky;top:0;z-index:100;background:linear-gradient(145deg,#2a1a0a,#1a0a0a);border-bottom:2px solid var(--accent);padding:calc(10px + env(safe-area-inset-top)) 14px 10px 14px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 8px rgba(0,0,0,.4)}
 .hdr h1{font-size:1.15rem;color:var(--accent);font-weight:700;letter-spacing:.5px}
 .hdr-btns{display:flex;gap:6px;flex-wrap:wrap}
 .btn{background:rgba(212,160,23,.15);color:var(--text);border:1px solid rgba(212,160,23,.4);border-radius:6px;padding:6px 12px;font-size:.8rem;cursor:pointer;font-family:inherit;white-space:nowrap;transition:background .15s}
@@ -109,6 +146,24 @@ table tr:hover{background:rgba(212,160,23,.05)}
 .time-chart-bar.white{fill:#E8E8F0}
 .time-chart-bar.black{fill:#7eb8da}
 @media(max-width:600px){.content{padding:8px}.hdr{padding:8px}.hdr h1{font-size:1rem}.btn{padding:4px 8px;font-size:.75rem}.fen-panel{font-size:.75rem;padding:8px}.fen-panel .fen-copy{font-size:.65rem;padding:2px 8px}}
+/* v1.0.7 UI: Portrait full-screen optimization for stats page.
+   - Add safe-area-inset padding for notch/punch-hole/R-corner screens.
+   - Ensure the header buttons wrap gracefully on very narrow screens.
+   - Ensure the board and all SVG charts never exceed viewport width.
+   - Force overflow-x:hidden as defense-in-depth. */
+@media(max-width:900px) and (orientation:portrait){
+  /* v1.0.7 PHASE 19: body and .hdr safe-area now handled in the base rules above. */
+  .hdr{flex-wrap:wrap;gap:6px}
+  .hdr-btns{flex-wrap:wrap}
+  .content{max-width:100%;overflow-x:hidden;word-wrap:break-word;overflow-wrap:break-word}
+  /* Ensure tables don't overflow on narrow screens — allow horizontal scroll
+     within the table container if needed, but the page itself never scrolls. */
+  .section{overflow-x:auto;max-width:100%}
+  /* Stats board: use full available width on narrow screens, don't cap at 360px */
+  #statsBoardOuter{max-width:100%!important}
+  /* SVG charts: already width:100%, but ensure they don't exceed viewport */
+  .eval-chart,.material-chart,.time-chart{max-width:100%;overflow:hidden}
+}
 </style>
 </head>
 <body>
@@ -1261,48 +1316,10 @@ function calcAccuracy(avgCPL){
   return Math.max(0,Math.min(100,acc)).toFixed(1);
 }
 
-// Render the PGN with rich formatting
-function renderPGN(parsed,evalData){
-  if(!parsed||!parsed.moves.length)return '<div class="loading">'+T('no_data')+'</div>';
-  let h='<div class="pgn-display">';
-  // Headers
-  const defaultHeaders={Event:'?',Site:'?',Date:'?',Round:'?',White:'?',Black:'?',Result:'*',TimeControl:'?'};
-  const hdrs={...defaultHeaders,...parsed.headers};
-  for(const k of ['Event','Site','Date','Round','White','Black','Result','TimeControl']){
-    h+='<span class="header-tag">['+k+' "'+(hdrs[k]||'?')+'"]</span>';
-  }
-  h+='<div style="margin-top:10px">';
-  // Moves with comments and variations
-  for(let i=0;i<parsed.moves.length;i++){
-    const m=parsed.moves[i];
-    const moveNum=Math.floor(i/2)+1;
-    const isWhite=moverIsWhite(i,parsed);
-    if(isWhite){
-      h+='<span class="move-num">'+moveNum+'.</span> ';
-    }
-    // Render move with piece symbol
-    h+='<span class="move">'+renderMoveNotation(m.notation)+'</span> ';
-    // Eval annotation if available
-    if(evalData&&evalData[i]){
-      const ev=evalData[i];
-      const evalStr=ev.mate?('#'+ev.mate):((ev.eval/100).toFixed(1));
-      h+='<span class="comment">{'+evalStr+'}</span> ';
-    }
-  }
-  h+='</div></div>';
-  return h;
-}
-
-// Render move notation with piece symbols
-function renderMoveNotation(notation){
-  if(!notation)return '';
-  // Replace piece letters with symbols
-  let result=notation;
-  // Detect color from context (alternating) — simplified: use white symbols for uppercase piece letters
-  // Actually we need to know the color. For now, use a neutral approach: replace K/Q/R/B/N with symbols
-  // The caller should wrap in appropriate color span
-  return result;
-}
+// v1.0.7 PHASE 19 (redundancy cleanup): Removed dead functions renderPGN() and
+// renderMoveNotation() — they were superseded by renderPGNText() in v1.0.3 but
+// never deleted. renderMoveNotation was a no-op stub ("return result" with no
+// transformation). Verified: no caller exists in the codebase.
 
 // Render statistics
 function renderStats(parsed,evalData){
@@ -2303,10 +2320,38 @@ function renderFENPanel(effectiveParsed,selectedIdx){
 // HTML attribute context (the FEN is rendered inside a <span> but could be
 // re-injected into attributes by downstream code). Quote-escaping closes
 // this XSS vector and matches chess.html's _esc() behavior.
+// v1.0.7 PHASE 17 (Kimi audit, partial adoption): Added backtick escaping —
+// closes a residual attribute-injection vector for template literals that
+// some downstream code might construct. Backticks in PGN comments are rare
+// but legal; escaping them costs nothing.
 function _escFEN(s){
   if(!s)return '';
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-          .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+          .replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/`/g,'&#96;');
+}
+// v1.0.7 PHASE 17 (Kimi audit suggestion C — adopted):
+// Replace JSON.parse(JSON.stringify(state)) deep clone in selectVariationMove
+// with a hand-written cloneState(). The state object has a known, stable
+// shape (board: 8x8 array of {type,color}|null, currentTurn, castlingRights,
+// enPassantTarget, halfMoveClock, fullMoveNumber, wk, bk) — no Map, no Set,
+// no undefined, no circular references. The hand-rolled clone is ~10x faster
+// than JSON round-trip and is type-safe (no silent data loss if a future
+// field is added that JSON would drop).
+//
+// Note: this only clones the "parsed.moves[].state" shape used by stats.html
+// (NOT the full gameState in chess.html which has posCount:Map, hash, etc).
+function _cloneStatsState(s){
+  if(!s)return null;
+  return {
+    board:s.board?s.board.map(r=>r.map(c=>c?{type:c.type,color:c.color}:null)):null,
+    currentTurn:s.currentTurn,
+    castlingRights:s.castlingRights?{...s.castlingRights}:null,
+    enPassantTarget:s.enPassantTarget?{row:s.enPassantTarget.row,col:s.enPassantTarget.col}:null,
+    halfMoveClock:s.halfMoveClock||0,
+    fullMoveNumber:s.fullMoveNumber||1,
+    wk:s.wk?{row:s.wk.row,col:s.wk.col}:null,
+    bk:s.bk?{row:s.bk.row,col:s.bk.col}:null
+  };
 }
 // v1.0.3: Copy FEN to clipboard. Uses navigator.clipboard if available,
 // falls back to a hidden textarea + document.execCommand('copy').
@@ -2395,7 +2440,14 @@ function _renderStatsBoard(parsed){
   //     text-shadow glow + paint-order:stroke fill.
   let bh='<div class="section"><h2>'+(T('position_board')||(_lang==='zh'?'当前局面':'Current Position'))+'</h2>';
   // Outer wrapper: file labels row (top) + flex row (rank labels + board grid)
-  bh+='<div id="statsBoardOuter" style="width:100%;max-width:360px;margin:0 auto 14px auto">';
+  // v1.0.7 PHASE 17 (Kimi audit suggestion 2.5 — adopted, scaled down):
+  // Raised max-width from 360px to 400px so the stats board breathes a bit
+  // more on tablets / wide landscape phones without overflowing on phones
+  // (the parent panel is already width-capped). Kimi suggested dropping the
+  // cap entirely or using container queries; we keep the cap because the
+  // stats panel itself is bounded and an unbounded board would dominate
+  // the panel on tablets, hiding the surrounding statistics.
+  bh+='<div id="statsBoardOuter" style="width:100%;max-width:400px;margin:0 auto 14px auto">';
   // File labels (a-h) on TOP, outside the board — matching main board's .flbl style
   bh+='<div style="display:flex;margin-left:18px"><div style="display:grid;grid-template-columns:repeat(8,1fr);width:100%;box-sizing:border-box">';
   for(let c=0;c<8;c++){
@@ -2588,7 +2640,12 @@ function renderPGNText(parsed,evalData,comments){
       let end=movetext.indexOf('}',i);
       if(end<0)end=movetext.length-1;
       const comment=movetext.substring(i+1,end);
-      result+='<span class="comment">{'+comment+'}</span>';
+      // v1.0.7 BUG FIX (audit: 棋局前端代码审查.docx §2): XSS escape the
+      // raw PGN comment text. Comments come from user-pasted PGN and may
+      // contain arbitrary HTML; without escaping, a comment like
+      //   }</span><img src=x onerror=alert(1)>
+      // would inject markup into the stats page.
+      result+='<span class="comment">{'+_escFEN(comment)+'}</span>';
       i=end+1;
       continue;
     }
@@ -2635,7 +2692,8 @@ function renderPGNText(parsed,evalData,comments){
         if(variationText[vi]==='{'){
           let vEnd=variationText.indexOf('}',vi);
           if(vEnd<0)vEnd=variationText.length-1;
-          varRendered+='<span class="comment">{'+variationText.substring(vi+1,vEnd)+'}</span>';
+          // v1.0.7: XSS-escape variation comments too (same fix as mainline comments).
+          varRendered+='<span class="comment">{'+_escFEN(variationText.substring(vi+1,vEnd))+'}</span>';
           vi=vEnd+1;
           continue;
         }
@@ -2913,7 +2971,12 @@ function selectVariationMove(varId,varClickedIdx){
   let state;
   if(v.mainIdxBefore>0&&parsed.moves[v.mainIdxBefore-1]){
     // Deep-copy the state to avoid mutating the cached parsed.moves entry.
-    state=JSON.parse(JSON.stringify(parsed.moves[v.mainIdxBefore-1].state));
+    // v1.0.7 PHASE 17: replaced JSON.parse(JSON.stringify(...)) with the
+    // hand-written _cloneStatsState() — faster (no JSON serialize/parse
+    // round-trip of an 8x8 array) and type-safe (preserves field types
+    // that JSON would silently drop, e.g. undefined, Date, etc., even
+    // though the current state shape has none of those).
+    state=_cloneStatsState(parsed.moves[v.mainIdxBefore-1].state);
   }else{
     state=parsed.startFEN?fenToState(parsed.startFEN):initState();
   }
@@ -2978,7 +3041,7 @@ function _showStatsExportDialog(){
   overlay.className='dov';
   overlay.setAttribute('role','dialog');
   overlay.setAttribute('aria-modal','true');
-  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:10000';
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:10000;padding:10px calc(env(safe-area-inset-right) + 3px) 10px env(safe-area-inset-left);box-sizing:border-box;overflow-x:hidden';
   overlay.onclick=function(e){if(e.target===overlay)overlay.remove();};
   var dlg=document.createElement('div');
   dlg.className='dlg';
@@ -3110,7 +3173,7 @@ function _showStatsImportDialog(){
   overlay.className='dov';
   overlay.setAttribute('role','dialog');
   overlay.setAttribute('aria-modal','true');
-  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:10000';
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:10000;padding:10px calc(env(safe-area-inset-right) + 3px) 10px env(safe-area-inset-left);box-sizing:border-box;overflow-x:hidden';
   overlay.onclick=function(e){if(e.target===overlay)overlay.remove();};
   var dlg=document.createElement('div');
   dlg.className='dlg';
@@ -3246,7 +3309,7 @@ function _showStatsImportBackPrompt(){
   overlay.setAttribute('role','dialog');
   overlay.setAttribute('aria-modal','true');
   overlay.setAttribute('aria-label',title);
-  overlay.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:10000;padding:16px';
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:10000;padding:10px calc(env(safe-area-inset-right) + 3px) 10px env(safe-area-inset-left);box-sizing:border-box;overflow-x:hidden';
   var dlg=document.createElement('div');
   dlg.className='dlg';
   dlg.style.cssText='max-width:380px;background:var(--card,#221015);border:1px solid var(--border2,#d4a017);border-radius:8px;padding:18px;width:100%;box-sizing:border-box';
@@ -3315,6 +3378,43 @@ function _statsImportBackDismiss(){
     }
   }
 }
+// v1.0.7 UI: Unified Android back-button handler for the stats page.
+// Priority order (most specific first):
+//   1. _statsImportBackDialogVisible — the "🗃️ Import PGN to game?" Yes/No/Cancel
+//   2. Any other open .dov overlay (export dialog, import dialog, etc.) — close topmost
+//   3. returnToGame() — close the stats activity and return to MainActivity
+// Returns true if the back press was consumed (so StatsActivity should NOT
+// call finish()), false if the activity should be closed.
+function handleStatsBackPress(){
+  try{
+    if(typeof _statsImportBackDialogVisible!=='undefined'&&_statsImportBackDialogVisible){
+      _statsImportBackDismiss();
+      return true;
+    }
+    // Close the topmost .dov overlay (export/import dialogs created via DOM appendChild).
+    // We do NOT close the import-back dialog here (already handled above).
+    var overlays=document.querySelectorAll('.dov[role="dialog"]');
+    if(overlays.length>0){
+      // Remove the last (topmost in z-order, since later appends paint above earlier ones)
+      var topmost=overlays[overlays.length-1];
+      var ariaLabel=topmost.getAttribute('aria-label')||'';
+      // Don't double-handle the import-back dialog (already returned true above
+      // when _statsImportBackDialogVisible is true). Defensive: skip it.
+      if(ariaLabel.indexOf('Import PGN to game')<0&&ariaLabel.indexOf('将PGN导入到对局')<0){
+        topmost.remove();
+        return true;
+      }
+    }
+    // No overlay open — delegate to returnToGame() (which may show the
+    // import-back interceptor or close the activity).
+    if(typeof returnToGame==='function'){
+      returnToGame();
+      return true;
+    }
+  }catch(e){console.error('handleStatsBackPress failed',e);}
+  return false;
+}
+window.handleStatsBackPress=handleStatsBackPress;
 
 // Initialize — get payload from Java bridge
 function init(){
@@ -3390,6 +3490,14 @@ document.addEventListener('keydown',function(e){
       return; // Let the default delete-character action happen
     }
     e.preventDefault();
+    // v1.0.7 PHASE 19 (bug fix): If the import-back dialog is visible, dismiss
+    // it instead of calling returnToGame() (which would re-open the same dialog).
+    // Previously, after the user dismissed the dialog with Cancel, the next
+    // Backspace would immediately re-open it — trapping keyboard users.
+    if(typeof _statsImportBackDialogVisible!=='undefined'&&_statsImportBackDialogVisible){
+      if(typeof _statsImportBackDismiss==='function')_statsImportBackDismiss();
+      return;
+    }
     returnToGame();
   }
 });

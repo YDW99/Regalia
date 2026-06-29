@@ -631,3 +631,31 @@ v1.0.6 (2026.6.27):
   - chess.html: rebuilt from chess.src/ changes.
   - stats.html: executeMove() castling rook-save fix + scroll preservation.
   - AGPLv3_Logo.svg, GPLv3_Logo.svg unchanged.
+
+v1.0.7 (2026.6.28-30):
+  - chess.src/ changes: see src/main/assets/chess.src/README.license for
+    full per-file details (Phases 1-20). Key changes across phases:
+    code-review bug fixes; Quick Toolbar + setup 🔁/⚡ markers; portrait UI
+    redesign; Chess960/X-FEN rule correctness; board sizing; eval bar/chart
+    optimization; PGN [%eval] import off-by-one fix; Phase 17 Chess960
+    castling "king self-capture" fix + review button auto-refresh + 5
+    Kimi-audit suggestions; Phase 18 _reviewEvalCache LRU eviction + review
+    move-list virtual list + 11 code-review fixes; Phase 19 comprehensive
+    7-subagent 28k-line code review + 20+ critical fixes (cache corruption
+    race, cross-mode stale callback, animateMove reduced-motion race,
+    reviewAnalyzeAll eval restoration, PGN [%eval] placeholder offset,
+    setupRedoStack, _resignGame clock leak, StockfishNative volatile fields,
+    stopAndWaitForBestmove timeout, ChessApp Error handling, etc.); Phase 20
+    UX refinements (review eval bar/analyze button enlarged, move animation
+    slowed ~30% with 120fps preserved, landscape anti-shake clipping fix,
+    portrait dialog repositioning to "slightly above center"); Phase 21
+    bug fixes (portrait dialog positioning precision fix 59vh→44vh,
+    landscape anti-shake root-cause fix overflow-x:visible + _antiShake=8
+    both orientations + rollback of ineffective margin-right, move-history
+    panel overflow-x:auto).
+  - chess.html: rebuilt from chess.src/ changes after each phase.
+  - stats.html: Phase 17 Kimi fixes (_escFEN backtick, _cloneStatsState,
+    board max-width 400px); Phase 19 Backspace dialog fix, safe-area-inset
+    dedup, CSP added, dead code removal (renderPGN/renderMoveNotation),
+    full Copyright + GPL v3 license block added to <head>.
+  - AGPLv3_Logo.svg, GPLv3_Logo.svg unchanged.

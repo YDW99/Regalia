@@ -400,15 +400,22 @@ function _parsePGN(pgnText){
           _currentMoveCal=[];
           _currentMoveComment=null;
           _currentMoveFlushed=true;
-          // Attach pending eval to the post-move position (reviewStep = moveCount).
-          // NOTE: [%eval] is a special case — it attaches to the position AFTER
-          // the move (reviewStep = _moveCount), NOT to the move itself. This is
-          // because [%eval] describes the evaluation of the resulting position.
-          // The "attach to next move" pattern was correct for [%eval] but wrong
-          // for [%csl]/[%cal]/free-text. We keep _pendingEval as a separate
-          // pre-move accumulator ONLY for [%eval].
+          // Attach pending eval to the post-move position.
+          // v1.0.7 PHASE 16 BUG FIX: [%eval] in a comment AFTER move N
+          // describes the position AFTER move N (Lichess/PGN convention).
+          // At this point _moveCount has JUST been incremented for the NEW
+          // move we're about to process, so the PREVIOUS move's post-position
+          // is reviewStep = _moveCount - 1. The old code used _moveCount
+          // (off-by-one — attached to the wrong position, and in the trailing
+          // case wrote to a key beyond reviewStates.length).
+          // Trace for `1. e4 {[%eval 0.2]} e5`: e4 → _moveCount=1; {[%eval]}
+          // sets _pendingEval; e5 → _moveCount=2, then attach. The eval
+          // describes the post-e4 position = reviewStep 1 = _moveCount-1. ✓
+          // Trace for a leading `{[%eval 0.5]} 1. e4`: _pendingEval set before
+          // any move; e4 → _moveCount=1, attach at _moveCount-1=0 = initial
+          // position. ✓ (This is the Phase 15 "step 0 cacheable" goal.)
           if(_pendingEval){
-            _extractedEvals.push({reviewStep:_moveCount,eval:_pendingEval.eval,mate:_pendingEval.mate,depth:_pendingEval.depth,wdlW:_pendingEval.wdlW,wdlD:_pendingEval.wdlD,wdlL:_pendingEval.wdlL});
+            _extractedEvals.push({reviewStep:_moveCount-1,eval:_pendingEval.eval,mate:_pendingEval.mate,depth:_pendingEval.depth,wdlW:_pendingEval.wdlW,wdlD:_pendingEval.wdlD,wdlL:_pendingEval.wdlL});
             _pendingEval=null;
           }
         }
@@ -422,9 +429,13 @@ function _parsePGN(pgnText){
     // the last move (_lastMoveIdx), which is correct per PGN spec.
     _flushCurrentMovePayload();
     // Trailing pending eval (comment after the last move) attaches to the
-    // position after the last move.
+    // position after the last move. _moveCount = number of moves seen, so
+    // the post-last-move position is reviewStep = _moveCount.
+    // v1.0.7 PHASE 16 BUG FIX: was _moveCount+1 (off-by-one — wrote to a key
+    // beyond reviewStates.length, which is moveRecords.length = _moveCount;
+    // valid reviewSteps are 0.._moveCount).
     if(_pendingEval&&_moveCount>=0){
-      _extractedEvals.push({reviewStep:_moveCount+1,eval:_pendingEval.eval,mate:_pendingEval.mate,depth:_pendingEval.depth,wdlW:_pendingEval.wdlW,wdlD:_pendingEval.wdlD,wdlL:_pendingEval.wdlL});
+      _extractedEvals.push({reviewStep:_moveCount,eval:_pendingEval.eval,mate:_pendingEval.mate,depth:_pendingEval.depth,wdlW:_pendingEval.wdlW,wdlD:_pendingEval.wdlD,wdlL:_pendingEval.wdlL});
     }
     // Also handle pending eval at the START (before any move) — attaches to
     // reviewStep 0 (the starting position).
@@ -915,6 +926,16 @@ function importPGN(pgnText){
   }
   const result=_parsePGN(pgnText);
   if(!result||!result.moves||!result.moves.length){showToast(T('pgn_invalid'),2000);return;}
+  // v1.0.7 BUG FIX (audit: 棋局前端代码审查.docx §10):
+  // Clear _reviewEvalCache before importing a new PGN — see _startGameImpl()
+  // for rationale (cache is keyed by per-game reviewStep, switching games
+  // invalidates the entire key space).
+  try{
+    if(typeof _reviewEvalCache!=='undefined'&&_reviewEvalCache){
+      _reviewEvalCache.clear();
+    }
+    if(typeof _reviewEvalRequestedStep!=='undefined')_reviewEvalRequestedStep=-1;
+  }catch(e){console.warn('importPGN: review eval cache clear failed',e);}
   
   // v1.0.4 NEW: Detect Chess960 variant from PGN [Variant] tag.
   // If detected, enable Chess960 engine mode and set gameVariant for PGN round-trip.
@@ -1442,28 +1463,26 @@ function importPGN(pgnText){
   // [%eval ...] annotations are immediately shown with their cached eval,
   // WITHOUT calling the engine. The engine is only invoked for positions
   // that have no [%eval ...] annotation.
-  //
-  // We clear only the current game's review steps (0..moveRecords.length)
-  // first, to avoid stale entries from a previous import overwriting the
-  // new game's positions. Other games' entries (e.g., from analyze-all on
-  // a different game) are preserved.
+  // v1.0.7 PHASE 16: The cache was already fully cleared at the top of
+  // importPGN (line ~935), so no selective pre-clear is needed here.
+  // The old code had a redundant loop deleting entries 0..moveRecords.length+1
+  // "to preserve other games' entries" — but the full clear already removed
+  // everything, so the loop was dead work and its comment was misleading.
   try{
     if(result.extractedEvals&&result.extractedEvals.length>0&&typeof _reviewEvalCache!=='undefined'){
-      // Clear current game's review-step entries (0..N+1)
-      const _maxStep=moveRecords.length+1;
-      for(let _i=0;_i<=_maxStep;_i++){
-        if(_reviewEvalCache.has(_i))_reviewEvalCache.delete(_i);
-      }
-      // Populate from extracted evals
-      let _populated=0;
+      const _maxStep=moveRecords.length;
+      // v1.0.7 PHASE 19 (critical bug fix): When a black-to-move placeholder
+      // exists at moveRecords[0] (from _prependBlackToMovePlaceholder for FEN
+      // imports where Black is to move), the eval reviewStep values computed
+      // by _parsePGN are offset by 1 — _parsePGN doesn't know about the
+      // placeholder that importPGN prepends AFTER parsing. Without this offset,
+      // evals attach to the wrong step and are invisible on PGN re-export.
+      const _placeholderOffset=(moveRecords.length>0&&moveRecords[0]===null)?1:0;
       for(const _e of result.extractedEvals){
-        if(_e.reviewStep>=0&&_e.reviewStep<=_maxStep){
-          _reviewEvalCache.set(_e.reviewStep,{eval:_e.eval,mate:_e.mate||0,depth:_e.depth||0,wdlW:_e.wdlW!=null?_e.wdlW:-1,wdlD:_e.wdlD!=null?_e.wdlD:-1,wdlL:_e.wdlL!=null?_e.wdlL:-1});
-          _populated++;
+        const _step=_e.reviewStep+_placeholderOffset;
+        if(_step>=0&&_step<=_maxStep){
+          _reviewEvalCache.set(_step,{eval:_e.eval,mate:_e.mate||0,depth:_e.depth||0,wdlW:_e.wdlW!=null?_e.wdlW:-1,wdlD:_e.wdlD!=null?_e.wdlD:-1,wdlL:_e.wdlL!=null?_e.wdlL:-1});
         }
-      }
-      if(_populated>0){
-        console.log('importPGN: populated '+_populated+' eval entries from PGN comments');
       }
     }
   }catch(e){console.warn('importPGN: eval cache population failed',e);}
@@ -1486,13 +1505,15 @@ function importPGN(pgnText){
   // from the PGN author's explicit annotation, not from our heuristic).
   try{
     if(result.extractedAnnotations&&result.extractedAnnotations.length>0&&typeof _visualAnnotationsCache!=='undefined'){
-      let _populatedVa=0;
+      // v1.0.7 PHASE 19: Apply same placeholder offset as eval cache above.
+      const _placeholderOffset=(moveRecords.length>0&&moveRecords[0]===null)?1:0;
       for(const _a of result.extractedAnnotations){
-        if(_a.moveIdx>=0&&_a.moveIdx<moveRecords.length){
+        const _idx=_a.moveIdx+_placeholderOffset;
+        if(_idx>=0&&_idx<moveRecords.length){
           // Merge with any existing cache entry (e.g., if there were multiple
           // comments for the same move). Deduplicate by color+square /
           // color+from+to.
-          const _existing=_visualAnnotationsCache.get(_a.moveIdx)||{csl:[],cal:[]};
+          const _existing=_visualAnnotationsCache.get(_idx)||{csl:[],cal:[]};
           const _cslSeen=new Set(_existing.csl.map(x=>x.color+x.square));
           for(const _c of _a.csl){
             const _k=_c.color+_c.square;
@@ -1509,12 +1530,8 @@ function importPGN(pgnText){
               _calSeen.add(_k);
             }
           }
-          _visualAnnotationsCache.set(_a.moveIdx,_existing);
-          _populatedVa++;
+          _visualAnnotationsCache.set(_idx,_existing);
         }
-      }
-      if(_populatedVa>0){
-        console.log('importPGN: populated '+_populatedVa+' visual annotation entries from PGN comments');
       }
     }
   }catch(e){console.warn('importPGN: visual annotations cache population failed',e);}
@@ -1526,20 +1543,18 @@ function importPGN(pgnText){
   //   - Re-exported in _buildPGNString() (so PGN round-trip is lossless)
   try{
     if(result.extractedComments&&result.extractedComments.length>0){
-      let _populatedCm=0;
+      // v1.0.7 PHASE 19: Apply same placeholder offset as eval cache above.
+      const _placeholderOffset=(moveRecords.length>0&&moveRecords[0]===null)?1:0;
       for(const _c of result.extractedComments){
-        if(_c.moveIdx>=0&&_c.moveIdx<moveRecords.length&&moveRecords[_c.moveIdx]){
-          if(moveRecords[_c.moveIdx].comment){
+        const _idx=_c.moveIdx+_placeholderOffset;
+        if(_idx>=0&&_idx<moveRecords.length&&moveRecords[_idx]){
+          if(moveRecords[_idx].comment){
             // Append to existing comment (multiple comments for the same move)
-            moveRecords[_c.moveIdx].comment+=' | '+_c.comment;
+            moveRecords[_idx].comment+=' | '+_c.comment;
           }else{
-            moveRecords[_c.moveIdx].comment=_c.comment;
+            moveRecords[_idx].comment=_c.comment;
           }
-          _populatedCm++;
         }
-      }
-      if(_populatedCm>0){
-        console.log('importPGN: populated '+_populatedCm+' free-text comments from PGN');
       }
     }
   }catch(e){console.warn('importPGN: comment population failed',e);}
@@ -1624,16 +1639,27 @@ if(c!==8)return null;
 if(!wk||!bk)return null;
 const turn=parts[1]==='b'?'black':'white';
 const crStr=parts[2]||'-';
-// v1.0.4 NEW: Detect Shredder-FEN castling rights (Chess960 format).
-// Shredder uses the rook's source file letter (uppercase=White, lowercase=Black)
-// instead of K/Q/k/q. If crStr contains any letter A-H or a-h (besides the
-// standard K/Q/k/q), parse it as Shredder format.
-const _isShredder=/[A-Ha-h]/.test(crStr)&&!/[KQkq]/.test(crStr.replace(/[A-Ha-h]/g,''));
+// v1.0.7 PHASE 4: X-FEN castling rights parsing.
+// X-FEN (the FEN extension used by Chess960) supports TWO notations:
+//   1. Standard KQkq: K=White kingside (rook on h1), Q=White queenside (rook
+//      on a1), k/q = Black equivalent.
+//   2. Shredder (file letters): the letter of the file where the castling
+//      rook sits, uppercase for White, lowercase for Black (e.g. "AHah" for
+//      standard position, "Bf" for White queenside rook on b1 + White kingside
+//      rook on f1).
+// X-FEN allows MIXED notation (e.g. "KQah" — White uses KQ because its rooks
+// are on a1/h1, Black uses Shredder "ah" because its rooks are elsewhere).
+//
+// The previous implementation used a brittle regex to distinguish Shredder
+// from standard, and could not handle mixed notation. The new
+// parseShredderCastling() (in chess960.js) handles ALL of these cases
+// uniformly by treating K/Q/k/q as file letters h/a respectively. We just
+// always call it (it returns all-false for "-").
 let castlingRights;
-if(_isShredder&&typeof parseShredderCastling==='function'){
+if(typeof parseShredderCastling==='function'){
   castlingRights=parseShredderCastling(crStr,board);
 }else{
-  // Standard KQkq format
+  // Fallback if chess960.js failed to load: standard KQkq only.
   castlingRights={whiteKingside:crStr.includes('K'),whiteQueenside:crStr.includes('Q'),blackKingside:crStr.includes('k'),blackQueenside:crStr.includes('q')};
 }
 let enPassantTarget=null;
@@ -1714,7 +1740,18 @@ if(!resp.ok){
   }
   return null;
 }
-const data=await resp.json();
+// v1.0.7 PHASE 19 (bug fix): Parse JSON in its own try/catch so a malformed
+// response body (server reachable but bad payload) does NOT count toward
+// _tbFailCount and trip _tbOffline. Previously, a JSON parse error threw into
+// the generic catch below, incrementing the fail count — contradicting the
+// Rev62 fix that excluded 4xx errors for the same reason (server is reachable).
+let data;
+try{
+  data=await resp.json();
+}catch(e){
+  console.warn('probeTablebase: bad JSON response',e);
+  return null;
+}
 // LRU cache: evict oldest when full
 if(_tbCache.size>=_TB_CACHE_MAX){const firstKey=_tbCache.keys().next().value;_tbCache.delete(firstKey);}
 _tbCache.set(fen,data);
