@@ -53,6 +53,11 @@ License classification by file:
   - EngineService.java: AGPL v3 (original)
       Foreground service that keeps the engine subprocess alive on
       Android 14/15 (Xiaomi HyperOS 3) when the app goes to background.
+  - StabilizationHelper.java: AGPL v3 (original)
+      v1.0.8 PHASE 49: added to the top-level classification (was previously
+      only mentioned in historical Phase 32/33/36/37 entries). Original
+      sensor-fusion anti-shake code (OIS-style translation compensation
+      using TYPE_LINEAR_ACCELERATION).
   - TlsSecurityHelper.java: AGPL v3 (original)
       TLS 1.2+ enforcement helper for HTTPS connections to the Lichless
       Tablebase API on older Android versions (API 21-27).
@@ -66,7 +71,11 @@ See the root-level LICENSE-AGPL v3, LICENSE-GPL v3, and NOTICE files
 for full license texts and attribution details.
 
 v1.0.2 NEW FEATURE additions:
-  - StatsActivity.java: AGPL v3 (original)
+  - StatsActivity.java: GPL v3 (v1.0.8 PHASE 37 reclassification)
+      v1.0.8 PHASE 37/49: reclassified from AGPL v3 → GPL v3 to match the
+        license of the stats.html asset it exclusively hosts (the two form
+        an inseparable @JavascriptInterface unit). The Java code itself is
+        original, but GPL v3 avoids dual-license confusion for redistributors.
       Fullscreen WebView activity that hosts the 📊统计 statistics page.
       Loads assets/stats.html and passes the game PGN + eval data + move
       records via Intent extra. Handles 💾HTML export, 🗃️import (Paste PGN /
@@ -83,9 +92,6 @@ v1.0.2 NEW FEATURE additions:
         - HTML export callback uses JSON encoding (not string concatenation)
           to prevent JS injection from filenames with special characters.
         - REQUEST_CODE_IMPORT_PGN=2002 for the in-activity SAF picker.
-      This file is original Regalia code (AGPL v3) — it only hosts the
-      WebView and delegates all PGN parsing to stats.html (which is GPL v3
-      due to DroidFish-derived code).
 
 v1.0.2 bug-fix updates to existing files:
   - StockfishNative.java:
@@ -804,3 +810,139 @@ v1.0.3 patch changes (version number unchanged — still v1.0.3 / versionCode 10
     - License classification: unchanged — StockfishNative.java and
       engine_jni.cpp remain GPL v3 (DroidFish-derived); all other Java
       files remain AGPL v3 (original). No new third-party code introduced.
+
+v1.0.8 (2026.6.30) changes:
+  - StockfishNative.java: ENGINE_VERSION constant updated to "v1.0.8".
+  - MainActivity.java: VERSION constant updated to "v1.0.8".
+  - ChessApp.java: init log message updated to "v1.0.8".
+  - ChessWebViewClient.java: version comment updated to "v1.0.8".
+  - All other Java files unchanged from v1.0.7 baseline.
+
+  v1.0.8 Phase 22 7th/8th supplements (2026.6.30):
+    - StatsActivity.java: Added @JavascriptInterface isSystemDarkMode() method
+      (same as StockfishNative.isSystemDarkMode() — reads UiModeManager).
+    - All other Java files unchanged from 5th supplement baseline.
+
+
+  v1.0.8 Phase 22 fifth supplement (2026.6.30):
+    - StockfishNative.java: New @JavascriptInterface isSystemDarkMode() method
+      that reads system night mode via UiModeManager. Used by JS to detect
+      system dark/light mode on devices where WebView's prefers-color-scheme
+      is unreliable (e.g. Xiaomi HyperOS 3).
+
+
+
+
+v1.0.8 Phase 23 (2026.7.1):
+  - StockfishNative.java: isSystemDarkMode() already added in Phase 22 (no
+    change). Version constants (ENGINE_VERSION) already "v1.0.8" from Phase 22.
+  - MainActivity.java, StatsActivity.java, EngineService.java, ChessApp.java,
+    ChessWebViewClient.java, StabilizationHelper.java, RootDetector.java,
+    TlsSecurityHelper.java: no changes in Phase 23.
+
+v1.0.8 Phase 24 (2026.7.1):
+  - StockfishNative.java (GPL v3): recoverEngine() executor leak fix
+    (_engineExecutor.shutdown() before creating fresh); makeExecutable()
+    fallback chmod 755→744 (consistency with nativeChmod 0744); new
+    cancelPendingExport() method to clear pending export state on SAF cancel.
+  - MainActivity.java (AGPL v3): onActivityResult() now clears pending
+    export on user-cancel (calls cancelPendingExport()) instead of early-
+    returning with stale state.
+  - EngineService.java (AGPL v3): isRunning field changed from plain
+    boolean to volatile (read from JS binder thread + service main thread).
+  - No changes to other Java files.
+
+v1.0.8 Phase 25 (2026.7.1): No changes to Java files.
+
+v1.0.8 Phase 26 (2026.7.1):
+  - StockfishNative.java (GPL v3): New haptic patterns PAWN_MOVE, QUEEN_MOVE,
+    KING_MOVE in performHapticInternal() (API 35+ PWLE + API 26+ waveform
+    fallbacks).
+
+v1.0.8 Phase 27 (2026.7.1):
+  - StockfishNative.java (GPL v3): New haptic patterns KNIGHT_MOVE,
+    BISHOP_MOVE, ROOK_MOVE in performHapticInternal() (API 35+ PWLE +
+    API 26+ waveform + legacy fallback). All six piece types now have
+    dedicated, personality-matched haptic feedback.
+
+v1.0.8 Phase 28 (2026.7.1):
+  - StockfishNative.java (GPL v3): tryPwleVibrate returns boolean (fallback
+    to waveform); new CASTLE + PROMOTION haptic cases; all call sites updated
+    to use && tryPwleVibrate() pattern.
+
+v1.0.8 Phase 29 (2026.7.1):
+  - MainActivity.java (AGPL v3): Safe Browsing enabled; 6-step WebView
+    destroy sequence (removeView → clearHistory → loadUrl about:blank →
+    removeJavascriptInterface → onPause → destroy).
+  - ChessWebViewClient.java (AGPL v3): onRenderProcessGone callback for
+    render-process crash recovery (recreates Activity).
+  - StatsActivity.java (AGPL v3): No changes.
+
+v1.0.8 Phase 30 (2026.7.1):
+  - StockfishNative.java (GPL v3): _restartInProgress cleared on init
+    early-return paths; heartbeat zombie check gated on isSearching;
+    duplicate onEngineError removed; engineSupportsOption synchronized;
+    startHeartbeat synchronized; shell-fallback exception variable fix.
+  - MainActivity.java (AGPL v3): onResume retry check fix; deprecated
+    Configuration.locale → getLocales(); version comment v18.4.5 → v1.0.8.
+  - ChessWebViewClient.java (AGPL v3): onRenderProcessGone log simplified.
+  - StatsActivity.java (AGPL v3): 6-step WebView teardown in onDestroy.
+  - StabilizationHelper.java (AGPL v3): full AGPL v3 boilerplate added;
+    clamp simplified to Math.max/min.
+  - ChessApp.java, RootDetector.java, TlsSecurityHelper.java,
+    EngineService.java: No changes.
+
+v1.0.8 Phase 32 (2026.7.1):
+  - StabilizationHelper.java (AGPL v3): dt now computed from event.timestamp
+    (not hardcoded 0.02f); clamped to [0.001, 0.1]s; _lastSensorNanos reset
+    in start()/stop().
+  - StockfishNative.java (GPL v3): PGN import truncation now appends a
+    warning PGN comment instead of silently truncating.
+  - StatsActivity.java (AGPL v3): Same PGN truncation notification fix.
+  - MainActivity.java, ChessWebViewClient.java, ChessApp.java,
+    RootDetector.java, TlsSecurityHelper.java, EngineService.java: No changes.
+
+v1.0.8 Phase 33 (2026.7.1):
+  - StockfishNative.java (GPL v3): removed dead isSearching local + ternary in
+    heartbeat; ZOMBIE_TIMEOUT_MS marked reserved; shutdown() race documented;
+    8 memorials trimmed.
+  - ChessApp.java (AGPL v3): Javadoc updated to match actual behavior; inline
+    duplicate memorial removed.
+  - MainActivity.java (AGPL v3): removed pendingStatsImportRequest memorial.
+  - StatsActivity.java (AGPL v3): removed stale "line 283" reference.
+  - StabilizationHelper.java (AGPL v3): trimmed stale external-doc references.
+  - ChessWebViewClient.java, EngineService.java, RootDetector.java,
+    TlsSecurityHelper.java: No changes.
+
+v1.0.8 Phase 36 (2026.7.1):
+  LICENSE RECLASSIFICATION: 5 files moved from AGPL v3 to GPL v3.
+  All code involving engine management or UI interaction is DroidFish-derived.
+  - MainActivity.java: AGPL v3 → GPL v3 (UI interaction — WebView host)
+  - ChessWebViewClient.java: AGPL v3 → GPL v3 (UI interaction — WebView client)
+  - EngineService.java: AGPL v3 → GPL v3 (engine management — foreground service)
+  - StatsActivity.java: AGPL v3 → GPL v3 (UI interaction + PGN display)
+  - StabilizationHelper.java: AGPL v3 → GPL v3 (UI interaction — board stabilization)
+  Files REMAINING AGPL v3: ChessApp.java (infrastructure), RootDetector.java (security),
+  TlsSecurityHelper.java (TLS config) — not chess/engine/PGN/UI code.
+  No functional code changes — license-header-only.
+
+v1.0.8 Phase 37 (2026.7.1):
+  LICENSE CORRECTION: 4 files reverted from GPL v3 back to AGPL v3.
+  Phase 36 incorrectly classified these as DroidFish-derived; they are original.
+  - MainActivity.java: GPL v3 → AGPL v3 (original WebView host/lifecycle)
+  - ChessWebViewClient.java: GPL v3 → AGPL v3 (original WebView client)
+  - EngineService.java: GPL v3 → AGPL v3 (original foreground service)
+  - StabilizationHelper.java: GPL v3 → AGPL v3 (original sensor anti-shake)
+  DroidFish derivation notes removed (none were added for Java files in Phase 36).
+  - StatsActivity.java: Remains GPL v3 (correctly DroidFish-derived PGN display)
+  - ChessApp.java, RootDetector.java, TlsSecurityHelper.java: Already AGPL v3 (no change).
+  No functional code changes — license-header-only.
+
+v1.0.8 Phase 43 (2026.7.1):
+  - All Java files: No changes.
+
+v1.0.8 Phase 42 (2026.7.1):
+  - All Java files: No changes.
+
+v1.0.8 Phase 41 (2026.7.1):
+  - All Java files: No changes.

@@ -51,10 +51,9 @@ source files. All derived code retains GPL v3 licensing as required.
    Derived functions:
      - nativeChmod(): JNI wrapper for chmod() system call
      - nativeRenice(): JNI wrapper for setpriority() system call
-   Original additions:
-     - dlopen()/dlsym() based engine loading (bypasses execve() restriction)
-     - Pipe-based I/O bridge for running engine as shared library
-     - Multiple engine entry point conventions support
+   (v1.0.2: the original dlopen()/dlsym()/pipe-based engine-loading code
+    was removed. Only nativeChmod and nativeRenice remain, both
+    DroidFish-derived. No original code remains in this file.)
 
 3. game-logic.js
    DroidFish sources:

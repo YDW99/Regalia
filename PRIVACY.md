@@ -51,7 +51,7 @@ This data:
 - Can be cleared by uninstalling the app or clearing app data
 - Is not shared with any third party
 - The PGN cache entries contain only chess game records (PGN format) — no personal or device-identifying information. They are never uploaded.
-- The eval cache (`eval_cache.json`) contains per-move Stockfish evaluation scores (centipawn values, mate distances, search depths, WDL probabilities) keyed by review step index. It contains no personal or position-identifying information beyond the chess evaluation data itself.
+- The eval cache (`eval_cache.json`) contains per-move Stockfish evaluation scores (centipawn values, mate distances, search depths, WDL probabilities) keyed by review step index. It contains no personal or position-identifying information beyond the chess evaluation data itself. (v1.0.7+: capped at 2000 entries via LRU eviction — the currently-viewed step is never evicted; eviction order is preserved across app restarts.)
 - The tag files contain user-defined tag strings (e.g., "opening", "tactics") for organizing PGN cache entries. They contain no personal or device-identifying information.
 
 ## Permissions
@@ -61,9 +61,27 @@ This data:
 | INTERNET | Tablebase API queries | No (only for tablebase feature) |
 | ACCESS_NETWORK_STATE | Detect offline status | No |
 | WAKE_LOCK | Keep engine process alive during analysis | Yes (foreground service) |
-| VIBRATE | Haptic feedback | No |
+| VIBRATE | Haptic feedback (personified per-piece haptics, v1.0.8+) | No |
 | FOREGROUND_SERVICE | Engine stability notification | Yes (Android 14+) |
+| FOREGROUND_SERVICE_SPECIAL_USE | Engine foreground service type (`specialUse`, Android 14+) | Yes (Android 14+) |
+| POST_NOTIFICATIONS | Engine foreground service notification (Android 13+) | Yes (Android 13+, runtime-requested) |
+| READ_EXTERNAL_STORAGE | PGN file import from shared storage (legacy, `maxSdkVersion=32`) | No (SAF used on Android 13+) |
+| WRITE_EXTERNAL_STORAGE | PGN/settings file export to shared storage (legacy, `maxSdkVersion=28`) | No (SAF used on Android 9+) |
+
+> **Note on sensors (v1.0.5+):** The board anti-shake feature (`StabilizationHelper.java`) reads the `TYPE_LINEAR_ACCELERATION` sensor for OIS-style translation compensation. This sensor does **not** require any Android permission and the raw motion data is **never** stored or transmitted — it is consumed in real time to apply a `transform: translate()` on the board element and discarded. No permission declaration is needed in the manifest for this sensor.
+
+## Haptic Feedback (v1.0.8+)
+
+v1.0.8 introduces personified haptic feedback — each of the six piece types (pawn, knight, bishop, rook, queen, king) plus castling and promotion has a dedicated vibration pattern. Haptics are:
+
+- Triggered locally via `Vibrator`/`VibrationEffect` (API 26+) or PWLE (API 35+)
+- Controlled by the user's system haptic-feedback preference (`Settings → Sound & vibration → Haptic feedback`)
+- Throttled per-event-type to avoid vibration fatigue
+- Never recorded or transmitted — the vibration is the only output
 
 ## Contact
 
 For questions about this privacy policy, please open an issue on the GitHub repository.
+
+---
+*AI生成*

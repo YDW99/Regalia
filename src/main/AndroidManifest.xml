@@ -1,14 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- AI-GEN: AI assisted -->
-<!-- This code was AI-assisted and has been reviewed for AGPL v3 compliance. -->
+<!--
+  Regalia - AndroidManifest
+  Copyright (C) 2026 Regalia
 
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.Regalia"
-    android:versionCode="107"
-    android:versionName="1.0.7">
+  AI-GEN: AI assisted
+  This code was AI-assisted and has been reviewed for AGPL v3 compliance.
 
-    <!-- v18.5.0: Removed appcompat dependency — no more AndroidX permission injection issues -->
-    <uses-sdk android:minSdkVersion="21" android:targetSdkVersion="35" />
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU Affero General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+  GNU Affero General Public License for more details.
+
+  You should have received a copy of the GNU Affero General Public License
+  along with this program. If not, see <https://www.gnu.org/licenses/>.
+-->
+
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- v1.0.8 PHASE 30: removed redundant package/versionCode/versionName attributes
+         and the <uses-sdk> element — AGP 8.x pulls these from build.gradle
+         (namespace, versionCode, versionName, minSdk, targetSdk). Keeping them
+         created two sources of truth and the package attribute is deprecated. -->
 
     <!-- Required permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -25,9 +41,12 @@
          require READ_MEDIA_IMAGES on Android 13+. The SAF picker (the primary
          import/export path) needs no permissions at all. -->
     <!-- v18.4.0: Request foreground service for engine stability on HyperOS -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" android:minSdkVersion="28" />
+    <!-- v1.0.8 PHASE 30: removed android:minSdkVersion — it is NOT a valid attribute
+         on <uses-permission> (only maxSdkVersion is supported). The system no-ops
+         these permissions on older API levels, so the attribute was misleading. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <!-- v18.4.7: Android 14+ requires specifying foreground service type -->
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" android:minSdkVersion="34" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <!-- Android 13+ (API 33): POST_NOTIFICATIONS required for foreground service notification -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 

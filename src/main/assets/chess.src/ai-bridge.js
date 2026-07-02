@@ -399,12 +399,24 @@ const HapticManager = (function() {
     PIECE_SELECT: 50,
     PIECE_MOVE: 35,
     PIECE_CAPTURE: 50,
+    // v1.0.8 PHASE 26: piece-specific haptics (throttled like PIECE_MOVE)
+    // v1.0.8 PHASE 27: added knight/bishop/rook — all six pieces now have
+    //   distinct, personality-matched haptic feedback.
+    PAWN_MOVE: 35,
+    KNIGHT_MOVE: 45,
+    BISHOP_MOVE: 40,
+    ROOK_MOVE: 50,
+    QUEEN_MOVE: 60,
+    KING_MOVE: 60,
     SLIDER_DRAG: 35,
     TAB_SWITCH: 50,
     TOGGLE_ON: 50,
     TOGGLE_OFF: 50,
     CHECK_ALERT: 100,
-    GAME_OVER: 200
+    GAME_OVER: 200,
+    // v1.0.8 PHASE 41: added CASTLE and PROMOTION (were missing, defaulted to 50ms)
+    CASTLE: 100,
+    PROMOTION: 200
   };
 
   let _lastFireTime = {};
@@ -442,9 +454,19 @@ const HapticManager = (function() {
   }
 
   function refreshSettings() {
+    // v1.0.8 PHASE 49: re-detect _hasVibrator too. The IIFE-time _init() may
+    //   run before AndroidBridge is injected (the WebView's JavascriptInterface
+    //   is attached synchronously, but on some ROMs the bridge object is not
+    //   visible to the very first script execution). If _hasVibrator stayed
+    //   false forever, haptics were permanently disabled even when the device
+    //   has a vibrator and the user enabled haptics. refreshSettings is called
+    //   from onEngineReady / settings import, both of which fire after the
+    //   bridge is guaranteed available.
     try {
-      if (typeof AndroidBridge !== 'undefined' && AndroidBridge.isHapticEnabled) {
-        _userEnabled = AndroidBridge.isHapticEnabled();
+      if (typeof AndroidBridge !== 'undefined') {
+        if (AndroidBridge.isHapticEnabled) _userEnabled = AndroidBridge.isHapticEnabled();
+        if (AndroidBridge.hasVibrator) _hasVibrator = AndroidBridge.hasVibrator();
+        if (AndroidBridge.getApiLevel) _apiLevel = AndroidBridge.getApiLevel();
       }
     } catch(e) {}
   }
@@ -473,7 +495,35 @@ let _evalRequestReviewMode=false;
 let _evalSafetyTimerId=null;
 
 let _toastTimer=0;
-function showToast(msg,duration=2500){const old=document.getElementById('_toast');if(old)old.remove();if(_toastTimer)clearTimeout(_toastTimer);const t=document.createElement('div');t.id='_toast';t.style.cssText='position:fixed;bottom:60px;left:50%;transform:translateX(-50%);background:rgba(42,21,32,.96);color:#f5e6c8;padding:10px 24px;border-radius:6px;font-size:.85rem;z-index:10000;border:1px solid #d4a017;box-shadow:0 0 4px rgba(212,160,23,.10);pointer-events:none;opacity:0;transition:opacity .3s;font-family:system-ui,-apple-system,sans-serif';t.textContent=msg;document.body.appendChild(t);requestAnimationFrame(()=>{t.style.opacity='1'});_toastTimer=setTimeout(()=>{t.style.opacity='0';setTimeout(()=>t.remove(),300)},duration)}
+// v1.0.8 PHASE 22 supplement: Smart toast sound — auto-detect success/error
+//   from the message's i18n key pattern and play a matching sound.
+//   - "已复制/已导出/已保存/copied/exported/saved" → playCopy (清脆叮声)
+//   - "失败/错误/超时/不可用/拒绝/failed/error/timeout/unavailable/rejected" → playError (低沉错误音)
+//   - Otherwise → no sound (avoid sound fatigue for neutral toasts)
+// This avoids modifying all 76 showToast call sites; the sound is inferred
+// from the message content. The detection is conservative — only plays sound
+// for clearly-successful or clearly-failed operations.
+function _playToastSound(msg){
+  try{
+    if(typeof soundOn==='undefined'||!soundOn)return;
+    if(typeof playSound!=='function')return;
+    const m=String(msg||'');
+    // Success keywords (Chinese + English i18n values)
+    if(/已复制|已导出|已保存|copied|exported|saved|成功/i.test(m)){
+      playSound('copy');
+      return;
+    }
+    // Error keywords
+    if(/失败|错误|超时|不可用|拒绝|无法|不能|failed|error|timeout|unavailable|rejected|unable/i.test(m)){
+      playSound('error');
+      return;
+    }
+    // Neutral toast — no sound
+  }catch(e){}
+}
+function showToast(msg,duration=2500){
+  _playToastSound(msg);
+  const old=document.getElementById('_toast');if(old)old.remove();if(_toastTimer)clearTimeout(_toastTimer);const t=document.createElement('div');t.id='_toast';t.style.cssText='position:fixed;bottom:60px;left:50%;transform:translateX(-50%);background:var(--overlay-card-bg);color:var(--text);padding:10px 24px;border-radius:6px;font-size:.85rem;z-index:10000;border:1px solid var(--border2);box-shadow:var(--panel-shadow);pointer-events:none;opacity:0;transition:opacity .3s;font-family:system-ui,-apple-system,sans-serif';t.textContent=msg;document.body.appendChild(t);requestAnimationFrame(()=>{t.style.opacity='1'});_toastTimer=setTimeout(()=>{t.style.opacity='0';setTimeout(()=>t.remove(),300)},duration)}
 
 // Update the foreground service notification with engine process info.
 // This prevents the OS from killing the engine process on aggressive
@@ -484,7 +534,7 @@ let _notificationThrottleTimer=0;
 let _pendingNotificationInfo=''; // v1.0.7 PHASE 19: buffer last info during throttle window
 function _updateEngineNotification(info){
   if(!info||info===_lastNotificationInfo)return;
-  // v1.0.7 BUG FIX (audit: 棋局前端代码审查.docx §4):
+  // v1.0.7 BUG FIX:
   // Previously the cache was updated BEFORE the throttle check, so when a
   // second change arrived during the throttle window we'd early-return on the
   // (already-stale) cache compare and never push the new value to the system
@@ -523,7 +573,7 @@ function _updateEngineNotification(info){
 function _bridgeCall(fn,fallback,requireEngine){
   try{
     if(typeof AndroidBridge!=='undefined'){
-      if(requireEngine===false||AndroidBridge.isEngineReady()){
+      if(requireEngine===false||(typeof AndroidBridge.isEngineReady==='function'&&AndroidBridge.isEngineReady())){
         return fn(AndroidBridge);
       }
     }
@@ -534,11 +584,52 @@ function _bridgeCall(fn,fallback,requireEngine){
 
 // Loading overlay for engine initialization — progress is REAL, driven by onEngineProgress callbacks
 let _loadingPct=0;
+// v1.0.8 PHASE 22: Light/Dark mode detection for the loading overlay's king icon.
+// Dark mode (default): white king ♔ with white-piece styling (silver body + dark stroke).
+// Light mode: black king ♚ with black-piece styling (dark body + light gold stroke).
+// Matches the main header's king icon (see ui.js render()).
+// The piece styling matches the on-board pieces exactly (same color, stroke, glow).
+function _isLightMode(){
+  try{
+    // v1.0.8 PHASE 22 (bug fix): 优先使用 AndroidBridge.isSystemDarkMode()。
+    // WebView 的 prefers-color-scheme 传递依赖 APP 主题的 isLightTheme 属性，
+    // 而 APP 使用 Theme.NoTitleBar（非 DayNight），isLightTheme 不随系统切换。
+    // 在某些 OEM ROM（如小米澎湃 OS 3）上，prefers-color-scheme 可能始终为 dark，
+    // 导致系统全局设为浅色模式时 APP 仍显示深色。
+    // 通过 AndroidBridge.isSystemDarkMode() 直接读取 UiModeManager，确保可靠切换。
+    if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.isSystemDarkMode==='function'){
+      return !AndroidBridge.isSystemDarkMode();
+    }
+    // 回退：使用 CSS 媒体查询（适用于 AndroidBridge 不可用时，如桌面调试）
+    return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches);
+  }catch(e){
+    // 最终回退：默认深色模式（与原设计一致）
+    try{
+      return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches);
+    }catch(e2){return false;}
+  }
+}
+function _loadingKingIconHTML(){
+  // Same piece styling as .sq .pc.w (white) / .sq .pc.bk (black) in index.html.tpl.
+  // Uses _KING_PIECE_STYLE constants (defined in ui.js, loaded after ai-bridge.js
+  // — but the typeof check guards against load-order issues during development).
+  // \uFE0E is Variation Selector-15 (text-presentation).
+  let ps;
+  if(_isLightMode()){
+    ps={color:'#1A1A2E',stroke:'rgba(255,230,150,.85)',shadow:'rgba(255,230,150,.55)',sym:'\u265A'};
+  }else{
+    ps={color:'#E8E8F0',stroke:'rgba(30,15,0,.85)',shadow:'rgba(30,15,0,.55)',sym:'\u2654'};
+  }
+  // Defensive: if _KING_PIECE_STYLE is defined (ui.js loaded), use it for consistency
+  try{if(typeof _KING_PIECE_STYLE!=='undefined'){ps=_isLightMode()?_KING_PIECE_STYLE.black:_KING_PIECE_STYLE.white;}}catch(e){}
+  return '<div style="font-size:4rem;margin-bottom:16px;font-weight:400;color:'+ps.color+';-webkit-text-stroke:.3px '+ps.stroke+';text-shadow:0 0 .8px '+ps.shadow+';font-family:\'DejaVu Sans\',\'Noto Sans\',\'Segoe UI Symbol\',sans-serif;font-variant-emoji:text">'+ps.sym+'\uFE0E</div>';
+}
 function _showLoadingOverlay(){
   if(document.getElementById('_loadingOverlay'))return;
   const lo=document.createElement('div');lo.id='_loadingOverlay';
-  lo.style.cssText='position:fixed;inset:0;background:rgba(26,10,10,.98);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:99999;font-family:system-ui,-apple-system,sans-serif';
-  lo.innerHTML=`<div style="font-size:4rem;margin-bottom:16px;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text">♔&#xFE0E;</div><div style="font-size:1.3rem;font-weight:900;color:#ffd700;letter-spacing:2px;margin-bottom:12px">${T('loading_title')}</div><div id="_loadingStatus" style="color:#a08050;font-size:.85rem;margin-bottom:20px">${T('loading_ui')}</div><div style="width:200px;height:4px;background:#1a0a0a;border-radius:2px;overflow:hidden;position:relative"><div id="_loadingBar" style="width:0%;height:100%;background:linear-gradient(90deg,#d4a017,#ffd700);border-radius:2px;transition:width .4s cubic-bezier(.4,0,.2,1)"></div></div><div id="_loadingPct" style="color:#ffd700;font-size:.7rem;margin-top:8px;font-weight:700;letter-spacing:1px">0%</div>`;
+  // v1.0.8 PHASE 22: overlay background uses CSS var so it follows light/dark theme
+  lo.style.cssText='position:fixed;inset:0;background:var(--overlay-bg);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:99999;font-family:system-ui,-apple-system,sans-serif';
+  lo.innerHTML=`${_loadingKingIconHTML()}<div style="font-size:1.3rem;font-weight:900;color:var(--accent2);letter-spacing:2px;margin-bottom:12px">${T('loading_title')}</div><div id="_loadingStatus" style="color:var(--muted);font-size:.85rem;margin-bottom:20px">${T('loading_ui')}</div><div style="width:200px;height:4px;background:var(--input-bg);border-radius:2px;overflow:hidden;position:relative"><div id="_loadingBar" style="width:0%;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:2px;transition:width .4s cubic-bezier(.4,0,.2,1)"></div></div><div id="_loadingPct" style="color:var(--accent2);font-size:.7rem;margin-top:8px;font-weight:700;letter-spacing:1px">0%</div>`;
   document.body.appendChild(lo);
   _loadingPct=0;
 }
@@ -560,7 +651,23 @@ function _hideLoadingOverlay(){
   const lo=document.getElementById('_loadingOverlay');
   if(lo){lo.style.opacity='0';lo.style.transition='opacity .5s';setTimeout(()=>{if(lo.parentNode)lo.remove();},500);}
 }
+// v1.0.8 PHASE 22 (bug fix): Apply system dark/light theme to <html> via
+// data-theme attribute. This works on ALL devices (including Xiaomi HyperOS 3
+// where prefers-color-scheme may be stuck on dark). CSS uses both
+// @media(prefers-color-scheme:light) AND html[data-theme="light"] selectors.
+// Called once at startup; the attribute persists for the app lifetime.
+// If the system theme changes while the app is running, the user must restart
+// the app (acceptable — theme changes are infrequent).
+function _applySystemTheme(){
+  try{
+    const isLight=_isLightMode();
+    document.documentElement.setAttribute('data-theme', isLight?'light':'dark');
+  }catch(e){
+    // Fallback: default dark theme (no attribute = dark :root variables)
+  }
+}
 // Show loading overlay immediately — real progress comes from onEngineProgress callback
+_applySystemTheme();
 _showLoadingOverlay();
 
 // CRITICAL FIX: Multi-layer startup protection to prevent infinite loading screen
@@ -779,25 +886,25 @@ function _buildPGNString(forceIncludeVariations){
     if(s.bk&&(s.bk.row!==0||s.bk.col!==4))return true;
     return false;
   }
+  // v1.0.8 PHASE 28 (bug fix): The previous code overwrote supObj.FEN with
+  //   generateFEN(gameState) (the CURRENT mid-game state), which corrupted the
+  //   [FEN] tag for any progressed game. The [FEN] tag must contain the
+  //   STARTING position, not the current position. supObj.FEN (set from
+  //   startFEN above) already has the correct starting FEN. We only need to
+  //   convert its castling-rights field to Shredder format if applicable.
   if(typeof toShredderCastling==='function'&&(typeof gameVariant!=='undefined'&&gameVariant==='chess960'||_needsShredderFEN(gameState))){
-    // Regenerate the FEN with Shredder castling for the [FEN] tag
-    const stdFEN=generateFEN(gameState);
-    // Replace the castling field (field 3, 0-indexed) with Shredder format
-    const parts=stdFEN.split(' ');
-    parts[2]=toShredderCastling(gameState.castlingRights,gameState.board);
-    supObj.FEN=parts.join(' ');
-    // Also update _setupFEN if it's the starting position, so the [FEN] tag
-    // in the PGN header uses Shredder castling too.
-    if(typeof _setupFEN!=='undefined'&&_setupFEN){
+    if(supObj.FEN){
       try{
-        const _sp=_setupFEN.split(' ');
-        if(_sp.length>=3){
-          // Re-parse the setup FEN to construct a state for toShredderCastling
-          // Easier: just replace the castling field with Shredder of the same state.
-          // Since _setupFEN was generated from the same gameState at setup time,
-          // and toShredderCastling takes (cr, board), we can re-derive.
-          // For simplicity, we leave _setupFEN as-is for now — it'll be regenerated
-          // below if needed. The PGN [FEN] tag will be supObj.FEN which is correct.
+        const parts=supObj.FEN.split(' ');
+        if(parts.length>=3){
+          // Convert the starting position's castling rights to Shredder format.
+          // We parse the startFEN to get the starting board + castling rights,
+          // then call toShredderCastling on that state (not the current state).
+          const startState=fenToState(supObj.FEN);
+          if(startState){
+            parts[2]=toShredderCastling(startState.castlingRights,startState.board);
+            supObj.FEN=parts.join(' ');
+          }
         }
       }catch(e){}
     }
@@ -1005,108 +1112,6 @@ function _buildPGNString(forceIncludeVariations){
     result:result
   });
 }
-// v1.0.2: Build a PGN comment for a move, combining thinking time + eval annotation.
-// v1.0.3: Format uses a single space as separator between thinking time and eval
-//   annotation (reverted from the earlier '——' em-dash proposal after user
-//   feedback — the space-separated format is simpler and matches the v1.0.2
-//   convention). Examples:
-//     "{3.2s +0.5 略优}"   (time + short eval)
-//     "{3.2s SF18 D22 +1.0 8%W/91%D/1%L}"  (time + full SF18 line, every 5 moves)
-//     "{3.2s}"             (time only — NO trailing space inside the braces)
-//     "{+0.5 略优}"         (eval only — no time available)
-//   stats.html's extractMoveTimes() recognizes the "<number>s" pattern inside
-//   {} comments regardless of separator, so both space-separated and the
-//   earlier em-dash format parse correctly.
-function _buildPGNComment(mr,reviewStep,moveNum){
-  let timePart='';
-  // 1. Thinking time (first item in the comment)
-  if(mr&&mr.time){
-    timePart=mr.time+'s';
-  }
-  // 2. Eval annotation
-  const evalAnn=_formatPGNEvalAnnotation(reviewStep,moveNum);
-  let evalInner='';
-  if(evalAnn){
-    // Strip the outer {} from the eval annotation
-    evalInner=evalAnn.replace(/^\{/,'').replace(/\}$/,'');
-  }
-  // v1.0.3: Build the comment with a single space separator if both time and
-  // eval are present.
-  //   - time + eval → "{time eval}"
-  //   - time only → "{time}"  (no trailing space)
-  //   - eval only → "{eval}"
-  //   - neither → ""
-  if(timePart&&evalInner){
-    return '{'+timePart+' '+evalInner+'}';
-  }else if(timePart){
-    return '{'+timePart+'}';
-  }else if(evalInner){
-    return '{'+evalInner+'}';
-  }
-  return '';
-}
-// v1.0.2 FEATURE: format a PGN comment annotation for the given review step.
-// Returns either:
-//   - `{+0.5 略优}` style (eval word only) for most moves
-//   - `{SF18 D22 +1.0 8%W/91%D/1%L}` style (full engine info) every 5 moves
-//   - empty string if no cached eval is available for this step
-// `moveNum` is the 1-based move number (1 for the first full move pair).
-// We use the actual move-pair count (n) so the "every 5 moves" cadence lines up
-// with chess convention (after move 5, 10, 15, …), not the half-move index.
-function _formatPGNEvalAnnotation(reviewStep,moveNum){
-  if(typeof _reviewEvalCache==='undefined')return '';
-  const cached=_reviewEvalCache.get(reviewStep);
-  if(!cached)return '';
-  // Format score: centipawns from White's perspective.
-  // Mate scores (|eval|>=90000) are shown as #M.
-  // v1.0.2 FIX (first-principles): parenthesize the mate-detection condition
-  // explicitly. The previous `cached.mate&&cached.mate!==0||Math.abs(ev)>=90000`
-  // parsed as `(cached.mate&&cached.mate!==0)||Math.abs(ev)>=90000` — which
-  // happened to be correct, but relied on JS operator precedence and was hard
-  // to read. Also normalize cached.mate to a number defensively (some callers
-  // pass it as a string from JSON deserialization).
-  const mateDist=Number(cached.mate)||0;
-  const ev=Number(cached.eval)||0;
-  const isMateScore=(mateDist!==0)||Math.abs(ev)>=90000;
-  let scoreStr;
-  if(isMateScore){
-    // Stockfish reports mate as ±99999 with _sfMateDistance holding the
-    // actual distance. If we have a real mate distance, use it; otherwise
-    // derive a best-effort distance from the eval sign.
-    const md=mateDist!==0?mateDist:(ev>0?1:-1);
-    scoreStr='#'+Math.abs(md);
-  }else{
-    // Centipawns → pawns with 1 decimal, signed
-    const pawns=(ev/100).toFixed(1);
-    scoreStr=(ev>=0?'+':'')+pawns;
-  }
-  // Every 5 moves (moveNum is 1-based; we want moves 5,10,15,…): full annotation
-  if(moveNum>0&&moveNum%5===0){
-    let wdlStr='';
-    if(cached.wdlW!=null&&cached.wdlW>=0&&cached.wdlD!=null&&cached.wdlD>=0&&cached.wdlL!=null&&cached.wdlL>=0){
-      const total=cached.wdlW+cached.wdlD+cached.wdlL;
-      if(total>0){
-        const wp=Math.round(cached.wdlW/total*100);
-        const dp=Math.round(cached.wdlD/total*100);
-        // v1.0.7 PHASE 19 (bug fix): Compute lp directly from raw value to avoid
-        // negative percentages at rounding boundaries (e.g. W=99.5,D=0.5,L=0 →
-        // wp=100,dp=1,lp=100-100-1=-1). The three may sum to 99 or 101, which
-        // is less visually jarring than a negative value.
-        const lp=Math.round(cached.wdlL/total*100);
-        wdlStr=wp+'%W/'+dp+'%D/'+lp+'%L';
-      }
-    }
-    // v1.0.4 Rev33: include seldepth (SD) in the PGN eval annotation when > depth.
-    const depthStr=cached.depth?('D'+cached.depth):'D?';
-    const seldepthStr=(cached.seldepth!=null&&cached.seldepth>0&&cached.seldepth>cached.depth)?(' SD'+cached.seldepth):'';
-    return '{SF18 '+depthStr+seldepthStr+' '+scoreStr+(wdlStr?(' '+wdlStr):'')+'}';
-  }
-  // Otherwise: short eval-word annotation
-  // posDesc is defined in ui.js but is in scope (single bundled file)
-  let word='';
-  try{word=typeof posDesc==='function'?posDesc(ev):'';}catch(e){word='';}
-  return '{'+scoreStr+(word?(' '+word):'')+'}';
-}
 function copyMoveHistory(){
   const pgn=_buildPGNString();
   if(!pgn){showToast(T('no_move_records'));return}
@@ -1229,9 +1234,7 @@ function onStatsHTMLExported(success,fileName){
   }
 }
 // v1.0.2 NEW FEATURE: Stats page requests to enter review mode.
-// (The onStatsRequestImport handler was removed in v1.0.2 — PGN import from
-// the stats page now opens the SAF picker directly inside StatsActivity via
-// statsSelectPGNFile(), so the main WebView no longer needs to participate.)
+// (onStatsRequestImport removed in v1.0.2 — stats page now opens SAF picker directly via statsSelectPGNFile.)
 // v1.0.2 FIX: Show a toast when there are no moves to review, instead of
 // silently doing nothing — the user otherwise has no feedback that the tap
 // was registered but the request couldn't be honored.
@@ -1266,9 +1269,14 @@ function _esc(s){return String(s).replace(_ESC_RE,c=>_ESC_MAP[c]);}
 // XSS-safe JS string escaper — for inserting paths into onclick='...' attributes
 // _esc() escapes for HTML, but paths in onclick JS strings need JS-level escaping
 // e.g. /sdcard/0'Brien/ — the single quote would break the onclick attribute
-const _ESCJS_MAP={'\\':'\\\\',"'":"\\'",'"':'&quot;','\n':'\\n','\r':'\\r'};
-const _ESCJS_RE=/[\\'"\n\r]/g;
-function _escJs(s){return String(s).replace(_ESCJS_RE,c=>_ESCJS_MAP[c]);}
+// v1.0.8 PHASE 32 ROBUSTNESS: also HTML-escape < > & so that a path containing
+//   "<script>" cannot inject HTML. The caller wraps the value in single quotes
+//   inside a double-quoted onclick attribute, so we must escape for BOTH the JS
+//   string literal context AND the HTML attribute context. Previously only the
+//   JS context was escaped, leaving an XSS vector via < > & in the path.
+const _ESCJS_MAP={'\\':'\\\\',"'":"\\'",'"':'&quot;','\n':'\\n','\r':'\\r','<':'&lt;','>':'&gt;','&':'&amp;'};
+const _ESCJS_RE=/[\\'"\n\r<>&]/g;
+function _escJs(s){return String(s).replace(_ESCJS_RE,c=>_ESCJS_MAP[c]||c);}
 
 /**
  * Format a variation for display in move records and review panel.
@@ -1780,7 +1788,9 @@ function _sanitizeFenForEngine(fen){
       if(ch>='1'&&ch<='8'){c+=parseInt(ch);continue;}
       if(c>=8)break;
       const isWhite=ch===ch.toUpperCase();
-      const type=ch.toLowerCase()==='p'?'pawn':ch.toLowerCase()==='n'?'knight':ch.toLowerCase()==='b'?'bishop':ch.toLowerCase()==='r'?'rook':ch.toLowerCase()==='q'?'queen':ch.toLowerCase()==='k'?'king':null;
+      // v1.0.8 PHASE 24 (PERF): cache toLowerCase once instead of 6× per piece.
+      const _lc=ch.toLowerCase();
+      const type=_lc==='p'?'pawn':_lc==='n'?'knight':_lc==='b'?'bishop':_lc==='r'?'rook':_lc==='q'?'queen':_lc==='k'?'king':null;
       if(!type)return fen; // malformed FEN — let engine handle
       board[r][c]={type,color:isWhite?'white':'black'};
       c++;
@@ -2001,6 +2011,8 @@ function onBestMove(uciMove){
   if(_aiMoveRequestId!==_currentAiRequestId){console.warn('Discarding stale bestmove');return;}
   // Cancel safety timeout — engine responded (and it's the current request)
   if(_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
+  // v1.0.8 PHASE 22 supplement: AI-think-end sound (轻微答声) — engine found a move
+  try{if(typeof playSound==='function')playSound('aiThinkEnd');}catch(e){}
   isAIThinking=false;_aiBarInfo='';_aiRetryCount=0;
 
   // CRITICAL FIX: Always clear ponder display state at the start of onBestMove.
@@ -2018,7 +2030,7 @@ function onBestMove(uciMove){
   // getLastPonderMove(). We fetch it here so we can record it as a variation.
   _lastPonderMoveFromEngine=null;
   try{
-    if(typeof AndroidBridge!=='undefined'&&AndroidBridge.isEngineReady()&&typeof AndroidBridge.getLastPonderMove==='function'){
+    if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.isEngineReady==='function'&&AndroidBridge.isEngineReady()&&typeof AndroidBridge.getLastPonderMove==='function'){
       const pm=AndroidBridge.getLastPonderMove();
       if(pm)_lastPonderMoveFromEngine=pm;
     }
@@ -2054,6 +2066,22 @@ function onBestMove(uciMove){
     ponderEnabled:!!(engineSettingsData&&engineSettingsData.ponder),
     multiPVEnabled:!!(engineSettingsData&&engineSettingsData.multiPV&&engineSettingsData.multiPV>1)
   };
+  // v1.0.8 PHASE 49: defensive cleanup. The Java side always fires
+  //   onMultiPVResult immediately after onBestMove (same postJsCallback queue),
+  //   so _processDeferredVariations() should run within milliseconds and clear
+  //   _pendingBestMoveInfo. But if onMultiPVResult is ever skipped (engine
+  //   crash mid-bestmove, future code path change), the pending info would
+  //   leak indefinitely and the pre-move deep clone would linger in memory.
+  //   This 2s self-clearing timer is a no-op in the normal path (because
+  //   _processDeferredVariations sets _pendingBestMoveInfo=null first) and a
+  //   safety net in the abnormal path.
+  const _pbmiCaptured=_pendingBestMoveInfo;
+  setTimeout(function(){
+    if(_pendingBestMoveInfo===_pbmiCaptured){
+      console.warn('onBestMove: _pendingBestMoveInfo not processed within 2s, clearing');
+      _pendingBestMoveInfo=null;
+    }
+  },2000);
 
   if(!uciMove||uciMove==='(none)'||uciMove==='0000'){
     render();
@@ -2081,12 +2109,10 @@ function onBestMove(uciMove){
   // since getLastPonderMove() is now a one-shot read (clears after return).
   // The ponder move was already consumed and stored in _lastPonderMoveFromEngine above.
   // FIX: Don't start ponder on game-over positions (checkmate/stalemate).
-  if(typeof AndroidBridge!=='undefined'&&AndroidBridge.isEngineReady()&&_lastPonderMoveFromEngine&&!gameOver){
+  if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.isEngineReady==='function'&&AndroidBridge.isEngineReady()&&_lastPonderMoveFromEngine&&!gameOver){
     try{
       const ponderMove=_lastPonderMoveFromEngine;
       if(typeof AndroidBridge.startPonder==='function'){
-        // Build FEN with the ponder move applied — engine will search this position
-        const ponderFen=generateFEN(gameState);
         // Apply the ponder move to get the position the engine should analyze
         const pCoords=uciToCoords(ponderMove);
         if(pCoords&&gameState.board[pCoords.from.row]){
@@ -2142,6 +2168,12 @@ function onBestMove(uciMove){
 // Also displays the ponder move (engine's predicted reply) alongside the bestmove
 function onHintMove(uciMove){
   console.log('onHintMove:',uciMove);
+  // v1.0.8 PHASE 49: discard stale hint callbacks. If isHintLoading is already
+  //   false by the time onHintMove fires, the user has moved (executeMove /
+  //   doAIMove) or switched modes (setup/review/new game) since the hint was
+  //   requested — the engine's hint was computed for the OLD position and must
+  //   not be applied to the new one. Mirrors onBestMove's _aiMoveRequestId guard.
+  if(!isHintLoading){console.warn('Discarding stale hintmove');return;}
   isHintLoading=false;_hintBarInfo='';
   // Increment _ponderGen to invalidate stale onPonderProgress() callbacks
   _ponderGen++;
@@ -2181,7 +2213,7 @@ function onHintMove(uciMove){
   _lastPonderMoveFromEngine=null;
   _ponderMoveSAN='';
   try{
-    if(typeof AndroidBridge!=='undefined'&&AndroidBridge.isEngineReady()&&typeof AndroidBridge.getLastPonderMove==='function'){
+    if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.isEngineReady==='function'&&AndroidBridge.isEngineReady()&&typeof AndroidBridge.getLastPonderMove==='function'){
       const pm=AndroidBridge.getLastPonderMove();
       if(pm)_lastPonderMoveFromEngine=pm;
     }
@@ -2214,6 +2246,8 @@ function onHintMove(uciMove){
   legalMvs=legalMoves(gameState,selectedSquare);
   legalSet=new Set(legalMvs.map(m=>m.row*8+m.col));
   HapticManager.fire('PIECE_SELECT');
+  // v1.0.8 PHASE 22 supplement: piece-select sound
+  try{if(typeof playSound==='function')playSound('select');}catch(e){}
   _updateBoardLightweight();
   render();
 }
@@ -2399,10 +2433,18 @@ function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth){
   // Flip WDL from side-to-move to White's perspective if Black is to move
   if(_evalForBlackTurn&&_sfWdlW>=0){const tmp=_sfWdlW;_sfWdlW=_sfWdlL;_sfWdlL=tmp;}
   if(scoreMate!=null){
-    const mateN=parseInt(scoreMate);
-    const whiteWins=(_evalForBlackTurn?mateN<=0:mateN>0);
-    _sfEval=whiteWins?99999:-99999;
-    _sfMateDistance=_evalForBlackTurn?-mateN:mateN;
+    // v1.0.8 PHASE 49: parseInt with radix 10 + NaN guard. A malformed score
+    //   mate (e.g. "mate ") produced NaN, which then yielded mateN<=0 → true
+    //   (whiteWins) and _sfMateDistance=NaN — misleading "#0" display.
+    const mateN=parseInt(scoreMate,10);
+    if(!isNaN(mateN)){
+      const whiteWins=(_evalForBlackTurn?mateN<=0:mateN>0);
+      _sfEval=whiteWins?99999:-99999;
+      _sfMateDistance=_evalForBlackTurn?-mateN:mateN;
+    }else{
+      _sfEval=_evalForBlackTurn?-scoreCp:scoreCp;
+      _sfMateDistance=0;
+    }
   }else{
     _sfEval=_evalForBlackTurn?-scoreCp:scoreCp;
     _sfMateDistance=0;
@@ -2442,21 +2484,24 @@ function renderEngineConfig(){
   let h='<div class="dov" role="dialog" aria-modal="true" aria-label="'+T('engine_config')+'" onclick="if(event.target===this){closeEngineConfig()}"><div class="dlg" style="max-width:520px"><h2>⚙️ '+T('engine_config')+'</h2>';
   // Tabs
   h+='<div style="display:flex;gap:2px;margin-bottom:14px;border-bottom:1px solid var(--border);padding-bottom:8px">';
-  h+='<button class="btn'+(engineConfigTab==='engine'?' btn-a':'')+'" onclick="HapticManager.fire(\'TAB_SWITCH\');engineConfigTab=\'engine\';renderEngineConfigAndUpdate()" style="flex:1">'+(_lang==='zh'?T('import_settings_engine'):'Engine')+'</button>';
-  h+='<button class="btn'+(engineConfigTab==='settings'?' btn-a':'')+'" onclick="HapticManager.fire(\'TAB_SWITCH\');engineConfigTab=\'settings\';renderEngineConfigAndUpdate()" style="flex:1">'+T('advanced_settings')+'</button>';
+  h+='<button class="btn btn-compact'+(engineConfigTab==='engine'?' btn-a':'')+'" onclick="HapticManager.fire(\'TAB_SWITCH\');engineConfigTab=\'engine\';renderEngineConfigAndUpdate()" style="padding:8px 14px">'+(_lang==='zh'?T('import_settings_engine'):'Engine')+'</button>';
+  h+='<button class="btn btn-compact'+(engineConfigTab==='settings'?' btn-a':'')+'" onclick="HapticManager.fire(\'TAB_SWITCH\');engineConfigTab=\'settings\';renderEngineConfigAndUpdate()" style="padding:8px 14px">'+T('advanced_settings')+'</button>';
   h+='</div>';
   if(engineConfigTab==='engine'){
     // Engine info section — built-in engine only
     h+='<div class="dlg-sec"><h3>'+T('engine_info')+'</h3>';
-    h+='<div style="background:#221015;border:1px solid var(--border);border-radius:6px;padding:10px;font-size:.8rem;line-height:1.6">';
+    h+='<div style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:10px;font-size:.8rem;line-height:1.6">';
     h+='<div><span style="color:var(--muted)">'+T('engine_name')+': </span><span style="font-weight:700">'+_esc(info.name||'Stockfish 18')+'</span><span style="color:var(--accent);font-size:.65rem;margin-left:6px">['+T('built_in')+']</span></div>';
     h+='<div><span style="color:var(--muted)">'+T('engine_author')+': </span><span>'+_esc(info.author||'--')+'</span></div>';
     if(info.threads!=null)h+='<div><span style="color:var(--muted)">'+T('engine_threads')+': </span><span>'+info.threads+'</span></div>';
     if(info.hash!=null)h+='<div><span style="color:var(--muted)">'+T('engine_hash')+': </span><span>'+info.hash+' MB</span></div>';
     h+='</div></div>';
-    // Restart button only — import removed
-    h+='<div class="dlg-sec"><div style="display:flex;gap:8px;flex-wrap:wrap">';
-    h+='<button class="btn" onclick="restartCurrentEngine()">'+T('engine_restart')+'</button>';
+    // v1.0.8 PHASE 39: compact button row — no .btn class (min-height:40px wastes space)
+    // v1.0.8 PHASE 50: added .btn-row class — opts out of the portrait grid transform
+    //   (.dlg-sec > div[style*="display:flex"] → display:grid 1fr auto) that was
+    //   stretching these buttons to full row width.
+    h+='<div class="dlg-sec"><div class="btn-row" style="display:flex;gap:6px;flex-wrap:wrap">';
+    h+='<button class="btn-compact" style="padding:4px 10px;font-size:.78rem;border-radius:4px;border:1px solid var(--border);cursor:pointer;background:var(--btn-bg);color:var(--text)" onclick="restartCurrentEngine()">'+T('engine_restart')+'</button>';
     h+='</div></div>';
   }else{
     // Settings tab
@@ -2496,13 +2541,16 @@ function renderEngineConfig(){
       h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px"><span style="font-size:.8rem">'+T('elo_target')+'</span><div style="display:flex;align-items:center;gap:4px"><button class="btn" style="padding:2px 8px;min-height:28px;font-size:.9rem" onclick="setConfigElo('+(settings.elo-50)+')">-</button><span style="min-width:40px;text-align:center;font-weight:700">'+(settings.elo||2800)+'</span><button class="btn" style="padding:2px 8px;min-height:28px;font-size:.9rem" onclick="setConfigElo('+(settings.elo+50)+')">+</button></div></div>';
     }
     h+='</div>';
-    // Export/Import buttons
-    h+='<div class="dlg-sec"><div style="display:flex;gap:8px;flex-wrap:wrap">';
-    h+='<button class="btn btn-s" onclick="exportEngineSettings()">'+T('export_settings_btn')+'</button>';
-    h+='<button class="btn btn-s" onclick="importEngineSettings()">'+T('import_settings_btn')+'</button>';
+    // v1.0.8 PHASE 39: compact button row — no .btn class (min-height:40px wastes space)
+    // v1.0.8 PHASE 50: added .btn-row class — opts out of the portrait grid transform
+    //   (.dlg-sec > div[style*="display:flex"] → display:grid 1fr auto) that was
+    //   stretching these buttons to full row width.
+    h+='<div class="dlg-sec"><div class="btn-row" style="display:flex;gap:6px;flex-wrap:wrap">';
+    h+='<button class="btn-compact" style="padding:4px 10px;font-size:.78rem;border-radius:4px;border:1px solid var(--border);cursor:pointer;background:var(--btn-bg);color:var(--text)" onclick="exportEngineSettings()">'+T('export_settings_btn')+'</button>';
+    h+='<button class="btn-compact" style="padding:4px 10px;font-size:.78rem;border-radius:4px;border:1px solid var(--border);cursor:pointer;background:var(--btn-bg);color:var(--text)" onclick="importEngineSettings()">'+T('import_settings_btn')+'</button>';
     h+='</div></div>';
   }
-  h+='<div class="dlg-btns"><button type="button" class="btn btn-s" onclick="closeEngineConfig()">'+T('close')+'</button></div>';
+  h+='<div class="dlg-btns"><button type="button" class="btn btn-s btn-compact" onclick="closeEngineConfig()" style="padding:8px 16px">'+T('close')+'</button></div>';
   h+='</div></div>';
   return h;
 }
@@ -2576,7 +2624,7 @@ function _showFileBrowser(){
       }catch(e){}
       let h='<div class="dov" role="dialog" aria-modal="true" aria-label="'+T('file_browse_label')+'" onclick="if(event.target===this){_closeFileBrowser()}"><div class="dlg" style="max-width:520px;max-height:80vh;overflow-y:auto">';
       h+='<h2>'+T('import_settings_title')+'</h2>';
-      h+='<div style="background:#221015;border:1px solid var(--border);border-radius:4px;padding:6px 10px;font-size:.72rem;color:var(--muted);margin-bottom:10px;word-break:break-all">'+_esc(_fileBrowserPath)+'</div>';
+      h+='<div style="background:var(--card);border:1px solid var(--border);border-radius:4px;padding:6px 10px;font-size:.72rem;color:var(--muted);margin-bottom:10px;word-break:break-all">'+_esc(_fileBrowserPath)+'</div>';
       // Navigation buttons
       h+='<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">';
       h+='<button class="btn" style="font-size:.72rem;padding:3px 8px" onclick="_fileBrowserGoTo(\'/sdcard\')">/sdcard</button>';
@@ -2994,8 +3042,6 @@ function _processDeferredVariations(){
   const contFirstIsWhite=!aiIsAfterWhiteMove;
   const contVarMoveNum=aiIsAfterWhiteMove?aiMoveNum:aiMoveNum+1;
 
-  const variations=[];
-
   // Get primary PV data
   // v1.0.2 FIX: Fall back to _multiPVResult[0].pv when _lastEngineVariation is
   // empty. Previously, if the bestmove didn't carry a PV (some Stockfish builds
@@ -3036,10 +3082,9 @@ function _processDeferredVariations(){
           });
         }
       }
-      // Legacy field
-      if(!lastRec.variation){
-        lastRec.variation=remainingUci.join(' ');
-      }
+      // v1.0.8 PHASE 49: removed dead `lastRec.variation` legacy field — it
+      //   was written here but never read (the review/PGN path consumes
+      //   lastRec.variations, the array, via _formatVariationGroups).
     }
   }
   _lastEngineVariation=null;
@@ -3083,17 +3128,11 @@ function _processDeferredVariations(){
     }
   }
 
-  // Ponder is fully decoupled from move records.
-  // Ponder variation is NO LONGER created or stored in moveRecords.
-  // Ponder functionality (engine background analysis of predicted opponent reply)
-  // remains active for AI opponent speed improvement, but is invisible to the user
-  // in move history and review. The ponder move is still used internally by
-  // onBestMove() to start background analysis after AI moves.
+  // Ponder is decoupled from move records — no ponder variation stored.
+  // Ponder move is still used internally by onBestMove() to start background analysis.
 
-  // Store variations on the move record
-  if(variations.length>0){
-    lastRec.variations=variations;
-  }
+  // v1.0.8 PHASE 33: removed dead `variations` array + `if(variations.length>0)` block
+  //   (variations was declared but never pushed to). lastRec.variations is set by _attachDivergentPV.
 
   // v1.0.2 NEW FEATURE: Register the engine's primary PV for divergence tracking.
   // The PV will be compared against future actual game moves. If the game
@@ -3264,6 +3303,17 @@ function _checkPVDivergence(){
       // Convert mr.from/mr.to to UCI for comparison
       const mrUci=_mrToUci(mr);
       const pvMove=pending.pvMoves[k];
+      // v1.0.8 PHASE 24 (bug fix): In Chess960, castling moves have two UCI
+      //   representations — the king's actual from→to (e.g. "e1g1", used by
+      //   the move record) and the king-captures-rook square (e.g. "e1h1",
+      //   used by the engine in PV output). Without normalization, every
+      //   Chess960 castling move in a PV continuation triggers a false
+      //   divergence. Skip the divergence check for castling moves in
+      //   Chess960 mode (treat as match).
+      if(typeof gameVariant!=='undefined'&&gameVariant==='chess960'&&mr&&mr.isCastling){
+        pending.matchedUpTo=k;
+        continue;
+      }
       if(mrUci===pvMove){
         // Still matching — advance
         pending.matchedUpTo=k;
@@ -3392,6 +3442,11 @@ function _updateMultiPVDisplay(){
   let hintParts=[];
   let cacheDirty=false;
   for(const pv of _multiPVLines){
+    // v1.0.8 PHASE 49: filter out-of-range MultiPV indices defensively.
+    //   pv.index comes from the engine's "info ... multipv N" line; a parser
+    //   hiccup or a stale line from a previous (larger) MultiPV setting could
+    //   yield an index > _cachedMultiPV, which would render a phantom line.
+    if(pv.index!=null&&(pv.index<1||pv.index>50))continue;
     // v1.0.5 Rev56: skip lines with no PV content — they contribute nothing
     // to the display except an empty score string, and would trigger a
     // wasteful _convertPVtoSAN('') call.
@@ -3408,8 +3463,8 @@ function _updateMultiPVDisplay(){
     // Cache miss — compute the display text for this line
     let scoreStr='';
     if(pv.scoreMate!=null){
-      const m=parseInt(pv.scoreMate);
-      scoreStr=m>0?'#+'+Math.abs(m):m<0?'#-'+Math.abs(m):'#0';
+      const m=parseInt(pv.scoreMate,10);
+      if(!isNaN(m))scoreStr=m>0?'#+'+Math.abs(m):m<0?'#-'+Math.abs(m):'#0';
     }else if(pv.scoreCp!=null){
       const pd=(pv.scoreCp/100).toFixed(1);
       scoreStr=(pv.scoreCp>0?'+':'')+pd;
@@ -3470,8 +3525,6 @@ let _ponderStartGen=-1; // The _ponderGen value when the current ponder session 
 // previous search. This caused UCI leaks and wrong move numbering.
 let _pendingBestMoveInfo=null;
 
-// Update AI thinking display (AI bar and hint area are INDEPENDENT)
-
 // Receive UCI_Elo sync from Java when AI level changes.
 // Updates engineSettingsData so the config panel always matches reality.
 // Render after difficulty change
@@ -3498,13 +3551,12 @@ function onEngineError(msg){
     const _errShort=(msg&&typeof msg==='string')?msg.slice(0,80):String(msg);
     _updateEngineNotification(T('engine_error')+': '+_errShort);
   }catch(e){}
-  // Reset animation flags to prevent permanent UI freeze.
+  // v1.0.8 PHASE 22: Reset animation flag to prevent permanent UI freeze.
   // If an engine error occurs DURING an animation, render() and sqClick()
-  // would block forever since animationInProgress/_landingAnimActive are
-  // only cleared by successful animation completion.
+  // would block forever since animationInProgress is only cleared by
+  // successful animation completion (_finishAnim in animateMove).
+  // (v1.0.8: _landingAnimActive/_landingAnimTimer removed — now WAAPI overlay.)
   animationInProgress=false;
-  _landingAnimActive=false;
-  if(_landingAnimTimer){clearTimeout(_landingAnimTimer);_landingAnimTimer=null;}
   // Cancel safety timeout — engine responded (with error)
   if(_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
   isAIThinking=false;_aiBarInfo='';_aiRetryCount=0;
@@ -3663,7 +3715,7 @@ function requestEngineEval(){
     const fen=_sanitizeFenForEngine(generateFEN(_rs));
     _evalForBlackTurn=_rs.currentTurn==='black';
     _reviewEvalRequestedStep=reviewStep;
-    if(typeof AndroidBridge!=='undefined'&&AndroidBridge.isEngineReady()){
+    if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.isEngineReady==='function'&&AndroidBridge.isEngineReady()){
       // Debounce: rapid navigation only evaluates the final position (300ms)
       // During batch analyze-all, skip debounce for maximum throughput
       if(_reviewAnalyzeAllActive){
@@ -3678,7 +3730,7 @@ function requestEngineEval(){
         }catch(e){
           console.error('engineEvalDeep error:',e);
           _evalLoading=false;
-          _updateEvalDisplay();
+          _updateAllEvalDisplays();
           // v1.0.4 Rev24: On synchronous engine call failure during batch,
           // advance to the next step instead of stalling. The safety timer
           // covers async failures (engine never responds).
@@ -3697,7 +3749,7 @@ function requestEngineEval(){
           try{
             if(typeof AndroidBridge.engineEvalDeep==='function'){AndroidBridge.engineEvalDeep(fen);}
             else{AndroidBridge.engineEval(fen);}
-          }catch(e){console.error('engineEvalDeep error:',e);_evalLoading=false;_updateEvalDisplay();}
+          }catch(e){console.error("engineEvalDeep error:",e);_evalLoading=false;_updateAllEvalDisplays();}
           // v1.0.7 PHASE 18 Task 3 (bug fix): Add safety timer for single-step
           // review eval. Previously, only normal game mode had a safety timer
           // (30s). Review mode (depth 22) had NO safety net — if the engine
@@ -3724,7 +3776,7 @@ function requestEngineEval(){
     // v1.0.6: Sanitize the FEN before sending to the engine.
     const fen=_sanitizeFenForEngine(generateFEN(gameState));
     _evalForBlackTurn=gameState.currentTurn==='black';
-    if(typeof AndroidBridge!=='undefined'&&AndroidBridge.isEngineReady()){
+    if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.isEngineReady==='function'&&AndroidBridge.isEngineReady()){
       _evalLoading=true;
       _updateEvalDisplay();
       try{AndroidBridge.engineEval(fen);}catch(e){console.error('engineEval error:',e);_evalLoading=false;_updateEvalDisplay();}

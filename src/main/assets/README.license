@@ -2,7 +2,7 @@ This directory contains application assets loaded by the WebView.
 
 License classification by file:
   - chess.html: Combined work (AGPL v3 + GPL v3)
-      Built from chess.src/ modules by build-chess.py / build-chess.sh.
+      Built from chess.src/ modules by build-chess.py.
       The HTML/CSS template is AGPL v3; the embedded JavaScript modules
       include GPL v3 (DroidFish-derived) and AGPL v3 (original) code.
       See chess.src/README.license for per-module details.
@@ -87,7 +87,7 @@ v1.0.4 EXPANSION (this round) changes (reflected in stats.html and rebuilt chess
       strings (bilingual zh/en).
   - Version strings throughout: v1.0.3 → v1.0.4 (header badge, about
       dialog, loading title, render-error fallback page).
-  - Built chess.html includes all the above via build-chess.sh.
+  - Built chess.html includes all the above via build-chess.py.
 
 v1.0.4 changes (reflected in stats.html and rebuilt chess.html):
   - chess.src/chess960.js (NEW FILE): Chess960 implementation.
@@ -659,3 +659,129 @@ v1.0.7 (2026.6.28-30):
     dedup, CSP added, dead code removal (renderPGN/renderMoveNotation),
     full Copyright + GPL v3 license block added to <head>.
   - AGPLv3_Logo.svg, GPLv3_Logo.svg unchanged.
+
+v1.0.8 (2026.6.30) changes:
+  - chess.html: rebuilt from chess.src/ (Phase 22: personified animation &
+    sound redesign, light mode silver palette, scene sound expansion, sound
+    mute bug fix, queen animation optimization, v1.0.7→v1.0.8 version residue
+    fix). See chess.src/README.license for per-module details.
+  - stats.html: light mode synced to silver palette (#f0f0f3/#e0e0e5/#2c2c34).
+  - AGPLv3_Logo.svg, GPLv3_Logo.svg unchanged.
+
+v1.0.8 Phase 22 7th/8th supplements (2026.6.30):
+  - chess.html: rebuilt from chess.src/ (animation flicker fix, _srcRookPc
+    undefined error fix, last-move highlight box-shadow rollback, .sq .pc
+    stale will-change/transition cleanup).
+  - stats.html: no changes in 7th/8th supplements.
+  - AGPLv3_Logo.svg, GPLv3_Logo.svg unchanged.
+
+
+v1.0.8 Phase 23 (2026.7.1):
+  - chess.html rebuilt from chess.src/ (see chess.src/README.license for
+    the ⚡ marker fix, animation flicker fix, and smoothness optimization).
+  - stats.html: no changes in Phase 23.
+  - AGPLv3_Logo.svg, GPLv3_Logo.svg unchanged.
+
+v1.0.8 Phase 24 (2026.7.1):
+  - chess.html rebuilt from chess.src/ (see chess.src/README.license for
+    the dead-code removal, bug fixes, and performance optimizations).
+  - stats.html: XSS fix (metadata table header values now escaped with
+    _escFEN); viewport meta allows user zoom (maximum-scale=5.0); title
+    changed from "📊统计数据" to "📊Statistics"; target="_blank" gains
+    rel="noopener noreferrer"; NaN% division-by-zero guard added.
+  - AGPLv3_Logo.svg, GPLv3_Logo.svg unchanged.
+
+v1.0.8 Phase 25 (2026.7.1):
+  - chess.html rebuilt from chess.src/ (worker-pool.js reimplemented and
+    added back to the module order).
+  - stats.html: Inline Web Worker for heatmap-stats offloading (CSP gains
+    worker-src blob: and script-src blob:); .hdr background theme-aware
+    via new --hdr-bg variable; _computeHeatmapStatsAsync with sync fallback.
+  - AGPLv3_Logo.svg, GPLv3_Logo.svg unchanged.
+
+v1.0.8 Phase 26 (2026.7.1):
+  - chess.html rebuilt (personified animations, shake-massive, ⚡ emoji fix).
+  - stats.html: 3 export/import dialogs theme-aware (var(--card)/var(--border));
+    Web Worker race-condition fix (taskId map).
+
+v1.0.8 Phase 27 (2026.7.1):
+  - chess.html rebuilt (executeMove haptic dispatch simplified to cover
+    all six pieces; HapticManager THROTTLE gains knight/bishop/rook).
+
+v1.0.8 Phase 28 (2026.7.1):
+  - chess.html rebuilt (all Phase 28 JS fixes).
+  - stats.html: html[data-theme="dark"] full palette; heatmap cache
+    invalidation on PGN import; worker onerror terminate+revokeURL.
+
+v1.0.8 Phase 29 (2026.7.1):
+  - chess.html rebuilt (Phase 29 changes in chess.src/ modules).
+  - stats.html: No changes.
+
+v1.0.8 Phase 30 (2026.7.1):
+  - chess.html rebuilt (Phase 30 changes in chess.src/ modules).
+  - stats.html: No changes.
+  - Fixed stale build-chess.sh reference (removed in v1.0.2).
+
+v1.0.8 Phase 32 (2026.7.1):
+  - chess.html rebuilt (Phase 32 changes in chess.src/ modules).
+  - stats.html: No changes.
+
+v1.0.8 Phase 33 (2026.7.1):
+  - chess.html rebuilt (Phase 33 changes in chess.src/ modules).
+  - stats.html: No changes.
+
+v1.0.8 Phase 34 (2026.7.1):
+  - chess.html rebuilt (Phase 34 changes in chess.src/ modules).
+  - stats.html: No changes (keeps its own inline worker).
+
+v1.0.8 Phase 35 (2026.7.1):
+  - chess.html rebuilt (Phase 35 changes in chess.src/ modules).
+  - stats.html: No changes.
+
+v1.0.8 Phase 36 (2026.7.1):
+  - chess.html rebuilt (license header changes in chess.src/ modules, no functional changes).
+  - stats.html: No changes.
+
+v1.0.8 Phase 37 (2026.7.1):
+  - chess.html rebuilt (license header corrections, no functional changes).
+  - stats.html: No changes.
+
+v1.0.8 Phase 38 (2026.7.1):
+  - chess.html rebuilt (Phase 38 changes in ui.js).
+  - stats.html: No changes.
+
+v1.0.8 Phase 39 (2026.7.1):
+  - chess.html rebuilt (Phase 39 changes in chess.src/ modules).
+  - stats.html: No changes.
+
+v1.0.8 Phase 40 (2026.7.1):
+  - chess.html rebuilt (Phase 40 changes in chess.src/ modules).
+  - stats.html: No changes.
+
+v1.0.8 Phase 41 (2026.7.1):
+  - chess.html rebuilt (Phase 41 changes in chess.src/ modules).
+  - stats.html: No changes.
+
+v1.0.8 Phase 42 (2026.7.1):
+  - chess.html rebuilt (Phase 42 changes in ui.js).
+  - stats.html: No changes.
+
+v1.0.8 Phase 43 (2026.7.1):
+  - chess.html rebuilt (Phase 43 changes in ui.js).
+  - stats.html: No changes.
+
+v1.0.8 Phase 44 (2026.7.1):
+  - chess.html rebuilt (Phase 44 changes in ui.js, ai-bridge.js).
+  - stats.html: No changes.
+
+v1.0.8 Phase 45 (2026.7.1):
+  - chess.html rebuilt (Phase 45 fix in ui.js, ai-bridge.js).
+  - stats.html: No changes.
+
+v1.0.8 Phase 46 (2026.7.1):
+  - chess.html rebuilt (Phase 46 changes in ui.js, tablebase.js).
+  - stats.html: No changes.
+
+v1.0.8 Phase 47 (2026.7.1):
+  - chess.html rebuilt (Phase 47 changes in ui.js, ai-bridge.js).
+  - stats.html: No changes.

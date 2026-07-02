@@ -2,7 +2,7 @@
 <html lang="zh">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
 <!--
   Copyright (C) 2026 Regalia
 
@@ -31,8 +31,8 @@
      the stats page, which renders user-pasted PGN content. Mirrors the CSP
      from chess.html (index.html.tpl) but with connect-src 'none' since
      stats.html uses AndroidBridge for IPC, not fetch. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; frame-ancestors 'none'; base-uri 'self'">
-<title>📊统计数据</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; img-src data:; worker-src blob:; connect-src 'none'; frame-ancestors 'none'; base-uri 'self'">
+<title>📊Statistics</title>
 <style>
 /* AI-GEN: AI assisted
    This code was AI-assisted and has been reviewed for GPL v3 compliance.
@@ -50,12 +50,46 @@
    Original PGN parsing logic derived from DroidFish (GPL v3).
    This file is licensed under GPL v3 to match the DroidFish-derived PGN parsing. */
 :root{
+  color-scheme:dark light;
   --bg:#1a0a0a;--card:#2a1a0a;--text:#f5e6c8;--muted:#a08050;
   --accent:#d4a017;--accent2:#7eb8da;--border:#4a3520;
+  --hdr-bg:#1a0a0a;
   --w-piece:#E8E8F0;--w-stroke:rgba(30,15,0,.85);--w-shadow:rgba(30,15,0,.55);
   --b-piece:#1A1A2E;--b-stroke:rgba(255,230,150,.85);--b-shadow:rgba(255,230,150,.55);
   --comment:#1a3a8a;--variation:#666;
 }
+/* v1.0.8 PHASE 22 (third supplement): Light theme for stats.html redesigned to
+   elegant silver tones — matches the main app's silver palette (see index.html.tpl).
+   "典雅庄重的白银色调": silver-gray bg + deep slate text + soft silver accents.
+   Board pieces keep their obsidian colors in both modes for chess-readability.
+   v1.0.8 PHASE 22 (bug fix): Also supports html[data-theme="light"] for Xiaomi
+   HyperOS 3 compatibility (JS sets data-theme based on AndroidBridge.isSystemDarkMode). */
+@media (prefers-color-scheme: light){
+  :root{
+    color-scheme:light dark;
+    --bg:#f0f0f3;--card:#e0e0e5;--text:#2c2c34;--muted:#6a6a76;
+    --accent:#4a4a52;--accent2:#2c5f8d;--border:#8a8a94;
+    --hdr-bg:#f0f0f3;
+    --w-piece:#E8E8F0;--w-stroke:rgba(30,15,0,.85);--w-shadow:rgba(30,15,0,.55);
+    --b-piece:#1A1A2E;--b-stroke:rgba(255,230,150,.85);--b-shadow:rgba(255,230,150,.55);
+    --comment:#2c5f8d;--variation:#6a6a76;
+  }
+}
+/* JS-driven light theme (Xiaomi HyperOS 3 compatibility) — same silver palette */
+html[data-theme="light"]{
+  color-scheme:light;
+  --bg:#f0f0f3;--card:#e0e0e5;--text:#2c2c34;--muted:#6a6a76;
+  --accent:#4a4a52;--accent2:#2c5f8d;--border:#8a8a94;
+  --hdr-bg:#f0f0f3;
+  --w-piece:#E8E8F0;--w-stroke:rgba(30,15,0,.85);--w-shadow:rgba(30,15,0,.55);
+  --b-piece:#1A1A2E;--b-stroke:rgba(255,230,150,.85);--b-shadow:rgba(255,230,150,.55);
+  --comment:#2c5f8d;--variation:#6a6a76;
+}
+/* v1.0.8 PHASE 28 (bug fix): html[data-theme="dark"] previously only set
+   color-scheme:dark without re-declaring the full dark palette. When the
+   system is light but JS forces dark (Xiaomi HyperOS 3), the page rendered
+   with light variables. Now restores the full dark palette (mirrors :root). */
+html[data-theme="dark"]{color-scheme:dark;--bg:#1a0a0a;--card:#2a1a0a;--text:#f5e6c8;--muted:#a08050;--accent:#d4a017;--accent2:#7eb8da;--border:#4a3520;--hdr-bg:#1a0a0a;--w-piece:#E8E8F0;--w-stroke:rgba(30,15,0,.85);--w-shadow:rgba(30,15,0,.55);--b-piece:#1A1A2E;--b-stroke:rgba(255,230,150,.85);--b-shadow:rgba(255,230,150,.55);--comment:#1a3a8a;--variation:#666}
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 /* v1.0.7: html + body both get overflow-x:hidden to kill ALL horizontal scroll.
    body gets 3px right padding for finger-grip clearance (same as chess.html). */
@@ -66,7 +100,12 @@ html{overflow-x:hidden;max-width:100%}
    2×safe-top + 8px before scrolling, then jump up by safe-top when sticky
    kicked in — a visible "header snaps upward" glitch on first scroll. */
 body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,sans-serif;font-size:16px;line-height:1.5;overflow-x:hidden;max-width:100%;padding:0 calc(env(safe-area-inset-right) + 3px) env(safe-area-inset-bottom) env(safe-area-inset-left)}
-.hdr{position:sticky;top:0;z-index:100;background:linear-gradient(145deg,#2a1a0a,#1a0a0a);border-bottom:2px solid var(--accent);padding:calc(10px + env(safe-area-inset-top)) 14px 10px 14px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+/* v1.0.8 PHASE 25 (light-mode fix): .hdr background was hardcoded
+   linear-gradient(145deg,#2a1a0a,#1a0a0a) (dark brown), which stayed dark
+   in light mode while the rest of the page turned silver. Now uses the
+   --hdr-bg theme variable (dark: #1a0a0a, light: #f0f0f3) with a subtle
+   gradient for depth. */
+.hdr{position:sticky;top:0;z-index:100;background:linear-gradient(145deg,var(--hdr-bg),var(--bg));border-bottom:2px solid var(--accent);padding:calc(10px + env(safe-area-inset-top)) 14px 10px 14px;display:flex;align-items:center;justify-content:space-between;box-shadow:0 2px 8px rgba(0,0,0,.4)}
 .hdr h1{font-size:1.15rem;color:var(--accent);font-weight:700;letter-spacing:.5px}
 .hdr-btns{display:flex;gap:6px;flex-wrap:wrap}
 .btn{background:rgba(212,160,23,.15);color:var(--text);border:1px solid rgba(212,160,23,.4);border-radius:6px;padding:6px 12px;font-size:.8rem;cursor:pointer;font-family:inherit;white-space:nowrap;transition:background .15s}
@@ -183,6 +222,175 @@ table tr:hover{background:rgba(212,160,23,.05)}
 // PGN parsing logic derived from DroidFish GameTree/PgnToken/PgnScanner (GPL v3)
 // Copyright (C) Peter Österlund. Modifications Copyright (C) 2026 Regalia.
 // Licensed under GPL v3.
+
+// === v1.0.8 PHASE 25: Web Worker pool for heavy stats computation ===
+// Offloads the heatmap-stats walk (1-2s for 100+ move games) to a background
+// worker so the UI doesn't freeze. Falls back to synchronous execution if
+// Worker is unavailable or CSP blocks blob: workers.
+let _statsWorker=null;
+let _statsWorkerSupported=(typeof Worker!=='undefined');
+let _heatmapCacheKey=null; // key for cached heatmap result
+let _heatmapCacheResult=null; // cached {ctrlW,ctrlB,posCount}
+
+// Worker source — self-contained heatmap computation (no external deps).
+// Mirrors the _computeCtrl + _attacked logic but runs off the main thread.
+const _STATS_WORKER_SRC=`
+self.onmessage=function(e){
+  var msg=e.data;
+  if(msg.type==='compute'){
+    var boards=msg.boards;
+    var taskId=msg.taskId; // v1.0.8 PHASE 26: echo back for concurrent task support
+    function attacked(board,pos){
+      var p=board[pos.row][pos.col];if(!p)return[];
+      var r=pos.row,c=pos.col,co=p.color,mv=[];
+      if(p.type==='pawn'){var d=co==='white'?-1:1;
+        if(r+d>=0&&r+d<8&&c-1>=0&&c-1<8)mv.push({row:r+d,col:c-1});
+        if(r+d>=0&&r+d<8&&c+1>=0&&c+1<8)mv.push({row:r+d,col:c+1});
+      }else if(p.type==='knight'){var offs=[[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
+        for(var i=0;i<offs.length;i++){var nr=r+offs[i][0],nc=c+offs[i][1];if(nr>=0&&nr<8&&nc>=0&&nc<8)mv.push({row:nr,col:nc});}
+      }else if(p.type==='king'){for(var dr=-1;dr<=1;dr++)for(var dc=-1;dc<=1;dc++){if(!dr&&!dc)continue;if(r+dr>=0&&r+dr<8&&c+dc>=0&&c+dc<8)mv.push({row:r+dr,col:c+dc});}
+      }else{var dirs=p.type==='rook'?[[-1,0],[1,0],[0,-1],[0,1]]:p.type==='bishop'?[[-1,-1],[-1,1],[1,-1],[1,1]]:[[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]];
+        for(var i=0;i<dirs.length;i++){var nr=r+dirs[i][0],nc=c+dirs[i][1];
+          while(nr>=0&&nr<8&&nc>=0&&nc<8){mv.push({row:nr,col:nc});if(board[nr][nc])break;nr+=dirs[i][0];nc+=dirs[i][1];}
+        }
+      }
+      return mv;
+    }
+    var ctrlW=[[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0]];
+    var ctrlB=[[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0]];
+    var posCount=0;
+    for(var bi=0;bi<boards.length;bi++){
+      var b=boards[bi];
+      for(var r=0;r<8;r++)for(var c=0;c<8;c++){
+        var p=b[r][c];if(!p)continue;
+        var atks=attacked(b,{row:r,col:c});
+        for(var ai=0;ai<atks.length;ai++){var a=atks[ai];
+          if(p.color==='white')ctrlW[a.row][a.col]++;else ctrlB[a.row][a.col]++;
+        }
+      }
+      posCount++;
+    }
+    self.postMessage({type:'result',taskId:taskId,ctrlW:ctrlW,ctrlB:ctrlB,posCount:posCount});
+  }
+};
+`;
+
+function _getStatsWorker(){
+  if(!_statsWorkerSupported)return null;
+  if(_statsWorker)return _statsWorker;
+  try{
+    var blob=new Blob([_STATS_WORKER_SRC],{type:'application/javascript'});
+    var url=URL.createObjectURL(blob);
+    _statsWorker=new Worker(url);
+    _statsWorker._url=url;
+    _statsWorker._nextTaskId=1;
+    _statsWorker._pending={}; // taskId -> {resolve, reject, timeout}
+    _statsWorker.onmessage=function(e){
+      var msg=e.data;
+      if(!msg||!msg.taskId)return;
+      var task=_statsWorker._pending[msg.taskId];
+      if(!task)return;
+      delete _statsWorker._pending[msg.taskId];
+      if(task.timeout){clearTimeout(task.timeout);task.timeout=null;}
+      if(msg.type==='result'){
+        task.resolve({ctrlW:msg.ctrlW,ctrlB:msg.ctrlB,posCount:msg.posCount});
+      }else{
+        task.reject(new Error(msg.error||'Worker error'));
+      }
+    };
+    _statsWorker.onerror=function(e){
+      console.warn('Stats worker error:',e);
+      // Reject all pending tasks
+      for(var tid in _statsWorker._pending){
+        var task=_statsWorker._pending[tid];
+        if(task.timeout){clearTimeout(task.timeout);task.timeout=null;}
+        task.reject(new Error('Worker crashed'));
+      }
+      _statsWorker._pending={};
+      // v1.0.8 PHASE 28 (bug fix): terminate the worker + revoke the blob URL
+      //   to prevent thread + memory leaks. Previously _statsWorker was nulled
+      //   without .terminate() or URL.revokeObjectURL().
+      try{_statsWorker.terminate();}catch(_e){}
+      try{if(_statsWorker._url)URL.revokeObjectURL(_statsWorker._url);}catch(_e){}
+      _statsWorkerSupported=false;
+      _statsWorker=null;
+    };
+    return _statsWorker;
+  }catch(e){
+    console.warn('Stats worker creation failed, falling back to sync:',e);
+    _statsWorkerSupported=false;
+    return null;
+  }
+}
+
+// v1.0.8 PHASE 26 (race-condition fix): The previous implementation overwrote
+//   w.onmessage on every call — if two calls overlapped (rapid re-render),
+//   the first call's onmessage was replaced by the second's, and the first
+//   call's Promise never resolved (memory leak + stuck loading placeholder).
+//   Fix: use a taskId map so multiple concurrent calls each get their own
+//   resolution. The worker includes taskId in its response.
+// Compute heatmap stats. Returns a Promise resolving to {ctrlW,ctrlB,posCount,viaWorker}.
+// boards: array of 8x8 board arrays (each cell is {type,color} or null).
+function _computeHeatmapStatsAsync(boards){
+  // v1.0.8 PHASE 49: removed the internal cache check + cache write. The
+  //   caller (renderStats) now owns the cache key (a strong content-based
+  //   key) and is the single place that reads/writes _heatmapCacheKey and
+  //   _heatmapCacheResult. The old internal weak key
+  //   (boards.length + ':' + (boards[0]?'1':'0')) could collide and would
+  //   overwrite the caller's strong key with a weak one, defeating the
+  //   caller's cache. This function now purely computes and returns.
+  var w=_getStatsWorker();
+  if(!w){
+    // Synchronous fallback
+    return Promise.resolve({viaWorker:false,result:_computeHeatmapStatsSync(boards)});
+  }
+  return new Promise(function(resolve,reject){
+    var taskId=w._nextTaskId++;
+    var timeout=setTimeout(function(){
+      delete w._pending[taskId];
+      reject(new Error('Heatmap worker timeout (30s)'));
+    },30000);
+    w._pending[taskId]={resolve:function(r){
+      resolve({viaWorker:true,result:r});
+    },reject:reject,timeout:timeout};
+    w.postMessage({type:'compute',taskId:taskId,boards:boards});
+  });
+}
+
+// Synchronous fallback (same logic, runs on main thread)
+function _computeHeatmapStatsSync(boards){
+  function attacked(board,pos){
+    var p=board[pos.row][pos.col];if(!p)return[];
+    var r=pos.row,c=pos.col,co=p.color,mv=[];
+    if(p.type==='pawn'){var d=co==='white'?-1:1;
+      if(r+d>=0&&r+d<8&&c-1>=0&&c-1<8)mv.push({row:r+d,col:c-1});
+      if(r+d>=0&&r+d<8&&c+1>=0&&c+1<8)mv.push({row:r+d,col:c+1});
+    }else if(p.type==='knight'){var offs=[[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
+      for(var i=0;i<offs.length;i++){var nr=r+offs[i][0],nc=c+offs[i][1];if(nr>=0&&nr<8&&nc>=0&&nc<8)mv.push({row:nr,col:nc});}
+    }else if(p.type==='king'){for(var dr=-1;dr<=1;dr++)for(var dc=-1;dc<=1;dc++){if(!dr&&!dc)continue;if(r+dr>=0&&r+dr<8&&c+dc>=0&&c+dc<8)mv.push({row:r+dr,col:c+dc});}
+    }else{var dirs=p.type==='rook'?[[-1,0],[1,0],[0,-1],[0,1]]:p.type==='bishop'?[[-1,-1],[-1,1],[1,-1],[1,1]]:[[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]];
+      for(var i=0;i<dirs.length;i++){var nr=r+dirs[i][0],nc=c+dirs[i][1];
+        while(nr>=0&&nr<8&&nc>=0&&nc<8){mv.push({row:nr,col:nc});if(board[nr][nc])break;nr+=dirs[i][0];nc+=dirs[i][1];}
+      }
+    }
+    return mv;
+  }
+  var ctrlW=[[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0]];
+  var ctrlB=[[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0]];
+  var posCount=0;
+  for(var bi=0;bi<boards.length;bi++){
+    var b=boards[bi];
+    for(var r=0;r<8;r++)for(var c=0;c<8;c++){
+      var p=b[r][c];if(!p)continue;
+      var atks=attacked(b,{row:r,col:c});
+      for(var ai=0;ai<atks.length;ai++){var a=atks[ai];
+        if(p.color==='white')ctrlW[a.row][a.col]++;else ctrlB[a.row][a.col]++;
+      }
+    }
+    posCount++;
+  }
+  return {ctrlW:ctrlW,ctrlB:ctrlB,posCount:posCount};
+}
 
 // The payload is injected by the Java side via AndroidBridge.getStatsPayload()
 let _payload=null;
@@ -1331,7 +1539,10 @@ function renderStats(parsed,evalData){
   h+='<div class="section"><h2>'+T('metadata')+'</h2><table>';
   const hdrs=parsed.headers||{};
   for(const k of ['Event','Site','Date','Round','White','Black','Result','TimeControl']){
-    h+='<tr><th>'+k+'</th><td>'+(hdrs[k]||'?')+'</td></tr>';
+    // v1.0.8 PHASE 24 (security fix): escape header values to prevent XSS.
+    //   A malicious PGN with a script tag in the header value would execute
+    //   on the stats page because CSP allows 'unsafe-inline'.
+    h+='<tr><th>'+k+'</th><td>'+_escFEN(hdrs[k]||'?')+'</td></tr>';
   }
   h+='</table></div>';
 
@@ -1780,15 +1991,15 @@ function renderStats(parsed,evalData){
       h+='<div style="margin-top:14px"><h3 style="font-size:.85rem;color:var(--accent);margin-bottom:6px">'+T('time_phase_dist')+'</h3>';
       h+='<div class="stats-grid">';
       if(openN>0){
-        const pct=Math.round(openT/total*100);
+        const pct=total>0?Math.round(openT/total*100):0;
         h+='<div class="stat-item"><div class="label">'+T('opening')+' ('+openN+' '+T('ply')+')</div><div class="value">'+formatTime(openT)+'<br><span style="font-size:.8rem">'+pct+T('time_pct')+'</span></div></div>';
       }
       if(midN>0){
-        const pct=Math.round(midT/total*100);
+        const pct=total>0?Math.round(midT/total*100):0;
         h+='<div class="stat-item"><div class="label">'+T('midgame')+' ('+midN+' '+T('ply')+')</div><div class="value">'+formatTime(midT)+'<br><span style="font-size:.8rem">'+pct+T('time_pct')+'</span></div></div>';
       }
       if(endN>0){
-        const pct=Math.round(endT/total*100);
+        const pct=total>0?Math.round(endT/total*100):0;
         h+='<div class="stat-item"><div class="label">'+T('endgame')+' ('+endN+' '+T('ply')+')</div><div class="value">'+formatTime(endT)+'<br><span style="font-size:.8rem">'+pct+T('time_pct')+'</span></div></div>';
       }
       h+='</div></div>';
@@ -1961,81 +2172,49 @@ function renderStats(parsed,evalData){
   }
 
   // v1.0.4 NEW: Heatmap-based control statistics
-  // For each move in the game, compute the control map (white/black piece counts
-  // attacking each square) and accumulate per-square control totals across all
-  // positions. Then derive aggregate statistics:
-  //   - Average control of each square (displayed as a heatmap)
-  //   - Per-side center control over time
-  //   - "Strongest square" for each side (most consistently controlled)
-  //   - "Weakest square" for each side (least controlled)
-  // This uses the in-memory control cache (_ctrlCache) keyed by FEN to avoid
-  // re-computing the same position's control map multiple times.
-  // v1.0.4 Round-5 Rev48: Conditional display — the entire heatmap section
-  // (including heading) is hidden if _posCount === 0 (no position data could
-  // be computed).
+  // v1.0.8 PHASE 25: Offloaded to a Web Worker to avoid UI freeze on long
+  //   games (1-2s for 100+ moves). The worker computes per-square control
+  //   counts; the main thread renders the heatmap from the cached result.
+  //   On first render (cache miss), a loading placeholder is shown and the
+  //   worker computes in the background; the page re-renders when done.
+  //   Falls back to synchronous computation if Worker is unavailable.
   if(moves.length>0){
-    // Accumulators
-    const _ctrlW=Array.from({length:8},()=>new Array(8).fill(0));
-    const _ctrlB=Array.from({length:8},()=>new Array(8).fill(0));
-    let _posCount=0;
-    // Walk through every position (initial + after each move)
-    let st=parsed.startFEN?fenToState(parsed.startFEN):initState();
-    if(st){
-      // Helper: compute control map for a state (cached)
-      const _ctrlCache={};
-      function _computeCtrl(s){
-        const fen=stateToFEN(s);
-        if(_ctrlCache[fen])return _ctrlCache[fen];
-        const cm=[];
-        for(let r=0;r<8;r++){cm[r]=[];for(let c=0;c<8;c++)cm[r][c]={white:[],black:[]};}
-        // For each piece, compute its attacks
-        for(let r=0;r<8;r++)for(let c=0;c<8;c++){
-          const p=s.board[r][c];
-          if(!p)continue;
-          const atks=_attacked(s.board,{row:r,col:c});
-          for(const a of atks){
-            cm[a.row][a.col][p.color].push({piece:p,position:{row:r,col:c}});
-          }
-        }
-        _ctrlCache[fen]=cm;
-        return cm;
-      }
-      // Inline _attacked (mirror of game-logic.attacked)
-      function _attacked(board,pos){
-        const b=board,p=b[pos.row][pos.col];if(!p)return[];
-        const r=pos.row,c=pos.col,co=p.color,mv=[];
-        if(p.type==='pawn'){const d=co==='white'?-1:1;for(const dc of[-1,1])if(r+d>=0&&r+d<8&&c+dc>=0&&c+dc<8)mv.push({row:r+d,col:c+dc});}
-        else if(p.type==='knight'){for(const[dr,dc] of[[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]])if(r+dr>=0&&r+dr<8&&c+dc>=0&&c+dc<8)mv.push({row:r+dr,col:c+dc});}
-        else if(p.type==='king'){for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++)if((dr||dc)&&r+dr>=0&&r+dr<8&&c+dc>=0&&c+dc<8)mv.push({row:r+dr,col:c+dc});}
-        else{const dirs=p.type==='rook'?[[-1,0],[1,0],[0,-1],[0,1]]:p.type==='bishop'?[[-1,-1],[-1,1],[1,-1],[1,1]]:[[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]];for(const[dr,dc] of dirs){let nr=r+dr,nc=c+dc;while(nr>=0&&nr<8&&nc>=0&&nc<8){mv.push({row:nr,col:nc});if(b[nr][nc])break;nr+=dr;nc+=dc;}}}
-        return mv;
-      }
-      // Accumulate the initial position
-      const cm0=_computeCtrl(st);
-      for(let r=0;r<8;r++)for(let c=0;c<8;c++){
-        _ctrlW[r][c]+=cm0[r][c].white.length;
-        _ctrlB[r][c]+=cm0[r][c].black.length;
-      }
-      _posCount++;
-      // Walk moves — use the cached post-move state from each move object.
-      // v1.0.4 ROUND-5 REV15: Previously used makeMvInPlace(st, m.move) which
-      // references a non-existent m.move field (moves from parseFromMoveRecords
-      // have {from, to, piece, captured, state, ...} — NO m.move). This caused
-      // EVERY move to be skipped via the `if(!m||!m.move)continue` guard,
-      // leaving _posCount stuck at 1. Now uses m.state directly (same approach
-      // as the material balance chart at line 1840).
-      for(let i=0;i<moves.length;i++){
-        const m=moves[i];
-        if(!m||!m.state)continue;
-        try{
-          const cm=_computeCtrl(m.state);
-          for(let r=0;r<8;r++)for(let c=0;c<8;c++){
-            _ctrlW[r][c]+=cm[r][c].white.length;
-            _ctrlB[r][c]+=cm[r][c].black.length;
-          }
-          _posCount++;
-        }catch(e){/* skip invalid move state */}
-      }
+    // Collect all board states to send to the worker
+    const _boards=[];
+    let _st0=parsed.startFEN?fenToState(parsed.startFEN):initState();
+    if(_st0)_boards.push(_st0.board);
+    for(let i=0;i<moves.length;i++){
+      const m=moves[i];
+      if(m&&m.state&&m.state.board)_boards.push(m.state.board);
+    }
+    // v1.0.8 PHASE 49: strengthened cache key. The old key
+    //   (boards.length + ':' + firstBoard JSON length) collided between a
+    //   variation and a mainline selection that happened to share the same
+    //   first board and move count — yielding a stale heatmap. Now hash the
+    //   FULL first board content (cheap — only one stringify of an 8x8 array)
+    //   plus the last board's content, which distinguishes any two board
+    //   sequences that differ in either their start or end position.
+    var _hmKey=_boards.length+':'+
+      (_boards[0]?JSON.stringify(_boards[0]):'')+':'+
+      (_boards[_boards.length-1]?JSON.stringify(_boards[_boards.length-1]):'');
+    var _hmCached=(_heatmapCacheKey===_hmKey&&_heatmapCacheResult);
+    var _ctrlW,_ctrlB,_posCount;
+    if(_hmCached){
+      _ctrlW=_heatmapCacheResult.ctrlW;
+      _ctrlB=_heatmapCacheResult.ctrlB;
+      _posCount=_heatmapCacheResult.posCount;
+    }else{
+      // Trigger async computation (worker or sync fallback), show placeholder
+      _computeHeatmapStatsAsync(_boards).then(function(res){
+        _heatmapCacheKey=_hmKey;
+        _heatmapCacheResult=res.result;
+        // Re-render now that the heatmap is ready
+        try{render();}catch(e){console.warn('Heatmap re-render failed:',e);}
+      }).catch(function(e){
+        console.warn('Heatmap worker failed:',e);
+      });
+      // Show placeholder for this render
+      _posCount=0;
     }
     if(_posCount>0){
     h+='<div class="section"><h2>'+(T('heatmap_stats')||'Heatmap Control Statistics')+'</h2>';
@@ -3045,8 +3224,8 @@ function _showStatsExportDialog(){
   overlay.onclick=function(e){if(e.target===overlay)overlay.remove();};
   var dlg=document.createElement('div');
   dlg.className='dlg';
-  dlg.style.cssText='max-width:440px;background:#221015;border:1px solid #d4a017;border-radius:12px;padding:20px;width:90%';
-  var html='<h2 style="color:#ffd700;margin-bottom:16px;font-size:1.1rem">💾HTML</h2>';
+  dlg.style.cssText='max-width:440px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;width:90%;color:var(--text)';
+  var html='<h2 style="color:var(--accent2);margin-bottom:16px;font-size:1.1rem">💾HTML</h2>';
   html+='<div style="display:flex;flex-direction:column;gap:10px">';
   html+='<button class="btn" style="width:100%;justify-content:center;gap:8px;padding:12px;font-size:.9rem" onclick="_haptic(\'BUTTON_PRESS\');this.closest(\'.dov\').remove();_exportStaticHTML()">📄 '+(_lang==='zh'?'导出此FEN的统计数据':'Export current position stats')+'</button>';
   html+='<button class="btn" style="width:100%;justify-content:center;gap:8px;padding:12px;font-size:.9rem" onclick="_haptic(\'BUTTON_PRESS\');this.closest(\'.dov\').remove();_exportFullHTML()">📊 '+(_lang==='zh'?'导出全PGN的统计数据':'Export full PGN stats')+'</button>';
@@ -3055,7 +3234,7 @@ function _showStatsExportDialog(){
   html+='<div style="margin-top:14px;padding:10px;background:rgba(192,57,43,.08);border:1px solid rgba(192,57,43,.3);border-radius:6px;font-size:.72rem;color:var(--text);line-height:1.5">';
   var notice=_lang==='zh'?'⚠️导出的HTML文件采用GPL v3授权（与DroidFish衍生的PGN解析一致）。分发导出的HTML文件时，您必须遵守许可证要求，包括完整的许可证文本和其他必要内容。您可通过以下渠道获取——':'⚠️The exported HTML file is licensed under GPL v3 to match the DroidFish-derived PGN parsing. When distributing exported HTML files, you must comply with the license requirements by including the full license text and other required contents. You may obtain them through the following channels——';
   html+='<span style="color:var(--text)">'+notice+'</span>';
-  html+='<br><a href="https://github.com/YDW99/Regalia/blame/main/LICENSE%26NOTICE.zip" style="color:var(--accent2);word-break:break-all" target="_blank">https://github.com/YDW99/Regalia/blame/main/LICENSE%26NOTICE.zip</a>';
+  html+='<br><a href="https://github.com/YDW99/Regalia/blame/main/LICENSE%26NOTICE.zip" style="color:var(--accent2);word-break:break-all" target="_blank" rel="noopener noreferrer">https://github.com/YDW99/Regalia/blame/main/LICENSE%26NOTICE.zip</a>';
   html+='</div>';
   // GPL v3 logo at the bottom
   html+='<div style="text-align:center;margin-top:10px" id="_gplLogoHolder"></div>';
@@ -3177,8 +3356,8 @@ function _showStatsImportDialog(){
   overlay.onclick=function(e){if(e.target===overlay)overlay.remove();};
   var dlg=document.createElement('div');
   dlg.className='dlg';
-  dlg.style.cssText='max-width:420px;background:#221015;border:1px solid #d4a017;border-radius:12px;padding:20px;width:90%';
-  var html='<h2 style="color:#ffd700;margin-bottom:16px;font-size:1.1rem">'+(_lang==='zh'?'🗃️ 导入PGN':'🗃️ Import PGN')+'</h2>';
+  dlg.style.cssText='max-width:420px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;width:90%;color:var(--text)';
+  var html='<h2 style="color:var(--accent2);margin-bottom:16px;font-size:1.1rem">'+(_lang==='zh'?'🗃️ 导入PGN':'🗃️ Import PGN')+'</h2>';
   html+='<div style="display:flex;flex-direction:column;gap:10px">';
   html+='<button class="btn" style="width:100%;justify-content:center;gap:8px;padding:12px;font-size:.9rem" onclick="_statsPastePGN()"><span style="font-size:1.3rem">📜</span> '+(_lang==='zh'?'粘贴PGN':'Paste PGN')+'</button>';
   html+='<button class="btn" style="width:100%;justify-content:center;gap:8px;padding:12px;font-size:.9rem" onclick="_statsSelectPGNFile()"><span style="font-size:1.3rem">📂</span> '+(_lang==='zh'?'选择PGN文件':'Select PGN File')+'</button>';
@@ -3215,6 +3394,11 @@ function _statsPastePGN(){
     _selectedMoveIdx=-1;
     _variationMoves=null;
     _variationMeta=null;
+    // v1.0.8 PHASE 28 (bug fix): Invalidate heatmap cache on new PGN import.
+    //   Without this, switching between same-length standard-chess games shows
+    //   stale heatmap stats from the previous game.
+    _heatmapCacheKey=null;
+    _heatmapCacheResult=null;
     // v1.0.4 Rev28: Record the imported PGN so the return-to-game flow can
     // prompt "🗃️ Import PGN to game?" Yes/No/Cancel.
     _statsImportedPGN=text;
@@ -3252,6 +3436,9 @@ function onStatsPGNFileRead(content){
   _selectedMoveIdx=-1;
   _variationMoves=null;
   _variationMeta=null;
+  // v1.0.8 PHASE 28 (bug fix): Invalidate heatmap cache on new PGN import.
+  _heatmapCacheKey=null;
+  _heatmapCacheResult=null;
   // v1.0.4 Rev28: Record the imported PGN so the return-to-game flow can
   // prompt "🗃️ Import PGN to game?" Yes/No/Cancel.
   _statsImportedPGN=content;
@@ -3418,6 +3605,17 @@ window.handleStatsBackPress=handleStatsBackPress;
 
 // Initialize — get payload from Java bridge
 function init(){
+  // v1.0.8 PHASE 22 (bug fix): Apply system dark/light theme via data-theme attribute.
+  // Uses AndroidBridge.isSystemDarkMode() (Xiaomi HyperOS 3 compatibility).
+  try{
+    let isLight=false;
+    if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.isSystemDarkMode==='function'){
+      isLight=!AndroidBridge.isSystemDarkMode();
+    }else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches){
+      isLight=true;
+    }
+    document.documentElement.setAttribute('data-theme', isLight?'light':'dark');
+  }catch(e){}
   if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getStatsPayload){
     try{
       const payloadStr=AndroidBridge.getStatsPayload();

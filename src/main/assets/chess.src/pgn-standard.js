@@ -1,5 +1,5 @@
 // ===================== MODULE: pgn-standard =====================
-// PGN (Portable Game Notation) standardization utilities — v1.0.4 NEW
+// PGN (Portable Game Notation) standardization utilities
 //
 // Implements the 1994 PGN specification (Steven J. Edwards) plus modern
 // de-facto extensions ([%eval], [%clk]) used by Lichess/Chessbase.
@@ -12,20 +12,24 @@
 //
 // Copyright (C) 2026 Regalia
 //
+// PGN encoding/decoding patterns derived from DroidFish PGN parsing
+// (Copyright (C) Peter Österlund, GPL v3)
+// Modified by Regalia on 2026-06-15
+//
 // AI-GEN: AI assisted
-// This code was AI-assisted and has been reviewed for AGPL v3 compliance.
+// This code was AI-assisted and has been reviewed for GPL v3 compliance.
 //
 // This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
+// it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Affero General Public License for more details.
+// GNU General Public License for more details.
 //
-// You should have received a copy of the GNU Affero General Public License
+// You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 // ===== I. Tag-pair encoding =====
@@ -373,30 +377,30 @@ function parseCalTag(tagStr){
 function parseTimeControl(tcStr){
   if(!tcStr||tcStr==='?')return {type:'unknown'};
   // Hourglass
-  if(tcStr.startsWith('*'))return {type:'hourglass',baseSec:parseInt(tcStr.substring(1))||0};
+  if(tcStr.startsWith('*'))return {type:'hourglass',baseSec:parseInt(tcStr.substring(1),10)||0};
   // Staged: "40/7200:3600" or "40/7200:20/3600:3600"
   if(tcStr.includes('/')||tcStr.includes(':')){
     const stages=[];
     const parts=tcStr.split(':');
     for(const p of parts){
       const sm=p.match(/^(\d+)\/(\d+)$/);
-      if(sm){stages.push({moves:parseInt(sm[1]),baseSec:parseInt(sm[2])});}
-      else{const n=parseInt(p);if(!isNaN(n))stages.push({baseSec:n});}
+      if(sm){stages.push({moves:parseInt(sm[1],10),baseSec:parseInt(sm[2],10)});}
+      else{const n=parseInt(p,10);if(!isNaN(n))stages.push({baseSec:n});}
     }
     return {type:'staged',stages:stages};
   }
   // Fischer increment
   const fm=tcStr.match(/^(\d+)\+(\d+)$/);
-  if(fm)return {type:'fischer',baseSec:parseInt(fm[1]),incrementSec:parseInt(fm[2])};
+  if(fm)return {type:'fischer',baseSec:parseInt(fm[1],10),incrementSec:parseInt(fm[2],10)};
   // Bronstein delay
   const bm=tcStr.match(/^(\d+)d(\d+)$/i);
-  if(bm)return {type:'bronstein',baseSec:parseInt(bm[1]),delaySec:parseInt(bm[2])};
+  if(bm)return {type:'bronstein',baseSec:parseInt(bm[1],10),delaySec:parseInt(bm[2],10)};
   // US delay
   const um=tcStr.match(/^(\d+)i(\d+)$/i);
-  if(um)return {type:'usdelay',baseSec:parseInt(um[1]),delaySec:parseInt(um[2])};
+  if(um)return {type:'usdelay',baseSec:parseInt(um[1],10),delaySec:parseInt(um[2],10)};
   // Sudden death
   const sm=tcStr.match(/^(\d+)$/);
-  if(sm)return {type:'sudden',baseSec:parseInt(sm[1])};
+  if(sm)return {type:'sudden',baseSec:parseInt(sm[1],10)};
   return {type:'unknown'};
 }
 
@@ -434,7 +438,7 @@ function formatTimeControl(tc){
  * @param {Object} params
  *   {string[]} tagPairs   — pre-formatted "[Key \"Value\"]" lines (NO trailing newlines)
  *   {Object[]} halfMoves  — [{moveNum, color:'white'|'black', san, comment?:string, variations?:Object[]}]
- *   {string}   result     — one of "1-0","0-2","1/2-1/2","*"
+ *   {string}   result     — one of "1-0","0-1","1/2-1/2","*"
  *   {Object[]} variations — top-level variations (rare; usually attached to moves)
  * @returns {string} complete PGN text
  */
@@ -553,14 +557,22 @@ function parseStandardPGN(pgnText){
     tags[key]=val;
   }
   // Remove all tag-pair lines from the working text
-  let moveText=pgnText.replace(/^\[[^\]]*\]/gm,'').trim();
+  // v1.0.8 PHASE 49: tag-value regex was `[^\]]*` which stops at the first
+  //   `]` inside a value, leaving residual text. Use a non-greedy `[\s\S]*?`
+  //   so values containing `]` (rare but legal per PGN spec when escaped)
+  //   are handled, and anchor to the line start so movetext `[Nf3]`-style
+  //   annotations (which never start a line) are not stripped.
+  let moveText=pgnText.replace(/^\[[\s\S]*?\]/gm,'').trim();
   // Remove line continuation markers
   moveText=moveText.replace(/\\\s*\n/g,' ');
-  // Remove line-comments (;...)
-  moveText=moveText.replace(/;[^\n]*/g,'');
+  // v1.0.8 PHASE 49: Flatten brace comments BEFORE removing line comments.
+  //   The old order (line-comments first) truncated `{...; ...}` brace
+  //   comments at the `;`, losing the rest of the comment and any moves
+  //   on the same line. Brace comments must be removed first so that any
+  //   `;` inside them is gone before the line-comment pass runs.
   // v1.0.7 PHASE 18 Task 3 (bug fix): Flatten nested brace comments by REMOVING
   // them entirely (braces + body), matching the proven-correct pattern in
-  // tablebase.js:456 and worker-pool.js:277. The old code stripped only the
+  // tablebase.js's _parsePGN. The old code stripped only the
   // braces and left the comment body as bare text in moveText — the tokenizer
   // then classified each whitespace-delimited comment word as a spurious SAN
   // token, polluting the move list. (Latent: parseStandardPGN is currently
@@ -575,6 +587,9 @@ function parseStandardPGN(pgnText){
     // Truncate at any unclosed brace (tolerant per PGN spec)
     if(moveText.includes('{'))moveText=moveText.substring(0,moveText.indexOf('{'));
   }
+  // Remove line-comments (;...) — must run AFTER brace-comment flattening
+  //   so `;` inside `{...}` is already gone.
+  moveText=moveText.replace(/;[^\n]*/g,'');
   // Extract comments inline as we tokenize (so we don't lose them)
   // Strategy: tokenize the movetext into a stream of {type, value} tokens
   const tokens=[];

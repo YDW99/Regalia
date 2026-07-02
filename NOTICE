@@ -26,9 +26,15 @@ GPL v3 (DroidFish-derived or Stockfish):
       Engine management logic from DroidFish (ExternalEngine.java,
       InternalStockFish.java, UCIEngineBase.java, EngineUtil.java,
       DroidComputerPlayer.java)
+  - src/main/java/com/Regalia/StatsActivity.java
+      v1.0.8 PHASE 37: classified GPL v3 to match the stats.html asset it
+      exclusively hosts (the two form an inseparable @JavascriptInterface
+      unit). The Java code itself is original, but GPL v3 avoids dual-license
+      confusion for redistributors.
   - src/main/cpp/engine_jni.cpp
-      Native chmod/renice from DroidFish nativeutil.cpp;
-      JNI bridge (dlopen/dlsym/pipe) is original code
+      Native chmod/renice from DroidFish nativeutil.cpp
+      (v1.0.2: the dlopen/dlsym/pipe engine-loading code was removed; only
+      nativeChmod and nativeRenice remain, both DroidFish-derived)
   - src/main/assets/chess.src/game-logic.js
       PGN disambiguation and SAN notation logic from DroidFish
   - src/main/assets/chess.src/ai-bridge.js
@@ -37,11 +43,26 @@ GPL v3 (DroidFish-derived or Stockfish):
       UI layout and interaction patterns from DroidFish
   - src/main/assets/chess.src/tablebase.js
       PGN parsing logic from DroidFish (GameTree/PgnToken/PgnScanner)
+  - src/main/assets/chess.src/pgn-standard.js
+      v1.0.8 PHASE 37: classified GPL v3 — PGN encoding/decoding patterns
+      derived from DroidFish PGN parsing (Copyright (C) Peter Österlund).
+      Implements the 1994 PGN spec plus NAG / [%emt] / [%csl] / [%cal] /
+      TimeControl extensions.
+  - src/main/assets/chess.src/worker-pool.js
+      v1.0.8 PHASE 37: classified GPL v3 — Web Worker pool implementation
+      (Blob-URL instantiation, Promise API, inline fallback) follows
+      DroidFish-derived worker patterns used elsewhere in the project.
   - src/main/assets/stats.html
       PGN parsing logic (parsePGN function) derived from DroidFish
       GameTree/PgnToken/PgnScanner. Statistics rendering and analysis
       are original code. Licensed under GPL v3 to match the
       DroidFish-derived PGN parsing code.
+  - src/main/assets/chess.src/index.html.tpl
+      v1.0.8 PHASE 37: classified GPL v3 — CSS layout patterns and theme
+      variable structure follow DroidFish-derived conventions used in
+      ui.js / game-logic.js. The HTML skeleton is original but the
+      template is bundled with the GPL v3 JS modules, so GPL v3 applies
+      to the combined work to avoid license fragmentation.
   - libstockfish.so (Stockfish 18 engine binary, GPL v3)
 
 AGPL v3 (original code):
@@ -49,28 +70,20 @@ AGPL v3 (original code):
   - src/main/java/com/Regalia/ChessApp.java
   - src/main/java/com/Regalia/ChessWebViewClient.java
   - src/main/java/com/Regalia/EngineService.java
-  - src/main/java/com/Regalia/StatsActivity.java
-      Fullscreen WebView activity hosting stats.html. Original code
-      that only hosts the WebView and delegates PGN parsing to
-      stats.html (which is GPL v3 due to DroidFish-derived code).
+  - src/main/java/com/Regalia/StabilizationHelper.java
+      v1.0.8 PHASE 49: added to the top-level classification (was previously
+      only mentioned in historical Phase 32/33/36/37 entries). Original
+      sensor-fusion anti-shake code (OIS-style translation compensation).
   - src/main/java/com/Regalia/RootDetector.java
   - src/main/java/com/Regalia/TlsSecurityHelper.java
   - src/main/assets/chess.src/chess960.js (v1.0.4 NEW)
       Original Chess960 implementation: SP-ID generator, Shredder-FEN
       castling-rights encoder/decoder, 960 castling legality checker.
-  - src/main/assets/chess.src/pgn-standard.js (v1.0.4 NEW)
-      Original standardized PGN encoder/decoder following the 1994 PGN spec.
-      v1.0.4 EXPANSION: adds NAG support, [%emt]/[%csl]/[%cal] tags,
-      parseTimeControl()/formatTimeControl() for all 6 TimeControl formats.
-  - src/main/assets/chess.src/worker-pool.js (v1.0.4 NEW)
-      Original Web Worker pool implementation: Blob-URL-based worker
-      instantiation, Promise-wrapping public API, inline fallback when
-      Workers are unavailable.
   - src/main/assets/chess.src/eco-data.js
       ECO data from lichess-org/chess-openings (CC0); code is original
-  - src/main/assets/chess.src/index.html.tpl
   - src/main/cpp/CMakeLists.txt
-  - build-chess.py, build-chess.sh
+  - build-chess.py
+      (v1.0.2: deleted build-chess.sh — byte-for-byte duplicate of build-chess.py)
   - All other project files not listed above
 
 ===== DROIDFISH ATTRIBUTION ===================================================
@@ -109,7 +122,8 @@ Java:
 C++:
   - engine_jni.cpp: Native chmod (nativeChmod) and renice (nativeRenice)
     functions derived from DroidFish's nativeutil.cpp.
-    JNI bridge (dlopen/dlsym/pipe) is original code.
+    (v1.0.2: the dlopen/dlsym/pipe engine-loading code was removed; only
+    nativeChmod and nativeRenice remain, both DroidFish-derived.)
 
 JavaScript (in chess.src/, merged into chess.html):
   - game-logic.js: PGN disambiguation and SAN notation logic derived from
@@ -2326,6 +2340,32 @@ v1.0.5 Round-6 Revision 60 (version unchanged, still v1.0.5 / versionCode 105):
     (see Rev61 entry above).
   - VERSION UNCHANGED: build.gradle versionCode=105, versionName="1.0.5".
 
+v1.0.6 (versionCode 106, 2026.6.27):
+  Feature release with 10 major additions:
+  - Chess960-mode ECO opening recognition suppression (no fixed opening theory
+    for the 960 starting positions).
+  - PGN with [FEN] header round-trip preservation — [SetUp "1"] and [FEN "..."]
+    tags are emitted when the game doesn't start from the standard position.
+  - Stats page per-move / per-FEN selection — click any move in the stats page
+    to view the position's control heatmap and statistics.
+  - Unified gray-out styling — only the control itself is dimmed (not its label
+    or container) for visual consistency.
+  - Portrait-optimized New Game settings dialog.
+  - Scroll-position preservation across renders for scrollable containers.
+  - Engine-eval FEN sanitization (_sanitizeFenForEngine) — strips inconsistent
+    castling rights that can cause the engine to hang.
+  - King-then-rook castling gesture (essential for Chess960) — select the king,
+    then tap the marked rook to castle (in addition to the standard king-to-
+    destination gesture).
+  - Chess960 castling detection overhaul (_castleSide helper).
+  - SL mode displays the explicit skill-level number (e.g. "SL20").
+  Also includes bug fixes: Chess960 unmakeMv board corruption, makeMvInPlace
+  castling-rights not cleared, animateMove race condition, and several others.
+  All v1.0.6 changes are in GPL-v3-licensed files (game-logic.js, ai-bridge.js,
+  ui.js, tablebase.js per DroidFish derivation) and AGPL-v3-licensed files
+  (MainActivity.java, StabilizationHelper.java, index.html.tpl). The new
+  StabilizationHelper.java (added in v1.0.5) is AGPL v3 (original code).
+
 v1.0.7 (versionCode 107, current release, 2026.6.28):
   Code-quality and stability maintenance release based on three independent
   code-review reports. No new features; fixes latent bugs and refines UI.
@@ -2948,6 +2988,1244 @@ v1.0.7 Phase 21 (bug fixes: portrait dialog positioning precision fix, landscape
   code was introduced. All Phase 21 changes are in GPL-v3-licensed files
   (game-logic.js, index.html.tpl per DroidFish derivation) and remain under
   GPL v3.
+
+v1.0.8 Phase 47 (button width root-cause fix: flex:0 0 auto + display:inline-flex, 2026.7.1):
+  Version: versionCode=108, versionName="1.0.8" (unchanged).
+
+  Root-cause fix (ui.js, ai-bridge.js, index.html.tpl):
+    - width:fit-content does NOT work in Android WebView's flex container —
+      the button still stretches to fill available space. The root cause is
+      that flex children default to flex:1 (grow to fill), and width:fit-content
+      is ignored when flex-grow is active.
+    - Fix: replaced width:fit-content with display:inline-flex;flex:0 0 auto;
+      width:auto on all compact buttons (PGN cache chips/toolbar + engine config
+      export/import/restart). flex:0 0 auto means "don't grow, don't shrink,
+      use natural width" — the button shrinks to exactly its content width.
+    - Also fixed engine config tab buttons ("引擎"/"高级设置") and close button:
+      changed style="flex:1" to style="flex:0 1 auto;width:auto;padding:8px 14px"
+      so they also shrink to content width instead of stretching to fill the row.
+    - Close button: added style="flex:0 0 auto;width:auto;padding:8px 16px" to
+      override .dlg-btns .btn{flex:1} CSS rule that was stretching it.
+
+  License classification: GPL v3 (ui.js, ai-bridge.js). No new third-party code.
+
+v1.0.8 Phase 46 (final review: sound-haptic decoupling + importPGNAsync success fix + redundancy cleanup, 2026.7.1):
+  Version: versionCode=108, versionName="1.0.8" (unchanged).
+
+  Bug fixes (ui.js, tablebase.js):
+    - Sound-haptic decoupling (ui.js executeMove): sounds don't cancel each
+      other (Web Audio API overlaps), but haptics do (Android vibrator cancels
+      in-flight). The previous code used the same if/else-if chain for both,
+      so promotion+check only played the promote sound (check alert was skipped).
+      Fixed: sounds now use independent if-statements (both fire if both apply);
+      haptics keep the mutually-exclusive if/else-if chain (only one fires).
+    - importPGNAsync success detection (tablebase.js): previously compared
+      moveRecords.length before/after import — but importPGN clears and
+      repopulates moveRecords, so importing a SHORTER PGN while reviewing a
+      longer game reported failure (afterCount < beforeCount). Fixed: compare
+      gameState reference instead — importPGN replaces gameState on success,
+      leaves it unchanged on failure.
+
+  Redundancy cleanup (ui.js):
+    - Removed _exitSetupImpl re-validation block (3 lines + comment): exitSetup
+      already validated, and _savePGNYes/_savePGNNo don't mutate castlingRights.
+    - Trimmed Phase 41 verbose 8-line haptic comment to 2 lines.
+
+  License classification: GPL v3 (ui.js, tablebase.js). No new third-party code.
+
+v1.0.8 Phase 45 (fix broken max-width:none attribute from Phase 44, 2026.7.1):
+  Version: versionCode=108, versionName="1.0.8" (unchanged).
+
+  Bug fix (ui.js, ai-bridge.js):
+    - Phase 44's sed command accidentally ate the closing quote of the style
+      attribute when appending max-width:none, producing
+      `max-width:none onclick=` instead of `max-width:none" onclick=`.
+      This corrupted the style attribute (max-width not applied) AND the
+      onclick attribute (handler may not fire). Fixed: restored the missing
+      closing quote. Now width:fit-content + max-width:none both take effect,
+      and onclick handlers work correctly.
+
+  License classification: GPL v3 (ui.js, ai-bridge.js). No new third-party code.
+
+v1.0.8 Phase 44 (button width fit-content optimization, 2026.7.1):
+  Version: versionCode=108, versionName="1.0.8" (unchanged).
+
+  UI optimization (ui.js, ai-bridge.js):
+    - All compact buttons (PGN cache: All/Tagged/Untagged/tag-chips/Select All/
+      Select None; engine config: Restart/Export/Import) now have
+      width:fit-content + max-width:none so the button width is exactly the
+      text content width — not stretched to fill the flex container row.
+
+  License classification: GPL v3 (ui.js, ai-bridge.js). No new third-party code.
+
+v1.0.8 Phase 43 (reset-board castle markers fix + Phase 38-42 redundancy cleanup, 2026.7.1):
+  Phase 43 is documented in the HTML user manuals at
+  Manual/Regalia-v1.0.8-manual-{zh,en}.html, Appendix A "版本更新日志" /
+  "Version Changelog". Summary:
+
+  Version: versionCode=108, versionName="1.0.8" (unchanged).
+
+  Root-cause fix (ui.js):
+    - "♻️ 重置棋盘" (Reset Board) button: previously called
+      gameState=initState() which creates a fresh object WITHOUT
+      setupCastleMarks. The markers were lost because initState() doesn't
+      set setupCastleMarks, and the next render showed no castle markers.
+      Fix: after initState(), explicitly set
+      gameState.setupCastleMarks=new Set([a1,h1,a8,h8]) to seed the
+      standard-position castle markers (matching initState's
+      castlingRights={all:true}). Also set setupEpMark=null explicitly.
+
+  Redundancy cleanup (ui.js):
+    - toggleSetup else-branch (toggle-exit path): trimmed Phase 38 verbose
+      15-line comment to 3 lines; removed unnecessary _savedErrors
+      save/restore (validateSetupPosition pushes to a local errs array, not
+      to the global setupErrors — the save/restore was a no-op).
+    - _exitSetupImpl: trimmed Phase 42 verbose 12-line comment to 3 lines;
+      removed unnecessary console.warn (silent catch is sufficient).
+
+  License classification: all Phase 43 changes are in GPL-v3-licensed files
+  (ui.js per DroidFish derivation). No new third-party code was introduced.
+
+v1.0.8 Phase 42 (castling rights lost on "Save PGN? → No" root-cause fix, 2026.7.1):
+  Phase 42 is documented in the HTML user manuals at
+  Manual/Regalia-v1.0.8-manual-{zh,en}.html, Appendix A "版本更新日志" /
+  "Version Changelog". Summary:
+
+  Version: versionCode=108, versionName="1.0.8" (unchanged).
+
+  Root-cause fix (ui.js):
+    - _exitSetupImpl now re-validates castlingRights at its START, not just
+      relying on the validateSetupPosition call in exitSetup(). When the
+      "Save PGN?" dialog appears, there's a time gap between exitSetup()'s
+      validation and _exitSetupImpl actually running (the user reads the
+      dialog and clicks "No"). During this gap, setupCastleMarks is still
+      populated but castlingRights could be stale (reset to all-false by
+      _refreshStateAfterSetup if the user modified the board during setup).
+      Re-validating at the start of _exitSetupImpl ensures castlingRights is
+      freshly derived from setupCastleMarks right before the state snapshot.
+      This is the root-cause fix for "castling rights lost when selecting No
+      in the save PGN dialog".
+
+  License classification: all Phase 42 changes are in GPL-v3-licensed files
+  (ui.js per DroidFish derivation). No new third-party code was introduced.
+
+v1.0.8 Phase 41 (haptic-sound matching audit + haptic cancellation fix + resign haptic fix + THROTTLE fix, 2026.7.1):
+  Phase 41 is documented in the HTML user manuals at
+  Manual/Regalia-v1.0.8-manual-{zh,en}.html, Appendix A "版本更新日志" /
+  "Version Changelog". Summary:
+
+  Version: versionCode=108, versionName="1.0.8" (unchanged).
+
+  Haptic-sound matching fixes (ui.js, ai-bridge.js):
+    - Haptic cancellation fix (executeMove): Android vibrator.vibrate() cancels
+      in-flight vibrations, so firing two haptics in the same JS turn silences
+      the first. The previous code could fire PROMOTION+PIECE_CAPTURE,
+      CHECK_ALERT+PIECE_CAPTURE, or CHECK_ALERT+CASTLE, losing the "special"
+      haptic on the most dramatic moves. Fixed: the special haptic (promotion/
+      check) takes priority; the move-type haptic (castle/capture/per-piece)
+      only fires when there's no special event, so no two haptics fire in the
+      same turn.
+    - Resign haptic fix: changed HapticManager.fire('ERROR') to
+      HapticManager.fire('GAME_OVER') in _resignGame. ERROR had no Java case
+      (fell to 15ms default); GAME_OVER has a proper 430ms multi-stage pattern
+      matching the somber 'gameover' sound. Both natural game-over and
+      resignation now use the same sound+haptic pairing.
+    - THROTTLE table: added CASTLE:100 and PROMOTION:200 (were missing,
+      defaulted to 50ms).
+
+  Castling rights fix verification (game-logic.js):
+    - Verified Phase 40's fix is complete: computeVisibleCastleMarks and
+      computeVisibleEpMark now check setupMode explicitly, covering ALL exit
+      paths (FEN import, PGN import, new game, toggle-exit, back-button exit).
+      No code change needed — the Phase 40 fix is confirmed correct.
+
+  License classification: all Phase 41 changes are in GPL-v3-licensed files
+  (ui.js, ai-bridge.js per DroidFish derivation). No new third-party code.
+
+v1.0.8 Phase 40 (castling rights root-cause fix + button width auto-fit, 2026.7.1):
+  Phase 40 is documented in the HTML user manuals at
+  Manual/Regalia-v1.0.8-manual-{zh,en}.html, Appendix A "版本更新日志" /
+  "Version Changelog". Summary:
+
+  Version: versionCode=108, versionName="1.0.8" (unchanged).
+
+  Root-cause fix for castling rights loss on setup exit (game-logic.js):
+    - computeVisibleCastleMarks: now checks setupMode explicitly before using
+      setupCastleMarks. Previously, if setupCastleMarks persisted after exiting
+      setup mode (via FEN import, PGN import, new game, or any path that set
+      setupMode=false without clearing the marks), this function returned the
+      stale markers instead of deriving from castlingRights. This was the ROOT
+      CAUSE of the "lost castling rights" bug — the castlingRights themselves
+      were correct, but the visible markers showed stale setup-mode markers
+      that didn't match the actual rights.
+    - computeVisibleEpMark: same fix — checks setupMode before using setupEpMark.
+    - This is a more robust fix than Phase 38's toggle-exit re-validation,
+      because it covers ALL exit paths (FEN import, PGN import, new game,
+      toggle-exit, back-button exit) in a single place.
+
+  Button width auto-fit (ui.js, ai-bridge.js):
+    - All compact buttons (PGN cache: All/Tagged/Untagged/tag-chips/Select All/
+      Select None; engine config: Restart/Export/Import) now have
+      white-space:nowrap so the button width fits the text content exactly,
+      without the overly-wide default from flex stretching.
+
+  License classification: all Phase 40 changes are in GPL-v3-licensed files
+  (game-logic.js, ui.js, ai-bridge.js per DroidFish derivation). No new
+  third-party code was introduced.
+
+v1.0.8 Phase 39 (PGN cache tag-presence filter + engine config button layout, 2026.7.1):
+  Phase 39 is documented in the HTML user manuals at
+  Manual/Regalia-v1.0.8-manual-{zh,en}.html, Appendix A "版本更新日志" /
+  "Version Changelog". Summary:
+
+  Version: versionCode=108, versionName="1.0.8" (unchanged).
+
+  UI features (ui.js, game-logic.js, ai-bridge.js):
+    - PGN cache manager: added "Tagged" (有标签) and "Untagged" (无标签)
+      filter buttons next to the "All" (全部) button. These filter the cache
+      list to show only entries with any tags or only entries without tags.
+      Special filter values '__has_tags__' and '__no_tags__' are handled by
+      _pgnCacheEntryMatchesFilter. The filter status line shows localized labels.
+      New i18n strings: pgn_cache_filter_has_tags, pgn_cache_filter_no_tags.
+      The tag-chip row is now always shown (even when no tags exist) so the
+      All/Tagged/Untagged buttons are always available.
+    - Engine config dialog: "Restart Engine" (🔄 重启引擎), "Export Settings"
+      (📤 导出设置), and "Import Settings" (📥 导入设置) buttons now use
+      compact plain styling (no .btn class, no min-height:40px), reducing
+      wasted vertical space. Buttons flow horizontally.
+
+  License classification: all Phase 39 changes are in GPL-v3-licensed files
+  (ui.js, ai-bridge.js, game-logic.js per DroidFish derivation). No new
+  third-party code was introduced.
+
+v1.0.8 Phase 38 (PGN cache UI layout + captured pieces fix + castling rights toggle-exit fix, 2026.7.1):
+  Phase 38 is documented in the HTML user manuals at
+  Manual/Regalia-v1.0.8-manual-{zh,en}.html, Appendix A "版本更新日志" /
+  "Version Changelog". Summary:
+
+  Version: versionCode=108, versionName="1.0.8" (unchanged).
+
+  UI fixes (ui.js):
+    - PGN cache manager button layout: "全选"/"全不选" toolbar buttons and
+      tag-chip filter buttons ("全部" + category tags) now use plain button
+      styling (no .btn class which had min-height:40px wasting vertical space).
+      Buttons flow left-to-right horizontally, wrapping only when the row is
+      full. Previously the .btn class's min-height caused excessive vertical
+      spacing.
+    - PGN cache entry size/date text: changed from var(--muted) (too faint in
+      light mode) to var(--text) with opacity:.75 for better contrast.
+
+  Logic fixes (ui.js):
+    - getCapturedPieces: when moveRecords is empty (setup mode / FEN import /
+      PGN import initial position), now returns empty array instead of using
+      the board-diff method. The board-diff method assumed standard starting
+      counts (1Q, 2R, 2B, 2N, 8P) which is wrong for custom positions — a FEN
+      with only K+Q vs K would show "captured: 1Q, 2R, 2B, 2N, 8P" which is
+      misleading. With no move history, there are no captures to display.
+    - toggleSetup toggle-exit path: now re-validates castlingRights from
+      setupCastleMarks before clearing them. The _refreshStateAfterSetup call
+      (triggered by every board mutation during setup) reset castlingRights to
+      all-false. If the user placed castle markers, we re-derive the rights
+      from those markers so they survive into play mode. Without this, exiting
+      setup via the toggle button (instead of "Done") would lose all castling
+      rights.
+
+  License classification: all Phase 38 changes are in GPL-v3-licensed files
+  (ui.js per DroidFish derivation). No new third-party code was introduced.
+
+v1.0.8 Phase 37 (license correction: 6 files reverted from GPL v3 to AGPL v3, 2026.7.1):
+  Phase 37 is documented in the HTML user manuals at
+  Manual/Regalia-v1.0.8-manual-{zh,en}.html, Appendix A "版本更新日志" /
+  "Version Changelog". Summary:
+
+  Version: versionCode=108, versionName="1.0.8" (unchanged).
+
+  License correction (6 files reverted from GPL v3 to AGPL v3):
+    Phase 36 incorrectly moved 9 files from AGPL v3 to GPL v3. Phase 37
+    corrects this: 6 of those files are actually ORIGINAL code (not
+    DroidFish-derived) and must remain AGPL v3. Only 3 files are correctly
+    GPL v3 (DroidFish-derived PGN parsing).
+
+  Files reverted to AGPL v3 (original code, no DroidFish derivation):
+    JavaScript:
+    - chess960.js: Original Chess960 SP-ID and Shredder-FEN implementation
+    - eco-data.js: Original ECO data integration with IndexedDB cache
+    Java:
+    - MainActivity.java: Original WebView host and lifecycle management
+    - ChessWebViewClient.java: Original WebView client with render-process recovery
+    - EngineService.java: Original foreground service for engine stability
+    - StabilizationHelper.java: Original sensor-based OIS anti-shake
+
+  Files that correctly remain GPL v3 (DroidFish-derived PGN parsing):
+    - pgn-standard.js: PGN encode/decode patterns from DroidFish
+    - worker-pool.js: PGN tokenization from DroidFish PGN parsing
+    - StatsActivity.java: PGN display logic from DroidFish
+
+  Each reverted file's header was updated:
+    - License boilerplate changed from GPL v3 back to AGPL v3
+    - "GPL v3 compliance" → "AGPL v3 compliance"
+    - "GNU General Public License" → "GNU Affero General Public License"
+    - DroidFish derivation note removed (these files are original code)
+
+  License classification: all Phase 37 changes are license-header-only changes.
+  No functional code changes. No new third-party code was introduced.
+
+v1.0.8 Phase 36 (GPL v3 license reclassification: 9 files moved from AGPL v3 to GPL v3, 2026.7.1):
+  Phase 36 is documented in the HTML user manuals at
+  Manual/Regalia-v1.0.8-manual-{zh,en}.html, Appendix A "版本更新日志" /
+  "Version Changelog". Summary:
+
+  Version: versionCode=108, versionName="1.0.8" (unchanged).
+
+  License reclassification (9 files moved from AGPL v3 to GPL v3):
+    All code involving engine management (Java/C++), chess logic, PGN parsing,
+    engine communication, and UI interaction is DroidFish-derived and must use
+    GPL v3 (not AGPL v3). The following 9 files were previously tagged AGPL v3
+    (original) but are now correctly tagged GPL v3 (DroidFish-derived):
+
+    JavaScript files:
+    - chess960.js: Chess960 rules and SP-ID logic — chess logic
+    - pgn-standard.js: PGN encode/decode — PGN parsing
+    - worker-pool.js: PGN tokenization + chess control-map logic — PGN parsing + chess logic
+    - eco-data.js: ECO opening classification — chess logic
+
+    Java files:
+    - MainActivity.java: WebView host, UI interaction
+    - ChessWebViewClient.java: WebView client, UI interaction
+    - EngineService.java: Engine foreground service management
+    - StatsActivity.java: Statistics page, PGN display, UI interaction
+    - StabilizationHelper.java: Board UI stabilization
+
+    Each file's header was updated:
+    - License boilerplate changed from AGPL v3 to GPL v3
+    - "AGPL v3 compliance" → "GPL v3 compliance"
+    - DroidFish derivation note added (Copyright Peter Österlund, Modified by Regalia)
+
+    Files that REMAIN AGPL v3 (infrastructure, not chess/engine/PGN/UI):
+    - ChessApp.java: Application lifecycle/crash protection (infrastructure)
+    - RootDetector.java: Security check (not chess-related)
+    - TlsSecurityHelper.java: TLS config (not chess-related)
+    - build-chess.py, CMakeLists.txt: Build infrastructure
+    - AndroidManifest.xml, strings.xml, res/xml/*.xml: Config files
+    - build.gradle, settings.gradle: Build config
+
+  License classification: all Phase 36 changes are license-header-only changes.
+  No functional code changes. No new third-party code was introduced.
+
+v1.0.8 Phase 35 (Phase 34 robustness re-review + worker-pool license correction, 2026.7.1):
+  Phase 35 is documented in the HTML user manuals at
+  Manual/Regalia-v1.0.8-manual-{zh,en}.html, Appendix A "版本更新日志" /
+  "Version Changelog". Summary:
+
+  Version: versionCode=108, versionName="1.0.8" (unchanged).
+
+  Robustness fixes (worker-pool.js, tablebase.js, ui.js):
+    - terminateWorkerPool (worker-pool.js): now rejects queued (not-yet-
+      dispatched) tasks before clearing _taskQueue. Previously these were
+      silently dropped, leaving their promises hanging up to 30s.
+    - workerRun timeout callback (worker-pool.js): when task.worker is null
+      (task still queued), now splices it from _taskQueue to prevent ghost
+      dispatch after timeout.
+    - workerRun sync fallback (worker-pool.js): deferred into
+      Promise.resolve().then(...) so sync throws (unknown fnName) become
+      rejected Promises instead of synchronous throws out of workerRun.
+    - importPGNAsync (tablebase.js): now resolves with a boolean success flag
+      (true = import succeeded, false = failed). Success detected by checking
+      if moveRecords grew. All paths resolve (never reject) — callers never hang.
+    - PGN cache manager .then() (ui.js): now checks the success flag before
+      showing the success toast + re-entering review. Added defensive .catch()
+      for unexpected throws in the callback.
+
+  License classification correction (chess.src/README.license):
+    - worker-pool.js Rev44 entry was incorrectly tagged "GPL v3" — corrected
+      to "AGPL v3". worker-pool.js is original code (NOT DroidFish-derived),
+      confirmed by NOTICE line 66-69 and README.license line 245. The file's
+      own header (AGPL v3) was always correct; only the README.license
+      historical entry had the wrong tag.
+
+  License classification: all Phase 35 changes are in AGPL-v3-licensed files
+  (worker-pool.js) and GPL-v3-licensed files (tablebase.js, ui.js per
+  DroidFish derivation). No new third-party code was introduced.
+
+v1.0.8 Phase 34 (worker-pool wired up: async PGN import with worker offloading + loading indicator, 2026.7.1):
+  Phase 34 is documented in the HTML user manuals at
+  Manual/Regalia-v1.0.8-manual-{zh,en}.html, Appendix A "版本更新日志" /
+  "Version Changelog". Summary:
+
+  Version: versionCode=108, versionName="1.0.8" (unchanged).
+
+  Worker pool activation (worker-pool.js, tablebase.js, ui.js, game-logic.js):
+    - worker-pool.js: rewrote parsePGNText worker function to do FULL PGN
+      tokenization (BOM removal, line-ending normalization, escape-line
+      stripping, multi-game split, FEN extraction, header parsing, brace-
+      comment extraction with [%csl]/[%cal]/[%eval] annotation extraction,
+      variation extraction, move-number/NAG/result stripping, token splitting).
+      The result now includes headers, tokens, variations, comments,
+      cslAnnotations, calAnnotations, evals, startFEN, result — all the raw
+      data the structural parser needs. The sync fallback (_syncParsePGNText)
+      mirrors this exactly.
+    - worker-pool.js: exposed workerParsePGN/workerComputeHeatmapStats/
+      terminateWorkerPool/workerRun on window (ES module exports aren't global;
+      source-module mode requires explicit window assignment).
+    - tablebase.js: added importPGNAsync(pgnText) — shows a "⏳ Importing PGN…"
+      loading toast, yields to the UI thread (50ms setTimeout) so the toast
+      renders, then offloads tokenization to the worker pool (30s timeout).
+      On success, runs the full sync importPGN (which re-parses but the UI is
+      now responsive). On worker failure/timeout, falls back to sync import.
+    - tablebase.js onPGNFileRead: now uses importPGNAsync for PGN (not FEN)
+      imports.
+    - ui.js: 3 PGN import call sites (PGN cache manager, paste-PGN, stats
+      import-back) now use importPGNAsync when available, falling back to
+      sync importPGN.
+    - game-logic.js: added 'importing_pgn' i18n string (zh: "⏳ 正在导入PGN…",
+      en: "⏳ Importing PGN…").
+
+  Design rationale:
+    The worker pool's original design intent (Phase 25) was to offload heavy
+    computations to background threads to prevent UI jank. Phase 28 fixed the
+    CSP issue (new Function → inlined switch-case). Phase 33 noted the module
+    was "NOT wired up at runtime — zero external callers." Phase 34 completes
+    the wiring: PGN import (the heaviest user-initiated computation) now
+    offloads tokenization to the worker pool + shows a loading indicator, so
+    large PGN files no longer freeze the UI. The structural parsing (SAN →
+    coordinates, board replay) still runs on the main thread because it needs
+    gameState/makeMvInPlace, but the UI shows feedback instead of freezing.
+    stats.html keeps its own inline worker (separate concern, already working).
+
+  License classification: all Phase 34 changes are in AGPL-v3-licensed files
+  (worker-pool.js, game-logic.js) and GPL-v3-licensed files (tablebase.js,
+  ui.js per DroidFish derivation). No new third-party code was introduced.
+
+v1.0.8 Phase 33 (robustness re-review + comment cleanup: isDeadPosition knight guard + dead-code removal + 42 obsolete comments trimmed, 2026.7.1):
+  Phase 33 is documented in the HTML user manuals at
+  Manual/Regalia-v1.0.8-manual-{zh,en}.html, Appendix A "版本更新日志" /
+  "Version Changelog". Summary:
+
+  Version: versionCode=108, versionName="1.0.8" (unchanged).
+
+  Robustness re-review of all Phase 28-32 changes (verified complete):
+    - All 15 Phase 28-32 fixes re-verified robust and complete. No regressions.
+
+  Robustness fixes (game-logic.js, StockfishNative.java, ai-bridge.js,
+  tablebase.js, ChessApp.java):
+    - isDeadPosition (game-logic.js): added wCount.knight===0 / bCount.knight===0
+      guard to the K+B+B(same color) vs K dead-position check. K+N+B+B(same
+      color) vs K is NOT a dead position — the knight attacks both square colors,
+      so checkmate IS possible. Pre-existing bug (not a Phase 30 regression).
+    - StockfishNative heartbeat: removed dead `isSearching` local + ternary (the
+      outer guard already ensures currentState!=STATE_NONE, so the ternary always
+      picked ZOMBIE_SEARCH_TIMEOUT_MS; ZOMBIE_TIMEOUT_MS was unreachable). Marked
+      ZOMBIE_TIMEOUT_MS as reserved.
+    - StockfishNative shutdown(): documented the benign race (NOT synchronized
+      unlike startHeartbeat — synchronizing would risk deadlock; the race is
+      benign because the new thread sees _heartbeatRunning=false and exits).
+    - ai-bridge.js: removed dead `variations=[]` array + `if(variations.length>0)`
+      block (variations was declared but never pushed to). lastRec.variations is
+      set by _attachDivergentPV.
+    - tablebase.js fenToState: added parseInt radix 10 to 4 sites (consistency
+      with Phase 32 pgn-standard.js fix).
+    - ChessApp.java: updated class Javadoc to match actual behavior (logs
+      exception type + thread name only, NOT full stack trace — MobSF #1).
+      Removed inline duplicate memorial.
+
+  Comment cleanup (42 obsolete/redundant comments trimmed across 9 files):
+    - StockfishNative.java: trimmed 8 memorials (postJsCallbackJson, _isPondering
+      branch, 3× unnecessary-block, copyFile, hasAllFilesAccess, REQUEST_CODE,
+      _pendingStats, bridge methods, stats HTML branch) to 1-line each or deleted.
+    - game-logic.js: trimmed recomputeCastlingRights memorial (12→2 lines),
+      _landingAnimActive memorial (3→1 line), rank formula memorial (3→1 line),
+      stale "v1.0.4 NEW" version tags.
+    - ai-bridge.js: trimmed ponder memorial (6→2 lines), onStatsRequestImport
+      memorial (3→1 line), _landingAnimActive memorial (2→1 line), stale .docx
+      reference.
+    - ui.js: trimmed playCastleRookLand memorial (4→1 line), _showStatsImportBackPrompt
+      export comment (7→2 lines), removed _pendingStatsImportPGN memorial, 4 stale
+      .docx references.
+    - chess960.js: dropped stale "v1.0.4 NEW" version tag.
+    - pgn-standard.js: dropped stale "v1.0.4 NEW" version tag.
+    - tablebase.js: removed _unclosed memorial, isCapture memorial, stale .docx
+      reference.
+    - eco-data.js: trimmed duplicate Phase 31 PERF comment (7→1 line).
+    - worker-pool.js: added dead-code-status note; trimmed Phase 28 CSP memorial
+      (7→3 lines).
+    - index.html.tpl: trimmed legacy @media memorial (5→1 line).
+    - ChessApp.java: trimmed class Javadoc + removed inline duplicate.
+    - MainActivity.java: removed pendingStatsImportRequest memorial (4 lines).
+    - StatsActivity.java: removed stale "line 283" reference.
+    - StabilizationHelper.java: trimmed stale external-doc references.
+
+  License classification: all Phase 33 changes are in GPL-v3-licensed files
+  (game-logic.js, ai-bridge.js, StockfishNative.java per DroidFish derivation)
+  and AGPL-v3-licensed files (ChessApp.java, tablebase.js, worker-pool.js,
+  ui.js, index.html.tpl, StabilizationHelper.java, StatsActivity.java,
+  MainActivity.java). No new third-party code was introduced.
+
+v1.0.8 Phase 32 (robustness hardening: _escJs XSS fix + StabilizationHelper dt fix + PGN truncation notification + worker-pool queue cap + parseInt radix, 2026.7.1):
+  Phase 32 is documented in the HTML user manuals at
+  Manual/Regalia-v1.0.8-manual-{zh,en}.html, Appendix A "版本更新日志" /
+  "Version Changelog". Summary:
+
+  Version: versionCode=108, versionName="1.0.8" (unchanged).
+
+  Robustness hardening (ai-bridge.js, StabilizationHelper.java,
+  StockfishNative.java, StatsActivity.java, worker-pool.js,
+  pgn-standard.js):
+    - _escJs (ai-bridge.js): now also HTML-escapes < > & so that a file
+      path containing "<script>" cannot inject HTML. Previously only the
+      JS string literal context was escaped, leaving an XSS vector via
+      < > & in the path. The regex now includes & in the character class.
+    - StabilizationHelper (java): dt is now computed from the actual
+      inter-event interval (event.timestamp) instead of a hardcoded
+      0.02f. Corrects integration error on devices whose SENSOR_DELAY_GAME
+      rate differs from 50Hz. dt is clamped to [0.001, 0.1] seconds to
+      reject outliers (first event, system stalls). _lastSensorNanos is
+      reset in start()/stop().
+    - PGN large-file truncation notification (StockfishNative.java +
+      StatsActivity.java): previously truncated at 5000 lines silently;
+      now appends a PGN comment "{ Warning: file truncated at 5000 lines
+      by Regalia import guard }" so the JS parser surfaces the truncation
+      instead of parsing an incomplete game.
+    - worker-pool.js: added _MAX_QUEUE_SIZE=50 cap. If the queue is full,
+      reject immediately with a clear error so the caller falls back to
+      synchronous execution rather than queuing forever.
+    - pgn-standard.js: all parseInt() calls in parseTimeControl now
+      explicitly pass radix 10 (lint-clean, future-proof against any
+      legacy octal interpretation).
+
+  License classification: all Phase 32 changes are in GPL-v3-licensed files
+  (ai-bridge.js, StockfishNative.java per DroidFish derivation) and
+  AGPL-v3-licensed files (worker-pool.js, pgn-standard.js, StatsActivity.java,
+  StabilizationHelper.java). No new third-party code was introduced.
+
+v1.0.8 Phase 31 (getCtrlMap allocation reduction + eco-data searchEco pre-indexing, 2026.7.1):
+  Phase 31 is documented in the HTML user manuals at
+  Manual/Regalia-v1.0.8-manual-{zh,en}.html, Appendix A "版本更新日志" /
+  "Version Changelog". Summary:
+
+  Version: versionCode=108, versionName="1.0.8" (unchanged).
+
+  Performance optimizations (game-logic.js, eco-data.js):
+    - getCtrlMap (game-logic.js): extracted _newCtrlCell factory so all 64
+      cell objects share the same V8 hidden class, improving inline-cache
+      hit rates for downstream cm[r][c].white / .black property access.
+      Could not reuse a single buffer across calls because callers cache
+      the result (cachedCtrlMap keyed by gameState.hash) and a concurrent
+      _computeAndCacheVisualAnnotations call (postState.board) would
+      corrupt the cached data.
+    - searchEco (eco-data.js): _ensureEcoParsed now pre-computes uppercase
+      _nameU and _familyU fields on each opening at parse time. searchEco
+      reads these directly instead of calling toUpperCase() on every
+      opening's name AND family on EVERY keystroke (was 6000 toUpperCase()
+      allocations per search; now 0). Added early-exit at 20 results.
+
+  License classification: all Phase 31 changes are in GPL-v3-licensed files
+  (game-logic.js per DroidFish derivation) and AGPL-v3-licensed files
+  (eco-data.js). No new third-party code was introduced.
+
+v1.0.8 Phase 30 (comprehensive first-principles code review: 2 HIGH bugs + 8 MED bugs + XSS hardening + dead-code removal + header/license consistency + documentation accuracy, 2026.7.1):
+  Phase 30 is documented in the HTML user manuals at
+  Manual/Regalia-v1.0.8-manual-{zh,en}.html, Appendix A "版本更新日志" /
+  "Version Changelog". Summary:
+
+  Version: versionCode=108, versionName="1.0.8" (unchanged).
+
+  Bug fixes (StockfishNative.java, MainActivity.java, ChessWebViewClient.java,
+  StatsActivity.java, StabilizationHelper.java, game-logic.js, chess960.js,
+  pgn-standard.js, ui.js, ai-bridge.js, worker-pool.js):
+    - [HIGH] _restartInProgress not cleared on engine init early-return paths
+      → permanent engine deadlock after init failure. Fixed.
+    - [HIGH] Heartbeat false-positive zombie detection on idle engine →
+      unnecessary 30s recovery cycles during quiet play. Fixed (zombie check
+      now gated on isSearching).
+    - [MED] _castleSide Chess960 fallback false-positive on normal king
+      captures to g1/c1 → silent piece destruction. Fixed (now checks
+      castling rights are present before classifying as castling).
+    - [MED] Tablebase bar XSS via unescaped _best.uci/_bestMoveLabel. Fixed
+      (_jsAttrEncode + _esc).
+    - [MED] ECO recommendation bar unescaped interpolation. Fixed (_esc).
+    - [MED] Render error catch unescaped e.toString()/e.stack. Fixed (_esc).
+    - [MED] StatsActivity missing 6-step WebView teardown. Fixed (matches
+      MainActivity).
+    - [MED] StabilizationHelper missing AGPL v3 boilerplate. Fixed.
+    - [MED] worker-pool.js truncated AGPL boilerplate. Fixed.
+    - [MED] Duplicate onEngineError callbacks on binary-not-found. Fixed.
+    - [MED] engineSupportsOption non-atomic check-then-contains on
+      synchronized set. Fixed (synchronized block).
+    - [MED] startHeartbeat race allows two heartbeat threads. Fixed
+      (synchronized method).
+    - [MED] MainActivity.onResume retry blocked by engineInitialized flag.
+      Fixed (dropped redundant check).
+    - [LOW] i18n broken English for setup_pawn_on_rank. Fixed.
+    - [LOW] algPos accepts strings >2 chars. Fixed (length===2 check).
+    - [LOW] isDeadPosition misses K+B+B+B vs K. Fixed (>=2 check).
+    - [LOW] _reattachActiveAnimations skips snap-to-dest on first re-attach.
+      Fixed (lastCell init).
+    - [LOW] chess960 initChess960State doesn't validate integer SP-ID.
+      Fixed.
+    - [LOW] Wrong exception variable in shell-fallback error message.
+      Fixed (e1 → e2).
+    - [LOW] Deprecated Configuration.locale. Fixed (getLocales() on API 24+).
+    - [LOW] Misleading onRenderProcessGone log "policy" label. Fixed.
+    - [LOW] pgn-standard.js JSDoc typo "0-2" → "0-1". Fixed.
+
+  Dead code / cleanup:
+    - Removed dead playCastleRookLand() (ui.js) — Phase 29 combined into
+      playCastleRookMove().
+    - Removed dead --rv-board-w CSS variable (ui.js) — never read.
+    - Removed dead `||'-'` in toShredderCastling (chess960.js).
+    - Removed orphan duplicated comment (ai-bridge.js).
+    - Removed redundant sourceSets block (build.gradle) — default jniLibs
+      dir.
+    - Removed redundant package/versionCode/versionName/<uses-sdk> from
+      AndroidManifest.xml — AGP 8.x pulls from build.gradle.
+    - Removed invalid android:minSdkVersion from <uses-permission> — not a
+      valid attribute (only maxSdkVersion is supported).
+    - Fixed misleading CMakeLists.txt comment about 16KB page alignment.
+    - Simplified StabilizationHelper clamp (4-line if/else → Math.max/min).
+    - Updated stale game-logic.js header comment (was "pure chess logic").
+    - Updated stale StockfishNative.java version comment (v18.5.0 → v1.0.8).
+    - Updated stale MainActivity.java version comment (v18.4.5 → v1.0.8).
+
+  Header / license consistency:
+    - Added full AGPL v3 boilerplate to StabilizationHelper.java (was
+      missing).
+    - Completed truncated AGPL v3 boilerplate in worker-pool.js.
+    - Added Copyright + AGPL v3 boilerplate headers to build.gradle,
+      settings.gradle, AndroidManifest.xml, strings.xml,
+      network_security_config.xml, backup_rules.xml,
+      data_extraction_rules.xml.
+    - Exported _showStatsImportBackPrompt on window (ui.js) so Java can
+      call it from source-module mode (was silently skipped).
+
+  Documentation accuracy:
+    - Updated README.md directory tree (added 6 README.license files,
+      gradle wrapper files, res/xml/ files, mipmap dirs).
+    - Updated README.md licensing table (added libstockfish.so to GPL v3,
+      fixed ECO file path).
+    - Fixed NOTICE dlopen references (removed in v1.0.2).
+    - Fixed NOTICE build-chess.sh reference (removed in v1.0.2).
+    - Fixed NOTICE-DroidFish dlopen references.
+    - Fixed cpp/README.license dlopen reference.
+    - Fixed res/README.license strings.xml version (v1.0.3 → v1.0.8).
+    - Fixed assets/README.license build-chess.sh reference.
+
+  License classification: all Phase 30 changes are in GPL-v3-licensed files
+  (StockfishNative.java, game-logic.js, ui.js, ai-bridge.js, tablebase.js,
+  index.html.tpl per DroidFish derivation) and AGPL-v3-licensed files
+  (MainActivity.java, ChessWebViewClient.java, StatsActivity.java,
+  StabilizationHelper.java, chess960.js, pgn-standard.js, worker-pool.js,
+  build.gradle, settings.gradle, AndroidManifest.xml, strings.xml,
+  res/xml/*.xml, CMakeLists.txt). No new third-party code was introduced.
+
+v1.0.8 Phase 29 (setup-mode ⚡ button normalization + castling sound/haptic redesign + light-mode contrast fixes + castling-rights/en-passant marker preservation audit + WebView robustness enhancements, 2026.7.1):
+  Phase 29 is documented in the HTML user manuals at
+  Manual/Regalia-v1.0.8-manual-{zh,en}.html, Appendix A "版本更新日志" /
+  "Version Changelog". Summary:
+
+  Version: versionCode=108, versionName="1.0.8" (unchanged).
+
+  User-feedback fixes (ui.js, index.html.tpl, StockfishNative.java,
+  MainActivity.java, ChessWebViewClient.java):
+    - Setup-mode ⚡ button normalization (font-variant-emoji:emoji inline
+      style for colorful emoji rendering).
+    - Castling sound redesign (playCastleRookMove: 2-stage snap+slam, 135ms).
+    - Castling haptic redesign (CASTLE: 2-stage snap+slam, 105ms, amplitudes
+      255/220, synchronized with sound).
+    - Light-mode setup-error contrast fix (.setup-errors →
+      var(--setup-err-color), deepened to #a02818).
+    - PGN cache search-box light-mode fix (var(--input-bg) +
+      var(--border) + new --placeholder theme variable + global
+      ::placeholder rule).
+    - Castling-rights/en-passant marker preservation audit (verified
+      end-to-end, added defensive assertions in _exitSetupImpl).
+
+  WebView robustness enhancements (MainActivity.java, ChessWebViewClient.java):
+    - Safe Browsing enabled (setSafeBrowsingEnabled(true) on API 26+).
+    - Render-process crash handling (onRenderProcessGone callback).
+    - 6-step WebView destroy sequence (removeView → clearHistory →
+      loadUrl about:blank → removeJavascriptInterface → onPause → destroy).
+
+  License classification: all Phase 29 changes are in GPL-v3-licensed files
+  (ui.js, index.html.tpl, StockfishNative.java per DroidFish derivation) and
+  AGPL-v3-licensed files (MainActivity.java, ChessWebViewClient.java). No
+  new third-party code was introduced.
+
+v1.0.8 Phase 28 (comprehensive first-principles re-review: 8 bug fixes + haptic fallback fix + Worker CSP fix + heatmap cache fix + castle/promotion haptic, 2026.7.1):
+  Phase 28 is documented in the HTML user manuals at
+  Manual/Regalia-v1.0.8-manual-{zh,en}.html, Appendix A "版本更新日志" /
+  "Version Changelog". Summary:
+
+  Version: versionCode=108, versionName="1.0.8" (unchanged).
+
+  Bug fixes (game-logic.js, ai-bridge.js, stats.html, index.html.tpl,
+  StockfishNative.java):
+    - [HIGH] _reattachActiveAnimations: _fc/_fr const-scoped inside if-block
+      (ReferenceError silently caught); snap formula double-counted source.
+      Fixed: moved to loop top; transform = scaled dx/dy only.
+    - [HIGH] validateSetupPosition: pawn-rank formula swapped (r===0)?1:8
+      should be (r===0)?8:1. Fixed.
+    - [HIGH] _checkPVDivergence: mr.castle → mr.isCastling (move records use
+      boolean). Phase 24 fix never triggered. Fixed.
+    - [MEDIUM] Chess960 PGN [FEN] tag: legacy supObj.FEN overwrite with
+      generateFEN(gameState) (current state) overrode Phase 24 fix. Fixed:
+      removed overwrite; only Shredder-convert starting FEN.
+    - [MEDIUM] stats.html html[data-theme="dark"]: only set color-scheme
+      without full dark palette. Fixed: restore full dark palette.
+    - [MEDIUM] Heatmap cache not invalidated on new PGN import. Fixed.
+    - [MEDIUM] tryPwleVibrate fallback lost multi-stage pattern (single
+      OneShot instead of waveform). Fixed: returns boolean; case falls through.
+    - [LOW] Landscape .review-hdr stripped safe-area. Fixed.
+    - [LOW] Review eval error catch: _updateEvalDisplay → _updateAllEvalDisplays.
+
+  Haptic fallback fix + Castle/Promotion haptic (StockfishNative.java):
+    - tryPwleVibrate returns boolean — PWLE failure falls through to waveform.
+    - New CASTLE case (double-tap: king step + rook slide).
+    - New PROMOTION case (celebratory ascending triad).
+
+  Worker CSP fix + memory leak fix (worker-pool.js, stats.html):
+    - worker-pool.js: new Function() (requires CSP unsafe-eval) replaced with
+      inlined switch-case dispatch.
+    - stats.html worker onerror: added .terminate() + URL.revokeObjectURL().
+    - worker-pool.js: timed-out tasks removed from queue; terminateWorkerPool
+      clears pending + rejects.
+
+  Redundancy cleanup (ai-bridge.js):
+    - Removed dead variable ponderFen in onBestMove.
+
+  License classification: all Phase 28 changes are in GPL-v3-licensed files
+  (game-logic.js, ai-bridge.js, ui.js, index.html.tpl, stats.html,
+  StockfishNative.java, worker-pool.js per DroidFish derivation / original).
+  No new third-party code was introduced.
+
+v1.0.8 Phase 27 (knight/bishop/rook dedicated haptic feedback — all six pieces now have personality-matched haptics, 2026.7.1):
+  Phase 27 is documented in the HTML user manuals at
+  Manual/Regalia-v1.0.8-manual-{zh,en}.html, Appendix A "版本更新日志" /
+  "Version Changelog". Summary:
+
+  Version: versionCode=108, versionName="1.0.8" (unchanged).
+
+  Knight/Bishop/Rook dedicated haptics (StockfishNative.java, ai-bridge.js,
+  ui.js):
+    - KNIGHT_MOVE: agile jump + crisp landing. PWLE [0, 0.35, 0.1, 0.7, 0]
+      with timings [0, 30, 40, 25, 15]. Matches the L-shape parabolic jump
+      animation + crisp "ding" sound.
+    - BISHOP_MOVE: sharp smooth glide. PWLE [0, 0.4, 0.45, 0.2, 0] with
+      timings [0, 40, 50, 40, 20]. Single bell-curve swell, no hard peak —
+      matches the sawtooth-glide + filter-sweep sound.
+    - ROOK_MOVE: fierce charge-dash-impact. PWLE [0, 0.5, 0.15, 0.85, 0.3,
+      0.5, 0] with timings [0, 25, 35, 60, 25, 40, 20]. Low charge → dash
+      gap → heavy impact thud → aftershock — matches the 3-stage rook sound
+      + light board shake.
+    - All three have API 35+ PWLE / API 26+ waveform / legacy fallback.
+    - executeMove (ui.js): haptic dispatch simplified to
+      piece.type.toUpperCase()+'_MOVE', covering all six pieces uniformly.
+    - HapticManager THROTTLE (ai-bridge.js): added KNIGHT_MOVE:45,
+      BISHOP_MOVE:40, ROOK_MOVE:50.
+    - Haptic personality spectrum: Pawn < Bishop < Knight < Rook < Queen <
+      King (light → heavy, amplitude and duration increase).
+
+  License classification: all Phase 27 changes are in GPL-v3-licensed files
+  (StockfishNative.java, ai-bridge.js, ui.js per DroidFish derivation). No
+  new third-party code was introduced.
+
+v1.0.8 Phase 26 (personified animation/sound/haptic upgrade + notch adaptation + shake/anti-shake coexistence + landscape board shrink + ⚡emoji fix + stats dialog light-mode + Worker race fix, 2026.7.1):
+  Phase 26 is documented in the HTML user manuals at
+  Manual/Regalia-v1.0.8-manual-{zh,en}.html, Appendix A "版本更新日志" /
+  "Version Changelog". Summary:
+
+  Version: versionCode=108, versionName="1.0.8" (unchanged).
+
+  Personified animation/sound/haptic upgrade (game-logic.js, ui.js, index.html.tpl,
+  StockfishNative.java, ai-bridge.js):
+    - Pawn: 22-keyframe high-frequency tremor (瑟瑟发抖), feather-light scale,
+      soft landing. Sound: 3 wavering squeaks. Haptic: PAWN_MOVE (3 tiny
+      vibrations, API 35+ PWLE). Duration 260ms.
+    - Queen: heavier than rook (铿锵有声、掷地有声), 520ms, pre-landing
+      compression + impact snap, triggers new MASSIVE shake (shake-massive,
+      620ms, ±6px — heavier than king's heavy). Sound: brass growl + metallic
+      clang + massive impact. Haptic: QUEEN_MOVE. Duration 520ms.
+    - King: more solemn than rook (威严庄重), 560ms (longest), 4 measured steps,
+      subtle scale breath, heavy shake. Sound: deeper bell (90Hz) + 4 deeper
+      footsteps (80Hz). Haptic: KING_MOVE. Duration 560ms.
+    - New CSS: @keyframes shakeMassive + .bwrap.shake-massive class.
+    - New Java haptic patterns: PAWN_MOVE, QUEEN_MOVE, KING_MOVE in
+      StockfishNative.performHapticInternal().
+    - ANIMATION_DEFER_MS 560→600 (matches new longest animation + shake).
+    - All keyframes mutate ONLY transform (GPU-composited) for high fps.
+
+  Notch/cutout/R-corner adaptation (index.html.tpl):
+    - .review-hdr gains env(safe-area-inset-*) padding (was missing).
+
+  Shake vs anti-shake coexistence fix (game-logic.js):
+    - Root cause: StabilizationHelper and _triggerBoardShake both set transform
+      on .bwrap — they fought over the same property.
+    - Fix: _triggerBoardShake temporarily removes .stabilized before adding
+      .shake-*; the next sensor event restores it (~20ms).
+
+  Landscape board shrink (game-logic.js):
+    - Anti-shake reservation 8px→12px (8px max displacement + 4px buffer),
+      slightly shrinking the landscape board so the right edge isn't clipped
+      when anti-shake shifts it rightward.
+
+  ⚡ marker emoji fix (index.html.tpl):
+    - Root cause: font-variant-emoji:text + purple color forced ⚡ to render
+      as a wrong-colored purple glyph.
+    - Fix: removed text-mode + color, letting ⚡ render as standard color emoji.
+      Outline preserved via text-shadow (works on color emoji). 🔁 keeps
+      text-mode (it's not an emoji).
+
+  Stats export/import dialog light-mode fix (stats.html):
+    - 3 dialogs: hardcoded #221015/#d4a017 → var(--card)/var(--border)/
+      var(--accent2)/var(--text).
+
+  Web Worker race-condition fix (stats.html):
+    - Root cause: heatmap worker overwrote w.onmessage on every call —
+      overlapping calls lost the first Promise.
+    - Fix: taskId map for concurrent task resolution; onerror rejects all
+      pending tasks; worker echoes taskId in response.
+
+  License classification: all Phase 26 changes are in GPL-v3-licensed files
+  (game-logic.js, ui.js, index.html.tpl, ai-bridge.js, stats.html per
+  DroidFish derivation; StockfishNative.java per DroidFish derivation). No
+  new third-party code was introduced.
+
+v1.0.8 Phase 25 (robust Web Worker multi-threading + portrait review chart height fix + ↹Global toggle fix + stats header light-mode fix, 2026.7.1):
+  Phase 25 is documented in the HTML user manuals at
+  Manual/Regalia-v1.0.8-manual-{zh,en}.html, Appendix A "版本更新日志" /
+  "Version Changelog". Summary:
+
+  Version: versionCode=108, versionName="1.0.8" (unchanged).
+
+  Robust Web Worker pool (worker-pool.js reimplemented and wired in):
+    - Phase 24 deleted the dead-code worker-pool.js (never called). This phase
+      reimplements it with first-principles robustness and wires it into the
+      heaviest call site: stats.html heatmap-stats walk (1-2s for 100+ move
+      games, the main UI-jank source).
+    - worker-pool.js: Pool of N workers (N = min(hardwareConcurrency, 4)),
+      Blob-URL workers, generic "run named function" protocol, 30s task
+      timeout + worker termination/replacement, pagehide auto-cleanup.
+      Graceful degradation to synchronous execution if Worker is unavailable.
+    - stats.html: Inline Web Worker (_STATS_WORKER_SRC) computes per-square
+      control counts in a background thread. First render shows a loading
+      placeholder; the worker computes in the background and triggers a
+      re-render when done. CSP gains worker-src blob: and script-src blob:.
+      Falls back to _computeHeatmapStatsSync if Worker is unavailable.
+    - getCtrlMap stays synchronous (render() needs the result immediately;
+      it's cached by cachedCtrlKey so the amortized cost is low).
+
+  Portrait review eval chart height fix (ui.js):
+    - Portrait chart height changed from max(120,min(200,innerHeight-140))
+      to max(100,min(120,floor((innerHeight-200)*0.18))). Portrait max
+      reduced to 120px (was 200px), min 100px (was 120px). Landscape
+      unchanged. The freed space goes to the move list.
+
+  "↹Global" toggle appearance fix (ui.js + index.html.tpl):
+    - Root cause: .toggle-sw CSS uses ::after pseudo-element for the dot,
+      but the HTML also created a custom inline <div> dot inside .toggle-sw
+      — two dots rendered simultaneously (overlapping, offset, different
+      colors). Fix: removed the inline dot div; use standard .toggle-sw +
+      ::after CSS. Added a .toggle-sw.sm variant class (30x16 switch + 12px
+      dot) for compact toolbars.
+
+  Stats page header light-mode fix (stats.html):
+    - .hdr used a hardcoded dark-brown gradient; in light mode the header
+      stayed dark while the page turned silver. Fixed to use a new --hdr-bg
+      theme variable (dark: #1a0a0a, light: #f0f0f3).
+
+  License classification: worker-pool.js is AGPL v3 (original code). stats.html
+  changes are in a GPL-v3-licensed file (DroidFish-derived PGN parsing). ui.js
+  and index.html.tpl changes are in GPL-v3-licensed files (DroidFish-derived).
+  No new third-party code was introduced.
+
+v1.0.8 Phase 24 (comprehensive first-principles code review: 7 subagents reviewed 26.5k lines, ~135 issues found, 30+ fixes applied, 2026.7.1):
+  Phase 24 is documented in the HTML user manuals at
+  Manual/Regalia-v1.0.8-manual-{zh,en}.html, Appendix A "版本更新日志" /
+  "Version Changelog". Summary:
+
+  Version: versionCode=108, versionName="1.0.8" (unchanged).
+
+  Dead-code removal (REDUNDANCY, highest impact):
+    - Deleted worker-pool.js (581 lines) — the entire module was never called
+      by any file. The 3 exported worker functions (workerParsePGN,
+      workerComputeHeatmapStats, workerGetCtrlMap) had zero callers. Removed
+      from build-chess.py module order.
+    - Deleted build-chess.sh — byte-for-byte duplicate of build-chess.py
+      (redundant shell wrapper around inline Python).
+    - Deleted _applyMoveToBoard (~30 lines in game-logic.js) — exported but
+      never called; also had a Chess960 castling bug (hard-coded standard
+      rook columns) that would have caused incorrect rook placement.
+    - Deleted dead code in ai-bridge.js: _buildPGNComment,
+      _formatPGNEvalAnnotation (~90 lines), empty if(_setupFEN) block, and
+      unused `variations` array declarations.
+
+  Bug fixes (BUG, by severity):
+    - [HIGH] stats.html XSS: PGN header values inserted into the metadata
+      table unescaped — a malicious PGN with a script tag in [White] would
+      execute. Fixed by wrapping with _escFEN().
+    - [MEDIUM] Chess960 PGN [FEN] tag: _setupFEN was null for Chess960 games
+      started from the New Game dialog, causing _buildPGNString to fall back
+      to generateFEN(gameState) (the CURRENT mid-game state) — corrupt PGN
+      export. Fixed by setting _setupFEN at Chess960 game start.
+    - [MEDIUM] Eval bar showed pre-move eval during the 560ms animation
+      window — executeMove didn't call _resetEvalState() before
+      _updateEvalDisplay(). Fixed.
+    - [MEDIUM] _resetGameUIState set animationInProgress=false but didn't
+      clear _activeAnimEls or remove overlay DOM — ghost pieces re-attached
+      by _reattachActiveAnimations(). Fixed to call _clearAnimationState().
+    - [MEDIUM] flipBoard/enterReview/exitReview/toggleSetup didn't call
+      _clearAnimationState() — overlay persisted with wrong orientation if
+      called during the ~520ms animation window. Fixed (all 4 now call it).
+    - [MEDIUM] StockfishNative.recoverEngine leaked an ExecutorService per
+      recovery cycle (old executor never shut down). Fixed with
+      _engineExecutor.shutdown() before creating a fresh one.
+    - [MEDIUM] StockfishNative.makeExecutable fallback used chmod 755 but
+      nativeChmod sets 0744 — inconsistent permissions. Fixed to 744.
+    - [MEDIUM] EngineService.isRunning was non-volatile — read from JS binder
+      thread and service main thread. Fixed to volatile.
+    - [MEDIUM] MainActivity.onActivityResult returned early on cancel without
+      clearing _pendingExportContent — "Exporting..." dialogs hung forever.
+      Fixed with cancelPendingExport() in StockfishNative.
+    - [MEDIUM] index.html.tpl html[data-theme="dark"] only overrode 7 chart
+      variables — when system was light but JS forced dark, the page rendered
+      light with dark chart colors. Fixed to restore the FULL dark palette.
+    - [LOW] Chess960 _checkPVDivergence false-positive on castling moves:
+      _mrToUci returns "e1g1" (king actual) but pvMoves holds "e1h1" (king
+      captures rook). Fixed to skip the divergence check for castling moves
+      in Chess960 mode.
+    - [LOW] _triggerBoardShake didn't clear stale _cachedBwrap. Fixed.
+    - [LOW] AndroidBridge.isEngineReady() called without typeof guard at 9
+      call sites across game-logic.js, ai-bridge.js, ui.js. Fixed all.
+    - [LOW] validateSetupPosition only checked one rank per color for pawns
+      (swapped rank-number literals in error messages). Fixed to check both
+      rank 1 and rank 8.
+    - [LOW] _reattachActiveAnimations didn't recompute dx/dy when CELL
+      changed (orientation change mid-animation). Fixed to cancel the WAAPI
+      animation and snap to the new destination.
+    - [LOW] stats.html viewport blocked user zoom (maximum-scale=1.0,
+      user-scalable=no). Fixed to maximum-scale=5.0, user-scalable=yes.
+    - [LOW] stats.html title hardcoded Chinese. Fixed to "📊Statistics".
+    - [LOW] stats.html target="_blank" without rel="noopener noreferrer"
+      (tab-nabbing risk). Fixed.
+    - [LOW] stats.html NaN% on division by zero in time-per-phase. Fixed
+      with total>0 guard.
+    - [LOW] i18n 'book' English translation was 'Mediocre' — should be
+      'Book'. Fixed.
+    - [LOW] chess960.js comment had swapped light/dark bishop file sets.
+      Fixed.
+
+  Performance fixes (PERF):
+    - validateSetupPosition: 12+ separate .filter() passes consolidated into
+      a single pass with per-type counters.
+    - _sanitizeFenForEngine: ch.toLowerCase() called 6× per piece — cached
+      to a local variable.
+
+  Comment/redundancy cleanup:
+    - Fixed misleading comments: _animKnight arcHeight, computeVisibleEpMark
+      row numbers, _animQueen landingScale, inCheck JSDoc, cloneS moveHistory,
+      _playCastleSound, _loadingKingIconHTML piece-style duplication, queen
+      personality description, StabilizationHelper --stab-rot cleanup,
+      ChessApp stack-logging comment, MainActivity version comment,
+      StockfishNative version comment.
+
+  License classification: unchanged — no new third-party code was introduced.
+  All Phase 24 changes are in GPL-v3-licensed files (game-logic.js, chess960.js,
+  ai-bridge.js, ui.js, index.html.tpl, stats.html per DroidFish derivation)
+  and AGPL-v3-licensed files (no new AGPL files). The deleted worker-pool.js
+  was AGPL v3 (original code). The deleted build-chess.sh was AGPL v3.
+  The Java bug fixes are in StockfishNative.java (GPL v3, DroidFish-derived),
+  MainActivity.java (AGPL v3), and EngineService.java (AGPL v3).
+
+v1.0.8 Phase 23 (⚡ marker rendering fix + animation flicker & smoothness first-principles optimization + Stockfish 18 dotprod engine + license-file fixes, 2026.7.1):
+  Phase 23 is documented in the HTML user manuals at
+  Manual/Regalia-v1.0.8-manual-{zh,en}.html, Appendix A "版本更新日志" /
+  "Version Changelog". Summary:
+
+  Version: versionCode=108, versionName="1.0.8" (unchanged).
+
+  Main-board ⚡ marker rendering root-cause fix (index.html.tpl):
+    - Root cause: the `.sq .setup-ep-mark` CSS rule applied a two-layer
+      `text-shadow` + `filter:drop-shadow` on top of a purple ⚡ glyph,
+      producing a muddy/blurry visual on Android WebView (Xiaomi HyperOS 3).
+      The review-board ⚡ looked "normal" only because review-board cells
+      lack the `.sq` class, so the rule didn't match and the ⚡ fell back
+      to the system's colorful emoji rendering.
+    - Fix: removed the `.sq` ancestor requirement so both boards share
+      one rule; removed `text-shadow` and `filter:drop-shadow`; changed
+      `-webkit-text-stroke` from `.4px rgba(255,255,255,.85)` (thick white)
+      to `.3px rgba(0,0,0,.85)` (ultra-thin dark). Same treatment for
+      `.setup-castle-mark` (🔁) for visual consistency.
+
+  Post-move piece flicker root-cause fix (game-logic.js, first-principles):
+    - Root cause: `_finishAnim()` called `el.remove()` to delete the overlay
+      at `onfinish` (~t=520ms), but `render()` (which rebuilds the DOM with
+      the new piece position) was scheduled separately via `setTimeout(560ms)`
+      → `requestAnimationFrame(updateAfterMove)`, painting at ~t=576ms. The
+      ~40–56ms gap left both source and destination squares empty — perceived
+      as flicker.
+    - Fix: `_finishAnim()` no longer removes the overlay. The overlay stays
+      visible at the destination square until `render()` runs
+      `app.innerHTML=h`, which destroys the `.bwrap` subtree (including the
+      overlay) and rebuilds it with the new state in a single synchronous
+      DOM mutation — the browser paints the new state in the same frame,
+      eliminating the visual gap. `_activeAnimEls` is still cleared so
+      `_reattachActiveAnimations()` won't re-append the stale overlay.
+      The stale-closure path (`_myGen !== _animGen`) keeps `el.remove()` as
+      belt-and-suspenders safety.
+
+  Animation smoothness breakthrough (game-logic.js + index.html.tpl,
+  first-principles):
+    - Root cause: knight/bishop/queen/king animation keyframes each set a
+      different `filter:drop-shadow(...)` value per keyframe.
+      `filter:drop-shadow` is a pixel-level operation; changing it on every
+      keyframe forces the browser to re-rasterize the alpha mask every frame
+      — even on a GPU-composited layer — causing frame drops.
+    - Fix: set `filter:drop-shadow(0 4px 5px rgba(0,0,0,0.45))` as a static
+      CSS property on `.move-anim`. The browser computes the filter once
+      when the overlay is composited and caches the result as the layer's
+      texture. Each keyframe now only changes `transform` (pure GPU layer
+      translation, zero pixel ops). All `filter` properties removed from
+      keyframes.
+
+  Ghost-piece fix on undo/flip during animation (ui.js):
+    - Root cause: `_clearAnimationState()` only set `animationInProgress=false`;
+      it didn't clear `_activeAnimEls` or remove leftover `.move-anim` overlay
+      nodes. When `render()` then called `_reattachActiveAnimations()`, it
+      re-appended the stale overlay to the new DOM — a "ghost piece".
+    - Fix: `_clearAnimationState()` now clears `_activeAnimEls`, bumps
+      `_animGen` (so any in-flight `_finishAnim` closure self-invalidates),
+      and proactively removes all `.move-anim` overlay nodes under `.bwrap`.
+
+  Stockfish 18 arm64-v8a-dotprod engine integration:
+    - Downloaded the official `stockfish-android-armv8-dotprod.tar` from the
+      GitHub sf_18 release. Extracted the 114MB binary (ELF 64-bit ARM aarch64,
+      statically linked, Android 29+, NDK r27c build, stripped). Renamed to
+      `lib/arm64-v8a/libstockfish.so` under `jniLibs` per Android packaging
+      convention. The dotprod variant enables ARMv8.6-A DOTPROD instructions
+      for integer matrix-multiply acceleration in NN inference.
+
+  License-file fixes (critical):
+    - `LICENSE-GPL v3` previously contained AGPL v3 text ("GNU AFFERO GENERAL
+      PUBLIC LICENSE"), not GPL v3. Replaced with the correct GPL v3 text
+      ("GNU GENERAL PUBLIC LICENSE", Version 3, 29 June 2007).
+    - `LICENSE-Apache v2.0` had a misleading LLVM Project header. Replaced
+      with the standard Apache 2.0 text.
+
+  Build environment & configuration update:
+    - JDK: Temurin JDK 21.0.5+11 (provides `javac`).
+    - Android SDK: platform-tools, build-tools;34.0.0, platforms;android-35,
+      ndk;27.2.12479018, cmake;3.22.1.
+    - gradle.properties: org.gradle.java.home points to the new JDK;
+      org.gradle.jvmargs raised from -Xmx1024m to -Xmx2048m; added
+      org.gradle.java.installations.auto-detect=true and auto-download=false.
+    - build.gradle: removed the `java { toolchain { ... } }` block; now uses
+      org.gradle.java.home directly.
+    - APK signing: v1/v2/v3 schemes all enabled, compatible with Xiaomi
+      HyperOS 3.
+
+  All Phase 23 changes are in GPL-v3-licensed files (game-logic.js,
+  index.html.tpl per DroidFish derivation; ui.js per DroidFish derivation)
+  and remain under GPL v3. The license-file fixes are documentation-only
+  and do not change the licensing of any code.
+
+v1.0.8 Phase 22 (complete redesign of move animation & sound effects + light mode support, 2026.6.30):
+  Phase 22 is documented in the HTML user manuals at
+  Manual/Regalia-v1.0.8-manual-{zh,en}.html, Appendix A "版本更新日志" /
+  "Version Changelog". Summary:
+
+  Version: versionCode=108, versionName="1.0.8".
+
+  Move animation redesign (game-logic.js, index.html.tpl):
+    - Completely removed old animation system: _lastAnimPieceType,
+      _lastAnimTarget, _lastCaptureFlag, _lastCheckFlag, _landingAnimActive,
+      _landingAnimTimer, _animFinishTimer, _startLandingTimer(), old
+      animateMove() body (170+ lines), 6 landing keyframes (pawnStep,
+      knightJump, bishopGlide, rookSlide, queenGlide, kingStep), 6 .sq
+      .pc.anim-* rules, captureFlash/captureCore keyframes, 6 .move-anim.
+      anim-* transition rules.
+    - New personified piece animations via Web Animations API:
+      pawn (timid, 250ms), knight (agile, 380ms, parabolic jump),
+      bishop (sharp, 270ms, golden glow), rook (fierce, 290ms, light
+      shake), queen (elegant, 420ms, aura), king (solemn, 520ms, heavy
+      shake). Each piece has unique cubic-bezier easing + scale/rotate/
+      drop-shadow keyframes.
+    - Board shake keyframes: shakeLight (rook landing, 280ms, ±2px),
+      shakeHeavy (king landing, 450ms, ±4px). Triggered via void offsetWidth
+      forced reflow for rapid restart.
+    - Chess960 castling: king + rook animate concurrently; _kingStayedPut
+      (king already on castling target) skips king overlay.
+    - prefers-reduced-motion: JS-side detection skips entire animation
+      path; CSS @media disables shake animations.
+    - _animGen generation counter prevents stale _finishAnim closures.
+    - _reattachActiveAnimations() re-attaches overlay nodes after DOM
+      rebuild.
+    - animateMove(from,to,pieceSym,pieceType,isCapture,isCheck,pieceColor)
+      signature preserved.
+
+  Sound redesign (ui.js):
+    - Completely removed old sound system: audioCtx, getAudioCtx(), old
+      playSound(type) body (7 simple oscillator sounds).
+    - New ChessAudioEngine class: pure Web Audio API synthesis. Each piece
+      has matching timbre: pawn (triangle 3-stage), knight (sine sweep +
+      ding), bishop (sawtooth + filter sweep), rook (square + noise + low
+      bandpass), queen (3-freq harmony + LFO vibrato), king (bell partials
+      + 4 footsteps).
+    - Audio routing: master gain → [dry + reverb→reverbGain] →
+      DynamicsCompressor → destination. Compressor threshold=-14dB;
+      convolution reverb 1.4s impulse.
+    - Mobile unlock on first pointerdown/keydown (silent buffer activation).
+    - _activeNodes Set tracks live oscillators; onended auto-cleans. All
+      exponentialRampToValueAtTime targets ≥ 0.0001 (no NaN).
+    - playSound(type) signature preserved; internally maps to new engine.
+      soundOn + toggleSound() + toolbar button (🔊/🔇) preserved.
+    - audioEngine global variable added for animateMove to trigger
+      piece-specific sounds.
+
+  Cross-file adaptation (ui.js):
+    - 13 references to old animation state (_lastAnimPieceType,
+      _landingAnimActive, _startLandingTimer etc.) adapted: render throttle
+      simplified to only animationInProgress; landing animCls computation
+      removed; _clearAnimationState() / _resetGameUIState() /
+      _cleanupEventListeners() cleanup code simplified.
+
+  Light mode support (index.html.tpl, stats.html, ai-bridge.js, ui.js):
+    - CSS @media (prefers-color-scheme: light) media query: app follows
+      system global theme setting automatically. CSS variables (--bg,
+      --card, --text, --accent, --btn-bg, --overlay-bg, etc.) overridden
+      in light mode with warm-cream + deep-gold palette (#f5ead6 / #b8860b
+      / #3a2410). color-scheme: dark light declaration for native UI.
+    - Loading overlay (ai-bridge.js _showLoadingOverlay): king icon switches
+      ♔ (dark mode, white-piece styling) ↔ ♚ (light mode, black-piece
+      styling). _isLightMode() + _loadingKingIconHTML() helpers added.
+    - Main header (ui.js render): king icon before "Regalia" app name
+      switches ♔ ↔ ♚ via _hdrKingIconHTML() helper.
+    - stats.html: independent light theme block added (own :root + @media).
+    - 13 hardcoded component colors replaced with CSS variables for theme
+      support (.hdr, .btn, .pbar, .card, .bwrap, .ev, .review-overlay, etc.).
+
+  HapticManager: unchanged (haptic feedback system not redesigned).
+
+
+
+
+
+
+
+  7th and 8th supplements (2026-06-30):
+    - Castling rights loss after setup: validatePosition() now calls syncHash(s)
+      after modifying castlingRights/enPassTarget.
+    - Animation flicker fix: _finishNow calls syncHash(s) after modifying
+      castlingRights/enPassTarget.
+    - Animation flicker fix: _finishAnim() no longer manually restores piece
+      opacity (was causing _srcRookpc is not defined" error and "piece returns
+      to source" visual artifact). The next render() naturally restores opacity.
+    - _srcRookPc undefined error: removed all manual opacity restoration from
+      _finishAnim() — _srcRookPc was only defined inside the castling if-block.
+    - stats.html light mode: StatsActivity.java added isSystemDarkMode() method.
+    - ℹ️ button sound: added .hdr-btn, .hdr-btn-lg to global click listener's
+      closest() selector.
+    - Last-move highlight: rolled back from outline to box-shadow (the contain
+      theory was wrong); uses CSS variables for both dark/light modes.
+    - .sq .pc cleanup: removed stale transition:transform .1s and
+      willend:transform,opacity (leftover from old CSS landing animation
+      system). Improves performance by reducing GPU compositing overhead.
+
+  Light mode system-switch bug fix (v1.0.8 Phase 22 fifth supplement):
+    - Bug: On Xiaomi HyperOS 3 with system light mode enabled, app still showed
+      dark mode. Root cause: WebView sets prefers-color-scheme based on app
+      theme's isLightTheme attribute; Theme.NoTitleBar (non-DayNight) doesn't
+      change isLightTheme with system dark mode, so prefers-color-scheme was
+      stuck on dark.
+    - Fix: Dual-channel theme detection:
+      * Java: Added @JavascriptInterface isSystemDarkMode() in StockfishNative.java
+        — reads UiModeManager.getNightMode() directly (Android 5.0+ compatible).
+      * JS: _isLightMode() prioritizes AndroidBridge.isSystemDarkMode(), falls
+        back to window.matchMedia('(prefers-color-scheme: light)').
+      * CSS: Light theme variables trigger via BOTH @media(prefers-color-scheme:light)
+        AND html[data-theme="light"] attribute selector. New _applySystemTheme()
+        function sets data-theme at startup.
+    - Files changed: StockfishNative.java (isSystemDarkMode method),
+      ai-bridge.js (_isLightMode + _applySystemTheme), index.html.tpl
+      (html[data-theme] selectors), stats.html (html[data-theme] selectors + init()).
+
+  Light mode silver palette redesign (v1.0.8 Phase 22 third supplement):
+    - Light mode palette redesigned from warm cream (#f5ead6) to elegant silver
+      tones: bg #f0f0f3 / card #e0e0e5 / text #2c2c34 / muted #6a6a76 /
+      accent #4a4a52 / border #8a8a94. Inspired by polished silver chess sets.
+      Every color (except board squares & pieces) differs from dark mode.
+    - Board squares (SQ_LIGHT/SQ_DARK) and pieces (.sq .pc.w/.bk) keep their
+      colors UNCHANGED in both modes for chess-readability.
+    - 40+ hardcoded component colors in index.html.tpl replaced with CSS
+      variables. 15 new theme variables added (--btn-a-bg, --btn-g-bg,
+      --btn-p-bg, --toggle-on-bg, --sq-hover, --scrollbar-track, --op-active-bg,
+      --setup-del-hover, --setup-err-color, --mvar-color, --mnum-color,
+      --last-to, --castle-ring, --setup-castle-mark, --setup-ep-mark).
+    - 4 new utility classes (.hdr-btn / .hdr-btn-lg / .chip-active /
+      .chip-inactive) added for theme-aware inline styling in ui.js.
+    - ui.js + ai-bridge.js: all inline-style hardcoded colors replaced with
+      CSS variables (header buttons, PGN cache chips, recovery UI, ECO card,
+      tablebase card, review chart, toggle dot, range slider, showToast).
+    - stats.html: light mode synced to silver palette.
+    - ♔/♚ king icon switch via prefers-color-scheme:light — follows Android
+      (incl. Xiaomi HyperOS 3) system global dark mode toggle.
+
+  Sound & animation optimization (v1.0.8 Phase 22 second supplement):
+    - Sound mute bug fix: _playPieceSound() / _playCastleSound() in
+      game-logic.js now check soundOn before playing (previously bypassed
+      playSound()'s soundOn guard, so move/castle sounds played even when
+      muted). toggleSound() in ui.js now calls audioEngine.setEnabled(soundOn)
+      to sync the engine's enabled flag with the global soundOn variable.
+    - Queen animation: duration 420ms→500ms (heavier than rook 290ms, close
+      to king 520ms); easing changed to cubic-bezier(0.4,0,0.2,1) (same as
+      king); landing now triggers _triggerBoardShake('heavy') (same as king,
+      previously no shake); scale variation 0.05→0.08; landing phase adds
+      compression for "impact" feel.
+    - Animation smoothness: keyframe counts reduced — knight 24→18, king
+      28→24, queen 20→16. Motion formulas unchanged; reduced GC pressure.
+    - Version number residue fix: game-logic.js loading_title i18n string
+      "Regalia v1.0.7"→"Regalia v1.0.8"; ChessWebViewClient.java version
+      comment "Version: v1.0.7"→"Version: v1.0.8".
+
+  Scene sound expansion (v1.0.8 Phase 22 supplement):
+    - 14 new personified scene sounds added to ChessAudioEngine (ui.js):
+      playDeselect, playUndo, playRedo, playFlip, playNewGame, playEnterReview,
+      playExitReview, playSetupToggle, playResign, playCopy, playError,
+      playAiThinkStart, playAiThinkEnd (playSelect/playHint already existed).
+    - playSound(type) signature unchanged; type parameter expanded from 7 to 21.
+    - Smart toast sound: _playToastSound(msg) auto-detects success/error from
+      message keywords, avoiding modification of all 76 showToast call sites.
+    - Sound trigger points added: sqClick (select/deselect), undoMove, redoMove,
+      flipBoard, _startGameImpl, enterReview, exitReview, toggleSetup,
+      _resignGame, getHint, doAIMove (aiThinkStart), onBestMove (aiThinkEnd),
+      toggleSound (select on enable), toggleLang (select).
+    - All new sounds share the same master→dry+reverb→compressor→destination
+      routing chain and the existing _activeNodes cleanup mechanism.
+
+  Post-release emergency bug fixes (same day as Phase 22 release):
+    - _landingAnimActive undefined error: 3 residual references to the removed
+      _landingAnimActive / _landingAnimTimer / animCls variables were missed
+      during the v1.0.8 redesign. Fixed in ai-bridge.js (engine-error handler),
+      game-logic.js (_requestStockfishMove), and ui.js (_updateSingleSq sig).
+    - King icon extra semicolon: _hdrKingIconHTML() used "♚\uFE0E;" (semicolon
+      after Unicode escape was displayed as literal). Fixed to "\u265A\uFE0E".
+      _loadingKingIconHTML() also unified to use Unicode escapes.
+    - Duplicate move sound: executeMove()'s playSound('move'/'capture'/'castle')
+      duplicated animateMove()'s internal _playPieceSound()/_playCastleSound().
+      Fixed: executeMove() now only handles promote/check special cases.
+    - ANIMATION_DEFER_MS: increased from 300ms to 560ms to match the new
+      personified animation system (King = 520ms + 40ms buffer).
+    - Stale _finishAnim closure DOM leakage: el.remove()/rookEl.remove() moved
+      before the _myGen check so overlay nodes are always cleaned up.
+    - Redundant CSS variables (--hdr-king-color/stroke/shadow/sym) removed
+      (king icon switching is JS-driven, not CSS-variable-driven).
+
+  License classification: unchanged — no new third-party code was
+  introduced. All Phase 22 changes are in GPL-v3-licensed files
+  (game-logic.js, ui.js, ai-bridge.js, index.html.tpl, stats.html per
+  DroidFish derivation)
+  and remain under their respective licenses. The new ChessAudioEngine
+  class is original code (AGPL v3 would apply if it were a standalone
+  module, but since it's embedded in ui.js which is GPL v3 per DroidFish
+  derivation, the engine code is GPL v3).
 
 v1.0.7 Phases 6-16 (2026.6.29):
   Phases 6 through 16 are documented in the HTML user manuals at

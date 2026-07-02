@@ -52,12 +52,12 @@ import android.widget.TextView;
  * - AndroidX immersive mode uses reflection fallback if classes are missing
  * - All exception handlers log to logcat for debugging
  *
- * Version: v18.4.5
+ * Version: v1.0.8
  */
 public class MainActivity extends Activity {
 
     private static final String TAG = "Regalia";
-    private static final String VERSION = "v1.0.7";
+    private static final String VERSION = "v1.0.8";
 
     private WebView webView;
     private StockfishNative stockfishEngine;
@@ -187,6 +187,17 @@ public class MainActivity extends Activity {
             webSettings.setTextZoom(100);
             webSettings.setAllowFileAccessFromFileURLs(false);
             webSettings.setAllowUniversalAccessFromFileURLs(false);
+            // v1.0.8 PHASE 29 (PDF best practice): Enable Safe Browsing on API 26+
+            //   to protect against malicious web content (defense-in-depth, even
+            //   though we only load local assets). Safe Browsing checks URLs
+            //   against Google's malware/phishing allowlist before navigation.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                try {
+                    webSettings.setSafeBrowsingEnabled(true);
+                } catch (Throwable e) {
+                    Log.w(TAG, "setSafeBrowsingEnabled failed", e);
+                }
+            }
             // Disable WebView force-dark (Android 10+) to prevent OEM dark mode
             // from inverting our dark theme colors (causes black-on-black text)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -525,16 +536,15 @@ public class MainActivity extends Activity {
         }
 
         // Retry engine init if not ready (handles case where init failed previously)
-        if (stockfishEngine != null && !stockfishEngine.isEngineReady() && !engineInitialized) {
-            Log.i(TAG, "onResume: engine not initialized, retrying");
+        // v1.0.8 PHASE 30: drop the !engineInitialized check — initEngineAfterPermissions sets
+        //   engineInitialized=true even on failure, which blocked this retry path. The init
+        //   method itself is idempotent (returns early if engineReady), so the guard is safe.
+        if (stockfishEngine != null && !stockfishEngine.isEngineReady()) {
+            Log.i(TAG, "onResume: engine not ready, retrying");
             initEngineAfterPermissions();
         }
 
         // v1.0.2 FEATURE: Handle pending review request from StatsActivity.
-        // (The pendingStatsImportRequest path was removed in v1.0.2 — PGN import
-        // from the stats page now opens the SAF picker directly inside
-        // StatsActivity via statsSelectPGNFile(), so there's no longer a
-        // round-trip through MainActivity.)
         if (pendingStatsReviewRequest) {
             pendingStatsReviewRequest = false;
             // Enter review mode on the main WebView
@@ -701,6 +711,48 @@ public class MainActivity extends Activity {
             }
         }
         if (webView != null) {
+            // v1.0.8 PHASE 29 (PDF best practice): Full WebView cleanup sequence
+            //   per "WebView 性能与健壮性优化指南" §健壮性保障 §1.标准销毁流程.
+            //   Order matters: each step prevents a specific leak/crash class.
+            //   1. removeView — prevents WindowLeaked exception if the WebView
+            //      still has an attached window when the Activity is destroyed.
+            //   2. clearHistory — releases the navigation history back/forward
+            //      stack so it can't be restored into a new WebView instance.
+            //   3. loadUrl("about:blank") — drops all JS callbacks and clears
+            //      the document, preventing JS timers from running on a dead
+            //      WebView. Also removes any pending navigation.
+            //   4. removeJavascriptInterface — explicitly unregisters the
+            //      AndroidBridge interface so a stale JS reference can't call
+            //      into the (now-defunct) StockfishNative after destroy.
+            //   5. onPause — pauses any remaining JS timers/media.
+            //   6. destroy — final native teardown.
+            try {
+                if (webView.getParent() instanceof android.view.ViewGroup) {
+                    ((android.view.ViewGroup) webView.getParent()).removeView(webView);
+                }
+            } catch (Throwable e) {
+                Log.w(TAG, "WebView removeView failed", e);
+            }
+            try {
+                webView.clearHistory();
+            } catch (Throwable e) {
+                Log.w(TAG, "WebView clearHistory failed", e);
+            }
+            try {
+                webView.loadUrl("about:blank");
+            } catch (Throwable e) {
+                Log.w(TAG, "WebView loadUrl about:blank failed", e);
+            }
+            try {
+                webView.removeJavascriptInterface("AndroidBridge");
+            } catch (Throwable e) {
+                Log.w(TAG, "WebView removeJavascriptInterface failed", e);
+            }
+            try {
+                webView.onPause();
+            } catch (Throwable e) {
+                Log.w(TAG, "WebView onPause failed", e);
+            }
             try {
                 webView.destroy();
             } catch (Throwable e) {
@@ -734,18 +786,24 @@ public class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, android.content.Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (resultCode != RESULT_OK) return;
+        // v1.0.8 PHASE 24 (bug fix): On user-cancel (resultCode != RESULT_OK),
+        //   clear pending export content and notify JS so "Exporting..." dialogs
+        //   don't hang forever. Previously the early return left stale state.
+        if (resultCode != RESULT_OK) {
+            try {
+                if (stockfishEngine != null && (requestCode == StockfishNative.REQUEST_CODE_EXPORT_SETTINGS
+                        || requestCode == StockfishNative.REQUEST_CODE_EXPORT_PGN)) {
+                    stockfishEngine.cancelPendingExport();
+                }
+            } catch (Throwable ignored) {}
+            return;
+        }
         if (stockfishEngine == null) return;
         try {
             if (requestCode == StockfishNative.REQUEST_CODE_IMPORT_SETTINGS) {
                 stockfishEngine.handleFilePickerResult(data);
             } else if (requestCode == StockfishNative.REQUEST_CODE_EXPORT_SETTINGS
                     || requestCode == StockfishNative.REQUEST_CODE_EXPORT_PGN) {
-                // v1.0.2: route PGN export through the same handler — it dispatches
-                // to onSettingsExported() or onPGNExported() based on _pendingExportType.
-                // v1.0.2 CLEANUP: Removed REQUEST_CODE_EXPORT_STATS_HTML from this
-                // list — stats HTML export is now handled entirely inside
-                // StatsActivity's own onActivityResult, never reaching here.
                 stockfishEngine.handleExportFilePickerResult(data);
             } else if (requestCode == StockfishNative.REQUEST_CODE_IMPORT_PGN) {
                 stockfishEngine.handlePGNFilePickerResult(data);
@@ -831,7 +889,15 @@ public class MainActivity extends Activity {
             if (saved != null) lang = saved;
             else {
                 // Auto-detect from system locale
-                java.util.Locale sys = getResources().getConfiguration().locale;
+                // v1.0.8 PHASE 30: use getLocales() on API 24+ (Configuration.locale is deprecated)
+                java.util.Locale sys;
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                    android.content.res.Configuration cfg = getResources().getConfiguration();
+                    sys = (cfg.getLocales() == null || cfg.getLocales().isEmpty())
+                            ? java.util.Locale.getDefault() : cfg.getLocales().get(0);
+                } else {
+                    sys = getResources().getConfiguration().locale;
+                }
                 if (sys != null && sys.getLanguage() != null && sys.getLanguage().startsWith("en")) lang = "en";
             }
         } catch (Throwable e) {

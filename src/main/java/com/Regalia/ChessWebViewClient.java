@@ -26,6 +26,7 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
 import android.util.Log;
+import android.webkit.RenderProcessGoneDetail;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -43,7 +44,7 @@ import java.lang.ref.WeakReference;
  * URLs in the system default browser (defense-in-depth alongside the JS-side
  * openUrlInBrowser bridge). Previously, external links were silently blocked.
  *
- * Version: v1.0.7
+ * Version: v1.0.8
  */
 public class ChessWebViewClient extends WebViewClient {
     private static final String TAG = "Regalia";
@@ -112,5 +113,58 @@ public class ChessWebViewClient extends WebViewClient {
         if (activity != null) {
             activity.initEngineAfterPermissions();
         }
+    }
+
+    // v1.0.8 PHASE 29 (PDF best practice): Handle WebView render-process crashes
+    //   per "WebView 性能与健壮性优化指南" §健壮性保障 §2.崩溃预防与处理.
+    //   On API 26+ (Oreo), the WebView renderer runs in a separate process.
+    //   If it crashes (OOM, GPU fault, native crash in the renderer), this
+    //   callback fires. Without handling, the WebView is left in a broken
+    //   state — black screen, no input — and the user must force-kill the app.
+    //   With handling, we cleanly destroy the dead WebView and let the
+    //   Activity recreate itself (or show an error). Returning true tells
+    //   the framework we've handled it (don't kill the app process).
+    @Override
+    public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
+        // v1.0.8 PHASE 30: simplified log (removed invented "policy" label)
+        Log.e(TAG, "WebView render process gone: crashed=" + detail.didCrash());
+        try {
+            if (view != null) {
+                // Remove the dead WebView from its parent to avoid
+                // WindowLeaked exceptions during Activity teardown.
+                if (view.getParent() instanceof android.view.ViewGroup) {
+                    ((android.view.ViewGroup) view.getParent()).removeView(view);
+                }
+                view.destroy();
+            }
+        } catch (Throwable e) {
+            Log.w(TAG, "Failed to destroy crashed WebView", e);
+        }
+        // Notify the Activity so it can recreate the WebView (e.g., by
+        // calling recreate() or showing a "Renderer crashed, tap to reload"
+        // overlay). We use a WeakReference so we don't leak the Activity.
+        MainActivity activity = activityRef.get();
+        if (activity != null) {
+            try {
+                // Use recreate() to fully rebuild the Activity + WebView.
+                // This is the simplest and most robust recovery — any
+                // in-memory JS state is lost, but the engine subprocess
+                // persists (it's a separate process), and persistent state
+                // (SharedPreferences, PGN cache) survives.
+                activity.runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            activity.recreate();
+                        } catch (Throwable e) {
+                            Log.w(TAG, "Activity.recreate() failed after renderer crash", e);
+                        }
+                    }
+                });
+            } catch (Throwable e) {
+                Log.w(TAG, "Failed to notify Activity of renderer crash", e);
+            }
+        }
+        return true; // We handled it — don't kill the app process
     }
 }

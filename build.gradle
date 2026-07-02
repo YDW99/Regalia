@@ -1,6 +1,23 @@
-buildscript {
+// Regalia - Gradle build configuration
+// Copyright (C) 2026 Regalia
+//
 // AI-GEN: AI assisted
 // This code was AI-assisted and has been reviewed for AGPL v3 compliance.
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+
+buildscript {
 
     repositories {
         maven { url 'https://maven.aliyun.com/repository/google' }
@@ -28,8 +45,8 @@ android {
         applicationId "com.Regalia"
         minSdk 21
         targetSdk 35
-        versionCode 107
-        versionName "1.0.7"
+        versionCode 108
+        versionName "1.0.8"
 
         ndk {
             abiFilters 'arm64-v8a'
@@ -76,13 +93,10 @@ android {
         buildConfig true
     }
 
-    // v1.0.2: Prebuilt native libraries from previous build.
-    // The NDK/CMake build is skipped — we use the .so files extracted
-    // from the previous APK's lib/arm64-v8a/ directory.
-    // This avoids the need to download the ~663MB NDK.
-    // v1.0.4 Round-5 Rev20: Re-enabled externalNativeBuild to compile engine_bridge.so
-    // from source (engine_jni.cpp). The NDK is now installed at
-    // /home/z/my-project/android-sdk/ndk/27.2.12479018/.
+    // externalNativeBuild compiles engine_bridge.so (the JNI bridge for
+    // nativeChmod / nativeRenice) from src/main/cpp/engine_jni.cpp via CMake.
+    // The Stockfish engine binary itself is prebuilt (libstockfish.so in
+    // jniLibs/) and executed via ProcessBuilder — not compiled from source.
     externalNativeBuild {
         cmake {
             path "src/main/cpp/CMakeLists.txt"
@@ -95,21 +109,13 @@ android {
             useLegacyPackaging true
         }
     }
-
-    sourceSets {
-        main {
-            jniLibs.srcDirs = ['src/main/jniLibs']
-        }
-    }
+    // v1.0.8 PHASE 30: removed redundant sourceSets block — 'src/main/jniLibs'
+    //   is AGP's default jniLibs source directory, so the explicit declaration
+    //   was a no-op.
 }
 
 dependencies {
 }
 
-// Force Gradle to use the JDK at /home/z/jdk-final for compilation
-// (the system JRE at /usr/lib/jvm/java-21-openjdk-amd64 lacks javac)
-java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
-    }
-}
+// Use the system JDK 21 (configured via gradle.properties org.gradle.java.home).
+// The toolchain block is removed so Gradle uses the running JDK directly.

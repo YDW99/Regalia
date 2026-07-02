@@ -4,7 +4,9 @@ License classification by file:
   - engine_jni.cpp: GPL v3 (partially derived from DroidFish)
       Native chmod/renice functions derived from DroidFish nativeutil.cpp.
       Copyright (C) Peter Österlund.
-      JNI bridge (dlopen/dlsym/pipe) is original code.
+      (v1.0.2: the dlopen/dlsym/pipe engine-loading code was removed; only
+      nativeChmod and nativeRenice remain, both DroidFish-derived. No
+      original code remains in this file.)
       Modifications Copyright (C) 2026 Regalia.
       v1.0.2: 500+ lines of dead code implementing the removed
       engine-import feature (nativeLoadEngine / nativeStartEngine /
@@ -128,3 +130,44 @@ v1.0.5 Round-6 Rev53: no changes to cpp/ sources.
 
 v1.0.5 Round-6 Rev54 through Rev68: no changes to cpp/ sources (engine_jni.cpp,
 CMakeLists.txt unchanged from Rev53 baseline).
+
+v1.0.8 (2026.6.30): no changes to cpp/ sources (engine_jni.cpp, CMakeLists.txt
+unchanged from v1.0.7 baseline). All v1.0.8 changes were in the JS layer.
+
+v1.0.8 Phase 23 (2026.7.1): The Stockfish engine binary
+(src/main/jniLibs/arm64-v8a/libstockfish.so) was updated to the official sf_18
+arm64-v8a-dotprod release. engine_jni.cpp and CMakeLists.txt are unchanged
+(the JNI bridge still provides only nativeChmod and nativeRenice).
+
+v1.0.8 Phase 24 (2026.7.1): No changes to cpp/ sources. The CMakeLists.txt
+comment "16KB page alignment for Android 15+ compatibility" was reviewed —
+the -Wl,--no-warn-mismatch flag suppresses linker warnings when mixing
+objects with different page-alignment requirements, which is related to but
+not the same as 16KB page support. The comment is retained as-is.
+
+v1.0.8 Phase 25 (2026.7.1): No changes to cpp/ sources.
+
+v1.0.8 Phase 26 (2026.7.1): No changes to cpp/ sources.
+
+v1.0.8 Phase 27 (2026.7.1): No changes to cpp/ sources.
+
+v1.0.8 Phase 28 (2026.7.1): No changes to cpp/ sources.
+
+v1.0.8 Phase 29 (2026.7.1):
+  - No changes to cpp/ sources.
+
+v1.0.8 Phase 30 (2026.7.1):
+  - CMakeLists.txt (AGPL v3): misleading 16KB page-alignment comment
+    corrected (the flag suppresses linker warnings, NDK r27 produces
+    16KB-aligned .so by default).
+  - engine_jni.cpp (GPL v3): No changes.
+  - Fixed stale dlopen/dlsym/pipe reference (removed in v1.0.2).
+
+v1.0.8 Phase 43 (2026.7.1):
+  - No changes to cpp/ sources.
+
+v1.0.8 Phase 42 (2026.7.1):
+  - No changes to cpp/ sources.
+
+v1.0.8 Phase 41 (2026.7.1):
+  - No changes to cpp/ sources.

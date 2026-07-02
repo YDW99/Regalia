@@ -1,5 +1,5 @@
 // ===================== MODULE: chess960 =====================
-// Chess960 (Fischer Random Chess) support — v1.0.4 NEW
+// Chess960 (Fischer Random Chess) support
 //
 // Provides:
 //   - SP-ID (Starting Position Identifier) generation & validation
@@ -29,8 +29,8 @@
 // ===== I. SP-ID → piece placement =====
 // The 960合法 starting positions are encoded by an integer 0..959.
 // Algorithm (reverse of the standard derivation):
-//   1. lightBishop = sp % 4        → file index among {0,2,4,6} (white squares for White)
-//   2. darkBishop  = (sp/4) % 4    → file index among {1,3,5,7} (black squares)
+//   1. lightBishop = sp % 4        → file index among {1,3,5,7} (LIGHT squares: b,d,f,h)
+//   2. darkBishop  = (sp/4) % 4    → file index among {0,2,4,6} (DARK squares: a,c,e,g)
 //   3. queen       = (sp/16) % 6   → file index among the 6 remaining empty squares
 //   4. knight1     = (sp/96) % 10  → first knight's slot among the 5 remaining empties
 //   5. knight2     = ((sp/96) / 10) → second knight's slot among the remaining 4 empties
@@ -253,7 +253,9 @@ function toShredderCastling(cr,board){
   for(const p of pairs){
     str+=String.fromCharCode((p.isWhite?65:97)+p.file);
   }
-  return str||'-';
+  // v1.0.8 PHASE 30: removed dead `||'-'` — pairs.length>0 here (length===0
+  //   returns '-' above), and the loop always appends ≥1 char, so str is non-empty.
+  return str;
 }
 
 /**
@@ -537,7 +539,9 @@ function isChess960Mode(){return _chess960ModeActive;}
  * @returns {Object} game state with board, castlingRights, etc.
  */
 function initChess960State(spid){
-  if(spid==null||spid<0||spid>959)spid=randomSPID();
+  // v1.0.8 PHASE 30: also validate that spid is an integer (518.5 would pass
+  //   the range check but corrupt the stored s.spid field downstream).
+  if(spid==null||spid<0||spid>959||!Number.isInteger(spid))spid=randomSPID();
   const backRank=spidToBackRank(spid);
   const b=Array.from({length:8},()=>Array(8).fill(null));
   // Black on row 0, White on row 7 (mirrored — black's a8 corresponds to col 0)

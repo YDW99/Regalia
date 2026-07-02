@@ -1,5 +1,12 @@
 This directory contains the JavaScript source modules for the chess UI.
-These modules are merged by build-chess.py / build-chess.sh into chess.html.
+These modules are merged by build-chess.py into chess.html.
+v1.0.8 Phase 25: worker-pool.js was REIMPLEMENTED (robust Web Worker pool)
+  and wired into stats.html (heatmap-stats offloading). The module order is
+  now: game-logic → chess960 → pgn-standard → worker-pool → ai-bridge →
+  tablebase → eco-data → ui (8 modules).
+v1.0.8 Phase 24: worker-pool.js was previously DELETED (581 lines of dead
+  code — the original v1.0.4 implementation was never called). Phase 25
+  reimplemented it robustly and correctly wired it in.
 
 License classification by file:
   - game-logic.js: GPL v3 (derived from DroidFish)
@@ -209,8 +216,14 @@ License classification by file:
   - eco-data.js: AGPL v3 (original)
       ECO opening data from lichess-org/chess-openings (CC0).
       Code is original — not derived from DroidFish.
-  - index.html.tpl: AGPL v3 (original CSS/HTML template)
-  - build-chess.sh / build-chess.py: AGPL v3 (original build scripts)
+  - index.html.tpl: GPL v3 (v1.0.8 PHASE 37 reclassification)
+      v1.0.8 PHASE 37/49: reclassified AGPL v3 → GPL v3. The CSS layout
+      patterns and theme-variable structure follow DroidFish-derived
+      conventions; the template is bundled with the GPL v3 JS modules by
+      build-chess.py, so GPL v3 applies to the combined work to avoid
+      license fragmentation.
+  - build-chess.py: AGPL v3 (original build script)
+      (v1.0.2: deleted build-chess.sh — byte-for-byte duplicate of build-chess.py)
 
 v1.0.2 stats.html updates (GPL v3, DroidFish-derived PGN parsing):
   - parsePGN() now checks for _payload.moveRecords (sent by the main
@@ -955,9 +968,11 @@ for full license texts and attribution details.
     - ai-bridge.js (GPL v3): Eval safety timer — 10s timeout that resets
       _evalLoading if engine doesn't respond. New _evalSafetyTimerId var.
       Timer cleared by onEngineEval on success.
-    - worker-pool.js (GPL v3): terminateWorker() function + pagehide/
+    - worker-pool.js (AGPL v3): terminateWorker() function + pagehide/
       beforeunload event registration. Fixes Worker memory leak (review
       report item 1). New export: terminateWorker.
+      (v1.0.8 PHASE 35: corrected license classification — worker-pool.js is
+      original code, NOT DroidFish-derived, so it is AGPL v3, not GPL v3.)
     - chess.html: rebuilt from the above chess.src/ changes.
 
   v1.0.4 Round-5 Rev45 changes:
@@ -1529,6 +1544,143 @@ for full license texts and attribution details.
       as game-logic.js makeMv(). Scroll position preservation (window.scrollY
       saved/restored across #content innerHTML replacement).
 
+v1.0.8 (2026.6.30) changes:
+  The v1.0.8 release completely redesigns the move animation and sound effect
+  system (Phase 22) and adds light mode support. See the HTML user manuals at
+  Manual/Regalia-v1.0.8-manual-{zh,en}.html, Appendix A "版本更新日志" /
+  "Version Changelog" for the full per-phase changelog.
+
+  Phase 22 (v1.0.8) summary:
+    - game-logic.js: COMPLETE removal of old animation system
+      (_lastAnimPieceType, _lastAnimTarget, _lastCaptureFlag, _lastCheckFlag,
+      _landingAnimActive, _landingAnimTimer, _animFinishTimer,
+      _startLandingTimer(), old animateMove() body 170+ lines). New
+      personified piece animations via Web Animations API: _animPawn,
+      _animKnight, _animBishop, _animRook, _animQueen, _animKing, each
+      with unique cubic-bezier easing + translate3d + scale + rotate +
+      drop-shadow keyframes. New _triggerBoardShake() for rook/king
+      landing shake. New _playPieceSound() / _playCastleSound() for
+      audioEngine integration. _animGen generation counter retained.
+      _reattachActiveAnimations() retained. animateMove() signature
+      preserved. prefers-reduced-motion respected. Chess960 _kingStayedPut
+      respected.
+    - ui.js: COMPLETE removal of old sound system (audioCtx, getAudioCtx(),
+      old playSound(type) body). New ChessAudioEngine class (pure Web Audio
+      API synthesis, no audio files). New audioEngine global variable. New
+      playSound(type) maps to engine. 13 cross-file references to old
+      animation state adapted. soundOn + toggleSound() + toolbar button
+      preserved. New _isLightMode() + _hdrKingIconHTML() for header king
+      icon light/dark switch.
+    - ai-bridge.js: New _isLightMode() + _loadingKingIconHTML() for loading
+      overlay king icon light/dark switch. _showLoadingOverlay() uses CSS
+      variables (var(--overlay-bg), var(--accent2), var(--muted),
+      var(--input-bg), var(--accent)) for theme-aware styling.
+    - index.html.tpl: :root now declares color-scheme:dark light + light
+      theme variables via @media(prefers-reduced-scheme:light). Old CSS
+      animations removed (pawnStep, knightJump, bishopGlide, rookSlide,
+      queenGlide, kingStep, captureFlash, captureCore, .sq .pc.anim-*,
+      .move-anim.anim-* transitions). New shakeLight/shakeHeavy keyframes
+      added. prefers-reduced-motion updated. 13 hardcoded component colors
+      replaced with CSS variables.
+    - stats.html: :root now declares color-scheme:dark light + light theme
+      variables via @media(prefers-color-scheme:light).
+    - chess.html: rebuilt from the above 4 source files.
+
+    - 7th/8th supplements (2026-06-30):
+      * game-l: validateSetupPosition() now calls syncHash(s) after
+        modifying castlingRights/enPassTarget (castling rights loss fix).
+        _finishAnim() removed all manual opacity restoration (was causing
+        "_srcRookPc is not defined" error and "piece returns to source"
+        visual artifact). .sq .pc removed stale transition:transform .1s
+        and will-change:transform,opacity (old CSS landing animation
+      * index.html.tpl: last-move highlight rolled back from outline to
+        box-shadow; uses CSS variables for both dark/light modes.
+      * ui.js: global click listener's closest() selector added .hdr-btn,
+        .hdr-btn-lg (ℹ️ button sound fix).
+      * StockNative.java: added isSystemMode() method (already done in 5th
+        supplement, noted here for completeness).
+      * StatsActivity.java: added isSystemDarkMode() method.
+
+    - Light mode system-switch bug fix (v1.0.8 Phase 22 fifth supplement):
+      * ai-bridge.js: _isLightMode() now prioritizes AndroidBridge.isSystemDarkMode()
+        over window.matchMedia('(prefers-color-scheme: light)'). New
+        _applySystemTheme() function sets document.documentElement data-theme
+        attribute at startup.
+      * index.html.tpl: Added html[data-theme="light"] and html[data-theme="dark"]
+        attribute selectors alongside @media(prefers-color-scheme:light) — same
+        silver palette, dual-channel triggering for Xiaomi HyperOS 3 compatibility.
+      * stats.html: Added html[data-theme] selectors + init() applies data-theme.
+      * StockfishNative.java: New @JavascriptInterface isSystemDarkMode() method
+        reads UiModeManager.getNightMode() (Android 5.0+ compatible).
+
+    - Light mode silver palette redesign (v1.0.8 Phase 22 third supplement):
+      * index.html.tpl: light mode @media(prefers-color-scheme:light) palette
+        redesigned to silver tones (#f0f0f3/#e0e0e5/#2c2c34/#6a6a76/#4a4a52).
+        40+ hardcoded component colors replaced with CSS variables. 15 new
+        theme variables added. 4 utility classes added (.hdr-btn, .hdr-btn-lg,
+        .chip-active, .chip-inactive).
+      * ui.js: inline-style hardcoded colors replaced with CSS variables
+        (header buttons, PGN cache chips, recovery UI, ECO card, tablebase
+        card, review chart, toggle dot, range slider). _hdrKingIconHTML keeps
+        gold gradient border (design intent).
+      * ai-bridge.js: showToast() background/border/shadow replaced with CSS
+        variables. Engine config dialog #221015→var(--card).
+      * stats.html: light mode synced to silver palette.
+
+    - Sound & animation optimization (v1.0.8 Phase 22 second supplement):
+      * game-logic.js: _playPieceSound / _playCastleSound now check soundOn
+        before playing (bug fix: previously bypassed the soundOn guard, so
+        move/castle sounds played even when muted). ANIM_DURATIONS.queen
+        420→500ms; ANIM_EASINGS.queen changed to cubic-bezier(0.4,0,0.2,1)
+        (same as king); _animQueen: keyframes 20→16, scale 0.05→0.08, landing
+        phase adds compression, onfinish triggers _triggerBoardShake('heavy')
+        (same as king). _animKnight: keyframes 24→18. _animKing: keyframes
+        28→24. loading_title i18n string "Regalia v1.0.7"→"Regalia v1.0.8".
+      * ui.js: toggleSound() now calls audioEngine.setEnabled(soundOn) to sync
+        the engine's enabled flag.
+      * ChessWebViewClient.java: version comment "Version: v1.0.7"→"v1.0.8".
+
+    - Scene sound expansion (v1.0.8 Phase 22 supplement): 14 new personified
+      scene sounds added to ChessAudioEngine in ui.js (playDeselect, playUndo,
+      playRedo, playFlip, playNewGame, playEnterReview, playExitReview,
+      playSetupToggle, playResign, playCopy, playError, playAiThinkStart,
+      playAiThinkEnd). playSound(type) type parameter expanded from 7 to 21.
+      Smart toast sound (_playToastSound) auto-detects success/error from
+      message keywords. Sound trigger points added to sqClick, undoMove,
+      redoMove, flipBoard, _startGameImpl, enterReview, exitReview,
+      toggleSetup, _resignGame, getHint, doAIMove, onBestMove, toggleSound,
+      toggleLang. ai-bridge.js: PIECE_SELECT now also triggers playSound('select');
+      onBestMove triggers playSound('aiThinkEnd'). game-logic.js: doAIMove
+      triggers playSound('aiThinkStart'); toggleLang triggers playSound('select').
+
+    - Post-release emergency bug fixes (same day):
+      * ai-bridge.js: removed residual _landingAnimActive=false and
+        _landingAnimTimer cleanup in engine-error handler (variables removed
+        in v1.0.8 redesign).
+      * game-logic.js: _requestStockfishMove's if(!_landingAnimActive)render()
+        changed to if(!animationInProgress)render(). _finishAnim(): moved
+        el.remove()/rookEl.remove() before _myGen check to prevent DOM leakage
+        from stale closures.
+      * ui.js: _updateSingleSq sig variable's trailing +animCls removed
+        (animCls was deleted, residual reference caused ReferenceError).
+        _hdrKingIconHTML(): fixed "♚\uFE0E;" → "\u265A\uFE0E" (extra
+        semicolon was displayed as literal). executeMove(): removed duplicate
+        playSound('move'/'capture'/'castle') calls (animateMove's internal
+        _playPieceSound/_playCastleSound handles these; executeMove now only
+        handles promote/check special cases). ANIMATION_DEFER_MS increased
+        from 300ms to 560ms to match new animation durations (King=520ms).
+      * index.html.tpl: removed 4 redundant CSS variables (--hdr-king-color,
+        --hdr-king-stroke, --hdr-king-shadow, --hdr-king-sym) that were never
+        referenced (king icon switching is JS-driven).
+      * ai-bridge.js: _loadingKingIconHTML() unified to use Unicode escapes
+        (\u2654/\u265A) instead of literal ♔/♚ characters.
+
+  License classification: game-logic.js, ai-bridge.js, ui.js remain GPL v3
+  (DroidFish-derived); chess960.js, eco-data.js, index.html.tpl remain AGPL v3
+  (original); stats.html remains GPL v3 (DroidFish-derived PGN parsing). The
+  new ChessAudioEngine class is original code embedded in ui.js (GPL v3 per
+  DroidFish derivation). No new third-party code was introduced in v1.0.8.
+
 v1.0.7 (2026.6.28-29) changes:
   The v1.0.7 release spans 17 phases. Rather than duplicate the per-phase
   detail here (which is already exhaustively documented in the HTML user
@@ -1755,3 +1907,214 @@ v1.0.7 (2026.6.28-29) changes:
   pgn-standard.js, worker-pool.js, tablebase.js, stats.html remain GPL v3
   (DroidFish-derived); chess960.js, eco-data.js, index.html.tpl remain AGPL v3
   (original). No new third-party code was introduced in v1.0.7.
+
+v1.0.8 Phase 26 (2026.7.1):
+  - game-logic.js (GPL v3): Personified animation upgrade (pawn shivering,
+    queen resounding, king regal); new SHAKE_MASSIVE_DUR + shake-massive
+    support; _triggerBoardShake anti-shake coexistence fix; landscape board
+    shrink (anti-shake reservation 8→12px); ANIMATION_DEFER_MS 560→600.
+  - ui.js (GPL v3): Audio engine upgrade (playPawn quivering, playQueen
+    resounding, playKing regal); piece-specific haptics (PAWN_MOVE/QUEEN_MOVE/
+    KING_MOVE) in executeMove.
+  - index.html.tpl (GPL v3): New @keyframes shakeMassive + .bwrap.shake-massive;
+    prefers-reduced-motion includes shake-massive; .review-hdr safe-area
+    padding; ⚡ marker emoji fix (color emoji + text-shadow outline).
+  - ai-bridge.js (GPL v3): HapticManager THROTTLE gains PAWN_MOVE/QUEEN_MOVE/
+    KING_MOVE.
+
+v1.0.8 Phase 27 (2026.7.1):
+  - ui.js (GPL v3): executeMove haptic dispatch simplified to
+    piece.type.toUpperCase()+'_MOVE' (covers all six pieces uniformly).
+  - ai-bridge.js (GPL v3): HapticManager THROTTLE gains KNIGHT_MOVE:45,
+    BISHOP_MOVE:40, ROOK_MOVE:50.
+
+v1.0.8 Phase 28 (2026.7.1):
+  - game-logic.js (GPL v3): _reattachActiveAnimations scope+formula fix;
+    validateSetupPosition pawn-rank formula fix.
+  - ai-bridge.js (GPL v3): _checkPVDivergence mr.castle→mr.isCastling;
+    Chess960 [FEN] tag supObj.FEN overwrite removed; dead ponderFen removed;
+    review eval error catch _updateEvalDisplay→_updateAllEvalDisplays.
+  - worker-pool.js (AGPL v3): new Function() CSP fix (inlined switch-case);
+    timed-out task queue fix; terminateWorkerPool pending cleanup.
+  - ui.js (GPL v3): No changes (haptic dispatch already uses piece.type).
+  - index.html.tpl (GPL v3): landscape .review-hdr safe-area preservation.
+
+v1.0.8 Phase 29 (2026.7.1):
+  - ui.js (GPL v3): ⚡ button font-variant-emoji:emoji; playCastleRookMove
+    redesigned (2-stage snap+slam); PGN cache search-box theme variables.
+  - index.html.tpl (combined): --placeholder theme variable; .setup-errors
+    → var(--setup-err-color); global ::placeholder rule; --setup-err-color
+    deepened in light mode.
+
+v1.0.8 Phase 30 (2026.7.1):
+  - game-logic.js (GPL v3): _castleSide Chess960 castling-rights guard;
+    i18n setup_pawn_on_rank/setup_rank English spacing fix; algPos
+    length===2 check; isDeadPosition >=2 bishops; _activeAnimEls lastCell
+    init; header comment updated.
+  - chess960.js (AGPL v3): initChess960State integer SP-ID validation;
+    dead `||'-'` removed from toShredderCastling.
+  - pgn-standard.js (AGPL v3): JSDoc typo "0-2" → "0-1".
+  - worker-pool.js (AGPL v3): truncated AGPL boilerplate completed.
+  - ui.js (GPL v3): dead playCastleRookLand() removed; dead --rv-board-w
+    removed; tablebase bar XSS _jsAttrEncode+_esc; ECO bar _esc; render
+    error _esc; _showStatsImportBackPrompt exported on window.
+  - ai-bridge.js (GPL v3): orphan duplicated comment removed.
+  - index.html.tpl (combined): No changes (Phase 29 theme work complete).
+
+v1.0.8 Phase 31 (2026.7.1):
+  - game-logic.js (GPL v3): getCtrlMap allocation reduction via hidden-class
+    stability — extracted a _newCtrlCell factory so all 64 cell objects share
+    the same V8 hidden class, improving inline-cache hit rates for downstream
+    cm[r][c].white / .black property access in the hot rendering loop. Could
+    not reuse a single buffer across calls because callers cache the result
+    (cachedCtrlMap keyed by gameState.hash) and a concurrent
+    _computeAndCacheVisualAnnotations call (postState.board, a DIFFERENT
+    board) would corrupt the cached data.
+  - eco-data.js (AGPL v3): searchEco pre-indexing — _ensureEcoParsed now
+    pre-computes uppercase _nameU and _familyU fields on each opening object
+    at parse time. searchEco reads these directly instead of calling
+    toUpperCase() on every opening's name AND family on EVERY keystroke
+    (was 2 × ~3000 = 6000 toUpperCase() allocations per search; now 0).
+    Also added early-exit when results reach 20 (the slice cap) to avoid
+    scanning all ~3000 openings when the query is common (e.g. "king").
+
+v1.0.8 Phase 32 (2026.7.1):
+  - ai-bridge.js (GPL v3): _escJs now also HTML-escapes < > & (was XSS
+    vector via path containing "<script>"). Regex includes & in char class.
+  - worker-pool.js (AGPL v3): added _MAX_QUEUE_SIZE=50 cap; rejects excess
+    tasks immediately so callers fall back to sync execution.
+  - pgn-standard.js (AGPL v3): all parseInt() in parseTimeControl now pass
+    radix 10 (lint-clean, future-proof).
+  - game-logic.js (GPL v3): No changes.
+  - ui.js (GPL v3): No changes.
+  - index.html.tpl (combined): No changes.
+
+v1.0.8 Phase 33 (2026.7.1):
+  - game-logic.js (GPL v3): isDeadPosition knight guard (K+N+B+B vs K is NOT
+    dead); trimmed 5 obsolete comments/memorials.
+  - ai-bridge.js (GPL v3): removed dead `variations=[]` block; trimmed 5
+    memorials + stale .docx reference.
+  - ui.js (GPL v3): trimmed 4 memorials + 4 stale .docx references.
+  - tablebase.js (GPL v3): parseInt radix 10 on 4 fenToState sites; trimmed 3
+    memorials + stale .docx reference.
+  - chess960.js (AGPL v3): dropped stale "v1.0.4 NEW" version tag.
+  - pgn-standard.js (AGPL v3): dropped stale "v1.0.4 NEW" version tag.
+  - eco-data.js (AGPL v3): trimmed duplicate Phase 31 comment.
+  - worker-pool.js (AGPL v3): added dead-code-status note; trimmed CSP memorial.
+  - index.html.tpl (combined): trimmed legacy @media memorial.
+
+v1.0.8 Phase 34 (2026.7.1):
+  - worker-pool.js (AGPL v3): rewrote parsePGNText to do FULL PGN tokenization
+    (headers, comments, [%csl]/[%cal]/[%eval], variations, FEN, result);
+    exposed workerParsePGN etc. on window; module is now WIRED UP at runtime.
+  - tablebase.js (GPL v3): added importPGNAsync with worker offloading +
+    loading indicator; onPGNFileRead uses importPGNAsync for PGN imports.
+  - ui.js (GPL v3): 3 PGN import call sites (cache manager, paste-PGN, stats
+    import-back) now use importPGNAsync.
+  - game-logic.js (GPL v3): added 'importing_pgn' i18n string.
+  - chess960.js, pgn-standard.js, eco-data.js, index.html.tpl: No changes.
+
+v1.0.8 Phase 35 (2026.7.1):
+  - worker-pool.js (AGPL v3): terminateWorkerPool now rejects queued tasks;
+    workerRun timeout splices ghost tasks from queue; sync fallback deferred
+    into Promise chain. Corrected Rev44 license tag from "GPL v3" to "AGPL v3".
+  - tablebase.js (GPL v3): importPGNAsync resolves with boolean success flag
+    (detected via moveRecords growth).
+  - ui.js (GPL v3): PGN cache manager .then() checks success flag; added
+    defensive .catch().
+  - game-logic.js, chess960.js, pgn-standard.js, eco-data.js, index.html.tpl:
+    No changes.
+
+v1.0.8 Phase 36 (2026.7.1):
+  LICENSE RECLASSIFICATION: 4 files moved from AGPL v3 to GPL v3.
+  All code involving chess logic, PGN parsing, engine communication, or UI
+  interaction is DroidFish-derived and must use GPL v3.
+  - chess960.js: AGPL v3 → GPL v3 (chess logic — Chess960 rules, SP-ID)
+  - pgn-standard.js: AGPL v3 → GPL v3 (PGN parsing — encode/decode)
+  - worker-pool.js: AGPL v3 → GPL v3 (PGN parsing + chess logic — tokenization, control maps)
+  - eco-data.js: AGPL v3 → GPL v3 (chess logic — ECO opening classification)
+  All 4 files now have DroidFish attribution (Copyright Peter Österlund) in header.
+  No functional code changes — license-header-only.
+  - game-logic.js, ai-bridge.js, ui.js, tablebase.js, index.html.tpl: No changes (already GPL v3).
+
+v1.0.8 Phase 37 (2026.7.1):
+  LICENSE CORRECTION: 2 files reverted from GPL v3 back to AGPL v3.
+  Phase 36 incorrectly classified these as DroidFish-derived; they are original.
+  - chess960.js: GPL v3 → AGPL v3 (original Chess960 SP-ID/Shredder-FEN impl)
+  - eco-data.js: GPL v3 → AGPL v3 (original ECO data + IndexedDB cache)
+  DroidFish derivation notes removed from both files.
+  - pgn-standard.js: Remains GPL v3 (correctly DroidFish-derived PGN parsing)
+  - worker-pool.js: Remains GPL v3 (correctly DroidFish-derived PGN tokenization)
+  No functional code changes — license-header-only.
+
+v1.0.8 Phase 38 (2026.7.1):
+  - ui.js (GPL v3): PGN cache manager button layout fix (plain buttons, no
+    .btn class); PGN cache entry size/date text contrast fix (var(--text)
+    opacity:.75); getCapturedPieces returns empty when no moveRecords (fixes
+    misleading captured display for setup/FEN import); toggleSetup toggle-exit
+    re-validates castlingRights from setupCastleMarks (fixes lost castling
+    rights when exiting setup via toggle button).
+  - Other files: No changes.
+
+v1.0.8 Phase 39 (2026.7.1):
+  - ui.js (GPL v3): PGN cache manager "Tagged"/"Untagged" filter buttons;
+    tag-chip row always shown; filter status localized labels.
+  - ai-bridge.js (GPL v3): engine config buttons use compact plain styling.
+  - game-logic.js (GPL v3): new i18n strings pgn_cache_filter_has_tags,
+    pgn_cache_filter_no_tags.
+  - Other files: No changes.
+
+v1.0.8 Phase 40 (2026.7.1):
+  - game-logic.js (GPL v3): computeVisibleCastleMarks/computeVisibleEpMark now
+    check setupMode explicitly — root-cause fix for stale setup markers
+    overriding castlingRights/enPassantTarget after exiting setup mode.
+  - ui.js (GPL v3): white-space:nowrap on all compact PGN cache buttons.
+  - ai-bridge.js (GPL v3): white-space:nowrap on all engine config buttons.
+  - Other files: No changes.
+
+v1.0.8 Phase 41 (2026.7.1):
+  - ui.js (GPL v3): haptic cancellation fix in executeMove (special haptic
+    takes priority; move-type haptic only when no special); resign haptic
+    changed from ERROR to GAME_OVER.
+  - ai-bridge.js (GPL v3): THROTTLE table — added CASTLE:100, PROMOTION:200.
+  - game-logic.js: No changes (Phase 40 castling fix verified complete).
+  - Other files: No changes.
+
+v1.0.8 Phase 42 (2026.7.1):
+  - ui.js (GPL v3): _exitSetupImpl now re-validates castlingRights at its
+    start — root-cause fix for castling rights lost when selecting "No" in
+    the "Save PGN?" dialog.
+  - Other files: No changes.
+
+v1.0.8 Phase 43 (2026.7.1):
+  - ui.js (GPL v3): "♻️ Reset Board" button now seeds setupCastleMarks with
+    standard-position markers (a1,h1,a8,h8) after initState(); trimmed
+    Phase 38/42 verbose comments; removed _savedErrors no-op save/restore.
+  - Other files: No changes.
+
+v1.0.8 Phase 44 (2026.7.1):
+  - ui.js (GPL v3): width:fit-content on all compact PGN cache buttons.
+  - ai-bridge.js (GPL v3): width:fit-content on all engine config buttons.
+  - Other files: No changes.
+
+v1.0.8 Phase 45 (2026.7.1):
+  - ui.js (GPL v3): Fixed broken max-width:none attribute (missing closing
+    quote from Phase 44 sed).
+  - ai-bridge.js (GPL v3): Same fix.
+  - Other files: No changes.
+
+v1.0.8 Phase 46 (2026.7.1):
+  - ui.js (GPL v3): Sound-haptic decoupling in executeMove (sounds independent,
+    haptics mutually exclusive); removed redundant _exitSetupImpl re-validation;
+    trimmed Phase 41 comment.
+  - tablebase.js (GPL v3): importPGNAsync success detection fixed (gameState
+    reference comparison instead of moveRecords.length).
+  - Other files: No changes.
+
+v1.0.8 Phase 47 (2026.7.1):
+  - ui.js (GPL v3): Replaced width:fit-content with display:inline-flex;
+    flex:0 0 auto; width:auto on all compact PGN cache buttons (root-cause
+    fix — width:fit-content doesn't work in WebView flex containers).
+  - ai-bridge.js (GPL v3): Same fix on engine config buttons; also fixed
+    tab buttons and close button flex stretching.
+  - Other files: No changes.

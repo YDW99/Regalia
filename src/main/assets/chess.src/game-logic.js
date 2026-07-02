@@ -1,7 +1,13 @@
 // ===================== MODULE: game-logic =====================
-// Pure chess logic — no UI or engine dependencies
-// Contains: board representation, move generation, move execution,
-// Zobrist hashing, FEN generation, game status, constants
+// Core chess logic, i18n, animation, and AI/ECO glue for Regalia.
+// Contains: board representation, move generation, move execution, Zobrist
+// hashing, FEN generation, game status, constants, i18n (T/toggleLang/_i18n),
+// personified move animations (Web Animations API), AI move requests, ECO
+// recommendation logic, and setup-mode validation.
+// Bundled by build-chess.py after chess960.js + pgn-standard.js + worker-pool.js
+// and before ai-bridge.js + tablebase.js + eco-data.js + ui.js. References
+// globals (gameState, playerColor, AndroidBridge, audioEngine, …) defined in
+// ui.js. See README.license for the module merge order.
 //
 // Copyright (C) 2026 Regalia
 //
@@ -28,7 +34,7 @@
 // ===================== i18n SYSTEM =====================
 let _lang='zh';
 function T(key){return _i18n[key]?.[_lang]||_i18n[key]?.zh||key;}
-function toggleLang(){_lang=(_lang==='zh')?'en':'zh';try{localStorage.setItem('Regalia_lang',_lang);}catch(e){}try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.saveLangPref)AndroidBridge.saveLangPref(_lang);}catch(e){}try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_lang',_lang);}catch(e){}try{if(typeof HapticManager!=='undefined'&&HapticManager.fire)HapticManager.fire('TOGGLE_ON');}catch(e){}render();}
+function toggleLang(){_lang=(_lang==='zh')?'en':'zh';try{localStorage.setItem('Regalia_lang',_lang);}catch(e){}try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.saveLangPref)AndroidBridge.saveLangPref(_lang);}catch(e){}try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_lang',_lang);}catch(e){}try{if(typeof HapticManager!=='undefined'&&HapticManager.fire)HapticManager.fire('TOGGLE_ON');}catch(e){}try{if(typeof playSound==='function')playSound('select');}catch(e){}render();}
 const _i18n={
 'app_name':{zh:'Regalia',en:'Regalia'},
 'new_game':{zh:'新游戏',en:'New Game'},
@@ -79,14 +85,14 @@ const _i18n={
 'ponder_desc':{zh:'开启后，引擎在AI走棋后继续分析对手可能的应手，提升后续走棋质量。会增加耗电，建议充电时开启',en:'Engine continues analyzing opponent\'s likely reply after AI moves. Improves subsequent move quality. Uses more battery, recommended when charging'},
 'book_moves':{zh:'使用ECO开局库',en:'Use ECO Book'},
 'eco_book_desc':{zh:'开启后，AI将优先从ECO开局库中选择开局走法，使开局更规范',en:'AI prioritizes ECO opening book moves for more standard openings'},
-// v1.0.4 NEW: Chess960 (Fischer Random Chess) UI strings
+// Chess960 (Fischer Random Chess) UI strings
 'chess960_label':{zh:'菲舍尔任意制象棋',en:'Fischer Random (Chess960)'},
 'chess960_enable':{zh:'启用 Chess960 模式',en:'Enable Chess960 mode'},
 'chess960_spid':{zh:'起始位置编号',en:'Start Position ID'},
 'chess960_random':{zh:'随机',en:'Random'},
 'chess960_preview':{zh:'起始排列预览',en:'Starting arrangement preview'},
 'chess960_note':{zh:'Chess960 模式下不使用 ECO 开局库（无固定开局理论）。王车易位规则：王走至 g1/c1，车走至 f1/d1，与标准象棋终点相同。',en:'Chess960 mode disables ECO opening book (no fixed opening theory). Castling: King ends on g1/c1, Rook ends on f1/d1 — same final squares as standard chess.'},
-// v1.0.4 EXPANSION (this round): Time Control UI strings
+// Time Control UI strings
 'time_control_label':{zh:'计时赛设置',en:'Time Control'},
 'time_control_off':{zh:'不计时（日常对局）',en:'Untimed (casual)'},
 'time_control_sudden':{zh:'突然死亡制',en:'Sudden Death'},
@@ -320,6 +326,9 @@ const _i18n={
 'pgn_cache_search_apply':{zh:'应用搜索',en:'Apply search'},
 'pgn_cache_search_clear':{zh:'清除筛选',en:'Clear filter'},
 'pgn_cache_filter_all':{zh:'全部',en:'All'},
+// v1.0.8 PHASE 39: tag-presence filter buttons
+'pgn_cache_filter_has_tags':{zh:'有标签',en:'Tagged'},
+'pgn_cache_filter_no_tags':{zh:'无标签',en:'Untagged'},
 'pgn_cache_filter_by_tag':{zh:'点击按此标签筛选',en:'Click to filter by this tag'},
 'pgn_cache_filter_status':{zh:'筛选中：{count}/{total} 个匹配「{filter}」',en:'Filtering: {count}/{total} match "{filter}"'},
 'pgn_cache_filter_no_match':{zh:'没有匹配的缓存条目。请尝试其他关键词或清除筛选。',en:'No matching cache entries. Try a different keyword or clear the filter.'},
@@ -359,7 +368,7 @@ const _i18n={
 'elo_target':{zh:'Elo目标',en:'ELO Target'},
 'export_settings_btn':{zh:'📤 导出设置',en:'📤 Export'},
 'import_settings_btn':{zh:'📥 导入设置',en:'📥 Import'},
-'loading_title':{zh:'Regalia v1.0.7',en:'Regalia v1.0.7'},
+'loading_title':{zh:'Regalia v1.0.8',en:'Regalia v1.0.8'},
 'click_skip_loading':{zh:'点击跳过加载',en:'Click to skip loading'},
 'white_checkmate':{zh:'白方将杀获胜',en:'White wins by checkmate'},
 'black_checkmate':{zh:'黑方将杀获胜',en:'Black wins by checkmate'},
@@ -371,7 +380,7 @@ const _i18n={
 'mistake':{zh:'错着',en:'Mistake'},
 'good':{zh:'正着',en:'Good'},
 'inaccuracy':{zh:'缓着',en:'Inaccuracy'},
-'book':{zh:'标准',en:'Mediocre'},
+'book':{zh:'开局库',en:'Book'},
 'winning':{zh:'你赢了',en:'You Won'},
 'losing':{zh:'你输了',en:'You Lost'},
 'draw_game':{zh:'和棋',en:'Draw'},
@@ -409,7 +418,7 @@ const _i18n={
 'setup_no_black_king':{zh:'缺少黑方王',en:'Missing black king'},
 'setup_kings_adjacent':{zh:'双方王不能相邻',en:'Kings cannot be adjacent'},
 'setup_no_pieces':{zh:'棋盘上无棋子',en:'No pieces on board'},
-'setup_pawn_on_rank':{zh:'兵不能在第',en:'Pawn cannot be on rank'},
+'setup_pawn_on_rank':{zh:'兵不能在第',en:' pawn cannot be on rank '},
 'setup_check_impossible':{zh:'方王处于被将军状态（非法局面）',en:' king is in check (illegal position)'},
 'setup_king_count_over':{zh:'方王数量超过1个',en:' king count exceeds 1'},
 'setup_piece_over_limit':{zh:'方棋子数超过上限16',en:' piece count exceeds limit of 16'},
@@ -418,7 +427,11 @@ const _i18n={
 'setup_rook_over_10':{zh:'方车超过10个',en:' rooks exceed 10'},
 'setup_bishop_over_10':{zh:'方象超过10个',en:' bishops exceed 10'},
 'setup_knight_over_10':{zh:'方马超过10个',en:' knights exceed 10'},
-'setup_rank':{zh:'行',en:'rank'},
+// v1.0.8 PHASE 30: setup_rank en value changed from 'rank' to ' ' to fix broken English
+//   concatenation (was producing "WhitePawn cannot be on rank1rank(a1)"). Chinese
+//   '行' unchanged (Chinese needs no spaces). The rank number is appended directly
+//   after setup_pawn_on_rank (which now ends with a space in English).
+'setup_rank':{zh:'行',en:' '},
 'setup_white':{zh:'白',en:'White'},
 'setup_black':{zh:'黑',en:'Black'},
 // PGN Import
@@ -428,6 +441,8 @@ const _i18n={
 'select_pgn_file':{zh:'选择PGN文件',en:'Select PGN File'},
 'pgn_imported':{zh:'PGN导入成功',en:'PGN imported'},
 'pgn_invalid':{zh:'PGN格式无效',en:'Invalid PGN format'},
+// v1.0.8 PHASE 34: loading indicator for async PGN import
+'importing_pgn':{zh:'⏳ 正在导入PGN…',en:'⏳ Importing PGN…'},
 'pgn_fen_rejected':{zh:'此输入为FEN格式，请使用「粘贴FEN」按钮导入。PGN导入仅接受完整棋谱文本。',en:'This is FEN format. Please use the "Paste FEN" button instead. PGN import only accepts full game notation.'},
 'pgn_paste_hint':{zh:'粘贴PGN棋谱字符串（仅限PGN格式，FEN请使用「粘贴FEN」按钮）',en:'Paste PGN game notation only (for FEN, use "Paste FEN" button)'},
 'fen_pgn_paste_label':{zh:'粘贴内容:',en:'Paste content:'},
@@ -483,42 +498,6 @@ const _i18n={
   try{const navLang=navigator.language||navigator.userLanguage||'';_lang=navLang.startsWith('zh')?'zh':'en';}catch(e){_lang='zh';}
 })();
 
-// ===================== CODE DEDUPLICATION =====================
-/**
- * Apply a move to a board array (creates new board, does not mutate original).
- * @param {Array} board - 8x8 board array
- * @param {Object} move - Move object with from, to, piece, captured, etc.
- * @returns {Array} New 8x8 board array with move applied
- */
-function _applyMoveToBoard(board, move) {
-  const newBoard = board.map(row => row.slice());
-  const {from, to, piece} = move;
-
-  // Clear source square
-  newBoard[from.row][from.col] = null;
-
-  // Place piece at destination
-  newBoard[to.row][to.col] = piece;
-
-  // Handle special moves
-  if (move.enPassant) {
-    const epRow = piece.color === 'white' ? to.row + 1 : to.row - 1;
-    newBoard[epRow][to.col] = null;
-  }
-  if (move.castling) {
-    const rookFromCol = move.castling === 'kingside' ? 7 : 0;
-    const rookToCol = move.castling === 'kingside' ? 5 : 3;
-    const rook = newBoard[from.row][rookFromCol];
-    newBoard[from.row][rookFromCol] = null;
-    newBoard[from.row][rookToCol] = rook;
-  }
-  if (move.promotion) {
-    newBoard[to.row][to.col] = {type: move.promotion, color: piece.color};
-  }
-
-  return newBoard;
-}
-
 window.onerror=function(msg,url,line,col,error){
     const errInfo={
         message:String(msg),
@@ -527,7 +506,7 @@ window.onerror=function(msg,url,line,col,error){
         column:col||0,
         stack:error&&error.stack?String(error.stack):'no stack',
         timestamp:new Date().toISOString(),
-        engineReady:typeof _engineReady!=='undefined'?_engineReady:'undefined'
+        engineReady:typeof _engineReady!=='undefined'?_engineReady:undefined
     };
     console.error('=== Regalia JS Error ===',errInfo);
     // NON-DESTRUCTIVE: Show toast instead of replacing entire DOM
@@ -641,12 +620,15 @@ function _recalcCellSize(){
   // Board border: 4px total (2px each side in base CSS, but portrait overrides
   // to 3px). We use the larger value (4px) to be safe.
   const _boardBorder=4;
-  // Anti-shake margin: 8px in BOTH orientations (matches MAX_DISPLACEMENT_PX
-  // in StabilizationHelper.java). Previously landscape was 0, which caused the
-  // board's right edge to be clipped when anti-shake shifted it rightward —
-  // the CELL calculation didn't reserve space for the ±8px translate3d.
-  // v1.0.7 PHASE 21 (bug fix): reserve 8px in landscape too.
-  const _antiShake=8;
+  // Anti-shake margin: reserves space on BOTH sides of the board for the
+  // ±8px translate3d applied by StabilizationHelper. Previously only 8px was
+  // reserved (in _horizOverhead), but the board is left-aligned in .bsec —
+  // when anti-shake shifts it RIGHTward by 8px, the right edge needs 8px of
+  // clearance to avoid being clipped by .main's overflow-x:hidden.
+  // v1.0.8 PHASE 26 (fix): reserve 12px total (8px for max displacement +
+  // 4px buffer) so the board's right edge is never clipped when anti-shake
+  // is active. This slightly shrinks the landscape board as the user requested.
+  const _antiShake=12;
   // Row-label column (.rlbl): 28px wide, sits LEFT of the board.
   const _rowLabelW=28;
   // v1.0.7 PHASE 7: Total horizontal overhead = .main padding (left+right) +
@@ -744,230 +726,576 @@ function posAlg(p){return String.fromCharCode(97+p.col)+(8-p.row)}
 function algPos(a){if(!a)return null;
   // Type coercion: if input is a number, try converting to string first
   if(typeof a==='number')a=String(a);
-  if(typeof a!=='string'||a.length<2)return null;
+  // v1.0.8 PHASE 30: also reject strings longer than 2 chars (e.g. 'e4e5' move
+  //   strings, 'e10' malformed input) which were silently truncated before.
+  if(typeof a!=='string'||a.length!==2)return null;
   try{const col=a.charCodeAt(0)-97,row=8-parseInt(a[1],10);if(col<0||col>7||isNaN(row)||row<0||row>7)return null;return{row,col}}catch(e){return null}}
 function inB(r,c){return r>=0&&r<8&&c>=0&&c<8}
 
-// Animation: cleanup stale elements, cache bwrap ref
+// AI-GEN: AI assisted
+// This code was AI-assisted and has been reviewed for AGPL v3 compliance.
+//
+// v1.0.8 PHASE 22: Personified piece-move animation system.
+// Redesigned per "棋魂 · 国际象棋拟人化走棋动画" reference. Each piece has a
+// distinct personality expressed through per-piece keyframe animations:
+//   pawn  (胆小 timid)      — hesitate-back then dart forward
+//   knight(灵活 agile)      — L-shape parabolic jump with rotation
+//   bishop(机敏 sharp)      — quick diagonal with golden glow trail
+//   rook  (生猛 fierce)     — charge-dash-impact with light board shake
+//   queen (沉重 heavy)     — graceful arc with heavy board shake
+//   king  (庄严 solemn)     — heavy measured step with heavy board shake
+//
+// Implementation:
+//   - Web Animations API (el.animate()) for GPU-composited 120fps motion
+//   - All keyframes use translate3d + scale + optional rotate/drop-shadow
+//   - Board shake (.bwrap.shake-light/.shake-heavy) for landing impact
+//   - prefers-reduced-motion fully respected (skip animation, keep sound)
+//   - Chess960 castling: king + rook animate concurrently (kingStayedPut
+//     skips king overlay when king is already on its castling target)
+//   - _animGen generation counter prevents stale closures from corrupting
+//     newer animation state (race-condition guard from v1.0.7 Phase 18)
+//   - _activeAnimEls tracks overlay nodes for re-attach after DOM rebuild
+//
+// Durations are ~60% of the reference spec (reference is for demo mode;
+// gameplay needs to stay responsive). Personality ordering preserved:
+//   pawn < bishop < rook < knight < queen < king (timid → solemn).
+const ANIM_DURATIONS={pawn:260,knight:380,bishop:270,rook:290,queen:520,king:560};
+const ANIM_EASINGS={
+  pawn:'cubic-bezier(0.25,0.05,0.25,1.15)',
+  knight:'cubic-bezier(0.34,1.42,0.64,1)',
+  bishop:'cubic-bezier(0.05,0.92,0.18,1)',
+  rook:'cubic-bezier(0.95,0.05,0.25,1)',
+  queen:'cubic-bezier(0.5,0,0.1,1)',
+  king:'cubic-bezier(0.5,0,0.05,1)'
+};
+// Board shake durations (used by _triggerBoardShake)
+// v1.0.8 PHASE 26: queen shake is now 'massive' — heavier than king's 'heavy',
+//   which is heavier than rook's 'light'. This makes the queen landing feel
+//   "铸锩有声、掷地有声" (resounding/ground-shaking) per the user's request.
+const SHAKE_LIGHT_DUR=280;   // rook landing — light tremor
+const SHAKE_HEAVY_DUR=450;   // king landing — heavy tremor
+const SHAKE_MASSIVE_DUR=620; // queen landing — massive tremor (heaviest)
+
 let _cachedBwrap=null;
 let animationInProgress=false;
-let _lastAnimPieceType='';
-let _lastAnimTarget=null;
-let _lastAnimMv=null; // v1.0.6: set by callers of animateMove for Chess960 castling detection
-let _lastCaptureFlag=false;
-let _lastCheckFlag=false;
-// Landing animation: block render() while CSS @keyframes is playing, then auto-render
-let _landingAnimActive=false;
-let _landingAnimTimer=null;
-// v1.0.7 PHASE 18 Task 3 (bug fix): Animation generation counter + finish-timer id.
-// These prevent a stale _finishAnim closure (from a prior animateMove call) from
-// corrupting the new animation's global state. Previously, the old setTimeout
-// was NOT cancelled when a new animateMove started within dur+60ms — the stale
-// timer would fire and set animationInProgress=false, _lastAnimTarget=oldTarget,
-// _activeAnimEls=[] (orphaning the new animation's overlay nodes).
-let _animFinishTimer=0;
+let _lastAnimMv=null; // set by callers of animateMove for Chess960 castling detection
+// v1.0.8 PHASE 22: _animGen prevents stale _finishAnim closures from a prior
+// animateMove call corrupting newer animation state. Bumped on every entry.
 let _animGen=0;
-function _startLandingTimer(pieceType){
-if(_landingAnimTimer)clearTimeout(_landingAnimTimer);
-// v1.0.4 ROUND-5 REV13: Reduced from 600-800ms to 200-300ms — the CSS
-// @keyframes still plays visually, but renders are no longer blocked for
-// the full keyframe duration. Only block long enough for the initial paint.
-const _maxDur=({pawn:200,knight:250,bishop:220,rook:200,queen:280,king:220}[pieceType]||220);
-_landingAnimTimer=setTimeout(()=>{_landingAnimActive=false;_landingAnimTimer=null;render();},_maxDur+30);
-}
-function animateMove(from,to,pieceSym,pieceType,isCapture,isCheck,pieceColor){
-// v1.0.7 PHASE 17 (Kimi audit suggestion 2.3 — adopted): Honor
-// prefers-reduced-motion on the JS side too. The CSS @media query already
-// disables the CSS animations, but the JS code path still creates overlay
-// <div>s, attaches transitionend listeners, and triggers double-rAF —
-// which is wasted work that also leaves the board in a transient state
-// (source piece hidden) for one frame. When the user has reduced-motion
-// enabled, skip ALL of that and just flip the board state directly.
-// Match the user's OS-level accessibility preference (Android "Remove
-// animations" / iOS "Reduce Motion" / desktop browser setting).
-try{
-  if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches){
-    // Skip animation entirely. Mark the animation as not-in-progress so
-    // render() doesn't get throttled, set _lastAnimTarget so the landing
-    // animation logic has consistent state, and return.
-    // v1.0.7 PHASE 19 (bug fix): Cancel any pending _animFinishTimer from a
-    // prior non-reduced-motion animation and bump _animGen so the stale
-    // _finishAnim closure self-invalidates. Without this, if a prior animation
-    // is in flight (with a pending setTimeout(_finishAnim, dur+60)), the stale
-    // closure would fire and overwrite _lastAnimTarget with the OLD target.
-    if(_animFinishTimer){clearTimeout(_animFinishTimer);_animFinishTimer=0;}
-    ++_animGen; // invalidate any pending stale _finishAnim closure
-    animationInProgress=false;
-    _landingAnimActive=false;
-    if(_landingAnimTimer){clearTimeout(_landingAnimTimer);_landingAnimTimer=null;}
-    _lastAnimPieceType=pieceType||'pawn';
-    _lastCaptureFlag=!!isCapture;
-    _lastCheckFlag=!!isCheck;
-    _lastAnimTarget={row:to.row,col:to.col};
-    _lastAnimMv=null;
-    _activeAnimEls=[];
-    // v1.0.7 PHASE 18 Task 3 (redundancy cleanup): Removed dead `if(isCheck)`
-    // block that assigned `const ck = pieceColor==='white'?null:null` (always
-    // null, never read). The in-check visual cue is painted by render() on the
-    // next pass via the _checkKingPos mechanism — no work needed here.
-    return;
-  }
-}catch(e){}
-// v1.0.6: Detect castling for animation. The caller may pass the mv object
-// via a global _lastAnimMv (set just before calling animateMove) so we can
-// use _castleSide() for Chess960 correctness. Fallback to the legacy
-// `Math.abs(to.col-from.col)===2` check for callers that don't set the global.
-let _castleside=null;
-try{if(typeof _lastAnimMv!=='undefined'&&_lastAnimMv&&typeof _castleSide==='function'){_castleside=_castleSide(_lastAnimMv);}}catch(e){}
-if(!_castleside&&pieceType==='king'&&Math.abs(to.col-from.col)===2){_castleside=to.col===6?'kingside':'queenside';}
-// v1.0.7 PHASE 17: When castling with king already on its target square
-// (from === to, e.g. SP-ID where white king starts on g1 castling kingside),
-// the king does NOT move — only the rook moves. Per the Fischer Random Chess
-// rules: "原地易位 — 该棋子'原地不动'，另一枚棋子移动到指定位置". Skip the
-// king-move animation overlay; only animate the rook.
-const _kingStayedPut=!!_castleside&&from.row===to.row&&from.col===to.col;
-animationInProgress=true;
-_lastAnimPieceType=pieceType||'pawn';
-_lastAnimTarget=null;
-_landingAnimActive=false;
-if(_landingAnimTimer){clearTimeout(_landingAnimTimer);_landingAnimTimer=null;}
-_lastCaptureFlag=!!isCapture;
-_lastCheckFlag=!!isCheck;
-_activeAnimEls=[]; // v1.0.4 REV13: track for re-attachment
-// Hide source piece during animation (overlay replaces it); also hide captured piece & castling rook
-const _srcPc=document.querySelector('.sq[data-r="'+from.row+'"][data-c="'+from.col+'"] .pc');
-// v1.0.7 PHASE 17: When the king stays put, do NOT hide its source piece —
-// there's no overlay covering it (the king animation overlay is skipped
-// below). Leaving the king visible during the rook's animation matches the
-// actual game state (king is still on its square).
-if(!_kingStayedPut&&_srcPc)_srcPc.style.opacity='0';
-if(isCapture){const _tgtPc=document.querySelector('.sq[data-r="'+to.row+'"][data-c="'+to.col+'"] .pc');if(_tgtPc)_tgtPc.style.opacity='0';}
-const bwrap=_cachedBwrap||(_cachedBwrap=document.querySelector('.bwrap'));if(!bwrap||!bwrap.parentNode){_cachedBwrap=null;animationInProgress=false;if(_srcPc)_srcPc.style.opacity='';return;}
-// Remove stale animation elements
-const oldAnims=bwrap.querySelectorAll('.move-anim');for(let i=0;i<oldAnims.length;i++)oldAnims[i].remove();
-const cs=CELL;const _flip=playerColor==='black';
-const _fc=_flip?7-from.col:from.col,_fr=_flip?7-from.row:from.row,_tc=_flip?7-to.col:to.col,_tr=_flip?7-to.row:to.row;
-const dx=(_tc-_fc)*cs,dy=(_tr-_fr)*cs;
-// v1.0.7 PHASE 17: Only create the king-move overlay when the king actually
-// moves. When _kingStayedPut is true (king already on castling target), skip
-// the overlay entirely — leaving the king visible at its square while the
-// rook animates from its source to its destination.
-let el=null;
-if(!_kingStayedPut){
-  el=document.createElement('div');el.className='move-anim anim-'+_lastAnimPieceType+(pieceColor==='white'?' w-piece':' bk-piece');
-  el.textContent=pieceSym;
-  el.style.cssText='left:'+(_fc*cs)+'px;top:'+(_fr*cs)+'px;width:'+cs+'px;height:'+cs+'px;transform:translate3d(0,0,0);opacity:1;will-change:transform';
-  bwrap.appendChild(el);
-  _activeAnimEls.push({el,from,dx,dy});
-}
-// Castling: also animate the rook (v1.0.6: use _castleside + Chess960 rook positions)
-let rookEl=null;
-const isCastling=!!_castleside;
-if(isCastling&&pieceColor){
-let rFromCol=-1,rToCol=-1;
-// v1.0.6: For Chess960, derive the actual rook from/to via chess960CastlingRookMove.
-// v1.0.7 PHASE 3: Always use Chess960 castling rook move logic (Chess960 is a
-// superset of standard chess castling — see makeMv for the rationale).
-if(typeof chess960CastlingRookMove==='function'){
-  // Pass a board snapshot — note: at this point the move has NOT been applied to
-  // gameState yet (animateMove is called BEFORE gameState=ns), so we can read
-  // the rook's source column from gameState.board. However, animateMove is
-  // sometimes called AFTER makeMv has already mutated the board (the UI calls
-  // makeMv first, then animateMove). To be safe, we re-derive via the helper
-  // using the from-row's board state. If the rook has already moved, we fall
-  // back to the standard 0/3/5/7 mapping.
+// v1.0.8 PHASE 22: Track active overlay nodes so they can be re-attached
+// after render() rebuilds the .bwrap DOM (e.g., on cell-size recalculation).
+let _activeAnimEls=[];
+
+// Trigger board shake. strength: 'light' (rook), 'heavy' (king), or 'massive' (queen).
+// Uses void offsetWidth trick to restart CSS animation on rapid successive calls.
+// v1.0.8 PHASE 26: 'massive' is the heaviest — reserved for queen landing.
+// v1.0.8 PHASE 26 (anti-shake coexistence): StabilizationHelper applies a
+//   CSS transform to .bwrap.stabilized for sensor-based translation compensation.
+//   If we add .shake-* while .stabilized is active, the shake animation's
+//   transform overrides the stabilization transform, causing a visual jump.
+//   Fix: temporarily remove .stabilized for the shake duration, then restore.
+//   The StabilizationHelper re-applies .stabilized on the next sensor event
+//   (within ~20ms), so the gap is imperceptible.
+function _triggerBoardShake(strength){
   try{
-    const rm=chess960CastlingRookMove(gameState,pieceColor,_castleside);
-    if(rm){rFromCol=rm.rookFrom;rToCol=rm.rookTo;}
+    const bwrap=_cachedBwrap||(_cachedBwrap=document.querySelector('.bwrap'));
+    if(!bwrap||!bwrap.parentNode){_cachedBwrap=null;return;}
+    const cls=strength==='massive'?'shake-massive':(strength==='heavy'?'shake-heavy':'shake-light');
+    // v1.0.8 PHASE 26: temporarily suspend stabilization so shake isn't fought
+    const wasStabilized=bwrap.classList.contains('stabilized');
+    if(wasStabilized)bwrap.classList.remove('stabilized');
+    bwrap.classList.remove(cls);
+    void bwrap.offsetWidth; // force reflow to restart animation
+    bwrap.classList.add(cls);
+    const baseDur=strength==='massive'?SHAKE_MASSIVE_DUR:(strength==='heavy'?SHAKE_HEAVY_DUR:SHAKE_LIGHT_DUR);
+    const dur=baseDur+30;
+    setTimeout(()=>{
+      try{bwrap.classList.remove(cls);}catch(e){}
+      // Restoration of .stabilized happens naturally on the next sensor event;
+      // we don't force-restore here to avoid conflicting with a mid-flight
+      // sensor sample that may have a different translation.
+    },dur);
   }catch(e){}
 }
-if(rFromCol<0){
-  if(_castleside==='kingside'){rFromCol=7;rToCol=5;}
-  else{rFromCol=0;rToCol=3;}
-}
-if(rFromCol>=0&&rFromCol!==rToCol){
-// Hide castling rook at source during animation
-const _srcRookPc=document.querySelector('.sq[data-r="'+from.row+'"][data-c="'+rFromCol+'"] .pc');
-if(_srcRookPc)_srcRookPc.style.opacity='0';
-const rFrom={row:from.row,col:rFromCol},rTo={row:from.row,col:rToCol};
-const _rfc=_flip?7-rFrom.col:rFrom.col,_rfr=_flip?7-rFrom.row:rFrom.row,_rtc=_flip?7-rTo.col:rTo.col,_rtr=_flip?7-rTo.row:rTo.row;
-rookEl=document.createElement('div');rookEl.className='move-anim anim-rook'+(pieceColor==='white'?' w-piece':' bk-piece');
-rookEl.textContent=SYM[pieceColor].rook;
-rookEl.style.cssText='left:'+(_rfc*cs)+'px;top:'+(_rfr*cs)+'px;width:'+cs+'px;height:'+cs+'px;transform:translate3d(0,0,0);opacity:1;will-change:transform';
-// Compute rook deltas here alongside rookEl creation (cleaner than separate block)
-rookEl._rdx=(_rtc-_rfc)*cs;rookEl._rdy=(_rtr-_rfr)*cs;
-bwrap.appendChild(rookEl);
-_activeAnimEls.push({el:rookEl,from:rFrom,dx:rookEl._rdx,dy:rookEl._rdy});
-}
-}
-// v1.0.7 PHASE 20 (UX): Slowed down piece-move animation ~30% so the human eye
-// can clearly see the smooth motion. Previous durations (180-260ms) were a bit
-// too fast to follow. New durations (240-340ms) give a comfortable, fluid feel
-// while still feeling snappy. The 120fps high-frame-rate is preserved — the
-// transition is GPU-composited (will-change:transform + translate3d) and the
-// browser renders at the display's native refresh rate. The cubic-bezier
-// easing curve (CSS .25,.1,.25,1) is unchanged — only the duration is longer.
-const durations={pawn:240,knight:320,bishop:280,rook:240,queen:340,king:280};
-const dur=durations[_lastAnimPieceType]||300;
-let _animDone=false;
-// v1.0.7 PHASE 18 Task 3 (bug fix): Cancel any pending finish-timer from a
-// prior animateMove call, and bump the generation counter so the old closure
-// self-invalidates if it ever fires (e.g. a stray transitionend from a
-// detached element).
-if(_animFinishTimer){clearTimeout(_animFinishTimer);_animFinishTimer=0;}
-const _myGen=++_animGen;
-function _finishAnim(){
-if(_animDone)return;_animDone=true;
-// Self-invalidation: if a newer animation started, this closure is stale —
-// do NOT touch global state. The newer animation owns it now.
-if(_myGen!==_animGen)return;
-if(el)el.remove();if(rookEl)rookEl.remove();animationInProgress=false;_lastAnimTarget={row:to.row,col:to.col};
-_lastAnimMv=null; // v1.0.6: clear stale move reference after animation completes
-_activeAnimEls=[]; // v1.0.4 REV13: clear tracking
-if(_lastCaptureFlag){
-const sq=document.querySelector(`.sq[data-r="${to.row}"][data-c="${to.col}"]`);
-if(sq)sq.classList.add('capture-flash');setTimeout(()=>{if(sq)sq.classList.remove('capture-flash')},1200);
-}
-if(_lastCheckFlag){
-const ck=gameState.currentTurn==='white'?gameState.wk:gameState.bk;
-if(ck){const ksq=document.querySelector(`.sq[data-r="${ck.row}"][data-c="${ck.col}"]`);if(ksq)ksq.classList.add('in-check')}
-}
-}
-if(el){
-  el.addEventListener('transitionend',function(e){if(e.propertyName==='transform')_finishAnim()},{once:true});
-}
-// v1.0.4 REV13: Double-rAF ensures initial position is painted before transition starts
-requestAnimationFrame(()=>{
-requestAnimationFrame(()=>{
-if(el)el.style.transform='translate3d('+dx+'px,'+dy+'px,0)';
-if(rookEl)rookEl.style.transform='translate3d('+rookEl._rdx+'px,'+rookEl._rdy+'px,0)';
-});
-});
-// v1.0.7 PHASE 18 Task 3: Track the timer id so the next animateMove can
-// cancel it. Previously this was a fire-and-forget setTimeout, which left a
-// window where a stale _finishAnim could corrupt the new animation's state.
-_animFinishTimer=setTimeout(function(){
-  _animFinishTimer=0;
-  _finishAnim();
-},dur+60);
+
+// Personified piece animations. Each returns a Promise resolving on finish.
+// dx/dy are total pixel offsets from source to destination.
+// All keyframes use translate3d for GPU compositing; scale/rotate/filter
+// add personality without breaking the composited layer.
+
+// 兵 · 瑟瑟发抖：颤颤巍巍、轻飘飘，仿佛随时会被风吹走
+// v1.0.8 PHASE 26 (optimization): The pawn now "瑟瑟发抖" (shivers/quivers).
+//   Design intent: a timid pawn that hesitates, trembles with high-frequency
+//   low-amplitude jitter, drifts forward "轻飘飘" (feather-light) with reduced
+//   scale, and lands softly. The trembling is achieved via many small keyframes
+//   with alternating ±offset. All keyframes mutate ONLY transform (GPU-composited)
+//   to sustain high fps — no per-frame filter/shadow changes.
+function _animPawn(el,dx,dy,dur,easing){
+  return new Promise(resolve=>{
+    const kfs=[];
+    const steps=22;
+    // Tremor parameters: high-frequency, low-amplitude jitter.
+    // The jitter amplitude is proportional to cell size so it scales with board.
+    const tremorAmp=CELL*0.018; // ~1.8% of cell — visible but not jarring
+    const tremorFreq=14; // alternations across the journey (high freq = "发抖")
+    // The pawn drifts forward on a slightly non-linear path (hesitate → drift → settle).
+    // Scale stays below 1.0 for most of the journey to feel "轻飘飘" (light/airy),
+    // then briefly expands to 1.0 on landing (gentle touchdown, no impact).
+    for(let i=0;i<=steps;i++){
+      const t=i/steps;
+      // Non-linear progress: hesitate (0-0.2), drift (0.2-0.8), settle (0.8-1.0)
+      let progress;
+      if(t<0.2)progress=t*0.5;           // hesitant start (slow)
+      else if(t<0.8)progress=0.1+(t-0.2)*1.1; // drift (faster)
+      else progress=0.76+(t-0.8)*1.2;    // settle
+      // Base position
+      let x=dx*progress, y=dy*progress;
+      // Tremor: alternating ±offset on both axes, decaying toward landing
+      const tremorDecay=t<0.85?1:(1-(t-0.85)/0.15); // fade tremor in last 15%
+      const phase=t*tremorFreq*Math.PI*2;
+      x+=Math.sin(phase*1.7)*tremorAmp*tremorDecay;
+      y+=Math.cos(phase*2.3)*tremorAmp*0.7*tremorDecay;
+      // Scale: < 1.0 for most of journey (轻飘飘), gentle 1.0 at landing
+      let scale;
+      if(t<0.9)scale=0.82+Math.sin(t*Math.PI)*0.06; // 0.82-0.88, feather-light
+      else scale=0.88+(t-0.9)/0.1*0.12; // expand to 1.0 for soft landing
+      kfs.push({transform:'translate3d('+x.toFixed(2)+'px,'+y.toFixed(2)+'px,0) scale('+scale.toFixed(3)+')'});
+    }
+    const a=el.animate(kfs,{duration:dur,easing:easing,fill:'forwards'});
+    a.onfinish=function(){resolve();};
+  });
 }
 
-// v1.0.4 ROUND-5 REV13: Re-attach active animation elements after DOM rebuild
-let _activeAnimEls=[];
+// 马 · 灵活：L形抛物线跳跃，带轻微弹跳和旋转 (agile: L-shape parabolic jump)
+// v1.0.8 PHASE 22 (优化): keyframe 数量从 24 减至 18 以降低 GC 压力，
+//   提升流畅度。运动公式不变（抛物线弧 + L 形偏向 + 旋转）。
+// v1.0.8 PHASE 23 (smoothness): removed per-frame `filter: drop-shadow`
+//   from keyframes — the static drop-shadow on `.move-anim` (CSS) is
+//   composited once and cached, so each frame is a pure transform update.
+function _animKnight(el,dx,dy,dur,easing){
+  return new Promise(resolve=>{
+    const steps=18;
+    const kfs=[];
+    const arcHeight=CELL*0.28; // 28% of cell size
+    for(let i=0;i<=steps;i++){
+      const t=i/steps;
+      const arc=4*t*(1-t);            // parabola: 0→1→0
+      const phaseBias=Math.sin(t*Math.PI)*0.15;
+      // L-shape feel: bias toward the longer axis mid-flight
+      const x=dx*t+(Math.abs(dy)>Math.abs(dx)?phaseBias*Math.sign(dy)*arcHeight*0.15:0);
+      const y=dy*t+(Math.abs(dx)>Math.abs(dy)?phaseBias*Math.sign(dx)*arcHeight*0.15:0)-arc*arcHeight;
+      const scale=1+arc*0.18;
+      const rot=Math.sin(t*Math.PI*2)*4;
+      kfs.push({transform:'translate3d('+x+'px,'+y+'px,0) scale('+scale+') rotate('+rot+'deg)'});
+    }
+    const a=el.animate(kfs,{duration:dur,easing:easing,fill:'forwards'});
+    a.onfinish=function(){resolve();};
+  });
+}
+
+// 象 · 机敏：极快斜线 (sharp: quick diagonal)
+// v1.0.8 PHASE 23 (smoothness): removed per-frame `filter: drop-shadow`
+//   (golden glow) from keyframes — static drop-shadow on `.move-anim` is
+//   cached by the compositor. The bishop's signature "golden trail" is
+//   now conveyed by the scale curve alone, which is sufficient for the
+//   short 270ms duration.
+function _animBishop(el,dx,dy,dur,easing){
+  return new Promise(resolve=>{
+    const kfs=[
+      {transform:'translate3d(0px,0px,0) scale(1)',offset:0},
+      {transform:'translate3d('+(dx*0.15)+'px,'+(dy*0.15)+'px,0) scale(1.05)',offset:0.15},
+      {transform:'translate3d('+(dx*0.5)+'px,'+(dy*0.5)+'px,0) scale(1.08)',offset:0.5},
+      {transform:'translate3d('+(dx*0.85)+'px,'+(dy*0.85)+'px,0) scale(1.03)',offset:0.85},
+      {transform:'translate3d('+dx+'px,'+dy+'px,0) scale(1)',offset:1}
+    ];
+    const a=el.animate(kfs,{duration:dur,easing:easing,fill:'forwards'});
+    a.onfinish=function(){resolve();};
+  });
+}
+
+// 车 · 生猛：蓄力顿挫，猛冲到目标，伴随轻震 (fierce: charge-dash-impact)
+function _animRook(el,dx,dy,dur,easing){
+  return new Promise(resolve=>{
+    const kfs=[
+      {transform:'translate3d(0px,0px,0) scale(1)',offset:0},
+      {transform:'translate3d(0px,0px,0) scale(1.08)',offset:0.08},
+      {transform:'translate3d(0px,0px,0) scale(0.96)',offset:0.14},
+      {transform:'translate3d('+(dx*0.04)+'px,'+(dy*0.04)+'px,0) scale(1.02)',offset:0.18},
+      {transform:'translate3d('+(dx*0.92)+'px,'+(dy*0.92)+'px,0) scale(1.05)',offset:0.86},
+      {transform:'translate3d('+dx+'px,'+dy+'px,0) scale(1.12)',offset:0.94},
+      {transform:'translate3d('+dx+'px,'+dy+'px,0) scale(0.98)',offset:0.98},
+      {transform:'translate3d('+dx+'px,'+dy+'px,0) scale(1)',offset:1}
+    ];
+    const a=el.animate(kfs,{duration:dur,easing:easing,fill:'forwards'});
+    a.onfinish=function(){_triggerBoardShake('light');resolve();};
+  });
+}
+
+// 后 · 铿锵有力、掷地有声：最沉重的移动 + 落地巨型震屏（比车更震撼）
+// v1.0.8 PHASE 26 (optimization): The queen now "铿锵有声、掷地有声" — heavier
+//   than the rook. Design: long duration (520ms), large scale swell mid-flight
+//   (queen is the most powerful piece — she carries weight), a dramatic
+//   pre-landing compression (t>0.85: scale dips to 0.92 then snaps to 1.18 on
+//   impact), and a MASSIVE board shake on landing (heavier than king's heavy).
+//   The pre-landing dip + impact snap creates the "铿锵" (clanking/resounding)
+//   feel. All keyframes mutate ONLY transform to sustain high fps.
+function _animQueen(el,dx,dy,dur,easing){
+  return new Promise(resolve=>{
+    const steps=18;
+    const kfs=[];
+    const arcSign=(Math.abs(dx)>Math.abs(dy))?-1:1;
+    const arcAmt=Math.min(Math.abs(dx),Math.abs(dy))*0.18+CELL*0.10;
+    for(let i=0;i<=steps;i++){
+      const t=i/steps;
+      const sin=Math.sin(t*Math.PI);
+      const x=dx*t+(dy!==0?sin*arcAmt*arcSign*0.4:0);
+      const y=dy*t-(dx!==0?sin*arcAmt*arcSign*0.4:0)-sin*5;
+      let scale;
+      if(t<0.85){
+        // Mid-flight: large swell (queen carries weight — she is the strongest)
+        scale=1+sin*0.12;
+      }else{
+        // Pre-landing compression (dip to 0.92) then impact snap (1.18 → 1.0)
+        // This creates the "铿锵" clanking feel — wind up, then slam.
+        const lt=(t-0.85)/0.15; // 0→1 over last 15%
+        if(lt<0.35)scale=1.12-lt*0.57;        // wind down: 1.12 → 0.92
+        else if(lt<0.55)scale=0.92+(lt-0.35)*1.3; // snap up: 0.92 → 1.18
+        else scale=1.18-(lt-0.55)/0.45*0.18;  // settle: 1.18 → 1.0
+      }
+      kfs.push({transform:'translate3d('+x.toFixed(2)+'px,'+y.toFixed(2)+'px,0) scale('+scale.toFixed(3)+')'});
+    }
+    const a=el.animate(kfs,{duration:dur,easing:easing,fill:'forwards'});
+    // v1.0.8 PHASE 26: queen landing triggers MASSIVE shake (heaviest, > king's heavy)
+    a.onfinish=function(){_triggerBoardShake('massive');resolve();};
+  });
+}
+
+// 王 · 威严庄重：比车更沉稳，每步微沉，落地重击 (solemn: heavier than rook)
+// v1.0.8 PHASE 26 (optimization): The king now "威严庄重" — more solemn/steady
+//   than the rook. Design: longest duration (560ms), four measured "steps"
+//   (the king does not glide — he plants each foot deliberately), a very subtle
+//   scale breath (1.0 → 1.02 → 1.0) to convey regal gravitas, and a HEAVY shake
+//   on landing (lighter than queen's massive, but heavier than rook's light).
+//   The step-wise y-wobble is retained but smoothed. All keyframes mutate ONLY
+//   transform to sustain high fps.
+function _animKing(el,dx,dy,dur,easing){
+  return new Promise(resolve=>{
+    const steps=28;
+    const kfs=[];
+    for(let i=0;i<=steps;i++){
+      const t=i/steps;
+      let x=dx*t, y=dy*t;
+      // Four deliberate steps: y dips slightly at each step landing, then
+      // recovers. Unlike the old version, the dip is smooth (no hard cutoff)
+      // and deeper (0.6px → CELL*0.025) to feel "沉稳" (steady/heavy).
+      const stepPhase=t*4;
+      const stepFrac=stepPhase-Math.floor(stepPhase);
+      // Smooth bell curve per step (sin), peaking at stepFrac=0.5
+      const stepDip=Math.sin(stepFrac*Math.PI)*CELL*0.025;
+      y+=stepDip;
+      // Subtle scale breath: 1.0 → 1.02 → 1.0 over the whole journey
+      // (conveys "威严" — regal presence, not a fragile tremor like the pawn)
+      const scale=1+Math.sin(t*Math.PI)*0.02;
+      kfs.push({transform:'translate3d('+x.toFixed(2)+'px,'+y.toFixed(2)+'px,0) scale('+scale.toFixed(3)+')'});
+    }
+    const a=el.animate(kfs,{duration:dur,easing:easing,fill:'forwards'});
+    a.onfinish=function(){_triggerBoardShake('heavy');resolve();};
+  });
+}
+
+// Dispatch piece animation by type. Returns Promise<void>.
+function _runPieceAnim(el,pieceType,dx,dy){
+  const dur=ANIM_DURATIONS[pieceType]||300;
+  const easing=ANIM_EASINGS[pieceType]||'linear';
+  switch(pieceType){
+    case 'pawn':   return _animPawn(el,dx,dy,dur,easing);
+    case 'knight': return _animKnight(el,dx,dy,dur,easing);
+    case 'bishop': return _animBishop(el,dx,dy,dur,easing);
+    case 'rook':   return _animRook(el,dx,dy,dur,easing);
+    case 'queen':  return _animQueen(el,dx,dy,dur,easing);
+    case 'king':   return _animKing(el,dx,dy,dur,easing);
+    default:
+      return new Promise(resolve=>{
+        el.style.transition='transform '+dur+'ms '+easing;
+        el.style.transform='translate3d('+dx+'px,'+dy+'px,0)';
+        setTimeout(resolve,dur);
+      });
+  }
+}
+
+// v1.0.8 PHASE 22: Trigger per-piece sound via audioEngine (defined in ui.js).
+// Defensive: typeof check guards against load-order issues during development.
+// For captures: playCapture (impact burst) + per-piece sound (movement) play
+// concurrently — the capture sound represents the captured piece's "hit" and
+// the per-piece sound represents the mover's approach. The compressor in the
+// audio routing chain prevents clipping when both sounds overlap.
+// v1.0.8 PHASE 22 (bug fix): Check soundOn before playing — this function is
+// called directly from animateMove (bypassing playSound's soundOn guard), so
+// without this check, move sounds would play even when the user muted sound.
+function _playPieceSound(pieceType,isCapture){
+  try{
+    if(typeof soundOn!=='undefined'&&!soundOn)return;
+    if(typeof audioEngine!=='undefined'&&audioEngine){
+      if(isCapture&&typeof audioEngine.playCapture==='function'){
+        audioEngine.playCapture();
+      }
+      const fnName='play'+pieceType.charAt(0).toUpperCase()+pieceType.slice(1);
+      const fn=audioEngine[fnName];
+      if(typeof fn==='function')fn.call(audioEngine);
+    }
+  }catch(e){}
+}
+
+// v1.0.8 PHASE 22: Trigger castle sound via audioEngine (rook move + king + rook land).
+// v1.0.8 PHASE 22 (bug fix): Check soundOn before playing (same reason as above).
+function _playCastleSound(){
+  try{
+    if(typeof soundOn!=='undefined'&&!soundOn)return;
+    if(typeof audioEngine!=='undefined'&&audioEngine){
+      if(typeof audioEngine.playCastleRookMove==='function')audioEngine.playCastleRookMove();
+    }
+  }catch(e){}
+}
+
+// Main animation entry point. Signature preserved from v1.0.7:
+//   animateMove(from,to,pieceSym,pieceType,isCapture,isCheck,pieceColor)
+// All callers in ui.js use this exact signature — DO NOT change.
+function animateMove(from,to,pieceSym,pieceType,isCapture,isCheck,pieceColor){
+  // v1.0.8 PHASE 22: prefers-reduced-motion — skip animation entirely.
+  // Still trigger sound so the user hears the move (sound is independent of
+  // animation per the v1.0.8 design — see ChessAudioEngine in ui.js).
+  let _reducedMotion=false;
+  try{
+    if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+      _reducedMotion=true;
+    }
+  }catch(e){}
+  if(_reducedMotion){
+    animationInProgress=false;
+    _activeAnimEls=[];
+    _playPieceSound(pieceType,!!isCapture);
+    return;
+  }
+
+  // Castling detection (Chess960-aware via _castleSide helper).
+  let _castleside=null;
+  try{
+    if(typeof _lastAnimMv!=='undefined'&&_lastAnimMv&&typeof _castleSide==='function'){
+      _castleside=_castleSide(_lastAnimMv);
+    }
+  }catch(e){}
+  if(!_castleside&&pieceType==='king'&&Math.abs(to.col-from.col)===2){
+    _castleside=to.col===6?'kingside':'queenside';
+  }
+  // Chess960: when king starts on its castling target square (e.g. SP-ID
+  // where white king starts on g1 castling kingside), the king does NOT
+  // move — only the rook moves. Skip king overlay; leave king visible.
+  const _kingStayedPut=!!_castleside&&from.row===to.row&&from.col===to.col;
+
+  animationInProgress=true;
+  _activeAnimEls=[];
+
+  // Hide source piece during animation (overlay replaces it).
+  // Hide captured piece too (so the overlay can take its place visually).
+  const _srcPc=document.querySelector('.sq[data-r="'+from.row+'"][data-c="'+from.col+'"] .pc');
+  if(!_kingStayedPut&&_srcPc)_srcPc.style.opacity='0';
+  if(isCapture){
+    const _tgtPc=document.querySelector('.sq[data-r="'+to.row+'"][data-c="'+to.col+'"] .pc');
+    if(_tgtPc)_tgtPc.style.opacity='0';
+  }
+
+  // Resolve .bwrap (cached). Fall back to querySelector if cache is stale.
+  const bwrap=_cachedBwrap||(_cachedBwrap=document.querySelector('.bwrap'));
+  if(!bwrap||!bwrap.parentNode){
+    _cachedBwrap=null;
+    animationInProgress=false;
+    if(_srcPc)_srcPc.style.opacity='';
+    _playPieceSound(pieceType,!!isCapture);
+    return;
+  }
+
+  // Remove stale overlay nodes from any prior animation.
+  const oldAnims=bwrap.querySelectorAll('.move-anim');
+  for(let i=0;i<oldAnims.length;i++)oldAnims[i].remove();
+
+  const cs=CELL;
+  const _flip=playerColor==='black';
+  const _fc=_flip?7-from.col:from.col, _fr=_flip?7-from.row:from.row;
+  const _tc=_flip?7-to.col:to.col,    _tr=_flip?7-to.row:to.row;
+  const dx=(_tc-_fc)*cs, dy=(_tr-_fr)*cs;
+
+  // Bump generation counter so any prior _finishAnim closure self-invalidates.
+  ++_animGen;
+  const _myGen=_animGen;
+  let _animDone=false;
+
+  // Create king overlay (skip if king stayed put for Chess960 castling).
+  let el=null;
+  if(!_kingStayedPut){
+    el=document.createElement('div');
+    el.className='move-anim anim-'+pieceType+(pieceColor==='white'?' w-piece':' bk-piece');
+    el.textContent=pieceSym;
+    el.style.cssText='left:'+(_fc*cs)+'px;top:'+(_fr*cs)+'px;width:'+cs+'px;height:'+cs+'px;transform:translate3d(0,0,0);opacity:1;will-change:transform';
+    bwrap.appendChild(el);
+    // v1.0.8 PHASE 30: include lastCell=CELL so _reattachActiveAnimations can
+    //   detect a CELL change on the FIRST re-attach (previously lastCell was
+    //   undefined, skipping the snap-to-dest correction if orientation changed
+    //   in the first few ms of an animation).
+    _activeAnimEls.push({el:el,from:{row:from.row,col:from.col},dx:dx,dy:dy,lastCell:cs});
+  }
+
+  // Castling: also create rook overlay (Chess960-aware via chess960CastlingRookMove)
+  let rookEl=null;
+  let rdx=0, rdy=0;
+  const isCastling=!!_castleside;
+  if(isCastling&&pieceColor){
+    let rFromCol=-1, rToCol=-1;
+    try{
+      if(typeof chess960CastlingRookMove==='function'){
+        const rm=chess960CastlingRookMove(gameState,pieceColor,_castleside);
+        if(rm){rFromCol=rm.rookFrom;rToCol=rm.rookTo;}
+      }
+    }catch(e){}
+    // Fallback to standard chess rook positions if helper fails
+    if(rFromCol<0){
+      if(_castleside==='kingside'){rFromCol=7;rToCol=5;}
+      else{rFromCol=0;rToCol=3;}
+    }
+    if(rFromCol>=0&&rFromCol!==rToCol){
+      // Hide source rook during animation
+      const _srcRookPc=document.querySelector('.sq[data-r="'+from.row+'"][data-c="'+rFromCol+'"] .pc');
+      if(_srcRookPc)_srcRookPc.style.opacity='0';
+      const rFrom={row:from.row,col:rFromCol}, rTo={row:from.row,col:rToCol};
+      const _rfc=_flip?7-rFrom.col:rFrom.col, _rfr=_flip?7-rFrom.row:rFrom.row;
+      const _rtc=_flip?7-rTo.col:rTo.col,     _rtr=_flip?7-rTo.row:rTo.row;
+      rdx=(_rtc-_rfc)*cs; rdy=(_rtr-_rfr)*cs;
+      rookEl=document.createElement('div');
+      rookEl.className='move-anim anim-rook'+(pieceColor==='white'?' w-piece':' bk-piece');
+      rookEl.textContent=SYM[pieceColor].rook;
+      rookEl.style.cssText='left:'+(_rfc*cs)+'px;top:'+(_rfr*cs)+'px;width:'+cs+'px;height:'+cs+'px;transform:translate3d(0,0,0);opacity:1;will-change:transform';
+      bwrap.appendChild(rookEl);
+      // v1.0.8 PHASE 30: include lastCell=cs (same fix as king overlay above)
+      _activeAnimEls.push({el:rookEl,from:rFrom,dx:rdx,dy:rdy,lastCell:cs});
+    }
+  }
+
+  // Trigger sound at animation start (synced with keyframe t=0).
+  if(isCastling){
+    _playCastleSound();
+  }else{
+    _playPieceSound(pieceType,!!isCapture);
+  }
+
+  // Run piece animations concurrently (king + rook for castling).
+  const promises=[];
+  if(el){
+    promises.push(_runPieceAnim(el,pieceType,dx,dy));
+  }
+  if(rookEl){
+    promises.push(_runPieceAnim(rookEl,'rook',rdx,rdy));
+  }
+
+  // _finishAnim: cleanup closure. Self-invalidates if a newer animation started.
+  function _finishAnim(){
+    if(_animDone)return;
+    _animDone=true;
+    // v1.0.8 PHASE 23 (flicker fix, first-principles):
+    // Previously this function called el.remove() / rookEl.remove() to detach
+    // the overlay nodes the instant the Web Animations API fired onfinish.
+    // However, the post-move render() (which rebuilds the DOM with the new
+    // piece position) is scheduled separately via setTimeout(ANIMATION_DEFER_MS)
+    // → requestAnimationFrame(updateAfterMove) → render(). That creates a
+    // ~40–56ms window between overlay removal and the next paint in which both
+    // the source square (opacity:0) and destination square (no overlay, no new
+    // DOM yet) appear empty — perceived by the user as a piece flicker.
+    //
+    // First-principles fix: do NOT remove the overlay here. The overlay stays
+    // visible at the destination square until render() runs. render() does
+    // `app.innerHTML = h`, which destroys the entire .bwrap subtree (including
+    // the overlay) and rebuilds it with the new game state in a single
+    // synchronous DOM mutation. The browser then paints the new state in the
+    // same frame — no flicker window exists.
+    //
+    // _activeAnimEls is still cleared so that _reattachActiveAnimations()
+    // (called by render after innerHTML replacement) does NOT re-append the
+    // now-stale overlay nodes to the new DOM.
+    if(_myGen!==_animGen){
+      // Stale closure (a newer animation started). The overlay elements may
+      // still be in the DOM if the newer animation hasn't started yet, or may
+      // have been removed by the newer animation's cleanup. Safe to remove.
+      if(el)el.remove();
+      if(rookEl)rookEl.remove();
+      return;
+    }
+    animationInProgress=false;
+    _activeAnimEls=[];
+    _lastAnimMv=null;
+    // NOTE: el.remove() / rookEl.remove() intentionally omitted — see comment
+    // above. The overlay is destroyed by the next render()'s innerHTML reset.
+  }
+
+  // Wait for all piece animations, then finish.
+  if(promises.length>0){
+    Promise.all(promises).then(function(){_finishAnim();});
+  }else{
+    // No overlay created (e.g., kingStayedPut with no rookEl) — finish now.
+    _finishAnim();
+  }
+
+  // Safety timeout: if Web Animations API fails (e.g., browser quirk), still
+  // clean up. Duration is max piece duration + 100ms buffer.
+  const _maxDur=Math.max(
+    ANIM_DURATIONS[pieceType]||300,
+    rookEl?(ANIM_DURATIONS.rook||300):0
+  )+100;
+  setTimeout(function(){
+    if(_myGen===_animGen&&!_animDone){_finishAnim();}
+  },_maxDur);
+}
+
+// v1.0.8 PHASE 22: Re-attach active animation overlay nodes after DOM rebuild.
+// Called by ui.js render() when the .bwrap innerHTML is regenerated during an
+// active animation. Without this, the overlay would be lost mid-animation.
+// v1.0.8 PHASE 24 (bug fix): If CELL changed (orientation change mid-animation),
+//   the WAAPI animation's dx/dy are stale. We cancel the animation and snap
+//   the overlay to the (new) destination position so it doesn't land on the
+//   wrong square. The overlay will be destroyed by the next render's innerHTML
+//   reset as usual.
 function _reattachActiveAnimations(){
   if(!_activeAnimEls.length)return;
   const bwrap=_cachedBwrap||(_cachedBwrap=document.querySelector('.bwrap'));
   if(!bwrap||!bwrap.parentNode){_cachedBwrap=null;return;}
-  const cs=CELL;const _flip=playerColor==='black';
+  const cs=CELL;
+  const _flip=playerColor==='black';
   for(const a of _activeAnimEls){
+    // v1.0.8 PHASE 28 (bug fix): _fc/_fr must be computed OUTSIDE the if-block
+    //   (they were const-scoped inside, causing ReferenceError in the snap-to-dest
+    //   path below). Also fixed the snap formula: the overlay's left/top already
+    //   positions it at the source square, so the transform should be just the
+    //   scaled dx/dy (not source + dx/dy — that would double-count the source).
+    const _fc=_flip?7-a.from.col:a.from.col, _fr=_flip?7-a.from.row:a.from.row;
     if(!a.el||!a.el.parentNode){
-      const _fc=_flip?7-a.from.col:a.from.col,_fr=_flip?7-a.from.row:a.from.row;
-      a.el.style.left=(_fc*cs)+'px';a.el.style.top=(_fr*cs)+'px';
-      a.el.style.width=cs+'px';a.el.style.height=cs+'px';
+      a.el.style.left=(_fc*cs)+'px';
+      a.el.style.top=(_fr*cs)+'px';
+      a.el.style.width=cs+'px';
+      a.el.style.height=cs+'px';
       bwrap.appendChild(a.el);
     }
+    // v1.0.8 PHASE 24: If cell size changed since the animation started, the
+    // cached dx/dy are wrong. Cancel the WAAPI animation and snap to dest.
+    // v1.0.8 PHASE 28 (bug fix): transform = scaled dx/dy only (source position
+    //   is already handled by left/top). Old formula added _fc*cs again.
+    if(a.lastCell&&a.lastCell!==cs){
+      try{
+        a.el.getAnimations().forEach(an=>an.cancel());
+        const _sx=a.dx*(cs/a.lastCell), _sy=a.dy*(cs/a.lastCell);
+        a.el.style.transform='translate3d('+_sx.toFixed(2)+'px,'+_sy.toFixed(2)+'px,0)';
+      }catch(e){}
+    }
+    a.lastCell=cs;
   }
 }
+
 
 function initBoard(){const b=Array.from({length:8},()=>Array(8).fill(null));const backRank=['rook','knight','bishop','queen','king','bishop','knight','rook'];for(let c=0;c<8;c++){b[0][c]={type:backRank[c],color:'black'};b[1][c]={type:'pawn',color:'black'};b[6][c]={type:'pawn',color:'white'};b[7][c]={type:backRank[c],color:'white'}}return b}
 // Returns all squares this piece attacks
@@ -986,33 +1314,54 @@ function validateSetupPosition(s){
   for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=s.board[r][c];if(p&&p.type==='king'){if(p.color==='white')s.wk={row:r,col:c};else s.bk={row:r,col:c}}}
   const errs=[];
   const wPieces=[],bPieces=[];
-  for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=s.board[r][c];if(p){if(p.color==='white')wPieces.push(p);else bPieces.push(p)}}
+  // v1.0.8 PHASE 24 (PERF + bug fix): single-pass piece collection with
+  //   per-type counters, replacing 12+ separate .filter() passes. Also
+  //   validates pawns on both rank 1 AND rank 8 (previously only checked
+  //   one rank per color with swapped rank-number literals in errors).
+  const _wCnt={pawn:0,knight:0,bishop:0,rook:0,queen:0,king:0};
+  const _bCnt={pawn:0,knight:0,bishop:0,rook:0,queen:0,king:0};
+  for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+    const p=s.board[r][c];
+    if(!p)continue;
+    if(p.color==='white'){wPieces.push(p);_wCnt[p.type]++;}
+    else{bPieces.push(p);_bCnt[p.type]++;}
+    if(p.type==='pawn'&&(r===0||r===7)){
+      // v1.0.8 PHASE 28 FIX: rank formula — row 0 = rank 8 (black), row 7 = rank 1 (white).
+      const rank=(r===0)?8:1;
+      errs.push((p.color==='white'?T('setup_white'):T('setup_black'))+T('setup_pawn_on_rank')+rank+T('setup_rank')+'('+posAlg({row:r,col:c})+')');
+    }
+  }
   const wk=s.wk,bk=s.bk;
-  const wKingCount=wPieces.filter(p=>p.type==='king').length,bKingCount=bPieces.filter(p=>p.type==='king').length;
-  if(wKingCount===0)errs.push(T('setup_no_white_king'));
-  if(bKingCount===0)errs.push(T('setup_no_black_king'));
-  if(wKingCount>1)errs.push(T('setup_white')+T('setup_king_count_over'));
-  if(bKingCount>1)errs.push(T('setup_black')+T('setup_king_count_over'));
+  if(_wCnt.king===0)errs.push(T('setup_no_white_king'));
+  if(_bCnt.king===0)errs.push(T('setup_no_black_king'));
+  if(_wCnt.king>1)errs.push(T('setup_white')+T('setup_king_count_over'));
+  if(_bCnt.king>1)errs.push(T('setup_black')+T('setup_king_count_over'));
   if(wk&&bk&&Math.abs(wk.row-bk.row)<=1&&Math.abs(wk.col-bk.col)<=1)errs.push(T('setup_kings_adjacent'));
   const nonMoveColor=OPP_COLOR[s.currentTurn];
   const nonMoveKing=nonMoveColor==='white'?s.wk:s.bk;
   if(nonMoveKing&&inCheck(s.board,nonMoveColor,nonMoveKing))errs.push((nonMoveColor==='white'?T('setup_white'):T('setup_black'))+T('setup_check_impossible'));
-  for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=s.board[r][c];if(p&&p.type==='pawn'){if(p.color==='white'&&r===0)errs.push(T('setup_white')+T('setup_pawn_on_rank')+'1'+T('setup_rank')+'('+posAlg({row:r,col:c})+')');if(p.color==='black'&&r===7)errs.push(T('setup_black')+T('setup_pawn_on_rank')+'8'+T('setup_rank')+'('+posAlg({row:r,col:c})+')')}}
   if(wPieces.length>16)errs.push(T('setup_white')+T('setup_piece_over_limit'));
   if(bPieces.length>16)errs.push(T('setup_black')+T('setup_piece_over_limit'));
-  if(wPieces.filter(p=>p.type==='pawn').length>8)errs.push(T('setup_white')+T('setup_pawn_over_8'));
-  if(bPieces.filter(p=>p.type==='pawn').length>8)errs.push(T('setup_black')+T('setup_pawn_over_8'));
-  if(wPieces.filter(p=>p.type==='queen').length>9)errs.push(T('setup_white')+T('setup_queen_over_9'));
-  if(bPieces.filter(p=>p.type==='queen').length>9)errs.push(T('setup_black')+T('setup_queen_over_9'));
-  if(wPieces.filter(p=>p.type==='rook').length>10)errs.push(T('setup_white')+T('setup_rook_over_10'));
-  if(bPieces.filter(p=>p.type==='rook').length>10)errs.push(T('setup_black')+T('setup_rook_over_10'));
-  if(wPieces.filter(p=>p.type==='bishop').length>10)errs.push(T('setup_white')+T('setup_bishop_over_10'));
-  if(bPieces.filter(p=>p.type==='bishop').length>10)errs.push(T('setup_black')+T('setup_bishop_over_10'));
-  if(wPieces.filter(p=>p.type==='knight').length>10)errs.push(T('setup_white')+T('setup_knight_over_10'));
-  if(bPieces.filter(p=>p.type==='knight').length>10)errs.push(T('setup_black')+T('setup_knight_over_10'));
+  if(_wCnt.pawn>8)errs.push(T('setup_white')+T('setup_pawn_over_8'));
+  if(_bCnt.pawn>8)errs.push(T('setup_black')+T('setup_pawn_over_8'));
+  if(_wCnt.queen>9)errs.push(T('setup_white')+T('setup_queen_over_9'));
+  if(_bCnt.queen>9)errs.push(T('setup_black')+T('setup_queen_over_9'));
+  if(_wCnt.rook>10)errs.push(T('setup_white')+T('setup_rook_over_10'));
+  if(_bCnt.rook>10)errs.push(T('setup_black')+T('setup_rook_over_10'));
+  if(_wCnt.bishop>10)errs.push(T('setup_white')+T('setup_bishop_over_10'));
+  if(_bCnt.bishop>10)errs.push(T('setup_black')+T('setup_bishop_over_10'));
+  if(_wCnt.knight>10)errs.push(T('setup_white')+T('setup_knight_over_10'));
+  if(_bCnt.knight>10)errs.push(T('setup_black')+T('setup_knight_over_10'));
   // v1.0.7 — Validate 🔁 castle markers and ⚡ en-passant marker
   _validateSetupCastleMarks(s,errs);
   _validateSetupEpMark(s,errs);
+  // v1.0.8 PHASE 22 (bug fix): Re-sync Zobrist hash after validation modifies
+  // castlingRights and enPassantTarget. Without this, gameState.hash is stale,
+  // causing posCount inconsistency and potential castling-rights detection
+  // issues (the engine receives a FEN derived from the correct castlingRights,
+  // but the internal hash-based position tracking is wrong, which can cause
+  // subtle issues with threefold repetition and state restoration).
+  syncHash(s);
   return errs
 }
 
@@ -1133,8 +1482,12 @@ function _validateSetupEpMark(s,errs){
 // gained/lost during play, satisfying the user's requirement that markers
 // "auto-remove when no longer eligible per the rules".
 function computeVisibleCastleMarks(s){
-  // Setup-mode input takes precedence
-  if(s.setupCastleMarks&&s.setupCastleMarks instanceof Set&&s.setupCastleMarks.size>0){
+  // v1.0.8 PHASE 40: only use setupCastleMarks when actually in setup mode.
+  //   Previously, if setupCastleMarks persisted after exiting setup mode
+  //   (via FEN import, PGN import, new game, etc.), this function would
+  //   return the stale markers instead of deriving from castlingRights.
+  //   Now we check setupMode explicitly, so stale markers are ignored.
+  if(typeof setupMode!=='undefined'&&setupMode&&s.setupCastleMarks&&s.setupCastleMarks instanceof Set&&s.setupCastleMarks.size>0){
     return s.setupCastleMarks;
   }
   const marks=new Set();
@@ -1186,15 +1539,16 @@ function computeVisibleCastleMarks(s){
 // we're in setup mode — no separate setupMode guard is needed.
 // In play/review mode, we derive the marker FROM enPassantTarget (the square
 // BEHIND the pawn): convert it back to the pawn's current square. A white
-// pawn on row 4 has enPassantTarget on row 3; a black pawn on row 3 has
+// pawn on row 4 has enPassantTarget on row 5; a black pawn on row 3 has
 // enPassantTarget on row 2.
 //
 // Returns {row,col}|null — the square where the ⚡ badge should be rendered
 // (the pawn's current square, not the FEN target square).
 function computeVisibleEpMark(s){
-  // Setup-mode input: setupEpMark is the user's marker placement (pawn's
-  // square). It is truthy only while setupMode===true (see lifecycle above).
-  if(s.setupEpMark)return s.setupEpMark;
+  // v1.0.8 PHASE 40: only use setupEpMark when actually in setup mode.
+  //   Same fix as computeVisibleCastleMarks — prevents stale setupEpMark
+  //   from overriding enPassantTarget after exiting setup mode.
+  if(typeof setupMode!=='undefined'&&setupMode&&s.setupEpMark)return s.setupEpMark;
   if(!s.enPassantTarget)return null;
   const {row,col}=s.enPassantTarget;
   // Derive the pawn's square from enPassantTarget (the skipped square) and
@@ -1219,9 +1573,8 @@ function computeVisibleEpMark(s){
 // Only clone array structure — reduces 64 object copies to 8 array slices per clone
 function cloneB(b){return b.map(r=>r.slice())}
 // posCount deep-copied for search correctness
-function cloneS(s){return{board:cloneB(s.board),currentTurn:s.currentTurn,castlingRights:{...s.castlingRights},enPassantTarget:s.enPassantTarget?{...s.enPassantTarget}:null,halfMoveClock:s.halfMoveClock,fullMoveNumber:s.fullMoveNumber,// moveHistory: deep-copied to prevent shared-reference corruption
-// (makeMvInPlace pushes to existing array, unmakeMv truncates it — sharing by reference
-// would silently corrupt the original state's moveHistory)
+function cloneS(s){return{board:cloneB(s.board),currentTurn:s.currentTurn,castlingRights:{...s.castlingRights},enPassantTarget:s.enPassantTarget?{...s.enPassantTarget}:null,halfMoveClock:s.halfMoveClock,fullMoveNumber:s.fullMoveNumber,// moveHistory: array shallow-copied (move objects are never mutated in place,
+// only pushed/popped), so sharing by reference would corrupt the parent's array
 moveHistory:s.moveHistory?s.moveHistory.slice():[],posCount:new Map(s.posCount),wk:s.wk?{...s.wk}:null,bk:s.bk?{...s.bk}:null,hash:s.hash||0,boardVersion:s.boardVersion||0}}
 
 function sqAttackedFast(b,pos,byCo){if(!b||!pos||!inB(pos.row,pos.col))return false;const r=pos.row,c=pos.col;const pd=byCo==='white'?1:-1;if(inB(r+pd,c-1)&&b[r+pd][c-1]&&b[r+pd][c-1].color===byCo&&b[r+pd][c-1].type==='pawn')return true;if(inB(r+pd,c+1)&&b[r+pd][c+1]&&b[r+pd][c+1].color===byCo&&b[r+pd][c+1].type==='pawn')return true;for(const[dr,dc]of KNIGHT_OFFSETS){if(inB(r+dr,c+dc)&&b[r+dr][c+dc]&&b[r+dr][c+dc].color===byCo&&b[r+dr][c+dc].type==='knight')return true}for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){if(!dr&&!dc)continue;if(inB(r+dr,c+dc)&&b[r+dr][c+dc]&&b[r+dr][c+dc].color===byCo&&b[r+dr][c+dc].type==='king')return true}for(const[dr,dc]of DIR_ROOK){let nr=r+dr,nc=c+dc;while(inB(nr,nc)){const p=b[nr][nc];if(p){if(p.color===byCo&&(p.type==='rook'||p.type==='queen'))return true;break}nr+=dr;nc+=dc}}for(const[dr,dc]of DIR_BISHOP){let nr=r+dr,nc=c+dc;while(inB(nr,nc)){const p=b[nr][nc];if(p){if(p.color===byCo&&(p.type==='bishop'||p.type==='queen'))return true;break}nr+=dr;nc+=dc}}return false}
@@ -1229,7 +1582,7 @@ function sqAttackedFast(b,pos,byCo){if(!b||!pos||!inB(pos.row,pos.col))return fa
  * Check if the given color's king is in check.
  * @param {Array} b - 8x8 board array
  * @param {string} co - Color to check ('white' or 'black')
- * @param {Object|null} kPos - King position override {row, col}, or null to find king
+ * @param {Object|null} kPos - King position {row, col}, or null to return false (does NOT search for the king)
  * @returns {boolean} True if the king is in check
  */
 function inCheck(b,co,kPos=null){const k=kPos;return k?sqAttackedFast(b,k,OPP_COLOR[co]):false}
@@ -1352,8 +1705,25 @@ function _castleSide(mv){
     if(mv.from.row===_homeRow&&mv.to.row===_homeRow){
       const _is960=(typeof gameVariant!=='undefined'&&gameVariant==='chess960')||(typeof isChess960Mode==='function'&&isChess960Mode());
       const _minDist=_is960?1:2;
-      if(mv.to.col===6&&Math.abs(mv.to.col-mv.from.col)>=_minDist)return 'kingside';
-      if(mv.to.col===2&&Math.abs(mv.to.col-mv.from.col)>=_minDist)return 'queenside';
+      // v1.0.8 PHASE 30: In Chess960, _minDist=1 means ANY king move to col 6/2 on
+      //   the home row would be classified as castling — including normal king
+      //   captures (e.g. Kxg1 when the king starts on f1). Guard by checking that
+      //   the corresponding castling right is actually present. This prevents
+      //   silent piece destruction + incorrect rook displacement + wrong 50-move
+      //   clock when the engine plays a normal king capture to g1/c1 in 960.
+      // v1.0.8 PHASE 49: The Phase 30 guard is insufficient — a king capture to
+      //   col 6/2 still satisfies "castling right present" but is a real capture,
+      //   not castling. Castling destination squares are ALWAYS empty (the rook
+      //   ends up BESIDE the king, not under it). If the target square holds any
+      //   piece, this is a capture, not castling. Add the empty-destination guard.
+      const _cr=(typeof gameState!=='undefined'&&gameState&&gameState.castlingRights)?gameState.castlingRights:null;
+      const _destEmpty=!gameState||!gameState.board||!gameState.board[mv.to.row]||!gameState.board[mv.to.row][mv.to.col];
+      if(mv.to.col===6&&Math.abs(mv.to.col-mv.from.col)>=_minDist){
+        if(_destEmpty&&(!_is960||(_cr&&_cr[mv.piece.color+'Kingside'])))return 'kingside';
+      }
+      if(mv.to.col===2&&Math.abs(mv.to.col-mv.from.col)>=_minDist){
+        if(_destEmpty&&(!_is960||(_cr&&_cr[mv.piece.color+'Queenside'])))return 'queenside';
+      }
     }
   }
   return null;
@@ -1877,9 +2247,16 @@ if(bMinor===0&&wMinor<=1)return true;
 // K+B vs K+B (both sides have exactly 1 bishop, same square color)
 if(wMinor===1&&bMinor===1&&wBishopCount===1&&bBishopCount===1
    &&wBishopParity>=0&&bBishopParity>=0&&wBishopParity===bBishopParity)return true;
-// K+B+B(same color) vs K — two same-color bishops cannot force checkmate
-if(bMinor===0&&wBishopCount===2&&wBishopParity>=0)return true;
-if(wMinor===0&&bBishopCount===2&&bBishopParity>=0)return true;
+// K+B+B(same color) vs K — any number of same-color bishops cannot force checkmate.
+// v1.0.8 PHASE 30: was wBishopCount===2 (exactly 2), now >=2 (2 or more, e.g. 3
+//   bishops via promotion — all same color, still no checkmate possible). The
+//   wBishopParity>=0 check already ensures ALL bishops are the same color.
+// v1.0.8 PHASE 33: added wCount.knight===0 guard. K+N+B+B(same color) vs K is
+//   NOT a dead position — the knight attacks both square colors, so combined
+//   with same-color bishops checkmate IS possible. The old code (===2 and >=2)
+//   both missed this edge case.
+if(bMinor===0&&wBishopCount>=2&&wBishopParity>=0&&wCount.knight===0)return true;
+if(wMinor===0&&bBishopCount>=2&&bBishopParity>=0&&bCount.knight===0)return true;
 return false;
 }
 // PGN-standard SAN notation with proper disambiguation (DroidFish TextIO.moveToString algorithm)
@@ -1918,7 +2295,30 @@ if(setupMode)return n;
 const ps=postState;
 if(ps){const opp=OPP_COLOR[piece.color];const kPos=opp==='white'?ps.wk:ps.bk;if(kPos&&inCheck(ps.board,opp,kPos)){n+=hasLegalMoves(ps)?'+':'#'}}
 return n}
-function getCtrlMap(b){const cm=[];for(let r=0;r<8;r++){cm[r]=[];for(let c=0;c<8;c++)cm[r][c]={white:[],black:[]}}
+// v1.0.8 PHASE 31 PERF: getCtrlMap allocation reduction via hidden-class stability.
+//   Previous implementation allocated 64 {white:[],black:[]} object literals on
+//   EVERY call (192 allocations including the 128 empty arrays). getCtrlMap is
+//   called on every render tick when the control heatmap is on, so this was
+//   significant GC pressure.
+//
+//   Optimization: use a factory function (_newCtrlCell) that builds each cell
+//   from the SAME code path. V8 can then assign the SAME hidden class to all 64
+//   cell objects (object literals at different source locations can sometimes
+//   get different hidden classes). This improves inline-cache hit rates for
+//   downstream property access (cm[r][c].white, .black) in the hot rendering
+//   loop. The factory also reads cleaner than an inline literal.
+//
+//   We CANNOT reuse a single buffer object across calls because callers cache
+//   the result (cachedCtrlMap keyed by gameState.hash) and a concurrent
+//   _computeAndCacheVisualAnnotations call (which uses postState.board, a
+//   DIFFERENT board) would corrupt the cached data if we cleared in place. So
+//   each call still produces a fresh 64-cell grid.
+//
+//   The attacker {piece, position} objects are still allocated per push, but the
+//   position object is hoisted per-piece (Rev55 optimization), so we allocate at
+//   most 32 position objects per call.
+function _newCtrlCell(){return{white:[],black:[]}}
+function getCtrlMap(b){const cm=[];for(let r=0;r<8;r++){cm[r]=[];for(let c=0;c<8;c++)cm[r][c]=_newCtrlCell()}
 // v1.0.5 Rev55 PERF: hoist the attacker-position object out of the inner loop.
 // Each piece at (r,c) attacks multiple squares, but its `position` field is the
 // SAME for all those pushes. Previously we allocated a fresh {row:r,col:c} object
@@ -2012,18 +2412,9 @@ function computeHash(s){
 // Used as fallback when incremental updates may be unreliable
 function syncHash(s){s.hash=computeHash(s)}
 
-// v1.0.7: recomputeCastlingRights has been REMOVED. The v1.0.6 auto-assignment
-// of castling rights ("when king + rook are on standard starting squares,
-// rights are auto-granted") is now superseded by fully manual control via
-// the 🔁 castle markers in setup mode (see _validateSetupCastleMarks). The
-// function's old behavior is preserved ONLY for the initial standard
-// position (initState) and Chess960 starting positions (initChess960State),
-// which still construct castlingRights={all:true} directly. For all other
-// setup-mode edits, castlingRights start at {all:false} and are validated
-// against the markers when the user taps "Done".
-// This avoids stale rights being silently retained after the user clears
-// the board or removes the king — the previous root cause of "phantom
-// castling" bugs reported during v1.0.6 QA.
+// v1.0.7: recomputeCastlingRights REMOVED — castling rights now owned by 🔁
+// marker validation (_validateSetupCastleMarks). initState/initChess960State
+// still construct castlingRights={all:true} directly.
 
 // Refresh game state after setup mode piece placement.
 // v1.0.7: No longer touches castlingRights — they are now owned entirely by
@@ -2073,7 +2464,7 @@ if(bookMove){
 }
 }catch(e){console.error('ECO book move lookup error:',e);}
 }
-if(typeof AndroidBridge!=='undefined'&&AndroidBridge.isEngineReady()){
+if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.isEngineReady==='function'&&AndroidBridge.isEngineReady()){
 // v1.0.6: Sanitize the FEN before sending to the engine to strip
 // inconsistent castling rights that can cause the engine to hang.
 const fen=(typeof _sanitizeFenForEngine==='function')?_sanitizeFenForEngine(generateFEN(gameState)):generateFEN(gameState);
@@ -2123,12 +2514,16 @@ if(gameState.currentTurn===playerColor)return;
 // Clear any stale safety timer from a previous failed attempt
 if(_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
 isAIThinking=true;
+// v1.0.8 PHASE 22 supplement: AI-think-start sound (轻微滴声)
+try{if(typeof playSound==='function')playSound('aiThinkStart');}catch(e){}
 hintText='';isHintLoading=false;_hintBarInfo='';_ponderGen++;_ponderBarInfo='';_ponderMoveSAN='';_pendingPonderMoveUCI=null;
 aiThinkInfo=T('thinking');_aiBarInfo=T('thinking');_updateAIThinkDisplay();
-// Lightweight UI update: avoid full render() which would destroy the landing animation.
-// _updateAIThinkDisplay() handles the "思考中..." indicator.
-// Full render is deferred until _startLandingTimer completes or AI responds.
-if(!_landingAnimActive)render();
+// v1.0.8 PHASE 22: Lightweight UI update — avoid full render() which would
+// destroy the piece-move animation overlay. _updateAIThinkDisplay() handles
+// the "思考中..." indicator. Full render is deferred until the animation
+// completes (_finishAnim clears animationInProgress) or AI responds.
+// Note: _landingAnimActive removed in v1.0.8 — WAAPI overlay is independent; skip render only during piece-move animation.
+if(!animationInProgress)render();
 // Safety timeout: if engine doesn't respond within 360s, reset AI state and retry
 // v1.0.4 Rev45: Extended from 15s to 30s to better accommodate timed-game mode.
 // v1.0.4 Rev46: Extended from 30s to 360s (6 minutes) to fully accommodate
@@ -2217,7 +2612,11 @@ function queryECO(s, openingId) {
     }
     if (!bestOp) return null;
     const stepOffset = s.moveHistory.length * 4;
-    if (stepOffset >= bestOp.moves.length) return null;
+    // v1.0.8 PHASE 49: need >= +4 (not just >= stepOffset) — we read
+    //   m[stepOffset..stepOffset+3]. The old `>= length` guard allowed
+    //   partial reads producing undefined from/to (defended by if(piece)
+    //   downstream, but logically wrong).
+    if (stepOffset + 4 > bestOp.moves.length) return null;
     const m = bestOp.moves;
     const from = { row: m[stepOffset], col: m[stepOffset + 1] };
     const to = { row: m[stepOffset + 2], col: m[stepOffset + 3] };
@@ -2320,7 +2719,7 @@ function queryECOBookMove(s) {
   }
   for (const o of searchSet) {
     const mv = o.moves;
-    if (mv.length <= hist.length * 4) continue;
+    if (mv.length < hist.length * 4 + 4) continue;
     let match = true;
     for (let i = 0; i < hist.length; i++) {
       const h = hist[i], j = i * 4;
@@ -2363,7 +2762,7 @@ const h0=hist[0];const key=h0.from.row+','+h0.from.col+','+h0.to.row+','+h0.to.c
 const indexed=ecoHashMap.get(key);if(indexed)searchSet=indexed;
 }
 for(const o of searchSet){
-const mv=o.moves;if(mv.length<=hist.length*4)continue;
+const mv=o.moves;if(mv.length<hist.length*4+4)continue;
 let match=true;
 for(let i=0;i<hist.length;i++){
 const h=hist[i],j=i*4;
@@ -2440,4 +2839,4 @@ function _prependBlackToMovePlaceholder(){
 }
 
 // ---- Exports ----
-export {PV,OPP_COLOR,SQ_LIGHT,SQ_DARK,SQ_SEL,LBL_LIGHT,LBL_DARK,LBL_STROKE_LIGHT,LBL_STROKE_DARK,SYM,PN,PN_EN,pieceName,_principlesHTML,KNIGHT_OFFSETS,DIR_ROOK,DIR_BISHOP,DIR_QUEEN,ELO_MATCH,getAI_LEVELS,CELL,REVIEW_CELL,zobrist,initBoard,attacked,initState,validateSetupPosition,cloneB,cloneS,sqAttackedFast,inCheck,pseudoMoves,legalMoves,hasLegalMoves,moveAlg,getCtrlMap,makeMvInPlace,unmakeMv,gameStatus,isDeadPosition,_applyMoveToBoard,generateFEN,uciToCoords,fenToState,_esc,posAlg,algPos,inB,pieceZobristIdx,computeHash,syncHash,_refreshStateAfterSetup,_recalcCellSize,getEffectiveAILevel,posEmoji,posDesc,T,toggleLang,_lang,_i18n,_prependBlackToMovePlaceholder,_reattachActiveAnimations,_activeAnimEls,computeVisibleCastleMarks,computeVisibleEpMark};
+export {PV,OPP_COLOR,SQ_LIGHT,SQ_DARK,SQ_SEL,LBL_LIGHT,LBL_DARK,LBL_STROKE_LIGHT,LBL_STROKE_DARK,SYM,PN,PN_EN,pieceName,_principlesHTML,KNIGHT_OFFSETS,DIR_ROOK,DIR_BISHOP,DIR_QUEEN,ELO_MATCH,getAI_LEVELS,CELL,REVIEW_CELL,zobrist,initBoard,attacked,initState,validateSetupPosition,cloneB,cloneS,sqAttackedFast,inCheck,pseudoMoves,legalMoves,hasLegalMoves,moveAlg,getCtrlMap,makeMvInPlace,unmakeMv,gameStatus,isDeadPosition,generateFEN,uciToCoords,fenToState,_esc,posAlg,algPos,inB,pieceZobristIdx,computeHash,syncHash,_refreshStateAfterSetup,_recalcCellSize,getEffectiveAILevel,posEmoji,posDesc,T,toggleLang,_lang,_i18n,_prependBlackToMovePlaceholder,_reattachActiveAnimations,_activeAnimEls,computeVisibleCastleMarks,computeVisibleEpMark};

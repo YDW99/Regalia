@@ -4,7 +4,7 @@
 //
 // Copyright (C) 2026 Regalia
 //
-// ECO opening classification data derived from lichess-org/chess-openings (CC0)
+// ECO opening classification data from lichess-org/chess-openings (CC0)
 // https://github.com/lichess-org/chess-openings
 // Code is original — not derived from DroidFish or any GPL v3 source.
 //
@@ -103,14 +103,26 @@ function _ensureEcoParsed(){
     _ecoParsed=true;
     _ecoCachedData=null; // Free the staging variable
     // Build lookup tables
-    for(const o of _ecoData){ECO_BY_ID[o.id]=ECO_BY_ID[o.id]||[];ECO_BY_ID[o.id].push(o);ECO_BY_FAMILY[o.family]=ECO_BY_FAMILY[o.family]||[];ECO_BY_FAMILY[o.family].push(o);}
+    // v1.0.8 PHASE 31 PERF: pre-compute _nameU/_familyU here (see searchEco comment for rationale).
+    for(const o of _ecoData){
+      ECO_BY_ID[o.id]=ECO_BY_ID[o.id]||[];ECO_BY_ID[o.id].push(o);
+      ECO_BY_FAMILY[o.family]=ECO_BY_FAMILY[o.family]||[];ECO_BY_FAMILY[o.family].push(o);
+      o._nameU=o.name.toUpperCase();
+      o._familyU=o.family.toUpperCase();
+    }
     _ecoRawJson=null;
     return;
   }
   try{_ecoData=JSON.parse(_ecoRawJson);_ecoParsed=true;}
   catch(e){console.error('ECO parse error:',e);_ecoData=[];_ecoParsed=true;}
   // Build lookup tables after parsing
-  for(const o of _ecoData){ECO_BY_ID[o.id]=ECO_BY_ID[o.id]||[];ECO_BY_ID[o.id].push(o);ECO_BY_FAMILY[o.family]=ECO_BY_FAMILY[o.family]||[];ECO_BY_FAMILY[o.family].push(o);}
+  // v1.0.8 PHASE 31 PERF: pre-compute uppercase name/family (see comment above).
+  for(const o of _ecoData){
+    ECO_BY_ID[o.id]=ECO_BY_ID[o.id]||[];ECO_BY_ID[o.id].push(o);
+    ECO_BY_FAMILY[o.family]=ECO_BY_FAMILY[o.family]||[];ECO_BY_FAMILY[o.family].push(o);
+    o._nameU=o.name.toUpperCase();
+    o._familyU=o.family.toUpperCase();
+  }
   // Save parsed data to IndexedDB for faster subsequent loads
   _saveEcoToCache(_ecoData);
   // Free the raw JSON string to save memory (~125KB)
@@ -118,7 +130,39 @@ function _ensureEcoParsed(){
 }
 // Lazy property: accessing ECO_OPENINGS triggers parsing
 Object.defineProperty(window,'ECO_OPENINGS',{get:function(){_ensureEcoParsed();return _ecoData;},configurable:true});
-const ECO_BY_ID={};const ECO_BY_FAMILY={};function searchEco(query){_ensureEcoParsed();const q=(query||'').trim().toUpperCase();if(!q)return[];const results=[];const seen=new Set();if(q.length<=3){for(const id in ECO_BY_ID){if(id.startsWith(q)){for(const o of ECO_BY_ID[id]){const k=o.id+'|'+o.name;if(!seen.has(k)){seen.add(k);results.push(o)}}}}}for(const o of ECO_OPENINGS){if(o.name.toUpperCase().includes(q)||o.family.toUpperCase().includes(q)){const k=o.id+'|'+o.name;if(!seen.has(k)){seen.add(k);results.push(o)}}}return results.slice(0,20)}
+const ECO_BY_ID={};const ECO_BY_FAMILY={};
+// v1.0.8 PHASE 31 PERF: searchEco now uses pre-indexed uppercase fields
+//   (_nameU, _familyU) instead of calling toUpperCase() on every opening per
+//   keystroke. The ID-prefix fast path is unchanged. The O(n) substring scan is
+//   unavoidable for arbitrary substring search without a full-text index, but
+//   the per-opening cost is now just 2 includes() calls (no allocations).
+//   Also: early-exit when results reach 20 (the slice cap) to avoid scanning
+//   all ~3000 openings when the query is common (e.g. "king" matches early).
+function searchEco(query){
+  _ensureEcoParsed();
+  const q=(query||'').trim().toUpperCase();
+  if(!q)return[];
+  const results=[];const seen=new Set();
+  // ID-prefix fast path (q.length<=3, e.g. "A04" or "B1")
+  if(q.length<=3){
+    for(const id in ECO_BY_ID){
+      if(id.startsWith(q)){
+        for(const o of ECO_BY_ID[id]){
+          const k=o.id+'|'+o.name;
+          if(!seen.has(k)){seen.add(k);results.push(o);if(results.length>=20)return results;}
+        }
+      }
+    }
+  }
+  // Substring scan using pre-indexed uppercase fields (no toUpperCase per opening)
+  for(const o of _ecoData){
+    if(o._nameU.includes(q)||o._familyU.includes(q)){
+      const k=o.id+'|'+o.name;
+      if(!seen.has(k)){seen.add(k);results.push(o);if(results.length>=20)return results;}
+    }
+  }
+  return results.slice(0,20);
+}
 let _ecoCacheKey='';let _ecoCacheResult=null;
 let ecoHashMap=null,ecoHashMap2=null,ecoHashMap3=null;
 

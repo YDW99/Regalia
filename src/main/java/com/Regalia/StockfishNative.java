@@ -88,7 +88,7 @@ import java.util.zip.ZipFile;
  * - Auto/manual hardware configuration (with big.LITTLE awareness)
  * - Settings export/import in TXT format
  *
- * Version: v18.5.0
+ * Version: v1.0.8
  */
 public class StockfishNative {
 
@@ -119,7 +119,7 @@ public class StockfishNative {
     // v18.4.0: ELO_MAP synced with JS ELO_MATCH for consistent level display
     private static final int[] ELO_MAP = {0, 800, 1350, 1700, 2000, 2200, 2350, 2800};
     // v1.0.5: Synced with the application version (was stale at v1.0.2).
-    private static final String ENGINE_VERSION = "v1.0.7";
+    private static final String ENGINE_VERSION = "v1.0.8";
     // Movetime mapping: index 0 unused, 1-7 = game levels
     private static final int[] MOVETIME_MAP = {0, 500, 800, 1000, 1500, 2000, 3000, 5000};
 
@@ -182,9 +182,18 @@ public class StockfishNative {
     private volatile int _evalDepthLimit = 15;
 
     private volatile boolean _heartbeatRunning = false;
-    private Thread _heartbeatThread = null;
+    // v1.0.8 PHASE 49: volatile — written inside synchronized startHeartbeat(),
+    //   read+joined in unsynchronized shutdown(). Without volatile the shutdown
+    //   thread could see a stale null and skip the interrupt/join, leaking the
+    //   thread. _heartbeatRunning above is already volatile; the Thread handle
+    //   must be too for the same cross-thread visibility reason.
+    private volatile Thread _heartbeatThread = null;
     private static final int HEARTBEAT_INTERVAL_MS = 5000; // 5 seconds (fast detection for aggressive OEM process killers)
-    private static final long ZOMBIE_TIMEOUT_MS = 30000; // 30 seconds (faster than 60s — HyperOS kills processes aggressively)
+    // v1.0.8 PHASE 33: ZOMBIE_TIMEOUT_MS is currently unused — the Phase 30 fix
+    //   gates the zombie check on isSearching, so only ZOMBIE_SEARCH_TIMEOUT_MS
+    //   applies. Kept for documentation of the original design intent (a future
+    //   idle-timeout could re-enable it).
+    private static final long ZOMBIE_TIMEOUT_MS = 30000; // reserved: 30s idle timeout (currently unused)
     private static final long ZOMBIE_SEARCH_TIMEOUT_MS = 120000; // 2 minutes for active searches
     private volatile long _lastResponseTime = System.currentTimeMillis();
     private volatile int _autoRecoveryCount = 0;
@@ -371,10 +380,7 @@ public class StockfishNative {
     }
 
     // ===================== JS CALLBACK HELPERS =====================
-
-    // v1.0.2 REDUNDANCY (audit): removed dead postJsCallbackJson() — zero callers
-    // after v18.5.0 cleanup. All callers use postJsCallback() directly with a
-    // pre-formatted JS expression string.
+    // (v1.0.2: removed dead postJsCallbackJson() — all callers use postJsCallback directly.)
 
     @JavascriptInterface
     public void initEngine() {
@@ -547,7 +553,6 @@ public class StockfishNative {
             _stopLatch = stopLatch;
             sendUciCommand("stop");
         }
-        boolean _timedOut = false;
         try {
             if (!stopLatch.await(1, TimeUnit.SECONDS)) {
                 // v1.0.7 PHASE 19 (bug fix): Engine didn't respond to "stop" within
@@ -557,7 +562,6 @@ public class StockfishNative {
                 // could corrupt the next position's game state (the bestmove is for
                 // the OLD position, not the new one the user is now on).
                 _discardingPonderBestmove = true;
-                _timedOut = true;
                 Log.w(TAG, callerTag + ": stopAndWaitForBestmove timed out — discarding late bestmove");
             }
         } catch (InterruptedException e) {
@@ -569,6 +573,9 @@ public class StockfishNative {
                 }
             }
         }
+        // v1.0.8 PHASE 49: removed the dead `_timedOut` local boolean (was
+        //   assigned true on timeout but never read — the _discardingPonderBestmove
+        //   flag is the real signal consumers check).
     }
 
     private void engineGoInternal(final String fen, final int level, final boolean needNewGame) {
@@ -954,6 +961,32 @@ public class StockfishNative {
         return engineReady;
     }
 
+    // v1.0.8 PHASE 22 (bug fix): Expose system dark-mode state to JS.
+    // WebView's prefers-color-scheme传递依赖 APP 主题的 isLightTheme 属性。
+    // 由于 APP 使用 Theme.NoTitleBar（非 DayNight），isLightTheme 不随系统切换，
+    // 导致 prefers-color-scheme 始终为固定值（在某些 OEM ROM 如小米澎湃 OS 3 上
+    // 可能始终为 dark）。此方法通过 UiModeManager 直接检测系统夜间模式，
+    // 让 JS 在 CSS 媒体查询之外额外检查，确保浅/深色模式正确切换。
+    // 兼容 Android 5.0 (API 21) 及以上，包括小米澎湃 OS 3。
+    @JavascriptInterface
+    public boolean isSystemDarkMode() {
+        try {
+            android.content.Context ctx = context;
+            if (ctx == null) return true; // 默认深色（与原设计一致）
+            android.app.UiModeManager umm = (android.app.UiModeManager) ctx.getSystemService(android.content.Context.UI_MODE_SERVICE);
+            if (umm == null) return true;
+            int mode = umm.getNightMode();
+            // MODE_NIGHT_NO → 浅色; MODE_NIGHT_YES → 深色; MODE_NIGHT_AUTO / MODE_NIGHT_CUSTOM → 跟随系统
+            if (mode == android.app.UiModeManager.MODE_NIGHT_NO) return false;
+            if (mode == android.app.UiModeManager.MODE_NIGHT_YES) return true;
+            // MODE_NIGHT_AUTO_TIME or MODE_NIGHT_CUSTOM: check current UI mode
+            int curMode = ctx.getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK;
+            return curMode == android.content.res.Configuration.UI_MODE_NIGHT_YES;
+        } catch (Throwable e) {
+            return true; // 出错时默认深色（安全回退）
+        }
+    }
+
     // ===================== ENGINE BINARY RESOLUTION =====================
 
     /**
@@ -1050,9 +1083,10 @@ public class StockfishNative {
             return extracted;
         }
 
+        // v1.0.8 PHASE 30: Do NOT postJsCallback here — caller (startEngineInternal) handles the error.
+        // Previously both this method AND the caller fired onEngineError, causing double error toasts.
         String msg = isEnglishMode() ? "Stockfish engine binary not found, please reinstall" : "\u672a\u627e\u5230Stockfish\u5f15\u64ce\u4e8c\u8fdb\u5236\u6587\u4ef6\uff0c\u8bf7\u91cd\u65b0\u5b89\u88c5\u5e94\u7528";
         Log.e(TAG, msg);
-        postJsCallback("onEngineError(" + escapeJsString(msg) + ")");
         return null;
     }
 
@@ -1083,6 +1117,7 @@ public class StockfishNative {
         if (stockfishBin == null) {
             Log.e(TAG, "Engine binary resolution failed — resetting initStarted for retry");
             initStarted = false;
+            _restartInProgress = false; // v1.0.8 PHASE 30: clear restart lock so future recoverEngine() calls can proceed
             postJsCallback("onEngineError(" + escapeJsString(isEnglishMode() ? "Engine file not found, will use offline mode" : "\u5f15\u64ce\u6587\u4ef6\u672a\u627e\u5230\uff0c\u5c06\u4f7f\u7528\u79bb\u7ebf\u6a21\u5f0f") + ")");
             return;
         }
@@ -1098,6 +1133,7 @@ public class StockfishNative {
         if (!started) {
             Log.e(TAG, "Engine process start failed");
             initStarted = false;
+            _restartInProgress = false; // v1.0.8 PHASE 30: clear restart lock so future recoverEngine() calls can proceed
             postJsCallback("onEngineError(" + escapeJsString(isEnglishMode() ? "Engine start failed - please reinstall" : "\u5f15\u64ce\u542f\u52a8\u5931\u8d25 - \u8bf7\u91cd\u65b0\u5b89\u88c5\u5e94\u7528") + ")");
             return;
         }
@@ -1250,8 +1286,9 @@ public class StockfishNative {
                 Log.i(TAG, "Started via /system/bin/sh -c");
             } catch (IOException e2) {
                 Log.w(TAG, "sh -c fallback also failed: " + e2.getMessage());
+                // v1.0.8 PHASE 30: use e2 (the fallback failure), not e1 (the original failure)
                 postJsCallback("onEngineError(" + escapeJsString(
-                        "\u65e0\u6cd5\u542f\u52a8\u5f15\u64ce\u8fdb\u7a0b: " + e1.getMessage()) + ")");
+                        "\u65e0\u6cd5\u542f\u52a8\u5f15\u64ce\u8fdb\u7a0b: " + e2.getMessage()) + ")");
                 return false;
             }
         }
@@ -1407,6 +1444,11 @@ public class StockfishNative {
                         if (shutdownRequested) { _restartInProgress = false; return; }
                         Log.i(TAG, "Auto-recovery attempt " + attemptNum + "/" + MAX_AUTO_RECOVERY + " (" + reason + ")");
                         cleanupEngineResources();
+                        // v1.0.8 PHASE 24 (bug fix): shut down the current executor
+                        //   before creating a fresh one. Previously each recovery
+                        //   cycle leaked an ExecutorService (and its non-daemon
+                        //   thread) because the old executor was never shut down.
+                        try { _engineExecutor.shutdown(); } catch (Throwable tsh) {}
                         _engineExecutor = _createEngineExecutor(); // Fresh executor after cleanup
                         _engineExecutor.execute(new Runnable() {
                             public void run() {
@@ -1542,18 +1584,11 @@ public class StockfishNative {
                     stopLatch.countDown();
                     return;
                 }
-                // v1.0.2 CLEANUP: Removed the dead `if (_isPondering)` branch
-                // here. Both stopPonder() and stopAndWaitForBestmove() set
-                // _isPondering=false BEFORE sending "stop", so by the time the
-                // engine's bestmove arrives, _isPondering is always false. The
-                // actual discard path is the _discardingPonderBestmove check
-                // below, which is set by those same callers.
-                // FIX: Discard bestmove from a ponder stop that was initiated by
-                // stopAndWaitForBestmove(). When we stop pondering to start a new
-                // search (e.g., entering review mode), the ponder's bestmove arrives
-                // after _isPondering has been set to false but before the new search
-                // starts. Without this check, the stale bestmove would be routed to
-                // handleBestMove() with STATE_NONE, corrupting the state machine.
+                // v1.0.8 PHASE 33: FIX: Discard bestmove from a stopped ponder.
+                //   _isPondering is already false by the time the bestmove arrives
+                //   (stopPonder/stopAndWaitForBestmove set it before sending "stop"),
+                //   so without this discard flag the stale bestmove would route to
+                //   handleBestMove() with STATE_NONE and corrupt the state machine.
                 if (_discardingPonderBestmove) {
                     _discardingPonderBestmove = false;
                     synchronized (stateLock) {
@@ -1881,13 +1916,10 @@ public class StockfishNative {
         switch (state) {
             case STATE_GO:
                 postJsCallback("onBestMove(" + escapeJsString(uciMove) + ")");
-                // v1.0.2 CLEANUP: Removed unnecessary { } block (leftover from a
-                // removed `if` condition).
                 postJsCallback("onMultiPVResult(" + multiPVJson + ")");
                 break;
             case STATE_HINT:
                 postJsCallback("onHintMove(" + escapeJsString(uciMove) + ")");
-                // v1.0.2 CLEANUP: Removed unnecessary { } block.
                 postJsCallback("onMultiPVResult(" + multiPVJson + ")");
                 break;
             case STATE_EVAL:
@@ -1900,7 +1932,6 @@ public class StockfishNative {
                 } else {
                     postJsCallback("onEngineEval(0, null, " + _lastEvalDepth + ", " + _storedWdlW + ", " + _storedWdlD + ", " + _storedWdlL + ", " + _lastEvalSeldepth + ")");
                 }
-                // v1.0.2 CLEANUP: Removed unnecessary { } block.
                 postJsCallback("onMultiPVResult(" + multiPVJson + ")");
                 _storedEvalCp = null;
                 _storedEvalMate = null;
@@ -2065,6 +2096,13 @@ public class StockfishNative {
 
     @JavascriptInterface
     public void shutdown() {
+        // v1.0.8 PHASE 33: NOT synchronized on `this` (unlike startHeartbeat).
+        //   There is a benign race: shutdown() could run between startHeartbeat's
+        //   check-and-set and thread.start(). In that case the new heartbeat
+        //   thread sees _heartbeatRunning=false and exits immediately — no leak,
+        //   no double heartbeat. _heartbeatRunning is volatile so visibility is
+        //   fine. Synchronizing shutdown() would risk deadlock if the heartbeat
+        //   thread holds the lock during recoverEngine().
         _heartbeatRunning = false;
         if (_heartbeatThread != null) {
             _heartbeatThread.interrupt();
@@ -2184,7 +2222,8 @@ public class StockfishNative {
         Log.i(TAG, "Cleaned up failed engine process");
     }
 
-    private void startHeartbeat() {
+    // v1.0.8 PHASE 30: synchronized to prevent two heartbeat threads on concurrent calls
+    private synchronized void startHeartbeat() {
         if (_heartbeatRunning) return;
         _heartbeatRunning = true;
         _heartbeatThread = new Thread(new Runnable() {
@@ -2207,11 +2246,18 @@ public class StockfishNative {
                     }
 
                     // Check 2: Responsiveness — zombie detection
-                    if (engineReady) {
-                        boolean isSearching = (currentState != STATE_NONE);
+                    // v1.0.8 PHASE 30: Only check zombie when actively searching. A healthy IDLE
+                    //   engine emits nothing, so _lastResponseTime goes stale after 30s and would
+                    //   falsely trigger a full recoverEngine() cycle (1-5s delay + process restart)
+                    //   during quiet play. The process-alive check above already covers the
+                    //   "engine process died" case for idle engines.
+                    // v1.0.8 PHASE 33: removed dead `isSearching` local + ternary (the outer guard
+                    //   already ensures currentState!=STATE_NONE, so the ternary always picked
+                    //   ZOMBIE_SEARCH_TIMEOUT_MS; ZOMBIE_TIMEOUT_MS was unreachable). Use the
+                    //   search timeout directly.
+                    if (engineReady && (currentState != STATE_NONE)) {
                         long timeSinceLastResponse = System.currentTimeMillis() - _lastResponseTime;
-                        long effectiveTimeout = isSearching ? ZOMBIE_SEARCH_TIMEOUT_MS : ZOMBIE_TIMEOUT_MS;
-                        if (timeSinceLastResponse > effectiveTimeout) {
+                        if (timeSinceLastResponse > ZOMBIE_SEARCH_TIMEOUT_MS) {
                             Log.e(TAG, "Heartbeat: engine zombie detected (no response for " + timeSinceLastResponse + " ms), attempting recovery");
                             // R1/R2 FIX: Use cleanupEngineResources() + recoverEngine() instead of inline code
                             // First try graceful quit
@@ -2544,16 +2590,20 @@ public class StockfishNative {
      * Uses the cached supportedOptionNames Set for O(1) lookup instead of
      * re-parsing the engineOptionsJson string on every call.
      */
+    // v1.0.8 PHASE 30: synchronize the combined check-then-contains to prevent a race where
+    //   the UCI handshake thread clears supportedOptionNames between isEmpty() and contains().
     private boolean engineSupportsOption(String optionName) {
-        if (supportedOptionNames.isEmpty()) {
-            // No option info available — assume supported (safe default for built-in Stockfish)
+        synchronized (supportedOptionNames) {
+            if (supportedOptionNames.isEmpty()) {
+                // No option info available — assume supported (safe default for built-in Stockfish)
+                return true;
+            }
+            if (!supportedOptionNames.contains(optionName)) {
+                Log.i(TAG, "Engine does not support option: " + optionName + " (skipping)");
+                return false;
+            }
             return true;
         }
-        boolean supported = supportedOptionNames.contains(optionName);
-        if (!supported) {
-            Log.i(TAG, "Engine does not support option: " + optionName + " (skipping)");
-        }
-        return supported;
     }
 
     /**
@@ -3747,8 +3797,8 @@ public class StockfishNative {
                     break;
 
                 case "PIECE_SELECT":
-                    if (apiLevel >= 35) {
-                        tryPwleVibrate(vibrator, new float[]{0.0f, 0.3f, 0.0f}, new long[]{0, 30, 20});
+                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.3f, 0.0f}, new long[]{0, 30, 20})) {
+                        // PWLE succeeded (or falls through to waveform below)
                     } else if (apiLevel >= 31) {
                         try {
                             android.os.VibrationEffect effect = android.os.VibrationEffect.createPredefined(
@@ -3763,8 +3813,8 @@ public class StockfishNative {
                     break;
 
                 case "PIECE_MOVE":
-                    if (apiLevel >= 35) {
-                        tryPwleVibrate(vibrator, new float[]{0.0f, 0.5f, 0.0f}, new long[]{0, 40, 25});
+                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.5f, 0.0f}, new long[]{0, 40, 25})) {
+                        // PWLE succeeded (or falls through to waveform below)
                     } else if (apiLevel >= 31) {
                         try {
                             android.os.VibrationEffect effect = android.os.VibrationEffect.createPredefined(
@@ -3778,9 +3828,122 @@ public class StockfishNative {
                     }
                     break;
 
+                // v1.0.8 PHASE 26: piece-specific haptics for pawn (light quiver),
+                //   queen (massive impact), king (heavy regal).
+                // v1.0.8 PHASE 27: added knight (jump + crisp landing),
+                //   bishop (smooth glide), rook (charge + impact) haptics so all
+                //   six piece types have distinct, personality-matched feedback.
+                case "PAWN_MOVE":
+                    // Light quiver — three tiny ticks (the "瑟瑟发抖" shiver)
+                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.15f, 0.05f, 0.15f, 0.05f, 0.15f, 0.0f}, new long[]{0, 12, 8, 12, 8, 12, 8})) {
+                        // PWLE succeeded (or falls through to waveform below)
+                    } else if (apiLevel >= 26) {
+                        try {
+                            long[] timings = {0, 12, 8, 12, 8, 12};
+                            int[] amplitudes = {0, 60, 20, 60, 20, 60};
+                            vibrator.vibrate(android.os.VibrationEffect.createWaveform(timings, amplitudes, -1));
+                        } catch (Throwable e) {
+                            fallbackVibrate(vibrator, apiLevel, 20);
+                        }
+                    } else {
+                        fallbackVibrate(vibrator, apiLevel, 20);
+                    }
+                    break;
+
+                case "KNIGHT_MOVE":
+                    // Agile jump + crisp landing — a gentle lift-off ramp, a brief
+                    // mid-air gap, then a sharp crisp "ding" tick (the L-shape
+                    // parabolic jump + crisp ding landing from the sound/animation).
+                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.35f, 0.1f, 0.7f, 0.0f}, new long[]{0, 30, 40, 25, 15})) {
+                        // PWLE: ramp up (lift-off) → gap (mid-air) → sharp peak (landing ding)
+                    } else if (apiLevel >= 26) {
+                        try {
+                            long[] timings = {0, 30, 40, 25};
+                            int[] amplitudes = {0, 100, 30, 200};
+                            vibrator.vibrate(android.os.VibrationEffect.createWaveform(timings, amplitudes, -1));
+                        } catch (Throwable e) {
+                            fallbackVibrate(vibrator, apiLevel, 60);
+                        }
+                    } else {
+                        fallbackVibrate(vibrator, apiLevel, 60);
+                    }
+                    break;
+
+                case "BISHOP_MOVE":
+                    // Sharp smooth glide — a single smooth swell (no hard peak);
+                    // the bishop slides swiftly and cleanly along the diagonal.
+                    // Matches the sawtooth-glide + filter-sweep sound (270ms).
+                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.4f, 0.45f, 0.2f, 0.0f}, new long[]{0, 40, 50, 40, 20})) {
+                        // PWLE: smooth ramp up → smooth ramp down (bell-curve, no tick)
+                    } else if (apiLevel >= 26) {
+                        try {
+                            long[] timings = {0, 40, 50, 40};
+                            int[] amplitudes = {0, 120, 140, 60};
+                            vibrator.vibrate(android.os.VibrationEffect.createWaveform(timings, amplitudes, -1));
+                        } catch (Throwable e) {
+                            fallbackVibrate(vibrator, apiLevel, 70);
+                        }
+                    } else {
+                        fallbackVibrate(vibrator, apiLevel, 70);
+                    }
+                    break;
+
+                case "ROOK_MOVE":
+                    // Fierce charge-dash-impact — a low charge rumble, a brief dash
+                    // gap, then a heavy impact thud (matches the 3-stage rook sound
+                    // and the light board shake on landing).
+                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.5f, 0.15f, 0.85f, 0.3f, 0.5f, 0.0f}, new long[]{0, 25, 35, 60, 25, 40, 20})) {
+                        // PWLE: low charge → gap (dash whoosh) → heavy impact thud
+                    } else if (apiLevel >= 26) {
+                        try {
+                            long[] timings = {0, 25, 35, 60, 25, 40};
+                            int[] amplitudes = {0, 150, 40, 255, 80, 150};
+                            vibrator.vibrate(android.os.VibrationEffect.createWaveform(timings, amplitudes, -1));
+                        } catch (Throwable e) {
+                            fallbackVibrate(vibrator, apiLevel, 120);
+                        }
+                    } else {
+                        fallbackVibrate(vibrator, apiLevel, 120);
+                    }
+                    break;
+
+                case "QUEEN_MOVE":
+                    // Massive impact — the "铿锵有声、掷地有声" resounding slam
+                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.8f, 0.3f, 1.0f, 0.2f, 0.7f, 0.0f}, new long[]{0, 60, 40, 120, 50, 80, 40})) {
+                        // PWLE succeeded (or falls through to waveform below)
+                    } else if (apiLevel >= 26) {
+                        try {
+                            long[] timings = {0, 60, 40, 120, 50, 80};
+                            int[] amplitudes = {0, 200, 80, 255, 130, 180};
+                            vibrator.vibrate(android.os.VibrationEffect.createWaveform(timings, amplitudes, -1));
+                        } catch (Throwable e) {
+                            fallbackVibrate(vibrator, apiLevel, 300);
+                        }
+                    } else {
+                        fallbackVibrate(vibrator, apiLevel, 300);
+                    }
+                    break;
+
+                case "KING_MOVE":
+                    // Heavy regal — four measured thuds (the "威严庄重" solemn steps)
+                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.6f, 0.2f, 0.6f, 0.2f, 0.6f, 0.2f, 0.6f, 0.0f}, new long[]{0, 50, 60, 50, 60, 50, 60, 50, 40})) {
+                        // PWLE succeeded (or falls through to waveform below)
+                    } else if (apiLevel >= 26) {
+                        try {
+                            long[] timings = {0, 50, 60, 50, 60, 50, 60, 50};
+                            int[] amplitudes = {0, 180, 60, 180, 60, 180, 60, 180};
+                            vibrator.vibrate(android.os.VibrationEffect.createWaveform(timings, amplitudes, -1));
+                        } catch (Throwable e) {
+                            fallbackVibrate(vibrator, apiLevel, 250);
+                        }
+                    } else {
+                        fallbackVibrate(vibrator, apiLevel, 250);
+                    }
+                    break;
+
                 case "PIECE_CAPTURE":
-                    if (apiLevel >= 35) {
-                        tryPwleVibrate(vibrator, new float[]{0.0f, 0.6f, 0.2f, 0.6f, 0.0f}, new long[]{0, 30, 20, 30, 20});
+                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.6f, 0.2f, 0.6f, 0.0f}, new long[]{0, 30, 20, 30, 20})) {
+                        // PWLE succeeded (or falls through to waveform below)
                     } else if (apiLevel >= 31) {
                         try {
                             vibrator.vibrate(android.os.VibrationEffect.createPredefined(
@@ -3794,8 +3957,8 @@ public class StockfishNative {
                     break;
 
                 case "SLIDER_DRAG":
-                    if (apiLevel >= 35) {
-                        tryPwleVibrate(vibrator, new float[]{0.0f, 0.15f, 0.0f}, new long[]{0, 15, 10});
+                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.15f, 0.0f}, new long[]{0, 15, 10})) {
+                        // PWLE succeeded (or falls through to waveform below)
                     } else {
                         fallbackVibrate(vibrator, apiLevel, 8);
                     }
@@ -3815,24 +3978,24 @@ public class StockfishNative {
                     break;
 
                 case "TOGGLE_ON":
-                    if (apiLevel >= 35) {
-                        tryPwleVibrate(vibrator, new float[]{0.0f, 0.2f, 0.5f, 0.0f}, new long[]{0, 30, 30, 20});
+                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.2f, 0.5f, 0.0f}, new long[]{0, 30, 30, 20})) {
+                        // PWLE succeeded (or falls through to waveform below)
                     } else {
                         fallbackVibrate(vibrator, apiLevel, 30);
                     }
                     break;
 
                 case "TOGGLE_OFF":
-                    if (apiLevel >= 35) {
-                        tryPwleVibrate(vibrator, new float[]{0.0f, 0.5f, 0.2f, 0.0f}, new long[]{0, 30, 30, 20});
+                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.5f, 0.2f, 0.0f}, new long[]{0, 30, 30, 20})) {
+                        // PWLE succeeded (or falls through to waveform below)
                     } else {
                         fallbackVibrate(vibrator, apiLevel, 20);
                     }
                     break;
 
                 case "CHECK_ALERT":
-                    if (apiLevel >= 35) {
-                        tryPwleVibrate(vibrator, new float[]{0.0f, 0.8f, 0.3f, 0.8f, 0.3f, 0.8f, 0.0f}, new long[]{0, 50, 30, 50, 30, 50, 30});
+                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.8f, 0.3f, 0.8f, 0.3f, 0.8f, 0.0f}, new long[]{0, 50, 30, 50, 30, 50, 30})) {
+                        // PWLE succeeded (or falls through to waveform below)
                     } else if (apiLevel >= 26) {
                         try {
                             long[] timings = {0, 50, 30, 50, 30, 50};
@@ -3847,8 +4010,8 @@ public class StockfishNative {
                     break;
 
                 case "GAME_OVER":
-                    if (apiLevel >= 35) {
-                        tryPwleVibrate(vibrator, new float[]{0.0f, 0.6f, 0.3f, 0.8f, 0.1f, 0.0f}, new long[]{0, 100, 50, 200, 80, 50});
+                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.6f, 0.3f, 0.8f, 0.1f, 0.0f}, new long[]{0, 100, 50, 200, 80, 50})) {
+                        // PWLE succeeded (or falls through to waveform below)
                     } else if (apiLevel >= 26) {
                         try {
                             long[] timings = {0, 100, 50, 200, 80};
@@ -3859,6 +4022,55 @@ public class StockfishNative {
                         }
                     } else {
                         fallbackVibrate(vibrator, apiLevel, 400);
+                    }
+                    break;
+
+                // v1.0.8 PHASE 28: CASTLE and PROMOTION haptics (previously fell to
+                //   the 15ms default — castling felt LESS tactile than a normal move,
+                //   promotion had no celebratory feedback).
+                // v1.0.8 PHASE 29: CASTLE redesigned to match the new rapid "snap +
+                //   slam" sound (playCastleRookMove in ui.js). The old pattern
+                //   (40-30-50ms, amplitudes 160/50/200) was too gentle and too slow
+                //   for the new impactful sound. New pattern mirrors the two-stage
+                //   audio design:
+                //     Stage 1 (0-35ms): sharp intense snap — amplitude 255 (max),
+                //                       matching the 110Hz thump + noise crack
+                //     Stage 2 (45-105ms): heavy rumble slam — amplitude 220,
+                //                         matching the sawtooth down-sweep + shimmer
+                //   Total ~105ms (vs old 120ms) — tighter, more decisive.
+                //   The "威严的迅猛" (majestic rapidity) feel: the king commands,
+                //   the rook obeys instantly with a heavy thud.
+                case "CASTLE":
+                    // Two-stage snap + slam — synchronized with playCastleRookMove
+                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 1.0f, 0.3f, 0.85f, 0.0f}, new long[]{0, 35, 10, 60, 15})) {
+                        // PWLE succeeded
+                    } else if (apiLevel >= 26) {
+                        try {
+                            long[] timings = {0, 35, 10, 60};
+                            int[] amplitudes = {0, 255, 80, 220};
+                            vibrator.vibrate(android.os.VibrationEffect.createWaveform(timings, amplitudes, -1));
+                        } catch (Throwable e) {
+                            fallbackVibrate(vibrator, apiLevel, 105);
+                        }
+                    } else {
+                        fallbackVibrate(vibrator, apiLevel, 105);
+                    }
+                    break;
+
+                case "PROMOTION":
+                    // Celebratory ascending triad — three rising pulses
+                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.3f, 0.15f, 0.5f, 0.2f, 0.8f, 0.0f}, new long[]{0, 30, 20, 30, 20, 50, 20})) {
+                        // PWLE succeeded
+                    } else if (apiLevel >= 26) {
+                        try {
+                            long[] timings = {0, 30, 20, 30, 20, 50};
+                            int[] amplitudes = {0, 80, 30, 140, 50, 220};
+                            vibrator.vibrate(android.os.VibrationEffect.createWaveform(timings, amplitudes, -1));
+                        } catch (Throwable e) {
+                            fallbackVibrate(vibrator, apiLevel, 100);
+                        }
+                    } else {
+                        fallbackVibrate(vibrator, apiLevel, 100);
                     }
                     break;
 
@@ -3874,7 +4086,14 @@ public class StockfishNative {
         Log.i(TAG, "Haptic feedback preference set to: " + enabled);
     }
 
-    private void tryPwleVibrate(android.os.Vibrator vibrator, float[] amplitudes, long[] durations) {
+    // v1.0.8 PHASE 28 (bug fix): tryPwleVibrate now returns boolean (true if
+    //   PWLE succeeded, false if it fell back). The internal fallback was a
+    //   single OneShot which lost the multi-stage pattern (e.g. queen's
+    //   charge-impact became a single 390ms buzz). Now: if PWLE fails, return
+    //   false so the case statement's API 26+ waveform branch can run (which
+    //   has the correct multi-stage pattern). The old internal fallback is
+    //   removed — no more silent single-buzz degradation.
+    private boolean tryPwleVibrate(android.os.Vibrator vibrator, float[] amplitudes, long[] durations) {
         if (Build.VERSION.SDK_INT >= 35) {
             try {
                 Class<?> builderClass = Class.forName("android.os.VibrationEffect$Composition");
@@ -3891,25 +4110,13 @@ public class StockfishNative {
 
                 Object effect = composeMethod.invoke(composition);
                 vibrator.vibrate((android.os.VibrationEffect) effect);
-                return;
+                return true;
             } catch (Throwable e) {
-                Log.d(TAG, "PWLE not available, using fallback");
+                Log.d(TAG, "PWLE not available, falling back to waveform");
+                return false;
             }
         }
-        if (Build.VERSION.SDK_INT >= 26) {
-            try {
-                long totalDuration = 0;
-                float maxAmp = 0;
-                for (int i = 0; i < durations.length; i++) { totalDuration += durations[i]; }
-                for (int i = 0; i < amplitudes.length; i++) { if (amplitudes[i] > maxAmp) maxAmp = amplitudes[i]; }
-                int ampInt = Math.max(1, Math.round(maxAmp * 255));
-                vibrator.vibrate(android.os.VibrationEffect.createOneShot(totalDuration, ampInt));
-            } catch (Throwable e) {
-                fallbackVibrate(vibrator, Build.VERSION.SDK_INT, 30);
-            }
-        } else {
-            fallbackVibrate(vibrator, Build.VERSION.SDK_INT, 30);
-        }
+        return false;
     }
 
     private void fallbackVibrate(android.os.Vibrator vibrator, int apiLevel, long durationMs) {
@@ -4157,16 +4364,24 @@ public class StockfishNative {
                 return;
             }
             if (!file.setExecutable(true, false)) {
+                // v1.0.8 PHASE 49: destroy() the chmod subprocess on timeout to
+                //   avoid zombie processes on broken ROMs where chmod hangs.
+                //   waitFor(2s) returns false on timeout but leaves the process
+                //   running; an explicit destroy() reaps it.
                 try {
                     Process p = Runtime.getRuntime().exec(
-                            new String[]{"/system/bin/chmod", "755", file.getAbsolutePath()});
-                    p.waitFor(2, TimeUnit.SECONDS);
+                            new String[]{"/system/bin/chmod", "744", file.getAbsolutePath()});
+                    if (!p.waitFor(2, TimeUnit.SECONDS)) {
+                        p.destroy();
+                    }
                 } catch (Throwable e2) {
                     try {
                         Process p = Runtime.getRuntime().exec(
                                 new String[]{"/system/bin/sh", "-c",
-                                        "chmod 755 " + file.getAbsolutePath()});
-                        p.waitFor(2, TimeUnit.SECONDS);
+                                        "chmod 744 " + file.getAbsolutePath()});
+                        if (!p.waitFor(2, TimeUnit.SECONDS)) {
+                            p.destroy();
+                        }
                     } catch (Throwable ignored) {}
                 }
             }
@@ -4175,9 +4390,7 @@ public class StockfishNative {
         }
     }
 
-    // v18.5.0: Removed unused copyFile() method — it was dead code since v18.5.0
-    // removed engine import functionality. The only file copying that happens
-    // is in extractEngineFromApk/extractEngineFromAssets which use inline streams.
+    // (v18.5.0: copyFile() removed — dead code after engine-import removal; extract* uses inline streams.)
 
     // ===================== FILE I/O FOR SETTINGS EXPORT/IMPORT =====================
 
@@ -4239,33 +4452,31 @@ public class StockfishNative {
         }
     }
 
-    // REMOVED: hasAllFilesAccess() and requestAllFilesAccess() — MANAGE_EXTERNAL_STORAGE
-    // permission has been removed. SAF (Storage Access Framework) is now used for all
-    // file read/write operations in public directories (Download, Documents, etc.).
-    // SAF works without any special permissions on all Android versions (API 19+).
+    // (MANAGE_EXTERNAL_STORAGE methods removed — SAF handles all public-dir I/O, no special permission needed, API 19+.)
 
     /** Request code for SAF file picker (export settings via ACTION_CREATE_DOCUMENT) */
     static final int REQUEST_CODE_EXPORT_SETTINGS = 1002;
     /** v1.0.2 FEATURE (audit): Request code for PGN export via ACTION_CREATE_DOCUMENT */
     static final int REQUEST_CODE_EXPORT_PGN = 1004;
-    // v1.0.2 CLEANUP: Removed REQUEST_CODE_EXPORT_STATS_HTML (1005) — the stats
-    // HTML export path is now handled entirely inside StatsActivity's own JS
-    // bridge (StatsActivity.exportStatsHTML + onActivityResult), so the main
-    // activity never receives this request code.
-
-    // v1.0.2 CLEANUP: Removed _pendingStatsPayload and _pendingStatsHTML fields.
-    // _pendingStatsPayload was only read by the now-removed getStatsPayload()
-    // bridge method (StatsActivity has its own bridge that reads the payload
-    // from the Intent extra, not from this field). _pendingStatsHTML was only
-    // set by the now-removed exportStatsHTML() bridge method (StatsActivity has
-    // its own). Both were memory leaks — large PGN payloads could linger until
-    // the next call or engine shutdown.
+    // (v1.0.2: REQUEST_CODE_EXPORT_STATS_HTML removed — stats HTML export lives in StatsActivity now.)
+    // (v1.0.2: _pendingStatsPayload / _pendingStatsHTML removed — StatsActivity has its own bridge; these were memory leaks.)
 
     /** Pending export content — stored temporarily until SAF picker returns a URI */
     private volatile String _pendingExportContent = null;
     /** v1.0.2 FEATURE: pending export type — "settings" or "pgn" — so handleExportFilePickerResult
      *  fires the correct JS callback (onSettingsExported vs onPGNExported). */
     private volatile String _pendingExportType = "settings";
+
+    /** v1.0.8 PHASE 24: Cancel a pending export (user dismissed the SAF picker).
+     *  Clears the pending content and notifies JS so the "Exporting..." dialog
+     *  is dismissed. Without this, cancelling the picker leaves the dialog hung. */
+    public void cancelPendingExport() {
+        _pendingExportContent = null;
+        _pendingExportType = "settings";
+        try {
+            postJsCallback("if(typeof onExportCancelled==='function')onExportCancelled();");
+        } catch (Throwable ignored) {}
+    }
 
     /**
      * Open the system SAF file picker for exporting settings to a TXT file.
@@ -4367,16 +4578,9 @@ public class StockfishNative {
         }
     }
 
-    // v1.0.2 CLEANUP: Removed the following dead bridge methods — StatsActivity
-    // has its own JS bridge that provides the same functionality, and its
-    // activityRef points to MainActivity (not StatsActivity), so these were
-    // either unreachable or no-ops:
-    //   - getStatsPayload()  — StatsActivity has its own at StatsActivity.java
-    //   - closeStatsPage()   — StatsActivity has its own (the instanceof check
-    //                           here always evaluated to false since activityRef
-    //                           points to MainActivity)
-    //   - exportStatsHTML()  — StatsActivity has its own
-    //   - statsRequestReview() — StatsActivity has its own
+    // (v1.0.2: stats bridge methods removed — getStatsPayload, closeStatsPage,
+    //  exportStatsHTML, statsRequestReview. StatsActivity has its own bridge;
+    //  activityRef points to MainActivity so these were unreachable.)
 
     /**
      * Handle SAF file picker result for settings export.
@@ -4384,10 +4588,6 @@ public class StockfishNative {
      *
      * v1.0.2 FEATURE: also handles PGN export (REQUEST_CODE_EXPORT_PGN) by
      * dispatching to onPGNExported() instead of onSettingsExported().
-     *
-     * v1.0.2 CLEANUP: Removed the stats HTML export branch — that path is now
-     * handled entirely inside StatsActivity (which has its own bridge and
-     * onActivityResult handler).
      */
     public void handleExportFilePickerResult(android.content.Intent data) {
         // Normal settings/PGN export path
@@ -4964,11 +5164,21 @@ public class StockfishNative {
                 String line;
                 int lineCount = 0;
                 final int MAX_LINES = 5000; // Prevent OOM on huge files
-                while ((line = reader.readLine()) != null && lineCount < MAX_LINES) {
+                // v1.0.8 PHASE 32 ROBUSTNESS: track truncation and notify JS so the
+                //   PGN parser can surface a warning instead of silently parsing an
+                //   incomplete game.
+                boolean truncated = false;
+                while ((line = reader.readLine()) != null) {
+                    if (lineCount >= MAX_LINES) { truncated = true; break; }
                     sb.append(line).append("\n");
                     lineCount++;
                 }
                 content = sb.toString();
+                if (truncated) {
+                    Log.w(TAG, "PGN file truncated at " + MAX_LINES + " lines");
+                    // Append a PGN comment so the JS parser surfaces the truncation
+                    content += "\n{ Warning: file truncated at " + MAX_LINES + " lines by Regalia import guard }\n";
+                }
             }
             // Sanitize: remove control characters that could break JS string parsing
             // (keep newline, tab, carriage return)
