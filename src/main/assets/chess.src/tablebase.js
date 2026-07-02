@@ -140,10 +140,23 @@ function _parsePGN(pgnText){
   // (Spec §10: "If the SetUp tag is set to "1", the FEN tag MUST be present.")
   // The inverse (FEN present but SetUp missing) is also auto-corrected silently.
   
-  // Remove header tags — handle multi-line headers and various formats
-  // v1.0.4 Round-5 Rev16: Anchor to start-of-line so [%csl ...]/[%cal ...]
-  // inside brace comments are NOT stripped (only header lines starting with [).
-  let moveText=pgnText.replace(/^\[[^\]]*\]/gm,'').trim();
+  // Remove header tags — handle multi-line headers and various formats.
+  // v1.0.9 PHASE 52 CRITICAL FIX: the previous regex /^\[[^\]]*\]/gm used
+  //   line-start anchor `^` with the multiline flag. For SINGLE-LINE PGN
+  //   files (where all tags + movetext are on one line with no \n between
+  //   them), `^` only matches the START OF THE ENTIRE STRING once — so only
+  //   the FIRST tag (e.g. [Event "..."]) was stripped, and the remaining
+  //   tags ([Site "?"] [Date "..."] ...) leaked into movetext as invalid
+  //   tokens. The tokenizer then skipped them all, hitting the 5-consecutive-
+  //   skip safety limit and aborting the parse — manifesting as "PGN import
+  //   fails, 0 moves parsed".
+  //   Fix: use a regex that matches PGN header tag format specifically —
+  //   `[TagName "value"]` or `[TagName value]` — where TagName starts with
+  //   a letter. This avoids the `^` line-anchor issue (works for both
+  //   single-line and multi-line PGN), and ALSO avoids stripping `[%csl ...]`
+  //   / `[%cal ...]` / `[%eval ...]` / `[%emt ...]` inside brace comments
+  //   (because `%` is not in `[A-Za-z]`).
+  let moveText=pgnText.replace(/\[[A-Za-z]\w*\s+[^\]]+\]/g,'').trim();
   // Remove line continuation markers (\ at end of line)
   moveText=moveText.replace(/\\\s*\n/g,' ');
   
@@ -278,6 +291,22 @@ function _parsePGN(pgnText){
           if(_d>0)_body+=_mt[_j];
           _j++;
         }
+        // v1.0.9 PHASE 52 CRITICAL FIX: only extract position-specific
+        //   annotations ([%eval]/[%csl]/[%cal]) from comments at _depth===0
+        //   (main line). Comments inside variations (...) describe the
+        //   variation's positions, NOT the main-line position. Previously,
+        //   a comment inside a variation was parsed and its [%eval]/[%csl]/
+        //   [%cal] tags accumulated into the pending per-move payload, which
+        //   the NEXT main-line move would flush and attach to ITSELF —
+        //   corrupting that main-line move's annotations with variation-
+        //   internal data. This manifested as the review board showing wrong
+        //   squares/arrows/evals for main-line moves that happened to follow
+        //   a variation with annotations.
+        //   Fix: skip [%eval]/[%csl]/[%cal] extraction when _depth>0; still
+        //   extract free-text comments (with [var] prefix) so variation
+        //   commentary remains visible in the move-list comment display.
+        //   Still advance _i past the comment body either way.
+        if(_depth===0){
         // Extract [%eval ...] from body
         const _em=_body.match(/\[%eval\s+([^\]]+)\]/i);
         if(_em){
@@ -347,11 +376,16 @@ function _parsePGN(pgnText){
             }
           }
         }
+        } // end if(_depth===0)
         // v1.0.5 Rev50: Extract free-text comment (body minus all [%xxx] tags).
         // Multiple consecutive comments for the SAME move merge with " | "
         // separator (only when _currentMoveFlushed is false, meaning a comment
         // was already seen for this move). Comments inside variations
         // (depth>0) get a "[var] " prefix so the user can distinguish them.
+        // v1.0.9 PHASE 52: free-text comments are extracted at ALL depths
+        // (including inside variations) so variation commentary remains
+        // visible in the move-list comment display. Only the position-
+        // specific [%eval]/[%csl]/[%cal] tags are depth-gated above.
         {
           let _ft=_body.replace(/\[%[a-zA-Z]+\s+[^\]]*\]/g,'').trim();
           // Also strip any leftover [CLK:...], [EMT:...] non-bracketed formats
@@ -450,7 +484,17 @@ function _parsePGN(pgnText){
   // tokenized as bogus move tokens (e.g. "1. e4 {unclosed comment e5 2. Nf3"
   // was producing tokens "{unclosed", "comment", "e5", "2.", "Nf3" — all
   // rejected as invalid SAN, generating useless NULL placeholders).
-  {let _braceIter=0;while(moveText.includes('{')&&_braceIter++<10)moveText=moveText.replace(/\{[^{}]*\}/g,'');}
+  // v1.0.9 PHASE 52 CRITICAL FIX: replace brace comments with a SPACE, not
+  //   empty string. The previous empty-string replacement caused moves
+  //   adjacent to a `}` (with no whitespace separator) to be CONCATENATED
+  //   into a single bogus token. Example from PGN 2Kbug.pgn:
+  //     `1. e4{[%emt ...] ...}e5 {[%emt ...] ...} 2. Bd3`
+  //   After brace stripping (old): `1. e4e5  2. Bd3`  ← "e4e5" is one token!
+  //   The tokenizer rejected "e4e5" as invalid SAN, triggering the 5-skip
+  //   cascade-failure path and aborting the parse.
+  //   After brace stripping (fixed): `1. e4 e5  2. Bd3`  ← two valid tokens.
+  //   The whitespace normalization at line ~490 collapses the double space.
+  {let _braceIter=0;while(moveText.includes('{')&&_braceIter++<10)moveText=moveText.replace(/\{[^{}]*\}/g,' ');}
   // v1.0.4 Rev29: Remove unclosed brace + everything to end-of-string.
   // This is the PGN spec's tolerant behavior: an unclosed comment consumes
   // the rest of the movetext. We log a warning so the user knows.
@@ -1278,6 +1322,19 @@ function importPGN(pgnText){
     const algRe=/^[a-h][1-8]$/;
     if(!algRe.test(fromAlg)){console.error('importPGN: invalid fromAlg at index',moveIdx,fromAlg);fromAlg=posAlg(from)||'??';}
     if(!algRe.test(toAlg)){console.error('importPGN: invalid toAlg at index',moveIdx,toAlg);toAlg=posAlg(to)||'??';}
+    // v1.0.9 PHASE 52 FIX: compute isCheck and isCastling for imported moves.
+    //   Previously, imported moveRecords lacked these fields, so:
+    //   (1) Red check arrows + green escape arrows were never generated for
+    //       imported PGNs (moveRecords[moveIdx].isCheck was undefined).
+    //   (2) Chess960 castling detection in the annotation replay path relied
+    //       solely on _castleSide's heuristic fallback.
+    //   Now we compute both from the post-move replayState (same logic as
+    //   executeMove in ui.js) so imported games get the same visual
+    //   annotation treatment as live-played games.
+    const _oppColor=replayState.currentTurn;
+    const _oppKing=_oppColor==='white'?replayState.wk:replayState.bk;
+    const _isCheck=_oppKing?inCheck(replayState.board,_oppColor,_oppKing):false;
+    const _isCastling=!!(typeof _castleSide==='function'&&parsedMove&&parsedMove.move&&_castleSide(parsedMove.move,preMoveState));
     // v1.0.1 CRITICAL FIX: Push stateHistory BEFORE adding the current move to moveRecords.
     // Previously this was pushed AFTER moveRecords.push(), which meant each stateHistory
     // entry's moveRecords INCLUDES the move that was just added. When undoMove() restored
@@ -1302,6 +1359,8 @@ function importPGN(pgnText){
       // "PGN invalid" — making EVERY PGN import fail. Fixed to use
       // parsedMove.move.promotion (the move object on the parsed result).
       promotion:(parsedMove&&parsedMove.move&&parsedMove.move.promotion)||null,
+      isCheck:_isCheck,
+      isCastling:_isCastling,
       time:null,
       variations:varEntries
     });

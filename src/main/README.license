@@ -366,3 +366,26 @@ v1.0.8 Phase 42 (2026.7.1):
 
 v1.0.8 Phase 41 (2026.7.1):
   - AndroidManifest.xml: No changes.
+
+
+v1.0.9 Phase 52 (2026.7.2):
+  - AndroidManifest.xml: no changes (versionCode/versionName are in build.gradle).
+  - build.gradle: versionCode 108 → 109, versionName "1.0.8" → "1.0.9".
+  - assets/chess.html: rebuilt from chess.src/ (tablebase.js, game-logic.js,
+    index.html.tpl, ui.js changes).
+  - assets/stats.html: PGN parse fix + executeMove castling detection fix.
+  - assets/chess.src/: 4 source modules updated (see chess.src/README.license).
+  - java/com/Regalia/: 4 version constants updated (see java/com/Regalia/README.license).
+  - res/values/strings.xml: app_name version updated.
+  - cpp/: no changes.
+  - jniLibs/arm64-v8a/libstockfish.so: unchanged (Stockfish 18 arm64-v8a-dotprod).
+
+
+v1.0.9 Phase 52 supplement (2026.7.2):
+  - assets/chess.html: rebuilt again (tablebase.js variation-comment isolation +
+    importPGN isCheck/isCastling; ui.js chart outline theme-aware; index.html.tpl
+    dark-mode chart palette unified blue-vs-red).
+  - assets/stats.html: executeMove castling-rights clearing robustness added.
+  - assets/chess.src/: tablebase.js + ui.js + index.html.tpl updated (see
+    chess.src/README.license for details).
+  - No changes to java/, res/, cpp/, jniLibs/.

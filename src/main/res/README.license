@@ -200,3 +200,8 @@ v1.0.8 Phase 42 (2026.7.1):
 
 v1.0.8 Phase 41 (2026.7.1):
   - No changes to res/ files.
+
+
+v1.0.9 Phase 52 (2026.7.2):
+  - strings.xml (AGPL v3): app_name "Regalia v1.0.8" → "Regalia v1.0.9".
+  - No other res/ files changed.

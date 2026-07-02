@@ -664,7 +664,11 @@ function parsePGN(pgnText){
   // A Black-to-move PGN starts with "1..." (or "N...") before the first move.
   if(!isBlackToMoveStart){
     // Strip headers, then check if the first move-number token ends with "..."
-    let mtCheck=text.replace(/^\[.*\]$/gm,'').trim();
+    // v1.0.9 PHASE 52 FIX: use tag-format-specific regex (no `^` line-anchor,
+    // no `$` end-anchor) so it works for single-line PGN where tags and
+    // movetext coexist on one line. The previous `/^\[.*\]$/gm` required the
+    // ENTIRE line to be `[...]`, which never matched single-line PGN.
+    let mtCheck=text.replace(/\[[A-Za-z]\w*\s+[^\]]+\]/g,'').trim();
     const firstNumMatch=mtCheck.match(/^(\d+\.+)/);
     if(firstNumMatch&&firstNumMatch[1].includes('...')){
       isBlackToMoveStart=true;
@@ -673,8 +677,13 @@ function parsePGN(pgnText){
 
   // Fallback: parse PGN string with simplified parser (for pasted/imported PGN
   // where no move records are available)
-  // Remove headers
-  let moveText=text.replace(/\[[^\]]*\]/g,'');
+  // Remove headers.
+  // v1.0.9 PHASE 52 FIX: use the tag-format-specific regex (matches
+  // `[TagName "value"]` or `[TagName value]` where TagName starts with a
+  // letter). This avoids stripping `[%csl ...]` / `[%cal ...]` / `[%eval ...]`
+  // / `[%emt ...]` from inside brace comments (since `%` is not in [A-Za-z]),
+  // and works correctly for single-line PGN files (no `^` line-anchor).
+  let moveText=text.replace(/\[[A-Za-z]\w*\s+[^\]]+\]/g,'');
   // Remove comments (brace-style).
   // v1.0.5 Round-6 Rev61 (2026.6.27) FIX: was `while(moveText.includes('{'))...`
   // which infinite-loops on a malformed PGN with an unclosed `{` (no matching `}`).
@@ -684,8 +693,15 @@ function parsePGN(pgnText){
   // iterations). Any residual `{` after the cap is left in place and gets
   // stripped by the later whitespace-normalization pass (it'll be a no-op
   // token that the move tokenizer ignores).
+  // v1.0.9 PHASE 52 CRITICAL FIX: replace brace comments with a SPACE, not
+  //   empty string. The previous empty-string replacement caused moves
+  //   adjacent to a `}` (no whitespace separator) to be CONCATENATED into a
+  //   single bogus token (e.g. "e4{...}e5" → "e4e5"), which then failed SAN
+  //   parsing and triggered the cascade-failure path. Replacing with a space
+  //   preserves token boundaries; the whitespace normalization below collapses
+  //   the resulting double spaces.
   for(let _braceIter=0;_braceIter<10&&moveText.includes('{');_braceIter++){
-    moveText=moveText.replace(/\{[^{}]*\}/g,'');
+    moveText=moveText.replace(/\{[^{}]*\}/g,' ');
   }
   // Remove semicolon comments
   moveText=moveText.replace(/;[^\n]*/g,'');
@@ -1004,24 +1020,58 @@ function executeMove(state,move,notation){
   // v1.0.6 FIX: Detect castling BEFORE moving the king. In Chess960, the
   // rook's source may be the king's destination (e.g. rook on g1, king
   // castles kingside to g1). Save the rook before the king overwrites it.
-  // Detection: king moving to col 6 (kingside) or col 2 (queenside).
+  // v1.0.9 PHASE 52 CRITICAL FIX: the previous detection
+  //   `piece.type==='king' && (move.to.col===6 || move.to.col===2)`
+  //   marked ANY king move to col 6/2 as castling — including normal king
+  //   moves (e.g. Kf1-g1, Kg7-g6) and king captures (Kxg1). This caused:
+  //   (1) the captured piece to be treated as the "castling rook" and
+  //       repositioned (silently losing the capture);
+  //   (2) the actual rook on h1/a1 to be illegally displaced;
+  //   (3) board-state corruption that manifested as extra pieces / extra
+  //       kings on the stats board.
+  //   Fix: only treat as castling when ALL of the following hold:
+  //     - piece is a king
+  //     - king is on its home row (row 7 for white, row 0 for black)
+  //     - destination is col 6 (kingside) or col 2 (queenside)
+  //     - the king traveled the castling distance (>=2 cols for standard
+  //       chess; >=1 col for Chess960 — Chess960 allows 1-col king moves
+  //       when castling, but only if castling rights are present)
+  //     - destination square is empty (castling never captures)
+  //     - castling right for that side is present (in the LOCAL state,
+  //       not a global)
   let _isCastling=false,_kingside=false,_rookFrom=-1,_rookTo=-1,_savedRook=null;
-  if(piece.type==='king'&&(move.to.col===6||move.to.col===2)){
-    _isCastling=true;
-    _kingside=move.to.col===6;
-    _rookTo=_kingside?5:3;
-    // Find the participating rook on the ORIGINAL board (state, not newState).
-    if(_kingside){
-      for(let c=7;c>move.from.col;c--){if(state.board[move.from.row][c]&&state.board[move.from.row][c].type==='rook'&&state.board[move.from.row][c].color===piece.color){_rookFrom=c;break;}}
-    }else{
-      for(let c=0;c<move.from.col;c++){if(state.board[move.from.row][c]&&state.board[move.from.row][c].type==='rook'&&state.board[move.from.row][c].color===piece.color){_rookFrom=c;break;}}
+  if(piece.type==='king'&&move.from.row===move.to.row){
+    const _homeRow=piece.color==='white'?7:0;
+    if(move.from.row===_homeRow&&(move.to.col===6||move.to.col===2)){
+      const _destEmpty=!state.board[move.to.row][move.to.col];
+      const _cr=state.castlingRights||{};
+      const _dist=Math.abs(move.to.col-move.from.col);
+      // Standard chess: king always moves exactly 2 cols to castle.
+      // Chess960: king may move 1-5 cols; require >=1 + castling right present.
+      // For standard chess (dist===2), the castling-right check is still
+      // applied as a safety guard (a 2-col king move without castling
+      // rights is illegal anyway, so this won't reject legal castles).
+      const _is960=(typeof gameVariant!=='undefined'&&gameVariant==='chess960');
+      const _minDist=_is960?1:2;
+      const _rightKey=piece.color==='white'?(move.to.col===6?'whiteKingside':'whiteQueenside'):(move.to.col===6?'blackKingside':'blackQueenside');
+      if(_dist>=_minDist&&_destEmpty&&_cr[_rightKey]){
+        _isCastling=true;
+        _kingside=move.to.col===6;
+        _rookTo=_kingside?5:3;
+        // Find the participating rook on the ORIGINAL board (state, not newState).
+        if(_kingside){
+          for(let c=7;c>move.from.col;c--){if(state.board[move.from.row][c]&&state.board[move.from.row][c].type==='rook'&&state.board[move.from.row][c].color===piece.color){_rookFrom=c;break;}}
+        }else{
+          for(let c=0;c<move.from.col;c++){if(state.board[move.from.row][c]&&state.board[move.from.row][c].type==='rook'&&state.board[move.from.row][c].color===piece.color){_rookFrom=c;break;}}
+        }
+        if(_rookFrom<0){
+          // Fallback: standard chess positions (rook on h1/a1)
+          _rookFrom=_kingside?7:0;
+        }
+        // Save the rook from the NEW board (which is a clone of state, not yet mutated).
+        _savedRook=newState.board[move.from.row][_rookFrom];
+      }
     }
-    if(_rookFrom<0){
-      // Fallback: standard chess positions (rook on h1/a1)
-      _rookFrom=_kingside?7:0;
-    }
-    // Save the rook from the NEW board (which is a clone of state, not yet mutated).
-    _savedRook=newState.board[move.from.row][_rookFrom];
   }
   let captured=_isCastling?null:newState.board[move.to.row][move.to.col];
   // v1.0.4 Rev29 FIX: En passant capture — when a pawn moves diagonally to an
@@ -1061,6 +1111,33 @@ function executeMove(state,move,notation){
   }
   if(captured)newState.halfMoveClock=0;
   if(piece.color==='black')newState.fullMoveNumber++;
+  // v1.0.9 PHASE 52 robustness: clear castling rights when the king or a
+  // rook moves, or when a rook is captured. Without this, downstream
+  // buildSAN/state serialization could emit stale castling-rights markers
+  // (KQkq) for a state where castling is no longer legal. This mirrors the
+  // main app's game-logic.js makeMv/makeMvInPlace behavior (which clears
+  // rights via findCastlingRooks). The check uses the ORIGINAL board's
+  // source-square column (move.from.col for the moving piece, move.to.col
+  // for the captured piece) so it works even when the rook has already moved
+  // away in newState.
+  if(piece.type==='king'){
+    if(piece.color==='white'){newState.castlingRights.whiteKingside=false;newState.castlingRights.whiteQueenside=false;}
+    else{newState.castlingRights.blackKingside=false;newState.castlingRights.blackQueenside=false;}
+  }
+  if(piece.type==='rook'){
+    const _hr=piece.color==='white'?7:0;
+    if(move.from.row===_hr){
+      if(move.from.col===0)newState.castlingRights[piece.color==='white'?'whiteQueenside':'blackQueenside']=false;
+      if(move.from.col===7)newState.castlingRights[piece.color==='white'?'whiteKingside':'blackKingside']=false;
+    }
+  }
+  if(captured&&captured.type==='rook'){
+    const _hr=captured.color==='white'?7:0;
+    if(move.to.row===_hr){
+      if(move.to.col===0)newState.castlingRights[captured.color==='white'?'whiteQueenside':'blackQueenside']=false;
+      if(move.to.col===7)newState.castlingRights[captured.color==='white'?'whiteKingside':'blackKingside']=false;
+    }
+  }
   // Build notation if not provided
   if(!notation){
     notation=buildSAN(state,move,newState,captured);

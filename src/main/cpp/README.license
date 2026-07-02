@@ -171,3 +171,7 @@ v1.0.8 Phase 42 (2026.7.1):
 
 v1.0.8 Phase 41 (2026.7.1):
   - No changes to cpp/ sources.
+
+
+v1.0.9 Phase 52 (2026.7.2):
+  - No changes to cpp/ sources (engine_jni.cpp, CMakeLists.txt unchanged).

@@ -785,3 +785,17 @@ v1.0.8 Phase 46 (2026.7.1):
 v1.0.8 Phase 47 (2026.7.1):
   - chess.html rebuilt (Phase 47 changes in ui.js, ai-bridge.js).
   - stats.html: No changes.
+
+v1.0.9 Phase 52 (2026.7.2):
+  - chess.html rebuilt (Phase 52 changes in chess.src/tablebase.js,
+    chess.src/game-logic.js, chess.src/index.html.tpl, chess.src/ui.js).
+  - stats.html: PGN tag-stripping regex fix (single-line PGN) + brace-comment
+    stripping space-replacement + executeMove castling detection hardened
+    (requires king on home row + correct distance + empty destination +
+    castling right present in LOCAL state — was: any king move to col 6/2).
+  - chess.html rebuilt again (Phase 52 supplement: tablebase.js variation-comment
+    isolation fix + importPGN isCheck/isCastling fields added; ui.js chart point
+    outline now theme-aware; index.html.tpl dark-mode chart palette unified
+    blue-vs-red).
+  - stats.html: executeMove now clears castling rights on king/rook move +
+    rook capture (robustness, was missing).

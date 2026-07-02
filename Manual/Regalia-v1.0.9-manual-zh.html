@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Regalia v1.0.8 用户说明书</title>
+<title>Regalia v1.0.9 用户说明书</title>
 <style>
 :root {
   --bg: #1a0a0a;
@@ -468,7 +468,7 @@ details summary:hover { color: var(--accent2); }
   <div class="cover-deco">&#9816; &#9814; &#9812; &#9815; &#9813;</div>
   <div class="cover-crown">&#9812;</div>
   <div class="cover-title">Regalia</div>
-  <div class="cover-version">v1.0.8</div>
+  <div class="cover-version">v1.0.9</div>
   <div class="cover-divider">
     <div class="cover-divider-line"></div>
     <div class="cover-divider-icon">&#9830;</div>
@@ -517,7 +517,7 @@ details summary:hover { color: var(--accent2); }
     <div class="section-title">应用简介</div>
   </div>
 
-  <p>Regalia v1.0.8 是一款功能强大的 Android 国际象棋对弈与分析应用。v1.0.8 按照《棋魂 · 国际象棋拟人化走棋动画》与《国际象棋拟人化音效方案》两份参考资料，<strong>完全重设计</strong>了走棋动画与音效系统（每种棋子拥有独特的拟人化运动特征与匹配的音色），并参考《Android 深色主题的设计原则》与《Android 浅色主题的设计原则》为 APP 适配浅色模式（浅色/深色模式随系统全局设置自动切换，启动进度条页面与主界面顶部工具栏的国王符号根据主题切换 ♔/♚）。本版本内置世界顶级开源棋力引擎 <strong>Stockfish 18</strong>（arm64-v8a-dotprod 原生编译），为从初学者到高级棋手提供专业级的对弈、复盘与训练体验。v1.0.4 新增 <strong>菲舍尔任意制象棋（Chess960）</strong>模式、<strong>计时赛（Time Control）</strong>、规范化 PGN 导入/导出（符合 1994 PGN 规范）、基于棋盘控制范围热力图的统计数据、Seldepth（选深）显示、视觉注解（NAG &amp; <code>[%csl]</code>/<code>[%cal]</code>）、Web Worker 并行计算、PGN 缓存管理器、玩家重命名、中英双语 UI、认输（🏳️ Resign）等多项改进。v1.0.5 新增棋盘防抖（基于传感器融合的光学防抖原理）、高长宽比屏幕适配、挖孔屏/刘海屏/R角适配、阶段分析精确化（开局/中局/残局多判据检测）、复盘箭头缩小优化等。v1.0.6 新增 Chess960 模式下 ECO 开局识别与推荐抑制、PGN 含 FEN 头的导入导出往返保真、统计数据页面按走法/FEN 选择查看对应局面、置灰样式统一化（仅控件本身淡化）、竖屏新游戏设置对话框优化、可滚动视窗位置保持、引擎评估 FEN 净化（避免不一致的王车易位权导致引擎挂起）、王-车易位新手势（选中王后点击被标记的车完成易位，Chess960 必备）、Chess960 王车易位检测修复、SL 模式显示具体技能等级数值等。v1.0.7 重点修复了多项隐性 Bug（悔棋后关键步缓存未同步、轻量棋盘更新路径缺失易位车标记、引擎通知节流缓存脏、统计页面 PGN 注释 XSS 风险、跨对局评估缓存污染、CSP 阻断 Blob Worker 风险）、为关于对话框补充了 DroidFish / Stockfish 的 GitHub 仓库超链接、进一步优化竖屏全面屏布局与安卓系统返回键适配，并合并了重复的 HTML 转义函数。v1.0.7 新增主界面「快捷工具栏」（将悔棋/撤悔/翻转/AI提示/控制范围 5 个按钮从顶部工具栏移至棋盘下方）、摆棋模式 🔁 易位权手动标记按钮与 ⚡ 可被吃过路兵手动标记按钮（取消自动赋予易位权/过路兵状态，改为完全手动控制，以菲舍尔任意制象棋规则为合法性检查标准），以及瘦长手机竖屏右侧内容裁切与对话框居中问题的第一性原理根因修复。v1.0.7 第十七阶段修复了 Chess960 王车易位「王吃自己」致命 Bug（当王初始位置恰好在易位目标格时）与复盘「分析全部」按钮状态不自动刷新 Bug，并基于 Kimi 审查报告甄别采纳 5 项合理建议（<code>_escFEN</code> 反引号转义、<code>_cloneStatsState</code> 替代 JSON 深拷贝、<code>.bgrid</code> 添加 <code>content-visibility:auto</code>、<code>animateMove</code> 在 JS 端亦遵循 <code>prefers-reduced-motion</code>、stats 棋盘 <code>max-width</code> 适度放宽）。v1.0.7 第十八阶段实现 Kimi 报告中剩余的两项架构性建议：<code>_reviewEvalCache</code> LRU 淘汰机制（MAX_ENTRIES=2000 软上限，不淘汰当前查看步骤，持久化保留 LRU 顺序）与复盘走法列表虚拟列表（>80 步启用窗口化渲染，仅渲染视口+overscan 10 行，动态实测行高），并修复 Chess960 <code>unmakeMv</code> 棋盘损坏、<code>makeMvInPlace</code> 易位权未清除、<code>animateMove</code> 竞态等 11 项 Bug。v1.0.7 第十九阶段进行最全面的第一性原理代码审查：7 个子代理并行审查全部 20 个源文件（28,281 行），实施 20+ 项关键修复，包括 <code>_reviewEvalCache</code> 缓存损坏竞态、跨模式陈旧回调竞态、PGN <code>[%eval]</code> placeholder 偏移、StockfishNative 线程安全（volatile 字段）、<code>stopAndWaitForBestmove</code> 超时丢弃、ChessApp <code>Error</code> 处理、stats.html CSP 添加等。v1.0.7 第三阶段针对遗留的竖屏 UI 问题从零重新设计（改用 <code>@media(orientation:portrait)</code> 无宽度阈值 + <code>vw</code>/<code>clamp()</code> 自适应字号），并修复了 🔁/⚡ 标记在摆棋模式外不显示、双步推进兵未自动获得 ⚡ 标记、有标记的棋子未获得可行走法、易位权 FEN 反向换算错误等多项第一性原理 Bug，同时确保摆棋后的 FEN/PGN 在非标准位置时自动改用 Shredder 易位标记以保证无损往返。</p>
+  <p>Regalia v1.0.9 是一款功能强大的 Android 国际象棋对弈与分析应用。v1.0.9 修复两项关键用户反馈 Bug（PGN 单行解析失败 + 复盘/统计数据界面「多余的王」棋盘损坏）、两项视觉注解准确性 Bug（变例注释污染主线注解 + 导入走法缺少 isCheck/isCastling 导致将军/避将箭头缺失），并将评估折线图配色统一为蓝-红双色方案（深色+浅色双模式各自调校饱和度以适配背景，兼顾区分度与色调融洽）。v1.0.8 按照《棋魂 · 国际象棋拟人化走棋动画》与《国际象棋拟人化音效方案》两份参考资料，<strong>完全重设计</strong>了走棋动画与音效系统（每种棋子拥有独特的拟人化运动特征与匹配的音色），并参考《Android 深色主题的设计原则》与《Android 浅色主题的设计原则》为 APP 适配浅色模式（浅色/深色模式随系统全局设置自动切换，启动进度条页面与主界面顶部工具栏的国王符号根据主题切换 ♔/♚）。本版本内置世界顶级开源棋力引擎 <strong>Stockfish 18</strong>（arm64-v8a-dotprod 原生编译），为从初学者到高级棋手提供专业级的对弈、复盘与训练体验。v1.0.4 新增 <strong>菲舍尔任意制象棋（Chess960）</strong>模式、<strong>计时赛（Time Control）</strong>、规范化 PGN 导入/导出（符合 1994 PGN 规范）、基于棋盘控制范围热力图的统计数据、Seldepth（选深）显示、视觉注解（NAG &amp; <code>[%csl]</code>/<code>[%cal]</code>）、Web Worker 并行计算、PGN 缓存管理器、玩家重命名、中英双语 UI、认输（🏳️ Resign）等多项改进。v1.0.5 新增棋盘防抖（基于传感器融合的光学防抖原理）、高长宽比屏幕适配、挖孔屏/刘海屏/R角适配、阶段分析精确化（开局/中局/残局多判据检测）、复盘箭头缩小优化等。v1.0.6 新增 Chess960 模式下 ECO 开局识别与推荐抑制、PGN 含 FEN 头的导入导出往返保真、统计数据页面按走法/FEN 选择查看对应局面、置灰样式统一化（仅控件本身淡化）、竖屏新游戏设置对话框优化、可滚动视窗位置保持、引擎评估 FEN 净化（避免不一致的王车易位权导致引擎挂起）、王-车易位新手势（选中王后点击被标记的车完成易位，Chess960 必备）、Chess960 王车易位检测修复、SL 模式显示具体技能等级数值等。v1.0.7 重点修复了多项隐性 Bug（悔棋后关键步缓存未同步、轻量棋盘更新路径缺失易位车标记、引擎通知节流缓存脏、统计页面 PGN 注释 XSS 风险、跨对局评估缓存污染、CSP 阻断 Blob Worker 风险）、为关于对话框补充了 DroidFish / Stockfish 的 GitHub 仓库超链接、进一步优化竖屏全面屏布局与安卓系统返回键适配，并合并了重复的 HTML 转义函数。v1.0.7 新增主界面「快捷工具栏」（将悔棋/撤悔/翻转/AI提示/控制范围 5 个按钮从顶部工具栏移至棋盘下方）、摆棋模式 🔁 易位权手动标记按钮与 ⚡ 可被吃过路兵手动标记按钮（取消自动赋予易位权/过路兵状态，改为完全手动控制，以菲舍尔任意制象棋规则为合法性检查标准），以及瘦长手机竖屏右侧内容裁切与对话框居中问题的第一性原理根因修复。v1.0.7 第十七阶段修复了 Chess960 王车易位「王吃自己」致命 Bug（当王初始位置恰好在易位目标格时）与复盘「分析全部」按钮状态不自动刷新 Bug，并基于 Kimi 审查报告甄别采纳 5 项合理建议（<code>_escFEN</code> 反引号转义、<code>_cloneStatsState</code> 替代 JSON 深拷贝、<code>.bgrid</code> 添加 <code>content-visibility:auto</code>、<code>animateMove</code> 在 JS 端亦遵守 <code>prefers-reduced-motion</code>、stats 棋盘 <code>max-width</code> 适度放宽）。v1.0.7 第十八阶段实现 Kimi 报告中剩余的两项架构性建议：<code>_reviewEvalCache</code> LRU 淘汰机制（MAX_ENTRIES=2000 软上限，不淘汰当前查看步骤，持久化保留 LRU 顺序）与复盘走法列表虚拟列表（>80 步启用窗口化渲染，仅渲染视口+overscan 10 行，动态实测行高），并修复 Chess960 <code>unmakeMv</code> 棋盘损坏、<code>makeMvInPlace</code> 易位权未清除、<code>animateMove</code> 竞态等 11 项 Bug。v1.0.7 第十九阶段进行最全面的第一性原理代码审查：7 个子代理并行审查全部 20 个源文件（28,281 行），实施 20+ 项关键修复，包括 <code>_reviewEvalCache</code> 缓存损坏竞态、跨模式陈旧回调竞态、PGN <code>[%eval]</code> placeholder 偏移、StockfishNative 线程安全（volatile 字段）、<code>stopAndWaitForBestmove</code> 超时丢弃、ChessApp <code>Error</code> 处理、stats.html CSP 添加等。v1.0.7 第三阶段针对遗留的竖屏 UI 问题从零重新设计（改用 <code>@media(orientation:portrait)</code> 无宽度阈值 + <code>vw</code>/<code>clamp()</code> 自适应字号），并修复了 🔁/⚡ 标记在摆棋模式外不显示、双步推进兵未自动获得 ⚡ 标记、有标记的棋子未获得可行走法、易位权 FEN 反向换算错误等多项第一性原理 Bug，同时确保摆棋后的 FEN/PGN 在非标准位置时自动改用 Shredder 易位标记以保证无损往返。</p>
 
   <div class="card-row">
     <div class="stat-card">
@@ -726,7 +726,7 @@ with open("chess.html","w",encoding="utf-8") as f:
 
   <div class="code-block">
     <span class="code-label">AGPL v3 许可声明</span>
-Regalia v1.0.8 User Manual
+Regalia v1.0.9 User Manual
 Copyright (C) 2026 Regalia
 
 This document is part of the Regalia project, licensed under
@@ -1553,7 +1553,14 @@ h+='&lt;/div&gt;&lt;/div&gt;';</div>
   <p>复盘模式采用左右分栏布局，左面板包含棋盘+评估+趋势图+导航，右面板为走法列表。导航走法时，走法列表会自动滚动至当前选中的走法位置，确保当前步骤始终可见。</p>
 
   <h3>评估趋势图</h3>
-  <p>SVG 折线图，纵轴白方视角评估，横轴步数。<strong>↹全局</strong> 开关控制局部/全局视图。折线颜色随走棋方变化：白方段 <span class="color-swatch" style="background:#E8E8F0"></span> <code>#E8E8F0</code>，黑方段 <span class="color-swatch" style="background:#1A1A2E;border:1px solid #3a2a18"></span> <code>#1A1A2E</code>，交叉点 <span class="color-swatch" style="background:#888"></span> <code>#888</code>。</p>
+  <p>SVG 折线图，纵轴白方视角评估，横轴步数。<strong>↹全局</strong> 开关控制局部/全局视图。折线/数据点颜色按评估值符号区分（v1.0.9 起统一为蓝-红配色，两种模式各自调校饱和度以适配背景）：</p>
+  <ul style="font-size:.88rem;line-height:1.8;padding-left:20px;margin:8px 0">
+    <li><strong>白方优势（正评估）</strong>：深色模式 <span class="color-swatch" style="background:#5dade2"></span> <code>#5dade2</code>（天蓝），浅色模式 <span class="color-swatch" style="background:#2c5f8d"></span> <code>#2c5f8d</code>（钢蓝）</li>
+    <li><strong>黑方优势（负评估）</strong>：深色模式 <span class="color-swatch" style="background:#e74c3c"></span> <code>#e74c3c</code>（暖红），浅色模式 <span class="color-swatch" style="background:#c0392b"></span> <code>#c0392b</code>（深红）</li>
+    <li><strong>零线 / 符号交叉段</strong>：深色模式 <span class="color-swatch" style="background:#8a6a3a"></span> <code>#8a6a3a</code>（暖棕），浅色模式 <span class="color-swatch" style="background:#8a8a94"></span> <code>#8a8a94</code>（中灰）</li>
+    <li><strong>当前位置标记环</strong>：两种模式均为 <span class="color-swatch" style="background:#ffd700"></span> <code>#ffd700</code> / <span class="color-swatch" style="background:#d4a017"></span> <code>#d4a017</code>（金色）</li>
+  </ul>
+  <p style="font-size:.82rem;color:#a08050;margin-top:6px">v1.0.9 设计思路：蓝（正向）与红（负向）是色环两端的对立色相，区分度最大；同时蓝/红是国际象棋软件评估图的通用惯例（蓝=好/白方优势，红=坏/黑方优势）。深色模式采用更高饱和度、更亮的色调以在 <code>#1a0a0a</code> 暖棕背景上清晰可见；浅色模式采用更深、更沉的色调以在 <code>#f0f0f3</code> 银灰背景上保持对比度，并与浅色模式整体银灰调色板融洽。</p>
   <div class="tip-box">
     <span class="tip-label">横屏适配：</span>评估趋势图已适配横屏方向。图表高度根据可用视口空间动态计算，SVG 渲染采用等比缩放确保折线形态正确，不会出现拉伸变形或内容截断。横屏复盘中，棋盘占据左侧面板约 45% 宽度，右侧走法列表获得更多空间。左面板控件（评估条、滑块、趋势图、按钮）经过紧凑布局优化，间距和尺寸均根据横屏可用高度动态调整，确保趋势图始终可见且不被推出视口。
   </div>
@@ -2698,10 +2705,62 @@ function moveRookForCastling(state, kingFrom, kingTo) {
     <div class="section-num">附录 A</div>
     <div class="section-title">版本更新日志</div>
   </div>
-  <p>本附录按版本号倒序汇总 Regalia 的全部更新日志详情。v1.0.4 内部进行了 48 次补丁修订（版本号不变，versionCode 仍为 104），随后升级至 v1.0.5（versionCode 105），包含第6轮第49至70次修订。v1.0.6（versionCode 106）包含10项主要新特性。v1.0.7（versionCode 107）聚焦于代码审查驱动的隐性 Bug 修复、关于对话框开源仓库链接补充与竖屏全面屏 UI 适配完善。v1.0.8（versionCode 108，当前版本）历经 30 个开发阶段（Phase 22~51），涵盖走棋动画与音效全面重设计、Stockfish 18 dotprod 引擎集成、Web Worker 多线程、六种棋子触觉人格化、全面第一性原理代码审查，以及 Phase 29 的摆棋 ⚡ 按钮规范化、王车易位音效触觉重设计、浅色模式对比度修复、易位权/过路兵保留审计与 WebView 健壮性增强，Phase 38~48 的 PGN 缓存 UI 布局优化、易位权丢失根因修复、按钮宽度根因修复（<code>.btn-compact</code> CSS 类 + <code>!important</code>），Phase 49 的全面第一性原理复审（6 项 Bug + 12 项健壮性 + 合规核对），Phase 50 的按钮宽度真正根因修复（<code>.btn-row</code> 退出竖屏 grid 变换），以及 Phase 51 的 PGN 往返易位修复（<code>_castleSide</code> 检查 <code>mv.to.castle</code>）、走法评价用语变更（"开局库"→"平常"）、评估折线图深色模式连线可见性修复。</p>
+  <p>本附录按版本号倒序汇总 Regalia 的全部更新日志详情。v1.0.4 内部进行了 48 次补丁修订（版本号不变，versionCode 仍为 104），随后升级至 v1.0.5（versionCode 105），包含第6轮第49至70次修订。v1.0.6（versionCode 106）包含10项主要新特性。v1.0.7（versionCode 107）聚焦于代码审查驱动的隐性 Bug 修复、关于对话框开源仓库链接补充与竖屏全面屏 UI 适配完善。v1.0.8（versionCode 108）历经 30 个开发阶段（Phase 22~51），涵盖走棋动画与音效全面重设计、Stockfish 18 dotprod 引擎集成、Web Worker 多线程、六种棋子触觉人格化、全面第一性原理代码审查，以及 Phase 29 的摆棋 ⚡ 按钮规范化、王车易位音效触觉重设计、浅色模式对比度修复、易位权/过路兵保留审计与 WebView 健壮性增强，Phase 38~48 的 PGN 缓存 UI 布局优化、易位权丢失根因修复、按钮宽度根因修复（<code>.btn-compact</code> CSS 类 + <code>!important</code>），Phase 49 的全面第一性原理复审（6 项 Bug + 12 项健壮性 + 合规核对），Phase 50 的按钮宽度真正根因修复（<code>.btn-row</code> 退出竖屏 grid 变换），以及 Phase 51 的 PGN 往返易位修复（<code>_castleSide</code> 检查 <code>mv.to.castle</code>）、走法评价用语变更（"开局库"→"平常"）、评估折线图深色模式连线可见性修复。v1.0.9（versionCode 109，当前版本）的 Phase 52 修复两项关键用户反馈 Bug（PGN 单行解析失败 + 复盘/统计数据界面「多余的王」棋盘损坏）、两项视觉注解准确性 Bug（变例注释污染主线注解 + 导入走法缺少 isCheck/isCastling），并将评估折线图配色统一为蓝-红双色方案（深色+浅色双模式各自调校饱和度以适配背景，兼顾区分度与色调融洽），同时加固 stats.html 易位权清除逻辑。</p>
 
   <div style="background:rgba(192,57,43,.08);border:1px solid rgba(192,57,43,.4);border-radius:6px;padding:12px 16px;margin:14px 0;font-size:.9rem;color:var(--text);line-height:1.7">
     <strong style="color:#e74c3c">⚠️ 版本号约定：</strong>曾在开发阶段使用版本号：<b>v18.x.x</b>，未来版本号超过<b>v17.x.x</b>以后，<span style="color:red; font-weight:bold;">应当跳过 v18.x.x</span>，从<b>v19.x.x</b>继续。
+  </div>
+
+  <!-- ============================== -->
+
+    <!-- v1.0.9 (current) -->
+  <div class="cl-card" style="border-left:4px solid #d4a017;margin-bottom:18px;padding:12px 16px;background:rgba(212,160,23,.05);border-radius:0 6px 6px 0">
+    <h3 style="color:#d4a017">v1.0.9（versionCode 109，2026.7.2）</h3>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">v1.0.9 修复两项关键用户反馈 Bug（PGN 单行解析失败 + 复盘/统计数据界面「多余的王」棋盘损坏）、两项视觉注解准确性 Bug（变例注释污染主线注解 + 导入走法缺少 isCheck/isCastling），并将评估折线图配色统一为蓝-红双色方案（深色+浅色双模式）。版本号升至 versionCode=109、versionName="1.0.9"。</p>
+
+                    <!-- v1.0.9 PHASE 52 (current) -->
+<h4 style="color:#d4a017;margin-top:14px;margin-bottom:6px;font-size:.9rem;border-top:1px dashed rgba(212,160,23,.3);padding-top:10px">🆕 v1.0.9 第五十二阶段新增（PGN 单行解析修复 + 复盘「多余的王」修复 + 视觉注解变例隔离修复 + 导入走法 isCheck/isCastling 修复 + 折线图配色统一，2026.7.2）</h4>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">本阶段修复两项关键用户反馈 Bug、两项视觉注解准确性 Bug，并将评估折线图配色统一为蓝-红双色方案。版本号升至 v1.0.9（versionCode=109）。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🐛 Bug 修复：PGN 单行解析失败（根因）</h5>
+    <ul style="font-size:.82rem;color:#c8b888;line-height:1.7;padding-left:20px">
+      <li><strong>[严重] 标签剥离正则 <code>/^\[[^\]]*\]/gm</code> 只剥离第一个标签</strong>（tablebase.js <code>_parsePGN</code>）— 该正则使用多行 <code>^</code> 锚定，对于<strong>单行 PGN</strong>（所有标签 + 走法文本在同一行，无 <code>\n</code> 分隔），<code>^</code> 只匹配整个字符串开头一次，因此只剥离了第一个标签 <code>[Event "..."]</code>，剩余标签（<code>[Site "?"]</code>、<code>[Date "..."]</code> 等）泄漏到走法文本中成为无效 SAN token。tokenizer 全部跳过，触发 5 次连续跳过安全限制并中止解析——表现为「PGN 导入失败，0 步解析」。修复：改用 <code>/\[[A-Za-z]\w*\s+[^\]]+\]/g</code>，专门匹配 PGN 标签格式（标签名以字母开头，后接空白 + 值），不锚定行首。这同时避免剥离花括号注释内的 <code>[%csl ...]</code> / <code>[%cal ...]</code> / <code>[%eval ...]</code>（因为 <code>%</code> 不在 <code>[A-Za-z]</code> 中）。验证：<code>PGN 2Kbug.pgn</code>（单行，71 半步，11 变例）现可正确导入全部 71 步。</li>
+      <li><strong>[严重] 花括号注释剥离将相邻走法拼接</strong>（tablebase.js <code>_parsePGN</code> + stats.html <code>parsePGN</code>）— 正则 <code>/\{[^{}]*\}/g</code> 将花括号注释替换为<strong>空字符串</strong>，导致 <code>e4{...}e5</code>（<code>}</code> 与下一个走法之间无空格——单行 PGN 中常见）变为 <code>e4e5</code>——一个无效的合并 token，SAN 解析失败。修复：替换为<strong>空格</strong>而非空字符串。空白规范化步骤随后合并双空格。已同步修复主界面（tablebase.js）与统计页（stats.html）两个解析器。</li>
+    </ul>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🐛 Bug 修复：复盘/统计数据界面「多余的王」棋盘损坏（根因）</h5>
+    <ul style="font-size:.82rem;color:#c8b888;line-height:1.7;padding-left:20px">
+      <li><strong>[严重] <code>_castleSide</code> 回退检测使用 <code>gameState.board</code>（全局最终状态）而非 <code>s.board</code>（被移动的局部状态）</strong>（game-logic.js）— 当 <code>mv.castle</code> 和 <code>mv.to.castle</code> 均为 undefined 时（例如复盘重放中从 <code>moveRecords</code> 重建的走法），<code>_castleSide</code> 的回退检测使用 <code>gameState.board</code> 检查目标格是否为空，使用 <code>gameState.castlingRights</code> 检查易位权是否存在。在 PGN 逆向重放（<code>enterReview</code> / <code>importPGN</code>）期间，被移动的局部状态 <code>s</code> 与 <code>gameState</code>（所有走法应用后的最终状态）不同。这导致回退检测使用了<strong>错误的棋盘</strong>：例如白王最终位于 g1，则早期易位走法（O-O 到 g1）的目标格空检查返回 false，抑制了易位检测。王移动到 g1 但车留在 h1，所有后续走法重放被破坏（涉及错误位置车的走法被静默跳过，棋盘状态偏离预期——对用户表现为「复盘/统计界面棋盘上多余的王」）。修复：<code>_castleSide</code> 现接受可选的 <code>s</code> 参数，并使用其 <code>board</code> 和 <code>castlingRights</code> 进行回退检测。<code>makeMv</code>、<code>makeMvInPlace</code>、<code>moveAlg</code> 均传递 <code>s</code>。ui.js 仅用于动画的调用方（无局部状态）省略 <code>s</code> 并回退到 <code>gameState</code>（对交互对弈正确）。</li>
+      <li><strong>[高危] stats.html <code>executeMove</code> 误判易位</strong>（stats.html）— 原检测 <code>piece.type==='king' && (move.to.col===6 || move.to.col===2)</code> 将<strong>任何</strong>王到第 6/2 列的走法都标记为易位——包括正常王走法（如 Kf1-g1、Kg7-g6）和王吃子（Kxg1）。这导致：(1) 被吃的棋子被当作「易位车」重新放置（静默丢失吃子）；(2) h1/a1 上的实际车被非法位移；(3) 棋盘状态损坏，表现为统计界面棋盘上多余棋子/多余的王。修复：现仅当<strong>所有</strong>以下条件均满足时才检测为易位：王在底排、目标列为 6/2、王移动了易位距离（标准 ≥2，Chess960 ≥1）、目标格为空、且对应易位权在<strong>局部状态</strong>中存在。</li>
+    </ul>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🐛 Bug 修复：视觉注解被变例注释污染</h5>
+    <ul style="font-size:.82rem;color:#c8b888;line-height:1.7;padding-left:20px">
+      <li><strong>[高危] 变例 <code>(...)</code> 内的注释污染了主线走法的注解</strong>（tablebase.js <code>_parsePGN</code>）— 注释提取循环（从 <code>{...}</code> 块中读取 <code>[%eval]</code>/<code>[%csl]</code>/<code>[%cal]</code> 标签）未检查括号深度 <code>_depth</code>。变例内的注释被解析，其位置相关标签累积到待处理的每步负载中，下一个主线走法会将其刷新并附加到自身——导致该主线走法的注解被变例内部数据污染。表现为复盘棋盘上紧跟变例的主线走法显示错误的格子/箭头/评估。修复：仅在 <code>_depth===0</code>（主线）时提取 <code>[%eval]</code>/<code>[%csl]</code>/<code>[%cal]</code>。自由文本注释仍在所有深度提取（变例注释加 <code>[var] </code> 前缀），以保持变例评注在走法列表中可见。</li>
+    </ul>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🐛 Bug 修复：导入的 PGN 走法缺少 isCheck/isCastling 字段</h5>
+    <ul style="font-size:.82rem;color:#c8b888;line-height:1.7;padding-left:20px">
+      <li><strong>[高危] 导入的 PGN 走法缺少 <code>isCheck</code> 和 <code>isCastling</code> 字段</strong>（tablebase.js <code>importPGN</code>）— 导入循环构建 moveRecords 时包含 <code>{notation, from, to, piece, captured, promotion, time, variations}</code> 但遗漏了 <code>isCheck</code> 和 <code>isCastling</code>。这意味着：(1) 导入的 PGN 从不生成红色将军箭头 + 绿色避将箭头（注解生成器检查 <code>moveRecords[moveIdx].isCheck</code>）；(2) Chess960 易位检测在注解重放路径中仅依赖 <code>_castleSide</code> 的启发式回退。修复：<code>importPGN</code> 现为每个导入走法计算 <code>isCheck</code>（通过 <code>inCheck</code> 检查走法后状态）和 <code>isCastling</code>（通过 <code>_castleSide</code> 检查走法前状态 + 解析的走法对象），与实时对弈的 <code>executeMove</code> 逻辑一致。这确保导入的对局获得与实时对弈相同的视觉注解处理——注解现在能正确反映每个局面的实际情况。</li>
+    </ul>
+    <h5 style="color:#3498db;margin-top:10px;margin-bottom:4px;font-size:.82rem">🎨 功能变更：评估折线图配色统一为蓝-红双色（深色+浅色双模式）</h5>
+    <ul style="font-size:.82rem;color:#c8b888;line-height:1.7;padding-left:20px">
+      <li><strong>浅色模式</strong>：原配色（<code>--chart-line</code> <code>#4a4a52</code> 深灰、<code>--chart-fill</code> <code>#2c2c34</code> 极深灰）过于相似——用户无法区分白方优势点/线与黑方优势点/线。改为：
+        <ul style="padding-left:20px;margin-top:4px">
+          <li><code>--chart-line: #2c5f8d</code>（钢蓝——白方优势，取自 <code>--blue</code>）</li>
+          <li><code>--chart-fill: #c0392b</code>（深红——黑方优势，类似 <code>--red</code>）</li>
+          <li><code>--chart-critical: #d4a017</code>（金色——当前位置标记环，在蓝/红点上更醒目）</li>
+        </ul>
+      </li>
+      <li><strong>深色模式</strong>：原配色（<code>--chart-line</code> <code>#E8E8F0</code> 近白、<code>--chart-fill</code> <code>#5dade2</code> 浅蓝）虽可见但色相相近、区分度不足，且浅蓝与深色模式整体暖棕金调色板不融洽。改为与浅色模式相同的蓝-红设计思路，饱和度调高以适配深色背景：
+        <ul style="padding-left:20px;margin-top:4px">
+          <li><code>--chart-line: #5dade2</code>（天蓝——白方优势，更亮更饱和，在 <code>#1a0a0a</code> 暖棕背景上清晰可见）</li>
+          <li><code>--chart-fill: #e74c3c</code>（暖红——黑方优势，与 <code>--chart-line</code> 形成色环两端的最大色相差异）</li>
+          <li><code>--chart-grid: #4a3020</code>（暗暖棕——全局模式竖向网格线，与背景融洽且不抢眼）</li>
+          <li><code>--chart-axis: #8a6a3a</code>（中暖棕——零线 + 符号交叉段，比原 <code>#666</code> 中灰更融洽）</li>
+          <li><code>--chart-critical: #ffd700</code>（金色——当前位置标记环，不变）</li>
+        </ul>
+      </li>
+      <li><strong>数据点描边</strong>（ui.js <code>_buildEvalTrendSVG</code>）：原硬编码 <code>rgba(30,15,0,0.85)</code>（正评估点深棕描边）与 <code>rgba(255,230,150,0.85)</code>（负评估点浅乳白描边）在浅色模式下浅乳白描边会与浅色背景混淆。改为使用 <code>--chart-text-stroke</code> 变量（深色模式 <code>#1a0a0a</code> / 浅色模式 <code>#f0f0f3</code>），确保描边环在两种模式下都对周围背景形成对比。</li>
+      <li>设计思路统一：(1) 蓝（正向）与红（负向）是色环两端的对立色相，区分度最大；(2) 蓝/红是国际象棋软件评估图的通用惯例；(3) 深色模式采用更高饱和度、更亮的色调以在 <code>#1a0a0a</code> 暖棕背景上清晰可见；(4) 浅色模式采用更深、更沉的色调以在 <code>#f0f0f3</code> 银灰背景上保持对比度，并与浅色模式整体银灰调色板融洽。</li>
+    </ul>
+    <p style="font-size:.78rem;color:#887860;margin-top:10px"><strong>版本号</strong>：升级为 versionCode=109、versionName="1.0.9"。<strong>引擎版本</strong>：Stockfish 18 arm64-v8a-dotprod（不变）。<strong>APK 签名</strong>：v1+v2+v3 三重签名齐全，兼容小米澎湃 OS 3。<strong>源码 tar 包</strong>：已排除所有引擎文件。<strong>构建环境</strong>：JDK 21（Temurin 21.0.5）、Android SDK 35、NDK 27.2.12479018、CMake 3.22.1、build-tools 34.0.0。</p>
   </div>
 
   <!-- ============================== -->
@@ -2711,8 +2770,8 @@ function moveRookForCastling(state, kingFrom, kingTo) {
     <h3 style="color:#2980b9">v1.0.7（versionCode 107，2026.6.28）</h3>
     <p style="font-size:.82rem;color:#c8b888;line-height:1.6">v1.0.7 是一次代码质量与稳定性维护版本，基于三份独立代码审查报告（共 30+ 项建议）逐项核实并采纳合理建议，未引入新功能但修复了多项隐性 Bug，并完善了关于对话框的开源仓库链接与竖屏全面屏 UI 适配。</p>
 
-                    <!-- v1.0.8 PHASE 51 (current) -->
-<h4 style="color:#d4a017;margin-top:14px;margin-bottom:6px;font-size:.9rem;border-top:1px dashed rgba(212,160,23,.3);padding-top:10px">🆕 v1.0.8 第五十一阶段新增（PGN 往返易位修复 + 走法评价用语 + 评估折线图深色模式可见性，2026.7.2）</h4>
+                    <!-- v1.0.8 PHASE 51 (previous) -->
+<h4 style="color:#d4a017;margin-top:14px;margin-bottom:6px;font-size:.9rem;border-top:1px dashed rgba(212,160,23,.3);padding-top:10px">v1.0.8 第五十一阶段新增（PGN 往返易位修复 + 走法评价用语 + 评估折线图深色模式可见性，2026.7.2）</h4>
     <p style="font-size:.82rem;color:#c8b888;line-height:1.6">本阶段修复三个用户反馈问题。版本号保持 v1.0.8 不变。</p>
     <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🐛 Bug 修复：PGN 往返易位失败（根因）</h5>
     <ul style="font-size:.82rem;color:#c8b888;line-height:1.7;padding-left:20px">
@@ -5419,7 +5478,7 @@ function moveRookForCastling(state, kingFrom, kingTo) {
 
 <!-- ===== FOOTER ===== -->
 <div style="text-align: center; padding: 40px 0 20px; color: #6a5a40; font-size: 12px;">
-  <p style="margin: 4px 0;">Regalia v1.0.8 用户说明书 (User Manual)</p>
+  <p style="margin: 4px 0;">Regalia v1.0.9 用户说明书 (User Manual)</p>
   <p style="margin: 4px 0;">Built with Stockfish 18 &nbsp;|&nbsp; AGPL v3</p>
   <p style="margin: 4px 0;">Compatible with Android 5.0-15 &nbsp;|&nbsp; Xiaomi HyperOS 3</p>
   <p style="margin: 4px 0;">Chess960 &nbsp;|&nbsp; Time Control &nbsp;|&nbsp; Standardized PGN &nbsp;|&nbsp; Seldepth &nbsp;|&nbsp; Web Worker Pool</p>

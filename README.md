@@ -13,7 +13,7 @@ A standalone, open-source chess app for Android — play offline against Stockfi
   <img src="assets/screenshot.jpg" alt="Regalia gameplay screenshot" width="280">
 </p>
 
-Portrait mode — evaluation bar, move history, AI opponent display with ponder info, and Control heatmap. See the user manual (`Manual/Regalia-v1.0.8-manual-{zh,en}.html`) for wireframe diagrams of every screen.
+Portrait mode — evaluation bar, move history, AI opponent display with ponder info, and Control heatmap. See the user manual (`Manual/Regalia-v1.0.9-manual-{zh,en}.html`) for wireframe diagrams of every screen.
 
 **Control Heatmap** — Tap the 🌗/🌈 button on the toolbar to toggle the control heatmap. Each square is dynamically colored by HSL to indicate which side controls it: blue-purple = your control, red = opponent's control, purple = contested. Hovering a square shows SVG arrows from each controlling piece to that square (warm gold for your pieces, cool silver-blue for opponent's). The info card below the board shows per-piece control contributions with position labels.
 
@@ -125,7 +125,7 @@ Regalia/
 │   │   ├── CMakeLists.txt
 │   │   └── README.license      # Per-file license classification for this directory
 │   ├── res/
-│   │   ├── values/strings.xml  # Application name ("Regalia v1.0.8")
+│   │   ├── values/strings.xml  # Application name ("Regalia v1.0.9")
 │   │   ├── xml/network_security_config.xml  # TLS + certificate pinning for tablebase API
 │   │   ├── xml/backup_rules.xml             # Backup rules (Android < 12)
 │   │   ├── xml/data_extraction_rules.xml    # Data extraction rules (Android 12+)
@@ -139,8 +139,8 @@ Regalia/
                                 #   to keep the tarball small and avoid redistributing the
                                 #   114MB engine binary with the source.
 ├── Manual/                     # User manuals (HTML, self-contained)
-│   ├── Regalia-v1.0.8-manual-zh.html  # Chinese user manual (current)
-│   ├── Regalia-v1.0.8-manual-en.html  # English user manual (current)
+│   ├── Regalia-v1.0.9-manual-zh.html  # Chinese user manual (current)
+│   ├── Regalia-v1.0.9-manual-en.html  # English user manual (current)
 │   └── README.license          # Manual license classification
 ├── gradle/wrapper/             # Gradle wrapper (8.11.1)
 │   ├── gradle-wrapper.jar
@@ -229,7 +229,14 @@ Contributions are welcome! Please ensure:
 
 During the development stage, the version number used was: **v18.x.x**. For future versions, once the version number exceeds **v17.x.x**, <span style="color:red; font-weight:bold;">**v18.x.x** should be skipped</span> and the next version should be **v19.x.x**.
 
-**v1.0.8** (versionCode 108) — current release
+**v1.0.9** (versionCode 109) — current release
+
+The v1.0.9 release fixes two critical user-reported bugs (PGN single-line import
+failure + review/stats "extra kings" board corruption) and improves the light-mode
+evaluation chart color differentiation. See the v1.0.9 Phase 52 changelog below
+for full details.
+
+**v1.0.8** (versionCode 108) — previous release
 
 The v1.0.8 release completely redesigns the move animation and sound effect system
 following the "Personified Chess Move Animation" and "Personified Chess Sound Effects"
@@ -239,6 +246,39 @@ Theme Design Principles" and "Android Light Theme Design Principles" — light/d
 mode switches automatically with the system global setting, and the king icon on
 the loading overlay and main header toolbar switches between ♔/♚ to match the
 on-board pieces. See the v1.0.8 Phase 22 changelog below for full details.
+
+### v1.0.9 Phase 52 (PGN single-line parse fix + review/stats "extra kings" fix + visual annotation variation-isolation fix + isCheck/isCastling import fix + eval-chart palette unified to blue-vs-red, 2026.7.2)
+
+This phase fixes two critical user-reported bugs, fixes two visual-annotation accuracy bugs (variation comment contamination + missing isCheck/isCastling on imported moves), and unifies the eval-chart palette to a blue-vs-red convention in both dark and light modes (with per-mode saturation tuning for background contrast). Version number bumped to v1.0.9 (versionCode 109).
+
+#### Bug fix: PGN single-line import failure (root cause)
+**[CRITICAL] Tag-stripping regex `/^\[[^\]]*\]/gm` only stripped the FIRST tag for single-line PGN files** (tablebase.js `_parsePGN`) — the `^` multiline anchor only matches at the START of the entire string when all tags + movetext are on one line with no `\n` between them. Only `[Event "..."]` was stripped; the remaining tags (`[Site "?"]`, `[Date "..."]`, etc.) leaked into movetext as invalid SAN tokens. The tokenizer skipped them all, hit the 5-consecutive-skip safety limit, and aborted the parse — manifesting as "PGN import fails, 0 moves parsed". Fix: replaced with `/\[[A-Za-z]\w*\s+[^\]]+\]/g` which matches PGN tag format specifically (TagName starts with a letter, followed by whitespace + value) and is NOT anchored to line start. This also avoids stripping `[%csl ...]` / `[%cal ...]` / `[%eval ...]` inside brace comments (since `%` is not in `[A-Za-z]`). Verified: `PGN 2Kbug.pgn` (single-line, 71 half-moves, 11 variations) now imports all 71 moves correctly.
+
+#### Bug fix: brace-comment stripping concatenated adjacent moves
+**[CRITICAL] `/\{[^{}]*\}/g` replaced brace comments with EMPTY STRING, concatenating adjacent moves** (tablebase.js `_parsePGN` + stats.html `parsePGN`) — `e4{...}e5` (no space between `}` and the next move — common in single-line PGN) became `e4e5` — a single bogus token that failed SAN parsing. Fix: replace with a SPACE instead of empty string. The whitespace normalization pass then collapses the double space. Applied to both tablebase.js (main app) and stats.html (stats page parser).
+
+#### Bug fix: review/stats "extra kings" board corruption (root cause)
+**[CRITICAL] `_castleSide` fallback used `gameState.board` (global final state) instead of `s.board` (local state being moved)** (game-logic.js) — the fallback castling detection (used when `mv.castle` and `mv.to.castle` are both undefined — e.g. for moves reconstructed from `moveRecords` during review replay) checked `gameState.board` for destination-emptiness and `gameState.castlingRights` for castling-rights presence. During PGN replay (`enterReview` / `importPGN`), the LOCAL state `s` being moved differs from `gameState` (which is the final state after ALL moves). This caused the fallback to use the WRONG board: e.g. if the white king ended on g1 in the final state, the destination-empty check for an EARLIER castling move (O-O to g1) returned false, suppressing castling detection. The king moved to g1 but the rook stayed on h1, corrupting all subsequent move replays (moves involving the misplaced rook were silently skipped, and the board state diverged from the intended game — manifesting to the user as "extra pieces / extra kings on the review board"). Fix: `_castleSide` now accepts an optional `s` parameter and uses ITS board and castlingRights for the fallback. `makeMv`, `makeMvInPlace`, and `moveAlg` all pass `s`. ui.js animation-only callers (which don't have a local state) omit `s` and fall back to `gameState` (correct for interactive play).
+
+#### Bug fix: stats.html false-positive castling detection
+**[HIGH] `piece.type==='king' && (move.to.col===6 || move.to.col===2)` marked ANY king move to col 6/2 as castling** (stats.html `executeMove`) — including normal king moves (e.g. Kf1-g1, Kg7-g6) and king captures (Kxg1). This caused: (1) the captured piece to be treated as the "castling rook" and repositioned (silently losing the capture); (2) the actual rook on h1/a1 to be illegally displaced; (3) board-state corruption that manifested as extra pieces / extra kings on the stats board. Fix: castling is now only detected when ALL of the following hold: king on home row, destination col 6/2, king traveled the castling distance (>=2 for standard, >=1 for Chess960), destination empty, and the corresponding castling right is present in the LOCAL state.
+
+#### Robustness: stats.html castling-rights clearing
+**[MEDIUM] `executeMove` did not clear castling rights on king/rook move or rook capture** (stats.html) — previously, `executeMove` updated `newState.wk`/`bk` but never cleared `newState.castlingRights` when the king moved, when a rook moved from its home square, or when a rook was captured on its home square. This meant downstream `buildSAN`/state serialization could emit stale `KQkq` markers for a state where castling was no longer legal. Fix: `executeMove` now mirrors `game-logic.js makeMv/makeMvInPlace` behavior — clears the corresponding castling right when the king moves (both sides for that color), when a rook moves from col 0/7 on its home row, or when a rook is captured on col 0/7 on its home row.
+
+#### Bug fix: visual annotation variation-comment contamination
+**[HIGH] Comments inside variations `(...)` contaminated main-line move annotations** (tablebase.js `_parsePGN`) — the comment-extraction loop (which reads `[%eval]`/`[%csl]`/`[%cal]` tags from `{...}` blocks) did NOT check the parenthesis depth `_depth`. Comments inside variations were parsed and their position-specific tags accumulated into the pending per-move payload, which the NEXT main-line move would flush and attach to ITSELF — corrupting that main-line move's annotations with variation-internal data. This manifested as the review board showing wrong squares/arrows/evals for main-line moves that happened to follow a variation with annotations. Fix: only extract `[%eval]`/`[%csl]`/`[%cal]` when `_depth===0` (main line). Free-text comments are still extracted at all depths (with `[var] ` prefix for variation comments) so variation commentary remains visible in the move-list comment display.
+
+#### Bug fix: missing isCheck/isCastling on imported moveRecords
+**[HIGH] Imported PGN moves lacked `isCheck` and `isCastling` fields** (tablebase.js `importPGN`) — the import loop built moveRecords with `{notation, from, to, piece, captured, promotion, time, variations}` but omitted `isCheck` and `isCastling`. This meant: (1) Red check arrows + green escape arrows were never generated for imported PGNs (the annotation generator checks `moveRecords[moveIdx].isCheck`); (2) Chess960 castling detection in the annotation replay path relied solely on `_castleSide`'s heuristic fallback. Fix: `importPGN` now computes `isCheck` (via `inCheck` on the post-move state) and `isCastling` (via `_castleSide` on the pre-move state + parsed move) for each imported move, matching the live-play `executeMove` logic. This ensures imported games get the same visual annotation treatment as live-played games — the annotations now correctly reflect each position's actual situation.
+
+#### Feature change: eval-chart palette unified to blue-vs-red (both dark and light modes)
+**[MEDIUM] Chart colors insufficiently differentiated + dark/light not harmonized** (index.html.tpl + ui.js) — the previous chart palette used different color pairs in each mode (dark: near-white `#E8E8F0` + light-blue `#5dade2`; light: dark-gray `#4a4a52` + very-dark-gray `#2c2c34`), neither pair had sufficient hue differentiation, and the dark-mode light-blue didn't harmonize with the warm-brown-gold theme. Unified both modes to a blue-vs-red convention (blue = White advantage/positive eval, red = Black advantage/negative eval — the universal chess-software convention), with per-mode saturation tuning:
+- **Light mode**: `--chart-line: #2c5f8d` (steel blue), `--chart-fill: #c0392b` (deep red), `--chart-critical: #d4a017` (gold) — deeper, muted shades for contrast on `#f0f0f3` silver-gray.
+- **Dark mode**: `--chart-line: #5dade2` (sky blue), `--chart-fill: #e74c3c` (warm red), `--chart-grid: #4a3020` (dark warm brown), `--chart-axis: #8a6a3a` (medium warm brown), `--chart-critical: #ffd700` (gold, unchanged) — brighter, more saturated shades for visibility on `#1a0a0a` warm-brown, and the warm-brown grid/axis colors harmonize with the dark-mode palette.
+- **Data point outline** (ui.js `_buildEvalTrendSVG`): replaced hardcoded `rgba(30,15,0,0.85)` + `rgba(255,230,150,0.85)` with the theme-aware `--chart-text-stroke` variable so the contrast ring is always visible against the surrounding background in both modes.
+
+Design rationale: (1) blue and red are opposite hues on the color wheel, maximizing distinguishability; (2) blue/red is the universal chess-software eval-chart convention; (3) dark mode uses brighter shades for dark-bg visibility; (4) light mode uses deeper shades for light-bg contrast.
 
 ### v1.0.8 Phase 51 (PGN round-trip castling fix + move-classification label + eval-chart dark-mode visibility, 2026.7.2)
 

@@ -31,7 +31,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; worker-src blob:; connect-src https://tablebase.lichess.ovh; img-src data: file: blob:; frame-ancestors 'none'; base-uri 'self'">
-<title>Regalia v1.0.8</title>
+<title>Regalia v1.0.9</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 /* v1.0.8 PHASE 22: Light/Dark theme system following Material Design
@@ -44,7 +44,7 @@
    All other component colors use CSS variables so the theme switch is
    comprehensive. The king icon (♔ dark / ♚ light) is swapped by JS
    (see ui.js _hdrKingIconHTML + ai-bridge.js _loadingKingIconHTML). */
-:root{color-scheme:dark light;--bg:#1a0a0a;--card:#221015;--card2:#2a1418;--hdr-bg:#1a0a0a;--border:#8b6914;--border2:#d4a017;--text:#f5e6c8;--muted:#a08050;--placeholder:#c0a070;--accent:#d4a017;--accent2:#ffd700;--blue:#4a90d9;--red:#c0392b;--purple:#8e44ad;--green:#27ae60;--danger:#c0392b;--btn-bg:#221015;--btn-bg-hover:#2d1a22;--btn-a-bg:#c49512;--btn-a-hover:#d4a017;--btn-g-bg:#229954;--btn-g-border:#2ecc71;--btn-p-bg:#3a78b4;--btn-p-hover:#4d9ccf;--btn-p-border:#5dade2;--btn-shadow:inset 0 1px 0 rgba(255,215,0,.1);--overlay-bg:rgba(26,10,10,.97);--overlay-card-bg:#221015;--input-bg:#1a0a0a;--toggle-bg:#1a0a0a;--toggle-on-bg:#c49512;--toggle-dot:#ffd700;--toggle-dot-on:#1a0a0a;--toggle-dot-shadow:0 1px 4px rgba(0,0,0,.5);--bwrap-bg:#1a0a0a;--diffsel-bg:#1a0a0a;--ev-bg:rgba(42,21,32,.8);--panel-shadow:0 0 6px rgba(212,160,23,.08),0 4px 14px rgba(0,0,0,.40),inset 0 0 4px rgba(0,0,0,.08);--sq-sel:#5a4030;--sq-hover:rgba(255,215,0,.04);--scrollbar-track:rgba(26,10,10,.5);--op-active-bg:#2a1520;--setup-del-hover:rgba(192,57,43,.2);--setup-err-color:#ff6b5a;--mvar-color:rgba(212,160,23,.05);--mnum-color:rgba(212,160,23,.1);--last-to:#8bc34a;--last-from:#ffd700;--last-to-glow:rgba(139,195,74,.15);--castle-ring:#ffd700;--setup-castle-mark:#ffd700;--setup-ep-mark:#9b59b6;--chart-line:#E8E8F0;--chart-fill:#5dade2;--chart-grid:#333;--chart-axis:#666;--chart-text-stroke:#1a0a0a;--chart-critical:#ffd700;--chart-critical-text:#ffd700}
+:root{color-scheme:dark light;--bg:#1a0a0a;--card:#221015;--card2:#2a1418;--hdr-bg:#1a0a0a;--border:#8b6914;--border2:#d4a017;--text:#f5e6c8;--muted:#a08050;--placeholder:#c0a070;--accent:#d4a017;--accent2:#ffd700;--blue:#4a90d9;--red:#c0392b;--purple:#8e44ad;--green:#27ae60;--danger:#c0392b;--btn-bg:#221015;--btn-bg-hover:#2d1a22;--btn-a-bg:#c49512;--btn-a-hover:#d4a017;--btn-g-bg:#229954;--btn-g-border:#2ecc71;--btn-p-bg:#3a78b4;--btn-p-hover:#4d9ccf;--btn-p-border:#5dade2;--btn-shadow:inset 0 1px 0 rgba(255,215,0,.1);--overlay-bg:rgba(26,10,10,.97);--overlay-card-bg:#221015;--input-bg:#1a0a0a;--toggle-bg:#1a0a0a;--toggle-on-bg:#c49512;--toggle-dot:#ffd700;--toggle-dot-on:#1a0a0a;--toggle-dot-shadow:0 1px 4px rgba(0,0,0,.5);--bwrap-bg:#1a0a0a;--diffsel-bg:#1a0a0a;--ev-bg:rgba(42,21,32,.8);--panel-shadow:0 0 6px rgba(212,160,23,.08),0 4px 14px rgba(0,0,0,.40),inset 0 0 4px rgba(0,0,0,.08);--sq-sel:#5a4030;--sq-hover:rgba(255,215,0,.04);--scrollbar-track:rgba(26,10,10,.5);--op-active-bg:#2a1520;--setup-del-hover:rgba(192,57,43,.2);--setup-err-color:#ff6b5a;--mvar-color:rgba(212,160,23,.05);--mnum-color:rgba(212,160,23,.1);--last-to:#8bc34a;--last-from:#ffd700;--last-to-glow:rgba(139,195,74,.15);--castle-ring:#ffd700;--setup-castle-mark:#ffd700;--setup-ep-mark:#9b59b6;--chart-line:#5dade2;--chart-fill:#e74c3c;--chart-grid:#4a3020;--chart-axis:#8a6a3a;--chart-text-stroke:#1a0a0a;--chart-critical:#ffd700;--chart-critical-text:#ffd700}
 /* v1.0.8 PHASE 22 (third supplement): Light mode redesigned to elegant silver tones.
    Design goal: "典雅庄重的白银色调" — silver-gray background + deep slate text +
    soft silver accents. Every color (except board squares & pieces) differs from
@@ -61,15 +61,15 @@
    Both selectors use the same silver palette. The :root dark-mode variables
    are the default; light-mode variables override when either selector matches. */
 @media (prefers-color-scheme: light){
-  :root{color-scheme:light dark;--bg:#f0f0f3;--card:#e0e0e5;--card2:#d4d4da;--hdr-bg:#f0f0f3;--border:#8a8a94;--border2:#5a5a66;--text:#2c2c34;--muted:#6a6a76;--placeholder:#4a4a52;--accent:#4a4a52;--accent2:#2c2c34;--blue:#2c5f8d;--red:#a02818;--purple:#6a2c8e;--green:#1e7e34;--danger:#a02818;--btn-bg:#e0e0e5;--btn-bg-hover:#d4d4da;--btn-a-bg:#6a6a76;--btn-a-hover:#5a5a66;--btn-g-bg:#229954;--btn-g-border:#2ecc71;--btn-p-bg:#3a78b4;--btn-p-hover:#4d9ccf;--btn-p-border:#5dade2;--btn-shadow:inset 0 1px 0 rgba(255,255,255,.6);--overlay-bg:rgba(240,240,243,.97);--overlay-card-bg:#e0e0e5;--input-bg:#f0f0f3;--toggle-bg:#d4d4da;--toggle-on-bg:#5a5a66;--toggle-dot:#5a5a66;--toggle-dot-on:#f0f0f3;--toggle-dot-shadow:0 1px 3px rgba(0,0,0,.25);--bwrap-bg:#e8d5b0;--diffsel-bg:#e0e0e5;--ev-bg:rgba(208,208,214,.8);--panel-shadow:0 0 6px rgba(90,90,102,.10),0 4px 14px rgba(0,0,0,.10),inset 0 0 4px rgba(0,0,0,.03);--sq-sel:#b8b8c0;--sq-hover:rgba(90,90,102,.06);--scrollbar-track:rgba(208,208,214,.6);--op-active-bg:#d4d4da;--setup-del-hover:rgba(160,40,24,.15);--setup-err-color:#a02818;--mvar-color:rgba(90,90,102,.06);--mnum-color:rgba(90,90,102,.1);--last-to:#8bc34a;--last-from:#ffd700;--last-to-glow:rgba(139,195,74,.15);--castle-ring:#5a5a66;--setup-castle-mark:#5a5a66;--setup-ep-mark:#6a2c8e;--chart-line:#4a4a52;--chart-fill:#2c2c34;--chart-grid:#b0b0b8;--chart-axis:#8a8a94;--chart-text-stroke:#f0f0f3;--chart-critical:#5a5a66;--chart-critical-text:#2c2c34}
+  :root{color-scheme:light dark;--bg:#f0f0f3;--card:#e0e0e5;--card2:#d4d4da;--hdr-bg:#f0f0f3;--border:#8a8a94;--border2:#5a5a66;--text:#2c2c34;--muted:#6a6a76;--placeholder:#4a4a52;--accent:#4a4a52;--accent2:#2c2c34;--blue:#2c5f8d;--red:#a02818;--purple:#6a2c8e;--green:#1e7e34;--danger:#a02818;--btn-bg:#e0e0e5;--btn-bg-hover:#d4d4da;--btn-a-bg:#6a6a76;--btn-a-hover:#5a5a66;--btn-g-bg:#229954;--btn-g-border:#2ecc71;--btn-p-bg:#3a78b4;--btn-p-hover:#4d9ccf;--btn-p-border:#5dade2;--btn-shadow:inset 0 1px 0 rgba(255,255,255,.6);--overlay-bg:rgba(240,240,243,.97);--overlay-card-bg:#e0e0e5;--input-bg:#f0f0f3;--toggle-bg:#d4d4da;--toggle-on-bg:#5a5a66;--toggle-dot:#5a5a66;--toggle-dot-on:#f0f0f3;--toggle-dot-shadow:0 1px 3px rgba(0,0,0,.25);--bwrap-bg:#e8d5b0;--diffsel-bg:#e0e0e5;--ev-bg:rgba(208,208,214,.8);--panel-shadow:0 0 6px rgba(90,90,102,.10),0 4px 14px rgba(0,0,0,.10),inset 0 0 4px rgba(0,0,0,.03);--sq-sel:#b8b8c0;--sq-hover:rgba(90,90,102,.06);--scrollbar-track:rgba(208,208,214,.6);--op-active-bg:#d4d4da;--setup-del-hover:rgba(160,40,24,.15);--setup-err-color:#a02818;--mvar-color:rgba(90,90,102,.06);--mnum-color:rgba(90,90,102,.1);--last-to:#8bc34a;--last-from:#ffd700;--last-to-glow:rgba(139,195,74,.15);--castle-ring:#5a5a66;--setup-castle-mark:#5a5a66;--setup-ep-mark:#6a2c8e;--chart-line:#2c5f8d;--chart-fill:#c0392b;--chart-grid:#b0b0b8;--chart-axis:#8a8a94;--chart-text-stroke:#f0f0f3;--chart-critical:#d4a017;--chart-critical-text:#2c2c34}
 }
 /* JS-driven light theme (Xiaomi HyperOS 3 compatibility) — same silver palette */
-html[data-theme="light"]{color-scheme:light;--bg:#f0f0f3;--card:#e0e0e5;--card2:#d4d4da;--hdr-bg:#f0f0f3;--border:#8a8a94;--border2:#5a5a66;--text:#2c2c34;--muted:#6a6a76;--placeholder:#4a4a52;--accent:#4a4a52;--accent2:#2c2c34;--blue:#2c5f8d;--red:#a02818;--purple:#6a2c8e;--green:#1e7e34;--danger:#a02818;--btn-bg:#e0e0e5;--btn-bg-hover:#d4d4da;--btn-a-bg:#6a6a76;--btn-a-hover:#5a5a66;--btn-g-bg:#229954;--btn-g-border:#2ecc71;--btn-p-bg:#3a78b4;--btn-p-hover:#4d9ccf;--btn-p-border:#5dade2;--btn-shadow:inset 0 1px 0 rgba(255,255,255,.6);--overlay-bg:rgba(240,240,243,.97);--overlay-card-bg:#e0e0e5;--input-bg:#f0f0f3;--toggle-bg:#d4d4da;--toggle-on-bg:#5a5a66;--toggle-dot:#5a5a66;--toggle-dot-on:#f0f0f3;--toggle-dot-shadow:0 1px 3px rgba(0,0,0,.25);--bwrap-bg:#e8d5b0;--diffsel-bg:#e0e0e5;--ev-bg:rgba(208,208,214,.8);--panel-shadow:0 0 6px rgba(90,90,102,.10),0 4px 14px rgba(0,0,0,.10),inset 0 0 4px rgba(0,0,0,.03);--sq-sel:#b8b8c0;--sq-hover:rgba(90,90,102,.06);--scrollbar-track:rgba(208,208,214,.6);--op-active-bg:#d4d4da;--setup-del-hover:rgba(160,40,24,.15);--setup-err-color:#a02818;--mvar-color:rgba(90,90,102,.06);--mnum-color:rgba(90,90,102,.1);--last-to:#8bc34a;--last-from:#ffd700;--last-to-glow:rgba(139,195,74,.15);--castle-ring:#5a5a66;--setup-castle-mark:#5a5a66;--setup-ep-mark:#6a2c8e;--chart-line:#4a4a52;--chart-fill:#2c2c34;--chart-grid:#b0b0b8;--chart-axis:#8a8a94;--chart-text-stroke:#f0f0f3;--chart-critical:#5a5a66;--chart-critical-text:#2c2c34}
+html[data-theme="light"]{color-scheme:light;--bg:#f0f0f3;--card:#e0e0e5;--card2:#d4d4da;--hdr-bg:#f0f0f3;--border:#8a8a94;--border2:#5a5a66;--text:#2c2c34;--muted:#6a6a76;--placeholder:#4a4a52;--accent:#4a4a52;--accent2:#2c2c34;--blue:#2c5f8d;--red:#a02818;--purple:#6a2c8e;--green:#1e7e34;--danger:#a02818;--btn-bg:#e0e0e5;--btn-bg-hover:#d4d4da;--btn-a-bg:#6a6a76;--btn-a-hover:#5a5a66;--btn-g-bg:#229954;--btn-g-border:#2ecc71;--btn-p-bg:#3a78b4;--btn-p-hover:#4d9ccf;--btn-p-border:#5dade2;--btn-shadow:inset 0 1px 0 rgba(255,255,255,.6);--overlay-bg:rgba(240,240,243,.97);--overlay-card-bg:#e0e0e5;--input-bg:#f0f0f3;--toggle-bg:#d4d4da;--toggle-on-bg:#5a5a66;--toggle-dot:#5a5a66;--toggle-dot-on:#f0f0f3;--toggle-dot-shadow:0 1px 3px rgba(0,0,0,.25);--bwrap-bg:#e8d5b0;--diffsel-bg:#e0e0e5;--ev-bg:rgba(208,208,214,.8);--panel-shadow:0 0 6px rgba(90,90,102,.10),0 4px 14px rgba(0,0,0,.10),inset 0 0 4px rgba(0,0,0,.03);--sq-sel:#b8b8c0;--sq-hover:rgba(90,90,102,.06);--scrollbar-track:rgba(208,208,214,.6);--op-active-bg:#d4d4da;--setup-del-hover:rgba(160,40,24,.15);--setup-err-color:#a02818;--mvar-color:rgba(90,90,102,.06);--mnum-color:rgba(90,90,102,.1);--last-to:#8bc34a;--last-from:#ffd700;--last-to-glow:rgba(139,195,74,.15);--castle-ring:#5a5a66;--setup-castle-mark:#5a5a66;--setup-ep-mark:#6a2c8e;--chart-line:#2c5f8d;--chart-fill:#c0392b;--chart-grid:#b0b0b8;--chart-axis:#8a8a94;--chart-text-stroke:#f0f0f3;--chart-critical:#d4a017;--chart-critical-text:#2c2c34}
 /* JS-driven dark theme (Xiaomi HyperOS 3 compatibility) — restores the FULL dark
    palette when the system reports light but JS forces dark via data-theme="dark".
    v1.0.8 PHASE 24 (bug fix): previously only restored 7 chart variables, leaving
    the rest of the page light when the system was light but JS forced dark. */
-html[data-theme="dark"]{color-scheme:dark;--bg:#1a0a0a;--card:#221015;--card2:#2a1418;--hdr-bg:#1a0a0a;--border:#8b6914;--border2:#d4a017;--text:#f5e6c8;--muted:#a08050;--placeholder:#c0a070;--accent:#d4a017;--accent2:#ffd700;--blue:#4a90d9;--red:#c0392b;--purple:#8e44ad;--green:#27ae60;--danger:#c0392b;--btn-bg:#221015;--btn-bg-hover:#2d1a22;--btn-a-bg:#c49512;--btn-a-hover:#d4a017;--btn-g-bg:#229954;--btn-g-border:#2ecc71;--btn-p-bg:#3a78b4;--btn-p-hover:#4d9ccf;--btn-p-border:#5dade2;--btn-shadow:inset 0 1px 0 rgba(255,215,0,.1);--overlay-bg:rgba(26,10,10,.97);--overlay-card-bg:#221015;--input-bg:#1a0a0a;--toggle-bg:#1a0a0a;--toggle-on-bg:#c49512;--toggle-dot:#ffd700;--toggle-dot-on:#1a0a0a;--toggle-dot-shadow:0 1px 4px rgba(0,0,0,.5);--bwrap-bg:#1a0a0a;--diffsel-bg:#1a0a0a;--ev-bg:rgba(42,21,32,.8);--panel-shadow:0 0 6px rgba(212,160,23,.08),0 4px 14px rgba(0,0,0,.40),inset 0 0 4px rgba(0,0,0,.08);--sq-sel:#5a4030;--sq-hover:rgba(255,215,0,.04);--scrollbar-track:rgba(26,10,10,.5);--op-active-bg:#2a1520;--setup-del-hover:rgba(192,57,43,.2);--setup-err-color:#ff6b5a;--mvar-color:rgba(212,160,23,.05);--mnum-color:rgba(212,160,23,.1);--last-to:#8bc34a;--last-from:#ffd700;--last-to-glow:rgba(139,195,74,.15);--castle-ring:#ffd700;--setup-castle-mark:#ffd700;--setup-ep-mark:#9b59b6;--chart-line:#E8E8F0;--chart-fill:#5dade2;--chart-grid:#333;--chart-axis:#666;--chart-text-stroke:#1a0a0a;--chart-critical:#ffd700;--chart-critical-text:#ffd700}
+html[data-theme="dark"]{color-scheme:dark;--bg:#1a0a0a;--card:#221015;--card2:#2a1418;--hdr-bg:#1a0a0a;--border:#8b6914;--border2:#d4a017;--text:#f5e6c8;--muted:#a08050;--placeholder:#c0a070;--accent:#d4a017;--accent2:#ffd700;--blue:#4a90d9;--red:#c0392b;--purple:#8e44ad;--green:#27ae60;--danger:#c0392b;--btn-bg:#221015;--btn-bg-hover:#2d1a22;--btn-a-bg:#c49512;--btn-a-hover:#d4a017;--btn-g-bg:#229954;--btn-g-border:#2ecc71;--btn-p-bg:#3a78b4;--btn-p-hover:#4d9ccf;--btn-p-border:#5dade2;--btn-shadow:inset 0 1px 0 rgba(255,215,0,.1);--overlay-bg:rgba(26,10,10,.97);--overlay-card-bg:#221015;--input-bg:#1a0a0a;--toggle-bg:#1a0a0a;--toggle-on-bg:#c49512;--toggle-dot:#ffd700;--toggle-dot-on:#1a0a0a;--toggle-dot-shadow:0 1px 4px rgba(0,0,0,.5);--bwrap-bg:#1a0a0a;--diffsel-bg:#1a0a0a;--ev-bg:rgba(42,21,32,.8);--panel-shadow:0 0 6px rgba(212,160,23,.08),0 4px 14px rgba(0,0,0,.40),inset 0 0 4px rgba(0,0,0,.08);--sq-sel:#5a4030;--sq-hover:rgba(255,215,0,.04);--scrollbar-track:rgba(26,10,10,.5);--op-active-bg:#2a1520;--setup-del-hover:rgba(192,57,43,.2);--setup-err-color:#ff6b5a;--mvar-color:rgba(212,160,23,.05);--mnum-color:rgba(212,160,23,.1);--last-to:#8bc34a;--last-from:#ffd700;--last-to-glow:rgba(139,195,74,.15);--castle-ring:#ffd700;--setup-castle-mark:#ffd700;--setup-ep-mark:#9b59b6;--chart-line:#5dade2;--chart-fill:#e74c3c;--chart-grid:#4a3020;--chart-axis:#8a6a3a;--chart-text-stroke:#1a0a0a;--chart-critical:#ffd700;--chart-critical-text:#ffd700}
 /* v1.0.7: html + body + #app ALL get overflow-x:hidden. html uses max-width:100%
    (NOT 100vw — 100vw includes safe-area insets and causes overflow on notched phones).
    body gets padding for safe-area only (NOT the 3px finger-grip — that's handled
@@ -1536,7 +1536,7 @@ const _i18n={
 'elo_target':{zh:'Elo目标',en:'ELO Target'},
 'export_settings_btn':{zh:'📤 导出设置',en:'📤 Export'},
 'import_settings_btn':{zh:'📥 导入设置',en:'📥 Import'},
-'loading_title':{zh:'Regalia v1.0.8',en:'Regalia v1.0.8'},
+'loading_title':{zh:'Regalia v1.0.9',en:'Regalia v1.0.9'},
 'click_skip_loading':{zh:'点击跳过加载',en:'Click to skip loading'},
 'white_checkmate':{zh:'白方将杀获胜',en:'White wins by checkmate'},
 'black_checkmate':{zh:'黑方将杀获胜',en:'Black wins by checkmate'},
@@ -2843,7 +2843,7 @@ function hasLegalMoves(s){for(let r=0;r<8;r++){for(let c=0;c<8;c++){const p=s.bo
  * f1 castling kingside to g1), the SAN-based import path in tablebase.js
  * now sets mv.castle explicitly based on the O-O / O-O-O token.
  */
-function _castleSide(mv){
+function _castleSide(mv,s){
   if(!mv||!mv.to||!mv.from||!mv.piece)return null;
   // Primary signal: explicit castle flag set by pseudoMoves() or by the
   // king-then-rook gesture handler in sqClick().
@@ -2896,8 +2896,27 @@ function _castleSide(mv){
       //   not castling. Castling destination squares are ALWAYS empty (the rook
       //   ends up BESIDE the king, not under it). If the target square holds any
       //   piece, this is a capture, not castling. Add the empty-destination guard.
-      const _cr=(typeof gameState!=='undefined'&&gameState&&gameState.castlingRights)?gameState.castlingRights:null;
-      const _destEmpty=!gameState||!gameState.board||!gameState.board[mv.to.row]||!gameState.board[mv.to.row][mv.to.col];
+      // v1.0.9 PHASE 52 CRITICAL FIX: the previous code checked `gameState.board`
+      //   and `gameState.castlingRights` — the GLOBAL final state — for the
+      //   destination-empty and castling-rights-present guards. During PGN
+      //   replay (enterReview / importPGN), the LOCAL state `s` being moved
+      //   differs from `gameState` (which is the final state after ALL moves
+      //   have been applied). This caused the fallback to use the WRONG board:
+      //   e.g. if the white king ended on g1 in the final state, the
+      //   destination-empty check for an EARLIER castling move (O-O to g1)
+      //   returned false, suppressing castling detection. The king moved to g1
+      //   but the rook stayed on h1, corrupting all subsequent move replays
+      //   (moves involving the misplaced rook were silently skipped, and the
+      //   board state diverged from the intended game — manifesting to the
+      //   user as "extra pieces / extra kings on the review board").
+      //   Fix: accept an optional `s` (the state being moved) parameter and
+      //   use ITS board and castlingRights for the fallback. If `s` is not
+      //   provided (e.g. animation-only callers in ui.js that don't have a
+      //   local state), fall back to `gameState` (the live game state during
+      //   interactive play, which is correct for that use case).
+      const _st=s||(typeof gameState!=='undefined'?gameState:null);
+      const _cr=(_st&&_st.castlingRights)?_st.castlingRights:null;
+      const _destEmpty=!_st||!_st.board||!_st.board[mv.to.row]||!_st.board[mv.to.row][mv.to.col];
       if(mv.to.col===6&&Math.abs(mv.to.col-mv.from.col)>=_minDist){
         if(_destEmpty&&(!_is960||(_cr&&_cr[mv.piece.color+'Kingside'])))return 'kingside';
       }
@@ -2923,7 +2942,10 @@ function makeMv(s,mv){const ns=cloneS(s);const{from,to,piece,promotion}=mv;if(!p
 // (1) suppress the capture (castling never captures), (2) save the rook
 // before moving the king, (3) move the king, (4) place the rook at its
 // destination.
-const _cs=_castleSide(mv);
+// v1.0.9 PHASE 52: pass `s` (the original pre-move state) to _castleSide
+// so the fallback castling detection checks the LOCAL board state and
+// LOCAL castling rights, not the global final gameState.
+const _cs=_castleSide(mv,s);
 let _rookFrom=-1,_rookTo=-1,_savedRook=null;
 if(_cs){
   // Compute rook from/to BEFORE moving the king, and save the rook piece.
@@ -3082,7 +3104,8 @@ if(!piece||!s.board[from.row]||!s.board[from.row][from.col])return null;
 // v1.0.6 FIX: Detect castling BEFORE moving the king (same fix as makeMv).
 // In Chess960, the rook's source may be the king's destination. Save the
 // rook before the king overwrites it.
-const _cs=_castleSide(mv);
+// v1.0.9 PHASE 52: pass `s` to _castleSide for correct local-state checks.
+const _cs=_castleSide(mv,s);
 let _rookFrom=-1,_rookTo=-1,_savedRook=null;
 if(_cs){
   // v1.0.7 PHASE 3: Always use Chess960 castling rook move logic (Chess960
@@ -3450,7 +3473,8 @@ function moveAlg(s,mv,postState){const{from,to,piece,promotion}=mv;const isCap=!
 // v1.0.6: Use _castleSide() for unambiguous castling detection.
 // In Chess960, the king may move only 1 column when castling (e.g. f1→g1),
 // so `Math.abs(to.col-from.col)===2` alone is insufficient.
-const _cs=_castleSide(mv);
+// v1.0.9 PHASE 52: pass `s` to _castleSide for correct local-state checks.
+const _cs=_castleSide(mv,s);
 if(_cs){n=_cs==='kingside'?'O-O':'O-O-O'}else{
 if(piece.type!=='pawn'){
 n+=piece.type==='knight'?'N':piece.type[0].toUpperCase();
@@ -10055,10 +10079,23 @@ function _parsePGN(pgnText){
   // (Spec §10: "If the SetUp tag is set to "1", the FEN tag MUST be present.")
   // The inverse (FEN present but SetUp missing) is also auto-corrected silently.
   
-  // Remove header tags — handle multi-line headers and various formats
-  // v1.0.4 Round-5 Rev16: Anchor to start-of-line so [%csl ...]/[%cal ...]
-  // inside brace comments are NOT stripped (only header lines starting with [).
-  let moveText=pgnText.replace(/^\[[^\]]*\]/gm,'').trim();
+  // Remove header tags — handle multi-line headers and various formats.
+  // v1.0.9 PHASE 52 CRITICAL FIX: the previous regex /^\[[^\]]*\]/gm used
+  //   line-start anchor `^` with the multiline flag. For SINGLE-LINE PGN
+  //   files (where all tags + movetext are on one line with no \n between
+  //   them), `^` only matches the START OF THE ENTIRE STRING once — so only
+  //   the FIRST tag (e.g. [Event "..."]) was stripped, and the remaining
+  //   tags ([Site "?"] [Date "..."] ...) leaked into movetext as invalid
+  //   tokens. The tokenizer then skipped them all, hitting the 5-consecutive-
+  //   skip safety limit and aborting the parse — manifesting as "PGN import
+  //   fails, 0 moves parsed".
+  //   Fix: use a regex that matches PGN header tag format specifically —
+  //   `[TagName "value"]` or `[TagName value]` — where TagName starts with
+  //   a letter. This avoids the `^` line-anchor issue (works for both
+  //   single-line and multi-line PGN), and ALSO avoids stripping `[%csl ...]`
+  //   / `[%cal ...]` / `[%eval ...]` / `[%emt ...]` inside brace comments
+  //   (because `%` is not in `[A-Za-z]`).
+  let moveText=pgnText.replace(/\[[A-Za-z]\w*\s+[^\]]+\]/g,'').trim();
   // Remove line continuation markers (\ at end of line)
   moveText=moveText.replace(/\\\s*\n/g,' ');
   
@@ -10193,6 +10230,22 @@ function _parsePGN(pgnText){
           if(_d>0)_body+=_mt[_j];
           _j++;
         }
+        // v1.0.9 PHASE 52 CRITICAL FIX: only extract position-specific
+        //   annotations ([%eval]/[%csl]/[%cal]) from comments at _depth===0
+        //   (main line). Comments inside variations (...) describe the
+        //   variation's positions, NOT the main-line position. Previously,
+        //   a comment inside a variation was parsed and its [%eval]/[%csl]/
+        //   [%cal] tags accumulated into the pending per-move payload, which
+        //   the NEXT main-line move would flush and attach to ITSELF —
+        //   corrupting that main-line move's annotations with variation-
+        //   internal data. This manifested as the review board showing wrong
+        //   squares/arrows/evals for main-line moves that happened to follow
+        //   a variation with annotations.
+        //   Fix: skip [%eval]/[%csl]/[%cal] extraction when _depth>0; still
+        //   extract free-text comments (with [var] prefix) so variation
+        //   commentary remains visible in the move-list comment display.
+        //   Still advance _i past the comment body either way.
+        if(_depth===0){
         // Extract [%eval ...] from body
         const _em=_body.match(/\[%eval\s+([^\]]+)\]/i);
         if(_em){
@@ -10262,11 +10315,16 @@ function _parsePGN(pgnText){
             }
           }
         }
+        } // end if(_depth===0)
         // v1.0.5 Rev50: Extract free-text comment (body minus all [%xxx] tags).
         // Multiple consecutive comments for the SAME move merge with " | "
         // separator (only when _currentMoveFlushed is false, meaning a comment
         // was already seen for this move). Comments inside variations
         // (depth>0) get a "[var] " prefix so the user can distinguish them.
+        // v1.0.9 PHASE 52: free-text comments are extracted at ALL depths
+        // (including inside variations) so variation commentary remains
+        // visible in the move-list comment display. Only the position-
+        // specific [%eval]/[%csl]/[%cal] tags are depth-gated above.
         {
           let _ft=_body.replace(/\[%[a-zA-Z]+\s+[^\]]*\]/g,'').trim();
           // Also strip any leftover [CLK:...], [EMT:...] non-bracketed formats
@@ -10365,7 +10423,17 @@ function _parsePGN(pgnText){
   // tokenized as bogus move tokens (e.g. "1. e4 {unclosed comment e5 2. Nf3"
   // was producing tokens "{unclosed", "comment", "e5", "2.", "Nf3" — all
   // rejected as invalid SAN, generating useless NULL placeholders).
-  {let _braceIter=0;while(moveText.includes('{')&&_braceIter++<10)moveText=moveText.replace(/\{[^{}]*\}/g,'');}
+  // v1.0.9 PHASE 52 CRITICAL FIX: replace brace comments with a SPACE, not
+  //   empty string. The previous empty-string replacement caused moves
+  //   adjacent to a `}` (with no whitespace separator) to be CONCATENATED
+  //   into a single bogus token. Example from PGN 2Kbug.pgn:
+  //     `1. e4{[%emt ...] ...}e5 {[%emt ...] ...} 2. Bd3`
+  //   After brace stripping (old): `1. e4e5  2. Bd3`  ← "e4e5" is one token!
+  //   The tokenizer rejected "e4e5" as invalid SAN, triggering the 5-skip
+  //   cascade-failure path and aborting the parse.
+  //   After brace stripping (fixed): `1. e4 e5  2. Bd3`  ← two valid tokens.
+  //   The whitespace normalization at line ~490 collapses the double space.
+  {let _braceIter=0;while(moveText.includes('{')&&_braceIter++<10)moveText=moveText.replace(/\{[^{}]*\}/g,' ');}
   // v1.0.4 Rev29: Remove unclosed brace + everything to end-of-string.
   // This is the PGN spec's tolerant behavior: an unclosed comment consumes
   // the rest of the movetext. We log a warning so the user knows.
@@ -11193,6 +11261,19 @@ function importPGN(pgnText){
     const algRe=/^[a-h][1-8]$/;
     if(!algRe.test(fromAlg)){console.error('importPGN: invalid fromAlg at index',moveIdx,fromAlg);fromAlg=posAlg(from)||'??';}
     if(!algRe.test(toAlg)){console.error('importPGN: invalid toAlg at index',moveIdx,toAlg);toAlg=posAlg(to)||'??';}
+    // v1.0.9 PHASE 52 FIX: compute isCheck and isCastling for imported moves.
+    //   Previously, imported moveRecords lacked these fields, so:
+    //   (1) Red check arrows + green escape arrows were never generated for
+    //       imported PGNs (moveRecords[moveIdx].isCheck was undefined).
+    //   (2) Chess960 castling detection in the annotation replay path relied
+    //       solely on _castleSide's heuristic fallback.
+    //   Now we compute both from the post-move replayState (same logic as
+    //   executeMove in ui.js) so imported games get the same visual
+    //   annotation treatment as live-played games.
+    const _oppColor=replayState.currentTurn;
+    const _oppKing=_oppColor==='white'?replayState.wk:replayState.bk;
+    const _isCheck=_oppKing?inCheck(replayState.board,_oppColor,_oppKing):false;
+    const _isCastling=!!(typeof _castleSide==='function'&&parsedMove&&parsedMove.move&&_castleSide(parsedMove.move,preMoveState));
     // v1.0.1 CRITICAL FIX: Push stateHistory BEFORE adding the current move to moveRecords.
     // Previously this was pushed AFTER moveRecords.push(), which meant each stateHistory
     // entry's moveRecords INCLUDES the move that was just added. When undoMove() restored
@@ -11217,6 +11298,8 @@ function importPGN(pgnText){
       // "PGN invalid" — making EVERY PGN import fail. Fixed to use
       // parsedMove.move.promotion (the move object on the parsed result).
       promotion:(parsedMove&&parsedMove.move&&parsedMove.move.promotion)||null,
+      isCheck:_isCheck,
+      isCastling:_isCastling,
       time:null,
       variations:varEntries
     });
@@ -13340,11 +13423,21 @@ function _buildEvalTrendSVG(width, height) {
   // v1.0.8 PHASE 22: Read theme-aware chart colors from CSS variables.
   // This ensures the review trend chart is visible in both dark and light modes.
   // SVG stroke/fill attributes can't use var() directly, so we read computed values.
+  // v1.0.9: chart palette follows a unified blue-vs-red convention in BOTH modes:
+  //   --chart-line  = blue  (White advantage, positive eval)
+  //   --chart-fill  = red   (Black advantage, negative eval)
+  //   --chart-axis  = neutral warm tone (zero-line + sign-crossing segments)
+  //   --chart-grid  = subtle warm tone (global-mode vertical gridlines)
+  //   --chart-critical = gold (current-position marker ring)
+  // The exact shade is tuned per mode for contrast against the bg:
+  //   dark mode (bg #1a0a0a): brighter, more saturated (#5dade2 sky-blue, #e74c3c red)
+  //   light mode (bg #f0f0f3): deeper, less saturated (#2c5f8d steel-blue, #c0392b red)
+  // Fallbacks below match the dark-mode palette (the :root default).
   const _cs = getComputedStyle(document.documentElement);
-  const _C_LINE = _cs.getPropertyValue('--chart-line').trim() || '#E8E8F0';
-  const _C_FILL = _cs.getPropertyValue('--chart-fill').trim() || '#1A1A2E';
-  const _C_GRID = _cs.getPropertyValue('--chart-grid').trim() || '#333';
-  const _C_AXIS = _cs.getPropertyValue('--chart-axis').trim() || '#666';
+  const _C_LINE = _cs.getPropertyValue('--chart-line').trim() || '#5dade2';
+  const _C_FILL = _cs.getPropertyValue('--chart-fill').trim() || '#e74c3c';
+  const _C_GRID = _cs.getPropertyValue('--chart-grid').trim() || '#4a3020';
+  const _C_AXIS = _cs.getPropertyValue('--chart-axis').trim() || '#8a6a3a';
   const _C_STROKE = _cs.getPropertyValue('--chart-text-stroke').trim() || '#1a0a0a';
   const _C_CRIT = _cs.getPropertyValue('--chart-critical').trim() || '#ffd700';
   const _C_CRIT_TXT = _cs.getPropertyValue('--chart-critical-text').trim() || '#ffd700';
@@ -13458,17 +13551,21 @@ function _buildEvalTrendSVG(width, height) {
     }
   }
 
-  // Draw data points
+  // Draw data points.
+  // v1.0.9: point outline uses --chart-text-stroke (theme-aware: dark stroke on
+  // light bg, light stroke on dark bg) so the contrast ring is always visible
+  // against the surrounding background — previously this was hardcoded to two
+  // fixed rgba values that washed out in light mode.
   for (const p of points) {
     const x = stepToX(p.step);
     const y = evalToY(p.eval);
     let fillColor, strokeColor;
     if (p.eval > 0) {
       fillColor = _C_LINE;
-      strokeColor = 'rgba(30,15,0,0.85)';
+      strokeColor = _C_STROKE;
     } else if (p.eval < 0) {
       fillColor = _C_FILL;
-      strokeColor = 'rgba(255,230,150,0.85)';
+      strokeColor = _C_STROKE;
     } else {
       fillColor = _C_AXIS;
       strokeColor = _C_AXIS;
@@ -14064,7 +14161,7 @@ const oppC=OPP_COLOR[playerColor];
 const flip=playerColor==='black';
 // Arrows computed separately by _updateArrows() — no inline computation needed
 
-let h='<div class="hdr" role="banner"><div class="hdr-top"><div class="hdr-l">'+_hdrKingIconHTML()+'<h1>'+T('app_name')+'<span class="ver">v1.0.8</span><button onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showAboutPage=true;render()" class="hdr-btn" style="margin-left:4px;cursor:pointer">ℹ️</button></h1></div><button onclick="toggleLang()" class="hdr-btn-lg" style="cursor:pointer">'+(_lang==='zh'?'↔️中':'↔️EN')+'</button><div class="ev" id="eval-disp" role="status" aria-label="'+T('evaluating')+'">'+(setupMode?T('setup_label'):(isAIThinking?'<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>':'<span class="ev-e">'+pe+'</span><span>'+pd+'</span><span style="color:var(--muted)">('+scoreStr+')</span>'+_hdrDepthStr+_hdrProgressStr))+'</div></div><div class="hdr-tools" role="toolbar" aria-label="'+T('ctrl_range')+'">'+(setupMode?'':'<div class="diff-sel" role="radiogroup" aria-label="AI">'+getAI_LEVELS().map(l=>'<button class="diff-b'+(getEffectiveAILevel()===l.id?' act':'')+'" onclick="if(!isAIThinking){'+(l.id===8?'openEngineConfig()':('aiLevel='+l.id+';try{AndroidBridge.syncGameDifficulty('+l.id+')}catch(e){}render()'))+'}" title="'+l.desc+'" role="radio" aria-checked="'+(getEffectiveAILevel()===l.id)+'">'+(l.id===8?'⚙️':l.id===7?('SL'+(function(){try{let _sl=20;if(typeof engineSettingsData!=='undefined'&&engineSettingsData&&engineSettingsData.skillLevel!=null)_sl=engineSettingsData.skillLevel;else if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getEngineSkillLevel)_sl=AndroidBridge.getEngineSkillLevel();return _sl;}catch(e){return 20;}})()):l.id)+'</button>').join('')+'</div>')+'<button type="button" class="btn" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()" aria-label="'+T('new_game')+'"><span style="font-size:1.4rem">⚔️</span> '+T('new_game')+'</button>'+'<button class="btn" onclick="quickFreeOpening()" aria-label="'+T('free_opening')+'">'+(playerColor==='white'?'<span style=\"font-size:1.4rem;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text\">♔&#xFE0E;</span>':'<span style=\"font-size:1.4rem;font-weight:400;color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans Symbol&#x27;,sans-serif;font-variant-emoji:text\">♚&#xFE0E;</span>')+' '+T('free_opening')+'</button>'+(setupMode?'':'<button class="btn" onclick="toggleSound()" id="btnSound" aria-label="'+T('sound')+'">'+(soundOn?'<span style="font-size:1.4rem">🔊</span> '+T('sound'):'<span style="font-size:1.4rem">🔇</span> '+T('sound'))+'</button>')+'<button class="btn" onclick="copyFEN()" title="'+T('copy_fen')+'" aria-label="'+T('copy_fen')+'"><span style="font-size:1.4rem">📝</span> FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="'+T('import_fen')+'" aria-label="'+T('import_fen')+'"><span style="font-size:1.4rem">🗃️</span> '+T('import_label')+'</button><button class="btn" onclick="'+(setupMode?'exitSetup()':'toggleSetup()')+'" aria-label="'+(setupMode?T('setup_done'):T('setup_mode'))+'">'+(setupMode?'<span style="font-size:1.4rem">✓</span> '+T('setup_done'):'<span style="font-size:1.4rem">🏗️</span> '+T('setup_mode'))+'</button></div></div>';
+let h='<div class="hdr" role="banner"><div class="hdr-top"><div class="hdr-l">'+_hdrKingIconHTML()+'<h1>'+T('app_name')+'<span class="ver">v1.0.9</span><button onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showAboutPage=true;render()" class="hdr-btn" style="margin-left:4px;cursor:pointer">ℹ️</button></h1></div><button onclick="toggleLang()" class="hdr-btn-lg" style="cursor:pointer">'+(_lang==='zh'?'↔️中':'↔️EN')+'</button><div class="ev" id="eval-disp" role="status" aria-label="'+T('evaluating')+'">'+(setupMode?T('setup_label'):(isAIThinking?'<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>':'<span class="ev-e">'+pe+'</span><span>'+pd+'</span><span style="color:var(--muted)">('+scoreStr+')</span>'+_hdrDepthStr+_hdrProgressStr))+'</div></div><div class="hdr-tools" role="toolbar" aria-label="'+T('ctrl_range')+'">'+(setupMode?'':'<div class="diff-sel" role="radiogroup" aria-label="AI">'+getAI_LEVELS().map(l=>'<button class="diff-b'+(getEffectiveAILevel()===l.id?' act':'')+'" onclick="if(!isAIThinking){'+(l.id===8?'openEngineConfig()':('aiLevel='+l.id+';try{AndroidBridge.syncGameDifficulty('+l.id+')}catch(e){}render()'))+'}" title="'+l.desc+'" role="radio" aria-checked="'+(getEffectiveAILevel()===l.id)+'">'+(l.id===8?'⚙️':l.id===7?('SL'+(function(){try{let _sl=20;if(typeof engineSettingsData!=='undefined'&&engineSettingsData&&engineSettingsData.skillLevel!=null)_sl=engineSettingsData.skillLevel;else if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getEngineSkillLevel)_sl=AndroidBridge.getEngineSkillLevel();return _sl;}catch(e){return 20;}})()):l.id)+'</button>').join('')+'</div>')+'<button type="button" class="btn" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()" aria-label="'+T('new_game')+'"><span style="font-size:1.4rem">⚔️</span> '+T('new_game')+'</button>'+'<button class="btn" onclick="quickFreeOpening()" aria-label="'+T('free_opening')+'">'+(playerColor==='white'?'<span style=\"font-size:1.4rem;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text\">♔&#xFE0E;</span>':'<span style=\"font-size:1.4rem;font-weight:400;color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans Symbol&#x27;,sans-serif;font-variant-emoji:text\">♚&#xFE0E;</span>')+' '+T('free_opening')+'</button>'+(setupMode?'':'<button class="btn" onclick="toggleSound()" id="btnSound" aria-label="'+T('sound')+'">'+(soundOn?'<span style="font-size:1.4rem">🔊</span> '+T('sound'):'<span style="font-size:1.4rem">🔇</span> '+T('sound'))+'</button>')+'<button class="btn" onclick="copyFEN()" title="'+T('copy_fen')+'" aria-label="'+T('copy_fen')+'"><span style="font-size:1.4rem">📝</span> FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="'+T('import_fen')+'" aria-label="'+T('import_fen')+'"><span style="font-size:1.4rem">🗃️</span> '+T('import_label')+'</button><button class="btn" onclick="'+(setupMode?'exitSetup()':'toggleSetup()')+'" aria-label="'+(setupMode?T('setup_done'):T('setup_mode'))+'">'+(setupMode?'<span style="font-size:1.4rem">✓</span> '+T('setup_done'):'<span style="font-size:1.4rem">🏗️</span> '+T('setup_mode'))+'</button></div></div>';
 h+=`<div class="main" role="main"><div class="bsec">`;
 // v1.0.4 Rev37: AI bar captured pieces split at 7 — pieces 8+ go to line 3.
 {const _aiCapHtml=capturedPiecesHtml(gameState.board,oppC,playerColor,7);
@@ -14462,7 +14559,7 @@ if(showAboutPage){
 // Load AGPL v3 SVG via AndroidBridge as base64 (CSP-compliant)
 let _gplSvgSrc='';
 try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.loadAssetAsBase64){const b64=AndroidBridge.loadAssetAsBase64('AGPLv3_Logo.svg');if(b64)_gplSvgSrc='data:image/svg+xml;base64,'+b64;}}catch(e){}
-h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="About"><div class="dlg" style="max-width:460px"><h2>${T('about_title')}</h2><div class="dlg-sec"><div class="crow"><span class="lb">${T('about_app')}</span><span class="vl">${T('app_name')} v1.0.8</span></div><div class="crow"><span class="lb">${T('about_engine')}</span><span class="vl">Stockfish 18 (arm64-v8a-dotprod)</span></div><div class="crow"><span class="lb">${T('about_platform')}</span><span class="vl">Android arm64-v8a</span></div></div><div class="dlg-sec"><h3>${T('copyright_license')}</h3>`+(_gplSvgSrc?`<div style="text-align:center;margin-bottom:10px"><img src="${_gplSvgSrc}" alt="AGPL v3 Logo" style="width:120px;height:auto;opacity:.9" /></div>`:'')+`<div style="font-size:.75rem;color:var(--text);line-height:1.6"><p style="margin-bottom:8px">${T('about_copyright')}</p><p style="margin-bottom:8px">${T('about_source_code_prefix')}<a href="${T('about_source_code_url')}" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">${T('about_source_code_url')}</a></p><p style="margin-bottom:8px">${T('about_agpl')} <a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GNU AGPL v3</a>${T('about_agpl_desc')}</p><p style="margin-bottom:8px">${T('about_droidfish')}<a href="https://github.com/peterosterlund2/droidfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">DroidFish</a>${T('about_droidfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a>${T('about_droidfish_tail')}</p><p style="margin-bottom:8px">${T('about_stockfish')}<a href="https://github.com/official-stockfish/Stockfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">Stockfish</a>${T('about_stockfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a> ${T('about_gplv3')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_disclaimer')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_ai')}</p></div></div><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="showAboutPage=false;render()" style="flex:1;justify-content:center">${T('close')}</button></div></div></div>`;}
+h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="About"><div class="dlg" style="max-width:460px"><h2>${T('about_title')}</h2><div class="dlg-sec"><div class="crow"><span class="lb">${T('about_app')}</span><span class="vl">${T('app_name')} v1.0.9</span></div><div class="crow"><span class="lb">${T('about_engine')}</span><span class="vl">Stockfish 18 (arm64-v8a-dotprod)</span></div><div class="crow"><span class="lb">${T('about_platform')}</span><span class="vl">Android arm64-v8a</span></div></div><div class="dlg-sec"><h3>${T('copyright_license')}</h3>`+(_gplSvgSrc?`<div style="text-align:center;margin-bottom:10px"><img src="${_gplSvgSrc}" alt="AGPL v3 Logo" style="width:120px;height:auto;opacity:.9" /></div>`:'')+`<div style="font-size:.75rem;color:var(--text);line-height:1.6"><p style="margin-bottom:8px">${T('about_copyright')}</p><p style="margin-bottom:8px">${T('about_source_code_prefix')}<a href="${T('about_source_code_url')}" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">${T('about_source_code_url')}</a></p><p style="margin-bottom:8px">${T('about_agpl')} <a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GNU AGPL v3</a>${T('about_agpl_desc')}</p><p style="margin-bottom:8px">${T('about_droidfish')}<a href="https://github.com/peterosterlund2/droidfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">DroidFish</a>${T('about_droidfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a>${T('about_droidfish_tail')}</p><p style="margin-bottom:8px">${T('about_stockfish')}<a href="https://github.com/official-stockfish/Stockfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">Stockfish</a>${T('about_stockfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a> ${T('about_gplv3')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_disclaimer')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_ai')}</p></div></div><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="showAboutPage=false;render()" style="flex:1;justify-content:center">${T('close')}</button></div></div></div>`;}
 // Import dialog — paste FEN, paste PGN, or select PGN file
 if(showImportDialog){
 h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="${T('import_title')}" onclick="if(event.target===this){showImportDialog=false;render()}"><div class="dlg" style="max-width:420px"><h2>${T('import_title')}</h2><div class="dlg-sec" style="gap:10px;display:flex;flex-direction:column">

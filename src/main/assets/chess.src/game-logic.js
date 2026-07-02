@@ -368,7 +368,7 @@ const _i18n={
 'elo_target':{zh:'Elo目标',en:'ELO Target'},
 'export_settings_btn':{zh:'📤 导出设置',en:'📤 Export'},
 'import_settings_btn':{zh:'📥 导入设置',en:'📥 Import'},
-'loading_title':{zh:'Regalia v1.0.8',en:'Regalia v1.0.8'},
+'loading_title':{zh:'Regalia v1.0.9',en:'Regalia v1.0.9'},
 'click_skip_loading':{zh:'点击跳过加载',en:'Click to skip loading'},
 'white_checkmate':{zh:'白方将杀获胜',en:'White wins by checkmate'},
 'black_checkmate':{zh:'黑方将杀获胜',en:'Black wins by checkmate'},
@@ -1675,7 +1675,7 @@ function hasLegalMoves(s){for(let r=0;r<8;r++){for(let c=0;c<8;c++){const p=s.bo
  * f1 castling kingside to g1), the SAN-based import path in tablebase.js
  * now sets mv.castle explicitly based on the O-O / O-O-O token.
  */
-function _castleSide(mv){
+function _castleSide(mv,s){
   if(!mv||!mv.to||!mv.from||!mv.piece)return null;
   // Primary signal: explicit castle flag set by pseudoMoves() or by the
   // king-then-rook gesture handler in sqClick().
@@ -1728,8 +1728,27 @@ function _castleSide(mv){
       //   not castling. Castling destination squares are ALWAYS empty (the rook
       //   ends up BESIDE the king, not under it). If the target square holds any
       //   piece, this is a capture, not castling. Add the empty-destination guard.
-      const _cr=(typeof gameState!=='undefined'&&gameState&&gameState.castlingRights)?gameState.castlingRights:null;
-      const _destEmpty=!gameState||!gameState.board||!gameState.board[mv.to.row]||!gameState.board[mv.to.row][mv.to.col];
+      // v1.0.9 PHASE 52 CRITICAL FIX: the previous code checked `gameState.board`
+      //   and `gameState.castlingRights` — the GLOBAL final state — for the
+      //   destination-empty and castling-rights-present guards. During PGN
+      //   replay (enterReview / importPGN), the LOCAL state `s` being moved
+      //   differs from `gameState` (which is the final state after ALL moves
+      //   have been applied). This caused the fallback to use the WRONG board:
+      //   e.g. if the white king ended on g1 in the final state, the
+      //   destination-empty check for an EARLIER castling move (O-O to g1)
+      //   returned false, suppressing castling detection. The king moved to g1
+      //   but the rook stayed on h1, corrupting all subsequent move replays
+      //   (moves involving the misplaced rook were silently skipped, and the
+      //   board state diverged from the intended game — manifesting to the
+      //   user as "extra pieces / extra kings on the review board").
+      //   Fix: accept an optional `s` (the state being moved) parameter and
+      //   use ITS board and castlingRights for the fallback. If `s` is not
+      //   provided (e.g. animation-only callers in ui.js that don't have a
+      //   local state), fall back to `gameState` (the live game state during
+      //   interactive play, which is correct for that use case).
+      const _st=s||(typeof gameState!=='undefined'?gameState:null);
+      const _cr=(_st&&_st.castlingRights)?_st.castlingRights:null;
+      const _destEmpty=!_st||!_st.board||!_st.board[mv.to.row]||!_st.board[mv.to.row][mv.to.col];
       if(mv.to.col===6&&Math.abs(mv.to.col-mv.from.col)>=_minDist){
         if(_destEmpty&&(!_is960||(_cr&&_cr[mv.piece.color+'Kingside'])))return 'kingside';
       }
@@ -1755,7 +1774,10 @@ function makeMv(s,mv){const ns=cloneS(s);const{from,to,piece,promotion}=mv;if(!p
 // (1) suppress the capture (castling never captures), (2) save the rook
 // before moving the king, (3) move the king, (4) place the rook at its
 // destination.
-const _cs=_castleSide(mv);
+// v1.0.9 PHASE 52: pass `s` (the original pre-move state) to _castleSide
+// so the fallback castling detection checks the LOCAL board state and
+// LOCAL castling rights, not the global final gameState.
+const _cs=_castleSide(mv,s);
 let _rookFrom=-1,_rookTo=-1,_savedRook=null;
 if(_cs){
   // Compute rook from/to BEFORE moving the king, and save the rook piece.
@@ -1914,7 +1936,8 @@ if(!piece||!s.board[from.row]||!s.board[from.row][from.col])return null;
 // v1.0.6 FIX: Detect castling BEFORE moving the king (same fix as makeMv).
 // In Chess960, the rook's source may be the king's destination. Save the
 // rook before the king overwrites it.
-const _cs=_castleSide(mv);
+// v1.0.9 PHASE 52: pass `s` to _castleSide for correct local-state checks.
+const _cs=_castleSide(mv,s);
 let _rookFrom=-1,_rookTo=-1,_savedRook=null;
 if(_cs){
   // v1.0.7 PHASE 3: Always use Chess960 castling rook move logic (Chess960
@@ -2282,7 +2305,8 @@ function moveAlg(s,mv,postState){const{from,to,piece,promotion}=mv;const isCap=!
 // v1.0.6: Use _castleSide() for unambiguous castling detection.
 // In Chess960, the king may move only 1 column when castling (e.g. f1→g1),
 // so `Math.abs(to.col-from.col)===2` alone is insufficient.
-const _cs=_castleSide(mv);
+// v1.0.9 PHASE 52: pass `s` to _castleSide for correct local-state checks.
+const _cs=_castleSide(mv,s);
 if(_cs){n=_cs==='kingside'?'O-O':'O-O-O'}else{
 if(piece.type!=='pawn'){
 n+=piece.type==='knight'?'N':piece.type[0].toUpperCase();

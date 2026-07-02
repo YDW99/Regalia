@@ -946,3 +946,11 @@ v1.0.8 Phase 42 (2026.7.1):
 
 v1.0.8 Phase 41 (2026.7.1):
   - All Java files: No changes.
+
+
+v1.0.9 Phase 52 (2026.7.2):
+  - MainActivity.java (AGPL v3): VERSION "v1.0.8" → "v1.0.9".
+  - StockfishNative.java (GPL v3): ENGINE_VERSION "v1.0.8" → "v1.0.9".
+  - ChessApp.java (AGPL v3): init log "v1.0.8" → "v1.0.9".
+  - ChessWebViewClient.java (AGPL v3): Version comment "v1.0.8" → "v1.0.9".
+  - No other Java files changed.
