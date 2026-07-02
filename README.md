@@ -9,6 +9,10 @@ A standalone, open-source chess app for Android — play offline against Stockfi
 
 ## Screenshots
 
+<p align="center">
+  <img src="assets/screenshot.jpg" alt="Regalia gameplay screenshot" width="280">
+</p>
+
 Portrait mode — evaluation bar, move history, AI opponent display with ponder info, and Control heatmap. See the user manual (`Manual/Regalia-v1.0.8-manual-{zh,en}.html`) for wireframe diagrams of every screen.
 
 **Control Heatmap** — Tap the 🌗/🌈 button on the toolbar to toggle the control heatmap. Each square is dynamically colored by HSL to indicate which side controls it: blue-purple = your control, red = opponent's control, purple = contested. Hovering a square shows SVG arrows from each controlling piece to that square (warm gold for your pieces, cool silver-blue for opponent's). The info card below the board shows per-piece control contributions with position labels.
