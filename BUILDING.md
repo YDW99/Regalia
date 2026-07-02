@@ -1,4 +1,4 @@
-# Building Regalia v1.0.8 from source
+# Building Regalia v1.0.9 from source
 
 <!-- AI-GEN: AI assisted
      This document was AI-assisted and has been reviewed for AGPL v3 compliance. -->
@@ -61,6 +61,34 @@ The signed APK (v1+v2+v3 signed with `../debug.keystore`) will be at
   `unzip -DD` (no directory timestamps) to avoid future-dated files.
 - **`./gradlew: Permission denied`**: The wrapper script may lose its executable
   bit after extraction. Fix: `chmod +x gradlew`.
+
+## v1.0.9 build notes
+- **v1.0.9 Phase 52 (2026.7.2):** Two critical bug fixes + two visual-annotation accuracy fixes + chart palette unification + robustness —
+  (1) PGN single-line parse failure: `tablebase.js` `_parsePGN` tag-stripping regex
+  `/^\[[^\]]*\]/gm` → `/\[[A-Za-z]\w*\s+[^\]]+\]/g` (the old `^` multiline anchor only
+  matched the first tag for single-line PGN files); also brace-comment stripping now
+  replaces with a SPACE instead of empty string (prevents `e4{...}e5` → `e4e5` concatenation).
+  (2) Review/stats "extra kings" board corruption: `game-logic.js` `_castleSide()` now
+  accepts an optional `s` (state) parameter for the fallback castling detection — uses
+  `s.board` / `s.castlingRights` instead of the global `gameState` (which is the final
+  state after ALL moves, incorrect during PGN replay). `makeMv`, `makeMvInPlace`, and
+  `moveAlg` all pass `s`. Also `stats.html` `executeMove` castling detection now requires
+  king on home row + correct distance + empty destination + castling right present (was:
+  any king move to col 6/2). (3) Visual annotation variation-comment contamination:
+  `tablebase.js` `_parsePGN` now only extracts `[%eval]`/`[%csl]`/`[%cal]` at `_depth===0`
+  (main line) — previously comments inside variations `(...)` were parsed and their tags
+  contaminated the next main-line move's annotations. (4) Missing isCheck/isCastling on
+  imported moves: `tablebase.js` `importPGN` now computes `isCheck` (via `inCheck` on
+  post-move state) and `isCastling` (via `_castleSide` on pre-move state) for each imported
+  move — previously these fields were missing, so red check arrows + green escape arrows
+  were never generated for imported PGNs. (5) Eval-chart palette unified to blue-vs-red
+  in BOTH dark and light modes (with per-mode saturation tuning): light mode `--chart-line`
+  `#4a4a52`→`#2c5f8d`, `--chart-fill` `#2c2c34`→`#c0392b`, `--chart-critical` `#5a5a66`→`#d4a017`;
+  dark mode `--chart-line` `#E8E8F0`→`#5dade2`, `--chart-fill` `#5dade2`→`#e74c3c`,
+  `--chart-grid` `#333`→`#4a3020`, `--chart-axis` `#666`→`#8a6a3a`. Data point outline now
+  uses `--chart-text-stroke` variable instead of hardcoded rgba. (6) Robustness:
+  `stats.html` `executeMove` now clears castling rights on king/rook move + rook capture
+  (was missing). Version bumped to versionCode=109, versionName="1.0.9".
 
 ## v1.0.8 build notes
 - **v1.0.8 Phase 51 (2026.7.2):** Three fixes — (1) PGN round-trip castling failure:

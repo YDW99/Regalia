@@ -1,5 +1,31 @@
 This directory contains the JavaScript source modules for the chess UI.
 These modules are merged by build-chess.py into chess.html.
+v1.0.9 Phase 52: PGN single-line parse fix + review "extra kings" fix + visual annotation variation-isolation fix + isCheck/isCastling import fix + eval-chart palette unified to blue-vs-red.
+  - tablebase.js _parsePGN: tag-stripping regex /^\[[^\]]*\]/gm → /\[[A-Za-z]\w*\s+[^\]]+\]/g
+    (the old ^ multiline anchor only matched the first tag for single-line PGN files).
+  - tablebase.js _parsePGN + stats.html parsePGN: brace-comment stripping now replaces
+    with a SPACE instead of empty string (prevents e4{...}e5 → e4e5 concatenation).
+  - tablebase.js _parsePGN: variation comment isolation — [%eval]/[%csl]/[%cal] tags
+    now only extracted at _depth===0 (main line). Previously, comments inside variations
+    (...) were parsed and their position-specific tags contaminated the next main-line
+    move's annotations. Free-text comments still extracted at all depths (with [var] prefix).
+  - tablebase.js importPGN: now computes isCheck (via inCheck on post-move state) and
+    isCastling (via _castleSide on pre-move state + parsed move) for each imported move.
+    Previously these fields were missing → red check arrows + green escape arrows were
+    never generated for imported PGNs.
+  - game-logic.js _castleSide: now accepts optional `s` (state) parameter for the fallback
+    castling detection — uses s.board / s.castlingRights instead of the global gameState.
+    Fixes review/stats "extra kings" board corruption during PGN replay.
+  - stats.html executeMove: castling detection now requires king on home row + correct
+    distance + empty destination + castling right present (was: any king move to col 6/2).
+    Also: castling rights now cleared on king/rook move + rook capture (was missing).
+  - index.html.tpl: eval-chart palette unified to blue-vs-red in BOTH modes:
+    Light mode:  --chart-line #4a4a52 → #2c5f8d (steel blue), --chart-fill #2c2c34 → #c0392b (deep red),
+                 --chart-critical #5a5a66 → #d4a017 (gold)
+    Dark mode:   --chart-line #E8E8F0 → #5dade2 (sky blue), --chart-fill #5dade2 → #e74c3c (warm red),
+                 --chart-grid #333 → #4a3020 (dark warm brown), --chart-axis #666 → #8a6a3a (medium warm brown)
+  - ui.js _buildEvalTrendSVG: data point outline now uses --chart-text-stroke variable
+    (theme-aware) instead of hardcoded rgba values; fallback colors updated to dark-mode palette.
 v1.0.8 Phase 51: game-logic.js _castleSide() fix — now checks mv.to.castle
   (set by pseudoMoves) in addition to mv.castle (set by executeMove). Fixes
   PGN round-trip castling failure (O-O/O-O-O only moved the king in replay).

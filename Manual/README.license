@@ -3,16 +3,28 @@ This directory contains the user-facing HTML manuals for the Regalia app
 with embedded CSS and JavaScript (no external resources).
 
 License classification by file:
-  - Regalia-v1.0.8-manual-zh.html: AGPL v3 (original Regalia work)
-      Chinese user manual for Regalia v1.0.8 (current).
+  - Regalia-v1.0.9-manual-zh.html: AGPL v3 (original Regalia work)
+      Chinese user manual for Regalia v1.0.9 (current).
       Copyright (C) 2026 Regalia.
-  - Regalia-v1.0.8-manual-en.html: AGPL v3 (original Regalia work)
-      English user manual for Regalia v1.0.8 (current).
+  - Regalia-v1.0.9-manual-en.html: AGPL v3 (original Regalia work)
+      English user manual for Regalia v1.0.9 (current).
       Copyright (C) 2026 Regalia.
 
 The manuals are AGPL v3 because they are original documentation created by
 the Regalia project, not derived from any third-party GPL work. The embedded
 diagrams, wireframes, and changelog text are all original.
+
+v1.0.9 (2026.7.2) changes:
+  - Regalia-v1.0.9-manual-zh.html: Renamed from v1.0.8. Phase 52 changelog
+    entry added to Appendix A (newest-first order maintained). Phase 52
+    documents: PGN single-line parse fix (tag-stripping regex + brace-comment
+    stripping), review/stats "extra kings" board corruption fix
+    (_castleSide local-state + stats.html executeMove castling detection),
+    and light-mode eval-chart color differentiation (blue/red). Also
+    documents the v1.0.9 dark-mode chart color update (same blue-vs-red
+    convention as light mode, tuned for dark-bg contrast).
+  - Regalia-v1.0.9-manual-en.html: Synced with Chinese version.
+  - Historical manuals (v1.0.4–v1.0.8): unchanged.
 
 v1.0.8 (2026.6.30) changes:
   - Regalia-v1.0.8-manual-zh.html: New v1.0.8 manual covering Phase 22

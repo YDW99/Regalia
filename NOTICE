@@ -2989,6 +2989,157 @@ v1.0.7 Phase 21 (bug fixes: portrait dialog positioning precision fix, landscape
   (game-logic.js, index.html.tpl per DroidFish derivation) and remain under
   GPL v3.
 
+v1.0.9 Phase 52 (PGN single-line parse fix + review/stats "extra kings" fix + visual annotation variation-isolation fix + isCheck/isCastling import fix + eval-chart palette unified to blue-vs-red, 2026.7.2):
+  Version: versionCode=109, versionName="1.0.9".
+
+  Bug fix (tablebase.js _parsePGN): single-line PGN import failure.
+    The tag-stripping regex /^\[[^\]]*\]/gm used the multiline `^` anchor,
+    which only matches at the START of the entire string for single-line
+    PGN files (where all tags + movetext are on one line with no \n between
+    them). Only the FIRST tag ([Event "..."]) was stripped; the remaining
+    tags ([Site "?"] [Date "..."] ...) leaked into movetext as invalid SAN
+    tokens. The tokenizer skipped them all, hit the 5-consecutive-skip
+    safety limit, and aborted the parse — manifesting as "PGN import fails,
+    0 moves parsed". Fix: replaced with /\[[A-Za-z]\w*\s+[^\]]+\]/g which
+    matches PGN tag format specifically (TagName starts with a letter,
+    followed by whitespace + value) and is NOT anchored to line start.
+    This also avoids stripping `[%csl ...]` / `[%cal ...]` / `[%eval ...]`
+    inside brace comments (since `%` is not in [A-Za-z]).
+    License: tablebase.js is GPL v3 (DroidFish-derived).
+
+  Bug fix (tablebase.js _parsePGN + stats.html parsePGN): brace-comment
+    stripping concatenated adjacent moves. The regex /\{[^{}]*\}/g replaced
+    brace comments with EMPTY STRING, so `e4{...}e5` (no space between `}`
+    and the next move — common in single-line PGN) became `e4e5` — a
+    single bogus token that failed SAN parsing. Fix: replace with a SPACE
+    instead of empty string. The whitespace normalization pass then
+    collapses the double space. Applied to both tablebase.js (main app)
+    and stats.html (stats page parser).
+    License: tablebase.js and stats.html are GPL v3 (DroidFish-derived).
+
+  Bug fix (game-logic.js _castleSide): review/stats "extra kings" board
+    corruption. The fallback castling detection (used when mv.castle and
+    mv.to.castle are both undefined — e.g. for moves reconstructed from
+    moveRecords during review replay) checked `gameState.board` (the
+    GLOBAL final state) for destination-emptiness and `gameState.castlingRights`
+    for castling-rights presence. During PGN replay (enterReview / importPGN),
+    the LOCAL state `s` being moved differs from `gameState` (which is the
+    final state after ALL moves). This caused the fallback to use the WRONG
+    board: e.g. if the white king ended on g1 in the final state, the
+    destination-empty check for an EARLIER castling move (O-O to g1)
+    returned false, suppressing castling detection. The king moved to g1
+    but the rook stayed on h1, corrupting all subsequent move replays
+    (moves involving the misplaced rook were silently skipped, and the
+    board state diverged from the intended game — manifesting to the
+    user as "extra pieces / extra kings on the review board"). Fix:
+    _castleSide now accepts an optional `s` parameter and uses ITS board
+    and castlingRights for the fallback. makeMv, makeMvInPlace, and
+    moveAlg all pass `s`. ui.js animation-only callers (which don't have
+    a local state) omit `s` and fall back to `gameState` (correct for
+    interactive play).
+    License: game-logic.js is GPL v3 (DroidFish-derived).
+
+  Bug fix (stats.html executeMove): false-positive castling detection.
+    The previous detection `piece.type==='king' && (move.to.col===6 ||
+    move.to.col===2)` marked ANY king move to col 6/2 as castling —
+    including normal king moves (e.g. Kf1-g1, Kg7-g6) and king captures
+    (Kxg1). This caused: (1) the captured piece to be treated as the
+    "castling rook" and repositioned (silently losing the capture);
+    (2) the actual rook on h1/a1 to be illegally displaced;
+    (3) board-state corruption that manifested as extra pieces / extra
+    kings on the stats board. Fix: castling is now only detected when ALL
+    of the following hold: king on home row, destination col 6/2, king
+    traveled the castling distance (>=2 for standard, >=1 for Chess960),
+    destination empty, and the corresponding castling right is present
+    in the LOCAL state.
+    License: stats.html is GPL v3 (DroidFish-derived).
+
+  Feature change (index.html.tpl): eval-chart palette unified to blue-vs-red
+    in BOTH dark and light modes.
+    Light mode: the previous colors (--chart-line #4a4a52 dark gray,
+    --chart-fill #2c2c34 very dark gray) were too similar — users couldn't
+    distinguish white-advantage points/lines from black-advantage ones.
+    Changed to:
+      --chart-line: #2c5f8d (steel blue — white advantage, from --blue)
+      --chart-fill: #c0392b (deep red — black advantage, similar to --red)
+      --chart-critical: #d4a017 (gold — current-position marker ring)
+    Dark mode: the previous colors (--chart-line #E8E8F0 near-white,
+    --chart-fill #5dade2 light blue) were visible but had similar hues
+    (insufficient differentiation), and the light blue didn't harmonize
+    with the dark mode's warm-brown-gold palette. Changed to the same
+    blue-vs-red design as light mode, with higher saturation for dark-bg:
+      --chart-line: #5dade2 (sky blue — white advantage, brighter/more sat.)
+      --chart-fill: #e74c3c (warm red — black advantage)
+      --chart-grid: #4a3020 (dark warm brown — global-mode gridlines)
+      --chart-axis: #8a6a3a (medium warm brown — zero line + sign-crossing)
+      --chart-critical: #ffd700 (gold — current-position marker, unchanged)
+    Data point outline (ui.js _buildEvalTrendSVG): previously hardcoded
+    rgba(30,15,0,0.85) (positive) + rgba(255,230,150,0.85) (negative) —
+    the light-cream negative outline washed out on light bg. Now uses the
+    --chart-text-stroke variable (theme-aware: dark stroke on light bg,
+    light stroke on dark bg) so the contrast ring is always visible.
+    Design rationale: (1) blue (positive) and red (negative) are opposite
+    hues on the color wheel, maximizing distinguishability; (2) blue/red
+    is the universal chess-software eval-chart convention; (3) dark mode
+    uses brighter, more saturated shades for visibility on #1a0a0a; (4)
+    light mode uses deeper, muted shades for contrast on #f0f0f3.
+    License: index.html.tpl and ui.js are GPL v3 (DroidFish-derived).
+
+  Robustness (stats.html executeMove): castling-rights clearing. Previously
+    executeMove did not clear castling rights when the king or a rook moved
+    or when a rook was captured — downstream buildSAN/state serialization
+    could emit stale KQkq markers. Now mirrors game-logic.js makeMv/makeMvInPlace
+    behavior: clears the corresponding castling right when the king moves,
+    when a rook moves from its home square, or when a rook is captured on
+    its home square.
+    License: stats.html is GPL v3 (DroidFish-derived).
+
+  Bug fix (tablebase.js _parsePGN): variation comments contaminated main-line
+    annotations. The comment-extraction loop (which reads [%eval]/[%csl]/[%cal]
+    tags from `{...}` blocks) did NOT check the parenthesis depth `_depth`.
+    Comments inside variations `(...)` were parsed and their position-specific
+    tags ([%eval]/[%csl]/[%cal]) accumulated into the pending per-move payload,
+    which the NEXT main-line move would flush and attach to ITSELF — corrupting
+    that main-line move's annotations with variation-internal data. This
+    manifested as the review board showing wrong squares/arrows/evals for
+    main-line moves that happened to follow a variation with annotations.
+    Fix: only extract [%eval]/[%csl]/[%cal] when `_depth===0` (main line).
+    Free-text comments are still extracted at all depths (with "[var] " prefix
+    for variation comments) so variation commentary remains visible in the
+    move-list comment display.
+    License: tablebase.js is GPL v3 (DroidFish-derived).
+
+  Bug fix (tablebase.js importPGN): isCheck and isCastling fields were missing
+    from imported moveRecords. The importPGN loop built moveRecords with
+    {notation, from, to, piece, captured, promotion, time, variations} but
+    omitted isCheck and isCastling. This meant:
+    (1) Red check arrows + green escape arrows were never generated for
+        imported PGNs (the annotation generator checks moveRecords[moveIdx].isCheck).
+    (2) Chess960 castling detection in the annotation replay path relied
+        solely on _castleSide's heuristic fallback (now also fixed to use
+        local state in the castleSide fix above).
+    Fix: importPGN now computes isCheck (via inCheck on the post-move state)
+    and isCastling (via _castleSide on the pre-move state + parsed move) for
+    each imported move, matching the live-play executeMove logic. This ensures
+    imported games get the same visual annotation treatment as live-played games.
+    License: tablebase.js is GPL v3 (DroidFish-derived).
+
+  Files changed:
+    - src/main/assets/chess.src/tablebase.js (PGN tag + brace stripping fix,
+      variation comment isolation fix, isCheck/isCastling import fix)
+    - src/main/assets/chess.src/game-logic.js (_castleSide local-state fix)
+    - src/main/assets/chess.src/index.html.tpl (chart palette unified blue-vs-red)
+    - src/main/assets/chess.src/ui.js (chart point outline theme-aware, fallback
+      colors updated)
+    - src/main/assets/stats.html (PGN tag + brace stripping fix, castling
+      detection fix, castling-rights clearing robustness)
+    - src/main/assets/chess.html (rebuilt from chess.src/ via build-chess.py)
+    - build.gradle, strings.xml, MainActivity.java, StockfishNative.java,
+      ChessApp.java, ChessWebViewClient.java, game-logic.js, index.html.tpl,
+      ui.js (version 108→109)
+    - Manual/Regalia-v1.0.9-manual-{zh,en}.html (Phase 52 changelog)
+    - NOTICE, README.md, chess.src/README.license (Phase 52 changelog)
+
 v1.0.8 Phase 51 (PGN round-trip castling fix + move-classification label + eval-chart dark-mode visibility, 2026.7.2):
   Version: versionCode=108, versionName="1.0.8" (unchanged).
 
