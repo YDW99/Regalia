@@ -9,10 +9,6 @@ A standalone, open-source chess app for Android — play offline against Stockfi
 
 ## Screenshots
 
-<p align="center">
-  <img src="assets/screenshot.jpg" alt="Regalia gameplay screenshot" width="280">
-</p>
-
 Portrait mode — evaluation bar, move history, AI opponent display with ponder info, and Control heatmap. See the user manual (`Manual/Regalia-v1.0.8-manual-{zh,en}.html`) for wireframe diagrams of every screen.
 
 **Control Heatmap** — Tap the 🌗/🌈 button on the toolbar to toggle the control heatmap. Each square is dynamically colored by HSL to indicate which side controls it: blue-purple = your control, red = opponent's control, purple = contested. Hovering a square shows SVG arrows from each controlling piece to that square (warm gold for your pieces, cool silver-blue for opponent's). The info card below the board shows per-piece control contributions with position labels.
@@ -141,14 +137,6 @@ Regalia/
 ├── Manual/                     # User manuals (HTML, self-contained)
 │   ├── Regalia-v1.0.8-manual-zh.html  # Chinese user manual (current)
 │   ├── Regalia-v1.0.8-manual-en.html  # English user manual (current)
-│   ├── Regalia-v1.0.7-manual-zh.html  # Chinese user manual (v1.0.7, historical)
-│   ├── Regalia-v1.0.7-manual-en.html  # English user manual (v1.0.7, historical)
-│   ├── Regalia-v1.0.6-manual-zh.html  # Chinese user manual (v1.0.6, historical)
-│   ├── Regalia-v1.0.6-manual-en.html  # English user manual (v1.0.6, historical)
-│   ├── Regalia-v1.0.5-manual-zh.html  # Chinese user manual (v1.0.5, historical)
-│   ├── Regalia-v1.0.5-manual-en.html  # English user manual (v1.0.5, historical)
-│   ├── Regalia-v1.0.4-manual-zh.html  # Chinese user manual (v1.0.4, historical)
-│   ├── Regalia-v1.0.4-manual-en.html  # English user manual (v1.0.4, historical)
 │   └── README.license          # Manual license classification
 ├── gradle/wrapper/             # Gradle wrapper (8.11.1)
 │   ├── gradle-wrapper.jar
@@ -234,6 +222,9 @@ Contributions are welcome! Please ensure:
 3. Code is tested on physical Android devices (especially Xiaomi HyperOS 3)
 
 ## Version
+
+During the development stage, the version number used was: **v18.x.x**. For future versions, once the version number exceeds **v17.x.x**, <span style="color:red; font-weight:bold;">**v18.x.x** should be skipped</span> and the next version should be **v19.x.x**.
+
 
 **v1.0.8** (versionCode 108) — current release
 
