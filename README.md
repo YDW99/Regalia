@@ -9,6 +9,10 @@ A standalone, open-source chess app for Android — play offline against Stockfi
 
 ## Screenshots
 
+<p align="center">
+  <img src="assets/screenshot.jpg" alt="Regalia gameplay screenshot" width="280">
+</p>
+
 Portrait mode — evaluation bar, move history, AI opponent display with ponder info, and Control heatmap. See the user manual (`Manual/Regalia-v1.0.8-manual-{zh,en}.html`) for wireframe diagrams of every screen.
 
 **Control Heatmap** — Tap the 🌗/🌈 button on the toolbar to toggle the control heatmap. Each square is dynamically colored by HSL to indicate which side controls it: blue-purple = your control, red = opponent's control, purple = contested. Hovering a square shows SVG arrows from each controlling piece to that square (warm gold for your pieces, cool silver-blue for opponent's). The info card below the board shows per-piece control contributions with position labels.
@@ -225,7 +229,6 @@ Contributions are welcome! Please ensure:
 
 During the development stage, the version number used was: **v18.x.x**. For future versions, once the version number exceeds **v17.x.x**, <span style="color:red; font-weight:bold;">**v18.x.x** should be skipped</span> and the next version should be **v19.x.x**.
 
-
 **v1.0.8** (versionCode 108) — current release
 
 The v1.0.8 release completely redesigns the move animation and sound effect system
@@ -236,149 +239,6 @@ Theme Design Principles" and "Android Light Theme Design Principles" — light/d
 mode switches automatically with the system global setting, and the king icon on
 the loading overlay and main header toolbar switches between ♔/♚ to match the
 on-board pieces. See the v1.0.8 Phase 22 changelog below for full details.
-
-**v1.0.7** (versionCode 107) — previous release
-
-The v1.0.7 release is a code-quality and stability maintenance release based on
-three independent code-review reports plus two comprehensive first-principles
-code-review passes (Phase 18 and Phase 19). It introduces performance
-breakthroughs (LRU cache eviction, virtual list) and fixes many latent bugs:
-
-1. **Critical-move cache invalidation on undo** — `_invalidateCachesForUndoneMoves()`
-   now also recomputes `reviewCritical` via `_findCriticalMoves()`, so review-mode
-   critical-move markers no longer reference undone moves.
-2. **Lightweight board update path gets castling-rook marker** — `_updateSingleSq()`
-   (the high-frequency engine-progress render path) now reuses
-   `_computeCastlingRookSetForSelection()` so all four render paths produce
-   identical castling-rook marker output.
-3. **Engine-notification throttle cache fix** — `_updateEngineNotification()` now
-   only updates the cache when actually pushing the notification, preventing the
-   notification bar from getting stuck on a stale value.
-4. **Stats-page PGN comment XSS escape** — all `{...}` comments in
-   `renderPGNText()` (mainline and variations) are now passed through `_escFEN()`.
-5. **CSP allows Blob Workers** — added `worker-src blob:`, `script-src 'unsafe-inline' blob:`,
-   and `img-src data: file: blob:` so `worker-pool.js`'s Blob-URL Worker cannot be
-   blocked by strict CSP.
-6. **Cross-game eval-cache invalidation** — `_reviewEvalCache.clear()` is now
-   called at the entry of `_startGameImpl()` and `importPGN()` so switching games
-   no longer returns stale evals for wrong positions.
-7. **About dialog: clickable GitHub links** — `DroidFish` and `Stockfish` project
-   names in the About dialog are now hyperlinks to their GitHub repositories,
-   opened by the system default browser.
-8. **Portrait "New Game Settings" dialog — complete redesign** — all label+input
-   rows in the New Game dialog now use a `portrait-stack` CSS class that switches
-   to `flex-direction:column` in portrait, making every input/select/form full-width.
-   The Chess960 SP-ID row's input+🎲 button stay side-by-side (together ~120px, fits
-   any phone). Engine Config and other dialogs are NOT affected. Landscape is unchanged.
-9. **All-UI portrait layout optimization** — ensures no horizontal scrolling on tall
-   narrow full-screen phones (e.g. Sony ~360×2400px): `overflow-x:hidden` on `.dov`/`.dlg`,
-   `env(safe-area-inset-*)` padding for notch/punch-hole/R-corner screens, stats page
-   board removes 360px cap, table containers get `overflow-x:auto` for in-table scroll.
-10. **Android back-button handling** — `handleBackPress()` now closes promotion
-    and save-PGN-prompt dialogs first; `StatsActivity` delegates to a new unified
-    `handleStatsBackPress()` that also closes export/import overlays.
-11. **Merged duplicate HTML-escape functions** — `_escapeHTML()` now delegates to
-    `_esc()` (single-pass regex + lookup table); both names retained for backward
-    compatibility.
-
-### v1.0.7 Phase 2 (same-day supplement, 2026.6.28)
-
-12. **Main-screen "Quick Toolbar"** — the Undo / Redo / Flip / AI-Hint / Control-Range
-    buttons have been MOVED from the top header toolbar to a new "Quick Toolbar"
-    placed below the board and above the player bar. The top toolbar is now focused
-    on game-level actions (New Game, Free Play, Sound, FEN, Import, Setup Mode).
-    In setup mode, Undo/Redo are hidden; Flip/Hint/Control-Range remain visible.
-13. **Setup-mode 🔁 Castle-Rights Marker button** — a new "🔁" button in the setup-mode
-    button bar toggles a small gold "🔁" marker on any board square. The old behavior
-    of "automatically granting castling rights when king and rook are on standard
-    starting squares" is REMOVED in favor of fully manual control. A legality check
-    (Fischer Random Chess castling rule, which subsumes standard chess) runs on "Done":
-    markers must share a square with a same-color rook, both king and rook must be on
-    their initial rank (rank 1 for white, rank 8 for black), the rook must be on the
-    correct side (kingside or queenside) of the king, and at most one marker per side
-    per color is allowed.
-14. **Setup-mode ⚡ En-Passant Marker button** — a new "⚡" button toggles a small purple
-    "⚡" marker on any board square. At most one marker is allowed; it must share a
-    square with a pawn on rank 4 (white) or rank 5 (black), and the pawn's color must
-    differ from the side to move.
-15. **Android back-button handles setupMarkerMode** — if a marker mode is active when
-    back is pressed, the marker mode is cancelled first instead of exiting setup.
-16. **First-principles portrait UI fixes** — (a) the portrait media-query threshold is
-    raised from `max-width:900px` to `max-width:1200px` so it actually triggers on
-    modern low-DPR phones; (b) `#app` gets `width:100%; min-width:0` and forces
-    `box-sizing:border-box` on all descendants as a safety net against horizontal
-    overflow; (c) `.dlg` uses expanded `margin-left:auto; margin-right:auto` +
-    `align-self:center` to fix dialog-not-centered issues in flex containers; (d)
-    portrait `.dlg` `max-width` is `100%` (was 600px) so the dialog fills the screen.
-17. **Removed `recomputeCastlingRights()`** — the function and its `export` reference
-    are deleted; `_refreshStateAfterSetup()` now resets castling rights to all-false
-    and the rights are explicitly granted by `_validateSetupCastleMarks()` on "Done".
-18. **Setup-mode undo/redo restores markers** — the snapshot now includes
-    `setupCastleMarks` (deep-copied Set) and `setupEpMark` (deep-copied object).
-
-### v1.0.7 Phase 3 (same-day second supplement, 2026.6.28)
-
-19. **Portrait UI redesigned from scratch** — switched from
-    `@media(max-width:Npx) and (orientation:portrait)` (which failed across 9
-    prior attempts because CSS viewport width depends on DPR and Android density
-    crop modes) to `@media(orientation:portrait)` with **NO width threshold**.
-    Font sizes and paddings now scale via `vw` units + `clamp()` functions.
-    A 360×800 phone (DPR 2.0) and a 1220×2712 phone (DPR 2.625, CSS viewport
-    465×1035) both correctly apply the portrait layout.
-20. **🔁/⚡ markers visible in ALL modes (play, review, setup)** — added
-    `computeVisibleCastleMarks(s)` and `computeVisibleEpMark(s)` pure functions
-    that derive markers from `castlingRights` + rook positions (or
-    `enPassantTarget`). Markers auto-remove when rights/target are lost. Wired
-    into all 5 render paths (renderInternal, _updateSingleSq,
-    _updateChangedSquares, _updateBoardLightweight fallback, review board).
-21. **Double-stepped pawn now auto-receives ⚡ marker** — `computeVisibleEpMark`
-    reverse-maps the FEN `enPassantTarget` (the skipped square) back to the
-    pawn's current square and displays ⚡ there.
-22. **Castling now works for non-standard rook positions** — the old non-Chess960
-    code path hard-coded king on e1 + rook on a1/h1. Switched to ALWAYS using
-    the Chess960 castling rule (`isChess960CastlingLegal`), which is a strict
-    superset of standard chess castling. Same change applied to `makeMv`,
-    `makeMvInPlace`, `_applyMoveToBoard` (animation), and the rook-move/capture
-    castling-rights-clearing logic (`findCastlingRooks` is now always used).
-23. **FEN enPassantTarget reverse-mapping fix** — Phase 2 incorrectly set
-    `enPassantTarget` to the pawn's current square; the FEN standard requires
-    it to be the SKIPPED square. Fixed: white pawn on rank 4 → target on rank 3;
-    black pawn on rank 3 → target on rank 2. Exported FENs now conform to the
-    standard.
-24. **Setup-mode FEN auto-switches to Shredder castling notation** — when the
-    setup position has a king or 🔁-marked rook on non-standard squares, the
-    standard KQkq notation is ambiguous. A new `_needsShredderFEN(s)` detection
-    function triggers Shredder-FEN (file letters A-H/a-h) in both `_setupFEN`
-    and the PGN export path, guaranteeing lossless round-trip. Standard
-    positions continue to use KQkq for backward compatibility.
-
-### v1.0.8 Phase 28 (comprehensive first-principles re-review: 8 bug fixes + haptic fallback fix + Worker CSP fix + heatmap cache fix + castle/promotion haptic, 2026.7.1)
-
-This phase performs another thorough first-principles code review. 3 subagents reviewed all source files (26,534 lines), finding and fixing 8 bugs + redundancy cleanup. Version number remains v1.0.8.
-
-#### Bug fixes (by severity)
-1. **[HIGH] `_reattachActiveAnimations` double bug** — `_fc`/`_fr` const-scoped inside if-block (ReferenceError silently caught); snap formula double-counted source offset. Fixed: moved to loop top; transform = scaled dx/dy only.
-2. **[HIGH] `validateSetupPosition` pawn-rank formula swapped** — `(r===0)?1:8` should be `(r===0)?8:1`. Fixed.
-3. **[HIGH] `_checkPVDivergence` Chess960 castling field name** — `mr.castle` → `mr.isCastling` (move records use boolean, not string). Phase 24 fix never triggered. Fixed.
-4. **[MEDIUM] Chess960 PGN [FEN] tag corruption** — Legacy code overwrote `supObj.FEN` with `generateFEN(gameState)` (current state), overriding Phase 24's starting-position fix. Fixed: removed overwrite; only Shredder-convert the starting FEN.
-5. **[MEDIUM] stats.html `html[data-theme="dark"]` incomplete** — Only set `color-scheme:dark` without full dark palette. Fixed: restore full dark palette.
-6. **[MEDIUM] Heatmap cache not invalidated on new PGN import** — Fixed: clear cache in `_statsPastePGN` + `onStatsPGNFileRead`.
-7. **[MEDIUM] `tryPwleVibrate` fallback lost multi-stage pattern** — PWLE failure degraded to single OneShot. Fixed: returns boolean; case statement falls through to waveform.
-8. **[LOW] Landscape `.review-hdr` stripped safe-area** — Fixed: preserve `env(safe-area-inset-top)`.
-9. **[LOW] Review eval error catch called wrong function** — `_updateEvalDisplay()` → `_updateAllEvalDisplays()`.
-
-#### Haptic fallback fix + Castle/Promotion haptic
-- `tryPwleVibrate` returns boolean — PWLE failure falls through to multi-stage waveform (not single OneShot).
-- New `CASTLE` case (double-tap: king step + rook slide).
-- New `PROMOTION` case (celebratory ascending triad).
-
-#### Worker CSP fix + memory leak fix
-- worker-pool.js: `new Function()` (requires CSP `unsafe-eval`) replaced with inlined switch-case dispatch.
-- stats.html worker onerror: added `.terminate()` + `URL.revokeObjectURL()`.
-- worker-pool.js: timed-out tasks removed from queue; `terminateWorkerPool` clears pending + rejects.
-
-#### Redundancy cleanup
-- Removed dead variable `ponderFen` in ai-bridge.js `onBestMove`.
 
 ### v1.0.8 Phase 50 (button width TRUE root-cause fix: .btn-row opts out of portrait grid transform, 2026.7.2)
 
@@ -527,6 +387,33 @@ Async PGN import + worker offloading + loading indicator. (Phase 49 later remove
 
 - 5 user-feedback fixes.
 - Safe Browsing, `onRenderProcessGone`, 6-step WebView destroy.
+### v1.0.8 Phase 28 (comprehensive first-principles re-review: 8 bug fixes + haptic fallback fix + Worker CSP fix + heatmap cache fix + castle/promotion haptic, 2026.7.1)
+
+This phase performs another thorough first-principles code review. 3 subagents reviewed all source files (26,534 lines), finding and fixing 8 bugs + redundancy cleanup. Version number remains v1.0.8.
+
+#### Bug fixes (by severity)
+1. **[HIGH] `_reattachActiveAnimations` double bug** — `_fc`/`_fr` const-scoped inside if-block (ReferenceError silently caught); snap formula double-counted source offset. Fixed: moved to loop top; transform = scaled dx/dy only.
+2. **[HIGH] `validateSetupPosition` pawn-rank formula swapped** — `(r===0)?1:8` should be `(r===0)?8:1`. Fixed.
+3. **[HIGH] `_checkPVDivergence` Chess960 castling field name** — `mr.castle` → `mr.isCastling` (move records use boolean, not string). Phase 24 fix never triggered. Fixed.
+4. **[MEDIUM] Chess960 PGN [FEN] tag corruption** — Legacy code overwrote `supObj.FEN` with `generateFEN(gameState)` (current state), overriding Phase 24's starting-position fix. Fixed: removed overwrite; only Shredder-convert the starting FEN.
+5. **[MEDIUM] stats.html `html[data-theme="dark"]` incomplete** — Only set `color-scheme:dark` without full dark palette. Fixed: restore full dark palette.
+6. **[MEDIUM] Heatmap cache not invalidated on new PGN import** — Fixed: clear cache in `_statsPastePGN` + `onStatsPGNFileRead`.
+7. **[MEDIUM] `tryPwleVibrate` fallback lost multi-stage pattern** — PWLE failure degraded to single OneShot. Fixed: returns boolean; case statement falls through to waveform.
+8. **[LOW] Landscape `.review-hdr` stripped safe-area** — Fixed: preserve `env(safe-area-inset-top)`.
+9. **[LOW] Review eval error catch called wrong function** — `_updateEvalDisplay()` → `_updateAllEvalDisplays()`.
+
+#### Haptic fallback fix + Castle/Promotion haptic
+- `tryPwleVibrate` returns boolean — PWLE failure falls through to multi-stage waveform (not single OneShot).
+- New `CASTLE` case (double-tap: king step + rook slide).
+- New `PROMOTION` case (celebratory ascending triad).
+
+#### Worker CSP fix + memory leak fix
+- worker-pool.js: `new Function()` (requires CSP `unsafe-eval`) replaced with inlined switch-case dispatch.
+- stats.html worker onerror: added `.terminate()` + `URL.revokeObjectURL()`.
+- worker-pool.js: timed-out tasks removed from queue; `terminateWorkerPool` clears pending + rejects.
+
+#### Redundancy cleanup
+- Removed dead variable `ponderFen` in ai-bridge.js `onBestMove`.
 
 ### v1.0.8 Phase 27 (knight/bishop/rook dedicated haptic feedback — all six pieces now have personality-matched haptics, 2026.7.1)
 
@@ -1012,29 +899,144 @@ AGPL v3). The new `ChessAudioEngine` class is original code embedded in ui.js
 
 ### v1.0.7 Phase 5 (board sizing and portrait layout optimization, 2026.6.29)
 
-25. **Portrait board h-file clipping fixed** — `_recalcCellSize()` now reads
+1. **Portrait board h-file clipping fixed** — `_recalcCellSize()` now reads
     actual safe-area insets via `_readSafeInsets()` and subtracts ALL
     clearances: 28px row-label column + safe-area left/right + 3px finger-grip
     + 4px board border + 6px anti-shake margin. Previously the 28px row-label
     column and safe-area insets were not subtracted, causing the h-file to be
     clipped on notched phones.
-26. **Board auto-enlarges when space is plentiful** — CELL cap raised from
+2. **Board auto-enlarges when space is plentiful** — CELL cap raised from
     72px (landscape) / ~50px (portrait) to 90px. Portrait mode now considers
     BOTH width and height constraints (previously width-only), preventing the
     board from being too large on ultra-tall phones.
-27. **Landscape right-edge content clipping fixed (regression)** — landscape
+3. **Landscape right-edge content clipping fixed (regression)** — landscape
     toolbar changed from `overflow-x:auto` to `flex-wrap:wrap`; `.main` gets
     `max-width:100%;overflow-x:hidden` as a safety net.
-28. **Anti-shake clearance double-counting fixed** — removed `.bwrap`'s
+4. **Anti-shake clearance double-counting fixed** — removed `.bwrap`'s
     `margin-right:6px` (anti-shake is now managed solely by
     `_recalcCellSize()`).
-29. **New Game Settings portrait layout redesigned from scratch** — switched
+5. **New Game Settings portrait layout redesigned from scratch** — switched
     from force-stacked `flex-direction:column` to a 2-column grid layout
     (`grid-template-columns:1fr auto`), with labels in the left column and
     inputs/buttons in the right column. Openings list `max-height` raised to
     `40vh`.
 
-**v1.0.6** (versionCode 106) — previous release
+**v1.0.7** (versionCode 107) — previous release
+
+The v1.0.7 release is a code-quality and stability maintenance release based on
+three independent code-review reports plus two comprehensive first-principles
+code-review passes (Phase 18 and Phase 19). It introduces performance
+breakthroughs (LRU cache eviction, virtual list) and fixes many latent bugs:
+
+1. **Critical-move cache invalidation on undo** — `_invalidateCachesForUndoneMoves()`
+   now also recomputes `reviewCritical` via `_findCriticalMoves()`, so review-mode
+   critical-move markers no longer reference undone moves.
+2. **Lightweight board update path gets castling-rook marker** — `_updateSingleSq()`
+   (the high-frequency engine-progress render path) now reuses
+   `_computeCastlingRookSetForSelection()` so all four render paths produce
+   identical castling-rook marker output.
+3. **Engine-notification throttle cache fix** — `_updateEngineNotification()` now
+   only updates the cache when actually pushing the notification, preventing the
+   notification bar from getting stuck on a stale value.
+4. **Stats-page PGN comment XSS escape** — all `{...}` comments in
+   `renderPGNText()` (mainline and variations) are now passed through `_escFEN()`.
+5. **CSP allows Blob Workers** — added `worker-src blob:`, `script-src 'unsafe-inline' blob:`,
+   and `img-src data: file: blob:` so `worker-pool.js`'s Blob-URL Worker cannot be
+   blocked by strict CSP.
+6. **Cross-game eval-cache invalidation** — `_reviewEvalCache.clear()` is now
+   called at the entry of `_startGameImpl()` and `importPGN()` so switching games
+   no longer returns stale evals for wrong positions.
+7. **About dialog: clickable GitHub links** — `DroidFish` and `Stockfish` project
+   names in the About dialog are now hyperlinks to their GitHub repositories,
+   opened by the system default browser.
+8. **Portrait "New Game Settings" dialog — complete redesign** — all label+input
+   rows in the New Game dialog now use a `portrait-stack` CSS class that switches
+   to `flex-direction:column` in portrait, making every input/select/form full-width.
+   The Chess960 SP-ID row's input+🎲 button stay side-by-side (together ~120px, fits
+   any phone). Engine Config and other dialogs are NOT affected. Landscape is unchanged.
+9. **All-UI portrait layout optimization** — ensures no horizontal scrolling on tall
+   narrow full-screen phones (e.g. Sony ~360×2400px): `overflow-x:hidden` on `.dov`/`.dlg`,
+   `env(safe-area-inset-*)` padding for notch/punch-hole/R-corner screens, stats page
+   board removes 360px cap, table containers get `overflow-x:auto` for in-table scroll.
+10. **Android back-button handling** — `handleBackPress()` now closes promotion
+    and save-PGN-prompt dialogs first; `StatsActivity` delegates to a new unified
+    `handleStatsBackPress()` that also closes export/import overlays.
+11. **Merged duplicate HTML-escape functions** — `_escapeHTML()` now delegates to
+    `_esc()` (single-pass regex + lookup table); both names retained for backward
+    compatibility.
+
+### v1.0.7 Phase 2 (same-day supplement, 2026.6.28)
+
+12. **Main-screen "Quick Toolbar"** — the Undo / Redo / Flip / AI-Hint / Control-Range
+    buttons have been MOVED from the top header toolbar to a new "Quick Toolbar"
+    placed below the board and above the player bar. The top toolbar is now focused
+    on game-level actions (New Game, Free Play, Sound, FEN, Import, Setup Mode).
+    In setup mode, Undo/Redo are hidden; Flip/Hint/Control-Range remain visible.
+13. **Setup-mode 🔁 Castle-Rights Marker button** — a new "🔁" button in the setup-mode
+    button bar toggles a small gold "🔁" marker on any board square. The old behavior
+    of "automatically granting castling rights when king and rook are on standard
+    starting squares" is REMOVED in favor of fully manual control. A legality check
+    (Fischer Random Chess castling rule, which subsumes standard chess) runs on "Done":
+    markers must share a square with a same-color rook, both king and rook must be on
+    their initial rank (rank 1 for white, rank 8 for black), the rook must be on the
+    correct side (kingside or queenside) of the king, and at most one marker per side
+    per color is allowed.
+14. **Setup-mode ⚡ En-Passant Marker button** — a new "⚡" button toggles a small purple
+    "⚡" marker on any board square. At most one marker is allowed; it must share a
+    square with a pawn on rank 4 (white) or rank 5 (black), and the pawn's color must
+    differ from the side to move.
+15. **Android back-button handles setupMarkerMode** — if a marker mode is active when
+    back is pressed, the marker mode is cancelled first instead of exiting setup.
+16. **First-principles portrait UI fixes** — (a) the portrait media-query threshold is
+    raised from `max-width:900px` to `max-width:1200px` so it actually triggers on
+    modern low-DPR phones; (b) `#app` gets `width:100%; min-width:0` and forces
+    `box-sizing:border-box` on all descendants as a safety net against horizontal
+    overflow; (c) `.dlg` uses expanded `margin-left:auto; margin-right:auto` +
+    `align-self:center` to fix dialog-not-centered issues in flex containers; (d)
+    portrait `.dlg` `max-width` is `100%` (was 600px) so the dialog fills the screen.
+17. **Removed `recomputeCastlingRights()`** — the function and its `export` reference
+    are deleted; `_refreshStateAfterSetup()` now resets castling rights to all-false
+    and the rights are explicitly granted by `_validateSetupCastleMarks()` on "Done".
+18. **Setup-mode undo/redo restores markers** — the snapshot now includes
+    `setupCastleMarks` (deep-copied Set) and `setupEpMark` (deep-copied object).
+
+### v1.0.7 Phase 3 (same-day second supplement, 2026.6.28)
+
+1. **Portrait UI redesigned from scratch** — switched from
+    `@media(max-width:Npx) and (orientation:portrait)` (which failed across 9
+    prior attempts because CSS viewport width depends on DPR and Android density
+    crop modes) to `@media(orientation:portrait)` with **NO width threshold**.
+    Font sizes and paddings now scale via `vw` units + `clamp()` functions.
+    A 360×800 phone (DPR 2.0) and a 1220×2712 phone (DPR 2.625, CSS viewport
+    465×1035) both correctly apply the portrait layout.
+2. **🔁/⚡ markers visible in ALL modes (play, review, setup)** — added
+    `computeVisibleCastleMarks(s)` and `computeVisibleEpMark(s)` pure functions
+    that derive markers from `castlingRights` + rook positions (or
+    `enPassantTarget`). Markers auto-remove when rights/target are lost. Wired
+    into all 5 render paths (renderInternal, _updateSingleSq,
+    _updateChangedSquares, _updateBoardLightweight fallback, review board).
+3. **Double-stepped pawn now auto-receives ⚡ marker** — `computeVisibleEpMark`
+    reverse-maps the FEN `enPassantTarget` (the skipped square) back to the
+    pawn's current square and displays ⚡ there.
+4. **Castling now works for non-standard rook positions** — the old non-Chess960
+    code path hard-coded king on e1 + rook on a1/h1. Switched to ALWAYS using
+    the Chess960 castling rule (`isChess960CastlingLegal`), which is a strict
+    superset of standard chess castling. Same change applied to `makeMv`,
+    `makeMvInPlace`, `_applyMoveToBoard` (animation), and the rook-move/capture
+    castling-rights-clearing logic (`findCastlingRooks` is now always used).
+5. **FEN enPassantTarget reverse-mapping fix** — Phase 2 incorrectly set
+    `enPassantTarget` to the pawn's current square; the FEN standard requires
+    it to be the SKIPPED square. Fixed: white pawn on rank 4 → target on rank 3;
+    black pawn on rank 3 → target on rank 2. Exported FENs now conform to the
+    standard.
+6. **Setup-mode FEN auto-switches to Shredder castling notation** — when the
+    setup position has a king or 🔁-marked rook on non-standard squares, the
+    standard KQkq notation is ambiguous. A new `_needsShredderFEN(s)` detection
+    function triggers Shredder-FEN (file letters A-H/a-h) in both `_setupFEN`
+    and the PGN export path, guaranteeing lossless round-trip. Standard
+    positions continue to use KQkq for backward compatibility.
+
+   **v1.0.6** (versionCode 106) — previous release
 
 The v1.0.6 release adds:
 
