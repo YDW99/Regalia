@@ -1,5 +1,10 @@
 This directory contains the JavaScript source modules for the chess UI.
 These modules are merged by build-chess.py into chess.html.
+v1.0.8 Phase 51: game-logic.js _castleSide() fix — now checks mv.to.castle
+  (set by pseudoMoves) in addition to mv.castle (set by executeMove). Fixes
+  PGN round-trip castling failure (O-O/O-O-O only moved the king in replay).
+  Also: i18n 'book' label changed {zh:'开局库',en:'Book'} → {zh:'平常',en:'Mediocre'}.
+  Also: index.html.tpl --chart-fill dark-mode color #1A1A2E → #5dade2 (visibility).
 v1.0.8 Phase 25: worker-pool.js was REIMPLEMENTED (robust Web Worker pool)
   and wired into stats.html (heatmap-stats offloading). The module order is
   now: game-logic → chess960 → pgn-standard → worker-pool → ai-bridge →

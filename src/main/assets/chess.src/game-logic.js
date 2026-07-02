@@ -380,7 +380,7 @@ const _i18n={
 'mistake':{zh:'错着',en:'Mistake'},
 'good':{zh:'正着',en:'Good'},
 'inaccuracy':{zh:'缓着',en:'Inaccuracy'},
-'book':{zh:'开局库',en:'Book'},
+'book':{zh:'平常',en:'Mediocre'},
 'winning':{zh:'你赢了',en:'You Won'},
 'losing':{zh:'你输了',en:'You Lost'},
 'draw_game':{zh:'和棋',en:'Draw'},
@@ -1679,7 +1679,19 @@ function _castleSide(mv){
   if(!mv||!mv.to||!mv.from||!mv.piece)return null;
   // Primary signal: explicit castle flag set by pseudoMoves() or by the
   // king-then-rook gesture handler in sqClick().
+  // v1.0.8 PHASE 51: pseudoMoves() attaches the castle flag to the `to` object
+  //   ({row,col,castle}), and legalMoves() builds the full move as
+  //   {from,to:{row,col,castle},piece}. So mv.castle (top-level) is undefined
+  //   for moves coming from legalMoves() — the flag is at mv.to.castle.
+  //   executeMove() (ui.js) copies it to mv.castle before calling makeMv, but
+  //   _applySANMove (PGN replay path) calls makeMvInPlace directly with the
+  //   legalMoves() object, so mv.castle is undefined there. This caused PGN
+  //   round-trip failure: castling moves (O-O / O-O-O) only moved the KING,
+  //   not the rook, so subsequent rook moves (e.g. Re1) failed to parse and
+  //   were silently dropped from the move list. Fix: check both mv.castle
+  //   (top-level, set by executeMove) and mv.to.castle (set by pseudoMoves).
   if(mv.castle)return mv.castle;
+  if(mv.to&&mv.to.castle)return mv.to.castle;
   // Fallback: detect by piece type + destination column.
   // In BOTH standard chess and Chess960, the king always ends on col 6
   // (kingside) or col 2 (queenside) after castling. The distance the king
