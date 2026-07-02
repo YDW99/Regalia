@@ -46,7 +46,34 @@ The signed APK (v1+v2+v3 signed with `../debug.keystore`) will be at
 - The APK is signed with v1+v2+v3 schemes (`enableV1Signing`/`enableV2Signing`/
   `enableV3Signing` all `true`), compatible with Xiaomi HyperOS 3 (Android 15).
 
+## Build troubleshooting
+
+- **CMake/ninja "manifest still dirty after 100 tries"**: This occurs when source
+  files have future timestamps (e.g. after extracting a zip with `unzip` preserving
+  the archive's mtime). CMake's re-run check sees `CMakeLists.txt` as newer than
+  `build.ninja` indefinitely. Fix: normalize timestamps before building:
+  ```
+  find . -name "*.txt" -o -name "*.cpp" -o -name "*.cmake" | xargs touch
+  rm -rf .cxx build
+  ./gradlew assembleRelease
+  ```
+  Alternatively, extract the source tarball with `tar --no-same-time` or
+  `unzip -DD` (no directory timestamps) to avoid future-dated files.
+- **`./gradlew: Permission denied`**: The wrapper script may lose its executable
+  bit after extraction. Fix: `chmod +x gradlew`.
+
 ## v1.0.8 build notes
+- **v1.0.8 Phase 51 (2026.7.2):** Three fixes — (1) PGN round-trip castling failure:
+  `game-logic.js` `_castleSide()` now checks `mv.to.castle` (set by `pseudoMoves`)
+  in addition to `mv.castle` (set by `executeMove`). The PGN-replay path
+  (`_applySANMove`) was calling `makeMvInPlace` directly with a move object whose
+  top-level `castle` flag was undefined, so castling only moved the king and
+  subsequent rook moves failed to parse. (2) Move-classification label
+  "Book"/"开局库" → "Mediocre"/"平常" (i18n only; CSS class `.book` unchanged).
+  (3) Eval-chart dark-mode negative-eval line color `--chart-fill` `#1A1A2E` (invisible)
+  → `#5dade2` (light blue) in `:root` and `html[data-theme="dark"]`.
+  No new modules; no build-order change. If you edit `chess.src/game-logic.js` or
+  `chess.src/index.html.tpl`, re-run `python3 build-chess.py`.
 - **v1.0.8 Phase 50 (2026.7.2):** Button-width TRUE root-cause fix — added `.btn-row`
   marker class (CSS) + applied to 4 button-row containers (ai-bridge.js ×2, ui.js ×2).
   No new modules; no build-order change. If you edit `chess.src/index.html.tpl` or
@@ -122,6 +149,9 @@ The signed APK (v1+v2+v3 signed with `../debug.keystore`) will be at
   `ai-bridge.js` so their functions are in scope when `ai-bridge.js` and
   `ui.js` reference them.
 - The Stockfish 18 `arm64-v8a-dotprod` binary is the official sf_18 release.
+
+---
+*AI生成*
 
 ---
 *AI生成*

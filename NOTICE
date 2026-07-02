@@ -2989,6 +2989,56 @@ v1.0.7 Phase 21 (bug fixes: portrait dialog positioning precision fix, landscape
   (game-logic.js, index.html.tpl per DroidFish derivation) and remain under
   GPL v3.
 
+v1.0.8 Phase 51 (PGN round-trip castling fix + move-classification label + eval-chart dark-mode visibility, 2026.7.2):
+  Version: versionCode=108, versionName="1.0.8" (unchanged).
+
+  Bug fix (game-logic.js _castleSide): PGN round-trip castling failure.
+    pseudoMoves() attaches the castle flag to the `to` object ({row,col,castle}),
+    and legalMoves() builds {from,to:{row,col,castle},piece}. _castleSide checked
+    only mv.castle (top-level), which is undefined for legalMoves() objects.
+    executeMove() (ui.js) copies the flag to mv.castle before makeMv, but
+    _applySANMove (PGN replay) calls makeMvInPlace directly — mv.castle was
+    undefined, so castling only moved the KING, not the rook. Subsequent rook
+    moves (e.g. Re1 after O-O) failed to parse → silently dropped from move list.
+    Fix: _castleSide now checks both mv.castle and mv.to.castle.
+    License: game-logic.js is GPL v3 (DroidFish-derived). No classification change.
+
+  Feature change (game-logic.js i18n): move-classification label 'book'
+    {zh:'开局库',en:'Book'} → {zh:'平常',en:'Mediocre'}. CSS class .book unchanged.
+
+  Bug fix (index.html.tpl): eval-chart dark-mode line invisibility.
+    --chart-fill was #1A1A2E (near-black) in dark mode — invisible on #1a0a0a bg.
+    Changed to #5dade2 (light blue) for :root and html[data-theme="dark"].
+    Light mode unchanged (#2c2c34). License: index.html.tpl is GPL v3.
+
+v1.0.8 Phase 50 (button width TRUE root-cause fix: .btn-row opts out of portrait grid transform, 2026.7.2):
+  Version: versionCode=108, versionName="1.0.8" (unchanged).
+
+  Root-cause fix (index.html.tpl, ai-bridge.js, ui.js): .btn-row marker class
+    opts multi-button rows out of the portrait @media grid transform
+    (.dlg-sec > div[style*="display:flex"] → display:grid 1fr auto). The buttons
+    were GRID items, not flex items — flex:none/width:auto had no effect.
+    .btn-row restores display:flex so .btn-compact children shrink to content width.
+    Applied to 4 containers (engine config Restart + Export/Import, PGN cache
+    filter-chip row + Select All/None toolbar). License: all 3 files GPL v3.
+
+v1.0.8 Phase 49 (comprehensive first-principles re-review + compliance audit, 2026.7.2):
+  Version: versionCode=108, versionName="1.0.8" (unchanged).
+
+  5-parallel-subagent review of all ~27,000 lines. 6 bug fixes, 12 robustness
+    hardenings, redundancy cleanup. License classification reconciled:
+    StatsActivity.java, pgn-standard.js, worker-pool.js, index.html.tpl moved
+    from AGPL v3 → GPL v3 (Phase 37 final classification). StabilizationHelper.java
+    added to AGPL v3 top-level list. StatsActivity.java + index.html.tpl headers
+    fixed to GPL v3. See top-level classification above (lines 22-87).
+
+v1.0.8 Phase 48 (button width root-cause fix: .btn-compact CSS class + !important, 2026.7.2):
+  Version: versionCode=108, versionName="1.0.8" (unchanged).
+  Added .btn-compact CSS class (7 !important declarations) for content-width
+    buttons. (Superseded by Phase 50's .btn-row for the grid-transform case,
+    but .btn-compact remains for the .dlg-btns flex:1 override case.)
+    License: index.html.tpl is GPL v3.
+
 v1.0.8 Phase 47 (button width root-cause fix: flex:0 0 auto + display:inline-flex, 2026.7.1):
   Version: versionCode=108, versionName="1.0.8" (unchanged).
 
