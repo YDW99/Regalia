@@ -3,16 +3,28 @@ This directory contains the user-facing HTML manuals for the Regalia app
 with embedded CSS and JavaScript (no external resources).
 
 License classification by file:
-  - Regalia-v1.0.7-manual-zh.html: AGPL v3 (original Regalia work)
-      Chinese user manual for Regalia v1.0.7.
+  - Regalia-v1.0.8-manual-zh.html: AGPL v3 (original Regalia work)
+      Chinese user manual for Regalia v1.0.8 (current).
       Copyright (C) 2026 Regalia.
-  - Regalia-v1.0.7-manual-en.html: AGPL v3 (original Regalia work)
-      English user manual for Regalia v1.0.7.
+  - Regalia-v1.0.8-manual-en.html: AGPL v3 (original Regalia work)
+      English user manual for Regalia v1.0.8 (current).
       Copyright (C) 2026 Regalia.
 
 The manuals are AGPL v3 because they are original documentation created by
 the Regalia project, not derived from any third-party GPL work. The embedded
 diagrams, wireframes, and changelog text are all original.
+
+v1.0.8 (2026.6.30) changes:
+  - Regalia-v1.0.8-manual-zh.html: New v1.0.8 manual covering Phase 22
+    (complete move animation & sound effect redesign per "Personified Chess
+    Move Animation" and "Personified Chess Sound Effects" reference docs,
+    plus light mode support per "Android Dark/Light Theme Design Principles").
+    Added new "Loading Overlay" wireframe diagram showing the king icon
+    (♔ dark mode / ♚ light mode) switch. Updated top toolbar wireframe
+    description to note the king icon theme switch. Changelog section has
+    Phase 22 entry at the top (newest-first order).
+  - Regalia-v1.0.8-manual-en.html: Synced with Chinese version.
+  - No changes to v1.0.7 and earlier manuals (historical reference only).
 
 v1.0.7 (2026.6.28-30) changes:
   - Regalia-v1.0.7-manual-zh.html: New v1.0.7 manual covering all phase
@@ -212,3 +224,51 @@ v1.0.5 Round-6 Rev61 changes (2026.6.27):
     marker and to note that Rev61 reverted ±45° to ±30°.
   - Regalia-v1.0.5-manual-en.html: Synced with Chinese version.
   - No changes to v1.0.4 manuals (historical reference only).
+
+v1.0.8 Phase 23 (2026.7.1):
+  - Regalia-v1.0.8-manual-zh.html: Added Phase 23 changelog entry.
+  - Regalia-v1.0.8-manual-en.html: Added Phase 23 changelog entry.
+  - Setup panel wireframe updated with 🔁 and ⚡ manual-marker buttons.
+  - Historical manuals (v1.0.4–v1.0.7) unchanged.
+
+v1.0.8 Phase 24 (2026.7.1):
+  - Regalia-v1.0.8-manual-zh.html: Added Phase 24 changelog entry.
+  - Regalia-v1.0.8-manual-en.html: Added Phase 24 changelog entry.
+  - Historical manuals (v1.0.4–v1.0.7) unchanged.
+
+v1.0.8 Phase 25 (2026.7.1):
+  - Regalia-v1.0.8-manual-zh.html: Added Phase 25 changelog entry.
+  - Regalia-v1.0.8-manual-en.html: Added Phase 25 changelog entry.
+  - Historical manuals (v1.0.4–v1.0.7) unchanged.
+
+v1.0.8 Phase 26 (2026.7.1):
+  - Regalia-v1.0.8-manual-zh.html: Added Phase 26 changelog entry.
+  - Regalia-v1.0.8-manual-en.html: Added Phase 26 changelog entry.
+
+v1.0.8 Phase 27 (2026.7.1):
+  - Regalia-v1.0.8-manual-zh.html: Added Phase 27 changelog entry.
+  - Regalia-v1.0.8-manual-en.html: Added Phase 27 changelog entry.
+
+v1.0.8 Phase 28 (2026.7.1):
+  - Regalia-v1.0.8-manual-zh.html: Added Phase 28 changelog entry.
+  - Regalia-v1.0.8-manual-en.html: Added Phase 28 changelog entry.
+
+v1.0.8 Phase 29 (2026.7.1):
+  - Regalia-v1.0.8-manual-{zh,en}.html: Phase 29 changelog entry added
+    to Appendix A (new-to-old order maintained).
+
+v1.0.8 Phase 30 (2026.7.1):
+  - Regalia-v1.0.8-manual-{zh,en}.html: Phase 30 changelog entry added
+    to Appendix A (new-to-old order maintained).
+
+v1.0.8 Phase 43 (2026.7.1):
+  - Regalia-v1.0.8-manual-{zh,en}.html: Phase 43 changelog entry added
+    to Appendix A (new-to-old order maintained).
+
+v1.0.8 Phase 42 (2026.7.1):
+  - Regalia-v1.0.8-manual-{zh,en}.html: Phase 42 changelog entry added
+    to Appendix A (new-to-old order maintained).
+
+v1.0.8 Phase 41 (2026.7.1):
+  - Regalia-v1.0.8-manual-{zh,en}.html: Phase 41 changelog entry added
+    to Appendix A (new-to-old order maintained).

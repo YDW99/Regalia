@@ -311,3 +311,58 @@ v1.0.7 (2026.6.28-30):
     block added to <head>.
   - cpp/ changes: no changes to engine_jni.cpp (the native chmod/renice
     bridge remains unchanged from the v1.0.4 baseline).
+
+v1.0.8 (2026.6.30): no changes to AndroidManifest.xml (versionCode=108,
+versionName="1.0.8" updated in-place; structure unchanged). All v1.0.8 changes
+were in the JS layer (chess.src/) and stats.html. See chess.src/README.license
+for per-module details and assets/README.license for asset-level changes.
+
+v1.0.8 Phase 23 (2026.7.1): src/main/jniLibs/arm64-v8a/libstockfish.so updated
+to the official Stockfish 18 arm64-v8a-dotprod binary (NDK r27c build, 114 MB,
+ARMv8.6-A DOTPROD acceleration). build.gradle: removed java toolchain block
+(now uses gradle.properties org.gradle.java.home). gradle.properties: JDK path
+updated, jvmargs raised to -Xmx2048m. The "All v1.0.8 changes were in the JS
+layer" claim above was from the Phase 22 entry and is now superseded — Phase 23
+did update the native engine binary and build configuration.
+
+v1.0.8 Phase 24 (2026.7.1): Bug fixes in java/ (StockfishNative.java executor
+leak + chmod 744 consistency + cancelPendingExport; MainActivity.java SAF
+cancel handling; EngineService.java isRunning volatile). No changes to res/
+or cpp/. See src/main/java/com/Regalia/README.license for Java-level details.
+
+v1.0.8 Phase 25 (2026.7.1): No changes to AndroidManifest.xml, res/, or cpp/.
+assets/ changes: chess.html rebuilt (worker-pool.js added back); stats.html
+gains inline Web Worker + theme-aware header. java/ unchanged. See
+src/main/assets/README.license and chess.src/README.license for details.
+
+v1.0.8 Phase 26 (2026.7.1): No changes to AndroidManifest.xml, res/, or cpp/.
+assets/ changes: chess.html rebuilt (animations, shake-massive, ⚡ emoji);
+stats.html (dialog light-mode, Worker race fix). java/ changes:
+StockfishNative.java (new haptic patterns). See per-directory README.license.
+
+v1.0.8 Phase 27 (2026.7.1): No changes to AndroidManifest.xml, res/, or cpp/.
+java/ changes: StockfishNative.java (3 new haptic patterns). assets/ changes:
+chess.html rebuilt (haptic dispatch). See per-directory README.license.
+
+v1.0.8 Phase 28 (2026.7.1): No changes to AndroidManifest.xml, res/, or cpp/.
+java/ changes: StockfishNative.java (tryPwleVibrate + CASTLE/PROMOTION).
+assets/ changes: chess.html + stats.html rebuilt. See per-directory README.license.
+
+v1.0.8 Phase 29 (2026.7.1):
+  - AndroidManifest.xml (AGPL v3): No changes (Phase 29 work was in Java
+    and JS layers).
+
+v1.0.8 Phase 30 (2026.7.1):
+  - AndroidManifest.xml (AGPL v3): full AGPL v3 boilerplate header added;
+    redundant package/versionCode/versionName attributes and <uses-sdk>
+    element removed (AGP 8.x pulls from build.gradle); invalid
+    android:minSdkVersion attributes removed from <uses-permission>.
+
+v1.0.8 Phase 43 (2026.7.1):
+  - AndroidManifest.xml: No changes.
+
+v1.0.8 Phase 42 (2026.7.1):
+  - AndroidManifest.xml: No changes.
+
+v1.0.8 Phase 41 (2026.7.1):
+  - AndroidManifest.xml: No changes.

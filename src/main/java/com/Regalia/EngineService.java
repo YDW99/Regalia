@@ -62,7 +62,9 @@ public class EngineService extends Service {
     private static final String PREFS_NAME = "RegaliaEngine";
 
     private PowerManager.WakeLock wakeLock = null;
-    private static boolean isRunning = false;
+    // v1.0.8 PHASE 24 (bug fix): volatile — read from JS binder thread
+    //   (updateNotification, start) and service main thread (onCreate/onDestroy).
+    private static volatile boolean isRunning = false;
     // v1.0.7 PHASE 19 (thread safety): lastStatusInfo is written from the JS
     // binder thread (via updateEngineNotification) and read from the service
     // main thread (in buildNotification/onCreate). Without volatile, stale

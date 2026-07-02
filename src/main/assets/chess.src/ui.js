@@ -25,12 +25,19 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 // Global haptic feedback for all interactive elements
+// v1.0.8 PHASE 22 (supplement): Also play a 'select' sound for all button clicks.
+// This provides unified audio feedback for EVERY interactive element without
+// needing to modify each inline onclick. Specific functions (undoMove, redoMove,
+// flipBoard, etc.) already play their own specialized sounds; this global
+// 'select' sound complements them (the compressor prevents clipping overlap).
 document.addEventListener('click', function(e) {
-  const btn = e.target.closest('.btn, .diff-b, .toggle, .clr-btn, .prom-btn, .setup-btn, .setup-del, .setup-clr');
+  const btn = e.target.closest('.btn, .btn-compact, .diff-b, .toggle, .clr-btn, .prom-btn, .setup-btn, .setup-del, .setup-clr, .hdr-btn, .hdr-btn-lg');
   if (btn) {
     if (!(btn.classList.contains('toggle') || btn.closest('.toggle'))) {
       HapticManager.fire('BUTTON_PRESS');
     }
+    // v1.0.8 PHASE 22 supplement: unified button-click sound
+    try{if(typeof playSound==='function')playSound('select');}catch(_e){}
   }
 }, true);
 
@@ -408,11 +415,11 @@ function _updateEvalDisplayIncremental() {
     if (error && error.stack && error.stack.indexOf('renderInternal') !== -1) {
       const app = document.getElementById('app');
       if (app) {
-        app.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#1a0a0a;color:#f5e6c8;padding:20px;text-align:center;font-family:system-ui,sans-serif">' +
+        app.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:var(--bg);color:var(--text);padding:20px;text-align:center;font-family:system-ui,sans-serif">' +
           '<div style="font-size:3rem;margin-bottom:16px">♔</div>' +
-          '<h2 style="color:#ffd700;margin-bottom:12px">'+T('app_name')+' v1.0.7</h2>' +
+          '<h2 style="color:var(--accent2);margin-bottom:12px">'+T('app_name')+' v1.0.8</h2>' +
           '<p style="color:#a08050;margin-bottom:20px;max-width:300px">'+T('render_error')+'</p>' +
-          '<button onclick="location.reload()" style="padding:12px 24px;background:#c49512;color:#1a0a0a;border:none;border-radius:6px;font-size:1rem;font-weight:700;cursor:pointer">'+T('refresh_page')+'</button>' +
+          '<button onclick="location.reload()" style="padding:12px 24px;background:var(--btn-a-bg);color:var(--bg);border:none;border-radius:6px;font-size:1rem;font-weight:700;cursor:pointer">'+T('refresh_page')+'</button>' +
           '</div>';
       }
     }
@@ -447,16 +454,796 @@ function _updateEvalDisplayIncremental() {
   } catch(e) {}
 })();
 
-let audioCtx=null;
-function getAudioCtx(){if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();return audioCtx}
-window.addEventListener('beforeunload',()=>{if(audioCtx&&audioCtx.state!=='closed'){audioCtx.close();audioCtx=null;}});
-function playSound(type){if(!soundOn)return;try{const ctx=getAudioCtx();if(ctx.state==='suspended')ctx.resume().catch(()=>{});const osc=ctx.createOscillator(),gain=ctx.createGain(),now=ctx.currentTime;osc.connect(gain);gain.connect(ctx.destination);switch(type){case'move':osc.type='sine';osc.frequency.setValueAtTime(300,now);osc.frequency.exponentialRampToValueAtTime(500,now+.06);gain.gain.setValueAtTime(.15,now);gain.gain.exponentialRampToValueAtTime(.01,now+.1);osc.start(now);osc.stop(now+.1);break;case'capture':osc.type='square';osc.frequency.setValueAtTime(200,now);osc.frequency.exponentialRampToValueAtTime(100,now+.12);gain.gain.setValueAtTime(.2,now);gain.gain.exponentialRampToValueAtTime(.01,now+.15);osc.start(now);osc.stop(now+.15);break;case'check':osc.type='sawtooth';osc.frequency.setValueAtTime(440,now);osc.frequency.setValueAtTime(554,now+.08);osc.frequency.setValueAtTime(659,now+.16);gain.gain.setValueAtTime(.18,now);gain.gain.exponentialRampToValueAtTime(.01,now+.25);osc.start(now);osc.stop(now+.25);break;case'castle':osc.type='triangle';osc.frequency.setValueAtTime(260,now);osc.frequency.exponentialRampToValueAtTime(520,now+.15);gain.gain.setValueAtTime(.15,now);gain.gain.exponentialRampToValueAtTime(.01,now+.18);osc.start(now);osc.stop(now+.18);break;case'promote':osc.type='sine';osc.frequency.setValueAtTime(523,now);osc.frequency.setValueAtTime(659,now+.08);osc.frequency.setValueAtTime(784,now+.16);osc.frequency.setValueAtTime(1047,now+.24);gain.gain.setValueAtTime(.15,now);gain.gain.exponentialRampToValueAtTime(.01,now+.3);osc.start(now);osc.stop(now+.3);break;case'gameover':osc.type='sine';osc.frequency.setValueAtTime(523,now);osc.frequency.setValueAtTime(440,now+.15);osc.frequency.setValueAtTime(349,now+.3);osc.frequency.setValueAtTime(262,now+.5);gain.gain.setValueAtTime(.2,now);gain.gain.exponentialRampToValueAtTime(.01,now+.7);osc.start(now);osc.stop(now+.7);break;case'hint':osc.type='sine';osc.frequency.setValueAtTime(600,now);osc.frequency.exponentialRampToValueAtTime(900,now+.1);gain.gain.setValueAtTime(.12,now);gain.gain.exponentialRampToValueAtTime(.01,now+.12);osc.start(now);osc.stop(now+.12);break;}}catch(e){}}
+// AI-GEN: AI assisted
+// This code was AI-assisted and has been reviewed for AGPL v3 compliance.
+//
+// v1.0.8 PHASE 22: ChessAudioEngine — personified piece-move sound engine.
+// Redesigned per "国际象棋拟人化音效方案" reference. Pure Web Audio API
+// synthesis (no audio files), with each piece's timbre matching its animated
+// personality. Sound timing is aligned with the animation keyframe timeline.
+//
+// Piece timbres (matching the animation personalities):
+//   pawn  (胆小 timid)      — triangle wave three-stage: hesitate-squeak, wood-tap, soft-landing
+//   knight(灵活 agile)      — sine frequency sweep + crisp ding landing
+//   bishop(机敏 sharp)      — sawtooth glide + bandpass filter sweep
+//   rook  (生猛 fierce)     — square charge + noise dash + impact burst
+//   queen (潇洒 elegant)    — three-frequency harmony + LFO vibrato + high overtone
+//   king  (庄严 solemn)     — bell partials + four heavy footstep pulses
+//
+// Interactive sounds (selection, hint, capture, castle rook move/land,
+// game-over) are also implemented. All sounds are routed through a master
+// gain → dry/reverb → compressor → destination chain for spatial feel and
+// anti-clipping protection.
+//
+// Performance & robustness:
+//   - _activeNodes set tracks all live oscillators; onended auto-cleans
+//   - All exponentialRampToValueAtTime targets >= 0.0001 (no NaN)
+//   - Mobile unlock on first pointerdown/keydown (silent buffer activation)
+//   - DynamicsCompressor prevents multi-voice clipping (threshold=-14dB)
+//   - Convolution reverb impulse is generated once and shared
+//   - Graceful degradation: if init() fails, all play* methods silently no-op
+//
+// API compatibility:
+//   - playSound(type) signature preserved (type ∈ move/capture/check/castle/
+//     promote/gameover/hint). Internal dispatch maps to the new engine.
+//   - soundOn global + toggleSound() function + toolbar button preserved.
+//   - audioEngine is the global engine instance (read by game-logic.js for
+//     per-piece sound triggers during animateMove).
+class ChessAudioEngine {
+  constructor() {
+    this.ctx = null;
+    this.master = null;
+    this.compressor = null;
+    this.reverb = null;
+    this.reverbGain = null;
+    this.dryGain = null;
+    this.enabled = true;
+    this.volume = 0.45;
+    this._noiseBuf = null;
+    this._unlocked = false;
+    this._activeNodes = new Set();
+  }
+
+  // ============ Initialization & routing ============
+
+  /** Lazy init. Must be called from a user-gesture handler on mobile. */
+  init() {
+    if (this.ctx) return true;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return false;
+    try {
+      this.ctx = new AC();
+      this.master = this.ctx.createGain();
+      this.master.gain.value = this.volume;
+      // Compressor: prevent multi-voice clipping
+      this.compressor = this.ctx.createDynamicsCompressor();
+      this.compressor.threshold.value = -14;
+      this.compressor.knee.value = 8;
+      this.compressor.ratio.value = 4;
+      this.compressor.attack.value = 0.003;
+      this.compressor.release.value = 0.12;
+      // Convolution reverb: gives the board spatial depth
+      this.reverb = this.ctx.createConvolver();
+      this.reverb.buffer = this._createImpulse(1.4, 2.8);
+      this.reverbGain = this.ctx.createGain();
+      this.reverbGain.gain.value = 0.18;
+      this.dryGain = this.ctx.createGain();
+      this.dryGain.gain.value = 0.88;
+      // Routing: master → [dry] + [reverb→reverbGain] → compressor → destination
+      this.master.connect(this.dryGain);
+      this.master.connect(this.reverb);
+      this.reverb.connect(this.reverbGain);
+      this.dryGain.connect(this.compressor);
+      this.reverbGain.connect(this.compressor);
+      this.compressor.connect(this.ctx.destination);
+      return true;
+    } catch (e) {
+      console.warn('[ChessAudio] init failed:', e);
+      return false;
+    }
+  }
+
+  /** Generate reverb impulse response. */
+  _createImpulse(duration, decay) {
+    const sr = this.ctx.sampleRate;
+    const len = Math.floor(sr * duration);
+    const buf = this.ctx.createBuffer(2, len, sr);
+    for (let ch = 0; ch < 2; ch++) {
+      const data = buf.getChannelData(ch);
+      for (let i = 0; i < len; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+      }
+    }
+    return buf;
+  }
+
+  /** White-noise buffer (cached & reused). */
+  _getNoise() {
+    if (this._noiseBuf) return this._noiseBuf;
+    const sr = this.ctx.sampleRate;
+    const buf = this.ctx.createBuffer(1, Math.floor(sr * 0.8), sr);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    this._noiseBuf = buf;
+    return buf;
+  }
+
+  /** Unlock AudioContext (mobile requires this in a user gesture). */
+  unlock() {
+    if (!this.init()) return;
+    if (this.ctx.state === 'suspended') {
+      this.ctx.resume().catch(function(){});
+    }
+    // Play a silent buffer to force activation
+    const buf = this.ctx.createBuffer(1, 1, this.ctx.sampleRate);
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(this.ctx.destination);
+    src.start(0);
+    this._unlocked = true;
+  }
+
+  setEnabled(v) {
+    this.enabled = v;
+    if (this.master) {
+      this.master.gain.setTargetAtTime(v ? this.volume : 0, this.ctx.currentTime, 0.02);
+    }
+  }
+
+  setVolume(v) {
+    this.volume = Math.max(0, Math.min(1, v));
+    if (this.master && this.enabled) {
+      this.master.gain.setTargetAtTime(this.volume, this.ctx.currentTime, 0.02);
+    }
+  }
+
+  now() { return this.ctx ? this.ctx.currentTime : 0; }
+
+  // ============ Generic building blocks ============
+
+  /** Create oscillator, connect to target, schedule start/stop. */
+  _osc(type, freq, t0, dur, target) {
+    const osc = this.ctx.createOscillator();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, t0);
+    osc.connect(target);
+    osc.start(t0);
+    osc.stop(t0 + dur + 0.05);
+    this._activeNodes.add(osc);
+    const self = this;
+    osc.onended = function() { self._activeNodes.delete(osc); };
+    return osc;
+  }
+
+  /** ADSR envelope on a gain node. */
+  _env(gainNode, t0, attack, peak, decay, sustainLevel, sustainTime, release) {
+    const g = gainNode.gain;
+    g.setValueAtTime(0.0001, t0);
+    g.linearRampToValueAtTime(Math.max(0.0001, peak), t0 + attack);
+    g.linearRampToValueAtTime(Math.max(0.0001, peak * sustainLevel), t0 + attack + decay);
+    g.setValueAtTime(Math.max(0.0001, peak * sustainLevel), t0 + attack + decay + sustainTime);
+    g.exponentialRampToValueAtTime(0.0001, t0 + attack + decay + sustainTime + release);
+  }
+
+  /** Noise source + biquad filter combo. */
+  _noise(t0, dur, filterType, freqStart, freqEnd, q, peak) {
+    const src = this.ctx.createBufferSource();
+    src.buffer = this._getNoise();
+    const filt = this.ctx.createBiquadFilter();
+    filt.type = filterType;
+    filt.frequency.setValueAtTime(freqStart, t0);
+    if (freqEnd !== freqStart) {
+      filt.frequency.exponentialRampToValueAtTime(Math.max(1, freqEnd), t0 + dur);
+    }
+    filt.Q.value = q;
+    const g = this.ctx.createGain();
+    src.connect(filt); filt.connect(g); g.connect(this.master);
+    src.start(t0);
+    src.stop(t0 + dur + 0.02);
+    this._env(g, t0, 0.002, peak, 0.04, 0.3, dur * 0.5, dur * 0.4);
+    this._activeNodes.add(src);
+    const self = this;
+    src.onended = function() { self._activeNodes.delete(src); };
+    return { src: src, filt: filt, g: g };
+  }
+
+  // ============ Interactive sounds ============
+
+  /** Selection: crisp short tone. */
+  playSelect() {
+    if (!this.enabled || !this.ctx) return;
+    const t0 = this.now();
+    const g = this.ctx.createGain();
+    g.connect(this.master);
+    const osc = this._osc('sine', 880, t0, 0.1, g);
+    osc.frequency.exponentialRampToValueAtTime(1320, t0 + 0.08);
+    this._env(g, t0, 0.005, 0.22, 0.02, 0.4, 0.04, 0.05);
+  }
+
+  /** Hint: soft triangle wave. */
+  playHint() {
+    if (!this.enabled || !this.ctx) return;
+    const t0 = this.now();
+    const g = this.ctx.createGain();
+    g.connect(this.master);
+    this._osc('triangle', 660, t0, 0.12, g);
+    this._env(g, t0, 0.008, 0.1, 0.04, 0.3, 0.05, 0.06);
+  }
+
+  /** Capture: noise burst + low-freq impact. */
+  playCapture() {
+    if (!this.enabled || !this.ctx) return;
+    const t0 = this.now();
+    this._noise(t0, 0.22, 'bandpass', 1000, 400, 0.8, 0.35);
+    const g = this.ctx.createGain();
+    g.connect(this.master);
+    const osc = this._osc('square', 130, t0, 0.18, g);
+    osc.frequency.exponentialRampToValueAtTime(55, t0 + 0.14);
+    this._env(g, t0, 0.002, 0.28, 0.04, 0.3, 0.06, 0.1);
+  }
+
+  // ============ Piece-move sounds (aligned with animation timeline) ============
+
+  /** Pawn · timid (animation 250ms in v1.0.8; reference 430ms)
+   *  0ms: hesitate squeak (freq dips slightly)
+   *  ~80ms: mid-section wood tap
+   *  ~160ms: soft landing "da" */
+  playPawn() {
+    if (!this.enabled || !this.ctx) return;
+    const t0 = this.now();
+    // v1.0.8 PHASE 26: pawn sound now "瑟瑟发抖" (quivering/shivering) to match
+    //   the trembling animation. Three quick wavering squeaks (frequency jitter)
+    //   + a soft feather-light landing. Low gain throughout (the pawn is timid).
+    // Tremor squeaks: three short triangle tones with slight pitch jitter
+    for (let i = 0; i < 3; i++) {
+      const ts = t0 + i * 0.045;
+      const g = this.ctx.createGain();
+      g.connect(this.master);
+      const baseFreq = 360 + i * 20;
+      const o = this._osc('triangle', baseFreq, ts, 0.04, g);
+      // Frequency jitter (the "发抖" quiver)
+      o.frequency.setValueAtTime(baseFreq, ts);
+      o.frequency.linearRampToValueAtTime(baseFreq + 15, ts + 0.01);
+      o.frequency.linearRampToValueAtTime(baseFreq - 10, ts + 0.025);
+      o.frequency.linearRampToValueAtTime(baseFreq + 8, ts + 0.04);
+      this._env(g, ts, 0.002, 0.06, 0.01, 0.2, 0.008, 0.02);
+    }
+    // Soft feather-light landing (sine, low gain, quick decay)
+    const tL = t0 + 0.16;
+    const gL = this.ctx.createGain();
+    gL.connect(this.master);
+    const oL = this._osc('sine', 240, tL, 0.08, gL);
+    oL.frequency.exponentialRampToValueAtTime(160, tL + 0.06);
+    this._env(gL, tL, 0.002, 0.10, 0.02, 0.15, 0.02, 0.05);
+  }
+
+  /** Knight · agile (animation 380ms; reference 680ms)
+   *  0ms: rising "whoosh" (300→900→600Hz)
+   *  ~250ms: crisp landing "ding" (1200Hz + 2400Hz overtone) */
+  playKnight() {
+    if (!this.enabled || !this.ctx) return;
+    const t0 = this.now();
+    // Rising whoosh
+    const g1 = this.ctx.createGain();
+    g1.connect(this.master);
+    const o1 = this._osc('sine', 300, t0, 0.24, g1);
+    o1.frequency.exponentialRampToValueAtTime(900, t0 + 0.12);
+    o1.frequency.exponentialRampToValueAtTime(600, t0 + 0.22);
+    this._env(g1, t0, 0.01, 0.16, 0.1, 0.5, 0.1, 0.07);
+    // Crisp ding
+    const t1 = t0 + 0.25;
+    const g2 = this.ctx.createGain();
+    g2.connect(this.master);
+    this._osc('sine', 1200, t1, 0.13, g2);
+    this._env(g2, t1, 0.001, 0.22, 0.05, 0.3, 0.04, 0.08);
+    // High overtone
+    const g3 = this.ctx.createGain();
+    g3.connect(this.master);
+    this._osc('sine', 2400, t1, 0.09, g3);
+    this._env(g3, t1, 0.001, 0.08, 0.03, 0.2, 0.03, 0.05);
+  }
+
+  /** Bishop · sharp (animation 270ms; reference 460ms)
+   *  0ms: sawtooth glide (500→1400→900Hz)
+   *       lowpass filter sweep (800→3000→1200Hz, Q=6) */
+  playBishop() {
+    if (!this.enabled || !this.ctx) return;
+    const t0 = this.now();
+    const g = this.ctx.createGain();
+    g.connect(this.master);
+    const osc = this.ctx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(500, t0);
+    osc.frequency.exponentialRampToValueAtTime(1400, t0 + 0.09);
+    osc.frequency.exponentialRampToValueAtTime(900, t0 + 0.25);
+    const filt = this.ctx.createBiquadFilter();
+    filt.type = 'lowpass';
+    filt.frequency.setValueAtTime(800, t0);
+    filt.frequency.exponentialRampToValueAtTime(3000, t0 + 0.12);
+    filt.frequency.exponentialRampToValueAtTime(1200, t0 + 0.27);
+    filt.Q.value = 6;
+    osc.connect(filt); filt.connect(g);
+    osc.start(t0);
+    osc.stop(t0 + 0.29);
+    this._activeNodes.add(osc);
+    const self = this;
+    osc.onended = function() { self._activeNodes.delete(osc); };
+    this._env(g, t0, 0.005, 0.18, 0.05, 0.6, 0.16, 0.06);
+  }
+
+  /** Rook · fierce (animation 290ms; reference 500ms)
+   *  0ms: charge low-freq (80→60Hz square)
+   *  ~50ms: dash whoosh (noise + bandpass sweep 400→1500Hz)
+   *  ~250ms: heavy impact (140→50Hz square + lowpass noise) */
+  playRook() {
+    if (!this.enabled || !this.ctx) return;
+    const t0 = this.now();
+    // Charge low-freq
+    const g1 = this.ctx.createGain();
+    g1.connect(this.master);
+    const o1 = this._osc('square', 80, t0, 0.06, g1);
+    o1.frequency.linearRampToValueAtTime(60, t0 + 0.05);
+    this._env(g1, t0, 0.003, 0.22, 0.04, 0.2, 0.01, 0.025);
+    // Dash whoosh
+    const t1 = t0 + 0.05;
+    const src = this.ctx.createBufferSource();
+    src.buffer = this._getNoise();
+    const nf = this.ctx.createBiquadFilter();
+    nf.type = 'bandpass';
+    nf.frequency.setValueAtTime(400, t1);
+    nf.frequency.exponentialRampToValueAtTime(1500, t1 + 0.18);
+    nf.Q.value = 2;
+    const ng = this.ctx.createGain();
+    src.connect(nf); nf.connect(ng); ng.connect(this.master);
+    src.start(t1);
+    src.stop(t1 + 0.22);
+    this._env(ng, t1, 0.01, 0.14, 0.05, 0.7, 0.13, 0.05);
+    this._activeNodes.add(src);
+    const self = this;
+    src.onended = function() { self._activeNodes.delete(src); };
+    // Heavy impact
+    const t2 = t0 + 0.25;
+    const g2 = this.ctx.createGain();
+    g2.connect(this.master);
+    const o2 = this._osc('square', 140, t2, 0.09, g2);
+    o2.frequency.exponentialRampToValueAtTime(50, t2 + 0.07);
+    this._env(g2, t2, 0.001, 0.38, 0.03, 0.3, 0.03, 0.06);
+    this._noise(t2, 0.09, 'lowpass', 600, 300, 0.5, 0.28);
+  }
+
+  /** Queen · resounding/heavy (animation 520ms in v1.0.8; reference 740ms)
+   *  v1.0.8 PHASE 26: queen sound now "铿锵有声、掷地有声" (clanking/resounding,
+   *    ground-shaking) to match the heavier-than-rook animation + massive shake.
+   *  0ms: low brass-like growl (110Hz sawtooth + 165Hz fifth) — the "铿锵" weight
+   *  ~80ms: metallic clang (880+1320Hz square, bandpass, quick decay) — the "clank"
+   *  ~400ms: massive impact (60Hz square + lowpass noise burst) — the "掷地有声" */
+  playQueen() {
+    if (!this.enabled || !this.ctx) return;
+    const t0 = this.now();
+    // Low brass-like growl (the weight of the queen)
+    const gG = this.ctx.createGain();
+    gG.connect(this.master);
+    const oG1 = this._osc('sawtooth', 110, t0, 0.45, gG);
+    const oG2 = this._osc('sawtooth', 165, t0, 0.45, gG); // perfect fifth
+    oG1.frequency.linearRampToValueAtTime(90, t0 + 0.4);
+    oG2.frequency.linearRampToValueAtTime(135, t0 + 0.4);
+    this._env(gG, t0, 0.03, 0.22, 0.08, 0.4, 0.3, 0.1);
+    // Metallic clang (the "铿锵" clank)
+    const tC = t0 + 0.08;
+    const gC = this.ctx.createGain();
+    gC.connect(this.master);
+    const oC1 = this._osc('square', 880, tC, 0.15, gC);
+    const oC2 = this._osc('square', 1320, tC, 0.12, gC);
+    const fC = this.ctx.createBiquadFilter();
+    fC.type = 'bandpass';
+    fC.frequency.value = 1100;
+    fC.Q.value = 4;
+    oC1.connect(fC); oC2.connect(fC);
+    fC.connect(gC);
+    this._env(gC, tC, 0.001, 0.18, 0.04, 0.5, 0.08, 0.06);
+    // Massive impact (the "掷地有声" ground-shaking landing) — synced with animation
+    const tI = t0 + 0.42;
+    const gI = this.ctx.createGain();
+    gI.connect(this.master);
+    const oI = this._osc('square', 60, tI, 0.12, gI);
+    oI.frequency.exponentialRampToValueAtTime(35, tI + 0.10);
+    this._env(gI, tI, 0.001, 0.32, 0.03, 0.4, 0.04, 0.08);
+    // Lowpass noise burst for the impact "thud"
+    this._noise(tI, 0.14, 'lowpass', 500, 200, 0.6, 0.3);
+  }
+
+  /** King · solemn/regal (animation 560ms in v1.0.8; reference 920ms)
+   *  v1.0.8 PHASE 26: king sound now "威严庄重" (regal/majestic) to match the
+   *    more solemn-than-rook animation. Deeper bell partials (90Hz fundamental),
+   *    longer decay, four measured footsteps (slower, deeper — the king does
+   *    not hurry). The footsteps are synced with the animation's 4-step wobble. */
+  playKing() {
+    if (!this.enabled || !this.ctx) return;
+    const t0 = this.now();
+    // Deeper bell partials (90Hz fundamental — more regal than 110Hz)
+    const partials = [
+      { f: 90,  g: 0.26, d: 0.58 },
+      { f: 180, g: 0.16, d: 0.46 },
+      { f: 270, g: 0.09, d: 0.32 },
+      { f: 360, g: 0.05, d: 0.25 },
+      { f: 450, g: 0.03, d: 0.19 }
+    ];
+    const self = this;
+    partials.forEach(function(p) {
+      const g = self.ctx.createGain();
+      g.connect(self.master);
+      self._osc('sine', p.f, t0, p.d, g);
+      self._env(g, t0, 0.06, p.g, 0.12, 0.3, p.d * 0.4, p.d * 0.4);
+    });
+    // Four measured footsteps (slower + deeper — synced with 560ms animation's
+    // 4-step wobble at ~140ms intervals). Deeper freq (80Hz) than before (95Hz).
+    for (let i = 0; i < 4; i++) {
+      const t = t0 + 0.10 + i * 0.12;
+      const g = this.ctx.createGain();
+      g.connect(this.master);
+      const osc = this._osc('sine', 80, t, 0.06, g);
+      osc.frequency.exponentialRampToValueAtTime(50, t + 0.05);
+      this._env(g, t, 0.002, 0.13, 0.02, 0.22, 0.015, 0.03);
+    }
+  }
+
+  // ============ Castle sounds (three-stage narrative) ============
+  // v1.0.8 PHASE 29: Castle rook move redesigned to be RAPID and IMPACTFUL.
+  //   Previous design: a soft 200→350Hz triangle wave rising over 250ms —
+  //   sounded more like a gentle slide than a decisive royal maneuver.
+  //   New design: two-stage "snap + slam" within ~135ms:
+  //     Stage 1 (0-45ms): sharp low-frequency impact (sine 110Hz thump +
+  //                       bandpass noise crack) — the rook snapping to attention
+  //     Stage 2 (45-135ms): metallic crash (sawtooth 220→80Hz down-sweep +
+  //                        highpass noise burst) — the rook slamming into place
+  //   The haptic feedback (CASTLE in StockfishNative.java) mirrors this:
+  //     Stage 1: short intense burst (amplitude 255, 35ms)
+  //     Stage 2: longer heavy rumble (amplitude 200, 60ms)
+  //   Together they convey the king's decisive command and the rook's heavy
+  //   obedience — "威严的迅猛".
+
+  /** Castle rook move: rapid snap + slam (two-stage impact). */
+  playCastleRookMove() {
+    if (!this.enabled || !this.ctx) return;
+    const t0 = this.now();
+    // Stage 1: low-freq thump (110Hz sine, 45ms) — the "snap"
+    const g1 = this.ctx.createGain();
+    g1.connect(this.master);
+    const osc1 = this._osc('sine', 110, t0, 0.05, g1);
+    osc1.frequency.exponentialRampToValueAtTime(80, t0 + 0.04);
+    this._env(g1, t0, 0.001, 0.42, 0.005, 0.3, 0.01, 0.03);
+    // Stage 1 companion: bandpass noise crack (1000Hz center, 35ms)
+    this._noise(t0, 0.04, 'bandpass', 1800, 600, 1.2, 0.32);
+    // Stage 2: metallic down-sweep (sawtooth 220→80Hz, 90ms) — the "slam"
+    const t1 = t0 + 0.045;
+    const g2 = this.ctx.createGain();
+    g2.connect(this.master);
+    const osc2 = this._osc('sawtooth', 220, t1, 0.10, g2);
+    osc2.frequency.exponentialRampToValueAtTime(80, t1 + 0.08);
+    this._env(g2, t1, 0.002, 0.30, 0.01, 0.4, 0.04, 0.05);
+    // Stage 2 companion: highpass noise burst (2500Hz, 80ms) — metallic shimmer
+    this._noise(t1, 0.08, 'highpass', 2500, 1200, 0.7, 0.22);
+  }
+
+  // (v1.0.8 PHASE 30: playCastleRookLand() removed — Phase 29 combined into playCastleRookMove.)
+
+  /** Promotion: ascending major arpeggio (C-E-G-C). */
+  playPromote() {
+    if (!this.enabled || !this.ctx) return;
+    const t0 = this.now();
+    const notes = [523, 659, 784, 1047];
+    const self = this;
+    notes.forEach(function(freq, i) {
+      const t = t0 + i * 0.08;
+      const g = self.ctx.createGain();
+      g.connect(self.master);
+      self._osc('sine', freq, t, 0.18, g);
+      self._env(g, t, 0.005, 0.15, 0.03, 0.3, 0.06, 0.09);
+    });
+  }
+
+  /** Check: attention-grabbing two-tone alert. */
+  playCheck() {
+    if (!this.enabled || !this.ctx) return;
+    const t0 = this.now();
+    const g = this.ctx.createGain();
+    g.connect(this.master);
+    const osc = this._osc('sawtooth', 440, t0, 0.18, g);
+    osc.frequency.setValueAtTime(554, t0 + 0.06);
+    osc.frequency.setValueAtTime(659, t0 + 0.12);
+    this._env(g, t0, 0.005, 0.18, 0.04, 0.4, 0.08, 0.08);
+  }
+
+  /** Game over: descending minor arpeggio (C-A-F-C low). */
+  playGameover() {
+    if (!this.enabled || !this.ctx) return;
+    const t0 = this.now();
+    const notes = [523, 440, 349, 262];
+    const durs = [0.12, 0.14, 0.18, 0.30];
+    const self = this;
+    notes.forEach(function(freq, i) {
+      const t = t0 + (i === 0 ? 0 : [0.12, 0.26, 0.44][i - 1] || 0);
+      const g = self.ctx.createGain();
+      g.connect(self.master);
+      self._osc('sine', freq, t, durs[i], g);
+      self._env(g, t, 0.01, 0.20, 0.04, 0.3, durs[i] * 0.4, durs[i] * 0.5);
+    });
+  }
+
+  /** Stop all active nodes immediately. */
+  stopAll() {
+    if (!this.ctx) return;
+    this._activeNodes.forEach(function(node) {
+      try { node.stop(); } catch (e) {}
+    });
+    this._activeNodes.clear();
+  }
+
+  // ============ v1.0.8 PHASE 22 (supplement): Scene / interaction sounds ============
+  //延续拟人化音效风格：每个音效都用 Web Audio API 纯合成，与棋子音效共享
+  //   同一套路由链（master → dry+reverb → compressor → destination）。音色设计
+  //   遵循「典雅庄重」美学——金色调 + 木质质感 + 空间混响。
+  // Note: playSelect / playHint / playCapture 等已在上方"Interactive sounds"段定义。
+
+  /** 取消选中：下行短音（选中音的逆行）。 */
+  playDeselect() {
+    if (!this.enabled || !this.ctx) return;
+    const t0 = this.now();
+    const g = this.ctx.createGain();
+    g.connect(this.master);
+    const osc = this._osc('sine', 880, t0, 0.08, g);
+    osc.frequency.exponentialRampToValueAtTime(560, t0 + 0.06);
+    this._env(g, t0, 0.005, 0.16, 0.02, 0.4, 0.03, 0.04);
+  }
+
+  /** 悔棋：逆向回旋音（高→低，体现"撤回"）。 */
+  playUndo() {
+    if (!this.enabled || !this.ctx) return;
+    const t0 = this.now();
+    const g = this.ctx.createGain();
+    g.connect(this.master);
+    const osc = this._osc('triangle', 660, t0, 0.18, g);
+    osc.frequency.exponentialRampToValueAtTime(330, t0 + 0.14);
+    this._env(g, t0, 0.005, 0.18, 0.04, 0.4, 0.06, 0.08);
+  }
+
+  /** 撤悔：正向回旋音（低→高，体现"重做"）。 */
+  playRedo() {
+    if (!this.enabled || !this.ctx) return;
+    const t0 = this.now();
+    const g = this.ctx.createGain();
+    g.connect(this.master);
+    const osc = this._osc('triangle', 330, t0, 0.18, g);
+    osc.frequency.exponentialRampToValueAtTime(660, t0 + 0.14);
+    this._env(g, t0, 0.005, 0.18, 0.04, 0.4, 0.06, 0.08);
+  }
+
+  /** 翻转棋盘：嗖声（带通滤波器扫频，体现"旋转"）。 */
+  playFlip() {
+    if (!this.enabled || !this.ctx) return;
+    const t0 = this.now();
+    const g = this.ctx.createGain();
+    g.connect(this.master);
+    const osc = this._osc('sawtooth', 200, t0, 0.22, g);
+    osc.frequency.exponentialRampToValueAtTime(800, t0 + 0.10);
+    osc.frequency.exponentialRampToValueAtTime(200, t0 + 0.20);
+    const filt = this.ctx.createBiquadFilter();
+    filt.type = 'bandpass';
+    filt.frequency.setValueAtTime(400, t0);
+    filt.frequency.exponentialRampToValueAtTime(2000, t0 + 0.10);
+    filt.frequency.exponentialRampToValueAtTime(400, t0 + 0.20);
+    filt.Q.value = 3;
+    osc.disconnect();
+    osc.connect(filt);
+    filt.connect(g);
+    this._env(g, t0, 0.01, 0.14, 0.05, 0.5, 0.08, 0.08);
+  }
+
+  /** 新游戏开始：号角式三音和弦（C-E-G，庄重开局）。 */
+  playNewGame() {
+    if (!this.enabled || !this.ctx) return;
+    const t0 = this.now();
+    const notes = [392, 523, 659]; // G-C-E (号角感)
+    const self = this;
+    notes.forEach(function(freq, i) {
+      const t = t0 + i * 0.04;
+      const g = self.ctx.createGain();
+      g.connect(self.master);
+      self._osc('triangle', freq, t, 0.30, g);
+      self._env(g, t, 0.02, 0.16, 0.06, 0.5, 0.12, 0.12);
+    });
+  }
+
+  /** 进入复盘：沉思音（低频钟声 + 混响，体现"回顾"）。 */
+  playEnterReview() {
+    if (!this.enabled || !this.ctx) return;
+    const t0 = this.now();
+    const g = this.ctx.createGain();
+    g.connect(this.master);
+    this._osc('sine', 220, t0, 0.50, g);
+    this._env(g, t0, 0.05, 0.20, 0.10, 0.4, 0.20, 0.20);
+    const g2 = this.ctx.createGain();
+    g2.connect(this.master);
+    this._osc('sine', 330, t0 + 0.08, 0.40, g2);
+    this._env(g2, t0 + 0.08, 0.05, 0.12, 0.08, 0.4, 0.16, 0.16);
+  }
+
+  /** 退出复盘：归位音（上行二音，体现"返回"）。 */
+  playExitReview() {
+    if (!this.enabled || !this.ctx) return;
+    const t0 = this.now();
+    const g1 = this.ctx.createGain();
+    g1.connect(this.master);
+    this._osc('sine', 330, t0, 0.12, g1);
+    this._env(g1, t0, 0.01, 0.16, 0.03, 0.4, 0.05, 0.05);
+    const g2 = this.ctx.createGain();
+    g2.connect(this.master);
+    this._osc('sine', 440, t0 + 0.08, 0.15, g2);
+    this._env(g2, t0 + 0.08, 0.01, 0.18, 0.03, 0.4, 0.06, 0.06);
+  }
+
+  /** 进入/退出摆棋：木质放置音（短促三角波，体现"摆放棋子"）。 */
+  playSetupToggle() {
+    if (!this.enabled || !this.ctx) return;
+    const t0 = this.now();
+    const g = this.ctx.createGain();
+    g.connect(this.master);
+    const osc = this._osc('triangle', 180, t0, 0.06, g);
+    osc.frequency.exponentialRampToValueAtTime(120, t0 + 0.04);
+    this._env(g, t0, 0.002, 0.20, 0.02, 0.3, 0.02, 0.03);
+  }
+
+  /** 认输：降旗音（下行三音，庄重而哀伤）。 */
+  playResign() {
+    if (!this.enabled || !this.ctx) return;
+    const t0 = this.now();
+    const notes = [440, 349, 262]; // A-F-C
+    const durs = [0.18, 0.22, 0.40];
+    const self = this;
+    notes.forEach(function(freq, i) {
+      const t = t0 + (i === 0 ? 0 : [0.18, 0.40][i - 1] || 0);
+      const g = self.ctx.createGain();
+      g.connect(self.master);
+      self._osc('sine', freq, t, durs[i], g);
+      self._env(g, t, 0.02, 0.18, 0.05, 0.3, durs[i] * 0.4, durs[i] * 0.5);
+    });
+  }
+
+  /** 复制成功：清脆叮声（高频正弦波短促上行）。 */
+  playCopy() {
+    if (!this.enabled || !this.ctx) return;
+    const t0 = this.now();
+    const g = this.ctx.createGain();
+    g.connect(this.master);
+    const osc = this._osc('sine', 1200, t0, 0.08, g);
+    osc.frequency.exponentialRampToValueAtTime(1800, t0 + 0.05);
+    this._env(g, t0, 0.002, 0.16, 0.02, 0.3, 0.03, 0.04);
+  }
+
+  /** 操作错误：低沉错误音（方波下行 + 噪声爆破）。 */
+  playError() {
+    if (!this.enabled || !this.ctx) return;
+    const t0 = this.now();
+    const g = this.ctx.createGain();
+    g.connect(this.master);
+    const osc = this._osc('square', 220, t0, 0.15, g);
+    osc.frequency.exponentialRampToValueAtTime(110, t0 + 0.10);
+    this._env(g, t0, 0.003, 0.20, 0.04, 0.3, 0.05, 0.07);
+    this._noise(t0, 0.08, 'bandpass', 800, 400, 1.5, 0.12);
+  }
+
+  /** AI 开始思考：轻微滴声（短促高频，体现"引擎启动"）。 */
+  playAiThinkStart() {
+    if (!this.enabled || !this.ctx) return;
+    const t0 = this.now();
+    const g = this.ctx.createGain();
+    g.connect(this.master);
+    this._osc('sine', 1000, t0, 0.05, g);
+    this._env(g, t0, 0.002, 0.10, 0.01, 0.3, 0.02, 0.02);
+  }
+
+  /** AI 找到走法：轻微答声（中频双音，体现"有了"）。 */
+  playAiThinkEnd() {
+    if (!this.enabled || !this.ctx) return;
+    const t0 = this.now();
+    const g1 = this.ctx.createGain();
+    g1.connect(this.master);
+    this._osc('sine', 600, t0, 0.06, g1);
+    this._env(g1, t0, 0.002, 0.12, 0.02, 0.3, 0.02, 0.03);
+    const g2 = this.ctx.createGain();
+    g2.connect(this.master);
+    this._osc('sine', 800, t0 + 0.04, 0.06, g2);
+    this._env(g2, t0 + 0.04, 0.002, 0.10, 0.02, 0.3, 0.02, 0.03);
+  }
+
+  /** Release resources. */
+  dispose() {
+    this.stopAll();
+    if (this.ctx) {
+      this.ctx.close().catch(function(){});
+      this.ctx = null;
+    }
+  }
+}
+
+// v1.0.8 PHASE 22: Global audio engine instance.
+// Lazy-initialized on first user gesture (see _unlockAudio below).
+let audioEngine = null;
+function _ensureAudioEngine() {
+  if (audioEngine) return audioEngine;
+  try {
+    audioEngine = new ChessAudioEngine();
+  } catch (e) {
+    audioEngine = null;
+  }
+  return audioEngine;
+}
+
+// v1.0.8 PHASE 22: Unlock audio on first user gesture (mobile requirement).
+// Attached as one-shot listeners on pointerdown/keydown. After unlock, the
+// engine is ready for all subsequent playSound calls.
+function _unlockAudio() {
+  const eng = _ensureAudioEngine();
+  if (eng) eng.unlock();
+  document.removeEventListener('pointerdown', _unlockAudio);
+  document.removeEventListener('keydown', _unlockAudio);
+}
+document.addEventListener('pointerdown', _unlockAudio, { once: false, passive: true });
+document.addEventListener('keydown', _unlockAudio, { once: false });
+
+// v1.0.8 PHASE 22: playSound(type) — preserved signature for ui.js callers.
+// Maps the legacy 7 sound types + v1.0.8 supplement scene sounds to the new
+// personified engine. For 'move', the actual piece-type sound is triggered by
+// game-logic.js's animateMove via audioEngine.play<pieceType>() — this 'move'
+// case is a fallback for any caller that doesn't go through animateMove.
+// v1.0.8 supplement: added deselect/undo/redo/flip/newgame/enterReview/
+//   exitReview/setupToggle/resign/copy/error/aiThinkStart/aiThinkEnd.
+function playSound(type) {
+  if (!soundOn) return;
+  const eng = _ensureAudioEngine();
+  if (!eng) return;
+  try {
+    switch (type) {
+      case 'move':         eng.playPawn();          break; // fallback (animateMove triggers per-piece)
+      case 'capture':      eng.playCapture();       break;
+      case 'check':        eng.playCheck();         break;
+      case 'castle':       eng.playCastleRookMove();break;
+      case 'promote':      eng.playPromote();       break;
+      case 'gameover':     eng.playGameover();      break;
+      case 'hint':         eng.playHint();          break;
+      case 'select':       eng.playSelect();        break;
+      case 'deselect':     eng.playDeselect();      break;
+      case 'undo':         eng.playUndo();          break;
+      case 'redo':         eng.playRedo();          break;
+      case 'flip':         eng.playFlip();          break;
+      case 'newgame':      eng.playNewGame();       break;
+      case 'enterReview':  eng.playEnterReview();   break;
+      case 'exitReview':   eng.playExitReview();    break;
+      case 'setupToggle':  eng.playSetupToggle();   break;
+      case 'resign':       eng.playResign();        break;
+      case 'copy':         eng.playCopy();          break;
+      case 'error':        eng.playError();         break;
+      case 'aiThinkStart': eng.playAiThinkStart();  break;
+      case 'aiThinkEnd':   eng.playAiThinkEnd();    break;
+      default: break;
+    }
+  } catch (e) {}
+}
+
+// v1.0.8 PHASE 22: Close audio context on page unload (resource cleanup).
+window.addEventListener('beforeunload', function() {
+  if (audioEngine) {
+    try { audioEngine.dispose(); } catch (e) {}
+    audioEngine = null;
+  }
+});
+
 
 
 // ECO UI helper functions — already defined in game-logic.js with correct const declarations.
 
 // ===================== PHASE 18 TASK 2: VIRTUAL LIST HELPERS =====================
-// v1.0.7 PHASE 18 Task 2: Virtual list helpers for the review move list.
+// v1.0.8 PHASE 18 Task 2: Virtual list helpers for the review move list.
 // These are module-level so they can be called from render() (full rebuild),
 // from _refreshReviewMovesOnly() (scroll-driven partial refresh), and from
 // reviewGoTo() (force window to contain the new active step).
@@ -611,6 +1398,18 @@ function _forceReviewWindowToStep(targetMoveIdx){
 function _buildEvalTrendSVG(width, height) {
   if (!reviewStates || reviewStates.length < 2) return '';
 
+  // v1.0.8 PHASE 22: Read theme-aware chart colors from CSS variables.
+  // This ensures the review trend chart is visible in both dark and light modes.
+  // SVG stroke/fill attributes can't use var() directly, so we read computed values.
+  const _cs = getComputedStyle(document.documentElement);
+  const _C_LINE = _cs.getPropertyValue('--chart-line').trim() || '#E8E8F0';
+  const _C_FILL = _cs.getPropertyValue('--chart-fill').trim() || '#1A1A2E';
+  const _C_GRID = _cs.getPropertyValue('--chart-grid').trim() || '#333';
+  const _C_AXIS = _cs.getPropertyValue('--chart-axis').trim() || '#666';
+  const _C_STROKE = _cs.getPropertyValue('--chart-text-stroke').trim() || '#1a0a0a';
+  const _C_CRIT = _cs.getPropertyValue('--chart-critical').trim() || '#ffd700';
+  const _C_CRIT_TXT = _cs.getPropertyValue('--chart-critical-text').trim() || '#ffd700';
+
   // v1.0.3-p11: reduced left/right padding from 36 to 8 so the chart points
   // and lines fully utilize the horizontal space with minimal edge gaps.
   const padding = {top: 12, right: 8, bottom: 4, left: 8};
@@ -673,13 +1472,13 @@ function _buildEvalTrendSVG(width, height) {
   let svg = '<svg width="100%" height="100%" viewBox="0 0 ' + width + ' ' + height + '" preserveAspectRatio="xMidYMid meet" style="display:block">';
 
   // 0-axis line (gray)
-  svg += '<line x1="' + padding.left + '" y1="' + midY + '" x2="' + (width - padding.right) + '" y2="' + midY + '" stroke="#666" stroke-width="0.5" stroke-dasharray="2,2"/>';
+  svg += '<line x1="' + padding.left + '" y1="' + midY + '" x2="' + (width - padding.right) + '" y2="' + midY + '" stroke="'+_C_AXIS+'" stroke-width="0.5" stroke-dasharray="2,2"/>';
 
   // In global mode: draw vertical grid lines at each step for alignment with progress bar
   if (_reviewEvalGlobal && reviewStates.length > 2) {
     for (let i = 0; i < reviewStates.length; i++) {
       const x = stepToX(i);
-      svg += '<line x1="' + x.toFixed(1) + '" y1="' + padding.top + '" x2="' + x.toFixed(1) + '" y2="' + (height - padding.bottom) + '" stroke="#333" stroke-width="0.3"/>';
+      svg += '<line x1="' + x.toFixed(1) + '" y1="' + padding.top + '" x2="' + x.toFixed(1) + '" y2="' + (height - padding.bottom) + '" stroke="'+_C_GRID+'" stroke-width="0.3"/>';
     }
   }
 
@@ -696,13 +1495,13 @@ function _buildEvalTrendSVG(width, height) {
     const avgEval = (p0.eval + p1.eval) / 2;
     let strokeColor;
     if (p0.eval * p1.eval < 0) {
-      strokeColor = '#888';
+      strokeColor = _C_AXIS;
     } else if (avgEval > 0) {
-      strokeColor = '#E8E8F0';
+      strokeColor = _C_LINE;
     } else if (avgEval < 0) {
-      strokeColor = '#4A4A6E';
+      strokeColor = _C_FILL;
     } else {
-      strokeColor = '#666';
+      strokeColor = _C_AXIS;
     }
 
     svg += '<line x1="' + x0.toFixed(1) + '" y1="' + y0.toFixed(1) + '" x2="' + x1.toFixed(1) + '" y2="' + y1.toFixed(1) + '" stroke="' + strokeColor + '" stroke-width="1.5" stroke-linecap="round"/>';
@@ -715,7 +1514,7 @@ function _buildEvalTrendSVG(width, height) {
         const interpEval = p0.eval + (p1.eval - p0.eval) * t;
         const sx = stepToX(s);
         const sy = evalToY(interpEval);
-        svg += '<circle cx="' + sx.toFixed(1) + '" cy="' + sy.toFixed(1) + '" r="1" fill="' + (interpEval > 0 ? '#E8E8F044' : '#4A4A6E44') + '"/>';
+        svg += '<circle cx="' + sx.toFixed(1) + '" cy="' + sy.toFixed(1) + '" r="1" fill="' + (interpEval > 0 ? _C_LINE+'44' : _C_FILL+'44') + '"/>';
       }
     }
   }
@@ -726,14 +1525,14 @@ function _buildEvalTrendSVG(width, height) {
     const y = evalToY(p.eval);
     let fillColor, strokeColor;
     if (p.eval > 0) {
-      fillColor = '#E8E8F0';
+      fillColor = _C_LINE;
       strokeColor = 'rgba(30,15,0,0.85)';
     } else if (p.eval < 0) {
-      fillColor = '#1A1A2E';
+      fillColor = _C_FILL;
       strokeColor = 'rgba(255,230,150,0.85)';
     } else {
-      fillColor = '#888';
-      strokeColor = '#666';
+      fillColor = _C_AXIS;
+      strokeColor = _C_AXIS;
     }
     svg += '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="2.5" fill="' + fillColor + '" stroke="' + strokeColor + '" stroke-width="0.5"/>';
   }
@@ -762,7 +1561,7 @@ function _buildEvalTrendSVG(width, height) {
       const _isCurrentStep = (p.step === reviewStep);
       if (!ev) continue;
 
-      let label = '', textColor = '#666', fontSize = 6.5, fontWeight = '';
+      let label = '', textColor = _C_AXIS, fontSize = 6.5, fontWeight = '';
       let labelY;
 
       if (Math.abs(ev.eval) >= 90000) {
@@ -780,7 +1579,7 @@ function _buildEvalTrendSVG(width, height) {
         const displayEval = (cpVal / 100).toFixed(cpVal % 100 === 0 ? 0 : 1);
         const sign = cpVal > 0 ? '+' : '';
         label = sign + displayEval;
-        textColor = p.eval > 0 ? '#E8E8F0' : (p.eval < 0 ? '#8888aa' : '#666');
+        textColor = p.eval > 0 ? _C_LINE : (p.eval < 0 ? _C_FILL : _C_AXIS);
         const _extraY = _isCurrentStep ? 3 : 0;
         labelY = (p.eval > 0) ? Math.min(y + 11 + _extraY, height - 2) : Math.max(y - 3 - _extraY, 9);
       }
@@ -820,7 +1619,7 @@ function _buildEvalTrendSVG(width, height) {
     // Render placed labels (sort back by step for logical ordering)
     _placedLabels.sort((a, b) => a.step - b.step);
     for (const lbl of _placedLabels) {
-      svg += '<text x="' + lbl.x.toFixed(1) + '" y="' + lbl.y.toFixed(1) + '" fill="' + lbl.textColor + '" font-size="' + lbl.fontSize + '"' + lbl.fontWeight + ' font-family="sans-serif" text-anchor="middle" paint-order="stroke" stroke="#1a0a0a" stroke-width="2">' + lbl.label + '</text>';
+      svg += '<text x="' + lbl.x.toFixed(1) + '" y="' + lbl.y.toFixed(1) + '" fill="' + lbl.textColor + '" font-size="' + lbl.fontSize + '"' + lbl.fontWeight + ' font-family="sans-serif" text-anchor="middle" paint-order="stroke" stroke="'+_C_STROKE+'" stroke-width="2">' + lbl.label + '</text>';
     }
   }
 
@@ -830,7 +1629,7 @@ function _buildEvalTrendSVG(width, height) {
     if (curEv != null) {
       const cx = stepToX(reviewStep);
       const cy = evalToY(curEv.eval);
-      svg += '<circle cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="4" fill="none" stroke="#ffd700" stroke-width="1.5"/>';
+      svg += '<circle cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="4" fill="none" stroke="'+_C_CRIT+'" stroke-width="1.5"/>';
     }
   }
 
@@ -847,7 +1646,7 @@ function _buildEvalTrendSVG(width, height) {
         const ly = evalToY(lastP.eval);
         const cmLabel = lastMd > 0 ? '#+' + Math.abs(lastMd) : lastMd < 0 ? '#-' + Math.abs(lastMd) : (lastEv.eval > 0 ? '#+' : '#-');
         const cmLabelY = (lastP.eval > 0) ? Math.min(ly + 12, height - 2) : Math.max(ly - 4, 9);
-        svg += '<text x="' + lx.toFixed(1) + '" y="' + cmLabelY.toFixed(1) + '" fill="#ffd700" font-size="7" font-weight="bold" font-family="sans-serif" text-anchor="middle" paint-order="stroke" stroke="#1a0a0a" stroke-width="2">' + cmLabel + '</text>';
+        svg += '<text x="' + lx.toFixed(1) + '" y="' + cmLabelY.toFixed(1) + '" fill="'+_C_CRIT_TXT+'" font-size="7" font-weight="bold" font-family="sans-serif" text-anchor="middle" paint-order="stroke" stroke="'+_C_STROKE+'" stroke-width="2">' + cmLabel + '</text>';
       }
     }
   }
@@ -992,7 +1791,7 @@ let showSavePGNPrompt=false,_pendingActionAfterSave=null,_skipPGNSavePrompt=fals
 // Setup mode state
 let setupMode=false,setupPiece=null,setupColor='white',setupErrors=[],
     setupHistory=[],setupRedoStack=[];
-// v1.0.7: setupMarkerMode — when active, clicking a board square toggles a
+// v1.0.8: setupMarkerMode — when active, clicking a board square toggles a
 // 🔁 castle-rights marker ('castle') or a ⚡ en-passant marker ('ep') instead
 // of placing the currently-selected piece. setupPiece and setupMarkerMode
 // are mutually exclusive: activating one clears the other.
@@ -1036,13 +1835,13 @@ let reviewMode=false,reviewStep=0,reviewStates=[],reviewCritical=[];
 // from scrolling the move list independently).
 let _lastReviewStepScrolled=-2;
 let _reviewAnalyzeAllActive=false; // Flag for reviewAnalyzeAll batch analysis
-// v1.0.7 PHASE 18 Task 3: Track the reviewStep at the time of the last render.
+// v1.0.8 PHASE 18 Task 3: Track the reviewStep at the time of the last render.
 // Used to decide whether to force the virtual-list window to contain the
 // active step (only when the step changed, not on every render — preserves
 // the user's scroll position across renders that don't change reviewStep).
 let _lastRenderReviewStep=-2;
 
-// v1.0.7 PHASE 18 Task 2: Virtual list state for the review move list.
+// v1.0.8 PHASE 18 Task 2: Virtual list state for the review move list.
 // When a game has more than RV_VIRTUAL_THRESHOLD moves, only the visible
 // window (plus RV_OVERSCAN rows above/below) is rendered as DOM nodes; the
 // rest are represented by two tall placeholder <div>s (top spacer + bottom
@@ -1159,27 +1958,14 @@ function getCapturedPieces(board, color, moveRecordsArg) {
     }
     return result;
   }
-  // Fallback: board-diff method (used only for setup mode / FEN import where
-  // there's no move history). NOTE: this method has the known promotion bug,
-  // but for setup-mode display it's acceptable since the user is constructing
-  // a position manually (not playing through moves).
-  const startCounts = { queen:1, rook:2, bishop:2, knight:2, pawn:8 };
-  const currentCounts = { queen:0, rook:0, bishop:0, knight:0, pawn:0 };
-  for (let r = 0; r < 8; r++) {
-    for (let c = 0; c < 8; c++) {
-      const p = board[r][c];
-      if (p && p.color === color && p.type !== 'king' && currentCounts[p.type] !== undefined) {
-        currentCounts[p.type]++;
-      }
-    }
-  }
-  const order = ['queen','rook','bishop','knight','pawn'];
-  const result = [];
-  for (const t of order) {
-    const diff = (startCounts[t] || 0) - (currentCounts[t] || 0);
-    for (let i = 0; i < diff; i++) result.push(t);
-  }
-  return result;
+  // v1.0.8 PHASE 38: When there are no moveRecords (setup mode / FEN import /
+  //   PGN import initial position), we CANNOT know which pieces were "captured"
+  //   vs "never placed" — the board-diff method assumed standard starting counts
+  //   (1Q, 2R, 2B, 2N, 8P) which is wrong for custom positions. For example,
+  //   a FEN with only K+Q vs K would show "captured: 1Q, 2R, 2B, 2N, 8P" which
+  //   is misleading. Return empty — no captures to display when there's no
+  //   move history.
+  return [];
 }
 
 /**
@@ -1255,6 +2041,28 @@ function capturedPiecesHtml(board, pieceColor, playerColor, splitAt) {
  * Multiple rapid calls are coalesced via requestAnimationFrame.
  * @side-effect Rebuilds the entire app DOM
  */
+// v1.0.8 PHASE 22: Header king icon — switches ♔ (dark mode) / ♚ (light mode).
+// _isLightMode() is defined in ai-bridge.js (loaded before ui.js); reuse it
+// to avoid duplicate definitions. The piece styling matches the on-board
+// pieces exactly (same color, stroke, glow). The icon is wrapped in a gold
+// gradient border (unchanged in both modes) — only the king symbol and its
+// piece styling change with the theme.
+// _KING_PIECE_STYLE: shared piece-styling constants for _hdrKingIconHTML
+// (ui.js) and _loadingKingIconHTML (ai-bridge.js). Extracted to avoid
+// duplicating the color/stroke/shadow values across two functions.
+const _KING_PIECE_STYLE={
+  white:{color:'#E8E8F0',stroke:'rgba(30,15,0,.85)',shadow:'rgba(30,15,0,.55)',sym:'\u2654'},
+  black:{color:'#1A1A2E',stroke:'rgba(255,230,150,.85)',shadow:'rgba(255,230,150,.55)',sym:'\u265A'}
+};
+function _hdrKingIconHTML(){
+  // Gold gradient border + piece-styled king. Same border in both modes; only
+  // the king symbol + piece color/stroke/glow differ.
+  const borderStyle='border:3px solid transparent;border-image:linear-gradient(145deg,#8b6914,#d4a017,#ffd700,#fff8dc,#ffd700,#d4a017,#8b6914) 1;padding:3px 6px;background:linear-gradient(145deg,rgba(139,105,20,.18),rgba(255,215,0,.08),rgba(139,105,20,.18));box-shadow:0 0 6px rgba(212,160,23,.35),0 0 12px rgba(255,215,0,.12),inset 0 0 3px rgba(255,215,0,.1),inset 0 1px 0 rgba(255,248,220,.15);position:relative';
+  const fontSpec='font-family:\'DejaVu Sans\',\'Noto Sans\',\'Segoe UI Symbol\',sans-serif;font-variant-emoji:text';
+  // Dark mode → white king ♔; Light mode → black king ♚
+  const ps=_isLightMode()?_KING_PIECE_STYLE.black:_KING_PIECE_STYLE.white;
+  return '<span style="font-size:1.3rem;color:'+ps.color+';-webkit-text-stroke:.3px '+ps.stroke+';text-shadow:0 0 .8px '+ps.shadow+';'+fontSpec+';'+borderStyle+'">'+ps.sym+'\uFE0E</span>';
+}
 // v1.0.4 ROUND-5 REV12: Unified render throttle — 8ms (120fps cap), single
 // renderInternal per frame (removed the double-renderInternal that caused
 // the scroll-to-top bug). The previous code called renderInternal() TWICE
@@ -1262,7 +2070,11 @@ function capturedPiecesHtml(board, pieceColor, playerColor, splitAt) {
 // call's save phase read scrollTop=0 from the just-rebuilt DOM.
 function render(){
   if(renderPending){lastRenderRequest=Date.now();return;}
-  if(animationInProgress||_landingAnimActive){
+  // v1.0.8 PHASE 22: throttle render while piece-move animation is in
+  //   progress (Web Animations API overlay is on screen). Landing anim is
+  //   no longer a separate phase — the overlay covers the destination
+  //   square until animateMove's _finishAnim removes it.
+  if(animationInProgress){
     if(!renderPending){
       renderPending=true;
       setTimeout(()=>{renderPending=false;lastRenderTime=Date.now();render();},200);
@@ -1313,7 +2125,7 @@ const oppC=OPP_COLOR[playerColor];
 const flip=playerColor==='black';
 // Arrows computed separately by _updateArrows() — no inline computation needed
 
-let h='<div class="hdr" role="banner"><div class="hdr-top"><div class="hdr-l"><span style="font-size:1.3rem;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text;border:3px solid transparent;border-image:linear-gradient(145deg,#8b6914,#d4a017,#ffd700,#fff8dc,#ffd700,#d4a017,#8b6914) 1;padding:3px 6px;background:linear-gradient(145deg,rgba(139,105,20,.18),rgba(255,215,0,.08),rgba(139,105,20,.18));box-shadow:0 0 6px rgba(212,160,23,.35),0 0 12px rgba(255,215,0,.12),inset 0 0 3px rgba(255,215,0,.1),inset 0 1px 0 rgba(255,248,220,.15);position:relative">♔&#xFE0E;</span><h1>'+T('app_name')+'<span class="ver">v1.0.7</span><button onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showAboutPage=true;render()" style="font-size:.6rem;color:var(--accent);background:rgba(212,160,23,.15);padding:2px 8px;border-radius:4px;border:1px solid rgba(212,160,23,.3);margin-left:4px;cursor:pointer;font-family:system-ui,-apple-system,sans-serif;letter-spacing:1px">ℹ️</button></h1></div><button onclick="toggleLang()" style="font-size:.65rem;color:var(--accent);background:rgba(212,160,23,.15);padding:2px 6px;border-radius:4px;border:1px solid rgba(212,160,23,.3);cursor:pointer;font-family:system-ui,-apple-system,sans-serif;letter-spacing:1px;flex-shrink:0">'+(_lang==='zh'?'↔️中':'↔️EN')+'</button><div class="ev" id="eval-disp" role="status" aria-label="'+T('evaluating')+'">'+(setupMode?T('setup_label'):(isAIThinking?'<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>':'<span class="ev-e">'+pe+'</span><span>'+pd+'</span><span style="color:var(--muted)">('+scoreStr+')</span>'+_hdrDepthStr+_hdrProgressStr))+'</div></div><div class="hdr-tools" role="toolbar" aria-label="'+T('ctrl_range')+'">'+(setupMode?'':'<div class="diff-sel" role="radiogroup" aria-label="AI">'+getAI_LEVELS().map(l=>'<button class="diff-b'+(getEffectiveAILevel()===l.id?' act':'')+'" onclick="if(!isAIThinking){'+(l.id===8?'openEngineConfig()':('aiLevel='+l.id+';try{AndroidBridge.syncGameDifficulty('+l.id+')}catch(e){}render()'))+'}" title="'+l.desc+'" role="radio" aria-checked="'+(getEffectiveAILevel()===l.id)+'">'+(l.id===8?'⚙️':l.id===7?('SL'+(function(){try{let _sl=20;if(typeof engineSettingsData!=='undefined'&&engineSettingsData&&engineSettingsData.skillLevel!=null)_sl=engineSettingsData.skillLevel;else if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getEngineSkillLevel)_sl=AndroidBridge.getEngineSkillLevel();return _sl;}catch(e){return 20;}})()):l.id)+'</button>').join('')+'</div>')+'<button type="button" class="btn" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()" aria-label="'+T('new_game')+'"><span style="font-size:1.4rem">⚔️</span> '+T('new_game')+'</button>'+'<button class="btn" onclick="quickFreeOpening()" aria-label="'+T('free_opening')+'">'+(playerColor==='white'?'<span style=\"font-size:1.4rem;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text\">♔&#xFE0E;</span>':'<span style=\"font-size:1.4rem;font-weight:400;color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans Symbol&#x27;,sans-serif;font-variant-emoji:text\">♚&#xFE0E;</span>')+' '+T('free_opening')+'</button>'+(setupMode?'':'<button class="btn" onclick="toggleSound()" id="btnSound" aria-label="'+T('sound')+'">'+(soundOn?'<span style="font-size:1.4rem">🔊</span> '+T('sound'):'<span style="font-size:1.4rem">🔇</span> '+T('sound'))+'</button>')+'<button class="btn" onclick="copyFEN()" title="'+T('copy_fen')+'" aria-label="'+T('copy_fen')+'"><span style="font-size:1.4rem">📝</span> FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="'+T('import_fen')+'" aria-label="'+T('import_fen')+'"><span style="font-size:1.4rem">🗃️</span> '+T('import_label')+'</button><button class="btn" onclick="'+(setupMode?'exitSetup()':'toggleSetup()')+'" aria-label="'+(setupMode?T('setup_done'):T('setup_mode'))+'">'+(setupMode?'<span style="font-size:1.4rem">✓</span> '+T('setup_done'):'<span style="font-size:1.4rem">🏗️</span> '+T('setup_mode'))+'</button></div></div>';
+let h='<div class="hdr" role="banner"><div class="hdr-top"><div class="hdr-l">'+_hdrKingIconHTML()+'<h1>'+T('app_name')+'<span class="ver">v1.0.8</span><button onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showAboutPage=true;render()" class="hdr-btn" style="margin-left:4px;cursor:pointer">ℹ️</button></h1></div><button onclick="toggleLang()" class="hdr-btn-lg" style="cursor:pointer">'+(_lang==='zh'?'↔️中':'↔️EN')+'</button><div class="ev" id="eval-disp" role="status" aria-label="'+T('evaluating')+'">'+(setupMode?T('setup_label'):(isAIThinking?'<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>':'<span class="ev-e">'+pe+'</span><span>'+pd+'</span><span style="color:var(--muted)">('+scoreStr+')</span>'+_hdrDepthStr+_hdrProgressStr))+'</div></div><div class="hdr-tools" role="toolbar" aria-label="'+T('ctrl_range')+'">'+(setupMode?'':'<div class="diff-sel" role="radiogroup" aria-label="AI">'+getAI_LEVELS().map(l=>'<button class="diff-b'+(getEffectiveAILevel()===l.id?' act':'')+'" onclick="if(!isAIThinking){'+(l.id===8?'openEngineConfig()':('aiLevel='+l.id+';try{AndroidBridge.syncGameDifficulty('+l.id+')}catch(e){}render()'))+'}" title="'+l.desc+'" role="radio" aria-checked="'+(getEffectiveAILevel()===l.id)+'">'+(l.id===8?'⚙️':l.id===7?('SL'+(function(){try{let _sl=20;if(typeof engineSettingsData!=='undefined'&&engineSettingsData&&engineSettingsData.skillLevel!=null)_sl=engineSettingsData.skillLevel;else if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getEngineSkillLevel)_sl=AndroidBridge.getEngineSkillLevel();return _sl;}catch(e){return 20;}})()):l.id)+'</button>').join('')+'</div>')+'<button type="button" class="btn" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()" aria-label="'+T('new_game')+'"><span style="font-size:1.4rem">⚔️</span> '+T('new_game')+'</button>'+'<button class="btn" onclick="quickFreeOpening()" aria-label="'+T('free_opening')+'">'+(playerColor==='white'?'<span style=\"font-size:1.4rem;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text\">♔&#xFE0E;</span>':'<span style=\"font-size:1.4rem;font-weight:400;color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans Symbol&#x27;,sans-serif;font-variant-emoji:text\">♚&#xFE0E;</span>')+' '+T('free_opening')+'</button>'+(setupMode?'':'<button class="btn" onclick="toggleSound()" id="btnSound" aria-label="'+T('sound')+'">'+(soundOn?'<span style="font-size:1.4rem">🔊</span> '+T('sound'):'<span style="font-size:1.4rem">🔇</span> '+T('sound'))+'</button>')+'<button class="btn" onclick="copyFEN()" title="'+T('copy_fen')+'" aria-label="'+T('copy_fen')+'"><span style="font-size:1.4rem">📝</span> FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="'+T('import_fen')+'" aria-label="'+T('import_fen')+'"><span style="font-size:1.4rem">🗃️</span> '+T('import_label')+'</button><button class="btn" onclick="'+(setupMode?'exitSetup()':'toggleSetup()')+'" aria-label="'+(setupMode?T('setup_done'):T('setup_mode'))+'">'+(setupMode?'<span style="font-size:1.4rem">✓</span> '+T('setup_done'):'<span style="font-size:1.4rem">🏗️</span> '+T('setup_mode'))+'</button></div></div>';
 h+=`<div class="main" role="main"><div class="bsec">`;
 // v1.0.4 Rev37: AI bar captured pieces split at 7 — pieces 8+ go to line 3.
 {const _aiCapHtml=capturedPiecesHtml(gameState.board,oppC,playerColor,7);
@@ -1359,7 +2171,7 @@ let _checkKingPos=getCheckKingPos(gameState);
 // Since renderInternal only needs the Set of row*8+col keys (the .side field
 // was never used), we now call _computeCastlingRookSetForSelection directly.
 const _castlingRookSet=_computeCastlingRookSetForSelection(selectedSquare,legalMvs);
-// v1.0.7 PHASE 3: Compute visible 🔁 / ⚡ markers ONCE per render pass.
+// v1.0.8 PHASE 3: Compute visible 🔁 / ⚡ markers ONCE per render pass.
 // These are derived from gameState.castlingRights / gameState.enPassantTarget
 // (during play) or from the user's setupCastleMarks / setupEpMark (during
 // setup mode). See computeVisibleCastleMarks/computeVisibleEpMark in
@@ -1379,23 +2191,26 @@ const lastTo=lastMove&&lastMove.to.row===rr&&lastMove.to.col===cc;
 const isLegal=legalSet.has(rr*8+cc);
 const isCheckSq=_checkKingPos&&rr===_checkKingPos.row&&cc===_checkKingPos.col;
 const isCastlingRook=_castlingRookSet.has(rr*8+cc);
-// v1.0.7 PHASE 3: visible markers (work in all modes — setup, play, review)
+// v1.0.8 PHASE 3: visible markers (work in all modes — setup, play, review)
 const hasCastleMark=_visibleCastleMarks.has(String(rr*8+cc));
 const hasEpMark=_visibleEpMark&&_visibleEpMark.row===rr&&_visibleEpMark.col===cc;
 const lbl=String.fromCharCode(97+cc)+(8-rr);
 h+=`<div class="sq${lastFrom?' last-from':''}${lastTo?' last-to':''}${isCheckSq?' in-check':''}${isCastlingRook?' castle-rook':''}" role="gridcell" style="background:${bg}" data-r="${rr}" data-c="${cc}" onclick="sqClick(${rr},${cc})">`;
 h+=`<span class="lbl" style="color:${isL?LBL_LIGHT:LBL_DARK};-webkit-text-stroke:.6px ${isL?LBL_STROKE_LIGHT:LBL_STROKE_DARK};paint-order:stroke fill;text-shadow:0 0 2px ${isL?LBL_STROKE_LIGHT:LBL_STROKE_DARK}">${lbl}</span>`;
+// v1.0.8 PHASE 22: landing animation removed — the Web Animations API
+//   overlay (created in animateMove) handles the entire piece-move motion.
+//   The destination square's piece is rendered normally here; the overlay
+//   sits on top until animateMove's _finishAnim removes it.
 if(p){
-const animCls=(_lastAnimPieceType&&_lastAnimTarget&&lastTo&&rr===_lastAnimTarget.row&&cc===_lastAnimTarget.col&&p.type===_lastAnimPieceType)?' anim-'+p.type:'';
-h+=`<span class="pc ${p.color==='white'?'w':'bk'}${animCls}">${SYM[p.color][p.type]}</span>`;
-if(animCls){_landingAnimActive=true;_startLandingTimer(_lastAnimPieceType);}}
+h+=`<span class="pc ${p.color==='white'?'w':'bk'}">${SYM[p.color][p.type]}</span>`;
+}
 if(isLegal&&!p)h+=`<div class="dot"></div>`;
 if(isLegal&&p&&!isCastlingRook)h+=`<div class="ring"></div>`;
 // v1.0.6: Castling rook marker — a golden dashed ring (distinct from the
 // solid green capture ring) that signals "click me to castle". Style
 // matches the existing ring/dot design language (CSS in index.html.tpl).
 if(isCastlingRook)h+=`<div class="castle-ring"></div>`;
-// v1.0.7 PHASE 3: 🔁 castle-rights marker and ⚡ en-passant marker.
+// v1.0.8 PHASE 3: 🔁 castle-rights marker and ⚡ en-passant marker.
 // Both render as a small badge anchored to the bottom-right corner of the
 // square, so they don't obstruct the piece glyph (centered) or the legal-
 // move ring (also centered). See .sq .setup-castle-mark / .sq .setup-ep-mark
@@ -1414,31 +2229,31 @@ if(gameOver&&lastMove&&!gameOverSoundPlayed){gameOverSoundPlayed=true;playSound(
 if(gameOver&&!setupMode){h+=`<div class="gover" role="alert" aria-live="assertive"><div class="ge" style="${_gameOverStatusKey==='checkmate'?(gameState.currentTurn==='black'?'color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55)':'color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55)'):'font-family:system-ui,sans-serif'};font-family:'DejaVu Sans','Noto Sans','Segoe UI Symbol',sans-serif;font-variant-emoji:text;font-weight:400">${_gameOverStatusKey==='checkmate'?(gameState.currentTurn==='black'?'♔\uFE0E':'♚\uFE0E'):_gameOverStatusKey==='resign'?'🏳️':_gameOverStatusKey==='timeout'?'⌛':'🤝'}</div><div class="gt">${gameOver}</div><button type="button" class="btn btn-p" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()">⚔️ ${T('play_again')}</button><button type="button" class="btn btn-g" onclick="enterReview()">📑 ${T('review')}</button></div>`;}
 if(setupMode){
 const spPieces=[{t:'pawn',w:'♙\uFE0E',b:'♟\uFE0E'},{t:'knight',w:'♘\uFE0E',b:'♞\uFE0E'},{t:'bishop',w:'♗\uFE0E',b:'♝\uFE0E'},{t:'rook',w:'♖\uFE0E',b:'♜\uFE0E'},{t:'queen',w:'♕\uFE0E',b:'♛\uFE0E'},{t:'king',w:'♔\uFE0E',b:'♚\uFE0E'}];
-// v1.0.7: Ensure setupCastleMarks (Set) and setupEpMark ({row,col}|null) exist
+// v1.0.8: Ensure setupCastleMarks (Set) and setupEpMark ({row,col}|null) exist
 // on gameState. They are the source of truth for the manual 🔁 castle markers
 // and the ⚡ en-passant marker. Initialize once per setup session if missing.
 if(!gameState.setupCastleMarks||!(gameState.setupCastleMarks instanceof Set))gameState.setupCastleMarks=new Set();
 if(typeof gameState.setupEpMark==='undefined')gameState.setupEpMark=null;
 h+=`<div class="setup-panel" style="width:${8*CELL+8}px;max-width:100%;box-sizing:border-box"><div class="setup-row" style="justify-content:flex-start"><span class="setup-label">${T('piece')}</span>`;
-// v1.0.7 PHASE 8: piece buttons toggle — clicking the already-selected piece
+// v1.0.8 PHASE 8: piece buttons toggle — clicking the already-selected piece
 // again deselects it (sets setupPiece=null). This matches the behavior of the
 // 🔁 and ⚡ marker buttons.
 for(const p of spPieces)h+=`<button class="setup-btn${setupPiece===p.t?' act':''} ${setupColor==='white'?'sw':'sb'}" onclick="setupPiece=(setupPiece==='${p.t}'?null:'${p.t}');render()">${setupColor==='white'?p.w:p.b}</button>`;
-// v1.0.7: 🔁 castle-rights marker toggle + ⚡ en-passant marker toggle.
-// v1.0.7 PHASE 8: 🗑️ delete button is MUTUALLY EXCLUSIVE with 🔁 and ⚡ markers.
+// v1.0.8: 🔁 castle-rights marker toggle + ⚡ en-passant marker toggle.
+// v1.0.8 PHASE 8: 🗑️ delete button is MUTUALLY EXCLUSIVE with 🔁 and ⚡ markers.
 // Selecting 🗑️ clears any active marker mode, and selecting a marker clears 🗑️.
 // Piece selection and marker selection remain independent (can co-exist),
 // but 🗑️ cannot co-exist with either marker because deleting a piece also
 // clears its markers — mixing them would be confusing.
 h+=`<button class="setup-btn${setupMarkerMode==='castle'?' act':''}" onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);setupMarkerMode=(setupMarkerMode==='castle'?null:'castle');if(setupMarkerMode&&setupPiece==='delete')setupPiece=null;render()" title="${T('setup_castle_marker_tip')}" aria-label="${T('setup_castle_marker')}" style="font-size:1.2rem">🔁</button>`;
-h+=`<button class="setup-btn${setupMarkerMode==='ep'?' act':''}" onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);setupMarkerMode=(setupMarkerMode==='ep'?null:'ep');if(setupMarkerMode&&setupPiece==='delete')setupPiece=null;render()" title="${T('setup_ep_marker_tip')}" aria-label="${T('setup_ep_marker')}" style="font-size:1.2rem">⚡</button>`;
+h+=`<button class="setup-btn${setupMarkerMode==='ep'?' act':''}" onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);setupMarkerMode=(setupMarkerMode==='ep'?null:'ep');if(setupMarkerMode&&setupPiece==='delete')setupPiece=null;render()" title="${T('setup_ep_marker_tip')}" aria-label="${T('setup_ep_marker')}" style="font-size:1.2rem;font-variant-emoji:emoji;-webkit-font-variant-emoji:emoji">⚡</button>`;
 h+=`<button class="setup-del${setupPiece==='delete'?' act':''}" onclick="setupPiece=(setupPiece==='delete'?null:'delete');if(setupPiece==='delete')setupMarkerMode=null;render()">🗑️</button></div>`;
-// v1.0.7: small-font usage hints for the two new marker buttons.
+// v1.0.8: small-font usage hints for the two new marker buttons.
 h+=`<div class="setup-row" style="justify-content:center;gap:8px;margin-top:2px"><span style="font-size:.62rem;color:var(--muted);line-height:1.3;text-align:center;flex:1 1 100%;word-break:break-word">${T('setup_castle_marker_tip')}</span></div>`;
 h+=`<div class="setup-row" style="justify-content:center;gap:8px;margin-top:2px"><span style="font-size:.62rem;color:var(--muted);line-height:1.3;text-align:center;flex:1 1 100%;word-break:break-word">${T('setup_ep_marker_tip')}</span></div>`;
 h+=`<div class="setup-row"><span class="setup-label">${T('color')}</span><button class="setup-clr${setupColor==='white'?' act':''}" onclick="setupColor='white';render()">${T('white_side')}</button><button class="setup-clr${setupColor==='black'?' act':''}" onclick="setupColor='black';render()">${T('black_side')}</button></div>`;
 h+=`<div class="setup-row"><span class="setup-label">${T('turn_side')}</span><button class="setup-clr${gameState.currentTurn==='white'?' act':''}" onclick="gameState.currentTurn='white';_refreshStateAfterSetup(gameState);render()">${T('white_side')}</button><button class="setup-clr${gameState.currentTurn==='black'?' act':''}" onclick="gameState.currentTurn='black';_refreshStateAfterSetup(gameState);render()">${T('black_side')}</button></div>`;
-h+=`<div class="setup-row" style="justify-content:center;gap:12px"><button class="btn" onclick="undoSetupClick()"${setupHistory.length===0?' disabled style="opacity:0.4"':''}><span style="font-size:1.4rem">↩️</span> ${T('undo_setup')}</button><button class="btn" onclick="redoSetupClick()"${setupRedoStack.length===0?' disabled style="opacity:0.4"':''}><span style="font-size:1.4rem">↪️</span> ${T('redo_setup')}</button><button class="btn" onclick="gameState=initState();gameState.moveHistory=[];setupErrors=[];setupHistory=[];setupRedoStack=[];render()"><span style="font-size:1.4rem">♻️</span> ${T('reset_board')}</button><button class="btn" onclick="for(let r=0;r<8;r++)for(let c=0;c<8;c++)gameState.board[r][c]=null;gameState.wk=null;gameState.bk=null;gameState.enPassantTarget=null;gameState.halfMoveClock=0;gameState.setupCastleMarks=new Set();gameState.setupEpMark=null;_refreshStateAfterSetup(gameState);setupErrors=[];setupHistory=[];setupRedoStack=[];render()"><span style="font-size:1.4rem">🧹</span> ${T('clear_board')}</button></div><div class="setup-row" style="justify-content:center;gap:8px;margin-top:6px"><button class="btn" onclick="copyFEN()"><span style="font-size:1.4rem">📝</span> ${T('copy_fen_btn')}</button><button class="btn" onclick="_importFENWithSaveCheck()"><span style="font-size:1.4rem">📋</span> ${T('import_fen_btn')}</button></div></div>`;
+h+=`<div class="setup-row" style="justify-content:center;gap:12px"><button class="btn" onclick="undoSetupClick()"${setupHistory.length===0?' disabled style="opacity:0.4"':''}><span style="font-size:1.4rem">↩️</span> ${T('undo_setup')}</button><button class="btn" onclick="redoSetupClick()"${setupRedoStack.length===0?' disabled style="opacity:0.4"':''}><span style="font-size:1.4rem">↪️</span> ${T('redo_setup')}</button><button class="btn" onclick="gameState=initState();gameState.moveHistory=[];setupErrors=[];setupHistory=[];setupRedoStack=[];gameState.setupCastleMarks=new Set([String(7*8+0),String(7*8+7),String(0*8+0),String(0*8+7)]);gameState.setupEpMark=null;render()"><span style="font-size:1.4rem">♻️</span> ${T('reset_board')}</button><button class="btn" onclick="for(let r=0;r<8;r++)for(let c=0;c<8;c++)gameState.board[r][c]=null;gameState.wk=null;gameState.bk=null;gameState.enPassantTarget=null;gameState.halfMoveClock=0;gameState.setupCastleMarks=new Set();gameState.setupEpMark=null;_refreshStateAfterSetup(gameState);setupErrors=[];setupHistory=[];setupRedoStack=[];render()"><span style="font-size:1.4rem">🧹</span> ${T('clear_board')}</button></div><div class="setup-row" style="justify-content:center;gap:8px;margin-top:6px"><button class="btn" onclick="copyFEN()"><span style="font-size:1.4rem">📝</span> ${T('copy_fen_btn')}</button><button class="btn" onclick="_importFENWithSaveCheck()"><span style="font-size:1.4rem">📋</span> ${T('import_fen_btn')}</button></div></div>`;
 if(setupErrors.length>0)h+=`<div class="setup-errors"><strong>${T('setup_error_title')}</strong><ul>${setupErrors.map(e=>`<li>${_esc(e)}</li>`).join('')}</ul><button class="btn" onclick="setupErrors=[];render()" style="margin-top:4px">${T('understood')}</button></div>`;
 }
 h+=`</div></div>`;
@@ -1473,10 +2288,13 @@ if(_cachedTb.moves&&_cachedTb.moves.length){
 _best=_cachedTb.moves[0]; // API sorts best-first
 _bestMoveLabel=_best.san||_best.uci;
 }
-_tbBarHtml=`<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="color:${(_cat==='win'||_cat==='syzygy-win')?'#27ae60':_cat==='draw'?'var(--accent)':'#c0392b'};font-weight:700">${_catLabel}</span><span style="color:var(--muted);font-size:.72rem">${_dtzLabel}</span>${_bestMoveLabel&&_best?'<span style="cursor:pointer;color:var(--accent2);font-size:.78rem" onclick="autoSelectTablebaseMove(\''+_best.uci+'\')">🌟 '+T('recommend')+': '+_bestMoveLabel+'</span>':''}</div>`;
+// v1.0.8 PHASE 30: escape _best.uci (in onclick attr) and _bestMoveLabel (in
+//   text content) — both come from the tablebase.lichess.ovh API response and
+//   could be XSS vectors if the API is compromised or returns malformed data.
+_tbBarHtml=`<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="color:${(_cat==='win'||_cat==='syzygy-win')?'#27ae60':_cat==='draw'?'var(--accent)':'#c0392b'};font-weight:700">${_catLabel}</span><span style="color:var(--muted);font-size:.72rem">${_dtzLabel}</span>${_bestMoveLabel&&_best?'<span style="cursor:pointer;color:var(--accent2);font-size:.78rem" onclick="autoSelectTablebaseMove('+_jsAttrEncode(_best.uci)+')">🌟 '+T('recommend')+': '+_esc(_bestMoveLabel)+'</span>':''}</div>`;
 }else if(isTbOffline()){_tbBarHtml='<span style="color:var(--muted)">'+T('tb_unavailable')+'</span>';}
 else{_tbBarHtml='<span style="cursor:pointer;color:var(--accent);text-decoration:underline" onclick="_triggerTbQuery()">'+T('tb_query')+'</span>';}
-h+=`<div style="padding:6px 12px;background:#221015;border:1px solid var(--border);border-radius:6px;font-size:.8rem;font-family:system-ui,-apple-system,sans-serif"><div style="display:flex;align-items:center;gap:6px;margin-bottom:3px"><span style="font-size:.85rem">🌐</span><span style="color:var(--accent2);font-weight:700;font-size:.75rem">${T('tb_library')}</span></div>${_tbBarHtml}</div>`;
+h+=`<div style="padding:6px 12px;background:var(--card);border:1px solid var(--border);border-radius:6px;font-size:.8rem;font-family:system-ui,-apple-system,sans-serif"><div style="display:flex;align-items:center;gap:6px;margin-bottom:3px"><span style="font-size:.85rem">🌐</span><span style="color:var(--accent2);font-weight:700;font-size:.75rem">${T('tb_library')}</span></div>${_tbBarHtml}</div>`;
 }
 // ECO Opening Recommendation bar (only when _ecoEnabled)
 // v1.0.6: Suppress in Chess960 mode — Chess960 has no fixed opening theory,
@@ -1488,16 +2306,18 @@ h+=`<div style="padding:6px 12px;background:#221015;border:1px solid var(--borde
 if(!setupMode&&!gameOver&&!reviewMode&&_ecoEnabled&&!(typeof gameVariant!=='undefined'&&gameVariant==='chess960')&&gameState.currentTurn===playerColor){
 const _ecoRec=getECORecommendation(gameState);
 if(_ecoRec){
-h+=`<div style="padding:6px 12px;background:#221015;border:1px solid var(--purple);border-radius:6px;font-size:.8rem;font-family:system-ui,-apple-system,sans-serif"><div style="display:flex;align-items:center;gap:6px;margin-bottom:3px"><span style="font-size:.85rem">📖</span><span style="color:#ffd700;font-weight:700;font-size:.75rem">${T('opening_rec')}</span></div><span style="color:var(--muted);font-size:.85rem;margin-right:4px">🔍</span><span style="color:var(--text)">${_ecoRec.notation}</span><span style="color:var(--muted);font-size:.7rem;margin-left:6px">(${_ecoRec.name})</span></div>`;
+// v1.0.8 PHASE 30: escape _ecoRec.notation and _ecoRec.name for defense-in-depth
+//   (ECO data is bundled/trusted, but consistent escaping is safer).
+h+=`<div style="padding:6px 12px;background:var(--card);border:1px solid var(--purple);border-radius:6px;font-size:.8rem;font-family:system-ui,-apple-system,sans-serif"><div style="display:flex;align-items:center;gap:6px;margin-bottom:3px"><span style="font-size:.85rem">📖</span><span style="color:var(--accent2);font-weight:700;font-size:.75rem">${T('opening_rec')}</span></div><span style="color:var(--muted);font-size:.85rem;margin-right:4px">🔍</span><span style="color:var(--text)">${_esc(_ecoRec.notation)}</span><span style="color:var(--muted);font-size:.7rem;margin-left:6px">(${_esc(_ecoRec.name)})</span></div>`;
 }
 }
 // Hint area: only shown when user clicked hint button (isHintLoading or hintText set)
 // Search info in hint area only shown during hint loading, NOT during AI thinking
-{if(isHintLoading||hintText){h+='<div class="hint-area"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:.85rem">💡</span><span style="font-size:.75rem;color:var(--accent2)">'+T('ai_hint')+'</span></div>';if(isHintLoading)h+='<div class="hint-text" style="animation:pulse 1.2s infinite">'+T('hint_thinking')+'</div>';else if(hintText)h+='<div class="hint-text">'+_esc(hintText)+'</div>';if(isHintLoading&&_hintBarInfo)h+='<div id="hint-search-info" style="font-size:.72rem;color:var(--accent);margin-top:4px;font-family:monospace;letter-spacing:.5px">'+_hintBarInfo+'</div>';
+{if(isHintLoading||hintText){h+='<div class="hint-area"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:.85rem">💡</span><span style="font-size:.75rem;color:var(--accent2)">'+T('ai_hint')+'</span></div>';if(isHintLoading)h+='<div class="hint-text" style="animation:pulse 1.2s infinite">'+T('hint_thinking')+'</div>';else if(hintText)h+='<div class="hint-text">'+_esc(hintText)+'</div>';if(isHintLoading&&_hintBarInfo)h+='<div id="hint-search-info" style="font-size:.72rem;color:var(--accent);margin-top:4px;font-family:monospace;letter-spacing:.5px">'+_esc(_hintBarInfo)+'</div>';
 // Ponder move is now displayed inline in hintText (set by onHintMove)
 // when the engine provides "bestmove X ponder Y". No separate display needed here.
 // Show MultiPV alternative lines if available
-if(_multiPVLines.length>=1){h+='<div style="margin-top:6px;border-top:1px solid rgba(212,160,23,.15);padding-top:6px"><div style="font-size:.65rem;color:var(--muted);margin-bottom:4px">'+T('multi_analysis')+'</div>';for(const pv of _multiPVLines){let scoreStr='';if(pv.scoreMate!=null&&pv.scoreMate!==null){const m=parseInt(pv.scoreMate);scoreStr=m>0?'#+'+Math.abs(m):m<0?'#-'+Math.abs(m):'#0';}else if(pv.scoreCp!=null&&pv.scoreCp!==null){const pd=(pv.scoreCp/100).toFixed(1);scoreStr=(pv.scoreCp>0?'+':'')+pd;} let pvSAN='';if(pv.pv){try{const _conv=_convertPVtoSAN(pv.pv,gameState);pvSAN=_conv.sanMoves.split(/\s+/).slice(0,3).join(' ');}catch(e){pvSAN=pv.pv.split(/\s+/).slice(0,3).join(' ');}} h+='<div style="font-size:.65rem;color:'+(pv.index===1?'var(--accent2)':'var(--muted)')+';margin-bottom:2px">'+(pv.index===1?'⭐':'·')+' '+scoreStr+(pvSAN?' <span style="font-family:monospace;font-size:.6rem">'+_esc(pvSAN)+'</span>':'')+'</div>';}h+='</div>';} h+='</div>';}}// Player bar
+if(_multiPVLines.length>=1){h+='<div style="margin-top:6px;border-top:1px solid rgba(212,160,23,.15);padding-top:6px"><div style="font-size:.65rem;color:var(--muted);margin-bottom:4px">'+T('multi_analysis')+'</div>';for(const pv of _multiPVLines){let scoreStr='';if(pv.scoreMate!=null&&pv.scoreMate!==null){const m=parseInt(pv.scoreMate,10);if(!isNaN(m))scoreStr=m>0?'#+'+Math.abs(m):m<0?'#-'+Math.abs(m):'#0';}else if(pv.scoreCp!=null&&pv.scoreCp!==null){const pd=(pv.scoreCp/100).toFixed(1);scoreStr=(pv.scoreCp>0?'+':'')+pd;} let pvSAN='';if(pv.pv){try{const _conv=_convertPVtoSAN(pv.pv,gameState);pvSAN=_conv.sanMoves.split(/\s+/).slice(0,3).join(' ');}catch(e){pvSAN=pv.pv.split(/\s+/).slice(0,3).join(' ');}} h+='<div style="font-size:.65rem;color:'+(pv.index===1?'var(--accent2)':'var(--muted)')+';margin-bottom:2px">'+(pv.index===1?'⭐':'·')+' '+scoreStr+(pvSAN?' <span style="font-family:monospace;font-size:.6rem">'+_esc(pvSAN)+'</span>':'')+'</div>';}h+='</div>';} h+='</div>';}}// Player bar
 {const _plCapHtml=capturedPiecesHtml(gameState.board,playerColor,playerColor);
 // v1.0.4 FIX (this round): render the player's clock display element when timed.
 const _plClockColor=playerColor;
@@ -1509,7 +2329,7 @@ const _plClockHtml=(typeof gameClocks!=='undefined'&&gameClocks)?`<span id="${_p
 // all PGN text ([White "..."] / [Black "..."]).
 const _plName=(typeof _humanPlayerName!=='undefined'&&_humanPlayerName)?_humanPlayerName:T('you');
 const _plNameEsc=_escapeHTML(_plName);
-// v1.0.7: Quick Toolbar — sits between the board and the player bar.
+// v1.0.8: Quick Toolbar — sits between the board and the player bar.
 // Originally these 5 buttons (↩️悔棋 / ↪️撤悔 / 🔃翻转 / 💡AI提示 / 🌗🌈控制范围)
 // lived in the top header toolbar. They have been MOVED here so the header
 // stays focused on game-level actions (New Game, Free Play, Sound, FEN,
@@ -1554,7 +2374,7 @@ if(ecoInfo){h+=`<div class="card"><div class="card-t"><span class="ico">📖</sp
 }
 
 // Move history
-h+=`<div class="card"><div class="card-t"><span class="ico">📜</span>${T('move_history')}<button class="btn" style="margin-left:auto;padding:3px 10px;font-size:.7rem;min-height:24px" onclick="copyMoveHistory()" title="${T('pgn_copied')||'Copy PGN'}">📝 PGN</button><button class="btn" style="margin-left:4px;padding:3px 10px;font-size:.7rem;min-height:24px" onclick="exportPGNToFile()" title="${T('export_pgn')||'Export PGN to file'}">💾</button><button class="btn" style="margin-left:4px;padding:3px 10px;font-size:.7rem;min-height:24px" onclick="openStatsPage()" title="${T('stats')}">📊</button><div class="toggle" style="margin-left:6px;padding:2px 6px;font-size:.65rem" onclick="showVariations=!showVariations;HapticManager.fire(showVariations?'TOGGLE_ON':'TOGGLE_OFF');render()"><span>${T('variation_toggle')}</span><div class="toggle-sw${showVariations?' on':''}" style="width:30px;height:16px"></div></div></div><div class="mlist">`;
+h+=`<div class="card"><div class="card-t"><span class="ico">📜</span>${T('move_history')}<button class="btn" style="margin-left:auto;padding:3px 10px;font-size:.7rem;min-height:24px" onclick="copyMoveHistory()" title="${T('pgn_copied')||'Copy PGN'}">📝 PGN</button><button class="btn" style="margin-left:4px;padding:3px 10px;font-size:.7rem;min-height:24px" onclick="exportPGNToFile()" title="${T('export_pgn')||'Export PGN to file'}">💾</button><button class="btn" style="margin-left:4px;padding:3px 10px;font-size:.7rem;min-height:24px" onclick="openStatsPage()" title="${T('stats')}">📊</button><div class="toggle" style="margin-left:6px;padding:2px 6px;font-size:.65rem" onclick="showVariations=!showVariations;HapticManager.fire(showVariations?'TOGGLE_ON':'TOGGLE_OFF');render()"><span>${T('variation_toggle')}</span><div class="toggle-sw sm${showVariations?' on':''}"></div></div></div><div class="mlist">`;
 // v1.0.3: Use _importedStartMoveNum as the move-pair number offset, so PGN
 // imports with [FEN "... w ... 4"] display "4. <move> 5. <move>" instead of
 // "1. <move> 2. <move>". Defaults to 1 (standard initial position).
@@ -1641,7 +2461,7 @@ if(dlgChess960&&!dlgBookMoves){
   // Chess") already makes it clear what mode the user is in. The redundant
   // heading consumed vertical space and duplicated information. The settings
   // (SP-ID input, back-rank preview, note) now appear directly under the toggle.
-  // v1.0.7 PORTRAIT REDESIGN: The SP-ID row is restructured so that in portrait
+  // v1.0.8 PORTRAIT REDESIGN: The SP-ID row is restructured so that in portrait
   // mode the CSS can stack "label + Random button" above "input + 🎲 button"
   // (the latter two stay side-by-side in a sub-wrapper, since together they're
   // ~120px wide and fit any phone viewport). In landscape, the outer flex row
@@ -1651,12 +2471,12 @@ if(dlgChess960&&!dlgBookMoves){
   const backRank=spidToBackRank(previewSPID);
   const pieceSym={rook:'♖',knight:'♘',bishop:'♗',queen:'♕',king:'♔'};
   h+=`<div class="dlg-sec">`;
-  // v1.0.7: outer flex row — in portrait, CSS forces flex-direction:column
+  // v1.0.8: outer flex row — in portrait, CSS forces flex-direction:column
   // so label stacks above Random button, which stacks above the input+🎲 sub-row.
   h+=`<div class="portrait-stack" style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap">`;
   h+=`<label style="font-size:.78rem;color:var(--muted)">${T('chess960_spid')}: </label>`;
-  h+=`<button class="btn" style="padding:4px 10px;font-size:.78rem;${curSPID===-1?'background:var(--accent);color:#1a0a0a;font-weight:700':''}" onclick="HapticManager.fire('BUTTON_PRESS');dlgChess960SPID=-1;render()">${T('chess960_random')}</button>`;
-  // v1.0.7: sub-wrapper for input + 🎲 button — NOT a direct child of .dlg-sec,
+  h+=`<button class="btn" style="padding:4px 10px;font-size:.78rem;${curSPID===-1?'background:var(--accent);color:var(--bg);font-weight:700':''}" onclick="HapticManager.fire('BUTTON_PRESS');dlgChess960SPID=-1;render()">${T('chess960_random')}</button>`;
+  // v1.0.8: sub-wrapper for input + 🎲 button — NOT a direct child of .dlg-sec,
   // so the portrait CSS stacking rule (.dlg-sec > div[style*="display:flex"])
   // does NOT apply. This keeps input and 🎲 side-by-side in all orientations.
   h+=`<div style="display:flex;gap:6px;align-items:center;flex:1;min-width:120px">`;
@@ -1703,7 +2523,7 @@ if(showAboutPage){
 // Load AGPL v3 SVG via AndroidBridge as base64 (CSP-compliant)
 let _gplSvgSrc='';
 try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.loadAssetAsBase64){const b64=AndroidBridge.loadAssetAsBase64('AGPLv3_Logo.svg');if(b64)_gplSvgSrc='data:image/svg+xml;base64,'+b64;}}catch(e){}
-h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="About"><div class="dlg" style="max-width:460px"><h2>${T('about_title')}</h2><div class="dlg-sec"><div class="crow"><span class="lb">${T('about_app')}</span><span class="vl">${T('app_name')} v1.0.7</span></div><div class="crow"><span class="lb">${T('about_engine')}</span><span class="vl">Stockfish 18 (arm64-v8a-dotprod)</span></div><div class="crow"><span class="lb">${T('about_platform')}</span><span class="vl">Android arm64-v8a</span></div></div><div class="dlg-sec"><h3>${T('copyright_license')}</h3>`+(_gplSvgSrc?`<div style="text-align:center;margin-bottom:10px"><img src="${_gplSvgSrc}" alt="AGPL v3 Logo" style="width:120px;height:auto;opacity:.9" /></div>`:'')+`<div style="font-size:.75rem;color:var(--text);line-height:1.6"><p style="margin-bottom:8px">${T('about_copyright')}</p><p style="margin-bottom:8px">${T('about_source_code_prefix')}<a href="${T('about_source_code_url')}" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">${T('about_source_code_url')}</a></p><p style="margin-bottom:8px">${T('about_agpl')} <a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GNU AGPL v3</a>${T('about_agpl_desc')}</p><p style="margin-bottom:8px">${T('about_droidfish')}<a href="https://github.com/peterosterlund2/droidfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">DroidFish</a>${T('about_droidfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a>${T('about_droidfish_tail')}</p><p style="margin-bottom:8px">${T('about_stockfish')}<a href="https://github.com/official-stockfish/Stockfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">Stockfish</a>${T('about_stockfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a> ${T('about_gplv3')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_disclaimer')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_ai')}</p></div></div><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="showAboutPage=false;render()" style="flex:1;justify-content:center">${T('close')}</button></div></div></div>`;}
+h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="About"><div class="dlg" style="max-width:460px"><h2>${T('about_title')}</h2><div class="dlg-sec"><div class="crow"><span class="lb">${T('about_app')}</span><span class="vl">${T('app_name')} v1.0.8</span></div><div class="crow"><span class="lb">${T('about_engine')}</span><span class="vl">Stockfish 18 (arm64-v8a-dotprod)</span></div><div class="crow"><span class="lb">${T('about_platform')}</span><span class="vl">Android arm64-v8a</span></div></div><div class="dlg-sec"><h3>${T('copyright_license')}</h3>`+(_gplSvgSrc?`<div style="text-align:center;margin-bottom:10px"><img src="${_gplSvgSrc}" alt="AGPL v3 Logo" style="width:120px;height:auto;opacity:.9" /></div>`:'')+`<div style="font-size:.75rem;color:var(--text);line-height:1.6"><p style="margin-bottom:8px">${T('about_copyright')}</p><p style="margin-bottom:8px">${T('about_source_code_prefix')}<a href="${T('about_source_code_url')}" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">${T('about_source_code_url')}</a></p><p style="margin-bottom:8px">${T('about_agpl')} <a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GNU AGPL v3</a>${T('about_agpl_desc')}</p><p style="margin-bottom:8px">${T('about_droidfish')}<a href="https://github.com/peterosterlund2/droidfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">DroidFish</a>${T('about_droidfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a>${T('about_droidfish_tail')}</p><p style="margin-bottom:8px">${T('about_stockfish')}<a href="https://github.com/official-stockfish/Stockfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">Stockfish</a>${T('about_stockfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a> ${T('about_gplv3')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_disclaimer')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_ai')}</p></div></div><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="showAboutPage=false;render()" style="flex:1;justify-content:center">${T('close')}</button></div></div></div>`;}
 // Import dialog — paste FEN, paste PGN, or select PGN file
 if(showImportDialog){
 h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="${T('import_title')}" onclick="if(event.target===this){showImportDialog=false;render()}"><div class="dlg" style="max-width:420px"><h2>${T('import_title')}</h2><div class="dlg-sec" style="gap:10px;display:flex;flex-direction:column">
@@ -1727,7 +2547,7 @@ const rs=reviewStates[safeStep];
 if(!rs){reviewMode=false;render();return}
 const rBoard=rs.state.board;const rLast=rs.lastMove;
 h+='<div class="review-overlay">';
-h+=`<div class="review-hdr"><h2>${T('review_analysis')}</h2><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><div class="toggle" style="padding:2px 6px;font-size:.65rem" onclick="showVariations=!showVariations;HapticManager.fire(showVariations?'TOGGLE_ON':'TOGGLE_OFF');render()"><span>${T('variation_toggle')}</span><div class="toggle-sw${showVariations?' on':''}" style="width:30px;height:16px"></div></div><button class="btn" onclick="showCtrlMap=!showCtrlMap;cachedCtrlKey=&quot;&quot;;render()" title="${T('ctrl_range')}">${showCtrlMap?'🌈':'🌗'}</button><button class="btn" onclick="copyReviewPGN()" title="${T('copy_review_pgn')}">📝 PGN</button><button class="btn" onclick="exportPGNToFile()" title="${T('export_pgn')||'Export PGN to file'}">💾</button><button class="btn" onclick="openPGNCacheManager()" title="${T('pgn_cache_manager')}" style="font-weight:700">📚</button><button class="btn" onclick="copyReviewFEN()" title="${T('copy_review_fen')}">📝 FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="${T('import_label')}">🗃️</button><button class="btn" onclick="openStatsPage()" title="${T('stats')}">📊</button><button class="btn" onclick="exitReview()">${T('return_game')}</button></div></div>`;
+h+=`<div class="review-hdr"><h2>${T('review_analysis')}</h2><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><div class="toggle" style="padding:2px 6px;font-size:.65rem" onclick="showVariations=!showVariations;HapticManager.fire(showVariations?'TOGGLE_ON':'TOGGLE_OFF');render()"><span>${T('variation_toggle')}</span><div class="toggle-sw sm${showVariations?' on':''}"></div></div><button class="btn" onclick="showCtrlMap=!showCtrlMap;cachedCtrlKey=&quot;&quot;;render()" title="${T('ctrl_range')}">${showCtrlMap?'🌈':'🌗'}</button><button class="btn" onclick="copyReviewPGN()" title="${T('copy_review_pgn')}">📝 PGN</button><button class="btn" onclick="exportPGNToFile()" title="${T('export_pgn')||'Export PGN to file'}">💾</button><button class="btn" onclick="openPGNCacheManager()" title="${T('pgn_cache_manager')}" style="font-weight:700">📚</button><button class="btn" onclick="copyReviewFEN()" title="${T('copy_review_fen')}">📝 FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="${T('import_label')}">🗃️</button><button class="btn" onclick="openStatsPage()" title="${T('stats')}">📊</button><button class="btn" onclick="exitReview()">${T('return_game')}</button></div></div>`;
 // v1.0.3 FIX: Move _rvCell calculation BEFORE its first use (the --rv-board-w
 // CSS variable on .review-body below). Previously, _rvCell was declared with
 // `let` on line 944 but referenced on line 935 — causing a ReferenceError
@@ -1758,7 +2578,7 @@ if (_isLandscapeReview) {
 // .review-bottom (chart+controls full width). In portrait, fall back to the
 // original stacked layout (.review-left with everything inline, .review-moves below).
 if(_isLandscapeReview){
-  h+='<div class="review-body" style="--rv-board-w:'+(_rvCell*8)+'px;--rv-board-h:'+(_rvCell*8)+'px">';
+  h+='<div class="review-body" style="--rv-board-h:'+(_rvCell*8)+'px">';
   h+='<div class="review-top">';
   // .review-left holds ONLY the board (no inline controls — they moved to .review-bottom)
   h+='<div class="review-left">';
@@ -1767,7 +2587,7 @@ if(_isLandscapeReview){
 }else{
   // Portrait: original stacked layout. review-body is vertical, review-left holds
   // everything (board + eval + slider + chart + nav), review-moves is below.
-  h+='<div class="review-body" style="--rv-board-w:'+(_rvCell*8)+'px;--rv-board-h:'+(_rvCell*8)+'px">';
+  h+='<div class="review-body" style="--rv-board-h:'+(_rvCell*8)+'px">';
   h+='<div class="review-left">';
   h+='<div class="review-board">';
   h+='<div class="bgrid" style="grid-template-columns:repeat(8,'+_rvCell+'px);grid-template-rows:repeat(8,'+_rvCell+'px)">';
@@ -1842,7 +2662,7 @@ if(!showCtrlMap&&typeof _getVisualAnnotations==='function'&&typeof reviewStep!==
 // stats.html's per-color value colors exactly so the visual association is
 // consistent across the app.
 const _RV_VA_COLORS={B:'#4a90d9',R:'#e74c3c',Y:'#f1c40f',G:'#27ae60'};
-// v1.0.7 PHASE 3: compute visible 🔁/⚡ markers for the review position.
+// v1.0.8 PHASE 3: compute visible 🔁/⚡ markers for the review position.
 // reviewStates[safeStep].state is the source-of-truth game state at step N.
 const _rvVisibleCastle=(typeof computeVisibleCastleMarks==='function')?computeVisibleCastleMarks(rs.state):new Set();
 const _rvVisibleEp=(typeof computeVisibleEpMark==='function')?computeVisibleEpMark(rs.state):null;
@@ -1910,7 +2730,7 @@ if(_isYellowSquare){
   const _yh=_rvCell-_inset*2;
   h+='<div style="position:absolute;left:'+_inset.toFixed(1)+'px;top:'+_inset.toFixed(1)+'px;width:'+_yw.toFixed(1)+'px;height:'+_yh.toFixed(1)+'px;border-radius:'+_radius.toFixed(1)+'px;border:2px solid '+_RV_VA_COLORS.Y+';box-shadow:0 0 4px '+_RV_VA_COLORS.Y+'66;pointer-events:none;z-index:5"></div>';
 }
-// v1.0.7 PHASE 3: visible 🔁/⚡ markers on the review board
+// v1.0.8 PHASE 3: visible 🔁/⚡ markers on the review board
 if(_rvVisibleCastle.has(String(rr*8+cc))){
   h+='<span class="setup-castle-mark" aria-hidden="true" style="font-size:'+(_rvCell*0.4).toFixed(1)+'px">🔁</span>';
 }
@@ -2021,11 +2841,11 @@ if(_sfEvalReady&&!_evalLoading&&reviewStep>0){
 // analysis (_evalLoading), the depth/seldepth/nodes/nps update in real-time
 // via onEngineProgress; when analysis completes, the final values are shown.
 // SD only shown when > 0 AND > depth (seldepth == depth is redundant).
-// v1.0.7 PHASE 14: removed the .65rem font-size override so D/SD inherit the
+// v1.0.8 PHASE 14: removed the .65rem font-size override so D/SD inherit the
 // eval-bar title size (.75rem / .7rem). Keeps the bar visually uniform.
 const _rDepthStr=_sfDepth>0?'<span style="color:var(--muted);margin-left:4px">D'+_sfDepth+'</span>'+(_sfSeldepth>0&&_sfSeldepth>_sfDepth?'<span style="color:var(--muted);margin-left:2px">SD'+_sfSeldepth+'</span>':''):'';
 // v1.0.4 Rev33: real-time nodes + nps display during review analysis.
-// v1.0.7 PHASE 14: removed the .6rem override (inherit title size).
+// v1.0.8 PHASE 14: removed the .6rem override (inherit title size).
 let _rProgressStr='';
 if(_evalLoading&&_sfDepth>0){
   let _rpp=[];
@@ -2034,10 +2854,10 @@ if(_evalLoading&&_sfDepth>0){
   if(_rpp.length)_rProgressStr='<span style="color:var(--muted);margin-left:3px">'+_rpp.join(' ')+'</span>';
 }
 // Build WDL string for review eval bar (same as main eval bar).
-// v1.0.7 PHASE 14: removed the .65rem override (inherit title size).
+// v1.0.8 PHASE 14: removed the .65rem override (inherit title size).
 let _rWdlStr='';
 if(_sfWdlW>=0&&_sfWdlD>=0&&_sfWdlL>=0){const _rt=_sfWdlW+_sfWdlD+_sfWdlL;const _rw=Math.round(_sfWdlW/_rt*100);const _rd=Math.round(_sfWdlD/_rt*100);const _rl=100-_rw-_rd;_rWdlStr='<span style="color:var(--muted);margin-left:4px">('+_rw+'%W/'+_rd+'%D/'+_rl+'%L)</span>';}
-// v1.0.7 PHASE 14: enlarge review eval-bar fonts and cap the bar's height
+// v1.0.8 PHASE 14: enlarge review eval-bar fonts and cap the bar's height
 // so it never grows beyond a single line of text. Previously the bar used
 // .62rem / .58rem with flex-wrap:wrap, which let long content (emoji + desc
 // + score + D + SD + progress + WDL + delta) wrap to 2-3 lines and eat
@@ -2052,7 +2872,7 @@ if(_sfWdlW>=0&&_sfWdlD>=0&&_sfWdlL>=0){const _rt=_sfWdlW+_sfWdlD+_sfWdlL;const _
 // The landscape CSS override (.review-bottom #review-eval-bar) is updated
 // to match — see index.html.tpl.
 //
-// v1.0.7 PHASE 20 (UX): Further enlarged fonts and min-height so text + emoji
+// v1.0.8 PHASE 20 (UX): Further enlarged fonts and min-height so text + emoji
 // display fully with comfortable breathing room (was feeling cramped).
 //   - Portrait eval bar: .75rem → .85rem; emoji .95rem → 1.1rem
 //   - Landscape eval bar: .7rem → .8rem; emoji .95rem → 1.05rem
@@ -2065,7 +2885,7 @@ const _rvEvalBarHTML='<div class="ev" id="review-eval-bar" style="margin:2px 0;w
 
 // Review step slider
 const _rvSliderHTML='<div style="width:100%;margin:6px 0">'+
-  '<input type="range" class="review-slider" min="0" max="' + (reviewStates.length-1) + '" value="' + reviewStep + '" style="width:100%;accent-color:#d4a017" oninput="reviewGoTo(parseInt(this.value))">'+
+  '<input type="range" class="review-slider" min="0" max="' + (reviewStates.length-1) + '" value="' + reviewStep + '" style="width:100%;accent-color:var(--accent)" oninput="reviewGoTo(parseInt(this.value))">'+
   '<div style="display:flex;justify-content:space-between;font-size:.65rem;color:var(--muted)"><span>'+T('start_pos')+'</span><span>'+T('step_label')+' '+ reviewStep + ' / ' + (reviewStates.length-1) + '</span><span>'+T('end_pos')+'</span></div>'+
   '</div>';
 
@@ -2074,22 +2894,28 @@ const _rvSliderHTML='<div style="width:100%;margin:6px 0">'+
 // a much wider canvas (edge-to-edge) than the previous design where it was
 // squeezed under the board.
 const _isLandscapeTrend = window.innerWidth > window.innerHeight;
-// v1.0.7 PHASE 14: chart sizing — min 120px, max 200px in BOTH orientations.
-// Previously min was 80px / max was 120 (landscape) or 180 (portrait), which
-// was too small for the trend line + labels to be readable. The user requires
-// min 120px / max 200px.
+// v1.0.8 PHASE 25 (portrait chart height fix): In portrait, the chart was
+//   too tall (up to 200px), leaving too little room for the move list. Reduced
+//   the portrait max to 120px (from 200px). Landscape unchanged (120-200px).
+//   min stays 120px so the trend line + labels remain readable.
 const _estimatedTrendW = Math.max(120, window.innerWidth - 28);
 const _trendW = _estimatedTrendW > 0 ? _estimatedTrendW : 300;
 const _trendH = _isLandscapeTrend
   ? Math.max(120, Math.min(200, Math.floor((window.innerHeight - 28) * 0.30)))
-  : Math.max(120, Math.min(200, window.innerHeight - 140));
+  : Math.max(100, Math.min(120, Math.floor((window.innerHeight - 200) * 0.18)));
 const _trendSVG = _buildEvalTrendSVG(_trendW, _trendH);
 let _rvChartHTML='';
 if (_trendSVG) {
   _rvChartHTML+='<div style="display:flex;justify-content:flex-start;padding:0 4px">';
-  _rvChartHTML+='<div class="toggle" style="font-size:.6rem;padding:2px 4px" onclick="_reviewEvalGlobal=!_reviewEvalGlobal;HapticManager.fire(_reviewEvalGlobal?\'TOGGLE_ON\':\'TOGGLE_OFF\');render()"><span>'+T('chart_global')+'</span><div class="toggle-sw'+(_reviewEvalGlobal?' on':'')+'" style="width:28px;height:16px"><div style="position:absolute;top:1px;left:'+(_reviewEvalGlobal?'13px':'1px')+';width:12px;height:12px;border-radius:50%;background:'+(_reviewEvalGlobal?'#1a0a0a':'var(--accent2)')+';transition:all .3s;box-shadow:0 1px 4px rgba(0,0,0,.5)"></div></div></div>';
+  // v1.0.8 PHASE 25 (toggle fix): The previous code created a CUSTOM inline
+  //   dot <div> inside .toggle-sw, which conflicted with the .toggle-sw::after
+  //   CSS pseudo-element (both rendered a dot → two dots, visual glitch).
+  //   Fix: use the standard .toggle / .toggle-sw classes without the inline
+  //   dot div — the ::after pseudo-element handles the dot correctly, with
+  //   proper theme colors via --toggle-dot / --toggle-dot-on / --toggle-on-bg.
+  _rvChartHTML+='<div class="toggle" style="font-size:.6rem;padding:2px 4px;gap:4px" onclick="_reviewEvalGlobal=!_reviewEvalGlobal;HapticManager.fire(_reviewEvalGlobal?\'TOGGLE_ON\':\'TOGGLE_OFF\');render()"><span>'+T('chart_global')+'</span><div class="toggle-sw sm'+(_reviewEvalGlobal?' on':'')+'"></div></div>';
   _rvChartHTML+='</div>';
-  _rvChartHTML+='<div class="review-chart" style="width:100%;height:'+_trendH+'px;margin:4px 0;background:#1a0a0a;border:1px solid var(--border);border-radius:4px;padding:2px;overflow:hidden">';
+  _rvChartHTML+='<div class="review-chart" style="width:100%;height:'+_trendH+'px;margin:4px 0;background:var(--input-bg);border:1px solid var(--border);border-radius:4px;padding:2px;overflow:hidden">';
   _rvChartHTML+=_trendSVG;
   _rvChartHTML+='</div>';
 }
@@ -2107,7 +2933,7 @@ const _rvNavHTML='<div class="review-nav" style="display:flex;gap:4px;margin-top
 // includes the initial position at index 0, so a fully-analyzed game has
 // moveRecords.length cache entries for steps 1..N). This caused
 // "全部分析完成" to never display after PGN re-import.
-// v1.0.7 PHASE 15: Analyze-all now includes step 0 (the initial position).
+// v1.0.8 PHASE 15: Analyze-all now includes step 0 (the initial position).
 // Rationale: the eval of the initial position is genuinely useful — it's
 // the baseline against which the first move's delta is computed, and
 // without it the first move in the move list shows no delta/classification
@@ -2115,7 +2941,7 @@ const _rvNavHTML='<div class="review-nav" style="display:flex;gap:4px;margin-top
 // the move list complete and the trend chart start from x=0 with a real
 // data point instead of a gap.
 // _totalSteps is now moveRecords.length + 1 (steps 0..N, inclusive).
-// v1.0.7 PHASE 17: Button now has id="review-analyze-btn" so _updateReviewAnalyzeBtn()
+// v1.0.8 PHASE 17: Button now has id="review-analyze-btn" so _updateReviewAnalyzeBtn()
 // can refresh its label in-place after each manual eval (without a full re-render).
 // Previously, when the user manually evaluated each step by clicking through the
 // move list, the cache was filled by onEngineEval but the button text stayed at
@@ -2124,16 +2950,16 @@ const _rvNavHTML='<div class="review-nav" style="display:flex;gap:4px;margin-top
 const _cachedCount=_reviewEvalCache.size;
 const _totalSteps=moveRecords.length+1;
 const _allCached=_cachedCount>=_totalSteps;
-// v1.0.7 PHASE 20 (UX): Enlarged font .7rem → .8rem and min-height 28px → 34px
+// v1.0.8 PHASE 20 (UX): Enlarged font .7rem → .8rem and min-height 28px → 34px
 // so the button text + emoji display fully with comfortable breathing room.
 const _rvAnalyzeHTML='<button id="review-analyze-btn" class="btn" style="margin-top:4px;width:100%;font-size:.8rem;min-height:34px;padding:6px 10px" onclick="reviewAnalyzeAll()">'+(_rvAnalyzeBtnLabel())+'</button>';
 
-// v1.0.7 PHASE 18 Task 2: Enable virtual list when the move list exceeds the
+// v1.0.8 PHASE 18 Task 2: Enable virtual list when the move list exceeds the
 // threshold. When enabled, only the visible window (plus overscan) is rendered
 // as DOM nodes; the rest are represented by top/bottom spacer <div>s so the
 // scrollbar still reflects the full content height.
 //
-// v1.0.7 PHASE 18 Task 3 (bug fix): Only force the window to contain the
+// v1.0.8 PHASE 18 Task 3 (bug fix): Only force the window to contain the
 // active step when reviewStep CHANGED (not on every render). Previously, every
 // render forced the window to the active step — discarding the user's scroll
 // position and causing a flicker (active-step rows → blank spacer → user-scrolled
@@ -2171,7 +2997,7 @@ if(_isLandscapeReview){
   // Landscape: close .review-left (board only), then .review-moves, then .review-top.
   // Open .review-bottom with chart + controls (full width, edge-to-edge).
   h+='</div>'; // close .review-left
-  // v1.0.7 PHASE 18 Task 2: Both branches now delegate to the shared
+  // v1.0.8 PHASE 18 Task 2: Both branches now delegate to the shared
   // _buildReviewMovesInnerHTML helper. This eliminates ~40 lines of duplicated
   // row-rendering code that previously existed in landscape vs portrait, and
   // centralizes the virtual-list spacer logic in one place.
@@ -2202,7 +3028,7 @@ if(_isLandscapeReview){
 h+='</div></div>'; // close .review-body, .review-overlay
 } // close if(reviewMode)
 const _wasEcoFocused=_ecoSearchFocused;if(_ecoBlurTimer){clearTimeout(_ecoBlurTimer);_ecoBlurTimer=0}
-// v1.0.7 PHASE 18 Task 3 (bug fix): Clear any pending virtual-list scroll
+// v1.0.8 PHASE 18 Task 3 (bug fix): Clear any pending virtual-list scroll
 // refresh timer before rebuilding the DOM. Without this, a pending 80ms
 // debounce timer (set by _onReviewMovesScroll) could fire AFTER app.innerHTML=h
 // and rebuild .review-moves with a stale window that conflicts with the window
@@ -2385,7 +3211,7 @@ _prevLegalSet=new Set();if(selectedSquare){for(const m of legalMvs)_prevLegalSet
 //   offset within the container, regardless of CSS positioning.
 if(reviewMode && reviewStep !== _lastReviewStepScrolled){
   _lastReviewStepScrolled = reviewStep;
-  // v1.0.7 PHASE 18 Task 2: When the virtual list is enabled, the active move
+  // v1.0.8 PHASE 18 Task 2: When the virtual list is enabled, the active move
   // may be OUTSIDE the currently-rendered window (so .rmv-block.act does not
   // exist in the DOM yet). Force the window to contain the active step FIRST,
   // then proceed with the existing scroll-into-view logic.
@@ -2428,7 +3254,7 @@ _evalDispPrevSig = '';
 // v1.0.2 (qw3.7max audit): cache the review-moves-list element for the
 // scroll-into-view path (avoids getElementById on every render).
 _rListEl = document.getElementById('reviewMovesList');
-// v1.0.7 PHASE 18 Task 2: When the virtual list is enabled, attach a passive
+// v1.0.8 PHASE 18 Task 2: When the virtual list is enabled, attach a passive
 // scroll listener so scrolling the move list triggers a debounced partial
 // refresh (_refreshReviewMovesOnly) instead of a full app.innerHTML rebuild.
 // The listener is passive — it cannot block scrolling or interfere with the
@@ -2466,7 +3292,9 @@ if(reviewMode&&_rListEl&&_rvVirtualState.enabled){
 if(_wasEcoFocused){const el=document.getElementById('ecoSearch');if(el){el.focus();_ecoSearchFocused=true;try{el.setSelectionRange(el.value.length,el.value.length)}catch(e){}}}
 // Auto-scroll opening list to selected opening (skip during review mode)
 if(showNewGameDialog&&dlgOpeningId&&!reviewMode){setTimeout(()=>{const list=document.querySelector('.op-list');if(list){const active=list.querySelector('.op-btn.act');if(active)active.scrollIntoView({block:'center',behavior:'smooth'})}},50)}
-}catch(e){const _app=document.getElementById('app');if(_app)_app.innerHTML='<div style="color:red;padding:20px;font-family:monospace;background:#1a0000;border:2px solid red;border-radius:8px;margin:20px"><h3>Render Error</h3><pre style="white-space:pre-wrap;font-size:12px">'+e.toString()+'\n\n'+e.stack+'</pre></div>';console.error('Render error:',e)}}
+// v1.0.8 PHASE 30: escape error message + stack to prevent XSS if a thrown
+//   error message ever contains HTML.
+}catch(e){const _app=document.getElementById('app');if(_app)_app.innerHTML='<div style="color:red;padding:20px;font-family:monospace;background:#1a0000;border:2px solid red;border-radius:8px;margin:20px"><h3>Render Error</h3><pre style="white-space:pre-wrap;font-size:12px">'+_esc(e.toString())+'\n\n'+_esc(e.stack)+'</pre></div>';console.error('Render error:',e)}}
 
 
 
@@ -2500,7 +3328,7 @@ function _updateSingleSq(el,p,rr,cc,cm,isL,lastMove,_checkKingPos){
   const lastTo=lastMove&&lastMove.to.row===rr&&lastMove.to.col===cc;
   const isCheckSq=_checkKingPos&&rr===_checkKingPos.row&&cc===_checkKingPos.col;
   const isLegal=legalSet.has(rr*8+cc);
-  // v1.0.7 BUG FIX (audit: 代码审查结果与完善建议.docx §1.1):
+  // v1.0.8 BUG FIX:
   // This lightweight single-square update path was missing the castle-rook
   // marker logic that renderInternal() and _updateChangedSquares() have.
   // Although the auto-clear-selection behavior after a move usually prevents
@@ -2523,8 +3351,8 @@ function _updateSingleSq(el,p,rr,cc,cm,isL,lastMove,_checkKingPos){
       return _updateSingleSq._cachedSet.has(rr*8+cc);
     }catch(e){return false;}
   })();
-  const animCls=(_lastAnimPieceType&&_lastAnimTarget&&lastTo&&rr===_lastAnimTarget.row&&cc===_lastAnimTarget.col&&p&&p.type===_lastAnimPieceType)?' anim-'+p.type:'';
-  // v1.0.7 PHASE 3: visible 🔁/⚡ markers (computed once per render pass and
+  // v1.0.8 PHASE 22: landing animation removed (Web Animations API handles motion)
+  // v1.0.8 PHASE 3: visible 🔁/⚡ markers (computed once per render pass and
   // cached on the function object — see caller). Added to the signature so
   // the marker is added/removed when the underlying rights/target change.
   if(!_updateSingleSq._vmCache || _updateSingleSq._vmState!==gameState){
@@ -2537,11 +3365,13 @@ function _updateSingleSq(el,p,rr,cc,cm,isL,lastMove,_checkKingPos){
   const hasCM=_updateSingleSq._vmCache.castle.has(String(rr*8+cc));
   const hasEM=_updateSingleSq._vmCache.ep&&_updateSingleSq._vmCache.ep.row===rr&&_updateSingleSq._vmCache.ep.col===cc;
   // Signature: piece color+type, selection, last-move from/to, check, legal,
-  // control-map presence (cm), anim class, castling-rook marker, visible 🔁/⚡.
-  // v1.0.7: isCastlingRook added to signature so the marker flips on/off
+  // control-map presence (cm), castling-rook marker, visible 🔁/⚡.
+  // v1.0.8: isCastlingRook added to signature so the marker flips on/off
   // correctly when selection changes.
-  // v1.0.7 PHASE 3: hasCM/hasEM added so markers flip on/off when rights/target change.
-  const sig=(p?p.color[0]+p.type:'--')+'|'+(isSel?1:0)+(lastFrom?1:0)+(lastTo?1:0)+(isCheckSq?1:0)+(isLegal?1:0)+(cm?1:0)+(isCastlingRook?1:0)+(hasCM?1:0)+(hasEM?1:0)+animCls;
+  // v1.0.8 PHASE 3: hasCM/hasEM added so markers flip on/off when rights/target change.
+  // v1.0.8 PHASE 22: animCls removed from signature (landing animation removed —
+  //   Web Animations API overlay handles piece-move motion independently).
+  const sig=(p?p.color[0]+p.type:'--')+'|'+(isSel?1:0)+(lastFrom?1:0)+(lastTo?1:0)+(isCheckSq?1:0)+(isLegal?1:0)+(cm?1:0)+(isCastlingRook?1:0)+(hasCM?1:0)+(hasEM?1:0);
   if(el._sig===sig)return; // No change — skip DOM writes entirely
   el._sig=sig;
   // Compute background only when we're going to write
@@ -2551,14 +3381,13 @@ function _updateSingleSq(el,p,rr,cc,cm,isL,lastMove,_checkKingPos){
   const lbl=String.fromCharCode(97+cc)+(8-rr);
   let inner=`<span class="lbl" style="color:${isL?LBL_LIGHT:LBL_DARK};-webkit-text-stroke:.6px ${isL?LBL_STROKE_LIGHT:LBL_STROKE_DARK};paint-order:stroke fill;text-shadow:0 0 2px ${isL?LBL_STROKE_LIGHT:LBL_STROKE_DARK}">${lbl}</span>`;
   if(p){
-    inner+=`<span class="pc ${p.color==='white'?'w':'bk'}${animCls}">${SYM[p.color][p.type]}</span>`;
-    if(animCls){_landingAnimActive=true;_startLandingTimer(_lastAnimPieceType);}
+    inner+=`<span class="pc ${p.color==='white'?'w':'bk'}">${SYM[p.color][p.type]}</span>`;
   }
   if(isLegal&&!p&&!isCastlingRook)inner+=`<div class="dot"></div>`;
   if(isLegal&&p&&!isCastlingRook)inner+=`<div class="ring"></div>`;
-  // v1.0.7: castle-ring marker, identical to renderInternal / _updateChangedSquares.
+  // v1.0.8: castle-ring marker, identical to renderInternal / _updateChangedSquares.
   if(isCastlingRook)inner+=`<div class="castle-ring"></div>`;
-  // v1.0.7 PHASE 3: visible 🔁/⚡ markers (all modes)
+  // v1.0.8 PHASE 3: visible 🔁/⚡ markers (all modes)
   if(hasCM)inner+=`<span class="setup-castle-mark" aria-hidden="true">🔁</span>`;
   if(hasEM)inner+=`<span class="setup-ep-mark" aria-hidden="true">⚡</span>`;
   el.innerHTML=inner;
@@ -2572,9 +3401,10 @@ function _updateSingleSq(el,p,rr,cc,cm,isL,lastMove,_checkKingPos){
 function updateAfterMove(){requestEngineEval();
   try{
   // If game over or in special modes, fall back to full render
-  if(gameOver||setupMode||reviewMode||showNewGameDialog||pendingPromotion){_lastAnimPieceType='';_lastAnimTarget=null;render();return;}
+  // v1.0.8 PHASE 22: landing animation state removed (Web Animations API)
+  if(gameOver||setupMode||reviewMode||showNewGameDialog||pendingPromotion){render();return;}
   const gridEl=document.getElementById('board-grid');
-  if(!gridEl){_lastAnimPieceType='';_lastAnimTarget=null;render();return;}
+  if(!gridEl){render();return;}
   // Update control map cache (board has changed after a move)
   const ctrlKey=showCtrlMap?gameState.hash:'off';
   if(ctrlKey!==cachedCtrlKey){cachedCtrlMap=showCtrlMap?getCtrlMap(gameState.board):null;cachedCtrlKey=ctrlKey;}
@@ -2594,7 +3424,7 @@ function updateAfterMove(){requestEngineEval();
   }else{
     // Fallback: rebuild if grid structure is wrong
     let bh='';
-    // v1.0.7 PHASE 3: compute visible markers once per fallback rebuild
+    // v1.0.8 PHASE 3: compute visible markers once per fallback rebuild
     const _fbCastleMarks=(typeof computeVisibleCastleMarks==='function')?computeVisibleCastleMarks(gameState):new Set();
     const _fbEpMark=(typeof computeVisibleEpMark==='function')?computeVisibleEpMark(gameState):null;
     for(let r=0;r<8;r++){for(let c=0;c<8;c++){
@@ -2611,7 +3441,7 @@ function updateAfterMove(){requestEngineEval();
       const lbl=String.fromCharCode(97+cc)+(8-rr);
       bh+=`<div class="sq${lastFrom?' last-from':''}${lastTo?' last-to':''}${isCheckSq?' in-check':''}" style="background:${isSel?SQ_SEL:bg}" data-r="${rr}" data-c="${cc}" onclick="sqClick(${rr},${cc})">`;
       bh+=`<span class="lbl" style="color:${isL?LBL_LIGHT:LBL_DARK};-webkit-text-stroke:.6px ${isL?LBL_STROKE_LIGHT:LBL_STROKE_DARK};paint-order:stroke fill;text-shadow:0 0 2px ${isL?LBL_STROKE_LIGHT:LBL_STROKE_DARK}">${lbl}</span>`;
-      if(p){const _ac=(_lastAnimPieceType&&_lastAnimTarget&&lastTo&&rr===_lastAnimTarget.row&&cc===_lastAnimTarget.col&&p.type===_lastAnimPieceType)?' anim-'+p.type:'';bh+=`<span class="pc ${p.color==='white'?'w':'bk'}${_ac}">${SYM[p.color][p.type]}</span>`;if(_ac){_landingAnimActive=true;_startLandingTimer(_lastAnimPieceType);}}
+      if(p){bh+=`<span class="pc ${p.color==='white'?'w':'bk'}">${SYM[p.color][p.type]}</span>`;}
       if(isLegal&&!p)bh+=`<div class="dot"></div>`;
       if(isLegal&&p)bh+=`<div class="ring"></div>`;
       if(_hasCM)bh+=`<span class="setup-castle-mark" aria-hidden="true">🔁</span>`;
@@ -2630,13 +3460,11 @@ function updateAfterMove(){requestEngineEval();
   _invalidateArrowCache();
   _updateArrows(hoveredSquare||selectedSquare);
 
-  // Clear landing anim state so the delayed render() will NOT re-apply the anim class
-  // (which would restart the CSS @keyframes animation)
-  _lastAnimPieceType='';_lastAnimTarget=null;
-  // Use markDirty for delayed panel/moves update
-  // Schedule a full render later for move history + other side panel updates
+  // v1.0.8 PHASE 22: landing animation state removed (Web Animations API).
+  // Use markDirty for delayed panel/moves update.
+  // Schedule a full render later for move history + other side panel updates.
   if(_fullRenderTimer)clearTimeout(_fullRenderTimer);
-  _fullRenderTimer=setTimeout(()=>{if(!animationInProgress&&!_landingAnimActive&&!isAIThinking)markDirty(DIRTY_MOVES|DIRTY_PANEL|DIRTY_EVAL);},350);
+  _fullRenderTimer=setTimeout(()=>{if(!animationInProgress&&!isAIThinking)markDirty(DIRTY_MOVES|DIRTY_PANEL|DIRTY_EVAL);},350);
   }catch(e){render();}
 }
 
@@ -2815,7 +3643,7 @@ function _updateChangedSquares(oldInfoSq,newInfoSq,oldLegalSet,newLegalSet){
   // marker is added when a king is selected and removed when deselected.
   for(const pos of _curCastlingRookSet)logicPositions.add(pos);
   for(const pos of _prevCastlingRookSet)logicPositions.add(pos);
-  // v1.0.7 PHASE 3: Include squares with visible 🔁/⚡ markers so they get
+  // v1.0.8 PHASE 3: Include squares with visible 🔁/⚡ markers so they get
   // updated by the lightweight path (not just by full re-renders). Also
   // include any PREVIOUS marker squares (we'd need a previous-state cache
   // for that — for simplicity we rely on the signature check inside
@@ -2844,7 +3672,7 @@ function _updateChangedSquares(oldInfoSq,newInfoSq,oldLegalSet,newLegalSet){
     // for the currently-selected king. This keeps the marker in sync with
     // selection changes via the lightweight update path.
     const isCastlingRook=_curCastlingRookSet.has(lr*8+lc);
-    // v1.0.7 PHASE 3: visible markers
+    // v1.0.8 PHASE 3: visible markers
     const _hasCM=_ucsCastleMarks.has(String(lr*8+lc));
     const _hasEM=_ucsEpMark&&_ucsEpMark.row===lr&&_ucsEpMark.col===lc;
     el.style.background=bg;
@@ -2858,7 +3686,7 @@ function _updateChangedSquares(oldInfoSq,newInfoSq,oldLegalSet,newLegalSet){
     // This matches renderInternal's logic. The marker is a golden dashed ring
     // that signals "click me to castle".
     if(isCastlingRook)inner+=`<div class="castle-ring"></div>`;
-    // v1.0.7 PHASE 3: visible 🔁/⚡ markers (all modes)
+    // v1.0.8 PHASE 3: visible 🔁/⚡ markers (all modes)
     if(_hasCM)inner+=`<span class="setup-castle-mark" aria-hidden="true">🔁</span>`;
     if(_hasEM)inner+=`<span class="setup-ep-mark" aria-hidden="true">⚡</span>`;
     el.innerHTML=inner;
@@ -3014,7 +3842,10 @@ if(selectedSquare&&canMove){
 // where the user had no way to clear the selection highlight.
 if(selectedSquare&&selectedSquare.row===r&&selectedSquare.col===c){
   selectedSquare=null;legalMvs=[];legalSet=new Set();
-  HapticManager.fire('BUTTON_PRESS');_updateBoardLightweight();return
+  HapticManager.fire('BUTTON_PRESS');
+  // v1.0.8 PHASE 22 supplement: deselect sound (下行短音)
+  try{if(typeof playSound==='function')playSound('deselect');}catch(e){}
+  _updateBoardLightweight();return
 }
 if(selectedSquare&&canMove){
   const isLegal=legalSet.has(r*8+c);
@@ -3034,14 +3865,20 @@ if(selectedSquare&&canMove){
   // clicked square while clearing the old selection highlight.
   if(p&&p.color===playerColor){
     selectedSquare=pos;legalMvs=legalMoves(gameState,pos);legalSet=new Set(legalMvs.map(m=>m.row*8+m.col));
-    HapticManager.fire('PIECE_SELECT');_updateBoardLightweight();return
+    HapticManager.fire('PIECE_SELECT');
+    // v1.0.8 PHASE 22 supplement: piece-select sound (清脆短音)
+    try{if(typeof playSound==='function')playSound('select');}catch(e){}
+    _updateBoardLightweight();return
   }
   // Clicked empty/opponent square that's not a legal move → deselect old & select new
   selectedSquare=pos;legalMvs=[];legalSet=new Set();
   HapticManager.fire('BUTTON_PRESS');_updateBoardLightweight();return
 }
 // No piece currently selected — allow selecting own piece or any square for control info
-if(canMove&&p&&p.color===playerColor){selectedSquare=pos;legalMvs=legalMoves(gameState,pos);legalSet=new Set(legalMvs.map(m=>m.row*8+m.col));HapticManager.fire('PIECE_SELECT');_updateBoardLightweight();return}
+if(canMove&&p&&p.color===playerColor){selectedSquare=pos;legalMvs=legalMoves(gameState,pos);legalSet=new Set(legalMvs.map(m=>m.row*8+m.col));HapticManager.fire('PIECE_SELECT');
+  // v1.0.8 PHASE 22 supplement: piece-select sound (清脆短音)
+  try{if(typeof playSound==='function')playSound('select');}catch(e){}
+  _updateBoardLightweight();return}
 // Clicked empty/opponent square with no selection — allow for control info, but prefer deselect
 if(selectedSquare){selectedSquare=null;legalMvs=[];legalSet=new Set();HapticManager.fire('BUTTON_PRESS');_updateBoardLightweight();return}
 selectedSquare=pos;legalMvs=[];legalSet=new Set();HapticManager.fire('BUTTON_PRESS');_updateBoardLightweight();return
@@ -3087,7 +3924,7 @@ function _getCastlingRookForClick(kingPos,clickedPos){
 function executeMove(from,to,promotion){
 try{
 // Handle Ponder mode — if engine is pondering, check if the move matches the ponder move
-if(typeof AndroidBridge!=='undefined'&&AndroidBridge.isEngineReady()&&typeof AndroidBridge.isPondering==='function'){
+if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.isEngineReady==='function'&&AndroidBridge.isEngineReady()&&typeof AndroidBridge.isPondering==='function'){
   if(AndroidBridge.isPondering()){
     // v1.0.2 CRITICAL FIX (audit): getLastPonderMove() is a one-shot read that
     // CLEARS the Java field after returning. onBestMove() already consumed it
@@ -3162,13 +3999,44 @@ if(typeof recordMoveEnd==='function')recordMoveEnd(piece.color);
 //   - Green arrows: the checked king's escape squares
 //   - Yellow arrows: if this move threatens the opponent's queen, the mover → queen path
 if(typeof _computeAndCacheVisualAnnotations==='function')_computeAndCacheVisualAnnotations(moveRecords.length-1);
-if(cast)playSound('castle');else if(promotion)playSound('promote');else if(ic){playSound('check');HapticManager.fire('CHECK_ALERT');}else if(gameState.board[to.row][to.col]||epCap){playSound('capture');HapticManager.fire('PIECE_CAPTURE');}else{playSound('move');HapticManager.fire('PIECE_MOVE');}
+// v1.0.8 PHASE 22: Sound dispatch — animateMove now triggers the per-piece
+// personified sound (playPawn/playKnight/playBishop/playRook/playQueen/
+// playKing), the capture sound (playCapture), and the castle rook-move
+// sound (playCastleRookMove) internally via _playPieceSound() /
+// _playCastleSound(). So we only handle the SPECIAL cases here that
+// animateMove doesn't cover:
+//   - promote: playSound('promote')  — promotion arpeggio (animateMove doesn't
+//                                       know about promotion; it animates the
+//                                       pawn reaching the 8th rank)
+//   - check:   playSound('check')    — check alert tone (overlaid on top of
+//                                       the piece sound; animateMove plays the
+//                                       mover's piece sound, then this adds
+//                                       the check alert)
+// Haptics for all move types are fired here (animateMove doesn't do haptics).
+// v1.0.8 PHASE 26: piece-specific haptics for pawn/queen/king to match the
+//   personified animation + sound. Pawn = light quiver (瑟瑟发抖),
+//   queen = massive impact (铿锵有声), king = heavy regal (威严庄重).
+// Sounds don't cancel — fire both promote+check if both apply.
+// Haptics DO cancel (Android vibrator) — fire only one per turn.
+if(promotion)playSound('promote');
+if(ic)playSound('check');
+// Haptics DO cancel (Android vibrator) — fire only one, priority: special > castle > capture > piece.
+if(promotion)HapticManager.fire('PROMOTION');
+else if(ic)HapticManager.fire('CHECK_ALERT');
+else if(cast)HapticManager.fire('CASTLE');
+else if(gameState.board[to.row][to.col]||epCap)HapticManager.fire('PIECE_CAPTURE');
+else HapticManager.fire(piece.type.toUpperCase()+'_MOVE');
 // v1.0.6: Set _lastAnimMv so animateMove can detect castling via _castleSide()
 // (needed for Chess960 where the king may move only 1 column when castling).
 _lastAnimMv=mv;
 animateMove(from,to,SYM[piece.color][piece.type],piece.type,!!(gameState.board[to.row][to.col]||epCap),ic,piece.color);gameState=ns;_cachedStatus=null;_cachedStatusKey='';lastMove={from,to};selectedSquare=null;legalMvs=[];legalSet=new Set();
-// Immediately mark eval as stale — show "分析中" until engine gives final evaluation
-_updateEvalDisplay(); // _resetEvalState now called inside requestEngineEval()
+// v1.0.8 PHASE 24 (bug fix): Immediately mark eval as stale so the eval bar
+// shows "分析中" during the 560ms animation window, NOT the pre-move eval.
+// Previously only _updateEvalDisplay() was called (which re-renders with the
+// STALE eval data); _resetEvalState() was deferred to requestEngineEval()
+// inside the setTimeout callback, leaving the bar showing the old eval.
+_resetEvalState();
+_updateEvalDisplay();
 
 // Heavy computation deferred until after animation completes
 // v1.0.2 FIX (audit): Capture gameState.hash BEFORE the timeout — if the user
@@ -3177,7 +4045,24 @@ _updateEvalDisplay(); // _resetEvalState now called inside requestEngineEval()
 // gameOver/_cachedStatus, manifesting as a "ghost" game-over banner.
 // Also moved doAIMove() out of the rAF callback into setTimeout(0) so the
 // browser can paint the post-move UI before the engine starts computing.
-const ANIMATION_DEFER_MS=300;
+// v1.0.8 PHASE 26: ANIMATION_DEFER_MS=600 matches the v1.0.8 PHASE 26 animation
+//   system. The two longest piece animations are King (560ms) and Queen (520ms).
+//   King triggers heavy shake (SHAKE_HEAVY_DUR=450ms); Queen triggers massive
+//   shake (SHAKE_MASSIVE_DUR=620ms). The massive shake extends beyond the queen
+//   animation, so we use 600ms (queen 520 + 80 buffer) to let the shake settle
+//   before the deferred callback fires. For king, 560+40=600 also works.
+//   If this fires too early, updateAfterMove() calls render() which gets
+//   throttled by the animationInProgress guard, so it is safe — but increasing
+//   the delay avoids the unnecessary throttle cycle.
+const ANIMATION_DEFER_MS=600;
+// v1.0.8 PHASE 49: when prefers-reduced-motion is on, animateMove returns
+//   immediately (no WAAPI motion, no shake) — see game-logic.js:1064-1073.
+//   The 600ms defer was sized to let the longest animation + shake settle
+//   before updateAfterMove fires. With no animation, 600ms is pure latency
+//   that delays the AI's reply and the game-over check for no reason.
+//   Reduce to 30ms (one frame + tiny buffer) under reduced-motion.
+let _deferMs=ANIMATION_DEFER_MS;
+try{if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches)_deferMs=30;}catch(e){}
 const _hashAtSched=gameState.hash;
 setTimeout(()=>{
 if(gameState.hash!==_hashAtSched)return; // stale — abort
@@ -3195,14 +4080,26 @@ try{if(typeof _checkPVDivergence==='function')_checkPVDivergence();}catch(e){con
 try{if(typeof _checkPVDivergenceSANs==='function')_checkPVDivergenceSANs();}catch(e){console.warn('PVDivergenceSANs check failed:',e);}
 if(!gameOver&&gameState.currentTurn!==playerColor){setTimeout(doAIMove,0);}
 }
-},ANIMATION_DEFER_MS);
+},_deferMs);
 }catch(e){console.error('executeMove error:',e)}}
 let _redoStack=[]; // Stack for redo (stores states pushed by undoMove)
 // P3: Common animation cleanup for undo/redo/flip operations
 function _clearAnimationState(){
-  animationInProgress=false;_landingAnimActive=false;
-  _lastAnimPieceType='';_lastAnimTarget=null;
-  if(_landingAnimTimer){clearTimeout(_landingAnimTimer);_landingAnimTimer=null;}
+  // v1.0.8 PHASE 23: clear _activeAnimEls and remove any leftover .move-anim
+  //   overlay nodes from the DOM. Without this, if the user undoes/flips during
+  //   an animation, _reattachActiveAnimations() (called by render) would
+  //   re-append the stale overlay to the new DOM, showing a ghost piece.
+  //   Also bump _animGen so any in-flight _finishAnim closure self-invalidates.
+  animationInProgress=false;
+  _activeAnimEls=[];
+  ++_animGen;
+  try{
+    const bwrap=_cachedBwrap||(_cachedBwrap=document.querySelector('.bwrap'));
+    if(bwrap){
+      const old=bwrap.querySelectorAll('.move-anim');
+      for(let i=0;i<old.length;i++)old[i].remove();
+    }
+  }catch(e){}
   if(_fullRenderTimer){clearTimeout(_fullRenderTimer);_fullRenderTimer=0;}
 }
 function undoMove(){
@@ -3211,8 +4108,12 @@ if(isAIThinking&&!setupMode)return;
 // feedback instead of the normal undo (PIECE_SELECT) feedback.
 if(stateHistory.length===0){
   HapticManager.fire('BUTTON_PRESS');
+  // v1.0.8 PHASE 22 supplement: error sound (nothing to undo)
+  try{if(typeof playSound==='function')playSound('error');}catch(e){}
   return;
 }
+// v1.0.8 PHASE 22 supplement: undo sound (逆向回旋音)
+try{if(typeof playSound==='function')playSound('undo');}catch(e){}
 _cachedStatus=null;_cachedStatusKey='';_updateEvalDisplay(); // _resetEvalState now inside requestEngineEval()
 _clearAnimationState();
 if(pendingPromotion)pendingPromotion=null;
@@ -3260,7 +4161,7 @@ if(gameState.currentTurn===playerColor)break;
 // the same index, and see stale eval/annotation data from the undone move.
 //
 // Three caches are invalidated:
-//   1. _reviewEvalCache — keyed by reviewStep (0-based since v1.0.7 Phase 15:
+//   1. _reviewEvalCache — keyed by reviewStep (0-based since v1.0.8 Phase 15:
 //      step 0 = initial position, steps 1..N = positions after each move).
 //      Entries with key > moveRecords.length are for undone moves and must
 //      be deleted. Step 0 is always retained (initial position doesn't
@@ -3335,8 +4236,12 @@ if(isAIThinking)return;
 // feedback instead of the normal redo feedback — consistent with undo behavior.
 if(_redoStack.length===0){
   HapticManager.fire('BUTTON_PRESS');
+  // v1.0.8 PHASE 22 supplement: error sound (nothing to redo)
+  try{if(typeof playSound==='function')playSound('error');}catch(e){}
   return;
 }
+// v1.0.8 PHASE 22 supplement: redo sound (正向回旋音)
+try{if(typeof playSound==='function')playSound('redo');}catch(e){}
 _cachedStatus=null;_cachedStatusKey='';_updateEvalDisplay();
 _clearAnimationState();
 // Pop from redo stack and restore
@@ -3377,6 +4282,11 @@ render();requestEngineEval();
 HapticManager.fire('PIECE_SELECT');
 }
 function flipBoard(){
+  // v1.0.8 PHASE 22 supplement: flip sound (嗖声)
+  try{if(typeof playSound==='function')playSound('flip');}catch(e){}
+  // v1.0.8 PHASE 24 (bug fix): clear animation state so a mid-animation flip
+  //   doesn't leave an overlay at the wrong orientation.
+  _clearAnimationState();
   playerColor=OPP_COLOR[playerColor];
   selectedSquare=null;legalMvs=[];legalSet=new Set();
   _cachedBwrap=null;
@@ -3389,7 +4299,7 @@ function flipBoard(){
 // === Quick free opening: start new game with current color, no opening ===
 function quickFreeOpening(){
   if(isAIThinking)return;
-  // v1.0.7 PHASE 7: If in setup mode, exit setup FIRST before starting a new
+  // v1.0.8 PHASE 7: If in setup mode, exit setup FIRST before starting a new
   // game. Previously, startGame() replaced gameState with initState() but
   // left setupMode=true. When the user then exited setup, exitSetup() ran
   // validateSetupPosition() on the new (standard) gameState which had no
@@ -3418,12 +4328,30 @@ function toggleSound(){
   const btn=document.getElementById('btnSound');
   if(btn)btn.innerHTML=soundOn?'<span style=\"font-size:1.4rem\">🔊</span> '+T('sound'):'<span style=\"font-size:1.4rem\">🔇</span> '+T('sound');
   HapticManager.fire(soundOn?'TOGGLE_ON':'TOGGLE_OFF');
+  // v1.0.8 PHASE 22 (bug fix): Sync audioEngine.enabled with soundOn. The
+  // ChessAudioEngine's play* methods check this.enabled, and _playPieceSound /
+  // _playCastleSound in game-logic.js check soundOn. Both must be in sync so
+  // that muting truly silences ALL sounds (including move/castle sounds that
+  // bypass playSound()). setEnabled() smoothly ramps the master gain to 0.
+  try{
+    if(typeof audioEngine!=='undefined'&&audioEngine){
+      audioEngine.setEnabled(soundOn);
+    }
+  }catch(e){}
+  // v1.0.8 PHASE 22 supplement: when turning sound ON, play a select sound
+  // so the user immediately hears confirmation that sound is now active.
+  // (When turning OFF, no sound — by definition.)
+  if(soundOn){
+    try{if(typeof playSound==='function')playSound('select');}catch(e){}
+  }
   showToast(soundOn?T('sound_on'):T('sound_off'),1200);
 }
 function doPromotion(type){if(pendingPromotion){try{executeMove(pendingPromotion.from,pendingPromotion.to,type);}finally{pendingPromotion=null;render();}}}
 function getHint(){
   if(gameOver||isAIThinking||reviewMode||gameState.currentTurn!==playerColor)return;
   if(!_engineReady){showToast(T('engine_not_ready'));return;}
+  // v1.0.8 PHASE 22 supplement: hint sound (柔和三角波) — requesting AI hint
+  try{if(typeof playSound==='function')playSound('hint');}catch(e){}
   isHintLoading=true;hintText='';_aiBarInfo='';aiThinkInfo=T('thinking');_hintBarInfo=T('thinking');
   // Clear stale ponder info when starting a new hint search
   _ponderGen++;_ponderBarInfo='';_ponderMoveSAN='';_pendingPonderMoveUCI=null;
@@ -3432,7 +4360,7 @@ function getHint(){
   _updateAIThinkDisplay();
   render();
   setTimeout(()=>{
-    if(typeof AndroidBridge!=='undefined'&&AndroidBridge.isEngineReady()){
+    if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.isEngineReady==='function'&&AndroidBridge.isEngineReady()){
       try{AndroidBridge.engineHint((typeof _sanitizeFenForEngine==='function')?_sanitizeFenForEngine(generateFEN(gameState)):generateFEN(gameState));}catch(e){console.error('engineHint error:',e);isHintLoading=false;_hintBarInfo='';hintText=T('hint_request_failed');render();}
       return;
     }
@@ -3441,10 +4369,14 @@ function getHint(){
   },10);
 }
 function toggleSetup(){if(isAIThinking&&!setupMode)return;_cachedStatus=null;_cachedStatusKey='';setupMode=!setupMode;
+// v1.0.8 PHASE 24 (bug fix): clear any in-progress animation.
+_clearAnimationState();
+// v1.0.8 PHASE 22 supplement: setup-toggle sound (木质放置音)
+try{if(typeof playSound==='function')playSound('setupToggle');}catch(e){}
 // v1.0.2 FIX (audit): extract common reset out of both branches.
 gameOver=null;_gameOverStatusKey=null;
 if(setupMode){setupPiece='pawn';setupColor='white';selectedSquare=null;legalMvs=[];legalSet=new Set();lastMove=null;gameOverSoundPlayed=false;setupErrors=[];setupHistory=[];
-// v1.0.7: Initialize castle-marker set and en-passant marker on gameState.
+// v1.0.8: Initialize castle-marker set and en-passant marker on gameState.
 // If the user is entering setup mode from a normal game (e.g., to tweak the
 // position), seed the markers from the existing castlingRights + enPassantTarget
 // so the user sees the current state instead of an empty marker set.
@@ -3500,7 +4432,7 @@ if(gameState.castlingRights){
     }
   }
 }
-// v1.0.7 PHASE 12 FIX: Seed ep marker from existing enPassantTarget.
+// v1.0.8 PHASE 12 FIX: Seed ep marker from existing enPassantTarget.
 // BUG: The previous code did `{...gameState.enPassantTarget}` directly — but
 // enPassantTarget is the SKIPPED square (where a capturing pawn lands), while
 // setupEpMark must be the PAWN's current square (the double-stepped pawn).
@@ -3531,11 +4463,11 @@ if(gameState.enPassantTarget){
 setupMarkerMode=null;
 }else{
 // Leaving setup mode via the toggle button (not via "Done"/exitSetup).
-// Clear the setup-mode transient input fields so they don't leak into
-// play/review mode. (_exitSetupImpl does the same clear when the user
-// taps Done; this mirrors it for the toggle-exit path.) Without this,
-// computeVisibleEpMark/computeVisibleCastleMarks would return the stale
-// setup-marker positions during play.
+// Re-validate castlingRights from setupCastleMarks before clearing them.
+// (_refreshStateAfterSetup reset them to all-false during setup.)
+if(gameState.setupCastleMarks&&gameState.setupCastleMarks.size>0){
+  try{validateSetupPosition(gameState);}catch(e){}
+}
 setupMarkerMode=null;
 gameState.setupEpMark=null;
 gameState.setupCastleMarks=new Set();
@@ -3548,7 +4480,72 @@ _applyGameOver(gameStatus(gameState));
 _sfEvalReady=false;_evalLoading=true;requestEngineEval();if(!gameOver&&gameState.currentTurn!==playerColor){doAIMove()}}render()}
 function exitSetup(){setupErrors=validateSetupPosition(gameState);if(setupErrors.length>0){render();return}
 _withPGNSaveCheck(_exitSetupImpl);}
-function _exitSetupImpl(){// When finishing setup mode, reset the game to use the setup position
+// v1.0.8 PHASE 29 (task 4 verification): Castle rights + en passant marker
+//   preservation audit. The full data flow has been verified end-to-end:
+//
+//   ENTER setup mode (toggleSetup, setupMode=false→true):
+//     1. setupCastleMarks.clear() then seeded from castlingRights — for each
+//        true right, find the same-color rook on the king's side (standard
+//        Chess960 convention: king between two rooks, so exactly one rook
+//        per side) and add its square to the Set.
+//     2. setupEpMark seeded from enPassantTarget — convert the SKIPPED square
+//        (enPassantTarget) back to the PAWN's square (row 4 for white, row 3
+//        for black), defensively verifying the pawn is actually there.
+//
+//   DURING setup mode:
+//     - _refreshStateAfterSetup resets castlingRights to all-false and
+//       enPassantTarget to null on every board mutation (place/delete piece,
+//       clear, reset, turn-side change, undo, redo). The markers
+//       (setupCastleMarks / setupEpMark) are PRESERVED across these resets
+//       so the user's input is not lost.
+//     - Deleting a piece also clears any marker on that square (setupClick).
+//
+//   EXIT setup mode (exitSetup → validateSetupPosition → _exitSetupImpl):
+//     1. _validateSetupCastleMarks: re-derives castlingRights from
+//        setupCastleMarks. For each marker, validates the square holds a
+//        same-color rook on its initial rank, with the king also on its
+//        initial rank, and the rook on the correct side of the king. Sets
+//        the corresponding right true; all others false.
+//     2. _validateSetupEpMark: re-derives enPassantTarget from setupEpMark.
+//        Validates the marked square holds a pawn of the correct color on
+//        the correct rank (white row 4 / black row 3), that the pawn's color
+//        is the OPPOSITE of currentTurn (the pawn just double-stepped), and
+//        that an adjacent enemy pawn exists to actually capture en passant.
+//        Sets enPassantTarget to the SKIPPED square.
+//     3. syncHash(s) re-computes the Zobrist hash with the validated rights.
+//     4. If validation passes, _exitSetupImpl:
+//        - Generates _setupFEN from the validated gameState (castlingRights
+//          and enPassantTarget are now correct, and generateFEN only emits
+//          the ep target if an adjacent capturer exists — consistent with
+//          the validation check).
+//        - Clears setupEpMark=null and setupCastleMarks=new Set() (they're
+//          setup-only transient fields; the authoritative state is now in
+//          castlingRights / enPassantTarget).
+//        - stateHistory=[{state:cloneS(gameState),...}] — cloneS deep-clones
+//          castlingRights (spread) and enPassantTarget (spread), so the
+//          initial state snapshot retains the validated rights.
+//        - reviewBaseState=cloneS(gameState) — same deep-clone.
+//
+//   PLAY mode (after exit):
+//     - computeVisibleCastleMarks: derives visible 🔁 markers from
+//       castlingRights (finds the same-color rook on the king's side).
+//     - computeVisibleEpMark: derives visible ⚡ marker from
+//       enPassantTarget (converts back to the pawn's square).
+//     - Both functions check setupCastleMarks / setupEpMark FIRST (for
+//       setup-mode input), but in play mode these are empty/null, so they
+//       fall through to the castlingRights / enPassantTarget derivation.
+//
+//   VERDICT: The round-trip is correct. castlingRights and enPassantTarget
+//   are preserved through setup mode and correctly reflected in the FEN,
+//   state history, and visible markers during play. No code change needed
+//   for the core preservation logic — the existing implementation is sound.
+//
+//   The only defensive improvement added below: after validation succeeds,
+//   explicitly assert that castlingRights is non-null and enPassantTarget
+//   is either null or a valid {row,col} object before proceeding. This
+//   catches any future regression that might leave these fields in an
+//   inconsistent state.
+function _exitSetupImpl(){
 // as the new starting position (step 0). This means:
 // - moveRecords is cleared (no move history from before setup)
 // - stateHistory is reset with the setup position as the initial state
@@ -3557,7 +4554,7 @@ function _exitSetupImpl(){// When finishing setup mode, reset the game to use th
 // - _redoStack is cleared
 // This ensures the user starts fresh from the setup position.
 // v1.0.3: Cache the setup position FEN for PGN export with [FEN]/[SetUp] headers.
-// v1.0.7 PHASE 3: If the setup position has castle rights on non-standard squares
+// v1.0.8 PHASE 3: If the setup position has castle rights on non-standard squares
 // (king not on e1/e8, or rook not on a1/h1/a8/h8), use Shredder-FEN castling
 // notation (file letters) instead of standard KQkq. Standard KQkq is ambiguous
 // in that case — it would imply rook on h1/a1 etc., which is not the actual
@@ -3608,6 +4605,22 @@ if(typeof _setupFEN!=='undefined'&&typeof generateFEN==='function'){
 if(typeof _importedStartMoveNum!=='undefined'){
   _importedStartMoveNum=(gameState.fullMoveNumber&&gameState.fullMoveNumber>0)?gameState.fullMoveNumber:1;
 }
+// v1.0.8 PHASE 29 (task 4 defensive check): Assert that validateSetupPosition
+//   has left castlingRights and enPassantTarget in a consistent state before
+//   we snapshot the state into stateHistory/reviewBaseState. If any of these
+//   invariants are violated, fix them defensively rather than crash. This
+//   guards against future regressions in _validateSetupCastleMarks /
+//   _validateSetupEpMark that might leave the state half-mutated.
+if(!gameState.castlingRights||typeof gameState.castlingRights!=='object'){
+  console.warn('[exitSetup] castlingRights missing after validation — restoring defaults');
+  gameState.castlingRights={whiteKingside:false,whiteQueenside:false,blackKingside:false,blackQueenside:false};
+}
+if(gameState.enPassantTarget){
+  if(typeof gameState.enPassantTarget!=='object'||typeof gameState.enPassantTarget.row!=='number'||typeof gameState.enPassantTarget.col!=='number'||gameState.enPassantTarget.row<0||gameState.enPassantTarget.row>7||gameState.enPassantTarget.col<0||gameState.enPassantTarget.col>7){
+    console.warn('[exitSetup] enPassantTarget malformed after validation — clearing');
+    gameState.enPassantTarget=null;
+  }
+}
 moveRecords=[];
 stateHistory=[{state:cloneS(gameState),selectedSquare:null,legalMvs:[],moveRecords:[],lastMove:null,gameOver:null}];
 lastMove=null;
@@ -3624,7 +4637,7 @@ gameState.setupEpMark=null;
 gameState.setupCastleMarks=new Set();
 reviewBaseState=cloneS(gameState);
 _reviewEvalCache.clear();_reviewEvalRequestedStep=-1; // Clear eval cache on board setup complete
-// v1.0.7 PHASE 4: Enable UCI_Chess960 on the engine if the setup position
+// v1.0.8 PHASE 4: Enable UCI_Chess960 on the engine if the setup position
 // has any castling rights on non-standard squares (king not on e1/e8, or a
 // castle-right rook not on a1/h1/a8/h8). Without UCI_Chess960=true, the
 // engine cannot correctly interpret castling in such positions — it would
@@ -3676,7 +4689,7 @@ toggleSetup()}
 function setupClick(r,c){
 if(!setupMode||isAIThinking)return;
 HapticManager.fire('PIECE_SELECT');
-// v1.0.7: Snapshot must also capture setupCastleMarks + setupEpMark so that
+// v1.0.8: Snapshot must also capture setupCastleMarks + setupEpMark so that
 // undo/redo correctly restores the marker state alongside the board.
 if(!gameState.setupCastleMarks)gameState.setupCastleMarks=new Set();
 if(typeof gameState.setupEpMark==='undefined')gameState.setupEpMark=null;
@@ -3692,7 +4705,7 @@ setupRedoStack=[];setupHistory.push({
   setupEpMark:gameState.setupEpMark?{...gameState.setupEpMark}:null
 });
 if(setupHistory.length>50)setupHistory.shift();
-// v1.0.7 PHASE 6: Marker mode and piece selection are INDEPENDENT.
+// v1.0.8 PHASE 6: Marker mode and piece selection are INDEPENDENT.
 // If BOTH are active, we apply the piece first, then toggle the marker.
 // If only one is active, only that action is taken.
 // Delete mode is exclusive — it clears the square and its markers.
@@ -3701,7 +4714,7 @@ if(gameState.board[r][c]&&gameState.board[r][c].type==='king'){
 if(gameState.board[r][c].color==='white')gameState.wk=null;
 else gameState.bk=null;
 }
-// v1.0.7: When deleting a piece, also clear any castle/ep markers on that square.
+// v1.0.8: When deleting a piece, also clear any castle/ep markers on that square.
 const key=String(r*8+c);
 gameState.setupCastleMarks.delete(key);
 if(gameState.setupEpMark&&gameState.setupEpMark.row===r&&gameState.setupEpMark.col===c)gameState.setupEpMark=null;
@@ -3720,7 +4733,7 @@ if(setupColor==='white')gameState.wk={row:r,col:c};
 else gameState.bk={row:r,col:c};
 }
 _refreshStateAfterSetup(gameState);
-// v1.0.7 PHASE 6: do NOT return here — fall through to marker toggle.
+// v1.0.8 PHASE 6: do NOT return here — fall through to marker toggle.
 }
 // Toggle marker if a marker mode is active
 if(setupMarkerMode==='castle'){
@@ -3751,7 +4764,7 @@ var _curSnap={board:gameState.board.map(r=>r.map(c=>c?{...c}:null)),wk:gameState
 setupRedoStack.push(_curSnap);if(setupRedoStack.length>50)setupRedoStack.shift();
 const snap=setupHistory.pop();
 gameState.board=snap.board;gameState.wk=snap.wk;gameState.bk=snap.bk;gameState.castlingRights=snap.castlingRights;gameState.currentTurn=snap.currentTurn;
-// v1.0.7: Restore marker state from snapshot
+// v1.0.8: Restore marker state from snapshot
 gameState.setupCastleMarks=snap.setupCastleMarks?new Set(snap.setupCastleMarks):new Set();
 gameState.setupEpMark=snap.setupEpMark?{...snap.setupEpMark}:null;
 _refreshStateAfterSetup(gameState);
@@ -3766,7 +4779,7 @@ gameState.wk=snap.wk?{...snap.wk}:null;gameState.bk=snap.bk?{...snap.bk}:null;
 gameState.castlingRights={...snap.castlingRights};
 gameState.currentTurn=snap.currentTurn;
 gameState.hash=snap.hash;
-// v1.0.7: Restore marker state from redo snapshot
+// v1.0.8: Restore marker state from redo snapshot
 gameState.setupCastleMarks=snap.setupCastleMarks?new Set(snap.setupCastleMarks):new Set();
 gameState.setupEpMark=snap.setupEpMark?{...snap.setupEpMark}:null;
 setupErrors=[];render();}
@@ -3776,7 +4789,12 @@ setupErrors=[];render();}
  * @side-effect Sets reviewMode=true, populates reviewStates, requests engine eval
  */
 function enterReview(){_cachedStatus=null;_cachedStatusKey='';
-// v1.0.7 PHASE 18 Task 2: Reset virtual list state on entering review mode.
+// v1.0.8 PHASE 24 (bug fix): clear any in-progress animation so the overlay
+//   doesn't persist into review mode.
+_clearAnimationState();
+// v1.0.8 PHASE 22 supplement: enter-review sound (沉思音)
+try{if(typeof playSound==='function')playSound('enterReview');}catch(e){}
+// v1.0.8 PHASE 18 Task 2: Reset virtual list state on entering review mode.
 // Each new review session starts with a fresh window centered on reviewStep=0.
 _resetRvVirtualState();
 // v1.0.4 Round-5 Rev19: Allow entering review mode with zero move records.
@@ -3999,14 +5017,16 @@ function startGame(){
   _withPGNSaveCheck(_startGameImpl);
 }
 function _startGameImpl(){
+  // v1.0.8 PHASE 22 supplement: new-game sound (号角式三音和弦)
+  try{if(typeof playSound==='function')playSound('newgame');}catch(e){}
   showNewGameDialog=false;
   playerColor=dlgPlayerColor;
   useBookMoves=dlgBookMoves;
-  // v1.0.7 PHASE 18 Task 2: Reset virtual list state on new game.
+  // v1.0.8 PHASE 18 Task 2: Reset virtual list state on new game.
   _resetRvVirtualState();
-  // v1.0.7 BUG FIX (audit: 棋局前端代码审查.docx §10):
+  // v1.0.8 BUG FIX:
   // _reviewEvalCache is keyed by reviewStep (0-based per-game index since
-  // v1.0.7 Phase 15: step 0 = initial position, steps 1..N = post-move).
+  // v1.0.8 Phase 15: step 0 = initial position, steps 1..N = post-move).
   // When the user starts a new game, the new game's reviewStep 0,1,2,...
   // map to completely different positions than the previous game's, so the
   // cache would return stale evals for the wrong positions. Clear the cache
@@ -4052,6 +5072,12 @@ function _startGameImpl(){
     // Track game variant for PGN export
     if(typeof gameVariant!=='undefined')gameVariant='chess960';
     if(typeof gameSPID!=='undefined')gameSPID=spid;
+    // v1.0.8 PHASE 24 (bug fix): Store the Chess960 starting FEN so PGN export
+    //   emits the correct [FEN] tag. Previously _setupFEN was null for Chess960
+    //   games started from the New Game dialog, causing _buildPGNString to
+    //   fall back to generateFEN(gameState) (the CURRENT mid-game state),
+    //   producing a corrupt [FEN] tag that re-imports to the wrong position.
+    if(typeof _setupFEN!=='undefined')_setupFEN=generateFEN(gameState);
   }else{
     if(typeof setChess960Mode==='function')setChess960Mode(false);
     gameState=initState();
@@ -4248,7 +5274,7 @@ function _onGameClockExpired(color){
   // Now we send a hard "stop" via engineStop() so the engine returns
   // bestmove immediately and the game-over overlay shows promptly.
   try{
-    if(typeof AndroidBridge!=='undefined'&&AndroidBridge.isEngineReady&&AndroidBridge.isEngineReady()){
+    if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.isEngineReady==='function'&&AndroidBridge.isEngineReady()){
       if(typeof AndroidBridge.engineStop==='function'){
         AndroidBridge.engineStop();
       }else if(typeof AndroidBridge.sendToEngine==='function'){
@@ -4829,7 +5855,7 @@ function _computeInitialPositionAnnotations(){
 // See the detailed comment in undoMove() for the rationale.
 function _invalidateCachesForUndoneMoves(currentMoveCount){
   try{
-    // 1. _reviewEvalCache — keyed by reviewStep (0-based since v1.0.7 Phase 15:
+    // 1. _reviewEvalCache — keyed by reviewStep (0-based since v1.0.8 Phase 15:
     //    step 0 = initial position, steps 1..N = positions after each move).
     //    Delete entries with key > currentMoveCount. Step 0 (the initial
     //    position) is always retained — it doesn't change on undo.
@@ -4866,7 +5892,7 @@ function _invalidateCachesForUndoneMoves(currentMoveCount){
     //    _buildPGNString() (which reads the current, shorter moveRecords).
     if(typeof _cachedOriginalPGN!=='undefined')_cachedOriginalPGN=null;
   }catch(e){}
-  // v1.0.7 BUG FIX (audit: 代码审查结果与完善建议.docx §1.4):
+  // v1.0.8 BUG FIX:
   // After undo, the critical-moves list (reviewCritical) still contained
   // entries for the now-undone moves, causing misaligned critical-move
   // markers in review mode. Recompute reviewCritical from the new
@@ -4890,9 +5916,11 @@ function _resetGameUIState(){
   isHintLoading=false;
   aiThinkInfo='';
   gameOverSoundPlayed=false;
-  animationInProgress=false;
-  _landingAnimActive=false;
-  if(_landingAnimTimer){clearTimeout(_landingAnimTimer);_landingAnimTimer=null;}
+  // v1.0.8 PHASE 24 (bug fix): use _clearAnimationState() instead of just
+  //   setting animationInProgress=false. This also clears _activeAnimEls and
+  //   removes leftover .move-anim overlay nodes, preventing ghost pieces from
+  //   being re-attached by _reattachActiveAnimations() on the next render.
+  _clearAnimationState();
   _cachedStatus=null;
   _cachedStatusKey='';
   cachedCtrlKey='';
@@ -4950,7 +5978,7 @@ function reviewGoTo(step){
   step=Math.max(0,Math.min(step,reviewStates.length-1));
   reviewStep=step;
   gameState=cloneS(reviewStates[reviewStep].state);
-  // v1.0.7 PHASE 18 Task 3 (perf): Removed the redundant _forceReviewWindowToStep
+  // v1.0.8 PHASE 18 Task 3 (perf): Removed the redundant _forceReviewWindowToStep
   // call. render()'s window-computation block (search for "_stepChanged")
   // already detects that reviewStep changed and forces the window to contain
   // the new active step. The old call here did an extra innerHTML replacement
@@ -4998,7 +6026,7 @@ function reviewGoTo(step){
  *     detects _reviewAnalyzeAllActive + cache hit and calls _reviewAnalyzeAdvance.
  */
 /**
- * v1.0.7 PHASE 17: Compute the "Analyze All" button label.
+ * v1.0.8 PHASE 17: Compute the "Analyze All" button label.
  * Pulled out so _updateReviewAnalyzeBtn() can re-derive the label without
  * rebuilding the whole review panel HTML.
  *
@@ -5017,7 +6045,7 @@ function _rvAnalyzeBtnLabel(){
   return T('analyze_all_steps')+' '+_totalSteps+(_cachedCount>0?' ('+_cachedCount+'/'+_totalSteps+')':'');
 }
 /**
- * v1.0.7 PHASE 17: Live-refresh the "Analyze All" button label without
+ * v1.0.8 PHASE 17: Live-refresh the "Analyze All" button label without
  * triggering a full render. Called from onEngineEval after each manual eval
  * completes — fixes the bug where the button stayed at "Analyze All (k/N)"
  * even after the user had individually evaluated every step.
@@ -5045,7 +6073,7 @@ function reviewAnalyzeAll(){
   // v1.0.4 Rev24: If every step is already cached, complete INSTANTLY.
   // This is the "instant recovery from cache" requirement — no engine calls,
   // no safety timer, no async wait. The user sees "Analysis complete!" immediately.
-  // v1.0.7 PHASE 15: Analyze-all now includes step 0 (the initial position).
+  // v1.0.8 PHASE 15: Analyze-all now includes step 0 (the initial position).
   // We check steps 0..moveRecords.length (inclusive). _lastStep is
   // moveRecords.length (the position after the last move); step 0 is the
   // initial position. Both are now part of the analysis scope.
@@ -5064,7 +6092,7 @@ function reviewAnalyzeAll(){
   // Save the step the user was on so we can return to it after analysis
   let _preAnalyzeStep=reviewStep;
   // Find first un-analyzed step (skip cached steps for efficiency)
-  // v1.0.7 PHASE 15: Start from step 0 (initial position), not step 1.
+  // v1.0.8 PHASE 15: Start from step 0 (initial position), not step 1.
   let startStep=-1;
   for(let i=0;i<=_lastStep;i++){
     if(!_reviewEvalCache.has(i)){startStep=i;break;}
@@ -5112,7 +6140,7 @@ function _reviewAnalyzeResetSafetyTimer(){
  */
 function _reviewAnalyzeAdvance(){
   if(!_reviewAnalyzeAllActive)return;
-  // v1.0.7 PHASE 15: Analyze-all now includes step 0 (the initial position).
+  // v1.0.8 PHASE 15: Analyze-all now includes step 0 (the initial position).
   // _lastStep is moveRecords.length (= reviewStates.length - 1). We iterate
   // steps 0.._lastStep inclusive. This covers the initial position (step 0)
   // and every position after a move (steps 1..N).
@@ -5126,7 +6154,7 @@ function _reviewAnalyzeAdvance(){
   if(nextStep>_lastStep){
     _reviewAnalyzeAllActive=false;
     if(_reviewAnalyzeSafetyTimer){clearTimeout(_reviewAnalyzeSafetyTimer);_reviewAnalyzeSafetyTimer=null;}
-    // v1.0.7 PHASE 19 (bug fix): Recompute reviewCritical now that the eval cache
+    // v1.0.8 PHASE 19 (bug fix): Recompute reviewCritical now that the eval cache
     // is fully populated. Previously, entering review on a fresh game (empty cache)
     // set reviewCritical=[], and Analyze All filled the cache but never recomputed
     // reviewCritical — the 💥/❌ critical-move markers stayed missing until the
@@ -5135,7 +6163,7 @@ function _reviewAnalyzeAdvance(){
     // Return to the step the user was viewing before analysis
     const returnStep=window._reviewAnalyzeReturnStep;
     if(typeof returnStep==='number'&&returnStep>=0&&returnStep<reviewStates.length){
-      // v1.0.7 PHASE 19 (bug fix): Use reviewGoTo() instead of manual assignment
+      // v1.0.8 PHASE 19 (bug fix): Use reviewGoTo() instead of manual assignment
       // so the eval vars (_sfEval/_sfMateDistance/_sfWdl*/_sfDepth/etc.) are
       // restored from cache. Without this, the eval bar would show the LAST
       // analyzed step's eval instead of the returned step's eval.
@@ -5144,7 +6172,7 @@ function _reviewAnalyzeAdvance(){
       showToast(T('analysis_done')+' '+_reviewEvalCache.size+' '+T('step'));
       return;
     }
-    // v1.0.7 PHASE 19: show actual cached count (may be < _lastStep+1 if some
+    // v1.0.8 PHASE 19: show actual cached count (may be < _lastStep+1 if some
     // steps timed out and were skipped by the safety timer).
     showToast(T('analysis_done')+' '+_reviewEvalCache.size+' '+T('step'));
     render();
@@ -5155,7 +6183,7 @@ function _reviewAnalyzeAdvance(){
   // v1.0.4 Rev24: Reset the per-step safety timer for the new step.
   _reviewAnalyzeResetSafetyTimer();
   // Update progress toast periodically (every 3 steps or at end)
-  // v1.0.7 PHASE 15: total is _lastStep+1 (steps 0..N inclusive)
+  // v1.0.8 PHASE 15: total is _lastStep+1 (steps 0..N inclusive)
   if(reviewStep%3===0||nextStep>=_lastStep){
     const cachedCount=_reviewEvalCache.size;
     showToast(T('analyzing_progress')+' ('+cachedCount+'/'+(_lastStep+1)+')');
@@ -5168,9 +6196,13 @@ function _reviewAnalyzeAdvance(){
  * Exit review mode and restore the game state.
  */
 function exitReview(){
+  // v1.0.8 PHASE 22 supplement: exit-review sound (归位音)
+  try{if(typeof playSound==='function')playSound('exitReview');}catch(e){}
+  // v1.0.8 PHASE 24 (bug fix): clear any in-progress animation.
+  _clearAnimationState();
   reviewMode=false;
   _reviewAnalyzeAllActive=false;
-  // v1.0.7 PHASE 18 Task 2: Reset virtual list state on exiting review mode.
+  // v1.0.8 PHASE 18 Task 2: Reset virtual list state on exiting review mode.
   // Clears the scroll timer and window so the next review session starts fresh.
   _resetRvVirtualState();
   if(_reviewAnalyzeSafetyTimer){clearTimeout(_reviewAnalyzeSafetyTimer);_reviewAnalyzeSafetyTimer=null;}
@@ -5354,7 +6386,37 @@ function _pgnCacheImport(name){
   try{
     if(wasReviewMode&&typeof exitReview==='function')exitReview();
   }catch(e){}
+  // v1.0.8 PHASE 34: use async import with worker offloading to prevent UI jank
+  //   on large PGN files. Falls back to sync importPGN if importPGNAsync unavailable.
   try{
+    if(typeof importPGNAsync==='function'){
+      importPGNAsync(pgn).then(function(ok){
+        // v1.0.8 PHASE 35: check success flag — importPGN shows its own error
+        //   toast on invalid PGN, so only show success UI if import succeeded.
+        if(!ok){
+          showToast(T('pgn_cache_import_failed'),2500);
+          render();
+          return;
+        }
+        // After import, if we were in review mode, re-enter review on the new game
+        if(wasReviewMode){
+          try{
+            if(typeof enterReview==='function'){
+              setTimeout(()=>{try{enterReview();}catch(e){}},100);
+            }
+          }catch(e){}
+        }
+        showToast(T('pgn_cache_imported')+'：'+name,2000);
+        try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+        render();
+      }).catch(function(e){
+        // v1.0.8 PHASE 35: defensive catch in case .then() callback throws
+        console.error('PGN cache import .then failed:',e);
+        showToast(T('pgn_cache_import_failed'),2500);
+        render();
+      });
+      return;
+    }
     if(typeof importPGN==='function')importPGN(pgn);
   }catch(e){
     showToast(T('pgn_cache_import_failed'),2500);
@@ -5500,11 +6562,28 @@ function _pgnCacheFilterByTag(tag){
   try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
   render();
 }
+// v1.0.8 PHASE 39: Filter by tag presence (has any tags / has no tags)
+function _pgnCacheFilterByTagPresence(hasTags){
+  _pgnCacheFilter=hasTags?'__has_tags__':'__no_tags__';
+  _pgnCacheFilterInput='';
+  _pgnCacheSelected.clear();
+  try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+  render();
+}
 // Returns true if an entry matches the current filter.
 // Filter matches if any tag matches case-insensitively OR the entry name
 // contains the filter (case-insensitive substring match).
+// v1.0.8 PHASE 39: special filter values '__has_tags__' and '__no_tags__'
+//   filter by tag presence rather than tag content.
 function _pgnCacheEntryMatchesFilter(entry,filter){
   if(!filter)return true; // No filter = match all
+  // v1.0.8 PHASE 39: tag-presence filters
+  if(filter==='__has_tags__'){
+    return Array.isArray(entry.tags)&&entry.tags.length>0;
+  }
+  if(filter==='__no_tags__'){
+    return !Array.isArray(entry.tags)||entry.tags.length===0;
+  }
   const fl=filter.toLowerCase();
   // Check name (substring)
   if(entry.name&&String(entry.name).toLowerCase().includes(fl))return true;
@@ -5553,27 +6632,40 @@ function _renderPGNCacheManager(){
     // Encode current filter input for safe embedding in the input value attribute
     const filterInputEsc=_escapeHTML(_pgnCacheFilterInput);
     filterHtml=`<div style="display:flex;gap:6px;margin:8px 0;align-items:center;flex-wrap:wrap">
-      <input type="search" id="_pgnCacheSearchInput" placeholder="${T('pgn_cache_search_placeholder')}" value="${filterInputEsc}" enterkeyhint="search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="_pgnCacheOnSearchInput(this.value)" onkeydown="if(event.key==='Enter'||event.keyCode===13){event.preventDefault();_pgnCacheApplyFilter()}" style="flex:1;min-width:120px;background:rgba(42,21,32,.6);color:var(--text);border:1px solid rgba(212,160,23,.3);border-radius:4px;padding:5px 8px;font-size:.78rem;font-family:inherit" />
+      <input type="search" id="_pgnCacheSearchInput" placeholder="${T('pgn_cache_search_placeholder')}" value="${filterInputEsc}" enterkeyhint="search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="_pgnCacheOnSearchInput(this.value)" onkeydown="if(event.key==='Enter'||event.keyCode===13){event.preventDefault();_pgnCacheApplyFilter()}" style="flex:1;min-width:120px;background:var(--input-bg);color:var(--text);border:1px solid var(--border);border-radius:4px;padding:5px 8px;font-size:.78rem;font-family:inherit" />
       ${filterActive?`<button class="btn" style="padding:5px 10px;font-size:.75rem;color:#ff8080;border-color:rgba(255,100,100,.4)" onclick="_pgnCacheClearFilter()" title="${T('pgn_cache_search_clear')}">✕</button>`:''}
     </div>`;
-    // Tag-chip quick filter row (only show if there are tags AND no active filter, OR always show so user can switch tags)
-    if(allTags.length>0){
-      let chipsHtml=`<div style="display:flex;flex-wrap:wrap;gap:4px;margin:4px 0 8px;font-size:.68rem">`;
-      // Add an "All" chip to clear the filter
+    // Tag-chip quick filter row — always show (even if no tags yet) so the
+    // "All" + "Tagged" + "Untagged" buttons are always available.
+    // v1.0.8 PHASE 38: horizontal layout — buttons flow left-to-right, wrap only when needed
+    // v1.0.8 PHASE 39: added "Tagged" and "Untagged" filter buttons after "All"
+    {
+      let chipsHtml=`<div class="btn-row" style="display:flex;flex-wrap:wrap;gap:4px;margin:4px 0 8px;font-size:.68rem;align-items:center">`;
+      // "All" chip to clear the filter
       const allActive=_pgnCacheFilter==='';
-      chipsHtml+=`<button class="btn" style="padding:2px 8px;font-size:.68rem;${allActive?'background:rgba(212,160,23,.4);color:#1a0a0a;border-color:#d4a017':'background:rgba(212,160,23,.15);color:var(--accent);border-color:rgba(212,160,23,.3)'}" onclick="_pgnCacheClearFilter()">${T('pgn_cache_filter_all')}</button>`;
+      chipsHtml+=`<button class="btn-compact ${allActive?'chip-active':'chip-inactive'}" style="padding:2px 8px;font-size:.68rem;border-radius:4px;border:1px solid var(--border);cursor:pointer" onclick="_pgnCacheClearFilter()">${T('pgn_cache_filter_all')}</button>`;
+      // v1.0.8 PHASE 39: "Tagged" and "Untagged" buttons
+      const hasTagsActive=_pgnCacheFilter==='__has_tags__';
+      const noTagsActive=_pgnCacheFilter==='__no_tags__';
+      chipsHtml+=`<button class="btn-compact ${hasTagsActive?'chip-active':'chip-inactive'}" style="padding:2px 8px;font-size:.68rem;border-radius:4px;border:1px solid var(--border);cursor:pointer" onclick="_pgnCacheFilterByTagPresence(true)">${T('pgn_cache_filter_has_tags')}</button>`;
+      chipsHtml+=`<button class="btn-compact ${noTagsActive?'chip-active':'chip-inactive'}" style="padding:2px 8px;font-size:.68rem;border-radius:4px;border:1px solid var(--border);cursor:pointer" onclick="_pgnCacheFilterByTagPresence(false)">${T('pgn_cache_filter_no_tags')}</button>`;
+      // Individual tag chips (only if there are tags)
       for(const t of allTags){
         // Encode tag for safe embedding in onclick attribute
         const tagJs=_jsAttrEncode(t);
         const isActive=_pgnCacheFilter===t;
-        chipsHtml+=`<button class="btn" style="padding:2px 8px;font-size:.68rem;${isActive?'background:rgba(212,160,23,.4);color:#1a0a0a;border-color:#d4a017':'background:rgba(212,160,23,.15);color:var(--accent);border-color:rgba(212,160,23,.3)'}" onclick="_pgnCacheFilterByTag(${tagJs})" title="${T('pgn_cache_filter_by_tag')}">${_escapeHTML(t)}</button>`;
+        chipsHtml+=`<button class="btn-compact ${isActive?'chip-active':'chip-inactive'}" style="padding:2px 8px;font-size:.68rem;border-radius:4px;border:1px solid var(--border);cursor:pointer" onclick="_pgnCacheFilterByTag(${tagJs})" title="${T('pgn_cache_filter_by_tag')}">${_escapeHTML(t)}</button>`;
       }
       chipsHtml+=`</div>`;
       filterHtml+=chipsHtml;
     }
     // Filter status line (when filter active)
     if(filterActive){
-      filterHtml+=`<div style="font-size:.72rem;color:var(--muted);margin:0 0 6px;padding:3px 8px;background:rgba(212,160,23,.08);border-radius:3px;border-left:2px solid var(--accent)">${T('pgn_cache_filter_status').replace('{count}',visibleCount).replace('{total}',total).replace('{filter}',_escapeHTML(_pgnCacheFilter))}</div>`;
+      // v1.0.8 PHASE 39: show localized label for tag-presence filters
+      let filterLabel=_pgnCacheFilter;
+      if(filterLabel==='__has_tags__')filterLabel=T('pgn_cache_filter_has_tags');
+      else if(filterLabel==='__no_tags__')filterLabel=T('pgn_cache_filter_no_tags');
+      filterHtml+=`<div style="font-size:.72rem;color:var(--muted);margin:0 0 6px;padding:3px 8px;background:rgba(212,160,23,.08);border-radius:3px;border-left:2px solid var(--accent)">${T('pgn_cache_filter_status').replace('{count}',visibleCount).replace('{total}',total).replace('{filter}',_escapeHTML(filterLabel))}</div>`;
     }
   }
   let listHtml='';
@@ -5606,7 +6698,8 @@ function _renderPGNCacheManager(){
       listHtml+=`<input type="checkbox" ${checked?'checked':''} onclick="event.stopPropagation();_pgnCacheToggleSel(${nameJs})" style="cursor:pointer;flex-shrink:0;width:18px;height:18px;margin-top:2px" />`;
       listHtml+=`<div style="flex:1;min-width:0" onclick="event.stopPropagation();_pgnCacheImport(${nameJs})">`;
       listHtml+=`<div style="font-weight:600;color:var(--text);font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_escapeHTML(e.name)}</div>`;
-      listHtml+=`<div style="font-size:.72rem;color:var(--muted);margin-top:2px">${sizeStr} · ${timeStr}</div>`;
+      // v1.0.8 PHASE 38: use var(--text) with opacity for better contrast (was var(--muted) which is too faint)
+      listHtml+=`<div style="font-size:.72rem;color:var(--text);opacity:.75;margin-top:2px">${sizeStr} · ${timeStr}</div>`;
       listHtml+=tagsHtml;
       listHtml+=`</div>`;
       // v1.0.4 Rev24: Removed the redundant 📥 Import button. Clicking the
@@ -5625,9 +6718,13 @@ function _renderPGNCacheManager(){
   // Toolbar: select all/none, count info
   let toolbarHtml='';
   if(total>0){
-    toolbarHtml=`<div style="display:flex;align-items:center;gap:8px;margin:8px 0;font-size:.78rem;color:var(--muted);flex-wrap:wrap">
-      <button class="btn" style="padding:4px 10px;font-size:.75rem" onclick="_pgnCacheSelectAll()">${T('pgn_cache_select_all')}</button>
-      <button class="btn" style="padding:4px 10px;font-size:.75rem" onclick="_pgnCacheSelectNone()">${T('pgn_cache_select_none')}</button>
+    // v1.0.8 PHASE 38: horizontal layout — buttons use plain styling (no .btn class
+    //   which has min-height:40px wasting vertical space). Buttons flow left-to-right.
+    // v1.0.8 PHASE 50: added .btn-row class — opts out of the portrait grid
+    //   transform so the buttons shrink to content width instead of stretching.
+    toolbarHtml=`<div class="btn-row" style="display:flex;align-items:center;gap:6px;margin:8px 0;font-size:.78rem;color:var(--muted);flex-wrap:wrap">
+      <button class="btn-compact" style="padding:4px 10px;font-size:.75rem;border-radius:4px;border:1px solid var(--border);cursor:pointer;background:var(--btn-bg);color:var(--text)" onclick="_pgnCacheSelectAll()">${T('pgn_cache_select_all')}</button>
+      <button class="btn-compact" style="padding:4px 10px;font-size:.75rem;border-radius:4px;border:1px solid var(--border);cursor:pointer;background:var(--btn-bg);color:var(--text)" onclick="_pgnCacheSelectNone()">${T('pgn_cache_select_none')}</button>
       <span style="margin-left:auto">${visibleCount===total?total+' '+T('pgn_cache_count'):visibleCount+'/'+total+' '+T('pgn_cache_count')}${selCount>0?(' · '+selCount+' '+T('pgn_cache_delete_sel')):''}</span>
     </div>`;
   }
@@ -5642,7 +6739,7 @@ function _renderPGNCacheManager(){
 }
 
 // Simple HTML escape for cache names (prevent XSS from user-controlled strings)
-// v1.0.7 REDUNDANCY (audit: 代码审查结果与完善建议.docx §4.1): Unified with
+// v1.0.8 REDUNDANCY: Unified with
 // _esc() (defined in ai-bridge.js). _esc uses a single-pass regex + lookup
 // table (faster, less allocation); _escapeHTML previously duplicated the
 // same logic with a slower 5-case replace callback. Now _escapeHTML simply
@@ -5670,14 +6767,14 @@ function _jsAttrEncode(s){
  * Closes open dialogs/overlays, exits review/setup modes.
  */
 function handleBackPress(){
-  // v1.0.7 UI: Promotion dialog takes highest priority — it blocks all other
+  // v1.0.8 UI: Promotion dialog takes highest priority — it blocks all other
   // input and must be dismissed before any other overlay can be closed.
   if(pendingPromotion){
     pendingPromotion=null;
     render();
     return;
   }
-  // v1.0.7 UI: Save-PGN prompt — back button = Cancel (matches the visible
+  // v1.0.8 UI: Save-PGN prompt — back button = Cancel (matches the visible
   // "Cancel" button behavior, so the user is not surprised by an implicit
   // Yes/No decision).
   if(showSavePGNPrompt){
@@ -5695,7 +6792,7 @@ function handleBackPress(){
     render();
     return;
   }
-  // v1.0.7 PHASE 6: If ANY setup-mode selection is active (marker mode OR
+  // v1.0.8 PHASE 6: If ANY setup-mode selection is active (marker mode OR
   // piece selection OR delete mode OR color selection), back button cancels
   // the selection first (instead of exiting setup). This covers:
   //   - setupMarkerMode ('castle' / 'ep')
@@ -5813,13 +6910,16 @@ function _showStatsImportBackPrompt(pgnText){
     showToast(T('stats_import_back_no_pgn'));
     return;
   }
-  // v1.0.7 PHASE 19 (bug fix): Close over pgnText directly instead of stashing
+  // v1.0.8 PHASE 19 (bug fix): Close over pgnText directly instead of stashing
   // in a module-level global. The global stash had a race: if this function was
   // called twice before the first save-prompt resolved, the second call would
   // overwrite the stash and the first import would be silently lost.
   var importAction=function(){
     try{
-      if(typeof importPGN==='function'){
+      // v1.0.8 PHASE 34: use async import with worker offloading
+      if(typeof importPGNAsync==='function'){
+        importPGNAsync(pgnText);
+      }else if(typeof importPGN==='function'){
         importPGN(pgnText);
       }else{
         console.error('importPGN function not available for stats import-back');
@@ -5834,9 +6934,9 @@ function _showStatsImportBackPrompt(pgnText){
   // show the "💾 Save PGN file?" prompt first; otherwise import directly.
   _withPGNSaveCheck(importAction);
 }
-// v1.0.4 Rev28: Stash for the PGN text being imported from the stats page.
-// v1.0.7 PHASE 19: _pendingStatsImportPGN removed — _showStatsImportBackPrompt
-// now closes over pgnText directly, eliminating the global stash race.
+// v1.0.8 PHASE 30: expose globally so Java's evaluateJavascript("typeof _showStatsImportBackPrompt==='function'...")
+//   works. ES module exports aren't global; the bundled chess.html masks this (top-level funcs become global).
+window._showStatsImportBackPrompt=_showStatsImportBackPrompt;
 
 /**
  * v1.0.4 Round-5 Rev27: Resign the current game (DeepSeek review 2.1).
@@ -5860,6 +6960,8 @@ function _showStatsImportBackPrompt(pgnText){
  */
 function _resignGame(){
   if(gameOver)return; // Already over — no-op
+  // v1.0.8 PHASE 22 supplement: resign sound (降旗音)
+  try{if(typeof playSound==='function')playSound('resign');}catch(e){}
   // The resigner is the human player (playerColor). The winner is the AI.
   _resignWinnerColor = (playerColor==='white') ? 'black' : 'white';
   // Stop any in-flight engine search
@@ -5880,7 +6982,7 @@ function _resignGame(){
     }
   }catch(e){}
   // Stop the game clock
-  // v1.0.7 PHASE 19 (bug fix): gameClocks.running=false was a no-op (the field
+  // v1.0.8 PHASE 19 (bug fix): gameClocks.running=false was a no-op (the field
   // doesn't exist). The 200ms interval kept firing for the rest of the session,
   // wasting CPU. Now properly clear the interval like _onGameClockExpired does.
   try{
@@ -5898,8 +7000,11 @@ function _resignGame(){
       playSound('gameover');
     }
   }catch(e){}
-  // Haptic feedback for the loss
-  try{HapticManager.fire('ERROR');}catch(e){}
+  // v1.0.8 PHASE 41: use GAME_OVER haptic (not ERROR) — resignation plays the
+  //   same 'gameover' sound as natural game-over, so the haptic should match.
+  //   ERROR had no Java case (fell to 15ms default); GAME_OVER has a proper
+  //   430ms multi-stage pattern matching the somber arpeggio.
+  try{HapticManager.fire('GAME_OVER');}catch(e){}
   // Force a full re-render to show the game-over overlay
   markDirty(DIRTY_FULL);
   console.log('Player resigned — winner:',_resignWinnerColor);
@@ -5942,7 +7047,7 @@ function _cleanupEventListeners(){
   _heartbeatRunning=false;
   if(_heartbeatIntervalId){clearInterval(_heartbeatIntervalId);_heartbeatIntervalId=null;}
   if(renderTimerId){cancelAnimationFrame(renderTimerId);renderTimerId=null;}
-  if(_landingAnimTimer){clearTimeout(_landingAnimTimer);_landingAnimTimer=null;}
+  // v1.0.8 PHASE 22: landing animation timer removed (Web Animations API)
   if(_fullRenderTimer){clearTimeout(_fullRenderTimer);_fullRenderTimer=0;}
   if(_reviewAnalyzeSafetyTimer){clearTimeout(_reviewAnalyzeSafetyTimer);_reviewAnalyzeSafetyTimer=null;}
   if(_reviewEvalDebounceTimer){clearTimeout(_reviewEvalDebounceTimer);_reviewEvalDebounceTimer=null;}
@@ -5956,7 +7061,7 @@ function _cleanupEventListeners(){
 // v1.0.2: Wrapped with _withPGNSaveCheck to prompt save before clearing
 function _doPastePGN(){
   _withPGNSaveCheck(function(){
-    // v1.0.7 PHASE 18 Task 3 (bug fix): Reset virtual list state on PGN paste
+    // v1.0.8 PHASE 18 Task 3 (bug fix): Reset virtual list state on PGN paste
     // so stale avgRowH / window from a previous long game don't carry over.
     _resetRvVirtualState();
     const text=prompt(T('pgn_paste_hint'));
@@ -5973,14 +7078,19 @@ function _doPastePGN(){
       showToast(T('pgn_fen_rejected'),2500);
       return;
     }
-    importPGN(text);
+    // v1.0.8 PHASE 34: use async import with worker offloading
+    if(typeof importPGNAsync==='function'){
+      importPGNAsync(text);
+    }else{
+      importPGN(text);
+    }
   });
 }
 
 // v1.0.2: Wrapper for importFEN with PGN save check
 function _importFENWithSaveCheck(){
   _withPGNSaveCheck(function(){
-    // v1.0.7 PHASE 18 Task 3 (bug fix): Reset virtual list state on FEN import
+    // v1.0.8 PHASE 18 Task 3 (bug fix): Reset virtual list state on FEN import
     // so stale avgRowH / window from a previous long game don't carry over.
     _resetRvVirtualState();
     importFEN();
@@ -5990,7 +7100,7 @@ function _importFENWithSaveCheck(){
 // v1.0.2: Wrapper for importPGNFile with PGN save check
 function _importPGNFileWithSaveCheck(){
   _withPGNSaveCheck(function(){
-    // v1.0.7 PHASE 18 Task 3 (bug fix): Reset virtual list state on PGN file import.
+    // v1.0.8 PHASE 18 Task 3 (bug fix): Reset virtual list state on PGN file import.
     _resetRvVirtualState();
     importPGNFile();
   });

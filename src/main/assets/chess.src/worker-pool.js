@@ -1,581 +1,560 @@
 // ===================== MODULE: worker-pool =====================
 // Web Worker pool for offloading heavy computations from the UI thread.
-// v1.0.4 NEW (this round): introduces Web Workers for:
-//   1. PGN parsing (tablebase.js _parsePGN — can take 100+ms for long games
-//      with many variations)
-//   2. Statistics computation (stats.html — the heatmap-control walk can take
-//      1-2 seconds for 100+ move games)
-//   3. Control-map computation (game-logic.js getCtrlMap — called on every
-//      render tick when showCtrlMap is on; for Chess960 with many pieces
-//      this is non-trivial)
 //
-// Implementation strategy: a single bundled worker script (created from a
-// Blob URL at runtime) handles all three task types via a `cmd` field.
-// This avoids CSP issues with separate .js files (the WebView CSP is
-// `script-src 'unsafe-inline'` which permits blob: URLs in modern WebView).
+// v1.0.8 PHASE 34: Originally wired into the PGN import path
+//   (importPGNAsync) to offload PGN tokenization. v1.0.8 PHASE 49 removed
+//   that call site because importPGNAsync discarded the worker result and
+//   re-parsed synchronously anyway (zero offloading benefit, double CPU).
+//   The pool is retained as infrastructure for future offloading and is
+//   still exercised by stats.html's separate inline worker (which does
+//   consume its result). The API (workerParsePGN / terminateWorkerPool)
+//   remains stable.
+//
+// Design (first-principles robustness):
+//   - Pool of N workers (N = min(hardwareConcurrency, 4)), created lazily.
+//   - Each worker is a Blob-URL worker (CSP allows worker-src blob:).
+//   - The worker source is a self-contained JS string with a fixed switch
+//     statement for each task type. Adding a new task type requires adding
+//     a new case (no dynamic evaluation — CSP 'unsafe-eval' not needed).
+//   - Fallback: if Worker creation fails OR the task is unknown, tasks run
+//     synchronously on the main thread via _syncFallback.
+//   - Task cancellation: each task has a 30s timeout. If exceeded, the worker
+//     is terminated and replaced.
+//   - taskId map for concurrent task resolution (Phase 26 race-condition fix).
+//   - Queue cap (_MAX_QUEUE_SIZE=50) prevents unbounded growth.
+//   - pagehide cleanup terminates all workers + rejects pending promises.
 //
 // Copyright (C) 2026 Regalia
 //
+// PGN tokenization and chess control-map logic derived from DroidFish
+// (Copyright (C) Peter Österlund, GPL v3)
+// Modified by Regalia on 2026-06-15
+//
 // AI-GEN: AI assisted
-// This code was AI-assisted and has been reviewed for AGPL v3 compliance.
+// This code was AI-assisted and has been reviewed for GPL v3 compliance.
 //
 // This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
+// it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Affero General Public License for more details.
+// GNU General Public License for more details.
 //
-// You should have received a copy of the GNU Affero General Public License
+// You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-// ===== Worker capability detection =====
-let _workerSupported=typeof Worker!=='undefined'&&typeof URL!=='undefined'&&typeof URL.createObjectURL==='function';
-// WebView on Android 5.0 (API 21) supports Workers, but some older devices
-// may have it disabled. We always fall back to inline execution on failure.
-let _workerBlobUrl=null;
-let _workerInstance=null;
-let _workerTaskId=0;
-const _workerPending=new Map(); // taskId -> {resolve, reject, transferBack}
+// === Pool state ===
+let _workerPool = [];
+let _poolSize = 0;
+let _workerSupported = (typeof Worker !== 'undefined');
+let _nextTaskId = 1;
+const _pendingTasks = new Map(); // taskId -> {resolve, reject, worker, timeout}
+const _MAX_QUEUE_SIZE = 50;
 
-// ===== Worker source code (as a string; instantiated via Blob) =====
-// The worker is self-contained: it has its own copy of the chess logic
-// (board, moves, control map, FEN, SAN parsing) since Workers cannot share
-// the main thread's scope. To keep the bundle small, we only inline the
-// functions the worker actually needs: parsePGN, fenToState, stateToFEN,
-// attacked, getCtrlMap, basic move execution for control-map computation.
-const _WORKER_SOURCE = `
-"use strict";
-// ====== Inline chess primitives (subset of game-logic.js) ======
-const KNIGHT_OFFSETS=[[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
-const DIR_ROOK=[[-1,0],[1,0],[0,-1],[0,1]];
-const DIR_BISHOP=[[-1,-1],[-1,1],[1,-1],[1,1]];
-const DIR_QUEEN=DIR_ROOK.concat(DIR_BISHOP);
-const OPP_COLOR={white:'black',black:'white'};
-const _PIECE_FEN={white:{king:'K',queen:'Q',rook:'R',bishop:'B',knight:'N',pawn:'P'},black:{king:'k',queen:'q',rook:'r',bishop:'b',knight:'n',pawn:'p'}};
-
-function inB(r,c){return r>=0&&r<8&&c>=0&&c<8}
-function posAlg(p){return String.fromCharCode(97+p.col)+(8-p.row)}
-function algPos(a){if(!a)return null;const c=a.charCodeAt(0)-97;const r=8-parseInt(a[1]);if(c<0||c>7||r<0||r>7||isNaN(r))return null;return{row:r,col:c}}
-
-function attacked(board,pos){
-  const b=board,p=b[pos.row][pos.col];if(!p)return[];
-  const r=pos.row,c=pos.col,co=p.color,mv=[];
-  if(p.type==='pawn'){const d=co==='white'?-1:1;for(const dc of[-1,1])if(inB(r+d,c+dc))mv.push({row:r+d,col:c+dc})}
-  else if(p.type==='knight'){for(const[dr,dc]of KNIGHT_OFFSETS)if(inB(r+dr,c+dc))mv.push({row:r+dr,col:c+dc})}
-  else if(p.type==='king'){for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++)if((dr||dc)&&inB(r+dr,c+dc))mv.push({row:r+dr,col:c+dc})}
-  else{const dirs=p.type==='rook'?DIR_ROOK:p.type==='bishop'?DIR_BISHOP:DIR_QUEEN;for(const[dr,dc] of dirs){let nr=r+dr,nc=c+dc;while(inB(nr,nc)){mv.push({row:nr,col:nc});if(b[nr][nc])break;nr+=dr;nc+=dc}}}
-  return mv;
-}
-
-function sqAttackedFast(b,pos,byCo){
-  if(!b||!pos||!inB(pos.row,pos.col))return false;
-  const r=pos.row,c=pos.col;
-  const pd=byCo==='white'?1:-1;
-  if(inB(r+pd,c-1)&&b[r+pd][c-1]&&b[r+pd][c-1].color===byCo&&b[r+pd][c-1].type==='pawn')return true;
-  if(inB(r+pd,c+1)&&b[r+pd][c+1]&&b[r+pd][c+1].color===byCo&&b[r+pd][c+1].type==='pawn')return true;
-  for(const[dr,dc] of KNIGHT_OFFSETS){if(inB(r+dr,c+dc)&&b[r+dr][c+dc]&&b[r+dr][c+dc].color===byCo&&b[r+dr][c+dc].type==='knight')return true}
-  for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){if(!dr&&!dc)continue;if(inB(r+dr,c+dc)&&b[r+dr][c+dc]&&b[r+dr][c+dc].color===byCo&&b[r+dr][c+dc].type==='king')return true}
-  for(const[dr,dc] of DIR_ROOK){let nr=r+dr,nc=c+dc;while(inB(nr,nc)){const p=b[nr][nc];if(p){if(p.color===byCo&&(p.type==='rook'||p.type==='queen'))return true;break}nr+=dr;nc+=dc}}
-  for(const[dr,dc] of DIR_BISHOP){let nr=r+dr,nc=c+dc;while(inB(nr,nc)){const p=b[nr][nc];if(p){if(p.color===byCo&&(p.type==='bishop'||p.type==='queen'))return true;break}nr+=dr;nc+=dc}}
-  return false;
-}
-
-function getCtrlMap(b){
-  const cm=[];
-  for(let r=0;r<8;r++){cm[r]=[];for(let c=0;c<8;c++)cm[r][c]={white:[],black:[]}}
-  for(let r=0;r<8;r++)for(let c=0;c<8;c++){
-    const p=b[r][c];
-    if(!p)continue;
-    const atks=attacked(b,{row:r,col:c});
-    for(const a of atks){
-      cm[a.row][a.col][p.color].push({piece:{type:p.type,color:p.color},position:{row:r,col:c}});
-    }
-  }
-  return cm;
-}
-
-function initBoard(){
-  const b=Array.from({length:8},()=>Array(8).fill(null));
-  const backRank=['rook','knight','bishop','queen','king','bishop','knight','rook'];
-  for(let c=0;c<8;c++){
-    b[0][c]={type:backRank[c],color:'black'};
-    b[1][c]={type:'pawn',color:'black'};
-    b[6][c]={type:'pawn',color:'white'};
-    b[7][c]={type:backRank[c],color:'white'};
-  }
-  return b;
-}
-
-function initState(){
-  const s={board:initBoard(),currentTurn:'white',castlingRights:{whiteKingside:true,whiteQueenside:true,blackKingside:true,blackQueenside:true},enPassantTarget:null,halfMoveClock:0,fullMoveNumber:1,moveHistory:[],wk:{row:7,col:4},bk:{row:0,col:4}};
-  return s;
-}
-
-function fenToState(fen){
-  if(!fen||typeof fen!=='string')return null;
-  // Accept minimal FENs (board + side-to-move only); castling/en-passant/clock
-  // fields are optional and default sensibly. Consistent with the main-thread
-  // fenToState in tablebase.js. NOTE: no backticks in this comment — it lives
-  // inside the _WORKER_SOURCE template literal.
-  const parts=fen.trim().split(/\\s+/);
-  if(parts.length<2)return null;
-  const rows=parts[0].split('/');
-  if(rows.length!==8)return null;
-  const board=Array.from({length:8},()=>Array(8).fill(null));
-  let wk=null,bk=null;
-  for(let r=0;r<8;r++){
-    let c=0;
-    for(const ch of rows[r]){
-      if(ch>='1'&&ch<='8'){c+=parseInt(ch);continue}
-      const isWhite=ch===ch.toUpperCase();
-      const type=ch.toLowerCase()==='p'?'pawn':ch.toLowerCase()==='n'?'knight':ch.toLowerCase()==='b'?'bishop':ch.toLowerCase()==='r'?'rook':ch.toLowerCase()==='q'?'queen':ch.toLowerCase()==='k'?'king':null;
-      if(!type)return null;
-      const color=isWhite?'white':'black';
-      board[r][c]={type,color};
-      if(type==='king'){if(color==='white')wk={row:r,col:c};else bk={row:r,col:c}}
-      c++;
-    }
-    if(c!==8)return null;
-  }
-  if(!wk||!bk)return null;
-  const turn=parts[1]==='b'?'black':'white';
-  const crStr=parts[2]||'-';
-  // v1.0.7 PHASE 4: X-FEN castling rights parsing.
-  // X-FEN supports both standard KQkq and Shredder (file-letter) notations,
-  // INCLUDING mixed (e.g. "KQah"). We parse each character independently:
-  //   - K/Q/k/q map to file h/a respectively (X-FEN backward-compatibility).
-  //   - A-H/a-h are Shredder file letters.
-  // We then map each file letter to kingside/queenside based on the king's
-  // column (file > king.col → kingside, file < king.col → queenside).
-  // This is the same logic as parseShredderCastling() in chess960.js, but
-  // inlined here because the worker is a sandboxed context without access
-  // to the main-thread function.
-  const castlingRights={whiteKingside:false,whiteQueenside:false,blackKingside:false,blackQueenside:false};
-  for(const ch of crStr){
-    let file=-1,isWhite=false;
-    if(ch==='K'){file=7;isWhite=true;}
-    else if(ch==='Q'){file=0;isWhite=true;}
-    else if(ch==='k'){file=7;isWhite=false;}
-    else if(ch==='q'){file=0;isWhite=false;}
-    else if(ch>='A'&&ch<='H'){file=ch.charCodeAt(0)-65;isWhite=true;}
-    else if(ch>='a'&&ch<='h'){file=ch.charCodeAt(0)-97;isWhite=false;}
-    else continue; // ignore '-' and unknown chars
-    if(isWhite){
-      if(wk.col>=0&&file>wk.col)castlingRights.whiteKingside=true;
-      else if(wk.col>=0&&file<wk.col)castlingRights.whiteQueenside=true;
-    }else{
-      if(bk.col>=0&&file>bk.col)castlingRights.blackKingside=true;
-      else if(bk.col>=0&&file<bk.col)castlingRights.blackQueenside=true;
-    }
-  }
-  let enPassantTarget=null;
-  if(parts[3]&&parts[3]!=='-'){const ec=parts[3].charCodeAt(0)-97;const er=8-parseInt(parts[3][1]);if(er>=0&&er<8&&ec>=0&&ec<8)enPassantTarget={row:er,col:ec}}
-  const halfMoveClock=parts[4]?parseInt(parts[4])||0:0;
-  const fullMoveNumber=parts[5]?parseInt(parts[5])||1:1;
-  return {board,currentTurn:turn,castlingRights,enPassantTarget,halfMoveClock,fullMoveNumber,wk,bk};
-}
-
-function stateToFEN(s){
-  if(!s||!s.board)return '';
-  let fen='';
-  for(let r=0;r<8;r++){
-    let empty=0;
-    for(let c=0;c<8;c++){
-      const p=s.board[r][c];
-      if(p&&_PIECE_FEN[p.color]&&_PIECE_FEN[p.color][p.type]){if(empty>0){fen+=empty;empty=0}fen+=_PIECE_FEN[p.color][p.type]}
-      else{empty++}
-    }
-    if(empty>0)fen+=empty;
-    if(r<7)fen+='/';
-  }
-  fen+=' '+(s.currentTurn==='white'?'w':'b');
-  let castle='';
-  const cr=s.castlingRights||{};
-  if(cr.whiteKingside)castle+='K';
-  if(cr.whiteQueenside)castle+='Q';
-  if(cr.blackKingside)castle+='k';
-  if(cr.blackQueenside)castle+='q';
-  fen+=' '+(castle||'-');
-  fen+=' '+(s.enPassantTarget?posAlg(s.enPassantTarget):'-');
-  fen+=' '+(s.halfMoveClock||0);
-  fen+=' '+(s.fullMoveNumber||1);
-  return fen;
-}
-
-// ====== Move application (simplified, in-place) ======
-function makeMvInPlace(s,mv){
-  const{from,to,piece,promotion}=mv;
-  if(!piece||!s.board[from.row]||!s.board[from.row][from.col])return null;
-  const capPiece=s.board[to.row][to.col];
-  const undo={from:{r:from.row,c:from.col},to:{r:to.row,c:to.col},piece:{type:piece.type,color:piece.color},capPiece:capPiece?{type:capPiece.type,color:capPiece.color}:null,oldWk:s.wk?{r:s.wk.row,c:s.wk.col}:null,oldBk:s.bk?{r:s.bk.row,c:s.bk.col}:null,oldCastling:{...s.castlingRights},oldEnPassant:s.enPassantTarget?{r:s.enPassantTarget.row,c:s.enPassantTarget.col}:null,oldHalfMove:s.halfMoveClock,oldFullMove:s.fullMoveNumber,promotion:promotion||null};
-  s.board[to.row][to.col]=s.board[from.row][from.col];
-  s.board[from.row][from.col]=null;
-  // En passant
-  if(piece.type==='pawn'&&s.enPassantTarget&&to.row===s.enPassantTarget.row&&to.col===s.enPassantTarget.col){
-    const cr=piece.color==='white'?to.row+1:to.row-1;
-    if(s.board[cr]&&s.board[cr][to.col]&&s.board[cr][to.col].type==='pawn'&&s.board[cr][to.col].color!==piece.color){
-      undo.epCaptured={r:cr,c:to.col};
-      s.board[cr][to.col]=null;
-    }
-  }
-  // Castling: standard chess only (king moves 2 squares).
-  // v1.0.6 NOTE: This worker is used for PGN parsing and heatmap computation
-  // in standard chess only. Chess960 PGN parsing goes through tablebase.js's
-  // _parsePGN() which uses the Chess960-aware makeMvInPlace from game-logic.js.
-  // The worker does NOT have access to gameVariant (it's a sandboxed inline
-  // worker), so it cannot detect Chess960 castling. This is acceptable because
-  // the worker is only used for: (1) PGN round-trip parsing (standard chess),
-  // (2) control heatmap computation (board-only, no castling). If Chess960
-  // support is ever needed here, the move object should carry a castle flag
-  // (set by the caller from the main thread pseudoMoves) — same pattern as
-  // game-logic.js _castleSide() helper.
-  // NOTE: no backticks in this comment — it lives inside the _WORKER_SOURCE
-  // template literal, and backticks would prematurely terminate it (Rev57 bug).
-  if(piece.type==='king'&&Math.abs(to.col-from.col)===2){
-    if(to.col===6){s.board[from.row][5]=s.board[from.row][7];s.board[from.row][7]=null;undo.castlingRook={from:{r:from.row,c:7},to:{r:from.row,c:5}}}
-    if(to.col===2){s.board[from.row][3]=s.board[from.row][0];s.board[from.row][0]=null;undo.castlingRook={from:{r:from.row,c:0},to:{r:from.row,c:3}}}
-  }
-  if(promotion)s.board[to.row][to.col]={type:promotion,color:piece.color};
-  if(piece.type==='king'){if(piece.color==='white'){s.wk={row:to.row,col:to.col};s.castlingRights.whiteKingside=false;s.castlingRights.whiteQueenside=false}else{s.bk={row:to.row,col:to.col};s.castlingRights.blackKingside=false;s.castlingRights.blackQueenside=false}}
-  if(piece.type==='rook'){if(from.row===7&&from.col===0)s.castlingRights.whiteQueenside=false;if(from.row===7&&from.col===7)s.castlingRights.whiteKingside=false;if(from.row===0&&from.col===0)s.castlingRights.blackQueenside=false;if(from.row===0&&from.col===7)s.castlingRights.blackKingside=false}
-  if(capPiece&&capPiece.type==='rook'){if(capPiece.color==='white'){if(to.row===7&&to.col===0)s.castlingRights.whiteQueenside=false;if(to.row===7&&to.col===7)s.castlingRights.whiteKingside=false}else{if(to.row===0&&to.col===0)s.castlingRights.blackQueenside=false;if(to.row===0&&to.col===7)s.castlingRights.blackKingside=false}}
-  if(piece.type==='pawn'&&Math.abs(to.row-from.row)===2){const epRow=(from.row+to.row)/2;s.enPassantTarget={row:epRow,col:from.col}}else{s.enPassantTarget=null}
-  s.halfMoveClock=(piece.type==='pawn'||capPiece)?0:s.halfMoveClock+1;
-  if(piece.color==='black')s.fullMoveNumber++;
-  s.currentTurn=OPP_COLOR[s.currentTurn];
-  return undo;
-}
-
-// ====== PGN parsing (subset of tablebase._parsePGN) ======
-function parsePGN(pgnText){
-  if(!pgnText||typeof pgnText!=='string')return null;
-  try{if(pgnText.charCodeAt(0)===0xFEFF)pgnText=pgnText.substring(1);}catch(e){return null}
-  pgnText=pgnText.replace(/\\r\\n/g,'\\n').replace(/\\r/g,'\\n');
-  pgnText=pgnText.replace(/^%.*$/gm,'');
-  pgnText=pgnText.replace(/\\u00a0/g,' ');
-  const gameBlocks=pgnText.split(/\\n\\s*\\n(?=\\[)/);
-  if(gameBlocks.length>1)pgnText=gameBlocks[0];
-  let startFEN=null;
-  const fenMatch=pgnText.match(/\\[FEN\\s+"([^"]+)"\\]/i);
-  if(fenMatch)startFEN=fenMatch[1];
-  else{const fenNoQuoteMatch=pgnText.match(/\\[FEN\\s+([^\\]\\n]+)\\]/i);if(fenNoQuoteMatch)startFEN=fenNoQuoteMatch[1].trim()}
-  // Variant tag (Chess960)
-  let variant=null;
-  const variantMatch=pgnText.match(/\\[Variant\\s+"([^"]+)"\\]/i);
-  if(variantMatch){const v=variantMatch[1].toLowerCase();if(v==='chess960'||v==='fischerandom'||v==='fischer random'||v==='frc')variant='chess960'}
-  // Tags
-  const tags={};
-  const tagRe=/\\[(\\w+)\\s+"?((?:[^"\\\\]|\\\\.)*)"?"?\\s*\\]/g;
-  let m;
-  while((m=tagRe.exec(pgnText))!==null){tags[m[1]]=m[2]||''}
-  let moveText=pgnText.replace(/^\\[[^\\]]*\\]/gm,'').trim();
-  moveText=moveText.replace(/\\\\\\s*\\n/g,' ');
-  {let _i=0;while(moveText.includes('{')&&_i++<10)moveText=moveText.replace(/\\{[^{}]*\\}/g,'');}
-  // v1.0.7 PHASE 18 Task 3 (bug fix): Truncate at any unclosed brace, matching
-  // tablebase.js:460-464. Without this, an unclosed { survives the flattening
-  // loop and pollutes the token stream.
-  if(moveText.includes('{'))moveText=moveText.substring(0,moveText.indexOf('{'));
-  moveText=moveText.replace(/;[^\\n]*/g,'');
-  let text=moveText.replace(/\\$\\d+/g,'');
-  text=text.replace(/\\b1-0\\b/g,'').replace(/\\b0-1\\b/g,'').replace(/\\b1\\/2-1\\/2\\b/g,'').replace(/\\*/g,'');
-  text=text.replace(/\\b1\\s+-\\s+0\\b/g,'').replace(/\\b0\\s+-\\s+1\\b/g,'').replace(/\\b1\\/2\\s+-\\s+1\\/2\\b/g,'');
-  text=text.replace(/\\s+/g,' ').trim();
-  text=text.replace(/(\\d+\\.+(?=[a-zA-Z]))/g,'$1 ');
-  // v1.0.5 Round-6 Rev62 (2026.6.27) FIX: add 'O' to the character class so
-  // PGN move numbers followed by castling notation (e.g. "1 O-O" without a
-  // dot) are correctly normalized to "1. O-O". Previously the regex
-  // (?=[a-hKQRBN]) did not match 'O', so "1 O-O" would not get the ". "
-  // inserted, causing the "1" to be mis-tokenized as a SAN move and skipped.
-  // NOTE: no backticks in this comment — it lives inside the _WORKER_SOURCE
-  // template literal, and backticks would prematurely terminate it (Rev57 bug).
-  text=text.replace(/(^|\\s)(\\d+)\\s+(?=[a-hKQRBNO])/g,'$1$2. ');
-  text=text.replace(/\\s[!?]{1,5}\\s/g,' ');
-  text=text.replace(/^[!?]{1,5}\\s/g,'').replace(/\\s[!?]{1,5}$/g,'');
-  if(!text)return null;
-  text=text.replace(/\\(/g,' ( ').replace(/\\)/g,' ) ');
-  const rawTokens=text.match(/\\(|\\)|\\S+/g)||[];
-  if(rawTokens.length===0)return null;
-  const moveNumRe=/^\\d+\\.+$/;
-  const moveNumPrefixRe=/^\\d+\\.+\\s*/;
-  const ellipsisRe=/^\\.\\.\\.+$/;
-  const skipTokens=new Set(['1-0','0-1','1/2-1/2','*']);
-  const annotRe=/[!?]+$/;
-  const rootFrame={tokens:[],subVars:[],localMoveIdx:0,attachToMoveIdx:-1,mainMoveIdx:-1};
-  const stack=[rootFrame];
-  for(const token of rawTokens){
-    if(token==='('){const parent=stack[stack.length-1];const attachIdx=parent.localMoveIdx>0?parent.localMoveIdx-1:0;const mainIdx=(parent===rootFrame)?attachIdx:parent.mainMoveIdx;const newFrame={tokens:[],subVars:[],localMoveIdx:0,attachToMoveIdx:attachIdx,mainMoveIdx:mainIdx};parent.subVars.push({tree:newFrame,attachToMoveIdx:attachIdx});stack.push(newFrame);continue}
-    if(token===')'){if(stack.length>1)stack.pop();continue}
-    if(moveNumRe.test(token)||ellipsisRe.test(token)||skipTokens.has(token))continue;
-    const clean=token.replace(moveNumPrefixRe,'').replace(annotRe,'');
-    if(!clean)continue;
-    const frame=stack[stack.length-1];
-    frame.tokens.push(clean);
-    frame.localMoveIdx++;
-  }
-  const variations=new Map();
-  function _flatten(frame,prefix){
-    if(frame.tokens.length>0){const combined=prefix.concat(frame.tokens);const mi=frame.mainMoveIdx;if(!variations.has(mi))variations.set(mi,[]);variations.get(mi).push({sanTokens:combined})}
-    for(const sv of frame.subVars){const subPrefix=prefix.concat(frame.tokens.slice(0,sv.attachToMoveIdx));_flatten(sv.tree,subPrefix)}
-  }
-  for(const sv of rootFrame.subVars)_flatten(sv.tree,[]);
-  // v1.0.7 PHASE 16: The first loop already collected all non-variation
-  // tokens into rootFrame.tokens (variation-internal tokens went to their
-  // own frames via the stack push/pop on '(' / ')'). The old code walked
-  // rawTokens a SECOND time to rebuild the same list — redundant. Reuse
-  // rootFrame.tokens directly.
-  const mainTokens=rootFrame.tokens;
-  if(mainTokens.length===0)return null;
-  // Return raw main-line SAN tokens + variations map + startFEN + variant
-  return {mainTokens,variations,startFEN,variant,tags};
-}
-
-// ====== Stats: heatmap control walk ======
-// Given a parsed game (mainTokens + startFEN + a simple SAN→move matcher),
-// walk every position and accumulate per-square attacker counts.
-// We accept pre-parsed moves from the main thread (faster than re-parsing
-// SAN inside the worker, since the main thread already has the parsed moves
-// with from/to coordinates).
-function computeHeatmapStats(initialState, moves){
-  // moves: array of {from:{row,col}, to:{row,col}, piece:{type,color}, promotion?}
-  const ctrlW=Array.from({length:8},()=>new Array(8).fill(0));
-  const ctrlB=Array.from({length:8},()=>new Array(8).fill(0));
-  let posCount=0;
-  // Deep clone the initial state (we mutate it as we walk)
-  const s={
-    board:initialState.board.map(r=>r.map(p=>p?{type:p.type,color:p.color}:null)),
-    currentTurn:initialState.currentTurn,
-    castlingRights:{...initialState.castlingRights},
-    enPassantTarget:initialState.enPassantTarget?{...initialState.enPassantTarget}:null,
-    halfMoveClock:initialState.halfMoveClock||0,
-    fullMoveNumber:initialState.fullMoveNumber||1,
-    wk:initialState.wk?{...initialState.wk}:null,
-    bk:initialState.bk?{...initialState.bk}:null
-  };
-  // Accumulate initial position
-  const cm0=getCtrlMap(s.board);
-  for(let r=0;r<8;r++)for(let c=0;c<8;c++){ctrlW[r][c]+=cm0[r][c].white.length;ctrlB[r][c]+=cm0[r][c].black.length}
-  posCount++;
-  for(const mv of moves){
-    if(!mv)continue;
-    const undo=makeMvInPlace(s,mv);
-    if(!undo)continue;
-    const cm=getCtrlMap(s.board);
-    for(let r=0;r<8;r++)for(let c=0;c<8;c++){ctrlW[r][c]+=cm[r][c].white.length;ctrlB[r][c]+=cm[r][c].black.length}
-    posCount++;
-  }
-  return {ctrlW,ctrlB,posCount};
-}
-
-// ====== Worker message handler ======
-self.onmessage=function(e){
-  const msg=e.data;
-  if(!msg||!msg.cmd){self.postMessage({taskId:msg&&msg.taskId,error:'Missing cmd'});return}
-  const taskId=msg.taskId;
-  try{
-    let result;
-    if(msg.cmd==='parsePGN'){
-      result=parsePGN(msg.pgnText);
-    }else if(msg.cmd==='computeHeatmapStats'){
-      result=computeHeatmapStats(msg.initialState,msg.moves);
-    }else if(msg.cmd==='getCtrlMap'){
-      result=getCtrlMap(msg.board);
-    }else{
-      self.postMessage({taskId:taskId,error:'Unknown cmd: '+msg.cmd});
+// === Worker source code (self-contained, no external deps, no eval) ===
+// v1.0.8 PHASE 28: Functions are inlined as cases in a switch statement.
+//   This avoids `new Function()` / `eval()` which require CSP 'unsafe-eval'.
+// v1.0.8 PHASE 34: parsePGNText now does FULL tokenization (headers, comments,
+//   variations, movetext) matching the main-thread _parsePGN lexer so the
+//   result can be consumed by the structural parser without re-tokenizing.
+const _WORKER_SRC = `
+self.onmessage = function(e) {
+  var msg = e.data;
+  if (msg.type !== 'run') return;
+  var taskId = msg.taskId;
+  var fnName = msg.fnName;
+  var args = msg.args;
+  try {
+    var result;
+    if (fnName === 'parsePGNText') {
+      result = _parsePGNText(args[0]);
+    } else if (fnName === 'computeHeatmapStats') {
+      result = _computeHeatmapStats(args[0]);
+    } else {
+      self.postMessage({type: 'error', taskId: taskId, error: 'Unknown function: ' + fnName});
       return;
     }
-    self.postMessage({taskId:taskId,result:result});
-  }catch(err){
-    self.postMessage({taskId:taskId,error:err.message||String(err),stack:err.stack});
+    // Use Promise.resolve to handle both sync and async return paths uniformly
+    Promise.resolve(result).then(function(r) {
+      self.postMessage({type: 'result', taskId: taskId, result: r});
+    }).catch(function(err) {
+      self.postMessage({type: 'error', taskId: taskId, error: String(err && err.message || err)});
+    });
+  } catch (err) {
+    self.postMessage({type: 'error', taskId: taskId, error: String(err && err.message || err)});
   }
 };
+// === PGN tokenizer (full lexer — mirrors tablebase.js _parsePGN tokenization) ===
+// Returns {headers, tokens, variations, comments, cslAnnotations, calAnnotations,
+//          evals, startFEN, result} — all the raw data the structural parser needs.
+function _parsePGNText(pgnText) {
+  if (!pgnText || typeof pgnText !== 'string') return null;
+  // Remove BOM
+  if (pgnText.charCodeAt(0) === 0xFEFF) pgnText = pgnText.substring(1);
+  // Normalize line endings
+  var text = pgnText.replace(/\\r\\n/g, '\\n').replace(/\\r/g, '\\n');
+  // Strip PGN escape lines (% in column 0)
+  text = text.replace(/^%.*$/gm, '');
+  // Replace non-breaking spaces
+  text = text.replace(/\\u00a0/g, ' ');
+  // Handle multiple games: only parse the first game
+  var gameBlocks = text.split(/\\n\\s*\\n(?=\\[)/);
+  if (gameBlocks.length > 1) text = gameBlocks[0];
+  // Extract FEN from headers
+  var startFEN = null;
+  var fenMatch = text.match(/\\[FEN\\s+"([^"]+)"\\]/i);
+  if (fenMatch) { startFEN = fenMatch[1]; }
+  else {
+    var fenNoQuoteMatch = text.match(/\\[FEN\\s+([^\\]\\n]+)\\]/i);
+    if (fenNoQuoteMatch) { startFEN = fenNoQuoteMatch[1].trim(); }
+  }
+  // Extract headers
+  var headers = {};
+  var headerRe = /\\[(\\w+)\\s+"((?:[^"\\\\]|\\\\.)*)"/g;
+  var m;
+  while ((m = headerRe.exec(text)) !== null) {
+    headers[m[1]] = m[2].replace(/\\\\"/g, '"').replace(/\\\\\\\\/g, '\\\\');
+  }
+  // Remove header lines
+  text = text.replace(headerRe, '');
+  // Remove rest-of-line comments (;)
+  text = text.replace(/;[^\\n]*/g, '');
+  // Remove brace comments, but extract [%csl], [%cal], [%eval] first
+  var comments = [];
+  var cslAnnotations = [];
+  var calAnnotations = [];
+  var evals = [];
+  var cslRe = /\\[%csl\\s+([^\\]]*)\\]/g;
+  var calRe = /\\[%cal\\s+([^\\]]*)\\]/g;
+  var evalRe = /\\[%eval\\s+([^\\]]*)\\]/g;
+  var iter = 0;
+  while (text.indexOf('{') >= 0 && iter++ < 20) {
+    var prev = text;
+    // Extract annotations from comments before removing them
+    var cm;
+    while ((cm = cslRe.exec(text)) !== null) { cslAnnotations.push(cm[1].trim()); }
+    while ((cm = calRe.exec(text)) !== null) { calAnnotations.push(cm[1].trim()); }
+    while ((cm = evalRe.exec(text)) !== null) { evals.push(cm[1].trim()); }
+    text = text.replace(/\\{[^{}]*\\}/g, function(match) {
+      comments.push(match.substring(1, match.length - 1));
+      return '';
+    });
+    if (text === prev) break;
+  }
+  text = text.replace(/[{}]/g, ' ');
+  // Extract variations (parenthesized)
+  var variations = [];
+  var depth = 0, start = -1;
+  for (var i = 0; i < text.length; i++) {
+    if (text[i] === '(') { if (depth === 0) start = i + 1; depth++; }
+    else if (text[i] === ')') { depth--; if (depth === 0 && start >= 0) { variations.push(text.substring(start, i)); start = -1; } }
+  }
+  // Remove variations from movetext
+  var movetext = '';
+  depth = 0;
+  for (var i = 0; i < text.length; i++) {
+    if (text[i] === '(') { depth++; continue; }
+    if (text[i] === ')') { if (depth > 0) depth--; continue; }
+    if (depth === 0) movetext += text[i];
+  }
+  // Clean up movetext
+  movetext = movetext.replace(/\\d+\\.+(\\d+\\.+)*/g, ' ');
+  movetext = movetext.replace(/\\$\\d+/g, ' ');
+  var result = '*';
+  var resultMatch = movetext.match(/(1-0|0-1|1\\/2-1\\/2|\\*)/);
+  if (resultMatch) { result = resultMatch[1]; }
+  movetext = movetext.replace(/(1-0|0-1|1\\/2-1\\/2|\\*)/g, ' ');
+  movetext = movetext.replace(/\\s+/g, ' ').trim();
+  var tokens = movetext ? movetext.split(' ').filter(function(t) { return t.length > 0; }) : [];
+  return {
+    headers: headers,
+    tokens: tokens,
+    variations: variations,
+    comments: comments,
+    cslAnnotations: cslAnnotations,
+    calAnnotations: calAnnotations,
+    evals: evals,
+    startFEN: startFEN,
+    result: result
+  };
+}
+// === Heatmap stats (mirrors stats.html worker logic) ===
+function _computeHeatmapStats(boards) {
+  function attacked(board, pos) {
+    var p = board[pos.row][pos.col]; if (!p) return [];
+    var r = pos.row, c = pos.col, co = p.color, mv = [];
+    if (p.type === 'pawn') {
+      var d = co === 'white' ? -1 : 1;
+      if (r+d >= 0 && r+d < 8 && c-1 >= 0 && c-1 < 8) mv.push({row: r+d, col: c-1});
+      if (r+d >= 0 && r+d < 8 && c+1 >= 0 && c+1 < 8) mv.push({row: r+d, col: c+1});
+    } else if (p.type === 'knight') {
+      var offs = [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
+      for (var i = 0; i < offs.length; i++) {
+        var nr = r+offs[i][0], nc = c+offs[i][1];
+        if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) mv.push({row: nr, col: nc});
+      }
+    } else if (p.type === 'king') {
+      for (var dr = -1; dr <= 1; dr++) for (var dc = -1; dc <= 1; dc++) {
+        if (!dr && !dc) continue;
+        if (r+dr >= 0 && r+dr < 8 && c+dc >= 0 && c+dc < 8) mv.push({row: r+dr, col: c+dc});
+      }
+    } else {
+      var dirs = p.type === 'rook' ? [[-1,0],[1,0],[0,-1],[0,1]]
+        : p.type === 'bishop' ? [[-1,-1],[-1,1],[1,-1],[1,1]]
+        : [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]];
+      for (var i = 0; i < dirs.length; i++) {
+        var nr = r+dirs[i][0], nc = c+dirs[i][1];
+        while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+          mv.push({row: nr, col: nc}); if (board[nr][nc]) break;
+          nr += dirs[i][0]; nc += dirs[i][1];
+        }
+      }
+    }
+    return mv;
+  }
+  var ctrlW = [[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0]];
+  var ctrlB = [[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0]];
+  var posCount = 0;
+  for (var bi = 0; bi < boards.length; bi++) {
+    var b = boards[bi];
+    for (var r = 0; r < 8; r++) for (var c = 0; c < 8; c++) {
+      var p = b[r][c]; if (!p) continue;
+      var atks = attacked(b, {row: r, col: c});
+      for (var ai = 0; ai < atks.length; ai++) {
+        var a = atks[ai];
+        if (p.color === 'white') ctrlW[a.row][a.col]++; else ctrlB[a.row][a.col]++;
+      }
+    }
+    posCount++;
+  }
+  return { ctrlW: ctrlW, ctrlB: ctrlB, posCount: posCount };
+}
 `;
 
-// ====== Worker initialization ======
-function _initWorker(){
-  if(!_workerSupported)return false;
-  try{
-    const blob=new Blob([_WORKER_SOURCE],{type:'application/javascript'});
-    _workerBlobUrl=URL.createObjectURL(blob);
-    _workerInstance=new Worker(_workerBlobUrl);
-    _workerInstance.onmessage=function(e){
-      const msg=e.data;
-      if(!msg||typeof msg.taskId!=='number')return;
-      const pending=_workerPending.get(msg.taskId);
-      if(!pending)return;
-      _workerPending.delete(msg.taskId);
-      if(msg.error){pending.reject(new Error(msg.error));}
-      else{pending.resolve(msg.result);}
+// === Pool management ===
+function _getPoolSize() {
+  if (_poolSize > 0) return _poolSize;
+  try {
+    const hc = (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) || 2;
+    _poolSize = Math.max(1, Math.min(hc, 4));
+  } catch (e) { _poolSize = 2; }
+  return _poolSize;
+}
+
+function _createWorker() {
+  if (!_workerSupported) return null;
+  // v1.0.8 PHASE 49: hoist `url` so the catch block can revoke it if
+  //   `new Worker(url)` throws. The old block-scoped declaration leaked the
+  //   Blob URL on every failed worker-creation attempt.
+  let url = null;
+  try {
+    const blob = new Blob([_WORKER_SRC], {type: 'application/javascript'});
+    url = URL.createObjectURL(blob);
+    const w = new Worker(url);
+    w._url = url;
+    url = null; // ownership transferred to w._url; revoke on worker teardown
+    w._busy = false;
+    w.onmessage = function(e) {
+      const msg = e.data;
+      if (!msg || !msg.taskId) return;
+      const task = _pendingTasks.get(msg.taskId);
+      if (!task) return;
+      _pendingTasks.delete(msg.taskId);
+      task.worker._busy = false;
+      if (task.timeout) { clearTimeout(task.timeout); task.timeout = null; }
+      if (msg.type === 'result') task.resolve(msg.result);
+      else task.reject(new Error(msg.error || 'Worker error'));
+      _dispatchNext();
     };
-    _workerInstance.onerror=function(e){
-      console.error('Worker error:',e.message||e);
-      // Reject ALL pending tasks — the worker is in an unknown state.
-      // v1.0.5 Round-6 Rev62 (2026.6.27) FIX: collect keys first, then delete.
-      // Modifying a Map during for...of iteration is spec-allowed but some
-      // engines may skip entries or behave unexpectedly. Array.from() takes
-      // a snapshot of the keys before any deletion, guaranteeing all pending
-      // tasks are rejected.
-      const ids=Array.from(_workerPending.keys());
-      for(const id of ids){
-        const pending=_workerPending.get(id);
-        if(pending)pending.reject(new Error('Worker error: '+(e.message||'unknown')));
-        _workerPending.delete(id);
+    w.onerror = function(e) {
+      // Collect tasks to reject before mutating the map (avoid iterate-while-mutate)
+      const toReject = [];
+      for (const [tid, task] of _pendingTasks) {
+        if (task.worker === w) toReject.push([tid, task]);
       }
+      for (const [tid, task] of toReject) {
+        _pendingTasks.delete(tid);
+        if (task.timeout) { clearTimeout(task.timeout); task.timeout = null; }
+        task.reject(new Error('Worker crashed: ' + (e && e.message || e)));
+      }
+      w._busy = false;
+      _removeWorker(w);
+      _dispatchNext();
     };
-    return true;
-  }catch(e){
-    console.warn('Worker init failed, falling back to inline:',e);
-    _workerSupported=false;
-    return false;
+    return w;
+  } catch (e) {
+    if (url) { try { URL.revokeObjectURL(url); } catch (_) {} }
+    _workerSupported = false;
+    return null;
   }
 }
 
-// ====== Public API ======
-// All public functions return Promises. If Workers are unavailable, they
-// fall back to inline execution (which blocks the UI thread but produces
-// identical results). This guarantees feature parity across all devices.
-
-/**
- * Parse PGN text off the main thread.
- * @param {string} pgnText
- * @returns {Promise<Object>} parsed PGN result (mainTokens, variations, startFEN, variant, tags)
- */
-function workerParsePGN(pgnText){
-  return new Promise((resolve,reject)=>{
-    if(!_workerSupported||(!_workerInstance&&!_initWorker())){
-      // Fallback: parse inline using the worker's source via eval.
-      // This is sub-optimal but ensures correctness on Worker-less devices.
-      try{
-        // The main thread already has _parsePGN() from tablebase.js in scope
-        // (bundled in the same file). Use it directly.
-        if(typeof _parsePGN==='function'){
-          resolve(_parsePGN(pgnText));
-        }else{
-          reject(new Error('PGN parser unavailable'));
-        }
-      }catch(e){reject(e);}
-      return;
-    }
-    const taskId=++_workerTaskId;
-    _workerPending.set(taskId,{resolve,reject});
-    try{
-      _workerInstance.postMessage({cmd:'parsePGN',pgnText:pgnText,taskId:taskId});
-    }catch(e){
-      _workerPending.delete(taskId);
-      reject(e);
-    }
-  });
+function _removeWorker(w) {
+  const idx = _workerPool.indexOf(w);
+  if (idx >= 0) _workerPool.splice(idx, 1);
+  try { w.terminate(); } catch (e) {}
+  try { if (w._url) URL.revokeObjectURL(w._url); } catch (e) {}
 }
 
-/**
- * Compute heatmap statistics off the main thread.
- * @param {Object} initialState — initial game state (board, currentTurn, etc.)
- * @param {Array} moves — array of {from, to, piece, promotion?}
- * @returns {Promise<Object>} {ctrlW, ctrlB, posCount}
- */
-function workerComputeHeatmapStats(initialState,moves){
-  return new Promise((resolve,reject)=>{
-    if(!_workerSupported||(!_workerInstance&&!_initWorker())){
-      // Fallback: inline implementation (replicates the worker's logic)
-      try{
-        // Use the main-thread getCtrlMap + makeMvInPlace
-        if(typeof getCtrlMap!=='function'||typeof makeMvInPlace!=='function'){
-          reject(new Error('Required functions unavailable for inline fallback'));
-          return;
-        }
-        const ctrlW=Array.from({length:8},()=>new Array(8).fill(0));
-        const ctrlB=Array.from({length:8},()=>new Array(8).fill(0));
-        let posCount=0;
-        const s=cloneS(initialState);
-        const cm0=getCtrlMap(s.board);
-        for(let r=0;r<8;r++)for(let c=0;c<8;c++){ctrlW[r][c]+=cm0[r][c].white.length;ctrlB[r][c]+=cm0[r][c].black.length}
-        posCount++;
-        for(const mv of moves){
-          if(!mv)continue;
-          const undo=makeMvInPlace(s,mv);
-          if(!undo)continue;
-          const cm=getCtrlMap(s.board);
-          for(let r=0;r<8;r++)for(let c=0;c<8;c++){ctrlW[r][c]+=cm[r][c].white.length;ctrlB[r][c]+=cm[r][c].black.length}
-          posCount++;
-        }
-        resolve({ctrlW,ctrlB,posCount});
-      }catch(e){reject(e);}
-      return;
-    }
-    const taskId=++_workerTaskId;
-    _workerPending.set(taskId,{resolve,reject});
-    try{
-      _workerInstance.postMessage({cmd:'computeHeatmapStats',initialState:initialState,moves:moves,taskId:taskId});
-    }catch(e){
-      _workerPending.delete(taskId);
-      reject(e);
-    }
-  });
-}
-
-/**
- * Compute control map for a single board position off the main thread.
- * Useful when the main thread is busy with rendering and a control-map
- * refresh would cause a frame drop.
- * @param {Array} board — 8x8 board array
- * @returns {Promise<Object>} control map (8x8 of {white:[], black:[]})
- */
-function workerGetCtrlMap(board){
-  return new Promise((resolve,reject)=>{
-    if(!_workerSupported||(!_workerInstance&&!_initWorker())){
-      try{
-        if(typeof getCtrlMap!=='function'){reject(new Error('getCtrlMap unavailable'));return}
-        resolve(getCtrlMap(board));
-      }catch(e){reject(e);}
-      return;
-    }
-    const taskId=++_workerTaskId;
-    _workerPending.set(taskId,{resolve,reject});
-    try{
-      _workerInstance.postMessage({cmd:'getCtrlMap',board:board,taskId:taskId});
-    }catch(e){
-      _workerPending.delete(taskId);
-      reject(e);
-    }
-  });
-}
-
-/**
- * Check whether the worker pool is currently available.
- */
-function isWorkerSupported(){return _workerSupported;}
-
-/**
- * v1.0.4 Rev44: Terminate the Web Worker to prevent memory leaks.
- * Called from pagehide/beforeunload events. In Android WebView, Worker threads
- * are NOT automatically destroyed when the page is unloaded — they persist
- * until explicitly terminated, causing OOM after repeated page loads.
- * After termination, the worker can be re-created on next use via _initWorker().
- */
-function terminateWorker(){
-  if(_workerInstance){
-    try{
-      _workerInstance.terminate();
-    }catch(e){console.warn('Worker terminate failed:',e);}
-    _workerInstance=null;
+function _getIdleWorker() {
+  for (const w of _workerPool) {
+    if (!w._busy) return w;
   }
-  if(_workerBlobUrl){
-    try{URL.revokeObjectURL(_workerBlobUrl);}catch(e){}
-    _workerBlobUrl=null;
+  if (_workerPool.length < _getPoolSize()) {
+    const w = _createWorker();
+    if (w) { _workerPool.push(w); return w; }
   }
-  _workerPending.clear();
-  _workerSupported=true; // Re-enable for potential re-init
+  return null;
 }
 
-// v1.0.4 Rev44: Register lifecycle events to terminate the worker on page exit.
-// This prevents the memory leak described in the review report (item 1).
-if(typeof window!=='undefined'){
-  window.addEventListener('pagehide',terminateWorker);
-  window.addEventListener('beforeunload',terminateWorker);
+// === Task queue ===
+const _taskQueue = [];
+
+function _dispatchNext() {
+  while (_taskQueue.length > 0) {
+    const w = _getIdleWorker();
+    if (!w) break;
+    const task = _taskQueue.shift();
+    w._busy = true;
+    task.worker = w;
+    _pendingTasks.set(task.taskId, task);
+    w.postMessage({type: 'run', taskId: task.taskId, fnName: task.fnName, args: task.args});
+  }
 }
 
-// Export the public API (the build script strips `export {}` statements).
-export {workerParsePGN, workerComputeHeatmapStats, workerGetCtrlMap, isWorkerSupported, terminateWorker};
+// === Public API ===
+
+function workerRun(fnName, args, timeoutMs) {
+  timeoutMs = timeoutMs || 30000;
+  if (!_workerSupported) {
+    // v1.0.8 PHASE 35: defer into Promise chain so sync throws (unknown fnName)
+    //   become rejected Promises instead of synchronous throws out of workerRun.
+    return Promise.resolve().then(function() { return _syncFallback(fnName, args); });
+  }
+  return new Promise(function(resolve, reject) {
+    const taskId = _nextTaskId++;
+    const task = {
+      taskId: taskId,
+      fnName: fnName,
+      args: args,
+      worker: null,
+      resolve: resolve,
+      reject: reject,
+      timeout: null
+    };
+    task.timeout = setTimeout(function() {
+      _pendingTasks.delete(taskId);
+      if (task.worker) {
+        task.worker._busy = false;
+        _removeWorker(task.worker);
+      } else {
+        // v1.0.8 PHASE 35: task was still queued (no worker assigned) — splice
+        //   it from _taskQueue to prevent a ghost dispatch later.
+        const idx = _taskQueue.indexOf(task);
+        if (idx >= 0) _taskQueue.splice(idx, 1);
+      }
+      reject(new Error('Worker timeout after ' + timeoutMs + 'ms for ' + fnName));
+      _dispatchNext();
+    }, timeoutMs);
+    // Cap the queue to prevent unbounded growth
+    if (_taskQueue.length >= _MAX_QUEUE_SIZE) {
+      clearTimeout(task.timeout);
+      reject(new Error('Worker pool queue full (' + _MAX_QUEUE_SIZE + ') for ' + fnName));
+      return;
+    }
+    _taskQueue.push(task);
+    _dispatchNext();
+  });
+}
+
+// Synchronous fallback — runs the function on the main thread
+function _syncFallback(fnName, args) {
+  if (fnName === 'parsePGNText') {
+    return _syncParsePGNText(args[0]);
+  } else if (fnName === 'computeHeatmapStats') {
+    return _syncComputeHeatmapStats(args[0]);
+  }
+  throw new Error('Unknown worker function: ' + fnName);
+}
+
+// Inline sync implementations (mirror the worker source for fallback)
+function _syncParsePGNText(pgnText) {
+  if (!pgnText || typeof pgnText !== 'string') return null;
+  if (pgnText.charCodeAt(0) === 0xFEFF) pgnText = pgnText.substring(1);
+  var text = pgnText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  text = text.replace(/^%.*$/gm, '');
+  text = text.replace(/\u00a0/g, ' ');
+  var gameBlocks = text.split(/\n\s*\n(?=\[)/);
+  if (gameBlocks.length > 1) text = gameBlocks[0];
+  var startFEN = null;
+  var fenMatch = text.match(/\[FEN\s+"([^"]+)"\]/i);
+  if (fenMatch) { startFEN = fenMatch[1]; }
+  else {
+    var fenNoQuoteMatch = text.match(/\[FEN\s+([^\]\n]+)\]/i);
+    if (fenNoQuoteMatch) { startFEN = fenNoQuoteMatch[1].trim(); }
+  }
+  var headers = {};
+  var headerRe = /\[(\w+)\s+"((?:[^"\\]|\\.)*)"/g;
+  var m;
+  while ((m = headerRe.exec(text)) !== null) {
+    headers[m[1]] = m[2].replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+  }
+  text = text.replace(headerRe, '');
+  text = text.replace(/;[^\n]*/g, '');
+  var comments = [];
+  var cslAnnotations = [];
+  var calAnnotations = [];
+  var evals = [];
+  var cslRe = /\[%csl\s+([^\]]*)\]/g;
+  var calRe = /\[%cal\s+([^\]]*)\]/g;
+  var evalRe = /\[%eval\s+([^\]]*)\]/g;
+  var iter = 0;
+  while (text.indexOf('{') >= 0 && iter++ < 20) {
+    var prev = text;
+    var cm;
+    while ((cm = cslRe.exec(text)) !== null) { cslAnnotations.push(cm[1].trim()); }
+    while ((cm = calRe.exec(text)) !== null) { calAnnotations.push(cm[1].trim()); }
+    while ((cm = evalRe.exec(text)) !== null) { evals.push(cm[1].trim()); }
+    text = text.replace(/\{[^{}]*\}/g, function(match) {
+      comments.push(match.substring(1, match.length - 1));
+      return '';
+    });
+    if (text === prev) break;
+  }
+  text = text.replace(/[{}]/g, ' ');
+  var variations = [];
+  var depth = 0, start = -1;
+  for (var i = 0; i < text.length; i++) {
+    if (text[i] === '(') { if (depth === 0) start = i + 1; depth++; }
+    else if (text[i] === ')') { depth--; if (depth === 0 && start >= 0) { variations.push(text.substring(start, i)); start = -1; } }
+  }
+  var movetext = '';
+  depth = 0;
+  for (var i = 0; i < text.length; i++) {
+    if (text[i] === '(') { depth++; continue; }
+    if (text[i] === ')') { if (depth > 0) depth--; continue; }
+    if (depth === 0) movetext += text[i];
+  }
+  movetext = movetext.replace(/\d+\.+(\d+\.+)*/g, ' ');
+  movetext = movetext.replace(/\$\d+/g, ' ');
+  var result = '*';
+  var resultMatch = movetext.match(/(1-0|0-1|1\/2-1\/2|\*)/);
+  if (resultMatch) { result = resultMatch[1]; }
+  movetext = movetext.replace(/(1-0|0-1|1\/2-1\/2|\*)/g, ' ');
+  movetext = movetext.replace(/\s+/g, ' ').trim();
+  var tokens = movetext ? movetext.split(' ').filter(function(t) { return t.length > 0; }) : [];
+  return {
+    headers: headers,
+    tokens: tokens,
+    variations: variations,
+    comments: comments,
+    cslAnnotations: cslAnnotations,
+    calAnnotations: calAnnotations,
+    evals: evals,
+    startFEN: startFEN,
+    result: result
+  };
+}
+
+function _syncComputeHeatmapStats(boards) {
+  function attacked(board, pos) {
+    var p = board[pos.row][pos.col]; if (!p) return [];
+    var r = pos.row, c = pos.col, co = p.color, mv = [];
+    if (p.type === 'pawn') {
+      var d = co === 'white' ? -1 : 1;
+      if (r+d >= 0 && r+d < 8 && c-1 >= 0 && c-1 < 8) mv.push({row: r+d, col: c-1});
+      if (r+d >= 0 && r+d < 8 && c+1 >= 0 && c+1 < 8) mv.push({row: r+d, col: c+1});
+    } else if (p.type === 'knight') {
+      var offs = [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
+      for (var i = 0; i < offs.length; i++) {
+        var nr = r+offs[i][0], nc = c+offs[i][1];
+        if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) mv.push({row: nr, col: nc});
+      }
+    } else if (p.type === 'king') {
+      for (var dr = -1; dr <= 1; dr++) for (var dc = -1; dc <= 1; dc++) {
+        if (!dr && !dc) continue;
+        if (r+dr >= 0 && r+dr < 8 && c+dc >= 0 && c+dc < 8) mv.push({row: r+dr, col: c+dc});
+      }
+    } else {
+      var dirs = p.type === 'rook' ? [[-1,0],[1,0],[0,-1],[0,1]]
+        : p.type === 'bishop' ? [[-1,-1],[-1,1],[1,-1],[1,1]]
+        : [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]];
+      for (var i = 0; i < dirs.length; i++) {
+        var nr = r+dirs[i][0], nc = c+dirs[i][1];
+        while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
+          mv.push({row: nr, col: nc}); if (board[nr][nc]) break;
+          nr += dirs[i][0]; nc += dirs[i][1];
+        }
+      }
+    }
+    return mv;
+  }
+  var ctrlW = [[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0]];
+  var ctrlB = [[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0]];
+  var posCount = 0;
+  for (var bi = 0; bi < boards.length; bi++) {
+    var b = boards[bi];
+    for (var r = 0; r < 8; r++) for (var c = 0; c < 8; c++) {
+      var p = b[r][c]; if (!p) continue;
+      var atks = attacked(b, {row: r, col: c});
+      for (var ai = 0; ai < atks.length; ai++) {
+        var a = atks[ai];
+        if (p.color === 'white') ctrlW[a.row][a.col]++; else ctrlB[a.row][a.col]++;
+      }
+    }
+    posCount++;
+  }
+  return { ctrlW: ctrlW, ctrlB: ctrlB, posCount: posCount };
+}
+
+// === Convenience wrappers ===
+
+function workerParsePGN(pgnText, timeoutMs) {
+  return workerRun('parsePGNText', [pgnText], timeoutMs);
+}
+
+function workerComputeHeatmapStats(serializedBoards, timeoutMs) {
+  return workerRun('computeHeatmapStats', [serializedBoards], timeoutMs);
+}
+
+function terminateWorkerPool() {
+  for (const w of _workerPool) {
+    try { w.terminate(); } catch (e) {}
+    try { if (w._url) URL.revokeObjectURL(w._url); } catch (e) {}
+  }
+  _workerPool = [];
+  // v1.0.8 PHASE 35: reject in-flight (dispatched) tasks
+  for (const [tid, task] of _pendingTasks) {
+    if (task.timeout) { clearTimeout(task.timeout); task.timeout = null; }
+    try { task.reject(new Error('Pool terminated')); } catch (e) {}
+  }
+  _pendingTasks.clear();
+  // v1.0.8 PHASE 35: reject queued (not-yet-dispatched) tasks too — previously
+  //   these were silently dropped by `_taskQueue.length = 0`, leaving their
+  //   promises hanging up to 30s. Now they reject immediately.
+  for (const task of _taskQueue) {
+    if (task.timeout) { clearTimeout(task.timeout); task.timeout = null; }
+    try { task.reject(new Error('Pool terminated')); } catch (e) {}
+  }
+  _taskQueue.length = 0;
+}
+
+// v1.0.8 PHASE 34: Expose globally so callers in tablebase.js / ui.js can use
+//   workerParsePGN without ES module imports (the bundled chess.html is a
+//   non-module script where top-level function declarations ARE global, but
+//   source-module mode requires explicit window assignment).
+if (typeof window !== 'undefined') {
+  window.workerParsePGN = workerParsePGN;
+  window.workerComputeHeatmapStats = workerComputeHeatmapStats;
+  window.terminateWorkerPool = terminateWorkerPool;
+  window.workerRun = workerRun;
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('pagehide', function() {
+    try { terminateWorkerPool(); } catch (e) {}
+  });
+}

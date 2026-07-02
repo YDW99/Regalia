@@ -271,9 +271,6 @@ function _parsePGN(pgnText){
         // '}', this is an UNCLOSED comment. We treat the rest as the comment
         // body (so any [%eval ...] inside is still extracted), then advance
         // _i past the end of the string to terminate the outer loop.
-        // v1.0.4 Rev31 CLEANUP: removed unused `_unclosed` flag (was set but
-        // never read — the post-loop logic handles both closed and unclosed
-        // cases uniformly via _j and _d).
         let _j=_i+1,_d=1,_body='';
         while(_j<_mt.length&&_d>0){
           if(_mt[_j]==='{')_d++;
@@ -486,9 +483,9 @@ function _parsePGN(pgnText){
   // handles "1.e4" → "1. e4", and the next regex handles "1 e4" → "1. e4".
   // Handle move numbers without dots (e.g. "1 e4 e5 2 Nf3") — add a dot so the
   // move-number regex can detect them. Pattern: standalone number followed by a piece/pawn letter.
-  // v1.0.5 Round-6 Rev62 (2026.6.27) FIX: add 'O' to character class (same fix
-  // as worker-pool.js line 269). PGN move numbers followed by castling "O-O"
-  // without a dot were not being normalized to "1. O-O".
+  // v1.0.5 Round-6 Rev62 (2026.6.27) FIX: add 'O' to character class. PGN move
+  // numbers followed by castling "O-O" without a dot were not being normalized
+  // to "1. O-O".
   text=text.replace(/(^|\s)(\d+)\s+(?=[a-hKQRBNO])/g,'$1$2. ');
   // Strip any remaining standalone annotation symbols that survived earlier cleaning
   // Handle 1-5 character annotations (!, !!, !?, ?!, ??, !!!, etc.)
@@ -889,8 +886,6 @@ function _executeAndRecord(state,move,notation){
   const undoInfo=makeMvInPlace(state,move);
   // makeMvInPlace mutates state in place and returns undo info, NOT the post-move state.
   // After the call, 'state' IS the post-move state.
-  // v1.0.3-p5 audit: removed dead `isCapture` computation (was never read, and
-  // move.enPassant is always undefined since legalMoves doesn't set it).
   // Determine check status using the mutated post-move state
   // After makeMvInPlace, currentTurn has already switched to the opponent's turn
   const oppColor=state.currentTurn; // side to move next (might be in check)
@@ -926,7 +921,16 @@ function importPGN(pgnText){
   }
   const result=_parsePGN(pgnText);
   if(!result||!result.moves||!result.moves.length){showToast(T('pgn_invalid'),2000);return;}
-  // v1.0.7 BUG FIX (audit: 棋局前端代码审查.docx §10):
+  // Start from FEN or initial position
+  // v1.0.8 PHASE 49: validate startState BEFORE clearing _reviewEvalCache and
+  //   toggling Chess960 mode. The old order (clear cache + set Chess960 first,
+  //   then validate startState) destroyed ALL persisted evals AND corrupted
+  //   the current game's Chess960 mode when a PGN had a valid movetext but an
+  //   invalid [FEN] tag — even though the import ultimately failed. Now the
+  //   side effects only run once we know the import will succeed.
+  const startState=result.startFEN?fenToState(result.startFEN):initState();
+  if(!startState){showToast(T('pgn_invalid'),2000);return;}
+  // v1.0.7 BUG FIX:
   // Clear _reviewEvalCache before importing a new PGN — see _startGameImpl()
   // for rationale (cache is keyed by per-game reviewStep, switching games
   // invalidates the entire key space).
@@ -953,7 +957,7 @@ function importPGN(pgnText){
           const backRank=[];
           let idx=0;
           for(const ch of whiteRow){
-            if(ch>='1'&&ch<='8'){for(let k=0;k<parseInt(ch);k++){backRank[idx++]=null;}}
+            if(ch>='1'&&ch<='8'){for(let k=0;k<parseInt(ch,10);k++){backRank[idx++]=null;}}
             else{
               const t=ch.toLowerCase()==='r'?'rook':ch.toLowerCase()==='n'?'knight':ch.toLowerCase()==='b'?'bishop':ch.toLowerCase()==='q'?'queen':ch.toLowerCase()==='k'?'king':null;
               if(t)backRank[idx++]=t;
@@ -972,9 +976,6 @@ function importPGN(pgnText){
     if(typeof gameSPID!=='undefined')gameSPID=null;
   }
   
-  // Start from FEN or initial position
-  const startState=result.startFEN?fenToState(result.startFEN):initState();
-  if(!startState){showToast(T('pgn_invalid'),2000);return;}
   // v1.0.6 FIX: Preserve the imported start FEN so PGN round-trip export
   // includes the [SetUp "1"] and [FEN "..."] headers. Previously, importPGN()
   // consumed result.startFEN to build startState but never assigned it to
@@ -1577,6 +1578,48 @@ function importPGN(pgnText){
   }
 }
 
+// v1.0.8 PHASE 34: Async PGN import with worker offloading + loading indicator.
+//   v1.0.8 PHASE 35: now resolves with a boolean success flag so callers can
+//     distinguish success from failure (importPGN returns void but shows its
+//     own error toast on invalid PGN; the boolean lets callers avoid showing
+//     a misleading success toast).
+//   Returns Promise<boolean>: true = import succeeded, false = import failed
+//   (invalid PGN). The caller should check the flag before showing success UI.
+function importPGNAsync(pgnText){
+  if(!pgnText||typeof pgnText!=='string')return Promise.resolve(false);
+  // If worker pool unavailable, fall back to sync immediately
+  if(typeof workerParsePGN!=='function'){
+    try{importPGN(pgnText);return Promise.resolve(true);}catch(e){
+      // importPGN itself shows the error toast, but if it threw we report false
+      return Promise.resolve(false);
+    }
+  }
+  // Show loading indicator
+  try{showToast(T('importing_pgn'),3000);}catch(e){}
+  // v1.0.8 PHASE 49: removed the dead workerParsePGN round-trip. The old code
+  //   called workerParsePGN(pgnText,30000) but discarded its result in BOTH
+  //   .then and .catch — both branches ran the SAME synchronous importPGN(pgnText)
+  //   afterward. The worker therefore burned CPU + memory tokenizing the PGN
+  //   only for the result to be thrown away, then the main thread re-parsed
+  //   it synchronously. Net effect: slower + more memory, zero offloading.
+  //   The 50ms setTimeout yield (so the toast paints before the heavy parse)
+  //   is the only meaningful part and is retained.
+  return new Promise(function(resolve){
+    setTimeout(function(){
+      var _beforeState=gameState;
+      try{
+        importPGN(pgnText);
+      }catch(e){
+        console.error('importPGNAsync: sync import failed',e);
+        try{showToast(T('pgn_invalid'),2000);}catch(_e){}
+        resolve(false);
+        return;
+      }
+      resolve(gameState!==_beforeState);
+    },50); // 50ms yield for UI paint
+  });
+}
+
 // Import PGN from file (SAF)
 function importPGNFile(){
   try{
@@ -1604,7 +1647,12 @@ function onPGNFileRead(content){
   if(looksLikeFEN){
     _applyImportedFEN(sanitized.trim());
   }else{
-    importPGN(sanitized);
+    // v1.0.8 PHASE 34: use async import with worker offloading for large files
+    if(typeof importPGNAsync==='function'){
+      importPGNAsync(sanitized);
+    }else{
+      importPGN(sanitized);
+    }
   }
   }catch(e){
     console.error('onPGNFileRead: error processing file',e);
@@ -1624,7 +1672,7 @@ let wk=null,bk=null;
 for(let r=0;r<8;r++){
 let c=0;
 for(const ch of rows[r]){
-if(ch>='1'&&ch<='8'){c+=parseInt(ch);continue}
+if(ch>='1'&&ch<='8'){c+=parseInt(ch,10);continue}
 const isWhite=ch===ch.toUpperCase();
 const type=ch.toLowerCase()==='p'?'pawn':ch.toLowerCase()==='n'?'knight':ch.toLowerCase()==='b'?'bishop':ch.toLowerCase()==='r'?'rook':ch.toLowerCase()==='q'?'queen':ch.toLowerCase()==='k'?'king':null;
 if(!type)return null;
@@ -1663,7 +1711,7 @@ if(typeof parseShredderCastling==='function'){
   castlingRights={whiteKingside:crStr.includes('K'),whiteQueenside:crStr.includes('Q'),blackKingside:crStr.includes('k'),blackQueenside:crStr.includes('q')};
 }
 let enPassantTarget=null;
-if(parts[3]&&parts[3]!=='-'){const ec=parts[3].charCodeAt(0)-97;const er=8-parseInt(parts[3][1]);if(er>=0&&er<8&&ec>=0&&ec<8){
+if(parts[3]&&parts[3]!=='-'){const ec=parts[3].charCodeAt(0)-97;const er=8-parseInt(parts[3][1],10);if(er>=0&&er<8&&ec>=0&&ec<8){
 // Validate: en passant row must be rank 6 (er=2) for white's turn or rank 3 (er=5) for black's turn
 const validRow=(turn==='white'&&er===2)||(turn==='black'&&er===5);
 if(validRow){
@@ -1672,8 +1720,8 @@ const opp=turn;const pd=opp==='white'?1:-1;let _epHasCap=false;for(const dc of[-
 if(_epHasCap)enPassantTarget={row:er,col:ec};
 }
 }}
-const halfMoveClock=parts[4]?parseInt(parts[4])||0:0;
-const fullMoveNumber=parts[5]?parseInt(parts[5])||1:1;
+const halfMoveClock=parts[4]?parseInt(parts[4],10)||0:0;
+const fullMoveNumber=parts[5]?parseInt(parts[5],10)||1:1;
 const s={board,currentTurn:turn,castlingRights,enPassantTarget,halfMoveClock,fullMoveNumber,moveHistory:[],posCount:new Map(),wk,bk,hash:0,boardVersion:1};
 syncHash(s);s.posCount.set(s.hash,1);
 // Validate: the side NOT to move must not be in check (illegal position)

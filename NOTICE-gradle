@@ -15,7 +15,7 @@ JUnit (http://www.junit.org)
 JCIFS (http://jcifs.samba.org)
 HttpClient (https://hc.apache.org/httpcomponents-client-4.5.x/)
 
-For licenses, see the LICENSE file.
+For licenses, see LICENSE-Apache v2.0.
 
 If any software distributed with Gradle does not have an Apache 2 License, its license is explicitly listed in the
 LICENSE file.

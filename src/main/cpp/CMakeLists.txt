@@ -33,7 +33,10 @@ target_link_libraries(engine_bridge
 # Set C++ standard
 target_compile_features(engine_bridge PRIVATE cxx_std_17)
 
-# 16KB page alignment for Android 15+ compatibility
+# v1.0.8 PHASE 30: Suppress linker warnings when mixing objects with different
+# page-alignment requirements. NDK r27 produces 16KB-aligned .so by default
+# (required for Android 15+ devices with 16KB page size); this flag silences
+# false-positive mismatch warnings during the transition period.
 if(ANDROID)
     target_link_options(engine_bridge PRIVATE
         -Wl,--no-warn-mismatch

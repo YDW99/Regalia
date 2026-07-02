@@ -28,15 +28,13 @@ import android.util.Log;
 /**
  * ChessApp - Custom Application class for Regalia.
  *
- * v18.4.2 CRITICAL FIX: Enhanced UncaughtExceptionHandler — logs FULL stack
- * trace for ALL threads. Previously, non-main thread exceptions were silently
- * swallowed, meaning key threads like SF-Reader dying would go unnoticed.
+ * v18.4.2: Global UncaughtExceptionHandler — logs exception type + thread name
+ * only (MobSF #1: no full stack trace, no throwable.getMessage() which may
+ * contain sensitive data). SF-* thread deaths are logged for diagnostics;
+ * full recovery is handled by StockfishNative's heartbeat (isProcessAlive).
  *
- * v1.0.2 REDUNDANCY (audit): removed the dead `engineThreadCrashed` flag +
- * `checkEngineThreadCrash()` API. The flag was set in the handler but no
- * caller ever checked it — the heartbeat in StockfishNative already detects
- * dead engine processes via isProcessAlive(). The SF- thread detection
- * branch is kept for diagnostic logging only.
+ * v1.0.2: removed dead engineThreadCrashed flag + checkEngineThreadCrash() API
+ * (heartbeat covers it).
  *
  * v18.4.1: Adds global UncaughtExceptionHandler to prevent hard crashes (闪退)
  * on Xiaomi HyperOS 3 and other devices.
@@ -47,10 +45,6 @@ public class ChessApp extends Application {
 
     // Keep reference to the original handler so we can chain to it
     private Thread.UncaughtExceptionHandler defaultHandler;
-
-    // v1.0.2 REDUNDANCY (audit): removed engineThreadCrashed flag +
-    // checkEngineThreadCrash() — dead API, no caller ever checked it.
-    // The heartbeat in StockfishNative already detects dead engine processes.
 
     @Override
     public void onCreate() {
@@ -89,13 +83,18 @@ public class ChessApp extends Application {
                 // true, causing a 30-120s apparent hang before heartbeat recovery.
                 if (!threadName.equals("main")) {
                     if (throwable instanceof Error) {
-                        Log.e(TAG, "Non-main thread Error — chaining to default handler", throwable);
+                        // v1.0.8 PHASE 49: do NOT pass `throwable` to Log.e — that
+                        //   dumps the full stack trace (MobSF #1 violation: the trace
+                        //   may contain sensitive paths, FEN strings, or engine
+                        //   internals). Log the type + a one-line summary only; the
+                        //   system dropbox already captures the full trace.
+                        Log.e(TAG, "Non-main thread Error (" + excType + ") — chaining to default handler");
                         if (defaultHandler != null) {
                             defaultHandler.uncaughtException(thread, throwable);
                         }
                         return;
                     }
-                    Log.w(TAG, "Non-main thread exception suppressed", throwable);
+                    Log.w(TAG, "Non-main thread exception suppressed: " + excType);
                     // Don't call defaultHandler — this prevents the crash dialog
                     // The thread will die but the app process continues
                     return;
@@ -109,7 +108,7 @@ public class ChessApp extends Application {
             }
         });
 
-        Log.i(TAG, "ChessApp initialized — crash protection active (v1.0.7)");
+        Log.i(TAG, "ChessApp initialized — crash protection active (v1.0.8)");
 
         // SECURITY (MobSF #4): Non-blocking root detection. The result is computed
         // once and cached; the app never refuses to run on a rooted device because

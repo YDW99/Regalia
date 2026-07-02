@@ -1,27 +1,33 @@
 // StatsActivity.java — Fullscreen WebView activity for the 📊统计 stats page.
 // AI-GEN: AI assisted
-// This code was AI-assisted and has been reviewed for AGPL v3 compliance.
+// This code was AI-assisted and has been reviewed for GPL v3 compliance.
 
 //
 // Copyright (C) 2026 Regalia
 //
 // This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
+// it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
 // This program is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Affero General Public License for more details.
+// GNU General Public License for more details.
 //
-// You should have received a copy of the GNU Affero General Public License
+// You should have received a copy of the GNU General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 //
 // The stats.html asset contains PGN parsing logic derived from DroidFish
 // (GameTree/PgnToken/PgnScanner, Copyright (C) Peter Österlund, GPL v3).
-// This Java file is original Regalia code (AGPL v3) — it only hosts the
-// WebView and delegates all PGN parsing to the JavaScript in stats.html.
+// v1.0.8 PHASE 37/49: Although this Java file is original Regalia code, it is
+//   classified as GPL v3 (not AGPL v3) to match the license of the stats.html
+//   asset it exclusively hosts — the two form a single inseparable unit
+//   (StatsActivity loads stats.html and the two communicate via
+//   @JavascriptInterface). Keeping them under the same license avoids
+//   dual-license confusion for redistributors. The GPL v3 boilerplate above
+//   is therefore authoritative; earlier comments mentioning "AGPL v3" were
+//   stale and have been removed.
 
 package com.Regalia;
 
@@ -62,8 +68,8 @@ import java.io.OutputStreamWriter;
  *   - 🗂️复盘: finish() and notify main WebView to enter review mode
  *   - 返回对局: finish()
  *
- * License: AGPL v3 (original Regalia code). The stats.html asset contains
- * DroidFish-derived PGN parsing logic under GPL v3.
+ * License: GPL v3 (classified to match the stats.html asset it hosts, which
+ * contains DroidFish-derived PGN parsing logic).
  */
 public class StatsActivity extends Activity {
 
@@ -72,7 +78,12 @@ public class StatsActivity extends Activity {
     private static final int REQUEST_CODE_IMPORT_PGN = 2002;
     private WebView webView;
     private String statsPayload;
-    private String pendingExportHTML;
+    // v1.0.8 PHASE 49: volatile — written by the WebView's JS thread (via
+    //   @JavascriptInterface) inside evaluate() and cleared inside
+    //   exportStats(), and read on the main thread (exportStats via
+    //   runOnUiThread). Without volatile the main thread could see a stale
+    //   null and skip the export, or see a stale non-null and export twice.
+    private volatile String pendingExportHTML;
     // v1.0.4 Rev28: The PGN text imported on the stats page (via 🗃️ Paste PGN or
     // 📂 Select PGN File). When the user returns to the main activity, if this is
     // non-null, MainActivity prompts "🗃️ Import PGN to game?" Yes/No/Cancel.
@@ -148,6 +159,27 @@ public class StatsActivity extends Activity {
             @JavascriptInterface
             public String getStatsPayload() {
                 return statsPayload;
+            }
+
+            // v1.0.8 PHASE 22 (bug fix): Expose system dark-mode state to stats.html.
+            // Same implementation as StockfishNative.isSystemDarkMode() — reads
+            // UiModeManager to reliably detect system dark/light mode on all
+            // devices including Xiaomi HyperOS 3 where prefers-color-scheme is
+            // unreliable. stats.html init() calls this to set data-theme attribute.
+            @JavascriptInterface
+            public boolean isSystemDarkMode() {
+                try {
+                    android.app.UiModeManager umm = (android.app.UiModeManager) getSystemService(UI_MODE_SERVICE);
+                    if (umm == null) return true;
+                    int mode = umm.getNightMode();
+                    if (mode == android.app.UiModeManager.MODE_NIGHT_NO) return false;
+                    if (mode == android.app.UiModeManager.MODE_NIGHT_YES) return true;
+                    int curMode = getResources().getConfiguration().uiMode
+                            & android.content.res.Configuration.UI_MODE_NIGHT_MASK;
+                    return curMode == android.content.res.Configuration.UI_MODE_NIGHT_YES;
+                } catch (Throwable e) {
+                    return true;
+                }
             }
 
             @JavascriptInterface
@@ -272,10 +304,8 @@ public class StatsActivity extends Activity {
             // v1.0.3: Load an asset file as base64 — used for GPL v3 logo in export dialog
             @JavascriptInterface
             public String loadAssetAsBase64(String assetPath) {
-                // v1.0.5 Round-6 Rev61 (2026.6.27): use try-with-resources to
-                // guarantee InputStream is closed even if baos.write throws
-                // (e.g. OutOfMemoryError on a huge asset). The previous manual
-                // close at line 283 was only reached on the happy path.
+                // v1.0.5 Rev61: try-with-resources guarantees InputStream is closed
+                // even if baos.write throws (e.g. OOM on a huge asset).
                 try (java.io.InputStream is = getAssets().open(assetPath)) {
                     java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
                     byte[] buffer = new byte[4096];
@@ -490,9 +520,17 @@ public class StatsActivity extends Activity {
                     String line;
                     int lineCount = 0;
                     final int MAX_LINES = 5000; // Match StockfishNative's limit
-                    while ((line = reader.readLine()) != null && lineCount < MAX_LINES) {
+                    // v1.0.8 PHASE 32 ROBUSTNESS: track truncation and append a
+                    //   warning comment (matching StockfishNative's behavior).
+                    boolean truncated = false;
+                    while ((line = reader.readLine()) != null) {
+                        if (lineCount >= MAX_LINES) { truncated = true; break; }
                         sb.append(line).append("\n");
                         lineCount++;
+                    }
+                    if (truncated) {
+                        sb.append("\n{ Warning: file truncated at ").append(MAX_LINES)
+                          .append(" lines by Regalia import guard }\n");
                     }
                 }
                 String content = sb.toString();
@@ -556,8 +594,21 @@ public class StatsActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        // v1.0.8 PHASE 30: Full 6-step WebView teardown (matching MainActivity).
+        //   Previously only webView.destroy() was called, which could leak JS
+        //   callbacks, cause WindowLeaked exceptions, and leave a stale
+        //   AndroidBridge interface pointing to the destroyed StatsActivity.
         if (webView != null) {
-            webView.destroy();
+            try {
+                if (webView.getParent() instanceof android.view.ViewGroup) {
+                    ((android.view.ViewGroup) webView.getParent()).removeView(webView);
+                }
+            } catch (Throwable ignored) {}
+            try { webView.clearHistory(); } catch (Throwable ignored) {}
+            try { webView.loadUrl("about:blank"); } catch (Throwable ignored) {}
+            try { webView.removeJavascriptInterface("AndroidBridge"); } catch (Throwable ignored) {}
+            try { webView.onPause(); } catch (Throwable ignored) {}
+            try { webView.destroy(); } catch (Throwable ignored) {}
             webView = null;
         }
         super.onDestroy();

@@ -4,6 +4,18 @@
 //
 // Copyright (C) 2026 Regalia
 //
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
 // ============================================================================
 // SENSOR STRATEGY — translation only (OIS-style)
 // ============================================================================
@@ -16,30 +28,26 @@
 // optical image stabilization (OIS) for the translation axis.
 //
 // ============================================================================
-// FIRST-PRINCIPLES AUDIT (per uploaded sensor docs)
+// FIRST-PRINCIPLES AUDIT
 // ============================================================================
-// Cross-checked against the two uploaded reference docs:
-//   (A) "Android传感器_阅读防抖_技术报告.md" (technical report on the three
-//       Android sensors used for reading anti-shake).
-//   (B) "元宝：三种传感器实现'阅读防抖'功能——对于开源软件可以实现吗？.md"
-//       (community article confirming open-source feasibility and warning
-//       about the deprecated TYPE_ORIENTATION sensor).
+// Design cross-checked against Android sensor best-practices docs (sensor
+// reading anti-shake technical report + community article on deprecated
+// TYPE_ORIENTATION).
 //
 // Audit conclusions:
 //
 // 1. SENSOR CHOICE — VERIFIED CORRECT
 //    - TYPE_LINEAR_ACCELERATION (gravity already removed by OS) for translation
-//      anti-shake. ✓ Matches doc (A) §2 and doc (B) recommendation.
+//      anti-shake. ✓
 //    - Display.getRotation() for screen-orientation remap of translation axes. ✓
 //
 // 2. ANTI-SHAKE TRANSLATION — KEEP INTEGRATION (OIS principle)
-//    Integration with strong decay (0.92/0.95) + clamp (±8px) prevents the
-//    drift problem doc (A) §6.2.5 warns about.
+//    Integration with strong decay (0.92/0.95) + clamp (±8px) prevents drift.
 //
-// 3. SAMPLING RATE — SENSOR_DELAY_GAME (~50 Hz). ✓ Matches doc (A) §6.2.1.
+// 3. SAMPLING RATE — SENSOR_DELAY_GAME (~50 Hz). ✓
 // 4. LIFECYCLE — register on start(), unregister on stop()/onPause/onDestroy. ✓
 // 5. FALLBACK — graceful degradation when sensor is missing. ✓
-// 6. NO ZERO-BIAS CALIBRATION — rely on decay. ✓ (doc (A) §6.2.4)
+// 6. NO ZERO-BIAS CALIBRATION — rely on decay. ✓
 //
 // SENSORS NOT USED:
 //   - TYPE_ACCELEROMETER: includes gravity, error-prone.
@@ -127,6 +135,7 @@ public class StabilizationHelper implements SensorEventListener {
         // Reset state
         velX = velY = dispX = dispY = 0;
         lastJsCallbackTime = 0;
+        _lastSensorNanos = 0; // v1.0.8 PHASE 32: reset so first event uses nominal dt
 
         Log.i(TAG, "Stabilization started (translation only). Sensors: linAccel=" + (linAccelSensor != null));
         return anyRegistered;
@@ -139,6 +148,7 @@ public class StabilizationHelper implements SensorEventListener {
         // Reset board to center.
         applyTransform(0, 0);
         velX = velY = dispX = dispY = 0;
+        _lastSensorNanos = 0; // v1.0.8 PHASE 32: reset on stop too
         Log.i(TAG, "Stabilization stopped");
     }
 
@@ -147,7 +157,11 @@ public class StabilizationHelper implements SensorEventListener {
         if (event == null || event.sensor == null) return;
         int type = event.sensor.getType();
         if (type == Sensor.TYPE_LINEAR_ACCELERATION) {
-            processLinearAcceleration(event.values[0], event.values[1]);
+            // v1.0.8 PHASE 32 ROBUSTNESS: pass the event timestamp so dt can be
+            //   computed from actual inter-event intervals instead of a hardcoded
+            //   0.02f. SENSOR_DELAY_GAME nominally delivers at ~50Hz but actual
+            //   rate is device-dependent and varies with load.
+            processLinearAcceleration(event.values[0], event.values[1], event.timestamp);
         }
     }
 
@@ -163,13 +177,35 @@ public class StabilizationHelper implements SensorEventListener {
         }
     }
 
+    // v1.0.8 PHASE 32 ROBUSTNESS: track last event timestamp for dt computation
+    private long _lastSensorNanos = 0;
+
     /**
      * Process linear acceleration (gravity already removed) to compute device
      * displacement, then derive the inverse board displacement for OIS.
      * Only X and Y axes are used (Z = toward/away, not visible).
+     *
+     * v1.0.8 PHASE 32: dt is now computed from the actual inter-event interval
+     *   (event.timestamp) instead of a hardcoded 0.02f. This corrects integration
+     *   error on devices whose SENSOR_DELAY_GAME rate differs from 50Hz. The dt
+     *   is clamped to [0.001, 0.1] seconds to reject outliers (e.g., the first
+     *   event after registration which has no prior reference, or a long gap
+     *   from a system stall that would cause a huge velocity spike).
      */
-    private void processLinearAcceleration(float ax, float ay) {
-        final float dt = 0.02f; // ~20ms at SENSOR_DELAY_GAME
+    private void processLinearAcceleration(float ax, float ay, long eventNanos) {
+        float dt;
+        if (_lastSensorNanos == 0) {
+            // First event — no reference; use nominal 20ms
+            dt = 0.02f;
+        } else {
+            long deltaNanos = eventNanos - _lastSensorNanos;
+            // Clamp to [1ms, 100ms] to reject outliers
+            float dtSec = deltaNanos / 1e9f;
+            if (dtSec < 0.001f) dtSec = 0.001f;
+            else if (dtSec > 0.1f) dtSec = 0.1f;
+            dt = dtSec;
+        }
+        _lastSensorNanos = eventNanos;
         velX += ax * dt;
         velY += ay * dt;
         dispX += velX * dt;
@@ -247,10 +283,9 @@ public class StabilizationHelper implements SensorEventListener {
                 boardPxY = +dispY * SCALE;
                 break;
         }
-        if (boardPxX > MAX_DISPLACEMENT_PX) boardPxX = MAX_DISPLACEMENT_PX;
-        else if (boardPxX < -MAX_DISPLACEMENT_PX) boardPxX = -MAX_DISPLACEMENT_PX;
-        if (boardPxY > MAX_DISPLACEMENT_PX) boardPxY = MAX_DISPLACEMENT_PX;
-        else if (boardPxY < -MAX_DISPLACEMENT_PX) boardPxY = -MAX_DISPLACEMENT_PX;
+        // v1.0.8 PHASE 30: simplified clamp (was 4-line if/else chain)
+        boardPxX = Math.max(-MAX_DISPLACEMENT_PX, Math.min(MAX_DISPLACEMENT_PX, boardPxX));
+        boardPxY = Math.max(-MAX_DISPLACEMENT_PX, Math.min(MAX_DISPLACEMENT_PX, boardPxY));
 
         // Throttle JS callback
         long now = System.currentTimeMillis();
