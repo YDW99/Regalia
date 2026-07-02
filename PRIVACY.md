@@ -84,7 +84,4 @@ v1.0.8 introduces personified haptic feedback — each of the six piece types (p
 For questions about this privacy policy, please open an issue on the GitHub repository.
 
 ---
-*AI生成*
-
----
-*AI生成*
+*AI-GEN*
