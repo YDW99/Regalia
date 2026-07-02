@@ -151,7 +151,4 @@ The signed APK (v1+v2+v3 signed with `../debug.keystore`) will be at
 - The Stockfish 18 `arm64-v8a-dotprod` binary is the official sf_18 release.
 
 ---
-*AI生成*
-
----
-*AI生成*
+*AI-GEN*
