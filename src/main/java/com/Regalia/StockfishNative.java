@@ -119,7 +119,7 @@ public class StockfishNative {
     // v18.4.0: ELO_MAP synced with JS ELO_MATCH for consistent level display
     private static final int[] ELO_MAP = {0, 800, 1350, 1700, 2000, 2200, 2350, 2800};
     // v1.0.5: Synced with the application version (was stale at v1.0.2).
-    private static final String ENGINE_VERSION = "v1.1.0";
+    private static final String ENGINE_VERSION = "v1.1.1";
     // Movetime mapping: index 0 unused, 1-7 = game levels
     private static final int[] MOVETIME_MAP = {0, 500, 800, 1000, 1500, 2000, 3000, 5000};
 
@@ -1389,7 +1389,12 @@ public class StockfishNative {
             engineProcess = null;
         }
         // Close writer
-        synchronized (this) {
+        // v1.1.1 Phase 60 (audit P0-3.1): Use _writerLock (not `this`) for writer
+        //   access — consistent with the heartbeat path's _writerLock usage (Phase 58).
+        //   The old `synchronized(this)` was inconsistent with the heartbeat's
+        //   `synchronized(_writerLock)`, risking writer being closed mid-write by
+        //   the heartbeat thread. All engineWriter access now goes through _writerLock.
+        synchronized (_writerLock) {
             if (engineWriter != null) {
                 try { engineWriter.close(); } catch (IOException ignored) {}
                 engineWriter = null;
@@ -2040,7 +2045,11 @@ public class StockfishNative {
 
     /**
      * Send a UCI command to the engine process.
-     * Synchronized to prevent command interleaving from concurrent threads.
+     * Synchronized on `this` to prevent command interleaving from concurrent threads.
+     * v1.1.1 Phase 60 (audit P0-3.1): Writer access is now inside _writerLock
+     *   to be consistent with cleanupEngineResources/shutdown/heartbeat — prevents
+     *   the writer being closed mid-write by a concurrent cleanup path. The `this`
+     *   monitor is retained for command ordering (only one command at a time).
      */
     private synchronized void sendUciCommand(String command) {
         if (engineWriter == null) {
@@ -2052,13 +2061,23 @@ public class StockfishNative {
             engineReady = false;
             return;
         }
-        try {
-            Log.d(TAG, "Sending UCI: " + command);
-            engineWriter.write(command + "\n");
-            engineWriter.flush();
-        } catch (IOException e) {
-            Log.e(TAG, "Error sending command: " + command, e);
-            engineReady = false;
+        // v1.1.1 Phase 60: Acquire _writerLock for the actual write so that
+        //   cleanup paths (which now also use _writerLock) cannot close the
+        //   writer while we're mid-write. Re-check engineWriter != null inside
+        //   the lock in case a cleanup ran between the outer check and here.
+        synchronized (_writerLock) {
+            if (engineWriter == null) {
+                Log.e(TAG, "Cannot send command - engine writer became null");
+                return;
+            }
+            try {
+                Log.d(TAG, "Sending UCI: " + command);
+                engineWriter.write(command + "\n");
+                engineWriter.flush();
+            } catch (IOException e) {
+                Log.e(TAG, "Error sending command: " + command, e);
+                engineReady = false;
+            }
         }
     }
 
@@ -2182,7 +2201,9 @@ public class StockfishNative {
         CountDownLatch readyLatch = readyOkLatchHolder;
         if (readyLatch != null) readyLatch.countDown();
 
-        synchronized (this) {
+        // v1.1.1 Phase 60 (audit P0-3.1): Use _writerLock (not `this`) for writer
+        //   access — consistent with cleanupEngineResources() and the heartbeat path.
+        synchronized (_writerLock) {
             try {
                 if (engineWriter != null) {
                     try {
@@ -2253,7 +2274,9 @@ public class StockfishNative {
         CountDownLatch stopLatch = _stopLatch;
         if (stopLatch != null) stopLatch.countDown();
 
-        synchronized (this) {
+        // v1.1.1 Phase 60 (audit P0-3.1): Use _writerLock (not `this`) for writer
+        //   access — consistent with cleanupEngineResources() and the heartbeat path.
+        synchronized (_writerLock) {
             if (engineWriter != null) {
                 try { engineWriter.close(); } catch (IOException ignored) {}
                 engineWriter = null;

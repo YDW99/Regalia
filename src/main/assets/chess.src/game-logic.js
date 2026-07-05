@@ -173,6 +173,12 @@ const _i18n={
 'pgn_copied':{zh:'PGN已复制到剪贴板',en:'PGN copied to clipboard'},
 'export_pgn':{zh:'导出PGN到文件',en:'Export PGN to file'},
 'pgn_exported':{zh:'PGN已导出',en:'PGN exported'},
+// v1.1.1 Phase 63: Export dialog asking whether to include new annotations
+// v1.1.1 Phase 64: Updated text — 💾 emoji in title, "特殊注释" terminology
+'pgn_export_include_annotations_title':{zh:'💾 导出PGN',en:'💾 Export PGN'},
+'pgn_export_include_annotations_msg':{zh:'是否在导出的PGN中包含特殊注释（视觉注解 [%csl]/[%cal]、评估注释 [%eval]、每5回合评估描述等）？',en:'Include special annotations in the exported PGN (visual annotations [%csl]/[%cal], eval tags [%eval], every-5-moves eval descriptions, etc.)?'},
+'pgn_export_include_annotations_yes':{zh:'是，包含特殊注释',en:'Yes, include special annotations'},
+'pgn_export_include_annotations_no':{zh:'否，不包含特殊注释',en:'No, exclude special annotations'},
 'fen_copied':{zh:'FEN已复制到剪贴板',en:'FEN copied to clipboard'},
 'fen_imported':{zh:'FEN导入成功',en:'FEN imported'},
 'settings_imported':{zh:'设置导入成功',en:'Settings imported'},
@@ -256,6 +262,9 @@ const _i18n={
 'fen_invalid':{zh:'FEN格式无效',en:'Invalid FEN format'},
 'paste_fen':{zh:'粘贴FEN字符串:',en:'Paste FEN string:'},
 'render_error':{zh:'渲染出错，可以尝试刷新恢复对局',en:'Render error, try refreshing to recover'},
+// v1.1.1 Phase 60 (audit i18n): Title for the render-error fallback page (was
+//   hard-coded English "Render Error" in ui.js).
+'render_error_title':{zh:'渲染错误',en:'Render Error'},
 'refresh_page':{zh:'刷新页面',en:'Refresh Page'},
 'new_game_settings':{zh:'新游戏设置',en:'New Game Settings'},
 'play_color':{zh:'执棋颜色',en:'Play Color'},
@@ -368,7 +377,7 @@ const _i18n={
 'elo_target':{zh:'Elo目标',en:'ELO Target'},
 'export_settings_btn':{zh:'📤 导出设置',en:'📤 Export'},
 'import_settings_btn':{zh:'📥 导入设置',en:'📥 Import'},
-'loading_title':{zh:'Regalia v1.1.0',en:'Regalia v1.1.0'},
+'loading_title':{zh:'Regalia v1.1.1',en:'Regalia v1.1.1'},
 'click_skip_loading':{zh:'点击跳过加载',en:'Click to skip loading'},
 'white_checkmate':{zh:'白方将杀获胜',en:'White wins by checkmate'},
 'black_checkmate':{zh:'黑方将杀获胜',en:'Black wins by checkmate'},
@@ -415,6 +424,18 @@ const _i18n={
 'pgn_black_winning':{zh:'黑方必胜',en:'Black winning'},
 'pgn_mate_white':{zh:'白方将杀',en:'White mates'},
 'pgn_mate_black':{zh:'黑方将杀',en:'Black mates'},
+// v1.1.1 Phase 59 Task 59.5: Resignation/timeout PGN comments follow the app's
+//   global language (was hard-coded English). These keys are consumed by
+//   _buildPGNString() in ai-bridge.js for the trailing {} comment on the last
+//   move of a resigned or timed-out game.
+'pgn_resign_white':{zh:'白方认输',en:'White resigns'},
+'pgn_resign_black':{zh:'黑方认输',en:'Black resigns'},
+'pgn_timeout_white_wins':{zh:'白方超时胜',en:'White wins by timeout'},
+'pgn_timeout_black_wins':{zh:'黑方超时胜',en:'Black wins by timeout'},
+// v1.1.1 Phase 59 Task 59.4: Prefix label for the initial-position annotation
+//   appended to the first move's {} comment (mirrors the every-5-moves
+//   annotation but marks it as the initial position so dedup can detect it).
+'pgn_initial_position':{zh:'初始局面',en:'Initial position'},
 'loading_prefix':{zh:'加载中 ',en:'Loading '},
 'empty_dir':{zh:'空目录',en:'Empty directory'},
 'import_settings_title':{zh:'📥 导入设置',en:'📥 Import Settings'},

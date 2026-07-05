@@ -13,7 +13,7 @@ A standalone, open-source chess app for Android — play offline against Stockfi
   <img src="assets/screenshot.jpg" alt="Regalia gameplay screenshot" width="280">
 </p>
 
-Portrait mode — evaluation bar, move history, AI opponent display with ponder info, and Control heatmap. See the user manual (`Manual/Regalia-v1.1.0-manual-{zh,en}.html`) for wireframe diagrams of every screen.
+Portrait mode — evaluation bar, move history, AI opponent display with ponder info, and Control heatmap. See the user manual (`Manual/Regalia-v1.1.1-manual-{zh,en}.html`) for wireframe diagrams of every screen.
 
 **Control Heatmap** — Tap the 🌗/🌈 button on the toolbar to toggle the control heatmap. Each square is dynamically colored by HSL to indicate which side controls it: blue-purple = your control, red = opponent's control, purple = contested. Hovering a square shows SVG arrows from each controlling piece to that square (warm gold for your pieces, cool silver-blue for opponent's). The info card below the board shows per-piece control contributions with position labels.
 
@@ -125,7 +125,7 @@ Regalia/
 │   │   ├── CMakeLists.txt
 │   │   └── README.license      # Per-file license classification for this directory
 │   ├── res/
-│   │   ├── values/strings.xml  # Application name ("Regalia v1.1.0")
+│   │   ├── values/strings.xml  # Application name ("Regalia v1.1.1")
 │   │   ├── xml/network_security_config.xml  # TLS + certificate pinning for tablebase API
 │   │   ├── xml/backup_rules.xml             # Backup rules (Android < 12)
 │   │   ├── xml/data_extraction_rules.xml    # Data extraction rules (Android 12+)
@@ -139,8 +139,8 @@ Regalia/
                                 #   to keep the tarball small and avoid redistributing the
                                 #   114MB engine binary with the source.
 ├── Manual/                     # User manuals (HTML, self-contained)
-│   ├── Regalia-v1.1.0-manual-zh.html  # Chinese user manual (current)
-│   ├── Regalia-v1.1.0-manual-en.html  # English user manual (current)
+│   ├── Regalia-v1.1.1-manual-zh.html  # Chinese user manual (current)
+│   ├── Regalia-v1.1.1-manual-en.html  # English user manual (current)
 │   └── README.license          # Manual license classification
 ├── gradle/wrapper/             # Gradle wrapper (8.11.1)
 │   ├── gradle-wrapper.jar
@@ -155,7 +155,7 @@ Regalia/
 ├── PRIVACY.md                  # Privacy policy
 ├── BUILDING.md                 # Build instructions
 ├── UBIQUITOUS_LANGUAGE.md      # Domain terminology glossary (English) — 80+ chess/engine/PGN/UI terms
-├── build.gradle                # Gradle build config (versionCode 110, v1/v2/v3 signing, NDK 27.2, cmake 3.22.1)
+├── build.gradle                # Gradle build config (versionCode 111, v1/v2/v3 signing, NDK 27.2, cmake 3.22.1)
 ├── settings.gradle             # Gradle settings (plugin/repo config)
 ├── gradle.properties           # Gradle properties (JDK 21, Xmx2048m)
 ├── build-chess.py              # Python build script (merges JS modules → chess.html)
@@ -230,7 +230,11 @@ Contributions are welcome! Please ensure:
 
 During the development stage, the version number used was: **v18.x.x**. For future versions, once the version number exceeds **v17.x.x**, <span style="color:red; font-weight:bold;">**v18.x.x** should be skipped</span> and the next version should be **v19.x.x**.
 
-**v1.1.0** (versionCode 110) — current release
+**v1.1.1** (versionCode 111) — current release
+
+The v1.1.1 release fixes four user-reported bugs and upgrades the version number, then adds same-version Phase 60, 61, 62, 63, 64, 65, and 66 revisions. Phase 66 (same-version) performs a strict full-codebase audit: fixes a _savePGNYes timing bug (async export dialog could be open when new game starts), removes 2 stale console.log calls, and makes openStatsPage includeAnnotations explicit. Phase 65 (same-version) adds Android back-button support and haptic feedback to the export annotation dialog, audits and fixes additional stale-state bugs (_preReviewSnapshot, setupHistory, dialog flags not cleared in _resetGameUIState), and performs a first-principles code optimization pass. Phase 64 (same-version) fixes the TRUE root cause of visual annotation pollution (stale reviewStates not cleared in _resetGameUIState, causing _computeAndCacheVisualAnnotations to use the old game's board state at the same move index) and updates the export dialog text (💾 emoji, "特殊注释" terminology). Phase 63 (same-version) adds an export dialog asking whether to include annotations ([%csl]/[%cal]/[%eval] etc.) in the exported PGN, and completes a full-chain audit of all visual annotation code paths. Phase 62 (same-version) fixes the visual annotation (`[%csl]`/`[%cal]`) PGN pollution bug from first principles — distinguishes "imported annotations" (human-authored, from PGN import) from "auto-generated annotations" (UI display aids) via an `imported` boolean flag; `_buildPGNString()` only exports `imported=true` entries. Phase 61 (same-version) fixes the new-game cache pollution bug (`_resetGameUIState()` now centrally clears all game-related caches — all 5 entry points call it uniformly), fixes the imported-PGN-cannot-save-to-PGN-cache-manager bug (pure-import games save the original PGN text), moves the initial-position eval annotation to a separate `{}` comment before the first move, and verifies stats-page PGN sync. Phase 60 (same-version) implements reasonable P0/P1 fixes from the comprehensive architecture audit report (writer lock unification in StockfishNative.java, Integer_bitcount negative-input guard, onRenderProcessGone crash-count backoff, normalizeTagValue tab filtering, render-error i18n), adds navigation buttons below the statistics board (⏮ ◀ ▶ ⏭ — mainline/variation context-aware, with full-PGN HTML export keeping the buttons and FEN-only export omitting them), verifies analyze-all robustness, and audits all 5 new-game entry points for cache cleanup. Phase 59 fixes: (1) duplicate every-5-moves PGN `{}` eval annotations when re-exporting an imported PGN (the annotation was re-appended even when `mr.comment` already contained it — now deduped via whitespace-tolerant regex matching); (2) step-0 (initial position) eval result never written to PGN and never auto-loaded by the evaluation trend chart (the chart's data point at step 0 was missing because `onEngineEval` discarded "stale" callbacks when the user navigated before step 0's eval completed — now stale callbacks are still cached for the original `_reviewEvalRequestedStep`, and a lightweight `_refreshEvalTrendChart()` updates the chart DOM without a full re-render); (3) step-0 now gets the same human-readable eval annotation as every-5-moves, attached to the first move's `{}` comment with a `[初始局面]` / `[Initial position]` prefix (deduped against `mr.comment`); (4) resignation and timeout PGN comments were hard-coded English (`{White resigns.}`, `{White wins by timeout}`) even in Chinese mode — now follow the app's global language via `T()` with new i18n keys `pgn_resign_white` / `pgn_resign_black` / `pgn_timeout_white_wins` / `pgn_timeout_black_wins`. Phase 59 also includes a first-principles rewrite of the review-mode "Analyze All" batch logic: the batch's current step (`_reviewAnalyzeStep`) and generation counter (`_reviewAnalyzeGen`) are now decoupled from `reviewStep` (the user's view), so user navigation during the batch no longer invalidates in-flight batch callbacks (the previous root cause of "analyze-all sometimes doesn't complete all evals" — stale batch callbacks were discarded entirely, stalling the batch until the 60s safety timer fired). The batch now runs in the background; the user can navigate freely, with progress shown via toast and the analyze-all button label.
+
+**v1.1.0** (versionCode 110) — previous release
 
 The v1.1.0 release redefines the green-arrow visual annotation from "king escape path" to "check response path" (now including both king escape moves AND legal captures of the checking piece), fixes a v1.0.9 bug where green arrows were drawn even when the king had no legal escape, fixes the stats page's visual-annotation counts to respect the selected-move cutoff, achieves pixel-perfect alignment between the review progress bar and the evaluation trend chart (track ends align with first/last data points), filters out illegal king-move arrows from the control heatmap, fixes red check arrow to use actual checker position (discovered check support) / "格子控制信息" panel / visual annotations, center-aligns the review nav button text, fixes a Chess960 castling bug where the rook would silently disappear after O-O/O-O-O in starting positions where the participating rook's source square is the king's castling destination, fixes a landscape review mode bug where clicking nav buttons caused the page to scroll back to the top, adds PGN timeout annotations (`[Termination "Time forfeit"]` + `{<color> wins by timeout}` comment), fixes the first-move timing to synchronize with the time-control countdown, refines UCI command ordering for Chess960 + TimeControl games, fixes the portrait review mode move-list scroll positioning (selected move not in view after click), and fixes the visual-annotation cache residue at review entry (stale `[%csl]`/`[%cal]` annotations from a previous review session occasionally rendering on the initial-position board). Phase 58 adds every-5-moves PGN `{}` eval annotations (bilingual, White-perspective, mirroring the eval bar format `均势 (-0.10) D22 SD34 (1%W/96%D/3%L)`), fixes two P0 concurrency issues in `StockfishNative.java` (stopLatch TOCTOU race that could incorrectly discard a legitimate bestmove, and heartbeat deadlock where `shutdown`'s `join` was blocked by heartbeat's `synchronized(this)` writer I/O — now uses a dedicated `_writerLock`). Phase 57+ completed code-review-driven preventive hardening: fixes a single-line PGN tag-stripping regex bug in `parseStandardPGN` (preventive — this parser is not on the main code path), optimizes `isChess960CastlingLegal` to use the cached `s.wk`/`s.bk` king-position fields directly (with a board-scan fallback), adds a divide-by-zero guard to the WDL percentage display, hardens `postJsCallback` to skip `evaluateJavascript` when the host Activity is finishing/destroyed (prevents HyperOS 3 IllegalStateException crash during engine-init retries), changes the `EngineService` wake lock to a bounded 30-minute timeout (prevents indefinite CPU wake if OEM silently kills the service), and corrects a stale `v1.0.8` version reference in `res/README.license`. Also adds a pure-English `UBIQUITOUS_LANGUAGE.md` at the project root — a domain-terminology glossary covering 80+ chess/engine/PGN/UI terms. See the v1.1.0 Phase 58 changelog below for full details.
 
@@ -251,6 +255,173 @@ Theme Design Principles" and "Android Light Theme Design Principles" — light/d
 mode switches automatically with the system global setting, and the king icon on
 the loading overlay and main header toolbar switches between ♔/♚ to match the
 on-board pieces. See the v1.0.8 Phase 22 changelog below for full details.
+
+### v1.1.1 Phase 63 (visual annotation deep audit + export annotation dialog, 2026.7.5)
+
+This is a same-version revision phase (no version bump — `versionCode=111`, `versionName="1.1.1"`). It completes a full-chain audit of all `[%csl]`/`[%cal]` code paths and adds a user-facing export dialog for annotation inclusion control.
+
+1. **Full-chain audit** of visual annotation code: verified all 4 `_visualAnnotationsCache` write sites (all include the `imported` flag from Phase 62), all 3 read sites, confirmed `_buildPGNString()` only exports `imported=true` entries, confirmed `importPGN` strips all `[%xxx]` tags from `mr.comment` (so `mr.comment` cannot contain `[%csl]`/`[%cal]` text), confirmed `_resetGameUIState()` clears `_visualAnnotationsCache`, and confirmed all 5 new-game entry points call `_resetGameUIState()` correctly. With Phase 62's `imported` flag, auto-generated annotations (`imported=false`) are excluded from PGN export — the only remaining source of `[%csl]`/`[%cal]` in PGN export is `imported=true` entries from PGN import.
+
+2. **Export annotation dialog** (`_showPGNExportAnnotationDialog`): `_buildPGNString()` now accepts an `includeAnnotations` parameter (default `true`). When `false`, ALL annotation-type tags are omitted from the PGN: `[%eval]` tags, every-5-moves eval descriptions, initial-position eval annotation (`preMoveComment`), and `[%csl]`/`[%cal]` tags (even `imported=true` ones). `[%emt]`/`[%clk]` time tags and `mr.comment` free-text are NOT gated (they are not "annotations"). The dialog is shown before `copyMoveHistory` (📋 copy PGN), `exportPGNToFile` (💾 export PGN to file), and `_pgnCacheSaveCurrent` (📚 save to PGN cache manager) with three options: "Yes, include annotations", "No, moves only", and "Cancel".
+
+3. **New i18n keys** (`game-logic.js`): `pgn_export_include_annotations_title`, `pgn_export_include_annotations_msg`, `pgn_export_include_annotations_yes`, `pgn_export_include_annotations_no` — all bilingual (zh/en).
+
+#### Files modified in Phase 63
+
+- `src/main/assets/chess.src/ai-bridge.js` — `_buildPGNString` `includeAnnotations` parameter; `_showPGNExportAnnotationDialog`; `copyMoveHistory`/`exportPGNToFile` dialog integration; export list updated
+- `src/main/assets/chess.src/ui.js` — `_pgnCacheSaveCurrent` dialog integration; extracted `_pgnCacheSaveCurrentImpl`
+- `src/main/assets/chess.src/game-logic.js` — new i18n keys for export dialog
+- `src/main/assets/chess.html` — rebuilt from chess.src/
+- `README.md`, `NOTICE` — Phase 63 changelog entry
+- `Manual/Regalia-v1.1.1-manual-{zh,en}.html` — Phase 63 intro + changelog
+- All 7 `README.license` files — Phase 63 changelog entry
+
+### v1.1.1 Phase 62 (visual annotation PGN pollution fix, 2026.7.5)
+
+This is a same-version revision phase (no version bump — `versionCode=111`, `versionName="1.1.1"`). It fixes the visual annotation (`[%csl]`/`[%cal]`) PGN pollution bug from first principles.
+
+**Root cause**: `_visualAnnotationsCache` stores two types of annotations:
+1. **Imported annotations** — extracted from an imported PGN's `[%csl]`/`[%cal]` comments (human-authored, SHOULD be exported to PGN).
+2. **Auto-generated annotations** — computed by `_computeAndCacheVisualAnnotations` after each move (UI display aids: arrows/highlights such as check arrows, threat arrows, control range — should NOT be exported to PGN).
+
+Previously, `_buildPGNString()` exported ALL cache entries, causing auto-generated visual annotations (and stale entries from a previous game if the cache wasn't cleared) to pollute the PGN comments.
+
+**Fix**: Added an `imported` boolean flag to each `_visualAnnotationsCache` entry:
+- `_computeAndCacheVisualAnnotations` sets `imported=false` (auto-generated)
+- `_computeInitialPositionAnnotations` sets `imported=false` (auto-generated)
+- `importPGN`'s annotation extraction sets `imported=true` (human-authored)
+- `_buildPGNString()` only exports entries where `imported=true`
+
+UI rendering is unaffected — review/main interface still shows all annotations (arrows/highlights); only PGN export is filtered by the `imported` flag.
+
+#### Verification
+
+- `chess.html` built successfully; JS syntax valid.
+- Java compiles successfully.
+- Phase 62 changelog added to README.md, NOTICE, all README.license files, and both HTML manuals.
+
+#### Files modified in Phase 62
+
+- `src/main/assets/chess.src/ui.js` — `_visualAnnotationsCache` entries now include `imported` flag; `_computeAndCacheVisualAnnotations` and `_computeInitialPositionAnnotations` set `imported=false`
+- `src/main/assets/chess.src/ai-bridge.js` — `_buildPGNString` only exports `imported=true` entries
+- `src/main/assets/chess.src/tablebase.js` — `importPGN` sets `imported=true` on extracted annotation cache entries
+- `src/main/assets/chess.html` — rebuilt from chess.src/
+- `README.md`, `NOTICE` — Phase 62 changelog entry
+- `Manual/Regalia-v1.1.1-manual-{zh,en}.html` — Phase 62 intro + changelog
+- All 7 `README.license` files — Phase 62 changelog entry
+
+### v1.1.1 Phase 61 (cache pollution fix + PGN cache save fix + initial-position annotation move + stats sync, 2026.7.5)
+
+This is a same-version revision phase (no version bump — `versionCode=111`, `versionName="1.1.1"`). It fixes the new-game cache pollution bug, the PGN cache save bug, moves the initial-position eval annotation to a separate pre-move comment, and verifies stats-page PGN sync.
+
+1. **Cache pollution fix** (`ui.js` `_resetGameUIState` + `tablebase.js` import paths): `_resetGameUIState()` now centrally clears ALL game-related caches — including `_reviewEvalCache` (LRU eval cache), `_ecoRecCache` (ECO recommendation cache), `_pvCache` (PV-line conversion cache), `_pendingEngineSANs`/`_pendingEnginePVs` (engine variations), `_multiPVLines`/`_multiPVResult`/`_lastEngineVariation` (MultiPV display), `reviewCritical` (critical-move markers), `_sfEval`/`_sfMateDistance`/`_sfDepth`/`_sfSeldepth`/`_sfWdlW/D/L`/`_sfEvalReady` (eval display variables), `_cachedOriginalPGN` (imported PGN text), `playerWhite`/`playerBlack` (imported player names), `_setupFEN` (setup FEN), `_importedStartMoveNum` (imported start move number), `_needNewGameForEngine` (engine new-game flag), `_tbLoading`/`_tbRetryCount` (tablebase state). All 5 entry points (`_startGameImpl`, `quickFreeOpening`, `_exitSetupImpl`, `_applyImportedFEN`, `importPGN`) call `_resetGameUIState()` and set entry-point-specific values AFTER the reset so they survive. Previously, manual cache clears were inconsistent across entry points, causing old-game eval data, visual annotations, engine variations, etc. to leak into the new game's PGN records, undo/redo stack, engine state, UI display, and statistics content.
+
+2. **PGN cache save fix** (`ui.js` `_pgnCacheSaveCurrent`): `_pgnCacheSaveCurrent()` now distinguishes pure-import games from games with new moves. If `_cachedOriginalPGN` is set AND all `moveRecords` have `time===null` (pure import, no live moves), save the original PGN text (preserving all comments/tags/NAGs/custom content). Otherwise rebuild via `_buildPGNString(true)` (includes post-import moves + eval annotations). Previously, `_buildPGNString` rebuild lost custom comments and non-cached NAGs from the original PGN, causing the saved PGN to differ from the imported one.
+
+3. **Initial-position annotation move** (`ai-bridge.js` `_buildPGNString` + `pgn-standard.js` `composePGN`): The initial-position eval annotation is now a SEPARATE `{}` comment BEFORE the first move (`preMoveComment`), not attached to white's first move's `{}` comment. `_buildPGNString` computes `_preMoveComment` (format: `[%eval <tag>] [Initial position] <desc> (<score>) D<depth> SD<seldepth> (<W%>W/<D%>D/<L%>L)`) and passes it to `composePGN`, which inserts `{...}` before the first move. PGN spec allows comments anywhere in movetext, including before the first move. The old `i===0` block that attached the annotation to the first move's `commentParts` is removed. This is more semantically correct — the initial position's eval applies to the position BEFORE any moves, not after white's first move.
+
+4. **Stats-page PGN sync verification** (`ai-bridge.js` `openStatsPage`): `openStatsPage()` already uses `_buildPGNString(true)` to rebuild the PGN from the current `moveRecords` (instead of the potentially-stale `_cachedOriginalPGN`), and `StatsActivity` receives the latest payload via Intent extra on each launch. Verified: the main/review interface's PGN info is correctly synced each time the stats page is opened (in review mode, `moveRecords` is still the full game record, and the stats page shows the full game).
+
+#### Verification
+
+- `chess.html` built successfully; JS syntax valid.
+- Java compiles successfully.
+- Phase 61 changelog added to README.md, NOTICE, all README.license files, and both HTML manuals.
+
+#### Files modified in Phase 61
+
+- `src/main/assets/chess.src/ai-bridge.js` — `_preMoveComment` computation; removed `i===0` initial annotation block; pass `preMoveComment` to `composePGN`
+- `src/main/assets/chess.src/pgn-standard.js` — `composePGN` `preMoveComment` support
+- `src/main/assets/chess.src/tablebase.js` — `_applyImportedFEN` + `importPGN` reordered: `_resetGameUIState` first, then set entry-point-specific values
+- `src/main/assets/chess.src/ui.js` — `_resetGameUIState` centralized cache clearing; `_exitSetupImpl`/`_startGameImpl` redundant manual clears removed; `_pgnCacheSaveCurrent` pure-import detection
+- `src/main/assets/chess.html` — rebuilt from chess.src/
+- `README.md`, `NOTICE` — Phase 61 changelog entry
+- `Manual/Regalia-v1.1.1-manual-{zh,en}.html` — Phase 61 intro + changelog
+- All 7 `README.license` files — Phase 61 changelog entry
+
+### v1.1.1 Phase 60 (audit-driven fixes + stats board navigation + analyze-all robustness + entry-point cache audit, 2026.7.5)
+
+This is a same-version revision phase (no version bump — `versionCode=111`, `versionName="1.1.1"`). It implements reasonable fixes from the comprehensive architecture audit report, adds navigation buttons to the statistics board, and audits all new-game entry points.
+
+1. **Audit-driven P0/P1 fixes** (reasonable suggestions only — false positives skipped):
+   - **P0-3.1 writer lock inconsistency** (`StockfishNative.java`): `cleanupEngineResources()`, `shutdown()`, and `cleanupFailedEngine()` previously used `synchronized(this)` to close the engine writer, while the Phase 58 heartbeat path uses `synchronized(_writerLock)`. This lock inconsistency risked the writer being closed mid-write by the heartbeat thread. Fix: all three writer-close paths now use `_writerLock`. `sendUciCommand()`'s writer access is also wrapped in `_writerLock` (with a re-check of `engineWriter != null` inside the lock) so cleanup paths cannot close the writer mid-send.
+   - **P0-3.5 Integer_bitcount negative-input infinite loop** (`ui.js`): `while (n) { n &= n - 1; }` loops forever for negative `n` (sign bit always 1). Fix: `n = n >>> 0` coerces to unsigned 32-bit. The dirty-flag bitfield is always non-negative in practice, but this is a defensive guard.
+   - **P1-4.4 onRenderProcessGone infinite recreate loop** (`ChessWebViewClient.java`): unconditional `activity.recreate()` could form a crash-restart-crash loop on buggy GPU drivers. Fix: added a static crash counter with a 60-second window — max 3 recreates per window, then stops (user must restart manually). The counter resets after 60s of stability.
+   - **P1-4.16 normalizeTagValue tab character** (`pgn-standard.js`): the `[\r\n]+` regex did not filter tab characters (PGN spec forbids tabs in tag values). Fix: regex changed to `[\r\n\t]+`.
+   - **i18n hard-coded "Render Error"** (`ui.js` + `game-logic.js`): the render-error fallback page had a hard-coded English title. Fix: new `render_error_title` i18n key (`{zh:'渲染错误', en:'Render Error'}`), used via `T()`.
+
+   **Audit findings verified as false positives (no fix needed)**: P0-3.2 (getInsetsController NPE — already wrapped in try-catch), P0-3.4 (toggleLang duplicate — only one definition exists), P0-3.6 (draw_fifty — code uses `draw_50move` consistently), P0-3.7 (_evalDispPrevSig — progress shown via full render path), P1-4.7 (Worker Blob URL leak — already revoked in _removeWorker), P1-4.8 (probeTablebase timeout — already has 5s AbortController), P1-4.9 (Chess960 SP-ID floor — `|0` + input validation handles it), P1-4.11 (Chess960 rook path — already checked via union path), P1-4.13 (_mlistScrollState — already reset in _resetGameUIState), P1-4.17/4.20 (ChessAudioEngine partial-init — already fixed in Phase 54), P2-5.5 (ECO parse error handling — already has try-catch), Section 15.2 i18n keys (all translations present).
+
+2. **Statistics board navigation buttons** (`stats.html`): Added ⏮ ◀ ▶ ⏭ navigation buttons below the statistics board, mirroring the review interface. Behavior:
+   - **Mainline move selected**: nav stays within the mainline. ⏮ = first move (press again for initial position), ◀ = previous (at first → initial position), ▶ = next (at last → stays), ⏭ = last move.
+   - **Variation move selected**: nav stays within the current variation's `()` sequence. ⏮ = variation's first move, ◀ = previous within variation (clamped at 0), ▶ = next within variation (clamped at last), ⏭ = variation's last move. Does NOT cross into mainline or other variations.
+   - **No moves**: buttons are hidden.
+   - **HTML export**: full-PGN export keeps the nav buttons (JS preserved, fully interactive); FEN-only export strips the nav buttons (static export has no JS, buttons would be non-functional).
+   - New i18n keys: `nav_first`, `nav_prev`, `nav_next`, `nav_last`, `nav_main_line`, `nav_variation`.
+
+3. **Analyze-all robustness verification**: The Phase 59 batch-session decoupling (`_reviewAnalyzeStep`/`_reviewAnalyzeGen`/`_evalRequestBatchGen`) is verified to ensure all evaluations complete in one pass — the batch runs in the background, user navigation does not invalidate in-flight callbacks, and the per-step 60s safety timer handles stuck steps.
+
+4. **New-game entry-point cache audit**: All 5 entry points verified to call `_resetGameUIState()` which clears: PGN records (`moveRecords`, `stateHistory`), undo/redo stack (`_redoStack`), engine state (`_needNewGameForEngine`, `isAIThinking`, `_evalLoading`, `_reviewEvalCache`), UI display (`_visualAnnotationsCache`, `_mlistScrollState`, `_multiPVLines`), statistics content (`_cachedOriginalPGN`, `playerWhite`/`playerBlack`). Entry points: `_startGameImpl` (new game dialog), `quickFreeOpening` (free opening → startGame), `_exitSetupImpl` (setup complete), `_applyImportedFEN` (FEN import), `importPGN` (PGN import).
+
+#### Verification
+
+- `chess.html` built successfully; JS syntax valid.
+- `stats.html` JS syntax valid.
+- Java compiles successfully.
+- Phase 60 changelog added to README.md, NOTICE, all README.license files, and both HTML manuals.
+
+#### Files modified in Phase 60
+
+- `src/main/java/com/Regalia/StockfishNative.java` — writer-close paths use `_writerLock`; `sendUciCommand` writer access wrapped in `_writerLock`
+- `src/main/java/com/Regalia/ChessWebViewClient.java` — `onRenderProcessGone` crash-count backoff
+- `src/main/assets/chess.src/ui.js` — `Integer_bitcount` unsigned coercion; render-error title i18n
+- `src/main/assets/chess.src/pgn-standard.js` — `normalizeTagValue` tab filtering
+- `src/main/assets/chess.src/game-logic.js` — new `render_error_title` i18n key
+- `src/main/assets/chess.html` — rebuilt from chess.src/
+- `src/main/assets/stats.html` — navigation buttons + `statsNavFirst/Prev/Next/Last` functions + static-export nav-button removal + new i18n keys
+- `README.md`, `NOTICE` — Phase 60 changelog entry
+- `Manual/Regalia-v1.1.1-manual-{zh,en}.html` — Phase 60 intro + changelog + updated stats-page wireframe with nav buttons
+- All 7 `README.license` files — Phase 60 changelog entry
+
+### v1.1.1 Phase 59 (PGN annotation dedup + step-0 eval + i18n resign/timeout + analyze-all rewrite, 2026.7.5)
+
+This phase bumps the version to `versionCode=111`, `versionName="1.1.1"` and fixes four user-reported bugs plus a first-principles rewrite of the review-mode "Analyze All" batch logic.
+
+1. **Version bump** (`versionCode 110` → `111`, `versionName "1.1.0"` → `"1.1.1"`): Updated `build.gradle`, `strings.xml` (`app_name`), `MainActivity.java` (`VERSION`), `StockfishNative.java` (`ENGINE_VERSION`), `ChessApp.java` (init log), `ChessWebViewClient.java` (version comment), `game-logic.js` (`loading_title`), `index.html.tpl` (`<title>`), `ui.js` (header badge + about dialog + render-error page — also fixed a stale `v1.0.8` in the render-error page), HTML manuals (file rename + internal version), `README.md`, `BUILDING.md`, `PRIVACY.md`, `NOTICE`, all 7 `README.license` files, tar package directory name (`Regalia-v1.1.0-src/` → `Regalia-v1.1.1-src/`), APK filename, tar filename.
+
+2. **Task 59.2 — Fix duplicate every-5-moves PGN annotation** (`ai-bridge.js` `_buildPGNString`): When re-exporting an imported PGN, the every-5-moves eval annotation was re-appended even though `mr.comment` already contained it (from the prior export). Fix: track freshly-computed annotations in a per-move `Set` (`_pgnAddedAnnotations`) and strip them from `mr.comment` via whitespace-tolerant regex matching before appending. The dedup is case-sensitive (the annotation is deterministic given `_lang` so this is safe) and handles both the bare annotation form and the `[初始局面]`-prefixed initial-position form.
+
+3. **Task 59.3 — Fix step-0 eval not cached & chart not auto-loading** (`ai-bridge.js` `onEngineEval` + `ui.js` `_refreshEvalTrendChart`): When the user entered review mode and immediately navigated to a later step, step 0's in-flight eval callback was discarded by the `_reviewEvalRequestedStep !== reviewStep` stale filter — leaving the chart with no data point at step 0. Fix: `onEngineEval` now computes eval values up-front and caches them for the ORIGINAL `_reviewEvalRequestedStep` even when the callback is "stale" for display (the display vars `_sfEval` etc. are NOT updated when stale — only the cache is populated). A new `_refreshEvalTrendChart()` function in `ui.js` performs a lightweight DOM update of the `.review-chart` container's SVG when a stale callback gets cached, so the chart's data point at step 0 appears without a full re-render.
+
+4. **Task 59.4 — Add initial-position annotation to first move** (`ai-bridge.js` `_buildPGNString` + `game-logic.js` new i18n key): PGN has no move-row for the initial position, so step 0's eval annotation is now attached to the FIRST move's `{}` comment with a `[初始局面]` / `[Initial position]` prefix (new i18n key `pgn_initial_position`). The annotation uses the same `formatEvalAnnotation` output as every-5-moves. Dedup tracks both the prefixed form (`[初始局面] 均势 (0.00) D20 ...`) and the bare form (`均势 (0.00) D20 ...`) so re-export doesn't duplicate. Works correctly for Chess960 and setup-FEN games (step 0 is the user-set position).
+
+5. **Task 59.5 — Fix resignation/timeout comment language** (`ai-bridge.js` `_buildPGNString` + `game-logic.js` new i18n keys): The resignation comment (`{White resigns.}` / `{Black resigns.}`) and timeout comment (`{White wins by timeout}` / `{Black wins by timeout}`) were hard-coded English even in Chinese mode. Fix: replaced with `T()` calls using new i18n keys `pgn_resign_white` / `pgn_resign_black` / `pgn_timeout_white_wins` / `pgn_timeout_black_wins`. Added `_commentHasText()` helper for dedup checking against both `commentParts` and `mr.comment` (whitespace-tolerant). The `[Termination "Resignation"]` / `[Termination "Time forfeit"]` PGN header tags remain English (per PGN spec — these are machine-readable tag values, not human-readable comments).
+
+6. **Task 59.6 — First-principles rewrite of "Analyze All" batch logic** (`ai-bridge.js` + `ui.js`): The old batch logic conflated the batch's current step with `reviewStep` (the user's view). User navigation during the batch either discarded the batch's in-flight callback (stalling until the 60s safety timer fired) or hijacked the batch's progress (re-evaluating already-cached steps). Fix: introduced a separate batch session — `_reviewAnalyzeStep` (batch's own current step), `_reviewAnalyzeGen` (generation counter), `_evalRequestBatchGen` (captured at request time). New `_requestBatchEval(step)` function sends eval requests with the batch gen, so `onEngineEval` can distinguish batch callbacks from user-nav callbacks (batch gen check happens FIRST, before the user-nav stale filter). User-nav eval requests are blocked during batch (serve from cache or show "analyzing") to avoid canceling the batch's in-flight engine call. The batch runs in the background — the user can navigate freely, with progress shown via toast and the analyze-all button label. `onEngineReady` resumes the batch via `_requestBatchEval` (not `requestEngineEval`). `exitReview` clears all batch state (`_reviewAnalyzeStep=-1`, `_evalRequestBatchGen=0`, increments `_reviewAnalyzeGen`).
+
+#### Verification
+
+- 17/17 automated dedup logic tests pass (`test-phase59-dedup-logic.js`) covering: `_commentHasText` basic + whitespace-tolerant + substring matching, every-5-moves annotation dedup, initial-position annotation dedup (prefixed + bare forms), resign/timeout comment dedup, initial-position annotation format.
+- `chess.html` built successfully (20150 lines, 1227842 bytes); JS syntax validated via `new Function()`.
+- Release APK built successfully: `versionCode=111`, `versionName="1.1.1"`, `application-label='Regalia v1.1.1'`, v1+v2+v3 signing all verified.
+- Phase 59 changelog added to README.md, BUILDING.md, NOTICE, all README.license files, and both HTML manuals.
+
+#### Files modified in Phase 59
+
+- `src/main/assets/chess.src/ai-bridge.js` — `_commentHasText` helper, every-5-moves dedup, initial-position annotation, i18n resign/timeout, batch session state (`_reviewAnalyzeStep`/`_reviewAnalyzeGen`/`_evalRequestBatchGen`), `_requestBatchEval()` function, `onEngineEval` batch-gen-first + stale-callback-caching, `requestEngineEval` user-nav-only (blocks during batch), `onEngineReady` batch resume via `_requestBatchEval`, export list updated
+- `src/main/assets/chess.src/ui.js` — `_refreshEvalTrendChart()` lightweight chart DOM refresh, `reviewAnalyzeAll()` uses `_requestBatchEval`, `_reviewAnalyzeAdvance()` uses `_reviewAnalyzeStep` (decoupled from `reviewStep`), `_reviewAnalyzeResetSafetyTimer()` logs `_reviewAnalyzeStep`, `exitReview()` clears batch state, export list updated
+- `src/main/assets/chess.src/game-logic.js` — new i18n keys: `pgn_resign_white`, `pgn_resign_black`, `pgn_timeout_white_wins`, `pgn_timeout_black_wins`, `pgn_initial_position`; `loading_title` bumped to v1.1.1
+- `src/main/assets/chess.src/index.html.tpl` — `<title>` bumped to v1.1.1
+- `src/main/assets/chess.html` — rebuilt from chess.src/ via `python3 build-chess.py`
+- `build.gradle` — `versionCode 111`, `versionName "1.1.1"`
+- `src/main/res/values/strings.xml` — `app_name` = `Regalia v1.1.1`
+- `src/main/java/com/Regalia/MainActivity.java` — `VERSION = "v1.1.1"`
+- `src/main/java/com/Regalia/StockfishNative.java` — `ENGINE_VERSION = "v1.1.1"`
+- `src/main/java/com/Regalia/ChessApp.java` — init log `v1.1.1`
+- `src/main/java/com/Regalia/ChessWebViewClient.java` — version comment `v1.1.1`
+- `README.md`, `BUILDING.md`, `PRIVACY.md`, `NOTICE` — Phase 59 changelog entry
+- `Manual/Regalia-v1.1.1-manual-{zh,en}.html` — renamed from v1.1.0 + Phase 59 intro paragraph + changelog paragraph
+- `src/main/README.license`, `src/main/assets/README.license`, `src/main/assets/chess.src/README.license`, `src/main/java/com/Regalia/README.license`, `src/main/cpp/README.license`, `src/main/res/README.license`, `Manual/README.license` — Phase 59 changelog entry
 
 ### v1.1.0 Phase 58 (every-5-moves PGN eval annotation + stopLatch race fix + heartbeat deadlock fix, 2026.7.5)
 

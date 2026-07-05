@@ -44,7 +44,9 @@ function normalizeTagValue(v){
   if(v==null)return '?';
   let s=String(v);
   s=s.replace(/\\/g,'\\\\').replace(/"/g,'\\"');
-  s=s.replace(/[\r\n]+/g,' '); // single-line
+  // v1.1.1 Phase 60 (audit P1-4.16): Also strip tab characters — PGN spec
+  //   requires tag values to be single-line, and tab is not allowed.
+  s=s.replace(/[\r\n\t]+/g,' '); // single-line, no tabs
   return s;
 }
 
@@ -531,6 +533,15 @@ function composePGN(params){
   const tagPart=(params.tagPairs||[]).join('\n');
   // Build movetext
   const tokens=[];
+  // v1.1.1 Phase 61: Insert a pre-move comment (if provided) BEFORE the first
+  //   move. This is used for the initial-position eval annotation, which
+  //   semantically applies to the position before any moves are played.
+  //   PGN spec allows comments anywhere in movetext, including before the
+  //   first move. The comment is normalized (braces escaped) and wrapped in {}.
+  if(params.preMoveComment){
+    const preBody=normalizeCommentBody(params.preMoveComment);
+    if(preBody)tokens.push('{'+preBody+'}');
+  }
   const moves=params.halfMoves||[];
   for(let i=0;i<moves.length;i++){
     const m=moves[i];
