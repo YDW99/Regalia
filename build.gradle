@@ -1,30 +1,11 @@
-// Regalia - Gradle build configuration
-// Copyright (C) 2026 Regalia
-//
-// AI-GEN: AI assisted
-// This code was AI-assisted and has been reviewed for AGPL v3 compliance.
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU Affero General Public License for more details.
-//
-// You should have received a copy of the GNU Affero General Public License
-// along with this program. If not, see <https://www.gnu.org/licenses/>.
-
 buildscript {
-
     repositories {
-        google()
-        mavenCentral()
         maven { url 'https://maven.aliyun.com/repository/google' }
         maven { url 'https://maven.aliyun.com/repository/central' }
         maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
+        google()
+        mavenCentral()
+        gradlePluginPortal()
     }
     dependencies {
         classpath 'com.android.tools.build:gradle:8.7.3'
@@ -33,23 +14,71 @@ buildscript {
 
 apply plugin: 'com.android.application'
 
-buildDir = "/tmp/regalia_build/${project.name}"
+// ============================================================
+// 版本号动态配置（从 version.properties 读取）
+// ============================================================
+def versionPropsFile = file("../version.properties")
+def versionProps = new Properties()
+if (versionPropsFile.exists()) {
+    versionProps.load(new FileInputStream(versionPropsFile))
+}
+
+def versionMajor = (versionProps['VERSION_MAJOR'] ?: "1").toInteger()
+def versionMinor = (versionProps['VERSION_MINOR'] ?: "1").toInteger()
+def versionPatch = (versionProps['VERSION_PATCH'] ?: "1").toInteger()
+def versionBuild = (versionProps['VERSION_BUILD'] ?: "111").toInteger()
+
+def computedVersionName = "${versionMajor}.${versionMinor}.${versionPatch}"
+def computedVersionCode = versionBuild
+
+// ============================================================
+// 签名配置（从 local.properties 或环境变量读取）
+// 安全实践：永远不要在版本控制中提交密码
+// ============================================================
+def keystorePropertiesFile = file("../keystore.properties")
+def keystoreProps = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProps.load(new FileInputStream(keystorePropertiesFile))
+}
+
+// 允许通过环境变量覆盖签名配置（CI/CD 友好）
+def releaseKeystorePath = System.getenv("RELEASE_KEYSTORE_PATH") ?: keystoreProps['releaseKeystorePath'] ?: ""
+def releaseKeystorePassword = System.getenv("RELEASE_KEYSTORE_PASSWORD") ?: keystoreProps['releaseKeystorePassword'] ?: ""
+def releaseKeyAlias = System.getenv("RELEASE_KEY_ALIAS") ?: keystoreProps['releaseKeyAlias'] ?: ""
+def releaseKeyPassword = System.getenv("RELEASE_KEY_PASSWORD") ?: keystoreProps['releaseKeyPassword'] ?: ""
 
 android {
     namespace 'com.Regalia'
     compileSdk 35
-    buildToolsVersion "34.0.0"
-    ndkVersion "27.2.12479018"
+
+    // AGP 8.7.3 自动管理 buildToolsVersion，无需显式指定
+    // 若需强制固定，可取消注释下行：
+    // buildToolsVersion "35.0.0"
+
+    // AGP 自动使用 bundled NDK，若需固定版本取消注释下行：
+    // ndkVersion "27.2.12479018"
 
     defaultConfig {
         applicationId "com.Regalia"
-        minSdk 21
+        minSdk 23
         targetSdk 35
-        versionCode 111
-        versionName "1.1.1"
+        versionCode computedVersionCode
+        versionName computedVersionName
 
         ndk {
+            // 仅保留 arm64-v8a 以减少 APK 体积
+            // 如需兼容 32 位设备，添加 'armeabi-v7a'
             abiFilters 'arm64-v8a'
+        }
+
+        // 导出编译信息供 CMake 使用
+        externalNativeBuild {
+            cmake {
+                cppFlags "-O3 -fexceptions -frtti -std=c++20"
+                arguments "-DANDROID_STL=c++_shared",
+                          "-DANDROID_PLATFORM=android-23",
+                          "-DCMAKE_BUILD_TYPE=Release"
+            }
         }
     }
 
@@ -57,65 +86,144 @@ android {
         debug {
             storeFile file('../debug.keystore')
             storePassword 'android'
-            keyAlias 'debug'
+            keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+
         release {
-            storeFile file('../debug.keystore')
-            storePassword 'android'
-            keyAlias 'debug'
-            keyPassword 'android'
-            enableV1Signing true
-            enableV2Signing true
-            enableV3Signing true
+            // 安全签名配置：使用外部注入的签名信息
+            // 本地开发：创建 keystore.properties 文件（已加入 .gitignore）
+            // CI/CD 环境：使用环境变量注入
+            if (file(releaseKeystorePath).exists()) {
+                storeFile file(releaseKeystorePath)
+                storePassword releaseKeystorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
+            }
+            enableV1Signing = true
+            enableV2Signing = true
+            enableV3Signing = true
         }
     }
 
     buildTypes {
         release {
-            minifyEnabled false
-            shrinkResources false
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             signingConfig signingConfigs.release
+            // Native 代码 Release 编译优化
+            externalNativeBuild {
+                cmake {
+                    cppFlags "-O3 -DNDEBUG -fvisibility=hidden -ffunction-sections -fdata-sections"
+                }
+            }
         }
+
         debug {
             minifyEnabled false
             debuggable true
+            jniDebuggable true
+            renderscriptDebuggable true
             signingConfig signingConfigs.debug
+            // Debug 构建附带调试符号
+            externalNativeBuild {
+                cmake {
+                    cppFlags "-O0 -g3 -fno-limit-debug-info"
+                }
+            }
         }
     }
 
+    // 升级到 Java 17，利用 JDK 21 编译器的完整特性
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
 
     buildFeatures {
         buildConfig true
+        // 如需 prefab 分发 Native 库，启用以下行：
+        // prefabPublishing true
     }
 
-    // externalNativeBuild compiles engine_bridge.so (the JNI bridge for
-    // nativeChmod / nativeRenice) from src/main/cpp/engine_jni.cpp via CMake.
-    // The Stockfish engine binary itself is prebuilt (libstockfish.so in
-    // jniLibs/) and executed via ProcessBuilder — not compiled from source.
     externalNativeBuild {
         cmake {
             path "src/main/cpp/CMakeLists.txt"
-            version "3.22.1"
+            // 使用 "3.22.1+" 允许 Gradle 自动匹配已安装的最新 CMake 版本
+            version "3.22.1+"
         }
     }
 
-    packaging {
+    packagingOptions {
+        // 使用新版 JNI 打包，支持 so 文件压缩，减小 APK 体积
         jniLibs {
-            useLegacyPackaging true
+            useLegacyPackaging false
+            // 按需排除不需要打包的库
+            // excludes += ['lib/arm64-v8a/libexclude.so']
         }
+        // 处理可能重复的资源文件
+        pickFirsts += ['**/libc++_shared.so', '**/libfoundation.so']
     }
-    // v1.0.8 PHASE 30: removed redundant sourceSets block — 'src/main/jniLibs'
-    //   is AGP's default jniLibs source directory, so the explicit declaration
-    //   was a no-op.
+
+    lint {
+        baseline = file("lint-baseline.xml")
+        lintConfig = file("lint.xml")
+        abortOnError false
+        checkReleaseBuilds true
+        xmlReport true
+        htmlReport true
+        // 静默已知但不重要的问题，减少构建噪音
+        disable 'ObsoleteLintCustomCheck', 'GradleDependency', 'OldTargetApi',
+                'AndroidGradlePluginVersion', 'NonConstantResourceId'
+    }
+
+    // 优化 Gradle 任务输出
+    // 减少不必要的文件复制，提升增量构建性能
+    tasks.withType(JavaCompile) {
+        options.compilerArgs += [
+            '-Xlint:unchecked',
+            '-Xlint:deprecation'
+        ]
+        // 开启编译器守护进程复用
+        options.fork = true
+        options.forkOptions.jvmArgs += ['-Xmx1024m']
+    }
 }
 
 dependencies {
+    // 此处保留为空 — 项目无外部依赖
+    // 如需添加依赖，建议使用 implementation 而非 api
+    // implementation 'androidx.core:core:1.13.1'
 }
 
-// Use the system JDK 21 (configured via gradle.properties org.gradle.java.home).
-// The toolchain block is removed so Gradle uses the running JDK directly.
+// ============================================================
+// 自定义构建任务
+// ============================================================
+
+// 清理 CMake 构建缓存（用于强制完整重建 Native 代码）
+task cleanNative(type: Delete) {
+    delete "${project.buildDir}/cxx"
+    delete "${project.buildDir}/intermediates/cmake"
+}
+
+// 打印构建环境信息（调试用）
+task printBuildInfo {
+    doLast {
+        println "========================================="
+        println "  Regalia Build Info"
+        println "========================================="
+        println "  Version Name : ${android.defaultConfig.versionName}"
+        println "  Version Code : ${android.defaultConfig.versionCode}"
+        println "  Compile SDK  : ${android.compileSdk}"
+        println "  Min SDK      : ${android.defaultConfig.minSdk}"
+        println "  Target SDK   : ${android.defaultConfig.targetSdk}"
+        println "  ABI Filters  : ${android.defaultConfig.ndk.abiFilters}"
+        println "  Build Type   : ${android.buildTypes*.name}"
+        println "  JDK          : ${System.getProperty('java.version')}"
+        println "  Gradle       : ${gradle.gradleVersion}"
+        println "  AGP          : 8.7.3"
+        println "  NDK Bundled  : ${android.ndkDirectory ?: 'Not found'}"
+        println "========================================="
+    }
+}
