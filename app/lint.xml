@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Regalia Android 项目 — Lint 规则配置
+
+    说明：
+    - severity="ignore" 的问题在构建时不会被报告
+    - severity="error" 的问题会导致构建失败
+    - severity="warning" 的问题仅产生警告
+    - 此配置旨在减少已知但不重要的噪音，聚焦真正的问题
+
+    建议工作流：
+    1. 首次使用时运行 ./gradlew lint 生成 baseline
+    2. 将生成的 lint-baseline.xml 加入版本控制
+    3. 后续 CI 只报告新增的 lint 问题
+-->
+<lint>
+    <!-- ========================================================
+         安全类 — 设为 error，构建失败以强制修复
+         ======================================================== -->
+    <issue id="HardcodedText" severity="warning" />
+    <issue id="SetJavaScriptEnabled" severity="error" />
+    <issue id="TrustAllX509TrustManager" severity="error" />
+    <issue id="BadHostnameVerifier" severity="error" />
+    <issue id="AllowBackup" severity="warning" />
+    <issue id="ExportedService" severity="error" />
+    <issue id="ExportedReceiver" severity="error" />
+    <issue id="ExportedContentProvider" severity="error" />
+    <issue id="ExportedActivity" severity="error" />
+
+    <!-- ========================================================
+         国际化 — Native 项目通常不需要多语言，忽略相关警告
+         ======================================================== -->
+    <issue id="MissingTranslation" severity="ignore" />
+    <issue id="ExtraTranslation" severity="ignore" />
+    <issue id="RtlEnabled" severity="ignore" />
+    <issue id="RtlHardcoded" severity="ignore" />
+
+    <!-- ========================================================
+         图标/资源 — Native 项目以 Native 渲染为主，忽略 UI 相关
+         ======================================================== -->
+    <issue id="IconLauncherFormat" severity="ignore" />
+    <issue id="IconMissingDensityFolder" severity="ignore" />
+    <issue id="IconDensities" severity="ignore" />
+    <issue id="IconDuplicatesConfig" severity="ignore" />
+    <issue id="IconDipSize" severity="ignore" />
+    <issue id="IconExpectedSize" severity="ignore" />
+
+    <!-- ========================================================
+         版本/依赖 — 已知但不需要立即处理的问题
+         ======================================================== -->
+    <!-- 依赖版本检查 — 手动管理依赖时不需要频繁提醒 -->
+    <issue id="GradleDependency" severity="ignore" />
+    <!-- AGP 版本检查 — 升级是计划性工作，不需要 lint 提醒 -->
+    <issue id="AndroidGradlePluginVersion" severity="ignore" />
+    <!-- SDK 版本目标检查 -->
+    <issue id="OldTargetApi" severity="ignore" />
+    <!-- 已废弃的 lint 自定义检查 -->
+    <issue id="ObsoleteLintCustomCheck" severity="ignore" />
+    <!-- 资源 ID 非编译时常量（AndroidX 新行为） -->
+    <issue id="NonConstantResourceId" severity="ignore" />
+
+    <!-- ========================================================
+         Native / JNI 相关
+         ======================================================== -->
+    <!-- Native 代码中的 JNI 签名问题 — 设为 error 因为会导致崩溃 -->
+    <issue id="JniMissingFunction" severity="error" />
+    <issue id="JniStaticPackagePrivateMethod" severity="warning" />
+
+    <!-- ========================================================
+         性能 — 设为 warning，建议但不强制
+         ======================================================== -->
+    <issue id="UnusedResources" severity="warning" />
+    <issue id="UnusedAttribute" severity="warning" />
+    <issue id="DisableBaselineAlignment" severity="warning" />
+    <issue id="InefficientWeight" severity="warning" />
+    <issue id="NestedWeights" severity="warning" />
+    <issue id="Overdraw" severity="warning" />
+
+    <!-- ========================================================
+         代码质量 — Native 项目 Java 代码较少，适当放宽
+         ======================================================== -->
+    <issue id="ObsoleteSdkInt" severity="warning" />
+    <issue id="UnusedMaterial3ScaffoldPaddingParameter" severity="ignore" />
+    <issue id="MonochromeLauncherIcon" severity="ignore" />
+    <issue id="DataExtractionRules" severity="warning" />
+    <issue id="RedundantLabel" severity="warning" />
+    <issue id="LockedOrientationActivity" severity="ignore" />
+
+    <!-- ========================================================
+         杂项 — 减少噪音
+         ======================================================== -->
+    <issue id="ContentDescription" severity="ignore" />
+    <issue id="LabelFor" severity="ignore" />
+    <issue id="KeyboardInaccessibleWidget" severity="ignore" />
+    <issue id="SelectableText" severity="ignore" />
+    <issue id="ClickableViewAccessibility" severity="ignore" />
+    <issue id="Autofill" severity="ignore" />
+
+</lint>
