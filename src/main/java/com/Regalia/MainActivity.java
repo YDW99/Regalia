@@ -57,7 +57,7 @@ import android.widget.TextView;
 public class MainActivity extends Activity {
 
     private static final String TAG = "Regalia";
-    private static final String VERSION = "v1.1.0";
+    private static final String VERSION = "v1.1.1";
 
     private WebView webView;
     private StockfishNative stockfishEngine;

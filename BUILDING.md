@@ -1,4 +1,4 @@
-# Building Regalia v1.1.0 from source
+# Building Regalia v1.1.1 from source
 
 <!-- AI-GEN: AI assisted
      This document was AI-assisted and has been reviewed for AGPL v3 compliance. -->
@@ -335,3 +335,4 @@ The signed APK (v1+v2+v3 signed with `../debug.keystore`) will be at
 
 ---
 *AI-GEN*
+

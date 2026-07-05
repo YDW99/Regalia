@@ -226,9 +226,17 @@ function _performDirtyRender() {
   _dirtyFlags = DIRTY_NONE;
 }
 
-/** Count set bits in a number */
+/** Count set bits in a number.
+ * v1.1.1 Phase 60 (audit P0-3.5): Guard against negative input — the old
+ *   `while (n) { n &= n - 1; }` loops forever for negative numbers (the
+ *   sign bit is always 1 in two's complement). Use `n >>> 0` to coerce to
+ *   an unsigned 32-bit integer, then iterate. The dirty-flag bitfield is
+ *   always non-negative in practice (DIRTY_* constants are positive), but
+ *   this is a defensive guard against future misuse.
+ */
 function Integer_bitcount(n) {
   let count = 0;
+  n = n >>> 0; // coerce to unsigned 32-bit
   while (n) { count++; n &= n - 1; }
   return count;
 }
@@ -417,7 +425,7 @@ function _updateEvalDisplayIncremental() {
       if (app) {
         app.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:var(--bg);color:var(--text);padding:20px;text-align:center;font-family:system-ui,sans-serif">' +
           '<div style="font-size:3rem;margin-bottom:16px">♔</div>' +
-          '<h2 style="color:var(--accent2);margin-bottom:12px">'+T('app_name')+' v1.0.8</h2>' +
+          '<h2 style="color:var(--accent2);margin-bottom:12px">'+T('app_name')+' v1.1.1</h2>' +
           '<p style="color:#a08050;margin-bottom:20px;max-width:300px">'+T('render_error')+'</p>' +
           '<button onclick="location.reload()" style="padding:12px 24px;background:var(--btn-a-bg);color:var(--bg);border:none;border-radius:6px;font-size:1rem;font-weight:700;cursor:pointer">'+T('refresh_page')+'</button>' +
           '</div>';
@@ -441,7 +449,7 @@ function _updateEvalDisplayIncremental() {
     if (saved) {
       const data = JSON.parse(saved);
       if (data && data.gameState && Date.now() - data.timestamp < 3600000) {
-        console.log('Recovery data found from', new Date(data.timestamp));
+        // v1.1.1 Phase 66: Removed stale console.log (debugging leftover).
       }
       // Clear recovery data after successful load
       setTimeout(function() {
@@ -1338,10 +1346,36 @@ function _buildReviewMovesInnerHTML(startIdx,endIdx){
 //   guards. These functions caused numerous bugs (pull-back, selection loss,
 //   >90 steps revert) and are now eliminated at the source.
 
-// ===================== KNOWLEDGE =====================
+// ===================== KNOWLEDGE ====================
 // P2 PERF: ECO_OPENINGS is lazily parsed on first access to avoid blocking main thread
 // during initial page load. The JSON string (~125KB) is parsed only when first needed.
 // ===================== EVAL TREND CHART =====================
+/**
+ * v1.1.1 Phase 59 Task 59.3: Lightweight refresh of the eval trend chart's
+ *   SVG content without triggering a full render(). Called from onEngineEval
+ *   when a stale callback (e.g. step 0's eval) gets cached — the chart
+ *   previously didn't update until the next full render, leaving step 0's
+ *   data point missing. This function rebuilds the SVG from the current
+ *   _reviewEvalCache and replaces the .review-chart container's innerHTML.
+ *   Safe to call when not in review mode or when the chart container
+ *   doesn't exist (no-op).
+ */
+function _refreshEvalTrendChart(){
+  if(!reviewMode||!reviewStates||reviewStates.length<2)return;
+  const _container=document.querySelector('.review-chart');
+  if(!_container)return;
+  // Measure the container's current pixel width (same logic as the render path)
+  let _w=Math.max(120,window.innerWidth-28);
+  const _actualW=_container.clientWidth;
+  if(_actualW>0)_w=_actualW;
+  const _h=_container.clientHeight||_trendH||120;
+  // Rebuild the SVG
+  const _svg=_buildEvalTrendSVG(_w,_h);
+  if(_svg){
+    _container.innerHTML=_svg;
+  }
+}
+
 /**
  * Build an SVG evaluation trend chart for review mode.
  * v1.1.0 Phase 54 rev11: Uses preserveAspectRatio="xMidYMid slice" with a
@@ -2115,7 +2149,7 @@ const oppC=OPP_COLOR[playerColor];
 const flip=playerColor==='black';
 // Arrows computed separately by _updateArrows() — no inline computation needed
 
-let h='<div class="hdr" role="banner"><div class="hdr-top"><div class="hdr-l">'+_hdrKingIconHTML()+'<h1>'+T('app_name')+'<span class="ver">v1.1.0</span><button onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showAboutPage=true;render()" class="hdr-btn" style="margin-left:4px;cursor:pointer">ℹ️</button></h1></div><button onclick="toggleLang()" class="hdr-btn-lg" style="cursor:pointer">'+(_lang==='zh'?'↔️中':'↔️EN')+'</button><div class="ev" id="eval-disp" role="status" aria-label="'+T('evaluating')+'">'+(setupMode?T('setup_label'):(isAIThinking?'<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>':'<span class="ev-e">'+pe+'</span><span>'+pd+'</span><span style="color:var(--muted)">('+scoreStr+')</span>'+_hdrDepthStr+_hdrProgressStr))+'</div></div><div class="hdr-tools" role="toolbar" aria-label="'+T('ctrl_range')+'">'+(setupMode?'':'<div class="diff-sel" role="radiogroup" aria-label="AI">'+getAI_LEVELS().map(l=>'<button class="diff-b'+(getEffectiveAILevel()===l.id?' act':'')+'" onclick="if(!isAIThinking){'+(l.id===8?'openEngineConfig()':('aiLevel='+l.id+';try{AndroidBridge.syncGameDifficulty('+l.id+')}catch(e){}render()'))+'}" title="'+l.desc+'" role="radio" aria-checked="'+(getEffectiveAILevel()===l.id)+'">'+(l.id===8?'⚙️':l.id===7?('SL'+(function(){try{let _sl=20;if(typeof engineSettingsData!=='undefined'&&engineSettingsData&&engineSettingsData.skillLevel!=null)_sl=engineSettingsData.skillLevel;else if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getEngineSkillLevel)_sl=AndroidBridge.getEngineSkillLevel();return _sl;}catch(e){return 20;}})()):l.id)+'</button>').join('')+'</div>')+'<button type="button" class="btn" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()" aria-label="'+T('new_game')+'"><span style="font-size:1.4rem">⚔️</span> '+T('new_game')+'</button>'+'<button class="btn" onclick="quickFreeOpening()" aria-label="'+T('free_opening')+'">'+(playerColor==='white'?'<span style=\"font-size:1.4rem;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text\">♔&#xFE0E;</span>':'<span style=\"font-size:1.4rem;font-weight:400;color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans Symbol&#x27;,sans-serif;font-variant-emoji:text\">♚&#xFE0E;</span>')+' '+T('free_opening')+'</button>'+(setupMode?'':'<button class="btn" onclick="toggleSound()" id="btnSound" aria-label="'+T('sound')+'">'+(soundOn?'<span style="font-size:1.4rem">🔊</span> '+T('sound'):'<span style="font-size:1.4rem">🔇</span> '+T('sound'))+'</button>')+'<button class="btn" onclick="copyFEN()" title="'+T('copy_fen')+'" aria-label="'+T('copy_fen')+'"><span style="font-size:1.4rem">📝</span> FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="'+T('import_fen')+'" aria-label="'+T('import_fen')+'"><span style="font-size:1.4rem">🗃️</span> '+T('import_label')+'</button><button class="btn" onclick="'+(setupMode?'exitSetup()':'toggleSetup()')+'" aria-label="'+(setupMode?T('setup_done'):T('setup_mode'))+'">'+(setupMode?'<span style="font-size:1.4rem">✓</span> '+T('setup_done'):'<span style="font-size:1.4rem">🏗️</span> '+T('setup_mode'))+'</button></div></div>';
+let h='<div class="hdr" role="banner"><div class="hdr-top"><div class="hdr-l">'+_hdrKingIconHTML()+'<h1>'+T('app_name')+'<span class="ver">v1.1.1</span><button onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showAboutPage=true;render()" class="hdr-btn" style="margin-left:4px;cursor:pointer">ℹ️</button></h1></div><button onclick="toggleLang()" class="hdr-btn-lg" style="cursor:pointer">'+(_lang==='zh'?'↔️中':'↔️EN')+'</button><div class="ev" id="eval-disp" role="status" aria-label="'+T('evaluating')+'">'+(setupMode?T('setup_label'):(isAIThinking?'<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>':'<span class="ev-e">'+pe+'</span><span>'+pd+'</span><span style="color:var(--muted)">('+scoreStr+')</span>'+_hdrDepthStr+_hdrProgressStr))+'</div></div><div class="hdr-tools" role="toolbar" aria-label="'+T('ctrl_range')+'">'+(setupMode?'':'<div class="diff-sel" role="radiogroup" aria-label="AI">'+getAI_LEVELS().map(l=>'<button class="diff-b'+(getEffectiveAILevel()===l.id?' act':'')+'" onclick="if(!isAIThinking){'+(l.id===8?'openEngineConfig()':('aiLevel='+l.id+';try{AndroidBridge.syncGameDifficulty('+l.id+')}catch(e){}render()'))+'}" title="'+l.desc+'" role="radio" aria-checked="'+(getEffectiveAILevel()===l.id)+'">'+(l.id===8?'⚙️':l.id===7?('SL'+(function(){try{let _sl=20;if(typeof engineSettingsData!=='undefined'&&engineSettingsData&&engineSettingsData.skillLevel!=null)_sl=engineSettingsData.skillLevel;else if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getEngineSkillLevel)_sl=AndroidBridge.getEngineSkillLevel();return _sl;}catch(e){return 20;}})()):l.id)+'</button>').join('')+'</div>')+'<button type="button" class="btn" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()" aria-label="'+T('new_game')+'"><span style="font-size:1.4rem">⚔️</span> '+T('new_game')+'</button>'+'<button class="btn" onclick="quickFreeOpening()" aria-label="'+T('free_opening')+'">'+(playerColor==='white'?'<span style=\"font-size:1.4rem;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text\">♔&#xFE0E;</span>':'<span style=\"font-size:1.4rem;font-weight:400;color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans Symbol&#x27;,sans-serif;font-variant-emoji:text\">♚&#xFE0E;</span>')+' '+T('free_opening')+'</button>'+(setupMode?'':'<button class="btn" onclick="toggleSound()" id="btnSound" aria-label="'+T('sound')+'">'+(soundOn?'<span style="font-size:1.4rem">🔊</span> '+T('sound'):'<span style="font-size:1.4rem">🔇</span> '+T('sound'))+'</button>')+'<button class="btn" onclick="copyFEN()" title="'+T('copy_fen')+'" aria-label="'+T('copy_fen')+'"><span style="font-size:1.4rem">📝</span> FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="'+T('import_fen')+'" aria-label="'+T('import_fen')+'"><span style="font-size:1.4rem">🗃️</span> '+T('import_label')+'</button><button class="btn" onclick="'+(setupMode?'exitSetup()':'toggleSetup()')+'" aria-label="'+(setupMode?T('setup_done'):T('setup_mode'))+'">'+(setupMode?'<span style="font-size:1.4rem">✓</span> '+T('setup_done'):'<span style="font-size:1.4rem">🏗️</span> '+T('setup_mode'))+'</button></div></div>';
 h+=`<div class="main" role="main"><div class="bsec">`;
 // v1.0.4 Rev37: AI bar captured pieces split at 7 — pieces 8+ go to line 3.
 {const _aiCapHtml=capturedPiecesHtml(gameState.board,oppC,playerColor,7);
@@ -2513,7 +2547,7 @@ if(showAboutPage){
 // Load AGPL v3 SVG via AndroidBridge as base64 (CSP-compliant)
 let _gplSvgSrc='';
 try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.loadAssetAsBase64){const b64=AndroidBridge.loadAssetAsBase64('AGPLv3_Logo.svg');if(b64)_gplSvgSrc='data:image/svg+xml;base64,'+b64;}}catch(e){}
-h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="About"><div class="dlg" style="max-width:460px"><h2>${T('about_title')}</h2><div class="dlg-sec"><div class="crow"><span class="lb">${T('about_app')}</span><span class="vl">${T('app_name')} v1.1.0</span></div><div class="crow"><span class="lb">${T('about_engine')}</span><span class="vl">Stockfish 18 (arm64-v8a-dotprod)</span></div><div class="crow"><span class="lb">${T('about_platform')}</span><span class="vl">Android arm64-v8a</span></div></div><div class="dlg-sec"><h3>${T('copyright_license')}</h3>`+(_gplSvgSrc?`<div style="text-align:center;margin-bottom:10px"><img src="${_gplSvgSrc}" alt="AGPL v3 Logo" style="width:120px;height:auto;opacity:.9" /></div>`:'')+`<div style="font-size:.75rem;color:var(--text);line-height:1.6"><p style="margin-bottom:8px">${T('about_copyright')}</p><p style="margin-bottom:8px">${T('about_source_code_prefix')}<a href="${T('about_source_code_url')}" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">${T('about_source_code_url')}</a></p><p style="margin-bottom:8px">${T('about_agpl')} <a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GNU AGPL v3</a>${T('about_agpl_desc')}</p><p style="margin-bottom:8px">${T('about_droidfish')}<a href="https://github.com/peterosterlund2/droidfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">DroidFish</a>${T('about_droidfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a>${T('about_droidfish_tail')}</p><p style="margin-bottom:8px">${T('about_stockfish')}<a href="https://github.com/official-stockfish/Stockfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">Stockfish</a>${T('about_stockfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a> ${T('about_gplv3')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_disclaimer')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_ai')}</p></div></div><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="showAboutPage=false;render()" style="flex:1;justify-content:center">${T('close')}</button></div></div></div>`;}
+h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="About"><div class="dlg" style="max-width:460px"><h2>${T('about_title')}</h2><div class="dlg-sec"><div class="crow"><span class="lb">${T('about_app')}</span><span class="vl">${T('app_name')} v1.1.1</span></div><div class="crow"><span class="lb">${T('about_engine')}</span><span class="vl">Stockfish 18 (arm64-v8a-dotprod)</span></div><div class="crow"><span class="lb">${T('about_platform')}</span><span class="vl">Android arm64-v8a</span></div></div><div class="dlg-sec"><h3>${T('copyright_license')}</h3>`+(_gplSvgSrc?`<div style="text-align:center;margin-bottom:10px"><img src="${_gplSvgSrc}" alt="AGPL v3 Logo" style="width:120px;height:auto;opacity:.9" /></div>`:'')+`<div style="font-size:.75rem;color:var(--text);line-height:1.6"><p style="margin-bottom:8px">${T('about_copyright')}</p><p style="margin-bottom:8px">${T('about_source_code_prefix')}<a href="${T('about_source_code_url')}" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">${T('about_source_code_url')}</a></p><p style="margin-bottom:8px">${T('about_agpl')} <a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GNU AGPL v3</a>${T('about_agpl_desc')}</p><p style="margin-bottom:8px">${T('about_droidfish')}<a href="https://github.com/peterosterlund2/droidfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">DroidFish</a>${T('about_droidfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a>${T('about_droidfish_tail')}</p><p style="margin-bottom:8px">${T('about_stockfish')}<a href="https://github.com/official-stockfish/Stockfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">Stockfish</a>${T('about_stockfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a> ${T('about_gplv3')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_disclaimer')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_ai')}</p></div></div><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="showAboutPage=false;render()" style="flex:1;justify-content:center">${T('close')}</button></div></div></div>`;}
 // Import dialog — paste FEN, paste PGN, or select PGN file
 if(showImportDialog){
 h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="${T('import_title')}" onclick="if(event.target===this){showImportDialog=false;render()}"><div class="dlg" style="max-width:420px"><h2>${T('import_title')}</h2><div class="dlg-sec" style="gap:10px;display:flex;flex-direction:column">
@@ -3383,7 +3417,9 @@ if(_wasEcoFocused){const el=document.getElementById('ecoSearch');if(el){el.focus
 if(showNewGameDialog&&dlgOpeningId&&!reviewMode){setTimeout(()=>{const list=document.querySelector('.op-list');if(list){const active=list.querySelector('.op-btn.act');if(active)active.scrollIntoView({block:'center',behavior:'smooth'})}},50)}
 // v1.0.8 PHASE 30: escape error message + stack to prevent XSS if a thrown
 //   error message ever contains HTML.
-}catch(e){const _app=document.getElementById('app');if(_app)_app.innerHTML='<div style="color:red;padding:20px;font-family:monospace;background:#1a0000;border:2px solid red;border-radius:8px;margin:20px"><h3>Render Error</h3><pre style="white-space:pre-wrap;font-size:12px">'+_esc(e.toString())+'\n\n'+_esc(e.stack)+'</pre></div>';console.error('Render error:',e)}}
+// v1.1.1 Phase 60 (audit i18n): Use T('render_error_title') instead of the
+//   hard-coded English "Render Error" so the title is localized.
+}catch(e){const _app=document.getElementById('app');if(_app)_app.innerHTML='<div style="color:red;padding:20px;font-family:monospace;background:#1a0000;border:2px solid red;border-radius:8px;margin:20px"><h3>'+T('render_error_title')+'</h3><pre style="white-space:pre-wrap;font-size:12px">'+_esc(e.toString())+'\n\n'+_esc(e.stack)+'</pre></div>';console.error('Render error:',e)}}
 
 
 
@@ -4679,28 +4715,12 @@ function _exitSetupImpl(){
 // - _mlistScrollState (old scroll position)
 // - gameClockTimerId (old clock timer)
 _resetGameUIState();
-// v1.1.0 Phase 54 rev20: Clear stale engine variation data to prevent
-//   pollution from the previous game. _pendingEngineSANs and
-//   _pendingEnginePVs store engine PV variations indexed by moveRecords
-//   indices — a new game reuses indices 0,1,2,... so stale entries
-//   would attach to the wrong moves.
-if(typeof _pendingEngineSANs!=='undefined')_pendingEngineSANs=[];
-if(typeof _pendingEnginePVs!=='undefined')_pendingEnginePVs=[];
-if(typeof reviewCritical!=='undefined')reviewCritical=[];
-// v1.1.0 Phase 53: Also clear state that _resetGameUIState doesn't cover
-// but _applyImportedFEN/importPGN do:
-if(typeof _cachedOriginalPGN!=='undefined')_cachedOriginalPGN=null;
-if(typeof playerWhite!=='undefined')playerWhite=undefined;
-if(typeof playerBlack!=='undefined')playerBlack=undefined;
-if(typeof _ecoRecCache!=='undefined')_ecoRecCache.clear();
-if(typeof _sfEval!=='undefined'){_sfEval=0;}
-if(typeof _sfMateDistance!=='undefined'){_sfMateDistance=0;}
-if(typeof _sfDepth!=='undefined'){_sfDepth=0;}
-if(typeof _sfEvalReady!=='undefined'){_sfEvalReady=false;}
-if(typeof _evalLoading!=='undefined'){_evalLoading=false;}
-if(typeof _needNewGameForEngine!=='undefined'){_needNewGameForEngine=true;}
-if(typeof _tbLoading!=='undefined'){_tbLoading=false;}
-if(typeof _tbRetryCount!=='undefined'){_tbRetryCount=0;}
+// v1.1.1 Phase 61: The manual clears below were redundant with the old
+//   _resetGameUIState and are now fully covered by it (it clears
+//   _pendingEngineSANs/_pendingEnginePVs, reviewCritical, _cachedOriginalPGN,
+//   playerWhite/playerBlack, _ecoRecCache, _sfEval/_sfDepth/etc,
+//   _evalLoading, _needNewGameForEngine, _tbLoading, _tbRetryCount, etc).
+//   Removed to avoid duplication.
 if(typeof _updateEvalDisplay==='function')_updateEvalDisplay();
 // as the new starting position (step 0). This means:
 // - moveRecords is cleared (no move history from before setup)
@@ -5184,13 +5204,31 @@ function _withPGNSaveCheck(callback){
 function _savePGNYes(){
   showSavePGNPrompt=false;
   _skipPGNSavePrompt=true;
-  // Export PGN to file (same as clicking 💾)
-  try{exportPGNToFile();}catch(e){console.warn('PGN export during save prompt failed',e);}
-  // Execute the pending action after a short delay (allow export to start)
+  // v1.1.1 Phase 66: exportPGNToFile now shows an annotation dialog (async).
+  //   We must defer the pending action until AFTER the dialog is dismissed,
+  //   not on a fixed 200ms timer. The annotation dialog's callback handles
+  //   the export; we schedule the pending action to run after the dialog
+  //   is dismissed by wrapping it in a function that checks if the dialog
+  //   is still active.
   var cb=_pendingActionAfterSave;
   _pendingActionAfterSave=null;
-  if(cb){setTimeout(function(){cb();_skipPGNSavePrompt=false;},200);}
-  else{_skipPGNSavePrompt=false;}
+  try{exportPGNToFile();}catch(e){console.warn('PGN export during save prompt failed',e);}
+  if(cb){
+    // Wait for the annotation dialog to be dismissed before executing cb.
+    // Poll every 200ms; if dialog is not active (never opened or dismissed),
+    // execute immediately.
+    function _waitForDialog(){
+      if(typeof _pgnExportDialogActive!=='undefined'&&_pgnExportDialogActive){
+        setTimeout(_waitForDialog,200);
+      }else{
+        cb();
+        _skipPGNSavePrompt=false;
+      }
+    }
+    setTimeout(_waitForDialog,200);
+  }else{
+    _skipPGNSavePrompt=false;
+  }
   render();
 }
 function _savePGNNo(){
@@ -5356,15 +5394,11 @@ function _startGameImpl(){
   }
   _needNewGameForEngine=true;
   reviewBaseState=cloneS(gameState);
-  _reviewEvalCache.clear();_reviewEvalRequestedStep=-1; // Clear eval cache on new game
-  // v1.1.0 Phase 54 rev21: Clear stale engine variation data on new game.
-  //   Same index-reuse issue as _exitSetupImpl/_applyImportedFEN/importPGN.
-  if(typeof _pendingEngineSANs!=='undefined')_pendingEngineSANs=[];
-  if(typeof _pendingEnginePVs!=='undefined')_pendingEnginePVs=[];
-  if(typeof _multiPVLines!=='undefined')_multiPVLines=[];
-  if(typeof _multiPVResult!=='undefined')_multiPVResult=null;
-  if(typeof _lastEngineVariation!=='undefined')_lastEngineVariation=null;
-  if(typeof reviewCritical!=='undefined')reviewCritical=[];
+  // v1.1.1 Phase 61: _resetGameUIState() now clears ALL per-game caches
+  //   centrally (including _reviewEvalCache, _pendingEngineSANs/_pendingEnginePVs,
+  //   _multiPV*, reviewCritical, _sfEval, _cachedOriginalPGN, playerWhite/
+  //   playerBlack, _setupFEN, _importedStartMoveNum, _needNewGameForEngine,
+  //   etc). The manual clears that were here are now redundant.
   _resetGameUIState();
   _resetEvalState();
   // v1.0.4 EXPANSION (this round): Initialize the game clocks based on dlgTimeControl.
@@ -5599,15 +5633,30 @@ function _updateClockDisplay(){
 //  10. Blue arrows: for each mover piece threatening 2+ enemy pieces, draw
 //      arrows from attacker to each threatened piece (cap: top 3 attackers
 //      by threat count, max 4 targets per attacker).
-const _visualAnnotationsCache=new Map(); // moveIdx → {csl:[...], cal:[...]}
+// v1.1.1 Phase 62: Each cache entry is {csl:[...], cal:[...], imported:boolean}.
+//   - imported=true: extracted from an imported PGN's [%csl]/[%cal] comments
+//     (human-authored annotations that SHOULD be exported in PGN).
+//   - imported=false: auto-generated by _computeAndCacheVisualAnnotations
+//     (UI display aids — arrows/highlights — that should NOT pollute PGN export).
+//   _buildPGNString() only exports entries where imported=true, preventing
+//   auto-generated annotations from contaminating the PGN.
+const _visualAnnotationsCache=new Map(); // moveIdx → {csl:[...], cal:[...], imported:boolean}
 
 function _computeAndCacheVisualAnnotations(moveIdx){
   if(!moveRecords||moveIdx<0||moveIdx>=moveRecords.length)return;
   // v1.0.4 ROUND-5 REV16: null check for Black-to-move placeholders
   // v1.0.5 Rev52 FIX: was referencing undefined `csl`/`cal` — use empty arrays.
-  if(!moveRecords[moveIdx]){_visualAnnotationsCache.set(moveIdx,{csl:[],cal:[]});return;}
+  if(!moveRecords[moveIdx]){_visualAnnotationsCache.set(moveIdx,{csl:[],cal:[],imported:false});return;}
   let postState=null;
-  if(typeof reviewStates!=='undefined'&&reviewStates[moveIdx+1]){
+  // v1.1.1 Phase 64: Only use reviewStates as a shortcut when we're
+  //   actually IN review mode. Previously, reviewStates could hold stale
+  //   entries from a previous game's review session (not cleared until
+  //   _resetGameUIState), causing this function to use the OLD game's
+  //   board state at the same move index — producing annotations that
+  //   match the old game at that step. Now we gate on reviewMode to
+  //   ensure reviewStates is only used during an active review session
+  //   of the CURRENT game.
+  if(typeof reviewMode!=='undefined'&&reviewMode&&typeof reviewStates!=='undefined'&&reviewStates[moveIdx+1]){
     postState=reviewStates[moveIdx+1].state;
   }
   if(!postState){
@@ -6025,7 +6074,10 @@ function _computeAndCacheVisualAnnotations(moveIdx){
     }
   }
   // Cache the result
-  _visualAnnotationsCache.set(moveIdx,{csl,cal});
+  // v1.1.1 Phase 62: Mark as auto-generated (imported=false) — these are UI
+  //   display aids, not human-authored PGN annotations. _buildPGNString()
+  //   skips entries with imported=false to prevent PGN pollution.
+  _visualAnnotationsCache.set(moveIdx,{csl,cal,imported:false});
 }
 
 // Get cached visual annotations for a move (returns {csl:[], cal:[]} or null)
@@ -6182,7 +6234,8 @@ function _computeInitialPositionAnnotations(){
         }
       }
     }
-    _visualAnnotationsCache.set('_initial',{csl,cal});
+    // v1.1.1 Phase 62: Mark as auto-generated (imported=false)
+    _visualAnnotationsCache.set('_initial',{csl,cal,imported:false});
   }catch(e){
     console.warn('_computeInitialPositionAnnotations failed',e);
   }
@@ -6294,6 +6347,44 @@ function _resetGameUIState(){
   // into the new game's PGN export (the cache is keyed by moveRecords index,
   // and a new game reuses indices 0, 1, 2, ... starting from 0).
   if(typeof _visualAnnotationsCache!=='undefined'&&_visualAnnotationsCache)_visualAnnotationsCache.clear();
+  // v1.1.1 Phase 64 ROOT CAUSE FIX: Clear reviewStates and reviewMode.
+  //   _computeAndCacheVisualAnnotations (called after each move via
+  //   executeMove) checks reviewStates[moveIdx+1] FIRST as a shortcut to
+  //   get the post-move state. If reviewStates still holds entries from a
+  //   PREVIOUS game's review session (because the user entered review on
+  //   game A, exited, then started game B), the function uses the OLD
+  //   game's board state at the same move index — producing annotations
+  //   that match the old game at that step (not the new game). This is
+  //   the TRUE root cause of "old game's visual annotations appearing in
+  //   new game's PGN": the annotations are freshly generated but from
+  //   stale reviewStates data, not from stale _visualAnnotationsCache.
+  //   Fix: clear reviewStates, reviewMode, reviewStep, and reviewBaseState
+  //   in _resetGameUIState so _computeAndCacheVisualAnnotations falls
+  //   through to the correct replay-from-moveRecords path.
+  if(typeof reviewStates!=='undefined')reviewStates=[];
+  if(typeof reviewMode!=='undefined')reviewMode=false;
+  if(typeof reviewStep!=='undefined')reviewStep=0;
+  if(typeof reviewBaseState!=='undefined')reviewBaseState=null;
+  // v1.1.1 Phase 65: Clear _preReviewSnapshot — if the user was in review mode
+  //   when a new game started, this snapshot holds references to the old game's
+  //   state (gameState, moveRecords, stateHistory, etc.), preventing GC and
+  //   potentially confusing exitReview if it's somehow called later.
+  if(typeof _preReviewSnapshot!=='undefined')_preReviewSnapshot=null;
+  // v1.1.1 Phase 65: Clear setup history — if the user was in setup mode,
+  //   these hold undo/redo snapshots of the setup board that are meaningless
+  //   for the new game.
+  if(typeof setupHistory!=='undefined')setupHistory=[];
+  if(typeof setupRedoStack!=='undefined')setupRedoStack=[];
+  // v1.1.1 Phase 65: Clear dialog visibility flags — if a dialog was open
+  //   when a new game started, it should be dismissed.
+  if(typeof showNewGameDialog!=='undefined')showNewGameDialog=false;
+  if(typeof showAboutPage!=='undefined')showAboutPage=false;
+  if(typeof showImportDialog!=='undefined')showImportDialog=false;
+  if(typeof showEngineConfig!=='undefined')showEngineConfig=false;
+  if(typeof showPGNCacheManager!=='undefined')showPGNCacheManager=false;
+  if(typeof showSavePGNPrompt!=='undefined')showSavePGNPrompt=false;
+  if(typeof showResignConfirm!=='undefined')showResignConfirm=false;
+  if(typeof _pendingActionAfterSave!=='undefined')_pendingActionAfterSave=null;
   // v1.0.4 REV13: Reset scroll state on new game
   // v1.0.4 Rev30: also reset the restore guard (in case a render is in flight)
   if(typeof _mlistScrollState!=='undefined'){_mlistScrollState.scrollTop=0;_mlistScrollState.atBottom=false;_mlistScrollState.valid=false;}
@@ -6336,6 +6427,73 @@ function _resetGameUIState(){
   //   non-dialog paths (FEN/PGN/setup), the imported game is treated as
   //   untimed unless the user explicitly starts a new timed game.
   if(typeof gameClocks!=='undefined'){gameClocks=null;}
+  // v1.1.1 Phase 61: Clear ALL remaining per-game caches that could pollute
+  //   the new game's PGN records, eval display, and statistics. Previously
+  //   these were cleared inconsistently across the 5 entry points
+  //   (_startGameImpl / quickFreeOpening / _exitSetupImpl / _applyImportedFEN /
+  //   importPGN), leading to stale-data leaks. Centralizing them here ensures
+  //   every entry point gets the same clean slate.
+  //   - _ecoRecCache: ECO recommendation cache (keyed by position hash, but
+  //     a new game from the standard start position could collide with a
+  //     previous game's hash if both start from the initial position).
+  //   - _pvCache: PV-line SAN conversion cache (keyed by hash+UCI-prefix;
+  //     low risk but cleared for consistency).
+  //   - _pendingEngineSANs/_pendingEnginePVs: engine PV variations indexed
+  //     by moveRecords indices — a new game reuses indices 0,1,2,... so
+  //     stale entries would attach to the wrong moves.
+  //   - _multiPVLines/_multiPVResult/_lastEngineVariation: MultiPV display
+  //     state from the previous game's engine search.
+  //   - reviewCritical: critical-move markers from the previous game's
+  //     review session.
+  //   - _sfEval/_sfMateDistance/_sfDepth/_sfSeldepth/_sfWdl*/_sfEvalReady:
+  //     eval display variables — reset to defaults so the eval bar starts
+  //     fresh instead of showing the previous game's last eval.
+  //   - _reviewEvalCache: the LRU eval cache (keyed by per-game reviewStep).
+  //     Previously cleared separately in each entry point; now centralized.
+  //   - _reviewEvalRequestedStep: the step currently being evaluated.
+  //   - _cachedOriginalPGN: the imported PGN text (for stats page / PGN
+  //     cache save). Must be nulled so the new game doesn't inherit the
+  //     old game's PGN.
+  //   - playerWhite/playerBlack: imported player names — a new game uses
+  //     the default "你"/"AI对手" (or _humanPlayerName if set via rename).
+  //   - _setupFEN: the setup-position FEN — a new game from the initial
+  //     position has no setup FEN.
+  //   - _importedStartMoveNum: the imported FEN/PGN's starting move number
+  //     — a new game from the initial position starts at move 1.
+  //   - _needNewGameForEngine: tells the engine to send ucinewgame before
+  //     the next search (clears the engine's internal hash tables).
+  //   - _tbLoading/_tbRetryCount: tablebase query state.
+  //   - _humanPlayerName is NOT cleared here — it's a persistent user
+  //     preference (the rename feature) that should survive across games.
+  if(typeof _ecoRecCache!=='undefined'&&_ecoRecCache&&typeof _ecoRecCache.clear==='function')_ecoRecCache.clear();
+  if(typeof _pvCache!=='undefined'&&_pvCache&&typeof _pvCache.clear==='function')_pvCache.clear();
+  if(typeof _pendingEngineSANs!=='undefined')_pendingEngineSANs=[];
+  if(typeof _pendingEnginePVs!=='undefined')_pendingEnginePVs=[];
+  if(typeof _multiPVLines!=='undefined')_multiPVLines=[];
+  if(typeof _multiPVResult!=='undefined')_multiPVResult=null;
+  if(typeof _lastEngineVariation!=='undefined')_lastEngineVariation=null;
+  if(typeof reviewCritical!=='undefined')reviewCritical=[];
+  if(typeof _sfEval!=='undefined')_sfEval=0;
+  if(typeof _sfMateDistance!=='undefined')_sfMateDistance=0;
+  if(typeof _sfDepth!=='undefined')_sfDepth=0;
+  if(typeof _sfSeldepth!=='undefined')_sfSeldepth=0;
+  if(typeof _sfWdlW!=='undefined')_sfWdlW=-1;
+  if(typeof _sfWdlD!=='undefined')_sfWdlD=-1;
+  if(typeof _sfWdlL!=='undefined')_sfWdlL=-1;
+  if(typeof _sfEvalReady!=='undefined')_sfEvalReady=false;
+  if(typeof _evalLoading!=='undefined')_evalLoading=false;
+  if(typeof _reviewEvalCache!=='undefined'&&_reviewEvalCache&&typeof _reviewEvalCache.clear==='function'){
+    try{_reviewEvalCache.clear();}catch(e){console.warn('_resetGameUIState: review eval cache clear failed',e);}
+  }
+  if(typeof _reviewEvalRequestedStep!=='undefined')_reviewEvalRequestedStep=-1;
+  if(typeof _cachedOriginalPGN!=='undefined')_cachedOriginalPGN=null;
+  if(typeof playerWhite!=='undefined')playerWhite=undefined;
+  if(typeof playerBlack!=='undefined')playerBlack=undefined;
+  if(typeof _setupFEN!=='undefined')_setupFEN=null;
+  if(typeof _importedStartMoveNum!=='undefined')_importedStartMoveNum=1;
+  if(typeof _needNewGameForEngine!=='undefined')_needNewGameForEngine=true;
+  if(typeof _tbLoading!=='undefined')_tbLoading=false;
+  if(typeof _tbRetryCount!=='undefined')_tbRetryCount=0;
 }
 
 /**
@@ -6447,12 +6605,7 @@ function _updateReviewAnalyzeBtn(){
 function reviewAnalyzeAll(){
   if(!reviewMode||!reviewStates||reviewStates.length===0)return;
   // v1.0.4 Rev24: If every step is already cached, complete INSTANTLY.
-  // This is the "instant recovery from cache" requirement — no engine calls,
-  // no safety timer, no async wait. The user sees "Analysis complete!" immediately.
   // v1.0.8 PHASE 15: Analyze-all now includes step 0 (the initial position).
-  // We check steps 0..moveRecords.length (inclusive). _lastStep is
-  // moveRecords.length (the position after the last move); step 0 is the
-  // initial position. Both are now part of the analysis scope.
   const _lastStep=moveRecords.length; // = reviewStates.length - 1
   let _uncachedCount=0;
   for(let i=0;i<=_lastStep;i++){
@@ -6465,34 +6618,39 @@ function reviewAnalyzeAll(){
     return;
   }
   _reviewAnalyzeAllActive=true;
-  // Save the step the user was on so we can return to it after analysis
+  // v1.1.1 Phase 59 Task 59.6: Save the step the user was on so we can return
+  //   to it after analysis. The batch runs in the background (decoupled from
+  //   reviewStep) — the user can navigate freely during the batch.
   let _preAnalyzeStep=reviewStep;
+  window._reviewAnalyzeReturnStep=_preAnalyzeStep;
   // Find first un-analyzed step (skip cached steps for efficiency)
-  // v1.0.8 PHASE 15: Start from step 0 (initial position), not step 1.
   let startStep=-1;
   for(let i=0;i<=_lastStep;i++){
     if(!_reviewEvalCache.has(i)){startStep=i;break;}
   }
-  if(startStep<0)startStep=0; // Defensive — shouldn't happen given the all-cached check above
-  reviewStep=startStep;
-  gameState=cloneS(reviewStates[reviewStep].state);
-  // v1.0.4 Rev24: Per-step safety timer (60s) that RESETS on each advance.
-  // The old global cap of 5 minutes was the primary root cause of "interrupted
-  // at a certain point" for long games. 60s/step is generous — depth-22 evals
-  // typically complete in 5-15s; if a single step takes >60s, the engine is
-  // stuck and we should abort that step (not the whole batch).
-  _reviewAnalyzeResetSafetyTimer();
-  // Store pre-analyze step for restoration on completion
-  window._reviewAnalyzeReturnStep=_preAnalyzeStep;
+  if(startStep<0)startStep=0;
+  // v1.1.1 Phase 59 Task 59.6: Don't hijack reviewStep — the batch runs in
+  //   the background. The user sees their current step on the board, and
+  //   progress is shown via toast. After the batch completes, we return to
+  //   the user's pre-batch step (which is the same as their current step
+  //   unless they navigated during the batch).
   showToast(T('analyzing_all')+' ('+_reviewEvalCache.size+'/'+(_lastStep+1)+')');
-  render();
-  requestEngineEval();
+  try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+  // Start the batch via _requestBatchEval (decoupled from reviewStep)
+  if(typeof _requestBatchEval==='function'){
+    _requestBatchEval(startStep);
+  }else{
+    // Fallback (shouldn't happen — _requestBatchEval is always exported)
+    _reviewAnalyzeResetSafetyTimer();
+    requestEngineEval();
+  }
 }
 
 /**
  * v1.0.4 Rev24: Reset the per-step safety timer. Called on every advance
  * so a stuck engine on step N doesn't abort the entire batch — only step N.
  * 60 seconds per step is generous; depth-22 evals typically finish in 5-15s.
+ * v1.1.1 Phase 59 Task 59.6: Log uses _reviewAnalyzeStep (not reviewStep).
  */
 function _reviewAnalyzeResetSafetyTimer(){
   if(_reviewAnalyzeSafetyTimer){clearTimeout(_reviewAnalyzeSafetyTimer);}
@@ -6500,7 +6658,10 @@ function _reviewAnalyzeResetSafetyTimer(){
     if(_reviewAnalyzeAllActive){
       // v1.0.4 Rev24: Don't abort the whole batch — skip the stuck step and
       // continue. This is more resilient than the old behavior (abort all).
-      console.warn('Analyze-all: step '+reviewStep+' timed out, skipping');
+      console.warn('Analyze-all: step '+_reviewAnalyzeStep+' timed out, skipping');
+      // v1.1.1 Phase 59 Task 59.6: Clear the batch gen so the stale callback
+      //   (if it ever arrives) doesn't double-advance.
+      if(typeof _evalRequestBatchGen!=='undefined')_evalRequestBatchGen=0;
       _reviewAnalyzeAdvance();
     }else{
       _reviewAnalyzeSafetyTimer=null;
@@ -6512,17 +6673,21 @@ function _reviewAnalyzeResetSafetyTimer(){
  * Advance to the next review step during analyze-all.
  * Called from onEngineEval when _reviewAnalyzeAllActive is true.
  * v1.0.4 Rev24: Also called from requestEngineEval() when a cache hit occurs
- * during batch mode (previously stalled silently).
+ *   during batch mode (previously stalled silently).
+ * v1.1.1 Phase 59 Task 59.6: Uses _reviewAnalyzeStep (decoupled from
+ *   reviewStep) so user navigation during the batch doesn't hijack progress.
+ *   The batch runs in the background; the user's reviewStep is restored
+ *   only when the batch completes.
  */
 function _reviewAnalyzeAdvance(){
   if(!_reviewAnalyzeAllActive)return;
-  // v1.0.8 PHASE 15: Analyze-all now includes step 0 (the initial position).
-  // _lastStep is moveRecords.length (= reviewStates.length - 1). We iterate
-  // steps 0.._lastStep inclusive. This covers the initial position (step 0)
-  // and every position after a move (steps 1..N).
   const _lastStep=moveRecords.length;
-  // Skip already-cached steps for efficiency
-  let nextStep=reviewStep+1;
+  // v1.1.1 Phase 59 Task 59.6: Walk forward from _reviewAnalyzeStep (NOT
+  //   reviewStep) to find the next uncached step. This is the core fix —
+  //   the old code used reviewStep, so user navigation during the batch
+  //   caused the batch to "restart" from the user's nav position, re-
+  //   evaluating already-cached steps and sometimes skipping uncached ones.
+  let nextStep=_reviewAnalyzeStep+1;
   while(nextStep<=_lastStep){
     if(!_reviewEvalCache.has(nextStep))break; // Found un-analyzed step
     nextStep++;
@@ -6530,53 +6695,50 @@ function _reviewAnalyzeAdvance(){
   if(nextStep>_lastStep){
     _reviewAnalyzeAllActive=false;
     if(_reviewAnalyzeSafetyTimer){clearTimeout(_reviewAnalyzeSafetyTimer);_reviewAnalyzeSafetyTimer=null;}
+    // v1.1.1 Phase 59 Task 59.6: Reset batch state
+    _reviewAnalyzeStep=-1;
+    if(typeof _evalRequestBatchGen!=='undefined')_evalRequestBatchGen=0;
     // v1.0.8 PHASE 19 (bug fix): Recompute reviewCritical now that the eval cache
-    // is fully populated. Previously, entering review on a fresh game (empty cache)
-    // set reviewCritical=[], and Analyze All filled the cache but never recomputed
-    // reviewCritical — the 💥/❌ critical-move markers stayed missing until the
-    // user exited and re-entered review.
+    // is fully populated.
     try{if(typeof _findCriticalMoves==='function')reviewCritical=_findCriticalMoves();}catch(e){}
-    // Return to the step the user was viewing before analysis
+    // Return to the step the user was viewing before analysis (or their
+    // current step if they navigated during the batch — reviewGoTo restores
+    // eval vars from cache).
     const returnStep=window._reviewAnalyzeReturnStep;
-    if(typeof returnStep==='number'&&returnStep>=0&&returnStep<reviewStates.length){
-      // v1.0.8 PHASE 19 (bug fix): Use reviewGoTo() instead of manual assignment
-      // so the eval vars (_sfEval/_sfMateDistance/_sfWdl*/_sfDepth/etc.) are
-      // restored from cache. Without this, the eval bar would show the LAST
-      // analyzed step's eval instead of the returned step's eval.
-      reviewGoTo(returnStep);
-      // reviewGoTo already calls render(), so we just show the toast and return.
+    // v1.1.1 Phase 59 Task 59.6: If the user navigated during the batch,
+    //   return to their CURRENT step (reviewStep), not the pre-batch step.
+    //   This respects the user's intent. If they didn't navigate, reviewStep
+    //   === returnStep, so reviewGoTo(returnStep) is correct.
+    const _targetStep=(typeof reviewStep==='number'&&reviewStep>=0&&reviewStep<reviewStates.length)?reviewStep:returnStep;
+    if(typeof _targetStep==='number'&&_targetStep>=0&&_targetStep<reviewStates.length){
+      reviewGoTo(_targetStep);
       showToast(T('analysis_done')+' '+_reviewEvalCache.size+' '+T('step'));
       return;
     }
-    // v1.0.8 PHASE 19: show actual cached count (may be < _lastStep+1 if some
-    // steps timed out and were skipped by the safety timer).
     showToast(T('analysis_done')+' '+_reviewEvalCache.size+' '+T('step'));
     render();
     return;
   }
-  reviewStep=nextStep;
-  gameState=cloneS(reviewStates[reviewStep].state);
+  _reviewAnalyzeStep=nextStep;
   // v1.0.4 Rev24: Reset the per-step safety timer for the new step.
   _reviewAnalyzeResetSafetyTimer();
   // Update progress toast periodically (every 3 steps or at end)
-  // v1.0.8 PHASE 15: total is _lastStep+1 (steps 0..N inclusive)
-  if(reviewStep%3===0||nextStep>=_lastStep){
+  if(nextStep%3===0||nextStep>=_lastStep){
     const cachedCount=_reviewEvalCache.size;
     showToast(T('analyzing_progress')+' ('+cachedCount+'/'+(_lastStep+1)+')');
   }
-  // v1.1.0 Phase 54 rev18: Use render() during analyze-all advance to
-  //   update the board, move list, eval bar, and chart. The previous
-  //   rev12 fix skipped render() to avoid scroll pull-back — but that
-  //   caused the board to not refresh (stale position displayed) and
-  //   the user couldn't see which step was being analyzed. The scroll
-  //   pull-back is now fixed by the synchronous scrollTop restore (rev17),
-  //   so render() is safe to call again. The user sees the board update
-  //   to the step being analyzed, and the move list highlights the active
-  //   move. The scrollIntoView in render() centers the active move.
-  //   Also force _lastReviewStepScrolled=-2 so scrollIntoView always fires.
-  _lastReviewStepScrolled=-2;
-  render();
-  requestEngineEval();
+  // v1.1.1 Phase 59 Task 59.6: Don't hijack reviewStep — the batch runs in
+  //   the background. The user sees their current step on the board.
+  //   Live-refresh the analyze-all button label so the user sees progress.
+  try{if(typeof _updateReviewAnalyzeBtn==='function')_updateReviewAnalyzeBtn();}catch(e){}
+  // v1.1.1 Phase 59 Task 59.6: Use _requestBatchEval (NOT requestEngineEval)
+  //   so the callback is correctly identified as a batch callback.
+  if(typeof _requestBatchEval==='function'){
+    _requestBatchEval(nextStep);
+  }else{
+    // Fallback (shouldn't happen)
+    requestEngineEval();
+  }
 }
 
 /**
@@ -6589,6 +6751,11 @@ function exitReview(){
   _clearAnimationState();
   reviewMode=false;
   _reviewAnalyzeAllActive=false;
+  // v1.1.1 Phase 59 Task 59.6: Clear batch session state so a stale
+  //   in-flight callback (if any) doesn't try to advance a canceled batch.
+  _reviewAnalyzeStep=-1;
+  if(typeof _evalRequestBatchGen!=='undefined')_evalRequestBatchGen=0;
+  if(typeof _reviewAnalyzeGen!=='undefined')_reviewAnalyzeGen++;
   // v1.0.8 PHASE 18 Task 2: Reset virtual list state on exiting review mode.
   // Clears the scroll timer and window so the next review session starts fresh.
   _resetRvVirtualState();
@@ -6719,20 +6886,46 @@ function _pgnCacheSaveCurrent(){
   try{name=prompt(T('pgn_cache_name_prompt'),T('pgn_cache_save_default'))||'';}catch(e){name='';}
   name=name.trim();
   if(!name)return;
-  // v1.0.4 Rev24: ALWAYS use _buildPGNString() for the saved PGN.
-  // Previously, _cachedOriginalPGN (the imported text) was preferred — but
-  // that loses NEW moves played after import. _buildPGNString() now includes:
-  //   - All moveRecords (including post-import moves)
-  //   - Variations (forced on below — independent of showVariations UI toggle)
-  //   - Comments with [%eval ...] from the review eval cache
-  //   - Comments with [%emt]/[%clk], [%csl], [%cal]
-  //   - Seven-Tag Roster + supplementary tags ([TimeControl], [FEN], [SetUp], etc.)
-  // This satisfies the "PGN cache archive should include complete PGN text —
-  // variations (), comments {}, no PGN info omitted" requirement.
+  // v1.1.1 Phase 63: Ask whether to include annotations
+  if(typeof _showPGNExportAnnotationDialog==='function'){
+    _showPGNExportAnnotationDialog(function(includeAnn){
+      if(includeAnn===null)return; // cancelled
+      _pgnCacheSaveCurrentImpl(name,includeAnn);
+    });
+  }else{
+    // Fallback (shouldn't happen — _showPGNExportAnnotationDialog is always exported)
+    _pgnCacheSaveCurrentImpl(name,true);
+  }
+}
+function _pgnCacheSaveCurrentImpl(name,includeAnn){
+  // v1.1.1 Phase 61: Fix "imported PGN cannot be correctly saved to PGN cache".
+  //   For a pure import (no new moves played after import), use _cachedOriginalPGN
+  //   to preserve the original PGN's full text. Otherwise rebuild via _buildPGNString.
+  // v1.1.1 Phase 63: Pass includeAnn to _buildPGNString. For pure imports,
+  //   _cachedOriginalPGN is used as-is (it already contains whatever annotations
+  //   the original PGN had — the user's choice doesn't affect it).
   let pgn='';
-  try{
-    if(typeof _buildPGNString==='function')pgn=_buildPGNString(true); // forceIncludeVariations=true
-  }catch(e){pgn='';}
+  let _useOriginal=false;
+  if(typeof _cachedOriginalPGN!=='undefined'&&_cachedOriginalPGN&&moveRecords&&moveRecords.length>0){
+    // Check if all moves have time===null (pure import, no live moves)
+    let _allImported=true;
+    for(let i=0;i<moveRecords.length;i++){
+      const mr=moveRecords[i];
+      if(mr&&mr.time!==null&&mr.time!==undefined){_allImported=false;break;}
+    }
+    if(_allImported){
+      _useOriginal=true;
+    }
+  }
+  if(_useOriginal){
+    // Use the original imported PGN text — preserves all comments/tags/NAGs
+    pgn=_cachedOriginalPGN;
+  }else{
+    // Rebuild from moveRecords (includes post-import moves + annotations)
+    try{
+      if(typeof _buildPGNString==='function')pgn=_buildPGNString(true,includeAnn); // forceIncludeVariations=true
+    }catch(e){pgn='';}
+  }
   if(!pgn){
     showToast(T('pgn_cache_save_failed'),2500);
     return;
@@ -7154,6 +7347,11 @@ function _jsAttrEncode(s){
  * Closes open dialogs/overlays, exits review/setup modes.
  */
 function handleBackPress(){
+  // v1.1.1 Phase 65: Export annotation dialog — back button = Cancel
+  if(typeof _pgnExportDialogActive!=='undefined'&&_pgnExportDialogActive){
+    if(typeof _pgnExportDialogDismiss==='function')_pgnExportDialogDismiss();
+    return;
+  }
   // v1.0.8 UI: Promotion dialog takes highest priority — it blocks all other
   // input and must be dismissed before any other overlay can be closed.
   if(pendingPromotion){
@@ -7394,7 +7592,7 @@ function _resignGame(){
   try{HapticManager.fire('GAME_OVER');}catch(e){}
   // Force a full re-render to show the game-over overlay
   markDirty(DIRTY_FULL);
-  console.log('Player resigned — winner:',_resignWinnerColor);
+  // v1.1.1 Phase 66: Removed stale console.log (was left over from debugging).
 }
 
 /**
@@ -7494,4 +7692,4 @@ function _importPGNFileWithSaveCheck(){
 }
 
 // ---- Exports ----
-export {render,markDirty,sqClick,executeMove,undoMove,redoMove,flipBoard,quickFreeOpening,toggleSound,doPromotion,getHint,toggleSetup,exitSetup,setupClick,enterReview,reviewGoTo,reviewAnalyzeAll,exitReview,startGame,_resetGameUIState,doAIMove,_requestStockfishMove,_buildEvalTrendSVG,handleBackPress,_startEngineHeartbeat,_cleanupEventListeners,_reviewAnalyzeAdvance,_rvAnalyzeBtnLabel,_updateReviewAnalyzeBtn,_doPastePGN};
+export {render,markDirty,sqClick,executeMove,undoMove,redoMove,flipBoard,quickFreeOpening,toggleSound,doPromotion,getHint,toggleSetup,exitSetup,setupClick,enterReview,reviewGoTo,reviewAnalyzeAll,exitReview,startGame,_resetGameUIState,doAIMove,_requestStockfishMove,_buildEvalTrendSVG,_refreshEvalTrendChart,handleBackPress,_startEngineHeartbeat,_cleanupEventListeners,_reviewAnalyzeAdvance,_rvAnalyzeBtnLabel,_updateReviewAnalyzeBtn,_doPastePGN};

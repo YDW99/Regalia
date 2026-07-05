@@ -8,7 +8,7 @@
 -->
 # Privacy Policy — Regalia
 
-Regalia is a fully offline chess application. This policy applies to the Regalia Android application (current version: **v1.1.0**, versionCode 110).
+Regalia is a fully offline chess application. This policy applies to the Regalia Android application (current version: **v1.1.1**, versionCode 111).
 
 ## Data Collection
 

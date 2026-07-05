@@ -44,11 +44,15 @@ import java.lang.ref.WeakReference;
  * URLs in the system default browser (defense-in-depth alongside the JS-side
  * openUrlInBrowser bridge). Previously, external links were silently blocked.
  *
- * Version: v1.1.0
+ * Version: v1.1.1
  */
 public class ChessWebViewClient extends WebViewClient {
     private static final String TAG = "Regalia";
     private final WeakReference<MainActivity> activityRef;
+    // v1.1.1 Phase 60 (audit P1-4.4): Render-process crash counter + last-crash
+    //   timestamp for backoff. Static so the counter survives Activity recreate.
+    private static int _renderCrashCount = 0;
+    private static long _lastRenderCrashTime = 0L;
 
     public ChessWebViewClient(MainActivity activity) {
         this.activityRef = new WeakReference<>(activity);
@@ -128,6 +132,36 @@ public class ChessWebViewClient extends WebViewClient {
     public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
         // v1.0.8 PHASE 30: simplified log (removed invented "policy" label)
         Log.e(TAG, "WebView render process gone: crashed=" + detail.didCrash());
+        // v1.1.1 Phase 60 (audit P1-4.4): Crash-count backoff to prevent infinite
+        //   recreate() loop. If the GPU driver is buggy and the renderer keeps
+        //   crashing, unconditional recreate() forms a crash-restart-crash loop
+        //   that drains battery and makes the app unusable. We allow up to 3
+        //   recreate attempts within a 60-second window; beyond that, we just
+        //   destroy the WebView and let the user manually restart the app.
+        //   The counter resets after 60 seconds of stability.
+        long now = System.currentTimeMillis();
+        if (now - _lastRenderCrashTime > 60000) {
+            // Window expired — reset counter
+            _renderCrashCount = 0;
+        }
+        _renderCrashCount++;
+        _lastRenderCrashTime = now;
+        if (_renderCrashCount > 3) {
+            Log.e(TAG, "Render process crashed " + _renderCrashCount + " times within 60s — "
+                    + "stopping recreate loop to prevent battery drain. User must restart app manually.");
+            try {
+                if (view != null) {
+                    if (view.getParent() instanceof android.view.ViewGroup) {
+                        ((android.view.ViewGroup) view.getParent()).removeView(view);
+                    }
+                    view.destroy();
+                }
+            } catch (Throwable e) {
+                Log.w(TAG, "Failed to destroy crashed WebView (backoff path)", e);
+            }
+            return true; // We handled it — don't kill the app process
+        }
+        Log.w(TAG, "Render process crash count within 60s: " + _renderCrashCount + "/3");
         try {
             if (view != null) {
                 // Remove the dead WebView from its parent to avoid

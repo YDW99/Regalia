@@ -431,6 +431,13 @@ const _i18n={
   'pgn_parse_error':{zh:'PGN 解析失败',en:'PGN parse error'},
   // v1.0.4 Rev27: Board display section heading (DeepSeek review feature)
   'position_board':{zh:'当前局面',en:'Current Position'},
+  // v1.1.1 Phase 60: Navigation button labels (board nav, below stats board)
+  'nav_first':{zh:'⏮',en:'⏮'},
+  'nav_prev':{zh:'◀',en:'◀'},
+  'nav_next':{zh:'▶',en:'▶'},
+  'nav_last':{zh:'⏭',en:'⏭'},
+  'nav_main_line':{zh:'主线',en:'Main line'},
+  'nav_variation':{zh:'变例',en:'Variation'},
   'position_stats':{zh:'局面统计',en:'Position Statistics'},
   'move_quality':{zh:'走法质量',en:'Move Quality'},
   'eval_trend':{zh:'评估趋势',en:'Eval Trend'},
@@ -2975,6 +2982,29 @@ function _renderStatsBoard(parsed){
     caption=_lang==='zh'?'初始局面':'Initial position';
   }
   bh+='<div style="text-align:center;font-size:.78rem;color:var(--muted,#a08050);margin-top:-6px;margin-bottom:10px">'+_escFEN(caption)+'</div>';
+  // v1.1.1 Phase 60: Navigation buttons below the stats board (mirrors review
+  //   interface's ⏮ ◀ ▶ ⏭). Behavior:
+  //   - When a MAINLINE move is selected (or nothing selected): nav stays within
+  //     the mainline. ⏮ = first mainline move (or initial position), ⏭ = last
+  //     mainline move. ◀/▶ step within mainline (◀ at first goes to initial
+  //     position; ▶ at last stays at last).
+  //   - When a VARIATION move is selected: nav stays within the current
+  //     variation's () — ◀/▶ step within the variation sequence, ⏮/⏭ jump to
+  //     the variation's first/last move. Does NOT cross into mainline or other
+  //     variations.
+  //   - Buttons are hidden when there are no moves (parsed.moves.length === 0).
+  //   - Buttons are hidden in FEN-only HTML export (no moves to navigate).
+  if(parsed.moves&&parsed.moves.length>0){
+    const _navMode=_variationMoves?'variation':'mainline';
+    const _navLabel=_variationMoves?T('nav_variation'):T('nav_main_line');
+    bh+='<div style="display:flex;justify-content:center;align-items:center;gap:4px;margin-top:-4px;margin-bottom:14px;flex-wrap:wrap">';
+    bh+='<span style="font-size:.65rem;color:var(--muted,#a08050);margin-right:6px">'+_escFEN(_navLabel)+'</span>';
+    bh+='<button class="btn" style="padding:4px 10px;font-size:.85rem;min-width:38px;cursor:pointer;background:var(--card,#2a1a0a);color:var(--text,#f5e6c8);border:1px solid var(--border,#4a3520);border-radius:4px" onclick="statsNavFirst()" title="'+(_lang==='zh'?'首步':'First')+'">'+T('nav_first')+'</button>';
+    bh+='<button class="btn" style="padding:4px 10px;font-size:.85rem;min-width:38px;cursor:pointer;background:var(--card,#2a1a0a);color:var(--text,#f5e6c8);border:1px solid var(--border,#4a3520);border-radius:4px" onclick="statsNavPrev()" title="'+(_lang==='zh'?'上一步':'Previous')+'">'+T('nav_prev')+'</button>';
+    bh+='<button class="btn" style="padding:4px 10px;font-size:.85rem;min-width:38px;cursor:pointer;background:var(--card,#2a1a0a);color:var(--text,#f5e6c8);border:1px solid var(--border,#4a3520);border-radius:4px" onclick="statsNavNext()" title="'+(_lang==='zh'?'下一步':'Next')+'">'+T('nav_next')+'</button>';
+    bh+='<button class="btn" style="padding:4px 10px;font-size:.85rem;min-width:38px;cursor:pointer;background:var(--card,#2a1a0a);color:var(--text,#f5e6c8);border:1px solid var(--border,#4a3520);border-radius:4px" onclick="statsNavLast()" title="'+(_lang==='zh'?'末步':'Last')+'">'+T('nav_last')+'</button>';
+    bh+='</div>';
+  }
   bh+='</div>';
   // v1.0.4 Rev31: schedule a post-layout callback to set --piece-size based on
   // the actual board width. This correctly scales pieces in BOTH portrait and
@@ -3484,6 +3514,121 @@ function selectVariationMove(varId,varClickedIdx){
   render();
 }
 
+// v1.1.1 Phase 60: Navigation button handlers for the stats board.
+//   These mirror the review interface's ⏮ ◀ ▶ ⏭ but with stats-page-specific
+//   behavior: the nav stays within the current "context" (mainline OR the
+//   currently-selected variation's () sequence). The context is determined by
+//   _variationMoves (non-null = variation context, null = mainline context).
+//
+//   MAINLINE context (no variation selected):
+//     - ⏮: jump to the first mainline move (index 0). If already at 0, go to
+//           the initial position (_selectedMoveIdx = -1).
+//     - ◀ : step back one. At index 0, go to initial position (-1). At -1,
+//           stay at -1 (clamped).
+//     - ▶ : step forward one. At the last move, stay (clamped).
+//     - ⏭: jump to the last mainline move.
+//
+//   VARIATION context (a variation move is selected):
+//     - ⏮: jump to the variation's first move (varClickedIdx = 0).
+//     - ◀ : step back within the variation. At 0, stay at 0 (clamped — does
+//           NOT cross into mainline).
+//     - ▶ : step forward within the variation. At the last variation move,
+//           stay (clamped).
+//     - ⏭: jump to the variation's last move.
+//
+//   All four handlers are no-ops if there are no moves. They call
+//   selectMove/selectVariationMove to update the selection, which triggers
+//   a full render().
+function statsNavFirst(){
+  _haptic('BUTTON_PRESS');
+  const parsed=parsePGN(_payload.pgn);
+  if(!parsed||!parsed.moves||parsed.moves.length===0)return;
+  if(_variationMoves&&_variationMeta){
+    // Variation context — jump to variation's first move
+    selectVariationMove(_variationMeta.varId,0);
+  }else{
+    // Mainline context — jump to first mainline move (index 0)
+    // If already at 0, toggle to initial position (-1) for ⏮-at-first behavior
+    if(_selectedMoveIdx===0){
+      _selectedMoveIdx=-1;
+      _variationMoves=null;
+      _variationMeta=null;
+      _fenSelected=false;
+      render();
+    }else{
+      selectMove(0);
+    }
+  }
+}
+function statsNavPrev(){
+  _haptic('BUTTON_PRESS');
+  const parsed=parsePGN(_payload.pgn);
+  if(!parsed||!parsed.moves||parsed.moves.length===0)return;
+  if(_variationMoves&&_variationMeta){
+    // Variation context — step back within variation (clamped at 0)
+    const newIdx=Math.max(0,_variationMeta.varClickedIdx-1);
+    if(newIdx!==_variationMeta.varClickedIdx){
+      selectVariationMove(_variationMeta.varId,newIdx);
+    }
+  }else{
+    // Mainline context — step back (clamped at -1 = initial position)
+    const newIdx=Math.max(-1,_selectedMoveIdx-1);
+    if(newIdx!==_selectedMoveIdx){
+      if(newIdx===-1){
+        _selectedMoveIdx=-1;
+        _variationMoves=null;
+        _variationMeta=null;
+        _fenSelected=false;
+        render();
+      }else{
+        selectMove(newIdx);
+      }
+    }
+  }
+}
+function statsNavNext(){
+  _haptic('BUTTON_PRESS');
+  const parsed=parsePGN(_payload.pgn);
+  if(!parsed||!parsed.moves||parsed.moves.length===0)return;
+  if(_variationMoves&&_variationMeta){
+    // Variation context — step forward within variation (clamped at last)
+    const v=_variations[_variationMeta.varId];
+    if(!v)return;
+    const maxVarIdx=v.moves.length-1;
+    const newIdx=Math.min(maxVarIdx,_variationMeta.varClickedIdx+1);
+    if(newIdx!==_variationMeta.varClickedIdx){
+      selectVariationMove(_variationMeta.varId,newIdx);
+    }
+  }else{
+    // Mainline context — step forward (clamped at last mainline move)
+    const maxIdx=parsed.moves.length-1;
+    const newIdx=Math.min(maxIdx,_selectedMoveIdx+1);
+    if(newIdx!==_selectedMoveIdx){
+      selectMove(newIdx);
+    }
+  }
+}
+function statsNavLast(){
+  _haptic('BUTTON_PRESS');
+  const parsed=parsePGN(_payload.pgn);
+  if(!parsed||!parsed.moves||parsed.moves.length===0)return;
+  if(_variationMoves&&_variationMeta){
+    // Variation context — jump to variation's last move
+    const v=_variations[_variationMeta.varId];
+    if(!v)return;
+    const maxVarIdx=v.moves.length-1;
+    if(maxVarIdx!==_variationMeta.varClickedIdx){
+      selectVariationMove(_variationMeta.varId,maxVarIdx);
+    }
+  }else{
+    // Mainline context — jump to last mainline move
+    const maxIdx=parsed.moves.length-1;
+    if(maxIdx!==_selectedMoveIdx){
+      selectMove(maxIdx);
+    }
+  }
+}
+
 // Button handlers
 // v1.0.2: Haptic feedback helper for stats page buttons
 function _haptic(type){
@@ -3547,6 +3692,27 @@ function _exportStaticHTML(){
     contentClone.querySelectorAll('.fen-copy-row').forEach(function(el){el.remove();});
     // Remove the hint span inside fen-label (the span with muted color text)
     contentClone.querySelectorAll('.fen-label > span').forEach(function(el){el.remove();});
+    // v1.1.1 Phase 60: Remove the stats-board navigation button row from the
+    //   static (FEN-only) export. The nav buttons require JS to function, and
+    //   a static export has no JS — the buttons would be visible but non-
+    //   functional. The nav row is identified by being the flex div that
+    //   contains the statsNav* buttons. We remove any div whose inline text
+    //   contains "statsNavFirst" (the first nav button's onclick), which is
+    //   unique to the nav row. Since we already removed onclick attributes
+    //   above, we instead match by a data attribute we add at render time.
+    //   Simpler: match the div that contains a button with textContent
+    //   matching the nav symbols (⏮ ◀ ▶ ⏭).
+    contentClone.querySelectorAll('div').forEach(function(div){
+      // Check if this div is the nav row by looking for 4 buttons with nav symbols
+      const btns=div.querySelectorAll('button');
+      if(btns.length===4){
+        const texts=Array.from(btns).map(b=>b.textContent.trim());
+        if(texts.indexOf('⏮')>=0&&texts.indexOf('◀')>=0&&texts.indexOf('▶')>=0&&texts.indexOf('⏭')>=0){
+          div.remove();
+          return;
+        }
+      }
+    });
     contentHTML=contentClone.innerHTML;
   }
   const langAttr=_lang==='zh'?'zh':'en';

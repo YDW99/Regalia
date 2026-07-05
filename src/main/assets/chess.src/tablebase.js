@@ -46,47 +46,32 @@ _applyImportedFEN(f);
 function _applyImportedFEN(fenStr){
 const ns=fenToState(fenStr);
 if(ns){
-// v1.0.3: Track FEN's starting move number for correct display numbering.
+// v1.1.1 Phase 61: _resetGameUIState() now clears ALL per-game caches
+//   centrally (including _reviewEvalCache, _ecoRecCache, _pvCache,
+//   _pendingEngineSANs/_pendingEnginePVs, _multiPV*, reviewCritical,
+//   _sfEval/_sfDepth/etc, _cachedOriginalPGN, playerWhite/playerBlack,
+//   _setupFEN, _importedStartMoveNum, _needNewGameForEngine, _tbLoading,
+//   _tbRetryCount, gameClocks, _redoStack, etc).
+//   We call it FIRST, then set the FEN-import-specific values AFTER so
+//   they survive the reset.
+gameState=ns;_resetGameUIState();gameOverSoundPlayed=false;
+// v1.1.1 Phase 61: Now set the FEN-import-specific values (after reset).
+// _importedStartMoveNum: Track FEN's starting move number for correct display numbering.
 if(typeof _importedStartMoveNum!=='undefined'){
   _importedStartMoveNum=(ns.fullMoveNumber&&ns.fullMoveNumber>0)?ns.fullMoveNumber:1;
 }
-// v1.1.0 Phase 53: Clear stale state from previous game to prevent pollution.
-// _cachedOriginalPGN: if the previous game was a PGN import, its text would
-//   leak into the stats page and PGN export. Clear it.
-// playerWhite/playerBlack: if the previous game was a PGN import with named
-//   players, those names would carry over. Clear them (same as _startGameImpl).
 // _setupFEN: set to the imported FEN so PGN export includes the [FEN] header
-//   (same as importPGN and exitSetup). Without this, the starting position
-//   would be lost on PGN export.
-if(typeof _cachedOriginalPGN!=='undefined')_cachedOriginalPGN=null;
-if(typeof playerWhite!=='undefined')playerWhite=undefined;
-if(typeof playerBlack!=='undefined')playerBlack=undefined;
 if(typeof _setupFEN!=='undefined')_setupFEN=fenStr;
-// v1.1.0 Phase 54 rev20: Clear stale engine variation data to prevent
-//   pollution from the previous game. _pendingEngineSANs and
-//   _pendingEnginePVs store engine PV variations indexed by moveRecords
-//   indices — a new game reuses indices 0,1,2,... so stale entries
-//   would attach to the wrong moves.
-if(typeof _pendingEngineSANs!=='undefined')_pendingEngineSANs=[];
-if(typeof _pendingEnginePVs!=='undefined')_pendingEnginePVs=[];
-if(typeof _multiPVLines!=='undefined')_multiPVLines=[];
-if(typeof _multiPVResult!=='undefined')_multiPVResult=null;
-if(typeof _lastEngineVariation!=='undefined')_lastEngineVariation=null;
-if(typeof reviewCritical!=='undefined')reviewCritical=[];
-gameState=ns;_resetGameUIState();gameOverSoundPlayed=false;
+// FEN import has no player names — leave playerWhite/playerBlack undefined
+// (already nulled by _resetGameUIState).
 _cachedStatus=null;_cachedStatusKey='';
-_sfEval=0;_sfMateDistance=0;_sfDepth=0;_sfEvalReady=false;_evalLoading=false;_updateEvalDisplay();
-_reviewEvalCache.clear();_reviewEvalRequestedStep=-1;
+_updateEvalDisplay();
 reviewMode=false;setupMode=false;showNewGameDialog=false;
-_needNewGameForEngine=true;
 gameOver=null;_gameOverStatusKey=null;selectedSquare=null;legalMvs=[];legalSet=new Set();
 lastMove=null;pendingPromotion=null;
 _aiBarInfo='';_hintBarInfo='';
 stateHistory=[];moveRecords=[];
 hintText='';isHintLoading=false;
-if(renderTimerId){cancelAnimationFrame(renderTimerId);renderTimerId=null;}renderPending=false;
-_tbLoading=false;_tbRetryCount=0;
-_ecoRecCache.clear();
 setupHistory=[];setupErrors=[];
 _ecoEnabled=false; // FEN import — disable ECO recognition
 reviewBaseState=cloneS(gameState);
@@ -1053,9 +1038,10 @@ function importPGN(pgnText){
   // _setupFEN, so _buildPGNString() emitted neither header on export.
   // _startGameImpl() (ui.js) clears _setupFEN=null on new game, so this
   // assignment is safe — it only persists until the next new-game action.
-  if(result.startFEN && typeof _setupFEN!=='undefined'){
-    _setupFEN=result.startFEN;
-  }
+  // v1.1.1 Phase 61: _setupFEN assignment moved AFTER _resetGameUIState()
+  //   (which now clears _setupFEN as part of the centralized cache reset).
+  //   We capture the value here and assign it after the reset below.
+  const _importedSetupFEN = (result.startFEN && typeof _setupFEN!=='undefined') ? result.startFEN : null;
   // v1.0.4: If the PGN declared Chess960, mark the start state too
   if(result.variant==='chess960'){
     startState.chess960=true;
@@ -1066,44 +1052,31 @@ function importPGN(pgnText){
   // can display correct move numbers (e.g., "4. Bxf7+ Kxf7 5. Ne5" instead of
   // "1. Bxf7+ Kxf7 2. Ne5" when the FEN starts at move 4). For the standard
   // initial position, this is 1 (no change in behavior).
-  if(typeof _importedStartMoveNum!=='undefined'){
-    _importedStartMoveNum=(startState.fullMoveNumber&&startState.fullMoveNumber>0)?startState.fullMoveNumber:1;
-    // If black is to move at the start, the FIRST displayed pair is move N
-    // with white's slot showing "..." — Math.floor(0/2)+N=N is correct.
-  }
+  // v1.1.1 Phase 61: _importedStartMoveNum assignment moved AFTER _resetGameUIState().
+  //   We capture the value here and assign it after the reset below.
+  const _importedStartMoveNumVal = (startState.fullMoveNumber&&startState.fullMoveNumber>0)?startState.fullMoveNumber:1;
   
-  // Reset game state
-  // v1.1.0 Phase 54 rev20: Clear stale engine variation data to prevent
-  //   pollution from the previous game. _pendingEngineSANs and
-  //   _pendingEnginePVs store engine PV variations indexed by moveRecords
-  //   indices — a new game reuses indices 0,1,2,... so stale entries
-  //   would attach to the wrong moves.
-  if(typeof _pendingEngineSANs!=='undefined')_pendingEngineSANs=[];
-  if(typeof _pendingEnginePVs!=='undefined')_pendingEnginePVs=[];
-  if(typeof _multiPVLines!=='undefined')_multiPVLines=[];
-  if(typeof _multiPVResult!=='undefined')_multiPVResult=null;
-  if(typeof _lastEngineVariation!=='undefined')_lastEngineVariation=null;
-  if(typeof reviewCritical!=='undefined')reviewCritical=[];
+  // v1.1.1 Phase 61: _resetGameUIState() now clears ALL per-game caches centrally.
+  //   We call it FIRST, then set the PGN-import-specific values AFTER so they
+  //   survive the reset.
   gameState=startState;_resetGameUIState();gameOverSoundPlayed=false;
+  // v1.1.1 Phase 61: Set PGN-import-specific values (after reset).
+  if(_importedSetupFEN!==null&&typeof _setupFEN!=='undefined'){
+    _setupFEN=_importedSetupFEN;
+  }
+  if(typeof _importedStartMoveNum!=='undefined'){
+    _importedStartMoveNum=_importedStartMoveNumVal;
+  }
   _cachedStatus=null;_cachedStatusKey='';
-  _sfEval=0;_sfMateDistance=0;_sfDepth=0;_sfEvalReady=false;_evalLoading=false;_updateEvalDisplay();
-  // v1.0.4 Rev24: Do NOT clear _reviewEvalCache here. We populate it below
-  // from the PGN's [%eval ...] comments. The old _reviewEvalCache.clear()
-  // destroyed ALL cached evals (from other games too), which was wasteful
-  // and broke the "instant recovery from PGN comments" feature.
-  // Instead, we selectively clear only the entries for the CURRENT game's
-  // review steps (0..N) AFTER importing, then populate from extracted evals.
-  _reviewEvalRequestedStep=-1;
+  _updateEvalDisplay();
+  // _reviewEvalCache was cleared by _resetGameUIState() — we populate it
+  // below from the PGN's [%eval ...] comments (if any).
   reviewMode=false;setupMode=false;showNewGameDialog=false;
-  _needNewGameForEngine=true;
   gameOver=null;_gameOverStatusKey=null;selectedSquare=null;legalMvs=[];legalSet=new Set();
   lastMove=null;pendingPromotion=null;
   _aiBarInfo='';_hintBarInfo='';
   stateHistory=[];moveRecords=[];
   hintText='';isHintLoading=false;
-  if(renderTimerId){cancelAnimationFrame(renderTimerId);renderTimerId=null;}renderPending=false;
-  _tbLoading=false;_tbRetryCount=0;
-  _ecoRecCache.clear();
   setupHistory=[];setupErrors=[];
   _ecoEnabled=false;
   reviewBaseState=cloneS(gameState);
@@ -1601,6 +1574,9 @@ function importPGN(pgnText){
   // _computeAndCacheVisualAnnotations, called during executeMove) AND
   // imported annotations, the IMPORTED ones take precedence (they came
   // from the PGN author's explicit annotation, not from our heuristic).
+  // v1.1.1 Phase 62: Mark imported entries with imported=true so
+  //   _buildPGNString() knows to export them (auto-generated entries have
+  //   imported=false and are skipped during PGN export).
   try{
     if(result.extractedAnnotations&&result.extractedAnnotations.length>0&&typeof _visualAnnotationsCache!=='undefined'){
       // v1.0.7 PHASE 19: Apply same placeholder offset as eval cache above.
@@ -1611,7 +1587,9 @@ function importPGN(pgnText){
           // Merge with any existing cache entry (e.g., if there were multiple
           // comments for the same move). Deduplicate by color+square /
           // color+from+to.
-          const _existing=_visualAnnotationsCache.get(_idx)||{csl:[],cal:[]};
+          // v1.1.1 Phase 62: Ensure imported flag is set to true.
+          const _existing=_visualAnnotationsCache.get(_idx)||{csl:[],cal:[],imported:false};
+          _existing.imported=true; // Mark as human-authored (from PGN import)
           const _cslSeen=new Set(_existing.csl.map(x=>x.color+x.square));
           for(const _c of _a.csl){
             const _k=_c.color+_c.square;

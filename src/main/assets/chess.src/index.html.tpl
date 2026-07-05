@@ -31,7 +31,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; worker-src blob:; connect-src https://tablebase.lichess.ovh; img-src data: file: blob:; frame-ancestors 'none'; base-uri 'self'">
-<title>Regalia v1.1.0</title>
+<title>Regalia v1.1.1</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 /* v1.0.8 PHASE 22: Light/Dark theme system following Material Design

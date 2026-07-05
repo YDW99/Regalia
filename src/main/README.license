@@ -368,6 +368,150 @@ v1.0.8 Phase 41 (2026.7.1):
   - AndroidManifest.xml: No changes.
 
 
+v1.1.1 Phase 66 (2026.7.5, same-version revision):
+  - Version remains versionCode=111, versionName="1.1.1".
+  - src/main/assets/chess.src/ui.js: Bug fix — _savePGNYes now polls
+    _pgnExportDialogActive before executing pending new-game action (was
+    using fixed 200ms setTimeout, could fire while annotation dialog open);
+    removed 2 stale console.log calls (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.src/ai-bridge.js: openStatsPage now explicitly
+    passes includeAnnotations=true to _buildPGNString (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.html: rebuilt from chess.src/.
+  - No new third-party code introduced.
+
+v1.1.1 Phase 65 (2026.7.5, same-version revision):
+  - Version remains versionCode=111, versionName="1.1.1".
+  - src/main/assets/chess.src/ai-bridge.js: _showPGNExportAnnotationDialog
+    now supports Android back-button (via _pgnExportDialogActive/
+    _pgnExportDialogDismiss globals) and explicit haptic feedback on all
+    buttons (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.src/ui.js: _resetGameUIState now clears
+    _preReviewSnapshot, setupHistory/setupRedoStack, and 7 dialog visibility
+    flags (showNewGameDialog/showAboutPage/showImportDialog/showEngineConfig/
+    showPGNCacheManager/showSavePGNPrompt/showResignConfirm/
+    _pendingActionAfterSave); handleBackPress checks _pgnExportDialogActive
+    first (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.html: rebuilt from chess.src/.
+  - No new third-party code introduced.
+
+v1.1.1 Phase 64 (2026.7.5, same-version revision):
+  - Version remains versionCode=111, versionName="1.1.1".
+  - TRUE ROOT CAUSE FIX: reviewStates (from previous game's review session)
+    was not cleared in _resetGameUIState(), causing _computeAndCacheVisualAnnotations
+    to use stale board states from the old game at the same move index —
+    producing annotations identical to the old game at that step.
+    Fix: _resetGameUIState now clears reviewStates/reviewMode/reviewStep/
+    reviewBaseState; _computeAndCacheVisualAnnotations gates reviewStates
+    shortcut on reviewMode===true (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.src/game-logic.js: updated export dialog i18n text
+    (💾 emoji, "特殊注释"/"special annotations" terminology) (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.html: rebuilt from chess.src/.
+  - No new third-party code introduced.
+
+v1.1.1 Phase 63 (2026.7.5, same-version revision):
+  - Version remains versionCode=111, versionName="1.1.1".
+  - Full-chain audit of all [%csl]/[%cal] visual annotation code paths
+    confirmed Phase 62 fix is correct.
+  - src/main/assets/chess.src/ai-bridge.js: _buildPGNString now accepts
+    includeAnnotations parameter (default true); when false, all annotation-
+    type tags ([%eval], every-5-moves desc, [%csl]/[%cal]) are omitted;
+    new _showPGNExportAnnotationDialog function; copyMoveHistory and
+    exportPGNToFile now show the dialog before exporting (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.src/ui.js: _pgnCacheSaveCurrent now shows the
+    annotation dialog; extracted _pgnCacheSaveCurrentImpl (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.src/game-logic.js: new i18n keys for export dialog
+    (pgn_export_include_annotations_title/msg/yes/no) (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.html: rebuilt from chess.src/.
+  - No new third-party code introduced.
+
+v1.1.1 Phase 62 (2026.7.5, same-version revision):
+  - Version remains versionCode=111, versionName="1.1.1".
+  - src/main/assets/chess.src/ui.js: _visualAnnotationsCache entries now
+    include imported boolean flag; _computeAndCacheVisualAnnotations and
+    _computeInitialPositionAnnotations set imported=false (auto-generated
+    UI display aids) (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.src/ai-bridge.js: _buildPGNString only exports
+    imported=true entries (human-authored annotations from PGN import);
+    auto-generated annotations no longer pollute PGN (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.src/tablebase.js: importPGN sets imported=true
+    on extracted [%csl]/[%cal] annotation cache entries (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.html: rebuilt from chess.src/.
+  - No new third-party code introduced.
+
+v1.1.1 Phase 61 (2026.7.5, same-version revision):
+  - Version remains versionCode=111, versionName="1.1.1".
+  - src/main/assets/chess.src/ui.js: _resetGameUIState() now centrally clears
+    ALL game-related caches (_reviewEvalCache, _ecoRecCache, _pvCache,
+    _pendingEngineSANs/_pendingEnginePVs, _multiPV*, reviewCritical,
+    _sfEval/_sfDepth/etc, _cachedOriginalPGN, playerWhite/playerBlack,
+    _setupFEN, _importedStartMoveNum, _needNewGameForEngine, _tbLoading,
+    _tbRetryCount); _exitSetupImpl/_startGameImpl redundant manual clears
+    removed; _pgnCacheSaveCurrent pure-import detection (saves original PGN
+    text for pure imports) (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.src/ai-bridge.js: _preMoveComment computation for
+    initial-position eval annotation as separate pre-move {} comment;
+    removed i===0 initial annotation block; pass preMoveComment to
+    composePGN (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.src/pgn-standard.js: composePGN preMoveComment
+    support — inserts {} comment before first move (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.src/tablebase.js: _applyImportedFEN + importPGN
+    reordered — _resetGameUIState first, then set entry-point-specific
+    values (_setupFEN, _importedStartMoveNum, playerWhite/playerBlack)
+    AFTER reset so they survive (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.html: rebuilt from chess.src/.
+  - No new third-party code introduced.
+
+v1.1.1 Phase 60 (2026.7.5, same-version revision):
+  - Version remains versionCode=111, versionName="1.1.1".
+  - src/main/java/com/Regalia/StockfishNative.java: writer-close paths
+    (cleanupEngineResources/shutdown/cleanupFailedEngine) now use _writerLock
+    (consistent with Phase 58 heartbeat path); sendUciCommand writer access
+    also wrapped in _writerLock (GPL v3, DroidFish-derived).
+  - src/main/java/com/Regalia/ChessWebViewClient.java: onRenderProcessGone
+    adds crash-count backoff (max 3 recreates per 60s window) (AGPL v3, original).
+  - src/main/assets/chess.src/ui.js: Integer_bitcount adds n>>>0 unsigned
+    coercion; render-error title uses T('render_error_title') i18n
+    (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.src/pgn-standard.js: normalizeTagValue regex adds
+    \t tab filtering (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.src/game-logic.js: new i18n key render_error_title
+    (GPL v3, DroidFish-derived).
+  - src/main/assets/stats.html: new navigation buttons (⏮ ◀ ▶ ⏭) below the
+    stats board with mainline/variation context-aware behavior; new i18n keys
+    nav_first/nav_prev/nav_next/nav_last/nav_main_line/nav_variation;
+    _exportStaticHTML removes nav buttons from FEN-only export (GPL v3,
+    DroidFish-derived).
+  - src/main/assets/chess.html: rebuilt from chess.src/.
+  - No new third-party code introduced.
+
+v1.1.1 Phase 59 (2026.7.5):
+  - Version bumped to versionCode=111, versionName="1.1.1".
+  - src/main/assets/chess.src/ai-bridge.js: _commentHasText helper, every-5-moves
+    PGN annotation dedup, initial-position annotation on first move, i18n
+    resign/timeout comments, batch analyze-all session state
+    (_reviewAnalyzeStep/_reviewAnalyzeGen/_evalRequestBatchGen), _requestBatchEval()
+    function, onEngineEval batch-gen-first + stale-callback-caching,
+    requestEngineEval user-nav-only (blocks during batch) (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.src/ui.js: _refreshEvalTrendChart() lightweight chart
+    DOM refresh, reviewAnalyzeAll/_reviewAnalyzeAdvance use _reviewAnalyzeStep
+    (decoupled from reviewStep), exitReview clears batch state
+    (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.src/game-logic.js: new i18n keys (pgn_resign_white,
+    pgn_resign_black, pgn_timeout_white_wins, pgn_timeout_black_wins,
+    pgn_initial_position); loading_title bumped to v1.1.1
+    (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.src/index.html.tpl: <title> bumped to v1.1.1
+    (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.html: rebuilt from chess.src/.
+  - src/main/res/values/strings.xml: app_name = "Regalia v1.1.1" (AGPL v3, original).
+  - src/main/java/com/Regalia/MainActivity.java: VERSION = "v1.1.1" (AGPL v3, original).
+  - src/main/java/com/Regalia/StockfishNative.java: ENGINE_VERSION = "v1.1.1"
+    (GPL v3, DroidFish-derived).
+  - src/main/java/com/Regalia/ChessApp.java: init log "v1.1.1" (AGPL v3, original).
+  - src/main/java/com/Regalia/ChessWebViewClient.java: version comment "v1.1.1"
+    (AGPL v3, original).
+  - No new third-party code introduced.
+
 v1.1.0 Phase 58 (2026.7.5):
   - src/main/assets/chess.src/pgn-standard.js: new formatEvalAnnotation function
     + _pgnWhitePerspectiveLabel helper for every-5-moves PGN {} eval annotation
