@@ -50,6 +50,29 @@ if(ns){
 if(typeof _importedStartMoveNum!=='undefined'){
   _importedStartMoveNum=(ns.fullMoveNumber&&ns.fullMoveNumber>0)?ns.fullMoveNumber:1;
 }
+// v1.1.0 Phase 53: Clear stale state from previous game to prevent pollution.
+// _cachedOriginalPGN: if the previous game was a PGN import, its text would
+//   leak into the stats page and PGN export. Clear it.
+// playerWhite/playerBlack: if the previous game was a PGN import with named
+//   players, those names would carry over. Clear them (same as _startGameImpl).
+// _setupFEN: set to the imported FEN so PGN export includes the [FEN] header
+//   (same as importPGN and exitSetup). Without this, the starting position
+//   would be lost on PGN export.
+if(typeof _cachedOriginalPGN!=='undefined')_cachedOriginalPGN=null;
+if(typeof playerWhite!=='undefined')playerWhite=undefined;
+if(typeof playerBlack!=='undefined')playerBlack=undefined;
+if(typeof _setupFEN!=='undefined')_setupFEN=fenStr;
+// v1.1.0 Phase 54 rev20: Clear stale engine variation data to prevent
+//   pollution from the previous game. _pendingEngineSANs and
+//   _pendingEnginePVs store engine PV variations indexed by moveRecords
+//   indices — a new game reuses indices 0,1,2,... so stale entries
+//   would attach to the wrong moves.
+if(typeof _pendingEngineSANs!=='undefined')_pendingEngineSANs=[];
+if(typeof _pendingEnginePVs!=='undefined')_pendingEnginePVs=[];
+if(typeof _multiPVLines!=='undefined')_multiPVLines=[];
+if(typeof _multiPVResult!=='undefined')_multiPVResult=null;
+if(typeof _lastEngineVariation!=='undefined')_lastEngineVariation=null;
+if(typeof reviewCritical!=='undefined')reviewCritical=[];
 gameState=ns;_resetGameUIState();gameOverSoundPlayed=false;
 _cachedStatus=null;_cachedStatusKey='';
 _sfEval=0;_sfMateDistance=0;_sfDepth=0;_sfEvalReady=false;_evalLoading=false;_updateEvalDisplay();
@@ -730,11 +753,15 @@ function _parsePGN(pgnText){
       }
       state.currentTurn=state.currentTurn==='white'?'black':'white';
       _consecutiveSkips++;
-      // Safety: if 5+ consecutive tokens fail, the PGN is hopelessly broken —
-      // stop trying to avoid an infinite wrong-side cascade that produces
-      // a garbage game state.
-      if(_consecutiveSkips>=5){
-        console.warn('_parsePGN: 5 consecutive invalid tokens — stopping parse');
+      // v1.1.0 Phase 54: Increased cascade limit from 5 to 15 (proportional to
+      //   token count). 5 was too aggressive for localized PGN corruption
+      //   (e.g., OCR errors in moves 40-44 of an 80-move game) — moves 45+
+      //   were silently dropped. With 15, localized glitches are skipped but
+      //   truly hopeless PGNs still abort. The threshold scales with game
+      //   length: Math.max(15, mainTokens.length * 0.1).
+      const _skipLimit=Math.max(15, Math.floor(mainTokens.length*0.1));
+      if(_consecutiveSkips>=_skipLimit){
+        console.warn('_parsePGN: '+_skipLimit+' consecutive invalid tokens — stopping parse');
         break;
       }
       continue;
@@ -1046,6 +1073,17 @@ function importPGN(pgnText){
   }
   
   // Reset game state
+  // v1.1.0 Phase 54 rev20: Clear stale engine variation data to prevent
+  //   pollution from the previous game. _pendingEngineSANs and
+  //   _pendingEnginePVs store engine PV variations indexed by moveRecords
+  //   indices — a new game reuses indices 0,1,2,... so stale entries
+  //   would attach to the wrong moves.
+  if(typeof _pendingEngineSANs!=='undefined')_pendingEngineSANs=[];
+  if(typeof _pendingEnginePVs!=='undefined')_pendingEnginePVs=[];
+  if(typeof _multiPVLines!=='undefined')_multiPVLines=[];
+  if(typeof _multiPVResult!=='undefined')_multiPVResult=null;
+  if(typeof _lastEngineVariation!=='undefined')_lastEngineVariation=null;
+  if(typeof reviewCritical!=='undefined')reviewCritical=[];
   gameState=startState;_resetGameUIState();gameOverSoundPlayed=false;
   _cachedStatus=null;_cachedStatusKey='';
   _sfEval=0;_sfMateDistance=0;_sfDepth=0;_sfEvalReady=false;_evalLoading=false;_updateEvalDisplay();

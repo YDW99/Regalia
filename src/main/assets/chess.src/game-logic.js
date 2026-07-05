@@ -368,7 +368,7 @@ const _i18n={
 'elo_target':{zh:'Elo目标',en:'ELO Target'},
 'export_settings_btn':{zh:'📤 导出设置',en:'📤 Export'},
 'import_settings_btn':{zh:'📥 导入设置',en:'📥 Import'},
-'loading_title':{zh:'Regalia v1.0.9',en:'Regalia v1.0.9'},
+'loading_title':{zh:'Regalia v1.1.0',en:'Regalia v1.1.0'},
 'click_skip_loading':{zh:'点击跳过加载',en:'Click to skip loading'},
 'white_checkmate':{zh:'白方将杀获胜',en:'White wins by checkmate'},
 'black_checkmate':{zh:'黑方将杀获胜',en:'Black wins by checkmate'},
@@ -401,6 +401,20 @@ const _i18n={
 'huge_dis':{zh:'你大劣',en:'Huge Disadvantage'},
 'you_winning':{zh:'你必胜',en:'You are winning'},
 'you_losing':{zh:'你必败',en:'You are losing'},
+// v1.1.0 Phase 58: White-perspective eval labels for PGN {}/every-5-moves annotation.
+//   These are White-POV (not player-POV) so the PGN comment is unambiguous regardless
+//   of which side the human played. Thresholds mirror posDesc() in ui.js.
+'pgn_white_winning':{zh:'白方必胜',en:'White winning'},
+'pgn_white_huge_adv':{zh:'白方大优',en:'White huge advantage'},
+'pgn_white_advantage':{zh:'白方占优',en:'White advantage'},
+'pgn_white_slight_adv':{zh:'白方微优',en:'White slight advantage'},
+'pgn_equal':{zh:'均势',en:'Equal'},
+'pgn_black_slight_adv':{zh:'黑方微优',en:'Black slight advantage'},
+'pgn_black_advantage':{zh:'黑方占优',en:'Black advantage'},
+'pgn_black_huge_adv':{zh:'黑方大优',en:'Black huge advantage'},
+'pgn_black_winning':{zh:'黑方必胜',en:'Black winning'},
+'pgn_mate_white':{zh:'白方将杀',en:'White mates'},
+'pgn_mate_black':{zh:'黑方将杀',en:'Black mates'},
 'loading_prefix':{zh:'加载中 ',en:'Loading '},
 'empty_dir':{zh:'空目录',en:'Empty directory'},
 'import_settings_title':{zh:'📥 导入设置',en:'📥 Import Settings'},
@@ -1725,9 +1739,18 @@ function _castleSide(mv,s){
       //   clock when the engine plays a normal king capture to g1/c1 in 960.
       // v1.0.8 PHASE 49: The Phase 30 guard is insufficient — a king capture to
       //   col 6/2 still satisfies "castling right present" but is a real capture,
-      //   not castling. Castling destination squares are ALWAYS empty (the rook
-      //   ends up BESIDE the king, not under it). If the target square holds any
-      //   piece, this is a capture, not castling. Add the empty-destination guard.
+      //   not castling. Add the destination guard below.
+      // v1.1.0 Phase 55 CORRECTION: The Phase 49 comment claimed "Castling
+      //   destination squares are ALWAYS empty (the rook ends up BESIDE the
+      //   king, not under it)". This is INCORRECT for Chess960 — the king's
+      //   destination CAN be the participating rook's source square (e.g.
+      //   king on d1, rook on c1: O-O-O puts the king on c1 = rook's source).
+      //   The rook still ends up beside the king (at d1), but the king's
+      //   destination was NOT empty before the move. The corrected guard:
+      //   destination must be empty OR contain a same-color rook (which is
+      //   the participating castling rook that will move away). A same-color
+      //   non-rook piece or an enemy piece on the destination still blocks
+      //   castling (it's a real move/capture, not castling).
       // v1.0.9 PHASE 52 CRITICAL FIX: the previous code checked `gameState.board`
       //   and `gameState.castlingRights` — the GLOBAL final state — for the
       //   destination-empty and castling-rights-present guards. During PGN
@@ -1748,12 +1771,22 @@ function _castleSide(mv,s){
       //   interactive play, which is correct for that use case).
       const _st=s||(typeof gameState!=='undefined'?gameState:null);
       const _cr=(_st&&_st.castlingRights)?_st.castlingRights:null;
-      const _destEmpty=!_st||!_st.board||!_st.board[mv.to.row]||!_st.board[mv.to.row][mv.to.col];
+      // v1.1.0 Phase 55 FIX: In Chess960, the king's destination square may
+      //   be occupied by the participating rook (e.g. SP-ID with king on d1
+      //   and queenside rook on c1: O-O-O puts the king on c1, which IS the
+      //   rook's source square). The previous `_destEmpty` check rejected
+      //   this case, causing the king to "capture" its own rook and silently
+      //   lose it. Now we allow the destination to contain a same-color rook
+      //   on the castling side (the participating rook, which moves away).
+      //   Standard chess is unaffected (rook is always on a1/h1, king dest
+      //   c1/g1 is always empty).
+      const _destPiece=_st&&_st.board&&_st.board[mv.to.row]?_st.board[mv.to.row][mv.to.col]:null;
+      const _destValid=!_destPiece||(_destPiece.type==='rook'&&_destPiece.color===mv.piece.color);
       if(mv.to.col===6&&Math.abs(mv.to.col-mv.from.col)>=_minDist){
-        if(_destEmpty&&(!_is960||(_cr&&_cr[mv.piece.color+'Kingside'])))return 'kingside';
+        if(_destValid&&(!_is960||(_cr&&_cr[mv.piece.color+'Kingside'])))return 'kingside';
       }
       if(mv.to.col===2&&Math.abs(mv.to.col-mv.from.col)>=_minDist){
-        if(_destEmpty&&(!_is960||(_cr&&_cr[mv.piece.color+'Queenside'])))return 'queenside';
+        if(_destValid&&(!_is960||(_cr&&_cr[mv.piece.color+'Queenside'])))return 'queenside';
       }
     }
   }

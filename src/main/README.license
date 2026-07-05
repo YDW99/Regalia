@@ -368,6 +368,100 @@ v1.0.8 Phase 41 (2026.7.1):
   - AndroidManifest.xml: No changes.
 
 
+v1.1.0 Phase 58 (2026.7.5):
+  - src/main/assets/chess.src/pgn-standard.js: new formatEvalAnnotation function
+    + _pgnWhitePerspectiveLabel helper for every-5-moves PGN {} eval annotation
+    (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.src/game-logic.js: new pgn_* i18n keys (White-perspective
+    eval labels) (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.src/ai-bridge.js: every-5-moves hook in _buildPGNString
+    (GPL v3, DroidFish-derived).
+  - src/main/java/com/Regalia/StockfishNative.java: stopLatch capture-and-clear
+    fix + _writerLock for heartbeat writer access (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.html: rebuilt from chess.src/.
+  - No new third-party code introduced.
+
+v1.1.0 Phase 57+ (2026.7.5):
+  - src/main/assets/chess.src/pgn-standard.js: parseStandardPGN single-line PGN
+    tag-stripping regex fix (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.src/chess960.js: isChess960CastlingLegal king-position
+    lookup optimization (uses s.wk / s.bk cache; board-scan fallback retained)
+    (AGPL v3, original).
+  - src/main/assets/chess.src/ai-bridge.js: WDL percentage display divide-by-zero
+    guard (added if(total>0) check) (GPL v3, DroidFish-derived).
+  - src/main/java/com/Regalia/StockfishNative.java: postJsCallback activity-
+    lifecycle guard (isFinishing()/isDestroyed() check before evaluateJavascript)
+    (GPL v3, DroidFish-derived).
+  - src/main/java/com/Regalia/EngineService.java: wake-lock bounded 30-minute
+    timeout (acquire(30*60*1000)) (AGPL v3, original).
+  - src/main/res/README.license: line 14 strings.xml description version reference
+    updated from v1.0.8 to v1.1.0 (LIC-2 fix) (AGPL v3, original).
+  - src/main/assets/chess.html: rebuilt from chess.src/.
+  - No new third-party code introduced.
+
+v1.1.0 Phase 57 (2026.7.4):
+  - src/main/assets/chess.src/ui.js: portrait review move-list scroll positioning
+    (getBoundingClientRect instead of offsetTop) + visual-annotation cache residue
+    fix (enterReview clears '_initial' cache key; _computeInitialPositionAnnotations
+    reads reviewStates[0].state instead of gameState).
+  - src/main/assets/chess.html: rebuilt from chess.src/.
+  - All changes in GPL-v3-licensed files (DroidFish-derived).
+
+v1.1.0 Phase 56 (2026.7.4):
+  - src/main/assets/chess.src/ui.js: landscape review scroll fix + first-move timing.
+  - src/main/assets/chess.src/ai-bridge.js: PGN timeout annotation.
+  - src/main/java/com/Regalia/StockfishNative.java: UCI command ordering refinement
+    (setGameDifficulty moved before position fen).
+  - src/main/assets/chess.html: rebuilt from chess.src/.
+  - All changes in GPL-v3-licensed files (DroidFish-derived).
+
+v1.1.0 Phase 55 (2026.7.4):
+  - src/main/assets/stats.html: executeMove + buildSAN Chess960 castling fix
+    (rook-loss when king's destination = rook's source square).
+  - src/main/assets/chess.src/game-logic.js: _castleSide fallback _destValid fix.
+  - src/main/assets/chess.html: rebuilt from chess.src/.
+  - All changes in GPL-v3-licensed files (DroidFish-derived).
+
+v1.1.0 Phase 54 (2026.7.4):
+  - ui.js + index.html.tpl: custom slider (track/fill/thumb divs + transparent
+    native input overlay) for pixel-perfect alignment with eval trend chart.
+    Slider wrapper CSS identical to chart container. Thumb center via CSS
+    calc(3px + ratio * (100% - 6px)).
+  - ui.js: move-list scroll-into-view fix (only scroll if not visible,
+    _lastReviewStepScrolled moved inside rAF callback).
+  - ui.js: executeMove async-callback try-catch.
+  - ui.js: ChessAudioEngine partial-init field reset + setEnabled/setVolume
+    null-guard.
+  - ui.js: render() retry-loop guard (_animRetryCount, max 10).
+  - ai-bridge.js: heartbeat timestamp in all engine callbacks (onEngineProgress,
+    onBestMove, onHintMove, onPonderProgress).
+  - ai-bridge.js: MultiPV secondary-variation divergence fix (distinguish
+    alternative vs continuation).
+  - tablebase.js: PGN cascade-skip threshold 5 → max(15, len*0.1).
+  All changes in GPL-v3-licensed files.
+
+
+v1.1.0 Phase 53 (2026.7.3):
+  - AndroidManifest.xml: no changes (versionCode/versionName are in build.gradle).
+  - build.gradle: versionCode 109 → 110, versionName "1.0.9" → "1.1.0".
+  - assets/chess.html: rebuilt from chess.src/ (ui.js, game-logic.js,
+    index.html.tpl changes).
+  - assets/stats.html: visual annotations desc + green_arrows label updated
+    (escape path → check-response); added _slicePGNAtMove helper; visual
+    annotations stats block now respects selected-move cutoff.
+  - assets/chess.src/: 3 source modules updated (see chess.src/README.license).
+    Phase 53 revision: ui.js also got king-control-arrow legality filter
+    (_updateArrows/_updateCtrlInfoPanel/_computeAndCacheVisualAnnotations/
+    _computeInitialPositionAnnotations); index.html.tpl also got slider
+    track margin:0 3px + thumb 6px + .review-nav .btn justify-content:center.
+  - java/com/Regalia/: 4 version constants updated (see java/com/Regalia/README.license).
+  - res/values/strings.xml: app_name version updated.
+  - cpp/: no changes.
+  - jniLibs/arm64-v8a/libstockfish.so: unchanged (Stockfish 18 arm64-v8a-dotprod).
+  - Manual/: old version manuals (v1.0.4–v1.0.9) deleted; only v1.1.0 manual
+    distributed (see Manual/README.license).
+
+
 v1.0.9 Phase 52 (2026.7.2):
   - AndroidManifest.xml: no changes (versionCode/versionName are in build.gradle).
   - build.gradle: versionCode 108 → 109, versionName "1.0.8" → "1.0.9".

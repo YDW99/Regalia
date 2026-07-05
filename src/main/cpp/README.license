@@ -173,5 +173,54 @@ v1.0.8 Phase 41 (2026.7.1):
   - No changes to cpp/ sources.
 
 
+v1.1.0 Phase 58 (2026.7.5):
+  - No changes to native code. Phase 58 adds a JS-layer feature (every-5-moves
+    PGN {} eval annotation) and Java-layer concurrency fixes
+    (StockfishNative.java stopLatch + heartbeat). The native engine_jni.cpp is
+    unaffected.
+
+v1.1.0 Phase 57+ (2026.7.5):
+  - No changes to native code. Phase 57+ fixes are in the JavaScript layer
+    (pgn-standard.js, chess960.js, ai-bridge.js) and the Java layer
+    (StockfishNative.java postJsCallback guard, EngineService.java wake-lock
+    timeout). The native engine_jni.cpp is unaffected.
+
+v1.1.0 Phase 57 (2026.7.4):
+  - No changes to native code. Phase 57 fixes are in the JavaScript layer (ui.js).
+    The native engine_jni.cpp is unaffected.
+
+v1.1.0 Phase 56 (2026.7.4):
+  - No changes to native code. Phase 56 fixes are in the JavaScript layer (ui.js,
+    ai-bridge.js) and the Java UCI bridge (StockfishNative.java). The native
+    engine_jni.cpp is unaffected.
+
+v1.1.0 Phase 55 (2026.7.4):
+  - No changes to native code in this phase. Phase 55 fixes a Chess960 castling
+    bug in stats.html (JavaScript) and game-logic.js (JavaScript). The native
+    engine_jni.cpp is unaffected.
+
+v1.1.0 Phase 54 (2026.7.4):
+  - ui.js + index.html.tpl: custom slider (track/fill/thumb divs + transparent
+    native input overlay) for pixel-perfect alignment with eval trend chart.
+    Slider wrapper CSS identical to chart container. Thumb center via CSS
+    calc(3px + ratio * (100% - 6px)).
+  - ui.js: move-list scroll-into-view fix (only scroll if not visible,
+    _lastReviewStepScrolled moved inside rAF callback).
+  - ui.js: executeMove async-callback try-catch.
+  - ui.js: ChessAudioEngine partial-init field reset + setEnabled/setVolume
+    null-guard.
+  - ui.js: render() retry-loop guard (_animRetryCount, max 10).
+  - ai-bridge.js: heartbeat timestamp in all engine callbacks (onEngineProgress,
+    onBestMove, onHintMove, onPonderProgress).
+  - ai-bridge.js: MultiPV secondary-variation divergence fix (distinguish
+    alternative vs continuation).
+  - tablebase.js: PGN cascade-skip threshold 5 → max(15, len*0.1).
+  All changes in GPL-v3-licensed files.
+
+
+v1.1.0 Phase 53 (2026.7.3):
+  - No changes to cpp/ sources (engine_jni.cpp, CMakeLists.txt unchanged).
+
+
 v1.0.9 Phase 52 (2026.7.2):
   - No changes to cpp/ sources (engine_jni.cpp, CMakeLists.txt unchanged).

@@ -786,6 +786,97 @@ v1.0.8 Phase 47 (2026.7.1):
   - chess.html rebuilt (Phase 47 changes in ui.js, ai-bridge.js).
   - stats.html: No changes.
 
+v1.1.0 Phase 58 (2026.7.5):
+  - chess.html: rebuilt from chess.src/ (Phase 58 pgn-standard.js + game-logic.js
+    + ai-bridge.js changes for every-5-moves PGN {} eval annotation).
+  - chess.src/pgn-standard.js: new formatEvalAnnotation function + _pgnWhitePerspectiveLabel
+    helper (GPL v3, DroidFish-derived).
+  - chess.src/game-logic.js: new pgn_* i18n keys (White-perspective eval labels)
+    (GPL v3, DroidFish-derived).
+  - chess.src/ai-bridge.js: every-5-moves hook in _buildPGNString (GPL v3, DroidFish-derived).
+  - stats.html: No changes.
+
+v1.1.0 Phase 57+ (2026.7.5):
+  - chess.html: rebuilt from chess.src/ (Phase 57+ pgn-standard.js,
+    chess960.js, and ai-bridge.js fixes).
+  - chess.src/pgn-standard.js: parseStandardPGN single-line PGN tag-stripping
+    regex fix (GPL v3, DroidFish-derived).
+  - chess.src/chess960.js: isChess960CastlingLegal king-position lookup
+    optimization (uses s.wk/s.bk cache; board-scan fallback retained)
+    (AGPL v3, original).
+  - chess.src/ai-bridge.js: WDL percentage display divide-by-zero guard
+    (if(total>0) check before dividing) (GPL v3, DroidFish-derived).
+  - stats.html: No changes.
+
+v1.1.0 Phase 57 (2026.7.4):
+  - chess.html: rebuilt from chess.src/ (Phase 57 ui.js fixes).
+  - ui.js changes: (1) portrait review move-list scroll positioning — replaced
+    offsetTop with getBoundingClientRect to compute the active move's position
+    relative to .review-moves (not relative to .review-overlay). In portrait,
+    offsetTop included the board's full height (256-320px), causing the active
+    move to be clamped to scrollHeight-clientHeight (scrolled to bottom) and not
+    centered. (2) visual-annotation cache residue fix — enterReview clears the
+    '_initial' cache key at entry; _computeInitialPositionAnnotations reads
+    reviewStates[0].state (initial position) instead of gameState (live mid-game
+    state). Stale '_initial' cache previously caused wrong annotations at step 0.
+
+v1.1.0 Phase 56 (2026.7.4):
+  - chess.html: rebuilt from chess.src/ (Phase 56 ui.js + ai-bridge.js fixes).
+  - ui.js changes: (1) landscape review nav-button scroll-to-top fix (replaced
+    scrollIntoView with manual scrollTop on inner .review-moves only); (2) first-move
+    timing sync (_turnStartTime + gameClocks reset in _resetGameUIState).
+  - ai-bridge.js changes: PGN timeout annotation ([Termination "Time forfeit"] tag +
+    {<color> wins by timeout} last-move comment).
+
+v1.1.0 Phase 55 (2026.7.4):
+  - stats.html: executeMove() and buildSAN() castling detection fix. Replaced
+    _destEmpty with _destValid — in Chess960, the king's destination square may
+    be occupied by the participating rook (e.g. king on d1, rook on c1, O-O-O
+    puts king on c1 = rook's source). The old _destEmpty check rejected this
+    case, causing the king to "self-capture" the rook and silently lose it from
+    the statistics board. Now the participating rook is found FIRST, then the
+    destination is validated (empty OR contains the participating rook). Also
+    fixed a latent rook-source clearing bug when _rookFrom === _rookTo (rook
+    stays in place, e.g. rook on f1 castling kingside to f1).
+  - chess.html: rebuilt from chess.src/ (Phase 55 game-logic.js _castleSide fix).
+
+v1.1.0 Phase 54 (2026.7.4):
+  - ui.js + index.html.tpl: custom slider (track/fill/thumb divs + transparent
+    native input overlay) for pixel-perfect alignment with eval trend chart.
+    Slider wrapper CSS identical to chart container. Thumb center via CSS
+    calc(3px + ratio * (100% - 6px)).
+  - ui.js: move-list scroll-into-view fix (only scroll if not visible,
+    _lastReviewStepScrolled moved inside rAF callback).
+  - ui.js: executeMove async-callback try-catch.
+  - ui.js: ChessAudioEngine partial-init field reset + setEnabled/setVolume
+    null-guard.
+  - ui.js: render() retry-loop guard (_animRetryCount, max 10).
+  - ai-bridge.js: heartbeat timestamp in all engine callbacks (onEngineProgress,
+    onBestMove, onHintMove, onPonderProgress).
+  - ai-bridge.js: MultiPV secondary-variation divergence fix (distinguish
+    alternative vs continuation).
+  - tablebase.js: PGN cascade-skip threshold 5 → max(15, len*0.1).
+  All changes in GPL-v3-licensed files.
+
+
+v1.1.0 Phase 53 (2026.7.3):
+  - chess.html rebuilt (Phase 53 changes in chess.src/ui.js, chess.src/game-logic.js,
+    chess.src/index.html.tpl).
+  - stats.html: visual_annotations_desc text updated (escape path → check-response
+    path, mentioning king escape + capture-the-checker). green_arrows_escape label
+    updated: zh "绿色箭头 (避将路径)" → "绿色箭头 (应将路径)", en "Green Arrows
+    (Escape Path)" → "Green Arrows (Check-Response)". Added _slicePGNAtMove(pgnText,
+    moveCount) helper inside renderStats — walks the raw PGN text tracking tag-pair
+    stripping, brace-comment depth, semicolon comments, variation depth, NAGs,
+    move numbers, and SAN move tokens; truncates after the Nth mainline move's
+    trailing {...} comment and/or $N NAG (the "move block"). The visual annotations
+    stats block now uses this sliced text when a mainline move is selected
+    (_selectedMoveIdx >= 0, no variation/FEN selected), so the [%csl]/[%cal]
+    counts respect the selected-move cutoff — consistent with the other stats
+    blocks that use effectiveParsed.moves. Comment for the [%cal] color semantics
+    also updated: "G=escape path" → "G=check-response (king escape or capture the
+    checker)".
+
 v1.0.9 Phase 52 (2026.7.2):
   - chess.html rebuilt (Phase 52 changes in chess.src/tablebase.js,
     chess.src/game-logic.js, chess.src/index.html.tpl, chess.src/ui.js).

@@ -31,7 +31,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; worker-src blob:; connect-src https://tablebase.lichess.ovh; img-src data: file: blob:; frame-ancestors 'none'; base-uri 'self'">
-<title>Regalia v1.0.9</title>
+<title>Regalia v1.1.0</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 /* v1.0.8 PHASE 22: Light/Dark theme system following Material Design
@@ -44,7 +44,7 @@
    All other component colors use CSS variables so the theme switch is
    comprehensive. The king icon (♔ dark / ♚ light) is swapped by JS
    (see ui.js _hdrKingIconHTML + ai-bridge.js _loadingKingIconHTML). */
-:root{color-scheme:dark light;--bg:#1a0a0a;--card:#221015;--card2:#2a1418;--hdr-bg:#1a0a0a;--border:#8b6914;--border2:#d4a017;--text:#f5e6c8;--muted:#a08050;--placeholder:#c0a070;--accent:#d4a017;--accent2:#ffd700;--blue:#4a90d9;--red:#c0392b;--purple:#8e44ad;--green:#27ae60;--danger:#c0392b;--btn-bg:#221015;--btn-bg-hover:#2d1a22;--btn-a-bg:#c49512;--btn-a-hover:#d4a017;--btn-g-bg:#229954;--btn-g-border:#2ecc71;--btn-p-bg:#3a78b4;--btn-p-hover:#4d9ccf;--btn-p-border:#5dade2;--btn-shadow:inset 0 1px 0 rgba(255,215,0,.1);--overlay-bg:rgba(26,10,10,.97);--overlay-card-bg:#221015;--input-bg:#1a0a0a;--toggle-bg:#1a0a0a;--toggle-on-bg:#c49512;--toggle-dot:#ffd700;--toggle-dot-on:#1a0a0a;--toggle-dot-shadow:0 1px 4px rgba(0,0,0,.5);--bwrap-bg:#1a0a0a;--diffsel-bg:#1a0a0a;--ev-bg:rgba(42,21,32,.8);--panel-shadow:0 0 6px rgba(212,160,23,.08),0 4px 14px rgba(0,0,0,.40),inset 0 0 4px rgba(0,0,0,.08);--sq-sel:#5a4030;--sq-hover:rgba(255,215,0,.04);--scrollbar-track:rgba(26,10,10,.5);--op-active-bg:#2a1520;--setup-del-hover:rgba(192,57,43,.2);--setup-err-color:#ff6b5a;--mvar-color:rgba(212,160,23,.05);--mnum-color:rgba(212,160,23,.1);--last-to:#8bc34a;--last-from:#ffd700;--last-to-glow:rgba(139,195,74,.15);--castle-ring:#ffd700;--setup-castle-mark:#ffd700;--setup-ep-mark:#9b59b6;--chart-line:#5dade2;--chart-fill:#e74c3c;--chart-grid:#4a3020;--chart-axis:#8a6a3a;--chart-text-stroke:#1a0a0a;--chart-critical:#ffd700;--chart-critical-text:#ffd700}
+:root{color-scheme:dark light;--bg:#1a0a0a;--card:#221015;--card2:#2a1418;--hdr-bg:#1a0a0a;--border:#8b6914;--border2:#d4a017;--text:#f5e6c8;--muted:#a08050;--placeholder:#c0a070;--accent:#d4a017;--accent2:#ffd700;--blue:#4a90d9;--red:#c0392b;--purple:#8e44ad;--green:#27ae60;--danger:#c0392b;--btn-bg:#221015;--btn-bg-hover:#2d1a22;--btn-a-bg:#c49512;--btn-a-hover:#d4a017;--btn-g-bg:#229954;--btn-g-border:#2ecc71;--btn-p-bg:#3a78b4;--btn-p-hover:#4d9ccf;--btn-p-border:#5dade2;--btn-shadow:inset 0 1px 0 rgba(255,215,0,.1);--overlay-bg:rgba(26,10,10,.97);--overlay-card-bg:#221015;--input-bg:#1a0a0a;--toggle-bg:#1a0a0a;--toggle-on-bg:#c49512;--toggle-dot:#ffd700;--toggle-dot-on:#1a0a0a;--toggle-dot-shadow:0 1px 4px rgba(0,0,0,.5);--bwrap-bg:#1a0a0a;--diffsel-bg:#1a0a0a;--ev-bg:rgba(42,21,32,.8);--panel-shadow:0 0 6px rgba(212,160,23,.08),0 4px 14px rgba(0,0,0,.40),inset 0 0 4px rgba(0,0,0,.08);--sq-sel:#5a4030;--sq-hover:rgba(255,215,0,.04);--scrollbar-track:rgba(26,10,10,.5);--op-active-bg:#2a1520;--setup-del-hover:rgba(192,57,43,.2);--setup-err-color:#ff6b5a;--mvar-color:rgba(212,160,23,.05);--mnum-color:rgba(212,160,23,.1);--last-to:#8bc34a;--last-from:#ffd700;--last-to-glow:rgba(139,195,74,.15);--castle-ring:#ffd700;--setup-castle-mark:#ffd700;--setup-ep-mark:#9b59b6;--chart-line:#5dade2;--chart-fill:#e74c3c;--chart-grid:#4a3020;--chart-axis:#8a6a3a;--chart-text-stroke:#1a0a0a;--chart-critical:#ffd700;--chart-critical-text:#ffd700;--chart-label:#f5e6c8}
 /* v1.0.8 PHASE 22 (third supplement): Light mode redesigned to elegant silver tones.
    Design goal: "典雅庄重的白银色调" — silver-gray background + deep slate text +
    soft silver accents. Every color (except board squares & pieces) differs from
@@ -61,15 +61,15 @@
    Both selectors use the same silver palette. The :root dark-mode variables
    are the default; light-mode variables override when either selector matches. */
 @media (prefers-color-scheme: light){
-  :root{color-scheme:light dark;--bg:#f0f0f3;--card:#e0e0e5;--card2:#d4d4da;--hdr-bg:#f0f0f3;--border:#8a8a94;--border2:#5a5a66;--text:#2c2c34;--muted:#6a6a76;--placeholder:#4a4a52;--accent:#4a4a52;--accent2:#2c2c34;--blue:#2c5f8d;--red:#a02818;--purple:#6a2c8e;--green:#1e7e34;--danger:#a02818;--btn-bg:#e0e0e5;--btn-bg-hover:#d4d4da;--btn-a-bg:#6a6a76;--btn-a-hover:#5a5a66;--btn-g-bg:#229954;--btn-g-border:#2ecc71;--btn-p-bg:#3a78b4;--btn-p-hover:#4d9ccf;--btn-p-border:#5dade2;--btn-shadow:inset 0 1px 0 rgba(255,255,255,.6);--overlay-bg:rgba(240,240,243,.97);--overlay-card-bg:#e0e0e5;--input-bg:#f0f0f3;--toggle-bg:#d4d4da;--toggle-on-bg:#5a5a66;--toggle-dot:#5a5a66;--toggle-dot-on:#f0f0f3;--toggle-dot-shadow:0 1px 3px rgba(0,0,0,.25);--bwrap-bg:#e8d5b0;--diffsel-bg:#e0e0e5;--ev-bg:rgba(208,208,214,.8);--panel-shadow:0 0 6px rgba(90,90,102,.10),0 4px 14px rgba(0,0,0,.10),inset 0 0 4px rgba(0,0,0,.03);--sq-sel:#b8b8c0;--sq-hover:rgba(90,90,102,.06);--scrollbar-track:rgba(208,208,214,.6);--op-active-bg:#d4d4da;--setup-del-hover:rgba(160,40,24,.15);--setup-err-color:#a02818;--mvar-color:rgba(90,90,102,.06);--mnum-color:rgba(90,90,102,.1);--last-to:#8bc34a;--last-from:#ffd700;--last-to-glow:rgba(139,195,74,.15);--castle-ring:#5a5a66;--setup-castle-mark:#5a5a66;--setup-ep-mark:#6a2c8e;--chart-line:#2c5f8d;--chart-fill:#c0392b;--chart-grid:#b0b0b8;--chart-axis:#8a8a94;--chart-text-stroke:#f0f0f3;--chart-critical:#d4a017;--chart-critical-text:#2c2c34}
+  :root{color-scheme:light dark;--bg:#f0f0f3;--card:#e0e0e5;--card2:#d4d4da;--hdr-bg:#f0f0f3;--border:#8a8a94;--border2:#5a5a66;--text:#2c2c34;--muted:#6a6a76;--placeholder:#4a4a52;--accent:#4a4a52;--accent2:#2c2c34;--blue:#2c5f8d;--red:#a02818;--purple:#6a2c8e;--green:#1e7e34;--danger:#a02818;--btn-bg:#e0e0e5;--btn-bg-hover:#d4d4da;--btn-a-bg:#6a6a76;--btn-a-hover:#5a5a66;--btn-g-bg:#229954;--btn-g-border:#2ecc71;--btn-p-bg:#3a78b4;--btn-p-hover:#4d9ccf;--btn-p-border:#5dade2;--btn-shadow:inset 0 1px 0 rgba(255,255,255,.6);--overlay-bg:rgba(240,240,243,.97);--overlay-card-bg:#e0e0e5;--input-bg:#f0f0f3;--toggle-bg:#d4d4da;--toggle-on-bg:#5a5a66;--toggle-dot:#5a5a66;--toggle-dot-on:#f0f0f3;--toggle-dot-shadow:0 1px 3px rgba(0,0,0,.25);--bwrap-bg:#e8d5b0;--diffsel-bg:#e0e0e5;--ev-bg:rgba(208,208,214,.8);--panel-shadow:0 0 6px rgba(90,90,102,.10),0 4px 14px rgba(0,0,0,.10),inset 0 0 4px rgba(0,0,0,.03);--sq-sel:#b8b8c0;--sq-hover:rgba(90,90,102,.06);--scrollbar-track:rgba(208,208,214,.6);--op-active-bg:#d4d4da;--setup-del-hover:rgba(160,40,24,.15);--setup-err-color:#a02818;--mvar-color:rgba(90,90,102,.06);--mnum-color:rgba(90,90,102,.1);--last-to:#8bc34a;--last-from:#ffd700;--last-to-glow:rgba(139,195,74,.15);--castle-ring:#5a5a66;--setup-castle-mark:#5a5a66;--setup-ep-mark:#6a2c8e;--chart-line:#2c5f8d;--chart-fill:#c0392b;--chart-grid:#b0b0b8;--chart-axis:#8a8a94;--chart-text-stroke:#f0f0f3;--chart-critical:#d4a017;--chart-critical-text:#2c2c34;--chart-label:#2c2c34}
 }
 /* JS-driven light theme (Xiaomi HyperOS 3 compatibility) — same silver palette */
-html[data-theme="light"]{color-scheme:light;--bg:#f0f0f3;--card:#e0e0e5;--card2:#d4d4da;--hdr-bg:#f0f0f3;--border:#8a8a94;--border2:#5a5a66;--text:#2c2c34;--muted:#6a6a76;--placeholder:#4a4a52;--accent:#4a4a52;--accent2:#2c2c34;--blue:#2c5f8d;--red:#a02818;--purple:#6a2c8e;--green:#1e7e34;--danger:#a02818;--btn-bg:#e0e0e5;--btn-bg-hover:#d4d4da;--btn-a-bg:#6a6a76;--btn-a-hover:#5a5a66;--btn-g-bg:#229954;--btn-g-border:#2ecc71;--btn-p-bg:#3a78b4;--btn-p-hover:#4d9ccf;--btn-p-border:#5dade2;--btn-shadow:inset 0 1px 0 rgba(255,255,255,.6);--overlay-bg:rgba(240,240,243,.97);--overlay-card-bg:#e0e0e5;--input-bg:#f0f0f3;--toggle-bg:#d4d4da;--toggle-on-bg:#5a5a66;--toggle-dot:#5a5a66;--toggle-dot-on:#f0f0f3;--toggle-dot-shadow:0 1px 3px rgba(0,0,0,.25);--bwrap-bg:#e8d5b0;--diffsel-bg:#e0e0e5;--ev-bg:rgba(208,208,214,.8);--panel-shadow:0 0 6px rgba(90,90,102,.10),0 4px 14px rgba(0,0,0,.10),inset 0 0 4px rgba(0,0,0,.03);--sq-sel:#b8b8c0;--sq-hover:rgba(90,90,102,.06);--scrollbar-track:rgba(208,208,214,.6);--op-active-bg:#d4d4da;--setup-del-hover:rgba(160,40,24,.15);--setup-err-color:#a02818;--mvar-color:rgba(90,90,102,.06);--mnum-color:rgba(90,90,102,.1);--last-to:#8bc34a;--last-from:#ffd700;--last-to-glow:rgba(139,195,74,.15);--castle-ring:#5a5a66;--setup-castle-mark:#5a5a66;--setup-ep-mark:#6a2c8e;--chart-line:#2c5f8d;--chart-fill:#c0392b;--chart-grid:#b0b0b8;--chart-axis:#8a8a94;--chart-text-stroke:#f0f0f3;--chart-critical:#d4a017;--chart-critical-text:#2c2c34}
+html[data-theme="light"]{color-scheme:light;--bg:#f0f0f3;--card:#e0e0e5;--card2:#d4d4da;--hdr-bg:#f0f0f3;--border:#8a8a94;--border2:#5a5a66;--text:#2c2c34;--muted:#6a6a76;--placeholder:#4a4a52;--accent:#4a4a52;--accent2:#2c2c34;--blue:#2c5f8d;--red:#a02818;--purple:#6a2c8e;--green:#1e7e34;--danger:#a02818;--btn-bg:#e0e0e5;--btn-bg-hover:#d4d4da;--btn-a-bg:#6a6a76;--btn-a-hover:#5a5a66;--btn-g-bg:#229954;--btn-g-border:#2ecc71;--btn-p-bg:#3a78b4;--btn-p-hover:#4d9ccf;--btn-p-border:#5dade2;--btn-shadow:inset 0 1px 0 rgba(255,255,255,.6);--overlay-bg:rgba(240,240,243,.97);--overlay-card-bg:#e0e0e5;--input-bg:#f0f0f3;--toggle-bg:#d4d4da;--toggle-on-bg:#5a5a66;--toggle-dot:#5a5a66;--toggle-dot-on:#f0f0f3;--toggle-dot-shadow:0 1px 3px rgba(0,0,0,.25);--bwrap-bg:#e8d5b0;--diffsel-bg:#e0e0e5;--ev-bg:rgba(208,208,214,.8);--panel-shadow:0 0 6px rgba(90,90,102,.10),0 4px 14px rgba(0,0,0,.10),inset 0 0 4px rgba(0,0,0,.03);--sq-sel:#b8b8c0;--sq-hover:rgba(90,90,102,.06);--scrollbar-track:rgba(208,208,214,.6);--op-active-bg:#d4d4da;--setup-del-hover:rgba(160,40,24,.15);--setup-err-color:#a02818;--mvar-color:rgba(90,90,102,.06);--mnum-color:rgba(90,90,102,.1);--last-to:#8bc34a;--last-from:#ffd700;--last-to-glow:rgba(139,195,74,.15);--castle-ring:#5a5a66;--setup-castle-mark:#5a5a66;--setup-ep-mark:#6a2c8e;--chart-line:#2c5f8d;--chart-fill:#c0392b;--chart-grid:#b0b0b8;--chart-axis:#8a8a94;--chart-text-stroke:#f0f0f3;--chart-critical:#d4a017;--chart-critical-text:#2c2c34;--chart-label:#2c2c34}
 /* JS-driven dark theme (Xiaomi HyperOS 3 compatibility) — restores the FULL dark
    palette when the system reports light but JS forces dark via data-theme="dark".
    v1.0.8 PHASE 24 (bug fix): previously only restored 7 chart variables, leaving
    the rest of the page light when the system was light but JS forced dark. */
-html[data-theme="dark"]{color-scheme:dark;--bg:#1a0a0a;--card:#221015;--card2:#2a1418;--hdr-bg:#1a0a0a;--border:#8b6914;--border2:#d4a017;--text:#f5e6c8;--muted:#a08050;--placeholder:#c0a070;--accent:#d4a017;--accent2:#ffd700;--blue:#4a90d9;--red:#c0392b;--purple:#8e44ad;--green:#27ae60;--danger:#c0392b;--btn-bg:#221015;--btn-bg-hover:#2d1a22;--btn-a-bg:#c49512;--btn-a-hover:#d4a017;--btn-g-bg:#229954;--btn-g-border:#2ecc71;--btn-p-bg:#3a78b4;--btn-p-hover:#4d9ccf;--btn-p-border:#5dade2;--btn-shadow:inset 0 1px 0 rgba(255,215,0,.1);--overlay-bg:rgba(26,10,10,.97);--overlay-card-bg:#221015;--input-bg:#1a0a0a;--toggle-bg:#1a0a0a;--toggle-on-bg:#c49512;--toggle-dot:#ffd700;--toggle-dot-on:#1a0a0a;--toggle-dot-shadow:0 1px 4px rgba(0,0,0,.5);--bwrap-bg:#1a0a0a;--diffsel-bg:#1a0a0a;--ev-bg:rgba(42,21,32,.8);--panel-shadow:0 0 6px rgba(212,160,23,.08),0 4px 14px rgba(0,0,0,.40),inset 0 0 4px rgba(0,0,0,.08);--sq-sel:#5a4030;--sq-hover:rgba(255,215,0,.04);--scrollbar-track:rgba(26,10,10,.5);--op-active-bg:#2a1520;--setup-del-hover:rgba(192,57,43,.2);--setup-err-color:#ff6b5a;--mvar-color:rgba(212,160,23,.05);--mnum-color:rgba(212,160,23,.1);--last-to:#8bc34a;--last-from:#ffd700;--last-to-glow:rgba(139,195,74,.15);--castle-ring:#ffd700;--setup-castle-mark:#ffd700;--setup-ep-mark:#9b59b6;--chart-line:#5dade2;--chart-fill:#e74c3c;--chart-grid:#4a3020;--chart-axis:#8a6a3a;--chart-text-stroke:#1a0a0a;--chart-critical:#ffd700;--chart-critical-text:#ffd700}
+html[data-theme="dark"]{color-scheme:dark;--bg:#1a0a0a;--card:#221015;--card2:#2a1418;--hdr-bg:#1a0a0a;--border:#8b6914;--border2:#d4a017;--text:#f5e6c8;--muted:#a08050;--placeholder:#c0a070;--accent:#d4a017;--accent2:#ffd700;--blue:#4a90d9;--red:#c0392b;--purple:#8e44ad;--green:#27ae60;--danger:#c0392b;--btn-bg:#221015;--btn-bg-hover:#2d1a22;--btn-a-bg:#c49512;--btn-a-hover:#d4a017;--btn-g-bg:#229954;--btn-g-border:#2ecc71;--btn-p-bg:#3a78b4;--btn-p-hover:#4d9ccf;--btn-p-border:#5dade2;--btn-shadow:inset 0 1px 0 rgba(255,215,0,.1);--overlay-bg:rgba(26,10,10,.97);--overlay-card-bg:#221015;--input-bg:#1a0a0a;--toggle-bg:#1a0a0a;--toggle-on-bg:#c49512;--toggle-dot:#ffd700;--toggle-dot-on:#1a0a0a;--toggle-dot-shadow:0 1px 4px rgba(0,0,0,.5);--bwrap-bg:#1a0a0a;--diffsel-bg:#1a0a0a;--ev-bg:rgba(42,21,32,.8);--panel-shadow:0 0 6px rgba(212,160,23,.08),0 4px 14px rgba(0,0,0,.40),inset 0 0 4px rgba(0,0,0,.08);--sq-sel:#5a4030;--sq-hover:rgba(255,215,0,.04);--scrollbar-track:rgba(26,10,10,.5);--op-active-bg:#2a1520;--setup-del-hover:rgba(192,57,43,.2);--setup-err-color:#ff6b5a;--mvar-color:rgba(212,160,23,.05);--mnum-color:rgba(212,160,23,.1);--last-to:#8bc34a;--last-from:#ffd700;--last-to-glow:rgba(139,195,74,.15);--castle-ring:#ffd700;--setup-castle-mark:#ffd700;--setup-ep-mark:#9b59b6;--chart-line:#5dade2;--chart-fill:#e74c3c;--chart-grid:#4a3020;--chart-axis:#8a6a3a;--chart-text-stroke:#1a0a0a;--chart-critical:#ffd700;--chart-critical-text:#ffd700;--chart-label:#f5e6c8}
 /* v1.0.7: html + body + #app ALL get overflow-x:hidden. html uses max-width:100%
    (NOT 100vw — 100vw includes safe-area insets and causes overflow on notched phones).
    body gets padding for safe-area only (NOT the 3px finger-grip — that's handled
@@ -405,7 +405,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .rmv-detail{display:flex;flex-direction:column;flex:1}
 /* v1.0.3-p10: review nav buttons stretch full width in ALL orientations */
 .review-nav{display:flex;gap:4px;width:100%}
-.review-nav .btn{flex:1 1 0;min-width:0}
+.review-nav .btn{flex:1 1 0;min-width:0;justify-content:center}
 ::-webkit-scrollbar{width:5px}
 ::-webkit-scrollbar-track{background:var(--scrollbar-track)}
 ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
@@ -457,7 +457,11 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
      portrait to maximize board area. */
   .bwrap{border-width:3px}
   /* Review mode: stacked layout in portrait. */
-  .review-body{flex-direction:column}
+  /* v1.1.0 Phase 53: Add overflow-y:auto + max-height so .review-bottom
+     controls are reachable by scrolling (same as landscape). Previously,
+     portrait had no scroll on .review-body, so if the board + moves
+     filled the viewport, the chart/slider/nav buttons were cut off. */
+  .review-body{flex-direction:column;overflow-y:auto;overflow-x:hidden;max-height:calc(100vh - 28px)}
   .review-board{padding:6px}
   /* Quick Toolbar (v1.0.7 PHASE 3): compact in portrait. */
   .qtoolbar{gap:4px;padding:5px 6px}
@@ -849,105 +853,233 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
     /* v1.0.3-p7: edge-to-edge — no horizontal padding so board+moves AND chart
        all span full width with no gaps. */
   }
-  /* Top section: board left + moves right — FILL 100% width, edge-to-edge.
-     flex:0 0 auto so its height is determined by the board's intrinsic height
-     (not stretched to fill). This lets the body scroll reveal the bottom
-     controls when they don't fit. */
-  .review-body > .review-top {
-    display: flex;
-    flex-direction: row;
-    flex: 0 0 auto;            /* v1.0.3-p7: height = board height (intrinsic) */
-    width: 100%;
-    gap: 0;
-    padding: 0;
-    min-height: 0;
-    align-items: flex-start;   /* v1.0.3-p7: top-align so board doesn't stretch */
-  }
-  /* v1.0.3-p7: board takes ~60% of viewport width (ALWAYS > move list width).
-     flex:0 0 auto + width set by JS via --rv-board-w. */
-  .review-left {
-    flex: 0 0 auto;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-start;
-    padding: 0;
-    gap: 0;
-    overflow: hidden;
-    min-width: unset !important;
-    flex-shrink: 0;
-    margin: 0;
-  }
-  .review-left .review-board { padding: 0; flex-shrink: 0; margin: 0; }
-  .review-left .review-board .bgrid { max-width: none; }
-  /* v1.0.3-p8: allow vertical pan (scroll) on the review board so the user
-     can slide on the board to scroll the whole review body. The base .bgrid
-     has touch-action:none (for the main game where board slides should NOT
-     scroll the page); in review mode we override to touch-action:pan-y so
-     vertical slides scroll the body. Horizontal slides are still blocked to
-     avoid interfering with any potential horizontal gestures. */
-  .review-left .review-board .bgrid { touch-action: pan-y; }
-  /* v1.0.3-p7: move list takes ALL remaining width (flex:1 1 0) — board + moves
-     together fill 100% of viewport width edge-to-edge. The move list has its
-     OWN independent scroll viewport: height matches the board height (set via
-     JS --rv-board-h), overflow-y:auto. Board width is always > move list width. */
-  .review-moves {
-    flex: 1 1 0;
-    overflow-y: auto;          /* v1.0.3-p7: LAYER 2 — independent scroll */
-    padding: 2px 2px 2px 4px;
-    min-width: 80px;
-    min-height: 0;
-    height: var(--rv-board-h, 320px);  /* v1.0.3-p7: match board height, set by JS */
-    margin: 0;
-  }
-  .rmv-block { padding: 3px 5px; }
-  .rmv-notation { font-size: .72rem; }
-  .rmv-num { font-size: .62rem; min-width: 20px; }
-  /* Bottom section: full-width chart + controls, edge-to-edge. flex:0 0 auto
-     so it takes its content height. Visible by scrolling the body. */
-  .review-body > .review-bottom {
-    display: flex;
-    flex-direction: column;
-    width: 100%;
-    flex: 0 0 auto;
-    padding: 4px 6px;
-    gap: 4px;
-  }
-  /* v1.0.7 PHASE 14: chart min-height raised to 120px (was 80) — user
-     requires the trend chart to always be at least 120px tall. The JS
-     _trendH computation enforces max 200px in both orientations. */
-  .review-chart { min-height: 120px; overflow: hidden; flex-shrink: 1; width: 100%; }
-  input[type="range"].review-slider { height: 18px; width: 100%; }
-  /* v1.0.3-p7: nav buttons stretched horizontally for better space use */
-  .review-bottom .review-nav {
-    display: flex;
-    gap: 4px;
-    width: 100%;
-  }
-  .review-bottom .review-nav .btn {
-    flex: 1 1 0;
-    padding: 4px 8px;
-    font-size: .7rem;
-    min-height: 28px;
-    min-width: 0;
-  }
-  /* v1.0.7 PHASE 14: landscape eval-bar override — match the inline style
-     (font .7rem, padding 3px 8px, max-height 1.9em, single-line clip).
-     v1.0.7 PHASE 20 (UX): enlarged to .8rem font, 5px 10px padding, 2.4em
-     max-height for comfortable breathing room. */
-  .review-bottom #review-eval-bar {
-    margin: 1px 0 !important;
-    font-size: .8rem !important;
-    padding: 5px 10px !important;
-    max-height: 2.4em !important;
-    overflow: hidden !important;
-    white-space: nowrap !important;
-    width: 100%;
-  }
-  /* v1.0.7 PHASE 20 (UX): slightly larger bottom buttons to match the
-     enlarged eval bar and analyze button. */
-  .review-bottom .btn { padding: 4px 10px; font-size: .65rem; min-height: 26px; min-width: 36px; }
+  /* v1.1.0 Phase 53: .review-top, .review-left, .review-moves, and .review-bottom
+     rules are now OUTSIDE the landscape media query (global) so they apply to BOTH
+     portrait and landscape. This ensures the slider, chart, nav buttons, and eval
+     bar have identical styling in both orientations. */
 }
+
+/* v1.1.0 Phase 53: Review layout — shared between portrait and landscape.
+   Previously, .review-top, .review-left (landscape overrides), and .review-moves
+   (landscape overrides) were inside @media(orientation:landscape) only.
+   Now .review-top and the .review-bottom rules apply to ALL orientations so
+   the layout structure is identical in both portrait and landscape. The only
+   orientation-specific differences are the board width (set by JS) and the
+   eval-bar font size (set by JS inline style). */
+
+/* Top section: board left + moves right — FILL 100% width, edge-to-edge.
+   flex:0 0 auto so its height is determined by the board's intrinsic height
+   (not stretched to fill). This lets the body scroll reveal the bottom
+   controls when they don't fit. */
+.review-body > .review-top {
+  display: flex;
+  flex-direction: row;
+  flex: 0 0 auto;
+  width: 100%;
+  gap: 0;
+  padding: 0;
+  min-height: 0;
+  align-items: flex-start;
+}
+/* Board container: flex:0 0 auto + width set by JS via --rv-board-w. */
+.review-left {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+  min-width: unset !important;
+  flex-shrink: 0;
+  margin: 0;
+}
+.review-left .review-board { padding: 0; flex-shrink: 0; margin: 0; }
+.review-left .review-board .bgrid { max-width: none; }
+.review-left .review-board .bgrid { touch-action: pan-y; }
+/* Move list takes ALL remaining width (flex:1 1 0). Has its OWN independent
+   scroll viewport: height matches the board height (set via JS --rv-board-h). */
+.review-moves {
+  flex: 1 1 0;
+  overflow-y: auto;
+  padding: 2px 2px 2px 4px;
+  min-width: 80px;
+  min-height: 0;
+  height: var(--rv-board-h, 320px);
+  margin: 0;
+}
+.rmv-block { padding: 3px 5px; }
+.rmv-notation { font-size: .72rem; }
+.rmv-num { font-size: .62rem; min-width: 20px; }
+
+/* Review bottom section — shared between portrait and landscape.
+   These rules ensure the progress bar, chart, nav buttons, and eval bar
+   have identical appearance in both portrait and landscape. */
+.review-body > .review-bottom {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  flex: 0 0 auto;
+  /* v1.1.0 Phase 54 rev5: horizontal padding 8px (> 4.75px thumb overflow)
+     so the 9.5px slider thumb is never clipped at min/max in either
+     portrait or landscape. Vertical padding 4px for breathing room. */
+  padding: 4px 8px;
+  gap: 4px;
+  overflow: visible;
+}
+.review-chart { min-height: 120px; overflow: hidden; flex-shrink: 1; width: 100%; }
+/* v1.1.0 Phase 54: Custom review slider — pixel-perfect alignment with chart.
+   The wrapper has IDENTICAL CSS to .review-chart (border:1px, padding:2px,
+   box-sizing:border-box, width:100%) so both share the same content box.
+   Inside, a container holds: base track, fill track, thumb (all visual-only,
+   pointer-events:none), and a transparent native <input type="range"> overlay
+   (opacity:0) that handles all touch/drag/keyboard interaction.
+   Thumb and fill positions are set by JS (_updateRvSliderVisual) to align
+   the thumb's CENTER with the chart's data points. */
+.rv-slider-wrap {
+  width: 100%;
+  margin: 6px 0;
+  box-sizing: border-box;
+  border: 1px solid transparent;
+  padding: 0;
+  border-radius: 4px;
+  /* v1.1.0 Phase 54 rev4: explicit overflow:visible so the 10px thumb
+     (which overflows 5px at min/max) is never clipped by the wrap. */
+  overflow: visible;
+}
+.rv-slider-container {
+  position: relative;
+  height: 20px;
+  width: 100%;
+  touch-action: none;
+  /* v1.1.0 Phase 54 rev6: overflow:hidden so the thumb (9.5px outer) is
+     CLIPPED at min/max — matching the chart's data point circles which
+     are also clipped at the edges. Both centers align at the edge, and
+     both are clipped symmetrically, achieving strict pixel-level alignment. */
+  overflow: hidden;
+}
+.rv-slider-base {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  pointer-events: none;
+}
+.rv-slider-fill {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 4px;
+  background: var(--accent);
+  border-radius: 2px;
+  pointer-events: none;
+  width: 0;
+}
+.rv-slider-thumb {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  /* v1.1.0 Phase 54 rev5: thumb outer diameter = 9.5px to STRICTLY match
+     the chart's current-position marker circle (SVG r=4 + stroke-width=1.5
+     → outer radius 4.75 → outer diameter 9.5px). The thumb is 7.5px wide
+     with a 1px border on each side → outer diameter = 7.5 + 2 = 9.5px.
+     This achieves exact pixel-level alignment with the chart's marker.
+     The thumb overflows 4.75px at min/max — the .review-bottom's 6px
+     horizontal padding accommodates this without clipping. */
+  width: 7.5px;
+  height: 7.5px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 1px solid var(--bg);
+  box-shadow: 0 1px 3px rgba(0,0,0,.4);
+  pointer-events: none;
+  left: 0;
+}
+.rv-slider-input {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+  opacity: 0;
+  cursor: pointer;
+}
+.rv-slider-input::-webkit-slider-runnable-track {
+  background: transparent;
+  border: none;
+  height: 20px;
+}
+.rv-slider-input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+.rv-slider-input::-moz-range-track {
+  background: transparent;
+  border: none;
+  height: 20px;
+}
+.rv-slider-input::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+.rv-slider-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: .65rem;
+  color: var(--muted);
+  /* v1.1.0 Phase 54 rev3: padding so labels aren't flush with the edge.
+     The slider track itself is edge-to-edge (padding:0 on wrap), but the
+     text labels need a small horizontal margin for readability. */
+  padding: 2px 3px;
+}
+/* v1.0.3-p7: nav buttons stretched horizontally for better space use */
+.review-bottom .review-nav {
+  display: flex;
+  gap: 4px;
+  width: 100%;
+}
+.review-bottom .review-nav .btn {
+  flex: 1 1 0;
+  padding: 4px 8px;
+  font-size: .7rem;
+  min-height: 28px;
+  min-width: 0;
+  justify-content: center;
+}
+/* v1.0.7 PHASE 14: eval-bar override — match the inline style
+   (font .8rem, padding 5px 10px, max-height 2.4em, single-line clip). */
+.review-bottom #review-eval-bar {
+  margin: 1px 0 !important;
+  font-size: .8rem !important;
+  padding: 5px 10px !important;
+  max-height: 2.4em !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
+  width: 100%;
+}
+/* v1.0.7 PHASE 20 (UX): slightly larger bottom buttons to match the
+   enlarged eval bar and analyze button. */
+.review-bottom .btn { padding: 4px 10px; font-size: .65rem; min-height: 26px; min-width: 36px; }
 
 /* --- VERY COMPACT LANDSCAPE (phone with keyboard overlay) --- */
 @media (orientation: landscape) and (max-height: 380px) {

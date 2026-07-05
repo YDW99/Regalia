@@ -395,6 +395,10 @@ function _computeHeatmapStatsSync(boards){
 // The payload is injected by the Java side via AndroidBridge.getStatsPayload()
 let _payload=null;
 let _lang='zh';
+// v1.1.0 Phase 54 rev22: gameVariant from payload — enables Chess960 castling
+// detection in executeMove/buildSAN. Set from _payload.gameVariant or detected
+// from PGN [Variant] header.
+let gameVariant=null;
 let _selectedMoveIdx=-1; // v1.0.2: selected move index for per-position stats
 // v1.0.3: variation selection state
 //   _variationMoves: when non-null, overrides parsed.moves for stats computation.
@@ -505,7 +509,7 @@ const _i18n={
   'time_control_bronstein':{zh:'布朗斯坦延迟制',en:'Bronstein Delay'},
   'time_control_usdelay':{zh:'美国延迟制',en:'US Delay'},
   'visual_annotations':{zh:'视觉注解（[%csl]/[%cal]）',en:'Visual Annotations ([%csl]/[%cal])'},
-  'visual_annotations_desc':{zh:'本对局PGN注释中包含的视觉注解统计：蓝色格=玩家净控制强势格，红色格=AI对手净控制强势格，黄色格=双方总计控制较高格，绿色格=中心区无控制格；蓝色箭头=一方棋子同时威胁另一方多个棋子，红色箭头=将军路径，黄色箭头=对后的威胁，绿色箭头=避将路径。',en:'Visual annotation counts in this game\'s PGN comments: Blue squares=player net-control strong squares, Red squares=AI net-control strong squares, Yellow squares=high total-control squares, Green squares=neutral center squares; Blue arrows=multi-threat (one piece threatens 2+ enemy pieces), Red arrows=check path, Yellow arrows=queen threat, Green arrows=escape path.'},
+  'visual_annotations_desc':{zh:'本对局PGN注释中包含的视觉注解统计：蓝色格=玩家净控制强势格，红色格=AI对手净控制强势格，黄色格=双方总计控制较高格，绿色格=中心区无控制格；蓝色箭头=一方棋子同时威胁另一方多个棋子，红色箭头=将军路径，黄色箭头=对后的威胁，绿色箭头=应将路径（王避将或吃将军棋子）。',en:'Visual annotation counts in this game\'s PGN comments: Blue squares=player net-control strong squares, Red squares=AI net-control strong squares, Yellow squares=high total-control squares, Green squares=neutral center squares; Blue arrows=multi-threat (one piece threatens 2+ enemy pieces), Red arrows=check path, Yellow arrows=queen threat, Green arrows=check-response path (king escape or capture the checker).'},
   'nag_annotations':{zh:'NAG数字注解',en:'NAG Annotations'},
   'nag_count':{zh:'NAG数量',en:'NAG Count'},
   'nag_quality_dist':{zh:'走法质量分布',en:'Move Quality Distribution'},
@@ -524,7 +528,7 @@ const _i18n={
   'blue_arrows_threats':{zh:'蓝色箭头 (多重威胁)',en:'Blue Arrows (Multi-Threat)'},
   'red_arrows_check':{zh:'红色箭头 (将军路径)',en:'Red Arrows (Check Path)'},
   'yellow_arrows_queen':{zh:'黄色箭头 (对后威胁)',en:'Yellow Arrows (Queen Threat)'},
-  'green_arrows_escape':{zh:'绿色箭头 (避将路径)',en:'Green Arrows (Escape Path)'},
+  'green_arrows_escape':{zh:'绿色箭头 (应将路径)',en:'Green Arrows (Check-Response)'},
   'total_time':{zh:'总时间',en:'Total Time'},
   'time_note':{zh:'时钟数据来自PGN注释',en:'Clock data from PGN comments'},
   'time_management':{zh:'时间管理',en:'Time Management'},
@@ -627,6 +631,13 @@ function parsePGN(pgnText){
   }
   // Extract FEN if present
   let startFEN=headers.FEN||null;
+  // v1.1.0 Phase 54 rev22: Detect Chess960 variant from [Variant] header
+  if(headers.Variant){
+    const v=headers.Variant.toLowerCase().replace(/\s+/g,'');
+    if(v.includes('chess960')||v.includes('fischer')||v.includes('frc')){
+      gameVariant='chess960';
+    }
+  }
   // v1.0.3: Detect Black-to-move start. Two signals:
   //   (a) FEN header with side-to-move = 'b'
   //   (b) PGN movetext starts with a "N..." move-number prefix (Black's move first)
@@ -833,10 +844,35 @@ function fenToState(fen){
     }
     const currentTurn=parts[1]==='w'?'white':'black';
     const castlingRights={whiteKingside:false,whiteQueenside:false,blackKingside:false,blackQueenside:false};
-    if(parts[2].includes('K'))castlingRights.whiteKingside=true;
-    if(parts[2].includes('Q'))castlingRights.whiteQueenside=true;
-    if(parts[2].includes('k'))castlingRights.blackKingside=true;
-    if(parts[2].includes('q'))castlingRights.blackQueenside=true;
+    // v1.1.0 Phase 54 rev22: Support Shredder-FEN castling notation (file
+    //   letters like AHah) in addition to standard KQkq. In Shredder-FEN,
+    //   uppercase letters = White rook files for castling, lowercase = Black.
+    //   Map them to the standard whiteKingside/whiteQueenside/etc. flags
+    //   by checking which side of the king each file is on.
+    const crStr=parts[2]||'-';
+    if(crStr!== '-'){
+      // Find king positions for Shredder mapping
+      let wkc=-1,bkc=-1;
+      for(let c=0;c<8;c++){
+        if(board[7][c]&&board[7][c].type==='king'&&board[7][c].color==='white')wkc=c;
+        if(board[0][c]&&board[0][c].type==='king'&&board[0][c].color==='black')bkc=c;
+      }
+      for(const ch of crStr){
+        if(ch==='K')castlingRights.whiteKingside=true;
+        else if(ch==='Q')castlingRights.whiteQueenside=true;
+        else if(ch==='k')castlingRights.blackKingside=true;
+        else if(ch==='q')castlingRights.blackQueenside=true;
+        else if(ch>='A'&&ch<='H'){
+          // Shredder: White rook file
+          const file=ch.charCodeAt(0)-65;
+          if(wkc>=0){if(file>wkc)castlingRights.whiteKingside=true;else castlingRights.whiteQueenside=true;}
+        }else if(ch>='a'&&ch<='h'){
+          // Shredder: Black rook file
+          const file=ch.charCodeAt(0)-97;
+          if(bkc>=0){if(file>bkc)castlingRights.blackKingside=true;else castlingRights.blackQueenside=true;}
+        }
+      }
+    }
     let wk=null,bk=null;
     for(let r=0;r<8;r++)for(let c=0;c<8;c++){
       const p=board[r][c];
@@ -1043,7 +1079,6 @@ function executeMove(state,move,notation){
   if(piece.type==='king'&&move.from.row===move.to.row){
     const _homeRow=piece.color==='white'?7:0;
     if(move.from.row===_homeRow&&(move.to.col===6||move.to.col===2)){
-      const _destEmpty=!state.board[move.to.row][move.to.col];
       const _cr=state.castlingRights||{};
       const _dist=Math.abs(move.to.col-move.from.col);
       // Standard chess: king always moves exactly 2 cols to castle.
@@ -1054,8 +1089,15 @@ function executeMove(state,move,notation){
       const _is960=(typeof gameVariant!=='undefined'&&gameVariant==='chess960');
       const _minDist=_is960?1:2;
       const _rightKey=piece.color==='white'?(move.to.col===6?'whiteKingside':'whiteQueenside'):(move.to.col===6?'blackKingside':'blackQueenside');
-      if(_dist>=_minDist&&_destEmpty&&_cr[_rightKey]){
-        _isCastling=true;
+      // v1.1.0 Phase 55 FIX: Find the participating rook FIRST, then check
+      //   destination validity. In Chess960, the king's destination square
+      //   may be occupied by the participating rook (e.g. SP-ID with king on
+      //   d1 and queenside rook on c1: O-O-O puts the king on c1 and the
+      //   rook on d1 — the rook's source IS the king's destination). The
+      //   previous `_destEmpty` check rejected this case, causing the king
+      //   to "capture" its own rook and silently lose it from the board.
+      //   Now we allow the destination to contain the participating rook.
+      if(_dist>=_minDist&&_cr[_rightKey]){
         _kingside=move.to.col===6;
         _rookTo=_kingside?5:3;
         // Find the participating rook on the ORIGINAL board (state, not newState).
@@ -1068,8 +1110,16 @@ function executeMove(state,move,notation){
           // Fallback: standard chess positions (rook on h1/a1)
           _rookFrom=_kingside?7:0;
         }
-        // Save the rook from the NEW board (which is a clone of state, not yet mutated).
-        _savedRook=newState.board[move.from.row][_rookFrom];
+        // Destination is valid if empty OR contains the participating rook
+        // (which will be moved to _rookTo as part of the castle). This is
+        // the Chess960 case where rookFrom === king's destination.
+        const _destPiece=state.board[move.to.row][move.to.col];
+        const _destValid=!_destPiece||(_rookFrom===move.to.col&&_destPiece.type==='rook'&&_destPiece.color===piece.color);
+        if(_destValid){
+          _isCastling=true;
+          // Save the rook from the NEW board (which is a clone of state, not yet mutated).
+          _savedRook=newState.board[move.from.row][_rookFrom];
+        }
       }
     }
   }
@@ -1098,7 +1148,11 @@ function executeMove(state,move,notation){
     // king destination, since the king already occupies that square).
     if(_isCastling&&_savedRook&&_rookFrom>=0){
       newState.board[move.from.row][_rookTo]=_savedRook;
-      if(_rookFrom!==move.to.col){
+      // v1.1.0 Phase 55 FIX: Don't clear the rook source if it's the king's
+      // destination (the king is now there) OR the rook's destination (the
+      // rook stays in place — happens in Chess960 when the rook's home square
+      // IS its castling destination, e.g. rook on f1 castling kingside to f1).
+      if(_rookFrom!==move.to.col&&_rookFrom!==_rookTo){
         newState.board[move.from.row][_rookFrom]=null;
       }
     }
@@ -1149,8 +1203,42 @@ function buildSAN(state,move,newState,captured){
   const piece=state.board[move.from.row][move.from.col];
   if(!piece)return move.to.col+''+move.to.row;
   let n='';
-  if(piece.type==='king'&&Math.abs(move.to.col-move.from.col)===2){
-    return move.to.col===6?'O-O':'O-O-O';
+  // v1.1.0 Phase 54 rev22: Chess960 castling SAN — detect castling the same
+  //   way executeMove does (king on home row, moves to col 6 or 2, >=1 col
+  //   distance for Chess960 or ==2 for standard, castling right present).
+  //   The old check `Math.abs(move.to.col-move.from.col)===2` missed
+  //   Chess960 castling where the king moves only 1 col (e.g. king on f1
+  //   castles kingside to g1).
+  // v1.1.0 Phase 55 FIX: Mirror the executeMove fix — find the participating
+  //   rook FIRST, then allow the destination to contain it (Chess960 case
+  //   where rookFrom === king's destination). The previous `_destEmpty`
+  //   check caused buildSAN to emit a plain king move (e.g. "Kc1") instead
+  //   of "O-O-O" when the rook was on the king's destination square.
+  if(piece.type==='king'&&move.from.row===move.to.row){
+    const _homeRow=piece.color==='white'?7:0;
+    if(move.from.row===_homeRow&&(move.to.col===6||move.to.col===2)){
+      const _cr=state.castlingRights||{};
+      const _dist=Math.abs(move.to.col-move.from.col);
+      const _is960=(typeof gameVariant!=='undefined'&&gameVariant==='chess960');
+      const _minDist=_is960?1:2;
+      const _rightKey=piece.color==='white'?(move.to.col===6?'whiteKingside':'whiteQueenside'):(move.to.col===6?'blackKingside':'blackQueenside');
+      if(_dist>=_minDist&&_cr[_rightKey]){
+        // Find the participating rook to validate destination
+        const _kingside=move.to.col===6;
+        let _rookFrom=-1;
+        if(_kingside){
+          for(let c=7;c>move.from.col;c--){if(state.board[move.from.row][c]&&state.board[move.from.row][c].type==='rook'&&state.board[move.from.row][c].color===piece.color){_rookFrom=c;break;}}
+        }else{
+          for(let c=0;c<move.from.col;c++){if(state.board[move.from.row][c]&&state.board[move.from.row][c].type==='rook'&&state.board[move.from.row][c].color===piece.color){_rookFrom=c;break;}}
+        }
+        if(_rookFrom<0)_rookFrom=_kingside?7:0;
+        const _destPiece=state.board[move.to.row][move.to.col];
+        const _destValid=!_destPiece||(_rookFrom===move.to.col&&_destPiece.type==='rook'&&_destPiece.color===piece.color);
+        if(_destValid){
+          return move.to.col===6?'O-O':'O-O-O';
+        }
+      }
+    }
   }
   if(piece.type!=='pawn'){
     n+=piece.type==='knight'?'N':piece.type[0].toUpperCase();
@@ -2358,6 +2446,108 @@ function renderStats(parsed,evalData){
     } // end _posCount>0
   }
 
+  // v1.1.0 Phase 53: Helper that truncates a PGN text after the Nth mainline move
+  // (including any trailing {...} comment / NAG on that move). Used by the visual
+  // annotations stats block to respect the selected-move cutoff.
+  //
+  // Walks the raw PGN text directly (no preprocessing), tracking:
+  //   - tag pairs [TagName "value"] → skipped without counting as moves
+  //   - brace comments {...} → skipped (preserved if part of a move block)
+  //   - semicolon comments ;... → skipped (rest-of-line)
+  //   - parentheses (...) → variation depth tracked; content at depth>0 is skipped
+  //   - NAGs $N → skipped (preserved if part of a move block)
+  //   - move numbers (e.g., 1., 2...) → skipped
+  //   - SAN move tokens → counted as mainline moves when at variation depth 0
+  //
+  // After the Nth mainline move token, the function includes any immediately
+  // following trailing {...} comment and/or $N NAG (the "move block"), then
+  // truncates the text at the end of that block.
+  //
+  // This is consistent with how the main app's PGN exporter groups annotations
+  // with the move they decorate, and matches the per-move scoping used by the
+  // other stats blocks (which use effectiveParsed.moves, sliced at the same
+  // boundary).
+  //
+  // Chess960 note: castling is written as O-O / O-O-O in PGN, which contains
+  // letters, so it's correctly identified as a SAN move token.
+  function _slicePGNAtMove(pgnText, moveCount){
+    if(moveCount<=0||!pgnText)return pgnText;
+    const len=pgnText.length;
+    let i=0;
+    let mainCount=0;
+    let varDepth=0;
+    let braceDepth=0;
+    let lastMoveEnd=-1;
+    while(i<len){
+      const ch=pgnText[i];
+      // Skip tag pairs [TagName "value"] when not inside a comment or variation
+      if(ch==='['&&braceDepth===0&&varDepth===0){
+        const tagM=pgnText.slice(i).match(/^\[([A-Za-z]\w*)\s+/);
+        if(tagM){
+          const close=pgnText.indexOf(']',i);
+          if(close>=0){i=close+1;continue;}
+        }
+      }
+      // Track brace comment depth
+      if(ch==='{'){braceDepth++;i++;continue;}
+      if(ch==='}'){braceDepth=Math.max(0,braceDepth-1);i++;continue;}
+      if(braceDepth>0){i++;continue;}
+      // Track variation depth
+      if(ch==='('){varDepth++;i++;continue;}
+      if(ch===')'){varDepth=Math.max(0,varDepth-1);i++;continue;}
+      if(varDepth>0){i++;continue;}
+      // Semicolon comments (rest of line)
+      if(ch===';'){
+        const nl=pgnText.indexOf('\n',i);
+        if(nl>=0){i=nl+1;continue;}else{i=len;break;}
+      }
+      // NAGs
+      if(ch==='$'){
+        const nagM=pgnText.slice(i).match(/^\$\d+/);
+        if(nagM){i+=nagM[0].length;continue;}
+      }
+      // Move numbers (e.g., 1., 2..., 12.)
+      const numM=pgnText.slice(i).match(/^\d+\.+/);
+      if(numM){i+=numM[0].length;continue;}
+      // Whitespace
+      if(/\s/.test(ch)){i++;continue;}
+      // Result tokens
+      const resM=pgnText.slice(i).match(/^(1-0|0-1|1\/2-1\/2|\*)/);
+      if(resM){i+=resM[0].length;continue;}
+      // SAN move token: read non-whitespace, non-delimiter chars
+      const tokM=pgnText.slice(i).match(/^[^\s(){};\]]+/);
+      if(!tokM){i++;continue;}
+      const tok=tokM[0];
+      const tokEnd=i+tok.length;
+      // Validate as SAN: must contain at least one letter (e4, Nf3, O-O, etc.)
+      const cleanTok=tok.replace(/[!?+#]+$/g,'');
+      if(!/[A-Za-z]/.test(cleanTok)){i=tokEnd;continue;}
+      // Count this as a mainline move
+      mainCount++;
+      // Find the end of this move's "block" — include any immediately following
+      // {...} comment and/or $N NAG (skipping whitespace between them).
+      let blockEnd=tokEnd;
+      let j=blockEnd;
+      while(j<len){
+        while(j<len&&/\s/.test(pgnText[j]))j++;
+        if(j>=len)break;
+        if(pgnText[j]==='{'){
+          const close=pgnText.indexOf('}',j);
+          if(close>=0){blockEnd=close+1;j=blockEnd;continue;}else{blockEnd=len;break;}
+        }
+        const nagM2=pgnText.slice(j).match(/^\$\d+/);
+        if(nagM2){blockEnd=j+nagM2[0].length;j=blockEnd;continue;}
+        break;
+      }
+      lastMoveEnd=blockEnd;
+      if(mainCount>=moveCount){
+        return pgnText.slice(0,lastMoveEnd);
+      }
+      i=blockEnd;
+    }
+    return pgnText;
+  }
+
   // v1.0.4 EXPANSION (this round): Visual annotations statistics
   // Scans the PGN movetext for [%csl ...] and [%cal ...] tags and tallies
   // them by color (B/G/R/Y). Also extracts NAGs ($N) from movetext and
@@ -2375,22 +2565,39 @@ function renderStats(parsed,evalData){
     let pgnText='';
     if(typeof _payload!=='undefined'&&_payload&&_payload.pgn){pgnText+=_payload.pgn;}
     if(typeof window!=='undefined'&&window._statsPGNText){pgnText+='\n'+window._statsPGNText;}
-    const hasVisualAnnotations=/\[%csl\s+/i.test(pgnText)||/\[%cal\s+/i.test(pgnText);
+    // v1.1.0 Phase 53: Respect selected-move cutoff. When a mainline move is
+    // selected (_selectedMoveIdx >= 0, no variation/FEN selected), slice pgnText
+    // at the (selectedIdx+1)th mainline move so only annotations up to and
+    // including the selected move are counted. This makes the visual-annotation
+    // stats block consistent with the other stat blocks (which use
+    // effectiveParsed.moves, already sliced to the same boundary).
+    // Variation/FEN selections are left unchanged (variations' annotations are
+    // inside (...) blocks that the slicer intentionally skips; FEN selection
+    // means no mainline moves to scope to).
+    let _effectivePgnText=pgnText;
+    try{
+      if(typeof _selectedMoveIdx!=='undefined'&&_selectedMoveIdx>=0
+         &&!(typeof _variationMoves!=='undefined'&&_variationMoves)
+         &&!(typeof _fenSelected!=='undefined'&&_fenSelected)){
+        _effectivePgnText=_slicePGNAtMove(pgnText,_selectedMoveIdx+1);
+      }
+    }catch(e){_effectivePgnText=pgnText;}
+    const hasVisualAnnotations=/\[%csl\s+/i.test(_effectivePgnText)||/\[%cal\s+/i.test(_effectivePgnText);
     if(hasVisualAnnotations){
     h+='<div class="section"><h2>'+(T('visual_annotations')||'Visual Annotations ([%csl]/[%cal])')+'</h2>';
     h+='<div style="font-size:.78rem;color:var(--muted);margin-bottom:10px">'+(T('visual_annotations_desc')||'Visual annotation counts in this game\'s PGN comments.')+'</div>';
     // v1.0.4 LATEST: full color semantics —
     //   [%csl]: B=player net control, R=AI net control, Y=high total control, G=neutral center
-    //   [%cal]: B=multi-threat, R=check path, Y=queen threat, G=escape path
+    //   [%cal]: B=multi-threat, R=check path, Y=queen threat, G=check-response (king escape or capture the checker)
     let blueSquares=0,redSquares=0,yellowSquares=0,greenSquaresNeutral=0;
     let blueArrowsThreats=0,redArrowsCheck=0,yellowArrowsQueen=0,greenArrowsEscape=0;
     let nagCount=0;
     const nagDist={1:0,2:0,3:0,4:0,5:0,6:0}; // !, ?, !!, ??, !?, ?!
-    if(pgnText){
+    if(_effectivePgnText){
       // Match all [%csl ...] tags (square highlights)
       const cslRe=/\[%csl\s+([^\]]+)\]/g;
       let cm;
-      while((cm=cslRe.exec(pgnText))!==null){
+      while((cm=cslRe.exec(_effectivePgnText))!==null){
         const parts=cm[1].split(',');
         for(const p of parts){
           const pm=p.trim().match(/^([GRBY])([a-h][1-8])$/);
@@ -2404,7 +2611,7 @@ function renderStats(parsed,evalData){
       }
       // Match all [%cal ...] tags (arrows)
       const calRe=/\[%cal\s+([^\]]+)\]/g;
-      while((cm=calRe.exec(pgnText))!==null){
+      while((cm=calRe.exec(_effectivePgnText))!==null){
         const parts=cm[1].split(',');
         for(const p of parts){
           const pm=p.trim().match(/^([GRBY])([a-h][1-8])([a-h][1-8])$/);
@@ -2418,7 +2625,7 @@ function renderStats(parsed,evalData){
       }
       // Match all NAGs ($N)
       const nagRe=/\$(\d+)/g;
-      while((cm=nagRe.exec(pgnText))!==null){
+      while((cm=nagRe.exec(_effectivePgnText))!==null){
         const n=parseInt(cm[1],10);
         if(n>=1&&n<=6){nagDist[n]++;nagCount++;}
       }
@@ -3699,6 +3906,8 @@ function init(){
       if(payloadStr){
         _payload=JSON.parse(payloadStr);
         if(_payload.lang)_lang=_payload.lang;
+        // v1.1.0 Phase 54 rev22: Set gameVariant from payload for Chess960 support
+        if(_payload.gameVariant)gameVariant=_payload.gameVariant;
       }
     }catch(e){console.error('init error:',e);}
   }

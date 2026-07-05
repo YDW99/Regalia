@@ -478,10 +478,29 @@ function isChess960CastlingLegal(s,color,side){
   if(side==='queenside'&&!cr[color+'Queenside'])return false;
   const row=color==='white'?7:0;
   // Locate the king (we need kingCol for path checks).
+  // v1.1.0 PHASE 57+: Use the cached king position (s.wk / s.bk) maintained
+  //   by syncHash() and cloneS() in game-logic.js. The previous version
+  //   scanned the entire back rank (up to 8 board reads) to find the king;
+  //   this was both wasteful and inconsistent with other king-position
+  //   lookups throughout the codebase. A defensive board-scan fallback is
+  //   retained for states that may not have the cache populated (e.g. a
+  //   hand-built state object used by a test harness).
   let kingCol=-1;
-  for(let c=0;c<8;c++){
-    const p=s.board[row][c];
-    if(p&&p.type==='king'&&p.color===color){kingCol=c;break;}
+  const cachedKing = color==='white' ? s.wk : s.bk;
+  if(cachedKing && typeof cachedKing.row==='number' && typeof cachedKing.col==='number'
+     && cachedKing.row===row){
+    // Verify the cache still points at a same-color king (defensive).
+    const kp=s.board[cachedKing.row][cachedKing.col];
+    if(kp && kp.type==='king' && kp.color===color){
+      kingCol=cachedKing.col;
+    }
+  }
+  if(kingCol<0){
+    // Fallback: scan the back rank for the king.
+    for(let c=0;c<8;c++){
+      const p=s.board[row][c];
+      if(p&&p.type==='king'&&p.color===color){kingCol=c;break;}
+    }
   }
   if(kingCol<0)return false;
   // v1.0.7 PHASE 4: only need a rook on THIS side, not both sides.

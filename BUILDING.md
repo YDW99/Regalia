@@ -1,4 +1,4 @@
-# Building Regalia v1.0.9 from source
+# Building Regalia v1.1.0 from source
 
 <!-- AI-GEN: AI assisted
      This document was AI-assisted and has been reviewed for AGPL v3 compliance. -->
@@ -61,8 +61,162 @@ The signed APK (v1+v2+v3 signed with `../debug.keystore`) will be at
   `unzip -DD` (no directory timestamps) to avoid future-dated files.
 - **`./gradlew: Permission denied`**: The wrapper script may lose its executable
   bit after extraction. Fix: `chmod +x gradlew`.
+- **Aliyun Maven mirror 502**: `build.gradle` and `settings.gradle` place
+  `google()` / `mavenCentral()` BEFORE the Aliyun mirror so official sources are
+  preferred. If you still hit 502s, temporarily comment out the Aliyun mirror
+  blocks in both files.
 
-## v1.0.9 build notes
+## v1.1.0 build notes
+- **v1.1.0 Phase 58 (2026.7.5):** Feature + concurrency hardening
+  (versionCode=110, versionName="1.1.0" unchanged). Four changes:
+  (1) **Every-5-moves PGN {} annotation** — at moves 5, 10, 15, 20, ...,
+  `_buildPGNString` (ai-bridge.js) appends a human-readable eval-bar-mirroring
+  comment fragment to the PGN `{}` comment, auto-localized via `T()` reading
+  the global `_lang` variable. Format:
+  `均势 (-0.10) D22 SD34 (1%W/96%D/3%L)` (Chinese mode) or
+  `Equal (-0.10) D22 SD34 (1%W/96%D/3%L)` (English mode). White-perspective
+  (not player-perspective) so the PGN comment is unambiguous regardless of
+  which side the human played. New function `formatEvalAnnotation` in
+  pgn-standard.js; new i18n keys `pgn_white_*` / `pgn_black_*` / `pgn_equal` /
+  `pgn_mate_white` / `pgn_mate_black` in game-logic.js. Missing components
+  (depth, WDL) are gracefully omitted; zero-sum WDL is guarded against
+  divide-by-zero.
+  (2) **stopLatch TOCTOU race fix** (StockfishNative.java) — the `bestmove`
+  handler previously read `_stopLatch` (volatile) without holding
+  `_stopLatchLock`, creating a race with `stopAndWaitForBestmove`'s timeout
+  path: if the bestmove arrived just as the timeout fired, the discard flag
+  could be incorrectly armed, discarding the NEXT legitimate bestmove. Now
+  the bestmove handler atomically captures-and-clears `_stopLatch` under
+  `_stopLatchLock`, and the timeout path only arms the discard flag if it
+  still owns the latch.
+  (3) **Heartbeat deadlock fix** (StockfishNative.java) — the heartbeat
+  thread's `engineWriter.write("quit\n")` call was synchronized on
+  `StockfishNative.this` (same monitor as `startHeartbeat()`), creating a
+  deadlock risk: if `shutdown()` ran while the heartbeat held the `this`
+  monitor inside the writer I/O, `shutdown`'s `_heartbeatThread.join(1000)`
+  would wait for the heartbeat to release `this` — but the heartbeat was
+  blocked on I/O. Now uses a dedicated `_writerLock` decoupled from the
+  `this` monitor, so `shutdown`'s interrupt/join is not blocked.
+  (4) **res/README.license** — no changes in Phase 58 (LIC-2 was already
+  fixed in Phase 57+). Historical accuracy preserved.
+  No new modules; build/test commands unchanged.
+
+- **v1.1.0 Phase 57+ (2026.7.5):** Code-review-driven preventive hardening
+  (versionCode=110, versionName="1.1.0" unchanged). Six fixes:
+  (1) `pgn-standard.js` `parseStandardPGN` — the old single-line PGN tag-stripping
+  regex `/^\[[\s\S]*?\]/gm` only matched the first tag when all tags + movetext
+  were on ONE line (the `^` anchor with `gm` flags only matches the very start
+  of the string), leaving subsequent tags as garbage tokens in `moveText`.
+  Replaced with the format-strict, unanchored `/\[[A-Za-z]\w*\s+"[^"]*"\]/g`,
+  which requires the canonical PGN tag shape (key + whitespace + quoted value)
+  so movetext comments like `[Nf3]` (no quotes) are never stripped.
+  `parseStandardPGN` is not currently on the main code path (the main parser
+  is `tablebase.js` `_parsePGN`, fixed in Phase 52), so this is a preventive
+  fix that prevents a landmine if `parseStandardPGN` is ever wired in.
+  (2) `chess960.js` `isChess960CastlingLegal` — was scanning the entire back
+  rank (up to 8 board reads) to find the king, inconsistent with other
+  king-position lookups in `game-logic.js`. Now reads the cached `s.wk` /
+  `s.bk` fields maintained by `syncHash()` and `cloneS()` directly, with a
+  defensive board-scan fallback retained for states that may not have the
+  cache populated (e.g. hand-built test harness states).
+  (3) `ai-bridge.js` `_buildEvalTrendSVG` WDL display — added `total > 0`
+  guard before dividing `_sfWdlW/_sfWdlD/_sfWdlL` by their sum, eliminating a
+  potential NaN/Infinity in the WDL percentage string if all three values are
+  zero (which can happen if the engine emits `wdl 0 0 0` in pathological
+  positions).
+  (4) `StockfishNative.java` `postJsCallback` — added an `isFinishing() ||
+  isDestroyed()` guard on the host Activity before invoking
+  `webView.evaluateJavascript(...)`. On some OEM ROMs (notably HyperOS 3),
+  calling `evaluateJavascript` on a destroyed WebView's main thread throws
+  `IllegalStateException`, which previously crashed the process during
+  engine-init retries after the user exited the app.
+  (5) `EngineService.java` wake lock — changed `wakeLock.acquire()` (unbounded)
+  to `wakeLock.acquire(30L * 60L * 1000L)` (30-minute timeout). If the OEM
+  silently kills the service and `onDestroy` never runs, the wake lock is
+  released automatically instead of holding the CPU awake indefinitely.
+  (6) `res/README.license` LIC-2 — line 14 `strings.xml` description still
+  referenced `Regalia v1.0.8` (stale); updated to `Regalia v1.1.0` to match
+  the actual `app_name` value. Historical changelog entries mentioning
+  v1.0.8 are preserved as-is (they are accurate historical records).
+  Also added `UBIQUITOUS_LANGUAGE.md` (English) at the project root for
+  domain terminology reference. No new modules; build/test commands unchanged.
+
+- **v1.1.0 Phase 57 (2026.7.4):** Same-version bug-fix phase (no version bump —
+  versionCode=110, versionName="1.1.0" unchanged). Two fixes in `ui.js` only:
+  (1) Portrait review move-list scroll positioning — the Phase 56 manual-scrollTop
+  calculation used `_rAct.offsetTop`, but `.rmv-block`'s `offsetParent` is
+  `.review-overlay` (`position:fixed`), NOT `_rList` (`.review-moves` has no
+  `position` set). In portrait, `.review-moves` is stacked below `.review-left`
+  (the board column), so `offsetTop` included the board's full height (256-320px),
+  causing the active move to be clamped to `scrollHeight-clientHeight` (scrolled
+  to bottom). Fix: replaced `offsetTop` with `getBoundingClientRect()`-based
+  calculation: `_actTop = (_actRect.top - _listRect.top) + _rList.scrollTop`.
+  If `getBoundingClientRect` returns zeros (disconnected DOM), skip scrolling
+  rather than fall back to the buggy `offsetTop`.
+  (2) Visual-annotation cache residue at review entry —
+  `_computeInitialPositionAnnotations` was reading `gameState` (the LIVE mid-game
+  state) instead of `reviewStates[0].state` (the actual initial position shown at
+  step 0). Fix: read `reviewStates[0].state` with fallback chain
+  `reviewStates[0].state → reviewBaseState → gameState`. Also `enterReview()` now
+  explicitly deletes the `'_initial'` cache key at entry (it was never cleared by
+  `_invalidateCachesForUndoneMoves` which only deletes numeric keys, and only
+  cleared by `_resetGameUIState` on new-game/import/setup/FEN). No new modules;
+  no build-order change. If you edit `chess.src/ui.js`, re-run
+  `python3 build-chess.py`.
+- **v1.1.0 Phase 56 (2026.7.4):** Four fixes in `ui.js`, `ai-bridge.js`, and
+  `StockfishNative.java`: (1) Landscape review nav-button scroll-to-top — replaced
+  `scrollIntoView({block:'center'})` with manual `scrollTop` computation on the
+  inner `.review-moves` container only (preserves outer `.review-body` scroll
+  position). (2) PGN timeout annotation — added `[Termination "Time forfeit"]`
+  tag + `{<color> wins by timeout}` last-move comment (parallel to existing resign
+  logic). (3) First-move timing sync — added `_turnStartTime=Date.now()` and
+  `gameClocks=null` to `_resetGameUIState()` (called by all game-start entry
+  points). (4) UCI command ordering refinement — moved `setGameDifficulty`'s
+  `setoption` commands to BEFORE `position fen` in both `engineGoTimed` and
+  `engineGoInternal`. No new modules; no build-order change. If you edit
+  `chess.src/ui.js`, `chess.src/ai-bridge.js`, or `StockfishNative.java`,
+  re-run `python3 build-chess.py` (for JS changes) then
+  `./gradlew assembleRelease`.
+- **v1.1.0 Phase 55 (2026.7.4):** Chess960 castling rook-loss fix in `stats.html`
+  (`executeMove`/`buildSAN`) and `game-logic.js` (`_castleSide` fallback). Replaced
+  `_destEmpty` with `_destValid` — in Chess960, the king's destination square may
+  be the participating rook's source square (e.g. King on d1, queenside rook on
+  c1: O-O-O puts the King on c1, which IS the rook's source). The old `_destEmpty`
+  rejected this case, causing the king to "self-capture" the rook. No new modules;
+  no build-order change. If you edit `chess.src/game-logic.js` or
+  `src/main/assets/stats.html`, re-run `python3 build-chess.py` (game-logic.js is
+  a chess.src module; stats.html is a standalone asset, not built by the script).
+- **v1.1.0 Phase 54 (2026.7.4):** Custom slider for pixel-perfect alignment
+  between the review progress bar and the eval trend chart. Replaced the native
+  `<input type="range">` visual with a custom track/fill/thumb rendered as divs
+  (the native input is now a transparent overlay handling touch/drag/keyboard).
+  Both the slider wrapper and chart container share identical CSS
+  (`border:1px; padding:0; box-sizing:border-box; width:100%`), so the thumb
+  center at `calc(ratio * 100%)` aligns exactly with the chart's data points.
+  Also: move-list scroll-into-view only scrolls when not visible (`block:'nearest'`);
+  `executeMove` async-callback try-catch; `ChessAudioEngine` partial-init reset;
+  engine heartbeat timestamp updated in all callbacks (`onEngineProgress`/
+  `onBestMove`/`onHintMove`/`onPonderProgress`); MultiPV secondary-variation
+  divergence fix (`actualIdx = fromMoveIdx + vi` for alternatives vs
+  `fromMoveIdx + 1 + vi` for continuations); PGN cascade-skip threshold raised
+  from 5 to `Math.max(15, mainTokens.length * 0.1)`; `render()` retry-loop guard
+  (`_animRetryCount` max 10). No new modules; no build-order change. If you edit
+  `chess.src/ui.js` or `chess.src/index.html.tpl`, re-run `python3 build-chess.py`.
+- **v1.1.0 Phase 53 (2026.7.3):** Version bumped to versionCode=110,
+  versionName="1.1.0". Green-arrow visual annotation redefined from "escape path"
+  to "check-response path" (king escape moves + legal captures of the checking
+  piece, via `legalMoves(postState, ...)`). Red check arrow uses actual checker
+  position (supports discovered check). Stats visual-annotation cutoff respects
+  selected move. King-position staleness + FEN-import/exitSetup state-pollution
+  fixes (added `_resetGameUIState()` calls at all game-start entry points).
+  Portrait/landscape review layout unified (both now use `.review-top` +
+  `.review-bottom` structure; CSS rules moved from `@media(orientation:landscape)`
+  to global scope). Nav-button text center-aligned. No new modules; no build-order
+  change. If you edit `chess.src/ui.js` or `chess.src/index.html.tpl`,
+  re-run `python3 build-chess.py`.
+
+## v1.0.9 build notes (historical)
+- All v1.0.8 build notes still apply.
 - **v1.0.9 Phase 52 (2026.7.2):** Two critical bug fixes + two visual-annotation accuracy fixes + chart palette unification + robustness —
   (1) PGN single-line parse failure: `tablebase.js` `_parsePGN` tag-stripping regex
   `/^\[[^\]]*\]/gm` → `/\[[A-Za-z]\w*\s+[^\]]+\]/g` (the old `^` multiline anchor only
@@ -90,7 +244,8 @@ The signed APK (v1+v2+v3 signed with `../debug.keystore`) will be at
   `stats.html` `executeMove` now clears castling rights on king/rook move + rook capture
   (was missing). Version bumped to versionCode=109, versionName="1.0.9".
 
-## v1.0.8 build notes
+## v1.0.8 build notes (historical)
+- All v1.0.7 build notes still apply.
 - **v1.0.8 Phase 51 (2026.7.2):** Three fixes — (1) PGN round-trip castling failure:
   `game-logic.js` `_castleSide()` now checks `mv.to.castle` (set by `pseudoMoves`)
   in addition to `mv.castle` (set by `executeMove`). The PGN-replay path
@@ -180,3 +335,6 @@ The signed APK (v1+v2+v3 signed with `../debug.keystore`) will be at
 
 ---
 *AI-GEN*
+
+---
+*AI生成*

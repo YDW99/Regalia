@@ -3,7 +3,30 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Regalia v1.0.9 用户说明书</title>
+<!--
+  Regalia v1.1.0 用户说明书
+  Copyright (C) 2026 Regalia
+
+  AI-GEN: AI assisted
+  This document was AI-assisted and has been reviewed for AGPL v3 compliance.
+
+  This document is part of the Regalia project, licensed under
+  GNU Affero General Public License v3 (AGPL v3).
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU Affero General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+  GNU Affero General Public License for more details.
+
+  You should have received a copy of the GNU Affero General Public License
+  along with this program. If not, see <https://www.gnu.org/licenses/>.
+-->
+<title>Regalia v1.1.0 用户说明书</title>
 <style>
 :root {
   --bg: #1a0a0a;
@@ -468,7 +491,7 @@ details summary:hover { color: var(--accent2); }
   <div class="cover-deco">&#9816; &#9814; &#9812; &#9815; &#9813;</div>
   <div class="cover-crown">&#9812;</div>
   <div class="cover-title">Regalia</div>
-  <div class="cover-version">v1.0.9</div>
+  <div class="cover-version">v1.1.0</div>
   <div class="cover-divider">
     <div class="cover-divider-line"></div>
     <div class="cover-divider-icon">&#9830;</div>
@@ -517,7 +540,7 @@ details summary:hover { color: var(--accent2); }
     <div class="section-title">应用简介</div>
   </div>
 
-  <p>Regalia v1.0.9 是一款功能强大的 Android 国际象棋对弈与分析应用。v1.0.9 修复两项关键用户反馈 Bug（PGN 单行解析失败 + 复盘/统计数据界面「多余的王」棋盘损坏）、两项视觉注解准确性 Bug（变例注释污染主线注解 + 导入走法缺少 isCheck/isCastling 导致将军/避将箭头缺失），并将评估折线图配色统一为蓝-红双色方案（深色+浅色双模式各自调校饱和度以适配背景，兼顾区分度与色调融洽）。v1.0.8 按照《棋魂 · 国际象棋拟人化走棋动画》与《国际象棋拟人化音效方案》两份参考资料，<strong>完全重设计</strong>了走棋动画与音效系统（每种棋子拥有独特的拟人化运动特征与匹配的音色），并参考《Android 深色主题的设计原则》与《Android 浅色主题的设计原则》为 APP 适配浅色模式（浅色/深色模式随系统全局设置自动切换，启动进度条页面与主界面顶部工具栏的国王符号根据主题切换 ♔/♚）。本版本内置世界顶级开源棋力引擎 <strong>Stockfish 18</strong>（arm64-v8a-dotprod 原生编译），为从初学者到高级棋手提供专业级的对弈、复盘与训练体验。v1.0.4 新增 <strong>菲舍尔任意制象棋（Chess960）</strong>模式、<strong>计时赛（Time Control）</strong>、规范化 PGN 导入/导出（符合 1994 PGN 规范）、基于棋盘控制范围热力图的统计数据、Seldepth（选深）显示、视觉注解（NAG &amp; <code>[%csl]</code>/<code>[%cal]</code>）、Web Worker 并行计算、PGN 缓存管理器、玩家重命名、中英双语 UI、认输（🏳️ Resign）等多项改进。v1.0.5 新增棋盘防抖（基于传感器融合的光学防抖原理）、高长宽比屏幕适配、挖孔屏/刘海屏/R角适配、阶段分析精确化（开局/中局/残局多判据检测）、复盘箭头缩小优化等。v1.0.6 新增 Chess960 模式下 ECO 开局识别与推荐抑制、PGN 含 FEN 头的导入导出往返保真、统计数据页面按走法/FEN 选择查看对应局面、置灰样式统一化（仅控件本身淡化）、竖屏新游戏设置对话框优化、可滚动视窗位置保持、引擎评估 FEN 净化（避免不一致的王车易位权导致引擎挂起）、王-车易位新手势（选中王后点击被标记的车完成易位，Chess960 必备）、Chess960 王车易位检测修复、SL 模式显示具体技能等级数值等。v1.0.7 重点修复了多项隐性 Bug（悔棋后关键步缓存未同步、轻量棋盘更新路径缺失易位车标记、引擎通知节流缓存脏、统计页面 PGN 注释 XSS 风险、跨对局评估缓存污染、CSP 阻断 Blob Worker 风险）、为关于对话框补充了 DroidFish / Stockfish 的 GitHub 仓库超链接、进一步优化竖屏全面屏布局与安卓系统返回键适配，并合并了重复的 HTML 转义函数。v1.0.7 新增主界面「快捷工具栏」（将悔棋/撤悔/翻转/AI提示/控制范围 5 个按钮从顶部工具栏移至棋盘下方）、摆棋模式 🔁 易位权手动标记按钮与 ⚡ 可被吃过路兵手动标记按钮（取消自动赋予易位权/过路兵状态，改为完全手动控制，以菲舍尔任意制象棋规则为合法性检查标准），以及瘦长手机竖屏右侧内容裁切与对话框居中问题的第一性原理根因修复。v1.0.7 第十七阶段修复了 Chess960 王车易位「王吃自己」致命 Bug（当王初始位置恰好在易位目标格时）与复盘「分析全部」按钮状态不自动刷新 Bug，并基于 Kimi 审查报告甄别采纳 5 项合理建议（<code>_escFEN</code> 反引号转义、<code>_cloneStatsState</code> 替代 JSON 深拷贝、<code>.bgrid</code> 添加 <code>content-visibility:auto</code>、<code>animateMove</code> 在 JS 端亦遵守 <code>prefers-reduced-motion</code>、stats 棋盘 <code>max-width</code> 适度放宽）。v1.0.7 第十八阶段实现 Kimi 报告中剩余的两项架构性建议：<code>_reviewEvalCache</code> LRU 淘汰机制（MAX_ENTRIES=2000 软上限，不淘汰当前查看步骤，持久化保留 LRU 顺序）与复盘走法列表虚拟列表（>80 步启用窗口化渲染，仅渲染视口+overscan 10 行，动态实测行高），并修复 Chess960 <code>unmakeMv</code> 棋盘损坏、<code>makeMvInPlace</code> 易位权未清除、<code>animateMove</code> 竞态等 11 项 Bug。v1.0.7 第十九阶段进行最全面的第一性原理代码审查：7 个子代理并行审查全部 20 个源文件（28,281 行），实施 20+ 项关键修复，包括 <code>_reviewEvalCache</code> 缓存损坏竞态、跨模式陈旧回调竞态、PGN <code>[%eval]</code> placeholder 偏移、StockfishNative 线程安全（volatile 字段）、<code>stopAndWaitForBestmove</code> 超时丢弃、ChessApp <code>Error</code> 处理、stats.html CSP 添加等。v1.0.7 第三阶段针对遗留的竖屏 UI 问题从零重新设计（改用 <code>@media(orientation:portrait)</code> 无宽度阈值 + <code>vw</code>/<code>clamp()</code> 自适应字号），并修复了 🔁/⚡ 标记在摆棋模式外不显示、双步推进兵未自动获得 ⚡ 标记、有标记的棋子未获得可行走法、易位权 FEN 反向换算错误等多项第一性原理 Bug，同时确保摆棋后的 FEN/PGN 在非标准位置时自动改用 Shredder 易位标记以保证无损往返。</p>
+  <p>Regalia v1.1.0 是一款功能强大的 Android 国际象棋对弈与分析应用。v1.1.0 Phase 58 新增每 5 回合在 PGN <code>{}</code> 注释中追加评估栏完整信息的功能（随 APP 全局语言模式自动选择中英文，白方视角，格式如 <code>均势 (-0.10) D22 SD34 (1%W/96%D/3%L)</code>），并修复 <code>StockfishNative.java</code> 中两项 P0 并发问题：stopLatch TOCTOU 竞态（bestmove 处理器原子捕获并清除 latch，超时路径仅在仍持有 latch 时设置 discard 标志）与心跳死锁（专用 <code>_writerLock</code> 与 <code>this</code> 监视器解耦，使 <code>shutdown</code> 的 <code>join</code> 不被心跳的 writer I/O 阻塞）。Phase 57+ 在保持版本号不变的前提下完成代码审查驱动的预防性加固：修复 <code>pgn-standard.js</code> 中 <code>parseStandardPGN</code> 的单行 PGN 标签剥离正则 Bug，优化 <code>chess960.js</code> 的 <code>isChess960CastlingLegal</code> 王位置查找（直接使用 <code>s.wk</code>/<code>s.bk</code> 缓存字段，保留棋盘扫描回退），修复 <code>ai-bridge.js</code> WDL 百分比显示的除零保护（添加 <code>total &gt; 0</code> 守卫），加固 <code>StockfishNative.java</code> 的 <code>postJsCallback</code>（在宿主 Activity 处于 <code>isFinishing()</code>/<code>isDestroyed()</code> 状态时跳过 <code>evaluateJavascript</code> 调用，避免 HyperOS 3 等机型在引擎初始化重试时崩溃），将 <code>EngineService</code> 的前台服务 wake lock 改为 30 分钟超时（防止 OEM 静默杀死服务时 CPU 永久唤醒），并修正 <code>res/README.license</code> 中应用名版本引用。Phase 57 修复了竖屏复盘模式走法列表选中走法后滚动跳转位置不正确的 Bug（Phase 56 修复仅覆盖横屏，竖屏下 <code>offsetTop</code> 含棋盘高度导致跳转错误），并修复了进入复盘界面时棋盘残留旧对局过时视觉注解（<code>[%csl]</code>/<code>[%cal]</code>）的 Bug（<code>_computeInitialPositionAnnotations</code> 误读 <code>gameState</code> 而非初始局面，且 <code>'_initial'</code> 缓存键在 <code>enterReview</code> 入口未清除）。Phase 56 修复了横屏复盘模式点击导航按钮导致界面异常滚动回顶部的 Bug，完善了计时赛超时结束对局的 PGN 注释（<code>[Termination "Time forfeit"]</code> 标签 + <code>{White/Black wins by timeout}</code> 末步注释），修正了棋局首步用时计时开始时刻与计时赛倒计时同步（<code>_turnStartTime</code> 与 <code>gameClocks</code> 在所有开局入口点重置），并精化了 Chess960+计时赛同时开启时的 UCI 指令顺序。Phase 55 修复了 Chess960 王车易位时车从统计数据界面棋盘上消失的 Bug。Phase 54 将绿色箭头视觉注解从「避将路径」重定义为「应将路径」（包含王避将 + 吃将军棋子两类），修复 v1.0.9 中王无合法避将时仍显示箭头的 Bug，修复统计数据界面的视觉注解统计区块不随选中走法改变截止步数的问题，实现复盘界面进度条与评估折线图的像素级严格对齐（进度条两端与折线图首末点对齐），过滤控制范围热力图/格子控制信息栏/视觉注解中从王位置起始的非法走法箭头，并将复盘导航按钮文本居中对齐。v1.0.9 修复两项关键用户反馈 Bug（PGN 单行解析失败 + 复盘/统计数据界面「多余的王」棋盘损坏）、两项视觉注解准确性 Bug（变例注释污染主线注解 + 导入走法缺少 isCheck/isCastling 导致将军/避将箭头缺失），并将评估折线图配色统一为蓝-红双色方案（深色+浅色双模式各自调校饱和度以适配背景，兼顾区分度与色调融洽）。v1.0.8 按照《棋魂 · 国际象棋拟人化走棋动画》与《国际象棋拟人化音效方案》两份参考资料，<strong>完全重设计</strong>了走棋动画与音效系统（每种棋子拥有独特的拟人化运动特征与匹配的音色），并参考《Android 深色主题的设计原则》与《Android 浅色主题的设计原则》为 APP 适配浅色模式（浅色/深色模式随系统全局设置自动切换，启动进度条页面与主界面顶部工具栏的国王符号根据主题切换 ♔/♚）。本版本内置世界顶级开源棋力引擎 <strong>Stockfish 18</strong>（arm64-v8a-dotprod 原生编译），为从初学者到高级棋手提供专业级的对弈、复盘与训练体验。v1.0.4 新增 <strong>菲舍尔任意制象棋（Chess960）</strong>模式、<strong>计时赛（Time Control）</strong>、规范化 PGN 导入/导出（符合 1994 PGN 规范）、基于棋盘控制范围热力图的统计数据、Seldepth（选深）显示、视觉注解（NAG &amp; <code>[%csl]</code>/<code>[%cal]</code>）、Web Worker 并行计算、PGN 缓存管理器、玩家重命名、中英双语 UI、认输（🏳️ Resign）等多项改进。v1.0.5 新增棋盘防抖（基于传感器融合的光学防抖原理）、高长宽比屏幕适配、挖孔屏/刘海屏/R角适配、阶段分析精确化（开局/中局/残局多判据检测）、复盘箭头缩小优化等。v1.0.6 新增 Chess960 模式下 ECO 开局识别与推荐抑制、PGN 含 FEN 头的导入导出往返保真、统计数据页面按走法/FEN 选择查看对应局面、置灰样式统一化（仅控件本身淡化）、竖屏新游戏设置对话框优化、可滚动视窗位置保持、引擎评估 FEN 净化（避免不一致的王车易位权导致引擎挂起）、王-车易位新手势（选中王后点击被标记的车完成易位，Chess960 必备）、Chess960 王车易位检测修复、SL 模式显示具体技能等级数值等。v1.0.7 重点修复了多项隐性 Bug（悔棋后关键步缓存未同步、轻量棋盘更新路径缺失易位车标记、引擎通知节流缓存脏、统计页面 PGN 注释 XSS 风险、跨对局评估缓存污染、CSP 阻断 Blob Worker 风险）、为关于对话框补充了 DroidFish / Stockfish 的 GitHub 仓库超链接、进一步优化竖屏全面屏布局与安卓系统返回键适配，并合并了重复的 HTML 转义函数。v1.0.7 新增主界面「快捷工具栏」（将悔棋/撤悔/翻转/AI提示/控制范围 5 个按钮从顶部工具栏移至棋盘下方）、摆棋模式 🔁 易位权手动标记按钮与 ⚡ 可被吃过路兵手动标记按钮（取消自动赋予易位权/过路兵状态，改为完全手动控制，以菲舍尔任意制象棋规则为合法性检查标准），以及瘦长手机竖屏右侧内容裁切与对话框居中问题的第一性原理根因修复。v1.0.7 第十七阶段修复了 Chess960 王车易位「王吃自己」致命 Bug（当王初始位置恰好在易位目标格时）与复盘「分析全部」按钮状态不自动刷新 Bug，并基于 Kimi 审查报告甄别采纳 5 项合理建议（<code>_escFEN</code> 反引号转义、<code>_cloneStatsState</code> 替代 JSON 深拷贝、<code>.bgrid</code> 添加 <code>content-visibility:auto</code>、<code>animateMove</code> 在 JS 端亦遵守 <code>prefers-reduced-motion</code>、stats 棋盘 <code>max-width</code> 适度放宽）。v1.0.7 第十八阶段实现 Kimi 报告中剩余的两项架构性建议：<code>_reviewEvalCache</code> LRU 淘汰机制（MAX_ENTRIES=2000 软上限，不淘汰当前查看步骤，持久化保留 LRU 顺序）与复盘走法列表虚拟列表（>80 步启用窗口化渲染，仅渲染视口+overscan 10 行，动态实测行高），并修复 Chess960 <code>unmakeMv</code> 棋盘损坏、<code>makeMvInPlace</code> 易位权未清除、<code>animateMove</code> 竞态等 11 项 Bug。v1.0.7 第十九阶段进行最全面的第一性原理代码审查：7 个子代理并行审查全部 20 个源文件（28,281 行），实施 20+ 项关键修复，包括 <code>_reviewEvalCache</code> 缓存损坏竞态、跨模式陈旧回调竞态、PGN <code>[%eval]</code> placeholder 偏移、StockfishNative 线程安全（volatile 字段）、<code>stopAndWaitForBestmove</code> 超时丢弃、ChessApp <code>Error</code> 处理、stats.html CSP 添加等。v1.0.7 第三阶段针对遗留的竖屏 UI 问题从零重新设计（改用 <code>@media(orientation:portrait)</code> 无宽度阈值 + <code>vw</code>/<code>clamp()</code> 自适应字号），并修复了 🔁/⚡ 标记在摆棋模式外不显示、双步推进兵未自动获得 ⚡ 标记、有标记的棋子未获得可行走法、易位权 FEN 反向换算错误等多项第一性原理 Bug，同时确保摆棋后的 FEN/PGN 在非标准位置时自动改用 Shredder 易位标记以保证无损往返。</p>
 
   <div class="card-row">
     <div class="stat-card">
@@ -626,7 +649,7 @@ details summary:hover { color: var(--accent2); }
 │  │   ├─ 引擎回调: onBestMove / onEngineEval /              │
 │  │   │   onEngineProgress / onPonderProgress               │
 │  │   ├─ 评估状态管理、WDL 转换、seldepth 解析              │
-│  │   ├─ 复盘评估缓存 _reviewEvalCache (无上限)             │
+│  │   ├─ 复盘评估缓存 _reviewEvalCache (LRU 2000 上限)      │
 │  │   ├─ 引擎心跳监测、崩溃恢复                             │
 │  │   ├─ _sanitizeFenForEngine() FEN净化 [v1.0.6 新增]      │
 │  │   └─ _aiOpponentNameWithLevel() SL模式显示 [v1.0.6]     │
@@ -726,7 +749,7 @@ with open("chess.html","w",encoding="utf-8") as f:
 
   <div class="code-block">
     <span class="code-label">AGPL v3 许可声明</span>
-Regalia v1.0.9 User Manual
+Regalia v1.1.0 User Manual
 Copyright (C) 2026 Regalia
 
 This document is part of the Regalia project, licensed under
@@ -1550,7 +1573,7 @@ h+='&lt;/div&gt;&lt;/div&gt;';</div>
     <div class="section-title">复盘分析</div>
   </div>
 
-  <p>复盘模式采用左右分栏布局，左面板包含棋盘+评估+趋势图+导航，右面板为走法列表。导航走法时，走法列表会自动滚动至当前选中的走法位置，确保当前步骤始终可见。</p>
+  <p>复盘模式（v1.1.0 Phase 53 起）采用统一的<strong>上下分栏布局</strong>（横屏与竖屏结构完全相同）：<code>.review-top</code>（横向 flex）包含棋盘（<code>.review-left</code>，约占视口宽度 60%）和走法列表（<code>.review-moves</code>，独立滚动，高度与棋盘一致）；<code>.review-bottom</code>（全宽）包含评估栏、进度条（自定义滑块，与折线图像素级对齐）、评估趋势图、导航按钮（⏮ ◀ ▶ ⏭）、全部分析按钮。导航走法时，走法列表会自动滚动至当前选中的走法位置（居中显示），确保当前步骤始终可见（v1.1.0 Phase 57 修复了竖屏下滚动跳转位置不正确的 Bug）。</p>
 
   <h3>评估趋势图</h3>
   <p>SVG 折线图，纵轴白方视角评估，横轴步数。<strong>↹全局</strong> 开关控制局部/全局视图。折线/数据点颜色按评估值符号区分（v1.0.9 起统一为蓝-红配色，两种模式各自调校饱和度以适配背景）：</p>
@@ -1562,10 +1585,10 @@ h+='&lt;/div&gt;&lt;/div&gt;';</div>
   </ul>
   <p style="font-size:.82rem;color:#a08050;margin-top:6px">v1.0.9 设计思路：蓝（正向）与红（负向）是色环两端的对立色相，区分度最大；同时蓝/红是国际象棋软件评估图的通用惯例（蓝=好/白方优势，红=坏/黑方优势）。深色模式采用更高饱和度、更亮的色调以在 <code>#1a0a0a</code> 暖棕背景上清晰可见；浅色模式采用更深、更沉的色调以在 <code>#f0f0f3</code> 银灰背景上保持对比度，并与浅色模式整体银灰调色板融洽。</p>
   <div class="tip-box">
-    <span class="tip-label">横屏适配：</span>评估趋势图已适配横屏方向。图表高度根据可用视口空间动态计算，SVG 渲染采用等比缩放确保折线形态正确，不会出现拉伸变形或内容截断。横屏复盘中，棋盘占据左侧面板约 45% 宽度，右侧走法列表获得更多空间。左面板控件（评估条、滑块、趋势图、按钮）经过紧凑布局优化，间距和尺寸均根据横屏可用高度动态调整，确保趋势图始终可见且不被推出视口。
+    <span class="tip-label">横屏与竖屏统一布局（v1.1.0 Phase 53）：</span>Phase 53 之前，竖屏复盘将所有控件（评估栏、进度条、折线图、导航按钮）放在 <code>.review-left</code>（棋盘列）内，使它们比视口窄。Phase 53 将竖屏改为与横屏相同的 <code>.review-top</code>（棋盘+走法）+ <code>.review-bottom</code>（控件全宽）结构，使进度条、折线图、导航按钮和评估栏在两种朝向下具有相同的样式和宽度。棋盘在横屏下约占视口宽度 60%，走法列表占剩余 40%。竖屏下棋盘宽度由 <code>REVIEW_CELL</code>（默认为 <code>CELL*0.8</code>）决定。
   </div>
   <div class="tip-box">
-    <span class="tip-label">v1.0.3 复盘评估栏实时搜索信息：</span>v1.0.4 Rev33 起，复盘界面的评估栏现在显示实时的搜索深度（D）、战术深度（SD）、节点数量、搜索速度。此前复盘评估栏仅显示 D（无节点/速度信息）。现在用户在复盘时可以完整看到引擎的搜索进度。
+    <span class="tip-label">v1.0.4 Rev33 复盘评估栏实时搜索信息：</span>复盘界面的评估栏显示实时的搜索深度（D）、战术深度（SD）、节点数量、搜索速度。用户在复盘时可以完整看到引擎的搜索进度。
   </div>
 
   <h3>走法分类</h3>
@@ -1584,9 +1607,9 @@ h+='&lt;/div&gt;&lt;/div&gt;';</div>
 
   <div class="impl-section">
     <h4>实现原理：复盘与评估缓存</h4>
-    <p><code>ui.js</code> 中的 <code>enterReview()</code> 保存当前游戏状态为 <code>reviewBaseState</code>，构建每步棋的快照数组 <code>reviewStates</code>。每次导航到新步骤时调用 <code>requestEngineEval()</code> 请求引擎评估，结果缓存到 <code>_reviewEvalCache</code>（v1.0.4 Rev18 起无上限，原 LRU 200 条上限已移除以适配 📚 PGN 缓存管理器的跨会话复盘）。</p>
+    <p><code>ui.js</code> 中的 <code>enterReview()</code> 保存当前游戏状态为 <code>reviewBaseState</code>，构建每步棋的快照数组 <code>reviewStates</code>。每次导航到新步骤时调用 <code>requestEngineEval()</code> 请求引擎评估，结果缓存到 <code>_reviewEvalCache</code>（v1.0.7 Phase 18 起：LRU 软上限 MAX_ENTRIES=2000，正常单局使用~80步不会触发淘汰；淘汰仅在跨会话缓存积累时作为安全网）。</p>
     <p>全部分析 <code>reviewAnalyzeAll()</code> 按顺序逐步发送 <code>go depth 22</code>，利用回调驱动机制在每步评估完成后自动推进到下一步，避免并发请求导致引擎混乱。缓存退出复盘后保留，仅在新对局开始时清空。</p>
-    <p>v1.0.4 Rev17 新增持久化存储层：复盘评估缓存现通过 <code>AndroidBridge.persistentSet/persistentGet</code>（SharedPreferences）持久化到 <code>/data/data/com.Regalia/shared_prefs/RegaliaEngine.xml</code>，避免被 Xiaomi HyperOS 3 缓存清理器清除。JS 侧采用<strong>双写 + 回退读取</strong>模式：写入时同时写 localStorage + 持久存储；读取时先读 localStorage（快速路径），失败时回退到持久存储（生存保证）并回写 localStorage。</p>
+    <p>v1.0.4 Rev20 起使用<strong>专用文件持久化层</strong>：复盘评估缓存通过 <code>AndroidBridge.writeEvalCache/readEvalCache</code> 持久化到 <code>/data/data/com.Regalia/files/eval_cache.json</code>（专用文件，原子写入：tmp + fsync + rename），避免被 Xiaomi HyperOS 3 缓存清理器清除。此前 v1.0.4 Rev17 使用 SharedPreferences，但 SharedPreferences.Editor.apply() 是异步的，在 HyperOS 3 激进杀进程时可能丢失数据；专用文件的原子写入确保崩溃安全。</p>
     <div class="code-block">
       <span class="code-label">ui.js — 走法分类算法</span>
 function _classifyMove(evalDelta,isMoverWhite){
@@ -1791,7 +1814,7 @@ async function queryTablebase(fen){
   </div>
 
   <h3>📚 PGN 缓存管理 / PGN Cache Manager <span class="new-tag">v1.0.4 Rev18 + Rev20 + Rev21 + Rev22</span></h3>
-  <p>复盘界面的工具栏中，<code>💬变例</code> 开关右侧新增 <strong>🌗/🌈 控制范围</strong>按钮、<strong>📝 PGN</strong> 按钮，紧随其后为 <strong>📚 按钮</strong>（PGN 缓存管理）。点击 📚 弹出"📚PGN缓存管理"窗口。此功能让用户可以将当前对局的 PGN 保存为命名缓存条目，之后随时一键导入，避免重复粘贴 PGN 文本。缓存文件存储于应用私有目录 <code>/data/data/com.Regalia/files/pgn_cache/</code>，与第17次修订的 SharedPreferences 持久化层同属<strong>不会被</strong>小米澎湃OS 3 缓存清理器清除的目录。第20次修订（Rev20）新增<strong>重命名</strong>（✏️）与<strong>添加标签</strong>（🔖）功能。第21次修订（Rev21）新增<strong>按标签筛选/搜索</strong>功能。第22次修订（Rev22）<strong>移除冗余的 🔍 按钮</strong>（键盘回车键直接触发搜索，软键盘显示搜索键图标），并将 ✏️/🔖/📥 三个按钮从纵向排列改为<strong>同一行横向排列</strong>。</p>
+  <p>复盘界面的工具栏中，<code>💬变例</code> 开关右侧新增 <strong>🌗/🌈 控制范围</strong>按钮、<strong>📝 PGN</strong> 按钮，紧随其后为 <strong>📚 按钮</strong>（PGN 缓存管理）。点击 📚 弹出"📚PGN缓存管理"窗口。此功能让用户可以将当前对局的 PGN 保存为命名缓存条目，之后随时一键导入，避免重复粘贴 PGN 文本。缓存文件存储于应用私有目录 <code>/data/data/com.Regalia/files/pgn_cache/</code>，与第20次修订（Rev20）的专用文件评估缓存持久化层同属<strong>不会被</strong>小米澎湃OS 3 缓存清理器清除的目录。第20次修订（Rev20）新增<strong>重命名</strong>（✏️）与<strong>添加标签</strong>（🔖）功能。第21次修订（Rev21）新增<strong>按标签筛选/搜索</strong>功能。第22次修订（Rev22）<strong>移除冗余的 🔍 按钮</strong>（键盘回车键直接触发搜索，软键盘显示搜索键图标），并将 ✏️/🔖/📥 三个按钮从纵向排列改为<strong>同一行横向排列</strong>。</p>
 
   <div class="impl-section">
     <h4>缓存管理窗口示意图 / Cache Manager Mockup</h4>
@@ -1943,7 +1966,7 @@ public int deletePGNCaches(String namesJson) {
   </div>
 
   <div class="tip-box">
-    <span class="tip-label">跨会话复盘：</span>结合第17次修订的 SharedPreferences 持久化层，缓存管理器实现了完整的跨会话复盘工作流：1) 在某次复盘时点击 📚 → "保存当前PGN到缓存" → 命名保存；2) 退出应用、重启手机、清理加速——这些操作都不会清除缓存；3) 下次打开应用 → 进入复盘 → 点击 📚 → 点击缓存条目 → 一键导入，立即恢复对局。
+    <span class="tip-label">跨会话复盘：</span>结合第20次修订（Rev20）的专用文件评估缓存持久化层，缓存管理器实现了完整的跨会话复盘工作流：1) 在某次复盘时点击 📚 → "保存当前PGN到缓存" → 命名保存；2) 退出应用、重启手机、清理加速——这些操作都不会清除缓存；3) 下次打开应用 → 进入复盘 → 点击 📚 → 点击缓存条目 → 一键导入，立即恢复对局。
   </div>
 </div>
 
@@ -2009,6 +2032,10 @@ public int deletePGNCaches(String namesJson) {
 
   <div class="tip-box">
     <span class="tip-label">Rev34 关键 bug 修复：</span>原实现仅检查王与车之间的格子是否为空，但<strong>未检查</strong>王的目的地和车的目的地是否有其他棋子。在 Chess960 中，王和车可能起始位置很近（如王在 b1，车在 c1），王的路径（b1→g1）远远超出车的位置——经过 d1、e1、f1 等可能被其他棋子占据的格子。<code>makeMv()</code> 会直接覆盖这些格子，<strong>等于销毁己方棋子</strong>。修复后检查王路径和车路径的并集。
+  </div>
+
+  <div class="tip-box">
+    <span class="tip-label">v1.1.0 Phase 55 修复（O-O/O-O-O 后车消失）：</span>存在一个相关的 Chess960 易位 Bug：当参与易位的车所在格<strong>恰好是</strong>王易位后的目标格时（如王在 d1、后翼车在 c1：长易位 O-O-O 后王至 c1，而 c1 正是车的起始格——车随后移至 d1），统计数据界面的棋盘会丢失这辆车。易位检测代码的 <code>_destEmpty</code> 检查错误地要求王的目标格必须为空，拒绝了这一合法的 Chess960 情形，导致王「自吃」自己的车。<strong>修复</strong>：将 <code>_destEmpty</code> 替换为 <code>_destValid</code>，允许目标格为空或正好停着参与易位的车（通过从王所在列向易位侧扫描识别）。同一修复也应用于主棋盘 <code>_castleSide</code> 兜底检测路径。标准象棋不受影响（车始终在 a1/h1，王目标格 c1/g1 始终为空）。
   </div>
 
   <h3>Shredder-FEN 易位权编码</h3>
@@ -2340,7 +2367,7 @@ const SEVEN_TAG_ROSTER = [
     <tr><td style="color:#4a90d9">蓝色 (B)</td><td>B</td><td>玩家净控制强势格</td><td>一方棋子同时威胁另一方多个（&gt;1个）棋子（从威胁棋子格子分别指向各被威胁棋子格子）。<strong>Rev54 扩展</strong>：当走子方主动把任意棋子移到受威胁格，导致另一方有任何棋子产生2个及以上威胁，相应蓝色箭头优先级提升（确保可见）。</td></tr>
     <tr><td style="color:#e74c3c">红色 (R)</td><td>R</td><td>AI对手净控制强势格</td><td>将军路径（将军子→被将的王）</td></tr>
     <tr><td style="color:#f1c40f">黄色 (Y)</td><td>Y</td><td>双方总计控制数较高格（<strong>Rev54</strong>：黄色格子样式改为圆角矩形内框叠加层，最上层，四角留空隙）</td><td>对后的威胁（从威胁棋子格子指向后所在格子）。<strong>Rev53 双向</strong>：含敌方对己方皇后的威胁。<strong>Rev54 扩展</strong>：当走子方主动把皇后移动到受威胁格，相应黄色箭头优先级提升（确保可见）。</td></tr>
-    <tr><td style="color:#27ae60">绿色 (G)</td><td>G</td><td>中心区无控制格</td><td>避将路径（被将方王的位置→避将格）</td></tr>
+    <tr><td style="color:#27ae60">绿色 (G)</td><td>G</td><td>中心区无控制格</td><td>应将路径（王避将 + 吃将军棋子）</td></tr>
   </table>
   <p><strong>Rev48 新增</strong>：蓝色箭头（多重威胁）与黄色箭头（对后威胁）。显示顺序从左至右为：蓝、红、黄、绿，与四种颜色的格子信息构成竖向同色对齐。</p>
   <p><strong>Rev54 新增（视觉区分）</strong>：四种颜色的箭头分别采取固定的对角线偏移（同时应用于起点和终点，保持箭头方向不变），便于在多色箭头共享起/终点时区分：
@@ -2374,7 +2401,7 @@ const SEVEN_TAG_ROSTER = [
     <tr><td>蓝色箭头</td><td>本方棋子对重要格子的控制路径</td><td>—（移除）</td><td><strong>多重威胁</strong>（一方棋子同时威胁另一方多个棋子）</td></tr>
     <tr><td>红色箭头</td><td>将军子→被将的王</td><td>保留（同原语义）</td><td>同 Rev14</td></tr>
     <tr><td>黄色箭头</td><td>走子方→对方后的位置（威胁）</td><td>—（移除）</td><td><strong>对后的威胁</strong>（从威胁棋子格子指向后所在格子）</td></tr>
-    <tr><td>绿色箭头</td><td>避将改为绿色格</td><td>避将改为<strong>绿色箭头</strong>（被将的王位置→避将格）</td><td>同 Rev14</td></tr>
+    <tr><td>绿色箭头</td><td>应将改为绿色格</td><td>应将改为<strong>绿色箭头</strong>（被将方王避将 + 被将方棋子吃将军棋子）</td><td>同 Rev14</td></tr>
   </table>
 
   <h3>导入后的行为</h3>
@@ -2705,7 +2732,7 @@ function moveRookForCastling(state, kingFrom, kingTo) {
     <div class="section-num">附录 A</div>
     <div class="section-title">版本更新日志</div>
   </div>
-  <p>本附录按版本号倒序汇总 Regalia 的全部更新日志详情。v1.0.4 内部进行了 48 次补丁修订（版本号不变，versionCode 仍为 104），随后升级至 v1.0.5（versionCode 105），包含第6轮第49至70次修订。v1.0.6（versionCode 106）包含10项主要新特性。v1.0.7（versionCode 107）聚焦于代码审查驱动的隐性 Bug 修复、关于对话框开源仓库链接补充与竖屏全面屏 UI 适配完善。v1.0.8（versionCode 108）历经 30 个开发阶段（Phase 22~51），涵盖走棋动画与音效全面重设计、Stockfish 18 dotprod 引擎集成、Web Worker 多线程、六种棋子触觉人格化、全面第一性原理代码审查，以及 Phase 29 的摆棋 ⚡ 按钮规范化、王车易位音效触觉重设计、浅色模式对比度修复、易位权/过路兵保留审计与 WebView 健壮性增强，Phase 38~48 的 PGN 缓存 UI 布局优化、易位权丢失根因修复、按钮宽度根因修复（<code>.btn-compact</code> CSS 类 + <code>!important</code>），Phase 49 的全面第一性原理复审（6 项 Bug + 12 项健壮性 + 合规核对），Phase 50 的按钮宽度真正根因修复（<code>.btn-row</code> 退出竖屏 grid 变换），以及 Phase 51 的 PGN 往返易位修复（<code>_castleSide</code> 检查 <code>mv.to.castle</code>）、走法评价用语变更（"开局库"→"平常"）、评估折线图深色模式连线可见性修复。v1.0.9（versionCode 109，当前版本）的 Phase 52 修复两项关键用户反馈 Bug（PGN 单行解析失败 + 复盘/统计数据界面「多余的王」棋盘损坏）、两项视觉注解准确性 Bug（变例注释污染主线注解 + 导入走法缺少 isCheck/isCastling），并将评估折线图配色统一为蓝-红双色方案（深色+浅色双模式各自调校饱和度以适配背景，兼顾区分度与色调融洽），同时加固 stats.html 易位权清除逻辑。</p>
+  <p>本附录按版本号倒序汇总 Regalia 的全部更新日志详情。v1.1.0（versionCode 110，当前版本）的 Phase 58 新增每 5 回合在 PGN <code>{}</code> 注释中追加评估栏完整信息的功能（在第 5、10、15、20... 回合，<code>_buildPGNString</code> 向 PGN <code>{}</code> 注释追加一段镜像评估栏的人类可读片段，通过 <code>T()</code> 读取全局 <code>_lang</code> 变量自动切换中英文。格式：<code>均势 (-0.10) D22 SD34 (1%W/96%D/3%L)</code>（中文）或 <code>Equal (-0.10) D22 SD34 (1%W/96%D/3%L)</code>（英文）。白方视角——非玩家视角——确保 PGN 注释无论人类执何方均无歧义。新增 <code>formatEvalAnnotation</code> 函数于 <code>pgn-standard.js</code>；新增 <code>pgn_white_*</code>/<code>pgn_black_*</code>/<code>pgn_equal</code>/<code>pgn_mate_white</code>/<code>pgn_mate_black</code> 等 i18n 键于 <code>game-logic.js</code>。缺失组件（深度、WDL）优雅省略；零和 WDL 有除零保护；将杀使用 <code>#+N</code>/<code>#-N</code> + 「白方将杀」/「黑方将杀」标签），并修复 <code>StockfishNative.java</code> 中两项 P0 并发问题：（1）stopLatch TOCTOU 竞态——bestmove 处理器旧版读取 <code>_stopLatch</code>（volatile 字段）时未持有 <code>_stopLatchLock</code>，与 <code>stopAndWaitForBestmove</code> 的超时路径存在竞态：若 bestmove 刚好在超时触发时到达，discard 标志可能被错误设置，从而丢弃下一个合法 bestmove。修复：bestmove 处理器现原子地捕获并清除 <code>_stopLatch</code>（在 <code>_stopLatchLock</code> 下），超时路径仅在仍持有 latch 时设置 discard 标志（<code>_stopLatch == stopLatch</code> 锁下检查）。恰一个消费者（bestmove 处理器或超时路径）「拥有」latch——无竞态。（2）心跳死锁——心跳线程的 <code>engineWriter.write("quit\n")</code> 调用（僵尸检测分支）此前同步在 <code>StockfishNative.this</code> 上——与 <code>startHeartbeat()</code>（<code>synchronized</code>）使用的同一个监视器。这构成死锁风险：若 <code>shutdown()</code> 在心跳持有 <code>this</code> 监视器（writer I/O 调用中）时运行，<code>shutdown</code> 的 <code>_heartbeatThread.join(1000)</code> 会等待心跳释放 <code>this</code>——但心跳阻塞在 I/O 上。修复：引入专用 <code>_writerLock</code>（<code>private final Object</code>）用于心跳路径的 engineWriter 访问。<code>_writerLock</code> 与 <code>this</code> 监视器解耦，<code>shutdown</code> 的 interrupt/join 不被心跳的 writer 访问阻塞。<code>cleanupEngineResources()</code> 与 <code>recoverEngine()</code> 使用各自的锁（<code>_restartLock</code>、<code>_stopLatchLock</code>），不持有 <code>_writerLock</code>。Phase 57+ 在保持版本号不变的前提下完成代码审查驱动的预防性加固：修复 <code>pgn-standard.js</code> 中 <code>parseStandardPGN</code> 的单行 PGN 标签剥离正则 Bug（旧版 <code>/^\[[\s\S]*?\]/gm</code> 在所有标签与走法同处一行时仅匹配首个标签，导致后续标签作为垃圾 token 残留——替换为格式严格、未锚定的 <code>/\[[A-Za-z]\w*\s+"[^"]*"\]/g</code>，仅匹配标准 PGN 标签形状，避免误伤走法注释中的 <code>[Nf3]</code> 等无引号括号；该解析器当前未被主路径调用，修复属预防性措施），优化 <code>chess960.js</code> 的 <code>isChess960CastlingLegal</code> 王位置查找（直接使用状态对象 <code>s.wk</code>/<code>s.bk</code> 缓存字段，与 <code>game-logic.js</code> 中其他王位置查找方式保持一致；保留棋盘扫描回退以应对未填充缓存字段的防御性状态），修复 <code>ai-bridge.js</code> WDL 百分比显示的除零保护（当引擎在病态局面输出 <code>wdl 0 0 0</code> 时旧代码会得到 NaN/Infinity），加固 <code>StockfishNative.java</code> 的 <code>postJsCallback</code>（在宿主 Activity 处于 <code>isFinishing()</code>/<code>isDestroyed()</code> 状态时跳过 <code>evaluateJavascript</code> 调用——HyperOS 3 等机型在已销毁 WebView 上调用此方法会抛 <code>IllegalStateException</code>，此前用户在引擎初始化重试期间退出 APP 会触发进程崩溃），将 <code>EngineService</code> 前台服务的 wake lock 改为 30 分钟超时获取（<code>wakeLock.acquire(30 * 60 * 1000)</code>，防止 OEM 静默杀死服务且 <code>onDestroy</code> 未运行时 CPU 永久唤醒），并修正 <code>res/README.license</code> 中 <code>strings.xml</code> 应用名版本引用（v1.0.8 → v1.1.0）。同时新增项目根目录的 <code>UBIQUITOUS_LANGUAGE.md</code>（纯英文领域术语表，覆盖 80+ 棋类、引擎、PGN、UI 术语，作为开发者与领域专家对话的统一语言）。Phase 57 修复了竖屏复盘模式走法列表选中走法后滚动跳转位置不正确的 Bug（Phase 56 修复仅覆盖横屏，竖屏下 <code>offsetTop</code> 含棋盘高度导致跳转错误——改用 <code>getBoundingClientRect</code> 相对于 <code>.review-moves</code> 计算位置），并修复了进入复盘界面时棋盘残留旧对局过时视觉注解（<code>[%csl]</code>/<code>[%cal]</code>）的 Bug（<code>_computeInitialPositionAnnotations</code> 误读 <code>gameState</code> 而非初始局面，且 <code>'_initial'</code> 缓存键在 <code>enterReview</code> 入口未清除）。Phase 56 修复了横屏复盘模式点击导航按钮导致界面异常滚动回顶部的 Bug，完善了计时赛超时结束对局的 PGN 注释（<code>[Termination "Time forfeit"]</code> + <code>{<颜色> wins by timeout}</code>），修正了棋局首步用时计时开始时刻与计时赛倒计时同步，并精化了 Chess960+计时赛同时开启时的 UCI 指令顺序。Phase 55 修复了 Chess960 王车易位时车从统计数据界面棋盘上消失的 Bug（根因：<code>_destEmpty</code> 检查错误地拒绝了王目标格上停着参与易位车的 Chess960 情形）。Phase 54 通过自定义滑块实现复盘进度条与评估折线图的像素级严格对齐，修复走法列表滚动行为，并解决代码审计中发现的 7 项高/中优先级问题。Phase 53 将绿色箭头视觉注解从「避将路径」重定义为「应将路径」，修复多项视觉注解 Bug，过滤非法走法箭头，并将复盘导航按钮文本居中对齐。v1.0.4 内部进行了 48 次补丁修订（版本号不变，versionCode 仍为 104），随后升级至 v1.0.5（versionCode 105），包含第6轮第49至70次修订。v1.0.6（versionCode 106）包含10项主要新特性。v1.0.7（versionCode 107）聚焦于代码审查驱动的隐性 Bug 修复、关于对话框开源仓库链接补充与竖屏全面屏 UI 适配完善。v1.0.8（versionCode 108）历经 30 个开发阶段（Phase 22~51），涵盖走棋动画与音效全面重设计、Stockfish 18 dotprod 引擎集成、Web Worker 多线程、六种棋子触觉人格化、全面第一性原理代码审查。v1.0.9（versionCode 109）的 Phase 52 修复两项关键用户反馈 Bug（PGN 单行解析失败 + 复盘/统计数据界面「多余的王」棋盘损坏）、两项视觉注解准确性 Bug，并将评估折线图配色统一为蓝-红双色方案。</p>
 
   <div style="background:rgba(192,57,43,.08);border:1px solid rgba(192,57,43,.4);border-radius:6px;padding:12px 16px;margin:14px 0;font-size:.9rem;color:var(--text);line-height:1.7">
     <strong style="color:#e74c3c">⚠️ 版本号约定：</strong>曾在开发阶段使用版本号：<b>v18.x.x</b>，未来版本号超过<b>v17.x.x</b>以后，<span style="color:red; font-weight:bold;">应当跳过 v18.x.x</span>，从<b>v19.x.x</b>继续。
@@ -2713,13 +2740,316 @@ function moveRookForCastling(state, kingFrom, kingTo) {
 
   <!-- ============================== -->
 
-    <!-- v1.0.9 (current) -->
+    <!-- v1.1.0 (current) -->
+    <h3 style="color:#d4a017">v1.1.0（versionCode 110，2026.7.4）</h3>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">v1.1.0 Phase 57 修复了竖屏复盘模式走法列表选中走法后滚动跳转位置不正确的 Bug（Phase 56 修复仅覆盖横屏，竖屏下 <code>offsetTop</code> 含棋盘高度导致跳转错误——改用 <code>getBoundingClientRect</code> 相对于 <code>.review-moves</code> 计算位置），并修复了进入复盘界面时棋盘残留旧对局过时视觉注解（<code>[%csl]</code>/<code>[%cal]</code>）的 Bug（<code>_computeInitialPositionAnnotations</code> 误读 <code>gameState</code> 而非初始局面；<code>'_initial'</code> 缓存键在 <code>enterReview</code> 入口未清除）。Phase 56 修复了横屏复盘模式点击导航按钮导致界面异常滚动回顶部的 Bug，完善了计时赛超时结束对局的 PGN 注释（<code>[Termination "Time forfeit"]</code> 标签 + <code>{White wins by timeout}</code>/<code>{Black wins by timeout}</code> 末步注释），修正了棋局首步用时计时开始时刻与计时赛倒计时同步（<code>_turnStartTime</code> 与 <code>gameClocks</code> 在所有开局入口点重置），并精化了 Chess960+计时赛同时开启时的 UCI 指令顺序（<code>setGameDifficulty</code> 的 <code>setoption</code> 指令移至 <code>position fen</code> 之前）。Phase 55 修复了 Chess960 王车易位时车从统计数据界面棋盘上消失的 Bug（当参与易位的车所在格恰好是王易位后的目标格时，如王在 d1、后翼车在 c1：长易位 O-O-O 后王至 c1，c1 正是车的起始格）。同一根因也影响主棋盘 <code>_castleSide</code> 兜底检测路径，一并修复。Phase 54 通过自定义滑块实现复盘进度条与评估折线图的像素级严格对齐，修复走法列表滚动行为，并解决 7 项代码审计中发现的高/中优先级问题。Phase 53 将绿色箭头视觉注解从「避将路径」重定义为「应将路径」，修复多项视觉注解 Bug，过滤非法走法箭头，并将复盘导航按钮文本居中对齐。版本号升至 versionCode=110、versionName="1.1.0"。</p>
+    <div class="changelog-card">
+                    <!-- v1.1.0 PHASE 57 (current) -->
+<h4 style="color:#d4a017;margin-top:14px;margin-bottom:6px;font-size:.9rem;border-top:1px dashed rgba(212,160,23,.3);padding-top:10px">🆕 v1.1.0 第五十七阶段新增（竖屏复盘走法列表滚动修复 + 视觉注解缓存残留修复，2026.7.4）</h4>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">本阶段为同版本内的 Bug 修复（版本号保持 versionCode=110、versionName="1.1.0" 不变），修复 Phase 56 之后用户反馈的 2 项问题。所有修复均同时兼容标准国际象棋与 Chess960。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🎯 Bug 修复：竖屏复盘模式走法列表选中走法后滚动跳转位置不正确</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">在<strong>竖屏</strong>复盘模式下，点击走法列表中的走法后，该走法未出现在视野内（滚动跳转位置不正确）。<strong>根因</strong>：Phase 56 修复（将 <code>scrollIntoView</code> 替换为手动 <code>scrollTop</code> 计算）使用了 <code>_rAct.offsetTop</code> 来计算活动走法的位置。然而 <code>offsetTop</code> 返回的是元素外边框到其 <code>offsetParent</code> 内边框顶部的距离，而 <code>.rmv-block</code> 的 <code>offsetParent</code> 是 <code>.review-overlay</code>（<code>position:fixed</code>），<strong>不是</strong> <code>_rList</code>（<code>.review-moves</code> 未设置 <code>position</code>）。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">在<strong>横屏</strong>下此误差较小——<code>.review-moves</code> 是 <code>.review-top</code>（行向 flex）的 flex 子元素，所以 <code>.rmv-block</code> 相对于 <code>.review-overlay</code> 的纵向 <code>offsetTop</code> ≈ 标题栏高度（~24px）+ 在走法列表中的位置。标题栏仅约 24px，误差较小。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">但在<strong>竖屏</strong>下，<code>.review-moves</code> 堆叠在 <code>.review-left</code>（棋盘列，含棋盘的完整高度）<strong>下方</strong>。所以 <code>.rmv-block</code> 相对于 <code>.review-overlay</code> 的纵向 <code>offsetTop</code> ≈ 标题栏高度 + 棋盘高度 + 在走法列表中的位置。棋盘高度为 256-320px——远大于 <code>.review-moves</code> 的可视高度（同为 256-320px），导致计算出的 <code>_target</code> 远超过实际需要，被截断至 <code>scrollHeight - clientHeight</code>（滚动到底部），活动走法完全不在视野中心。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复</strong>：将基于 <code>offsetTop</code> 的计算替换为基于 <code>getBoundingClientRect()</code> 的计算，计算活动走法<strong>相对于 <code>_rList</code></strong>（而非相对于 <code>.review-overlay</code>）的位置：</p>
+    <p style="font-size:.78rem;color:#9b59b6;line-height:1.5;font-family:monospace;background:rgba(0,0,0,.2);padding:8px 12px;border-radius:4px;margin:8px 0">_actTop = (_actRect.top - _listRect.top) + _rList.scrollTop</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">此公式给出活动走法在 <code>_rList</code> 完整内容（包括已滚出视野的部分）中的位置，<strong>不受</strong>方向、布局结构或 <code>offsetParent</code> 链影响。居中公式 <code>_target = _actTop + _actH/2 - _listH/2</code> 随后正确地将活动走法居中于可视区域。同时保留了对 <code>offsetTop</code> 的防御性回退，以防 <code>getBoundingClientRect</code> 抛出异常。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>Chess960 兼容性</strong>：此为纯 DOM/布局修复，不涉及任何棋理、易位或走法生成代码。对标准国际象棋与 Chess960 行为完全一致（走法列表渲染与变体无关）。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🎯 Bug 修复：进入复盘界面时棋盘残留旧对局的过时视觉注解</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">偶尔在刚刚进入复盘界面时，复盘界面棋盘上残留旧对局的过时视觉注解（<code>[%csl]</code>/<code>[%cal]</code>）。<strong>两个根因</strong>：</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">(a) <code>_computeInitialPositionAnnotations</code> 读取 <code>gameState</code>（<strong>实时</strong>对局中局状态）而非 <code>reviewStates[0].state</code>（第 0 步显示的实际初始局面）。当用户在中局过程中进入复盘时，缓存在 <code>'_initial'</code> 键下的注解是为中局位置计算的（如对 d4 上的后的威胁），但第 0 步的棋盘显示的是<strong>初始</strong>局面（后在 d1）。这种不匹配导致第 0 步出现陈旧、不相关的注解——用户感知为「残留旧对局的过时视觉注解」。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">(b) <code>'_initial'</code> 缓存键<strong>从未</strong>被 <code>_invalidateCachesForUndoneMoves</code> 清除（该函数仅删除 <code>&gt;= N</code> 的数值键）。它会被 <code>_resetGameUIState</code> 清除（由新对局/导入/摆棋完成/FEN 导入调用），但如果用户在<strong>没有</strong>经过上述任一入口点的情况下重新进入复盘（例如继续同一对局并再次进入复盘），陈旧的 <code>'_initial'</code> 缓存会持续存在，导致错误的注解渲染。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复</strong>：(a) <code>_computeInitialPositionAnnotations</code> 现在读取 <code>reviewStates[0].state</code>（实际初始局面），带回退链：<code>reviewStates[0].state</code> → <code>reviewBaseState</code> → <code>gameState</code>（防御性）。(b) <code>enterReview()</code> 现在在入口处显式删除 <code>_visualAnnotationsCache</code> 中的 <code>'_initial'</code> 键，强制每次复盘会话重新计算。数值键（0..N-1）被刻意保留——它们是在对弈过程中（每步走法后通过 <code>_computeAndCacheVisualAnnotations</code>）计算的，对当前 <code>moveRecords</code> 仍然有效。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>Chess960 兼容性</strong>：<code>reviewStates[0].state</code> 由 <code>enterReview()</code> 从 <code>stateHistory[0].state</code>（对局开始时捕获）或 <code>reviewBaseState</code>（初始局面）构建。对于 Chess960 对局，此状态包含 Chess960 起始局面（带有 <code>spid</code>）。<code>getCtrlMap</code> 和 <code>attacked</code> 都对棋盘状态进行操作，与变体无关，因此注解对 Chess960 初始局面也能正确计算。</p>
+    <h5 style="color:#9b59b6;margin-top:10px;margin-bottom:4px;font-size:.82rem">📝 Phase 57 修改的文件</h5>
+    <ul style="font-size:.82rem;color:#c8b888;line-height:1.6;margin-left:20px">
+      <li><code>src/main/assets/chess.src/ui.js</code>（Issue 1 + Issue 2）</li>
+      <li><code>src/main/assets/chess.html</code>（由 <code>build-chess.py</code> 从 <code>chess.src/</code> 重建）</li>
+      <li><code>NOTICE</code>、<code>README.md</code>、所有 <code>README.license</code> 文件（Phase 57 更新日志）</li>
+      <li><code>Manual/Regalia-v1.1.0-manual-{zh,en}.html</code>（Phase 57 更新日志置顶）</li>
+    </ul>
+
+                    <!-- v1.1.0 PHASE 56 -->
+<h4 style="color:#d4a017;margin-top:14px;margin-bottom:6px;font-size:.9rem;border-top:1px dashed rgba(212,160,23,.3);padding-top:10px">v1.1.0 第五十六阶段新增（横屏复盘导航按钮滚动修复 + PGN超时注释 + 首步用时同步 + UCI指令顺序精化，2026.7.4）</h4>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">本阶段修复 4 项问题：</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🎯 Bug 修复：横屏复盘模式导航按钮导致界面异常滚动回顶部</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">在横屏复盘模式下，点击页面底部的导航按钮（⏮ ◀ ▶ ⏭）会导致整个 <code>.review-body</code> 容器异常滚动回顶部。<strong>根因</strong>：对活动走法调用 <code>scrollIntoView({block:'center'})</code> 会滚动<strong>所有</strong>可滚动祖先容器——活动走法位于内层 <code>.review-moves</code> 容器中，而该容器处于外层 <code>.review-body</code> 的<strong>顶部</strong>，所以 <code>scrollIntoView</code> 会把 <code>.review-body</code> 拽回 <code>scrollTop=0</code>，撤销了同步滚动位置恢复逻辑的效果。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复</strong>：将 <code>scrollIntoView</code> 替换为仅对内层 <code>.review-moves</code> 容器手动计算 <code>scrollTop</code>（<code>scrollTop = actTop + actH/2 - listH/2</code>），保留外层 <code>.review-body</code> 的滚动位置不变。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🎯 Bug 修复：PGN 超时注释完善</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">对于因超时（计时赛）而结束的对局，PGN 缺少 <code>[Termination "Time forfeit"]</code> 标签和 <code>{White wins by timeout}</code>/<code>{Black wins by timeout}</code> 末步注释。按用户规范：「对于一方时间耗尽(计时赛)而导致另一方获胜，当前的PGN缺乏完善的注释，应当在最后的注释中写明：'White wins by timeout' 或 'Black wins by timeout'」。<strong>修复</strong>：在现有认输逻辑旁增加超时分支——发送 <code>[Termination "Time forfeit"]</code> 标签，并在最后一步走法后添加 <code>{<颜色> wins by timeout}</code> 注释。<code>[Result]</code> 标签此前已正确（通过 <code>_timeoutWinnerColor</code> 设为 1-0/0-1）。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🎯 Bug 修复：棋局首步用时计时同步</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><code>_turnStartTime</code> 变量（用于记录每步走法的已用时间，供 <code>[%emt]</code>/<code>{Xs}</code> 注解使用）<strong>从未</strong>在任何开局入口点重置——它仅在模块加载时设置一次，并在每步走法后重新赋值。这意味着<strong>首步</strong>走法的已用时间包含了自<strong>上一局</strong>最后一步走法（或自应用启动）以来的真实时钟时长，可能是几分钟、几小时甚至几天。此外，<code>gameClocks</code> 在非对话框入口点（FEN/PGN 导入、摆棋完成）未被置空，导致旧对局的时钟状态泄漏到新对局。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复</strong>：在 <code>_resetGameUIState()</code> 中添加 <code>_turnStartTime=Date.now()</code> 和 <code>gameClocks=null</code>——该函数由<strong>所有</strong>开局入口点调用（新游戏对话框、自由开局按钮、摆棋完成、FEN 导入、PGN 导入），确保两个计时器一致重置。对于对话框路径，<code>initGameClocks()</code>（在 <code>_resetGameUIState</code> 之后调用）会用新的时钟状态覆盖 null 的 <code>gameClocks</code>。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🔧 完善：Chess960+计时赛 UCI 指令顺序</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">验证了 Chess960+计时赛同时开启时的 UCI 指令顺序正确：<code>setoption name UCI_Chess960 value true</code>（带 <code>isready</code> 握手）在 <code>ucinewgame</code> 和 <code>position fen</code> 之前发送，<code>go</code> 指令包含正确的 <code>wtime</code>/<code>btime</code>/<code>winc</code>/<code>binc</code> 参数（源自 <code>gameClocks</code>），<code>position fen</code> 发送的 FEN 使用 Shredder 格式（按列字母编码易位权）。<strong>精化</strong>：将 <code>setGameDifficulty</code> 的 <code>setoption</code> 指令移至 <code>position fen</code> <strong>之前</strong>（此前位于 <code>position fen</code> 与 <code>go</code> 之间）——按 UCI 规范建议，所有 <code>setoption</code> 指令应在 <code>position</code>/<code>go</code> 之前发送。此精化同时应用于 <code>engineGoTimed</code> 和 <code>engineGoInternal</code>。</p>
+    <h5 style="color:#9b59b6;margin-top:10px;margin-bottom:4px;font-size:.82rem">📝 Phase 56 修改的文件</h5>
+    <ul style="font-size:.82rem;color:#c8b888;line-height:1.6;margin-left:20px">
+      <li><code>src/main/assets/chess.src/ui.js</code>（Issue 1 + Issue 3）</li>
+      <li><code>src/main/assets/chess.src/ai-bridge.js</code>（Issue 2）</li>
+      <li><code>src/main/java/com/Regalia/StockfishNative.java</code>（Issue 4）</li>
+      <li><code>src/main/assets/chess.html</code>（由 <code>build-chess.py</code> 从 <code>chess.src/</code> 重建）</li>
+      <li><code>NOTICE</code>、<code>README.md</code>、所有 <code>README.license</code> 文件（Phase 56 更新日志）</li>
+      <li><code>Manual/Regalia-v1.1.0-manual-{zh,en}.html</code>（Phase 56 更新日志置顶）</li>
+    </ul>
+
+                    <!-- v1.1.0 PHASE 55 -->
+<h4 style="color:#d4a017;margin-top:14px;margin-bottom:6px;font-size:.9rem;border-top:1px dashed rgba(212,160,23,.3);padding-top:10px">v1.1.0 第五十五阶段新增（Chess960 王车易位丢车修复 + game-logic.js _castleSide 兜底修复，2026.7.4）</h4>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">本阶段修复了 Chess960 王车易位时车从棋盘上消失的 Bug。在特定 Chess960 起始位置中，当参与易位的车所在格<strong>恰好是</strong>王易位后的目标格时（如王在 d1、后翼车在 c1：长易位 O-O-O 后王至 c1，而 c1 正是车的起始格——车随后移至 d1），统计数据界面的棋盘会丢失这辆车。同一根因也影响主棋盘 <code>_castleSide</code> 兜底检测路径。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🔬 第一性原理根因分析</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">王车易位检测代码在三处使用了 <code>_destEmpty</code> 检查，要求王的目标格必须为空：</p>
+    <ol style="font-size:.82rem;color:#c8b888;line-height:1.6;margin-left:20px">
+      <li><code>stats.html</code> 的 <code>executeMove()</code> — 统计数据界面的 PGN 复盘易位检测</li>
+      <li><code>stats.html</code> 的 <code>buildSAN()</code> — 统计数据界面的易位 SAN 记谱生成</li>
+      <li><code>game-logic.js</code> 的 <code>_castleSide()</code> — 主棋盘易位检测兜底路径（当显式 <code>mv.castle</code>/<code>mv.to.castle</code> 标志缺失时使用，如 UCI 引擎走法或从 SAN 重建的走法）</li>
+    </ol>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><code>_destEmpty</code> 检查在 v1.0.8 第49阶段引入，注释称「易位目标格<strong>始终</strong>为空（车停在王旁边，而非王下方）」。此注释对 Chess960 <strong>不正确</strong>——王的目标格（O-O-O 为 c1，O-O 为 g1）<strong>可以</strong>是参与易位的车所在格。车最终仍停在王旁边（分别在 d1 或 f1），但王的目标格在走法执行前<strong>并不为空</strong>——它停着即将移走的车。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">当 <code>_destEmpty</code> 拒绝此情形时：</p>
+    <ul style="font-size:.82rem;color:#c8b888;line-height:1.6;margin-left:20px">
+      <li><code>_isCastling</code> 保持 <code>false</code></li>
+      <li>王的走法被当作普通（非法）「自吃车」处理</li>
+      <li>车被静默从棋盘移除（被王覆盖，而非重新定位）</li>
+      <li>用户看到车在易位后「消失」</li>
+    </ul>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🔧 修复方案</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">将 <code>_destEmpty</code> 检查替换为 <code>_destValid</code>，允许目标格为：</p>
+    <ul style="font-size:.82rem;color:#c8b888;line-height:1.6;margin-left:20px">
+      <li><strong>空</strong>（标准象棋，以及车不在王目标格的 Chess960 情形），或</li>
+      <li><strong>被同色车占据且该车正是参与易位的车</strong>（Chess960 情形）</li>
+    </ul>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">对于 stats.html 的 <code>executeMove</code> 和 <code>buildSAN</code>，先从王所在列向易位侧扫描找到<strong>最近的同色车</strong>（即参与易位的车），再检查目标格是否为空或正好是这辆车——确保检测到的「在目标格上的车」确实是参与易位的车，而非任意一辆车。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">同时修复了 stats.html <code>executeMove</code> 车源清除逻辑中的一个相关隐性 Bug：当 <code>_rookFrom === _rookTo</code>（车原地不动——Chess960 中车的起始格<strong>就是</strong>其易位目标格时发生，如车在 f1 王翼易位至 f1）时，旧代码在将车放至目标格后又清除了该格，等于把刚放好的车又删掉。修复方案：在清除条件中增加 <code>&amp;&amp; _rookFrom !== _rookTo</code>。主棋盘的 <code>makeMv()</code> 对此情形本就正确（当 <code>rookFrom === rookTo</code> 时跳过整个车放置块），故只需修复 <code>_castleSide</code> 的 <code>_destValid</code>。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">✅ 标准象棋兼容性</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">标准象棋不受影响：车始终在 a1/h1，王易位目标格 c1/g1 始终为空。<code>_destValid</code> 检查对标准象棋平凡通过。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🧪 验证</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">6 项测试用例（<code>scripts/verify-stats-fix.js</code>）：用户 PGN 的 O-O-O（王 d1、车 c1）、c5 后续走法、标准 O-O-O 回归、标准 O-O 回归、Chess960 O-O 车原地不动（王 e1、车 f1）、Chess960 O-O 车在王目标格（王 e1、车 g1）。全部通过。</p>
+    <h5 style="color:#9b59b6;margin-top:10px;margin-bottom:4px;font-size:.82rem">📝 Phase 55 修改的文件</h5>
+    <ul style="font-size:.82rem;color:#c8b888;line-height:1.6;margin-left:20px">
+      <li><code>src/main/assets/stats.html</code>（<code>executeMove</code> + <code>buildSAN</code> 易位检测修复）</li>
+      <li><code>src/main/assets/chess.src/game-logic.js</code>（<code>_castleSide</code> 兜底 <code>_destValid</code> 修复 + 修正第49阶段错误注释）</li>
+      <li><code>src/main/assets/chess.html</code>（由 <code>build-chess.py</code> 从 <code>chess.src/</code> 重建）</li>
+      <li><code>NOTICE</code>、<code>README.md</code>、所有 <code>README.license</code> 文件（Phase 55 更新日志）</li>
+      <li><code>Manual/Regalia-v1.1.0-manual-{zh,en}.html</code>（Phase 55 更新日志置顶）</li>
+    </ul>
+
+                    <!-- v1.1.0 PHASE 54 -->
+<h4 style="color:#d4a017;margin-top:14px;margin-bottom:6px;font-size:.9rem;border-top:1px dashed rgba(212,160,23,.3);padding-top:10px">v1.1.0 第五十四阶段新增（自定义滑块实现进度条与折线图像素级对齐 + 走法列表滚动修复 + executeMove异步回调异常捕获 + 音频引擎部分初始化重置 + 引擎心跳全回调修复 + MultiPV次变例分叉修复 + PGN级联跳过阈值提升 + 渲染重试循环保护，2026.7.4）</h4>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">本阶段通过将原生 <code>&lt;input type="range"&gt;</code> 的视觉效果替换为自定义的轨道/填充/滑块 div 元素（原生 input 现在作为透明覆盖层处理触摸/拖动/键盘交互），实现了复盘进度条与评估折线图的真正像素级严格对齐。同时修复了走法列表滚动行为（仅当选中走法不可见时才滚动），并解决了第一性原理代码审计中发现的 7 项高/中优先级问题。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🎯 Bug 修复：复盘进度条与评估折线图对齐</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">v1.1.0 Phase 53 尝试使用原生 <code>&lt;input type="range"&gt;</code> 配合 CSS <code>::-webkit-slider-runnable-track</code> 边距和包装器内边距来对齐滑块轨道与图表数据点。此方案不可靠——WebKit 原生滑块在最小/最大值时的滑块位置取决于内部布局算法，在不同 WebView 版本间无法通过 CSS 完全控制。用户反馈进度条左右两端超出了折线图首末点的位置范围。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复方案</strong>：用自定义实现替换原生滑块视觉效果：</p>
+    <ul style="font-size:.82rem;color:#c8b888;line-height:1.6;margin-left:20px">
+      <li>滑块包装器与图表容器具有<strong>完全相同的 CSS</strong>（border:1px、padding:2px、box-sizing:border-box、width:100%），因此两者共享相同的内容盒宽度。</li>
+      <li>包装器内部的容器包含：基础轨道（从 left:0 到 right:0 的灰色条，占满全宽）、填充轨道（彩色进度条，从 left:0 开始）、滑块（6px 圆形）、以及一个透明的原生 <code>&lt;input type="range"&gt;</code> 覆盖层（opacity:0），后者处理所有触摸/拖动/键盘交互。</li>
+      <li>滑块的<strong>中心</strong>通过 CSS <code>calc()</code> 定位：<code>left: calc(ratio * 100%)</code>，其中 <code>ratio = reviewStep / maxStep</code>。这与图表数据点在 viewBox x=0（首点，左边缘）和 x=width（末点，右边缘）的位置完全匹配——折线图与进度条都左右占满全宽。</li>
+      <li>CSS <code>calc()</code> 在调整大小/屏幕旋转时自动调整（因为 <code>100%</code> 跟踪容器宽度），消除了闪烁，无需重新渲染即可处理布局变化。</li>
+      <li>滑块宽度为 6px，在最小值时中心位于 0%（左边缘），滑块左半部分向左溢出 3px；在最大值时中心位于 100%（右边缘），滑块右半部分向右溢出 3px。容器设置 <code>overflow:visible</code> 使溢出部分可见。</li>
+    </ul>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🎯 Bug 修复：复盘走法列表滚动</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">走法列表滚动代码在每次步数变化时都将活动走法居中，在附近走法间导航时感觉跳动。此外，<code>_lastReviewStepScrolled</code> 在 <code>requestAnimationFrame</code> 回调触发之前就被设置——如果回调失败（找不到元素），滚动将永远不会重试。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复</strong>：仅当选中走法<strong>不完全可见</strong>时才滚动（block:'nearest' 行为）。将 <code>_lastReviewStepScrolled</code> 更新移至 rAF 回调内部，在滚动成功后设置。如果找不到元素，标志不更新——下次渲染时重试。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🎯 Bug 修复：executeMove 异步回调未捕获异常</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><code>executeMove</code> 中的 <code>setTimeout</code> 回调（驱动 updateAfterMove、AI 走棋触发、游戏结束检查）没有 try-catch。如果 <code>gameStatus()</code> 或回调内的任何调用抛出异常，AI 将永远不会走棋，UI 也不会更新。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复</strong>：将回调体包装在 try-catch 中，并输出 <code>console.error</code>。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🎯 Bug 修复：ChessAudioEngine 部分初始化失败</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><code>init()</code> 先设置 <code>this.ctx</code>，然后在同一个 try 块中设置 <code>this.master</code>/<code>compressor</code>/<code>reverb</code>。如果后续行抛出异常，catch 返回 false 但 <code>this.ctx</code> 保持设置。所有未来的 <code>init()</code> 调用在早期的 <code>if(this.ctx) return true</code> 守卫处返回 true，导致引擎永久无声。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复</strong>：在 catch 块中重置所有字段（ctx、master、compressor、reverb、reverbGain、dryGain、_noiseBuf），并关闭部分初始化的 AudioContext。在 <code>setEnabled()</code> 和 <code>setVolume()</code> 中添加 <code>this.ctx</code> 空守卫。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🎯 Bug 修复：引擎心跳仅跟踪 onEngineEval</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">引擎心跳监视器在 <code>_lastEngineCallbackTime</code> 过期 120 秒后重启引擎。但 <code>_lastEngineCallbackTime</code> 仅在 <code>onEngineEval()</code> 内更新。在计时对局的长时间 AI 思考期间（AI 安全计时器为 360 秒；长时间控制常产生 120-300 秒思考），不请求评估，时间戳过期。120 秒时心跳触发 <code>restartEngine()</code>，强制取消进行中的 AI 搜索。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复</strong>：在 <code>onEngineProgress</code>、<code>onBestMove</code>、<code>onHintMove</code> 和 <code>onPonderProgress</code> 的顶部更新 <code>_lastEngineCallbackTime = Date.now()</code>——这些都是健康引擎的生命证明信号。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🎯 Bug 修复：MultiPV 次变例分叉偏移一位</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">MultiPV 次变例（bestmove 的替代线路）以 1 步偏移进行分叉检查，导致它们被附加到错误的走法记录。分叉检查总是使用 <code>actualIdx = fromMoveIdx + 1 + vi</code>，这对主线续局（PV 以对手应招开头）正确，但对次变例（PV 以 AI 的替代走法开头——与 bestmove 同侧）错误。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复</strong>：在 <code>_checkPVDivergenceSANs</code> 中，根据 <code>pending.firstMoveIsWhite</code> 与 <code>fromMoveIdx</code> 处的方色比较来计算起始索引。如果 <code>firstMoveIsWhite === (fromMoveIdx % 2 === 0)</code>（同侧），则该变例是替代——从 <code>actualIdx = fromMoveIdx + vi</code> 开始比较。否则（续局），从 <code>actualIdx = fromMoveIdx + 1 + vi</code> 开始（之前的行为）。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🎯 Bug 修复：PGN 级联跳过阈值过于激进</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><code>_parsePGN</code> 的级联失败安全限制（5 个连续无效标记）对于局部 PGN 损坏过于激进（例如，80 步对局中第 40-44 步有 OCR 错误）。旧限制下，第 45 步及以后的走法被静默丢弃。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复</strong>：将阈值提升至 <code>Math.max(15, mainTokens.length * 0.1)</code>——随游戏长度缩放，160 标记的游戏可容忍 16 个连续跳过后才中止。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🎯 Bug 修复：render() 重试循环无最大重试限制</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><code>render()</code> 函数在 <code>animationInProgress</code> 上的 200ms 重试循环没有最大重试限制——如果标志卡在 true，循环将无限运行。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复</strong>：添加 <code>_animRetryCount</code> 守卫（最多 10 次重试 = 2 秒）。10 次重试后，强制清除 <code>animationInProgress</code> 并立即渲染。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🎯 修订 2（2026.7.4）：折线图与进度条左右占满全宽</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">用户反馈：折线图的首个点和最后一个点与左右边缘仍有 3px 间隔，而进度条看起来已占满全宽。用户要求取消所有边缘间隔，让折线图和进度条都左右占满全宽。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复</strong>：将折线图左右内边距从 3 减为 0——首个数据点位于 viewBox x=0（左边缘），末个点位于 x=width（右边缘）。滑块中心位置改为 <code>calc(ratio * 100%)</code>（原为 <code>calc(3px + ratio * (100% - 6px))</code>），在最小值时中心位于 0%（左边缘），最大值时位于 100%（右边缘）——精确匹配折线图首末数据点。滑块基础轨道和填充从 <code>left:0</code> 开始（原为 <code>left:3px</code>）。滑块容器设置 <code>overflow:visible</code>，使 6px 滑块在最小/最大值时可向两侧溢出 3px。折线图首末数据点圆圈（r=2.75）被容器 <code>overflow:hidden</code> 半裁剪——这是预期的边缘到边缘效果，与滑块溢出方式一致。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🎯 修订 3（2026.7.4）：真正的边缘到边缘（移除容器内边距）+ 走法列表滚动跟随根本原因修复</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">用户反馈：即使经过修订 2，折线图首末数据点仍未位于左右边缘。第一性原理根因分析发现问题：折线图<strong>容器</strong>（<code>.review-chart</code>）的内联样式中仍有 <code>padding:2px</code>。SVG 填充容器的内容盒（从外边缘内缩 3px——1px 边框 + 2px 内边距）。viewBox 内边距=0 时，数据点位于内容盒边缘，从视觉外边缘内缩 3px。滑块包装器（<code>.rv-slider-wrap</code>）也有 <code>padding:2px</code>，所以滑块滑块也内缩——两者相互对齐，但都不在真正的边缘。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复（折线图边缘到边缘）</strong>：将折线图容器内联 <code>padding</code> 从 <code>2px</code> 改为 <code>0</code>（保留 <code>border:1px</code> 作为可见边框）。现在 SVG 填充整个内容盒（= 边框盒减去每侧 1px 边框），viewBox x=0 和 x=width 的数据点映射到 1px 边框的内边缘——视觉上边缘到边缘。滑块包装器 CSS <code>padding</code> 也设为 <code>0</code>（保留 <code>border:1px transparent</code>），所以 <code>calc(ratio * 100%)</code> 的滑块映射到相同的内边框边缘位置。两个容器具有相同的边框盒宽度（<code>.review-bottom</code> 的 100%），所以内容盒宽度匹配，数据点 + 滑块在真正的边缘完美对齐。<code>_trendW</code> 测量更新：由于 <code>padding:0</code>，<code>clientWidth</code> 等于内容盒宽度（无需减 4）。滑块标签（开始/步骤/结束文本）添加 <code>padding:2px 3px</code> 以免紧贴边缘。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复（走法列表滚动跟随）</strong>：用户报告走法列表"某些情况下没有正确跟随选中的走法跳转到视野中可见选中走法的滚动位置"。第一性原理根因分析发现两个问题：</p>
+    <ol style="font-size:.82rem;color:#c8b888;line-height:1.6;margin-left:20px">
+      <li><strong>滚动恢复冲突</strong>：<code>.review-moves</code> 在 <code>_savedContainerScrolls</code> 恢复列表中。当 <code>reviewStep</code> 改变（用户点击走法）时，渲染捕获旧滚动位置，重建 DOM（scrollTop 重置为 0），然后单 rAF 恢复旧滚动位置，然后双 rAF 运行 scroll-into-view。恢复与 scroll-into-view 冲突——先滚回旧位置，然后 scroll-into-view 检测到活动走法并再次滚动，导致可见的跳动闪烁。更糟的是，如果恢复使活动走法在边缘部分可见，"已可见"检查通过，走法停留在边缘。<strong>修复</strong>：当 <code>reviewStep</code> 改变时，跳过 <code>.review-moves</code> 滚动恢复（<code>_reviewStepChanged</code> 标志）。让 scroll-into-view 完全处理。当 <code>reviewStep</code> 未改变（如切换控件）时，恢复是正确的。</li>
+      <li><strong>"已可见"检查过于激进</strong>：如果活动走法"完全可见"（top &ge; 容器 top 且 bottom &le; 容器 bottom），scroll-into-view 代码跳过滚动。但如果走法在视口顶部或底部边缘（技术上可见但未居中），检查通过且不滚动——用户看到走法在边缘，未居中。<strong>修复</strong>：当 <code>reviewStep</code> 改变时，始终居中活动走法（移除"已可见"跳过）。用户明确导航到此步骤——他们希望看到它居中，而不是在边缘。</li>
+    </ol>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🎯 修订 4（2026.7.4）：走法列表滚动彻底重建 + 滑块圆点直径对齐折线图选中圆圈 + 无裁剪</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">用户反馈：（1）走法列表滚动仍然不正常。（2）进度条定位圆点在最左、最右会被裁剪，而折线图首末点不被裁剪。（3）进度条上的定位圆点的直径需要等于包裹折线图上当前选中的点的圆圈的直径才能正确达成像素级严格对齐。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复（走法列表滚动——彻底重建）</strong>：舍弃整个旧滚动机制（保存/恢复 <code>.review-moves</code> scrollTop + 条件 scroll-into-view + <code>_lastReviewStepScrolled</code> 守卫）。旧机制脆弱——保存/恢复与 scroll-into-view 冲突，<code>_lastReviewStepScrolled</code> 守卫导致跳过，"已可见"检查使走法停留在边缘。新机制简单可靠：</p>
+    <ul style="font-size:.82rem;color:#c8b888;line-height:1.6;margin-left:20px">
+      <li><code>.review-moves</code> 从 <code>_savedContainerScrolls</code> 保存/恢复列表中完全移除。其 scrollTop 永不在完整重新渲染间保存或恢复。</li>
+      <li>每次 <code>render()</code> 后，<strong>始终</strong>居中活动走法（<code>.rmv-block.act</code>）。无 <code>_lastReviewStepScrolled</code> 守卫，无"已可见"检查——每次渲染都居中。</li>
+      <li>用户滚动不触发完整 <code>render()</code>（虚拟列表滚动监听器执行部分刷新），因此居中逻辑不与用户滚动冲突。</li>
+    </ul>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复（滑块圆点直径 = 折线图选中圆圈直径）</strong>：折线图当前选中点标记是 SVG 圆圈，<code>r=4</code> + <code>stroke-width=1.5</code> → 外半径 4.75px → 外径 9.5px。滑块圆点原为 6px（太小）。将圆点改为 10px（≈ 9.5px 标记外径），使圆点视觉上匹配标记圆圈。滑块容器高度从 18px 增至 20px 以容纳更大圆点。原生 input 的 <code>::-webkit-slider-thumb</code> 和 <code>::-moz-range-thumb</code> 从 18px 增至 20px 以保持一致的触摸目标尺寸。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复（边缘无裁剪）</strong>：折线图容器的 <code>overflow</code> 从 <code>hidden</code> 改为 <code>visible</code>（内联样式和 <code>.review-chart</code> CSS 规则均改）。现在首末位置（viewBox x=0 和 x=width）的数据点圆圈（r=2.75）完全可见——它们溢出容器边缘 2.75px，由 <code>.review-bottom</code> 的 6px 水平内边距容纳。滑块圆点（10px）在最小/最大值时溢出 5px，也由 6px 内边距容纳。<code>.rv-slider-wrap</code> 显式设置 <code>overflow:visible</code> 以确保圆点永不被裁剪。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🎯 修订 5（2026.7.4）：评估值标签颜色对比度 + 全局模式标签移除 + 严格9.5px圆点 + 竖屏裁剪修复 + 走法列表滚动block:'nearest'</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">用户反馈：（1）局部模式评估值标签在浅色/深色模式下对比度不足。（2）避免标签在边缘被裁剪。（3）取消全局模式末端点评估值显示。（4）竖屏模式滑块圆点仍被裁剪。（5）滑块圆点必须严格采用9.5px外径。（6）走法列表甚至无法滚动了。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复（评估值标签颜色对比度）</strong>：新增 <code>--chart-label</code> CSS 变量——深色模式 <code>#f5e6c8</code>（浅色），浅色模式 <code>#2c2c34</code>（深色）。所有局部模式评估值标签现在使用 <code>_C_LABEL</code> 而非折线/填充/轴线颜色，确保两种主题下与背景的高对比度。将杀标签仍使用 <code>_C_CRIT</code>（金色）以示强调。标签描边提供额外对比度。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复（标签边缘裁剪）</strong>：标签使用 <code>text-anchor="middle"</code>，在 x=0 时左半部分被裁剪。新增 X 钳制：估算标签半宽为 <code>fontSize * label.length * 0.32</code>，将 X 钳制到 <code>[estHalfW, width - estHalfW]</code>，确保标签完全在折线图范围内。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复（全局模式标签移除）</strong>：移除了仅在全局模式下运行的"末端点将杀距离显示"整块代码。全局模式现在纯视觉（折线+点），无文本标签。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复（严格9.5px圆点）</strong>：滑块圆点从 10px 改为 7.5px 宽高 + 1px 边框 = 9.5px 外径，严格匹配折线图当前选中点标记圆圈（SVG <code>r=4</code> + <code>stroke-width=1.5</code> → 外半径 4.75 → 外径 9.5px）。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复（竖屏裁剪）</strong>：<code>.review-bottom</code> 水平内边距从 6px 增至 8px（> 4.75px 圆点溢出），确保 9.5px 圆点在竖屏/横屏最小/最大值时均不被裁剪。<code>.review-bottom</code> 显式设置 <code>overflow:visible</code>。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复（走法列表滚动——block:'nearest'）</strong>：修订 4 的"始终居中"方案破坏了滚动——每次渲染都重新居中活动走法，与用户滚动位置冲突。替换为 <code>block:'nearest'</code> 行为：仅当活动走法不完全可见时才滚动（上方则顶部对齐，下方则底部对齐）。如果已可见，不做任何操作（保留用户滚动）。仅在 <code>reviewStep</code> 改变时运行（恢复 <code>_lastReviewStepScrolled</code> 守卫）——切换控件时不重置滚动。这是标准的 <code>scrollIntoView({block:'nearest'})</code> 行为。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🎯 修订 6（2026.7.4）：原生scrollIntoView精确跳转 + 对称边缘裁剪实现严格对齐</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">用户反馈：（1）走法列表能正常滚动了，但点击不可见走法时没有精确跳转至视野范围。（2）或许让进度条滑块圆点和折线图首末数据点都在边缘被裁剪恰恰才是实现严格对齐的好方案。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复（走法列表滚动——原生scrollIntoView）</strong>：修订 5 的手动 <code>block:'nearest'</code> 计算存在边缘情况下的滚动位置错误（尤其是虚拟列表占位符高度估算误差）。替换为浏览器原生 <code>scrollIntoView({block:'nearest', behavior:'auto'})</code>，正确处理所有几何计算。这是浏览器内置的"滚动最小量使元素可见"——正是用户要求的"精确跳转至视野范围"行为。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复（对称边缘裁剪实现严格对齐）</strong>：将折线图容器的 <code>overflow</code> 从 <code>visible</code> 改回 <code>hidden</code>（内联样式和 <code>.review-chart</code> CSS 规则均改）。将滑块容器的 <code>overflow</code> 从 <code>visible</code> 改为 <code>hidden</code>。现在折线图首末数据点圆圈（r=2.75）和滑块圆点（9.5px外径）都在边缘被对称裁剪。它们的<strong>中心</strong>精确对齐于边缘（数据点位于 viewBox x=0/x=width，圆点位于 0%/100%），两者被裁剪相同的量。这实现了严格的像素级对齐——裁剪的半部分是镜像，因此可见部分完美对齐。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🎯 修订 7（2026.7.4）：导航按钮滚动拉回修复 + SVG overflow:hidden确保一致裁剪</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">用户反馈：（1）走法列表使用导航按钮滚动到一定程度就会被强制拉回到某个位置。（2）折线图首末数据点没有正确在边缘被裁剪——横屏模式下即使未选中走法时被裁剪，一旦选中就不被裁剪了。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复（导航按钮滚动拉回）</strong>：根本原因——每次 <code>render()</code>（导航按钮触发）执行 <code>app.innerHTML=h</code>，重建 DOM 并将 <code>.review-moves</code> 的 <code>scrollTop</code> 重置为 0。<code>scrollIntoView</code> 然后从 <code>scrollTop=0</code> 跳转到活动走法，丢失用户滚动位置。<strong>修复</strong>：新增 <code>_savedReviewMovesScroll</code>——在 <code>app.innerHTML=h</code> 之前保存 <code>.review-moves</code> 的 <code>scrollTop</code>，之后恢复（钳制到 <code>maxScroll</code>）。恢复在 <code>scrollIntoView</code> 逻辑之前执行。因此列表返回用户位置，然后 <code>scrollIntoView({block:'nearest'})</code> 仅在活动走法不可见时才滚动——保留用户视图并仅最小调整。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复（SVG边缘裁剪一致性）</strong>：根本原因——SVG 元素的 <code>overflow</code> 在某些 WebView 实现中默认为 <code>visible</code>，因此 viewBox 之外的 SVG 内容（x=0/x=width 处的数据点圆圈）不被 SVG 裁剪——仅被折线图容器的 <code>overflow:hidden</code> 裁剪。横屏模式下，当 <code>preserveAspectRatio="xMidYMid meet"</code> 缩放内容时（因 viewBox/视口宽高比不匹配），数据点向内移动，逃逸容器裁剪。<strong>修复</strong>：在 SVG 元素的内联样式中添加 <code>overflow:hidden</code>（<code>style="display:block;overflow:hidden"</code>）。现在 SVG 本身裁剪 viewBox 之外的内容，确保无论 <code>preserveAspectRatio</code> 缩放或选中状态如何，都能一致裁剪。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🎯 修订 8（2026.7.4）：SVG slice + 100x100 viewBox保证边缘填充 + 滚动恢复仅在步数未变时</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">用户反馈：（1）<code>preserveAspectRatio="xMidYMid meet"</code> 仍然导致数据点向内移动，逃逸容器裁剪——应该使用 <code>preserveAspectRatio="xMidYMid slice"</code> 配合 <code>viewBox="0 0 100 100"</code>。（2）导航按钮/点击走法滚动拉回 bug 仍然发生，彻底实施修复。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复（SVG slice + 100x100 viewBox）</strong>：将基于像素的 viewBox（<code>0 0 width height</code> 配合 <code>preserveAspectRatio="xMidYMid meet"</code>）替换为固定 <code>viewBox="0 0 100 100"</code> 和 <code>preserveAspectRatio="xMidYMid slice"</code>。"slice" 均匀缩放以<strong>覆盖</strong>容器（裁剪溢出），保证折线图填满全宽全高，无居中间隙。旧的 "meet" 模式缩放以<strong>适应</strong>内部，当容器宽高比与 viewBox 不同时留下间隙——数据点向内移动，逃逸边缘裁剪。所有坐标现在在 0-100 空间计算（非像素空间）：数据点半径 2.5→1.6，标记半径 4→2.5，描边宽度缩小，字体大小缩放到 0-100 范围。<code>_buildEvalTrendSVG</code> 函数不再接受 width/height 参数——固定 viewBox 处理所有缩放。移除了 <code>_trendW</code> 测量代码（不再需要）。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复（滚动恢复仅在步数未变时）</strong>：剩余拉回的根本原因——当 <code>reviewStep</code> 改变（导航按钮/点击）时，虚拟列表窗口重新计算以新活动走法为中心。<code>_savedReviewMovesScroll</code> 恢复然后尝试恢复旧 scrollTop——但 DOM 内容改变了（不同窗口），旧 scrollTop 指向空白区域。<code>scrollIntoView</code> 然后修正到活动走法——造成可见跳动。<strong>修复</strong>：仅当 <code>reviewStep</code> <strong>未</strong>改变时恢复 <code>_savedReviewMovesScroll</code>（<code>_reviewStepUnchanged</code> 标志 = <code>reviewStep === _lastReviewStepScrolled</code>）。当 <code>reviewStep</code> 改变时，完全跳过恢复，让 <code>scrollIntoView({block:'nearest'})</code> 从 <code>scrollTop=0</code> 处理。这消除了拉回——列表直接到达活动走法，没有到旧位置的中间跳动。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🎯 修订 9（2026.7.4）：消除scrollIntoView后的拉回（测量rAF重建 + 滚动驱动刷新）</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">用户反馈：走法列表到达活动走法后被拉回某个位置。第一性原理根因分析发现两个在 <code>scrollIntoView</code> 之后触发的异步操作重置了滚动位置：</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>根本原因 1——测量 rAF innerHTML 重建</strong>：首次虚拟渲染时（<code>!_rvVirtualState.measured</code>），一个 <code>requestAnimationFrame</code> 从真实 DOM 测量 <code>avgRowH</code>，然后用准确占位符高度<strong>重建</strong> <code>.review-moves</code> innerHTML 并恢复 <code>_oldScrollTop</code>。但 <code>_oldScrollTop</code> 是在 <code>scrollIntoView</code> 已经定位列表<strong>之后</strong>捕获的，新 DOM（准确占位符）有不同几何形状——恢复的 scrollTop 指向错误位置 → 拉回。<strong>修复</strong>：从测量 rAF 移除 innerHTML 重建 + scrollTop 恢复。现在测量<strong>仅</strong>记录 <code>avgRowH</code>——测量值在<strong>下次</strong>渲染时使用（从一开始就有正确占位符）。<code>scrollIntoView</code> 后无 DOM 重建。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>根本原因 2——滚动驱动刷新</strong>：<code>scrollIntoView</code> 编程式滚动 <code>.review-moves</code>，触发滚动事件 → <code>_onReviewMovesScroll</code> → <code>_refreshReviewMovesOnly</code>（80ms 防抖后）→ 重新计算虚拟窗口 → 重建 innerHTML → 在新 DOM（不同占位符高度）上恢复旧 scrollTop → 拉回。即使 <code>render()</code> 已经计算了正确窗口（包含活动走法），这仍然发生。<strong>修复</strong>：新增 <code>_suppressScrollRefresh</code> 守卫。当 <code>reviewStep</code> 改变时，在 <code>scrollIntoView</code> 双 rAF 之前设置 <code>_suppressScrollRefresh=true</code>。守卫使 <code>_refreshReviewMovesOnly</code> 提前返回（无窗口重计算，无 innerHTML 重建）。<code>scrollIntoView</code> 完成 + 300ms 边际后（足够让 80ms 防抖触发并被抑制），清除守卫使正常用户滚动恢复工作。这防止滚动驱动刷新干扰 <code>render()</code> 计算的窗口 + <code>scrollIntoView</code> 定位。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🎯 修订 10（2026.7.4）：分析全部时跳过scrollIntoView + preserveAspectRatio="none"修复折线图显示</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">用户反馈：（1）走法列表每隔一段时间拉回到某个位置。（2）评估折线图显示不全。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复（分析全部时跳过 scrollIntoView）</strong>：根本原因——"分析全部"期间（<code>_reviewAnalyzeAllActive=true</code>），<code>_reviewAnalyzeAdvance()</code> 将 <code>reviewStep</code> 改为下一个待分析步骤（每 1-5 秒一次评估完成时），然后调用 <code>render()</code>。每次 <code>render()</code> 触发 <code>scrollIntoView</code>（因为 <code>reviewStep !== _lastReviewStepScrolled</code>），将列表拉到分析步骤——即使用户没有导航到那里。这就是"每隔一段时间拉回" bug（每 1-5 秒周期性拉回）。<strong>修复</strong>：当 <code>_reviewAnalyzeAllActive</code> 为 true 时，完全跳过 <code>scrollIntoView</code>——保留用户滚动位置。<code>scrollIntoView</code> 在分析全部完成并返回用户原始步骤时（通过 <code>reviewGoTo(returnStep)</code>）运行一次。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复（折线图显示 preserveAspectRatio="none"）</strong>：根本原因——修订 8 的 <code>preserveAspectRatio="xMidYMid slice"</code> 配合 <code>viewBox="0 0 100 100"</code> 导致垂直裁剪。"slice" 均匀缩放以<strong>覆盖</strong>容器——缩放因子为 <code>max(containerW/100, containerH/100)</code>。对于宽而短的容器（竖屏：约 350x100px），缩放 = 350/100 = 3.5。折线图内容（viewBox y=12 到 y=96 = 84 单位）变为 84*3.5 = 294px 高——但容器只有 100px，所以 194px 的折线图内容被垂直裁剪（"显示不全"）。<strong>修复</strong>：将 <code>preserveAspectRatio</code> 从 <code>"xMidYMid slice"</code> 改为 <code>"none"</code>。"none" 在 X 和 Y 方向独立拉伸 SVG 以<strong>填充</strong>容器——无裁剪、无居中间隙。0-100 viewBox 直接映射到容器的像素尺寸：X 拉伸到全宽，Y 压缩到全高。折线图线可能有轻微宽高比变形，但<strong>所有</strong>内容可见。x=0 和 x=100 处的数据点位于左/右边缘（被 <code>overflow:hidden</code> 裁剪以与滑块对称边缘对齐）。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🎯 修订 11（2026.7.4）：动态viewBox匹配容器宽高比 + 始终恢复scrollTop消除所有拉回</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">用户反馈：（1）<code>viewBox="0 0 100 100"</code> 配合 <code>preserveAspectRatio="none"</code> 效果太差，放弃采用，保留 <code>preserveAspectRatio="xMidYMid slice"</code>，使用第一性原理研究最佳方案。（2）走法列表周期性拉回仍然发生。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复（折线图——动态 viewBox 匹配容器）</strong>：第一性原理分析："slice" 均匀缩放以<strong>覆盖</strong>容器，裁剪溢出。为避免裁剪，viewBox 宽高比必须<strong>等于</strong>容器的宽高比。当两者匹配时，"slice" 以 1:1 缩放——无裁剪、无间隙、无变形。<strong>方案</strong>：使用<strong>动态</strong> viewBox <code>0 0 &lt;width&gt; &lt;height&gt;</code>，其中 width 从现有 <code>.review-chart</code> 容器的 <code>clientWidth</code> 测量（首次渲染时从窗口估算），height 为 <code>_trendH</code>。由于 viewBox 宽高比等于容器的像素宽高比，"slice" 产生 1:1 缩放——<strong>所有</strong>内容可见，<strong>无</strong>裁剪，<strong>无</strong>变形。这保留了 <code>preserveAspectRatio="xMidYMid slice"</code>（如用户要求），同时修复显示。所有坐标回到像素空间（数据点 r=2.5，标记 r=4，描边宽度/字体大小为原始像素值）。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复（滚动——始终恢复 scrollTop）</strong>：第一性原理分析：周期性拉回发生是因为<strong>任何</strong>改变 <code>reviewStep</code> 的 <code>render()</code>（包括分析全部的 <code>_reviewAnalyzeAdvance</code>）都会触发 <code>scrollIntoView</code>，重新定位列表。修订 8/10 的修复仅在分析全部期间跳过 scrollIntoView，但其他周期性渲染仍可能导致问题。<strong>稳健方案</strong>：<strong>始终</strong>在 DOM 重建间保存和恢复 <code>.review-moves</code> 的 scrollTop（无论 reviewStep 是否改变）。恢复在 scrollIntoView <strong>之前</strong>发生。然后 scrollIntoView 仅在以下情况运行：（1）reviewStep 改变（用户导航），且（2）分析全部未激活。当 scrollIntoView 运行时，它用 <code>block:'nearest'</code>（最小滚动）调整<strong>已恢复</strong>的位置。当 scrollIntoView 被跳过时（分析全部，或 reviewStep 未改变），恢复的位置保持不变——<strong>无任何来源的拉回</strong>。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🎯 修订 12（2026.7.4）：分析全部推进时不调用render()彻底消除周期性拉回</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">用户反馈：走法列表仍然时不时拉回。修订 11 的修复（始终恢复 scrollTop + 分析全部期间跳过 scrollIntoView）减少了拉回但未完全消除——因为 <code>_reviewAnalyzeAdvance()</code> 仍然在每步调用 <code>render()</code>，重建 DOM（<code>app.innerHTML=h</code>）并强制虚拟列表窗口围绕新 <code>reviewStep</code> 重新计算——丢弃了用户基于滚动的窗口。即使恢复了 scrollTop，DOM 内容已改变（不同窗口），恢复的 scrollTop 指向了不同位置。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复</strong>：从 <code>_reviewAnalyzeAdvance()</code> 移除 <code>render()</code> 调用。分析全部期间，推进现在<strong>仅</strong>调用 <code>_updateAllEvalDisplays()</code>（更新评估栏，无 DOM 重建）+ <code>_updateReviewAnalyzeBtn()</code>（更新按钮标签，无 DOM 重建）+ <code>requestEngineEval()</code>（启动下一个评估）。棋盘/评估栏/走法列表在分析期间<strong>不</strong>重建——保持用户离开时的位置。完整 <code>render()</code> 在分析全部完成并返回用户原始步骤时（通过 <code>reviewGoTo(returnStep)</code> → <code>render()</code>）<strong>仅运行一次</strong>。这彻底消除了周期性拉回——无 DOM 重建 = 无滚动干扰。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🎯 修订 13（2026.7.4）：修复虚拟列表窗口重计算丢弃用户滚动位置（>90步回退）</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">用户反馈：走法列表大于 90 步（45 回合）后无法保持完整，总是回退到 90 步以前。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>根本原因</strong>：虚拟列表窗口重计算条件为 <code>_curEnd===Infinity || !_rvVirtualState.measured || _stepChanged</code>。<code>!_rvVirtualState.measured</code> 条件在 <code>avgRowH</code> 被测量之前（发生在渲染后 rAF 中）的<strong>每次</strong> <code>render()</code> 都强制重新计算窗口。当用户滚动到第 91 步以后（通过 <code>_refreshReviewMovesOnly</code> 更新虚拟窗口），然后触发<strong>任何</strong> <code>render()</code>（切换、导航按钮等），<code>!measured</code> 条件会强制窗口回到以 <code>reviewStep</code>（活动走法）为中心——丢弃了用户基于滚动的窗口。由于 <code>reviewStep</code> 可能 ≤90（用户在查看第 91 步以后但未导航到那里），窗口回退到 90 步以前。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复</strong>：从窗口重计算守卫中移除 <code>!_rvVirtualState.measured</code> 条件。现在窗口仅在以下情况重新计算：（a）首次虚拟渲染（<code>_curEnd===Infinity</code>），或（b）<code>reviewStep</code> 改变（<code>_stepChanged</code>）。当用户滚动但未改变 <code>reviewStep</code> 时，虚拟窗口已由 <code>_refreshReviewMovesOnly</code>（滚动驱动）更新——我们<strong>不能</strong>在 <code>render()</code> 中重新计算它。<code>avgRowH</code> 测量仍在渲染后 rAF 中运行，但不再强制窗口重计算；它仅记录测量值供下次渲染使用。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🎯 修订 14（2026.7.4）：彻底禁用虚拟列表——一次性消除所有走法列表bug</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">用户反馈：走法列表 bug 太多——无法通过滚动加载出大于 40 步的走法列表，快速连点导航按钮触发强制性拉回，选中走法有时丢失选中状态，到达最后一步后再点击导航按钮丢失选中状态。第一性原理分析：<strong>所有</strong>这些 bug 都是由虚拟列表（窗口化渲染）引起的。虚拟列表增加了巨大的复杂性（窗口跟踪、占位符高度估算、滚动驱动刷新、测量 rAF、抑制守卫），而性能提升微乎其微——典型国际象棋对局有 40-80 步，即使 200 步作为完整列表也能正常渲染（每行只是一个简单的 <code>&lt;div&gt;</code> 文本，现代 WebView 轻松处理 200 个 DOM 节点）。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复</strong>：设置 <code>RV_VIRTUAL_THRESHOLD=Infinity</code>——这会为<strong>所有</strong>对局禁用虚拟列表。每个走法始终渲染为 DOM 节点。这一次性消除：无法滚动超过 40 步、快速导航拉回、选中状态丢失、>90 步回退、<code>_refreshReviewMovesOnly</code> 周期性拉回、<code>_suppressScrollRefresh</code> 守卫、<code>_forceReviewWindowToStep</code>、avgRowH 测量 rAF、占位符高度估算误差。滚动跟随逻辑简化为：当 <code>reviewStep</code> 改变且分析全部未激活时，在双 rAF 中直接调用 <code>scrollIntoView({block:'nearest'})</code>。无需虚拟列表守卫或抑制。</p>
+    <h5 style="color:#9b59b6;margin-top:10px;margin-bottom:4px;font-size:.82rem">🧹 修订 15（2026.7.4）：死代码清理——移除所有虚拟列表残留</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">修订 14 禁用虚拟列表后的第一性原理代码审计。移除了所有仅在虚拟列表启用时可达的死代码：死函数（<code>_suppressScrollRefresh</code>、<code>_refreshReviewMovesOnly</code>、<code>_onReviewMovesScroll</code>、<code>_forceReviewWindowToStep</code>、<code>_computeVirtualWindow</code>）、死常量（<code>RV_OVERSCAN</code>、<code>RV_SCROLL_DEBOUNCE_MS</code>）、死变量（<code>_lastRenderReviewStep</code>）、<code>render()</code> 中的死分支（<code>if(_rvVirtualState.enabled)</code> 窗口重计算块）、死渲染后块（滚动监听器 + avgRowH 测量 rAF）、<code>_buildReviewMovesInnerHTML</code> 中的死占位符分支。总计移除约 145 行死代码。无运行时行为变化。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🎯 修订 16（2026.7.4）：修复最后一步选中滚出视野 + 进入复盘从第0步开始 + ⏮需点两次</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">用户反馈：（1）选中最后一步后再点击 ▶ 或 ⏭，列表滚动到看不见选中走法的位置。（2）刚进入复盘界面时，第0步未被纳入折线图，且 ⏮ 按钮点击一次不抵达第0步（到第1步，需再点一次）。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复（选中滚出视野）</strong>：两个根本原因——<code>scrollIntoView({block:'nearest'})</code> 仅滚动最小量使元素可见（如果元素在视口底部边缘则留在边缘，不居中）；在最后一步点击 ▶ 时 <code>reviewGoTo(reviewStep+1)</code> 钳制为同一步——<code>reviewStep</code> 不变，<code>_lastReviewStepScrolled</code> 守卫跳过 <code>scrollIntoView</code>，但 <code>render()</code> 仍重建 DOM，滚动位置可能偏移。<strong>修复</strong>：<code>block:'nearest'</code> → <code>block:'center'</code>（活动走法始终居中）；在 <code>reviewGoTo()</code> 开头强制 <code>_lastReviewStepScrolled=-2</code>，使守卫始终触发，<code>scrollIntoView</code> 始终运行。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复（第0步未纳入 + ⏮两次点击）</strong>：<code>enterReview()</code> 设置 <code>reviewStep=reviewStates.length-1</code>（最后一步），导致图表从最后一步开始而非第0步。且 ⏮ 按钮（<code>reviewGoTo(0)</code>）从最后一步到第0步——但图表局部模式窗口在第0步时为 <code>[0, 0]</code> = 仅一个点，图表返回空字符串。<strong>修复</strong>：<code>enterReview()</code> 设置 <code>reviewStep=0</code>（初始位置），确保第0步从一开始就纳入图表，⏮ 在第0步时正确工作（一次点击）。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🎯 修订 17（2026.7.4）：修复复盘界面点击导航按钮/走法后页面滚回顶部</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">用户反馈：每次点击导航按钮或点击走法后，界面会滚回顶部。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>根本原因</strong>：<code>render()</code> 通过 <code>app.innerHTML=h</code> 重建整个 DOM，将 <code>.review-body</code>（外层滚动容器）和 <code>.review-moves</code>（内层走法列表）的 <code>scrollTop</code> 都重置为 0。<code>.review-moves</code> 的恢复代码在 <code>requestAnimationFrame</code> 中执行——太晚了：浏览器在 rAF 回调触发前就绘制了 <code>scrollTop=0</code> 状态，导致可见的"跳到顶部"闪烁。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复</strong>：<code>.review-body</code> 和 <code>.review-moves</code> 的 <code>scrollTop</code> 恢复现在都是<strong>同步</strong>的——在 <code>app.innerHTML=h</code> 之后立即执行，在浏览器绘制之前。<code>scrollBehavior</code> 在赋值前设为 <code>'auto'</code>（瞬时），赋值后重置为 <code>''</code>（默认）。用户永远不会看到 <code>scrollTop=0</code> 状态。双 rAF 中的 <code>scrollIntoView({block:'center'})</code> 随后从恢复的位置（而非 0）开始调整，使过渡平滑。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🎯 修订 18（2026.7.4）：修复分析全部时棋盘不刷新 + 恢复自动选中/跳转正在分析的走法</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">用户反馈：（1）复盘界面棋盘渲染过迟甚至不刷新。（2）恢复分析全部自动选中正在分析的走法、自动跳转到正在分析的局面的功能。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>根本原因（棋盘不刷新）</strong>：修订 12 从 <code>_reviewAnalyzeAdvance()</code> 移除了 <code>render()</code> 以修复滚动拉回 bug。但这意味着分析期间棋盘、评估栏、走法列表、折线图都不更新——用户看到的是过期位置。棋盘"不刷新"或"渲染过迟"是因为它只在分析完成时才更新一次。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复</strong>：在 <code>_reviewAnalyzeAdvance()</code> 中恢复 <code>render()</code> 调用。修订 12 试图修复的滚动拉回现在已由同步 scrollTop 恢复（修订 17）正确处理——所以 <code>render()</code> 可以安全调用。用户看到棋盘随每步分析更新，走法列表高亮活动走法，<code>scrollIntoView({block:'center'})</code> 将其居中。同时在 <code>render()</code> 前强制 <code>_lastReviewStepScrolled=-2</code>，使 <code>scrollIntoView</code> 始终触发（活动步数已改变）。</p>
+    <h5 style="color:#9b59b6;margin-top:10px;margin-bottom:4px;font-size:.82rem">🧹 修订 19（2026.7.4）：终极审计——移除过时分析全部滚动守卫 + 修复 _savedReviewBodyScroll 未清除</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">终极第一性原理代码审计。两项发现：</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">（1）<strong>过时的分析全部滚动守卫</strong>：<code>if(_reviewAnalyzeAllActive)</code> 守卫在分析全部期间跳过 <code>scrollIntoView</code>——已过时，因为修订 18 恢复了 <code>render()</code>，用户现在<strong>希望</strong>在分析期间看到棋盘更新 + 活动走法居中。移除守卫，使 <code>scrollIntoView({block:'center'})</code> 在 <code>reviewStep</code> 改变时始终运行（包括分析全部期间）。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">（2）<strong>_savedReviewBodyScroll 未清除</strong>：<code>.review-body</code> 的 scrollTop 在 <code>app.innerHTML=h</code> 前保存、后恢复，但从未清除为 0。下次渲染时，过期值仍 > 0，导致即使用户未滚动也会产生错误的恢复。修复：恢复后清除 <code>_savedReviewBodyScroll=0</code>（与现有 <code>_savedReviewMovesScroll=0</code> 模式一致）。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🎯 修订 20（2026.7.4）：修复摆棋/导入后旧对局引擎变异数据污染新对局</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">用户反馈：已有走法记录时完成摆棋或进行导入（PGN 或 FEN）所开始的新对局受旧对局残留缓存污染。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>根本原因</strong>：引擎 PV 变异数据（<code>_pendingEngineSANs</code>、<code>_pendingEnginePVs</code>、<code>_multiPVLines</code>、<code>_multiPVResult</code>、<code>_lastEngineVariation</code>）和 <code>reviewCritical</code> 按 <code>moveRecords</code> 索引（0, 1, 2, ...）存储。新对局开始时 <code>moveRecords</code> 被清除并从 0 重建——但旧对局的引擎变异数据从未清除。旧索引现在映射到新对局的不同走法，导致过期变体附加到错误走法，过期关键走法标记出现在错误位置。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复</strong>：在所有三个入口点清除过期引擎变异数据：<code>_exitSetupImpl()</code>（ui.js）、<code>_applyImportedFEN()</code>（tablebase.js）、<code>importPGN()</code>（tablebase.js）。这匹配了现有 <code>_visualAnnotationsCache.clear()</code> 在 <code>_resetGameUIState()</code> 中的模式（相同的索引重用问题）。</p>
+    <h5 style="color:#9b59b6;margin-top:10px;margin-bottom:4px;font-size:.82rem">🧹 修订 21（2026.7.4）：终极审计——在新游戏对话框路径也清除过期引擎数据</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">终极第一性原理审计发现 <code>_startGameImpl()</code>（"新游戏"对话框路径）缺少修订 20 添加到 <code>_exitSetupImpl</code>、<code>_applyImportedFEN</code>、<code>importPGN</code> 的过期引擎变异数据清除。从对话框开始新游戏也会从 0 重用 <code>moveRecords</code> 索引，因此旧对局的 <code>_pendingEngineSANs</code>、<code>_pendingEnginePVs</code>、<code>_multiPVLines</code>、<code>_multiPVResult</code>、<code>_lastEngineVariation</code>、<code>reviewCritical</code> 会污染新对局。修复：在 <code>_startGameImpl()</code> 中添加相同的清除。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🎯 修订 22（2026.7.4）：修复统计数据界面Chess960王车易位支持</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">用户反馈：统计数据界面的 PGN 解析、棋盘显示不支持 Chess960 王车易位。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>根本原因</strong>：stats.html 中三个问题：（1）<code>buildSAN()</code> 使用 <code>Math.abs(move.to.col-move.from.col)===2</code> 检测王车易位——这遗漏了 Chess960 中王只移动 1 列的易位（如王在 f1 王车易位到 g1）。（2）<code>fenToState()</code> 仅解析标准 KQkq 易位标记——Chess960 FEN 使用 Shredder 标记（文件字母如 AHah）。（3）<code>gameVariant</code> 从未在 stats.html 中设置——<code>executeMove()</code> 中的 <code>_is960</code> 检查始终为 false。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复</strong>：（1）<code>buildSAN()</code> 使用与 <code>executeMove()</code> 相同的易位检测逻辑（王在底线、移动到 col 6 或 2、Chess960 ≥1 列距离、目标格为空、易位权存在）。（2）<code>fenToState()</code> 添加 Shredder-FEN 解析，根据王的位置将文件字母映射到 whiteKingside/whiteQueenside 等。（3）<code>openStatsPage()</code>（ai-bridge.js）在 payload 中发送 <code>gameVariant</code>；stats.html 从 payload 接收；<code>parsePGN()</code> 也从 PGN <code>[Variant]</code> 头检测 Chess960（用于统计页面直接导入 PGN）。</p>
+    <h5 style="color:#9b59b6;margin-top:10px;margin-bottom:4px;font-size:.82rem">📝 Phase 54 修改的文件</h5>
+    <ul style="font-size:.78rem;color:#a89868;line-height:1.5;margin-left:20px">
+      <li><code>src/main/assets/chess.src/ui.js</code>（自定义滑块 HTML/CSS/JS、走法列表滚动修复、executeMove try-catch、音频引擎初始化重置、渲染重试守卫）</li>
+      <li><code>src/main/assets/chess.src/ai-bridge.js</code>（所有回调中的心跳时间戳、MultiPV 分叉修复）</li>
+      <li><code>src/main/assets/chess.src/tablebase.js</code>（PGN 级联跳过阈值）</li>
+      <li><code>src/main/assets/chess.src/index.html.tpl</code>（自定义滑块 CSS、移除旧的原生滑块 CSS）</li>
+      <li><code>NOTICE</code>、<code>README.md</code>、所有 <code>README.license</code> 文件（Phase 54 更新日志）</li>
+      <li><code>Manual/Regalia-v1.1.0-manual-{zh,en}.html</code>（Phase 54 更新日志置顶）</li>
+    </ul>
+
+                <!-- v1.1.0 PHASE 53 -->
+<h4 style="color:#d4a017;margin-top:14px;margin-bottom:6px;font-size:.9rem;border-top:1px dashed rgba(212,160,23,.3);padding-top:10px">🆕 v1.1.0 第五十三阶段新增（绿色箭头改为应将路径 + 红色将军箭头发现将军修复 + 王位置过时修复 + FEN导入状态污染修复 + 摆棋完成状态污染修复 + 竖屏横屏复盘布局统一 + 统计视觉注解截止步数修复 + 复盘进度条与折线图严格对齐 + 王控制箭头合法性过滤 + 导航按钮居中，2026.7.3）</h4>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">本阶段将绿色箭头视觉注解从「避将路径」重定义为「应将路径」，修复 v1.0.9 中王无合法避将时仍显示箭头的 Bug，修复统计数据界面视觉注解统计区块不随选中走法改变截止步数的问题，实现复盘界面进度条与评估折线图的像素级严格对齐（进度条两端与折线图首末点对齐），过滤控制范围热力图/格子控制信息栏/视觉注解中从王位置起始的非法走法箭头，并将复盘导航按钮文本居中对齐。版本号升至 v1.1.0（versionCode=110）。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🎯 行为变更：绿色箭头从「避将路径」改为「应将路径」</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">v1.0.9 的实现仅检查控制图（<code>cm[er][ec][moverColor]</code>）中被将王相邻格的攻击者数量，存在两个缺陷：</p>
+    <ol style="font-size:.82rem;color:#c8b888;line-height:1.6;margin-left:20px">
+      <li>未验证王是否可以<strong>合法</strong>移动到该格——例如，滑行棋子（车/象/后）穿过王当前位置攻击该格时，王移走后该格仍被攻击，但控制图基于走法前的棋盘计算，无法反映王移动后的攻击几何。结果：绿色箭头被画到王无法实际到达的格子（如王移动后仍被将军的格子）。</li>
+      <li>仅生成王避将箭头，忽略了非王棋子「吃将军棋子」的应将方式（这是应将的另一半方式）。按用户规范，绿色箭头应同时包含王避将与合法吃将军棋子两类应将走法。</li>
+    </ol>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复</strong>：用两次 <code>legalMoves()</code> 调用替换控制图检查：</p>
+    <ul style="font-size:.82rem;color:#c8b888;line-height:1.6;margin-left:20px">
+      <li><code>legalMoves(postState, oppKingPos)</code> 返回王的合法避将走法（正确处理钉子、被挡住的格子、王移动后不被将军规则）。若王无合法避将（闷杀、底线杀、被钉住等），<strong>不</strong>生成任何从王起始的绿色箭头——这修复了缺陷 (1)。</li>
+      <li><code>legalMoves(postState, null)</code> 返回被将方所有合法走法；过滤目的地为将军棋子位置的走法。对每个合法吃子走法，生成从吃子棋子位置到将军棋子位置的绿色箭头。王吃相邻将军棋子的走法已被 (1) 覆盖，此处跳过以避免重复箭头。包括合法的吃过路兵（用于应将发现的过路兵将军）。双将军时只有王能应将（吃一个将军棋子后另一个仍在将军），<code>legalMoves</code> 正确排除非王吃子走法。</li>
+    </ul>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>Chess960 兼容</strong>：<code>legalMoves</code> 处理 Chess960 王车易位（被将军时禁止，通过 <code>isChess960CastlingLegal</code>）与吃过路兵，与标准国际象棋完全一致——无需特殊代码。被将军时易位的箭头永不生成，因为 <code>legalMoves</code> 正确排除了它们。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🐛 修复：红色将军箭头使用实际将军棋子位置（发现将军支持）</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">红色将军箭头此前从走棋方棋子的目标格起始。这对于发现将军是错误的——走棋方棋子移开后，暴露了另一个棋子对王的将军。箭头应从实际将军的棋子（可能是未移动的另一个棋子）起始。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复</strong>：红色箭头现在使用控制图（<code>cm[oppKingPos.row][oppKingPos.col][moverColor]</code>）中的<strong>实际将军棋子位置</strong>。对于直接将军，走棋方棋子就是将军棋子，箭头不变。对于发现将军，将军棋子是被暴露的另一个棋子，箭头正确地从该棋子位置起始。对于双将军，绘制多条红色箭头（每个将军棋子一条），从将军棋子位置指向被将军的王位置。回退：如果控制图为 null，使用旧行为（走棋方棋子目标格）。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🐛 修复：王位置记录过时</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">通过第一性原理全面排查，发现三个导致王位置（<code>wk</code>/<code>bk</code>）过时的根本原因并修复：</p>
+    <ol style="font-size:.82rem;color:#c8b888;line-height:1.6;margin-left:20px">
+      <li><strong>重放跳过导致状态损坏</strong>（<code>_computeAndCacheVisualAnnotations</code>）：重放路径使用 <code>continue</code> 跳过无法重放的走法（空走法记录、无效起点/终点、起点无棋子）。跳过走法使状态不变，后续走法应用到过时状态上，王位置也过时。<strong>修复</strong>：如果任何走法无法重放，停止整个重放并返回不缓存（部分重放的状态不安全）。</li>
+      <li><strong>enterReview 缺少 Chess960 易位标志</strong>：<code>enterReview</code> 构建 <code>reviewStates</code> 时未传递 <code>castle</code> 标志。虽然 <code>_castleSide</code> 的回退检测器可以处理，但显式标志更可靠。<strong>修复</strong>：当 <code>mr.isCastling</code> 为 true 时传递 <code>mv.castle</code>（与重放路径一致）。</li>
+      <li><strong>enterReview 未检查 makeMv 返回值</strong>：<code>enterReview</code> 未检查 <code>makeMv</code> 是否成功——如果返回 null，旧状态用于后续走法，导致级联损坏。<strong>修复</strong>：检查 <code>makeMv</code> 返回值；如果失败，推送占位符状态但不更新运行状态。</li>
+    </ol>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🐛 修复：FEN 导入状态污染</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">当已有走法记录缓存时导入 FEN，三个旧对局状态会污染新对局：</p>
+    <ol style="font-size:.82rem;color:#c8b888;line-height:1.6;margin-left:20px">
+      <li><strong>_cachedOriginalPGN 未清除</strong>：如果前一局是 PGN 导入，其文本会泄露到统计页面和 PGN 导出。<strong>修复</strong>：FEN 导入时清除 <code>_cachedOriginalPGN</code>。</li>
+      <li><strong>playerWhite/playerBlack 未清除</strong>：如果前一局是带玩家名的 PGN 导入（如 <code>[White "Magnus"]</code>），这些名字会保留到新对局。<strong>修复</strong>：FEN 导入时清除 <code>playerWhite</code>/<code>playerBlack</code>（与 <code>_startGameImpl</code> 一致）。</li>
+      <li><strong>_setupFEN 未设置</strong>：FEN 导入的起始位置在 PGN 导出时会丢失（无 <code>[FEN]</code> 头）。<strong>修复</strong>：将 <code>_setupFEN</code> 设为导入的 FEN 字符串（与 <code>importPGN</code> 和 <code>exitSetup</code> 一致）。</li>
+    </ol>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">走法记录在 PGN 和 FEN 导入时都正确清除为 <code>[]</code>，<code>_prependBlackToMovePlaceholder</code> 在 FEN 为黑方走棋时添加 null 占位符。新对局从第 1 回合（或 FEN 指定的回合数）开始，不受旧对局走法记录的污染。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🐛 修复：摆棋完成状态污染</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">在已有走法记录的情况下完成摆棋时，<code>_exitSetupImpl</code> 未调用 <code>_resetGameUIState()</code>（与 <code>_applyImportedFEN</code> 和 <code>importPGN</code> 不同），导致旧对局的状态泄露到新对局：包括 <code>_cachedOriginalPGN</code>（旧 PGN 文本泄露到统计/PGN 导出）、<code>playerWhite</code>/<code>playerBlack</code>（旧玩家名）、<code>_visualAnnotationsCache</code>（旧 <code>[%csl]</code>/<code>[%cal]</code>）、AI/提示栏文本、缓存状态、AI 思考状态、引擎评估状态、认输状态、控制图缓存、ECO 缓存、评估值、残局库加载状态等。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复</strong>：在 <code>_exitSetupImpl</code> 开头调用 <code>_resetGameUIState()</code>，然后额外清除 <code>_resetGameUIState</code> 未覆盖但 <code>_applyImportedFEN</code>/<code>importPGN</code> 已清除的状态（<code>_cachedOriginalPGN</code>、<code>playerWhite</code>、<code>playerBlack</code>、<code>_ecoRecCache</code>、<code>_sfEval</code>、<code>_sfMateDistance</code>、<code>_sfDepth</code>、<code>_sfEvalReady</code>、<code>_evalLoading</code>、<code>_needNewGameForEngine</code>、<code>_tbLoading</code>、<code>_tbRetryCount</code>）。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🎨 行为变更：竖屏横屏复盘布局统一</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">此前竖屏复盘模式将所有控件（评估栏、进度条、折线图、导航按钮、分析按钮）放在 <code>.review-left</code>（棋盘列）内，使它们比视口窄。横屏使用独立的 <code>.review-bottom</code> 容器跨越整个视口宽度。现在两种朝向都使用相同的 <code>.review-bottom</code> 容器，使进度条、折线图、导航按钮和评估栏在竖屏和横屏下具有相同的样式和宽度。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>变更</strong>：(1) JS 竖屏分支现在生成与横屏相同的 <code>.review-top</code>（棋盘+走法）+ <code>.review-bottom</code>（控件）结构。(2) <code>.review-top</code>、<code>.review-left</code>、<code>.review-moves</code>、<code>.review-bottom</code>、<code>.review-chart</code>、<code>.review-slider</code>、<code>.review-nav</code> 和评估栏的 CSS 规则从 <code>@media(orientation:landscape)</code> 移至全局作用域。(3) 竖屏 <code>.review-body</code> 现在有 <code>overflow-y:auto</code> + <code>max-height:calc(100vh - 28px)</code>。(4) 评估栏字体大小统一为 <code>.8rem</code>。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🐛 修复：统计数据界面视觉注解统计区块不随选中走法改变截止步数</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">视觉注解统计区块（蓝/红/黄/绿格 + 箭头计数 + NAG 分布）扫描<strong>整个</strong> PGN 文本，无论选中哪个主线走法，使其与其他统计区块（使用 <code>effectiveParsed.moves</code>，已切片到选中走法）不一致。按 v1.1.0 任务规范：「统计界面的视觉注解统计区块应随选中走法改变——只统计从开局到选中走法为止的 [%csl]/[%cal] 标签数量」。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修复</strong>：新增 <code>_slicePGNAtMove(pgnText, moveCount)</code> 辅助函数，直接遍历原始 PGN 文本（无预处理），跟踪 tag 剥离、花括号注释深度、分号注释、变例深度（圆括号）、NAG、走法编号、SAN 走法 token。在第 N 个主线走法 token（N = <code>_selectedMoveIdx + 1</code>）之后，函数包含紧随其后的 <code>{...}</code> 注释和/或 <code>$N</code> NAG（「走法块」），然后截断文本。视觉注解区块现在使用此切片文本进行「是否有视觉注解」检查和按颜色计数，使其与 <code>effectiveParsed.moves</code> 一致。变例选择和 FEN 选择保持不变（变例的注解位于 <code>(...)</code> 块内，切片器有意跳过；FEN 选择意味着没有主线走法可限定范围）。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🎨 行为变更：复盘界面进度条与评估折线图严格对齐（修订）</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">v1.0.9 布局中，滑块轨道（track）跨越输入元素的整个宽度 [0, width]，而折线图的数据点向内缩进 8px（位于 [8, width-8]）。这使进度条左右两端超出折线图首个点、最后一个点的位置范围。</p>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6"><strong>修订修复</strong>（第一性原理重新分析后）：目标是使滑块<strong>轨道两端</strong>与折线图的首个/最后一个数据点对齐，并将数据点离边缘的距离缩小至极限。</p>
+    <ol style="font-size:.82rem;color:#c8b888;line-height:1.6;margin-left:20px">
+      <li>折线图内部 padding 从 8 减至 3（左右）——这是防止数据点圆形被裁剪的极限值（数据点圆形半径 r=2.5 + 描边 0.5 = 2.75px 外半径，padding=3 确保首个/最后一个点的左/右边缘不超出 SVG 边界）。首个/最后一个数据点位于 [3, width-3]。</li>
+      <li>滑块容器的水平 padding 设为 5px（2px 基础 + 3px 对齐），而折线图容器的水平 padding 为 2px。两者都有 border:1px。因此 <code>&lt;input&gt;</code> 内容框比 SVG 内容框每侧窄 3px。轨道（跨越整个 input 宽度）从距 SVG 左边缘 3px 处开始、在距右边缘 3px 处结束——精确匹配数据点位置 [3, width-3]。</li>
+      <li>此方案比 <code>::-webkit-slider-runnable-track</code> 的 <code>margin</code> 更可靠，因为 <code>margin</code> 在不同 WebView 版本中支持不一致。滑块 thumb 宽度 6px（= 2 × padding）。</li>
+    </ol>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">此方案在竖屏和横屏模式下均生效，因为滑块容器与折线图容器现在都位于相同的 <code>.review-bottom</code> 容器中，使用相同的 CSS 规则，具有相同的 border+padding 结构。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🎨 行为变更：王控制箭头合法性过滤</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">从一方王当前所在格子起始的箭头（控制范围热力图箭头、「格子控制信息」栏、视觉注解 <code>[%cal]</code>）现在在目标格被另一方控制时被抑制——王不能合法移动到该格，因此显示此类箭头会将非法王走法误表示为有效控制/威胁。非王棋子不受影响（被钉住的棋子仍然"控制"格子，即使它不能合法移动）。适用于玩家王和对手王。在视觉注解威胁图（<code>threatByMover</code>/<code>threatByOpp</code>/<code>threatByWhite</code>/<code>threatByBlack</code>）中，目标格被对手控制时的王攻击者被过滤掉；这也正确过滤了从王起始的黄色后威胁箭头和蓝色多威胁箭头。</p>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🎨 行为变更：复盘导航按钮文本居中对齐</h5>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">复盘导航按钮（⏮ ◀ ▶ ⏭）现在有 <code>justify-content:center</code>，使按钮文本居中（之前因默认 <code>flex-start</code> 而左对齐）。在竖屏（基础 <code>.review-nav .btn</code>）和横屏（<code>.review-bottom .review-nav .btn</code>）CSS 规则中均已应用。</p>
+    <h5 style="color:#3498db;margin-top:10px;margin-bottom:4px;font-size:.82rem">📚 文档更新</h5>
+    <ul style="font-size:.82rem;color:#c8b888;line-height:1.6;margin-left:20px">
+      <li>所有版本引用从 v1.0.9（versionCode 109）升至 v1.1.0（versionCode 110）。</li>
+      <li>HTML 说明书更新日志顺序为由上至下从新到旧（Phase 53 在最上方），按用户规范。</li>
+      <li>视觉注解章节的绿色箭头说明从「避将路径」更新为「应将路径（王避将 + 吃将军棋子）」。</li>
+      <li>所有 README/LICENSE/NOTICE 文件添加 Phase 53 条目。</li>
+      <li>旧版本说明书（v1.0.4–v1.0.9）已删除；仅分发 v1.1.0 说明书。</li>
+    </ul>
+    <h5 style="color:#9b59b6;margin-top:10px;margin-bottom:4px;font-size:.82rem">📝 Phase 53 修改的文件</h5>
+    <ul style="font-size:.82rem;color:#c8b888;line-height:1.6;margin-left:20px">
+      <li><code>src/main/assets/chess.src/ui.js</code>（绿色箭头应将路径逻辑、<code>_trendW</code> 测量、滑块容器 border/padding、王控制箭头合法性过滤：<code>_updateArrows</code>/<code>_updateCtrlInfoPanel</code>/<code>_computeAndCacheVisualAnnotations</code>/<code>_computeInitialPositionAnnotations</code>）</li>
+      <li><code>src/main/assets/chess.src/index.html.tpl</code>（滑块 thumb/track CSS、<code>.review-nav .btn</code> 居中、title）</li>
+      <li><code>src/main/assets/chess.src/game-logic.js</code>（loading_title）</li>
+      <li><code>src/main/assets/stats.html</code>（视觉注解描述、green_arrows 标签、<code>_slicePGNAtMove</code> 辅助函数、视觉注解区块截止步数）</li>
+      <li><code>src/main/assets/chess.html</code>（通过 <code>build-chess.py</code> 从 <code>chess.src/</code> 重新构建）</li>
+      <li><code>build.gradle</code>、<code>strings.xml</code>、<code>MainActivity.java</code>、<code>StockfishNative.java</code>、<code>ChessApp.java</code>、<code>ChessWebViewClient.java</code>、<code>game-logic.js</code>、<code>index.html.tpl</code>、<code>ui.js</code>（版本号 109→110）</li>
+      <li><code>Manual/Regalia-v1.1.0-manual-{zh,en}.html</code>（Phase 53 更新日志，置顶；旧说明书已删除）</li>
+      <li><code>NOTICE</code>、<code>README.md</code>、所有 <code>README.license</code> 文件（Phase 53 更新日志）</li>
+    </ul>
+    </div>
+
+    <!-- v1.0.9 (previous) -->
+
   <div class="cl-card" style="border-left:4px solid #d4a017;margin-bottom:18px;padding:12px 16px;background:rgba(212,160,23,.05);border-radius:0 6px 6px 0">
     <h3 style="color:#d4a017">v1.0.9（versionCode 109，2026.7.2）</h3>
     <p style="font-size:.82rem;color:#c8b888;line-height:1.6">v1.0.9 修复两项关键用户反馈 Bug（PGN 单行解析失败 + 复盘/统计数据界面「多余的王」棋盘损坏）、两项视觉注解准确性 Bug（变例注释污染主线注解 + 导入走法缺少 isCheck/isCastling），并将评估折线图配色统一为蓝-红双色方案（深色+浅色双模式）。版本号升至 versionCode=109、versionName="1.0.9"。</p>
 
                     <!-- v1.0.9 PHASE 52 (current) -->
-<h4 style="color:#d4a017;margin-top:14px;margin-bottom:6px;font-size:.9rem;border-top:1px dashed rgba(212,160,23,.3);padding-top:10px">🆕 v1.0.9 第五十二阶段新增（PGN 单行解析修复 + 复盘「多余的王」修复 + 视觉注解变例隔离修复 + 导入走法 isCheck/isCastling 修复 + 折线图配色统一，2026.7.2）</h4>
+<h4 style="color:#d4a017;margin-top:14px;margin-bottom:6px;font-size:.9rem;border-top:1px dashed rgba(212,160,23,.3);padding-top:10px">v1.0.9 第五十二阶段新增（PGN 单行解析修复 + 复盘「多余的王」修复 + 视觉注解变例隔离修复 + 导入走法 isCheck/isCastling 修复 + 折线图配色统一，2026.7.2）</h4>
     <p style="font-size:.82rem;color:#c8b888;line-height:1.6">本阶段修复两项关键用户反馈 Bug、两项视觉注解准确性 Bug，并将评估折线图配色统一为蓝-红双色方案。版本号升至 v1.0.9（versionCode=109）。</p>
     <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🐛 Bug 修复：PGN 单行解析失败（根因）</h5>
     <ul style="font-size:.82rem;color:#c8b888;line-height:1.7;padding-left:20px">
@@ -2729,7 +3059,7 @@ function moveRookForCastling(state, kingFrom, kingTo) {
     <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🐛 Bug 修复：复盘/统计数据界面「多余的王」棋盘损坏（根因）</h5>
     <ul style="font-size:.82rem;color:#c8b888;line-height:1.7;padding-left:20px">
       <li><strong>[严重] <code>_castleSide</code> 回退检测使用 <code>gameState.board</code>（全局最终状态）而非 <code>s.board</code>（被移动的局部状态）</strong>（game-logic.js）— 当 <code>mv.castle</code> 和 <code>mv.to.castle</code> 均为 undefined 时（例如复盘重放中从 <code>moveRecords</code> 重建的走法），<code>_castleSide</code> 的回退检测使用 <code>gameState.board</code> 检查目标格是否为空，使用 <code>gameState.castlingRights</code> 检查易位权是否存在。在 PGN 逆向重放（<code>enterReview</code> / <code>importPGN</code>）期间，被移动的局部状态 <code>s</code> 与 <code>gameState</code>（所有走法应用后的最终状态）不同。这导致回退检测使用了<strong>错误的棋盘</strong>：例如白王最终位于 g1，则早期易位走法（O-O 到 g1）的目标格空检查返回 false，抑制了易位检测。王移动到 g1 但车留在 h1，所有后续走法重放被破坏（涉及错误位置车的走法被静默跳过，棋盘状态偏离预期——对用户表现为「复盘/统计界面棋盘上多余的王」）。修复：<code>_castleSide</code> 现接受可选的 <code>s</code> 参数，并使用其 <code>board</code> 和 <code>castlingRights</code> 进行回退检测。<code>makeMv</code>、<code>makeMvInPlace</code>、<code>moveAlg</code> 均传递 <code>s</code>。ui.js 仅用于动画的调用方（无局部状态）省略 <code>s</code> 并回退到 <code>gameState</code>（对交互对弈正确）。</li>
-      <li><strong>[高危] stats.html <code>executeMove</code> 误判易位</strong>（stats.html）— 原检测 <code>piece.type==='king' && (move.to.col===6 || move.to.col===2)</code> 将<strong>任何</strong>王到第 6/2 列的走法都标记为易位——包括正常王走法（如 Kf1-g1、Kg7-g6）和王吃子（Kxg1）。这导致：(1) 被吃的棋子被当作「易位车」重新放置（静默丢失吃子）；(2) h1/a1 上的实际车被非法位移；(3) 棋盘状态损坏，表现为统计界面棋盘上多余棋子/多余的王。修复：现仅当<strong>所有</strong>以下条件均满足时才检测为易位：王在底排、目标列为 6/2、王移动了易位距离（标准 ≥2，Chess960 ≥1）、目标格为空、且对应易位权在<strong>局部状态</strong>中存在。</li>
+      <li><strong>[高危] stats.html <code>executeMove</code> 误判易位</strong>（stats.html）— 原检测 <code>piece.type==='king' &amp;&amp; (move.to.col===6 || move.to.col===2)</code> 将<strong>任何</strong>王到第 6/2 列的走法都标记为易位——包括正常王走法（如 Kf1-g1、Kg7-g6）和王吃子（Kxg1）。这导致：(1) 被吃的棋子被当作「易位车」重新放置（静默丢失吃子）；(2) h1/a1 上的实际车被非法位移；(3) 棋盘状态损坏，表现为统计界面棋盘上多余棋子/多余的王。修复：现仅当<strong>所有</strong>以下条件均满足时才检测为易位：王在底排、目标列为 6/2、王移动了易位距离（标准 ≥2，Chess960 ≥1）、目标格为空、且对应易位权在<strong>局部状态</strong>中存在。</li>
     </ul>
     <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🐛 Bug 修复：视觉注解被变例注释污染</h5>
     <ul style="font-size:.82rem;color:#c8b888;line-height:1.7;padding-left:20px">
@@ -3615,7 +3945,7 @@ function moveRookForCastling(state, kingFrom, kingTo) {
 
     <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🐛 _srcRookPc 未定义错误 + 棋子动画后回到初始位置 + 走法提示边框修复（v1.0.8 第二十二阶段八次补充）</h5>
     <ul style="font-size:.82rem;color:#c8b888;line-height:1.7;padding-left:20px">
-      <li><strong>_srcRookPc 未定义错误</strong> — 走棋后报错 <code>_srcRookPc is not defined</code>。<strong>根因</strong>：上一轮修复在 <code>_finishAnim()</code> 中引用 <code>_srcRookPc</code> 来恢复易位车的 opacity，但 <code>_srcRookPc</code> 是在 <code>if(isCastling&&pieceColor)</code> → <code>if(rFromCol&gt;=0&&rFromCol!==rToCol)</code> 嵌套块内用 <code>const</code> 定义的局部变量——当不是易位或条件不满足时，该变量不存在，引用它导致 <code>ReferenceError</code>。<strong>修复</strong>：移除 <code>_finishAnim()</code> 中所有手动恢复 opacity 的代码。</li>
+      <li><strong>_srcRookPc 未定义错误</strong> — 走棋后报错 <code>_srcRookPc is not defined</code>。<strong>根因</strong>：上一轮修复在 <code>_finishAnim()</code> 中引用 <code>_srcRookPc</code> 来恢复易位车的 opacity，但 <code>_srcRookPc</code> 是在 <code>if(isCastling&amp;&amp;pieceColor)</code> → <code>if(rFromCol&gt;=0&amp;&amp;rFromCol!==rToCol)</code> 嵌套块内用 <code>const</code> 定义的局部变量——当不是易位或条件不满足时，该变量不存在，引用它导致 <code>ReferenceError</code>。<strong>修复</strong>：移除 <code>_finishAnim()</code> 中所有手动恢复 opacity 的代码。</li>
       <li><strong>棋子动画后回到初始位置</strong> — 走棋动画结束后，棋子短暂回到初始位置再跳到目标位置。<strong>根因</strong>：<code>_finishAnim()</code> 中手动恢复 <code>opacity=''</code> 的操作作用于旧的 DOM 元素——但 <code>executeMove</code> 在调用 <code>animateMove</code> 后立即执行 <code>gameState=ns</code>（新状态），后续 <code>render()</code> 会用新状态重建 DOM。如果 <code>_finishAnim</code> 在 <code>render()</code> 之后执行，恢复 opacity 的元素是已被 render 替换的旧 DOM——旧位置上的棋子（opacity 恢复为可见）短暂显示，造成"回到初始位置"的视觉假象。<strong>修复</strong>：完全移除 <code>_finishAnim()</code> 中的 opacity 恢复操作。下一次 <code>render()</code> 会用新状态重建 DOM，所有 piece 的 opacity 自然恢复为默认值（1），无需手动恢复。</li>
       <li><strong>走法提示边框回滚与正确修复</strong> — 上一轮误判走法提示边框不可见的原因，将其从 <code>box-shadow</code> 改为 <code>outline</code>。实际原因是浅色模式下 CSS 变量值需要同步更新。<strong>修复</strong>：回滚到 <code>box-shadow</code>（<code>inset 0 0 0 3px var(--last-to)</code>），确保深色模式 <code>--last-to:#8bc34a</code>（亮黄绿）和浅色模式 <code>--last-to:#689f38</code>（深黄绿）都正确应用。增加 <code>z-index:2</code> 确保提示边框在棋子上方可见。</li>
     </ul>
@@ -3684,7 +4014,7 @@ function moveRookForCastling(state, kingFrom, kingTo) {
 
     <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🔧 音效与动画优化（v1.0.8 第二十二阶段二次补充）</h5>
     <ul style="font-size:.82rem;color:#c8b888;line-height:1.7;padding-left:20px">
-      <li><strong>音效静音 bug 修复</strong> — 部分音效（走棋棋子音效、王车易位音效）不受 🔊/🔇 音效开关控制，即使静音后仍会播放。<strong>根因</strong>：<code>_playPieceSound()</code> / <code>_playCastleSound()</code>（在 game-logic.js 中）直接调用 <code>audioEngine.playXXX()</code>，绕过了 <code>playSound()</code> 的 <code>soundOn</code> 守卫检查；同时 <code>toggleSound()</code> 只切换 <code>soundOn</code> 全局变量，未同步 <code>audioEngine.setEnabled()</code>。<strong>修复</strong>：(1) 在 <code>_playPieceSound</code> / <code>_playCastleSound</code> 中添加 <code>if(typeof soundOn!=='undefined'&&!soundOn)return;</code> 守卫；(2) <code>toggleSound()</code> 中新增 <code>audioEngine.setEnabled(soundOn)</code> 调用，通过 <code>setTargetAtTime</code> 平滑过渡主增益到 0。现在静音后所有音效（含走棋音效）完全静默。</li>
+      <li><strong>音效静音 bug 修复</strong> — 部分音效（走棋棋子音效、王车易位音效）不受 🔊/🔇 音效开关控制，即使静音后仍会播放。<strong>根因</strong>：<code>_playPieceSound()</code> / <code>_playCastleSound()</code>（在 game-logic.js 中）直接调用 <code>audioEngine.playXXX()</code>，绕过了 <code>playSound()</code> 的 <code>soundOn</code> 守卫检查；同时 <code>toggleSound()</code> 只切换 <code>soundOn</code> 全局变量，未同步 <code>audioEngine.setEnabled()</code>。<strong>修复</strong>：(1) 在 <code>_playPieceSound</code> / <code>_playCastleSound</code> 中添加 <code>if(typeof soundOn!=='undefined'&amp;&amp;!soundOn)return;</code> 守卫；(2) <code>toggleSound()</code> 中新增 <code>audioEngine.setEnabled(soundOn)</code> 调用，通过 <code>setTargetAtTime</code> 平滑过渡主增益到 0。现在静音后所有音效（含走棋音效）完全静默。</li>
       <li><strong>皇后动画优化——比车更沉重，震屏不亚于王</strong> — 皇后作为最强棋子，原动画时长 420ms（仅比车 290ms 长 130ms），落地无震屏，体感不够"沉重"。<strong>优化</strong>：(1) 时长从 420ms 提升至 500ms（接近王 520ms，比车 290ms 长 210ms）；(2) 缓动曲线从 <code>cubic-bezier(0.65,0,0.35,1)</code>（优雅）改为 <code>cubic-bezier(0.4,0,0.2,1)</code>（与王相同的沉重缓动）；(3) 落地触发 <code>_triggerBoardShake('heavy')</code>（重型震屏 450ms，与王同等，此前皇后无震屏）；(4) scale 变化从 0.05→0.08 增大幅度体现"沉重"；(5) 落地阶段（t&gt;0.9）增加压缩感 <code>landingScale</code> 体现"重击"。现在皇后移动的视觉冲击力与王相当，远比车沉重。</li>
       <li><strong>走棋动画流畅度优化</strong> — 减少 keyframe 数量以降低 GC 压力、提升流畅度：马的 keyframe 从 24 减至 18，王的 keyframe 从 28 减至 24，皇后的 keyframe 从 20 减至 16。运动公式与视觉效果不变，仅减少中间帧数量。在 120Hz 屏幕上，每个 keyframe 间隔约 15-25ms，减少帧数可减少 Web Animations API 的内部插值计算，降低主线程占用。</li>
       <li><strong>版本号残留修复</strong> — 修复 2 处用户可见的 v1.0.7 残留：(1) <code>game-logic.js</code> 的 <code>loading_title</code> i18n 字符串（启动进度条页面标题）从 "Regalia v1.0.7" 更新为 "Regalia v1.0.8"；(2) <code>ChessWebViewClient.java</code> 的版本注释从 "Version: v1.0.7" 更新为 "Version: v1.0.8"。其余代码中的 "v1.0.7" 引用均为历史 Phase 注释（如 <code>// v1.0.7 PHASE 18</code>），记录的是代码变更历史，保留不改。</li>
@@ -3912,7 +4242,7 @@ function moveRookForCastling(state, kingFrom, kingTo) {
 
     <h5 style="color:#9b59b6;margin-top:10px;margin-bottom:4px;font-size:.82rem">🧹 冗余清理（v1.0.7 第十三阶段）</h5>
     <ul style="font-size:.82rem;color:#c8b888;line-height:1.7;padding-left:20px">
-      <li><strong>移除 computeVisibleEpMark() 的 setupMode 防御性守卫</strong> — 此前 <code>if(s.setupEpMark && typeof setupMode!=='undefined' && setupMode)return s.setupEpMark;</code> 中的 <code>&amp;&amp; setupMode</code> 守卫是为「误报」而加的防御。第一性原理分析：<code>setupEpMark</code> 是摆棋专属瞬态字段，<code>toggleSetup()</code> 进入时设置、退出时清除，<code>initState()</code>/<code>fenToState()</code>/<code>cloneS()</code> 均不复制它——故 <code>s.setupEpMark</code> 为真当且仅当处于摆棋模式。守卫冗余，简化为 <code>if(s.setupEpMark)return s.setupEpMark;</code>。</li>
+      <li><strong>移除 computeVisibleEpMark() 的 setupMode 防御性守卫</strong> — 此前 <code>if(s.setupEpMark &amp;&amp; typeof setupMode!=='undefined' &amp;&amp; setupMode)return s.setupEpMark;</code> 中的 <code>&amp;&amp; setupMode</code> 守卫是为「误报」而加的防御。第一性原理分析：<code>setupEpMark</code> 是摆棋专属瞬态字段，<code>toggleSetup()</code> 进入时设置、退出时清除，<code>initState()</code>/<code>fenToState()</code>/<code>cloneS()</code> 均不复制它——故 <code>s.setupEpMark</code> 为真当且仅当处于摆棋模式。守卫冗余，简化为 <code>if(s.setupEpMark)return s.setupEpMark;</code>。</li>
       <li><strong>修复 toggleSetup() 退出路径未清除 setupEpMark/setupCastleMarks 的根因</strong> — 上述守卫之所以「看起来」必要，是因为 <code>toggleSetup()</code> 退出分支（用户点摆棋按钮切换退出，非点「完成」）未清除 <code>gameState.setupEpMark</code> 与 <code>gameState.setupCastleMarks</code>。本阶段从根因修复：在 <code>toggleSetup()</code> 退出分支补充 <code>gameState.setupEpMark=null; gameState.setupCastleMarks=new Set();</code>，与 <code>_exitSetupImpl()</code> 的清除保持一致。根因修复后，<code>computeVisibleEpMark()</code> 不再需要任何 <code>setupMode</code> 守卫。</li>
       <li><strong>移除 _visibleEpMark 复盘模式守卫的误报注释</strong> — <code>const _visibleEpMark=(!reviewMode&amp;&amp;...)?...:null;</code> 中的 <code>!reviewMode</code> 守卫本身是有效的性能优化（复盘模式下主棋盘被 <code>.review-overlay</code> 覆盖，跳过主棋盘标记计算），但旧注释「⚡/🔁 markers could theoretically show through the 2% transparent overlay」是误报理论。注释改为准确描述性能优化动机。同步为 <code>_visibleCastleMarks</code> 加上 <code>!reviewMode</code> 守卫（此前仅 <code>_visibleEpMark</code> 有，不一致）。</li>
       <li><strong>简化 computeVisibleEpMark() 的 enPassantTarget 派生注释</strong> — 移除「v1.0.7 PHASE 10: Verify the pawn is actually on the expected square. In review mode, after an en passant capture...」中关于「复盘模式」的误报上下文，保留「校验兵确实在预期格子、颜色正确」这一有效的防御性逻辑描述。</li>
@@ -4150,7 +4480,9 @@ function moveRookForCastling(state, kingFrom, kingTo) {
 
     <p style="font-size:.78rem;color:#887860;margin-top:10px"><strong>引擎版本</strong>：Stockfish 18 arm64-v8a-dotprod（不变）。<strong>APK 签名</strong>：v1+v2+v3 三重签名齐全，兼容小米澎湃 OS 3。<strong>源码 tar 包</strong>：已排除所有引擎文件（<code>*.so</code>、<code>*.apk</code>、<code>*.keystore</code>、<code>local.properties</code>、<code>build</code>、<code>.gradle</code>、<code>jniLibs</code>）。</p>
 
-    <li><strong>悔棋后关键步缓存未同步失效</strong> — <code>_invalidateCachesForUndoneMoves()</code> 仅清理了评估缓存与视觉注解缓存，未更新关键步列表 <code>reviewCritical</code>，导致复盘模式下关键步标记仍包含已撤销走法、出现标注错位。修复：在缓存清理函数末尾追加 <code>reviewCritical = _findCriticalMoves()</code> 基于新的走法记录重新计算关键步。</li>
+    <h5 style="color:#e74c3c;margin-top:10px;margin-bottom:4px;font-size:.82rem">🐛 Bug 修复（v1.0.7 第十九阶段代码审查）</h5>
+    <ul style="font-size:.82rem;color:#c8b888;line-height:1.7;padding-left:20px">
+      <li><strong>悔棋后关键步缓存未同步失效</strong> — <code>_invalidateCachesForUndoneMoves()</code> 仅清理了评估缓存与视觉注解缓存，未更新关键步列表 <code>reviewCritical</code>，导致复盘模式下关键步标记仍包含已撤销走法、出现标注错位。修复：在缓存清理函数末尾追加 <code>reviewCritical = _findCriticalMoves()</code> 基于新的走法记录重新计算关键步。</li>
       <li><strong>轻量棋盘更新路径缺失易位车标记</strong> — <code>_updateSingleSq()</code>（每秒 10–50 次的引擎进度回调路径）未包含 <code>castle-rook</code> 标记逻辑，而 <code>renderInternal()</code> 与 <code>_updateChangedSquares()</code> 已实现。四条渲染路径不一致属典型代码债务。修复：在 <code>_updateSingleSq()</code> 中复用 <code>_computeCastlingRookSetForSelection()</code> 计算易位车格子集（带 per-render-pass 缓存避免重复计算），并将 <code>isCastlingRook</code> 加入签名缓存以正确驱动标记的添加与移除。</li>
       <li><strong>引擎通知节流缓存脏</strong> — <code>_updateEngineNotification(info)</code> 在节流检查<em>之前</em>就更新了 <code>_lastNotificationInfo</code>，导致 1 秒节流窗口内新到的信息被丢弃（缓存已脏但通知栏未推送），节流定时器到期后下次调用又因缓存命中而跳过——通知栏永远停留在首次的值。修复：仅在真正推送通知时才更新缓存。</li>
       <li><strong>统计页面 PGN 注释 XSS 风险</strong> — <code>stats.html</code> 的 <code>renderPGNText()</code> 将 PGN 注释原文（来自用户粘贴的 PGN）直接拼入 HTML，未做转义。恶意注释（如 <code>}</code>&amp;<code>lt;img src=x onerror=alert(1)&gt;</code>）可注入 DOM。修复：所有 <code>{...}</code> 注释段（主行与变例）均通过 <code>_escFEN()</code> 转义。</li>
@@ -4244,7 +4576,7 @@ function moveRookForCastling(state, kingFrom, kingTo) {
     <ul>
       <li><strong>净控制算法一致性修复（bug 修复）</strong>：用户规格："对净控制的算法应该与'格子控制信息'栏中的净控制保持一致。"
         <ul>
-          <li><strong>不一致根因</strong>："格子控制信息"栏计算净控制为 <code>netCtrl = myCtrl - opCtrl</code>（我方攻击者数 − 对方攻击者数），任何非零差值都算净控制。而 [%csl] 蓝/红方格注解此前使用<strong>单边主导</strong>逻辑：蓝色要求 <code>pAtk &gt; 0 && aAtk === 0</code>（玩家有攻击者且 AI 无攻击者），红色要求 <code>aAtk &gt; 0 && pAtk === 0</code>。这导致一个 3 白 + 1 黑攻击者的格子（netCtrl = +2，玩家净控制）在"格子控制信息"栏显示为玩家净控制 +2，但 [%csl] 注解中<strong>不标记</strong>为蓝色（因 AI 也有攻击者，不满足单边主导条件）。</li>
+          <li><strong>不一致根因</strong>："格子控制信息"栏计算净控制为 <code>netCtrl = myCtrl - opCtrl</code>（我方攻击者数 − 对方攻击者数），任何非零差值都算净控制。而 [%csl] 蓝/红方格注解此前使用<strong>单边主导</strong>逻辑：蓝色要求 <code>pAtk &gt; 0 &amp;&amp; aAtk === 0</code>（玩家有攻击者且 AI 无攻击者），红色要求 <code>aAtk &gt; 0 &amp;&amp; pAtk === 0</code>。这导致一个 3 白 + 1 黑攻击者的格子（netCtrl = +2，玩家净控制）在"格子控制信息"栏显示为玩家净控制 +2，但 [%csl] 注解中<strong>不标记</strong>为蓝色（因 AI 也有攻击者，不满足单边主导条件）。</li>
           <li><strong>修复</strong>：蓝/红方格候选改为基于 <code>netCtrl</code>（与"格子控制信息"栏一致）：
             <ul>
               <li>蓝色：<code>netCtrl &gt; 0</code>（玩家攻击者数 &gt; AI 攻击者数，即玩家净控制为正）——不再要求 AI 攻击者数为 0。</li>
@@ -4396,7 +4728,7 @@ function moveRookForCastling(state, kingFrom, kingTo) {
     <ul>
       <li><strong>黄色格子逻辑修正（bug 修复）</strong>：用户规格："标记为黄色的格子(非箭头)应该为双方总控制数量(攻击该格子的棋子总数，无论棋子颜色)最多的那几个格子——当前未正确实现"。
         <ul>
-          <li><strong>Rev61 的错误</strong>：Rev61 将黄色格子条件改为 <code>pAtk &gt; 0 && aAtk &gt; 0</code>（双方都必须有攻击者），这<strong>过于严格</strong>——排除了仅一方攻击但总数很高的格子。例如：5 个白方攻击者 + 0 个黑方 = 总数 5，应被纳入黄色候选，但 Rev61 逻辑排除了它。</li>
+          <li><strong>Rev61 的错误</strong>：Rev61 将黄色格子条件改为 <code>pAtk &gt; 0 &amp;&amp; aAtk &gt; 0</code>（双方都必须有攻击者），这<strong>过于严格</strong>——排除了仅一方攻击但总数很高的格子。例如：5 个白方攻击者 + 0 个黑方 = 总数 5，应被纳入黄色候选，但 Rev61 逻辑排除了它。</li>
           <li><strong>Rev65 的正确实现</strong>：黄色格子 = 总攻击者数（双方合计，无论棋子颜色）最高的前几个格子。具体逻辑：
             <ol>
               <li>收集所有 <code>total &gt;= 2</code> 的格子作为黄色候选。</li>
@@ -4491,7 +4823,7 @@ function moveRookForCastling(state, kingFrom, kingTo) {
           <li><strong>起点格</strong>（威胁/将军来源）</li>
           <li><strong>终点格</strong>（指向）</li>
           <li><strong>方向</strong>（区分起点→终点 vs 终点→起点）</li>
-          <li><strong>颜色</strong>（类型：B=多威胁、Y=后威胁、R=将军、G=避将）</li>
+          <li><strong>颜色</strong>（类型：B=多威胁、Y=后威胁、R=将军、G=应将）</li>
         </ol>
         满足四要素的最小元素：一条直线（隐式传达起点+终点+方向）+ 终点端的小三角箭头标记（确认方向）+ 线条颜色（传达类型）。移除的冗余元素：
         <ul>
@@ -4847,7 +5179,7 @@ function moveRookForCastling(state, kingFrom, kingTo) {
           <li>蓝色箭头 = 一方棋子同时威胁另一方多个棋子（≥2 个）</li>
           <li>红色箭头 = 将军路径（将军子→被将的王）</li>
           <li>黄色箭头 = 对后的威胁（威胁子→后所在格）</li>
-          <li>绿色箭头 = 避将路径（被将的王→避将格）</li>
+          <li>绿色箭头 = 应将路径（王避将 + 吃将军棋子）</li>
         </ul>
         所有标签通过 <code>formatCslTag()</code>/<code>formatCalTag()</code> 写入 PGN 对应走法后的 <code>{}</code> 注释。
       </li>
@@ -5338,7 +5670,7 @@ function moveRookForCastling(state, kingFrom, kingTo) {
             <ul>
               <li><strong>蓝色箭头 (B)</strong>：本方棋子对重要格子的控制路径，按"中心 +3 / 扩展中心 +1 / 双方争夺 +1"的重要性评分排序，取前 3 条。</li>
               <li><strong>红色箭头 (R)</strong>：当本步产生将军时，从将军子指向被将方的王。</li>
-              <li><strong>绿色高亮格 (G)</strong>：被将方王的相邻安全格（未被将军方攻击的空格或可吃子格），即"避将路径"。</li>
+              <li><strong>绿色高亮格 (G)</strong>：中心区无控制格（与将军/应将无关）。</li>
               <li><strong>黄色箭头 (Y)</strong>：当本步威胁到对方的后时，从走子方指向对方后的位置。</li>
             </ul>
           </li>
@@ -5363,7 +5695,7 @@ function moveRookForCastling(state, kingFrom, kingTo) {
       <li><strong>新游戏对话框布局重构（功能完善）</strong>：Chess960 设置（SP-ID 输入、起始排列预览、说明文字）不再显示在"执棋颜色"下方，改为在开启 Chess960 时替换整个"经典开局（可选）"区域。Chess960 开关与"使用 ECO 开局库"开关互斥置灰：开启 Chess960 时 ECO 开关置灰，开启 ECO 时 Chess960 开关置灰。<em>注：第22次修订（Rev22）进一步调整——Chess960 开关本身移至"执棋颜色"选项正下方，"经典开局（可选）"残留标题移除，Chess960 开启时专属设置区标题从"经典开局（可选）"改为"菲舍尔任意制象棋"（T('chess960_label')）。</em></li>
       <li><strong>视觉注解颜色语义重定义（功能完善）</strong>：
         <ul>
-          <li>避将改为<strong>绿色箭头</strong>（被将的王位置→避将格），不再是绿色格。</li>
+          <li>避将/应将改为<strong>绿色箭头</strong>（被将方王避将 + 被将方棋子吃将军棋子），不再是绿色格。</li>
           <li>新增<strong>红色格</strong>=AI对手净控制强势格，<strong>蓝色格</strong>=玩家净控制强势格，<strong>黄色格</strong>=双方总计控制数较高格，<strong>绿色格</strong>=中心区无控制格。</li>
           <li>红色箭头保留=将军子→被将的王。</li>
           <li>📊统计数据页"视觉注解"区块同步更新为新语义。</li>
@@ -5478,7 +5810,7 @@ function moveRookForCastling(state, kingFrom, kingTo) {
 
 <!-- ===== FOOTER ===== -->
 <div style="text-align: center; padding: 40px 0 20px; color: #6a5a40; font-size: 12px;">
-  <p style="margin: 4px 0;">Regalia v1.0.9 用户说明书 (User Manual)</p>
+  <p style="margin: 4px 0;">Regalia v1.1.0 用户说明书 (User Manual)</p>
   <p style="margin: 4px 0;">Built with Stockfish 18 &nbsp;|&nbsp; AGPL v3</p>
   <p style="margin: 4px 0;">Compatible with Android 5.0-15 &nbsp;|&nbsp; Xiaomi HyperOS 3</p>
   <p style="margin: 4px 0;">Chess960 &nbsp;|&nbsp; Time Control &nbsp;|&nbsp; Standardized PGN &nbsp;|&nbsp; Seldepth &nbsp;|&nbsp; Web Worker Pool</p>

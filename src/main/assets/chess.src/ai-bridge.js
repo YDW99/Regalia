@@ -927,14 +927,19 @@ function _buildPGNString(forceIncludeVariations){
       supLines.push('[TimeControl "'+tcStr+'"]');
     }
   }
-  // v1.0.4 Rev27: [Termination "Resignation"] tag when the game ended by resignation.
+  // v1.0.4 Rev27: [Termination "..."] tag when the game ended by resignation or timeout.
   // Per PGN spec, [Termination] is a supplementary tag (not part of the Seven-Tag
   // Roster) describing how the game ended. Values include "Normal" (default),
-  // "Time forfeit", "Abandoned", "Resignation", etc. We only emit this tag for
-  // resignation (other terminations like checkmate/timeout are already clear
-  // from the [Result] + movetext).
+  // "Time forfeit", "Abandoned", "Resignation", etc.
+  // v1.1.0 Phase 56: Added [Termination "Time forfeit"] for timeout games
+  //   (previously omitted — the comment said "other terminations like
+  //   checkmate/timeout are already clear from [Result] + movetext", but
+  //   per PGN spec, "Time forfeit" is the standard value for timeout and
+  //   should be emitted for proper PGN inter-op).
   if(typeof _gameOverStatusKey!=='undefined'&&_gameOverStatusKey==='resign'){
     supLines.push('[Termination "Resignation"]');
+  }else if(typeof _gameOverStatusKey!=='undefined'&&_gameOverStatusKey==='timeout'){
+    supLines.push('[Termination "Time forfeit"]');
   }
   const allTags=strLines.concat(supLines);
   // v1.0.4: Build halfMoves array for composePGN()
@@ -1004,6 +1009,19 @@ function _buildPGNString(forceIncludeVariations){
       if(cached){
         const evalTag=formatEvalTag(cached);
         if(evalTag)commentParts.push(evalTag);
+        // v1.1.0 Phase 58: Every-5-moves human-readable eval annotation.
+        //   At moves 5, 10, 15, 20, ... (i.e. _moveNum % 5 === 0), append a
+        //   {}-comment body fragment mirroring the eval bar display:
+        //     "<desc> (<score>) D<depth> SD<seldepth> (<W%>W/<D%>D/<L%>L)"
+        //   Language auto-selected via T() reading the global _lang variable.
+        //   White-perspective (not player-perspective) so the PGN comment is
+        //   unambiguous regardless of which side the human played.
+        //   Placed AFTER [%eval] (structured tag stays first per PGN spec)
+        //   and BEFORE free-text comment / resign/timeout annotations.
+        if(_moveNum>0&&_moveNum%5===0){
+          const ann=typeof formatEvalAnnotation==='function'?formatEvalAnnotation(cached):'';
+          if(ann)commentParts.push(ann);
+        }
       }
     }
     // v1.0.4 EXPANSION (this round): [%csl] and [%cal] from the visual annotations cache
@@ -1050,6 +1068,18 @@ function _buildPGNString(forceIncludeVariations){
       // English is the de-facto standard for inter-op). Format: "White resigns."
       const resignerStr=resignerColor==='white'?'White':'Black';
       commentParts.push(resignerStr+' resigns.');
+    }
+    // v1.1.0 Phase 56: On the LAST move of a timeout game, append the
+    //   "{White wins by timeout}" / "{Black wins by timeout}" annotation.
+    //   Per the user spec: "对于一方时间耗尽(计时赛)而导致另一方获胜，当前的PGN
+    //   缺乏完善的注释，应当在最后的注释中写明：'White wins by timeout' 或
+    //   'Black wins by timeout'". _timeoutWinnerColor is the side that WON
+    //   (the side whose opponent's clock expired).
+    if(typeof _gameOverStatusKey!=='undefined'&&_gameOverStatusKey==='timeout'
+       && typeof _timeoutWinnerColor!=='undefined'&&_timeoutWinnerColor
+       && i===moveRecords.length-1){
+      const winnerStr=_timeoutWinnerColor==='white'?'White':'Black';
+      commentParts.push(winnerStr+' wins by timeout');
     }
     const comment=commentParts.length>0?commentParts.join(' '):undefined;
     // Variations: include from moveRecords[i].variations if available
@@ -1215,7 +1245,7 @@ function openStatsPage(){
       });
     }
   }
-  const payload=JSON.stringify({pgn:pgn,evals:evalData,moveRecords:moveData,playerColor:playerColor,lang:(typeof _lang!=='undefined'?_lang:'zh')});
+  const payload=JSON.stringify({pgn:pgn,evals:evalData,moveRecords:moveData,playerColor:playerColor,lang:(typeof _lang!=='undefined'?_lang:'zh'),gameVariant:(typeof gameVariant!=='undefined'?gameVariant:null)});
   _bridgeCall(function(bridge){
     if(typeof bridge.openStatsPage==='function'){
       bridge.openStatsPage(payload);
@@ -2005,6 +2035,10 @@ function onEngineReady(){
 // Callback: Best move received from engine (AI move)
 function onBestMove(uciMove){
   console.log('onBestMove:',uciMove);
+  // v1.1.0 Phase 54: Update heartbeat timestamp — onBestMove is proof-of-life
+  // from a healthy engine. Without this, long AI thinks (>120s) falsely
+  // trigger engine restart via the heartbeat monitor.
+  _lastEngineCallbackTime=Date.now();
   // v1.0.3-p9 audit fix: check staleness BEFORE clearing the safety timer.
   // If a stale bestmove arrives, the real bestmove is still pending and the
   // safety timer must remain active to catch a potential timeout.
@@ -2168,6 +2202,8 @@ function onBestMove(uciMove){
 // Also displays the ponder move (engine's predicted reply) alongside the bestmove
 function onHintMove(uciMove){
   console.log('onHintMove:',uciMove);
+  // v1.1.0 Phase 54: Update heartbeat timestamp — onHintMove is proof-of-life.
+  _lastEngineCallbackTime=Date.now();
   // v1.0.8 PHASE 49: discard stale hint callbacks. If isHintLoading is already
   //   false by the time onHintMove fires, the user has moved (executeMove /
   //   doAIMove) or switched modes (setup/review/new game) since the hint was
@@ -2263,6 +2299,8 @@ function onHintMove(uciMove){
 // reflects the actual max depth reached in tactical variations. Displayed as
 // "SD<N>" right after "D<N>" to match the existing abbreviated style.
 function onEngineProgress(depth,nodes,nps,scoreCp,scoreMate,wdlW,wdlD,wdlL,seldepth){
+  // v1.1.0 Phase 54: Update heartbeat timestamp — onEngineProgress is proof-of-life.
+  _lastEngineCallbackTime=Date.now();
   if(depth<=0)return;
   // DEFENSE IN DEPTH: Skip unrealistic depth values (>60) that could come from
   // stale info lines due to Java state machine race condition (see StockfishNative
@@ -2350,6 +2388,8 @@ function onEngineProgress(depth,nodes,nps,scoreCp,scoreMate,wdlW,wdlD,wdlL,selde
 // but is displayed as 🔮 row in the AI opponent bar for real-time feedback.
 // v1.0.4 Rev33: added seldepth (6th param) for "SD" display after "D".
 function onPonderProgress(depth,nodes,nps,scoreCp,scoreMate,seldepth){
+  // v1.1.0 Phase 54: Update heartbeat timestamp — onPonderProgress is proof-of-life.
+  _lastEngineCallbackTime=Date.now();
   if(depth<=0)return;
   if(depth>60)return; // Skip unrealistic depths from stale info lines
   // FIX: Generation-based staleness guard. If the ponder generation has changed
@@ -3170,8 +3210,20 @@ function _checkPVDivergenceSANs(){
     if(sanMoves.length===0)continue;
     let matchCount=pending.matchedUpTo||0;
     let divergeIdx=-1;
+    // v1.1.0 Phase 54: Determine if this is a secondary variation (alternative
+    // to the move at fromMoveIdx) or a mainline continuation (after the move).
+    // Secondary: firstMoveIsWhite matches the side at fromMoveIdx → the
+    //   variation's first move is an ALTERNATIVE to moveRecords[fromMoveIdx].
+    //   Compare to fromMoveIdx + vi.
+    // Mainline: firstMoveIsWhite is the opposite side → the variation's first
+    //   move is the opponent's reply (after fromMoveIdx). Compare to fromMoveIdx + 1 + vi.
+    // The old code always used fromMoveIdx+1+vi, which was wrong for secondary
+    // variations — they were attached to the opponent's move with wrong side/number.
+    const _fromIsWhite=(pending.fromMoveIdx%2===0);
+    const _isAlternative=(pending.firstMoveIsWhite===_fromIsWhite);
+    const _baseIdx=_isAlternative?pending.fromMoveIdx:pending.fromMoveIdx+1;
     for(let vi=matchCount;vi<sanMoves.length;vi++){
-      const actualIdx=pending.fromMoveIdx+1+vi;
+      const actualIdx=_baseIdx+vi;
       if(actualIdx>=moveRecords.length){
         // Game hasn't reached this point yet — keep cached
         break;
@@ -3825,7 +3877,7 @@ function _buildEvalHTML(e,opts){
   }
   s+=progressStr;
   let wdlStr='';
-  if(_sfWdlW>=0&&_sfWdlD>=0&&_sfWdlL>=0){const total=_sfWdlW+_sfWdlD+_sfWdlL;const wP=Math.round(_sfWdlW/total*100);const dP=Math.round(_sfWdlD/total*100);const lP=Math.round(_sfWdlL/total*100);wdlStr='<span style="font-size:.65rem;color:var(--muted);margin-left:4px">('+wP+'%W/'+dP+'%D/'+lP+'%L)</span>';}
+  if(_sfWdlW>=0&&_sfWdlD>=0&&_sfWdlL>=0){const total=_sfWdlW+_sfWdlD+_sfWdlL;if(total>0){const wP=Math.round(_sfWdlW/total*100);const dP=Math.round(_sfWdlD/total*100);const lP=Math.round(_sfWdlL/total*100);wdlStr='<span style="font-size:.65rem;color:var(--muted);margin-left:4px">('+wP+'%W/'+dP+'%D/'+lP+'%L)</span>';}}
   s+=wdlStr;
   if(opts.delta)s+=opts.delta;
   return s;
