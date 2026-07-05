@@ -1,0 +1,68 @@
+name: Stale Issue & PR Management
+
+on:
+  schedule:
+    # Run every day at 02:00 UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Mark and Close Stale Items
+        uses: actions/stale@v9
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+          # --- Stale Issues ---
+          stale-issue-label: 'stale'
+          stale-issue-message: |
+            This issue has been automatically marked as stale because it has not had any activity for 30 days.
+            It will be closed in 7 days if no further activity occurs.
+
+            If this issue is still relevant, please comment to keep it open.
+            此 Issue 因 30 天无活动已被自动标记为过期。如 7 天内无进一步活动将被关闭。
+            如果此问题仍然存在，请留言以保持开启状态。
+
+          close-issue-message: |
+            This issue has been automatically closed due to inactivity. Feel free to reopen it if the problem persists.
+            此 Issue 因长期无活动已自动关闭。如问题仍然存在，欢迎重新打开。
+
+          days-before-issue-stale: 30
+          days-before-issue-close: 7
+
+          # --- Stale Pull Requests ---
+          stale-pr-label: 'stale'
+          stale-pr-message: |
+            This pull request has been automatically marked as stale because it has not had any activity for 30 days.
+            It will be closed in 7 days if no further activity occurs.
+
+            Please update the PR or comment to keep it open.
+            此 Pull Request 因 30 天无活动已被自动标记为过期。如 7 天内无进一步活动将被关闭。
+
+          close-pr-message: |
+            This pull request has been automatically closed due to inactivity. Please reopen it when you're ready to continue.
+            此 Pull Request 因长期无活动已自动关闭。准备好继续时欢迎重新打开。
+
+          days-before-pr-stale: 30
+          days-before-pr-close: 7
+
+          # --- Exemptions ---
+          exempt-issue-labels: 'pinned,help wanted,bug,enhancement,in-progress'
+          exempt-pr-labels: 'pinned,in-progress,wip'
+          exempt-all-milestones: true
+          exempt-all-assignees: false
+
+          # --- Operations ---
+          operations-per-run: 60
+          remove-stale-when-updated: true
+          delete-branch: false
+
+          # --- Labels to add on close ---
+          close-issue-reason: 'not_planned'

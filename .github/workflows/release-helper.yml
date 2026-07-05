@@ -1,0 +1,181 @@
+name: Release Helper
+
+on:
+  release:
+    types: [created, published]
+
+permissions:
+  contents: write
+
+jobs:
+  generate-release-notes:
+    name: Generate Release Notes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for accurate changelog
+
+      - name: Generate Release Notes
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { data: release } = await github.rest.repos.getRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: context.payload.release.id,
+            });
+
+            // Get the previous release for comparison
+            const { data: releases } = await github.rest.repos.listReleases({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 10,
+            });
+
+            const currentIndex = releases.findIndex(r => r.id === release.id);
+            const previousRelease = releases[currentIndex + 1]; // Next in list is older
+
+            let commitsData = [];
+            if (previousRelease) {
+              // Get commits between previous and current release
+              const { data: comparison } = await github.rest.repos.compareCommits({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                base: previousRelease.tag_name,
+                head: release.tag_name,
+              });
+              commitsData = comparison.commits;
+            } else {
+              // First release - get last 30 commits
+              const { data: commits } = await github.rest.repos.listCommits({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                sha: release.target_commitish || 'main',
+                per_page: 30,
+              });
+              commitsData = commits.map(c => ({ ...c, commit: c.commit }));
+            }
+
+            // Categorize commits
+            const categories = {
+              'Features': [],
+              'Bug Fixes': [],
+              'Improvements': [],
+              'Documentation': [],
+              'Build / CI': [],
+              'Other': [],
+            };
+
+            const featurePatterns = ['feat', 'feature', 'add', 'implement', 'new'];
+            const fixPatterns = ['fix', 'bug', 'repair', 'correct', 'resolve'];
+            const improvePatterns = ['improve', 'enhance', 'optimize', 'refactor', 'perf', 'performance'];
+            const docPatterns = ['doc', 'readme', 'comment', 'wiki'];
+            const buildPatterns = ['build', 'ci', 'gradle', 'workflow', 'dependabot'];
+
+            for (const item of commitsData) {
+              const message = item.commit.message.split('\n')[0].toLowerCase();
+              const sha = item.sha.substring(0, 7);
+              const author = item.author?.login || item.commit.author?.name || 'unknown';
+              const line = `- ${item.commit.message.split('\n')[0]} (@${author}) \`${sha}\``;
+
+              if (featurePatterns.some(p => message.includes(p))) {
+                categories['Features'].push(line);
+              } else if (fixPatterns.some(p => message.includes(p))) {
+                categories['Bug Fixes'].push(line);
+              } else if (improvePatterns.some(p => message.includes(p))) {
+                categories['Improvements'].push(line);
+              } else if (docPatterns.some(p => message.includes(p))) {
+                categories['Documentation'].push(line);
+              } else if (buildPatterns.some(p => message.includes(p))) {
+                categories['Build / CI'].push(line);
+              } else {
+                categories['Other'].push(line);
+              }
+            }
+
+            // Build release notes
+            let notes = `## What's New in ${release.tag_name}\n\n`;
+
+            if (previousRelease) {
+              notes += `**Full Changelog**: ${release.html_url}/compare/${previousRelease.tag_name}...${release.tag_name}\n\n`;
+            }
+
+            // Add contributor list
+            const contributors = [...new Set(commitsData.map(c => c.author?.login).filter(Boolean))];
+            if (contributors.length > 0) {
+              notes += `### Contributors\n`;
+              for (const contributor of contributors) {
+                notes += `- @${contributor}\n`;
+              }
+              notes += `\n`;
+            }
+
+            // Add categorized changes
+            for (const [category, items] of Object.entries(categories)) {
+              if (items.length > 0) {
+                notes += `### ${category}\n`;
+                for (const item of items) {
+                  notes += `${item}\n`;
+                }
+                notes += `\n`;
+              }
+            }
+
+            // Add installation note
+            notes += `---\n\n`;
+            notes += `### Installation\n`;
+            notes += `Download the APK from the assets below and install it on your Android device.\n`;
+            notes += `Note: This app requires Stockfish chess engine binaries (\`libstockfish.so\`) to be built separately via NDK.\n\n`;
+            notes += `> ⚠️ **Note**: If you encounter any issues, please [report them here](https://github.com/${context.repo.owner}/${context.repo.repo}/issues).\n`;
+
+            // Update the release with generated notes
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: release.id,
+              body: notes,
+            });
+
+            console.log(`Release notes updated for ${release.tag_name}`);
+
+  verify-release-assets:
+    name: Verify Release Assets
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: generate-release-notes
+
+    steps:
+      - name: Check Release Assets
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { data: release } = await github.rest.repos.getRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: context.payload.release.id,
+            });
+
+            const assets = release.assets || [];
+            const apkAssets = assets.filter(a => a.name.endsWith('.apk'));
+
+            if (apkAssets.length === 0) {
+              console.log('::warning::No APK assets found in this release.');
+              console.log('::notice::Please manually upload the APK file to the release.');
+            } else {
+              console.log(`✓ Found ${apkAssets.length} APK asset(s):`);
+              for (const apk of apkAssets) {
+                const sizeMB = (apk.size / (1024 * 1024)).toFixed(2);
+                console.log(`  - ${apk.name} (${sizeMB} MB)`);
+              }
+            }
+
+            // List all assets
+            if (assets.length > 0) {
+              console.log(`\nTotal assets: ${assets.length}`);
+            }

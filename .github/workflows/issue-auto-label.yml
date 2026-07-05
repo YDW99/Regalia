@@ -1,0 +1,140 @@
+name: Issue Auto Labeling
+
+on:
+  issues:
+    types: [opened, edited]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue number to re-label (optional)'
+        required: false
+        type: string
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  auto-label:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Auto-label Issue
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issueNumber = context.payload.inputs?.issue_number
+              ? parseInt(context.payload.inputs.issue_number)
+              : context.issue.number;
+
+            const { data: issue } = await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+            });
+
+            const title = (issue.title || '').toLowerCase();
+            const body = (issue.body || '').toLowerCase();
+            const combined = title + ' ' + body;
+
+            const labelsToAdd = new Set();
+
+            // --- Bug Detection ---
+            const bugKeywords = [
+              'bug', 'fix', 'crash', 'error', 'exception', 'broken',
+              'not working', 'doesn\'t work', 'failed', 'failure',
+              ' NullPointer', ' NullReference', 'force close', 'fc',
+              'freeze', 'hang', 'stuck', 'leak', '内存泄漏', '崩溃',
+              '闪退', '卡死', 'bug', '错误', '异常'
+            ];
+            if (bugKeywords.some(k => combined.includes(k))) {
+              labelsToAdd.add('bug');
+            }
+
+            // --- Enhancement / Feature Request ---
+            const featureKeywords = [
+              'feature', 'enhancement', 'request', 'add ', 'support',
+              'implement', 'would be nice', 'improvement', 'optimize',
+              '新功能', '功能请求', '建议', '优化', '改进', '添加'
+            ];
+            if (featureKeywords.some(k => combined.includes(k))) {
+              labelsToAdd.add('enhancement');
+            }
+
+            // --- UI/UX ---
+            const uiKeywords = [
+              'ui', 'ux', 'design', 'layout', 'theme', 'dark mode',
+              'icon', 'color', 'font', 'text size', '界面', '主题',
+              '图标', '颜色', '布局', '字体'
+            ];
+            if (uiKeywords.some(k => combined.includes(k))) {
+              labelsToAdd.add('ui/ux');
+            }
+
+            // --- Documentation ---
+            const docKeywords = [
+              'doc', 'readme', 'wiki', 'comment', 'typo', 'translation',
+              '文档', '说明', '翻译', '注释'
+            ];
+            if (docKeywords.some(k => combined.includes(k))) {
+              labelsToAdd.add('documentation');
+            }
+
+            // --- Build / CI ---
+            const buildKeywords = [
+              'build', 'gradle', 'ci', 'workflow', 'ndk', 'compile',
+              '构建', '编译', '打包'
+            ];
+            if (buildKeywords.some(k => combined.includes(k))) {
+              labelsToAdd.add('build/ci');
+            }
+
+            // --- Chess Engine / Stockfish ---
+            const engineKeywords = [
+              'stockfish', 'engine', 'uci', 'chess engine', 'nnue',
+              'elo', 'strength', 'level', 'ai', 'bot', 'engine',
+              '引擎', '棋力', '等级', ' Stockfish ', 'stockfish '
+            ];
+            if (engineKeywords.some(k => combined.includes(k))) {
+              labelsToAdd.add('chess-engine');
+            }
+
+            // --- Good First Issue (for easy tasks) ---
+            const goodFirstKeywords = [
+              'good first issue', 'beginner', 'easy', 'simple',
+              'good first', '入门', '新手', '简单'
+            ];
+            if (goodFirstKeywords.some(k => combined.includes(k))) {
+              labelsToAdd.add('good first issue');
+            }
+
+            // --- Question ---
+            const questionKeywords = [
+              'how to', 'how do', 'question', 'help', 'what is',
+              '请问', '如何', '怎么', '疑问', '问题'
+            ];
+            if (questionKeywords.some(k => combined.includes(k))) {
+              labelsToAdd.add('question');
+            }
+
+            // --- Platform Specific ---
+            if (/android \d+|api \d+|sdk|pixel|samsung|xiaomi|huawei|oppo|vivo|meizu/.test(combined)) {
+              labelsToAdd.add('platform-specific');
+            }
+
+            // Add labels if any were matched
+            if (labelsToAdd.size > 0) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                labels: Array.from(labelsToAdd),
+              });
+              console.log(`Added labels to #${issueNumber}: ${Array.from(labelsToAdd).join(', ')}`);
+            } else {
+              console.log(`No labels matched for #${issueNumber}`);
+            }

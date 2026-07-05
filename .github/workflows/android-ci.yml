@@ -1,0 +1,192 @@
+name: Android CI
+
+on:
+  push:
+    branches: [main, master]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.gitignore'
+  pull_request:
+    branches: [main, master]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.gitignore'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gradle-validation:
+    name: Validate Gradle Wrapper
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate Gradle Wrapper checksum
+        uses: gradle/actions/wrapper-validation@v3
+
+  code-checks:
+    name: Java/Kotlin Code Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: gradle-validation
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Run Kotlin lint (ktlintCheck)
+        continue-on-error: true
+        run: ./gradlew ktlintCheck --no-daemon --stacktrace
+
+      - name: Compile Java/Kotlin sources (without NDK build)
+        run: |
+          # Compile only Java/Kotlin sources, skip NDK tasks that require libstockfish.so
+          ./gradlew compileDebugJavaWithJavac compileDebugKotlin \
+            -x externalNativeBuildDebug \
+            -x externalNativeBuildRelease \
+            -x mergeDebugNativeLibs \
+            -x stripDebugDebugSymbols \
+            -x packageDebug \
+            -x packageRelease \
+            --no-daemon \
+            --stacktrace
+
+  manifest-check:
+    name: AndroidManifest Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: gradle-validation
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate AndroidManifest.xml exists
+        run: |
+          MANIFEST_PATH="app/src/main/AndroidManifest.xml"
+          if [ ! -f "$MANIFEST_PATH" ]; then
+            echo "::error::AndroidManifest.xml not found at $MANIFEST_PATH"
+            exit 1
+          fi
+          echo "✓ AndroidManifest.xml found"
+
+      - name: Check AndroidManifest.xml basic structure
+        run: |
+          MANIFEST_PATH="app/src/main/AndroidManifest.xml"
+
+          # Check for required elements
+          if ! grep -q '<manifest' "$MANIFEST_PATH"; then
+            echo "::error::Missing <manifest> root element"
+            exit 1
+          fi
+
+          if ! grep -q 'package=' "$MANIFEST_PATH"; then
+            echo "::warning::Missing 'package' attribute in <manifest>"
+          fi
+
+          if ! grep -q '<application' "$MANIFEST_PATH"; then
+            echo "::error::Missing <application> element"
+            exit 1
+          fi
+
+          # Check for common activity declaration
+          if ! grep -q '<activity' "$MANIFEST_PATH"; then
+            echo "::warning::No <activity> found in manifest"
+          fi
+
+          echo "✓ AndroidManifest.xml structure is valid"
+
+      - name: Check for debug-only configurations
+        run: |
+          MANIFEST_PATH="app/src/main/AndroidManifest.xml"
+
+          # Warn if android:debuggable="true" is present in release context
+          if grep -q 'android:debuggable="true"' "$MANIFEST_PATH"; then
+            echo "::warning::android:debuggable=\"true\" detected - ensure this is removed for release builds"
+          fi
+
+          # Check for exported components without permissions
+          if grep -q 'android:exported="true"' "$MANIFEST_PATH"; then
+            echo "::notice::Exported components found - ensure proper permissions/intent-filters are configured"
+          fi
+
+          echo "✓ Manifest security checks completed"
+
+  file-format-check:
+    name: File Format Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check for trailing whitespace in source files
+        run: |
+          echo "Checking for trailing whitespace in Java/Kotlin/XML files..."
+          OFFENDING_FILES=$(find . -type f \( -name "*.java" -o -name "*.kt" -o -name "*.xml" \) \
+            ! -path "*/build/*" ! -path "*/.gradle/*" \
+            -exec grep -l ' $' {} \; 2>/dev/null || true)
+
+          if [ -n "$OFFENDING_FILES" ]; then
+            echo "::warning::Files with trailing whitespace found:"
+            echo "$OFFENDING_FILES" | while read -r file; do
+              echo "  - $file"
+            done
+          else
+            echo "✓ No trailing whitespace found"
+          fi
+
+      - name: Check for missing newlines at end of files
+        run: |
+          echo "Checking for missing final newlines..."
+          MISSING_NL=$(find . -type f \( -name "*.java" -o -name "*.kt" -o -name "*.xml" -o -name "*.gradle" -o -name "*.yml" -o -name "*.yaml" \) \
+            ! -path "*/build/*" ! -path "*/.gradle/*" \
+            -exec sh -c '[ -n "$(tail -c 1 "$1")" ]' _ {} \; -print 2>/dev/null || true)
+
+          if [ -n "$MISSING_NL" ]; then
+            echo "::warning::Files missing final newline:"
+            echo "$MISSING_NL" | while read -r file; do
+              echo "  - $file"
+            done
+          else
+            echo "✓ All files end with a newline"
+          fi
+
+      - name: Check file naming conventions
+        run: |
+          echo "Checking Java/Kotlin file naming conventions..."
+
+          # Java/Kotlin files should be PascalCase
+          INVALID_NAMES=$(find . -type f \( -name "*.java" -o -name "*.kt" \) \
+            ! -path "*/build/*" ! -path "*/.gradle/*" \
+            | grep -v '/[A-Z][a-zA-Z0-9]*\.(java|kt)$' || true)
+
+          if [ -n "$INVALID_NAMES" ]; then
+            echo "::warning::Java/Kotlin files that don't follow PascalCase naming:"
+            echo "$INVALID_NAMES" | while read -r file; do
+              echo "  - $file"
+            done
+          else
+            echo "✓ File naming conventions look good"
+          fi
