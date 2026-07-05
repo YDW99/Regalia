@@ -157,6 +157,91 @@ function formatEvalTag(cached){
 }
 
 /**
+ * v1.1.0 Phase 58: Build a human-readable, White-perspective eval annotation
+ * for the every-5-moves PGN {} comment. Format mirrors the eval bar:
+ *   "<desc> (<score>) D<depth> SD<seldepth> (<W%>W/<D%>D/<L%>L)"
+ * e.g. "均势 (-0.10) D22 SD34 (1%W/96%D/3%L)"  (Chinese mode)
+ *      "Equal (-0.10) D22 SD34 (1%W/96%D/3%L)" (English mode)
+ *
+ * Language is auto-selected via T() which reads the global _lang variable.
+ * All eval/WDL/depth values are White-perspective (the engine → White
+ * conversion is done in onEngineEval before caching).
+ *
+ * Missing components are gracefully omitted:
+ *   - No depth → omit "D## SD##"
+ *   - No WDL (all -1 or sum<=0) → omit "(%W/%D/%L)"
+ *   - Mate → use "#+N" / "#-N" score + "White mates" / "Black mates" label
+ *
+ * @param {Object} cached — {eval, mate, depth, seldepth, wdlW, wdlD, wdlL}
+ * @returns {string} annotation text (empty string if cached is falsy)
+ */
+function formatEvalAnnotation(cached){
+  if(!cached)return '';
+  const mateDist=Number(cached.mate)||0;
+  const ev=Number(cached.eval)||0;
+  const depth=Number(cached.depth)||0;
+  const seldepth=Number(cached.seldepth)||0;
+  const wW=Number(cached.wdlW);  // may be NaN if undefined
+  const wD=Number(cached.wdlD);
+  const wL=Number(cached.wdlL);
+  // White-perspective description label (matches posDesc thresholds, but
+  // from White's POV rather than the player's POV).
+  let label, scoreStr;
+  if(mateDist!==0||Math.abs(ev)>=90000){
+    // Mate — determine which side mates.
+    // ev>=90000 → White wins; ev<=-90000 → Black wins.
+    // mateDist>0 (White POV) → White mates in N; mateDist<0 → Black mates in N.
+    const whiteMates=(mateDist!==0)?mateDist>0:ev>0;
+    label=T(whiteMates?'pgn_mate_white':'pgn_mate_black');
+    const absMd=mateDist!==0?Math.abs(mateDist):0;
+    scoreStr=whiteMates?('#+'+(absMd||'')):('#-'+(absMd||''));
+  }else{
+    // Centipawn eval — White-POV (ev is already White-POV from onEngineEval).
+    label=_pgnWhitePerspectiveLabel(ev);
+    const pawns=(ev/100).toFixed(2);
+    scoreStr=ev>0?('+'+pawns):pawns;  // negative already has sign; 0.00 stays
+  }
+  let s=label+' ('+scoreStr+')';
+  // Depth / seldepth — mirror eval bar "D15 SD22" format.
+  if(depth>0){
+    s+=' D'+depth;
+    if(seldepth>0&&seldepth>depth)s+=' SD'+seldepth;
+  }
+  // WDL — only when all three are non-negative AND sum > 0.
+  if(!isNaN(wW)&&!isNaN(wD)&&!isNaN(wL)&&wW>=0&&wD>=0&&wL>=0){
+    const total=wW+wD+wL;
+    if(total>0){
+      const wP=Math.round(wW/total*100);
+      const dP=Math.round(wD/total*100);
+      const lP=Math.round(wL/total*100);
+      s+=' ('+wP+'%W/'+dP+'%D/'+lP+'%L)';
+    }
+  }
+  return s;
+}
+
+/**
+ * v1.1.0 Phase 58: Map a White-POV centipawn eval to a White-perspective
+ * description label, using the same thresholds as posDesc() in ui.js but
+ * returning White-POV strings (e.g. "白方占优" / "White advantage") instead
+ * of player-POV strings ("你占优" / "Advantage").
+ *
+ * @param {number} ev — White-POV centipawn eval
+ * @returns {string} localized label
+ */
+function _pgnWhitePerspectiveLabel(ev){
+  if(ev>600)return T('pgn_white_winning');
+  if(ev>350)return T('pgn_white_huge_adv');
+  if(ev>150)return T('pgn_white_advantage');
+  if(ev>50)return T('pgn_white_slight_adv');
+  if(ev>-50)return T('pgn_equal');
+  if(ev>-150)return T('pgn_black_slight_adv');
+  if(ev>-350)return T('pgn_black_advantage');
+  if(ev>-600)return T('pgn_black_huge_adv');
+  return T('pgn_black_winning');
+}
+
+/**
  * Build a [%clk H:MM:SS] comment annotation from remaining clock seconds.
  *
  * @param {number} remainingSec — remaining clock time in seconds (null if unknown)
@@ -562,7 +647,16 @@ function parseStandardPGN(pgnText){
   //   so values containing `]` (rare but legal per PGN spec when escaped)
   //   are handled, and anchor to the line start so movetext `[Nf3]`-style
   //   annotations (which never start a line) are not stripped.
-  let moveText=pgnText.replace(/^\[[\s\S]*?\]/gm,'').trim();
+  // v1.1.0 PHASE 57+: The previous `/^\[[\s\S]*?\]/gm` pattern relied on
+  //   `^` with the `gm` flags to anchor tags to line starts. In single-line
+  //   PGN (all tags + movetext on ONE line, e.g. PGN 2Kbug.pgn) `^` only
+  //   matches the very start of the string, so the first `]` (closing the
+  //   first tag) is the only match — the remaining tags survive as garbage
+  //   tokens in moveText. Replaced with an unanchored, format-strict regex
+  //   `/\[[A-Za-z]\w*\s+"[^"]*"\]/g` that requires the canonical PGN tag
+  //   shape (key + whitespace + quoted value), so movetext comments like
+  //   `[Nf3]` (no quotes) are never stripped.
+  let moveText=pgnText.replace(/\[[A-Za-z]\w*\s+"[^"]*"\]/g,'').trim();
   // Remove line continuation markers
   moveText=moveText.replace(/\\\s*\n/g,' ');
   // v1.0.8 PHASE 49: Flatten brace comments BEFORE removing line comments.

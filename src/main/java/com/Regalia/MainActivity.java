@@ -52,12 +52,12 @@ import android.widget.TextView;
  * - AndroidX immersive mode uses reflection fallback if classes are missing
  * - All exception handlers log to logcat for debugging
  *
- * Version: v1.0.9
+ * Version: v1.1.0
  */
 public class MainActivity extends Activity {
 
     private static final String TAG = "Regalia";
-    private static final String VERSION = "v1.0.9";
+    private static final String VERSION = "v1.1.0";
 
     private WebView webView;
     private StockfishNative stockfishEngine;

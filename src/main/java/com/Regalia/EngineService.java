@@ -120,13 +120,18 @@ public class EngineService extends Service {
             startForeground(NOTIFICATION_ID, notification);
         }
 
-        // Acquire partial wake lock to prevent CPU suspension during analysis
+        // Acquire partial wake lock to prevent CPU suspension during analysis.
+        // v1.1.0 Phase 57+: Use a bounded timeout (30 min) as a safety net — if the
+        // Service is silently killed by the OEM and onDestroy never runs, the wake
+        // lock will still be released automatically. The 30-minute window is well
+        // beyond any single analysis session; longer sessions can re-acquire by
+        // re-entering the foreground state.
         try {
             PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
             if (pm != null) {
                 wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Regalia:engine-analysis");
-                wakeLock.acquire();
-                Log.i(TAG, "Partial wake lock acquired");
+                wakeLock.acquire(30L * 60L * 1000L); // 30 minutes
+                Log.i(TAG, "Partial wake lock acquired (30min timeout)");
             }
         } catch (Throwable e) {
             Log.w(TAG, "Wake lock acquire failed", e);

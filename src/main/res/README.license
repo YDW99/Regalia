@@ -11,7 +11,7 @@ NOTE on README.license placement:
 
 Subdirectory license summary:
   - values/: AGPL v3 (original)
-      strings.xml — application name ("Regalia v1.0.8") and string
+      strings.xml — application name ("Regalia v1.1.0") and string
       resources. Contains app_name, dialog titles, button labels,
       toast messages, ECO family names, and all user-facing strings
       in both Chinese and English (selected at runtime via _lang).
@@ -200,6 +200,57 @@ v1.0.8 Phase 42 (2026.7.1):
 
 v1.0.8 Phase 41 (2026.7.1):
   - No changes to res/ files.
+
+
+v1.1.0 Phase 57 (2026.7.4):
+  - No changes to Android resources. Phase 57 fixes are in JavaScript (ui.js)
+    only — pure DOM/layout and visual-annotation cache fixes.
+
+v1.1.0 Phase 56 (2026.7.4):
+  - No changes to Android resources. Phase 56 fixes are in JavaScript (ui.js,
+    ai-bridge.js) and Java (StockfishNative.java).
+
+v1.1.0 Phase 55 (2026.7.4):
+  - No changes to Android resources in this phase. Phase 55 fixes a Chess960
+    castling bug in stats.html (JavaScript) and game-logic.js (JavaScript).
+
+v1.1.0 Phase 54 (2026.7.4):
+  - ui.js + index.html.tpl: custom slider (track/fill/thumb divs + transparent
+    native input overlay) for pixel-perfect alignment with eval trend chart.
+    Slider wrapper CSS identical to chart container. Thumb center via CSS
+    calc(3px + ratio * (100% - 6px)).
+  - ui.js: move-list scroll-into-view fix (only scroll if not visible,
+    _lastReviewStepScrolled moved inside rAF callback).
+  - ui.js: executeMove async-callback try-catch.
+  - ui.js: ChessAudioEngine partial-init field reset + setEnabled/setVolume
+    null-guard.
+  - ui.js: render() retry-loop guard (_animRetryCount, max 10).
+  - ai-bridge.js: heartbeat timestamp in all engine callbacks (onEngineProgress,
+    onBestMove, onHintMove, onPonderProgress).
+  - ai-bridge.js: MultiPV secondary-variation divergence fix (distinguish
+    alternative vs continuation).
+  - tablebase.js: PGN cascade-skip threshold 5 → max(15, len*0.1).
+  All changes in GPL-v3-licensed files.
+
+
+v1.1.0 Phase 58 (2026.7.5):
+  - No changes to res/ files. Phase 58 adds a JS-layer feature (every-5-moves
+    PGN {} eval annotation in pgn-standard.js + game-logic.js + ai-bridge.js)
+    and Java-layer concurrency fixes (StockfishNative.java). strings.xml and
+    all other res/ files are unaffected.
+
+v1.1.0 Phase 57+ (2026.7.5):
+  - res/README.license (AGPL v3): Line 14 strings.xml description version
+    reference updated from "Regalia v1.0.8" to "Regalia v1.1.0" (LIC-2 fix to
+    match the actual app_name value updated in Phase 53). Historical changelog
+    entries that mention v1.0.8 (lines 163+) are preserved as accurate
+    historical records.
+  - strings.xml: No changes (app_name remains "Regalia v1.1.0").
+  - No other res/ files changed.
+
+v1.1.0 Phase 53 (2026.7.3):
+  - strings.xml (AGPL v3): app_name "Regalia v1.0.9" → "Regalia v1.1.0".
+  - No other res/ files changed.
 
 
 v1.0.9 Phase 52 (2026.7.2):

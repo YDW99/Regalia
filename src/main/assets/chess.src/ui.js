@@ -538,7 +538,19 @@ class ChessAudioEngine {
       this.compressor.connect(this.ctx.destination);
       return true;
     } catch (e) {
+      // v1.1.0 Phase 54: Reset ALL fields on partial-init failure so a retry
+      // can start fresh. Previously, this.ctx stayed set after a partial
+      // failure, making the early `if(this.ctx) return true` guard skip
+      // re-init — permanently locking the engine in a broken state.
       console.warn('[ChessAudio] init failed:', e);
+      try { if (this.ctx) this.ctx.close(); } catch(_){}
+      this.ctx = null;
+      this.master = null;
+      this.compressor = null;
+      this.reverb = null;
+      this.reverbGain = null;
+      this.dryGain = null;
+      this._noiseBuf = null;
       return false;
     }
   }
@@ -585,14 +597,17 @@ class ChessAudioEngine {
 
   setEnabled(v) {
     this.enabled = v;
-    if (this.master) {
+    // v1.1.0 Phase 54: Guard both master AND ctx — after a partial-init
+    // failure, master is null but ctx might still be set (now fixed in init(),
+    // but defensive guard remains for safety).
+    if (this.master && this.ctx) {
       this.master.gain.setTargetAtTime(v ? this.volume : 0, this.ctx.currentTime, 0.02);
     }
   }
 
   setVolume(v) {
     this.volume = Math.max(0, Math.min(1, v));
-    if (this.master && this.enabled) {
+    if (this.master && this.ctx && this.enabled) {
       this.master.gain.setTargetAtTime(this.volume, this.ctx.currentTime, 0.02);
     }
   }
@@ -1264,20 +1279,9 @@ function _resetRvVirtualState(){
   if(_rvScrollRefreshTimer){clearTimeout(_rvScrollRefreshTimer);_rvScrollRefreshTimer=0;}
 }
 
-// Compute the visible window [start, end) based on the current scroll position
-// and avgRowH. Returns the clamped window. When the virtual list is disabled,
-// returns the full range.
-function _computeVirtualWindow(){
-  if(!_rvVirtualState.enabled)return {start:0,end:moveRecords.length};
-  const _rList=_rListEl||document.getElementById('reviewMovesList');
-  if(!_rList||_rvVirtualState.avgRowH<=0)return {start:0,end:moveRecords.length};
-  const _firstVisible=Math.floor(_rList.scrollTop/_rvVirtualState.avgRowH);
-  const _lastVisible=Math.ceil((_rList.scrollTop+_rList.clientHeight)/_rvVirtualState.avgRowH);
-  return {
-    start:Math.max(0,_firstVisible-RV_OVERSCAN),
-    end:Math.min(moveRecords.length,_lastVisible+RV_OVERSCAN),
-  };
-}
+// v1.1.0 Phase 54 rev14: _computeVirtualWindow removed (dead code after
+//   virtual list disabled). When virtual list is off, the full range
+//   [0, moveRecords.length) is always used.
 
 // Build the inner HTML for the review move list, rendering only rows in
 // [startIdx, endIdx). When the virtual list is enabled, top/bottom spacer
@@ -1288,14 +1292,10 @@ function _computeVirtualWindow(){
 // landscape and portrait branches of render(). Both branches now call this
 // helper, eliminating ~40 lines of code duplication.
 function _buildReviewMovesInnerHTML(startIdx,endIdx){
-  const _virtual=_rvVirtualState.enabled;
+  // v1.1.0 Phase 54 rev14: Virtual list disabled — spacers never render.
   const _end=Math.min(endIdx,moveRecords.length);
   const _start=Math.max(0,Math.min(startIdx,_end));
   let h='';
-  // Top spacer: represents rows [0, _start) that are not rendered as DOM.
-  if(_virtual&&_start>0){
-    h+='<div class="rmv-spacer" style="height:'+(_start*_rvVirtualState.avgRowH)+'px"></div>';
-  }
   // Critical-move lookup tables (computed once, used for every row).
   const _criticalSteps=new Set(reviewCritical.map(c=>c.step));
   const _criticalReasons=new Map();
@@ -1327,63 +1327,16 @@ function _buildReviewMovesInnerHTML(startIdx,endIdx){
     }
     h+='</div></div>';
   }
-  // Bottom spacer: represents rows [_end, moveRecords.length) that are not rendered.
-  if(_virtual&&_end<moveRecords.length){
-    const _remaining=moveRecords.length-_end;
-    h+='<div class="rmv-spacer" style="height:'+(_remaining*_rvVirtualState.avgRowH)+'px"></div>';
-  }
   return h;
 }
 
-// Scroll-driven partial refresh: recompute the visible window and, if it has
-// changed, replace ONLY the .review-moves innerHTML (not app.innerHTML).
-// This keeps the board, eval bar, chart, nav buttons, and dialog state intact.
-// The scroll position is captured BEFORE the swap and restored AFTER, so the
-// user sees no visual jump.
-function _refreshReviewMovesOnly(){
-  if(!_rvVirtualState.enabled||!reviewMode)return;
-  const _rList=_rListEl||document.getElementById('reviewMovesList');
-  if(!_rList)return;
-  const _oldScrollTop=_rList.scrollTop;
-  const _newWindow=_computeVirtualWindow();
-  if(_newWindow.start===_rvVirtualState.windowStart&&
-     _newWindow.end===_rvVirtualState.windowEnd)return; // window unchanged
-  _rvVirtualState.windowStart=_newWindow.start;
-  _rvVirtualState.windowEnd=_newWindow.end;
-  _rvVirtualState.scrollTop=_oldScrollTop;
-  _rList.innerHTML=_buildReviewMovesInnerHTML(_newWindow.start,_newWindow.end);
-  // Restore scroll position (innerHTML reset zeroes scrollTop).
-  _rList.scrollTop=_oldScrollTop;
-}
-
-// Passive scroll handler — attached to .review-moves when virtual list is on.
-// Debounces the partial refresh to avoid swapping innerHTML on every scroll
-// event (which would thrash the DOM and could cause visible flicker).
-function _onReviewMovesScroll(){
-  if(!_rvVirtualState.enabled||!reviewMode)return;
-  if(_rvScrollRefreshTimer)clearTimeout(_rvScrollRefreshTimer);
-  _rvScrollRefreshTimer=setTimeout(_refreshReviewMovesOnly,RV_SCROLL_DEBOUNCE_MS);
-}
-
-// Force the virtual window to contain a specific 0-based move index.
-// Called from reviewGoTo() so the active move is always in the rendered
-// window (otherwise the scroll-into-view code can't find the .rmv-block.act
-// element because it's outside the window and was never created as DOM).
-function _forceReviewWindowToStep(targetMoveIdx){
-  if(!_rvVirtualState.enabled)return;
-  const _clamped=Math.max(0,Math.min(moveRecords.length-1,targetMoveIdx));
-  const _desiredStart=Math.max(0,_clamped-RV_OVERSCAN);
-  const _desiredEnd=Math.min(moveRecords.length,_clamped+1+RV_OVERSCAN);
-  if(_desiredStart>=_rvVirtualState.windowStart&&_desiredEnd<=_rvVirtualState.windowEnd)return;
-  _rvVirtualState.windowStart=_desiredStart;
-  _rvVirtualState.windowEnd=_desiredEnd;
-  const _rList=_rListEl||document.getElementById('reviewMovesList');
-  if(_rList){
-    const _oldScrollTop=_rList.scrollTop;
-    _rList.innerHTML=_buildReviewMovesInnerHTML(_desiredStart,_desiredEnd);
-    _rList.scrollTop=_oldScrollTop;
-  }
-}
+// v1.1.0 Phase 54 rev14: Virtual list scroll-driven refresh functions removed.
+//   _suppressScrollRefresh, _refreshReviewMovesOnly, _onReviewMovesScroll,
+//   _forceReviewWindowToStep were all dead code after RV_VIRTUAL_THRESHOLD=Infinity.
+//   The virtual list is disabled — all moves are always in the DOM, so there's
+//   no need for scroll-driven partial refresh, window forcing, or suppression
+//   guards. These functions caused numerous bugs (pull-back, selection loss,
+//   >90 steps revert) and are now eliminated at the source.
 
 // ===================== KNOWLEDGE =====================
 // P2 PERF: ECO_OPENINGS is lazily parsed on first access to avoid blocking main thread
@@ -1391,12 +1344,24 @@ function _forceReviewWindowToStep(targetMoveIdx){
 // ===================== EVAL TREND CHART =====================
 /**
  * Build an SVG evaluation trend chart for review mode.
- * @param {number} width - Chart width in pixels
- * @param {number} height - Chart height in pixels
+ * v1.1.0 Phase 54 rev11: Uses preserveAspectRatio="xMidYMid slice" with a
+ *   DYNAMIC viewBox that matches the container's pixel aspect ratio. The
+ *   viewBox is "0 0 <width> <height>" where width is measured from the
+ *   existing .review-chart container (or estimated on first render) and
+ *   height is _trendH. Since the viewBox aspect ratio matches the container,
+ *   "slice" scales 1:1 with NO cropping and NO centering gaps. Data points
+ *   at x=0 and x=width are at the left/right edges (clipped by overflow:hidden
+ *   for symmetric edge alignment with the slider).
+ * @param {number} trendW - Chart width in pixels (measured from container)
+ * @param {number} trendH - Chart height in pixels
  * @returns {string} SVG string for the eval trend chart
  */
-function _buildEvalTrendSVG(width, height) {
+function _buildEvalTrendSVG(trendW, trendH) {
   if (!reviewStates || reviewStates.length < 2) return '';
+  if (!trendW || trendW < 10) trendW = 300; // fallback
+  if (!trendH || trendH < 10) trendH = 120; // fallback
+  const width = trendW;
+  const height = trendH;
 
   // v1.0.8 PHASE 22: Read theme-aware chart colors from CSS variables.
   // This ensures the review trend chart is visible in both dark and light modes.
@@ -1419,10 +1384,18 @@ function _buildEvalTrendSVG(width, height) {
   const _C_STROKE = _cs.getPropertyValue('--chart-text-stroke').trim() || '#1a0a0a';
   const _C_CRIT = _cs.getPropertyValue('--chart-critical').trim() || '#ffd700';
   const _C_CRIT_TXT = _cs.getPropertyValue('--chart-critical-text').trim() || '#ffd700';
+  // v1.1.0 Phase 54 rev5: --chart-label is a high-contrast text color for eval
+  //   value labels — light in dark mode (#f5e6c8), dark in light mode (#2c2c34).
+  //   This ensures labels are readable on the chart background in both themes.
+  //   Previously, labels used --chart-line (blue) / --chart-fill (red) / --chart-axis
+  //   (warm gray), which had insufficient contrast especially in light mode.
+  const _C_LABEL = _cs.getPropertyValue('--chart-label').trim() || '#f5e6c8';
 
-  // v1.0.3-p11: reduced left/right padding from 36 to 8 so the chart points
-  // and lines fully utilize the horizontal space with minimal edge gaps.
-  const padding = {top: 12, right: 8, bottom: 4, left: 8};
+  // v1.1.0 Phase 54 rev11: Pixel-space coordinates (viewBox matches container
+  //   pixel dimensions). Left/right padding = 0 so first data point is at x=0
+  //   (left edge) and last at x=width (right edge). Top padding = 12px and
+  //   bottom padding = 4px for label space.
+  const padding = {top: 12, right: 0, bottom: 4, left: 0};
   const chartW = width - padding.left - padding.right;
   const chartH = height - padding.top - padding.bottom;
   const midY = padding.top + chartH / 2;
@@ -1475,13 +1448,13 @@ function _buildEvalTrendSVG(width, height) {
 
   if (points.length < 1) return '';
 
-  // FIX: Use preserveAspectRatio="xMidYMid meet" instead of "none" — "none" causes
-  // severe distortion in landscape where the container aspect ratio differs greatly
-  // from the viewBox. "xMidYMid meet" scales the chart uniformly to fit the container,
-  // maintaining proper line shapes and readable labels.
-  let svg = '<svg width="100%" height="100%" viewBox="0 0 ' + width + ' ' + height + '" preserveAspectRatio="xMidYMid meet" style="display:block">';
+  // v1.1.0 Phase 54 rev11: preserveAspectRatio="xMidYMid slice" with a DYNAMIC
+  //   viewBox that matches the container's pixel dimensions. Since the viewBox
+  //   aspect ratio equals the container aspect ratio, "slice" scales 1:1 — NO
+  //   cropping, NO centering gaps, NO distortion. All content is visible.
+  let svg = '<svg width="100%" height="100%" viewBox="0 0 ' + width + ' ' + height + '" preserveAspectRatio="xMidYMid slice" style="display:block;overflow:hidden">';
 
-  // 0-axis line (gray)
+  // 0-axis line (gray) — pixel space
   svg += '<line x1="' + padding.left + '" y1="' + midY + '" x2="' + (width - padding.right) + '" y2="' + midY + '" stroke="'+_C_AXIS+'" stroke-width="0.5" stroke-dasharray="2,2"/>';
 
   // In global mode: draw vertical grid lines at each step for alignment with progress bar
@@ -1517,7 +1490,6 @@ function _buildEvalTrendSVG(width, height) {
     svg += '<line x1="' + x0.toFixed(1) + '" y1="' + y0.toFixed(1) + '" x2="' + x1.toFixed(1) + '" y2="' + y1.toFixed(1) + '" stroke="' + strokeColor + '" stroke-width="1.5" stroke-linecap="round"/>';
 
     // In global mode: fill the gap between consecutive points with a lighter line
-    // to show the uniform spacing
     if (_reviewEvalGlobal && p1.step - p0.step > 1) {
       for (let s = p0.step + 1; s < p1.step; s++) {
         const t = (s - p0.step) / (p1.step - p0.step);
@@ -1529,11 +1501,7 @@ function _buildEvalTrendSVG(width, height) {
     }
   }
 
-  // Draw data points.
-  // v1.0.9: point outline uses --chart-text-stroke (theme-aware: dark stroke on
-  // light bg, light stroke on dark bg) so the contrast ring is always visible
-  // against the surrounding background — previously this was hardcoded to two
-  // fixed rgba values that washed out in light mode.
+  // Draw data points (pixel space).
   for (const p of points) {
     const x = stepToX(p.step);
     const y = evalToY(p.eval);
@@ -1561,28 +1529,23 @@ function _buildEvalTrendSVG(width, height) {
   //   with priority (current step > mate > eval). Second pass: render only
   //   labels that don't overlap, also tracking Y proximity.
   if (!_reviewEvalGlobal) {
-    // Pass 1: Collect all candidate labels with priority
+    // Pass 1: Collect all candidate labels with priority (pixel space)
     const _labelCandidates = [];
     for (const p of points) {
       const x = stepToX(p.step);
       const y = evalToY(p.eval);
-      // v1.0.5 Round-6 Rev62 (2026.6.27) PERF: use peek() instead of get().
-      // This is a read-only iteration over all eval points for label layout —
-      // refreshing LRU order on each access would just churn the Map (per the
-      // design principle documented at lines 513-515). Same pattern as the
-      // review-moves-list loop at line 1845.
       const ev = _reviewEvalCache.peek(p.step);
       const _isCurrentStep = (p.step === reviewStep);
       if (!ev) continue;
 
-      let label = '', textColor = _C_AXIS, fontSize = 6.5, fontWeight = '';
+      let label = '', textColor = _C_LABEL, fontSize = 6.5, fontWeight = '';
       let labelY;
 
       if (Math.abs(ev.eval) >= 90000) {
         const md = ev.mate != null ? ev.mate : (ev.mateDistance != null ? ev.mateDistance : 0);
         if (md !== 0 || Math.abs(ev.eval) >= 99999) {
           label = md > 0 ? '#+' + Math.abs(md) : md < 0 ? '#-' + Math.abs(md) : (ev.eval > 0 ? '#+' : '#-');
-          textColor = '#ffd700';
+          textColor = _C_CRIT;
           fontSize = 7;
           fontWeight = ' font-weight="bold"';
           const _extraY = _isCurrentStep ? 4 : 0;
@@ -1593,14 +1556,17 @@ function _buildEvalTrendSVG(width, height) {
         const displayEval = (cpVal / 100).toFixed(cpVal % 100 === 0 ? 0 : 1);
         const sign = cpVal > 0 ? '+' : '';
         label = sign + displayEval;
-        textColor = p.eval > 0 ? _C_LINE : (p.eval < 0 ? _C_FILL : _C_AXIS);
+        textColor = _C_LABEL;
         const _extraY = _isCurrentStep ? 3 : 0;
         labelY = (p.eval > 0) ? Math.min(y + 11 + _extraY, height - 2) : Math.max(y - 3 - _extraY, 9);
       }
 
       if (label) {
+        // Clamp label X to prevent edge clipping (pixel space)
+        const _estHalfW = fontSize * label.length * 0.32;
+        const _clampedX = Math.max(_estHalfW, Math.min(x, width - _estHalfW));
         _labelCandidates.push({
-          x, y: labelY,
+          x: _clampedX, y: labelY,
           label, textColor, fontSize, fontWeight,
           priority: _isCurrentStep ? 3 : (Math.abs(ev.eval) >= 90000 ? 2 : 1),
           step: p.step
@@ -1608,12 +1574,11 @@ function _buildEvalTrendSVG(width, height) {
       }
     }
 
-    // Pass 2: Render labels with overlap prevention (both X and Y proximity)
-    // Sort by priority descending — higher priority labels are placed first
+    // Pass 2: Render labels with overlap prevention (pixel space)
     _labelCandidates.sort((a, b) => b.priority - a.priority);
     const _placedLabels = [];
-    const _minLabelGapX = 36; // Minimum horizontal gap between labels
-    const _minLabelGapY = 10; // Minimum vertical gap between overlapping X labels
+    const _minLabelGapX = 36;
+    const _minLabelGapY = 10;
 
     for (const cand of _labelCandidates) {
       let overlaps = false;
@@ -1630,14 +1595,14 @@ function _buildEvalTrendSVG(width, height) {
       }
     }
 
-    // Render placed labels (sort back by step for logical ordering)
+    // Render placed labels (pixel space)
     _placedLabels.sort((a, b) => a.step - b.step);
     for (const lbl of _placedLabels) {
       svg += '<text x="' + lbl.x.toFixed(1) + '" y="' + lbl.y.toFixed(1) + '" fill="' + lbl.textColor + '" font-size="' + lbl.fontSize + '"' + lbl.fontWeight + ' font-family="sans-serif" text-anchor="middle" paint-order="stroke" stroke="'+_C_STROKE+'" stroke-width="2">' + lbl.label + '</text>';
     }
   }
 
-  // Current position marker (highlighted)
+  // Current position marker (highlighted) — pixel space
   if (reviewStep >= 0 && reviewStep < reviewStates.length) {
     const curEv = _reviewEvalCache.get(reviewStep);
     if (curEv != null) {
@@ -1647,23 +1612,13 @@ function _buildEvalTrendSVG(width, height) {
     }
   }
 
-  // Last endpoint checkmate distance display — only in global mode
-  // (In local mode, the main loop above already renders labels for all visible points,
-  //  so showing another label here would cause overlap/duplication on the last point.)
-  if (_reviewEvalGlobal && points.length > 0) {
-    const lastP = points[points.length - 1];
-    const lastEv = _reviewEvalCache.get(lastP.step);
-    if (lastEv && Math.abs(lastEv.eval) >= 90000) {
-      const lastMd = lastEv.mate != null ? lastEv.mate : (lastEv.mateDistance != null ? lastEv.mateDistance : 0);
-      if (lastMd !== 0 || Math.abs(lastEv.eval) >= 99999) {
-        const lx = stepToX(lastP.step);
-        const ly = evalToY(lastP.eval);
-        const cmLabel = lastMd > 0 ? '#+' + Math.abs(lastMd) : lastMd < 0 ? '#-' + Math.abs(lastMd) : (lastEv.eval > 0 ? '#+' : '#-');
-        const cmLabelY = (lastP.eval > 0) ? Math.min(ly + 12, height - 2) : Math.max(ly - 4, 9);
-        svg += '<text x="' + lx.toFixed(1) + '" y="' + cmLabelY.toFixed(1) + '" fill="'+_C_CRIT_TXT+'" font-size="7" font-weight="bold" font-family="sans-serif" text-anchor="middle" paint-order="stroke" stroke="'+_C_STROKE+'" stroke-width="2">' + cmLabel + '</text>';
-      }
-    }
-  }
+  // v1.1.0 Phase 54 rev5: Removed the global-mode last-endpoint checkmate
+  //   distance label. User requested: "取消全局模式开启时最右侧末端点旁显示的评估值".
+  //   In global mode, the chart shows all points without individual labels (the
+  //   local-mode label loop above only runs when !_reviewEvalGlobal). The old
+  //   code added a special label for the last point's mate distance in global
+  //   mode — this is now removed. Global mode is purely visual (line + points),
+  //   no text labels.
 
   svg += '</svg>';
   return svg;
@@ -1819,6 +1774,7 @@ let reviewBaseState=null,_cachedStatus=null,_cachedStatusKey='';
 // Control map cache
 let cachedCtrlMap=null,cachedCtrlKey='',renderPending=false,
     lastRenderTime=0,lastRenderRequest=0,renderTimerId=null;
+let _animRetryCount=0; // v1.1.0 Phase 54: guard against stuck animationInProgress
 let _heartbeatIntervalId=null; // Interval ID for engine heartbeat monitor
 let _heartbeatRunning=false; // Flag for engine heartbeat monitor state
 // Dialog state
@@ -1849,12 +1805,8 @@ let reviewMode=false,reviewStep=0,reviewStates=[],reviewCritical=[];
 // from scrolling the move list independently).
 let _lastReviewStepScrolled=-2;
 let _reviewAnalyzeAllActive=false; // Flag for reviewAnalyzeAll batch analysis
-// v1.0.8 PHASE 18 Task 3: Track the reviewStep at the time of the last render.
-// Used to decide whether to force the virtual-list window to contain the
-// active step (only when the step changed, not on every render — preserves
-// the user's scroll position across renders that don't change reviewStep).
-let _lastRenderReviewStep=-2;
-
+// v1.1.0 Phase 54 rev14: _lastRenderReviewStep removed (dead code after virtual
+//   list disabled). Was used to detect reviewStep changes for window recompute.
 // v1.0.8 PHASE 18 Task 2: Virtual list state for the review move list.
 // When a game has more than RV_VIRTUAL_THRESHOLD moves, only the visible
 // window (plus RV_OVERSCAN rows above/below) is rendered as DOM nodes; the
@@ -1886,16 +1838,29 @@ let _lastRenderReviewStep=-2;
 //     app.innerHTML — so the board, eval bar, chart, nav buttons, and dialog
 //     state are all preserved. The scroll position is captured BEFORE the
 //     swap and restored AFTER, so the user sees no jump.
-const RV_VIRTUAL_THRESHOLD=80;        // >80 moves → enable virtual list
-const RV_OVERSCAN=10;                 // extra rows above/below viewport
-const RV_SCROLL_DEBOUNCE_MS=80;       // debounce for scroll-triggered refresh
+// v1.1.0 Phase 54 rev14: DISABLED the virtual list entirely.
+//   The virtual list (windowed rendering with spacers) caused numerous bugs:
+//   - Can't scroll past ~40 moves (window computation with inaccurate avgRowH)
+//   - Fast nav-button clicks cause pull-back (throttled render + window recompute)
+//   - Selection state lost (active move outside virtual window)
+//   - >90 steps revert (window recompute discarding scroll-based window)
+//   - Periodic pull-back from _refreshReviewMovesOnly innerHTML rebuilds
+//   First-principles analysis: the virtual list optimizes for >80 moves, but
+//   a typical chess game has 40-80 moves (20-40 pairs). Even a 200-move game
+//   renders fine as a full list — each row is a simple <div> with text, and
+//   modern WebView handles 200 DOM nodes trivially. The complexity of virtual
+//   list (window tracking, spacer heights, scroll-driven refresh, measurement
+//   rAF, suppression guards) far outweighs the negligible performance gain.
+//   Setting threshold to Infinity disables virtual list for ALL games —
+//   eliminating ALL virtual-list-related bugs at once.
+const RV_VIRTUAL_THRESHOLD=Infinity;   // v1.1.0 rev14: disabled — render full list always
 let _rvVirtualState={
-  avgRowH:44,                         // initial estimate, measured after first render
+  avgRowH:44,
   scrollTop:0,
   windowStart:0,
   windowEnd:Infinity,
-  measured:false,                     // false until avgRowH is measured from real DOM
-  enabled:false,                      // true iff current move list exceeds threshold
+  measured:false,
+  enabled:false,
 };
 let _rvScrollRefreshTimer=0;
 // Track the game-over status key so we can re-localize gameOver on language switch.
@@ -2088,13 +2053,24 @@ function render(){
   //   progress (Web Animations API overlay is on screen). Landing anim is
   //   no longer a separate phase — the overlay covers the destination
   //   square until animateMove's _finishAnim removes it.
+  // v1.1.0 Phase 54: Added _animRetryCount guard (max 10 retries = 2s) to
+  //   prevent infinite loop if animationInProgress gets stuck true.
   if(animationInProgress){
     if(!renderPending){
+      _animRetryCount=(_animRetryCount||0)+1;
+      if(_animRetryCount>10){
+        // Stuck — force-clear and render immediately
+        animationInProgress=false;_animRetryCount=0;
+        lastRenderTime=Date.now();
+        renderInternal();
+        return;
+      }
       renderPending=true;
-      setTimeout(()=>{renderPending=false;lastRenderTime=Date.now();render();},200);
+      setTimeout(()=>{renderPending=false;_animRetryCount=0;lastRenderTime=Date.now();render();},200);
     }
     return;
   }
+  _animRetryCount=0;
   const now=Date.now();
   if(now-lastRenderTime<8){
     renderPending=true;
@@ -2139,7 +2115,7 @@ const oppC=OPP_COLOR[playerColor];
 const flip=playerColor==='black';
 // Arrows computed separately by _updateArrows() — no inline computation needed
 
-let h='<div class="hdr" role="banner"><div class="hdr-top"><div class="hdr-l">'+_hdrKingIconHTML()+'<h1>'+T('app_name')+'<span class="ver">v1.0.9</span><button onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showAboutPage=true;render()" class="hdr-btn" style="margin-left:4px;cursor:pointer">ℹ️</button></h1></div><button onclick="toggleLang()" class="hdr-btn-lg" style="cursor:pointer">'+(_lang==='zh'?'↔️中':'↔️EN')+'</button><div class="ev" id="eval-disp" role="status" aria-label="'+T('evaluating')+'">'+(setupMode?T('setup_label'):(isAIThinking?'<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>':'<span class="ev-e">'+pe+'</span><span>'+pd+'</span><span style="color:var(--muted)">('+scoreStr+')</span>'+_hdrDepthStr+_hdrProgressStr))+'</div></div><div class="hdr-tools" role="toolbar" aria-label="'+T('ctrl_range')+'">'+(setupMode?'':'<div class="diff-sel" role="radiogroup" aria-label="AI">'+getAI_LEVELS().map(l=>'<button class="diff-b'+(getEffectiveAILevel()===l.id?' act':'')+'" onclick="if(!isAIThinking){'+(l.id===8?'openEngineConfig()':('aiLevel='+l.id+';try{AndroidBridge.syncGameDifficulty('+l.id+')}catch(e){}render()'))+'}" title="'+l.desc+'" role="radio" aria-checked="'+(getEffectiveAILevel()===l.id)+'">'+(l.id===8?'⚙️':l.id===7?('SL'+(function(){try{let _sl=20;if(typeof engineSettingsData!=='undefined'&&engineSettingsData&&engineSettingsData.skillLevel!=null)_sl=engineSettingsData.skillLevel;else if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getEngineSkillLevel)_sl=AndroidBridge.getEngineSkillLevel();return _sl;}catch(e){return 20;}})()):l.id)+'</button>').join('')+'</div>')+'<button type="button" class="btn" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()" aria-label="'+T('new_game')+'"><span style="font-size:1.4rem">⚔️</span> '+T('new_game')+'</button>'+'<button class="btn" onclick="quickFreeOpening()" aria-label="'+T('free_opening')+'">'+(playerColor==='white'?'<span style=\"font-size:1.4rem;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text\">♔&#xFE0E;</span>':'<span style=\"font-size:1.4rem;font-weight:400;color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans Symbol&#x27;,sans-serif;font-variant-emoji:text\">♚&#xFE0E;</span>')+' '+T('free_opening')+'</button>'+(setupMode?'':'<button class="btn" onclick="toggleSound()" id="btnSound" aria-label="'+T('sound')+'">'+(soundOn?'<span style="font-size:1.4rem">🔊</span> '+T('sound'):'<span style="font-size:1.4rem">🔇</span> '+T('sound'))+'</button>')+'<button class="btn" onclick="copyFEN()" title="'+T('copy_fen')+'" aria-label="'+T('copy_fen')+'"><span style="font-size:1.4rem">📝</span> FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="'+T('import_fen')+'" aria-label="'+T('import_fen')+'"><span style="font-size:1.4rem">🗃️</span> '+T('import_label')+'</button><button class="btn" onclick="'+(setupMode?'exitSetup()':'toggleSetup()')+'" aria-label="'+(setupMode?T('setup_done'):T('setup_mode'))+'">'+(setupMode?'<span style="font-size:1.4rem">✓</span> '+T('setup_done'):'<span style="font-size:1.4rem">🏗️</span> '+T('setup_mode'))+'</button></div></div>';
+let h='<div class="hdr" role="banner"><div class="hdr-top"><div class="hdr-l">'+_hdrKingIconHTML()+'<h1>'+T('app_name')+'<span class="ver">v1.1.0</span><button onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showAboutPage=true;render()" class="hdr-btn" style="margin-left:4px;cursor:pointer">ℹ️</button></h1></div><button onclick="toggleLang()" class="hdr-btn-lg" style="cursor:pointer">'+(_lang==='zh'?'↔️中':'↔️EN')+'</button><div class="ev" id="eval-disp" role="status" aria-label="'+T('evaluating')+'">'+(setupMode?T('setup_label'):(isAIThinking?'<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>':'<span class="ev-e">'+pe+'</span><span>'+pd+'</span><span style="color:var(--muted)">('+scoreStr+')</span>'+_hdrDepthStr+_hdrProgressStr))+'</div></div><div class="hdr-tools" role="toolbar" aria-label="'+T('ctrl_range')+'">'+(setupMode?'':'<div class="diff-sel" role="radiogroup" aria-label="AI">'+getAI_LEVELS().map(l=>'<button class="diff-b'+(getEffectiveAILevel()===l.id?' act':'')+'" onclick="if(!isAIThinking){'+(l.id===8?'openEngineConfig()':('aiLevel='+l.id+';try{AndroidBridge.syncGameDifficulty('+l.id+')}catch(e){}render()'))+'}" title="'+l.desc+'" role="radio" aria-checked="'+(getEffectiveAILevel()===l.id)+'">'+(l.id===8?'⚙️':l.id===7?('SL'+(function(){try{let _sl=20;if(typeof engineSettingsData!=='undefined'&&engineSettingsData&&engineSettingsData.skillLevel!=null)_sl=engineSettingsData.skillLevel;else if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getEngineSkillLevel)_sl=AndroidBridge.getEngineSkillLevel();return _sl;}catch(e){return 20;}})()):l.id)+'</button>').join('')+'</div>')+'<button type="button" class="btn" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()" aria-label="'+T('new_game')+'"><span style="font-size:1.4rem">⚔️</span> '+T('new_game')+'</button>'+'<button class="btn" onclick="quickFreeOpening()" aria-label="'+T('free_opening')+'">'+(playerColor==='white'?'<span style=\"font-size:1.4rem;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text\">♔&#xFE0E;</span>':'<span style=\"font-size:1.4rem;font-weight:400;color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans Symbol&#x27;,sans-serif;font-variant-emoji:text\">♚&#xFE0E;</span>')+' '+T('free_opening')+'</button>'+(setupMode?'':'<button class="btn" onclick="toggleSound()" id="btnSound" aria-label="'+T('sound')+'">'+(soundOn?'<span style="font-size:1.4rem">🔊</span> '+T('sound'):'<span style="font-size:1.4rem">🔇</span> '+T('sound'))+'</button>')+'<button class="btn" onclick="copyFEN()" title="'+T('copy_fen')+'" aria-label="'+T('copy_fen')+'"><span style="font-size:1.4rem">📝</span> FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="'+T('import_fen')+'" aria-label="'+T('import_fen')+'"><span style="font-size:1.4rem">🗃️</span> '+T('import_label')+'</button><button class="btn" onclick="'+(setupMode?'exitSetup()':'toggleSetup()')+'" aria-label="'+(setupMode?T('setup_done'):T('setup_mode'))+'">'+(setupMode?'<span style="font-size:1.4rem">✓</span> '+T('setup_done'):'<span style="font-size:1.4rem">🏗️</span> '+T('setup_mode'))+'</button></div></div>';
 h+=`<div class="main" role="main"><div class="bsec">`;
 // v1.0.4 Rev37: AI bar captured pieces split at 7 — pieces 8+ go to line 3.
 {const _aiCapHtml=capturedPiecesHtml(gameState.board,oppC,playerColor,7);
@@ -2537,7 +2513,7 @@ if(showAboutPage){
 // Load AGPL v3 SVG via AndroidBridge as base64 (CSP-compliant)
 let _gplSvgSrc='';
 try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.loadAssetAsBase64){const b64=AndroidBridge.loadAssetAsBase64('AGPLv3_Logo.svg');if(b64)_gplSvgSrc='data:image/svg+xml;base64,'+b64;}}catch(e){}
-h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="About"><div class="dlg" style="max-width:460px"><h2>${T('about_title')}</h2><div class="dlg-sec"><div class="crow"><span class="lb">${T('about_app')}</span><span class="vl">${T('app_name')} v1.0.9</span></div><div class="crow"><span class="lb">${T('about_engine')}</span><span class="vl">Stockfish 18 (arm64-v8a-dotprod)</span></div><div class="crow"><span class="lb">${T('about_platform')}</span><span class="vl">Android arm64-v8a</span></div></div><div class="dlg-sec"><h3>${T('copyright_license')}</h3>`+(_gplSvgSrc?`<div style="text-align:center;margin-bottom:10px"><img src="${_gplSvgSrc}" alt="AGPL v3 Logo" style="width:120px;height:auto;opacity:.9" /></div>`:'')+`<div style="font-size:.75rem;color:var(--text);line-height:1.6"><p style="margin-bottom:8px">${T('about_copyright')}</p><p style="margin-bottom:8px">${T('about_source_code_prefix')}<a href="${T('about_source_code_url')}" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">${T('about_source_code_url')}</a></p><p style="margin-bottom:8px">${T('about_agpl')} <a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GNU AGPL v3</a>${T('about_agpl_desc')}</p><p style="margin-bottom:8px">${T('about_droidfish')}<a href="https://github.com/peterosterlund2/droidfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">DroidFish</a>${T('about_droidfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a>${T('about_droidfish_tail')}</p><p style="margin-bottom:8px">${T('about_stockfish')}<a href="https://github.com/official-stockfish/Stockfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">Stockfish</a>${T('about_stockfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a> ${T('about_gplv3')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_disclaimer')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_ai')}</p></div></div><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="showAboutPage=false;render()" style="flex:1;justify-content:center">${T('close')}</button></div></div></div>`;}
+h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="About"><div class="dlg" style="max-width:460px"><h2>${T('about_title')}</h2><div class="dlg-sec"><div class="crow"><span class="lb">${T('about_app')}</span><span class="vl">${T('app_name')} v1.1.0</span></div><div class="crow"><span class="lb">${T('about_engine')}</span><span class="vl">Stockfish 18 (arm64-v8a-dotprod)</span></div><div class="crow"><span class="lb">${T('about_platform')}</span><span class="vl">Android arm64-v8a</span></div></div><div class="dlg-sec"><h3>${T('copyright_license')}</h3>`+(_gplSvgSrc?`<div style="text-align:center;margin-bottom:10px"><img src="${_gplSvgSrc}" alt="AGPL v3 Logo" style="width:120px;height:auto;opacity:.9" /></div>`:'')+`<div style="font-size:.75rem;color:var(--text);line-height:1.6"><p style="margin-bottom:8px">${T('about_copyright')}</p><p style="margin-bottom:8px">${T('about_source_code_prefix')}<a href="${T('about_source_code_url')}" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">${T('about_source_code_url')}</a></p><p style="margin-bottom:8px">${T('about_agpl')} <a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GNU AGPL v3</a>${T('about_agpl_desc')}</p><p style="margin-bottom:8px">${T('about_droidfish')}<a href="https://github.com/peterosterlund2/droidfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">DroidFish</a>${T('about_droidfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a>${T('about_droidfish_tail')}</p><p style="margin-bottom:8px">${T('about_stockfish')}<a href="https://github.com/official-stockfish/Stockfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">Stockfish</a>${T('about_stockfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a> ${T('about_gplv3')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_disclaimer')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_ai')}</p></div></div><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="showAboutPage=false;render()" style="flex:1;justify-content:center">${T('close')}</button></div></div></div>`;}
 // Import dialog — paste FEN, paste PGN, or select PGN file
 if(showImportDialog){
 h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="${T('import_title')}" onclick="if(event.target===this){showImportDialog=false;render()}"><div class="dlg" style="max-width:420px"><h2>${T('import_title')}</h2><div class="dlg-sec" style="gap:10px;display:flex;flex-direction:column">
@@ -2893,30 +2869,94 @@ if(_sfWdlW>=0&&_sfWdlD>=0&&_sfWdlL>=0){const _rt=_sfWdlW+_sfWdlD+_sfWdlL;const _
 //   - max-height 1.9em → 2.4em (accommodate larger font + slight padding)
 //   - padding 3px 8px → 5px 10px (more vertical breathing room)
 //   - Analyze button font .7rem → .8rem; min-height 28px → 34px
-const _rvEvalFontSize=_isLandscapeReview?'.8rem':'.85rem';
-const _rvEvalEmojiSize=_isLandscapeReview?'1.05rem':'1.1rem';
+// v1.1.0 Phase 53: Use the SAME font sizes for both portrait and landscape
+// (previously portrait used .85rem/1.1rem, landscape used .8rem/1.05rem).
+// The .review-bottom #review-eval-bar CSS rule also sets .8rem via !important,
+// so this inline style is the fallback for when .review-bottom CSS hasn't
+// loaded yet (first render).
+const _rvEvalFontSize='.8rem';
+const _rvEvalEmojiSize='1.05rem';
 const _rvEvalBarHTML='<div class="ev" id="review-eval-bar" style="margin:2px 0;width:100%;box-sizing:border-box;font-size:'+_rvEvalFontSize+'!important;padding:5px 10px!important;gap:5px;max-height:2.4em;overflow:hidden;white-space:nowrap"><span class="ev-e" style="font-size:'+_rvEvalEmojiSize+'">'+_re.emoji+'</span><span>'+_re.desc+'</span><span style="color:var(--muted)">('+_re.score+')</span>'+_rDepthStr+_rProgressStr+_rWdlStr+_rDelta+'</div>';
 
-// Review step slider
-const _rvSliderHTML='<div style="width:100%;margin:6px 0">'+
-  '<input type="range" class="review-slider" min="0" max="' + (reviewStates.length-1) + '" value="' + reviewStep + '" style="width:100%;accent-color:var(--accent)" oninput="reviewGoTo(parseInt(this.value))">'+
-  '<div style="display:flex;justify-content:space-between;font-size:.65rem;color:var(--muted)"><span>'+T('start_pos')+'</span><span>'+T('step_label')+' '+ reviewStep + ' / ' + (reviewStates.length-1) + '</span><span>'+T('end_pos')+'</span></div>'+
+// Review step slider — custom slider with pixel-perfect alignment to chart data points.
+// v1.1.0 Phase 54: Replaced the native <input type="range"> visual with a custom
+// track/fill/thumb rendered as divs. The native input is now a transparent overlay
+// (opacity:0) that handles all touch/drag/keyboard interaction.
+//
+// v1.1.0 Phase 54 (revision 2): Edge-to-edge alignment. Both the chart and slider
+// now fill the full width — first data point at x=0 (left edge), last at x=width
+// (right edge). The slider thumb center goes from 0% to 100%, matching the chart
+// points exactly. The thumb (6px wide) overflows the container by 3px on each side
+// at min/max; the container's overflow:visible lets the thumb show. The chart's
+// first/last data point circles (r=2.75) are half-clipped by the chart container's
+// overflow:hidden — this is the intended edge-to-edge look.
+//
+// ALIGNMENT MATH:
+//   The slider wrapper has IDENTICAL CSS to the chart container (border:1px,
+//   padding:2px, box-sizing:border-box, width:100%). So both have the same content
+//   box width = W-6 (where W = .review-bottom content width).
+//   The chart's SVG viewBox is 0 0 (W-6) _trendH with padding=0 (left/right), so:
+//     - First data point at viewBox x=0 → at the left edge of the SVG content area
+//     - Last data point at viewBox x=W-6 → at the right edge of the SVG content area
+//   The slider container fills the wrapper's content box (width = W-6).
+//   The thumb CENTER is at: calc(ratio * 100%) where ratio = reviewStep / maxStep.
+//     - At ratio=0: thumbCenter = 0% = left edge = first data point ✓
+//     - At ratio=1: thumbCenter = 100% = right edge = last data point ✓
+//   The fill spans from 0 to the thumb's center.
+const _rvSliderMax=reviewStates.length-1;
+// Compute ratio for initial CSS calc positioning (avoids flicker before rAF).
+// calc(ratio * 100%) places the thumb's CENTER at the correct position,
+// matching the chart's data points at x=0 and x=width.
+const _rvSliderRatio=_rvSliderMax>0?reviewStep/_rvSliderMax:0;
+const _rvSliderThumbLeft='calc('+_rvSliderRatio+' * 100%)';
+const _rvSliderFillW='calc('+_rvSliderRatio+' * 100%)';
+const _rvSliderHTML='<div class="rv-slider-wrap">'+
+  '<div class="rv-slider-container" id="rvSliderContainer">'+
+    '<div class="rv-slider-base"></div>'+
+    '<div class="rv-slider-fill" id="rvSliderFill" style="width:'+_rvSliderFillW+'"></div>'+
+    '<div class="rv-slider-thumb" id="rvSliderThumb" style="left:'+_rvSliderThumbLeft+'"></div>'+
+    '<input type="range" class="rv-slider-input" min="0" max="'+_rvSliderMax+'" value="'+reviewStep+'" oninput="reviewGoTo(parseInt(this.value))" aria-label="'+T('step_label')+'">'+
+  '</div>'+
+  '<div class="rv-slider-labels"><span>'+T('start_pos')+'</span><span>'+T('step_label')+' '+ reviewStep + ' / ' + _rvSliderMax + '</span><span>'+T('end_pos')+'</span></div>'+
   '</div>';
+
+// v1.1.0 Phase 54: The slider thumb and fill positions are set via CSS calc()
+// in the inline style (see _rvSliderHTML above). CSS calc() automatically
+// adjusts on resize/orientation change (since 100% tracks the container width),
+// so no JS post-render update is needed. This eliminates flicker on render
+// and handles layout changes without requiring a re-render.
 
 // Eval trend chart — v1.0.3 patch: in landscape, the chart now lives in
 // .review-bottom which spans the FULL viewport width. This gives the chart
 // a much wider canvas (edge-to-edge) than the previous design where it was
 // squeezed under the board.
 const _isLandscapeTrend = window.innerWidth > window.innerHeight;
+// v1.1.0 Phase 54 rev8: _buildEvalTrendSVG no longer takes width/height —
+//   it uses a fixed viewBox="0 0 100 100" with preserveAspectRatio="xMidYMid
+//   slice", so the SVG always fills the container edge-to-edge regardless of
+//   the container's pixel dimensions. No width measurement needed. The chart
+//   container's height (_trendH) is still needed for the container's CSS height.
 // v1.0.8 PHASE 25 (portrait chart height fix): In portrait, the chart was
 //   too tall (up to 200px), leaving too little room for the move list. Reduced
 //   the portrait max to 120px (from 200px). Landscape unchanged (120-200px).
 //   min stays 120px so the trend line + labels remain readable.
-const _estimatedTrendW = Math.max(120, window.innerWidth - 28);
-const _trendW = _estimatedTrendW > 0 ? _estimatedTrendW : 300;
 const _trendH = _isLandscapeTrend
   ? Math.max(120, Math.min(200, Math.floor((window.innerHeight - 28) * 0.30)))
   : Math.max(100, Math.min(120, Math.floor((window.innerHeight - 200) * 0.18)));
+// v1.1.0 Phase 54 rev11: Measure the existing .review-chart container's
+//   clientWidth so the viewBox width == container pixel width. With
+//   preserveAspectRatio="xMidYMid slice", when the viewBox aspect ratio
+//   matches the container, "slice" scales 1:1 — no cropping, no gaps.
+//   On first render (.review-chart doesn't exist yet), estimate from window.
+let _trendW = Math.max(120, window.innerWidth - 28);
+try{
+  const _existingChart=document.querySelector('.review-chart');
+  if(_existingChart){
+    // clientWidth = content-box width (padding=0, so = border-box - 2px border)
+    const _actualW=_existingChart.clientWidth;
+    if(_actualW>0)_trendW=_actualW;
+  }
+}catch(e){/* measurement failed — use estimate */}
 const _trendSVG = _buildEvalTrendSVG(_trendW, _trendH);
 let _rvChartHTML='';
 if (_trendSVG) {
@@ -2929,7 +2969,7 @@ if (_trendSVG) {
   //   proper theme colors via --toggle-dot / --toggle-dot-on / --toggle-on-bg.
   _rvChartHTML+='<div class="toggle" style="font-size:.6rem;padding:2px 4px;gap:4px" onclick="_reviewEvalGlobal=!_reviewEvalGlobal;HapticManager.fire(_reviewEvalGlobal?\'TOGGLE_ON\':\'TOGGLE_OFF\');render()"><span>'+T('chart_global')+'</span><div class="toggle-sw sm'+(_reviewEvalGlobal?' on':'')+'"></div></div>';
   _rvChartHTML+='</div>';
-  _rvChartHTML+='<div class="review-chart" style="width:100%;height:'+_trendH+'px;margin:4px 0;background:var(--input-bg);border:1px solid var(--border);border-radius:4px;padding:2px;overflow:hidden">';
+  _rvChartHTML+='<div class="review-chart" style="width:100%;height:'+_trendH+'px;margin:4px 0;background:var(--input-bg);border:1px solid var(--border);border-radius:4px;padding:0;overflow:hidden">';
   _rvChartHTML+=_trendSVG;
   _rvChartHTML+='</div>';
 }
@@ -2941,6 +2981,13 @@ const _rvNavHTML='<div class="review-nav" style="display:flex;gap:4px;margin-top
   '<button class="btn btn-d" onclick="reviewGoTo(Math.min(reviewStates.length-1,reviewStep+1))">▶</button>'+
   '<button class="btn btn-d" onclick="reviewGoTo(reviewStates.length-1)">⏭</button>'+
   '</div>';
+// v1.1.0 Phase 54 rev16: nav buttons now force scrollIntoView even when the
+//   target step equals the current step (e.g. ▶ at last step, ⏮ at step 0).
+//   reviewGoTo() clamps the step, so calling reviewGoTo(reviewStep) at the
+//   boundary is a no-op for reviewStep but still triggers render(). The
+//   _lastReviewStepScrolled guard would skip scrollIntoView in that case.
+//   Fix: force _lastReviewStepScrolled=-2 in reviewGoTo so the guard always
+//   fires and scrollIntoView runs.
 
 // Analyze-all button.
 // v1.0.6 FIX: _totalSteps was moveRecords.length (off-by-one — reviewStates
@@ -2978,32 +3025,11 @@ const _rvAnalyzeHTML='<button id="review-analyze-btn" class="btn" style="margin-
 // render forced the window to the active step — discarding the user's scroll
 // position and causing a flicker (active-step rows → blank spacer → user-scrolled
 // rows). Now we track _lastRenderReviewStep and only re-center when the step
-// actually changes. Initial conditions (_curEnd===Infinity || !measured) still
-// force the window regardless. Scroll-position-based window recomputation
-// happens in _refreshReviewMovesOnly (triggered by the scroll listener).
+// v1.1.0 Phase 54 rev14: Virtual list disabled (RV_VIRTUAL_THRESHOLD=Infinity).
+//   Always render the full move list — no windowing, no spacers.
 _rvVirtualState.enabled=moveRecords.length>RV_VIRTUAL_THRESHOLD;
-if(_rvVirtualState.enabled){
-  const _activeIdx=Math.max(0,Math.min(moveRecords.length-1,reviewStep-1));
-  const _curStart=_rvVirtualState.windowStart;
-  const _curEnd=_rvVirtualState.windowEnd;
-  // Force window recompute ONLY when: (a) first virtual render, (b) reviewStep
-  // changed since last render, or (c) the active step is outside the current
-  // window AND was never in it. Case (c) uses a separate guard so that a
-  // user-scrolled window (where active step is intentionally outside) is
-  // preserved across renders that don't change reviewStep.
-  const _stepChanged = reviewStep !== _lastRenderReviewStep;
-  if(_curEnd===Infinity||!_rvVirtualState.measured||_stepChanged){
-    const _desiredStart=Math.max(0,_activeIdx-RV_OVERSCAN);
-    const _desiredEnd=Math.min(moveRecords.length,_activeIdx+1+RV_OVERSCAN);
-    _rvVirtualState.windowStart=_desiredStart;
-    _rvVirtualState.windowEnd=_desiredEnd;
-  }
-  _lastRenderReviewStep=reviewStep;
-}else{
-  // Short list — full render, no windowing.
-  _rvVirtualState.windowStart=0;
-  _rvVirtualState.windowEnd=moveRecords.length;
-}
+_rvVirtualState.windowStart=0;
+_rvVirtualState.windowEnd=moveRecords.length;
 const _rvStart=_rvVirtualState.windowStart;
 const _rvEnd=_rvVirtualState.windowEnd;
 
@@ -3028,25 +3054,31 @@ if(_isLandscapeReview){
   h+=_rvAnalyzeHTML;
   h+='</div>'; // close .review-bottom
 }else{
-  // Portrait: original stacked layout — everything in .review-left, then .review-moves below.
+  // v1.1.0 Phase 53: Portrait now uses the SAME layout as landscape —
+  // board + moves in .review-top, controls in .review-bottom (full width).
+  // Previously, portrait put all controls inside .review-left (the board
+  // column), making the slider/chart narrower than the viewport and
+  // causing misalignment between portrait and landscape. Now both
+  // orientations use the same .review-bottom container for controls.
+  h+='</div>'; // close .review-left
+  h+='<div class="review-moves" id="reviewMovesList">';
+  h+=_buildReviewMovesInnerHTML(_rvStart,_rvEnd);
+  h+='</div>'; // close .review-moves
+  h+='</div>'; // close .review-top
+  h+='<div class="review-bottom">';
   h+=_rvEvalBarHTML;
   h+=_rvSliderHTML;
   h+=_rvChartHTML;
   h+=_rvNavHTML;
   h+=_rvAnalyzeHTML;
-  h+='</div>'; // close .review-left
-  h+='<div class="review-moves" id="reviewMovesList">';
-  h+=_buildReviewMovesInnerHTML(_rvStart,_rvEnd);
-  h+='</div>'; // close .review-moves
+  h+='</div>'; // close .review-bottom
 }
 h+='</div></div>'; // close .review-body, .review-overlay
 } // close if(reviewMode)
 const _wasEcoFocused=_ecoSearchFocused;if(_ecoBlurTimer){clearTimeout(_ecoBlurTimer);_ecoBlurTimer=0}
-// v1.0.8 PHASE 18 Task 3 (bug fix): Clear any pending virtual-list scroll
-// refresh timer before rebuilding the DOM. Without this, a pending 80ms
-// debounce timer (set by _onReviewMovesScroll) could fire AFTER app.innerHTML=h
-// and rebuild .review-moves with a stale window that conflicts with the window
-// render() just computed — causing a visible flicker.
+// v1.1.0 Phase 54 rev14: Virtual list is disabled (RV_VIRTUAL_THRESHOLD=Infinity).
+//   The scroll refresh timer is always 0, so this clearTimeout is a no-op.
+//   Kept for safety in case virtual list is re-enabled in the future.
 if(_rvScrollRefreshTimer){clearTimeout(_rvScrollRefreshTimer);_rvScrollRefreshTimer=0;}
 // v1.0.3-p4 FIX: preserve the main-UI move-list (.mlist) scroll position across
 // full re-renders. app.innerHTML=h recreates the .mlist DOM element from
@@ -3071,6 +3103,10 @@ if(_rvScrollRefreshTimer){clearTimeout(_rvScrollRefreshTimer);_rvScrollRefreshTi
 // user was scrolled up (reading old moves), preserve their exact position.
 // This matches the behavior of chess.com / lichess move lists.
 let _savedReviewBodyScroll=0;
+// v1.1.0 Phase 54 rev7: Save .review-moves scrollTop to preserve user's scroll
+//   position across DOM rebuild. Restored after app.innerHTML=h, then
+//   scrollIntoView({block:'nearest'}) adjusts only if active move not visible.
+let _savedReviewMovesScroll=0;
 // v1.0.6: Save scroll positions of additional scrollable containers that
 // were previously NOT preserved across full re-renders:
 //   - .dlg (any open dialog: New Game, Engine Config, Import, About, etc.)
@@ -3083,7 +3119,9 @@ let _savedReviewBodyScroll=0;
 // scroll positions that some WebViews clamp to 0 with a visible jump).
 let _savedContainerScrolls=[];
 try{
-  const _selectors=['.dlg','.panel','.review-moves','.op-list'];
+  // v1.1.0 Phase 54 rev4: .review-moves removed from this list — its scroll
+  // is now handled entirely by the active-move scroll-into-view mechanism.
+  const _selectors=['.dlg','.panel','.op-list'];
   for(const _sel of _selectors){
     const _els=document.querySelectorAll(_sel);
     for(let _i=0;_i<_els.length;_i++){
@@ -3113,6 +3151,14 @@ if(!reviewMode){
 }else{
   const _oldReviewBody=document.querySelector('.review-body');
   if(_oldReviewBody){_savedReviewBodyScroll=_oldReviewBody.scrollTop;}
+  // v1.1.0 Phase 54 rev7: Save .review-moves scrollTop BEFORE app.innerHTML=h
+  //   resets it to 0. This preserves the user's scroll position across the
+  //   DOM rebuild. After rebuild, we restore it, then scrollIntoView({block:'nearest'})
+  //   adjusts only if the active move is NOT visible. This prevents the "forced
+  //   pull-back" when using nav buttons — the list stays at the user's position
+  //   and only scrolls minimally to show the new active move.
+  const _oldReviewMoves=document.getElementById('reviewMovesList');
+  if(_oldReviewMoves){_savedReviewMovesScroll=_oldReviewMoves.scrollTop;}
 }
 app.innerHTML=h;
 // v1.0.4 ROUND-5 REV13: Re-attach active animation elements after DOM rebuild
@@ -3149,26 +3195,49 @@ if(!reviewMode){
     }
   }
 }
-// v1.0.3-p9: restore .review-body scroll position after DOM rebuild
-// v1.0.4 Rev30 ROBUSTNESS: also use guard for review-body scroll restore
-// v1.0.4 Rev31 FIX: skip restore on orientation change — the saved scrollTop
-// is from the OLD layout and would point to a wrong position in the NEW layout.
-// The active-move scroll-into-view logic (below) handles re-centering instead.
+// v1.1.0 Phase 54 rev17: Restore .review-body scroll position after DOM rebuild.
+//   This is the OUTER scroll container (the whole review page). When render()
+//   rebuilds the DOM (app.innerHTML=h), .review-body.scrollTop resets to 0,
+//   causing the page to jump to the top. We MUST restore it synchronously
+//   (not in rAF) — the user sees the jump if we wait even one frame.
 if(reviewMode&&_savedReviewBodyScroll>0&&!_skipReviewBodyScrollRestore){
   const _newReviewBody=document.querySelector('.review-body');
   if(_newReviewBody){
-    const _savedBehavior=_newReviewBody.style.scrollBehavior;
     _newReviewBody.style.scrollBehavior='auto';
     try{_newReviewBody.scrollTop=_savedReviewBodyScroll;}catch(e){}
-    _newReviewBody.style.scrollBehavior=_savedBehavior;
+    _newReviewBody.style.scrollBehavior='';
   }
 }
-// Always clear the skip flag after one render cycle
+_savedReviewBodyScroll=0; // v1.1.0 rev19: clear after restore (was missing)
 _skipReviewBodyScrollRestore=false;
+// v1.1.0 Phase 54 rev17: Restore .review-moves scrollTop synchronously after
+//   DOM rebuild. This is the INNER scroll container (the move list). Same
+//   issue as .review-body — app.innerHTML=h resets scrollTop to 0. We restore
+//   synchronously (not in rAF) to prevent the visible jump to top. The
+//   scrollIntoView below (in double-rAF) then adjusts to center the active
+//   move — but starting from the restored position, not from 0.
+if(reviewMode&&_savedReviewMovesScroll>0){
+  const _newReviewMoves=document.getElementById('reviewMovesList');
+  if(_newReviewMoves){
+    _newReviewMoves.style.scrollBehavior='auto';
+    try{
+      const _maxScroll=Math.max(0,_newReviewMoves.scrollHeight-_newReviewMoves.clientHeight);
+      _newReviewMoves.scrollTop=Math.min(_savedReviewMovesScroll,_maxScroll);
+    }catch(e){}
+    _newReviewMoves.style.scrollBehavior='';
+  }
+}
+_savedReviewMovesScroll=0;
 // v1.0.6: Restore scroll positions of additional containers (.dlg, .panel,
-// .review-moves, .op-list). This must run AFTER app.innerHTML=h so the new
-// DOM elements exist. We use requestAnimationFrame to ensure layout has
-// settled before reading scrollHeight/clientHeight for clamping.
+// .op-list). This must run AFTER app.innerHTML=h so the new DOM elements exist.
+// v1.1.0 Phase 54 rev4: .review-moves is NO LONGER in this list. The review
+//   move-list scroll is now handled ENTIRELY by the active-move scroll-into-view
+//   mechanism below (always centers the active move after every render). The old
+//   save/restore for .review-moves conflicted with scroll-into-view, causing
+//   jump-flicker and moves stuck at edges. Now .review-moves scrollTop is never
+//   saved or restored — it is always recomputed from the active move position.
+//   The other containers (.dlg, .panel, .op-list) still use save/restore because
+//   they don't have an "active item" to center on.
 if(_savedContainerScrolls.length>0){
   const _toRestore=_savedContainerScrolls;
   _savedContainerScrolls=[]; // clear so re-renders don't double-restore
@@ -3204,52 +3273,88 @@ _cachedBwrap=null;_cachedSvgEl=null;_cachedSvgLines=[];_cachedArrowKey='';_cache
 _prevHoverSq=hoveredSquare?{row:hoveredSquare.row,col:hoveredSquare.col}:null;
 _prevSelSq=selectedSquare?{row:selectedSquare.row,col:selectedSquare.col}:null;
 _prevLegalSet=new Set();if(selectedSquare){for(const m of legalMvs)_prevLegalSet.add(m.row*8+m.col);}
-// Review scrolling: scroll the active move into view after DOM rebuild.
-// v1.0.2 (qw3.7max audit): Use double requestAnimationFrame instead of
-// rAF+setTimeout(0). The first rAF fires after the browser computes layout
-// for the new DOM; the second rAF fires after paint. Reading layout info
-// (scrollIntoView) in the second rAF guarantees no forced synchronous layout
-// (layout thrashing). The old rAF+setTimeout(0) pattern couldn't guarantee
-// layout was complete because setTimeout is a macrotask that may run before
-// the browser's layout/paint step.
-// Also use the module-level _rListEl cache instead of getElementById on every
-// render (avoids a DOM tree walk on the scroll path).
+// v1.1.0 Phase 54 rev19: scrollIntoView for the active move. Runs in
+//   double-rAF so layout is settled.
+//   Analyze-all is now allowed (rev18 restored render() in advance) — the
+//   user WANTS to see the board update + active move centered during
+//   analysis. So we no longer skip scrollIntoView during analyze-all.
+// v1.1.0 Phase 56 FIX: scrollIntoView({block:'center'}) scrolls ALL
+//   scrollable ancestors — in landscape review mode, the active move lives
+//   in the inner .review-moves container which sits at the TOP of the outer
+//   .review-body. When the user has scrolled .review-body down to reach the
+//   nav buttons at the bottom, clicking a nav button triggers render() →
+//   this scrollIntoView yanks .review-body back to scrollTop=0, undoing the
+//   synchronous restore at lines 3203-3210 above. Fix: manually compute the
+//   inner .review-moves scrollTop to center the active move, WITHOUT calling
+//   scrollIntoView (which would also scroll the outer container). This
+//   preserves the outer .review-body scroll position.
 //
-// v1.0.3-p6: only scroll when reviewStep CHANGES, not on every render.
-// v1.0.3-p9: scroll ONLY the move-list container, NOT the review-body.
-// v1.0.3-p11: use getBoundingClientRect for robust offset calculation —
-//   the offsetParent walk (p10) failed in portrait because .review-moves
-//   has position:static, so .rmv-block's offsetParent skips it and jumps
-//   to .review-overlay (position:fixed). getBoundingClientRect gives the
-//   absolute position of both elements; their difference is the scroll
-//   offset within the container, regardless of CSS positioning.
+// v1.1.0 Phase 57 FIX (portrait scroll): The Phase 56 fix used _rAct.offsetTop
+//   to compute the active move's position. However, offsetTop returns the
+//   distance from the element's outer border to the top of its offsetParent's
+//   inner border — and .rmv-block's offsetParent is .review-overlay (which is
+//   position:fixed), NOT _rList (.review-moves has no position set).
+//
+//   In LANDSCAPE this happened to be approximately correct because .review-moves
+//   is a flex child of .review-top (which is row-flex), so .rmv-block's vertical
+//   offsetTop within .review-overlay ≈ header_height + position_within_moves.
+//   The header is only ~24px, so the error was small.
+//
+//   In PORTRAIT, however, .review-moves is stacked BELOW .review-left (the board
+//   column, which has the board's full height). So .rmv-block's vertical
+//   offsetTop within .review-overlay ≈ header_height + board_height +
+//   position_within_moves. The board_height is 256-320px — much larger than the
+//   .review-moves viewport (also 256-320px), so the resulting _target was
+//   WAY too large, clamped to scrollHeight-clientHeight (scrolled to bottom),
+//   and the active move was nowhere near the center of the visible area.
+//
+//   Fix: use getBoundingClientRect() to compute the active move's position
+//   RELATIVE TO _rList (not relative to .review-overlay). This works correctly
+//   regardless of orientation, layout structure, or offsetParent chain.
+//   The formula:
+//     _actTop = (_actRect.top - _listRect.top) + _rList.scrollTop
+//   gives the active move's position within _rList's full content (including
+//   the portion scrolled out of view). Then center it:
+//     _target = _actTop + _actH/2 - _listH/2
 if(reviewMode && reviewStep !== _lastReviewStepScrolled){
   _lastReviewStepScrolled = reviewStep;
-  // v1.0.8 PHASE 18 Task 2: When the virtual list is enabled, the active move
-  // may be OUTSIDE the currently-rendered window (so .rmv-block.act does not
-  // exist in the DOM yet). Force the window to contain the active step FIRST,
-  // then proceed with the existing scroll-into-view logic.
-  if(_rvVirtualState.enabled){
-    _forceReviewWindowToStep(reviewStep-1); // 0-based idx
-  }
   requestAnimationFrame(function(){
     requestAnimationFrame(function(){
       const _rList=_rListEl||document.getElementById('reviewMovesList');
       if(_rList){
         const _rAct=_rList.querySelector('.rmv-block.act');
         if(_rAct){
-          // v1.0.3-p11: use getBoundingClientRect to compute the active
-          // element's position relative to the scroll container. This works
-          // regardless of offsetParent / position CSS, in both portrait
-          // and landscape.
-          const _rListRect=_rList.getBoundingClientRect();
-          const _rActRect=_rAct.getBoundingClientRect();
-          // The active element's top relative to the container's content top
-          // = (active's absolute top) - (container's absolute top) + current scrollTop
-          const _offsetTop = _rActRect.top - _rListRect.top + _rList.scrollTop;
-          // Center the active move within the container
-          const _target = _offsetTop - (_rList.clientHeight/2) + (_rAct.offsetHeight/2);
-          _rList.scrollTop = Math.max(0, _target);
+          // Manually center the active move within the inner .review-moves
+          // container only — do NOT use scrollIntoView (which would also
+          // scroll the outer .review-body in landscape mode, causing the
+          // page to jump back to the top when the user clicked a nav button
+          // at the bottom of the page).
+          const _listH=_rList.clientHeight;
+          const _actH=_rAct.offsetHeight||0;
+          // v1.1.0 Phase 57: use getBoundingClientRect to compute the active
+          // move's position relative to _rList, NOT relative to offsetParent.
+          // See the long comment above for why offsetTop was wrong in portrait.
+          // If getBoundingClientRect is unavailable or returns zeros (e.g.,
+          // disconnected DOM — should not happen here since _rAct was just
+          // queried from _rList), skip scrolling rather than risk a wrong jump.
+          let _actTop=-1;
+          try{
+            const _listRect=_rList.getBoundingClientRect();
+            const _actRect=_rAct.getBoundingClientRect();
+            if(_listRect.width>0||_listRect.height>0){
+              // Position of _rAct's top relative to _rList's content area:
+              //   (_actRect.top - _listRect.top) = visible offset (negative if scrolled past)
+              //   + _rList.scrollTop = absolute content position
+              _actTop=(_actRect.top-_listRect.top)+_rList.scrollTop;
+            }
+          }catch(e){}
+          if(_actTop>=0){
+            // Center: scrollTop = actTop + actH/2 - listH/2
+            const _target=Math.max(0,_actTop+(_actH/2)-(_listH/2));
+            _rList.style.scrollBehavior='auto';
+            try{_rList.scrollTop=_target;}catch(e){}
+            _rList.style.scrollBehavior='';
+          }
         }
       }
     });
@@ -3268,40 +3373,10 @@ _evalDispPrevSig = '';
 // v1.0.2 (qw3.7max audit): cache the review-moves-list element for the
 // scroll-into-view path (avoids getElementById on every render).
 _rListEl = document.getElementById('reviewMovesList');
-// v1.0.8 PHASE 18 Task 2: When the virtual list is enabled, attach a passive
-// scroll listener so scrolling the move list triggers a debounced partial
-// refresh (_refreshReviewMovesOnly) instead of a full app.innerHTML rebuild.
-// The listener is passive — it cannot block scrolling or interfere with the
-// existing scroll-restore mechanism (_savedContainerScrolls).
-// Also schedule a one-shot avgRowH measurement on the first virtual render
-// so the spacer heights are accurate (the initial 44px estimate may be off
-// when variations expand rows to 2-3x normal height).
-if(reviewMode&&_rListEl&&_rvVirtualState.enabled){
-  _rListEl.addEventListener('scroll',_onReviewMovesScroll,{passive:true});
-  if(!_rvVirtualState.measured){
-    requestAnimationFrame(function(){
-      try{
-        const _blocks=_rListEl.querySelectorAll('.rmv-block');
-        if(_blocks.length>=5){
-          let _totalH=0;
-          const _n=Math.min(_blocks.length,10);
-          for(let i=0;i<_n;i++)_totalH+=_blocks[i].offsetHeight;
-          const _avg=_totalH/_n;
-          if(_avg>0){
-            _rvVirtualState.avgRowH=_avg;
-            _rvVirtualState.measured=true;
-            // Re-render the move list with accurate spacer heights. This is
-            // a one-time cost on the first virtual render; subsequent renders
-            // use the measured value directly.
-            const _oldScrollTop=_rListEl.scrollTop;
-            _rListEl.innerHTML=_buildReviewMovesInnerHTML(_rvVirtualState.windowStart,_rvVirtualState.windowEnd);
-            _rListEl.scrollTop=_oldScrollTop;
-          }
-        }
-      }catch(e){}
-    });
-  }
-}
+// v1.1.0 Phase 54 rev14: Virtual list scroll listener + avgRowH measurement
+//   block removed (dead code — _rvVirtualState.enabled is always false).
+//   With the virtual list disabled, all moves are always in the DOM — no
+//   scroll-driven partial refresh or spacer height measurement needed.
 // Restore focus for ECO search input using pre-rebuild state
 if(_wasEcoFocused){const el=document.getElementById('ecoSearch');if(el){el.focus();_ecoSearchFocused=true;try{el.setSelectionRange(el.value.length,el.value.length)}catch(e){}}}
 // Auto-scroll opening list to selected opening (skip during review mode)
@@ -3550,13 +3625,24 @@ function _updateArrows(infoSq){
   const e=cm[infoSq.row][infoSq.col];
   if(!e)return;
   const oppC=OPP_COLOR[playerColor];
-  // Differentiate friend vs foe arrows with distinct colors.
-  // Player's pieces: warm gold (#D4A017) — clearly "ours"
-  // Opponent's pieces: cool silver (#8A9BAE) — clearly "theirs"
-  // Previously both used the same #888888 gray, making them indistinguishable.
+  // v1.1.0 Phase 53 (revision): Exclude arrows from a king whose destination
+  //   (infoSq) is controlled by the opponent — the king cannot legally move
+  //   there, so showing an arrow to it would misrepresent an illegal king
+  //   move as a valid control/threat. This applies to BOTH player's king and
+  //   opponent's king (a king never moves into check, regardless of side).
+  //   For non-king pieces, all control arrows are shown (they represent
+  //   attacks/defenses, not moves — a pinned piece still "controls" squares).
   const arrows=[];
-  for(const c of e[playerColor])arrows.push({from:c.position,to:infoSq,isFriendly:true});
-  for(const c of e[oppC])arrows.push({from:c.position,to:infoSq,isFriendly:false});
+  for(const c of e[playerColor]){
+    // Skip king→infoSq arrow if infoSq is controlled by opponent (illegal king move)
+    if(c.piece.type==='king' && e[oppC].length>0)continue;
+    arrows.push({from:c.position,to:infoSq,isFriendly:true});
+  }
+  for(const c of e[oppC]){
+    // Skip king→infoSq arrow if infoSq is controlled by player (illegal king move for opponent)
+    if(c.piece.type==='king' && e[playerColor].length>0)continue;
+    arrows.push({from:c.position,to:infoSq,isFriendly:false});
+  }
   for(const ar of arrows){
     const _afc=flip?7-ar.from.col:ar.from.col,_afr=flip?7-ar.from.row:ar.from.row;
     const _atc=flip?7-ar.to.col:ar.to.col,_atr=flip?7-ar.to.row:ar.to.row;
@@ -3807,7 +3893,22 @@ if(!showCtrlMap){var cc=document.getElementById('ctrl-info-card');if(cc)cc.style
     h+=`<div class="crow"><span class="lb">${T('my_ctrl')}</span><span class="vl b">${myCtrl}</span></div>`;
     h+=`<div class="crow"><span class="lb">${T('op_ctrl')}</span><span class="vl r">${opCtrl}</span></div>`;
     h+=`<div class="crow"><span class="lb">${T('net_ctrl')}</span><span class="vl ${netCtrl>0?'b':netCtrl<0?'r':''}">${netCtrl>0?'+':''}${netCtrl}</span></div>`;
-    if(infoCtrl){h+=`<div class="plist">`;for(const c of infoCtrl[playerColor])h+=`<div class="pitem"><span class="dot2 b"></span>${pieceName(c.piece.type)}@${posAlg(c.position)}</div>`;for(const c of infoCtrl[oppC])h+=`<div class="pitem"><span class="dot2 r"></span>${pieceName(c.piece.type)}@${posAlg(c.position)}</div>`;h+=`</div>`}
+    if(infoCtrl){
+      h+=`<div class="plist">`;
+      // v1.1.0 Phase 53 (revision): Exclude a king from the control list if
+      //   the target square (infoSq) is controlled by the opposite color —
+      //   the king cannot legally move there, so listing it as a controller
+      //   would misrepresent an illegal king move as a valid control.
+      for(const c of infoCtrl[playerColor]){
+        if(c.piece.type==='king' && infoCtrl[oppC].length>0)continue;
+        h+=`<div class="pitem"><span class="dot2 b"></span>${pieceName(c.piece.type)}@${posAlg(c.position)}</div>`;
+      }
+      for(const c of infoCtrl[oppC]){
+        if(c.piece.type==='king' && infoCtrl[playerColor].length>0)continue;
+        h+=`<div class="pitem"><span class="dot2 r"></span>${pieceName(c.piece.type)}@${posAlg(c.position)}</div>`;
+      }
+      h+=`</div>`;
+    }
     ctrlCard.innerHTML=h;
   }else{
     ctrlCard.innerHTML=`<div class="card-t"><span class="ico">📍</span>${T('ctrl_info')}</div><div style="color:#64748b;font-size:.85rem">${T('click_sq')}</div>`;
@@ -4079,6 +4180,7 @@ let _deferMs=ANIMATION_DEFER_MS;
 try{if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches)_deferMs=30;}catch(e){}
 const _hashAtSched=gameState.hash;
 setTimeout(()=>{
+try{
 if(gameState.hash!==_hashAtSched)return; // stale — abort
 const gsr=!setupMode&&gameStatus(gameState);
 const _gsKey=gameState.hash+'|'+gameState.currentTurn;_cachedStatus=gsr;_cachedStatusKey=_gsKey;
@@ -4094,6 +4196,7 @@ try{if(typeof _checkPVDivergence==='function')_checkPVDivergence();}catch(e){con
 try{if(typeof _checkPVDivergenceSANs==='function')_checkPVDivergenceSANs();}catch(e){console.warn('PVDivergenceSANs check failed:',e);}
 if(!gameOver&&gameState.currentTurn!==playerColor){setTimeout(doAIMove,0);}
 }
+}catch(e){console.error('executeMove deferred callback error:',e)}
 },_deferMs);
 }catch(e){console.error('executeMove error:',e)}}
 let _redoStack=[]; // Stack for redo (stores states pushed by undoMove)
@@ -4560,6 +4663,45 @@ _withPGNSaveCheck(_exitSetupImpl);}
 //   catches any future regression that might leave these fields in an
 //   inconsistent state.
 function _exitSetupImpl(){
+// v1.1.0 Phase 53: Call _resetGameUIState() to clear ALL stale UI state
+// from the previous game — same as _applyImportedFEN and importPGN.
+// Without this, the following would leak from the previous game:
+// - _cachedOriginalPGN (old PGN text → stats page / PGN export pollution)
+// - playerWhite/playerBlack (old player names from PGN import)
+// - _visualAnnotationsCache (old [%csl]/[%cal] → new game's PGN export)
+// - _aiBarInfo/_hintBarInfo/hintText (old AI/hint bar text)
+// - _cachedStatus/_cachedStatusKey (old game status cache)
+// - isAIThinking/_aiSafetyTimerId (AI thinking state)
+// - _evalLoading/_sfEvalReady/_ponderGen (engine eval state)
+// - showResignConfirm/_resignWinnerColor (resign state)
+// - cachedCtrlKey (control map cache key)
+// - _redoStack (old redo entries)
+// - _mlistScrollState (old scroll position)
+// - gameClockTimerId (old clock timer)
+_resetGameUIState();
+// v1.1.0 Phase 54 rev20: Clear stale engine variation data to prevent
+//   pollution from the previous game. _pendingEngineSANs and
+//   _pendingEnginePVs store engine PV variations indexed by moveRecords
+//   indices — a new game reuses indices 0,1,2,... so stale entries
+//   would attach to the wrong moves.
+if(typeof _pendingEngineSANs!=='undefined')_pendingEngineSANs=[];
+if(typeof _pendingEnginePVs!=='undefined')_pendingEnginePVs=[];
+if(typeof reviewCritical!=='undefined')reviewCritical=[];
+// v1.1.0 Phase 53: Also clear state that _resetGameUIState doesn't cover
+// but _applyImportedFEN/importPGN do:
+if(typeof _cachedOriginalPGN!=='undefined')_cachedOriginalPGN=null;
+if(typeof playerWhite!=='undefined')playerWhite=undefined;
+if(typeof playerBlack!=='undefined')playerBlack=undefined;
+if(typeof _ecoRecCache!=='undefined')_ecoRecCache.clear();
+if(typeof _sfEval!=='undefined'){_sfEval=0;}
+if(typeof _sfMateDistance!=='undefined'){_sfMateDistance=0;}
+if(typeof _sfDepth!=='undefined'){_sfDepth=0;}
+if(typeof _sfEvalReady!=='undefined'){_sfEvalReady=false;}
+if(typeof _evalLoading!=='undefined'){_evalLoading=false;}
+if(typeof _needNewGameForEngine!=='undefined'){_needNewGameForEngine=true;}
+if(typeof _tbLoading!=='undefined'){_tbLoading=false;}
+if(typeof _tbRetryCount!=='undefined'){_tbRetryCount=0;}
+if(typeof _updateEvalDisplay==='function')_updateEvalDisplay();
 // as the new starting position (step 0). This means:
 // - moveRecords is cleared (no move history from before setup)
 // - stateHistory is reset with the setup position as the initial state
@@ -4808,6 +4950,27 @@ function enterReview(){_cachedStatus=null;_cachedStatusKey='';
 _clearAnimationState();
 // v1.0.8 PHASE 22 supplement: enter-review sound (沉思音)
 try{if(typeof playSound==='function')playSound('enterReview');}catch(e){}
+// v1.1.0 Phase 57 FIX (visual annotation residue): Clear the '_initial' key
+//   from the visual annotations cache to ensure fresh computation. The cached
+//   '_initial' annotations may be stale from a previous review session:
+//     - The '_initial' key is populated lazily by _computeInitialPositionAnnotations()
+//       on the first render at reviewStep=0.
+//     - That function (after the Phase 57 fix below) reads reviewStates[0].state
+//       (the initial position), but in PREVIOUS review sessions it may have read
+//       the LIVE gameState (mid-game), producing annotations for the mid-game
+//       position rather than the initial position.
+//     - The '_initial' key is NEVER cleared by _invalidateCachesForUndoneMoves
+//       (which only deletes NUMERIC keys >= N). It IS cleared by _resetGameUIState
+//       (called by new game / import / setup-complete / FEN import), but if the
+//       user re-enters review WITHOUT one of those entry points in between
+//       (e.g., continues playing the same game and re-enters review), the stale
+//       '_initial' cache would persist and the wrong annotations would render.
+//   We deliberately do NOT clear the NUMERIC keys (0..N-1) — those were computed
+//   during play (via _computeAndCacheVisualAnnotations after each move) and are
+//   still valid for the current moveRecords.
+if(typeof _visualAnnotationsCache!=='undefined'&&_visualAnnotationsCache){
+  try{_visualAnnotationsCache.delete('_initial');}catch(e){}
+}
 // v1.0.8 PHASE 18 Task 2: Reset virtual list state on entering review mode.
 // Each new review session starts with a fresh window centered on reviewStep=0.
 _resetRvVirtualState();
@@ -4880,10 +5043,28 @@ const piece=s.board[from.row][from.col];
 if(piece){
   // Ensure promotion field is properly handled
   const promotion=(mr.promotion&&mr.promotion!=='null')?mr.promotion:null;
+  // v1.1.0 Phase 53: Pass the castle flag for Chess960 castling moves
+  // (king may move only 1 col, so _castleSide's fallback detection is
+  // needed — but the explicit flag is more reliable and consistent with
+  // the _computeAndCacheVisualAnnotations replay path).
+  const mv={from,to,piece,promotion};
+  if(mr.isCastling&&piece.type==='king'){
+    mv.castle=(to.col===6)?'kingside':'queenside';
+  }
   // makeMv returns a fresh clone, so `s` here is already a new object;
   // the cloneS is defensive (harmless if redundant) and keeps the three
   // push sites uniform.
-  s=makeMv(s,{from,to,piece,promotion});reviewStates.push({state:cloneS(s),lastMove:{from,to}});
+  const ns=makeMv(s,mv);
+  if(ns){
+    s=ns;
+    reviewStates.push({state:cloneS(s),lastMove:{from,to}});
+  }else{
+    // v1.1.0 Phase 53: makeMv failed — push placeholder (stale state)
+    // but do NOT update `s`, so subsequent moves at least start from the
+    // last known-good state. This prevents cascading corruption.
+    console.error('enterReview: makeMv failed for move',i,mr);
+    reviewStates.push({state:cloneS(s),lastMove:null});
+  }
 }else{console.error('enterReview: no piece at',mr.from,'for move',i,mr);
   // Bug 1 fix: Push placeholder to keep reviewStates indices aligned with moveRecords.
   // cloneS required (same reason as the null-placeholder branch above — `s`
@@ -4891,7 +5072,11 @@ if(piece){
   reviewStates.push({state:cloneS(s),lastMove:null});
 }
 }
-reviewStep=reviewStates.length-1;
+reviewStep=0;
+// v1.1.0 Phase 54 rev16: Enter review at step 0 (initial position), not the
+//   last step. This matches the ⏮ button (which goes to step 0) and ensures
+//   the eval trend chart starts from step 0 with a real data point.
+//   The user can press ⏭ to jump to the last step if desired.
 // v1.0.3-p6: reset _lastReviewStepScrolled so the first render after entering
 // review mode scrolls the active move into view (rather than skipping the
 // scroll because _lastReviewStepScrolled happens to equal reviewStep).
@@ -5172,6 +5357,14 @@ function _startGameImpl(){
   _needNewGameForEngine=true;
   reviewBaseState=cloneS(gameState);
   _reviewEvalCache.clear();_reviewEvalRequestedStep=-1; // Clear eval cache on new game
+  // v1.1.0 Phase 54 rev21: Clear stale engine variation data on new game.
+  //   Same index-reuse issue as _exitSetupImpl/_applyImportedFEN/importPGN.
+  if(typeof _pendingEngineSANs!=='undefined')_pendingEngineSANs=[];
+  if(typeof _pendingEnginePVs!=='undefined')_pendingEnginePVs=[];
+  if(typeof _multiPVLines!=='undefined')_multiPVLines=[];
+  if(typeof _multiPVResult!=='undefined')_multiPVResult=null;
+  if(typeof _lastEngineVariation!=='undefined')_lastEngineVariation=null;
+  if(typeof reviewCritical!=='undefined')reviewCritical=[];
   _resetGameUIState();
   _resetEvalState();
   // v1.0.4 EXPANSION (this round): Initialize the game clocks based on dlgTimeControl.
@@ -5421,14 +5614,15 @@ function _computeAndCacheVisualAnnotations(moveIdx){
     try{
       let st=(typeof _setupFEN!=='undefined'&&_setupFEN)?fenToState(_setupFEN):initState();
       if(!st)return;
+      let _replayOk=true;
       for(let i=0;i<=moveIdx;i++){
         const mr=moveRecords[i];
-        if(!mr)continue;
+        if(!mr){_replayOk=false;break;}
         const from=algPos(mr.from);
         const to=algPos(mr.to);
-        if(!from||!to)continue;
+        if(!from||!to){_replayOk=false;break;}
         const piece=st.board[from.row][from.col];
-        if(!piece)continue;
+        if(!piece){_replayOk=false;break;}
         // v1.0.6: Preserve the castle flag from moveRecords so makeMv can
         // detect Chess960 castling (king may move only 1 col). mr.isCastling
         // tells us this was a castling move; we derive the side from the
@@ -5438,7 +5632,14 @@ function _computeAndCacheVisualAnnotations(moveIdx){
           mv.castle=(to.col===6)?'kingside':'queenside';
         }
         st=makeMv(st,mv);
-        if(!st)break;
+        if(!st){_replayOk=false;break;}
+      }
+      if(!_replayOk){
+        // v1.1.0 Phase 53: If replay failed (move couldn't be applied),
+        // do NOT use the partially-replayed state — its king positions and
+        // board may be stale/inconsistent. Return without caching.
+        console.warn('_computeAndCacheVisualAnnotations: replay failed at moveIdx',moveIdx);
+        return;
       }
       postState=st;
     }catch(e){
@@ -5548,27 +5749,104 @@ function _computeAndCacheVisualAnnotations(moveIdx){
     }
   }
   // Red arrow + Green arrows: if the move gives check
-  const moverTo=algPos(moveRecords[moveIdx].to);
+  // v1.1.0 Phase 53 (revision): Red arrow now uses the ACTUAL checker
+  //   position(s) from the control map, not the moved piece's destination.
+  //   This correctly handles discovered check (where the moved piece moves
+  //   away, exposing another piece that gives check). Previously, the red
+  //   arrow started from the moved piece's destination, which was wrong for
+  //   discovered check — the arrow should start from the piece actually
+  //   giving check (which may be a different piece that didn't move).
+  //   For double check, multiple red arrows are drawn (one per checker).
   if(oppKingPos&&moveRecords[moveIdx].isCheck){
-    // Red arrow: mover → opponent king
-    if(moverTo){
-      cal.push({color:'R',from:posAlg(moverTo),to:posAlg(oppKingPos)});
-    }
-    // Green arrows: opponent king position → each escape square (avoidance paths)
+    // Red arrow(s): each checker → opponent king
     if(cm){
-      for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){
-        if(!dr&&!dc)continue;
-        const er=oppKingPos.row+dr,ec=oppKingPos.col+dc;
-        if(er<0||er>=8||ec<0||ec>=8)continue;
-        const p=postState.board[er][ec];
-        if(p&&p.color===oppColor)continue; // king can't capture own piece
-        // Square must NOT be attacked by the mover's side
-        const attackers=cm[er][ec][moverColor];
-        if(!attackers||attackers.length===0){
-          // Green ARROW from king position to escape square (not a square highlight)
-          cal.push({color:'G',from:posAlg(oppKingPos),to:posAlg({row:er,col:ec})});
+      const checkers=cm[oppKingPos.row][oppKingPos.col][moverColor]||[];
+      const checkerSeen=new Set();
+      for(const checker of checkers){
+        const ck=checker.position.row+','+checker.position.col;
+        if(checkerSeen.has(ck))continue;
+        checkerSeen.add(ck);
+        cal.push({color:'R',from:posAlg(checker.position),to:posAlg(oppKingPos)});
+      }
+    }else{
+      // Fallback if cm is null: use moved piece's destination (old behavior)
+      const moverTo=algPos(moveRecords[moveIdx].to);
+      if(moverTo){
+        cal.push({color:'R',from:posAlg(moverTo),to:posAlg(oppKingPos)});
+      }
+    }
+    // v1.1.0 Phase 53: Green arrows = "respond-to-check" paths (was: escape-only).
+    // Two categories:
+    //   (1) King escape moves: from king's current square to each legal escape
+    //       square. Uses legalMoves(postState, oppKingPos) which correctly
+    //       handles pins, blocked escape squares, and the "king must not be in
+    //       check after moving" rule. If the king has NO legal escape
+    //       (smothered mate, back-rank mate with no flight square, anchored
+    //       pin, etc.), NO king-starting green arrow is generated — this fixes
+    //       the v1.0.9 bug where the old control-map-only check would draw
+    //       arrows to squares the king couldn't actually move to (e.g., a
+    //       square attacked through the king's current position by a sliding
+    //       piece behind it).
+    //   (2) Capture-the-checker moves: from each oppColor piece (including
+    //       pawns via en passant) that can LEGALLY capture a checking piece,
+    //       to that checker's square. legalMoves already includes en passant
+    //       captures and verifies the move doesn't leave the king in check
+    //       (so a pinned piece can't capture). For double check, only king
+    //       moves can respond (capturing one checker still leaves the other
+    //       giving check), so legalMoves correctly excludes non-king captures
+    //       in that case.
+    // Chess960 compat: legalMoves handles Chess960 castling (forbidden when in
+    //   check via isChess960CastlingLegal) and en passant identically to
+    //   standard chess. No special-casing needed.
+    try{
+      // postState.currentTurn is oppColor (the side to move = side in check).
+      // Compute all legal moves ONCE; the king's escape moves are a subset.
+      const allLegalMoves=legalMoves(postState, null);
+      // (1) King escape arrows — moves whose source is the king's square.
+      //     legalMoves never generates castling moves when in check (filtered
+      //     by isChess960CastlingLegal), so no castle-skip is needed here.
+      for(const m of allLegalMoves){
+        if(m.from.row===oppKingPos.row&&m.from.col===oppKingPos.col){
+          cal.push({color:'G',from:posAlg(oppKingPos),to:posAlg(m.to)});
         }
       }
+      // (2) Capture-the-checker arrows
+      // Find all checker positions via the control map: cm[king][moverColor]
+      // lists every mover piece that attacks the king's square.
+      if(cm){
+        const checkers=cm[oppKingPos.row][oppKingPos.col][moverColor]||[];
+        if(checkers.length>0){
+          // Build a Map from destination-square-key → list of legal moves
+          // landing on that square. This avoids an O(checkers × allLegalMoves)
+          // nested loop — lookup is O(1) per checker.
+          const movesByDest=new Map();
+          for(const m of allLegalMoves){
+            const k=m.to.row+','+m.to.col;
+            let list=movesByDest.get(k);
+            if(!list){list=[];movesByDest.set(k,list);}
+            list.push(m);
+          }
+          // Dedup checkers by position (control map can have duplicate entries
+          // if a piece attacks via multiple paths — rare but possible).
+          const checkerSeen=new Set();
+          for(const checker of checkers){
+            const ck=checker.position.row+','+checker.position.col;
+            if(checkerSeen.has(ck))continue;
+            checkerSeen.add(ck);
+            const captures=movesByDest.get(ck);
+            if(!captures)continue;
+            for(const m of captures){
+              // Skip king captures — they're already covered by (1) king
+              // escape arrows (king escape moves include captures of
+              // adjacent checkers). Avoid duplicate arrows.
+              if(m.piece.type==='king')continue;
+              cal.push({color:'G',from:posAlg(m.from),to:posAlg(m.to)});
+            }
+          }
+        }
+      }
+    }catch(e){
+      console.warn('visualAnnotations: green arrows (respond-to-check) failed',e);
     }
   }
   // v1.0.4 Round-5 Rev48 NEW: Blue arrows (multi-threat) and Yellow arrows (queen threat).
@@ -5626,31 +5904,45 @@ function _computeAndCacheVisualAnnotations(moveIdx){
     }
     for(let r=0;r<8;r++)for(let c=0;c<8;c++){
       const p=postState.board[r][c];
-      if(!p||p.type==='king')continue; // skip kings (check arrows handle them)
+      if(!p||p.type==='king')continue; // skip kings as TARGETS (check arrows handle them)
       if(p.color===moverColor){
         // This is a mover piece. Check if oppColor attacks it.
         const oppAttackers=cm[r][c][oppColor]||[];
         if(oppAttackers.length>0){
-          for(const atk of oppAttackers){
+          // v1.1.0 Phase 53 (revision): Filter out king-as-attacker arrows whose
+          //   target (r,c) is controlled by the opposite color — the king cannot
+          //   legally move there (would be moving into check), so the arrow would
+          //   misrepresent an illegal king move as a valid threat.
+          //   We check cm[r][c][moverColor] — if the mover defends (r,c), the
+          //   opp king cannot capture there (it would be moving into check).
+          const _legalOppAttackers = oppAttackers.filter(atk =>
+            atk.piece.type!=='king' || (cm[r][c][moverColor]||[]).length===0
+          );
+          for(const atk of _legalOppAttackers){
             const k=atk.position.row+','+atk.position.col;
             if(!threatByOpp.has(k))threatByOpp.set(k,{attacker:atk,targets:[]});
             threatByOpp.get(k).targets.push({piece:p,position:{row:r,col:c}});
           }
           if(p.type==='queen'){
-            moverQueens.push({position:{row:r,col:c},attackers:oppAttackers.slice()});
+            moverQueens.push({position:{row:r,col:c},attackers:_legalOppAttackers.slice()});
           }
         }
       }else if(p.color===oppColor){
         // This is an opp piece. Check if moverColor attacks it.
         const moverAttackers=cm[r][c][moverColor]||[];
         if(moverAttackers.length>0){
-          for(const atk of moverAttackers){
+          // v1.1.0 Phase 53 (revision): Filter out king-as-attacker arrows whose
+          //   target (r,c) is controlled by the opposite color.
+          const _legalMoverAttackers = moverAttackers.filter(atk =>
+            atk.piece.type!=='king' || (cm[r][c][oppColor]||[]).length===0
+          );
+          for(const atk of _legalMoverAttackers){
             const k=atk.position.row+','+atk.position.col;
             if(!threatByMover.has(k))threatByMover.set(k,{attacker:atk,targets:[]});
             threatByMover.get(k).targets.push({piece:p,position:{row:r,col:c}});
           }
           if(p.type==='queen'){
-            oppQueens.push({position:{row:r,col:c},attackers:moverAttackers.slice()});
+            oppQueens.push({position:{row:r,col:c},attackers:_legalMoverAttackers.slice()});
           }
         }
       }
@@ -5741,25 +6033,50 @@ function _getVisualAnnotations(moveIdx){
   return _visualAnnotationsCache.get(moveIdx)||null;
 }
 
-// v1.0.5 Rev53 NEW: Compute visual annotations for the INITIAL position
+// v1.0.5 Rev53: Compute visual annotations for the INITIAL position
 // (reviewStep 0). Per user spec, annotations must be computed for the
 // initial position too (setup complete / FEN import / PGN with FEN import).
-// We reuse the same logic as _computeAndCacheVisualAnnotations but feed it
-// the initial gameState directly. The result is cached under key '_initial'.
+// We inline a simplified version of _computeAndCacheVisualAnnotations's logic
+// (which can't be called directly because it reads moveRecords[moveIdx]).
+// The result is cached under key '_initial'.
+//
+// v1.1.0 Phase 57 FIX (visual annotation residue): Use reviewStates[0].state
+//   (the actual initial position shown at reviewStep=0) instead of gameState
+//   (the LIVE mid-game state). Previously, this function read gameState, which
+//   is the LIVE game state — NOT the initial position. When the user entered
+//   review during a mid-game, the annotations cached under '_initial' were
+//   computed for the mid-game position (e.g., threats to a queen on d4), but
+//   the board at reviewStep=0 shows the INITIAL position (queen on d1). The
+//   mismatch caused stale, irrelevant annotations to appear at step 0 —
+//   perceived by the user as "残留旧对局的过时视觉注解".
+//
+//   Chess960 compatibility: reviewStates[0].state is built by enterReview()
+//   from stateHistory[0].state (captured at game start) or from reviewBaseState
+//   (which is the initial position). For Chess960 games, this state has the
+//   Chess960 starting position (with spid set). getCtrlMap and attacked both
+//   operate on the board state regardless of variant, so the annotations are
+//   computed correctly for Chess960 initial positions too.
 function _computeInitialPositionAnnotations(){
   if(_visualAnnotationsCache.has('_initial'))return; // already computed
   try{
-    const st=(typeof gameState!=='undefined'&&gameState)?gameState:null;
+    // v1.1.0 Phase 57: Prefer reviewStates[0].state (the actual initial
+    // position shown at reviewStep=0). Fall back to reviewBaseState (also
+    // the initial position), then gameState (defensive — should not happen
+    // in review mode, but guards against undefined reviewStates).
+    let st=null;
+    if(typeof reviewStates!=='undefined'&&reviewStates&&reviewStates.length>0&&reviewStates[0]&&reviewStates[0].state){
+      st=reviewStates[0].state;
+    }else if(typeof reviewBaseState!=='undefined'&&reviewBaseState){
+      st=reviewBaseState;
+    }else if(typeof gameState!=='undefined'&&gameState){
+      st=gameState; // last-resort fallback
+    }
     if(!st)return;
     // Determine "mover" and "opp" for the initial position. At the start,
     // it's the side to move's turn. We compute annotations from BOTH sides'
-    // perspectives (the threat detection in _computeAndCacheVisualAnnotations
-    // already examines both directions for blue/yellow arrows).
-    // We synthesize a moveIdx that doesn't exist in moveRecords (-1 sentinel)
-    // and call the compute function with a custom state.
-    // Since _computeAndCacheVisualAnnotations reads moveRecords[moveIdx], we
-    // can't call it directly with moveIdx=-1. Instead, we inline a simplified
-    // version that uses the current gameState.
+    // perspectives (the threat detection below examines both directions for
+    // blue/yellow arrows). No red/green check arrows are generated for the
+    // initial position (no move was just made).
     const csl=[];  // [{color, square}]
     const cal=[];  // [{color, from, to}]
     const moverColor=st.currentTurn||'white';
@@ -5818,19 +6135,28 @@ function _computeInitialPositionAnnotations(){
       let whiteQueensThreatened=[],blackQueensThreatened=[];
       for(let r=0;r<8;r++)for(let c=0;c<8;c++){
         const p=st.board[r][c];
-        if(!p||p.type==='king')continue;
+        if(!p||p.type==='king')continue; // skip kings as TARGETS
         const enemyColor=p.color==='white'?'black':'white';
         const enemyAttackers=cm[r][c][enemyColor]||[];
         if(enemyAttackers.length===0)continue;
+        // v1.1.0 Phase 53 (revision): Filter out king-as-attacker arrows whose
+        //   target (r,c) is controlled by the opposite color (p.color) — the king
+        //   cannot legally move there, so the arrow would misrepresent an illegal
+        //   king move as a valid threat.
+        const _friendlyCtrl = cm[r][c][p.color]||[];
+        const _legalEnemyAttackers = enemyAttackers.filter(atk =>
+          atk.piece.type!=='king' || _friendlyCtrl.length===0
+        );
+        if(_legalEnemyAttackers.length===0)continue;
         const map=p.color==='white'?threatByWhite:threatByBlack;
-        for(const atk of enemyAttackers){
+        for(const atk of _legalEnemyAttackers){
           const k=atk.position.row+','+atk.position.col;
           if(!map.has(k))map.set(k,{attacker:atk,targets:[]});
           map.get(k).targets.push({piece:p,position:{row:r,col:c}});
         }
         if(p.type==='queen'){
-          if(p.color==='white')whiteQueensThreatened.push({position:{row:r,col:c},attackers:enemyAttackers.slice()});
-          else blackQueensThreatened.push({position:{row:r,col:c},attackers:enemyAttackers.slice()});
+          if(p.color==='white')whiteQueensThreatened.push({position:{row:r,col:c},attackers:_legalEnemyAttackers.slice()});
+          else blackQueensThreatened.push({position:{row:r,col:c},attackers:_legalEnemyAttackers.slice()});
         }
       }
       const _pieceVal={pawn:1,knight:3,bishop:3,rook:5,queen:9,king:0};
@@ -5885,17 +6211,15 @@ function _invalidateCachesForUndoneMoves(currentMoveCount){
   }catch(e){console.warn('_invalidateCachesForUndoneMoves: eval cache failed',e);}
   try{
     // 2. _visualAnnotationsCache — keyed by moveIdx (0-based). Delete entries
-    //    with key >= currentMoveCount. Also delete the '_initial' sentinel
-    //    only if currentMoveCount===0 (no moves at all — initial position).
+    //    with key >= currentMoveCount. The '_initial' sentinel is ALWAYS kept
+    //    (it describes the starting position, which doesn't change on undo).
+    //    It is cleared separately by _resetGameUIState (new game / import /
+    //    setup / FEN) and by enterReview (Phase 57: forces fresh computation
+    //    each review session to avoid stale-annotation residue).
     if(typeof _visualAnnotationsCache!=='undefined'&&_visualAnnotationsCache){
       const _vaKeysToDelete=[];
       for(const k of _visualAnnotationsCache.keys()){
-        if(k==='_initial'){
-          // Keep '_initial' unless we're back to the very start (no moves).
-          // The initial-position annotations are valid regardless of undo
-          // (they describe the starting position, which hasn't changed).
-          continue;
-        }
+        if(k==='_initial')continue;
         if(typeof k==='number'&&k>=currentMoveCount)_vaKeysToDelete.push(k);
       }
       for(const k of _vaKeysToDelete)_visualAnnotationsCache.delete(k);
@@ -5981,6 +6305,37 @@ function _resetGameUIState(){
   // to set up the new game's clocks; here we just stop the old timer.
   if(typeof gameClockTimerId!=='undefined'&&gameClockTimerId){clearInterval(gameClockTimerId);gameClockTimerId=null;}
   if(typeof gameClockExpired!=='undefined')gameClockExpired=null;
+  // v1.1.0 Phase 56 FIX: Reset _turnStartTime so the FIRST move of the new
+  //   game (or the first move after FEN/PGN import / setup-complete) has an
+  //   accurate [%emt]/{Xs} annotation. Previously _turnStartTime was NEVER
+  //   reset at any game-start entry point — it was only set at module-load
+  //   time (ui.js line 1781) and re-assigned inside executeMove() after each
+  //   move. This meant the first move's elapsed time included the wall-clock
+  //   duration since the PREVIOUS game's last move (or since app launch if
+  //   no previous game), which could be minutes, hours, or days.
+  //   The reset belongs here (in _resetGameUIState) because EVERY game-start
+  //   entry point calls _resetGameUIState: _startGameImpl (new game dialog),
+  //   quickFreeOpening (free opening button), _exitSetupImpl (setup complete),
+  //   _applyImportedFEN (FEN import), importPGN (PGN import). This ensures
+  //   _turnStartTime is synchronized with the start of the new game, and —
+  //   for timed games — with initGameClocks()'s lastMoveTimestamp reset
+  //   (which also happens at game start).
+  if(typeof _turnStartTime!=='undefined'){_turnStartTime=Date.now();}
+  // v1.1.0 Phase 56 FIX: Null gameClocks for non-dialog entry points.
+  //   Previously, _resetGameUIState only stopped the timer interval but did
+  //   NOT null the gameClocks object itself. So after FEN/PGN import or
+  //   setup-complete, gameClocks retained the PREVIOUS game's clock state
+  //   (or null if the previous game was untimed). This caused:
+  //     (a) Stale [%clk] annotations in PGN export (using the old game's
+  //         remaining time).
+  //     (b) Stale wtime/btime sent to the engine if the imported position
+  //         triggered an AI move.
+  //   _startGameImpl() calls initGameClocks() AFTER _resetGameUIState() to
+  //   set up fresh clocks for the new timed game — so nulling here is safe
+  //   for the dialog path (initGameClocks will overwrite the null). For
+  //   non-dialog paths (FEN/PGN/setup), the imported game is treated as
+  //   untimed unless the user explicitly starts a new timed game.
+  if(typeof gameClocks!=='undefined'){gameClocks=null;}
 }
 
 /**
@@ -5990,6 +6345,13 @@ function _resetGameUIState(){
 function reviewGoTo(step){
   if(!reviewMode||!reviewStates||reviewStates.length===0)return;
   step=Math.max(0,Math.min(step,reviewStates.length-1));
+  // v1.1.0 Phase 54 rev16: Force _lastReviewStepScrolled=-2 so that even when
+  //   the step doesn't change (e.g. ▶ at last step, ⏮ at step 0), the
+  //   scrollIntoView in render() still fires and re-centers the active move.
+  //   Previously, the guard `reviewStep !== _lastReviewStepScrolled` would skip
+  //   scrollIntoView when the step was the same, causing the selection to be
+  //   scrolled out of view after DOM rebuild.
+  _lastReviewStepScrolled=-2;
   reviewStep=step;
   gameState=cloneS(reviewStates[reviewStep].state);
   // v1.0.8 PHASE 18 Task 3 (perf): Removed the redundant _forceReviewWindowToStep
@@ -6202,6 +6564,17 @@ function _reviewAnalyzeAdvance(){
     const cachedCount=_reviewEvalCache.size;
     showToast(T('analyzing_progress')+' ('+cachedCount+'/'+(_lastStep+1)+')');
   }
+  // v1.1.0 Phase 54 rev18: Use render() during analyze-all advance to
+  //   update the board, move list, eval bar, and chart. The previous
+  //   rev12 fix skipped render() to avoid scroll pull-back — but that
+  //   caused the board to not refresh (stale position displayed) and
+  //   the user couldn't see which step was being analyzed. The scroll
+  //   pull-back is now fixed by the synchronous scrollTop restore (rev17),
+  //   so render() is safe to call again. The user sees the board update
+  //   to the step being analyzed, and the move list highlights the active
+  //   move. The scrollIntoView in render() centers the active move.
+  //   Also force _lastReviewStepScrolled=-2 so scrollIntoView always fires.
+  _lastReviewStepScrolled=-2;
   render();
   requestEngineEval();
 }

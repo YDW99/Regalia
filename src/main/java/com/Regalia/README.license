@@ -948,6 +948,85 @@ v1.0.8 Phase 41 (2026.7.1):
   - All Java files: No changes.
 
 
+v1.1.0 Phase 58 (2026.7.5):
+  - StockfishNative.java (GPL v3, DroidFish-derived): Two P0 concurrency fixes.
+    (1) stopLatch TOCTOU race fix — the bestmove handler in readEngineOutput()
+    now atomically captures-and-clears _stopLatch under _stopLatchLock (was:
+    read volatile _stopLatch without holding the lock, creating a race with
+    stopAndWaitForBestmove's timeout path that could incorrectly arm the
+    _discardingPonderBestmove flag and discard the NEXT legitimate bestmove).
+    The timeout path now only arms the discard flag if it still owns the latch
+    (_stopLatch == stopLatch under the lock).
+    (2) Heartbeat deadlock fix — the heartbeat thread's engineWriter.write("quit")
+    call (zombie-detection branch) was synchronized on StockfishNative.this
+    (same monitor as startHeartbeat), creating a deadlock risk: shutdown's
+    _heartbeatThread.join(1000) would wait for the heartbeat to release `this`
+    while the heartbeat was blocked on I/O. Now uses a dedicated _writerLock
+    (new private final Object field) decoupled from the `this` monitor.
+  - Other Java files: No changes.
+
+v1.1.0 Phase 57+ (2026.7.5):
+  - StockfishNative.java (GPL v3, DroidFish-derived): postJsCallback now checks
+    `activity.isFinishing() || activity.isDestroyed()` before invoking
+    `webView.evaluateJavascript(...)`. On some OEM ROMs (notably HyperOS 3),
+    calling evaluateJavascript on a destroyed WebView's main thread throws
+    IllegalStateException, which previously crashed the process during engine-
+    init retries after the user exited the app. The guard logs and skips the
+    callback instead.
+  - EngineService.java (AGPL v3, original): Foreground-service wake lock
+    acquisition changed from unbounded `wakeLock.acquire()` to bounded
+    `wakeLock.acquire(30L * 60L * 1000L)` (30-minute timeout). If the OEM
+    silently kills the service and onDestroy never runs, the wake lock is
+    released automatically instead of holding the CPU awake indefinitely.
+
+v1.1.0 Phase 57 (2026.7.4):
+  - All Java files: No changes. Phase 57 fixes are in the JavaScript layer (ui.js)
+    only — pure DOM/layout and visual-annotation cache fixes.
+
+v1.1.0 Phase 56 (2026.7.4):
+  - StockfishNative.java: Moved setGameDifficulty() call to BEFORE position fen in
+    both engineGoTimed() and engineGoInternal(). Previously setGameDifficulty was
+    called BETWEEN position fen and go — UCI commands are processed in order so this
+    worked, but the UCI spec recommends setoption commands precede position/go. This
+    refinement ensures all setoption commands (UCI_Chess960, UCI_LimitStrength,
+    UCI_Elo, Skill Level) are sent before position fen, cleaner ordering. Verified
+    Chess960+TimeControl UCI sequence: setoption UCI_Chess960 (with isready) →
+    ucinewgame → isready → setoption difficulty → position fen (Shredder) →
+    go wtime/btime/winc/binc.
+
+v1.1.0 Phase 55 (2026.7.4):
+  - No changes to Java source files in this phase. Phase 55 fixes a Chess960
+    castling bug in stats.html (JavaScript) and game-logic.js (JavaScript).
+    The Java-side StatsActivity just loads stats.html in a WebView; the fix is
+    entirely within the JavaScript layer.
+
+v1.1.0 Phase 54 (2026.7.4):
+  - ui.js + index.html.tpl: custom slider (track/fill/thumb divs + transparent
+    native input overlay) for pixel-perfect alignment with eval trend chart.
+    Slider wrapper CSS identical to chart container. Thumb center via CSS
+    calc(3px + ratio * (100% - 6px)).
+  - ui.js: move-list scroll-into-view fix (only scroll if not visible,
+    _lastReviewStepScrolled moved inside rAF callback).
+  - ui.js: executeMove async-callback try-catch.
+  - ui.js: ChessAudioEngine partial-init field reset + setEnabled/setVolume
+    null-guard.
+  - ui.js: render() retry-loop guard (_animRetryCount, max 10).
+  - ai-bridge.js: heartbeat timestamp in all engine callbacks (onEngineProgress,
+    onBestMove, onHintMove, onPonderProgress).
+  - ai-bridge.js: MultiPV secondary-variation divergence fix (distinguish
+    alternative vs continuation).
+  - tablebase.js: PGN cascade-skip threshold 5 → max(15, len*0.1).
+  All changes in GPL-v3-licensed files.
+
+
+v1.1.0 Phase 53 (2026.7.3):
+  - MainActivity.java (AGPL v3): VERSION "v1.0.9" → "v1.1.0".
+  - StockfishNative.java (GPL v3): ENGINE_VERSION "v1.0.9" → "v1.1.0".
+  - ChessApp.java (AGPL v3): init log "v1.0.9" → "v1.1.0".
+  - ChessWebViewClient.java (AGPL v3): Version comment "v1.0.9" → "v1.1.0".
+  - No other Java files changed.
+
+
 v1.0.9 Phase 52 (2026.7.2):
   - MainActivity.java (AGPL v3): VERSION "v1.0.8" → "v1.0.9".
   - StockfishNative.java (GPL v3): ENGINE_VERSION "v1.0.8" → "v1.0.9".

@@ -88,7 +88,7 @@ import java.util.zip.ZipFile;
  * - Auto/manual hardware configuration (with big.LITTLE awareness)
  * - Settings export/import in TXT format
  *
- * Version: v1.0.9
+ * Version: v1.1.0
  */
 public class StockfishNative {
 
@@ -119,7 +119,7 @@ public class StockfishNative {
     // v18.4.0: ELO_MAP synced with JS ELO_MATCH for consistent level display
     private static final int[] ELO_MAP = {0, 800, 1350, 1700, 2000, 2200, 2350, 2800};
     // v1.0.5: Synced with the application version (was stale at v1.0.2).
-    private static final String ENGINE_VERSION = "v1.0.9";
+    private static final String ENGINE_VERSION = "v1.1.0";
     // Movetime mapping: index 0 unused, 1-7 = game levels
     private static final int[] MOVETIME_MAP = {0, 500, 800, 1000, 1500, 2000, 3000, 5000};
 
@@ -207,6 +207,10 @@ public class StockfishNative {
     static final int REQUEST_CODE_IMPORT_SETTINGS = 1001;
     static final int REQUEST_CODE_IMPORT_PGN = 1003;
     private final Object _startEngineLock = new Object();
+    // v1.1.0 Phase 58: Dedicated lock for engineWriter access. Decoupled from
+    //   the `this` monitor (used by startHeartbeat) so shutdown()'s interrupt+
+    //   join on the heartbeat thread is not blocked by an in-flight writer I/O.
+    private final Object _writerLock = new Object();
 
     // v18.6.0: Single-thread executor for serialized UCI command execution
     // Replaces new Thread().start() calls to prevent engine hangs from concurrent UCI commands
@@ -561,8 +565,26 @@ public class StockfishNative {
                 // real move. Without this, a late bestmove from the stopped search
                 // could corrupt the next position's game state (the bestmove is for
                 // the OLD position, not the new one the user is now on).
-                _discardingPonderBestmove = true;
-                Log.w(TAG, callerTag + ": stopAndWaitForBestmove timed out — discarding late bestmove");
+                // v1.1.0 Phase 58: P0 concurrency fix — only set the discard flag if
+                //   we STILL own the latch. If the bestmove handler already captured
+                //   and cleared _stopLatch (race-free under _stopLatchLock), then
+                //   the bestmove was actually received just before our timeout fired
+                //   — in that case the late bestmove was already consumed by the
+                //   handler and we must NOT arm the discard flag (it would
+                //   incorrectly discard the NEXT legitimate bestmove).
+                synchronized (_stopLatchLock) {
+                    if (_stopLatch == stopLatch) {
+                        // We still own it — bestmove hasn't arrived. Arm the discard.
+                        _discardingPonderBestmove = true;
+                        _stopLatch = null;
+                        Log.w(TAG, callerTag + ": stopAndWaitForBestmove timed out — discarding late bestmove");
+                    } else {
+                        // bestmove handler already claimed the latch just before our
+                        // timeout — the late bestmove was already consumed. Do NOT
+                        // arm the discard flag.
+                        Log.d(TAG, callerTag + ": stopAndWaitForBestmove timed out but bestmove was already consumed (race resolved)");
+                    }
+                }
             }
         } catch (InterruptedException e) {
             Log.w(TAG, callerTag + ": interrupted waiting for stop bestmove");
@@ -604,8 +626,10 @@ public class StockfishNative {
                         readyOkLatchHolder = null;
                     }
                 }
-                sendUciCommand("position fen " + fen);
+                // v1.1.0 Phase 56: Send setGameDifficulty BEFORE position fen
+                //   (consistency with engineGoTimed — cleaner UCI ordering).
                 setGameDifficulty(level);
+                sendUciCommand("position fen " + fen);
                 int movetime = (level >= 1 && level < MOVETIME_MAP.length) ? MOVETIME_MAP[level] : 5000;
                 sendUciCommand("go movetime " + movetime);
             }
@@ -670,8 +694,16 @@ public class StockfishNative {
                         readyOkLatchHolder = null;
                     }
                 }
-                sendUciCommand("position fen " + fen);
+                // v1.1.0 Phase 56: Send setGameDifficulty BEFORE position fen.
+                //   Previously, setGameDifficulty was called BETWEEN position fen
+                //   and go — UCI commands are processed in order by the engine,
+                //   so this worked, but it's cleaner per the UCI spec to send
+                //   all setoption commands BEFORE position fen (the spec
+                //   recommends setoption be sent during initialization or before
+                //   position/go). This also ensures the engine applies the
+                //   difficulty settings to the search from the very start.
                 setGameDifficulty(level);
+                sendUciCommand("position fen " + fen);
 
                 // v1.0.4 Rev35: Re-compute the clock values to send, deducting
                 // the setup overhead (time elapsed since JS called us). This
@@ -1579,7 +1611,27 @@ public class StockfishNative {
 
             Matcher bestMoveMatcher = BESTMOVE_PATTERN.matcher(line);
             if (bestMoveMatcher.find()) {
-                CountDownLatch stopLatch = _stopLatch;
+                // v1.1.0 Phase 58: P0 concurrency fix — eliminate stopLatch TOCTOU race.
+                //   Previously: read _stopLatch (volatile), if non-null countDown+return,
+                //   else check _discardingPonderBestmove. The race window was:
+                //     1. bestmove handler reads _stopLatch = X (non-null)
+                //     2. stopAndWaitForBestmove's await() times out, sets
+                //        _discardingPonderBestmove = true, finally{} clears _stopLatch = null
+                //     3. bestmove handler calls X.countDown() and returns — but the discard
+                //        flag is now stuck TRUE, incorrectly discarding the NEXT legitimate
+                //        bestmove.
+                //   Fix: atomically capture-and-clear _stopLatch under _stopLatchLock so
+                //   exactly one consumer (either the bestmove handler OR the timeout path)
+                //   "owns" the latch. If we capture it, we countDown and the timeout path
+                //   sees null (no discard). If the timeout path already cleared it, we see
+                //   null and fall through to the discard check.
+                CountDownLatch stopLatch;
+                synchronized (_stopLatchLock) {
+                    stopLatch = _stopLatch;
+                    if (stopLatch != null) {
+                        _stopLatch = null;  // claim ownership; stopAndWaitForBestmove sees null
+                    }
+                }
                 if (stopLatch != null) {
                     stopLatch.countDown();
                     return;
@@ -2067,10 +2119,19 @@ public class StockfishNative {
             mainHandler.post(new Runnable() {
                 public void run() {
                     try {
+                        // v1.1.0 Phase 57+: Guard against callbacks executing after the
+                        // host Activity is finishing or destroyed. evaluateJavascript on
+                        // a destroyed WebView throws IllegalStateException on some OEM
+                        // ROMs (notably HyperOS 3), causing engine-init retries to
+                        // crash the process instead of degrading gracefully.
+                        Activity activity = activityRef.get();
+                        if (activity != null && (activity.isFinishing() || activity.isDestroyed())) {
+                            Log.d(TAG, "postJsCallback: host activity is finishing/destroyed, skipping: " + cleanJs);
+                            return;
+                        }
                         WebView webView = cachedWebViewRef.get();
                         if (webView == null) {
                             // Try to get WebView from Activity reference
-                            Activity activity = activityRef.get();
                             if (activity instanceof MainActivity) {
                                 webView = ((MainActivity) activity).getWebView();
                                 if (webView != null) {
@@ -2259,9 +2320,20 @@ public class StockfishNative {
                         long timeSinceLastResponse = System.currentTimeMillis() - _lastResponseTime;
                         if (timeSinceLastResponse > ZOMBIE_SEARCH_TIMEOUT_MS) {
                             Log.e(TAG, "Heartbeat: engine zombie detected (no response for " + timeSinceLastResponse + " ms), attempting recovery");
-                            // R1/R2 FIX: Use cleanupEngineResources() + recoverEngine() instead of inline code
-                            // First try graceful quit
-                            synchronized (StockfishNative.this) {
+                            // v1.1.0 Phase 58: P0 concurrency fix — use _writerLock instead
+                            //   of synchronized(StockfishNative.this). The old monitor used
+                            //   the same lock as startHeartbeat() (which is `synchronized`
+                            //   on `this`), creating a deadlock risk: if shutdown() ran
+                            //   while the heartbeat held `this` monitor inside the
+                            //   engineWriter.write() call, shutdown's
+                            //   _heartbeatThread.join(1000) would wait for the heartbeat
+                            //   to release `this` — but the heartbeat was blocked on I/O.
+                            //   _writerLock is a separate lock dedicated to engineWriter
+                            //   access, so shutdown's interrupt/join is not blocked by
+                            //   heartbeat's writer access. cleanupEngineResources() and
+                            //   recoverEngine() use their own locks (_restartLock,
+                            //   _stopLatchLock) and do not hold _writerLock.
+                            synchronized (_writerLock) {
                                 try {
                                     if (engineWriter != null) {
                                         engineWriter.write("quit\n");

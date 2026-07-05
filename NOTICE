@@ -2989,6 +2989,1128 @@ v1.0.7 Phase 21 (bug fixes: portrait dialog positioning precision fix, landscape
   (game-logic.js, index.html.tpl per DroidFish derivation) and remain under
   GPL v3.
 
+v1.1.0 Phase 58 (every-5-moves PGN eval annotation + stopLatch race fix + heartbeat deadlock fix, 2026.7.5):
+  Version: versionCode=110, versionName="1.1.0". (Same-version feature +
+  concurrency hardening — no version bump.)
+
+  This phase adds 1 feature and fixes 2 P0 concurrency issues:
+
+  Feature (every-5-moves PGN {} eval annotation):
+    At moves 5, 10, 15, 20, ..., _buildPGNString (ai-bridge.js) appends a
+    human-readable eval-bar-mirroring comment fragment to the PGN {} comment.
+    The fragment is auto-localized via T() reading the global _lang variable,
+    so it switches between Chinese and English based on the app's current
+    language mode. Format:
+      Chinese:  "均势 (-0.10) D22 SD34 (1%W/96%D/3%L)"
+      English:  "Equal (-0.10) D22 SD34 (1%W/96%D/3%L)"
+    All eval/WDL/depth values are White-perspective (the engine → White
+    conversion is done in onEngineEval before caching), so the PGN comment
+    is unambiguous regardless of which side the human played.
+
+    New function formatEvalAnnotation(cached) in pgn-standard.js builds the
+    annotation from a cached eval object {eval, mate, depth, seldepth,
+    wdlW, wdlD, wdlL}. Missing components are gracefully omitted:
+      - No depth → omit "D## SD##"
+      - No WDL (all -1 or sum<=0) → omit "(%W/%D/%L)"
+      - Mate → use "#+N" / "#-N" score + "White mates" / "Black mates" label
+
+    New i18n keys in game-logic.js (T() dictionary):
+      pgn_white_winning, pgn_white_huge_adv, pgn_white_advantage,
+      pgn_white_slight_adv, pgn_equal, pgn_black_slight_adv,
+      pgn_black_advantage, pgn_black_huge_adv, pgn_black_winning,
+      pgn_mate_white, pgn_mate_black
+    These are White-perspective labels (not player-perspective) using the
+    same thresholds as posDesc() in ui.js.
+
+    The annotation is placed in the PGN {} comment AFTER the structured
+    [%eval] tag (so [%xxx] tags remain first per PGN spec) and BEFORE
+    free-text comments / resign/timeout annotations.
+
+  P0 Concurrency Fix 1 (stopLatch TOCTOU race):
+    The bestmove handler in readEngineOutput() previously read _stopLatch
+    (volatile field) without holding _stopLatchLock. This created a
+    time-of-check-to-time-of-use race with stopAndWaitForBestmove's timeout
+    path:
+      1. bestmove handler reads _stopLatch = X (non-null)
+      2. stopAndWaitForBestmove's await() times out, sets
+         _discardingPonderBestmove = true, finally{} clears _stopLatch = null
+      3. bestmove handler calls X.countDown() and returns — but the discard
+         flag is now stuck TRUE, incorrectly discarding the NEXT legitimate
+         bestmove.
+    Fix: the bestmove handler now atomically captures-and-clears _stopLatch
+    under _stopLatchLock. The timeout path only arms the discard flag if it
+    still owns the latch (i.e., _stopLatch == stopLatch under the lock).
+    Exactly one consumer (either the bestmove handler OR the timeout path)
+    "owns" the latch — no race.
+
+  P0 Concurrency Fix 2 (heartbeat deadlock):
+    The heartbeat thread's engineWriter.write("quit\n") call (inside the
+    zombie-detection branch) was synchronized on StockfishNative.this — the
+    same monitor used by startHeartbeat() (which is `synchronized`). This
+    created a deadlock risk: if shutdown() ran while the heartbeat held the
+    `this` monitor inside the writer I/O call, shutdown's
+    _heartbeatThread.join(1000) would wait for the heartbeat to release
+    `this` — but the heartbeat was blocked on I/O. Result: shutdown would
+    time out after 1 second, potentially leaving the heartbeat thread in a
+    zombie state.
+    Fix: introduced a dedicated _writerLock (private final Object) for
+    engineWriter access in the heartbeat path. _writerLock is decoupled
+    from the `this` monitor, so shutdown's interrupt/join is not blocked
+    by heartbeat's writer access. cleanupEngineResources() and
+    recoverEngine() use their own locks (_restartLock, _stopLatchLock) and
+    do not hold _writerLock.
+
+  License classification:
+  - pgn-standard.js (GPL v3, DroidFish-derived): new formatEvalAnnotation
+    function + _pgnWhitePerspectiveLabel helper.
+  - game-logic.js (GPL v3, DroidFish-derived): new pgn_* i18n keys.
+  - ai-bridge.js (GPL v3, DroidFish-derived): every-5-moves hook in
+    _buildPGNString.
+  - StockfishNative.java (GPL v3, DroidFish-derived): stopLatch capture-
+    and-clear fix + _writerLock for heartbeat writer access.
+  - chess.html (GPL v3, DroidFish-derived): rebuilt from chess.src/.
+  - BUILDING.md, README.md, NOTICE, all README.license files, both HTML
+    manuals: documentation updates.
+
+  No new third-party code introduced.
+
+v1.1.0 Phase 57+ (code-review-driven preventive hardening, 2026.7.5):
+  Version: versionCode=110, versionName="1.1.0". (Same-version hardening —
+  no version bump.)
+
+  This phase implements 6 preventive fixes surfaced by the comprehensive
+  code review of the v1.1.0 source:
+
+  Fix 1 (pgn-standard.js — single-line PGN tag stripping): The old
+    tag-stripping regex `/^\[[\s\S]*?\]/gm` relied on `^` with the `gm`
+    flags to anchor PGN tag pairs to line starts. In multi-line PGN (one
+    tag per line) this works correctly. But in SINGLE-LINE PGN (all tags
+    + movetext on ONE line — e.g. PGN 2Kbug.pgn), `^` only matches the
+    very start of the string, so the regex matches only the FIRST `[...]`
+    block. Because `[\s\S]*?` is non-greedy, that first match stops at
+    the first `]` (closing the first tag), leaving the remaining tags as
+    garbage tokens in moveText. Replaced with the format-strict,
+    unanchored `/\[[A-Za-z]\w*\s+"[^"]*"\]/g`, which requires the
+    canonical PGN tag shape (key + whitespace + double-quoted value) so
+    movetext comments like `[Nf3]` (no quotes) are never false-positive
+    stripped. parseStandardPGN is currently NOT on the main code path
+    (the main parser is tablebase.js _parsePGN, fixed in Phase 52), so
+    this fix is preventive.
+
+  Fix 2 (chess960.js — isChess960CastlingLegal king lookup): The
+    function was scanning the entire back rank (up to 8 board reads) to
+    locate the king, inconsistent with how other king-position lookups
+    are done in game-logic.js. The state object maintains cached s.wk /
+    s.bk fields (maintained by syncHash() and cloneS()). Now reads
+    s.wk / s.bk directly, with a defensive verification that the cached
+    square actually contains a same-color king. If the cache is missing
+    or stale, falls back to the original board scan.
+
+  Fix 3 (ai-bridge.js — WDL display divide-by-zero guard): The WDL
+    percentage calculation `_sfWdlW/total*100` (and the D and L variants)
+    previously divided by `_sfWdlW+_sfWdlD+_sfWdlL` without guarding
+    against `total === 0`. In pathological positions where the engine
+    emits `wdl 0 0 0`, this produced NaN/Infinity in the WDL percentage
+    string. Added an `if(total>0)` guard.
+
+  Fix 4 (StockfishNative.java — postJsCallback activity-lifecycle
+    guard): Added an `isFinishing() || isDestroyed()` guard on the host
+    Activity before invoking `webView.evaluateJavascript(...)`. On some
+    OEM ROMs (notably HyperOS 3), calling evaluateJavascript on a
+    destroyed WebView's main thread throws IllegalStateException, which
+    previously crashed the process during engine-init retries after the
+    user exited the app. The guard logs and skips the callback instead.
+
+  Fix 5 (EngineService.java — wake-lock bounded timeout): Changed
+    `wakeLock.acquire()` (unbounded) to
+    `wakeLock.acquire(30L * 60L * 1000L)` (30-minute timeout). If the
+    OEM silently kills the service and onDestroy never runs, the wake
+    lock is released automatically instead of holding the CPU awake
+    indefinitely. The 30-minute window is well beyond any single
+    analysis session; longer sessions re-acquire by re-entering the
+    foreground state.
+
+  Fix 6 (res/README.license LIC-2 — stale version reference): Line 14's
+    strings.xml description still referenced "Regalia v1.0.8" even
+    though the actual app_name value was updated to "Regalia v1.1.0" in
+    Phase 53. Updated to v1.1.0. Historical changelog entries that
+    mention v1.0.8 (lines 163+) are preserved as accurate historical
+    records.
+
+  Also added UBIQUITOUS_LANGUAGE.md (pure-English domain terminology
+  glossary, 80+ chess/engine/PGN/UI terms) at the project root for
+  developer/domain-expert conversation reference.
+
+  License classification:
+  - pgn-standard.js (GPL v3, DroidFish-derived): single-line PGN tag
+    stripping regex fix.
+  - chess960.js (AGPL v3, original): isChess960CastlingLegal king lookup.
+  - ai-bridge.js (GPL v3, DroidFish-derived): WDL display guard.
+  - StockfishNative.java (GPL v3, DroidFish-derived): postJsCallback
+    activity-lifecycle guard.
+  - EngineService.java (AGPL v3, original): wake-lock bounded timeout.
+  - res/README.license (AGPL v3, original): strings.xml description
+    version reference.
+  - UBIQUITOUS_LANGUAGE.md (AGPL v3, original): new file at project root.
+  - chess.html (GPL v3, DroidFish-derived): rebuilt from chess.src/.
+  - BUILDING.md, README.md, PRIVACY.md, Manual/Regalia-v1.1.0-manual-
+    {zh,en}.html, NOTICE: documentation updates.
+
+  Code-review findings NOT fixed in Phase 57+ (with rationale):
+  - A05-1 (build.gradle:82 debuggable=true): FALSE POSITIVE. debuggable
+    true is ONLY in the debug buildType (line 82). The release buildType
+    (lines 75-79) does NOT set debuggable, so it defaults to false. The
+    release APK is verified via apksigner and does not have
+    android:debuggable="true" in the manifest.
+  - LIC-1 (StockfishNative.java v18.5.0 internal version comments):
+    INTENTIONALLY NOT MODIFIED. These are accurate historical changelog
+    comments documenting internal development stages (v18.x.x). The
+    README "Version" section explains this convention. Editing them
+    would falsify historical records.
+  - P0 concurrency issues in StockfishNative.java (stopLatch race,
+    heartbeat deadlock, etc.): POSTPONED to a dedicated concurrency-
+    hardening phase. These are theoretical races that have not
+    manifested in production across v1.0.8-v1.1.0. Properly addressing
+    them requires dedicated concurrency analysis and stress-testing,
+    not a quick patch.
+  - "God module" refactor (ui.js 7,497 lines / StockfishNative.java
+    5,212 lines): POSTPONED to a future major version. A proper refactor
+    requires 6+ weeks of architectural work and dedicated test coverage.
+    Not appropriate for a same-version hardening phase.
+
+v1.1.0 Phase 57 (portrait review move-list scroll positioning + visual-annotation cache residue fix, 2026.7.4):
+  Version: versionCode=110, versionName="1.1.0". (Same-version bug fix —
+  no version bump.)
+
+  This phase fixes 2 issues:
+
+  Bug fix 1 (ui.js — portrait review move-list scroll positioning): In
+    PORTRAIT review mode, after clicking a move in the move list, the
+    selected move was not in view (the scroll position was wrong). Root
+    cause: the Phase 56 fix (which replaced scrollIntoView with manual
+    scrollTop computation) used `_rAct.offsetTop` to compute the active
+    move's position. However, offsetTop returns the distance from the
+    element's outer border to the top of its offsetParent's inner border,
+    and `.rmv-block`'s offsetParent is `.review-overlay` (which is
+    position:fixed), NOT `_rList` (`.review-moves` has no `position` set).
+
+    In LANDSCAPE this happened to be approximately correct because
+    `.review-moves` is a flex child of `.review-top` (which is row-flex),
+    so `.rmv-block`'s vertical offsetTop within `.review-overlay` ≈
+    header_height + position_within_moves. The header is only ~24px, so
+    the error was small.
+
+    In PORTRAIT, however, `.review-moves` is stacked BELOW `.review-left`
+    (the board column, which has the board's full height). So `.rmv-block`'s
+    vertical offsetTop within `.review-overlay` ≈ header_height +
+    board_height + position_within_moves. The board_height is 256-320px —
+    much larger than the `.review-moves` viewport (also 256-320px), so the
+    resulting `_target` was WAY too large, clamped to scrollHeight -
+    clientHeight (scrolled to bottom), and the active move was nowhere near
+    the center of the visible area.
+
+    Fix: replaced the `offsetTop`-based calculation with a
+    `getBoundingClientRect()`-based calculation that computes the active
+    move's position RELATIVE TO `_rList` (not relative to `.review-overlay`):
+      `_actTop = (_actRect.top - _listRect.top) + _rList.scrollTop`
+    This gives the active move's position within `_rList`'s full content
+    (including the portion scrolled out of view), regardless of
+    orientation, layout structure, or offsetParent chain. The centering
+    formula `_target = _actTop + _actH/2 - _listH/2` then correctly
+    centers the active move in the visible area. A defensive fallback to
+    `offsetTop` is preserved in case `getBoundingClientRect` throws.
+
+    Chess960 compatibility: this is a pure DOM/layout fix; it does not
+    touch any game-logic, castling, or move-generation code. It works
+    identically for standard chess and Chess960 (the move list rendering
+    is variant-agnostic).
+
+  Bug fix 2 (ui.js — visual-annotation cache residue at review entry):
+    Occasionally, when entering review mode, the review board at step 0
+    (initial position) showed stale visual annotations ([%csl]/[%cal])
+    that did not match the displayed position. Two root causes:
+
+    (a) `_computeInitialPositionAnnotations` read `gameState` (the LIVE
+        mid-game state) instead of `reviewStates[0].state` (the actual
+        initial position shown at step 0). When the user entered review
+        during a mid-game, the annotations cached under the `'_initial'`
+        key were computed for the mid-game position (e.g., threats to a
+        queen on d4), but the board at step 0 shows the INITIAL position
+        (queen on d1). The mismatch caused stale, irrelevant annotations
+        to appear at step 0 — perceived by the user as "残留旧对局的
+        过时视觉注解".
+
+    (b) The `'_initial'` cache key was NEVER cleared by
+        `_invalidateCachesForUndoneMoves` (which only deletes NUMERIC keys
+        >= N). It IS cleared by `_resetGameUIState` (called by new game /
+        import / setup-complete / FEN import), but if the user re-entered
+        review WITHOUT one of those entry points in between (e.g.,
+        continued playing the same game and re-entered review), the stale
+        `'_initial'` cache would persist and the wrong annotations would
+        render.
+
+    Fix: (a) `_computeInitialPositionAnnotations` now reads
+    `reviewStates[0].state` (the actual initial position) with a fallback
+    chain: reviewStates[0].state → reviewBaseState → gameState (defensive).
+    (b) `enterReview()` now explicitly deletes the `'_initial'` key from
+    `_visualAnnotationsCache` at entry, forcing fresh computation each
+    review session. The NUMERIC keys (0..N-1) are deliberately preserved —
+    they were computed during play (via
+    `_computeAndCacheVisualAnnotations` after each move) and are still
+    valid for the current moveRecords.
+
+    Chess960 compatibility: `reviewStates[0].state` is built by
+    `enterReview()` from `stateHistory[0].state` (captured at game start)
+    or from `reviewBaseState` (which is the initial position). For
+    Chess960 games, this state has the Chess960 starting position (with
+    spid set). `getCtrlMap` and `attacked` both operate on the board
+    state regardless of variant, so the annotations are computed correctly
+    for Chess960 initial positions too.
+
+  Files modified in Phase 57:
+    - src/main/assets/chess.src/ui.js (Issue 1 + Issue 2)
+    - src/main/assets/chess.html (rebuilt from chess.src/)
+    - NOTICE, README.md, all README.license files (Phase 57 changelog)
+    - Manual/Regalia-v1.1.0-manual-{zh,en}.html (Phase 57 changelog at top)
+
+  All Phase 57 changes are in GPL-v3-licensed files (ui.js per DroidFish
+  derivation) and remain under GPL v3.
+
+v1.1.0 Phase 56 (landscape review nav-button scroll-to-top fix + PGN timeout annotation + first-move timing sync + UCI command ordering refinement, 2026.7.4):
+  Version: versionCode=110, versionName="1.1.0".
+
+  This phase fixes 4 issues:
+
+  Bug fix 1 (ui.js — landscape review nav-button scroll-to-top): In
+    landscape review mode, clicking the nav buttons (⏮ ◀ ▶ ⏭) at the
+    bottom of the page caused the entire .review-body container to
+    abnormally scroll back to the top. Root cause: scrollIntoView(
+    {block:'center'}) on the active move scrolls ALL scrollable ancestors
+    — the active move lives in the inner .review-moves container at the
+    TOP of the outer .review-body, so scrollIntoView yanked .review-body
+    back to scrollTop=0, undoing the synchronous scroll-position restore.
+    Fix: replaced scrollIntoView with manual scrollTop computation on the
+    inner .review-moves container only (scrollTop = actTop + actH/2 -
+    listH/2), preserving the outer .review-body scroll position.
+
+  Bug fix 2 (ai-bridge.js — PGN timeout annotation): For games ending by
+    timeout (time control), the PGN was missing the [Termination "Time
+    forfeit"] tag and the {White wins by timeout} / {Black wins by
+    timeout} last-move comment. The [Result] tag was already correct
+    (1-0/0-1 via _timeoutWinnerColor). Fix: added a timeout branch
+    parallel to the existing resign logic — emits [Termination "Time
+    forfeit"] tag and {<color> wins by timeout} comment on the last move.
+
+  Bug fix 3 (ui.js — first-move timing synchronization): The _turnStartTime
+    variable (which records per-move elapsed time for [%emt]/{Xs}
+    annotations) was NEVER reset at any game-start entry point — it was
+    only set at module-load time and re-assigned after each move. This
+    meant the first move's elapsed time included the wall-clock duration
+    since the PREVIOUS game's last move (or since app launch), which could
+    be minutes, hours, or days. Additionally, gameClocks was not nulled at
+    non-dialog entry points (FEN/PGN import, setup-complete), causing
+    stale clock state to leak into the new game. Fix: added
+    _turnStartTime=Date.now() and gameClocks=null to _resetGameUIState()
+    — this function is called by ALL game-start entry points (new game
+    dialog, free opening button, setup complete, FEN import, PGN import),
+    ensuring both timers reset consistently. For the dialog path,
+    initGameClocks() (called after _resetGameUIState) overwrites the null
+    gameClocks with fresh clock state.
+
+  Refinement 4 (StockfishNative.java — UCI command ordering): Verified
+    that the UCI command sequence for a Chess960 + TimeControl game is
+    correct: setoption name UCI_Chess960 value true is sent (with isready
+    handshake) BEFORE ucinewgame and position fen, and the go command
+    includes correct wtime/btime/winc/binc parameters derived from
+    gameClocks. The FEN sent via position fen uses Shredder format (file-
+    letter castling rights) for Chess960. Minor refinement: moved
+    setGameDifficulty's setoption commands to BEFORE position fen
+    (previously sent between position fen and go) for cleaner UCI ordering
+    — all setoption commands now precede position/go per UCI spec
+    recommendations. Applied to both engineGoTimed and engineGoInternal.
+
+  Files modified in Phase 56:
+    - src/main/assets/chess.src/ui.js (Issue 1 + Issue 3)
+    - src/main/assets/chess.src/ai-bridge.js (Issue 2)
+    - src/main/java/com/Regalia/StockfishNative.java (Issue 4)
+    - src/main/assets/chess.html (rebuilt from chess.src/)
+    - NOTICE, README.md, all README.license files (Phase 56 changelog)
+    - Manual/Regalia-v1.1.0-manual-{zh,en}.html (Phase 56 changelog at top)
+
+  All Phase 56 changes are in GPL-v3-licensed files (ui.js, ai-bridge.js,
+  StockfishNative.java per DroidFish derivation) and remain under GPL v3.
+
+v1.1.0 Phase 55 (Chess960 castling rook-loss fix in stats.html + game-logic.js _castleSide fallback, 2026.7.4):
+  Version: versionCode=110, versionName="1.1.0".
+
+  Bug fix (stats.html executeMove/buildSAN, game-logic.js _castleSide —
+  Chess960 castling rook loss): The castling detection code in three
+  places used a `_destEmpty` check that required the king's destination
+  square to be empty. This check was added in v1.0.8 Phase 49 with the
+  comment "Castling destination squares are ALWAYS empty (the rook ends
+  up BESIDE the king, not under it)". This comment is INCORRECT for
+  Chess960 — the king's destination (c1 for O-O-O, g1 for O-O) CAN be
+  the participating rook's source square (e.g. SP-ID with king on d1
+  and queenside rook on c1: O-O-O puts the king on c1, which IS the
+  rook's source). When `_destEmpty` rejected this case, the king's move
+  was treated as a normal self-capture of the rook, and the rook was
+  silently removed from the board.
+
+  Fix: Replaced `_destEmpty` with `_destValid` that allows the
+  destination to be empty OR contain a same-color rook (the
+  participating castling rook, which moves away). The participating
+  rook is found FIRST (by scanning from the king's column toward the
+  castling side), then the destination validity is checked.
+
+  Additionally fixed a latent bug in stats.html executeMove's
+  rook-source clearing: when `_rookFrom === _rookTo` (rook stays in
+  place, e.g. rook on f1 castling kingside to f1), the old code cleared
+  the rook's source AFTER placing the rook there. Added
+  `&& _rookFrom !== _rookTo` to the clearing condition. The main app's
+  makeMv was already correct for this case (skips rook-placement
+  entirely when rookFrom === rookTo).
+
+  Standard chess compatibility: unaffected (rook always on a1/h1,
+  king dest c1/g1 always empty).
+
+  Verification: 6-case test suite at scripts/verify-stats-fix.js
+  (user PGN O-O-O, c5 follow-up, standard O-O/O-O-O regression,
+  Chess960 O-O rook-stays, Chess960 O-O rook-on-dest). All pass.
+
+  Files modified in Phase 55:
+    - src/main/assets/stats.html (executeMove + buildSAN castling fix)
+    - src/main/assets/chess.src/game-logic.js (_castleSide _destValid fix)
+    - src/main/assets/chess.html (rebuilt from chess.src/)
+    - NOTICE, README.md, all README.license files (Phase 55 changelog)
+    - Manual/Regalia-v1.1.0-manual-{zh,en}.html (Phase 55 changelog at top)
+
+  All Phase 55 changes are in GPL-v3-licensed files (stats.html,
+  game-logic.js per DroidFish derivation) and remain under GPL v3.
+
+v1.1.0 Phase 54 (custom slider for pixel-perfect chart alignment + move-list scroll-into-view fix + executeMove async-callback try-catch + audio-engine partial-init reset + engine heartbeat all-callbacks fix + MultiPV secondary-variation divergence fix + PGN cascade-skip threshold increase + render retry-loop guard, 2026.7.4):
+  Version: versionCode=110, versionName="1.1.0".
+
+  Bug fix (ui.js, index.html.tpl — review progress bar alignment): The
+    v1.1.0 Phase 53 attempt used a native <input type="range"> with CSS
+    ::-webkit-slider-runnable-track margin and wrapper padding to align
+    the slider track with the chart's data points. This was unreliable
+    because WebKit's native slider thumb position at min/max values
+    depends on internal layout algorithms that vary across WebView
+    versions. Users reported that the progress bar's left/right ends
+    exceeded the chart's first/last data point positions.
+    Fix: Replaced the native slider visual with a custom implementation.
+    The slider wrapper has IDENTICAL CSS to the chart container
+    (border:1px, padding:2px, box-sizing:border-box, width:100%), so
+    both share the same content box width. Inside the wrapper, a
+    container holds: a base track (gray bar from left:3px to right:3px),
+    a fill track (colored progress bar), a thumb (6px circle), and a
+    transparent native <input type="range"> overlay (opacity:0) that
+    handles all touch/drag/keyboard interaction. The thumb's CENTER is
+    positioned via CSS calc(): left: calc(3px + ratio * (100% - 6px))
+    where ratio = reviewStep / maxStep. This matches the chart's data
+    points at viewBox x=3 (first point) and x=width-3 (last point).
+    CSS calc() automatically adjusts on resize/orientation change,
+    eliminating flicker and handling layout changes without requiring
+    a re-render. The thumb is 6px wide (= 2 × chart padding), so at
+    min the thumb's left edge is at the first data point, and at max
+    the thumb's right edge is at the last data point.
+
+  Bug fix (ui.js — review move-list scroll-into-view): The move-list
+    scroll code centered the active move on every step change, which
+    felt jumpy when navigating between nearby moves. Additionally,
+    _lastReviewStepScrolled was set BEFORE the requestAnimationFrame
+    callback fired — if the callback failed (element not found), the
+    scroll was never retried.
+    Fix: Only scroll if the active move is NOT fully visible
+    (block:'nearest' behavior). Moved _lastReviewStepScrolled update
+    INSIDE the rAF callback, after the scroll succeeds. If the element
+    is not found, the flag is NOT updated — the next render will retry.
+
+  Bug fix (ui.js — executeMove async callback un-caught exceptions):
+    The setTimeout callback in executeMove (which drives post-move
+    logic: updateAfterMove, AI move trigger, game-over check) had NO
+    try-catch. If gameStatus() or any call inside the callback threw,
+    the AI never moved and the UI never updated.
+    Fix: Wrapped the callback body in try-catch with console.error.
+
+  Bug fix (ui.js — ChessAudioEngine partial-init failure): init() set
+    this.ctx first, then this.master/compressor/reverb in the same try
+    block. If a later line threw, the catch returned false but this.ctx
+    stayed set. All future init() calls returned true at the early
+    if(this.ctx) return true guard, leaving the engine permanently
+    broken with no audio.
+    Fix: Reset ALL fields (ctx, master, compressor, reverb, reverbGain,
+    dryGain, _noiseBuf) in the catch block, and close the partially-
+    initialized AudioContext. Added this.ctx null-guard to setEnabled()
+    and setVolume().
+
+  Bug fix (ai-bridge.js — engine heartbeat only tracked onEngineEval):
+    The engine heartbeat monitor restarted the engine if
+    _lastEngineCallbackTime was stale by >120s. But
+    _lastEngineCallbackTime was ONLY updated inside onEngineEval().
+    During a long AI think in a timed game (the AI safety timer is
+    360s; long time controls routinely produce 120-300s thinks), no
+    eval was requested, so the timestamp went stale. At 120s the
+    heartbeat fired restartEngine(), forcibly cancelling the in-flight
+    AI search.
+    Fix: Update _lastEngineCallbackTime = Date.now() at the top of
+    onEngineProgress, onBestMove, onHintMove, and onPonderProgress —
+    all of which are proof-of-life signals from a healthy engine.
+
+  Bug fix (ai-bridge.js — MultiPV secondary-variation divergence
+    off-by-one): MultiPV secondary variations (alternative lines to
+    the bestmove) were divergence-checked with a 1-ply offset, causing
+    them to be attached to the WRONG move record. The divergence check
+    always used actualIdx = fromMoveIdx + 1 + vi, which is correct for
+    mainline continuations (where the PV starts with the opponent's
+    reply) but wrong for secondary variations (where the PV starts with
+    the AI's alternative move — same side as bestmove).
+    Fix: In _checkPVDivergenceSANs, compute the starting index based on
+    pending.firstMoveIsWhite vs the side at fromMoveIdx. If
+    firstMoveIsWhite === (fromMoveIdx % 2 === 0) (same side), the
+    variation is an alternative — start comparison at
+    actualIdx = fromMoveIdx + vi. Otherwise (continuation), start at
+    actualIdx = fromMoveIdx + 1 + vi (previous behavior).
+
+  Bug fix (tablebase.js — PGN cascade-skip threshold too aggressive):
+    _parsePGN's cascade-failure safety limit (5 consecutive invalid
+    tokens) was too aggressive for localized PGN corruption (e.g., OCR
+    errors in moves 40-44 of an 80-move game). With the old limit,
+    moves 45+ were silently dropped.
+    Fix: Increased the threshold to Math.max(15, mainTokens.length *
+    0.1) — scales with game length, so a 160-token game tolerates 16
+    consecutive skips before aborting.
+
+  Bug fix (ui.js — render() retry loop had no max-retry limit): The
+    render() function's 200ms retry loop on animationInProgress had no
+    max-retry limit — if the flag got stuck true, the loop would run
+    indefinitely.
+    Fix: Added _animRetryCount guard (max 10 retries = 2s). After 10
+    retries, force-clear animationInProgress and render immediately.
+
+  Revision 2 (2026.7.4): edge-to-edge chart and slider. User feedback:
+    the chart's first/last data points still had a 3px gap from the
+    left/right edges. Fix: reduced chart left/right padding from 3 to 0
+    — first data point at viewBox x=0 (left edge), last at x=width
+    (right edge). Slider thumb center now at calc(ratio * 100%) (was
+    calc(3px + ratio * (100% - 6px))), matching chart points at 0% and
+    100%. Slider base track and fill start at left:0 (was left:3px).
+    Slider container overflow:visible so the 6px thumb can overflow by
+    3px at min/max. Chart's first/last data point circles (r=2.75) are
+    half-clipped by overflow:hidden — intended edge-to-edge look.
+
+  Revision 3 (2026.7.4): true edge-to-edge + move-list scroll fix.
+    User feedback: even after Revision 2, data points were still not at
+    the edges. Root cause: the chart CONTAINER (.review-chart) had
+    padding:2px in its inline style. The SVG fills the content-box
+    (inset 3px from outer edge: 1px border + 2px padding). With viewBox
+    padding=0, data points are at content-box edges, 3px inset from the
+    visual edge. The slider wrapper (.rv-slider-wrap) also had
+    padding:2px — both aligned with each other but neither at the true
+    edge.
+    Fix (chart): chart container inline padding 2px → 0 (keep border:1px).
+    Slider wrapper CSS padding 2px → 0 (keep border:1px transparent).
+    Now SVG fills the content-box (= border-box minus 1px border), data
+    points at inner edge of 1px border — visually edge-to-edge. Both
+    containers have the same border-box width, so content-box widths
+    match, data points + thumb perfectly aligned at true edges.
+    _trendW measurement updated: clientWidth (no -4 subtraction needed
+    since padding=0). Slider labels get padding:2px 3px for readability.
+    Fix (move-list scroll): root-cause analysis found TWO issues.
+    (1) Scroll-restore conflict: .review-moves was in
+    _savedContainerScrolls. When reviewStep changed, render captured
+    OLD scroll, rebuilt DOM (scrollTop=0), single-rAF restored OLD
+    scroll, double-rAF ran scroll-into-view. Restore fought with
+    scroll-into-view — scrolled back to old position, then
+    scroll-into-view scrolled again (visible jump-flicker). Worse, if
+    restore made active move partially visible at edge, "already
+    visible" check passed and move stayed at edge. Fix: when
+    reviewStep changed, skip .review-moves restore (_reviewStepChanged
+    flag). Let scroll-into-view handle it. When reviewStep unchanged,
+    restore is correct.
+    (2) "Already visible" check too aggressive: skipped scrolling if
+    active move was "fully visible" (top >= container top AND bottom <=
+    container bottom). But move at edge was technically visible but not
+    centered — check passed, no scroll. Fix: when reviewStep changed,
+    ALWAYS center the active move (removed "already visible" skip).
+
+  Revision 4 (2026.7.4): move-list scroll complete rebuild + thumb/
+    chart circle diameter alignment + no clipping.
+    (1) Move-list scroll: discarded entire old mechanism (save/restore
+    .review-moves scrollTop + conditional scroll-into-view with
+    _lastReviewStepScrolled guard). NEW: .review-moves removed from
+    _savedContainerScrolls entirely (never saved/restored). After
+    EVERY render(), ALWAYS center active move (.rmv-block.act) — no
+    _lastReviewStepScrolled guard, no "already visible" check. User
+    scrolling doesn't trigger full render() (virtual-list scroll
+    listener does partial refresh), so centering doesn't fight user
+    scrolling.
+    (2) Thumb diameter = marker circle diameter: chart current-position
+    marker is SVG circle r=4 + stroke-width=1.5 → outer radius 4.75 →
+    outer diameter 9.5px. Slider thumb was 6px → changed to 10px (≈9.5px
+    marker). Slider container height 18px → 20px. Native input thumb
+    18px → 20px.
+    (3) No clipping: chart container overflow hidden → visible (inline
+    style + .review-chart CSS). Data point circles (r=2.75) at
+    viewBox x=0/x=width now fully visible (overflow 2.75px into
+    .review-bottom's 6px padding). Slider thumb (10px) overflows 5px
+    at min/max — also accommodated by 6px padding. .rv-slider-wrap gets
+    explicit overflow:visible.
+
+  Revision 5 (2026.7.4): eval label color/contrast + global-mode label
+    removal + strict 9.5px thumb + portrait clipping fix + move-list
+    scroll block:'nearest'.
+    (1) Eval label color: added --chart-label CSS variable (#f5e6c8
+    dark mode, #2c2c34 light mode). All local-mode eval labels now use
+    _C_LABEL for high contrast. Mate labels keep _C_CRIT (gold).
+    (2) Label edge clipping: X-clamp labels to [estHalfW, width-estHalfW]
+    (estHalfW = fontSize * label.length * 0.32) so text-anchor="middle"
+    labels stay fully within chart bounds.
+    (3) Global-mode label removal: removed entire "last endpoint
+    checkmate distance display" block. Global mode now purely visual
+    (line + points), no text labels.
+    (4) Strict 9.5px thumb: 7.5px width/height + 1px border = 9.5px
+    outer diameter, exactly matching chart marker (r=4 + stroke 1.5 →
+    4.75 radius → 9.5px outer).
+    (5) Portrait clipping: .review-bottom horizontal padding 6px → 8px
+    (> 4.75px overflow). Explicit overflow:visible on .review-bottom.
+    (6) Move-list scroll: replaced rev4 "always center" (broke
+    scrolling) with block:'nearest' — only scroll if active move NOT
+    fully visible (top-align if above, bottom-align if below). Restored
+    _lastReviewStepScrolled guard so toggles don't reset scroll.
+
+  Revision 6 (2026.7.4): native scrollIntoView + symmetric edge clipping.
+    (1) Move-list scroll: replaced rev5 manual block:'nearest' calculation
+    (had edge cases with virtual-list spacer height errors) with browser's
+    native scrollIntoView({block:'nearest', behavior:'auto'}). Handles
+    all geometry correctly — exactly "精确跳转至视野范围".
+    (2) Symmetric edge clipping: chart container overflow visible → hidden
+    (inline + CSS). Slider container overflow visible → hidden. Now BOTH
+    chart first/last data point circles (r=2.75) AND slider thumb (9.5px
+    outer) are clipped symmetrically at edges. Centers align exactly at
+    edge (data points at viewBox x=0/x=width, thumb at 0%/100%), both
+    clipped by same amount. Strict pixel-level alignment — clipped halves
+    are mirror images.
+
+  Revision 7 (2026.7.4): nav-button scroll pull-back fix + SVG
+    overflow:hidden for consistent edge clipping.
+    (1) Nav-button scroll pull-back: root cause — every render() (from
+    nav buttons) does app.innerHTML=h, resetting .review-moves scrollTop
+    to 0. scrollIntoView then jumps from 0 to active move, losing user's
+    scroll position. Fix: added _savedReviewMovesScroll — save scrollTop
+    before innerHTML, restore after (clamped to maxScroll). Restore runs
+    BEFORE scrollIntoView, so list returns to user's position, then
+    scrollIntoView({block:'nearest'}) only scrolls if active NOT visible.
+    (2) SVG edge clipping: root cause — SVG overflow defaults to visible
+    in some WebViews, so content outside viewBox (data points at x=0/
+    x=width) wasn't clipped by SVG, only by container. In landscape,
+    preserveAspectRatio scaling moved data points inward, escaping
+    container clip. Fix: added overflow:hidden to SVG inline style
+    (style="display:block;overflow:hidden"). SVG now clips content
+    outside viewBox — consistent clipping regardless of scaling or
+    selection state.
+
+  Revision 8 (2026.7.4): SVG slice + 100x100 viewBox + scroll-restore
+    only when step unchanged.
+    (1) SVG: replaced pixel-based viewBox (0 0 width height with
+    preserveAspectRatio="xMidYMid meet") with fixed viewBox="0 0 100 100"
+    + preserveAspectRatio="xMidYMid slice". "slice" scales to COVER
+    container (cropping overflow) — no centering gaps. "meet" scaled to
+    FIT inside, leaving gaps → data points moved inward, escaped clip.
+    All coordinates now in 0-100 space (data point r 2.5→1.6, marker
+    r 4→2.5, stroke-widths/font-sizes scaled). _buildEvalTrendSVG no
+    longer takes width/height. Removed _trendW measurement.
+    (2) Scroll-restore: root cause of remaining pull-back — when
+    reviewStep changed, virtual list window recomputed to center on new
+    active step. _savedReviewMovesScroll restore tried old scrollTop
+    but DOM changed (different window) → old scrollTop pointed to blank
+    area → scrollIntoView corrected → visible jump. Fix: only restore
+    _savedReviewMovesScroll when reviewStep did NOT change
+    (_reviewStepUnchanged = reviewStep === _lastReviewStepScrolled).
+    When reviewStep changed, skip restore, let scrollIntoView handle
+    from scrollTop=0. Eliminates pull-back — list goes directly to
+    active step without intermediate jump.
+
+  Revision 9 (2026.7.4): eliminate post-scrollIntoView pull-back.
+    User: list reaches active move then pulled back. First-principles
+    analysis found TWO async ops that fired AFTER scrollIntoView:
+    (1) Measurement rAF innerHTML rebuild: on first virtual render
+    (!_rvVirtualState.measured), rAF measured avgRowH, REBUILT
+    .review-moves innerHTML with accurate spacers, restored
+    _oldScrollTop. But _oldScrollTop captured AFTER scrollIntoView,
+    new DOM different geometry → restored scrollTop wrong → pull-back.
+    Fix: removed innerHTML rebuild + restore from measurement rAF.
+    Only record avgRowH — used on NEXT render. No rebuild after
+    scrollIntoView.
+    (2) Scroll-driven refresh: scrollIntoView fires scroll event →
+    _onReviewMovesScroll → _refreshReviewMovesOnly (80ms debounce) →
+    recomputes window → rebuilds innerHTML → restores old scrollTop
+    on new DOM (different spacers) → pull-back. Even though render()
+    already computed correct window. Fix: added _suppressScrollRefresh
+    guard. When reviewStep changed, set true before scrollIntoView
+    double-rAF. Guard makes _refreshReviewMovesOnly early-return.
+    After scrollIntoView + 300ms margin, clear guard so user scrolling
+    works again.
+
+  Revision 10 (2026.7.4): skip scrollIntoView during Analyze All + fix
+    chart display.
+    (1) Periodic pull-back: root cause — during Analyze All
+    (_reviewAnalyzeAllActive=true), _reviewAnalyzeAdvance() changes
+    reviewStep to next step being analyzed (every 1-5s), then calls
+    render(). Each render() triggers scrollIntoView (reviewStep changed),
+    pulling list to analyzed step — user didn't navigate there. This is
+    "每隔一段时间拉回". Fix: when _reviewAnalyzeAllActive is true, skip
+    scrollIntoView entirely — preserve user scroll. scrollIntoView runs
+    once when analyze-all completes and returns to user's original step.
+    (2) Chart display: root cause — rev8 "xMidYMid slice" with viewBox
+    "0 0 100 100" caused vertical cropping. "slice" scales to COVER —
+    scale = max(containerW/100, containerH/100). Wide-short container
+    (portrait ~350x100): scale=3.5, chart content 84*3.5=294px tall,
+    container only 100px → 194px cropped ("显示不全"). Fix: changed
+    preserveAspectRatio from "xMidYMid slice" to "none". "none"
+    stretches to FILL independently in X/Y — no cropping, no gaps.
+    Slight aspect distortion but ALL content visible.
+
+  Revision 11 (2026.7.4): dynamic viewBox + always-restore scrollTop.
+    (1) Chart: user rejected "none" (too distorted). First-principles:
+    "slice" crops when viewBox aspect ≠ container aspect. Solution:
+    DYNAMIC viewBox "0 0 <width> <height>" where width = measured
+    container clientWidth, height = _trendH. Aspect ratio matches →
+    "slice" scales 1:1 → NO cropping, NO distortion. Kept
+    preserveAspectRatio="xMidYMid slice". All coords back to pixel space.
+    (2) Scroll: periodic pull-back from ANY render changing reviewStep.
+    Robust fix: ALWAYS save/restore .review-moves scrollTop across DOM
+    rebuild (regardless of reviewStep change). Restore BEFORE
+    scrollIntoView. scrollIntoView only runs when reviewStep changed AND
+    analyze-all NOT active. When skipped, restored position stands —
+    no pull-back from any source.
+
+  Revision 12 (2026.7.4): eliminate periodic pull-back by not calling
+    render() during Analyze All advance.
+    User: "时不时拉回" still occurs. Root cause: _reviewAnalyzeAdvance()
+    called render() on every step (every 1-5s), rebuilding DOM
+    (app.innerHTML=h) and forcing virtual-list window recompute around
+    new reviewStep — discarding user's scroll-based window. Even with
+    scrollTop restore, DOM content changed (different window) →
+    restored scrollTop pointed to different position → pull-back.
+    Fix: removed render() from _reviewAnalyzeAdvance(). During
+    analyze-all, advance now ONLY calls _updateAllEvalDisplays() (eval
+    bar, no DOM rebuild) + _updateReviewAnalyzeBtn() (button label,
+    no DOM rebuild) + requestEngineEval() (next eval). Board/eval-bar/
+    move-list NOT rebuilt during analysis — stay where user left them.
+    Full render() happens ONCE when analyze-all completes and returns
+    to user's original step (reviewGoTo(returnStep) → render()). No
+    DOM rebuild = no scroll disruption.
+
+  Revision 13 (2026.7.4): fix virtual-list window recompute discarding
+    user's scroll position (>90 steps reverts).
+    User: move list >90 moves can't stay past move 90 — always reverts.
+    Root cause: window recompute condition was
+    "_curEnd===Infinity || !measured || _stepChanged". The "!measured"
+    condition forced recompute on EVERY render until avgRowH measured
+    (post-render rAF). When user scrolled to move 91+ (updating window
+    via _refreshReviewMovesOnly), then triggered ANY render (toggle,
+    nav), the "!measured" condition forced window back to center on
+    reviewStep (active move, likely ≤90) — discarding scroll-based
+    window → revert to before move 90.
+    Fix: removed "!measured" condition. Window recomputed ONLY when:
+    (a) first virtual render (_curEnd===Infinity), or (b) reviewStep
+    changed (_stepChanged). Scroll-based window from
+    _refreshReviewMovesOnly is preserved across renders. avgRowH
+    measurement still runs but no longer forces recompute.
+
+  Revision 14 (2026.7.4): DISABLE virtual list entirely.
+    User: too many bugs — can't scroll past 40 moves, fast nav pull-back,
+    selection lost, selection lost at last step. First-principles: ALL
+    bugs caused by virtual list (windowed rendering). Complexity
+    (window tracking, spacer estimation, scroll-driven refresh,
+    measurement rAF, suppression guards) >> negligible perf gain.
+    Fix: RV_VIRTUAL_THRESHOLD=Infinity — disables virtual list for ALL
+    games. Every move always in DOM. Eliminates: can't scroll past 40,
+    fast nav pull-back, selection lost, >90 revert, periodic pull-back,
+    _suppressScrollRefresh, _forceReviewWindowToStep, avgRowH rAF,
+    spacer errors. Simplified scrollIntoView: just
+    scrollIntoView({block:'nearest'}) in double-rAF when reviewStep
+    changed and analyze-all not active.
+
+  Revision 15 (2026.7.4): dead-code cleanup — remove all virtual-list
+    remnants. After rev14 disabled virtual list (RV_VIRTUAL_THRESHOLD=
+    Infinity), first-principles audit found ~145 lines of dead code:
+    _suppressScrollRefresh, _refreshReviewMovesOnly, _onReviewMovesScroll,
+    _forceReviewWindowToStep, _computeVirtualWindow (dead functions);
+    RV_OVERSCAN, RV_SCROLL_DEBOUNCE_MS (dead constants);
+    _lastRenderReviewStep (dead variable); if(_rvVirtualState.enabled)
+    branch in render() (dead branch); scroll-listener + avgRowH rAF
+    block (dead post-render block); spacer rendering in
+    _buildReviewMovesInnerHTML (dead branches). All removed. No runtime
+    behavior change.
+
+  Revision 16 (2026.7.4): fix selection scrolled out of view at last step
+    + enter review at step 0 + ⏮ two clicks.
+    (1) Selection scrolled out: root causes — block:'nearest' keeps element
+    at viewport edge (not centered); reviewGoTo at boundary (▶ at last
+    step) doesn't change reviewStep so _lastReviewStepScrolled guard
+    skips scrollIntoView. Fix: block:'nearest' → block:'center'; force
+    _lastReviewStepScrolled=-2 in reviewGoTo so guard always fires.
+    (2) Step 0 not in chart + ⏮ two clicks: enterReview set
+    reviewStep=lastStep. Chart local mode window at step 0 = [0,0] =
+    one point → chart returned empty. Fix: enterReview sets
+    reviewStep=0 (initial position). Chart starts from step 0 with
+    real data. ⏮ at step 0 is no-op but scrollIntoView still fires
+    via _lastReviewStepScrolled=-2.
+
+  Revision 17 (2026.7.4): fix review page scrolling to top on every nav
+    button / move click.
+    Root cause: render() rebuilds DOM (app.innerHTML=h), resetting
+    .review-body and .review-moves scrollTop to 0. The .review-moves
+    restore was in requestAnimationFrame (too late — browser painted
+    scrollTop=0 before rAF fired → visible "jump to top").
+    Fix: both .review-body and .review-moves scrollTop restores are
+    now SYNCHRONOUS — run immediately after app.innerHTML=h, before
+    browser paints. scrollBehavior set to 'auto' (instant) before
+    assignment, reset to '' after. User never sees scrollTop=0.
+    scrollIntoView in double-rAF adjusts from restored position.
+
+  Revision 18 (2026.7.4): fix board not refreshing during Analyze All +
+    restore auto-select/jump to analyzed step.
+    Root cause: rev12 removed render() from _reviewAnalyzeAdvance() to
+    fix scroll pull-back. But this meant board/eval/move-list/chart
+    never updated during analysis — stale position displayed. Board
+    appeared to "not refresh" because it only updated when analysis
+    completed.
+    Fix: restored render() in _reviewAnalyzeAdvance(). Scroll pull-back
+    is now fixed by synchronous scrollTop restore (rev17), so render()
+    is safe. User sees board update to each analyzed step, move list
+    highlights active move, scrollIntoView centers it. Force
+    _lastReviewStepScrolled=-2 before render() so scrollIntoView fires.
+
+  Revision 19 (2026.7.4): final audit — remove stale analyze-all scroll
+    guard + fix _savedReviewBodyScroll not cleared.
+    (1) Stale guard: if(_reviewAnalyzeAllActive) skipped scrollIntoView
+    during analyze-all — stale because rev18 restored render() in
+    advance, user now WANTS board update + active move centered.
+    Removed guard so scrollIntoView always runs when reviewStep changed.
+    (2) _savedReviewBodyScroll not cleared after restore — stale value
+    > 0 on next render caused spurious restore. Fix: clear to 0 after
+    restore (matching _savedReviewMovesScroll pattern).
+
+  Revision 20 (2026.7.4): fix stale engine variation data polluting new
+    game after setup/import.
+    Root cause: _pendingEngineSANs, _pendingEnginePVs, _multiPVLines,
+    _multiPVResult, _lastEngineVariation, reviewCritical are indexed by
+    moveRecords indices (0,1,2,...). New game clears moveRecords and
+    rebuilds from 0 — stale engine data from old game never cleared,
+    old indices map to different moves → wrong variations attached.
+    Fix: clear all stale engine variation data in _exitSetupImpl (ui.js),
+    _applyImportedFEN (tablebase.js), importPGN (tablebase.js).
+    Matches existing _visualAnnotationsCache.clear() pattern in
+    _resetGameUIState (same index-reuse issue).
+
+  Revision 21 (2026.7.4): final audit — also clear stale engine data
+    in _startGameImpl (new game via dialog). _startGameImpl was missing
+    the same clearing that rev20 added to _exitSetupImpl,
+    _applyImportedFEN, importPGN. New game from dialog also reuses
+    moveRecords indices from 0 — stale _pendingEngineSANs,
+    _pendingEnginePVs, _multiPVLines, _multiPVResult,
+    _lastEngineVariation, reviewCritical would pollute. Fix: added
+    same clearing in _startGameImpl.
+
+  Revision 22 (2026.7.4): fix stats page Chess960 castling support.
+    Root cause: three issues in stats.html:
+    (1) buildSAN used Math.abs(to-from)===2 for castling detection —
+    misses Chess960 1-col king moves. Fix: same logic as executeMove
+    (home row, col 6/2, >=1 dist for 960, dest empty, right present).
+    (2) fenToState only parsed KQkq — Chess960 FENs use Shredder
+    notation (file letters AHah). Fix: added Shredder parsing mapping
+    file letters to kingside/queenside based on king column.
+    (3) gameVariant never set in stats.html — _is960 always false.
+    Fix: openStatsPage (ai-bridge.js) sends gameVariant in payload;
+    stats.html receives from payload; parsePGN detects from [Variant]
+    header for direct PGN import.
+
+  Files modified in Phase 54:
+    - src/main/assets/chess.src/ui.js (custom slider HTML/CSS/JS,
+      move-list scroll fix, executeMove try-catch, audio-engine init
+      reset, render retry guard)
+    - src/main/assets/chess.src/ai-bridge.js (heartbeat timestamp in
+      all callbacks, MultiPV divergence fix)
+    - src/main/assets/chess.src/tablebase.js (PGN cascade-skip
+      threshold)
+    - src/main/assets/chess.src/index.html.tpl (custom slider CSS,
+      removed old native-slider CSS)
+    - NOTICE, README.md, all README.license files (Phase 54 changelog)
+    - Manual/Regalia-v1.1.0-manual-{zh,en}.html (Phase 54 changelog
+      at top)
+
+  All Phase 54 changes are in GPL-v3-licensed files (ui.js,
+  ai-bridge.js, tablebase.js, index.html.tpl per DroidFish derivation)
+  and remain under GPL v3.
+
+v1.1.0 Phase 53 (green-arrow check-response + red-arrow discovered-check fix + stats visual-annotation cutoff + review progress-bar/eval-chart alignment + king-control-arrow legality filter + nav-button center-align + king-position staleness fix + FEN-import state-pollution fix + exitSetup state-pollution fix + portrait/landscape review layout unification, 2026.7.3):
+  Version: versionCode=110, versionName="1.1.0".
+
+  Behavior change (ui.js _computeAndCacheVisualAnnotations): green arrows
+    redefined from "king escape path" to "check response path". The v1.0.9
+    implementation only checked the control map (cm[er][ec][moverColor]) for
+    each adjacent square of the checked king, which had two defects:
+      (1) It didn't verify that the king could actually MOVE to the square
+          legally — a slider attacking through the king's current position
+          would still "attack" the escape square in the control map even
+          after the king moved (because the king's body was no longer
+          blocking), but the control map is computed on the PRE-move board
+          state, so it doesn't reflect the post-king-move attack geometry.
+          Result: green arrows were drawn to squares the king couldn't
+          actually move to (e.g., a square that would still be in check
+          after the king moves there).
+      (2) It only generated king-escape arrows, ignoring "capture the
+          checker" responses by non-king pieces (the other half of how a
+          player can respond to check). Per the user spec for v1.1.0:
+          green arrows should include BOTH king escape moves AND legal
+          captures of the checking piece by any of the checked side's
+          pieces.
+    Fix: replaced the control-map-based check with two legalMoves() calls:
+      (a) legalMoves(postState, oppKingPos) returns the king's legal escape
+          moves (correctly handling pins, blocked squares, and the
+          "king-not-still-in-check-after-move" rule). If the king has NO
+          legal escape (smothered mate, anchored pin, etc.), NO king-starting
+          green arrow is generated — this fixes defect (1).
+      (b) legalMoves(postState, null) returns all legal moves for the
+          checked side; we filter for moves whose destination is a checker's
+          square. For each such capture, we generate a green arrow from the
+          capturing piece's square to the checker's square. King captures
+          of adjacent checkers are already covered by (a), so we skip them
+          here to avoid duplicate arrows. En passant captures of a pawn
+          that gave check via discovery are included (legalMoves already
+          covers en passant). Double check is handled correctly — only the
+          king can respond (capturing one checker still leaves the other
+          giving check), so legalMoves excludes non-king captures in that
+          case.
+    Chess960 compatibility: legalMoves handles Chess960 castling (forbidden
+      when in check, via isChess960CastlingLegal) and en passant identically
+      to standard chess — no special-casing needed. Castling-out-of-check
+      arrows are never generated because legalMoves correctly excludes them.
+    License: ui.js is GPL v3 (DroidFish-derived).
+
+  Bug fix (ui.js _computeAndCacheVisualAnnotations): red check arrow now uses
+    the ACTUAL checker position(s) from the control map, not the moved piece's
+    destination. This correctly handles discovered check (where the moved piece
+    moves away, exposing another piece that gives check). Previously, the red
+    arrow started from the moved piece's destination, which was wrong for
+    discovered check — the arrow should start from the piece actually giving
+    check (which may be a different piece that didn't move). For double check,
+    multiple red arrows are now drawn (one per checker), each from the checker's
+    position to the checked king's position.
+    License: ui.js is GPL v3 (DroidFish-derived).
+
+  Bug fix (ui.js _computeAndCacheVisualAnnotations + enterReview): king
+    position staleness fix. Three root causes identified and fixed:
+    (1) The _computeAndCacheVisualAnnotations replay path used `continue`
+        to skip moves that couldn't be replayed (null moveRecord, invalid
+        from/to, no piece at source). Skipping a move leaves the state
+        unchanged, so subsequent moves are applied to a stale state with
+        stale king positions. Fix: if any move can't be replayed, stop
+        the replay entirely and return without caching (the partially-
+        replayed state is unsafe to use for annotations).
+    (2) The enterReview path (building reviewStates) didn't pass the
+        `castle` flag for Chess960 castling moves (king may move only 1
+        col). While _castleSide's fallback detector can handle this, the
+        explicit flag is more reliable and consistent with the
+        _computeAndCacheVisualAnnotations replay path. Fix: pass
+        mv.castle when mr.isCastling is true (same as the replay path).
+    (3) The enterReview path didn't check if makeMv succeeded — if it
+        returned null, the old state was used for subsequent moves,
+        causing cascading corruption. Fix: check makeMv's return value;
+        if it fails, push a placeholder state but don't update `s`.
+    License: ui.js is GPL v3 (DroidFish-derived).
+
+  Bug fix (stats.html visual annotations statistics block): the visual
+    annotations stats block (blue/red/yellow/green squares + arrows counts
+    + NAG distribution) was scanning the FULL PGN text regardless of which
+    mainline move was selected, making it inconsistent with the other stats
+    blocks (which use effectiveParsed.moves, sliced to the selected move).
+    Per the v1.1.0 task spec: "统计界面的视觉注解统计区块应随选中走法改变——
+    只统计从开局到选中走法为止的 [%csl]/[%cal] 标签数量".
+    Fix: added a _slicePGNAtMove(pgnText, moveCount) helper that walks the
+    raw PGN text directly (no preprocessing), tracking tag-pair stripping,
+    brace-comment depth, semicolon comments, variation depth (parentheses),
+    NAGs, move numbers, and SAN move tokens. After the Nth mainline move
+    token (where N = _selectedMoveIdx + 1), the function includes any
+    immediately following {...} comment and/or $N NAG (the "move block"),
+    then truncates the text. The visual annotation block now uses this
+    sliced text for both the "has any visual annotations" check AND the
+    per-color counting, making it consistent with effectiveParsed.moves.
+    Variation selections and FEN selections are left unchanged (variations'
+    annotations are inside (...) blocks that the slicer intentionally
+    skips; FEN selection means no mainline moves to scope to).
+    License: stats.html is GPL v3 (DroidFish-derived).
+
+  Behavior change (ui.js _buildEvalTrendSVG + index.html.tpl + slider
+    rendering): pixel-perfect alignment between the review progress bar
+    and the evaluation trend chart. The v1.0.9 layout had three sources of
+    misalignment:
+      (1) The chart container had border:1px + padding:2px on each side,
+          but the slider wrapper had NO border and NO padding — so the
+          slider's content-box origin was 3px to the LEFT of the chart's
+          SVG origin, making every data point appear 3px to the right of
+          the corresponding slider thumb position.
+      (2) The chart's viewBox width (_trendW = window.innerWidth - 28) was
+          an ESTIMATE that didn't match the SVG element's actual rendered
+          width (which depends on the parent's actual width). With
+          preserveAspectRatio="xMidYMid meet", a viewBox narrower than the
+          container introduces horizontal centering margins, shifting data
+          points inward from the container's edges.
+      (3) The slider's native thumb width varied by browser/WebView
+          version (typically 12-18px), making the thumb's center offset
+          from the input's edges inconsistent — it didn't match the
+          chart's internal padding (8px on each side).
+    Fix (three parts):
+      (a) The slider wrapper now has border:1px solid transparent +
+          padding:2px + box-sizing:border-box, matching the chart
+          container's effective horizontal layout exactly. The transparent
+          border takes up the same 1px on each side without showing
+          visually.
+      (b) _trendW is now measured from the existing .review-chart
+          container's clientWidth on re-renders (falling back to the
+          window-based estimate on first render, when .review-chart
+          doesn't exist yet). This makes the viewBox width == SVG actual
+          width, so preserveAspectRatio="xMidYMid meet" produces no
+          centering margins — coords map 1:1 to pixels.
+      (c) The slider's thumb width is explicitly set to 16px via CSS
+          (::-webkit-slider-thumb and ::-moz-range-thumb), so the thumb
+          center travels from 8px (left edge) to width-8px (right edge)
+          of the input — matching the chart's padding.left=8 and
+          padding.right=8 exactly.
+    Combined, these three fixes make the slider thumb's CENTER align with
+    the chart's data points pixel-for-pixel (assuming the slider's input
+    element width == chart's SVG width, which holds because both wrappers
+    have the same border+padding and both are 100% width of the same
+    parent). Both global and local chart modes preserve alignment because
+    the slider always uses the global step range (0 to N-1) and the chart
+    in global mode uses the same range.
+    License: ui.js and index.html.tpl are GPL v3 (DroidFish-derived).
+
+  Behavior change (ui.js _updateArrows + _updateCtrlInfoPanel +
+    _computeAndCacheVisualAnnotations + _computeInitialPositionAnnotations):
+    king-control-arrow legality filter. Arrows originating from a king's
+    current square (in the heatmap control arrows, the "格子控制信息" panel,
+    and the visual annotations [%cal]) are now suppressed when the target
+    square is controlled by the opponent — the king cannot legally move
+    there, so showing such an arrow would misrepresent an illegal king move
+    as a valid control/threat. Non-king pieces are unaffected (a pinned
+    piece still "controls" squares even if it can't legally move). Applies
+    to BOTH the player's king and the opponent's king. In the visual-
+    annotation threat maps (threatByMover/threatByOpp/threatByWhite/
+    threatByBlack), king attackers are filtered out when the target is
+    opponent-controlled; this also correctly filters the yellow queen-threat
+    arrows and blue multi-threat arrows that originate from a king.
+    License: ui.js is GPL v3 (DroidFish-derived).
+
+  Behavior change (ui.js _buildEvalTrendSVG + index.html.tpl slider CSS,
+    revision): the progress bar / eval chart alignment was revised. The
+    chart's internal padding was reduced from 8 to 3 (left/right) so the
+    first/last data points sit closer to the chart edges. The slider track
+    gets margin:0 3px (matching the chart padding), so the track spans
+    [3, width-3] — exactly matching the first/last data-point positions.
+    The slider thumb width was reduced from 16 to 6 (= 2 × padding), so
+    at min value the thumb's LEFT edge is at the first point, and at max
+    value the thumb's RIGHT edge is at the last point. The track ends and
+    thumb edges together frame the data-point range precisely. Works in
+    both portrait and landscape (both wrappers have identical border+padding).
+    License: ui.js and index.html.tpl are GPL v3 (DroidFish-derived).
+
+  Behavior change (index.html.tpl .review-nav .btn): review navigation
+    buttons (⏮ ◀ ▶ ⏭) now have justify-content:center so the button text
+    is centered (was left-aligned due to the default flex-start). Applied
+    in both portrait (base .review-nav .btn) and landscape (.review-bottom
+    .review-nav .btn) CSS rules.
+    License: index.html.tpl is GPL v3 (DroidFish-derived).
+
+  Bug fix (tablebase.js _applyImportedFEN): FEN import state-pollution fix.
+    Three stale-state issues identified and fixed:
+    (1) _cachedOriginalPGN was not cleared — if the previous game was a PGN
+        import, its text would leak into the stats page and PGN export.
+        Fix: clear _cachedOriginalPGN on FEN import.
+    (2) playerWhite/playerBlack were not cleared — if the previous game was a
+        PGN import with named players (e.g. [White "Magnus"] [Black "Hikaru"]),
+        those names would carry over to the new FEN-imported game.
+        Fix: clear playerWhite/playerBlack on FEN import (same as _startGameImpl).
+    (3) _setupFEN was not set — the FEN import's starting position would be
+        lost on PGN export (no [FEN] header emitted). Fix: set _setupFEN to
+        the imported FEN string (same as importPGN and exitSetup).
+    Additionally, the moveRecords start from the correct move number:
+    moveRecords is cleared to [] (line 74), and _prependBlackToMovePlaceholder
+    adds a null placeholder if the FEN has black to move. The new game starts
+    from move 1 (or the FEN's specified move number), with no pollution from
+    the previous game's moveRecords.
+    License: tablebase.js is GPL v3 (DroidFish-derived).
+
+  Bug fix (ui.js _exitSetupImpl): exitSetup state-pollution fix. When
+    completing setup mode with existing move records, _exitSetupImpl did
+    not call _resetGameUIState() (unlike _applyImportedFEN and importPGN),
+    leaving stale state from the previous game: _cachedOriginalPGN (old PGN
+    text → stats/PGN export pollution), playerWhite/playerBlack (old player
+    names), _visualAnnotationsCache (old [%csl]/[%cal]), _aiBarInfo/
+    _hintBarInfo (old AI/hint text), _cachedStatus/_cachedStatusKey (old
+    status cache), isAIThinking/_aiSafetyTimerId (AI thinking state),
+    _evalLoading/_sfEvalReady (engine eval state), showResignConfirm/
+    _resignWinnerColor (resign state), cachedCtrlKey (control map cache),
+    _ecoRecCache (ECO cache), _sfEval/_sfMateDistance/_sfDepth (old eval
+    values), _needNewGameForEngine (engine not notified of new game),
+    _tbLoading/_tbRetryCount (tablebase loading state).
+    Fix: call _resetGameUIState() at the top of _exitSetupImpl, then also
+    clear the additional state that _resetGameUIState doesn't cover but
+    _applyImportedFEN/importPGN do (_cachedOriginalPGN, playerWhite,
+    playerBlack, _ecoRecCache, _sfEval, _sfMateDistance, _sfDepth,
+    _sfEvalReady, _evalLoading, _needNewGameForEngine, _tbLoading,
+    _tbRetryCount).
+    License: ui.js is GPL v3 (DroidFish-derived).
+
+  Behavior change (ui.js + index.html.tpl): portrait/landscape review layout
+    unification. Previously, portrait review mode put all controls (eval bar,
+    slider, chart, nav buttons, analyze button) inside .review-left (the board
+    column), making them narrower than the viewport. Landscape used a separate
+    .review-bottom container spanning full viewport width. Now BOTH orientations
+    use the same .review-bottom container, so the slider, chart, nav buttons,
+    and eval bar have identical styling and width in both portrait and landscape.
+    Changes:
+    (1) JS: portrait branch of the review layout now generates the same
+        .review-top (board + moves) + .review-bottom (controls) structure as
+        landscape. Previously portrait put controls inside .review-left.
+    (2) CSS: .review-top, .review-left, .review-moves, .review-bottom,
+        .review-chart, .review-slider, .review-nav, and eval-bar rules moved
+        from inside @media(orientation:landscape) to global scope (outside
+        any media query), so they apply to ALL orientations.
+    (3) CSS: .review-body in portrait now has overflow-y:auto +
+        max-height:calc(100vh - 28px) so .review-bottom controls are
+        reachable by scrolling (same as landscape).
+    (4) JS: eval-bar font size unified to .8rem (was .85rem in portrait,
+        .8rem in landscape).
+    License: ui.js and index.html.tpl are GPL v3 (DroidFish-derived).
+
+  Documentation update: README.md, NOTICE, all README.license files, and
+    Chinese/English HTML manuals updated with the Phase 53 changelog entry.
+    All version references bumped from v1.0.9 (versionCode 109) to v1.1.0
+    (versionCode 110). The HTML manuals' changelog order is now newest-
+    first (Phase 53 at the top), per the user spec. Old version manuals
+    (v1.0.4–v1.0.9) deleted; only v1.1.0 manual distributed.
+
+  Files modified in Phase 53:
+    - src/main/assets/chess.src/ui.js (green-arrow check-response logic,
+      _trendW measurement, slider wrapper border/padding, king-control-arrow
+      legality filter in _updateArrows/_updateCtrlInfoPanel/
+      _computeAndCacheVisualAnnotations/_computeInitialPositionAnnotations)
+    - src/main/assets/chess.src/index.html.tpl (slider thumb/track CSS,
+      review-nav button center-align, title)
+    - src/main/assets/chess.src/game-logic.js (loading_title)
+    - src/main/assets/stats.html (visual annotations desc, green_arrows
+      label, _slicePGNAtMove helper, visual annotations block cutoff)
+    - src/main/assets/chess.html (rebuilt from chess.src/ via build-chess.py)
+    - build.gradle, strings.xml, MainActivity.java, StockfishNative.java,
+      ChessApp.java, ChessWebViewClient.java, game-logic.js, index.html.tpl,
+      ui.js (version 109→110)
+    - Manual/Regalia-v1.1.0-manual-{zh,en}.html (Phase 53 changelog, top)
+    - NOTICE, README.md, all README.license files (Phase 53 changelog)
+
 v1.0.9 Phase 52 (PGN single-line parse fix + review/stats "extra kings" fix + visual annotation variation-isolation fix + isCheck/isCastling import fix + eval-chart palette unified to blue-vs-red, 2026.7.2):
   Version: versionCode=109, versionName="1.0.9".
 
