@@ -1,0 +1,158 @@
+name: Bug 报告
+ description: 报告 Regalia 应用中的 Bug 或异常行为
+ title: "[Bug] "
+ labels: ["bug", "triage"]
+ body:
+   - type: markdown
+     attributes:
+       value: |
+         感谢您花时间报告 Bug！为了帮助我们更快定位和修复问题，请尽可能详细地填写以下表单。
+         
+         在提交之前，请确认：
+         - [ ] 我已经搜索过现有 Issue，确认该 Bug 未被报告过
+         - [ ] 我正在使用最新版本的 Regalia
+         - [ ] 我已经尝试清除 App 数据后复现问题
+ 
+   - type: textarea
+     id: description
+     attributes:
+       label: 问题描述
+       description: 用简洁清晰的语言描述您遇到的 Bug
+       placeholder: |
+         例如：在对弈模式下，当引擎思考时间超过 30 秒时，App 会闪退。
+     validations:
+       required: true
+ 
+   - type: textarea
+     id: reproduction
+     attributes:
+       label: 复现步骤
+       description: 编号列出从打开 App 到触发 Bug 的每一步操作
+       placeholder: |
+         1. 打开 Regalia
+         2. 点击「开始对弈」
+         3. 选择「人机对战」，难度设为「大师」
+         4. 执白开局走 e4
+         5. 等待引擎思考约 30 秒
+         6. App 闪退
+     validations:
+       required: true
+ 
+   - type: textarea
+     id: expected
+     attributes:
+       label: 期望行为
+       description: 您期望发生什么
+       placeholder: |
+         引擎应正常返回最佳着法，对弈继续进行。
+     validations:
+       required: true
+ 
+   - type: textarea
+     id: actual
+     attributes:
+       label: 实际行为
+       description: 实际发生了什么
+       placeholder: |
+         App 直接闪退，回到桌面。没有任何错误提示。
+     validations:
+       required: true
+ 
+   - type: dropdown
+     id: app_version
+     attributes:
+       label: App 版本
+       description: 您正在使用的 Regalia 版本（可在「设置 → 关于」中查看）
+       options:
+         - v1.1.1 (最新)
+         - v1.1.0
+         - v1.0.x
+         - 其他/未知
+     validations:
+       required: true
+ 
+   - type: input
+     id: android_version
+     attributes:
+       label: Android 版本
+       description: 例如 Android 14、Android 13 等
+       placeholder: "Android 14 (API 34)"
+     validations:
+       required: true
+ 
+   - type: input
+     id: device_model
+     attributes:
+       label: 设备型号
+       description: 例如小米 14、三星 Galaxy S24、Pixel 8 等
+       placeholder: "小米 14"
+     validations:
+       required: true
+ 
+   - type: input
+     id: rom
+     attributes:
+       label: ROM / 系统定制
+       description: 例如 HyperOS、OneUI、ColorOS、原生 Android 等
+       placeholder: "HyperOS 1.0"
+ 
+   - type: dropdown
+     id: cpu_arch
+     attributes:
+       label: CPU 架构
+       description: 如有了解，请选择您的设备架构
+       options:
+         - arm64-v8a
+         - armeabi-v7a
+         - 未知
+ 
+   - type: textarea
+     id: pgn
+     attributes:
+       label: 相关棋局（PGN / FEN）
+       description: |
+         如果 Bug 与特定棋局相关，请粘贴 PGN 文件内容或 FEN 字符串。
+         您可以在 App 中使用「分享 PGN」功能导出。
+       render: pgn
+       placeholder: |
+         [Event "人机对战"]
+         [Site "Regalia"]
+         [Date "2025.01.15"]
+         
+         1. e4 e5 2. Nf3 Nc6 *
+         
+         或 FEN: rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq - 0 2
+ 
+   - type: textarea
+     id: media
+     attributes:
+       label: 截图 / 录屏
+       description: |
+         如果适用，请上传截图或录屏以帮助说明问题。
+         对于界面显示异常、崩溃瞬间等视觉问题，截图/录屏尤其重要。
+       placeholder: |
+         将截图拖放到此处上传，或点击区域选择文件。
+ 
+   - type: textarea
+     id: logs
+     attributes:
+       label: 日志 / 错误信息
+       description: |
+         如果您可以通过 adb 获取到崩溃日志，请粘贴在这里。
+         命令：`adb logcat | grep Regalia`
+       render: shell
+       placeholder: |
+         E/AndroidRuntime: FATAL EXCEPTION: Thread-5
+             Process: com.ydw.regalia, PID: 12345
+             java.lang.RuntimeException: 错误信息...
+ 
+   - type: textarea
+     id: additional
+     attributes:
+       label: 附加信息
+       description: 任何其他您认为有助于排查问题的信息
+       placeholder: |
+         - 该问题是否每次都能复现？还是偶发？
+         - 是否只在特定条件下出现（如特定主题、特定难度）？
+         - 最近是否升级过系统或 App？
+         - 是否与其他 App（如 VPN、游戏模式）同时运行？
