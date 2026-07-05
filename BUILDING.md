@@ -335,6 +335,3 @@ The signed APK (v1+v2+v3 signed with `../debug.keystore`) will be at
 
 ---
 *AI-GEN*
-
----
-*AI生成*
