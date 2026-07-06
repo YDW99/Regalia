@@ -6,7 +6,7 @@
 //   - Back-rank piece placement from SP-ID
 //   - Shredder-FEN castling rights encoding/decoding (HAah format)
 //   - Chess960 castling rules (king-to-g1/c1, rook-to-f1/d1 final squares)
-//   - Bridge call helper: setChess960Mode(enabled) → AndroidBridge
+//   - Bridge call helper: setChess960Mode(enabled) -> AndroidBridge
 //
 // Copyright (C) 2026 Regalia
 //
@@ -26,14 +26,14 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-// ===== I. SP-ID → piece placement =====
+// ===== I. SP-ID -> piece placement =====
 // The 960合法 starting positions are encoded by an integer 0..959.
 // Algorithm (reverse of the standard derivation):
-//   1. lightBishop = sp % 4        → file index among {1,3,5,7} (LIGHT squares: b,d,f,h)
-//   2. darkBishop  = (sp/4) % 4    → file index among {0,2,4,6} (DARK squares: a,c,e,g)
-//   3. queen       = (sp/16) % 6   → file index among the 6 remaining empty squares
-//   4. knight1     = (sp/96) % 10  → first knight's slot among the 5 remaining empties
-//   5. knight2     = ((sp/96) / 10) → second knight's slot among the remaining 4 empties
+//   1. lightBishop = sp % 4        -> file index among {1,3,5,7} (LIGHT squares: b,d,f,h)
+//   2. darkBishop  = (sp/4) % 4    -> file index among {0,2,4,6} (DARK squares: a,c,e,g)
+//   3. queen       = (sp/16) % 6   -> file index among the 6 remaining empty squares
+//   4. knight1     = (sp/96) % 10  -> first knight's slot among the 5 remaining empties
+//   5. knight2     = ((sp/96) / 10) -> second knight's slot among the remaining 4 empties
 //   6. The remaining 3 slots are filled: ROOK, KING, ROOK (in that order, since King must be between two rooks).
 // The traditional chess start position (RNBQKBNR) is SP-ID 518.
 
@@ -54,7 +54,7 @@ const _BINOMIAL_5_2 = [
 
 /**
  * Generate the 8-piece back-rank arrangement from a Chess960 SP-ID.
- * @param {number} spid — integer 0..959
+ * @param {number} spid -- integer 0..959
  * @returns {string[]} array of 8 piece-type strings: 'rook'/'knight'/'bishop'/'queen'/'king'
  */
 function spidToBackRank(spid){
@@ -96,9 +96,9 @@ function spidToBackRank(spid){
  * variables (empties1, empties2, queenIdx) and confusing intermediate state.
  * Rewrote from first principles: derive each SP-ID component directly from
  * the piece positions, in the same order the SP-ID encoding uses
- * (light bishop → dark bishop → queen slot → knight pair).
+ * (light bishop -> dark bishop -> queen slot -> knight pair).
  *
- * @param {string[]} backRank — array of 8 piece types
+ * @param {string[]} backRank -- array of 8 piece types
  * @returns {number} SP-ID 0..959, or -1 if invalid
  */
 function backRankToSPID(backRank){
@@ -118,7 +118,7 @@ function backRankToSPID(backRank){
   const bishFiles=[];
   for(let i=0;i<8;i++)if(backRank[i]==='bishop')bishFiles.push(i);
   if(bishFiles.length!==2)return -1;
-  if(bishFiles[0]%2===bishFiles[1]%2)return -1; // same-color bishops — invalid
+  if(bishFiles[0]%2===bishFiles[1]%2)return -1; // same-color bishops -- invalid
   // 4. Derive SP-ID components.
   // Light (white-square) bishop is on an ODD file (1,3,5,7);
   // dark (black-square) bishop is on an EVEN file (0,2,4,6).
@@ -157,17 +157,30 @@ function backRankToSPID(backRank){
  * v1.0.4 Rev30 ROBUSTNESS: Eliminate modulo bias. Previously buf[0]%960 had
  * a slight bias because 65536 isn't a multiple of 960 (65536 = 68*960 + 256,
  * so values 0..255 were slightly more likely than 256..959). Now we rejection-
- * sample: take values < 65536-256 = 65280 (the largest multiple of 960 ≤ 65536)
+ * sample: take values < 65536-256 = 65280 (the largest multiple of 960 <= 65536)
  * and only then apply %960. The bias was only ~0.03% so this is a defensive
  * improvement, not a bug fix.
+ *
+ * SECURITY FIX v1.0.5 (SonarCloud Hotspot #3):
+ *   - Removed the Math.random() fallback in the catch{} block.
+ *   - Math.random() is a pseudo-random number generator (PRNG) using a
+ *     predictable LCG algorithm. In the context of Chess960 SP-ID generation,
+ *     a predictable sequence could allow an attacker to anticipate upcoming
+ *     starting positions, compromising competitive fairness.
+ *   - New fallback: if crypto.getRandomValues() is unavailable (should never
+ *     happen in modern browsers/WebView), return the standard SP-ID 518
+ *     (traditional start position RNBQKBNR) as a safe default instead of
+ *     falling back to an insecure PRNG.
+ *   - This eliminates the SonarCloud "Make sure that using this pseudorandom
+ *     number generator is safe here" hotspot.
  */
 function randomSPID(){
   try{
     if(typeof crypto!=='undefined'&&crypto.getRandomValues){
       const buf=new Uint16Array(1);
       // Rejection-sample to eliminate modulo bias
-      const LIMIT=65280; // largest multiple of 960 ≤ 65536
-      for(let _i=0;_i<8;_i++){ // bounded retries (8 is plenty — P(>8 retries) ≈ 0)
+      const LIMIT=65280; // largest multiple of 960 <= 65536
+      for(let _i=0;_i<8;_i++){ // bounded retries (8 is plenty -- P(>8 retries) approx 0)
         crypto.getRandomValues(buf);
         if(buf[0]<LIMIT)return buf[0]%960;
       }
@@ -175,13 +188,15 @@ function randomSPID(){
       return buf[0]%960;
     }
   }catch(e){}
-  return Math.floor(Math.random()*960);
+  // SECURITY: Return standard position instead of Math.random() when crypto
+  // is unavailable. SP-ID 518 = traditional RNBQKBNR.
+  return 518;
 }
 
 // ===== II. Shredder-FEN castling rights =====
 // In Chess960, castling rights in FEN use the rook's source file letter
 // (uppercase for White, lowercase for Black) instead of K/Q/k/q.
-// Example: SP-ID 518 (traditional) → "RNBQKBNR" with castling rights "HAah"
+// Example: SP-ID 518 (traditional) -> "RNBQKBNR" with castling rights "HAah"
 // (H = rook on h1 = kingside, A = rook on a1 = queenside, etc.)
 // For standard chess, "HAah" is equivalent to "KQkq".
 
@@ -190,25 +205,25 @@ function randomSPID(){
  * (X-FEN) format.
  *
  * v1.0.7 PHASE 4 (Chess960 / X-FEN correctness fix):
- *   - Letters MUST be sorted a→h (left-to-right) regardless of color, per the
+ *   - Letters MUST be sorted a->h (left-to-right) regardless of color, per the
  *     X-FEN specification. The previous implementation emitted White-ks,
- *     White-qs, Black-ks, Black-qs in that fixed order — which violated the
+ *     White-qs, Black-ks, Black-qs in that fixed order -- which violated the
  *     spec when, e.g., White's queenside rook was on file b and White's
  *     kingside rook was on file f (correct output "BF", previous output "FB").
  *   - A side's rook is the CLOSEST same-color rook on the relevant side of
  *     the king (kingside = first rook to the right of the king; queenside =
  *     first rook to the left). The previous code used `Array.find` which
- *     returns the FIRST match in iteration order — for kingside that was the
+ *     returns the FIRST match in iteration order -- for kingside that was the
  *     closest-to-king rook (correct), but for queenside it was also the
- *     closest-to-king rook (also correct, since iteration goes 0→7 and we
+ *     closest-to-king rook (also correct, since iteration goes 0->7 and we
  *     want the rightmost of the left-side rooks). Re-verified: this is right.
  *   - Returns '-' if no rights are set OR if the required rook cannot be
- *     found on the board (defensive — should not normally happen because
+ *     found on the board (defensive -- should not normally happen because
  *     _validateSetupCastleMarks / makeMv keep rights and rooks in sync).
  *
- * @param {Object} cr — {whiteKingside, whiteQueenside, blackKingside, blackQueenside}
- * @param {Array} board — 8x8 board array (used to locate rooks)
- * @returns {string} Shredder castling string, e.g. "AHah" (sorted a→h) or "-"
+ * @param {Object} cr -- {whiteKingside, whiteQueenside, blackKingside, blackQueenside}
+ * @param {Array} board -- 8x8 board array (used to locate rooks)
+ * @returns {string} Shredder castling string, e.g. "AHah" (sorted a->h) or "-"
  */
 function toShredderCastling(cr,board){
   if(!cr)return '-';
@@ -246,22 +261,22 @@ function toShredderCastling(cr,board){
     }
   }
   if(pairs.length===0)return '-';
-  // Sort by file a→h (spec requirement). Ties (same file, both colors —
+  // Sort by file a->h (spec requirement). Ties (same file, both colors --
   // impossible in a legal position) keep White before Black.
   pairs.sort((a,b)=>a.file-b.file||(a.isWhite?0:1)-(b.isWhite?0:1));
   let str='';
   for(const p of pairs){
     str+=String.fromCharCode((p.isWhite?65:97)+p.file);
   }
-  // v1.0.8 PHASE 30: removed dead `||'-'` — pairs.length>0 here (length===0
-  //   returns '-' above), and the loop always appends ≥1 char, so str is non-empty.
+  // v1.0.8 PHASE 30: removed dead `||'-'` -- pairs.length>0 here (length===0
+  //   returns '-' above), and the loop always appends >=1 char, so str is non-empty.
   return str;
 }
 
 /**
  * Parse a Shredder-FEN (X-FEN) castling string into our internal castlingRights
  * object. Also accepts the standard KQkq notation (X-FEN backward-compatibility
- * mode: K maps to file h, Q maps to file a, k → h, q → a).
+ * mode: K maps to file h, Q maps to file a, k -> h, q -> a).
  *
  * v1.0.7 PHASE 4 (Chess960 / X-FEN correctness fix):
  *   - The X-FEN spec allows MIXED notation: e.g. "KQah" is legal (White uses
@@ -274,14 +289,14 @@ function toShredderCastling(cr,board){
  *     against malformed FENs). If not, the right is silently dropped instead
  *     of producing an inconsistent state that would later break move generation.
  *
- * @param {string} str — castling field from FEN (e.g. "KQkq", "AHah", "Bf", "-")
- * @param {Array} board — 8x8 board array (used to identify king + rook positions)
+ * @param {string} str -- castling field from FEN (e.g. "KQkq", "AHah", "Bf", "-")
+ * @param {Array} board -- 8x8 board array (used to identify king + rook positions)
  * @returns {Object} {whiteKingside, whiteQueenside, blackKingside, blackQueenside}
  */
 function parseShredderCastling(str,board){
   const cr={whiteKingside:false,whiteQueenside:false,blackKingside:false,blackQueenside:false};
   if(!str||str==='-')return cr;
-  // Locate kings (required to map a file letter → kingside/queenside).
+  // Locate kings (required to map a file letter -> kingside/queenside).
   let wKing=-1,bKing=-1;
   for(let c=0;c<8;c++){
     if(board[7][c]&&board[7][c].type==='king'&&board[7][c].color==='white')wKing=c;
@@ -309,7 +324,7 @@ function parseShredderCastling(str,board){
       if(wKing<0)continue;
       if(file>wKing)cr.whiteKingside=true;
       else if(file<wKing)cr.whiteQueenside=true;
-      // file === wKing is illegal (rook on king's square) — silently drop.
+      // file === wKing is illegal (rook on king's square) -- silently drop.
     }else{
       if(bKing<0)continue;
       if(file>bKing)cr.blackKingside=true;
@@ -327,7 +342,7 @@ function parseShredderCastling(str,board){
 //                 king does not pass through or land on an attacked square.
 //   - The rook's PATH may pass through attacked squares (only the king's path matters).
 //
-// In standard chess the king moves 2 squares (e1→g1 or e1→c1). In Chess960, the
+// In standard chess the king moves 2 squares (e1->g1 or e1->c1). In Chess960, the
 // king's MOVE may be 0, 1, 2, or more squares to reach g1/c1, depending on its
 // starting file. The rook's move may also be 0 or more squares.
 //
@@ -348,9 +363,9 @@ function parseShredderCastling(str,board){
  *     existed in the case of a non-standard setup position).
  *   - The kingside rook is the CLOSEST same-color rook to the RIGHT of the
  *     king (i.e. highest col among rooks with col > kingCol, but actually
- *     the SMALLEST such col — the closest one to the king, since "kingside"
+ *     the SMALLEST such col -- the closest one to the king, since "kingside"
  *     traditionally means the h-file side and the king castles toward h).
- *     Wait — clarify: in Chess960, "kingside" castling always sends the
+ *     Wait -- clarify: in Chess960, "kingside" castling always sends the
  *     king to g1 (col 6). The rook that participates is the closest rook
  *     on the king's RIGHT side (col > kingCol), because that rook's path
  *     to f1 (col 5) is the shortest. If multiple rooks are on the right,
@@ -361,8 +376,8 @@ function parseShredderCastling(str,board){
  *     `null` if no rook exists on that side. Previously returned `null`
  *     entirely if either side was missing, which broke single-side castling.
  *
- * @param {Array} board — 8x8 board
- * @param {string} color — 'white' or 'black'
+ * @param {Array} board -- 8x8 board
+ * @param {string} color -- 'white' or 'black'
  * @returns {Object|null} {king:col, kingside:col|null, queenside:col|null}
  *   Returns null only if the king itself is missing.
  */
@@ -381,10 +396,10 @@ function findCastlingRooks(board,color){
   let ksr=null,qsr=null;
   for(const c of rookCols){
     if(c>kingCol){
-      // right of king — pick the smallest such col (closest to king)
+      // right of king -- pick the smallest such col (closest to king)
       if(ksr===null||c<ksr)ksr=c;
     }else if(c<kingCol){
-      // left of king — pick the largest such col (closest to king)
+      // left of king -- pick the largest such col (closest to king)
       if(qsr===null||c>qsr)qsr=c;
     }
   }
@@ -394,7 +409,7 @@ function findCastlingRooks(board,color){
 /**
  * Find the rook that participates in a Chess960 castling move on the given side.
  * Returns just that rook's column, or null if no rook exists on that side.
- * This is the per-side variant of findCastlingRooks — used by isChess960CastlingLegal
+ * This is the per-side variant of findCastlingRooks -- used by isChess960CastlingLegal
  * and chess960CastlingRookMove so that castling to one side works even when the
  * other side has no rook (per the user's rule reference).
  *
@@ -412,11 +427,11 @@ function findCastlingRookForSide(board,color,side){
  * v1.0.7 PHASE 4: now uses findCastlingRookForSide so that castling to one
  * side works even when the other side has no rook (e.g. the queenside rook
  * was captured). Previously this called findCastlingRooks which returned null
- * unless BOTH sides had rooks — blocking single-side castling.
+ * unless BOTH sides had rooks -- blocking single-side castling.
  *
- * @param {Object} s — game state
- * @param {string} color — 'white' or 'black'
- * @param {string} side — 'kingside' or 'queenside'
+ * @param {Object} s -- game state
+ * @param {string} color -- 'white' or 'black'
+ * @param {string} side -- 'kingside' or 'queenside'
  * @returns {Object|null} {rookFrom:col, rookTo:col, kingTo:col, row} or null
  */
 function chess960CastlingRookMove(s,color,side){
@@ -435,7 +450,7 @@ function chess960CastlingRookMove(s,color,side){
  *   - Now uses findCastlingRookForSide instead of findCastlingRooks. This
  *     means castling to one side is legal even if the other side has no rook
  *     (e.g. the queenside rook was captured). Per the user-quoted rule
- *     reference: "对局进行中（执行易位时）：不需要" — only the participating
+ *     reference: "对局进行中（执行易位时）：不需要" -- only the participating
  *     rook must exist; the other side is irrelevant.
  *   - If no rook exists on the requested side, returns false (cannot castle
  *     without a rook to castle with).
@@ -445,11 +460,11 @@ function chess960CastlingRookMove(s,color,side){
  * hold:
  *   1. The king and participating rook have never moved (castling rights present).
  *   2. All squares between the king and rook (exclusive) are empty.
- *   3. The king's destination AND the rook's destination are empty — EXCEPT
+ *   3. The king's destination AND the rook's destination are empty -- EXCEPT
  *      the king/rook themselves may occupy each other's destination (since
  *      they move away). A third piece on either destination makes castling
- *      ILLEGAL (previously the code allowed castling that would CAPTURE or
- *      DESTROY own pieces on the destination squares!).
+ *      ILLEGAL (previously the code only checked squares between king and rook
+ *      and missed destination squares!).
  *   4. The king is not currently in check.
  *   5. Every square the king crosses (including destination) is not attacked.
  *
@@ -457,8 +472,8 @@ function chess960CastlingRookMove(s,color,side){
  * and conditions 4-5 (check/attack). It was MISSING condition 3: it never
  * verified that the king's destination and rook's destination were clear of
  * other pieces. In Chess960, the king and rook can start close together
- * (e.g., king on b1, rook on c1), so the king's path (b1→g1) extends FAR
- * beyond the rook — through squares d1, e1, f1 that may be occupied by
+ * (e.g., king on b1, rook on c1), so the king's path (b1->g1) extends FAR
+ * beyond the rook -- through squares d1, e1, f1 that may be occupied by
  * other pieces. The "between king and rook" check (only covering the gap
  * between the two pieces) did NOT cover these path squares.
  *
@@ -466,9 +481,9 @@ function chess960CastlingRookMove(s,color,side){
  * square in this union must be empty, EXCEPT the king's starting square
  * (king moves away) and the rook's starting square (rook moves away).
  *
- * @param {Object} s — game state
- * @param {string} color — 'white' or 'black'
- * @param {string} side — 'kingside' or 'queenside'
+ * @param {Object} s -- game state
+ * @param {string} color -- 'white' or 'black'
+ * @param {string} side -- 'kingside' or 'queenside'
  * @returns {boolean} true if castling is legal
  */
 function isChess960CastlingLegal(s,color,side){
@@ -519,7 +534,7 @@ function isChess960CastlingLegal(s,color,side){
   const rookLo=Math.min(rookFrom,rookTo),rookHi=Math.max(rookFrom,rookTo);
   const unionLo=Math.min(kingLo,rookLo),unionHi=Math.max(kingHi,rookHi);
   for(let c=unionLo;c<=unionHi;c++){
-    if(c===kingCol||c===rookFrom)continue; // king/rook start — they move away
+    if(c===kingCol||c===rookFrom)continue; // king/rook start -- they move away
     if(s.board[row][c])return false; // another piece blocks the path or destination
   }
 
@@ -554,7 +569,7 @@ function isChess960Mode(){return _chess960ModeActive;}
 /**
  * Build a complete game state for a Chess960 starting position.
  * Mirrors initState() but uses the SP-ID-specified back-rank.
- * @param {number} spid — 0..959 (default: random)
+ * @param {number} spid -- 0..959 (default: random)
  * @returns {Object} game state with board, castlingRights, etc.
  */
 function initChess960State(spid){
@@ -563,7 +578,7 @@ function initChess960State(spid){
   if(spid==null||spid<0||spid>959||!Number.isInteger(spid))spid=randomSPID();
   const backRank=spidToBackRank(spid);
   const b=Array.from({length:8},()=>Array(8).fill(null));
-  // Black on row 0, White on row 7 (mirrored — black's a8 corresponds to col 0)
+  // Black on row 0, White on row 7 (mirrored -- black's a8 corresponds to col 0)
   for(let c=0;c<8;c++){
     b[0][c]={type:backRank[c],color:'black'};
     b[1][c]={type:'pawn',color:'black'};

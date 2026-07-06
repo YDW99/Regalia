@@ -33,6 +33,23 @@
 
 // ===================== i18n SYSTEM =====================
 let _lang='zh';
+/**
+ * SECURITY FIX v1.0.5 (SonarCloud Hotspot #4):
+ * Generate a cryptographically secure random integer in [0, max).
+ * Replaces Math.random() for security-sensitive random selection.
+ * Uses crypto.getRandomValues with rejection sampling to eliminate modulo bias.
+ */
+function secureRandomInt(max){
+  if(max<=1)return 0;
+  const buf=new Uint32Array(1);
+  const LIMIT=0xFFFFFFFF - (0xFFFFFFFF % max); // largest multiple of max <= 2^32-1
+  for(let i=0;i<8;i++){
+    crypto.getRandomValues(buf);
+    if(buf[0]<LIMIT)return buf[0]%max;
+  }
+  return buf[0]%max; // fallback after 8 retries (extremely unlikely)
+}
+
 function T(key){return _i18n[key]?.[_lang]||_i18n[key]?.zh||key;}
 function toggleLang(){_lang=(_lang==='zh')?'en':'zh';try{localStorage.setItem('Regalia_lang',_lang);}catch(e){}try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.saveLangPref)AndroidBridge.saveLangPref(_lang);}catch(e){}try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_lang',_lang);}catch(e){}try{if(typeof HapticManager!=='undefined'&&HapticManager.fire)HapticManager.fire('TOGGLE_ON');}catch(e){}try{if(typeof playSound==='function')playSound('select');}catch(e){}render();}
 const _i18n={
@@ -2827,7 +2844,7 @@ function queryECOBookMove(s) {
   // Prefer longer/deeper book lines, with some randomness for variety
   candidates.sort((a, b) => b.depth - a.depth);
   const topN = candidates.slice(0, Math.min(5, candidates.length));
-  return topN[Math.floor(Math.random() * topN.length)];
+  return topN[secureRandomInt(topN.length)];
 }
 
 // ECO Opening Recommendation for player's turn (LRU cache using Map)
