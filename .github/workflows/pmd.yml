@@ -37,7 +37,7 @@ jobs:
         with:
           version: "7.4.0"
           rulesets: "rulesets/java/quickstart.xml,rulesets/java/errorprone.xml,rulesets/java/bestpractices.xml"
-          sourcePath: "app/src/main/java"
+          sourcePath: "src/main/java"
           analyzeModifiedFilesOnly: "${{ github.event_name == 'pull_request' }}"
           format: "sarif"
           outputFile: "pmd-report.sarif"
