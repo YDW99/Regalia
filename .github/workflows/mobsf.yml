@@ -4,13 +4,13 @@ on:
   push:
     branches: ["main"]
     paths:
-      - "app/src/main/java/**"
-      - "app/src/main/AndroidManifest.xml"
+      - "src/main/java/**"
+      - "src/main/AndroidManifest.xml"
   pull_request:
     branches: ["main"]
     paths:
-      - "app/src/main/java/**"
-      - "app/src/main/AndroidManifest.xml"
+      - "src/main/java/**"
+      - "src/main/AndroidManifest.xml"
   workflow_dispatch:
 
 permissions:
@@ -42,8 +42,8 @@ jobs:
       - name: Run mobsfscan
         run: |
           mobsfscan \
-            app/src/main/java \
-            app/src/main/AndroidManifest.xml \
+            src/main/java \
+            src/main/AndroidManifest.xml \
             --type android \
             --sarif \
             --output mobsf-results.sarif \
