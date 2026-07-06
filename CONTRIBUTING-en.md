@@ -134,6 +134,7 @@ We follow the **Conventional Commits** specification:
 |------|-------------|
 | `feat` | New feature |
 | `fix` | Bug fix |
+| `security` | Security consolidation |
 | `docs` | Documentation updates (README, manuals, etc.) |
 | `style` | Code formatting changes (no functional impact) |
 | `refactor` | Code refactoring |

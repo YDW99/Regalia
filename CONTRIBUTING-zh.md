@@ -134,6 +134,7 @@ git checkout -b feature/your-feature-name
 |------|------|
 | `feat` | 新功能 |
 | `fix` | Bug 修复 |
+| `security` | 安全巩固 |
 | `docs` | 文档更新（README、手册等） |
 | `style` | 代码格式调整（不影响功能） |
 | `refactor` | 代码重构 |
