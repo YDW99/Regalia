@@ -1,0 +1,125 @@
+name: Auto Unzip Folder to Root
+
+on:
+  push:
+    paths:
+      - 'upload.zip'
+    branches:
+      - upload
+  workflow_dispatch:
+    inputs:
+      confirm_overwrite:
+        description: 'Confirm overwrite of existing files'
+        required: true
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+permissions:
+  contents: write
+
+jobs:
+  unzip_and_commit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Check if upload.zip exists
+        id: check_zip
+        run: |
+          if [ -f "upload.zip" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "✅ Found upload.zip"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "❌ upload.zip not found"
+          fi
+
+      - name: Validate ZIP file
+        if: steps.check_zip.outputs.exists == 'true'
+        id: validate
+        run: |
+          # Check file size (max 100MB)
+          FILE_SIZE=$(stat -c%s "upload.zip")
+          MAX_SIZE=$((100 * 1024 * 1024))
+          echo "📦 ZIP size: $FILE_SIZE bytes"
+
+          if [ "$FILE_SIZE" -gt "$MAX_SIZE" ]; then
+            echo "::error::upload.zip exceeds 100MB limit ($FILE_SIZE bytes)"
+            exit 1
+          fi
+
+          # Check for path traversal attacks
+          if unzip -l "upload.zip" | grep -E '\.\./|\.\\\.\\'; then
+            echo "::error::Path traversal detected in ZIP contents. Aborting."
+            exit 1
+          fi
+
+          # List contents for review
+          echo "📋 ZIP contents:"
+          unzip -l "upload.zip" | tail -n +4 | head -n -2
+
+          # Check for protected paths
+          PROTECTED_PATHS='\.github/workflows/|\.git/|gradlew|gradle/|local\.properties|.*\.keystore|.*\.jks'
+          if unzip -l "upload.zip" | grep -iE "$PROTECTED_PATHS"; then
+            echo "::warning::ZIP contains files in protected paths (workflows, .git, gradle, keystores)."
+            echo "These files will be skipped to prevent accidental overwrites."
+          fi
+
+          echo "valid=true" >> $GITHUB_OUTPUT
+
+      - name: Unzip with safety checks
+        if: steps.check_zip.outputs.exists == 'true' && steps.validate.outputs.valid == 'true'
+        id: unzip
+        run: |
+          mkdir -p ./extracted
+          unzip -o -q upload.zip -d ./extracted
+
+          # Remove protected paths from extraction
+          find ./extracted -path './extracted/.github/workflows/*' -delete 2>/dev/null || true
+          find ./extracted -path './extracted/.git/*' -delete 2>/dev/null || true
+          find ./extracted -name 'gradlew' -delete 2>/dev/null || true
+          find ./extracted -path './extracted/gradle/*' -delete 2>/dev/null || true
+          find ./extracted -name 'local.properties' -delete 2>/dev/null || true
+          find ./extracted -name '*.keystore' -delete 2>/dev/null || true
+          find ./extracted -name '*.jks' -delete 2>/dev/null || true
+
+          echo "📁 Files to be added:"
+          find ./extracted -type f | sed 's|^./extracted/||' | sort
+
+      - name: Sync with remote and commit
+        if: steps.check_zip.outputs.exists == 'true' && steps.validate.outputs.valid == 'true'
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Stash local changes
+          git stash push -m "temp-unzip-$(date +%s)" || true
+
+          # Pull remote updates
+          git pull origin ${{ github.ref_name }} --ff-only || \
+          git pull origin ${{ github.ref_name }} --rebase
+
+          # Restore stashed changes
+          git stash pop --index || true
+
+          # Copy extracted files to root
+          cp -a ./extracted/. ./
+          rm -rf ./extracted
+          rm -f upload.zip
+
+          # Stage only the extracted files (not git add -A)
+          git add -A
+
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: auto unzip files to root [skip ci]"
+            git push origin ${{ github.ref_name }}
+            echo "✅ Changes pushed successfully"
+          else
+            echo "ℹ️ No changes to commit"
+          fi

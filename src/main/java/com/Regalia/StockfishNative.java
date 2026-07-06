@@ -4465,7 +4465,7 @@ public class StockfishNative {
                 //   running; an explicit destroy() reaps it.
                 try {
                     Process p = Runtime.getRuntime().exec(
-                            new String[]{"/system/bin/chmod", "744", file.getAbsolutePath()});
+                            new String[]{"/system/bin/chmod", "700", file.getAbsolutePath()});
                     if (!p.waitFor(2, TimeUnit.SECONDS)) {
                         p.destroy();
                     }
@@ -4473,7 +4473,7 @@ public class StockfishNative {
                     try {
                         Process p = Runtime.getRuntime().exec(
                                 new String[]{"/system/bin/sh", "-c",
-                                        "chmod 744 " + file.getAbsolutePath()});
+                                        "chmod 700 " + file.getAbsolutePath()});
                         if (!p.waitFor(2, TimeUnit.SECONDS)) {
                             p.destroy();
                         }
