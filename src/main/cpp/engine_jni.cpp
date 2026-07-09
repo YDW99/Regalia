@@ -45,6 +45,7 @@
 #include <android/log.h>
 #include <unistd.h>
 #include <string.h>
+#include <errno.h>
 #include <sys/stat.h>
 #include <sys/resource.h>
 
@@ -101,5 +102,12 @@ Java_com_Regalia_StockfishNative_nativeChmod(JNIEnv *env, jclass, jstring jPath)
 extern "C" JNIEXPORT void JNICALL
 Java_com_Regalia_StockfishNative_nativeRenice(JNIEnv *env, jclass, jint pid, jint prio) {
     if (pid <= 0) return;
-    setpriority(PRIO_PROCESS, pid, prio);
+    // v1.1.2 Phase 67: Code review P0 fix - validate prio range and check setpriority() return value.
+    // PRIO_MIN/PRIO_MAX are typically -20/19 on Linux/Android. Clamping prevents undefined behavior
+    // if callers ever pass an out-of-range value (e.g., from a malformed configuration).
+    if (prio < PRIO_MIN) prio = PRIO_MIN;
+    if (prio > PRIO_MAX) prio = PRIO_MAX;
+    if (setpriority(PRIO_PROCESS, pid, prio) != 0) {
+        LOGE("setpriority failed for pid %d (prio=%d): %s", pid, prio, strerror(errno));
+    }
 }

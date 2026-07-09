@@ -695,7 +695,7 @@ let _engineInitAttempted=false;
 function _attemptEngineInit(){
   if(_engineInitAttempted)return;
   _engineInitAttempted=true;
-  console.log('Attempting engine init...');
+  // v1.1.2 Phase 70: removed debug console.log (production cleanup)
   // Request POST_NOTIFICATIONS permission on Android 13+ before starting engine.
   // This is required for the foreground service notification that keeps the engine alive.
   try{
@@ -706,7 +706,7 @@ function _attemptEngineInit(){
   try{
     if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.initEngine==='function'){
       AndroidBridge.initEngine();
-      console.log('Engine init called via AndroidBridge');
+      // v1.1.2 Phase 70: removed debug console.log (production cleanup)
     }else{
       console.warn('AndroidBridge.initEngine not available');
     }
@@ -757,7 +757,7 @@ let _emergencyFallbackTimerId=setTimeout(function(){
       lo.title=T('click_skip_loading');
       lo.addEventListener('click',function(e){
         if(!_loadingOverlayHiding){
-          console.log('User clicked loading overlay — skipping');
+          // v1.1.2 Phase 70: removed debug console.log (production cleanup)
           _hideLoadingOverlay();
           showToast(T('engine_skip'));
           render();
@@ -2107,13 +2107,20 @@ function uciToCoords(uci){
     const toPiece=gameState.board[tr][tc];
     if(fromPiece&&fromPiece.type==='king'&&toPiece&&toPiece.type==='rook'&&fromPiece.color===toPiece.color&&fr===tr){
       // King "captures" own rook on the same rank → Chess960 castling notation.
+      // v1.1.2 PHASE 71 (bug fix): Attach the castle flag to `result.to` so that
+      // downstream `_castleSide()` detects castling via its primary path
+      // (`mv.to.castle`) instead of falling back to the distance heuristic —
+      // which rejects 0-distance king moves (king already on g1/c1) and would
+      // null the king in `makeMv`. This fixes Chess960 SP-IDs where the king
+      // starts on its castling target square (e.g. king on g1, rook on h1 →
+      // UCI "g1h1" rewritten to "g1g1" with castle='kingside').
       if(tc>fc){
         // Rook is to the right of king → kingside castling, king ends on col 6.
         // Rewrite destination to (king's row, col 6) = g1/g8.
-        result.to={row:tr,col:6};
+        result.to={row:tr,col:6,castle:'kingside'};
       }else if(tc<fc){
         // Rook is to the left of king → queenside castling, king ends on col 2.
-        result.to={row:tr,col:2};
+        result.to={row:tr,col:2,castle:'queenside'};
       }
       // If tc === fc this is impossible (king and rook can't share a square).
     }
@@ -2123,7 +2130,7 @@ function uciToCoords(uci){
 
 // Callback: Engine init progress (real progress from StockfishNative.startEngine)
 function onInitProgress(pct, msg){
-  console.log('Engine init progress:', pct, msg);
+  // v1.1.2 Phase 70: removed debug console.log (production cleanup)
   if(!_loadingOverlayHiding){
     _updateLoadingStatus(msg||(T('loading_prefix')+pct+'%'), pct);
   }
@@ -2134,7 +2141,7 @@ function onInitProgress(pct, msg){
 // It gives JS a chance to reset stale state that would otherwise block
 // doAIMove()/requestEngineEval() when onEngineReady() fires after restart.
 function onEngineRestarting(){
-  console.log('Engine restarting (Java-side auto-recovery)');
+  // v1.1.2 Phase 70: removed debug console.log (production cleanup)
   _engineReady=false;
   if(isAIThinking){isAIThinking=false;_aiBarInfo='';}
   if(isHintLoading){isHintLoading=false;_hintBarInfo='';}
@@ -2166,7 +2173,7 @@ function onEngineRestarting(){
 
 // Callback: Engine ready
 function onEngineReady(){
-  console.log('Stockfish engine is ready');
+  // v1.1.2 Phase 70: removed debug console.log (production cleanup)
   _engineReady=true;
   // Reset restart counter on successful engine init
   if(window._engineRestartCount)window._engineRestartCount=0;
@@ -2235,7 +2242,7 @@ function onEngineReady(){
 
 // Callback: Best move received from engine (AI move)
 function onBestMove(uciMove){
-  console.log('onBestMove:',uciMove);
+  // v1.1.2 Phase 67: removed leftover console.log (Phase 66 cleanup miss; mirrors onHintMove).
   // v1.1.0 Phase 54: Update heartbeat timestamp — onBestMove is proof-of-life
   // from a healthy engine. Without this, long AI thinks (>120s) falsely
   // trigger engine restart via the heartbeat monitor.
@@ -2402,7 +2409,7 @@ function onBestMove(uciMove){
 // Converts UCI move to SAN (Standard Algebraic Notation) for FIDE PGN compliant display
 // Also displays the ponder move (engine's predicted reply) alongside the bestmove
 function onHintMove(uciMove){
-  console.log('onHintMove:',uciMove);
+  // v1.1.2 Phase 67: removed leftover console.log (Phase 66 cleanup miss).
   // v1.1.0 Phase 54: Update heartbeat timestamp — onHintMove is proof-of-life.
   _lastEngineCallbackTime=Date.now();
   // v1.0.8 PHASE 49: discard stale hint callbacks. If isHintLoading is already
@@ -2433,6 +2440,17 @@ function onHintMove(uciMove){
     return;
   }
   // Generate SAN notation for the bestmove (推荐走法)
+  // v1.1.2 Phase 67: P2 fix — verify coords are in-bounds before board access.
+  // Although uciToCoords() returns valid coords for well-formed UCI strings,
+  // a race condition (gameState mutated during async engine callback) could
+  // leave us with stale coords. Bounds-check defensively.
+  if(!inB(coords.from.row,coords.from.col)||!inB(coords.to.row,coords.to.col)){
+    _ponderMoveSAN='';_lastPonderMoveFromEngine=null;
+    _updateAIThinkDisplay();
+    hintText='🔦 '+T('recommend')+': '+uciMove;
+    render();
+    return;
+  }
   const piece=gameState.board[coords.from.row][coords.from.col];
   if(!piece){
     _ponderMoveSAN='';_lastPonderMoveFromEngine=null;

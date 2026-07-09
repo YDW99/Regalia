@@ -31,7 +31,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; worker-src blob:; connect-src https://tablebase.lichess.ovh; img-src data: file: blob:; frame-ancestors 'none'; base-uri 'self'">
-<title>Regalia v1.1.1</title>
+<title>Regalia v1.1.2</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 /* v1.0.8 PHASE 22: Light/Dark theme system following Material Design
@@ -397,7 +397,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
    in landscape it becomes the left column via media query. */
 .review-left{display:flex;flex-direction:column;align-items:center;gap:8px}
 .review-moves{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:4px;-webkit-overflow-scrolling:touch}
-.rmv-block{padding:10px 14px;border-radius:6px;background:var(--btn-bg);border:1px solid var(--border);cursor:pointer;transition:all .2s;display:flex;align-items:flex-start;gap:8px;font-family:system-ui,-apple-system,sans-serif}
+.rmv-block{padding:10px 14px;border-radius:6px;background:var(--btn-bg);border:1px solid var(--border);cursor:pointer;transition:all .2s;display:flex;align-items:flex-start;gap:8px;font-family:system-ui,-apple-system,sans-serif;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:manipulation}
 .rmv-block:hover{border-color:var(--accent);background:rgba(212,160,23,.08);box-shadow:none}
 .rmv-block.act{border-color:var(--accent2);background:rgba(212,160,23,.12);box-shadow:0 0 3px rgba(212,160,23,.08)}
 .rmv-num{font-size:.75rem;color:var(--muted);min-width:28px;font-weight:700;padding-top:2px}

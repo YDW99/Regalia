@@ -8,7 +8,7 @@
 -->
 # Privacy Policy — Regalia
 
-Regalia is a fully offline chess application. This policy applies to the Regalia Android application (current version: **v1.1.1**, versionCode 111).
+Regalia is a fully offline chess application. This policy applies to the Regalia Android application (current version: **v1.1.2**, versionCode 112).
 
 ## Data Collection
 
@@ -53,6 +53,21 @@ This data:
 - The PGN cache entries contain only chess game records (PGN format) — no personal or device-identifying information. They are never uploaded.
 - The eval cache (`eval_cache.json`) contains per-move Stockfish evaluation scores (centipawn values, mate distances, search depths, WDL probabilities) keyed by review step index. It contains no personal or position-identifying information beyond the chess evaluation data itself. (v1.0.7+: capped at 2000 entries via LRU eviction — the currently-viewed step is never evicted; eviction order is preserved across app restarts.)
 - The tag files contain user-defined tag strings (e.g., "opening", "tactics") for organizing PGN cache entries. They contain no personal or device-identifying information.
+
+### v1.1.2 Phase 72: review analyze-all "false completion" bug fix
+
+The Phase 72 change (2026.7.12) is a pure bug fix in `_reviewAnalyzeAdvance` (ui.js) — the review-mode "Analyze All" batch completion check. No new permissions, no new network access, no new data collection, no changes to how data is stored or transmitted. The fix only affects the in-memory `_reviewEvalCache` scan logic (when to stop the batch and report completion). Version unchanged: `versionCode=112`, `versionName="1.1.2"`.
+
+### v1.1.2 Phase 71: CSP relaxation + XSS hardening on stats page
+
+The stats page (`stats.html`) Content-Security-Policy was relaxed from a fixed SHA-256 hash to `'unsafe-inline'` (Phase 71, 2026.7.11) to unblock the 23 inline `onclick` event handlers used for move selection (the previous hash-based policy silently blocked them per CSP Level 2+). This is safe because:
+
+- `stats.html` is a local asset (`file:///android_asset/`) with no externally injected content.
+- All JavaScript in `stats.html` is inlined — no external script loading.
+- The `connect-src 'none'` directive remains, preventing any network fetch from the stats page.
+- As defense-in-depth, all unrecognized movetext/variation-text/notation characters are now HTML-escaped via `_escFEN` before insertion into `innerHTML`, neutralizing any `<img onerror>`, `<script>`, or similar payload that might be present in a user-pasted PGN. No user data leaves the device — the hardening is purely a local-rendering safety measure.
+
+No new permissions, no new network access, no new data collection. Version unchanged: `versionCode=112`, `versionName="1.1.2"`.
 
 ## Permissions
 

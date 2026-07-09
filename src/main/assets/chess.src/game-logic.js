@@ -41,6 +41,15 @@ let _lang='zh';
  */
 function secureRandomInt(max){
   if(max<=1)return 0;
+  // v1.1.2 PHASE 71 (robustness): guard against `crypto` being undefined (e.g.
+  // in non-browser test harnesses or if a future WebView config strips it).
+  // Mirrors the defensive pattern already used by randomSPID in chess960.js.
+  // Without this guard, `crypto.getRandomValues(buf)` would throw a
+  // ReferenceError, propagating to the caller (queryECOBookMove) and crashing
+  // the AI's opening-book lookup.
+  if(typeof crypto==='undefined'||!crypto||typeof crypto.getRandomValues!=='function'){
+    return Math.floor(Math.random()*max);
+  }
   const buf=new Uint32Array(1);
   const LIMIT=0xFFFFFFFF - (0xFFFFFFFF % max); // largest multiple of max <= 2^32-1
   for(let i=0;i<8;i++){
@@ -77,12 +86,12 @@ const _i18n={
 'no_moves':{zh:'暂无走法记录',en:'No moves yet'},
 'enter_review_hint':{zh:'点击进入复盘界面（可使用 📚 缓存管理器或 🗃️ 导入 PGN）',en:'Click to enter review mode (use 📚 Cache Manager or 🗃️ to import PGN)'},
 'stats':{zh:'统计',en:'Stats'},
-'stats_title':{zh:'📊统计数据',en:'📊Statistics'},
-'stats_export_html':{zh:'💾HTML',en:'💾HTML'},
-'stats_review':{zh:'🗂️复盘',en:'🗂️Review'},
+'stats_title':{zh:'📊 统计数据',en:'📊 Statistics'},
+'stats_export_html':{zh:'💾 HTML',en:'💾 HTML'},
+'stats_review':{zh:'🗂️ 复盘',en:'🗂️ Review'},
 'stats_save_html':{zh:'保存HTML统计文件',en:'Save HTML stats file'},
 'stats_saved':{zh:'HTML统计文件已保存',en:'HTML stats file saved'},
-'save_pgn_prompt':{zh:'💾是否保存PGN文件？',en:'💾 Save PGN file?'},
+'save_pgn_prompt':{zh:'💾 是否保存PGN文件？',en:'💾 Save PGN file?'},
 'save_pgn_yes':{zh:'是',en:'Yes'},
 'save_pgn_no':{zh:'否',en:'No'},
 'white_concedes_move':{zh:'白方让先（黑方先走）',en:'White concedes the move (black to move)'},
@@ -151,7 +160,7 @@ const _i18n={
 'draw':{zh:'和棋',en:'Draw'},
 'play_again':{zh:'再来一局',en:'Play Again'},
 'review':{zh:'复盘',en:'Review'},
-'variation_toggle':{zh:'💬变例',en:'💬Vars'},
+'variation_toggle':{zh:'💬 变例',en:'💬 Vars'},
 'tb_library':{zh:'Syzygy残局库',en:'Syzygy Endgame'},
 'tb_query':{zh:'🔭 点击查询残局库',en:'🔭 Query Endgame DB'},
 'tb_unavailable':{zh:'🚫 残局库: 暂不可用',en:'🚫 Endgame DB: Unavailable'},
@@ -257,6 +266,10 @@ const _i18n={
 'analyzing_all':{zh:'正在分析所有步骤...',en:'Analyzing all steps...'},
 'analysis_done':{zh:'分析完成! 共',en:'Analysis complete! Total'},
 'analyzing_progress':{zh:'正在分析...',en:'Analyzing...'},
+// v1.1.2 Phase 68 (Issue 30 P2): Long-press-to-prioritize during analyze-all
+'priority_eval_toast':{zh:'已优先分析此走法，批量分析将在该步完成后继续',en:'Prioritizing this move. Batch resumes after this step completes.'},
+'priority_eval_already_cached':{zh:'此走法已分析完成',en:'This move is already analyzed.'},
+'priority_eval_not_in_review':{zh:'长按优先分析仅在复盘模式可用',en:'Long-press priority is only available in review mode.'},
 'js_error':{zh:'JS错误',en:'JS error'},
 'promise_error':{zh:'Promise错误',en:'Promise error'},
 'engine_unavailable_hint':{zh:'引擎不可用',en:'Engine unavailable'},
@@ -320,7 +333,7 @@ const _i18n={
 'copy_review_pgn':{zh:'复制走法记录PGN',en:'Copy PGN'},
 'copy_review_fen':{zh:'复制当前复盘局面的FEN',en:'Copy FEN'},
 'return_game':{zh:'返回对局',en:'Return to Game'},
-'pgn_cache_manager':{zh:'📚PGN缓存管理',en:'📚PGN Cache Manager'},
+'pgn_cache_manager':{zh:'📚 PGN缓存管理',en:'📚 PGN Cache Manager'},
 'pgn_cache_btn':{zh:'PGN缓存',en:'PGN Cache'},
 'pgn_cache_empty':{zh:'暂无缓存的PGN对局。点击下方"保存当前PGN到缓存"按钮以创建。',en:'No cached PGN games yet. Click "Save current PGN to cache" below to create one.'},
 'pgn_cache_name_prompt':{zh:'请输入缓存名称（如：经典对局1）：',en:'Enter cache name (e.g.: Classic Game 1):'},
@@ -337,6 +350,12 @@ const _i18n={
 'pgn_cache_deleted':{zh:'已删除',en:'deleted'},
 'pgn_cache_imported':{zh:'已导入PGN缓存',en:'PGN cache imported'},
 'pgn_cache_save_failed':{zh:'保存失败',en:'Save failed'},
+// v1.1.2 Phase 67 Task 67.2: New i18n keys for incomplete-eval-coverage prompt
+'pgn_cache_partial_eval_title':{zh:'💾 部分步骤尚未评估',en:'💾 Some steps not yet analyzed'},
+'pgn_cache_partial_eval_msg':{zh:'当前复盘有 N1 步，但仅有 N2 步已评估。完整保存评估注释 [%eval] 需先执行"分析全部"。',en:'This review has N1 steps but only N2 are analyzed. Run "Analyze All" first to capture every [%eval] annotation.'},
+'pgn_cache_partial_eval_analyze_first':{zh:'先分析全部（推荐）',en:'Analyze All first (recommended)'},
+'pgn_cache_partial_eval_save_as_is':{zh:'仍要保存（注释将缺失）',en:'Save anyway (evals will be missing)'},
+'pgn_cache_analyze_then_save':{zh:'分析完成后将自动保存...',en:'Analysis will complete, then auto-save...'},
 'pgn_cache_import_failed':{zh:'导入失败：缓存不存在或为空',en:'Import failed: cache not found or empty'},
 // v1.0.4 Round-5 Rev20: Rename and Tag features
 'pgn_cache_rename':{zh:'重命名',en:'Rename'},
@@ -394,7 +413,7 @@ const _i18n={
 'elo_target':{zh:'Elo目标',en:'ELO Target'},
 'export_settings_btn':{zh:'📤 导出设置',en:'📤 Export'},
 'import_settings_btn':{zh:'📥 导入设置',en:'📥 Import'},
-'loading_title':{zh:'Regalia v1.1.1',en:'Regalia v1.1.1'},
+'loading_title':{zh:'Regalia v1.1.2',en:'Regalia v1.1.2'},
 'click_skip_loading':{zh:'点击跳过加载',en:'Click to skip loading'},
 'white_checkmate':{zh:'白方将杀获胜',en:'White wins by checkmate'},
 'black_checkmate':{zh:'黑方将杀获胜',en:'Black wins by checkmate'},
@@ -1820,6 +1839,26 @@ function _castleSide(mv,s){
       //   c1/g1 is always empty).
       const _destPiece=_st&&_st.board&&_st.board[mv.to.row]?_st.board[mv.to.row][mv.to.col]:null;
       const _destValid=!_destPiece||(_destPiece.type==='rook'&&_destPiece.color===mv.piece.color);
+      // v1.1.2 PHASE 71 (defense-in-depth): Chess960 0-distance castling.
+      // When the engine emits a UCI castling move for an SP-ID where the king
+      // already sits on its castling target (e.g. king on g1, kingside rook on
+      // h1 → UCI "g1h1" → uciToCoords rewrites to "g1g1"), the king's source
+      // and destination are the SAME square. The distance check below
+      // (`Math.abs(to.col-from.col)>=_minDist`) rejects this (0 < 1). The
+      // primary castle-flag path (`mv.to.castle`, set by uciToCoords in
+      // Phase 71) catches it before this fallback, but we add an explicit
+      // 0-distance branch here as defense-in-depth so that any future code
+      // path that produces a 0-distance king move with castling rights
+      // present is still correctly recognized as castling. The king itself
+      // occupies the destination square (so `_destValid` is false), which is
+      // why we bypass `_destValid` for this case — the king stays put and
+      // only the rook moves (handled by makeMv's `from===to` branch added in
+      // v1.0.7 PHASE 17).
+      const _isZeroDist=mv.from.col===mv.to.col;
+      if(_is960&&_isZeroDist&&_cr){
+        if(mv.to.col===6&&_cr[mv.piece.color+'Kingside'])return 'kingside';
+        if(mv.to.col===2&&_cr[mv.piece.color+'Queenside'])return 'queenside';
+      }
       if(mv.to.col===6&&Math.abs(mv.to.col-mv.from.col)>=_minDist){
         if(_destValid&&(!_is960||(_cr&&_cr[mv.piece.color+'Kingside'])))return 'kingside';
       }
@@ -1836,7 +1875,12 @@ function _castleSide(mv,s){
  * @param {Object} mv - Move object with from, to, piece, promotion, etc.
  * @returns {Object} New game state with the move applied
  */
-function makeMv(s,mv){const ns=cloneS(s);const{from,to,piece,promotion}=mv;if(!piece||!ns.board[from.row]||!ns.board[from.row][from.col])return ns;
+function makeMv(s,mv){const ns=cloneS(s);const{from,to,piece,promotion}=mv;
+// v1.1.2 Phase 67: Code review P1 fix - validate both from/to coords via inB() before any board access.
+// Previously only from.row was bounds-checked; an out-of-range to coord (e.g., from setup mode
+// or a malformed FEN-derived move) would silently throw on ns.board[to.row][to.col] and corrupt state.
+if(!piece||!inB(from.row,from.col)||!inB(to.row,to.col))return ns;
+if(!ns.board[from.row][from.col])return ns;
 // v1.0.6 FIX: Detect castling BEFORE moving the king. In Chess960, the
 // rook's source square may be the same as the king's destination square
 // (e.g. rook on g1, king castles kingside to g1). If we move the king
@@ -1900,7 +1944,13 @@ if(_cs&&from.row===to.row&&from.col===to.col){
   ns.board[to.row][to.col]=ns.board[from.row][from.col];
   ns.board[from.row][from.col]=null;
 }
-if(piece.type==='pawn'&&s.enPassantTarget&&to.row===s.enPassantTarget.row&&to.col===s.enPassantTarget.col){const cr=piece.color==='white'?to.row+1:to.row-1;const epP=ns.board[cr][to.col];if(epP&&epP.type==='pawn'&&epP.color!==piece.color){ns.board[cr][to.col]=null}else if(epP){console.error('[En Passant Bug] Target set but captured piece is not an opposing pawn:',epP)}}
+if(piece.type==='pawn'&&s.enPassantTarget&&to.row===s.enPassantTarget.row&&to.col===s.enPassantTarget.col){const cr=piece.color==='white'?to.row+1:to.row-1;
+// v1.1.2 PHASE 71 (robustness): bounds-check `cr` before indexing ns.board.
+//   In normal play `to.row` is always 2 (white capturing) or 5 (black capturing),
+//   so `cr` is 3 or 4 — always in-bounds. But if a corrupted FEN import or
+//   setup-mode misuse produces an out-of-range enPassantTarget, `cr` could be
+//   -1 or 8, and `ns.board[cr]` would be undefined → TypeError. Defense-in-depth.
+if(inB(cr,to.col)){const epP=ns.board[cr][to.col];if(epP&&epP.type==='pawn'&&epP.color!==piece.color){ns.board[cr][to.col]=null}else if(epP){console.error('[En Passant Bug] Target set but captured piece is not an opposing pawn:',epP)}}}
 // v1.0.6 FIX: Move the rook for castling. _savedRook was saved BEFORE the
 // king moved, so it's the actual rook piece (not the king that overwrote
 // it). Place it at the rook destination, clear the rook source.
@@ -1966,7 +2016,10 @@ if(capPiece)h^=zobrist.pieceTable[to.row*8+to.col][pieceZobristIdx(capPiece)];
 const placedPiece=promotion?{type:promotion,color:piece.color}:piece;
 h^=zobrist.pieceTable[to.row*8+to.col][pieceZobristIdx(placedPiece)];
 // 4. En passant capture: remove captured pawn (with defensive check)
-if(piece.type==='pawn'&&s.enPassantTarget&&to.row===s.enPassantTarget.row&&to.col===s.enPassantTarget.col){const cr=piece.color==='white'?to.row+1:to.row-1;const epPiece={type:'pawn',color:OPP_COLOR[piece.color]};const epP=s.board[cr][to.col];if(epP&&epP.type==='pawn'&&epP.color!==piece.color){h^=zobrist.pieceTable[cr*8+to.col][pieceZobristIdx(epPiece)]};}
+if(piece.type==='pawn'&&s.enPassantTarget&&to.row===s.enPassantTarget.row&&to.col===s.enPassantTarget.col){const cr=piece.color==='white'?to.row+1:to.row-1;const epPiece={type:'pawn',color:OPP_COLOR[piece.color]};
+// v1.1.2 PHASE 71 (robustness): bounds-check `cr` before indexing s.board
+//   (mirrors the makeMv/makeMvInPlace en-passant bounds checks above).
+if(inB(cr,to.col)){const epP=s.board[cr][to.col];if(epP&&epP.type==='pawn'&&epP.color!==piece.color){h^=zobrist.pieceTable[cr*8+to.col][pieceZobristIdx(epPiece)]};}}
 // 5. Castling: move rook (v1.0.6: use actual rook from/to cols for Chess960)
 if(_cs&&_rookFrom>=0&&_rookTo>=0){
   const rookIdx=pieceZobristIdx({type:'rook',color:piece.color});
@@ -2003,7 +2056,12 @@ return ns}
  */
 function makeMvInPlace(s,mv){
 const{from,to,piece,promotion}=mv;
-if(!piece||!s.board[from.row]||!s.board[from.row][from.col])return null;
+// v1.1.2 Phase 70: Apply the same P1 bounds check as makeMv (Phase 67) —
+//   validate both from/to coords via inB() before any board access.
+//   Previously only from.row was bounds-checked, allowing an out-of-range
+//   to coord to silently throw on s.board[to.row][to.col].
+if(!piece||!inB(from.row,from.col)||!inB(to.row,to.col))return null;
+if(!s.board[from.row]||!s.board[from.row][from.col])return null;
 // v1.0.6 FIX: Detect castling BEFORE moving the king (same fix as makeMv).
 // In Chess960, the rook's source may be the king's destination. Save the
 // rook before the king overwrites it.
@@ -2086,10 +2144,14 @@ if(_cs&&from.row===to.row&&from.col===to.col){
 // 2. En passant capture
 if(piece.type==='pawn'&&s.enPassantTarget&&to.row===s.enPassantTarget.row&&to.col===s.enPassantTarget.col){
 const cr=piece.color==='white'?to.row+1:to.row-1;
+// v1.1.2 PHASE 71 (robustness): bounds-check `cr` before indexing s.board
+//   (defense-in-depth — mirrors the makeMv fix above).
+if(inB(cr,to.col)){
 const epP=s.board[cr][to.col];
 if(epP&&epP.type==='pawn'&&epP.color!==piece.color){
 undo.epCaptured={r:cr,c:to.col,piece:{type:epP.type,color:epP.color}};
 s.board[cr][to.col]=null;
+}
 }
 }
 // 3. Castling: move rook (v1.0.6 FIX: use _savedRook saved before king move)
@@ -2396,7 +2458,13 @@ for(let r=0;r<8;r++)for(let c=0;c<8;c++){if(r===from.row&&c===from.col)continue;
 if(numSameTarget>0){if(numSameFile===0)n+=String.fromCharCode(97+from.col);else if(numSameRow===0)n+=(8-from.row);else n+=String.fromCharCode(97+from.col)+(8-from.row)}
 }
 if(piece.type==='pawn'&&isCap)n+=String.fromCharCode(97+from.col);if(isCap)n+='x';n+=posAlg(to);if(promotion)n+='='+(promotion==='knight'?'N':promotion[0].toUpperCase())}
-if(setupMode)return n;
+// v1.1.2 PHASE 71 (robustness): guard against `setupMode` being undefined
+// (e.g. if moveAlg is called before ui.js has declared the global). Other
+// call sites in this file use `typeof setupMode!=='undefined'&&setupMode`;
+// this site was missed and would throw a ReferenceError. Falling through to
+// the check/checkmate suffix computation is harmless for setup-mode moves
+// (the post-state would just be undefined → no suffix added).
+if(typeof setupMode!=='undefined'&&setupMode)return n;
 // Check/checkmate suffix: use actual post-move state when available (avoids manual board
 // construction bugs — missing posCount, stale castlingRights, etc.)
 const ps=postState;

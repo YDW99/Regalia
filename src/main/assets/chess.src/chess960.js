@@ -226,7 +226,12 @@ function randomSPID(){
  * @returns {string} Shredder castling string, e.g. "AHah" (sorted a->h) or "-"
  */
 function toShredderCastling(cr,board){
-  if(!cr)return '-';
+  // v1.1.2 PHASE 71 (robustness): guard against null/undefined board or
+  // missing rows. The loop below directly accesses board[7][c] and
+  // board[0][c]; without this guard a corrupted/empty board would throw a
+  // TypeError. parseShredderCastling (the inverse) already has this defensive
+  // pattern — we mirror it here for symmetry.
+  if(!cr||!board||!board[7]||!board[0])return '-';
   // Find white king + rooks on rank 1 (row 7), and black on rank 8 (row 0)
   let wKing=null,bKing=null;
   const wRooks=[],bRooks=[];

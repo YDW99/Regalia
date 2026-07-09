@@ -60,6 +60,10 @@ function normalizeTagValue(v){
  * @returns {string} multi-line tag-pair section (no trailing newline)
  */
 function sevenTagRoster(info){
+  // v1.1.2 PHASE 71 (robustness): guard against null/undefined info (a caller
+  // passing `null` would previously throw a TypeError at `info.result`).
+  // Defensive — callers should always pass an object, but the cost is trivial.
+  info=info||{};
   const r=info.result||'*';
   // Validate Result — only the 4 legal values are allowed
   const validResults=['1-0','0-1','1/2-1/2','*'];
@@ -530,7 +534,12 @@ function formatTimeControl(tc){
  * @returns {string} complete PGN text
  */
 function composePGN(params){
-  const tagPart=(params.tagPairs||[]).join('\n');
+  // v1.1.2 PHASE 71 (robustness): guard against null/undefined params (a
+  // caller passing `null` would previously throw a TypeError at
+  // `params.tagPairs`). Defensive — the AI-bridge caller always passes an
+  // object, but this protects against future regressions.
+  params=params||{};
+  const tagPart=((params.tagPairs)||[]).join('\n');
   // Build movetext
   const tokens=[];
   // v1.1.1 Phase 61: Insert a pre-move comment (if provided) BEFORE the first

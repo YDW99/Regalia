@@ -948,6 +948,81 @@ v1.0.8 Phase 41 (2026.7.1):
   - All Java files: No changes.
 
 
+v1.1.2 Phase 72 (2026.7.12, same-version revision):
+  - Version remains versionCode=112, versionName="1.1.2".
+  - No changes to Java files in Phase 72.
+  - License classification unchanged.
+
+v1.1.2 Phase 71 (2026.7.11, same-version revision):
+  - Version remains versionCode=112, versionName="1.1.2".
+  - StockfishNative.java (GPL v3): three fixes.
+    (1) readyOkLatchHolder race — JS binder thread (sendSetOptionAndWait) and
+        executor thread (startEngineInternal / engineGoInternal ucinewgame)
+        both wrote the single volatile field without synchronization; if they
+        overlapped, one latch was lost → 3s/10s timeout. Fix: dedicated
+        _readyOkLock serializes all readyOk set+wait operations.
+    (2) engineStop TOCTOU on _discardingPonderBestmove — engineStop set the
+        flag outside any lock while the reader thread's bestmove handler read
+        it outside any lock. Fix: dedicated _discardFlagLock makes the
+        check-and-clear atomic w.r.t. engineStop's set.
+    (3) importSettings cap bypass — direct field assignment with loose caps
+        (1024/1048576/10000) bypassed Phase 69 setter caps (2x CPU cores / 50%
+        JVM heap / 1000ms). Fix: apply Phase 69 cap formulas inline in
+        importSettings (direct assignment necessary because setters return
+        early when autoConfig is enabled — autoConfig is disabled later in
+        the import flow).
+  - StatsActivity.java (GPL v3): added deprecated shouldOverrideUrlLoading
+    overload (API 21-23 compat — only the deprecated overload fires on those
+    API levels; without it, external http(s) URLs would load INTO the WebView
+    bypassing the system browser). Added onRenderProcessGone handler so a
+    render-process crash on the stats page finishes the activity instead of
+    leaving a blank WebView. Shared URL-override logic extracted to
+    _handleUrlOverride(String) helper.
+  - Other Java files: No changes.
+  - License classification unchanged.
+
+v1.1.2 Phase 70 (2026.7.10, same-version revision):
+  - Version remains versionCode=112, versionName="1.1.2".
+  - No changes to Java files in Phase 70.
+  - License classification unchanged.
+
+v1.1.2 Phase 69 (2026.7.9, same-version revision):
+  - Version remains versionCode=112, versionName="1.1.2".
+  - StockfishNative.java (GPL v3, DroidFish-derived): UCI parameter validation
+    tightened per SF18 best-practices PDF guide:
+    * MultiPV cap 8 (was 500; PDF recommends 3-5 for review).
+    * Move Overhead cap 1000ms (was 5000ms; PDF recommends 10-30 local, 50-150 network).
+    * Hash cap 50% of JVM heap (was 32TB; PDF warns swapping kills performance).
+    * Threads cap 2x CPU cores (was 512; PDF warns thread contention reduces NPS).
+    * Added UCI_AnalyseMode=true during eval mode (applyEvalModeOptions) +
+      UCI_AnalyseMode=false restore for gameplay (restoreGameplayOptions).
+  - Other Java files: no changes.
+  - License classification unchanged.
+
+v1.1.2 Phase 68 (2026.7.8, same-version revision):
+  - Version remains versionCode=112, versionName="1.1.2".
+  - No changes to Java files in Phase 68. The engineStop() bridge method
+    (used by the new long-press priority feature) already exists in
+    StockfishNative.java from a prior phase. All Java files are unchanged.
+  - License classification unchanged.
+
+v1.1.2 Phase 67 (2026.7.7):
+  - Version bumped to versionCode=112, versionName="1.1.2".
+  - StockfishNative.java (GPL v3, DroidFish-derived):
+    * P2 fix: Long.parseLong() for nodes/nps wrapped in try-catch;
+      malformed/malicious engine output cannot crash info-line processing.
+    * Version bump: ENGINE_VERSION "v1.1.1" → "v1.1.2".
+  - MainActivity.java (AGPL v3):
+    * P3 fix: onDestroy() WebView cleanup adds stopLoading() as step 0
+      (before removeView) to prevent in-flight load callbacks firing on a
+      destroyed native peer (SIGSEGV on some OEM ROMs).
+    * Version bump: VERSION "v1.1.1" → "v1.1.2".
+  - ChessApp.java (AGPL v3): version bump in init log "v1.1.1" → "v1.1.2".
+  - ChessWebViewClient.java (AGPL v3): version comment "v1.1.1" → "v1.1.2".
+  - EngineService.java, StabilizationHelper.java, RootDetector.java,
+    TlsSecurityHelper.java, StatsActivity.java (all AGPL v3): no changes.
+  - No new Java files; no new third-party code introduced.
+
 v1.1.1 Phase 66 (2026.7.5, same-version revision):
   - Version remains versionCode=111, versionName="1.1.1".
   - src/main/assets/chess.src/ui.js: Bug fix — _savePGNYes now polls

@@ -173,6 +173,43 @@ v1.0.8 Phase 41 (2026.7.1):
   - No changes to cpp/ sources.
 
 
+v1.1.2 Phase 72 (2026.7.12, same-version revision):
+  - Version remains versionCode=112, versionName="1.1.2".
+  - No changes to cpp/ files in Phase 72.
+  - License classification unchanged.
+
+v1.1.2 Phase 71 (2026.7.11, same-version revision):
+  - Version remains versionCode=112, versionName="1.1.2".
+  - No changes to cpp/ files in Phase 71.
+  - License classification unchanged.
+
+v1.1.2 Phase 70 (2026.7.10, same-version revision):
+  - Version remains versionCode=112, versionName="1.1.2".
+  - No changes to cpp/ files in Phase 70.
+  - License classification unchanged.
+
+v1.1.2 Phase 69 (2026.7.9, same-version revision):
+  - Version remains versionCode=112, versionName="1.1.2".
+  - No changes to cpp/ files in Phase 69.
+  - License classification unchanged.
+
+v1.1.2 Phase 68 (2026.7.8, same-version revision):
+  - Version remains versionCode=112, versionName="1.1.2".
+  - No changes to cpp/ files in Phase 68. engine_jni.cpp and CMakeLists.txt
+    are unchanged from Phase 67.
+  - License classification unchanged.
+
+v1.1.2 Phase 67 (2026.7.7):
+  - Version bumped to versionCode=112, versionName="1.1.2".
+  - engine_jni.cpp (GPL v3, DroidFish-derived):
+    * P0 fix: nativeRenice() now checks setpriority() return value (logs
+      LOGE on failure with strerror(errno)) and validates prio against
+      PRIO_MIN/PRIO_MAX (clamps to range). Adds #include <errno.h>.
+    * License classification unchanged — engine_jni.cpp remains GPL v3
+      (DroidFish-derived from nativeutil.cpp chmod/reNice functions).
+  - CMakeLists.txt (AGPL v3): no changes.
+  - No new third-party code introduced.
+
 v1.1.1 Phase 66 (2026.7.5, same-version revision):
   - Version remains versionCode=111, versionName="1.1.1".
   - src/main/assets/chess.src/ui.js: Bug fix — _savePGNYes now polls

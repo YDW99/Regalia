@@ -233,6 +233,42 @@ v1.1.0 Phase 54 (2026.7.4):
   All changes in GPL-v3-licensed files.
 
 
+v1.1.2 Phase 72 (2026.7.12, same-version revision):
+  - Version remains versionCode=112, versionName="1.1.2".
+  - No changes to res/ files in Phase 72.
+  - License classification unchanged.
+
+v1.1.2 Phase 71 (2026.7.11, same-version revision):
+  - Version remains versionCode=112, versionName="1.1.2".
+  - No changes to res/ files in Phase 71.
+  - License classification unchanged.
+
+v1.1.2 Phase 70 (2026.7.10, same-version revision):
+  - Version remains versionCode=112, versionName="1.1.2".
+  - No changes to res/ files in Phase 70.
+  - License classification unchanged.
+
+v1.1.2 Phase 69 (2026.7.9, same-version revision):
+  - Version remains versionCode=112, versionName="1.1.2".
+  - No changes to res/ files in Phase 69.
+  - License classification unchanged.
+
+v1.1.2 Phase 68 (2026.7.8, same-version revision):
+  - Version remains versionCode=112, versionName="1.1.2".
+  - No changes to res/ files in Phase 68. strings.xml, xml/*.xml, mipmap-*/
+    are all unchanged.
+  - License classification unchanged.
+
+v1.1.2 Phase 67 (2026.7.7):
+  - Version bumped to versionCode=112, versionName="1.1.2".
+  - values/strings.xml (AGPL v3): app_name "Regalia v1.1.1" → "Regalia v1.1.2".
+  - xml/backup_rules.xml, xml/data_extraction_rules.xml, xml/network_security_config.xml
+    (all AGPL v3): no changes. backup_rules.xml continues to protect
+    SharedPreferences, WebView LocalStorage, eval_cache.json, and pgn_cache/
+    directory (the allowBackup="true" decision is intentional — preserves
+    user's PGN cache and engine settings across device transfers).
+  - No new resources introduced.
+
 v1.1.1 Phase 66 (2026.7.5, same-version revision):
   - Version remains versionCode=111, versionName="1.1.1".
   - src/main/assets/chess.src/ui.js: Bug fix — _savePGNYes now polls

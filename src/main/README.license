@@ -368,6 +368,144 @@ v1.0.8 Phase 41 (2026.7.1):
   - AndroidManifest.xml: No changes.
 
 
+v1.1.2 Phase 72 (2026.7.12, same-version revision):
+  - Version remains versionCode=112, versionName="1.1.2".
+  - Bug fix: _reviewAnalyzeAdvance (ui.js, GPL v3) — "false completion"
+    after long-press priority eval. The completion check now scans the
+    ENTIRE range [0.._lastStep] for uncached steps.
+  - AndroidManifest.xml: No changes.
+  - License classification: unchanged — no new third-party code introduced.
+
+v1.1.2 Phase 71 (2026.7.11, same-version revision):
+  - Version remains versionCode=112, versionName="1.1.2".
+  - Bug fix (user-reported): stats.html (GPL v3) CSP blocked inline onclick
+    handlers → move selection broken. Fix: script-src switched from
+    'sha256-<hash>' to 'unsafe-inline'. XSS hardening: movetext/variation/
+    firstMoves now escaped via _escFEN. Chess960 0-distance castling fix
+    across stats.html + ai-bridge.js + ui.js + game-logic.js.
+  - Concurrency fixes: StockfishNative.java (GPL v3) readyOkLatchHolder race
+    + engineStop TOCTOU + importSettings cap bypass.
+  - StatsActivity.java (GPL v3): shouldOverrideUrlLoading deprecated overload
+    + onRenderProcessGone.
+  - Low-risk robustness patches: secureRandomInt/moveAlg/en-passant inB
+    (game-logic.js, GPL v3); toShredderCastling board guard (chess960.js,
+    AGPL v3); sevenTagRoster/composePGN null guards (pgn-standard.js, GPL v3);
+    worker-pool.js 3-strike counter (GPL v3).
+  - AndroidManifest.xml: No changes.
+  - License classification: unchanged — no new third-party code introduced.
+
+v1.1.2 Phase 70 (2026.7.10, same-version revision):
+  - Version remains versionCode=112, versionName="1.1.2".
+  - Bug fix: _pgnCacheBuildSaveContext (ui.js, GPL v3) — force-rebuild now
+    checks _reviewEvalCache.size > 0 directly (not _inReview), so evals from
+    a previous review session are included even after exiting review mode.
+  - Robustness: makeMvInPlace (game-logic.js, GPL v3) — added inB() bounds
+    check on to-coordinates (same fix as makeMv in Phase 67).
+  - Redundancy cleanup: removed 7 debug console.log from ai-bridge.js (GPL v3)
+    + 1 from eco-data.js (AGPL v3).
+  - License classification: unchanged — no new third-party code introduced.
+
+v1.1.2 Phase 69 (2026.7.9, same-version revision):
+  - Version remains versionCode=112, versionName="1.1.2".
+  - Bug 1+2: _pgnCacheSaveCurrentImpl (ui.js, GPL v3) — decoupled coverage check
+    from _useOriginal; when _reviewEvalCache.size>0, force rebuild path so
+    [%eval] annotations are included. Refactored into _pgnCacheBuildSaveContext
+    + _pgnCacheBuildPGNText + _pgnCachePersistSave shared helpers.
+  - Bug 3: _pgnCacheOpInProgress guard (ui.js, GPL v3) on all PGN cache operations.
+  - Bug 4: build-chess.py (AGPL v3) auto-fixes stats.html CSP hash on every build.
+  - Web Worker: worker-pool.js (GPL v3) added onmessageerror handler (PDF §6.1).
+  - UCI: StockfishNative.java (GPL v3) tightened MultiPV/MoveOverhead/Hash/Threads
+    caps + added UCI_AnalyseMode (PDF guide).
+  - License classification: unchanged — no new third-party code introduced.
+
+v1.1.2 Phase 68 (2026.7.8, same-version revision):
+  - Version remains versionCode=112, versionName="1.1.2".
+  - Analyze All optimization (Issue 30): _reviewAnalyzeAdvance() (ui.js, GPL v3)
+    now calls render() only every 10 steps (was: every step); intermediate
+    steps use lightweight _refreshEvalTrendChart() + _updateReviewAnalyzeBtn().
+    The next _requestBatchEval call is wrapped in setTimeout(0) to yield the
+    main thread (prevents ANR on long games).
+  - Long-press priority feature (Issue 30): move-list rows (.rmv-block) now
+    have an oncontextmenu handler _prioritizeReviewStep (ui.js, GPL v3). Long-
+    pressing an uncached move during an active batch sends engineStop(),
+    pushes the step onto _reviewAnalyzePriorityQueue, fires Toast + haptic,
+    and the next _reviewAnalyzeAdvance evaluates the prioritized step first.
+    New state: _reviewAnalyzePriorityQueue (cleared on batch start/completion/
+    cancel/exitReview/_resetGameUIState). New i18n keys (zh/en) in
+    game-logic.js (AGPL v3): priority_eval_toast, priority_eval_already_cached,
+    priority_eval_not_in_review.
+  - CSS: .rmv-block (index.html.tpl, GPL v3) now has user-select:none +
+    -webkit-touch-callout:none + touch-action:manipulation to prevent text
+    selection during long-press.
+  - Stats nav buttons (stats.html, GPL v3): changed from min-width:38px to
+    flex:1 1 0 (uniform full-width, matches review-mode nav buttons).
+  - PGN cache partial-eval dialog (ui.js, GPL v3): title now has emoji prefix;
+    Android back-button dismisses via new _pgnPartialEvalDialogActive/
+    _pgnPartialEvalDialogDismiss globals checked in handleBackPress().
+  - License classification: unchanged — no new third-party code introduced.
+
+v1.1.2 Phase 67 (2026.7.7):
+  - Version bumped to versionCode=112, versionName="1.1.2".
+  - Emoticon-text spacing fix: audited all i18n keys and hardcoded HTML
+    titles; added a space between emoji and following text in 6 i18n keys
+    (stats_title, stats_export_html, stats_review, save_pgn_prompt,
+    variation_toggle, pgn_cache_manager — zh/en synchronized). Excluded
+    VS15-decorated chess piece symbols (used as inline icons).
+  - PGN cache [%eval] root-cause fix: _pgnCacheSaveCurrentImpl() now checks
+    _reviewEvalCache coverage before rebuild; if incomplete AND in review
+    mode AND not pure-import, shows a 3-option dialog (Analyze All first /
+    Save anyway / Cancel). _reviewAnalyzeAdvance() completion path triggers
+    deferred save via _pgnCacheSaveCurrentImpl_SkipCoverageCheck().
+    _resetGameUIState() and exitReview() clear _pendingPGNCacheSave.
+    5 new i18n keys (zh/en): pgn_cache_partial_eval_title/msg/
+    analyze_first/save_as_is, pgn_cache_analyze_then_save. New dialog
+    function _pgnCacheShowPartialEvalDialog().
+  - Code-review fixes (P0/P1/P2/GOV/MED):
+    * engine_jni.cpp nativeRenice() — added setpriority() return check +
+      PRIO_MIN/PRIO_MAX range clamp + #include <errno.h> (GPL v3).
+    * game-logic.js makeMv() — added inB() bounds check on to-coordinates
+      (P1, GPL v3).
+    * ai-bridge.js onHintMove() — added inB() bounds check on coords
+      (P2, GPL v3); removed leftover console.log in onBestMove and
+      onHintMove (Phase 66 cleanup miss).
+    * StockfishNative.java Long.parseLong() — wrapped in try-catch
+      (P2, GPL v3).
+    * MainActivity.java onDestroy() WebView cleanup — added stopLoading()
+      as step 0 (P3, AGPL v3).
+    * ChessApp.java init log version v1.1.1 → v1.1.2 (AGPL v3).
+    * ChessWebViewClient.java version comment v1.1.1 → v1.1.2 (AGPL v3).
+    * StockfishNative.java ENGINE_VERSION v1.1.1 → v1.1.2 (GPL v3).
+    * MainActivity.java VERSION v1.1.1 → v1.1.2 (AGPL v3).
+    * strings.xml app_name "Regalia v1.1.1" → "Regalia v1.1.2" (AGPL v3).
+    * game-logic.js loading_title v1.1.1 → v1.1.2 (GPL v3).
+    * index.html.tpl <title> v1.1.1 → v1.1.2 (GPL v3).
+    * ui.js header badge, about dialog, render-error page — version
+      v1.1.1 → v1.1.2 (3 places, GPL v3).
+    * build-chess.py — added __main__ guard + try/except around file I/O
+      + missing-placeholder detection + explicit UTF-8 encoding (MED-3,
+      AGPL v3).
+    * gradle.properties — removed hardcoded Ubuntu JVM path
+      org.gradle.java.home=/usr/lib/jvm/java-21-openjdk-amd64; JDK 21 now
+      resolved via JAVA_HOME or ~/.gradle/gradle.properties (GOV-2, AGPL v3).
+  - New files at project root: LICENSE (AGPL v3 full text — copy of
+    LICENSE-AGPL v3, GOV-1, AGPL v3); version.properties (VERSION_MAJOR=1,
+    VERSION_MINOR=1, VERSION_PATCH=2, VERSION_BUILD=112 — drives
+    build.gradle's computedVersionCode/Name, AGPL v3); keystore.properties
+    (release signing config — releaseKeystorePath/Password/KeyAlias/
+    KeyPassword, AGPL v3, .gitignore'd in production).
+  - License classification: unchanged — no new third-party code introduced.
+    All Phase 67 changes are in GPL v3 files (engine_jni.cpp, game-logic.js,
+    ai-bridge.js, pgn-standard.js, ui.js, index.html.tpl, chess.html,
+    StockfishNative.java, StatsActivity.java — DroidFish-derived) or AGPL
+    v3 files (chess960.js, eco-data.js, MainActivity.java, ChessApp.java,
+    ChessWebViewClient.java, EngineService.java, StabilizationHelper.java,
+    RootDetector.java, TlsSecurityHelper.java, CMakeLists.txt, build-chess.py,
+    AndroidManifest.xml, strings.xml, res/xml/*.xml, build.gradle,
+    settings.gradle, gradle.properties, version.properties,
+    keystore.properties, LICENSE, UBIQUITOUS_LANGUAGE.md, NOTICE, README.md,
+    BUILDING.md, PRIVACY.md, all README.license files, both
+    Manual/Regalia-v1.1.2-manual-{zh,en}.html — original).
+
 v1.1.1 Phase 66 (2026.7.5, same-version revision):
   - Version remains versionCode=111, versionName="1.1.1".
   - src/main/assets/chess.src/ui.js: Bug fix — _savePGNYes now polls

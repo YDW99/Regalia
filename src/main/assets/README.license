@@ -786,6 +786,125 @@ v1.0.8 Phase 47 (2026.7.1):
   - chess.html rebuilt (Phase 47 changes in ui.js, ai-bridge.js).
   - stats.html: No changes.
 
+v1.1.2 Phase 72 (2026.7.12, same-version revision):
+  - Version remains versionCode=112, versionName="1.1.2".
+  - chess.src/ui.js (GPL v3): _reviewAnalyzeAdvance — fixed "false
+    completion" bug after long-press priority eval. The completion check
+    now scans the ENTIRE range [0.._lastStep] for uncached steps (not just
+    forward from _reviewAnalyzeStep+1), so a priority eval that jumped
+    ahead no longer causes the batch to report completion while earlier
+    steps remain un-analyzed.
+  - chess.html: rebuilt from chess.src/.
+  - No new third-party code introduced.
+
+v1.1.2 Phase 71 (2026.7.11, same-version revision):
+  - Version remains versionCode=112, versionName="1.1.2".
+  - stats.html (GPL v3): CSP switched from 'sha256-<hash>' blob: to
+    'unsafe-inline' blob: (fixes the user-reported move-selection bug —
+    SHA-256 hash policy blocked all 23 inline onclick handlers per CSP L2+).
+    XSS hardening: renderPGNText movetext-walk fallback, variation-text walk,
+    and firstMoves opening-plies list now route unrecognized characters
+    through _escFEN before HTML insertion (neutralizes malicious PGN
+    payloads that would execute under 'unsafe-inline'). Chess960 0-distance
+    castling: executeMove adds _isZeroDistKingCastle branch (king stays put,
+    only rook moves); buildSAN accepts 0-distance as castling; board-mutation
+    block skips king move when from===to.
+  - chess.src/ai-bridge.js (GPL v3): uciToCoords attaches castle flag to
+    result.to when rewriting Chess960 castling.
+  - chess.src/ui.js (GPL v3): executeMove checks to.castle as primary source
+    for castle flag.
+  - chess.src/game-logic.js (GPL v3): _castleSide 0-distance branch +
+    secureRandomInt crypto guard + moveAlg typeof guard + en-passant inB()
+    bounds checks.
+  - chess.src/chess960.js (AGPL v3): toShredderCastling board guard.
+  - chess.src/pgn-standard.js (GPL v3): sevenTagRoster/composePGN null guards.
+  - chess.src/worker-pool.js (GPL v3): 3-strike transient-failure counter.
+  - chess.html: rebuilt from chess.src/.
+  - No new third-party code introduced.
+
+v1.1.2 Phase 70 (2026.7.10, same-version revision):
+  - Version remains versionCode=112, versionName="1.1.2".
+  - chess.src/ui.js (GPL v3): _pgnCacheBuildSaveContext edge case fix
+    (force-rebuild checks _reviewEvalCache.size > 0, not _inReview).
+  - chess.src/game-logic.js (GPL v3): makeMvInPlace inB() bounds check.
+  - chess.src/ai-bridge.js (GPL v3): 7 debug console.log removed.
+  - chess.src/eco-data.js (AGPL v3): 1 debug console.log removed.
+  - chess.html: rebuilt from chess.src/.
+  - No new third-party code introduced.
+
+v1.1.2 Phase 69 (2026.7.9, same-version revision):
+  - Version remains versionCode=112, versionName="1.1.2".
+  - chess.src/ui.js (GPL v3): Bug 1+2 (_pgnCacheBuildSaveContext decouples coverage
+    check from _useOriginal; force rebuild when _reviewEvalCache.size>0) + Bug 3
+    (_pgnCacheOpInProgress guard on all PGN cache ops).
+  - chess.src/worker-pool.js (GPL v3): added onmessageerror handler (PDF §6.1).
+  - stats.html (GPL v3): CSP hash auto-fixed by build-chess.py (Bug 4).
+  - chess.html: rebuilt from chess.src/.
+  - No new third-party code introduced.
+
+v1.1.2 Phase 68 (2026.7.8, same-version revision):
+  - Version remains versionCode=112, versionName="1.1.2".
+  - chess.src/ui.js (GPL v3, DroidFish-derived):
+    * Analyze All optimization (Issue 30): _reviewAnalyzeAdvance() now calls
+      render() only every 10 steps (was: every step); intermediate steps use
+      _refreshEvalTrendChart() + _updateReviewAnalyzeBtn(). Next _requestBatchEval
+      wrapped in setTimeout(0) for main-thread yield.
+    * Long-press priority: .rmv-block rows have oncontextmenu=_prioritizeReviewStep.
+      New state _reviewAnalyzePriorityQueue. New function _prioritizeReviewStep
+      sends engineStop(), pushes step, fires Toast + haptic, schedules advance.
+    * PGN cache partial-eval dialog: title has emoji prefix; back-button support
+      via _pgnPartialEvalDialogActive/_pgnPartialEvalDialogDismiss globals.
+  - chess.src/game-logic.js (AGPL v3, original):
+    * 3 new i18n keys (zh/en): priority_eval_toast, priority_eval_already_cached,
+      priority_eval_not_in_review.
+    * Partial-eval dialog title now has emoji prefix.
+  - chess.src/index.html.tpl (GPL v3, DroidFish-derived):
+    * .rmv-block CSS: added user-select:none + -webkit-touch-callout:none +
+      touch-action:manipulation.
+  - stats.html (GPL v3, DroidFish-derived):
+    * Nav buttons changed from min-width:38px to flex:1 1 0 (uniform full-width).
+  - chess.html: rebuilt from chess.src/.
+  - No new third-party code introduced.
+
+v1.1.2 Phase 67 (2026.7.7):
+  - Version bumped to versionCode=112, versionName="1.1.2".
+  - chess.src/game-logic.js (GPL v3, DroidFish-derived):
+    * P1 fix: makeMv() now validates BOTH from and to coordinates via inB()
+      before any board access. Previously only from.row was bounds-checked.
+    * Emoji-space fix: 6 i18n keys (stats_title, stats_export_html,
+      stats_review, save_pgn_prompt, variation_toggle, pgn_cache_manager)
+      now have a space between emoji and following text (zh/en sync).
+    * Version bump: loading_title "Regalia v1.1.1" → "Regalia v1.1.2".
+    * Added 5 new i18n keys (zh/en) for the partial-eval-coverage dialog:
+      pgn_cache_partial_eval_title, pgn_cache_partial_eval_msg (with
+      N1/N2 placeholders for total/cached step counts),
+      pgn_cache_partial_eval_analyze_first,
+      pgn_cache_partial_eval_save_as_is, pgn_cache_analyze_then_save.
+  - chess.src/ai-bridge.js (GPL v3, DroidFish-derived):
+    * P2 fix: onHintMove() adds inB() bounds check on coords.from/coords.to
+      before board access. Defensive against race conditions.
+    * Redundancy cleanup: removed leftover console.log in onBestMove and
+      onHintMove (Phase 66 cleanup miss).
+  - chess.src/ui.js (GPL v3, DroidFish-derived):
+    * Task 67.2 root-cause fix: _pgnCacheSaveCurrentImpl() now checks
+      _reviewEvalCache coverage before _buildPGNString; if incomplete AND
+      reviewMode AND not pure-import, calls new
+      _pgnCacheShowPartialEvalDialog() with 3 options (Analyze All first /
+      Save anyway / Cancel). _reviewAnalyzeAdvance() completion path
+      triggers deferred save via _pgnCacheSaveCurrentImpl_SkipCoverageCheck().
+      _resetGameUIState() and exitReview() clear _pendingPGNCacheSave.
+    * Version bump: header badge <span class="ver">v1.1.1</span> → "v1.1.2";
+      about dialog "v1.1.1" → "v1.1.2"; render-error page "v1.1.1" → "v1.1.2"
+      (3 places total).
+  - chess.src/index.html.tpl (GPL v3, DroidFish-derived):
+    * Version bump: <title>Regalia v1.1.1</title> → "v1.1.2".
+  - stats.html (GPL v3, DroidFish-derived):
+    * Emoji-space fix: <h1>📊统计数据</h1> → "📊 统计数据"; <title> tag;
+      button labels 💾HTML/🗃️<span>导入</span>/🗂️<span>复盘</span> now
+      have spaces; <h2> export dialog title; exported-HTML title strings.
+  - chess.html: rebuilt from chess.src/.
+  - No new third-party code introduced.
+
 v1.1.1 Phase 66 (2026.7.5, same-version revision):
   - Version remains versionCode=111, versionName="1.1.1".
   - src/main/assets/chess.src/ui.js: Bug fix — _savePGNYes now polls
