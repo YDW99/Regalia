@@ -2989,6 +2989,437 @@ v1.0.7 Phase 21 (bug fixes: portrait dialog positioning precision fix, landscape
   (game-logic.js, index.html.tpl per DroidFish derivation) and remain under
   GPL v3.
 
+v1.1.2 Phase 72 (review analyze-all "false completion" after long-press priority, 2026.7.12):
+  Version: versionCode=112, versionName="1.1.2" (same-version revision).
+
+  A. Bug fix: _reviewAnalyzeAdvance (ui.js) — the completion check previously
+     ONLY walked forward from _reviewAnalyzeStep+1. When the user long-pressed
+     a step to prioritize it (Phase 68 feature), the batch would evaluate that
+     single step, then the forward walk reached _lastStep and reported "all
+     analysis complete" — even though steps BEFORE the prioritized step were
+     still uncached. The user saw a "完成 N 步" toast with N < total, and the
+     batch ended prematurely, leaving earlier steps un-analyzed.
+     Root cause: the completion check was a forward-only walk; it never
+     scanned steps 0.._reviewAnalyzeStep-1 for uncached entries.
+     Fix: when the forward walk finds nothing, scan the ENTIRE range
+     [0.._lastStep] to find the lowest uncached step and resume the batch
+     from there. The forward-only fast-path is preserved for the common
+     (no-priority) case; the full-range scan is the source of truth for
+     completion.
+
+  License classification: unchanged — the Phase 72 change is in ui.js
+    (GPL v3, DroidFish-derived).
+
+  Files modified: ui.js (false-completion bug fix), chess.html (rebuilt),
+    BUILDING.md (Phase 72 section), PRIVACY.md (Phase 72 note), NOTICE (this
+    entry), README.md (Phase 72 changelog), all 7 README.license files,
+    Manual/Regalia-v1.1.2-manual-{zh,en}.html (Phase 72 changelog).
+
+v1.1.2 Phase 71 (stats-page move-selection bug fix + first-principles code review, 2026.7.11):
+  Version: versionCode=112, versionName="1.1.2" (same-version revision).
+
+  A. Bug fix (user-reported): stats.html CSP blocked inline onclick handlers →
+     clicking a PGN move in the statistics page did nothing. Root cause: the
+     SHA-256-hash-based script-src policy silently blocked all 23 inline event
+     handlers per CSP Level 2+. Fix: switch script-src from 'sha256-<hash>'
+     blob: to 'unsafe-inline' blob: (safe — stats.html is a local asset with
+     no external content and all JS is inlined).
+
+  B. XSS hardening (consequence of the CSP change): stats.html renderPGNText
+     / variation-text walk / firstMoves now route unrecognized characters
+     through _escFEN before HTML insertion. Without this, a malicious PGN
+     movetext payload like <img src=x onerror="..."> would execute under
+     'unsafe-inline' with full AndroidBridge access.
+
+  C. Chess960 0-distance castling fix (P1 bug, main app + stats page): for
+     SP-IDs where the king already sits on its castling target (e.g. king on
+     g1, rook on h1 → UCI g1h1), uciToCoords rewrote the destination to col 6,
+     producing a 0-distance "move" g1g1 that _castleSide rejected → king
+     nulled. Fix: uciToCoords (ai-bridge.js) attaches castle flag to result.to;
+     executeMove (ui.js) checks to.castle as primary source; _castleSide
+     (game-logic.js) adds a 0-distance branch; stats.html mirrors all three
+     fixes in its independent code.
+
+  D. Concurrency fix: readyOkLatchHolder race (StockfishNative.java) — JS
+     binder thread (sendSetOptionAndWait) and executor thread
+     (startEngineInternal / engineGoInternal ucinewgame) both wrote the single
+     volatile field without synchronization. Fix: dedicated _readyOkLock
+     serializes all readyOk set+wait operations.
+
+  E. Concurrency fix: engineStop TOCTOU on _discardingPonderBestmove
+     (StockfishNative.java) — engineStop set the flag outside any lock while
+     the reader thread's bestmove handler read it outside any lock. Fix:
+     dedicated _discardFlagLock makes the check-and-clear atomic.
+
+  F. importSettings cap bypass fix (StockfishNative.java): apply the Phase 69
+     cap formulas (2x CPU cores / 50% JVM heap / 1000ms) inline in
+     importSettings instead of the loose 1024/1048576/10000 caps.
+
+  G. StatsActivity robustness: added deprecated shouldOverrideUrlLoading
+     overload (API 21-23 compat) + onRenderProcessGone handler.
+
+  H. Low-risk robustness patches: secureRandomInt crypto guard (game-logic.js);
+     moveAlg setupMode typeof guard (game-logic.js); toShredderCastling board
+     guard (chess960.js); sevenTagRoster/composePGN null guards
+     (pgn-standard.js); worker-pool.js 3-strike transient-failure counter;
+     makeMv/makeMvInPlace en-passant inB() bounds checks (game-logic.js).
+
+  License classification: unchanged — all Phase 71 changes are in GPL v3
+    files (stats.html, ai-bridge.js, ui.js, game-logic.js, pgn-standard.js,
+    worker-pool.js, chess.html, StockfishNative.java, StatsActivity.java —
+    DroidFish-derived or matching stats.html) or AGPL v3 files (chess960.js,
+    BUILDING.md, PRIVACY.md, NOTICE, README.md, README.license files, manuals
+    — original).
+
+  Files modified: stats.html (CSP + XSS + Chess960 0-distance), ai-bridge.js
+    (uciToCoords castle flag), ui.js (executeMove to.castle primary),
+    game-logic.js (_castleSide 0-distance + secureRandomInt + moveAlg typeof
+    + en-passant inB), chess960.js (toShredderCastling board guard),
+    pgn-standard.js (sevenTagRoster/composePGN null guards), worker-pool.js
+    (3-strike counter), chess.html (rebuilt), StockfishNative.java
+    (readyOkLock + _discardFlagLock + importSettings caps), StatsActivity.java
+    (shouldOverrideUrlLoading + onRenderProcessGone), BUILDING.md (Phase 71
+    section), PRIVACY.md (Phase 71 note), NOTICE (this entry), README.md
+    (Phase 71 changelog), all 7 README.license files, Manual/Regalia-v1.1.2-
+    manual-{zh,en}.html (Phase 71 changelog).
+
+v1.1.2 Phase 70 (first-principles code review cleanup, 2026.7.10):
+  Version: versionCode=112, versionName="1.1.2" (same-version revision).
+
+  A. Bug fix (edge case): _pgnCacheBuildSaveContext (ui.js) — when the user
+     exits review mode before saving, _reviewEvalCache still has entries
+     (persisted until _resetGameUIState), but the Phase 69 force-rebuild was
+     gated on _inReview (which is now false). This meant the pure-import path
+     would save _cachedOriginalPGN verbatim, losing [%eval] annotations.
+     Fix: the force-rebuild now checks _reviewEvalCache.size > 0 directly
+     (not _inReview), so evals from a previous review session are always
+     included. The coverage dialog still requires _inReview (the "Analyze All
+     first" option needs review mode).
+
+  B. Robustness: makeMvInPlace (game-logic.js) — added the same inB() bounds
+     check on to-coordinates that makeMv got in Phase 67. Previously only
+     from.row was bounds-checked, allowing an out-of-range to coord to silently
+     throw on s.board[to.row][to.col].
+
+  C. Redundancy cleanup: removed 7 debug console.log calls from ai-bridge.js
+     (engine init/restart/ready callbacks) and 1 from eco-data.js (IndexedDB
+     cache load). These were debug leftovers that polluted production logs.
+     Replaced with comments documenting the removal.
+
+  License classification: unchanged — all Phase 70 changes are in GPL v3
+    files (ui.js, game-logic.js, ai-bridge.js, eco-data.js, chess.html —
+    DroidFish-derived) or AGPL v3 files (BUILDING.md, NOTICE, README.license
+    files — original).
+
+  Files modified: ui.js (edge case bug fix), game-logic.js (makeMvInPlace
+    bounds check), ai-bridge.js (console.log cleanup), eco-data.js (console.log
+    cleanup), chess.html (rebuilt), BUILDING.md (Phase 70 section), NOTICE
+    (this entry), all 7 README.license files, Manual/Regalia-v1.1.2-manual-
+    {zh,en}.html (Phase 70 changelog).
+
+v1.1.2 Phase 69 (4 bug fixes + Web Worker robustness + UCI optimization, 2026.7.9):
+  Version: versionCode=112, versionName="1.1.2" (same-version revision).
+
+  A. Bug 1+2: PGN cache partial-eval dialog never appeared + [%eval] lost after reload.
+     Root cause: _pgnCacheSaveCurrentImpl (ui.js) gated the coverage check on
+     !_useOriginal, but _useOriginal is almost always true for imported PGNs
+     (because importPGN sets time:null on all moves). This meant:
+     - Bug 1: the partial-eval dialog never appeared (coverage check skipped).
+     - Bug 2: the pure-import path saved _cachedOriginalPGN verbatim, ignoring
+       _reviewEvalCache (so [%eval] annotations from Analyze All were lost).
+     Fix: decouple the coverage check from _useOriginal. When _reviewEvalCache.size
+     > 0, force the rebuild path (_buildPGNString) so [%eval] annotations are
+     included. The pure-import (_cachedOriginalPGN) path is now only used when
+     there are NO cached evals at all (truly un-analyzed import). Refactored
+     into shared helpers: _pgnCacheBuildSaveContext, _pgnCacheBuildPGNText,
+     _pgnCachePersistSave (used by both _pgnCacheSaveCurrentImpl and
+     _pgnCacheSaveCurrentImpl_SkipCoverageCheck for identical PGN-building logic).
+
+  B. Bug 3: PGN cache manager race conditions.
+     Added _pgnCacheOpInProgress guard to all PGN cache operations (save/import/
+     delete/rename/tags). Prevents re-entrant operations from corrupting state.
+     importPGNAsync().then() checks _pgnCacheOpInProgress to ensure the operation
+     wasn't superseded. Guard is reset on: _pgnCachePersistSave completion,
+     _pgnCacheShowPartialEvalDialog dismiss, _pgnCacheClose, _resetGameUIState.
+
+  C. Bug 4: stats.html CSP SHA-256 hash mismatch.
+     Phase 68 modified the nav button code in stats.html, changing the inline
+     script's content. The CSP 'sha256-...' hash in the <meta> tag was NOT
+     updated, so the browser refused to execute the script -> stats page blank.
+     Fix: build-chess.py now auto-computes and updates the stats.html CSP hash
+     on every build (prevents recurrence). Also added a standalone
+     fix_stats_csp_hash.py script for manual fixes.
+
+  D. Web Worker robustness (per "Web Worker 设计与优化指南" PDF §6.1).
+     worker-pool.js: added onmessageerror handler on each worker. Previously,
+     structured-clone serialization failures would silently leave the task's
+     promise hanging until the 30s timeout. Now the task rejects immediately
+     and the worker is recycled (terminate + replace). The handler mirrors
+     the existing onerror handler's task-rejection + worker-recycle logic.
+
+  E. UCI optimization (per "stockfish18的UCI优化指南" PDF).
+     StockfishNative.java: tightened UCI parameter validation per SF18 best
+     practices:
+     - MultiPV cap 8 (was 500; PDF recommends 3-5 for review analysis).
+     - Move Overhead cap 1000ms (was 5000ms; PDF recommends 10-30 local,
+       50-150 network).
+     - Hash cap 50% of JVM heap (was 33554432 MB = 32TB; PDF warns exceeding
+       50% of RAM causes virtual memory swapping, drastically slowing engine).
+     - Threads cap 2x CPU cores (was 512; PDF warns exceeding physical core
+       count causes thread contention, reducing NPS).
+     - Added UCI_AnalyseMode=true during eval mode (applyEvalModeOptions) +
+       UCI_AnalyseMode=false restore for gameplay (restoreGameplayOptions).
+       PDF §3.3: in analysis mode, the engine searches more thoroughly,
+       exploring suboptimal moves for comprehensive variations.
+
+  License classification: unchanged — all Phase 69 changes are in GPL v3
+    files (ui.js, worker-pool.js, chess.html, stats.html, StockfishNative.java,
+    build-chess.py — DroidFish-derived) or AGPL v3 files (game-logic.js for
+    i18n, BUILDING.md, NOTICE, README.license files — original).
+
+  Files modified: ui.js (Bug 1+2+3), worker-pool.js (Web Worker), build-chess.py
+    (Bug 4 auto-fix + CSP hash), StockfishNative.java (UCI optimization),
+    stats.html (CSP hash auto-fixed by build-chess.py), chess.html (rebuilt),
+    BUILDING.md (Phase 69 section), NOTICE (this entry), all 7 README.license
+    files, Manual/Regalia-v1.1.2-manual-{zh,en}.html (Phase 69 changelog).
+
+v1.1.2 Phase 68 (Analyze All optimization + long-press priority + UI polish, 2026.7.8):
+  Version: versionCode=112, versionName="1.1.2" (same-version revision).
+
+  A. Analyze All optimization (Issue 30 root-cause fix):
+     - _reviewAnalyzeAdvance() (ui.js) now calls render() only every 10 steps
+       (was: every step). Intermediate steps use lightweight
+       _refreshEvalTrendChart() + _updateReviewAnalyzeBtn() to keep the chart
+       and button label in sync without rebuilding the full DOM. This fixes
+       Issue 30 root cause A (WebView memory pressure from per-step render()
+       on 100+ step games).
+     - The next _requestBatchEval call is wrapped in setTimeout(0) to yield
+       the JS main thread between batch steps. This lets the UI process
+       pending touch events / scroll / paint, preventing ANR triggers on
+       aggressive OEM ROMs (Issue 30 root cause B/C mitigation).
+     - Eval cache skip: the while loop in _reviewAnalyzeAdvance already skips
+       cached steps (Phase 59); Phase 68 documents this as the "breakpoint
+       resume" mechanism — an interrupted batch resumes from the next
+       uncached step, never re-evaluating a cached step.
+
+  B. Long-press to prioritize a step during Analyze All (new feature):
+     - Move-list rows (.rmv-block) now have an oncontextmenu handler
+       (_prioritizeReviewStep) that fires on Android long-press.
+     - When long-pressed during an active batch:
+       1. Validates the step is uncached and the batch is active.
+       2. Pushes the step onto _reviewAnalyzePriorityQueue (deduplicated).
+       3. Aborts the current in-flight batch eval via engineStop().
+       4. Bumps _reviewAnalyzeGen + clears _evalRequestBatchGen so the
+          in-flight onEngineEval callback takes the user-nav stale path
+          (caches the partial result for the original step — NOT lost).
+       5. Fires a Toast notification + HapticManager.fire('BUTTON_PRESS').
+       6. Schedules _reviewAnalyzeAdvance after 150ms; the advance function
+          checks the priority queue first and evaluates the prioritized step
+          before continuing the normal sequence.
+     - If no batch is active, falls back to navigating + single eval.
+     - New state: _reviewAnalyzePriorityQueue (array, cleared on batch
+       start/completion/cancel/exitReview/_resetGameUIState).
+     - New i18n keys (zh/en): priority_eval_toast, priority_eval_already_cached,
+       priority_eval_not_in_review.
+     - CSS: .rmv-block now has user-select:none + -webkit-touch-callout:none
+       + touch-action:manipulation to prevent text selection / callout during
+       long-press.
+
+  C. Stats nav buttons uniform width:
+     - stats.html nav buttons now use flex:1 1 0 (full-width uniform)
+       instead of min-width:38px (which left gaps on wide screens).
+       Matches the review-mode nav buttons (.review-nav .btn{flex:1 1 0}).
+     - The label span is now on its own line above the button row so the
+       buttons can stretch to full width without the label squeezing them.
+
+  D. PGN cache partial-eval dialog polish:
+     - Title now has emoji prefix (Phase 67 had no emoji; Phase 68 adds it
+       for consistency with the export annotation dialog's emoji).
+     - Android back-button now dismisses the dialog (= Cancel) via new
+       _pgnPartialEvalDialogActive / _pgnPartialEvalDialogDismiss globals
+       checked in handleBackPress(). Matches the pattern used by
+       _pgnExportDialogActive / _pgnExportDialogDismiss.
+     - Haptic feedback (HapticManager.fire('BUTTON_PRESS')) was already
+       present on all buttons (Phase 67); Phase 68 verifies it's consistent
+       with the export annotation dialog's button haptics.
+
+  E. Code-review-driven cleanup:
+     - _prioritizeReviewStep function comment was streamlined (removed
+       design-rationale stream-of-consciousness, kept the concise behavioral
+       spec).
+     - No new files at project root; no build-system changes; no new
+       third-party code introduced.
+
+  License classification: unchanged — all Phase 68 changes are in GPL v3
+    files (ui.js, index.html.tpl, chess.html, stats.html — DroidFish-derived)
+    or AGPL v3 files (game-logic.js for new i18n keys — original).
+
+  Files modified: ui.js (Analyze All opt + long-press handler + priority
+    queue + dialog back-button + CSS .rmv-block), index.html.tpl (.rmv-block
+    CSS), game-logic.js (3 new i18n keys + emoji in partial-eval title),
+    stats.html (nav buttons uniform width), chess.html (rebuilt), BUILDING.md
+    (Phase 68 section).
+
+v1.1.2 Phase 67 (emoji-space formatting fix + PGN cache [%eval] root-cause fix + version bump + comprehensive code review report implementation, 2026.7.7):
+  Version: versionCode=112, versionName="1.1.2".
+
+  A. Unified emoji-text spacing in window titles:
+     - Audited all i18n keys and hardcoded HTML titles; found 6 categories of
+       titles/button labels missing a space between the emoji and the
+       following text (e.g. "📚PGN Cache Manager" should be "📚 PGN Cache
+       Manager").
+     - Fixed i18n keys (zh/en synchronized): stats_title, stats_export_html,
+       stats_review, save_pgn_prompt, variation_toggle, pgn_cache_manager.
+     - Fixed hardcoded emoji+text combinations in stats.html: <h1> title,
+       <h2> export dialog title, <title> tag, button labels (💾HTML → 💾 HTML,
+       🗃️<span>导入</span> → 🗃️ <span>导入</span>, 🗃️<span>复盘</span> →
+       🗃️ <span>复盘</span>), and exported-HTML title strings.
+     - Excluded VS15-decorated chess piece symbols (♔/♕/♖/♗/♘/♙/♚/♛/♜/♝/♞/♟
+       with U+FE0E text presentation selector) — used as inline icons, no
+       space needed.
+
+  B. Root-cause fix for PGN cache save losing [%eval] annotations:
+     - Symptom: In review mode, opening the PGN cache manager and saving with
+       "Yes, include special annotations" produced a PGN missing some
+       [%eval] annotations.
+     - Root cause: _buildPGNString(true, true) can only emit [%eval] for
+       steps that already have an entry in _reviewEvalCache. If the user
+       has not navigated to every step OR run "Analyze All", some steps
+       lack cached evals, and the corresponding [%eval] annotations are
+       missing from the saved PGN.
+     - Fix: _pgnCacheSaveCurrentImpl() now checks _reviewEvalCache coverage
+       before calling _buildPGNString. If incomplete AND reviewMode is
+       active AND not on the pure-import path, a new dialog shows total
+       vs. cached step counts and offers three options:
+       1. "Analyze All first (recommended)" — sets _pendingPGNCacheSave
+          flag, calls reviewAnalyzeAll(), auto-saves on completion.
+       2. "Save anyway (evals will be missing)" — legacy behavior, saves
+          partial PGN.
+       3. "Cancel" — aborts.
+     - The _reviewAnalyzeAdvance() completion path checks _pendingPGNCacheSave
+       and triggers the deferred save via _pgnCacheSaveCurrentImpl_SkipCoverageCheck().
+     - _resetGameUIState() and exitReview() clear _pendingPGNCacheSave to
+       prevent stale saves from firing after the user exits review mode.
+     - Added 5 new i18n keys (zh/en): pgn_cache_partial_eval_title,
+       pgn_cache_partial_eval_msg, pgn_cache_partial_eval_analyze_first,
+       pgn_cache_partial_eval_save_as_is, pgn_cache_analyze_then_save.
+     - The pgn_cache_partial_eval_msg template uses N1/N2 placeholders for
+       total/cached step counts (replaced at runtime).
+
+  C. Version bump: versionCode 111 → 112, versionName "1.1.1" → "1.1.2".
+     Updated 11 source code references:
+     - src/main/res/values/strings.xml: app_name "Regalia v1.1.1" → "v1.1.2"
+     - MainActivity.java: VERSION = "v1.1.1" → "v1.1.2"
+     - StockfishNative.java: ENGINE_VERSION = "v1.1.1" → "v1.1.2"
+     - ChessApp.java: init log "v1.1.1" → "v1.1.2"
+     - ChessWebViewClient.java: version comment "v1.1.1" → "v1.1.2"
+     - game-logic.js: loading_title "Regalia v1.1.1" → "v1.1.2"
+     - index.html.tpl: <title>Regalia v1.1.1</title> → "v1.1.2"
+     - ui.js: header badge <span class="ver">v1.1.1</span> → "v1.1.2"
+     - ui.js: about dialog "v1.1.1" → "v1.1.2"
+     - ui.js: render-error page "v1.1.1" → "v1.1.2"
+     - build.gradle reads ../version.properties (VERSION_BUILD=112,
+       VERSION_PATCH=2) — created alongside this release.
+
+  D. Comprehensive code review report — reasonable suggestions implemented:
+     - P0: engine_jni.cpp nativeRenice() now checks setpriority() return
+       value (logs LOGE on failure) and validates prio against PRIO_MIN/
+       PRIO_MAX (clamp to range). Adds #include <errno.h>.
+     - P1: game-logic.js makeMv() now validates BOTH from and to coordinates
+       via inB() before any board access. Previously only from.row was
+       bounds-checked, allowing an out-of-range to coord (e.g., from setup
+       mode or malformed FEN-derived move) to silently throw on
+       ns.board[to.row][to.col].
+     - P2: ai-bridge.js onHintMove() adds inB() bounds check on
+       coords.from/coords.to before board access. Defensive against race
+       conditions where gameState mutates during async engine callbacks.
+     - P2: StockfishNative.java Long.parseLong() for nodes/nps wrapped in
+       try-catch — malformed/malicious engine output cannot crash
+       info-line processing.
+     - P2: MainActivity.onDestroy() WebView cleanup adds stopLoading() as
+       step 0 (before removeView). Prevents in-flight page/resource load
+       from dispatching a callback to a destroyed native peer, which on
+       certain OEM ROMs (HyperOS, MIUI) can SIGSEGV.
+     - GOV-1: Added standard LICENSE file at project root (AGPL v3 full
+       text, copy of LICENSE-AGPL v3) so GitHub/F-Droid auto-detect the
+       license. The existing LICENSE-AGPL v3 / LICENSE-GPL v3 / LICENSE-
+       Apache v2.0 files are retained as sub-license references.
+     - GOV-2: gradle.properties no longer hardcodes
+       org.gradle.java.home=/usr/lib/jvm/java-21-openjdk-amd64 (Ubuntu-
+       specific path that broke cross-platform builds). JDK 21 is now
+       resolved via JAVA_HOME env var (CI) or auto-detection. Local
+       developers can pin a specific JDK via ~/.gradle/gradle.properties
+       (per-machine, never committed).
+     - MED-3: build-chess.py wraps all file I/O in try/except for clearer
+       diagnostics, adds __main__ guard, missing-placeholder detection,
+       and explicit UTF-8 encoding.
+     - Redundancy cleanup: removed 2 leftover console.log calls missed by
+       Phase 66 (onBestMove in ai-bridge.js, onHintMove in ai-bridge.js).
+     - Skipped (justified):
+       * HIGH-1/HIGH-2 (JS bridge sandbox validation, UCI command
+         whitelist): too invasive for incremental release, requires
+         careful design.
+       * MED-1 (allowBackup="false"): would break user backup functionality
+         (the carefully configured backup_rules.xml + data_extraction_rules
+         protect PGN cache, eval cache, engine settings, localStorage).
+         The "sensitive data" is just chess history, not PII.
+       * MED-2 (requestLegacyExternalStorage removal): may affect Android
+         10 users; SAF works without it but legacy paths might be used.
+       * P0-1 through P0-4 architectural refactoring (God Module splits,
+         message bus, global state store): multi-week effort, deferred to
+         next major version.
+       * P2-1 Zobrist enPassant row validation: valid but very low risk
+         (FEN parser already validates).
+       * P3-x low-priority improvements.
+
+  E. Documentation sync:
+     - BUILDING.md: title v1.1.1 → v1.1.2, added Phase 67 section
+       describing gradle.properties GOV-2 change, version.properties and
+       keystore.properties new files, build-chess.py MED-3 changes,
+       standard LICENSE GOV-1 addition.
+     - PRIVACY.md: version reference v1.1.1/versionCode 111 → v1.1.2/112.
+     - README.md: Phase 67 entry added to changelog, version references
+       updated, standard LICENSE file noted in directory tree.
+     - All 7 README.license files: Phase 67 entry added (src/main/,
+       src/main/assets/, src/main/assets/chess.src/, src/main/cpp/,
+       src/main/java/com/Regalia/, src/main/res/, Manual/).
+     - NOTICE: this entry.
+     - Manual/Regalia-v1.1.2-manual-{zh,en}.html: new manuals (renamed
+       from v1.1.1, cover/title/intro/changelog/footer version updated,
+       Phase 67 changelog entry added at top).
+     - UBIQUITOUS_LANGUAGE.md: no changes (pure English glossary,
+       version-agnostic).
+
+  License classification:
+    - ai-bridge.js, ui.js, chess.html, game-logic.js, index.html.tpl,
+      pgn-standard.js, stats.html, StockfishNative.java, engine_jni.cpp,
+      StatsActivity.java — GPL v3 (DroidFish-derived).
+    - chess960.js, eco-data.js, MainActivity.java, ChessWebViewClient.java,
+      EngineService.java, StabilizationHelper.java, ChessApp.java,
+      RootDetector.java, TlsSecurityHelper.java, CMakeLists.txt,
+      build-chess.py, AndroidManifest.xml, strings.xml, res/xml/*.xml,
+      build.gradle, settings.gradle, gradle.properties, version.properties
+      (new), keystore.properties (new), LICENSE (new), UBIQUITOUS_LANGUAGE.md,
+      NOTICE, README.md, BUILDING.md, PRIVACY.md, all README.license files,
+      Manual/Regalia-v1.1.2-manual-{zh,en}.html — AGPL v3 (original).
+
+  Files modified: engine_jni.cpp (P0 nativeRenice), game-logic.js (P1 makeMv
+    bounds + emoji-space i18n + version), ai-bridge.js (P2 onHintMove bounds
+    + console.log cleanup + version), StockfishNative.java (P2 Long parse +
+    version), MainActivity.java (P3 stopLoading + version), ChessApp.java
+    (version), ChessWebViewClient.java (version), strings.xml (version),
+    index.html.tpl (version), ui.js (PGN cache fix + version + emoji-space
+    i18n propagation), stats.html (emoji-space), build-chess.py (MED-3),
+    gradle.properties (GOV-2), BUILDING.md, PRIVACY.md, README.md, NOTICE
+    (this entry), all 7 README.license files, Manual/Regalia-v1.1.2-manual-
+    zh.html (new), Manual/Regalia-v1.1.2-manual-en.html (new), LICENSE (new,
+    GOV-1), version.properties (new), keystore.properties (new).
+  Files added: LICENSE (project root, AGPL v3 full text — copy of LICENSE-
+    AGPL v3), version.properties, keystore.properties,
+    Manual/Regalia-v1.1.2-manual-zh.html, Manual/Regalia-v1.1.2-manual-en.html.
+  Files superseded: Manual/Regalia-v1.1.1-manual-{zh,en}.html (kept for
+    historical reference; new v1.1.2 manuals are the current versions).
+
 v1.1.1 Phase 66 (strict full-codebase audit + bug fixes + redundancy cleanup, 2026.7.5):
   Version: versionCode=111, versionName="1.1.1" (same-version revision).
 

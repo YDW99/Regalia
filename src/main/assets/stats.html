@@ -30,9 +30,16 @@
 <!-- v1.0.7 PHASE 19 (security): Content Security Policy — defense-in-depth for
      the stats page, which renders user-pasted PGN content. Mirrors the CSP
      from chess.html (index.html.tpl) but with connect-src 'none' since
-     stats.html uses AndroidBridge for IPC, not fetch. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-I9Xt0poQXytNiqR2LPRf4xmXHl7fLVtmQ4pUhdls6wc=' blob:; style-src 'unsafe-inline'; img-src data:; worker-src blob:; connect-src 'none'; frame-ancestors 'none'; base-uri 'self'">
-<title>📊Statistics</title>
+     stats.html uses AndroidBridge for IPC, not fetch.
+     v1.1.2 PHASE 71 (bug fix): script-src switched from a fixed SHA-256 hash to
+     'unsafe-inline'. The previous hash-based policy blocked all inline event
+     handlers (onclick="selectMove(...)" etc.) per CSP Level 2+, which silently
+     broke move selection in the stats page. Because stats.html is a local
+     asset (file:///android_asset/) with no externally injected content and all
+     JavaScript is inlined, 'unsafe-inline' is safe here and removes the need
+     to recompute the hash after every JS edit. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; img-src data:; worker-src blob:; connect-src 'none'; frame-ancestors 'none'; base-uri 'self'">
+<title>📊 Statistics</title>
 <style>
 /* AI-GEN: AI assisted
    This code was AI-assisted and has been reviewed for GPL v3 compliance.
@@ -207,11 +214,11 @@ table tr:hover{background:rgba(212,160,23,.05)}
 </head>
 <body>
 <div class="hdr">
-  <h1>📊统计数据</h1>
+  <h1>📊 统计数据</h1>
   <div class="hdr-btns">
-    <button class="btn" onclick="exportHTML()">💾HTML</button>
-    <button class="btn" onclick="requestImport()" id="btnImport">🗃️<span id="btnImportText">导入</span></button>
-    <button class="btn" onclick="requestReview()" id="btnReview">🗂️<span id="btnReviewText">复盘</span></button>
+    <button class="btn" onclick="exportHTML()">💾 HTML</button>
+    <button class="btn" onclick="requestImport()" id="btnImport">🗃️ <span id="btnImportText">导入</span></button>
+    <button class="btn" onclick="requestReview()" id="btnReview">🗂️ <span id="btnReviewText">复盘</span></button>
     <button class="btn" onclick="returnToGame()" id="btnBack">返回</button>
   </div>
 </div>
@@ -549,7 +556,7 @@ const _i18n={
   'king':{zh:'王',en:'King'},
   'key_moments':{zh:'关键转折',en:'Key Moments'},
   'back':{zh:'返回',en:'Back'},
-  'stats_title':{zh:'📊统计数据',en:'📊Statistics'},
+  'stats_title':{zh:'📊 统计数据',en:'📊 Statistics'},
   // v1.0.3: new strings for time-management analysis, FEN panel, variation selection
   'fen_label':{zh:'局面 FEN',en:'Position FEN'},
   'fen_hint':{zh:'点击上方任意走法（含变例走法）以生成对应局面的 FEN',en:'Tap any move above (including variation moves) to generate the FEN for that position'},
@@ -1083,6 +1090,18 @@ function executeMove(state,move,notation){
   //     - castling right for that side is present (in the LOCAL state,
   //       not a global)
   let _isCastling=false,_kingside=false,_rookFrom=-1,_rookTo=-1,_savedRook=null;
+  // v1.1.2 PHASE 71 (bug fix): Chess960 0-distance castling.
+  // When an SP-ID has the king already on its castling target (e.g. king on
+  // g1, kingside rook on h1), the O-O SAN applies and the king "stays put"
+  // while the rook moves. The previous code rejected this case via
+  // `_dist>=_minDist` (0 < 1) AND via `_destValid` (the king itself occupies
+  // the destination, not a rook), causing the king to be nulled by the
+  // unconditional `newState.board[to]=piece; newState.board[from]=null;`
+  // below. We now detect the 0-distance case explicitly and treat it as
+  // castling when the castling right is present, then skip the king move
+  // (only the rook moves). Mirrors the v1.0.7 PHASE 17 fix in the main
+  // app's game-logic.js makeMv/makeMvInPlace.
+  let _isZeroDistKingCastle=false;
   if(piece.type==='king'&&move.from.row===move.to.row){
     const _homeRow=piece.color==='white'?7:0;
     if(move.from.row===_homeRow&&(move.to.col===6||move.to.col===2)){
@@ -1096,6 +1115,13 @@ function executeMove(state,move,notation){
       const _is960=(typeof gameVariant!=='undefined'&&gameVariant==='chess960');
       const _minDist=_is960?1:2;
       const _rightKey=piece.color==='white'?(move.to.col===6?'whiteKingside':'whiteQueenside'):(move.to.col===6?'blackKingside':'blackQueenside');
+      // v1.1.2 PHASE 71: 0-distance king castling (king already on target).
+      // Only valid in Chess960 AND when the castling right for that side is
+      // present. Bypasses _destValid because the king itself is at the
+      // destination (the king stays put; only the rook moves).
+      if(_is960&&_dist===0&&_cr[_rightKey]){
+        _isZeroDistKingCastle=true;
+      }
       // v1.1.0 Phase 55 FIX: Find the participating rook FIRST, then check
       //   destination validity. In Chess960, the king's destination square
       //   may be occupied by the participating rook (e.g. SP-ID with king on
@@ -1104,7 +1130,7 @@ function executeMove(state,move,notation){
       //   previous `_destEmpty` check rejected this case, causing the king
       //   to "capture" its own rook and silently lose it from the board.
       //   Now we allow the destination to contain the participating rook.
-      if(_dist>=_minDist&&_cr[_rightKey]){
+      if(_isZeroDistKingCastle||(_dist>=_minDist&&_cr[_rightKey])){
         _kingside=move.to.col===6;
         _rookTo=_kingside?5:3;
         // Find the participating rook on the ORIGINAL board (state, not newState).
@@ -1117,15 +1143,22 @@ function executeMove(state,move,notation){
           // Fallback: standard chess positions (rook on h1/a1)
           _rookFrom=_kingside?7:0;
         }
-        // Destination is valid if empty OR contains the participating rook
-        // (which will be moved to _rookTo as part of the castle). This is
-        // the Chess960 case where rookFrom === king's destination.
-        const _destPiece=state.board[move.to.row][move.to.col];
-        const _destValid=!_destPiece||(_rookFrom===move.to.col&&_destPiece.type==='rook'&&_destPiece.color===piece.color);
-        if(_destValid){
+        if(_isZeroDistKingCastle){
+          // 0-distance: king stays put, only the rook moves. The destination
+          // holds the king itself, which is valid for this case.
           _isCastling=true;
-          // Save the rook from the NEW board (which is a clone of state, not yet mutated).
           _savedRook=newState.board[move.from.row][_rookFrom];
+        }else{
+          // Destination is valid if empty OR contains the participating rook
+          // (which will be moved to _rookTo as part of the castle). This is
+          // the Chess960 case where rookFrom === king's destination.
+          const _destPiece=state.board[move.to.row][move.to.col];
+          const _destValid=!_destPiece||(_rookFrom===move.to.col&&_destPiece.type==='rook'&&_destPiece.color===piece.color);
+          if(_destValid){
+            _isCastling=true;
+            // Save the rook from the NEW board (which is a clone of state, not yet mutated).
+            _savedRook=newState.board[move.from.row][_rookFrom];
+          }
         }
       }
     }
@@ -1144,9 +1177,19 @@ function executeMove(state,move,notation){
     captured=newState.board[epPawnRow][epPawnCol];
     newState.board[epPawnRow][epPawnCol]=null;
   }
-  newState.board[move.to.row][move.to.col]=piece;
-  newState.board[move.from.row][move.from.col]=null;
-  if(move.promotion)newState.board[move.to.row][move.to.col]={type:move.promotion,color:piece.color};
+  // v1.1.2 PHASE 71 (bug fix): For Chess960 0-distance castling (king already
+  // on its castling target square), from===to. The unconditional
+  // `newState.board[to]=piece; newState.board[from]=null;` would null the
+  // king's own square after the self-copy, removing the king from the board.
+  // Skip the king move entirely in this case — only the rook moves (handled
+  // in the king-block below).
+  if(_isZeroDistKingCastle){
+    // King stays put; do not touch newState.board[from/to].
+  }else{
+    newState.board[move.to.row][move.to.col]=piece;
+    newState.board[move.from.row][move.from.col]=null;
+  }
+  if(move.promotion&&!_isZeroDistKingCastle)newState.board[move.to.row][move.to.col]={type:move.promotion,color:piece.color};
   if(piece.type==='king'){
     if(piece.color==='white')newState.wk={row:move.to.row,col:move.to.col};
     else newState.bk={row:move.to.row,col:move.to.col};
@@ -1229,7 +1272,13 @@ function buildSAN(state,move,newState,captured){
       const _is960=(typeof gameVariant!=='undefined'&&gameVariant==='chess960');
       const _minDist=_is960?1:2;
       const _rightKey=piece.color==='white'?(move.to.col===6?'whiteKingside':'whiteQueenside'):(move.to.col===6?'blackKingside':'blackQueenside');
-      if(_dist>=_minDist&&_cr[_rightKey]){
+      // v1.1.2 PHASE 71: Chess960 0-distance castling (king already on target).
+      // Accept this case when the castling right is present — the king stays
+      // put, only the rook moves. Without this, buildSAN would emit a plain
+      // king move (e.g. "Kg1") instead of "O-O" for Chess960 SP-IDs where
+      // the king starts on g1.
+      const _isZeroDist=_is960&&_dist===0&&_cr[_rightKey];
+      if(_isZeroDist||(_dist>=_minDist&&_cr[_rightKey])){
         // Find the participating rook to validate destination
         const _kingside=move.to.col===6;
         let _rookFrom=-1;
@@ -1239,6 +1288,10 @@ function buildSAN(state,move,newState,captured){
           for(let c=0;c<move.from.col;c++){if(state.board[move.from.row][c]&&state.board[move.from.row][c].type==='rook'&&state.board[move.from.row][c].color===piece.color){_rookFrom=c;break;}}
         }
         if(_rookFrom<0)_rookFrom=_kingside?7:0;
+        if(_isZeroDist){
+          // 0-distance: king stays put. Valid as castling.
+          return move.to.col===6?'O-O':'O-O-O';
+        }
         const _destPiece=state.board[move.to.row][move.to.col];
         const _destValid=!_destPiece||(_rookFrom===move.to.col&&_destPiece.type==='rook'&&_destPiece.color===piece.color);
         if(_destValid){
@@ -2197,7 +2250,10 @@ function renderStats(parsed,evalData){
       const m=moves[i];
       const moveNum=Math.floor(i/2)+1;
       if(moverIsWhite(i,parsed))firstMoves+=moveNum+'. ';
-      firstMoves+=m.notation+' ';
+      // v1.1.2 PHASE 71 (security): escape notation before HTML insertion
+      // (defense-in-depth — notation is engine-generated, but the CSP switch
+      // to 'unsafe-inline' means any unescaped payload would execute).
+      firstMoves+=_escFEN(m.notation)+' ';
     }
     h+='<p style="font-size:.85rem;color:var(--text);margin-bottom:8px">'+firstMoves.trim()+'</p>';
     // Piece development speed
@@ -2997,12 +3053,19 @@ function _renderStatsBoard(parsed){
   if(parsed.moves&&parsed.moves.length>0){
     const _navMode=_variationMoves?'variation':'mainline';
     const _navLabel=_variationMoves?T('nav_variation'):T('nav_main_line');
-    bh+='<div style="display:flex;justify-content:center;align-items:center;gap:4px;margin-top:-4px;margin-bottom:14px;flex-wrap:wrap">';
-    bh+='<span style="font-size:.65rem;color:var(--muted,#a08050);margin-right:6px">'+_escFEN(_navLabel)+'</span>';
-    bh+='<button class="btn" style="padding:4px 10px;font-size:.85rem;min-width:38px;cursor:pointer;background:var(--card,#2a1a0a);color:var(--text,#f5e6c8);border:1px solid var(--border,#4a3520);border-radius:4px" onclick="statsNavFirst()" title="'+(_lang==='zh'?'首步':'First')+'">'+T('nav_first')+'</button>';
-    bh+='<button class="btn" style="padding:4px 10px;font-size:.85rem;min-width:38px;cursor:pointer;background:var(--card,#2a1a0a);color:var(--text,#f5e6c8);border:1px solid var(--border,#4a3520);border-radius:4px" onclick="statsNavPrev()" title="'+(_lang==='zh'?'上一步':'Previous')+'">'+T('nav_prev')+'</button>';
-    bh+='<button class="btn" style="padding:4px 10px;font-size:.85rem;min-width:38px;cursor:pointer;background:var(--card,#2a1a0a);color:var(--text,#f5e6c8);border:1px solid var(--border,#4a3520);border-radius:4px" onclick="statsNavNext()" title="'+(_lang==='zh'?'下一步':'Next')+'">'+T('nav_next')+'</button>';
-    bh+='<button class="btn" style="padding:4px 10px;font-size:.85rem;min-width:38px;cursor:pointer;background:var(--card,#2a1a0a);color:var(--text,#f5e6c8);border:1px solid var(--border,#4a3520);border-radius:4px" onclick="statsNavLast()" title="'+(_lang==='zh'?'末步':'Last')+'">'+T('nav_last')+'</button>';
+    // v1.1.2 Phase 68: Nav buttons now use flex:1 1 0 (uniform width, full
+    //   width fill) — matches the review-mode nav buttons (.review-nav .btn).
+    //   Previously used min-width:38px which left gaps on wide screens.
+    //   The label span is on its own line above the button row so the buttons
+    //   can stretch to full width without the label squeezing them.
+    bh+='<div style="margin-top:-4px;margin-bottom:14px">';
+    bh+='<div style="text-align:center;font-size:.65rem;color:var(--muted,#a08050);margin-bottom:4px">'+_escFEN(_navLabel)+'</div>';
+    bh+='<div style="display:flex;gap:4px;width:100%">';
+    bh+='<button class="btn" style="flex:1 1 0;min-width:0;padding:6px 4px;font-size:.85rem;cursor:pointer;background:var(--card,#2a1a0a);color:var(--text,#f5e6c8);border:1px solid var(--border,#4a3520);border-radius:4px;justify-content:center" onclick="statsNavFirst()" title="'+(_lang==='zh'?'首步':'First')+'">'+T('nav_first')+'</button>';
+    bh+='<button class="btn" style="flex:1 1 0;min-width:0;padding:6px 4px;font-size:.85rem;cursor:pointer;background:var(--card,#2a1a0a);color:var(--text,#f5e6c8);border:1px solid var(--border,#4a3520);border-radius:4px;justify-content:center" onclick="statsNavPrev()" title="'+(_lang==='zh'?'上一步':'Previous')+'">'+T('nav_prev')+'</button>';
+    bh+='<button class="btn" style="flex:1 1 0;min-width:0;padding:6px 4px;font-size:.85rem;cursor:pointer;background:var(--card,#2a1a0a);color:var(--text,#f5e6c8);border:1px solid var(--border,#4a3520);border-radius:4px;justify-content:center" onclick="statsNavNext()" title="'+(_lang==='zh'?'下一步':'Next')+'">'+T('nav_next')+'</button>';
+    bh+='<button class="btn" style="flex:1 1 0;min-width:0;padding:6px 4px;font-size:.85rem;cursor:pointer;background:var(--card,#2a1a0a);color:var(--text,#f5e6c8);border:1px solid var(--border,#4a3520);border-radius:4px;justify-content:center" onclick="statsNavLast()" title="'+(_lang==='zh'?'末步':'Last')+'">'+T('nav_last')+'</button>';
+    bh+='</div>';
     bh+='</div>';
   }
   bh+='</div>';
@@ -3242,7 +3305,9 @@ function renderPGNText(parsed,evalData,comments){
           vi=vj;
           continue;
         }
-        varRendered+=variationText[vi];
+        // v1.1.2 PHASE 71 (security): escape unrecognized variation-text characters
+        // (same XSS hardening as the mainline pass-through above).
+        varRendered+=_escFEN(variationText[vi]);
         vi++;
       }
       // v1.0.3: Register the variation AFTER collecting its moves.
@@ -3301,7 +3366,14 @@ function renderPGNText(parsed,evalData,comments){
       continue;
     }
     // Pass through other characters
-    result+=movetext[i];
+    // v1.1.2 PHASE 71 (security): Escape unrecognized movetext characters via
+    // _escFEN before appending to the HTML string. Previously they were
+    // appended raw, which — combined with the CSP switch to 'unsafe-inline'
+    // for onclick support — allowed a malicious PGN movetext payload such as
+    // `<img src=x onerror="...">` to execute arbitrary JavaScript with full
+    // AndroidBridge access. _escFEN neutralizes &<>"'` so any injected tag
+    // becomes inert text.
+    result+=_escFEN(movetext[i]);
     i++;
   }
   h+=result;
@@ -3654,7 +3726,7 @@ function _showStatsExportDialog(){
   var dlg=document.createElement('div');
   dlg.className='dlg';
   dlg.style.cssText='max-width:440px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;width:90%;color:var(--text)';
-  var html='<h2 style="color:var(--accent2);margin-bottom:16px;font-size:1.1rem">💾HTML</h2>';
+  var html='<h2 style="color:var(--accent2);margin-bottom:16px;font-size:1.1rem">💾 HTML</h2>';
   html+='<div style="display:flex;flex-direction:column;gap:10px">';
   html+='<button class="btn" style="width:100%;justify-content:center;gap:8px;padding:12px;font-size:.9rem" onclick="_haptic(\'BUTTON_PRESS\');this.closest(\'.dov\').remove();_exportStaticHTML()">📄 '+(_lang==='zh'?'导出此FEN的统计数据':'Export current position stats')+'</button>';
   html+='<button class="btn" style="width:100%;justify-content:center;gap:8px;padding:12px;font-size:.9rem" onclick="_haptic(\'BUTTON_PRESS\');this.closest(\'.dov\').remove();_exportFullHTML()">📊 '+(_lang==='zh'?'导出全PGN的统计数据':'Export full PGN stats')+'</button>';
@@ -3716,7 +3788,7 @@ function _exportStaticHTML(){
     contentHTML=contentClone.innerHTML;
   }
   const langAttr=_lang==='zh'?'zh':'en';
-  const title=_lang==='zh'?'📊统计数据 — 静态导出':'📊Statistics — Static Export';
+  const title=_lang==='zh'?'📊 统计数据 — 静态导出':'📊 Statistics — Static Export';
   const staticHTML='<!DOCTYPE html>\n<html lang="'+langAttr+'">\n<head>\n<meta charset="UTF-8">\n<meta name="viewport" content="width=device-width, initial-scale=1.0">\n<title>'+title+'</title>\n<style>\nbody{background:#1a0a0a;margin:0;padding:0}\n'+styleCSS+'\n</style>\n</head>\n<body>\n<div class="content">'+contentHTML+'</div>\n</body>\n</html>';
   if(typeof AndroidBridge!=='undefined'&&AndroidBridge.exportStatsHTML){AndroidBridge.exportStatsHTML(staticHTML);}
 }
@@ -3772,7 +3844,7 @@ function _exportFullHTML(){
     'var _lang='+JSON.stringify(lang)+';\n'+
     scriptJS;
 
-  const title=lang==='zh'?'📊统计数据 — 完整导出':'📊Statistics — Full Export';
+  const title=lang==='zh'?'📊 统计数据 — 完整导出':'📊 Statistics — Full Export';
   const fullHTML='<!DOCTYPE html>\n'+
     '<html lang="'+lang+'">\n'+
     '<head>\n'+
@@ -4117,7 +4189,7 @@ function _updateButtonText(){
   if(backBtn)backBtn.textContent=_lang==='zh'?'返回':'Back';
   // Update title
   const titleEl=document.querySelector('.hdr h1');
-  if(titleEl)titleEl.textContent=_lang==='zh'?'📊统计数据':'📊Statistics';
+  if(titleEl)titleEl.textContent=_lang==='zh'?'📊 统计数据':'📊 Statistics';
   // Update loading text
   const loadingEl=document.getElementById('content');
   if(loadingEl&&loadingEl.querySelector('.loading')){

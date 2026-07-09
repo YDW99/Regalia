@@ -57,7 +57,7 @@ import android.widget.TextView;
 public class MainActivity extends Activity {
 
     private static final String TAG = "Regalia";
-    private static final String VERSION = "v1.1.1";
+    private static final String VERSION = "v1.1.2";
 
     private WebView webView;
     private StockfishNative stockfishEngine;
@@ -726,6 +726,15 @@ public class MainActivity extends Activity {
             //      into the (now-defunct) StockfishNative after destroy.
             //   5. onPause — pauses any remaining JS timers/media.
             //   6. destroy — final native teardown.
+            //   v1.1.2 Phase 67 (P3): added step 0 — stopLoading() to abort any
+            //   in-flight page/resource load before tearing down. Otherwise the
+            //   WebView may attempt to dispatch a load callback to a destroyed
+            //   native peer, producing a SIGSEGV on certain OEM ROMs (HyperOS, MIUI).
+            try {
+                webView.stopLoading();
+            } catch (Throwable e) {
+                Log.w(TAG, "WebView stopLoading failed", e);
+            }
             try {
                 if (webView.getParent() instanceof android.view.ViewGroup) {
                     ((android.view.ViewGroup) webView.getParent()).removeView(webView);

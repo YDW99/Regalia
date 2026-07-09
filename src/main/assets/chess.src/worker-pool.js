@@ -50,6 +50,11 @@
 let _workerPool = [];
 let _poolSize = 0;
 let _workerSupported = (typeof Worker !== 'undefined');
+// v1.1.2 PHASE 71: consecutive-failure counter for _createWorker(). Reset to
+// 0 on success; incremented on failure. When >= 3, _workerSupported is set
+// false (pool disabled). This prevents a single transient OOM from
+// permanently disabling the worker pool for the page lifetime.
+let _workerCreateFailures = 0;
 let _nextTaskId = 1;
 const _pendingTasks = new Map(); // taskId -> {resolve, reject, worker, timeout}
 const _MAX_QUEUE_SIZE = 50;
@@ -284,10 +289,44 @@ function _createWorker() {
       _removeWorker(w);
       _dispatchNext();
     };
+    // v1.1.2 Phase 69 (Web Worker guide §6.1): onmessageerror fires when the
+    //   message data cannot be deserialized (structured clone failure). Without
+    //   this handler, such failures would silently leave the task's promise
+    //   hanging until the 30s timeout. Now we reject immediately and recycle
+    //   the worker (a serialization failure usually indicates a corrupted
+    //   worker state — safer to terminate and replace).
+    w.onmessageerror = function(e) {
+      const toReject = [];
+      for (const [tid, task] of _pendingTasks) {
+        if (task.worker === w) toReject.push([tid, task]);
+      }
+      for (const [tid, task] of toReject) {
+        _pendingTasks.delete(tid);
+        if (task.timeout) { clearTimeout(task.timeout); task.timeout = null; }
+        task.reject(new Error('Worker message serialization error'));
+      }
+      w._busy = false;
+      _removeWorker(w);
+      _dispatchNext();
+    };
+    // v1.1.2 PHASE 71: reset the consecutive-failure counter on success — a
+    // single successful creation proves the pool is still functional.
+    _workerCreateFailures = 0;
     return w;
   } catch (e) {
     if (url) { try { URL.revokeObjectURL(url); } catch (_) {} }
-    _workerSupported = false;
+    // v1.1.2 PHASE 71 (robustness): do NOT permanently disable the worker pool
+    // on a single transient failure (e.g. transient OOM, Blob URL quota
+    // exhaustion). Previously `_workerSupported = false` was set on any error,
+    // disabling the pool for the entire page lifetime — even if the next
+    // _createWorker() call would have succeeded. We now track a consecutive-
+    // failure counter and only disable after 3 consecutive failures. A
+    // successful _createWorker() resets the counter. This mirrors the
+    // resilience pattern recommended for transient resource-exhaustion errors.
+    _workerCreateFailures = (_workerCreateFailures || 0) + 1;
+    if (_workerCreateFailures >= 3) {
+      _workerSupported = false;
+    }
     return null;
   }
 }

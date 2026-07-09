@@ -119,7 +119,7 @@ public class StockfishNative {
     // v18.4.0: ELO_MAP synced with JS ELO_MATCH for consistent level display
     private static final int[] ELO_MAP = {0, 800, 1350, 1700, 2000, 2200, 2350, 2800};
     // v1.0.5: Synced with the application version (was stale at v1.0.2).
-    private static final String ENGINE_VERSION = "v1.1.1";
+    private static final String ENGINE_VERSION = "v1.1.2";
     // Movetime mapping: index 0 unused, 1-7 = game levels
     private static final int[] MOVETIME_MAP = {0, 500, 800, 1000, 1500, 2000, 3000, 5000};
 
@@ -312,6 +312,15 @@ public class StockfishNative {
     // false), causing wrong state routing — e.g., entering review mode gets
     // a stale bestmove that corrupts the engine state machine.
     private volatile boolean _discardingPonderBestmove = false;
+    // v1.1.2 PHASE 71 (concurrency fix): dedicated lock for the
+    //   _discardingPonderBestmove flag. Previously, engineStop() set the flag
+    //   (outside any lock) while the reader thread's bestmove handler read it
+    //   (also outside any lock) — a TOCTOU window where engineStop sets the
+    //   flag AFTER the reader's check but BEFORE handleBestMove, causing the
+    //   stopped search's bestmove to be processed as a real AI move. All
+    //   set/check-and-clear operations now go through synchronized blocks on
+    //   this lock so the check-and-clear is atomic w.r.t. engineStop's set.
+    private final Object _discardFlagLock = new Object();
     // v18.4.1: Accumulated MultiPV data during current search
     private final java.util.concurrent.ConcurrentHashMap<Integer, JSONObject> _multiPVData =
             new java.util.concurrent.ConcurrentHashMap<>();
@@ -616,14 +625,19 @@ public class StockfishNative {
                 if (needNewGame) {
                     sendUciCommand("ucinewgame");
                     final CountDownLatch newGameLatch = new CountDownLatch(1);
-                    readyOkLatchHolder = newGameLatch;
-                    sendUciCommand("isready");
-                    try {
-                        newGameLatch.await(5, TimeUnit.SECONDS);
-                    } catch (InterruptedException e) {
-                        Log.w(TAG, "engineGoNewGame: interrupted waiting for readyok");
-                    } finally {
-                        readyOkLatchHolder = null;
+                    // v1.1.2 PHASE 71 (concurrency fix): serialize readyOkLatchHolder
+                    //   access on _readyOkLock so that a concurrent sendSetOptionAndWait
+                    //   call (JS binder thread) cannot overwrite our latch mid-wait.
+                    synchronized (_readyOkLock) {
+                        readyOkLatchHolder = newGameLatch;
+                        sendUciCommand("isready");
+                        try {
+                            newGameLatch.await(5, TimeUnit.SECONDS);
+                        } catch (InterruptedException e) {
+                            Log.w(TAG, "engineGoNewGame: interrupted waiting for readyok");
+                        } finally {
+                            readyOkLatchHolder = null;
+                        }
                     }
                 }
                 // v1.1.0 Phase 56: Send setGameDifficulty BEFORE position fen
@@ -684,14 +698,18 @@ public class StockfishNative {
                 if (needNewGame) {
                     sendUciCommand("ucinewgame");
                     final CountDownLatch newGameLatch = new CountDownLatch(1);
-                    readyOkLatchHolder = newGameLatch;
-                    sendUciCommand("isready");
-                    try {
-                        newGameLatch.await(5, TimeUnit.SECONDS);
-                    } catch (InterruptedException e) {
-                        Log.w(TAG, "engineGoTimed: interrupted waiting for readyok");
-                    } finally {
-                        readyOkLatchHolder = null;
+                    // v1.1.2 PHASE 71 (concurrency fix): serialize readyOkLatchHolder
+                    //   access on _readyOkLock (same as engineGoInternal above).
+                    synchronized (_readyOkLock) {
+                        readyOkLatchHolder = newGameLatch;
+                        sendUciCommand("isready");
+                        try {
+                            newGameLatch.await(5, TimeUnit.SECONDS);
+                        } catch (InterruptedException e) {
+                            Log.w(TAG, "engineGoTimed: interrupted waiting for readyok");
+                        } finally {
+                            readyOkLatchHolder = null;
+                        }
                     }
                 }
                 // v1.1.0 Phase 56: Send setGameDifficulty BEFORE position fen.
@@ -846,6 +864,13 @@ public class StockfishNative {
             if (engineSupportsOption("UCI_ShowWDL")) {
                 sendUciCommand("setoption name UCI_ShowWDL value true");
             }
+            // v1.1.2 Phase 69 (UCI guide §3.3): UCI_AnalyseMode=true tells the
+            //   engine to search more thoroughly (explore suboptimal moves for
+            //   comprehensive variations). This is the correct mode for review
+            //   analysis. The engine restores it to false via restoreGameplayOptions().
+            if (engineSupportsOption("UCI_AnalyseMode")) {
+                sendUciCommand("setoption name UCI_AnalyseMode value true");
+            }
         } catch (Throwable e) {
             Log.w(TAG, "applyEvalModeOptions failed", e);
         }
@@ -869,6 +894,12 @@ public class StockfishNative {
             }
             if (engineMultiPV != 1 && engineSupportsOption("MultiPV")) {
                 sendUciCommand("setoption name MultiPV value " + engineMultiPV);
+            }
+            // v1.1.2 Phase 69 (UCI guide §3.3): Restore UCI_AnalyseMode=false for
+            //   gameplay. The engine should not waste time exploring suboptimal
+            //   moves during actual games.
+            if (engineSupportsOption("UCI_AnalyseMode")) {
+                sendUciCommand("setoption name UCI_AnalyseMode value false");
             }
         } catch (Throwable e) {
             Log.w(TAG, "restoreGameplayOptions failed", e);
@@ -1222,27 +1253,30 @@ public class StockfishNative {
         // Step 5: Wait for engine ready (75% -> 90%)
         postJsCallback("onInitProgress(75, " + escapeJsString(isEnglishMode() ? "Waiting for engine ready..." : "\u6b63\u5728\u7b49\u5f85\u5f15\u64ce\u5c31\u7eea...") + ")");
         final CountDownLatch readyOkLatch = new CountDownLatch(1);
-        readyOkLatchHolder = readyOkLatch;
-
-        sendUciCommand("isready");
-
-        try {
-            boolean gotReadyOk = readyOkLatch.await(10, TimeUnit.SECONDS);
-            if (!gotReadyOk) {
-                Log.e(TAG, "Timed out waiting for readyok");
+        // v1.1.2 PHASE 71 (concurrency fix): acquire _readyOkLock for the
+        //   set+wait so that a concurrent sendSetOptionAndWait call (from the
+        //   JS binder thread) cannot overwrite our readyOkLatchHolder mid-wait.
+        synchronized (_readyOkLock) {
+            readyOkLatchHolder = readyOkLatch;
+            sendUciCommand("isready");
+            try {
+                boolean gotReadyOk = readyOkLatch.await(10, TimeUnit.SECONDS);
+                if (!gotReadyOk) {
+                    Log.e(TAG, "Timed out waiting for readyok");
+                    cleanupFailedEngine();
+                    initStarted = false;
+                    postJsCallback("onEngineError(" + escapeJsString(isEnglishMode() ? "Engine initialization timeout" : "\u5f15\u64ce\u521d\u59cb\u5316\u8d85\u65f6") + ")");
+                    return;
+                }
+            } catch (InterruptedException e) {
+                Log.e(TAG, "Interrupted waiting for readyok");
                 cleanupFailedEngine();
                 initStarted = false;
-                postJsCallback("onEngineError(" + escapeJsString(isEnglishMode() ? "Engine initialization timeout" : "\u5f15\u64ce\u521d\u59cb\u5316\u8d85\u65f6") + ")");
+                postJsCallback("onEngineError(" + escapeJsString(isEnglishMode() ? "Engine initialization interrupted" : "\u5f15\u64ce\u521d\u59cb\u5316\u88ab\u4e2d\u65ad") + ")");
                 return;
+            } finally {
+                readyOkLatchHolder = null;
             }
-        } catch (InterruptedException e) {
-            Log.e(TAG, "Interrupted waiting for readyok");
-            cleanupFailedEngine();
-            initStarted = false;
-            postJsCallback("onEngineError(" + escapeJsString(isEnglishMode() ? "Engine initialization interrupted" : "\u5f15\u64ce\u521d\u59cb\u5316\u88ab\u4e2d\u65ad") + ")");
-            return;
-        } finally {
-            readyOkLatchHolder = null;
         }
 
         // Step 6: Apply settings with correct ordering
@@ -1364,6 +1398,17 @@ public class StockfishNative {
     // Latch holders for init sequence
     private volatile CountDownLatch uciOkLatchHolder = null;
     private volatile CountDownLatch readyOkLatchHolder = null;
+    // v1.1.2 PHASE 71 (concurrency fix): dedicated lock for readyOkLatchHolder.
+    //   Previously, the JS binder thread (sendSetOptionAndWait) and the executor
+    //   thread (startEngineInternal / engineGoInternal ucinewgame path) both
+    //   wrote the single volatile `readyOkLatchHolder` field without
+    //   synchronization. If they overlapped, one latch was lost → 3-second
+    //   timeout in sendSetOptionAndWait (or 10s in startEngineInternal). The
+    //   engine only emits ONE readyok per isready, so concurrent isready
+    //   commands are fundamentally racy. Serialize all readyOk set+wait
+    //   operations on this lock so that at most one thread is waiting for
+    //   readyok at a time.
+    private final Object _readyOkLock = new Object();
 
     // ===================== R1/R2 FIX: Extracted recovery helpers =====================
 
@@ -1646,8 +1691,17 @@ public class StockfishNative {
                 //   (stopPonder/stopAndWaitForBestmove set it before sending "stop"),
                 //   so without this discard flag the stale bestmove would route to
                 //   handleBestMove() with STATE_NONE and corrupt the state machine.
-                if (_discardingPonderBestmove) {
+                // v1.1.2 PHASE 71 (concurrency fix): atomically check-and-clear
+                //   _discardingPonderBestmove under _discardFlagLock so that a
+                //   concurrent engineStop() cannot set the flag AFTER our check
+                //   but BEFORE handleBestMove — that TOCTOU window would let the
+                //   stopped search's bestmove be processed as a real AI move.
+                boolean _shouldDiscard;
+                synchronized (_discardFlagLock) {
+                    _shouldDiscard = _discardingPonderBestmove;
                     _discardingPonderBestmove = false;
+                }
+                if (_shouldDiscard) {
                     synchronized (stateLock) {
                         currentState = STATE_NONE;
                     }
@@ -1776,11 +1830,15 @@ public class StockfishNative {
             Long nps = null;
             Matcher nodesMatcher = NODES_PATTERN.matcher(line);
             if (nodesMatcher.find()) {
-                nodes = Long.parseLong(nodesMatcher.group(1));
+                // v1.1.2 Phase 67: P2 fix — wrap Long.parseLong in try-catch so a
+                // malformed/malicious engine output cannot crash info-line processing.
+                try { nodes = Long.parseLong(nodesMatcher.group(1)); }
+                catch (NumberFormatException ignored) { nodes = null; }
             }
             Matcher npsMatcher = NPS_PATTERN.matcher(line);
             if (npsMatcher.find()) {
-                nps = Long.parseLong(npsMatcher.group(1));
+                try { nps = Long.parseLong(npsMatcher.group(1)); }
+                catch (NumberFormatException ignored) { nps = null; }
             }
 
             int scoreCp = 0;
@@ -2083,36 +2141,50 @@ public class StockfishNative {
 
     /**
      * Send a setoption command and wait for readyok confirmation.
+     * v1.1.2 PHASE 71 (concurrency fix): the entire set+wait is synchronized
+     *   on _readyOkLock so that concurrent callers (e.g. JS binder thread
+     *   applying settings while executor thread starts a new game) do not
+     *   overwrite each other's readyOkLatchHolder. The engine only emits ONE
+     *   readyok per isready, so concurrent isready commands are inherently
+     *   racy — serialization ensures at most one thread is waiting for
+     *   readyok at a time. The 3-second per-call timeout bounds the worst-case
+     *   wait for a queued caller.
      */
     private boolean sendSetOptionAndWait(String name, String value) {
         if (!engineReady || engineWriter == null) {
             Log.w(TAG, "Cannot set option " + name + " - engine not ready");
             return false;
         }
-        final CountDownLatch latch = new CountDownLatch(1);
-        readyOkLatchHolder = latch;
-        sendUciCommand("setoption name " + name + " value " + value);
-        sendUciCommand("isready");
-        try {
-            long deadline = System.currentTimeMillis() + 3000;
-            while (System.currentTimeMillis() < deadline) {
-                if (latch.await(100, TimeUnit.MILLISECONDS)) {
-                    return true;
+        synchronized (_readyOkLock) {
+            final CountDownLatch latch = new CountDownLatch(1);
+            readyOkLatchHolder = latch;
+            sendUciCommand("setoption name " + name + " value " + value);
+            sendUciCommand("isready");
+            try {
+                long deadline = System.currentTimeMillis() + 3000;
+                while (System.currentTimeMillis() < deadline) {
+                    if (latch.await(100, TimeUnit.MILLISECONDS)) {
+                        return true;
+                    }
+                    if (engineProcess != null && !isProcessAlive()) {
+                        Log.e(TAG, "Engine process died while setting " + name);
+                        engineReady = false;
+                        readyOkLatchHolder = null;
+                        return false;
+                    }
                 }
-                if (engineProcess != null && !isProcessAlive()) {
-                    Log.e(TAG, "Engine process died while setting " + name);
-                    engineReady = false;
-                    readyOkLatchHolder = null;
-                    return false;
-                }
+                Log.w(TAG, "Timeout waiting for readyok after setting " + name);
+                readyOkLatchHolder = null;
+                return false;
+            } catch (InterruptedException e) {
+                Log.w(TAG, "Interrupted waiting for readyok after setting " + name);
+                readyOkLatchHolder = null;
+                return false;
+            } finally {
+                // v1.1.2 PHASE 71: clear the holder under the lock so the next
+                // caller starts from a clean state.
+                readyOkLatchHolder = null;
             }
-            Log.w(TAG, "Timeout waiting for readyok after setting " + name);
-            readyOkLatchHolder = null;
-            return false;
-        } catch (InterruptedException e) {
-            Log.w(TAG, "Interrupted waiting for readyok after setting " + name);
-            readyOkLatchHolder = null;
-            return false;
         }
     }
 
@@ -2770,7 +2842,16 @@ public class StockfishNative {
     @JavascriptInterface
     public void setEngineThreads(int threads) {
         if (threads < 1) threads = 1;
-        if (threads > 512) threads = 512;
+        // v1.1.2 Phase 69 (UCI guide §1.1): cap Threads at 2x available processors.
+        //   The UCI guide warns that exceeding physical core count causes thread
+        //   contention, reducing NPS. We allow up to 2x for hyperthreading benefit
+        //   but no higher. The old cap of 512 was a spec ceiling.
+        int cpuCores = Runtime.getRuntime().availableProcessors();
+        int threadsCap = Math.max(1, cpuCores * 2);
+        if (threads > threadsCap) {
+            Log.w(TAG, "setEngineThreads: " + threads + " exceeds 2x CPU cores (" + threadsCap + "), capping");
+            threads = threadsCap;
+        }
         engineThreads = threads;
         saveIntSetting("engineThreads", threads);
         if (autoConfigEnabled) {
@@ -2785,7 +2866,17 @@ public class StockfishNative {
     @JavascriptInterface
     public void setEngineHash(int hashMB) {
         if (hashMB < 1) hashMB = 1;
-        if (hashMB > 33554432) hashMB = 33554432;
+        // v1.1.2 Phase 69 (UCI guide §1.2): cap Hash at 50% of available JVM heap
+        //   memory. The UCI guide warns that exceeding 50% of physical RAM causes
+        //   virtual memory swapping, drastically slowing the engine. On Android,
+        //   the JVM heap is the relevant limit (not total device RAM). The old cap
+        //   of 33554432 MB (32TB) was a spec ceiling with no practical use.
+        long maxMemoryMB = Runtime.getRuntime().maxMemory() / (1024 * 1024);
+        long hashCap = Math.max(16, maxMemoryMB / 2); // 50% of heap, min 16MB
+        if (hashMB > hashCap) {
+            Log.w(TAG, "setEngineHash: " + hashMB + "MB exceeds 50% of heap (" + hashCap + "MB), capping");
+            hashMB = (int) hashCap;
+        }
         engineHash = hashMB;
         saveIntSetting("engineHash", hashMB);
         if (autoConfigEnabled) {
@@ -2800,7 +2891,11 @@ public class StockfishNative {
     @JavascriptInterface
     public void setEngineMoveOverhead(int ms) {
         if (ms < 0) ms = 0;
-        if (ms > 5000) ms = 5000;
+        // v1.1.2 Phase 69 (UCI guide §2.2): cap Move Overhead at 1000ms. The UCI
+        //   guide recommends 10-30ms for local play, 50-150ms for network play.
+        //   Values above 1000ms waste thinking time with no benefit. The old cap
+        //   of 5000ms was excessive.
+        if (ms > 1000) ms = 1000;
         engineMoveOverhead = ms;
         saveIntSetting("engineMoveOverhead", ms);
         if (engineReady) {
@@ -2811,7 +2906,11 @@ public class StockfishNative {
     @JavascriptInterface
     public void setEngineMultiPV(int multiPV) {
         if (multiPV < 1) multiPV = 1;
-        if (multiPV > 500) multiPV = 500;
+        // v1.1.2 Phase 69 (UCI guide §2.1): cap MultiPV at 8. The UCI optimization
+        //   guide recommends 3-5 for review analysis; values above 8 severely
+        //   reduce search depth with diminishing returns. The old cap of 500 was
+        //   a spec ceiling, not a practical limit.
+        if (multiPV > 8) multiPV = 8;
         engineMultiPV = multiPV;
         saveIntSetting("engineMultiPV", multiPV);
         if (engineReady) {
@@ -2960,7 +3059,13 @@ public class StockfishNative {
         }
         _isPondering = false;
         if (stateBefore != STATE_NONE) {
-            _discardingPonderBestmove = true;
+            // v1.1.2 PHASE 71 (concurrency fix): set _discardingPonderBestmove
+            //   under _discardFlagLock so the reader thread's bestmove handler
+            //   cannot observe a half-set flag (the check-and-clear in the reader
+            //   is now atomic w.r.t. this set).
+            synchronized (_discardFlagLock) {
+                _discardingPonderBestmove = true;
+            }
             try {
                 sendUciCommand("stop");
             } catch (Throwable e) {
@@ -3687,21 +3792,62 @@ public class StockfishNative {
                         try {
                             switch (key) {
                                 case "engine.threads":
-                                    engineThreads = Math.max(1, Math.min(1024, Integer.parseInt(value)));
-                                    saveIntSetting("engineThreads", engineThreads);
-                                    explicitlySet.add("engine.threads");
-                                    appliedCount++;
+                                    // v1.1.2 PHASE 71 (security/robustness): apply the SAME Phase 69
+                                    // cap (2x CPU cores) as setEngineThreads() instead of the previous
+                                    // loose cap of 1024. An imported settings file with extreme values
+                                    // would otherwise be applied without capping, causing thread
+                                    // contention and NPS collapse per the UCI guide §1.1. We assign
+                                    // the field directly (rather than calling setEngineThreads) because
+                                    // setEngineThreads returns early when autoConfig is enabled — and
+                                    // autoConfig is only disabled further below after parsing completes.
+                                    // applySettings() will send the UCI command using this capped value.
+                                    {
+                                        int _t = Math.max(1, Math.min(1024, Integer.parseInt(value)));
+                                        int _cpuCores = Runtime.getRuntime().availableProcessors();
+                                        int _threadsCap = Math.max(1, _cpuCores * 2);
+                                        if (_t > _threadsCap) {
+                                            Log.w(TAG, "importSettings: engine.threads=" + _t + " exceeds 2x CPU cores (" + _threadsCap + "), capping");
+                                            _t = _threadsCap;
+                                        }
+                                        engineThreads = _t;
+                                        saveIntSetting("engineThreads", _t);
+                                        explicitlySet.add("engine.threads");
+                                        appliedCount++;
+                                    }
                                     break;
                                 case "engine.hash":
-                                    engineHash = Math.max(1, Math.min(1048576, Integer.parseInt(value)));
-                                    saveIntSetting("engineHash", engineHash);
-                                    explicitlySet.add("engine.hash");
-                                    appliedCount++;
+                                    // v1.1.2 PHASE 71: apply the Phase 69 cap (50% JVM heap) instead
+                                    // of the loose 1048576 MB cap. Direct field assignment for the
+                                    // same autoConfig reason as engine.threads above.
+                                    {
+                                        int _h = Math.max(1, Math.min(1048576, Integer.parseInt(value)));
+                                        long _maxMemoryMB = Runtime.getRuntime().maxMemory() / (1024 * 1024);
+                                        long _hashCap = Math.max(16, _maxMemoryMB / 2);
+                                        if (_h > _hashCap) {
+                                            Log.w(TAG, "importSettings: engine.hash=" + _h + "MB exceeds 50% of heap (" + _hashCap + "MB), capping");
+                                            _h = (int) _hashCap;
+                                        }
+                                        engineHash = _h;
+                                        saveIntSetting("engineHash", _h);
+                                        explicitlySet.add("engine.hash");
+                                        appliedCount++;
+                                    }
                                     break;
                                 case "engine.moveOverhead":
-                                    engineMoveOverhead = Math.max(0, Math.min(10000, Integer.parseInt(value)));
-                                    saveIntSetting("engineMoveOverhead", engineMoveOverhead);
-                                    appliedCount++;
+                                    // v1.1.2 PHASE 71: apply the Phase 69 cap (1000ms) instead of
+                                    // the loose 10000ms cap. Direct field assignment for consistency
+                                    // with engine.threads/engine.hash above (no autoConfig early-return
+                                    // issue here, but keeping the pattern uniform).
+                                    {
+                                        int _ms = Math.max(0, Math.min(10000, Integer.parseInt(value)));
+                                        if (_ms > 1000) {
+                                            Log.w(TAG, "importSettings: engine.moveOverhead=" + _ms + "ms exceeds 1000ms, capping");
+                                            _ms = 1000;
+                                        }
+                                        engineMoveOverhead = _ms;
+                                        saveIntSetting("engineMoveOverhead", _ms);
+                                        appliedCount++;
+                                    }
                                     break;
                                 case "engine.multiPV":
                                     engineMultiPV = Math.max(1, Math.min(8, Integer.parseInt(value)));

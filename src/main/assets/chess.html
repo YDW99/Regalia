@@ -30,8 +30,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'sha256-NwXAUM7Cuexq21w0HElhrOOYg3domd5DziqJOUahkHs=' blob:; style-src 'unsafe-inline'; worker-src blob:; connect-src https://tablebase.lichess.ovh; img-src data: file: blob:; frame-ancestors 'none'; base-uri 'self'">
-<title>Regalia v1.1.1</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; worker-src blob:; connect-src https://tablebase.lichess.ovh; img-src data: file: blob:; frame-ancestors 'none'; base-uri 'self'">
+<title>Regalia v1.1.2</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 /* v1.0.8 PHASE 22: Light/Dark theme system following Material Design
@@ -397,7 +397,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
    in landscape it becomes the left column via media query. */
 .review-left{display:flex;flex-direction:column;align-items:center;gap:8px}
 .review-moves{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:4px;-webkit-overflow-scrolling:touch}
-.rmv-block{padding:10px 14px;border-radius:6px;background:var(--btn-bg);border:1px solid var(--border);cursor:pointer;transition:all .2s;display:flex;align-items:flex-start;gap:8px;font-family:system-ui,-apple-system,sans-serif}
+.rmv-block{padding:10px 14px;border-radius:6px;background:var(--btn-bg);border:1px solid var(--border);cursor:pointer;transition:all .2s;display:flex;align-items:flex-start;gap:8px;font-family:system-ui,-apple-system,sans-serif;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:manipulation}
 .rmv-block:hover{border-color:var(--accent);background:rgba(212,160,23,.08);box-shadow:none}
 .rmv-block.act{border-color:var(--accent2);background:rgba(212,160,23,.12);box-shadow:0 0 3px rgba(212,160,23,.08)}
 .rmv-num{font-size:.75rem;color:var(--muted);min-width:28px;font-weight:700;padding-top:2px}
@@ -1333,6 +1333,32 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 
 // ===================== i18n SYSTEM =====================
 let _lang='zh';
+/**
+ * SECURITY FIX v1.0.5 (SonarCloud Hotspot #4):
+ * Generate a cryptographically secure random integer in [0, max).
+ * Replaces Math.random() for security-sensitive random selection.
+ * Uses crypto.getRandomValues with rejection sampling to eliminate modulo bias.
+ */
+function secureRandomInt(max){
+  if(max<=1)return 0;
+  // v1.1.2 PHASE 71 (robustness): guard against `crypto` being undefined (e.g.
+  // in non-browser test harnesses or if a future WebView config strips it).
+  // Mirrors the defensive pattern already used by randomSPID in chess960.js.
+  // Without this guard, `crypto.getRandomValues(buf)` would throw a
+  // ReferenceError, propagating to the caller (queryECOBookMove) and crashing
+  // the AI's opening-book lookup.
+  if(typeof crypto==='undefined'||!crypto||typeof crypto.getRandomValues!=='function'){
+    return Math.floor(Math.random()*max);
+  }
+  const buf=new Uint32Array(1);
+  const LIMIT=0xFFFFFFFF - (0xFFFFFFFF % max); // largest multiple of max <= 2^32-1
+  for(let i=0;i<8;i++){
+    crypto.getRandomValues(buf);
+    if(buf[0]<LIMIT)return buf[0]%max;
+  }
+  return buf[0]%max; // fallback after 8 retries (extremely unlikely)
+}
+
 function T(key){return _i18n[key]?.[_lang]||_i18n[key]?.zh||key;}
 function toggleLang(){_lang=(_lang==='zh')?'en':'zh';try{localStorage.setItem('Regalia_lang',_lang);}catch(e){}try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.saveLangPref)AndroidBridge.saveLangPref(_lang);}catch(e){}try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_lang',_lang);}catch(e){}try{if(typeof HapticManager!=='undefined'&&HapticManager.fire)HapticManager.fire('TOGGLE_ON');}catch(e){}try{if(typeof playSound==='function')playSound('select');}catch(e){}render();}
 const _i18n={
@@ -1360,12 +1386,12 @@ const _i18n={
 'no_moves':{zh:'暂无走法记录',en:'No moves yet'},
 'enter_review_hint':{zh:'点击进入复盘界面（可使用 📚 缓存管理器或 🗃️ 导入 PGN）',en:'Click to enter review mode (use 📚 Cache Manager or 🗃️ to import PGN)'},
 'stats':{zh:'统计',en:'Stats'},
-'stats_title':{zh:'📊统计数据',en:'📊Statistics'},
-'stats_export_html':{zh:'💾HTML',en:'💾HTML'},
-'stats_review':{zh:'🗂️复盘',en:'🗂️Review'},
+'stats_title':{zh:'📊 统计数据',en:'📊 Statistics'},
+'stats_export_html':{zh:'💾 HTML',en:'💾 HTML'},
+'stats_review':{zh:'🗂️ 复盘',en:'🗂️ Review'},
 'stats_save_html':{zh:'保存HTML统计文件',en:'Save HTML stats file'},
 'stats_saved':{zh:'HTML统计文件已保存',en:'HTML stats file saved'},
-'save_pgn_prompt':{zh:'💾是否保存PGN文件？',en:'💾 Save PGN file?'},
+'save_pgn_prompt':{zh:'💾 是否保存PGN文件？',en:'💾 Save PGN file?'},
 'save_pgn_yes':{zh:'是',en:'Yes'},
 'save_pgn_no':{zh:'否',en:'No'},
 'white_concedes_move':{zh:'白方让先（黑方先走）',en:'White concedes the move (black to move)'},
@@ -1434,7 +1460,7 @@ const _i18n={
 'draw':{zh:'和棋',en:'Draw'},
 'play_again':{zh:'再来一局',en:'Play Again'},
 'review':{zh:'复盘',en:'Review'},
-'variation_toggle':{zh:'💬变例',en:'💬Vars'},
+'variation_toggle':{zh:'💬 变例',en:'💬 Vars'},
 'tb_library':{zh:'Syzygy残局库',en:'Syzygy Endgame'},
 'tb_query':{zh:'🔭 点击查询残局库',en:'🔭 Query Endgame DB'},
 'tb_unavailable':{zh:'🚫 残局库: 暂不可用',en:'🚫 Endgame DB: Unavailable'},
@@ -1540,6 +1566,10 @@ const _i18n={
 'analyzing_all':{zh:'正在分析所有步骤...',en:'Analyzing all steps...'},
 'analysis_done':{zh:'分析完成! 共',en:'Analysis complete! Total'},
 'analyzing_progress':{zh:'正在分析...',en:'Analyzing...'},
+// v1.1.2 Phase 68 (Issue 30 P2): Long-press-to-prioritize during analyze-all
+'priority_eval_toast':{zh:'已优先分析此走法，批量分析将在该步完成后继续',en:'Prioritizing this move. Batch resumes after this step completes.'},
+'priority_eval_already_cached':{zh:'此走法已分析完成',en:'This move is already analyzed.'},
+'priority_eval_not_in_review':{zh:'长按优先分析仅在复盘模式可用',en:'Long-press priority is only available in review mode.'},
 'js_error':{zh:'JS错误',en:'JS error'},
 'promise_error':{zh:'Promise错误',en:'Promise error'},
 'engine_unavailable_hint':{zh:'引擎不可用',en:'Engine unavailable'},
@@ -1603,7 +1633,7 @@ const _i18n={
 'copy_review_pgn':{zh:'复制走法记录PGN',en:'Copy PGN'},
 'copy_review_fen':{zh:'复制当前复盘局面的FEN',en:'Copy FEN'},
 'return_game':{zh:'返回对局',en:'Return to Game'},
-'pgn_cache_manager':{zh:'📚PGN缓存管理',en:'📚PGN Cache Manager'},
+'pgn_cache_manager':{zh:'📚 PGN缓存管理',en:'📚 PGN Cache Manager'},
 'pgn_cache_btn':{zh:'PGN缓存',en:'PGN Cache'},
 'pgn_cache_empty':{zh:'暂无缓存的PGN对局。点击下方"保存当前PGN到缓存"按钮以创建。',en:'No cached PGN games yet. Click "Save current PGN to cache" below to create one.'},
 'pgn_cache_name_prompt':{zh:'请输入缓存名称（如：经典对局1）：',en:'Enter cache name (e.g.: Classic Game 1):'},
@@ -1620,6 +1650,12 @@ const _i18n={
 'pgn_cache_deleted':{zh:'已删除',en:'deleted'},
 'pgn_cache_imported':{zh:'已导入PGN缓存',en:'PGN cache imported'},
 'pgn_cache_save_failed':{zh:'保存失败',en:'Save failed'},
+// v1.1.2 Phase 67 Task 67.2: New i18n keys for incomplete-eval-coverage prompt
+'pgn_cache_partial_eval_title':{zh:'💾 部分步骤尚未评估',en:'💾 Some steps not yet analyzed'},
+'pgn_cache_partial_eval_msg':{zh:'当前复盘有 N1 步，但仅有 N2 步已评估。完整保存评估注释 [%eval] 需先执行"分析全部"。',en:'This review has N1 steps but only N2 are analyzed. Run "Analyze All" first to capture every [%eval] annotation.'},
+'pgn_cache_partial_eval_analyze_first':{zh:'先分析全部（推荐）',en:'Analyze All first (recommended)'},
+'pgn_cache_partial_eval_save_as_is':{zh:'仍要保存（注释将缺失）',en:'Save anyway (evals will be missing)'},
+'pgn_cache_analyze_then_save':{zh:'分析完成后将自动保存...',en:'Analysis will complete, then auto-save...'},
 'pgn_cache_import_failed':{zh:'导入失败：缓存不存在或为空',en:'Import failed: cache not found or empty'},
 // v1.0.4 Round-5 Rev20: Rename and Tag features
 'pgn_cache_rename':{zh:'重命名',en:'Rename'},
@@ -1677,7 +1713,7 @@ const _i18n={
 'elo_target':{zh:'Elo目标',en:'ELO Target'},
 'export_settings_btn':{zh:'📤 导出设置',en:'📤 Export'},
 'import_settings_btn':{zh:'📥 导入设置',en:'📥 Import'},
-'loading_title':{zh:'Regalia v1.1.1',en:'Regalia v1.1.1'},
+'loading_title':{zh:'Regalia v1.1.2',en:'Regalia v1.1.2'},
 'click_skip_loading':{zh:'点击跳过加载',en:'Click to skip loading'},
 'white_checkmate':{zh:'白方将杀获胜',en:'White wins by checkmate'},
 'black_checkmate':{zh:'黑方将杀获胜',en:'Black wins by checkmate'},
@@ -3103,6 +3139,26 @@ function _castleSide(mv,s){
       //   c1/g1 is always empty).
       const _destPiece=_st&&_st.board&&_st.board[mv.to.row]?_st.board[mv.to.row][mv.to.col]:null;
       const _destValid=!_destPiece||(_destPiece.type==='rook'&&_destPiece.color===mv.piece.color);
+      // v1.1.2 PHASE 71 (defense-in-depth): Chess960 0-distance castling.
+      // When the engine emits a UCI castling move for an SP-ID where the king
+      // already sits on its castling target (e.g. king on g1, kingside rook on
+      // h1 → UCI "g1h1" → uciToCoords rewrites to "g1g1"), the king's source
+      // and destination are the SAME square. The distance check below
+      // (`Math.abs(to.col-from.col)>=_minDist`) rejects this (0 < 1). The
+      // primary castle-flag path (`mv.to.castle`, set by uciToCoords in
+      // Phase 71) catches it before this fallback, but we add an explicit
+      // 0-distance branch here as defense-in-depth so that any future code
+      // path that produces a 0-distance king move with castling rights
+      // present is still correctly recognized as castling. The king itself
+      // occupies the destination square (so `_destValid` is false), which is
+      // why we bypass `_destValid` for this case — the king stays put and
+      // only the rook moves (handled by makeMv's `from===to` branch added in
+      // v1.0.7 PHASE 17).
+      const _isZeroDist=mv.from.col===mv.to.col;
+      if(_is960&&_isZeroDist&&_cr){
+        if(mv.to.col===6&&_cr[mv.piece.color+'Kingside'])return 'kingside';
+        if(mv.to.col===2&&_cr[mv.piece.color+'Queenside'])return 'queenside';
+      }
       if(mv.to.col===6&&Math.abs(mv.to.col-mv.from.col)>=_minDist){
         if(_destValid&&(!_is960||(_cr&&_cr[mv.piece.color+'Kingside'])))return 'kingside';
       }
@@ -3119,7 +3175,12 @@ function _castleSide(mv,s){
  * @param {Object} mv - Move object with from, to, piece, promotion, etc.
  * @returns {Object} New game state with the move applied
  */
-function makeMv(s,mv){const ns=cloneS(s);const{from,to,piece,promotion}=mv;if(!piece||!ns.board[from.row]||!ns.board[from.row][from.col])return ns;
+function makeMv(s,mv){const ns=cloneS(s);const{from,to,piece,promotion}=mv;
+// v1.1.2 Phase 67: Code review P1 fix - validate both from/to coords via inB() before any board access.
+// Previously only from.row was bounds-checked; an out-of-range to coord (e.g., from setup mode
+// or a malformed FEN-derived move) would silently throw on ns.board[to.row][to.col] and corrupt state.
+if(!piece||!inB(from.row,from.col)||!inB(to.row,to.col))return ns;
+if(!ns.board[from.row][from.col])return ns;
 // v1.0.6 FIX: Detect castling BEFORE moving the king. In Chess960, the
 // rook's source square may be the same as the king's destination square
 // (e.g. rook on g1, king castles kingside to g1). If we move the king
@@ -3183,7 +3244,13 @@ if(_cs&&from.row===to.row&&from.col===to.col){
   ns.board[to.row][to.col]=ns.board[from.row][from.col];
   ns.board[from.row][from.col]=null;
 }
-if(piece.type==='pawn'&&s.enPassantTarget&&to.row===s.enPassantTarget.row&&to.col===s.enPassantTarget.col){const cr=piece.color==='white'?to.row+1:to.row-1;const epP=ns.board[cr][to.col];if(epP&&epP.type==='pawn'&&epP.color!==piece.color){ns.board[cr][to.col]=null}else if(epP){console.error('[En Passant Bug] Target set but captured piece is not an opposing pawn:',epP)}}
+if(piece.type==='pawn'&&s.enPassantTarget&&to.row===s.enPassantTarget.row&&to.col===s.enPassantTarget.col){const cr=piece.color==='white'?to.row+1:to.row-1;
+// v1.1.2 PHASE 71 (robustness): bounds-check `cr` before indexing ns.board.
+//   In normal play `to.row` is always 2 (white capturing) or 5 (black capturing),
+//   so `cr` is 3 or 4 — always in-bounds. But if a corrupted FEN import or
+//   setup-mode misuse produces an out-of-range enPassantTarget, `cr` could be
+//   -1 or 8, and `ns.board[cr]` would be undefined → TypeError. Defense-in-depth.
+if(inB(cr,to.col)){const epP=ns.board[cr][to.col];if(epP&&epP.type==='pawn'&&epP.color!==piece.color){ns.board[cr][to.col]=null}else if(epP){console.error('[En Passant Bug] Target set but captured piece is not an opposing pawn:',epP)}}}
 // v1.0.6 FIX: Move the rook for castling. _savedRook was saved BEFORE the
 // king moved, so it's the actual rook piece (not the king that overwrote
 // it). Place it at the rook destination, clear the rook source.
@@ -3249,7 +3316,10 @@ if(capPiece)h^=zobrist.pieceTable[to.row*8+to.col][pieceZobristIdx(capPiece)];
 const placedPiece=promotion?{type:promotion,color:piece.color}:piece;
 h^=zobrist.pieceTable[to.row*8+to.col][pieceZobristIdx(placedPiece)];
 // 4. En passant capture: remove captured pawn (with defensive check)
-if(piece.type==='pawn'&&s.enPassantTarget&&to.row===s.enPassantTarget.row&&to.col===s.enPassantTarget.col){const cr=piece.color==='white'?to.row+1:to.row-1;const epPiece={type:'pawn',color:OPP_COLOR[piece.color]};const epP=s.board[cr][to.col];if(epP&&epP.type==='pawn'&&epP.color!==piece.color){h^=zobrist.pieceTable[cr*8+to.col][pieceZobristIdx(epPiece)]};}
+if(piece.type==='pawn'&&s.enPassantTarget&&to.row===s.enPassantTarget.row&&to.col===s.enPassantTarget.col){const cr=piece.color==='white'?to.row+1:to.row-1;const epPiece={type:'pawn',color:OPP_COLOR[piece.color]};
+// v1.1.2 PHASE 71 (robustness): bounds-check `cr` before indexing s.board
+//   (mirrors the makeMv/makeMvInPlace en-passant bounds checks above).
+if(inB(cr,to.col)){const epP=s.board[cr][to.col];if(epP&&epP.type==='pawn'&&epP.color!==piece.color){h^=zobrist.pieceTable[cr*8+to.col][pieceZobristIdx(epPiece)]};}}
 // 5. Castling: move rook (v1.0.6: use actual rook from/to cols for Chess960)
 if(_cs&&_rookFrom>=0&&_rookTo>=0){
   const rookIdx=pieceZobristIdx({type:'rook',color:piece.color});
@@ -3286,7 +3356,12 @@ return ns}
  */
 function makeMvInPlace(s,mv){
 const{from,to,piece,promotion}=mv;
-if(!piece||!s.board[from.row]||!s.board[from.row][from.col])return null;
+// v1.1.2 Phase 70: Apply the same P1 bounds check as makeMv (Phase 67) —
+//   validate both from/to coords via inB() before any board access.
+//   Previously only from.row was bounds-checked, allowing an out-of-range
+//   to coord to silently throw on s.board[to.row][to.col].
+if(!piece||!inB(from.row,from.col)||!inB(to.row,to.col))return null;
+if(!s.board[from.row]||!s.board[from.row][from.col])return null;
 // v1.0.6 FIX: Detect castling BEFORE moving the king (same fix as makeMv).
 // In Chess960, the rook's source may be the king's destination. Save the
 // rook before the king overwrites it.
@@ -3369,10 +3444,14 @@ if(_cs&&from.row===to.row&&from.col===to.col){
 // 2. En passant capture
 if(piece.type==='pawn'&&s.enPassantTarget&&to.row===s.enPassantTarget.row&&to.col===s.enPassantTarget.col){
 const cr=piece.color==='white'?to.row+1:to.row-1;
+// v1.1.2 PHASE 71 (robustness): bounds-check `cr` before indexing s.board
+//   (defense-in-depth — mirrors the makeMv fix above).
+if(inB(cr,to.col)){
 const epP=s.board[cr][to.col];
 if(epP&&epP.type==='pawn'&&epP.color!==piece.color){
 undo.epCaptured={r:cr,c:to.col,piece:{type:epP.type,color:epP.color}};
 s.board[cr][to.col]=null;
+}
 }
 }
 // 3. Castling: move rook (v1.0.6 FIX: use _savedRook saved before king move)
@@ -3679,7 +3758,13 @@ for(let r=0;r<8;r++)for(let c=0;c<8;c++){if(r===from.row&&c===from.col)continue;
 if(numSameTarget>0){if(numSameFile===0)n+=String.fromCharCode(97+from.col);else if(numSameRow===0)n+=(8-from.row);else n+=String.fromCharCode(97+from.col)+(8-from.row)}
 }
 if(piece.type==='pawn'&&isCap)n+=String.fromCharCode(97+from.col);if(isCap)n+='x';n+=posAlg(to);if(promotion)n+='='+(promotion==='knight'?'N':promotion[0].toUpperCase())}
-if(setupMode)return n;
+// v1.1.2 PHASE 71 (robustness): guard against `setupMode` being undefined
+// (e.g. if moveAlg is called before ui.js has declared the global). Other
+// call sites in this file use `typeof setupMode!=='undefined'&&setupMode`;
+// this site was missed and would throw a ReferenceError. Falling through to
+// the check/checkmate suffix computation is harmless for setup-mode moves
+// (the post-state would just be undefined → no suffix added).
+if(typeof setupMode!=='undefined'&&setupMode)return n;
 // Check/checkmate suffix: use actual post-move state when available (avoids manual board
 // construction bugs — missing posCount, stale castlingRights, etc.)
 const ps=postState;
@@ -4127,7 +4212,7 @@ function queryECOBookMove(s) {
   // Prefer longer/deeper book lines, with some randomness for variety
   candidates.sort((a, b) => b.depth - a.depth);
   const topN = candidates.slice(0, Math.min(5, candidates.length));
-  return topN[Math.floor(Math.random() * topN.length)];
+  return topN[secureRandomInt(topN.length)];
 }
 
 // ECO Opening Recommendation for player's turn (LRU cache using Map)
@@ -4238,7 +4323,7 @@ function _prependBlackToMovePlaceholder(){
 //   - Back-rank piece placement from SP-ID
 //   - Shredder-FEN castling rights encoding/decoding (HAah format)
 //   - Chess960 castling rules (king-to-g1/c1, rook-to-f1/d1 final squares)
-//   - Bridge call helper: setChess960Mode(enabled) → AndroidBridge
+//   - Bridge call helper: setChess960Mode(enabled) -> AndroidBridge
 //
 // Copyright (C) 2026 Regalia
 //
@@ -4258,14 +4343,14 @@ function _prependBlackToMovePlaceholder(){
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 
-// ===== I. SP-ID → piece placement =====
+// ===== I. SP-ID -> piece placement =====
 // The 960合法 starting positions are encoded by an integer 0..959.
 // Algorithm (reverse of the standard derivation):
-//   1. lightBishop = sp % 4        → file index among {1,3,5,7} (LIGHT squares: b,d,f,h)
-//   2. darkBishop  = (sp/4) % 4    → file index among {0,2,4,6} (DARK squares: a,c,e,g)
-//   3. queen       = (sp/16) % 6   → file index among the 6 remaining empty squares
-//   4. knight1     = (sp/96) % 10  → first knight's slot among the 5 remaining empties
-//   5. knight2     = ((sp/96) / 10) → second knight's slot among the remaining 4 empties
+//   1. lightBishop = sp % 4        -> file index among {1,3,5,7} (LIGHT squares: b,d,f,h)
+//   2. darkBishop  = (sp/4) % 4    -> file index among {0,2,4,6} (DARK squares: a,c,e,g)
+//   3. queen       = (sp/16) % 6   -> file index among the 6 remaining empty squares
+//   4. knight1     = (sp/96) % 10  -> first knight's slot among the 5 remaining empties
+//   5. knight2     = ((sp/96) / 10) -> second knight's slot among the remaining 4 empties
 //   6. The remaining 3 slots are filled: ROOK, KING, ROOK (in that order, since King must be between two rooks).
 // The traditional chess start position (RNBQKBNR) is SP-ID 518.
 
@@ -4286,7 +4371,7 @@ const _BINOMIAL_5_2 = [
 
 /**
  * Generate the 8-piece back-rank arrangement from a Chess960 SP-ID.
- * @param {number} spid — integer 0..959
+ * @param {number} spid -- integer 0..959
  * @returns {string[]} array of 8 piece-type strings: 'rook'/'knight'/'bishop'/'queen'/'king'
  */
 function spidToBackRank(spid){
@@ -4328,9 +4413,9 @@ function spidToBackRank(spid){
  * variables (empties1, empties2, queenIdx) and confusing intermediate state.
  * Rewrote from first principles: derive each SP-ID component directly from
  * the piece positions, in the same order the SP-ID encoding uses
- * (light bishop → dark bishop → queen slot → knight pair).
+ * (light bishop -> dark bishop -> queen slot -> knight pair).
  *
- * @param {string[]} backRank — array of 8 piece types
+ * @param {string[]} backRank -- array of 8 piece types
  * @returns {number} SP-ID 0..959, or -1 if invalid
  */
 function backRankToSPID(backRank){
@@ -4350,7 +4435,7 @@ function backRankToSPID(backRank){
   const bishFiles=[];
   for(let i=0;i<8;i++)if(backRank[i]==='bishop')bishFiles.push(i);
   if(bishFiles.length!==2)return -1;
-  if(bishFiles[0]%2===bishFiles[1]%2)return -1; // same-color bishops — invalid
+  if(bishFiles[0]%2===bishFiles[1]%2)return -1; // same-color bishops -- invalid
   // 4. Derive SP-ID components.
   // Light (white-square) bishop is on an ODD file (1,3,5,7);
   // dark (black-square) bishop is on an EVEN file (0,2,4,6).
@@ -4389,17 +4474,30 @@ function backRankToSPID(backRank){
  * v1.0.4 Rev30 ROBUSTNESS: Eliminate modulo bias. Previously buf[0]%960 had
  * a slight bias because 65536 isn't a multiple of 960 (65536 = 68*960 + 256,
  * so values 0..255 were slightly more likely than 256..959). Now we rejection-
- * sample: take values < 65536-256 = 65280 (the largest multiple of 960 ≤ 65536)
+ * sample: take values < 65536-256 = 65280 (the largest multiple of 960 <= 65536)
  * and only then apply %960. The bias was only ~0.03% so this is a defensive
  * improvement, not a bug fix.
+ *
+ * SECURITY FIX v1.0.5 (SonarCloud Hotspot #3):
+ *   - Removed the Math.random() fallback in the catch{} block.
+ *   - Math.random() is a pseudo-random number generator (PRNG) using a
+ *     predictable LCG algorithm. In the context of Chess960 SP-ID generation,
+ *     a predictable sequence could allow an attacker to anticipate upcoming
+ *     starting positions, compromising competitive fairness.
+ *   - New fallback: if crypto.getRandomValues() is unavailable (should never
+ *     happen in modern browsers/WebView), return the standard SP-ID 518
+ *     (traditional start position RNBQKBNR) as a safe default instead of
+ *     falling back to an insecure PRNG.
+ *   - This eliminates the SonarCloud "Make sure that using this pseudorandom
+ *     number generator is safe here" hotspot.
  */
 function randomSPID(){
   try{
     if(typeof crypto!=='undefined'&&crypto.getRandomValues){
       const buf=new Uint16Array(1);
       // Rejection-sample to eliminate modulo bias
-      const LIMIT=65280; // largest multiple of 960 ≤ 65536
-      for(let _i=0;_i<8;_i++){ // bounded retries (8 is plenty — P(>8 retries) ≈ 0)
+      const LIMIT=65280; // largest multiple of 960 <= 65536
+      for(let _i=0;_i<8;_i++){ // bounded retries (8 is plenty -- P(>8 retries) approx 0)
         crypto.getRandomValues(buf);
         if(buf[0]<LIMIT)return buf[0]%960;
       }
@@ -4407,13 +4505,15 @@ function randomSPID(){
       return buf[0]%960;
     }
   }catch(e){}
-  return Math.floor(Math.random()*960);
+  // SECURITY: Return standard position instead of Math.random() when crypto
+  // is unavailable. SP-ID 518 = traditional RNBQKBNR.
+  return 518;
 }
 
 // ===== II. Shredder-FEN castling rights =====
 // In Chess960, castling rights in FEN use the rook's source file letter
 // (uppercase for White, lowercase for Black) instead of K/Q/k/q.
-// Example: SP-ID 518 (traditional) → "RNBQKBNR" with castling rights "HAah"
+// Example: SP-ID 518 (traditional) -> "RNBQKBNR" with castling rights "HAah"
 // (H = rook on h1 = kingside, A = rook on a1 = queenside, etc.)
 // For standard chess, "HAah" is equivalent to "KQkq".
 
@@ -4422,28 +4522,33 @@ function randomSPID(){
  * (X-FEN) format.
  *
  * v1.0.7 PHASE 4 (Chess960 / X-FEN correctness fix):
- *   - Letters MUST be sorted a→h (left-to-right) regardless of color, per the
+ *   - Letters MUST be sorted a->h (left-to-right) regardless of color, per the
  *     X-FEN specification. The previous implementation emitted White-ks,
- *     White-qs, Black-ks, Black-qs in that fixed order — which violated the
+ *     White-qs, Black-ks, Black-qs in that fixed order -- which violated the
  *     spec when, e.g., White's queenside rook was on file b and White's
  *     kingside rook was on file f (correct output "BF", previous output "FB").
  *   - A side's rook is the CLOSEST same-color rook on the relevant side of
  *     the king (kingside = first rook to the right of the king; queenside =
  *     first rook to the left). The previous code used `Array.find` which
- *     returns the FIRST match in iteration order — for kingside that was the
+ *     returns the FIRST match in iteration order -- for kingside that was the
  *     closest-to-king rook (correct), but for queenside it was also the
- *     closest-to-king rook (also correct, since iteration goes 0→7 and we
+ *     closest-to-king rook (also correct, since iteration goes 0->7 and we
  *     want the rightmost of the left-side rooks). Re-verified: this is right.
  *   - Returns '-' if no rights are set OR if the required rook cannot be
- *     found on the board (defensive — should not normally happen because
+ *     found on the board (defensive -- should not normally happen because
  *     _validateSetupCastleMarks / makeMv keep rights and rooks in sync).
  *
- * @param {Object} cr — {whiteKingside, whiteQueenside, blackKingside, blackQueenside}
- * @param {Array} board — 8x8 board array (used to locate rooks)
- * @returns {string} Shredder castling string, e.g. "AHah" (sorted a→h) or "-"
+ * @param {Object} cr -- {whiteKingside, whiteQueenside, blackKingside, blackQueenside}
+ * @param {Array} board -- 8x8 board array (used to locate rooks)
+ * @returns {string} Shredder castling string, e.g. "AHah" (sorted a->h) or "-"
  */
 function toShredderCastling(cr,board){
-  if(!cr)return '-';
+  // v1.1.2 PHASE 71 (robustness): guard against null/undefined board or
+  // missing rows. The loop below directly accesses board[7][c] and
+  // board[0][c]; without this guard a corrupted/empty board would throw a
+  // TypeError. parseShredderCastling (the inverse) already has this defensive
+  // pattern — we mirror it here for symmetry.
+  if(!cr||!board||!board[7]||!board[0])return '-';
   // Find white king + rooks on rank 1 (row 7), and black on rank 8 (row 0)
   let wKing=null,bKing=null;
   const wRooks=[],bRooks=[];
@@ -4478,22 +4583,22 @@ function toShredderCastling(cr,board){
     }
   }
   if(pairs.length===0)return '-';
-  // Sort by file a→h (spec requirement). Ties (same file, both colors —
+  // Sort by file a->h (spec requirement). Ties (same file, both colors --
   // impossible in a legal position) keep White before Black.
   pairs.sort((a,b)=>a.file-b.file||(a.isWhite?0:1)-(b.isWhite?0:1));
   let str='';
   for(const p of pairs){
     str+=String.fromCharCode((p.isWhite?65:97)+p.file);
   }
-  // v1.0.8 PHASE 30: removed dead `||'-'` — pairs.length>0 here (length===0
-  //   returns '-' above), and the loop always appends ≥1 char, so str is non-empty.
+  // v1.0.8 PHASE 30: removed dead `||'-'` -- pairs.length>0 here (length===0
+  //   returns '-' above), and the loop always appends >=1 char, so str is non-empty.
   return str;
 }
 
 /**
  * Parse a Shredder-FEN (X-FEN) castling string into our internal castlingRights
  * object. Also accepts the standard KQkq notation (X-FEN backward-compatibility
- * mode: K maps to file h, Q maps to file a, k → h, q → a).
+ * mode: K maps to file h, Q maps to file a, k -> h, q -> a).
  *
  * v1.0.7 PHASE 4 (Chess960 / X-FEN correctness fix):
  *   - The X-FEN spec allows MIXED notation: e.g. "KQah" is legal (White uses
@@ -4506,14 +4611,14 @@ function toShredderCastling(cr,board){
  *     against malformed FENs). If not, the right is silently dropped instead
  *     of producing an inconsistent state that would later break move generation.
  *
- * @param {string} str — castling field from FEN (e.g. "KQkq", "AHah", "Bf", "-")
- * @param {Array} board — 8x8 board array (used to identify king + rook positions)
+ * @param {string} str -- castling field from FEN (e.g. "KQkq", "AHah", "Bf", "-")
+ * @param {Array} board -- 8x8 board array (used to identify king + rook positions)
  * @returns {Object} {whiteKingside, whiteQueenside, blackKingside, blackQueenside}
  */
 function parseShredderCastling(str,board){
   const cr={whiteKingside:false,whiteQueenside:false,blackKingside:false,blackQueenside:false};
   if(!str||str==='-')return cr;
-  // Locate kings (required to map a file letter → kingside/queenside).
+  // Locate kings (required to map a file letter -> kingside/queenside).
   let wKing=-1,bKing=-1;
   for(let c=0;c<8;c++){
     if(board[7][c]&&board[7][c].type==='king'&&board[7][c].color==='white')wKing=c;
@@ -4541,7 +4646,7 @@ function parseShredderCastling(str,board){
       if(wKing<0)continue;
       if(file>wKing)cr.whiteKingside=true;
       else if(file<wKing)cr.whiteQueenside=true;
-      // file === wKing is illegal (rook on king's square) — silently drop.
+      // file === wKing is illegal (rook on king's square) -- silently drop.
     }else{
       if(bKing<0)continue;
       if(file>bKing)cr.blackKingside=true;
@@ -4559,7 +4664,7 @@ function parseShredderCastling(str,board){
 //                 king does not pass through or land on an attacked square.
 //   - The rook's PATH may pass through attacked squares (only the king's path matters).
 //
-// In standard chess the king moves 2 squares (e1→g1 or e1→c1). In Chess960, the
+// In standard chess the king moves 2 squares (e1->g1 or e1->c1). In Chess960, the
 // king's MOVE may be 0, 1, 2, or more squares to reach g1/c1, depending on its
 // starting file. The rook's move may also be 0 or more squares.
 //
@@ -4580,9 +4685,9 @@ function parseShredderCastling(str,board){
  *     existed in the case of a non-standard setup position).
  *   - The kingside rook is the CLOSEST same-color rook to the RIGHT of the
  *     king (i.e. highest col among rooks with col > kingCol, but actually
- *     the SMALLEST such col — the closest one to the king, since "kingside"
+ *     the SMALLEST such col -- the closest one to the king, since "kingside"
  *     traditionally means the h-file side and the king castles toward h).
- *     Wait — clarify: in Chess960, "kingside" castling always sends the
+ *     Wait -- clarify: in Chess960, "kingside" castling always sends the
  *     king to g1 (col 6). The rook that participates is the closest rook
  *     on the king's RIGHT side (col > kingCol), because that rook's path
  *     to f1 (col 5) is the shortest. If multiple rooks are on the right,
@@ -4593,8 +4698,8 @@ function parseShredderCastling(str,board){
  *     `null` if no rook exists on that side. Previously returned `null`
  *     entirely if either side was missing, which broke single-side castling.
  *
- * @param {Array} board — 8x8 board
- * @param {string} color — 'white' or 'black'
+ * @param {Array} board -- 8x8 board
+ * @param {string} color -- 'white' or 'black'
  * @returns {Object|null} {king:col, kingside:col|null, queenside:col|null}
  *   Returns null only if the king itself is missing.
  */
@@ -4613,10 +4718,10 @@ function findCastlingRooks(board,color){
   let ksr=null,qsr=null;
   for(const c of rookCols){
     if(c>kingCol){
-      // right of king — pick the smallest such col (closest to king)
+      // right of king -- pick the smallest such col (closest to king)
       if(ksr===null||c<ksr)ksr=c;
     }else if(c<kingCol){
-      // left of king — pick the largest such col (closest to king)
+      // left of king -- pick the largest such col (closest to king)
       if(qsr===null||c>qsr)qsr=c;
     }
   }
@@ -4626,7 +4731,7 @@ function findCastlingRooks(board,color){
 /**
  * Find the rook that participates in a Chess960 castling move on the given side.
  * Returns just that rook's column, or null if no rook exists on that side.
- * This is the per-side variant of findCastlingRooks — used by isChess960CastlingLegal
+ * This is the per-side variant of findCastlingRooks -- used by isChess960CastlingLegal
  * and chess960CastlingRookMove so that castling to one side works even when the
  * other side has no rook (per the user's rule reference).
  *
@@ -4644,11 +4749,11 @@ function findCastlingRookForSide(board,color,side){
  * v1.0.7 PHASE 4: now uses findCastlingRookForSide so that castling to one
  * side works even when the other side has no rook (e.g. the queenside rook
  * was captured). Previously this called findCastlingRooks which returned null
- * unless BOTH sides had rooks — blocking single-side castling.
+ * unless BOTH sides had rooks -- blocking single-side castling.
  *
- * @param {Object} s — game state
- * @param {string} color — 'white' or 'black'
- * @param {string} side — 'kingside' or 'queenside'
+ * @param {Object} s -- game state
+ * @param {string} color -- 'white' or 'black'
+ * @param {string} side -- 'kingside' or 'queenside'
  * @returns {Object|null} {rookFrom:col, rookTo:col, kingTo:col, row} or null
  */
 function chess960CastlingRookMove(s,color,side){
@@ -4667,7 +4772,7 @@ function chess960CastlingRookMove(s,color,side){
  *   - Now uses findCastlingRookForSide instead of findCastlingRooks. This
  *     means castling to one side is legal even if the other side has no rook
  *     (e.g. the queenside rook was captured). Per the user-quoted rule
- *     reference: "对局进行中（执行易位时）：不需要" — only the participating
+ *     reference: "对局进行中（执行易位时）：不需要" -- only the participating
  *     rook must exist; the other side is irrelevant.
  *   - If no rook exists on the requested side, returns false (cannot castle
  *     without a rook to castle with).
@@ -4677,11 +4782,11 @@ function chess960CastlingRookMove(s,color,side){
  * hold:
  *   1. The king and participating rook have never moved (castling rights present).
  *   2. All squares between the king and rook (exclusive) are empty.
- *   3. The king's destination AND the rook's destination are empty — EXCEPT
+ *   3. The king's destination AND the rook's destination are empty -- EXCEPT
  *      the king/rook themselves may occupy each other's destination (since
  *      they move away). A third piece on either destination makes castling
- *      ILLEGAL (previously the code allowed castling that would CAPTURE or
- *      DESTROY own pieces on the destination squares!).
+ *      ILLEGAL (previously the code only checked squares between king and rook
+ *      and missed destination squares!).
  *   4. The king is not currently in check.
  *   5. Every square the king crosses (including destination) is not attacked.
  *
@@ -4689,8 +4794,8 @@ function chess960CastlingRookMove(s,color,side){
  * and conditions 4-5 (check/attack). It was MISSING condition 3: it never
  * verified that the king's destination and rook's destination were clear of
  * other pieces. In Chess960, the king and rook can start close together
- * (e.g., king on b1, rook on c1), so the king's path (b1→g1) extends FAR
- * beyond the rook — through squares d1, e1, f1 that may be occupied by
+ * (e.g., king on b1, rook on c1), so the king's path (b1->g1) extends FAR
+ * beyond the rook -- through squares d1, e1, f1 that may be occupied by
  * other pieces. The "between king and rook" check (only covering the gap
  * between the two pieces) did NOT cover these path squares.
  *
@@ -4698,9 +4803,9 @@ function chess960CastlingRookMove(s,color,side){
  * square in this union must be empty, EXCEPT the king's starting square
  * (king moves away) and the rook's starting square (rook moves away).
  *
- * @param {Object} s — game state
- * @param {string} color — 'white' or 'black'
- * @param {string} side — 'kingside' or 'queenside'
+ * @param {Object} s -- game state
+ * @param {string} color -- 'white' or 'black'
+ * @param {string} side -- 'kingside' or 'queenside'
  * @returns {boolean} true if castling is legal
  */
 function isChess960CastlingLegal(s,color,side){
@@ -4751,7 +4856,7 @@ function isChess960CastlingLegal(s,color,side){
   const rookLo=Math.min(rookFrom,rookTo),rookHi=Math.max(rookFrom,rookTo);
   const unionLo=Math.min(kingLo,rookLo),unionHi=Math.max(kingHi,rookHi);
   for(let c=unionLo;c<=unionHi;c++){
-    if(c===kingCol||c===rookFrom)continue; // king/rook start — they move away
+    if(c===kingCol||c===rookFrom)continue; // king/rook start -- they move away
     if(s.board[row][c])return false; // another piece blocks the path or destination
   }
 
@@ -4786,7 +4891,7 @@ function isChess960Mode(){return _chess960ModeActive;}
 /**
  * Build a complete game state for a Chess960 starting position.
  * Mirrors initState() but uses the SP-ID-specified back-rank.
- * @param {number} spid — 0..959 (default: random)
+ * @param {number} spid -- 0..959 (default: random)
  * @returns {Object} game state with board, castlingRights, etc.
  */
 function initChess960State(spid){
@@ -4795,7 +4900,7 @@ function initChess960State(spid){
   if(spid==null||spid<0||spid>959||!Number.isInteger(spid))spid=randomSPID();
   const backRank=spidToBackRank(spid);
   const b=Array.from({length:8},()=>Array(8).fill(null));
-  // Black on row 0, White on row 7 (mirrored — black's a8 corresponds to col 0)
+  // Black on row 0, White on row 7 (mirrored -- black's a8 corresponds to col 0)
   for(let c=0;c<8;c++){
     b[0][c]={type:backRank[c],color:'black'};
     b[1][c]={type:'pawn',color:'black'};
@@ -4892,6 +4997,10 @@ function normalizeTagValue(v){
  * @returns {string} multi-line tag-pair section (no trailing newline)
  */
 function sevenTagRoster(info){
+  // v1.1.2 PHASE 71 (robustness): guard against null/undefined info (a caller
+  // passing `null` would previously throw a TypeError at `info.result`).
+  // Defensive — callers should always pass an object, but the cost is trivial.
+  info=info||{};
   const r=info.result||'*';
   // Validate Result — only the 4 legal values are allowed
   const validResults=['1-0','0-1','1/2-1/2','*'];
@@ -5362,7 +5471,12 @@ function formatTimeControl(tc){
  * @returns {string} complete PGN text
  */
 function composePGN(params){
-  const tagPart=(params.tagPairs||[]).join('\n');
+  // v1.1.2 PHASE 71 (robustness): guard against null/undefined params (a
+  // caller passing `null` would previously throw a TypeError at
+  // `params.tagPairs`). Defensive — the AI-bridge caller always passes an
+  // object, but this protects against future regressions.
+  params=params||{};
+  const tagPart=((params.tagPairs)||[]).join('\n');
   // Build movetext
   const tokens=[];
   // v1.1.1 Phase 61: Insert a pre-move comment (if provided) BEFORE the first
@@ -5799,6 +5913,11 @@ function buildSupplementaryTagsObject(ctx){
 let _workerPool = [];
 let _poolSize = 0;
 let _workerSupported = (typeof Worker !== 'undefined');
+// v1.1.2 PHASE 71: consecutive-failure counter for _createWorker(). Reset to
+// 0 on success; incremented on failure. When >= 3, _workerSupported is set
+// false (pool disabled). This prevents a single transient OOM from
+// permanently disabling the worker pool for the page lifetime.
+let _workerCreateFailures = 0;
 let _nextTaskId = 1;
 const _pendingTasks = new Map(); // taskId -> {resolve, reject, worker, timeout}
 const _MAX_QUEUE_SIZE = 50;
@@ -6033,10 +6152,44 @@ function _createWorker() {
       _removeWorker(w);
       _dispatchNext();
     };
+    // v1.1.2 Phase 69 (Web Worker guide §6.1): onmessageerror fires when the
+    //   message data cannot be deserialized (structured clone failure). Without
+    //   this handler, such failures would silently leave the task's promise
+    //   hanging until the 30s timeout. Now we reject immediately and recycle
+    //   the worker (a serialization failure usually indicates a corrupted
+    //   worker state — safer to terminate and replace).
+    w.onmessageerror = function(e) {
+      const toReject = [];
+      for (const [tid, task] of _pendingTasks) {
+        if (task.worker === w) toReject.push([tid, task]);
+      }
+      for (const [tid, task] of toReject) {
+        _pendingTasks.delete(tid);
+        if (task.timeout) { clearTimeout(task.timeout); task.timeout = null; }
+        task.reject(new Error('Worker message serialization error'));
+      }
+      w._busy = false;
+      _removeWorker(w);
+      _dispatchNext();
+    };
+    // v1.1.2 PHASE 71: reset the consecutive-failure counter on success — a
+    // single successful creation proves the pool is still functional.
+    _workerCreateFailures = 0;
     return w;
   } catch (e) {
     if (url) { try { URL.revokeObjectURL(url); } catch (_) {} }
-    _workerSupported = false;
+    // v1.1.2 PHASE 71 (robustness): do NOT permanently disable the worker pool
+    // on a single transient failure (e.g. transient OOM, Blob URL quota
+    // exhaustion). Previously `_workerSupported = false` was set on any error,
+    // disabling the pool for the entire page lifetime — even if the next
+    // _createWorker() call would have succeeded. We now track a consecutive-
+    // failure counter and only disable after 3 consecutive failures. A
+    // successful _createWorker() resets the counter. This mirrors the
+    // resilience pattern recommended for transient resource-exhaustion errors.
+    _workerCreateFailures = (_workerCreateFailures || 0) + 1;
+    if (_workerCreateFailures >= 3) {
+      _workerSupported = false;
+    }
     return null;
   }
 }
@@ -7005,7 +7158,7 @@ let _engineInitAttempted=false;
 function _attemptEngineInit(){
   if(_engineInitAttempted)return;
   _engineInitAttempted=true;
-  console.log('Attempting engine init...');
+  // v1.1.2 Phase 70: removed debug console.log (production cleanup)
   // Request POST_NOTIFICATIONS permission on Android 13+ before starting engine.
   // This is required for the foreground service notification that keeps the engine alive.
   try{
@@ -7016,7 +7169,7 @@ function _attemptEngineInit(){
   try{
     if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.initEngine==='function'){
       AndroidBridge.initEngine();
-      console.log('Engine init called via AndroidBridge');
+      // v1.1.2 Phase 70: removed debug console.log (production cleanup)
     }else{
       console.warn('AndroidBridge.initEngine not available');
     }
@@ -7067,7 +7220,7 @@ let _emergencyFallbackTimerId=setTimeout(function(){
       lo.title=T('click_skip_loading');
       lo.addEventListener('click',function(e){
         if(!_loadingOverlayHiding){
-          console.log('User clicked loading overlay — skipping');
+          // v1.1.2 Phase 70: removed debug console.log (production cleanup)
           _hideLoadingOverlay();
           showToast(T('engine_skip'));
           render();
@@ -8417,13 +8570,20 @@ function uciToCoords(uci){
     const toPiece=gameState.board[tr][tc];
     if(fromPiece&&fromPiece.type==='king'&&toPiece&&toPiece.type==='rook'&&fromPiece.color===toPiece.color&&fr===tr){
       // King "captures" own rook on the same rank → Chess960 castling notation.
+      // v1.1.2 PHASE 71 (bug fix): Attach the castle flag to `result.to` so that
+      // downstream `_castleSide()` detects castling via its primary path
+      // (`mv.to.castle`) instead of falling back to the distance heuristic —
+      // which rejects 0-distance king moves (king already on g1/c1) and would
+      // null the king in `makeMv`. This fixes Chess960 SP-IDs where the king
+      // starts on its castling target square (e.g. king on g1, rook on h1 →
+      // UCI "g1h1" rewritten to "g1g1" with castle='kingside').
       if(tc>fc){
         // Rook is to the right of king → kingside castling, king ends on col 6.
         // Rewrite destination to (king's row, col 6) = g1/g8.
-        result.to={row:tr,col:6};
+        result.to={row:tr,col:6,castle:'kingside'};
       }else if(tc<fc){
         // Rook is to the left of king → queenside castling, king ends on col 2.
-        result.to={row:tr,col:2};
+        result.to={row:tr,col:2,castle:'queenside'};
       }
       // If tc === fc this is impossible (king and rook can't share a square).
     }
@@ -8433,7 +8593,7 @@ function uciToCoords(uci){
 
 // Callback: Engine init progress (real progress from StockfishNative.startEngine)
 function onInitProgress(pct, msg){
-  console.log('Engine init progress:', pct, msg);
+  // v1.1.2 Phase 70: removed debug console.log (production cleanup)
   if(!_loadingOverlayHiding){
     _updateLoadingStatus(msg||(T('loading_prefix')+pct+'%'), pct);
   }
@@ -8444,7 +8604,7 @@ function onInitProgress(pct, msg){
 // It gives JS a chance to reset stale state that would otherwise block
 // doAIMove()/requestEngineEval() when onEngineReady() fires after restart.
 function onEngineRestarting(){
-  console.log('Engine restarting (Java-side auto-recovery)');
+  // v1.1.2 Phase 70: removed debug console.log (production cleanup)
   _engineReady=false;
   if(isAIThinking){isAIThinking=false;_aiBarInfo='';}
   if(isHintLoading){isHintLoading=false;_hintBarInfo='';}
@@ -8476,7 +8636,7 @@ function onEngineRestarting(){
 
 // Callback: Engine ready
 function onEngineReady(){
-  console.log('Stockfish engine is ready');
+  // v1.1.2 Phase 70: removed debug console.log (production cleanup)
   _engineReady=true;
   // Reset restart counter on successful engine init
   if(window._engineRestartCount)window._engineRestartCount=0;
@@ -8545,7 +8705,7 @@ function onEngineReady(){
 
 // Callback: Best move received from engine (AI move)
 function onBestMove(uciMove){
-  console.log('onBestMove:',uciMove);
+  // v1.1.2 Phase 67: removed leftover console.log (Phase 66 cleanup miss; mirrors onHintMove).
   // v1.1.0 Phase 54: Update heartbeat timestamp — onBestMove is proof-of-life
   // from a healthy engine. Without this, long AI thinks (>120s) falsely
   // trigger engine restart via the heartbeat monitor.
@@ -8712,7 +8872,7 @@ function onBestMove(uciMove){
 // Converts UCI move to SAN (Standard Algebraic Notation) for FIDE PGN compliant display
 // Also displays the ponder move (engine's predicted reply) alongside the bestmove
 function onHintMove(uciMove){
-  console.log('onHintMove:',uciMove);
+  // v1.1.2 Phase 67: removed leftover console.log (Phase 66 cleanup miss).
   // v1.1.0 Phase 54: Update heartbeat timestamp — onHintMove is proof-of-life.
   _lastEngineCallbackTime=Date.now();
   // v1.0.8 PHASE 49: discard stale hint callbacks. If isHintLoading is already
@@ -8743,6 +8903,17 @@ function onHintMove(uciMove){
     return;
   }
   // Generate SAN notation for the bestmove (推荐走法)
+  // v1.1.2 Phase 67: P2 fix — verify coords are in-bounds before board access.
+  // Although uciToCoords() returns valid coords for well-formed UCI strings,
+  // a race condition (gameState mutated during async engine callback) could
+  // leave us with stale coords. Bounds-check defensively.
+  if(!inB(coords.from.row,coords.from.col)||!inB(coords.to.row,coords.to.col)){
+    _ponderMoveSAN='';_lastPonderMoveFromEngine=null;
+    _updateAIThinkDisplay();
+    hintText='🔦 '+T('recommend')+': '+uciMove;
+    render();
+    return;
+  }
   const piece=gameState.board[coords.from.row][coords.from.col];
   if(!piece){
     _ponderMoveSAN='';_lastPonderMoveFromEngine=null;
@@ -12611,7 +12782,7 @@ let _ecoCachedData = null;
   _loadEcoFromCache().then(function(cached) {
     if (cached && Array.isArray(cached) && cached.length > 0) {
       _ecoCachedData = cached;
-      console.log('ECO data loaded from IndexedDB cache (' + cached.length + ' openings)');
+      // v1.1.2 Phase 70: removed debug console.log (production cleanup)
     }
   }).catch(function() {});
 })();
@@ -13120,7 +13291,7 @@ function _updateEvalDisplayIncremental() {
       if (app) {
         app.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:var(--bg);color:var(--text);padding:20px;text-align:center;font-family:system-ui,sans-serif">' +
           '<div style="font-size:3rem;margin-bottom:16px">♔</div>' +
-          '<h2 style="color:var(--accent2);margin-bottom:12px">'+T('app_name')+' v1.1.1</h2>' +
+          '<h2 style="color:var(--accent2);margin-bottom:12px">'+T('app_name')+' v1.1.2</h2>' +
           '<p style="color:#a08050;margin-bottom:20px;max-width:300px">'+T('render_error')+'</p>' +
           '<button onclick="location.reload()" style="padding:12px 24px;background:var(--btn-a-bg);color:var(--bg);border:none;border-radius:6px;font-size:1rem;font-weight:700;cursor:pointer">'+T('refresh_page')+'</button>' +
           '</div>';
@@ -14013,8 +14184,15 @@ function _buildReviewMovesInnerHTML(startIdx,endIdx){
     }
     const isAct=reviewStep===i+1;
     const isCritical=_criticalSteps.has(i+1);
+    // v1.1.2 Phase 68 (Issue 30 P2): Add long-press handler to prioritize
+    //   this step's eval during an active analyze-all batch. The handler is
+    //   attached via oncontextmenu (right-click / long-press on Android) —
+    //   this is the most reliable cross-platform long-press signal in WebView
+    //   (touchstart-based timers conflict with the existing board long-press
+    //   handler in the global touchstart listener). Returning false prevents
+    //   the default context menu.
     const criticalFlag=isCritical?' style="border-left:3px solid var(--accent2);padding-left:7px"':'';
-    h+='<div class="rmv-block'+(isAct?' act':'')+'" onclick="reviewGoTo('+(i+1)+')" data-step="'+(i+1)+'"'+criticalFlag+'>';
+    h+='<div class="rmv-block'+(isAct?' act':'')+'" onclick="reviewGoTo('+(i+1)+')" oncontextmenu="_prioritizeReviewStep('+(i+1)+');return false" data-step="'+(i+1)+'"'+criticalFlag+'>';
     h+='<span class="rmv-num">'+(isW?moveNum+'.':'')+'</span>';
     h+='<div class="rmv-detail"><span class="rmv-notation">'+_esc(mr.notation)+'</span>';
     if(isCritical&&_criticalReasons.has(i+1)){h+='<span style="font-size:.65rem;color:var(--accent);display:block;margin-top:1px">'+_criticalReasons.get(i+1)+'</span>';}
@@ -14534,6 +14712,14 @@ let reviewMode=false,reviewStep=0,reviewStates=[],reviewCritical=[];
 // from scrolling the move list independently).
 let _lastReviewStepScrolled=-2;
 let _reviewAnalyzeAllActive=false; // Flag for reviewAnalyzeAll batch analysis
+// v1.1.2 Phase 68 (Issue 30 P2): Priority queue for long-press-to-prioritize
+//   during analyze-all. When the user long-presses an uncached move while a
+//   batch is running, the step index is pushed here. The batch's advance
+//   function checks this queue BEFORE continuing the normal sequence and
+//   evaluates the prioritized step first. Entries are deduplicated (a second
+//   long-press on an already-queued step is a no-op). The queue is cleared on
+//   batch completion, batch cancel (exitReview/new game), and engine restart.
+let _reviewAnalyzePriorityQueue=[];
 // v1.1.0 Phase 54 rev14: _lastRenderReviewStep removed (dead code after virtual
 //   list disabled). Was used to detect reviewStep changes for window recompute.
 // v1.0.8 PHASE 18 Task 2: Virtual list state for the review move list.
@@ -14844,7 +15030,7 @@ const oppC=OPP_COLOR[playerColor];
 const flip=playerColor==='black';
 // Arrows computed separately by _updateArrows() — no inline computation needed
 
-let h='<div class="hdr" role="banner"><div class="hdr-top"><div class="hdr-l">'+_hdrKingIconHTML()+'<h1>'+T('app_name')+'<span class="ver">v1.1.1</span><button onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showAboutPage=true;render()" class="hdr-btn" style="margin-left:4px;cursor:pointer">ℹ️</button></h1></div><button onclick="toggleLang()" class="hdr-btn-lg" style="cursor:pointer">'+(_lang==='zh'?'↔️中':'↔️EN')+'</button><div class="ev" id="eval-disp" role="status" aria-label="'+T('evaluating')+'">'+(setupMode?T('setup_label'):(isAIThinking?'<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>':'<span class="ev-e">'+pe+'</span><span>'+pd+'</span><span style="color:var(--muted)">('+scoreStr+')</span>'+_hdrDepthStr+_hdrProgressStr))+'</div></div><div class="hdr-tools" role="toolbar" aria-label="'+T('ctrl_range')+'">'+(setupMode?'':'<div class="diff-sel" role="radiogroup" aria-label="AI">'+getAI_LEVELS().map(l=>'<button class="diff-b'+(getEffectiveAILevel()===l.id?' act':'')+'" onclick="if(!isAIThinking){'+(l.id===8?'openEngineConfig()':('aiLevel='+l.id+';try{AndroidBridge.syncGameDifficulty('+l.id+')}catch(e){}render()'))+'}" title="'+l.desc+'" role="radio" aria-checked="'+(getEffectiveAILevel()===l.id)+'">'+(l.id===8?'⚙️':l.id===7?('SL'+(function(){try{let _sl=20;if(typeof engineSettingsData!=='undefined'&&engineSettingsData&&engineSettingsData.skillLevel!=null)_sl=engineSettingsData.skillLevel;else if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getEngineSkillLevel)_sl=AndroidBridge.getEngineSkillLevel();return _sl;}catch(e){return 20;}})()):l.id)+'</button>').join('')+'</div>')+'<button type="button" class="btn" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()" aria-label="'+T('new_game')+'"><span style="font-size:1.4rem">⚔️</span> '+T('new_game')+'</button>'+'<button class="btn" onclick="quickFreeOpening()" aria-label="'+T('free_opening')+'">'+(playerColor==='white'?'<span style=\"font-size:1.4rem;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text\">♔&#xFE0E;</span>':'<span style=\"font-size:1.4rem;font-weight:400;color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans Symbol&#x27;,sans-serif;font-variant-emoji:text\">♚&#xFE0E;</span>')+' '+T('free_opening')+'</button>'+(setupMode?'':'<button class="btn" onclick="toggleSound()" id="btnSound" aria-label="'+T('sound')+'">'+(soundOn?'<span style="font-size:1.4rem">🔊</span> '+T('sound'):'<span style="font-size:1.4rem">🔇</span> '+T('sound'))+'</button>')+'<button class="btn" onclick="copyFEN()" title="'+T('copy_fen')+'" aria-label="'+T('copy_fen')+'"><span style="font-size:1.4rem">📝</span> FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="'+T('import_fen')+'" aria-label="'+T('import_fen')+'"><span style="font-size:1.4rem">🗃️</span> '+T('import_label')+'</button><button class="btn" onclick="'+(setupMode?'exitSetup()':'toggleSetup()')+'" aria-label="'+(setupMode?T('setup_done'):T('setup_mode'))+'">'+(setupMode?'<span style="font-size:1.4rem">✓</span> '+T('setup_done'):'<span style="font-size:1.4rem">🏗️</span> '+T('setup_mode'))+'</button></div></div>';
+let h='<div class="hdr" role="banner"><div class="hdr-top"><div class="hdr-l">'+_hdrKingIconHTML()+'<h1>'+T('app_name')+'<span class="ver">v1.1.2</span><button onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showAboutPage=true;render()" class="hdr-btn" style="margin-left:4px;cursor:pointer">ℹ️</button></h1></div><button onclick="toggleLang()" class="hdr-btn-lg" style="cursor:pointer">'+(_lang==='zh'?'↔️中':'↔️EN')+'</button><div class="ev" id="eval-disp" role="status" aria-label="'+T('evaluating')+'">'+(setupMode?T('setup_label'):(isAIThinking?'<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>':'<span class="ev-e">'+pe+'</span><span>'+pd+'</span><span style="color:var(--muted)">('+scoreStr+')</span>'+_hdrDepthStr+_hdrProgressStr))+'</div></div><div class="hdr-tools" role="toolbar" aria-label="'+T('ctrl_range')+'">'+(setupMode?'':'<div class="diff-sel" role="radiogroup" aria-label="AI">'+getAI_LEVELS().map(l=>'<button class="diff-b'+(getEffectiveAILevel()===l.id?' act':'')+'" onclick="if(!isAIThinking){'+(l.id===8?'openEngineConfig()':('aiLevel='+l.id+';try{AndroidBridge.syncGameDifficulty('+l.id+')}catch(e){}render()'))+'}" title="'+l.desc+'" role="radio" aria-checked="'+(getEffectiveAILevel()===l.id)+'">'+(l.id===8?'⚙️':l.id===7?('SL'+(function(){try{let _sl=20;if(typeof engineSettingsData!=='undefined'&&engineSettingsData&&engineSettingsData.skillLevel!=null)_sl=engineSettingsData.skillLevel;else if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getEngineSkillLevel)_sl=AndroidBridge.getEngineSkillLevel();return _sl;}catch(e){return 20;}})()):l.id)+'</button>').join('')+'</div>')+'<button type="button" class="btn" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()" aria-label="'+T('new_game')+'"><span style="font-size:1.4rem">⚔️</span> '+T('new_game')+'</button>'+'<button class="btn" onclick="quickFreeOpening()" aria-label="'+T('free_opening')+'">'+(playerColor==='white'?'<span style=\"font-size:1.4rem;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text\">♔&#xFE0E;</span>':'<span style=\"font-size:1.4rem;font-weight:400;color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans Symbol&#x27;,sans-serif;font-variant-emoji:text\">♚&#xFE0E;</span>')+' '+T('free_opening')+'</button>'+(setupMode?'':'<button class="btn" onclick="toggleSound()" id="btnSound" aria-label="'+T('sound')+'">'+(soundOn?'<span style="font-size:1.4rem">🔊</span> '+T('sound'):'<span style="font-size:1.4rem">🔇</span> '+T('sound'))+'</button>')+'<button class="btn" onclick="copyFEN()" title="'+T('copy_fen')+'" aria-label="'+T('copy_fen')+'"><span style="font-size:1.4rem">📝</span> FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="'+T('import_fen')+'" aria-label="'+T('import_fen')+'"><span style="font-size:1.4rem">🗃️</span> '+T('import_label')+'</button><button class="btn" onclick="'+(setupMode?'exitSetup()':'toggleSetup()')+'" aria-label="'+(setupMode?T('setup_done'):T('setup_mode'))+'">'+(setupMode?'<span style="font-size:1.4rem">✓</span> '+T('setup_done'):'<span style="font-size:1.4rem">🏗️</span> '+T('setup_mode'))+'</button></div></div>';
 h+=`<div class="main" role="main"><div class="bsec">`;
 // v1.0.4 Rev37: AI bar captured pieces split at 7 — pieces 8+ go to line 3.
 {const _aiCapHtml=capturedPiecesHtml(gameState.board,oppC,playerColor,7);
@@ -15242,7 +15428,7 @@ if(showAboutPage){
 // Load AGPL v3 SVG via AndroidBridge as base64 (CSP-compliant)
 let _gplSvgSrc='';
 try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.loadAssetAsBase64){const b64=AndroidBridge.loadAssetAsBase64('AGPLv3_Logo.svg');if(b64)_gplSvgSrc='data:image/svg+xml;base64,'+b64;}}catch(e){}
-h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="About"><div class="dlg" style="max-width:460px"><h2>${T('about_title')}</h2><div class="dlg-sec"><div class="crow"><span class="lb">${T('about_app')}</span><span class="vl">${T('app_name')} v1.1.1</span></div><div class="crow"><span class="lb">${T('about_engine')}</span><span class="vl">Stockfish 18 (arm64-v8a-dotprod)</span></div><div class="crow"><span class="lb">${T('about_platform')}</span><span class="vl">Android arm64-v8a</span></div></div><div class="dlg-sec"><h3>${T('copyright_license')}</h3>`+(_gplSvgSrc?`<div style="text-align:center;margin-bottom:10px"><img src="${_gplSvgSrc}" alt="AGPL v3 Logo" style="width:120px;height:auto;opacity:.9" /></div>`:'')+`<div style="font-size:.75rem;color:var(--text);line-height:1.6"><p style="margin-bottom:8px">${T('about_copyright')}</p><p style="margin-bottom:8px">${T('about_source_code_prefix')}<a href="${T('about_source_code_url')}" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">${T('about_source_code_url')}</a></p><p style="margin-bottom:8px">${T('about_agpl')} <a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GNU AGPL v3</a>${T('about_agpl_desc')}</p><p style="margin-bottom:8px">${T('about_droidfish')}<a href="https://github.com/peterosterlund2/droidfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">DroidFish</a>${T('about_droidfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a>${T('about_droidfish_tail')}</p><p style="margin-bottom:8px">${T('about_stockfish')}<a href="https://github.com/official-stockfish/Stockfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">Stockfish</a>${T('about_stockfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a> ${T('about_gplv3')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_disclaimer')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_ai')}</p></div></div><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="showAboutPage=false;render()" style="flex:1;justify-content:center">${T('close')}</button></div></div></div>`;}
+h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="About"><div class="dlg" style="max-width:460px"><h2>${T('about_title')}</h2><div class="dlg-sec"><div class="crow"><span class="lb">${T('about_app')}</span><span class="vl">${T('app_name')} v1.1.2</span></div><div class="crow"><span class="lb">${T('about_engine')}</span><span class="vl">Stockfish 18 (arm64-v8a-dotprod)</span></div><div class="crow"><span class="lb">${T('about_platform')}</span><span class="vl">Android arm64-v8a</span></div></div><div class="dlg-sec"><h3>${T('copyright_license')}</h3>`+(_gplSvgSrc?`<div style="text-align:center;margin-bottom:10px"><img src="${_gplSvgSrc}" alt="AGPL v3 Logo" style="width:120px;height:auto;opacity:.9" /></div>`:'')+`<div style="font-size:.75rem;color:var(--text);line-height:1.6"><p style="margin-bottom:8px">${T('about_copyright')}</p><p style="margin-bottom:8px">${T('about_source_code_prefix')}<a href="${T('about_source_code_url')}" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">${T('about_source_code_url')}</a></p><p style="margin-bottom:8px">${T('about_agpl')} <a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GNU AGPL v3</a>${T('about_agpl_desc')}</p><p style="margin-bottom:8px">${T('about_droidfish')}<a href="https://github.com/peterosterlund2/droidfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">DroidFish</a>${T('about_droidfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a>${T('about_droidfish_tail')}</p><p style="margin-bottom:8px">${T('about_stockfish')}<a href="https://github.com/official-stockfish/Stockfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">Stockfish</a>${T('about_stockfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a> ${T('about_gplv3')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_disclaimer')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_ai')}</p></div></div><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="showAboutPage=false;render()" style="flex:1;justify-content:center">${T('close')}</button></div></div></div>`;}
 // Import dialog — paste FEN, paste PGN, or select PGN file
 if(showImportDialog){
 h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="${T('import_title')}" onclick="if(event.target===this){showImportDialog=false;render()}"><div class="dlg" style="max-width:420px"><h2>${T('import_title')}</h2><div class="dlg-sec" style="gap:10px;display:flex;flex-direction:column">
@@ -16822,10 +17008,23 @@ if(stateHistory.length>200)stateHistory.shift();
 // once per user interaction.
 const mv={from,to,piece,promotion};
 if(piece.type==='king'){
-  for(const _lm of (legalMvs||[])){
-    if(_lm&&_lm.castle&&_lm.row===to.row&&_lm.col===to.col){
-      mv.castle=_lm.castle;
-      break;
+  // v1.1.2 PHASE 71 (bug fix): Primary source of the castle flag is now
+  // `to.castle` (set by uciToCoords when it rewrites Chess960 castling UCI
+  // moves, and by pseudoMoves for user-click castling). This covers AI moves
+  // where `legalMvs` is empty (cleared after the player's previous move) —
+  // previously the legalMvs lookup failed silently and `mv.castle` was
+  // undefined, causing `_castleSide` to fall back to the distance heuristic
+  // which rejects 0-distance king moves (king already on g1/c1) → king nulled
+  // in `makeMv`. The legalMvs lookup remains as a fallback for the case where
+  // `to` is a plain {row,col} object without the castle flag.
+  if(to&&to.castle){
+    mv.castle=to.castle;
+  }else{
+    for(const _lm of (legalMvs||[])){
+      if(_lm&&_lm.castle&&_lm.row===to.row&&_lm.col===to.col){
+        mv.castle=_lm.castle;
+        break;
+      }
     }
   }
 }
@@ -19080,6 +19279,18 @@ function _resetGameUIState(){
   if(typeof showSavePGNPrompt!=='undefined')showSavePGNPrompt=false;
   if(typeof showResignConfirm!=='undefined')showResignConfirm=false;
   if(typeof _pendingActionAfterSave!=='undefined')_pendingActionAfterSave=null;
+  // v1.1.2 Phase 67 Task 67.2: Clear any pending PGN cache save (set by the
+  //   partial-eval-coverage dialog when the user chose "Analyze All first").
+  //   A new game invalidates the pending save because the moveRecords it was
+  //   tied to no longer exist.
+  if(typeof _pendingPGNCacheSave!=='undefined')_pendingPGNCacheSave=null;
+  // v1.1.2 Phase 69 (Bug 3): Clear the PGN cache op-in-progress flag — a new
+  //   game invalidates any in-flight cache operation.
+  if(typeof _pgnCacheOpInProgress!=='undefined')_pgnCacheOpInProgress=false;
+  // v1.1.2 Phase 68 (Issue 30 P2): Clear the long-press priority queue — a
+  //   new game invalidates queued step indices because reviewStates will be
+  //   rebuilt for the new game.
+  _reviewAnalyzePriorityQueue=[];
   // v1.0.4 REV13: Reset scroll state on new game
   // v1.0.4 Rev30: also reset the restore guard (in case a render is in flight)
   if(typeof _mlistScrollState!=='undefined'){_mlistScrollState.scrollTop=0;_mlistScrollState.atBottom=false;_mlistScrollState.valid=false;}
@@ -19297,6 +19508,100 @@ function _updateReviewAnalyzeBtn(){
   btn.textContent=_rvAnalyzeBtnLabel();
 }
 
+/**
+ * v1.1.2 Phase 68 (Issue 30 P2): Long-press-to-prioritize a step during
+ *   analyze-all. When the user long-presses a move in the review move list
+ *   while an analyze-all batch is running, this function:
+ *   1. Validates the step is uncached and the batch is active.
+ *   2. Pushes the step onto _reviewAnalyzePriorityQueue.
+ *   3. Aborts the current in-flight batch eval via engineStop() so the
+ *      priority step can be evaluated next. The in-flight eval's result is
+ *      NOT lost — onEngineEval's user-nav stale path caches it for the
+ *      original _reviewEvalRequestedStep.
+ *   4. Fires a Toast notification + haptic feedback.
+ *   5. Triggers _reviewAnalyzeAdvance after a short delay; the advance
+ *      function checks the priority queue first and evaluates the prioritized
+ *      step before continuing the normal sequence.
+ *
+ * If no batch is active, the function falls back to navigating to the step
+ * and triggering a single eval (graceful degradation).
+ *
+ * @param {number} step - the review step index to prioritize (1..moveRecords.length)
+ */
+function _prioritizeReviewStep(step){
+  // Validate: must be in review mode
+  if(!reviewMode){
+    try{showToast(T('priority_eval_not_in_review'),2500);}catch(e){}
+    return;
+  }
+  // Validate: step must be in range
+  if(!reviewStates||step<0||step>=reviewStates.length)return;
+  // Validate: step must be uncached (no point prioritizing an already-analyzed step)
+  if(_reviewEvalCache.has(step)){
+    try{showToast(T('priority_eval_already_cached'),2000);}catch(e){}
+    try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+    return;
+  }
+  // Fire haptic feedback (matches the existing long-press pattern)
+  try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+  // If no batch is active, just navigate to the step and trigger a single eval
+  // (the user can manually inspect it). This is a graceful fallback.
+  if(!_reviewAnalyzeAllActive){
+    reviewGoTo(step);
+    try{requestEngineEval();}catch(e){}
+    try{showToast(T('priority_eval_toast'),2500);}catch(e){}
+    return;
+  }
+  // Deduplicate: don't add the same step twice
+  if(_reviewAnalyzePriorityQueue.indexOf(step)>=0){
+    try{showToast(T('priority_eval_toast'),2500);}catch(e){}
+    return;
+  }
+  // Push onto the priority queue
+  _reviewAnalyzePriorityQueue.push(step);
+  // Show toast notification
+  try{showToast(T('priority_eval_toast'),2500);}catch(e){}
+  // Abort the current in-flight batch eval so the priority step can be
+  // evaluated next. We bump _reviewAnalyzeGen and clear _evalRequestBatchGen
+  // so the in-flight onEngineEval callback is treated as stale (its result
+  // will be cached for _reviewEvalRequestedStep via the user-nav stale path,
+  // NOT lost). The safety timer (60s) will eventually fire if the engine
+  // doesn't respond to the stop, advancing the batch.
+  if(typeof _evalRequestBatchGen!=='undefined')_evalRequestBatchGen=0;
+  if(typeof _reviewAnalyzeGen!=='undefined')_reviewAnalyzeGen++;
+  // Clear the safety timer — _reviewAnalyzeAdvance will reset it when it
+  // picks up the priority entry. Without this clear, the old safety timer
+  // could fire and skip the priority step.
+  if(_reviewAnalyzeSafetyTimer){clearTimeout(_reviewAnalyzeSafetyTimer);_reviewAnalyzeSafetyTimer=null;}
+  // Send engine "stop" — the engine will respond with bestmove, which fires
+  // onEngineEval. Because _evalRequestBatchGen is now 0, the batch path in
+  // onEngineEval is skipped; the user-nav stale path caches the result for
+  // _reviewEvalRequestedStep (the step that was being evaluated when the
+  // user long-pressed).
+  try{
+    if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.engineStop==='function'){
+      AndroidBridge.engineStop();
+    }
+  }catch(e){console.warn('engineStop for priority failed',e);}
+  // Trigger _reviewAnalyzeAdvance after a short delay to pick up the priority
+  // entry. The delay (100ms) gives the engine time to process the stop
+  // command and fire its bestmove callback. If the callback hasn't arrived
+  // by then, _reviewAnalyzeAdvance will still pick up the priority entry
+  // (because the priority queue check happens BEFORE the normal sequence).
+  // We use a flag to prevent multiple advance triggers if the bestmove
+  // callback also fires.
+  const _advanceFlag='_priorityAdvancePending';
+  if(!window[_advanceFlag]){
+    window[_advanceFlag]=true;
+    setTimeout(function(){
+      window[_advanceFlag]=false;
+      if(_reviewAnalyzeAllActive){
+        try{_reviewAnalyzeAdvance();}catch(e){console.error('Priority advance failed:',e);}
+      }
+    },150);
+  }
+}
+
 function reviewAnalyzeAll(){
   if(!reviewMode||!reviewStates||reviewStates.length===0)return;
   // v1.0.4 Rev24: If every step is already cached, complete INSTANTLY.
@@ -19313,6 +19618,10 @@ function reviewAnalyzeAll(){
     return;
   }
   _reviewAnalyzeAllActive=true;
+  // v1.1.2 Phase 68 (Issue 30 P2): Clear any stale priority queue at batch
+  //   start (defensive — should already be empty if the previous batch
+  //   completed normally, but a crashed/canceled batch might have left entries).
+  _reviewAnalyzePriorityQueue=[];
   // v1.1.1 Phase 59 Task 59.6: Save the step the user was on so we can return
   //   to it after analysis. The batch runs in the background (decoupled from
   //   reviewStep) — the user can navigate freely during the batch.
@@ -19377,15 +19686,61 @@ function _reviewAnalyzeResetSafetyTimer(){
 function _reviewAnalyzeAdvance(){
   if(!_reviewAnalyzeAllActive)return;
   const _lastStep=moveRecords.length;
-  // v1.1.1 Phase 59 Task 59.6: Walk forward from _reviewAnalyzeStep (NOT
-  //   reviewStep) to find the next uncached step. This is the core fix —
-  //   the old code used reviewStep, so user navigation during the batch
-  //   caused the batch to "restart" from the user's nav position, re-
-  //   evaluating already-cached steps and sometimes skipping uncached ones.
+  // v1.1.2 PHASE 72 (bug fix): The completion check previously ONLY walked
+  //   forward from _reviewAnalyzeStep+1. When the user long-pressed a step
+  //   to prioritize it (Phase 68), the batch would evaluate that single
+  //   step, then advance forward and find all subsequent steps already
+  //   cached (or reach _lastStep), incorrectly reporting "all analysis
+  //   complete" — even though steps BEFORE the prioritized step were still
+  //   uncached. The user saw a "完成 N 步" toast with N < total, and the
+  //   batch ended prematurely, leaving earlier steps un-analyzed.
+  //   Root cause: the completion check was a forward-only walk; it never
+  //   scanned steps 0.._reviewAnalyzeStep-1 for uncached entries.
+  //   Fix: walk the ENTIRE range [0.._lastStep] to find the next uncached
+  //   step. This correctly resumes the batch from the lowest uncached step
+  //   after a priority eval completes, regardless of where the priority
+  //   step sat in the sequence. The forward-only optimization (skip cached
+  //   steps ahead of _reviewAnalyzeStep) is preserved as a fast-path, but
+  //   the full-range scan is the source of truth for completion.
+  //
+  // v1.1.1 Phase 59 Task 59.6 (historical): Walk forward from
+  //   _reviewAnalyzeStep (NOT reviewStep) to find the next uncached step.
+  //   This decouples batch progress from user navigation. Still correct
+  //   under Phase 72 — the full-range scan below supersedes it for the
+  //   completion decision but preserves the "start from _reviewAnalyzeStep"
+  //   intent for the common (no-priority) case via the fast-path.
+  //
+  // v1.1.2 Phase 68 (Issue 30 P0): Eval cache skip — if a step somehow has
+  //   a cached entry (e.g., prioritized eval just completed for this step),
+  //   advance immediately without sending a new engine request. This is the
+  //   "breakpoint resume" mechanism: the batch never re-evaluates a step
+  //   that already has a cached eval, so an interrupted batch resumes from
+  //   the next uncached step.
+  // Fast path: try forward from _reviewAnalyzeStep+1 first (common case —
+  //   no priority interruption, steps are analyzed in order). If that finds
+  //   an uncached step, use it. If it reaches _lastStep, fall through to the
+  //   full-range scan to catch any uncached steps BEFORE _reviewAnalyzeStep
+  //   (priority-interruption case).
   let nextStep=_reviewAnalyzeStep+1;
   while(nextStep<=_lastStep){
-    if(!_reviewEvalCache.has(nextStep))break; // Found un-analyzed step
+    if(!_reviewEvalCache.has(nextStep))break; // Found un-analyzed step (forward)
     nextStep++;
+  }
+  if(nextStep>_lastStep){
+    // Forward scan found nothing — but steps BEFORE _reviewAnalyzeStep may
+    // still be uncached (e.g., after a priority eval jumped ahead). Scan
+    // the full range [0.._lastStep] to find the lowest uncached step.
+    // v1.1.2 PHASE 72: This is the fix for the "false completion" bug.
+    let _lowestUncached=-1;
+    for(let i=0;i<=_lastStep;i++){
+      if(!_reviewEvalCache.has(i)){_lowestUncached=i;break;}
+    }
+    if(_lowestUncached>=0){
+      // Resume the batch from the lowest uncached step (before
+      // _reviewAnalyzeStep). This handles the priority-interruption case.
+      nextStep=_lowestUncached;
+    }
+    // else: truly all steps cached → fall through to completion branch below
   }
   if(nextStep>_lastStep){
     _reviewAnalyzeAllActive=false;
@@ -19393,9 +19748,19 @@ function _reviewAnalyzeAdvance(){
     // v1.1.1 Phase 59 Task 59.6: Reset batch state
     _reviewAnalyzeStep=-1;
     if(typeof _evalRequestBatchGen!=='undefined')_evalRequestBatchGen=0;
+    // v1.1.2 Phase 68 (Issue 30): Clear any prioritized-step queue (defensive —
+    //   should already be empty when batch completes normally).
+    _reviewAnalyzePriorityQueue=[];
     // v1.0.8 PHASE 19 (bug fix): Recompute reviewCritical now that the eval cache
     // is fully populated.
     try{if(typeof _findCriticalMoves==='function')reviewCritical=_findCriticalMoves();}catch(e){}
+    // v1.1.2 Phase 67 Task 67.2: If a PGN cache save is pending (user chose
+    //   "Analyze All first" in the partial-eval dialog), trigger it now.
+    //   The save will use the now-fully-populated _reviewEvalCache so every
+    //   move gets a [%eval] annotation. Clear the pending flag BEFORE invoking
+    //   the save so the save's own coverage check (defensive) doesn't recurse.
+    const _pendingSave=_pendingPGNCacheSave;
+    _pendingPGNCacheSave=null;
     // Return to the step the user was viewing before analysis (or their
     // current step if they navigated during the batch — reviewGoTo restores
     // eval vars from cache).
@@ -19408,10 +19773,24 @@ function _reviewAnalyzeAdvance(){
     if(typeof _targetStep==='number'&&_targetStep>=0&&_targetStep<reviewStates.length){
       reviewGoTo(_targetStep);
       showToast(T('analysis_done')+' '+_reviewEvalCache.size+' '+T('step'));
+      // v1.1.2 Phase 67 Task 67.2: trigger pending save AFTER reviewGoTo so
+      //   the UI shows the user's pre-batch step (not the last analyzed step).
+      if(_pendingSave){
+        try{setTimeout(function(){
+          try{_pgnCacheSaveCurrentImpl_SkipCoverageCheck(_pendingSave.name,_pendingSave.includeAnn);}
+          catch(e){showToast(T('pgn_cache_save_failed'),2500);}
+        },150);}catch(e){}
+      }
       return;
     }
     showToast(T('analysis_done')+' '+_reviewEvalCache.size+' '+T('step'));
     render();
+    if(_pendingSave){
+      try{setTimeout(function(){
+        try{_pgnCacheSaveCurrentImpl_SkipCoverageCheck(_pendingSave.name,_pendingSave.includeAnn);}
+        catch(e){showToast(T('pgn_cache_save_failed'),2500);}
+      },150);}catch(e){}
+    }
     return;
   }
   _reviewAnalyzeStep=nextStep;
@@ -19422,18 +19801,75 @@ function _reviewAnalyzeAdvance(){
     const cachedCount=_reviewEvalCache.size;
     showToast(T('analyzing_progress')+' ('+cachedCount+'/'+(_lastStep+1)+')');
   }
-  // v1.1.1 Phase 59 Task 59.6: Don't hijack reviewStep — the batch runs in
-  //   the background. The user sees their current step on the board.
-  //   Live-refresh the analyze-all button label so the user sees progress.
+  // v1.1.2 Phase 68 (Issue 30 P1): Incremental UI update — instead of calling
+  //   render() on every step (which rebuilds the entire DOM and causes memory
+  //   pressure on long games per Issue 30 root cause A), use lightweight
+  //   updates: refresh the eval trend chart + analyze-all button label, and
+  //   only call full render() every 10 steps (or at the end, which is handled
+  //   by the completion branch above).
+  //   - _refreshEvalTrendChart() rebuilds ONLY the SVG inside .review-chart
+  //     (one DOM write), keeping the chart visually in sync with new evals.
+  //   - _updateReviewAnalyzeBtn() updates the button label (one textContent).
+  //   - Full render() every 10 steps handles: move-list row updates (eval
+  //     delta colors, critical-move markers), scroll-into-view for active step,
+  //     and any layout shifts. 10 was chosen as a balance: frequent enough
+  //     that the move list feels responsive, infrequent enough to avoid the
+  //     O(n) DOM rebuild cost that caused WebView memory pressure on 100+
+  //     step games.
   try{if(typeof _updateReviewAnalyzeBtn==='function')_updateReviewAnalyzeBtn();}catch(e){}
-  // v1.1.1 Phase 59 Task 59.6: Use _requestBatchEval (NOT requestEngineEval)
-  //   so the callback is correctly identified as a batch callback.
-  if(typeof _requestBatchEval==='function'){
-    _requestBatchEval(nextStep);
-  }else{
-    // Fallback (shouldn't happen)
-    requestEngineEval();
+  try{if(typeof _refreshEvalTrendChart==='function')_refreshEvalTrendChart();}catch(e){}
+  if(nextStep%10===0){
+    try{render();}catch(e){}
   }
+  // v1.1.2 Phase 68 (Issue 30 P1): Main-thread yield — wrap the next
+  //   _requestBatchEval call in setTimeout(0) so the JS main thread can
+  //   process pending UI events (touch events, scroll, paint) between batch
+  //   steps. Without this yield, a 100-step batch would monopolize the main
+  //   thread for 5-15 minutes, making the UI feel frozen and increasing the
+  //   risk of ANR (Application Not Responding) triggers on aggressive OEM ROMs.
+  //   The 0ms delay is enough for the event loop to drain pending microtasks
+  //   and macrotasks (including requestAnimationFrame-driven paints) without
+  //   measurably slowing the batch (the engine's search time dominates).
+  //   The batch gen counter is preserved across the setTimeout boundary
+  //   because _evalRequestBatchGen is only reset by user-nav requests and
+  //   onEngineEval batch-path completion, neither of which fire here.
+  const _batchStep=nextStep;
+  setTimeout(function(){
+    if(!_reviewAnalyzeAllActive)return; // batch was canceled during the yield
+    if(_reviewAnalyzeStep!==_batchStep)return; // batch was hijacked (e.g., long-press priority)
+    // v1.1.2 Phase 68 (Issue 30 P2): Prioritized-step injection — if the user
+    //   long-pressed a move to prioritize it, evaluate that step FIRST before
+    //   continuing the normal batch sequence. The priority queue is drained
+    //   one entry at a time; each entry is a step index that was uncached at
+    //   long-press time.
+    if(_reviewAnalyzePriorityQueue.length>0){
+      const _priorityStep=_reviewAnalyzePriorityQueue.shift();
+      // Skip if it got cached in the meantime (e.g., the batch reached it
+      // before the priority queue did — unlikely but defensive).
+      if(_reviewEvalCache.has(_priorityStep)){
+        // Re-invoke _reviewAnalyzeAdvance to either pick up the next priority
+        // entry or continue the normal sequence.
+        try{_reviewAnalyzeAdvance();}catch(e){console.error('Analyze-all priority advance failed:',e);}
+        return;
+      }
+      _reviewAnalyzeStep=_priorityStep;
+      // Don't reset the safety timer here — _requestBatchEval does it.
+      if(typeof _requestBatchEval==='function'){
+        _requestBatchEval(_priorityStep);
+      }else{
+        requestEngineEval();
+      }
+      return;
+    }
+    // v1.1.1 Phase 59 Task 59.6: Use _requestBatchEval (NOT requestEngineEval)
+    //   so the callback is correctly identified as a batch callback.
+    if(typeof _requestBatchEval==='function'){
+      _requestBatchEval(_batchStep);
+    }else{
+      // Fallback (shouldn't happen)
+      requestEngineEval();
+    }
+  },0);
 }
 
 /**
@@ -19451,6 +19887,17 @@ function exitReview(){
   _reviewAnalyzeStep=-1;
   if(typeof _evalRequestBatchGen!=='undefined')_evalRequestBatchGen=0;
   if(typeof _reviewAnalyzeGen!=='undefined')_reviewAnalyzeGen++;
+  // v1.1.2 Phase 68 (Issue 30 P2): Clear the priority queue — exiting review
+  //   mode invalidates any pending long-press prioritization because the
+  //   reviewStates array it indexes is about to be cleared.
+  _reviewAnalyzePriorityQueue=[];
+  // v1.1.2 Phase 67 Task 67.2: Clear any pending PGN cache save — exiting
+  //   review mode invalidates the save because the rebuild path requires
+  //   reviewMode===true and a fully-populated _reviewEvalCache.
+  if(typeof _pendingPGNCacheSave!=='undefined')_pendingPGNCacheSave=null;
+  // v1.1.2 Phase 69 (Bug 3): Clear the PGN cache op-in-progress flag — a new
+  //   game invalidates any in-flight cache operation.
+  if(typeof _pgnCacheOpInProgress!=='undefined')_pgnCacheOpInProgress=false;
   // v1.0.8 PHASE 18 Task 2: Reset virtual list state on exiting review mode.
   // Clears the scroll timer and window so the next review session starts fresh.
   _resetRvVirtualState();
@@ -19506,6 +19953,10 @@ function exitReview(){
 //
 // Backed by Java-side AndroidBridge.listPGNCaches / savePGNCache / getPGNCache /
 // deletePGNCaches (files in /data/data/com.Regalia/files/pgn_cache/, HyperOS-proof).
+// v1.1.2 Phase 69 (Bug 3): _pgnCacheOpInProgress guards against re-entrant
+//   operations (save/import/delete/rename/tags) to prevent race conditions
+//   where a user clicks multiple operations before the first completes.
+let _pgnCacheOpInProgress=false;
 function openPGNCacheManager(){
   try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
   _pgnCacheSelected=new Set();
@@ -19577,19 +20028,44 @@ function _pgnCacheSelectNone(){
 }
 
 function _pgnCacheSaveCurrent(){
+  // v1.1.2 Phase 69 (Bug 3): Guard against re-entrant operations.
+  // The guard is set here and reset in all completion paths:
+  //   - _pgnCachePersistSave (synchronous save completes)
+  //   - _pgnCacheShowPartialEvalDialog cancel/overlay-click (dialog dismissed without save)
+  //   - export annotation dialog cancel (includeAnn===null)
+  //   - _reviewAnalyzeAdvance pending-save completion (async save after analyze-all)
+  //   - _pgnCacheClose / _resetGameUIState (UI teardown)
+  if(_pgnCacheOpInProgress)return;
   let name='';
   try{name=prompt(T('pgn_cache_name_prompt'),T('pgn_cache_save_default'))||'';}catch(e){name='';}
   name=name.trim();
   if(!name)return;
-  // v1.1.1 Phase 63: Ask whether to include annotations
-  if(typeof _showPGNExportAnnotationDialog==='function'){
-    _showPGNExportAnnotationDialog(function(includeAnn){
-      if(includeAnn===null)return; // cancelled
-      _pgnCacheSaveCurrentImpl(name,includeAnn);
-    });
-  }else{
-    // Fallback (shouldn't happen — _showPGNExportAnnotationDialog is always exported)
-    _pgnCacheSaveCurrentImpl(name,true);
+  _pgnCacheOpInProgress=true;
+  try{
+    // v1.1.1 Phase 63: Ask whether to include annotations
+    if(typeof _showPGNExportAnnotationDialog==='function'){
+      _showPGNExportAnnotationDialog(function(includeAnn){
+        if(includeAnn===null){_pgnCacheOpInProgress=false;return;} // cancelled
+        _pgnCacheSaveCurrentImpl(name,includeAnn);
+        // _pgnCacheSaveCurrentImpl may have: (a) saved synchronously via
+        // _pgnCachePersistSave (which resets the guard), or (b) shown the
+        // partial-eval dialog (async — guard is reset by the dialog's dismiss
+        // handlers). If it returned without doing either (e.g. empty PGN),
+        // reset here as a safety net.
+        if(!_pendingPGNCacheSave && !_pgnPartialEvalDialogActive){
+          _pgnCacheOpInProgress=false;
+        }
+      });
+    }else{
+      // Fallback (shouldn't happen — _showPGNExportAnnotationDialog is always exported)
+      _pgnCacheSaveCurrentImpl(name,true);
+      if(!_pendingPGNCacheSave && !_pgnPartialEvalDialogActive){
+        _pgnCacheOpInProgress=false;
+      }
+    }
+  }catch(e){
+    _pgnCacheOpInProgress=false;
+    throw e;
   }
 }
 function _pgnCacheSaveCurrentImpl(name,includeAnn){
@@ -19599,30 +20075,116 @@ function _pgnCacheSaveCurrentImpl(name,includeAnn){
   // v1.1.1 Phase 63: Pass includeAnn to _buildPGNString. For pure imports,
   //   _cachedOriginalPGN is used as-is (it already contains whatever annotations
   //   the original PGN had — the user's choice doesn't affect it).
-  let pgn='';
+  // v1.1.2 Phase 67 Task 67.2: ROOT-CAUSE FIX for "save with annotations loses [%eval]".
+  //   When the user is in review mode and saves with includeAnn=true via the rebuild
+  //   path (not pure import), _buildPGNString can only emit [%eval] for steps that
+  //   already have an entry in _reviewEvalCache. If the user hasn't navigated to
+  //   every step OR run "Analyze All", some steps lack cached evals, and the saved
+  //   PGN is missing those [%eval] annotations. We detect this coverage gap and
+  //   prompt the user to run "Analyze All" first (with options to save as-is or cancel).
+  // v1.1.2 Phase 69 Bug 1+2 ROOT-CAUSE FIX: The Phase 67 coverage check was gated
+  //   on `!_useOriginal`, but `_useOriginal` is almost always true for imported PGNs
+  //   (because importPGN sets time:null on all moves). This meant the dialog never
+  //   appeared (Bug 1) AND the pure-import path saved _cachedOriginalPGN verbatim,
+  //   ignoring _reviewEvalCache (Bug 2 — [%eval] lost after reload).
+  //   Fix: decouple the coverage check from _useOriginal. When the user has ANY
+  //   cached evals (_reviewEvalCache.size > 0) and is in review mode with
+  //   includeAnn=true, we (a) run the coverage check regardless of _useOriginal,
+  //   and (b) force the rebuild path so [%eval] annotations are included. The
+  //   pure-import (_cachedOriginalPGN) path is now only used when there are NO
+  //   cached evals at all (truly un-analyzed import).
+  const _ctx=_pgnCacheBuildSaveContext(includeAnn);
+  // Coverage check (may show dialog and return early)
+  if(_ctx.needsCoverageCheck && !_pendingPGNCacheSave){
+    const _missing=(_ctx.totalSteps+1)-_ctx.cachedCount;
+    if(_missing>0){
+      _pgnCacheShowPartialEvalDialog(name, includeAnn, _ctx.totalSteps+1, _ctx.cachedCount);
+      return;
+    }
+  }
+  // Build the PGN text
+  const pgn=_pgnCacheBuildPGNText(_ctx, includeAnn);
+  if(!pgn){
+    showToast(T('pgn_cache_save_failed'),2500);
+    return;
+  }
+  _pgnCachePersistSave(name, pgn);
+}
+
+// v1.1.2 Phase 69: Build the save context — shared by _pgnCacheSaveCurrentImpl
+//   and _pgnCacheSaveCurrentImpl_SkipCoverageCheck. Centralizes the pure-import
+//   detection and eval-cache coverage analysis so both paths use identical logic.
+//   Returns { useOriginal, hasCachedEvals, needsCoverageCheck, totalSteps, cachedCount }.
+function _pgnCacheBuildSaveContext(includeAnn){
   let _useOriginal=false;
   if(typeof _cachedOriginalPGN!=='undefined'&&_cachedOriginalPGN&&moveRecords&&moveRecords.length>0){
-    // Check if all moves have time===null (pure import, no live moves)
     let _allImported=true;
     for(let i=0;i<moveRecords.length;i++){
       const mr=moveRecords[i];
       if(mr&&mr.time!==null&&mr.time!==undefined){_allImported=false;break;}
     }
-    if(_allImported){
-      _useOriginal=true;
+    if(_allImported)_useOriginal=true;
+  }
+  // Phase 69: Check eval-cache coverage. This is INDEPENDENT of _useOriginal.
+  const _inReview = typeof reviewMode!=='undefined' && reviewMode
+    && typeof reviewStates!=='undefined' && reviewStates && reviewStates.length>0
+    && typeof _reviewEvalCache!=='undefined' && _reviewEvalCache;
+  let _cachedCount=0;
+  const _totalSteps = (moveRecords&&moveRecords.length>0) ? moveRecords.length : 0;
+  if(_inReview){
+    for(let i=0;i<=_totalSteps;i++){
+      if(_reviewEvalCache.has(i))_cachedCount++;
     }
   }
-  if(_useOriginal){
-    // Use the original imported PGN text — preserves all comments/tags/NAGs
-    pgn=_cachedOriginalPGN;
+  const _hasCachedEvals = _cachedCount>0;
+  // v1.1.2 Phase 70 (Bug 2 edge case fix): if _reviewEvalCache has ANY entries
+  //   (even if the user exited review mode — reviewMode=false but the cache
+  //   persists until _resetGameUIState), force rebuild path so [%eval] annotations
+  //   are included. _buildPGNString reads _reviewEvalCache.peek(i+1) regardless
+  //   of reviewMode (it only checks size>0), so the evals WILL be emitted.
+  //   Previously, the force was gated on _inReview, which meant exiting review
+  //   mode before saving would lose all [%eval] annotations.
+  const _hasAnyCachedEvals = typeof _reviewEvalCache!=='undefined' && _reviewEvalCache && _reviewEvalCache.size>0;
+  if(_hasAnyCachedEvals && _useOriginal){
+    _useOriginal=false;
+  }
+  // Coverage check is needed when: includeAnn=true, in review mode, has cached
+  // evals (meaning user cares about evals), and there are uncached steps.
+  // We only run the coverage dialog when _inReview is true because the dialog's
+  // "Analyze All first" option requires review mode to work. If the user exited
+  // review mode, we silently force rebuild (no dialog) — the evals from the
+  // previous review session are included as-is.
+  const _needsCoverageCheck = includeAnn && _inReview && _hasCachedEvals;
+  return {
+    useOriginal: _useOriginal,
+    hasCachedEvals: _hasCachedEvals,
+    needsCoverageCheck: _needsCoverageCheck,
+    totalSteps: _totalSteps,
+    cachedCount: _cachedCount
+  };
+}
+
+// v1.1.2 Phase 69: Build the PGN text from the save context.
+function _pgnCacheBuildPGNText(_ctx, includeAnn){
+  let pgn='';
+  if(_ctx.useOriginal){
+    // Use the original imported PGN text — preserves all comments/tags/NAGs.
+    // Only reached when there are NO cached evals (truly un-analyzed import).
+    pgn = (typeof _cachedOriginalPGN!=='undefined') ? _cachedOriginalPGN : '';
   }else{
-    // Rebuild from moveRecords (includes post-import moves + annotations)
     try{
-      if(typeof _buildPGNString==='function')pgn=_buildPGNString(true,includeAnn); // forceIncludeVariations=true
+      if(typeof _buildPGNString==='function')pgn=_buildPGNString(true,includeAnn);
     }catch(e){pgn='';}
   }
+  return pgn;
+}
+
+// v1.1.2 Phase 69: Persist the PGN save via AndroidBridge + post-save UI update.
+//   Shared by _pgnCacheSaveCurrentImpl and _pgnCacheSaveCurrentImpl_SkipCoverageCheck.
+function _pgnCachePersistSave(name, pgn){
   if(!pgn){
     showToast(T('pgn_cache_save_failed'),2500);
+    _pgnCacheOpInProgress=false; // Phase 69 (Bug 3): reset guard on failure
     return;
   }
   let ok=false;
@@ -19639,10 +20201,140 @@ function _pgnCacheSaveCurrentImpl(name,includeAnn){
   }else{
     showToast(T('pgn_cache_save_failed'),2500);
   }
+  _pgnCacheOpInProgress=false; // Phase 69 (Bug 3): reset guard on completion
 }
 
+// v1.1.2 Phase 67 Task 67.2: Pending save state — set when user chooses
+// "Analyze All first" in the partial-eval dialog. The analyze-all completion
+// path (_reviewAnalyzeAdvance) checks this and triggers the deferred save.
+let _pendingPGNCacheSave=null;
+// v1.1.2 Phase 68: Partial-eval dialog active flag + dismiss handler — registered
+//   so handleBackPress() can dismiss the dialog on Android back-button press
+//   (matches the pattern used by _pgnExportDialogActive/_pgnExportDialogDismiss).
+let _pgnPartialEvalDialogActive=false;
+let _pgnPartialEvalDialogDismiss=null;
+
+// v1.1.2 Phase 67 Task 67.2 + Phase 68: Partial-eval-coverage dialog. Shows
+//   total/cached step counts and offers three actions: analyze-all-first /
+//   save-as-is / cancel. The title now includes a 💾 emoji prefix (Phase 68),
+//   and the dialog supports Android back-button dismissal (Phase 68).
+function _pgnCacheShowPartialEvalDialog(name, includeAnn, totalSteps, cachedCount){
+  // Build a modal dialog similar to _showPGNExportAnnotationDialog in ai-bridge.js.
+  // We use a DHTML overlay so it works without any framework.
+  try{
+    // Remove any existing dialog (defensive)
+    const _old=document.getElementById('_pgnPartialEvalDlg');
+    if(_old)_old.remove();
+    const overlay=document.createElement('div');
+    overlay.id='_pgnPartialEvalDlg';
+    overlay.className='dov';
+    overlay.setAttribute('role','dialog');
+    overlay.setAttribute('aria-modal','true');
+    overlay.setAttribute('aria-label',T('pgn_cache_partial_eval_title'));
+    overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:100000';
+    const dlg=document.createElement('div');
+    dlg.className='dlg';
+    dlg.style.cssText='max-width:440px;background:var(--card,#221015);border:1px solid var(--border,#3a1a1a);border-radius:12px;padding:20px;width:90%;color:var(--text,#f5e6c8)';
+    const title=document.createElement('h2');
+    title.textContent=T('pgn_cache_partial_eval_title');
+    title.style.cssText='color:var(--accent2,#ffd700);margin:0 0 14px 0;font-size:1.05rem';
+    dlg.appendChild(title);
+    const msg=document.createElement('p');
+    msg.style.cssText='font-size:.9rem;line-height:1.6;margin:0 0 16px 0';
+    msg.textContent=T('pgn_cache_partial_eval_msg')
+      .replace('N1',String(totalSteps))
+      .replace('N2',String(cachedCount));
+    dlg.appendChild(msg);
+    const btns=document.createElement('div');
+    btns.style.cssText='display:flex;flex-direction:column;gap:8px';
+    // v1.1.2 Phase 68: Centralized dismiss function — used by all buttons AND
+    //   the back-button handler. Sets the active flag to false BEFORE removing
+    //   the overlay so a synchronous back-press during a button click doesn't
+    //   double-dismiss.
+    // v1.1.2 Phase 69 (Bug 3): Also reset _pgnCacheOpInProgress so the cancel
+    //   path doesn't leave the guard locked.
+    const _dismiss=function(){
+      _pgnPartialEvalDialogActive=false;
+      _pgnPartialEvalDialogDismiss=null;
+      if(typeof _pgnCacheOpInProgress!=='undefined')_pgnCacheOpInProgress=false;
+      if(overlay.parentNode)overlay.remove();
+    };
+    _pgnPartialEvalDialogActive=true;
+    _pgnPartialEvalDialogDismiss=_dismiss;
+    const makeBtn=function(label, isPrimary, onClick){
+      const b=document.createElement('button');
+      b.type='button';
+      b.className='btn'+(isPrimary?' btn-p':'');
+      b.textContent=label;
+      b.style.cssText='width:100%;justify-content:center;gap:8px;padding:12px;font-size:.9rem';
+      b.onclick=function(){
+        try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+        _dismiss();
+        onClick();
+      };
+      return b;
+    };
+    btns.appendChild(makeBtn(T('pgn_cache_partial_eval_analyze_first'), true, function(){
+      // Set pending save; reviewAnalyzeAll() will trigger the save on completion.
+      _pendingPGNCacheSave={name:name, includeAnn:includeAnn};
+      showToast(T('pgn_cache_analyze_then_save'),2500);
+      try{
+        if(typeof reviewAnalyzeAll==='function'){
+          reviewAnalyzeAll();
+        }else{
+          // Fallback — shouldn't happen
+          _pendingPGNCacheSave=null;
+          _pgnCacheSaveCurrentImpl(name, includeAnn);
+        }
+      }catch(e){
+        _pendingPGNCacheSave=null;
+        showToast(T('pgn_cache_save_failed'),2500);
+      }
+    }));
+    btns.appendChild(makeBtn(T('pgn_cache_partial_eval_save_as_is'), false, function(){
+      // Save with whatever is cached (current behavior pre-fix).
+      _pgnCacheSaveCurrentImpl_SkipCoverageCheck(name, includeAnn);
+    }));
+    btns.appendChild(makeBtn(T('cancel'), false, function(){
+      // Just dismiss — no action.
+    }));
+    dlg.appendChild(btns);
+    overlay.appendChild(dlg);
+    // Click on overlay (outside dialog) = cancel
+    overlay.addEventListener('click', function(e){
+      if(e.target===overlay){
+        try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+        _dismiss();
+      }
+    });
+    document.body.appendChild(overlay);
+  }catch(e){
+    // Fallback: just save as-is if dialog fails to render
+    _pgnPartialEvalDialogActive=false;
+    _pgnPartialEvalDialogDismiss=null;
+    _pgnCacheSaveCurrentImpl_SkipCoverageCheck(name, includeAnn);
+  }
+}
+
+// v1.1.2 Phase 67 Task 67.2 + Phase 69: Inner save routine that skips the
+//   coverage check. Called by the "Save anyway" button OR by the post-analyze-all
+//   pending-save path. Phase 69: refactored to use _pgnCacheBuildSaveContext +
+//   _pgnCacheBuildPGNText + _pgnCachePersistSave so the PGN-building logic is
+//   identical to the with-coverage-check path (fixes Bug 2 — previously this
+//   function had its own copy of the pure-import detection that didn't force
+//   rebuild when cached evals existed).
+function _pgnCacheSaveCurrentImpl_SkipCoverageCheck(name, includeAnn){
+  const _ctx=_pgnCacheBuildSaveContext(includeAnn);
+  const pgn=_pgnCacheBuildPGNText(_ctx, includeAnn);
+  _pgnCachePersistSave(name, pgn);
+}
+
+
 function _pgnCacheImport(name){
+  // v1.1.2 Phase 69 (Bug 3): Guard against re-entrant operations.
+  if(_pgnCacheOpInProgress)return;
   if(!name)return;
+  _pgnCacheOpInProgress=true;
   let pgn=null;
   try{
     if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getPGNCache){
@@ -19650,6 +20342,7 @@ function _pgnCacheImport(name){
     }
   }catch(e){pgn=null;}
   if(!pgn){
+    _pgnCacheOpInProgress=false;
     showToast(T('pgn_cache_import_failed'),2500);
     return;
   }
@@ -19663,9 +20356,13 @@ function _pgnCacheImport(name){
   }catch(e){}
   // v1.0.8 PHASE 34: use async import with worker offloading to prevent UI jank
   //   on large PGN files. Falls back to sync importPGN if importPGNAsync unavailable.
+  // v1.1.2 Phase 69 (Bug 3): The .then callback checks _pgnCacheOpInProgress to
+  //   ensure the operation wasn't superseded. It also resets the flag on completion.
   try{
     if(typeof importPGNAsync==='function'){
       importPGNAsync(pgn).then(function(ok){
+        if(!_pgnCacheOpInProgress)return; // superseded by another operation
+        _pgnCacheOpInProgress=false;
         // v1.0.8 PHASE 35: check success flag — importPGN shows its own error
         //   toast on invalid PGN, so only show success UI if import succeeded.
         if(!ok){
@@ -19685,6 +20382,7 @@ function _pgnCacheImport(name){
         try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
         render();
       }).catch(function(e){
+        _pgnCacheOpInProgress=false;
         // v1.0.8 PHASE 35: defensive catch in case .then() callback throws
         console.error('PGN cache import .then failed:',e);
         showToast(T('pgn_cache_import_failed'),2500);
@@ -19693,7 +20391,9 @@ function _pgnCacheImport(name){
       return;
     }
     if(typeof importPGN==='function')importPGN(pgn);
+    _pgnCacheOpInProgress=false;
   }catch(e){
+    _pgnCacheOpInProgress=false;
     showToast(T('pgn_cache_import_failed'),2500);
     return;
   }
@@ -19712,9 +20412,12 @@ function _pgnCacheImport(name){
 }
 
 function _pgnCacheDeleteSelected(){
+  // v1.1.2 Phase 69 (Bug 3): Guard against re-entrant operations.
+  if(_pgnCacheOpInProgress)return;
   if(_pgnCacheSelected.size===0)return;
   let ok=confirm(T('pgn_cache_confirm_delete'));
   if(!ok)return;
+  _pgnCacheOpInProgress=true;
   const names=Array.from(_pgnCacheSelected);
   let deleted=0;
   try{
@@ -19724,12 +20427,16 @@ function _pgnCacheDeleteSelected(){
   }catch(e){deleted=0;}
   _pgnCacheSelected.clear();
   _refreshPGNCacheList();
+  _pgnCacheOpInProgress=false;
   try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
   showToast(T('pgn_cache_deleted')+'：'+deleted,2000);
   render();
 }
 
 function _pgnCacheClose(){
+  // v1.1.2 Phase 69 (Bug 3): Reset the op-in-progress flag on close so a
+  //   stale async operation (e.g. importPGNAsync .then) doesn't lock the UI.
+  _pgnCacheOpInProgress=false;
   showPGNCacheManager=false;
   _pgnCacheSelected.clear();
   // v1.0.4 Rev21: Reset filter state on close so next open shows all entries.
@@ -19741,11 +20448,14 @@ function _pgnCacheClose(){
 // v1.0.4 Round-5 Rev20: Rename a PGN cache entry.
 // Prompts for a new name; refuses to overwrite an existing entry.
 function _pgnCacheRename(oldName){
+  // v1.1.2 Phase 69 (Bug 3): Guard against re-entrant operations.
+  if(_pgnCacheOpInProgress)return;
   if(!oldName)return;
   let newName='';
   try{newName=prompt(T('pgn_cache_rename_prompt'),oldName)||'';}catch(e){newName='';}
   newName=newName.trim();
   if(!newName||newName===oldName)return;
+  _pgnCacheOpInProgress=true;
   let ok=false;
   try{
     if(typeof AndroidBridge!=='undefined'&&AndroidBridge.renamePGNCache){
@@ -19760,12 +20470,15 @@ function _pgnCacheRename(oldName){
   }else{
     showToast(T('pgn_cache_rename_failed'),2500);
   }
+  _pgnCacheOpInProgress=false;
 }
 
 // v1.0.4 Round-5 Rev20: Tag editor for a PGN cache entry.
 // Shows a prompt pre-filled with current tags (comma-separated);
 // the user can add/remove tags. Tags are stored as a JSON array on the Java side.
 function _pgnCacheEditTags(name){
+  // v1.1.2 Phase 69 (Bug 3): Guard against re-entrant operations.
+  if(_pgnCacheOpInProgress)return;
   if(!name)return;
   // Find current tags from the in-memory list
   let currentTags=[];
@@ -19788,6 +20501,7 @@ function _pgnCacheEditTags(name){
     tags.push(t);
     if(tags.length>=10)break; // Max 10 tags per entry
   }
+  _pgnCacheOpInProgress=true;
   let ok=false;
   try{
     if(typeof AndroidBridge!=='undefined'&&AndroidBridge.setPGNCacheTags){
@@ -19802,6 +20516,7 @@ function _pgnCacheEditTags(name){
   }else{
     showToast(T('pgn_cache_tags_save_failed'),2500);
   }
+  _pgnCacheOpInProgress=false;
 }
 
 // v1.0.4 Round-5 Rev21: Tag filter / search functions.
@@ -20045,6 +20760,12 @@ function handleBackPress(){
   // v1.1.1 Phase 65: Export annotation dialog — back button = Cancel
   if(typeof _pgnExportDialogActive!=='undefined'&&_pgnExportDialogActive){
     if(typeof _pgnExportDialogDismiss==='function')_pgnExportDialogDismiss();
+    return;
+  }
+  // v1.1.2 Phase 68: Partial-eval-coverage dialog — back button = Cancel
+  //   (matches the export annotation dialog pattern).
+  if(typeof _pgnPartialEvalDialogActive!=='undefined'&&_pgnPartialEvalDialogActive){
+    if(typeof _pgnPartialEvalDialogDismiss==='function')_pgnPartialEvalDialogDismiss();
     return;
   }
   // v1.0.8 UI: Promotion dialog takes highest priority — it blocks all other

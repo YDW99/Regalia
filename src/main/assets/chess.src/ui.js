@@ -425,7 +425,7 @@ function _updateEvalDisplayIncremental() {
       if (app) {
         app.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:var(--bg);color:var(--text);padding:20px;text-align:center;font-family:system-ui,sans-serif">' +
           '<div style="font-size:3rem;margin-bottom:16px">♔</div>' +
-          '<h2 style="color:var(--accent2);margin-bottom:12px">'+T('app_name')+' v1.1.1</h2>' +
+          '<h2 style="color:var(--accent2);margin-bottom:12px">'+T('app_name')+' v1.1.2</h2>' +
           '<p style="color:#a08050;margin-bottom:20px;max-width:300px">'+T('render_error')+'</p>' +
           '<button onclick="location.reload()" style="padding:12px 24px;background:var(--btn-a-bg);color:var(--bg);border:none;border-radius:6px;font-size:1rem;font-weight:700;cursor:pointer">'+T('refresh_page')+'</button>' +
           '</div>';
@@ -1318,8 +1318,15 @@ function _buildReviewMovesInnerHTML(startIdx,endIdx){
     }
     const isAct=reviewStep===i+1;
     const isCritical=_criticalSteps.has(i+1);
+    // v1.1.2 Phase 68 (Issue 30 P2): Add long-press handler to prioritize
+    //   this step's eval during an active analyze-all batch. The handler is
+    //   attached via oncontextmenu (right-click / long-press on Android) —
+    //   this is the most reliable cross-platform long-press signal in WebView
+    //   (touchstart-based timers conflict with the existing board long-press
+    //   handler in the global touchstart listener). Returning false prevents
+    //   the default context menu.
     const criticalFlag=isCritical?' style="border-left:3px solid var(--accent2);padding-left:7px"':'';
-    h+='<div class="rmv-block'+(isAct?' act':'')+'" onclick="reviewGoTo('+(i+1)+')" data-step="'+(i+1)+'"'+criticalFlag+'>';
+    h+='<div class="rmv-block'+(isAct?' act':'')+'" onclick="reviewGoTo('+(i+1)+')" oncontextmenu="_prioritizeReviewStep('+(i+1)+');return false" data-step="'+(i+1)+'"'+criticalFlag+'>';
     h+='<span class="rmv-num">'+(isW?moveNum+'.':'')+'</span>';
     h+='<div class="rmv-detail"><span class="rmv-notation">'+_esc(mr.notation)+'</span>';
     if(isCritical&&_criticalReasons.has(i+1)){h+='<span style="font-size:.65rem;color:var(--accent);display:block;margin-top:1px">'+_criticalReasons.get(i+1)+'</span>';}
@@ -1839,6 +1846,14 @@ let reviewMode=false,reviewStep=0,reviewStates=[],reviewCritical=[];
 // from scrolling the move list independently).
 let _lastReviewStepScrolled=-2;
 let _reviewAnalyzeAllActive=false; // Flag for reviewAnalyzeAll batch analysis
+// v1.1.2 Phase 68 (Issue 30 P2): Priority queue for long-press-to-prioritize
+//   during analyze-all. When the user long-presses an uncached move while a
+//   batch is running, the step index is pushed here. The batch's advance
+//   function checks this queue BEFORE continuing the normal sequence and
+//   evaluates the prioritized step first. Entries are deduplicated (a second
+//   long-press on an already-queued step is a no-op). The queue is cleared on
+//   batch completion, batch cancel (exitReview/new game), and engine restart.
+let _reviewAnalyzePriorityQueue=[];
 // v1.1.0 Phase 54 rev14: _lastRenderReviewStep removed (dead code after virtual
 //   list disabled). Was used to detect reviewStep changes for window recompute.
 // v1.0.8 PHASE 18 Task 2: Virtual list state for the review move list.
@@ -2149,7 +2164,7 @@ const oppC=OPP_COLOR[playerColor];
 const flip=playerColor==='black';
 // Arrows computed separately by _updateArrows() — no inline computation needed
 
-let h='<div class="hdr" role="banner"><div class="hdr-top"><div class="hdr-l">'+_hdrKingIconHTML()+'<h1>'+T('app_name')+'<span class="ver">v1.1.1</span><button onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showAboutPage=true;render()" class="hdr-btn" style="margin-left:4px;cursor:pointer">ℹ️</button></h1></div><button onclick="toggleLang()" class="hdr-btn-lg" style="cursor:pointer">'+(_lang==='zh'?'↔️中':'↔️EN')+'</button><div class="ev" id="eval-disp" role="status" aria-label="'+T('evaluating')+'">'+(setupMode?T('setup_label'):(isAIThinking?'<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>':'<span class="ev-e">'+pe+'</span><span>'+pd+'</span><span style="color:var(--muted)">('+scoreStr+')</span>'+_hdrDepthStr+_hdrProgressStr))+'</div></div><div class="hdr-tools" role="toolbar" aria-label="'+T('ctrl_range')+'">'+(setupMode?'':'<div class="diff-sel" role="radiogroup" aria-label="AI">'+getAI_LEVELS().map(l=>'<button class="diff-b'+(getEffectiveAILevel()===l.id?' act':'')+'" onclick="if(!isAIThinking){'+(l.id===8?'openEngineConfig()':('aiLevel='+l.id+';try{AndroidBridge.syncGameDifficulty('+l.id+')}catch(e){}render()'))+'}" title="'+l.desc+'" role="radio" aria-checked="'+(getEffectiveAILevel()===l.id)+'">'+(l.id===8?'⚙️':l.id===7?('SL'+(function(){try{let _sl=20;if(typeof engineSettingsData!=='undefined'&&engineSettingsData&&engineSettingsData.skillLevel!=null)_sl=engineSettingsData.skillLevel;else if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getEngineSkillLevel)_sl=AndroidBridge.getEngineSkillLevel();return _sl;}catch(e){return 20;}})()):l.id)+'</button>').join('')+'</div>')+'<button type="button" class="btn" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()" aria-label="'+T('new_game')+'"><span style="font-size:1.4rem">⚔️</span> '+T('new_game')+'</button>'+'<button class="btn" onclick="quickFreeOpening()" aria-label="'+T('free_opening')+'">'+(playerColor==='white'?'<span style=\"font-size:1.4rem;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text\">♔&#xFE0E;</span>':'<span style=\"font-size:1.4rem;font-weight:400;color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans Symbol&#x27;,sans-serif;font-variant-emoji:text\">♚&#xFE0E;</span>')+' '+T('free_opening')+'</button>'+(setupMode?'':'<button class="btn" onclick="toggleSound()" id="btnSound" aria-label="'+T('sound')+'">'+(soundOn?'<span style="font-size:1.4rem">🔊</span> '+T('sound'):'<span style="font-size:1.4rem">🔇</span> '+T('sound'))+'</button>')+'<button class="btn" onclick="copyFEN()" title="'+T('copy_fen')+'" aria-label="'+T('copy_fen')+'"><span style="font-size:1.4rem">📝</span> FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="'+T('import_fen')+'" aria-label="'+T('import_fen')+'"><span style="font-size:1.4rem">🗃️</span> '+T('import_label')+'</button><button class="btn" onclick="'+(setupMode?'exitSetup()':'toggleSetup()')+'" aria-label="'+(setupMode?T('setup_done'):T('setup_mode'))+'">'+(setupMode?'<span style="font-size:1.4rem">✓</span> '+T('setup_done'):'<span style="font-size:1.4rem">🏗️</span> '+T('setup_mode'))+'</button></div></div>';
+let h='<div class="hdr" role="banner"><div class="hdr-top"><div class="hdr-l">'+_hdrKingIconHTML()+'<h1>'+T('app_name')+'<span class="ver">v1.1.2</span><button onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showAboutPage=true;render()" class="hdr-btn" style="margin-left:4px;cursor:pointer">ℹ️</button></h1></div><button onclick="toggleLang()" class="hdr-btn-lg" style="cursor:pointer">'+(_lang==='zh'?'↔️中':'↔️EN')+'</button><div class="ev" id="eval-disp" role="status" aria-label="'+T('evaluating')+'">'+(setupMode?T('setup_label'):(isAIThinking?'<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>':'<span class="ev-e">'+pe+'</span><span>'+pd+'</span><span style="color:var(--muted)">('+scoreStr+')</span>'+_hdrDepthStr+_hdrProgressStr))+'</div></div><div class="hdr-tools" role="toolbar" aria-label="'+T('ctrl_range')+'">'+(setupMode?'':'<div class="diff-sel" role="radiogroup" aria-label="AI">'+getAI_LEVELS().map(l=>'<button class="diff-b'+(getEffectiveAILevel()===l.id?' act':'')+'" onclick="if(!isAIThinking){'+(l.id===8?'openEngineConfig()':('aiLevel='+l.id+';try{AndroidBridge.syncGameDifficulty('+l.id+')}catch(e){}render()'))+'}" title="'+l.desc+'" role="radio" aria-checked="'+(getEffectiveAILevel()===l.id)+'">'+(l.id===8?'⚙️':l.id===7?('SL'+(function(){try{let _sl=20;if(typeof engineSettingsData!=='undefined'&&engineSettingsData&&engineSettingsData.skillLevel!=null)_sl=engineSettingsData.skillLevel;else if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getEngineSkillLevel)_sl=AndroidBridge.getEngineSkillLevel();return _sl;}catch(e){return 20;}})()):l.id)+'</button>').join('')+'</div>')+'<button type="button" class="btn" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()" aria-label="'+T('new_game')+'"><span style="font-size:1.4rem">⚔️</span> '+T('new_game')+'</button>'+'<button class="btn" onclick="quickFreeOpening()" aria-label="'+T('free_opening')+'">'+(playerColor==='white'?'<span style=\"font-size:1.4rem;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text\">♔&#xFE0E;</span>':'<span style=\"font-size:1.4rem;font-weight:400;color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans Symbol&#x27;,sans-serif;font-variant-emoji:text\">♚&#xFE0E;</span>')+' '+T('free_opening')+'</button>'+(setupMode?'':'<button class="btn" onclick="toggleSound()" id="btnSound" aria-label="'+T('sound')+'">'+(soundOn?'<span style="font-size:1.4rem">🔊</span> '+T('sound'):'<span style="font-size:1.4rem">🔇</span> '+T('sound'))+'</button>')+'<button class="btn" onclick="copyFEN()" title="'+T('copy_fen')+'" aria-label="'+T('copy_fen')+'"><span style="font-size:1.4rem">📝</span> FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="'+T('import_fen')+'" aria-label="'+T('import_fen')+'"><span style="font-size:1.4rem">🗃️</span> '+T('import_label')+'</button><button class="btn" onclick="'+(setupMode?'exitSetup()':'toggleSetup()')+'" aria-label="'+(setupMode?T('setup_done'):T('setup_mode'))+'">'+(setupMode?'<span style="font-size:1.4rem">✓</span> '+T('setup_done'):'<span style="font-size:1.4rem">🏗️</span> '+T('setup_mode'))+'</button></div></div>';
 h+=`<div class="main" role="main"><div class="bsec">`;
 // v1.0.4 Rev37: AI bar captured pieces split at 7 — pieces 8+ go to line 3.
 {const _aiCapHtml=capturedPiecesHtml(gameState.board,oppC,playerColor,7);
@@ -2547,7 +2562,7 @@ if(showAboutPage){
 // Load AGPL v3 SVG via AndroidBridge as base64 (CSP-compliant)
 let _gplSvgSrc='';
 try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.loadAssetAsBase64){const b64=AndroidBridge.loadAssetAsBase64('AGPLv3_Logo.svg');if(b64)_gplSvgSrc='data:image/svg+xml;base64,'+b64;}}catch(e){}
-h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="About"><div class="dlg" style="max-width:460px"><h2>${T('about_title')}</h2><div class="dlg-sec"><div class="crow"><span class="lb">${T('about_app')}</span><span class="vl">${T('app_name')} v1.1.1</span></div><div class="crow"><span class="lb">${T('about_engine')}</span><span class="vl">Stockfish 18 (arm64-v8a-dotprod)</span></div><div class="crow"><span class="lb">${T('about_platform')}</span><span class="vl">Android arm64-v8a</span></div></div><div class="dlg-sec"><h3>${T('copyright_license')}</h3>`+(_gplSvgSrc?`<div style="text-align:center;margin-bottom:10px"><img src="${_gplSvgSrc}" alt="AGPL v3 Logo" style="width:120px;height:auto;opacity:.9" /></div>`:'')+`<div style="font-size:.75rem;color:var(--text);line-height:1.6"><p style="margin-bottom:8px">${T('about_copyright')}</p><p style="margin-bottom:8px">${T('about_source_code_prefix')}<a href="${T('about_source_code_url')}" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">${T('about_source_code_url')}</a></p><p style="margin-bottom:8px">${T('about_agpl')} <a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GNU AGPL v3</a>${T('about_agpl_desc')}</p><p style="margin-bottom:8px">${T('about_droidfish')}<a href="https://github.com/peterosterlund2/droidfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">DroidFish</a>${T('about_droidfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a>${T('about_droidfish_tail')}</p><p style="margin-bottom:8px">${T('about_stockfish')}<a href="https://github.com/official-stockfish/Stockfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">Stockfish</a>${T('about_stockfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a> ${T('about_gplv3')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_disclaimer')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_ai')}</p></div></div><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="showAboutPage=false;render()" style="flex:1;justify-content:center">${T('close')}</button></div></div></div>`;}
+h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="About"><div class="dlg" style="max-width:460px"><h2>${T('about_title')}</h2><div class="dlg-sec"><div class="crow"><span class="lb">${T('about_app')}</span><span class="vl">${T('app_name')} v1.1.2</span></div><div class="crow"><span class="lb">${T('about_engine')}</span><span class="vl">Stockfish 18 (arm64-v8a-dotprod)</span></div><div class="crow"><span class="lb">${T('about_platform')}</span><span class="vl">Android arm64-v8a</span></div></div><div class="dlg-sec"><h3>${T('copyright_license')}</h3>`+(_gplSvgSrc?`<div style="text-align:center;margin-bottom:10px"><img src="${_gplSvgSrc}" alt="AGPL v3 Logo" style="width:120px;height:auto;opacity:.9" /></div>`:'')+`<div style="font-size:.75rem;color:var(--text);line-height:1.6"><p style="margin-bottom:8px">${T('about_copyright')}</p><p style="margin-bottom:8px">${T('about_source_code_prefix')}<a href="${T('about_source_code_url')}" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">${T('about_source_code_url')}</a></p><p style="margin-bottom:8px">${T('about_agpl')} <a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GNU AGPL v3</a>${T('about_agpl_desc')}</p><p style="margin-bottom:8px">${T('about_droidfish')}<a href="https://github.com/peterosterlund2/droidfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">DroidFish</a>${T('about_droidfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a>${T('about_droidfish_tail')}</p><p style="margin-bottom:8px">${T('about_stockfish')}<a href="https://github.com/official-stockfish/Stockfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">Stockfish</a>${T('about_stockfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a> ${T('about_gplv3')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_disclaimer')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_ai')}</p></div></div><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="showAboutPage=false;render()" style="flex:1;justify-content:center">${T('close')}</button></div></div></div>`;}
 // Import dialog — paste FEN, paste PGN, or select PGN file
 if(showImportDialog){
 h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="${T('import_title')}" onclick="if(event.target===this){showImportDialog=false;render()}"><div class="dlg" style="max-width:420px"><h2>${T('import_title')}</h2><div class="dlg-sec" style="gap:10px;display:flex;flex-direction:column">
@@ -4127,10 +4142,23 @@ if(stateHistory.length>200)stateHistory.shift();
 // once per user interaction.
 const mv={from,to,piece,promotion};
 if(piece.type==='king'){
-  for(const _lm of (legalMvs||[])){
-    if(_lm&&_lm.castle&&_lm.row===to.row&&_lm.col===to.col){
-      mv.castle=_lm.castle;
-      break;
+  // v1.1.2 PHASE 71 (bug fix): Primary source of the castle flag is now
+  // `to.castle` (set by uciToCoords when it rewrites Chess960 castling UCI
+  // moves, and by pseudoMoves for user-click castling). This covers AI moves
+  // where `legalMvs` is empty (cleared after the player's previous move) —
+  // previously the legalMvs lookup failed silently and `mv.castle` was
+  // undefined, causing `_castleSide` to fall back to the distance heuristic
+  // which rejects 0-distance king moves (king already on g1/c1) → king nulled
+  // in `makeMv`. The legalMvs lookup remains as a fallback for the case where
+  // `to` is a plain {row,col} object without the castle flag.
+  if(to&&to.castle){
+    mv.castle=to.castle;
+  }else{
+    for(const _lm of (legalMvs||[])){
+      if(_lm&&_lm.castle&&_lm.row===to.row&&_lm.col===to.col){
+        mv.castle=_lm.castle;
+        break;
+      }
     }
   }
 }
@@ -6385,6 +6413,18 @@ function _resetGameUIState(){
   if(typeof showSavePGNPrompt!=='undefined')showSavePGNPrompt=false;
   if(typeof showResignConfirm!=='undefined')showResignConfirm=false;
   if(typeof _pendingActionAfterSave!=='undefined')_pendingActionAfterSave=null;
+  // v1.1.2 Phase 67 Task 67.2: Clear any pending PGN cache save (set by the
+  //   partial-eval-coverage dialog when the user chose "Analyze All first").
+  //   A new game invalidates the pending save because the moveRecords it was
+  //   tied to no longer exist.
+  if(typeof _pendingPGNCacheSave!=='undefined')_pendingPGNCacheSave=null;
+  // v1.1.2 Phase 69 (Bug 3): Clear the PGN cache op-in-progress flag — a new
+  //   game invalidates any in-flight cache operation.
+  if(typeof _pgnCacheOpInProgress!=='undefined')_pgnCacheOpInProgress=false;
+  // v1.1.2 Phase 68 (Issue 30 P2): Clear the long-press priority queue — a
+  //   new game invalidates queued step indices because reviewStates will be
+  //   rebuilt for the new game.
+  _reviewAnalyzePriorityQueue=[];
   // v1.0.4 REV13: Reset scroll state on new game
   // v1.0.4 Rev30: also reset the restore guard (in case a render is in flight)
   if(typeof _mlistScrollState!=='undefined'){_mlistScrollState.scrollTop=0;_mlistScrollState.atBottom=false;_mlistScrollState.valid=false;}
@@ -6602,6 +6642,100 @@ function _updateReviewAnalyzeBtn(){
   btn.textContent=_rvAnalyzeBtnLabel();
 }
 
+/**
+ * v1.1.2 Phase 68 (Issue 30 P2): Long-press-to-prioritize a step during
+ *   analyze-all. When the user long-presses a move in the review move list
+ *   while an analyze-all batch is running, this function:
+ *   1. Validates the step is uncached and the batch is active.
+ *   2. Pushes the step onto _reviewAnalyzePriorityQueue.
+ *   3. Aborts the current in-flight batch eval via engineStop() so the
+ *      priority step can be evaluated next. The in-flight eval's result is
+ *      NOT lost — onEngineEval's user-nav stale path caches it for the
+ *      original _reviewEvalRequestedStep.
+ *   4. Fires a Toast notification + haptic feedback.
+ *   5. Triggers _reviewAnalyzeAdvance after a short delay; the advance
+ *      function checks the priority queue first and evaluates the prioritized
+ *      step before continuing the normal sequence.
+ *
+ * If no batch is active, the function falls back to navigating to the step
+ * and triggering a single eval (graceful degradation).
+ *
+ * @param {number} step - the review step index to prioritize (1..moveRecords.length)
+ */
+function _prioritizeReviewStep(step){
+  // Validate: must be in review mode
+  if(!reviewMode){
+    try{showToast(T('priority_eval_not_in_review'),2500);}catch(e){}
+    return;
+  }
+  // Validate: step must be in range
+  if(!reviewStates||step<0||step>=reviewStates.length)return;
+  // Validate: step must be uncached (no point prioritizing an already-analyzed step)
+  if(_reviewEvalCache.has(step)){
+    try{showToast(T('priority_eval_already_cached'),2000);}catch(e){}
+    try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+    return;
+  }
+  // Fire haptic feedback (matches the existing long-press pattern)
+  try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+  // If no batch is active, just navigate to the step and trigger a single eval
+  // (the user can manually inspect it). This is a graceful fallback.
+  if(!_reviewAnalyzeAllActive){
+    reviewGoTo(step);
+    try{requestEngineEval();}catch(e){}
+    try{showToast(T('priority_eval_toast'),2500);}catch(e){}
+    return;
+  }
+  // Deduplicate: don't add the same step twice
+  if(_reviewAnalyzePriorityQueue.indexOf(step)>=0){
+    try{showToast(T('priority_eval_toast'),2500);}catch(e){}
+    return;
+  }
+  // Push onto the priority queue
+  _reviewAnalyzePriorityQueue.push(step);
+  // Show toast notification
+  try{showToast(T('priority_eval_toast'),2500);}catch(e){}
+  // Abort the current in-flight batch eval so the priority step can be
+  // evaluated next. We bump _reviewAnalyzeGen and clear _evalRequestBatchGen
+  // so the in-flight onEngineEval callback is treated as stale (its result
+  // will be cached for _reviewEvalRequestedStep via the user-nav stale path,
+  // NOT lost). The safety timer (60s) will eventually fire if the engine
+  // doesn't respond to the stop, advancing the batch.
+  if(typeof _evalRequestBatchGen!=='undefined')_evalRequestBatchGen=0;
+  if(typeof _reviewAnalyzeGen!=='undefined')_reviewAnalyzeGen++;
+  // Clear the safety timer — _reviewAnalyzeAdvance will reset it when it
+  // picks up the priority entry. Without this clear, the old safety timer
+  // could fire and skip the priority step.
+  if(_reviewAnalyzeSafetyTimer){clearTimeout(_reviewAnalyzeSafetyTimer);_reviewAnalyzeSafetyTimer=null;}
+  // Send engine "stop" — the engine will respond with bestmove, which fires
+  // onEngineEval. Because _evalRequestBatchGen is now 0, the batch path in
+  // onEngineEval is skipped; the user-nav stale path caches the result for
+  // _reviewEvalRequestedStep (the step that was being evaluated when the
+  // user long-pressed).
+  try{
+    if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.engineStop==='function'){
+      AndroidBridge.engineStop();
+    }
+  }catch(e){console.warn('engineStop for priority failed',e);}
+  // Trigger _reviewAnalyzeAdvance after a short delay to pick up the priority
+  // entry. The delay (100ms) gives the engine time to process the stop
+  // command and fire its bestmove callback. If the callback hasn't arrived
+  // by then, _reviewAnalyzeAdvance will still pick up the priority entry
+  // (because the priority queue check happens BEFORE the normal sequence).
+  // We use a flag to prevent multiple advance triggers if the bestmove
+  // callback also fires.
+  const _advanceFlag='_priorityAdvancePending';
+  if(!window[_advanceFlag]){
+    window[_advanceFlag]=true;
+    setTimeout(function(){
+      window[_advanceFlag]=false;
+      if(_reviewAnalyzeAllActive){
+        try{_reviewAnalyzeAdvance();}catch(e){console.error('Priority advance failed:',e);}
+      }
+    },150);
+  }
+}
+
 function reviewAnalyzeAll(){
   if(!reviewMode||!reviewStates||reviewStates.length===0)return;
   // v1.0.4 Rev24: If every step is already cached, complete INSTANTLY.
@@ -6618,6 +6752,10 @@ function reviewAnalyzeAll(){
     return;
   }
   _reviewAnalyzeAllActive=true;
+  // v1.1.2 Phase 68 (Issue 30 P2): Clear any stale priority queue at batch
+  //   start (defensive — should already be empty if the previous batch
+  //   completed normally, but a crashed/canceled batch might have left entries).
+  _reviewAnalyzePriorityQueue=[];
   // v1.1.1 Phase 59 Task 59.6: Save the step the user was on so we can return
   //   to it after analysis. The batch runs in the background (decoupled from
   //   reviewStep) — the user can navigate freely during the batch.
@@ -6682,15 +6820,61 @@ function _reviewAnalyzeResetSafetyTimer(){
 function _reviewAnalyzeAdvance(){
   if(!_reviewAnalyzeAllActive)return;
   const _lastStep=moveRecords.length;
-  // v1.1.1 Phase 59 Task 59.6: Walk forward from _reviewAnalyzeStep (NOT
-  //   reviewStep) to find the next uncached step. This is the core fix —
-  //   the old code used reviewStep, so user navigation during the batch
-  //   caused the batch to "restart" from the user's nav position, re-
-  //   evaluating already-cached steps and sometimes skipping uncached ones.
+  // v1.1.2 PHASE 72 (bug fix): The completion check previously ONLY walked
+  //   forward from _reviewAnalyzeStep+1. When the user long-pressed a step
+  //   to prioritize it (Phase 68), the batch would evaluate that single
+  //   step, then advance forward and find all subsequent steps already
+  //   cached (or reach _lastStep), incorrectly reporting "all analysis
+  //   complete" — even though steps BEFORE the prioritized step were still
+  //   uncached. The user saw a "完成 N 步" toast with N < total, and the
+  //   batch ended prematurely, leaving earlier steps un-analyzed.
+  //   Root cause: the completion check was a forward-only walk; it never
+  //   scanned steps 0.._reviewAnalyzeStep-1 for uncached entries.
+  //   Fix: walk the ENTIRE range [0.._lastStep] to find the next uncached
+  //   step. This correctly resumes the batch from the lowest uncached step
+  //   after a priority eval completes, regardless of where the priority
+  //   step sat in the sequence. The forward-only optimization (skip cached
+  //   steps ahead of _reviewAnalyzeStep) is preserved as a fast-path, but
+  //   the full-range scan is the source of truth for completion.
+  //
+  // v1.1.1 Phase 59 Task 59.6 (historical): Walk forward from
+  //   _reviewAnalyzeStep (NOT reviewStep) to find the next uncached step.
+  //   This decouples batch progress from user navigation. Still correct
+  //   under Phase 72 — the full-range scan below supersedes it for the
+  //   completion decision but preserves the "start from _reviewAnalyzeStep"
+  //   intent for the common (no-priority) case via the fast-path.
+  //
+  // v1.1.2 Phase 68 (Issue 30 P0): Eval cache skip — if a step somehow has
+  //   a cached entry (e.g., prioritized eval just completed for this step),
+  //   advance immediately without sending a new engine request. This is the
+  //   "breakpoint resume" mechanism: the batch never re-evaluates a step
+  //   that already has a cached eval, so an interrupted batch resumes from
+  //   the next uncached step.
+  // Fast path: try forward from _reviewAnalyzeStep+1 first (common case —
+  //   no priority interruption, steps are analyzed in order). If that finds
+  //   an uncached step, use it. If it reaches _lastStep, fall through to the
+  //   full-range scan to catch any uncached steps BEFORE _reviewAnalyzeStep
+  //   (priority-interruption case).
   let nextStep=_reviewAnalyzeStep+1;
   while(nextStep<=_lastStep){
-    if(!_reviewEvalCache.has(nextStep))break; // Found un-analyzed step
+    if(!_reviewEvalCache.has(nextStep))break; // Found un-analyzed step (forward)
     nextStep++;
+  }
+  if(nextStep>_lastStep){
+    // Forward scan found nothing — but steps BEFORE _reviewAnalyzeStep may
+    // still be uncached (e.g., after a priority eval jumped ahead). Scan
+    // the full range [0.._lastStep] to find the lowest uncached step.
+    // v1.1.2 PHASE 72: This is the fix for the "false completion" bug.
+    let _lowestUncached=-1;
+    for(let i=0;i<=_lastStep;i++){
+      if(!_reviewEvalCache.has(i)){_lowestUncached=i;break;}
+    }
+    if(_lowestUncached>=0){
+      // Resume the batch from the lowest uncached step (before
+      // _reviewAnalyzeStep). This handles the priority-interruption case.
+      nextStep=_lowestUncached;
+    }
+    // else: truly all steps cached → fall through to completion branch below
   }
   if(nextStep>_lastStep){
     _reviewAnalyzeAllActive=false;
@@ -6698,9 +6882,19 @@ function _reviewAnalyzeAdvance(){
     // v1.1.1 Phase 59 Task 59.6: Reset batch state
     _reviewAnalyzeStep=-1;
     if(typeof _evalRequestBatchGen!=='undefined')_evalRequestBatchGen=0;
+    // v1.1.2 Phase 68 (Issue 30): Clear any prioritized-step queue (defensive —
+    //   should already be empty when batch completes normally).
+    _reviewAnalyzePriorityQueue=[];
     // v1.0.8 PHASE 19 (bug fix): Recompute reviewCritical now that the eval cache
     // is fully populated.
     try{if(typeof _findCriticalMoves==='function')reviewCritical=_findCriticalMoves();}catch(e){}
+    // v1.1.2 Phase 67 Task 67.2: If a PGN cache save is pending (user chose
+    //   "Analyze All first" in the partial-eval dialog), trigger it now.
+    //   The save will use the now-fully-populated _reviewEvalCache so every
+    //   move gets a [%eval] annotation. Clear the pending flag BEFORE invoking
+    //   the save so the save's own coverage check (defensive) doesn't recurse.
+    const _pendingSave=_pendingPGNCacheSave;
+    _pendingPGNCacheSave=null;
     // Return to the step the user was viewing before analysis (or their
     // current step if they navigated during the batch — reviewGoTo restores
     // eval vars from cache).
@@ -6713,10 +6907,24 @@ function _reviewAnalyzeAdvance(){
     if(typeof _targetStep==='number'&&_targetStep>=0&&_targetStep<reviewStates.length){
       reviewGoTo(_targetStep);
       showToast(T('analysis_done')+' '+_reviewEvalCache.size+' '+T('step'));
+      // v1.1.2 Phase 67 Task 67.2: trigger pending save AFTER reviewGoTo so
+      //   the UI shows the user's pre-batch step (not the last analyzed step).
+      if(_pendingSave){
+        try{setTimeout(function(){
+          try{_pgnCacheSaveCurrentImpl_SkipCoverageCheck(_pendingSave.name,_pendingSave.includeAnn);}
+          catch(e){showToast(T('pgn_cache_save_failed'),2500);}
+        },150);}catch(e){}
+      }
       return;
     }
     showToast(T('analysis_done')+' '+_reviewEvalCache.size+' '+T('step'));
     render();
+    if(_pendingSave){
+      try{setTimeout(function(){
+        try{_pgnCacheSaveCurrentImpl_SkipCoverageCheck(_pendingSave.name,_pendingSave.includeAnn);}
+        catch(e){showToast(T('pgn_cache_save_failed'),2500);}
+      },150);}catch(e){}
+    }
     return;
   }
   _reviewAnalyzeStep=nextStep;
@@ -6727,18 +6935,75 @@ function _reviewAnalyzeAdvance(){
     const cachedCount=_reviewEvalCache.size;
     showToast(T('analyzing_progress')+' ('+cachedCount+'/'+(_lastStep+1)+')');
   }
-  // v1.1.1 Phase 59 Task 59.6: Don't hijack reviewStep — the batch runs in
-  //   the background. The user sees their current step on the board.
-  //   Live-refresh the analyze-all button label so the user sees progress.
+  // v1.1.2 Phase 68 (Issue 30 P1): Incremental UI update — instead of calling
+  //   render() on every step (which rebuilds the entire DOM and causes memory
+  //   pressure on long games per Issue 30 root cause A), use lightweight
+  //   updates: refresh the eval trend chart + analyze-all button label, and
+  //   only call full render() every 10 steps (or at the end, which is handled
+  //   by the completion branch above).
+  //   - _refreshEvalTrendChart() rebuilds ONLY the SVG inside .review-chart
+  //     (one DOM write), keeping the chart visually in sync with new evals.
+  //   - _updateReviewAnalyzeBtn() updates the button label (one textContent).
+  //   - Full render() every 10 steps handles: move-list row updates (eval
+  //     delta colors, critical-move markers), scroll-into-view for active step,
+  //     and any layout shifts. 10 was chosen as a balance: frequent enough
+  //     that the move list feels responsive, infrequent enough to avoid the
+  //     O(n) DOM rebuild cost that caused WebView memory pressure on 100+
+  //     step games.
   try{if(typeof _updateReviewAnalyzeBtn==='function')_updateReviewAnalyzeBtn();}catch(e){}
-  // v1.1.1 Phase 59 Task 59.6: Use _requestBatchEval (NOT requestEngineEval)
-  //   so the callback is correctly identified as a batch callback.
-  if(typeof _requestBatchEval==='function'){
-    _requestBatchEval(nextStep);
-  }else{
-    // Fallback (shouldn't happen)
-    requestEngineEval();
+  try{if(typeof _refreshEvalTrendChart==='function')_refreshEvalTrendChart();}catch(e){}
+  if(nextStep%10===0){
+    try{render();}catch(e){}
   }
+  // v1.1.2 Phase 68 (Issue 30 P1): Main-thread yield — wrap the next
+  //   _requestBatchEval call in setTimeout(0) so the JS main thread can
+  //   process pending UI events (touch events, scroll, paint) between batch
+  //   steps. Without this yield, a 100-step batch would monopolize the main
+  //   thread for 5-15 minutes, making the UI feel frozen and increasing the
+  //   risk of ANR (Application Not Responding) triggers on aggressive OEM ROMs.
+  //   The 0ms delay is enough for the event loop to drain pending microtasks
+  //   and macrotasks (including requestAnimationFrame-driven paints) without
+  //   measurably slowing the batch (the engine's search time dominates).
+  //   The batch gen counter is preserved across the setTimeout boundary
+  //   because _evalRequestBatchGen is only reset by user-nav requests and
+  //   onEngineEval batch-path completion, neither of which fire here.
+  const _batchStep=nextStep;
+  setTimeout(function(){
+    if(!_reviewAnalyzeAllActive)return; // batch was canceled during the yield
+    if(_reviewAnalyzeStep!==_batchStep)return; // batch was hijacked (e.g., long-press priority)
+    // v1.1.2 Phase 68 (Issue 30 P2): Prioritized-step injection — if the user
+    //   long-pressed a move to prioritize it, evaluate that step FIRST before
+    //   continuing the normal batch sequence. The priority queue is drained
+    //   one entry at a time; each entry is a step index that was uncached at
+    //   long-press time.
+    if(_reviewAnalyzePriorityQueue.length>0){
+      const _priorityStep=_reviewAnalyzePriorityQueue.shift();
+      // Skip if it got cached in the meantime (e.g., the batch reached it
+      // before the priority queue did — unlikely but defensive).
+      if(_reviewEvalCache.has(_priorityStep)){
+        // Re-invoke _reviewAnalyzeAdvance to either pick up the next priority
+        // entry or continue the normal sequence.
+        try{_reviewAnalyzeAdvance();}catch(e){console.error('Analyze-all priority advance failed:',e);}
+        return;
+      }
+      _reviewAnalyzeStep=_priorityStep;
+      // Don't reset the safety timer here — _requestBatchEval does it.
+      if(typeof _requestBatchEval==='function'){
+        _requestBatchEval(_priorityStep);
+      }else{
+        requestEngineEval();
+      }
+      return;
+    }
+    // v1.1.1 Phase 59 Task 59.6: Use _requestBatchEval (NOT requestEngineEval)
+    //   so the callback is correctly identified as a batch callback.
+    if(typeof _requestBatchEval==='function'){
+      _requestBatchEval(_batchStep);
+    }else{
+      // Fallback (shouldn't happen)
+      requestEngineEval();
+    }
+  },0);
 }
 
 /**
@@ -6756,6 +7021,17 @@ function exitReview(){
   _reviewAnalyzeStep=-1;
   if(typeof _evalRequestBatchGen!=='undefined')_evalRequestBatchGen=0;
   if(typeof _reviewAnalyzeGen!=='undefined')_reviewAnalyzeGen++;
+  // v1.1.2 Phase 68 (Issue 30 P2): Clear the priority queue — exiting review
+  //   mode invalidates any pending long-press prioritization because the
+  //   reviewStates array it indexes is about to be cleared.
+  _reviewAnalyzePriorityQueue=[];
+  // v1.1.2 Phase 67 Task 67.2: Clear any pending PGN cache save — exiting
+  //   review mode invalidates the save because the rebuild path requires
+  //   reviewMode===true and a fully-populated _reviewEvalCache.
+  if(typeof _pendingPGNCacheSave!=='undefined')_pendingPGNCacheSave=null;
+  // v1.1.2 Phase 69 (Bug 3): Clear the PGN cache op-in-progress flag — a new
+  //   game invalidates any in-flight cache operation.
+  if(typeof _pgnCacheOpInProgress!=='undefined')_pgnCacheOpInProgress=false;
   // v1.0.8 PHASE 18 Task 2: Reset virtual list state on exiting review mode.
   // Clears the scroll timer and window so the next review session starts fresh.
   _resetRvVirtualState();
@@ -6811,6 +7087,10 @@ function exitReview(){
 //
 // Backed by Java-side AndroidBridge.listPGNCaches / savePGNCache / getPGNCache /
 // deletePGNCaches (files in /data/data/com.Regalia/files/pgn_cache/, HyperOS-proof).
+// v1.1.2 Phase 69 (Bug 3): _pgnCacheOpInProgress guards against re-entrant
+//   operations (save/import/delete/rename/tags) to prevent race conditions
+//   where a user clicks multiple operations before the first completes.
+let _pgnCacheOpInProgress=false;
 function openPGNCacheManager(){
   try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
   _pgnCacheSelected=new Set();
@@ -6882,19 +7162,44 @@ function _pgnCacheSelectNone(){
 }
 
 function _pgnCacheSaveCurrent(){
+  // v1.1.2 Phase 69 (Bug 3): Guard against re-entrant operations.
+  // The guard is set here and reset in all completion paths:
+  //   - _pgnCachePersistSave (synchronous save completes)
+  //   - _pgnCacheShowPartialEvalDialog cancel/overlay-click (dialog dismissed without save)
+  //   - export annotation dialog cancel (includeAnn===null)
+  //   - _reviewAnalyzeAdvance pending-save completion (async save after analyze-all)
+  //   - _pgnCacheClose / _resetGameUIState (UI teardown)
+  if(_pgnCacheOpInProgress)return;
   let name='';
   try{name=prompt(T('pgn_cache_name_prompt'),T('pgn_cache_save_default'))||'';}catch(e){name='';}
   name=name.trim();
   if(!name)return;
-  // v1.1.1 Phase 63: Ask whether to include annotations
-  if(typeof _showPGNExportAnnotationDialog==='function'){
-    _showPGNExportAnnotationDialog(function(includeAnn){
-      if(includeAnn===null)return; // cancelled
-      _pgnCacheSaveCurrentImpl(name,includeAnn);
-    });
-  }else{
-    // Fallback (shouldn't happen — _showPGNExportAnnotationDialog is always exported)
-    _pgnCacheSaveCurrentImpl(name,true);
+  _pgnCacheOpInProgress=true;
+  try{
+    // v1.1.1 Phase 63: Ask whether to include annotations
+    if(typeof _showPGNExportAnnotationDialog==='function'){
+      _showPGNExportAnnotationDialog(function(includeAnn){
+        if(includeAnn===null){_pgnCacheOpInProgress=false;return;} // cancelled
+        _pgnCacheSaveCurrentImpl(name,includeAnn);
+        // _pgnCacheSaveCurrentImpl may have: (a) saved synchronously via
+        // _pgnCachePersistSave (which resets the guard), or (b) shown the
+        // partial-eval dialog (async — guard is reset by the dialog's dismiss
+        // handlers). If it returned without doing either (e.g. empty PGN),
+        // reset here as a safety net.
+        if(!_pendingPGNCacheSave && !_pgnPartialEvalDialogActive){
+          _pgnCacheOpInProgress=false;
+        }
+      });
+    }else{
+      // Fallback (shouldn't happen — _showPGNExportAnnotationDialog is always exported)
+      _pgnCacheSaveCurrentImpl(name,true);
+      if(!_pendingPGNCacheSave && !_pgnPartialEvalDialogActive){
+        _pgnCacheOpInProgress=false;
+      }
+    }
+  }catch(e){
+    _pgnCacheOpInProgress=false;
+    throw e;
   }
 }
 function _pgnCacheSaveCurrentImpl(name,includeAnn){
@@ -6904,30 +7209,116 @@ function _pgnCacheSaveCurrentImpl(name,includeAnn){
   // v1.1.1 Phase 63: Pass includeAnn to _buildPGNString. For pure imports,
   //   _cachedOriginalPGN is used as-is (it already contains whatever annotations
   //   the original PGN had — the user's choice doesn't affect it).
-  let pgn='';
+  // v1.1.2 Phase 67 Task 67.2: ROOT-CAUSE FIX for "save with annotations loses [%eval]".
+  //   When the user is in review mode and saves with includeAnn=true via the rebuild
+  //   path (not pure import), _buildPGNString can only emit [%eval] for steps that
+  //   already have an entry in _reviewEvalCache. If the user hasn't navigated to
+  //   every step OR run "Analyze All", some steps lack cached evals, and the saved
+  //   PGN is missing those [%eval] annotations. We detect this coverage gap and
+  //   prompt the user to run "Analyze All" first (with options to save as-is or cancel).
+  // v1.1.2 Phase 69 Bug 1+2 ROOT-CAUSE FIX: The Phase 67 coverage check was gated
+  //   on `!_useOriginal`, but `_useOriginal` is almost always true for imported PGNs
+  //   (because importPGN sets time:null on all moves). This meant the dialog never
+  //   appeared (Bug 1) AND the pure-import path saved _cachedOriginalPGN verbatim,
+  //   ignoring _reviewEvalCache (Bug 2 — [%eval] lost after reload).
+  //   Fix: decouple the coverage check from _useOriginal. When the user has ANY
+  //   cached evals (_reviewEvalCache.size > 0) and is in review mode with
+  //   includeAnn=true, we (a) run the coverage check regardless of _useOriginal,
+  //   and (b) force the rebuild path so [%eval] annotations are included. The
+  //   pure-import (_cachedOriginalPGN) path is now only used when there are NO
+  //   cached evals at all (truly un-analyzed import).
+  const _ctx=_pgnCacheBuildSaveContext(includeAnn);
+  // Coverage check (may show dialog and return early)
+  if(_ctx.needsCoverageCheck && !_pendingPGNCacheSave){
+    const _missing=(_ctx.totalSteps+1)-_ctx.cachedCount;
+    if(_missing>0){
+      _pgnCacheShowPartialEvalDialog(name, includeAnn, _ctx.totalSteps+1, _ctx.cachedCount);
+      return;
+    }
+  }
+  // Build the PGN text
+  const pgn=_pgnCacheBuildPGNText(_ctx, includeAnn);
+  if(!pgn){
+    showToast(T('pgn_cache_save_failed'),2500);
+    return;
+  }
+  _pgnCachePersistSave(name, pgn);
+}
+
+// v1.1.2 Phase 69: Build the save context — shared by _pgnCacheSaveCurrentImpl
+//   and _pgnCacheSaveCurrentImpl_SkipCoverageCheck. Centralizes the pure-import
+//   detection and eval-cache coverage analysis so both paths use identical logic.
+//   Returns { useOriginal, hasCachedEvals, needsCoverageCheck, totalSteps, cachedCount }.
+function _pgnCacheBuildSaveContext(includeAnn){
   let _useOriginal=false;
   if(typeof _cachedOriginalPGN!=='undefined'&&_cachedOriginalPGN&&moveRecords&&moveRecords.length>0){
-    // Check if all moves have time===null (pure import, no live moves)
     let _allImported=true;
     for(let i=0;i<moveRecords.length;i++){
       const mr=moveRecords[i];
       if(mr&&mr.time!==null&&mr.time!==undefined){_allImported=false;break;}
     }
-    if(_allImported){
-      _useOriginal=true;
+    if(_allImported)_useOriginal=true;
+  }
+  // Phase 69: Check eval-cache coverage. This is INDEPENDENT of _useOriginal.
+  const _inReview = typeof reviewMode!=='undefined' && reviewMode
+    && typeof reviewStates!=='undefined' && reviewStates && reviewStates.length>0
+    && typeof _reviewEvalCache!=='undefined' && _reviewEvalCache;
+  let _cachedCount=0;
+  const _totalSteps = (moveRecords&&moveRecords.length>0) ? moveRecords.length : 0;
+  if(_inReview){
+    for(let i=0;i<=_totalSteps;i++){
+      if(_reviewEvalCache.has(i))_cachedCount++;
     }
   }
-  if(_useOriginal){
-    // Use the original imported PGN text — preserves all comments/tags/NAGs
-    pgn=_cachedOriginalPGN;
+  const _hasCachedEvals = _cachedCount>0;
+  // v1.1.2 Phase 70 (Bug 2 edge case fix): if _reviewEvalCache has ANY entries
+  //   (even if the user exited review mode — reviewMode=false but the cache
+  //   persists until _resetGameUIState), force rebuild path so [%eval] annotations
+  //   are included. _buildPGNString reads _reviewEvalCache.peek(i+1) regardless
+  //   of reviewMode (it only checks size>0), so the evals WILL be emitted.
+  //   Previously, the force was gated on _inReview, which meant exiting review
+  //   mode before saving would lose all [%eval] annotations.
+  const _hasAnyCachedEvals = typeof _reviewEvalCache!=='undefined' && _reviewEvalCache && _reviewEvalCache.size>0;
+  if(_hasAnyCachedEvals && _useOriginal){
+    _useOriginal=false;
+  }
+  // Coverage check is needed when: includeAnn=true, in review mode, has cached
+  // evals (meaning user cares about evals), and there are uncached steps.
+  // We only run the coverage dialog when _inReview is true because the dialog's
+  // "Analyze All first" option requires review mode to work. If the user exited
+  // review mode, we silently force rebuild (no dialog) — the evals from the
+  // previous review session are included as-is.
+  const _needsCoverageCheck = includeAnn && _inReview && _hasCachedEvals;
+  return {
+    useOriginal: _useOriginal,
+    hasCachedEvals: _hasCachedEvals,
+    needsCoverageCheck: _needsCoverageCheck,
+    totalSteps: _totalSteps,
+    cachedCount: _cachedCount
+  };
+}
+
+// v1.1.2 Phase 69: Build the PGN text from the save context.
+function _pgnCacheBuildPGNText(_ctx, includeAnn){
+  let pgn='';
+  if(_ctx.useOriginal){
+    // Use the original imported PGN text — preserves all comments/tags/NAGs.
+    // Only reached when there are NO cached evals (truly un-analyzed import).
+    pgn = (typeof _cachedOriginalPGN!=='undefined') ? _cachedOriginalPGN : '';
   }else{
-    // Rebuild from moveRecords (includes post-import moves + annotations)
     try{
-      if(typeof _buildPGNString==='function')pgn=_buildPGNString(true,includeAnn); // forceIncludeVariations=true
+      if(typeof _buildPGNString==='function')pgn=_buildPGNString(true,includeAnn);
     }catch(e){pgn='';}
   }
+  return pgn;
+}
+
+// v1.1.2 Phase 69: Persist the PGN save via AndroidBridge + post-save UI update.
+//   Shared by _pgnCacheSaveCurrentImpl and _pgnCacheSaveCurrentImpl_SkipCoverageCheck.
+function _pgnCachePersistSave(name, pgn){
   if(!pgn){
     showToast(T('pgn_cache_save_failed'),2500);
+    _pgnCacheOpInProgress=false; // Phase 69 (Bug 3): reset guard on failure
     return;
   }
   let ok=false;
@@ -6944,10 +7335,140 @@ function _pgnCacheSaveCurrentImpl(name,includeAnn){
   }else{
     showToast(T('pgn_cache_save_failed'),2500);
   }
+  _pgnCacheOpInProgress=false; // Phase 69 (Bug 3): reset guard on completion
 }
 
+// v1.1.2 Phase 67 Task 67.2: Pending save state — set when user chooses
+// "Analyze All first" in the partial-eval dialog. The analyze-all completion
+// path (_reviewAnalyzeAdvance) checks this and triggers the deferred save.
+let _pendingPGNCacheSave=null;
+// v1.1.2 Phase 68: Partial-eval dialog active flag + dismiss handler — registered
+//   so handleBackPress() can dismiss the dialog on Android back-button press
+//   (matches the pattern used by _pgnExportDialogActive/_pgnExportDialogDismiss).
+let _pgnPartialEvalDialogActive=false;
+let _pgnPartialEvalDialogDismiss=null;
+
+// v1.1.2 Phase 67 Task 67.2 + Phase 68: Partial-eval-coverage dialog. Shows
+//   total/cached step counts and offers three actions: analyze-all-first /
+//   save-as-is / cancel. The title now includes a 💾 emoji prefix (Phase 68),
+//   and the dialog supports Android back-button dismissal (Phase 68).
+function _pgnCacheShowPartialEvalDialog(name, includeAnn, totalSteps, cachedCount){
+  // Build a modal dialog similar to _showPGNExportAnnotationDialog in ai-bridge.js.
+  // We use a DHTML overlay so it works without any framework.
+  try{
+    // Remove any existing dialog (defensive)
+    const _old=document.getElementById('_pgnPartialEvalDlg');
+    if(_old)_old.remove();
+    const overlay=document.createElement('div');
+    overlay.id='_pgnPartialEvalDlg';
+    overlay.className='dov';
+    overlay.setAttribute('role','dialog');
+    overlay.setAttribute('aria-modal','true');
+    overlay.setAttribute('aria-label',T('pgn_cache_partial_eval_title'));
+    overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:100000';
+    const dlg=document.createElement('div');
+    dlg.className='dlg';
+    dlg.style.cssText='max-width:440px;background:var(--card,#221015);border:1px solid var(--border,#3a1a1a);border-radius:12px;padding:20px;width:90%;color:var(--text,#f5e6c8)';
+    const title=document.createElement('h2');
+    title.textContent=T('pgn_cache_partial_eval_title');
+    title.style.cssText='color:var(--accent2,#ffd700);margin:0 0 14px 0;font-size:1.05rem';
+    dlg.appendChild(title);
+    const msg=document.createElement('p');
+    msg.style.cssText='font-size:.9rem;line-height:1.6;margin:0 0 16px 0';
+    msg.textContent=T('pgn_cache_partial_eval_msg')
+      .replace('N1',String(totalSteps))
+      .replace('N2',String(cachedCount));
+    dlg.appendChild(msg);
+    const btns=document.createElement('div');
+    btns.style.cssText='display:flex;flex-direction:column;gap:8px';
+    // v1.1.2 Phase 68: Centralized dismiss function — used by all buttons AND
+    //   the back-button handler. Sets the active flag to false BEFORE removing
+    //   the overlay so a synchronous back-press during a button click doesn't
+    //   double-dismiss.
+    // v1.1.2 Phase 69 (Bug 3): Also reset _pgnCacheOpInProgress so the cancel
+    //   path doesn't leave the guard locked.
+    const _dismiss=function(){
+      _pgnPartialEvalDialogActive=false;
+      _pgnPartialEvalDialogDismiss=null;
+      if(typeof _pgnCacheOpInProgress!=='undefined')_pgnCacheOpInProgress=false;
+      if(overlay.parentNode)overlay.remove();
+    };
+    _pgnPartialEvalDialogActive=true;
+    _pgnPartialEvalDialogDismiss=_dismiss;
+    const makeBtn=function(label, isPrimary, onClick){
+      const b=document.createElement('button');
+      b.type='button';
+      b.className='btn'+(isPrimary?' btn-p':'');
+      b.textContent=label;
+      b.style.cssText='width:100%;justify-content:center;gap:8px;padding:12px;font-size:.9rem';
+      b.onclick=function(){
+        try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+        _dismiss();
+        onClick();
+      };
+      return b;
+    };
+    btns.appendChild(makeBtn(T('pgn_cache_partial_eval_analyze_first'), true, function(){
+      // Set pending save; reviewAnalyzeAll() will trigger the save on completion.
+      _pendingPGNCacheSave={name:name, includeAnn:includeAnn};
+      showToast(T('pgn_cache_analyze_then_save'),2500);
+      try{
+        if(typeof reviewAnalyzeAll==='function'){
+          reviewAnalyzeAll();
+        }else{
+          // Fallback — shouldn't happen
+          _pendingPGNCacheSave=null;
+          _pgnCacheSaveCurrentImpl(name, includeAnn);
+        }
+      }catch(e){
+        _pendingPGNCacheSave=null;
+        showToast(T('pgn_cache_save_failed'),2500);
+      }
+    }));
+    btns.appendChild(makeBtn(T('pgn_cache_partial_eval_save_as_is'), false, function(){
+      // Save with whatever is cached (current behavior pre-fix).
+      _pgnCacheSaveCurrentImpl_SkipCoverageCheck(name, includeAnn);
+    }));
+    btns.appendChild(makeBtn(T('cancel'), false, function(){
+      // Just dismiss — no action.
+    }));
+    dlg.appendChild(btns);
+    overlay.appendChild(dlg);
+    // Click on overlay (outside dialog) = cancel
+    overlay.addEventListener('click', function(e){
+      if(e.target===overlay){
+        try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+        _dismiss();
+      }
+    });
+    document.body.appendChild(overlay);
+  }catch(e){
+    // Fallback: just save as-is if dialog fails to render
+    _pgnPartialEvalDialogActive=false;
+    _pgnPartialEvalDialogDismiss=null;
+    _pgnCacheSaveCurrentImpl_SkipCoverageCheck(name, includeAnn);
+  }
+}
+
+// v1.1.2 Phase 67 Task 67.2 + Phase 69: Inner save routine that skips the
+//   coverage check. Called by the "Save anyway" button OR by the post-analyze-all
+//   pending-save path. Phase 69: refactored to use _pgnCacheBuildSaveContext +
+//   _pgnCacheBuildPGNText + _pgnCachePersistSave so the PGN-building logic is
+//   identical to the with-coverage-check path (fixes Bug 2 — previously this
+//   function had its own copy of the pure-import detection that didn't force
+//   rebuild when cached evals existed).
+function _pgnCacheSaveCurrentImpl_SkipCoverageCheck(name, includeAnn){
+  const _ctx=_pgnCacheBuildSaveContext(includeAnn);
+  const pgn=_pgnCacheBuildPGNText(_ctx, includeAnn);
+  _pgnCachePersistSave(name, pgn);
+}
+
+
 function _pgnCacheImport(name){
+  // v1.1.2 Phase 69 (Bug 3): Guard against re-entrant operations.
+  if(_pgnCacheOpInProgress)return;
   if(!name)return;
+  _pgnCacheOpInProgress=true;
   let pgn=null;
   try{
     if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getPGNCache){
@@ -6955,6 +7476,7 @@ function _pgnCacheImport(name){
     }
   }catch(e){pgn=null;}
   if(!pgn){
+    _pgnCacheOpInProgress=false;
     showToast(T('pgn_cache_import_failed'),2500);
     return;
   }
@@ -6968,9 +7490,13 @@ function _pgnCacheImport(name){
   }catch(e){}
   // v1.0.8 PHASE 34: use async import with worker offloading to prevent UI jank
   //   on large PGN files. Falls back to sync importPGN if importPGNAsync unavailable.
+  // v1.1.2 Phase 69 (Bug 3): The .then callback checks _pgnCacheOpInProgress to
+  //   ensure the operation wasn't superseded. It also resets the flag on completion.
   try{
     if(typeof importPGNAsync==='function'){
       importPGNAsync(pgn).then(function(ok){
+        if(!_pgnCacheOpInProgress)return; // superseded by another operation
+        _pgnCacheOpInProgress=false;
         // v1.0.8 PHASE 35: check success flag — importPGN shows its own error
         //   toast on invalid PGN, so only show success UI if import succeeded.
         if(!ok){
@@ -6990,6 +7516,7 @@ function _pgnCacheImport(name){
         try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
         render();
       }).catch(function(e){
+        _pgnCacheOpInProgress=false;
         // v1.0.8 PHASE 35: defensive catch in case .then() callback throws
         console.error('PGN cache import .then failed:',e);
         showToast(T('pgn_cache_import_failed'),2500);
@@ -6998,7 +7525,9 @@ function _pgnCacheImport(name){
       return;
     }
     if(typeof importPGN==='function')importPGN(pgn);
+    _pgnCacheOpInProgress=false;
   }catch(e){
+    _pgnCacheOpInProgress=false;
     showToast(T('pgn_cache_import_failed'),2500);
     return;
   }
@@ -7017,9 +7546,12 @@ function _pgnCacheImport(name){
 }
 
 function _pgnCacheDeleteSelected(){
+  // v1.1.2 Phase 69 (Bug 3): Guard against re-entrant operations.
+  if(_pgnCacheOpInProgress)return;
   if(_pgnCacheSelected.size===0)return;
   let ok=confirm(T('pgn_cache_confirm_delete'));
   if(!ok)return;
+  _pgnCacheOpInProgress=true;
   const names=Array.from(_pgnCacheSelected);
   let deleted=0;
   try{
@@ -7029,12 +7561,16 @@ function _pgnCacheDeleteSelected(){
   }catch(e){deleted=0;}
   _pgnCacheSelected.clear();
   _refreshPGNCacheList();
+  _pgnCacheOpInProgress=false;
   try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
   showToast(T('pgn_cache_deleted')+'：'+deleted,2000);
   render();
 }
 
 function _pgnCacheClose(){
+  // v1.1.2 Phase 69 (Bug 3): Reset the op-in-progress flag on close so a
+  //   stale async operation (e.g. importPGNAsync .then) doesn't lock the UI.
+  _pgnCacheOpInProgress=false;
   showPGNCacheManager=false;
   _pgnCacheSelected.clear();
   // v1.0.4 Rev21: Reset filter state on close so next open shows all entries.
@@ -7046,11 +7582,14 @@ function _pgnCacheClose(){
 // v1.0.4 Round-5 Rev20: Rename a PGN cache entry.
 // Prompts for a new name; refuses to overwrite an existing entry.
 function _pgnCacheRename(oldName){
+  // v1.1.2 Phase 69 (Bug 3): Guard against re-entrant operations.
+  if(_pgnCacheOpInProgress)return;
   if(!oldName)return;
   let newName='';
   try{newName=prompt(T('pgn_cache_rename_prompt'),oldName)||'';}catch(e){newName='';}
   newName=newName.trim();
   if(!newName||newName===oldName)return;
+  _pgnCacheOpInProgress=true;
   let ok=false;
   try{
     if(typeof AndroidBridge!=='undefined'&&AndroidBridge.renamePGNCache){
@@ -7065,12 +7604,15 @@ function _pgnCacheRename(oldName){
   }else{
     showToast(T('pgn_cache_rename_failed'),2500);
   }
+  _pgnCacheOpInProgress=false;
 }
 
 // v1.0.4 Round-5 Rev20: Tag editor for a PGN cache entry.
 // Shows a prompt pre-filled with current tags (comma-separated);
 // the user can add/remove tags. Tags are stored as a JSON array on the Java side.
 function _pgnCacheEditTags(name){
+  // v1.1.2 Phase 69 (Bug 3): Guard against re-entrant operations.
+  if(_pgnCacheOpInProgress)return;
   if(!name)return;
   // Find current tags from the in-memory list
   let currentTags=[];
@@ -7093,6 +7635,7 @@ function _pgnCacheEditTags(name){
     tags.push(t);
     if(tags.length>=10)break; // Max 10 tags per entry
   }
+  _pgnCacheOpInProgress=true;
   let ok=false;
   try{
     if(typeof AndroidBridge!=='undefined'&&AndroidBridge.setPGNCacheTags){
@@ -7107,6 +7650,7 @@ function _pgnCacheEditTags(name){
   }else{
     showToast(T('pgn_cache_tags_save_failed'),2500);
   }
+  _pgnCacheOpInProgress=false;
 }
 
 // v1.0.4 Round-5 Rev21: Tag filter / search functions.
@@ -7350,6 +7894,12 @@ function handleBackPress(){
   // v1.1.1 Phase 65: Export annotation dialog — back button = Cancel
   if(typeof _pgnExportDialogActive!=='undefined'&&_pgnExportDialogActive){
     if(typeof _pgnExportDialogDismiss==='function')_pgnExportDialogDismiss();
+    return;
+  }
+  // v1.1.2 Phase 68: Partial-eval-coverage dialog — back button = Cancel
+  //   (matches the export annotation dialog pattern).
+  if(typeof _pgnPartialEvalDialogActive!=='undefined'&&_pgnPartialEvalDialogActive){
+    if(typeof _pgnPartialEvalDialogDismiss==='function')_pgnPartialEvalDialogDismiss();
     return;
   }
   // v1.0.8 UI: Promotion dialog takes highest priority — it blocks all other

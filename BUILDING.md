@@ -1,4 +1,4 @@
-# Building Regalia v1.1.1 from source
+# Building Regalia v1.1.2 from source
 
 <!-- AI-GEN: AI assisted
      This document was AI-assisted and has been reviewed for AGPL v3 compliance. -->
@@ -23,6 +23,8 @@ python3 build-chess.py
 The build script merges `src/main/assets/chess.src/*.js` (in order:
 game-logic → chess960 → pgn-standard → worker-pool → ai-bridge → tablebase → eco-data → ui)
 into `src/main/assets/chess.html`, stripping `export` statements.
+As of v1.1.2 Phase 67 (MED-3), the script wraps every file I/O in try/except
+for clearer diagnostics and uses an `if __name__ == '__main__':` guard.
 
 ## Build APK
 ```
@@ -36,11 +38,29 @@ The signed APK (v1+v2+v3 signed with `../debug.keystore`) will be at
 - JDK 21 (e.g. Temurin JDK 21.0.5+11) — must include `javac` (JRE-only is insufficient)
 - Android SDK API 35, Build-Tools 34.0.0, NDK 27.2.12479018, CMake 3.22.1
 - Gradle 8.11.1 (wrapper included)
-- Configure `gradle.properties`:
-  - `org.gradle.java.home` → path to JDK 21
-  - `org.gradle.java.installations.paths` → same path
+- Set `JAVA_HOME` to your JDK 21 path (or add `org.gradle.java.home=...` to
+  `~/.gradle/gradle.properties` — never commit machine-specific paths to the
+  project's `gradle.properties`; v1.1.2 Phase 67 GOV-2 removed the previously
+  hardcoded Ubuntu path `/usr/lib/jvm/java-21-openjdk-amd64`).
 - Configure `local.properties`:
   - `sdk.dir` → Android SDK path
+- Configure `../version.properties` (one level above the project dir):
+  ```
+  VERSION_MAJOR=1
+  VERSION_MINOR=1
+  VERSION_PATCH=2
+  VERSION_BUILD=112
+  ```
+  Defaults inside `build.gradle` cover the missing case (1.1.1 / 111).
+- Configure `../keystore.properties` (one level above the project dir) for
+  release signing, or use environment variables `RELEASE_KEYSTORE_PATH` /
+  `RELEASE_KEYSTORE_PASSWORD` / `RELEASE_KEY_ALIAS` / `RELEASE_KEY_PASSWORD`:
+  ```
+  releaseKeystorePath=/absolute/path/to/debug.keystore
+  releaseKeystorePassword=android
+  releaseKeyAlias=debug
+  releaseKeyPassword=android
+  ```
 - Place a keystore at `../debug.keystore` (storepass=android, alias=debug) or
   update `signingConfigs.release` in `build.gradle` to your own keystore.
 - The APK is signed with v1+v2+v3 schemes (`enableV1Signing`/`enableV2Signing`/
@@ -67,6 +87,195 @@ The signed APK (v1+v2+v3 signed with `../debug.keystore`) will be at
   blocks in both files.
 
 ## v1.1.0 build notes
+- **v1.1.2 Phase 72 (2026.7.12):** Same-version revision (versionCode=112,
+  versionName="1.1.2" unchanged). Review analyze-all "false completion"
+  bug fix after long-press priority. No build-system changes; no new files
+  at project root. If you edit `chess.src/*.js`, re-run
+  `python3 build-chess.py` before `./gradlew assembleRelease`. Changes:
+  (1) **Bug fix (user-reported)**: `_reviewAnalyzeAdvance` (ui.js) — the
+  completion check previously ONLY walked forward from
+  `_reviewAnalyzeStep+1`. When the user long-pressed a step to prioritize
+  it (Phase 68 feature), the batch evaluated that single step, then the
+  forward walk reached `_lastStep` and reported "all analysis complete" —
+  even though steps BEFORE the prioritized step were still uncached. Fix:
+  when the forward walk finds nothing, scan the ENTIRE range
+  `[0.._lastStep]` for the lowest uncached step and resume the batch from
+  there. The forward-only fast-path is preserved for the common
+  (no-priority) case; the full-range scan is the source of truth for
+  completion.
+  (2) **Phase 67→70 verification**: all Phase 67→70 changes re-verified to
+  be correctly implemented (nativeRenice setpriority check, makeMv
+  inB(to) check, onHintMove bounds check, Long.parseLong try-catch,
+  MainActivity stopLoading, standard LICENSE file, gradle.properties
+  cross-platform, build-chess.py try/except, emoji-space formatting,
+  _pgnCacheShowPartialEvalDialog 3 options, _reviewAnalyzeAdvance render
+  every 10 steps, _refreshEvalTrendChart + _updateReviewAnalyzeBtn,
+  setTimeout(0) yield, _prioritizeReviewStep + _reviewAnalyzePriorityQueue,
+  .rmv-block oncontextmenu, stats nav buttons flex:1 1 0,
+  _pgnPartialEvalDialogActive back-button, .rmv-block CSS user-select:none,
+  3 new i18n keys, _pgnCacheBuildSaveContext decoupled coverage check,
+  _reviewEvalCache.size > 0 force rebuild, _pgnCacheOpInProgress guard,
+  stats.html CSP hash auto-update, worker-pool.js onmessageerror, MultiPV
+  cap 8, Move Overhead cap 1000ms, Hash cap 50% JVM heap, Threads cap 2x
+  CPU cores, UCI_AnalyseMode, makeMvInPlace inB(to) check, console.log
+  cleanup). No corrections needed.
+
+- **v1.1.2 Phase 71 (2026.7.11):** Same-version revision (versionCode=112,
+  versionName="1.1.2" unchanged). Stats-page move-selection bug fix +
+  first-principles code review of all ~34,000 source lines. No build-system
+  changes; no new files at project root. If you edit `chess.src/*.js` or
+  `src/main/assets/stats.html`, re-run `python3 build-chess.py` before
+  `./gradlew assembleRelease`. Changes:
+  (1) **Bug fix (user-reported)**: `stats.html` CSP blocked inline `onclick`
+  handlers → clicking a PGN move in the statistics page did nothing. Root
+  cause: the SHA-256-hash-based `script-src` policy silently blocked all
+  23 inline event handlers per CSP Level 2+. Fix: switch `script-src` from
+  `'sha256-<hash>' blob:` to `'unsafe-inline' blob:` (safe — stats.html is a
+  local asset with no external content). **Note**: the Phase 69
+  `build-chess.py` CSP-hash auto-update step is now a no-op for stats.html
+  (the CSP no longer uses a hash) but remains harmless.
+  (2) **XSS hardening** (consequence of the CSP change): `stats.html`
+  `renderPGNText` / variation-text walk / `firstMoves` now route unrecognized
+  characters through `_escFEN` before HTML insertion. Without this, a
+  malicious PGN movetext payload like `<img src=x onerror="...">` would
+  execute under `'unsafe-inline'`.
+  (3) **Chess960 0-distance castling fix** (P1 bug, main app + stats page):
+  for SP-IDs where the king already sits on its castling target (e.g. king on
+  g1, rook on h1 → UCI `g1h1`), `uciToCoords` rewrote the destination to col
+  6, producing a 0-distance "move" `g1g1` that `_castleSide` rejected → king
+  nulled. Fix: `uciToCoords` (ai-bridge.js) attaches `castle` flag to
+  `result.to`; `executeMove` (ui.js) checks `to.castle` as primary source;
+  `_castleSide` (game-logic.js) adds a 0-distance branch;
+  `stats.html` mirrors all three fixes in its independent code.
+  (4) **Concurrency fixes** (StockfishNative.java): `readyOkLatchHolder` race
+  — JS binder thread and executor thread both wrote the single volatile
+  field without synchronization; fix: dedicated `_readyOkLock` serializes all
+  readyOk set+wait operations. `engineStop` TOCTOU on
+  `_discardingPonderBestmove` — fix: dedicated `_discardFlagLock` makes the
+  check-and-clear atomic.
+  (5) **importSettings cap bypass fix** (StockfishNative.java): apply the
+  Phase 69 cap formulas (2x CPU cores / 50% JVM heap / 1000ms) inline in
+  `importSettings` instead of the loose 1024/1048576/10000 caps.
+  (6) **StatsActivity robustness**: added deprecated `shouldOverrideUrlLoading`
+  overload (API 21-23 compat) + `onRenderProcessGone` handler.
+  (7) **Low-risk robustness patches**: `secureRandomInt` crypto guard;
+  `moveAlg` setupMode `typeof` guard; `toShredderCastling` board guard;
+  `sevenTagRoster`/`composePGN` null guards; `worker-pool.js` 3-strike
+  transient-failure counter; `makeMv`/`makeMvInPlace` en-passant `inB()`
+  bounds checks.
+
+- **v1.1.2 Phase 70 (2026.7.10):** Same-version revision (versionCode=112,
+  versionName="1.1.2" unchanged). First-principles code review cleanup.
+  No build-system changes; no new files at project root. If you edit
+  `chess.src/*.js`, re-run `python3 build-chess.py` before
+  `./gradlew assembleRelease`. Changes:
+  (1) **Bug fix (edge case)**: `_pgnCacheBuildSaveContext` (ui.js) — when the
+  user exits review mode before saving, `_reviewEvalCache` still has entries
+  (persisted until `_resetGameUIState`), but the Phase 69 force-rebuild was
+  gated on `_inReview` (which is now false). This meant the pure-import path
+  would save `_cachedOriginalPGN` verbatim, losing `[%eval]` annotations.
+  Fix: the force-rebuild now checks `_reviewEvalCache.size > 0` directly
+  (not `_inReview`), so evals from a previous review session are always
+  included. The coverage dialog still requires `_inReview` (the "Analyze All
+  first" option needs review mode).
+  (2) **Robustness**: `makeMvInPlace` (game-logic.js) — added the same `inB()`
+  bounds check on `to`-coordinates that `makeMv` got in Phase 67. Previously
+  only `from.row` was bounds-checked, allowing an out-of-range `to` coord to
+  silently throw on `s.board[to.row][to.col]`.
+  (3) **Redundancy cleanup**: removed 7 debug `console.log` calls from
+  `ai-bridge.js` (engine init/restart/ready callbacks) and 1 from `eco-data.js`
+  (IndexedDB cache load). These were debug leftovers that polluted production
+  logs. Replaced with comments documenting the removal.
+
+- **v1.1.2 Phase 69 (2026.7.9):** Same-version revision (versionCode=112,
+  versionName="1.1.2" unchanged). 4 bug fixes + Web Worker robustness + UCI
+  optimization. No build-system changes; no new files at project root. If you
+  edit `chess.src/*.js`, `chess.src/index.html.tpl`, or
+  `src/main/assets/stats.html`, re-run `python3 build-chess.py` before
+  `./gradlew assembleRelease`. Changes:
+  (1) **Bug 1+2 fix**: `_pgnCacheSaveCurrentImpl` (ui.js) — the partial-eval
+  dialog never appeared because the coverage check was gated on `!_useOriginal`,
+  but `_useOriginal` is almost always true for imported PGNs (importPGN sets
+  time:null). Fix: decouple coverage check from `_useOriginal`; when
+  `_reviewEvalCache.size > 0`, force rebuild path so `[%eval]` annotations are
+  included. Refactored into `_pgnCacheBuildSaveContext` + `_pgnCacheBuildPGNText`
+  + `_pgnCachePersistSave` shared helpers.
+  (2) **Bug 3 fix**: PGN cache manager race conditions — added
+  `_pgnCacheOpInProgress` guard to all operations (save/import/delete/rename/
+  tags). `importPGNAsync().then()` checks `showPGNCacheManager` state. Guard
+  reset on close/resetGameUIState/partial-eval dialog dismiss.
+  (3) **Bug 4 fix**: `stats.html` CSP SHA-256 hash mismatch — Phase 68 changed
+  the nav button code, changing the inline script's hash, but the CSP `<meta>`
+  tag wasn't updated → browser blocked script execution → stats page blank.
+  Fix: `build-chess.py` now auto-computes and updates the stats.html CSP hash
+  on every build. Also added a standalone `fix_stats_csp_hash.py` script.
+  (4) **Web Worker robustness** (per "Web Worker 设计与优化指南" PDF §6.1):
+  `worker-pool.js` — added `onmessageerror` handler on each worker. Previously,
+  structured-clone serialization failures would silently leave the task's
+  promise hanging until the 30s timeout. Now the task rejects immediately and
+  the worker is recycled (terminate + replace).
+  (5) **UCI optimization** (per "stockfish18的UCI优化指南" PDF):
+  `StockfishNative.java` — tightened parameter validation per SF18 best
+  practices: MultiPV cap 8 (was 500; PDF recommends 3-5 for review), Move
+  Overhead cap 1000ms (was 5000ms; PDF recommends 10-30 local, 50-150 network),
+  Hash cap 50% of JVM heap (was 32TB; PDF warns swapping kills performance),
+  Threads cap 2x CPU cores (was 512; PDF warns thread contention reduces NPS).
+  Added `UCI_AnalyseMode=true` during eval mode + `UCI_AnalyseMode=false`
+  restore for gameplay (PDF §3.3: engine searches more thoroughly in analysis
+  mode, exploring suboptimal moves for comprehensive variations).
+
+- **v1.1.2 Phase 68 (2026.7.8):** Same-version revision (versionCode=112,
+  versionName="1.1.2" unchanged). Analyze All optimization + long-press
+  priority feature + UI polish. No build-system changes; no new files at
+  project root. If you edit `chess.src/*.js`, `chess.src/index.html.tpl`,
+  or `src/main/assets/stats.html`, re-run `python3 build-chess.py` before
+  `./gradlew assembleRelease`. Changes:
+  (1) **Analyze All incremental UI update + main-thread yield** (Issue 30):
+  `_reviewAnalyzeAdvance()` (ui.js) now calls `render()` only every 10 steps
+  (was: every step), using lightweight `_refreshEvalTrendChart()` +
+  `_updateReviewAnalyzeBtn()` for intermediate steps. The next
+  `_requestBatchEval` call is wrapped in `setTimeout(0)` to yield the main
+  thread between batch steps (prevents ANR on long games).
+  (2) **Long-press to prioritize a step during Analyze All** (Issue 30):
+  move-list rows (`.rmv-block`) now have an `oncontextmenu` handler
+  (`_prioritizeReviewStep`). Long-pressing an uncached move during an active
+  batch sends `engineStop()`, pushes the step onto `_reviewAnalyzePriorityQueue`,
+  fires a Toast + haptic, and the next `_reviewAnalyzeAdvance` iteration
+  evaluates the prioritized step before continuing the normal sequence. The
+  in-flight eval's result is cached for its original step (not lost).
+  (3) **Stats nav buttons uniform width**: `stats.html` nav buttons (⏮ ◀ ▶ ⏭)
+  now use `flex:1 1 0` (full-width uniform) instead of `min-width:38px`
+  (which left gaps on wide screens). Matches the review-mode nav buttons.
+  (4) **PGN cache partial-eval dialog polish**: title now has 💾 emoji prefix
+  (`💾 部分步骤尚未评估` / `💾 Some steps not yet analyzed`); Android
+  back-button dismisses the dialog (= Cancel) via new
+  `_pgnPartialEvalDialogActive`/`_pgnPartialEvalDialogDismiss` globals
+  checked in `handleBackPress()`.
+  (5) **.rmv-block CSS**: added `user-select:none` + `-webkit-touch-callout:none`
+  + `touch-action:manipulation` to prevent text selection / callout during
+  long-press. New i18n keys (zh/en): `priority_eval_toast`,
+  `priority_eval_already_cached`, `priority_eval_not_in_review`.
+
+- **v1.1.2 Phase 67 (2026.7.7):** Incremental release (versionCode=112,
+  versionName="1.1.2"). Five changes relevant to building:
+  (1) **`gradle.properties` no longer hardcodes `org.gradle.java.home`** —
+  the previous Ubuntu-specific path (`/usr/lib/jvm/java-21-openjdk-amd64`)
+  broke cross-platform builds. Set `JAVA_HOME` or `~/.gradle/gradle.properties`
+  instead.
+  (2) **`version.properties` (new, one level up)** drives `versionCode` /
+  `versionName`. Defaults inside `build.gradle` cover the missing case
+  (1.1.1 / 111), but you should ship a `version.properties` for explicit
+  version pinning.
+  (3) **`keystore.properties` (new, one level up)** drives release signing.
+  Environment variables `RELEASE_KEYSTORE_PATH` etc. override for CI/CD.
+  (4) **`build-chess.py` now has a `__main__` guard + try/except around all
+  file I/O** for clearer diagnostics (MED-3).
+  (5) **Standard `LICENSE` file added at project root** (AGPL v3 full text —
+  same content as `LICENSE-AGPL v3`, GOV-1) so GitHub/F-Droid auto-detect
+  the license. No new modules; build/test commands unchanged. If you edit
+  `chess.src/*.js` or `chess.src/index.html.tpl`, re-run
+  `python3 build-chess.py` before `./gradlew assembleRelease`.
+
 - **v1.1.0 Phase 58 (2026.7.5):** Feature + concurrency hardening
   (versionCode=110, versionName="1.1.0" unchanged). Four changes:
   (1) **Every-5-moves PGN {} annotation** — at moves 5, 10, 15, 20, ...,

@@ -87,7 +87,7 @@ let _ecoCachedData = null;
   _loadEcoFromCache().then(function(cached) {
     if (cached && Array.isArray(cached) && cached.length > 0) {
       _ecoCachedData = cached;
-      console.log('ECO data loaded from IndexedDB cache (' + cached.length + ' openings)');
+      // v1.1.2 Phase 70: removed debug console.log (production cleanup)
     }
   }).catch(function() {});
 })();

@@ -1,5 +1,108 @@
 This directory contains the JavaScript source modules for the chess UI.
 These modules are merged by build-chess.py into chess.html.
+v1.1.2 Phase 72 (2026.7.12, same-version revision):
+  - Version remains versionCode=112, versionName="1.1.2".
+  - ui.js (GPL v3): _reviewAnalyzeAdvance — fixed "false completion" bug
+    after long-press priority eval. Previously, the completion check ONLY
+    walked forward from _reviewAnalyzeStep+1; when a priority eval jumped
+    ahead (e.g., user long-pressed step 50 during a batch at step 5), the
+    batch evaluated step 50, then the forward walk reached _lastStep and
+    reported "all analysis complete" — even though steps 0-49 were still
+    uncached. Fix: when the forward walk finds nothing, scan the ENTIRE
+    range [0.._lastStep] for the lowest uncached step and resume the batch
+    from there. The forward-only fast-path is preserved for the common
+    (no-priority) case; the full-range scan is the source of truth for
+    completion.
+  - No new modules; build-order unchanged. Re-run python3 build-chess.py.
+
+v1.1.2 Phase 71 (2026.7.11, same-version revision):
+  - Version remains versionCode=112, versionName="1.1.2".
+  - ai-bridge.js (GPL v3): uciToCoords — when rewriting Chess960 castling
+    destination (king-captures-rook UCI notation), now attaches castle=
+    'kingside'/'queenside' to result.to so _castleSide's primary path catches
+    it. Fixes 0-distance king castling (king already on g1/c1) where the
+    previous distance-based fallback rejected the move and makeMv nulled
+    the king.
+  - ui.js (GPL v3): executeMove — check to.castle as the PRIMARY source for
+    the castle flag (covers AI moves where legalMvs is empty). The legalMvs
+    lookup is now the fallback.
+  - game-logic.js (GPL v3): _castleSide — added explicit 0-distance branch
+    (defense-in-depth: when _is960 && _dist===0 && _cr[side], return
+    'kingside'/'queenside'). secureRandomInt — crypto undefined guard (falls
+    back to Math.random). moveAlg — setupMode typeof guard (was bare
+    if(setupMode)). makeMv/makeMvInPlace/Zobrist — en-passant cr bounds
+    check via inB() (defense-in-depth).
+  - chess960.js (AGPL v3): toShredderCastling — board null/undefined guard
+    (mirrors parseShredderCastling's defensive pattern).
+  - pgn-standard.js (GPL v3): sevenTagRoster/composePGN — null/undefined
+    params guard (defense-in-depth).
+  - worker-pool.js (GPL v3): _createWorker — 3-strike transient-failure
+    counter; no longer permanently disables the pool on a single OOM.
+  - No new modules; build-order unchanged. Re-run python3 build-chess.py.
+
+v1.1.2 Phase 70 (2026.7.10, same-version revision):
+  - Version remains versionCode=112, versionName="1.1.2".
+  - ui.js (GPL v3): _pgnCacheBuildSaveContext — force-rebuild now checks
+    _reviewEvalCache.size > 0 directly (not _inReview), fixing the edge case
+    where exiting review mode before saving would lose [%eval] annotations.
+  - game-logic.js (GPL v3): makeMvInPlace — added inB() bounds check on
+    to-coordinates (same fix as makeMv in Phase 67).
+  - ai-bridge.js (GPL v3): 7 debug console.log removed.
+  - eco-data.js (AGPL v3): 1 debug console.log removed.
+  - No new modules; build-order unchanged. Re-run python3 build-chess.py.
+
+v1.1.2 Phase 69 (2026.7.9, same-version revision):
+  - Version remains versionCode=112, versionName="1.1.2".
+  - ui.js (GPL v3): Bug 1+2 (_pgnCacheBuildSaveContext + _pgnCacheBuildPGNText +
+    _pgnCachePersistSave shared helpers; decouple coverage check from _useOriginal;
+    force rebuild when _reviewEvalCache.size>0) + Bug 3 (_pgnCacheOpInProgress guard).
+  - worker-pool.js (GPL v3): added onmessageerror handler (PDF §6.1).
+  - No new modules; build-order unchanged. Re-run python3 build-chess.py.
+
+v1.1.2 Phase 68 (2026.7.8, same-version revision):
+  - Version remains versionCode=112, versionName="1.1.2".
+  - ui.js (GPL v3):
+    * Analyze All optimization (Issue 30): _reviewAnalyzeAdvance() now calls
+      render() only every 10 steps; intermediate steps use
+      _refreshEvalTrendChart() + _updateReviewAnalyzeBtn(). Next _requestBatchEval
+      wrapped in setTimeout(0) for main-thread yield.
+    * Long-press priority: .rmv-block rows have oncontextmenu=_prioritizeReviewStep.
+      New state _reviewAnalyzePriorityQueue. New function _prioritizeReviewStep.
+    * PGN cache partial-eval dialog: title has emoji prefix; back-button support
+      via _pgnPartialEvalDialogActive/_pgnPartialEvalDialogDismiss.
+  - game-logic.js (AGPL v3): 3 new i18n keys (priority_eval_toast,
+    priority_eval_already_cached, priority_eval_not_in_review) + emoji in
+    partial-eval title.
+  - index.html.tpl (GPL v3): .rmv-block CSS — added user-select:none +
+    -webkit-touch-callout:none + touch-action:manipulation.
+  - No new modules; build-order unchanged. Re-run python3 build-chess.py.
+
+v1.1.2 Phase 67 (2026.7.7):
+  - Version bumped to versionCode=112, versionName="1.1.2".
+  - game-logic.js (GPL v3):
+    * P1 fix: makeMv() validates BOTH from and to coordinates via inB()
+      before any board access.
+    * Emoji-space fix: 6 i18n keys (stats_title, stats_export_html,
+      stats_review, save_pgn_prompt, variation_toggle, pgn_cache_manager)
+      — zh/en sync.
+    * Version bump: loading_title "Regalia v1.1.1" → "v1.1.2".
+    * Added 5 new i18n keys (zh/en) for partial-eval-coverage dialog.
+  - ai-bridge.js (GPL v3):
+    * P2 fix: onHintMove() bounds check on coords.
+    * Redundancy cleanup: removed leftover console.log in onBestMove and
+      onHintMove.
+  - ui.js (GPL v3):
+    * Task 67.2 root-cause fix: _pgnCacheSaveCurrentImpl() checks
+      _reviewEvalCache coverage; new _pgnCacheShowPartialEvalDialog() with
+      3 options; _pgnCacheSaveCurrentImpl_SkipCoverageCheck() inner save;
+      _pendingPGNCacheSave state; _reviewAnalyzeAdvance() completion path
+      triggers deferred save; _resetGameUIState() and exitReview() clear
+      _pendingPGNCacheSave.
+    * Version bump: header badge / about dialog / render-error page
+      (3 places).
+  - index.html.tpl (GPL v3): version bump in <title>.
+  - No new modules; build-order unchanged. Re-run python3 build-chess.py.
+
 v1.1.1 Phase 66 (2026.7.5, same-version revision):
   - Version remains versionCode=111, versionName="1.1.1".
   - src/main/assets/chess.src/ui.js: Bug fix — _savePGNYes now polls

@@ -361,24 +361,40 @@ public class StatsActivity extends Activity {
         // Set WebViewClient to load stats.html from assets.
         // v1.0.4 Rev27: External http(s) URLs are now opened in the system browser
         // (defense-in-depth alongside the JS-side openUrlInBrowser bridge).
+        // v1.1.2 PHASE 71 (robustness): Add the deprecated shouldOverrideUrlLoading
+        //   overload (WebView, String) so that on API 21-23 (minSdk=21) external
+        //   http(s) URLs are also redirected to the system browser. On those API
+        //   levels, only the deprecated overload fires; the new
+        //   WebResourceRequest-based overload is API 24+ only. Without this, a
+        //   stats-page navigation to an external URL would load INTO the WebView
+        //   (bypassing the system browser) on older devices. Also added
+        //   onRenderProcessGone so that a render-process crash on the stats page
+        //   finishes the activity instead of leaving a blank, unresponsive WebView
+        //   (mirrors ChessWebViewClient's handling for the main chess board).
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 String url = (request != null && request.getUrl() != null) ? request.getUrl().toString() : "";
-                if (url.startsWith("file:///android_asset/")) {
-                    return false;
-                }
-                if (url.startsWith("http://") || url.startsWith("https://")) {
-                    try {
-                        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
-                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                        startActivity(intent);
-                    } catch (Throwable e) {
-                        Log.w(TAG, "Failed to open external URL from stats WebView: " + url, e);
+                return _handleUrlOverride(url);
+            }
+
+            @Override
+            @SuppressWarnings("deprecation")
+            public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                return _handleUrlOverride(url != null ? url : "");
+            }
+
+            @Override
+            public boolean onRenderProcessGone(WebView view, android.webkit.RenderProcessGoneDetail detail) {
+                Log.e(TAG, "Stats WebView render process gone: crashed=" +
+                        (detail != null && detail.didCrash()));
+                try {
+                    if (view != null) {
+                        view.destroy();
                     }
-                    return true;
-                }
-                return true; // Block all other URL navigation
+                } catch (Throwable ignored) {}
+                finish();
+                return true;
             }
         });
 
@@ -392,6 +408,34 @@ public class StatsActivity extends Activity {
         _applyImmersiveMode();
 
         Log.i(TAG, "StatsActivity created, loading stats.html");
+    }
+
+    /**
+     * v1.1.2 PHASE 71: Shared URL-override logic for both the API 24+
+     * {@link WebViewClient#shouldOverrideUrlLoading(WebView, WebResourceRequest)}
+     * and the deprecated {@link WebViewClient#shouldOverrideUrlLoading(WebView, String)}
+     * (which is the only one that fires on API 21-23). Returns {@code true} to
+     * block the WebView from loading the URL ourselves; {@code false} to let
+     * the WebView proceed (only for our own asset:// URLs).
+     */
+    private boolean _handleUrlOverride(String url) {
+        if (url == null || url.isEmpty()) {
+            return true; // Block empty URLs
+        }
+        if (url.startsWith("file:///android_asset/")) {
+            return false; // Allow loading our own bundled assets
+        }
+        if (url.startsWith("http://") || url.startsWith("https://")) {
+            try {
+                Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(intent);
+            } catch (Throwable e) {
+                Log.w(TAG, "Failed to open external URL from stats WebView: " + url, e);
+            }
+            return true;
+        }
+        return true; // Block all other URL navigation (data:, javascript:, intent:, etc.)
     }
 
     /**
