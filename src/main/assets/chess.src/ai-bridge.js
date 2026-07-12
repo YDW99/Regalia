@@ -849,48 +849,123 @@ function _commentHasText(commentParts,importedComment,targetText){
 //   eval descriptions are OMITTED from the PGN export. Only mr.comment (free-text
 //   from imported PGN) and [%emt]/[%clk] time tags are preserved.
 //   When true (default), all annotations are included (same as before).
-function _buildPGNString(forceIncludeVariations, includeAnnotations){
-  if(includeAnnotations===undefined)includeAnnotations=true; // default: include
-  if(!moveRecords||!moveRecords.length)return '';
-  // v1.0.4: Determine the game result from the gameOver string.
-  // Falls back to "*" if the game is still in progress.
-  let result='*';
-  // v1.0.4 Rev27: Resign — winner is _resignWinnerColor; result is "1-0" if
-  // White wins, "0-1" if Black wins. Checked FIRST so the resign text (which
-  // does not contain "White wins" / "Black wins") doesn't fall through to the
-  // default "1/2-1/2" draw branch.
-  if(gameOver&&typeof _gameOverStatusKey!=='undefined'&&_gameOverStatusKey==='resign'&&typeof _resignWinnerColor!=='undefined'&&_resignWinnerColor){
-    result=(_resignWinnerColor==='white')?'1-0':'0-1';
-  } else if(gameOver&&typeof _gameOverStatusKey!=='undefined'&&_gameOverStatusKey==='timeout'&&typeof _timeoutWinnerColor!=='undefined'&&_timeoutWinnerColor){
-    // v1.0.4 Rev47: Timeout — use _timeoutWinnerColor (the color that WINS).
-    result=(_timeoutWinnerColor==='white')?'1-0':'0-1';
-  } else if(gameOver){
-    if(gameOver.includes(T('white_wins'))||gameOver.includes('White wins'))result='1-0';
-    else if(gameOver.includes(T('black_wins'))||gameOver.includes('Black wins'))result='0-1';
-    else result='1/2-1/2';
+// v1.2.0 Phase 76+: Extracted game result derivation from _buildPGNString
+//   to reduce cognitive complexity (SonarCloud CS02).
+function _deriveGameResult(){
+  if(!gameOver)return '*';
+  // Resign: winner is _resignWinnerColor
+  if(typeof _gameOverStatusKey!=='undefined'&&_gameOverStatusKey==='resign'
+     &&typeof _resignWinnerColor!=='undefined'&&_resignWinnerColor){
+    return (_resignWinnerColor==='white')?'1-0':'0-1';
   }
-  // v1.0.4: Build the Seven-Tag Roster (STR) — always required by PGN spec.
-  // Use today's date in YYYY.MM.DD format if no game date is tracked.
-  const _today=new Date();
-  const _todayStr=_today.getFullYear()+'.'+((_today.getMonth()+1)<10?'0':'')+(_today.getMonth()+1)+'.'+(_today.getDate()<10?'0':'')+(_today.getDate());
-  const strInfo={
+  // Timeout: winner is _timeoutWinnerColor
+  if(typeof _gameOverStatusKey!=='undefined'&&_gameOverStatusKey==='timeout'
+     &&typeof _timeoutWinnerColor!=='undefined'&&_timeoutWinnerColor){
+    return (_timeoutWinnerColor==='white')?'1-0':'0-1';
+  }
+  // Checkmate/stalemate: parse gameOver text
+  if(gameOver.includes(T('white_wins'))||gameOver.includes('White wins'))return '1-0';
+  if(gameOver.includes(T('black_wins'))||gameOver.includes('Black wins'))return '0-1';
+  return '1/2-1/2';
+}
+
+// v1.2.0 Phase 76+: Extracted Shredder FEN detection from _buildPGNString
+function _needsShredderFEN(s){
+  if(!s||!s.board||!s.castlingRights)return false;
+  const cr=s.castlingRights;
+  if(!cr.whiteKingside&&!cr.whiteQueenside&&!cr.blackKingside&&!cr.blackQueenside)return false;
+  if(cr.whiteKingside){
+    const wr=s.board[7]?.[7];
+    if(!wr||wr.type!=='rook'||wr.color!=='white')return true;
+  }
+  if(cr.whiteQueenside){
+    const wr=s.board[7]?.[0];
+    if(!wr||wr.type!=='rook'||wr.color!=='white')return true;
+  }
+  if(cr.blackKingside){
+    const br=s.board[0]?.[7];
+    if(!br||br.type!=='rook'||br.color!=='black')return true;
+  }
+  if(cr.blackQueenside){
+    const br=s.board[0]?.[0];
+    if(!br||br.type!=='rook'||br.color!=='black')return true;
+  }
+  if(s.wk&&(s.wk.row!==7||s.wk.col!==4))return true;
+  if(s.bk&&(s.bk.row!==0||s.bk.col!==4))return true;
+  return false;
+}
+
+// v1.2.0 Phase 76+: Extracted date formatting helper
+function _formatTodayPGNDate(){
+  const d=new Date();
+  const m=d.getMonth()+1;
+  const day=d.getDate();
+  return d.getFullYear()+'.'+(m<10?'0':'')+m+'.'+(day<10?'0':'')+day;
+}
+
+// v1.2.0 Phase 76+: Extracted Shredder FEN conversion logic from _buildPGNString
+function _applyShredderFENIfNeeded(supObj){
+  if(typeof toShredderCastling!=='function')return;
+  const needsShredder=(typeof gameVariant!=='undefined'&&gameVariant==='chess960')||_needsShredderFEN(gameState);
+  if(!needsShredder||!supObj.FEN)return;
+  try{
+    const parts=supObj.FEN.split(' ');
+    if(parts.length<3)return;
+    const startState=fenToState(supObj.FEN);
+    if(startState){
+      parts[2]=toShredderCastling(startState.castlingRights,startState.board);
+      supObj.FEN=parts.join(' ');
+    }
+  }catch(e){
+    // Shredder conversion failure is non-fatal — keep standard FEN
+  }
+}
+
+// v1.2.0 Phase 76+: Extracted Seven-Tag Roster info building
+function _buildStrInfo(result){
+  return {
     event:typeof gameEvent!=='undefined'?gameEvent:'Regalia',
     site:typeof gameSite!=='undefined'?gameSite:'?',
-    date:_todayStr,
+    date:_formatTodayPGNDate(),
     round:'?',
-    // v1.0.4 LATEST: AI opponent name includes difficulty level suffix.
-    //   Levels 1-6: "AI对手 Lv.N" / "AI Opponent Lv.N"
-    //   Level 7 (Skill Level): "AI对手 SL" / "AI Opponent SL"
-    //   Level 8 (Custom): "AI对手 Custom" / "AI Opponent Custom"
-    // The human player is always "你" / "You".
-    // If playerWhite/playerBlack are explicitly set (e.g. from PGN import), use those.
-    // v1.0.4 Rev24: For the human player's slot, prefer _humanPlayerName (the
-    // rename feature) over the default "你"/"You". This ensures PGN text,
-    // clipboard copies, and PGN cache archives all use the renamed name.
     white:typeof playerWhite!=='undefined'?playerWhite:(playerColor==='white'?(_humanPlayerName||T('you')):(_aiOpponentNameWithLevel())),
     black:typeof playerBlack!=='undefined'?playerBlack:(playerColor==='black'?(_humanPlayerName||T('you')):(_aiOpponentNameWithLevel())),
     result:result
   };
+}
+
+// v1.2.0 Phase 76+: Extracted TimeControl tag building
+function _buildTimeControlTag(){
+  if(typeof gameClocks==='undefined'||!gameClocks||typeof formatTimeControl!=='function')return null;
+  const tcObj={
+    type:gameClocks.type,
+    baseSec:gameClocks.baseSec||0,
+    incrementSec:gameClocks.incrementSec||0,
+    delaySec:gameClocks.delaySec||0
+  };
+  const tcStr=formatTimeControl(tcObj);
+  return (tcStr&&tcStr!=='?')?('[TimeControl "'+tcStr+'"]'):null;
+}
+
+// v1.2.0 Phase 76+: Extracted Termination tag building
+function _buildTerminationTag(){
+  if(typeof _gameOverStatusKey==='undefined')return null;
+  if(_gameOverStatusKey==='resign')return '[Termination "Resignation"]';
+  if(_gameOverStatusKey==='timeout')return '[Termination "Time forfeit"]';
+  return null;
+}
+
+function _buildPGNString(forceIncludeVariations, includeAnnotations, includeAutoAnnotations){
+  if(includeAnnotations===undefined)includeAnnotations=true; // default: include
+  // v1.2.0 Phase 82+++++ rev 9: New parameter — when true, auto-generated visual
+  // annotations (imported=false) are also exported. Default false (Phase 62 behavior:
+  // don't pollute PGN export with auto-generated annotations). The stats page
+  // passes true so it can display live-game visual annotations.
+  if(includeAutoAnnotations===undefined)includeAutoAnnotations=false;
+  if(!moveRecords||!moveRecords.length)return '';
+  // v1.2.0 Phase 76+: game result derivation extracted to _deriveGameResult()
+  const result=_deriveGameResult();
+  const strInfo=_buildStrInfo(result);
   const strLines=sevenTagRoster(strInfo).split('\n');
   // v1.0.4: Build supplementary tags
   const supObj=buildSupplementaryTagsObject({
@@ -898,99 +973,14 @@ function _buildPGNString(forceIncludeVariations, includeAnnotations){
     startFEN:(typeof _setupFEN!=='undefined'&&_setupFEN)?_setupFEN:((typeof gameVariant!=='undefined'&&gameVariant==='chess960')?generateFEN(gameState):null),
     plyCount:moveRecords.length
   });
-  // For Chess960, the FEN we emit must use Shredder castling rights.
-  // v1.0.7 PHASE 3: Also use Shredder castling rights for non-Chess960 games
-  // whose starting position came from Setup mode with 🔁 markers on non-
-  // standard squares. In that case the standard "KQkq" notation is ambiguous
-  // (it implies rook on h1/a1 etc.), so we emit Shredder (file letters) to
-  // unambiguously identify which rook holds the rights. This is the only
-  // way to losslessly round-trip such positions through PGN/FEN.
-  // Detection: the setup position has a king or rook NOT on standard squares.
-  function _needsShredderFEN(s){
-    if(!s||!s.board||!s.castlingRights)return false;
-    // If no castling rights at all, no need for Shredder.
-    const cr=s.castlingRights;
-    if(!cr.whiteKingside&&!cr.whiteQueenside&&!cr.blackKingside&&!cr.blackQueenside)return false;
-    // Standard squares: white king e1 (7,4), white rooks a1 (7,0) & h1 (7,7);
-    // black king e8 (0,4), black rooks a8 (0,0) & h8 (0,7).
-    // If all rooks with rights are on standard squares AND king is on e1/e8,
-    // standard KQkq notation is sufficient.
-    if(cr.whiteKingside){
-      const wr=s.board[7]&&s.board[7][7];
-      if(!wr||wr.type!=='rook'||wr.color!=='white')return true; // not on h1
-    }
-    if(cr.whiteQueenside){
-      const wr=s.board[7]&&s.board[7][0];
-      if(!wr||wr.type!=='rook'||wr.color!=='white')return true; // not on a1
-    }
-    if(cr.blackKingside){
-      const br=s.board[0]&&s.board[0][7];
-      if(!br||br.type!=='rook'||br.color!=='black')return true;
-    }
-    if(cr.blackQueenside){
-      const br=s.board[0]&&s.board[0][0];
-      if(!br||br.type!=='rook'||br.color!=='black')return true;
-    }
-    // Also check king position
-    if(s.wk&&(s.wk.row!==7||s.wk.col!==4))return true;
-    if(s.bk&&(s.bk.row!==0||s.bk.col!==4))return true;
-    return false;
-  }
-  // v1.0.8 PHASE 28 (bug fix): The previous code overwrote supObj.FEN with
-  //   generateFEN(gameState) (the CURRENT mid-game state), which corrupted the
-  //   [FEN] tag for any progressed game. The [FEN] tag must contain the
-  //   STARTING position, not the current position. supObj.FEN (set from
-  //   startFEN above) already has the correct starting FEN. We only need to
-  //   convert its castling-rights field to Shredder format if applicable.
-  if(typeof toShredderCastling==='function'&&(typeof gameVariant!=='undefined'&&gameVariant==='chess960'||_needsShredderFEN(gameState))){
-    if(supObj.FEN){
-      try{
-        const parts=supObj.FEN.split(' ');
-        if(parts.length>=3){
-          // Convert the starting position's castling rights to Shredder format.
-          // We parse the startFEN to get the starting board + castling rights,
-          // then call toShredderCastling on that state (not the current state).
-          const startState=fenToState(supObj.FEN);
-          if(startState){
-            parts[2]=toShredderCastling(startState.castlingRights,startState.board);
-            supObj.FEN=parts.join(' ');
-          }
-        }
-      }catch(e){}
-    }
-  }
+  // v1.2.0 Phase 76+: Shredder FEN conversion logic extracted
+  _applyShredderFENIfNeeded(supObj);
   const supLines=supplementaryTags(supObj);
-  // v1.0.4 EXPANSION (this round): Add [TimeControl] header when game is timed
-  if(typeof gameClocks!=='undefined'&&gameClocks&&typeof formatTimeControl==='function'){
-    // v1.0.4 FIX (this round): use gameClocks.baseSec (now stored on the clock
-    // object) as the authoritative source. Previously fell back to
-    // dlgTimeControl.baseSec which could be stale after a PGN import (the
-    // imported game's time control may differ from the dialog's last setting).
-    const tcObj={
-      type:gameClocks.type,
-      baseSec:gameClocks.baseSec||0,
-      incrementSec:gameClocks.incrementSec||0,
-      delaySec:gameClocks.delaySec||0
-    };
-    const tcStr=formatTimeControl(tcObj);
-    if(tcStr&&tcStr!=='?'){
-      supLines.push('[TimeControl "'+tcStr+'"]');
-    }
-  }
-  // v1.0.4 Rev27: [Termination "..."] tag when the game ended by resignation or timeout.
-  // Per PGN spec, [Termination] is a supplementary tag (not part of the Seven-Tag
-  // Roster) describing how the game ended. Values include "Normal" (default),
-  // "Time forfeit", "Abandoned", "Resignation", etc.
-  // v1.1.0 Phase 56: Added [Termination "Time forfeit"] for timeout games
-  //   (previously omitted — the comment said "other terminations like
-  //   checkmate/timeout are already clear from [Result] + movetext", but
-  //   per PGN spec, "Time forfeit" is the standard value for timeout and
-  //   should be emitted for proper PGN inter-op).
-  if(typeof _gameOverStatusKey!=='undefined'&&_gameOverStatusKey==='resign'){
-    supLines.push('[Termination "Resignation"]');
-  }else if(typeof _gameOverStatusKey!=='undefined'&&_gameOverStatusKey==='timeout'){
-    supLines.push('[Termination "Time forfeit"]');
-  }
+  // v1.2.0 Phase 76+: TimeControl and Termination tags extracted
+  const tcTag=_buildTimeControlTag();
+  if(tcTag)supLines.push(tcTag);
+  const termTag=_buildTerminationTag();
+  if(termTag)supLines.push(termTag);
   const allTags=strLines.concat(supLines);
   // v1.0.4: Build halfMoves array for composePGN()
   // Use _importedStartMoveNum offset for FEN-started games (preserves original move numbers)
@@ -1139,9 +1129,13 @@ function _buildPGNString(forceIncludeVariations, includeAnnotations){
     // v1.0.4 EXPANSION (this round): [%csl] and [%cal] from the visual annotations cache
     // v1.1.1 Phase 62: ONLY export imported annotations (imported=true).
     // v1.1.1 Phase 63: Also gated by includeAnnotations parameter.
+    // v1.2.0 Phase 82+++++ rev 9: When includeAutoAnnotations=true (stats page),
+    // also export auto-generated annotations (imported=false). Previously, only
+    // imported=true annotations were exported, which meant live-game visual
+    // annotations never reached the stats page.
     if(includeAnnotations&&typeof _getVisualAnnotations==='function'){
       const va=_getVisualAnnotations(i);
-      if(va&&va.imported){
+      if(va&&(va.imported||includeAutoAnnotations)){
         if(va.csl&&va.csl.length>0&&typeof formatCslTag==='function'){
           const cslTag=formatCslTag(va.csl);
           if(cslTag)commentParts.push(cslTag);
@@ -1391,7 +1385,7 @@ function openStatsPage(){
   // page's job is to analyze the CURRENT game, not the original import text.
   // (The original import text is still preserved in _cachedOriginalPGN for
   // the PGN cache save 📚 feature.)
-  let pgn=_buildPGNString(true,true); // forceIncludeVariations=true, includeAnnotations=true
+  let pgn=_buildPGNString(true,true,true); // forceIncludeVariations=true, includeAnnotations=true, includeAutoAnnotations=true (v1.2.0 Phase 82+++++ rev 9: stats page needs auto-generated visual annotations)
   // v1.0.3 fallback: if _buildPGNString returned empty (e.g., no moveRecords),
   // try _cachedOriginalPGN as a last resort (e.g., FEN-only imports that didn't
   // generate moveRecords but did set _cachedOriginalPGN).
@@ -4021,7 +4015,12 @@ function requestEngineEval(){
       _sfMateDistance=0;_sfDepth=0;_sfSeldepth=0;
       _sfEvalReady=true;_evalLoading=false;
       _invalidateInFlight();
-      _reviewEvalCache.set(reviewStep,{eval:_sfEval,mate:0,depth:0,seldepth:0,wdlW:_isBlackTurn?0:1000,wdlD:0,wdlL:_isBlackTurn?1000:0});
+      // v1.2.0 Phase 82+++++ FIX: WDL values were inverted. When _isBlackTurn=true,
+      // Black is checkmated → White wins → wdlW should be 1000 (100% White win),
+      // wdlL should be 0. Previously the ternary branches were swapped, showing
+      // "(0%W/0%D/100%L)" for a position White had won. All WDL values are
+      // White-perspective (per pgn-standard.js convention + onEngineEval line 2675).
+      _reviewEvalCache.set(reviewStep,{eval:_sfEval,mate:0,depth:0,seldepth:0,wdlW:_isBlackTurn?1000:0,wdlD:0,wdlL:_isBlackTurn?0:1000});
       _updateAllEvalDisplays();
       return;
     }
@@ -4111,7 +4110,8 @@ function _requestBatchEval(step){
   if(_termStatus==='checkmate'){
     const _isBlackTurn=_rs.currentTurn==='black';
     const _eval=_isBlackTurn?99999:-99999;
-    _reviewEvalCache.set(step,{eval:_eval,mate:0,depth:0,seldepth:0,wdlW:_isBlackTurn?0:1000,wdlD:0,wdlL:_isBlackTurn?1000:0});
+    // v1.2.0 Phase 82+++++ FIX: WDL values were inverted (same fix as requestEngineEval).
+    _reviewEvalCache.set(step,{eval:_eval,mate:0,depth:0,seldepth:0,wdlW:_isBlackTurn?1000:0,wdlD:0,wdlL:_isBlackTurn?0:1000});
     if(typeof _reviewAnalyzeAdvance==='function'){
       try{_reviewAnalyzeAdvance();}catch(e){console.error('Analyze-all advance (checkmate) failed:',e);}
     }

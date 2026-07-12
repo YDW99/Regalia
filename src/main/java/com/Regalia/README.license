@@ -1252,3 +1252,148 @@ v1.0.9 Phase 52 (2026.7.2):
   - ChessApp.java (AGPL v3): init log "v1.0.8" → "v1.0.9".
   - ChessWebViewClient.java (AGPL v3): Version comment "v1.0.8" → "v1.0.9".
   - No other Java files changed.
+
+
+v1.2.0 Phase 73-75 (2026.7.11):
+  - StockfishNative.java (GPL v3): ENGINE_VERSION "v1.1.2" → "v1.2.0".
+      God Module split: extracted 6 manager classes.
+      SonarCloud bug fixes: InterruptedException re-interrupt, delete()/renameTo()
+      return value checks, AtomicInteger for thread-safe counters.
+  - EngineProcessManager.java (GPL v3, NEW): Engine process lifecycle management.
+      Extracted from StockfishNative.java. Handles start/stop/restart, binary
+      extraction, chmod/renice, ELF verification, stream initialization.
+  - UciProtocolHandler.java (GPL v3, NEW): UCI protocol command handling.
+      Extracted from StockfishNative.java. Handles command sending, response
+      parsing (uciok/readyok/bestmove), setoption synchronization.
+  - EngineConfigManager.java (GPL v3, NEW): Engine configuration management.
+      Extracted from StockfishNative.java. Handles settings persistence,
+      import/export, range validation, auto-detection.
+  - JsBridgeGateway.java (GPL v3, NEW): JS bridge security gateway.
+      Extracted from StockfishNative.java. Provides sandbox path validation,
+      UCI command whitelisting, input sanitization.
+  - PgnCacheManager.java (GPL v3, NEW): PGN cache CRUD operations.
+      Extracted from StockfishNative.java. Handles cache directory, file
+      read/write/delete/rename, tag file management.
+  - EngineHealthMonitor.java (GPL v3, NEW): Engine health monitoring.
+      Extracted from StockfishNative.java. Handles heartbeat thread, zombie
+      detection, auto-recovery backoff with AtomicInteger counters.
+  - MessageBus.java (AGPL v3, NEW Phase 75): JS ↔ Java unified message bus.
+      Provides dispatch(action, payload) for JS→Java and emit(event, payload)
+      for Java→JS communication.
+  - MainActivity.java (AGPL v3): VERSION "v1.1.2" → "v1.2.0".
+  - ChessApp.java (AGPL v3): init log "v1.1.2" → "v1.2.0".
+  - ChessWebViewClient.java (AGPL v3): Version comment "v1.1.2" → "v1.2.0".
+
+
+v1.2.0 Phase 73+ (2026.7.11) — Additional helper classes:
+  - FileIoHelper.java (GPL v3, NEW): File I/O operations extracted from
+      StockfishNative.java. Handles writeTextFile (3-tier fallback: primary→
+      app-private→clipboard), readTextFile (with READ_EXTERNAL_STORAGE on
+      Android 5-9), listFiles (with MediaStore supplement on Android 11+),
+      loadAssetAsBase64 (with ".." path-traversal check), getDefaultPaths,
+      getExportPath, getParentPath, scanEngines (stub for JS API compat).
+      File I/O patterns derived from DroidFish EngineUtil.java.
+  - PermissionHelper.java (GPL v3, NEW): Runtime permission checks extracted
+      from StockfishNative.java. Handles storage (Android version-aware:
+      WRITE_EXTERNAL_STORAGE on 5-9, READ_EXTERNAL_STORAGE on 10-12, none on
+      13+), notification (POST_NOTIFICATIONS on 13+), and vibrator checks.
+      Uses checkSelfPermission() (not checkCallingOrSelfPermission) to avoid
+      WebView caller-identity mismatch. Permission patterns derived from
+      DroidFish EngineOptionsDialog.java.
+  - HapticHelper.java (GPL v3, NEW): Haptic feedback extracted from
+      StockfishNative.java. Provides perform(type) with type-specific durations
+      (BUTTON_PRESS/PIECE_MOVE/CAPTURE/CHECK/GAME_END/ERROR). Uses
+      VibrationEffect.createOneShot on Android 8+, deprecated vibrate(long) on
+      Android 7 and below (minSdk=23). Haptic patterns derived from DroidFish
+      EngineUtil.java vibration.
+  - StockfishNative.java (GPL v3): @JavascriptInterface methods for file I/O,
+      permissions, and vibrator now delegate to the new helper classes,
+      reducing StockfishNative from 5,443 to 4,976 lines.
+
+  - SafPickerHelper.java (GPL v3, NEW): SAF file picker extracted from
+      StockfishNative.java. Handles:
+        - Export: openExportFilePicker (settings TXT), openPGNExportFilePicker (PGN),
+          handleExportResult (writes content to user-chosen URI via ContentResolver),
+          cancelPendingExport (user dismissed picker).
+        - Import: openSystemFilePicker (settings TXT), openPGNFilePicker (PGN),
+          handleImportResult (reads file + calls importSettings),
+          handlePGNImportResult (reads PGN with 5000-line truncation guard +
+          control-character sanitization + JSON-safe encoding).
+      SAF patterns derived from DroidFish EngineOptionsDialog.java.
+      Request codes (REQUEST_CODE_IMPORT_SETTINGS/EXPORT_SETTINGS/IMPORT_PGN/
+      EXPORT_PGN) moved here as constants; StockfishNative re-exports them for
+      MainActivity.onActivityResult compatibility.
+
+  - EngineSettingsHelper.java (GPL v3, NEW): Engine settings query/export/import
+      extracted from StockfishNative.java. Handles:
+        - getEngineInfo(): builds JSON with name/author/path/threads/hash/autoConfig.
+        - getEngineSettings(): builds JSON with all configurable params.
+        - exportSettings(): exports as TXT key=value format with comment header.
+        - exportEngineSettings(): alias for exportSettings (JS API compat).
+        - importSettings(txtContent): parses TXT, applies range capping
+          (threads ≤ 2×CPU cores, hash ≤ 50% JVM heap, moveOverhead ≤ 1000ms,
+          multiPV 1-8, skillLevel 0-20, elo 1-3200), persists to prefs,
+          applies to running engine via stopAndWaitForBestmove + applySettings.
+          Disables autoConfig when user explicitly imports threads/hash.
+        - importEngineSettings(): alias for importSettings (JS API compat).
+      Uses Callbacks interface to access StockfishNative engine state.
+      Settings patterns derived from DroidFish EngineOptionsDialog.java.
+
+v1.2.0 Phase 81 (2026.7.11) — Engine config helper extraction:
+  - EngineConfigHelper.java (GPL v3, NEW): Engine configuration methods extracted
+    from StockfishNative.java. Handles:
+        - setAutoConfig(enabled): toggle auto-config + trigger hardware detection.
+        - detectHardwareAndConfigure(): big.LITTLE-aware Threads/Hash detection
+          (reads /proc/cpuinfo, caches big-core count for device lifetime).
+        - detectBigCoreCount(): parses /proc/cpuinfo for per-core max frequency,
+          counts cores >= 90% of highest freq (when highest > 1.2× median).
+        - applySettings(): applies all UCI options in order (Threads/Hash source
+          depends on autoConfig; common options applied identically).
+        - setEngineThreads/Hash/MoveOverhead/MultiPV/Ponder/ShowWDL/SkillLevel/
+          LimitElo/Elo: UCI option setters with range capping (same Phase 71
+          limits as EngineSettingsHelper.importSettings).
+        - setGameDifficulty(level 1-7): maps to ELO_MAP (moved here from
+          StockfishNative — only used by this method). Levels 1-6 enable
+          UCI_LimitStrength + set UCI_Elo; level 7 disables LimitStrength.
+        - forceFullStrength(): temporary override for eval/hint searches
+          (sets Skill Level 20, UCI_LimitStrength false).
+        - syncGameDifficulty(level): JS-side sync wrapper with logging.
+        - setShowWDL/setLimitStrength/setElo: JS API compat aliases.
+    Uses Callbacks interface for field access (setThreadsField etc. update field
+    + persist, no UCI command) and engine operations (sendSetOptionAndWait,
+    sendUciCommand, engineSupportsOption, notifyEngineInfo, postJsCallback).
+    StockfishNative retains thin @JavascriptInterface delegates. StockfishNative:
+    4,492→4,245 lines (−247). Helper/manager class count: 12→13 (14 with MessageBus).
+
+v1.2.0 Phase 82+++++ rev 8 (2026.7.12) — MessageBus reflection fix + proguard + sandbox hardening:
+  - MessageBus.java (AGPL v3, MODIFIED): Removed `final` from webView field.
+    Added public setWebView(WebView) method. Replaces fragile reflection that
+    failed in release builds (R8 renamed the private field).
+  - StockfishNative.java (GPL v3, MODIFIED): Replaced reflection in
+    setMessageBusWebView() with _messageBus.setWebView(). Made _messageBus final.
+  - MainActivity.java (AGPL v3, MODIFIED): Added removeJavascriptInterface
+    ("MessageBus") in onDestroy().
+  - JsBridgeGateway.java (GPL v3, MODIFIED): Tightened isPathInSandbox() to
+    require path separator after sandbox root.
+  - No other Java files changed. No new Java files.
+
+v1.2.0 Phase 82+++++ rev 7 (2026.7.12) — MessageBus wiring (Task 75 design intent):
+  - StockfishNative.java (GPL v3, MODIFIED): Instantiated _messageBus in constructor.
+    Added registerMessageBusHandlers() with 4 handlers (ENGINE_GO, ENGINE_STOP,
+    ENGINE_SET_OPTION, PGN_CACHE_SAVE). Added emitToJs(), getMessageBus(),
+    setMessageBusWebView(). Emit ENGINE_READY and ENGINE_BESTMOVE events via MessageBus.
+  - MainActivity.java (AGPL v3, MODIFIED): Register MessageBus as separate
+    @JavascriptInterface named "MessageBus" (alongside AndroidBridge).
+  - MessageBus.java (AGPL v3, MODIFIED): Updated emit() to call
+    window._messageBusJs._onEvent (avoids shadowing by Java interface).
+  - No other Java files changed. No new files.
+
+v1.2.0 Phase 82+++++ (2026.7.12) — WebView cache fix:
+  - MainActivity.java (AGPL v3, MODIFIED): Added webView.clearCache(true) before
+    loadUrl("file:///android_asset/chess.html"). This ensures the WebView always
+    loads the latest chess.html from the APK, fixing a issue where some WebView
+    implementations (especially Xiaomi HyperOS) serve a stale cached chess.html
+    after an app update. Root cause of the "oppC is not defined" error on user
+    devices — the Phase 82++++ JS fix was correct but the WebView loaded a cached
+    pre-fix chess.html.
+  - No other Java files changed. No new files.

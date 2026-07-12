@@ -60,7 +60,10 @@ function secureRandomInt(max){
 }
 
 function T(key){return _i18n[key]?.[_lang]||_i18n[key]?.zh||key;}
-function toggleLang(){_lang=(_lang==='zh')?'en':'zh';try{localStorage.setItem('Regalia_lang',_lang);}catch(e){}try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.saveLangPref)AndroidBridge.saveLangPref(_lang);}catch(e){}try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_lang',_lang);}catch(e){}try{if(typeof HapticManager!=='undefined'&&HapticManager.fire)HapticManager.fire('TOGGLE_ON');}catch(e){}try{if(typeof playSound==='function')playSound('select');}catch(e){}render();}
+function toggleLang(){_lang=(_lang==='zh')?'en':'zh';
+  // v1.2.0 Phase 82+++++ rev 5: Wire Store as debug observability layer.
+  try{if(typeof Store!=='undefined'&&Store&&typeof Store.dispatch==='function')Store.dispatch('SET_LANG',{lang:_lang});}catch(e){}
+try{localStorage.setItem('Regalia_lang',_lang);}catch(e){}try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.saveLangPref)AndroidBridge.saveLangPref(_lang);}catch(e){}try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_lang',_lang);}catch(e){}try{if(typeof HapticManager!=='undefined'&&HapticManager.fire)HapticManager.fire('TOGGLE_ON');}catch(e){}try{if(typeof playSound==='function')playSound('select');}catch(e){}render();}
 const _i18n={
 'app_name':{zh:'Regalia',en:'Regalia'},
 'new_game':{zh:'新游戏',en:'New Game'},
@@ -2727,7 +2730,9 @@ setTimeout(()=>{
 // P0 FIX: Validate state freshness — game may have changed during 0ms delay
 if(gameOver||reviewMode||setupMode||gameState.currentTurn===playerColor||!isAIThinking)return;
 // Level 7: probe tablebase for endgame positions (7 pieces or fewer) before Stockfish
-if(aiLevel===7&&pieceCountLE7(gameState.board)){
+// v1.2.0 Phase 82+++++: Added typeof guard for pieceCountLE7 (defined in tablebase.js,
+// loaded after game-logic.js). All other cross-module calls use typeof guards.
+if(aiLevel===7&&typeof pieceCountLE7==='function'&&pieceCountLE7(gameState.board)){
 _tbLoading=true;_aiBarInfo='⏳ '+T('tb_querying');_updateAIThinkDisplay();render();
 // Save board reference BEFORE async call to prevent race condition
 // (gameState may change while tablebase query is in-flight)
@@ -2753,6 +2758,12 @@ _requestStockfishMove();
 }).catch(function(){
 _tbLoading=false;
 _tbRetryCount++;
+// v1.2.0 Phase 82+++++ FIX: Reset _aiRetryCount here because a tablebase network
+// failure is NOT an AI timeout. Without this reset, 2 tablebase rejections would
+// increment _aiRetryCount to 3, triggering the false "ai_timeout" toast and
+// returning before Stockfish is ever consulted. The retry counter is meant to
+// guard against Stockfish engine hangs, not tablebase API outages.
+_aiRetryCount=0;
 if(_tbRetryCount<=2){
 isAIThinking=false;_aiBarInfo='';doAIMove();
 }else{

@@ -57,7 +57,7 @@ import android.widget.TextView;
 public class MainActivity extends Activity {
 
     private static final String TAG = "Regalia";
-    private static final String VERSION = "v1.1.2";
+    private static final String VERSION = "v1.2.0";
 
     private WebView webView;
     private StockfishNative stockfishEngine;
@@ -271,12 +271,25 @@ public class MainActivity extends Activity {
             // (file:// disabled). The remaining residual risk is acceptable for an offline
             // chess app with no sensitive data.
             webView.addJavascriptInterface(stockfishEngine, "AndroidBridge");
+            // v1.2.0 Phase 82+++++ rev 7: Register MessageBus as a separate
+            // JavascriptInterface so JS can call MessageBus.dispatch(action, payload)
+            // for unified JS→Java communication (Phase 75 design intent).
+            if (stockfishEngine.getMessageBus() != null) {
+                webView.addJavascriptInterface(stockfishEngine.getMessageBus(), "MessageBus");
+                stockfishEngine.setMessageBusWebView(webView);
+            }
         } catch (Throwable e) {
             Log.e(TAG, "StockfishNative initialization failed", e);
             stockfishEngine = null;
         }
 
         // Load the chess HTML
+        // v1.2.0 Phase 82+++++: Clear WebView cache before loading to ensure the
+        // latest chess.html is always loaded from the APK. Without this, some
+        // WebView implementations (especially on Xiaomi HyperOS) may serve a
+        // stale cached chess.html after an app update, causing the user to see
+        // bugs that were already fixed in the new version.
+        webView.clearCache(true);
         try {
             webView.loadUrl("file:///android_asset/chess.html");
         } catch (Throwable e) {
@@ -754,6 +767,8 @@ public class MainActivity extends Activity {
             }
             try {
                 webView.removeJavascriptInterface("AndroidBridge");
+                // v1.2.0 Phase 82+++++ rev 8: Also remove MessageBus interface (symmetry).
+                webView.removeJavascriptInterface("MessageBus");
             } catch (Throwable e) {
                 Log.w(TAG, "WebView removeJavascriptInterface failed", e);
             }

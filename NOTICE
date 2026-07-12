@@ -26,6 +26,54 @@ GPL v3 (DroidFish-derived or Stockfish):
       Engine management logic from DroidFish (ExternalEngine.java,
       InternalStockFish.java, UCIEngineBase.java, EngineUtil.java,
       DroidComputerPlayer.java)
+      v1.2.0 Phase 73: God Module split — extracted 6 manager classes:
+        EngineProcessManager.java, UciProtocolHandler.java,
+        EngineConfigManager.java, JsBridgeGateway.java,
+        PgnCacheManager.java, EngineHealthMonitor.java.
+      StockfishNative now acts as a facade delegating to these managers.
+  - src/main/java/com/Regalia/EngineProcessManager.java (v1.2.0 Phase 73)
+      Engine process lifecycle: start/stop/restart, binary extraction,
+      chmod/renice. Derived from DroidFish engine process patterns.
+  - src/main/java/com/Regalia/UciProtocolHandler.java (v1.2.0 Phase 73)
+      UCI command sending, response parsing, option setting.
+      Derived from DroidFish UCIEngineBase patterns.
+  - src/main/java/com/Regalia/EngineConfigManager.java (v1.2.0 Phase 73)
+      Engine settings persistence, import/export, range validation.
+      Derived from DroidFish EngineUtil patterns.
+  - src/main/java/com/Regalia/JsBridgeGateway.java (v1.2.0 Phase 73)
+      Sandbox-safe path validation, UCI command whitelisting.
+      Original code with DroidFish-derived patterns.
+  - src/main/java/com/Regalia/PgnCacheManager.java (v1.2.0 Phase 73)
+      PGN cache CRUD operations. Derived from DroidFish cache patterns.
+  - src/main/java/com/Regalia/EngineHealthMonitor.java (v1.2.0 Phase 73)
+      Heartbeat monitoring, zombie detection, auto-recovery backoff.
+      Derived from DroidFish engine health patterns.
+  - src/main/java/com/Regalia/FileIoHelper.java (v1.2.0 Phase 73+)
+      File I/O operations: writeTextFile, readTextFile, listFiles,
+      loadAssetAsBase64, getDefaultPaths, getExportPath, getParentPath, scanEngines.
+      Extracted from StockfishNative.java. File I/O patterns derived from DroidFish.
+  - src/main/java/com/Regalia/PermissionHelper.java (v1.2.0 Phase 73+)
+      Runtime permission checks: storage, notification, vibrator.
+      Extracted from StockfishNative.java. Permission patterns derived from DroidFish.
+  - src/main/java/com/Regalia/HapticHelper.java (v1.2.0 Phase 73+)
+      Haptic feedback (vibration) operations.
+      Extracted from StockfishNative.java. Haptic patterns derived from DroidFish.
+  - src/main/java/com/Regalia/SafPickerHelper.java (v1.2.0 Phase 73+)
+      SAF file picker: export (settings/PGN) and import (settings/PGN).
+      Extracted from StockfishNative.java. SAF patterns derived from DroidFish.
+  - src/main/java/com/Regalia/EngineSettingsHelper.java (v1.2.0 Phase 73+)
+      Engine settings query (getEngineInfo/getEngineSettings), export (TXT format),
+      import (TXT format parsing with range capping). Extracted from StockfishNative.java.
+      Settings patterns derived from DroidFish EngineOptionsDialog.java.
+  - src/main/java/com/Regalia/EngineConfigHelper.java (v1.2.0 Phase 81)
+      Engine configuration: setAutoConfig, detectHardwareAndConfigure (big.LITTLE aware),
+      applySettings, UCI option setters (Threads/Hash/MoveOverhead/MultiPV/Ponder/ShowWDL/
+      SkillLevel/UCI_LimitStrength/UCI_Elo), setGameDifficulty (1-7 → ELO_MAP),
+      forceFullStrength. Extracted from StockfishNative.java. ELO_MAP constant moved
+      here (only used by setGameDifficulty). Config patterns derived from DroidFish
+      EngineOptionsDialog.java. Uses Callbacks interface for field access + UCI dispatch.
+  - src/main/java/com/Regalia/MessageBus.java (v1.2.0 Phase 75)
+      JS ↔ Java unified message dispatch. Original AGPL v3 code.
   - src/main/java/com/Regalia/StatsActivity.java
       v1.0.8 PHASE 37: classified GPL v3 to match the stats.html asset it
       exclusively hosts (the two form an inseparable @JavascriptInterface
@@ -41,6 +89,25 @@ GPL v3 (DroidFish-derived or Stockfish):
       Engine communication patterns from DroidFish
   - src/main/assets/chess.src/ui.js
       UI layout and interaction patterns from DroidFish
+      v1.2.0 Phase 74: God Module split — extracted 4 modules:
+        ui-board.js, ui-review.js, ui-audio.js, ui-toolbar.js
+      v1.2.0 Phase 82-82++++: renderInternal God Function split — extracted 11
+        sub-functions (_renderDialogs, _renderReviewMode, _renderHeader,
+        _renderBoardGrid, _renderSetupPanel, _renderSidePanel, _renderAIBar,
+        _renderPlayerBar, _renderInfoBars, _computeRenderState,
+        _renderGameOverOverlay, _applyRenderResult). renderInternal: 1,365 → 70
+        lines (−95%). Phase 82++++ also fixed a critical scoping bug (flip/cm/
+        infoSq/infoCtrl/oppC were local to _renderHeader but referenced by other
+        sub-functions — root cause of the review-mode entry failure) and a layout
+        bug (info bars + player bar were outside .bsec).
+  - src/main/assets/chess.src/ui-board.js (v1.2.0 Phase 74)
+      Board rendering, coordinate labels, heatmap. DroidFish-derived.
+  - src/main/assets/chess.src/ui-review.js (v1.2.0 Phase 74)
+      Review mode, eval trend chart, move classification. DroidFish-derived.
+  - src/main/assets/chess.src/ui-audio.js (v1.2.0 Phase 74)
+      Audio engine utilities, volume management. DroidFish-derived patterns.
+  - src/main/assets/chess.src/ui-toolbar.js (v1.2.0 Phase 74)
+      Toolbar rendering, button state, language switch. DroidFish-derived.
   - src/main/assets/chess.src/tablebase.js
       PGN parsing logic from DroidFish (GameTree/PgnToken/PgnScanner)
   - src/main/assets/chess.src/pgn-standard.js
@@ -79,6 +146,8 @@ AGPL v3 (original code):
   - src/main/assets/chess.src/chess960.js (v1.0.4 NEW)
       Original Chess960 implementation: SP-ID generator, Shredder-FEN
       castling-rights encoder/decoder, 960 castling legality checker.
+  - src/main/assets/chess.src/state-store.js (v1.2.0 Phase 75 NEW)
+      Global state store (Redux-like). Original AGPL v3 code.
   - src/main/assets/chess.src/eco-data.js
       ECO data from lichess-org/chess-openings (CC0); code is original
   - src/main/cpp/CMakeLists.txt

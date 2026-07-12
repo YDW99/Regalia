@@ -1153,3 +1153,16 @@ v1.0.9 Phase 52 (2026.7.2):
     blue-vs-red).
   - stats.html: executeMove now clears castling rights on king/rook move +
     rook capture (robustness, was missing).
+
+v1.1.2 Phase 66-72 (2026.7.5-7.12):
+  - chess.html rebuilt multiple times (Phase 66-72 changes in chess.src/ files).
+  - stats.html: no direct changes (all Phase 66-72 changes are in chess.src/).
+  - See chess.src/README.license for source-level changes.
+
+v1.2.0 Phase 73-82+++++ rev 4 (2026.7.11-12):
+  - chess.html rebuilt multiple times (Phase 73-82+++++ changes in chess.src/ files).
+  - The God Module refactor (Phase 73-82) split StockfishNative.java into 13+ helper
+    classes and renderInternal() into 11 sub-functions. chess.html is the built output
+    of the 13 JS modules merged by build-chess.py.
+  - stats.html: CSP hash auto-updated by build-chess.py (no manual changes).
+  - See chess.src/README.license for source-level changes.

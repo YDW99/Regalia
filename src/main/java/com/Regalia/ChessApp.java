@@ -108,7 +108,7 @@ public class ChessApp extends Application {
             }
         });
 
-        Log.i(TAG, "ChessApp initialized — crash protection active (v1.1.2)");
+        Log.i(TAG, "ChessApp initialized — crash protection active (v1.2.0)");
 
         // SECURITY (MobSF #4): Non-blocking root detection. The result is computed
         // once and cached; the app never refuses to run on a rooted device because
