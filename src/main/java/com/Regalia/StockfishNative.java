@@ -116,10 +116,11 @@ public class StockfishNative {
     private static final String ENGINE_LIB_NAME = "libstockfish.so";
     private static final String PREFS_NAME = "RegaliaEngine";
 
-    // v18.4.0: ELO_MAP synced with JS ELO_MATCH for consistent level display
-    private static final int[] ELO_MAP = {0, 800, 1350, 1700, 2000, 2200, 2350, 2800};
+    // v18.4.0: ELO_MAP synced with JS ELO_MATCH for consistent level display.
+    // v1.2.0 Phase 81: Moved to EngineConfigHelper (only used by setGameDifficulty).
     // v1.0.5: Synced with the application version (was stale at v1.0.2).
-    private static final String ENGINE_VERSION = "v1.1.2";
+    // v1.2.0: Updated for v1.2.0 release.
+    private static final String ENGINE_VERSION = "v1.2.0";
     // Movetime mapping: index 0 unused, 1-7 = game levels
     private static final int[] MOVETIME_MAP = {0, 500, 800, 1000, 1500, 2000, 3000, 5000};
 
@@ -142,6 +143,28 @@ public class StockfishNative {
     private final Handler mainHandler;
     private final Object stateLock = new Object();
     private final SharedPreferences prefs;
+
+    // v1.2.0 Phase 73: Manager class instances (God Module split)
+    // These encapsulate specific concerns, reducing StockfishNative's complexity.
+    private final PgnCacheManager _pgnCacheManager;
+    private final EngineConfigManager _engineConfigManager;
+    private final JsBridgeGateway _jsBridgeGateway;
+    private final EngineProcessManager _engineProcessManager;
+    private final UciProtocolHandler _uciProtocolHandler;
+    private final EngineHealthMonitor _engineHealthMonitor;
+    // v1.2.0 Phase 73+: Additional helper classes for further God Module reduction
+    private final FileIoHelper _fileIoHelper;
+    private final PermissionHelper _permissionHelper;
+    private final HapticHelper _hapticHelper;
+    private final SafPickerHelper _safPickerHelper;
+    private final EngineSettingsHelper _engineSettingsHelper;
+    // v1.2.0 Phase 81: Engine config helper — extracted from StockfishNative to reduce God Module size.
+    // Encapsulates setAutoConfig/detectHardwareAndConfigure/applySettings/UCI option setters/
+    // setGameDifficulty/forceFullStrength. StockfishNative retains thin @JavascriptInterface delegates.
+    private final EngineConfigHelper _engineConfigHelper;
+    // v1.2.0 Phase 75: Message bus for unified JS↔Java communication
+    // v1.2.0 Phase 82+++++ rev 8: Made final — assigned once in constructor, never reassigned.
+    private final MessageBus _messageBus;
 
     // OPT: P2 - Cache WebView reference via WeakReference to avoid repeated lookups
     // in postJsCallback. The reference is updated whenever the WebView becomes available.
@@ -203,9 +226,8 @@ public class StockfishNative {
     // Restart lock: prevents concurrent restartEngine/recoverEngine calls
     private final Object _restartLock = new Object();
     private volatile boolean _restartInProgress = false;
-    /** Request code for SAF file picker (import settings) */
-    static final int REQUEST_CODE_IMPORT_SETTINGS = 1001;
-    static final int REQUEST_CODE_IMPORT_PGN = 1003;
+    // v1.2.0 Phase 73+: REQUEST_CODE_* constants moved to SafPickerHelper and
+    // re-exported below for MainActivity compatibility.
     private final Object _startEngineLock = new Object();
     // v1.1.0 Phase 58: Dedicated lock for engineWriter access. Decoupled from
     //   the `this` monitor (used by startHeartbeat) so shutdown()'s interrupt+
@@ -343,6 +365,259 @@ public class StockfishNative {
         loadSettingsFromPrefs();
         // OPT: P2 - Initialize cached WebView reference early
         updateCachedWebView();
+
+        // v1.2.0 Phase 73: Initialize manager class instances (God Module split)
+        this._pgnCacheManager = new PgnCacheManager(this.context);
+        this._engineConfigManager = new EngineConfigManager(this.context);
+        this._jsBridgeGateway = new JsBridgeGateway(this.context);
+        this._engineProcessManager = new EngineProcessManager(this.context, new EngineProcessManager.ChmodProvider() {
+            @Override
+            public boolean nativeChmod(String path) {
+                return StockfishNative.nativeChmod(path);
+            }
+            @Override
+            public boolean isEnglishMode() {
+                return StockfishNative.this.isEnglishMode();
+            }
+            @Override
+            public void postProgress(int pct, String message) {
+                postJsCallback("onInitProgress(" + pct + ", " + escapeJsString(message) + ")");
+            }
+        });
+        this._uciProtocolHandler = new UciProtocolHandler(new UciProtocolHandler.UciCallback() {
+            @Override
+            public OutputStreamWriter getEngineWriter() {
+                return engineWriter;
+            }
+            @Override
+            public void onUciOk(String engineName, String engineAuthor, String optionsJson) {
+                StockfishNative.this.engineName = engineName;
+                StockfishNative.this.engineAuthor = engineAuthor;
+                StockfishNative.this.engineOptionsJson = optionsJson;
+            }
+            @Override
+            public void onReadyOk() {
+                // handled by main class
+            }
+            @Override
+            public void onBestMove(String bestmove, String ponder) {
+                // handled by main class
+            }
+            @Override
+            public void onInfo(String line) {
+                // handled by main class
+            }
+            @Override
+            public void onEngineError(String message) {
+                postJsCallback("onEngineError(" + escapeJsString(message) + ")");
+            }
+            @Override
+            public boolean isEnglishMode() {
+                return StockfishNative.this.isEnglishMode();
+            }
+        });
+        this._engineHealthMonitor = new EngineHealthMonitor(new EngineHealthMonitor.RecoveryCallback() {
+            @Override
+            public boolean isEngineSearching() {
+                synchronized (stateLock) {
+                    return currentState == STATE_GO || currentState == STATE_EVAL;
+                }
+            }
+            @Override
+            public boolean isEngineReady() {
+                return engineReady;
+            }
+            @Override
+            public void triggerRecovery(String reason, String userMessage) {
+                recoverEngine(reason, userMessage);
+            }
+            @Override
+            public boolean isEnglishMode() {
+                return StockfishNative.this.isEnglishMode();
+            }
+        });
+        // v1.2.0 Phase 73+: Initialize additional helper classes
+        this._fileIoHelper = new FileIoHelper(this.context, this.activityRef);
+        this._permissionHelper = new PermissionHelper(this.context, this.activityRef);
+        this._hapticHelper = new HapticHelper(this.context);
+        this._safPickerHelper = new SafPickerHelper(this.context, this.activityRef, new SafPickerHelper.Callbacks() {
+            @Override
+            public void postJsCallback(String jsExpression) {
+                StockfishNative.this.postJsCallback(jsExpression);
+            }
+            @Override
+            public String escapeJsString(String s) {
+                return StockfishNative.escapeJsString(s);
+            }
+            @Override
+            public void importSettings(String content) {
+                StockfishNative.this.importSettings(content);
+            }
+        });
+        this._engineSettingsHelper = new EngineSettingsHelper(this.context, new EngineSettingsHelper.Callbacks() {
+            @Override public String getEngineName() { return engineName; }
+            @Override public String getEngineAuthor() { return engineAuthor; }
+            @Override public String getCurrentEnginePath() { return currentEnginePath; }
+            @Override public String getEngineVersion() { return ENGINE_VERSION; }
+            @Override public int getEngineThreads() { return engineThreads; }
+            @Override public int getEngineHash() { return engineHash; }
+            @Override public int getEngineMoveOverhead() { return engineMoveOverhead; }
+            @Override public int getEngineMultiPV() { return engineMultiPV; }
+            @Override public boolean getEnginePonder() { return enginePonder; }
+            @Override public boolean getEngineShowWDL() { return engineShowWDL; }
+            @Override public int getEngineSkillLevel() { return engineSkillLevel; }
+            @Override public boolean getEngineLimitElo() { return engineLimitElo; }
+            @Override public int getEngineElo() { return engineElo; }
+            @Override public boolean isAutoConfigEnabled() { return autoConfigEnabled; }
+            @Override public boolean isEngineReady() { return engineReady; }
+            @Override public void setEngineThreads(int v) { engineThreads = v; saveIntSetting("engineThreads", v); }
+            @Override public void setEngineHash(int v) { engineHash = v; saveIntSetting("engineHash", v); }
+            @Override public void setEngineMoveOverhead(int v) { engineMoveOverhead = v; saveIntSetting("engineMoveOverhead", v); }
+            @Override public void setEngineMultiPV(int v) { engineMultiPV = v; saveIntSetting("engineMultiPV", v); }
+            @Override public void setEnginePonder(boolean v) { enginePonder = v; saveBoolSetting("enginePonder", v); }
+            @Override public void setEngineShowWDL(boolean v) { engineShowWDL = v; saveBoolSetting("engineShowWDL", v); }
+            @Override public void setEngineSkillLevel(int v) { engineSkillLevel = v; saveIntSetting("engineSkillLevel", v); }
+            @Override public void setEngineLimitElo(boolean v) { engineLimitElo = v; saveBoolSetting("engineLimitElo", v); }
+            @Override public void setEngineElo(int v) { engineElo = v; saveIntSetting("engineElo", v); }
+            @Override public void setAutoConfigEnabled(boolean v) { autoConfigEnabled = v; saveBoolSetting("autoConfig", v); }
+            @Override public void stopAndWaitForBestmove(String callerTag) { StockfishNative.this.stopAndWaitForBestmove(callerTag); }
+            @Override public void applySettings() { StockfishNative.this.applySettings(); }
+            @Override public void notifyEngineInfo() { StockfishNative.this.notifyEngineInfo(); }
+            @Override public void postJsCallback(String jsExpression) { StockfishNative.this.postJsCallback(jsExpression); }
+            @Override public void safeExecute(Runnable r, String tag) { StockfishNative.this._safeExecute(r, tag); }
+        });
+        // v1.2.0 Phase 81: Engine config helper — Callbacks provide raw field access
+        // (field + persist, no UCI command) so the helper owns all UCI command dispatch.
+        this._engineConfigHelper = new EngineConfigHelper(this.context, new EngineConfigHelper.Callbacks() {
+            @Override public boolean isEngineReady() { return engineReady; }
+            @Override public boolean isAutoConfigEnabled() { return autoConfigEnabled; }
+            @Override public int getEngineThreads() { return engineThreads; }
+            @Override public int getEngineHash() { return engineHash; }
+            @Override public int getEngineMoveOverhead() { return engineMoveOverhead; }
+            @Override public int getEngineMultiPV() { return engineMultiPV; }
+            @Override public boolean getEnginePonder() { return enginePonder; }
+            @Override public boolean getEngineShowWDL() { return engineShowWDL; }
+            @Override public int getEngineSkillLevel() { return engineSkillLevel; }
+            @Override public boolean getEngineLimitElo() { return engineLimitElo; }
+            @Override public int getEngineElo() { return engineElo; }
+            @Override public void setThreadsField(int v) { engineThreads = v; saveIntSetting("engineThreads", v); }
+            @Override public void setHashField(int v) { engineHash = v; saveIntSetting("engineHash", v); }
+            @Override public void setMoveOverheadField(int v) { engineMoveOverhead = v; saveIntSetting("engineMoveOverhead", v); }
+            @Override public void setMultiPVField(int v) { engineMultiPV = v; saveIntSetting("engineMultiPV", v); }
+            @Override public void setPonderField(boolean v) { enginePonder = v; saveBoolSetting("enginePonder", v); }
+            @Override public void setShowWDLField(boolean v) { engineShowWDL = v; saveBoolSetting("engineShowWDL", v); }
+            @Override public void setSkillLevelField(int v) { engineSkillLevel = v; saveIntSetting("engineSkillLevel", v); }
+            @Override public void setLimitEloField(boolean v) { engineLimitElo = v; saveBoolSetting("engineLimitElo", v); }
+            @Override public void setEloField(int v) { engineElo = v; saveIntSetting("engineElo", v); }
+            @Override public void setAutoConfigField(boolean v) { autoConfigEnabled = v; saveBoolSetting("autoConfig", v); }
+            @Override public boolean engineSupportsOption(String name) { return StockfishNative.this.engineSupportsOption(name); }
+            @Override public void sendSetOptionAndWait(String name, String value) { StockfishNative.this.sendSetOptionAndWait(name, value); }
+            @Override public void sendUciCommand(String command) { StockfishNative.this.sendUciCommand(command); }
+            @Override public void notifyEngineInfo() { StockfishNative.this.notifyEngineInfo(); }
+            @Override public void postJsCallback(String jsExpression) { StockfishNative.this.postJsCallback(jsExpression); }
+        });
+        // v1.2.0 Phase 82+++++ rev 7: Wire MessageBus (Phase 75 design intent).
+        // The MessageBus provides a unified JS↔Java communication channel that runs
+        // alongside the existing AndroidBridge. It is registered as a separate
+        // JavascriptInterface named "MessageBus" so JS can call MessageBus.dispatch()
+        // and receive events via window.MessageBus._onEvent().
+        // Standard message types (per v1.2.0 Development Plan Task 75):
+        //   JS→Java: ENGINE_GO, ENGINE_STOP, ENGINE_SET_OPTION, PGN_CACHE_SAVE
+        //   Java→JS: ENGINE_EVAL, ENGINE_BESTMOVE, ENGINE_READY, ENGINE_ERROR, PGN_CACHE_LIST
+        // The handlers below delegate to the existing engine methods — this is purely
+        // additive (the AndroidBridge methods remain unchanged for backward compatibility).
+        this._messageBus = new MessageBus(null); // WebView set later via setWebView
+        registerMessageBusHandlers();
+    }
+
+    /**
+     * v1.2.0 Phase 82+++++ rev 7: Register standard MessageBus handlers.
+     * Each handler delegates to the existing engine method — the MessageBus is
+     * a parallel channel, not a replacement for AndroidBridge.
+     */
+    private void registerMessageBusHandlers() {
+        if (_messageBus == null) return;
+        // JS→Java: ENGINE_GO — send position + go command
+        _messageBus.register("ENGINE_GO", payload -> {
+            // payload: {"fen":"...", "goCmd":"go depth 15"} or {"goCmd":"go movetime 1000"}
+            try {
+                org.json.JSONObject obj = new org.json.JSONObject(payload != null ? payload : "{}");
+                String fen = obj.optString("fen", null);
+                String goCmd = obj.optString("goCmd", "go depth 15");
+                if (fen != null) {
+                    sendUciCommand("position fen " + fen);
+                }
+                sendUciCommand(goCmd);
+                return "{\"ok\":true}";
+            } catch (Throwable e) {
+                return "{\"ok\":false,\"error\":\"" + e.getMessage() + "\"}";
+            }
+        });
+        // JS→Java: ENGINE_STOP — stop engine search
+        _messageBus.register("ENGINE_STOP", payload -> {
+            sendUciCommand("stop");
+            return "{\"ok\":true}";
+        });
+        // JS→Java: ENGINE_SET_OPTION — set UCI parameter
+        _messageBus.register("ENGINE_SET_OPTION", payload -> {
+            try {
+                org.json.JSONObject obj = new org.json.JSONObject(payload != null ? payload : "{}");
+                String name = obj.optString("name", "");
+                String value = obj.optString("value", "");
+                if (!name.isEmpty()) {
+                    sendUciCommand("setoption name " + name + " value " + value);
+                    return "{\"ok\":true}";
+                }
+                return "{\"ok\":false,\"error\":\"missing name\"}";
+            } catch (Throwable e) {
+                return "{\"ok\":false,\"error\":\"" + e.getMessage() + "\"}";
+            }
+        });
+        // JS→Java: PGN_CACHE_SAVE — save PGN to cache
+        _messageBus.register("PGN_CACHE_SAVE", payload -> {
+            try {
+                org.json.JSONObject obj = new org.json.JSONObject(payload != null ? payload : "{}");
+                String name = obj.optString("name", "");
+                String pgn = obj.optString("pgn", "");
+                if (!name.isEmpty() && !pgn.isEmpty()) {
+                    savePGNCache(name, pgn);
+                    return "{\"ok\":true}";
+                }
+                return "{\"ok\":false,\"error\":\"missing name or pgn\"}";
+            } catch (Throwable e) {
+                return "{\"ok\":false,\"error\":\"" + e.getMessage() + "\"}";
+            }
+        });
+    }
+
+    /**
+     * v1.2.0 Phase 82+++++ rev 8: Set the WebView on the MessageBus so it can
+     * emit events to JS. Called from MainActivity after addJavascriptInterface.
+     * Rev 8 fix: uses public setter instead of reflection (R8 renames private
+     * fields in release builds, causing NoSuchFieldException with reflection).
+     */
+    public void setMessageBusWebView(WebView webView) {
+        if (_messageBus != null && webView != null) {
+            _messageBus.setWebView(webView);
+        }
+    }
+
+    /**
+     * v1.2.0 Phase 82+++++ rev 7: Emit an event to JS via the MessageBus.
+     * Java code can call this to send events like ENGINE_READY, ENGINE_BESTMOVE, etc.
+     */
+    public void emitToJs(String event, String jsonPayload) {
+        if (_messageBus != null) {
+            _messageBus.emit(event, jsonPayload);
+        }
+    }
+
+    /**
+     * v1.2.0 Phase 82+++++ rev 7: Get the MessageBus instance (for MainActivity
+     * to register as a JavascriptInterface).
+     */
+    public MessageBus getMessageBus() {
+        return _messageBus;
     }
 
     /**
@@ -552,7 +827,7 @@ public class StockfishNative {
                 currentState = STATE_NONE;
             }
             sendUciCommand("stop");
-            try { Thread.sleep(100); } catch (InterruptedException ignored) {}
+            try { Thread.sleep(100); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
             // FIX: After stopping ponder, the engine is now idle (bestmove was discarded).
             // Previously, the code fell through to create a new latch and send "stop" again,
             // but the engine already sent its bestmove (which was discarded). The new latch
@@ -596,6 +871,7 @@ public class StockfishNative {
                 }
             }
         } catch (InterruptedException e) {
+            Thread.currentThread().interrupt(); // v1.2.0 Phase 73: re-interrupt
             Log.w(TAG, callerTag + ": interrupted waiting for stop bestmove");
         } finally {
             synchronized (_stopLatchLock) {
@@ -634,6 +910,7 @@ public class StockfishNative {
                         try {
                             newGameLatch.await(5, TimeUnit.SECONDS);
                         } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt(); // v1.2.0 Phase 73: re-interrupt
                             Log.w(TAG, "engineGoNewGame: interrupted waiting for readyok");
                         } finally {
                             readyOkLatchHolder = null;
@@ -706,6 +983,7 @@ public class StockfishNative {
                         try {
                             newGameLatch.await(5, TimeUnit.SECONDS);
                         } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt(); // v1.2.0 Phase 73: re-interrupt
                             Log.w(TAG, "engineGoTimed: interrupted waiting for readyok");
                         } finally {
                             readyOkLatchHolder = null;
@@ -933,44 +1211,25 @@ public class StockfishNative {
 
     /**
      * Set game difficulty level (1-7). Controls UCI_LimitStrength + UCI_Elo only.
+     * v1.2.0 Phase 81: Delegates to EngineConfigHelper.setGameDifficulty().
+     * Kept as package-private so internal callers (engineGo, engineEval, etc.)
+     * can still invoke it via StockfishNative.this.setGameDifficulty().
      */
-    private void setGameDifficulty(int level) {
-        if (level >= 1 && level <= 6) {
-            int elo = (level >= 1 && level < ELO_MAP.length) ? ELO_MAP[level] : 1500;
-            engineLimitElo = true;
-            engineElo = elo;
-            if (engineSupportsOption("UCI_LimitStrength"))
-                sendUciCommand("setoption name UCI_LimitStrength value true");
-            if (engineSupportsOption("UCI_Elo"))
-                sendUciCommand("setoption name UCI_Elo value " + elo);
-        } else {
-            engineLimitElo = false;
-            if (engineSupportsOption("UCI_LimitStrength"))
-                sendUciCommand("setoption name UCI_LimitStrength value false");
-            if (engineSupportsOption("Skill Level"))
-                sendUciCommand("setoption name Skill Level value " + engineSkillLevel);
-        }
-        saveBoolSetting("engineLimitElo", engineLimitElo);
-        if (level >= 1 && level <= 6) {
-            saveIntSetting("engineElo", engineElo);
-        }
-        postJsCallback("onGameDifficultyChanged(" + engineLimitElo + "," + engineElo + ")");
+    void setGameDifficulty(int level) {
+        _engineConfigHelper.setGameDifficulty(level);
     }
 
     /**
      * Force full-strength engine play for evaluation and hint searches.
+     * v1.2.0 Phase 81: Delegates to EngineConfigHelper.forceFullStrength().
      */
-    private void forceFullStrength() {
-        if (engineSupportsOption("Skill Level"))
-            sendUciCommand("setoption name Skill Level value 20");
-        if (engineSupportsOption("UCI_LimitStrength"))
-            sendUciCommand("setoption name UCI_LimitStrength value false");
+    void forceFullStrength() {
+        _engineConfigHelper.forceFullStrength();
     }
 
     @JavascriptInterface
     public void syncGameDifficulty(int level) {
-        Log.i(TAG, "syncGameDifficulty: level=" + level);
-        setGameDifficulty(level);
+        _engineConfigHelper.syncGameDifficulty(level);
     }
 
     /**
@@ -1170,6 +1429,8 @@ public class StockfishNative {
             postJsCallback("onInitProgress(100, " + escapeJsString(isEnglishMode() ? "Engine already running" : "\u5f15\u64ce\u5df2\u8fd0\u884c") + ")");
             postJsCallback("onEngineReady()");
             engineReady = true;
+            // v1.2.0 Phase 82+++++ rev 7: Emit ENGINE_READY via MessageBus (parallel channel)
+            emitToJs("ENGINE_READY", null);
             return;
         }
 
@@ -1240,6 +1501,7 @@ public class StockfishNative {
                 return;
             }
         } catch (InterruptedException e) {
+            Thread.currentThread().interrupt(); // v1.2.0 Phase 73: re-interrupt
             Log.e(TAG, "Interrupted waiting for uciok");
             cleanupFailedEngine();
             initStarted = false;
@@ -1269,6 +1531,7 @@ public class StockfishNative {
                     return;
                 }
             } catch (InterruptedException e) {
+                Thread.currentThread().interrupt(); // v1.2.0 Phase 73: re-interrupt
                 Log.e(TAG, "Interrupted waiting for readyok");
                 cleanupFailedEngine();
                 initStarted = false;
@@ -1302,6 +1565,8 @@ public class StockfishNative {
         _autoRecoveryCount = 0;
         _restartInProgress = false; // Clear restart lock on successful start
         postJsCallback("onEngineReady()");
+        // v1.2.0 Phase 82+++++ rev 7: Emit ENGINE_READY via MessageBus (parallel channel)
+        emitToJs("ENGINE_READY", null);
 
         // Start the foreground service to keep the engine process alive
         EngineService.start(context);
@@ -1362,13 +1627,13 @@ public class StockfishNative {
         // Wait for the engine process to initialize
         try {
             Thread.sleep(800);
-        } catch (InterruptedException ignored) {}
+        } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
 
         if (!isProcessAlive()) {
             Log.w(TAG, "Engine process not alive after 800ms, retrying check (1000ms)...");
             try {
                 Thread.sleep(1000);
-            } catch (InterruptedException ignored) {}
+            } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
 
             if (!isProcessAlive()) {
                 Log.e(TAG, "Engine process died immediately after starting from: " + binPath);
@@ -1425,7 +1690,7 @@ public class StockfishNative {
             try { engineProcess.getErrorStream().close(); } catch (Throwable ignored) {}
             try {
                 engineProcess.destroy();
-                try { Thread.sleep(100); } catch (InterruptedException ignored) {}
+                try { Thread.sleep(100); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
                 // v1.0.2 FIX: use isProcessAlive() + destroyForciblySafe() —
                 // direct engineProcess.isAlive() / destroyForcibly() throw
                 // NoSuchMethodError on API 21-25 (minSdk).
@@ -2032,6 +2297,8 @@ public class StockfishNative {
             case STATE_GO:
                 postJsCallback("onBestMove(" + escapeJsString(uciMove) + ")");
                 postJsCallback("onMultiPVResult(" + multiPVJson + ")");
+                // v1.2.0 Phase 82+++++ rev 7: Emit ENGINE_BESTMOVE via MessageBus (parallel channel)
+                emitToJs("ENGINE_BESTMOVE", "{\"uci\":\"" + uciMove + "\"}");
                 break;
             case STATE_HINT:
                 postJsCallback("onHintMove(" + escapeJsString(uciMove) + ")");
@@ -2177,6 +2444,7 @@ public class StockfishNative {
                 readyOkLatchHolder = null;
                 return false;
             } catch (InterruptedException e) {
+                Thread.currentThread().interrupt(); // v1.2.0 Phase 73: re-interrupt
                 Log.w(TAG, "Interrupted waiting for readyok after setting " + name);
                 readyOkLatchHolder = null;
                 return false;
@@ -2295,7 +2563,7 @@ public class StockfishNative {
         if (engineProcess != null) {
             try {
                 engineProcess.destroy();
-                try { Thread.sleep(200); } catch (InterruptedException ignored) {}
+                try { Thread.sleep(200); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
                 // v1.0.2 FIX: use isProcessAlive() + destroyForciblySafe() —
                 // direct engineProcess.isAlive() / destroyForcibly() throw
                 // NoSuchMethodError on API 21-25 (minSdk).
@@ -2358,7 +2626,7 @@ public class StockfishNative {
         if (engineProcess != null) {
             try {
                 engineProcess.destroy();
-                try { Thread.sleep(100); } catch (InterruptedException ignored) {}
+                try { Thread.sleep(100); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
                 // v1.0.2 FIX: use isProcessAlive() + destroyForciblySafe() —
                 // direct engineProcess.isAlive() / destroyForcibly() throw
                 // NoSuchMethodError on API 21-25 (minSdk).
@@ -2388,6 +2656,7 @@ public class StockfishNative {
                     try {
                         Thread.sleep(HEARTBEAT_INTERVAL_MS);
                     } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt(); // v1.2.0 Phase 73: re-interrupt
                         break;
                     }
                     if (!_heartbeatRunning || shutdownRequested) break;
@@ -2437,11 +2706,11 @@ public class StockfishNative {
                                 } catch (IOException ignored) {}
                             }
                             // Wait briefly for graceful exit
-                            try { Thread.sleep(200); } catch (InterruptedException e) { break; }
+                            try { Thread.sleep(200); } catch (InterruptedException e) { Thread.currentThread().interrupt(); break; }
                             // Clean up all resources
                             cleanupEngineResources();
                             // Wait before restarting
-                            try { Thread.sleep(500); } catch (InterruptedException e) { break; }
+                            try { Thread.sleep(500); } catch (InterruptedException e) { Thread.currentThread().interrupt(); break; }
                             // Attempt recovery (recoverEngine handles counter incrementing)
                             recoverEngine("heartbeat-zombie",
                                     "\u5f15\u64ce\u53cd\u590d\u65e0\u54cd\u5e94\uff0c\u8bf7\u5c1d\u8bd5\u624b\u52a8\u91cd\u542f");
@@ -2601,31 +2870,16 @@ public class StockfishNative {
      */
     @JavascriptInterface
     public String getEngineInfo() {
-        try {
-            JSONObject info = new JSONObject();
-            info.put("name", engineName);
-            info.put("author", engineAuthor);
-            info.put("path", currentEnginePath != null ? currentEnginePath : "");
-            info.put("threads", engineThreads);
-            info.put("hash", engineHash);
-            info.put("autoConfig", autoConfigEnabled);
-            return info.toString();
-        } catch (Throwable e) {
-            Log.e(TAG, "Error building engine info", e);
-            return "{}";
-        }
+        return _engineSettingsHelper.getEngineInfo();
     }
 
     // ===================== AUTO / MANUAL CONFIG =====================
+    // v1.2.0 Phase 81: Config logic extracted to EngineConfigHelper.
+    //                   StockfishNative retains @JavascriptInterface delegates.
 
     @JavascriptInterface
     public void setAutoConfig(boolean enabled) {
-        autoConfigEnabled = enabled;
-        saveBoolSetting("autoConfig", enabled);
-        Log.i(TAG, "Auto config " + (enabled ? "enabled" : "disabled"));
-        if (enabled && engineReady) {
-            detectHardwareAndConfigure();
-        }
+        _engineConfigHelper.setAutoConfig(enabled);
     }
 
     @JavascriptInterface
@@ -2634,128 +2888,15 @@ public class StockfishNative {
     }
 
     /**
-     * Detect hardware capabilities and configure engine accordingly.
-     * Sets optimal Threads and Hash values based on CPU cores and available memory.
-     */
-    private void detectHardwareAndConfigure() {
-        try {
-            int availableProcessors = Runtime.getRuntime().availableProcessors();
-
-            int bigCoreCount = detectBigCoreCount();
-            int effectiveCores;
-            if (bigCoreCount > 0) {
-                effectiveCores = bigCoreCount;
-                Log.i(TAG, "big.LITTLE detected: " + bigCoreCount + " big cores out of "
-                        + availableProcessors + " total");
-            } else {
-                effectiveCores = availableProcessors / 2;
-            }
-
-            int optimalThreads = Math.max(1, effectiveCores);
-            optimalThreads = Math.min(optimalThreads, 16);
-
-            long maxMemory = Runtime.getRuntime().maxMemory();
-            // Stockfish 18 best practice: keep hashfull < 30% for optimal strength.
-            // On mobile, 64MB is the sweet spot; cap at 128MB to avoid OOM on low-RAM devices.
-            long optimalHashMB = Math.max(16, maxMemory / (16 * 1024 * 1024));
-            optimalHashMB = Math.min(optimalHashMB, 128);
-            optimalHashMB = Math.max(16, (optimalHashMB / 16) * 16);
-
-            Log.i(TAG, "Hardware detection: processors=" + availableProcessors
-                    + " (bigCores=" + bigCoreCount + ")"
-                    + " -> threads=" + optimalThreads
-                    + ", maxMemory=" + (maxMemory / 1024 / 1024) + "MB"
-                    + " -> hash=" + optimalHashMB + "MB");
-
-            if (engineReady) {
-                sendSetOptionAndWait("Threads", String.valueOf(optimalThreads));
-                sendSetOptionAndWait("Hash", String.valueOf(optimalHashMB));
-                engineThreads = optimalThreads;
-                engineHash = (int) optimalHashMB;
-                saveIntSetting("engineThreads", engineThreads);
-                saveIntSetting("engineHash", engineHash);
-                notifyEngineInfo();
-            }
-        } catch (Throwable e) {
-            Log.e(TAG, "Hardware detection failed", e);
-        }
-    }
-
-    /**
-     * Detect the number of "big" cores on big.LITTLE ARM architectures.
-     */
-    // v1.0.2 PERF (audit): cache detectBigCoreCount() result — CPU topology
-    // is fixed for the device's lifetime, no need to re-parse /proc/cpuinfo
-    // every time detectHardwareAndConfigure() is called.
-    private volatile int _cachedBigCoreCount = -1;
-
-    private int detectBigCoreCount() {
-        if (_cachedBigCoreCount >= 0) return _cachedBigCoreCount;
-        int bigCores = 0;
-        try {
-            java.util.List<Long> frequencies = new java.util.ArrayList<>();
-
-            try (java.io.BufferedReader reader = new java.io.BufferedReader(
-                    new java.io.InputStreamReader(new java.io.FileInputStream("/proc/cpuinfo")))) {
-                String line;
-                long currentFreq = 0;
-                while ((line = reader.readLine()) != null) {
-                    if (line.startsWith("processor")) {
-                        if (currentFreq > 0) {
-                            frequencies.add(currentFreq);
-                        }
-                        currentFreq = 0;
-                    } else if (line.contains("CPU max MHz") || line.contains("BogoMIPS")) {
-                        try {
-                            String[] parts = line.split(":");
-                            if (parts.length >= 2) {
-                                double freq = Double.parseDouble(parts[1].trim());
-                                currentFreq = (long) (freq * 1000);
-                            }
-                        } catch (NumberFormatException ignored) {}
-                    } else if (line.contains("cpu MHz")) {
-                        try {
-                            String[] parts = line.split(":");
-                            if (parts.length >= 2) {
-                                double freq = Double.parseDouble(parts[1].trim());
-                                if (currentFreq == 0) {
-                                    currentFreq = (long) (freq * 1000);
-                                }
-                            }
-                        } catch (NumberFormatException ignored) {}
-                    }
-                }
-                if (currentFreq > 0) {
-                    frequencies.add(currentFreq);
-                }
-            }
-
-            if (frequencies.size() >= 2) {
-                java.util.Collections.sort(frequencies);
-                long medianFreq = frequencies.get(frequencies.size() / 2);
-                long highestFreq = frequencies.get(frequencies.size() - 1);
-
-                if (highestFreq > medianFreq * 1.2) {
-                    for (long freq : frequencies) {
-                        if (freq >= highestFreq * 0.9) {
-                            bigCores++;
-                        }
-                    }
-                }
-            }
-        } catch (Throwable e) {
-            Log.d(TAG, "big.LITTLE detection failed (non-fatal): " + e.getMessage());
-        }
-        _cachedBigCoreCount = bigCores; // v1.0.2 PERF: cache result
-        return bigCores;
-    }
-
-    // ===================== UCI OPTION SETTERS =====================
-
-    /**
      * P1 FIX: Check if the current engine supports a given UCI option name.
      * Uses the cached supportedOptionNames Set for O(1) lookup instead of
      * re-parsing the engineOptionsJson string on every call.
+     *
+     * v1.2.0 Phase 81: Retained on StockfishNative (not extracted) because it
+     *   is called from many non-config paths (setChess960Mode, startEngine,
+     *   onUciReady, etc.) and is a pure query on supportedOptionNames.
+     *   EngineConfigHelper accesses it via the Callbacks.engineSupportsOption()
+     *   bridge.
      */
     // v1.0.8 PHASE 30: synchronize the combined check-then-contains to prevent a race where
     //   the UCI handshake thread clears supportedOptionNames between isEmpty() and contains().
@@ -2775,156 +2916,37 @@ public class StockfishNative {
 
     /**
      * Apply all current settings to the engine in the correct order.
-     *
-     * v1.0.2 SIMPLIFY (audit): consolidated the two near-identical branches
-     * (autoConfig on/off) into one. The ONLY difference was how Threads/Hash
-     * are determined: autoConfig calls detectHardwareAndConfigure() (which
-     * sets Threads/Hash from device hardware); the else branch applies the
-     * user-specified Threads/Hash directly. All other options (Move Overhead,
-     * MultiPV, Ponder, UCI_ShowWDL, Skill Level, UCI_LimitStrength, UCI_Elo)
-     * were applied identically in both branches — duplicated ~50 lines.
+     * v1.2.0 Phase 81: Delegates to EngineConfigHelper.applySettings().
+     * Kept as package-private so EngineSettingsHelper.Callbacks.applySettings()
+     * can call it via StockfishNative.this.applySettings().
      */
-    private void applySettings() {
-        if (!engineReady) {
-            Log.w(TAG, "Cannot apply settings - engine not ready");
-            return;
-        }
-
-        Log.i(TAG, "Applying engine settings (autoConfig=" + autoConfigEnabled + ")");
-
-        // Threads + Hash: source depends on autoConfig
-        if (autoConfigEnabled) {
-            detectHardwareAndConfigure();
-            if (!engineReady) return;
-        } else {
-            if (engineSupportsOption("Threads")) {
-                sendSetOptionAndWait("Threads", String.valueOf(engineThreads));
-                if (!engineReady) return;
-            }
-            if (engineSupportsOption("Hash")) {
-                sendSetOptionAndWait("Hash", String.valueOf(engineHash));
-                if (!engineReady) return;
-            }
-        }
-
-        // Common options (applied identically regardless of autoConfig)
-        if (engineSupportsOption("Move Overhead")) {
-            sendSetOptionAndWait("Move Overhead", String.valueOf(engineMoveOverhead));
-            if (!engineReady) return;
-        }
-        if (engineSupportsOption("MultiPV")) {
-            sendSetOptionAndWait("MultiPV", String.valueOf(engineMultiPV));
-            if (!engineReady) return;
-        }
-        if (engineSupportsOption("Ponder")) {
-            sendSetOptionAndWait("Ponder", String.valueOf(enginePonder));
-            if (!engineReady) return;
-        }
-        if (engineSupportsOption("UCI_ShowWDL")) {
-            sendSetOptionAndWait("UCI_ShowWDL", String.valueOf(engineShowWDL));
-            if (!engineReady) return;
-        }
-        if (engineSupportsOption("Skill Level")) {
-            sendSetOptionAndWait("Skill Level", String.valueOf(engineSkillLevel));
-            if (!engineReady) return;
-        }
-        if (engineSupportsOption("UCI_LimitStrength")) {
-            sendSetOptionAndWait("UCI_LimitStrength", String.valueOf(engineLimitElo));
-            if (!engineReady) return;
-            if (engineLimitElo && engineSupportsOption("UCI_Elo")) {
-                sendSetOptionAndWait("UCI_Elo", String.valueOf(engineElo));
-            }
-        }
-
-        Log.i(TAG, "Engine settings applied successfully");
+    void applySettings() {
+        _engineConfigHelper.applySettings();
     }
 
     @JavascriptInterface
     public void setEngineThreads(int threads) {
-        if (threads < 1) threads = 1;
-        // v1.1.2 Phase 69 (UCI guide §1.1): cap Threads at 2x available processors.
-        //   The UCI guide warns that exceeding physical core count causes thread
-        //   contention, reducing NPS. We allow up to 2x for hyperthreading benefit
-        //   but no higher. The old cap of 512 was a spec ceiling.
-        int cpuCores = Runtime.getRuntime().availableProcessors();
-        int threadsCap = Math.max(1, cpuCores * 2);
-        if (threads > threadsCap) {
-            Log.w(TAG, "setEngineThreads: " + threads + " exceeds 2x CPU cores (" + threadsCap + "), capping");
-            threads = threadsCap;
-        }
-        engineThreads = threads;
-        saveIntSetting("engineThreads", threads);
-        if (autoConfigEnabled) {
-            Log.w(TAG, "setEngineThreads ignored - autoConfig is enabled");
-            return;
-        }
-        if (engineReady) {
-            sendSetOptionAndWait("Threads", String.valueOf(threads));
-        }
+        _engineConfigHelper.setEngineThreads(threads);
     }
 
     @JavascriptInterface
     public void setEngineHash(int hashMB) {
-        if (hashMB < 1) hashMB = 1;
-        // v1.1.2 Phase 69 (UCI guide §1.2): cap Hash at 50% of available JVM heap
-        //   memory. The UCI guide warns that exceeding 50% of physical RAM causes
-        //   virtual memory swapping, drastically slowing the engine. On Android,
-        //   the JVM heap is the relevant limit (not total device RAM). The old cap
-        //   of 33554432 MB (32TB) was a spec ceiling with no practical use.
-        long maxMemoryMB = Runtime.getRuntime().maxMemory() / (1024 * 1024);
-        long hashCap = Math.max(16, maxMemoryMB / 2); // 50% of heap, min 16MB
-        if (hashMB > hashCap) {
-            Log.w(TAG, "setEngineHash: " + hashMB + "MB exceeds 50% of heap (" + hashCap + "MB), capping");
-            hashMB = (int) hashCap;
-        }
-        engineHash = hashMB;
-        saveIntSetting("engineHash", hashMB);
-        if (autoConfigEnabled) {
-            Log.w(TAG, "setEngineHash ignored - autoConfig is enabled");
-            return;
-        }
-        if (engineReady) {
-            sendSetOptionAndWait("Hash", String.valueOf(hashMB));
-        }
+        _engineConfigHelper.setEngineHash(hashMB);
     }
 
     @JavascriptInterface
     public void setEngineMoveOverhead(int ms) {
-        if (ms < 0) ms = 0;
-        // v1.1.2 Phase 69 (UCI guide §2.2): cap Move Overhead at 1000ms. The UCI
-        //   guide recommends 10-30ms for local play, 50-150ms for network play.
-        //   Values above 1000ms waste thinking time with no benefit. The old cap
-        //   of 5000ms was excessive.
-        if (ms > 1000) ms = 1000;
-        engineMoveOverhead = ms;
-        saveIntSetting("engineMoveOverhead", ms);
-        if (engineReady) {
-            sendSetOptionAndWait("Move Overhead", String.valueOf(ms));
-        }
+        _engineConfigHelper.setEngineMoveOverhead(ms);
     }
 
     @JavascriptInterface
     public void setEngineMultiPV(int multiPV) {
-        if (multiPV < 1) multiPV = 1;
-        // v1.1.2 Phase 69 (UCI guide §2.1): cap MultiPV at 8. The UCI optimization
-        //   guide recommends 3-5 for review analysis; values above 8 severely
-        //   reduce search depth with diminishing returns. The old cap of 500 was
-        //   a spec ceiling, not a practical limit.
-        if (multiPV > 8) multiPV = 8;
-        engineMultiPV = multiPV;
-        saveIntSetting("engineMultiPV", multiPV);
-        if (engineReady) {
-            sendSetOptionAndWait("MultiPV", String.valueOf(multiPV));
-        }
+        _engineConfigHelper.setEngineMultiPV(multiPV);
     }
 
     @JavascriptInterface
     public void setEnginePonder(boolean enabled) {
-        enginePonder = enabled;
-        saveBoolSetting("enginePonder", enabled);
-        if (engineReady) {
-            sendSetOptionAndWait("Ponder", String.valueOf(enabled));
-        }
+        _engineConfigHelper.setEnginePonder(enabled);
     }
 
     // ===================== PONDER MANAGEMENT =====================
@@ -3330,7 +3352,10 @@ public class StockfishNative {
                 }
             }
             // Legacy path (API 21-25 or cross-device fallback)
-            if (finalFile.exists()) finalFile.delete();
+            // v1.2.0 Phase 73 (SonarCloud B29): check delete() return value
+            if (finalFile.exists() && !finalFile.delete()) {
+                Log.w(TAG, "saveEvalCacheSync: failed to delete old cache file");
+            }
             if (!tmpFile.renameTo(finalFile)) {
                 // Fallback: copy tmp to final if rename fails (cross-device?)
                 Log.w(TAG, "saveEvalCacheSync: rename failed, falling back to copy");
@@ -3357,258 +3382,56 @@ public class StockfishNative {
     private static final String PGN_CACHE_DIR = "pgn_cache";
 
     private File _pgnCacheDir() {
-        File dir = new File(context.getFilesDir(), PGN_CACHE_DIR);
-        if (!dir.exists()) {
-            dir.mkdirs();
-        }
-        return dir;
+        // v1.2.0 Phase 73: Delegate to PgnCacheManager
+        return _pgnCacheManager.getCacheDir();
     }
 
     private String _sanitizeCacheName(String name) {
-        // Strip path separators, control chars, and trim. Empty name → null.
-        if (name == null) return null;
-        String s = name.trim();
-        // Remove any path-like characters (forbid directory traversal)
-        s = s.replaceAll("[/\\\\:*?\"<>|]", "");
-        // Remove control characters
-        s = s.replaceAll("[\\x00-\\x1f\\x7f]", "");
-        // Limit length to 100 chars to avoid filesystem issues
-        if (s.length() > 100) s = s.substring(0, 100);
-        return s.isEmpty() ? null : s;
+        // v1.2.0 Phase 73: Delegate to PgnCacheManager
+        return _pgnCacheManager.sanitizeName(name);
     }
+
+    // v1.2.0 Phase 73: PGN cache methods delegate to PgnCacheManager.
+    // The @JavascriptInterface signatures are preserved for JS compatibility.
 
     @JavascriptInterface
     public String listPGNCaches() {
-        try {
-            File dir = _pgnCacheDir();
-            File[] files = dir.listFiles();
-            if (files == null) return "[]";
-            // Sort: newest first (by mtime desc)
-            java.util.Arrays.sort(files, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
-            org.json.JSONArray arr = new org.json.JSONArray();
-            // v1.0.4 Round-5 Rev20: Pre-load all tag files into a map for O(1) lookup
-            // (avoids N file reads when listing N entries).
-            java.util.Map<String, org.json.JSONArray> tagMap = new java.util.HashMap<>();
-            for (File f : files) {
-                String fn = f.getName();
-                if (fn.endsWith(".tags.json")) {
-                    String baseName = fn.substring(0, fn.length() - ".tags.json".length());
-                    try {
-                        String content = getPGNCacheTags(baseName);
-                        tagMap.put(baseName, new org.json.JSONArray(content));
-                    } catch (Throwable ignored) {}
-                }
-            }
-            for (File f : files) {
-                if (!f.isFile()) continue;
-                String fn = f.getName();
-                if (fn.endsWith(".tags.json")) continue; // Skip tag files in main list
-                // Strip .pgn extension for display
-                String displayName = fn.endsWith(".pgn") ? fn.substring(0, fn.length() - 4) : fn;
-                try {
-                    org.json.JSONObject obj = new org.json.JSONObject();
-                    obj.put("name", displayName);
-                    obj.put("size", f.length());
-                    obj.put("mtime", f.lastModified());
-                    // Include tags (empty array if none)
-                    org.json.JSONArray tags = tagMap.get(displayName);
-                    obj.put("tags", tags != null ? tags : new org.json.JSONArray());
-                    arr.put(obj);
-                } catch (Throwable ignored) {}
-            }
-            return arr.toString();
-        } catch (Throwable e) {
-            Log.w(TAG, "listPGNCaches failed", e);
-            return "[]";
-        }
+        return _pgnCacheManager.listCaches();
     }
 
     @JavascriptInterface
     public boolean savePGNCache(String name, String pgn) {
-        if (name == null || pgn == null) return false;
-        String safe = _sanitizeCacheName(name);
-        if (safe == null) return false;
-        try {
-            File file = new File(_pgnCacheDir(), safe + ".pgn");
-            try (java.io.FileOutputStream fos = new java.io.FileOutputStream(file);
-                 java.io.OutputStreamWriter writer = new java.io.OutputStreamWriter(fos, "UTF-8")) {
-                writer.write(pgn);
-                writer.flush();
-            }
-            Log.i(TAG, "PGN cache saved: " + safe + " (" + pgn.length() + " chars)");
-            return true;
-        } catch (Throwable e) {
-            Log.w(TAG, "savePGNCache failed for name=" + safe, e);
-            return false;
-        }
+        return _pgnCacheManager.save(name, pgn);
     }
 
     @JavascriptInterface
     public String getPGNCache(String name) {
-        if (name == null) return null;
-        String safe = _sanitizeCacheName(name);
-        if (safe == null) return null;
-        try {
-            File file = new File(_pgnCacheDir(), safe + ".pgn");
-            if (!file.exists() || !file.isFile()) return null;
-            try (java.io.FileInputStream fis = new java.io.FileInputStream(file);
-                 java.io.InputStreamReader reader = new java.io.InputStreamReader(fis, "UTF-8");
-                 java.io.StringWriter sw = new java.io.StringWriter()) {
-                char[] buf = new char[8192];
-                int n;
-                while ((n = reader.read(buf)) > 0) {
-                    sw.write(buf, 0, n);
-                }
-                return sw.toString();
-            }
-        } catch (Throwable e) {
-            Log.w(TAG, "getPGNCache failed for name=" + safe, e);
-            return null;
-        }
+        return _pgnCacheManager.get(name);
     }
 
     @JavascriptInterface
     public boolean deletePGNCache(String name) {
-        if (name == null) return false;
-        String safe = _sanitizeCacheName(name);
-        if (safe == null) return false;
-        try {
-            File file = new File(_pgnCacheDir(), safe + ".pgn");
-            boolean pgnDeleted = file.exists() && file.delete();
-            // v1.0.4 Round-5 Rev20: Also delete associated tags file
-            File tagsFile = new File(_pgnCacheDir(), safe + ".tags.json");
-            if (tagsFile.exists()) tagsFile.delete();
-            return pgnDeleted;
-        } catch (Throwable e) {
-            Log.w(TAG, "deletePGNCache failed for name=" + safe, e);
-            return false;
-        }
+        return _pgnCacheManager.delete(name);
     }
 
-    /**
-     * Delete multiple PGN cache entries. Names is a JSON array of strings.
-     * Returns the number of entries successfully deleted.
-     */
     @JavascriptInterface
     public int deletePGNCaches(String namesJson) {
-        if (namesJson == null) return 0;
-        int deleted = 0;
-        try {
-            org.json.JSONArray arr = new org.json.JSONArray(namesJson);
-            for (int i = 0; i < arr.length(); i++) {
-                String name = arr.optString(i, "");
-                if (deletePGNCache(name)) deleted++;
-            }
-        } catch (Throwable e) {
-            Log.w(TAG, "deletePGNCaches failed", e);
-        }
-        return deleted;
+        return _pgnCacheManager.deleteBatch(namesJson);
     }
 
-    // v1.0.4 Round-5 Rev20: Rename and Tag features for PGN Cache Manager.
-    // Tags are stored as a separate file: pgn_cache/<name>.tags.json (an array
-    // of strings). This avoids modifying the PGN file itself and allows fast
-    // tag queries without parsing PGN. Tag files are tiny (< 1KB each).
-
-    /**
-     * Atomically rename a PGN cache entry. Also renames the associated
-     * tags file if it exists. Returns true on success.
-     * If a cache with the new name already exists, returns false (does not overwrite).
-     */
     @JavascriptInterface
     public boolean renamePGNCache(String oldName, String newName) {
-        if (oldName == null || newName == null) return false;
-        String oldSafe = _sanitizeCacheName(oldName);
-        String newSafe = _sanitizeCacheName(newName);
-        if (oldSafe == null || newSafe == null) return false;
-        if (oldSafe.equals(newSafe)) return true; // No-op
-        try {
-            File oldFile = new File(_pgnCacheDir(), oldSafe + ".pgn");
-            File newFile = new File(_pgnCacheDir(), newSafe + ".pgn");
-            if (!oldFile.exists()) return false;
-            if (newFile.exists()) return false; // Refuse to overwrite
-            if (!oldFile.renameTo(newFile)) return false;
-            // Also rename tags file if exists
-            File oldTags = new File(_pgnCacheDir(), oldSafe + ".tags.json");
-            if (oldTags.exists()) {
-                File newTags = new File(_pgnCacheDir(), newSafe + ".tags.json");
-                oldTags.renameTo(newTags); // best-effort
-            }
-            Log.i(TAG, "PGN cache renamed: " + oldSafe + " → " + newSafe);
-            return true;
-        } catch (Throwable e) {
-            Log.w(TAG, "renamePGNCache failed: " + oldSafe + " → " + newSafe, e);
-            return false;
-        }
+        return _pgnCacheManager.rename(oldName, newName);
     }
 
-    /**
-     * Set tags for a PGN cache entry. tagsJson is a JSON array of strings.
-     * Pass null or empty array to clear tags.
-     * Returns true on success.
-     */
     @JavascriptInterface
     public boolean setPGNCacheTags(String name, String tagsJson) {
-        if (name == null) return false;
-        String safe = _sanitizeCacheName(name);
-        if (safe == null) return false;
-        try {
-            File tagsFile = new File(_pgnCacheDir(), safe + ".tags.json");
-            // Parse to validate JSON and normalize
-            org.json.JSONArray arr;
-            if (tagsJson == null || tagsJson.trim().isEmpty()) {
-                arr = new org.json.JSONArray();
-            } else {
-                arr = new org.json.JSONArray(tagsJson);
-            }
-            if (arr.length() == 0) {
-                // No tags — delete the file
-                if (tagsFile.exists()) tagsFile.delete();
-                return true;
-            }
-            // Write tags file
-            try (java.io.FileOutputStream fos = new java.io.FileOutputStream(tagsFile);
-                 java.io.OutputStreamWriter writer = new java.io.OutputStreamWriter(fos, "UTF-8")) {
-                writer.write(arr.toString());
-                writer.flush();
-                try { fos.getFD().sync(); } catch (Throwable ignored) {}
-            }
-            return true;
-        } catch (Throwable e) {
-            Log.w(TAG, "setPGNCacheTags failed for name=" + safe, e);
-            return false;
-        }
+        return _pgnCacheManager.setTags(name, tagsJson);
     }
 
-    /**
-     * Get tags for a PGN cache entry. Returns a JSON array of strings (e.g., [" classics "," tactics "]).
-     * Returns "[]" if no tags file exists.
-     */
     @JavascriptInterface
     public String getPGNCacheTags(String name) {
-        if (name == null) return "[]";
-        String safe = _sanitizeCacheName(name);
-        if (safe == null) return "[]";
-        try {
-            File tagsFile = new File(_pgnCacheDir(), safe + ".tags.json");
-            if (!tagsFile.exists() || !tagsFile.isFile()) return "[]";
-            try (java.io.FileInputStream fis = new java.io.FileInputStream(tagsFile);
-                 java.io.InputStreamReader reader = new java.io.InputStreamReader(fis, "UTF-8");
-                 java.io.StringWriter sw = new java.io.StringWriter()) {
-                char[] buf = new char[4096];
-                int n;
-                while ((n = reader.read(buf)) > 0) {
-                    sw.write(buf, 0, n);
-                }
-                // Validate JSON
-                String content = sw.toString();
-                new org.json.JSONArray(content); // throws if invalid
-                return content;
-            }
-        } catch (Throwable e) {
-            Log.w(TAG, "getPGNCacheTags failed for name=" + safe, e);
-            return "[]";
-        }
+        return _pgnCacheManager.getTags(name);
     }
 
     // ===================== MULTIPV / WDL / SKILL =====================
@@ -3620,11 +3443,7 @@ public class StockfishNative {
 
     @JavascriptInterface
     public void setEngineShowWDL(boolean enabled) {
-        engineShowWDL = enabled;
-        saveBoolSetting("engineShowWDL", enabled);
-        if (engineReady) {
-            sendSetOptionAndWait("UCI_ShowWDL", String.valueOf(enabled));
-        }
+        _engineConfigHelper.setEngineShowWDL(enabled);
     }
 
     /**
@@ -3632,18 +3451,12 @@ public class StockfishNative {
      */
     @JavascriptInterface
     public void setShowWDL(boolean enabled) {
-        setEngineShowWDL(enabled);
+        _engineConfigHelper.setShowWDL(enabled);
     }
 
     @JavascriptInterface
     public void setEngineSkillLevel(int level) {
-        if (level < 0) level = 0;
-        if (level > 20) level = 20;
-        engineSkillLevel = level;
-        saveIntSetting("engineSkillLevel", level);
-        if (engineReady) {
-            sendSetOptionAndWait("Skill Level", String.valueOf(level));
-        }
+        _engineConfigHelper.setEngineSkillLevel(level);
     }
 
     // v1.0.6 NEW: JS-side getter for the current Skill Level value.
@@ -3651,23 +3464,12 @@ public class StockfishNative {
     // bar and in PGN [White]/[Black] tags when the AI is in SL mode.
     @JavascriptInterface
     public int getEngineSkillLevel() {
-        return engineSkillLevel;
+        return _engineConfigHelper.getEngineSkillLevel();
     }
 
     @JavascriptInterface
     public void setEngineLimitElo(boolean enabled, int elo) {
-        if (elo < 500) elo = 500;
-        if (elo > 3500) elo = 3500;
-        engineLimitElo = enabled;
-        engineElo = elo;
-        saveBoolSetting("engineLimitElo", enabled);
-        saveIntSetting("engineElo", elo);
-        if (engineReady) {
-            sendSetOptionAndWait("UCI_LimitStrength", String.valueOf(enabled));
-            if (enabled) {
-                sendSetOptionAndWait("UCI_Elo", String.valueOf(elo));
-            }
-        }
+        _engineConfigHelper.setEngineLimitElo(enabled, elo);
     }
 
     /**
@@ -3675,7 +3477,7 @@ public class StockfishNative {
      */
     @JavascriptInterface
     public void setLimitStrength(boolean enabled, int elo) {
-        setEngineLimitElo(enabled, elo);
+        _engineConfigHelper.setLimitStrength(enabled, elo);
     }
 
     /**
@@ -3683,282 +3485,37 @@ public class StockfishNative {
      */
     @JavascriptInterface
     public void setElo(int elo) {
-        if (elo < 500) elo = 500;
-        if (elo > 3500) elo = 3500;
-        engineElo = elo;
-        saveIntSetting("engineElo", elo);
-        if (engineReady && engineLimitElo) {
-            sendSetOptionAndWait("UCI_Elo", String.valueOf(elo));
-        }
+        _engineConfigHelper.setElo(elo);
     }
+
+    // ===================== SETTINGS QUERY / EXPORT / IMPORT =====================
+    // v1.2.0 Phase 73+: Delegated to EngineSettingsHelper
 
     @JavascriptInterface
     public String getEngineSettings() {
-        try {
-            JSONObject settings = new JSONObject();
-            settings.put("threads", engineThreads);
-            settings.put("hash", engineHash);
-            settings.put("moveOverhead", engineMoveOverhead);
-            settings.put("multiPV", engineMultiPV);
-            settings.put("ponder", enginePonder);
-            settings.put("showWDL", engineShowWDL);
-            settings.put("skillLevel", engineSkillLevel);
-            settings.put("limitStrength", engineLimitElo);
-            settings.put("elo", engineElo);
-            settings.put("autoConfig", autoConfigEnabled);
-            return settings.toString();
-        } catch (Throwable e) {
-            Log.e(TAG, "Error building engine settings JSON", e);
-            return "{}";
-        }
+        return _engineSettingsHelper.getEngineSettings();
     }
-
-    // ===================== SETTINGS EXPORT / IMPORT =====================
 
     @JavascriptInterface
     public String exportSettings() {
-        try {
-            SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault());
-            String timestamp = sdf.format(new Date());
-
-            StringBuilder sb = new StringBuilder();
-            sb.append("# Regalia Engine Configuration\n");
-            sb.append("# Version: ").append(ENGINE_VERSION).append("\n");
-            sb.append("# Export Time: ").append(timestamp).append("\n");
-            sb.append("#\n");
-            sb.append("engine.name=").append(engineName).append("\n");
-            sb.append("engine.path=").append(currentEnginePath != null ? currentEnginePath : "").append("\n");
-            sb.append("engine.threads=").append(engineThreads).append("\n");
-            sb.append("engine.hash=").append(engineHash).append("\n");
-            sb.append("engine.moveOverhead=").append(engineMoveOverhead).append("\n");
-            sb.append("engine.multiPV=").append(engineMultiPV).append("\n");
-            sb.append("engine.ponder=").append(enginePonder).append("\n");
-            sb.append("engine.showWDL=").append(engineShowWDL).append("\n");
-            sb.append("engine.skillLevel=").append(engineSkillLevel).append("\n");
-            sb.append("engine.limitStrength=").append(engineLimitElo).append("\n");
-            sb.append("engine.elo=").append(engineElo).append("\n");
-            sb.append("engine.autoConfig=").append(autoConfigEnabled).append("\n");
-
-            return sb.toString();
-        } catch (Throwable e) {
-            Log.e(TAG, "Error exporting settings", e);
-            return "# Error exporting settings\n";
-        }
+        return _engineSettingsHelper.exportSettings();
     }
 
-    /**
-     * v18.5.0: Alias for exportSettings — matches the JS API contract.
-     */
+    /** v18.5.0: Alias for exportSettings — matches the JS API contract. */
     @JavascriptInterface
     public String exportEngineSettings() {
-        return exportSettings();
+        return _engineSettingsHelper.exportSettings();
     }
 
     @JavascriptInterface
     public void importSettings(String txtContent) {
-        // v1.0.2 FIX (audit): use _safeExecute to catch RejectedExecutionException
-        _safeExecute(new Runnable() { // tag: importSettings
-            public void run() {
-                boolean success = false;
-                String message = "";
-                int appliedCount = 0;
-                int skippedAutoConfigCount = 0;
-
-                try {
-                    if (txtContent == null || txtContent.trim().isEmpty()) {
-                        throw new IllegalArgumentException("Empty settings content");
-                    }
-
-                    // v1.0.2 FIX: Track explicitly-imported keys so we can report
-                    // which ones were silently overridden by autoConfig. Without
-                    // this, a user importing "engine.threads=4" while autoConfig
-                    // is on would see "Imported N settings successfully" but the
-                    // threads value would be silently replaced by the detected
-                    // hardware value — manifesting as "import reports success but
-                    // has no effect".
-                    java.util.Set<String> explicitlySet = new java.util.HashSet<>();
-
-                    String[] lines = txtContent.split("\\r?\\n");
-                    for (String line : lines) {
-                        line = line.trim();
-                        if (line.isEmpty() || line.startsWith("#")) continue;
-
-                        int eqIndex = line.indexOf('=');
-                        if (eqIndex <= 0 || eqIndex >= line.length() - 1) continue;
-
-                        String key = line.substring(0, eqIndex).trim();
-                        String value = line.substring(eqIndex + 1).trim();
-
-                        try {
-                            switch (key) {
-                                case "engine.threads":
-                                    // v1.1.2 PHASE 71 (security/robustness): apply the SAME Phase 69
-                                    // cap (2x CPU cores) as setEngineThreads() instead of the previous
-                                    // loose cap of 1024. An imported settings file with extreme values
-                                    // would otherwise be applied without capping, causing thread
-                                    // contention and NPS collapse per the UCI guide §1.1. We assign
-                                    // the field directly (rather than calling setEngineThreads) because
-                                    // setEngineThreads returns early when autoConfig is enabled — and
-                                    // autoConfig is only disabled further below after parsing completes.
-                                    // applySettings() will send the UCI command using this capped value.
-                                    {
-                                        int _t = Math.max(1, Math.min(1024, Integer.parseInt(value)));
-                                        int _cpuCores = Runtime.getRuntime().availableProcessors();
-                                        int _threadsCap = Math.max(1, _cpuCores * 2);
-                                        if (_t > _threadsCap) {
-                                            Log.w(TAG, "importSettings: engine.threads=" + _t + " exceeds 2x CPU cores (" + _threadsCap + "), capping");
-                                            _t = _threadsCap;
-                                        }
-                                        engineThreads = _t;
-                                        saveIntSetting("engineThreads", _t);
-                                        explicitlySet.add("engine.threads");
-                                        appliedCount++;
-                                    }
-                                    break;
-                                case "engine.hash":
-                                    // v1.1.2 PHASE 71: apply the Phase 69 cap (50% JVM heap) instead
-                                    // of the loose 1048576 MB cap. Direct field assignment for the
-                                    // same autoConfig reason as engine.threads above.
-                                    {
-                                        int _h = Math.max(1, Math.min(1048576, Integer.parseInt(value)));
-                                        long _maxMemoryMB = Runtime.getRuntime().maxMemory() / (1024 * 1024);
-                                        long _hashCap = Math.max(16, _maxMemoryMB / 2);
-                                        if (_h > _hashCap) {
-                                            Log.w(TAG, "importSettings: engine.hash=" + _h + "MB exceeds 50% of heap (" + _hashCap + "MB), capping");
-                                            _h = (int) _hashCap;
-                                        }
-                                        engineHash = _h;
-                                        saveIntSetting("engineHash", _h);
-                                        explicitlySet.add("engine.hash");
-                                        appliedCount++;
-                                    }
-                                    break;
-                                case "engine.moveOverhead":
-                                    // v1.1.2 PHASE 71: apply the Phase 69 cap (1000ms) instead of
-                                    // the loose 10000ms cap. Direct field assignment for consistency
-                                    // with engine.threads/engine.hash above (no autoConfig early-return
-                                    // issue here, but keeping the pattern uniform).
-                                    {
-                                        int _ms = Math.max(0, Math.min(10000, Integer.parseInt(value)));
-                                        if (_ms > 1000) {
-                                            Log.w(TAG, "importSettings: engine.moveOverhead=" + _ms + "ms exceeds 1000ms, capping");
-                                            _ms = 1000;
-                                        }
-                                        engineMoveOverhead = _ms;
-                                        saveIntSetting("engineMoveOverhead", _ms);
-                                        appliedCount++;
-                                    }
-                                    break;
-                                case "engine.multiPV":
-                                    engineMultiPV = Math.max(1, Math.min(8, Integer.parseInt(value)));
-                                    saveIntSetting("engineMultiPV", engineMultiPV);
-                                    appliedCount++;
-                                    break;
-                                case "engine.ponder":
-                                    enginePonder = Boolean.parseBoolean(value);
-                                    saveBoolSetting("enginePonder", enginePonder);
-                                    appliedCount++;
-                                    break;
-                                case "engine.showWDL":
-                                    engineShowWDL = Boolean.parseBoolean(value);
-                                    saveBoolSetting("engineShowWDL", engineShowWDL);
-                                    appliedCount++;
-                                    break;
-                                case "engine.skillLevel":
-                                    engineSkillLevel = Math.max(0, Math.min(20, Integer.parseInt(value)));
-                                    saveIntSetting("engineSkillLevel", engineSkillLevel);
-                                    appliedCount++;
-                                    break;
-                                case "engine.limitStrength":
-                                    engineLimitElo = Boolean.parseBoolean(value);
-                                    saveBoolSetting("engineLimitElo", engineLimitElo);
-                                    appliedCount++;
-                                    break;
-                                case "engine.elo":
-                                    engineElo = Math.max(1, Math.min(3200, Integer.parseInt(value)));
-                                    saveIntSetting("engineElo", engineElo);
-                                    appliedCount++;
-                                    break;
-                                case "engine.autoConfig":
-                                    autoConfigEnabled = Boolean.parseBoolean(value);
-                                    saveBoolSetting("autoConfig", autoConfigEnabled);
-                                    appliedCount++;
-                                    break;
-                                default:
-                                    break;
-                            }
-                        } catch (NumberFormatException e) {
-                            Log.w(TAG, "Invalid value for " + key + ": " + value);
-                        }
-                    }
-
-                    // v1.0.2 FIX: If autoConfig is enabled AND the user explicitly
-                    // imported engine.threads/engine.hash, those explicit values
-                    // would be silently overridden by detectHardwareAndConfigure()
-                    // in applySettings(). Honor the user's explicit import by
-                    // disabling autoConfig for this apply cycle only.
-                    if (autoConfigEnabled) {
-                        if (explicitlySet.contains("engine.threads") || explicitlySet.contains("engine.hash")) {
-                            Log.i(TAG, "User explicitly imported threads/hash — disabling autoConfig for this apply cycle");
-                            skippedAutoConfigCount = 1;
-                            // Persist the change so the engine-config UI reflects it
-                            autoConfigEnabled = false;
-                            saveBoolSetting("autoConfig", false);
-                        }
-                    }
-
-                    if (engineReady) {
-                        // v1.0.2 CRITICAL FIX: Stop any in-flight search BEFORE applying
-                        // settings. Otherwise sendSetOptionAndWait() times out waiting
-                        // for readyok (engine only responds to isready when idle), and
-                        // the settings silently fail to apply — manifesting as
-                        // "import reports success but does not take effect".
-                        try {
-                            stopAndWaitForBestmove("importSettings");
-                        } catch (Throwable t) {
-                            Log.w(TAG, "stopAndWaitForBestmove during import failed", t);
-                        }
-                        applySettings();
-                        notifyEngineInfo();
-                    } else {
-                        // v1.0.2 FIX: Engine not ready yet — settings are saved to
-                        // prefs and will be applied automatically by startEngine()'s
-                        // call to applySettings() once the engine finishes initializing.
-                        Log.i(TAG, "Engine not ready — settings saved, will apply on next engineReady");
-                    }
-
-                    success = true;
-                    message = "Imported " + appliedCount + " settings successfully";
-                    if (skippedAutoConfigCount > 0) {
-                        message += " (autoConfig disabled to honor explicit threads/hash)";
-                    }
-                    if (!engineReady) {
-                        message += " (engine not ready — will apply on next start)";
-                    }
-                    Log.i(TAG, message);
-                } catch (Throwable e) {
-                    Log.e(TAG, "Error importing settings", e);
-                    message = e.getMessage() != null ? e.getMessage() : "Import failed";
-                }
-
-                try {
-                    JSONObject result = new JSONObject();
-                    result.put("success", success);
-                    result.put("message", message);
-                    postJsCallback("onSettingsImported(" + result.toString() + ")");
-                } catch (Throwable e) {
-                    Log.w(TAG, "Error posting settings imported callback", e);
-                }
-            }
-        }, "importSettings");
+        _engineSettingsHelper.importSettings(txtContent);
     }
 
-    /**
-     * v18.5.0: Alias for importSettings — matches the JS API contract.
-     */
+    /** v18.5.0: Alias for importSettings — matches the JS API contract. */
     @JavascriptInterface
     public void importEngineSettings(String txtContent) {
-        importSettings(txtContent);
+        _engineSettingsHelper.importSettings(txtContent);
     }
 
     // ===================== HAPTIC FEEDBACK =====================
@@ -3970,12 +3527,7 @@ public class StockfishNative {
 
     @JavascriptInterface
     public boolean hasVibrator() {
-        try {
-            android.os.Vibrator vibrator = (android.os.Vibrator) context.getSystemService(Context.VIBRATOR_SERVICE);
-            return vibrator != null && vibrator.hasVibrator();
-        } catch (Throwable e) {
-            return false;
-        }
+        return _permissionHelper.hasVibrator();
     }
 
     @JavascriptInterface
@@ -4373,22 +3925,11 @@ public class StockfishNative {
     }
 
     // ===================== ASSET LOADING =====================
+    // v1.2.0 Phase 73+: Delegated to FileIoHelper
 
     @JavascriptInterface
     public String loadAssetAsBase64(String assetPath) {
-        // FIX: Use try-with-resources to prevent InputStream leak on exception
-        try (java.io.InputStream in = context.getAssets().open(assetPath)) {
-            byte[] buffer = new byte[8192];
-            java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream();
-            int len;
-            while ((len = in.read(buffer)) > 0) {
-                baos.write(buffer, 0, len);
-            }
-            return android.util.Base64.encodeToString(baos.toByteArray(), android.util.Base64.NO_WRAP);
-        } catch (Throwable e) {
-            Log.e(TAG, "Failed to load asset as base64: " + assetPath, e);
-            return "";
-        }
+        return _fileIoHelper.loadAssetAsBase64(assetPath);
     }
 
     // ===================== EXTERNAL URL LAUNCHER =====================
@@ -4514,11 +4055,11 @@ public class StockfishNative {
                     return destFile;
                 } else {
                     Log.e(TAG, "Extracted engine failed ELF header verification");
-                    destFile.delete();
+                    if (!destFile.delete()) Log.w(TAG, "Failed to delete: " + destFile.getAbsolutePath());
                 }
             } else {
                 Log.e(TAG, "Extracted engine file is invalid (size=" + (destFile.exists() ? destFile.length() : 0) + ")");
-                destFile.delete();
+                if (!destFile.delete()) Log.w(TAG, "Failed to delete: " + destFile.getAbsolutePath());
             }
         } catch (Throwable e) {
             Log.e(TAG, "Failed to extract engine from APK", e);
@@ -4586,11 +4127,11 @@ public class StockfishNative {
                 return destFile;
             } else {
                 Log.e(TAG, "Asset-extracted engine failed ELF verification — deleting");
-                destFile.delete();
+                if (!destFile.delete()) Log.w(TAG, "Failed to delete: " + destFile.getAbsolutePath());
             }
         } else {
             Log.e(TAG, "Asset-extracted engine is invalid (size=" + (destFile.exists() ? destFile.length() : 0) + ")");
-            destFile.delete();
+            if (!destFile.delete()) Log.w(TAG, "Failed to delete: " + destFile.getAbsolutePath());
         }
         return null;
     }
@@ -4635,157 +4176,45 @@ public class StockfishNative {
 
     // ===================== FILE I/O FOR SETTINGS EXPORT/IMPORT =====================
 
-    /**
-     * Check if the app has external storage permission.
-     * On Android 10+: Scoped storage — app-specific directories don't need permission.
-     * On Android 13+: SAF is the proper way to access files; no runtime permission needed.
-     * MANAGE_EXTERNAL_STORAGE has been removed — SAF is used for all file I/O.
-     */
+    // ===================== PERMISSIONS =====================
+    // v1.2.0 Phase 73+: Delegated to PermissionHelper
+
     @JavascriptInterface
     public boolean hasStoragePermission() {
-        if (Build.VERSION.SDK_INT >= 33) {
-            // Android 13+: No runtime storage permission needed — SAF handles everything
-            return true;
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            // Android 10-12: READ_EXTERNAL_STORAGE still works for File API access
-            // FIX: Use checkSelfPermission() instead of checkCallingOrSelfPermission().
-            // In @JavascriptInterface context, checkCallingOrSelfPermission() uses the
-            // WebView's caller identity which may not match the app's own UID, causing
-            // false negatives. checkSelfPermission() always checks the app's own permissions.
-            return context.checkSelfPermission(
-                android.Manifest.permission.READ_EXTERNAL_STORAGE
-            ) == android.content.pm.PackageManager.PERMISSION_GRANTED;
-        }
-        // Android 9 and below: check WRITE_EXTERNAL_STORAGE
-        return context.checkSelfPermission(
-            android.Manifest.permission.WRITE_EXTERNAL_STORAGE
-        ) == android.content.pm.PackageManager.PERMISSION_GRANTED;
+        return _permissionHelper.hasStoragePermission();
     }
 
-    /**
-     * Request storage permission based on Android version.
-     * - Android 9 and below: WRITE_EXTERNAL_STORAGE
-     * - Android 10-12 (API 29-32): READ_EXTERNAL_STORAGE (still valid for File API)
-     * - Android 13+ (API 33+): No runtime permission needed — SAF handles file access
-     */
     @JavascriptInterface
     public void requestStoragePermission() {
-        Activity activity = activityRef.get();
-        if (activity == null) return;
-        try {
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-                // Android 9 and below: request WRITE_EXTERNAL_STORAGE
-                activity.requestPermissions(
-                    new String[]{android.Manifest.permission.WRITE_EXTERNAL_STORAGE},
-                    1001
-                );
-            } else if (Build.VERSION.SDK_INT < 33) {
-                // Android 10-12: request READ_EXTERNAL_STORAGE (still valid for File API)
-                activity.requestPermissions(
-                    new String[]{android.Manifest.permission.READ_EXTERNAL_STORAGE},
-                    1001
-                );
-            }
-            // Android 13+: No runtime permission to request — SAF handles file access
-        } catch (Throwable e) {
-            Log.w(TAG, "requestStoragePermission failed", e);
-        }
+        _permissionHelper.requestStoragePermission();
     }
 
     // (MANAGE_EXTERNAL_STORAGE methods removed — SAF handles all public-dir I/O, no special permission needed, API 19+.)
 
-    /** Request code for SAF file picker (export settings via ACTION_CREATE_DOCUMENT) */
-    static final int REQUEST_CODE_EXPORT_SETTINGS = 1002;
-    /** v1.0.2 FEATURE (audit): Request code for PGN export via ACTION_CREATE_DOCUMENT */
-    static final int REQUEST_CODE_EXPORT_PGN = 1004;
-    // (v1.0.2: REQUEST_CODE_EXPORT_STATS_HTML removed — stats HTML export lives in StatsActivity now.)
-    // (v1.0.2: _pendingStatsPayload / _pendingStatsHTML removed — StatsActivity has its own bridge; these were memory leaks.)
+    // v1.2.0 Phase 73+: SAF request codes — retained as constants for MainActivity compatibility
+    static final int REQUEST_CODE_EXPORT_SETTINGS = SafPickerHelper.REQUEST_CODE_EXPORT_SETTINGS;
+    static final int REQUEST_CODE_EXPORT_PGN = SafPickerHelper.REQUEST_CODE_EXPORT_PGN;
+    static final int REQUEST_CODE_IMPORT_SETTINGS = SafPickerHelper.REQUEST_CODE_IMPORT_SETTINGS;
+    static final int REQUEST_CODE_IMPORT_PGN = SafPickerHelper.REQUEST_CODE_IMPORT_PGN;
 
-    /** Pending export content — stored temporarily until SAF picker returns a URI */
-    private volatile String _pendingExportContent = null;
-    /** v1.0.2 FEATURE: pending export type — "settings" or "pgn" — so handleExportFilePickerResult
-     *  fires the correct JS callback (onSettingsExported vs onPGNExported). */
-    private volatile String _pendingExportType = "settings";
+    // ===================== SAF FILE PICKER (EXPORT) =====================
+    // v1.2.0 Phase 73+: Delegated to SafPickerHelper
 
-    /** v1.0.8 PHASE 24: Cancel a pending export (user dismissed the SAF picker).
-     *  Clears the pending content and notifies JS so the "Exporting..." dialog
-     *  is dismissed. Without this, cancelling the picker leaves the dialog hung. */
+    /** v1.0.8 PHASE 24: Cancel a pending export (user dismissed the SAF picker). */
     public void cancelPendingExport() {
-        _pendingExportContent = null;
-        _pendingExportType = "settings";
-        try {
-            postJsCallback("if(typeof onExportCancelled==='function')onExportCancelled();");
-        } catch (Throwable ignored) {}
+        _safPickerHelper.cancelPendingExport();
     }
 
-    /**
-     * Open the system SAF file picker for exporting settings to a TXT file.
-     * Uses ACTION_CREATE_DOCUMENT which creates a file in the user-chosen location
-     * (typically Download directory). No special permissions needed — SAF handles it.
-     * The actual write happens in handleExportFilePickerResult() after the user picks a location.
-     */
+    /** Open SAF export picker for settings (TXT) */
     @JavascriptInterface
     public void openExportFilePicker(String content) {
-        if (content == null || content.isEmpty()) {
-            Log.w(TAG, "openExportFilePicker: empty content, skipping");
-            return;
-        }
-        _pendingExportContent = content;
-        _pendingExportType = "settings";
-        try {
-            Activity activity = activityRef.get();
-            if (activity == null) {
-                Log.w(TAG, "openExportFilePicker: no valid Activity reference");
-                postJsCallback("if(typeof showToast==='function')showToast('Activity unavailable')");
-                return;
-            }
-            android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_CREATE_DOCUMENT);
-            intent.addCategory(android.content.Intent.CATEGORY_OPENABLE);
-            intent.setType("text/plain");
-            intent.putExtra(android.content.Intent.EXTRA_TITLE, "Regalia_engine_settings.txt");
-            activity.startActivityForResult(intent, REQUEST_CODE_EXPORT_SETTINGS);
-            Log.i(TAG, "SAF export file picker opened");
-        } catch (Throwable e) {
-            Log.e(TAG, "openExportFilePicker failed", e);
-            _pendingExportContent = null;
-            _pendingExportType = "settings";
-            postJsCallback("if(typeof showToast==='function')showToast('File picker unavailable')");
-        }
+        _safPickerHelper.openExportFilePicker(content);
     }
 
-    /**
-     * v1.0.2 FEATURE (audit): Open the system SAF file picker for exporting a PGN game.
-     * Mirrors openExportFilePicker but uses .pgn extension and a separate request code
-     * so handleExportFilePickerResult can fire onPGNExported() instead of onSettingsExported().
-     */
+    /** Open SAF export picker for PGN */
     @JavascriptInterface
     public void openPGNExportFilePicker(String content) {
-        if (content == null || content.isEmpty()) {
-            Log.w(TAG, "openPGNExportFilePicker: empty content, skipping");
-            return;
-        }
-        _pendingExportContent = content;
-        _pendingExportType = "pgn";
-        try {
-            Activity activity = activityRef.get();
-            if (activity == null) {
-                Log.w(TAG, "openPGNExportFilePicker: no valid Activity reference");
-                postJsCallback("if(typeof showToast==='function')showToast('Activity unavailable')");
-                return;
-            }
-            android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_CREATE_DOCUMENT);
-            intent.addCategory(android.content.Intent.CATEGORY_OPENABLE);
-            intent.setType("application/x-chess-pgn");
-            intent.putExtra(android.content.Intent.EXTRA_TITLE, "Regalia_game.pgn");
-            activity.startActivityForResult(intent, REQUEST_CODE_EXPORT_PGN);
-            Log.i(TAG, "SAF PGN export file picker opened");
-        } catch (Throwable e) {
-            Log.e(TAG, "openPGNExportFilePicker failed", e);
-            _pendingExportContent = null;
-            _pendingExportType = "settings";
-            postJsCallback("if(typeof showToast==='function')showToast('File picker unavailable')");
-        }
+        _safPickerHelper.openPGNExportFilePicker(content);
     }
 
     /**
@@ -4823,540 +4252,79 @@ public class StockfishNative {
     //  exportStatsHTML, statsRequestReview. StatsActivity has its own bridge;
     //  activityRef points to MainActivity so these were unreachable.)
 
-    /**
-     * Handle SAF file picker result for settings export.
-     * Writes the pending export content to the user-chosen URI.
-     *
-     * v1.0.2 FEATURE: also handles PGN export (REQUEST_CODE_EXPORT_PGN) by
-     * dispatching to onPGNExported() instead of onSettingsExported().
-     */
+    /** Handle SAF export result — writes pending content to user-chosen URI */
     public void handleExportFilePickerResult(android.content.Intent data) {
-        // Normal settings/PGN export path
-        String content = _pendingExportContent;
-        String exportType = _pendingExportType;
-        _pendingExportContent = null;
-        _pendingExportType = "settings"; // reset to default
-        if (data == null || data.getData() == null || content == null) {
-            Log.w(TAG, "handleExportFilePickerResult: invalid data or no pending content");
-            return;
-        }
-        try {
-            android.net.Uri uri = data.getData();
-            // Take persistable permission so we can access the file later if needed
-            try {
-                context.getContentResolver().takePersistableUriPermission(
-                    uri, android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-            } catch (Throwable e) {
-                Log.w(TAG, "takePersistableUriPermission failed (non-critical)", e);
-            }
-            // Write content to the user-chosen location via ContentResolver
-            try (java.io.OutputStream os = context.getContentResolver().openOutputStream(uri);
-                 java.io.OutputStreamWriter writer = new java.io.OutputStreamWriter(os, "UTF-8")) {
-                writer.write(content);
-                writer.flush();
-                Log.i(TAG, (exportType.equals("pgn") ? "PGN" : "Settings") + " exported via SAF to: " + uri.toString());
-            }
-            // Notify JS of success — include the display name if available
-            String displayName = exportType.equals("pgn") ? "Regalia_game.pgn" : "Regalia_engine_settings.txt";
-            try {
-                android.database.Cursor cursor = context.getContentResolver().query(uri, null, null, null, null);
-                if (cursor != null) {
-                    try {
-                        int nameIdx = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME);
-                        if (nameIdx >= 0 && cursor.moveToFirst()) {
-                            displayName = cursor.getString(nameIdx);
-                        }
-                    } finally {
-                        cursor.close();
-                    }
-                }
-            } catch (Throwable ignored) {}
-            if (exportType.equals("pgn")) {
-                postJsCallback("if(typeof onPGNExported==='function')onPGNExported(true," + escapeJsString(displayName) + ")");
-            } else {
-                postJsCallback("if(typeof onSettingsExported==='function')onSettingsExported(true," + escapeJsString(displayName) + ")");
-            }
-        } catch (Throwable e) {
-            Log.e(TAG, "handleExportFilePickerResult failed", e);
-            if (exportType.equals("pgn")) {
-                postJsCallback("if(typeof onPGNExported==='function')onPGNExported(false,'')");
-            } else {
-                postJsCallback("if(typeof onSettingsExported==='function')onSettingsExported(false,'')");
-            }
-        }
+        _safPickerHelper.handleExportResult(data);
     }
 
-    /**
-     * Request POST_NOTIFICATIONS permission (Android 13+ / API 33+).
-     * Required for the foreground service notification that keeps the engine alive.
-     * Called on first engine init to ensure the persistent notification can be shown.
-     */
+    // v1.2.0 Phase 73+: Notification permission delegated to PermissionHelper
+
     @JavascriptInterface
     public void requestNotificationPermission() {
-        if (Build.VERSION.SDK_INT >= 33) { // Build.VERSION_CODES.TIRAMISU
-            Activity activity = activityRef.get();
-            if (activity != null) {
-                try {
-                    // Check if already granted
-                    if (context.checkSelfPermission(
-                            android.Manifest.permission.POST_NOTIFICATIONS
-                    ) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                        activity.requestPermissions(
-                            new String[]{android.Manifest.permission.POST_NOTIFICATIONS},
-                            1003
-                        );
-                        Log.i(TAG, "POST_NOTIFICATIONS permission requested");
-                    }
-                } catch (Throwable e) {
-                    Log.w(TAG, "requestNotificationPermission failed", e);
-                }
-            }
-        }
+        _permissionHelper.requestNotificationPermission();
     }
 
-    /**
-     * Check if POST_NOTIFICATIONS permission has been granted (Android 13+).
-     * Always returns true on Android 12 and below (not required).
-     */
     @JavascriptInterface
     public boolean hasNotificationPermission() {
-        if (Build.VERSION.SDK_INT < 33) return true;
-        // FIX: Use checkSelfPermission() instead of checkCallingOrSelfPermission()
-        // for the same reason as hasStoragePermission() — @JavascriptInterface context
-        // caller identity may not match the app's own UID.
-        return context.checkSelfPermission(
-            android.Manifest.permission.POST_NOTIFICATIONS
-        ) == android.content.pm.PackageManager.PERMISSION_GRANTED;
+        return _permissionHelper.hasNotificationPermission();
     }
 
-    /**
-     * v18.6.0: Get the app-specific export directory path.
-     * Creates the directory if it doesn't exist.
-     * @return Absolute path to the export directory
-     */
+    // ===================== FILE I/O =====================
+    // v1.2.0 Phase 73+: Delegated to FileIoHelper to reduce God Module size.
+
     @JavascriptInterface
     public String getExportPath() {
-        File dir = new File(context.getFilesDir(), "export");
-        if (!dir.exists()) dir.mkdirs();
-        return dir.getAbsolutePath();
+        return _fileIoHelper.getExportPath();
     }
 
-    /**
-     * Write text content to a file on external storage.
-     * v18.6.0: Added double fallback — tries public directory first, then app-specific
-     * directory, and finally copies to clipboard as last resort.
-     * Includes retry mechanism (max 3 retries, 1 second each) for transient failures.
-     * @return true if write succeeded to primary or fallback location, false otherwise
-     */
     @JavascriptInterface
     public boolean writeTextFile(String path, String content) {
-        // Try primary path with retry mechanism (max 3 retries, 1 second each)
-        for (int attempt = 1; attempt <= 3; attempt++) {
-            try {
-                java.io.File file = new java.io.File(path);
-                java.io.File parentDir = file.getParentFile();
-                if (parentDir != null && !parentDir.exists()) {
-                    parentDir.mkdirs();
-                }
-                // FIX: Use try-with-resources to prevent stream leak on exception
-                try (java.io.FileOutputStream fos = new java.io.FileOutputStream(file);
-                     java.io.OutputStreamWriter writer = new java.io.OutputStreamWriter(fos, "UTF-8")) {
-                    writer.write(content);
-                    writer.flush();
-                }
-                Log.i(TAG, "File written: " + path);
-                return true;
-            } catch (Throwable e) {
-                Log.w(TAG, "writeTextFile attempt " + attempt + "/3 failed: " + path, e);
-                if (attempt < 3) {
-                    try { Thread.sleep(1000); } catch (InterruptedException ignored) { break; }
-                }
-            }
-        }
-
-        // Fallback 1: Try app-specific export directory
-        try {
-            File fallbackDir = new File(context.getFilesDir(), "export");
-            if (!fallbackDir.exists()) fallbackDir.mkdirs();
-            String fileName = new java.io.File(path).getName();
-            File fallbackFile = new File(fallbackDir, fileName);
-            // FIX: Use try-with-resources to prevent stream leak on exception
-            try (java.io.FileOutputStream fos = new java.io.FileOutputStream(fallbackFile);
-                 java.io.OutputStreamWriter writer = new java.io.OutputStreamWriter(fos, "UTF-8")) {
-                writer.write(content);
-                writer.flush();
-            }
-            Log.i(TAG, "File written to fallback (app-specific): " + fallbackFile.getAbsolutePath());
-            return true;
-        } catch (Throwable e2) {
-            Log.e(TAG, "writeTextFile fallback also failed", e2);
-        }
-
-        // Fallback 2: Copy to clipboard as last resort
-        try {
-            int sdk = Build.VERSION.SDK_INT;
-            android.content.ClipboardManager clipboard = (android.content.ClipboardManager)
-                    context.getSystemService(Context.CLIPBOARD_SERVICE);
-            if (clipboard != null) {
-                android.content.ClipData clip = android.content.ClipData.newPlainText("Regalia Export", content);
-                clipboard.setPrimaryClip(clip);
-                Log.i(TAG, "writeTextFile: content copied to clipboard as last resort");
-            }
-        } catch (Throwable e3) {
-            Log.w(TAG, "writeTextFile: clipboard fallback also failed", e3);
-        }
-
-        return false;
+        return _fileIoHelper.writeTextFile(path, content);
     }
 
-    /**
-     * Read text content from a file on external storage.
-     * v18.6.0: Added READ_EXTERNAL_STORAGE permission check for Android 5-9.
-     * On Android 10+ with scoped storage, app-specific directories don't need permission.
-     * @return File content as string, or null if read failed
-     */
     @JavascriptInterface
     public String readTextFile(String path) {
-        // v18.6.0: Request READ_EXTERNAL_STORAGE on Android 5-9 if not already granted
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            if (context.checkSelfPermission(
-                    android.Manifest.permission.READ_EXTERNAL_STORAGE
-            ) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
-                // Try to request permission via the Activity
-                Activity activity = activityRef.get();
-                if (activity != null) {
-                    try {
-                        activity.requestPermissions(
-                            new String[]{android.Manifest.permission.READ_EXTERNAL_STORAGE},
-                            1002
-                        );
-                    } catch (Throwable e) {
-                        Log.w(TAG, "readTextFile: could not request READ_EXTERNAL_STORAGE", e);
-                    }
-                }
-                Log.w(TAG, "readTextFile: READ_EXTERNAL_STORAGE not granted for path: " + path);
-                // Still attempt the read — permission may have been granted since last check
-            }
-        }
-
-        try {
-            java.io.File file = new java.io.File(path);
-            if (!file.exists() || !file.canRead()) return null;
-            // FIX: Use try-with-resources to prevent FileInputStream leak on exception
-            try (java.io.FileInputStream fis = new java.io.FileInputStream(file);
-                 java.io.BufferedReader reader = new java.io.BufferedReader(
-                     new java.io.InputStreamReader(fis, "UTF-8")
-                 )) {
-                StringBuilder sb = new StringBuilder();
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    sb.append(line).append("\n");
-                }
-                return sb.toString();
-            }
-        } catch (Throwable e) {
-            Log.e(TAG, "readTextFile failed: " + path, e);
-            return null;
-        }
+        return _fileIoHelper.readTextFile(path);
     }
 
-    /**
-     * Get default file system paths for the file browser.
-     * @return JSON object with path strings
-     */
     @JavascriptInterface
     public String getDefaultPaths() {
-        try {
-            JSONObject paths = new JSONObject();
-            // External storage root
-            String externalStorage = android.os.Environment.getExternalStorageDirectory().getAbsolutePath();
-            paths.put("externalStorage", externalStorage);
-            // Downloads directory
-            File downloadsDir = android.os.Environment.getExternalStoragePublicDirectory(
-                android.os.Environment.DIRECTORY_DOWNLOADS
-            );
-            paths.put("downloads", downloadsDir.getAbsolutePath());
-            // Documents directory
-            File documentsDir = android.os.Environment.getExternalStoragePublicDirectory(
-                android.os.Environment.DIRECTORY_DOCUMENTS
-            );
-            paths.put("documents", documentsDir.getAbsolutePath());
-            return paths.toString();
-        } catch (Throwable e) {
-            Log.e(TAG, "getDefaultPaths failed", e);
-            return "{\"externalStorage\":\"/sdcard\",\"downloads\":\"/storage/emulated/0/Download\",\"documents\":\"/storage/emulated/0/Documents\"}";
-        }
+        return _fileIoHelper.getDefaultPaths();
     }
 
-    /**
-     * List files and directories at the given path.
-     * FIX: On Android 11+ (API 30+), supplements java.io.File.listFiles() with
-     * MediaStore query results to find .txt/.cfg files that scoped storage hides
-     * from File API. Without this, TXT settings files in public directories
-     * (Download, Documents) are invisible to the built-in file browser.
-     * @return JSON array of file objects with name, path, isDirectory, size fields
-     */
     @JavascriptInterface
     public String listFiles(String dirPath) {
-        try {
-            JSONArray result = new JSONArray();
-            File dir = new File(dirPath);
-            if (!dir.exists() || !dir.isDirectory()) return result.toString();
-
-            // Use a TreeMap keyed by path to deduplicate File API + MediaStore results
-            java.util.TreeMap<String, JSONObject> fileMap = new java.util.TreeMap<>();
-
-            // Source 1: java.io.File.listFiles() — shows directories and some files
-            File[] files = dir.listFiles();
-            if (files != null) {
-                for (File f : files) {
-                    try {
-                        JSONObject obj = new JSONObject();
-                        obj.put("name", f.getName());
-                        obj.put("path", f.getAbsolutePath());
-                        obj.put("isDirectory", f.isDirectory());
-                        obj.put("size", f.length());
-                        fileMap.put(f.getAbsolutePath(), obj);
-                    } catch (Throwable e) {
-                        // Skip problematic files
-                    }
-                }
-            }
-
-            // Source 2: MediaStore query — on Android 11+ (API 30+), this finds files
-            // in public directories that java.io.File.listFiles() cannot see due to
-            // scoped storage restrictions (e.g., .txt files in Download/).
-            if (Build.VERSION.SDK_INT >= 30) {
-                try {
-                    String[] projection = {
-                        android.provider.MediaStore.MediaColumns.DISPLAY_NAME,
-                        android.provider.MediaStore.MediaColumns.DATA,
-                        android.provider.MediaStore.MediaColumns.SIZE
-                    };
-                    // Query MediaStore.Files for files in this directory
-                    android.database.Cursor cursor = context.getContentResolver().query(
-                        android.provider.MediaStore.Files.getContentUri("external"),
-                        projection,
-                        android.provider.MediaStore.MediaColumns.DATA + " LIKE ? AND " +
-                        android.provider.MediaStore.MediaColumns.DATA + " NOT LIKE ?",
-                        new String[]{dirPath + "/%", dirPath + "/%/%"},
-                        null
-                    );
-                    if (cursor != null) {
-                        try {
-                            int nameIdx = cursor.getColumnIndexOrThrow(android.provider.MediaStore.MediaColumns.DISPLAY_NAME);
-                            int dataIdx = cursor.getColumnIndexOrThrow(android.provider.MediaStore.MediaColumns.DATA);
-                            int sizeIdx = cursor.getColumnIndexOrThrow(android.provider.MediaStore.MediaColumns.SIZE);
-                            while (cursor.moveToNext()) {
-                                try {
-                                    String filePath = cursor.getString(dataIdx);
-                                    if (filePath == null || fileMap.containsKey(filePath)) continue;
-                                    String fileName = cursor.getString(nameIdx);
-                                    if (fileName == null) continue;
-                                    long fileSize = sizeIdx >= 0 ? cursor.getLong(sizeIdx) : 0;
-                                    // Only include .txt and .cfg files from MediaStore
-                                    // (these are the ones typically hidden by scoped storage)
-                                    if (fileName.endsWith(".txt") || fileName.endsWith(".cfg")) {
-                                        JSONObject obj = new JSONObject();
-                                        obj.put("name", fileName);
-                                        obj.put("path", filePath);
-                                        obj.put("isDirectory", false);
-                                        obj.put("size", fileSize);
-                                        fileMap.put(filePath, obj);
-                                    }
-                                } catch (Throwable e) {
-                                    // Skip problematic entries
-                                }
-                            }
-                        } finally {
-                            cursor.close();
-                        }
-                    }
-                } catch (Throwable e) {
-                    Log.w(TAG, "MediaStore query failed for: " + dirPath, e);
-                }
-            }
-
-            // Convert TreeMap to sorted JSONArray: directories first, then files, both alphabetically
-            java.util.List<JSONObject> dirs = new java.util.ArrayList<>();
-            java.util.List<JSONObject> filList = new java.util.ArrayList<>();
-            for (JSONObject obj : fileMap.values()) {
-                try {
-                    if (obj.getBoolean("isDirectory")) {
-                        dirs.add(obj);
-                    } else {
-                        filList.add(obj);
-                    }
-                } catch (Throwable e) {}
-            }
-            // Sort both lists by name
-            java.util.Collections.sort(dirs, (a, b) -> {
-                try { return a.getString("name").compareToIgnoreCase(b.getString("name")); }
-                catch (Throwable e) { return 0; }
-            });
-            java.util.Collections.sort(filList, (a, b) -> {
-                try { return a.getString("name").compareToIgnoreCase(b.getString("name")); }
-                catch (Throwable e) { return 0; }
-            });
-            for (JSONObject obj : dirs) result.put(obj);
-            for (JSONObject obj : filList) result.put(obj);
-
-            return result.toString();
-        } catch (Throwable e) {
-            Log.e(TAG, "listFiles failed: " + dirPath, e);
-            return "[]";
-        }
+        return _fileIoHelper.listFiles(dirPath);
     }
 
-    /**
-     * v18.5.0: Scan for engines — returns empty array since only built-in engine is supported.
-     * Kept as a stub for JS API compatibility.
-     */
     @JavascriptInterface
     public String scanEngines() {
-        return "[]";
+        return _fileIoHelper.scanEngines();
     }
 
-    /**
-     * FIX: Get canonical parent directory path for a given path.
-     * Uses java.io.File.getParent() for proper path resolution instead of
-     * string concatenation with "/.." which creates non-canonical paths that
-     * cause listFiles() to fail.
-     * @param path The directory path
-     * @return Parent directory path, or empty string if no parent
-     */
     @JavascriptInterface
     public String getParentPath(String path) {
-        try {
-            if (path == null || path.isEmpty()) return "";
-            File dir = new File(path);
-            File parent = dir.getParentFile();
-            if (parent != null) {
-                return parent.getAbsolutePath();
-            }
-            return "";
-        } catch (Throwable e) {
-            Log.e(TAG, "getParentPath failed", e);
-            return "";
-        }
+        return _fileIoHelper.getParentPath(path);
     }
 
-    /**
-     * FIX: Open the system file picker (SAF) for importing settings files.
-     * This works properly on Android 11+ scoped storage where
-     * java.io.File.listFiles() cannot see .txt files.
-     * Uses ACTION_OPEN_DOCUMENT with text/plain MIME type.
-     */
+    // ===================== SAF FILE PICKER (IMPORT) =====================
+    // v1.2.0 Phase 73+: Delegated to SafPickerHelper
+
+    /** Open SAF import picker for settings (TXT) */
     @JavascriptInterface
     public void openSystemFilePicker() {
-        try {
-            // FIX: Use activityRef (WeakReference) instead of checking 'context instanceof Activity'.
-            // Since v18.5.0, 'context' is Application context (getApplicationContext()), which
-            // is NEVER an Activity, so the old instanceof check always failed — the file picker
-            // could never be opened. Now we use the stored Activity reference instead.
-            Activity activity = activityRef.get();
-            if (activity == null) {
-                Log.w(TAG, "openSystemFilePicker: no valid Activity reference");
-                postJsCallback("if(typeof showToast==='function')showToast('Activity unavailable')");
-                return;
-            }
-            android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT);
-            intent.addCategory(android.content.Intent.CATEGORY_OPENABLE);
-            // v18.6.0 FIX: Use */* as primary type to show ALL files including .txt on all devices.
-            // Some OEM file pickers (Xiaomi HyperOS) don't show .txt files when setType is
-            // "text/plain" because the MIME type doesn't match. Using */* ensures all files
-            // are visible, and EXTRA_MIME_TYPES provides hint for preferred types.
-            intent.setType("*/*");
-            intent.putExtra(android.content.Intent.EXTRA_MIME_TYPES, new String[]{"text/plain", "application/octet-stream"});
-            activity.startActivityForResult(intent, REQUEST_CODE_IMPORT_SETTINGS);
-        } catch (Throwable e) {
-            Log.e(TAG, "openSystemFilePicker failed", e);
-            postJsCallback("if(typeof showToast==='function')showToast('File picker unavailable')");
-        }
+        _safPickerHelper.openSystemFilePicker();
     }
 
-    /**
-     * FIX: Handle SAF file picker result — read the selected file and import settings.
-     * Called from MainActivity.onActivityResult when REQUEST_CODE_IMPORT_SETTINGS result arrives.
-     *
-     * v1.0.2 FIX: Previously this method called importSettings() (which fires
-     * onSettingsImported callback with success/failure + message via postJsCallback)
-     * AND ALSO fired its own showToast('Settings imported') + openEngineConfig()
-     * directly. The result was: (1) duplicate toast ("Settings imported" appeared
-     * twice), (2) the "Settings imported" toast appeared BEFORE the async
-     * importSettings() actually finished, so on transient failure the user saw
-     * a success toast followed by a silent no-op. Now we let importSettings()
-     * own the toast/dialog via its onSettingsImported callback — single source
-     * of truth, fired only after the import truly completes.
-     */
+    /** Handle SAF import result — reads file and imports settings */
     public void handleFilePickerResult(android.content.Intent data) {
-        if (data == null || data.getData() == null) return;
-        try {
-            android.net.Uri uri = data.getData();
-            // Persist permission to access this URI
-            try {
-                context.getContentResolver().takePersistableUriPermission(
-                    uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            } catch (Throwable e) {
-                Log.w(TAG, "takePersistableUriPermission failed", e);
-            }
-            // v1.0.3 FIX: Close the settings dialog IMMEDIATELY before starting the
-            // async import. The old approach waited for onSettingsImported (which fires
-            // after the engine thread finishes applying settings — potentially seconds
-            // later). During that wait, the dialog stayed open and the user saw no
-            // feedback. Now we close the dialog right away, and the import continues
-            // in the background. The onSettingsImported callback still fires to show
-            // the success/failure toast.
-            postJsCallback("try{showEngineConfig=false;var d=document.querySelector('.dov[role=\"dialog\"]');if(d)d.remove();var fb=document.getElementById('_fileBrowserOverlay');if(fb)fb.remove();if(typeof render==='function')render();}catch(e){}");
-
-            // v1.0.2 FIX: Use try-with-resources on BufferedReader so the reader
-            // (and its internal char buffer) is always closed, not just the
-            // underlying InputStream. The previous pattern (close `is` in
-            // finally) left the BufferedReader unclosed, relying on GC.
-            String content;
-            try (java.io.BufferedReader reader = new java.io.BufferedReader(
-                    new java.io.InputStreamReader(
-                            context.getContentResolver().openInputStream(uri), "UTF-8"))) {
-                StringBuilder sb = new StringBuilder();
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    sb.append(line).append("\n");
-                }
-                content = sb.toString();
-            }
-            // Import the settings — onSettingsImported() callback in JS
-            // will fire the appropriate toast (success or failure).
-            importSettings(content);
-        } catch (Throwable e) {
-            Log.e(TAG, "handleFilePickerResult failed", e);
-            // Only fire an error toast if the file read itself failed (importSettings
-            // handles its own error reporting for parse/apply failures).
-            postJsCallback("if(typeof showToast==='function')showToast('Failed to read file')");
-        }
+        _safPickerHelper.handleImportResult(data);
     }
 
-    /**
-     * Open SAF file picker for PGN file import.
-     * Uses ACTION_OPEN_DOCUMENT with application/x-chess-pgn and text/plain MIME types.
-     */
+    /** Open SAF import picker for PGN */
     @JavascriptInterface
     public void openPGNFilePicker() {
-        try {
-            Activity activity = activityRef.get();
-            if (activity == null) {
-                Log.w(TAG, "openPGNFilePicker: no valid Activity reference");
-                postJsCallback("if(typeof showToast==='function')showToast('Activity unavailable')");
-                return;
-            }
-            android.content.Intent intent = new android.content.Intent(android.content.Intent.ACTION_OPEN_DOCUMENT);
-            intent.addCategory(android.content.Intent.CATEGORY_OPENABLE);
-            intent.setType("*/*");
-            intent.putExtra(android.content.Intent.EXTRA_MIME_TYPES, new String[]{"application/x-chess-pgn", "text/plain", "application/octet-stream"});
-            activity.startActivityForResult(intent, REQUEST_CODE_IMPORT_PGN);
-        } catch (Throwable e) {
-            Log.e(TAG, "openPGNFilePicker failed", e);
-            postJsCallback("if(typeof showToast==='function')showToast('File picker unavailable')");
-        }
+        _safPickerHelper.openPGNFilePicker();
     }
 
     /**
@@ -5379,65 +4347,8 @@ public class StockfishNative {
         }
     }
 
-    /**
-     * Handle SAF file picker result for PGN import.
-     * Reads the file content and calls onPGNFileRead() in JavaScript.
-     */
+    /** Handle SAF PGN import result — reads file and calls onPGNFileRead JS callback */
     public void handlePGNFilePickerResult(android.content.Intent data) {
-        if (data == null || data.getData() == null) return;
-        try {
-            android.net.Uri uri = data.getData();
-            try {
-                context.getContentResolver().takePersistableUriPermission(
-                    uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            } catch (Throwable e) {
-                Log.w(TAG, "takePersistableUriPermission failed", e);
-            }
-            // v1.0.2 FIX: Use try-with-resources on BufferedReader so the reader
-            // (and its internal char buffer) is always closed, not just the
-            // underlying InputStream. The previous pattern (close `is` in
-            // finally) left the BufferedReader unclosed, relying on GC.
-            String content;
-            try (java.io.BufferedReader reader = new java.io.BufferedReader(
-                    new java.io.InputStreamReader(
-                            context.getContentResolver().openInputStream(uri), "UTF-8"))) {
-                StringBuilder sb = new StringBuilder();
-                String line;
-                int lineCount = 0;
-                final int MAX_LINES = 5000; // Prevent OOM on huge files
-                // v1.0.8 PHASE 32 ROBUSTNESS: track truncation and notify JS so the
-                //   PGN parser can surface a warning instead of silently parsing an
-                //   incomplete game.
-                boolean truncated = false;
-                while ((line = reader.readLine()) != null) {
-                    if (lineCount >= MAX_LINES) { truncated = true; break; }
-                    sb.append(line).append("\n");
-                    lineCount++;
-                }
-                content = sb.toString();
-                if (truncated) {
-                    Log.w(TAG, "PGN file truncated at " + MAX_LINES + " lines");
-                    // Append a PGN comment so the JS parser surfaces the truncation
-                    content += "\n{ Warning: file truncated at " + MAX_LINES + " lines by Regalia import guard }\n";
-                }
-            }
-            // Sanitize: remove control characters that could break JS string parsing
-            // (keep newline, tab, carriage return)
-            content = content.replaceAll("[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F]", "");
-            // Pass content to JavaScript onPGNFileRead callback
-            // Use JSON encoding for safe JS string passing — avoids syntax errors from
-            // unescaped newlines, quotes, and special characters in PGN content
-            String jsonContent;
-            try {
-                jsonContent = new org.json.JSONObject().put("content", content).toString();
-            } catch (Throwable je) {
-                Log.e(TAG, "JSON encoding failed for PGN content", je);
-                jsonContent = "{\"content\":\"\"}";
-            }
-            postJsCallback("if(typeof onPGNFileRead==='function'){try{var _d=" + jsonContent + ";onPGNFileRead(_d.content);}catch(e){console.error('PGN file read callback error:',e);}}");
-        } catch (Throwable e) {
-            Log.e(TAG, "handlePGNFilePickerResult failed", e);
-            postJsCallback("if(typeof showToast==='function')showToast('Failed to read PGN file')");
-        }
+        _safPickerHelper.handlePGNImportResult(data);
     }
 }

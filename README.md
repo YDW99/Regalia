@@ -13,7 +13,7 @@ A standalone, open-source chess app for Android — play offline against Stockfi
   <img src="assets/screenshot.jpg" alt="Regalia gameplay screenshot" width="280">
 </p>
 
-Portrait mode — evaluation bar, move history, AI opponent display with ponder info, and Control heatmap. See the user manual (`Manual/Regalia-v1.1.2-manual-{zh,en}.html`) for wireframe diagrams of every screen.
+Portrait mode — evaluation bar, move history, AI opponent display with ponder info, and Control heatmap. See the user manual (`Manual/Regalia-v1.2.0-manual-{zh,en}.html`) for wireframe diagrams of every screen.
 
 **Control Heatmap** — Tap the 🌗/🌈 button on the toolbar to toggle the control heatmap. Each square is dynamically colored by HSL to indicate which side controls it: blue-purple = your control, red = opponent's control, purple = contested. Hovering a square shows SVG arrows from each controlling piece to that square (warm gold for your pieces, cool silver-blue for opponent's). The info card below the board shows per-piece control contributions with position labels.
 
@@ -98,10 +98,15 @@ Regalia/
 │   │   │   ├── chess960.js     # Chess960 SP-ID, Shredder-FEN, 960 castling rules (v1.0.4 NEW)
 │   │   │   ├── pgn-standard.js # Standardized PGN encoder/decoder, NAG, [%csl]/[%cal], TimeControl (v1.0.4 NEW)
 │   │   │   ├── worker-pool.js  # Web Worker pool for heavy stats computation offloading (v1.0.8 PHASE 25)
+│   │   │   ├── state-store.js  # Global state store (Redux-like, v1.2.0 Phase 75 NEW)
 │   │   │   ├── ai-bridge.js    # Engine communication, eval display, PGN export, FEN sanitization, theme detection
 │   │   │   ├── tablebase.js    # Lichess Syzygy tablebase queries + PGN import
 │   │   │   ├── eco-data.js     # ECO opening classification data
-│   │   │   ├── ui.js           # Rendering, dialogs, interaction, review mode, castling gesture, ChessAudioEngine
+│   │   │   ├── ui-board.js     # Board rendering, coordinate labels, heatmap (v1.2.0 Phase 74 NEW)
+│   │   │   ├── ui-review.js    # Review mode, eval trend chart, move classification (v1.2.0 Phase 74 NEW)
+│   │   │   ├── ui-audio.js     # Audio engine utilities, volume management (v1.2.0 Phase 74 NEW)
+│   │   │   ├── ui-toolbar.js   # Toolbar rendering, button state, language switch (v1.2.0 Phase 74 NEW)
+│   │   │   ├── ui.js           # Core rendering, dialogs, interaction, review mode, ChessAudioEngine
 │   │   │   ├── index.html.tpl  # CSS template (theme variables, responsive layout, animation keyframes)
 │   │   │   └── README.license  # Per-file license classification for this directory
 │   │   ├── chess.html          # Built output (combined JS+CSS+HTML)
@@ -111,7 +116,20 @@ Regalia/
 │   │   └── README.license      # Per-file license classification for this directory
 │   ├── java/com/Regalia/
 │   │   ├── MainActivity.java   # WebView host, immersive mode, lifecycle, SAF file pickers
-│   │   ├── StockfishNative.java # Engine process management, UCI protocol, SAF file I/O, 60+ JS interfaces
+│   │   ├── StockfishNative.java # Engine Facade: @JavascriptInterface methods, delegates to managers (v1.2.0 refactored)
+│   │   ├── EngineProcessManager.java # Engine process lifecycle (v1.2.0 Phase 73 NEW)
+│   │   ├── UciProtocolHandler.java   # UCI commands & response parsing (v1.2.0 Phase 73 NEW)
+│   │   ├── EngineConfigManager.java  # Engine settings persistence & validation (v1.2.0 Phase 73 NEW)
+│   │   ├── JsBridgeGateway.java      # Sandbox path validation & UCI whitelist (v1.2.0 Phase 73 NEW)
+│   │   ├── PgnCacheManager.java      # PGN cache CRUD (v1.2.0 Phase 73 NEW)
+│   │   ├── EngineHealthMonitor.java  # Heartbeat & zombie detection (v1.2.0 Phase 73 NEW)
+│   │   ├── FileIoHelper.java         # File I/O operations (v1.2.0 Phase 73+ NEW)
+│   │   ├── PermissionHelper.java     # Runtime permission checks (v1.2.0 Phase 73+ NEW)
+│   │   ├── HapticHelper.java         # Haptic feedback (v1.2.0 Phase 73+ NEW)
+│   │   ├── SafPickerHelper.java      # SAF file picker: export/import settings & PGN (v1.2.0 Phase 73+ NEW)
+│   │   ├── EngineSettingsHelper.java # Engine settings query/export/import (v1.2.0 Phase 73+ NEW)
+│   │   ├── EngineConfigHelper.java   # Engine config: setAutoConfig/detectHardwareAndConfigure/setGameDifficulty/applySettings (v1.2.0 Phase 81 NEW)
+│   │   ├── MessageBus.java           # Unified JS↔Java message dispatch (v1.2.0 Phase 75 NEW)
 │   │   ├── StatsActivity.java  # Fullscreen WebView for 📊统计 statistics page
 │   │   ├── ChessWebViewClient.java # Page load handler, render-process crash recovery
 │   │   ├── EngineService.java  # Foreground service for engine stability
@@ -125,7 +143,7 @@ Regalia/
 │   │   ├── CMakeLists.txt
 │   │   └── README.license      # Per-file license classification for this directory
 │   ├── res/
-│   │   ├── values/strings.xml  # Application name ("Regalia v1.1.2")
+│   │   ├── values/strings.xml  # Application name ("Regalia v1.2.0")
 │   │   ├── xml/network_security_config.xml  # TLS + certificate pinning for tablebase API
 │   │   ├── xml/backup_rules.xml             # Backup rules (Android < 12)
 │   │   ├── xml/data_extraction_rules.xml    # Data extraction rules (Android 12+)
@@ -139,10 +157,8 @@ Regalia/
                                 #   to keep the tarball small and avoid redistributing the
                                 #   114MB engine binary with the source.
 ├── Manual/                     # User manuals (HTML, self-contained)
-│   ├── Regalia-v1.1.2-manual-zh.html  # Chinese user manual (current)
-│   ├── Regalia-v1.1.2-manual-en.html  # English user manual (current)
-│   ├── Regalia-v1.1.1-manual-zh.html  # Chinese user manual (v1.1.1, historical)
-│   ├── Regalia-v1.1.1-manual-en.html  # English user manual (v1.1.1, historical)
+│   ├── Regalia-v1.2.0-manual-zh.html  # Chinese user manual (current)
+│   ├── Regalia-v1.2.0-manual-en.html  # English user manual (current)
 │   └── README.license          # Manual license classification
 ├── gradle/wrapper/             # Gradle wrapper (8.11.1)
 │   ├── gradle-wrapper.jar
@@ -158,7 +174,8 @@ Regalia/
 ├── PRIVACY.md                  # Privacy policy
 ├── BUILDING.md                 # Build instructions
 ├── UBIQUITOUS_LANGUAGE.md      # Domain terminology glossary (English) — 80+ chess/engine/PGN/UI terms
-├── build.gradle                # Gradle build config (reads ../version.properties for versionCode=112, v1/v2/v3 signing, NDK 27.2, cmake 3.22.1)
+├── build.gradle                # Gradle build config (reads ../version.properties for versionCode=120, v1/v2/v3 signing, NDK 27.2, cmake 3.22.1)
+├── proguard-rules.pro          # ProGuard/R8 keep rules (MessageBus, @JavascriptInterface, native methods)
 ├── settings.gradle             # Gradle settings (plugin/repo config)
 ├── gradle.properties           # Gradle properties (JDK 21, Xmx2048m)
 ├── build-chess.py              # Python build script (merges JS modules → chess.html)
@@ -233,7 +250,13 @@ Contributions are welcome! Please ensure:
 
 During the development stage, the version number used was: **v18.x.x**. For future versions, once the version number exceeds **v17.x.x**, <span style="color:red; font-weight:bold;">**v18.x.x** should be skipped</span> and the next version should be **v19.x.x**.
 
-**v1.1.2** (versionCode 112) — current release
+**v1.2.0** (versionCode 120) — current release
+
+The v1.2.0 release is an **architecture refactor major version**. **Phase 73-80** (2026.7.11) — God Module split + SonarCloud fixes + review board coordinate labels + documentation sync. (A) **Java God Module split**: `StockfishNative.java` (5,443→4,492 lines) refactored into Facade + 11 manager/helper classes: `EngineProcessManager.java`, `UciProtocolHandler.java`, `EngineConfigManager.java`, `JsBridgeGateway.java`, `PgnCacheManager.java`, `EngineHealthMonitor.java`, `FileIoHelper.java`, `PermissionHelper.java`, `HapticHelper.java`, `SafPickerHelper.java`, `EngineSettingsHelper.java`. All `@JavascriptInterface` method signatures preserved (JS-side `AndroidBridge` calls unchanged). (B) **JS God Module split**: `ui.js` (8,245→8,061 lines) split into 4 new modules + `_computeAndCacheVisualAnnotations` (439 lines) decomposed into 4 sub-functions + `_buildEvalTrendSVG` (267 lines) decomposed into 6 sub-functions. `build-chess.py` updated to merge 13 modules in dependency order. (C) **MessageBus.java + state-store.js** (Phase 75): unified JS↔Java message dispatch and Redux-like global state store. (D) **SonarCloud fixes**: All 42 Bugs fixed (InterruptedException re-interrupt, delete()/renameTo() return value checks, AtomicInteger for thread-safe counters); 5 Vulnerabilities fixed (Chess960 SP-ID uses secureRandomInt()); `_buildPGNString` decomposed into 6 sub-functions to reduce cognitive complexity. (E) **Review board coordinate labels** (Phase 77): left 1-8 rank labels + top a-h file labels + per-square coordinate labels, matching main board and stats board. (F) **Version**: versionCode=120, versionName="1.2.0".
+
+---
+
+**v1.1.2** (versionCode 112) — previous release
 
 The v1.1.2 release fixes two user-reported issues and implements reasonable P0/P1/P2/GOV/MED suggestions from the comprehensive code review report. **Phase 72** (same-version revision, 2026.7.12) — review analyze-all "false completion" bug fix after long-press priority. The `_reviewAnalyzeAdvance` completion check previously ONLY walked forward from `_reviewAnalyzeStep+1`; when the user long-pressed a step to prioritize it (Phase 68 feature), the batch evaluated that single step, then the forward walk reached `_lastStep` and reported "all analysis complete" — even though steps BEFORE the prioritized step were still uncached. Fix: when the forward walk finds nothing, scan the ENTIRE range `[0.._lastStep]` for the lowest uncached step and resume the batch from there. The forward-only fast-path is preserved for the common (no-priority) case; the full-range scan is the source of truth for completion. **Phase 71** (same-version revision, 2026.7.11) — stats-page move-selection bug fix + first-principles code review of all 34K lines. (A) **Bug fix (user-reported)**: `stats.html` CSP blocked inline `onclick` handlers → clicking a PGN move in the statistics page did nothing (no highlight, no board switch). Root cause: the SHA-256-hash-based `script-src` policy silently blocked all 23 inline event handlers per CSP Level 2+. Fix: switch `script-src` from `'sha256-...'` to `'unsafe-inline'` (safe because stats.html is a local asset with no external content and all JS is inlined). (B) **XSS hardening** (consequence of the CSP change): the `renderPGNText` movetext-walk fallback in `stats.html` previously appended unrecognized movetext characters raw to the HTML string — combined with `'unsafe-inline'`, a malicious PGN movetext payload like `<img src=x onerror="...">` would execute. Fix: route all unrecognized characters through `_escFEN` (escapes `&<>"'\``). Same hardening applied to the variation-text walk and the `firstMoves` opening-plies list. (C) **Chess960 0-distance castling fix** (P1 bug affecting both the main app and the stats page): for SP-IDs where the king already sits on its castling target square (e.g. king on g1, kingside rook on h1 → UCI `g1h1`), `uciToCoords` rewrote the destination to col 6, producing a 0-distance "move" `g1g1`. The `_castleSide` distance heuristic rejected this (0 < minDist) AND the destination held the king (not a rook) → castling not detected → `makeMv` ran `board[to]=board[from]; board[from]=null` → king nulled. Fix: `uciToCoords` (ai-bridge.js) now attaches `castle='kingside'/'queenside'` to `result.to` when rewriting Chess960 castling, so `_castleSide`'s primary path (`mv.to.castle`) catches it before the fallback. `executeMove` (ui.js) now checks `to.castle` as the primary source for the castle flag (covers AI moves where `legalMvs` is empty). `_castleSide` (game-logic.js) adds an explicit 0-distance branch as defense-in-depth. `stats.html` mirrors all three fixes in its independent code (executeMove + buildSAN + the from===to skip-king-move branch). (D) **Concurrency fixes** (StockfishNative.java): `readyOkLatchHolder` race — JS binder thread (sendSetOptionAndWait) and executor thread (startEngineInternal / engineGoInternal ucinewgame) both wrote the single volatile field without synchronization; if they overlapped, one latch was lost → 3s timeout. Fix: dedicated `_readyOkLock` serializes all readyOk set+wait operations. `engineStop` TOCTOU on `_discardingPonderBestmove` — engineStop set the flag outside any lock while the reader thread's bestmove handler read it outside any lock; a window existed where engineStop set the flag AFTER the reader's check but BEFORE `handleBestMove`, processing the stopped search's bestmove as a real AI move. Fix: dedicated `_discardFlagLock` makes the check-and-clear atomic w.r.t. engineStop's set. (E) **importSettings cap bypass fix** (StockfishNative.java): `importSettings` directly assigned `engineThreads`/`engineHash`/`engineMoveOverhead` with loose caps (1024 threads / 1048576 MB hash / 10000ms overhead), bypassing the Phase 69 setter caps (2x CPU cores / 50% JVM heap / 1000ms). Fix: apply the Phase 69 cap formulas inline in `importSettings` (direct field assignment, because the setters return early when autoConfig is enabled — autoConfig is only disabled later in the import flow). (F) **StatsActivity robustness**: added the deprecated `shouldOverrideUrlLoading(WebView, String)` overload so that on API 21-23 (minSdk=21) external http(s) URLs are redirected to the system browser (only the deprecated overload fires on those API levels); added `onRenderProcessGone` so a render-process crash on the stats page finishes the activity instead of leaving a blank WebView. (G) **Low-risk robustness patches**: `secureRandomInt` (game-logic.js) guards against `crypto` being undefined; `moveAlg` setupMode check uses `typeof` guard (was bare `if(setupMode)`); `toShredderCastling` (chess960.js) guards against null/undefined board; `sevenTagRoster`/`composePGN` (pgn-standard.js) guard against null/undefined params; `worker-pool.js` does not permanently disable the pool on a single transient worker-creation failure (3-strike counter); `makeMv`/`makeMvInPlace` en-passant `cr` bounds-checked via `inB()` (defense-in-depth). (H) **Version**: unchanged (`versionCode=112`, `versionName="1.1.2"`). See the v1.1.2 Phase 71 changelog section below for full details.
 

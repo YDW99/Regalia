@@ -425,7 +425,7 @@ function _updateEvalDisplayIncremental() {
       if (app) {
         app.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:var(--bg);color:var(--text);padding:20px;text-align:center;font-family:system-ui,sans-serif">' +
           '<div style="font-size:3rem;margin-bottom:16px">♔</div>' +
-          '<h2 style="color:var(--accent2);margin-bottom:12px">'+T('app_name')+' v1.1.2</h2>' +
+          '<h2 style="color:var(--accent2);margin-bottom:12px">'+T('app_name')+' v1.2.0</h2>' +
           '<p style="color:#a08050;margin-bottom:20px;max-width:300px">'+T('render_error')+'</p>' +
           '<button onclick="location.reload()" style="padding:12px 24px;background:var(--btn-a-bg);color:var(--bg);border:none;border-radius:6px;font-size:1rem;font-weight:700;cursor:pointer">'+T('refresh_page')+'</button>' +
           '</div>';
@@ -1397,116 +1397,34 @@ function _refreshEvalTrendChart(){
  * @param {number} trendH - Chart height in pixels
  * @returns {string} SVG string for the eval trend chart
  */
-function _buildEvalTrendSVG(trendW, trendH) {
-  if (!reviewStates || reviewStates.length < 2) return '';
-  if (!trendW || trendW < 10) trendW = 300; // fallback
-  if (!trendH || trendH < 10) trendH = 120; // fallback
-  const width = trendW;
-  const height = trendH;
-
-  // v1.0.8 PHASE 22: Read theme-aware chart colors from CSS variables.
-  // This ensures the review trend chart is visible in both dark and light modes.
-  // SVG stroke/fill attributes can't use var() directly, so we read computed values.
-  // v1.0.9: chart palette follows a unified blue-vs-red convention in BOTH modes:
-  //   --chart-line  = blue  (White advantage, positive eval)
-  //   --chart-fill  = red   (Black advantage, negative eval)
-  //   --chart-axis  = neutral warm tone (zero-line + sign-crossing segments)
-  //   --chart-grid  = subtle warm tone (global-mode vertical gridlines)
-  //   --chart-critical = gold (current-position marker ring)
-  // The exact shade is tuned per mode for contrast against the bg:
-  //   dark mode (bg #1a0a0a): brighter, more saturated (#5dade2 sky-blue, #e74c3c red)
-  //   light mode (bg #f0f0f3): deeper, less saturated (#2c5f8d steel-blue, #c0392b red)
-  // Fallbacks below match the dark-mode palette (the :root default).
+// v1.2.0 Phase 76+: Extracted chart color reading from _buildEvalTrendSVG.
+function _getChartColors(){
   const _cs = getComputedStyle(document.documentElement);
-  const _C_LINE = _cs.getPropertyValue('--chart-line').trim() || '#5dade2';
-  const _C_FILL = _cs.getPropertyValue('--chart-fill').trim() || '#e74c3c';
-  const _C_GRID = _cs.getPropertyValue('--chart-grid').trim() || '#4a3020';
-  const _C_AXIS = _cs.getPropertyValue('--chart-axis').trim() || '#8a6a3a';
-  const _C_STROKE = _cs.getPropertyValue('--chart-text-stroke').trim() || '#1a0a0a';
-  const _C_CRIT = _cs.getPropertyValue('--chart-critical').trim() || '#ffd700';
-  const _C_CRIT_TXT = _cs.getPropertyValue('--chart-critical-text').trim() || '#ffd700';
-  // v1.1.0 Phase 54 rev5: --chart-label is a high-contrast text color for eval
-  //   value labels — light in dark mode (#f5e6c8), dark in light mode (#2c2c34).
-  //   This ensures labels are readable on the chart background in both themes.
-  //   Previously, labels used --chart-line (blue) / --chart-fill (red) / --chart-axis
-  //   (warm gray), which had insufficient contrast especially in light mode.
-  const _C_LABEL = _cs.getPropertyValue('--chart-label').trim() || '#f5e6c8';
+  return {
+    line: _cs.getPropertyValue('--chart-line').trim() || '#5dade2',
+    fill: _cs.getPropertyValue('--chart-fill').trim() || '#e74c3c',
+    grid: _cs.getPropertyValue('--chart-grid').trim() || '#4a3020',
+    axis: _cs.getPropertyValue('--chart-axis').trim() || '#8a6a3a',
+    stroke: _cs.getPropertyValue('--chart-text-stroke').trim() || '#1a0a0a',
+    critical: _cs.getPropertyValue('--chart-critical').trim() || '#ffd700',
+    label: _cs.getPropertyValue('--chart-label').trim() || '#f5e6c8'
+  };
+}
 
-  // v1.1.0 Phase 54 rev11: Pixel-space coordinates (viewBox matches container
-  //   pixel dimensions). Left/right padding = 0 so first data point is at x=0
-  //   (left edge) and last at x=width (right edge). Top padding = 12px and
-  //   bottom padding = 4px for label space.
-  const padding = {top: 12, right: 0, bottom: 4, left: 0};
-  const chartW = width - padding.left - padding.right;
-  const chartH = height - padding.top - padding.bottom;
-  const midY = padding.top + chartH / 2;
-
-  // Map eval to y coordinate: +10 → top, -10 → bottom, 0 → middle
-  const maxEval = 10;
-  function evalToY(ev) {
-    const clamped = Math.max(-maxEval, Math.min(maxEval, ev / 100));
-    return midY - (clamped / maxEval) * (chartH / 2);
-  }
-
-  // Local mode — show a window of steps around the current review step,
-  // with the current step as the rightmost data point. This aligns with the progress
-  // bar and shows checkmate distance numbers. Global mode shows all steps uniformly.
-  let localStepMin = 0, localStepMax = reviewStates.length - 1;
-  let displayStepCount = reviewStates.length;
-  if (!_reviewEvalGlobal) {
-    // Local mode: show ~15 steps centered on the current step, with current step
-    // at the right edge so the user can see what led up to this position.
-    const windowSize = Math.min(15, reviewStates.length);
-    localStepMax = reviewStep;
-    localStepMin = Math.max(0, localStepMax - windowSize + 1);
-    displayStepCount = localStepMax - localStepMin + 1;
-  }
-  function stepToX(step) {
-    if (_reviewEvalGlobal) {
-      // Guard against division by zero when reviewStates has only 1 entry
-      if (reviewStates.length <= 1) return padding.left + chartW / 2;
-      return padding.left + (step / (reviewStates.length - 1)) * chartW;
-    } else {
-      // Local mode: uniform spacing for steps in the window
-      const idx = step - localStepMin;
-      const count = Math.max(1, displayStepCount);
-      if (count <= 1) return padding.left + chartW; // Single point: place at right edge
-      return padding.left + (idx / (count - 1)) * chartW;
-    }
-  }
-
-  // Collect eval data points (only within the visible window)
-  // v1.0.2 PERF: use peek() instead of get() — this is a read-only iteration
-  // over many entries, so refreshing LRU order on each access would just
-  // churn the Map and push other entries toward eviction for no benefit.
-  const points = [];
-  for (let i = localStepMin; i <= localStepMax; i++) {
-    const ev = _reviewEvalCache.peek(i);
-    if (ev != null) {
-      points.push({step: i, eval: ev.eval || 0, mate: ev.mate, mateDistance: ev.mateDistance});
-    }
-  }
-
-  if (points.length < 1) return '';
-
-  // v1.1.0 Phase 54 rev11: preserveAspectRatio="xMidYMid slice" with a DYNAMIC
-  //   viewBox that matches the container's pixel dimensions. Since the viewBox
-  //   aspect ratio equals the container aspect ratio, "slice" scales 1:1 — NO
-  //   cropping, NO centering gaps, NO distortion. All content is visible.
-  let svg = '<svg width="100%" height="100%" viewBox="0 0 ' + width + ' ' + height + '" preserveAspectRatio="xMidYMid slice" style="display:block;overflow:hidden">';
-
-  // 0-axis line (gray) — pixel space
-  svg += '<line x1="' + padding.left + '" y1="' + midY + '" x2="' + (width - padding.right) + '" y2="' + midY + '" stroke="'+_C_AXIS+'" stroke-width="0.5" stroke-dasharray="2,2"/>';
-
-  // In global mode: draw vertical grid lines at each step for alignment with progress bar
+// v1.2.0 Phase 76+: Extracted grid-line rendering.
+function _buildEvalTrendGrid(svg, colors, width, height, padding, midY, _reviewEvalGlobal, reviewStates, stepToX){
+  svg += '<line x1="' + padding.left + '" y1="' + midY + '" x2="' + (width - padding.right) + '" y2="' + midY + '" stroke="'+colors.axis+'" stroke-width="0.5" stroke-dasharray="2,2"/>';
   if (_reviewEvalGlobal && reviewStates.length > 2) {
     for (let i = 0; i < reviewStates.length; i++) {
       const x = stepToX(i);
-      svg += '<line x1="' + x.toFixed(1) + '" y1="' + padding.top + '" x2="' + x.toFixed(1) + '" y2="' + (height - padding.bottom) + '" stroke="'+_C_GRID+'" stroke-width="0.3"/>';
+      svg += '<line x1="' + x.toFixed(1) + '" y1="' + padding.top + '" x2="' + x.toFixed(1) + '" y2="' + (height - padding.bottom) + '" stroke="'+colors.grid+'" stroke-width="0.3"/>';
     }
   }
+  return svg;
+}
 
-  // Build line segments with color based on eval sign
+// v1.2.0 Phase 76+: Extracted line-segment rendering with color-by-sign.
+function _buildEvalTrendSegments(svg, colors, points, stepToX, evalToY, _reviewEvalGlobal){
   for (let i = 1; i < points.length; i++) {
     const p0 = points[i-1];
     const p1 = points[i];
@@ -1514,153 +1432,181 @@ function _buildEvalTrendSVG(trendW, trendH) {
     const y0 = evalToY(p0.eval);
     const x1 = stepToX(p1.step);
     const y1 = evalToY(p1.eval);
-
-    // Determine color based on eval sign
     const avgEval = (p0.eval + p1.eval) / 2;
     let strokeColor;
     if (p0.eval * p1.eval < 0) {
-      strokeColor = _C_AXIS;
+      strokeColor = colors.axis;
     } else if (avgEval > 0) {
-      strokeColor = _C_LINE;
+      strokeColor = colors.line;
     } else if (avgEval < 0) {
-      strokeColor = _C_FILL;
+      strokeColor = colors.fill;
     } else {
-      strokeColor = _C_AXIS;
+      strokeColor = colors.axis;
     }
-
     svg += '<line x1="' + x0.toFixed(1) + '" y1="' + y0.toFixed(1) + '" x2="' + x1.toFixed(1) + '" y2="' + y1.toFixed(1) + '" stroke="' + strokeColor + '" stroke-width="1.5" stroke-linecap="round"/>';
-
-    // In global mode: fill the gap between consecutive points with a lighter line
+    // In global mode: fill gaps with interpolated dots
     if (_reviewEvalGlobal && p1.step - p0.step > 1) {
       for (let s = p0.step + 1; s < p1.step; s++) {
         const t = (s - p0.step) / (p1.step - p0.step);
         const interpEval = p0.eval + (p1.eval - p0.eval) * t;
         const sx = stepToX(s);
         const sy = evalToY(interpEval);
-        svg += '<circle cx="' + sx.toFixed(1) + '" cy="' + sy.toFixed(1) + '" r="1" fill="' + (interpEval > 0 ? _C_LINE+'44' : _C_FILL+'44') + '"/>';
+        svg += '<circle cx="' + sx.toFixed(1) + '" cy="' + sy.toFixed(1) + '" r="1" fill="' + (interpEval > 0 ? colors.line+'44' : colors.fill+'44') + '"/>';
       }
     }
   }
+  return svg;
+}
 
-  // Draw data points (pixel space).
+// v1.2.0 Phase 76+: Extracted data-point circle rendering.
+function _buildEvalTrendPoints(svg, colors, points, stepToX, evalToY){
   for (const p of points) {
     const x = stepToX(p.step);
     const y = evalToY(p.eval);
     let fillColor, strokeColor;
     if (p.eval > 0) {
-      fillColor = _C_LINE;
-      strokeColor = _C_STROKE;
+      fillColor = colors.line;
+      strokeColor = colors.stroke;
     } else if (p.eval < 0) {
-      fillColor = _C_FILL;
-      strokeColor = _C_STROKE;
+      fillColor = colors.fill;
+      strokeColor = colors.stroke;
     } else {
-      fillColor = _C_AXIS;
-      strokeColor = _C_AXIS;
+      fillColor = colors.axis;
+      strokeColor = colors.axis;
     }
     svg += '<circle cx="' + x.toFixed(1) + '" cy="' + y.toFixed(1) + '" r="2.5" fill="' + fillColor + '" stroke="' + strokeColor + '" stroke-width="0.5"/>';
   }
+  return svg;
+}
 
-  // Checkmate distance labels — show in local mode (user request)
-  // Also show eval score labels for all points when not in global mode
-  // Prevent label overlap by tracking last label position
-  // Current-step circle overlap avoidance,
-  //   clamp label Y to SVG bounds, use #+N/#-N format for mate distances.
-  // Two-pass label rendering to prevent overlap when switching
-  //   from global mode to local mode. First pass: collect all candidate labels
-  //   with priority (current step > mate > eval). Second pass: render only
-  //   labels that don't overlap, also tracking Y proximity.
+// v1.2.0 Phase 76+: Extracted label rendering with two-pass overlap prevention.
+function _buildEvalTrendLabels(svg, colors, points, stepToX, evalToY, width, height, reviewStep){
+  // Pass 1: Collect candidates with priority
+  const candidates = [];
+  for (const p of points) {
+    const x = stepToX(p.step);
+    const y = evalToY(p.eval);
+    const ev = _reviewEvalCache.peek(p.step);
+    const isCurrentStep = (p.step === reviewStep);
+    if (!ev) continue;
+    let label = '', textColor = colors.label, fontSize = 6.5, fontWeight = '';
+    let labelY;
+    if (Math.abs(ev.eval) >= 90000) {
+      const md = ev.mate != null ? ev.mate : (ev.mateDistance != null ? ev.mateDistance : 0);
+      if (md !== 0 || Math.abs(ev.eval) >= 99999) {
+        label = md > 0 ? '#+' + Math.abs(md) : md < 0 ? '#-' + Math.abs(md) : (ev.eval > 0 ? '#+' : '#-');
+        textColor = colors.critical;
+        fontSize = 7;
+        fontWeight = ' font-weight="bold"';
+        const extraY = isCurrentStep ? 4 : 0;
+        labelY = (p.eval > 0) ? Math.min(y + 12 + extraY, height - 2) : Math.max(y - 4 - extraY, 9);
+      }
+    } else {
+      const cpVal = ev.eval || 0;
+      const displayEval = (cpVal / 100).toFixed(cpVal % 100 === 0 ? 0 : 1);
+      const sign = cpVal > 0 ? '+' : '';
+      label = sign + displayEval;
+      textColor = colors.label;
+      const extraY = isCurrentStep ? 3 : 0;
+      labelY = (p.eval > 0) ? Math.min(y + 11 + extraY, height - 2) : Math.max(y - 3 - extraY, 9);
+    }
+    if (label) {
+      const estHalfW = fontSize * label.length * 0.32;
+      const clampedX = Math.max(estHalfW, Math.min(x, width - estHalfW));
+      candidates.push({
+        x: clampedX, y: labelY,
+        label, textColor, fontSize, fontWeight,
+        priority: isCurrentStep ? 3 : (Math.abs(ev.eval) >= 90000 ? 2 : 1),
+        step: p.step
+      });
+    }
+  }
+  // Pass 2: Render with overlap prevention
+  candidates.sort((a, b) => b.priority - a.priority);
+  const placed = [];
+  const minGapX = 36, minGapY = 10;
+  for (const cand of candidates) {
+    let overlaps = false;
+    for (const p of placed) {
+      if (Math.abs(cand.x - p.x) < minGapX && Math.abs(cand.y - p.y) < minGapY) {
+        overlaps = true;
+        break;
+      }
+    }
+    if (!overlaps) placed.push(cand);
+  }
+  placed.sort((a, b) => a.step - b.step);
+  for (const lbl of placed) {
+    svg += '<text x="' + lbl.x.toFixed(1) + '" y="' + lbl.y.toFixed(1) + '" fill="' + lbl.textColor + '" font-size="' + lbl.fontSize + '"' + lbl.fontWeight + ' font-family="sans-serif" text-anchor="middle" paint-order="stroke" stroke="'+colors.stroke+'" stroke-width="2">' + lbl.label + '</text>';
+  }
+  return svg;
+}
+
+// v1.2.0 Phase 76+: Extracted current-position marker rendering.
+function _buildEvalTrendCurrentMarker(svg, colors, reviewStep, reviewStates, stepToX, evalToY){
+  if (reviewStep < 0 || reviewStep >= reviewStates.length) return svg;
+  const curEv = _reviewEvalCache.get(reviewStep);
+  if (curEv == null) return svg;
+  const cx = stepToX(reviewStep);
+  const cy = evalToY(curEv.eval);
+  svg += '<circle cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="4" fill="none" stroke="'+colors.critical+'" stroke-width="1.5"/>';
+  return svg;
+}
+
+function _buildEvalTrendSVG(trendW, trendH) {
+  if (!reviewStates || reviewStates.length < 2) return '';
+  if (!trendW || trendW < 10) trendW = 300;
+  if (!trendH || trendH < 10) trendH = 120;
+  const width = trendW;
+  const height = trendH;
+  const colors = _getChartColors();
+  const padding = {top: 12, right: 0, bottom: 4, left: 0};
+  const chartW = width - padding.left - padding.right;
+  const chartH = height - padding.top - padding.bottom;
+  const midY = padding.top + chartH / 2;
+  const maxEval = 10;
+  function evalToY(ev) {
+    const clamped = Math.max(-maxEval, Math.min(maxEval, ev / 100));
+    return midY - (clamped / maxEval) * (chartH / 2);
+  }
+  // Determine visible window (local vs global mode)
+  let localStepMin = 0, localStepMax = reviewStates.length - 1;
+  let displayStepCount = reviewStates.length;
   if (!_reviewEvalGlobal) {
-    // Pass 1: Collect all candidate labels with priority (pixel space)
-    const _labelCandidates = [];
-    for (const p of points) {
-      const x = stepToX(p.step);
-      const y = evalToY(p.eval);
-      const ev = _reviewEvalCache.peek(p.step);
-      const _isCurrentStep = (p.step === reviewStep);
-      if (!ev) continue;
-
-      let label = '', textColor = _C_LABEL, fontSize = 6.5, fontWeight = '';
-      let labelY;
-
-      if (Math.abs(ev.eval) >= 90000) {
-        const md = ev.mate != null ? ev.mate : (ev.mateDistance != null ? ev.mateDistance : 0);
-        if (md !== 0 || Math.abs(ev.eval) >= 99999) {
-          label = md > 0 ? '#+' + Math.abs(md) : md < 0 ? '#-' + Math.abs(md) : (ev.eval > 0 ? '#+' : '#-');
-          textColor = _C_CRIT;
-          fontSize = 7;
-          fontWeight = ' font-weight="bold"';
-          const _extraY = _isCurrentStep ? 4 : 0;
-          labelY = (p.eval > 0) ? Math.min(y + 12 + _extraY, height - 2) : Math.max(y - 4 - _extraY, 9);
-        }
-      } else {
-        const cpVal = ev.eval || 0;
-        const displayEval = (cpVal / 100).toFixed(cpVal % 100 === 0 ? 0 : 1);
-        const sign = cpVal > 0 ? '+' : '';
-        label = sign + displayEval;
-        textColor = _C_LABEL;
-        const _extraY = _isCurrentStep ? 3 : 0;
-        labelY = (p.eval > 0) ? Math.min(y + 11 + _extraY, height - 2) : Math.max(y - 3 - _extraY, 9);
-      }
-
-      if (label) {
-        // Clamp label X to prevent edge clipping (pixel space)
-        const _estHalfW = fontSize * label.length * 0.32;
-        const _clampedX = Math.max(_estHalfW, Math.min(x, width - _estHalfW));
-        _labelCandidates.push({
-          x: _clampedX, y: labelY,
-          label, textColor, fontSize, fontWeight,
-          priority: _isCurrentStep ? 3 : (Math.abs(ev.eval) >= 90000 ? 2 : 1),
-          step: p.step
-        });
-      }
-    }
-
-    // Pass 2: Render labels with overlap prevention (pixel space)
-    _labelCandidates.sort((a, b) => b.priority - a.priority);
-    const _placedLabels = [];
-    const _minLabelGapX = 36;
-    const _minLabelGapY = 10;
-
-    for (const cand of _labelCandidates) {
-      let overlaps = false;
-      for (const placed of _placedLabels) {
-        const dx = Math.abs(cand.x - placed.x);
-        const dy = Math.abs(cand.y - placed.y);
-        if (dx < _minLabelGapX && dy < _minLabelGapY) {
-          overlaps = true;
-          break;
-        }
-      }
-      if (!overlaps) {
-        _placedLabels.push(cand);
-      }
-    }
-
-    // Render placed labels (pixel space)
-    _placedLabels.sort((a, b) => a.step - b.step);
-    for (const lbl of _placedLabels) {
-      svg += '<text x="' + lbl.x.toFixed(1) + '" y="' + lbl.y.toFixed(1) + '" fill="' + lbl.textColor + '" font-size="' + lbl.fontSize + '"' + lbl.fontWeight + ' font-family="sans-serif" text-anchor="middle" paint-order="stroke" stroke="'+_C_STROKE+'" stroke-width="2">' + lbl.label + '</text>';
+    const windowSize = Math.min(15, reviewStates.length);
+    localStepMax = reviewStep;
+    localStepMin = Math.max(0, localStepMax - windowSize + 1);
+    displayStepCount = localStepMax - localStepMin + 1;
+  }
+  function stepToX(step) {
+    if (_reviewEvalGlobal) {
+      if (reviewStates.length <= 1) return padding.left + chartW / 2;
+      return padding.left + (step / (reviewStates.length - 1)) * chartW;
+    } else {
+      const idx = step - localStepMin;
+      const count = Math.max(1, displayStepCount);
+      if (count <= 1) return padding.left + chartW;
+      return padding.left + (idx / (count - 1)) * chartW;
     }
   }
-
-  // Current position marker (highlighted) — pixel space
-  if (reviewStep >= 0 && reviewStep < reviewStates.length) {
-    const curEv = _reviewEvalCache.get(reviewStep);
-    if (curEv != null) {
-      const cx = stepToX(reviewStep);
-      const cy = evalToY(curEv.eval);
-      svg += '<circle cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="4" fill="none" stroke="'+_C_CRIT+'" stroke-width="1.5"/>';
+  // Collect eval data points
+  const points = [];
+  for (let i = localStepMin; i <= localStepMax; i++) {
+    const ev = _reviewEvalCache.peek(i);
+    if (ev != null) {
+      points.push({step: i, eval: ev.eval || 0, mate: ev.mate, mateDistance: ev.mateDistance});
     }
   }
-
-  // v1.1.0 Phase 54 rev5: Removed the global-mode last-endpoint checkmate
-  //   distance label. User requested: "取消全局模式开启时最右侧末端点旁显示的评估值".
-  //   In global mode, the chart shows all points without individual labels (the
-  //   local-mode label loop above only runs when !_reviewEvalGlobal). The old
-  //   code added a special label for the last point's mate distance in global
-  //   mode — this is now removed. Global mode is purely visual (line + points),
-  //   no text labels.
-
+  if (points.length < 1) return '';
+  // Build SVG using sub-functions
+  let svg = '<svg width="100%" height="100%" viewBox="0 0 ' + width + ' ' + height + '" preserveAspectRatio="xMidYMid slice" style="display:block;overflow:hidden">';
+  svg = _buildEvalTrendGrid(svg, colors, width, height, padding, midY, _reviewEvalGlobal, reviewStates, stepToX);
+  svg = _buildEvalTrendSegments(svg, colors, points, stepToX, evalToY, _reviewEvalGlobal);
+  svg = _buildEvalTrendPoints(svg, colors, points, stepToX, evalToY);
+  if (!_reviewEvalGlobal) {
+    svg = _buildEvalTrendLabels(svg, colors, points, stepToX, evalToY, width, height, reviewStep);
+  }
+  svg = _buildEvalTrendCurrentMarker(svg, colors, reviewStep, reviewStates, stepToX, evalToY);
   svg += '</svg>';
   return svg;
 }
@@ -2136,302 +2082,31 @@ function render(){
   lastRenderTime=now;
   renderInternal();
 }
+
 /**
- * Internal render function — builds the entire UI HTML string and sets innerHTML.
- * @side-effect Rebuilds entire app DOM, invalidates element cache
+ * v1.2.0 Phase 82: Render all modal dialogs as a single group.
+ *
+ * Extracted from renderInternal() to reduce God Function size. Each dialog is
+ * triggered by an independent boolean flag and produces self-contained HTML
+ * overlay markup appended to the `h` string. All dialogs use global state only
+ * (no local variables from renderInternal's main body), making this extraction
+ * safe and reversible.
+ *
+ * Dialogs rendered (in order):
+ *   - showNewGameDialog: New game settings (color, Chess960, time control, openings)
+ *   - showEngineConfig: Engine configuration (delegates to renderEngineConfig)
+ *   - showResignConfirm: Resignation confirmation
+ *   - showAboutPage: About / license information
+ *   - showImportDialog: FEN/PGN import options
+ *   - pendingPromotion: Pawn promotion piece selector
+ *   - showSavePGNPrompt: Save PGN before clearing move records
+ *   - showPGNCacheManager: PGN cache manager (delegates to _renderPGNCacheManager)
+ *
+ * @param {string} h - Current HTML string
+ * @returns {string} h with dialog HTML appended
  */
-function renderInternal(){try{
-// Defensive check — if gameState is undefined/corrupt, reset to initial state
-if(!gameState||!gameState.board){console.error('renderInternal: gameState is invalid, resetting');gameState=initState();stateHistory=[];_redoStack=[];}
-if(setupMode){gameOver=null;_gameOverStatusKey=null;}
-// Re-localize gameOver text on every render
-if(gameOver&&_gameOverStatusKey){const _reLocStr=_gameOverStrFromStatus(_gameOverStatusKey);if(_reLocStr)gameOver=_reLocStr;}
-const app=document.getElementById('app');if(!app)return;
-// Score from White's perspective (UCI side-to-move → White conversion done in onEngineEval); emoji/desc reflect player's advantage
-const _fe=formatEval();const pe=_fe.emoji,pd=_fe.desc,scoreStr=_fe.score;
-// v1.0.4 Rev33: display "D15 SD22" — depth + seldepth (tactical depth).
-// SD only shown when > 0 AND > depth (seldepth == depth is redundant).
-const _hdrDepthStr=_sfDepth>0?'<span style="font-size:.65rem;color:var(--muted);margin-left:4px">D'+_sfDepth+'</span>'+(_sfSeldepth>0&&_sfSeldepth>_sfDepth?'<span style="font-size:.65rem;color:var(--muted);margin-left:2px">SD'+_sfSeldepth+'</span>':''):'';
-let _hdrProgressStr='';if(_evalLoading&&_sfDepth>0){let _hpp=[];if(_lastProgressNodes!=null){const _ns=_lastProgressNodes>=1000000?(_lastProgressNodes/1000000).toFixed(1)+'M':_lastProgressNodes>=1000?Math.round(_lastProgressNodes/1000)+'K':String(_lastProgressNodes);_hpp.push(_ns);}if(_lastProgressNps!=null){const _ns=_lastProgressNps>=1000000?(_lastProgressNps/1000000).toFixed(1)+'M/s':_lastProgressNps>=1000?Math.round(_lastProgressNps/1000)+'K/s':String(_lastProgressNps);_hpp.push(_ns);}if(_hpp.length)_hdrProgressStr='<span style="font-size:.6rem;color:var(--muted);margin-left:3px">'+_hpp.join(' ')+'</span>';}
-
-if(!gameOver&&!setupMode&&!isAIThinking&&!reviewMode){const _gsKey=gameState.hash+'|'+gameState.currentTurn;if(_cachedStatusKey!==_gsKey){_cachedStatus=gameStatus(gameState);_cachedStatusKey=_gsKey;}_applyGameOver(_cachedStatus);}
-const ctrlKey=showCtrlMap?gameState.hash:'off';if(ctrlKey!==cachedCtrlKey){cachedCtrlMap=showCtrlMap?getCtrlMap(gameState.board):null;cachedCtrlKey=ctrlKey}const cm=cachedCtrlMap;
-const infoSq=hoveredSquare||selectedSquare;let infoCtrl=null;
-// v1.0.2 FIX (audit): reuse the control-map entry directly instead of
-// allocating a fresh {white,black} object on every render.
-if(infoSq&&cm){const e=cm[infoSq.row][infoSq.col];if(e)infoCtrl=e;}
-const oppC=OPP_COLOR[playerColor];
-const flip=playerColor==='black';
-// Arrows computed separately by _updateArrows() — no inline computation needed
-
-let h='<div class="hdr" role="banner"><div class="hdr-top"><div class="hdr-l">'+_hdrKingIconHTML()+'<h1>'+T('app_name')+'<span class="ver">v1.1.2</span><button onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showAboutPage=true;render()" class="hdr-btn" style="margin-left:4px;cursor:pointer">ℹ️</button></h1></div><button onclick="toggleLang()" class="hdr-btn-lg" style="cursor:pointer">'+(_lang==='zh'?'↔️中':'↔️EN')+'</button><div class="ev" id="eval-disp" role="status" aria-label="'+T('evaluating')+'">'+(setupMode?T('setup_label'):(isAIThinking?'<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>':'<span class="ev-e">'+pe+'</span><span>'+pd+'</span><span style="color:var(--muted)">('+scoreStr+')</span>'+_hdrDepthStr+_hdrProgressStr))+'</div></div><div class="hdr-tools" role="toolbar" aria-label="'+T('ctrl_range')+'">'+(setupMode?'':'<div class="diff-sel" role="radiogroup" aria-label="AI">'+getAI_LEVELS().map(l=>'<button class="diff-b'+(getEffectiveAILevel()===l.id?' act':'')+'" onclick="if(!isAIThinking){'+(l.id===8?'openEngineConfig()':('aiLevel='+l.id+';try{AndroidBridge.syncGameDifficulty('+l.id+')}catch(e){}render()'))+'}" title="'+l.desc+'" role="radio" aria-checked="'+(getEffectiveAILevel()===l.id)+'">'+(l.id===8?'⚙️':l.id===7?('SL'+(function(){try{let _sl=20;if(typeof engineSettingsData!=='undefined'&&engineSettingsData&&engineSettingsData.skillLevel!=null)_sl=engineSettingsData.skillLevel;else if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getEngineSkillLevel)_sl=AndroidBridge.getEngineSkillLevel();return _sl;}catch(e){return 20;}})()):l.id)+'</button>').join('')+'</div>')+'<button type="button" class="btn" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()" aria-label="'+T('new_game')+'"><span style="font-size:1.4rem">⚔️</span> '+T('new_game')+'</button>'+'<button class="btn" onclick="quickFreeOpening()" aria-label="'+T('free_opening')+'">'+(playerColor==='white'?'<span style=\"font-size:1.4rem;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text\">♔&#xFE0E;</span>':'<span style=\"font-size:1.4rem;font-weight:400;color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans Symbol&#x27;,sans-serif;font-variant-emoji:text\">♚&#xFE0E;</span>')+' '+T('free_opening')+'</button>'+(setupMode?'':'<button class="btn" onclick="toggleSound()" id="btnSound" aria-label="'+T('sound')+'">'+(soundOn?'<span style="font-size:1.4rem">🔊</span> '+T('sound'):'<span style="font-size:1.4rem">🔇</span> '+T('sound'))+'</button>')+'<button class="btn" onclick="copyFEN()" title="'+T('copy_fen')+'" aria-label="'+T('copy_fen')+'"><span style="font-size:1.4rem">📝</span> FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="'+T('import_fen')+'" aria-label="'+T('import_fen')+'"><span style="font-size:1.4rem">🗃️</span> '+T('import_label')+'</button><button class="btn" onclick="'+(setupMode?'exitSetup()':'toggleSetup()')+'" aria-label="'+(setupMode?T('setup_done'):T('setup_mode'))+'">'+(setupMode?'<span style="font-size:1.4rem">✓</span> '+T('setup_done'):'<span style="font-size:1.4rem">🏗️</span> '+T('setup_mode'))+'</button></div></div>';
-h+=`<div class="main" role="main"><div class="bsec">`;
-// v1.0.4 Rev37: AI bar captured pieces split at 7 — pieces 8+ go to line 3.
-{const _aiCapHtml=capturedPiecesHtml(gameState.board,oppC,playerColor,7);
-// v1.0.4 FIX (this round): render the AI's clock display element when the game is timed.
-// The element has id="clock-black" or "clock-white" depending on which color the AI plays.
-// _updateClockDisplay() updates its textContent live (200ms poll) without full re-render.
-const _aiClockColor=oppC;
-const _aiClockId=_aiClockColor==='white'?'clock-white':'clock-black';
-const _aiClockHtml=(typeof gameClocks!=='undefined'&&gameClocks)?`<span id="${_aiClockId}" style="font-family:monospace,system-ui,-apple-system,sans-serif;font-size:.85rem;font-weight:700;color:var(--text);background:rgba(0,0,0,.3);padding:2px 8px;border-radius:4px;border:1px solid var(--border);min-width:48px;text-align:center">${formatClock(gameClocks[_aiClockColor]?gameClocks[_aiClockColor].remainingSec:0)}</span>`:'';
-// v1.0.4 Rev36 LAYOUT: AI opponent bar restructured for cleaner multi-line display.
-// Line 1: AI name + level + clock + waiting/thinking indicator (compact status).
-// Line 2: Engine search real-time info (_aiBarInfo / _hintBarInfo) — right-aligned.
-// Line 3: Ponder info (🔮 move + progress) — right-aligned.
-// v1.0.4 Rev37: When AI captured pieces > 7, pieces 8+ go on line 3 left-aligned
-// (sharing the line with ponder info which is right-aligned). The _aiCapHtml
-// may contain two divs: the first (pieces 1-7) and #ai-cap-overflow (pieces 8+).
-// We extract the overflow div and place it in line 3 alongside #ai-ponder-info.
-// v1.0.4 Rev38 FIX: Overflow issues — search info and ponder info could exceed
-// the bar width because the inner column div didn't have overflow:hidden, and
-// the search/ponder text used white-space:nowrap without a bounded max-width.
-// Fix: add overflow:hidden to the inner column, add max-width:100% to search/
-// ponder info, and make the line-3 container properly shrinkable (min-width:0).
-// v1.0.4 Rev40 FIX: Line-3 layout — was justify-content:space-between which put
-// #ai-ponder-info at LEFT when no overflow (single child). Changed to
-// margin-left:auto on #ai-ponder-info so it's ALWAYS right-aligned regardless
-// of whether overflow pieces exist. Also removed justify-content from container.
-// Extract overflow captured pieces (if any) from _aiCapHtml for line 3 placement.
-const _aiCapOverflowMatch=_aiCapHtml.match(/<div id="ai-cap-overflow"[^>]*>[\s\S]*?<\/div>/);
-const _aiCapOverflow=_aiCapOverflowMatch?_aiCapOverflowMatch[0]:'';
-const _aiCapMain=_aiCapOverflowMatch?_aiCapHtml.replace(_aiCapOverflowMatch[0],''):_aiCapHtml;
-h+=`<div class="pbar" id="ai-bar" role="status" aria-label="AI" style="flex-wrap:wrap"><span class="pico">${playerColor==='white'?'<span style="color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55)">♚&#xFE0E;</span>':'<span style="color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55)">♔&#xFE0E;</span>'}</span><div style="flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><div class="pname">${T('ai_opponent')}</div><div class="pbar-sub">${getEffectiveAILevel()===8?T('manual_config'):getEffectiveAILevel()===7?('SL'+(function(){try{let _sl=20;if(typeof engineSettingsData!=='undefined'&&engineSettingsData&&engineSettingsData.skillLevel!=null)_sl=engineSettingsData.skillLevel;else if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getEngineSkillLevel)_sl=AndroidBridge.getEngineSkillLevel();return _sl;}catch(e){return 20;}})()):('Lv.'+getEffectiveAILevel())}</div>${_aiClockHtml}${gameState.currentTurn!==playerColor&&!gameOver&&!isAIThinking?'<span class="tind">'+T('waiting')+'</span>':''}${isAIThinking?'<span class="tind">'+T('thinking')+'</span>':''}</div>${_aiCapMain}<div id="ai-search-info" style="display:flex;justify-content:flex-end;text-align:right;font-size:.65rem;color:var(--accent2);font-family:monospace,system-ui,-apple-system,sans-serif;letter-spacing:.5px;padding-top:2px;line-height:1.3;min-height:1.3em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;width:100%;box-sizing:border-box">${isAIThinking&&_aiBarInfo?_esc(_aiBarInfo):''}</div><div style="display:flex;align-items:center;width:100%;gap:6px;min-width:0;overflow:hidden">${_aiCapOverflow}<div id="ai-ponder-info" style="text-align:right;font-size:.65rem;color:var(--muted);font-family:monospace,system-ui,-apple-system,sans-serif;letter-spacing:.5px;padding-top:1px;line-height:1.3;min-height:1.3em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto;min-width:0;margin-left:auto">${(!isAIThinking&&!isHintLoading&&!hintText&&_ponderMoveSAN&&_ponderBarInfo&&!gameOver&&!setupMode&&!reviewMode)?('🔮 '+_esc(_ponderMoveSAN)+' '+_esc(_ponderBarInfo)):''}</div></div></div></div>`;}
-h+=`<div class="flbl" style="margin-left:28px">${(flip?'hgfedcba':'abcdefgh').split('').map(f=>`<span style="width:${CELL}px">${f}</span>`).join('')}</div>`;
-h+=`<div style="display:flex"><div class="rlbl">${(flip?'12345678':'87654321').split('').map(r=>`<span style="height:${CELL}px">${r}</span>`).join('')}</div>`;
-h+=`<div class="bwrap"><div class="bgrid" id="board-grid" role="grid" aria-label="${T('board')}" style="grid-template-columns:repeat(8,${CELL}px);grid-template-rows:repeat(8,${CELL}px)">`;
-// Determine check state for king highlighting
-let _checkKingPos=getCheckKingPos(gameState);
-// v1.0.6: Identify castling rook squares for the selected king (if any).
-// These squares get a distinct golden ring marker so the user knows they
-// can click the rook to trigger castling (essential for Chess960).
-// v1.0.6 OPTIMIZATION: _getCastlingRookSquares() was redundantly re-iterating
-// legalMvs and re-calling chess960CastlingRookMove() to reconstruct the 'side'
-// field that _computeCastlingRookSetForSelection already computed but discarded.
-// Since renderInternal only needs the Set of row*8+col keys (the .side field
-// was never used), we now call _computeCastlingRookSetForSelection directly.
-const _castlingRookSet=_computeCastlingRookSetForSelection(selectedSquare,legalMvs);
-// v1.0.8 PHASE 3: Compute visible 🔁 / ⚡ markers ONCE per render pass.
-// These are derived from gameState.castlingRights / gameState.enPassantTarget
-// (during play) or from the user's setupCastleMarks / setupEpMark (during
-// setup mode). See computeVisibleCastleMarks/computeVisibleEpMark in
-// game-logic.js. The markers display in setup and play modes.
-// In review mode the main board is covered by the .review-overlay (a
-// 98%-opaque fixed-position layer), so we skip the computation for the main
-// board here as a minor performance optimization — the review board renders
-// its own markers from rs.state.
-const _visibleCastleMarks=(!reviewMode&&typeof computeVisibleCastleMarks==='function')?computeVisibleCastleMarks(gameState):new Set();
-const _visibleEpMark=(!reviewMode&&typeof computeVisibleEpMark==='function')?computeVisibleEpMark(gameState):null;
-for(let r=0;r<8;r++){for(let c=0;c<8;c++){
-const rr=flip?7-r:r;const cc=flip?7-c:c;
-const p=gameState.board[rr][cc];const isL=(r+c)%2===0;
-let bg=_getSqBg(rr,cc,cm,isL,lastMove);if(selectedSquare&&rr===selectedSquare.row&&cc===selectedSquare.col)bg=SQ_SEL;
-const lastFrom=lastMove&&rr===lastMove.from.row&&cc===lastMove.from.col;
-const lastTo=lastMove&&lastMove.to.row===rr&&lastMove.to.col===cc;
-const isLegal=legalSet.has(rr*8+cc);
-const isCheckSq=_checkKingPos&&rr===_checkKingPos.row&&cc===_checkKingPos.col;
-const isCastlingRook=_castlingRookSet.has(rr*8+cc);
-// v1.0.8 PHASE 3: visible markers (work in all modes — setup, play, review)
-const hasCastleMark=_visibleCastleMarks.has(String(rr*8+cc));
-const hasEpMark=_visibleEpMark&&_visibleEpMark.row===rr&&_visibleEpMark.col===cc;
-const lbl=String.fromCharCode(97+cc)+(8-rr);
-h+=`<div class="sq${lastFrom?' last-from':''}${lastTo?' last-to':''}${isCheckSq?' in-check':''}${isCastlingRook?' castle-rook':''}" role="gridcell" style="background:${bg}" data-r="${rr}" data-c="${cc}" onclick="sqClick(${rr},${cc})">`;
-h+=`<span class="lbl" style="color:${isL?LBL_LIGHT:LBL_DARK};-webkit-text-stroke:.6px ${isL?LBL_STROKE_LIGHT:LBL_STROKE_DARK};paint-order:stroke fill;text-shadow:0 0 2px ${isL?LBL_STROKE_LIGHT:LBL_STROKE_DARK}">${lbl}</span>`;
-// v1.0.8 PHASE 22: landing animation removed — the Web Animations API
-//   overlay (created in animateMove) handles the entire piece-move motion.
-//   The destination square's piece is rendered normally here; the overlay
-//   sits on top until animateMove's _finishAnim removes it.
-if(p){
-h+=`<span class="pc ${p.color==='white'?'w':'bk'}">${SYM[p.color][p.type]}</span>`;
-}
-if(isLegal&&!p)h+=`<div class="dot"></div>`;
-if(isLegal&&p&&!isCastlingRook)h+=`<div class="ring"></div>`;
-// v1.0.6: Castling rook marker — a golden dashed ring (distinct from the
-// solid green capture ring) that signals "click me to castle". Style
-// matches the existing ring/dot design language (CSS in index.html.tpl).
-if(isCastlingRook)h+=`<div class="castle-ring"></div>`;
-// v1.0.8 PHASE 3: 🔁 castle-rights marker and ⚡ en-passant marker.
-// Both render as a small badge anchored to the bottom-right corner of the
-// square, so they don't obstruct the piece glyph (centered) or the legal-
-// move ring (also centered). See .sq .setup-castle-mark / .sq .setup-ep-mark
-// in index.html.tpl for the styling.
-// These markers now display in ALL modes (setup, play, review), derived from
-// gameState.castlingRights / gameState.enPassantTarget by computeVisibleCastleMarks
-// / computeVisibleEpMark (called once per render pass above). Markers auto-
-// remove when the underlying rights/target are lost (e.g., after the king or
-// rook moves, or after the en-passant opportunity passes).
-if(hasCastleMark)h+=`<span class="setup-castle-mark" aria-hidden="true">🔁</span>`;
-if(hasEpMark)h+=`<span class="setup-ep-mark" aria-hidden="true">⚡</span>`;
-h+=`</div>`}}
-h+=`</div>`;
-// Arrows are now handled by persistent SVG overlay via _updateArrows() — no inline SVG here
-if(gameOver&&lastMove&&!gameOverSoundPlayed){gameOverSoundPlayed=true;playSound('gameover');HapticManager.fire('GAME_OVER');}
-if(gameOver&&!setupMode){h+=`<div class="gover" role="alert" aria-live="assertive"><div class="ge" style="${_gameOverStatusKey==='checkmate'?(gameState.currentTurn==='black'?'color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55)':'color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55)'):'font-family:system-ui,sans-serif'};font-family:'DejaVu Sans','Noto Sans','Segoe UI Symbol',sans-serif;font-variant-emoji:text;font-weight:400">${_gameOverStatusKey==='checkmate'?(gameState.currentTurn==='black'?'♔\uFE0E':'♚\uFE0E'):_gameOverStatusKey==='resign'?'🏳️':_gameOverStatusKey==='timeout'?'⌛':'🤝'}</div><div class="gt">${gameOver}</div><button type="button" class="btn btn-p" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()">⚔️ ${T('play_again')}</button><button type="button" class="btn btn-g" onclick="enterReview()">📑 ${T('review')}</button></div>`;}
-if(setupMode){
-const spPieces=[{t:'pawn',w:'♙\uFE0E',b:'♟\uFE0E'},{t:'knight',w:'♘\uFE0E',b:'♞\uFE0E'},{t:'bishop',w:'♗\uFE0E',b:'♝\uFE0E'},{t:'rook',w:'♖\uFE0E',b:'♜\uFE0E'},{t:'queen',w:'♕\uFE0E',b:'♛\uFE0E'},{t:'king',w:'♔\uFE0E',b:'♚\uFE0E'}];
-// v1.0.8: Ensure setupCastleMarks (Set) and setupEpMark ({row,col}|null) exist
-// on gameState. They are the source of truth for the manual 🔁 castle markers
-// and the ⚡ en-passant marker. Initialize once per setup session if missing.
-if(!gameState.setupCastleMarks||!(gameState.setupCastleMarks instanceof Set))gameState.setupCastleMarks=new Set();
-if(typeof gameState.setupEpMark==='undefined')gameState.setupEpMark=null;
-h+=`<div class="setup-panel" style="width:${8*CELL+8}px;max-width:100%;box-sizing:border-box"><div class="setup-row" style="justify-content:flex-start"><span class="setup-label">${T('piece')}</span>`;
-// v1.0.8 PHASE 8: piece buttons toggle — clicking the already-selected piece
-// again deselects it (sets setupPiece=null). This matches the behavior of the
-// 🔁 and ⚡ marker buttons.
-for(const p of spPieces)h+=`<button class="setup-btn${setupPiece===p.t?' act':''} ${setupColor==='white'?'sw':'sb'}" onclick="setupPiece=(setupPiece==='${p.t}'?null:'${p.t}');render()">${setupColor==='white'?p.w:p.b}</button>`;
-// v1.0.8: 🔁 castle-rights marker toggle + ⚡ en-passant marker toggle.
-// v1.0.8 PHASE 8: 🗑️ delete button is MUTUALLY EXCLUSIVE with 🔁 and ⚡ markers.
-// Selecting 🗑️ clears any active marker mode, and selecting a marker clears 🗑️.
-// Piece selection and marker selection remain independent (can co-exist),
-// but 🗑️ cannot co-exist with either marker because deleting a piece also
-// clears its markers — mixing them would be confusing.
-h+=`<button class="setup-btn${setupMarkerMode==='castle'?' act':''}" onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);setupMarkerMode=(setupMarkerMode==='castle'?null:'castle');if(setupMarkerMode&&setupPiece==='delete')setupPiece=null;render()" title="${T('setup_castle_marker_tip')}" aria-label="${T('setup_castle_marker')}" style="font-size:1.2rem">🔁</button>`;
-h+=`<button class="setup-btn${setupMarkerMode==='ep'?' act':''}" onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);setupMarkerMode=(setupMarkerMode==='ep'?null:'ep');if(setupMarkerMode&&setupPiece==='delete')setupPiece=null;render()" title="${T('setup_ep_marker_tip')}" aria-label="${T('setup_ep_marker')}" style="font-size:1.2rem;font-variant-emoji:emoji;-webkit-font-variant-emoji:emoji">⚡</button>`;
-h+=`<button class="setup-del${setupPiece==='delete'?' act':''}" onclick="setupPiece=(setupPiece==='delete'?null:'delete');if(setupPiece==='delete')setupMarkerMode=null;render()">🗑️</button></div>`;
-// v1.0.8: small-font usage hints for the two new marker buttons.
-h+=`<div class="setup-row" style="justify-content:center;gap:8px;margin-top:2px"><span style="font-size:.62rem;color:var(--muted);line-height:1.3;text-align:center;flex:1 1 100%;word-break:break-word">${T('setup_castle_marker_tip')}</span></div>`;
-h+=`<div class="setup-row" style="justify-content:center;gap:8px;margin-top:2px"><span style="font-size:.62rem;color:var(--muted);line-height:1.3;text-align:center;flex:1 1 100%;word-break:break-word">${T('setup_ep_marker_tip')}</span></div>`;
-h+=`<div class="setup-row"><span class="setup-label">${T('color')}</span><button class="setup-clr${setupColor==='white'?' act':''}" onclick="setupColor='white';render()">${T('white_side')}</button><button class="setup-clr${setupColor==='black'?' act':''}" onclick="setupColor='black';render()">${T('black_side')}</button></div>`;
-h+=`<div class="setup-row"><span class="setup-label">${T('turn_side')}</span><button class="setup-clr${gameState.currentTurn==='white'?' act':''}" onclick="gameState.currentTurn='white';_refreshStateAfterSetup(gameState);render()">${T('white_side')}</button><button class="setup-clr${gameState.currentTurn==='black'?' act':''}" onclick="gameState.currentTurn='black';_refreshStateAfterSetup(gameState);render()">${T('black_side')}</button></div>`;
-h+=`<div class="setup-row" style="justify-content:center;gap:12px"><button class="btn" onclick="undoSetupClick()"${setupHistory.length===0?' disabled style="opacity:0.4"':''}><span style="font-size:1.4rem">↩️</span> ${T('undo_setup')}</button><button class="btn" onclick="redoSetupClick()"${setupRedoStack.length===0?' disabled style="opacity:0.4"':''}><span style="font-size:1.4rem">↪️</span> ${T('redo_setup')}</button><button class="btn" onclick="gameState=initState();gameState.moveHistory=[];setupErrors=[];setupHistory=[];setupRedoStack=[];gameState.setupCastleMarks=new Set([String(7*8+0),String(7*8+7),String(0*8+0),String(0*8+7)]);gameState.setupEpMark=null;render()"><span style="font-size:1.4rem">♻️</span> ${T('reset_board')}</button><button class="btn" onclick="for(let r=0;r<8;r++)for(let c=0;c<8;c++)gameState.board[r][c]=null;gameState.wk=null;gameState.bk=null;gameState.enPassantTarget=null;gameState.halfMoveClock=0;gameState.setupCastleMarks=new Set();gameState.setupEpMark=null;_refreshStateAfterSetup(gameState);setupErrors=[];setupHistory=[];setupRedoStack=[];render()"><span style="font-size:1.4rem">🧹</span> ${T('clear_board')}</button></div><div class="setup-row" style="justify-content:center;gap:8px;margin-top:6px"><button class="btn" onclick="copyFEN()"><span style="font-size:1.4rem">📝</span> ${T('copy_fen_btn')}</button><button class="btn" onclick="_importFENWithSaveCheck()"><span style="font-size:1.4rem">📋</span> ${T('import_fen_btn')}</button></div></div>`;
-if(setupErrors.length>0)h+=`<div class="setup-errors"><strong>${T('setup_error_title')}</strong><ul>${setupErrors.map(e=>`<li>${_esc(e)}</li>`).join('')}</ul><button class="btn" onclick="setupErrors=[];render()" style="margin-top:4px">${T('understood')}</button></div>`;
-}
-h+=`</div></div>`;
-// Tablebase status bar (player turn only, ≤7 pieces, manual query)
-if(!gameOver&&!reviewMode&&pieceCountLE7(gameState.board)){
-const _tbFen=generateFEN(gameState);
-let _tbBarHtml='';
-const _cachedTb=_tbCache.get(_tbFen);
-if(_tbLoading){_tbBarHtml='<span style="color:var(--accent)">'+T('tb_querying')+'</span>';}
-else if(_cachedTb){
-// API returns moves[] already sorted best-first; use moves[0] directly
-const _cat=_cachedTb.category||'';
-const _catMap={'win':T('tb_cat_win'),'syzygy-win':T('tb_cat_syzygy_win'),'maybe-win':T('tb_cat_maybe_win'),'cursed-win':T('tb_cat_cursed_win'),'draw':T('tb_cat_draw'),'blessed-loss':T('tb_cat_blessed_loss'),'maybe-loss':T('tb_cat_maybe_loss'),'syzygy-loss':T('tb_cat_syzygy_loss'),'loss':T('tb_cat_loss')};
-const _catLabel=_catMap[_cat]||_cat;
-let _dtzLabel='';
-const _dtm=_cachedTb.dtm;
-const _dtz=_cachedTb.precise_dtz!=null?_cachedTb.precise_dtz:_cachedTb.dtz;
-const _isWinCat=_cat==='win'||_cat==='syzygy-win'||_cat==='maybe-win'||_cat==='cursed-win';
-const _isLossCat=_cat==='loss'||_cat==='syzygy-loss'||_cat==='maybe-loss'||_cat==='blessed-loss';
-if(_isWinCat){
-  if(_dtm!=null&&_dtm>0){_dtzLabel=T('tb_mate_dist')+': '+Math.ceil(Math.abs(_dtm)/2)+T('tb_steps');}
-  else if(_dtz!=null&&_dtz>0){_dtzLabel=T('tb_dtz_dist')+': '+Math.ceil(_dtz/2)+T('tb_steps');}
-}else if(_cat==='draw'){_dtzLabel=T('tb_theory_draw');}
-else if(_isLossCat){
-  if(_dtm!=null&&_dtm<0){_dtzLabel=T('tb_mate_dist')+': '+Math.ceil(Math.abs(_dtm)/2)+T('tb_steps');}
-  else if(_dtz!=null&&_dtz<0){_dtzLabel=T('tb_resist_dist')+': '+Math.ceil(Math.abs(_dtz)/2)+T('tb_steps');}
-}
-// Declare _best outside the if-block to avoid ReferenceError
-let _bestMoveLabel='';
-let _best=null;
-if(_cachedTb.moves&&_cachedTb.moves.length){
-_best=_cachedTb.moves[0]; // API sorts best-first
-_bestMoveLabel=_best.san||_best.uci;
-}
-// v1.0.8 PHASE 30: escape _best.uci (in onclick attr) and _bestMoveLabel (in
-//   text content) — both come from the tablebase.lichess.ovh API response and
-//   could be XSS vectors if the API is compromised or returns malformed data.
-_tbBarHtml=`<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="color:${(_cat==='win'||_cat==='syzygy-win')?'#27ae60':_cat==='draw'?'var(--accent)':'#c0392b'};font-weight:700">${_catLabel}</span><span style="color:var(--muted);font-size:.72rem">${_dtzLabel}</span>${_bestMoveLabel&&_best?'<span style="cursor:pointer;color:var(--accent2);font-size:.78rem" onclick="autoSelectTablebaseMove('+_jsAttrEncode(_best.uci)+')">🌟 '+T('recommend')+': '+_esc(_bestMoveLabel)+'</span>':''}</div>`;
-}else if(isTbOffline()){_tbBarHtml='<span style="color:var(--muted)">'+T('tb_unavailable')+'</span>';}
-else{_tbBarHtml='<span style="cursor:pointer;color:var(--accent);text-decoration:underline" onclick="_triggerTbQuery()">'+T('tb_query')+'</span>';}
-h+=`<div style="padding:6px 12px;background:var(--card);border:1px solid var(--border);border-radius:6px;font-size:.8rem;font-family:system-ui,-apple-system,sans-serif"><div style="display:flex;align-items:center;gap:6px;margin-bottom:3px"><span style="font-size:.85rem">🌐</span><span style="color:var(--accent2);font-weight:700;font-size:.75rem">${T('tb_library')}</span></div>${_tbBarHtml}</div>`;
-}
-// ECO Opening Recommendation bar (only when _ecoEnabled)
-// v1.0.6: Suppress in Chess960 mode — Chess960 has no fixed opening theory,
-// so ECO recommendations are meaningless and were already disabled in the
-// new-game dialog (the ECO book toggle is grayed out when Chess960 is on).
-// This same gate now also covers the in-game recommendation bar so a game
-// that started as Chess960 (or was imported from a Chess960 PGN) never
-// shows ECO recommendations.
-if(!setupMode&&!gameOver&&!reviewMode&&_ecoEnabled&&!(typeof gameVariant!=='undefined'&&gameVariant==='chess960')&&gameState.currentTurn===playerColor){
-const _ecoRec=getECORecommendation(gameState);
-if(_ecoRec){
-// v1.0.8 PHASE 30: escape _ecoRec.notation and _ecoRec.name for defense-in-depth
-//   (ECO data is bundled/trusted, but consistent escaping is safer).
-h+=`<div style="padding:6px 12px;background:var(--card);border:1px solid var(--purple);border-radius:6px;font-size:.8rem;font-family:system-ui,-apple-system,sans-serif"><div style="display:flex;align-items:center;gap:6px;margin-bottom:3px"><span style="font-size:.85rem">📖</span><span style="color:var(--accent2);font-weight:700;font-size:.75rem">${T('opening_rec')}</span></div><span style="color:var(--muted);font-size:.85rem;margin-right:4px">🔍</span><span style="color:var(--text)">${_esc(_ecoRec.notation)}</span><span style="color:var(--muted);font-size:.7rem;margin-left:6px">(${_esc(_ecoRec.name)})</span></div>`;
-}
-}
-// Hint area: only shown when user clicked hint button (isHintLoading or hintText set)
-// Search info in hint area only shown during hint loading, NOT during AI thinking
-{if(isHintLoading||hintText){h+='<div class="hint-area"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:.85rem">💡</span><span style="font-size:.75rem;color:var(--accent2)">'+T('ai_hint')+'</span></div>';if(isHintLoading)h+='<div class="hint-text" style="animation:pulse 1.2s infinite">'+T('hint_thinking')+'</div>';else if(hintText)h+='<div class="hint-text">'+_esc(hintText)+'</div>';if(isHintLoading&&_hintBarInfo)h+='<div id="hint-search-info" style="font-size:.72rem;color:var(--accent);margin-top:4px;font-family:monospace;letter-spacing:.5px">'+_esc(_hintBarInfo)+'</div>';
-// Ponder move is now displayed inline in hintText (set by onHintMove)
-// when the engine provides "bestmove X ponder Y". No separate display needed here.
-// Show MultiPV alternative lines if available
-if(_multiPVLines.length>=1){h+='<div style="margin-top:6px;border-top:1px solid rgba(212,160,23,.15);padding-top:6px"><div style="font-size:.65rem;color:var(--muted);margin-bottom:4px">'+T('multi_analysis')+'</div>';for(const pv of _multiPVLines){let scoreStr='';if(pv.scoreMate!=null&&pv.scoreMate!==null){const m=parseInt(pv.scoreMate,10);if(!isNaN(m))scoreStr=m>0?'#+'+Math.abs(m):m<0?'#-'+Math.abs(m):'#0';}else if(pv.scoreCp!=null&&pv.scoreCp!==null){const pd=(pv.scoreCp/100).toFixed(1);scoreStr=(pv.scoreCp>0?'+':'')+pd;} let pvSAN='';if(pv.pv){try{const _conv=_convertPVtoSAN(pv.pv,gameState);pvSAN=_conv.sanMoves.split(/\s+/).slice(0,3).join(' ');}catch(e){pvSAN=pv.pv.split(/\s+/).slice(0,3).join(' ');}} h+='<div style="font-size:.65rem;color:'+(pv.index===1?'var(--accent2)':'var(--muted)')+';margin-bottom:2px">'+(pv.index===1?'⭐':'·')+' '+scoreStr+(pvSAN?' <span style="font-family:monospace;font-size:.6rem">'+_esc(pvSAN)+'</span>':'')+'</div>';}h+='</div>';} h+='</div>';}}// Player bar
-{const _plCapHtml=capturedPiecesHtml(gameState.board,playerColor,playerColor);
-// v1.0.4 FIX (this round): render the player's clock display element when timed.
-const _plClockColor=playerColor;
-const _plClockId=_plClockColor==='white'?'clock-white':'clock-black';
-const _plClockHtml=(typeof gameClocks!=='undefined'&&gameClocks)?`<span id="${_plClockId}" style="font-family:monospace,system-ui,-apple-system,sans-serif;font-size:.85rem;font-weight:700;color:var(--text);background:rgba(0,0,0,.3);padding:2px 8px;border-radius:4px;border:1px solid var(--border);min-width:48px;text-align:center">${formatClock(gameClocks[_plClockColor]?gameClocks[_plClockColor].remainingSec:0)}</span>`:'';
-// v1.0.4 Rev24: Player name display — uses _humanPlayerName (rename feature)
-// if set, otherwise the default "你"/"You". Clicking the name opens a rename
-// prompt. The name is persisted via AndroidBridge.persistentSet and used in
-// all PGN text ([White "..."] / [Black "..."]).
-const _plName=(typeof _humanPlayerName!=='undefined'&&_humanPlayerName)?_humanPlayerName:T('you');
-const _plNameEsc=_escapeHTML(_plName);
-// v1.0.8: Quick Toolbar — sits between the board and the player bar.
-// Originally these 5 buttons (↩️悔棋 / ↪️撤悔 / 🔃翻转 / 💡AI提示 / 🌗🌈控制范围)
-// lived in the top header toolbar. They have been MOVED here so the header
-// stays focused on game-level actions (New Game, Free Play, Sound, FEN,
-// Import, Setup) while in-game / over-the-board actions live next to the
-// board where the user's thumb naturally rests.
-// In setup mode, ↩️/↪️ are hidden (no moves to undo/redo), but 🔃/💡/🌗🌈 stay.
-// Review mode has its own toolbar inside .review-hdr, so this quick toolbar
-// is hidden entirely when reviewMode === true.
-if(!reviewMode){
-  h+=`<div class="qtoolbar" role="toolbar" aria-label="${T('quick_toolbar')}">`;
-  if(!setupMode){
-    h+=`<button class="btn" onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);undoMove()" aria-label="${T('undo')}" title="${T('undo')}"><span style="font-size:1.4rem">↩️</span> ${T('undo')}</button>`;
-    h+=`<button class="btn" onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);redoMove()" aria-label="${T('redo')}" id="redoBtnQt" title="${T('redo')}"><span style="font-size:1.4rem">↪️</span> ${T('redo')}</button>`;
-  }
-  h+=`<button class="btn" onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);flipBoard()" aria-label="${T('flip')}" title="${T('flip')}"><span style="font-size:1.4rem">🔃</span> ${T('flip')}</button>`;
-  h+=`<button class="btn" onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);getHint()" aria-label="${T('ai_hint')}" title="${T('ai_hint')}"><span style="font-size:1.4rem">💡</span> ${T('ai_hint')}</button>`;
-  h+=`<button class="btn" onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showCtrlMap=!showCtrlMap;cachedCtrlKey=&quot;&quot;;render()" aria-label="${T('ctrl_range')}" title="${T('ctrl_range')}">${showCtrlMap?'<span style="font-size:1.4rem">🌈</span> '+T('ctrl_range'):'<span style="font-size:1.4rem">🌗</span> '+T('ctrl_range')}</button>`;
-  h+=`</div>`;
-}
-h+=`<div class="pbar" id="player-bar" style="flex-wrap:wrap"><span class="pico">${playerColor==='white'?'<span style="color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55)">♔&#xFE0E;</span>':'<span style="color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55)">♚&#xFE0E;</span>'}</span><div style="flex:1;min-width:0;display:flex;flex-direction:column"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><div class="pname" style="cursor:pointer;text-decoration:underline dotted rgba(212,160,23,.5);text-underline-offset:3px" onclick="_renameHumanPlayer()" title="${T('rename_player_hint')}">${_plNameEsc}</div>${_plClockHtml}</div>${_plCapHtml}</div>${gameState.currentTurn===playerColor&&!gameOver&&!setupMode?'<span class="tind" style="color:#4ade80">'+T('your_turn')+'</span><button type="button" class="btn" onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showResignConfirm=true;render()" title="'+T('resign_btn')+'" aria-label="'+T('resign_btn')+'" style="padding:4px 10px;font-size:.75rem;min-height:30px;border-color:rgba(192,57,43,.6);color:#e57373;background:rgba(192,57,43,.12)">'+T('resign_btn')+'</button>':''}</div>`;}
-h+=`</div>`;
-// Side panel
-h+=`<div class="panel" role="complementary">`;
-// Control info
-if(showCtrlMap){
-h+=`<div class="card" id="ctrl-info-card"><div class="card-t"><span class="ico">📍</span>${T('ctrl_info')}</div>`;
-if(infoSq){const al=posAlg(infoSq);const pc=gameState.board[infoSq.row][infoSq.col];const wt=infoCtrl?infoCtrl.white.length:0;const bt=infoCtrl?infoCtrl.black.length:0;
-const myCtrl=playerColor==='white'?wt:bt;const opCtrl=playerColor==='white'?bt:wt;const netCtrl=myCtrl-opCtrl;
-h+=`<div class="crow"><span class="lb">${T('cur_square')}</span><span class="vl">${al} ${pc?pieceName(pc.type):''}</span></div>`;
-h+=`<div class="crow"><span class="lb">${T('total_ctrl')}</span><span class="vl">${wt+bt}</span></div>`;
-h+=`<div class="crow"><span class="lb">${T('my_ctrl')}</span><span class="vl b">${myCtrl}</span></div>`;
-h+=`<div class="crow"><span class="lb">${T('op_ctrl')}</span><span class="vl r">${opCtrl}</span></div>`;
-h+=`<div class="crow"><span class="lb">${T('net_ctrl')}</span><span class="vl ${netCtrl>0?'b':netCtrl<0?'r':''}">${netCtrl>0?'+':''}${netCtrl}</span></div>`;
-if(infoCtrl){h+=`<div class="plist">`;for(const c of infoCtrl[playerColor])h+=`<div class="pitem"><span class="dot2 b"></span>${pieceName(c.piece.type)}@${posAlg(c.position)}</div>`;for(const c of infoCtrl[oppC])h+=`<div class="pitem"><span class="dot2 r"></span>${pieceName(c.piece.type)}@${posAlg(c.position)}</div>`;h+=`</div>`}}
-else{h+=`<div style="color:#64748b;font-size:.85rem">${T('click_sq')}</div>`}
-h+=`</div>`;}
-// ECO Opening Info (only when _ecoEnabled)
-// v1.0.6: Also suppress in Chess960 mode (no fixed opening theory).
-if(_ecoEnabled&&!(typeof gameVariant!=='undefined'&&gameVariant==='chess960')){
-const ecoInfo=queryECO(gameState);
-if(ecoInfo){h+=`<div class="card"><div class="card-t"><span class="ico">📖</span>${T('eco_id')}</div><div style="padding:12px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span class="opening-tag">${_esc(ecoInfo.id)}</span><span style="font-weight:600;font-size:.9rem">${_esc(ecoInfo.name)}</span></div><div style="color:var(--muted);font-size:.82rem">${_esc(ecoInfo.family)}</div></div></div>`}
-}
-
-// Move history
-h+=`<div class="card"><div class="card-t"><span class="ico">📜</span>${T('move_history')}<button class="btn" style="margin-left:auto;padding:3px 10px;font-size:.7rem;min-height:24px" onclick="copyMoveHistory()" title="${T('pgn_copied')||'Copy PGN'}">📝 PGN</button><button class="btn" style="margin-left:4px;padding:3px 10px;font-size:.7rem;min-height:24px" onclick="exportPGNToFile()" title="${T('export_pgn')||'Export PGN to file'}">💾</button><button class="btn" style="margin-left:4px;padding:3px 10px;font-size:.7rem;min-height:24px" onclick="openStatsPage()" title="${T('stats')}">📊</button><div class="toggle" style="margin-left:6px;padding:2px 6px;font-size:.65rem" onclick="showVariations=!showVariations;HapticManager.fire(showVariations?'TOGGLE_ON':'TOGGLE_OFF');render()"><span>${T('variation_toggle')}</span><div class="toggle-sw sm${showVariations?' on':''}"></div></div></div><div class="mlist">`;
-// v1.0.3: Use _importedStartMoveNum as the move-pair number offset, so PGN
-// imports with [FEN "... w ... 4"] display "4. <move> 5. <move>" instead of
-// "1. <move> 2. <move>". Defaults to 1 (standard initial position).
-const _mvStartOffset=(typeof _importedStartMoveNum!=='undefined'&&_importedStartMoveNum>0)?_importedStartMoveNum:1;
-// v1.0.3: pairs store the moveRecords index `i` so the onclick handlers can
-// compute the correct reviewStep (= i + 1, since reviewStates[0] is the
-// starting position) regardless of the FEN-based move-number offset.
-const pairs=[];for(let i=0;i<moveRecords.length;i+=2){pairs.push({n:Math.floor(i/2)+_mvStartOffset,wi:i,bi:i+1,w:moveRecords[i],b:moveRecords[i+1]})}
-for(const pr of pairs){h+='<div class="mrow"><span class="mnum">'+pr.n+'.</span>';if(pr.w){h+='<span class="mw" onclick="if(!isAIThinking&&!setupMode&&!reviewMode){showNewGameDialog=false;enterReview();reviewGoTo('+(pr.wi+1)+');event.stopPropagation()}">'+_esc(pr.w.notation)+(pr.w.time?'<span style="font-size:.6rem;color:var(--muted);margin-left:2px">'+pr.w.time+'s</span>':'')+'</span>';if(showVariations&&pr.w&&pr.w.variations&&pr.w.variations.length>0){h+=_formatVariationGroups(pr.w.variations,pr.n,true);}}else if(pr.w===null){h+='<span class="mw" style="opacity:.55;font-style:italic" title="'+T('white_concedes_move')+'">...</span>';}if(pr.b){h+='<span class="mb" onclick="if(!isAIThinking&&!setupMode&&!reviewMode){showNewGameDialog=false;enterReview();reviewGoTo('+(pr.bi+1)+');event.stopPropagation()}">'+_esc(pr.b.notation)+(pr.b.time?'<span style="font-size:.6rem;color:var(--muted);margin-left:2px">'+pr.b.time+'s</span>':'')+'</span>';if(showVariations&&pr.b&&pr.b.variations&&pr.b.variations.length>0){h+=_formatVariationGroups(pr.b.variations,pr.n,false);}}h+='</div>'}
-if(!pairs.length)h+=`<div style="color:#64748b;font-size:.85rem;cursor:pointer;padding:4px 0;text-decoration:underline dotted rgba(100,116,139,.4);text-underline-offset:3px" onclick="if(!isAIThinking&&!setupMode&&!reviewMode){showNewGameDialog=false;enterReview();event.stopPropagation()}" title="${T('enter_review_hint')}">${T('no_moves')}</div>`;
-h+=`</div></div>`;
-// Tips
-h+=`<div class="card"><div class="card-t"><span class="ico">💡</span>${T('chess_tips')}</div><div class="tips">`;
-h+=_principlesHTML();
-h+=`</div></div>`;
-h+=`</div></div>`;
-
-// New game dialog
+function _renderDialogs(h){
+// ===================== NEW GAME DIALOG =====================
 if(showNewGameDialog){
 h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="${T('new_game_settings')}" onclick="if(event.target===this){showNewGameDialog=false;render()}"><div class="dlg"><h2>⚔️ ${T('new_game_settings')}</h2><div class="dlg-content">`;
 h+=`<div class="dlg-sec"><h3>${T('play_color')}</h3><div class="clr-row"><button class="clr-btn${dlgPlayerColor==='white'?' act':''}" onclick="dlgPlayerColor='white';render()"><span style="color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text;font-size:1.6rem">♔&#xFE0E;</span>${T('white_first')}</button><button class="clr-btn${dlgPlayerColor==='black'?' act':''}" onclick="dlgPlayerColor='black';render()"><span style="color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text;font-size:1.6rem">♚&#xFE0E;</span>${T('black_second')}</button></div></div>`;
@@ -2520,7 +2195,7 @@ if(dlgChess960&&!dlgBookMoves){
   // does NOT apply. This keeps input and 🎲 side-by-side in all orientations.
   h+=`<div style="display:flex;gap:6px;align-items:center;flex:1;min-width:120px">`;
   h+=`<input type="number" min="0" max="959" value="${curSPID>=0?curSPID:''}" placeholder="0-959" style="flex:1;width:80px;min-width:0;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;text-align:center" oninput="const v=parseInt(this.value,10);if(!isNaN(v)&&v>=0&&v<960){dlgChess960SPID=v;render();}else if(this.value===''){dlgChess960SPID=-1;render();}">`;
-  h+=`<button class="btn" style="padding:4px 10px;font-size:.78rem;flex-shrink:0" onclick="HapticManager.fire('BUTTON_PRESS');dlgChess960SPID=Math.floor(Math.random()*960);render();">🎲</button>`;
+  h+=`<button class="btn" style="padding:4px 10px;font-size:.78rem;flex-shrink:0" onclick="HapticManager.fire('BUTTON_PRESS');dlgChess960SPID=(typeof secureRandomInt==='function'?secureRandomInt(960):Math.floor(Math.random()*960));render();">🎲</button>`;
   h+=`</div>`;
   h+=`</div>`;
   // Back-rank preview — responsive grid; piece symbols use board piece styling
@@ -2552,17 +2227,23 @@ h+=`</div>`; // close .dlg-content
 h+=`<div class="dlg-btns"><button type="button" class="btn btn-s" onclick="showNewGameDialog=false;dlgOpeningId=null;render()">${T('cancel')}</button><button type="button" class="btn btn-p" onclick="startGame()">${T('start_game_pawn')}</button></div>`;
 h+=`</div></div>`}
 
-// Promotion dialog
+// ===================== ENGINE CONFIG DIALOG =====================
 if(showEngineConfig){h+=renderEngineConfig();}
+
+// ===================== RESIGN CONFIRMATION =====================
 // v1.0.4 Rev27: Resign confirmation dialog (DeepSeek review 2.1)
 if(showResignConfirm){
 h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="${T('resign_confirm_title')}" onclick="if(event.target===this){showResignConfirm=false;render()}"><div class="dlg" style="max-width:380px"><h2>${T('resign_confirm_title')}</h2><div class="dlg-sec"><p style="font-size:.9rem;line-height:1.6;color:var(--text)">${T('resign_confirm_msg')}</p></div><div class="dlg-btns"><button type="button" class="btn" onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showResignConfirm=false;render()" style="flex:1;justify-content:center">${T('resign_no')}</button><button type="button" class="btn btn-p" onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showResignConfirm=false;_resignGame();render()" style="flex:1;justify-content:center;background:#c0392b;border-color:#a93226;color:#fff">${T('resign_yes')}</button></div></div></div>`;
 }
+
+// ===================== ABOUT PAGE =====================
 if(showAboutPage){
 // Load AGPL v3 SVG via AndroidBridge as base64 (CSP-compliant)
 let _gplSvgSrc='';
 try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.loadAssetAsBase64){const b64=AndroidBridge.loadAssetAsBase64('AGPLv3_Logo.svg');if(b64)_gplSvgSrc='data:image/svg+xml;base64,'+b64;}}catch(e){}
-h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="About"><div class="dlg" style="max-width:460px"><h2>${T('about_title')}</h2><div class="dlg-sec"><div class="crow"><span class="lb">${T('about_app')}</span><span class="vl">${T('app_name')} v1.1.2</span></div><div class="crow"><span class="lb">${T('about_engine')}</span><span class="vl">Stockfish 18 (arm64-v8a-dotprod)</span></div><div class="crow"><span class="lb">${T('about_platform')}</span><span class="vl">Android arm64-v8a</span></div></div><div class="dlg-sec"><h3>${T('copyright_license')}</h3>`+(_gplSvgSrc?`<div style="text-align:center;margin-bottom:10px"><img src="${_gplSvgSrc}" alt="AGPL v3 Logo" style="width:120px;height:auto;opacity:.9" /></div>`:'')+`<div style="font-size:.75rem;color:var(--text);line-height:1.6"><p style="margin-bottom:8px">${T('about_copyright')}</p><p style="margin-bottom:8px">${T('about_source_code_prefix')}<a href="${T('about_source_code_url')}" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">${T('about_source_code_url')}</a></p><p style="margin-bottom:8px">${T('about_agpl')} <a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GNU AGPL v3</a>${T('about_agpl_desc')}</p><p style="margin-bottom:8px">${T('about_droidfish')}<a href="https://github.com/peterosterlund2/droidfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">DroidFish</a>${T('about_droidfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a>${T('about_droidfish_tail')}</p><p style="margin-bottom:8px">${T('about_stockfish')}<a href="https://github.com/official-stockfish/Stockfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">Stockfish</a>${T('about_stockfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a> ${T('about_gplv3')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_disclaimer')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_ai')}</p></div></div><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="showAboutPage=false;render()" style="flex:1;justify-content:center">${T('close')}</button></div></div></div>`;}
+h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="About"><div class="dlg" style="max-width:460px"><h2>${T('about_title')}</h2><div class="dlg-sec"><div class="crow"><span class="lb">${T('about_app')}</span><span class="vl">${T("app_name")} v1.2.0</span></div><div class="crow"><span class="lb">${T('about_engine')}</span><span class="vl">Stockfish 18 (arm64-v8a-dotprod)</span></div><div class="crow"><span class="lb">${T('about_platform')}</span><span class="vl">Android arm64-v8a</span></div></div><div class="dlg-sec"><h3>${T('copyright_license')}</h3>`+(_gplSvgSrc?`<div style="text-align:center;margin-bottom:10px"><img src="${_gplSvgSrc}" alt="AGPL v3 Logo" style="width:120px;height:auto;opacity:.9" /></div>`:'')+`<div style="font-size:.75rem;color:var(--text);line-height:1.6"><p style="margin-bottom:8px">${T('about_copyright')}</p><p style="margin-bottom:8px">${T('about_source_code_prefix')}<a href="${T('about_source_code_url')}" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">${T('about_source_code_url')}</a></p><p style="margin-bottom:8px">${T('about_agpl')} <a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GNU AGPL v3</a>${T('about_agpl_desc')}</p><p style="margin-bottom:8px">${T('about_droidfish')}<a href="https://github.com/peterosterlund2/droidfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">DroidFish</a>${T('about_droidfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a>${T('about_droidfish_tail')}</p><p style="margin-bottom:8px">${T('about_stockfish')}<a href="https://github.com/official-stockfish/Stockfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">Stockfish</a>${T('about_stockfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a> ${T('about_gplv3')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_disclaimer')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_ai')}</p></div></div><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="showAboutPage=false;render()" style="flex:1;justify-content:center">${T('close')}</button></div></div></div>`;}
+
+// ===================== IMPORT DIALOG =====================
 // Import dialog — paste FEN, paste PGN, or select PGN file
 if(showImportDialog){
 h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="${T('import_title')}" onclick="if(event.target===this){showImportDialog=false;render()}"><div class="dlg" style="max-width:420px"><h2>${T('import_title')}</h2><div class="dlg-sec" style="gap:10px;display:flex;flex-direction:column">
@@ -2571,19 +2252,45 @@ h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="${T('import_tit
 <button class="btn" style="width:100%;justify-content:center;gap:8px;padding:12px;font-size:.9rem" onclick="showImportDialog=false;_importPGNFileWithSaveCheck()"><span style="font-size:1.3rem">📂</span> ${T('select_pgn_file')}</button>
 </div><div class="dlg-btns"><button type="button" class="btn btn-s" onclick="showImportDialog=false;render()" style="flex:1;justify-content:center">${T('cancel')}</button></div></div></div>`;
 }
+
+// ===================== PROMOTION DIALOG =====================
 if(pendingPromotion){const co=pendingPromotion.piece.color;const pcls=co==='white'?'w-prom':'bk-prom';h+=`<div class="prom-dov" role="dialog" aria-modal="true" aria-label="${T('select_promotion')}" onclick="if(event.target===this){pendingPromotion=null;render()}"><div class="prom-dlg"><h3>${T('select_promotion')}</h3><div class="prom-row">`;for(const t of['queen','rook','bishop','knight'])h+=`<button class="prom-btn ${pcls}" onclick="doPromotion('${t}')">${SYM[co][t]}</button>`;h+=`</div><button class="btn" style="margin-top:12px;font-size:.8rem" onclick="pendingPromotion=null;render()">${T('cancel')}</button></div></div>`}
 
+// ===================== PGN SAVE PROMPT =====================
 // v1.0.2: PGN save prompt dialog — shown before clearing move records
 if(showSavePGNPrompt){h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="${T('save_pgn_prompt')}" onclick="if(event.target===this){_savePGNCancel()}"><div class="dlg" style="max-width:320px"><h2>${T('save_pgn_prompt')}</h2><div class="dlg-btns" style="flex-wrap:wrap;gap:6px"><button type="button" class="btn btn-p" onclick="HapticManager.fire('BUTTON_PRESS');_savePGNYes()">${T('save_pgn_yes')}</button><button type="button" class="btn btn-s" onclick="HapticManager.fire('BUTTON_PRESS');_savePGNNo()">${T('save_pgn_no')}</button><button type="button" class="btn" onclick="HapticManager.fire('BUTTON_PRESS');_savePGNCancel()" style="flex:1 1 100%;margin-top:4px">${T('cancel')}</button></div></div></div>`;}
 
+// ===================== PGN CACHE MANAGER =====================
 // v1.0.4 Round-5 Rev18: PGN cache manager modal
 if(showPGNCacheManager){h+=_renderPGNCacheManager();}
 
-if(reviewMode){
+return h;
+} // end _renderDialogs
+
+/**
+ * Internal render function — builds the entire UI HTML string and sets innerHTML.
+ * @side-effect Rebuilds entire app DOM, invalidates element cache
+ */
+/**
+ * v1.2.0 Phase 82+: Render review mode UI (board, eval bar, slider, chart, nav, analyze).
+ *
+ * Extracted from renderInternal() to further reduce God Function size. This block
+ * renders the entire review-mode overlay: the review board (with coordinate labels,
+ * control map, visual annotations, SVG arrows), the eval bar, the move slider, the
+ * eval trend chart, the navigation buttons, and the analyze-all button.
+ *
+ * Uses global state only (no local variables from renderInternal's main body),
+ * making this extraction safe and reversible. The h string concatenation pattern
+ * is preserved (receives h, returns h with review HTML appended).
+ *
+ * @param {string} h - Current HTML string
+ * @returns {{h: string, done: boolean}} - {h: updated HTML, done: true if early-return triggered (invalid review state, caller should return immediately)}
+ */
+function _renderReviewMode(h, flip){
 const safeStep=Math.max(0,Math.min(reviewStep,reviewStates.length-1));
 reviewStep=safeStep;
 const rs=reviewStates[safeStep];
-if(!rs){reviewMode=false;render();return}
+if(!rs){reviewMode=false;render();return{h,done:true}}
 const rBoard=rs.state.board;const rLast=rs.lastMove;
 h+='<div class="review-overlay">';
 h+=`<div class="review-hdr"><h2>${T('review_analysis')}</h2><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><div class="toggle" style="padding:2px 6px;font-size:.65rem" onclick="showVariations=!showVariations;HapticManager.fire(showVariations?'TOGGLE_ON':'TOGGLE_OFF');render()"><span>${T('variation_toggle')}</span><div class="toggle-sw sm${showVariations?' on':''}"></div></div><button class="btn" onclick="showCtrlMap=!showCtrlMap;cachedCtrlKey=&quot;&quot;;render()" title="${T('ctrl_range')}">${showCtrlMap?'🌈':'🌗'}</button><button class="btn" onclick="copyReviewPGN()" title="${T('copy_review_pgn')}">📝 PGN</button><button class="btn" onclick="exportPGNToFile()" title="${T('export_pgn')||'Export PGN to file'}">💾</button><button class="btn" onclick="openPGNCacheManager()" title="${T('pgn_cache_manager')}" style="font-weight:700">📚</button><button class="btn" onclick="copyReviewFEN()" title="${T('copy_review_fen')}">📝 FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="${T('import_label')}">🗃️</button><button class="btn" onclick="openStatsPage()" title="${T('stats')}">📊</button><button class="btn" onclick="exitReview()">${T('return_game')}</button></div></div>`;
@@ -2613,22 +2320,40 @@ if (_isLandscapeReview) {
   const _rvMaxCellW = Math.floor((window.innerWidth * 0.60) / 8);
   _rvCell = Math.max(22, _rvMaxCellW);
 }
+// v1.2.0 Phase 83: Pre-compute coordinate label dimensions for the review board.
+// Labels are positioned absolutely OUTSIDE .bgrid (in .review-board's padding area),
+// so .review-board needs padding-top + padding-left to reserve space, and --rv-board-h
+// (used by .review-moves height) must include the label height so the move list
+// aligns with the board's full visual height.
+const _rvLabelW=Math.floor(_rvCell*0.4);
+const _rvLabelH=Math.floor(_rvCell*0.4);
+const _rvLabelGap=2;
+const _rvBoardPx=_rvCell*8;
+const _rvFullBoardH=_rvBoardPx+_rvLabelH+_rvLabelGap; // board + top label row
 // v1.0.3 patch: new DOM structure for landscape — .review-top (board+moves) +
 // .review-bottom (chart+controls full width). In portrait, fall back to the
 // original stacked layout (.review-left with everything inline, .review-moves below).
 if(_isLandscapeReview){
-  h+='<div class="review-body" style="--rv-board-h:'+(_rvCell*8)+'px">';
+  h+='<div class="review-body" style="--rv-board-h:'+_rvFullBoardH+'px">';
   h+='<div class="review-top">';
   // .review-left holds ONLY the board (no inline controls — they moved to .review-bottom)
   h+='<div class="review-left">';
-  h+='<div class="review-board">';
+  // v1.2.0 Phase 83: inline padding reserves space for absolute-positioned coordinate labels.
+  // Overrides CSS .review-board{padding:12px} (portrait) and .review-left .review-board{padding:0} (landscape).
+  h+='<div class="review-board" style="padding-top:'+(_rvLabelH+_rvLabelGap)+'px;padding-left:'+(_rvLabelW+_rvLabelGap)+'px;padding-right:0;padding-bottom:0">';
   h+='<div class="bgrid" style="grid-template-columns:repeat(8,'+_rvCell+'px);grid-template-rows:repeat(8,'+_rvCell+'px)">';
 }else{
   // Portrait: original stacked layout. review-body is vertical, review-left holds
   // everything (board + eval + slider + chart + nav), review-moves is below.
-  h+='<div class="review-body" style="--rv-board-h:'+(_rvCell*8)+'px">';
+  // v1.2.0 Phase 82+++++ rev 4 FIX: Added missing .review-top open tag. The portrait
+  // branch was closing .review-top (line ~2893) without ever opening it, causing the
+  // </div> to auto-close .review-body instead. This made .review-bottom a sibling of
+  // .review-body (not a child), so the CSS rule .review-body > .review-bottom did not
+  // apply in portrait mode. Now .review-top is properly opened, matching landscape.
+  h+='<div class="review-body" style="--rv-board-h:'+_rvFullBoardH+'px">';
+  h+='<div class="review-top">';
   h+='<div class="review-left">';
-  h+='<div class="review-board">';
+  h+='<div class="review-board" style="padding-top:'+(_rvLabelH+_rvLabelGap)+'px;padding-left:'+(_rvLabelW+_rvLabelGap)+'px;padding-right:0;padding-bottom:0">';
   h+='<div class="bgrid" style="grid-template-columns:repeat(8,'+_rvCell+'px);grid-template-rows:repeat(8,'+_rvCell+'px)">';
 }
 // v1.0.2: When showCtrlMap is enabled (🌈), color the review board squares with
@@ -2665,8 +2390,16 @@ if(!showCtrlMap&&typeof _getVisualAnnotations==='function'&&typeof reviewStep!==
   // on-demand using the current gameState (which is the initial position when
   // reviewStep=0).
   // reviewStep N (N>0) = position after move N (moveRecords index N-1).
+  // v1.2.0 Phase 82+++++ rev 6 FIX: Apply placeholder offset when reading visual
+  // annotations. When a black-to-move placeholder exists at moveRecords[0] (from
+  // _prependBlackToMovePlaceholder for FEN imports where Black is to move),
+  // importPGN stores imported annotations at moveIdx + placeholderOffset. Without
+  // this offset, imported annotations would be read from the wrong moveIdx,
+  // causing them to appear on the wrong review step (or not appear at all).
+  // This mirrors the _placeholderOffset logic in tablebase.js importPGN (lines 1551, 1583).
+  const _rvPlaceholderOffset=(typeof moveRecords!=='undefined'&&moveRecords.length>0&&moveRecords[0]===null)?1:0;
   if(reviewStep>0){
-    _rvVa=_getVisualAnnotations(reviewStep-1);
+    _rvVa=_getVisualAnnotations(reviewStep-1+_rvPlaceholderOffset);
   }else if(reviewStep===0){
     // Compute annotations for the initial position on demand.
     // Use a special key '_initial' to cache so we don't recompute every render.
@@ -2705,6 +2438,42 @@ const _RV_VA_COLORS={B:'#4a90d9',R:'#e74c3c',Y:'#f1c40f',G:'#27ae60'};
 // reviewStates[safeStep].state is the source-of-truth game state at step N.
 const _rvVisibleCastle=(typeof computeVisibleCastleMarks==='function')?computeVisibleCastleMarks(rs.state):new Set();
 const _rvVisibleEp=(typeof computeVisibleEpMark==='function')?computeVisibleEpMark(rs.state):null;
+// v1.2.0 Phase 77 → Phase 83 FIX: 添加复盘棋盘坐标标注（左侧1-8数字 + 上方a-h字母 + 格子坐标）
+// 与主界面棋盘和统计数据界面棋盘同款，颜色/位置/字体完全一致。
+//
+// ⚠️ Phase 77 BUG FIX (Phase 83): 原实现将 flex 布局的标签 div 放在 .bgrid（CSS Grid）
+// 内部，破坏了网格布局（Grid 期望 64 个直接子节点，却得到了 flex 包装器），导致棋盘
+// 格子排列异常。同时 SVG 箭头叠加层的 position:absolute 锚点也因此错位。
+//
+// 修复方案：坐标标签改为 position:absolute 定位，放在 .bgrid 外部（.review-board 内部），
+// 不影响网格布局。.review-board 添加 padding 为标签预留空间。SVG 叠加层位置同步调整。
+//
+// 标签尺寸 (_rvLabelW/_rvLabelH/_rvLabelGap/_rvBoardPx) 已在上方 .review-board 开启前
+// 计算（Phase 83），此处仅计算字体大小和构建标签 HTML 字符串。
+const _rvCoordFontSize=Math.max(8,Math.floor(_rvCell*0.25));
+const _rvLabelFontSize=Math.max(10,Math.floor(_rvCell*0.25));
+// 标签 HTML 字符串（稍后在 .bgrid 关闭后插入，作为 .review-board 的绝对定位子元素）
+// 标签位于 .review-board 的 padding 区域：上方 a-h 行（top:0，padding-top 区域），
+// 左侧 1-8 列（left:0，padding-left 区域）。.bgrid 自然流动到 padding 之后，即
+// (padding-left, padding-top) = (_rvLabelW+_rvLabelGap, _rvLabelH+_rvLabelGap) 位置。
+const _rvFileLabelsHtml=(function(){
+  let _s='<div style="position:absolute;left:'+(_rvLabelW+_rvLabelGap)+'px;top:0;width:'+_rvBoardPx+'px;height:'+_rvLabelH+'px;display:flex;flex-direction:row;pointer-events:none;z-index:11">';
+  for(let _fc=0;_fc<8;_fc++){
+    const _fileChar=flip?String.fromCharCode(104-_fc):String.fromCharCode(97+_fc);
+    _s+='<div style="flex:1;display:flex;align-items:center;justify-content:center;font:'+_rvLabelFontSize+'px sans-serif;color:var(--text,#f5e6c8);user-select:none">'+_fileChar+'</div>';
+  }
+  _s+='</div>';
+  return _s;
+})();
+const _rvRankLabelsHtml=(function(){
+  let _s='<div style="position:absolute;left:0;top:'+(_rvLabelH+_rvLabelGap)+'px;width:'+_rvLabelW+'px;height:'+_rvBoardPx+'px;display:flex;flex-direction:column;pointer-events:none;z-index:11">';
+  for(let _fr=0;_fr<8;_fr++){
+    const _rankNum=flip?(_fr+1):(8-_fr);
+    _s+='<div style="flex:1;display:flex;align-items:center;justify-content:center;font:'+_rvLabelFontSize+'px sans-serif;color:var(--text,#f5e6c8);user-select:none">'+_rankNum+'</div>';
+  }
+  _s+='</div>';
+  return _s;
+})();
 for(let r=0;r<8;r++){for(let c=0;c<8;c++){
 const rr=flip?7-r:r;const cc=flip?7-c:c;
 const p=rBoard[rr][cc];const isL=(r+c)%2===0;
@@ -2756,7 +2525,14 @@ if(_rvCslMap){
 }
 let _boxShadow=_boxShadowParts.length?'box-shadow:'+_boxShadowParts.join(',')+';':'';
 h+='<div style="background:'+bg+';'+_boxShadow+'width:'+_rvCell+'px;height:'+_rvCell+'px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;position:relative">';
-if(p){h+='<span class="'+(p.color==='white'?'rv-w':'rv-bk')+'" style="pointer-events:none">'+SYM[p.color][p.type]+'</span>';}
+// v1.2.0 Phase 77: 格子内坐标标注（与主界面同款，左上角偏移2px）
+{
+  const _sqName=String.fromCharCode(97+cc)+(8-rr);
+  const _coordColor=isL?'#4a3a0a':'#f0dcb0';
+  const _coordStroke=isL?'rgba(255,230,150,.85)':'rgba(30,15,0,.85)';
+  h+='<span style="position:absolute;left:2px;top:2px;font:'+_rvCoordFontSize+'px/'+_rvCoordFontSize+'px sans-serif;color:'+_coordColor+';text-shadow:0 0 2px '+_coordStroke+',0 0 2px '+_coordStroke+';pointer-events:none;z-index:1;user-select:none">'+_sqName+'</span>';
+}
+if(p){h+='<span class="'+(p.color==='white'?'rv-w':'rv-bk')+'" style="pointer-events:none;z-index:2">'+SYM[p.color][p.type]+'</span>';}
 // Yellow rounded-rect overlay INSIDE the cell div (before </div>) so
 // position:absolute anchors to THIS cell (position:relative). Multiple B/R/G
 // box-shadow insets are on the cell div itself; the yellow overlay paints on
@@ -2779,10 +2555,19 @@ if(_rvVisibleEp&&_rvVisibleEp.row===rr&&_rvVisibleEp.col===cc){
 h+='</div>';
 }}
 h+='</div>'; // close .bgrid
+// v1.2.0 Phase 83: Insert coordinate labels as absolute-positioned siblings of .bgrid.
+// Labels are OUTSIDE .bgrid (in .review-board's padding area), so they don't
+// participate in the CSS Grid layout. This fixes the Phase 77 bug where flex
+// label wrappers inside .bgrid broke the grid's 64-cell layout.
+h+=_rvFileLabelsHtml;
+h+=_rvRankLabelsHtml;
 // SVG arrow overlay for [%cal] visual annotations. Drawn when heatmap is OFF
 // and the current review step has cached visual annotations with arrows. The
 // SVG uses the same coordinate system as the bgrid (8*_rvCell pixels square),
 // positioned absolutely over the board.
+//
+// v1.2.0 Phase 83: SVG position offset by (_rvLabelW+_rvLabelGap, _rvLabelH+_rvLabelGap)
+// to align with .bgrid (which is in .review-board's padding box, after the label space).
 //
 // Arrow design (minimal): a thin colored line + small triangular arrowhead at
 // the target end. The line's color communicates the type (B/Y/R/G). No origin
@@ -2800,8 +2585,11 @@ h+='</div>'; // close .bgrid
 // they represent the same threat). The offset magnitude is 12% of cell size,
 // which scales proportionally across screen sizes and stays within cell bounds.
 if(_rvCalList&&_rvCalList.length>0){
-  const _rvBoardPx=_rvCell*8;
-  h+='<svg style="position:absolute;left:0;top:0;width:'+_rvBoardPx+'px;height:'+_rvBoardPx+'px;pointer-events:none;z-index:10" width="'+_rvBoardPx+'" height="'+_rvBoardPx+'" viewBox="0 0 '+_rvBoardPx+' '+_rvBoardPx+'">';
+  // v1.2.0 Phase 83: _rvBoardPx already computed above; re-declaring would shadow.
+  // SVG offset aligns it with .bgrid (after .review-board's padding for labels).
+  const _rvSvgLeft=_rvLabelW+_rvLabelGap;
+  const _rvSvgTop=_rvLabelH+_rvLabelGap;
+  h+='<svg style="position:absolute;left:'+_rvSvgLeft+'px;top:'+_rvSvgTop+'px;width:'+_rvBoardPx+'px;height:'+_rvBoardPx+'px;pointer-events:none;z-index:10" width="'+_rvBoardPx+'" height="'+_rvBoardPx+'" viewBox="0 0 '+_rvBoardPx+' '+_rvBoardPx+'">';
   // Compact 4×3 triangular arrowhead per color. 4×3 is the smallest size that
   // still reads as a clear triangle at typical cell sizes (30-60px). refX=3.5
   // so the tip extends ~0.5px past the line endpoint (clean point, no overshoot).
@@ -2862,6 +2650,9 @@ if(_rvCalList&&_rvCalList.length>0){
   }
   h+='</svg>';
 }
+// v1.2.0 Phase 83: close .review-board (Phase 77's flex wrapper closing divs removed —
+// the flex wrappers were inside .bgrid and broke the grid layout; labels are now
+// absolute-positioned siblings of .bgrid, no extra wrappers to close).
 h+='</div>'; // close .review-board
 
 // v1.0.3 patch: build the eval bar, slider, chart, nav buttons, and analyze
@@ -3123,7 +2914,575 @@ if(_isLandscapeReview){
   h+='</div>'; // close .review-bottom
 }
 h+='</div></div>'; // close .review-body, .review-overlay
-} // close if(reviewMode)
+return{h,done:false};
+} // end _renderReviewMode
+
+/**
+ * v1.2.0 Phase 82++: Render the main game board grid (file/rank labels + 8×8 cells).
+ *
+ * Extracted from renderInternal() to further reduce God Function size. Renders:
+ *   - File labels (a-h) row above the board
+ *   - Rank labels (1-8) column left of the board
+ *   - .bgrid container with 8×8 square cells
+ *   - Per cell: background color, piece glyph, legal-move dot/ring, castling-rook
+ *     marker, check highlight, castle-rights (🔁) and en-passant (⚡) badges,
+ *     square coordinate label
+ *
+ * Uses global state only (gameState, selectedSquare, legalMvs, legalSet, lastMove,
+ * reviewMode, CELL, SQ_SEL, LBL_*, SYM, etc.). The flip flag and control map (cm)
+ * are passed as parameters because they are local to renderInternal.
+ *
+ * @param {string} h - Current HTML string
+ * @param {boolean} flip - Whether the board is flipped (playerColor === 'black')
+ * @param {Object|null} cm - Cached control map (from cachedCtrlMap)
+ * @returns {string} h with board grid HTML appended
+ */
+function _renderBoardGrid(h, flip, cm){
+h+=`<div class="flbl" style="margin-left:28px">${(flip?'hgfedcba':'abcdefgh').split('').map(f=>`<span style="width:${CELL}px">${f}</span>`).join('')}</div>`;
+h+=`<div style="display:flex"><div class="rlbl">${(flip?'12345678':'87654321').split('').map(r=>`<span style="height:${CELL}px">${r}</span>`).join('')}</div>`;
+h+=`<div class="bwrap"><div class="bgrid" id="board-grid" role="grid" aria-label="${T('board')}" style="grid-template-columns:repeat(8,${CELL}px);grid-template-rows:repeat(8,${CELL}px)">`;
+// Determine check state for king highlighting
+let _checkKingPos=getCheckKingPos(gameState);
+// v1.0.6: Identify castling rook squares for the selected king (if any).
+// These squares get a distinct golden ring marker so the user knows they
+// can click the rook to trigger castling (essential for Chess960).
+// v1.0.6 OPTIMIZATION: _getCastlingRookSquares() was redundantly re-iterating
+// legalMvs and re-calling chess960CastlingRookMove() to reconstruct the 'side'
+// field that _computeCastlingRookSetForSelection already computed but discarded.
+// Since renderInternal only needs the Set of row*8+col keys (the .side field
+// was never used), we now call _computeCastlingRookSetForSelection directly.
+const _castlingRookSet=_computeCastlingRookSetForSelection(selectedSquare,legalMvs);
+// v1.0.8 PHASE 3: Compute visible 🔁 / ⚡ markers ONCE per render pass.
+// These are derived from gameState.castlingRights / gameState.enPassantTarget
+// (during play) or from the user's setupCastleMarks / setupEpMark (during
+// setup mode). See computeVisibleCastleMarks/computeVisibleEpMark in
+// game-logic.js. The markers display in setup and play modes.
+// In review mode the main board is covered by the .review-overlay (a
+// 98%-opaque fixed-position layer), so we skip the computation for the main
+// board here as a minor performance optimization — the review board renders
+// its own markers from rs.state.
+const _visibleCastleMarks=(!reviewMode&&typeof computeVisibleCastleMarks==='function')?computeVisibleCastleMarks(gameState):new Set();
+const _visibleEpMark=(!reviewMode&&typeof computeVisibleEpMark==='function')?computeVisibleEpMark(gameState):null;
+for(let r=0;r<8;r++){for(let c=0;c<8;c++){
+const rr=flip?7-r:r;const cc=flip?7-c:c;
+const p=gameState.board[rr][cc];const isL=(r+c)%2===0;
+let bg=_getSqBg(rr,cc,cm,isL,lastMove);if(selectedSquare&&rr===selectedSquare.row&&cc===selectedSquare.col)bg=SQ_SEL;
+const lastFrom=lastMove&&rr===lastMove.from.row&&cc===lastMove.from.col;
+const lastTo=lastMove&&lastMove.to.row===rr&&lastMove.to.col===cc;
+const isLegal=legalSet.has(rr*8+cc);
+const isCheckSq=_checkKingPos&&rr===_checkKingPos.row&&cc===_checkKingPos.col;
+const isCastlingRook=_castlingRookSet.has(rr*8+cc);
+// v1.0.8 PHASE 3: visible markers (work in all modes — setup, play, review)
+const hasCastleMark=_visibleCastleMarks.has(String(rr*8+cc));
+const hasEpMark=_visibleEpMark&&_visibleEpMark.row===rr&&_visibleEpMark.col===cc;
+const lbl=String.fromCharCode(97+cc)+(8-rr);
+h+=`<div class="sq${lastFrom?' last-from':''}${lastTo?' last-to':''}${isCheckSq?' in-check':''}${isCastlingRook?' castle-rook':''}" role="gridcell" style="background:${bg}" data-r="${rr}" data-c="${cc}" onclick="sqClick(${rr},${cc})">`;
+h+=`<span class="lbl" style="color:${isL?LBL_LIGHT:LBL_DARK};-webkit-text-stroke:.6px ${isL?LBL_STROKE_LIGHT:LBL_STROKE_DARK};paint-order:stroke fill;text-shadow:0 0 2px ${isL?LBL_STROKE_LIGHT:LBL_STROKE_DARK}">${lbl}</span>`;
+// v1.0.8 PHASE 22: landing animation removed — the Web Animations API
+//   overlay (created in animateMove) handles the entire piece-move motion.
+//   The destination square's piece is rendered normally here; the overlay
+//   sits on top until animateMove's _finishAnim removes it.
+if(p){
+h+=`<span class="pc ${p.color==='white'?'w':'bk'}">${SYM[p.color][p.type]}</span>`;
+}
+if(isLegal&&!p)h+=`<div class="dot"></div>`;
+if(isLegal&&p&&!isCastlingRook)h+=`<div class="ring"></div>`;
+// v1.0.6: Castling rook marker — a golden dashed ring (distinct from the
+// solid green capture ring) that signals "click me to castle". Style
+// matches the existing ring/dot design language (CSS in index.html.tpl).
+if(isCastlingRook)h+=`<div class="castle-ring"></div>`;
+// v1.0.8 PHASE 3: 🔁 castle-rights marker and ⚡ en-passant marker.
+// Both render as a small badge anchored to the bottom-right corner of the
+// square, so they don't obstruct the piece glyph (centered) or the legal-
+// move ring (also centered). See .sq .setup-castle-mark / .sq .setup-ep-mark
+// in index.html.tpl for the styling.
+// These markers now display in ALL modes (setup, play, review), derived from
+// gameState.castlingRights / gameState.enPassantTarget by computeVisibleCastleMarks
+// / computeVisibleEpMark (called once per render pass above). Markers auto-
+// remove when the underlying rights/target are lost (e.g., after the king or
+// rook moves, or after the en-passant opportunity passes).
+if(hasCastleMark)h+=`<span class="setup-castle-mark" aria-hidden="true">🔁</span>`;
+if(hasEpMark)h+=`<span class="setup-ep-mark" aria-hidden="true">⚡</span>`;
+h+=`</div>`}}
+h+=`</div>`;
+return h;
+} // end _renderBoardGrid
+
+/**
+ * v1.2.0 Phase 82++: Render the setup mode panel (piece buttons, color/turn selectors,
+ * undo/redo/reset/clear buttons, copy/import FEN buttons, setup errors).
+ *
+ * Extracted from renderInternal() to further reduce God Function size. Renders the
+ * setup-mode control panel below the board when setupMode is true. The panel allows
+ * the user to place/remove pieces, toggle castle-rights (🔁) and en-passant (⚡)
+ * markers, select piece color and side-to-move, undo/redo setup actions, reset/clear
+ * the board, and copy/import FEN.
+ *
+ * Uses global state only (setupMode, gameState, CELL, T, setupPiece, setupColor,
+ * setupMarkerMode, setupHistory, setupRedoStack, setupErrors, etc.).
+ *
+ * @param {string} h - Current HTML string
+ * @returns {string} h with setup panel HTML appended (if setupMode is true)
+ */
+function _renderSetupPanel(h){
+if(setupMode){
+const spPieces=[{t:'pawn',w:'♙\uFE0E',b:'♟\uFE0E'},{t:'knight',w:'♘\uFE0E',b:'♞\uFE0E'},{t:'bishop',w:'♗\uFE0E',b:'♝\uFE0E'},{t:'rook',w:'♖\uFE0E',b:'♜\uFE0E'},{t:'queen',w:'♕\uFE0E',b:'♛\uFE0E'},{t:'king',w:'♔\uFE0E',b:'♚\uFE0E'}];
+// v1.0.8: Ensure setupCastleMarks (Set) and setupEpMark ({row,col}|null) exist
+// on gameState. They are the source of truth for the manual 🔁 castle markers
+// and the ⚡ en-passant marker. Initialize once per setup session if missing.
+if(!gameState.setupCastleMarks||!(gameState.setupCastleMarks instanceof Set))gameState.setupCastleMarks=new Set();
+if(typeof gameState.setupEpMark==='undefined')gameState.setupEpMark=null;
+h+=`<div class="setup-panel" style="width:${8*CELL+8}px;max-width:100%;box-sizing:border-box"><div class="setup-row" style="justify-content:flex-start"><span class="setup-label">${T('piece')}</span>`;
+// v1.0.8 PHASE 8: piece buttons toggle — clicking the already-selected piece
+// again deselects it (sets setupPiece=null). This matches the behavior of the
+// 🔁 and ⚡ marker buttons.
+for(const p of spPieces)h+=`<button class="setup-btn${setupPiece===p.t?' act':''} ${setupColor==='white'?'sw':'sb'}" onclick="setupPiece=(setupPiece==='${p.t}'?null:'${p.t}');render()">${setupColor==='white'?p.w:p.b}</button>`;
+// v1.0.8: 🔁 castle-rights marker toggle + ⚡ en-passant marker toggle.
+// v1.0.8 PHASE 8: 🗑️ delete button is MUTUALLY EXCLUSIVE with 🔁 and ⚡ markers.
+// Selecting 🗑️ clears any active marker mode, and selecting a marker clears 🗑️.
+// Piece selection and marker selection remain independent (can co-exist),
+// but 🗑️ cannot co-exist with either marker because deleting a piece also
+// clears its markers — mixing them would be confusing.
+h+=`<button class="setup-btn${setupMarkerMode==='castle'?' act':''}" onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);setupMarkerMode=(setupMarkerMode==='castle'?null:'castle');if(setupMarkerMode&&setupPiece==='delete')setupPiece=null;render()" title="${T('setup_castle_marker_tip')}" aria-label="${T('setup_castle_marker')}" style="font-size:1.2rem">🔁</button>`;
+h+=`<button class="setup-btn${setupMarkerMode==='ep'?' act':''}" onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);setupMarkerMode=(setupMarkerMode==='ep'?null:'ep');if(setupMarkerMode&&setupPiece==='delete')setupPiece=null;render()" title="${T('setup_ep_marker_tip')}" aria-label="${T('setup_ep_marker')}" style="font-size:1.2rem;font-variant-emoji:emoji;-webkit-font-variant-emoji:emoji">⚡</button>`;
+h+=`<button class="setup-del${setupPiece==='delete'?' act':''}" onclick="setupPiece=(setupPiece==='delete'?null:'delete');if(setupPiece==='delete')setupMarkerMode=null;render()">🗑️</button></div>`;
+// v1.0.8: small-font usage hints for the two new marker buttons.
+h+=`<div class="setup-row" style="justify-content:center;gap:8px;margin-top:2px"><span style="font-size:.62rem;color:var(--muted);line-height:1.3;text-align:center;flex:1 1 100%;word-break:break-word">${T('setup_castle_marker_tip')}</span></div>`;
+h+=`<div class="setup-row" style="justify-content:center;gap:8px;margin-top:2px"><span style="font-size:.62rem;color:var(--muted);line-height:1.3;text-align:center;flex:1 1 100%;word-break:break-word">${T('setup_ep_marker_tip')}</span></div>`;
+h+=`<div class="setup-row"><span class="setup-label">${T('color')}</span><button class="setup-clr${setupColor==='white'?' act':''}" onclick="setupColor='white';render()">${T('white_side')}</button><button class="setup-clr${setupColor==='black'?' act':''}" onclick="setupColor='black';render()">${T('black_side')}</button></div>`;
+h+=`<div class="setup-row"><span class="setup-label">${T('turn_side')}</span><button class="setup-clr${gameState.currentTurn==='white'?' act':''}" onclick="gameState.currentTurn='white';_refreshStateAfterSetup(gameState);render()">${T('white_side')}</button><button class="setup-clr${gameState.currentTurn==='black'?' act':''}" onclick="gameState.currentTurn='black';_refreshStateAfterSetup(gameState);render()">${T('black_side')}</button></div>`;
+h+=`<div class="setup-row" style="justify-content:center;gap:12px"><button class="btn" onclick="undoSetupClick()"${setupHistory.length===0?' disabled style="opacity:0.4"':''}><span style="font-size:1.4rem">↩️</span> ${T('undo_setup')}</button><button class="btn" onclick="redoSetupClick()"${setupRedoStack.length===0?' disabled style="opacity:0.4"':''}><span style="font-size:1.4rem">↪️</span> ${T('redo_setup')}</button><button class="btn" onclick="gameState=initState();gameState.moveHistory=[];setupErrors=[];setupHistory=[];setupRedoStack=[];gameState.setupCastleMarks=new Set([String(7*8+0),String(7*8+7),String(0*8+0),String(0*8+7)]);gameState.setupEpMark=null;render()"><span style="font-size:1.4rem">♻️</span> ${T('reset_board')}</button><button class="btn" onclick="for(let r=0;r<8;r++)for(let c=0;c<8;c++)gameState.board[r][c]=null;gameState.wk=null;gameState.bk=null;gameState.enPassantTarget=null;gameState.halfMoveClock=0;gameState.setupCastleMarks=new Set();gameState.setupEpMark=null;_refreshStateAfterSetup(gameState);setupErrors=[];setupHistory=[];setupRedoStack=[];render()"><span style="font-size:1.4rem">🧹</span> ${T('clear_board')}</button></div><div class="setup-row" style="justify-content:center;gap:8px;margin-top:6px"><button class="btn" onclick="copyFEN()"><span style="font-size:1.4rem">📝</span> ${T('copy_fen_btn')}</button><button class="btn" onclick="_importFENWithSaveCheck()"><span style="font-size:1.4rem">📋</span> ${T('import_fen_btn')}</button></div></div>`;
+if(setupErrors.length>0)h+=`<div class="setup-errors"><strong>${T('setup_error_title')}</strong><ul>${setupErrors.map(e=>`<li>${_esc(e)}</li>`).join('')}</ul><button class="btn" onclick="setupErrors=[];render()" style="margin-top:4px">${T('understood')}</button></div>`;
+}
+return h;
+} // end _renderSetupPanel
+
+/**
+ * v1.2.0 Phase 82++: Render the side panel (control info, ECO info, move history, tips).
+ *
+ * Extracted from renderInternal() to further reduce God Function size. Renders the
+ * right-side .panel container with four cards:
+ *   1. Control info card (when showCtrlMap is on) — square control breakdown
+ *   2. ECO opening info card (when _ecoEnabled and not Chess960)
+ *   3. Move history card — PGN-format move list with copy/export/stats buttons
+ *   4. Tips card — chess principles
+ *
+ * Uses global state only (showCtrlMap, gameState, playerColor, _ecoEnabled,
+ * gameVariant, moveRecords, showVariations, etc.). The infoSq, infoCtrl, and oppC
+ * values are passed as parameters because they are local to renderInternal.
+ *
+ * @param {string} h - Current HTML string
+ * @param {Object|null} infoSq - Hovered or selected square ({row, col} or null)
+ * @param {Object|null} infoCtrl - Control map entry for infoSq ({white, black} or null)
+ * @param {string} oppC - Opponent color ('white' or 'black')
+ * @returns {string} h with side panel HTML appended
+ */
+function _renderSidePanel(h, infoSq, infoCtrl, oppC){
+h+=`<div class="panel" role="complementary">`;
+// Control info
+if(showCtrlMap){
+h+=`<div class="card" id="ctrl-info-card"><div class="card-t"><span class="ico">📍</span>${T('ctrl_info')}</div>`;
+if(infoSq){const al=posAlg(infoSq);const pc=gameState.board[infoSq.row][infoSq.col];const wt=infoCtrl?infoCtrl.white.length:0;const bt=infoCtrl?infoCtrl.black.length:0;
+const myCtrl=playerColor==='white'?wt:bt;const opCtrl=playerColor==='white'?bt:wt;const netCtrl=myCtrl-opCtrl;
+h+=`<div class="crow"><span class="lb">${T('cur_square')}</span><span class="vl">${al} ${pc?pieceName(pc.type):''}</span></div>`;
+h+=`<div class="crow"><span class="lb">${T('total_ctrl')}</span><span class="vl">${wt+bt}</span></div>`;
+h+=`<div class="crow"><span class="lb">${T('my_ctrl')}</span><span class="vl b">${myCtrl}</span></div>`;
+h+=`<div class="crow"><span class="lb">${T('op_ctrl')}</span><span class="vl r">${opCtrl}</span></div>`;
+h+=`<div class="crow"><span class="lb">${T('net_ctrl')}</span><span class="vl ${netCtrl>0?'b':netCtrl<0?'r':''}">${netCtrl>0?'+':''}${netCtrl}</span></div>`;
+if(infoCtrl){h+=`<div class="plist">`;for(const c of infoCtrl[playerColor])h+=`<div class="pitem"><span class="dot2 b"></span>${pieceName(c.piece.type)}@${posAlg(c.position)}</div>`;for(const c of infoCtrl[oppC])h+=`<div class="pitem"><span class="dot2 r"></span>${pieceName(c.piece.type)}@${posAlg(c.position)}</div>`;h+=`</div>`}}
+else{h+=`<div style="color:#64748b;font-size:.85rem">${T('click_sq')}</div>`}
+h+=`</div>`;}
+// ECO Opening Info (only when _ecoEnabled)
+// v1.0.6: Also suppress in Chess960 mode (no fixed opening theory).
+if(_ecoEnabled&&!(typeof gameVariant!=='undefined'&&gameVariant==='chess960')){
+const ecoInfo=queryECO(gameState);
+if(ecoInfo){h+=`<div class="card"><div class="card-t"><span class="ico">📖</span>${T('eco_id')}</div><div style="padding:12px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span class="opening-tag">${_esc(ecoInfo.id)}</span><span style="font-weight:600;font-size:.9rem">${_esc(ecoInfo.name)}</span></div><div style="color:var(--muted);font-size:.82rem">${_esc(ecoInfo.family)}</div></div></div>`}
+}
+
+// Move history
+h+=`<div class="card"><div class="card-t"><span class="ico">📜</span>${T('move_history')}<button class="btn" style="margin-left:auto;padding:3px 10px;font-size:.7rem;min-height:24px" onclick="copyMoveHistory()" title="${T('pgn_copied')||'Copy PGN'}">📝 PGN</button><button class="btn" style="margin-left:4px;padding:3px 10px;font-size:.7rem;min-height:24px" onclick="exportPGNToFile()" title="${T('export_pgn')||'Export PGN to file'}">💾</button><button class="btn" style="margin-left:4px;padding:3px 10px;font-size:.7rem;min-height:24px" onclick="openStatsPage()" title="${T('stats')}">📊</button><div class="toggle" style="margin-left:6px;padding:2px 6px;font-size:.65rem" onclick="showVariations=!showVariations;HapticManager.fire(showVariations?'TOGGLE_ON':'TOGGLE_OFF');render()"><span>${T('variation_toggle')}</span><div class="toggle-sw sm${showVariations?' on':''}"></div></div></div><div class="mlist">`;
+// v1.0.3: Use _importedStartMoveNum as the move-pair number offset, so PGN
+// imports with [FEN "... w ... 4"] display "4. <move> 5. <move>" instead of
+// "1. <move> 2. <move>". Defaults to 1 (standard initial position).
+const _mvStartOffset=(typeof _importedStartMoveNum!=='undefined'&&_importedStartMoveNum>0)?_importedStartMoveNum:1;
+// v1.0.3: pairs store the moveRecords index `i` so the onclick handlers can
+// compute the correct reviewStep (= i + 1, since reviewStates[0] is the
+// starting position) regardless of the FEN-based move-number offset.
+const pairs=[];for(let i=0;i<moveRecords.length;i+=2){pairs.push({n:Math.floor(i/2)+_mvStartOffset,wi:i,bi:i+1,w:moveRecords[i],b:moveRecords[i+1]})}
+for(const pr of pairs){h+='<div class="mrow"><span class="mnum">'+pr.n+'.</span>';if(pr.w){h+='<span class="mw" onclick="if(!isAIThinking&&!setupMode&&!reviewMode){showNewGameDialog=false;enterReview();reviewGoTo('+(pr.wi+1)+');event.stopPropagation()}">'+_esc(pr.w.notation)+(pr.w.time?'<span style="font-size:.6rem;color:var(--muted);margin-left:2px">'+pr.w.time+'s</span>':'')+'</span>';if(showVariations&&pr.w&&pr.w.variations&&pr.w.variations.length>0){h+=_formatVariationGroups(pr.w.variations,pr.n,true);}}else if(pr.w===null){h+='<span class="mw" style="opacity:.55;font-style:italic" title="'+T('white_concedes_move')+'">...</span>';}if(pr.b){h+='<span class="mb" onclick="if(!isAIThinking&&!setupMode&&!reviewMode){showNewGameDialog=false;enterReview();reviewGoTo('+(pr.bi+1)+');event.stopPropagation()}">'+_esc(pr.b.notation)+(pr.b.time?'<span style="font-size:.6rem;color:var(--muted);margin-left:2px">'+pr.b.time+'s</span>':'')+'</span>';if(showVariations&&pr.b&&pr.b.variations&&pr.b.variations.length>0){h+=_formatVariationGroups(pr.b.variations,pr.n,false);}}h+='</div>'}
+if(!pairs.length)h+=`<div style="color:#64748b;font-size:.85rem;cursor:pointer;padding:4px 0;text-decoration:underline dotted rgba(100,116,139,.4);text-underline-offset:3px" onclick="if(!isAIThinking&&!setupMode&&!reviewMode){showNewGameDialog=false;enterReview();event.stopPropagation()}" title="${T('enter_review_hint')}">${T('no_moves')}</div>`;
+h+=`</div></div>`;
+// Tips
+h+=`<div class="card"><div class="card-t"><span class="ico">💡</span>${T('chess_tips')}</div><div class="tips">`;
+h+=_principlesHTML();
+h+=`</div></div>`;
+h+=`</div></div>`;
+return h;
+} // end _renderSidePanel
+
+/**
+ * v1.2.0 Phase 82++++: Compute the render state shared across all render sub-functions.
+ *
+ * Extracted from renderInternal() + _renderHeader() to fix a critical Phase 82++
+ * regression: the local variables (cm, infoSq, infoCtrl, oppC, flip) were declared
+ * inside _renderHeader() and therefore NOT accessible in renderInternal() or other
+ * sub-functions. This caused:
+ *   - _renderAIBar(h, oppC) -> oppC was undefined -> AI captured-pieces display broke
+ *   - _renderBoardGrid(h, flip, cm) -> flip/cm undefined -> board never flipped for
+ *     black player; control-map coloring was lost
+ *   - _renderSidePanel(h, infoSq, infoCtrl, oppC) -> all undefined -> control-info
+ *     card was silently skipped
+ *   - _renderReviewMode(h) referenced `flip` as a free variable -> threw
+ *     ReferenceError -> caught by renderInternal's try-catch -> user saw "Render
+ *     Error" instead of the review overlay (this was the root cause of the
+ *     "clicking move records doesn't enter review mode" bug)
+ *
+ * This function centralizes all defensive checks and shared-state computation:
+ *   1. gameState validity check (reset if corrupt)
+ *   2. setupMode / gameOver reset
+ *   3. gameOver text re-localization
+ *   4. _applyGameOver() check (was previously inside _renderHeader)
+ *   5. Control-map cache (cachedCtrlMap / cm)
+ *   6. infoSq (hovered or selected square) + infoCtrl (control-map entry)
+ *   7. oppC (opponent color) + flip (board-flip flag)
+ *
+ * The returned object is destructured by renderInternal and passed explicitly to
+ * every sub-function that needs these values. This eliminates the scoping bug
+ * permanently — no sub-function reads these as free variables anymore.
+ *
+ * Uses global state only (gameState, initState, stateHistory, _redoStack, setupMode,
+ * gameOver, _gameOverStatusKey, _gameOverStrFromStatus, isAIThinking, reviewMode,
+ * _cachedStatusKey, _cachedStatus, gameStatus, _applyGameOver, showCtrlMap,
+ * cachedCtrlKey, cachedCtrlMap, getCtrlMap, hoveredSquare, selectedSquare,
+ * OPP_COLOR, playerColor).
+ *
+ * @returns {{cm: Object|null, infoSq: Object|null, infoCtrl: Object|null,
+ *            oppC: string, flip: boolean}}
+ */
+function _computeRenderState(){
+// Defensive check — if gameState is undefined/corrupt, reset to initial state
+if(!gameState||!gameState.board){console.error('renderInternal: gameState is invalid, resetting');gameState=initState();stateHistory=[];_redoStack=[];}
+if(setupMode){gameOver=null;_gameOverStatusKey=null;}
+// Re-localize gameOver text on every render
+if(gameOver&&_gameOverStatusKey){const _reLocStr=_gameOverStrFromStatus(_gameOverStatusKey);if(_reLocStr)gameOver=_reLocStr;}
+// _applyGameOver check (was inside _renderHeader in Phase 82++)
+if(!gameOver&&!setupMode&&!isAIThinking&&!reviewMode){const _gsKey=gameState.hash+'|'+gameState.currentTurn;if(_cachedStatusKey!==_gsKey){_cachedStatus=gameStatus(gameState);_cachedStatusKey=_gsKey;}_applyGameOver(_cachedStatus);}
+// Control-map cache
+const ctrlKey=showCtrlMap?gameState.hash:'off';if(ctrlKey!==cachedCtrlKey){cachedCtrlMap=showCtrlMap?getCtrlMap(gameState.board):null;cachedCtrlKey=ctrlKey}const cm=cachedCtrlMap;
+// infoSq + infoCtrl
+const infoSq=hoveredSquare||selectedSquare;let infoCtrl=null;
+// v1.0.2 FIX (audit): reuse the control-map entry directly instead of
+// allocating a fresh {white,black} object on every render.
+if(infoSq&&cm){const e=cm[infoSq.row][infoSq.col];if(e)infoCtrl=e;}
+// oppC + flip
+const oppC=OPP_COLOR[playerColor];
+const flip=playerColor==='black';
+return {cm, infoSq, infoCtrl, oppC, flip};
+} // end _computeRenderState
+
+/**
+ * v1.2.0 Phase 82++: Render the header toolbar (app title, eval display, difficulty
+ * selector, new game / free play / sound / FEN / import / setup buttons).
+ *
+ * Extracted from renderInternal() to further reduce God Module size. Computes the
+ * eval display (emoji, description, score, depth, seldepth, nodes, nps) and builds
+ * the .hdr toolbar HTML string. This is the FIRST h contribution — the function
+ * initializes h and returns it.
+ *
+ * v1.2.0 Phase 82++++: The defensive checks, _applyGameOver, and cm/infoSq/infoCtrl/
+ * oppC/flip computation were moved to _computeRenderState() to fix a critical
+ * scoping bug (those locals were inaccessible to other sub-functions).
+ *
+ * Uses global state only (formatEval, _sfDepth, _sfSeldepth, _evalLoading,
+ * _lastProgressNodes, _lastProgressNps, T, _lang, setupMode, isAIThinking,
+ * getAI_LEVELS, getEffectiveAILevel, playerColor, soundOn, etc.).
+ *
+ * @returns {string} h — the header toolbar HTML string (caller continues appending)
+ */
+function _renderHeader(){
+const _fe=formatEval();const pe=_fe.emoji,pd=_fe.desc,scoreStr=_fe.score;
+// v1.0.4 Rev33: display "D15 SD22" — depth + seldepth (tactical depth).
+// SD only shown when > 0 AND > depth (seldepth == depth is redundant).
+const _hdrDepthStr=_sfDepth>0?'<span style="font-size:.65rem;color:var(--muted);margin-left:4px">D'+_sfDepth+'</span>'+(_sfSeldepth>0&&_sfSeldepth>_sfDepth?'<span style="font-size:.65rem;color:var(--muted);margin-left:2px">SD'+_sfSeldepth+'</span>':''):'';
+let _hdrProgressStr='';if(_evalLoading&&_sfDepth>0){let _hpp=[];if(_lastProgressNodes!=null){const _ns=_lastProgressNodes>=1000000?(_lastProgressNodes/1000000).toFixed(1)+'M':_lastProgressNodes>=1000?Math.round(_lastProgressNodes/1000)+'K':String(_lastProgressNodes);_hpp.push(_ns);}if(_lastProgressNps!=null){const _ns=_lastProgressNps>=1000000?(_lastProgressNps/1000000).toFixed(1)+'M/s':_lastProgressNps>=1000?Math.round(_lastProgressNps/1000)+'K/s':String(_lastProgressNps);_hpp.push(_ns);}if(_hpp.length)_hdrProgressStr='<span style="font-size:.6rem;color:var(--muted);margin-left:3px">'+_hpp.join(' ')+'</span>';}
+
+// v1.2.0 Phase 82++++: Defensive checks, _applyGameOver, and cm/infoSq/infoCtrl/
+// oppC/flip computation moved to _computeRenderState() (fixes critical scoping bug
+// where these locals were inaccessible to other sub-functions).
+// Arrows computed separately by _updateArrows() — no inline computation needed
+
+let h='<div class="hdr" role="banner"><div class="hdr-top"><div class="hdr-l">'+_hdrKingIconHTML()+'<h1>'+T('app_name')+'<span class="ver">v1.2.0</span><button onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showAboutPage=true;render()" class="hdr-btn" style="margin-left:4px;cursor:pointer">ℹ️</button></h1></div><button onclick="toggleLang()" class="hdr-btn-lg" style="cursor:pointer">'+(_lang==='zh'?'↔️中':'↔️EN')+'</button><div class="ev" id="eval-disp" role="status" aria-label="'+T('evaluating')+'">'+(setupMode?T('setup_label'):(isAIThinking?'<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>':'<span class="ev-e">'+pe+'</span><span>'+pd+'</span><span style="color:var(--muted)">('+scoreStr+')</span>'+_hdrDepthStr+_hdrProgressStr))+'</div></div><div class="hdr-tools" role="toolbar" aria-label="'+T('ctrl_range')+'">'+(setupMode?'':'<div class="diff-sel" role="radiogroup" aria-label="AI">'+getAI_LEVELS().map(l=>'<button class="diff-b'+(getEffectiveAILevel()===l.id?' act':'')+'" onclick="if(!isAIThinking){'+(l.id===8?'openEngineConfig()':('aiLevel='+l.id+';try{AndroidBridge.syncGameDifficulty('+l.id+')}catch(e){}render()'))+'}" title="'+l.desc+'" role="radio" aria-checked="'+(getEffectiveAILevel()===l.id)+'">'+(l.id===8?'⚙️':l.id===7?('SL'+(function(){try{let _sl=20;if(typeof engineSettingsData!=='undefined'&&engineSettingsData&&engineSettingsData.skillLevel!=null)_sl=engineSettingsData.skillLevel;else if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getEngineSkillLevel)_sl=AndroidBridge.getEngineSkillLevel();return _sl;}catch(e){return 20;}})()):l.id)+'</button>').join('')+'</div>')+'<button type="button" class="btn" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()" aria-label="'+T('new_game')+'"><span style="font-size:1.4rem">⚔️</span> '+T('new_game')+'</button>'+'<button class="btn" onclick="quickFreeOpening()" aria-label="'+T('free_opening')+'">'+(playerColor==='white'?'<span style=\"font-size:1.4rem;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text\">♔&#xFE0E;</span>':'<span style=\"font-size:1.4rem;font-weight:400;color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans Symbol&#x27;,sans-serif;font-variant-emoji:text\">♚&#xFE0E;</span>')+' '+T('free_opening')+'</button>'+(setupMode?'':'<button class="btn" onclick="toggleSound()" id="btnSound" aria-label="'+T('sound')+'">'+(soundOn?'<span style="font-size:1.4rem">🔊</span> '+T('sound'):'<span style="font-size:1.4rem">🔇</span> '+T('sound'))+'</button>')+'<button class="btn" onclick="copyFEN()" title="'+T('copy_fen')+'" aria-label="'+T('copy_fen')+'"><span style="font-size:1.4rem">📝</span> FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="'+T('import_fen')+'" aria-label="'+T('import_fen')+'"><span style="font-size:1.4rem">🗃️</span> '+T('import_label')+'</button><button class="btn" onclick="'+(setupMode?'exitSetup()':'toggleSetup()')+'" aria-label="'+(setupMode?T('setup_done'):T('setup_mode'))+'">'+(setupMode?'<span style="font-size:1.4rem">✓</span> '+T('setup_done'):'<span style="font-size:1.4rem">🏗️</span> '+T('setup_mode'))+'</button></div></div>';
+return h;
+} // end _renderHeader
+
+/**
+ * v1.2.0 Phase 82+++: Render the AI opponent bar (name, level, clock, captured
+ * pieces, search info, ponder info).
+ *
+ * Extracted from renderInternal() to further reduce God Function size. Renders
+ * the .pbar#ai-bar element with:
+ *   - AI opponent icon + name + level (Lv.N / SLN / ⚙️ manual config)
+ *   - Clock display (when game is timed)
+ *   - Waiting/thinking indicators
+ *   - Captured pieces (split at 7: pieces 1-7 on line 2, pieces 8+ on line 3)
+ *   - Engine search info (#ai-search-info, right-aligned)
+ *   - Ponder info (#ai-ponder-info, right-aligned on line 3)
+ *
+ * Uses global state only (gameState, playerColor, gameClocks, formatClock, T,
+ * getEffectiveAILevel, engineSettingsData, AndroidBridge, isAIThinking, gameOver,
+ * _aiBarInfo, _esc, isHintLoading, hintText, _ponderMoveSAN, _ponderBarInfo,
+ * setupMode, reviewMode, capturedPiecesHtml). The oppC (opponent color) value
+ * is passed as a parameter because it is local to renderInternal.
+ *
+ * @param {string} h - Current HTML string
+ * @param {string} oppC - Opponent color ('white' or 'black')
+ * @returns {string} h with AI bar HTML appended
+ */
+function _renderAIBar(h, oppC){
+// v1.0.4 Rev37: AI bar captured pieces split at 7 — pieces 8+ go to line 3.
+{const _aiCapHtml=capturedPiecesHtml(gameState.board,oppC,playerColor,7);
+// v1.0.4 FIX (this round): render the AI's clock display element when the game is timed.
+// The element has id="clock-black" or "clock-white" depending on which color the AI plays.
+// _updateClockDisplay() updates its textContent live (200ms poll) without full re-render.
+const _aiClockColor=oppC;
+const _aiClockId=_aiClockColor==='white'?'clock-white':'clock-black';
+const _aiClockHtml=(typeof gameClocks!=='undefined'&&gameClocks)?`<span id="${_aiClockId}" style="font-family:monospace,system-ui,-apple-system,sans-serif;font-size:.85rem;font-weight:700;color:var(--text);background:rgba(0,0,0,.3);padding:2px 8px;border-radius:4px;border:1px solid var(--border);min-width:48px;text-align:center">${formatClock(gameClocks[_aiClockColor]?gameClocks[_aiClockColor].remainingSec:0)}</span>`:'';
+// v1.0.4 Rev36 LAYOUT: AI opponent bar restructured for cleaner multi-line display.
+// Line 1: AI name + level + clock + waiting/thinking indicator (compact status).
+// Line 2: Engine search real-time info (_aiBarInfo / _hintBarInfo) — right-aligned.
+// Line 3: Ponder info (🔮 move + progress) — right-aligned.
+// v1.0.4 Rev37: When AI captured pieces > 7, pieces 8+ go on line 3 left-aligned
+// (sharing the line with ponder info which is right-aligned). The _aiCapHtml
+// may contain two divs: the first (pieces 1-7) and #ai-cap-overflow (pieces 8+).
+// We extract the overflow div and place it in line 3 alongside #ai-ponder-info.
+// v1.0.4 Rev38 FIX: Overflow issues — search info and ponder info could exceed
+// the bar width because the inner column div didn't have overflow:hidden, and
+// the search/ponder text used white-space:nowrap without a bounded max-width.
+// Fix: add overflow:hidden to the inner column, add max-width:100% to search/
+// ponder info, and make the line-3 container properly shrinkable (min-width:0).
+// v1.0.4 Rev40 FIX: Line-3 layout — was justify-content:space-between which put
+// #ai-ponder-info at LEFT when no overflow (single child). Changed to
+// margin-left:auto on #ai-ponder-info so it's ALWAYS right-aligned regardless
+// of whether overflow pieces exist. Also removed justify-content from container.
+// Extract overflow captured pieces (if any) from _aiCapHtml for line 3 placement.
+const _aiCapOverflowMatch=_aiCapHtml.match(/<div id="ai-cap-overflow"[^>]*>[\s\S]*?<\/div>/);
+const _aiCapOverflow=_aiCapOverflowMatch?_aiCapOverflowMatch[0]:'';
+const _aiCapMain=_aiCapOverflowMatch?_aiCapHtml.replace(_aiCapOverflowMatch[0],''):_aiCapHtml;
+h+=`<div class="pbar" id="ai-bar" role="status" aria-label="AI" style="flex-wrap:wrap"><span class="pico">${playerColor==='white'?'<span style="color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55)">♚&#xFE0E;</span>':'<span style="color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55)">♔&#xFE0E;</span>'}</span><div style="flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><div class="pname">${T('ai_opponent')}</div><div class="pbar-sub">${getEffectiveAILevel()===8?T('manual_config'):getEffectiveAILevel()===7?('SL'+(function(){try{let _sl=20;if(typeof engineSettingsData!=='undefined'&&engineSettingsData&&engineSettingsData.skillLevel!=null)_sl=engineSettingsData.skillLevel;else if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getEngineSkillLevel)_sl=AndroidBridge.getEngineSkillLevel();return _sl;}catch(e){return 20;}})()):('Lv.'+getEffectiveAILevel())}</div>${_aiClockHtml}${gameState.currentTurn!==playerColor&&!gameOver&&!isAIThinking?'<span class="tind">'+T('waiting')+'</span>':''}${isAIThinking?'<span class="tind">'+T('thinking')+'</span>':''}</div>${_aiCapMain}<div id="ai-search-info" style="display:flex;justify-content:flex-end;text-align:right;font-size:.65rem;color:var(--accent2);font-family:monospace,system-ui,-apple-system,sans-serif;letter-spacing:.5px;padding-top:2px;line-height:1.3;min-height:1.3em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;width:100%;box-sizing:border-box">${isAIThinking&&_aiBarInfo?_esc(_aiBarInfo):''}</div><div style="display:flex;align-items:center;width:100%;gap:6px;min-width:0;overflow:hidden">${_aiCapOverflow}<div id="ai-ponder-info" style="text-align:right;font-size:.65rem;color:var(--muted);font-family:monospace,system-ui,-apple-system,sans-serif;letter-spacing:.5px;padding-top:1px;line-height:1.3;min-height:1.3em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto;min-width:0;margin-left:auto">${(!isAIThinking&&!isHintLoading&&!hintText&&_ponderMoveSAN&&_ponderBarInfo&&!gameOver&&!setupMode&&!reviewMode)?('🔮 '+_esc(_ponderMoveSAN)+' '+_esc(_ponderBarInfo)):''}</div></div></div></div>`;}
+return h;
+} // end _renderAIBar
+
+/**
+ * v1.2.0 Phase 82+++: Render the quick toolbar and player bar.
+ *
+ * Extracted from renderInternal() to further reduce God Function size. Renders:
+ *   - Quick toolbar (.qtoolbar) with 5 buttons: undo / redo / flip / hint /
+ *     control-map toggle. Hidden in review mode. Undo/redo hidden in setup mode.
+ *   - Player bar (.pbar#player-bar) with player icon, name (clickable to rename),
+ *     clock display, captured pieces, your-turn indicator, resign button.
+ *
+ * Uses global state only (capturedPiecesHtml, gameState, playerColor, gameClocks,
+ * formatClock, _humanPlayerName, T, _escapeHTML, reviewMode, setupMode,
+ * HapticManager, undoMove, redoMove, flipBoard, getHint, showCtrlMap, cachedCtrlKey,
+ * render, isAIThinking, gameOver, showResignConfirm).
+ *
+ * @param {string} h - Current HTML string
+ * @returns {string} h with quick toolbar + player bar HTML appended
+ */
+function _renderPlayerBar(h){
+{const _plCapHtml=capturedPiecesHtml(gameState.board,playerColor,playerColor);
+// v1.0.4 FIX (this round): render the player's clock display element when timed.
+const _plClockColor=playerColor;
+const _plClockId=_plClockColor==='white'?'clock-white':'clock-black';
+const _plClockHtml=(typeof gameClocks!=='undefined'&&gameClocks)?`<span id="${_plClockId}" style="font-family:monospace,system-ui,-apple-system,sans-serif;font-size:.85rem;font-weight:700;color:var(--text);background:rgba(0,0,0,.3);padding:2px 8px;border-radius:4px;border:1px solid var(--border);min-width:48px;text-align:center">${formatClock(gameClocks[_plClockColor]?gameClocks[_plClockColor].remainingSec:0)}</span>`:'';
+// v1.0.4 Rev24: Player name display — uses _humanPlayerName (rename feature)
+// if set, otherwise the default "你"/"You". Clicking the name opens a rename
+// prompt. The name is persisted via AndroidBridge.persistentSet and used in
+// all PGN text ([White "..."] / [Black "..."]).
+const _plName=(typeof _humanPlayerName!=='undefined'&&_humanPlayerName)?_humanPlayerName:T('you');
+const _plNameEsc=_escapeHTML(_plName);
+// v1.0.8: Quick Toolbar — sits between the board and the player bar.
+// Originally these 5 buttons (↩️悔棋 / ↪️撤悔 / 🔃翻转 / 💡AI提示 / 🌗🌈控制范围)
+// lived in the top header toolbar. They have been MOVED here so the header
+// stays focused on game-level actions (New Game, Free Play, Sound, FEN,
+// Import, Setup) while in-game / over-the-board actions live next to the
+// board where the user's thumb naturally rests.
+// In setup mode, ↩️/↪️ are hidden (no moves to undo/redo), but 🔃/💡/🌗🌈 stay.
+// Review mode has its own toolbar inside .review-hdr, so this quick toolbar
+// is hidden entirely when reviewMode === true.
+if(!reviewMode){
+  h+=`<div class="qtoolbar" role="toolbar" aria-label="${T('quick_toolbar')}">`;
+  if(!setupMode){
+    h+=`<button class="btn" onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);undoMove()" aria-label="${T('undo')}" title="${T('undo')}"><span style="font-size:1.4rem">↩️</span> ${T('undo')}</button>`;
+    h+=`<button class="btn" onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);redoMove()" aria-label="${T('redo')}" id="redoBtnQt" title="${T('redo')}"><span style="font-size:1.4rem">↪️</span> ${T('redo')}</button>`;
+  }
+  h+=`<button class="btn" onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);flipBoard()" aria-label="${T('flip')}" title="${T('flip')}"><span style="font-size:1.4rem">🔃</span> ${T('flip')}</button>`;
+  h+=`<button class="btn" onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);getHint()" aria-label="${T('ai_hint')}" title="${T('ai_hint')}"><span style="font-size:1.4rem">💡</span> ${T('ai_hint')}</button>`;
+  h+=`<button class="btn" onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showCtrlMap=!showCtrlMap;cachedCtrlKey=&quot;&quot;;render()" aria-label="${T('ctrl_range')}" title="${T('ctrl_range')}">${showCtrlMap?'<span style="font-size:1.4rem">🌈</span> '+T('ctrl_range'):'<span style="font-size:1.4rem">🌗</span> '+T('ctrl_range')}</button>`;
+  h+=`</div>`;
+}
+h+=`<div class="pbar" id="player-bar" style="flex-wrap:wrap"><span class="pico">${playerColor==='white'?'<span style="color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55)">♔&#xFE0E;</span>':'<span style="color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55)">♚&#xFE0E;</span>'}</span><div style="flex:1;min-width:0;display:flex;flex-direction:column"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><div class="pname" style="cursor:pointer;text-decoration:underline dotted rgba(212,160,23,.5);text-underline-offset:3px" onclick="_renameHumanPlayer()" title="${T('rename_player_hint')}">${_plNameEsc}</div>${_plClockHtml}</div>${_plCapHtml}</div>${gameState.currentTurn===playerColor&&!gameOver&&!setupMode?'<span class="tind" style="color:#4ade80">'+T('your_turn')+'</span><button type="button" class="btn" onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showResignConfirm=true;render()" title="'+T('resign_btn')+'" aria-label="'+T('resign_btn')+'" style="padding:4px 10px;font-size:.75rem;min-height:30px;border-color:rgba(192,57,43,.6);color:#e57373;background:rgba(192,57,43,.12)">'+T('resign_btn')+'</button>':''}</div>`;}
+return h;
+} // end _renderPlayerBar
+
+/**
+ * v1.2.0 Phase 82+++: Render the info bars below the board (tablebase status,
+ * ECO opening recommendation, AI hint with MultiPV).
+ *
+ * Extracted from renderInternal() to further reduce God Function size. Renders
+ * three optional info bars between the board and the player bar:
+ *   1. Tablebase status bar (when ≤7 pieces and player's turn) — shows Syzygy
+ *      category (win/draw/loss), DTZ/DTM distance, best move recommendation.
+ *   2. ECO opening recommendation bar (when _ecoEnabled, not Chess960, player's
+ *      turn) — shows the recommended opening move from the ECO book.
+ *   3. AI hint area (when isHintLoading or hintText set) — shows hint text,
+ *      search info, and MultiPV alternative lines.
+ *
+ * Uses global state only (gameOver, reviewMode, pieceCountLE7, gameState,
+ * generateFEN, _tbCache, _tbLoading, T, isTbOffline, _triggerTbQuery,
+ * _jsAttrEncode, _esc, setupMode, _ecoEnabled, gameVariant, playerColor,
+ * getECORecommendation, isHintLoading, hintText, _hintBarInfo, _multiPVLines,
+ * _convertPVtoSAN).
+ *
+ * @param {string} h - Current HTML string
+ * @returns {string} h with info bars HTML appended
+ */
+function _renderInfoBars(h){
+// Tablebase status bar (player turn only, ≤7 pieces, manual query)
+if(!gameOver&&!reviewMode&&pieceCountLE7(gameState.board)){
+const _tbFen=generateFEN(gameState);
+let _tbBarHtml='';
+const _cachedTb=_tbCache.get(_tbFen);
+if(_tbLoading){_tbBarHtml='<span style="color:var(--accent)">'+T('tb_querying')+'</span>';}
+else if(_cachedTb){
+// API returns moves[] already sorted best-first; use moves[0] directly
+const _cat=_cachedTb.category||'';
+const _catMap={'win':T('tb_cat_win'),'syzygy-win':T('tb_cat_syzygy_win'),'maybe-win':T('tb_cat_maybe_win'),'cursed-win':T('tb_cat_cursed_win'),'draw':T('tb_cat_draw'),'blessed-loss':T('tb_cat_blessed_loss'),'maybe-loss':T('tb_cat_maybe_loss'),'syzygy-loss':T('tb_cat_syzygy_loss'),'loss':T('tb_cat_loss')};
+const _catLabel=_catMap[_cat]||_cat;
+let _dtzLabel='';
+const _dtm=_cachedTb.dtm;
+const _dtz=_cachedTb.precise_dtz!=null?_cachedTb.precise_dtz:_cachedTb.dtz;
+const _isWinCat=_cat==='win'||_cat==='syzygy-win'||_cat==='maybe-win'||_cat==='cursed-win';
+const _isLossCat=_cat==='loss'||_cat==='syzygy-loss'||_cat==='maybe-loss'||_cat==='blessed-loss';
+if(_isWinCat){
+  if(_dtm!=null&&_dtm>0){_dtzLabel=T('tb_mate_dist')+': '+Math.ceil(Math.abs(_dtm)/2)+T('tb_steps');}
+  else if(_dtz!=null&&_dtz>0){_dtzLabel=T('tb_dtz_dist')+': '+Math.ceil(_dtz/2)+T('tb_steps');}
+}else if(_cat==='draw'){_dtzLabel=T('tb_theory_draw');}
+else if(_isLossCat){
+  if(_dtm!=null&&_dtm<0){_dtzLabel=T('tb_mate_dist')+': '+Math.ceil(Math.abs(_dtm)/2)+T('tb_steps');}
+  else if(_dtz!=null&&_dtz<0){_dtzLabel=T('tb_resist_dist')+': '+Math.ceil(Math.abs(_dtz)/2)+T('tb_steps');}
+}
+// Declare _best outside the if-block to avoid ReferenceError
+let _bestMoveLabel='';
+let _best=null;
+if(_cachedTb.moves&&_cachedTb.moves.length){
+_best=_cachedTb.moves[0]; // API sorts best-first
+_bestMoveLabel=_best.san||_best.uci;
+}
+// v1.0.8 PHASE 30: escape _best.uci (in onclick attr) and _bestMoveLabel (in
+//   text content) — both come from the tablebase.lichess.ovh API response and
+//   could be XSS vectors if the API is compromised or returns malformed data.
+_tbBarHtml=`<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="color:${(_cat==='win'||_cat==='syzygy-win')?'#27ae60':_cat==='draw'?'var(--accent)':'#c0392b'};font-weight:700">${_catLabel}</span><span style="color:var(--muted);font-size:.72rem">${_dtzLabel}</span>${_bestMoveLabel&&_best?'<span style="cursor:pointer;color:var(--accent2);font-size:.78rem" onclick="autoSelectTablebaseMove('+_jsAttrEncode(_best.uci)+')">🌟 '+T('recommend')+': '+_esc(_bestMoveLabel)+'</span>':''}</div>`;
+}else if(isTbOffline()){_tbBarHtml='<span style="color:var(--muted)">'+T('tb_unavailable')+'</span>';}
+else{_tbBarHtml='<span style="cursor:pointer;color:var(--accent);text-decoration:underline" onclick="_triggerTbQuery()">'+T('tb_query')+'</span>';}
+h+=`<div style="padding:6px 12px;background:var(--card);border:1px solid var(--border);border-radius:6px;font-size:.8rem;font-family:system-ui,-apple-system,sans-serif"><div style="display:flex;align-items:center;gap:6px;margin-bottom:3px"><span style="font-size:.85rem">🌐</span><span style="color:var(--accent2);font-weight:700;font-size:.75rem">${T('tb_library')}</span></div>${_tbBarHtml}</div>`;
+}
+// ECO Opening Recommendation bar (only when _ecoEnabled)
+// v1.0.6: Suppress in Chess960 mode — Chess960 has no fixed opening theory,
+// so ECO recommendations are meaningless and were already disabled in the
+// new-game dialog (the ECO book toggle is grayed out when Chess960 is on).
+// This same gate now also covers the in-game recommendation bar so a game
+// that started as Chess960 (or was imported from a Chess960 PGN) never
+// shows ECO recommendations.
+if(!setupMode&&!gameOver&&!reviewMode&&_ecoEnabled&&!(typeof gameVariant!=='undefined'&&gameVariant==='chess960')&&gameState.currentTurn===playerColor){
+const _ecoRec=getECORecommendation(gameState);
+if(_ecoRec){
+// v1.0.8 PHASE 30: escape _ecoRec.notation and _ecoRec.name for defense-in-depth
+//   (ECO data is bundled/trusted, but consistent escaping is safer).
+h+=`<div style="padding:6px 12px;background:var(--card);border:1px solid var(--purple);border-radius:6px;font-size:.8rem;font-family:system-ui,-apple-system,sans-serif"><div style="display:flex;align-items:center;gap:6px;margin-bottom:3px"><span style="font-size:.85rem">📖</span><span style="color:var(--accent2);font-weight:700;font-size:.75rem">${T('opening_rec')}</span></div><span style="color:var(--muted);font-size:.85rem;margin-right:4px">🔍</span><span style="color:var(--text)">${_esc(_ecoRec.notation)}</span><span style="color:var(--muted);font-size:.7rem;margin-left:6px">(${_esc(_ecoRec.name)})</span></div>`;
+}
+}
+// Hint area: only shown when user clicked hint button (isHintLoading or hintText set)
+// Search info in hint area only shown during hint loading, NOT during AI thinking
+{if(isHintLoading||hintText){h+='<div class="hint-area"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:.85rem">💡</span><span style="font-size:.75rem;color:var(--accent2)">'+T('ai_hint')+'</span></div>';if(isHintLoading)h+='<div class="hint-text" style="animation:pulse 1.2s infinite">'+T('hint_thinking')+'</div>';else if(hintText)h+='<div class="hint-text">'+_esc(hintText)+'</div>';if(isHintLoading&&_hintBarInfo)h+='<div id="hint-search-info" style="font-size:.72rem;color:var(--accent);margin-top:4px;font-family:monospace;letter-spacing:.5px">'+_esc(_hintBarInfo)+'</div>';
+// Ponder move is now displayed inline in hintText (set by onHintMove)
+// when the engine provides "bestmove X ponder Y". No separate display needed here.
+// Show MultiPV alternative lines if available
+if(_multiPVLines.length>=1){h+='<div style="margin-top:6px;border-top:1px solid rgba(212,160,23,.15);padding-top:6px"><div style="font-size:.65rem;color:var(--muted);margin-bottom:4px">'+T('multi_analysis')+'</div>';for(const pv of _multiPVLines){let scoreStr='';if(pv.scoreMate!=null&&pv.scoreMate!==null){const m=parseInt(pv.scoreMate,10);if(!isNaN(m))scoreStr=m>0?'#+'+Math.abs(m):m<0?'#-'+Math.abs(m):'#0';}else if(pv.scoreCp!=null&&pv.scoreCp!==null){const pd=(pv.scoreCp/100).toFixed(1);scoreStr=(pv.scoreCp>0?'+':'')+pd;} let pvSAN='';if(pv.pv){try{const _conv=_convertPVtoSAN(pv.pv,gameState);pvSAN=_conv.sanMoves.split(/\s+/).slice(0,3).join(' ');}catch(e){pvSAN=pv.pv.split(/\s+/).slice(0,3).join(' ');}} h+='<div style="font-size:.65rem;color:'+(pv.index===1?'var(--accent2)':'var(--muted)')+';margin-bottom:2px">'+(pv.index===1?'⭐':'·')+' '+scoreStr+(pvSAN?' <span style="font-family:monospace;font-size:.6rem">'+_esc(pvSAN)+'</span>':'')+'</div>';}h+='</div>';} h+='</div>';}}// Player bar
+return h;
+} // end _renderInfoBars
+
+/**
+ * v1.2.0 Phase 82++++: Render the game-over overlay (sound trigger + overlay HTML).
+ *
+ * Extracted from renderInternal() to further reduce God Function size. Handles:
+ *   1. Game-over sound trigger (fires once per game end via gameOverSoundPlayed guard)
+ *   2. Game-over overlay HTML (.gover) with status emoji, localized status text,
+ *      "Play Again" and "Review" buttons
+ *
+ * The overlay markup includes adaptive color/emoji based on _gameOverStatusKey:
+ *   - checkmate: ♔/♚ piece glyph with adaptive color for winning side
+ *   - resign: 🏳️ white flag
+ *   - timeout: ⌛ hourglass
+ *   - other (draw/stalemate): 🤝 handshake
+ *
+ * Uses global state only (gameOver, lastMove, gameOverSoundPlayed, playSound,
+ * HapticManager, setupMode, _gameOverStatusKey, gameState, T, render,
+ * showNewGameDialog, dlgPlayerColor, playerColor, dlgOpeningId, ecoShowCount,
+ * dlgBookMoves, useBookMoves, enterReview).
+ *
+ * @param {string} h - Current HTML string
+ * @returns {string} h with game-over overlay HTML appended (if applicable)
+ */
+function _renderGameOverOverlay(h){
+if(gameOver&&lastMove&&!gameOverSoundPlayed){gameOverSoundPlayed=true;playSound('gameover');HapticManager.fire('GAME_OVER');}
+if(gameOver&&!setupMode){h+=`<div class="gover" role="alert" aria-live="assertive"><div class="ge" style="${_gameOverStatusKey==='checkmate'?(gameState.currentTurn==='black'?'color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55)':'color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55)'):'font-family:system-ui,sans-serif'};font-family:'DejaVu Sans','Noto Sans','Segoe UI Symbol',sans-serif;font-variant-emoji:text;font-weight:400">${_gameOverStatusKey==='checkmate'?(gameState.currentTurn==='black'?'♔\uFE0E':'♚\uFE0E'):_gameOverStatusKey==='resign'?'🏳️':_gameOverStatusKey==='timeout'?'⌛':'🤝'}</div><div class="gt">${gameOver}</div><button type="button" class="btn btn-p" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()">⚔️ ${T('play_again')}</button><button type="button" class="btn btn-g" onclick="enterReview()">📑 ${T('review')}</button></div>`;}
+return h;
+} // end _renderGameOverOverlay
+
+/**
+ * v1.2.0 Phase 82++++: Apply the render result to the DOM (scroll save / innerHTML /
+ * scroll restore / cache invalidation / focus restore).
+ *
+ * Extracted from renderInternal() to further reduce God Function size. This is the
+ * most delicate extraction because it touches many global state variables and uses
+ * specific DOM operation timing (synchronous scroll restore for review containers,
+ * double-rAF for layout-settled operations).
+ *
+ * Pipeline:
+ *   1. Capture scroll positions of all scrollable containers BEFORE DOM rebuild
+ *      (.mlist, .review-body, .review-moves, .dlg, .panel, .op-list)
+ *   2. app.innerHTML = h  (rebuilds entire DOM, resets all scrollTops to 0)
+ *   3. Re-attach active piece-move animations (_reattachActiveAnimations)
+ *   4. Restore .mlist scroll synchronously (with _scrollRestoreGuard to suppress
+ *      intermediate scroll events)
+ *   5. Restore .review-body + .review-moves scroll SYNCHRONOUSLY (not in rAF —
+ *      otherwise the user sees a visible jump-to-top flicker)
+ *   6. Restore .dlg / .panel / .op-list scroll in double-rAF (deferred to let
+ *      layout settle, with clamping to handle shorter content)
+ *   7. Invalidate DOM caches (_cachedBwrap, _cachedSvgEl, _cachedCtrlCard, etc.)
+ *   8. Update prev-tracking state (_prevHoverSq, _prevSelSq, _prevLegalSet)
+ *   9. Active-move scroll-into-view in review mode (double-rAF, manual scrollTop
+ *      computation to avoid scrollIntoView's ancestor-scrolling side effect)
+ *  10. Update arrow overlay (_updateArrows)
+ *  11. Invalidate eval-display signature cache (_evalDispPrevSig)
+ *  12. Cache review-moves-list element ref (_rListEl)
+ *  13. Restore ECO search input focus
+ *  14. Auto-scroll opening list to selected opening (if New Game dialog open)
+ *
+ * Uses global state only (reviewMode, _ecoSearchFocused, _ecoBlurTimer,
+ * _rvScrollRefreshTimer, _mlistScrollState, _scrollRestoreGuard, _skipReviewBodyScrollRestore,
+ * _rListEl, _lastReviewStepScrolled, reviewStep, hoveredSquare, selectedSquare,
+ * legalMvs, _cachedBwrap, _cachedSvgEl, _cachedSvgLines, _cachedArrowKey,
+ * _cachedCtrlCard, _prevHoverSq, _prevSelSq, _prevLegalSet, _evalDispPrevSig,
+ * _invalidateElCache, _sqElCache, _prevBoardVersion, _reattachActiveAnimations,
+ * _updateArrows, _onMlistScroll, gameState, requestAnimationFrame).
+ *
+ * @param {HTMLElement} app - The #app DOM element
+ * @param {string} h - The HTML string to set as app.innerHTML
+ * @param {boolean} reviewMode - Whether review mode is active (affects scroll restore)
+ */
+function _applyRenderResult(app, h, reviewMode){
 const _wasEcoFocused=_ecoSearchFocused;if(_ecoBlurTimer){clearTimeout(_ecoBlurTimer);_ecoBlurTimer=0}
 // v1.1.0 Phase 54 rev14: Virtual list is disabled (RV_VIRTUAL_THRESHOLD=Infinity).
 //   The scroll refresh timer is always 0, so this clearTimeout is a no-op.
@@ -3331,40 +3690,31 @@ _prevLegalSet=new Set();if(selectedSquare){for(const m of legalMvs)_prevLegalSet
 //   scrollable ancestors — in landscape review mode, the active move lives
 //   in the inner .review-moves container which sits at the TOP of the outer
 //   .review-body. When the user has scrolled .review-body down to reach the
-//   nav buttons at the bottom, clicking a nav button triggers render() →
+//   nav buttons at the bottom, clicking a nav button triggers render() ->
 //   this scrollIntoView yanks .review-body back to scrollTop=0, undoing the
-//   synchronous restore at lines 3203-3210 above. Fix: manually compute the
-//   inner .review-moves scrollTop to center the active move, WITHOUT calling
-//   scrollIntoView (which would also scroll the outer container). This
-//   preserves the outer .review-body scroll position.
-//
+//   synchronous restore above. Fix: manually compute the inner .review-moves
+//   scrollTop to center the active move, WITHOUT calling scrollIntoView (which
+//   would also scroll the outer container). This preserves the outer .review-body
+//   scroll position.
 // v1.1.0 Phase 57 FIX (portrait scroll): The Phase 56 fix used _rAct.offsetTop
 //   to compute the active move's position. However, offsetTop returns the
 //   distance from the element's outer border to the top of its offsetParent's
 //   inner border — and .rmv-block's offsetParent is .review-overlay (which is
 //   position:fixed), NOT _rList (.review-moves has no position set).
-//
 //   In LANDSCAPE this happened to be approximately correct because .review-moves
 //   is a flex child of .review-top (which is row-flex), so .rmv-block's vertical
-//   offsetTop within .review-overlay ≈ header_height + position_within_moves.
+//   offsetTop within .review-overlay ~= header_height + position_within_moves.
 //   The header is only ~24px, so the error was small.
-//
 //   In PORTRAIT, however, .review-moves is stacked BELOW .review-left (the board
 //   column, which has the board's full height). So .rmv-block's vertical
-//   offsetTop within .review-overlay ≈ header_height + board_height +
+//   offsetTop within .review-overlay ~= header_height + board_height +
 //   position_within_moves. The board_height is 256-320px — much larger than the
 //   .review-moves viewport (also 256-320px), so the resulting _target was
 //   WAY too large, clamped to scrollHeight-clientHeight (scrolled to bottom),
 //   and the active move was nowhere near the center of the visible area.
-//
 //   Fix: use getBoundingClientRect() to compute the active move's position
 //   RELATIVE TO _rList (not relative to .review-overlay). This works correctly
 //   regardless of orientation, layout structure, or offsetParent chain.
-//   The formula:
-//     _actTop = (_actRect.top - _listRect.top) + _rList.scrollTop
-//   gives the active move's position within _rList's full content (including
-//   the portion scrolled out of view). Then center it:
-//     _target = _actTop + _actH/2 - _listH/2
 if(reviewMode && reviewStep !== _lastReviewStepScrolled){
   _lastReviewStepScrolled = reviewStep;
   requestAnimationFrame(function(){
@@ -3382,18 +3732,11 @@ if(reviewMode && reviewStep !== _lastReviewStepScrolled){
           const _actH=_rAct.offsetHeight||0;
           // v1.1.0 Phase 57: use getBoundingClientRect to compute the active
           // move's position relative to _rList, NOT relative to offsetParent.
-          // See the long comment above for why offsetTop was wrong in portrait.
-          // If getBoundingClientRect is unavailable or returns zeros (e.g.,
-          // disconnected DOM — should not happen here since _rAct was just
-          // queried from _rList), skip scrolling rather than risk a wrong jump.
           let _actTop=-1;
           try{
             const _listRect=_rList.getBoundingClientRect();
             const _actRect=_rAct.getBoundingClientRect();
             if(_listRect.width>0||_listRect.height>0){
-              // Position of _rAct's top relative to _rList's content area:
-              //   (_actRect.top - _listRect.top) = visible offset (negative if scrolled past)
-              //   + _rList.scrollTop = absolute content position
               _actTop=(_actRect.top-_listRect.top)+_rList.scrollTop;
             }
           }catch(e){}
@@ -3430,10 +3773,92 @@ _rListEl = document.getElementById('reviewMovesList');
 if(_wasEcoFocused){const el=document.getElementById('ecoSearch');if(el){el.focus();_ecoSearchFocused=true;try{el.setSelectionRange(el.value.length,el.value.length)}catch(e){}}}
 // Auto-scroll opening list to selected opening (skip during review mode)
 if(showNewGameDialog&&dlgOpeningId&&!reviewMode){setTimeout(()=>{const list=document.querySelector('.op-list');if(list){const active=list.querySelector('.op-btn.act');if(active)active.scrollIntoView({block:'center',behavior:'smooth'})}},50)}
-// v1.0.8 PHASE 30: escape error message + stack to prevent XSS if a thrown
-//   error message ever contains HTML.
-// v1.1.1 Phase 60 (audit i18n): Use T('render_error_title') instead of the
-//   hard-coded English "Render Error" so the title is localized.
+} // end _applyRenderResult
+
+function renderInternal(){try{
+// v1.2.0 Phase 82++++: Defensive checks + cm/infoSq/infoCtrl/oppC/flip computation
+// extracted to _computeRenderState(). This fixes a critical Phase 82++ regression
+// where these locals were declared inside _renderHeader() and inaccessible to
+// other sub-functions (root cause of the "clicking move records doesn't enter
+// review mode" bug — _renderReviewMode threw ReferenceError on `flip`).
+const _rs=_computeRenderState();
+const {cm, infoSq, infoCtrl, oppC, flip}=_rs;
+const app=document.getElementById('app');if(!app)return;
+// Score from White's perspective (UCI side-to-move -> White conversion done in onEngineEval); emoji/desc reflect player's advantage
+// v1.2.0 Phase 82++: Header toolbar rendering extracted to _renderHeader().
+// _renderHeader() initializes h with the header HTML and returns it.
+let h=_renderHeader();
+h+=`<div class="main" role="main"><div class="bsec">`;
+// v1.2.0 Phase 82+++: AI opponent bar rendering extracted to _renderAIBar(h, oppC).
+h=_renderAIBar(h, oppC);
+// v1.2.0 Phase 82++: Board grid rendering extracted to _renderBoardGrid(h, flip, cm).
+// _renderBoardGrid opens .flbl (self-closing), .display:flex (open), .rlbl (self-closing),
+// .bwrap (open), .bgrid (open→close after grid loop). The .bwrap and .display:flex stay OPEN.
+// v1.2.0 Phase 82+++++ FIX: In v1.1.2, the game-over overlay and setup panel render INSIDE
+// .bwrap (because .gover uses position:absolute;inset:0 and .bwrap has position:relative,
+// so the overlay covers the board area only). The .bwrap+.display:flex close happens AFTER
+// the setup panel. This matches v1.1.2 exactly.
+h=_renderBoardGrid(h, flip, cm);
+// Arrows are now handled by persistent SVG overlay via _updateArrows() — no inline SVG here
+// v1.2.0 Phase 82++++: Game-over sound + overlay extracted to _renderGameOverOverlay(h).
+// The .gover overlay is position:absolute;inset:0 — it anchors to .bwrap (position:relative),
+// covering the board area only (NOT the entire screen).
+h=_renderGameOverOverlay(h);
+// v1.2.0 Phase 82++: Setup panel rendering extracted to _renderSetupPanel(h).
+// In v1.1.2, the setup panel renders inside .bwrap (between .bgrid close and .bwrap close).
+h=_renderSetupPanel(h);
+// v1.2.0 Phase 82+++++ FIX: Close .bwrap + .display:flex wrapper opened by _renderBoardGrid.
+// This must happen AFTER game-over overlay and setup panel (they render inside .bwrap).
+// In v1.1.2 this is the `h+=</div></div>` at line 2298.
+h+=`</div></div>`; // close .bwrap + .display:flex (board wrapper)
+// v1.2.0 Phase 82+++: Info bars (tablebase/ECO/hint) rendering extracted to _renderInfoBars(h).
+// Info bars render inside .bsec, OUTSIDE .bwrap (they are siblings of the board wrapper).
+h=_renderInfoBars(h);
+// v1.2.0 Phase 82+++: Quick toolbar + player bar rendering extracted to _renderPlayerBar(h).
+// Quick toolbar + player bar render inside .bsec, OUTSIDE .bwrap.
+h=_renderPlayerBar(h);
+h+=`</div>`; // close .bsec
+// Side panel (sibling of .bsec, inside .main)
+// v1.2.0 Phase 82++: Side panel rendering extracted to _renderSidePanel(h, infoSq, infoCtrl, oppC).
+// v1.2.0 Phase 82+++++: _renderSidePanel opens .panel and closes BOTH .panel and .main
+// (its trailing </div></div> closes .panel + .main). Do NOT add an extra </div> here —
+// that was the root cause of the "main interface layout abnormal" bug (an extra </div>
+// closed #app, causing all subsequent content — dialogs, review overlay — to render
+// outside the #app flex container, breaking the layout).
+h=_renderSidePanel(h, infoSq, infoCtrl, oppC);
+
+// v1.2.0 Phase 82: All modal dialogs extracted to _renderDialogs(h) to reduce
+// renderInternal's God Function size. Each dialog is triggered by an independent
+// boolean flag and produces self-contained HTML overlay markup. See _renderDialogs
+// above for the full dialog rendering logic and extraction rationale.
+h=_renderDialogs(h);
+
+
+// v1.2.0 Phase 82+: Review mode rendering extracted to _renderReviewMode(h, flip) to further
+// reduce renderInternal's God Function size. The function returns {h, done} — when
+// done=true, the review state was invalid and a re-render has been triggered; we must
+// return immediately to skip the scroll-save/innerHTML/scroll-restore logic below
+// (which would otherwise operate on stale DOM state). Only called when reviewMode is true.
+// v1.2.0 Phase 82++++: `flip` parameter added to fix ReferenceError (flip was previously
+// a free variable — root cause of the review-mode entry bug).
+if(reviewMode){
+  const _rvResult=_renderReviewMode(h, flip);
+  h=_rvResult.h;
+  if(_rvResult.done) return;
+}
+// v1.2.0 Phase 82++++: Scroll save / DOM update / scroll restore orchestration
+// extracted to _applyRenderResult(app, h, reviewMode). This handles:
+//   - Scroll position capture (.mlist, .review-body, .review-moves, .dlg, .panel, .op-list)
+//   - app.innerHTML = h (DOM rebuild)
+//   - Animation re-attach (_reattachActiveAnimations)
+//   - Scroll position restore (synchronous for .mlist/.review-body/.review-moves,
+//     deferred via double-rAF for .dlg/.panel/.op-list)
+//   - DOM cache invalidation (_cachedBwrap, _cachedSvgEl, etc.)
+//   - Active-move scroll-into-view (review mode)
+//   - Arrow overlay update (_updateArrows)
+//   - ECO search focus restore
+//   - Opening list auto-scroll
+_applyRenderResult(app, h, reviewMode);
 }catch(e){const _app=document.getElementById('app');if(_app)_app.innerHTML='<div style="color:red;padding:20px;font-family:monospace;background:#1a0000;border:2px solid red;border-radius:8px;margin:20px"><h3>'+T('render_error_title')+'</h3><pre style="white-space:pre-wrap;font-size:12px">'+_esc(e.toString())+'\n\n'+_esc(e.stack)+'</pre></div>';console.error('Render error:',e)}}
 
 
@@ -4506,6 +4931,9 @@ function quickFreeOpening(){
 // === Toggle sound on/off (toolbar button) ===
 function toggleSound(){
   soundOn=!soundOn;
+  // v1.2.0 Phase 82+++++ rev 5: Wire Store as debug observability layer.
+  try{if(typeof Store!=='undefined'&&Store&&typeof Store.dispatch==='function')Store.dispatch('TOGGLE_SOUND',soundOn);}catch(e){}
+
   const btn=document.getElementById('btnSound');
   if(btn)btn.innerHTML=soundOn?'<span style=\"font-size:1.4rem\">🔊</span> '+T('sound'):'<span style=\"font-size:1.4rem\">🔇</span> '+T('sound');
   HapticManager.fire(soundOn?'TOGGLE_ON':'TOGGLE_OFF');
@@ -5147,6 +5575,9 @@ _ponderGen++;_ponderMoveSAN='';_ponderBarInfo='';_pendingPonderMoveUCI=null;
 isAIThinking=false;_aiBarInfo='';
 if(typeof _updateAIThinkDisplay==='function')_updateAIThinkDisplay();
 reviewCritical=_findCriticalMoves();requestEngineEval();render(); // _resetEvalState now inside requestEngineEval()
+  // v1.2.0 Phase 82+++++ rev 5: Wire Store as debug observability layer.
+  try{if(typeof Store!=='undefined'&&Store&&typeof Store.dispatch==='function')Store.dispatch('ENTER_REVIEW',{states:reviewStates,baseState:reviewBaseState});}catch(e){}
+
 }
 /**
  * Find critical moves in the game — moves where the evaluation changed significantly.
@@ -5670,441 +6101,283 @@ function _updateClockDisplay(){
 //   auto-generated annotations from contaminating the PGN.
 const _visualAnnotationsCache=new Map(); // moveIdx → {csl:[...], cal:[...], imported:boolean}
 
+// v1.2.0 Phase 76+: Extracted from _computeAndCacheVisualAnnotations to reduce
+//   cognitive complexity. Replays moves from the starting position to obtain
+//   the post-move state at moveIdx. Returns null if replay fails.
+function _replayMovesToState(moveIdx){
+  try{
+    let st=(typeof _setupFEN!=='undefined'&&_setupFEN)?fenToState(_setupFEN):initState();
+    if(!st)return null;
+    for(let i=0;i<=moveIdx;i++){
+      const mr=moveRecords[i];
+      if(!mr)return null;
+      const from=algPos(mr.from);
+      const to=algPos(mr.to);
+      if(!from||!to)return null;
+      const piece=st.board[from.row][from.col];
+      if(!piece)return null;
+      const mv={from,to,piece,promotion:mr.promotion};
+      if(mr.isCastling&&piece.type==='king'){
+        mv.castle=(to.col===6)?'kingside':'queenside';
+      }
+      st=makeMv(st,mv);
+      if(!st)return null;
+    }
+    return st;
+  }catch(e){
+    console.warn('_replayMovesToState: failed to replay moves',e);
+    return null;
+  }
+}
+
+// v1.2.0 Phase 76+: Extracted square-highlight computation (Blue/Red/Yellow/Green).
+function _computeSquareHighlights(cm, playerCol, aiCol){
+  if(!cm)return [];
+  const csl=[];
+  const centerSquares=[[3,3],[3,4],[4,3],[4,4]];
+  const isCenter=(r,c)=>(r===3||r===4)&&(c===3||c===4);
+  const isExtendedCenter=(r,c)=>r>=2&&r<=5&&c>=2&&c<=5;
+  const blueCandidates=[];
+  const redCandidates=[];
+  const yellowCandidates=[];
+  for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+    const entry=cm[r][c];
+    if(!entry)continue;
+    const pAtk=entry[playerCol].length;
+    const aAtk=entry[aiCol].length;
+    const total=pAtk+aAtk;
+    const netCtrl=pAtk-aAtk;
+    if(netCtrl>0){
+      let score=netCtrl*2;
+      if(isCenter(r,c))score+=3;
+      else if(isExtendedCenter(r,c))score+=1;
+      blueCandidates.push({r,c,score});
+    }
+    if(netCtrl<0){
+      let score=(-netCtrl)*2;
+      if(isCenter(r,c))score+=3;
+      else if(isExtendedCenter(r,c))score+=1;
+      redCandidates.push({r,c,score});
+    }
+    if(total>=2){
+      yellowCandidates.push({r,c,total});
+    }
+  }
+  blueCandidates.sort((a,b)=>b.score-a.score);
+  redCandidates.sort((a,b)=>b.score-a.score);
+  yellowCandidates.sort((a,b)=>b.total-a.total);
+  for(const sq of blueCandidates.slice(0,3)){
+    csl.push({color:'B',square:posAlg({row:sq.r,col:sq.c})});
+  }
+  for(const sq of redCandidates.slice(0,3)){
+    csl.push({color:'R',square:posAlg({row:sq.r,col:sq.c})});
+  }
+  for(const sq of yellowCandidates.slice(0,3)){
+    csl.push({color:'Y',square:posAlg({row:sq.r,col:sq.c})});
+  }
+  for(const [r,c] of centerSquares){
+    const entry=cm[r][c];
+    if(entry&&entry.white.length===0&&entry.black.length===0){
+      csl.push({color:'G',square:posAlg({row:r,col:c})});
+    }
+  }
+  return csl;
+}
+
+// v1.2.0 Phase 76+: Extracted check-arrow computation (Red + Green arrows).
+function _computeCheckArrows(cm, postState, oppKingPos, moverColor, oppColor, moveIdx){
+  if(!oppKingPos||!moveRecords[moveIdx].isCheck)return [];
+  const cal=[];
+  if(cm){
+    const checkers=cm[oppKingPos.row][oppKingPos.col][moverColor]||[];
+    const checkerSeen=new Set();
+    for(const checker of checkers){
+      const ck=checker.position.row+','+checker.position.col;
+      if(checkerSeen.has(ck))continue;
+      checkerSeen.add(ck);
+      cal.push({color:'R',from:posAlg(checker.position),to:posAlg(oppKingPos)});
+    }
+  }else{
+    const moverTo=algPos(moveRecords[moveIdx].to);
+    if(moverTo){
+      cal.push({color:'R',from:posAlg(moverTo),to:posAlg(oppKingPos)});
+    }
+  }
+  try{
+    const allLegalMoves=legalMoves(postState, null);
+    for(const m of allLegalMoves){
+      if(m.from.row===oppKingPos.row&&m.from.col===oppKingPos.col){
+        cal.push({color:'G',from:posAlg(oppKingPos),to:posAlg(m.to)});
+      }
+    }
+    if(cm){
+      const checkers=cm[oppKingPos.row][oppKingPos.col][moverColor]||[];
+      if(checkers.length>0){
+        const movesByDest=new Map();
+        for(const m of allLegalMoves){
+          const k=m.to.row+','+m.to.col;
+          let list=movesByDest.get(k);
+          if(!list){list=[];movesByDest.set(k,list);}
+          list.push(m);
+        }
+        const checkerSeen=new Set();
+        for(const checker of checkers){
+          const ck=checker.position.row+','+checker.position.col;
+          if(checkerSeen.has(ck))continue;
+          checkerSeen.add(ck);
+          const captures=movesByDest.get(ck);
+          if(!captures)continue;
+          for(const m of captures){
+            if(m.piece.type==='king')continue;
+            cal.push({color:'G',from:posAlg(m.from),to:posAlg(m.to)});
+          }
+        }
+      }
+    }
+  }catch(e){
+    console.warn('visualAnnotations: green arrows (respond-to-check) failed',e);
+  }
+  return cal;
+}
+
+// v1.2.0 Phase 76+: Extracted threat-arrow computation (Yellow + Blue arrows).
+function _computeThreatArrows(cm, postState, moverColor, oppColor, _movedToPos, _isQueenMovedIntoThreat){
+  if(!cm)return [];
+  const cal=[];
+  const threatByMover=new Map();
+  const threatByOpp=new Map();
+  let moverQueens=[];
+  let oppQueens=[];
+  let _movedPieceThreatened=false;
+  if(_movedToPos){
+    const _atkOnMoved=cm[_movedToPos.row][_movedToPos.col][oppColor]||[];
+    if(_atkOnMoved.length>0)_movedPieceThreatened=true;
+  }
+  for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+    const p=postState.board[r][c];
+    if(!p||p.type==='king')continue;
+    if(p.color===moverColor){
+      const oppAttackers=cm[r][c][oppColor]||[];
+      if(oppAttackers.length>0){
+        const _legalOppAttackers=oppAttackers.filter(atk=>
+          atk.piece.type!=='king'||(cm[r][c][moverColor]||[]).length===0
+        );
+        for(const atk of _legalOppAttackers){
+          const k=atk.position.row+','+atk.position.col;
+          if(!threatByOpp.has(k))threatByOpp.set(k,{attacker:atk,targets:[]});
+          threatByOpp.get(k).targets.push({piece:p,position:{row:r,col:c}});
+        }
+        if(p.type==='queen'){
+          moverQueens.push({position:{row:r,col:c},attackers:_legalOppAttackers.slice()});
+        }
+      }
+    }else if(p.color===oppColor){
+      const moverAttackers=cm[r][c][moverColor]||[];
+      if(moverAttackers.length>0){
+        const _legalMoverAttackers=moverAttackers.filter(atk=>
+          atk.piece.type!=='king'||(cm[r][c][oppColor]||[]).length===0
+        );
+        for(const atk of _legalMoverAttackers){
+          const k=atk.position.row+','+atk.position.col;
+          if(!threatByMover.has(k))threatByMover.set(k,{attacker:atk,targets:[]});
+          threatByMover.get(k).targets.push({piece:p,position:{row:r,col:c}});
+        }
+        if(p.type==='queen'){
+          oppQueens.push({position:{row:r,col:c},attackers:_legalMoverAttackers.slice()});
+        }
+      }
+    }
+  }
+  const _pieceVal={pawn:1,knight:3,bishop:3,rook:5,queen:9,king:0};
+  const yellowAttackers=[];
+  for(const q of oppQueens){
+    for(const atk of q.attackers){
+      const _isAtMovedDest=_movedToPos&&q.position.row===_movedToPos.row&&q.position.col===_movedToPos.col;
+      yellowAttackers.push({attacker:atk,queen:q.position,boost:_isAtMovedDest?1:0});
+    }
+  }
+  for(const q of moverQueens){
+    for(const atk of q.attackers){
+      const _isMovedQueen=_isQueenMovedIntoThreat
+        &&_movedToPos
+        &&q.position.row===_movedToPos.row
+        &&q.position.col===_movedToPos.col;
+      yellowAttackers.push({attacker:atk,queen:q.position,boost:_isMovedQueen?1:0});
+    }
+  }
+  const yaSeen=new Set();
+  const yaDedup=[];
+  for(const ya of yellowAttackers){
+    const k=ya.attacker.position.row+','+ya.attacker.position.col+'->'+ya.queen.row+','+ya.queen.col;
+    if(yaSeen.has(k))continue;
+    yaSeen.add(k);
+    yaDedup.push(ya);
+  }
+  yaDedup.sort((a,b)=>{
+    if(a.boost!==b.boost)return b.boost-a.boost;
+    return _pieceVal[b.attacker.piece.type]-_pieceVal[a.attacker.piece.type];
+  });
+  for(const ya of yaDedup.slice(0,6)){
+    cal.push({color:'Y',from:posAlg(ya.attacker.position),to:posAlg(ya.queen)});
+  }
+  const multiThreats=[];
+  for(const v of threatByMover.values()){
+    if(v.targets.length>=2)multiThreats.push({attacker:v.attacker,targets:v.targets,boost:0});
+  }
+  for(const v of threatByOpp.values()){
+    if(v.targets.length>=2){
+      let _boost=_movedPieceThreatened?1:0;
+      if(_movedToPos&&_boost){
+        const _threatensMoved=v.targets.some(t=>t.position.row===_movedToPos.row&&t.position.col===_movedToPos.col);
+        if(!_threatensMoved)_boost=0;
+      }
+      multiThreats.push({attacker:v.attacker,targets:v.targets,boost:_boost});
+    }
+  }
+  multiThreats.sort((a,b)=>{
+    if(a.boost!==b.boost)return b.boost-a.boost;
+    return b.targets.length-a.targets.length;
+  });
+  for(const mt of multiThreats.slice(0,3)){
+    for(const tgt of mt.targets.slice(0,4)){
+      cal.push({color:'B',from:posAlg(mt.attacker.position),to:posAlg(tgt.position)});
+    }
+  }
+  return cal;
+}
+
 function _computeAndCacheVisualAnnotations(moveIdx){
   if(!moveRecords||moveIdx<0||moveIdx>=moveRecords.length)return;
-  // v1.0.4 ROUND-5 REV16: null check for Black-to-move placeholders
-  // v1.0.5 Rev52 FIX: was referencing undefined `csl`/`cal` — use empty arrays.
   if(!moveRecords[moveIdx]){_visualAnnotationsCache.set(moveIdx,{csl:[],cal:[],imported:false});return;}
+  // v1.2.0 Phase 76+: Obtain post-move state (reviewStates shortcut or replay)
   let postState=null;
-  // v1.1.1 Phase 64: Only use reviewStates as a shortcut when we're
-  //   actually IN review mode. Previously, reviewStates could hold stale
-  //   entries from a previous game's review session (not cleared until
-  //   _resetGameUIState), causing this function to use the OLD game's
-  //   board state at the same move index — producing annotations that
-  //   match the old game at that step. Now we gate on reviewMode to
-  //   ensure reviewStates is only used during an active review session
-  //   of the CURRENT game.
   if(typeof reviewMode!=='undefined'&&reviewMode&&typeof reviewStates!=='undefined'&&reviewStates[moveIdx+1]){
     postState=reviewStates[moveIdx+1].state;
   }
   if(!postState){
-    try{
-      let st=(typeof _setupFEN!=='undefined'&&_setupFEN)?fenToState(_setupFEN):initState();
-      if(!st)return;
-      let _replayOk=true;
-      for(let i=0;i<=moveIdx;i++){
-        const mr=moveRecords[i];
-        if(!mr){_replayOk=false;break;}
-        const from=algPos(mr.from);
-        const to=algPos(mr.to);
-        if(!from||!to){_replayOk=false;break;}
-        const piece=st.board[from.row][from.col];
-        if(!piece){_replayOk=false;break;}
-        // v1.0.6: Preserve the castle flag from moveRecords so makeMv can
-        // detect Chess960 castling (king may move only 1 col). mr.isCastling
-        // tells us this was a castling move; we derive the side from the
-        // king's destination column (6=kingside, 2=queenside).
-        const mv={from,to,piece,promotion:mr.promotion};
-        if(mr.isCastling&&piece.type==='king'){
-          mv.castle=(to.col===6)?'kingside':'queenside';
-        }
-        st=makeMv(st,mv);
-        if(!st){_replayOk=false;break;}
-      }
-      if(!_replayOk){
-        // v1.1.0 Phase 53: If replay failed (move couldn't be applied),
-        // do NOT use the partially-replayed state — its king positions and
-        // board may be stale/inconsistent. Return without caching.
-        console.warn('_computeAndCacheVisualAnnotations: replay failed at moveIdx',moveIdx);
-        return;
-      }
-      postState=st;
-    }catch(e){
-      console.warn('_computeAndCacheVisualAnnotations: failed to replay moves',e);
+    postState=_replayMovesToState(moveIdx);
+    if(!postState){
+      console.warn('_computeAndCacheVisualAnnotations: replay failed at moveIdx',moveIdx);
       return;
     }
   }
-  if(!postState)return;
-  const csl=[];  // [{color, square}]
-  const cal=[];  // [{color, from, to}]
   const moverColor=postState.currentTurn==='white'?'black':'white';
   const oppColor=moverColor==='white'?'black':'white';
   const oppKingPos=moverColor==='white'?postState.bk:postState.wk;
-  // v1.0.4 LATEST: "player" and "AI" are based on playerColor (human's color).
   const playerCol=(typeof playerColor!=='undefined')?playerColor:'white';
   const aiCol=playerCol==='white'?'black':'white';
-  // v1.0.5 Rev54: Identify the moved piece and its destination square.
-  // This is used to BOOST the priority of yellow/blue arrows that involve
-  // the just-moved piece — i.e., "actively moving INTO a threatened square"
-  // (per user spec). Without this boost, the cap (top 6 yellow / top 3 blue
-  // attackers) could drop the move-related arrow when many other threats
-  // already exist on the board.
   const _movedToAlg=moveRecords[moveIdx].to;
   const _movedToPos=algPos(_movedToAlg);
   const _movedPiece=_movedToPos?postState.board[_movedToPos.row][_movedToPos.col]:null;
   const _isQueenMovedIntoThreat=_movedPiece&&_movedPiece.type==='queen'&&_movedPiece.color===moverColor;
-  // Compute control map
   let cm=null;
   try{
-    if(typeof getCtrlMap==='function'){
-      cm=getCtrlMap(postState.board);
-    }
+    if(typeof getCtrlMap==='function')cm=getCtrlMap(postState.board);
   }catch(e){cm=null;}
-  // Square highlights: Blue (player net control), Red (AI net control),
-  // Yellow (high total control), Green (neutral center)
-  if(cm){
-    const centerSquares=[[3,3],[3,4],[4,3],[4,4]]; // d5,e5,d4,e4 (row 3=rank5, row4=rank4)
-    const isCenter=(r,c)=>(r===3||r===4)&&(c===3||c===4);
-    const isExtendedCenter=(r,c)=>r>=2&&r<=5&&c>=2&&c<=5;
-    // Collect candidates
-    const blueCandidates=[]; // {r,c,score}
-    const redCandidates=[];  // {r,c,score}
-    const yellowCandidates=[]; // {r,c,total}
-    for(let r=0;r<8;r++)for(let c=0;c<8;c++){
-      const entry=cm[r][c];
-      if(!entry)continue;
-      const pAtk=entry[playerCol].length;
-      const aAtk=entry[aiCol].length;
-      const total=pAtk+aAtk;
-      const netCtrl=pAtk-aAtk; // same as heatmap panel's myCtrl-opCtrl
-      // Blue: player net control (netCtrl>0, i.e. more player attackers than AI).
-      // v1.0.5 Round-6 Rev70 (2026.6.27): Per user spec "对净控制的算法应该与
-      // '格子控制信息'栏中的净控制保持一致" — the heatmap control-info panel
-      // computes net = myCtrl - opCtrl (any nonzero difference), NOT one-sided
-      // dominance. Previously blue required pAtk>0 && aAtk===0 (one-sided only),
-      // which was INCONSISTENT with the panel. Now blue = netCtrl>0 (player has
-      // more attackers, regardless of whether AI also has some). A square with
-      // 3 white + 1 black = netCtrl +2 → blue (was NOT blue before). This matches
-      // the panel's "net control +2 → player" classification.
-      if(netCtrl>0){
-        let score=netCtrl*2;
-        if(isCenter(r,c))score+=3;
-        else if(isExtendedCenter(r,c))score+=1;
-        blueCandidates.push({r,c,score});
-      }
-      // Red: AI net control (netCtrl<0, i.e. more AI attackers than player).
-      // Same consistency fix as blue — was aAtk>0 && pAtk===0 (one-sided only),
-      // now netCtrl<0 (AI has more attackers).
-      if(netCtrl<0){
-        let score=(-netCtrl)*2;
-        if(isCenter(r,c))score+=3;
-        else if(isExtendedCenter(r,c))score+=1;
-        redCandidates.push({r,c,score});
-      }
-      // Yellow: top squares by TOTAL attacker count (both sides combined,
-      // regardless of piece color). Per user spec: "黄色格子应该为双方总控制
-      // 数量(攻击该格子的棋子总数，无论棋子颜色)最多的那几个格子". Yellow
-      // MAY overlap with blue/red — per user spec "应该允许被标记为黄色的格子
-      // 同时被标记为其它颜色", a square can carry both a blue/red highlight
-      // (one-sided dominance) AND a yellow highlight (top total control).
-      if(total>=2){
-        yellowCandidates.push({r,c,total});
-      }
-    }
-    // Sort and pick top 3 for each color
-    blueCandidates.sort((a,b)=>b.score-a.score);
-    redCandidates.sort((a,b)=>b.score-a.score);
-    yellowCandidates.sort((a,b)=>b.total-a.total);
-    for(const sq of blueCandidates.slice(0,3)){
-      csl.push({color:'B',square:posAlg({row:sq.r,col:sq.c})});
-    }
-    for(const sq of redCandidates.slice(0,3)){
-      csl.push({color:'R',square:posAlg({row:sq.r,col:sq.c})});
-    }
-    // Yellow = top 3 highest-total squares, ALLOWED to overlap with blue/red.
-    // The rendering layer (CSS box-shadow inset per color + yellow rounded-rect
-    // overlay) handles multiple highlights on the same square.
-    for(const sq of yellowCandidates.slice(0,3)){
-      csl.push({color:'Y',square:posAlg({row:sq.r,col:sq.c})});
-    }
-    // Green: center squares with NO control from either side
-    for(const [r,c] of centerSquares){
-      const entry=cm[r][c];
-      if(entry&&entry.white.length===0&&entry.black.length===0){
-        csl.push({color:'G',square:posAlg({row:r,col:c})});
-      }
-    }
-  }
-  // Red arrow + Green arrows: if the move gives check
-  // v1.1.0 Phase 53 (revision): Red arrow now uses the ACTUAL checker
-  //   position(s) from the control map, not the moved piece's destination.
-  //   This correctly handles discovered check (where the moved piece moves
-  //   away, exposing another piece that gives check). Previously, the red
-  //   arrow started from the moved piece's destination, which was wrong for
-  //   discovered check — the arrow should start from the piece actually
-  //   giving check (which may be a different piece that didn't move).
-  //   For double check, multiple red arrows are drawn (one per checker).
-  if(oppKingPos&&moveRecords[moveIdx].isCheck){
-    // Red arrow(s): each checker → opponent king
-    if(cm){
-      const checkers=cm[oppKingPos.row][oppKingPos.col][moverColor]||[];
-      const checkerSeen=new Set();
-      for(const checker of checkers){
-        const ck=checker.position.row+','+checker.position.col;
-        if(checkerSeen.has(ck))continue;
-        checkerSeen.add(ck);
-        cal.push({color:'R',from:posAlg(checker.position),to:posAlg(oppKingPos)});
-      }
-    }else{
-      // Fallback if cm is null: use moved piece's destination (old behavior)
-      const moverTo=algPos(moveRecords[moveIdx].to);
-      if(moverTo){
-        cal.push({color:'R',from:posAlg(moverTo),to:posAlg(oppKingPos)});
-      }
-    }
-    // v1.1.0 Phase 53: Green arrows = "respond-to-check" paths (was: escape-only).
-    // Two categories:
-    //   (1) King escape moves: from king's current square to each legal escape
-    //       square. Uses legalMoves(postState, oppKingPos) which correctly
-    //       handles pins, blocked escape squares, and the "king must not be in
-    //       check after moving" rule. If the king has NO legal escape
-    //       (smothered mate, back-rank mate with no flight square, anchored
-    //       pin, etc.), NO king-starting green arrow is generated — this fixes
-    //       the v1.0.9 bug where the old control-map-only check would draw
-    //       arrows to squares the king couldn't actually move to (e.g., a
-    //       square attacked through the king's current position by a sliding
-    //       piece behind it).
-    //   (2) Capture-the-checker moves: from each oppColor piece (including
-    //       pawns via en passant) that can LEGALLY capture a checking piece,
-    //       to that checker's square. legalMoves already includes en passant
-    //       captures and verifies the move doesn't leave the king in check
-    //       (so a pinned piece can't capture). For double check, only king
-    //       moves can respond (capturing one checker still leaves the other
-    //       giving check), so legalMoves correctly excludes non-king captures
-    //       in that case.
-    // Chess960 compat: legalMoves handles Chess960 castling (forbidden when in
-    //   check via isChess960CastlingLegal) and en passant identically to
-    //   standard chess. No special-casing needed.
-    try{
-      // postState.currentTurn is oppColor (the side to move = side in check).
-      // Compute all legal moves ONCE; the king's escape moves are a subset.
-      const allLegalMoves=legalMoves(postState, null);
-      // (1) King escape arrows — moves whose source is the king's square.
-      //     legalMoves never generates castling moves when in check (filtered
-      //     by isChess960CastlingLegal), so no castle-skip is needed here.
-      for(const m of allLegalMoves){
-        if(m.from.row===oppKingPos.row&&m.from.col===oppKingPos.col){
-          cal.push({color:'G',from:posAlg(oppKingPos),to:posAlg(m.to)});
-        }
-      }
-      // (2) Capture-the-checker arrows
-      // Find all checker positions via the control map: cm[king][moverColor]
-      // lists every mover piece that attacks the king's square.
-      if(cm){
-        const checkers=cm[oppKingPos.row][oppKingPos.col][moverColor]||[];
-        if(checkers.length>0){
-          // Build a Map from destination-square-key → list of legal moves
-          // landing on that square. This avoids an O(checkers × allLegalMoves)
-          // nested loop — lookup is O(1) per checker.
-          const movesByDest=new Map();
-          for(const m of allLegalMoves){
-            const k=m.to.row+','+m.to.col;
-            let list=movesByDest.get(k);
-            if(!list){list=[];movesByDest.set(k,list);}
-            list.push(m);
-          }
-          // Dedup checkers by position (control map can have duplicate entries
-          // if a piece attacks via multiple paths — rare but possible).
-          const checkerSeen=new Set();
-          for(const checker of checkers){
-            const ck=checker.position.row+','+checker.position.col;
-            if(checkerSeen.has(ck))continue;
-            checkerSeen.add(ck);
-            const captures=movesByDest.get(ck);
-            if(!captures)continue;
-            for(const m of captures){
-              // Skip king captures — they're already covered by (1) king
-              // escape arrows (king escape moves include captures of
-              // adjacent checkers). Avoid duplicate arrows.
-              if(m.piece.type==='king')continue;
-              cal.push({color:'G',from:posAlg(m.from),to:posAlg(m.to)});
-            }
-          }
-        }
-      }
-    }catch(e){
-      console.warn('visualAnnotations: green arrows (respond-to-check) failed',e);
-    }
-  }
-  // v1.0.4 Round-5 Rev48 NEW: Blue arrows (multi-threat) and Yellow arrows (queen threat).
-  // v1.0.5 Rev53: Yellow arrows now include threats to BOTH sides' queens
-  //   (enemy queen threatened by mover, AND mover's queen threatened by enemy).
-  //
-  // v1.0.5 Rev54 (this round): Three extensions per user spec:
-  //   (1) Yellow arrow extension — "主动把皇后移动到受威胁格":
-  //       When the mover's just-moved piece is a queen and its destination
-  //       square is attacked by an opp piece, we BOOST that yellow arrow's
-  //       priority so it survives the cap-6 dedup. The existing POST-MOVE
-  //       control map already detects this threat; the boost just guarantees
-  //       visibility.
-  //   (2) Blue arrow extension — "主动把任意棋子移到受威胁格, 导致另一方有
-  //       任何棋子产生2+威胁": When the mover's moved piece is itself at a
-  //       square attacked by an opp piece (i.e., the mover "walked into a
-  //       threat"), we BOOST any opp multi-threat arrows (opp piece that now
-  //       threatens 2+ mover pieces) so they survive the cap-3 dedup. The
-  //       existing threatByOpp logic already detects these; the boost ensures
-  //       visibility specifically when caused by the just-made move.
-  //   (3) Per-color arrow offsets (UL/LL/UR/LR): see SVG rendering block below.
-  //
-  // Per user spec (备忘1.md + Rev53 clarification):
-  //   Blue arrow  = one side's piece simultaneously threatens multiple (>1) enemy
-  //                  pieces (arrows from threatening piece to each threatened piece)
-  //   Yellow arrow = queen threat — includes:
-  //                  (a) mover's piece threatening enemy queen, AND
-  //                  (b) enemy's piece threatening mover's queen (including when
-  //                      the mover's queen just moved INTO a threatened square).
-  //                  Arrow from threatening piece to queen's square.
-  //
-  // We compute these from the POST-MOVE position's control map. Both sides
-  // are examined as potential attackers (not just the mover), so that threats
-  // to the mover's own queen are also annotated.
-  //
-  // Caps to keep the board readable:
-  //   - Top 3 attackers by threat count (blue)
-  //   - Top 6 queen-threat attackers (yellow)
-  //   - Max 4 blue arrows per attacker
-  if(cm){
-    // Build threat maps for BOTH directions:
-    //   threatByMover: mover's pieces threatening oppColor pieces
-    //   threatByOpp: oppColor pieces threatening mover's pieces
-    const threatByMover=new Map(); // attacker pos key → {attacker, targets:[{piece,position}]}
-    const threatByOpp=new Map();
-    let moverQueens=[]; // mover's queen positions threatened by opp
-    let oppQueens=[];   // opp's queen positions threatened by mover
-    // v1.0.5 Rev54: Track whether the mover's just-moved piece is itself
-    // threatened (i.e., the mover walked INTO a threatened square). This
-    // is used to boost blue-arrow priority per user spec item (2).
-    let _movedPieceThreatened=false;
-    if(_movedToPos){
-      const _atkOnMoved=cm[_movedToPos.row][_movedToPos.col][oppColor]||[];
-      if(_atkOnMoved.length>0)_movedPieceThreatened=true;
-    }
-    for(let r=0;r<8;r++)for(let c=0;c<8;c++){
-      const p=postState.board[r][c];
-      if(!p||p.type==='king')continue; // skip kings as TARGETS (check arrows handle them)
-      if(p.color===moverColor){
-        // This is a mover piece. Check if oppColor attacks it.
-        const oppAttackers=cm[r][c][oppColor]||[];
-        if(oppAttackers.length>0){
-          // v1.1.0 Phase 53 (revision): Filter out king-as-attacker arrows whose
-          //   target (r,c) is controlled by the opposite color — the king cannot
-          //   legally move there (would be moving into check), so the arrow would
-          //   misrepresent an illegal king move as a valid threat.
-          //   We check cm[r][c][moverColor] — if the mover defends (r,c), the
-          //   opp king cannot capture there (it would be moving into check).
-          const _legalOppAttackers = oppAttackers.filter(atk =>
-            atk.piece.type!=='king' || (cm[r][c][moverColor]||[]).length===0
-          );
-          for(const atk of _legalOppAttackers){
-            const k=atk.position.row+','+atk.position.col;
-            if(!threatByOpp.has(k))threatByOpp.set(k,{attacker:atk,targets:[]});
-            threatByOpp.get(k).targets.push({piece:p,position:{row:r,col:c}});
-          }
-          if(p.type==='queen'){
-            moverQueens.push({position:{row:r,col:c},attackers:_legalOppAttackers.slice()});
-          }
-        }
-      }else if(p.color===oppColor){
-        // This is an opp piece. Check if moverColor attacks it.
-        const moverAttackers=cm[r][c][moverColor]||[];
-        if(moverAttackers.length>0){
-          // v1.1.0 Phase 53 (revision): Filter out king-as-attacker arrows whose
-          //   target (r,c) is controlled by the opposite color.
-          const _legalMoverAttackers = moverAttackers.filter(atk =>
-            atk.piece.type!=='king' || (cm[r][c][oppColor]||[]).length===0
-          );
-          for(const atk of _legalMoverAttackers){
-            const k=atk.position.row+','+atk.position.col;
-            if(!threatByMover.has(k))threatByMover.set(k,{attacker:atk,targets:[]});
-            threatByMover.get(k).targets.push({piece:p,position:{row:r,col:c}});
-          }
-          if(p.type==='queen'){
-            oppQueens.push({position:{row:r,col:c},attackers:_legalMoverAttackers.slice()});
-          }
-        }
-      }
-    }
-    // Yellow arrows: threats to queens from BOTH sides.
-    // (a) mover threatening opp queen: arrow from mover attacker → opp queen
-    // (b) opp threatening mover queen: arrow from opp attacker → mover queen
-    //     (this includes the case where the mover's queen just moved INTO a
-    //      threatened square — _isQueenMovedIntoThreat is used for priority boost)
-    const _pieceVal={pawn:1,knight:3,bishop:3,rook:5,queen:9,king:0};
-    const yellowAttackers=[];
-    for(const q of oppQueens){
-      for(const atk of q.attackers){
-        // v1.0.5 Rev54: Boost if this opp queen is at the mover's destination
-        // (rare: only when the mover captured an opp queen that was defended).
-        const _isAtMovedDest=_movedToPos&&q.position.row===_movedToPos.row&&q.position.col===_movedToPos.col;
-        yellowAttackers.push({attacker:atk,queen:q.position,boost:_isAtMovedDest?1:0});
-      }
-    }
-    for(const q of moverQueens){
-      for(const atk of q.attackers){
-        // v1.0.5 Rev54: Boost if this mover queen IS the just-moved piece
-        // (i.e., the mover actively moved their queen INTO a threatened square).
-        const _isMovedQueen=_isQueenMovedIntoThreat
-          &&_movedToPos
-          &&q.position.row===_movedToPos.row
-          &&q.position.col===_movedToPos.col;
-        yellowAttackers.push({attacker:atk,queen:q.position,boost:_isMovedQueen?1:0});
-      }
-    }
-    // Deduplicate by attacker→queen key
-    const yaSeen=new Set();
-    const yaDedup=[];
-    for(const ya of yellowAttackers){
-      const k=ya.attacker.position.row+','+ya.attacker.position.col+'->'+ya.queen.row+','+ya.queen.col;
-      if(yaSeen.has(k))continue;
-      yaSeen.add(k);
-      yaDedup.push(ya);
-    }
-    // v1.0.5 Rev54: Sort with boost first (boosted entries win ties), then by
-    // attacker piece value descending (higher-value attacker = more notable).
-    yaDedup.sort((a,b)=>{
-      if(a.boost!==b.boost)return b.boost-a.boost;
-      return _pieceVal[b.attacker.piece.type]-_pieceVal[a.attacker.piece.type];
-    });
-    for(const ya of yaDedup.slice(0,6)){ // cap 6 (3 per side typically)
-      cal.push({color:'Y',from:posAlg(ya.attacker.position),to:posAlg(ya.queen)});
-    }
-    // Blue arrows: multi-threat from BOTH sides (combine threatByMover + threatByOpp)
-    // v1.0.5 Rev54: Boost opp multi-threats when the mover's moved piece is itself
-    // threatened (the mover "walked into a threat", possibly exposing other pieces
-    // to the same opp attacker). Per user spec item (2).
-    const multiThreats=[];
-    for(const v of threatByMover.values()){
-      if(v.targets.length>=2) multiThreats.push({attacker:v.attacker,targets:v.targets,boost:0});
-    }
-    for(const v of threatByOpp.values()){
-      if(v.targets.length>=2){
-        // Boost if the mover's destination square is one of this opp attacker's
-        // targets (i.e., the opp attacker threatens the moved piece) — this is
-        // the case where moving INTO a threat also exposes other pieces to the
-        // same attacker, satisfying user spec item (2).
-        let _boost=_movedPieceThreatened?1:0;
-        if(_movedToPos&&_boost){
-          // Verify the opp attacker actually threatens the moved piece's square
-          const _threatensMoved=v.targets.some(t=>t.position.row===_movedToPos.row&&t.position.col===_movedToPos.col);
-          if(!_threatensMoved)_boost=0;
-        }
-        multiThreats.push({attacker:v.attacker,targets:v.targets,boost:_boost});
-      }
-    }
-    multiThreats.sort((a,b)=>{
-      if(a.boost!==b.boost)return b.boost-a.boost;
-      return b.targets.length-a.targets.length;
-    });
-    for(const mt of multiThreats.slice(0,3)){
-      for(const tgt of mt.targets.slice(0,4)){
-        cal.push({color:'B',from:posAlg(mt.attacker.position),to:posAlg(tgt.position)});
-      }
-    }
-  }
-  // Cache the result
-  // v1.1.1 Phase 62: Mark as auto-generated (imported=false) — these are UI
-  //   display aids, not human-authored PGN annotations. _buildPGNString()
-  //   skips entries with imported=false to prevent PGN pollution.
+  const csl=_computeSquareHighlights(cm, playerCol, aiCol);
+  const checkArrows=_computeCheckArrows(cm, postState, oppKingPos, moverColor, oppColor, moveIdx);
+  const threatArrows=_computeThreatArrows(cm, postState, moverColor, oppColor, _movedToPos, _isQueenMovedIntoThreat);
+  const cal=checkArrows.concat(threatArrows);
   _visualAnnotationsCache.set(moveIdx,{csl,cal,imported:false});
 }
 
@@ -6534,6 +6807,10 @@ function _resetGameUIState(){
   if(typeof _needNewGameForEngine!=='undefined')_needNewGameForEngine=true;
   if(typeof _tbLoading!=='undefined')_tbLoading=false;
   if(typeof _tbRetryCount!=='undefined')_tbRetryCount=0;
+  // v1.2.0 Phase 82+++++ rev 5: Wire Store as debug observability layer.
+  // Dispatch a RESET action so Store.getState() reflects the reset for debugging.
+  // This is additive — Store is a read-only mirror, not the source of truth.
+  try{if(typeof Store!=='undefined'&&Store&&typeof Store.dispatch==='function'){Store.dispatch('SETUP_EXIT');Store.dispatch('PGN_CLEARED');}}catch(e){}
 }
 
 /**

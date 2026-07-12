@@ -38,15 +38,22 @@ def main():
         sys.exit(1)
 
     # Build the combined JS - order matters!
+    # v1.2.0 Phase 74/75: Added state-store.js, ui-board.js, ui-review.js,
+    #   ui-audio.js, ui-toolbar.js (God Module split + global state store)
     modules = [
         "game-logic.js",
         "chess960.js",
         "pgn-standard.js",
         "worker-pool.js",
+        "state-store.js",      # v1.2.0 Phase 75: global state store (must be before ui*.js)
         "ai-bridge.js",
         "tablebase.js",
         "eco-data.js",
-        "ui.js",
+        "ui-audio.js",         # v1.2.0 Phase 74: audio utilities
+        "ui-board.js",         # v1.2.0 Phase 74: board rendering utilities
+        "ui-review.js",        # v1.2.0 Phase 74: review mode utilities
+        "ui-toolbar.js",       # v1.2.0 Phase 74: toolbar utilities
+        "ui.js",               # main UI (uses the above modules)
     ]
 
     js_parts = []

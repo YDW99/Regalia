@@ -1,5 +1,223 @@
 This directory contains the JavaScript source modules for the chess UI.
 These modules are merged by build-chess.py into chess.html.
+
+v1.2.0 Phase 82+++++ rev 9 (2026.7.12, same-version deep refactor):
+  - Version remains versionCode=120, versionName="1.2.0".
+  - ai-bridge.js (GPL v3): Bug fix — stats page visual annotation fix. Added third
+    parameter `includeAutoAnnotations` to _buildPGNString() (default false). When
+    true, auto-generated annotations (imported=false) are also exported. Updated
+    openStatsPage() to call _buildPGNString(true, true, true) so the stats page
+    receives live-game visual annotations. Other callers unchanged (default false
+    preserves Phase 62 PGN export behavior).
+  - No new modules; build-order unchanged (13 modules). Re-run python3 build-chess.py.
+
+v1.2.0 Phase 82+++++ rev 8 (2026.7.12, same-version deep refactor):
+  - Version remains versionCode=120, versionName="1.2.0".
+  - No JS module changes in this phase. The rev 8 fix is in Java files
+    (MessageBus.java, StockfishNative.java, MainActivity.java, JsBridgeGateway.java)
+    and proguard-rules.pro. See src/main/README.license for details.
+
+v1.2.0 Phase 82+++++ rev 7 (2026.7.12, same-version deep refactor):
+  - Version remains versionCode=120, versionName="1.2.0".
+  - state-store.js (AGPL v3): Added window._messageBusJs JS-side MessageBus event
+    receiver with _onEvent(event, payload). Dispatches engine events to Store for
+    observability. Uses _messageBusJs (not MessageBus) to avoid shadowing by the
+    Java @JavascriptInterface registered as "MessageBus".
+  - No changes to other JS modules; build-order unchanged (13 modules).
+
+v1.2.0 Phase 82+++++ rev 6 (2026.7.12, same-version deep refactor):
+  - Version remains versionCode=120, versionName="1.2.0".
+  - ui.js (GPL v3): Bug fix — visual annotation placeholder offset. In
+    _renderReviewMode, when reading visual annotations for review steps, added
+    _rvPlaceholderOffset to match the offset used by importPGN when storing
+    imported annotations. Without this, imported annotations were read from
+    the wrong moveIdx when a black-to-move placeholder existed at moveRecords[0].
+  - Read the v1.2.0 Development Plan and verified the complete visual annotation
+    lifecycle: imported flag, _initial key clearing, reviewStates clearing,
+    _invalidateCachesForUndoneMoves, _buildPGNString export filter — all correct.
+  - No new modules; build-order unchanged (13 modules). Re-run python3 build-chess.py.
+
+v1.2.0 Phase 82+++++ rev 5 (2026.7.12, same-version deep refactor):
+  - Version remains versionCode=120, versionName="1.2.0".
+  - ui.js (GPL v3): Wired Store (state-store.js) as debug observability layer.
+    Added Store.dispatch() calls at 3 key state-change points: _resetGameUIState
+    (dispatches SETUP_EXIT + PGN_CLEARED), toggleSound (dispatches TOGGLE_SOUND),
+    enterReview (dispatches ENTER_REVIEW). All additive, try/catch + typeof guarded.
+  - game-logic.js (GPL v3): Wired Store.dispatch('SET_LANG') into toggleLang.
+  - state-store.js (AGPL v3): Now actively used as debug observability layer.
+    Previously dead code — Store was bundled but never dispatched to. Now dispatched
+    from 4 state-change points (see above). Store remains a read-only mirror; globals
+    are still the source of truth.
+  - ui-audio.js, ui-board.js, ui-review.js, ui-toolbar.js (GPL v3): Still infrastructure
+    for future use. The production code still uses inline implementations for backward
+    compatibility. These modules define self-contained constants (coordinate colors,
+    move classification thresholds, button IDs) that can be referenced by future refactors.
+  - Web Worker (worker-pool.js, GPL v3): Verified correct and complete. No changes needed.
+    3-strike failure counter, onmessageerror handler, onerror handler, 30s timeout,
+    pagehide cleanup, sync fallback, queue cap — all present and correct.
+  - No new modules; build-order unchanged (13 modules). Re-run python3 build-chess.py.
+
+v1.2.0 Phase 82+++++ rev 4 (2026.7.12, same-version deep refactor):
+  - Version remains versionCode=120, versionName="1.2.0".
+  - ui.js (GPL v3): Bug fix — portrait review-top missing open tag. The portrait
+    branch of _renderReviewMode was closing .review-top without ever opening it,
+    causing the </div> to auto-close .review-body instead. Fixed by adding the
+    missing h+='<div class="review-top">'; in the portrait open branch. This was
+    a pre-existing bug in v1.1.2 (not a regression).
+  - No new modules; build-order unchanged (13 modules). Re-run python3 build-chess.py.
+
+v1.2.0 Phase 82+++++ rev 3 (2026.7.12, same-version deep refactor):
+  - Version remains versionCode=120, versionName="1.2.0".
+  - No JS module changes in this phase. The Phase 82+++++ rev 3 is a verification
+    + APK rebuild: extracted v1.1.2 source and confirmed v1.2.0 produces
+    byte-for-byte identical HTML to v1.1.2 for all 35+ layout scenarios.
+  - The renderInternal order now matches v1.1.2 exactly:
+    _renderBoardGrid → _renderGameOverOverlay → _renderSetupPanel →
+    </div></div> (close .bwrap+.display:flex) → _renderInfoBars →
+    _renderPlayerBar → </div> (close .bsec) → _renderSidePanel → _renderDialogs
+  - APK rebuilt with the correct order (previous APK had stale chess.html).
+
+v1.2.0 Phase 82+++++ rev 2 (2026.7.12, same-version deep refactor):
+  - Version remains versionCode=120, versionName="1.2.0".
+  - ui.js (GPL v3): renderInternal layout regression fix — removed extra </div>
+    after _renderSidePanel (was closing #app prematurely), added missing
+    </div></div> after _renderBoardGrid (was leaving .bwrap+.display:flex
+    wrapper unclosed, nesting post-board content inside the board wrapper).
+    Structure now matches v1.1.2 layout exactly.
+  - game-logic.js (GPL v3): Bug fix — tablebase retry false AI timeout.
+    Reset _aiRetryCount=0 in tablebase .catch() block (tablebase failure is
+    not an AI timeout). Added typeof guard for pieceCountLE7.
+  - ai-bridge.js (GPL v3): Bug fix — inverted WDL on checkmate. Swapped
+    ternary branches in requestEngineEval() and _requestBatchEval() so
+    wdlW/wdlL are correctly White-perspective.
+  - No new modules; build-order unchanged (13 modules). Re-run python3 build-chess.py.
+
+v1.2.0 Phase 82+++++ (2026.7.12, same-version deep refactor):
+  - Version remains versionCode=120, versionName="1.2.0".
+  - No JS module changes in this phase. The Phase 82+++++ fix is in
+    MainActivity.java (WebView cache clear). See src/main/README.license
+    for details.
+  - Comprehensive line-by-line code review of all 13 JS modules completed.
+    No additional bugs found. All sub-functions correctly receive shared
+    variables (oppC, flip, cm, infoSq, infoCtrl) as parameters from
+    _computeRenderState() via renderInternal().
+
+v1.2.0 Phase 82++++ (2026.7.12, same-version deep refactor):
+  - Version remains versionCode=120, versionName="1.2.0".
+  - ui.js (GPL v3): Phase 82++++ — extracted 3 more rendering blocks from
+    renderInternal() (359 lines) into dedicated functions, plus 2 critical
+    bug fixes:
+    _computeRenderState() — centralizes defensive checks (gameState validity,
+      setupMode/gameOver reset, gameOver re-localization, _applyGameOver check)
+      and shared-state computation (control-map cache cm, infoSq/infoCtrl,
+      oppC, flip). Returns {cm, infoSq, infoCtrl, oppC, flip} object that
+      renderInternal destructures and passes explicitly to every sub-function.
+      FIXES CRITICAL SCOPING BUG: in Phase 82++, these locals were declared
+      inside _renderHeader() and inaccessible to other sub-functions — root
+      cause of the "clicking move records doesn't enter review mode" bug
+      (_renderReviewMode threw ReferenceError on free variable `flip`).
+    _renderGameOverOverlay(h) — game-over sound trigger (fires once via
+      gameOverSoundPlayed guard) + .gover overlay HTML with status emoji
+      (♔/♚/🏳️/⌛/🤝), localized status text, "Play Again" and "Review" buttons.
+    _applyRenderResult(app, h, reviewMode) — scroll save/DOM update/scroll
+      restore orchestration: captures scroll positions of .mlist, .review-body,
+      .review-moves, .dlg, .panel, .op-list; app.innerHTML=h; re-attaches
+      animations; restores scroll synchronously for .mlist/.review-body/
+      .review-moves (with _scrollRestoreGuard); restores .dlg/.panel/.op-list
+      in double-rAF with clamping; invalidates DOM caches; active-move
+      scroll-into-view (manual scrollTop to avoid scrollIntoView ancestor
+      scrolling); updates arrows; restores ECO search focus.
+    _renderReviewMode(h, flip) — signature updated to accept flip parameter
+      (was previously a free variable — root cause of the review-mode entry bug).
+    LAYOUT FIX: info bars (_renderInfoBars) and player bar (_renderPlayerBar)
+      were accidentally rendered after `</div></div>` close of .bsec+.main,
+      placing them outside .bsec. Fixed by moving both calls before `</div>`
+      close of .bsec, restoring the intended board-column layout.
+    renderInternal: 359→70 lines (−289). Cumulative reduction: 1,365→70
+    (−1,295 lines, −95%). renderInternal now focuses purely on orchestration.
+  - No new modules; build-order unchanged (13 modules). Re-run python3 build-chess.py.
+
+v1.2.0 Phase 82+++ (2026.7.12, same-version deep refactor):
+  - Version remains versionCode=120, versionName="1.2.0".
+  - ui.js (GPL v3): Phase 82+++ — extracted 3 more rendering blocks from
+    renderInternal() (476 lines) into dedicated functions:
+    _renderAIBar(h, oppC) — AI opponent bar (.pbar#ai-bar) with icon, name,
+      level, clock, waiting/thinking indicators, captured pieces (split at 7),
+      engine search info (#ai-search-info), ponder info (#ai-ponder-info).
+      oppC passed as param.
+    _renderPlayerBar(h) — quick toolbar (.qtoolbar with undo/redo/flip/hint/
+      control-map, hidden in review/setup) + player bar (.pbar#player-bar with
+      icon, clickable name, clock, captured pieces, your-turn, resign).
+    _renderInfoBars(h) — three optional info bars: tablebase status (≤7 pieces),
+      ECO opening recommendation (_ecoEnabled, not Chess960), AI hint area
+      (isHintLoading/hintText) with MultiPV alternative lines.
+    renderInternal: 476→359 lines (−117). Cumulative reduction: 1,365→359
+    (−1,006 lines, −74%). All extracted functions use the h string
+    concatenation pattern (receive h, return h).
+  - No new modules; build-order unchanged (13 modules). Re-run python3 build-chess.py.
+
+v1.2.0 Phase 82++ (2026.7.12, same-version deep refactor):
+  - Version remains versionCode=120, versionName="1.2.0".
+  - ui.js (GPL v3): Phase 82++ — extracted 4 more rendering blocks from
+    renderInternal() (619 lines) into dedicated functions:
+    _renderHeader() — eval display computation + .hdr toolbar HTML (app title,
+      language toggle, eval display, difficulty selector, new-game/free-play/
+      sound/FEN/import/setup buttons). Initializes h, returns it.
+    _renderBoardGrid(h, flip, cm) — file/rank labels + .bgrid 8×8 cell grid
+      with pieces, legal-move dots/rings, castling-rook markers, check
+      highlights, castle-rights/en-passant badges, square coordinates.
+      flip and cm passed as params.
+    _renderSetupPanel(h) — setup-mode control panel (piece buttons, color/turn
+      selectors, undo/redo/reset/clear, copy/import FEN, setup errors).
+    _renderSidePanel(h, infoSq, infoCtrl, oppC) — right-side .panel container
+      with control-info/ECO-info/move-history/tips cards. infoSq, infoCtrl,
+      oppC passed as params.
+    renderInternal: 619→476 lines (−143). Cumulative reduction: 1,365→476
+    (−889 lines, −65%). All extracted functions use the h string concatenation
+    pattern (receive h, return h) except _renderHeader which initializes h.
+  - No new modules; build-order unchanged (13 modules). Re-run python3 build-chess.py.
+
+v1.2.0 Phase 82+ (2026.7.12, same-version deep refactor):
+  - Version remains versionCode=120, versionName="1.2.0".
+  - ui.js (GPL v3): Phase 82+ — extracted the entire review-mode rendering
+    block from renderInternal() (615 lines) into a new _renderReviewMode(h)
+    function. The block renders the complete review-mode overlay: review board
+    (with coordinate labels, control map, visual annotations, SVG arrows),
+    eval bar, move slider, eval trend chart, navigation buttons, analyze-all
+    button. renderInternal: 1,224→619 lines (−605). The function returns
+    {h, done} — done=true signals an early-return (invalid review state) so
+    the caller skips stale-DOM scroll-save/restore logic. The call site is
+    guarded by if(reviewMode){...} matching the original block semantics.
+    All review-mode logic uses global state only; the h string concatenation
+    pattern is preserved.
+  - No new modules; build-order unchanged (13 modules). Re-run python3 build-chess.py.
+
+v1.2.0 Phase 82-83 (2026.7.11, same-version deep refactor):
+  - Version remains versionCode=120, versionName="1.2.0".
+  - ui.js (GPL v3): Phase 82 — extracted 8 modal dialog blocks from
+    renderInternal() (1,365 lines) into a new _renderDialogs(h) function.
+    Dialogs: showNewGameDialog, showEngineConfig, showResignConfirm,
+    showAboutPage, showImportDialog, pendingPromotion, showSavePGNPrompt,
+    showPGNCacheManager. renderInternal: 1,365→1,224 lines (−141). All dialogs
+    use global state only; the h string concatenation pattern is preserved.
+  - ui.js (GPL v3): Phase 83 — fixed Phase 77 regression where flex-layout
+    coordinate label wrappers inside .bgrid (CSS Grid) broke the 64-cell grid
+    layout. Labels now use position:absolute as siblings of .bgrid (inside
+    .review-board's padding area). SVG arrow overlay position offset to align
+    with .bgrid. --rv-board-h includes label height for move-list alignment.
+  - No new modules; build-order unchanged (13 modules). Re-run python3 build-chess.py.
+
+v1.2.0 Phase 73-80 (2026.7.11, architecture refactor major version):
+  - Version: versionCode=120, versionName="1.2.0".
+  - 4 new JS modules extracted from ui.js: ui-board.js, ui-review.js,
+    ui-audio.js, ui-toolbar.js (all GPL v3, DroidFish-derived).
+  - state-store.js (AGPL v3, NEW): Redux-like global state store.
+  - ui.js: _buildPGNString decomposed into 6 sub-functions;
+    _computeAndCacheVisualAnnotations decomposed into 4 sub-functions;
+    _buildEvalTrendSVG decomposed into 6 sub-functions. ui.js: 8,245→8,061 lines.
+  - build-chess.py: 13 modules merged in dependency order.
+  - Review board coordinate labels (Phase 77): left 1-8 + top a-h + per-square.
+
 v1.1.2 Phase 72 (2026.7.12, same-version revision):
   - Version remains versionCode=112, versionName="1.1.2".
   - ui.js (GPL v3): _reviewAnalyzeAdvance — fixed "false completion" bug
