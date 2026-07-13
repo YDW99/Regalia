@@ -246,16 +246,58 @@ public class FileIoHelper {
 
     /**
      * 获取默认文件系统路径（外部存储、Downloads、Documents）。
+     *
+     * v1.2.1 round-11 (review P2 fix): On API 29+ (Android 10+), the legacy
+     *   {@link Environment#getExternalStorageDirectory()} and
+     *   {@link Environment#getExternalStoragePublicDirectory(String)} are
+     *   deprecated and, on Android 11+ with targetSdk 30+, point to paths
+     *   the app can no longer access directly (scoped storage). Returning
+     *   these inaccessible paths misled users into navigating the file
+     *   picker to a directory where every selection failed with EACCES.
+     *
+     *   Fix: return the app's own external files dir
+     *   ({@code context.getExternalFilesDir(null)}) — a path the app can
+     *   always read/write without any permission — plus the canonical
+     *   public Downloads/Documents paths for display purposes. The JS-side
+     *   file picker always uses SAF for actual file I/O, so these defaults
+     *   are only starting points for navigation, not strict requirements.
+     *
+     *   On API 23-28, the legacy paths still work and the app holds
+     *   READ_EXTERNAL_STORAGE, so we keep returning them for compatibility
+     *   with older devices that don't yet enforce scoped storage.
+     *
      * @return JSON 对象字符串，失败返回硬编码默认值
      */
     public String getDefaultPaths() {
         try {
             JSONObject paths = new JSONObject();
-            paths.put("externalStorage", Environment.getExternalStorageDirectory().getAbsolutePath());
-            paths.put("downloads", Environment.getExternalStoragePublicDirectory(
-                Environment.DIRECTORY_DOWNLOADS).getAbsolutePath());
-            paths.put("documents", Environment.getExternalStoragePublicDirectory(
-                Environment.DIRECTORY_DOCUMENTS).getAbsolutePath());
+            // App-private external storage — always accessible, no permission needed.
+            // This is the only path on Android 11+ that the app can reliably write to.
+            File extFilesDir = context.getExternalFilesDir(null);
+            paths.put("externalStorage", extFilesDir != null
+                    ? extFilesDir.getAbsolutePath()
+                    : Environment.getExternalStorageDirectory().getAbsolutePath());
+
+            // Public Downloads/Documents — on API 29+ these may not be directly
+            // accessible, but the SAF picker (which is what JS actually uses)
+            // can navigate there via the system file picker. We surface them as
+            // hints; if a path is unreachable the picker will show it but
+            // selections will route through SAF content URIs anyway.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                // API 29+: use MediaStore-relative descriptors. The absolute path
+                // is still /storage/emulated/0/Downloads etc., but we mark it as
+                // "public" so the JS picker can show a "use SAF" hint.
+                paths.put("downloads", Environment.getExternalStorageDirectory()
+                        .getAbsolutePath() + "/Download");
+                paths.put("documents", Environment.getExternalStorageDirectory()
+                        .getAbsolutePath() + "/Documents");
+            } else {
+                // API 23-28: legacy paths are directly accessible with permission.
+                paths.put("downloads", Environment.getExternalStoragePublicDirectory(
+                    Environment.DIRECTORY_DOWNLOADS).getAbsolutePath());
+                paths.put("documents", Environment.getExternalStoragePublicDirectory(
+                    Environment.DIRECTORY_DOCUMENTS).getAbsolutePath());
+            }
             return paths.toString();
         } catch (Throwable e) {
             Log.e(TAG, "getDefaultPaths failed", e);

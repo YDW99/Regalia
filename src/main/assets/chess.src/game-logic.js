@@ -2743,7 +2743,17 @@ setTimeout(()=>{
 // P0 FIX: Validate state freshness — game may have changed during 0ms delay
 if(gameOver||reviewMode||setupMode||gameState.currentTurn===playerColor||!isAIThinking)return;
 // Level 7: probe tablebase for endgame positions (7 pieces or fewer) before Stockfish
-if(aiLevel===7&&pieceCountLE7(gameState.board)){
+// v1.2.1 round-11 (review fix): restore the typeof guard around pieceCountLE7.
+//   tablebase.js is loaded AFTER game-logic.js in build-chess.py's module
+//   order, and is also a network-fetched fallback (the worker-pool path may
+//   fail to register on extreme WebView implementations). If pieceCountLE7
+//   is somehow undefined (script load failure, worker error), an unguarded
+//   call would throw ReferenceError and completely halt AI move generation
+//   — the user would see "AI thinking" forever with no recovery path. The
+//   typeof guard degrades gracefully: if tablebase isn't available, we skip
+//   the tablebase probe and fall through to Stockfish (which is always
+//   available once the engine is ready).
+if(aiLevel===7&&typeof pieceCountLE7==='function'&&pieceCountLE7(gameState.board)){
 _tbLoading=true;_aiBarInfo='⏳ '+T('tb_querying');_updateAIThinkDisplay();render();
 // Save board reference BEFORE async call to prevent race condition
 // (gameState may change while tablebase query is in-flight)

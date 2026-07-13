@@ -1,3 +1,13 @@
+v1.2.1 round-11 (2026.7.14) — 2 user-reported bugs + review-report defects + first-principles optimization:
+  - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
+    refinement).
+  - No source files in this directory modified in this pass. All changes
+    were in chess.src/ (JS modules), java/com/Regalia/ (FileIoHelper.java),
+    and the rebuilt chess.html. See those directories' README.license files
+    for details.
+  - License classification: all files in this directory retain their
+    existing classification.
+
 v1.2.1 round-10 regression test + first-principles optimization (2026.7.14):
   - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
     refinement).

@@ -1370,6 +1370,91 @@ function onPGNExported(success,fileName){
 // WebView activity by the Java side. The PGN is passed via the bridge and
 // stored in a JS variable that stats.html reads on load.
 function openStatsPage(){
+  // v1.2.1 round-11 (Bug #2 fix): In review mode, ensure ALL moves have been
+  //   evaluated before opening the stats page. Previously, if the user opened
+  //   📊 after navigating through only some moves, the stats page received an
+  //   evals array with null entries for unanalyzed moves — causing the "move
+  //   quality" / "eval trend" sections to silently skip those moves, so the
+  //   completeness of stats data varied depending on which move was selected
+  //   when 📊 was pressed. The stats page is meant to be a complete picture
+  //   of the game; partial data is a bug, not a feature.
+  //   Fix: detect uncached steps in review mode and auto-trigger analyze-all.
+  //   The pending flag is read by _reviewAnalyzeAdvance()'s completion branch
+  //   (in ui.js) to re-invoke openStatsPage() once every step is cached.
+  //   If every step is already cached (or we're not in review mode), fall
+  //   through to the normal open-stats flow.
+  if(typeof reviewMode!=='undefined'&&reviewMode
+     &&typeof reviewStates!=='undefined'&&reviewStates&&reviewStates.length>0
+     &&typeof moveRecords!=='undefined'&&moveRecords){
+    // Mirror reviewAnalyzeAll()'s coverage check: 0..moveRecords.length inclusive.
+    const _lastStep=moveRecords.length;
+    let _uncachedCount=0;
+    for(let i=0;i<=_lastStep;i++){
+      if(!_reviewEvalCache.has(i))_uncachedCount++;
+    }
+    if(_uncachedCount>0){
+      // Set pending flag (consumed by _reviewAnalyzeAdvance on completion).
+      // Guard against double-trigger: if a batch is already running for this
+      // purpose, just show a toast and return.
+      if(typeof window!=='undefined'){
+        if(window._pendingOpenStats){
+          // Already pending — user clicked 📊 again while batch is running.
+          // Show progress toast and bail out (don't open stats yet).
+          try{
+            const _cached=_reviewEvalCache.size;
+            const _total=_lastStep+1;
+            showToast(T('analyzing_progress')+' ('+_cached+'/'+_total+')');
+          }catch(e){}
+          return;
+        }
+        window._pendingOpenStats=true;
+        // v1.2.1 round-11 (Bug #2 fix hardening): safety timeout — if the
+        //   batch never completes within 10 minutes (e.g., engine stuck
+        //   unrecoverable, or a bug prevents the completion branch from
+        //   firing), clear the pending flag so the user can retry 📊
+        //   instead of being permanently locked out. The timeout is
+        //   generous: a 200-step game at 60s/step worst-case = 200min,
+        //   but the per-step safety timer (60s) skips stuck steps, so a
+        //   healthy batch finishes in <30min for any realistic game.
+        //   10min covers the common case (engine slow to start) while
+        //   catching genuine deadlocks.
+        if(window._pendingOpenStatsTimer){clearTimeout(window._pendingOpenStatsTimer);}
+        window._pendingOpenStatsTimer=setTimeout(function(){
+          if(window._pendingOpenStats){
+            window._pendingOpenStats=false;
+            console.warn('openStatsPage: pending-stats safety timeout fired (10min) — batch did not complete');
+            try{showToast(T('analyzing_progress')+' timed out');}catch(e){}
+          }
+          window._pendingOpenStatsTimer=null;
+        },600000); // 10 minutes
+      }
+      // v1.2.1 round-11 (Bug #2 fix): If a batch is already running (user
+      //   clicked "Analyze All" manually before clicking 📊), DON'T restart
+      //   it — that would corrupt the batch state. Instead, just wait for
+      //   the existing batch to complete; the completion branch will see
+      //   our _pendingOpenStats flag and open stats automatically.
+      if(typeof _reviewAnalyzeAllActive!=='undefined'&&_reviewAnalyzeAllActive){
+        try{
+          showToast(T('analyzing_progress')+' ('+_reviewEvalCache.size+'/'+(_lastStep+1)+')');
+        }catch(e){}
+        return; // existing batch will trigger openStatsPage on completion
+      }
+      // Kick off analyze-all. reviewAnalyzeAll() is exported by ui.js and
+      // operates on the same _reviewEvalCache / reviewStates globals this
+      // module also uses, so the batch will populate the cache correctly.
+      try{
+        if(typeof reviewAnalyzeAll==='function'){
+          showToast(T('analyzing_all')+' ('+_reviewEvalCache.size+'/'+(_lastStep+1)+')');
+          try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+          reviewAnalyzeAll();
+          return; // stats will open when batch completes
+        }
+      }catch(e){console.error('openStatsPage: analyze-all trigger failed:',e);}
+      // If we reach here, analyze-all couldn't start — fall through and open
+      // stats with whatever data is cached (better than silence).
+      if(typeof window!=='undefined')window._pendingOpenStats=false;
+    }
+  }
   // v1.0.4 Rev28: ALWAYS sync the current main/review game state to the stats
   // page. Previously, this used _cachedOriginalPGN (the text from the last
   // importPGN/importPGNFile call) which became STALE when the user played new
@@ -1454,10 +1539,27 @@ function openStatsPage(){
   //   consistency and forward-compatibility.)
   const vaData={};
   if(typeof _visualAnnotationsCache!=='undefined'&&_visualAnnotationsCache){
-    for(const [k,v] of _visualAnnotationsCache){
-      if(k==='_initial')continue; // initial-position annotation, not move-scoped
-      if(!v||(!v.csl&&!v.cal))continue;
-      vaData[k]={csl:v.csl||[],cal:v.cal||[]};
+    // v1.2.1 round-11 (review P2 fix): use forEach instead of for...of so a
+    //   non-Map _visualAnnotationsCache (e.g., a plain object accidentally
+    //   assigned, or a null/undefined slipped past the guard) doesn't throw
+    //   TypeError. forEach exists on Map and Array; if it's missing we fall
+    //   back to Object.keys iteration which handles plain objects too.
+    //   This makes the stats-page payload resilient to cache-shape drift.
+    if(typeof _visualAnnotationsCache.forEach==='function'){
+      _visualAnnotationsCache.forEach(function(v,k){
+        if(k==='_initial')return; // initial-position annotation, not move-scoped
+        if(!v||(!v.csl&&!v.cal))return;
+        vaData[k]={csl:v.csl||[],cal:v.cal||[]};
+      });
+    }else{
+      // Plain-object fallback (defensive — current code always uses Map)
+      for(const k in _visualAnnotationsCache){
+        if(!_visualAnnotationsCache.hasOwnProperty(k))continue;
+        if(k==='_initial')continue;
+        const v=_visualAnnotationsCache[k];
+        if(!v||(!v.csl&&!v.cal))continue;
+        vaData[k]={csl:v.csl||[],cal:v.cal||[]};
+      }
     }
   }
   const payload=JSON.stringify({pgn:pgn,evals:evalData,moveRecords:moveData,visualAnnotations:vaData,playerColor:playerColor,lang:(typeof _lang!=='undefined'?_lang:'zh'),gameVariant:(typeof gameVariant!=='undefined'?gameVariant:null)});
@@ -2303,11 +2405,20 @@ function onBestMove(uciMove){
   const _bmCoords=uciToCoords(uciMove);
   if(!_bmCoords){
     console.error('onBestMove: failed to parse UCI move:',uciMove);
+    // v1.2.1 round-11 (review P3 fix): reset isAIThinking on validation
+    //   failure so the UI doesn't stay stuck in "AI thinking" state. The
+    //   safety timer remains armed (we didn't clear _aiSafetyTimerId above)
+    //   so the auto-retry still fires after 360s if the user doesn't undo.
+    //   This prevents a soft-lock where the user sees "thinking..." forever
+    //   if the engine emits an unparseable bestmove line.
+    isAIThinking=false;_aiBarInfo='';
     render();
     return;
   }
   if(!gameState.board[_bmCoords.from.row]||!gameState.board[_bmCoords.from.row][_bmCoords.from.col]){
     console.error('onBestMove: no piece at from square for UCI move:',uciMove);
+    // v1.2.1 round-11 (review P3 fix): same reset as above.
+    isAIThinking=false;_aiBarInfo='';
     render();
     return;
   }
@@ -2844,6 +2955,18 @@ function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth){
   // at "Analyze All N (k/N)" until the next full render.
   try{
     if(typeof _updateReviewAnalyzeBtn==='function')_updateReviewAnalyzeBtn();
+  }catch(e){}
+  // v1.2.1 round-11 (Bug #1 fix): Live-refresh the eval trend chart so the
+  //   newly-cached data point appears on the line chart IMMEDIATELY when the
+  //   current step's eval completes — without requiring the user to navigate
+  //   to a different move to trigger a full render(). Previously the chart
+  //   only refreshed on the stale-callback path (line ~2818), so the common
+  //   case "user stays on the analyzed step" left the chart missing the point
+  //   until the next render() was triggered by some unrelated action.
+  //   The function is a no-op when not in review mode or when the chart
+  //   container doesn't exist, so this call is safe in all contexts.
+  try{
+    if(typeof _refreshEvalTrendChart==='function')_refreshEvalTrendChart();
   }catch(e){}
 }
 

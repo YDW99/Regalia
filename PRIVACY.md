@@ -301,6 +301,21 @@ This pass performs a regression test of all review-D/E/F fixes from the initial 
 
 Version: `versionCode=121`, `versionName="1.2.1"` (unchanged).
 
+## v1.2.1 round-11 (2026.7.14) — 2 user-reported bugs + review-report defects + first-principles optimization
+
+This pass fixes 2 user-reported bugs in the review-mode eval chart and stats page, plus the remaining non-false-positive defects from the round-2 review-report collection, plus a first-principles optimization pass on the changed files. **No new permissions, no new data collection, no new network access, no changes to data flow or storage.** All changes are internal to the app and have zero privacy impact:
+
+- **Bug #1 fix (review eval chart refresh, `ai-bridge.js`)**: Added a `_refreshEvalTrendChart()` call after the eval cache is updated in `onEngineEval`'s non-stale path. Previously the chart only refreshed on the stale-callback path; the common case "user stays on the analyzed step" left the chart missing the point until the next full render. No privacy impact — purely a UI refresh timing fix.
+- **Bug #2 fix (stats page data completeness, `ai-bridge.js` + `ui.js`)**: `openStatsPage` now triggers `reviewAnalyzeAll()` if any review step is uncached, deferring the stats page opening until the batch completes. This ensures the stats page always receives a complete `evals` array. `exitReview` clears the pending-stats flag. No privacy impact — the stats page already had access to the full PGN and move records; only the eval cache completeness changed.
+- **`game-logic.js` `pieceCountLE7` typeof guard restored**: Defensive guard against `tablebase.js` load failure. No privacy impact — only affects whether the tablebase probe runs.
+- **`ai-bridge.js` `onBestMove` isAIThinking reset on validation failure**: Resets the AI-thinking flag when bestmove parsing fails, preventing a soft-lock. No privacy impact.
+- **`ai-bridge.js` `_visualAnnotationsCache` iteration safety**: Switched from `for...of` to `forEach` with a plain-object fallback. No privacy impact — the visual annotations are locally-generated UI aids, not user data.
+- **`FileIoHelper.java` `getDefaultPaths` deprecated API fix**: On API 29+, returns `context.getExternalFilesDir(null)` (app-private external storage, always accessible) for the `externalStorage` key instead of the deprecated `Environment.getExternalStorageDirectory()` (which points to inaccessible paths on Android 11+). No privacy impact — these paths are only starting points for the SAF file picker; actual file I/O always uses SAF content URIs.
+- **`state-store.js` `_deepClone` nosemgrep comment + Map/Set support**: Added a `// nosemgrep` comment with justification for the `new RegExp(obj.source, obj.flags)` line, plus Map/Set deep-clone branches. No privacy impact — the state store only holds in-memory UI state, never user PII.
+- **First-principles optimization**: Race-condition guard for concurrent batch, double-click guard for 📊 button, `exitReview` pending-stats clear, 10-minute safety timeout on the pending-stats flag (prevents permanent lockout if the engine hangs). No privacy impact — purely internal state-management improvements.
+
+Version: `versionCode=121`, `versionName="1.2.1"` (unchanged — same-version refinement).
+
 ## Contact
 
 For questions about this privacy policy, please open an issue on the GitHub repository.

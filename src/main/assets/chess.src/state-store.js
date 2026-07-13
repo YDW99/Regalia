@@ -160,7 +160,32 @@ const Store = (function() {
         // equivalent to `new RegExp(obj)` but avoids Semgrep FP on non-
         // literal-RegExp construction, since `obj` is already instanceof
         // RegExp and we only forward its string properties).
+        // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp
+        //   — Justification: `obj` is verified to be a RegExp instance one
+        //   line above, so this construction cannot inject attacker-controlled
+        //   pattern source. The `obj.source` and `obj.flags` properties are
+        //   spec-defined strings produced by the JS engine when the original
+        //   RegExp was constructed, not user input.
         if (obj instanceof RegExp) return new RegExp(obj.source, obj.flags);
+        // v1.2.1 round-11 (review P3 fix): Map/Set deep-clone support.
+        //   The current state tree doesn't use Map/Set, but adding these
+        //   branches now means a future addition (e.g., a Set of selected
+        //   squares) won't silently degrade to a shallow reference share.
+        //   Map keys are also deep-cloned to handle object keys correctly.
+        if (obj instanceof Map) {
+            const clonedMap = new Map();
+            obj.forEach(function (v, k) {
+                clonedMap.set(_deepClone(k, _depth + 1), _deepClone(v, _depth + 1));
+            });
+            return clonedMap;
+        }
+        if (obj instanceof Set) {
+            const clonedSet = new Set();
+            obj.forEach(function (v) {
+                clonedSet.add(_deepClone(v, _depth + 1));
+            });
+            return clonedSet;
+        }
         if (Array.isArray(obj)) return obj.map(function (v) { return _deepClone(v, _depth + 1); });
         const cloned = {};
         for (const key in obj) {

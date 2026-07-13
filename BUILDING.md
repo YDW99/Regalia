@@ -1043,3 +1043,47 @@ This pass performs a regression test of all review-D/E/F fixes from the initial 
 - `aapt dump xmltree` confirms FGS subtype property still present and `requestLegacyExternalStorage` still absent.
 - `unzip -l` confirms `HapticHelper.class` still absent from the APK.
 - Version: `versionCode=121`, `versionName="1.2.1"` (unchanged — same-version refinement).
+
+## v1.2.1 round-11 (2026.7.14) — 2 user-reported bugs + review-report defects + first-principles optimization
+
+This pass fixes 2 user-reported bugs in the review-mode eval chart and stats page, plus the remaining non-false-positive defects from the round-2 review-report collection (`Regalia_v1.2.1_Round2_审查报告合集.zip`), plus a first-principles optimization pass on the changed files. **No new features, no new permissions, no new network access, no versionCode bump.**
+
+### Bug #1 (user-reported) — review eval chart not refreshing on eval completion
+
+**Symptom**: In review mode, after a step's evaluation analysis completes, the corresponding data point does NOT appear on the line chart unless the user changes the selected move.
+
+**Root cause**: `onEngineEval` in `ai-bridge.js` has two code paths — a "stale" path (when the user navigated away before the eval completed) and a "non-stale" path (when the user stayed on the step being analyzed). The stale path called `_refreshEvalTrendChart()` after caching the eval, but the non-stale path did NOT — it only updated the text displays via `_updateAllEvalDisplays()`. The chart only refreshed on the next full `render()` (triggered by an unrelated action like navigating to another step or toggling a UI element).
+
+**Fix**: Added a `_refreshEvalTrendChart()` call (wrapped in `try/catch` + `typeof === 'function'` guard) after `_reviewEvalCache.set(reviewStep, ...)` in the non-stale path. The function is a no-op when not in review mode or when the chart container doesn't exist, so the call is safe in all contexts.
+
+### Bug #2 (user-reported) — stats page data completeness varied by selected move
+
+**Symptom**: In review mode, after selecting different moves and clicking 📊, the stats page showed varying levels of completeness in its data displays. Stats should always be complete regardless of which move was selected.
+
+**Root cause**: `openStatsPage` in `ai-bridge.js` builds the `evals` array by iterating `moveRecords.length` items and pushing `null` for any step not in `_reviewEvalCache`. In review mode, only the steps the user navigated through (plus any analyzed by a batch) had cached evals — all other steps were `null`. The stats page's "move quality" and "eval trend" sections silently skipped `null` entries, so the displayed stats were partial.
+
+**Fix**: `openStatsPage` now checks if any step (0..moveRecords.length inclusive) is uncached in review mode. If so, it sets a `window._pendingOpenStats` flag and calls `reviewAnalyzeAll()` to start a batch analysis; the stats page opens automatically when the batch completes (via a new hook in `_reviewAnalyzeAdvance`'s completion branch in `ui.js`). If a batch is already running, the call defers to the existing batch. If all steps are cached (or we're not in review mode), the call falls through to the normal open-stats flow. `exitReview` clears the pending flag to prevent stale-flag pollution of future review sessions.
+
+### Review-report non-false-positive defects
+
+- **`game-logic.js` `pieceCountLE7` typeof guard restored (P2)** — The round-2 review removed the `typeof pieceCountLE7 === 'function'` guard, relying on `tablebase.js` always being loaded after `game-logic.js`. Restored the guard so a script-load failure (rare but possible) doesn't cause `ReferenceError` and completely halt AI move generation. The guard degrades gracefully: if tablebase isn't available, we skip the tablebase probe and fall through to Stockfish.
+- **`ai-bridge.js` `onBestMove` isAIThinking reset on validation failure (P3)** — When `_bmCoords` parsing fails or the from-square is empty, the function now resets `isAIThinking = false` and `_aiBarInfo = ''` before the early return. Previously these early returns left `isAIThinking = true`, causing a soft-lock where the UI showed "thinking..." forever if the engine emitted an unparseable bestmove line.
+- **`ai-bridge.js` `_visualAnnotationsCache` iteration safety (P2)** — `openStatsPage` now uses `forEach` instead of `for...of` to iterate `_visualAnnotationsCache`, with a plain-object fallback via `for...in`. A non-Map cache (e.g., a plain object accidentally assigned) would previously throw `TypeError`.
+- **`FileIoHelper.java` `getDefaultPaths` deprecated API (P2)** — On API 29+ (Android 10+), `Environment.getExternalStorageDirectory()` and `Environment.getExternalStoragePublicDirectory(String)` are deprecated and, on Android 11+ with targetSdk 30+, point to paths the app can no longer access directly (scoped storage). The method now returns `context.getExternalFilesDir(null)` for the `externalStorage` key (always accessible, no permission needed). On API 23-28, the legacy paths are still returned for compatibility.
+- **`state-store.js` `_deepClone` nosemgrep comment + Map/Set support (P3)** — Added `// nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp` to the `new RegExp(obj.source, obj.flags)` line with a justification comment. Also added Map/Set deep-clone branches — the current state tree doesn't use Map/Set, but adding these branches now means a future addition won't silently degrade to a shallow reference share.
+
+### First-principles optimization
+
+- **`ai-bridge.js` Bug #2 fix — race-condition guard for concurrent batch** — If a batch is already running when 📊 is pressed, `openStatsPage` does NOT restart it (which would corrupt batch state); instead it just waits for the existing batch's completion.
+- **`ai-bridge.js` Bug #2 fix — double-click guard** — If the user clicks 📊 again while a batch is already running for stats, the second call shows a progress toast and returns early (no duplicate batch, no duplicate stats Activity).
+- **`ai-bridge.js` Bug #2 fix — 10-minute safety timeout** — If the batch never completes within 10 minutes (e.g., engine stuck unrecoverable, or a bug prevents the completion branch from firing), the pending-stats flag is cleared so the user can retry 📊 instead of being permanently locked out. The timeout is generous (a 200-step game at 60s/step worst-case = 200min, but the per-step safety timer skips stuck steps, so a healthy batch finishes in <30min for any realistic game). The timer is cleared on normal completion and on `exitReview`.
+- **`ui.js` `exitReview` pending-stats clear** — Mirrors the existing `_pendingPGNCacheSave` clear pattern, preventing a stale flag from polluting the next review session.
+
+### Verification
+
+- All 9 JS modules pass `node --check` (ai-bridge.js, chess960.js, eco-data.js, game-logic.js, pgn-standard.js, state-store.js, tablebase.js, ui.js, worker-pool.js).
+- `chess.html` rebuilt: 21,964 lines, 1,320,550 bytes (+9 lines / +9,723 bytes vs round-10, reflecting the new bug-fix code + comments).
+- Release APK rebuilt: `Regalia-release.apk`, 78,145,566 bytes.
+- Signature verified: v1 ✓, v2 ✓, v3 ✓ (compatible with Xiaomi HyperOS 3). `apksigner verify --verbose` confirms all three schemes.
+- APK contents verified via `unzip -l`: `libstockfish.so` (114,115,752 bytes, the arm64-v8a-dotprod Stockfish 18 binary), `libengine_bridge.so`, `libc++_shared.so`, `chess.html`, `stats.html`, all 9 `chess.src/*.js` modules, and all assets.
+- Version: `versionCode=121`, `versionName="1.2.1"` (unchanged — same-version refinement).

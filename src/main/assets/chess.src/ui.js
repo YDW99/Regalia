@@ -7015,6 +7015,19 @@ function _reviewAnalyzeAdvance(){
     //   the save so the save's own coverage check (defensive) doesn't recurse.
     const _pendingSave=_pendingPGNCacheSave;
     _pendingPGNCacheSave=null;
+    // v1.2.1 round-11 (Bug #2 fix): If openStatsPage() deferred opening the
+    //   stats page until analyze-all completed, the cache is now fully
+    //   populated — re-invoke openStatsPage() so it builds the payload with
+    //   the complete evals array. Clear the flag BEFORE the call so the
+    //   second invocation takes the normal "all cached → open stats" path.
+    const _pendingStats=(typeof window!=='undefined'&&window._pendingOpenStats)?true:false;
+    if(typeof window!=='undefined'){
+      window._pendingOpenStats=false;
+      // v1.2.1 round-11 (Bug #2 fix hardening): clear the safety timeout
+      //   since the batch completed normally — no need to fire the 10min
+      //   timeout warning.
+      if(window._pendingOpenStatsTimer){clearTimeout(window._pendingOpenStatsTimer);window._pendingOpenStatsTimer=null;}
+    }
     // Return to the step the user was viewing before analysis (or their
     // current step if they navigated during the batch — reviewGoTo restores
     // eval vars from cache).
@@ -7035,6 +7048,16 @@ function _reviewAnalyzeAdvance(){
           catch(e){showToast(T('pgn_cache_save_failed'),2500);}
         },150);}catch(e){}
       }
+      // v1.2.1 round-11 (Bug #2 fix): trigger deferred stats page open AFTER
+      //   reviewGoTo so the user's pre-batch step is restored first. The
+      //   150ms delay mirrors the pending-save pattern: gives the UI time to
+      //   paint the restored step before the stats Activity is pushed.
+      if(_pendingStats){
+        try{setTimeout(function(){
+          try{if(typeof openStatsPage==='function')openStatsPage();}
+          catch(e){console.error('Deferred openStatsPage failed:',e);}
+        },150);}catch(e){}
+      }
       return;
     }
     showToast(T('analysis_done')+' '+_reviewEvalCache.size+' '+T('step'));
@@ -7043,6 +7066,12 @@ function _reviewAnalyzeAdvance(){
       try{setTimeout(function(){
         try{_pgnCacheSaveCurrentImpl_SkipCoverageCheck(_pendingSave.name,_pendingSave.includeAnn);}
         catch(e){showToast(T('pgn_cache_save_failed'),2500);}
+      },150);}catch(e){}
+    }
+    if(_pendingStats){
+      try{setTimeout(function(){
+        try{if(typeof openStatsPage==='function')openStatsPage();}
+        catch(e){console.error('Deferred openStatsPage failed:',e);}
       },150);}catch(e){}
     }
     return;
@@ -7140,6 +7169,19 @@ function exitReview(){
   //   review mode invalidates the save because the rebuild path requires
   //   reviewMode===true and a fully-populated _reviewEvalCache.
   if(typeof _pendingPGNCacheSave!=='undefined')_pendingPGNCacheSave=null;
+  // v1.2.1 round-11 (Bug #2 fix): Clear the pending-open-stats flag —
+  //   exiting review mode invalidates the deferred stats-page opening
+  //   because openStatsPage() in review mode requires reviewMode===true
+  //   to trigger analyze-all. Without this clear, a stale flag would
+  //   cause the next reviewAnalyzeAll() completion (in a future review
+  //   session) to spuriously open the stats page.
+  // v1.2.1 round-11 (Bug #2 fix hardening): also clear the safety timeout
+  //   so it doesn't fire after exit and confuse the user with a stale
+  //   "timed out" toast.
+  if(typeof window!=='undefined'){
+    window._pendingOpenStats=false;
+    if(window._pendingOpenStatsTimer){clearTimeout(window._pendingOpenStatsTimer);window._pendingOpenStatsTimer=null;}
+  }
   // v1.1.2 Phase 69 (Bug 3): Clear the PGN cache op-in-progress flag — a new
   //   game invalidates any in-flight cache operation.
   if(typeof _pgnCacheOpInProgress!=='undefined')_pgnCacheOpInProgress=false;

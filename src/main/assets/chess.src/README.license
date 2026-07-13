@@ -1,3 +1,37 @@
+v1.2.1 round-11 (2026.7.14) — 2 user-reported bugs + review-report defects + first-principles optimization:
+  - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
+    refinement).
+  - ai-bridge.js (GPL v3): 4 changes — (1) Bug #1 fix: added
+    _refreshEvalTrendChart() call after _reviewEvalCache.set(reviewStep, ...)
+    in onEngineEval non-stale path; (2) Bug #2 fix: openStatsPage now
+    triggers reviewAnalyzeAll() if any review step is uncached, setting
+    window._pendingOpenStats flag; (3) onBestMove isAIThinking reset on
+    validation failure (P3 review fix); (4) _visualAnnotationsCache
+    iteration safety: forEach with plain-object fallback (P2 review fix).
+  - ai-bridge.js (GPL v3): Bug #2 fix hardening — 10-minute safety timeout
+    on window._pendingOpenStats (cleared on normal completion and on
+    exitReview) so the user can retry 📊 if the batch never completes
+    (e.g., engine stuck unrecoverable). Prevents permanent lockout.
+  - ui.js (GPL v3): 2 changes — (1) Bug #2 fix: _reviewAnalyzeAdvance
+    completion branch now checks window._pendingOpenStats in both return
+    paths, re-invoking openStatsPage() after a 150ms delay when set;
+    (2) exitReview clears window._pendingOpenStats to prevent stale-flag
+    pollution of future review sessions.
+  - game-logic.js (GPL v3): pieceCountLE7 typeof guard restored (P2 review
+    fix). Degrades gracefully: if tablebase.js fails to load, skips the
+    tablebase probe and falls through to Stockfish.
+  - state-store.js (AGPL v3): _deepClone nosemgrep comment + Map/Set support
+    (P3 review fix). Added // nosemgrep: javascript.lang.security.audit.
+    detect-non-literal-regexp with justification. Added Map/Set deep-clone
+    branches.
+  - Other JS modules (chess960.js, pgn-standard.js, worker-pool.js,
+    tablebase.js, eco-data.js) and index.html.tpl: unchanged in this pass.
+  - chess.html rebuilt: 21,964 lines, 1,320,550 bytes (+9 lines / +9,723
+    bytes vs round-10, reflecting the new bug-fix code + comments).
+  - License classification: all files in this directory retain their
+    existing classification (AGPL v3 for state-store.js + eco-data.js +
+    index.html.tpl; GPL v3 for the other 7 files — DroidFish-derived).
+
 v1.2.1 round-10 regression test + first-principles optimization (2026.7.14):
   - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
     refinement).
