@@ -1461,7 +1461,15 @@ function importPGN(pgnText){
         }
       }
       if(divergeIdx<0) continue;
-      if(divergeIdx>=0&&divergeIdx<moveRecords.length){
+      // v1.2.1 round-9: Removed redundant `divergeIdx>=0&&` prefixes and the
+      //   unreachable `else` branch. The `if(divergeIdx<0) continue;` above
+      //   guarantees divergeIdx>=0 here, so the two remaining cases are
+      //   exhaustive: (a) divergeIdx < moveRecords.length, (b) divergeIdx >=
+      //   moveRecords.length. The previous `else` branch ("No divergence
+      //   found and not all matched — keep at original location") was dead
+      //   code — it could never execute because the prior `continue` handles
+      //   the divergeIdx<0 case. Verified by reading the surrounding logic.
+      if(divergeIdx<moveRecords.length){
         // Move the variation to the divergence-point move
         const remainingSAN=sanMoves.slice(matchCount).join(' ');
         if(remainingSAN.length>0){
@@ -1483,15 +1491,12 @@ function importPGN(pgnText){
           }
         }
         // Don't add to remainingVars (moved to new location)
-      }else if(divergeIdx>=0&&divergeIdx>=moveRecords.length){
+      }else{
         // v1.0.2 FIX: Variation starts BEYOND the game end — the game hasn't
         // reached the variation's starting move. Cache it (don't display).
         // For PGN import, this means the variation is a hypothetical continuation
         // that was never reached. Don't add to remainingVars (remove from display).
         continue;
-      }else{
-        // No divergence found and not all matched — keep at original location
-        remainingVars.push(v);
       }
     }
     mr.variations=remainingVars.length>0?remainingVars:undefined;
@@ -1915,4 +1920,14 @@ _updateBoardLightweight();
 }
 
 // ---- Exports ----
-export {isTbOffline,countPieces,pieceCountLE7,probeTablebase,bestMoveFromTablebase,_triggerTbQuery,autoSelectTablebaseMove,importFEN,importPGN,importPGNFile,onPGNFileRead,_applyImportedFEN};
+// v1.2.1 round-9: Added 3 names that ARE defined in this file but were
+// missing from the export list:
+//   - copyFEN (line 30) — called from ui.js
+//   - copyReviewFEN (line 35) — called from ui.js
+//   - fenToState (line 1729) — called from ai-bridge.js; was previously
+//     (incorrectly) exported from game-logic.js. Moved here where it's
+//     actually defined. In source-module mode the missing export would
+//     cause a ReferenceError; in bundled mode build-chess.py strips the
+//     `export {}` line so there was no production impact, but the list
+//     was incomplete/misleading.
+export {isTbOffline,countPieces,pieceCountLE7,probeTablebase,bestMoveFromTablebase,_triggerTbQuery,autoSelectTablebaseMove,importFEN,importPGN,importPGNFile,onPGNFileRead,_applyImportedFEN,copyFEN,copyReviewFEN,fenToState};

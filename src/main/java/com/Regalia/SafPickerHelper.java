@@ -198,8 +198,15 @@ public class SafPickerHelper {
 
     /** 将内容写入 URI */
     private void writeContentToUri(Uri uri, String content) throws Throwable {
-        try (OutputStream os = context.getContentResolver().openOutputStream(uri);
-             OutputStreamWriter writer = new OutputStreamWriter(os, "UTF-8")) {
+        // v1.2.1 round-9: openOutputStream can return null per Android docs
+        //   (e.g. if the URI provider is unavailable). Without this check,
+        //   the OutputStreamWriter constructor would throw NPE.
+        OutputStream os = context.getContentResolver().openOutputStream(uri);
+        if (os == null) {
+            throw new java.io.IOException("openOutputStream returned null for " + uri);
+        }
+        try (OutputStream autoClose = os;
+             OutputStreamWriter writer = new OutputStreamWriter(autoClose, "UTF-8")) {
             writer.write(content);
             writer.flush();
             Log.i(TAG, "Exported via SAF to: " + uri.toString());

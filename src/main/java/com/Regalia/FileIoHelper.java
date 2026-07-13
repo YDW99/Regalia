@@ -76,6 +76,17 @@ import java.util.TreeMap;
 public class FileIoHelper {
     private static final String TAG = "FileIoHelper";
 
+    // v1.2.1 round-10 (review-E P2): named request code for READ_EXTERNAL_STORAGE.
+    //   Was a hardcoded `1002` literal. Note: this code is in the 1000-range used
+    //   by SafPickerHelper (1001-1004) and PermissionHelper (1001/1003). The codes
+    //   do NOT functionally collide because (a) MainActivity has no
+    //   onRequestPermissionsResult handler — the permission dialog result is
+    //   silently dropped (the read simply fails and returns null if the user
+    //   denied), and (b) onActivityResult only fires for startActivityForResult
+    //   calls, not requestPermissions. The naming is for readability only.
+    //   PermissionHelper now uses a disjoint 3000-range (see its constants).
+    private static final int REQUEST_CODE_READ_EXTERNAL_STORAGE = 1002;
+
     private final Context context;
     private final WeakReference<Activity> activityRef;
 
@@ -180,7 +191,7 @@ public class FileIoHelper {
     public String readTextFile(String path) {
         // Android 5-9: 检查并请求 READ_EXTERNAL_STORAGE
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            ensureReadExternalStoragePermission();
+            requestReadExternalStoragePermission();
         }
 
         try {
@@ -203,8 +214,20 @@ public class FileIoHelper {
         }
     }
 
-    /** 请求 READ_EXTERNAL_STORAGE 权限（Android 5-9） */
-    private void ensureReadExternalStoragePermission() {
+    /**
+     * 请求 READ_EXTERNAL_STORAGE 权限（Android 5-9）。
+     *
+     * v1.2.1 round-10 (review-E P2): renamed from {@code ensureReadExternalStoragePermission}
+     *   to {@code requestReadExternalStoragePermission}. The previous name "ensure"
+     *   implied a synchronous guarantee, but {@code Activity.requestPermissions} is
+     *   asynchronous — it shows the permission dialog and returns immediately. The
+     *   caller ({@code readTextFile}) does NOT wait for the dialog result; if the
+     *   permission is not yet granted, the read attempt will fail and return null.
+     *   The new name accurately reflects the asynchronous, fire-and-forget behavior.
+     *   Also extracted the hardcoded request code 1002 to the
+     *   {@link #REQUEST_CODE_READ_EXTERNAL_STORAGE} named constant.
+     */
+    private void requestReadExternalStoragePermission() {
         if (context.checkSelfPermission(android.Manifest.permission.READ_EXTERNAL_STORAGE)
                 != PackageManager.PERMISSION_GRANTED) {
             Activity activity = activityRef.get();
@@ -212,7 +235,7 @@ public class FileIoHelper {
                 try {
                     activity.requestPermissions(
                         new String[]{android.Manifest.permission.READ_EXTERNAL_STORAGE},
-                        1002
+                        REQUEST_CODE_READ_EXTERNAL_STORAGE
                     );
                 } catch (Throwable e) {
                     Log.w(TAG, "could not request READ_EXTERNAL_STORAGE", e);

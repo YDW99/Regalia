@@ -1,3 +1,80 @@
+v1.2.1 round-10 regression test + first-principles optimization (2026.7.14):
+  - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
+    refinement).
+  - Regression test of all review-D/E/F fixes — all verified intact. No
+    source changes in this directory this pass; see java/com/Regalia/README.license
+    for the 4 first-principles optimization items (StockfishNative
+    PROCESS_DESTROY_GRACE_MS extraction, StatsActivity redundant Uri.parse
+    removal, StabilizationHelper comment direction fix, proguard-rules.pro
+    section-3 comment fix).
+  - License classification: all files in this directory retain their existing
+    classification.
+
+v1.2.1 (2026.7.14, round-10 continuation — secondary review-E items):
+  - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
+    refinement).
+  - Regalia-v1.2.1-manual-zh.html (AGPL v3): added round-10 continuation
+    changelog entry to Appendix A (after the initial round-10 entry,
+    before the round-9 entry). Documents the 4 secondary review-E items:
+    FileIoHelper naming fix, PermissionHelper request-code migration,
+    ChessApp/MainActivity/StockfishNative version-string unification via
+    BuildConfig.VERSION_NAME, EngineService isRunning timing fix.
+  - Regalia-v1.2.1-manual-en.html (AGPL v3): same — round-10 continuation
+    changelog entry added to Appendix A.
+  - License classification: both manuals retain AGPL v3 (original work).
+
+v1.2.1 (2026.7.14, tenth-pass refinement — round-10 review):
+  - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
+    refinement).
+  - Regalia-v1.2.1-manual-zh.html (AGPL v3): added round-10 changelog entry
+    at the top of Appendix A (changelog), above the round-9 entry. The
+    entry describes the deep fix of review-D/E/F P2/P3 items: 13 priority
+    fixes (concurrency hardening, dead-code removal, readability improvements).
+    No UI change, no engine behavior change, no privacy-relevant change.
+  - Regalia-v1.2.1-manual-en.html (AGPL v3): same — round-10 changelog entry
+    added at the top of Appendix A, above the round-9 entry.
+  - License classification: both manuals retain AGPL v3 (original work).
+
+v1.2.1 (2026.7.13, ninth-pass refinement — round-9 review):
+  - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
+    refinement).
+  - Regalia-v1.2.1-manual-zh.html (AGPL v3): added round-9 changelog entry
+    at the top of Appendix A (changelog), above the round-8 entry. The
+    entry describes the first-principles code review findings and the P1/P2/P3
+    fixes applied.
+  - Regalia-v1.2.1-manual-en.html (AGPL v3): same — round-9 changelog entry
+    added at the top of Appendix A, above the round-8 entry.
+  - License classification: both manuals retain AGPL v3 (original work).
+
+v1.2.1 (2026.7.13, eighth-pass refinement — round-8 review):
+  - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version refinement).
+  - Regalia-v1.2.1-manual-zh.html (AGPL v3): added round-8 changelog entry
+    at the top of Appendix A (changelog), above the round-7 entry. The
+    entry describes the TDZ (Temporal Dead Zone) bug fix in state-store.js
+    that caused the white-screen symptom.
+  - Regalia-v1.2.1-manual-en.html (AGPL v3): same — round-8 changelog entry
+    added at the top of Appendix A, above the round-7 entry.
+  - License classification: both manuals retain AGPL v3 (original work).
+
+v1.2.1 (2026.7.13, eighth-pass refinement — round-8 review):
+  - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version refinement).
+  - Regalia-v1.2.1-manual-zh.html (AGPL v3): added round-8 changelog entry
+    at the top of Appendix A (changelog), above the round-7 entry. The
+    entry describes the TDZ (Temporal Dead Zone) bug fix in state-store.js
+    that caused the white-screen symptom.
+  - Regalia-v1.2.1-manual-en.html (AGPL v3): same — round-8 changelog entry
+    added at the top of Appendix A, above the round-7 entry.
+  - License classification: both manuals retain AGPL v3 (original work).
+
+v1.2.1 (2026.7.13, seventh-pass refinement — round-7 review):
+  - Regalia-v1.2.1-manual-{zh,en}.html: Updated to reflect v1.2.1 round-7
+    changes. Added v1.2.1 seventh-pass changelog entry at the top of
+    Appendix A (newest-first ordering). Updated the "Visual Annotations"
+    section to describe the Phase 62 revert — visual annotations are now
+    exported based solely on the export dialog's "Include special
+    annotations" choice, no longer gated on the `imported` flag.
+    Diagrams reviewed for accuracy against the latest code.
+
 v1.2.1 (2026.7.13, sixth-pass refinement — round-6 review):
   - Regalia-v1.2.1-manual-{zh,en}.html: Updated to reflect v1.2.1 round-6
     stats page visual annotation bug fix. Added v1.2.1 sixth-pass changelog

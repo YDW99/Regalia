@@ -50,9 +50,18 @@ import java.util.concurrent.TimeUnit;
  *   3. /system/bin/chmod 700 — direct system call.
  *   4. /system/bin/sh -c "chmod 700 ..." — last-resort shell fallback.
  *
- * The {@link ChmodProvider} callback supplies the JNI bridge and the
- * user-facing progress / language helpers from StockfishNative, keeping this
- * class free of any Activity or Context reference.
+ * The {@link ChmodProvider} callback supplies the JNI bridge from
+ * StockfishNative, keeping this class free of any Activity or Context
+ * reference.
+ *
+ * v1.2.1 round-9: Slimmed the ChmodProvider interface to the single method
+ *   that makeExecutable actually calls (nativeChmod). The previous interface
+ *   also declared isEnglishMode() and postProgress(int, String) — leftovers
+ *   from the round-4 cleanup that removed extractEngineFromApk() and its
+ *   progress-reporting call sites. The anonymous implementation in
+ *   StockfishNative still provides all 3 methods, but 2 of them were never
+ *   invoked after the round-4 slim. Removing them eliminates dead interface
+ *   surface and simplifies future implementations.
  */
 public class EngineProcessManager {
     private static final String TAG = "EngineProcessManager";
@@ -60,8 +69,6 @@ public class EngineProcessManager {
     /** chmod provider — implemented by StockfishNative. */
     public interface ChmodProvider {
         boolean nativeChmod(String path);
-        boolean isEnglishMode();
-        void postProgress(int pct, String message);
     }
 
     private final ChmodProvider chmodProvider;

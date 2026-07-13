@@ -53,6 +53,20 @@ import java.lang.ref.WeakReference;
 public class PermissionHelper {
     private static final String TAG = "PermissionHelper";
 
+    // v1.2.1 round-10 (review-E P2): Named request codes for requestPermissions
+    //   calls. Previously hardcoded as 1001 (storage) and 1003 (notification),
+    //   which OVERLAPPED with SafPickerHelper's REQUEST_CODE_IMPORT_SETTINGS=1001
+    //   and REQUEST_CODE_IMPORT_PGN=1003 (used for startActivityForResult). The
+    //   overlap caused no functional bug because (a) requestPermissions and
+    //   startActivityForResult dispatch through different Activity callbacks
+    //   (onRequestPermissionsResult vs onActivityResult), and (b) MainActivity
+    //   has no onRequestPermissionsResult handler — the permission dialog
+    //   result is silently dropped. However, the overlap was confusing for
+    //   maintenance. Migrated to a disjoint 3000-range so the two code spaces
+    //   are visually distinct and never share a numeric value.
+    private static final int REQUEST_CODE_STORAGE_PERMISSION = 3001;
+    private static final int REQUEST_CODE_NOTIFICATION_PERMISSION = 3002;
+
     private final Context context;
     private final WeakReference<Activity> activityRef;
 
@@ -98,12 +112,12 @@ public class PermissionHelper {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
                 activity.requestPermissions(
                     new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},
-                    1001
+                    REQUEST_CODE_STORAGE_PERMISSION
                 );
             } else if (Build.VERSION.SDK_INT < 33) {
                 activity.requestPermissions(
                     new String[]{Manifest.permission.READ_EXTERNAL_STORAGE},
-                    1001
+                    REQUEST_CODE_STORAGE_PERMISSION
                 );
             }
             // Android 13+: 无需请求
@@ -138,7 +152,7 @@ public class PermissionHelper {
         try {
             activity.requestPermissions(
                 new String[]{Manifest.permission.POST_NOTIFICATIONS},
-                1003
+                REQUEST_CODE_NOTIFICATION_PERMISSION
             );
         } catch (Throwable e) {
             Log.w(TAG, "requestNotificationPermission failed", e);

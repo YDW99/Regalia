@@ -30,7 +30,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; worker-src blob:; connect-src https://tablebase.lichess.ovh; img-src data: file: blob:; frame-ancestors 'none'; base-uri 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; worker-src blob:; connect-src https://tablebase.lichess.ovh; img-src data: file: blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'none'; object-src 'none'">
 <title>Regalia v1.2.1</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -499,7 +499,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
   .dlg:not([style*="max-width"]){margin-top:-10px;margin-bottom:calc(-12vh);margin-left:calc(-1 * (env(safe-area-inset-right) + 3px));margin-right:calc(-1 * env(safe-area-inset-left))}
   .dlg:not([style*="max-width"]) > h2{padding:14px 16px 10px;margin:0;border-bottom:2px solid var(--border2);flex-shrink:0;background:var(--card);position:sticky;top:0;z-index:2}
   .dlg:not([style*="max-width"]) > .dlg-content{flex:1 1 auto;overflow-y:auto;padding:12px 14px;-webkit-overflow-scrolling:touch;min-height:0}
-  .dlg:not([style*="max-width"]) > .dlg-btns{display:flex;gap:8px;padding:10px 14px;border-top:2px solid var(--border2);background:var(--card);flex-shrink:0;margin:0;flex:0 0 auto}
+  .dlg:not([style*="max-width"]) > .dlg-btns{display:flex;gap:8px;padding:10px 14px;border-top:2px solid var(--border2);background:var(--card);margin:0;flex:0 0 auto}
   .dlg:not([style*="max-width"]) > .dlg-btns .btn{flex:1;padding:14px;font-size:.9rem;min-height:44px;justify-content:center}
   /* v1.0.7 PHASE 6: when .dlg-content wrapper is NOT used (older dialogs
      like About / Import / Resign that put .dlg-sec directly inside .dlg),
@@ -892,7 +892,9 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
   gap: 0;
   overflow: hidden;
   min-width: unset !important;
-  flex-shrink: 0;
+  /* v1.2.1 round-9: removed redundant flex-shrink:0 — the shorthand
+     `flex: 0 0 auto` above already sets flex-shrink:0 (same pattern
+     round-7 cleaned up elsewhere; this instance was missed). */
   margin: 0;
 }
 .review-left .review-board { padding: 0; flex-shrink: 0; margin: 0; }
@@ -930,8 +932,13 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 }
 .review-chart { min-height: 120px; overflow: hidden; flex-shrink: 1; width: 100%; }
 /* v1.1.0 Phase 54: Custom review slider — pixel-perfect alignment with chart.
-   The wrapper has IDENTICAL CSS to .review-chart (border:1px, padding:2px,
-   box-sizing:border-box, width:100%) so both share the same content box.
+   v1.2.1 round-9: The previous comment claimed "IDENTICAL CSS to .review-chart
+   (border:1px, padding:2px, ...)" but .review-chart (line ~933) has neither
+   border nor padding — the comment was stale. The actual design: both
+   .review-chart and .rv-slider-wrap use width:100% + box-sizing:border-box
+   so their OUTER boxes match. The transparent 1px border on .rv-slider-wrap
+   is intentional (compensates for .review-chart's 1px overflow:hidden
+   rounding) but the padding is 0 (not 2px as the old comment claimed).
    Inside, a container holds: base track, fill track, thumb (all visual-only,
    pointer-events:none), and a transparent native <input type="range"> overlay
    (opacity:0) that handles all touch/drag/keyboard interaction.

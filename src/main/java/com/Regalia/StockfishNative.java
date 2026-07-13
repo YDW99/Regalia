@@ -26,7 +26,9 @@ package com.Regalia;
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  *
- * v18.5.0: Refactored to remove JNI bridge / engine import code.
+ * v18.5.0: Refactored to consolidate engine binary resolution (APK-extract
+ *   and nativeLibraryDir paths) into resolveEngineBinary(). JNI is still used
+ *   for chmod/renice via engine_jni.cpp — see EngineProcessManager.
  * Only built-in engine (nativeLibraryDir) is supported.
  * Context changed to Application context to prevent Activity memory leaks.
  * Duplicate recovery code extracted into cleanupEngineResources()/recoverEngine().
@@ -119,7 +121,13 @@ public class StockfishNative {
     // v1.0.5: Synced with the application version (was stale at v1.0.2).
     // v1.2.0: Updated for v1.2.0 release.
     // v1.2.1: Updated for v1.2.1 release.
-    private static final String ENGINE_VERSION = "v1.2.1";
+    // v1.2.1 round-10 (review-E P3): Derive from BuildConfig.VERSION_NAME so this
+    //   stays in sync with build.gradle's versionName without manual edits.
+    //   Despite the name "ENGINE_VERSION", this is the APP version exposed to JS
+    //   via getEngineVersion() (the Stockfish engine version is reported by the
+    //   engine itself via the "uci" handshake's "id name" line, stored in
+    //   `engineName`). Kept the field name for API stability.
+    private static final String ENGINE_VERSION = "v" + BuildConfig.VERSION_NAME;
     // Movetime mapping: index 0 unused, 1-7 = game levels
     private static final int[] MOVETIME_MAP = {0, 500, 800, 1000, 1500, 2000, 3000, 5000};
 
@@ -155,7 +163,6 @@ public class StockfishNative {
     // v1.2.0 Phase 73+: Additional helper classes for further God Module reduction
     private final FileIoHelper _fileIoHelper;
     private final PermissionHelper _permissionHelper;
-    private final HapticHelper _hapticHelper;
     private final SafPickerHelper _safPickerHelper;
     private final EngineSettingsHelper _engineSettingsHelper;
     // v1.2.0 Phase 81: Engine config helper — extracted from StockfishNative to reduce God Module size.
@@ -219,6 +226,23 @@ public class StockfishNative {
     //   作为唯一状态持有者（消除字段重复）。所有读写通过 _engineHealthMonitor 进行。
     private static final int MAX_AUTO_RECOVERY = 3; // Conservative: prevent restart loops on HyperOS 3
     private static final int RECOVERY_COUNT_RESET_INTERVAL_MS = 120000; // 2 min — reset counter after stable operation
+    // v1.2.1 round-10 (review-D P3): extracted magic number — 50 MB minimum
+    //   engine binary size, used to validate the extracted Stockfish ELF before
+    //   execution. Previously hardcoded as `50000000L` in 4 places.
+    private static final long MIN_ENGINE_BINARY_SIZE = 50_000_000L;
+    // v1.2.1 round-10 (review-D P3): extracted magic number — grace period
+    //   (ms) to wait after sending "stop" for a ponder search's bestmove to
+    //   arrive before assuming the engine is idle. Was a bare `100` literal.
+    private static final int PONDER_STOP_GRACE_MS = 100;
+    // v1.2.1 round-10 regression: extracted magic number — grace period (ms)
+    //   to wait after Process.destroy() (SIGTERM) for the engine process to
+    //   exit gracefully before probing isProcessAlive() and falling back to
+    //   destroyForciblySafe() (SIGKILL). Used in cleanupEngineResources() and
+    //   shutdown(). Was a bare `100` literal in 2 places. Same value as
+    //   PONDER_STOP_GRACE_MS but different semantic — kept separate so each
+    //   can be tuned independently if future profiling suggests different
+    //   optimal values (process-exit latency vs. UCI bestmove latency).
+    private static final int PROCESS_DESTROY_GRACE_MS = 100;
     private volatile long _lastRecoveryTimestamp = 0;
     // Restart lock: prevents concurrent restartEngine/recoverEngine calls
     private final Object _restartLock = new Object();
@@ -227,11 +251,25 @@ public class StockfishNative {
     //   （inner task 被 shutdownNow 静默丢弃时 finally 不会执行，标志会永久卡住）。
     private volatile long _restartStartTimeMs = 0L;
     private static final long RESTART_STALE_THRESHOLD_MS = 30_000L;
+
+    // v1.2.1 round-10: All _restartInProgress = false writes MUST go through
+    //   this helper so they take _restartLock — matching the locked =true writes
+    //   in recoverEngine/restartEngine. Previously the bare writes raced with
+    //   concurrent =true writes (review-D P2).
+    private void _clearRestartInProgress() {
+        synchronized (_restartLock) {
+            _restartInProgress = false;
+        }
+    }
     // v1.2.1: 引擎线程死亡标记。ChessApp 的 UncaughtExceptionHandler 在 SF-*
     //   线程异常退出时调用 markEngineThreadDead() 设置此标记；heartbeat 检查
     //   此标记，若为 true 则触发 recoverEngine —— 否则引擎进程虽然活着但读
     //   线程已死，isProcessAlive() 返回 true 导致 heartbeat 误判健康，AI
     //   静默不动直到 15-30s zombie 超时。
+    // v1.2.1 round-7 (audit note): These fields are `static volatile` — they
+    //   assume a single engine instance per process (the app's design).
+    //   If multi-engine support is ever added, this must be promoted to
+    //   per-instance fields on the StockfishNative object itself.
     private static volatile boolean sEngineThreadDied = false;
     private static volatile String sEngineThreadDiedName = null;
     // v1.2.0 Phase 73+: REQUEST_CODE_* constants moved to SafPickerHelper and
@@ -295,6 +333,10 @@ public class StockfishNative {
     );
     private static final Pattern UCIOK_PATTERN = Pattern.compile("^uciok");
     private static final Pattern READYOK_PATTERN = Pattern.compile("^readyok");
+    // v1.2.1 round-7 (R3): validate eventName in the structured postJsCallback
+    // overload. ECMAScript IdentifierName subset (no reserved words, no
+    // Unicode escapes, no keywords) — sufficient for our onXxx callback names.
+    private static final Pattern EVENT_NAME_PATTERN = Pattern.compile("^[A-Za-z_$][A-Za-z0-9_$]*$");
 
     // ===================== ENGINE CONFIGURATION FIELDS =====================
 
@@ -351,6 +393,10 @@ public class StockfishNative {
     //   set/check-and-clear operations now go through synchronized blocks on
     //   this lock so the check-and-clear is atomic w.r.t. engineStop's set.
     private final Object _discardFlagLock = new Object();
+    // v1.2.1 round-10 (review-D P3): moved from line ~1175 (mid-class) to the
+    //   main field block for readability. Holds the pending Chess960 mode so
+    //   the flag survives engine restarts and is re-applied by startEngineInternal.
+    private volatile boolean _pendingChess960 = false;
     // v18.4.1: Accumulated MultiPV data during current search
     private final java.util.concurrent.ConcurrentHashMap<Integer, JSONObject> _multiPVData =
             new java.util.concurrent.ConcurrentHashMap<>();
@@ -383,21 +429,21 @@ public class StockfishNative {
             public boolean nativeChmod(String path) {
                 return StockfishNative.nativeChmod(path);
             }
-            @Override
-            public boolean isEnglishMode() {
-                return StockfishNative.this.isEnglishMode();
-            }
-            @Override
-            public void postProgress(int pct, String message) {
-                postJsCallback("onInitProgress(" + pct + ", " + escapeJsString(message) + ")");
-            }
+            // v1.2.1 round-9: isEnglishMode() and postProgress(int, String)
+            //   overrides removed — the ChmodProvider interface was slimmed
+            //   to just nativeChmod (the only method makeExecutable calls).
+            //   The previous overrides were dead code left over from the
+            //   round-4 cleanup that removed extractEngineFromApk().
         });
         // v1.2.1: EngineHealthMonitor slimmed to a state holder — no callback wiring needed.
         this._engineHealthMonitor = new EngineHealthMonitor();
         // v1.2.0 Phase 73+: Initialize additional helper classes
         this._fileIoHelper = new FileIoHelper(this.context, this.activityRef);
         this._permissionHelper = new PermissionHelper(this.context, this.activityRef);
-        this._hapticHelper = new HapticHelper(this.context);
+        // v1.2.1 round-10 (review-E P2): HapticHelper removed — it was a Phase 73
+        //   extraction that was never wired in (performHaptic still calls the
+        //   inline performHapticInternal). The dead class/field/instantiation
+        //   have been removed; no behavior change.
         this._safPickerHelper = new SafPickerHelper(this.context, this.activityRef, new SafPickerHelper.Callbacks() {
             @Override
             public void postJsCallback(String jsExpression) {
@@ -545,7 +591,7 @@ public class StockfishNative {
             _engineExecutor = _createEngineExecutor();
         }
         initStarted = true;
-        _restartInProgress = false; // Reset lock for fresh init
+        _clearRestartInProgress(); // Reset lock for fresh init
         try {
             _engineExecutor.execute(new Runnable() {
                 public void run() {
@@ -555,7 +601,7 @@ public class StockfishNative {
                         Log.e(TAG, "Failed to initialize engine", e);
                         initStarted = false;
                         engineReady = false;
-                        _restartInProgress = false;
+                        _clearRestartInProgress();
                         postJsCallback("onEngineError(" + escapeJsString(e.getMessage() != null ? e.getMessage() : "Unknown error") + ")");
                     }
                 }
@@ -571,7 +617,7 @@ public class StockfishNative {
                         Log.e(TAG, "initEngine retry failed", t);
                         initStarted = false;
                         engineReady = false;
-                        _restartInProgress = false;
+                        _clearRestartInProgress();
                         postJsCallback("onEngineError(" + escapeJsString(t.getMessage() != null ? t.getMessage() : "Unknown error") + ")");
                     }
                 }
@@ -598,16 +644,20 @@ public class StockfishNative {
     }
 
     private boolean isProcessAlive() {
-        try {
-            if (engineProcess == null) return false;
+        if (engineProcess == null) return false;
+        // v1.2.1 round-10 (review-D P3): Process.isAlive() is API 26+ only.
+        //   Previously every call (heartbeat ~1Hz + every UCI send path) took
+        //   the NoSuchMethodError hit on API 21-25. Pre-check SDK_INT so the
+        //   common path (API 26+) is a direct virtual invoke with no
+        //   try/catch overhead, and the legacy path uses exitValue() probing.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             return engineProcess.isAlive();
-        } catch (NoSuchMethodError e) {
-            try {
-                engineProcess.exitValue();
-                return false;
-            } catch (IllegalThreadStateException ex) {
-                return true;
-            }
+        }
+        try {
+            engineProcess.exitValue();
+            return false;
+        } catch (IllegalThreadStateException ex) {
+            return true;
         } catch (Throwable e) {
             return false;
         }
@@ -702,12 +752,18 @@ public class StockfishNative {
 
         if (_isPondering) {
             _isPondering = false;
-            _discardingPonderBestmove = true; // FIX: Discard the ponder's bestmove when it arrives
+            // v1.2.1 round-10 (review-D P2): set _discardingPonderBestmove under
+            //   _discardFlagLock so the reader thread's check-and-clear is
+            //   atomic w.r.t. this set. Previously the bare write raced with
+            //   the reader's locked clear.
+            synchronized (_discardFlagLock) {
+                _discardingPonderBestmove = true; // FIX: Discard the ponder's bestmove when it arrives
+            }
             synchronized (stateLock) {
                 currentState = STATE_NONE;
             }
             sendUciCommand("stop");
-            try { Thread.sleep(100); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            try { Thread.sleep(PONDER_STOP_GRACE_MS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
             // FIX: After stopping ponder, the engine is now idle (bestmove was discarded).
             // Previously, the code fell through to create a new latch and send "stop" again,
             // but the engine already sent its bestmove (which was discarded). The new latch
@@ -736,10 +792,19 @@ public class StockfishNative {
                 //   — in that case the late bestmove was already consumed by the
                 //   handler and we must NOT arm the discard flag (it would
                 //   incorrectly discard the NEXT legitimate bestmove).
+                // v1.2.1 round-9: Fixed lock mismatch — the discard flag is read
+                //   and cleared by the bestmove reader thread under _discardFlagLock
+                //   (line ~1871), so the write here MUST also be under
+                //   _discardFlagLock to provide mutual exclusion. Previously this
+                //   write was under _stopLatchLock (the wrong lock), creating a
+                //   TOCTOU window where the reader could observe a stale `false`
+                //   value while this write was in flight, or vice versa.
                 synchronized (_stopLatchLock) {
                     if (_stopLatch == stopLatch) {
                         // We still own it — bestmove hasn't arrived. Arm the discard.
-                        _discardingPonderBestmove = true;
+                        synchronized (_discardFlagLock) {
+                            _discardingPonderBestmove = true;
+                        }
                         _stopLatch = null;
                         Log.w(TAG, callerTag + ": stopAndWaitForBestmove timed out — discarding late bestmove");
                     } else {
@@ -1148,7 +1213,6 @@ public class StockfishNative {
             Log.w(TAG, "Engine does not support UCI_Chess960 option — Chess960 moves will still work via standard FEN");
         }
     }
-    private volatile boolean _pendingChess960 = false;
 
     /**
      * v1.0.4 NEW: Returns the current Chess960 mode flag (last value passed to
@@ -1175,8 +1239,10 @@ public class StockfishNative {
     @JavascriptInterface
     public boolean isSystemDarkMode() {
         try {
+            // v1.2.1 round-10 (review-D P3): `context` is a final field set in
+            //   the constructor — it can never be null. Removed the dead
+            //   `if (ctx == null) return true;` guard.
             android.content.Context ctx = context;
-            if (ctx == null) return true; // 默认深色（与原设计一致）
             android.app.UiModeManager umm = (android.app.UiModeManager) ctx.getSystemService(android.content.Context.UI_MODE_SERVICE);
             if (umm == null) return true;
             int mode = umm.getNightMode();
@@ -1304,6 +1370,18 @@ public class StockfishNative {
     }
 
     private void startEngineInternal() throws IOException {
+        // v1.2.1 round-10 (review-D P2): bail out early if a shutdown was
+        //   requested between the time the recovery task was scheduled and
+        //   the time it actually starts running. Without this check, a race
+        //   between recoverEngine's inner task (which calls startEngine) and
+        //   a concurrent shutdown() would spawn a fresh engine process AFTER
+        //   the user asked to quit, leaking the new process and its executor.
+        if (shutdownRequested) {
+            Log.i(TAG, "startEngineInternal: shutdownRequested — aborting engine start");
+            _clearRestartInProgress();
+            return;
+        }
+
         postJsCallback("onInitProgress(5, " + escapeJsString(isEnglishMode() ? "Starting engine initialization..." : "\u5f00\u59cb\u521d\u59cb\u5316\u5f15\u64ce...") + ")");
 
         if (engineProcess != null && isProcessAlive()) {
@@ -1321,7 +1399,7 @@ public class StockfishNative {
         if (stockfishBin == null) {
             Log.e(TAG, "Engine binary resolution failed — resetting initStarted for retry");
             initStarted = false;
-            _restartInProgress = false; // v1.0.8 PHASE 30: clear restart lock so future recoverEngine() calls can proceed
+            _clearRestartInProgress(); // v1.0.8 PHASE 30: clear restart lock so future recoverEngine() calls can proceed
             postJsCallback("onEngineError(" + escapeJsString(isEnglishMode() ? "Engine file not found, will use offline mode" : "\u5f15\u64ce\u6587\u4ef6\u672a\u627e\u5230\uff0c\u5c06\u4f7f\u7528\u79bb\u7ebf\u6a21\u5f0f") + ")");
             return;
         }
@@ -1337,7 +1415,7 @@ public class StockfishNative {
         if (!started) {
             Log.e(TAG, "Engine process start failed");
             initStarted = false;
-            _restartInProgress = false; // v1.0.8 PHASE 30: clear restart lock so future recoverEngine() calls can proceed
+            _clearRestartInProgress(); // v1.0.8 PHASE 30: clear restart lock so future recoverEngine() calls can proceed
             postJsCallback("onEngineError(" + escapeJsString(isEnglishMode() ? "Engine start failed - please reinstall" : "\u5f15\u64ce\u542f\u52a8\u5931\u8d25 - \u8bf7\u91cd\u65b0\u5b89\u88c5\u5e94\u7528") + ")");
             return;
         }
@@ -1446,7 +1524,7 @@ public class StockfishNative {
         postJsCallback("onInitProgress(90, " + escapeJsString(isEnglishMode() ? "Engine ready!" : "\u5f15\u64ce\u5c31\u7eea\uff01") + ")");
         Log.i(TAG, "Stockfish engine ready: " + engineName);
         _engineHealthMonitor.resetRecoveryCount();
-        _restartInProgress = false; // Clear restart lock on successful start
+        _clearRestartInProgress(); // Clear restart lock on successful start
         clearEngineThreadDeadFlag(); // v1.2.1: 引擎成功启动，清除前次死亡标记
         postJsCallback("onEngineReady()");
 
@@ -1565,6 +1643,19 @@ public class StockfishNative {
      * zombie recovery to avoid duplicate code.
      */
     private void cleanupEngineResources() {
+        // v1.2.1 round-9: Reset currentState to STATE_NONE FIRST so that any
+        //   buffered bestmove/info lines the reader thread processes during
+        //   the teardown below (before it sees `interrupt()`) route through
+        //   the STATE_NONE branches of handleBestMove / handleInfo / etc.
+        //   and become no-ops. Without this, a stale bestmove could fire
+        //   onBestMove / onHintMove / onEngineEval for a position being
+        //   torn down, racing with onEngineRestarting() and corrupting the
+        //   JS-side state machine. shutdown() (line ~2500) and engineStop()
+        //   (line ~3066) both reset state; cleanupEngineResources was the
+        //   only teardown path that didn't.
+        synchronized (stateLock) {
+            currentState = STATE_NONE;
+        }
         // Close process streams
         if (engineProcess != null) {
             try { engineProcess.getInputStream().close(); } catch (Throwable ignored) {}
@@ -1572,7 +1663,7 @@ public class StockfishNative {
             try { engineProcess.getErrorStream().close(); } catch (Throwable ignored) {}
             try {
                 engineProcess.destroy();
-                try { Thread.sleep(100); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+                try { Thread.sleep(PROCESS_DESTROY_GRACE_MS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
                 // v1.0.2 FIX: use isProcessAlive() + destroyForciblySafe() —
                 // direct engineProcess.isAlive() / destroyForcibly() throw
                 // NoSuchMethodError on API 21-25 (minSdk).
@@ -1608,7 +1699,11 @@ public class StockfishNative {
         // holders so a stale latch from the dead engine doesn't block the new
         // engine's isready handshake.
         _isPondering = false;
-        _discardingPonderBestmove = false;
+        // v1.2.1 round-10 (review-D P2): clear under _discardFlagLock for
+        //   consistency with all other writes.
+        synchronized (_discardFlagLock) {
+            _discardingPonderBestmove = false;
+        }
         _lastPonderMove = null;
         _stopLatch = null;
         readyOkLatchHolder = null;
@@ -1651,7 +1746,7 @@ public class StockfishNative {
 
         if (_engineHealthMonitor.getRecoveryCount() >= MAX_AUTO_RECOVERY) {
             Log.e(TAG, "Auto-recovery limit reached (" + MAX_AUTO_RECOVERY + "), giving up. Reason: " + reason);
-            _restartInProgress = false;
+            _clearRestartInProgress();
             postJsCallback("onEngineError(" + escapeJsString(userMessage) + ")");
             return;
         }
@@ -1672,6 +1767,16 @@ public class StockfishNative {
         } catch (Throwable e) {
             _engineExecutor = _createEngineExecutor();
         }
+        // v1.2.1 round-10 (review-D P2): re-check shutdownRequested AFTER
+        //   recreating the executor but BEFORE scheduling the delayed task.
+        //   If shutdown() raced between the top-of-method check and the
+        //   executor recreation, the freshly-created executor would be
+        //   leaked (no shutdown hook registered). Bail out cleanly instead.
+        if (shutdownRequested) {
+            Log.i(TAG, "recoverEngine: shutdownRequested after executor recreation — aborting (" + reason + ")");
+            _clearRestartInProgress();
+            return;
+        }
 
         final int delay = Math.min(1000 + (attemptNum - 1) * 500, 5000); // Cap at 5s
         try {
@@ -1679,7 +1784,7 @@ public class StockfishNative {
                 public void run() {
                     try {
                         Thread.sleep(delay);
-                        if (shutdownRequested) { _restartInProgress = false; return; }
+                        if (shutdownRequested) { _clearRestartInProgress(); return; }
                         Log.i(TAG, "Auto-recovery attempt " + attemptNum + "/" + MAX_AUTO_RECOVERY + " (" + reason + ")");
                         cleanupEngineResources();
                         // v1.0.8 PHASE 24 (bug fix): shut down the current executor
@@ -1698,13 +1803,13 @@ public class StockfishNative {
                                         postJsCallback("onEngineError(" + escapeJsString(userMessage) + ")");
                                     }
                                 } finally {
-                                    _restartInProgress = false;
+                                    _clearRestartInProgress();
                                 }
                             }
                         });
                     } catch (Throwable t) {
                         Log.e(TAG, "Auto-recovery attempt " + attemptNum + " failed (" + reason + ")", t);
-                        _restartInProgress = false;
+                        _clearRestartInProgress();
                         if (attemptNum >= MAX_AUTO_RECOVERY) {
                             postJsCallback("onEngineError(" + escapeJsString(userMessage) + ")");
                         }
@@ -1727,12 +1832,12 @@ public class StockfishNative {
                                 postJsCallback("onEngineError(" + escapeJsString(userMessage) + ")");
                             }
                         } finally {
-                            _restartInProgress = false;
+                            _clearRestartInProgress();
                         }
                     }
                 });
             } catch (Throwable t2) {
-                _restartInProgress = false;
+                _clearRestartInProgress();
                 Log.e(TAG, "Recovery retry also failed (" + reason + ")", t2);
             }
         }
@@ -2414,6 +2519,63 @@ public class StockfishNative {
         }
     }
 
+    /**
+     * v1.2.1 round-7 (security hardening, R3): Structured JS callback helper.
+     * Builds a JS call of the form {@code eventName(arg0, arg1, ...)} where each
+     * argument is JSON-encoded via {@link JSONArray} — guaranteeing proper
+     * escaping of strings, numbers, booleans, and null. Callers MUST prefer
+     * this method over the raw {@link #postJsCallback(String)} variant whenever
+     * the arguments come from anything other than a hard-coded literal, so that
+     * JS-injection-via-forgotten-escaping cannot occur by construction.
+     *
+     * <p>Examples:
+     * <pre>{@code
+     * postJsCallback("onEngineError", "Engine not ready");
+     * postJsCallback("onInitProgress", 25, "Locating engine file...");
+     * postJsCallback("onBestMove", "e2e4", null);
+     * }</pre>
+     *
+     * @param eventName global JS function name to invoke (must match ^[A-Za-z_$][A-Za-z0-9_$]*$)
+     * @param args arguments to pass; each is JSON-encoded (String/Number/Boolean/null/Object)
+     */
+    private void postJsCallback(String eventName, Object... args) {
+        if (eventName == null || eventName.isEmpty()) {
+            Log.w(TAG, "postJsCallback: eventName is null/empty, skipping");
+            return;
+        }
+        // Defend against a malformed eventName being used to inject JS. The
+        // regex below is the ECMAScript IdentifierName spec (subset; no
+        // reserved words or Unicode escapes). If a caller passes a non-
+        // identifier, we refuse to dispatch rather than risk eval-style
+        // injection through the function-name slot.
+        if (!EVENT_NAME_PATTERN.matcher(eventName).matches()) {
+            Log.w(TAG, "postJsCallback: rejected non-identifier eventName: " + eventName);
+            return;
+        }
+        // Build the args list as a JSON array, then strip the outer [] so the
+        // result is a comma-separated JS argument list. JSONArray.toString()
+        // produces valid JSON, which is a strict subset of JS expression
+        // syntax — so the resulting string is safe to splice into a JS call.
+        String argsJs;
+        try {
+            argsJs = new JSONArray(args).toString();
+        } catch (Throwable t) {
+            // JSONArray can throw on non-encodable values (very unlikely for
+            // our caller-controlled inputs, but be defensive).
+            Log.e(TAG, "postJsCallback: failed to encode args for " + eventName, t);
+            return;
+        }
+        // Strip leading '[' and trailing ']' (length is >= 2 because "[]" is
+        // the empty-array encoding).
+        if (argsJs.length() >= 2 && argsJs.charAt(0) == '[' && argsJs.charAt(argsJs.length() - 1) == ']') {
+            argsJs = argsJs.substring(1, argsJs.length() - 1);
+        } else {
+            // Defensive: should never happen — JSONArray always emits [].
+            argsJs = "";
+        }
+        postJsCallback(eventName + "(" + argsJs + ")");
+    }
+
     @JavascriptInterface
     public void shutdown() {
         // v1.0.8 PHASE 33: NOT synchronized on `this` (unlike startHeartbeat).
@@ -2528,7 +2690,7 @@ public class StockfishNative {
         if (engineProcess != null) {
             try {
                 engineProcess.destroy();
-                try { Thread.sleep(100); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+                try { Thread.sleep(PROCESS_DESTROY_GRACE_MS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
                 // v1.0.2 FIX: use isProcessAlive() + destroyForciblySafe() —
                 // direct engineProcess.isAlive() / destroyForcibly() throw
                 // NoSuchMethodError on API 21-25 (minSdk).
@@ -2687,7 +2849,7 @@ public class StockfishNative {
                                 Log.e(TAG, "Engine restart failed", e);
                                 postJsCallback("onEngineError(" + escapeJsString((isEnglishMode() ? "Engine restart failed: " : "\u5f15\u64ce\u91cd\u542f\u5931\u8d25: ") + (e.getMessage() != null ? e.getMessage() : "Unknown")) + ")");
                             } finally {
-                                _restartInProgress = false;
+                                _clearRestartInProgress();
                             }
                         }
                     });
@@ -2707,7 +2869,7 @@ public class StockfishNative {
                         Log.e(TAG, "Engine restart retry failed", t);
                         postJsCallback("onEngineError(" + escapeJsString((isEnglishMode() ? "Engine restart failed: " : "\u5f15\u64ce\u91cd\u542f\u5931\u8d25: ") + (t.getMessage() != null ? t.getMessage() : "Unknown")) + ")");
                     } finally {
-                        _restartInProgress = false;
+                        _clearRestartInProgress();
                     }
                 }
             });
@@ -2733,8 +2895,11 @@ public class StockfishNative {
                 case '\u2029': sb.append("\\u2029"); break;
                 case '\u0000': sb.append("\\u0000"); break;
                 default:
-                    // Escape other C0 control characters (0x01-0x1F except \t\n\r already handled)
-                    if (c < 0x20 && c != '\t' && c != '\n' && c != '\r') {
+                    // v1.2.1 round-10 (review-D P3): The previous guard
+                    //   `c != '\t' && c != '\n' && c != '\r'` was dead code —
+                    //   those three chars are caught by explicit cases above.
+                    //   Escape other C0 control chars (0x00-0x1F) as backslash-u-XXXX.
+                    if (c < 0x20) {
                         sb.append(String.format("\\u%04x", (int) c));
                     } else {
                         sb.append(c);
@@ -2964,7 +3129,11 @@ public class StockfishNative {
         if (!_isPondering) return;
         Log.i(TAG, "Stopping ponder — opponent played unexpected move");
         _isPondering = false;
-        _discardingPonderBestmove = true; // Discard the ponder's bestmove when it arrives
+        // v1.2.1 round-10 (review-D P2): set under _discardFlagLock — see
+        //   stopAndWaitForBestmove for the rationale.
+        synchronized (_discardFlagLock) {
+            _discardingPonderBestmove = true; // Discard the ponder's bestmove when it arrives
+        }
         synchronized (stateLock) {
             currentState = STATE_NONE;
         }
@@ -3887,8 +4056,11 @@ public class StockfishNative {
     public void openUrlInBrowser(String url) {
         if (url == null) return;
         String trimmed = url.trim();
-        // SECURITY: Only allow http(s) schemes. Reject file:, content:, javascript:, etc.
-        if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
+        // v1.2.1 round-10 (review-E P2): Use case-insensitive scheme check.
+        //   Uri.parse + equalsIgnoreCase accepts "HTTP://...", "Https://..."
+        //   which are valid per RFC 3986 §3.1 (scheme is case-insensitive).
+        //   The previous case-sensitive startsWith() rejected these URLs.
+        if (!_isHttpUrl(trimmed)) {
             Log.w(TAG, "openUrlInBrowser rejected non-http(s) URL: " + trimmed);
             return;
         }
@@ -3906,6 +4078,16 @@ public class StockfishNative {
         }
     }
 
+    // v1.2.1 round-10 (review-E P2): case-insensitive http(s) scheme check.
+    //   Used by StockfishNative.openUrlInBrowser; mirrored in StatsActivity
+    //   and ChessWebViewClient via the same Uri.parse + equalsIgnoreCase idiom.
+    private static boolean _isHttpUrl(String url) {
+        if (url == null || url.isEmpty()) return false;
+        Uri uri = Uri.parse(url);
+        String scheme = uri.getScheme();
+        return "http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme);
+    }
+
     // ===================== ENGINE BINARY EXTRACTION HELPERS =====================
 
     /**
@@ -3916,7 +4098,7 @@ public class StockfishNative {
         File destFile = new File(context.getFilesDir(), ENGINE_LIB_NAME);
 
         // FIX: Also verify ELF header on cached file to prevent using corrupted extraction
-        if (destFile.exists() && destFile.length() > 50000000 && isElfFile(destFile)) {
+        if (destFile.exists() && destFile.length() > MIN_ENGINE_BINARY_SIZE && isElfFile(destFile)) {
             Log.i(TAG, "Using previously extracted engine: " + destFile.getAbsolutePath()
                     + " size=" + destFile.length());
             makeExecutable(destFile);
@@ -3990,7 +4172,7 @@ public class StockfishNative {
 
             makeExecutable(destFile);
 
-            if (destFile.exists() && destFile.canRead() && destFile.length() > 50000000) {
+            if (destFile.exists() && destFile.canRead() && destFile.length() > MIN_ENGINE_BINARY_SIZE) {
                 if (isElfFile(destFile)) {
                     Log.i(TAG, "Engine extracted successfully, size=" + destFile.length());
                     currentEnginePath = destFile.getAbsolutePath();
@@ -4017,7 +4199,7 @@ public class StockfishNative {
         File destFile = new File(context.getFilesDir(), ENGINE_LIB_NAME);
 
         // FIX: Also verify ELF header on cached file to prevent using corrupted extraction
-        if (destFile.exists() && destFile.length() > 50000000 && isElfFile(destFile)) {
+        if (destFile.exists() && destFile.length() > MIN_ENGINE_BINARY_SIZE && isElfFile(destFile)) {
             Log.i(TAG, "Using previously asset-extracted engine: " + destFile.getAbsolutePath()
                     + " size=" + destFile.length());
             makeExecutable(destFile);
@@ -4062,7 +4244,7 @@ public class StockfishNative {
 
         makeExecutable(destFile);
 
-        if (destFile.exists() && destFile.canRead() && destFile.length() > 50000000) {
+        if (destFile.exists() && destFile.canRead() && destFile.length() > MIN_ENGINE_BINARY_SIZE) {
             if (isElfFile(destFile)) {
                 Log.i(TAG, "Engine extracted from assets successfully, size=" + destFile.length());
                 currentEnginePath = destFile.getAbsolutePath();

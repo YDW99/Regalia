@@ -43,12 +43,16 @@ function secureRandomInt(max){
   if(max<=1)return 0;
   // v1.1.2 PHASE 71 (robustness): guard against `crypto` being undefined (e.g.
   // in non-browser test harnesses or if a future WebView config strips it).
-  // Mirrors the defensive pattern already used by randomSPID in chess960.js.
-  // Without this guard, `crypto.getRandomValues(buf)` would throw a
-  // ReferenceError, propagating to the caller (queryECOBookMove) and crashing
-  // the AI's opening-book lookup.
+  // v1.2.1 round-7 (security hardening): fail-safe by returning 0 instead of
+  // falling back to Math.random(). Math.random() is a predictable PRNG; using
+  // it for Chess960 SP-ID selection or ECO opening-book picks would defeat the
+  // purpose of cryptographic randomization. Returning 0 is safe — it selects
+  // the first candidate (a valid game state) rather than a predictable pseudo-
+  // random one. Mirrors the fail-safe pattern already used by randomSPID in
+  // chess960.js (which returns SP-ID 518 = standard chess position).
   if(typeof crypto==='undefined'||!crypto||typeof crypto.getRandomValues!=='function'){
-    return Math.floor(Math.random()*max);
+    console.error('secureRandomInt: crypto API unavailable, returning 0 (fail-safe)');
+    return 0;
   }
   const buf=new Uint32Array(1);
   const LIMIT=0xFFFFFFFF - (0xFFFFFFFF % max); // largest multiple of max <= 2^32-1
@@ -1466,6 +1470,15 @@ function _validateSetupCastleMarks(s,errs){
   const byColor={white:[],black:[]};
   for(const key of s.setupCastleMarks){
     const idx=parseInt(key,10);
+    // v1.2.1 round-9: Guard against malformed keys. parseInt returns NaN for
+    // non-numeric strings; `NaN>>3` is 0 and `NaN&7` is 0, so a malformed key
+    // would silently map to (row=0, col=0) = a8 and either be incorrectly
+    // accepted (if a8 has a rook) or produce a spurious "not a rook" error
+    // for a8. Reject non-integer or out-of-range keys explicitly.
+    if(!Number.isInteger(idx)||idx<0||idx>=64){
+      errs.push(T('setup_castle_err_not_rook')+' ('+String(key)+')');
+      continue;
+    }
     const r=idx>>3,c=idx&7;
     const p=s.board[r]&&s.board[r][c];
     if(!p){errs.push(T('setup_castle_err_not_rook')+' ('+posAlg({row:r,col:c})+')');continue;}
@@ -3017,4 +3030,14 @@ function _prependBlackToMovePlaceholder(){
 }
 
 // ---- Exports ----
-export {PV,OPP_COLOR,SQ_LIGHT,SQ_DARK,SQ_SEL,LBL_LIGHT,LBL_DARK,LBL_STROKE_LIGHT,LBL_STROKE_DARK,SYM,PN,PN_EN,pieceName,_principlesHTML,KNIGHT_OFFSETS,DIR_ROOK,DIR_BISHOP,DIR_QUEEN,ELO_MATCH,getAI_LEVELS,CELL,REVIEW_CELL,zobrist,initBoard,attacked,initState,validateSetupPosition,cloneB,cloneS,sqAttackedFast,inCheck,pseudoMoves,legalMoves,hasLegalMoves,moveAlg,getCtrlMap,makeMvInPlace,unmakeMv,gameStatus,isDeadPosition,generateFEN,uciToCoords,fenToState,_esc,posAlg,algPos,inB,pieceZobristIdx,computeHash,syncHash,_refreshStateAfterSetup,_recalcCellSize,getEffectiveAILevel,posEmoji,posDesc,T,toggleLang,_lang,_i18n,_prependBlackToMovePlaceholder,_reattachActiveAnimations,_activeAnimEls,computeVisibleCastleMarks,computeVisibleEpMark};
+// v1.2.1 round-9: Two corrections:
+//   1. Added `makeMv` — defined at line 1885, used by ai-bridge.js
+//      (lines 1805/2399/2498/2521) and tablebase.js (lines 906/921), but
+//      was missing from the export list. In source-module mode this would
+//      cause a ReferenceError; in bundled mode build-chess.py strips the
+//      `export {}` line so there was no production impact, but the list
+//      was incomplete/misleading.
+//   2. Removed `fenToState` — it is defined in tablebase.js (line 1729),
+//      NOT in this file. It belongs in tablebase.js's export list (added
+//      there in this round). The previous entry here was wrong.
+export {PV,OPP_COLOR,SQ_LIGHT,SQ_DARK,SQ_SEL,LBL_LIGHT,LBL_DARK,LBL_STROKE_LIGHT,LBL_STROKE_DARK,SYM,PN,PN_EN,pieceName,_principlesHTML,KNIGHT_OFFSETS,DIR_ROOK,DIR_BISHOP,DIR_QUEEN,ELO_MATCH,getAI_LEVELS,CELL,REVIEW_CELL,zobrist,initBoard,attacked,initState,validateSetupPosition,cloneB,cloneS,sqAttackedFast,inCheck,pseudoMoves,legalMoves,hasLegalMoves,moveAlg,getCtrlMap,makeMv,makeMvInPlace,unmakeMv,gameStatus,isDeadPosition,generateFEN,uciToCoords,_esc,posAlg,algPos,inB,pieceZobristIdx,computeHash,syncHash,_refreshStateAfterSetup,_recalcCellSize,getEffectiveAILevel,posEmoji,posDesc,T,toggleLang,_lang,_i18n,_prependBlackToMovePlaceholder,_reattachActiveAnimations,_activeAnimEls,computeVisibleCastleMarks,computeVisibleEpMark};

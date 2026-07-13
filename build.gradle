@@ -1,3 +1,24 @@
+// ============================================================================
+// Regalia - Gradle Build Configuration
+// Copyright (C) 2026 Regalia
+//
+// AI-GEN: AI assisted
+// This code was AI-assisted and has been reviewed for AGPL v3 compliance.
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Affero General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Affero General Public License for more details.
+//
+// You should have received a copy of the GNU Affero General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+// ============================================================================
+
 buildscript {
     repositories {
         maven { url 'https://maven.aliyun.com/repository/google' }
@@ -20,7 +41,11 @@ apply plugin: 'com.android.application'
 def versionPropsFile = file("../version.properties")
 def versionProps = new Properties()
 if (versionPropsFile.exists()) {
-    versionProps.load(new FileInputStream(versionPropsFile))
+    // v1.2.1 round-9: Use withInputStream to ensure the FileInputStream is
+    //   always closed (SonarCloud java:S2093 — resource leak). Previously
+    //   `new FileInputStream(versionPropsFile)` was passed to Properties.load()
+    //   without close, leaking a file descriptor on every Gradle config pass.
+    versionPropsFile.withInputStream { versionProps.load(it) }
 }
 
 def versionMajor = (versionProps['VERSION_MAJOR'] ?: "1").toInteger()
@@ -38,7 +63,8 @@ def computedVersionCode = versionBuild
 def keystorePropertiesFile = file("../keystore.properties")
 def keystoreProps = new Properties()
 if (keystorePropertiesFile.exists()) {
-    keystoreProps.load(new FileInputStream(keystorePropertiesFile))
+    // v1.2.1 round-9: Use withInputStream (resource leak fix — see above).
+    keystorePropertiesFile.withInputStream { keystoreProps.load(it) }
 }
 
 // 允许通过环境变量覆盖签名配置（CI/CD 友好）
@@ -56,7 +82,7 @@ android {
     // buildToolsVersion "35.0.0"
 
     // AGP 自动使用 bundled NDK，若需固定版本取消注释下行：
-    // ndkVersion "27.2.12479018"
+    ndkVersion "27.2.12479018"
 
     defaultConfig {
         applicationId "com.Regalia"
@@ -156,14 +182,21 @@ android {
     }
 
     packagingOptions {
-        // 使用新版 JNI 打包，支持 so 文件压缩，减小 APK 体积
+        // 与 AndroidManifest android:extractNativeLibs="true" 对齐：
+        // useLegacyPackaging=true 时 .so 在 APK 中保持未压缩，
+        // 安装时由系统直接从 APK 映射到 /data/app/.../lib/，
+        // 兼容 Stockfish ELF 可执行文件加载路径。
         jniLibs {
-            useLegacyPackaging false
+            useLegacyPackaging true
             // 按需排除不需要打包的库
             // excludes += ['lib/arm64-v8a/libexclude.so']
         }
         // 处理可能重复的资源文件
-        pickFirsts += ['**/libc++_shared.so', '**/libfoundation.so']
+        // v1.2.1 round-10 (review-F P3): removed '**/libfoundation.so' —
+        //   jniLibs contains only libstockfish.so and libc++_shared.so; the
+        //   libfoundation.so entry was a leftover from an earlier build config
+        //   and never matched anything.
+        pickFirsts += ['**/libc++_shared.so']
     }
 
     lint {
@@ -173,9 +206,10 @@ android {
         checkReleaseBuilds true
         xmlReport true
         htmlReport true
-        // 静默已知但不重要的问题，减少构建噪音
-        disable 'ObsoleteLintCustomCheck', 'GradleDependency', 'OldTargetApi',
-                'AndroidGradlePluginVersion', 'NonConstantResourceId'
+        // v1.2.1 round-10 (review-F P3): removed the `disable` list — these 5
+        //   checks are already severity="ignore" in lint.xml (lines 52-60),
+        //   so listing them again here was redundant and split configuration
+        //   across two files. lint.xml is now the single source of truth.
     }
 
     // 优化 Gradle 任务输出

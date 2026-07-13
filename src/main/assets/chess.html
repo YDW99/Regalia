@@ -30,7 +30,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; worker-src blob:; connect-src https://tablebase.lichess.ovh; img-src data: file: blob:; frame-ancestors 'none'; base-uri 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; worker-src blob:; connect-src https://tablebase.lichess.ovh; img-src data: file: blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'none'; object-src 'none'">
 <title>Regalia v1.2.1</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -499,7 +499,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
   .dlg:not([style*="max-width"]){margin-top:-10px;margin-bottom:calc(-12vh);margin-left:calc(-1 * (env(safe-area-inset-right) + 3px));margin-right:calc(-1 * env(safe-area-inset-left))}
   .dlg:not([style*="max-width"]) > h2{padding:14px 16px 10px;margin:0;border-bottom:2px solid var(--border2);flex-shrink:0;background:var(--card);position:sticky;top:0;z-index:2}
   .dlg:not([style*="max-width"]) > .dlg-content{flex:1 1 auto;overflow-y:auto;padding:12px 14px;-webkit-overflow-scrolling:touch;min-height:0}
-  .dlg:not([style*="max-width"]) > .dlg-btns{display:flex;gap:8px;padding:10px 14px;border-top:2px solid var(--border2);background:var(--card);flex-shrink:0;margin:0;flex:0 0 auto}
+  .dlg:not([style*="max-width"]) > .dlg-btns{display:flex;gap:8px;padding:10px 14px;border-top:2px solid var(--border2);background:var(--card);margin:0;flex:0 0 auto}
   .dlg:not([style*="max-width"]) > .dlg-btns .btn{flex:1;padding:14px;font-size:.9rem;min-height:44px;justify-content:center}
   /* v1.0.7 PHASE 6: when .dlg-content wrapper is NOT used (older dialogs
      like About / Import / Resign that put .dlg-sec directly inside .dlg),
@@ -892,7 +892,9 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
   gap: 0;
   overflow: hidden;
   min-width: unset !important;
-  flex-shrink: 0;
+  /* v1.2.1 round-9: removed redundant flex-shrink:0 — the shorthand
+     `flex: 0 0 auto` above already sets flex-shrink:0 (same pattern
+     round-7 cleaned up elsewhere; this instance was missed). */
   margin: 0;
 }
 .review-left .review-board { padding: 0; flex-shrink: 0; margin: 0; }
@@ -930,8 +932,13 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 }
 .review-chart { min-height: 120px; overflow: hidden; flex-shrink: 1; width: 100%; }
 /* v1.1.0 Phase 54: Custom review slider — pixel-perfect alignment with chart.
-   The wrapper has IDENTICAL CSS to .review-chart (border:1px, padding:2px,
-   box-sizing:border-box, width:100%) so both share the same content box.
+   v1.2.1 round-9: The previous comment claimed "IDENTICAL CSS to .review-chart
+   (border:1px, padding:2px, ...)" but .review-chart (line ~933) has neither
+   border nor padding — the comment was stale. The actual design: both
+   .review-chart and .rv-slider-wrap use width:100% + box-sizing:border-box
+   so their OUTER boxes match. The transparent 1px border on .rv-slider-wrap
+   is intentional (compensates for .review-chart's 1px overflow:hidden
+   rounding) but the padding is 0 (not 2px as the old comment claimed).
    Inside, a container holds: base track, fill track, thumb (all visual-only,
    pointer-events:none), and a transparent native <input type="range"> overlay
    (opacity:0) that handles all touch/drag/keyboard interaction.
@@ -1343,12 +1350,16 @@ function secureRandomInt(max){
   if(max<=1)return 0;
   // v1.1.2 PHASE 71 (robustness): guard against `crypto` being undefined (e.g.
   // in non-browser test harnesses or if a future WebView config strips it).
-  // Mirrors the defensive pattern already used by randomSPID in chess960.js.
-  // Without this guard, `crypto.getRandomValues(buf)` would throw a
-  // ReferenceError, propagating to the caller (queryECOBookMove) and crashing
-  // the AI's opening-book lookup.
+  // v1.2.1 round-7 (security hardening): fail-safe by returning 0 instead of
+  // falling back to Math.random(). Math.random() is a predictable PRNG; using
+  // it for Chess960 SP-ID selection or ECO opening-book picks would defeat the
+  // purpose of cryptographic randomization. Returning 0 is safe — it selects
+  // the first candidate (a valid game state) rather than a predictable pseudo-
+  // random one. Mirrors the fail-safe pattern already used by randomSPID in
+  // chess960.js (which returns SP-ID 518 = standard chess position).
   if(typeof crypto==='undefined'||!crypto||typeof crypto.getRandomValues!=='function'){
-    return Math.floor(Math.random()*max);
+    console.error('secureRandomInt: crypto API unavailable, returning 0 (fail-safe)');
+    return 0;
   }
   const buf=new Uint32Array(1);
   const LIMIT=0xFFFFFFFF - (0xFFFFFFFF % max); // largest multiple of max <= 2^32-1
@@ -2766,6 +2777,15 @@ function _validateSetupCastleMarks(s,errs){
   const byColor={white:[],black:[]};
   for(const key of s.setupCastleMarks){
     const idx=parseInt(key,10);
+    // v1.2.1 round-9: Guard against malformed keys. parseInt returns NaN for
+    // non-numeric strings; `NaN>>3` is 0 and `NaN&7` is 0, so a malformed key
+    // would silently map to (row=0, col=0) = a8 and either be incorrectly
+    // accepted (if a8 has a rook) or produce a spurious "not a rook" error
+    // for a8. Reject non-integer or out-of-range keys explicitly.
+    if(!Number.isInteger(idx)||idx<0||idx>=64){
+      errs.push(T('setup_castle_err_not_rook')+' ('+String(key)+')');
+      continue;
+    }
     const r=idx>>3,c=idx&7;
     const p=s.board[r]&&s.board[r][c];
     if(!p){errs.push(T('setup_castle_err_not_rook')+' ('+posAlg({row:r,col:c})+')');continue;}
@@ -4317,6 +4337,16 @@ function _prependBlackToMovePlaceholder(){
 }
 
 // ---- Exports ----
+// v1.2.1 round-9: Two corrections:
+//   1. Added `makeMv` — defined at line 1885, used by ai-bridge.js
+//      (lines 1805/2399/2498/2521) and tablebase.js (lines 906/921), but
+//      was missing from the export list. In source-module mode this would
+//      cause a ReferenceError; in bundled mode build-chess.py strips the
+//      `export {}` line so there was no production impact, but the list
+//      was incomplete/misleading.
+//   2. Removed `fenToState` — it is defined in tablebase.js (line 1729),
+//      NOT in this file. It belongs in tablebase.js's export list (added
+//      there in this round). The previous entry here was wrong.
 
 // ===================== MODULE: chess960 =====================
 // Chess960 (Fischer Random Chess) support
@@ -4549,8 +4579,8 @@ function toShredderCastling(cr,board){
   // v1.1.2 PHASE 71 (robustness): guard against null/undefined board or
   // missing rows. The loop below directly accesses board[7][c] and
   // board[0][c]; without this guard a corrupted/empty board would throw a
-  // TypeError. parseShredderCastling (the inverse) already has this defensive
-  // pattern — we mirror it here for symmetry.
+  // TypeError. parseShredderCastling (the inverse) has the same defensive
+  // pattern (added in v1.2.1 round-9 for symmetry).
   if(!cr||!board||!board[7]||!board[0])return '-';
   // Find white king + rooks on rank 1 (row 7), and black on rank 8 (row 0)
   let wKing=null,bKing=null;
@@ -4621,6 +4651,10 @@ function toShredderCastling(cr,board){
 function parseShredderCastling(str,board){
   const cr={whiteKingside:false,whiteQueenside:false,blackKingside:false,blackQueenside:false};
   if(!str||str==='-')return cr;
+  // v1.2.1 round-9: defensive null guard on board (matches toShredderCastling
+  // at line ~228 which already has the same guard). Without this, a null/undefined
+  // board would throw TypeError at line 307's board[7][c] access.
+  if(!board||!board[7]||!board[0])return cr;
   // Locate kings (required to map a file letter -> kingside/queenside).
   let wKing=-1,bKing=-1;
   for(let c=0;c<8;c++){
@@ -4707,6 +4741,10 @@ function parseShredderCastling(str,board){
  *   Returns null only if the king itself is missing.
  */
 function findCastlingRooks(board,color){
+  // v1.2.1 round-9: defensive null guard on board (matches toShredderCastling
+  // and parseShredderCastling). Without this, a null/undefined board or
+  // missing row would throw TypeError at line 398's board[row][c] access.
+  if(!board||!board[7]||!board[0])return null;
   const row=color==='white'?7:0;
   let kingCol=-1;
   const rookCols=[];
@@ -4812,6 +4850,9 @@ function chess960CastlingRookMove(s,color,side){
  * @returns {boolean} true if castling is legal
  */
 function isChess960CastlingLegal(s,color,side){
+  // v1.2.1 round-9: defensive null guard on state (matches the pattern in
+  // toShredderCastling / parseShredderCastling / findCastlingRooks).
+  if(!s||!s.board||!s.castlingRights)return false;
   const opp=OPP_COLOR[color];
   const cr=s.castlingRights;
   if(side==='kingside'&&!cr[color+'Kingside'])return false;
@@ -5616,10 +5657,16 @@ function parseStandardPGN(pgnText){
   //   matches the very start of the string, so the first `]` (closing the
   //   first tag) is the only match — the remaining tags survive as garbage
   //   tokens in moveText. Replaced with an unanchored, format-strict regex
-  //   `/\[[A-Za-z]\w*\s+"[^"]*"\]/g` that requires the canonical PGN tag
-  //   shape (key + whitespace + quoted value), so movetext comments like
-  //   `[Nf3]` (no quotes) are never stripped.
-  let moveText=pgnText.replace(/\[[A-Za-z]\w*\s+"[^"]*"\]/g,'').trim();
+  //   `/\[[A-Za-z]\w*\s+"(?:[^"\\]|\\.)*"\]/g` that requires the canonical
+  //   PGN tag shape (key + whitespace + quoted value), so movetext comments
+  //   like `[Nf3]` (no quotes) are never stripped.
+  //   v1.2.1 round-9: Updated the value pattern from `[^"]*` to
+  //   `(?:[^"\\]|\\.)*` to correctly handle escaped quotes inside tag values
+  //   (e.g. `[Event "Some \"Fun\" Event"]`). The tag-EXTRACTION regex at
+  //   line ~658 already handles escaped quotes; this brings the removal
+  //   regex into parity so a tag with escaped quotes is fully stripped from
+  //   movetext (otherwise residual garbage tokens survive).
+  let moveText=pgnText.replace(/\[[A-Za-z]\w*\s+"(?:[^"\\]|\\.)*"\]/g,'').trim();
   // Remove line continuation markers
   moveText=moveText.replace(/\\\s*\n/g,' ');
   // v1.0.8 PHASE 49: Flatten brace comments BEFORE removing line comments.
@@ -6580,9 +6627,6 @@ const Store = (function() {
         }
     };
 
-    // 当前状态（深拷贝初始状态）
-    let _state = _deepClone(_initialState);
-
     // 订阅者列表
     const _listeners = [];
 
@@ -6590,21 +6634,62 @@ const Store = (function() {
     const _reducers = {};
 
     /**
-     * 深拷贝对象（避免引用共享）
+     * 深拷贝最大递归深度（防御性深度守卫）。
+     *
+     * ⚠️ 必须声明在任何对 _deepClone 的调用之前。v1.2.1 round-7 曾将
+     * 此 const 放在 _deepClone 函数定义之后、IIFE 顶部初始化调用
+     * `let _state = _deepClone(_initialState)` 之后，导致 TDZ
+     * (Temporal Dead Zone) 违规：const 不像 var 那样有变量提升，函数
+     * 体在执行时会访问尚未初始化的 DEEP_CLONE_MAX_DEPTH，抛出
+     * `ReferenceError: Cannot access 'DEEP_CLONE_MAX_DEPTH' before
+     * initialization`，state-store 模块初始化崩溃，所有依赖 Store 的
+     * 模块（ui.js、ai-bridge.js 等）级联失败，整个 chess.html 渲染失败
+     * → APP 白屏。
+     *
+     * v1.2.1 round-8 修复：将 const 声明移到 IIFE 顶部（在
+     * `let _state = _deepClone(_initialState)` 之前），消除 TDZ。
      */
-    function _deepClone(obj) {
+    const DEEP_CLONE_MAX_DEPTH = 64;
+
+    /**
+     * 深拷贝对象（避免引用共享）
+     *
+     * v1.2.1 round-7: 限制递归深度以防御栈溢出（理论场景——状态对象嵌套
+     * 不会很深，但防御性编程无害）。同时将 RegExp 拷贝改为显式属性
+     * 复制（new RegExp(obj.source, obj.flags)），消除 Semgrep
+     * detect-non-literal-regexp 误报。
+     */
+    function _deepClone(obj, _depth) {
         if (obj === null || typeof obj !== 'object') return obj;
+        // Depth guard — prevents stack overflow on pathological cyclic or
+        // deeply-nested inputs. _depth is an internal parameter; callers
+        // never pass it.
+        if (typeof _depth !== 'number') _depth = 0;
+        if (_depth > DEEP_CLONE_MAX_DEPTH) {
+            if (typeof console !== 'undefined' && console.warn) {
+                console.warn('[Store] _deepClone exceeded max depth, returning shallow copy');
+            }
+            return obj;
+        }
         if (obj instanceof Date) return new Date(obj.getTime());
-        if (obj instanceof RegExp) return new RegExp(obj);
-        if (Array.isArray(obj)) return obj.map(_deepClone);
+        // RegExp: use explicit source+flags construction (semantically
+        // equivalent to `new RegExp(obj)` but avoids Semgrep FP on non-
+        // literal-RegExp construction, since `obj` is already instanceof
+        // RegExp and we only forward its string properties).
+        if (obj instanceof RegExp) return new RegExp(obj.source, obj.flags);
+        if (Array.isArray(obj)) return obj.map(function (v) { return _deepClone(v, _depth + 1); });
         const cloned = {};
         for (const key in obj) {
             if (Object.prototype.hasOwnProperty.call(obj, key)) {
-                cloned[key] = _deepClone(obj[key]);
+                cloned[key] = _deepClone(obj[key], _depth + 1);
             }
         }
         return cloned;
     }
+
+    // 当前状态（深拷贝初始状态）——必须在 _deepClone 与
+    // DEEP_CLONE_MAX_DEPTH 都就绪后才能执行（否则 TDZ）。
+    let _state = _deepClone(_initialState);
 
     /**
      * 注册 reducer
@@ -6687,11 +6772,15 @@ const Store = (function() {
     /**
      * 重置状态到初始值
      * @param {Object} [overrides] - 需要覆盖的字段
+     * @returns {Object} 新状态的深拷贝（与 getState()/dispatch() 一致，
+     *                   调用者可安全修改返回值而不影响内部 _state）
      */
     function reset(overrides) {
         _state = Object.assign(_deepClone(_initialState), overrides || {});
         _notifyListeners();
-        return _state;
+        // v1.2.1 round-9: 返回深拷贝，与 getState()/dispatch() 保持一致。
+        // 旧版直接返回 _state 引用，调用者修改返回值会污染内部状态。
+        return _deepClone(_state);
     }
 
     // ========== 注册核心 reducers ==========
@@ -6808,12 +6897,16 @@ const Store = (function() {
     }));
 
     // 对话框
-    registerReducer('SHOW_DIALOG', (state, payload) => ({
-        dialogVisible: Object.assign({}, state.dialogVisible, { [payload]: true })
-    }));
-    registerReducer('HIDE_DIALOG', (state, payload) => ({
-        dialogVisible: Object.assign({}, state.dialogVisible, { [payload]: false })
-    }));
+    // v1.2.1 round-9: payload 必须是字符串，否则 [payload] 会产生 "null"/"undefined"
+    // 等垃圾键污染 dialogVisible。非字符串 payload 视为 no-op 返回 {}。
+    registerReducer('SHOW_DIALOG', (state, payload) => {
+        if (typeof payload !== 'string' || !payload) return {};
+        return { dialogVisible: Object.assign({}, state.dialogVisible, { [payload]: true }) };
+    });
+    registerReducer('HIDE_DIALOG', (state, payload) => {
+        if (typeof payload !== 'string' || !payload) return {};
+        return { dialogVisible: Object.assign({}, state.dialogVisible, { [payload]: false }) };
+    });
     registerReducer('HIDE_ALL_DIALOGS', (state) => {
         const cleared = {};
         for (const key in state.dialogVisible) {
@@ -6933,6 +7026,18 @@ let _reviewEvalCache=new function(){
   //   instantly (no async, no JNI round-trip). The user sees cached evals
   //   immediately, with NO "analyzing..." flash.
 
+  // v1.2.1 round-9: Best-effort warning helper for eval-cache persistence
+  // paths. Previously all catch blocks were empty (`catch(e){}`) — silent
+  // failure meant corrupted cache files, QuotaExceededError on localStorage,
+  // and JNI failures were invisible. We log at `warn` (not `error`) because
+  // these are non-fatal — the cache is best-effort and the app continues to
+  // work (just without persistent evals).
+  function _warnEvalCache(op,e){
+    if(typeof console!=='undefined'&&console.warn){
+      console.warn('[eval-cache] '+op+' failed:',e&&e.message?e.message:e);
+    }
+  }
+
   function _readPersisted(){
     // Try the dedicated eval cache file FIRST (Rev20 — durable, fast).
     try{
@@ -6943,12 +7048,12 @@ let _reviewEvalCache=new function(){
           if(Array.isArray(arr))return arr;
         }
       }
-    }catch(e){}
+    }catch(e){_warnEvalCache('load (file path)',e);}
     // Fall back to localStorage (fast in-memory, may be wiped by HyperOS)
     try{
       const saved=localStorage.getItem(STORAGE_KEY);
       if(saved){const arr=JSON.parse(saved);if(Array.isArray(arr))return arr;}
-    }catch(e){}
+    }catch(e){_warnEvalCache('load (localStorage path)',e);}
     // Fall back to legacy SharedPreferences-backed persistentGet (Rev17 path)
     try{
       if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentGet){
@@ -6957,12 +7062,12 @@ let _reviewEvalCache=new function(){
           const arr=JSON.parse(persisted);
           if(Array.isArray(arr)){
             // Rehydrate localStorage so subsequent reads hit the fast path
-            try{localStorage.setItem(STORAGE_KEY,persisted);}catch(e){}
+            try{localStorage.setItem(STORAGE_KEY,persisted);}catch(e){_warnEvalCache('rehydrate localStorage',e);}
             return arr;
           }
         }
       }
-    }catch(e){}
+    }catch(e){_warnEvalCache('load (legacy path)',e);}
     return null;
   }
   // Load from persisted storage on construction (instant — synchronous JNI call)
@@ -6973,7 +7078,7 @@ let _reviewEvalCache=new function(){
         m.set(k,v);
       }
     }
-  }catch(e){}
+  }catch(e){_warnEvalCache('constructor load',e);}
   // v1.0.4 Round-5 Rev20: Save to disk. Strategy:
   //   - Debounced 150ms write using saveEvalCacheSync (atomic file write).
   //   - _flushSync() forces immediate write — called from critical event handlers.
@@ -7028,12 +7133,12 @@ let _reviewEvalCache=new function(){
       if(typeof AndroidBridge!=='undefined'&&AndroidBridge.saveEvalCacheSync){
         fileOk=!!AndroidBridge.saveEvalCacheSync(json);
       }
-    }catch(e){}
+    }catch(e){_warnEvalCache('save (file path)',e);}
     // Always write to localStorage as a fast in-memory read cache (best-effort)
-    try{localStorage.setItem(STORAGE_KEY,json);}catch(e){}
+    try{localStorage.setItem(STORAGE_KEY,json);}catch(e){_warnEvalCache('save (localStorage path)',e);}
     // Also write to SharedPreferences persistentGet backing store (legacy compat)
     if(!fileOk){
-      try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSetSync)AndroidBridge.persistentSetSync(STORAGE_KEY,json);}catch(e){}
+      try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSetSync)AndroidBridge.persistentSetSync(STORAGE_KEY,json);}catch(e){_warnEvalCache('save (legacy path)',e);}
     }
   }
   // Public flush method — called from Java onPause/onStop/onUserLeaveHint
@@ -7961,11 +8066,14 @@ function _buildPGNString(forceIncludeVariations, includeAnnotations){
       //   move's commentParts has been removed.
     }
     // v1.0.4 EXPANSION (this round): [%csl] and [%cal] from the visual annotations cache
-    // v1.1.1 Phase 62: ONLY export imported annotations (imported=true).
-    // v1.1.1 Phase 63: Also gated by includeAnnotations parameter.
+    // v1.1.1 Phase 62 (REVERTED in v1.2.1 round-7): previously only imported
+    //   annotations (imported=true) were exported. Round-7 reverts this so ALL
+    //   visual annotations are exported (both auto-generated and imported),
+    //   controlled solely by the includeAnnotations flag (the export dialog).
+    // v1.1.1 Phase 63: gated by includeAnnotations parameter.
     if(includeAnnotations&&typeof _getVisualAnnotations==='function'){
       const va=_getVisualAnnotations(i);
-      if(va&&va.imported){
+      if(va){
         if(va.csl&&va.csl.length>0&&typeof formatCslTag==='function'){
           const cslTag=formatCslTag(va.csl);
           if(cslTag)commentParts.push(cslTag);
@@ -8265,13 +8373,17 @@ function openStatsPage(){
   }
   // v1.2.1 (round-6 bugfix): Collect ALL visual annotations (both imported
   //   and auto-generated) so the stats page can display them. Previously,
-  //   _buildPGNString only exports imported=true entries (per Phase 62 design
+  //   _buildPGNString only exported imported=true entries (per Phase 62 design
   //   to avoid polluting PGN export with auto-generated UI aids), so the stats
   //   page's PGN-text scan never found auto-generated annotations — the visual
   //   annotations section was silently hidden for all newly-played games.
   //   Fix: send a separate visualAnnotations field with all cache entries
   //   (imported + auto-generated), keyed by moveIdx. The stats page uses this
   //   as the primary data source, falling back to PGN-text scan only if absent.
+  //   (Note: round-7 reverted the Phase 62 imported-only filter in
+  //   _buildPGNString, so PGN export now includes all annotations too. The
+  //   visualAnnotations payload remains as the primary stats data source for
+  //   consistency and forward-compatibility.)
   const vaData={};
   if(typeof _visualAnnotationsCache!=='undefined'&&_visualAnnotationsCache){
     for(const [k,v] of _visualAnnotationsCache){
@@ -9057,16 +9169,13 @@ function onEngineReady(){
     // v1.1.1 Phase 59 Task 59.6: Use _requestBatchEval (decoupled from
     //   reviewStep) instead of requestEngineEval so the resumed batch callback
     //   is correctly identified as a batch callback (gen matches).
+    // v1.2.1 round-7: removed unreachable `typeof _requestBatchEval === 'function'`
+    //   guard — _requestBatchEval is always exported by this module at load time.
     if(typeof _reviewAnalyzeAllActive!=='undefined'&&_reviewAnalyzeAllActive&&typeof reviewMode!=='undefined'&&reviewMode){
       try{
         // Find the next uncached step from _reviewAnalyzeStep (or step 0 if reset)
         const _resumeStep=_reviewAnalyzeStep>=0?_reviewAnalyzeStep:0;
-        if(typeof _requestBatchEval==='function'){
-          _requestBatchEval(_resumeStep);
-        }else if(typeof _reviewAnalyzeResetSafetyTimer==='function'){
-          _reviewAnalyzeResetSafetyTimer();
-          requestEngineEval();
-        }
+        _requestBatchEval(_resumeStep);
         return;
       }catch(e){console.error('Analyze-all resume after engine ready failed:',e);}
     }
@@ -9095,8 +9204,31 @@ function onBestMove(uciMove){
   // v1.2.1: 先验证 bestmove 可解析再清理状态 —— 否则 unparseable bestmove 会让
   //   AI 卡在 "未思考、无安全计时器、但仍是 AI 回合" 的死锁状态，user 无法 undo
   //   也无法继续。验证失败时保持 safety timer 活跃以触发自动重试。
+  // v1.2.1 round-7 (吉他#2 fix): 当引擎返回 '(none)' 时，先用 gameStatus()
+  //   检测当前局面是否真的为终局（将杀/逼和）。如果是，直接调用 _applyGameOver
+  //   触发终局流程并清理 AI 状态——避免在终局位置反复重试 3 × 360s = 18 分钟。
+  //   只有在非终局位置收到 '(none)'（理论上的引擎异常）时才保持原有重试行为。
   if(!uciMove||uciMove==='(none)'||uciMove==='0000'){
-    console.error('onBestMove: engine returned empty bestmove:',uciMove);
+    // Probe terminal position — only checkmate/stalemate legitimately produce
+    // '(none)' from Stockfish. Other draw types (50-move, repetition, etc.)
+    // are detected earlier by gameStatus() during move application, so we
+    // only need to check for the no-legal-moves cases here.
+    if(typeof gameStatus==='function'&&typeof _applyGameOver==='function'){
+      const _terminalStatus=gameStatus(gameState);
+      if(_terminalStatus==='checkmate'||_terminalStatus==='draw_stalemate'){
+        // Genuine terminal position — apply game-over and clear AI state.
+        _applyGameOver(_terminalStatus);
+        if(_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
+        isAIThinking=false;_aiBarInfo='';_aiRetryCount=0;
+        console.warn('onBestMove: engine returned',uciMove,'at terminal position',_terminalStatus,'— game over applied');
+        render();
+        return;
+      }
+    }
+    // Not a terminal position — '(none)' is spurious. Keep the existing
+    // retry behavior: leave isAIThinking=true and safety timer armed so the
+    // auto-retry fires. After 3 retries doAIMove() will surface ai_timeout.
+    console.error('onBestMove: engine returned empty bestmove (non-terminal):',uciMove);
     render();
     return;
   }
@@ -9987,7 +10119,7 @@ function toggleLimitElo(){
   HapticManager.fire(newVal?'TOGGLE_ON':'TOGGLE_OFF');
   _bridgeCall(function(bridge){bridge.setEngineLimitElo(newVal,engineSettingsData?engineSettingsData.elo:2800);});renderEngineConfigAndUpdate();
 }
-function setConfigElo(v){v=Math.max(500,Math.min(3200,parseInt(v)||2800));if(engineSettingsData)engineSettingsData.elo=v;_bridgeCall(function(bridge){bridge.setEngineLimitElo(engineSettingsData?engineSettingsData.limitStrength:false,v);});renderEngineConfigAndUpdate();}
+function setConfigElo(v){v=Math.max(500,Math.min(3500,parseInt(v)||2800));if(engineSettingsData)engineSettingsData.elo=v;_bridgeCall(function(bridge){bridge.setEngineLimitElo(engineSettingsData?engineSettingsData.limitStrength:false,v);});renderEngineConfigAndUpdate();}
 function toggleAutoConfig(){
   const newVal=!engineSettingsData||!engineSettingsData.autoConfig;
   if(engineSettingsData)engineSettingsData.autoConfig=newVal;
@@ -10562,7 +10694,14 @@ function _attachDivergentPV(divergeAtIdx,pvRemainder,pending){
     const piece=state.board[coords.from.row][coords.from.col];
     if(!piece)break;
     const mv={from:coords.from,to:coords.to,piece,promotion:coords.promotion};
-    makeMvInPlace(state,mv);
+    // v1.2.1 round-9: makeMvInPlace returns null on invalid move (malformed
+    // UCI, piece missing, or state desync). If we don't break here, the next
+    // iteration operates on the stale (un-advanced) state, finds the wrong
+    // piece at the next PV move's from-square, fails the `!piece` guard, and
+    // exits the loop with state at the wrong position — producing incorrect
+    // SAN for the divergent PV that gets stored in moveRecords variations
+    // and exported in PGN.
+    if(!makeMvInPlace(state,mv))break;
   }
   // Now state is the position before the divergent PV move.
   // The divergent PV starts with the PREDICTED move (alternative to the
@@ -11151,6 +11290,14 @@ function _updateAIThinkDisplay(){
 
 
 // ---- Exports ----
+// v1.2.1 round-9: Removed 9 names that are NOT defined in this file's scope
+// (they live in ui.js): formatEval, playSound, handleBackPress, scanEngines,
+// copyFEN, copyReviewFEN, importFEN, _startEngineHeartbeat,
+// _cleanupEventListeners. In source-module mode the previous list would
+// throw SyntaxError; in bundled mode build-chess.py strips the whole
+// `export {...}` line via regex, so there was no production impact, but
+// the list was misleading. Verified each removal by grep — none of these
+// symbols are declared in ai-bridge.js.
 
 // ===================== MODULE: tablebase =====================
 // Syzygy endgame tablebase integration + PGN parser
@@ -12615,7 +12762,15 @@ function importPGN(pgnText){
         }
       }
       if(divergeIdx<0) continue;
-      if(divergeIdx>=0&&divergeIdx<moveRecords.length){
+      // v1.2.1 round-9: Removed redundant `divergeIdx>=0&&` prefixes and the
+      //   unreachable `else` branch. The `if(divergeIdx<0) continue;` above
+      //   guarantees divergeIdx>=0 here, so the two remaining cases are
+      //   exhaustive: (a) divergeIdx < moveRecords.length, (b) divergeIdx >=
+      //   moveRecords.length. The previous `else` branch ("No divergence
+      //   found and not all matched — keep at original location") was dead
+      //   code — it could never execute because the prior `continue` handles
+      //   the divergeIdx<0 case. Verified by reading the surrounding logic.
+      if(divergeIdx<moveRecords.length){
         // Move the variation to the divergence-point move
         const remainingSAN=sanMoves.slice(matchCount).join(' ');
         if(remainingSAN.length>0){
@@ -12637,15 +12792,12 @@ function importPGN(pgnText){
           }
         }
         // Don't add to remainingVars (moved to new location)
-      }else if(divergeIdx>=0&&divergeIdx>=moveRecords.length){
+      }else{
         // v1.0.2 FIX: Variation starts BEYOND the game end — the game hasn't
         // reached the variation's starting move. Cache it (don't display).
         // For PGN import, this means the variation is a hypothetical continuation
         // that was never reached. Don't add to remainingVars (remove from display).
         continue;
-      }else{
-        // No divergence found and not all matched — keep at original location
-        remainingVars.push(v);
       }
     }
     mr.variations=remainingVars.length>0?remainingVars:undefined;
@@ -13069,6 +13221,16 @@ _updateBoardLightweight();
 }
 
 // ---- Exports ----
+// v1.2.1 round-9: Added 3 names that ARE defined in this file but were
+// missing from the export list:
+//   - copyFEN (line 30) — called from ui.js
+//   - copyReviewFEN (line 35) — called from ui.js
+//   - fenToState (line 1729) — called from ai-bridge.js; was previously
+//     (incorrectly) exported from game-logic.js. Moved here where it's
+//     actually defined. In source-module mode the missing export would
+//     cause a ReferenceError; in bundled mode build-chess.py strips the
+//     `export {}` line so there was no production impact, but the list
+//     was incomplete/misleading.
 
 // ===================== MODULE: eco-data =====================
 // ECO opening data, IndexedDB cache, and lookup functions
@@ -13135,7 +13297,13 @@ function _saveEcoToCache(parsedData) {
     try {
       const tx = db.transaction(_ECO_STORE_NAME, 'readwrite');
       tx.objectStore(_ECO_STORE_NAME).put(parsedData, 'eco_openings');
-    } catch(e) {}
+    } catch(e) {
+      // v1.2.1 round-9: log instead of silently swallowing — matches the
+      // convention in _loadEcoFromCache (line 51) and state-store.js.
+      if (typeof console !== 'undefined' && console.warn) {
+        console.warn('ECO cache save failed:', e);
+      }
+    }
   });
 }
 
@@ -13240,6 +13408,14 @@ let ecoHashMap=null,ecoHashMap2=null,ecoHashMap3=null;
 
 
 // ---- Exports ----
+// v1.2.1 round-9: Removed 5 names that are NOT defined in this file's scope
+// (they live in game-logic.js): queryECO, buildEcoHashMap, queryECOBookMove,
+// getECORecommendation, _ecoRecCache. In source-module mode the previous
+// list would throw SyntaxError; in bundled mode build-chess.py strips the
+// whole `export {...}` line via regex, so there was no production impact,
+// but the list was misleading. Also added _ecoCacheKey/_ecoCacheResult
+// (declared above at line 166, used by game-logic.js) for consistency with
+// the ecoHashMap exports.
 
 // ===================== MODULE: ui =====================
 // Rendering, interaction, dialog management
@@ -13682,6 +13858,17 @@ function _updateEvalDisplayIncremental() {
 })();
 
 // Auto-recover from localStorage on startup
+// v1.2.1 round-9: This IIFE previously loaded recovery data and parsed it
+// but the if-block body was EMPTY (dead code) — data was never applied to
+// gameState/moveRecords. The save side in _installErrorBoundary (line 408)
+// was therefore wasted effort. Rather than implement an unsafe late-restore
+// (which would race with normal init paths and could resurrect a stale
+// gameState that caused the original crash), we keep the IIFE for its
+// STILL-USEFUL cleanup behavior (clearing stale recovery data after 5s if
+// the engine started successfully) and document that the load-and-apply
+// path is intentionally not implemented. The save side is retained as a
+// diagnostic artifact — developers can inspect localStorage/Java persistent
+// store after a crash to see what state triggered it.
 (function _tryRecovery() {
   try {
     let saved = localStorage.getItem('Regalia_recovery');
@@ -13690,13 +13877,20 @@ function _updateEvalDisplayIncremental() {
       try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentGet){const persisted=AndroidBridge.persistentGet('Regalia_recovery');if(persisted){saved=persisted;try{localStorage.setItem('Regalia_recovery',persisted);}catch(e){}}}}catch(e){}
     }
     if (saved) {
-      const data = JSON.parse(saved);
+      // v1.2.1 round-9: Parse to validate the data shape, but do NOT apply
+      // it to gameState/moveRecords — late restoration would race with the
+      // normal init path and could resurrect the very state that caused the
+      // original crash. The data is retained in storage for 5s (below) as a
+      // diagnostic artifact, then cleared if the engine started successfully.
+      let data = null;
+      try { data = JSON.parse(saved); } catch(e) {}
       if (data && data.gameState && Date.now() - data.timestamp < 3600000) {
-        // v1.1.1 Phase 66: Removed stale console.log (debugging leftover).
+        // Recovery data is valid and fresh — available for inspection via
+        // DevTools if needed, but intentionally not auto-applied.
       }
       // Clear recovery data after successful load
       setTimeout(function() {
-        if (_engineReady || document.getElementById('board-grid')) {
+        if (typeof _engineReady !== 'undefined' && (_engineReady || document.getElementById('board-grid'))) {
           try{localStorage.removeItem('Regalia_recovery');}catch(e){}
           try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentRemove)AndroidBridge.persistentRemove('Regalia_recovery');}catch(e){}
         }
@@ -18729,7 +18923,7 @@ function _classifyMove(evalDelta,isMoverWhite){
 // Checks if there are any moves; if so, shows a "💾是否保存PGN文件？" dialog.
 // The callback is executed after the user chooses (or immediately if no moves).
 function _withPGNSaveCheck(callback){
-  if(_skipPGNSavePrompt||!moveRecords||!moveRecords.some(function(r){return r!==null&&r!==undefined;})){
+  if(_skipPGNSavePrompt||!moveRecords||!moveRecords.some(function(r){return r!=null;})){
     callback();
     return;
   }
@@ -20125,14 +20319,8 @@ function reviewAnalyzeAll(){
   //   unless they navigated during the batch).
   showToast(T('analyzing_all')+' ('+_reviewEvalCache.size+'/'+(_lastStep+1)+')');
   try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
-  // Start the batch via _requestBatchEval (decoupled from reviewStep)
-  if(typeof _requestBatchEval==='function'){
-    _requestBatchEval(startStep);
-  }else{
-    // Fallback (shouldn't happen — _requestBatchEval is always exported)
-    _reviewAnalyzeResetSafetyTimer();
-    requestEngineEval();
-  }
+  // Start the batch via _requestBatchEval (always exported by ai-bridge.js).
+  _requestBatchEval(startStep);
 }
 
 /**
@@ -20339,21 +20527,12 @@ function _reviewAnalyzeAdvance(){
       }
       _reviewAnalyzeStep=_priorityStep;
       // Don't reset the safety timer here — _requestBatchEval does it.
-      if(typeof _requestBatchEval==='function'){
-        _requestBatchEval(_priorityStep);
-      }else{
-        requestEngineEval();
-      }
+      _requestBatchEval(_priorityStep);
       return;
     }
     // v1.1.1 Phase 59 Task 59.6: Use _requestBatchEval (NOT requestEngineEval)
     //   so the callback is correctly identified as a batch callback.
-    if(typeof _requestBatchEval==='function'){
-      _requestBatchEval(_batchStep);
-    }else{
-      // Fallback (shouldn't happen)
-      requestEngineEval();
-    }
+    _requestBatchEval(_batchStep);
   },0);
 }
 
@@ -21604,6 +21783,12 @@ function _importPGNFileWithSaveCheck(){
 }
 
 // ---- Exports ----
+// v1.2.1 round-9: Removed doAIMove and _requestStockfishMove — both are
+// defined in game-logic.js, NOT ui.js. In source-module mode the previous
+// list would throw SyntaxError; in bundled mode build-chess.py strips the
+// whole `export {...}` line via regex, so there was no production impact,
+// but the list was misleading. Verified by grep — neither symbol is
+// declared in ui.js.
 </script>
 </body>
 </html>

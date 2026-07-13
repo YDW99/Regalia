@@ -43,7 +43,8 @@ import java.lang.ref.WeakReference;
  * URLs in the system default browser (defense-in-depth alongside the JS-side
  * openUrlInBrowser bridge). Previously, external links were silently blocked.
  *
- * Version: v1.2.1
+ * Version: v1.2.1 (round-10: shouldOverrideUrlLoading now uses case-insensitive
+ *   Uri.parse + equalsIgnoreCase for http(s) scheme check per RFC 3986 §3.1)
  */
 public class ChessWebViewClient extends WebViewClient {
     private static final String TAG = "Regalia";
@@ -69,9 +70,13 @@ public class ChessWebViewClient extends WebViewClient {
         // already calls AndroidBridge.openUrlInBrowser() on link clicks, but if
         // a link is triggered by other means (e.g. meta refresh, JS window.open),
         // this WebViewClient layer catches it.
-        if (url.startsWith("http://") || url.startsWith("https://")) {
+        // v1.2.1 round-10 (review-E P2): case-insensitive scheme check.
+        //   RFC 3986 §3.1: scheme is case-insensitive — accept "HTTP://...", etc.
+        Uri parsed = Uri.parse(url);
+        String scheme = parsed.getScheme();
+        if ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme)) {
             try {
-                Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                Intent intent = new Intent(Intent.ACTION_VIEW, parsed);
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 Activity activity = activityRef.get();
                 if (activity != null) {

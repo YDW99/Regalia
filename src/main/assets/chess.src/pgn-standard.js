@@ -676,10 +676,16 @@ function parseStandardPGN(pgnText){
   //   matches the very start of the string, so the first `]` (closing the
   //   first tag) is the only match — the remaining tags survive as garbage
   //   tokens in moveText. Replaced with an unanchored, format-strict regex
-  //   `/\[[A-Za-z]\w*\s+"[^"]*"\]/g` that requires the canonical PGN tag
-  //   shape (key + whitespace + quoted value), so movetext comments like
-  //   `[Nf3]` (no quotes) are never stripped.
-  let moveText=pgnText.replace(/\[[A-Za-z]\w*\s+"[^"]*"\]/g,'').trim();
+  //   `/\[[A-Za-z]\w*\s+"(?:[^"\\]|\\.)*"\]/g` that requires the canonical
+  //   PGN tag shape (key + whitespace + quoted value), so movetext comments
+  //   like `[Nf3]` (no quotes) are never stripped.
+  //   v1.2.1 round-9: Updated the value pattern from `[^"]*` to
+  //   `(?:[^"\\]|\\.)*` to correctly handle escaped quotes inside tag values
+  //   (e.g. `[Event "Some \"Fun\" Event"]`). The tag-EXTRACTION regex at
+  //   line ~658 already handles escaped quotes; this brings the removal
+  //   regex into parity so a tag with escaped quotes is fully stripped from
+  //   movetext (otherwise residual garbage tokens survive).
+  let moveText=pgnText.replace(/\[[A-Za-z]\w*\s+"(?:[^"\\]|\\.)*"\]/g,'').trim();
   // Remove line continuation markers
   moveText=moveText.replace(/\\\s*\n/g,' ');
   // v1.0.8 PHASE 49: Flatten brace comments BEFORE removing line comments.

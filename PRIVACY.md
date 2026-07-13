@@ -206,6 +206,101 @@ The Stockfish 18 engine binary (`libstockfish.so`) is shipped as an arm64-v8a na
 
 If either check fails, the engine refuses to start and reports the error to the user via the UI. The binary is never downloaded at runtime; it is statically embedded in the APK.
 
+## v1.2.1 round-7 refinement (2026.7.13)
+
+The seventh-pass refinement is a code-quality and security-hardening pass. **No new permissions, no new data collection, no new network access, no changes to data flow or storage.** All changes are internal to the app and have zero privacy impact:
+
+- **PGN export semantics change**: Reverting the Phase 62 `imported`-flag filter in `_buildPGNString()` does NOT change what data is collected or stored — it only changes which annotations are included when the user explicitly chooses "Yes, include special annotations" in the export dialog. The user's existing annotation cache is unaffected; only the export output includes more annotations when the user opts in.
+- **`secureRandomInt()` fail-safe**: When the `crypto` API is unavailable (theoretical scenario — Android WebView has supported Web Crypto API since 2015), the function now returns `0` instead of falling back to `Math.random()`. This is a security improvement (no predictable PRNG for Chess960 SP-ID selection) with no privacy impact.
+- **`postJsCallback` structured API**: The new `postJsCallback(String eventName, Object... args)` overload is an internal Java-to-JS bridge helper. It does not access, store, or transmit any new data. Existing call sites are unchanged.
+- **ELO range unification**: `setConfigElo()` JS-side clamp changed from 500-3200 to 500-3500 to match the Java side. This fixes a data-consistency bug where imported ELO values 3201-3500 were accepted by Java but not representable in the UI. No new data is collected; the change only ensures the UI can display all values Java accepts.
+- **`onBestMove` terminal-position probe**: When the engine returns `(none)` (no legal move), the app now checks `gameStatus()` and applies game-over immediately for terminal positions. This is a reliability fix (prevents up to 18-minute hang) with no privacy impact.
+- **`_deepClone` depth guard**: Defensive programming to prevent stack overflow on pathological inputs. No privacy impact.
+- **`proguard-rules.pro` creation**: Build infrastructure file. The Log.v/Log.d stripping rule actually *improves* privacy by removing verbose/diagnostic logging from release builds (only w/i/e levels are retained for crash diagnostics).
+
+Version: `versionCode=121`, `versionName="1.2.1"` (unchanged).
+
+
+
+## v1.2.1 round-8 refinement (2026.7.13)
+
+The eighth-pass refinement fixes a critical white-screen bug in `state-store.js`. **No new permissions, no new data collection, no new network access, no changes to data flow or storage.** All changes are internal to the app and have zero privacy impact:
+
+- **TDZ (Temporal Dead Zone) bug fix**: The round-7 `_deepClone()` hardening added a `const DEEP_CLONE_MAX_DEPTH = 64;` declaration at a position in the IIFE that came AFTER the IIFE-top initialization call `let _state = _deepClone(_initialState);`. Because `const` declarations do NOT hoist (they are in TDZ until their declaration line executes), the function body's reference to `DEEP_CLONE_MAX_DEPTH` triggered `ReferenceError: Cannot access 'DEEP_CLONE_MAX_DEPTH' before initialization`, crashing the state-store module initialization, cascading to all dependent modules (ui.js, ai-bridge.js, etc.), and leaving the WebView showing only the background color. The fix moves the `const` declaration to IIFE-top, BEFORE the initialization call. This is purely a code-organization fix with no privacy impact.
+- **`build.gradle` alignment**: Two latent build-config mismatches were corrected so the round-8 APK can be assembled cleanly on a fresh environment:
+  - Pinned `ndkVersion "27.2.12479018"` (AGP's default 27.0.12077973 was incomplete on fresh install).
+  - Set `useLegacyPackaging true` in `packagingOptions.jniLibs` to match `android:extractNativeLibs="true"` in `AndroidManifest.xml`. This keeps `.so` files uncompressed in the APK so the system can memory-map them at install time — no behavioral or privacy impact (the .so is the same Stockfish 18 arm64-v8a-dotprod binary, just stored differently inside the APK).
+- **No new logging, no new telemetry, no new file I/O.**
+
+Version: `versionCode=121`, `versionName="1.2.1"` (unchanged).
+
+
+## v1.2.1 round-9 refinement (2026.7.13)
+
+The ninth-pass refinement is a code-quality and hardening pass based on a first-principles code review of all source files (~32K lines), guided by three uploaded PDFs (AI code-gen defect prevention, Android WebView dev, SonarCloud pass guide). **No new permissions, no new data collection, no new network access, no changes to data flow or storage.** All changes are internal to the app and have zero privacy impact:
+
+- **AndroidManifest FGS subtype property**: Added `<property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE" android:value="chess_engine_analysis" />` to EngineService. This is a required declaration for `FOREGROUND_SERVICE_TYPE_SPECIAL_USE` on Android 14+ — it identifies the foreground service subtype to the system. No privacy impact (the value is a static string embedded in the manifest; not user data).
+- **StockfishNative lock fix + cleanupEngineResources state reset**: Internal concurrency hardening. No privacy impact.
+- **ai-bridge.js _attachDivergentPV return check**: Correctness fix for PGN variation SAN. No privacy impact.
+- **Cross-module export-list corrections** (5 JS files): No runtime impact (bundled mode strips the export line). No privacy impact.
+- **state-store.js reset deep-clone + dialog payload guard**: Internal state-management hardening. No privacy impact.
+- **chess960.js null guards**: Defensive programming. No privacy impact.
+- **pgn-standard.js escaped-quote regex**: PGN parsing correctness. No privacy impact.
+- **ai-bridge.js + eco-data.js error logging**: Empty `catch(e){}` blocks now log via `console.warn`. Logs are local-only (Android logcat, not transmitted). No new data collection — the errors were previously silently swallowed; now they're visible for debugging.
+- **game-logic.js malformed key guard**: Internal validation. No privacy impact.
+- **StatsActivity + SafPickerHelper openOutputStream null check**: Error-message clarity improvement. No privacy impact.
+- **EngineProcessManager ChmodProvider slim**: Dead interface method removal. No privacy impact.
+- **build.gradle FileInputStream leak fix**: Resource leak fix in build script. No runtime/privacy impact.
+- **index.html.tpl CSP hardening**: Added `form-action 'none'` and `object-src 'none'` to CSP. Both fall back to `default-src 'none'` (behavior unchanged), but explicit declarations are defense-in-depth. The WebView dev guide PDF emphasized CSP hardening as a core security practice.
+- **index.html.tpl + tablebase.js + ui.js redundancy cleanup**: Stale comment fixes, dead code removal. No privacy impact.
+
+Version: `versionCode=121`, `versionName="1.2.1"` (unchanged).
+
+
+## v1.2.1 round-10 refinement (2026.7.14)
+
+The tenth-pass refinement is a deep fix of the P2/P3 items flagged by round-9's review-D (StockfishNative.java), review-E (16 mid-size Java files), and review-F (build infra + manifest + proguard). 13 priority items implemented. **No new permissions, no new data collection, no new network access, no changes to data flow or storage.** All changes are internal to the app and have zero privacy impact:
+
+- **StockfishNative.java concurrency hardening** (`_restartInProgress` lock consistency, `recoverEngine` shutdown-requested checks, `_discardingPonderBestmove` lock unification): Internal threading hardening. No privacy impact.
+- **URL scheme case-insensitivity** (3 sites: `StockfishNative.openUrlInBrowser`, `StatsActivity.openUrlInBrowser`, `ChessWebViewClient.shouldOverrideUrlLoading`): The check now accepts `"HTTP://..."` (case-insensitive scheme per RFC 3986 §3.1). No privacy impact — the same set of URLs is accepted/rejected, just case-insensitively.
+- **StatsActivity `statsPayload` volatile + `onPause`/`onResume`**: Internal threading fix + battery optimization (backgrounded stats page now pauses JS timers). No privacy impact.
+- **EngineConfigHelper `detectBigCoreCount` failure-cache fix + mid-search comments**: Internal retry logic. No privacy impact.
+- **StabilizationHelper `applyTransform` hot-path optimization**: Performance fix. No privacy impact.
+- **TlsSecurityHelper `validatePin` constant-time comparison**: Pin comparison now uses `MessageDigest.isEqual` instead of `String.equals`. The pins are public Let's Encrypt values (not user data). No privacy impact — purely a defensive coding practice.
+- **HapticHelper.java removed entirely**: Dead-code purge. The class was instantiated but never invoked. No behavior change. No privacy impact.
+- **StockfishNative.java P3 cleanup** (magic numbers extracted, `escapeJsString` dead-code simplified, `isProcessAlive` `SDK_INT` pre-check, `_pendingChess960` field relocated, `if(ctx==null)` dead code removed, "remove JNI bridge" comment rewritten): Readability + minor performance. No privacy impact.
+- **build.gradle cleanup** (pickFirsts removed libfoundation.so, lint disable list dedup with lint.xml): Build config cleanup. No runtime/privacy impact.
+- **AndroidManifest.xml**: Removed `android:requestLegacyExternalStorage="true"`. This attribute was already ignored (targetSdk=35 ≥ 30) and the app uses SAF for all file I/O. No behavior change, no privacy impact.
+- **proguard-rules.pro**: Comment rewrite for clarity. No rule changes. No privacy impact.
+
+Version: `versionCode=121`, `versionName="1.2.1"` (unchanged).
+
+
+## v1.2.1 round-10 continuation (2026.7.14)
+
+This pass addresses the remaining review-E items not in the initial round-10 priority list. 4 secondary items implemented. **No new permissions, no new data collection, no new network access, no changes to data flow or storage.** All changes are internal to the app and have zero privacy impact:
+
+- **FileIoHelper naming fix** (`ensureReadExternalStoragePermission` → `requestReadExternalStoragePermission`): Pure rename for accuracy. The method's behavior (asynchronously request the READ_EXTERNAL_STORAGE permission dialog) is unchanged. No privacy impact.
+- **PermissionHelper request-code migration** (1001/1003 → 3001/3002): The numeric codes passed to `Activity.requestPermissions` are changed to a disjoint 3000-range so they no longer overlap with `SafPickerHelper`'s `startActivityForResult` codes (1001-1004). The codes are never transmitted off-device; they are internal dispatch identifiers. No privacy impact.
+- **ChessApp / MainActivity / StockfishNative version-string unification**: Three hardcoded `"v1.2.1"` literals replaced with `BuildConfig.VERSION_NAME` (auto-generated by AGP from `build.gradle`'s `versionName`). The version string was already visible in logs and the title display; this change just makes it auto-sync with `build.gradle`. No privacy impact — the version number is not sensitive data.
+- **EngineService `isRunning` timing fix**: Moved `isRunning = true` to after `startForeground()` succeeds. Pure internal state-management improvement; no user-visible behavior change. No privacy impact.
+- **ChessWebViewClient doc-comment update**: Documentation-only change. No privacy impact.
+
+Version: `versionCode=121`, `versionName="1.2.1"` (unchanged).
+
+
+## v1.2.1 round-10 regression test + first-principles optimization (2026.7.14)
+
+This pass performs a regression test of all review-D/E/F fixes from the initial round-10 and its continuation, then applies first-principles optimization to eliminate residual magic numbers, redundant operations, and misleading comments discovered during the regression audit. **No new permissions, no new data collection, no new network access, no changes to data flow or storage.** All changes are internal to the app and have zero privacy impact:
+
+- **Regression test**: All review-D/E/F fixes verified intact — `_restartInProgress` lock consistency (14 writes), `recoverEngine` shutdown checks, `_discardingPonderBestmove` lock unification (8 writes), URL scheme case-insensitivity (3 sites), HapticHelper removal, StatsActivity volatile + lifecycle, EngineConfigHelper retry, StabilizationHelper hot-path, TlsSecurityHelper constant-time, FileIoHelper rename, PermissionHelper 3000-range codes, BuildConfig.VERSION_NAME unification, EngineService isRunning timing, build.gradle cleanup, AndroidManifest cleanup, proguard-rules comment fixes. No privacy impact — purely a verification pass.
+- **StockfishNative.java `PROCESS_DESTROY_GRACE_MS` extraction**: 2 remaining `Thread.sleep(100)` calls in process-destroy paths extracted to a named constant (semantically distinct from `PONDER_STOP_GRACE_MS`). No privacy impact.
+- **StatsActivity.java redundant `Uri.parse` removal**: The second `Uri.parse` call in `openUrlInBrowser` was removed (the first parse is now reused for the Intent). No privacy impact — same URL validation, just no double-parse.
+- **StabilizationHelper.java comment direction fix**: Corrected a comment that said "below" when referring to `start()` which is actually above `applyTransform()` in source order. No privacy impact.
+- **proguard-rules.pro section-3 comment fix**: Rewrote the section-3 comment (same direction-inversion bug as the round-10 section-6 fix). No privacy impact.
+
+Version: `versionCode=121`, `versionName="1.2.1"` (unchanged).
+
 ## Contact
 
 For questions about this privacy policy, please open an issue on the GitHub repository.

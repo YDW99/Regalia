@@ -94,6 +94,18 @@ let _reviewEvalCache=new function(){
   //   instantly (no async, no JNI round-trip). The user sees cached evals
   //   immediately, with NO "analyzing..." flash.
 
+  // v1.2.1 round-9: Best-effort warning helper for eval-cache persistence
+  // paths. Previously all catch blocks were empty (`catch(e){}`) — silent
+  // failure meant corrupted cache files, QuotaExceededError on localStorage,
+  // and JNI failures were invisible. We log at `warn` (not `error`) because
+  // these are non-fatal — the cache is best-effort and the app continues to
+  // work (just without persistent evals).
+  function _warnEvalCache(op,e){
+    if(typeof console!=='undefined'&&console.warn){
+      console.warn('[eval-cache] '+op+' failed:',e&&e.message?e.message:e);
+    }
+  }
+
   function _readPersisted(){
     // Try the dedicated eval cache file FIRST (Rev20 — durable, fast).
     try{
@@ -104,12 +116,12 @@ let _reviewEvalCache=new function(){
           if(Array.isArray(arr))return arr;
         }
       }
-    }catch(e){}
+    }catch(e){_warnEvalCache('load (file path)',e);}
     // Fall back to localStorage (fast in-memory, may be wiped by HyperOS)
     try{
       const saved=localStorage.getItem(STORAGE_KEY);
       if(saved){const arr=JSON.parse(saved);if(Array.isArray(arr))return arr;}
-    }catch(e){}
+    }catch(e){_warnEvalCache('load (localStorage path)',e);}
     // Fall back to legacy SharedPreferences-backed persistentGet (Rev17 path)
     try{
       if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentGet){
@@ -118,12 +130,12 @@ let _reviewEvalCache=new function(){
           const arr=JSON.parse(persisted);
           if(Array.isArray(arr)){
             // Rehydrate localStorage so subsequent reads hit the fast path
-            try{localStorage.setItem(STORAGE_KEY,persisted);}catch(e){}
+            try{localStorage.setItem(STORAGE_KEY,persisted);}catch(e){_warnEvalCache('rehydrate localStorage',e);}
             return arr;
           }
         }
       }
-    }catch(e){}
+    }catch(e){_warnEvalCache('load (legacy path)',e);}
     return null;
   }
   // Load from persisted storage on construction (instant — synchronous JNI call)
@@ -134,7 +146,7 @@ let _reviewEvalCache=new function(){
         m.set(k,v);
       }
     }
-  }catch(e){}
+  }catch(e){_warnEvalCache('constructor load',e);}
   // v1.0.4 Round-5 Rev20: Save to disk. Strategy:
   //   - Debounced 150ms write using saveEvalCacheSync (atomic file write).
   //   - _flushSync() forces immediate write — called from critical event handlers.
@@ -189,12 +201,12 @@ let _reviewEvalCache=new function(){
       if(typeof AndroidBridge!=='undefined'&&AndroidBridge.saveEvalCacheSync){
         fileOk=!!AndroidBridge.saveEvalCacheSync(json);
       }
-    }catch(e){}
+    }catch(e){_warnEvalCache('save (file path)',e);}
     // Always write to localStorage as a fast in-memory read cache (best-effort)
-    try{localStorage.setItem(STORAGE_KEY,json);}catch(e){}
+    try{localStorage.setItem(STORAGE_KEY,json);}catch(e){_warnEvalCache('save (localStorage path)',e);}
     // Also write to SharedPreferences persistentGet backing store (legacy compat)
     if(!fileOk){
-      try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSetSync)AndroidBridge.persistentSetSync(STORAGE_KEY,json);}catch(e){}
+      try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSetSync)AndroidBridge.persistentSetSync(STORAGE_KEY,json);}catch(e){_warnEvalCache('save (legacy path)',e);}
     }
   }
   // Public flush method — called from Java onPause/onStop/onUserLeaveHint
@@ -1122,11 +1134,14 @@ function _buildPGNString(forceIncludeVariations, includeAnnotations){
       //   move's commentParts has been removed.
     }
     // v1.0.4 EXPANSION (this round): [%csl] and [%cal] from the visual annotations cache
-    // v1.1.1 Phase 62: ONLY export imported annotations (imported=true).
-    // v1.1.1 Phase 63: Also gated by includeAnnotations parameter.
+    // v1.1.1 Phase 62 (REVERTED in v1.2.1 round-7): previously only imported
+    //   annotations (imported=true) were exported. Round-7 reverts this so ALL
+    //   visual annotations are exported (both auto-generated and imported),
+    //   controlled solely by the includeAnnotations flag (the export dialog).
+    // v1.1.1 Phase 63: gated by includeAnnotations parameter.
     if(includeAnnotations&&typeof _getVisualAnnotations==='function'){
       const va=_getVisualAnnotations(i);
-      if(va&&va.imported){
+      if(va){
         if(va.csl&&va.csl.length>0&&typeof formatCslTag==='function'){
           const cslTag=formatCslTag(va.csl);
           if(cslTag)commentParts.push(cslTag);
@@ -1426,13 +1441,17 @@ function openStatsPage(){
   }
   // v1.2.1 (round-6 bugfix): Collect ALL visual annotations (both imported
   //   and auto-generated) so the stats page can display them. Previously,
-  //   _buildPGNString only exports imported=true entries (per Phase 62 design
+  //   _buildPGNString only exported imported=true entries (per Phase 62 design
   //   to avoid polluting PGN export with auto-generated UI aids), so the stats
   //   page's PGN-text scan never found auto-generated annotations — the visual
   //   annotations section was silently hidden for all newly-played games.
   //   Fix: send a separate visualAnnotations field with all cache entries
   //   (imported + auto-generated), keyed by moveIdx. The stats page uses this
   //   as the primary data source, falling back to PGN-text scan only if absent.
+  //   (Note: round-7 reverted the Phase 62 imported-only filter in
+  //   _buildPGNString, so PGN export now includes all annotations too. The
+  //   visualAnnotations payload remains as the primary stats data source for
+  //   consistency and forward-compatibility.)
   const vaData={};
   if(typeof _visualAnnotationsCache!=='undefined'&&_visualAnnotationsCache){
     for(const [k,v] of _visualAnnotationsCache){
@@ -2218,16 +2237,13 @@ function onEngineReady(){
     // v1.1.1 Phase 59 Task 59.6: Use _requestBatchEval (decoupled from
     //   reviewStep) instead of requestEngineEval so the resumed batch callback
     //   is correctly identified as a batch callback (gen matches).
+    // v1.2.1 round-7: removed unreachable `typeof _requestBatchEval === 'function'`
+    //   guard — _requestBatchEval is always exported by this module at load time.
     if(typeof _reviewAnalyzeAllActive!=='undefined'&&_reviewAnalyzeAllActive&&typeof reviewMode!=='undefined'&&reviewMode){
       try{
         // Find the next uncached step from _reviewAnalyzeStep (or step 0 if reset)
         const _resumeStep=_reviewAnalyzeStep>=0?_reviewAnalyzeStep:0;
-        if(typeof _requestBatchEval==='function'){
-          _requestBatchEval(_resumeStep);
-        }else if(typeof _reviewAnalyzeResetSafetyTimer==='function'){
-          _reviewAnalyzeResetSafetyTimer();
-          requestEngineEval();
-        }
+        _requestBatchEval(_resumeStep);
         return;
       }catch(e){console.error('Analyze-all resume after engine ready failed:',e);}
     }
@@ -2256,8 +2272,31 @@ function onBestMove(uciMove){
   // v1.2.1: 先验证 bestmove 可解析再清理状态 —— 否则 unparseable bestmove 会让
   //   AI 卡在 "未思考、无安全计时器、但仍是 AI 回合" 的死锁状态，user 无法 undo
   //   也无法继续。验证失败时保持 safety timer 活跃以触发自动重试。
+  // v1.2.1 round-7 (吉他#2 fix): 当引擎返回 '(none)' 时，先用 gameStatus()
+  //   检测当前局面是否真的为终局（将杀/逼和）。如果是，直接调用 _applyGameOver
+  //   触发终局流程并清理 AI 状态——避免在终局位置反复重试 3 × 360s = 18 分钟。
+  //   只有在非终局位置收到 '(none)'（理论上的引擎异常）时才保持原有重试行为。
   if(!uciMove||uciMove==='(none)'||uciMove==='0000'){
-    console.error('onBestMove: engine returned empty bestmove:',uciMove);
+    // Probe terminal position — only checkmate/stalemate legitimately produce
+    // '(none)' from Stockfish. Other draw types (50-move, repetition, etc.)
+    // are detected earlier by gameStatus() during move application, so we
+    // only need to check for the no-legal-moves cases here.
+    if(typeof gameStatus==='function'&&typeof _applyGameOver==='function'){
+      const _terminalStatus=gameStatus(gameState);
+      if(_terminalStatus==='checkmate'||_terminalStatus==='draw_stalemate'){
+        // Genuine terminal position — apply game-over and clear AI state.
+        _applyGameOver(_terminalStatus);
+        if(_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
+        isAIThinking=false;_aiBarInfo='';_aiRetryCount=0;
+        console.warn('onBestMove: engine returned',uciMove,'at terminal position',_terminalStatus,'— game over applied');
+        render();
+        return;
+      }
+    }
+    // Not a terminal position — '(none)' is spurious. Keep the existing
+    // retry behavior: leave isAIThinking=true and safety timer armed so the
+    // auto-retry fires. After 3 retries doAIMove() will surface ai_timeout.
+    console.error('onBestMove: engine returned empty bestmove (non-terminal):',uciMove);
     render();
     return;
   }
@@ -3148,7 +3187,7 @@ function toggleLimitElo(){
   HapticManager.fire(newVal?'TOGGLE_ON':'TOGGLE_OFF');
   _bridgeCall(function(bridge){bridge.setEngineLimitElo(newVal,engineSettingsData?engineSettingsData.elo:2800);});renderEngineConfigAndUpdate();
 }
-function setConfigElo(v){v=Math.max(500,Math.min(3200,parseInt(v)||2800));if(engineSettingsData)engineSettingsData.elo=v;_bridgeCall(function(bridge){bridge.setEngineLimitElo(engineSettingsData?engineSettingsData.limitStrength:false,v);});renderEngineConfigAndUpdate();}
+function setConfigElo(v){v=Math.max(500,Math.min(3500,parseInt(v)||2800));if(engineSettingsData)engineSettingsData.elo=v;_bridgeCall(function(bridge){bridge.setEngineLimitElo(engineSettingsData?engineSettingsData.limitStrength:false,v);});renderEngineConfigAndUpdate();}
 function toggleAutoConfig(){
   const newVal=!engineSettingsData||!engineSettingsData.autoConfig;
   if(engineSettingsData)engineSettingsData.autoConfig=newVal;
@@ -3723,7 +3762,14 @@ function _attachDivergentPV(divergeAtIdx,pvRemainder,pending){
     const piece=state.board[coords.from.row][coords.from.col];
     if(!piece)break;
     const mv={from:coords.from,to:coords.to,piece,promotion:coords.promotion};
-    makeMvInPlace(state,mv);
+    // v1.2.1 round-9: makeMvInPlace returns null on invalid move (malformed
+    // UCI, piece missing, or state desync). If we don't break here, the next
+    // iteration operates on the stale (un-advanced) state, finds the wrong
+    // piece at the next PV move's from-square, fails the `!piece` guard, and
+    // exits the loop with state at the wrong position — producing incorrect
+    // SAN for the divergent PV that gets stored in moveRecords variations
+    // and exported in PGN.
+    if(!makeMvInPlace(state,mv))break;
   }
   // Now state is the position before the divergent PV move.
   // The divergent PV starts with the PREDICTED move (alternative to the
@@ -4312,4 +4358,12 @@ function _updateAIThinkDisplay(){
 
 
 // ---- Exports ----
-export {showToast,_bridgeCall,_showLoadingOverlay,_updateLoadingStatus,_hideLoadingOverlay,_attemptEngineInit,onInitProgress,onEngineReady,onBestMove,onHintMove,onEngineProgress,onPonderProgress,onEngineEval,onEngineInfo,onEngineSwitched,onSettingsImported,onSettingsExported,onPGNExported,onStatsHTMLExported,onStatsRequestReview,onGameDifficultyChanged,onEngineError,onMultiPVProgress,onMultiPVResult,copyMoveHistory,copyReviewPGN,exportPGNToFile,openStatsPage,playSound,handleBackPress,renderEngineConfig,renderEngineConfigAndUpdate,openEngineConfig,closeEngineConfig,scanEngines,switchEngine,importExternalEngine,restartCurrentEngine,setConfigThreads,setConfigHash,setConfigMultiPV,setConfigMoveOverhead,togglePonder,toggleShowWDL,setConfigSkillLevel,toggleLimitElo,setConfigElo,toggleAutoConfig,exportEngineSettings,importEngineSettings,requestEngineEval,_requestBatchEval,_showPGNExportAnnotationDialog,_pgnExportDialogActive,_pgnExportDialogDismiss,_updateEvalDisplay,_updateReviewEvalUI,formatEval,_resetEvalState,_updateAllEvalDisplays,copyFEN,copyReviewFEN,importFEN,_startEngineHeartbeat,_cleanupEventListeners,_formatVariationGroups,_commentHasText};
+// v1.2.1 round-9: Removed 9 names that are NOT defined in this file's scope
+// (they live in ui.js): formatEval, playSound, handleBackPress, scanEngines,
+// copyFEN, copyReviewFEN, importFEN, _startEngineHeartbeat,
+// _cleanupEventListeners. In source-module mode the previous list would
+// throw SyntaxError; in bundled mode build-chess.py strips the whole
+// `export {...}` line via regex, so there was no production impact, but
+// the list was misleading. Verified each removal by grep — none of these
+// symbols are declared in ai-bridge.js.
+export {showToast,_bridgeCall,_showLoadingOverlay,_updateLoadingStatus,_hideLoadingOverlay,_attemptEngineInit,onInitProgress,onEngineReady,onBestMove,onHintMove,onEngineProgress,onPonderProgress,onEngineEval,onEngineInfo,onEngineSwitched,onSettingsImported,onSettingsExported,onPGNExported,onStatsHTMLExported,onStatsRequestReview,onGameDifficultyChanged,onEngineError,onMultiPVProgress,onMultiPVResult,copyMoveHistory,copyReviewPGN,exportPGNToFile,openStatsPage,renderEngineConfig,renderEngineConfigAndUpdate,openEngineConfig,closeEngineConfig,switchEngine,importExternalEngine,restartCurrentEngine,setConfigThreads,setConfigHash,setConfigMultiPV,setConfigMoveOverhead,togglePonder,toggleShowWDL,setConfigSkillLevel,toggleLimitElo,setConfigElo,toggleAutoConfig,exportEngineSettings,importEngineSettings,requestEngineEval,_requestBatchEval,_showPGNExportAnnotationDialog,_pgnExportDialogActive,_pgnExportDialogDismiss,_updateEvalDisplay,_updateReviewEvalUI,_resetEvalState,_updateAllEvalDisplays,_formatVariationGroups,_commentHasText};

@@ -66,8 +66,12 @@
         android:usesCleartextTraffic="false"
         android:networkSecurityConfig="@xml/network_security_config"
         android:fullBackupContent="@xml/backup_rules"
-        android:dataExtractionRules="@xml/data_extraction_rules"
-        android:requestLegacyExternalStorage="true">
+        android:dataExtractionRules="@xml/data_extraction_rules">
+        <!-- v1.2.1 round-10 (review-F P3): removed android:requestLegacyExternalStorage="true"
+             — this attribute is ignored when targetSdk >= 30 (we use 35). The app
+             uses SAF for all file I/O (no File API external-storage access), so the
+             legacy storage mode was never actually consulted. Keeping it was dead
+             configuration that misled readers into thinking we relied on legacy FS. -->
 
         <!-- v18.5.0 FIX: Changed from "portrait" to "unspecified" — the previous
              portrait lock prevented CSS @media (orientation:landscape) from ever
@@ -91,12 +95,23 @@
 
         <!-- v18.4.7: Foreground service to keep the chess engine process alive
              on Android 14/15 (Xiaomi HyperOS 3). Without this, the OS aggressively
-             kills the engine subprocess when the app goes to background. -->
+             kills the engine subprocess when the app goes to background.
+             v1.2.1 round-9: Added the required <property> child element for
+             FOREGROUND_SERVICE_TYPE_SPECIAL_USE. Per Android 14 docs, apps
+             targeting API 34+ using FOREGROUND_SERVICE_TYPE_SPECIAL_USE MUST
+             declare the subtype property via
+             android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE, otherwise
+             startForeground(..., FOREGROUND_SERVICE_TYPE_SPECIAL_USE) can
+             throw ForegroundServiceTypeNotAllowed on Android 14+ devices. -->
         <service
             android:name="com.Regalia.EngineService"
             android:foregroundServiceType="specialUse"
             android:exported="false"
-            android:stopWithTask="true" />
+            android:stopWithTask="true">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="chess_engine_analysis" />
+        </service>
 
         <!-- v1.0.2 NEW FEATURE: StatsActivity — fullscreen WebView for the 📊统计
              statistics page. Displays PGN with rich formatting + computed statistics.

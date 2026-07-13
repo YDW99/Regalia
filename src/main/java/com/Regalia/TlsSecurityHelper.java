@@ -97,6 +97,15 @@ public final class TlsSecurityHelper {
             "C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=";
     private static final String PIN_ISRG_X2 =
             "diGVwiVYbubAI3RW4hB9xU8e/CH2GnkuvVFZE8zmgzI=";
+    // v1.2.1 round-10 (review-E P2): pre-decoded bytes for constant-time
+    //   comparison via MessageDigest.isEqual. Decoded once at class-load
+    //   rather than per-validatePin-call.
+    private static final byte[] PIN_LE_E7_BYTES =
+            android.util.Base64.decode(PIN_LE_E7, android.util.Base64.NO_WRAP);
+    private static final byte[] PIN_ISRG_X1_BYTES =
+            android.util.Base64.decode(PIN_ISRG_X1, android.util.Base64.NO_WRAP);
+    private static final byte[] PIN_ISRG_X2_BYTES =
+            android.util.Base64.decode(PIN_ISRG_X2, android.util.Base64.NO_WRAP);
 
     private TlsSecurityHelper() {
         // Utility class — no instances
@@ -185,17 +194,26 @@ public final class TlsSecurityHelper {
             throw new CertificateException("Cannot extract SubjectPublicKeyInfo from certificate");
         }
         String pin;
+        byte[] hash;
         try {
             MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
-            byte[] hash = sha256.digest(spki);
+            hash = sha256.digest(spki);
             pin = android.util.Base64.encodeToString(hash, android.util.Base64.NO_WRAP);
         } catch (NoSuchAlgorithmException e) {
             throw new CertificateException("SHA-256 algorithm unavailable: " + e.getMessage());
         }
-        // Compare against configured pins (constant-time-ish: compare all, then decide)
-        boolean matchesLE = pin.equals(PIN_LE_E7);
-        boolean matchesX1 = pin.equals(PIN_ISRG_X1);
-        boolean matchesX2 = pin.equals(PIN_ISRG_X2);
+        // v1.2.1 round-10 (review-E P2): use MessageDigest.isEqual for a
+        //   constant-time byte[] comparison. The previous String.equals
+        //   approach short-circuits on length mismatch, leaking pin length
+        //   to a timing attacker. The pins themselves are public (Let's
+        //   Encrypt publishes them), so the practical risk is low, but
+        //   using isEqual is the documented best practice and silences
+        //   the SonarCloud crypto-bad-comparison hotspot.
+        //   Note: we compare the RAW 32-byte SHA-256 digest against the
+        //   pre-decoded pin bytes (NOT the Base64-encoded string bytes).
+        boolean matchesLE = MessageDigest.isEqual(hash, PIN_LE_E7_BYTES);
+        boolean matchesX1 = MessageDigest.isEqual(hash, PIN_ISRG_X1_BYTES);
+        boolean matchesX2 = MessageDigest.isEqual(hash, PIN_ISRG_X2_BYTES);
         if (!matchesLE && !matchesX1 && !matchesX2) {
             throw new CertificateException(
                 "Certificate pin mismatch: computed=" + pin

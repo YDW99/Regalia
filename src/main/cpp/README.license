@@ -1,3 +1,58 @@
+v1.2.1 round-10 regression test + first-principles optimization (2026.7.14):
+  - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
+    refinement).
+  - Regression test of all review-D/E/F fixes — all verified intact. No
+    source changes in this directory this pass; see java/com/Regalia/README.license
+    for the 4 first-principles optimization items (StockfishNative
+    PROCESS_DESTROY_GRACE_MS extraction, StatsActivity redundant Uri.parse
+    removal, StabilizationHelper comment direction fix, proguard-rules.pro
+    section-3 comment fix).
+  - License classification: all files in this directory retain their existing
+    classification.
+
+v1.2.1 (2026.7.14, round-10 continuation — secondary review-E items):
+  - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
+    refinement).
+  - No C++ source changes in this continuation pass. engine_jni.cpp unchanged.
+  - Stockfish 18 arm64-v8a-dotprod binary unchanged.
+  - engine_jni.cpp retains existing GPL v3 classification (DroidFish-derived).
+
+v1.2.1 (2026.7.14, tenth-pass refinement — round-10 review):
+  - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
+    refinement).
+  - No C++ source changes in this pass. engine_jni.cpp verified clean.
+    (The proguard-rules.pro section-6 comment about engine_jni.cpp was
+    rewritten for clarity, but no C++ source changed.)
+  - Stockfish 18 arm64-v8a-dotprod binary unchanged (same engine as round-8/9).
+  - engine_jni.cpp retains existing GPL v3 classification (DroidFish-derived).
+
+v1.2.1 (2026.7.13, ninth-pass refinement — round-9 review):
+  - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
+    refinement).
+  - No C++ source changes in this pass. engine_jni.cpp verified clean
+    (nativeChmod JNI pattern correct, nativeRenice prio clamping correct,
+    kept for JNI symbol surface stability per its own comment).
+  - Stockfish 18 arm64-v8a-dotprod binary unchanged (same engine as round-8).
+  - engine_jni.cpp retains existing GPL v3 classification (DroidFish-derived).
+
+v1.2.1 (2026.7.13, eighth-pass refinement — round-8 review):
+  - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version refinement).
+  - No C++ source changes in this pass. The round-8 fix is entirely
+    contained in src/main/assets/chess.src/state-store.js (AGPL v3) — a TDZ
+    (Temporal Dead Zone) bug fix for the `const DEEP_CLONE_MAX_DEPTH`
+    declaration position.
+  - Stockfish 18 arm64-v8a-dotprod binary unchanged (same engine as round-7).
+  - engine_jni.cpp retains existing GPL v3 classification (DroidFish-derived).
+
+v1.2.1 (2026.7.13, eighth-pass refinement — round-8 review):
+  - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version refinement).
+  - No C++ source changes in this pass. The round-8 fix is entirely
+    contained in src/main/assets/chess.src/state-store.js (AGPL v3) — a TDZ
+    (Temporal Dead Zone) bug fix for the `const DEEP_CLONE_MAX_DEPTH`
+    declaration position.
+  - Stockfish 18 arm64-v8a-dotprod binary unchanged (same engine as round-7).
+  - engine_jni.cpp retains existing GPL v3 classification (DroidFish-derived).
+
 This directory contains the chess engine JNI bridge native code.
 
 License classification by file:

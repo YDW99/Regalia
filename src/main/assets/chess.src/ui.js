@@ -439,6 +439,17 @@ function _updateEvalDisplayIncremental() {
 })();
 
 // Auto-recover from localStorage on startup
+// v1.2.1 round-9: This IIFE previously loaded recovery data and parsed it
+// but the if-block body was EMPTY (dead code) — data was never applied to
+// gameState/moveRecords. The save side in _installErrorBoundary (line 408)
+// was therefore wasted effort. Rather than implement an unsafe late-restore
+// (which would race with normal init paths and could resurrect a stale
+// gameState that caused the original crash), we keep the IIFE for its
+// STILL-USEFUL cleanup behavior (clearing stale recovery data after 5s if
+// the engine started successfully) and document that the load-and-apply
+// path is intentionally not implemented. The save side is retained as a
+// diagnostic artifact — developers can inspect localStorage/Java persistent
+// store after a crash to see what state triggered it.
 (function _tryRecovery() {
   try {
     let saved = localStorage.getItem('Regalia_recovery');
@@ -447,13 +458,20 @@ function _updateEvalDisplayIncremental() {
       try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentGet){const persisted=AndroidBridge.persistentGet('Regalia_recovery');if(persisted){saved=persisted;try{localStorage.setItem('Regalia_recovery',persisted);}catch(e){}}}}catch(e){}
     }
     if (saved) {
-      const data = JSON.parse(saved);
+      // v1.2.1 round-9: Parse to validate the data shape, but do NOT apply
+      // it to gameState/moveRecords — late restoration would race with the
+      // normal init path and could resurrect the very state that caused the
+      // original crash. The data is retained in storage for 5s (below) as a
+      // diagnostic artifact, then cleared if the engine started successfully.
+      let data = null;
+      try { data = JSON.parse(saved); } catch(e) {}
       if (data && data.gameState && Date.now() - data.timestamp < 3600000) {
-        // v1.1.1 Phase 66: Removed stale console.log (debugging leftover).
+        // Recovery data is valid and fresh — available for inspection via
+        // DevTools if needed, but intentionally not auto-applied.
       }
       // Clear recovery data after successful load
       setTimeout(function() {
-        if (_engineReady || document.getElementById('board-grid')) {
+        if (typeof _engineReady !== 'undefined' && (_engineReady || document.getElementById('board-grid'))) {
           try{localStorage.removeItem('Regalia_recovery');}catch(e){}
           try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentRemove)AndroidBridge.persistentRemove('Regalia_recovery');}catch(e){}
         }
@@ -5486,7 +5504,7 @@ function _classifyMove(evalDelta,isMoverWhite){
 // Checks if there are any moves; if so, shows a "💾是否保存PGN文件？" dialog.
 // The callback is executed after the user chooses (or immediately if no moves).
 function _withPGNSaveCheck(callback){
-  if(_skipPGNSavePrompt||!moveRecords||!moveRecords.some(function(r){return r!==null&&r!==undefined;})){
+  if(_skipPGNSavePrompt||!moveRecords||!moveRecords.some(function(r){return r!=null;})){
     callback();
     return;
   }
@@ -6882,14 +6900,8 @@ function reviewAnalyzeAll(){
   //   unless they navigated during the batch).
   showToast(T('analyzing_all')+' ('+_reviewEvalCache.size+'/'+(_lastStep+1)+')');
   try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
-  // Start the batch via _requestBatchEval (decoupled from reviewStep)
-  if(typeof _requestBatchEval==='function'){
-    _requestBatchEval(startStep);
-  }else{
-    // Fallback (shouldn't happen — _requestBatchEval is always exported)
-    _reviewAnalyzeResetSafetyTimer();
-    requestEngineEval();
-  }
+  // Start the batch via _requestBatchEval (always exported by ai-bridge.js).
+  _requestBatchEval(startStep);
 }
 
 /**
@@ -7096,21 +7108,12 @@ function _reviewAnalyzeAdvance(){
       }
       _reviewAnalyzeStep=_priorityStep;
       // Don't reset the safety timer here — _requestBatchEval does it.
-      if(typeof _requestBatchEval==='function'){
-        _requestBatchEval(_priorityStep);
-      }else{
-        requestEngineEval();
-      }
+      _requestBatchEval(_priorityStep);
       return;
     }
     // v1.1.1 Phase 59 Task 59.6: Use _requestBatchEval (NOT requestEngineEval)
     //   so the callback is correctly identified as a batch callback.
-    if(typeof _requestBatchEval==='function'){
-      _requestBatchEval(_batchStep);
-    }else{
-      // Fallback (shouldn't happen)
-      requestEngineEval();
-    }
+    _requestBatchEval(_batchStep);
   },0);
 }
 
@@ -8361,4 +8364,10 @@ function _importPGNFileWithSaveCheck(){
 }
 
 // ---- Exports ----
-export {render,markDirty,sqClick,executeMove,undoMove,redoMove,flipBoard,quickFreeOpening,toggleSound,doPromotion,getHint,toggleSetup,exitSetup,setupClick,enterReview,reviewGoTo,reviewAnalyzeAll,exitReview,startGame,_resetGameUIState,doAIMove,_requestStockfishMove,_buildEvalTrendSVG,_refreshEvalTrendChart,handleBackPress,_startEngineHeartbeat,_cleanupEventListeners,_reviewAnalyzeAdvance,_rvAnalyzeBtnLabel,_updateReviewAnalyzeBtn,_doPastePGN};
+// v1.2.1 round-9: Removed doAIMove and _requestStockfishMove — both are
+// defined in game-logic.js, NOT ui.js. In source-module mode the previous
+// list would throw SyntaxError; in bundled mode build-chess.py strips the
+// whole `export {...}` line via regex, so there was no production impact,
+// but the list was misleading. Verified by grep — neither symbol is
+// declared in ui.js.
+export {render,markDirty,sqClick,executeMove,undoMove,redoMove,flipBoard,quickFreeOpening,toggleSound,doPromotion,getHint,toggleSetup,exitSetup,setupClick,enterReview,reviewGoTo,reviewAnalyzeAll,exitReview,startGame,_resetGameUIState,_buildEvalTrendSVG,_refreshEvalTrendChart,handleBackPress,_startEngineHeartbeat,_cleanupEventListeners,_reviewAnalyzeAdvance,_rvAnalyzeBtnLabel,_updateReviewAnalyzeBtn,_doPastePGN};
