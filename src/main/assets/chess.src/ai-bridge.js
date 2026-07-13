@@ -955,13 +955,8 @@ function _buildTerminationTag(){
   return null;
 }
 
-function _buildPGNString(forceIncludeVariations, includeAnnotations, includeAutoAnnotations){
+function _buildPGNString(forceIncludeVariations, includeAnnotations){
   if(includeAnnotations===undefined)includeAnnotations=true; // default: include
-  // v1.2.0 Phase 82+++++ rev 9: New parameter — when true, auto-generated visual
-  // annotations (imported=false) are also exported. Default false (Phase 62 behavior:
-  // don't pollute PGN export with auto-generated annotations). The stats page
-  // passes true so it can display live-game visual annotations.
-  if(includeAutoAnnotations===undefined)includeAutoAnnotations=false;
   if(!moveRecords||!moveRecords.length)return '';
   // v1.2.0 Phase 76+: game result derivation extracted to _deriveGameResult()
   const result=_deriveGameResult();
@@ -1129,13 +1124,9 @@ function _buildPGNString(forceIncludeVariations, includeAnnotations, includeAuto
     // v1.0.4 EXPANSION (this round): [%csl] and [%cal] from the visual annotations cache
     // v1.1.1 Phase 62: ONLY export imported annotations (imported=true).
     // v1.1.1 Phase 63: Also gated by includeAnnotations parameter.
-    // v1.2.0 Phase 82+++++ rev 9: When includeAutoAnnotations=true (stats page),
-    // also export auto-generated annotations (imported=false). Previously, only
-    // imported=true annotations were exported, which meant live-game visual
-    // annotations never reached the stats page.
     if(includeAnnotations&&typeof _getVisualAnnotations==='function'){
       const va=_getVisualAnnotations(i);
-      if(va&&(va.imported||includeAutoAnnotations)){
+      if(va&&va.imported){
         if(va.csl&&va.csl.length>0&&typeof formatCslTag==='function'){
           const cslTag=formatCslTag(va.csl);
           if(cslTag)commentParts.push(cslTag);
@@ -1385,7 +1376,7 @@ function openStatsPage(){
   // page's job is to analyze the CURRENT game, not the original import text.
   // (The original import text is still preserved in _cachedOriginalPGN for
   // the PGN cache save 📚 feature.)
-  let pgn=_buildPGNString(true,true,true); // forceIncludeVariations=true, includeAnnotations=true, includeAutoAnnotations=true (v1.2.0 Phase 82+++++ rev 9: stats page needs auto-generated visual annotations)
+  let pgn=_buildPGNString(true,true); // forceIncludeVariations=true, includeAnnotations=true
   // v1.0.3 fallback: if _buildPGNString returned empty (e.g., no moveRecords),
   // try _cachedOriginalPGN as a last resort (e.g., FEN-only imports that didn't
   // generate moveRecords but did set _cachedOriginalPGN).
@@ -1433,7 +1424,24 @@ function openStatsPage(){
       });
     }
   }
-  const payload=JSON.stringify({pgn:pgn,evals:evalData,moveRecords:moveData,playerColor:playerColor,lang:(typeof _lang!=='undefined'?_lang:'zh'),gameVariant:(typeof gameVariant!=='undefined'?gameVariant:null)});
+  // v1.2.1 (round-6 bugfix): Collect ALL visual annotations (both imported
+  //   and auto-generated) so the stats page can display them. Previously,
+  //   _buildPGNString only exports imported=true entries (per Phase 62 design
+  //   to avoid polluting PGN export with auto-generated UI aids), so the stats
+  //   page's PGN-text scan never found auto-generated annotations — the visual
+  //   annotations section was silently hidden for all newly-played games.
+  //   Fix: send a separate visualAnnotations field with all cache entries
+  //   (imported + auto-generated), keyed by moveIdx. The stats page uses this
+  //   as the primary data source, falling back to PGN-text scan only if absent.
+  const vaData={};
+  if(typeof _visualAnnotationsCache!=='undefined'&&_visualAnnotationsCache){
+    for(const [k,v] of _visualAnnotationsCache){
+      if(k==='_initial')continue; // initial-position annotation, not move-scoped
+      if(!v||(!v.csl&&!v.cal))continue;
+      vaData[k]={csl:v.csl||[],cal:v.cal||[]};
+    }
+  }
+  const payload=JSON.stringify({pgn:pgn,evals:evalData,moveRecords:moveData,visualAnnotations:vaData,playerColor:playerColor,lang:(typeof _lang!=='undefined'?_lang:'zh'),gameVariant:(typeof gameVariant!=='undefined'?gameVariant:null)});
   _bridgeCall(function(bridge){
     if(typeof bridge.openStatsPage==='function'){
       bridge.openStatsPage(payload);
@@ -2245,6 +2253,25 @@ function onBestMove(uciMove){
   // If a stale bestmove arrives, the real bestmove is still pending and the
   // safety timer must remain active to catch a potential timeout.
   if(_aiMoveRequestId!==_currentAiRequestId){console.warn('Discarding stale bestmove');return;}
+  // v1.2.1: 先验证 bestmove 可解析再清理状态 —— 否则 unparseable bestmove 会让
+  //   AI 卡在 "未思考、无安全计时器、但仍是 AI 回合" 的死锁状态，user 无法 undo
+  //   也无法继续。验证失败时保持 safety timer 活跃以触发自动重试。
+  if(!uciMove||uciMove==='(none)'||uciMove==='0000'){
+    console.error('onBestMove: engine returned empty bestmove:',uciMove);
+    render();
+    return;
+  }
+  const _bmCoords=uciToCoords(uciMove);
+  if(!_bmCoords){
+    console.error('onBestMove: failed to parse UCI move:',uciMove);
+    render();
+    return;
+  }
+  if(!gameState.board[_bmCoords.from.row]||!gameState.board[_bmCoords.from.row][_bmCoords.from.col]){
+    console.error('onBestMove: no piece at from square for UCI move:',uciMove);
+    render();
+    return;
+  }
   // Cancel safety timeout — engine responded (and it's the current request)
   if(_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
   // v1.0.8 PHASE 22 supplement: AI-think-end sound (轻微答声) — engine found a move
@@ -2319,24 +2346,11 @@ function onBestMove(uciMove){
     }
   },2000);
 
-  if(!uciMove||uciMove==='(none)'||uciMove==='0000'){
-    render();
-    return;
-  }
+  // v1.2.1: uciMove / coords / piece 已在函数入口验证（line 2242-2257），
+  //   此处保留 coords 解析以提取 from/to/promotion 字段供 executeMove 使用。
   const coords=uciToCoords(uciMove);
-  if(!coords){
-    console.error('Failed to parse UCI move:',uciMove);
-    render();
-    return;
-  }
   const from=coords.from, to=coords.to;
-  if(!gameState.board[from.row]){console.error('Board row access error');render();return;}
   const piece=gameState.board[from.row][from.col];
-  if(!piece){
-    console.error('No piece at from square');
-    render();
-    return;
-  }
   executeMove(from,to,coords.promotion);
 
   // After AI moves, start Ponder if enabled and we have a ponder move
@@ -3116,27 +3130,27 @@ function setConfigMultiPV(v){
 }
 function setConfigMoveOverhead(v){v=Math.max(0,Math.min(5000,parseInt(v)||30));if(engineSettingsData)engineSettingsData.moveOverhead=v;_bridgeCall(function(bridge){bridge.setEngineMoveOverhead(v);});renderEngineConfigAndUpdate();}
 function togglePonder(){
-  const newVal=!(engineSettingsData&&engineSettingsData.ponder);
+  const newVal=!engineSettingsData||!engineSettingsData.ponder;
   if(engineSettingsData)engineSettingsData.ponder=newVal;
   HapticManager.fire(newVal?'TOGGLE_ON':'TOGGLE_OFF');
   _bridgeCall(function(bridge){bridge.setEnginePonder(newVal);});renderEngineConfigAndUpdate();
 }
 function toggleShowWDL(){
-  const newVal=!(engineSettingsData&&engineSettingsData.showWDL);
+  const newVal=!engineSettingsData||!engineSettingsData.showWDL;
   if(engineSettingsData)engineSettingsData.showWDL=newVal;
   HapticManager.fire(newVal?'TOGGLE_ON':'TOGGLE_OFF');
   _bridgeCall(function(bridge){bridge.setEngineShowWDL(newVal);});renderEngineConfigAndUpdate();
 }
 function setConfigSkillLevel(v){v=Math.max(0,Math.min(20,parseInt(v)||20));if(engineSettingsData)engineSettingsData.skillLevel=v;_bridgeCall(function(bridge){bridge.setEngineSkillLevel(v);});renderEngineConfigAndUpdate();}
 function toggleLimitElo(){
-  const newVal=!(engineSettingsData&&engineSettingsData.limitStrength);
+  const newVal=!engineSettingsData||!engineSettingsData.limitStrength;
   if(engineSettingsData)engineSettingsData.limitStrength=newVal;
   HapticManager.fire(newVal?'TOGGLE_ON':'TOGGLE_OFF');
   _bridgeCall(function(bridge){bridge.setEngineLimitElo(newVal,engineSettingsData?engineSettingsData.elo:2800);});renderEngineConfigAndUpdate();
 }
 function setConfigElo(v){v=Math.max(500,Math.min(3200,parseInt(v)||2800));if(engineSettingsData)engineSettingsData.elo=v;_bridgeCall(function(bridge){bridge.setEngineLimitElo(engineSettingsData?engineSettingsData.limitStrength:false,v);});renderEngineConfigAndUpdate();}
 function toggleAutoConfig(){
-  const newVal=!(engineSettingsData&&engineSettingsData.autoConfig);
+  const newVal=!engineSettingsData||!engineSettingsData.autoConfig;
   if(engineSettingsData)engineSettingsData.autoConfig=newVal;
   HapticManager.fire(newVal?'TOGGLE_ON':'TOGGLE_OFF');
   _bridgeCall(function(bridge){bridge.setAutoConfig(newVal);});renderEngineConfigAndUpdate();
@@ -4015,11 +4029,9 @@ function requestEngineEval(){
       _sfMateDistance=0;_sfDepth=0;_sfSeldepth=0;
       _sfEvalReady=true;_evalLoading=false;
       _invalidateInFlight();
-      // v1.2.0 Phase 82+++++ FIX: WDL values were inverted. When _isBlackTurn=true,
-      // Black is checkmated → White wins → wdlW should be 1000 (100% White win),
-      // wdlL should be 0. Previously the ternary branches were swapped, showing
-      // "(0%W/0%D/100%L)" for a position White had won. All WDL values are
-      // White-perspective (per pgn-standard.js convention + onEngineEval line 2675).
+      // v1.2.1: 修复 WDL 反转 bug —— 此前 wdlW/wdlL 与 checkmate 方不一致。
+      //   当 _isBlackTurn=true（黑被将杀，白胜）时 wdlW 应为 1000、wdlL 应为 0；
+      //   与 onEngineEval 路径的 White-POV 翻转逻辑（line 2677）保持一致。
       _reviewEvalCache.set(reviewStep,{eval:_sfEval,mate:0,depth:0,seldepth:0,wdlW:_isBlackTurn?1000:0,wdlD:0,wdlL:_isBlackTurn?0:1000});
       _updateAllEvalDisplays();
       return;
@@ -4110,7 +4122,6 @@ function _requestBatchEval(step){
   if(_termStatus==='checkmate'){
     const _isBlackTurn=_rs.currentTurn==='black';
     const _eval=_isBlackTurn?99999:-99999;
-    // v1.2.0 Phase 82+++++ FIX: WDL values were inverted (same fix as requestEngineEval).
     _reviewEvalCache.set(step,{eval:_eval,mate:0,depth:0,seldepth:0,wdlW:_isBlackTurn?1000:0,wdlD:0,wdlL:_isBlackTurn?0:1000});
     if(typeof _reviewAnalyzeAdvance==='function'){
       try{_reviewAnalyzeAdvance();}catch(e){console.error('Analyze-all advance (checkmate) failed:',e);}

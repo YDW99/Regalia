@@ -20,6 +20,172 @@ The original NOTICE files from third-party projects are preserved alongside this
 - AUTHORS-stockfish: Stockfish project authors list
 
 ===== LICENSE CLASSIFICATION BY FILE ==========================================
+v1.2.1 (2026.7.13) — Fourth-pass refinement (round-4 cleanup — dead-code purge):
+  - Deleted MessageBus.java (AGPL v3): JS side had only a console.log stub and
+    zero dispatch() callers; the entire Java→JS event-bus was dead code.
+  - Deleted UciProtocolHandler.java (GPL v3): its latch-based setOptionAndWait /
+    waitForBestmove / waitForUciOk were never used (StockfishNative runs its own
+    inline reader loop). Only resetHandshakeState() was called (defensively, in
+    cleanup) and even that did nothing useful.
+  - Deleted EngineConfigManager.java (GPL v3): instantiated but no method on the
+    instance was ever called — only MIN_SKILL_LEVEL / MAX_SKILL_LEVEL constants
+    were referenced externally. Inlined those two constants (0, 20) in
+    EngineConfigHelper.setEngineSkillLevel.
+  - Deleted ui-audio.js (GPL v3): duplicated inline ChessAudioEngine in ui.js;
+    separate _volume / _enabled state could drift out of sync.
+  - Deleted ui-board.js (GPL v3): used OPPOSITE rank convention (rank=0 → rank 1)
+    vs inline code (rr=0 → rank 8); never callable from the hot path.
+  - Deleted ui-review.js (GPL v3): used different classification taxonomy
+    (best/excellent/good/ok/...) vs inline _classifyMove
+    (brilliant/great/good/book/...); direct replacement would silently change
+    review annotations.
+  - Deleted ui-toolbar.js (GPL v3): switchLanguage re-implemented toggleLang's
+    persistence + dispatch; BTN_ID was never read.
+  - Slimmed EngineHealthMonitor.java (GPL v3, 208 → 85 lines): removed heartbeat
+    thread, zombie-detection timeouts, RecoveryCallback interface — all duplicated
+    inline in StockfishNative. Now a pure state holder for lastResponseTime +
+    autoRecoveryCount.
+  - Slimmed EngineProcessManager.java (GPL v3, 489 → 111 lines): removed
+    resolveEngineBinary / extractEngineFromApk / extractEngineFromAssets /
+    startProcess / initStreams / cleanupResources / isElfFile / process getters
+    and setters — all dead code (StockfishNative keeps inline copies). Only
+    makeExecutable(File) remains.
+  - StockfishNative.java (GPL v3): removed _engineConfigManager /
+    _uciProtocolHandler / _messageBus fields + constructor instantiations;
+    removed getMessageBus() / _emitLifecycleEvent() / _escapeJsonString()
+    helpers; removed 3 _emitLifecycleEvent call sites; removed
+    _uciProtocolHandler.resetHandshakeState() call in cleanup. EngineHealthMonitor
+    now constructed with no-arg constructor. EngineProcessManager now constructed
+    with ChmodProvider only (Context arg removed). Fixed inline
+    extractEngineFromApk ZipEntry.getSize() == -1 divide-by-zero.
+  - EngineConfigHelper.java (GPL v3): setEngineSkillLevel now uses inline 0/20
+    constants instead of EngineConfigManager.MIN/MAX_SKILL_LEVEL.
+  - MainActivity.java (AGPL v3): removed MessageBus JS-interface registration
+    (both initial + rebuild paths).
+  - build-chess.py (AGPL v3): module list 13 → 9 (removed ui-audio / ui-board /
+    ui-review / ui-toolbar).
+  - ui.js (GPL v3): removed UIAudio.unlockAudio() call in _unlockAudio; removed
+    UIAudio.setEnabled(soundOn) call in toggleSound.
+  - game-logic.js (GPL v3): removed UIToolbar.switchLanguage(_lang) call in
+    toggleLang.
+  - ai-bridge.js (GPL v3): removed window.MessageBus._onEvent JS stub and 4
+    typeof-guarded module-activation checks (UIAudio / UIBoard / UIReview /
+    UIToolbar).
+  - TlsSecurityHelper.java (AGPL v3): RETAINED from third pass — actual SPKI
+    SHA-256 pin validation per RFC 7469 (was a no-op logging stub).
+  - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
+    refinement).
+  - License classification: unchanged — no new third-party code introduced;
+    3 AGPL-v3 files + 4 GPL-v3 files removed (all originally Regalia originals
+    or DroidFish-derived, no third-party licenses affected).
+
+v1.2.1 (2026.7.13) — Fifth-pass refinement (round-5 review — line-by-line audit):
+  - ChessApp.java (AGPL v3): removed unused `import android.os.Build;` (left
+    over from an earlier root-detection refactor — Build was never referenced
+    after the check moved to RootDetector).
+  - ChessWebViewClient.java (AGPL v3): removed unused `import android.os.Build;`
+    (left over from an earlier render-process-gone API-level guard that was
+    simplified to always-on).
+  - EngineSettingsHelper.java (GPL v3): bug fix — `engine.elo` case in
+    importSettings used a 1-3200 range, inconsistent with EngineConfigHelper's
+    canonical 500-3500 range. Importing a value like 400 would pass the 1-3200
+    check, then be silently re-clamped to 500 on the next setEngineLimitElo
+    call. Fixed to Math.max(500, Math.min(3500, ...)) to match the canonical
+    range.
+  - All other 16 Java files + 9 JS files verified clean (no dead code, no
+    inconsistent ranges, no leftover debug statements, no references to
+    deleted symbols, no debugger; statements, no TODO/FIXME/HACK markers).
+  - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
+    refinement).
+  - License classification: unchanged — no new third-party code introduced.
+
+v1.2.1 (2026.7.13) — Sixth-pass refinement (round-6 review — stats page visual annotation bug fix):
+  - ai-bridge.js (GPL v3): openStatsPage() now sends a `visualAnnotations`
+    payload field containing all _visualAnnotationsCache entries (both
+    imported=true and imported=false), keyed by moveIdx. Previously, the
+    stats page only saw imported=true annotations (via PGN text scan),
+    so auto-generated annotations from newly-played games were silently
+    missing.
+  - stats.html (AGPL v3): visual annotations section now reads
+    _payload.visualAnnotations as the PRIMARY data source, applies the
+    selected-move cutoff, and falls back to PGN-text scan only if the
+    payload field is absent. NAG scanning from PGN text is preserved.
+  - No new files. No license classification changes.
+  - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
+    refinement).
+
+v1.2.1 (2026.7.13) — Second-pass refinement (hardening + bug fix):
+  - P0 fix: TOCTOU race on _discardingPonderBestmove (StockfishNative.java,
+    GPL v3). stopAndWaitForBestmove + reader-thread latch-capture path now
+    clear the discard flag, preventing residual flag from silently discarding
+    the next legitimate bestmove ("AI never moves").
+  - P1 fix: Chess960 re-apply symmetry (StockfishNative.java, GPL v3).
+    startEngineInternal now re-applies UCI_Chess960 as both true AND false
+    based on _pendingChess960.
+  - P1 fix: eval-mode option leak (StockfishNative.java, GPL v3). engineStop
+    now calls restoreGameplayOptions when interrupting STATE_EVAL.
+  - P1 fix: sendSetOptionAndWait newline hardening (StockfishNative.java,
+    GPL v3). value parameter stripped of \r\n before UCI command concat.
+  - P1 fix: _restartInProgress stale-detection (StockfishNative.java,
+    GPL v3). Force-reset after 30s of being stuck.
+  - P1 security: JsBridgeGateway.isPathInSandbox requires trailing
+    File.separator before startsWith, closing theoretical directory-traversal
+    (GPL v3).
+  - P1 reliability: ChessApp.markEngineThreadDead + heartbeat Check 0
+    (ChessApp.java AGPL v3 + StockfishNative.java GPL v3). SF-* thread
+    death now triggers immediate recoverEngine instead of 15-30s zombie
+    timeout.
+  - P1 reliability: StatsActivity.onDestroy now calls webView.stopLoading()
+    first (AGPL v3). Prevents SIGSEGV on HyperOS 3/MIUI.
+  - P1 privacy: Removed takePersistableUriPermission from SafPickerHelper
+    (GPL v3) and StatsActivity (AGPL v3). One-shot operations no longer
+    consume SAF 512-grant cap.
+  - P1 fix: Checkmate WDL inversion in requestEngineEval + _requestBatchEval
+    fast-paths (ai-bridge.js, GPL v3). Now writes wdlW=1000 when Black is
+    checkmated, matching onEngineEval's White-POV swap.
+  - P1 fix: formatEvalAnnotation malformed `[%eval #+]`/`[%eval #-]` tag
+    (pgn-standard.js, GPL v3). absMd defaults to 1 when mateDist=0 but
+    |eval|>=90000, matching formatEvalTag.
+  - P1 fix: onBestMove validation order (ai-bridge.js, GPL v3). UCI move
+    parsing + piece-existence checks now run BEFORE clearing
+    isAIThinking/_aiSafetyTimerId/_aiRetryCount.
+  - P1 fix: CSS font-family HTML entity (index.html.tpl, GPL v3). 5
+    occurrences of `&#x27;` inside <style> rules replaced with literal `'`.
+  - P1 input validation: PGN cache name prompt (ui.js, GPL v3) now enforces
+    60-char cap + rejects / \ : * ? " < > | + control chars. New i18n keys
+    in game-logic.js (GPL v3).
+  - P2 robustness: HapticHelper.perform respects system HAPTIC_FEEDBACK_ENABLED
+    setting (GPL v3).
+  - P2 robustness: EngineProcessManager.extractEngineFromApk guards against
+    ZipEntry.getSize() == -1 (GPL v3).
+  - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
+    refinement).
+  - License classification: unchanged — no new third-party code introduced.
+
+v1.2.1 (2026.7.12) — Defect fix release based on comprehensive review reports:
+  - Critical fix: oppC/flip/cm/infoSq/infoCtrl scoping bug in renderInternal()
+    (variables were local to _renderHeader but referenced by other sub-functions).
+    Fixed by extracting _computeRenderState() returning {cm,infoSq,infoCtrl,oppC,flip}.
+  - Security: Activated JsBridgeGateway sandbox path validation and UCI command
+    whitelist for writeTextFile/readTextFile/sendToEngine. Removed intent: scheme
+    from isUrlSafe(). Set allowBackup=false. Sanitized newlines in setOptionAndWait.
+  - SonarCloud: 20 Bugs addressed — InterruptedException re-interrupt (9 locations),
+    AtomicInteger for _autoRecoveryCount, await() return value check (2 locations),
+    sort() localeCompare (Critical), dead conditional removal (2 locations),
+    aria-label for ecoSearch, De Morgan rewrites (4 locations).
+  - Code quality: Store.getState()/dispatch() return deep clone, _notifyListeners
+    snapshot iteration, _deepClone Date/RegExp support, SET_LANG payload type fix,
+    static final Pattern in UciProtocolHandler, _onEvent error logging,
+    registerReducer overwrite warning, unknown action warning.
+  - Layout: Portrait .review-top missing open tag fixed. _renderReviewMode accepts
+    flip parameter. Game-over overlay and setup panel render inside .bwrap.
+  - Store wiring: Store.dispatch calls added to toggleLang/toggleSound/enterReview/
+    _resetGameUIState for debug observability.
+  - proguard-rules.pro created (was missing despite build.gradle reference).
+  - Version: versionCode=121, versionName="1.2.1".
+  - License classification: unchanged — no new third-party code introduced.
+
+
 
 GPL v3 (DroidFish-derived or Stockfish):
   - src/main/java/com/Regalia/StockfishNative.java
@@ -91,15 +257,6 @@ GPL v3 (DroidFish-derived or Stockfish):
       UI layout and interaction patterns from DroidFish
       v1.2.0 Phase 74: God Module split — extracted 4 modules:
         ui-board.js, ui-review.js, ui-audio.js, ui-toolbar.js
-      v1.2.0 Phase 82-82++++: renderInternal God Function split — extracted 11
-        sub-functions (_renderDialogs, _renderReviewMode, _renderHeader,
-        _renderBoardGrid, _renderSetupPanel, _renderSidePanel, _renderAIBar,
-        _renderPlayerBar, _renderInfoBars, _computeRenderState,
-        _renderGameOverOverlay, _applyRenderResult). renderInternal: 1,365 → 70
-        lines (−95%). Phase 82++++ also fixed a critical scoping bug (flip/cm/
-        infoSq/infoCtrl/oppC were local to _renderHeader but referenced by other
-        sub-functions — root cause of the review-mode entry failure) and a layout
-        bug (info bars + player bar were outside .bsec).
   - src/main/assets/chess.src/ui-board.js (v1.2.0 Phase 74)
       Board rendering, coordinate labels, heatmap. DroidFish-derived.
   - src/main/assets/chess.src/ui-review.js (v1.2.0 Phase 74)

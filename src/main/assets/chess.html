@@ -31,7 +31,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; worker-src blob:; connect-src https://tablebase.lichess.ovh; img-src data: file: blob:; frame-ancestors 'none'; base-uri 'self'">
-<title>Regalia v1.2.0</title>
+<title>Regalia v1.2.1</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 /* v1.0.8 PHASE 22: Light/Dark theme system following Material Design
@@ -210,14 +210,14 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 /* === 黑曜石棋子 — 清晰轮廓、全局可辨 === */
 /* 黑子: 深曜石底色 + 亮金描边 + 亮金微光 (深色格上描边醒目可辨) */
 /* 白子: 银曜石底色 + 浓棕描边 + 浓棕微光 (浅色格上描边醒目可辨) */
-.sq .pc{pointer-events:none;font-size:2rem;z-index:1;position:relative;font-variant-emoji:text;-webkit-font-variant-emoji:text;font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-weight:400;speak:none;transform:translateZ(0);backface-visibility:hidden}
+.sq .pc{pointer-events:none;font-size:2rem;z-index:1;position:relative;font-variant-emoji:text;-webkit-font-variant-emoji:text;font-family:'DejaVu Sans','Noto Sans','Segoe UI Symbol',sans-serif;font-weight:400;speak:none;transform:translateZ(0);backface-visibility:hidden}
 .sq:hover .pc{transform:scale(1.05) translateZ(0)}
 /* 黑子 — 深曜石：亮金描边 + 亮金微光 (深/浅色背景上均可辨) */
 .sq .pc.bk,.prom-btn.bk-prom,.setup-btn.sb,.move-anim.bk-piece,.rv-bk{color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55)}
 /* 白子 — 银曜石：浓棕描边 + 浓棕微光 (深/浅色背景上均可辨) */
 .sq .pc.w,.prom-btn.w-prom,.setup-btn.sw,.move-anim.w-piece,.rv-w{color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55)}
 /* 复盘棋子：字体与棋盘一致，避免字形跳变 */
-.rv-w,.rv-bk{font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text;-webkit-font-variant-emoji:text;font-weight:400}
+.rv-w,.rv-bk{font-family:'DejaVu Sans','Noto Sans','Segoe UI Symbol',sans-serif;font-variant-emoji:text;-webkit-font-variant-emoji:text;font-weight:400}
 .sq .dot{width:18px;height:18px;border-radius:50%;background:radial-gradient(circle,rgba(255,140,0,.6),rgba(255,140,0,.35));pointer-events:none;z-index:1;box-shadow:0 0 3px rgba(255,140,0,.2)}
 .sq .ring{position:absolute;inset:3px;border-radius:50%;border:3px solid rgba(255,140,0,.55);pointer-events:none;z-index:1;box-shadow:0 0 2px rgba(255,140,0,.10)}
 /* v1.0.6: Castling rook marker — golden dashed ring. Distinct from the orange
@@ -348,13 +348,13 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .prom-dlg{background:var(--card);border:2px solid var(--border2);border-radius:8px;padding:18px;text-align:center;box-shadow:none}
 .prom-dlg h3{margin-bottom:12px;font-family:system-ui,-apple-system,sans-serif;font-size:1rem;color:var(--accent2)}
 .prom-row{display:flex;gap:10px}
-.prom-btn{width:56px;height:56px;font-size:2rem;border-radius:6px;border:1px solid var(--border);background:var(--btn-bg);cursor:pointer;transition:all .2s;font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text;-webkit-font-variant-emoji:text}
+.prom-btn{width:56px;height:56px;font-size:2rem;border-radius:6px;border:1px solid var(--border);background:var(--btn-bg);cursor:pointer;transition:all .2s;font-family:'DejaVu Sans','Noto Sans','Segoe UI Symbol',sans-serif;font-variant-emoji:text;-webkit-font-variant-emoji:text}
 
 .prom-btn:hover{background:var(--btn-bg-hover);border-color:var(--accent2);transform:scale(1.1);box-shadow:none}
 .setup-panel{display:flex;flex-direction:column;gap:8px;padding:12px;background:var(--card);border:1px solid var(--border);border-radius:6px;margin-top:8px}
 .setup-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:center}
 .setup-label{font-size:.75rem;color:var(--muted);min-width:48px;text-align:right;font-family:system-ui,-apple-system,sans-serif}
-.setup-btn{width:44px;height:44px;font-size:1.8rem;border-radius:4px;border:1px solid var(--border);background:var(--btn-bg);cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text;-webkit-font-variant-emoji:text}
+.setup-btn{width:44px;height:44px;font-size:1.8rem;border-radius:4px;border:1px solid var(--border);background:var(--btn-bg);cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;font-family:'DejaVu Sans','Noto Sans','Segoe UI Symbol',sans-serif;font-variant-emoji:text;-webkit-font-variant-emoji:text}
 
 .setup-btn.act{border-color:var(--accent2);background:rgba(212,160,23,.15);transform:scale(1.05);box-shadow:none}
 .setup-btn:hover{border-color:var(--accent);background:rgba(212,160,23,.08)}
@@ -1163,7 +1163,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
    `filter: drop-shadow(...)` value on every keyframe of knight/bishop/
    queen/king animations, forcing the browser to re-rasterize the alpha
    mask every frame. */
-.move-anim{position:absolute;display:flex;align-items:center;justify-content:center;font-size:2rem;z-index:20;pointer-events:none;will-change:transform;backface-visibility:hidden;-webkit-backface-visibility:hidden;transform:translate3d(0,0,0);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text;-webkit-font-variant-emoji:text;font-weight:400;filter:drop-shadow(0 4px 5px rgba(0,0,0,0.45))}
+.move-anim{position:absolute;display:flex;align-items:center;justify-content:center;font-size:2rem;z-index:20;pointer-events:none;will-change:transform;backface-visibility:hidden;-webkit-backface-visibility:hidden;transform:translate3d(0,0,0);font-family:'DejaVu Sans','Noto Sans','Segoe UI Symbol',sans-serif;font-variant-emoji:text;-webkit-font-variant-emoji:text;font-weight:400;filter:drop-shadow(0 4px 5px rgba(0,0,0,0.45))}
 
 /* v1.0.5 Round-6 Rev49: High aspect-ratio screen adaptation.
    Goal: every interface scrolls VERTICALLY ONLY — never horizontal scroll,
@@ -1361,9 +1361,7 @@ function secureRandomInt(max){
 
 function T(key){return _i18n[key]?.[_lang]||_i18n[key]?.zh||key;}
 function toggleLang(){_lang=(_lang==='zh')?'en':'zh';
-  // v1.2.0 Phase 82+++++ rev 5: Wire Store as debug observability layer.
-  try{if(typeof Store!=='undefined'&&Store&&typeof Store.dispatch==='function')Store.dispatch('SET_LANG',{lang:_lang});}catch(e){}
-try{localStorage.setItem('Regalia_lang',_lang);}catch(e){}try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.saveLangPref)AndroidBridge.saveLangPref(_lang);}catch(e){}try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_lang',_lang);}catch(e){}try{if(typeof HapticManager!=='undefined'&&HapticManager.fire)HapticManager.fire('TOGGLE_ON');}catch(e){}try{if(typeof playSound==='function')playSound('select');}catch(e){}render();}
+  try{if(typeof Store!=='undefined'&&Store&&typeof Store.dispatch==='function')Store.dispatch('SET_LANG',_lang);}catch(e){}try{localStorage.setItem('Regalia_lang',_lang);}catch(e){}try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.saveLangPref)AndroidBridge.saveLangPref(_lang);}catch(e){}try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_lang',_lang);}catch(e){}try{if(typeof HapticManager!=='undefined'&&HapticManager.fire)HapticManager.fire('TOGGLE_ON');}catch(e){}try{if(typeof playSound==='function')playSound('select');}catch(e){}render();}
 const _i18n={
 'app_name':{zh:'Regalia',en:'Regalia'},
 'new_game':{zh:'新游戏',en:'New Game'},
@@ -1641,6 +1639,8 @@ const _i18n={
 'pgn_cache_empty':{zh:'暂无缓存的PGN对局。点击下方"保存当前PGN到缓存"按钮以创建。',en:'No cached PGN games yet. Click "Save current PGN to cache" below to create one.'},
 'pgn_cache_name_prompt':{zh:'请输入缓存名称（如：经典对局1）：',en:'Enter cache name (e.g.: Classic Game 1):'},
 'pgn_cache_save_default':{zh:'我的对局',en:'My Game'},
+'pgn_cache_name_too_long':{zh:'名称过长（最多60字符）',en:'Name too long (max 60 chars)'},
+'pgn_cache_name_invalid':{zh:'名称包含非法字符（/ \\ : * ? \" < > |）',en:'Name contains invalid chars (/ \\ : * ? \" < > |)'},
 'pgn_cache_save_current':{zh:'保存当前PGN到缓存',en:'Save current PGN to cache'},
 'pgn_cache_import':{zh:'导入',en:'Import'},
 'pgn_cache_delete_sel':{zh:'删除选中',en:'Delete Selected'},
@@ -1716,7 +1716,7 @@ const _i18n={
 'elo_target':{zh:'Elo目标',en:'ELO Target'},
 'export_settings_btn':{zh:'📤 导出设置',en:'📤 Export'},
 'import_settings_btn':{zh:'📥 导入设置',en:'📥 Import'},
-'loading_title':{zh:'Regalia v1.1.2',en:'Regalia v1.1.2'},
+'loading_title':{zh:'Regalia v1.2.1',en:'Regalia v1.2.1'},
 'click_skip_loading':{zh:'点击跳过加载',en:'Click to skip loading'},
 'white_checkmate':{zh:'白方将杀获胜',en:'White wins by checkmate'},
 'black_checkmate':{zh:'黑方将杀获胜',en:'Black wins by checkmate'},
@@ -4030,9 +4030,7 @@ setTimeout(()=>{
 // P0 FIX: Validate state freshness — game may have changed during 0ms delay
 if(gameOver||reviewMode||setupMode||gameState.currentTurn===playerColor||!isAIThinking)return;
 // Level 7: probe tablebase for endgame positions (7 pieces or fewer) before Stockfish
-// v1.2.0 Phase 82+++++: Added typeof guard for pieceCountLE7 (defined in tablebase.js,
-// loaded after game-logic.js). All other cross-module calls use typeof guards.
-if(aiLevel===7&&typeof pieceCountLE7==='function'&&pieceCountLE7(gameState.board)){
+if(aiLevel===7&&pieceCountLE7(gameState.board)){
 _tbLoading=true;_aiBarInfo='⏳ '+T('tb_querying');_updateAIThinkDisplay();render();
 // Save board reference BEFORE async call to prevent race condition
 // (gameState may change while tablebase query is in-flight)
@@ -4058,12 +4056,6 @@ _requestStockfishMove();
 }).catch(function(){
 _tbLoading=false;
 _tbRetryCount++;
-// v1.2.0 Phase 82+++++ FIX: Reset _aiRetryCount here because a tablebase network
-// failure is NOT an AI timeout. Without this reset, 2 tablebase rejections would
-// increment _aiRetryCount to 3, triggering the false "ai_timeout" toast and
-// returning before Stockfish is ever consulted. The retry counter is meant to
-// guard against Stockfish engine hangs, not tablebase API outages.
-_aiRetryCount=0;
 if(_tbRetryCount<=2){
 isAIThinking=false;_aiBarInfo='';doAIMove();
 }else{
@@ -5147,8 +5139,11 @@ function formatEvalAnnotation(cached){
     // mateDist>0 (White POV) → White mates in N; mateDist<0 → Black mates in N.
     const whiteMates=(mateDist!==0)?mateDist>0:ev>0;
     label=T(whiteMates?'pgn_mate_white':'pgn_mate_black');
-    const absMd=mateDist!==0?Math.abs(mateDist):0;
-    scoreStr=whiteMates?('#+'+(absMd||'')):('#-'+(absMd||''));
+    // v1.2.1: 修复 malformed `[%eval #+]`/`[%eval #-]` —— 此前 absMd=0 时
+    //   `0||''` 求值为 ''，产生无数字的 `#+` / `#-` 标签。与 formatEvalTag
+    //   (line 156) 保持一致：mateDist=0 但 |ev|≥90000 时默认 ±1。
+    const absMd=mateDist!==0?Math.abs(mateDist):1;
+    scoreStr=whiteMates?('#+'+absMd):('#-'+absMd);
   }else{
     // Centipawn eval — White-POV (ev is already White-POV from onEngineEval).
     label=_pgnWhitePerspectiveLabel(ev);
@@ -6599,6 +6594,8 @@ const Store = (function() {
      */
     function _deepClone(obj) {
         if (obj === null || typeof obj !== 'object') return obj;
+        if (obj instanceof Date) return new Date(obj.getTime());
+        if (obj instanceof RegExp) return new RegExp(obj);
         if (Array.isArray(obj)) return obj.map(_deepClone);
         const cloned = {};
         for (const key in obj) {
@@ -6621,6 +6618,7 @@ const Store = (function() {
         if (typeof reducer !== 'function') {
             throw new Error('reducer must be a function');
         }
+        if (_reducers[actionType] && typeof console !== 'undefined' && console.warn) console.warn('[Store] Reducer overwrite:', actionType);
         _reducers[actionType] = reducer;
     }
 
@@ -6633,15 +6631,16 @@ const Store = (function() {
     function dispatch(action, payload) {
         const reducer = _reducers[action];
         if (!reducer) {
-            // 未知 action — 静默忽略，便于扩展
-            return _state;
+            if (typeof console !== 'undefined' && console.warn) console.warn('[Store] No reducer for action:', action);
+            return _deepClone(_state);
         }
         const partial = reducer(_state, payload);
         if (partial && typeof partial === 'object') {
             _state = Object.assign({}, _state, partial);
             _notifyListeners();
         }
-        return _state;
+        // v1.2.1: Return deep clone (P0-2)
+        return _deepClone(_state);
     }
 
     /**
@@ -6649,7 +6648,8 @@ const Store = (function() {
      * @returns {Object} 状态对象
      */
     function getState() {
-        return _state;
+        // v1.2.1: Return deep clone to prevent external mutation (P0-1)
+        return _deepClone(_state);
     }
 
     /**
@@ -6673,9 +6673,10 @@ const Store = (function() {
      */
     function _notifyListeners() {
         const snapshot = _state;
-        for (let i = 0; i < _listeners.length; i++) {
+        const listeners = _listeners.slice();
+        for (let i = 0; i < listeners.length; i++) {
             try {
-                _listeners[i](snapshot);
+                listeners[i](snapshot);
             } catch (e) {
                 // 单个监听器异常不影响其他监听器
                 console.error('[Store] listener error:', e);
@@ -6834,52 +6835,6 @@ const Store = (function() {
 // 导出到全局（用于非模块化合并）
 if (typeof window !== 'undefined') {
     window.Store = Store;
-
-    // v1.2.0 Phase 82+++++ rev 7: JS-side MessageBus event receiver.
-    // When Java emits an event via MessageBus.emit(event, payload), it calls
-    // window._messageBusJs._onEvent(event, payload) via evaluateJavascript.
-    // We use _messageBusJs (not MessageBus) because the Java @JavascriptInterface
-    // is registered as "MessageBus" — using the same name would cause the Java
-    // proxy object to shadow this JS object, making _onEvent unavailable.
-    // Standard event types (per v1.2.0 Development Plan Task 75):
-    //   ENGINE_EVAL, ENGINE_BESTMOVE, ENGINE_READY, ENGINE_ERROR, PGN_CACHE_LIST
-    // The actual engine callbacks (onEngineEval, onBestMove, etc.) are still
-    // called via the existing postJsCallback mechanism — this is a parallel
-    // channel for future migration and debugging.
-    window._messageBusJs = {
-        _listeners: {},
-        _onEvent: function(event, payload) {
-            // Dispatch to Store for observability
-            try {
-                if (event === 'ENGINE_READY') Store.dispatch('ENGINE_READY');
-                else if (event === 'ENGINE_ERROR') Store.dispatch('ENGINE_NOT_READY');
-                else if (event === 'ENGINE_BESTMOVE') Store.dispatch('AI_THINKING_END');
-                else if (event === 'ENGINE_EVAL') {
-                    if (payload && typeof payload === 'object') {
-                        Store.dispatch('UPDATE_EVAL', payload);
-                    }
-                }
-            } catch(e) {}
-            // Notify registered listeners
-            var arr = this._listeners[event];
-            if (arr) {
-                for (var i = 0; i < arr.length; i++) {
-                    try { arr[i](payload); } catch(e) {}
-                }
-            }
-        },
-        on: function(event, listener) {
-            if (!this._listeners[event]) this._listeners[event] = [];
-            this._listeners[event].push(listener);
-        },
-        off: function(event, listener) {
-            var arr = this._listeners[event];
-            if (arr) {
-                var idx = arr.indexOf(listener);
-                if (idx >= 0) arr.splice(idx, 1);
-            }
-        }
-    };
 }
 
 // ===================== MODULE: ai-bridge =====================
@@ -7839,13 +7794,8 @@ function _buildTerminationTag(){
   return null;
 }
 
-function _buildPGNString(forceIncludeVariations, includeAnnotations, includeAutoAnnotations){
+function _buildPGNString(forceIncludeVariations, includeAnnotations){
   if(includeAnnotations===undefined)includeAnnotations=true; // default: include
-  // v1.2.0 Phase 82+++++ rev 9: New parameter — when true, auto-generated visual
-  // annotations (imported=false) are also exported. Default false (Phase 62 behavior:
-  // don't pollute PGN export with auto-generated annotations). The stats page
-  // passes true so it can display live-game visual annotations.
-  if(includeAutoAnnotations===undefined)includeAutoAnnotations=false;
   if(!moveRecords||!moveRecords.length)return '';
   // v1.2.0 Phase 76+: game result derivation extracted to _deriveGameResult()
   const result=_deriveGameResult();
@@ -8013,13 +7963,9 @@ function _buildPGNString(forceIncludeVariations, includeAnnotations, includeAuto
     // v1.0.4 EXPANSION (this round): [%csl] and [%cal] from the visual annotations cache
     // v1.1.1 Phase 62: ONLY export imported annotations (imported=true).
     // v1.1.1 Phase 63: Also gated by includeAnnotations parameter.
-    // v1.2.0 Phase 82+++++ rev 9: When includeAutoAnnotations=true (stats page),
-    // also export auto-generated annotations (imported=false). Previously, only
-    // imported=true annotations were exported, which meant live-game visual
-    // annotations never reached the stats page.
     if(includeAnnotations&&typeof _getVisualAnnotations==='function'){
       const va=_getVisualAnnotations(i);
-      if(va&&(va.imported||includeAutoAnnotations)){
+      if(va&&va.imported){
         if(va.csl&&va.csl.length>0&&typeof formatCslTag==='function'){
           const cslTag=formatCslTag(va.csl);
           if(cslTag)commentParts.push(cslTag);
@@ -8269,7 +8215,7 @@ function openStatsPage(){
   // page's job is to analyze the CURRENT game, not the original import text.
   // (The original import text is still preserved in _cachedOriginalPGN for
   // the PGN cache save 📚 feature.)
-  let pgn=_buildPGNString(true,true,true); // forceIncludeVariations=true, includeAnnotations=true, includeAutoAnnotations=true (v1.2.0 Phase 82+++++ rev 9: stats page needs auto-generated visual annotations)
+  let pgn=_buildPGNString(true,true); // forceIncludeVariations=true, includeAnnotations=true
   // v1.0.3 fallback: if _buildPGNString returned empty (e.g., no moveRecords),
   // try _cachedOriginalPGN as a last resort (e.g., FEN-only imports that didn't
   // generate moveRecords but did set _cachedOriginalPGN).
@@ -8317,7 +8263,24 @@ function openStatsPage(){
       });
     }
   }
-  const payload=JSON.stringify({pgn:pgn,evals:evalData,moveRecords:moveData,playerColor:playerColor,lang:(typeof _lang!=='undefined'?_lang:'zh'),gameVariant:(typeof gameVariant!=='undefined'?gameVariant:null)});
+  // v1.2.1 (round-6 bugfix): Collect ALL visual annotations (both imported
+  //   and auto-generated) so the stats page can display them. Previously,
+  //   _buildPGNString only exports imported=true entries (per Phase 62 design
+  //   to avoid polluting PGN export with auto-generated UI aids), so the stats
+  //   page's PGN-text scan never found auto-generated annotations — the visual
+  //   annotations section was silently hidden for all newly-played games.
+  //   Fix: send a separate visualAnnotations field with all cache entries
+  //   (imported + auto-generated), keyed by moveIdx. The stats page uses this
+  //   as the primary data source, falling back to PGN-text scan only if absent.
+  const vaData={};
+  if(typeof _visualAnnotationsCache!=='undefined'&&_visualAnnotationsCache){
+    for(const [k,v] of _visualAnnotationsCache){
+      if(k==='_initial')continue; // initial-position annotation, not move-scoped
+      if(!v||(!v.csl&&!v.cal))continue;
+      vaData[k]={csl:v.csl||[],cal:v.cal||[]};
+    }
+  }
+  const payload=JSON.stringify({pgn:pgn,evals:evalData,moveRecords:moveData,visualAnnotations:vaData,playerColor:playerColor,lang:(typeof _lang!=='undefined'?_lang:'zh'),gameVariant:(typeof gameVariant!=='undefined'?gameVariant:null)});
   _bridgeCall(function(bridge){
     if(typeof bridge.openStatsPage==='function'){
       bridge.openStatsPage(payload);
@@ -9129,6 +9092,25 @@ function onBestMove(uciMove){
   // If a stale bestmove arrives, the real bestmove is still pending and the
   // safety timer must remain active to catch a potential timeout.
   if(_aiMoveRequestId!==_currentAiRequestId){console.warn('Discarding stale bestmove');return;}
+  // v1.2.1: 先验证 bestmove 可解析再清理状态 —— 否则 unparseable bestmove 会让
+  //   AI 卡在 "未思考、无安全计时器、但仍是 AI 回合" 的死锁状态，user 无法 undo
+  //   也无法继续。验证失败时保持 safety timer 活跃以触发自动重试。
+  if(!uciMove||uciMove==='(none)'||uciMove==='0000'){
+    console.error('onBestMove: engine returned empty bestmove:',uciMove);
+    render();
+    return;
+  }
+  const _bmCoords=uciToCoords(uciMove);
+  if(!_bmCoords){
+    console.error('onBestMove: failed to parse UCI move:',uciMove);
+    render();
+    return;
+  }
+  if(!gameState.board[_bmCoords.from.row]||!gameState.board[_bmCoords.from.row][_bmCoords.from.col]){
+    console.error('onBestMove: no piece at from square for UCI move:',uciMove);
+    render();
+    return;
+  }
   // Cancel safety timeout — engine responded (and it's the current request)
   if(_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
   // v1.0.8 PHASE 22 supplement: AI-think-end sound (轻微答声) — engine found a move
@@ -9203,24 +9185,11 @@ function onBestMove(uciMove){
     }
   },2000);
 
-  if(!uciMove||uciMove==='(none)'||uciMove==='0000'){
-    render();
-    return;
-  }
+  // v1.2.1: uciMove / coords / piece 已在函数入口验证（line 2242-2257），
+  //   此处保留 coords 解析以提取 from/to/promotion 字段供 executeMove 使用。
   const coords=uciToCoords(uciMove);
-  if(!coords){
-    console.error('Failed to parse UCI move:',uciMove);
-    render();
-    return;
-  }
   const from=coords.from, to=coords.to;
-  if(!gameState.board[from.row]){console.error('Board row access error');render();return;}
   const piece=gameState.board[from.row][from.col];
-  if(!piece){
-    console.error('No piece at from square');
-    render();
-    return;
-  }
   executeMove(from,to,coords.promotion);
 
   // After AI moves, start Ponder if enabled and we have a ponder move
@@ -10000,27 +9969,27 @@ function setConfigMultiPV(v){
 }
 function setConfigMoveOverhead(v){v=Math.max(0,Math.min(5000,parseInt(v)||30));if(engineSettingsData)engineSettingsData.moveOverhead=v;_bridgeCall(function(bridge){bridge.setEngineMoveOverhead(v);});renderEngineConfigAndUpdate();}
 function togglePonder(){
-  const newVal=!(engineSettingsData&&engineSettingsData.ponder);
+  const newVal=!engineSettingsData||!engineSettingsData.ponder;
   if(engineSettingsData)engineSettingsData.ponder=newVal;
   HapticManager.fire(newVal?'TOGGLE_ON':'TOGGLE_OFF');
   _bridgeCall(function(bridge){bridge.setEnginePonder(newVal);});renderEngineConfigAndUpdate();
 }
 function toggleShowWDL(){
-  const newVal=!(engineSettingsData&&engineSettingsData.showWDL);
+  const newVal=!engineSettingsData||!engineSettingsData.showWDL;
   if(engineSettingsData)engineSettingsData.showWDL=newVal;
   HapticManager.fire(newVal?'TOGGLE_ON':'TOGGLE_OFF');
   _bridgeCall(function(bridge){bridge.setEngineShowWDL(newVal);});renderEngineConfigAndUpdate();
 }
 function setConfigSkillLevel(v){v=Math.max(0,Math.min(20,parseInt(v)||20));if(engineSettingsData)engineSettingsData.skillLevel=v;_bridgeCall(function(bridge){bridge.setEngineSkillLevel(v);});renderEngineConfigAndUpdate();}
 function toggleLimitElo(){
-  const newVal=!(engineSettingsData&&engineSettingsData.limitStrength);
+  const newVal=!engineSettingsData||!engineSettingsData.limitStrength;
   if(engineSettingsData)engineSettingsData.limitStrength=newVal;
   HapticManager.fire(newVal?'TOGGLE_ON':'TOGGLE_OFF');
   _bridgeCall(function(bridge){bridge.setEngineLimitElo(newVal,engineSettingsData?engineSettingsData.elo:2800);});renderEngineConfigAndUpdate();
 }
 function setConfigElo(v){v=Math.max(500,Math.min(3200,parseInt(v)||2800));if(engineSettingsData)engineSettingsData.elo=v;_bridgeCall(function(bridge){bridge.setEngineLimitElo(engineSettingsData?engineSettingsData.limitStrength:false,v);});renderEngineConfigAndUpdate();}
 function toggleAutoConfig(){
-  const newVal=!(engineSettingsData&&engineSettingsData.autoConfig);
+  const newVal=!engineSettingsData||!engineSettingsData.autoConfig;
   if(engineSettingsData)engineSettingsData.autoConfig=newVal;
   HapticManager.fire(newVal?'TOGGLE_ON':'TOGGLE_OFF');
   _bridgeCall(function(bridge){bridge.setAutoConfig(newVal);});renderEngineConfigAndUpdate();
@@ -10899,11 +10868,9 @@ function requestEngineEval(){
       _sfMateDistance=0;_sfDepth=0;_sfSeldepth=0;
       _sfEvalReady=true;_evalLoading=false;
       _invalidateInFlight();
-      // v1.2.0 Phase 82+++++ FIX: WDL values were inverted. When _isBlackTurn=true,
-      // Black is checkmated → White wins → wdlW should be 1000 (100% White win),
-      // wdlL should be 0. Previously the ternary branches were swapped, showing
-      // "(0%W/0%D/100%L)" for a position White had won. All WDL values are
-      // White-perspective (per pgn-standard.js convention + onEngineEval line 2675).
+      // v1.2.1: 修复 WDL 反转 bug —— 此前 wdlW/wdlL 与 checkmate 方不一致。
+      //   当 _isBlackTurn=true（黑被将杀，白胜）时 wdlW 应为 1000、wdlL 应为 0；
+      //   与 onEngineEval 路径的 White-POV 翻转逻辑（line 2677）保持一致。
       _reviewEvalCache.set(reviewStep,{eval:_sfEval,mate:0,depth:0,seldepth:0,wdlW:_isBlackTurn?1000:0,wdlD:0,wdlL:_isBlackTurn?0:1000});
       _updateAllEvalDisplays();
       return;
@@ -10994,7 +10961,6 @@ function _requestBatchEval(step){
   if(_termStatus==='checkmate'){
     const _isBlackTurn=_rs.currentTurn==='black';
     const _eval=_isBlackTurn?99999:-99999;
-    // v1.2.0 Phase 82+++++ FIX: WDL values were inverted (same fix as requestEngineEval).
     _reviewEvalCache.set(step,{eval:_eval,mate:0,depth:0,seldepth:0,wdlW:_isBlackTurn?1000:0,wdlD:0,wdlL:_isBlackTurn?0:1000});
     if(typeof _reviewAnalyzeAdvance==='function'){
       try{_reviewAnalyzeAdvance();}catch(e){console.error('Analyze-all advance (checkmate) failed:',e);}
@@ -12648,17 +12614,7 @@ function importPGN(pgnText){
           break;
         }
       }
-      if(divergeIdx<0){
-        // All variation moves checked without divergence
-        if(matchCount>=sanMoves.length){
-          // All matched — redundant, remove
-          continue;
-        }else{
-          // Some moves weren't checked (shouldn't happen, but defensive)
-          // Remove the variation — it's incomplete
-          continue;
-        }
-      }
+      if(divergeIdx<0) continue;
       if(divergeIdx>=0&&divergeIdx<moveRecords.length){
         // Move the variation to the divergence-point move
         const remainingSAN=sanMoves.slice(matchCount).join(' ');
@@ -13285,872 +13241,6 @@ let ecoHashMap=null,ecoHashMap2=null,ecoHashMap3=null;
 
 // ---- Exports ----
 
-// ui-audio.js — Audio Engine Module (v1.2.0 Phase 74)
-//
-// Regalia - UI Audio Module
-// Copyright (C) 2026 Regalia
-//
-// Derived from DroidFish (Peter Österlund) audio patterns.
-// Modifications Copyright (C) 2026 Regalia
-//
-// AI-GEN: AI assisted + DroidFish source code logic reference
-// This code was AI-assisted and has been reviewed for GPL v3 compliance.
-//
-// v1.2.0: New module (Phase 74 — God Module split).
-//         Provides audio engine utilities and sound synthesis helpers.
-//         The main ChessAudioEngine class remains in ui.js for backward
-//         compatibility; this module provides additional utilities.
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with this program. If not, see <https://www.gnu.org/licenses/>.
-
-/**
- * UI Audio Module (v1.2.0 Phase 74)
- *
- * 音频工具模块 — 提供音量管理、音频解锁、音效合成的辅助工具。
- * ChessAudioEngine 类保留在 ui.js 中以维持兼容性。
- */
-const UIAudio = (function() {
-    'use strict';
-
-    // 音量常量
-    const DEFAULT_VOLUME = 0.7;
-    const MIN_VOLUME = 0;
-    const MAX_VOLUME = 1;
-
-    // 音效类型
-    const SOUND_TYPE = {
-        MOVE: 'move',
-        CAPTURE: 'capture',
-        CASTLE: 'castle',
-        CHECK: 'check',
-        CHECKMATE: 'checkmate',
-        SELECT: 'select',
-        HINT: 'hint',
-        GAME_START: 'gameStart',
-        GAME_END: 'gameEnd',
-        ERROR: 'error'
-    };
-
-    // 棋子类型（与 game-logic.js 一致）
-    const PIECE_TYPE = {
-        PAWN: 'p',
-        KNIGHT: 'n',
-        BISHOP: 'b',
-        ROOK: 'r',
-        QUEEN: 'q',
-        KING: 'k'
-    };
-
-    let _audioContext = null;
-    let _masterGain = null;
-    let _volume = DEFAULT_VOLUME;
-    let _enabled = true;
-
-    /**
-     * 获取或创建 AudioContext
-     */
-    function getAudioContext() {
-        if (!_audioContext) {
-            try {
-                const Ctor = window.AudioContext || window.webkitAudioContext;
-                if (!Ctor) return null;
-                _audioContext = new Ctor();
-                _masterGain = _audioContext.createGain();
-                _masterGain.gain.value = _volume;
-                _masterGain.connect(_audioContext.destination);
-            } catch (e) {
-                console.warn('[UIAudio] AudioContext init failed:', e);
-                return null;
-            }
-        }
-        return _audioContext;
-    }
-
-    /**
-     * 解锁音频（移动端需要在用户交互后恢复 AudioContext）
-     */
-    function unlockAudio() {
-        const ctx = getAudioContext();
-        if (!ctx) return;
-        if (ctx.state === 'suspended') {
-            ctx.resume().catch(function(e) {
-                console.warn('[UIAudio] resume failed:', e);
-            });
-        }
-    }
-
-    /**
-     * 设置主音量
-     * @param {number} vol - 音量 (0-1)
-     */
-    function setVolume(vol) {
-        _volume = Math.max(MIN_VOLUME, Math.min(MAX_VOLUME, vol));
-        if (_masterGain) {
-            _masterGain.gain.value = _volume;
-        }
-    }
-
-    /**
-     * 获取当前音量
-     */
-    function getVolume() {
-        return _volume;
-    }
-
-    /**
-     * 启用/禁用音效
-     */
-    function setEnabled(enabled) {
-        _enabled = !!enabled;
-        if (_masterGain) {
-            _masterGain.gain.value = _enabled ? _volume : 0;
-        }
-    }
-
-    /**
-     * 是否启用
-     */
-    function isEnabled() {
-        return _enabled;
-    }
-
-    /**
-     * 合成简单的提示音（用于 UI 反馈）
-     * @param {number} freq - 频率 (Hz)
-     * @param {number} duration - 持续时间 (秒)
-     * @param {string} type - 波形类型 ('sine' | 'square' | 'triangle' | 'sawtooth')
-     */
-    function playTone(freq, duration, type) {
-        if (!_enabled) return;
-        const ctx = getAudioContext();
-        if (!ctx) return;
-        try {
-            const osc = ctx.createOscillator();
-            const gain = ctx.createGain();
-            osc.type = type || 'sine';
-            osc.frequency.value = freq;
-            gain.gain.setValueAtTime(0, ctx.currentTime);
-            gain.gain.linearRampToValueAtTime(0.3, ctx.currentTime + 0.01);
-            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
-            osc.connect(gain);
-            gain.connect(_masterGain);
-            osc.start();
-            osc.stop(ctx.currentTime + duration);
-        } catch (e) {
-            console.warn('[UIAudio] playTone failed:', e);
-        }
-    }
-
-    /**
-     * 释放音频资源
-     */
-    function dispose() {
-        if (_audioContext) {
-            try {
-                _audioContext.close();
-            } catch (e) {
-                // 忽略关闭错误
-            }
-            _audioContext = null;
-            _masterGain = null;
-        }
-    }
-
-    return {
-        DEFAULT_VOLUME,
-        SOUND_TYPE,
-        PIECE_TYPE,
-        getAudioContext,
-        unlockAudio,
-        setVolume,
-        getVolume,
-        setEnabled,
-        isEnabled,
-        playTone,
-        dispose
-    };
-})();
-
-// 导出到全局
-if (typeof window !== 'undefined') {
-    window.UIAudio = UIAudio;
-}
-
-// ui-board.js — Board Rendering Module (v1.2.0 Phase 74)
-//
-// Regalia - UI Board Module
-// Copyright (C) 2026 Regalia
-//
-// Derived from DroidFish (Peter Österlund) board rendering logic.
-// Modifications Copyright (C) 2026 Regalia
-//
-// AI-GEN: AI assisted + DroidFish source code logic reference
-// This code was AI-assisted and has been reviewed for GPL v3 compliance.
-//
-// v1.2.0: New module (Phase 74 — God Module split).
-//         Extracts board rendering, coordinate labels, heatmap, and arrow
-//         rendering from ui.js. Provides reusable board utilities.
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with this program. If not, see <https://www.gnu.org/licenses/>.
-
-/**
- * UI Board Module (v1.2.0 Phase 74)
- *
- * 棋盘渲染工具模块 — 提供坐标标注、格子背景色、箭头渲染等可复用工具。
- *
- * 坐标标注规范（与主界面、统计界面、复盘界面统一）:
- *   - 左侧 1-8 数字标签：棋盘格宽度的 25% 字体大小，从白方视角底部为 1 顶部为 8
- *   - 上方 a-h 字母标签：棋盘格宽度的 25% 字体大小，从白方视角左侧为 a 右侧为 h
- *   - 浅色格坐标颜色: #4a3a0a (深棕色)
- *   - 深色格坐标颜色: #f0dcb0 (浅米色)
- *   - 浅色格坐标描边: rgba(255,230,150,.85)
- *   - 深色格坐标描边: rgba(30,15,0,.85)
- *   - 格子内坐标位置: 左上角偏移 2px
- *   - 字体: sans-serif
- */
-const UIBoard = (function() {
-    'use strict';
-
-    // 坐标标注常量（与主界面 index.html.tpl CSS 一致）
-    const COORD_COLOR_LIGHT = '#4a3a0a';
-    const COORD_COLOR_DARK = '#f0dcb0';
-    const COORD_STROKE_LIGHT = 'rgba(255,230,150,.85)';
-    const COORD_STROKE_DARK = 'rgba(30,15,0,.85)';
-    const COORD_FONT_FAMILY = 'sans-serif';
-    const COORD_FONT_RATIO = 0.25; // 格宽的 25%
-    const COORD_OFFSET_PX = 2; // 左上角偏移
-
-    // 棋盘格子背景色
-    const SQ_BG_LIGHT = '#f0d9b5';
-    const SQ_BG_DARK = '#b58863';
-    const SQ_BG_LIGHT_HIGHLIGHT = '#f7ec74';
-    const SQ_BG_DARK_HIGHLIGHT = '#dac34b';
-    const SQ_BG_LIGHT_SELECTED = '#a8a8a8';
-    const SQ_BG_DARK_SELECTED = '#888888';
-
-    /**
-     * 获取格子背景色
-     * @param {number} file - 列 (0-7, a-h)
-     * @param {number} rank - 行 (0-7, 8-1)
-     * @param {Object} opts - 选项 {selected, highlight, lastMove}
-     * @returns {string} CSS 颜色值
-     */
-    function getSquareBg(file, rank, opts) {
-        opts = opts || {};
-        const isLight = (file + rank) % 2 === 1;
-        if (opts.selected) return isLight ? SQ_BG_LIGHT_SELECTED : SQ_BG_DARK_SELECTED;
-        if (opts.highlight) return isLight ? SQ_BG_LIGHT_HIGHLIGHT : SQ_BG_DARK_HIGHLIGHT;
-        if (opts.lastMove) return isLight ? SQ_BG_LIGHT_HIGHLIGHT : SQ_BG_DARK_HIGHLIGHT;
-        return isLight ? SQ_BG_LIGHT : SQ_BG_DARK;
-    }
-
-    /**
-     * 获取格子坐标名称（如 "a1", "e4"）
-     * @param {number} file - 列 (0-7)
-     * @param {number} rank - 行 (0-7)
-     * @param {boolean} flipped - 棋盘是否翻转
-     * @returns {string} 坐标名称
-     */
-    function getSquareName(file, rank, flipped) {
-        if (flipped) {
-            file = 7 - file;
-            rank = 7 - rank;
-        }
-        return String.fromCharCode(97 + file) + (rank + 1);
-    }
-
-    /**
-     * 获取格子坐标颜色（根据格子的明暗）
-     * @param {number} file - 列
-     * @param {number} rank - 行
-     * @returns {string} CSS 颜色值
-     */
-    function getCoordColor(file, rank) {
-        const isLight = (file + rank) % 2 === 1;
-        return isLight ? COORD_COLOR_LIGHT : COORD_COLOR_DARK;
-    }
-
-    /**
-     * 获取格子坐标描边颜色
-     * @param {number} file - 列
-     * @param {number} rank - 行
-     * @returns {string} CSS 颜色值
-     */
-    function getCoordStroke(file, rank) {
-        const isLight = (file + rank) % 2 === 1;
-        return isLight ? COORD_STROKE_LIGHT : COORD_STROKE_DARK;
-    }
-
-    /**
-     * 生成格子坐标标签的 HTML
-     * @param {number} file - 列
-     * @param {number} rank - 行
-     * @param {boolean} flipped - 棋盘是否翻转
-     * @param {number} squareSize - 格子宽度（像素）
-     * @returns {string} HTML 字符串
-     */
-    function renderSquareCoord(file, rank, flipped, squareSize) {
-        const name = getSquareName(file, rank, flipped);
-        const color = getCoordColor(file, rank);
-        const stroke = getCoordStroke(file, rank);
-        const fontSize = Math.max(8, Math.floor(squareSize * COORD_FONT_RATIO));
-        const style = [
-            'position:absolute',
-            'left:' + COORD_OFFSET_PX + 'px',
-            'top:' + COORD_OFFSET_PX + 'px',
-            'font:' + fontSize + 'px/' + fontSize + 'px ' + COORD_FONT_FAMILY,
-            'color:' + color,
-            'text-shadow:0 0 2px ' + stroke + ',0 0 2px ' + stroke,
-            'pointer-events:none',
-            'z-index:1',
-            'user-select:none'
-        ].join(';');
-        return '<span class="sq-coord" style="' + style + '">' + name + '</span>';
-    }
-
-    /**
-     * 生成左侧 1-8 数字标签 HTML
-     * @param {boolean} flipped - 棋盘是否翻转
-     * @param {number} squareSize - 格子宽度
-     * @returns {string} HTML 字符串
-     */
-    function renderRankLabels(flipped, squareSize) {
-        const fontSize = Math.max(10, Math.floor(squareSize * COORD_FONT_RATIO));
-        let html = '<div class="rank-labels" style="position:absolute;left:0;top:0;width:' +
-                   Math.floor(squareSize * 0.4) + 'px;height:100%;display:flex;flex-direction:column;';
-        html += 'font:' + fontSize + 'px ' + COORD_FONT_FAMILY + ';color:var(--text,#f5e6c8);">';
-        // 白方视角: 底部为 1，顶部为 8
-        // 翻转时: 底部为 8，顶部为 1
-        const ranks = flipped ? [1,2,3,4,5,6,7,8] : [8,7,6,5,4,3,2,1];
-        for (let i = 0; i < 8; i++) {
-            html += '<div style="flex:1;display:flex;align-items:center;justify-content:center;">' +
-                    ranks[i] + '</div>';
-        }
-        html += '</div>';
-        return html;
-    }
-
-    /**
-     * 生成上方 a-h 字母标签 HTML
-     * @param {boolean} flipped - 棋盘是否翻转
-     * @param {number} squareSize - 格子宽度
-     * @returns {string} HTML 字符串
-     */
-    function renderFileLabels(flipped, squareSize) {
-        const fontSize = Math.max(10, Math.floor(squareSize * COORD_FONT_RATIO));
-        let html = '<div class="file-labels" style="position:absolute;left:0;top:0;width:100%;height:' +
-                   Math.floor(squareSize * 0.4) + 'px;display:flex;flex-direction:row;';
-        html += 'font:' + fontSize + 'px ' + COORD_FONT_FAMILY + ';color:var(--text,#f5e6c8);">';
-        // 白方视角: 左侧为 a，右侧为 h
-        // 翻转时: 左侧为 h，右侧为 a
-        const files = flipped ? ['h','g','f','e','d','c','b','a'] : ['a','b','c','d','e','f','g','h'];
-        for (let i = 0; i < 8; i++) {
-            html += '<div style="flex:1;display:flex;align-items:center;justify-content:center;">' +
-                    files[i] + '</div>';
-        }
-        html += '</div>';
-        return html;
-    }
-
-    /**
-     * 为复盘界面棋盘添加完整坐标标注（左侧 1-8 + 上方 a-h + 格子坐标）
-     * @param {HTMLElement} boardEl - 棋盘容器元素
-     * @param {boolean} flipped - 棋盘是否翻转
-     * @param {number} squareSize - 格子宽度
-     */
-    function addReviewBoardCoords(boardEl, flipped, squareSize) {
-        if (!boardEl) return;
-        // 确保容器是相对定位
-        const pos = boardEl.style.position;
-        if (pos !== 'relative' && pos !== 'absolute') {
-            boardEl.style.position = 'relative';
-        }
-        // 移除旧的坐标标签（如有）
-        const oldRanks = boardEl.querySelector('.rank-labels');
-        if (oldRanks) oldRanks.remove();
-        const oldFiles = boardEl.querySelector('.file-labels');
-        if (oldFiles) oldFiles.remove();
-
-        // 添加新的坐标标签
-        const rankHtml = renderRankLabels(flipped, squareSize);
-        const fileHtml = renderFileLabels(flipped, squareSize);
-        boardEl.insertAdjacentHTML('afterbegin', rankHtml + fileHtml);
-
-        // 为每个格子添加坐标标签
-        const squares = boardEl.querySelectorAll('.sq');
-        squares.forEach((sq, idx) => {
-            // 移除旧坐标
-            const oldCoord = sq.querySelector('.sq-coord');
-            if (oldCoord) oldCoord.remove();
-            // 计算行列（根据 DOM 顺序）
-            const file = idx % 8;
-            const rank = Math.floor(idx / 8);
-            // 插入坐标
-            sq.insertAdjacentHTML('afterbegin', renderSquareCoord(file, rank, flipped, squareSize));
-        });
-    }
-
-    return {
-        COORD_COLOR_LIGHT,
-        COORD_COLOR_DARK,
-        COORD_STROKE_LIGHT,
-        COORD_STROKE_DARK,
-        SQ_BG_LIGHT,
-        SQ_BG_DARK,
-        getSquareBg,
-        getSquareName,
-        getCoordColor,
-        getCoordStroke,
-        renderSquareCoord,
-        renderRankLabels,
-        renderFileLabels,
-        addReviewBoardCoords
-    };
-})();
-
-// 导出到全局
-if (typeof window !== 'undefined') {
-    window.UIBoard = UIBoard;
-}
-
-// ui-review.js — Review Mode Module (v1.2.0 Phase 74)
-//
-// Regalia - UI Review Module
-// Copyright (C) 2026 Regalia
-//
-// Derived from DroidFish (Peter Österlund) review mode logic.
-// Modifications Copyright (C) 2026 Regalia
-//
-// AI-GEN: AI assisted + DroidFish source code logic reference
-// This code was AI-assisted and has been reviewed for GPL v3 compliance.
-//
-// v1.2.0: New module (Phase 74 — God Module split).
-//         Extracts review mode utilities: evaluation trend chart,
-//         move classification, and analyze-all helpers.
-//         Also provides review board coordinate labeling (Phase 77).
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with this program. If not, see <https://www.gnu.org/licenses/>.
-
-/**
- * UI Review Module (v1.2.0 Phase 74)
- *
- * 复盘模式工具模块 — 提供评估趋势图、走法分类、分析全部等可复用工具。
- */
-const UIReview = (function() {
-    'use strict';
-
-    // 走法分类常量
-    const MOVE_CLASS = {
-        BEST: 'best',           // 最佳走法
-        EXCELLENT: 'excellent', // 极好
-        GOOD: 'good',           // 好走法
-        OK: 'ok',               // 一般
-        INACCURACY: 'inaccuracy', // 不准确
-        MISTAKE: 'mistake',     // 失误
-        BLUNDER: 'blunder'      // 严重失误
-    };
-
-    // 分数阈值（centipawns）
-    const THRESHOLDS = {
-        BEST: 0,        // 评估损失 0
-        EXCELLENT: 10,  // ≤ 10
-        GOOD: 25,       // ≤ 25
-        OK: 50,         // ≤ 50
-        INACCURACY: 100, // ≤ 100
-        MISTAKE: 300,   // ≤ 300
-        BLUNDER: 300    // > 300
-    };
-
-    /**
-     * 根据评估损失分类走法
-     * @param {number} evalLoss - 评估损失（centipawns，正数表示损失）
-     * @returns {string} MOVE_CLASS 之一
-     */
-    function classifyMove(evalLoss) {
-        if (evalLoss <= THRESHOLDS.BEST) return MOVE_CLASS.BEST;
-        if (evalLoss <= THRESHOLDS.EXCELLENT) return MOVE_CLASS.EXCELLENT;
-        if (evalLoss <= THRESHOLDS.GOOD) return MOVE_CLASS.GOOD;
-        if (evalLoss <= THRESHOLDS.OK) return MOVE_CLASS.OK;
-        if (evalLoss <= THRESHOLDS.INACCURACY) return MOVE_CLASS.INACCURACY;
-        if (evalLoss <= THRESHOLDS.MISTAKE) return MOVE_CLASS.MISTAKE;
-        return MOVE_CLASS.BLUNDER;
-    }
-
-    /**
-     * 获取走法分类的显示名称
-     * @param {string} cls - MOVE_CLASS 之一
-     * @param {string} lang - 语言 ('zh' | 'en')
-     * @returns {string} 本地化名称
-     */
-    function getMoveClassName(cls, lang) {
-        const names = {
-            zh: {
-                best: '最佳',
-                excellent: '极好',
-                good: '好',
-                ok: '一般',
-                inaccuracy: '不准确',
-                mistake: '失误',
-                blunder: '严重失误'
-            },
-            en: {
-                best: 'Best',
-                excellent: 'Excellent',
-                good: 'Good',
-                ok: 'OK',
-                inaccuracy: 'Inaccuracy',
-                mistake: 'Mistake',
-                blunder: 'Blunder'
-            }
-        };
-        const langMap = names[lang] || names.zh;
-        return langMap[cls] || cls;
-    }
-
-    /**
-     * 获取走法分类的颜色
-     * @param {string} cls - MOVE_CLASS 之一
-     * @returns {string} CSS 颜色值
-     */
-    function getMoveClassColor(cls) {
-        const colors = {
-            best: '#4caf50',       // 绿色
-            excellent: '#8bc34a',  // 浅绿
-            good: '#cddc39',       // 黄绿
-            ok: '#ffc107',         // 黄色
-            inaccuracy: '#ff9800', // 橙色
-            mistake: '#ff5722',    // 深橙
-            blunder: '#f44336'     // 红色
-        };
-        return colors[cls] || '#888';
-    }
-
-    /**
-     * 构建评估趋势图 SVG
-     * @param {Array} evals - 评估值数组 [{score, depth, mate}]
-     * @param {Object} opts - 选项 {width, height, theme}
-     * @returns {string} SVG 字符串
-     */
-    function buildEvalTrendSVG(evals, opts) {
-        opts = opts || {};
-        const width = opts.width || 600;
-        const height = opts.height || 120;
-        const theme = opts.theme || 'dark';
-        const isDark = theme === 'dark';
-
-        const bgColor = isDark ? '#1a0a0a' : '#f0f0f3';
-        const lineColor = isDark ? '#5dade2' : '#2c5f8d';
-        const fillColor = isDark ? '#e74c3c' : '#c0392b';
-        const gridColor = isDark ? '#4a3020' : '#b0b0b8';
-        const axisColor = isDark ? '#8a6a3a' : '#8a8a94';
-        const textColor = isDark ? '#f5e6c8' : '#2c2c34';
-
-        if (!evals || evals.length === 0) {
-            return '<svg width="' + width + '" height="' + height + '" xmlns="http://www.w3.org/2000/svg">' +
-                   '<rect width="100%" height="100%" fill="' + bgColor + '"/>' +
-                   '<text x="50%" y="50%" text-anchor="middle" fill="' + textColor + '" font-size="14">No data</text>' +
-                   '</svg>';
-        }
-
-        const padding = 20;
-        const chartW = width - padding * 2;
-        const chartH = height - padding * 2;
-
-        // 计算分数范围
-        let minScore = Infinity, maxScore = -Infinity;
-        for (const e of evals) {
-            if (e && typeof e.score === 'number') {
-                if (e.score < minScore) minScore = e.score;
-                if (e.score > maxScore) maxScore = e.score;
-            }
-        }
-        // 钳制到合理范围
-        const range = Math.max(200, maxScore - minScore);
-        const yMin = minScore - range * 0.1;
-        const yMax = maxScore + range * 0.1;
-
-        // 生成路径
-        let pathD = '';
-        const points = [];
-        for (let i = 0; i < evals.length; i++) {
-            const e = evals[i];
-            if (!e || typeof e.score !== 'number') continue;
-            const x = padding + (chartW * i) / Math.max(1, evals.length - 1);
-            const y = padding + chartH * (1 - (e.score - yMin) / (yMax - yMin));
-            points.push([x, y]);
-            pathD += (i === 0 ? 'M' : 'L') + x.toFixed(1) + ',' + y.toFixed(1) + ' ';
-        }
-
-        // 构建区域填充路径
-        let areaD = pathD;
-        if (points.length > 0) {
-            areaD += 'L' + points[points.length - 1][0].toFixed(1) + ',' + (padding + chartH) + ' ';
-            areaD += 'L' + points[0][0].toFixed(1) + ',' + (padding + chartH) + ' Z';
-        }
-
-        let svg = '<svg width="' + width + '" height="' + height + '" xmlns="http://www.w3.org/2000/svg">';
-        svg += '<rect width="100%" height="100%" fill="' + bgColor + '"/>';
-
-        // 网格线
-        for (let i = 0; i <= 4; i++) {
-            const y = padding + (chartH * i) / 4;
-            svg += '<line x1="' + padding + '" y1="' + y + '" x2="' + (padding + chartW) +
-                   '" y2="' + y + '" stroke="' + gridColor + '" stroke-width="0.5" opacity="0.5"/>';
-        }
-
-        // 0 线（如果范围跨越 0）
-        if (yMin < 0 && yMax > 0) {
-            const zeroY = padding + chartH * (1 - (0 - yMin) / (yMax - yMin));
-            svg += '<line x1="' + padding + '" y1="' + zeroY + '" x2="' + (padding + chartW) +
-                   '" y2="' + zeroY + '" stroke="' + axisColor + '" stroke-width="1" stroke-dasharray="3,3"/>';
-        }
-
-        // 区域填充
-        svg += '<path d="' + areaD + '" fill="' + fillColor + '" opacity="0.2"/>';
-        // 折线
-        svg += '<path d="' + pathD + '" fill="none" stroke="' + lineColor + '" stroke-width="2"/>';
-
-        // 数据点
-        for (const p of points) {
-            svg += '<circle cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) +
-                   '" r="2" fill="' + lineColor + '"/>';
-        }
-
-        svg += '</svg>';
-        return svg;
-    }
-
-    /**
-     * 为复盘棋盘添加坐标标注（Phase 77）
-     * 委托给 UIBoard.addReviewBoardCoords
-     */
-    function addReviewBoardCoords(boardEl, flipped, squareSize) {
-        if (typeof UIBoard !== 'undefined') {
-            UIBoard.addReviewBoardCoords(boardEl, flipped, squareSize);
-        }
-    }
-
-    return {
-        MOVE_CLASS,
-        THRESHOLDS,
-        classifyMove,
-        getMoveClassName,
-        getMoveClassColor,
-        buildEvalTrendSVG,
-        addReviewBoardCoords
-    };
-})();
-
-// 导出到全局
-if (typeof window !== 'undefined') {
-    window.UIReview = UIReview;
-}
-
-// ui-toolbar.js — Toolbar Module (v1.2.0 Phase 74)
-//
-// Regalia - UI Toolbar Module
-// Copyright (C) 2026 Regalia
-//
-// Derived from DroidFish (Peter Österlund) UI patterns.
-// Modifications Copyright (C) 2026 Regalia
-//
-// AI-GEN: AI assisted + DroidFish source code logic reference
-// This code was AI-assisted and has been reviewed for GPL v3 compliance.
-//
-// v1.2.0: New module (Phase 74 — God Module split).
-//         Provides toolbar rendering utilities, button state management,
-//         and language switching helpers.
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with this program. If not, see <https://www.gnu.org/licenses/>.
-
-/**
- * UI Toolbar Module (v1.2.0 Phase 74)
- *
- * 工具栏模块 — 提供工具栏渲染、按钮状态管理、语言切换的辅助工具。
- */
-const UIToolbar = (function() {
-    'use strict';
-
-    // 工具栏按钮 ID
-    const BTN_ID = {
-        NEW_GAME: 'btn-new-game',
-        UNDO: 'btn-undo',
-        REDO: 'btn-redo',
-        HINT: 'btn-hint',
-        FLIP: 'btn-flip',
-        REVIEW: 'btn-review',
-        SETUP: 'btn-setup',
-        SETTINGS: 'btn-settings',
-        PGN_CACHE: 'btn-pgn-cache',
-        STATS: 'btn-stats',
-        SOUND: 'btn-sound',
-        THEME: 'btn-theme',
-        LANG: 'btn-lang',
-        ABOUT: 'btn-about'
-    };
-
-    // 按钮状态
-    const BTN_STATE = {
-        NORMAL: 'normal',
-        ACTIVE: 'active',
-        DISABLED: 'disabled',
-        HIDDEN: 'hidden'
-    };
-
-    /**
-     * 设置按钮状态
-     * @param {string} btnId - 按钮 ID
-     * @param {string} state - BTN_STATE 之一
-     */
-    function setButtonState(btnId, state) {
-        const el = document.getElementById(btnId);
-        if (!el) return;
-        // 清除旧状态
-        el.classList.remove('btn-active', 'btn-disabled');
-        el.removeAttribute('disabled');
-        el.style.display = '';
-        switch (state) {
-            case BTN_STATE.ACTIVE:
-                el.classList.add('btn-active');
-                break;
-            case BTN_STATE.DISABLED:
-                el.classList.add('btn-disabled');
-                el.setAttribute('disabled', 'disabled');
-                break;
-            case BTN_STATE.HIDDEN:
-                el.style.display = 'none';
-                break;
-            case BTN_STATE.NORMAL:
-            default:
-                // 正常状态，无需额外类
-                break;
-        }
-    }
-
-    /**
-     * 切换语言（发送到 Java 层持久化）
-     * @param {string} lang - 'zh' 或 'en'
-     */
-    function switchLanguage(lang) {
-        try {
-            if (typeof AndroidBridge !== 'undefined' && AndroidBridge.saveLangPref) {
-                AndroidBridge.saveLangPref(lang);
-            }
-        } catch (e) {
-            console.warn('[UIToolbar] saveLangPref failed:', e);
-        }
-        // 通过 Store 更新状态
-        if (typeof Store !== 'undefined') {
-            Store.dispatch('SET_LANG', lang);
-        }
-    }
-
-    /**
-     * 切换主题
-     * @param {string} theme - 'dark' 或 'light'
-     */
-    function switchTheme(theme) {
-        document.documentElement.setAttribute('data-theme', theme);
-        if (typeof Store !== 'undefined') {
-            Store.dispatch('SET_THEME', theme);
-        }
-    }
-
-    /**
-     * 切换音效开关
-     * @param {boolean} enabled - 是否启用
-     */
-    function toggleSound(enabled) {
-        if (typeof UIAudio !== 'undefined') {
-            UIAudio.setEnabled(enabled);
-        }
-        if (typeof Store !== 'undefined') {
-            Store.dispatch('TOGGLE_SOUND', enabled);
-        }
-    }
-
-    /**
-     * 更新所有工具栏按钮的状态
-     * @param {Object} state - 应用状态
-     */
-    function updateToolbarState(state) {
-        if (!state) return;
-        // 悔棋按钮：有历史才可用
-        setButtonState(BTN_ID.UNDO, state.stateHistory && state.stateHistory.length > 0
-            ? BTN_STATE.NORMAL : BTN_STATE.DISABLED);
-        // 重做按钮：有重做栈才可用
-        setButtonState(BTN_ID.REDO, state.redoStack && state.redoStack.length > 0
-            ? BTN_STATE.NORMAL : BTN_STATE.DISABLED);
-        // 提示按钮：引擎就绪且非 AI 思考中
-        setButtonState(BTN_ID.HINT, (state.engineReady && !state.aiThinking)
-            ? BTN_STATE.NORMAL : BTN_STATE.DISABLED);
-        // 复盘按钮：有走法记录才可用
-        setButtonState(BTN_ID.REVIEW, state.moveRecords && state.moveRecords.length > 0
-            ? BTN_STATE.NORMAL : BTN_STATE.DISABLED);
-        // 音效按钮：反映当前状态
-        setButtonState(BTN_ID.SOUND, state.soundOn ? BTN_STATE.ACTIVE : BTN_STATE.NORMAL);
-    }
-
-    return {
-        BTN_ID,
-        BTN_STATE,
-        setButtonState,
-        switchLanguage,
-        switchTheme,
-        toggleSound,
-        updateToolbarState
-    };
-})();
-
-// 导出到全局
-if (typeof window !== 'undefined') {
-    window.UIToolbar = UIToolbar;
-}
-
 // ===================== MODULE: ui =====================
 // Rendering, interaction, dialog management
 // Depends on: game-logic, eco-data, tablebase, ai-bridge
@@ -14578,7 +13668,7 @@ function _updateEvalDisplayIncremental() {
       if (app) {
         app.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:var(--bg);color:var(--text);padding:20px;text-align:center;font-family:system-ui,sans-serif">' +
           '<div style="font-size:3rem;margin-bottom:16px">♔</div>' +
-          '<h2 style="color:var(--accent2);margin-bottom:12px">'+T('app_name')+' v1.2.0</h2>' +
+          '<h2 style="color:var(--accent2);margin-bottom:12px">'+T('app_name')+' v1.2.1</h2>' +
           '<p style="color:#a08050;margin-bottom:20px;max-width:300px">'+T('render_error')+'</p>' +
           '<button onclick="location.reload()" style="padding:12px 24px;background:var(--btn-a-bg);color:var(--bg);border:none;border-radius:6px;font-size:1rem;font-weight:700;cursor:pointer">'+T('refresh_page')+'</button>' +
           '</div>';
@@ -16368,7 +15458,7 @@ if(dlgChess960&&!dlgBookMoves){
   // v1.0.4 FIX (this round): Removed the redundant <h3>${T('classic_openings')}</h3>
   // heading — it was a residual title. The section is self-evident from the ECO
   // search box and openings list below.
-  h+=`<div class="dlg-sec"><div class="portrait-stack" style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap"><form onsubmit="event.preventDefault();if(!_ecoComposing){_ecoDoSearch()}" style="flex:1;min-width:160px;display:flex;gap:4px"><input id="ecoSearch" type="text" inputmode="search" placeholder="${T('eco_search_ph')}" style="flex:1;padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;touch-action:manipulation" enterkeyhint="search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="if(!_ecoComposing){setEcoQuery(this.value)}" onfocus="_ecoSearchFocused=true;if(_ecoBlurTimer){clearTimeout(_ecoBlurTimer);_ecoBlurTimer=0}" onblur="_ecoBlurTimer=setTimeout(function(){_ecoSearchFocused=false;_ecoBlurTimer=0},200)" oncompositionstart="_ecoComposing=true" oncompositionend="_ecoComposing=false;setEcoQuery(this.value)" onkeydown="if((event.key==='Enter'||event.keyCode===13)&&!event.isComposing&&!_ecoComposing){event.preventDefault();setEcoQuery(this.value);_ecoDoSearch()}" value="${(window.ecoSearchQuery||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c]))}"></form><select id="ecoFamily" style="padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;cursor:pointer;flex-shrink:0" onchange="window.ecoFamilyFilter=this.value;ecoShowCount=30;_ecoUpdateResults()"><option value="">${T('all_categories')}</option>${Object.keys(ECO_BY_FAMILY).sort().map(f=>`<option value="${f}"${(window.ecoFamilyFilter||'')===f?' selected':''}>${f}</option>`).join('')}</select></div><div class="op-list"><button class="op-btn${!dlgOpeningId?' act':''}" onclick="dlgOpeningId=null;window.ecoSearchQuery='';window.ecoFamilyFilter='';ecoShowCount=30;_ecoUpdateResults()"><div class="on">${T('free_opening_btn')}</div><div class="os">${T('from_start')}</div></button>`;
+  h+=`<div class="dlg-sec"><div class="portrait-stack" style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap"><form onsubmit="event.preventDefault();if(!_ecoComposing){_ecoDoSearch()}" style="flex:1;min-width:160px;display:flex;gap:4px"><input id="ecoSearch" type="text" inputmode="search" aria-label="${T('eco_search_ph')}" placeholder="${T('eco_search_ph')}" style="flex:1;padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;touch-action:manipulation" enterkeyhint="search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="if(!_ecoComposing){setEcoQuery(this.value)}" onfocus="_ecoSearchFocused=true;if(_ecoBlurTimer){clearTimeout(_ecoBlurTimer);_ecoBlurTimer=0}" onblur="_ecoBlurTimer=setTimeout(function(){_ecoSearchFocused=false;_ecoBlurTimer=0},200)" oncompositionstart="_ecoComposing=true" oncompositionend="_ecoComposing=false;setEcoQuery(this.value)" onkeydown="if((event.key==='Enter'||event.keyCode===13)&&!event.isComposing&&!_ecoComposing){event.preventDefault();setEcoQuery(this.value);_ecoDoSearch()}" value="${(window.ecoSearchQuery||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c]))}"></form><select id="ecoFamily" style="padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;cursor:pointer;flex-shrink:0" onchange="window.ecoFamilyFilter=this.value;ecoShowCount=30;_ecoUpdateResults()"><option value="">${T('all_categories')}</option>${Object.keys(ECO_BY_FAMILY).sort((a,b)=>a.localeCompare(b)).map(f=>`<option value="${f}"${(window.ecoFamilyFilter||'')===f?' selected':''}>${f}</option>`).join('')}</select></div><div class="op-list"><button class="op-btn${!dlgOpeningId?' act':''}" onclick="dlgOpeningId=null;window.ecoSearchQuery='';window.ecoFamilyFilter='';ecoShowCount=30;_ecoUpdateResults()"><div class="on">${T('free_opening_btn')}</div><div class="os">${T('from_start')}</div></button>`;
   _ensureEcoParsed();ecoDisplayList=ECO_OPENINGS;
   if(window.ecoSearchQuery){const q=window.ecoSearchQuery.trim().toUpperCase();ecoDisplayList=searchEco(q)}
   else if(window.ecoFamilyFilter){ecoDisplayList=ECO_BY_FAMILY[window.ecoFamilyFilter]||[]}
@@ -16394,7 +15484,7 @@ if(showAboutPage){
 // Load AGPL v3 SVG via AndroidBridge as base64 (CSP-compliant)
 let _gplSvgSrc='';
 try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.loadAssetAsBase64){const b64=AndroidBridge.loadAssetAsBase64('AGPLv3_Logo.svg');if(b64)_gplSvgSrc='data:image/svg+xml;base64,'+b64;}}catch(e){}
-h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="About"><div class="dlg" style="max-width:460px"><h2>${T('about_title')}</h2><div class="dlg-sec"><div class="crow"><span class="lb">${T('about_app')}</span><span class="vl">${T("app_name")} v1.2.0</span></div><div class="crow"><span class="lb">${T('about_engine')}</span><span class="vl">Stockfish 18 (arm64-v8a-dotprod)</span></div><div class="crow"><span class="lb">${T('about_platform')}</span><span class="vl">Android arm64-v8a</span></div></div><div class="dlg-sec"><h3>${T('copyright_license')}</h3>`+(_gplSvgSrc?`<div style="text-align:center;margin-bottom:10px"><img src="${_gplSvgSrc}" alt="AGPL v3 Logo" style="width:120px;height:auto;opacity:.9" /></div>`:'')+`<div style="font-size:.75rem;color:var(--text);line-height:1.6"><p style="margin-bottom:8px">${T('about_copyright')}</p><p style="margin-bottom:8px">${T('about_source_code_prefix')}<a href="${T('about_source_code_url')}" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">${T('about_source_code_url')}</a></p><p style="margin-bottom:8px">${T('about_agpl')} <a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GNU AGPL v3</a>${T('about_agpl_desc')}</p><p style="margin-bottom:8px">${T('about_droidfish')}<a href="https://github.com/peterosterlund2/droidfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">DroidFish</a>${T('about_droidfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a>${T('about_droidfish_tail')}</p><p style="margin-bottom:8px">${T('about_stockfish')}<a href="https://github.com/official-stockfish/Stockfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">Stockfish</a>${T('about_stockfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a> ${T('about_gplv3')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_disclaimer')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_ai')}</p></div></div><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="showAboutPage=false;render()" style="flex:1;justify-content:center">${T('close')}</button></div></div></div>`;}
+h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="About"><div class="dlg" style="max-width:460px"><h2>${T('about_title')}</h2><div class="dlg-sec"><div class="crow"><span class="lb">${T('about_app')}</span><span class="vl">${T("app_name")} v1.2.1</span></div><div class="crow"><span class="lb">${T('about_engine')}</span><span class="vl">Stockfish 18 (arm64-v8a-dotprod)</span></div><div class="crow"><span class="lb">${T('about_platform')}</span><span class="vl">Android arm64-v8a</span></div></div><div class="dlg-sec"><h3>${T('copyright_license')}</h3>`+(_gplSvgSrc?`<div style="text-align:center;margin-bottom:10px"><img src="${_gplSvgSrc}" alt="AGPL v3 Logo" style="width:120px;height:auto;opacity:.9" /></div>`:'')+`<div style="font-size:.75rem;color:var(--text);line-height:1.6"><p style="margin-bottom:8px">${T('about_copyright')}</p><p style="margin-bottom:8px">${T('about_source_code_prefix')}<a href="${T('about_source_code_url')}" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">${T('about_source_code_url')}</a></p><p style="margin-bottom:8px">${T('about_agpl')} <a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GNU AGPL v3</a>${T('about_agpl_desc')}</p><p style="margin-bottom:8px">${T('about_droidfish')}<a href="https://github.com/peterosterlund2/droidfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">DroidFish</a>${T('about_droidfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a>${T('about_droidfish_tail')}</p><p style="margin-bottom:8px">${T('about_stockfish')}<a href="https://github.com/official-stockfish/Stockfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">Stockfish</a>${T('about_stockfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a> ${T('about_gplv3')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_disclaimer')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_ai')}</p></div></div><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="showAboutPage=false;render()" style="flex:1;justify-content:center">${T('close')}</button></div></div></div>`;}
 
 // ===================== IMPORT DIALOG =====================
 // Import dialog — paste FEN, paste PGN, or select PGN file
@@ -16496,13 +15586,8 @@ if(_isLandscapeReview){
   h+='<div class="review-board" style="padding-top:'+(_rvLabelH+_rvLabelGap)+'px;padding-left:'+(_rvLabelW+_rvLabelGap)+'px;padding-right:0;padding-bottom:0">';
   h+='<div class="bgrid" style="grid-template-columns:repeat(8,'+_rvCell+'px);grid-template-rows:repeat(8,'+_rvCell+'px)">';
 }else{
-  // Portrait: original stacked layout. review-body is vertical, review-left holds
-  // everything (board + eval + slider + chart + nav), review-moves is below.
-  // v1.2.0 Phase 82+++++ rev 4 FIX: Added missing .review-top open tag. The portrait
-  // branch was closing .review-top (line ~2893) without ever opening it, causing the
-  // </div> to auto-close .review-body instead. This made .review-bottom a sibling of
-  // .review-body (not a child), so the CSS rule .review-body > .review-bottom did not
-  // apply in portrait mode. Now .review-top is properly opened, matching landscape.
+  // Portrait: same unified layout as landscape — .review-top wraps board + moves.
+  // v1.2.1 fix: Added missing .review-top open tag (was pre-existing bug from v1.1.2).
   h+='<div class="review-body" style="--rv-board-h:'+_rvFullBoardH+'px">';
   h+='<div class="review-top">';
   h+='<div class="review-left">';
@@ -16543,16 +15628,8 @@ if(!showCtrlMap&&typeof _getVisualAnnotations==='function'&&typeof reviewStep!==
   // on-demand using the current gameState (which is the initial position when
   // reviewStep=0).
   // reviewStep N (N>0) = position after move N (moveRecords index N-1).
-  // v1.2.0 Phase 82+++++ rev 6 FIX: Apply placeholder offset when reading visual
-  // annotations. When a black-to-move placeholder exists at moveRecords[0] (from
-  // _prependBlackToMovePlaceholder for FEN imports where Black is to move),
-  // importPGN stores imported annotations at moveIdx + placeholderOffset. Without
-  // this offset, imported annotations would be read from the wrong moveIdx,
-  // causing them to appear on the wrong review step (or not appear at all).
-  // This mirrors the _placeholderOffset logic in tablebase.js importPGN (lines 1551, 1583).
-  const _rvPlaceholderOffset=(typeof moveRecords!=='undefined'&&moveRecords.length>0&&moveRecords[0]===null)?1:0;
   if(reviewStep>0){
-    _rvVa=_getVisualAnnotations(reviewStep-1+_rvPlaceholderOffset);
+    _rvVa=_getVisualAnnotations(reviewStep-1);
   }else if(reviewStep===0){
     // Compute annotations for the initial position on demand.
     // Use a special key '_initial' to cache so we don't recompute every render.
@@ -17274,60 +16351,18 @@ return h;
 } // end _renderSidePanel
 
 /**
- * v1.2.0 Phase 82++++: Compute the render state shared across all render sub-functions.
- *
- * Extracted from renderInternal() + _renderHeader() to fix a critical Phase 82++
- * regression: the local variables (cm, infoSq, infoCtrl, oppC, flip) were declared
- * inside _renderHeader() and therefore NOT accessible in renderInternal() or other
- * sub-functions. This caused:
- *   - _renderAIBar(h, oppC) -> oppC was undefined -> AI captured-pieces display broke
- *   - _renderBoardGrid(h, flip, cm) -> flip/cm undefined -> board never flipped for
- *     black player; control-map coloring was lost
- *   - _renderSidePanel(h, infoSq, infoCtrl, oppC) -> all undefined -> control-info
- *     card was silently skipped
- *   - _renderReviewMode(h) referenced `flip` as a free variable -> threw
- *     ReferenceError -> caught by renderInternal's try-catch -> user saw "Render
- *     Error" instead of the review overlay (this was the root cause of the
- *     "clicking move records doesn't enter review mode" bug)
- *
- * This function centralizes all defensive checks and shared-state computation:
- *   1. gameState validity check (reset if corrupt)
- *   2. setupMode / gameOver reset
- *   3. gameOver text re-localization
- *   4. _applyGameOver() check (was previously inside _renderHeader)
- *   5. Control-map cache (cachedCtrlMap / cm)
- *   6. infoSq (hovered or selected square) + infoCtrl (control-map entry)
- *   7. oppC (opponent color) + flip (board-flip flag)
- *
- * The returned object is destructured by renderInternal and passed explicitly to
- * every sub-function that needs these values. This eliminates the scoping bug
- * permanently — no sub-function reads these as free variables anymore.
- *
- * Uses global state only (gameState, initState, stateHistory, _redoStack, setupMode,
- * gameOver, _gameOverStatusKey, _gameOverStrFromStatus, isAIThinking, reviewMode,
- * _cachedStatusKey, _cachedStatus, gameStatus, _applyGameOver, showCtrlMap,
- * cachedCtrlKey, cachedCtrlMap, getCtrlMap, hoveredSquare, selectedSquare,
- * OPP_COLOR, playerColor).
- *
- * @returns {{cm: Object|null, infoSq: Object|null, infoCtrl: Object|null,
- *            oppC: string, flip: boolean}}
+ * v1.2.1: Compute the render state shared across all render sub-functions.
+ * Fixes critical scoping bug where oppC/flip/cm/infoSq/infoCtrl were declared
+ * inside _renderHeader() and inaccessible to other sub-functions.
  */
 function _computeRenderState(){
-// Defensive check — if gameState is undefined/corrupt, reset to initial state
 if(!gameState||!gameState.board){console.error('renderInternal: gameState is invalid, resetting');gameState=initState();stateHistory=[];_redoStack=[];}
 if(setupMode){gameOver=null;_gameOverStatusKey=null;}
-// Re-localize gameOver text on every render
 if(gameOver&&_gameOverStatusKey){const _reLocStr=_gameOverStrFromStatus(_gameOverStatusKey);if(_reLocStr)gameOver=_reLocStr;}
-// _applyGameOver check (was inside _renderHeader in Phase 82++)
 if(!gameOver&&!setupMode&&!isAIThinking&&!reviewMode){const _gsKey=gameState.hash+'|'+gameState.currentTurn;if(_cachedStatusKey!==_gsKey){_cachedStatus=gameStatus(gameState);_cachedStatusKey=_gsKey;}_applyGameOver(_cachedStatus);}
-// Control-map cache
 const ctrlKey=showCtrlMap?gameState.hash:'off';if(ctrlKey!==cachedCtrlKey){cachedCtrlMap=showCtrlMap?getCtrlMap(gameState.board):null;cachedCtrlKey=ctrlKey}const cm=cachedCtrlMap;
-// infoSq + infoCtrl
 const infoSq=hoveredSquare||selectedSquare;let infoCtrl=null;
-// v1.0.2 FIX (audit): reuse the control-map entry directly instead of
-// allocating a fresh {white,black} object on every render.
 if(infoSq&&cm){const e=cm[infoSq.row][infoSq.col];if(e)infoCtrl=e;}
-// oppC + flip
 const oppC=OPP_COLOR[playerColor];
 const flip=playerColor==='black';
 return {cm, infoSq, infoCtrl, oppC, flip};
@@ -17337,14 +16372,10 @@ return {cm, infoSq, infoCtrl, oppC, flip};
  * v1.2.0 Phase 82++: Render the header toolbar (app title, eval display, difficulty
  * selector, new game / free play / sound / FEN / import / setup buttons).
  *
- * Extracted from renderInternal() to further reduce God Module size. Computes the
+ * Extracted from renderInternal() to further reduce God Function size. Computes the
  * eval display (emoji, description, score, depth, seldepth, nodes, nps) and builds
  * the .hdr toolbar HTML string. This is the FIRST h contribution — the function
  * initializes h and returns it.
- *
- * v1.2.0 Phase 82++++: The defensive checks, _applyGameOver, and cm/infoSq/infoCtrl/
- * oppC/flip computation were moved to _computeRenderState() to fix a critical
- * scoping bug (those locals were inaccessible to other sub-functions).
  *
  * Uses global state only (formatEval, _sfDepth, _sfSeldepth, _evalLoading,
  * _lastProgressNodes, _lastProgressNps, T, _lang, setupMode, isAIThinking,
@@ -17359,12 +16390,10 @@ const _fe=formatEval();const pe=_fe.emoji,pd=_fe.desc,scoreStr=_fe.score;
 const _hdrDepthStr=_sfDepth>0?'<span style="font-size:.65rem;color:var(--muted);margin-left:4px">D'+_sfDepth+'</span>'+(_sfSeldepth>0&&_sfSeldepth>_sfDepth?'<span style="font-size:.65rem;color:var(--muted);margin-left:2px">SD'+_sfSeldepth+'</span>':''):'';
 let _hdrProgressStr='';if(_evalLoading&&_sfDepth>0){let _hpp=[];if(_lastProgressNodes!=null){const _ns=_lastProgressNodes>=1000000?(_lastProgressNodes/1000000).toFixed(1)+'M':_lastProgressNodes>=1000?Math.round(_lastProgressNodes/1000)+'K':String(_lastProgressNodes);_hpp.push(_ns);}if(_lastProgressNps!=null){const _ns=_lastProgressNps>=1000000?(_lastProgressNps/1000000).toFixed(1)+'M/s':_lastProgressNps>=1000?Math.round(_lastProgressNps/1000)+'K/s':String(_lastProgressNps);_hpp.push(_ns);}if(_hpp.length)_hdrProgressStr='<span style="font-size:.6rem;color:var(--muted);margin-left:3px">'+_hpp.join(' ')+'</span>';}
 
-// v1.2.0 Phase 82++++: Defensive checks, _applyGameOver, and cm/infoSq/infoCtrl/
-// oppC/flip computation moved to _computeRenderState() (fixes critical scoping bug
-// where these locals were inaccessible to other sub-functions).
-// Arrows computed separately by _updateArrows() — no inline computation needed
+// v1.2.1: Defensive checks, _applyGameOver, and cm/infoSq/infoCtrl/oppC/flip computation
+// moved to _computeRenderState() to fix critical scoping bug.
 
-let h='<div class="hdr" role="banner"><div class="hdr-top"><div class="hdr-l">'+_hdrKingIconHTML()+'<h1>'+T('app_name')+'<span class="ver">v1.2.0</span><button onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showAboutPage=true;render()" class="hdr-btn" style="margin-left:4px;cursor:pointer">ℹ️</button></h1></div><button onclick="toggleLang()" class="hdr-btn-lg" style="cursor:pointer">'+(_lang==='zh'?'↔️中':'↔️EN')+'</button><div class="ev" id="eval-disp" role="status" aria-label="'+T('evaluating')+'">'+(setupMode?T('setup_label'):(isAIThinking?'<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>':'<span class="ev-e">'+pe+'</span><span>'+pd+'</span><span style="color:var(--muted)">('+scoreStr+')</span>'+_hdrDepthStr+_hdrProgressStr))+'</div></div><div class="hdr-tools" role="toolbar" aria-label="'+T('ctrl_range')+'">'+(setupMode?'':'<div class="diff-sel" role="radiogroup" aria-label="AI">'+getAI_LEVELS().map(l=>'<button class="diff-b'+(getEffectiveAILevel()===l.id?' act':'')+'" onclick="if(!isAIThinking){'+(l.id===8?'openEngineConfig()':('aiLevel='+l.id+';try{AndroidBridge.syncGameDifficulty('+l.id+')}catch(e){}render()'))+'}" title="'+l.desc+'" role="radio" aria-checked="'+(getEffectiveAILevel()===l.id)+'">'+(l.id===8?'⚙️':l.id===7?('SL'+(function(){try{let _sl=20;if(typeof engineSettingsData!=='undefined'&&engineSettingsData&&engineSettingsData.skillLevel!=null)_sl=engineSettingsData.skillLevel;else if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getEngineSkillLevel)_sl=AndroidBridge.getEngineSkillLevel();return _sl;}catch(e){return 20;}})()):l.id)+'</button>').join('')+'</div>')+'<button type="button" class="btn" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()" aria-label="'+T('new_game')+'"><span style="font-size:1.4rem">⚔️</span> '+T('new_game')+'</button>'+'<button class="btn" onclick="quickFreeOpening()" aria-label="'+T('free_opening')+'">'+(playerColor==='white'?'<span style=\"font-size:1.4rem;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text\">♔&#xFE0E;</span>':'<span style=\"font-size:1.4rem;font-weight:400;color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans Symbol&#x27;,sans-serif;font-variant-emoji:text\">♚&#xFE0E;</span>')+' '+T('free_opening')+'</button>'+(setupMode?'':'<button class="btn" onclick="toggleSound()" id="btnSound" aria-label="'+T('sound')+'">'+(soundOn?'<span style="font-size:1.4rem">🔊</span> '+T('sound'):'<span style="font-size:1.4rem">🔇</span> '+T('sound'))+'</button>')+'<button class="btn" onclick="copyFEN()" title="'+T('copy_fen')+'" aria-label="'+T('copy_fen')+'"><span style="font-size:1.4rem">📝</span> FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="'+T('import_fen')+'" aria-label="'+T('import_fen')+'"><span style="font-size:1.4rem">🗃️</span> '+T('import_label')+'</button><button class="btn" onclick="'+(setupMode?'exitSetup()':'toggleSetup()')+'" aria-label="'+(setupMode?T('setup_done'):T('setup_mode'))+'">'+(setupMode?'<span style="font-size:1.4rem">✓</span> '+T('setup_done'):'<span style="font-size:1.4rem">🏗️</span> '+T('setup_mode'))+'</button></div></div>';
+let h='<div class="hdr" role="banner"><div class="hdr-top"><div class="hdr-l">'+_hdrKingIconHTML()+'<h1>'+T('app_name')+'<span class="ver">v1.2.1</span><button onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showAboutPage=true;render()" class="hdr-btn" style="margin-left:4px;cursor:pointer">ℹ️</button></h1></div><button onclick="toggleLang()" class="hdr-btn-lg" style="cursor:pointer">'+(_lang==='zh'?'↔️中':'↔️EN')+'</button><div class="ev" id="eval-disp" role="status" aria-label="'+T('evaluating')+'">'+(setupMode?T('setup_label'):(isAIThinking?'<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>':'<span class="ev-e">'+pe+'</span><span>'+pd+'</span><span style="color:var(--muted)">('+scoreStr+')</span>'+_hdrDepthStr+_hdrProgressStr))+'</div></div><div class="hdr-tools" role="toolbar" aria-label="'+T('ctrl_range')+'">'+(setupMode?'':'<div class="diff-sel" role="radiogroup" aria-label="AI">'+getAI_LEVELS().map(l=>'<button class="diff-b'+(getEffectiveAILevel()===l.id?' act':'')+'" onclick="if(!isAIThinking){'+(l.id===8?'openEngineConfig()':('aiLevel='+l.id+';try{AndroidBridge.syncGameDifficulty('+l.id+')}catch(e){}render()'))+'}" title="'+l.desc+'" role="radio" aria-checked="'+(getEffectiveAILevel()===l.id)+'">'+(l.id===8?'⚙️':l.id===7?('SL'+(function(){try{let _sl=20;if(typeof engineSettingsData!=='undefined'&&engineSettingsData&&engineSettingsData.skillLevel!=null)_sl=engineSettingsData.skillLevel;else if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getEngineSkillLevel)_sl=AndroidBridge.getEngineSkillLevel();return _sl;}catch(e){return 20;}})()):l.id)+'</button>').join('')+'</div>')+'<button type="button" class="btn" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()" aria-label="'+T('new_game')+'"><span style="font-size:1.4rem">⚔️</span> '+T('new_game')+'</button>'+'<button class="btn" onclick="quickFreeOpening()" aria-label="'+T('free_opening')+'">'+(playerColor==='white'?'<span style=\"font-size:1.4rem;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text\">♔&#xFE0E;</span>':'<span style=\"font-size:1.4rem;font-weight:400;color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans Symbol&#x27;,sans-serif;font-variant-emoji:text\">♚&#xFE0E;</span>')+' '+T('free_opening')+'</button>'+(setupMode?'':'<button class="btn" onclick="toggleSound()" id="btnSound" aria-label="'+T('sound')+'">'+(soundOn?'<span style="font-size:1.4rem">🔊</span> '+T('sound'):'<span style="font-size:1.4rem">🔇</span> '+T('sound'))+'</button>')+'<button class="btn" onclick="copyFEN()" title="'+T('copy_fen')+'" aria-label="'+T('copy_fen')+'"><span style="font-size:1.4rem">📝</span> FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="'+T('import_fen')+'" aria-label="'+T('import_fen')+'"><span style="font-size:1.4rem">🗃️</span> '+T('import_label')+'</button><button class="btn" onclick="'+(setupMode?'exitSetup()':'toggleSetup()')+'" aria-label="'+(setupMode?T('setup_done'):T('setup_mode'))+'">'+(setupMode?'<span style="font-size:1.4rem">✓</span> '+T('setup_done'):'<span style="font-size:1.4rem">🏗️</span> '+T('setup_mode'))+'</button></div></div>';
 return h;
 } // end _renderHeader
 
@@ -17565,77 +16594,42 @@ if(_multiPVLines.length>=1){h+='<div style="margin-top:6px;border-top:1px solid 
 return h;
 } // end _renderInfoBars
 
-/**
- * v1.2.0 Phase 82++++: Render the game-over overlay (sound trigger + overlay HTML).
- *
- * Extracted from renderInternal() to further reduce God Function size. Handles:
- *   1. Game-over sound trigger (fires once per game end via gameOverSoundPlayed guard)
- *   2. Game-over overlay HTML (.gover) with status emoji, localized status text,
- *      "Play Again" and "Review" buttons
- *
- * The overlay markup includes adaptive color/emoji based on _gameOverStatusKey:
- *   - checkmate: ♔/♚ piece glyph with adaptive color for winning side
- *   - resign: 🏳️ white flag
- *   - timeout: ⌛ hourglass
- *   - other (draw/stalemate): 🤝 handshake
- *
- * Uses global state only (gameOver, lastMove, gameOverSoundPlayed, playSound,
- * HapticManager, setupMode, _gameOverStatusKey, gameState, T, render,
- * showNewGameDialog, dlgPlayerColor, playerColor, dlgOpeningId, ecoShowCount,
- * dlgBookMoves, useBookMoves, enterReview).
- *
- * @param {string} h - Current HTML string
- * @returns {string} h with game-over overlay HTML appended (if applicable)
- */
-function _renderGameOverOverlay(h){
+function renderInternal(){try{
+const _rs=_computeRenderState();
+const {cm, infoSq, infoCtrl, oppC, flip}=_rs;
+const app=document.getElementById('app');if(!app)return;
+let h=_renderHeader();
+h+=`<div class="main" role="main"><div class="bsec">`;
+h=_renderAIBar(h, oppC);
+h=_renderBoardGrid(h, flip, cm);
+// Game-over overlay renders INSIDE .bwrap (anchors to .bwrap via position:absolute)
 if(gameOver&&lastMove&&!gameOverSoundPlayed){gameOverSoundPlayed=true;playSound('gameover');HapticManager.fire('GAME_OVER');}
 if(gameOver&&!setupMode){h+=`<div class="gover" role="alert" aria-live="assertive"><div class="ge" style="${_gameOverStatusKey==='checkmate'?(gameState.currentTurn==='black'?'color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55)':'color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55)'):'font-family:system-ui,sans-serif'};font-family:'DejaVu Sans','Noto Sans','Segoe UI Symbol',sans-serif;font-variant-emoji:text;font-weight:400">${_gameOverStatusKey==='checkmate'?(gameState.currentTurn==='black'?'♔\uFE0E':'♚\uFE0E'):_gameOverStatusKey==='resign'?'🏳️':_gameOverStatusKey==='timeout'?'⌛':'🤝'}</div><div class="gt">${gameOver}</div><button type="button" class="btn btn-p" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()">⚔️ ${T('play_again')}</button><button type="button" class="btn btn-g" onclick="enterReview()">📑 ${T('review')}</button></div>`;}
-return h;
-} // end _renderGameOverOverlay
+// v1.2.0 Phase 82++: Setup panel rendering extracted to _renderSetupPanel(h).
+h=_renderSetupPanel(h);
+h+=`</div></div>`; // close .bwrap + .display:flex
+h=_renderInfoBars(h);
+h=_renderPlayerBar(h);
+h+=`</div>`; // close .bsec
+h=_renderSidePanel(h, infoSq, infoCtrl, oppC); // opens .panel, closes .panel + .main
 
-/**
- * v1.2.0 Phase 82++++: Apply the render result to the DOM (scroll save / innerHTML /
- * scroll restore / cache invalidation / focus restore).
- *
- * Extracted from renderInternal() to further reduce God Function size. This is the
- * most delicate extraction because it touches many global state variables and uses
- * specific DOM operation timing (synchronous scroll restore for review containers,
- * double-rAF for layout-settled operations).
- *
- * Pipeline:
- *   1. Capture scroll positions of all scrollable containers BEFORE DOM rebuild
- *      (.mlist, .review-body, .review-moves, .dlg, .panel, .op-list)
- *   2. app.innerHTML = h  (rebuilds entire DOM, resets all scrollTops to 0)
- *   3. Re-attach active piece-move animations (_reattachActiveAnimations)
- *   4. Restore .mlist scroll synchronously (with _scrollRestoreGuard to suppress
- *      intermediate scroll events)
- *   5. Restore .review-body + .review-moves scroll SYNCHRONOUSLY (not in rAF —
- *      otherwise the user sees a visible jump-to-top flicker)
- *   6. Restore .dlg / .panel / .op-list scroll in double-rAF (deferred to let
- *      layout settle, with clamping to handle shorter content)
- *   7. Invalidate DOM caches (_cachedBwrap, _cachedSvgEl, _cachedCtrlCard, etc.)
- *   8. Update prev-tracking state (_prevHoverSq, _prevSelSq, _prevLegalSet)
- *   9. Active-move scroll-into-view in review mode (double-rAF, manual scrollTop
- *      computation to avoid scrollIntoView's ancestor-scrolling side effect)
- *  10. Update arrow overlay (_updateArrows)
- *  11. Invalidate eval-display signature cache (_evalDispPrevSig)
- *  12. Cache review-moves-list element ref (_rListEl)
- *  13. Restore ECO search input focus
- *  14. Auto-scroll opening list to selected opening (if New Game dialog open)
- *
- * Uses global state only (reviewMode, _ecoSearchFocused, _ecoBlurTimer,
- * _rvScrollRefreshTimer, _mlistScrollState, _scrollRestoreGuard, _skipReviewBodyScrollRestore,
- * _rListEl, _lastReviewStepScrolled, reviewStep, hoveredSquare, selectedSquare,
- * legalMvs, _cachedBwrap, _cachedSvgEl, _cachedSvgLines, _cachedArrowKey,
- * _cachedCtrlCard, _prevHoverSq, _prevSelSq, _prevLegalSet, _evalDispPrevSig,
- * _invalidateElCache, _sqElCache, _prevBoardVersion, _reattachActiveAnimations,
- * _updateArrows, _onMlistScroll, gameState, requestAnimationFrame).
- *
- * @param {HTMLElement} app - The #app DOM element
- * @param {string} h - The HTML string to set as app.innerHTML
- * @param {boolean} reviewMode - Whether review mode is active (affects scroll restore)
- */
-function _applyRenderResult(app, h, reviewMode){
+// v1.2.0 Phase 82: All modal dialogs extracted to _renderDialogs(h) to reduce
+// renderInternal's God Function size. Each dialog is triggered by an independent
+// boolean flag and produces self-contained HTML overlay markup. See _renderDialogs
+// above for the full dialog rendering logic and extraction rationale.
+h=_renderDialogs(h);
+
+
+// v1.2.0 Phase 82+: Review mode rendering extracted to _renderReviewMode(h) to further
+// reduce renderInternal's God Function size. The function returns {h, done} — when
+// done=true, the review state was invalid and a re-render has been triggered; we must
+// return immediately to skip the scroll-save/innerHTML/scroll-restore logic below
+// (which would otherwise operate on stale DOM state). Only called when reviewMode is true.
+if(reviewMode){
+  const _rvResult=_renderReviewMode(h, flip);
+  h=_rvResult.h;
+  if(_rvResult.done) return;
+}
 const _wasEcoFocused=_ecoSearchFocused;if(_ecoBlurTimer){clearTimeout(_ecoBlurTimer);_ecoBlurTimer=0}
 // v1.1.0 Phase 54 rev14: Virtual list is disabled (RV_VIRTUAL_THRESHOLD=Infinity).
 //   The scroll refresh timer is always 0, so this clearTimeout is a no-op.
@@ -17843,31 +16837,40 @@ _prevLegalSet=new Set();if(selectedSquare){for(const m of legalMvs)_prevLegalSet
 //   scrollable ancestors — in landscape review mode, the active move lives
 //   in the inner .review-moves container which sits at the TOP of the outer
 //   .review-body. When the user has scrolled .review-body down to reach the
-//   nav buttons at the bottom, clicking a nav button triggers render() ->
+//   nav buttons at the bottom, clicking a nav button triggers render() →
 //   this scrollIntoView yanks .review-body back to scrollTop=0, undoing the
-//   synchronous restore above. Fix: manually compute the inner .review-moves
-//   scrollTop to center the active move, WITHOUT calling scrollIntoView (which
-//   would also scroll the outer container). This preserves the outer .review-body
-//   scroll position.
+//   synchronous restore at lines 3203-3210 above. Fix: manually compute the
+//   inner .review-moves scrollTop to center the active move, WITHOUT calling
+//   scrollIntoView (which would also scroll the outer container). This
+//   preserves the outer .review-body scroll position.
+//
 // v1.1.0 Phase 57 FIX (portrait scroll): The Phase 56 fix used _rAct.offsetTop
 //   to compute the active move's position. However, offsetTop returns the
 //   distance from the element's outer border to the top of its offsetParent's
 //   inner border — and .rmv-block's offsetParent is .review-overlay (which is
 //   position:fixed), NOT _rList (.review-moves has no position set).
+//
 //   In LANDSCAPE this happened to be approximately correct because .review-moves
 //   is a flex child of .review-top (which is row-flex), so .rmv-block's vertical
-//   offsetTop within .review-overlay ~= header_height + position_within_moves.
+//   offsetTop within .review-overlay ≈ header_height + position_within_moves.
 //   The header is only ~24px, so the error was small.
+//
 //   In PORTRAIT, however, .review-moves is stacked BELOW .review-left (the board
 //   column, which has the board's full height). So .rmv-block's vertical
-//   offsetTop within .review-overlay ~= header_height + board_height +
+//   offsetTop within .review-overlay ≈ header_height + board_height +
 //   position_within_moves. The board_height is 256-320px — much larger than the
 //   .review-moves viewport (also 256-320px), so the resulting _target was
 //   WAY too large, clamped to scrollHeight-clientHeight (scrolled to bottom),
 //   and the active move was nowhere near the center of the visible area.
+//
 //   Fix: use getBoundingClientRect() to compute the active move's position
 //   RELATIVE TO _rList (not relative to .review-overlay). This works correctly
 //   regardless of orientation, layout structure, or offsetParent chain.
+//   The formula:
+//     _actTop = (_actRect.top - _listRect.top) + _rList.scrollTop
+//   gives the active move's position within _rList's full content (including
+//   the portion scrolled out of view). Then center it:
+//     _target = _actTop + _actH/2 - _listH/2
 if(reviewMode && reviewStep !== _lastReviewStepScrolled){
   _lastReviewStepScrolled = reviewStep;
   requestAnimationFrame(function(){
@@ -17885,11 +16888,18 @@ if(reviewMode && reviewStep !== _lastReviewStepScrolled){
           const _actH=_rAct.offsetHeight||0;
           // v1.1.0 Phase 57: use getBoundingClientRect to compute the active
           // move's position relative to _rList, NOT relative to offsetParent.
+          // See the long comment above for why offsetTop was wrong in portrait.
+          // If getBoundingClientRect is unavailable or returns zeros (e.g.,
+          // disconnected DOM — should not happen here since _rAct was just
+          // queried from _rList), skip scrolling rather than risk a wrong jump.
           let _actTop=-1;
           try{
             const _listRect=_rList.getBoundingClientRect();
             const _actRect=_rAct.getBoundingClientRect();
             if(_listRect.width>0||_listRect.height>0){
+              // Position of _rAct's top relative to _rList's content area:
+              //   (_actRect.top - _listRect.top) = visible offset (negative if scrolled past)
+              //   + _rList.scrollTop = absolute content position
               _actTop=(_actRect.top-_listRect.top)+_rList.scrollTop;
             }
           }catch(e){}
@@ -17926,92 +16936,10 @@ _rListEl = document.getElementById('reviewMovesList');
 if(_wasEcoFocused){const el=document.getElementById('ecoSearch');if(el){el.focus();_ecoSearchFocused=true;try{el.setSelectionRange(el.value.length,el.value.length)}catch(e){}}}
 // Auto-scroll opening list to selected opening (skip during review mode)
 if(showNewGameDialog&&dlgOpeningId&&!reviewMode){setTimeout(()=>{const list=document.querySelector('.op-list');if(list){const active=list.querySelector('.op-btn.act');if(active)active.scrollIntoView({block:'center',behavior:'smooth'})}},50)}
-} // end _applyRenderResult
-
-function renderInternal(){try{
-// v1.2.0 Phase 82++++: Defensive checks + cm/infoSq/infoCtrl/oppC/flip computation
-// extracted to _computeRenderState(). This fixes a critical Phase 82++ regression
-// where these locals were declared inside _renderHeader() and inaccessible to
-// other sub-functions (root cause of the "clicking move records doesn't enter
-// review mode" bug — _renderReviewMode threw ReferenceError on `flip`).
-const _rs=_computeRenderState();
-const {cm, infoSq, infoCtrl, oppC, flip}=_rs;
-const app=document.getElementById('app');if(!app)return;
-// Score from White's perspective (UCI side-to-move -> White conversion done in onEngineEval); emoji/desc reflect player's advantage
-// v1.2.0 Phase 82++: Header toolbar rendering extracted to _renderHeader().
-// _renderHeader() initializes h with the header HTML and returns it.
-let h=_renderHeader();
-h+=`<div class="main" role="main"><div class="bsec">`;
-// v1.2.0 Phase 82+++: AI opponent bar rendering extracted to _renderAIBar(h, oppC).
-h=_renderAIBar(h, oppC);
-// v1.2.0 Phase 82++: Board grid rendering extracted to _renderBoardGrid(h, flip, cm).
-// _renderBoardGrid opens .flbl (self-closing), .display:flex (open), .rlbl (self-closing),
-// .bwrap (open), .bgrid (open→close after grid loop). The .bwrap and .display:flex stay OPEN.
-// v1.2.0 Phase 82+++++ FIX: In v1.1.2, the game-over overlay and setup panel render INSIDE
-// .bwrap (because .gover uses position:absolute;inset:0 and .bwrap has position:relative,
-// so the overlay covers the board area only). The .bwrap+.display:flex close happens AFTER
-// the setup panel. This matches v1.1.2 exactly.
-h=_renderBoardGrid(h, flip, cm);
-// Arrows are now handled by persistent SVG overlay via _updateArrows() — no inline SVG here
-// v1.2.0 Phase 82++++: Game-over sound + overlay extracted to _renderGameOverOverlay(h).
-// The .gover overlay is position:absolute;inset:0 — it anchors to .bwrap (position:relative),
-// covering the board area only (NOT the entire screen).
-h=_renderGameOverOverlay(h);
-// v1.2.0 Phase 82++: Setup panel rendering extracted to _renderSetupPanel(h).
-// In v1.1.2, the setup panel renders inside .bwrap (between .bgrid close and .bwrap close).
-h=_renderSetupPanel(h);
-// v1.2.0 Phase 82+++++ FIX: Close .bwrap + .display:flex wrapper opened by _renderBoardGrid.
-// This must happen AFTER game-over overlay and setup panel (they render inside .bwrap).
-// In v1.1.2 this is the `h+=</div></div>` at line 2298.
-h+=`</div></div>`; // close .bwrap + .display:flex (board wrapper)
-// v1.2.0 Phase 82+++: Info bars (tablebase/ECO/hint) rendering extracted to _renderInfoBars(h).
-// Info bars render inside .bsec, OUTSIDE .bwrap (they are siblings of the board wrapper).
-h=_renderInfoBars(h);
-// v1.2.0 Phase 82+++: Quick toolbar + player bar rendering extracted to _renderPlayerBar(h).
-// Quick toolbar + player bar render inside .bsec, OUTSIDE .bwrap.
-h=_renderPlayerBar(h);
-h+=`</div>`; // close .bsec
-// Side panel (sibling of .bsec, inside .main)
-// v1.2.0 Phase 82++: Side panel rendering extracted to _renderSidePanel(h, infoSq, infoCtrl, oppC).
-// v1.2.0 Phase 82+++++: _renderSidePanel opens .panel and closes BOTH .panel and .main
-// (its trailing </div></div> closes .panel + .main). Do NOT add an extra </div> here —
-// that was the root cause of the "main interface layout abnormal" bug (an extra </div>
-// closed #app, causing all subsequent content — dialogs, review overlay — to render
-// outside the #app flex container, breaking the layout).
-h=_renderSidePanel(h, infoSq, infoCtrl, oppC);
-
-// v1.2.0 Phase 82: All modal dialogs extracted to _renderDialogs(h) to reduce
-// renderInternal's God Function size. Each dialog is triggered by an independent
-// boolean flag and produces self-contained HTML overlay markup. See _renderDialogs
-// above for the full dialog rendering logic and extraction rationale.
-h=_renderDialogs(h);
-
-
-// v1.2.0 Phase 82+: Review mode rendering extracted to _renderReviewMode(h, flip) to further
-// reduce renderInternal's God Function size. The function returns {h, done} — when
-// done=true, the review state was invalid and a re-render has been triggered; we must
-// return immediately to skip the scroll-save/innerHTML/scroll-restore logic below
-// (which would otherwise operate on stale DOM state). Only called when reviewMode is true.
-// v1.2.0 Phase 82++++: `flip` parameter added to fix ReferenceError (flip was previously
-// a free variable — root cause of the review-mode entry bug).
-if(reviewMode){
-  const _rvResult=_renderReviewMode(h, flip);
-  h=_rvResult.h;
-  if(_rvResult.done) return;
-}
-// v1.2.0 Phase 82++++: Scroll save / DOM update / scroll restore orchestration
-// extracted to _applyRenderResult(app, h, reviewMode). This handles:
-//   - Scroll position capture (.mlist, .review-body, .review-moves, .dlg, .panel, .op-list)
-//   - app.innerHTML = h (DOM rebuild)
-//   - Animation re-attach (_reattachActiveAnimations)
-//   - Scroll position restore (synchronous for .mlist/.review-body/.review-moves,
-//     deferred via double-rAF for .dlg/.panel/.op-list)
-//   - DOM cache invalidation (_cachedBwrap, _cachedSvgEl, etc.)
-//   - Active-move scroll-into-view (review mode)
-//   - Arrow overlay update (_updateArrows)
-//   - ECO search focus restore
-//   - Opening list auto-scroll
-_applyRenderResult(app, h, reviewMode);
+// v1.0.8 PHASE 30: escape error message + stack to prevent XSS if a thrown
+//   error message ever contains HTML.
+// v1.1.1 Phase 60 (audit i18n): Use T('render_error_title') instead of the
+//   hard-coded English "Render Error" so the title is localized.
 }catch(e){const _app=document.getElementById('app');if(_app)_app.innerHTML='<div style="color:red;padding:20px;font-family:monospace;background:#1a0000;border:2px solid red;border-radius:8px;margin:20px"><h3>'+T('render_error_title')+'</h3><pre style="white-space:pre-wrap;font-size:12px">'+_esc(e.toString())+'\n\n'+_esc(e.stack)+'</pre></div>';console.error('Render error:',e)}}
 
 
@@ -19084,9 +18012,7 @@ function quickFreeOpening(){
 // === Toggle sound on/off (toolbar button) ===
 function toggleSound(){
   soundOn=!soundOn;
-  // v1.2.0 Phase 82+++++ rev 5: Wire Store as debug observability layer.
   try{if(typeof Store!=='undefined'&&Store&&typeof Store.dispatch==='function')Store.dispatch('TOGGLE_SOUND',soundOn);}catch(e){}
-
   const btn=document.getElementById('btnSound');
   if(btn)btn.innerHTML=soundOn?'<span style=\"font-size:1.4rem\">🔊</span> '+T('sound'):'<span style=\"font-size:1.4rem\">🔇</span> '+T('sound');
   HapticManager.fire(soundOn?'TOGGLE_ON':'TOGGLE_OFF');
@@ -19727,10 +18653,8 @@ _ponderGen++;_ponderMoveSAN='';_ponderBarInfo='';_pendingPonderMoveUCI=null;
 // the eval bar from showing "⏳ analyzing" even when the cache has the eval.
 isAIThinking=false;_aiBarInfo='';
 if(typeof _updateAIThinkDisplay==='function')_updateAIThinkDisplay();
-reviewCritical=_findCriticalMoves();requestEngineEval();render(); // _resetEvalState now inside requestEngineEval()
-  // v1.2.0 Phase 82+++++ rev 5: Wire Store as debug observability layer.
-  try{if(typeof Store!=='undefined'&&Store&&typeof Store.dispatch==='function')Store.dispatch('ENTER_REVIEW',{states:reviewStates,baseState:reviewBaseState});}catch(e){}
-
+reviewCritical=_findCriticalMoves();requestEngineEval();render();
+  try{if(typeof Store!=='undefined'&&Store&&typeof Store.dispatch==='function')Store.dispatch('ENTER_REVIEW',{states:reviewStates,baseState:reviewBaseState});}catch(e){} // _resetEvalState now inside requestEngineEval()
 }
 /**
  * Find critical moves in the game — moves where the evaluation changed significantly.
@@ -20960,9 +19884,6 @@ function _resetGameUIState(){
   if(typeof _needNewGameForEngine!=='undefined')_needNewGameForEngine=true;
   if(typeof _tbLoading!=='undefined')_tbLoading=false;
   if(typeof _tbRetryCount!=='undefined')_tbRetryCount=0;
-  // v1.2.0 Phase 82+++++ rev 5: Wire Store as debug observability layer.
-  // Dispatch a RESET action so Store.getState() reflects the reset for debugging.
-  // This is additive — Store is a read-only mirror, not the source of truth.
   try{if(typeof Store!=='undefined'&&Store&&typeof Store.dispatch==='function'){Store.dispatch('SETUP_EXIT');Store.dispatch('PGN_CLEARED');}}catch(e){}
 }
 
@@ -21604,6 +20525,17 @@ function _pgnCacheSaveCurrent(){
   try{name=prompt(T('pgn_cache_name_prompt'),T('pgn_cache_save_default'))||'';}catch(e){name='';}
   name=name.trim();
   if(!name)return;
+  // v1.2.1: 与 _renameHumanPlayer 保持一致的输入校验 —— 长度上限 60、禁止
+  //   文件系统危险字符 / \ : * ? " < > | 与控制字符。否则恶意/误输入可能
+  //   逃逸出沙箱路径或破坏 PGN 缓存索引。
+  if(name.length>60){
+    try{showToast(T('pgn_cache_name_too_long')||'Name too long (max 60)');}catch(e){}
+    return;
+  }
+  if(/[\/\\:*?"<>|\x00-\x1f\x7f]/.test(name)){
+    try{showToast(T('pgn_cache_name_invalid')||'Name contains invalid characters');}catch(e){}
+    return;
+  }
   _pgnCacheOpInProgress=true;
   try{
     // v1.1.1 Phase 63: Ask whether to include annotations

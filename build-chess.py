@@ -38,22 +38,21 @@ def main():
         sys.exit(1)
 
     # Build the combined JS - order matters!
-    # v1.2.0 Phase 74/75: Added state-store.js, ui-board.js, ui-review.js,
-    #   ui-audio.js, ui-toolbar.js (God Module split + global state store)
+    # v1.2.1 (round-4 cleanup): Removed ui-audio.js, ui-board.js, ui-review.js,
+    #   ui-toolbar.js — these were Phase-74 extracts that duplicated inline logic
+    #   in ui.js / ai-bridge.js with subtly different conventions (rank order,
+    #   move classification, audio state). They were never on the hot path and
+    #   keeping them created two sources of truth.
     modules = [
         "game-logic.js",
         "chess960.js",
         "pgn-standard.js",
         "worker-pool.js",
-        "state-store.js",      # v1.2.0 Phase 75: global state store (must be before ui*.js)
+        "state-store.js",      # v1.2.0 Phase 75: global state store (must be before ui.js)
         "ai-bridge.js",
         "tablebase.js",
         "eco-data.js",
-        "ui-audio.js",         # v1.2.0 Phase 74: audio utilities
-        "ui-board.js",         # v1.2.0 Phase 74: board rendering utilities
-        "ui-review.js",        # v1.2.0 Phase 74: review mode utilities
-        "ui-toolbar.js",       # v1.2.0 Phase 74: toolbar utilities
-        "ui.js",               # main UI (uses the above modules)
+        "ui.js",               # main UI (inline ChessAudioEngine + board rendering)
     ]
 
     js_parts = []

@@ -22,7 +22,6 @@ package com.Regalia;
  */
 
 import android.app.Application;
-import android.os.Build;
 import android.util.Log;
 
 /**
@@ -67,8 +66,16 @@ public class ChessApp extends Application {
                 // v18.4.2: Detect engine thread deaths ("SF-" prefix) for
                 // diagnostic logging. The actual recovery is handled by
                 // StockfishNative's heartbeat (isProcessAlive check).
+                // v1.2.1: 主动调用 markEngineThreadDead 设置死亡标记 —— 否则
+                //   引擎进程虽然活着但读线程已死，isProcessAlive() 仍返回 true，
+                //   heartbeat 误判健康，AI 静默不动直到 15-30s zombie 超时。
                 if (threadName.startsWith("SF-")) {
                     Log.e(TAG, "Engine thread died: " + threadName);
+                    try {
+                        StockfishNative.markEngineThreadDead(threadName);
+                    } catch (Throwable ignored) {
+                        // StockfishNative 类尚未加载时忽略 —— 此时也没有引擎可恢复
+                    }
                 }
 
                 // On Xiaomi HyperOS 3, some "crashes" are actually non-fatal
@@ -108,7 +115,7 @@ public class ChessApp extends Application {
             }
         });
 
-        Log.i(TAG, "ChessApp initialized — crash protection active (v1.2.0)");
+        Log.i(TAG, "ChessApp initialized — crash protection active (v1.2.1)");
 
         // SECURITY (MobSF #4): Non-blocking root detection. The result is computed
         // once and cached; the app never refuses to run on a rooted device because

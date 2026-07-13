@@ -1,3 +1,103 @@
+v1.2.1 (2026.7.13) — Sixth-pass refinement (round-6 review — stats page visual annotation bug fix):
+  - No Java file changes in this round. The bug fix is entirely in JS files
+    (ai-bridge.js) and stats.html. See chess.src/README.license and
+    assets/README.license for details.
+  - No new Java files.
+
+v1.2.1 (2026.7.13) — Fifth-pass refinement (round-5 review — line-by-line audit):
+  - ChessApp.java (AGPL v3): removed unused `import android.os.Build;` (left
+    over from an earlier root-detection refactor — Build was never referenced
+    after the check moved to RootDetector).
+  - ChessWebViewClient.java (AGPL v3): removed unused `import android.os.Build;`
+    (left over from an earlier render-process-gone API-level guard that was
+    simplified to always-on).
+  - EngineSettingsHelper.java (GPL v3): bug fix — `engine.elo` case in
+    importSettings used a 1-3200 range, inconsistent with EngineConfigHelper's
+    canonical 500-3500 range (500-3500). Importing a value like 400 would pass
+    the 1-3200 check, then be silently re-clamped to 500 on the next
+    setEngineLimitElo call. Fixed to Math.max(500, Math.min(3500, ...)).
+  - All other 16 Java files verified clean (no dead code, no inconsistent
+    ranges, no leftover debug statements, no references to deleted symbols).
+  - No new Java files.
+
+v1.2.1 (2026.7.13) — Fourth-pass refinement (round-4 cleanup — dead-code purge):
+  - Deleted MessageBus.java (AGPL v3): JS side had only a console.log stub and no
+    dispatch() callers; the entire Java→JS event-bus was dead code.
+  - Deleted UciProtocolHandler.java (GPL v3): its latch-based setOptionAndWait /
+    waitForBestmove / waitForUciOk were never used — StockfishNative runs its own
+    inline reader loop with its own readyOkLatchHolder / uciOkLatchHolder. Only
+    resetHandshakeState() was called (defensively, in cleanup) and even that did
+    nothing useful because the latches were never set on this class.
+  - Deleted EngineConfigManager.java (GPL v3): the class was instantiated in the
+    StockfishNative constructor but no method on the instance was ever called —
+    only the MIN_SKILL_LEVEL / MAX_SKILL_LEVEL constants were referenced from
+    EngineConfigHelper. Inlined those two constants (0, 20) and removed the class.
+  - Slimmed EngineHealthMonitor.java (GPL v3, 208 → 85 lines): removed the
+    heartbeat thread, zombie-detection timeouts, and RecoveryCallback interface.
+    These duplicated the inline equivalents in StockfishNative and could diverge.
+    The class is now a pure state holder for lastResponseTime + autoRecoveryCount
+    (the only two pieces of state StockfishNative reads through it).
+  - Slimmed EngineProcessManager.java (GPL v3, 489 → 111 lines): removed
+    resolveEngineBinary / extractEngineFromApk / extractEngineFromAssets /
+    startProcess / initStreams / cleanupResources / isElfFile / process getters
+    and setters — all dead code, since StockfishNative keeps its own inline
+    copies with direct field access. Only makeExecutable(File) remains, called
+    from StockfishNative.makeExecutable for its multi-strategy chmod fallback.
+  - StockfishNative.java (GPL v3): removed _engineConfigManager / _uciProtocolHandler
+    / _messageBus fields and their constructor instantiations; removed
+    getMessageBus() / _emitLifecycleEvent() / _escapeJsonString() helpers;
+    removed 3 _emitLifecycleEvent call sites (engine-ready / engine-error /
+    engine-restarting); removed _uciProtocolHandler.resetHandshakeState() call
+    in cleanup. EngineHealthMonitor now constructed with no-arg constructor
+    (RecoveryCallback wiring removed). EngineProcessManager now constructed
+    with ChmodProvider only (Context arg removed). Fixed inline
+    extractEngineFromApk ZipEntry.getSize() == -1 divide-by-zero (previously
+    only fixed in the now-deleted EngineProcessManager.extractEngineFromApk copy).
+  - EngineConfigHelper.java (GPL v3): setEngineSkillLevel now uses inline 0/20
+    constants instead of EngineConfigManager.MIN/MAX_SKILL_LEVEL.
+  - MainActivity.java (AGPL v3): removed MessageBus JS-interface registration
+    (both initial and rebuild paths).
+  - No new Java files.
+
+
+v1.2.1 (2026.7.13) — Second-pass refinement (hardening + bug fix):
+  - StockfishNative.java (GPL v3): P0 TOCTOU race on _discardingPonderBestmove
+    fixed (stopAndWaitForBestmove + reader-thread latch-capture path now clear
+    the discard flag). P1 Chess960 re-apply symmetry (now applies both true AND
+    false based on _pendingChess960). P1 eval-mode option leak fix
+    (engineStop now calls restoreGameplayOptions when interrupting STATE_EVAL).
+    P1 sendSetOptionAndWait value newline hardening (matches
+    UciProtocolHandler.setOptionAndWait). P1 _restartInProgress stale-detection
+    (resets after 30s of being stuck). P1 engine-thread-death detection via
+    markEngineThreadDead/clearEngineThreadDeadFlag + heartbeat Check 0.
+  - JsBridgeGateway.java (GPL v3): P1 isPathInSandbox now requires trailing
+    File.separator before startsWith (closes theoretical directory-traversal).
+  - SafPickerHelper.java (GPL v3): P1 removed takePersistableWritePermission /
+    takePersistableReadPermission — one-shot import/export no longer consumes
+    SAF 512-grant cap.
+  - StatsActivity.java (AGPL v3): P1 onDestroy now calls webView.stopLoading()
+    first (prevents SIGSEGV on HyperOS 3/MIUI). P1 removed
+    takePersistableUriPermission for PGN import.
+  - ChessApp.java (AGPL v3): P1 SF-* thread UncaughtExceptionHandler now calls
+    StockfishNative.markEngineThreadDead to trigger heartbeat recovery.
+  - HapticHelper.java (GPL v3): P2 perform() now respects system
+    HAPTIC_FEEDBACK_ENABLED setting (matches StatsActivity.performHaptic).
+  - EngineProcessManager.java (GPL v3): P2 extractEngineFromApk guards against
+    ZipEntry.getSize() == -1 (divide-by-zero / negative progress percentage).
+  - No new Java files.
+
+v1.2.1 (2026.7.12) — Defect fix release (initial):
+  - StockfishNative.java (GPL v3): AtomicInteger for _autoRecoveryCount. InterruptedException
+    re-interrupt at 9 locations. await() return value check at 2 locations. JsBridgeGateway
+    activated — writeTextFile/readTextFile sandbox check, sendToEngine UCI whitelist.
+    _messageBus made final.
+  - UciProtocolHandler.java (GPL v3): Static final Pattern constants. setOptionAndWait
+    newline sanitization.
+  - JsBridgeGateway.java (GPL v3): intent: scheme removed from isUrlSafe.
+  - MessageBus.java (AGPL v3): setWebView() public setter (replaces reflection).
+  - MainActivity.java (AGPL v3): removeJavascriptInterface("MessageBus") in onDestroy.
+  - No new Java files.
+
 This directory contains Java source files for the Regalia Android application.
 
 License classification by file:
@@ -1364,36 +1464,3 @@ v1.2.0 Phase 81 (2026.7.11) — Engine config helper extraction:
     sendUciCommand, engineSupportsOption, notifyEngineInfo, postJsCallback).
     StockfishNative retains thin @JavascriptInterface delegates. StockfishNative:
     4,492→4,245 lines (−247). Helper/manager class count: 12→13 (14 with MessageBus).
-
-v1.2.0 Phase 82+++++ rev 8 (2026.7.12) — MessageBus reflection fix + proguard + sandbox hardening:
-  - MessageBus.java (AGPL v3, MODIFIED): Removed `final` from webView field.
-    Added public setWebView(WebView) method. Replaces fragile reflection that
-    failed in release builds (R8 renamed the private field).
-  - StockfishNative.java (GPL v3, MODIFIED): Replaced reflection in
-    setMessageBusWebView() with _messageBus.setWebView(). Made _messageBus final.
-  - MainActivity.java (AGPL v3, MODIFIED): Added removeJavascriptInterface
-    ("MessageBus") in onDestroy().
-  - JsBridgeGateway.java (GPL v3, MODIFIED): Tightened isPathInSandbox() to
-    require path separator after sandbox root.
-  - No other Java files changed. No new Java files.
-
-v1.2.0 Phase 82+++++ rev 7 (2026.7.12) — MessageBus wiring (Task 75 design intent):
-  - StockfishNative.java (GPL v3, MODIFIED): Instantiated _messageBus in constructor.
-    Added registerMessageBusHandlers() with 4 handlers (ENGINE_GO, ENGINE_STOP,
-    ENGINE_SET_OPTION, PGN_CACHE_SAVE). Added emitToJs(), getMessageBus(),
-    setMessageBusWebView(). Emit ENGINE_READY and ENGINE_BESTMOVE events via MessageBus.
-  - MainActivity.java (AGPL v3, MODIFIED): Register MessageBus as separate
-    @JavascriptInterface named "MessageBus" (alongside AndroidBridge).
-  - MessageBus.java (AGPL v3, MODIFIED): Updated emit() to call
-    window._messageBusJs._onEvent (avoids shadowing by Java interface).
-  - No other Java files changed. No new files.
-
-v1.2.0 Phase 82+++++ (2026.7.12) — WebView cache fix:
-  - MainActivity.java (AGPL v3, MODIFIED): Added webView.clearCache(true) before
-    loadUrl("file:///android_asset/chess.html"). This ensures the WebView always
-    loads the latest chess.html from the APK, fixing a issue where some WebView
-    implementations (especially Xiaomi HyperOS) serve a stale cached chess.html
-    after an app update. Root cause of the "oppC is not defined" error on user
-    devices — the Phase 82++++ JS fix was correct but the WebView loaded a cached
-    pre-fix chess.html.
-  - No other Java files changed. No new files.

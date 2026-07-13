@@ -553,11 +553,9 @@ public class StatsActivity extends Activity {
             }
             try {
                 Uri uri = data.getData();
-                // Take persistable permission so the URI remains usable if needed
-                try {
-                    getContentResolver().takePersistableUriPermission(
-                            uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                } catch (Throwable ignored) {}
+                // v1.2.1: 不再 takePersistableUriPermission —— 一次性读取不需要持久授权，
+                //   且会无谓占用 SAF 512 上限。transient FLAG_GRANT_READ_URI_PERMISSION
+                //   from ACTION_OPEN_DOCUMENT 已足够读取本次内容。
                 StringBuilder sb = new StringBuilder();
                 try (InputStream is = getContentResolver().openInputStream(uri);
                      BufferedReader reader = new BufferedReader(new InputStreamReader(is, "UTF-8"))) {
@@ -643,6 +641,10 @@ public class StatsActivity extends Activity {
         //   callbacks, cause WindowLeaked exceptions, and leave a stale
         //   AndroidBridge interface pointing to the destroyed StatsActivity.
         if (webView != null) {
+            // v1.2.1: 与 MainActivity.onDestroy 保持一致 —— 先 stopLoading() 终止
+            //   in-flight 加载，避免某些 OEM ROM（HyperOS 3 / MIUI）在 destroy()
+            //   后仍派发 load 回调到已销毁的 native peer，触发 SIGSEGV。
+            try { webView.stopLoading(); } catch (Throwable ignored) {}
             try {
                 if (webView.getParent() instanceof android.view.ViewGroup) {
                     ((android.view.ViewGroup) webView.getParent()).removeView(webView);

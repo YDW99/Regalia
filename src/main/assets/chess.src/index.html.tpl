@@ -31,7 +31,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; worker-src blob:; connect-src https://tablebase.lichess.ovh; img-src data: file: blob:; frame-ancestors 'none'; base-uri 'self'">
-<title>Regalia v1.2.0</title>
+<title>Regalia v1.2.1</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 /* v1.0.8 PHASE 22: Light/Dark theme system following Material Design
@@ -210,14 +210,14 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 /* === 黑曜石棋子 — 清晰轮廓、全局可辨 === */
 /* 黑子: 深曜石底色 + 亮金描边 + 亮金微光 (深色格上描边醒目可辨) */
 /* 白子: 银曜石底色 + 浓棕描边 + 浓棕微光 (浅色格上描边醒目可辨) */
-.sq .pc{pointer-events:none;font-size:2rem;z-index:1;position:relative;font-variant-emoji:text;-webkit-font-variant-emoji:text;font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-weight:400;speak:none;transform:translateZ(0);backface-visibility:hidden}
+.sq .pc{pointer-events:none;font-size:2rem;z-index:1;position:relative;font-variant-emoji:text;-webkit-font-variant-emoji:text;font-family:'DejaVu Sans','Noto Sans','Segoe UI Symbol',sans-serif;font-weight:400;speak:none;transform:translateZ(0);backface-visibility:hidden}
 .sq:hover .pc{transform:scale(1.05) translateZ(0)}
 /* 黑子 — 深曜石：亮金描边 + 亮金微光 (深/浅色背景上均可辨) */
 .sq .pc.bk,.prom-btn.bk-prom,.setup-btn.sb,.move-anim.bk-piece,.rv-bk{color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55)}
 /* 白子 — 银曜石：浓棕描边 + 浓棕微光 (深/浅色背景上均可辨) */
 .sq .pc.w,.prom-btn.w-prom,.setup-btn.sw,.move-anim.w-piece,.rv-w{color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55)}
 /* 复盘棋子：字体与棋盘一致，避免字形跳变 */
-.rv-w,.rv-bk{font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text;-webkit-font-variant-emoji:text;font-weight:400}
+.rv-w,.rv-bk{font-family:'DejaVu Sans','Noto Sans','Segoe UI Symbol',sans-serif;font-variant-emoji:text;-webkit-font-variant-emoji:text;font-weight:400}
 .sq .dot{width:18px;height:18px;border-radius:50%;background:radial-gradient(circle,rgba(255,140,0,.6),rgba(255,140,0,.35));pointer-events:none;z-index:1;box-shadow:0 0 3px rgba(255,140,0,.2)}
 .sq .ring{position:absolute;inset:3px;border-radius:50%;border:3px solid rgba(255,140,0,.55);pointer-events:none;z-index:1;box-shadow:0 0 2px rgba(255,140,0,.10)}
 /* v1.0.6: Castling rook marker — golden dashed ring. Distinct from the orange
@@ -348,13 +348,13 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .prom-dlg{background:var(--card);border:2px solid var(--border2);border-radius:8px;padding:18px;text-align:center;box-shadow:none}
 .prom-dlg h3{margin-bottom:12px;font-family:system-ui,-apple-system,sans-serif;font-size:1rem;color:var(--accent2)}
 .prom-row{display:flex;gap:10px}
-.prom-btn{width:56px;height:56px;font-size:2rem;border-radius:6px;border:1px solid var(--border);background:var(--btn-bg);cursor:pointer;transition:all .2s;font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text;-webkit-font-variant-emoji:text}
+.prom-btn{width:56px;height:56px;font-size:2rem;border-radius:6px;border:1px solid var(--border);background:var(--btn-bg);cursor:pointer;transition:all .2s;font-family:'DejaVu Sans','Noto Sans','Segoe UI Symbol',sans-serif;font-variant-emoji:text;-webkit-font-variant-emoji:text}
 
 .prom-btn:hover{background:var(--btn-bg-hover);border-color:var(--accent2);transform:scale(1.1);box-shadow:none}
 .setup-panel{display:flex;flex-direction:column;gap:8px;padding:12px;background:var(--card);border:1px solid var(--border);border-radius:6px;margin-top:8px}
 .setup-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;justify-content:center}
 .setup-label{font-size:.75rem;color:var(--muted);min-width:48px;text-align:right;font-family:system-ui,-apple-system,sans-serif}
-.setup-btn{width:44px;height:44px;font-size:1.8rem;border-radius:4px;border:1px solid var(--border);background:var(--btn-bg);cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text;-webkit-font-variant-emoji:text}
+.setup-btn{width:44px;height:44px;font-size:1.8rem;border-radius:4px;border:1px solid var(--border);background:var(--btn-bg);cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;font-family:'DejaVu Sans','Noto Sans','Segoe UI Symbol',sans-serif;font-variant-emoji:text;-webkit-font-variant-emoji:text}
 
 .setup-btn.act{border-color:var(--accent2);background:rgba(212,160,23,.15);transform:scale(1.05);box-shadow:none}
 .setup-btn:hover{border-color:var(--accent);background:rgba(212,160,23,.08)}
@@ -1163,7 +1163,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
    `filter: drop-shadow(...)` value on every keyframe of knight/bishop/
    queen/king animations, forcing the browser to re-rasterize the alpha
    mask every frame. */
-.move-anim{position:absolute;display:flex;align-items:center;justify-content:center;font-size:2rem;z-index:20;pointer-events:none;will-change:transform;backface-visibility:hidden;-webkit-backface-visibility:hidden;transform:translate3d(0,0,0);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text;-webkit-font-variant-emoji:text;font-weight:400;filter:drop-shadow(0 4px 5px rgba(0,0,0,0.45))}
+.move-anim{position:absolute;display:flex;align-items:center;justify-content:center;font-size:2rem;z-index:20;pointer-events:none;will-change:transform;backface-visibility:hidden;-webkit-backface-visibility:hidden;transform:translate3d(0,0,0);font-family:'DejaVu Sans','Noto Sans','Segoe UI Symbol',sans-serif;font-variant-emoji:text;-webkit-font-variant-emoji:text;font-weight:400;filter:drop-shadow(0 4px 5px rgba(0,0,0,0.45))}
 
 /* v1.0.5 Round-6 Rev49: High aspect-ratio screen adaptation.
    Goal: every interface scrolls VERTICALLY ONLY — never horizontal scroll,

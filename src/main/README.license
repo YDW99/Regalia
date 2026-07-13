@@ -1,3 +1,46 @@
+v1.2.1 (2026.7.13, sixth-pass refinement — round-6 review):
+  - java/com/Regalia/: no changes.
+  - assets/chess.src/: ai-bridge.js edited (openStatsPage now sends
+    visualAnnotations payload field).
+  - assets/chess.html: rebuilt.
+  - assets/stats.html: edited (visual annotations section now reads
+    _payload.visualAnnotations as primary data source).
+  - cpp/: no changes.
+  - res/: no changes.
+
+v1.2.1 (2026.7.13, fifth-pass refinement — round-5 review):
+  - java/com/Regalia/: 3 files edited (ChessApp removed unused Build import;
+    ChessWebViewClient removed unused Build import; EngineSettingsHelper ELO
+    range fix 1-3200 → 500-3500 to match EngineConfigHelper canonical range).
+  - assets/chess.src/: no changes (all 9 JS files verified clean).
+  - assets/chess.html: rebuilt (no source changes — chess.html unchanged).
+  - cpp/: no changes.
+  - res/: no changes.
+
+v1.2.1 (2026.7.13, fourth-pass refinement — round-4 cleanup):
+  - java/com/Regalia/: 3 files deleted (MessageBus / UciProtocolHandler /
+    EngineConfigManager), 2 files slimmed (EngineHealthMonitor 208→85 lines,
+    EngineProcessManager 489→111 lines), 4 files edited (StockfishNative /
+    EngineConfigHelper / MainActivity / build-chess.py).
+  - assets/chess.src/: 4 modules deleted (ui-audio / ui-board / ui-review /
+    ui-toolbar); 3 files edited (ui.js / game-logic.js / ai-bridge.js);
+    build-chess.py module list 13 → 9.
+  - assets/chess.html: rebuilt.
+  - cpp/: no changes.
+  - res/: no changes.
+
+v1.2.1 (2026.7.12) — Defect fix release:
+  - assets/chess.src/ui.js: _computeRenderState, portrait review-top, Store.dispatch, localeCompare, aria-label.
+  - assets/chess.src/state-store.js: deep clone, snapshot iteration, Date/RegExp, warnings.
+  - assets/chess.src/game-logic.js: SET_LANG fix, Store.dispatch.
+  - assets/chess.src/ai-bridge.js: De Morgan rewrites.
+  - assets/chess.src/tablebase.js: Dead conditional removed.
+  - java/StockfishNative.java: AtomicInteger, InterruptedException, await check, JsBridgeGateway activation.
+  - java/UciProtocolHandler.java: Static Pattern, newline sanitization.
+  - java/JsBridgeGateway.java: intent: removed from isUrlSafe.
+  - AndroidManifest.xml: allowBackup=false.
+  - proguard-rules.pro: Created (was missing).
+
 This directory contains the main Android application source code.
 
 Subdirectory license summary:
@@ -766,112 +809,6 @@ v1.0.9 Phase 52 supplement (2026.7.2):
     chess.src/README.license for details).
   - No changes to java/, res/, cpp/, jniLibs/.
 
-
-v1.2.0 Phase 82+++++ rev 9 (2026.7.12) — Stats page visual annotation fix:
-  - assets/chess.src/ai-bridge.js (GPL v3): Added `includeAutoAnnotations` parameter
-    to _buildPGNString(). Updated openStatsPage() to pass true. Other callers unchanged.
-  - assets/chess.html: Rebuilt from chess.src/.
-  - No changes to java/, res/, cpp/, jniLibs/.
-
-v1.2.0 Phase 82+++++ rev 8 (2026.7.12) — MessageBus reflection fix + proguard + sandbox hardening:
-  - java/com/Regalia/MessageBus.java (AGPL v3): Removed `final` from webView field.
-    Added public setWebView(WebView) method. Replaces fragile reflection.
-  - java/com/Regalia/StockfishNative.java (GPL v3): Replaced reflection in
-    setMessageBusWebView() with direct _messageBus.setWebView() call. Made
-    _messageBus field final.
-  - java/com/Regalia/MainActivity.java (AGPL v3): Added removeJavascriptInterface
-    ("MessageBus") in onDestroy() for symmetry.
-  - java/com/Regalia/JsBridgeGateway.java (GPL v3): Tightened isPathInSandbox()
-    prefix check to require path separator (security hardening).
-  - proguard-rules.pro (AGPL v3, NEW): Created with keep rules for MessageBus,
-    @JavascriptInterface methods, and native methods. Was referenced by build.gradle
-    but missing.
-  - No changes to res/, cpp/, jniLibs/.
-
-v1.2.0 Phase 82+++++ rev 7 (2026.7.12) — MessageBus + Store wiring (Task 75 design intent):
-  - java/com/Regalia/StockfishNative.java (GPL v3): Instantiated _messageBus in
-    constructor. Added registerMessageBusHandlers(), emitToJs(), getMessageBus(),
-    setMessageBusWebView(). Registered 4 JS→Java handlers. Emit ENGINE_READY and
-    ENGINE_BESTMOVE events.
-  - java/com/Regalia/MainActivity.java (AGPL v3): Register MessageBus as separate
-    @JavascriptInterface named "MessageBus".
-  - java/com/Regalia/MessageBus.java (AGPL v3): Updated emit() to call
-    window._messageBusJs._onEvent (not window.MessageBus._onEvent).
-  - assets/chess.src/state-store.js (AGPL v3): Added window._messageBusJs receiver.
-
-v1.2.0 Phase 82+++++ rev 6 (2026.7.12) — Visual annotation placeholder offset fix + design intent verification:
-  - assets/chess.src/ui.js (GPL v3): Bug fix — visual annotation placeholder offset
-    in _renderReviewMode. Added _rvPlaceholderOffset to match importPGN's storage offset.
-  - Verified complete visual annotation lifecycle against v1.2.0 Development Plan.
-  - No changes to java/, res/, cpp/, jniLibs/.
-
-v1.2.0 Phase 82+++++ rev 5 (2026.7.12) — Dead module wiring + Web Worker verification + cache cleanup verification:
-  - assets/chess.src/ui.js (GPL v3): Wired Store as debug observability layer.
-    Added Store.dispatch() at _resetGameUIState, toggleSound, enterReview.
-  - assets/chess.src/game-logic.js (GPL v3): Wired Store.dispatch('SET_LANG') at toggleLang.
-  - assets/chess.src/state-store.js (AGPL v3): Now actively used (was dead code).
-  - Web Worker (worker-pool.js): Verified correct, no changes.
-  - All 5 new-game entry points verified calling _resetGameUIState().
-  - No changes to java/, res/, cpp/, jniLibs/.
-
-v1.2.0 Phase 82+++++ rev 4 (2026.7.12) — Portrait review-top fix + documentation fixes:
-  - assets/chess.src/ui.js (GPL v3): Bug fix — portrait review-top missing open
-    tag in _renderReviewMode. Pre-existing bug from v1.1.2. Fixed by adding the
-    missing h+='<div class="review-top">'; in the portrait open branch.
-  - Documentation fixes: README.md versionCode=112→120, res/README.license
-    v1.1.1→v1.2.0, assets/README.license backfilled v1.1.2+v1.2.0 entries,
-    HTML manuals title bar wireframe v1.0.7→v1.2.0.
-  - No changes to java/, res/, cpp/, jniLibs/.
-
-v1.2.0 Phase 82+++++ rev 3 (2026.7.12) — Layout fix verified + APK rebuild:
-  - No source code changes. Extracted v1.1.2 source and verified v1.2.0
-    produces byte-for-byte identical HTML for all 35+ layout scenarios.
-  - APK rebuilt with correct renderInternal order (previous APK had stale
-    chess.html with wrong .bwrap close order).
-  - No changes to java/, res/, cpp/, jniLibs/.
-
-v1.2.0 Phase 82+++++ rev 2 (2026.7.12) — Layout regression fix + bug fixes:
-  - assets/chess.src/ui.js (GPL v3): renderInternal layout regression fix.
-      Removed extra </div> after _renderSidePanel (was closing #app prematurely).
-      Added missing </div></div> after _renderBoardGrid (was leaving .bwrap +
-      .display:flex wrapper unclosed). Structure now matches v1.1.2 layout.
-  - assets/chess.src/game-logic.js (GPL v3): Bug fix — tablebase retry false AI
-      timeout. Reset _aiRetryCount=0 in tablebase .catch() block. Added typeof
-      guard for pieceCountLE7 (cross-module consistency).
-  - assets/chess.src/ai-bridge.js (GPL v3): Bug fix — inverted WDL on checkmate.
-      Swapped ternary branches in requestEngineEval() and _requestBatchEval().
-  - No changes to java/, res/, cpp/, jniLibs/.
-
-v1.2.0 Phase 82+++++ (2026.7.12) — WebView cache fix + code review:
-  - java/com/Regalia/MainActivity.java (AGPL v3): Added webView.clearCache(true)
-    before loadUrl() to ensure the latest chess.html is always loaded from the
-    APK. Without this, some WebView implementations (especially Xiaomi HyperOS)
-    serve a stale cached chess.html after an app update, causing the user to
-    see bugs that were already fixed. This is the root cause of the
-    "oppC is not defined" error reported on user devices — the Phase 82++++
-    fix was correct in the source code, but the WebView was loading a cached
-    pre-fix chess.html.
-  - No JS module changes. No changes to res/, cpp/, jniLibs/.
-  - Comprehensive line-by-line code review of all files completed. No additional
-    bugs found.
-
-v1.2.0 Phase 82++++ (2026.7.12) — renderInternal final extraction + review-mode entry fix + layout fix:
-  - assets/chess.src/ui.js (GPL v3): renderInternal 359→70 lines.
-      Phase 82++++: 3 more rendering blocks extracted to dedicated functions:
-      _computeRenderState() (defensive checks + cm/infoSq/infoCtrl/oppC/flip
-        computation — fixes critical scoping bug where these locals were
-        inaccessible to other sub-functions, root cause of review-mode entry failure),
-      _renderGameOverOverlay(h) (game-over sound + .gover overlay HTML),
-      _applyRenderResult(app, h, reviewMode) (scroll save/DOM update/scroll
-        restore orchestration — most delicate extraction).
-      _renderReviewMode signature updated to (h, flip) — was (h) with flip as
-        free variable (threw ReferenceError → caught by try-catch → "Render Error").
-      LAYOUT FIX: info bars + player bar moved inside .bsec (were outside due
-        to premature </div></div> close).
-      Cumulative renderInternal reduction: 1,365→70 (−1,295 lines, −95%).
-      renderInternal now focuses purely on orchestration.
-  - No new modules; build-order unchanged (13 JS modules).
-  - No changes to java/, res/, cpp/, jniLibs/.
 
 v1.2.0 Phase 82+++ (2026.7.12) — renderInternal AI/player/info bars extraction:
   - assets/chess.src/ui.js (GPL v3): renderInternal 476→359 lines.

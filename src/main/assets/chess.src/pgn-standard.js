@@ -199,8 +199,11 @@ function formatEvalAnnotation(cached){
     // mateDist>0 (White POV) → White mates in N; mateDist<0 → Black mates in N.
     const whiteMates=(mateDist!==0)?mateDist>0:ev>0;
     label=T(whiteMates?'pgn_mate_white':'pgn_mate_black');
-    const absMd=mateDist!==0?Math.abs(mateDist):0;
-    scoreStr=whiteMates?('#+'+(absMd||'')):('#-'+(absMd||''));
+    // v1.2.1: 修复 malformed `[%eval #+]`/`[%eval #-]` —— 此前 absMd=0 时
+    //   `0||''` 求值为 ''，产生无数字的 `#+` / `#-` 标签。与 formatEvalTag
+    //   (line 156) 保持一致：mateDist=0 但 |ev|≥90000 时默认 ±1。
+    const absMd=mateDist!==0?Math.abs(mateDist):1;
+    scoreStr=whiteMates?('#+'+absMd):('#-'+absMd);
   }else{
     // Centipawn eval — White-POV (ev is already White-POV from onEngineEval).
     label=_pgnWhitePerspectiveLabel(ev);

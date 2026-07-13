@@ -425,7 +425,7 @@ function _updateEvalDisplayIncremental() {
       if (app) {
         app.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:var(--bg);color:var(--text);padding:20px;text-align:center;font-family:system-ui,sans-serif">' +
           '<div style="font-size:3rem;margin-bottom:16px">♔</div>' +
-          '<h2 style="color:var(--accent2);margin-bottom:12px">'+T('app_name')+' v1.2.0</h2>' +
+          '<h2 style="color:var(--accent2);margin-bottom:12px">'+T('app_name')+' v1.2.1</h2>' +
           '<p style="color:#a08050;margin-bottom:20px;max-width:300px">'+T('render_error')+'</p>' +
           '<button onclick="location.reload()" style="padding:12px 24px;background:var(--btn-a-bg);color:var(--bg);border:none;border-radius:6px;font-size:1rem;font-weight:700;cursor:pointer">'+T('refresh_page')+'</button>' +
           '</div>';
@@ -2215,7 +2215,7 @@ if(dlgChess960&&!dlgBookMoves){
   // v1.0.4 FIX (this round): Removed the redundant <h3>${T('classic_openings')}</h3>
   // heading — it was a residual title. The section is self-evident from the ECO
   // search box and openings list below.
-  h+=`<div class="dlg-sec"><div class="portrait-stack" style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap"><form onsubmit="event.preventDefault();if(!_ecoComposing){_ecoDoSearch()}" style="flex:1;min-width:160px;display:flex;gap:4px"><input id="ecoSearch" type="text" inputmode="search" placeholder="${T('eco_search_ph')}" style="flex:1;padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;touch-action:manipulation" enterkeyhint="search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="if(!_ecoComposing){setEcoQuery(this.value)}" onfocus="_ecoSearchFocused=true;if(_ecoBlurTimer){clearTimeout(_ecoBlurTimer);_ecoBlurTimer=0}" onblur="_ecoBlurTimer=setTimeout(function(){_ecoSearchFocused=false;_ecoBlurTimer=0},200)" oncompositionstart="_ecoComposing=true" oncompositionend="_ecoComposing=false;setEcoQuery(this.value)" onkeydown="if((event.key==='Enter'||event.keyCode===13)&&!event.isComposing&&!_ecoComposing){event.preventDefault();setEcoQuery(this.value);_ecoDoSearch()}" value="${(window.ecoSearchQuery||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c]))}"></form><select id="ecoFamily" style="padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;cursor:pointer;flex-shrink:0" onchange="window.ecoFamilyFilter=this.value;ecoShowCount=30;_ecoUpdateResults()"><option value="">${T('all_categories')}</option>${Object.keys(ECO_BY_FAMILY).sort().map(f=>`<option value="${f}"${(window.ecoFamilyFilter||'')===f?' selected':''}>${f}</option>`).join('')}</select></div><div class="op-list"><button class="op-btn${!dlgOpeningId?' act':''}" onclick="dlgOpeningId=null;window.ecoSearchQuery='';window.ecoFamilyFilter='';ecoShowCount=30;_ecoUpdateResults()"><div class="on">${T('free_opening_btn')}</div><div class="os">${T('from_start')}</div></button>`;
+  h+=`<div class="dlg-sec"><div class="portrait-stack" style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap"><form onsubmit="event.preventDefault();if(!_ecoComposing){_ecoDoSearch()}" style="flex:1;min-width:160px;display:flex;gap:4px"><input id="ecoSearch" type="text" inputmode="search" aria-label="${T('eco_search_ph')}" placeholder="${T('eco_search_ph')}" style="flex:1;padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;touch-action:manipulation" enterkeyhint="search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="if(!_ecoComposing){setEcoQuery(this.value)}" onfocus="_ecoSearchFocused=true;if(_ecoBlurTimer){clearTimeout(_ecoBlurTimer);_ecoBlurTimer=0}" onblur="_ecoBlurTimer=setTimeout(function(){_ecoSearchFocused=false;_ecoBlurTimer=0},200)" oncompositionstart="_ecoComposing=true" oncompositionend="_ecoComposing=false;setEcoQuery(this.value)" onkeydown="if((event.key==='Enter'||event.keyCode===13)&&!event.isComposing&&!_ecoComposing){event.preventDefault();setEcoQuery(this.value);_ecoDoSearch()}" value="${(window.ecoSearchQuery||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c]))}"></form><select id="ecoFamily" style="padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;cursor:pointer;flex-shrink:0" onchange="window.ecoFamilyFilter=this.value;ecoShowCount=30;_ecoUpdateResults()"><option value="">${T('all_categories')}</option>${Object.keys(ECO_BY_FAMILY).sort((a,b)=>a.localeCompare(b)).map(f=>`<option value="${f}"${(window.ecoFamilyFilter||'')===f?' selected':''}>${f}</option>`).join('')}</select></div><div class="op-list"><button class="op-btn${!dlgOpeningId?' act':''}" onclick="dlgOpeningId=null;window.ecoSearchQuery='';window.ecoFamilyFilter='';ecoShowCount=30;_ecoUpdateResults()"><div class="on">${T('free_opening_btn')}</div><div class="os">${T('from_start')}</div></button>`;
   _ensureEcoParsed();ecoDisplayList=ECO_OPENINGS;
   if(window.ecoSearchQuery){const q=window.ecoSearchQuery.trim().toUpperCase();ecoDisplayList=searchEco(q)}
   else if(window.ecoFamilyFilter){ecoDisplayList=ECO_BY_FAMILY[window.ecoFamilyFilter]||[]}
@@ -2241,7 +2241,7 @@ if(showAboutPage){
 // Load AGPL v3 SVG via AndroidBridge as base64 (CSP-compliant)
 let _gplSvgSrc='';
 try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.loadAssetAsBase64){const b64=AndroidBridge.loadAssetAsBase64('AGPLv3_Logo.svg');if(b64)_gplSvgSrc='data:image/svg+xml;base64,'+b64;}}catch(e){}
-h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="About"><div class="dlg" style="max-width:460px"><h2>${T('about_title')}</h2><div class="dlg-sec"><div class="crow"><span class="lb">${T('about_app')}</span><span class="vl">${T("app_name")} v1.2.0</span></div><div class="crow"><span class="lb">${T('about_engine')}</span><span class="vl">Stockfish 18 (arm64-v8a-dotprod)</span></div><div class="crow"><span class="lb">${T('about_platform')}</span><span class="vl">Android arm64-v8a</span></div></div><div class="dlg-sec"><h3>${T('copyright_license')}</h3>`+(_gplSvgSrc?`<div style="text-align:center;margin-bottom:10px"><img src="${_gplSvgSrc}" alt="AGPL v3 Logo" style="width:120px;height:auto;opacity:.9" /></div>`:'')+`<div style="font-size:.75rem;color:var(--text);line-height:1.6"><p style="margin-bottom:8px">${T('about_copyright')}</p><p style="margin-bottom:8px">${T('about_source_code_prefix')}<a href="${T('about_source_code_url')}" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">${T('about_source_code_url')}</a></p><p style="margin-bottom:8px">${T('about_agpl')} <a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GNU AGPL v3</a>${T('about_agpl_desc')}</p><p style="margin-bottom:8px">${T('about_droidfish')}<a href="https://github.com/peterosterlund2/droidfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">DroidFish</a>${T('about_droidfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a>${T('about_droidfish_tail')}</p><p style="margin-bottom:8px">${T('about_stockfish')}<a href="https://github.com/official-stockfish/Stockfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">Stockfish</a>${T('about_stockfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a> ${T('about_gplv3')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_disclaimer')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_ai')}</p></div></div><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="showAboutPage=false;render()" style="flex:1;justify-content:center">${T('close')}</button></div></div></div>`;}
+h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="About"><div class="dlg" style="max-width:460px"><h2>${T('about_title')}</h2><div class="dlg-sec"><div class="crow"><span class="lb">${T('about_app')}</span><span class="vl">${T("app_name")} v1.2.1</span></div><div class="crow"><span class="lb">${T('about_engine')}</span><span class="vl">Stockfish 18 (arm64-v8a-dotprod)</span></div><div class="crow"><span class="lb">${T('about_platform')}</span><span class="vl">Android arm64-v8a</span></div></div><div class="dlg-sec"><h3>${T('copyright_license')}</h3>`+(_gplSvgSrc?`<div style="text-align:center;margin-bottom:10px"><img src="${_gplSvgSrc}" alt="AGPL v3 Logo" style="width:120px;height:auto;opacity:.9" /></div>`:'')+`<div style="font-size:.75rem;color:var(--text);line-height:1.6"><p style="margin-bottom:8px">${T('about_copyright')}</p><p style="margin-bottom:8px">${T('about_source_code_prefix')}<a href="${T('about_source_code_url')}" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">${T('about_source_code_url')}</a></p><p style="margin-bottom:8px">${T('about_agpl')} <a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GNU AGPL v3</a>${T('about_agpl_desc')}</p><p style="margin-bottom:8px">${T('about_droidfish')}<a href="https://github.com/peterosterlund2/droidfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">DroidFish</a>${T('about_droidfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a>${T('about_droidfish_tail')}</p><p style="margin-bottom:8px">${T('about_stockfish')}<a href="https://github.com/official-stockfish/Stockfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">Stockfish</a>${T('about_stockfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a> ${T('about_gplv3')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_disclaimer')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_ai')}</p></div></div><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="showAboutPage=false;render()" style="flex:1;justify-content:center">${T('close')}</button></div></div></div>`;}
 
 // ===================== IMPORT DIALOG =====================
 // Import dialog — paste FEN, paste PGN, or select PGN file
@@ -2343,13 +2343,8 @@ if(_isLandscapeReview){
   h+='<div class="review-board" style="padding-top:'+(_rvLabelH+_rvLabelGap)+'px;padding-left:'+(_rvLabelW+_rvLabelGap)+'px;padding-right:0;padding-bottom:0">';
   h+='<div class="bgrid" style="grid-template-columns:repeat(8,'+_rvCell+'px);grid-template-rows:repeat(8,'+_rvCell+'px)">';
 }else{
-  // Portrait: original stacked layout. review-body is vertical, review-left holds
-  // everything (board + eval + slider + chart + nav), review-moves is below.
-  // v1.2.0 Phase 82+++++ rev 4 FIX: Added missing .review-top open tag. The portrait
-  // branch was closing .review-top (line ~2893) without ever opening it, causing the
-  // </div> to auto-close .review-body instead. This made .review-bottom a sibling of
-  // .review-body (not a child), so the CSS rule .review-body > .review-bottom did not
-  // apply in portrait mode. Now .review-top is properly opened, matching landscape.
+  // Portrait: same unified layout as landscape — .review-top wraps board + moves.
+  // v1.2.1 fix: Added missing .review-top open tag (was pre-existing bug from v1.1.2).
   h+='<div class="review-body" style="--rv-board-h:'+_rvFullBoardH+'px">';
   h+='<div class="review-top">';
   h+='<div class="review-left">';
@@ -2390,16 +2385,8 @@ if(!showCtrlMap&&typeof _getVisualAnnotations==='function'&&typeof reviewStep!==
   // on-demand using the current gameState (which is the initial position when
   // reviewStep=0).
   // reviewStep N (N>0) = position after move N (moveRecords index N-1).
-  // v1.2.0 Phase 82+++++ rev 6 FIX: Apply placeholder offset when reading visual
-  // annotations. When a black-to-move placeholder exists at moveRecords[0] (from
-  // _prependBlackToMovePlaceholder for FEN imports where Black is to move),
-  // importPGN stores imported annotations at moveIdx + placeholderOffset. Without
-  // this offset, imported annotations would be read from the wrong moveIdx,
-  // causing them to appear on the wrong review step (or not appear at all).
-  // This mirrors the _placeholderOffset logic in tablebase.js importPGN (lines 1551, 1583).
-  const _rvPlaceholderOffset=(typeof moveRecords!=='undefined'&&moveRecords.length>0&&moveRecords[0]===null)?1:0;
   if(reviewStep>0){
-    _rvVa=_getVisualAnnotations(reviewStep-1+_rvPlaceholderOffset);
+    _rvVa=_getVisualAnnotations(reviewStep-1);
   }else if(reviewStep===0){
     // Compute annotations for the initial position on demand.
     // Use a special key '_initial' to cache so we don't recompute every render.
@@ -3121,60 +3108,18 @@ return h;
 } // end _renderSidePanel
 
 /**
- * v1.2.0 Phase 82++++: Compute the render state shared across all render sub-functions.
- *
- * Extracted from renderInternal() + _renderHeader() to fix a critical Phase 82++
- * regression: the local variables (cm, infoSq, infoCtrl, oppC, flip) were declared
- * inside _renderHeader() and therefore NOT accessible in renderInternal() or other
- * sub-functions. This caused:
- *   - _renderAIBar(h, oppC) -> oppC was undefined -> AI captured-pieces display broke
- *   - _renderBoardGrid(h, flip, cm) -> flip/cm undefined -> board never flipped for
- *     black player; control-map coloring was lost
- *   - _renderSidePanel(h, infoSq, infoCtrl, oppC) -> all undefined -> control-info
- *     card was silently skipped
- *   - _renderReviewMode(h) referenced `flip` as a free variable -> threw
- *     ReferenceError -> caught by renderInternal's try-catch -> user saw "Render
- *     Error" instead of the review overlay (this was the root cause of the
- *     "clicking move records doesn't enter review mode" bug)
- *
- * This function centralizes all defensive checks and shared-state computation:
- *   1. gameState validity check (reset if corrupt)
- *   2. setupMode / gameOver reset
- *   3. gameOver text re-localization
- *   4. _applyGameOver() check (was previously inside _renderHeader)
- *   5. Control-map cache (cachedCtrlMap / cm)
- *   6. infoSq (hovered or selected square) + infoCtrl (control-map entry)
- *   7. oppC (opponent color) + flip (board-flip flag)
- *
- * The returned object is destructured by renderInternal and passed explicitly to
- * every sub-function that needs these values. This eliminates the scoping bug
- * permanently — no sub-function reads these as free variables anymore.
- *
- * Uses global state only (gameState, initState, stateHistory, _redoStack, setupMode,
- * gameOver, _gameOverStatusKey, _gameOverStrFromStatus, isAIThinking, reviewMode,
- * _cachedStatusKey, _cachedStatus, gameStatus, _applyGameOver, showCtrlMap,
- * cachedCtrlKey, cachedCtrlMap, getCtrlMap, hoveredSquare, selectedSquare,
- * OPP_COLOR, playerColor).
- *
- * @returns {{cm: Object|null, infoSq: Object|null, infoCtrl: Object|null,
- *            oppC: string, flip: boolean}}
+ * v1.2.1: Compute the render state shared across all render sub-functions.
+ * Fixes critical scoping bug where oppC/flip/cm/infoSq/infoCtrl were declared
+ * inside _renderHeader() and inaccessible to other sub-functions.
  */
 function _computeRenderState(){
-// Defensive check — if gameState is undefined/corrupt, reset to initial state
 if(!gameState||!gameState.board){console.error('renderInternal: gameState is invalid, resetting');gameState=initState();stateHistory=[];_redoStack=[];}
 if(setupMode){gameOver=null;_gameOverStatusKey=null;}
-// Re-localize gameOver text on every render
 if(gameOver&&_gameOverStatusKey){const _reLocStr=_gameOverStrFromStatus(_gameOverStatusKey);if(_reLocStr)gameOver=_reLocStr;}
-// _applyGameOver check (was inside _renderHeader in Phase 82++)
 if(!gameOver&&!setupMode&&!isAIThinking&&!reviewMode){const _gsKey=gameState.hash+'|'+gameState.currentTurn;if(_cachedStatusKey!==_gsKey){_cachedStatus=gameStatus(gameState);_cachedStatusKey=_gsKey;}_applyGameOver(_cachedStatus);}
-// Control-map cache
 const ctrlKey=showCtrlMap?gameState.hash:'off';if(ctrlKey!==cachedCtrlKey){cachedCtrlMap=showCtrlMap?getCtrlMap(gameState.board):null;cachedCtrlKey=ctrlKey}const cm=cachedCtrlMap;
-// infoSq + infoCtrl
 const infoSq=hoveredSquare||selectedSquare;let infoCtrl=null;
-// v1.0.2 FIX (audit): reuse the control-map entry directly instead of
-// allocating a fresh {white,black} object on every render.
 if(infoSq&&cm){const e=cm[infoSq.row][infoSq.col];if(e)infoCtrl=e;}
-// oppC + flip
 const oppC=OPP_COLOR[playerColor];
 const flip=playerColor==='black';
 return {cm, infoSq, infoCtrl, oppC, flip};
@@ -3184,14 +3129,10 @@ return {cm, infoSq, infoCtrl, oppC, flip};
  * v1.2.0 Phase 82++: Render the header toolbar (app title, eval display, difficulty
  * selector, new game / free play / sound / FEN / import / setup buttons).
  *
- * Extracted from renderInternal() to further reduce God Module size. Computes the
+ * Extracted from renderInternal() to further reduce God Function size. Computes the
  * eval display (emoji, description, score, depth, seldepth, nodes, nps) and builds
  * the .hdr toolbar HTML string. This is the FIRST h contribution — the function
  * initializes h and returns it.
- *
- * v1.2.0 Phase 82++++: The defensive checks, _applyGameOver, and cm/infoSq/infoCtrl/
- * oppC/flip computation were moved to _computeRenderState() to fix a critical
- * scoping bug (those locals were inaccessible to other sub-functions).
  *
  * Uses global state only (formatEval, _sfDepth, _sfSeldepth, _evalLoading,
  * _lastProgressNodes, _lastProgressNps, T, _lang, setupMode, isAIThinking,
@@ -3206,12 +3147,10 @@ const _fe=formatEval();const pe=_fe.emoji,pd=_fe.desc,scoreStr=_fe.score;
 const _hdrDepthStr=_sfDepth>0?'<span style="font-size:.65rem;color:var(--muted);margin-left:4px">D'+_sfDepth+'</span>'+(_sfSeldepth>0&&_sfSeldepth>_sfDepth?'<span style="font-size:.65rem;color:var(--muted);margin-left:2px">SD'+_sfSeldepth+'</span>':''):'';
 let _hdrProgressStr='';if(_evalLoading&&_sfDepth>0){let _hpp=[];if(_lastProgressNodes!=null){const _ns=_lastProgressNodes>=1000000?(_lastProgressNodes/1000000).toFixed(1)+'M':_lastProgressNodes>=1000?Math.round(_lastProgressNodes/1000)+'K':String(_lastProgressNodes);_hpp.push(_ns);}if(_lastProgressNps!=null){const _ns=_lastProgressNps>=1000000?(_lastProgressNps/1000000).toFixed(1)+'M/s':_lastProgressNps>=1000?Math.round(_lastProgressNps/1000)+'K/s':String(_lastProgressNps);_hpp.push(_ns);}if(_hpp.length)_hdrProgressStr='<span style="font-size:.6rem;color:var(--muted);margin-left:3px">'+_hpp.join(' ')+'</span>';}
 
-// v1.2.0 Phase 82++++: Defensive checks, _applyGameOver, and cm/infoSq/infoCtrl/
-// oppC/flip computation moved to _computeRenderState() (fixes critical scoping bug
-// where these locals were inaccessible to other sub-functions).
-// Arrows computed separately by _updateArrows() — no inline computation needed
+// v1.2.1: Defensive checks, _applyGameOver, and cm/infoSq/infoCtrl/oppC/flip computation
+// moved to _computeRenderState() to fix critical scoping bug.
 
-let h='<div class="hdr" role="banner"><div class="hdr-top"><div class="hdr-l">'+_hdrKingIconHTML()+'<h1>'+T('app_name')+'<span class="ver">v1.2.0</span><button onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showAboutPage=true;render()" class="hdr-btn" style="margin-left:4px;cursor:pointer">ℹ️</button></h1></div><button onclick="toggleLang()" class="hdr-btn-lg" style="cursor:pointer">'+(_lang==='zh'?'↔️中':'↔️EN')+'</button><div class="ev" id="eval-disp" role="status" aria-label="'+T('evaluating')+'">'+(setupMode?T('setup_label'):(isAIThinking?'<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>':'<span class="ev-e">'+pe+'</span><span>'+pd+'</span><span style="color:var(--muted)">('+scoreStr+')</span>'+_hdrDepthStr+_hdrProgressStr))+'</div></div><div class="hdr-tools" role="toolbar" aria-label="'+T('ctrl_range')+'">'+(setupMode?'':'<div class="diff-sel" role="radiogroup" aria-label="AI">'+getAI_LEVELS().map(l=>'<button class="diff-b'+(getEffectiveAILevel()===l.id?' act':'')+'" onclick="if(!isAIThinking){'+(l.id===8?'openEngineConfig()':('aiLevel='+l.id+';try{AndroidBridge.syncGameDifficulty('+l.id+')}catch(e){}render()'))+'}" title="'+l.desc+'" role="radio" aria-checked="'+(getEffectiveAILevel()===l.id)+'">'+(l.id===8?'⚙️':l.id===7?('SL'+(function(){try{let _sl=20;if(typeof engineSettingsData!=='undefined'&&engineSettingsData&&engineSettingsData.skillLevel!=null)_sl=engineSettingsData.skillLevel;else if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getEngineSkillLevel)_sl=AndroidBridge.getEngineSkillLevel();return _sl;}catch(e){return 20;}})()):l.id)+'</button>').join('')+'</div>')+'<button type="button" class="btn" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()" aria-label="'+T('new_game')+'"><span style="font-size:1.4rem">⚔️</span> '+T('new_game')+'</button>'+'<button class="btn" onclick="quickFreeOpening()" aria-label="'+T('free_opening')+'">'+(playerColor==='white'?'<span style=\"font-size:1.4rem;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text\">♔&#xFE0E;</span>':'<span style=\"font-size:1.4rem;font-weight:400;color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans Symbol&#x27;,sans-serif;font-variant-emoji:text\">♚&#xFE0E;</span>')+' '+T('free_opening')+'</button>'+(setupMode?'':'<button class="btn" onclick="toggleSound()" id="btnSound" aria-label="'+T('sound')+'">'+(soundOn?'<span style="font-size:1.4rem">🔊</span> '+T('sound'):'<span style="font-size:1.4rem">🔇</span> '+T('sound'))+'</button>')+'<button class="btn" onclick="copyFEN()" title="'+T('copy_fen')+'" aria-label="'+T('copy_fen')+'"><span style="font-size:1.4rem">📝</span> FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="'+T('import_fen')+'" aria-label="'+T('import_fen')+'"><span style="font-size:1.4rem">🗃️</span> '+T('import_label')+'</button><button class="btn" onclick="'+(setupMode?'exitSetup()':'toggleSetup()')+'" aria-label="'+(setupMode?T('setup_done'):T('setup_mode'))+'">'+(setupMode?'<span style="font-size:1.4rem">✓</span> '+T('setup_done'):'<span style="font-size:1.4rem">🏗️</span> '+T('setup_mode'))+'</button></div></div>';
+let h='<div class="hdr" role="banner"><div class="hdr-top"><div class="hdr-l">'+_hdrKingIconHTML()+'<h1>'+T('app_name')+'<span class="ver">v1.2.1</span><button onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showAboutPage=true;render()" class="hdr-btn" style="margin-left:4px;cursor:pointer">ℹ️</button></h1></div><button onclick="toggleLang()" class="hdr-btn-lg" style="cursor:pointer">'+(_lang==='zh'?'↔️中':'↔️EN')+'</button><div class="ev" id="eval-disp" role="status" aria-label="'+T('evaluating')+'">'+(setupMode?T('setup_label'):(isAIThinking?'<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>':'<span class="ev-e">'+pe+'</span><span>'+pd+'</span><span style="color:var(--muted)">('+scoreStr+')</span>'+_hdrDepthStr+_hdrProgressStr))+'</div></div><div class="hdr-tools" role="toolbar" aria-label="'+T('ctrl_range')+'">'+(setupMode?'':'<div class="diff-sel" role="radiogroup" aria-label="AI">'+getAI_LEVELS().map(l=>'<button class="diff-b'+(getEffectiveAILevel()===l.id?' act':'')+'" onclick="if(!isAIThinking){'+(l.id===8?'openEngineConfig()':('aiLevel='+l.id+';try{AndroidBridge.syncGameDifficulty('+l.id+')}catch(e){}render()'))+'}" title="'+l.desc+'" role="radio" aria-checked="'+(getEffectiveAILevel()===l.id)+'">'+(l.id===8?'⚙️':l.id===7?('SL'+(function(){try{let _sl=20;if(typeof engineSettingsData!=='undefined'&&engineSettingsData&&engineSettingsData.skillLevel!=null)_sl=engineSettingsData.skillLevel;else if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getEngineSkillLevel)_sl=AndroidBridge.getEngineSkillLevel();return _sl;}catch(e){return 20;}})()):l.id)+'</button>').join('')+'</div>')+'<button type="button" class="btn" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()" aria-label="'+T('new_game')+'"><span style="font-size:1.4rem">⚔️</span> '+T('new_game')+'</button>'+'<button class="btn" onclick="quickFreeOpening()" aria-label="'+T('free_opening')+'">'+(playerColor==='white'?'<span style=\"font-size:1.4rem;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text\">♔&#xFE0E;</span>':'<span style=\"font-size:1.4rem;font-weight:400;color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans Symbol&#x27;,sans-serif;font-variant-emoji:text\">♚&#xFE0E;</span>')+' '+T('free_opening')+'</button>'+(setupMode?'':'<button class="btn" onclick="toggleSound()" id="btnSound" aria-label="'+T('sound')+'">'+(soundOn?'<span style="font-size:1.4rem">🔊</span> '+T('sound'):'<span style="font-size:1.4rem">🔇</span> '+T('sound'))+'</button>')+'<button class="btn" onclick="copyFEN()" title="'+T('copy_fen')+'" aria-label="'+T('copy_fen')+'"><span style="font-size:1.4rem">📝</span> FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="'+T('import_fen')+'" aria-label="'+T('import_fen')+'"><span style="font-size:1.4rem">🗃️</span> '+T('import_label')+'</button><button class="btn" onclick="'+(setupMode?'exitSetup()':'toggleSetup()')+'" aria-label="'+(setupMode?T('setup_done'):T('setup_mode'))+'">'+(setupMode?'<span style="font-size:1.4rem">✓</span> '+T('setup_done'):'<span style="font-size:1.4rem">🏗️</span> '+T('setup_mode'))+'</button></div></div>';
 return h;
 } // end _renderHeader
 
@@ -3412,77 +3351,42 @@ if(_multiPVLines.length>=1){h+='<div style="margin-top:6px;border-top:1px solid 
 return h;
 } // end _renderInfoBars
 
-/**
- * v1.2.0 Phase 82++++: Render the game-over overlay (sound trigger + overlay HTML).
- *
- * Extracted from renderInternal() to further reduce God Function size. Handles:
- *   1. Game-over sound trigger (fires once per game end via gameOverSoundPlayed guard)
- *   2. Game-over overlay HTML (.gover) with status emoji, localized status text,
- *      "Play Again" and "Review" buttons
- *
- * The overlay markup includes adaptive color/emoji based on _gameOverStatusKey:
- *   - checkmate: ♔/♚ piece glyph with adaptive color for winning side
- *   - resign: 🏳️ white flag
- *   - timeout: ⌛ hourglass
- *   - other (draw/stalemate): 🤝 handshake
- *
- * Uses global state only (gameOver, lastMove, gameOverSoundPlayed, playSound,
- * HapticManager, setupMode, _gameOverStatusKey, gameState, T, render,
- * showNewGameDialog, dlgPlayerColor, playerColor, dlgOpeningId, ecoShowCount,
- * dlgBookMoves, useBookMoves, enterReview).
- *
- * @param {string} h - Current HTML string
- * @returns {string} h with game-over overlay HTML appended (if applicable)
- */
-function _renderGameOverOverlay(h){
+function renderInternal(){try{
+const _rs=_computeRenderState();
+const {cm, infoSq, infoCtrl, oppC, flip}=_rs;
+const app=document.getElementById('app');if(!app)return;
+let h=_renderHeader();
+h+=`<div class="main" role="main"><div class="bsec">`;
+h=_renderAIBar(h, oppC);
+h=_renderBoardGrid(h, flip, cm);
+// Game-over overlay renders INSIDE .bwrap (anchors to .bwrap via position:absolute)
 if(gameOver&&lastMove&&!gameOverSoundPlayed){gameOverSoundPlayed=true;playSound('gameover');HapticManager.fire('GAME_OVER');}
 if(gameOver&&!setupMode){h+=`<div class="gover" role="alert" aria-live="assertive"><div class="ge" style="${_gameOverStatusKey==='checkmate'?(gameState.currentTurn==='black'?'color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55)':'color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55)'):'font-family:system-ui,sans-serif'};font-family:'DejaVu Sans','Noto Sans','Segoe UI Symbol',sans-serif;font-variant-emoji:text;font-weight:400">${_gameOverStatusKey==='checkmate'?(gameState.currentTurn==='black'?'♔\uFE0E':'♚\uFE0E'):_gameOverStatusKey==='resign'?'🏳️':_gameOverStatusKey==='timeout'?'⌛':'🤝'}</div><div class="gt">${gameOver}</div><button type="button" class="btn btn-p" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()">⚔️ ${T('play_again')}</button><button type="button" class="btn btn-g" onclick="enterReview()">📑 ${T('review')}</button></div>`;}
-return h;
-} // end _renderGameOverOverlay
+// v1.2.0 Phase 82++: Setup panel rendering extracted to _renderSetupPanel(h).
+h=_renderSetupPanel(h);
+h+=`</div></div>`; // close .bwrap + .display:flex
+h=_renderInfoBars(h);
+h=_renderPlayerBar(h);
+h+=`</div>`; // close .bsec
+h=_renderSidePanel(h, infoSq, infoCtrl, oppC); // opens .panel, closes .panel + .main
 
-/**
- * v1.2.0 Phase 82++++: Apply the render result to the DOM (scroll save / innerHTML /
- * scroll restore / cache invalidation / focus restore).
- *
- * Extracted from renderInternal() to further reduce God Function size. This is the
- * most delicate extraction because it touches many global state variables and uses
- * specific DOM operation timing (synchronous scroll restore for review containers,
- * double-rAF for layout-settled operations).
- *
- * Pipeline:
- *   1. Capture scroll positions of all scrollable containers BEFORE DOM rebuild
- *      (.mlist, .review-body, .review-moves, .dlg, .panel, .op-list)
- *   2. app.innerHTML = h  (rebuilds entire DOM, resets all scrollTops to 0)
- *   3. Re-attach active piece-move animations (_reattachActiveAnimations)
- *   4. Restore .mlist scroll synchronously (with _scrollRestoreGuard to suppress
- *      intermediate scroll events)
- *   5. Restore .review-body + .review-moves scroll SYNCHRONOUSLY (not in rAF —
- *      otherwise the user sees a visible jump-to-top flicker)
- *   6. Restore .dlg / .panel / .op-list scroll in double-rAF (deferred to let
- *      layout settle, with clamping to handle shorter content)
- *   7. Invalidate DOM caches (_cachedBwrap, _cachedSvgEl, _cachedCtrlCard, etc.)
- *   8. Update prev-tracking state (_prevHoverSq, _prevSelSq, _prevLegalSet)
- *   9. Active-move scroll-into-view in review mode (double-rAF, manual scrollTop
- *      computation to avoid scrollIntoView's ancestor-scrolling side effect)
- *  10. Update arrow overlay (_updateArrows)
- *  11. Invalidate eval-display signature cache (_evalDispPrevSig)
- *  12. Cache review-moves-list element ref (_rListEl)
- *  13. Restore ECO search input focus
- *  14. Auto-scroll opening list to selected opening (if New Game dialog open)
- *
- * Uses global state only (reviewMode, _ecoSearchFocused, _ecoBlurTimer,
- * _rvScrollRefreshTimer, _mlistScrollState, _scrollRestoreGuard, _skipReviewBodyScrollRestore,
- * _rListEl, _lastReviewStepScrolled, reviewStep, hoveredSquare, selectedSquare,
- * legalMvs, _cachedBwrap, _cachedSvgEl, _cachedSvgLines, _cachedArrowKey,
- * _cachedCtrlCard, _prevHoverSq, _prevSelSq, _prevLegalSet, _evalDispPrevSig,
- * _invalidateElCache, _sqElCache, _prevBoardVersion, _reattachActiveAnimations,
- * _updateArrows, _onMlistScroll, gameState, requestAnimationFrame).
- *
- * @param {HTMLElement} app - The #app DOM element
- * @param {string} h - The HTML string to set as app.innerHTML
- * @param {boolean} reviewMode - Whether review mode is active (affects scroll restore)
- */
-function _applyRenderResult(app, h, reviewMode){
+// v1.2.0 Phase 82: All modal dialogs extracted to _renderDialogs(h) to reduce
+// renderInternal's God Function size. Each dialog is triggered by an independent
+// boolean flag and produces self-contained HTML overlay markup. See _renderDialogs
+// above for the full dialog rendering logic and extraction rationale.
+h=_renderDialogs(h);
+
+
+// v1.2.0 Phase 82+: Review mode rendering extracted to _renderReviewMode(h) to further
+// reduce renderInternal's God Function size. The function returns {h, done} — when
+// done=true, the review state was invalid and a re-render has been triggered; we must
+// return immediately to skip the scroll-save/innerHTML/scroll-restore logic below
+// (which would otherwise operate on stale DOM state). Only called when reviewMode is true.
+if(reviewMode){
+  const _rvResult=_renderReviewMode(h, flip);
+  h=_rvResult.h;
+  if(_rvResult.done) return;
+}
 const _wasEcoFocused=_ecoSearchFocused;if(_ecoBlurTimer){clearTimeout(_ecoBlurTimer);_ecoBlurTimer=0}
 // v1.1.0 Phase 54 rev14: Virtual list is disabled (RV_VIRTUAL_THRESHOLD=Infinity).
 //   The scroll refresh timer is always 0, so this clearTimeout is a no-op.
@@ -3690,31 +3594,40 @@ _prevLegalSet=new Set();if(selectedSquare){for(const m of legalMvs)_prevLegalSet
 //   scrollable ancestors — in landscape review mode, the active move lives
 //   in the inner .review-moves container which sits at the TOP of the outer
 //   .review-body. When the user has scrolled .review-body down to reach the
-//   nav buttons at the bottom, clicking a nav button triggers render() ->
+//   nav buttons at the bottom, clicking a nav button triggers render() →
 //   this scrollIntoView yanks .review-body back to scrollTop=0, undoing the
-//   synchronous restore above. Fix: manually compute the inner .review-moves
-//   scrollTop to center the active move, WITHOUT calling scrollIntoView (which
-//   would also scroll the outer container). This preserves the outer .review-body
-//   scroll position.
+//   synchronous restore at lines 3203-3210 above. Fix: manually compute the
+//   inner .review-moves scrollTop to center the active move, WITHOUT calling
+//   scrollIntoView (which would also scroll the outer container). This
+//   preserves the outer .review-body scroll position.
+//
 // v1.1.0 Phase 57 FIX (portrait scroll): The Phase 56 fix used _rAct.offsetTop
 //   to compute the active move's position. However, offsetTop returns the
 //   distance from the element's outer border to the top of its offsetParent's
 //   inner border — and .rmv-block's offsetParent is .review-overlay (which is
 //   position:fixed), NOT _rList (.review-moves has no position set).
+//
 //   In LANDSCAPE this happened to be approximately correct because .review-moves
 //   is a flex child of .review-top (which is row-flex), so .rmv-block's vertical
-//   offsetTop within .review-overlay ~= header_height + position_within_moves.
+//   offsetTop within .review-overlay ≈ header_height + position_within_moves.
 //   The header is only ~24px, so the error was small.
+//
 //   In PORTRAIT, however, .review-moves is stacked BELOW .review-left (the board
 //   column, which has the board's full height). So .rmv-block's vertical
-//   offsetTop within .review-overlay ~= header_height + board_height +
+//   offsetTop within .review-overlay ≈ header_height + board_height +
 //   position_within_moves. The board_height is 256-320px — much larger than the
 //   .review-moves viewport (also 256-320px), so the resulting _target was
 //   WAY too large, clamped to scrollHeight-clientHeight (scrolled to bottom),
 //   and the active move was nowhere near the center of the visible area.
+//
 //   Fix: use getBoundingClientRect() to compute the active move's position
 //   RELATIVE TO _rList (not relative to .review-overlay). This works correctly
 //   regardless of orientation, layout structure, or offsetParent chain.
+//   The formula:
+//     _actTop = (_actRect.top - _listRect.top) + _rList.scrollTop
+//   gives the active move's position within _rList's full content (including
+//   the portion scrolled out of view). Then center it:
+//     _target = _actTop + _actH/2 - _listH/2
 if(reviewMode && reviewStep !== _lastReviewStepScrolled){
   _lastReviewStepScrolled = reviewStep;
   requestAnimationFrame(function(){
@@ -3732,11 +3645,18 @@ if(reviewMode && reviewStep !== _lastReviewStepScrolled){
           const _actH=_rAct.offsetHeight||0;
           // v1.1.0 Phase 57: use getBoundingClientRect to compute the active
           // move's position relative to _rList, NOT relative to offsetParent.
+          // See the long comment above for why offsetTop was wrong in portrait.
+          // If getBoundingClientRect is unavailable or returns zeros (e.g.,
+          // disconnected DOM — should not happen here since _rAct was just
+          // queried from _rList), skip scrolling rather than risk a wrong jump.
           let _actTop=-1;
           try{
             const _listRect=_rList.getBoundingClientRect();
             const _actRect=_rAct.getBoundingClientRect();
             if(_listRect.width>0||_listRect.height>0){
+              // Position of _rAct's top relative to _rList's content area:
+              //   (_actRect.top - _listRect.top) = visible offset (negative if scrolled past)
+              //   + _rList.scrollTop = absolute content position
               _actTop=(_actRect.top-_listRect.top)+_rList.scrollTop;
             }
           }catch(e){}
@@ -3773,92 +3693,10 @@ _rListEl = document.getElementById('reviewMovesList');
 if(_wasEcoFocused){const el=document.getElementById('ecoSearch');if(el){el.focus();_ecoSearchFocused=true;try{el.setSelectionRange(el.value.length,el.value.length)}catch(e){}}}
 // Auto-scroll opening list to selected opening (skip during review mode)
 if(showNewGameDialog&&dlgOpeningId&&!reviewMode){setTimeout(()=>{const list=document.querySelector('.op-list');if(list){const active=list.querySelector('.op-btn.act');if(active)active.scrollIntoView({block:'center',behavior:'smooth'})}},50)}
-} // end _applyRenderResult
-
-function renderInternal(){try{
-// v1.2.0 Phase 82++++: Defensive checks + cm/infoSq/infoCtrl/oppC/flip computation
-// extracted to _computeRenderState(). This fixes a critical Phase 82++ regression
-// where these locals were declared inside _renderHeader() and inaccessible to
-// other sub-functions (root cause of the "clicking move records doesn't enter
-// review mode" bug — _renderReviewMode threw ReferenceError on `flip`).
-const _rs=_computeRenderState();
-const {cm, infoSq, infoCtrl, oppC, flip}=_rs;
-const app=document.getElementById('app');if(!app)return;
-// Score from White's perspective (UCI side-to-move -> White conversion done in onEngineEval); emoji/desc reflect player's advantage
-// v1.2.0 Phase 82++: Header toolbar rendering extracted to _renderHeader().
-// _renderHeader() initializes h with the header HTML and returns it.
-let h=_renderHeader();
-h+=`<div class="main" role="main"><div class="bsec">`;
-// v1.2.0 Phase 82+++: AI opponent bar rendering extracted to _renderAIBar(h, oppC).
-h=_renderAIBar(h, oppC);
-// v1.2.0 Phase 82++: Board grid rendering extracted to _renderBoardGrid(h, flip, cm).
-// _renderBoardGrid opens .flbl (self-closing), .display:flex (open), .rlbl (self-closing),
-// .bwrap (open), .bgrid (open→close after grid loop). The .bwrap and .display:flex stay OPEN.
-// v1.2.0 Phase 82+++++ FIX: In v1.1.2, the game-over overlay and setup panel render INSIDE
-// .bwrap (because .gover uses position:absolute;inset:0 and .bwrap has position:relative,
-// so the overlay covers the board area only). The .bwrap+.display:flex close happens AFTER
-// the setup panel. This matches v1.1.2 exactly.
-h=_renderBoardGrid(h, flip, cm);
-// Arrows are now handled by persistent SVG overlay via _updateArrows() — no inline SVG here
-// v1.2.0 Phase 82++++: Game-over sound + overlay extracted to _renderGameOverOverlay(h).
-// The .gover overlay is position:absolute;inset:0 — it anchors to .bwrap (position:relative),
-// covering the board area only (NOT the entire screen).
-h=_renderGameOverOverlay(h);
-// v1.2.0 Phase 82++: Setup panel rendering extracted to _renderSetupPanel(h).
-// In v1.1.2, the setup panel renders inside .bwrap (between .bgrid close and .bwrap close).
-h=_renderSetupPanel(h);
-// v1.2.0 Phase 82+++++ FIX: Close .bwrap + .display:flex wrapper opened by _renderBoardGrid.
-// This must happen AFTER game-over overlay and setup panel (they render inside .bwrap).
-// In v1.1.2 this is the `h+=</div></div>` at line 2298.
-h+=`</div></div>`; // close .bwrap + .display:flex (board wrapper)
-// v1.2.0 Phase 82+++: Info bars (tablebase/ECO/hint) rendering extracted to _renderInfoBars(h).
-// Info bars render inside .bsec, OUTSIDE .bwrap (they are siblings of the board wrapper).
-h=_renderInfoBars(h);
-// v1.2.0 Phase 82+++: Quick toolbar + player bar rendering extracted to _renderPlayerBar(h).
-// Quick toolbar + player bar render inside .bsec, OUTSIDE .bwrap.
-h=_renderPlayerBar(h);
-h+=`</div>`; // close .bsec
-// Side panel (sibling of .bsec, inside .main)
-// v1.2.0 Phase 82++: Side panel rendering extracted to _renderSidePanel(h, infoSq, infoCtrl, oppC).
-// v1.2.0 Phase 82+++++: _renderSidePanel opens .panel and closes BOTH .panel and .main
-// (its trailing </div></div> closes .panel + .main). Do NOT add an extra </div> here —
-// that was the root cause of the "main interface layout abnormal" bug (an extra </div>
-// closed #app, causing all subsequent content — dialogs, review overlay — to render
-// outside the #app flex container, breaking the layout).
-h=_renderSidePanel(h, infoSq, infoCtrl, oppC);
-
-// v1.2.0 Phase 82: All modal dialogs extracted to _renderDialogs(h) to reduce
-// renderInternal's God Function size. Each dialog is triggered by an independent
-// boolean flag and produces self-contained HTML overlay markup. See _renderDialogs
-// above for the full dialog rendering logic and extraction rationale.
-h=_renderDialogs(h);
-
-
-// v1.2.0 Phase 82+: Review mode rendering extracted to _renderReviewMode(h, flip) to further
-// reduce renderInternal's God Function size. The function returns {h, done} — when
-// done=true, the review state was invalid and a re-render has been triggered; we must
-// return immediately to skip the scroll-save/innerHTML/scroll-restore logic below
-// (which would otherwise operate on stale DOM state). Only called when reviewMode is true.
-// v1.2.0 Phase 82++++: `flip` parameter added to fix ReferenceError (flip was previously
-// a free variable — root cause of the review-mode entry bug).
-if(reviewMode){
-  const _rvResult=_renderReviewMode(h, flip);
-  h=_rvResult.h;
-  if(_rvResult.done) return;
-}
-// v1.2.0 Phase 82++++: Scroll save / DOM update / scroll restore orchestration
-// extracted to _applyRenderResult(app, h, reviewMode). This handles:
-//   - Scroll position capture (.mlist, .review-body, .review-moves, .dlg, .panel, .op-list)
-//   - app.innerHTML = h (DOM rebuild)
-//   - Animation re-attach (_reattachActiveAnimations)
-//   - Scroll position restore (synchronous for .mlist/.review-body/.review-moves,
-//     deferred via double-rAF for .dlg/.panel/.op-list)
-//   - DOM cache invalidation (_cachedBwrap, _cachedSvgEl, etc.)
-//   - Active-move scroll-into-view (review mode)
-//   - Arrow overlay update (_updateArrows)
-//   - ECO search focus restore
-//   - Opening list auto-scroll
-_applyRenderResult(app, h, reviewMode);
+// v1.0.8 PHASE 30: escape error message + stack to prevent XSS if a thrown
+//   error message ever contains HTML.
+// v1.1.1 Phase 60 (audit i18n): Use T('render_error_title') instead of the
+//   hard-coded English "Render Error" so the title is localized.
 }catch(e){const _app=document.getElementById('app');if(_app)_app.innerHTML='<div style="color:red;padding:20px;font-family:monospace;background:#1a0000;border:2px solid red;border-radius:8px;margin:20px"><h3>'+T('render_error_title')+'</h3><pre style="white-space:pre-wrap;font-size:12px">'+_esc(e.toString())+'\n\n'+_esc(e.stack)+'</pre></div>';console.error('Render error:',e)}}
 
 
@@ -4931,9 +4769,7 @@ function quickFreeOpening(){
 // === Toggle sound on/off (toolbar button) ===
 function toggleSound(){
   soundOn=!soundOn;
-  // v1.2.0 Phase 82+++++ rev 5: Wire Store as debug observability layer.
   try{if(typeof Store!=='undefined'&&Store&&typeof Store.dispatch==='function')Store.dispatch('TOGGLE_SOUND',soundOn);}catch(e){}
-
   const btn=document.getElementById('btnSound');
   if(btn)btn.innerHTML=soundOn?'<span style=\"font-size:1.4rem\">🔊</span> '+T('sound'):'<span style=\"font-size:1.4rem\">🔇</span> '+T('sound');
   HapticManager.fire(soundOn?'TOGGLE_ON':'TOGGLE_OFF');
@@ -5574,10 +5410,8 @@ _ponderGen++;_ponderMoveSAN='';_ponderBarInfo='';_pendingPonderMoveUCI=null;
 // the eval bar from showing "⏳ analyzing" even when the cache has the eval.
 isAIThinking=false;_aiBarInfo='';
 if(typeof _updateAIThinkDisplay==='function')_updateAIThinkDisplay();
-reviewCritical=_findCriticalMoves();requestEngineEval();render(); // _resetEvalState now inside requestEngineEval()
-  // v1.2.0 Phase 82+++++ rev 5: Wire Store as debug observability layer.
-  try{if(typeof Store!=='undefined'&&Store&&typeof Store.dispatch==='function')Store.dispatch('ENTER_REVIEW',{states:reviewStates,baseState:reviewBaseState});}catch(e){}
-
+reviewCritical=_findCriticalMoves();requestEngineEval();render();
+  try{if(typeof Store!=='undefined'&&Store&&typeof Store.dispatch==='function')Store.dispatch('ENTER_REVIEW',{states:reviewStates,baseState:reviewBaseState});}catch(e){} // _resetEvalState now inside requestEngineEval()
 }
 /**
  * Find critical moves in the game — moves where the evaluation changed significantly.
@@ -6807,9 +6641,6 @@ function _resetGameUIState(){
   if(typeof _needNewGameForEngine!=='undefined')_needNewGameForEngine=true;
   if(typeof _tbLoading!=='undefined')_tbLoading=false;
   if(typeof _tbRetryCount!=='undefined')_tbRetryCount=0;
-  // v1.2.0 Phase 82+++++ rev 5: Wire Store as debug observability layer.
-  // Dispatch a RESET action so Store.getState() reflects the reset for debugging.
-  // This is additive — Store is a read-only mirror, not the source of truth.
   try{if(typeof Store!=='undefined'&&Store&&typeof Store.dispatch==='function'){Store.dispatch('SETUP_EXIT');Store.dispatch('PGN_CLEARED');}}catch(e){}
 }
 
@@ -7451,6 +7282,17 @@ function _pgnCacheSaveCurrent(){
   try{name=prompt(T('pgn_cache_name_prompt'),T('pgn_cache_save_default'))||'';}catch(e){name='';}
   name=name.trim();
   if(!name)return;
+  // v1.2.1: 与 _renameHumanPlayer 保持一致的输入校验 —— 长度上限 60、禁止
+  //   文件系统危险字符 / \ : * ? " < > | 与控制字符。否则恶意/误输入可能
+  //   逃逸出沙箱路径或破坏 PGN 缓存索引。
+  if(name.length>60){
+    try{showToast(T('pgn_cache_name_too_long')||'Name too long (max 60)');}catch(e){}
+    return;
+  }
+  if(/[\/\\:*?"<>|\x00-\x1f\x7f]/.test(name)){
+    try{showToast(T('pgn_cache_name_invalid')||'Name contains invalid characters');}catch(e){}
+    return;
+  }
   _pgnCacheOpInProgress=true;
   try{
     // v1.1.1 Phase 63: Ask whether to include annotations

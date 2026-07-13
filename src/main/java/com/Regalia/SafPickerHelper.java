@@ -182,7 +182,9 @@ public class SafPickerHelper {
         }
         try {
             Uri uri = data.getData();
-            takePersistableWritePermission(uri);
+            // v1.2.1: 不再 takePersistableUriPermission —— 一次性导出不需要持久授权，
+            //   transient FLAG_GRANT_WRITE_URI_PERMISSION from ACTION_CREATE_DOCUMENT
+            //   已足够写入本次文件。持久授权会长期占用 SAF 512 上限。
             writeContentToUri(uri, content);
             String displayName = queryDisplayName(uri, exportType);
             notifyExportSuccess(exportType, displayName);
@@ -192,15 +194,7 @@ public class SafPickerHelper {
         }
     }
 
-    /** 获取持久化写入权限 */
-    private void takePersistableWritePermission(Uri uri) {
-        try {
-            context.getContentResolver().takePersistableUriPermission(
-                uri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-        } catch (Throwable e) {
-            Log.w(TAG, "takePersistableUriPermission failed (non-critical)", e);
-        }
-    }
+    // v1.2.1: takePersistableWritePermission 已删除 —— 一次性导出不需要持久授权。
 
     /** 将内容写入 URI */
     private void writeContentToUri(Uri uri, String content) throws Throwable {
@@ -300,7 +294,7 @@ public class SafPickerHelper {
         if (data == null || data.getData() == null) return;
         try {
             Uri uri = data.getData();
-            takePersistableReadPermission(uri);
+            // v1.2.1: 不再 takePersistableUriPermission —— 一次性读取不需要持久授权。
             // v1.0.3 FIX: 立即关闭设置对话框，不等异步导入完成
             callbacks.postJsCallback("try{showEngineConfig=false;var d=document.querySelector('.dov[role=\"dialog\"]');if(d)d.remove();var fb=document.getElementById('_fileBrowserOverlay');if(fb)fb.remove();if(typeof render==='function')render();}catch(e){}");
             String content = readTextFromUri(uri);
@@ -317,7 +311,7 @@ public class SafPickerHelper {
         if (data == null || data.getData() == null) return;
         try {
             Uri uri = data.getData();
-            takePersistableReadPermission(uri);
+            // v1.2.1: 不再 takePersistableUriPermission —— 一次性读取不需要持久授权。
             String content = readPgnFromUri(uri);
             content = sanitizePgnContent(content);
             String jsonContent = encodePgnAsJson(content);
@@ -328,15 +322,7 @@ public class SafPickerHelper {
         }
     }
 
-    /** 获取持久化读取权限 */
-    private void takePersistableReadPermission(Uri uri) {
-        try {
-            context.getContentResolver().takePersistableUriPermission(
-                uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        } catch (Throwable e) {
-            Log.w(TAG, "takePersistableUriPermission failed", e);
-        }
-    }
+    // v1.2.1: takePersistableReadPermission 已删除 —— 一次性读取不需要持久授权。
 
     /** 从 URI 读取文本内容（设置文件） */
     private String readTextFromUri(Uri uri) throws Throwable {

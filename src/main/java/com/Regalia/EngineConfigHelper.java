@@ -440,6 +440,10 @@ public class EngineConfigHelper {
      * intentionally playing suboptimal moves.
      */
     public void setEngineSkillLevel(int level) {
+        // v1.2.1: Inline Skill Level range (0-20). Previously referenced
+        //   EngineConfigManager.MIN/MAX_SKILL_LEVEL, but that class was deleted
+        //   in round-4 (its only external callers were these two constants).
+        //   Stockfish's UCI "Skill Level" option accepts 0..20.
         if (level < 0) level = 0;
         if (level > 20) level = 20;
         callbacks.setSkillLevelField(level);

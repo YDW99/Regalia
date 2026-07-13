@@ -1,4 +1,4 @@
-# Building Regalia v1.2.0 from source
+# Building Regalia v1.2.1 from source
 
 <!-- AI-GEN: AI assisted
      This document was AI-assisted and has been reviewed for AGPL v3 compliance. -->
@@ -21,10 +21,14 @@ chmod +x src/main/jniLibs/arm64-v8a/libstockfish.so
 python3 build-chess.py
 ```
 The build script merges `src/main/assets/chess.src/*.js` (in order:
-game-logic → chess960 → pgn-standard → worker-pool → ai-bridge → tablebase → eco-data → ui)
+game-logic → chess960 → pgn-standard → worker-pool → state-store → ai-bridge → tablebase → eco-data → ui)
 into `src/main/assets/chess.html`, stripping `export` statements.
 As of v1.1.2 Phase 67 (MED-3), the script wraps every file I/O in try/except
 for clearer diagnostics and uses an `if __name__ == '__main__':` guard.
+v1.2.1 (round-4 cleanup) removed the four Phase-74 ui-*.js extracts
+(ui-audio / ui-board / ui-review / ui-toolbar) — they duplicated inline logic
+in ui.js / ai-bridge.js with subtly different conventions and were never on
+the hot path. Bundle order is now 9 modules (down from 13).
 
 ## Build APK
 ```
@@ -47,9 +51,9 @@ The signed APK (v1+v2+v3 signed with `../debug.keystore`) will be at
 - Configure `../version.properties` (one level above the project dir):
   ```
   VERSION_MAJOR=1
-  VERSION_MINOR=1
-  VERSION_PATCH=2
-  VERSION_BUILD=112
+  VERSION_MINOR=2
+  VERSION_PATCH=1
+  VERSION_BUILD=121
   ```
   Defaults inside `build.gradle` cover the missing case (1.1.1 / 111).
 - Configure `../keystore.properties` (one level above the project dir) for
@@ -457,33 +461,21 @@ The signed APK (v1+v2+v3 signed with `../debug.keystore`) will be at
 - All v1.0.8 build notes still apply.
 - **v1.2.0 Phase 73-80 (2026.7.11): Architecture refactor major version.**
   - **Java God Module split**: `StockfishNative.java` (5,443→4,492 lines) refactored
-    into Facade + 11 manager/helper classes:
-    - `EngineProcessManager.java` — engine process lifecycle
-    - `UciProtocolHandler.java` — UCI protocol commands
-    - `EngineConfigManager.java` — engine settings persistence
-    - `JsBridgeGateway.java` — sandbox path validation & UCI whitelist
-    - `PgnCacheManager.java` — PGN cache CRUD
-    - `EngineHealthMonitor.java` — heartbeat & zombie detection
-    - `FileIoHelper.java` — file I/O operations
-    - `PermissionHelper.java` — runtime permission checks
-    - `HapticHelper.java` — haptic feedback
-    - `SafPickerHelper.java` — SAF file picker (export/import settings & PGN)
-    - `EngineSettingsHelper.java` — engine settings query/export/import
-    - `MessageBus.java` — unified JS↔Java message dispatch
-  - **JS God Module split**: 4 new modules extracted from `ui.js`:
-    - `ui-board.js` — board rendering & coordinate labels
-    - `ui-review.js` — review mode & eval trend chart
-    - `ui-audio.js` — audio engine utilities
-    - `ui-toolbar.js` — toolbar rendering
-    - `_computeAndCacheVisualAnnotations` (439 lines) decomposed into 4 sub-functions:
-      `_replayMovesToState`, `_computeSquareHighlights`, `_computeCheckArrows`,
-      `_computeThreatArrows`.
-    - `_buildEvalTrendSVG` (267 lines) decomposed into 6 sub-functions:
-      `_getChartColors`, `_buildEvalTrendGrid`, `_buildEvalTrendSegments`,
-      `_buildEvalTrendPoints`, `_buildEvalTrendLabels`, `_buildEvalTrendCurrentMarker`.
-      ui.js: 8,245→8,061 lines.
+    into Facade + manager/helper classes. (See v1.2.1 round-4 notes below for
+    which of these extracts survived.)
+  - **JS God Module split**: 4 new modules extracted from `ui.js`
+    (`ui-board.js` / `ui-review.js` / `ui-audio.js` / `ui-toolbar.js`).
+    **Note (v1.2.1 round-4)**: all four were deleted in v1.2.1 — they
+    duplicated inline logic with subtly different conventions (rank order,
+    move taxonomy, audio state) and were never on the hot path.
+  - `_computeAndCacheVisualAnnotations` (439 lines) decomposed into 4 sub-functions:
+    `_replayMovesToState`, `_computeSquareHighlights`, `_computeCheckArrows`,
+    `_computeThreatArrows`.
+  - `_buildEvalTrendSVG` (267 lines) decomposed into 6 sub-functions:
+    `_getChartColors`, `_buildEvalTrendGrid`, `_buildEvalTrendSegments`,
+    `_buildEvalTrendPoints`, `_buildEvalTrendLabels`, `_buildEvalTrendCurrentMarker`.
+    ui.js: 8,245→8,061 lines.
   - **Global state store**: `state-store.js` (Redux-like single source of truth)
-  - **`build-chess.py` updated**: 13 modules merged in dependency order.
   - **SonarCloud fixes**: All `InterruptedException` catches re-interrupt;
     all `delete()`/`renameTo()` return values checked; `AtomicInteger` for
     thread-safe counters; `_buildPGNString` decomposed into 6 sub-functions.
@@ -511,6 +503,9 @@ The signed APK (v1+v2+v3 signed with `../debug.keystore`) will be at
   - `engineSupportsOption()` retained on `StockfishNative` (called from many non-config
     paths); accessed by `EngineConfigHelper` via `Callbacks.engineSupportsOption()`.
   - Helper/manager class count: 12→13 (now 14 including `MessageBus`).
+    **Note (v1.2.1 round-4)**: count back down to 11 — `MessageBus`,
+    `UciProtocolHandler`, and `EngineConfigManager` were deleted in round-4
+    (their functionality was either never wired up or duplicated inline).
 - **v1.2.0 Phase 82 (2026.7.11): renderInternal dialog extraction.**
   - Extracted all 8 modal dialog blocks from `renderInternal()` (1,365 lines) into a
     new `_renderDialogs(h)` function.
@@ -623,355 +618,6 @@ The signed APK (v1+v2+v3 signed with `../debug.keystore`) will be at
 - **Engine binary**: Stockfish 18 `arm64-v8a-dotprod` (unchanged).
 - Version: versionCode=120, versionName="1.2.0" (unchanged — same version, deeper refactor).
 
-## v1.2.0 Phase 82++++ build notes (renderInternal final extraction + review-mode entry fix + layout fix)
-- All v1.2.0 Phase 82+++ build notes still apply.
-- **v1.2.0 Phase 82++++ (2026.7.12): renderInternal final extraction + critical bug fixes.**
-  - **3 more rendering blocks extracted from `renderInternal()`** into dedicated functions,
-    further reducing the God Function from 359 to 70 lines (−289 lines, −81% cumulative −95%).
-  - **`_computeRenderState()`**: Centralizes all defensive checks (gameState validity,
-    setupMode/gameOver reset, gameOver re-localization, `_applyGameOver` check) and
-    shared-state computation (control-map cache `cm`, `infoSq`/`infoCtrl`, `oppC`, `flip`).
-    Returns `{cm, infoSq, infoCtrl, oppC, flip}` object that `renderInternal` destructures
-    and passes explicitly to every sub-function. **This fixes a critical Phase 82++ scoping
-    bug** where `cm`, `infoSq`, `infoCtrl`, `oppC`, `flip` were declared as `const` inside
-    `_renderHeader()` and therefore inaccessible to other sub-functions.
-  - **`_renderGameOverOverlay(h)`**: Renders the game-over sound trigger (fires once via
-    `gameOverSoundPlayed` guard) and the `.gover` overlay HTML with status emoji
-    (♔/♚/🏳️/⌛/🤝), localized status text, "Play Again" and "Review" buttons. Receives
-    `h`, returns `h` with overlay appended (if applicable).
-  - **`_applyRenderResult(app, h, reviewMode)`**: The most delicate extraction — handles
-    scroll-position capture (`.mlist`, `.review-body`, `.review-moves`, `.dlg`, `.panel`,
-    `.op-list`), `app.innerHTML=h` DOM rebuild, animation re-attach, synchronous scroll
-    restore for `.mlist`/`.review-body`/`.review-moves` (with `_scrollRestoreGuard`),
-    deferred scroll restore for `.dlg`/`.panel`/`.op-list` (double-rAF with clamping),
-    DOM cache invalidation, active-move scroll-into-view (manual `scrollTop` computation
-    to avoid `scrollIntoView`'s ancestor-scrolling side effect), arrow overlay update,
-    ECO search focus restore, opening-list auto-scroll.
-  - **`_renderReviewMode(h, flip)`**: Signature updated to accept `flip` as parameter
-    (was previously a free variable — root cause of the review-mode entry bug, see below).
-  - **CRITICAL BUG FIX (review-mode entry)**: Root cause of "clicking move records text
-    doesn't enter review mode" identified and fixed. The Phase 82++ extraction moved
-    `const flip=playerColor==='black'` into `_renderHeader()` (local scope), but
-    `_renderReviewMode(h)` referenced `flip` 9 times as a free variable. When the user
-    clicked a move record (`.mw`/`.mb` span), `enterReview()` set `reviewMode=true` and
-    called `render()` → `renderInternal()` → `_renderReviewMode(h)` → **ReferenceError:
-    flip is not defined** → caught by `renderInternal`'s try-catch → user saw "Render
-    Error" instead of the review overlay. Fixed by: (1) extracting `_computeRenderState()`
-    to compute `flip` at the `renderInternal` scope, (2) passing `flip` explicitly to
-    `_renderReviewMode(h, flip)`. Same fix applied to `_renderAIBar(h, oppC)`,
-    `_renderBoardGrid(h, flip, cm)`, `_renderSidePanel(h, infoSq, infoCtrl, oppC)` — all
-    previously received `undefined` for these parameters.
-  - **LAYOUT FIX (.bsec structure)**: The Phase 82+++/82+++ extraction accidentally moved
-    info bars (`_renderInfoBars`) and player bar (`_renderPlayerBar`) rendering AFTER the
-    `</div></div>` close of `.bsec`+`.main`, placing them outside `.bsec` (and outside
-    `.main`). This broke the vertical-flex layout of `.bsec` (board column). Fixed by
-    moving both calls BEFORE the `</div>` close of `.bsec`, so they correctly stack
-    vertically below the board inside the board section. The `.main` close `</div>` now
-    correctly follows the side panel (which is a sibling of `.bsec` inside `.main`).
-  - `renderInternal()`: 359 → 70 lines (−289). Cumulative: 1,365 → 70 lines (−1,295 lines, −95%).
-    The function now focuses purely on orchestration: call `_computeRenderState()`, dispatch
-    to sub-functions in order, then call `_applyRenderResult()`. All rendering logic is in
-    dedicated sub-functions.
-  - **renderInternal sub-function count**: 11 (was 8). New: `_computeRenderState`,
-    `_renderGameOverOverlay`, `_applyRenderResult`.
-- **Engine binary**: Stockfish 18 `arm64-v8a-dotprod` (unchanged).
-- Version: versionCode=120, versionName="1.2.0" (unchanged — same version, deeper refactor).
-
-## v1.2.0 Phase 82+++++ build notes (WebView cache fix + code review)
-- All v1.2.0 Phase 82++++ build notes still apply.
-- **v1.2.0 Phase 82+++++ (2026.7.12): WebView cache fix + comprehensive code review.**
-  - **WebView cache fix (root cause of "oppC is not defined" on user devices)**:
-    `MainActivity.java` now calls `webView.clearCache(true)` before `loadUrl()`. Without
-    this, some WebView implementations (especially on Xiaomi HyperOS) serve a stale cached
-    `chess.html` after an app update — the user would see bugs that were already fixed in
-    the new version (e.g., the Phase 82++++ `oppC` scoping fix was not visible because the
-    WebView loaded the pre-fix `chess.html` from cache). `clearCache(true)` evicts both RAM
-    and disk caches, guaranteeing the latest `chess.html` is always loaded from the APK.
-  - **README.md directory tree fix**: Added missing `EngineConfigHelper.java` (Phase 81)
-    to the Java file listing.
-  - **Comprehensive code review**: All JS modules, Java files, CSS template, and HTML
-    manuals reviewed line-by-line. No additional bugs found — the Phase 82++++ fix is
-    correct and complete. The `oppC` error was entirely caused by stale WebView cache.
-- **Engine binary**: Stockfish 18 `arm64-v8a-dotprod` (unchanged).
-- Version: versionCode=120, versionName="1.2.0" (unchanged — same version, deeper refactor).
-
-## v1.2.0 Phase 82+++++ (rev 9) build notes (stats page visual annotation fix)
-- All v1.2.0 Phase 82+++++ rev 8 build notes still apply.
-- **v1.2.0 Phase 82+++++ rev 9 (2026.7.12): Stats page visual annotation fix.**
-  - **BUG fix (stats page not showing visual annotations for live games)**: The stats page
-    (`stats.html`) was not displaying `[%csl]`/`[%cal]` visual annotation data for live games.
-    Root cause: `_buildPGNString()` (ai-bridge.js) filtered out auto-generated visual annotations
-    (`imported=false`) per the Phase 62 design (which was correct for PGN export/save — users
-    don't want auto-generated arrows cluttering their PGN archive). However, `openStatsPage()`
-    also called `_buildPGNString(true, true)` without any way to include auto-generated
-    annotations, so the stats page never received them. The stats page's explicit purpose is
-    to count and display these visual annotations, so this was a bug.
-  - **Fix**: Added a third parameter `includeAutoAnnotations` (default `false`) to
-    `_buildPGNString()`. When `true`, auto-generated annotations (`imported=false`) are also
-    exported. `openStatsPage()` now calls `_buildPGNString(true, true, true)` to include
-    auto-generated annotations for the stats page. All other callers (copyMoveHistory,
-    exportPGNToFile, PGN cache save) are unchanged — they continue to use the default
-    `includeAutoAnnotations=false`, preserving the Phase 62 behavior for PGN export.
-  - **Impact**: The stats page now correctly displays visual annotation counts and details
-    for both live games (auto-generated annotations) and imported PGNs (human-authored
-    annotations). No other functionality is affected.
-- **Engine binary**: Stockfish 18 `arm64-v8a-dotprod` (unchanged).
-- Version: versionCode=120, versionName="1.2.0" (unchanged — same version, deeper refactor).
-
-## v1.2.0 Phase 82+++++ (rev 8) build notes (MessageBus reflection fix + proguard rules + sandbox hardening)
-- All v1.2.0 Phase 82+++++ rev 7 build notes still apply.
-- **v1.2.0 Phase 82+++++ rev 8 (2026.7.12): MessageBus reflection fix + proguard rules + sandbox hardening.**
-  - **CRITICAL BUG fix (MessageBus.emit broken in release builds)**: `StockfishNative.setMessageBusWebView()`
-    used reflection (`MessageBus.class.getDeclaredField("webView")`) to set the WebView on MessageBus.
-    However, `build.gradle` enables `minifyEnabled true` for release builds, and R8 renames private
-    fields. The reflection threw `NoSuchFieldException` (silently caught), leaving `webView=null` forever.
-    This caused ALL `emitToJs()` calls (ENGINE_READY, ENGINE_BESTMOVE) to be silently dropped in release
-    builds. Fixed by: (1) removing `final` from `MessageBus.webView` field, (2) adding public
-    `setWebView(WebView)` method, (3) replacing reflection with direct method call. Primary app
-    functionality was unaffected (engine callbacks flow through `postJsCallback`), but the MessageBus
-    Java→JS channel was non-functional in release.
-  - **proguard-rules.pro created**: `build.gradle` referenced `'proguard-rules.pro'` but the file
-    didn't exist. AGP silently treats missing proguard files as empty, so R8 used only default rules.
-    Created `proguard-rules.pro` with: `-keep class com.Regalia.MessageBus { *; }` (defense-in-depth
-    even after the reflection fix), `@JavascriptInterface` keep rule (explicit), and native method
-    keep rule.
-  - **ROBUSTNESS fix (onDestroy removes MessageBus interface)**: `MainActivity.onDestroy()` removed
-    only `"AndroidBridge"` but not `"MessageBus"`. Added `webView.removeJavascriptInterface("MessageBus")`
-    for symmetry and defense-in-depth.
-  - **SECURITY fix (isPathInSandbox prefix check tightened)**: `JsBridgeGateway.isPathInSandbox()` used
-    `String.startsWith(filesPath)` which would falsely accept `/data/data/com.Regalia/files_evil` as
-    inside filesDir. Fixed to require a path separator: `targetPath.equals(filesPath) ||
-    targetPath.startsWith(filesPath + File.separator)`.
-  - **SIMPLIFICATION**: `_messageBus` field made `final` (assigned once in constructor, never reassigned).
-  - **Verification**: All v1.2.0 planned tasks (73-80) verified complete:
-    - Task 73: 13 helper/manager Java classes ✓
-    - Task 74: 5 new JS modules ✓
-    - Task 75: MessageBus + Store wired (rev 7+8) ✓
-    - Task 76: SonarCloud fixes (16 InterruptedException re-interrupts, secureRandomInt) ✓
-    - Task 77: Review board coordinate labels ✓
-    - Task 78: Version 120 in all 22 locations ✓
-    - Task 79-80: APK + tar + manuals ✓
-- **Engine binary**: Stockfish 18 `arm64-v8a-dotprod` (unchanged).
-- Version: versionCode=120, versionName="1.2.0" (unchanged — same version, deeper refactor).
-
-## v1.2.0 Phase 82+++++ (rev 7) build notes (MessageBus + Store wiring — Task 75 design intent)
-- All v1.2.0 Phase 82+++++ rev 6 build notes still apply.
-- **v1.2.0 Phase 82+++++ rev 7 (2026.7.12): MessageBus + Store wiring — Task 75 design intent correctly implemented.**
-  - **Task 75 design intent** (from v1.2.0 Development Plan): MessageBus provides a unified JS↔Java
-    communication channel with `dispatch()` (JS→Java) and `emit()` (Java→JS). Store provides a
-    Redux-like single source of truth. Both were created in Phase 75 but never wired into production.
-  - **MessageBus wiring (Java side)**:
-    - `StockfishNative.java`: `_messageBus` field now instantiated in constructor with `new MessageBus(null)`.
-      WebView set later via `setMessageBusWebView(webView)`.
-    - `registerMessageBusHandlers()`: Registers 4 standard JS→Java handlers (per plan):
-      `ENGINE_GO` (send position + go), `ENGINE_STOP` (stop search), `ENGINE_SET_OPTION` (set UCI param),
-      `PGN_CACHE_SAVE` (save PGN cache). All delegate to existing engine methods.
-    - `emitToJs(event, payload)`: Public method for Java code to emit events to JS.
-    - `getMessageBus()`: Getter for MainActivity to access the MessageBus instance.
-    - `MainActivity.java`: Registers MessageBus as a separate `JavascriptInterface` named "MessageBus"
-      (alongside the existing "AndroidBridge"). Sets WebView via `setMessageBusWebView()`.
-    - Engine events emitted via MessageBus (parallel to existing `postJsCallback`):
-      `ENGINE_READY` (at engine ready, 2 locations), `ENGINE_BESTMOVE` (at bestmove, 1 location).
-  - **MessageBus wiring (JS side)**:
-    - `state-store.js`: Added `window._messageBusJs` object with `_onEvent(event, payload)` receiver.
-      Uses `_messageBusJs` (not `MessageBus`) because the Java `@JavascriptInterface` registered as
-      "MessageBus" would shadow a JS object of the same name.
-    - `_onEvent` dispatches to Store for observability: `ENGINE_READY` → `Store.dispatch('ENGINE_READY')`,
-      `ENGINE_ERROR` → `Store.dispatch('ENGINE_NOT_READY')`, `ENGINE_BESTMOVE` → `Store.dispatch('AI_THINKING_END')`,
-      `ENGINE_EVAL` → `Store.dispatch('UPDATE_EVAL', payload)`.
-    - Also notifies registered listeners via `on(event, listener)` / `off(event, listener)` API.
-    - `MessageBus.java` `emit()` calls `window._messageBusJs._onEvent(event, payload)` via `evaluateJavascript`.
-  - **Store wiring (already done in rev 5)**: Store is wired as a debug observability layer with
-    `dispatch()` calls at `_resetGameUIState`, `toggleLang`, `toggleSound`, `enterReview`. The MessageBus
-    `_onEvent` receiver now also dispatches to Store, making Store a unified observability hub for both
-    UI state changes and engine events.
-  - **Backward compatibility**: All existing `AndroidBridge` methods and `postJsCallback` calls remain
-    unchanged. The MessageBus is a parallel channel — existing code is not affected. The MessageBus can
-    be used for future migration to a unified communication pattern.
-  - **Standard message types implemented** (per plan):
-    | Direction | Type | Status |
-    |-----------|------|--------|
-    | JS→Java | `ENGINE_GO` | ✓ Registered (delegates to `sendUciCommand`) |
-    | JS→Java | `ENGINE_STOP` | ✓ Registered (delegates to `sendUciCommand("stop")`) |
-    | JS→Java | `ENGINE_SET_OPTION` | ✓ Registered (delegates to `sendUciCommand`) |
-    | JS→Java | `PGN_CACHE_SAVE` | ✓ Registered (delegates to `savePGNCache`) |
-    | Java→JS | `ENGINE_READY` | ✓ Emitted (at engine ready) |
-    | Java→JS | `ENGINE_BESTMOVE` | ✓ Emitted (at bestmove) |
-    | Java→JS | `ENGINE_EVAL` | Available (via `emitToJs`) — not yet emitted (evals go through `postJsCallback`) |
-    | Java→JS | `ENGINE_ERROR` | Available (via `emitToJs`) — not yet emitted (errors go through `postJsCallback`) |
-    | Java→JS | `PGN_CACHE_LIST` | Available (via `emitToJs`) — not yet emitted (list goes through `postJsCallback`) |
-- **Engine binary**: Stockfish 18 `arm64-v8a-dotprod` (unchanged).
-- Version: versionCode=120, versionName="1.2.0" (unchanged — same version, deeper refactor).
-
-## v1.2.0 Phase 82+++++ (rev 6) build notes (visual annotation placeholder offset fix + design intent verification)
-- All v1.2.0 Phase 82+++++ rev 5 build notes still apply.
-- **v1.2.0 Phase 82+++++ rev 6 (2026.7.12): Visual annotation placeholder offset fix + design intent verification.**
-  - **Read the v1.2.0 Development Plan** (`Regalia-v1.2.0-Development-Plan.md`) to understand the design intent
-    for visual annotations ([%csl]/[%cal]). The plan specifies:
-    - `_visualAnnotationsCache` entries must have `imported` flag: `imported=false` for auto-generated,
-      `imported=true` for PGN-imported. `_buildPGNString()` only exports `imported=true`. ✓ Verified correct.
-    - `reviewStates` must be cleared in `_resetGameUIState()` (Phase 64 root cause). ✓ Verified at ui.js:6665.
-    - `enterReview` must clear the `_initial` key (Phase 57 fix for stale annotations). ✓ Verified at ui.js:5447.
-  - **BUG fix (visual annotation placeholder offset)**: `ui.js` `_renderReviewMode()` — when reading visual
-    annotations for review steps, the code used `_getVisualAnnotations(reviewStep-1)` WITHOUT applying the
-    placeholder offset. When a black-to-move placeholder exists at `moveRecords[0]` (from
-    `_prependBlackToMovePlaceholder` for FEN imports where Black is to move), `importPGN` stores imported
-    annotations at `moveIdx + placeholderOffset`. Without the offset in the review read path, imported
-    annotations were read from the wrong `moveIdx`, causing them to appear on the wrong review step (or not
-    appear at all). Fixed by adding `const _rvPlaceholderOffset=(moveRecords.length>0&&moveRecords[0]===null)?1:0;`
-    and reading `_getVisualAnnotations(reviewStep-1+_rvPlaceholderOffset)`. This mirrors the `_placeholderOffset`
-    logic in `tablebase.js` `importPGN` (lines 1551, 1583).
-  - **Stale annotation verification**: Verified the complete visual annotation lifecycle:
-    1. `_computeAndCacheVisualAnnotations(moveIdx)` — called after `executeMove` with `moveIdx=moveRecords.length-1`.
-       Uses `reviewMode` guard for `reviewStates` shortcut (only in review mode). Stores `imported=false`. ✓
-    2. `_computeInitialPositionAnnotations()` — called on-demand in review mode for step 0. Uses
-       `reviewStates[0].state` (the actual initial position, not live `gameState`). Stores `imported=false`
-       under key `'_initial'`. ✓
-    3. `importPGN` — stores imported annotations at `moveIdx + placeholderOffset` with `imported=true`. ✓
-    4. `enterReview` — clears `'_initial'` key (forces fresh computation each review session). Keeps numeric
-       keys (still valid for same game). ✓
-    5. `_resetGameUIState` — clears entire `_visualAnnotationsCache` (new game / import / setup / FEN). ✓
-    6. `_invalidateCachesForUndoneMoves` — deletes numeric keys >= currentMoveCount (undo). Keeps `'_initial'`. ✓
-    7. `_buildPGNString` — only exports entries where `imported=true`. ✓
-    All lifecycle paths verified correct. No stale annotation bugs found beyond the placeholder offset fix.
-- **Engine binary**: Stockfish 18 `arm64-v8a-dotprod` (unchanged).
-- Version: versionCode=120, versionName="1.2.0" (unchanged — same version, deeper refactor).
-
-## v1.2.0 Phase 82+++++ (rev 5) build notes (dead module wiring + Web Worker verification + cache cleanup verification)
-- All v1.2.0 Phase 82+++++ rev 4 build notes still apply.
-- **v1.2.0 Phase 82+++++ rev 5 (2026.7.12): Dead module wiring + Web Worker verification + cache cleanup verification.**
-  - **Dead module wiring (first-principles analysis)**: The 5 modules created in Phase 74/75
-    (state-store.js, ui-audio.js, ui-board.js, ui-review.js, ui-toolbar.js) were previously
-    dead code — bundled into chess.html but never called from production paths. First-principles
-    analysis: these modules were designed as the architectural foundation for the God Module
-    split, but the production code still uses the original inline implementations. The safest
-    way to make them useful WITHOUT changing production behavior is to wire `Store`
-    (state-store.js) as a **debug observability layer** — dispatching actions at key
-    state-change points so `Store.getState()` mirrors the app state for debugging. This is
-    purely additive (the globals remain the source of truth; Store is a read-only mirror).
-    Wired points: `_resetGameUIState` (dispatches SETUP_EXIT + PGN_CLEARED), `toggleLang`
-    (dispatches SET_LANG), `toggleSound` (dispatches TOGGLE_SOUND), `enterReview` (dispatches
-    ENTER_REVIEW). All wrapped in try/catch with typeof guards — zero risk of breaking
-    production if Store is unavailable.
-  - **Web Worker verification**: Verified `worker-pool.js` implementation is correct and
-    complete: (1) 3-strike consecutive-failure counter prevents permanent pool disable on
-    transient OOM (Phase 71); (2) `onmessageerror` handler rejects immediately on
-    serialization failure instead of hanging 30s (Phase 69); (3) `onerror` handler rejects
-    all pending tasks for the crashed worker; (4) task cancellation with 30s timeout; (5)
-    pagehide cleanup terminates all workers + rejects pending promises; (6) sync fallback
-    for unknown functions; (7) queue cap (_MAX_QUEUE_SIZE=50) prevents unbounded growth.
-    The `workerParsePGN` API is available but intentionally NOT called from `importPGNAsync`
-    (Phase 49 removed the dead round-trip — the worker result was discarded and re-parsed
-    synchronously, so it was pure overhead). The worker infrastructure is used by stats.html's
-    separate inline worker. No changes needed — the implementation is robust.
-  - **Cache cleanup verification**: Verified all 5 new-game entry points correctly call
-    `_resetGameUIState()` which centrally clears 25+ state variables:
-    1. New game dialog → `startGame()` → `_startGameImpl()` → `_resetGameUIState()` (ui.js:5847)
-    2. Free opening button → `quickFreeOpening()` → `startGame()` → `_startGameImpl()` → `_resetGameUIState()`
-    3. PGN import → `importPGN()` → `_resetGameUIState()` (tablebase.js:57)
-    4. Setup complete → `exitSetup()` → `_exitSetupImpl()` → `_resetGameUIState()` (ui.js:5162)
-    5. FEN import → `_importFENWithSaveCheck()` → `importFEN()` → `_applyImportedFEN()` → `_resetGameUIState()` (tablebase.js:57)
-    All entry points confirmed. `_resetGameUIState` clears: selectedSquare, legalMvs, legalSet,
-    lastMove, pendingPromotion, AI/ponder/eval/MultiPV state, _cachedStatus, cachedCtrlKey,
-    _redoStack, resign state, visual annotations cache, reviewStates/reviewMode/reviewStep/
-    reviewBaseState, _preReviewSnapshot, setupHistory/setupRedoStack, 7 dialog visibility flags,
-    _pendingPGNCacheSave, _pgnCacheOpInProgress, _reviewAnalyzePriorityQueue, scroll state,
-    game clocks, _turnStartTime, _ecoRecCache, _pvCache, _pendingEngineSANs/_pendingEnginePVs,
-    _multiPV*, reviewCritical, _sfEval/_sfDepth/etc, _reviewEvalCache, _cachedOriginalPGN,
-    playerWhite/playerBlack, _setupFEN, _importedStartMoveNum, _needNewGameForEngine,
-    _tbLoading/_tbRetryCount.
-- **Engine binary**: Stockfish 18 `arm64-v8a-dotprod` (unchanged).
-- Version: versionCode=120, versionName="1.2.0" (unchanged — same version, deeper refactor).
-
-## v1.2.0 Phase 82+++++ (rev 4) build notes (portrait review-top fix + documentation fixes)
-- All v1.2.0 Phase 82+++++ rev 3 build notes still apply.
-- **v1.2.0 Phase 82+++++ rev 4 (2026.7.12): Portrait review-top fix + documentation fixes.**
-  - **BUG fix (portrait review-top missing open tag)**: `ui.js` `_renderReviewMode()` — the
-    portrait branch was closing `.review-top` (at the end of the function) without ever opening
-    it. This was a pre-existing bug in v1.1.2 (not a regression). The orphan `</div>` auto-closed
-    `.review-body` instead, making `.review-bottom` a sibling of `.review-body` (not a child),
-    so the CSS rule `.review-body > .review-bottom` did not apply in portrait mode. Fixed by
-    adding the missing `h+='<div class="review-top">';` in the portrait open branch, matching
-    the landscape branch. Now portrait and landscape both use the unified `.review-top` /
-    `.review-bottom` layout as documented in the manual.
-  - **Documentation fixes**:
-    - `README.md` line 177: `versionCode=112` → `versionCode=120` (stale v1.1.2 reference).
-    - `src/main/res/README.license` line 14: `"Regalia v1.1.1"` → `"Regalia v1.2.0"` (stale version).
-    - `src/main/assets/README.license`: Added v1.1.2 (Phase 66-72) and v1.2.0 (Phase 73-82+++++ rev 4)
-      summary entries (were missing — last entry was v1.0.9 Phase 52).
-    - Both HTML manuals line 915: Version badge in title bar wireframe `v1.0.7` → `v1.2.0`.
-- **Engine binary**: Stockfish 18 `arm64-v8a-dotprod` (unchanged).
-- Version: versionCode=120, versionName="1.2.0" (unchanged — same version, deeper refactor).
-
-## v1.2.0 Phase 82+++++ (rev 3) build notes (layout fix verified + APK rebuild)
-- All v1.2.0 Phase 82+++++ rev 2 build notes still apply.
-- **v1.2.0 Phase 82+++++ rev 3 (2026.7.12): Layout fix verified against v1.1.2 source + APK rebuilt.**
-  - **Layout fix verified**: Extracted the v1.1.2 source (Regalia-v1.1.2-src.zip) and compared the
-    `renderInternal()` HTML structure line-by-line between v1.1.2 (inline, 1295 lines) and v1.2.0
-    (split into 11 sub-functions, 85 lines). Confirmed that the v1.2.0 source now produces
-    **byte-for-byte identical HTML** to v1.1.2 for all 35+ layout scenarios tested (initial,
-    black-side, setup, all dialogs, game-over states, ctrl-map, hints, multi-PV, move history,
-    etc.). The only intentional differences are: version string (v1.1.2 → v1.2.0), Chess960 🎲
-    button uses `secureRandomInt(960)` (security improvement), and Phase 77/83 review-mode
-    coordinate labels (intentional new feature).
-  - **Correct renderInternal order** (matches v1.1.2 exactly):
-    1. `_renderHeader()` — header toolbar
-    2. `<div class="main"><div class="bsec">` — open .main + .bsec
-    3. `_renderAIBar(h, oppC)` — AI opponent bar (inside .bsec)
-    4. `_renderBoardGrid(h, flip, cm)` — board grid (opens .display:flex + .bwrap, closes .bgrid)
-    5. `_renderGameOverOverlay(h)` — game-over overlay (inside .bwrap, anchors to .bwrap via position:absolute)
-    6. `_renderSetupPanel(h)` — setup panel (inside .bwrap)
-    7. `</div></div>` — close .bwrap + .display:flex
-    8. `_renderInfoBars(h)` — info bars (inside .bsec, outside .bwrap)
-    9. `_renderPlayerBar(h)` — quick toolbar + player bar (inside .bsec, outside .bwrap)
-    10. `</div>` — close .bsec
-    11. `_renderSidePanel(h, infoSq, infoCtrl, oppC)` — side panel (opens .panel, closes .panel + .main)
-    12. `_renderDialogs(h)` — all 8 modal dialogs
-  - **APK rebuilt**: The previous APK (built 2026-07-11 22:14) had a stale `chess.html` that
-    closed `.bwrap` before `_renderGameOverOverlay`/`_renderSetupPanel` (wrong order). The new
-    APK (built 2026-07-11 22:40) has the correct order verified by extracting and checking the
-    APK's `assets/chess.html`.
-- **Engine binary**: Stockfish 18 `arm64-v8a-dotprod` (unchanged).
-- Version: versionCode=120, versionName="1.2.0" (unchanged — same version, deeper refactor).
-
-## v1.2.0 Phase 82+++++ (rev 2) build notes (layout regression fix + bug fixes)
-- All v1.2.0 Phase 82+++++ build notes still apply.
-- **v1.2.0 Phase 82+++++ rev 2 (2026.7.12): Main interface layout regression fix + 3 bug fixes from comprehensive code review.**
-  - **CRITICAL: Main interface layout regression (root cause of "主界面布局异常")**:
-    The Phase 82++++ layout "fix" introduced two structural bugs in `renderInternal()`:
-    1. **Extra `</div>` after `_renderSidePanel`**: `_renderSidePanel` already closes both
-       `.panel` AND `.main` (its trailing `</div></div>` closes `.panel` + `.main`). The
-       Phase 82++++ code added an extra `h+=</div>` after `_renderSidePanel`, creating an
-       unbalanced `</div>` that closed `#app` prematurely. This caused all subsequent
-       content (dialogs, review overlay) to render outside the `#app` flex container,
-       breaking the layout. Fixed by removing the extra `</div>`.
-    2. **Missing `</div></div>` after `_renderBoardGrid`**: `_renderBoardGrid` opens
-       `<div style="display:flex">` (rank label + board wrapper) and `<div class="bwrap">`
-       but only closes `.bgrid` (the 8×8 grid). The `.bwrap` and `.display:flex` wrapper
-       were never closed, causing all post-board content (game-over overlay, setup panel,
-       info bars, player bar) to be nested INSIDE the board's flex wrapper. Fixed by adding
-       `h+=</div></div>` after `_renderBoardGrid` to close `.bwrap` + `.display:flex`.
-    The correct v1.1.2 structure is: `.main > .bsec > [AI bar, board wrapper (.flex+.bwrap),
-    game-over, setup, info bars, player bar] + .panel`. `_renderSidePanel` closes `.panel`
-    and `.main`.
-  - **BUG fix (tablebase retry false AI timeout)**: `game-logic.js` `doAIMove()` — when
-    the tablebase API rejects (network error), the `.catch()` block called `doAIMove()`
-    to retry, but each call incremented `_aiRetryCount`. After 2 tablebase rejections,
-    `_aiRetryCount` reached 3, triggering the false `ai_timeout` toast and returning
-    before Stockfish was ever consulted. Fixed by resetting `_aiRetryCount=0` in the
-    `.catch()` block (tablebase failure is not an AI timeout).
-  - **BUG fix (inverted WDL on checkmate)**: `ai-bridge.js` `requestEngineEval()` and
-    `_requestBatchEval()` — when the review position is checkmate, the WDL values cached
-    were inverted. When Black was checkmated (White wins), `wdlW` was set to 0 and
-    `wdlL` to 1000 (should be `wdlW:1000, wdlL:0`). The eval bar showed "(0%W/0%D/100%L)"
-    for a position White had won. Fixed by swapping the ternary branches in both functions.
-  - **Robustness fix (typeof guard for pieceCountLE7)**: `game-logic.js` `doAIMove()` —
-    `pieceCountLE7` is defined in `tablebase.js` (loaded after `game-logic.js`). Added
-    `typeof pieceCountLE7==='function'` guard for consistency with all other cross-module
-    calls.
-- **Engine binary**: Stockfish 18 `arm64-v8a-dotprod` (unchanged).
-- Version: versionCode=120, versionName="1.2.0" (unchanged — same version, deeper refactor).
-
 ## v1.0.8 build notes (historical)
 - All v1.0.7 build notes still apply.
 - **v1.0.8 Phase 51 (2026.7.2):** Three fixes — (1) PGN round-trip castling failure:
@@ -1064,3 +710,75 @@ The signed APK (v1+v2+v3 signed with `../debug.keystore`) will be at
 ---
 *AI-GEN*
 
+
+## v1.2.1 build notes (defect fix release)
+- **v1.2.1 (2026.7.12): Defect fix release based on comprehensive review reports.**
+  - **Critical**: oppC/flip/cm/infoSq/infoCtrl scoping bug fixed via _computeRenderState()
+  - **Security**: JsBridgeGateway activated (sandbox path validation + UCI whitelist), allowBackup=false, intent: removed from isUrlSafe, setOptionAndWait newline sanitization
+  - **SonarCloud 20 Bugs**: InterruptedException re-interrupt (9), AtomicInteger, await check (2), localeCompare, dead conditionals (2), aria-label, De Morgan (4)
+  - **Code quality**: Store immutability (deep clone), _notifyListeners snapshot, _deepClone Date/RegExp, SET_LANG fix, static Pattern, error logging
+  - **Layout**: Portrait .review-top fix, _renderReviewMode flip param, game-over overlay inside .bwrap
+  - **Store wiring**: dispatch calls at toggleLang/toggleSound/enterReview/_resetGameUIState
+  - **proguard-rules.pro**: Created (was missing)
+  - Version: versionCode=121, versionName="1.2.1"
+- **Engine binary**: Stockfish 18 arm64-v8a-dotprod (unchanged)
+
+## v1.2.1 second-pass refinement (2026.7.13)
+- **P0 bug fix**: TOCTOU race on `_discardingPonderBestmove` — `stopAndWaitForBestmove` and the bestmove reader thread now clear the discard flag in the early-return and latch-capture paths, preventing the flag from being stuck `true` and silently discarding the next legitimate bestmove (manifested as "AI never moves").
+- **P1 bug fix**: Chess960 re-apply symmetry — `startEngineInternal` now re-applies `UCI_Chess960` as both `true` AND `false` based on `_pendingChess960`, so a user switching back to standard chess no longer has `UCI_Chess960=true` retained after an engine crash.
+- **P1 bug fix**: eval-mode option leak — `engineStop()` now calls `restoreGameplayOptions()` if it interrupts a `STATE_EVAL` search, preventing `Contempt=0` / `MultiPV=1` / `UCI_AnalyseMode=true` from leaking into the next gameplay search.
+- **P1 bug fix**: `sendSetOptionAndWait` newline hardening — the `value` parameter is now stripped of `\r` / `\n` before concatenation into the UCI command (matching the parallel hardening applied to `UciProtocolHandler.setOptionAndWait` in v1.2.0).
+- **P1 bug fix**: `_restartInProgress` stale-detection — `recoverEngine` and `restartEngine` now reset the restart lock if it has been stuck for >30s.
+- **P1 security fix**: `JsBridgeGateway.isPathInSandbox` now requires a trailing `File.separator` before `startsWith`, closing a theoretical directory-traversal.
+- **P1 reliability fix**: `ChessApp`'s `UncaughtExceptionHandler` now sets a static flag via `StockfishNative.markEngineThreadDead(threadName)` when an `SF-*` engine thread dies; the heartbeat monitors this flag and triggers `recoverEngine` instead of waiting for the 15–30s zombie timeout.
+- **P1 reliability fix**: `StatsActivity.onDestroy` now calls `webView.stopLoading()` first, matching `MainActivity.onDestroy` — prevents SIGSEGV on HyperOS 3 / MIUI when the WebView dispatches a load callback to a destroyed native peer.
+- **P1 privacy fix**: Removed `takePersistableUriPermission` calls from `SafPickerHelper` (export + import paths) and `StatsActivity` (PGN import) — one-shot operations no longer consume the 512-grant SAF cap.
+- **P1 bug fix**: Checkmate WDL inversion — `requestEngineEval` and `_requestBatchEval` fast-paths now write `wdlW=1000` (not 0) when Black is checkmated, matching `onEngineEval`'s White-POV swap.
+- **P1 bug fix**: `formatEvalAnnotation` malformed `[%eval #+]` / `[%eval #-]` tags — `absMd` now defaults to 1 when `mateDist=0` but `|eval|≥90000` (matching `formatEvalTag`).
+- **P1 bug fix**: `onBestMove` validation order — UCI move parsing and piece-existence checks now run BEFORE clearing `isAIThinking` / `_aiSafetyTimerId` / `_aiRetryCount`, preventing an unparseable bestmove from leaving the AI in a "not thinking, no safety timer, but still AI's turn" deadlock.
+- **P1 bug fix**: CSS `font-family` HTML entity — 5 occurrences of `&#x27;` inside `<style>` rules in `index.html.tpl` replaced with literal `'` (HTML parser does NOT decode entities in raw-text mode).
+- **P1 input validation**: PGN cache name `prompt()` now enforces 60-char cap and rejects `/ \ : * ? " < > |` + control chars (matching `_renameHumanPlayer`).
+- **P2 robustness**: `HapticHelper.perform` now respects the system `HAPTIC_FEEDBACK_ENABLED` setting (matching `StatsActivity.performHaptic`).
+- **P2 robustness**: `StockfishNative.extractEngineFromApk` (inline) now guards against `ZipEntry.getSize() == -1` (divide-by-zero / negative progress percentage). The same fix had previously been applied only to the now-deleted `EngineProcessManager.extractEngineFromApk` copy.
+- Version: versionCode=121, versionName="1.2.1" (unchanged — same-version refinement)
+
+## v1.2.1 fourth-pass refinement (2026.7.13) — round-4 cleanup: dead-code purge
+- **First-principles review conclusion**: the third-pass "unused-file activation" round (above, now reverted) wired up 7 Phase-73/74 extracts that duplicated inline logic with subtly different conventions. The activation was "for activation's sake" — none of the activated paths were on the hot path, and several introduced semantic drift risks (rank order, move taxonomy, audio state, ELO ranges). Round 4 deletes the 7 redundant files and slimms 2 others.
+- **Deleted 7 files**:
+  - `MessageBus.java` (AGPL v3) — JS side had only a `console.log` stub and zero `dispatch()` callers; the entire Java→JS event bus was dead code.
+  - `UciProtocolHandler.java` (GPL v3) — its latch-based `setOptionAndWait` / `waitForBestmove` / `waitForUciOk` were never used (StockfishNative runs its own inline reader loop with its own `readyOkLatchHolder` / `uciOkLatchHolder`). The only call site was a defensive `resetHandshakeState()` in cleanup that did nothing useful.
+  - `EngineConfigManager.java` (GPL v3) — instantiated but no method on the instance was ever called; only `MIN_SKILL_LEVEL` / `MAX_SKILL_LEVEL` constants were referenced externally. Inlined those two constants (0, 20) in `EngineConfigHelper.setEngineSkillLevel`.
+  - `ui-audio.js` (GPL v3) — duplicated inline `ChessAudioEngine` in `ui.js`; separate `_volume` / `_enabled` state could drift out of sync.
+  - `ui-board.js` (GPL v3) — used OPPOSITE rank convention (rank=0 → rank 1) vs inline code (rr=0 → rank 8); never callable from the hot path.
+  - `ui-review.js` (GPL v3) — used different classification taxonomy (best/excellent/good/ok/...) vs inline `_classifyMove` (brilliant/great/good/book/...); direct replacement would silently change review annotations.
+  - `ui-toolbar.js` (GPL v3) — `switchLanguage` re-implemented `toggleLang`'s persistence + dispatch; `BTN_ID` was never read.
+- **Slimmed 2 files**:
+  - `EngineHealthMonitor.java` (208 → 85 lines): removed heartbeat thread, zombie-detection timeouts, `RecoveryCallback` interface — all duplicated inline in `StockfishNative`. Now a pure state holder for `lastResponseTime` + `autoRecoveryCount`.
+  - `EngineProcessManager.java` (489 → 111 lines): removed `resolveEngineBinary` / `extractEngineFromApk` / `extractEngineFromAssets` / `startProcess` / `initStreams` / `cleanupResources` / `isElfFile` / process getters/setters — all dead code (StockfishNative keeps inline copies with direct field access). Only `makeExecutable(File)` remains.
+- **StockfishNative.java** (4,373 → 4,278 lines): removed `_engineConfigManager` / `_uciProtocolHandler` / `_messageBus` fields + constructor instantiations; removed `getMessageBus()` / `_emitLifecycleEvent()` / `_escapeJsonString()` helpers; removed 3 `_emitLifecycleEvent` call sites; removed `_uciProtocolHandler.resetHandshakeState()` call in cleanup; removed 3 now-unused imports (`SimpleDateFormat`, `Date`, `AtomicInteger`). `EngineHealthMonitor` now constructed no-arg; `EngineProcessManager` now constructed with `ChmodProvider` only (Context arg removed).
+- **MainActivity.java**: removed `MessageBus` JS-interface registration (both initial + rebuild paths).
+- **build-chess.py**: module list 13 → 9 (removed the four `ui-*.js` modules).
+- **JS edits**: `ui.js` removed `UIAudio.unlockAudio()` / `UIAudio.setEnabled()` calls; `game-logic.js` removed `UIToolbar.switchLanguage()` call; `ai-bridge.js` removed `window.MessageBus._onEvent` stub + 4 `typeof`-guarded module-activation checks.
+- **Bug fix**: inline `StockfishNative.extractEngineFromApk` now guards against `ZipEntry.getSize() == -1` (previously only fixed in the now-deleted `EngineProcessManager.extractEngineFromApk` copy).
+- Version: versionCode=121, versionName="1.2.1" (unchanged — same-version refinement)
+
+## v1.2.1 fifth-pass refinement (2026.7.13) — round-5 review: line-by-line audit of remaining 28 files
+- **Scope**: First-principles line-by-line review of all remaining 19 Java files + 9 JS files (the 7 deleted in round-4 plus the 2 slimmed were already audited). Focus: bug > robustness > features > performance > redundancy > simplification, in that priority order.
+- **Removed 2 unused imports**:
+  - `ChessApp.java`: removed `import android.os.Build;` (left over from an earlier root-detection refactor — `Build` was never referenced after the check moved to `RootDetector`).
+  - `ChessWebViewClient.java`: removed `import android.os.Build;` (left over from an earlier render-process-gone API-level guard that was simplified to always-on).
+- **Bug fix**: `EngineSettingsHelper.importSettings` — the `engine.elo` case used a 1-3200 range, inconsistent with `EngineConfigHelper`'s canonical 500-3500 range (used by `setEngineLimitElo`, `setElo`, and the documented spec). Importing a value like 400 would pass the 1-3200 check, then be silently re-clamped to 500 on the next `setEngineLimitElo` call — a silent data-mutation bug. Fixed to `Math.max(500, Math.min(3500, ...))` to match the canonical range.
+- **Verified clean** (no changes needed):
+  - `EngineService.java`, `FileIoHelper.java`, `HapticHelper.java`, `JsBridgeGateway.java`, `PermissionHelper.java`, `PgnCacheManager.java`, `RootDetector.java`, `SafPickerHelper.java`, `StabilizationHelper.java`, `StatsActivity.java`, `TlsSecurityHelper.java`, `EngineConfigHelper.java`, `EngineHealthMonitor.java`, `EngineProcessManager.java`, `MainActivity.java`, `StockfishNative.java` — all imports used, no dead code, no inconsistent ranges, no leftover debug statements.
+  - All 9 JS files (`game-logic.js`, `chess960.js`, `pgn-standard.js`, `worker-pool.js`, `state-store.js`, `ai-bridge.js`, `tablebase.js`, `eco-data.js`, `ui.js`) — no `debugger;` statements, no live `console.log` (only comments noting their removal), no `TODO`/`FIXME`/`HACK` markers, no references to deleted symbols.
+- Version: versionCode=121, versionName="1.2.1" (unchanged — same-version refinement)
+
+## v1.2.1 sixth-pass refinement (2026.7.13) — round-6 review: stats page visual annotation bug fix
+- **Bug fix (user-reported)**: Statistics page visual annotation data not displaying for newly-played games.
+  - **Root cause**: `_buildPGNString()` (ai-bridge.js) only exports visual annotations where `imported=true` (per Phase 62 design — auto-generated annotations are UI display aids that should NOT pollute PGN export). The stats page (stats.html) scanned the PGN text for `[%csl]`/`[%cal]` tags to count annotations. Since auto-generated annotations (`imported=false`) were never in the PGN text, the stats page's `hasVisualAnnotations` check returned false, and the entire visual annotations section was silently hidden for all newly-played games (only imported PGNs with human-authored annotations would show the section).
+  - **Fix**: `openStatsPage()` (ai-bridge.js) now sends a separate `visualAnnotations` field in the payload, containing ALL cache entries (both `imported=true` and `imported=false`), keyed by moveIdx. The stats page uses this field as the PRIMARY data source, falling back to PGN-text scan only if the field is absent (older callers). NAGs (`$N`) are still scanned from PGN text (they're PGN-only, not in the visualAnnotations cache).
+  - **Files changed**:
+    - `ai-bridge.js` (GPL v3): `openStatsPage()` now collects all `_visualAnnotationsCache` entries (skipping the `_initial` key) into a `vaData` object and includes it in the JSON payload as `visualAnnotations`.
+    - `stats.html` (AGPL v3): visual annotations section now reads `_payload.visualAnnotations` first (primary source), applies the selected-move cutoff, and falls back to PGN-text scan only if the payload field is absent. NAG scanning from PGN text is preserved (NAGs are not in the payload).
+  - **Design preserved**: The Phase 62 `imported` flag logic in `_buildPGNString()` is UNCHANGED — auto-generated annotations still do NOT pollute PGN export. The fix is purely additive: a new payload field that gives the stats page access to all annotations without changing PGN export semantics.
+  - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version refinement)

@@ -55,10 +55,8 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.lang.ref.WeakReference;
-import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Date;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
@@ -120,7 +118,8 @@ public class StockfishNative {
     // v1.2.0 Phase 81: Moved to EngineConfigHelper (only used by setGameDifficulty).
     // v1.0.5: Synced with the application version (was stale at v1.0.2).
     // v1.2.0: Updated for v1.2.0 release.
-    private static final String ENGINE_VERSION = "v1.2.0";
+    // v1.2.1: Updated for v1.2.1 release.
+    private static final String ENGINE_VERSION = "v1.2.1";
     // Movetime mapping: index 0 unused, 1-7 = game levels
     private static final int[] MOVETIME_MAP = {0, 500, 800, 1000, 1500, 2000, 3000, 5000};
 
@@ -146,11 +145,12 @@ public class StockfishNative {
 
     // v1.2.0 Phase 73: Manager class instances (God Module split)
     // These encapsulate specific concerns, reducing StockfishNative's complexity.
+    // v1.2.1: EngineConfigManager / UciProtocolHandler / MessageBus deleted (round-4 cleanup —
+    //   never used: EngineConfigManager had no method callers, UciProtocolHandler's latch
+    //   mechanism was bypassed by inline reader loop, MessageBus had no JS subscribers).
     private final PgnCacheManager _pgnCacheManager;
-    private final EngineConfigManager _engineConfigManager;
     private final JsBridgeGateway _jsBridgeGateway;
     private final EngineProcessManager _engineProcessManager;
-    private final UciProtocolHandler _uciProtocolHandler;
     private final EngineHealthMonitor _engineHealthMonitor;
     // v1.2.0 Phase 73+: Additional helper classes for further God Module reduction
     private final FileIoHelper _fileIoHelper;
@@ -162,9 +162,6 @@ public class StockfishNative {
     // Encapsulates setAutoConfig/detectHardwareAndConfigure/applySettings/UCI option setters/
     // setGameDifficulty/forceFullStrength. StockfishNative retains thin @JavascriptInterface delegates.
     private final EngineConfigHelper _engineConfigHelper;
-    // v1.2.0 Phase 75: Message bus for unified JS↔Java communication
-    // v1.2.0 Phase 82+++++ rev 8: Made final — assigned once in constructor, never reassigned.
-    private final MessageBus _messageBus;
 
     // OPT: P2 - Cache WebView reference via WeakReference to avoid repeated lookups
     // in postJsCallback. The reference is updated whenever the WebView becomes available.
@@ -218,14 +215,25 @@ public class StockfishNative {
     //   idle-timeout could re-enable it).
     private static final long ZOMBIE_TIMEOUT_MS = 30000; // reserved: 30s idle timeout (currently unused)
     private static final long ZOMBIE_SEARCH_TIMEOUT_MS = 120000; // 2 minutes for active searches
-    private volatile long _lastResponseTime = System.currentTimeMillis();
-    private volatile int _autoRecoveryCount = 0;
+    // v1.2.1: _lastResponseTime 与 _autoRecoveryCount 已迁移到 EngineHealthMonitor
+    //   作为唯一状态持有者（消除字段重复）。所有读写通过 _engineHealthMonitor 进行。
     private static final int MAX_AUTO_RECOVERY = 3; // Conservative: prevent restart loops on HyperOS 3
     private static final int RECOVERY_COUNT_RESET_INTERVAL_MS = 120000; // 2 min — reset counter after stable operation
     private volatile long _lastRecoveryTimestamp = 0;
     // Restart lock: prevents concurrent restartEngine/recoverEngine calls
     private final Object _restartLock = new Object();
     private volatile boolean _restartInProgress = false;
+    // v1.2.1: 记录 recoverEngine 启动时间，用于检测 _restartInProgress 卡死
+    //   （inner task 被 shutdownNow 静默丢弃时 finally 不会执行，标志会永久卡住）。
+    private volatile long _restartStartTimeMs = 0L;
+    private static final long RESTART_STALE_THRESHOLD_MS = 30_000L;
+    // v1.2.1: 引擎线程死亡标记。ChessApp 的 UncaughtExceptionHandler 在 SF-*
+    //   线程异常退出时调用 markEngineThreadDead() 设置此标记；heartbeat 检查
+    //   此标记，若为 true 则触发 recoverEngine —— 否则引擎进程虽然活着但读
+    //   线程已死，isProcessAlive() 返回 true 导致 heartbeat 误判健康，AI
+    //   静默不动直到 15-30s zombie 超时。
+    private static volatile boolean sEngineThreadDied = false;
+    private static volatile String sEngineThreadDiedName = null;
     // v1.2.0 Phase 73+: REQUEST_CODE_* constants moved to SafPickerHelper and
     // re-exported below for MainActivity compatibility.
     private final Object _startEngineLock = new Object();
@@ -367,10 +375,10 @@ public class StockfishNative {
         updateCachedWebView();
 
         // v1.2.0 Phase 73: Initialize manager class instances (God Module split)
+        // v1.2.1: EngineConfigManager / UciProtocolHandler / MessageBus instantiations removed (round-4 cleanup).
         this._pgnCacheManager = new PgnCacheManager(this.context);
-        this._engineConfigManager = new EngineConfigManager(this.context);
         this._jsBridgeGateway = new JsBridgeGateway(this.context);
-        this._engineProcessManager = new EngineProcessManager(this.context, new EngineProcessManager.ChmodProvider() {
+        this._engineProcessManager = new EngineProcessManager(new EngineProcessManager.ChmodProvider() {
             @Override
             public boolean nativeChmod(String path) {
                 return StockfishNative.nativeChmod(path);
@@ -384,58 +392,8 @@ public class StockfishNative {
                 postJsCallback("onInitProgress(" + pct + ", " + escapeJsString(message) + ")");
             }
         });
-        this._uciProtocolHandler = new UciProtocolHandler(new UciProtocolHandler.UciCallback() {
-            @Override
-            public OutputStreamWriter getEngineWriter() {
-                return engineWriter;
-            }
-            @Override
-            public void onUciOk(String engineName, String engineAuthor, String optionsJson) {
-                StockfishNative.this.engineName = engineName;
-                StockfishNative.this.engineAuthor = engineAuthor;
-                StockfishNative.this.engineOptionsJson = optionsJson;
-            }
-            @Override
-            public void onReadyOk() {
-                // handled by main class
-            }
-            @Override
-            public void onBestMove(String bestmove, String ponder) {
-                // handled by main class
-            }
-            @Override
-            public void onInfo(String line) {
-                // handled by main class
-            }
-            @Override
-            public void onEngineError(String message) {
-                postJsCallback("onEngineError(" + escapeJsString(message) + ")");
-            }
-            @Override
-            public boolean isEnglishMode() {
-                return StockfishNative.this.isEnglishMode();
-            }
-        });
-        this._engineHealthMonitor = new EngineHealthMonitor(new EngineHealthMonitor.RecoveryCallback() {
-            @Override
-            public boolean isEngineSearching() {
-                synchronized (stateLock) {
-                    return currentState == STATE_GO || currentState == STATE_EVAL;
-                }
-            }
-            @Override
-            public boolean isEngineReady() {
-                return engineReady;
-            }
-            @Override
-            public void triggerRecovery(String reason, String userMessage) {
-                recoverEngine(reason, userMessage);
-            }
-            @Override
-            public boolean isEnglishMode() {
-                return StockfishNative.this.isEnglishMode();
-            }
-        });
+        // v1.2.1: EngineHealthMonitor slimmed to a state holder — no callback wiring needed.
+        this._engineHealthMonitor = new EngineHealthMonitor();
         // v1.2.0 Phase 73+: Initialize additional helper classes
         this._fileIoHelper = new FileIoHelper(this.context, this.activityRef);
         this._permissionHelper = new PermissionHelper(this.context, this.activityRef);
@@ -516,108 +474,6 @@ public class StockfishNative {
             @Override public void notifyEngineInfo() { StockfishNative.this.notifyEngineInfo(); }
             @Override public void postJsCallback(String jsExpression) { StockfishNative.this.postJsCallback(jsExpression); }
         });
-        // v1.2.0 Phase 82+++++ rev 7: Wire MessageBus (Phase 75 design intent).
-        // The MessageBus provides a unified JS↔Java communication channel that runs
-        // alongside the existing AndroidBridge. It is registered as a separate
-        // JavascriptInterface named "MessageBus" so JS can call MessageBus.dispatch()
-        // and receive events via window.MessageBus._onEvent().
-        // Standard message types (per v1.2.0 Development Plan Task 75):
-        //   JS→Java: ENGINE_GO, ENGINE_STOP, ENGINE_SET_OPTION, PGN_CACHE_SAVE
-        //   Java→JS: ENGINE_EVAL, ENGINE_BESTMOVE, ENGINE_READY, ENGINE_ERROR, PGN_CACHE_LIST
-        // The handlers below delegate to the existing engine methods — this is purely
-        // additive (the AndroidBridge methods remain unchanged for backward compatibility).
-        this._messageBus = new MessageBus(null); // WebView set later via setWebView
-        registerMessageBusHandlers();
-    }
-
-    /**
-     * v1.2.0 Phase 82+++++ rev 7: Register standard MessageBus handlers.
-     * Each handler delegates to the existing engine method — the MessageBus is
-     * a parallel channel, not a replacement for AndroidBridge.
-     */
-    private void registerMessageBusHandlers() {
-        if (_messageBus == null) return;
-        // JS→Java: ENGINE_GO — send position + go command
-        _messageBus.register("ENGINE_GO", payload -> {
-            // payload: {"fen":"...", "goCmd":"go depth 15"} or {"goCmd":"go movetime 1000"}
-            try {
-                org.json.JSONObject obj = new org.json.JSONObject(payload != null ? payload : "{}");
-                String fen = obj.optString("fen", null);
-                String goCmd = obj.optString("goCmd", "go depth 15");
-                if (fen != null) {
-                    sendUciCommand("position fen " + fen);
-                }
-                sendUciCommand(goCmd);
-                return "{\"ok\":true}";
-            } catch (Throwable e) {
-                return "{\"ok\":false,\"error\":\"" + e.getMessage() + "\"}";
-            }
-        });
-        // JS→Java: ENGINE_STOP — stop engine search
-        _messageBus.register("ENGINE_STOP", payload -> {
-            sendUciCommand("stop");
-            return "{\"ok\":true}";
-        });
-        // JS→Java: ENGINE_SET_OPTION — set UCI parameter
-        _messageBus.register("ENGINE_SET_OPTION", payload -> {
-            try {
-                org.json.JSONObject obj = new org.json.JSONObject(payload != null ? payload : "{}");
-                String name = obj.optString("name", "");
-                String value = obj.optString("value", "");
-                if (!name.isEmpty()) {
-                    sendUciCommand("setoption name " + name + " value " + value);
-                    return "{\"ok\":true}";
-                }
-                return "{\"ok\":false,\"error\":\"missing name\"}";
-            } catch (Throwable e) {
-                return "{\"ok\":false,\"error\":\"" + e.getMessage() + "\"}";
-            }
-        });
-        // JS→Java: PGN_CACHE_SAVE — save PGN to cache
-        _messageBus.register("PGN_CACHE_SAVE", payload -> {
-            try {
-                org.json.JSONObject obj = new org.json.JSONObject(payload != null ? payload : "{}");
-                String name = obj.optString("name", "");
-                String pgn = obj.optString("pgn", "");
-                if (!name.isEmpty() && !pgn.isEmpty()) {
-                    savePGNCache(name, pgn);
-                    return "{\"ok\":true}";
-                }
-                return "{\"ok\":false,\"error\":\"missing name or pgn\"}";
-            } catch (Throwable e) {
-                return "{\"ok\":false,\"error\":\"" + e.getMessage() + "\"}";
-            }
-        });
-    }
-
-    /**
-     * v1.2.0 Phase 82+++++ rev 8: Set the WebView on the MessageBus so it can
-     * emit events to JS. Called from MainActivity after addJavascriptInterface.
-     * Rev 8 fix: uses public setter instead of reflection (R8 renames private
-     * fields in release builds, causing NoSuchFieldException with reflection).
-     */
-    public void setMessageBusWebView(WebView webView) {
-        if (_messageBus != null && webView != null) {
-            _messageBus.setWebView(webView);
-        }
-    }
-
-    /**
-     * v1.2.0 Phase 82+++++ rev 7: Emit an event to JS via the MessageBus.
-     * Java code can call this to send events like ENGINE_READY, ENGINE_BESTMOVE, etc.
-     */
-    public void emitToJs(String event, String jsonPayload) {
-        if (_messageBus != null) {
-            _messageBus.emit(event, jsonPayload);
-        }
-    }
-
-    /**
-     * v1.2.0 Phase 82+++++ rev 7: Get the MessageBus instance (for MainActivity
-     * to register as a JavascriptInterface).
-     */
-    public MessageBus getMessageBus() {
-        return _messageBus;
     }
 
     /**
@@ -723,6 +579,24 @@ public class StockfishNative {
         }
     }
 
+    /**
+     * v1.2.1: 由 ChessApp 的 UncaughtExceptionHandler 调用 —— 当 SF-* 线程
+     *   因未捕获异常退出时设置死亡标记。Heartbeat 会检测此标记并触发
+     *   recoverEngine —— 否则引擎进程虽然活着但读线程已死，isProcessAlive()
+     *   返回 true 导致 heartbeat 误判健康，AI 静默不动直到 15-30s zombie 超时。
+     */
+    public static void markEngineThreadDead(String threadName) {
+        sEngineThreadDied = true;
+        sEngineThreadDiedName = threadName;
+        Log.e("StockfishNative", "Engine thread marked dead: " + threadName);
+    }
+
+    /** v1.2.1: 在引擎成功启动后清除死亡标记 */
+    private void clearEngineThreadDeadFlag() {
+        sEngineThreadDied = false;
+        sEngineThreadDiedName = null;
+    }
+
     private boolean isProcessAlive() {
         try {
             if (engineProcess == null) return false;
@@ -816,7 +690,13 @@ public class StockfishNative {
     private void stopAndWaitForBestmove(String callerTag) {
         // v18.6.0: Skip stop/wait entirely when engine is idle — avoids unnecessary
         // latch allocation and 1-second timeout when no search is running.
+        // v1.2.1: 同时清空 _discardingPonderBestmove 残留标志 —— 否则上一次
+        //   engineStop() 在 STATE_NONE 路径上设置的丢弃标志会持续到下一次
+        //   bestmove 到达时被错误地丢弃（TOCTOU 残留 bug 修复）。
         if (currentState == STATE_NONE && !_isPondering) {
+            synchronized (_discardFlagLock) {
+                _discardingPonderBestmove = false;
+            }
             return;
         }
 
@@ -908,7 +788,8 @@ public class StockfishNative {
                         readyOkLatchHolder = newGameLatch;
                         sendUciCommand("isready");
                         try {
-                            newGameLatch.await(5, TimeUnit.SECONDS);
+                            boolean gotReadyOk = newGameLatch.await(5, TimeUnit.SECONDS);
+                            if (!gotReadyOk) Log.w(TAG, "Timeout waiting for readyok after ucinewgame");
                         } catch (InterruptedException e) {
                             Thread.currentThread().interrupt(); // v1.2.0 Phase 73: re-interrupt
                             Log.w(TAG, "engineGoNewGame: interrupted waiting for readyok");
@@ -981,7 +862,8 @@ public class StockfishNative {
                         readyOkLatchHolder = newGameLatch;
                         sendUciCommand("isready");
                         try {
-                            newGameLatch.await(5, TimeUnit.SECONDS);
+                            boolean gotReadyOk = newGameLatch.await(5, TimeUnit.SECONDS);
+                            if (!gotReadyOk) Log.w(TAG, "Timeout waiting for readyok after ucinewgame");
                         } catch (InterruptedException e) {
                             Thread.currentThread().interrupt(); // v1.2.0 Phase 73: re-interrupt
                             Log.w(TAG, "engineGoTimed: interrupted waiting for readyok");
@@ -1429,8 +1311,6 @@ public class StockfishNative {
             postJsCallback("onInitProgress(100, " + escapeJsString(isEnglishMode() ? "Engine already running" : "\u5f15\u64ce\u5df2\u8fd0\u884c") + ")");
             postJsCallback("onEngineReady()");
             engineReady = true;
-            // v1.2.0 Phase 82+++++ rev 7: Emit ENGINE_READY via MessageBus (parallel channel)
-            emitToJs("ENGINE_READY", null);
             return;
         }
 
@@ -1551,9 +1431,12 @@ public class StockfishNative {
         // (re)start. Without this, an engine auto-recovery after a crash would
         // silently drop UCI_Chess960=true and the user's Chess960 game would
         // be analyzed as standard chess (wrong castling handling).
-        if (_pendingChess960 && engineSupportsOption("UCI_Chess960")) {
+        // v1.2.1: 此前只在 _pendingChess960==true 时重新应用，导致用户从
+        //   Chess960 切回标准棋后崩溃恢复会把 UCI_Chess960=true 错误地保留。
+        //   现在根据 _pendingChess960 的实际值应用 true 或 false。
+        if (engineSupportsOption("UCI_Chess960")) {
             try {
-                sendSetOptionAndWait("UCI_Chess960", "true");
+                sendSetOptionAndWait("UCI_Chess960", _pendingChess960 ? "true" : "false");
             } catch (Exception e) {
                 Log.w(TAG, "Failed to re-apply UCI_Chess960 after engine start: " + e.getMessage());
             }
@@ -1562,11 +1445,10 @@ public class StockfishNative {
         // Step 7: Engine ready (90% -> 100%)
         postJsCallback("onInitProgress(90, " + escapeJsString(isEnglishMode() ? "Engine ready!" : "\u5f15\u64ce\u5c31\u7eea\uff01") + ")");
         Log.i(TAG, "Stockfish engine ready: " + engineName);
-        _autoRecoveryCount = 0;
+        _engineHealthMonitor.resetRecoveryCount();
         _restartInProgress = false; // Clear restart lock on successful start
+        clearEngineThreadDeadFlag(); // v1.2.1: 引擎成功启动，清除前次死亡标记
         postJsCallback("onEngineReady()");
-        // v1.2.0 Phase 82+++++ rev 7: Emit ENGINE_READY via MessageBus (parallel channel)
-        emitToJs("ENGINE_READY", null);
 
         // Start the foreground service to keep the engine process alive
         EngineService.start(context);
@@ -1713,7 +1595,7 @@ public class StockfishNative {
         // Interrupt reader thread
         if (readerThread != null) {
             readerThread.interrupt();
-            try { readerThread.join(1000); } catch (Throwable ignored) {}
+            try { readerThread.join(1000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); } catch (Throwable ignored) {}
             readerThread = null;
         }
         engineReader = null;
@@ -1745,28 +1627,37 @@ public class StockfishNative {
         // Prevent concurrent restart — if another restart is already in progress, skip
         synchronized (_restartLock) {
             if (_restartInProgress) {
-                Log.w(TAG, "Recovery skipped — restart already in progress (" + reason + ")");
-                return;
+                // v1.2.1: stale detection —— inner task 可能被 shutdownNow() 静默
+                //   丢弃（execute() 成功但任务从未运行），导致 _restartInProgress
+                //   永久卡住、未来 recoverEngine 全部早退。超过阈值则强制重置。
+                long stuckMs = System.currentTimeMillis() - _restartStartTimeMs;
+                if (stuckMs < RESTART_STALE_THRESHOLD_MS) {
+                    Log.w(TAG, "Recovery skipped — restart already in progress (" + reason + ")");
+                    return;
+                }
+                Log.w(TAG, "Stale _restartInProgress detected (" + (stuckMs/1000)
+                        + "s), forcing reset for new recovery (" + reason + ")");
             }
             _restartInProgress = true;
+            _restartStartTimeMs = System.currentTimeMillis();
         }
 
         // Reset recovery count if engine has been stable for a while
         long timeSinceLastRecovery = System.currentTimeMillis() - _lastRecoveryTimestamp;
-        if (timeSinceLastRecovery > RECOVERY_COUNT_RESET_INTERVAL_MS && _autoRecoveryCount > 0) {
-            Log.i(TAG, "Resetting auto-recovery count (" + _autoRecoveryCount + ") after " + (timeSinceLastRecovery/1000) + "s of stable operation");
-            _autoRecoveryCount = 0;
+        if (timeSinceLastRecovery > RECOVERY_COUNT_RESET_INTERVAL_MS && _engineHealthMonitor.getRecoveryCount() > 0) {
+            Log.i(TAG, "Resetting auto-recovery count (" + _engineHealthMonitor.getRecoveryCount() + ") after " + (timeSinceLastRecovery/1000) + "s of stable operation");
+            _engineHealthMonitor.resetRecoveryCount();
         }
 
-        if (_autoRecoveryCount >= MAX_AUTO_RECOVERY) {
+        if (_engineHealthMonitor.getRecoveryCount() >= MAX_AUTO_RECOVERY) {
             Log.e(TAG, "Auto-recovery limit reached (" + MAX_AUTO_RECOVERY + "), giving up. Reason: " + reason);
             _restartInProgress = false;
             postJsCallback("onEngineError(" + escapeJsString(userMessage) + ")");
             return;
         }
-        _autoRecoveryCount++;
+        _engineHealthMonitor.incrementRecoveryCount();
         _lastRecoveryTimestamp = System.currentTimeMillis();
-        final int attemptNum = _autoRecoveryCount;
+        final int attemptNum = _engineHealthMonitor.getRecoveryCount();
 
         // CRITICAL FIX: Notify JS that engine is restarting so it can reset stale state.
         // Without this, JS state (isAIThinking, _evalLoading, etc.) remains stale from
@@ -1874,7 +1765,7 @@ public class StockfishNative {
                     break;
                 }
                 if (shutdownRequested) break;
-                _lastResponseTime = System.currentTimeMillis();
+                _engineHealthMonitor.onResponseReceived();
                 processEngineLine(line.trim());
             }
         } catch (IOException e) {
@@ -1889,7 +1780,7 @@ public class StockfishNative {
     }
 
     private void processEngineLine(String line) {
-        _lastResponseTime = System.currentTimeMillis();
+        _engineHealthMonitor.onResponseReceived();
 
         if (line.isEmpty()) return;
 
@@ -1948,6 +1839,13 @@ public class StockfishNative {
                     }
                 }
                 if (stopLatch != null) {
+                    // v1.2.1: 同时清空 _discardingPonderBestmove —— 该 bestmove
+                    //   已被 latch 路径消费，不应再被 discard 路径处理；否则
+                    //   engineStop() 在 latch 持有期间设置的丢弃标志会持续到
+                    //   下一次合法 bestmove，导致 AI 静默不动（P0 修复）。
+                    synchronized (_discardFlagLock) {
+                        _discardingPonderBestmove = false;
+                    }
                     stopLatch.countDown();
                     return;
                 }
@@ -2297,8 +2195,6 @@ public class StockfishNative {
             case STATE_GO:
                 postJsCallback("onBestMove(" + escapeJsString(uciMove) + ")");
                 postJsCallback("onMultiPVResult(" + multiPVJson + ")");
-                // v1.2.0 Phase 82+++++ rev 7: Emit ENGINE_BESTMOVE via MessageBus (parallel channel)
-                emitToJs("ENGINE_BESTMOVE", "{\"uci\":\"" + uciMove + "\"}");
                 break;
             case STATE_HINT:
                 postJsCallback("onHintMove(" + escapeJsString(uciMove) + ")");
@@ -2422,10 +2318,14 @@ public class StockfishNative {
             Log.w(TAG, "Cannot set option " + name + " - engine not ready");
             return false;
         }
+        // v1.2.1: Strip CR/LF from name/value to prevent UCI command injection
+        //   (a malicious value could otherwise inject an extra UCI line).
+        String safeName = name == null ? "" : name.replaceAll("[\\r\\n]", "");
+        String safeValue = value == null ? "" : value.replaceAll("[\\r\\n]", "");
         synchronized (_readyOkLock) {
             final CountDownLatch latch = new CountDownLatch(1);
             readyOkLatchHolder = latch;
-            sendUciCommand("setoption name " + name + " value " + value);
+            sendUciCommand("setoption name " + safeName + " value " + safeValue);
             sendUciCommand("isready");
             try {
                 long deadline = System.currentTimeMillis() + 3000;
@@ -2526,7 +2426,7 @@ public class StockfishNative {
         _heartbeatRunning = false;
         if (_heartbeatThread != null) {
             _heartbeatThread.interrupt();
-            try { _heartbeatThread.join(1000); } catch (Throwable ignored) {}
+            try { _heartbeatThread.join(1000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); } catch (Throwable ignored) {}
             _heartbeatThread = null;
         }
 
@@ -2581,6 +2481,8 @@ public class StockfishNative {
             try {
                 readerThread.interrupt();
                 readerThread.join(1000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
             } catch (Throwable ignored) {}
             readerThread = null;
         }
@@ -2637,7 +2539,7 @@ public class StockfishNative {
 
         if (readerThread != null) {
             readerThread.interrupt();
-            try { readerThread.join(1000); } catch (Throwable ignored) {}
+            try { readerThread.join(1000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); } catch (Throwable ignored) {}
             readerThread = null;
         }
 
@@ -2661,6 +2563,19 @@ public class StockfishNative {
                     }
                     if (!_heartbeatRunning || shutdownRequested) break;
 
+                    // v1.2.1: Check 0 —— Engine-thread-alive health. SF-Reader /
+                    //   SF-Heartbeat 等线程因未捕获异常退出时，ChessApp 的
+                    //   UncaughtExceptionHandler 调用 markEngineThreadDead() 设置
+                    //   此标记。引擎进程可能仍存活，但读线程已死，bestmove 永远
+                    //   不会被消费 —— 必须主动恢复。
+                    if (sEngineThreadDied) {
+                        Log.e(TAG, "Heartbeat: engine thread died (" + sEngineThreadDiedName
+                                + "), attempting restart");
+                        recoverEngine("heartbeat-thread-died",
+                                "\u5f15\u64ce\u7ebf\u7a0b\u5d29\u6e83\uff0c\u8bf7\u5c1d\u8bd5\u624b\u52a8\u91cd\u542f");
+                        continue; // Skip other checks this cycle
+                    }
+
                     // Check 1: Process-level health
                     if (!isProcessAlive()) {
                         Log.e(TAG, "Heartbeat: engine process is dead, attempting restart");
@@ -2681,7 +2596,7 @@ public class StockfishNative {
                     //   ZOMBIE_SEARCH_TIMEOUT_MS; ZOMBIE_TIMEOUT_MS was unreachable). Use the
                     //   search timeout directly.
                     if (engineReady && (currentState != STATE_NONE)) {
-                        long timeSinceLastResponse = System.currentTimeMillis() - _lastResponseTime;
+                        long timeSinceLastResponse = System.currentTimeMillis() - _engineHealthMonitor.getLastResponseTime();
                         if (timeSinceLastResponse > ZOMBIE_SEARCH_TIMEOUT_MS) {
                             Log.e(TAG, "Heartbeat: engine zombie detected (no response for " + timeSinceLastResponse + " ms), attempting recovery");
                             // v1.1.0 Phase 58: P0 concurrency fix — use _writerLock instead
@@ -2728,10 +2643,16 @@ public class StockfishNative {
         // Prevent concurrent restart — if another restart is already in progress, skip
         synchronized (_restartLock) {
             if (_restartInProgress) {
-                Log.w(TAG, "restartEngine: skipping — restart already in progress");
-                return;
+                // v1.2.1: stale detection —— 与 recoverEngine 保持一致
+                long stuckMs = System.currentTimeMillis() - _restartStartTimeMs;
+                if (stuckMs < RESTART_STALE_THRESHOLD_MS) {
+                    Log.w(TAG, "restartEngine: skipping — restart already in progress");
+                    return;
+                }
+                Log.w(TAG, "restartEngine: stale _restartInProgress detected (" + (stuckMs/1000) + "s), forcing reset");
             }
             _restartInProgress = true;
+            _restartStartTimeMs = System.currentTimeMillis();
         }
 
         // Ensure executor is available — recreate if shutdown (common after recoverEngine)
@@ -2748,7 +2669,7 @@ public class StockfishNative {
             executor.execute(new Runnable() {
                 public void run() {
                     Log.i(TAG, "Restarting engine by JS request");
-                    _autoRecoveryCount = 0;
+                    _engineHealthMonitor.resetRecoveryCount();
                     shutdown();
                     try {
                         Thread.sleep(500);
@@ -2779,7 +2700,7 @@ public class StockfishNative {
             _engineExecutor.execute(new Runnable() {
                 public void run() {
                     try {
-                        _autoRecoveryCount = 0;
+                        _engineHealthMonitor.resetRecoveryCount();
                         cleanupEngineResources();
                         startEngine();
                     } catch (Throwable t) {
@@ -3093,6 +3014,14 @@ public class StockfishNative {
             } catch (Throwable e) {
                 Log.w(TAG, "engineStop: sendUciCommand failed", e);
             }
+            // v1.2.1: 若被打断的是 STATE_EVAL，需要主动恢复 gameplay 选项 ——
+            //   applyEvalModeOptions() 设置的 Contempt=0/MultiPV=1/UCI_AnalyseMode=true
+            //   否则会泄漏到下一次 gameplay 搜索（handleBestMove 的 STATE_EVAL 分支
+            //   才会调用 restoreGameplayOptions()，但 discard 路径不会进入该分支）。
+            if (stateBefore == STATE_EVAL) {
+                try { restoreGameplayOptions(); }
+                catch (Throwable t) { Log.w(TAG, "engineStop: restoreGameplayOptions failed", t); }
+            }
         }
     }
 
@@ -3105,6 +3034,10 @@ public class StockfishNative {
     @JavascriptInterface
     public void sendToEngine(final String command) {
         if (command == null || command.isEmpty()) return;
+        if (!_jsBridgeGateway.isUciCommandAllowed(command)) {
+            Log.w(TAG, "sendToEngine: blocked non-whitelisted command: " + command);
+            return;
+        }
         _safeExecute(new Runnable() {
             public void run() {
                 if (!engineReady) return;
@@ -4037,8 +3970,17 @@ public class StockfishNative {
                         total += len;
                         if (total - lastProgress > 10485760) {
                             lastProgress = total;
-                            int pct = 12 + (int) (total * 13 / entry.getSize());
-                            postJsCallback("onInitProgress(" + pct + ", " + escapeJsString((isEnglishMode() ? "Extracting engine... " : "\u6b63\u5728\u63d0\u53d6\u5f15\u64ce... ") + (total / 1048576) + "MB/" + (entry.getSize() / 1048576) + "MB") + ")");
+                            // v1.2.1 (round-4 bugfix): ZipEntry.getSize() may return -1
+                            //   (unknown size) — direct division yields a negative pct and
+                            //   a misleading "MB/-1MB" suffix. Fall back to a flat 25%.
+                            long entrySize = entry.getSize();
+                            int pct = (entrySize > 0)
+                                    ? 12 + (int) (total * 13 / entrySize)
+                                    : 25;
+                            String sizeStr = (entrySize > 0)
+                                    ? (total / 1048576) + "MB/" + (entrySize / 1048576) + "MB"
+                                    : (total / 1048576) + "MB";
+                            postJsCallback("onInitProgress(" + pct + ", " + escapeJsString((isEnglishMode() ? "Extracting engine... " : "\u6b63\u5728\u63d0\u53d6\u5f15\u64ce... ") + sizeStr) + ")");
                         }
                     }
                     out.flush();
@@ -4138,38 +4080,12 @@ public class StockfishNative {
 
     /**
      * Make a file executable using multiple methods for maximum compatibility.
+     * v1.2.1: 委派给 EngineProcessManager.makeExecutable —— 该方法已封装相同的多级
+     *   fallback 逻辑（nativeChmod → setExecutable → /system/bin/chmod → sh -c），
+     *   并通过 ChmodProvider 回调使用本类的 nativeChmod 实现。消除重复代码。
      */
     private void makeExecutable(File file) {
-        try {
-            boolean nativeOk = nativeChmod(file.getAbsolutePath());
-            if (nativeOk && file.canExecute()) {
-                return;
-            }
-            if (!file.setExecutable(true, false)) {
-                // v1.0.8 PHASE 49: destroy() the chmod subprocess on timeout to
-                //   avoid zombie processes on broken ROMs where chmod hangs.
-                //   waitFor(2s) returns false on timeout but leaves the process
-                //   running; an explicit destroy() reaps it.
-                try {
-                    Process p = Runtime.getRuntime().exec(
-                            new String[]{"/system/bin/chmod", "700", file.getAbsolutePath()});
-                    if (!p.waitFor(2, TimeUnit.SECONDS)) {
-                        p.destroy();
-                    }
-                } catch (Throwable e2) {
-                    try {
-                        Process p = Runtime.getRuntime().exec(
-                                new String[]{"/system/bin/sh", "-c",
-                                        "chmod 700 " + file.getAbsolutePath()});
-                        if (!p.waitFor(2, TimeUnit.SECONDS)) {
-                            p.destroy();
-                        }
-                    } catch (Throwable ignored) {}
-                }
-            }
-        } catch (Throwable e) {
-            Log.w(TAG, "Failed to make executable: " + file.getAbsolutePath(), e);
-        }
+        _engineProcessManager.makeExecutable(file);
     }
 
     // (v18.5.0: copyFile() removed — dead code after engine-import removal; extract* uses inline streams.)
@@ -4279,11 +4195,19 @@ public class StockfishNative {
 
     @JavascriptInterface
     public boolean writeTextFile(String path, String content) {
+        if (!_jsBridgeGateway.isPathInSandbox(path)) {
+            Log.w(TAG, "writeTextFile: path rejected by sandbox check");
+            return false;
+        }
         return _fileIoHelper.writeTextFile(path, content);
     }
 
     @JavascriptInterface
     public String readTextFile(String path) {
+        if (!_jsBridgeGateway.isPathInSandbox(path)) {
+            Log.w(TAG, "readTextFile: path rejected by sandbox check");
+            return null;
+        }
         return _fileIoHelper.readTextFile(path);
     }
 

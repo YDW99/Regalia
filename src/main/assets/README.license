@@ -1,3 +1,30 @@
+v1.2.1 (2026.7.13, sixth-pass refinement — round-6 review):
+  - chess.html: rebuilt from chess.src/ via build-chess.py (reflects
+    ai-bridge.js openStatsPage visualAnnotations payload field addition).
+  - stats.html: visual annotations section now reads
+    _payload.visualAnnotations as the PRIMARY data source (falling back to
+    PGN-text scan only if absent). NAG scanning from PGN text preserved.
+    Fixes user-reported bug where the visual annotations section was silently
+    hidden for all newly-played games.
+  - AGPLv3_Logo.svg / GPLv3_Logo.svg: no changes.
+
+v1.2.1 (2026.7.13, fifth-pass refinement — round-5 review):
+  - chess.html: rebuilt from chess.src/ via build-chess.py (no source changes —
+    chess.html byte-identical to round-4 build).
+  - stats.html: no changes.
+  - AGPLv3_Logo.svg / GPLv3_Logo.svg: no changes.
+
+v1.2.1 (2026.7.13, fourth-pass refinement — round-4 cleanup):
+  - chess.html: rebuilt from chess.src/ via build-chess.py. Reflects the
+    4 ui-*.js module deletions and the MessageBus stub removal in ai-bridge.js.
+  - stats.html: no changes.
+  - AGPLv3_Logo.svg / GPLv3_Logo.svg: no changes.
+
+v1.2.1 (2026.7.12):
+  - chess.html rebuilt from chess.src/ (v1.2.1 source-level changes).
+  - stats.html: no direct changes.
+  - See chess.src/README.license for source-level changes.
+
 This directory contains application assets loaded by the WebView.
 
 License classification by file:
@@ -1153,16 +1180,3 @@ v1.0.9 Phase 52 (2026.7.2):
     blue-vs-red).
   - stats.html: executeMove now clears castling rights on king/rook move +
     rook capture (robustness, was missing).
-
-v1.1.2 Phase 66-72 (2026.7.5-7.12):
-  - chess.html rebuilt multiple times (Phase 66-72 changes in chess.src/ files).
-  - stats.html: no direct changes (all Phase 66-72 changes are in chess.src/).
-  - See chess.src/README.license for source-level changes.
-
-v1.2.0 Phase 73-82+++++ rev 4 (2026.7.11-12):
-  - chess.html rebuilt multiple times (Phase 73-82+++++ changes in chess.src/ files).
-  - The God Module refactor (Phase 73-82) split StockfishNative.java into 13+ helper
-    classes and renderInternal() into 11 sub-functions. chess.html is the built output
-    of the 13 JS modules merged by build-chess.py.
-  - stats.html: CSP hash auto-updated by build-chess.py (no manual changes).
-  - See chess.src/README.license for source-level changes.

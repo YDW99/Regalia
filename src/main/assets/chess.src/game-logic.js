@@ -61,9 +61,7 @@ function secureRandomInt(max){
 
 function T(key){return _i18n[key]?.[_lang]||_i18n[key]?.zh||key;}
 function toggleLang(){_lang=(_lang==='zh')?'en':'zh';
-  // v1.2.0 Phase 82+++++ rev 5: Wire Store as debug observability layer.
-  try{if(typeof Store!=='undefined'&&Store&&typeof Store.dispatch==='function')Store.dispatch('SET_LANG',{lang:_lang});}catch(e){}
-try{localStorage.setItem('Regalia_lang',_lang);}catch(e){}try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.saveLangPref)AndroidBridge.saveLangPref(_lang);}catch(e){}try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_lang',_lang);}catch(e){}try{if(typeof HapticManager!=='undefined'&&HapticManager.fire)HapticManager.fire('TOGGLE_ON');}catch(e){}try{if(typeof playSound==='function')playSound('select');}catch(e){}render();}
+  try{if(typeof Store!=='undefined'&&Store&&typeof Store.dispatch==='function')Store.dispatch('SET_LANG',_lang);}catch(e){}try{localStorage.setItem('Regalia_lang',_lang);}catch(e){}try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.saveLangPref)AndroidBridge.saveLangPref(_lang);}catch(e){}try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_lang',_lang);}catch(e){}try{if(typeof HapticManager!=='undefined'&&HapticManager.fire)HapticManager.fire('TOGGLE_ON');}catch(e){}try{if(typeof playSound==='function')playSound('select');}catch(e){}render();}
 const _i18n={
 'app_name':{zh:'Regalia',en:'Regalia'},
 'new_game':{zh:'新游戏',en:'New Game'},
@@ -341,6 +339,8 @@ const _i18n={
 'pgn_cache_empty':{zh:'暂无缓存的PGN对局。点击下方"保存当前PGN到缓存"按钮以创建。',en:'No cached PGN games yet. Click "Save current PGN to cache" below to create one.'},
 'pgn_cache_name_prompt':{zh:'请输入缓存名称（如：经典对局1）：',en:'Enter cache name (e.g.: Classic Game 1):'},
 'pgn_cache_save_default':{zh:'我的对局',en:'My Game'},
+'pgn_cache_name_too_long':{zh:'名称过长（最多60字符）',en:'Name too long (max 60 chars)'},
+'pgn_cache_name_invalid':{zh:'名称包含非法字符（/ \\ : * ? \" < > |）',en:'Name contains invalid chars (/ \\ : * ? \" < > |)'},
 'pgn_cache_save_current':{zh:'保存当前PGN到缓存',en:'Save current PGN to cache'},
 'pgn_cache_import':{zh:'导入',en:'Import'},
 'pgn_cache_delete_sel':{zh:'删除选中',en:'Delete Selected'},
@@ -416,7 +416,7 @@ const _i18n={
 'elo_target':{zh:'Elo目标',en:'ELO Target'},
 'export_settings_btn':{zh:'📤 导出设置',en:'📤 Export'},
 'import_settings_btn':{zh:'📥 导入设置',en:'📥 Import'},
-'loading_title':{zh:'Regalia v1.1.2',en:'Regalia v1.1.2'},
+'loading_title':{zh:'Regalia v1.2.1',en:'Regalia v1.2.1'},
 'click_skip_loading':{zh:'点击跳过加载',en:'Click to skip loading'},
 'white_checkmate':{zh:'白方将杀获胜',en:'White wins by checkmate'},
 'black_checkmate':{zh:'黑方将杀获胜',en:'Black wins by checkmate'},
@@ -2730,9 +2730,7 @@ setTimeout(()=>{
 // P0 FIX: Validate state freshness — game may have changed during 0ms delay
 if(gameOver||reviewMode||setupMode||gameState.currentTurn===playerColor||!isAIThinking)return;
 // Level 7: probe tablebase for endgame positions (7 pieces or fewer) before Stockfish
-// v1.2.0 Phase 82+++++: Added typeof guard for pieceCountLE7 (defined in tablebase.js,
-// loaded after game-logic.js). All other cross-module calls use typeof guards.
-if(aiLevel===7&&typeof pieceCountLE7==='function'&&pieceCountLE7(gameState.board)){
+if(aiLevel===7&&pieceCountLE7(gameState.board)){
 _tbLoading=true;_aiBarInfo='⏳ '+T('tb_querying');_updateAIThinkDisplay();render();
 // Save board reference BEFORE async call to prevent race condition
 // (gameState may change while tablebase query is in-flight)
@@ -2758,12 +2756,6 @@ _requestStockfishMove();
 }).catch(function(){
 _tbLoading=false;
 _tbRetryCount++;
-// v1.2.0 Phase 82+++++ FIX: Reset _aiRetryCount here because a tablebase network
-// failure is NOT an AI timeout. Without this reset, 2 tablebase rejections would
-// increment _aiRetryCount to 3, triggering the false "ai_timeout" toast and
-// returning before Stockfish is ever consulted. The retry counter is meant to
-// guard against Stockfish engine hangs, not tablebase API outages.
-_aiRetryCount=0;
 if(_tbRetryCount<=2){
 isAIThinking=false;_aiBarInfo='';doAIMove();
 }else{

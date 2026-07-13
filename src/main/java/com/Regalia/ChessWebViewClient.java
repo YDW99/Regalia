@@ -24,7 +24,6 @@ package com.Regalia;
 import android.app.Activity;
 import android.content.Intent;
 import android.net.Uri;
-import android.os.Build;
 import android.util.Log;
 import android.webkit.RenderProcessGoneDetail;
 import android.webkit.WebResourceRequest;
@@ -44,7 +43,7 @@ import java.lang.ref.WeakReference;
  * URLs in the system default browser (defense-in-depth alongside the JS-side
  * openUrlInBrowser bridge). Previously, external links were silently blocked.
  *
- * Version: v1.2.0
+ * Version: v1.2.1
  */
 public class ChessWebViewClient extends WebViewClient {
     private static final String TAG = "Regalia";

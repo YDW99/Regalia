@@ -310,7 +310,11 @@ public class EngineSettingsHelper {
                 callbacks.setEngineLimitElo(Boolean.parseBoolean(value));
                 return 1;
             case "engine.elo":
-                callbacks.setEngineElo(Math.max(1, Math.min(3200, Integer.parseInt(value))));
+                // v1.2.1 (round-5 review): align with EngineConfigHelper's 500-3500 range
+                // (previously 1-3200 — inconsistent with the canonical setter, allowing
+                // out-of-range values to slip through import and later be silently
+                // re-clamped on the next setEngineLimitElo call).
+                callbacks.setEngineElo(Math.max(500, Math.min(3500, Integer.parseInt(value))));
                 return 1;
             case "engine.autoConfig":
                 callbacks.setAutoConfigEnabled(Boolean.parseBoolean(value));

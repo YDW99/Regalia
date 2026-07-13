@@ -1,107 +1,368 @@
+v1.2.1 (2026.7.13, sixth-pass refinement — round-6 review):
+  - Regalia-v1.2.1-manual-{zh,en}.html: Updated to reflect v1.2.1 round-6
+    stats page visual annotation bug fix. Added v1.2.1 sixth-pass changelog
+    entry at the top of Appendix A (newest-first ordering). Updated the
+    stats page visual annotations section to document the new
+    visualAnnotations payload field. No UI changes — diagrams unchanged.
+  - No new third-party content.
+
+v1.2.1 (2026.7.13, fifth-pass refinement — round-5 review):
+  - Regalia-v1.2.1-manual-{zh,en}.html: Updated to reflect v1.2.1 round-5
+    line-by-line audit. Added v1.2.1 fifth-pass changelog entry at the top of
+    Appendix A (newest-first ordering). No UI changes — diagrams unchanged.
+  - No new third-party content.
+
+v1.2.1 (2026.7.13, fourth-pass refinement — round-4 cleanup):
+  - Regalia-v1.2.1-manual-{zh,en}.html: Updated to reflect v1.2.1 round-4
+    dead-code purge (deleted 7 files: MessageBus / UciProtocolHandler /
+    EngineConfigManager / ui-audio / ui-board / ui-review / ui-toolbar;
+    slimmed EngineHealthMonitor and EngineProcessManager). Replaced the
+    third-pass changelog entry (which described the now-reverted unused-file
+    activation) with a fourth-pass entry. No UI changes — diagrams unchanged.
+
+v1.2.1 (2026.7.13, second-pass refinement):
+  - Regalia-v1.2.1-manual-{zh,en}.html: Updated to reflect v1.2.1 hardening +
+    bug-fix refinement pass. Added v1.2.1 second-pass changelog entry at the
+    top of Appendix A (newest-first ordering). Updated intro paragraph to
+    mention the v1.2.1 refinement focus: P0 TOCTOU discard-flag fix, P1
+    Chess960 re-apply symmetry, P1 eval-mode option leak, P1 sandbox path
+    hardening, P1 SAF persistable permission grant removal, P1 checkmate WDL
+    inversion, P1 CSS font-family entity fix, P2 HapticHelper system-setting
+    check, etc.
+  - Old version manuals (v1.0.4–v1.2.0) deleted; only v1.2.1 distributed.
+  - No new third-party content.
+
+v1.2.1 (2026.7.12, initial release):
+  - Regalia-v1.2.1-manual-{zh,en}.html: Initial v1.2.1 release. Added v1.2.1
+    changelog entry covering the comprehensive first-pass review fixes
+    (oppC/flip/cm scoping, JsBridgeGateway activation, SonarCloud 20 bugs,
+    Store immutability, layout fixes, Store dispatch wiring, proguard-rules
+    creation).
+  - No new third-party content.
+
 This directory contains the user-facing HTML manuals for the Regalia app
 (Chinese and English versions). Each manual is a self-contained HTML file
 with embedded CSS and JavaScript (no external resources).
 
 License classification by file:
-  - Regalia-v1.2.0-manual-zh.html: AGPL v3 (original Regalia work)
-      Chinese user manual for Regalia v1.2.0 (current).
+  - Regalia-v1.2.1-manual-zh.html: AGPL v3 (original Regalia work)
+      Chinese user manual for Regalia v1.2.1 (current).
       Copyright (C) 2026 Regalia.
-  - Regalia-v1.2.0-manual-en.html: AGPL v3 (original Regalia work)
-      English user manual for Regalia v1.2.0 (current).
+  - Regalia-v1.2.1-manual-en.html: AGPL v3 (original Regalia work)
+      English user manual for Regalia v1.2.1 (current).
       Copyright (C) 2026 Regalia.
 
 The manuals are AGPL v3 because they are original documentation created by
 the Regalia project, not derived from any third-party GPL work. The embedded
 diagrams, wireframes, and changelog text are all original.
 
-v1.2.0 Phase 82+++++ rev 8 (2026.7.12, same-version deep refactor):
-  - Regalia-v1.2.0-manual-{zh,en}.html: Added Phase 82+++++ rev 8 changelog
-    entry covering: MessageBus reflection fix (R8 renamed private field,
-    replaced with public setter), proguard-rules.pro created, onDestroy
-    cleanup, isPathInSandbox security hardening, _messageBus final.
-    All v1.2.0 planned tasks (73-80) verified complete.
+v1.1.1 (2026.7.5) Phase 59 changes:
+  - Regalia-v1.1.0-manual-{zh,en}.html → renamed to Regalia-v1.1.1-manual-{zh,en}.html.
+  - Regalia-v1.1.1-manual-{zh,en}.html: Phase 59 changelog entry at the top of
+    Appendix A (newest-first order). Phase 59 documents: (1) duplicate every-5-moves
+    PGN annotation fix — re-exporting an imported PGN no longer duplicates the
+    annotation (whitespace-tolerant regex dedup against mr.comment); (2) step-0
+    eval caching fix — onEngineEval now caches stale callbacks for the original
+    _reviewEvalRequestedStep (was discarded when user navigated before step 0's
+    eval completed), and _refreshEvalTrendChart() updates the chart DOM without
+    a full re-render; (3) initial-position annotation on first move — step 0's
+    eval annotation attached to first move's {} comment with [初始局面]/
+    [Initial position] prefix (deduped); (4) resignation/timeout comment i18n —
+    now follows app global language via T() (was hard-coded English); (5) "Analyze
+    All" batch rewrite — batch session decoupled from reviewStep (_reviewAnalyzeStep
+    + _reviewAnalyzeGen + _evalRequestBatchGen), user navigation during batch no
+    longer invalidates in-flight callbacks, batch runs in background. Version
+    bumped to versionCode=111, versionName="1.1.1".
+
+v1.1.0 (2026.7.5) Phase 58 changes:
+  - Regalia-v1.1.0-manual-{zh,en}.html: Phase 58 changelog entry. Phase 58
+    documents: (1) every-5-moves PGN {} eval annotation — at moves 5, 10, 15,
+    20, ..., the PGN {} comment now includes a human-readable eval-bar-mirroring
+    fragment, auto-localized via T() reading the global _lang variable. Format:
+    "均势 (-0.10) D22 SD34 (1%W/96%D/3%L)" (Chinese) /
+    "Equal (-0.10) D22 SD34 (1%W/96%D/3%L)" (English). White-perspective.
+    (2) stopLatch TOCTOU race fix in StockfishNative.java — bestmove handler
+    now atomically captures-and-clears _stopLatch under _stopLatchLock;
+    timeout path only arms discard flag if it still owns the latch. (3) Heartbeat
+    deadlock fix in StockfishNative.java — dedicated _writerLock decoupled from
+    `this` monitor so shutdown's join is not blocked by heartbeat's writer I/O.
+
+v1.1.0 (2026.7.5) Phase 57+ changes:
+  - Regalia-v1.1.0-manual-{zh,en}.html: Current version. Phase 57+ changelog
+    entry at the top of Appendix A (newest-first order). Phase 57+ documents
+    code-review-driven preventive hardening: (1) pgn-standard.js single-line
+    PGN tag-stripping regex fix (preventive — parser not on main code path),
+    (2) chess960.js isChess960CastlingLegal king-position lookup uses s.wk/s.bk
+    cache (with board-scan fallback), (3) ai-bridge.js WDL percentage display
+    divide-by-zero guard, (4) StockfishNative.java postJsCallback activity-
+    lifecycle guard (isFinishing/isDestroyed check before evaluateJavascript —
+    prevents HyperOS 3 IllegalStateException crash during engine-init retries),
+    (5) EngineService.java wake-lock bounded 30-minute timeout (prevents
+    indefinite CPU wake if OEM silently kills service), (6) res/README.license
+    LIC-2 stale version reference (v1.0.8 → v1.1.0). Also adds pure-English
+    UBIQUITOUS_LANGUAGE.md at the project root — 80+ domain terminology
+    reference for developer/domain-expert conversations.
+
+v1.1.0 (2026.7.4) changes:
+  - Regalia-v1.1.0-manual-{zh,en}.html: Phase 57 changelog entry. Phase 57
+    documents:
+    (1) portrait review mode move-list scroll positioning fix — the Phase 56
+    manual-scrollTop calculation used offsetTop (which is relative to
+    .review-overlay, the offsetParent, NOT relative to .review-moves); in
+    portrait this included the board's full height (256-320px), causing the
+    active move to be clamped to scrollHeight-clientHeight (scrolled to
+    bottom) and not centered. Replaced with getBoundingClientRect-based
+    calculation that computes the active move's position relative to
+    .review-moves, regardless of orientation/layout/offsetParent chain.
+    (2) visual-annotation cache residue fix — _computeInitialPositionAnnotations
+    now reads reviewStates[0].state (the actual initial position) instead of
+    gameState (the LIVE mid-game state); enterReview now clears the '_initial'
+    cache key at entry to prevent stale annotations from a previous review
+    session persisting at step 0. Chess960-compatible (reviewStates[0].state
+    carries the Chess960 starting position with spid).
+  - Phase 56 (previous): landscape review nav-button scroll-to-top fix,
+    PGN timeout annotation ([Termination "Time forfeit"] + {<color> wins by
+    timeout}), first-move timing sync (_turnStartTime + gameClocks reset in
+    _resetGameUIState), UCI command ordering refinement for Chess960 +
+    TimeControl.
+  - Phase 53 (older): green-arrow check-response, red-arrow discovered-
+    check fix, king-position staleness fix, FEN-import/exitSetup state-
+    pollution fix, portrait/landscape review layout unification, stats
+    visual-annotation cutoff, king-control-arrow legality filter, nav-button
+    center-align.
+
+v1.0.9 (2026.7.2) and earlier:
+  - Old version manuals (v1.0.4–v1.0.9) have been deleted; only the current
+    v1.1.0 manual is distributed. The v1.1.0 manual's Appendix A contains
+    the complete historical changelog (Phase 52 and earlier) for reference.
+
+v1.1.2 Phase 72 (2026.7.12, same-version revision):
+  - Version remains versionCode=112, versionName="1.1.2".
+  - Regalia-v1.1.2-manual-{zh,en}.html (AGPL v3, UPDATED): added Phase 72 entry
+    to the changelog (newest-first ordering). Updated intro paragraph to mention
+    Phase 72's "false completion" bug fix.
   - No new manual files; no new third-party content introduced.
 
-v1.2.0 Phase 82+++++ rev 7 (2026.7.12, same-version deep refactor):
-  - Regalia-v1.2.0-manual-{zh,en}.html: Added Phase 82+++++ rev 7 changelog
-    entry covering: MessageBus + Store wiring (Task 75 design intent).
-    MessageBus registered as @JavascriptInterface, 4 JS→Java handlers,
-    2 Java→JS events, JS-side _messageBusJs receiver with Store dispatch.
+v1.1.2 Phase 71 (2026.7.11, same-version revision):
+  - Version remains versionCode=112, versionName="1.1.2".
+  - Regalia-v1.1.2-manual-{zh,en}.html (AGPL v3, UPDATED): added Phase 71 entry
+    to the changelog (newest-first ordering). Updated intro paragraph to mention
+    Phase 71's stats-page move-selection bug fix + first-principles code review.
   - No new manual files; no new third-party content introduced.
 
-v1.2.0 Phase 82+++++ rev 6 (2026.7.12, same-version deep refactor):
-  - Regalia-v1.2.0-manual-{zh,en}.html: Added Phase 82+++++ rev 6 changelog
-    entry covering: visual annotation placeholder offset fix, complete visual
-    annotation lifecycle verification.
+v1.1.2 Phase 70 (2026.7.10, same-version revision):
+  - Version remains versionCode=112, versionName="1.1.2".
+  - Regalia-v1.1.2-manual-{zh,en}.html (AGPL v3, UPDATED): added Phase 70 entry
+    to the changelog (newest-first ordering).
   - No new manual files; no new third-party content introduced.
 
-v1.2.0 Phase 82+++++ rev 5 (2026.7.12, same-version deep refactor):
-  - Regalia-v1.2.0-manual-{zh,en}.html: Added Phase 82+++++ rev 5 changelog
-    entry covering: dead module wiring (Store as debug observability layer),
-    Web Worker verification, cache cleanup verification (all 5 entry points).
+v1.1.2 Phase 69 (2026.7.9, same-version revision):
+  - Version remains versionCode=112, versionName="1.1.2".
+  - Regalia-v1.1.2-manual-{zh,en}.html (AGPL v3, UPDATED): added Phase 69 entry
+    to the changelog (newest-first ordering). Updated intro paragraph to mention
+    Phase 69's 4 bug fixes + Web Worker robustness + UCI optimization.
   - No new manual files; no new third-party content introduced.
 
-v1.2.0 Phase 82+++++ rev 4 (2026.7.12, same-version deep refactor):
-  - Regalia-v1.2.0-manual-{zh,en}.html: Added Phase 82+++++ rev 4 changelog
-    entry covering: portrait review-top fix, documentation fixes.
+v1.1.2 Phase 68 (2026.7.8, same-version revision):
+  - Version remains versionCode=112, versionName="1.1.2".
+  - Regalia-v1.1.2-manual-zh.html (AGPL v3, UPDATED): added Phase 68 entry to
+    the changelog (newest-first ordering). Updated wireframe descriptions for
+    the stats nav buttons (now uniform full-width). Updated the Analyze All
+    section to describe the long-press priority feature and the incremental
+    UI update optimization.
+  - Regalia-v1.1.2-manual-en.html (AGPL v3, UPDATED): same as above, English.
   - No new manual files; no new third-party content introduced.
 
-v1.2.0 Phase 82+++++ rev 3 (2026.7.12, same-version deep refactor):
-  - Regalia-v1.2.0-manual-{zh,en}.html: Added Phase 82+++++ rev 3 changelog
-    entry covering: layout fix verified against v1.1.2 source + APK rebuild.
-  - No new manual files; no new third-party content introduced.
+v1.1.2 Phase 67 (2026.7.7):
+  - Version bumped to versionCode=112, versionName="1.1.2".
+  - Regalia-v1.1.2-manual-zh.html (AGPL v3, NEW): renamed from
+    Regalia-v1.1.1-manual-zh.html; updated header comment, <title>, cover
+    version div, intro paragraph (prepended v1.1.2 Phase 67 description),
+    footer version, and added Phase 67 entry at top of changelog (newest-
+    first ordering per project convention). The v1.1.1 historical section
+    is demoted from "(current)" to a regular historical entry.
+  - Regalia-v1.1.2-manual-en.html (AGPL v3, NEW): same as above, English.
+  - Regalia-v1.1.1-manual-{zh,en}.html (AGPL v3): retained for historical
+    reference; the v1.1.2 manuals are the current versions.
+  - No new third-party content introduced.
 
-v1.2.0 Phase 82+++++ rev 2 (2026.7.12, same-version deep refactor):
-  - Regalia-v1.2.0-manual-{zh,en}.html: Added Phase 82+++++ rev 2 changelog
-    entry covering: main interface layout regression fix + 3 bug fixes
-    (tablebase false timeout, WDL inversion, typeof guard).
-  - No new manual files; no new third-party content introduced.
+v1.1.1 Phase 66 (2026.7.5, same-version revision):
+  - Version remains versionCode=111, versionName="1.1.1".
+  - src/main/assets/chess.src/ui.js: Bug fix — _savePGNYes now polls
+    _pgnExportDialogActive before executing pending new-game action (was
+    using fixed 200ms setTimeout, could fire while annotation dialog open);
+    removed 2 stale console.log calls (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.src/ai-bridge.js: openStatsPage now explicitly
+    passes includeAnnotations=true to _buildPGNString (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.html: rebuilt from chess.src/.
+  - No new third-party code introduced.
 
-v1.2.0 Phase 82+++++ (2026.7.12, same-version deep refactor):
-  - Regalia-v1.2.0-manual-{zh,en}.html: Added Phase 82+++++ changelog
-    entry covering: WebView cache fix, README.md directory tree fix.
-  - No new manual files; no new third-party content introduced.
+v1.1.1 Phase 65 (2026.7.5, same-version revision):
+  - Version remains versionCode=111, versionName="1.1.1".
+  - src/main/assets/chess.src/ai-bridge.js: _showPGNExportAnnotationDialog
+    now supports Android back-button (via _pgnExportDialogActive/
+    _pgnExportDialogDismiss globals) and explicit haptic feedback on all
+    buttons (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.src/ui.js: _resetGameUIState now clears
+    _preReviewSnapshot, setupHistory/setupRedoStack, and 7 dialog visibility
+    flags (showNewGameDialog/showAboutPage/showImportDialog/showEngineConfig/
+    showPGNCacheManager/showSavePGNPrompt/showResignConfirm/
+    _pendingActionAfterSave); handleBackPress checks _pgnExportDialogActive
+    first (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.html: rebuilt from chess.src/.
+  - No new third-party code introduced.
 
-v1.2.0 Phase 82++++ (2026.7.12):
-  - Regalia-v1.2.0-manual-{zh,en}.html: Added v1.2.0 Phase 82++++ changelog
-    entry covering: renderInternal final extraction (3 blocks →
-    _computeRenderState/_renderGameOverOverlay/_applyRenderResult,
-    renderInternal 359→70 lines, cumulative 1,365→70 −95%).
-  - No new manual files; no new third-party content introduced.
+v1.1.1 Phase 64 (2026.7.5, same-version revision):
+  - Version remains versionCode=111, versionName="1.1.1".
+  - TRUE ROOT CAUSE FIX: reviewStates (from previous game's review session)
+    was not cleared in _resetGameUIState(), causing _computeAndCacheVisualAnnotations
+    to use stale board states from the old game at the same move index —
+    producing annotations identical to the old game at that step.
+    Fix: _resetGameUIState now clears reviewStates/reviewMode/reviewStep/
+    reviewBaseState; _computeAndCacheVisualAnnotations gates reviewStates
+    shortcut on reviewMode===true (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.src/game-logic.js: updated export dialog i18n text
+    (💾 emoji, "特殊注释"/"special annotations" terminology) (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.html: rebuilt from chess.src/.
+  - No new third-party code introduced.
+
+v1.1.1 Phase 63 (2026.7.5, same-version revision):
+  - Version remains versionCode=111, versionName="1.1.1".
+  - Full-chain audit of all [%csl]/[%cal] visual annotation code paths
+    confirmed Phase 62 fix is correct.
+  - src/main/assets/chess.src/ai-bridge.js: _buildPGNString now accepts
+    includeAnnotations parameter (default true); when false, all annotation-
+    type tags ([%eval], every-5-moves desc, [%csl]/[%cal]) are omitted;
+    new _showPGNExportAnnotationDialog function; copyMoveHistory and
+    exportPGNToFile now show the dialog before exporting (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.src/ui.js: _pgnCacheSaveCurrent now shows the
+    annotation dialog; extracted _pgnCacheSaveCurrentImpl (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.src/game-logic.js: new i18n keys for export dialog
+    (pgn_export_include_annotations_title/msg/yes/no) (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.html: rebuilt from chess.src/.
+  - No new third-party code introduced.
+
+v1.1.1 Phase 62 (2026.7.5, same-version revision):
+  - Version remains versionCode=111, versionName="1.1.1".
+  - src/main/assets/chess.src/ui.js: _visualAnnotationsCache entries now
+    include imported boolean flag; _computeAndCacheVisualAnnotations and
+    _computeInitialPositionAnnotations set imported=false (auto-generated
+    UI display aids) (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.src/ai-bridge.js: _buildPGNString only exports
+    imported=true entries (human-authored annotations from PGN import);
+    auto-generated annotations no longer pollute PGN (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.src/tablebase.js: importPGN sets imported=true
+    on extracted [%csl]/[%cal] annotation cache entries (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.html: rebuilt from chess.src/.
+  - No new third-party code introduced.
+
+v1.1.1 Phase 61 (2026.7.5, same-version revision):
+  - Version remains versionCode=111, versionName="1.1.1".
+  - src/main/assets/chess.src/ui.js: _resetGameUIState() now centrally clears
+    ALL game-related caches (_reviewEvalCache, _ecoRecCache, _pvCache,
+    _pendingEngineSANs/_pendingEnginePVs, _multiPV*, reviewCritical,
+    _sfEval/_sfDepth/etc, _cachedOriginalPGN, playerWhite/playerBlack,
+    _setupFEN, _importedStartMoveNum, _needNewGameForEngine, _tbLoading,
+    _tbRetryCount); _exitSetupImpl/_startGameImpl redundant manual clears
+    removed; _pgnCacheSaveCurrent pure-import detection (saves original PGN
+    text for pure imports) (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.src/ai-bridge.js: _preMoveComment computation for
+    initial-position eval annotation as separate pre-move {} comment;
+    removed i===0 initial annotation block; pass preMoveComment to
+    composePGN (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.src/pgn-standard.js: composePGN preMoveComment
+    support — inserts {} comment before first move (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.src/tablebase.js: _applyImportedFEN + importPGN
+    reordered — _resetGameUIState first, then set entry-point-specific
+    values (_setupFEN, _importedStartMoveNum, playerWhite/playerBlack)
+    AFTER reset so they survive (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.html: rebuilt from chess.src/.
+  - No new third-party code introduced.
+
+v1.1.1 Phase 60 (2026.7.5, same-version revision):
+  - Version remains versionCode=111, versionName="1.1.1".
+  - src/main/java/com/Regalia/StockfishNative.java: writer-close paths
+    (cleanupEngineResources/shutdown/cleanupFailedEngine) now use _writerLock
+    (consistent with Phase 58 heartbeat path); sendUciCommand writer access
+    also wrapped in _writerLock (GPL v3, DroidFish-derived).
+  - src/main/java/com/Regalia/ChessWebViewClient.java: onRenderProcessGone
+    adds crash-count backoff (max 3 recreates per 60s window) (AGPL v3, original).
+  - src/main/assets/chess.src/ui.js: Integer_bitcount adds n>>>0 unsigned
+    coercion; render-error title uses T('render_error_title') i18n
+    (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.src/pgn-standard.js: normalizeTagValue regex adds
+    \t tab filtering (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.src/game-logic.js: new i18n key render_error_title
+    (GPL v3, DroidFish-derived).
+  - src/main/assets/stats.html: new navigation buttons (⏮ ◀ ▶ ⏭) below the
+    stats board with mainline/variation context-aware behavior; new i18n keys
+    nav_first/nav_prev/nav_next/nav_last/nav_main_line/nav_variation;
+    _exportStaticHTML removes nav buttons from FEN-only export (GPL v3,
+    DroidFish-derived).
+  - src/main/assets/chess.html: rebuilt from chess.src/.
+  - No new third-party code introduced.
+
+v1.1.1 Phase 59 (2026.7.5):
+  - Version bumped to versionCode=111, versionName="1.1.1".
+  - src/main/assets/chess.src/ai-bridge.js: _commentHasText helper, every-5-moves
+    PGN annotation dedup, initial-position annotation on first move, i18n
+    resign/timeout comments, batch analyze-all session state
+    (_reviewAnalyzeStep/_reviewAnalyzeGen/_evalRequestBatchGen), _requestBatchEval()
+    function, onEngineEval batch-gen-first + stale-callback-caching,
+    requestEngineEval user-nav-only (blocks during batch) (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.src/ui.js: _refreshEvalTrendChart() lightweight chart
+    DOM refresh, reviewAnalyzeAll/_reviewAnalyzeAdvance use _reviewAnalyzeStep
+    (decoupled from reviewStep), exitReview clears batch state
+    (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.src/game-logic.js: new i18n keys (pgn_resign_white,
+    pgn_resign_black, pgn_timeout_white_wins, pgn_timeout_black_wins,
+    pgn_initial_position); loading_title bumped to v1.1.1
+    (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.src/index.html.tpl: <title> bumped to v1.1.1
+    (GPL v3, DroidFish-derived).
+  - src/main/assets/chess.html: rebuilt from chess.src/.
+  - src/main/res/values/strings.xml: app_name = "Regalia v1.1.1" (AGPL v3, original).
+  - src/main/java/com/Regalia/MainActivity.java: VERSION = "v1.1.1" (AGPL v3, original).
+  - src/main/java/com/Regalia/StockfishNative.java: ENGINE_VERSION = "v1.1.1"
+    (GPL v3, DroidFish-derived).
+  - src/main/java/com/Regalia/ChessApp.java: init log "v1.1.1" (AGPL v3, original).
+  - src/main/java/com/Regalia/ChessWebViewClient.java: version comment "v1.1.1"
+    (AGPL v3, original).
+  - No new third-party code introduced.
+
+
 
 v1.2.0 Phase 82+++ (2026.7.12):
-  - Regalia-v1.2.0-manual-{zh,en}.html: Added v1.2.0 Phase 82+++ changelog
-    entry covering: renderInternal AI/player/info bars extraction (3 blocks →
-    _renderAIBar/_renderPlayerBar/_renderInfoBars, renderInternal
-    476→359 lines, cumulative 1,365→359 −74%).
-  - No new manual files; no new third-party content introduced.
+  - Regalia-v1.2.0-manual-zh.html: Added v1.2.0 Phase 82+++ changelog entry
+      covering: renderInternal AI/player/info bars extraction (3 blocks →
+      _renderAIBar/_renderPlayerBar/_renderInfoBars, renderInternal
+      476→359 lines, cumulative 1,365→359 −74%).
+  - Regalia-v1.2.0-manual-en.html: English version, same changelog entry as Chinese.
 
 v1.2.0 Phase 82++ (2026.7.12):
-  - Regalia-v1.2.0-manual-{zh,en}.html: Added v1.2.0 Phase 82++ changelog
-    entry covering: renderInternal main-board extraction (4 blocks →
-    _renderHeader/_renderBoardGrid/_renderSetupPanel/_renderSidePanel,
-    renderInternal 619→476 lines, cumulative 1,365→476 −65%).
-  - No new manual files; no new third-party content introduced.
+  - Regalia-v1.2.0-manual-zh.html: Added v1.2.0 Phase 82++ changelog entry
+      covering: renderInternal main-board extraction (4 blocks → _renderHeader/
+      _renderBoardGrid/_renderSetupPanel/_renderSidePanel, renderInternal
+      619→476 lines, cumulative 1,365→476 −65%).
+  - Regalia-v1.2.0-manual-en.html: English version, same changelog entry as Chinese.
 
 v1.2.0 Phase 82+ (2026.7.12):
-  - Regalia-v1.2.0-manual-{zh,en}.html: Added v1.2.0 Phase 82+ changelog
-    entry covering: renderInternal review mode extraction (615 lines →
-    _renderReviewMode(h), renderInternal 1,224→619 lines).
-  - No new manual files; no new third-party content introduced.
+  - Regalia-v1.2.0-manual-zh.html: Added v1.2.0 Phase 82+ changelog entry
+      covering: renderInternal review mode extraction (615 lines →
+      _renderReviewMode(h), renderInternal 1,224→619 lines).
+  - Regalia-v1.2.0-manual-en.html: English version, same changelog entry as Chinese.
 
 v1.2.0 Phase 81-83 (2026.7.11):
-  - Regalia-v1.2.0-manual-{zh,en}.html: Added v1.2.0 Phase 81-83 changelog
-    entry covering: EngineConfigHelper extraction (StockfishNative
-    4,492→4,245 lines), renderInternal dialog extraction (1,365→1,224 lines),
-    review board display fix (Phase 77 flex-layout regression).
-  - No new manual files; no new third-party content introduced.
+  - Regalia-v1.2.0-manual-zh.html: Added v1.2.0 Phase 81-83 changelog entry
+      covering: EngineConfigHelper extraction (StockfishNative 4,492→4,245 lines),
+      renderInternal dialog extraction (1,365→1,224 lines), review board display
+      fix (Phase 77 flex-layout regression).
+  - Regalia-v1.2.0-manual-en.html: English version, same changelog entry as Chinese.
 
 v1.2.0 Phase 78 (2026.7.11):
-  - Regalia-v1.2.0-manual-{zh,en}.html (renamed from v1.1.2):
+  - Regalia-v1.2.0-manual-zh.html (renamed from v1.1.2):
       Version references updated to v1.2.0. Added v1.2.0 changelog section
       covering: God Module split (6 Java classes + 4 JS modules), MessageBus,
       state-store.js, SonarCloud bug fixes, review board coordinate labels.
-  - Old version manuals (v1.0.4–v1.1.2) have been deleted; only the current
-    v1.2.0 manual is distributed. The v1.2.0 manual's Appendix A contains
-    the complete historical changelog for reference.
-  - No new third-party content introduced.
+  - Regalia-v1.2.0-manual-en.html (renamed from v1.1.2):
+      English version, same updates as Chinese version.

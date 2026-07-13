@@ -79,6 +79,8 @@ package com.Regalia;
 import android.content.Context;
 import android.util.Log;
 
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 
@@ -156,17 +158,50 @@ public final class TlsSecurityHelper {
 
     /**
      * Validate a certificate's pin matches one of the configured pins.
-     * Utility method — currently unused (pinning is via XML), but provides
-     * a code-level reference for MobSF and a hook for programmatic validation.
+     *
+     * v1.2.1: Now implements ACTUAL SPKI SHA-256 pin validation per RFC 7469.
+     * The SubjectPublicKeyInfo (SPKI) is extracted from the certificate via
+     * {@link java.security.cert.X509Certificate#getPublicKey()}**.getEncoded(),
+     * hashed with SHA-256, Base64-encoded, and compared against the three
+     * configured pins (PIN_LE_E7, PIN_ISRG_X1, PIN_ISRG_X2). A mismatch
+     * throws CertificateException.
+     *
+     * This method is a programmatic fallback to the platform's
+     * network_security_config.xml <pin-set> enforcement. The XML pin-set
+     * remains the primary enforcement mechanism for the tablebase API
+     * endpoint; this method provides a hook for programmatic validation
+     * (e.g., if future code uses OkHttp or a custom TrustManager).
      *
      * @param cert The X.509 certificate to validate
-     * @throws CertificateException if the pin does not match
+     * @throws CertificateException if the pin does not match any configured pin
      */
     public static void validatePin(X509Certificate cert) throws CertificateException {
         if (cert == null) throw new CertificateException("Null certificate");
-        // Actual pin validation is delegated to the platform via
-        // network_security_config.xml <pin-set>. This method exists for
-        // code-level documentation and MobSF pattern matching.
-        Log.i(TAG, "Certificate pin validation delegated to network_security_config.xml");
+        if (cert.getPublicKey() == null) {
+            throw new CertificateException("Certificate has null public key");
+        }
+        byte[] spki = cert.getPublicKey().getEncoded();
+        if (spki == null || spki.length == 0) {
+            throw new CertificateException("Cannot extract SubjectPublicKeyInfo from certificate");
+        }
+        String pin;
+        try {
+            MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
+            byte[] hash = sha256.digest(spki);
+            pin = android.util.Base64.encodeToString(hash, android.util.Base64.NO_WRAP);
+        } catch (NoSuchAlgorithmException e) {
+            throw new CertificateException("SHA-256 algorithm unavailable: " + e.getMessage());
+        }
+        // Compare against configured pins (constant-time-ish: compare all, then decide)
+        boolean matchesLE = pin.equals(PIN_LE_E7);
+        boolean matchesX1 = pin.equals(PIN_ISRG_X1);
+        boolean matchesX2 = pin.equals(PIN_ISRG_X2);
+        if (!matchesLE && !matchesX1 && !matchesX2) {
+            throw new CertificateException(
+                "Certificate pin mismatch: computed=" + pin
+                + ", expected one of [LE-E7, ISRG-X1, ISRG-X2]");
+        }
+        Log.i(TAG, "Certificate pin validated: " + pin
+            + " (matched: " + (matchesLE ? "LE-E7" : matchesX1 ? "ISRG-X1" : "ISRG-X2") + ")");
     }
 }

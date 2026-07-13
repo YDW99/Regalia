@@ -1460,17 +1460,7 @@ function importPGN(pgnText){
           break;
         }
       }
-      if(divergeIdx<0){
-        // All variation moves checked without divergence
-        if(matchCount>=sanMoves.length){
-          // All matched — redundant, remove
-          continue;
-        }else{
-          // Some moves weren't checked (shouldn't happen, but defensive)
-          // Remove the variation — it's incomplete
-          continue;
-        }
-      }
+      if(divergeIdx<0) continue;
       if(divergeIdx>=0&&divergeIdx<moveRecords.length){
         // Move the variation to the divergence-point move
         const remainingSAN=sanMoves.slice(matchCount).join(' ');

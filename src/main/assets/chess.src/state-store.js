@@ -125,6 +125,8 @@ const Store = (function() {
      */
     function _deepClone(obj) {
         if (obj === null || typeof obj !== 'object') return obj;
+        if (obj instanceof Date) return new Date(obj.getTime());
+        if (obj instanceof RegExp) return new RegExp(obj);
         if (Array.isArray(obj)) return obj.map(_deepClone);
         const cloned = {};
         for (const key in obj) {
@@ -147,6 +149,7 @@ const Store = (function() {
         if (typeof reducer !== 'function') {
             throw new Error('reducer must be a function');
         }
+        if (_reducers[actionType] && typeof console !== 'undefined' && console.warn) console.warn('[Store] Reducer overwrite:', actionType);
         _reducers[actionType] = reducer;
     }
 
@@ -159,15 +162,16 @@ const Store = (function() {
     function dispatch(action, payload) {
         const reducer = _reducers[action];
         if (!reducer) {
-            // 未知 action — 静默忽略，便于扩展
-            return _state;
+            if (typeof console !== 'undefined' && console.warn) console.warn('[Store] No reducer for action:', action);
+            return _deepClone(_state);
         }
         const partial = reducer(_state, payload);
         if (partial && typeof partial === 'object') {
             _state = Object.assign({}, _state, partial);
             _notifyListeners();
         }
-        return _state;
+        // v1.2.1: Return deep clone (P0-2)
+        return _deepClone(_state);
     }
 
     /**
@@ -175,7 +179,8 @@ const Store = (function() {
      * @returns {Object} 状态对象
      */
     function getState() {
-        return _state;
+        // v1.2.1: Return deep clone to prevent external mutation (P0-1)
+        return _deepClone(_state);
     }
 
     /**
@@ -199,9 +204,10 @@ const Store = (function() {
      */
     function _notifyListeners() {
         const snapshot = _state;
-        for (let i = 0; i < _listeners.length; i++) {
+        const listeners = _listeners.slice();
+        for (let i = 0; i < listeners.length; i++) {
             try {
-                _listeners[i](snapshot);
+                listeners[i](snapshot);
             } catch (e) {
                 // 单个监听器异常不影响其他监听器
                 console.error('[Store] listener error:', e);
@@ -360,50 +366,4 @@ const Store = (function() {
 // 导出到全局（用于非模块化合并）
 if (typeof window !== 'undefined') {
     window.Store = Store;
-
-    // v1.2.0 Phase 82+++++ rev 7: JS-side MessageBus event receiver.
-    // When Java emits an event via MessageBus.emit(event, payload), it calls
-    // window._messageBusJs._onEvent(event, payload) via evaluateJavascript.
-    // We use _messageBusJs (not MessageBus) because the Java @JavascriptInterface
-    // is registered as "MessageBus" — using the same name would cause the Java
-    // proxy object to shadow this JS object, making _onEvent unavailable.
-    // Standard event types (per v1.2.0 Development Plan Task 75):
-    //   ENGINE_EVAL, ENGINE_BESTMOVE, ENGINE_READY, ENGINE_ERROR, PGN_CACHE_LIST
-    // The actual engine callbacks (onEngineEval, onBestMove, etc.) are still
-    // called via the existing postJsCallback mechanism — this is a parallel
-    // channel for future migration and debugging.
-    window._messageBusJs = {
-        _listeners: {},
-        _onEvent: function(event, payload) {
-            // Dispatch to Store for observability
-            try {
-                if (event === 'ENGINE_READY') Store.dispatch('ENGINE_READY');
-                else if (event === 'ENGINE_ERROR') Store.dispatch('ENGINE_NOT_READY');
-                else if (event === 'ENGINE_BESTMOVE') Store.dispatch('AI_THINKING_END');
-                else if (event === 'ENGINE_EVAL') {
-                    if (payload && typeof payload === 'object') {
-                        Store.dispatch('UPDATE_EVAL', payload);
-                    }
-                }
-            } catch(e) {}
-            // Notify registered listeners
-            var arr = this._listeners[event];
-            if (arr) {
-                for (var i = 0; i < arr.length; i++) {
-                    try { arr[i](payload); } catch(e) {}
-                }
-            }
-        },
-        on: function(event, listener) {
-            if (!this._listeners[event]) this._listeners[event] = [];
-            this._listeners[event].push(listener);
-        },
-        off: function(event, listener) {
-            var arr = this._listeners[event];
-            if (arr) {
-                var idx = arr.indexOf(listener);
-                if (idx >= 0) arr.splice(idx, 1);
-            }
-        }
-    };
 }
