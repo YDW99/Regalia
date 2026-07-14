@@ -707,10 +707,6 @@ The signed APK (v1+v2+v3 signed with `../debug.keystore`) will be at
   `ui.js` reference them.
 - The Stockfish 18 `arm64-v8a-dotprod` binary is the official sf_18 release.
 
----
-*AI-GEN*
-
-
 ## v1.2.1 build notes (defect fix release)
 - **v1.2.1 (2026.7.12): Defect fix release based on comprehensive review reports.**
   - **Critical**: oppC/flip/cm/infoSq/infoCtrl scoping bug fixed via _computeRenderState()
@@ -1376,3 +1372,7 @@ The 2 `catch(_e){}` blocks (worker terminate/revoke at lines 320-321) are preser
 - ✅ All empty `catch(e){}` blocks in chess.src/*.js — fixed in round-12 (146 sites)
 - ✅ All empty `catch(e){}` blocks in stats.html — fixed in round-15 (6 sites)
 - ✅ `catch(_){}` / `catch(_e){}` convention preserved (intentionally-unused idiom)
+
+---
+
+*AI-GEN*
