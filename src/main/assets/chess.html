@@ -31,7 +31,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; worker-src blob:; connect-src https://tablebase.lichess.ovh; img-src data: file: blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'none'; object-src 'none'">
-<title>Regalia v1.2.1</title>
+<title>Regalia v1.2.2</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 /* v1.0.8 PHASE 22: Light/Dark theme system following Material Design
@@ -1580,6 +1580,14 @@ const _i18n={
 'analyzing_all':{zh:'正在分析所有步骤...',en:'Analyzing all steps...'},
 'analysis_done':{zh:'分析完成! 共',en:'Analysis complete! Total'},
 'analyzing_progress':{zh:'正在分析...',en:'Analyzing...'},
+// v1.2.1 round-16: Clarify that 📊 in review mode opens the stats page
+//   automatically once the background batch analysis completes. Without this
+//   hint, users see only "正在分析..." and may not realize they need to wait
+//   (and that the stats page will open on its own).
+'stats_will_open_after_analysis':{zh:'分析完成后将进入统计页面',en:'Statistics will open after analysis completes'},
+// v1.2.1 round-16: Proper i18n for the 10-min safety-timeout toast in
+//   openStatsPage() — previously mixed zh + en ("正在分析... timed out").
+'analysis_timed_out_retry':{zh:'分析超时，请重试',en:'Analysis timed out, please retry'},
 // v1.1.2 Phase 68 (Issue 30 P2): Long-press-to-prioritize during analyze-all
 'priority_eval_toast':{zh:'已优先分析此走法，批量分析将在该步完成后继续',en:'Prioritizing this move. Batch resumes after this step completes.'},
 'priority_eval_already_cached':{zh:'此走法已分析完成',en:'This move is already analyzed.'},
@@ -1729,7 +1737,7 @@ const _i18n={
 'elo_target':{zh:'Elo目标',en:'ELO Target'},
 'export_settings_btn':{zh:'📤 导出设置',en:'📤 Export'},
 'import_settings_btn':{zh:'📥 导入设置',en:'📥 Import'},
-'loading_title':{zh:'Regalia v1.2.1',en:'Regalia v1.2.1'},
+'loading_title':{zh:'Regalia v1.2.2',en:'Regalia v1.2.2'},
 'click_skip_loading':{zh:'点击跳过加载',en:'Click to skip loading'},
 'white_checkmate':{zh:'白方将杀获胜',en:'White wins by checkmate'},
 'black_checkmate':{zh:'黑方将杀获胜',en:'Black wins by checkmate'},
@@ -4308,7 +4316,7 @@ _ecoRecCache.set(ck,result);
 return result;
 }
 
-let _ecoComposing=false;let _ecoSearchFocused=false;let _ecoBlurTimer=0;let ecoSearchTimer=0;let ecoDisplayList=[];let ecoShowCount=30;function setEcoQuery(v){window.ecoSearchQuery=v;ecoShowCount=30;if(ecoSearchTimer)clearTimeout(ecoSearchTimer);if(_ecoComposing){ecoSearchTimer=setTimeout(_ecoUpdateResults,300)}else{ecoSearchTimer=setTimeout(_ecoUpdateResults,80)}}function _ecoUpdateResults(){_ensureEcoParsed();if(!showNewGameDialog)return;const listEl=document.querySelector('.op-list');if(!listEl)return;const el=document.getElementById('ecoSearch');if(el)window.ecoSearchQuery=el.value;const q=(window.ecoSearchQuery||'').trim().toUpperCase();let results=q?searchEco(q):ECO_OPENINGS;const ff=window.ecoFamilyFilter;if(ff)results=results.filter(o=>o.family===ff);ecoDisplayList=results.slice(0,ecoShowCount);let oh='<button class="op-btn'+(!dlgOpeningId?' act':'')+'" onclick="dlgOpeningId=null;window.ecoSearchQuery=\'\';window.ecoFamilyFilter=\'\';ecoShowCount=30;_ecoUpdateResults()"><div class="on">'+T('free_opening')+'</div><div class="os">'+T('from_start')+'</div></button>';for(const o of ecoDisplayList){const isOpen=o.moves&&o.moves.length>=4;oh+=`<button class="op-btn${dlgOpeningId===o.id+'|'+o.name?' act':''}" onclick="dlgOpeningId='${_escJs(o.id)}|${_escJs(o.name)}';ecoShowCount=30;_ecoUpdateResults()"><div class="on">${_esc(o.id)} ${_esc(o.name)}</div>${isOpen?'<div class="os">'+_esc(o.family)+'</div>':''}</button>`}listEl.innerHTML=oh;_ecoRestoreFocus()}function _ecoRestoreFocus(){if(!_ecoSearchFocused)return;const ae=document.activeElement;if(ae&&(ae.tagName==='BUTTON'||ae.tagName==='SELECT'||ae.tagName==='OPTION'))return;const el=document.getElementById('ecoSearch');if(el&&document.activeElement!==el){el.focus();try{const len=el.value.length;el.setSelectionRange(len,len)}catch(e){}}}function _ecoDoSearch(){if(ecoSearchTimer)clearTimeout(ecoSearchTimer);const el=document.getElementById('ecoSearch');if(el){window.ecoSearchQuery=el.value;_ecoComposing=false;if(_ecoBlurTimer){clearTimeout(_ecoBlurTimer);_ecoBlurTimer=0}}_ecoSearchFocused=true;_ecoUpdateResults()}
+let _ecoComposing=false;let _ecoSearchFocused=false;let _ecoBlurTimer=0;let ecoSearchTimer=0;let ecoDisplayList=[];let ecoShowCount=30;function setEcoQuery(v){window.ecoSearchQuery=v;ecoShowCount=30;if(ecoSearchTimer)clearTimeout(ecoSearchTimer);if(_ecoComposing){ecoSearchTimer=setTimeout(_ecoUpdateResults,300)}else{ecoSearchTimer=setTimeout(_ecoUpdateResults,80)}}function _ecoUpdateResults(){_ensureEcoParsed();if(!showNewGameDialog)return;const listEl=document.querySelector('.op-list');if(!listEl)return;const el=document.getElementById('ecoSearch');if(el)window.ecoSearchQuery=el.value;const q=(window.ecoSearchQuery||'').trim().toUpperCase();let results=q?searchEco(q):ECO_OPENINGS;const ff=window.ecoFamilyFilter;if(ff)results=results.filter(o=>o.family===ff);ecoDisplayList=results.slice(0,ecoShowCount);let oh='<button class="op-btn'+(!dlgOpeningId?' act':'')+'" onclick="dlgOpeningId=null;window.ecoSearchQuery=\'\';window.ecoFamilyFilter=\'\';ecoShowCount=30;_ecoUpdateResults()"><div class="on">'+T('free_opening')+'</div><div class="os">'+T('from_start')+'</div></button>';for(const o of ecoDisplayList){const isOpen=o.moves&&o.moves.length>=4;oh+=`<button class="op-btn${dlgOpeningId===o.id+'|'+o.name?' act':''}" onclick="dlgOpeningId='${_escJs(o.id)}|${_escJs(o.name)}';ecoShowCount=30;_ecoUpdateResults()"><div class="on">${_esc(o.id)} ${_esc(o.name)}</div>${isOpen?'<div class="os">'+_esc(o.family)+'</div>':''}</button>`}listEl.innerHTML=oh;_ecoRestoreFocus()}function _ecoRestoreFocus(){if(!_ecoSearchFocused)return;const ae=document.activeElement;if(ae&&(ae.tagName==='BUTTON'||ae.tagName==='SELECT'||ae.tagName==='OPTION'))return;const el=document.getElementById('ecoSearch');if(el&&document.activeElement!==el){el.focus();try{const len=el.value.length;el.setSelectionRange(len,len)}catch(e){/* v1.2.1 round-16: setSelectionRange may fail on hidden/disabled inputs — non-critical, user can still type. */console.warn('[ECO] setSelectionRange failed:',e&&e.message?e.message:e);}}}function _ecoDoSearch(){if(ecoSearchTimer)clearTimeout(ecoSearchTimer);const el=document.getElementById('ecoSearch');if(el){window.ecoSearchQuery=el.value;_ecoComposing=false;if(_ecoBlurTimer){clearTimeout(_ecoBlurTimer);_ecoBlurTimer=0}}_ecoSearchFocused=true;_ecoUpdateResults()}
 
 
 function posEmoji(ev){if(ev>600)return'🏆';if(ev>350)return'😄';if(ev>150)return'😊';if(ev>50)return'🙂';if(ev>-50)return'😐';if(ev>-150)return'😟';if(ev>-350)return'😰';if(ev>-600)return'😱';return'💀'}
@@ -8372,7 +8380,9 @@ function openStatsPage(){
           try{
             const _cached=_reviewEvalCache.size;
             const _total=_lastStep+1;
-            showToast(T('analyzing_progress')+' ('+_cached+'/'+_total+')');
+            // v1.2.1 round-16: include the 'stats will open after analysis'
+            //   hint so the user knows to wait instead of clicking 📊 again.
+            showToast(T('analyzing_progress')+' ('+_cached+'/'+_total+') \u2014 '+T('stats_will_open_after_analysis'));
           }catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
           return;
         }
@@ -8392,7 +8402,9 @@ function openStatsPage(){
           if(window._pendingOpenStats){
             window._pendingOpenStats=false;
             console.warn('openStatsPage: pending-stats safety timeout fired (10min) — batch did not complete');
-            try{showToast(T('analyzing_progress')+' timed out');}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+            // v1.2.1 round-16: proper i18n (was previously mixed zh+en
+            //   "T('analyzing_progress') + ' timed out'").
+            try{showToast(T('analysis_timed_out_retry'));}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
           }
           window._pendingOpenStatsTimer=null;
         },600000); // 10 minutes
@@ -8404,7 +8416,8 @@ function openStatsPage(){
       //   our _pendingOpenStats flag and open stats automatically.
       if(typeof _reviewAnalyzeAllActive!=='undefined'&&_reviewAnalyzeAllActive){
         try{
-          showToast(T('analyzing_progress')+' ('+_reviewEvalCache.size+'/'+(_lastStep+1)+')');
+          // v1.2.1 round-16: include the 'stats will open after analysis' hint.
+          showToast(T('analyzing_progress')+' ('+_reviewEvalCache.size+'/'+(_lastStep+1)+') \u2014 '+T('stats_will_open_after_analysis'));
         }catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
         return; // existing batch will trigger openStatsPage on completion
       }
@@ -8413,7 +8426,10 @@ function openStatsPage(){
       // module also uses, so the batch will populate the cache correctly.
       try{
         if(typeof reviewAnalyzeAll==='function'){
-          showToast(T('analyzing_all')+' ('+_reviewEvalCache.size+'/'+(_lastStep+1)+')');
+          // v1.2.1 round-16: include the 'stats will open after analysis' hint
+          //   so the user knows the stats page will appear automatically once
+          //   the batch finishes — no further action required on their part.
+          showToast(T('analyzing_all')+' ('+_reviewEvalCache.size+'/'+(_lastStep+1)+') \u2014 '+T('stats_will_open_after_analysis'));
           try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
           reviewAnalyzeAll();
           return; // stats will open when batch completes
@@ -13192,8 +13208,16 @@ function onPGNFileRead(content){
 }
 
 // Parse FEN string into game state (for import in setup mode)
+// v1.2.2 (audit YELLOW-1): Added length limit to prevent DoS via pathologically
+//   long FEN strings. Standard FEN is ≤87 chars; 200 allows Chess960 Shredder
+//   notation + en passant + extended fields with comfortable margin. The audit
+//   also suggested a character whitelist regex, but that was rejected because
+//   it would break Chess960 (file letters a-h in castling rights) and en
+//   passant target squares — the per-character validation below already
+//   rejects invalid piece characters, which is the correct whitelist approach.
 function fenToState(fen){
 if(!fen||typeof fen!=='string')return null;
+if(fen.length>200)return null;
 const parts=fen.trim().split(/\s+/);
 if(parts.length<2)return null;
 const rows=parts[0].split('/');
@@ -14004,7 +14028,7 @@ function _updateEvalDisplayIncremental() {
       if (app) {
         app.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:var(--bg);color:var(--text);padding:20px;text-align:center;font-family:system-ui,sans-serif">' +
           '<div style="font-size:3rem;margin-bottom:16px">♔</div>' +
-          '<h2 style="color:var(--accent2);margin-bottom:12px">'+T('app_name')+' v1.2.1</h2>' +
+          '<h2 style="color:var(--accent2);margin-bottom:12px">'+T('app_name')+' v1.2.2</h2>' +
           '<p style="color:#a08050;margin-bottom:20px;max-width:300px">'+T('render_error')+'</p>' +
           '<button onclick="location.reload()" style="padding:12px 24px;background:var(--btn-a-bg);color:var(--bg);border:none;border-radius:6px;font-size:1rem;font-weight:700;cursor:pointer">'+T('refresh_page')+'</button>' +
           '</div>';
@@ -14160,7 +14184,14 @@ class ChessAudioEngine {
     }
   }
 
-  /** Generate reverb impulse response. */
+  /**
+   * Generate reverb impulse response buffer.
+   * SECURITY-AUDIT (v1.2.1 round-16): Math.random() is intentionally used
+   *   for audio noise synthesis (reverb impulse response). This is NOT a
+   *   security-sensitive use case — uniform distribution is the only
+   *   requirement, and crypto.getRandomValues() would add ~100x overhead
+   *   with no security benefit for audio effects.
+   */
   _createImpulse(duration, decay) {
     const sr = this.ctx.sampleRate;
     const len = Math.floor(sr * duration);
@@ -14174,7 +14205,14 @@ class ChessAudioEngine {
     return buf;
   }
 
-  /** White-noise buffer (cached & reused). */
+  /**
+   * White-noise buffer (cached & reused).
+   * SECURITY-AUDIT (v1.2.1 round-16): Math.random() is intentionally used
+   *   for white-noise synthesis. Audio synthesis does not require
+   *   cryptographically secure randomness — uniform distribution is the
+   *   only requirement. Using crypto.getRandomValues() here would add
+   *   unnecessary CPU overhead on every buffer fill.
+   */
   _getNoise() {
     if (this._noiseBuf) return this._noiseBuf;
     const sr = this.ctx.sampleRate;
@@ -15792,7 +15830,12 @@ function _renderChess960Settings(h){
   h+=`<button class="btn" style="padding:4px 10px;font-size:.78rem;${curSPID===-1?'background:var(--accent);color:var(--bg);font-weight:700':''}" onclick="HapticManager.fire('BUTTON_PRESS');dlgChess960SPID=-1;render()">${T('chess960_random')}</button>`;
   h+=`<div style="display:flex;gap:6px;align-items:center;flex:1;min-width:120px">`;
   h+=`<input type="number" min="0" max="959" value="${curSPID>=0?curSPID:''}" placeholder="0-959" style="flex:1;width:80px;min-width:0;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;text-align:center" oninput="const v=parseInt(this.value,10);if(!isNaN(v)&&v>=0&&v<960){dlgChess960SPID=v;render();}else if(this.value===''){dlgChess960SPID=-1;render();}">`;
-  h+=`<button class="btn" style="padding:4px 10px;font-size:.78rem;flex-shrink:0" onclick="HapticManager.fire('BUTTON_PRESS');dlgChess960SPID=(typeof secureRandomInt==='function'?secureRandomInt(960):Math.floor(Math.random()*960));render();">🎲</button>`;
+  // v1.2.1 round-16: secureRandomInt is exported by game-logic.js (loaded
+  //   before ui.js), so the typeof guard is unreachable defensive code.
+  //   Simplified to direct call (removes Math.random() that triggered
+  //   security-scanner flags; secureRandomInt uses crypto.getRandomValues
+  //   with safe failure to 0, never returns undefined).
+  h+=`<button class="btn" style="padding:4px 10px;font-size:.78rem;flex-shrink:0" onclick="HapticManager.fire('BUTTON_PRESS');dlgChess960SPID=secureRandomInt(960);render();">🎲</button>`;
   h+=`</div>`;
   h+=`</div>`;
   const _wPieceStyle="color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:'DejaVu Sans','Noto Sans','Segoe UI Symbol',sans-serif;font-variant-emoji:text;font-weight:400";
@@ -15840,7 +15883,7 @@ return h;
 function _renderAboutDialog(h){
 let _gplSvgSrc='';
 try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.loadAssetAsBase64){const b64=AndroidBridge.loadAssetAsBase64('AGPLv3_Logo.svg');if(b64)_gplSvgSrc='data:image/svg+xml;base64,'+b64;}}catch(e){console.warn('[About] AGPL SVG load failed:',e.message);_gplSvgSrc='';}
-h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="About"><div class="dlg" style="max-width:460px"><h2>${T('about_title')}</h2><div class="dlg-sec"><div class="crow"><span class="lb">${T('about_app')}</span><span class="vl">${T("app_name")} v1.2.1</span></div><div class="crow"><span class="lb">${T('about_engine')}</span><span class="vl">Stockfish 18 (arm64-v8a-dotprod)</span></div><div class="crow"><span class="lb">${T('about_platform')}</span><span class="vl">Android arm64-v8a</span></div></div><div class="dlg-sec"><h3>${T('copyright_license')}</h3>`+(_gplSvgSrc?`<div style="text-align:center;margin-bottom:10px"><img src="${_gplSvgSrc}" alt="AGPL v3 Logo" style="width:120px;height:auto;opacity:.9" /></div>`:'')+`<div style="font-size:.75rem;color:var(--text);line-height:1.6"><p style="margin-bottom:8px">${T('about_copyright')}</p><p style="margin-bottom:8px">${T('about_source_code_prefix')}<a href="${T('about_source_code_url')}" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">${T('about_source_code_url')}</a></p><p style="margin-bottom:8px">${T('about_agpl')} <a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GNU AGPL v3</a>${T('about_agpl_desc')}</p><p style="margin-bottom:8px">${T('about_droidfish')}<a href="https://github.com/peterosterlund2/droidfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">DroidFish</a>${T('about_droidfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a>${T('about_droidfish_tail')}</p><p style="margin-bottom:8px">${T('about_stockfish')}<a href="https://github.com/official-stockfish/Stockfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">Stockfish</a>${T('about_stockfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a> ${T('about_gplv3')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_disclaimer')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_ai')}</p></div></div><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="showAboutPage=false;render()" style="flex:1;justify-content:center">${T('close')}</button></div></div></div>`;
+h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="About"><div class="dlg" style="max-width:460px"><h2>${T('about_title')}</h2><div class="dlg-sec"><div class="crow"><span class="lb">${T('about_app')}</span><span class="vl">${T("app_name")} v1.2.2</span></div><div class="crow"><span class="lb">${T('about_engine')}</span><span class="vl">Stockfish 18 (arm64-v8a-dotprod)</span></div><div class="crow"><span class="lb">${T('about_platform')}</span><span class="vl">Android arm64-v8a</span></div></div><div class="dlg-sec"><h3>${T('copyright_license')}</h3>`+(_gplSvgSrc?`<div style="text-align:center;margin-bottom:10px"><img src="${_gplSvgSrc}" alt="AGPL v3 Logo" style="width:120px;height:auto;opacity:.9" /></div>`:'')+`<div style="font-size:.75rem;color:var(--text);line-height:1.6"><p style="margin-bottom:8px">${T('about_copyright')}</p><p style="margin-bottom:8px">${T('about_source_code_prefix')}<a href="${T('about_source_code_url')}" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">${T('about_source_code_url')}</a></p><p style="margin-bottom:8px">${T('about_agpl')} <a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GNU AGPL v3</a>${T('about_agpl_desc')}</p><p style="margin-bottom:8px">${T('about_droidfish')}<a href="https://github.com/peterosterlund2/droidfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">DroidFish</a>${T('about_droidfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a>${T('about_droidfish_tail')}</p><p style="margin-bottom:8px">${T('about_stockfish')}<a href="https://github.com/official-stockfish/Stockfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">Stockfish</a>${T('about_stockfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a> ${T('about_gplv3')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_disclaimer')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_ai')}</p></div></div><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="showAboutPage=false;render()" style="flex:1;justify-content:center">${T('close')}</button></div></div></div>`;
 return h;
 }
 
@@ -16793,7 +16836,7 @@ let _hdrProgressStr='';if(_evalLoading&&_sfDepth>0){let _hpp=[];if(_lastProgress
 // v1.2.1: Defensive checks, _applyGameOver, and cm/infoSq/infoCtrl/oppC/flip computation
 // moved to _computeRenderState() to fix critical scoping bug.
 
-let h='<div class="hdr" role="banner"><div class="hdr-top"><div class="hdr-l">'+_hdrKingIconHTML()+'<h1>'+T('app_name')+'<span class="ver">v1.2.1</span><button onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showAboutPage=true;render()" class="hdr-btn" style="margin-left:4px;cursor:pointer">ℹ️</button></h1></div><button onclick="toggleLang()" class="hdr-btn-lg" style="cursor:pointer">'+(_lang==='zh'?'↔️中':'↔️EN')+'</button><div class="ev" id="eval-disp" role="status" aria-label="'+T('evaluating')+'">'+(setupMode?T('setup_label'):(isAIThinking?'<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>':'<span class="ev-e">'+pe+'</span><span>'+pd+'</span><span style="color:var(--muted)">('+scoreStr+')</span>'+_hdrDepthStr+_hdrProgressStr))+'</div></div><div class="hdr-tools" role="toolbar" aria-label="'+T('ctrl_range')+'">'+(setupMode?'':'<div class="diff-sel" role="radiogroup" aria-label="AI">'+getAI_LEVELS().map(l=>'<button class="diff-b'+(getEffectiveAILevel()===l.id?' act':'')+'" onclick="if(!isAIThinking){'+(l.id===8?'openEngineConfig()':('aiLevel='+l.id+';try{AndroidBridge.syncGameDifficulty('+l.id+')}catch(e){}render()'))+'}" title="'+l.desc+'" role="radio" aria-checked="'+(getEffectiveAILevel()===l.id)+'">'+(l.id===8?'⚙️':l.id===7?('SL'+(function(){try{let _sl=20;if(typeof engineSettingsData!=='undefined'&&engineSettingsData&&engineSettingsData.skillLevel!=null)_sl=engineSettingsData.skillLevel;else if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getEngineSkillLevel)_sl=AndroidBridge.getEngineSkillLevel();return _sl;}catch(e){return 20;}})()):l.id)+'</button>').join('')+'</div>')+'<button type="button" class="btn" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()" aria-label="'+T('new_game')+'"><span style="font-size:1.4rem">⚔️</span> '+T('new_game')+'</button>'+'<button class="btn" onclick="quickFreeOpening()" aria-label="'+T('free_opening')+'">'+(playerColor==='white'?'<span style=\"font-size:1.4rem;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text\">♔&#xFE0E;</span>':'<span style=\"font-size:1.4rem;font-weight:400;color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans Symbol&#x27;,sans-serif;font-variant-emoji:text\">♚&#xFE0E;</span>')+' '+T('free_opening')+'</button>'+(setupMode?'':'<button class="btn" onclick="toggleSound()" id="btnSound" aria-label="'+T('sound')+'">'+(soundOn?'<span style="font-size:1.4rem">🔊</span> '+T('sound'):'<span style="font-size:1.4rem">🔇</span> '+T('sound'))+'</button>')+'<button class="btn" onclick="copyFEN()" title="'+T('copy_fen')+'" aria-label="'+T('copy_fen')+'"><span style="font-size:1.4rem">📝</span> FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="'+T('import_fen')+'" aria-label="'+T('import_fen')+'"><span style="font-size:1.4rem">🗃️</span> '+T('import_label')+'</button><button class="btn" onclick="'+(setupMode?'exitSetup()':'toggleSetup()')+'" aria-label="'+(setupMode?T('setup_done'):T('setup_mode'))+'">'+(setupMode?'<span style="font-size:1.4rem">✓</span> '+T('setup_done'):'<span style="font-size:1.4rem">🏗️</span> '+T('setup_mode'))+'</button></div></div>';
+let h='<div class="hdr" role="banner"><div class="hdr-top"><div class="hdr-l">'+_hdrKingIconHTML()+'<h1>'+T('app_name')+'<span class="ver">v1.2.2</span><button onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showAboutPage=true;render()" class="hdr-btn" style="margin-left:4px;cursor:pointer">ℹ️</button></h1></div><button onclick="toggleLang()" class="hdr-btn-lg" style="cursor:pointer">'+(_lang==='zh'?'↔️中':'↔️EN')+'</button><div class="ev" id="eval-disp" role="status" aria-label="'+T('evaluating')+'">'+(setupMode?T('setup_label'):(isAIThinking?'<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>':'<span class="ev-e">'+pe+'</span><span>'+pd+'</span><span style="color:var(--muted)">('+scoreStr+')</span>'+_hdrDepthStr+_hdrProgressStr))+'</div></div><div class="hdr-tools" role="toolbar" aria-label="'+T('ctrl_range')+'">'+(setupMode?'':'<div class="diff-sel" role="radiogroup" aria-label="AI">'+getAI_LEVELS().map(l=>'<button class="diff-b'+(getEffectiveAILevel()===l.id?' act':'')+'" onclick="if(!isAIThinking){'+(l.id===8?'openEngineConfig()':('aiLevel='+l.id+';try{AndroidBridge.syncGameDifficulty('+l.id+')}catch(e){console.warn("[AI] syncGameDifficulty failed:",e&&e.message?e.message:e)}render()'))+'}" title="'+l.desc+'" role="radio" aria-checked="'+(getEffectiveAILevel()===l.id)+'">'+(l.id===8?'⚙️':l.id===7?('SL'+(function(){try{let _sl=20;if(typeof engineSettingsData!=='undefined'&&engineSettingsData&&engineSettingsData.skillLevel!=null)_sl=engineSettingsData.skillLevel;else if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getEngineSkillLevel)_sl=AndroidBridge.getEngineSkillLevel();return _sl;}catch(e){return 20;}})()):l.id)+'</button>').join('')+'</div>')+'<button type="button" class="btn" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()" aria-label="'+T('new_game')+'"><span style="font-size:1.4rem">⚔️</span> '+T('new_game')+'</button>'+'<button class="btn" onclick="quickFreeOpening()" aria-label="'+T('free_opening')+'">'+(playerColor==='white'?'<span style=\"font-size:1.4rem;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text\">♔&#xFE0E;</span>':'<span style=\"font-size:1.4rem;font-weight:400;color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans Symbol&#x27;,sans-serif;font-variant-emoji:text\">♚&#xFE0E;</span>')+' '+T('free_opening')+'</button>'+(setupMode?'':'<button class="btn" onclick="toggleSound()" id="btnSound" aria-label="'+T('sound')+'">'+(soundOn?'<span style="font-size:1.4rem">🔊</span> '+T('sound'):'<span style="font-size:1.4rem">🔇</span> '+T('sound'))+'</button>')+'<button class="btn" onclick="copyFEN()" title="'+T('copy_fen')+'" aria-label="'+T('copy_fen')+'"><span style="font-size:1.4rem">📝</span> FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="'+T('import_fen')+'" aria-label="'+T('import_fen')+'"><span style="font-size:1.4rem">🗃️</span> '+T('import_label')+'</button><button class="btn" onclick="'+(setupMode?'exitSetup()':'toggleSetup()')+'" aria-label="'+(setupMode?T('setup_done'):T('setup_mode'))+'">'+(setupMode?'<span style="font-size:1.4rem">✓</span> '+T('setup_done'):'<span style="font-size:1.4rem">🏗️</span> '+T('setup_mode'))+'</button></div></div>';
 return h;
 } // end _renderHeader
 

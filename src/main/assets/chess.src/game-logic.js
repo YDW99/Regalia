@@ -271,6 +271,14 @@ const _i18n={
 'analyzing_all':{zh:'正在分析所有步骤...',en:'Analyzing all steps...'},
 'analysis_done':{zh:'分析完成! 共',en:'Analysis complete! Total'},
 'analyzing_progress':{zh:'正在分析...',en:'Analyzing...'},
+// v1.2.1 round-16: Clarify that 📊 in review mode opens the stats page
+//   automatically once the background batch analysis completes. Without this
+//   hint, users see only "正在分析..." and may not realize they need to wait
+//   (and that the stats page will open on its own).
+'stats_will_open_after_analysis':{zh:'分析完成后将进入统计页面',en:'Statistics will open after analysis completes'},
+// v1.2.1 round-16: Proper i18n for the 10-min safety-timeout toast in
+//   openStatsPage() — previously mixed zh + en ("正在分析... timed out").
+'analysis_timed_out_retry':{zh:'分析超时，请重试',en:'Analysis timed out, please retry'},
 // v1.1.2 Phase 68 (Issue 30 P2): Long-press-to-prioritize during analyze-all
 'priority_eval_toast':{zh:'已优先分析此走法，批量分析将在该步完成后继续',en:'Prioritizing this move. Batch resumes after this step completes.'},
 'priority_eval_already_cached':{zh:'此走法已分析完成',en:'This move is already analyzed.'},
@@ -420,7 +428,7 @@ const _i18n={
 'elo_target':{zh:'Elo目标',en:'ELO Target'},
 'export_settings_btn':{zh:'📤 导出设置',en:'📤 Export'},
 'import_settings_btn':{zh:'📥 导入设置',en:'📥 Import'},
-'loading_title':{zh:'Regalia v1.2.1',en:'Regalia v1.2.1'},
+'loading_title':{zh:'Regalia v1.2.2',en:'Regalia v1.2.2'},
 'click_skip_loading':{zh:'点击跳过加载',en:'Click to skip loading'},
 'white_checkmate':{zh:'白方将杀获胜',en:'White wins by checkmate'},
 'black_checkmate':{zh:'黑方将杀获胜',en:'Black wins by checkmate'},
@@ -2999,7 +3007,7 @@ _ecoRecCache.set(ck,result);
 return result;
 }
 
-let _ecoComposing=false;let _ecoSearchFocused=false;let _ecoBlurTimer=0;let ecoSearchTimer=0;let ecoDisplayList=[];let ecoShowCount=30;function setEcoQuery(v){window.ecoSearchQuery=v;ecoShowCount=30;if(ecoSearchTimer)clearTimeout(ecoSearchTimer);if(_ecoComposing){ecoSearchTimer=setTimeout(_ecoUpdateResults,300)}else{ecoSearchTimer=setTimeout(_ecoUpdateResults,80)}}function _ecoUpdateResults(){_ensureEcoParsed();if(!showNewGameDialog)return;const listEl=document.querySelector('.op-list');if(!listEl)return;const el=document.getElementById('ecoSearch');if(el)window.ecoSearchQuery=el.value;const q=(window.ecoSearchQuery||'').trim().toUpperCase();let results=q?searchEco(q):ECO_OPENINGS;const ff=window.ecoFamilyFilter;if(ff)results=results.filter(o=>o.family===ff);ecoDisplayList=results.slice(0,ecoShowCount);let oh='<button class="op-btn'+(!dlgOpeningId?' act':'')+'" onclick="dlgOpeningId=null;window.ecoSearchQuery=\'\';window.ecoFamilyFilter=\'\';ecoShowCount=30;_ecoUpdateResults()"><div class="on">'+T('free_opening')+'</div><div class="os">'+T('from_start')+'</div></button>';for(const o of ecoDisplayList){const isOpen=o.moves&&o.moves.length>=4;oh+=`<button class="op-btn${dlgOpeningId===o.id+'|'+o.name?' act':''}" onclick="dlgOpeningId='${_escJs(o.id)}|${_escJs(o.name)}';ecoShowCount=30;_ecoUpdateResults()"><div class="on">${_esc(o.id)} ${_esc(o.name)}</div>${isOpen?'<div class="os">'+_esc(o.family)+'</div>':''}</button>`}listEl.innerHTML=oh;_ecoRestoreFocus()}function _ecoRestoreFocus(){if(!_ecoSearchFocused)return;const ae=document.activeElement;if(ae&&(ae.tagName==='BUTTON'||ae.tagName==='SELECT'||ae.tagName==='OPTION'))return;const el=document.getElementById('ecoSearch');if(el&&document.activeElement!==el){el.focus();try{const len=el.value.length;el.setSelectionRange(len,len)}catch(e){}}}function _ecoDoSearch(){if(ecoSearchTimer)clearTimeout(ecoSearchTimer);const el=document.getElementById('ecoSearch');if(el){window.ecoSearchQuery=el.value;_ecoComposing=false;if(_ecoBlurTimer){clearTimeout(_ecoBlurTimer);_ecoBlurTimer=0}}_ecoSearchFocused=true;_ecoUpdateResults()}
+let _ecoComposing=false;let _ecoSearchFocused=false;let _ecoBlurTimer=0;let ecoSearchTimer=0;let ecoDisplayList=[];let ecoShowCount=30;function setEcoQuery(v){window.ecoSearchQuery=v;ecoShowCount=30;if(ecoSearchTimer)clearTimeout(ecoSearchTimer);if(_ecoComposing){ecoSearchTimer=setTimeout(_ecoUpdateResults,300)}else{ecoSearchTimer=setTimeout(_ecoUpdateResults,80)}}function _ecoUpdateResults(){_ensureEcoParsed();if(!showNewGameDialog)return;const listEl=document.querySelector('.op-list');if(!listEl)return;const el=document.getElementById('ecoSearch');if(el)window.ecoSearchQuery=el.value;const q=(window.ecoSearchQuery||'').trim().toUpperCase();let results=q?searchEco(q):ECO_OPENINGS;const ff=window.ecoFamilyFilter;if(ff)results=results.filter(o=>o.family===ff);ecoDisplayList=results.slice(0,ecoShowCount);let oh='<button class="op-btn'+(!dlgOpeningId?' act':'')+'" onclick="dlgOpeningId=null;window.ecoSearchQuery=\'\';window.ecoFamilyFilter=\'\';ecoShowCount=30;_ecoUpdateResults()"><div class="on">'+T('free_opening')+'</div><div class="os">'+T('from_start')+'</div></button>';for(const o of ecoDisplayList){const isOpen=o.moves&&o.moves.length>=4;oh+=`<button class="op-btn${dlgOpeningId===o.id+'|'+o.name?' act':''}" onclick="dlgOpeningId='${_escJs(o.id)}|${_escJs(o.name)}';ecoShowCount=30;_ecoUpdateResults()"><div class="on">${_esc(o.id)} ${_esc(o.name)}</div>${isOpen?'<div class="os">'+_esc(o.family)+'</div>':''}</button>`}listEl.innerHTML=oh;_ecoRestoreFocus()}function _ecoRestoreFocus(){if(!_ecoSearchFocused)return;const ae=document.activeElement;if(ae&&(ae.tagName==='BUTTON'||ae.tagName==='SELECT'||ae.tagName==='OPTION'))return;const el=document.getElementById('ecoSearch');if(el&&document.activeElement!==el){el.focus();try{const len=el.value.length;el.setSelectionRange(len,len)}catch(e){/* v1.2.1 round-16: setSelectionRange may fail on hidden/disabled inputs — non-critical, user can still type. */console.warn('[ECO] setSelectionRange failed:',e&&e.message?e.message:e);}}}function _ecoDoSearch(){if(ecoSearchTimer)clearTimeout(ecoSearchTimer);const el=document.getElementById('ecoSearch');if(el){window.ecoSearchQuery=el.value;_ecoComposing=false;if(_ecoBlurTimer){clearTimeout(_ecoBlurTimer);_ecoBlurTimer=0}}_ecoSearchFocused=true;_ecoUpdateResults()}
 
 
 function posEmoji(ev){if(ev>600)return'🏆';if(ev>350)return'😄';if(ev>150)return'😊';if(ev>50)return'🙂';if(ev>-50)return'😐';if(ev>-150)return'😟';if(ev>-350)return'😰';if(ev>-600)return'😱';return'💀'}

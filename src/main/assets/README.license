@@ -1,3 +1,28 @@
+v1.2.2 (2026.7.14) — Comprehensive audit-report non-false-positive fix + version bump:
+  - Version: versionCode=122, versionName="1.2.2" (version bump from v1.2.1).
+  - chess.html rebuilt from the updated JS modules (see
+    chess.src/README.license for details). 21,988 lines, 1,321,170 bytes.
+  - stats.html: unchanged in this pass (v1.2.1 round-16 content preserved).
+  - Other assets (screenshot, SVG logos): unchanged.
+  - License classification: all files in this directory retain their
+    existing classification.
+
+v1.2.1 round-16 (2026.7.14) — User-reported UX clarity + audit-report non-false-positive defect fixes:
+  - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
+    refinement).
+  - chess.html rebuilt from the updated chess.src/ JS modules (see
+    chess.src/README.license for details). 21,980 lines, 1,321,589 bytes.
+  - stats.html (AGPL v3): visual_annotations_desc text reordered to
+    eliminate ambiguity. The Chinese description for green arrows
+    (应将路径) was "王避将或吃将军棋子" — the new wording is "吃将军棋子
+    或王避将" so that "吃将军棋子" is no longer misread as having "王"
+    as its subject (i.e., the king captures the checker). The English
+    description is similarly reordered from "king escape or capture the
+    checker" to "capture the checker or king escape". This is a
+    documentation-only change; no code semantics affected.
+  - Other assets (screenshot, SVG logos): unchanged.
+  - License classification: all files in this directory retain their
+    existing classification.
 v1.2.1 round-15 (2026.7.14) — Final perfection: S3776 _renderReviewMode partial extraction + stats.html S108 + comprehensive PDF-guided audit:
   - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
     refinement).

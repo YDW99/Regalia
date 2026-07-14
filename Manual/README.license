@@ -1,3 +1,28 @@
+v1.2.2 (2026.7.14) — Comprehensive audit-report non-false-positive fix + version bump:
+  - Version: versionCode=122, versionName="1.2.2" (version bump from v1.2.1).
+  - Regalia-v1.2.1-manual-zh.html and Regalia-v1.2.1-manual-en.html:
+    DELETED (old version manuals removed per recovery guide §4.2).
+  - Regalia-v1.2.2-manual-zh.html and Regalia-v1.2.2-manual-en.html:
+    CREATED (new version manuals). Updated cover version (v1.2.1→v1.2.2),
+    title, footer, and added v1.2.2 changelog entry at top (new-to-old
+    order). The entry summarizes the comprehensive audit-report
+    non-false-positive findings (7 false positives excluded, 1 real fix:
+    YELLOW-1 FEN length limit) and the version bump (versionCode 121→122,
+    versionName "1.2.1"→"1.2.2", 11 version-number locations updated).
+  - License classification: AGPL v3 (original documentation).
+
+v1.2.1 round-16 (2026.7.14) — User-reported UX clarity + audit-report non-false-positive defect fixes:
+  - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
+    refinement).
+  - Regalia-v1.2.1-manual-zh.html and Regalia-v1.2.1-manual-en.html:
+    updated with the round-16 changelog entry (置顶 / on top). The entry
+    summarizes the 📊 Toast clarity fix (openStatsPage now tells the user
+    the stats page will open automatically after analysis completes),
+    the stats.html visual_annotations_desc wording fix (吃将军棋子或王避将
+    to eliminate ambiguity), and the audit-report non-false-positive
+    defect fixes (empty catch blocks + Math.random audit + Chess960 SPID
+    simplification).
+  - License classification: AGPL v3 (original documentation).
 v1.2.1 round-15 (2026.7.14) — Final perfection: comprehensive PDF-guided audit:
   - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
     refinement).

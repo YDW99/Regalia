@@ -1,3 +1,60 @@
+v1.2.2 (2026.7.14) — Comprehensive audit-report non-false-positive fix + version bump:
+  - Version: versionCode=122, versionName="1.2.2" (version bump from v1.2.1).
+  - tablebase.js (GPL v3): fenToState() — added 200-character length limit
+    (audit YELLOW-1). Standard FEN ≤87 chars; 200 allows Chess960 Shredder
+    notation + en passant + extended fields. Prevents DoS via pathologically
+    long FEN strings. The audit's suggested character-whitelist regex was
+    rejected — it would break Chess960 (castling rights use a-h file
+    letters) and en passant target squares (e3 etc.). The existing
+    per-character validation (invalid piece chars return null) is the
+    correct whitelist approach.
+  - game-logic.js (GPL v3): loading_title i18n key updated from
+    "Regalia v1.2.1" to "Regalia v1.2.2".
+  - index.html.tpl (AGPL v3): <title> updated from "Regalia v1.2.1" to
+    "Regalia v1.2.2".
+  - ui.js (GPL v3): 3 version-string references updated from "v1.2.1" to
+    "v1.2.2" (about-dialog h2, header badge, about-dialog app_name row).
+  - Other JS modules: unchanged in this pass.
+  - chess.html rebuilt: 21,988 lines, 1,321,170 bytes.
+  - License classification: all files in this directory retain their
+    existing classification.
+
+v1.2.1 round-16 (2026.7.14) — User-reported UX clarity + audit-report non-false-positive defect fixes:
+  - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
+    refinement).
+  - ai-bridge.js (GPL v3): openStatsPage() — 4 Toast messages clarified.
+    (1) When the user clicks 📊 in review mode and a batch is already
+    pending, the toast now appends " — 分析完成后将进入统计页面 /
+    Statistics will open after analysis completes" so the user knows the
+    stats page will open automatically (no need to click 📊 again).
+    (2) Same suffix added to the "batch already running" toast.
+    (3) Same suffix added to the "kicking off analyze-all" toast.
+    (4) The 10-min safety-timeout toast previously mixed zh+en
+    ("T('analyzing_progress') + ' timed out'"); now uses a proper i18n
+    key 'analysis_timed_out_retry' = "分析超时，请重试 / Analysis timed
+    out, please retry".
+  - game-logic.js (GPL v3): (a) Two new i18n keys added —
+    'stats_will_open_after_analysis' and 'analysis_timed_out_retry'.
+    (b) _ecoRestoreFocus empty catch(e){} now logs
+    console.warn('[ECO] setSelectionRange failed:', e.message) —
+    SonarCloud S108; non-critical (user can still type in the search box).
+  - ui.js (GPL v3): (a) Inline catch(e){} after AndroidBridge.
+    syncGameDifficulty() now logs console.warn('[AI] syncGameDifficulty
+    failed:', e.message) — SonarCloud S108. (b) Chess960 🎲 button
+    simplified: removed the unreachable `typeof secureRandomInt===
+    'function'?...:Math.floor(Math.random()*960)` fallback (secureRandomInt
+    is always exported by game-logic.js, which loads before ui.js) — now
+    calls secureRandomInt(960) directly. This removes the only Math.random()
+    use in ui.js that triggered security-scanner flags. (c) Two
+    SECURITY-AUDIT comments added above _createImpulse() and _getNoise()
+    explaining that Math.random() is intentionally used for audio noise
+    synthesis (not security-sensitive; crypto.getRandomValues would add
+    ~100x overhead with no benefit).
+  - Other JS modules and index.html.tpl: unchanged in this pass.
+  - chess.html rebuilt: 21,980 lines, 1,321,589 bytes.
+  - License classification: all files in this directory retain their
+    existing classification.
+
 v1.2.1 round-15 (2026.7.14) — Final perfection: S3776 _renderReviewMode partial extraction + comprehensive PDF-guided audit:
   - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
     refinement).
