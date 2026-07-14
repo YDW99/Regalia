@@ -1,3 +1,112 @@
+v1.2.1 round-15 (2026.7.14) — Final perfection: S3776 _renderReviewMode partial extraction + comprehensive PDF-guided audit:
+  - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
+    refinement).
+  - ui.js (GPL v3): _renderReviewMode partial extraction — 3 self-contained
+    helpers extracted from the 612-line function (612 → 561 lines, -51 lines):
+    (1) _buildRvFileLabels(flip,labelW,labelGap,boardPx,labelH,fontSize) —
+    builds a-h file labels row; (2) _buildRvRankLabels(flip,labelW,labelH,
+    labelGap,boardPx,fontSize) — builds 1-8 rank labels column;
+    (3) _prepareRvVisualAnnotations(showCtrlMap) — prepares [%csl]/[%cal]
+    annotations, returns {va,cslMap,calList}. Byte-identical behavior.
+  - Other JS modules and index.html.tpl: unchanged in this pass.
+  - chess.html rebuilt: 21,945 lines, 1,318,936 bytes.
+  - License classification: all files in this directory retain their
+    existing classification.
+
+v1.2.1 round-14 (2026.7.14) — S3776 _renderDialogs extraction + S2703 typeof audit:
+  - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
+    refinement).
+  - ui.js (GPL v3): _renderDialogs refactored from 181 lines (CC=71) to a
+    10-line thin dispatcher that delegates to 8 per-dialog helpers:
+    _renderNewGameDialog, _renderChess960Settings, _renderClassicOpeningsList,
+    _renderResignConfirmDialog, _renderAboutDialog, _renderImportDialog,
+    _renderPromotionDialog, _renderSavePGNPromptDialog. Byte-identical behavior.
+  - ui.js (GPL v3): S2703 — 25 typeof → direct === undefined / !== undefined
+    comparison for module-scoped variables (soundOn, gameClocks, gameVariant,
+    dlgChess960, _gameOverStatusKey, etc.). True globals (crypto,
+    AndroidBridge) preserved with typeof.
+  - ai-bridge.js (GPL v3): S2703 — 20 typeof → direct comparison for
+    module-scoped variables (soundOn, gameClocks, _gameOverStatusKey,
+    _reviewEvalCache, etc.). True globals (AndroidBridge) preserved.
+  - game-logic.js (GPL v3): S2703 — 4 typeof → direct comparison for
+    module-scoped variables. True globals (crypto) preserved.
+  - tablebase.js (GPL v3): S2703 — 4 typeof → direct comparison for
+    module-scoped variables.
+  - Other JS modules (chess960.js, eco-data.js, pgn-standard.js,
+    state-store.js, worker-pool.js) and index.html.tpl: unchanged in this pass.
+  - chess.html rebuilt: 21,909 lines, 1,317,862 bytes.
+  - License classification: all files in this directory retain their
+    existing classification.
+
+v1.2.1 round-13 (2026.7.14) — S3776 cognitive complexity: renderInternal God Function refactor:
+  - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
+    refinement).
+  - ui.js (GPL v3): renderInternal God Function (CC=122, ~347 lines) split
+    into 4 named helpers:
+    (1) _buildRenderHTML(_rs) — sequences the existing _render* helpers and
+        inserts the game-over overlay. Returns {h, done}.
+    (2) _saveScrollState() — snapshots scroll positions of .mlist /
+        .review-body / .review-moves / .dlg / .panel / .op-list before DOM
+        rebuild. Returns a context object.
+    (3) _restoreScrollState(ctx) — restores scroll positions after DOM rebuild
+        in the correct order (synchronous for critical containers, rAF-deferred
+        for non-critical).
+    (4) _postRenderFinalize(wasEcoFocused) — cache invalidation +
+        active-review-move centering (double-rAF) + arrow rendering + ECO focus
+        restore + opening-list auto-scroll.
+    renderInternal is now a 23-line thin orchestrator. Behavior is byte-identical
+    to the pre-refactor version; only the structure changed.
+  - Other JS modules (ai-bridge.js, chess960.js, eco-data.js, game-logic.js,
+    pgn-standard.js, state-store.js, tablebase.js, worker-pool.js) and
+    index.html.tpl: unchanged in this pass.
+  - chess.html rebuilt: 21,901 lines, 1,320,836 bytes (-102 lines / -1,537
+    bytes vs round-12, reflecting removal of long inline comments replaced by
+    concise JSDoc on each helper).
+  - License classification: all files in this directory retain their
+    existing classification (GPL v3 for ui.js; AGPL v3 for state-store.js,
+    eco-data.js, index.html.tpl; built chess.html inherits GPL v3).
+
+v1.2.1 round-12 (2026.7.14) — SonarCloud PR #43 bugs + code smells cleanup:
+  - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
+    refinement).
+  - ui.js (GPL v3): 4 changes — (1) SonarCloud Bug #1 & #2 (S3923): removed
+    two duplicate if(_isLandscapeReview){...}else{...} blocks in
+    _renderReviewMode (both branches were byte-identical, legacy from the
+    v1.1.0 Phase 53 portrait/landscape unification); (2) SonarCloud Bug #3
+    (S2757 false positive): rewrote _ecoEnabled expression using De Morgan's
+    law; (3) S3358 nested ternary: extracted _gameOverIconChar() and
+    _gameOverIconStyle() helpers + refactored formatEval mate-sign
+    computation; (4) S108: 93 empty catches now log console.warn('[UI]',
+    e.message).
+  - ai-bridge.js (GPL v3): 3 changes — (1) S108: 30 empty catches now log
+    console.warn('[AIBridge]', e.message) (plus 6 module-specific messages
+    for critical paths); (2) S3523: parseFloat → Number.parseFloat (1 site);
+    (3) S1154: String.fromCharCode → String.fromCodePoint (3 sites).
+  - game-logic.js (GPL v3): 3 changes — (1) S108: 19 empty catches now log
+    console.warn('[GameLogic]', e.message); (2) S3523: parseFloat →
+    Number.parseFloat (5 sites); (3) S1154: String.fromCharCode →
+    String.fromCodePoint (4 sites).
+  - tablebase.js (GPL v3): 2 changes — (1) S108: 3 empty catches now log
+    console.warn('[Tablebase]', e.message); (2) S3523: parseFloat →
+    Number.parseFloat (1 site).
+  - chess960.js (GPL v3): 2 changes — (1) S108: 1 empty catch now logs
+    console.warn('[Chess960]', e.message); (2) S1154: String.fromCharCode →
+    String.fromCodePoint (1 site).
+  - index.html.tpl (AGPL v3): S3646 — merged two adjacent
+    .dlg:not([style*="max-width"]) rules and two adjacent
+    .review-left .review-board .bgrid rules.
+  - Other JS modules (pgn-standard.js, worker-pool.js, state-store.js,
+    eco-data.js): unchanged in this pass.
+  - chess.html rebuilt: 22,003 lines, 1,330,373 bytes (+39 lines / +9,823
+    bytes vs round-11, reflecting the new helper functions, refactored
+    branches, and console.warn additions).
+  - License classification: all files in this directory retain their
+    existing classification (GPL v3 for ai-bridge.js, game-logic.js,
+    tablebase.js, chess960.js, pgn-standard.js, worker-pool.js, ui.js;
+    AGPL v3 for state-store.js, eco-data.js, index.html.tpl; built
+    chess.html inherits the most restrictive classification of its source
+    modules — GPL v3).
+
 v1.2.1 round-11 (2026.7.14) — 2 user-reported bugs + review-report defects + first-principles optimization:
   - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
     refinement).

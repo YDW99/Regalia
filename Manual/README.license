@@ -1,3 +1,45 @@
+v1.2.1 round-15 (2026.7.14) — Final perfection: comprehensive PDF-guided audit:
+  - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
+    refinement).
+  - Regalia-v1.2.1-manual-zh.html and Regalia-v1.2.1-manual-en.html:
+    updated with the round-15 changelog entry (置顶 / on top). The entry
+    summarizes the _renderReviewMode partial extraction (612→561 lines,
+    3 helpers), stats.html S108 fixes (6 sites), and the comprehensive
+    PDF-guided audit findings.
+  - License classification: AGPL v3 (original documentation).
+
+v1.2.1 round-14 (2026.7.14) — S3776 _renderDialogs extraction + S2703 typeof audit:
+  - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
+    refinement).
+  - Regalia-v1.2.1-manual-zh.html and Regalia-v1.2.1-manual-en.html:
+    updated with the round-14 changelog entry (置顶 / on top). The entry
+    summarizes the _renderDialogs extraction (CC=71 → ~5, 8 per-dialog
+    helpers) and the S2703 typeof audit (53 safe conversions, true globals
+    preserved).
+  - License classification: AGPL v3 (original documentation).
+
+v1.2.1 round-13 (2026.7.14) — S3776 cognitive complexity: renderInternal God Function refactor:
+  - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
+    refinement).
+  - Regalia-v1.2.1-manual-zh.html and Regalia-v1.2.1-manual-en.html:
+    updated with the round-13 changelog entry (置顶 / on top). The entry
+    summarizes the renderInternal God Function refactor: 347-line function
+    split into 4 named helpers (_buildRenderHTML, _saveScrollState,
+    _restoreScrollState, _postRenderFinalize), reducing renderInternal to
+    a 23-line thin orchestrator. Behavior is byte-identical.
+  - License classification: AGPL v3 (original documentation).
+
+v1.2.1 round-12 (2026.7.14) — SonarCloud PR #43 bugs + code smells cleanup:
+  - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
+    refinement).
+  - Regalia-v1.2.1-manual-zh.html and Regalia-v1.2.1-manual-en.html:
+    updated with the round-12 changelog entry (置顶 / on top). The entry
+    summarizes the 3 SonarCloud Bugs fixed (S3923 ×2 real + S2757 ×1
+    false-positive refactor) and the P0/P1/P2 code-smells cleanup
+    (S108 empty catches ×146, S3358 nested ternary ×2, S3646 duplicate
+    CSS ×2, S3523 parseFloat ×7, S1154 fromCharCode ×18).
+  - License classification: AGPL v3 (original documentation).
+
 v1.2.1 round-11 (2026.7.14) — 2 user-reported bugs + review-report defects + first-principles optimization:
   - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
     refinement).

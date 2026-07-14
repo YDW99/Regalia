@@ -316,6 +316,50 @@ This pass fixes 2 user-reported bugs in the review-mode eval chart and stats pag
 
 Version: `versionCode=121`, `versionName="1.2.1"` (unchanged — same-version refinement).
 
+## v1.2.1 round-12 (2026.7.14) — SonarCloud PR #43 bugs + code smells cleanup
+
+This pass fixes the 3 SonarCloud Bugs reported on PR #43 (2 real S3923 "if/else identical" issues + 1 S2757 false-positive refactor) and applies the P0/P1/P2 code-smells cleanup from the `Regalia_v1.2.1_CodeSmells_修复指南.md` guide. **No new permissions, no new data collection, no new network access, no changes to data flow or storage.** All changes are internal to the app and have zero privacy impact:
+
+- **S3923 if/else identical branches removed (`ui.js`)**: Two `if (_isLandscapeReview) { ... } else { ... }` blocks in `_renderReviewMode` had byte-identical branches (legacy from the v1.1.0 Phase 53 portrait/landscape unification). Removed the conditional, kept one copy. No privacy impact — pure markup-cleanup.
+- **S2757 false-positive refactor (`ui.js`)**: Rewrote `_ecoEnabled = !(typeof dlgChess960 !== 'undefined' && dlgChess960)` as `_ecoEnabled = typeof dlgChess960 === 'undefined' || !dlgChess960` (De Morgan's law, identical semantics). No privacy impact — ECO recognition is a local opening-classification lookup, no user data involved.
+- **S108 empty catch blocks filled with `console.warn` (~146 sites)**: Empty `catch(e){}` blocks across `ui.js` (93), `ai-bridge.js` (30), `game-logic.js` (19), `tablebase.js` (3), `chess960.js` (1) now log a module-tagged warning. No privacy impact — `console.warn` writes to the WebView JavaScript console (visible only via `adb logcat` or Chrome DevTools); it does NOT transmit any data over the network, does NOT write to persistent storage, and does NOT include user PII (only `e.message` — typically a generic JS error string like "Cannot read property 'x' of undefined"). The catches using `catch(_){}` / `catch(_e){}` (intentionally-unused parameter — a SonarCloud-recognized idiom) were preserved. Catches inside inline HTML event-handler attributes were skipped because expanding them inline would break attribute quoting.
+- **S3358 nested ternary operators refactored (`ui.js`, 2 sites)**: The 4-way nested ternary selecting the game-over icon character + style was extracted into two helper functions `_gameOverIconChar()` / `_gameOverIconStyle()` with explicit `if` branches. The 2-way nested ternary computing the mate-score suffix in `formatEval` was refactored to compute `mateSign` once. No privacy impact — pure readability refactors.
+- **S3646 duplicate CSS selectors merged (`index.html.tpl`, 2 sites)**: Merged two adjacent `.dlg:not([style*="max-width"])` rules and two adjacent `.review-left .review-board .bgrid` rules. No privacy impact — pure CSS cleanup.
+- **S3523 `parseFloat` → `Number.parseFloat` (7 sites)**: Pure ES2015 namespace form. No privacy impact.
+- **S1154 `String.fromCharCode` → `String.fromCodePoint` (18 sites)**: All call sites pass ASCII code points < 128 (chess coordinate labels `a`-`h`, SP-ID letters `A`/`a`); behavior is identical. No privacy impact.
+
+Version: `versionCode=121`, `versionName="1.2.1"` (unchanged — same-version refinement).
+
+## v1.2.1 round-13 (2026.7.14) — S3776 cognitive complexity: renderInternal God Function refactor
+
+This pass addresses the highest-priority S3776 Cognitive Complexity violation deferred from round-12: the `renderInternal` God Function (CC=122, ~347 lines) is split into 4 named helpers (`_buildRenderHTML`, `_saveScrollState`, `_restoreScrollState`, `_postRenderFinalize`), reducing `renderInternal` to a 23-line thin orchestrator. **No new permissions, no new data collection, no new network access, no changes to data flow or storage.** All changes are internal to the app and have zero privacy impact:
+
+- **`renderInternal` God Function refactor (`ui.js`)**: The 347-line function is split into 4 named helpers, each with a single responsibility (HTML building, scroll-state snapshot, scroll-state restore, post-render finalization). Behavior is byte-identical to the pre-refactor version; only the structure changed. No privacy impact — the refactor touches only render orchestration; no data is read, written, or transmitted differently.
+- **No new globals**: All 4 helpers are module-scoped functions (not exported). They access the same module-level state as the original inline code. No privacy impact.
+- **Error handling preserved**: The `try/catch` wrapper around the entire render remains in `renderInternal`. If any helper throws, the error display UI is shown exactly as before. No privacy impact — error messages are displayed locally, never transmitted.
+- **Early return preserved**: The `_renderReviewMode` `done=true` early return (which skips scroll-save/innerHTML/scroll-restore to avoid operating on stale DOM) is preserved. No privacy impact.
+
+Version: `versionCode=121`, `versionName="1.2.1"` (unchanged — same-version refinement).
+
+## v1.2.1 round-14 (2026.7.14) — S3776 _renderDialogs extraction + S2703 typeof audit
+
+This pass completes the remaining S3776 Cognitive Complexity items deferred from round-13 (`_renderDialogs` CC=71 → ~5) plus the S2703 `typeof` audit deferred from round-12 (53 safe conversions). **No new permissions, no new data collection, no new network access, no changes to data flow or storage.** All changes are internal to the app and have zero privacy impact:
+
+- **`_renderDialogs` refactor (`ui.js`)**: The 181-line function (CC=71) is refactored into a 10-line thin dispatcher that delegates to 8 per-dialog helpers (`_renderNewGameDialog`, `_renderChess960Settings`, `_renderClassicOpeningsList`, `_renderResignConfirmDialog`, `_renderAboutDialog`, `_renderImportDialog`, `_renderPromotionDialog`, `_renderSavePGNPromptDialog`). Behavior is byte-identical. No privacy impact — pure structural refactor of render orchestration.
+- **S2703 `typeof` audit (53 sites across 4 JS files)**: Converted `typeof <var> === 'undefined'` / `!== 'undefined'` to direct `=== undefined` / `!== undefined` comparison for variables guaranteed to be declared via module-scoped `let`/`var` (`soundOn`, `gameClocks`, `_gameOverStatusKey`, `_reviewEvalCache`, `gameVariant`, `dlgChess960`, and other module-scoped variables). True globals (`crypto`, `AndroidBridge`) correctly preserved with `typeof` to avoid `ReferenceError`. No privacy impact — pure style modernization with identical semantics.
+
+Version: `versionCode=121`, `versionName="1.2.1"` (unchanged — same-version refinement).
+
+## v1.2.1 round-15 (2026.7.14) — Final perfection: S3776 _renderReviewMode partial extraction + stats.html S108 + comprehensive PDF-guided audit
+
+This is the **final perfection round** — a comprehensive, first-principles audit of every source file guided by the three uploaded PDFs (AI Code Generation Defect Prevention Guide, Android WebView Development Guide, SonarCloud Perfect Review Guide). **No new permissions, no new data collection, no new network access, no changes to data flow or storage.** All changes are internal to the app and have zero privacy impact:
+
+- **`_renderReviewMode` partial extraction (`ui.js`)**: Extracted 3 self-contained helpers (`_buildRvFileLabels`, `_buildRvRankLabels`, `_prepareRvVisualAnnotations`) from the 612-line function, reducing it to 561 lines. Byte-identical behavior. No privacy impact — pure structural refactor of review-board rendering.
+- **stats.html S108 empty catch blocks (6 sites)**: Added `console.warn('[Stats]', e.message)` to 6 empty `catch(e){}` blocks in `stats.html`. No privacy impact — `console.warn` writes to the WebView JavaScript console (visible only via `adb logcat` or Chrome DevTools); it does NOT transmit any data over the network, does NOT write to persistent storage, and does NOT include user PII.
+- **PDF-guided audit verified**: WebView security settings (`setAllowFileAccess(false)`, `setAllowFileAccessFromFileURLs(false)`, `setAllowUniversalAccessFromFileURLs(false)`) confirmed correct. `@JavascriptInterface` annotation on all exposed methods. `onDestroy` cleanup complete. Debug mode never enabled (system default = disabled). TLS pinning implemented. No hardcoded secrets. PGN/FEN input escaped for XSS prevention. No privacy impact — all findings confirm existing security posture is correct.
+
+Version: `versionCode=121`, `versionName="1.2.1"` (unchanged — same-version refinement).
+
 ## Contact
 
 For questions about this privacy policy, please open an issue on the GitHub repository.

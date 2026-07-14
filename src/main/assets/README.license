@@ -1,3 +1,48 @@
+v1.2.1 round-15 (2026.7.14) — Final perfection: S3776 _renderReviewMode partial extraction + stats.html S108 + comprehensive PDF-guided audit:
+  - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
+    refinement).
+  - chess.html rebuilt from the updated ui.js (see chess.src/README.license
+    for details). 21,945 lines, 1,318,936 bytes.
+  - stats.html (AGPL v3): S108 — 6 empty catch(e){} blocks now log
+    console.warn('[Stats]', e.message). The 2 catch(_e){} blocks (worker
+    terminate/revoke) preserved — SonarCloud-recognized idiom.
+  - Other assets (screenshot, SVG logos): unchanged.
+  - License classification: all files in this directory retain their
+    existing classification.
+
+v1.2.1 round-14 (2026.7.14) — S3776 _renderDialogs extraction + S2703 typeof audit:
+  - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
+    refinement).
+  - chess.html rebuilt from the updated JS modules (see
+    chess.src/README.license for details). 21,909 lines, 1,317,862 bytes.
+  - stats.html: unchanged in this pass.
+  - Other assets: unchanged.
+  - License classification: all files in this directory retain their
+    existing classification.
+
+v1.2.1 round-13 (2026.7.14) — S3776 cognitive complexity: renderInternal God Function refactor:
+  - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
+    refinement).
+  - chess.html rebuilt from the updated ui.js (see chess.src/README.license
+    for the renderInternal refactor details). 21,901 lines, 1,320,836 bytes.
+  - stats.html: unchanged in this pass.
+  - Other assets: unchanged.
+  - License classification: all files in this directory retain their
+    existing classification.
+
+v1.2.1 round-12 (2026.7.14) — SonarCloud PR #43 bugs + code smells cleanup:
+  - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
+    refinement).
+  - chess.html rebuilt from the updated chess.src/ modules (see
+    chess.src/README.license for the per-module change list). 22,003 lines,
+    1,330,373 bytes.
+  - stats.html: unchanged in this pass (no source modifications; the CSP
+    SHA-256 hash is auto-recomputed by build-chess.py only when stats.html
+    itself changes).
+  - Other assets (screenshot, SVG logos, etc.): unchanged.
+  - License classification: all files in this directory retain their
+    existing classification.
+
 v1.2.1 round-11 (2026.7.14) — 2 user-reported bugs + review-report defects + first-principles optimization:
   - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
     refinement).

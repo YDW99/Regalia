@@ -337,7 +337,7 @@ function _parsePGN(pgnText){
             }
           }else{
             // Centipawn / pawn value: 0.35, -1.5, +2.00
-            const _pawns=parseFloat(_val);
+            const _pawns=Number.parseFloat(_val);
             if(!isNaN(_pawns)){
               _ev=Math.round(_pawns*100);
               _mate=0;
@@ -908,7 +908,7 @@ function _applySANMove(state,san){
         if(alg===sanClean||alg.replace(/[+#!?]+$/,'')===sanClean){
           return _executeAndRecord(state,m,alg);
         }
-      }catch(e){}
+      }catch(e){console.warn('[Tablebase]',e&&e.message?e.message:e);}
     }
   }
   
@@ -991,7 +991,7 @@ function importPGN(pgnText){
   // for rationale (cache is keyed by per-game reviewStep, switching games
   // invalidates the entire key space).
   try{
-    if(typeof _reviewEvalCache!=='undefined'&&_reviewEvalCache){
+    if(_reviewEvalCache !== undefined&&_reviewEvalCache){
       _reviewEvalCache.clear();
     }
     if(typeof _reviewEvalRequestedStep!=='undefined')_reviewEvalRequestedStep=-1;
@@ -1001,7 +1001,7 @@ function importPGN(pgnText){
   // If detected, enable Chess960 engine mode and set gameVariant for PGN round-trip.
   if(result.variant==='chess960'){
     if(typeof setChess960Mode==='function')setChess960Mode(true);
-    if(typeof gameVariant!=='undefined')gameVariant='chess960';
+    if(gameVariant !== undefined)gameVariant='chess960';
     if(typeof gameSPID!=='undefined'){
       // Try to derive SP-ID from the starting FEN's back rank
       if(result.startFEN&&typeof backRankToSPID==='function'){
@@ -1028,7 +1028,7 @@ function importPGN(pgnText){
     }
   }else{
     if(typeof setChess960Mode==='function')setChess960Mode(false);
-    if(typeof gameVariant!=='undefined')gameVariant=null;
+    if(gameVariant !== undefined)gameVariant=null;
     if(typeof gameSPID!=='undefined')gameSPID=null;
   }
   
@@ -1103,7 +1103,7 @@ function importPGN(pgnText){
         const _isDefault=(_humanName===T('you')||_humanName==='你'||_humanName==='You'||_humanName===T('ai_opponent')||_humanName==='AI对手'||_humanName==='AI Opponent'||/Lv\.\d/.test(_humanName)||/SL/.test(_humanName));
         if(!_isDefault){
           _humanPlayerName=_humanName;
-          try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_humanName',_humanName);}catch(e){}
+          try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_humanName',_humanName);}catch(e){console.warn('[Tablebase]',e&&e.message?e.message:e);}
         }
       }
     }
@@ -1535,7 +1535,7 @@ function importPGN(pgnText){
   // "to preserve other games' entries" — but the full clear already removed
   // everything, so the loop was dead work and its comment was misleading.
   try{
-    if(result.extractedEvals&&result.extractedEvals.length>0&&typeof _reviewEvalCache!=='undefined'){
+    if(result.extractedEvals&&result.extractedEvals.length>0&&_reviewEvalCache !== undefined){
       const _maxStep=moveRecords.length;
       // v1.0.7 PHASE 19 (critical bug fix): When a black-to-move placeholder
       // exists at moveRecords[0] (from _prependBlackToMovePlaceholder for FEN
@@ -1665,7 +1665,7 @@ function importPGNAsync(pgnText){
     }
   }
   // Show loading indicator
-  try{showToast(T('importing_pgn'),3000);}catch(e){}
+  try{showToast(T('importing_pgn'),3000);}catch(e){console.warn('[Tablebase]',e&&e.message?e.message:e);}
   // v1.0.8 PHASE 49: removed the dead workerParsePGN round-trip. The old code
   //   called workerParsePGN(pgnText,30000) but discarded its result in BOTH
   //   .then and .catch — both branches ran the SAME synchronous importPGN(pgnText)

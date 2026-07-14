@@ -3152,7 +3152,7 @@ function _updateStatsBoardPieceSize(){
     if(w<=0)return;
     const pieceSize=Math.round(w/8*0.72);
     wrap.style.setProperty('--piece-size',pieceSize+'px');
-  }catch(e){}
+  }catch(e){console.warn('[Stats] piece-size set failed:',e.message);}
 }
 
 // PGN text section (raw with formatting)
@@ -3541,7 +3541,7 @@ function render(){
     // Only restore if the saved position is still within a reasonable range
     // of the new max — avoids restoring a stale position when the user switched
     // between very different views (e.g., from a long variation back to mainline).
-    try{window.scrollTo(0,_targetScroll);}catch(e){}
+    try{window.scrollTo(0,_targetScroll);}catch(e){console.warn('[Stats] scroll restore failed:',e.message);}
   }
 }
 
@@ -3772,7 +3772,7 @@ function _haptic(type){
     if(typeof AndroidBridge!=='undefined'&&AndroidBridge.performHaptic){
       AndroidBridge.performHaptic(type);
     }
-  }catch(e){}
+  }catch(e){console.warn('[Stats] haptic failed:',e.message);}
 }
 // v1.0.3: Show the 💾HTML export dialog with two options + GPL v3 notice
 function exportHTML(){
@@ -3808,7 +3808,7 @@ function _showStatsExportDialog(){
   overlay.appendChild(dlg);
   document.body.appendChild(overlay);
   // Load GPL v3 logo — display at bottom of dialog
-  try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.loadAssetAsBase64){var b64=AndroidBridge.loadAssetAsBase64('GPLv3_Logo.svg');if(b64){var holder=document.getElementById('_gplLogoHolder');if(holder)holder.innerHTML='<img src="data:image/svg+xml;base64,'+b64+'" alt="GPL v3" style="width:140px;height:auto;opacity:.95" />';}}}catch(e){}
+  try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.loadAssetAsBase64){var b64=AndroidBridge.loadAssetAsBase64('GPLv3_Logo.svg');if(b64){var holder=document.getElementById('_gplLogoHolder');if(holder)holder.innerHTML='<img src="data:image/svg+xml;base64,'+b64+'" alt="GPL v3" style="width:140px;height:auto;opacity:.95" />';}}}catch(e){console.warn('[Stats] GPL SVG load failed:',e.message);}
 }
 
 // v1.0.3: Export static HTML (current selection frozen, no JS, no buttons, no hint, no copy)
@@ -4201,7 +4201,7 @@ function init(){
       isLight=true;
     }
     document.documentElement.setAttribute('data-theme', isLight?'light':'dark');
-  }catch(e){}
+  }catch(e){console.warn('[Stats] theme apply failed:',e.message);}
   if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getStatsPayload){
     try{
       const payloadStr=AndroidBridge.getStatsPayload();
@@ -4232,7 +4232,7 @@ function init(){
         if(typeof AndroidBridge!=='undefined'&&AndroidBridge.openUrlInBrowser){
           AndroidBridge.openUrlInBrowser(href);
         }else{
-          try{window.open(href,'_blank');}catch(err){}
+          try{window.open(href,'_blank');}catch(err){console.warn('[Stats] window.open fallback failed:',err.message);}
         }
       }catch(err){console.error('openUrlInBrowser failed:',err);}
     },true);

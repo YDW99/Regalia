@@ -187,7 +187,7 @@ function randomSPID(){
       // Fallback if all 8 retries exceeded (extremely unlikely)
       return buf[0]%960;
     }
-  }catch(e){}
+  }catch(e){console.warn('[Chess960]',e&&e.message?e.message:e);}
   // SECURITY: Return standard position instead of Math.random() when crypto
   // is unavailable. SP-ID 518 = traditional RNBQKBNR.
   return 518;
@@ -271,7 +271,7 @@ function toShredderCastling(cr,board){
   pairs.sort((a,b)=>a.file-b.file||(a.isWhite?0:1)-(b.isWhite?0:1));
   let str='';
   for(const p of pairs){
-    str+=String.fromCharCode((p.isWhite?65:97)+p.file);
+    str+=String.fromCodePoint((p.isWhite?65:97)+p.file);
   }
   // v1.0.8 PHASE 30: removed dead `||'-'` -- pairs.length>0 here (length===0
   //   returns '-' above), and the loop always appends >=1 char, so str is non-empty.

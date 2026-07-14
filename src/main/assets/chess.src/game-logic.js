@@ -65,7 +65,7 @@ function secureRandomInt(max){
 
 function T(key){return _i18n[key]?.[_lang]||_i18n[key]?.zh||key;}
 function toggleLang(){_lang=(_lang==='zh')?'en':'zh';
-  try{if(typeof Store!=='undefined'&&Store&&typeof Store.dispatch==='function')Store.dispatch('SET_LANG',_lang);}catch(e){}try{localStorage.setItem('Regalia_lang',_lang);}catch(e){}try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.saveLangPref)AndroidBridge.saveLangPref(_lang);}catch(e){}try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_lang',_lang);}catch(e){}try{if(typeof HapticManager!=='undefined'&&HapticManager.fire)HapticManager.fire('TOGGLE_ON');}catch(e){}try{if(typeof playSound==='function')playSound('select');}catch(e){}render();}
+  try{if(typeof Store!=='undefined'&&Store&&typeof Store.dispatch==='function')Store.dispatch('SET_LANG',_lang);}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}try{localStorage.setItem('Regalia_lang',_lang);}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.saveLangPref)AndroidBridge.saveLangPref(_lang);}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_lang',_lang);}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}try{if(typeof HapticManager!=='undefined'&&HapticManager.fire)HapticManager.fire('TOGGLE_ON');}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}try{if(typeof playSound==='function')playSound('select');}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}render();}
 const _i18n={
 'app_name':{zh:'Regalia',en:'Regalia'},
 'new_game':{zh:'新游戏',en:'New Game'},
@@ -569,10 +569,10 @@ const _i18n={
 };
 // Auto-detect language on startup
 (function(){
-  try{const saved=localStorage.getItem('Regalia_lang');if(saved==='zh'||saved==='en'){_lang=saved;return;}}catch(e){}
+  try{const saved=localStorage.getItem('Regalia_lang');if(saved==='zh'||saved==='en'){_lang=saved;return;}}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}
   // v1.0.4 Round-5 Rev16: Fall back to persistent Java store when HyperOS 3 wiped localStorage
-  try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentGet){const persisted=AndroidBridge.persistentGet('Regalia_lang');if(persisted==='zh'||persisted==='en'){_lang=persisted;try{localStorage.setItem('Regalia_lang',persisted);}catch(e){}return;}}}catch(e){}
-  try{if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.getSystemLanguage==='function'){const sysLang=AndroidBridge.getSystemLanguage();_lang=(sysLang&&sysLang.startsWith('zh'))?'zh':'en';return;}}catch(e){}
+  try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentGet){const persisted=AndroidBridge.persistentGet('Regalia_lang');if(persisted==='zh'||persisted==='en'){_lang=persisted;try{localStorage.setItem('Regalia_lang',persisted);}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}return;}}}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}
+  try{if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.getSystemLanguage==='function'){const sysLang=AndroidBridge.getSystemLanguage();_lang=(sysLang&&sysLang.startsWith('zh'))?'zh':'en';return;}}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}
   try{const navLang=navigator.language||navigator.userLanguage||'';_lang=navLang.startsWith('zh')?'zh':'en';}catch(e){_lang='zh';}
 })();
 
@@ -629,7 +629,7 @@ let _safeInsets={top:0,bottom:0,left:0,right:0};
 function _readSafeInsets(){
   try{
     const cs=getComputedStyle(document.documentElement);
-    const _parse=(v)=>{const m=parseFloat(v);return isNaN(m)?0:m;};
+    const _parse=(v)=>{const m=Number.parseFloat(v);return isNaN(m)?0:m;};
     _safeInsets.top=_parse(cs.getPropertyValue('--safe-top'))||0;
     _safeInsets.bottom=_parse(cs.getPropertyValue('--safe-bottom'))||0;
     _safeInsets.left=_parse(cs.getPropertyValue('--safe-left'))||0;
@@ -671,10 +671,10 @@ function _recalcCellSize(){
       const cs=getComputedStyle(appEl);
       // With box-sizing:border-box, clientWidth = content + padding.
       // Content width = clientWidth - paddingLeft - paddingRight.
-      const pl=parseFloat(cs.paddingLeft)||0;
-      const pr=parseFloat(cs.paddingRight)||0;
-      const pt=parseFloat(cs.paddingTop)||0;
-      const pb=parseFloat(cs.paddingBottom)||0;
+      const pl=Number.parseFloat(cs.paddingLeft)||0;
+      const pr=Number.parseFloat(cs.paddingRight)||0;
+      const pt=Number.parseFloat(cs.paddingTop)||0;
+      const pb=Number.parseFloat(cs.paddingBottom)||0;
       _appContentW=appEl.clientWidth-pl-pr;
       _appContentH=appEl.clientHeight-pt-pb;
       // v1.0.7 PHASE 7: if the computed content width is unreasonably small
@@ -800,7 +800,7 @@ const KNIGHT_OFFSETS=[[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
 const DIR_ROOK=[[0,1],[0,-1],[1,0],[-1,0]];
 const DIR_BISHOP=[[1,1],[1,-1],[-1,1],[-1,-1]];
 const DIR_QUEEN=[...DIR_ROOK,...DIR_BISHOP];
-function posAlg(p){return String.fromCharCode(97+p.col)+(8-p.row)}
+function posAlg(p){return String.fromCodePoint(97+p.col)+(8-p.row)}
 function algPos(a){if(!a)return null;
   // Type coercion: if input is a number, try converting to string first
   if(typeof a==='number')a=String(a);
@@ -888,12 +888,12 @@ function _triggerBoardShake(strength){
     const baseDur=strength==='massive'?SHAKE_MASSIVE_DUR:(strength==='heavy'?SHAKE_HEAVY_DUR:SHAKE_LIGHT_DUR);
     const dur=baseDur+30;
     setTimeout(()=>{
-      try{bwrap.classList.remove(cls);}catch(e){}
+      try{bwrap.classList.remove(cls);}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}
       // Restoration of .stabilized happens naturally on the next sensor event;
       // we don't force-restore here to avoid conflicting with a mid-flight
       // sensor sample that may have a different translation.
     },dur);
-  }catch(e){}
+  }catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}
 }
 
 // Personified piece animations. Each returns a Promise resolving on finish.
@@ -1112,7 +1112,7 @@ function _runPieceAnim(el,pieceType,dx,dy){
 // without this check, move sounds would play even when the user muted sound.
 function _playPieceSound(pieceType,isCapture){
   try{
-    if(typeof soundOn!=='undefined'&&!soundOn)return;
+    if(soundOn !== undefined&&!soundOn)return;
     if(typeof audioEngine!=='undefined'&&audioEngine){
       if(isCapture&&typeof audioEngine.playCapture==='function'){
         audioEngine.playCapture();
@@ -1121,18 +1121,18 @@ function _playPieceSound(pieceType,isCapture){
       const fn=audioEngine[fnName];
       if(typeof fn==='function')fn.call(audioEngine);
     }
-  }catch(e){}
+  }catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}
 }
 
 // v1.0.8 PHASE 22: Trigger castle sound via audioEngine (rook move + king + rook land).
 // v1.0.8 PHASE 22 (bug fix): Check soundOn before playing (same reason as above).
 function _playCastleSound(){
   try{
-    if(typeof soundOn!=='undefined'&&!soundOn)return;
+    if(soundOn !== undefined&&!soundOn)return;
     if(typeof audioEngine!=='undefined'&&audioEngine){
       if(typeof audioEngine.playCastleRookMove==='function')audioEngine.playCastleRookMove();
     }
-  }catch(e){}
+  }catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}
 }
 
 // Main animation entry point. Signature preserved from v1.0.7:
@@ -1147,7 +1147,7 @@ function animateMove(from,to,pieceSym,pieceType,isCapture,isCheck,pieceColor){
     if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches){
       _reducedMotion=true;
     }
-  }catch(e){}
+  }catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}
   if(_reducedMotion){
     animationInProgress=false;
     _activeAnimEls=[];
@@ -1161,7 +1161,7 @@ function animateMove(from,to,pieceSym,pieceType,isCapture,isCheck,pieceColor){
     if(typeof _lastAnimMv!=='undefined'&&_lastAnimMv&&typeof _castleSide==='function'){
       _castleside=_castleSide(_lastAnimMv);
     }
-  }catch(e){}
+  }catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}
   if(!_castleside&&pieceType==='king'&&Math.abs(to.col-from.col)===2){
     _castleside=to.col===6?'kingside':'queenside';
   }
@@ -1233,7 +1233,7 @@ function animateMove(from,to,pieceSym,pieceType,isCapture,isCheck,pieceColor){
         const rm=chess960CastlingRookMove(gameState,pieceColor,_castleside);
         if(rm){rFromCol=rm.rookFrom;rToCol=rm.rookTo;}
       }
-    }catch(e){}
+    }catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}
     // Fallback to standard chess rook positions if helper fails
     if(rFromCol<0){
       if(_castleside==='kingside'){rFromCol=7;rToCol=5;}
@@ -1368,7 +1368,7 @@ function _reattachActiveAnimations(){
         a.el.getAnimations().forEach(an=>an.cancel());
         const _sx=a.dx*(cs/a.lastCell), _sy=a.dy*(cs/a.lastCell);
         a.el.style.transform='translate3d('+_sx.toFixed(2)+'px,'+_sy.toFixed(2)+'px,0)';
-      }catch(e){}
+      }catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}
     }
     a.lastCell=cs;
   }
@@ -1802,7 +1802,7 @@ function _castleSide(mv,s){
   if(mv.piece.type==='king'){
     const _homeRow=mv.piece.color==='white'?7:0;
     if(mv.from.row===_homeRow&&mv.to.row===_homeRow){
-      const _is960=(typeof gameVariant!=='undefined'&&gameVariant==='chess960')||(typeof isChess960Mode==='function'&&isChess960Mode());
+      const _is960=(gameVariant !== undefined&&gameVariant==='chess960')||(typeof isChess960Mode==='function'&&isChess960Mode());
       const _minDist=_is960?1:2;
       // v1.0.8 PHASE 30: In Chess960, _minDist=1 means ANY king move to col 6/2 on
       //   the home row would be classified as castling — including normal king
@@ -2471,9 +2471,9 @@ n+=piece.type==='knight'?'N':piece.type[0].toUpperCase();
 let numSameTarget=0,numSameFile=0,numSameRow=0;
 for(let r=0;r<8;r++)for(let c=0;c<8;c++){if(r===from.row&&c===from.col)continue;const p=s.board[r][c];if(p&&p.type===piece.type&&p.color===piece.color){const pm=pseudoMoves(s,{row:r,col:c});if(pm.some(m=>m.row===to.row&&m.col===to.col)){const mv2={from:{row:r,col:c},to:{row:to.row,col:to.col},piece:p,promotion:undefined};const undo=makeMvInPlace(s,mv2);if(undo){const kPos=p.type==='king'?{row:to.row,col:to.col}:(p.color==='white'?s.wk:s.bk);if(kPos&&!inCheck(s.board,p.color,kPos)){numSameTarget++;if(c===from.col)numSameFile++;if(r===from.row)numSameRow++;}unmakeMv(s,undo);}}}}
 // PGN standard disambiguation: file first, then rank, then both
-if(numSameTarget>0){if(numSameFile===0)n+=String.fromCharCode(97+from.col);else if(numSameRow===0)n+=(8-from.row);else n+=String.fromCharCode(97+from.col)+(8-from.row)}
+if(numSameTarget>0){if(numSameFile===0)n+=String.fromCodePoint(97+from.col);else if(numSameRow===0)n+=(8-from.row);else n+=String.fromCodePoint(97+from.col)+(8-from.row)}
 }
-if(piece.type==='pawn'&&isCap)n+=String.fromCharCode(97+from.col);if(isCap)n+='x';n+=posAlg(to);if(promotion)n+='='+(promotion==='knight'?'N':promotion[0].toUpperCase())}
+if(piece.type==='pawn'&&isCap)n+=String.fromCodePoint(97+from.col);if(isCap)n+='x';n+=posAlg(to);if(promotion)n+='='+(promotion==='knight'?'N':promotion[0].toUpperCase())}
 // v1.1.2 PHASE 71 (robustness): guard against `setupMode` being undefined
 // (e.g. if moveAlg is called before ui.js has declared the global). Other
 // call sites in this file use `typeof setupMode!=='undefined'&&setupMode`;
@@ -2663,7 +2663,7 @@ const fen=(typeof _sanitizeFenForEngine==='function')?_sanitizeFenForEngine(gene
 // manages its own time allocation via UCI wtime/btime/winc/binc parameters.
 // This is the correct way to play timed games — the engine will think longer
 // in critical positions and shorter in simple ones, just like a human.
-if(typeof gameClocks!=='undefined'&&gameClocks&&typeof AndroidBridge.engineGoTimed==='function'){
+if(gameClocks !== undefined&&gameClocks&&typeof AndroidBridge.engineGoTimed==='function'){
   const wMs=Math.round(gameClocks.white.remainingSec*1000);
   const bMs=Math.round(gameClocks.black.remainingSec*1000);
   const wincMs=(gameClocks.type==='fischer')?Math.round((gameClocks.incrementSec||0)*1000):0;
@@ -2706,7 +2706,7 @@ if(gameState.currentTurn===playerColor)return;
 if(_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
 isAIThinking=true;
 // v1.0.8 PHASE 22 supplement: AI-think-start sound (轻微滴声)
-try{if(typeof playSound==='function')playSound('aiThinkStart');}catch(e){}
+try{if(typeof playSound==='function')playSound('aiThinkStart');}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}
 hintText='';isHintLoading=false;_hintBarInfo='';_ponderGen++;_ponderBarInfo='';_ponderMoveSAN='';_pendingPonderMoveUCI=null;
 aiThinkInfo=T('thinking');_aiBarInfo=T('thinking');_updateAIThinkDisplay();
 // v1.0.8 PHASE 22: Lightweight UI update — avoid full render() which would

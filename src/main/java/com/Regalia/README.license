@@ -1,3 +1,45 @@
+v1.2.1 round-15 (2026.7.14) — Final perfection: comprehensive PDF-guided audit:
+  - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
+    refinement).
+  - No Java source files modified in this pass. PDF-guided audit verified
+    WebView security settings (setAllowFileAccess(false),
+    setAllowFileAccessFromFileURLs(false),
+    setAllowUniversalAccessFromFileURLs(false)), @JavascriptInterface
+    annotation, onDestroy cleanup, debug mode never enabled, TLS pinning.
+    All findings confirm existing security posture is correct.
+  - License classification: all files in this directory retain their
+    existing classification.
+
+v1.2.1 round-14 (2026.7.14) — S3776 _renderDialogs extraction + S2703 typeof audit:
+  - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
+    refinement).
+  - No Java source files modified in this pass. All round-14 changes were
+    in chess.src/ JS modules. See chess.src/README.license for details.
+  - License classification: all files in this directory retain their
+    existing classification.
+
+v1.2.1 round-13 (2026.7.14) — S3776 cognitive complexity: renderInternal God Function refactor:
+  - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
+    refinement).
+  - No Java source files modified in this pass. All round-13 changes were
+    in chess.src/ui.js. See chess.src/README.license for details.
+  - License classification: all files in this directory retain their
+    existing classification.
+
+v1.2.1 round-12 (2026.7.14) — SonarCloud PR #43 bugs + code smells cleanup:
+  - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
+    refinement).
+  - No Java source files modified in this pass. All round-12 changes were
+    in chess.src/ (JS modules) and index.html.tpl (CSS). See
+    chess.src/README.license for details.
+  - License classification: all files in this directory retain their
+    existing classification (AGPL v3 for MainActivity, ChessApp,
+    StatsActivity, ChessWebViewClient, TlsSecurityHelper,
+    StabilizationHelper, RootDetector, EngineService; GPL v3 for
+    StockfishNative, EngineProcessManager, EngineHealthMonitor,
+    JsBridgeGateway, PgnCacheManager, FileIoHelper, PermissionHelper,
+    SafPickerHelper, EngineSettingsHelper, EngineConfigHelper).
+
 v1.2.1 round-11 (2026.7.14) — 2 user-reported bugs + review-report defects + first-principles optimization:
   - FileIoHelper.java (GPL v3): getDefaultPaths() deprecated API fix (P2).
     On API 29+ (Android 10+), Environment.getExternalStorageDirectory()

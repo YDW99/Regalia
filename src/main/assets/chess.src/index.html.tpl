@@ -491,12 +491,14 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
      import, save-pgn, pgn-cache — all have inline style="max-width:Npx") keep
      their natural content height and are positioned "slightly above center"
      by the .dov asymmetric padding rule (see Phase 21 fix below). */
-  .dlg:not([style*="max-width"]){max-width:100%;width:100%;height:100%;max-height:100%;padding:0;margin:0;border-radius:0;border:none;display:flex;flex-direction:column;overflow:hidden;align-self:stretch}
   /* v1.0.7 PHASE 21 (bug fix): Fullscreen dialog cancels the .dov asymmetric
      padding (padding-top:10px + padding-bottom:12vh) so it truly fills the
      entire overlay (not just the content area between paddings). Negative
-     margins on all four sides cancel .dov's padding + safe-area insets. */
-  .dlg:not([style*="max-width"]){margin-top:-10px;margin-bottom:calc(-12vh);margin-left:calc(-1 * (env(safe-area-inset-right) + 3px));margin-right:calc(-1 * env(safe-area-inset-left))}
+     margins on all four sides cancel .dov's padding + safe-area insets.
+     v1.2.1 round-12 (S3646): Merged the two .dlg:not([style*="max-width"])
+     rules — SonarCloud flagged them as duplicate selectors. The merge
+     preserves both the layout reset and the negative-margin cancellation. */
+  .dlg:not([style*="max-width"]){max-width:100%;width:100%;height:100%;max-height:100%;padding:0;margin-top:-10px;margin-bottom:calc(-12vh);margin-left:calc(-1 * (env(safe-area-inset-right) + 3px));margin-right:calc(-1 * env(safe-area-inset-left));border-radius:0;border:none;display:flex;flex-direction:column;overflow:hidden;align-self:stretch}
   .dlg:not([style*="max-width"]) > h2{padding:14px 16px 10px;margin:0;border-bottom:2px solid var(--border2);flex-shrink:0;background:var(--card);position:sticky;top:0;z-index:2}
   .dlg:not([style*="max-width"]) > .dlg-content{flex:1 1 auto;overflow-y:auto;padding:12px 14px;-webkit-overflow-scrolling:touch;min-height:0}
   .dlg:not([style*="max-width"]) > .dlg-btns{display:flex;gap:8px;padding:10px 14px;border-top:2px solid var(--border2);background:var(--card);margin:0;flex:0 0 auto}
@@ -898,8 +900,8 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
   margin: 0;
 }
 .review-left .review-board { padding: 0; flex-shrink: 0; margin: 0; }
-.review-left .review-board .bgrid { max-width: none; }
-.review-left .review-board .bgrid { touch-action: pan-y; }
+/* v1.2.1 round-12 (S3646): Merged the two duplicate .bgrid rules into one. */
+.review-left .review-board .bgrid { max-width: none; touch-action: pan-y; }
 /* Move list takes ALL remaining width (flex:1 1 0). Has its OWN independent
    scroll viewport: height matches the board height (set via JS --rv-board-h). */
 .review-moves {

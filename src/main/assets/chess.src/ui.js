@@ -416,8 +416,8 @@ function _updateEvalDisplayIncremental() {
       const recoveryJson = JSON.stringify(recoveryData);
       localStorage.setItem('Regalia_recovery', recoveryJson);
       // v1.0.4 Round-5 Rev16: Also persist to Java side (HyperOS 3 cache-wipe proof)
-      try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_recovery',recoveryJson);}catch(e){}
-    } catch(e) {}
+      try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_recovery',recoveryJson);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+    } catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
 
     // If this is a render error (indicated by the stack trace), show recovery UI
     if (error && error.stack && error.stack.indexOf('renderInternal') !== -1) {
@@ -455,7 +455,7 @@ function _updateEvalDisplayIncremental() {
     let saved = localStorage.getItem('Regalia_recovery');
     // v1.0.4 Round-5 Rev16: Fall back to persistent Java store if HyperOS 3 wiped localStorage
     if(!saved){
-      try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentGet){const persisted=AndroidBridge.persistentGet('Regalia_recovery');if(persisted){saved=persisted;try{localStorage.setItem('Regalia_recovery',persisted);}catch(e){}}}}catch(e){}
+      try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentGet){const persisted=AndroidBridge.persistentGet('Regalia_recovery');if(persisted){saved=persisted;try{localStorage.setItem('Regalia_recovery',persisted);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}}}}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
     }
     if (saved) {
       // v1.2.1 round-9: Parse to validate the data shape, but do NOT apply
@@ -464,7 +464,7 @@ function _updateEvalDisplayIncremental() {
       // original crash. The data is retained in storage for 5s (below) as a
       // diagnostic artifact, then cleared if the engine started successfully.
       let data = null;
-      try { data = JSON.parse(saved); } catch(e) {}
+      try { data = JSON.parse(saved); } catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
       if (data && data.gameState && Date.now() - data.timestamp < 3600000) {
         // Recovery data is valid and fresh — available for inspection via
         // DevTools if needed, but intentionally not auto-applied.
@@ -472,12 +472,12 @@ function _updateEvalDisplayIncremental() {
       // Clear recovery data after successful load
       setTimeout(function() {
         if (typeof _engineReady !== 'undefined' && (_engineReady || document.getElementById('board-grid'))) {
-          try{localStorage.removeItem('Regalia_recovery');}catch(e){}
-          try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentRemove)AndroidBridge.persistentRemove('Regalia_recovery');}catch(e){}
+          try{localStorage.removeItem('Regalia_recovery');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+          try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentRemove)AndroidBridge.persistentRemove('Regalia_recovery');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
         }
       }, 5000);
     }
-  } catch(e) {}
+  } catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
 })();
 
 // AI-GEN: AI assisted
@@ -1647,8 +1647,10 @@ function formatEval(){
       const whiteWins=gameOver.includes(T('white_wins'))||gameOver.includes('White wins');
       const playerWins=(playerColor==='white')===whiteWins;
       // Checkmate already on the board — show mate distance if available
+      // v1.2.1 round-12 (S3358): refactored nested ternary into if/else for clarity.
       const md=Math.abs(_sfMateDistance||0);
-      const mateStr=md>0?(whiteWins?'#+'+md:'#-'+md):(whiteWins?'#+':'#-');
+      const mateSign=whiteWins?'+':'-';
+      const mateStr=md>0?('#'+mateSign+md):('#'+mateSign);
       return{emoji:playerWins?'🏆':'💀',desc:playerWins?T('winning'):T('losing'),score:mateStr};
     }
     // v1.0.4 LATEST FIX: timeout win was incorrectly showing as draw (🤝).
@@ -1679,7 +1681,7 @@ function formatEval(){
   // If the cache has the eval for the current reviewStep, return it immediately —
   // don't show "analyzing" even if _evalLoading is true (e.g. from a stale debounce
   // timer or a race condition between reviewGoTo and render throttle).
-  if(reviewMode&&typeof reviewStep!=='undefined'&&typeof _reviewEvalCache!=='undefined'){
+  if(reviewMode&&typeof reviewStep!=='undefined'&&_reviewEvalCache !== undefined){
     const cachedReview=_reviewEvalCache.peek(reviewStep);
     if(cachedReview!=null){
       const evP=playerColor==='white'?cachedReview.eval:-cachedReview.eval;
@@ -1752,6 +1754,32 @@ function _applyGameOver(cachedSt){
   if(goStr){gameOver=goStr;_gameOverStatusKey=st;if((st==='checkmate'||goStr.includes('将杀')||goStr.includes('Checkmate'))&&moveRecords.length>0){const last=moveRecords[moveRecords.length-1];// v1.0.2 FIX: null-safe — last entry may be the black-to-move null placeholder
       // in pathological edge cases (no real moves executed). Skip notation patching if so.
       if(last&&last.notation&&!last.notation.endsWith('#')){last.notation=last.notation.replace(/\+$/,'')+'#';}_sfMateDistance=0;_sfDepth=0;_sfSeldepth=0;_sfEval=gameState.currentTurn==='black'?99999:-99999;_sfEvalReady=true;}}
+}
+
+// v1.2.1 round-12 (S3358): Extracted game-over icon + style computation into
+// helpers to eliminate a 4-way nested ternary in renderInternal's game-over
+// overlay. Behavior is identical to the previous inline expression; the helpers
+// just give each branch a name so the dispatch is readable.
+function _gameOverIconStyle(){
+  // Checkmate: render the losing side's king glyph in its color.
+  // Other endings (resign/timeout/draw) use the system emoji font.
+  if(_gameOverStatusKey==='checkmate'){
+    if(gameState.currentTurn==='black'){
+      // White gave checkmate — black king on light backdrop
+      return 'color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55)';
+    }
+    // Black gave checkmate — white king on dark backdrop
+    return 'color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55)';
+  }
+  return 'font-family:system-ui,sans-serif';
+}
+function _gameOverIconChar(){
+  if(_gameOverStatusKey==='checkmate'){
+    return gameState.currentTurn==='black'?'♔\uFE0E':'♚\uFE0E';
+  }
+  if(_gameOverStatusKey==='resign') return '🏳️';
+  if(_gameOverStatusKey==='timeout') return '⌛';
+  return '🤝'; // draw / stalemate / unknown
 }
 
 // ===================== GAME STATE =====================
@@ -2123,32 +2151,22 @@ function render(){
  * @param {string} h - Current HTML string
  * @returns {string} h with dialog HTML appended
  */
-function _renderDialogs(h){
-// ===================== NEW GAME DIALOG =====================
-if(showNewGameDialog){
+/**
+ * v1.2.1 round-14 (S3776): Render the New Game dialog.
+ *
+ * Extracted from _renderDialogs() to reduce its cognitive complexity (was CC=71).
+ * This is the largest dialog (~118 lines) and the primary source of complexity
+ * due to the Chess960-vs-Classic-Openings if/else, the time-control conditional
+ * inputs, and the mutual-exclusivity gray-out logic.
+ *
+ * @param {string} h - Current HTML string
+ * @returns {string} h with New Game dialog HTML appended
+ */
+function _renderNewGameDialog(h){
 h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="${T('new_game_settings')}" onclick="if(event.target===this){showNewGameDialog=false;render()}"><div class="dlg"><h2>⚔️ ${T('new_game_settings')}</h2><div class="dlg-content">`;
 h+=`<div class="dlg-sec"><h3>${T('play_color')}</h3><div class="clr-row"><button class="clr-btn${dlgPlayerColor==='white'?' act':''}" onclick="dlgPlayerColor='white';render()"><span style="color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text;font-size:1.6rem">♔&#xFE0E;</span>${T('white_first')}</button><button class="clr-btn${dlgPlayerColor==='black'?' act':''}" onclick="dlgPlayerColor='black';render()"><span style="color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text;font-size:1.6rem">♚&#xFE0E;</span>${T('black_second')}</button></div></div>`;
-// v1.0.4 FIX (this round): Chess960 toggle is now placed DIRECTLY BELOW the
-// play_color section (per user request). The "Use ECO Book" toggle below
-// remains mutually exclusive — when it is ON, this Chess960 toggle is grayed out.
-// When Chess960 is ON, the dedicated Chess960 settings (SP-ID, preview, note)
-// replace the Classic Openings section further below (existing behavior, unchanged).
-// v1.0.6 GRAY-OUT UNIFICATION: Only the toggle button itself is dimmed and
-// disabled — the section heading "菲舍尔任意制象棋"/"Fischer Random (Chess960)"
-// and the description "启用 Chess960 模式"/"Enable Chess960 mode" remain at
-// full opacity. A new gray-out explanation is shown below the toggle when it
-// is grayed out, using the same color as the matching text in the Engine
-// Configuration advanced settings dialog.
 const _ch960Grayed=dlgBookMoves;
 h+=`<div class="dlg-sec"><h3>${T('chess960_label')}</h3><div class="toggle" onclick="${_ch960Grayed?'':`dlgChess960=!dlgChess960;HapticManager.fire(dlgChess960?'TOGGLE_ON':'TOGGLE_OFF');if(dlgChess960){dlgOpeningId=null;}render()`}" style="margin-bottom:10px;${_ch960Grayed?'opacity:.4;pointer-events:none':''}"><span>${T('chess960_enable')}</span><div class="toggle-sw${dlgChess960?' on':''}"></div></div>${_ch960Grayed?`<div style="font-size:.7rem;color:var(--red);margin-top:-4px;margin-bottom:6px">${T('gray_disabled_by_eco_book')}</div>`:''}</div>`;
-// v1.0.4 EXPANSION (this round): Time Control selector
-//   - Type dropdown: Untimed / Sudden Death / Fischer Increment / Bronstein Delay / US Delay
-//   - Base time input (minutes), shown when type != 'off'
-//   - Increment input (sec/move), shown for 'fischer'
-//   - Delay input (sec/move), shown for 'bronstein' and 'usdelay'
-//   - When time control is active, the in-game UI shows live clocks; PGN export
-//     emits [TimeControl "..."] header + per-move [%clk HH:MM:SS] comments.
-//   - When untimed, PGN export emits [%emt HH:MM:SS] (elapsed move time) comments.
 h+=`<div class="dlg-sec"><h3>${T('time_control_label')}</h3>`;
 h+=`<select id="timeControlType" style="width:100%;padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;cursor:pointer;margin-bottom:10px" onchange="HapticManager.fire('BUTTON_PRESS');dlgTimeControl.type=this.value;render()">`;
 const _tcTypes=[['off','time_control_off'],['sudden','time_control_sudden'],['fischer','time_control_fischer'],['bronstein','time_control_bronstein'],['usdelay','time_control_usdelay']];
@@ -2157,7 +2175,6 @@ for(const [v,key] of _tcTypes){
 }
 h+=`</select>`;
 if(dlgTimeControl.type!=='off'){
-  // Base time (minutes)
   h+=`<div class="portrait-stack" style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><label style="font-size:.78rem;color:var(--muted);flex:1">${T('time_control_base_min')}</label><input type="number" min="1" max="600" value="${Math.round((dlgTimeControl.baseSec||300)/60)}" style="width:80px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;text-align:center" oninput="const v=parseInt(this.value,10);if(!isNaN(v)&&v>=1){dlgTimeControl.baseSec=v*60;}"></div>`;
   if(dlgTimeControl.type==='fischer'){
     h+=`<div class="portrait-stack" style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><label style="font-size:.78rem;color:var(--muted);flex:1">${T('time_control_inc_sec')}</label><input type="number" min="0" max="60" value="${dlgTimeControl.incrementSec||0}" style="width:80px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;text-align:center" oninput="const v=parseInt(this.value,10);if(!isNaN(v)&&v>=0){dlgTimeControl.incrementSec=v;}"></div>`;
@@ -2168,55 +2185,37 @@ if(dlgTimeControl.type!=='off'){
 }
 h+=`<div style="font-size:.7rem;color:var(--muted);margin-top:4px">${T('time_control_note')}</div>`;
 h+=`</div>`;
-// v1.0.4 FIX (this round): AI Book Moves toggle.
-//   - When Chess960 is enabled, this toggle is grayed out (Chess960 has no fixed opening theory).
-//   - When this toggle is ON, the Chess960 toggle (above) is grayed out (mutual exclusivity).
-//   - v1.0.6 GRAY-OUT UNIFICATION: Only the toggle button itself is dimmed and
-//     disabled — the section heading "AI开局库"/"AI Opening Book", the description
-//     "使用ECO开局库"/"Use ECO Book", and the explanation paragraph remain at
-//     full opacity. A new gray-out explanation appears below the toggle when it
-//     is grayed out.
 const _ecoGrayed=dlgChess960;
 h+=`<div class="dlg-sec"><h3>${T('ai_book')}</h3><div class="toggle" onclick="${_ecoGrayed?'':`dlgBookMoves=!dlgBookMoves;HapticManager.fire(dlgBookMoves?'TOGGLE_ON':'TOGGLE_OFF');render()`}" style="margin-bottom:10px;${_ecoGrayed?'opacity:.4;pointer-events:none':''}"><span>${T('book_moves')}</span><div class="toggle-sw${dlgBookMoves?' on':''}"></div></div>${_ecoGrayed?`<div style="font-size:.7rem;color:var(--red);margin-top:-4px;margin-bottom:6px">${T('gray_disabled_by_chess960')}</div>`:''}</div><div style="font-size:.72rem;color:var(--muted);margin-bottom:10px">${T('eco_book_desc')}</div></div>`;
-// v1.0.4 FIX (this round): The "Classic Openings" section and the "Chess960" section
-// are MUTUALLY EXCLUSIVE — when Chess960 is ON, the Classic Openings area is
-// REPLACED by the Chess960-specific settings (SP-ID input, back-rank preview, note).
-// When Chess960 is OFF, the Classic Openings area shows as before (now WITHOUT
-// the redundant "Classic Openings (Optional)" heading — it was a residual title
-// since the user already knows they're in classic mode).
-// The Chess960 toggle itself is shown above (directly below play_color).
-// When "Use ECO Book" is ON, the Chess960 toggle is grayed out (mutual exclusivity).
 if(dlgChess960&&!dlgBookMoves){
-  // Chess960 is ON — show Chess960-specific settings INSTEAD of Classic Openings.
-  // v1.0.4 Rev25 FIX: Removed the <h3>${T('chess960_label')}</h3> section heading.
-  // The Chess960 toggle above (with its own label "菲舍尔任意制象棋"/"Fischer Random
-  // Chess") already makes it clear what mode the user is in. The redundant
-  // heading consumed vertical space and duplicated information. The settings
-  // (SP-ID input, back-rank preview, note) now appear directly under the toggle.
-  // v1.0.8 PORTRAIT REDESIGN: The SP-ID row is restructured so that in portrait
-  // mode the CSS can stack "label + Random button" above "input + 🎲 button"
-  // (the latter two stay side-by-side in a sub-wrapper, since together they're
-  // ~120px wide and fit any phone viewport). In landscape, the outer flex row
-  // lays all 4 elements horizontally as before.
+  h=_renderChess960Settings(h);
+}else{
+  h=_renderClassicOpeningsList(h);
+}
+h+=`</div>`; // close .dlg-content
+h+=`<div class="dlg-btns"><button type="button" class="btn btn-s" onclick="showNewGameDialog=false;dlgOpeningId=null;render()">${T('cancel')}</button><button type="button" class="btn btn-p" onclick="startGame()">${T('start_game_pawn')}</button></div>`;
+h+=`</div></div>`;
+return h;
+}
+
+/**
+ * v1.2.1 round-14 (S3776): Render Chess960 SP-ID settings section (inside New Game dialog).
+ * Extracted from _renderNewGameDialog to further reduce cognitive complexity.
+ */
+function _renderChess960Settings(h){
   const curSPID=dlgChess960SPID>=0?dlgChess960SPID:-1;
-  const previewSPID=curSPID>=0?curSPID:518; // default preview = traditional position
+  const previewSPID=curSPID>=0?curSPID:518;
   const backRank=spidToBackRank(previewSPID);
   const pieceSym={rook:'♖',knight:'♘',bishop:'♗',queen:'♕',king:'♔'};
   h+=`<div class="dlg-sec">`;
-  // v1.0.8: outer flex row — in portrait, CSS forces flex-direction:column
-  // so label stacks above Random button, which stacks above the input+🎲 sub-row.
   h+=`<div class="portrait-stack" style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap">`;
   h+=`<label style="font-size:.78rem;color:var(--muted)">${T('chess960_spid')}: </label>`;
   h+=`<button class="btn" style="padding:4px 10px;font-size:.78rem;${curSPID===-1?'background:var(--accent);color:var(--bg);font-weight:700':''}" onclick="HapticManager.fire('BUTTON_PRESS');dlgChess960SPID=-1;render()">${T('chess960_random')}</button>`;
-  // v1.0.8: sub-wrapper for input + 🎲 button — NOT a direct child of .dlg-sec,
-  // so the portrait CSS stacking rule (.dlg-sec > div[style*="display:flex"])
-  // does NOT apply. This keeps input and 🎲 side-by-side in all orientations.
   h+=`<div style="display:flex;gap:6px;align-items:center;flex:1;min-width:120px">`;
   h+=`<input type="number" min="0" max="959" value="${curSPID>=0?curSPID:''}" placeholder="0-959" style="flex:1;width:80px;min-width:0;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;text-align:center" oninput="const v=parseInt(this.value,10);if(!isNaN(v)&&v>=0&&v<960){dlgChess960SPID=v;render();}else if(this.value===''){dlgChess960SPID=-1;render();}">`;
   h+=`<button class="btn" style="padding:4px 10px;font-size:.78rem;flex-shrink:0" onclick="HapticManager.fire('BUTTON_PRESS');dlgChess960SPID=(typeof secureRandomInt==='function'?secureRandomInt(960):Math.floor(Math.random()*960));render();">🎲</button>`;
   h+=`</div>`;
   h+=`</div>`;
-  // Back-rank preview — responsive grid; piece symbols use board piece styling
   const _wPieceStyle="color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:'DejaVu Sans','Noto Sans','Segoe UI Symbol',sans-serif;font-variant-emoji:text;font-weight:400";
   h+=`<div style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:6px;margin-bottom:6px"><div style="font-size:.7rem;color:var(--muted);margin-bottom:4px">${T('chess960_preview')} (SP-ID ${previewSPID})</div><div style="display:grid;grid-template-columns:repeat(8,1fr);gap:0;font-size:1.4rem;background:#3a2a1a;padding:4px;border-radius:4px">`;
   for(let c=0;c<8;c++){
@@ -2228,11 +2227,14 @@ if(dlgChess960&&!dlgBookMoves){
   h+=`</div></div>`;
   h+=`<div style="font-size:.7rem;color:var(--muted);margin-top:4px">${T('chess960_note')}</div>`;
   h+=`</div>`;
-}else{
-  // Chess960 is OFF — show Classic Openings list.
-  // v1.0.4 FIX (this round): Removed the redundant <h3>${T('classic_openings')}</h3>
-  // heading — it was a residual title. The section is self-evident from the ECO
-  // search box and openings list below.
+  return h;
+}
+
+/**
+ * v1.2.1 round-14 (S3776): Render Classic Openings list section (inside New Game dialog).
+ * Extracted from _renderNewGameDialog to further reduce cognitive complexity.
+ */
+function _renderClassicOpeningsList(h){
   h+=`<div class="dlg-sec"><div class="portrait-stack" style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap"><form onsubmit="event.preventDefault();if(!_ecoComposing){_ecoDoSearch()}" style="flex:1;min-width:160px;display:flex;gap:4px"><input id="ecoSearch" type="text" inputmode="search" aria-label="${T('eco_search_ph')}" placeholder="${T('eco_search_ph')}" style="flex:1;padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;touch-action:manipulation" enterkeyhint="search" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" oninput="if(!_ecoComposing){setEcoQuery(this.value)}" onfocus="_ecoSearchFocused=true;if(_ecoBlurTimer){clearTimeout(_ecoBlurTimer);_ecoBlurTimer=0}" onblur="_ecoBlurTimer=setTimeout(function(){_ecoSearchFocused=false;_ecoBlurTimer=0},200)" oncompositionstart="_ecoComposing=true" oncompositionend="_ecoComposing=false;setEcoQuery(this.value)" onkeydown="if((event.key==='Enter'||event.keyCode===13)&&!event.isComposing&&!_ecoComposing){event.preventDefault();setEcoQuery(this.value);_ecoDoSearch()}" value="${(window.ecoSearchQuery||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c]))}"></form><select id="ecoFamily" style="padding:8px 12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;cursor:pointer;flex-shrink:0" onchange="window.ecoFamilyFilter=this.value;ecoShowCount=30;_ecoUpdateResults()"><option value="">${T('all_categories')}</option>${Object.keys(ECO_BY_FAMILY).sort((a,b)=>a.localeCompare(b)).map(f=>`<option value="${f}"${(window.ecoFamilyFilter||'')===f?' selected':''}>${f}</option>`).join('')}</select></div><div class="op-list"><button class="op-btn${!dlgOpeningId?' act':''}" onclick="dlgOpeningId=null;window.ecoSearchQuery='';window.ecoFamilyFilter='';ecoShowCount=30;_ecoUpdateResults()"><div class="on">${T('free_opening_btn')}</div><div class="os">${T('from_start')}</div></button>`;
   _ensureEcoParsed();ecoDisplayList=ECO_OPENINGS;
   if(window.ecoSearchQuery){const q=window.ecoSearchQuery.trim().toUpperCase();ecoDisplayList=searchEco(q)}
@@ -2240,55 +2242,176 @@ if(dlgChess960&&!dlgBookMoves){
   for(const o of ecoDisplayList.slice(0,ecoShowCount))h+=`<button class="op-btn${dlgOpeningId===o.id+'|'+o.name?' act':''}" onclick="dlgOpeningId='${_escJs(o.id)}|${_escJs(o.name)}';_ecoUpdateResults()"><div class="on">${_esc(o.id)} ${_esc(o.name)}</div><div class="os">${_esc(o.family)}</div></button>`;
   if(ecoDisplayList.length>ecoShowCount)h+=`<button class="btn btn-d" style="width:100%;margin-top:4px" onclick="ecoShowCount+=30;_ecoUpdateResults()">${T('load_more')} (+${ecoDisplayList.length-ecoShowCount})</button>`;
   h+=`</div></div>`;
+  return h;
 }
-h+=`</div>`; // close .dlg-content
-h+=`<div class="dlg-btns"><button type="button" class="btn btn-s" onclick="showNewGameDialog=false;dlgOpeningId=null;render()">${T('cancel')}</button><button type="button" class="btn btn-p" onclick="startGame()">${T('start_game_pawn')}</button></div>`;
-h+=`</div></div>`}
 
-// ===================== ENGINE CONFIG DIALOG =====================
-if(showEngineConfig){h+=renderEngineConfig();}
-
-// ===================== RESIGN CONFIRMATION =====================
-// v1.0.4 Rev27: Resign confirmation dialog (DeepSeek review 2.1)
-if(showResignConfirm){
+/**
+ * v1.2.1 round-14 (S3776): Render the Resign confirmation dialog.
+ * Extracted from _renderDialogs() to reduce its cognitive complexity.
+ */
+function _renderResignConfirmDialog(h){
 h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="${T('resign_confirm_title')}" onclick="if(event.target===this){showResignConfirm=false;render()}"><div class="dlg" style="max-width:380px"><h2>${T('resign_confirm_title')}</h2><div class="dlg-sec"><p style="font-size:.9rem;line-height:1.6;color:var(--text)">${T('resign_confirm_msg')}</p></div><div class="dlg-btns"><button type="button" class="btn" onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showResignConfirm=false;render()" style="flex:1;justify-content:center">${T('resign_no')}</button><button type="button" class="btn btn-p" onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showResignConfirm=false;_resignGame();render()" style="flex:1;justify-content:center;background:#c0392b;border-color:#a93226;color:#fff">${T('resign_yes')}</button></div></div></div>`;
+return h;
 }
 
-// ===================== ABOUT PAGE =====================
-if(showAboutPage){
-// Load AGPL v3 SVG via AndroidBridge as base64 (CSP-compliant)
+/**
+ * v1.2.1 round-14 (S3776): Render the About / license dialog.
+ * Extracted from _renderDialogs() to reduce its cognitive complexity.
+ */
+function _renderAboutDialog(h){
 let _gplSvgSrc='';
-try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.loadAssetAsBase64){const b64=AndroidBridge.loadAssetAsBase64('AGPLv3_Logo.svg');if(b64)_gplSvgSrc='data:image/svg+xml;base64,'+b64;}}catch(e){}
-h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="About"><div class="dlg" style="max-width:460px"><h2>${T('about_title')}</h2><div class="dlg-sec"><div class="crow"><span class="lb">${T('about_app')}</span><span class="vl">${T("app_name")} v1.2.1</span></div><div class="crow"><span class="lb">${T('about_engine')}</span><span class="vl">Stockfish 18 (arm64-v8a-dotprod)</span></div><div class="crow"><span class="lb">${T('about_platform')}</span><span class="vl">Android arm64-v8a</span></div></div><div class="dlg-sec"><h3>${T('copyright_license')}</h3>`+(_gplSvgSrc?`<div style="text-align:center;margin-bottom:10px"><img src="${_gplSvgSrc}" alt="AGPL v3 Logo" style="width:120px;height:auto;opacity:.9" /></div>`:'')+`<div style="font-size:.75rem;color:var(--text);line-height:1.6"><p style="margin-bottom:8px">${T('about_copyright')}</p><p style="margin-bottom:8px">${T('about_source_code_prefix')}<a href="${T('about_source_code_url')}" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">${T('about_source_code_url')}</a></p><p style="margin-bottom:8px">${T('about_agpl')} <a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GNU AGPL v3</a>${T('about_agpl_desc')}</p><p style="margin-bottom:8px">${T('about_droidfish')}<a href="https://github.com/peterosterlund2/droidfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">DroidFish</a>${T('about_droidfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a>${T('about_droidfish_tail')}</p><p style="margin-bottom:8px">${T('about_stockfish')}<a href="https://github.com/official-stockfish/Stockfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">Stockfish</a>${T('about_stockfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a> ${T('about_gplv3')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_disclaimer')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_ai')}</p></div></div><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="showAboutPage=false;render()" style="flex:1;justify-content:center">${T('close')}</button></div></div></div>`;}
+try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.loadAssetAsBase64){const b64=AndroidBridge.loadAssetAsBase64('AGPLv3_Logo.svg');if(b64)_gplSvgSrc='data:image/svg+xml;base64,'+b64;}}catch(e){console.warn('[About] AGPL SVG load failed:',e.message);_gplSvgSrc='';}
+h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="About"><div class="dlg" style="max-width:460px"><h2>${T('about_title')}</h2><div class="dlg-sec"><div class="crow"><span class="lb">${T('about_app')}</span><span class="vl">${T("app_name")} v1.2.1</span></div><div class="crow"><span class="lb">${T('about_engine')}</span><span class="vl">Stockfish 18 (arm64-v8a-dotprod)</span></div><div class="crow"><span class="lb">${T('about_platform')}</span><span class="vl">Android arm64-v8a</span></div></div><div class="dlg-sec"><h3>${T('copyright_license')}</h3>`+(_gplSvgSrc?`<div style="text-align:center;margin-bottom:10px"><img src="${_gplSvgSrc}" alt="AGPL v3 Logo" style="width:120px;height:auto;opacity:.9" /></div>`:'')+`<div style="font-size:.75rem;color:var(--text);line-height:1.6"><p style="margin-bottom:8px">${T('about_copyright')}</p><p style="margin-bottom:8px">${T('about_source_code_prefix')}<a href="${T('about_source_code_url')}" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">${T('about_source_code_url')}</a></p><p style="margin-bottom:8px">${T('about_agpl')} <a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GNU AGPL v3</a>${T('about_agpl_desc')}</p><p style="margin-bottom:8px">${T('about_droidfish')}<a href="https://github.com/peterosterlund2/droidfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">DroidFish</a>${T('about_droidfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a>${T('about_droidfish_tail')}</p><p style="margin-bottom:8px">${T('about_stockfish')}<a href="https://github.com/official-stockfish/Stockfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">Stockfish</a>${T('about_stockfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a> ${T('about_gplv3')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_disclaimer')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_ai')}</p></div></div><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="showAboutPage=false;render()" style="flex:1;justify-content:center">${T('close')}</button></div></div></div>`;
+return h;
+}
 
-// ===================== IMPORT DIALOG =====================
-// Import dialog — paste FEN, paste PGN, or select PGN file
-if(showImportDialog){
+/**
+ * v1.2.1 round-14 (S3776): Render the Import (FEN/PGN) dialog.
+ * Extracted from _renderDialogs() to reduce its cognitive complexity.
+ */
+function _renderImportDialog(h){
 h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="${T('import_title')}" onclick="if(event.target===this){showImportDialog=false;render()}"><div class="dlg" style="max-width:420px"><h2>${T('import_title')}</h2><div class="dlg-sec" style="gap:10px;display:flex;flex-direction:column">
 <button class="btn" style="width:100%;justify-content:center;gap:8px;padding:12px;font-size:.9rem" onclick="showImportDialog=false;_importFENWithSaveCheck()"><span style="font-size:1.3rem">📋</span> ${T('paste_fen_opt')}</button>
 <button class="btn" style="width:100%;justify-content:center;gap:8px;padding:12px;font-size:.9rem" onclick="showImportDialog=false;_doPastePGN()"><span style="font-size:1.3rem">📜</span> ${T('paste_pgn_opt')}</button>
 <button class="btn" style="width:100%;justify-content:center;gap:8px;padding:12px;font-size:.9rem" onclick="showImportDialog=false;_importPGNFileWithSaveCheck()"><span style="font-size:1.3rem">📂</span> ${T('select_pgn_file')}</button>
 </div><div class="dlg-btns"><button type="button" class="btn btn-s" onclick="showImportDialog=false;render()" style="flex:1;justify-content:center">${T('cancel')}</button></div></div></div>`;
+return h;
 }
 
-// ===================== PROMOTION DIALOG =====================
-if(pendingPromotion){const co=pendingPromotion.piece.color;const pcls=co==='white'?'w-prom':'bk-prom';h+=`<div class="prom-dov" role="dialog" aria-modal="true" aria-label="${T('select_promotion')}" onclick="if(event.target===this){pendingPromotion=null;render()}"><div class="prom-dlg"><h3>${T('select_promotion')}</h3><div class="prom-row">`;for(const t of['queen','rook','bishop','knight'])h+=`<button class="prom-btn ${pcls}" onclick="doPromotion('${t}')">${SYM[co][t]}</button>`;h+=`</div><button class="btn" style="margin-top:12px;font-size:.8rem" onclick="pendingPromotion=null;render()">${T('cancel')}</button></div></div>`}
-
-// ===================== PGN SAVE PROMPT =====================
-// v1.0.2: PGN save prompt dialog — shown before clearing move records
-if(showSavePGNPrompt){h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="${T('save_pgn_prompt')}" onclick="if(event.target===this){_savePGNCancel()}"><div class="dlg" style="max-width:320px"><h2>${T('save_pgn_prompt')}</h2><div class="dlg-btns" style="flex-wrap:wrap;gap:6px"><button type="button" class="btn btn-p" onclick="HapticManager.fire('BUTTON_PRESS');_savePGNYes()">${T('save_pgn_yes')}</button><button type="button" class="btn btn-s" onclick="HapticManager.fire('BUTTON_PRESS');_savePGNNo()">${T('save_pgn_no')}</button><button type="button" class="btn" onclick="HapticManager.fire('BUTTON_PRESS');_savePGNCancel()" style="flex:1 1 100%;margin-top:4px">${T('cancel')}</button></div></div></div>`;}
-
-// ===================== PGN CACHE MANAGER =====================
-// v1.0.4 Round-5 Rev18: PGN cache manager modal
-if(showPGNCacheManager){h+=_renderPGNCacheManager();}
-
+/**
+ * v1.2.1 round-14 (S3776): Render the pawn-promotion piece-selector dialog.
+ * Extracted from _renderDialogs() to reduce its cognitive complexity.
+ */
+function _renderPromotionDialog(h){
+const co=pendingPromotion.piece.color;const pcls=co==='white'?'w-prom':'bk-prom';
+h+=`<div class="prom-dov" role="dialog" aria-modal="true" aria-label="${T('select_promotion')}" onclick="if(event.target===this){pendingPromotion=null;render()}"><div class="prom-dlg"><h3>${T('select_promotion')}</h3><div class="prom-row">`;
+for(const t of['queen','rook','bishop','knight'])h+=`<button class="prom-btn ${pcls}" onclick="doPromotion('${t}')">${SYM[co][t]}</button>`;
+h+=`</div><button class="btn" style="margin-top:12px;font-size:.8rem" onclick="pendingPromotion=null;render()">${T('cancel')}</button></div></div>`;
 return h;
-} // end _renderDialogs
+}
+
+/**
+ * v1.2.1 round-14 (S3776): Render the "Save PGN?" prompt dialog.
+ * Extracted from _renderDialogs() to reduce its cognitive complexity.
+ */
+function _renderSavePGNPromptDialog(h){
+h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="${T('save_pgn_prompt')}" onclick="if(event.target===this){_savePGNCancel()}"><div class="dlg" style="max-width:320px"><h2>${T('save_pgn_prompt')}</h2><div class="dlg-btns" style="flex-wrap:wrap;gap:6px"><button type="button" class="btn btn-p" onclick="HapticManager.fire('BUTTON_PRESS');_savePGNYes()">${T('save_pgn_yes')}</button><button type="button" class="btn btn-s" onclick="HapticManager.fire('BUTTON_PRESS');_savePGNNo()">${T('save_pgn_no')}</button><button type="button" class="btn" onclick="HapticManager.fire('BUTTON_PRESS');_savePGNCancel()" style="flex:1 1 100%;margin-top:4px">${T('cancel')}</button></div></div></div>`;
+return h;
+}
+
+/**
+ * v1.2.1 round-14 (S3776): Render all modal dialogs.
+ *
+ * Refactored from a 181-line function (CC=71) into a thin dispatcher that
+ * delegates to per-dialog helpers. Each dialog is triggered by an independent
+ * boolean flag and produces self-contained HTML overlay markup.
+ *
+ * @param {string} h - Current HTML string
+ * @returns {string} h with any active dialog HTML appended
+ */
+function _renderDialogs(h){
+if(showNewGameDialog){h=_renderNewGameDialog(h);}
+if(showEngineConfig){h+=renderEngineConfig();}
+if(showResignConfirm){h=_renderResignConfirmDialog(h);}
+if(showAboutPage){h=_renderAboutDialog(h);}
+if(showImportDialog){h=_renderImportDialog(h);}
+if(pendingPromotion){h=_renderPromotionDialog(h);}
+if(showSavePGNPrompt){h=_renderSavePGNPromptDialog(h);}
+if(showPGNCacheManager){h+=_renderPGNCacheManager();}
+return h;
+}
 
 /**
  * Internal render function — builds the entire UI HTML string and sets innerHTML.
  * @side-effect Rebuilds entire app DOM, invalidates element cache
  */
+/**
+ * v1.2.1 round-15 (S3776): Build the review board's file labels (a-h row).
+ * Extracted from _renderReviewMode to reduce its cognitive complexity.
+ * @param {boolean} flip - Whether the board is flipped (black perspective)
+ * @param {number} labelW - Label area width in px
+ * @param {number} labelGap - Gap between label and board in px
+ * @param {number} boardPx - Board pixel size (cell*8)
+ * @param {number} labelH - Label area height in px
+ * @param {number} fontSize - Label font size in px
+ * @returns {string} HTML string for the file labels row
+ */
+function _buildRvFileLabels(flip,labelW,labelGap,boardPx,labelH,fontSize){
+  let s='<div style="position:absolute;left:'+(labelW+labelGap)+'px;top:0;width:'+boardPx+'px;height:'+labelH+'px;display:flex;flex-direction:row;pointer-events:none;z-index:11">';
+  for(let fc=0;fc<8;fc++){
+    const fileChar=flip?String.fromCodePoint(104-fc):String.fromCodePoint(97+fc);
+    s+='<div style="flex:1;display:flex;align-items:center;justify-content:center;font:'+fontSize+'px sans-serif;color:var(--text,#f5e6c8);user-select:none">'+fileChar+'</div>';
+  }
+  s+='</div>';
+  return s;
+}
+
+/**
+ * v1.2.1 round-15 (S3776): Build the review board's rank labels (1-8 column).
+ * Extracted from _renderReviewMode to reduce its cognitive complexity.
+ * @param {boolean} flip - Whether the board is flipped (black perspective)
+ * @param {number} labelW - Label area width in px
+ * @param {number} labelH - Label area height in px
+ * @param {number} labelGap - Gap between label and board in px
+ * @param {number} boardPx - Board pixel size (cell*8)
+ * @param {number} fontSize - Label font size in px
+ * @returns {string} HTML string for the rank labels column
+ */
+function _buildRvRankLabels(flip,labelW,labelH,labelGap,boardPx,fontSize){
+  let s='<div style="position:absolute;left:0;top:'+(labelH+labelGap)+'px;width:'+labelW+'px;height:'+boardPx+'px;display:flex;flex-direction:column;pointer-events:none;z-index:11">';
+  for(let fr=0;fr<8;fr++){
+    const rankNum=flip?(fr+1):(8-fr);
+    s+='<div style="flex:1;display:flex;align-items:center;justify-content:center;font:'+fontSize+'px sans-serif;color:var(--text,#f5e6c8);user-select:none">'+rankNum+'</div>';
+  }
+  s+='</div>';
+  return s;
+}
+
+/**
+ * v1.2.1 round-15 (S3776): Prepare visual annotations ([%csl]/[%cal]) for the
+ * review board. Extracted from _renderReviewMode to reduce its cognitive complexity.
+ *
+ * Returns {va, cslMap, calList}:
+ *   - va: the raw visual annotations object (or null)
+ *   - cslMap: {squareKey -> [colors]} for O(1) lookup during cell render
+ *   - calList: array of {color, from, to} for SVG rendering
+ *
+ * When showCtrlMap is true (heatmap mode), returns all-null (annotations are
+ * not shown — the heatmap replaces them).
+ */
+function _prepareRvVisualAnnotations(showCtrlMap){
+  let va=null;
+  let cslMap=null;
+  let calList=null;
+  if(showCtrlMap||typeof _getVisualAnnotations!=='function'||typeof reviewStep==='undefined'){
+    return {va,cslMap,calList};
+  }
+  if(reviewStep>0){
+    va=_getVisualAnnotations(reviewStep-1);
+  }else if(reviewStep===0){
+    va=_getVisualAnnotations('_initial');
+    if(!va&&typeof _computeInitialPositionAnnotations==='function'){
+      _computeInitialPositionAnnotations();
+      va=_getVisualAnnotations('_initial');
+    }
+  }
+  if(va){
+    if(va.csl&&va.csl.length>0){
+      cslMap={};
+      for(const h of va.csl){
+        if(h&&h.color&&h.square){
+          if(!cslMap[h.square])cslMap[h.square]=[];
+          cslMap[h.square].push(h.color);
+        }
+      }
+    }
+    if(va.cal&&va.cal.length>0){
+      calList=va.cal;
+    }
+  }
+  return {va,cslMap,calList};
+}
+
 /**
  * v1.2.0 Phase 82+: Render review mode UI (board, eval bar, slider, chart, nav, analyze).
  *
@@ -2348,27 +2471,21 @@ const _rvLabelH=Math.floor(_rvCell*0.4);
 const _rvLabelGap=2;
 const _rvBoardPx=_rvCell*8;
 const _rvFullBoardH=_rvBoardPx+_rvLabelH+_rvLabelGap; // board + top label row
-// v1.0.3 patch: new DOM structure for landscape — .review-top (board+moves) +
-// .review-bottom (chart+controls full width). In portrait, fall back to the
-// original stacked layout (.review-left with everything inline, .review-moves below).
-if(_isLandscapeReview){
-  h+='<div class="review-body" style="--rv-board-h:'+_rvFullBoardH+'px">';
-  h+='<div class="review-top">';
-  // .review-left holds ONLY the board (no inline controls — they moved to .review-bottom)
-  h+='<div class="review-left">';
-  // v1.2.0 Phase 83: inline padding reserves space for absolute-positioned coordinate labels.
-  // Overrides CSS .review-board{padding:12px} (portrait) and .review-left .review-board{padding:0} (landscape).
-  h+='<div class="review-board" style="padding-top:'+(_rvLabelH+_rvLabelGap)+'px;padding-left:'+(_rvLabelW+_rvLabelGap)+'px;padding-right:0;padding-bottom:0">';
-  h+='<div class="bgrid" style="grid-template-columns:repeat(8,'+_rvCell+'px);grid-template-rows:repeat(8,'+_rvCell+'px)">';
-}else{
-  // Portrait: same unified layout as landscape — .review-top wraps board + moves.
-  // v1.2.1 fix: Added missing .review-top open tag (was pre-existing bug from v1.1.2).
-  h+='<div class="review-body" style="--rv-board-h:'+_rvFullBoardH+'px">';
-  h+='<div class="review-top">';
-  h+='<div class="review-left">';
-  h+='<div class="review-board" style="padding-top:'+(_rvLabelH+_rvLabelGap)+'px;padding-left:'+(_rvLabelW+_rvLabelGap)+'px;padding-right:0;padding-bottom:0">';
-  h+='<div class="bgrid" style="grid-template-columns:repeat(8,'+_rvCell+'px);grid-template-rows:repeat(8,'+_rvCell+'px)">';
-}
+// v1.1.0 Phase 53: Portrait and landscape now use the same DOM skeleton.
+// The _isLandscapeReview flag is still used later for board sizing (cell width)
+// and two-layer scroll decisions, but the initial DOM structure is identical.
+// v1.2.1 round-12 (S3923): Removed duplicate if/else — both branches produced
+// the exact same markup, leaving a redundant conditional that hid the unified
+// layout intent. The .review-top wrapper is now always emitted (it was
+// previously missing in the portrait branch — a v1.1.2 bug fixed in round-1).
+h+='<div class="review-body" style="--rv-board-h:'+_rvFullBoardH+'px">';
+h+='<div class="review-top">';
+// .review-left holds ONLY the board (no inline controls — they moved to .review-bottom)
+h+='<div class="review-left">';
+// v1.2.0 Phase 83: inline padding reserves space for absolute-positioned coordinate labels.
+// Overrides CSS .review-board{padding:12px} (portrait) and .review-left .review-board{padding:0} (landscape).
+h+='<div class="review-board" style="padding-top:'+(_rvLabelH+_rvLabelGap)+'px;padding-left:'+(_rvLabelW+_rvLabelGap)+'px;padding-right:0;padding-bottom:0">';
+h+='<div class="bgrid" style="grid-template-columns:repeat(8,'+_rvCell+'px);grid-template-rows:repeat(8,'+_rvCell+'px)">';
 // v1.0.2: When showCtrlMap is enabled (🌈), color the review board squares with
 // the control map — same as the main board. Compute the control map for the
 // review position's board state.
@@ -2396,45 +2513,10 @@ if(showCtrlMap){
 let _rvVa=null;
 let _rvCslMap=null; // {squareKey -> color} for O(1) lookup during cell render
 let _rvCalList=null; // array of {color, from, to} for SVG rendering
-if(!showCtrlMap&&typeof _getVisualAnnotations==='function'&&typeof reviewStep!=='undefined'){
-  // v1.0.5 Rev53: reviewStep 0 = initial position. We now compute annotations
-  // for the initial position too (per user spec: "初始局面... APP都要在后台
-  // 实施对四色视觉注解的记录"). The initial position's annotations are computed
-  // on-demand using the current gameState (which is the initial position when
-  // reviewStep=0).
-  // reviewStep N (N>0) = position after move N (moveRecords index N-1).
-  if(reviewStep>0){
-    _rvVa=_getVisualAnnotations(reviewStep-1);
-  }else if(reviewStep===0){
-    // Compute annotations for the initial position on demand.
-    // Use a special key '_initial' to cache so we don't recompute every render.
-    _rvVa=_getVisualAnnotations('_initial');
-    if(!_rvVa&&typeof _computeInitialPositionAnnotations==='function'){
-      _computeInitialPositionAnnotations();
-      _rvVa=_getVisualAnnotations('_initial');
-    }
-  }
-  if(_rvVa){
-    if(_rvVa.csl&&_rvVa.csl.length>0){
-      // v1.0.5 Round-6 Rev69 (2026.6.27): store ALL colors per square (was
-      // single-color overwrite). Per user spec "应该允许已被选入标记为黄色的
-      // 格子再被标记为其它颜色" + "同一个格子上应该可以同时绘制黄色圆角矩形
-      // 和其它颜色的方框", a square can carry multiple colors simultaneously
-      // (e.g. both B and Y). Previously _rvCslMap[sq]={color} overwrote earlier
-      // entries; now _rvCslMap[sq]=[colors] preserves all.
-      _rvCslMap={};
-      for(const _h of _rvVa.csl){
-        if(_h&&_h.color&&_h.square){
-          if(!_rvCslMap[_h.square])_rvCslMap[_h.square]=[];
-          _rvCslMap[_h.square].push(_h.color);
-        }
-      }
-    }
-    if(_rvVa.cal&&_rvVa.cal.length>0){
-      _rvCalList=_rvVa.cal;
-    }
-  }
-}
+const _rvAnnResult=_prepareRvVisualAnnotations(showCtrlMap);
+_rvVa=_rvAnnResult.va;
+_rvCslMap=_rvAnnResult.cslMap;
+_rvCalList=_rvAnnResult.calList;
 // v1.0.4 Round-5 Rev48: Color palette for visual annotations — must match
 // stats.html's per-color value colors exactly so the visual association is
 // consistent across the app.
@@ -2461,24 +2543,8 @@ const _rvLabelFontSize=Math.max(10,Math.floor(_rvCell*0.25));
 // 标签位于 .review-board 的 padding 区域：上方 a-h 行（top:0，padding-top 区域），
 // 左侧 1-8 列（left:0，padding-left 区域）。.bgrid 自然流动到 padding 之后，即
 // (padding-left, padding-top) = (_rvLabelW+_rvLabelGap, _rvLabelH+_rvLabelGap) 位置。
-const _rvFileLabelsHtml=(function(){
-  let _s='<div style="position:absolute;left:'+(_rvLabelW+_rvLabelGap)+'px;top:0;width:'+_rvBoardPx+'px;height:'+_rvLabelH+'px;display:flex;flex-direction:row;pointer-events:none;z-index:11">';
-  for(let _fc=0;_fc<8;_fc++){
-    const _fileChar=flip?String.fromCharCode(104-_fc):String.fromCharCode(97+_fc);
-    _s+='<div style="flex:1;display:flex;align-items:center;justify-content:center;font:'+_rvLabelFontSize+'px sans-serif;color:var(--text,#f5e6c8);user-select:none">'+_fileChar+'</div>';
-  }
-  _s+='</div>';
-  return _s;
-})();
-const _rvRankLabelsHtml=(function(){
-  let _s='<div style="position:absolute;left:0;top:'+(_rvLabelH+_rvLabelGap)+'px;width:'+_rvLabelW+'px;height:'+_rvBoardPx+'px;display:flex;flex-direction:column;pointer-events:none;z-index:11">';
-  for(let _fr=0;_fr<8;_fr++){
-    const _rankNum=flip?(_fr+1):(8-_fr);
-    _s+='<div style="flex:1;display:flex;align-items:center;justify-content:center;font:'+_rvLabelFontSize+'px sans-serif;color:var(--text,#f5e6c8);user-select:none">'+_rankNum+'</div>';
-  }
-  _s+='</div>';
-  return _s;
-})();
+const _rvFileLabelsHtml=_buildRvFileLabels(flip,_rvLabelW,_rvLabelGap,_rvBoardPx,_rvLabelH,_rvLabelFontSize);
+const _rvRankLabelsHtml=_buildRvRankLabels(flip,_rvLabelW,_rvLabelH,_rvLabelGap,_rvBoardPx,_rvLabelFontSize);
 for(let r=0;r<8;r++){for(let c=0;c<8;c++){
 const rr=flip?7-r:r;const cc=flip?7-c:c;
 const p=rBoard[rr][cc];const isL=(r+c)%2===0;
@@ -2515,7 +2581,7 @@ if(_rvCm){
 let _boxShadowParts=[];
 let _isYellowSquare=false;
 if(_rvCslMap){
-  const _sqKey=String.fromCharCode(97+cc)+(8-rr);
+  const _sqKey=String.fromCodePoint(97+cc)+(8-rr);
   const _colors=_rvCslMap[_sqKey];
   if(_colors&&Array.isArray(_colors)){
     for(const _color of _colors){
@@ -2532,7 +2598,7 @@ let _boxShadow=_boxShadowParts.length?'box-shadow:'+_boxShadowParts.join(',')+';
 h+='<div style="background:'+bg+';'+_boxShadow+'width:'+_rvCell+'px;height:'+_rvCell+'px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;position:relative">';
 // v1.2.0 Phase 77: 格子内坐标标注（与主界面同款，左上角偏移2px）
 {
-  const _sqName=String.fromCharCode(97+cc)+(8-rr);
+  const _sqName=String.fromCodePoint(97+cc)+(8-rr);
   const _coordColor=isL?'#4a3a0a':'#f0dcb0';
   const _coordStroke=isL?'rgba(255,230,150,.85)':'rgba(30,15,0,.85)';
   h+='<span style="position:absolute;left:2px;top:2px;font:'+_rvCoordFontSize+'px/'+_rvCoordFontSize+'px sans-serif;color:'+_coordColor+';text-shadow:0 0 2px '+_coordStroke+',0 0 2px '+_coordStroke+';pointer-events:none;z-index:1;user-select:none">'+_sqName+'</span>';
@@ -2878,46 +2944,26 @@ _rvVirtualState.windowEnd=moveRecords.length;
 const _rvStart=_rvVirtualState.windowStart;
 const _rvEnd=_rvVirtualState.windowEnd;
 
-if(_isLandscapeReview){
-  // Landscape: close .review-left (board only), then .review-moves, then .review-top.
-  // Open .review-bottom with chart + controls (full width, edge-to-edge).
-  h+='</div>'; // close .review-left
-  // v1.0.8 PHASE 18 Task 2: Both branches now delegate to the shared
-  // _buildReviewMovesInnerHTML helper. This eliminates ~40 lines of duplicated
-  // row-rendering code that previously existed in landscape vs portrait, and
-  // centralizes the virtual-list spacer logic in one place.
-  h+='<div class="review-moves" id="reviewMovesList">';
-  h+=_buildReviewMovesInnerHTML(_rvStart,_rvEnd);
-  h+='</div>'; // close .review-moves
-  h+='</div>'; // close .review-top
-  // .review-bottom: full-width chart + controls, edge-to-edge
-  h+='<div class="review-bottom">';
-  h+=_rvEvalBarHTML;
-  h+=_rvSliderHTML;
-  h+=_rvChartHTML;
-  h+=_rvNavHTML;
-  h+=_rvAnalyzeHTML;
-  h+='</div>'; // close .review-bottom
-}else{
-  // v1.1.0 Phase 53: Portrait now uses the SAME layout as landscape —
-  // board + moves in .review-top, controls in .review-bottom (full width).
-  // Previously, portrait put all controls inside .review-left (the board
-  // column), making the slider/chart narrower than the viewport and
-  // causing misalignment between portrait and landscape. Now both
-  // orientations use the same .review-bottom container for controls.
-  h+='</div>'; // close .review-left
-  h+='<div class="review-moves" id="reviewMovesList">';
-  h+=_buildReviewMovesInnerHTML(_rvStart,_rvEnd);
-  h+='</div>'; // close .review-moves
-  h+='</div>'; // close .review-top
-  h+='<div class="review-bottom">';
-  h+=_rvEvalBarHTML;
-  h+=_rvSliderHTML;
-  h+=_rvChartHTML;
-  h+=_rvNavHTML;
-  h+=_rvAnalyzeHTML;
-  h+='</div>'; // close .review-bottom
-}
+// v1.1.0 Phase 53 (round-12 S3923 cleanup): Unified layout — both portrait and
+// landscape close .review-left, emit .review-moves, close .review-top, then open
+// .review-bottom with the eval bar + slider + chart + nav + analyze controls.
+// The previous if/else produced identical markup in both branches; the only
+// remaining orientation-specific logic is the cell-width calculation above.
+h+='</div>'; // close .review-left
+// v1.0.8 PHASE 18 Task 2: _buildReviewMovesInnerHTML centralizes the row-rendering
+// code and the virtual-list spacer logic in one place.
+h+='<div class="review-moves" id="reviewMovesList">';
+h+=_buildReviewMovesInnerHTML(_rvStart,_rvEnd);
+h+='</div>'; // close .review-moves
+h+='</div>'; // close .review-top
+// .review-bottom: full-width chart + controls, edge-to-edge
+h+='<div class="review-bottom">';
+h+=_rvEvalBarHTML;
+h+=_rvSliderHTML;
+h+=_rvChartHTML;
+h+=_rvNavHTML;
+h+=_rvAnalyzeHTML;
+h+='</div>'; // close .review-bottom
 h+='</div></div>'; // close .review-body, .review-overlay
 return{h,done:false};
 } // end _renderReviewMode
@@ -2980,7 +3026,7 @@ const isCastlingRook=_castlingRookSet.has(rr*8+cc);
 // v1.0.8 PHASE 3: visible markers (work in all modes — setup, play, review)
 const hasCastleMark=_visibleCastleMarks.has(String(rr*8+cc));
 const hasEpMark=_visibleEpMark&&_visibleEpMark.row===rr&&_visibleEpMark.col===cc;
-const lbl=String.fromCharCode(97+cc)+(8-rr);
+const lbl=String.fromCodePoint(97+cc)+(8-rr);
 h+=`<div class="sq${lastFrom?' last-from':''}${lastTo?' last-to':''}${isCheckSq?' in-check':''}${isCastlingRook?' castle-rook':''}" role="gridcell" style="background:${bg}" data-r="${rr}" data-c="${cc}" onclick="sqClick(${rr},${cc})">`;
 h+=`<span class="lbl" style="color:${isL?LBL_LIGHT:LBL_DARK};-webkit-text-stroke:.6px ${isL?LBL_STROKE_LIGHT:LBL_STROKE_DARK};paint-order:stroke fill;text-shadow:0 0 2px ${isL?LBL_STROKE_LIGHT:LBL_STROKE_DARK}">${lbl}</span>`;
 // v1.0.8 PHASE 22: landing animation removed — the Web Animations API
@@ -3099,7 +3145,7 @@ else{h+=`<div style="color:#64748b;font-size:.85rem">${T('click_sq')}</div>`}
 h+=`</div>`;}
 // ECO Opening Info (only when _ecoEnabled)
 // v1.0.6: Also suppress in Chess960 mode (no fixed opening theory).
-if(_ecoEnabled&&!(typeof gameVariant!=='undefined'&&gameVariant==='chess960')){
+if(_ecoEnabled&&!(gameVariant !== undefined&&gameVariant==='chess960')){
 const ecoInfo=queryECO(gameState);
 if(ecoInfo){h+=`<div class="card"><div class="card-t"><span class="ico">📖</span>${T('eco_id')}</div><div style="padding:12px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span class="opening-tag">${_esc(ecoInfo.id)}</span><span style="font-weight:600;font-size:.9rem">${_esc(ecoInfo.name)}</span></div><div style="color:var(--muted);font-size:.82rem">${_esc(ecoInfo.family)}</div></div></div>`}
 }
@@ -3203,7 +3249,7 @@ function _renderAIBar(h, oppC){
 // _updateClockDisplay() updates its textContent live (200ms poll) without full re-render.
 const _aiClockColor=oppC;
 const _aiClockId=_aiClockColor==='white'?'clock-white':'clock-black';
-const _aiClockHtml=(typeof gameClocks!=='undefined'&&gameClocks)?`<span id="${_aiClockId}" style="font-family:monospace,system-ui,-apple-system,sans-serif;font-size:.85rem;font-weight:700;color:var(--text);background:rgba(0,0,0,.3);padding:2px 8px;border-radius:4px;border:1px solid var(--border);min-width:48px;text-align:center">${formatClock(gameClocks[_aiClockColor]?gameClocks[_aiClockColor].remainingSec:0)}</span>`:'';
+const _aiClockHtml=(gameClocks !== undefined&&gameClocks)?`<span id="${_aiClockId}" style="font-family:monospace,system-ui,-apple-system,sans-serif;font-size:.85rem;font-weight:700;color:var(--text);background:rgba(0,0,0,.3);padding:2px 8px;border-radius:4px;border:1px solid var(--border);min-width:48px;text-align:center">${formatClock(gameClocks[_aiClockColor]?gameClocks[_aiClockColor].remainingSec:0)}</span>`:'';
 // v1.0.4 Rev36 LAYOUT: AI opponent bar restructured for cleaner multi-line display.
 // Line 1: AI name + level + clock + waiting/thinking indicator (compact status).
 // Line 2: Engine search real-time info (_aiBarInfo / _hintBarInfo) — right-aligned.
@@ -3251,7 +3297,7 @@ function _renderPlayerBar(h){
 // v1.0.4 FIX (this round): render the player's clock display element when timed.
 const _plClockColor=playerColor;
 const _plClockId=_plClockColor==='white'?'clock-white':'clock-black';
-const _plClockHtml=(typeof gameClocks!=='undefined'&&gameClocks)?`<span id="${_plClockId}" style="font-family:monospace,system-ui,-apple-system,sans-serif;font-size:.85rem;font-weight:700;color:var(--text);background:rgba(0,0,0,.3);padding:2px 8px;border-radius:4px;border:1px solid var(--border);min-width:48px;text-align:center">${formatClock(gameClocks[_plClockColor]?gameClocks[_plClockColor].remainingSec:0)}</span>`:'';
+const _plClockHtml=(gameClocks !== undefined&&gameClocks)?`<span id="${_plClockId}" style="font-family:monospace,system-ui,-apple-system,sans-serif;font-size:.85rem;font-weight:700;color:var(--text);background:rgba(0,0,0,.3);padding:2px 8px;border-radius:4px;border:1px solid var(--border);min-width:48px;text-align:center">${formatClock(gameClocks[_plClockColor]?gameClocks[_plClockColor].remainingSec:0)}</span>`:'';
 // v1.0.4 Rev24: Player name display — uses _humanPlayerName (rename feature)
 // if set, otherwise the default "你"/"You". Clicking the name opens a rename
 // prompt. The name is persisted via AndroidBridge.persistentSet and used in
@@ -3351,7 +3397,7 @@ h+=`<div style="padding:6px 12px;background:var(--card);border:1px solid var(--b
 // This same gate now also covers the in-game recommendation bar so a game
 // that started as Chess960 (or was imported from a Chess960 PGN) never
 // shows ECO recommendations.
-if(!setupMode&&!gameOver&&!reviewMode&&_ecoEnabled&&!(typeof gameVariant!=='undefined'&&gameVariant==='chess960')&&gameState.currentTurn===playerColor){
+if(!setupMode&&!gameOver&&!reviewMode&&_ecoEnabled&&!(gameVariant !== undefined&&gameVariant==='chess960')&&gameState.currentTurn===playerColor){
 const _ecoRec=getECORecommendation(gameState);
 if(_ecoRec){
 // v1.0.8 PHASE 30: escape _ecoRec.notation and _ecoRec.name for defense-in-depth
@@ -3369,145 +3415,118 @@ if(_multiPVLines.length>=1){h+='<div style="margin-top:6px;border-top:1px solid 
 return h;
 } // end _renderInfoBars
 
-function renderInternal(){try{
-const _rs=_computeRenderState();
+/**
+ * v1.2.1 round-13 (S3776): Build the full HTML string for the current render.
+ *
+ * Extracted from renderInternal() to reduce its cognitive complexity (was CC=122).
+ * Delegates to the existing _renderHeader / _renderAIBar / _renderBoardGrid /
+ * _renderSetupPanel / _renderInfoBars / _renderPlayerBar / _renderSidePanel /
+ * _renderDialogs / _renderReviewMode helpers (each already extracted in earlier
+ * rounds). This function just sequences them and inserts the game-over overlay
+ * at the correct DOM position (inside .bwrap, after the board grid).
+ *
+ * Returns {h, done} — when done=true, the review state was invalid and a
+ * re-render has already been triggered; renderInternal must return immediately
+ * to skip the scroll-save/innerHTML/scroll-restore logic (which would operate
+ * on stale DOM state).
+ *
+ * @param {Object} _rs - Render state from _computeRenderState()
+ * @returns {{h: string, done: boolean}}
+ */
+function _buildRenderHTML(_rs){
 const {cm, infoSq, infoCtrl, oppC, flip}=_rs;
-const app=document.getElementById('app');if(!app)return;
 let h=_renderHeader();
 h+=`<div class="main" role="main"><div class="bsec">`;
 h=_renderAIBar(h, oppC);
 h=_renderBoardGrid(h, flip, cm);
 // Game-over overlay renders INSIDE .bwrap (anchors to .bwrap via position:absolute)
 if(gameOver&&lastMove&&!gameOverSoundPlayed){gameOverSoundPlayed=true;playSound('gameover');HapticManager.fire('GAME_OVER');}
-if(gameOver&&!setupMode){h+=`<div class="gover" role="alert" aria-live="assertive"><div class="ge" style="${_gameOverStatusKey==='checkmate'?(gameState.currentTurn==='black'?'color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55)':'color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55)'):'font-family:system-ui,sans-serif'};font-family:'DejaVu Sans','Noto Sans','Segoe UI Symbol',sans-serif;font-variant-emoji:text;font-weight:400">${_gameOverStatusKey==='checkmate'?(gameState.currentTurn==='black'?'♔\uFE0E':'♚\uFE0E'):_gameOverStatusKey==='resign'?'🏳️':_gameOverStatusKey==='timeout'?'⌛':'🤝'}</div><div class="gt">${gameOver}</div><button type="button" class="btn btn-p" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()">⚔️ ${T('play_again')}</button><button type="button" class="btn btn-g" onclick="enterReview()">📑 ${T('review')}</button></div>`;}
-// v1.2.0 Phase 82++: Setup panel rendering extracted to _renderSetupPanel(h).
+if(gameOver&&!setupMode){h+=`<div class="gover" role="alert" aria-live="assertive"><div class="ge" style="${_gameOverIconStyle()};font-family:'DejaVu Sans','Noto Sans','Segoe UI Symbol',sans-serif;font-variant-emoji:text;font-weight:400">${_gameOverIconChar()}</div><div class="gt">${gameOver}</div><button type="button" class="btn btn-p" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()">⚔️ ${T('play_again')}</button><button type="button" class="btn btn-g" onclick="enterReview()">📑 ${T('review')}</button></div>`;}
 h=_renderSetupPanel(h);
 h+=`</div></div>`; // close .bwrap + .display:flex
 h=_renderInfoBars(h);
 h=_renderPlayerBar(h);
 h+=`</div>`; // close .bsec
 h=_renderSidePanel(h, infoSq, infoCtrl, oppC); // opens .panel, closes .panel + .main
-
-// v1.2.0 Phase 82: All modal dialogs extracted to _renderDialogs(h) to reduce
-// renderInternal's God Function size. Each dialog is triggered by an independent
-// boolean flag and produces self-contained HTML overlay markup. See _renderDialogs
-// above for the full dialog rendering logic and extraction rationale.
 h=_renderDialogs(h);
-
-
-// v1.2.0 Phase 82+: Review mode rendering extracted to _renderReviewMode(h) to further
-// reduce renderInternal's God Function size. The function returns {h, done} — when
-// done=true, the review state was invalid and a re-render has been triggered; we must
-// return immediately to skip the scroll-save/innerHTML/scroll-restore logic below
-// (which would otherwise operate on stale DOM state). Only called when reviewMode is true.
 if(reviewMode){
   const _rvResult=_renderReviewMode(h, flip);
   h=_rvResult.h;
-  if(_rvResult.done) return;
+  if(_rvResult.done) return {h, done:true};
 }
-const _wasEcoFocused=_ecoSearchFocused;if(_ecoBlurTimer){clearTimeout(_ecoBlurTimer);_ecoBlurTimer=0}
-// v1.1.0 Phase 54 rev14: Virtual list is disabled (RV_VIRTUAL_THRESHOLD=Infinity).
-//   The scroll refresh timer is always 0, so this clearTimeout is a no-op.
-//   Kept for safety in case virtual list is re-enabled in the future.
+return {h, done:false};
+}
+
+/**
+ * v1.2.1 round-13 (S3776): Snapshot scroll positions of all scrollable containers
+ * BEFORE the DOM is rebuilt (app.innerHTML=h resets all scrollTop to 0).
+ *
+ * Extracted from renderInternal() to reduce its cognitive complexity. Captures:
+ *   - .mlist scrollTop + atBottom flag (main-UI move list)
+ *   - .review-body scrollTop (outer review scroll container)
+ *   - .review-moves scrollTop (inner review move list)
+ *   - .dlg / .panel / .op-list scrollTop (dialogs, side panel, opening list)
+ *
+ * Returns a context object consumed by _restoreScrollState().
+ */
+function _saveScrollState(){
+const ctx={
+  wasEcoFocused:_ecoSearchFocused,
+  reviewBodyScroll:0,
+  reviewMovesScroll:0,
+  containerScrolls:[],
+};
+if(_ecoBlurTimer){clearTimeout(_ecoBlurTimer);_ecoBlurTimer=0}
 if(_rvScrollRefreshTimer){clearTimeout(_rvScrollRefreshTimer);_rvScrollRefreshTimer=0;}
-// v1.0.3-p4 FIX: preserve the main-UI move-list (.mlist) scroll position across
-// full re-renders. app.innerHTML=h recreates the .mlist DOM element from
-// scratch, resetting its scrollTop to 0. We capture scrollTop BEFORE innerHTML
-// replacement and restore it AFTER.
-// v1.0.3-p9 FIX: also preserve the review-body (.review-body) scroll position.
-// In landscape review mode, .review-body scrolls (two-layer scroll). Every
-// render() rebuilds the DOM and resets .review-body.scrollTop to 0, yanking
-// the user back to the top. Now we capture & restore it too.
-//
-// v1.0.4 FIX (this round): the previous logic captured _savedMlistScroll from
-// the OLD .mlist element, but if the user was near the bottom AND a new move
-// was just added (making the list taller), the restored scrollTop would be
-// too small relative to the new content height, causing the list to appear
-// stuck at an old position rather than following the new move. More
-// importantly, when render() was throttled (deferred 200ms via setTimeout),
-// the OLD .mlist element may have already been detached by a prior partial
-// update, so _oldMlist.scrollTop read 0 — causing the "scroll to top" bug.
-//
-// Fix: track whether the user was at/near the bottom before the render. If so,
-// scroll to the BOTTOM after rebuild (so the newest move is visible). If the
-// user was scrolled up (reading old moves), preserve their exact position.
-// This matches the behavior of chess.com / lichess move lists.
-let _savedReviewBodyScroll=0;
-// v1.1.0 Phase 54 rev7: Save .review-moves scrollTop to preserve user's scroll
-//   position across DOM rebuild. Restored after app.innerHTML=h, then
-//   scrollIntoView({block:'nearest'}) adjusts only if active move not visible.
-let _savedReviewMovesScroll=0;
-// v1.0.6: Save scroll positions of additional scrollable containers that
-// were previously NOT preserved across full re-renders:
-//   - .dlg (any open dialog: New Game, Engine Config, Import, About, etc.)
-//   - .panel (right-side info panel in landscape — contains control info,
-//     ECO info, move history, eval chart, etc.)
-//   - .review-moves (inner move list in review mode — outer is .review-body)
-//   - .op-list (opening selector inside New Game dialog)
-// Each entry stores {selector, scrollTop, scrollHeight, clientHeight} so we
-// can clamp the restore if the new content is shorter (avoiding negative
-// scroll positions that some WebViews clamp to 0 with a visible jump).
-let _savedContainerScrolls=[];
 try{
-  // v1.1.0 Phase 54 rev4: .review-moves removed from this list — its scroll
-  // is now handled entirely by the active-move scroll-into-view mechanism.
   const _selectors=['.dlg','.panel','.op-list'];
   for(const _sel of _selectors){
     const _els=document.querySelectorAll(_sel);
     for(let _i=0;_i<_els.length;_i++){
       const _el=_els[_i];
       if(_el&&_el.scrollHeight>0&&_el.clientHeight>0&&_el.scrollTop>0){
-        _savedContainerScrolls.push({sel:_sel,idx:_i,scrollTop:_el.scrollTop,scrollHeight:_el.scrollHeight,clientHeight:_el.clientHeight});
+        ctx.containerScrolls.push({sel:_sel,idx:_i,scrollTop:_el.scrollTop,scrollHeight:_el.scrollHeight,clientHeight:_el.clientHeight});
       }
     }
   }
-}catch(e){}
-// v1.0.4 Rev30 ROBUSTNESS: save phase reads scrollTop DIRECTLY from the DOM
-// (not just from _mlistScrollState). The scroll-event handler is the
-// authoritative source during normal user scrolling, but it can be missed if:
-//   - The user scrolled during a throttled render (event fired on detached element)
-//   - A programmatic scroll restoration is in progress (guard suppressed it)
-//   - The browser hasn't fired the event yet after a fast scroll
-// Reading from the live DOM here is the most reliable snapshot.
+}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
 if(!reviewMode){
   const _oldMlist=document.querySelector('.mlist');
   if(_oldMlist&&_oldMlist.scrollHeight>0&&_oldMlist.clientHeight>0){
-    // ALWAYS read the current scrollTop from the live DOM — this is the
-    // authoritative snapshot at the moment of render.
     _mlistScrollState.scrollTop=_oldMlist.scrollTop;
     _mlistScrollState.atBottom=(_oldMlist.scrollTop + _oldMlist.clientHeight >= _oldMlist.scrollHeight - 40);
     _mlistScrollState.valid=true;
   }
 }else{
   const _oldReviewBody=document.querySelector('.review-body');
-  if(_oldReviewBody){_savedReviewBodyScroll=_oldReviewBody.scrollTop;}
-  // v1.1.0 Phase 54 rev7: Save .review-moves scrollTop BEFORE app.innerHTML=h
-  //   resets it to 0. This preserves the user's scroll position across the
-  //   DOM rebuild. After rebuild, we restore it, then scrollIntoView({block:'nearest'})
-  //   adjusts only if the active move is NOT visible. This prevents the "forced
-  //   pull-back" when using nav buttons — the list stays at the user's position
-  //   and only scrolls minimally to show the new active move.
+  if(_oldReviewBody){ctx.reviewBodyScroll=_oldReviewBody.scrollTop;}
   const _oldReviewMoves=document.getElementById('reviewMovesList');
-  if(_oldReviewMoves){_savedReviewMovesScroll=_oldReviewMoves.scrollTop;}
+  if(_oldReviewMoves){ctx.reviewMovesScroll=_oldReviewMoves.scrollTop;}
 }
-app.innerHTML=h;
-// v1.0.4 ROUND-5 REV13: Re-attach active animation elements after DOM rebuild
-if(typeof _reattachActiveAnimations==='function'){try{_reattachActiveAnimations();}catch(e){}}
-// v1.0.3-p4: restore .mlist scroll position after DOM rebuild
-// v1.0.4 FIX: if the user was at the bottom, scroll to the bottom (not the old
-// scrollTop) so the newest move is visible. Otherwise preserve the old position.
-// v1.0.4 Rev30 ROBUSTNESS: Use _scrollRestoreGuard to suppress intermediate
-// scroll events fired by the browser during programmatic scrollTop assignment.
-// Also temporarily set scroll-behavior:auto to avoid smooth-animation
-// intermediate events corrupting _mlistScrollState. After the restore, clear
-// the guard so user scrolling is tracked normally again.
+return ctx;
+}
+
+/**
+ * v1.2.1 round-13 (S3776): Restore scroll positions AFTER the DOM is rebuilt.
+ *
+ * Extracted from renderInternal() to reduce its cognitive complexity. Restores
+ * all scroll positions captured by _saveScrollState(), in the correct order:
+ *   1. Re-attach active animations (must happen before any scroll restore)
+ *   2. .mlist (main-UI move list) — synchronous, with scroll-restore guard
+ *   3. .review-body (outer review scroll) — synchronous
+ *   4. .review-moves (inner review move list) — synchronous
+ *   5. .dlg / .panel / .op-list — deferred to rAF (non-critical)
+ *
+ * @param {Object} ctx - Context from _saveScrollState()
+ */
+function _restoreScrollState(ctx){
+if(typeof _reattachActiveAnimations==='function'){try{_reattachActiveAnimations();}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}}
 if(!reviewMode){
   const _newMlist=document.querySelector('.mlist');
   if(_newMlist){
     _newMlist.addEventListener('scroll',_onMlistScroll,{passive:true});
     if(_mlistScrollState.valid){
       _scrollRestoreGuard=true;
-      // Temporarily disable smooth scrolling so programmatic restore is instant
       const _savedBehavior=_newMlist.style.scrollBehavior;
       _newMlist.style.scrollBehavior='auto';
       try{
@@ -3517,68 +3536,40 @@ if(!reviewMode){
           const _maxScroll=Math.max(0,_newMlist.scrollHeight-_newMlist.clientHeight);
           _newMlist.scrollTop=Math.min(_mlistScrollState.scrollTop,_maxScroll);
         }
-      }catch(e){}
-      // Restore original scroll-behavior (let user scrolling stay smooth)
+      }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
       _newMlist.style.scrollBehavior=_savedBehavior;
-      // Clear guard on next frame — by then the programmatic scroll has settled
       requestAnimationFrame(()=>{requestAnimationFrame(()=>{_scrollRestoreGuard=false;});});
     }
   }
 }
-// v1.1.0 Phase 54 rev17: Restore .review-body scroll position after DOM rebuild.
-//   This is the OUTER scroll container (the whole review page). When render()
-//   rebuilds the DOM (app.innerHTML=h), .review-body.scrollTop resets to 0,
-//   causing the page to jump to the top. We MUST restore it synchronously
-//   (not in rAF) — the user sees the jump if we wait even one frame.
-if(reviewMode&&_savedReviewBodyScroll>0&&!_skipReviewBodyScrollRestore){
+if(reviewMode&&ctx.reviewBodyScroll>0&&!_skipReviewBodyScrollRestore){
   const _newReviewBody=document.querySelector('.review-body');
   if(_newReviewBody){
     _newReviewBody.style.scrollBehavior='auto';
-    try{_newReviewBody.scrollTop=_savedReviewBodyScroll;}catch(e){}
+    try{_newReviewBody.scrollTop=ctx.reviewBodyScroll;}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
     _newReviewBody.style.scrollBehavior='';
   }
 }
-_savedReviewBodyScroll=0; // v1.1.0 rev19: clear after restore (was missing)
 _skipReviewBodyScrollRestore=false;
-// v1.1.0 Phase 54 rev17: Restore .review-moves scrollTop synchronously after
-//   DOM rebuild. This is the INNER scroll container (the move list). Same
-//   issue as .review-body — app.innerHTML=h resets scrollTop to 0. We restore
-//   synchronously (not in rAF) to prevent the visible jump to top. The
-//   scrollIntoView below (in double-rAF) then adjusts to center the active
-//   move — but starting from the restored position, not from 0.
-if(reviewMode&&_savedReviewMovesScroll>0){
+if(reviewMode&&ctx.reviewMovesScroll>0){
   const _newReviewMoves=document.getElementById('reviewMovesList');
   if(_newReviewMoves){
     _newReviewMoves.style.scrollBehavior='auto';
     try{
       const _maxScroll=Math.max(0,_newReviewMoves.scrollHeight-_newReviewMoves.clientHeight);
-      _newReviewMoves.scrollTop=Math.min(_savedReviewMovesScroll,_maxScroll);
-    }catch(e){}
+      _newReviewMoves.scrollTop=Math.min(ctx.reviewMovesScroll,_maxScroll);
+    }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
     _newReviewMoves.style.scrollBehavior='';
   }
 }
-_savedReviewMovesScroll=0;
-// v1.0.6: Restore scroll positions of additional containers (.dlg, .panel,
-// .op-list). This must run AFTER app.innerHTML=h so the new DOM elements exist.
-// v1.1.0 Phase 54 rev4: .review-moves is NO LONGER in this list. The review
-//   move-list scroll is now handled ENTIRELY by the active-move scroll-into-view
-//   mechanism below (always centers the active move after every render). The old
-//   save/restore for .review-moves conflicted with scroll-into-view, causing
-//   jump-flicker and moves stuck at edges. Now .review-moves scrollTop is never
-//   saved or restored — it is always recomputed from the active move position.
-//   The other containers (.dlg, .panel, .op-list) still use save/restore because
-//   they don't have an "active item" to center on.
-if(_savedContainerScrolls.length>0){
-  const _toRestore=_savedContainerScrolls;
-  _savedContainerScrolls=[]; // clear so re-renders don't double-restore
+if(ctx.containerScrolls.length>0){
+  const _toRestore=ctx.containerScrolls;
   requestAnimationFrame(function(){
     for(const _entry of _toRestore){
       try{
         const _els=document.querySelectorAll(_entry.sel);
         const _el=_els[_entry.idx];
         if(!_el)continue;
-        // Clamp: if the new content is shorter than the saved scrollTop,
-        // scroll to the bottom instead (avoid jumping to top on shorter content).
         const _maxScroll=Math.max(0,_el.scrollHeight-_el.clientHeight);
         const _target=Math.min(_entry.scrollTop,_maxScroll);
         if(_target>0){
@@ -3587,65 +3578,32 @@ if(_savedContainerScrolls.length>0){
           _el.scrollTop=_target;
           _el.style.scrollBehavior=_savedBehavior;
         }
-      }catch(e){}
+      }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
     }
   });
 }
-// Invalidate all cached DOM refs since DOM was rebuilt by full render
+}
+
+/**
+ * v1.2.1 round-13 (S3776): Post-render finalization.
+ *
+ * Extracted from renderInternal() to reduce its cognitive complexity. Runs
+ * AFTER the DOM is rebuilt and scroll positions are restored:
+ *   1. Invalidate cached DOM refs (rebuilt DOM has new element identities)
+ *   2. Update prev-state tracking for _updateBoardLightweight diffing
+ *   3. Center the active review move in the .review-moves viewport (double-rAF)
+ *   4. Render arrows into the new SVG overlay
+ *   5. Invalidate eval-display signature + cache review-moves-list element
+ *   6. Restore ECO search input focus
+ *   7. Auto-scroll opening list to selected opening
+ *
+ * @param {boolean} wasEcoFocused - Whether ECO search was focused before render
+ */
+function _postRenderFinalize(wasEcoFocused){
 _cachedBwrap=null;_cachedSvgEl=null;_cachedSvgLines=[];_cachedArrowKey='';_cachedCtrlCard=null;
-// Do NOT reset _prevSelSq/_prevLegalSet to null/empty after render().
-// After render() rebuilds the DOM, we must preserve the tracking state so that
-// the next _updateBoardLightweight() call can correctly identify what changed
-// and clear old selection highlights. Previously, resetting these to null caused
-// the old selected square to never be updated when the user clicked a different
-// piece after an AI hint auto-selection (which calls both _updateBoardLightweight()
-// and render()). The old highlight remained stuck, appearing as "two pieces selected".
 _prevHoverSq=hoveredSquare?{row:hoveredSquare.row,col:hoveredSquare.col}:null;
 _prevSelSq=selectedSquare?{row:selectedSquare.row,col:selectedSquare.col}:null;
 _prevLegalSet=new Set();if(selectedSquare){for(const m of legalMvs)_prevLegalSet.add(m.row*8+m.col);}
-// v1.1.0 Phase 54 rev19: scrollIntoView for the active move. Runs in
-//   double-rAF so layout is settled.
-//   Analyze-all is now allowed (rev18 restored render() in advance) — the
-//   user WANTS to see the board update + active move centered during
-//   analysis. So we no longer skip scrollIntoView during analyze-all.
-// v1.1.0 Phase 56 FIX: scrollIntoView({block:'center'}) scrolls ALL
-//   scrollable ancestors — in landscape review mode, the active move lives
-//   in the inner .review-moves container which sits at the TOP of the outer
-//   .review-body. When the user has scrolled .review-body down to reach the
-//   nav buttons at the bottom, clicking a nav button triggers render() →
-//   this scrollIntoView yanks .review-body back to scrollTop=0, undoing the
-//   synchronous restore at lines 3203-3210 above. Fix: manually compute the
-//   inner .review-moves scrollTop to center the active move, WITHOUT calling
-//   scrollIntoView (which would also scroll the outer container). This
-//   preserves the outer .review-body scroll position.
-//
-// v1.1.0 Phase 57 FIX (portrait scroll): The Phase 56 fix used _rAct.offsetTop
-//   to compute the active move's position. However, offsetTop returns the
-//   distance from the element's outer border to the top of its offsetParent's
-//   inner border — and .rmv-block's offsetParent is .review-overlay (which is
-//   position:fixed), NOT _rList (.review-moves has no position set).
-//
-//   In LANDSCAPE this happened to be approximately correct because .review-moves
-//   is a flex child of .review-top (which is row-flex), so .rmv-block's vertical
-//   offsetTop within .review-overlay ≈ header_height + position_within_moves.
-//   The header is only ~24px, so the error was small.
-//
-//   In PORTRAIT, however, .review-moves is stacked BELOW .review-left (the board
-//   column, which has the board's full height). So .rmv-block's vertical
-//   offsetTop within .review-overlay ≈ header_height + board_height +
-//   position_within_moves. The board_height is 256-320px — much larger than the
-//   .review-moves viewport (also 256-320px), so the resulting _target was
-//   WAY too large, clamped to scrollHeight-clientHeight (scrolled to bottom),
-//   and the active move was nowhere near the center of the visible area.
-//
-//   Fix: use getBoundingClientRect() to compute the active move's position
-//   RELATIVE TO _rList (not relative to .review-overlay). This works correctly
-//   regardless of orientation, layout structure, or offsetParent chain.
-//   The formula:
-//     _actTop = (_actRect.top - _listRect.top) + _rList.scrollTop
-//   gives the active move's position within _rList's full content (including
-//   the portion scrolled out of view). Then center it:
-//     _target = _actTop + _actH/2 - _listH/2
 if(reviewMode && reviewStep !== _lastReviewStepScrolled){
   _lastReviewStepScrolled = reviewStep;
   requestAnimationFrame(function(){
@@ -3654,35 +3612,20 @@ if(reviewMode && reviewStep !== _lastReviewStepScrolled){
       if(_rList){
         const _rAct=_rList.querySelector('.rmv-block.act');
         if(_rAct){
-          // Manually center the active move within the inner .review-moves
-          // container only — do NOT use scrollIntoView (which would also
-          // scroll the outer .review-body in landscape mode, causing the
-          // page to jump back to the top when the user clicked a nav button
-          // at the bottom of the page).
           const _listH=_rList.clientHeight;
           const _actH=_rAct.offsetHeight||0;
-          // v1.1.0 Phase 57: use getBoundingClientRect to compute the active
-          // move's position relative to _rList, NOT relative to offsetParent.
-          // See the long comment above for why offsetTop was wrong in portrait.
-          // If getBoundingClientRect is unavailable or returns zeros (e.g.,
-          // disconnected DOM — should not happen here since _rAct was just
-          // queried from _rList), skip scrolling rather than risk a wrong jump.
           let _actTop=-1;
           try{
             const _listRect=_rList.getBoundingClientRect();
             const _actRect=_rAct.getBoundingClientRect();
             if(_listRect.width>0||_listRect.height>0){
-              // Position of _rAct's top relative to _rList's content area:
-              //   (_actRect.top - _listRect.top) = visible offset (negative if scrolled past)
-              //   + _rList.scrollTop = absolute content position
               _actTop=(_actRect.top-_listRect.top)+_rList.scrollTop;
             }
-          }catch(e){}
+          }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
           if(_actTop>=0){
-            // Center: scrollTop = actTop + actH/2 - listH/2
             const _target=Math.max(0,_actTop+(_actH/2)-(_listH/2));
             _rList.style.scrollBehavior='auto';
-            try{_rList.scrollTop=_target;}catch(e){}
+            try{_rList.scrollTop=_target;}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
             _rList.style.scrollBehavior='';
           }
         }
@@ -3690,31 +3633,32 @@ if(reviewMode && reviewStep !== _lastReviewStepScrolled){
     });
   });
 }
-// Render arrows into the new DOM using persistent SVG overlay
 _updateArrows(hoveredSquare||selectedSquare);
-// Invalidate DOM element cache and update board state tracking after full render
-// v1.0.2 PERF (audit): use boardVersion integer instead of JSON.stringify
 _invalidateElCache(); _sqElCache = null; _prevBoardVersion = gameState.boardVersion || 0;
-// v1.0.5 Rev56: Invalidate the eval-display signature cache. The full render
-// rebuilt the eval element's innerHTML directly (not via _updateEvalDisplayIncremental),
-// so the cached signature no longer matches what's on screen. Without this
-// invalidation, the next DIRTY_EVAL tick would falsely skip the update.
 _evalDispPrevSig = '';
-// v1.0.2 (qw3.7max audit): cache the review-moves-list element for the
-// scroll-into-view path (avoids getElementById on every render).
 _rListEl = document.getElementById('reviewMovesList');
-// v1.1.0 Phase 54 rev14: Virtual list scroll listener + avgRowH measurement
-//   block removed (dead code — _rvVirtualState.enabled is always false).
-//   With the virtual list disabled, all moves are always in the DOM — no
-//   scroll-driven partial refresh or spacer height measurement needed.
-// Restore focus for ECO search input using pre-rebuild state
-if(_wasEcoFocused){const el=document.getElementById('ecoSearch');if(el){el.focus();_ecoSearchFocused=true;try{el.setSelectionRange(el.value.length,el.value.length)}catch(e){}}}
-// Auto-scroll opening list to selected opening (skip during review mode)
+if(wasEcoFocused){const el=document.getElementById('ecoSearch');if(el){el.focus();_ecoSearchFocused=true;try{el.setSelectionRange(el.value.length,el.value.length)}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}}}
 if(showNewGameDialog&&dlgOpeningId&&!reviewMode){setTimeout(()=>{const list=document.querySelector('.op-list');if(list){const active=list.querySelector('.op-btn.act');if(active)active.scrollIntoView({block:'center',behavior:'smooth'})}},50)}
-// v1.0.8 PHASE 30: escape error message + stack to prevent XSS if a thrown
-//   error message ever contains HTML.
-// v1.1.1 Phase 60 (audit i18n): Use T('render_error_title') instead of the
-//   hard-coded English "Render Error" so the title is localized.
+}
+
+// v1.2.1 round-13 (S3776): renderInternal refactored into a thin orchestrator.
+//   The God Function (CC=122, ~347 lines) is split into 4 named helpers:
+//     1. _buildRenderHTML(_rs) — sequences the existing _render* helpers
+//     2. _saveScrollState() — snapshots all scroll positions before DOM rebuild
+//     3. _restoreScrollState(ctx) — restores scroll positions after DOM rebuild
+//     4. _postRenderFinalize(wasEcoFocused) — cache invalidation + arrows + focus
+//   renderInternal now just coordinates the 4 phases + the error catch.
+//   Behavior is byte-identical to the pre-refactor version; only the structure
+//   changed. See the long comments in each helper for the original rationale.
+function renderInternal(){try{
+const _rs=_computeRenderState();
+const app=document.getElementById('app');if(!app)return;
+const _htmlResult=_buildRenderHTML(_rs);
+if(_htmlResult.done) return;
+const _scrollCtx=_saveScrollState();
+app.innerHTML=_htmlResult.h;
+_restoreScrollState(_scrollCtx);
+_postRenderFinalize(_scrollCtx.wasEcoFocused);
 }catch(e){const _app=document.getElementById('app');if(_app)_app.innerHTML='<div style="color:red;padding:20px;font-family:monospace;background:#1a0000;border:2px solid red;border-radius:8px;margin:20px"><h3>'+T('render_error_title')+'</h3><pre style="white-space:pre-wrap;font-size:12px">'+_esc(e.toString())+'\n\n'+_esc(e.stack)+'</pre></div>';console.error('Render error:',e)}}
 
 
@@ -3799,7 +3743,7 @@ function _updateSingleSq(el,p,rr,cc,cm,isL,lastMove,_checkKingPos){
   const bg=_getSqBg(rr,cc,cm,isL,lastMove);
   el.style.background=isSel?SQ_SEL:bg;
   el.className='sq'+(lastFrom?' last-from':'')+(lastTo?' last-to':'')+(isCheckSq?' in-check':'')+(isCastlingRook?' castle-rook':'');
-  const lbl=String.fromCharCode(97+cc)+(8-rr);
+  const lbl=String.fromCodePoint(97+cc)+(8-rr);
   let inner=`<span class="lbl" style="color:${isL?LBL_LIGHT:LBL_DARK};-webkit-text-stroke:.6px ${isL?LBL_STROKE_LIGHT:LBL_STROKE_DARK};paint-order:stroke fill;text-shadow:0 0 2px ${isL?LBL_STROKE_LIGHT:LBL_STROKE_DARK}">${lbl}</span>`;
   if(p){
     inner+=`<span class="pc ${p.color==='white'?'w':'bk'}">${SYM[p.color][p.type]}</span>`;
@@ -3859,7 +3803,7 @@ function updateAfterMove(){requestEngineEval();
       const isLegal=legalSet.has(rr*8+cc);
       const _hasCM=_fbCastleMarks.has(String(rr*8+cc));
       const _hasEM=_fbEpMark&&_fbEpMark.row===rr&&_fbEpMark.col===cc;
-      const lbl=String.fromCharCode(97+cc)+(8-rr);
+      const lbl=String.fromCodePoint(97+cc)+(8-rr);
       bh+=`<div class="sq${lastFrom?' last-from':''}${lastTo?' last-to':''}${isCheckSq?' in-check':''}" style="background:${isSel?SQ_SEL:bg}" data-r="${rr}" data-c="${cc}" onclick="sqClick(${rr},${cc})">`;
       bh+=`<span class="lbl" style="color:${isL?LBL_LIGHT:LBL_DARK};-webkit-text-stroke:.6px ${isL?LBL_STROKE_LIGHT:LBL_STROKE_DARK};paint-order:stroke fill;text-shadow:0 0 2px ${isL?LBL_STROKE_LIGHT:LBL_STROKE_DARK}">${lbl}</span>`;
       if(p){bh+=`<span class="pc ${p.color==='white'?'w':'bk'}">${SYM[p.color][p.type]}</span>`;}
@@ -3998,7 +3942,7 @@ function _invalidateArrowCache(){
   // Remove old line elements from DOM before clearing cache
   if(_cachedSvgEl){
     for(let i=0;i<_cachedSvgLines.length;i++){
-      try{_cachedSvgLines[i].remove();}catch(e){}
+      try{_cachedSvgLines[i].remove();}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
     }
   }
   _cachedArrowKey='';_cachedSvgLines=[];
@@ -4044,7 +3988,7 @@ function _updateChangedSquares(oldInfoSq,newInfoSq,oldLegalSet,newLegalSet){
           if(_prevLegalSet.has(_ksKey)){
             // Kingside castling was legal — find the rook column
             let rCol=7; // standard chess default
-            if(typeof gameVariant!=='undefined'&&gameVariant==='chess960'&&typeof chess960CastlingRookMove==='function'){
+            if(gameVariant !== undefined&&gameVariant==='chess960'&&typeof chess960CastlingRookMove==='function'){
               const rm=chess960CastlingRookMove(gameState,_prevPiece.color,'kingside');
               if(rm)rCol=rm.rookFrom;
             }
@@ -4052,7 +3996,7 @@ function _updateChangedSquares(oldInfoSq,newInfoSq,oldLegalSet,newLegalSet){
           }
           if(_prevLegalSet.has(_qsKey)){
             let rCol=0; // standard chess default
-            if(typeof gameVariant!=='undefined'&&gameVariant==='chess960'&&typeof chess960CastlingRookMove==='function'){
+            if(gameVariant !== undefined&&gameVariant==='chess960'&&typeof chess960CastlingRookMove==='function'){
               const rm=chess960CastlingRookMove(gameState,_prevPiece.color,'queenside');
               if(rm)rCol=rm.rookFrom;
             }
@@ -4060,7 +4004,7 @@ function _updateChangedSquares(oldInfoSq,newInfoSq,oldLegalSet,newLegalSet){
           }
         }
       }
-    }catch(e){}
+    }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
   }
   // Collect logical positions that need updating
   const logicPositions=new Set();
@@ -4109,7 +4053,7 @@ function _updateChangedSquares(oldInfoSq,newInfoSq,oldLegalSet,newLegalSet){
     const _hasEM=_ucsEpMark&&_ucsEpMark.row===lr&&_ucsEpMark.col===lc;
     el.style.background=bg;
     el.className='sq'+(lastFrom?' last-from':'')+(lastTo?' last-to':'')+(isCheckSq?' in-check':'')+(isCastlingRook?' castle-rook':'');
-    const lbl=String.fromCharCode(97+lc)+(8-lr);
+    const lbl=String.fromCodePoint(97+lc)+(8-lr);
     let inner=`<span class="lbl" style="color:${isL?LBL_LIGHT:LBL_DARK};-webkit-text-stroke:.6px ${isL?LBL_STROKE_LIGHT:LBL_STROKE_DARK};paint-order:stroke fill;text-shadow:0 0 2px ${isL?LBL_STROKE_LIGHT:LBL_STROKE_DARK}">${lbl}</span>`;
     if(p){inner+=`<span class="pc ${p.color==='white'?'w':'bk'}">${SYM[p.color][p.type]}</span>`;}
     if(isLegal&&!p&&!isCastlingRook)inner+=`<div class="dot"></div>`;
@@ -4141,11 +4085,11 @@ function _computeCastlingRookSetForSelection(selPos,moves){
     for(const m of _moves){
       if(m&&m.castle){
         let rookCol=-1;
-        if(typeof gameVariant!=='undefined'&&gameVariant==='chess960'&&typeof chess960CastlingRookMove==='function'){
+        if(gameVariant !== undefined&&gameVariant==='chess960'&&typeof chess960CastlingRookMove==='function'){
           try{
             const rm=chess960CastlingRookMove(gameState,_p.color,m.castle);
             if(rm)rookCol=rm.rookFrom;
-          }catch(e){}
+          }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
         }else{
           rookCol=m.castle==='kingside'?7:0;
         }
@@ -4154,7 +4098,7 @@ function _computeCastlingRookSetForSelection(selPos,moves){
         }
       }
     }
-  }catch(e){}
+  }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
   return result;
 }
 
@@ -4291,7 +4235,7 @@ if(selectedSquare&&selectedSquare.row===r&&selectedSquare.col===c){
   selectedSquare=null;legalMvs=[];legalSet=new Set();
   HapticManager.fire('BUTTON_PRESS');
   // v1.0.8 PHASE 22 supplement: deselect sound (下行短音)
-  try{if(typeof playSound==='function')playSound('deselect');}catch(e){}
+  try{if(typeof playSound==='function')playSound('deselect');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
   _updateBoardLightweight();return
 }
 if(selectedSquare&&canMove){
@@ -4314,7 +4258,7 @@ if(selectedSquare&&canMove){
     selectedSquare=pos;legalMvs=legalMoves(gameState,pos);legalSet=new Set(legalMvs.map(m=>m.row*8+m.col));
     HapticManager.fire('PIECE_SELECT');
     // v1.0.8 PHASE 22 supplement: piece-select sound (清脆短音)
-    try{if(typeof playSound==='function')playSound('select');}catch(e){}
+    try{if(typeof playSound==='function')playSound('select');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
     _updateBoardLightweight();return
   }
   // Clicked empty/opponent square that's not a legal move → deselect old & select new
@@ -4324,7 +4268,7 @@ if(selectedSquare&&canMove){
 // No piece currently selected — allow selecting own piece or any square for control info
 if(canMove&&p&&p.color===playerColor){selectedSquare=pos;legalMvs=legalMoves(gameState,pos);legalSet=new Set(legalMvs.map(m=>m.row*8+m.col));HapticManager.fire('PIECE_SELECT');
   // v1.0.8 PHASE 22 supplement: piece-select sound (清脆短音)
-  try{if(typeof playSound==='function')playSound('select');}catch(e){}
+  try{if(typeof playSound==='function')playSound('select');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
   _updateBoardLightweight();return}
 // Clicked empty/opponent square with no selection — allow for control info, but prefer deselect
 if(selectedSquare){selectedSquare=null;legalMvs=[];legalSet=new Set();HapticManager.fire('BUTTON_PRESS');_updateBoardLightweight();return}
@@ -4352,11 +4296,11 @@ function _getCastlingRookForClick(kingPos,clickedPos){
   for(const m of _moves){
     if(m&&m.castle){
       let rookCol=-1;
-      if(typeof gameVariant!=='undefined'&&gameVariant==='chess960'&&typeof chess960CastlingRookMove==='function'){
+      if(gameVariant !== undefined&&gameVariant==='chess960'&&typeof chess960CastlingRookMove==='function'){
         try{
           const rm=chess960CastlingRookMove(gameState,_p.color,m.castle);
           if(rm)rookCol=rm.rookFrom;
-        }catch(e){}
+        }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
       }else{
         rookCol=m.castle==='kingside'?7:0;
       }
@@ -4387,7 +4331,7 @@ if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.isEngineReady==='fun
     // never fired for any promotion move — every promotion fell back to
     // stopPonder() + a fresh search, defeating the ponder optimization.
     const promoChar=promotion?{queen:'q',rook:'r',bishop:'b',knight:'n'}[promotion]||'':'';
-    const moveUCI=String.fromCharCode(97+from.col)+(8-from.row)+String.fromCharCode(97+to.col)+(8-to.row)+promoChar;
+    const moveUCI=String.fromCodePoint(97+from.col)+(8-from.row)+String.fromCodePoint(97+to.col)+(8-to.row)+promoChar;
     if(ponderMove&&ponderMove===moveUCI){
       // Player played the expected move — hit ponder and continue analysis
       AndroidBridge.ponderHit();
@@ -4522,7 +4466,7 @@ const ANIMATION_DEFER_MS=600;
 //   that delays the AI's reply and the game-over check for no reason.
 //   Reduce to 30ms (one frame + tiny buffer) under reduced-motion.
 let _deferMs=ANIMATION_DEFER_MS;
-try{if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches)_deferMs=30;}catch(e){}
+try{if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches)_deferMs=30;}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
 const _hashAtSched=gameState.hash;
 setTimeout(()=>{
 try{
@@ -4561,7 +4505,7 @@ function _clearAnimationState(){
       const old=bwrap.querySelectorAll('.move-anim');
       for(let i=0;i<old.length;i++)old[i].remove();
     }
-  }catch(e){}
+  }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
   if(_fullRenderTimer){clearTimeout(_fullRenderTimer);_fullRenderTimer=0;}
 }
 function undoMove(){
@@ -4571,11 +4515,11 @@ if(isAIThinking&&!setupMode)return;
 if(stateHistory.length===0){
   HapticManager.fire('BUTTON_PRESS');
   // v1.0.8 PHASE 22 supplement: error sound (nothing to undo)
-  try{if(typeof playSound==='function')playSound('error');}catch(e){}
+  try{if(typeof playSound==='function')playSound('error');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
   return;
 }
 // v1.0.8 PHASE 22 supplement: undo sound (逆向回旋音)
-try{if(typeof playSound==='function')playSound('undo');}catch(e){}
+try{if(typeof playSound==='function')playSound('undo');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
 _cachedStatus=null;_cachedStatusKey='';_updateEvalDisplay(); // _resetEvalState now inside requestEngineEval()
 _clearAnimationState();
 if(pendingPromotion)pendingPromotion=null;
@@ -4650,7 +4594,7 @@ if(typeof _invalidateCachesForUndoneMoves==='function'){
 }else{
   // Inline fallback (in case the function isn't defined yet — defensive)
   try{
-    if(typeof _reviewEvalCache!=='undefined'&&_reviewEvalCache){
+    if(_reviewEvalCache !== undefined&&_reviewEvalCache){
       const _keysToDelete=[];
       if(typeof _reviewEvalCache.keys==='function'){
         for(const k of _reviewEvalCache.keys()){
@@ -4671,7 +4615,7 @@ if(typeof _invalidateCachesForUndoneMoves==='function'){
   }catch(e){console.warn('undoMove: visual annotation cache invalidation failed',e);}
   try{
     if(typeof _cachedOriginalPGN!=='undefined')_cachedOriginalPGN=null;
-  }catch(e){}
+  }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
 }
 // After undo, select the piece at the player's original (from) position.
 // This is the position the piece was at BEFORE the player moved it, so the user
@@ -4699,11 +4643,11 @@ if(isAIThinking)return;
 if(_redoStack.length===0){
   HapticManager.fire('BUTTON_PRESS');
   // v1.0.8 PHASE 22 supplement: error sound (nothing to redo)
-  try{if(typeof playSound==='function')playSound('error');}catch(e){}
+  try{if(typeof playSound==='function')playSound('error');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
   return;
 }
 // v1.0.8 PHASE 22 supplement: redo sound (正向回旋音)
-try{if(typeof playSound==='function')playSound('redo');}catch(e){}
+try{if(typeof playSound==='function')playSound('redo');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
 _cachedStatus=null;_cachedStatusKey='';_updateEvalDisplay();
 _clearAnimationState();
 // Pop from redo stack and restore
@@ -4745,7 +4689,7 @@ HapticManager.fire('PIECE_SELECT');
 }
 function flipBoard(){
   // v1.0.8 PHASE 22 supplement: flip sound (嗖声)
-  try{if(typeof playSound==='function')playSound('flip');}catch(e){}
+  try{if(typeof playSound==='function')playSound('flip');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
   // v1.0.8 PHASE 24 (bug fix): clear animation state so a mid-animation flip
   //   doesn't leave an overlay at the wrong orientation.
   _clearAnimationState();
@@ -4787,7 +4731,7 @@ function quickFreeOpening(){
 // === Toggle sound on/off (toolbar button) ===
 function toggleSound(){
   soundOn=!soundOn;
-  try{if(typeof Store!=='undefined'&&Store&&typeof Store.dispatch==='function')Store.dispatch('TOGGLE_SOUND',soundOn);}catch(e){}
+  try{if(typeof Store!=='undefined'&&Store&&typeof Store.dispatch==='function')Store.dispatch('TOGGLE_SOUND',soundOn);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
   const btn=document.getElementById('btnSound');
   if(btn)btn.innerHTML=soundOn?'<span style=\"font-size:1.4rem\">🔊</span> '+T('sound'):'<span style=\"font-size:1.4rem\">🔇</span> '+T('sound');
   HapticManager.fire(soundOn?'TOGGLE_ON':'TOGGLE_OFF');
@@ -4800,12 +4744,12 @@ function toggleSound(){
     if(typeof audioEngine!=='undefined'&&audioEngine){
       audioEngine.setEnabled(soundOn);
     }
-  }catch(e){}
+  }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
   // v1.0.8 PHASE 22 supplement: when turning sound ON, play a select sound
   // so the user immediately hears confirmation that sound is now active.
   // (When turning OFF, no sound — by definition.)
   if(soundOn){
-    try{if(typeof playSound==='function')playSound('select');}catch(e){}
+    try{if(typeof playSound==='function')playSound('select');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
   }
   showToast(soundOn?T('sound_on'):T('sound_off'),1200);
 }
@@ -4814,7 +4758,7 @@ function getHint(){
   if(gameOver||isAIThinking||reviewMode||gameState.currentTurn!==playerColor)return;
   if(!_engineReady){showToast(T('engine_not_ready'));return;}
   // v1.0.8 PHASE 22 supplement: hint sound (柔和三角波) — requesting AI hint
-  try{if(typeof playSound==='function')playSound('hint');}catch(e){}
+  try{if(typeof playSound==='function')playSound('hint');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
   isHintLoading=true;hintText='';_aiBarInfo='';aiThinkInfo=T('thinking');_hintBarInfo=T('thinking');
   // Clear stale ponder info when starting a new hint search
   _ponderGen++;_ponderBarInfo='';_ponderMoveSAN='';_pendingPonderMoveUCI=null;
@@ -4835,7 +4779,7 @@ function toggleSetup(){if(isAIThinking&&!setupMode)return;_cachedStatus=null;_ca
 // v1.0.8 PHASE 24 (bug fix): clear any in-progress animation.
 _clearAnimationState();
 // v1.0.8 PHASE 22 supplement: setup-toggle sound (木质放置音)
-try{if(typeof playSound==='function')playSound('setupToggle');}catch(e){}
+try{if(typeof playSound==='function')playSound('setupToggle');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
 // v1.0.2 FIX (audit): extract common reset out of both branches.
 gameOver=null;_gameOverStatusKey=null;
 if(setupMode){setupPiece='pawn';setupColor='white';selectedSquare=null;legalMvs=[];legalSet=new Set();lastMove=null;gameOverSoundPlayed=false;setupErrors=[];setupHistory=[];
@@ -4929,7 +4873,7 @@ setupMarkerMode=null;
 // Re-validate castlingRights from setupCastleMarks before clearing them.
 // (_refreshStateAfterSetup reset them to all-false during setup.)
 if(gameState.setupCastleMarks&&gameState.setupCastleMarks.size>0){
-  try{validateSetupPosition(gameState);}catch(e){}
+  try{validateSetupPosition(gameState);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
 }
 setupMarkerMode=null;
 gameState.setupEpMark=null;
@@ -5160,8 +5104,8 @@ if(typeof setChess960Mode==='function'&&typeof isChess960Mode==='function'){
   // state, to avoid an unnecessary engine stop/wait cycle.
   if(_needsChess960&&!isChess960Mode()){
     setChess960Mode(true);
-    if(typeof gameVariant!=='undefined')gameVariant='chess960'; // treat as Chess960 for PGN export
-  }else if(!_needsChess960&&isChess960Mode()&&(typeof gameVariant==='undefined'||gameVariant!=='chess960')){
+    if(gameVariant !== undefined)gameVariant='chess960'; // treat as Chess960 for PGN export
+  }else if(!_needsChess960&&isChess960Mode()&&(gameVariant === undefined||gameVariant!=='chess960')){
     // Setup produced a standard position — disable Chess960 mode unless we're
     // in an explicit Chess960 game (gameVariant === 'chess960').
     setChess960Mode(false);
@@ -5279,7 +5223,7 @@ function enterReview(){_cachedStatus=null;_cachedStatusKey='';
 //   doesn't persist into review mode.
 _clearAnimationState();
 // v1.0.8 PHASE 22 supplement: enter-review sound (沉思音)
-try{if(typeof playSound==='function')playSound('enterReview');}catch(e){}
+try{if(typeof playSound==='function')playSound('enterReview');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
 // v1.1.0 Phase 57 FIX (visual annotation residue): Clear the '_initial' key
 //   from the visual annotations cache to ensure fresh computation. The cached
 //   '_initial' annotations may be stale from a previous review session:
@@ -5299,7 +5243,7 @@ try{if(typeof playSound==='function')playSound('enterReview');}catch(e){}
 //   during play (via _computeAndCacheVisualAnnotations after each move) and are
 //   still valid for the current moveRecords.
 if(typeof _visualAnnotationsCache!=='undefined'&&_visualAnnotationsCache){
-  try{_visualAnnotationsCache.delete('_initial');}catch(e){}
+  try{_visualAnnotationsCache.delete('_initial');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
 }
 // v1.0.8 PHASE 18 Task 2: Reset virtual list state on entering review mode.
 // Each new review session starts with a fresh window centered on reviewStep=0.
@@ -5420,7 +5364,7 @@ try{
   if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.isPondering==='function'&&AndroidBridge.isPondering()){
     if(typeof AndroidBridge.stopPonder==='function')AndroidBridge.stopPonder();
   }
-}catch(e){}
+}catch(e){console.warn('[Review] stopPonder on enterReview failed:',e.message);}
 _ponderGen++;_ponderMoveSAN='';_ponderBarInfo='';_pendingPonderMoveUCI=null;
 // v1.0.4 ROUND-5 REV14: Clear stale AI thinking state before entering review.
 // When returning from stats page, isAIThinking might be true if the AI was
@@ -5429,7 +5373,7 @@ _ponderGen++;_ponderMoveSAN='';_ponderBarInfo='';_pendingPonderMoveUCI=null;
 isAIThinking=false;_aiBarInfo='';
 if(typeof _updateAIThinkDisplay==='function')_updateAIThinkDisplay();
 reviewCritical=_findCriticalMoves();requestEngineEval();render();
-  try{if(typeof Store!=='undefined'&&Store&&typeof Store.dispatch==='function')Store.dispatch('ENTER_REVIEW',{states:reviewStates,baseState:reviewBaseState});}catch(e){} // _resetEvalState now inside requestEngineEval()
+  try{if(typeof Store!=='undefined'&&Store&&typeof Store.dispatch==='function')Store.dispatch('ENTER_REVIEW',{states:reviewStates,baseState:reviewBaseState});}catch(e){console.warn('[State] ENTER_REVIEW dispatch failed:',e.message);} // _resetEvalState now inside requestEngineEval()
 }
 /**
  * Find critical moves in the game — moves where the evaluation changed significantly.
@@ -5566,7 +5510,7 @@ function startGame(){
 }
 function _startGameImpl(){
   // v1.0.8 PHASE 22 supplement: new-game sound (号角式三音和弦)
-  try{if(typeof playSound==='function')playSound('newgame');}catch(e){}
+  try{if(typeof playSound==='function')playSound('newgame');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
   showNewGameDialog=false;
   playerColor=dlgPlayerColor;
   useBookMoves=dlgBookMoves;
@@ -5583,7 +5527,7 @@ function _startGameImpl(){
   // correctness. The previous design assumed "same step index → same
   // position", which is only true within ONE game.
   try{
-    if(typeof _reviewEvalCache!=='undefined'&&_reviewEvalCache){
+    if(_reviewEvalCache !== undefined&&_reviewEvalCache){
       _reviewEvalCache.clear();
     }
     if(typeof _reviewEvalRequestedStep!=='undefined')_reviewEvalRequestedStep=-1;
@@ -5595,7 +5539,11 @@ function _startGameImpl(){
   // gameVariant==='chess960' for defense in depth, but _ecoEnabled=false
   // here is the primary switch so getECORecommendation() is never even
   // called for Chess960 positions (saves CPU).
-  _ecoEnabled=!(typeof dlgChess960!=='undefined'&&dlgChess960);
+  // v1.2.1 round-12 (S2757 false-positive refactor): The original
+  // `!(dlgChess960 !== undefined&&dlgChess960)` triggered SonarCloud's
+  // '=!' operator typo detector. Rewrite using De Morgan's law for the same
+  // semantics: ECO is enabled when dlgChess960 is undefined OR falsy.
+  _ecoEnabled=dlgChess960 === undefined||!dlgChess960;
   // v1.0.3: Clear cached original PGN and setup FEN — new game means no imported PGN.
   if(typeof _cachedOriginalPGN!=='undefined')_cachedOriginalPGN=null;
   if(typeof _setupFEN!=='undefined')_setupFEN=null;
@@ -5613,12 +5561,12 @@ function _startGameImpl(){
   // - If dlgChess960SPID is set (0..959), use it; otherwise pick a random SP-ID.
   // - Tell StockfishNative to enable UCI_Chess960 so castling works correctly.
   // - For Chess960 we skip ECO openings (they assume the standard start position).
-  if(typeof dlgChess960!=='undefined'&&dlgChess960){
+  if(dlgChess960 !== undefined&&dlgChess960){
     const spid=(typeof dlgChess960SPID!=='undefined'&&dlgChess960SPID>=0&&dlgChess960SPID<960)?dlgChess960SPID:randomSPID();
     if(typeof setChess960Mode==='function')setChess960Mode(true);
     gameState=initChess960State(spid);
     // Track game variant for PGN export
-    if(typeof gameVariant!=='undefined')gameVariant='chess960';
+    if(gameVariant !== undefined)gameVariant='chess960';
     if(typeof gameSPID!=='undefined')gameSPID=spid;
     // v1.0.8 PHASE 24 (bug fix): Store the Chess960 starting FEN so PGN export
     //   emits the correct [FEN] tag. Previously _setupFEN was null for Chess960
@@ -5629,7 +5577,7 @@ function _startGameImpl(){
   }else{
     if(typeof setChess960Mode==='function')setChess960Mode(false);
     gameState=initState();
-    if(typeof gameVariant!=='undefined')gameVariant=null;
+    if(gameVariant !== undefined)gameVariant=null;
     if(typeof gameSPID!=='undefined')gameSPID=null;
   }
   stateHistory=[{state:cloneS(gameState),selectedSquare:null,legalMvs:[],moveRecords:[],lastMove:null,gameOver:null}];
@@ -5637,7 +5585,7 @@ function _startGameImpl(){
   gameOver=null;_gameOverStatusKey=null;
   // If an opening is selected AND we're NOT in Chess960 mode, apply ECO opening moves.
   // (ECO openings assume the standard start position — they don't make sense in Chess960.)
-  if(dlgOpeningId&&!(typeof dlgChess960!=='undefined'&&dlgChess960)){
+  if(dlgOpeningId&&!(dlgChess960 !== undefined&&dlgChess960)){
     _ensureEcoParsed();
     const pipeIdx=dlgOpeningId.indexOf('|');
     const ecoCode=pipeIdx>=0?dlgOpeningId.substring(0,pipeIdx):dlgOpeningId;
@@ -6405,7 +6353,7 @@ function _invalidateCachesForUndoneMoves(currentMoveCount){
     //    step 0 = initial position, steps 1..N = positions after each move).
     //    Delete entries with key > currentMoveCount. Step 0 (the initial
     //    position) is always retained — it doesn't change on undo.
-    if(typeof _reviewEvalCache!=='undefined'&&_reviewEvalCache){
+    if(_reviewEvalCache !== undefined&&_reviewEvalCache){
       const _keysToDelete=[];
       if(typeof _reviewEvalCache.keys==='function'){
         for(const k of _reviewEvalCache.keys()){
@@ -6435,7 +6383,7 @@ function _invalidateCachesForUndoneMoves(currentMoveCount){
     // 3. _cachedOriginalPGN — null it so subsequent PGN operations use
     //    _buildPGNString() (which reads the current, shorter moveRecords).
     if(typeof _cachedOriginalPGN!=='undefined')_cachedOriginalPGN=null;
-  }catch(e){}
+  }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
   // v1.0.8 BUG FIX:
   // After undo, the critical-moves list (reviewCritical) still contained
   // entries for the now-undone moves, causing misaligned critical-move
@@ -6591,7 +6539,7 @@ function _resetGameUIState(){
   //   for the dialog path (initGameClocks will overwrite the null). For
   //   non-dialog paths (FEN/PGN/setup), the imported game is treated as
   //   untimed unless the user explicitly starts a new timed game.
-  if(typeof gameClocks!=='undefined'){gameClocks=null;}
+  if(gameClocks !== undefined){gameClocks=null;}
   // v1.1.1 Phase 61: Clear ALL remaining per-game caches that could pollute
   //   the new game's PGN records, eval display, and statistics. Previously
   //   these were cleared inconsistently across the 5 entry points
@@ -6647,7 +6595,7 @@ function _resetGameUIState(){
   if(typeof _sfWdlL!=='undefined')_sfWdlL=-1;
   if(typeof _sfEvalReady!=='undefined')_sfEvalReady=false;
   if(typeof _evalLoading!=='undefined')_evalLoading=false;
-  if(typeof _reviewEvalCache!=='undefined'&&_reviewEvalCache&&typeof _reviewEvalCache.clear==='function'){
+  if(_reviewEvalCache !== undefined&&_reviewEvalCache&&typeof _reviewEvalCache.clear==='function'){
     try{_reviewEvalCache.clear();}catch(e){console.warn('_resetGameUIState: review eval cache clear failed',e);}
   }
   if(typeof _reviewEvalRequestedStep!=='undefined')_reviewEvalRequestedStep=-1;
@@ -6659,7 +6607,7 @@ function _resetGameUIState(){
   if(typeof _needNewGameForEngine!=='undefined')_needNewGameForEngine=true;
   if(typeof _tbLoading!=='undefined')_tbLoading=false;
   if(typeof _tbRetryCount!=='undefined')_tbRetryCount=0;
-  try{if(typeof Store!=='undefined'&&Store&&typeof Store.dispatch==='function'){Store.dispatch('SETUP_EXIT');Store.dispatch('PGN_CLEARED');}}catch(e){}
+  try{if(typeof Store!=='undefined'&&Store&&typeof Store.dispatch==='function'){Store.dispatch('SETUP_EXIT');Store.dispatch('PGN_CLEARED');}}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
 }
 
 /**
@@ -6791,36 +6739,36 @@ function _updateReviewAnalyzeBtn(){
 function _prioritizeReviewStep(step){
   // Validate: must be in review mode
   if(!reviewMode){
-    try{showToast(T('priority_eval_not_in_review'),2500);}catch(e){}
+    try{showToast(T('priority_eval_not_in_review'),2500);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
     return;
   }
   // Validate: step must be in range
   if(!reviewStates||step<0||step>=reviewStates.length)return;
   // Validate: step must be uncached (no point prioritizing an already-analyzed step)
   if(_reviewEvalCache.has(step)){
-    try{showToast(T('priority_eval_already_cached'),2000);}catch(e){}
-    try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+    try{showToast(T('priority_eval_already_cached'),2000);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+    try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
     return;
   }
   // Fire haptic feedback (matches the existing long-press pattern)
-  try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+  try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
   // If no batch is active, just navigate to the step and trigger a single eval
   // (the user can manually inspect it). This is a graceful fallback.
   if(!_reviewAnalyzeAllActive){
     reviewGoTo(step);
-    try{requestEngineEval();}catch(e){}
-    try{showToast(T('priority_eval_toast'),2500);}catch(e){}
+    try{requestEngineEval();}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+    try{showToast(T('priority_eval_toast'),2500);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
     return;
   }
   // Deduplicate: don't add the same step twice
   if(_reviewAnalyzePriorityQueue.indexOf(step)>=0){
-    try{showToast(T('priority_eval_toast'),2500);}catch(e){}
+    try{showToast(T('priority_eval_toast'),2500);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
     return;
   }
   // Push onto the priority queue
   _reviewAnalyzePriorityQueue.push(step);
   // Show toast notification
-  try{showToast(T('priority_eval_toast'),2500);}catch(e){}
+  try{showToast(T('priority_eval_toast'),2500);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
   // Abort the current in-flight batch eval so the priority step can be
   // evaluated next. We bump _reviewAnalyzeGen and clear _evalRequestBatchGen
   // so the in-flight onEngineEval callback is treated as stale (its result
@@ -6873,7 +6821,7 @@ function reviewAnalyzeAll(){
   }
   if(_uncachedCount===0){
     showToast(T('analysis_done')+' '+(_lastStep+1)+' '+T('step'));
-    try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+    try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
     render();
     return;
   }
@@ -6899,7 +6847,7 @@ function reviewAnalyzeAll(){
   //   the user's pre-batch step (which is the same as their current step
   //   unless they navigated during the batch).
   showToast(T('analyzing_all')+' ('+_reviewEvalCache.size+'/'+(_lastStep+1)+')');
-  try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+  try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
   // Start the batch via _requestBatchEval (always exported by ai-bridge.js).
   _requestBatchEval(startStep);
 }
@@ -7007,7 +6955,7 @@ function _reviewAnalyzeAdvance(){
     _reviewAnalyzePriorityQueue=[];
     // v1.0.8 PHASE 19 (bug fix): Recompute reviewCritical now that the eval cache
     // is fully populated.
-    try{if(typeof _findCriticalMoves==='function')reviewCritical=_findCriticalMoves();}catch(e){}
+    try{if(typeof _findCriticalMoves==='function')reviewCritical=_findCriticalMoves();}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
     // v1.1.2 Phase 67 Task 67.2: If a PGN cache save is pending (user chose
     //   "Analyze All first" in the partial-eval dialog), trigger it now.
     //   The save will use the now-fully-populated _reviewEvalCache so every
@@ -7046,7 +6994,7 @@ function _reviewAnalyzeAdvance(){
         try{setTimeout(function(){
           try{_pgnCacheSaveCurrentImpl_SkipCoverageCheck(_pendingSave.name,_pendingSave.includeAnn);}
           catch(e){showToast(T('pgn_cache_save_failed'),2500);}
-        },150);}catch(e){}
+        },150);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
       }
       // v1.2.1 round-11 (Bug #2 fix): trigger deferred stats page open AFTER
       //   reviewGoTo so the user's pre-batch step is restored first. The
@@ -7056,7 +7004,7 @@ function _reviewAnalyzeAdvance(){
         try{setTimeout(function(){
           try{if(typeof openStatsPage==='function')openStatsPage();}
           catch(e){console.error('Deferred openStatsPage failed:',e);}
-        },150);}catch(e){}
+        },150);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
       }
       return;
     }
@@ -7066,13 +7014,13 @@ function _reviewAnalyzeAdvance(){
       try{setTimeout(function(){
         try{_pgnCacheSaveCurrentImpl_SkipCoverageCheck(_pendingSave.name,_pendingSave.includeAnn);}
         catch(e){showToast(T('pgn_cache_save_failed'),2500);}
-      },150);}catch(e){}
+      },150);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
     }
     if(_pendingStats){
       try{setTimeout(function(){
         try{if(typeof openStatsPage==='function')openStatsPage();}
         catch(e){console.error('Deferred openStatsPage failed:',e);}
-      },150);}catch(e){}
+      },150);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
     }
     return;
   }
@@ -7099,10 +7047,10 @@ function _reviewAnalyzeAdvance(){
   //     that the move list feels responsive, infrequent enough to avoid the
   //     O(n) DOM rebuild cost that caused WebView memory pressure on 100+
   //     step games.
-  try{if(typeof _updateReviewAnalyzeBtn==='function')_updateReviewAnalyzeBtn();}catch(e){}
-  try{if(typeof _refreshEvalTrendChart==='function')_refreshEvalTrendChart();}catch(e){}
+  try{if(typeof _updateReviewAnalyzeBtn==='function')_updateReviewAnalyzeBtn();}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{if(typeof _refreshEvalTrendChart==='function')_refreshEvalTrendChart();}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
   if(nextStep%10===0){
-    try{render();}catch(e){}
+    try{render();}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
   }
   // v1.1.2 Phase 68 (Issue 30 P1): Main-thread yield — wrap the next
   //   _requestBatchEval call in setTimeout(0) so the JS main thread can
@@ -7151,7 +7099,7 @@ function _reviewAnalyzeAdvance(){
  */
 function exitReview(){
   // v1.0.8 PHASE 22 supplement: exit-review sound (归位音)
-  try{if(typeof playSound==='function')playSound('exitReview');}catch(e){}
+  try{if(typeof playSound==='function')playSound('exitReview');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
   // v1.0.8 PHASE 24 (bug fix): clear any in-progress animation.
   _clearAnimationState();
   reviewMode=false;
@@ -7245,7 +7193,7 @@ function exitReview(){
 //   where a user clicks multiple operations before the first completes.
 let _pgnCacheOpInProgress=false;
 function openPGNCacheManager(){
-  try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+  try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
   _pgnCacheSelected=new Set();
   // v1.0.4 Rev21: Reset filter state when (re)opening the manager.
   _pgnCacheFilter='';
@@ -7293,7 +7241,7 @@ function _formatPGNCacheMtime(mtime){
 function _pgnCacheToggleSel(name){
   if(_pgnCacheSelected.has(name))_pgnCacheSelected.delete(name);
   else _pgnCacheSelected.add(name);
-  try{HapticManager.fire('TOGGLE_ON');}catch(e){}
+  try{HapticManager.fire('TOGGLE_ON');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
   render();
 }
 
@@ -7331,11 +7279,11 @@ function _pgnCacheSaveCurrent(){
   //   文件系统危险字符 / \ : * ? " < > | 与控制字符。否则恶意/误输入可能
   //   逃逸出沙箱路径或破坏 PGN 缓存索引。
   if(name.length>60){
-    try{showToast(T('pgn_cache_name_too_long')||'Name too long (max 60)');}catch(e){}
+    try{showToast(T('pgn_cache_name_too_long')||'Name too long (max 60)');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
     return;
   }
   if(/[\/\\:*?"<>|\x00-\x1f\x7f]/.test(name)){
-    try{showToast(T('pgn_cache_name_invalid')||'Name contains invalid characters');}catch(e){}
+    try{showToast(T('pgn_cache_name_invalid')||'Name contains invalid characters');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
     return;
   }
   _pgnCacheOpInProgress=true;
@@ -7426,7 +7374,7 @@ function _pgnCacheBuildSaveContext(includeAnn){
   // Phase 69: Check eval-cache coverage. This is INDEPENDENT of _useOriginal.
   const _inReview = typeof reviewMode!=='undefined' && reviewMode
     && typeof reviewStates!=='undefined' && reviewStates && reviewStates.length>0
-    && typeof _reviewEvalCache!=='undefined' && _reviewEvalCache;
+    && _reviewEvalCache !== undefined && _reviewEvalCache;
   let _cachedCount=0;
   const _totalSteps = (moveRecords&&moveRecords.length>0) ? moveRecords.length : 0;
   if(_inReview){
@@ -7442,7 +7390,7 @@ function _pgnCacheBuildSaveContext(includeAnn){
   //   of reviewMode (it only checks size>0), so the evals WILL be emitted.
   //   Previously, the force was gated on _inReview, which meant exiting review
   //   mode before saving would lose all [%eval] annotations.
-  const _hasAnyCachedEvals = typeof _reviewEvalCache!=='undefined' && _reviewEvalCache && _reviewEvalCache.size>0;
+  const _hasAnyCachedEvals = _reviewEvalCache !== undefined && _reviewEvalCache && _reviewEvalCache.size>0;
   if(_hasAnyCachedEvals && _useOriginal){
     _useOriginal=false;
   }
@@ -7494,7 +7442,7 @@ function _pgnCachePersistSave(name, pgn){
   if(ok){
     _refreshPGNCacheList();
     showToast(T('pgn_cache_saved')+'：'+name,2000);
-    try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+    try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
     render();
   }else{
     showToast(T('pgn_cache_save_failed'),2500);
@@ -7566,7 +7514,7 @@ function _pgnCacheShowPartialEvalDialog(name, includeAnn, totalSteps, cachedCoun
       b.textContent=label;
       b.style.cssText='width:100%;justify-content:center;gap:8px;padding:12px;font-size:.9rem';
       b.onclick=function(){
-        try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+        try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
         _dismiss();
         onClick();
       };
@@ -7601,7 +7549,7 @@ function _pgnCacheShowPartialEvalDialog(name, includeAnn, totalSteps, cachedCoun
     // Click on overlay (outside dialog) = cancel
     overlay.addEventListener('click', function(e){
       if(e.target===overlay){
-        try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+        try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
         _dismiss();
       }
     });
@@ -7651,7 +7599,7 @@ function _pgnCacheImport(name){
   const wasReviewMode=typeof reviewMode!=='undefined'&&reviewMode;
   try{
     if(wasReviewMode&&typeof exitReview==='function')exitReview();
-  }catch(e){}
+  }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
   // v1.0.8 PHASE 34: use async import with worker offloading to prevent UI jank
   //   on large PGN files. Falls back to sync importPGN if importPGNAsync unavailable.
   // v1.1.2 Phase 69 (Bug 3): The .then callback checks _pgnCacheOpInProgress to
@@ -7672,12 +7620,12 @@ function _pgnCacheImport(name){
         if(wasReviewMode){
           try{
             if(typeof enterReview==='function'){
-              setTimeout(()=>{try{enterReview();}catch(e){}},100);
+              setTimeout(()=>{try{enterReview();}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}},100);
             }
-          }catch(e){}
+          }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
         }
         showToast(T('pgn_cache_imported')+'：'+name,2000);
-        try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+        try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
         render();
       }).catch(function(e){
         _pgnCacheOpInProgress=false;
@@ -7700,12 +7648,12 @@ function _pgnCacheImport(name){
     try{
       if(typeof enterReview==='function'){
         // Slight delay to let importPGN settle
-        setTimeout(()=>{try{enterReview();}catch(e){}},100);
+        setTimeout(()=>{try{enterReview();}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}},100);
       }
-    }catch(e){}
+    }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
   }
   showToast(T('pgn_cache_imported')+'：'+name,2000);
-  try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+  try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
   render();
 }
 
@@ -7726,7 +7674,7 @@ function _pgnCacheDeleteSelected(){
   _pgnCacheSelected.clear();
   _refreshPGNCacheList();
   _pgnCacheOpInProgress=false;
-  try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+  try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
   showToast(T('pgn_cache_deleted')+'：'+deleted,2000);
   render();
 }
@@ -7763,7 +7711,7 @@ function _pgnCacheRename(oldName){
   if(ok){
     _refreshPGNCacheList();
     showToast(T('pgn_cache_renamed')+'：'+newName,2000);
-    try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+    try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
     render();
   }else{
     showToast(T('pgn_cache_rename_failed'),2500);
@@ -7809,7 +7757,7 @@ function _pgnCacheEditTags(name){
   if(ok){
     _refreshPGNCacheList();
     showToast(T('pgn_cache_tags_saved')+'：'+name,2000);
-    try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+    try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
     render();
   }else{
     showToast(T('pgn_cache_tags_save_failed'),2500);
@@ -7833,13 +7781,13 @@ function _pgnCacheApplyFilter(){
   _pgnCacheFilter=_pgnCacheFilterInput.trim();
   // Clear selection — selected items might no longer be visible after filter.
   _pgnCacheSelected.clear();
-  try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+  try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
   render();
 }
 function _pgnCacheClearFilter(){
   _pgnCacheFilter='';
   _pgnCacheFilterInput='';
-  try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+  try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
   render();
 }
 function _pgnCacheFilterByTag(tag){
@@ -7847,7 +7795,7 @@ function _pgnCacheFilterByTag(tag){
   _pgnCacheFilter=String(tag);
   _pgnCacheFilterInput=String(tag);
   _pgnCacheSelected.clear();
-  try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+  try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
   render();
 }
 // v1.0.8 PHASE 39: Filter by tag presence (has any tags / has no tags)
@@ -7855,7 +7803,7 @@ function _pgnCacheFilterByTagPresence(hasTags){
   _pgnCacheFilter=hasTags?'__has_tags__':'__no_tags__';
   _pgnCacheFilterInput='';
   _pgnCacheSelected.clear();
-  try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+  try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
   render();
 }
 // Returns true if an entry matches the current filter.
@@ -8164,7 +8112,7 @@ function handleBackPress(){
  * default "你"/"You" (clears the persisted preference).
  */
 function _renameHumanPlayer(){
-  try{HapticManager.fire('BUTTON_PRESS');}catch(e){}
+  try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
   const _current=(typeof _humanPlayerName!=='undefined'&&_humanPlayerName)?_humanPlayerName:T('you');
   let _newName='';
   try{_newName=prompt(T('rename_player_prompt'),_current)||'';}catch(e){_newName='';}
@@ -8173,11 +8121,11 @@ function _renameHumanPlayer(){
   // If the user typed the default name or cancelled, clear the rename
   if(!_newName||_newName===T('you')||_newName==='你'||_newName==='You'){
     _humanPlayerName=null;
-    try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentRemove)AndroidBridge.persistentRemove('Regalia_humanName');}catch(e){}
+    try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentRemove)AndroidBridge.persistentRemove('Regalia_humanName');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
     showToast(T('rename_player_reset'),2000);
   }else{
     _humanPlayerName=_newName;
-    try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_humanName',_newName);}catch(e){}
+    try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_humanName',_newName);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
     showToast(T('rename_player_saved')+'：'+_newName,2000);
   }
   render();
@@ -8260,7 +8208,7 @@ window._showStatsImportBackPrompt=_showStatsImportBackPrompt;
 function _resignGame(){
   if(gameOver)return; // Already over — no-op
   // v1.0.8 PHASE 22 supplement: resign sound (降旗音)
-  try{if(typeof playSound==='function')playSound('resign');}catch(e){}
+  try{if(typeof playSound==='function')playSound('resign');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
   // The resigner is the human player (playerColor). The winner is the AI.
   _resignWinnerColor = (playerColor==='white') ? 'black' : 'white';
   // Stop any in-flight engine search
@@ -8277,9 +8225,9 @@ function _resignGame(){
         }else if(typeof AndroidBridge!=='undefined'&&AndroidBridge.sendToEngine){
           AndroidBridge.sendToEngine('stop');
         }
-      }catch(e){}
+      }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
     }
-  }catch(e){}
+  }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
   // Stop the game clock
   // v1.0.8 PHASE 19 (bug fix): gameClocks.running=false was a no-op (the field
   // doesn't exist). The 200ms interval kept firing for the rest of the session,
@@ -8289,21 +8237,21 @@ function _resignGame(){
       clearInterval(gameClockTimerId);
       gameClockTimerId=null;
     }
-  }catch(e){}
+  }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
   // Set game-over state
   _gameOverStatusKey='resign';
   gameOver=_gameOverStrFromStatus('resign');
   // Play a soft "gameover" sound for the loss.
   try{
-    if(typeof soundOn!=='undefined'&&soundOn&&typeof playSound==='function'){
+    if(soundOn !== undefined&&soundOn&&typeof playSound==='function'){
       playSound('gameover');
     }
-  }catch(e){}
+  }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
   // v1.0.8 PHASE 41: use GAME_OVER haptic (not ERROR) — resignation plays the
   //   same 'gameover' sound as natural game-over, so the haptic should match.
   //   ERROR had no Java case (fell to 15ms default); GAME_OVER has a proper
   //   430ms multi-stage pattern matching the somber arpeggio.
-  try{HapticManager.fire('GAME_OVER');}catch(e){}
+  try{HapticManager.fire('GAME_OVER');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
   // Force a full re-render to show the game-over overlay
   markDirty(DIRTY_FULL);
   // v1.1.1 Phase 66: Removed stale console.log (was left over from debugging).
