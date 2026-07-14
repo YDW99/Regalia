@@ -1,3 +1,19 @@
+v1.2.2 (2026.7.14) — Comprehensive audit-report non-false-positive fix + version bump:
+  - Version: versionCode=122, versionName="1.2.2" (version bump from v1.2.1).
+  - No C++ source files modified in this pass. The only code change was in
+    chess.src/tablebase.js (YELLOW-1 FEN length limit). See
+    chess.src/README.license for details.
+  - License classification: all files in this directory retain their
+    existing classification.
+
+v1.2.1 round-16 (2026.7.14) — User-reported UX clarity + audit-report non-false-positive defect fixes:
+  - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
+    refinement).
+  - No C++ source files modified in this pass. All round-16 changes were
+    in chess.src/ JS modules, stats.html, and the rebuilt chess.html. See
+    chess.src/README.license for details.
+  - License classification: all files in this directory retain their
+    existing classification.
 v1.2.1 round-15 (2026.7.14) — Final perfection: comprehensive PDF-guided audit:
   - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
     refinement).

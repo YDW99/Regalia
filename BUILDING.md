@@ -707,6 +707,10 @@ The signed APK (v1+v2+v3 signed with `../debug.keystore`) will be at
   `ui.js` reference them.
 - The Stockfish 18 `arm64-v8a-dotprod` binary is the official sf_18 release.
 
+---
+*AI-GEN*
+
+
 ## v1.2.1 build notes (defect fix release)
 - **v1.2.1 (2026.7.12): Defect fix release based on comprehensive review reports.**
   - **Critical**: oppC/flip/cm/infoSq/infoCtrl scoping bug fixed via _computeRenderState()
@@ -1284,6 +1288,93 @@ The existing `renderEngineConfig()` and `_renderPGNCacheManager()` helpers (alre
 - ✅ All safe-to-convert sites (53 conversions) — fixed in round-14
 - ✅ True globals (`crypto`, `AndroidBridge`) — correctly preserved with `typeof`
 
+## v1.2.2 (2026.7.14) — Comprehensive audit-report non-false-positive fix + version bump
+
+This version is based on the uploaded comprehensive audit-report collection (`Regalia_v1.2.1_全技能审查报告.zip`, 5 sub-reports totaling 4,199 lines) covering 8 security/architecture skills. After rigorous code-level verification against the actual source tree, **7 of the audit's findings were confirmed as false positives** (based on stale code from deleted files or already-fixed issues), and **1 real defect was fixed**. The version number is bumped from v1.2.1 to v1.2.2 (versionCode 121→122).
+
+### Audit-report false positives excluded (7 items)
+
+1. **RED-1 (getStatsPayload XSS)**: `stats.html` already escapes PGN header values via `_escFEN()` at the rendering layer. The audit's suggested Java-layer JSON-string escaping (`"` → `\"`) would corrupt JSON syntax — false positive.
+2. **RED-2 (javascript: protocol not blocked)**: `ChessWebViewClient.shouldOverrideUrlLoading()` already blocks all non-`file:///android_asset/`, non-`http(s)` protocols (including `javascript:`, `data:`, `intent:`, `content:`) via the final `return true` — false positive.
+3. **RED-3 (_buildPGNString i18n XSS)**: i18n strings (`T('you')`="你"/"You", `T('ai_opponent')`="AI对手"/"AI Opponent") are static developer-controlled strings. User names are protected by `normalizeTagValue()` PGN escaping + `_escFEN()` HTML escaping — false positive.
+4. **YELLOW-2 (sendToEngine UCI whitelist)**: `StockfishNative.sendToEngine()` already has `JsBridgeGateway.isUciCommandAllowed()` UCI command whitelist — false positive.
+5. **YELLOW-3 (allowBackup=true)**: `AndroidManifest.xml`'s `android:allowBackup` was set to `false` in round-1 — false positive.
+6. **YELLOW-5 (ProGuard rules too permissive)**: the audit's referenced `-keep class com.Regalia.MessageBus { *; }` rule does not exist — `MessageBus.java` was deleted in round-4. Current `proguard-rules.pro` rules are tight — false positive.
+7. **P0 #4-5 (empty catch blocks) + P1 #12 (HapticHelper dead code)**: round-16 already fixed empty catches, round-10 already deleted `HapticHelper.java` — false positive.
+
+### Non-false-positive defect fix (1 item)
+
+**YELLOW-1 (FEN parsing lacks length limit)**: `tablebase.js` `fenToState()` now has a 200-character length limit. Standard FEN ≤87 chars; 200 allows Chess960 Shredder notation + en passant target squares + extended fields. Prevents DoS via pathologically long FEN strings. The audit's suggested character-whitelist regex was rejected — it would break Chess960 (castling rights use `a-h` file letters) and en passant target squares (`e3` etc.). The existing per-character validation (invalid piece chars return `null`) is the correct whitelist approach.
+
+### Architectural refactoring suggestions (not implemented)
+
+The audit's God Module splitting (StockfishNative 4,354 lines, ui.js 8,522 lines), Store evaluation-state migration, @JavascriptInterface facade aggregation (91→6), render() componentization, etc. are long-term architectural planning (estimated 2-4 weeks), not appropriate for a patch release. These suggestions are documented for future version planning.
+
+### Version bump (versionCode 121→122, versionName "1.2.1"→"1.2.2")
+
+Updated 11 version-number locations per `版本号位置.md`:
+- `version.properties`: VERSION_PATCH=2, VERSION_BUILD=122
+- `build.gradle`: auto-computed from version.properties
+- `strings.xml`: app_name="Regalia v1.2.2"
+- `ChessWebViewClient.java`: version comment
+- `game-logic.js`: loading_title
+- `index.html.tpl`: `<title>`
+- `ui.js`: about-dialog h2, header badge, about-dialog app_name row (3 places)
+- HTML manuals: cover, footer, title (files renamed from v1.2.1 to v1.2.2)
+- `MainActivity.java`, `StockfishNative.java`, `ChessApp.java`: use `BuildConfig.VERSION_NAME` (auto-synced)
+
+### Build verification
+
+- ✅ All 9 JS modules pass `node --check`
+- ✅ `state-store.js` TDZ safety verified (no regression)
+- ✅ `chess.html` rebuilt: 21,988 lines, 1,321,170 bytes
+- ✅ Release APK rebuilt: 78,141,232 bytes, v1+v2+v3 signatures all enabled, versionCode=122, versionName="1.2.2"
+- ✅ FGS subtype property present (`chess_engine_analysis`)
+- ✅ Stockfish dotprod engine SHA-256 three-way consistency: `8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5`
+- ✅ Tarball repackaged via `create_v122_tar.sh`: 112 files, 0 forbidden entries
+
+## v1.2.1 round-16 (2026.7.14) — User-reported UX clarity + audit-report non-false-positive defect fixes
+
+This round addresses two specific user-reported issues plus the non-false-positive defects from the uploaded audit report (`Regalia v1.2.1 剩余优化修复指南.md`). **No versionCode bump.** No new features, no new permissions, no new network access. The two user-facing changes are UX-clarity fixes (Toast wording + stats-page description wording); the audit-report fixes are robustness/quality hardening.
+
+### User-reported fix 1: 📊 Toast clarity in review mode
+
+**Symptom**: When the user clicks 📊 in the review interface (复盘界面) and not all moves have been analyzed yet, the app shows a Toast like "正在分析所有步骤... (5/200)" — but the user has no way to know that the stats page will open automatically once analysis completes. Some users click 📊 repeatedly thinking it didn't register.
+
+**Fix**: All 4 Toast messages in `openStatsPage()` (ai-bridge.js) that fire when the user clicks 📊 in review mode now append the i18n string `stats_will_open_after_analysis` ("分析完成后将进入统计页面 / Statistics will open after analysis completes"), separated by an em-dash. The 4 sites are:
+1. "Batch already pending" (user double-clicked 📊) — now reads "正在分析... (5/200) — 分析完成后将进入统计页面"
+2. "Batch already running" (user had clicked "Analyze All" manually first) — same suffix
+3. "Kicking off analyze-all" (no batch running, starting fresh) — same suffix
+4. 10-min safety-timeout toast — previously mixed zh+en ("T('analyzing_progress') + ' timed out'"), now uses the new i18n key `analysis_timed_out_retry` = "分析超时，请重试 / Analysis timed out, please retry"
+
+Two new i18n keys added to `game-logic.js`: `stats_will_open_after_analysis` and `analysis_timed_out_retry`.
+
+### User-reported fix 2: Visual annotation wording ambiguity
+
+**Symptom**: In the stats page, the visual-annotations description for green arrows (应将路径 / check-response path) read "王避将或吃将军棋子" (king escape or capture the checker). The word order creates a parsing ambiguity: "吃将军棋子" can be misread as having "王" (king) as its subject — i.e., "the king captures the checker" — which is only one of several possible check-response moves (other pieces can also capture the checker, and the king can also move away).
+
+**Fix**: Reorder the wording to "吃将军棋子或王避将" (capture the checker or king escape) so that "吃将军棋子" is read as a standalone clause with its implied subject being "any friendly piece", followed by the alternative "王避将". The English description is similarly reordered from "king escape or capture the checker" to "capture the checker or king escape". This is a documentation-only change in `stats.html`'s `visual_annotations_desc` i18n entry — no code semantics affected.
+
+### Audit-report non-false-positive defect fixes
+
+The uploaded audit report (`Regalia v1.2.1 剩余优化修复指南.md`) flagged 6 items. After code-level verification, 3 were confirmed as **false positives** (SonarCloud L945 input-label, SonarCloud L1810 InterruptedException, HapticHelper.java — the latter is absent from the source tree because round-10 already removed it). The remaining 3 were **real defects** and are now fixed:
+
+1. **game-logic.js `_ecoRestoreFocus` empty catch** (SonarCloud S108): The `catch(e){}` around `el.setSelectionRange(len, len)` now logs `console.warn('[ECO] setSelectionRange failed:', e.message)`. Non-critical — `setSelectionRange` may fail on hidden/disabled inputs, but the user can still type in the search box.
+2. **ui.js inline `catch(e){}` after `AndroidBridge.syncGameDifficulty`** (SonarCloud S108): Now logs `console.warn('[AI] syncGameDifficulty failed:', e.message)`. Defensive programming — sync failure should not block UI render.
+3. **ui.js Chess960 SPID `Math.random()` fallback** (security-scanner flag): The unreachable `typeof secureRandomInt==='function'?secureRandomInt(960):Math.floor(Math.random()*960)` is simplified to `secureRandomInt(960)`. `secureRandomInt` is exported by `game-logic.js` (loaded before `ui.js`), so the typeof guard was unreachable defensive code. This removes the only `Math.random()` use in `ui.js` that triggered security-scanner flags.
+
+Additionally, two **SECURITY-AUDIT comments** were added above `_createImpulse()` and `_getNoise()` in `ui.js` explaining that `Math.random()` is intentionally used for audio noise synthesis (not security-sensitive; `crypto.getRandomValues()` would add ~100x overhead with no benefit). This pre-empts future security-scanner flags on those two remaining `Math.random()` uses.
+
+### Build verification
+
+- ✅ All 9 JS modules pass `node --check`
+- ✅ `state-store.js` TDZ safety verified (no regression from round-8 fix)
+- ✅ `chess.html` rebuilt: 21,980 lines, 1,321,589 bytes
+- ✅ Release APK rebuilt: 78,139,573 bytes, v1+v2+v3 signatures all enabled, versionCode=121, versionName="1.2.1"
+- ✅ FGS subtype property present (`chess_engine_analysis`)
+- ✅ Stockfish dotprod engine SHA-256 three-way consistency: `8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5` (source binary = jniLibs = APK-embedded)
+- ✅ Tarball repackaged via `create_v121_tar.sh`: 112 files, 0 forbidden entries (no `.so`/`jniLibs`/`build`/`.gradle`/`.cxx`/`.keystore`)
+
 ## v1.2.1 round-15 (2026.7.14) — Final perfection: S3776 _renderReviewMode partial extraction + stats.html S108 + comprehensive audit
 
 This is the **final perfection round** — a comprehensive, first-principles audit of every source file guided by the three uploaded PDFs (AI Code Generation Defect Prevention Guide, Android WebView Development Guide, SonarCloud Perfect Review Guide). The goal is to push quality to the absolute limit: zero bugs, maximum robustness, no redundancy, optimal simplicity. **No new features, no new permissions, no new network access, no versionCode bump.** Behavior is byte-identical to the pre-refactor version; only the structure changed.
@@ -1372,7 +1463,3 @@ The 2 `catch(_e){}` blocks (worker terminate/revoke at lines 320-321) are preser
 - ✅ All empty `catch(e){}` blocks in chess.src/*.js — fixed in round-12 (146 sites)
 - ✅ All empty `catch(e){}` blocks in stats.html — fixed in round-15 (6 sites)
 - ✅ `catch(_){}` / `catch(_e){}` convention preserved (intentionally-unused idiom)
-
----
-
-*AI-GEN*

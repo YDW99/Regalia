@@ -1,3 +1,34 @@
+v1.2.2 (2026.7.14) — Comprehensive audit-report non-false-positive fix + version bump:
+  - Version: versionCode=122, versionName="1.2.2" (version bump from v1.2.1).
+  - ChessWebViewClient.java (AGPL v3): version comment updated from
+    "v1.2.1" to "v1.2.2". No code changes.
+  - MainActivity.java, StockfishNative.java, ChessApp.java: use
+    BuildConfig.VERSION_NAME (auto-synced from build.gradle via AGP),
+    no manual version-string changes needed.
+  - Audit-report false positives confirmed (no action taken):
+    RED-2 (javascript: protocol) — ChessWebViewClient already blocks all
+    non-file/non-http(s) protocols via final return true.
+    YELLOW-2 (sendToEngine UCI whitelist) — StockfishNative.sendToEngine
+    already has JsBridgeGateway.isUciCommandAllowed whitelist.
+    YELLOW-3 (allowBackup) — AndroidManifest already has
+    android:allowBackup="false" (round-1).
+    YELLOW-5 (ProGuard rules) — MessageBus.java was deleted in round-4;
+    audit based on stale code. Current proguard-rules.pro is tight.
+    P1 #12 (HapticHelper) — deleted in round-10.
+  - License classification: all files in this directory retain their
+    existing classification.
+
+v1.2.1 round-16 (2026.7.14) — User-reported UX clarity + audit-report non-false-positive defect fixes:
+  - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
+    refinement).
+  - No Java source files modified in this pass. Audit-report verification:
+    all 20 InterruptedException catches in StockfishNative.java confirmed
+    to have Thread.currentThread().interrupt() (SonarCloud java:S2142
+    false positive — based on stale scan). HapticHelper.java confirmed
+    absent (round-10 removed it; audit report's P1-1 was based on stale
+    commit info).
+  - License classification: all files in this directory retain their
+    existing classification.
 v1.2.1 round-15 (2026.7.14) — Final perfection: comprehensive PDF-guided audit:
   - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
     refinement).

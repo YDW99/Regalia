@@ -43,7 +43,7 @@ import java.lang.ref.WeakReference;
  * URLs in the system default browser (defense-in-depth alongside the JS-side
  * openUrlInBrowser bridge). Previously, external links were silently blocked.
  *
- * Version: v1.2.1 (round-10: shouldOverrideUrlLoading now uses case-insensitive
+ * Version: v1.2.2 (round-10: shouldOverrideUrlLoading now uses case-insensitive
  *   Uri.parse + equalsIgnoreCase for http(s) scheme check per RFC 3986 §3.1)
  */
 public class ChessWebViewClient extends WebViewClient {

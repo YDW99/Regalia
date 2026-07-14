@@ -1403,7 +1403,9 @@ function openStatsPage(){
           try{
             const _cached=_reviewEvalCache.size;
             const _total=_lastStep+1;
-            showToast(T('analyzing_progress')+' ('+_cached+'/'+_total+')');
+            // v1.2.1 round-16: include the 'stats will open after analysis'
+            //   hint so the user knows to wait instead of clicking 📊 again.
+            showToast(T('analyzing_progress')+' ('+_cached+'/'+_total+') \u2014 '+T('stats_will_open_after_analysis'));
           }catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
           return;
         }
@@ -1423,7 +1425,9 @@ function openStatsPage(){
           if(window._pendingOpenStats){
             window._pendingOpenStats=false;
             console.warn('openStatsPage: pending-stats safety timeout fired (10min) — batch did not complete');
-            try{showToast(T('analyzing_progress')+' timed out');}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+            // v1.2.1 round-16: proper i18n (was previously mixed zh+en
+            //   "T('analyzing_progress') + ' timed out'").
+            try{showToast(T('analysis_timed_out_retry'));}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
           }
           window._pendingOpenStatsTimer=null;
         },600000); // 10 minutes
@@ -1435,7 +1439,8 @@ function openStatsPage(){
       //   our _pendingOpenStats flag and open stats automatically.
       if(typeof _reviewAnalyzeAllActive!=='undefined'&&_reviewAnalyzeAllActive){
         try{
-          showToast(T('analyzing_progress')+' ('+_reviewEvalCache.size+'/'+(_lastStep+1)+')');
+          // v1.2.1 round-16: include the 'stats will open after analysis' hint.
+          showToast(T('analyzing_progress')+' ('+_reviewEvalCache.size+'/'+(_lastStep+1)+') \u2014 '+T('stats_will_open_after_analysis'));
         }catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
         return; // existing batch will trigger openStatsPage on completion
       }
@@ -1444,7 +1449,10 @@ function openStatsPage(){
       // module also uses, so the batch will populate the cache correctly.
       try{
         if(typeof reviewAnalyzeAll==='function'){
-          showToast(T('analyzing_all')+' ('+_reviewEvalCache.size+'/'+(_lastStep+1)+')');
+          // v1.2.1 round-16: include the 'stats will open after analysis' hint
+          //   so the user knows the stats page will appear automatically once
+          //   the batch finishes — no further action required on their part.
+          showToast(T('analyzing_all')+' ('+_reviewEvalCache.size+'/'+(_lastStep+1)+') \u2014 '+T('stats_will_open_after_analysis'));
           try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
           reviewAnalyzeAll();
           return; // stats will open when batch completes

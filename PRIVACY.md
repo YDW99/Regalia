@@ -350,6 +350,28 @@ This pass completes the remaining S3776 Cognitive Complexity items deferred from
 
 Version: `versionCode=121`, `versionName="1.2.1"` (unchanged — same-version refinement).
 
+## v1.2.2 (2026.7.14) — Comprehensive audit-report non-false-positive fix + version bump
+
+This version is based on the uploaded comprehensive audit-report collection (`Regalia_v1.2.1_全技能审查报告.zip`). After rigorous code-level verification, 7 of the audit's findings were confirmed as false positives (based on stale code from deleted files or already-fixed issues), and 1 real defect was fixed. **No new permissions, no new data collection, no new network access, no changes to data flow or storage.** All changes are internal to the app and have zero privacy impact:
+
+- **FEN parsing length limit (`tablebase.js`)**: `fenToState()` now rejects FEN strings longer than 200 characters (standard FEN ≤87 chars). This is a DoS-prevention hardening measure — a pathologically long FEN string could previously cause unnecessary string processing before validation rejected it. No privacy impact — FEN strings are chess position notation with no PII; the length limit simply fails faster on invalid input.
+- **Version bump (v1.2.1→v1.2.2)**: 11 version-number locations updated (version.properties, build.gradle, strings.xml, ChessWebViewClient.java, game-logic.js, index.html.tpl, ui.js 3 places, HTML manuals). No privacy impact — version numbers are public information.
+- **Audit-report false positives confirmed (no action taken)**: RED-1 (getStatsPayload XSS — stats.html already escapes via `_escFEN`), RED-2 (javascript: protocol — already blocked), RED-3 (i18n XSS — static strings + double escaping), YELLOW-2 (sendToEngine — already has UCI whitelist), YELLOW-3 (allowBackup — already false), YELLOW-5 (ProGuard — MessageBus deleted), P0 #4-5 (empty catches — round-16 fixed), P1 #12 (HapticHelper — round-10 deleted).
+
+Version: `versionCode=122`, `versionName="1.2.2"` (version bump from v1.2.1).
+
+## v1.2.1 round-16 (2026.7.14) — User-reported UX clarity + audit-report non-false-positive defect fixes
+
+This round addresses two user-reported UX-clarity issues plus 3 non-false-positive defects from the uploaded audit report. **No new permissions, no new data collection, no new network access, no changes to data flow or storage.** All changes are internal to the app and have zero privacy impact:
+
+- **📊 Toast clarity in review mode (`ai-bridge.js`, `game-logic.js`)**: When the user clicks 📊 in review mode and a background analysis batch is needed, the Toast now appends "分析完成后将进入统计页面 / Statistics will open after analysis completes" so the user knows to wait. Two new i18n keys (`stats_will_open_after_analysis`, `analysis_timed_out_retry`) added to `game-logic.js`. No privacy impact — Toast text is rendered locally; no data is transmitted or stored.
+- **Visual annotation wording fix (`stats.html`)**: The description for green arrows (应将路径) was reordered from "王避将或吃将军棋子" to "吃将军棋子或王避将" to eliminate a parsing ambiguity. Documentation-only change. No privacy impact.
+- **Empty `catch(e){}` blocks filled (`game-logic.js`, `ui.js`)**: The `_ecoRestoreFocus` catch and the inline `AndroidBridge.syncGameDifficulty` catch now log `console.warn(...)`. No privacy impact — `console.warn` writes to the WebView JavaScript console (visible only via `adb logcat` or Chrome DevTools); it does NOT transmit any data over the network, does NOT write to persistent storage, and does NOT include user PII.
+- **Chess960 SPID `Math.random()` fallback removed (`ui.js`)**: The unreachable `typeof secureRandomInt==='function'?...:Math.floor(Math.random()*960)` is simplified to `secureRandomInt(960)`. `secureRandomInt` uses `crypto.getRandomValues()` (already used elsewhere) — this change actually *improves* the cryptographic strength of the SPID generation by removing the insecure fallback. No privacy impact.
+- **SECURITY-AUDIT comments added (`ui.js`)**: Two comments added above `_createImpulse()` and `_getNoise()` explaining that `Math.random()` is intentionally used for audio noise synthesis. No privacy impact — comments only.
+
+Version: `versionCode=121`, `versionName="1.2.1"` (unchanged — same-version refinement).
+
 ## v1.2.1 round-15 (2026.7.14) — Final perfection: S3776 _renderReviewMode partial extraction + stats.html S108 + comprehensive PDF-guided audit
 
 This is the **final perfection round** — a comprehensive, first-principles audit of every source file guided by the three uploaded PDFs (AI Code Generation Defect Prevention Guide, Android WebView Development Guide, SonarCloud Perfect Review Guide). **No new permissions, no new data collection, no new network access, no changes to data flow or storage.** All changes are internal to the app and have zero privacy impact:

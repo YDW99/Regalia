@@ -1731,8 +1731,16 @@ function onPGNFileRead(content){
 }
 
 // Parse FEN string into game state (for import in setup mode)
+// v1.2.2 (audit YELLOW-1): Added length limit to prevent DoS via pathologically
+//   long FEN strings. Standard FEN is ≤87 chars; 200 allows Chess960 Shredder
+//   notation + en passant + extended fields with comfortable margin. The audit
+//   also suggested a character whitelist regex, but that was rejected because
+//   it would break Chess960 (file letters a-h in castling rights) and en
+//   passant target squares — the per-character validation below already
+//   rejects invalid piece characters, which is the correct whitelist approach.
 function fenToState(fen){
 if(!fen||typeof fen!=='string')return null;
+if(fen.length>200)return null;
 const parts=fen.trim().split(/\s+/);
 if(parts.length<2)return null;
 const rows=parts[0].split('/');
