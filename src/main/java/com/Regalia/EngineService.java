@@ -102,7 +102,16 @@ public class EngineService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
-        isRunning = true;
+        // v1.2.1 round-10 (review-E P3): Moved `isRunning = true` to AFTER
+        //   startForeground() succeeds. Previously it was set at the very top of
+        //   onCreate, before createNotificationChannel() and startForeground().
+        //   If startForeground() threw (e.g. ForegroundServiceTypeNotAllowed on
+        //   Android 14+ when the FGS subtype property is missing — round-9 added
+        //   it, but a future regression could re-trigger the crash), isRunning
+        //   would be left `true` while the service is actually dead. Callers
+        //   (EngineService.start, updateNotification) would then no-op or
+        //   attempt to update a non-existent notification. Now isRunning only
+        //   flips true once the service is genuinely in the foreground state.
         Log.i(TAG, "Engine service created");
 
         // Create notification channel (required Android 8+)
@@ -119,6 +128,7 @@ public class EngineService extends Service {
         } else {
             startForeground(NOTIFICATION_ID, notification);
         }
+        isRunning = true;
 
         // Acquire partial wake lock to prevent CPU suspension during analysis.
         // v1.1.0 Phase 57+: Use a bounded timeout (30 min) as a safety net — if the

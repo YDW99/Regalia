@@ -337,7 +337,7 @@ function _parsePGN(pgnText){
             }
           }else{
             // Centipawn / pawn value: 0.35, -1.5, +2.00
-            const _pawns=parseFloat(_val);
+            const _pawns=Number.parseFloat(_val);
             if(!isNaN(_pawns)){
               _ev=Math.round(_pawns*100);
               _mate=0;
@@ -908,7 +908,7 @@ function _applySANMove(state,san){
         if(alg===sanClean||alg.replace(/[+#!?]+$/,'')===sanClean){
           return _executeAndRecord(state,m,alg);
         }
-      }catch(e){}
+      }catch(e){console.warn('[Tablebase]',e&&e.message?e.message:e);}
     }
   }
   
@@ -991,7 +991,7 @@ function importPGN(pgnText){
   // for rationale (cache is keyed by per-game reviewStep, switching games
   // invalidates the entire key space).
   try{
-    if(typeof _reviewEvalCache!=='undefined'&&_reviewEvalCache){
+    if(_reviewEvalCache !== undefined&&_reviewEvalCache){
       _reviewEvalCache.clear();
     }
     if(typeof _reviewEvalRequestedStep!=='undefined')_reviewEvalRequestedStep=-1;
@@ -1001,7 +1001,7 @@ function importPGN(pgnText){
   // If detected, enable Chess960 engine mode and set gameVariant for PGN round-trip.
   if(result.variant==='chess960'){
     if(typeof setChess960Mode==='function')setChess960Mode(true);
-    if(typeof gameVariant!=='undefined')gameVariant='chess960';
+    if(gameVariant !== undefined)gameVariant='chess960';
     if(typeof gameSPID!=='undefined'){
       // Try to derive SP-ID from the starting FEN's back rank
       if(result.startFEN&&typeof backRankToSPID==='function'){
@@ -1028,7 +1028,7 @@ function importPGN(pgnText){
     }
   }else{
     if(typeof setChess960Mode==='function')setChess960Mode(false);
-    if(typeof gameVariant!=='undefined')gameVariant=null;
+    if(gameVariant !== undefined)gameVariant=null;
     if(typeof gameSPID!=='undefined')gameSPID=null;
   }
   
@@ -1103,7 +1103,7 @@ function importPGN(pgnText){
         const _isDefault=(_humanName===T('you')||_humanName==='你'||_humanName==='You'||_humanName===T('ai_opponent')||_humanName==='AI对手'||_humanName==='AI Opponent'||/Lv\.\d/.test(_humanName)||/SL/.test(_humanName));
         if(!_isDefault){
           _humanPlayerName=_humanName;
-          try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_humanName',_humanName);}catch(e){}
+          try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_humanName',_humanName);}catch(e){console.warn('[Tablebase]',e&&e.message?e.message:e);}
         }
       }
     }
@@ -1460,18 +1460,16 @@ function importPGN(pgnText){
           break;
         }
       }
-      if(divergeIdx<0){
-        // All variation moves checked without divergence
-        if(matchCount>=sanMoves.length){
-          // All matched — redundant, remove
-          continue;
-        }else{
-          // Some moves weren't checked (shouldn't happen, but defensive)
-          // Remove the variation — it's incomplete
-          continue;
-        }
-      }
-      if(divergeIdx>=0&&divergeIdx<moveRecords.length){
+      if(divergeIdx<0) continue;
+      // v1.2.1 round-9: Removed redundant `divergeIdx>=0&&` prefixes and the
+      //   unreachable `else` branch. The `if(divergeIdx<0) continue;` above
+      //   guarantees divergeIdx>=0 here, so the two remaining cases are
+      //   exhaustive: (a) divergeIdx < moveRecords.length, (b) divergeIdx >=
+      //   moveRecords.length. The previous `else` branch ("No divergence
+      //   found and not all matched — keep at original location") was dead
+      //   code — it could never execute because the prior `continue` handles
+      //   the divergeIdx<0 case. Verified by reading the surrounding logic.
+      if(divergeIdx<moveRecords.length){
         // Move the variation to the divergence-point move
         const remainingSAN=sanMoves.slice(matchCount).join(' ');
         if(remainingSAN.length>0){
@@ -1493,15 +1491,12 @@ function importPGN(pgnText){
           }
         }
         // Don't add to remainingVars (moved to new location)
-      }else if(divergeIdx>=0&&divergeIdx>=moveRecords.length){
+      }else{
         // v1.0.2 FIX: Variation starts BEYOND the game end — the game hasn't
         // reached the variation's starting move. Cache it (don't display).
         // For PGN import, this means the variation is a hypothetical continuation
         // that was never reached. Don't add to remainingVars (remove from display).
         continue;
-      }else{
-        // No divergence found and not all matched — keep at original location
-        remainingVars.push(v);
       }
     }
     mr.variations=remainingVars.length>0?remainingVars:undefined;
@@ -1540,7 +1535,7 @@ function importPGN(pgnText){
   // "to preserve other games' entries" — but the full clear already removed
   // everything, so the loop was dead work and its comment was misleading.
   try{
-    if(result.extractedEvals&&result.extractedEvals.length>0&&typeof _reviewEvalCache!=='undefined'){
+    if(result.extractedEvals&&result.extractedEvals.length>0&&_reviewEvalCache !== undefined){
       const _maxStep=moveRecords.length;
       // v1.0.7 PHASE 19 (critical bug fix): When a black-to-move placeholder
       // exists at moveRecords[0] (from _prependBlackToMovePlaceholder for FEN
@@ -1670,7 +1665,7 @@ function importPGNAsync(pgnText){
     }
   }
   // Show loading indicator
-  try{showToast(T('importing_pgn'),3000);}catch(e){}
+  try{showToast(T('importing_pgn'),3000);}catch(e){console.warn('[Tablebase]',e&&e.message?e.message:e);}
   // v1.0.8 PHASE 49: removed the dead workerParsePGN round-trip. The old code
   //   called workerParsePGN(pgnText,30000) but discarded its result in BOTH
   //   .then and .catch — both branches ran the SAME synchronous importPGN(pgnText)
@@ -1925,4 +1920,14 @@ _updateBoardLightweight();
 }
 
 // ---- Exports ----
-export {isTbOffline,countPieces,pieceCountLE7,probeTablebase,bestMoveFromTablebase,_triggerTbQuery,autoSelectTablebaseMove,importFEN,importPGN,importPGNFile,onPGNFileRead,_applyImportedFEN};
+// v1.2.1 round-9: Added 3 names that ARE defined in this file but were
+// missing from the export list:
+//   - copyFEN (line 30) — called from ui.js
+//   - copyReviewFEN (line 35) — called from ui.js
+//   - fenToState (line 1729) — called from ai-bridge.js; was previously
+//     (incorrectly) exported from game-logic.js. Moved here where it's
+//     actually defined. In source-module mode the missing export would
+//     cause a ReferenceError; in bundled mode build-chess.py strips the
+//     `export {}` line so there was no production impact, but the list
+//     was incomplete/misleading.
+export {isTbOffline,countPieces,pieceCountLE7,probeTablebase,bestMoveFromTablebase,_triggerTbQuery,autoSelectTablebaseMove,importFEN,importPGN,importPGNFile,onPGNFileRead,_applyImportedFEN,copyFEN,copyReviewFEN,fenToState};

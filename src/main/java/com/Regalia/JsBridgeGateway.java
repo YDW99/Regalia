@@ -97,12 +97,15 @@ public class JsBridgeGateway {
             String targetPath = target.getPath();
             String filesPath = filesDir.getPath();
             String cachePath = cacheDir.getPath();
-            // v1.2.0 Phase 82+++++ rev 8: Tightened prefix check to require a path
-            // separator after the sandbox root. Previously, String.startsWith would
-            // falsely accept "/data/data/com.Regalia/files_evil" as inside filesDir.
-            String sep = java.io.File.separator;
-            return targetPath.equals(filesPath) || targetPath.startsWith(filesPath + sep)
-                || targetPath.equals(cachePath) || targetPath.startsWith(cachePath + sep);
+            // v1.2.1: 必须追加 File.separator 才允许 startsWith —— 否则
+            //   /data/data/com.Regalia/files_evil/x 会通过 filesDir 检查
+            //   （"files_evil".startsWith("files") == true），构成沙箱穿越。
+            //   允许 equals(targetPath) 是因为 filesDir / cacheDir 自身合法。
+            boolean underFiles = targetPath.equals(filesPath)
+                    || targetPath.startsWith(filesPath + File.separator);
+            boolean underCache = targetPath.equals(cachePath)
+                    || targetPath.startsWith(cachePath + File.separator);
+            return underFiles || underCache;
         } catch (IOException e) {
             Log.w(TAG, "Path canonicalization failed: " + path, e);
             return false;
@@ -167,8 +170,7 @@ public class JsBridgeGateway {
         String lower = url.toLowerCase();
         return lower.startsWith("http://")
                 || lower.startsWith("https://")
-                || lower.startsWith("mailto:")
-                || lower.startsWith("intent:");
+                || lower.startsWith("mailto:");
     }
 
     /**

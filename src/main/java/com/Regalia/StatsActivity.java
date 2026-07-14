@@ -48,6 +48,7 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
@@ -77,7 +78,12 @@ public class StatsActivity extends Activity {
     private static final int REQUEST_CODE_EXPORT_HTML = 2001;
     private static final int REQUEST_CODE_IMPORT_PGN = 2002;
     private WebView webView;
-    private String statsPayload;
+    // v1.2.1 round-10 (review-E P2): volatile — written in onCreate (main thread)
+    //   and read from @JavascriptInterface getStatsPayload() (JS binder thread).
+    //   Previously relied on the implicit happens-before from webView.loadUrl,
+    //   which is correct but fragile. volatile makes the visibility guarantee
+    //   explicit and tooling-friendly.
+    private volatile String statsPayload;
     // v1.0.8 PHASE 49: volatile — written by the WebView's JS thread (via
     //   @JavascriptInterface) inside evaluate() and cleared inside
     //   exportStats(), and read on the main thread (exportStats via
@@ -342,13 +348,19 @@ public class StatsActivity extends Activity {
             public void openUrlInBrowser(String url) {
                 if (url == null) return;
                 String trimmed = url.trim();
-                if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
+                // v1.2.1 round-10 (review-E P2): case-insensitive scheme check
+                //   (mirrors StockfishNative._isHttpUrl). RFC 3986 §3.1: scheme
+                //   is case-insensitive — accept "HTTP://...", "Https://...", etc.
+                // v1.2.1 round-10 regression: reuse `parsed` for the Intent instead
+                //   of re-parsing (was a redundant second Uri.parse call).
+                Uri parsed = Uri.parse(trimmed);
+                String scheme = parsed.getScheme();
+                if (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme)) {
                     Log.w(TAG, "openUrlInBrowser rejected non-http(s) URL: " + trimmed);
                     return;
                 }
                 try {
-                    Uri uri = Uri.parse(trimmed);
-                    Intent intent = new Intent(Intent.ACTION_VIEW, uri);
+                    Intent intent = new Intent(Intent.ACTION_VIEW, parsed);
                     intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                     startActivity(intent);
                     Log.i(TAG, "Opened external URL in browser: " + trimmed);
@@ -425,9 +437,13 @@ public class StatsActivity extends Activity {
         if (url.startsWith("file:///android_asset/")) {
             return false; // Allow loading our own bundled assets
         }
-        if (url.startsWith("http://") || url.startsWith("https://")) {
+        // v1.2.1 round-10 (review-E P2): case-insensitive scheme check.
+        //   Previously case-sensitive startsWith rejected "HTTP://..." URLs.
+        Uri parsed = Uri.parse(url);
+        String scheme = parsed.getScheme();
+        if ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme)) {
             try {
-                Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+                Intent intent = new Intent(Intent.ACTION_VIEW, parsed);
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 startActivity(intent);
             } catch (Throwable e) {
@@ -512,8 +528,18 @@ public class StatsActivity extends Activity {
             }
             try {
                 Uri uri = data.getData();
-                try (OutputStream os = getContentResolver().openOutputStream(uri);
-                     OutputStreamWriter writer = new OutputStreamWriter(os, "UTF-8")) {
+                // v1.2.1 round-9: openOutputStream can return null per Android
+                //   docs (e.g. if the URI provider is unavailable or the file
+                //   is not writable). Without this check, the OutputStreamWriter
+                //   constructor would throw NPE, which is caught by the outer
+                //   catch but produces a confusing "Stats HTML export failed"
+                //   message instead of the actual root cause.
+                OutputStream os = getContentResolver().openOutputStream(uri);
+                if (os == null) {
+                    throw new IOException("openOutputStream returned null for " + uri);
+                }
+                try (OutputStream autoClose = os;
+                     OutputStreamWriter writer = new OutputStreamWriter(autoClose, "UTF-8")) {
                     writer.write(html);
                     writer.flush();
                 }
@@ -553,11 +579,9 @@ public class StatsActivity extends Activity {
             }
             try {
                 Uri uri = data.getData();
-                // Take persistable permission so the URI remains usable if needed
-                try {
-                    getContentResolver().takePersistableUriPermission(
-                            uri, Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                } catch (Throwable ignored) {}
+                // v1.2.1: 不再 takePersistableUriPermission —— 一次性读取不需要持久授权，
+                //   且会无谓占用 SAF 512 上限。transient FLAG_GRANT_READ_URI_PERMISSION
+                //   from ACTION_OPEN_DOCUMENT 已足够读取本次内容。
                 StringBuilder sb = new StringBuilder();
                 try (InputStream is = getContentResolver().openInputStream(uri);
                      BufferedReader reader = new BufferedReader(new InputStreamReader(is, "UTF-8"))) {
@@ -636,6 +660,29 @@ public class StatsActivity extends Activity {
         return super.onKeyDown(keyCode, event);
     }
 
+    // v1.2.1 round-10 (review-E P2): Add onPause/onResume to pause/resume the
+    //   WebView's JS timers when the user backgrounds the activity. Previously
+    //   the stats page's setInterval-based animations and any in-flight
+    //   evaluateJavascript callbacks kept running in the background, draining
+    //   battery and (on HyperOS 3) raising the app's background-CPU score,
+    //   which could trigger more aggressive process freezing. MainActivity
+    //   has had this pair since v1.0.8; StatsActivity now matches.
+    @Override
+    protected void onPause() {
+        super.onPause();
+        if (webView != null) {
+            try { webView.onPause(); } catch (Throwable ignored) {}
+        }
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (webView != null) {
+            try { webView.onResume(); } catch (Throwable ignored) {}
+        }
+    }
+
     @Override
     protected void onDestroy() {
         // v1.0.8 PHASE 30: Full 6-step WebView teardown (matching MainActivity).
@@ -643,6 +690,10 @@ public class StatsActivity extends Activity {
         //   callbacks, cause WindowLeaked exceptions, and leave a stale
         //   AndroidBridge interface pointing to the destroyed StatsActivity.
         if (webView != null) {
+            // v1.2.1: 与 MainActivity.onDestroy 保持一致 —— 先 stopLoading() 终止
+            //   in-flight 加载，避免某些 OEM ROM（HyperOS 3 / MIUI）在 destroy()
+            //   后仍派发 load 回调到已销毁的 native peer，触发 SIGSEGV。
+            try { webView.stopLoading(); } catch (Throwable ignored) {}
             try {
                 if (webView.getParent() instanceof android.view.ViewGroup) {
                     ((android.view.ViewGroup) webView.getParent()).removeView(webView);

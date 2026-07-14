@@ -63,7 +63,13 @@ function _saveEcoToCache(parsedData) {
     try {
       const tx = db.transaction(_ECO_STORE_NAME, 'readwrite');
       tx.objectStore(_ECO_STORE_NAME).put(parsedData, 'eco_openings');
-    } catch(e) {}
+    } catch(e) {
+      // v1.2.1 round-9: log instead of silently swallowing — matches the
+      // convention in _loadEcoFromCache (line 51) and state-store.js.
+      if (typeof console !== 'undefined' && console.warn) {
+        console.warn('ECO cache save failed:', e);
+      }
+    }
   });
 }
 
@@ -168,4 +174,12 @@ let ecoHashMap=null,ecoHashMap2=null,ecoHashMap3=null;
 
 
 // ---- Exports ----
-export {_openEcoDB,_saveEcoToCache,_loadEcoFromCache,_ecoCachedData,ECO_BY_ID,ECO_BY_FAMILY,ecoHashMap,ecoHashMap2,ecoHashMap3,queryECO,buildEcoHashMap,queryECOBookMove,getECORecommendation,_ecoRecCache,_ensureEcoParsed,searchEco};
+// v1.2.1 round-9: Removed 5 names that are NOT defined in this file's scope
+// (they live in game-logic.js): queryECO, buildEcoHashMap, queryECOBookMove,
+// getECORecommendation, _ecoRecCache. In source-module mode the previous
+// list would throw SyntaxError; in bundled mode build-chess.py strips the
+// whole `export {...}` line via regex, so there was no production impact,
+// but the list was misleading. Also added _ecoCacheKey/_ecoCacheResult
+// (declared above at line 166, used by game-logic.js) for consistency with
+// the ecoHashMap exports.
+export {_openEcoDB,_saveEcoToCache,_loadEcoFromCache,_ecoCachedData,ECO_BY_ID,ECO_BY_FAMILY,ecoHashMap,ecoHashMap2,ecoHashMap3,_ecoCacheKey,_ecoCacheResult,_ensureEcoParsed,searchEco};

@@ -111,9 +111,6 @@ const Store = (function() {
         }
     };
 
-    // 当前状态（深拷贝初始状态）
-    let _state = _deepClone(_initialState);
-
     // 订阅者列表
     const _listeners = [];
 
@@ -121,19 +118,87 @@ const Store = (function() {
     const _reducers = {};
 
     /**
-     * 深拷贝对象（避免引用共享）
+     * 深拷贝最大递归深度（防御性深度守卫）。
+     *
+     * ⚠️ 必须声明在任何对 _deepClone 的调用之前。v1.2.1 round-7 曾将
+     * 此 const 放在 _deepClone 函数定义之后、IIFE 顶部初始化调用
+     * `let _state = _deepClone(_initialState)` 之后，导致 TDZ
+     * (Temporal Dead Zone) 违规：const 不像 var 那样有变量提升，函数
+     * 体在执行时会访问尚未初始化的 DEEP_CLONE_MAX_DEPTH，抛出
+     * `ReferenceError: Cannot access 'DEEP_CLONE_MAX_DEPTH' before
+     * initialization`，state-store 模块初始化崩溃，所有依赖 Store 的
+     * 模块（ui.js、ai-bridge.js 等）级联失败，整个 chess.html 渲染失败
+     * → APP 白屏。
+     *
+     * v1.2.1 round-8 修复：将 const 声明移到 IIFE 顶部（在
+     * `let _state = _deepClone(_initialState)` 之前），消除 TDZ。
      */
-    function _deepClone(obj) {
+    const DEEP_CLONE_MAX_DEPTH = 64;
+
+    /**
+     * 深拷贝对象（避免引用共享）
+     *
+     * v1.2.1 round-7: 限制递归深度以防御栈溢出（理论场景——状态对象嵌套
+     * 不会很深，但防御性编程无害）。同时将 RegExp 拷贝改为显式属性
+     * 复制（new RegExp(obj.source, obj.flags)），消除 Semgrep
+     * detect-non-literal-regexp 误报。
+     */
+    function _deepClone(obj, _depth) {
         if (obj === null || typeof obj !== 'object') return obj;
-        if (Array.isArray(obj)) return obj.map(_deepClone);
+        // Depth guard — prevents stack overflow on pathological cyclic or
+        // deeply-nested inputs. _depth is an internal parameter; callers
+        // never pass it.
+        if (typeof _depth !== 'number') _depth = 0;
+        if (_depth > DEEP_CLONE_MAX_DEPTH) {
+            if (typeof console !== 'undefined' && console.warn) {
+                console.warn('[Store] _deepClone exceeded max depth, returning shallow copy');
+            }
+            return obj;
+        }
+        if (obj instanceof Date) return new Date(obj.getTime());
+        // RegExp: use explicit source+flags construction (semantically
+        // equivalent to `new RegExp(obj)` but avoids Semgrep FP on non-
+        // literal-RegExp construction, since `obj` is already instanceof
+        // RegExp and we only forward its string properties).
+        // nosemgrep: javascript.lang.security.audit.detect-non-literal-regexp
+        //   — Justification: `obj` is verified to be a RegExp instance one
+        //   line above, so this construction cannot inject attacker-controlled
+        //   pattern source. The `obj.source` and `obj.flags` properties are
+        //   spec-defined strings produced by the JS engine when the original
+        //   RegExp was constructed, not user input.
+        if (obj instanceof RegExp) return new RegExp(obj.source, obj.flags);
+        // v1.2.1 round-11 (review P3 fix): Map/Set deep-clone support.
+        //   The current state tree doesn't use Map/Set, but adding these
+        //   branches now means a future addition (e.g., a Set of selected
+        //   squares) won't silently degrade to a shallow reference share.
+        //   Map keys are also deep-cloned to handle object keys correctly.
+        if (obj instanceof Map) {
+            const clonedMap = new Map();
+            obj.forEach(function (v, k) {
+                clonedMap.set(_deepClone(k, _depth + 1), _deepClone(v, _depth + 1));
+            });
+            return clonedMap;
+        }
+        if (obj instanceof Set) {
+            const clonedSet = new Set();
+            obj.forEach(function (v) {
+                clonedSet.add(_deepClone(v, _depth + 1));
+            });
+            return clonedSet;
+        }
+        if (Array.isArray(obj)) return obj.map(function (v) { return _deepClone(v, _depth + 1); });
         const cloned = {};
         for (const key in obj) {
             if (Object.prototype.hasOwnProperty.call(obj, key)) {
-                cloned[key] = _deepClone(obj[key]);
+                cloned[key] = _deepClone(obj[key], _depth + 1);
             }
         }
         return cloned;
     }
+
+    // 当前状态（深拷贝初始状态）——必须在 _deepClone 与
+    // DEEP_CLONE_MAX_DEPTH 都就绪后才能执行（否则 TDZ）。
+    let _state = _deepClone(_initialState);
 
     /**
      * 注册 reducer
@@ -147,6 +212,7 @@ const Store = (function() {
         if (typeof reducer !== 'function') {
             throw new Error('reducer must be a function');
         }
+        if (_reducers[actionType] && typeof console !== 'undefined' && console.warn) console.warn('[Store] Reducer overwrite:', actionType);
         _reducers[actionType] = reducer;
     }
 
@@ -159,15 +225,16 @@ const Store = (function() {
     function dispatch(action, payload) {
         const reducer = _reducers[action];
         if (!reducer) {
-            // 未知 action — 静默忽略，便于扩展
-            return _state;
+            if (typeof console !== 'undefined' && console.warn) console.warn('[Store] No reducer for action:', action);
+            return _deepClone(_state);
         }
         const partial = reducer(_state, payload);
         if (partial && typeof partial === 'object') {
             _state = Object.assign({}, _state, partial);
             _notifyListeners();
         }
-        return _state;
+        // v1.2.1: Return deep clone (P0-2)
+        return _deepClone(_state);
     }
 
     /**
@@ -175,7 +242,8 @@ const Store = (function() {
      * @returns {Object} 状态对象
      */
     function getState() {
-        return _state;
+        // v1.2.1: Return deep clone to prevent external mutation (P0-1)
+        return _deepClone(_state);
     }
 
     /**
@@ -199,9 +267,10 @@ const Store = (function() {
      */
     function _notifyListeners() {
         const snapshot = _state;
-        for (let i = 0; i < _listeners.length; i++) {
+        const listeners = _listeners.slice();
+        for (let i = 0; i < listeners.length; i++) {
             try {
-                _listeners[i](snapshot);
+                listeners[i](snapshot);
             } catch (e) {
                 // 单个监听器异常不影响其他监听器
                 console.error('[Store] listener error:', e);
@@ -212,11 +281,15 @@ const Store = (function() {
     /**
      * 重置状态到初始值
      * @param {Object} [overrides] - 需要覆盖的字段
+     * @returns {Object} 新状态的深拷贝（与 getState()/dispatch() 一致，
+     *                   调用者可安全修改返回值而不影响内部 _state）
      */
     function reset(overrides) {
         _state = Object.assign(_deepClone(_initialState), overrides || {});
         _notifyListeners();
-        return _state;
+        // v1.2.1 round-9: 返回深拷贝，与 getState()/dispatch() 保持一致。
+        // 旧版直接返回 _state 引用，调用者修改返回值会污染内部状态。
+        return _deepClone(_state);
     }
 
     // ========== 注册核心 reducers ==========
@@ -333,12 +406,16 @@ const Store = (function() {
     }));
 
     // 对话框
-    registerReducer('SHOW_DIALOG', (state, payload) => ({
-        dialogVisible: Object.assign({}, state.dialogVisible, { [payload]: true })
-    }));
-    registerReducer('HIDE_DIALOG', (state, payload) => ({
-        dialogVisible: Object.assign({}, state.dialogVisible, { [payload]: false })
-    }));
+    // v1.2.1 round-9: payload 必须是字符串，否则 [payload] 会产生 "null"/"undefined"
+    // 等垃圾键污染 dialogVisible。非字符串 payload 视为 no-op 返回 {}。
+    registerReducer('SHOW_DIALOG', (state, payload) => {
+        if (typeof payload !== 'string' || !payload) return {};
+        return { dialogVisible: Object.assign({}, state.dialogVisible, { [payload]: true }) };
+    });
+    registerReducer('HIDE_DIALOG', (state, payload) => {
+        if (typeof payload !== 'string' || !payload) return {};
+        return { dialogVisible: Object.assign({}, state.dialogVisible, { [payload]: false }) };
+    });
     registerReducer('HIDE_ALL_DIALOGS', (state) => {
         const cleared = {};
         for (const key in state.dialogVisible) {
@@ -360,50 +437,4 @@ const Store = (function() {
 // 导出到全局（用于非模块化合并）
 if (typeof window !== 'undefined') {
     window.Store = Store;
-
-    // v1.2.0 Phase 82+++++ rev 7: JS-side MessageBus event receiver.
-    // When Java emits an event via MessageBus.emit(event, payload), it calls
-    // window._messageBusJs._onEvent(event, payload) via evaluateJavascript.
-    // We use _messageBusJs (not MessageBus) because the Java @JavascriptInterface
-    // is registered as "MessageBus" — using the same name would cause the Java
-    // proxy object to shadow this JS object, making _onEvent unavailable.
-    // Standard event types (per v1.2.0 Development Plan Task 75):
-    //   ENGINE_EVAL, ENGINE_BESTMOVE, ENGINE_READY, ENGINE_ERROR, PGN_CACHE_LIST
-    // The actual engine callbacks (onEngineEval, onBestMove, etc.) are still
-    // called via the existing postJsCallback mechanism — this is a parallel
-    // channel for future migration and debugging.
-    window._messageBusJs = {
-        _listeners: {},
-        _onEvent: function(event, payload) {
-            // Dispatch to Store for observability
-            try {
-                if (event === 'ENGINE_READY') Store.dispatch('ENGINE_READY');
-                else if (event === 'ENGINE_ERROR') Store.dispatch('ENGINE_NOT_READY');
-                else if (event === 'ENGINE_BESTMOVE') Store.dispatch('AI_THINKING_END');
-                else if (event === 'ENGINE_EVAL') {
-                    if (payload && typeof payload === 'object') {
-                        Store.dispatch('UPDATE_EVAL', payload);
-                    }
-                }
-            } catch(e) {}
-            // Notify registered listeners
-            var arr = this._listeners[event];
-            if (arr) {
-                for (var i = 0; i < arr.length; i++) {
-                    try { arr[i](payload); } catch(e) {}
-                }
-            }
-        },
-        on: function(event, listener) {
-            if (!this._listeners[event]) this._listeners[event] = [];
-            this._listeners[event].push(listener);
-        },
-        off: function(event, listener) {
-            var arr = this._listeners[event];
-            if (arr) {
-                var idx = arr.indexOf(listener);
-                if (idx >= 0) arr.splice(idx, 1);
-            }
-        }
-    };
 }

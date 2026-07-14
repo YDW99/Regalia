@@ -137,6 +137,27 @@ public class StabilizationHelper implements SensorEventListener {
         lastJsCallbackTime = 0;
         _lastSensorNanos = 0; // v1.0.8 PHASE 32: reset so first event uses nominal dt
 
+        // v1.2.1 round-10 (review-E P2): one-time clear of any stale
+        //   --stab-rot CSS variable from a previous session (Rev64 removed
+        //   rotation sensors, so this var is never set anymore, but older
+        //   DOM state from a prior app run may still have it). Moved here
+        //   from applyTransform() which ran it ~50 times per second.
+        try {
+            mainHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    WebView v = webViewRef.get();
+                    if (v != null) {
+                        v.evaluateJavascript(
+                            "(function(){document.documentElement.style.removeProperty('--stab-rot');})();",
+                            null);
+                    }
+                }
+            });
+        } catch (Throwable e) {
+            Log.w(TAG, "one-time --stab-rot clear failed", e);
+        }
+
         Log.i(TAG, "Stabilization started (translation only). Sensors: linAccel=" + (linAccelSensor != null));
         return anyRegistered;
     }
@@ -305,10 +326,14 @@ public class StabilizationHelper implements SensorEventListener {
         if (wv == null) return;
         String sx = String.format(java.util.Locale.US, "%.1f", x);
         String sy = String.format(java.util.Locale.US, "%.1f", y);
+        // v1.2.1 round-10 (review-E P2): removed r.removeProperty('--stab-rot')
+        //   from this hot path. The --stab-rot CSS variable was never set in
+        //   the current codebase (Rev64 removed rotation sensors), so the
+        //   removeProperty was a no-op executed ~50 times per second. The
+        //   one-time clear is now done in start() (above).
         final String finalJs = "(function(){var r=document.documentElement.style;"
                 + "r.setProperty('--stab-x','" + sx + "px');"
                 + "r.setProperty('--stab-y','" + sy + "px');"
-                + "r.removeProperty('--stab-rot');" // Clear any stale --stab-rot from a previous session
                 + "var b=document.querySelector('.bwrap');"
                 + "if(b){b.classList.add('stabilized');}"
                 + "})();";

@@ -187,7 +187,7 @@ function randomSPID(){
       // Fallback if all 8 retries exceeded (extremely unlikely)
       return buf[0]%960;
     }
-  }catch(e){}
+  }catch(e){console.warn('[Chess960]',e&&e.message?e.message:e);}
   // SECURITY: Return standard position instead of Math.random() when crypto
   // is unavailable. SP-ID 518 = traditional RNBQKBNR.
   return 518;
@@ -229,8 +229,8 @@ function toShredderCastling(cr,board){
   // v1.1.2 PHASE 71 (robustness): guard against null/undefined board or
   // missing rows. The loop below directly accesses board[7][c] and
   // board[0][c]; without this guard a corrupted/empty board would throw a
-  // TypeError. parseShredderCastling (the inverse) already has this defensive
-  // pattern — we mirror it here for symmetry.
+  // TypeError. parseShredderCastling (the inverse) has the same defensive
+  // pattern (added in v1.2.1 round-9 for symmetry).
   if(!cr||!board||!board[7]||!board[0])return '-';
   // Find white king + rooks on rank 1 (row 7), and black on rank 8 (row 0)
   let wKing=null,bKing=null;
@@ -271,7 +271,7 @@ function toShredderCastling(cr,board){
   pairs.sort((a,b)=>a.file-b.file||(a.isWhite?0:1)-(b.isWhite?0:1));
   let str='';
   for(const p of pairs){
-    str+=String.fromCharCode((p.isWhite?65:97)+p.file);
+    str+=String.fromCodePoint((p.isWhite?65:97)+p.file);
   }
   // v1.0.8 PHASE 30: removed dead `||'-'` -- pairs.length>0 here (length===0
   //   returns '-' above), and the loop always appends >=1 char, so str is non-empty.
@@ -301,6 +301,10 @@ function toShredderCastling(cr,board){
 function parseShredderCastling(str,board){
   const cr={whiteKingside:false,whiteQueenside:false,blackKingside:false,blackQueenside:false};
   if(!str||str==='-')return cr;
+  // v1.2.1 round-9: defensive null guard on board (matches toShredderCastling
+  // at line ~228 which already has the same guard). Without this, a null/undefined
+  // board would throw TypeError at line 307's board[7][c] access.
+  if(!board||!board[7]||!board[0])return cr;
   // Locate kings (required to map a file letter -> kingside/queenside).
   let wKing=-1,bKing=-1;
   for(let c=0;c<8;c++){
@@ -387,6 +391,10 @@ function parseShredderCastling(str,board){
  *   Returns null only if the king itself is missing.
  */
 function findCastlingRooks(board,color){
+  // v1.2.1 round-9: defensive null guard on board (matches toShredderCastling
+  // and parseShredderCastling). Without this, a null/undefined board or
+  // missing row would throw TypeError at line 398's board[row][c] access.
+  if(!board||!board[7]||!board[0])return null;
   const row=color==='white'?7:0;
   let kingCol=-1;
   const rookCols=[];
@@ -492,6 +500,9 @@ function chess960CastlingRookMove(s,color,side){
  * @returns {boolean} true if castling is legal
  */
 function isChess960CastlingLegal(s,color,side){
+  // v1.2.1 round-9: defensive null guard on state (matches the pattern in
+  // toShredderCastling / parseShredderCastling / findCastlingRooks).
+  if(!s||!s.board||!s.castlingRights)return false;
   const opp=OPP_COLOR[color];
   const cr=s.castlingRights;
   if(side==='kingside'&&!cr[color+'Kingside'])return false;

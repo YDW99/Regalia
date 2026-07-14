@@ -249,8 +249,15 @@ public class EngineConfigHelper {
             }
         } catch (Throwable e) {
             Log.d(TAG, "big.LITTLE detection failed (non-fatal): " + e.getMessage());
+            // v1.2.1 round-10 (review-E P2): Do NOT cache the failure result.
+            //   The catch block leaves bigCores=0, but the failure may be
+            //   transient (e.g. /proc/cpuinfo briefly unreadable due to a
+            //   SELinux denials flush). Caching 0 would prevent retries and
+            //   permanently degrade thread autoconfig. Keep _cachedBigCoreCount
+            //   at -1 so the next call attempts detection again.
+            return 0;
         }
-        _cachedBigCoreCount = bigCores; // v1.0.2 PERF: cache result
+        _cachedBigCoreCount = bigCores; // v1.0.2 PERF: cache result (only on success)
         return bigCores;
     }
 
@@ -440,6 +447,10 @@ public class EngineConfigHelper {
      * intentionally playing suboptimal moves.
      */
     public void setEngineSkillLevel(int level) {
+        // v1.2.1: Inline Skill Level range (0-20). Previously referenced
+        //   EngineConfigManager.MIN/MAX_SKILL_LEVEL, but that class was deleted
+        //   in round-4 (its only external callers were these two constants).
+        //   Stockfish's UCI "Skill Level" option accepts 0..20.
         if (level < 0) level = 0;
         if (level > 20) level = 20;
         callbacks.setSkillLevelField(level);
@@ -513,6 +524,18 @@ public class EngineConfigHelper {
      * UI can update the difficulty selector display.
      */
     public void setGameDifficulty(int level) {
+        // v1.2.1 round-10 (review-E P2): mid-search context note.
+        //   This method is invoked from JS both before a search starts AND
+        //   mid-search (e.g. when the user changes difficulty while the AI
+        //   is thinking). For that reason we use sendUciCommand (fire-and-
+        //   forget) and NOT sendSetOptionAndWait — the latter would block
+        //   on the engine's readyok handshake, which cannot complete while
+        //   a search is in progress, causing a 10s timeout deadlock. The
+        //   engine applies setoption immediately even mid-search per UCI
+        //   spec §3.4 ("must be applied as soon as possible"). The peer
+        //   setters (setEngineThreads/setEngineHash) use sendSetOptionAndWait
+        //   because they are only called from applySettings() which itself
+        //   is only called when the engine is idle.
         if (level >= 1 && level <= 6) {
             int elo = (level < ELO_MAP.length) ? ELO_MAP[level] : 1500;
             callbacks.setLimitEloField(true);
@@ -545,6 +568,12 @@ public class EngineConfigHelper {
      * (typically by calling applySettings()).
      */
     public void forceFullStrength() {
+        // v1.2.1 round-10 (review-E P2): mid-search context note.
+        //   Called from engineGoDepth (eval/hint paths) DURING an active
+        //   search — using sendUciCommand (fire-and-forget) is intentional
+        //   for the same reason as setGameDifficulty above. The caller
+        //   (typically ai-bridge.js) is responsible for restoring gameplay
+        //   settings via applySettings() once the eval/hint search ends.
         if (callbacks.engineSupportsOption("Skill Level")) {
             callbacks.sendUciCommand("setoption name Skill Level value 20");
         }

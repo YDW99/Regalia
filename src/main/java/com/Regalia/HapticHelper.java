@@ -32,6 +32,7 @@ import android.content.Context;
 import android.os.Build;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
+import android.provider.Settings;
 import android.util.Log;
 
 /**
@@ -81,6 +82,15 @@ public class HapticHelper {
      */
     public void perform(String type) {
         if (!enabled || vibrator == null || !vibrator.hasVibrator()) return;
+        // v1.2.1: 与 StatsActivity.performHaptic 保持一致 —— 检查系统触觉反馈
+        //   总开关。用户在系统设置中关闭"触摸时振动"后，APP 内的触觉也应被抑制，
+        //   否则会产生不一致的体验（设置页静默、对局页振动）。
+        try {
+            if (Settings.System.getInt(context.getContentResolver(),
+                    Settings.System.HAPTIC_FEEDBACK_ENABLED, 0) == 0) return;
+        } catch (Throwable ignored) {
+            // 读取系统设置失败时不阻断触觉反馈
+        }
         try {
             int duration = getDurationForType(type);
             if (duration <= 0) return;

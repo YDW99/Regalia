@@ -79,6 +79,8 @@ package com.Regalia;
 import android.content.Context;
 import android.util.Log;
 
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 
@@ -95,6 +97,15 @@ public final class TlsSecurityHelper {
             "C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=";
     private static final String PIN_ISRG_X2 =
             "diGVwiVYbubAI3RW4hB9xU8e/CH2GnkuvVFZE8zmgzI=";
+    // v1.2.1 round-10 (review-E P2): pre-decoded bytes for constant-time
+    //   comparison via MessageDigest.isEqual. Decoded once at class-load
+    //   rather than per-validatePin-call.
+    private static final byte[] PIN_LE_E7_BYTES =
+            android.util.Base64.decode(PIN_LE_E7, android.util.Base64.NO_WRAP);
+    private static final byte[] PIN_ISRG_X1_BYTES =
+            android.util.Base64.decode(PIN_ISRG_X1, android.util.Base64.NO_WRAP);
+    private static final byte[] PIN_ISRG_X2_BYTES =
+            android.util.Base64.decode(PIN_ISRG_X2, android.util.Base64.NO_WRAP);
 
     private TlsSecurityHelper() {
         // Utility class — no instances
@@ -156,17 +167,59 @@ public final class TlsSecurityHelper {
 
     /**
      * Validate a certificate's pin matches one of the configured pins.
-     * Utility method — currently unused (pinning is via XML), but provides
-     * a code-level reference for MobSF and a hook for programmatic validation.
+     *
+     * v1.2.1: Now implements ACTUAL SPKI SHA-256 pin validation per RFC 7469.
+     * The SubjectPublicKeyInfo (SPKI) is extracted from the certificate via
+     * {@link java.security.cert.X509Certificate#getPublicKey()}**.getEncoded(),
+     * hashed with SHA-256, Base64-encoded, and compared against the three
+     * configured pins (PIN_LE_E7, PIN_ISRG_X1, PIN_ISRG_X2). A mismatch
+     * throws CertificateException.
+     *
+     * This method is a programmatic fallback to the platform's
+     * network_security_config.xml <pin-set> enforcement. The XML pin-set
+     * remains the primary enforcement mechanism for the tablebase API
+     * endpoint; this method provides a hook for programmatic validation
+     * (e.g., if future code uses OkHttp or a custom TrustManager).
      *
      * @param cert The X.509 certificate to validate
-     * @throws CertificateException if the pin does not match
+     * @throws CertificateException if the pin does not match any configured pin
      */
     public static void validatePin(X509Certificate cert) throws CertificateException {
         if (cert == null) throw new CertificateException("Null certificate");
-        // Actual pin validation is delegated to the platform via
-        // network_security_config.xml <pin-set>. This method exists for
-        // code-level documentation and MobSF pattern matching.
-        Log.i(TAG, "Certificate pin validation delegated to network_security_config.xml");
+        if (cert.getPublicKey() == null) {
+            throw new CertificateException("Certificate has null public key");
+        }
+        byte[] spki = cert.getPublicKey().getEncoded();
+        if (spki == null || spki.length == 0) {
+            throw new CertificateException("Cannot extract SubjectPublicKeyInfo from certificate");
+        }
+        String pin;
+        byte[] hash;
+        try {
+            MessageDigest sha256 = MessageDigest.getInstance("SHA-256");
+            hash = sha256.digest(spki);
+            pin = android.util.Base64.encodeToString(hash, android.util.Base64.NO_WRAP);
+        } catch (NoSuchAlgorithmException e) {
+            throw new CertificateException("SHA-256 algorithm unavailable: " + e.getMessage());
+        }
+        // v1.2.1 round-10 (review-E P2): use MessageDigest.isEqual for a
+        //   constant-time byte[] comparison. The previous String.equals
+        //   approach short-circuits on length mismatch, leaking pin length
+        //   to a timing attacker. The pins themselves are public (Let's
+        //   Encrypt publishes them), so the practical risk is low, but
+        //   using isEqual is the documented best practice and silences
+        //   the SonarCloud crypto-bad-comparison hotspot.
+        //   Note: we compare the RAW 32-byte SHA-256 digest against the
+        //   pre-decoded pin bytes (NOT the Base64-encoded string bytes).
+        boolean matchesLE = MessageDigest.isEqual(hash, PIN_LE_E7_BYTES);
+        boolean matchesX1 = MessageDigest.isEqual(hash, PIN_ISRG_X1_BYTES);
+        boolean matchesX2 = MessageDigest.isEqual(hash, PIN_ISRG_X2_BYTES);
+        if (!matchesLE && !matchesX1 && !matchesX2) {
+            throw new CertificateException(
+                "Certificate pin mismatch: computed=" + pin
+                + ", expected one of [LE-E7, ISRG-X1, ISRG-X2]");
+        }
+        Log.i(TAG, "Certificate pin validated: " + pin
+            + " (matched: " + (matchesLE ? "LE-E7" : matchesX1 ? "ISRG-X1" : "ISRG-X2") + ")");
     }
 }

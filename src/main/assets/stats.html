@@ -2645,7 +2645,34 @@ function renderStats(parsed,evalData){
         _effectivePgnText=_slicePGNAtMove(pgnText,_selectedMoveIdx+1);
       }
     }catch(e){_effectivePgnText=pgnText;}
-    const hasVisualAnnotations=/\[%csl\s+/i.test(_effectivePgnText)||/\[%cal\s+/i.test(_effectivePgnText);
+    // v1.2.1 (round-6 bugfix): Use the visualAnnotations payload field (sent by
+    //   openStatsPage) as the PRIMARY data source. This field contains ALL
+    //   annotation entries (both imported=true and imported=false), so
+    //   auto-generated annotations from newly-played games are included.
+    //   Previously, the stats page only scanned the PGN text, which contains
+    //   only imported=true entries (per Phase 62 design) — auto-generated
+    //   annotations were silently missing, and the entire section was hidden
+    //   for all newly-played games.
+    //   The payload field is keyed by moveIdx (0-based). When a selected-move
+    //   cutoff is active, only count entries with moveIdx <= _selectedMoveIdx.
+    //   Fall back to PGN-text scan if the payload field is absent (older caller
+    //   or stats page opened directly without going through openStatsPage).
+    const _vaPayload=(typeof _payload!=='undefined'&&_payload&&_payload.visualAnnotations)?_payload.visualAnnotations:null;
+    const _cutoffIdx=(typeof _selectedMoveIdx!=='undefined'&&_selectedMoveIdx>=0
+         &&!(typeof _variationMoves!=='undefined'&&_variationMoves)
+         &&!(typeof _fenSelected!=='undefined'&&_fenSelected))?_selectedMoveIdx:-1;
+    let _hasVaFromPayload=false;
+    if(_vaPayload){
+      for(const k in _vaPayload){
+        const idx=parseInt(k,10);
+        if(isNaN(idx))continue;
+        if(_cutoffIdx>=0&&idx>_cutoffIdx)continue;
+        const e=_vaPayload[k];
+        if(e&&((e.csl&&e.csl.length>0)||(e.cal&&e.cal.length>0))){_hasVaFromPayload=true;break;}
+      }
+    }
+    const hasVisualAnnotations=_hasVaFromPayload
+      ||(/\[%csl\s+/i.test(_effectivePgnText)||/\[%cal\s+/i.test(_effectivePgnText));
     if(hasVisualAnnotations){
     h+='<div class="section"><h2>'+(T('visual_annotations')||'Visual Annotations ([%csl]/[%cal])')+'</h2>';
     h+='<div style="font-size:.78rem;color:var(--muted);margin-bottom:10px">'+(T('visual_annotations_desc')||'Visual annotation counts in this game\'s PGN comments.')+'</div>';
@@ -2656,7 +2683,41 @@ function renderStats(parsed,evalData){
     let blueArrowsThreats=0,redArrowsCheck=0,yellowArrowsQueen=0,greenArrowsEscape=0;
     let nagCount=0;
     const nagDist={1:0,2:0,3:0,4:0,5:0,6:0}; // !, ?, !!, ??, !?, ?!
-    if(_effectivePgnText){
+    // v1.2.1 (round-6 bugfix): Count from the payload field first (primary source).
+    if(_vaPayload){
+      for(const k in _vaPayload){
+        const idx=parseInt(k,10);
+        if(isNaN(idx))continue;
+        if(_cutoffIdx>=0&&idx>_cutoffIdx)continue;
+        const e=_vaPayload[k];
+        if(!e)continue;
+        if(e.csl){
+          for(const c of e.csl){
+            if(!c||!c.color||!c.square)continue;
+            if(c.color==='B')blueSquares++;
+            else if(c.color==='R')redSquares++;
+            else if(c.color==='Y')yellowSquares++;
+            else if(c.color==='G')greenSquaresNeutral++;
+          }
+        }
+        if(e.cal){
+          for(const a of e.cal){
+            if(!a||!a.color||!a.from||!a.to)continue;
+            if(a.color==='B')blueArrowsThreats++;
+            else if(a.color==='R')redArrowsCheck++;
+            else if(a.color==='Y')yellowArrowsQueen++;
+            else if(a.color==='G')greenArrowsEscape++;
+          }
+        }
+      }
+    }
+    // v1.2.1 (round-6 bugfix): Also scan PGN text for NAGs ($N) — NAGs are not
+    //   in the visualAnnotations payload (they're PGN-only). The PGN text scan
+    //   for [%csl]/[%cal] is kept as a fallback for callers that don't send
+    //   the payload field, but when the payload is present, the payload counts
+    //   are authoritative (the PGN text may have imported-only annotations
+    //   that the payload already includes — scanning both would double-count).
+    if(!_vaPayload&&_effectivePgnText){
       // Match all [%csl ...] tags (square highlights)
       const cslRe=/\[%csl\s+([^\]]+)\]/g;
       let cm;
@@ -2686,8 +2747,11 @@ function renderStats(parsed,evalData){
           }
         }
       }
-      // Match all NAGs ($N)
+    }
+    // NAGs are always scanned from PGN text (they're not in the visualAnnotations payload).
+    if(_effectivePgnText){
       const nagRe=/\$(\d+)/g;
+      let cm;
       while((cm=nagRe.exec(_effectivePgnText))!==null){
         const n=parseInt(cm[1],10);
         if(n>=1&&n<=6){nagDist[n]++;nagCount++;}
@@ -3088,7 +3152,7 @@ function _updateStatsBoardPieceSize(){
     if(w<=0)return;
     const pieceSize=Math.round(w/8*0.72);
     wrap.style.setProperty('--piece-size',pieceSize+'px');
-  }catch(e){}
+  }catch(e){console.warn('[Stats] piece-size set failed:',e.message);}
 }
 
 // PGN text section (raw with formatting)
@@ -3477,7 +3541,7 @@ function render(){
     // Only restore if the saved position is still within a reasonable range
     // of the new max — avoids restoring a stale position when the user switched
     // between very different views (e.g., from a long variation back to mainline).
-    try{window.scrollTo(0,_targetScroll);}catch(e){}
+    try{window.scrollTo(0,_targetScroll);}catch(e){console.warn('[Stats] scroll restore failed:',e.message);}
   }
 }
 
@@ -3708,7 +3772,7 @@ function _haptic(type){
     if(typeof AndroidBridge!=='undefined'&&AndroidBridge.performHaptic){
       AndroidBridge.performHaptic(type);
     }
-  }catch(e){}
+  }catch(e){console.warn('[Stats] haptic failed:',e.message);}
 }
 // v1.0.3: Show the 💾HTML export dialog with two options + GPL v3 notice
 function exportHTML(){
@@ -3744,7 +3808,7 @@ function _showStatsExportDialog(){
   overlay.appendChild(dlg);
   document.body.appendChild(overlay);
   // Load GPL v3 logo — display at bottom of dialog
-  try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.loadAssetAsBase64){var b64=AndroidBridge.loadAssetAsBase64('GPLv3_Logo.svg');if(b64){var holder=document.getElementById('_gplLogoHolder');if(holder)holder.innerHTML='<img src="data:image/svg+xml;base64,'+b64+'" alt="GPL v3" style="width:140px;height:auto;opacity:.95" />';}}}catch(e){}
+  try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.loadAssetAsBase64){var b64=AndroidBridge.loadAssetAsBase64('GPLv3_Logo.svg');if(b64){var holder=document.getElementById('_gplLogoHolder');if(holder)holder.innerHTML='<img src="data:image/svg+xml;base64,'+b64+'" alt="GPL v3" style="width:140px;height:auto;opacity:.95" />';}}}catch(e){console.warn('[Stats] GPL SVG load failed:',e.message);}
 }
 
 // v1.0.3: Export static HTML (current selection frozen, no JS, no buttons, no hint, no copy)
@@ -4137,7 +4201,7 @@ function init(){
       isLight=true;
     }
     document.documentElement.setAttribute('data-theme', isLight?'light':'dark');
-  }catch(e){}
+  }catch(e){console.warn('[Stats] theme apply failed:',e.message);}
   if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getStatsPayload){
     try{
       const payloadStr=AndroidBridge.getStatsPayload();
@@ -4168,7 +4232,7 @@ function init(){
         if(typeof AndroidBridge!=='undefined'&&AndroidBridge.openUrlInBrowser){
           AndroidBridge.openUrlInBrowser(href);
         }else{
-          try{window.open(href,'_blank');}catch(err){}
+          try{window.open(href,'_blank');}catch(err){console.warn('[Stats] window.open fallback failed:',err.message);}
         }
       }catch(err){console.error('openUrlInBrowser failed:',err);}
     },true);
