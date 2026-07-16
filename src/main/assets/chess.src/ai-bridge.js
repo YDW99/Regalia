@@ -1449,12 +1449,21 @@ function openStatsPage(){
       // module also uses, so the batch will populate the cache correctly.
       try{
         if(typeof reviewAnalyzeAll==='function'){
-          // v1.2.1 round-16: include the 'stats will open after analysis' hint
-          //   so the user knows the stats page will appear automatically once
-          //   the batch finishes — no further action required on their part.
-          showToast(T('analyzing_all')+' ('+_reviewEvalCache.size+'/'+(_lastStep+1)+') \u2014 '+T('stats_will_open_after_analysis'));
+          // v1.2.3 P2 (Issue #47 path 3): Split the single combined toast into
+          //   two staged toasts. The previous single toast concatenated the
+          //   intent ("stats will open after analysis") AFTER the progress
+          //   info, so users fixated on the progress half and missed the
+          //   intent. Now we show the intent FIRST (1s) so the user registers
+          //   it, THEN defer reviewAnalyzeAll() so its own "analyzing_all"
+          //   progress toast replaces the intent toast at ~1s — giving the
+          //   user a clear intent→progress sequence. The 1s delay is short
+          //   enough not to feel sluggish (analysis itself takes much longer)
+          //   but long enough to read the 10-char intent message.
+          showToast(T('stats_will_open_after_analysis'),1000);
           try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
-          reviewAnalyzeAll();
+          setTimeout(function(){
+            try{reviewAnalyzeAll();}catch(e){console.error('openStatsPage: deferred analyze-all trigger failed:',e);}
+          },1000);
           return; // stats will open when batch completes
         }
       }catch(e){console.error('openStatsPage: analyze-all trigger failed:',e);}

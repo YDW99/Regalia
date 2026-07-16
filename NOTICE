@@ -1058,6 +1058,158 @@ Verification:
   - Version: versionCode=121, versionName="1.2.1" (unchanged —
     same-version refinement).
 
+== v1.2.3 optimization pass (2026.7.16) — first-principles line-by-line review ==
+
+A line-by-line first-principles review of every source file was performed
+after the Round 17/18 fix pass. The review applied the priority order:
+bug-fix > robustness > feature > performance > redundancy > simplification.
+No versionCode bump — version stays at 123. No new files added; no files
+deleted. All modified files retain their original license classification.
+
+Modified files (license unchanged):
+  - StockfishNative.java (GPL v3): Stale "API 21-25" comments corrected to
+    "API 23-25" to match minSdk 23. isSystemDarkMode comment "Android 5.0
+    (API 21)" → "Android 6.0 (API 23, minSdk)". No code behavior change.
+  - EngineConfigHelper.java (GPL v3): setGameDifficulty() converted from
+    raw postJsCallback(string-concat) to structured postJsCallback(eventName,
+    args...) overload. Added the structured overload to the Callbacks
+    interface. The anonymous implementation in StockfishNative now delegates
+    to StockfishNative.this.postJsCallback(eventName, args).
+  - MainActivity.java (AGPL v3): VERSION comment example "v1.2.1" → "v1.2.3".
+  - ChessWebViewClient.java (AGPL v3): Version header "v1.2.2" → "v1.2.3";
+    "API 21-23" → "API 23 (minSdk)".
+  - StatsActivity.java (AGPL v3): Added clarifying comment on the anonymous
+    JS bridge safety (Round 17 P1-5 false-positive documentation).
+  - ai-bridge.js (GPL v3): openStatsPage() path-3 toast staging refined —
+    deferred reviewAnalyzeAll() by 1s so the intent toast shows first,
+    then reviewAnalyzeAll()'s progress toast replaces it, eliminating the
+    redundant double-toast from the prior pass.
+  - ui.js (GPL v3): setDifficultyLevel() comment reference corrected from
+    "Issue #46" to "user-reported 'Unexpected end of input' JS error".
+  - network_security_config.xml (AGPL v3): "minSdk 21" → "minSdk 23".
+  - gradle.properties (AGPL v3): Removed redundant
+    android.enableR8.fullMode=true (default in AGP 8.x, Round 18 P3-8).
+  - README.md, BUILDING.md, PRIVACY.md, NOTICE, all 7 README.license,
+    Manual/Regalia-v1.2.3-manual-{zh,en}.html: documentation updates
+    documenting this optimization pass.
+
+File rename:
+  - Manual/Regalia-v1.2.2-manual-zh.html → Regalia-v1.2.3-manual-zh.html
+  - Manual/Regalia-v1.2.2-manual-en.html → Regalia-v1.2.3-manual-en.html
+  (Filenames now match the current version per recovery guide §6.4.)
+
+Reviewed but not modified (confirmed correct):
+  - AndroidManifest.xml: FGS subtype, allowBackup=false, permissions.
+  - build.gradle, settings.gradle, lint.xml, proguard-rules.pro.
+  - engine_jni.cpp, CMakeLists.txt (prior v1.2.3 fixes confirmed correct).
+  - state-store.js (TDZ safety confirmed), all other JS modules.
+  - All LICENSE files, NOTICE-DroidFish, NOTICE-gradle, AUTHORS-stockfish.
+
+Verification:
+  - All 9 JS modules pass node --check.
+  - chess.html rebuilt: 22,108 lines, 1,328,929 bytes.
+  - Release APK rebuilt: signature v1+v2+v3 all true, versionCode=123,
+    versionName="1.2.3".
+  - APK lib/arm64-v8a/libstockfish.so SHA-256 =
+    8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5
+    — three-way match preserved.
+  - FGS subtype property present.
+  - Tarball: 112 files, 0 forbidden entries.
+
+== v1.2.3 (2026.7.16) — Round 17/18 review fixes + P0 JS error fix + Toast UX ==
+
+This version is based on the uploaded Round 17 (Issue #48, 24 findings)
+and Round 18 (Issue #49, 32 findings) multi-skill review reports, plus
+a user-reported P0 JS error and Issue #47 Toast UX optimization. After
+rigorous false-positive verification, 3 Round-17 findings and 4 Round-18
+findings were confirmed as false positives (already-fixed in prior rounds
+or stale references to deleted code), and the remaining actionable
+findings were fixed. Version bumped from v1.2.2 to v1.2.3
+(versionCode 122→123).
+
+License classification changes:
+  - No new files added; no files deleted.
+  - All modified files retain their original license classification:
+    * AGPL v3: MainActivity, ChessApp, StatsActivity, ChessWebViewClient,
+      TlsSecurityHelper, StabilizationHelper, RootDetector, EngineService,
+      state-store.js, eco-data.js, Manual/*.html, build-chess.py,
+      stats.html, chess.html, index.html.tpl, proguard-rules.pro,
+      AndroidManifest.xml, build.gradle, settings.gradle, gradle.properties,
+      lint.xml, CMakeLists.txt
+    * GPL v3: StockfishNative, EngineProcessManager, EngineHealthMonitor,
+      JsBridgeGateway, PgnCacheManager, FileIoHelper, PermissionHelper,
+      SafPickerHelper, EngineSettingsHelper, EngineConfigHelper,
+      engine_jni.cpp, all chess.src/*.js except state-store.js and eco-data.js
+
+New @JavascriptInterface methods (GPL v3, StockfishNative.java):
+  - engineEvalDeepBeginBatch(): Sets eval-mode UCI options once and marks
+    the batch active so subsequent engineEvalDeep() calls skip the per-step
+    setoption storm. Pure engine-control method; no network, no storage,
+    no PII.
+  - engineEvalDeepEndBatch(): Clears the batch flag and restores gameplay
+    UCI options via applySettings(). Pure engine-control method; no
+    network, no storage, no PII.
+
+Modified files (license unchanged):
+  - game-logic.js (GPL v3): cloneS() Chess960 fields; toggleLang() html lang
+    sync; startup auto-detect html lang sync; 'about' and
+    'analysis_complete_opening_stats' i18n keys; loading_title v1.2.3.
+  - ui.js (GPL v3): setDifficultyLevel() new function (P0 fix); _renderHeader
+    onclick refactor + aria-label i18n + version badge v1.2.3; formatEval()
+    + _applyGameOver() _gameOverStatusKey branching; _renderAboutDialog
+    aria-label + version v1.2.3; _endEvalDeepBatchIfActive() new helper;
+    reviewAnalyzeAll() begin-batch hook; _reviewAnalyzeAdvance() completion
+    branches end-batch hook + completion toast; exitReview() end-batch hook;
+    render-error fallback version v1.2.3.
+  - ai-bridge.js (GPL v3): openStatsPage() path 3 staged toasts; (no
+    license change).
+  - index.html.tpl (GPL v3): <title> v1.2.3; html lang attribute comment.
+  - StockfishNative.java (GPL v3): NEWLINE_PATTERN + stripNewlines() helper;
+    sendSetOptionAndWait uses stripNewlines; saveEvalCacheSync finally-block
+    .tmp cleanup; _evalDeepBatchActive volatile field; engineEvalDeep
+    batch-skip; engineEvalDeepBeginBatch/EndBatch new methods;
+    stopAndWaitForBestmove process-health check.
+  - StabilizationHelper.java (AGPL v3): start() defensive unregisterListener.
+  - engine_jni.cpp (GPL v3): nativeChmod errno logging.
+  - CMakeLists.txt (AGPL v3): cxx_std_17 → cxx_std_20.
+  - strings.xml (AGPL v3): app_name v1.2.3.
+  - BUILDING.md, PRIVACY.md, README.md, NOTICE, 7× README.license:
+    documentation updates.
+  - Manual/Regalia-v1.2.3-manual-{zh,en}.html (AGPL v3): RENAMED from
+    Regalia-v1.2.2-manual-{zh,en}.html (filenames match current version
+    per recovery guide §6.4). Content updated with v1.2.3 changelog at
+    top (newest-first), cover/footer/title version v1.2.2→v1.2.3, intro
+    paragraph updated with v1.2.3 summary.
+
+False positives excluded (no action taken):
+  - Round 17 P1-4 (EngineConfigManager dead code): already deleted in
+    v1.2.1 round-4; report based on stale commit info.
+  - Round 17 P1-5 (StatsActivity JS Bridge strong Activity ref): onDestroy
+    already calls removeJavascriptInterface + webView.destroy; not a real
+    leak (Java tracing GC handles the cycle).
+  - Round 17 P2-1 (UciProtocolHandler dead code): already deleted in
+    v1.2.1 round-4.
+  - Round 17 P2-2 (RootDetector deprecated API): informational only;
+    getPackageInfo(String, int) is deprecated but still functional, and
+    the fallback path handles API 33+ correctly.
+  - Round 18 i18n-P2-1 (placeholder="0-959" untranslated): purely numeric
+    placeholder; no translation needed.
+  - Round 18 A-P1-1/2/3/4 (God Class refactors): StockfishNative 219KB,
+    ui.js 468KB, implicit JS dependency cycle, build-chess.py merge —
+    require multi-release architecture migration (2-4 weeks each),
+    deferred to future versions.
+
+Verification:
+  - All 9 JS modules pass node --check.
+  - chess.html rebuilt: 22,106 lines, 1,328,785 bytes.
+  - Release APK rebuilt: 78,146,685 bytes, v1+v2+v3 signatures all enabled.
+  - APK lib/arm64-v8a/libstockfish.so SHA-256 =
+    8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5
+    — three-way match (source binary / jniLibs / APK).
+  - FGS subtype property present in AndroidManifest.xml:
+    android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE = chess_engine_analysis.
+  - Version: versionCode=123, versionName="1.2.3".
+
 == v1.2.2 (2026.7.14) — Comprehensive audit-report non-false-positive fix + version bump ==
 
 This version is based on the uploaded comprehensive audit-report

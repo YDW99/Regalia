@@ -8,7 +8,7 @@
 -->
 # Privacy Policy — Regalia
 
-Regalia is a fully offline chess application. This policy applies to the Regalia Android application (current version: **v1.2.1**, versionCode 121).
+Regalia is a fully offline chess application. This policy applies to the Regalia Android application (current version: **v1.2.3**, versionCode 123).
 
 ## Data Collection
 
@@ -349,6 +349,37 @@ This pass completes the remaining S3776 Cognitive Complexity items deferred from
 - **S2703 `typeof` audit (53 sites across 4 JS files)**: Converted `typeof <var> === 'undefined'` / `!== 'undefined'` to direct `=== undefined` / `!== undefined` comparison for variables guaranteed to be declared via module-scoped `let`/`var` (`soundOn`, `gameClocks`, `_gameOverStatusKey`, `_reviewEvalCache`, `gameVariant`, `dlgChess960`, and other module-scoped variables). True globals (`crypto`, `AndroidBridge`) correctly preserved with `typeof` to avoid `ReferenceError`. No privacy impact — pure style modernization with identical semantics.
 
 Version: `versionCode=121`, `versionName="1.2.1"` (unchanged — same-version refinement).
+
+## v1.2.3 (2026.7.16) — Round 17/18 review fixes + P0 JS error fix + Toast UX
+
+This version addresses a user-reported P0 JS error, Round 17 (Issue #48) and Round 18 (Issue #49) multi-skill review findings, and Issue #47 Toast UX optimization. **No new permissions, no new data collection, no new network access, no changes to data flow or storage.** All changes are internal to the app and have zero privacy impact:
+
+- **P0 JS error fix (`ui.js`)**: AI difficulty button inline `onclick` refactored into a named global function `setDifficultyLevel(level)`. Previously the inline `onclick` contained `console.warn("[AI] ...")` with double quotes that collided with the HTML attribute delimiter, causing `Uncaught SyntaxError: Unexpected end of input`. No privacy impact — pure UI bug fix; no data transmitted or stored.
+- **Round 17 P1 — cloneS Chess960 fields (`game-logic.js`)**: `cloneS()` now copies `chess960` and `spid` fields. No privacy impact — pure correctness fix for Chess960 state cloning.
+- **Round 17 P1 — sendSetOptionAndWait Pattern caching (`StockfishNative.java`)**: Pre-compiled `NEWLINE_PATTERN` + `stripNewlines()` helper. No privacy impact — performance optimization only.
+- **Round 17 P1 — saveEvalCacheSync .tmp leak (`StockfishNative.java`)**: `finally` block guarantees `.tmp` cleanup. The eval cache is a local-only file in `context.getFilesDir()` containing engine evaluation data (no PII). The fix prevents stale `.tmp` file accumulation; no data leaves the device.
+- **Round 17 P1 — C++ standard mismatch (`CMakeLists.txt`)**: `cxx_std_17` → `cxx_std_20` to match `build.gradle`. No privacy impact — build config alignment.
+- **Round 18 i18n P1 — aria-label, game-over detection, html lang (`ui.js`, `game-logic.js`)**: Three i18n fixes for accessibility and language consistency. No privacy impact — UI text/accessibility only.
+- **Round 18 P1 — analyze-all setoption redundancy (`StockfishNative.java`, `ui.js`)**: Added `engineEvalDeepBeginBatch()` / `engineEvalDeepEndBatch()` Java methods to skip redundant UCI setoption calls during batch analysis. No privacy impact — performance optimization; engine communication is local-only.
+- **Issue #47 Toast UX (`ai-bridge.js`, `ui.js`, `game-logic.js`)**: Path 3 staged intent+progress toasts; Path 4 completion toast before deferred stats open. New i18n key `analysis_complete_opening_stats`. No privacy impact — Toast text is rendered locally.
+- **Round 17 P2 — StabilizationHelper, engine_jni.cpp errno, stopAndWaitForBestmove health**: Three robustness fixes. No privacy impact — internal diagnostics and recovery.
+- **False positives excluded**: Round 17 P1-4 (EngineConfigManager — already deleted), P1-5 (StatsActivity JS Bridge — onDestroy already cleans up), P2-1 (UciProtocolHandler — already deleted), P2-2 (RootDetector deprecated API — informational only). Round 18 i18n-P2-1 (`placeholder="0-959"` — numeric), A-P1-1/2/3/4 (God Class refactors — deferred).
+
+Version: `versionCode=123`, `versionName="1.2.3"` (version bump from v1.2.2).
+
+## v1.2.3 optimization pass (2026.7.16) — first-principles line-by-line review
+
+A line-by-line first-principles review of every source file was performed after the Round 17/18 fix pass. **No versionCode bump.** **No new permissions, no new data collection, no new network access, no changes to data flow or storage.** All changes are internal code-quality, documentation-accuracy, and redundancy-cleanup improvements with zero privacy impact:
+
+- **Stale API version comments corrected** (`StockfishNative.java`, `ChessWebViewClient.java`, `network_security_config.xml`): "API 21" references updated to "API 23" to match the actual `minSdk 23`. Documentation-only; no code behavior change. No privacy impact.
+- **Version string comments updated** (`MainActivity.java`, `ChessWebViewClient.java`): Example version references updated from "v1.2.1"/"v1.2.2" to "v1.2.3". No privacy impact — comments only.
+- **`EngineConfigHelper.setGameDifficulty` callback**: Converted raw string-concatenation `postJsCallback` to the structured `postJsCallback(eventName, args...)` overload. No privacy impact — the callback only passes a boolean and an int (limitElo, elo) to JS; no PII, no network, no storage.
+- **`StatsActivity` JS bridge comment**: Added a clarifying comment documenting why the anonymous JS bridge is safe (onDestroy cleanup + Java GC). No privacy impact — comment only.
+- **`gradle.properties`**: Removed redundant `android.enableR8.fullMode=true` (default in AGP 8.x). No privacy impact — build config only.
+- **HTML manuals renamed + wireframe version badge fixed**: `Regalia-v1.2.2-manual-{zh,en}.html` → `Regalia-v1.2.3-manual-{zh,en}.html`; header-bar wireframe badge updated from `v1.0.7` to `v1.2.3` to match the actual app rendering. No privacy impact — documentation only.
+- **README.md directory tree accuracy fixes**: `strings.xml` comment "v1.2.1" → "v1.2.3"; `build.gradle` comment "versionCode=121" → "versionCode=123"; manual filename references updated. No privacy impact — documentation only.
+
+Version: `versionCode=123`, `versionName="1.2.3"` (unchanged — optimization pass, no version bump).
 
 ## v1.2.2 (2026.7.14) — Comprehensive audit-report non-false-positive fix + version bump
 

@@ -1,3 +1,62 @@
+v1.2.3 optimization pass (2026.7.16) — first-principles line-by-line review:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — no version bump).
+  - ai-bridge.js (GPL v3): openStatsPage() path-3 toast staging refined —
+    the previous version used a setTimeout to show a progress toast at 1.25s,
+    but reviewAnalyzeAll() also shows its own progress toast, causing a
+    redundant double-toast. Refined to defer reviewAnalyzeAll() by 1s so
+    the intent toast shows first (1s), then reviewAnalyzeAll()'s progress
+    toast replaces it — giving a clean intent→progress sequence with no
+    redundancy. No license change.
+  - ui.js (GPL v3): setDifficultyLevel() comment reference corrected from
+    "Issue #46" to "user-reported 'Unexpected end of input' JS error" (the
+    P0 bug was user-reported, not tracked as Issue #46). No code change.
+  - chess.html: rebuilt (22,108 lines, 1,328,929 bytes).
+  - License classification: all files retain their existing classification.
+
+v1.2.3 (2026.7.16) — Round 17/18 review fixes + P0 JS error fix + Toast UX:
+  - Version: versionCode=123, versionName="1.2.3" (version bump from v1.2.2).
+  - game-logic.js (GPL v3):
+    * cloneS() now copies Chess960 chess960 and spid fields via conditional
+      spread (Round 17 P1-1). Previously these were dropped on clone,
+      causing Chess960 state to lose its identity after the first move.
+    * toggleLang() now syncs document.documentElement.lang to 'zh-CN' or
+      'en' (Round 18 i18n-P1-3). Startup auto-detect IIFE also syncs the
+      lang attribute.
+    * New i18n keys: 'about' (Round 18 i18n-P1-1) and
+      'analysis_complete_opening_stats' (Issue #47 path 4).
+    * loading_title updated from "Regalia v1.2.2" to "Regalia v1.2.3".
+  - ui.js (GPL v3):
+    * New global function setDifficultyLevel(level) (P0 fix). Refactored
+      the inline onclick attribute (which had a console.warn("[AI] ...")
+      double-quote nesting bug causing "Unexpected end of input") into a
+      named function. The onclick is now
+      onclick="setDifficultyLevel('+l.id+')".
+    * _renderHeader() ℹ️ button aria-label changed from hardcoded "About"
+      to T('about') (Round 18 i18n-P1-1). Version badge v1.2.2 → v1.2.3.
+    * formatEval() and _applyGameOver() now branch on _gameOverStatusKey
+      (language-independent) instead of gameOver.includes('将杀') /
+      .includes('Checkmate') (language-dependent) (Round 18 i18n-P1-2).
+    * _renderAboutDialog() aria-label="About" → T('about_title'); app_name
+      row version v1.2.2 → v1.2.3.
+    * New helper _endEvalDeepBatchIfActive() (Round 18 A-P1-2).
+    * reviewAnalyzeAll() now calls engineEvalDeepBeginBatch() at start.
+    * _reviewAnalyzeAdvance() completion branches now call
+      _endEvalDeepBatchIfActive() + show completion toast (Issue #47
+      path 4).
+    * exitReview() now calls _endEvalDeepBatchIfActive().
+    * render-error fallback version v1.2.2 → v1.2.3.
+  - ai-bridge.js (GPL v3):
+    * openStatsPage() path 3 split into staged intent toast (1.2s) +
+      progress toast (3s) (Issue #47 path 3).
+  - index.html.tpl (GPL v3): <title> v1.2.2 → v1.2.3; html lang attribute
+    comment explaining runtime update by toggleLang().
+  - chess.html: rebuilt from the updated JS modules + template
+    (22,106 lines, 1,328,785 bytes).
+  - License classification: all files in this directory retain their
+    existing classification (GPL v3 for game-logic.js, chess960.js,
+    pgn-standard.js, worker-pool.js, ai-bridge.js, tablebase.js, ui.js,
+    index.html.tpl; AGPL v3 for state-store.js, eco-data.js).
+
 v1.2.2 (2026.7.14) — Comprehensive audit-report non-false-positive fix + version bump:
   - Version: versionCode=122, versionName="1.2.2" (version bump from v1.2.1).
   - tablebase.js (GPL v3): fenToState() — added 200-character length limit

@@ -118,6 +118,15 @@ public class StabilizationHelper implements SensorEventListener {
             Log.w(TAG, "SensorManager unavailable — stabilization disabled");
             return false;
         }
+        // v1.2.3 P2 (Round 17 P2-3): Defensive idempotency guard. The
+        //   callers (onResume, toggleStabilization) always pair stop() before
+        //   start(), but Android's SensorManager.registerListener is not
+        //   guaranteed idempotent across OEM ROMs — some HyperOS / MIUI
+        //   builds double-deliver events when the same listener is registered
+        //   twice without an intervening unregisterListener. Unregister first
+        //   so a stray start() (e.g. onResume called without onPause) cannot
+        //   double-register.
+        try { sensorManager.unregisterListener(this); } catch (Throwable ignored) {}
         // Resolve the only sensor we need (Rev64: rotation sensors removed).
         linAccelSensor = sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);
 

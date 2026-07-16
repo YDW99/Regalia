@@ -35,7 +35,7 @@
     stale pins cannot permanently brick the optional tablebase feature.
   - Certificate Transparency (#4): Android 10+ (API 29+) enforces CT for all
     certificates issued from certificates whose CT enforcement dates have passed,
-    via the platform Conscrypt provider. minSdk 21 devices without platform CT
+    via the platform Conscrypt provider. minSdk 23 devices without platform CT
     still benefit from the pin-set above. No additional library is needed.
 -->
 <network-security-config>

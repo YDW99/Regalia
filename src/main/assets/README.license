@@ -1,3 +1,22 @@
+v1.2.3 optimization pass (2026.7.16) — first-principles line-by-line review:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — no version bump).
+  - chess.html: rebuilt from the updated ai-bridge.js (openStatsPage toast
+    refinement). 22,108 lines, 1,328,929 bytes.
+  - stats.html: no changes; CSP SHA-256 hash re-verified by build-chess.py.
+  - AGPLv3_Logo.svg, GPLv3_Logo.svg: no changes.
+  - License classification: unchanged.
+
+v1.2.3 (2026.7.16) — Round 17/18 review fixes + P0 JS error fix + Toast UX:
+  - Version: versionCode=123, versionName="1.2.3" (version bump from v1.2.2).
+  - chess.html: rebuilt from the updated JS modules (see
+    chess.src/README.license for the per-module change list).
+    22,106 lines, 1,328,785 bytes.
+  - stats.html: no source changes; CSP SHA-256 hash re-verified by
+    build-chess.py (unchanged).
+  - AGPLv3_Logo.svg, GPLv3_Logo.svg: no changes.
+  - License classification: chess.html, stats.html, AGPLv3_Logo.svg (AGPL v3);
+    GPLv3_Logo.svg (GPL v3). All retain existing classification.
+
 v1.2.2 (2026.7.14) — Comprehensive audit-report non-false-positive fix + version bump:
   - Version: versionCode=122, versionName="1.2.2" (version bump from v1.2.1).
   - chess.html rebuilt from the updated JS modules (see

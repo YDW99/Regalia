@@ -208,6 +208,16 @@ public class StockfishNative {
     // Expected depth limit for eval searches (go depth N)
     private volatile int _evalDepthLimit = 15;
 
+    // v1.2.3 P1 (Round 17 P1-3 / Round 18 A-P1-2): Batch eval flag.
+    //   When JS starts an analyze-all batch, it calls engineEvalDeepBeginBatch()
+    //   once. Subsequent engineEvalDeep() calls during the batch skip the
+    //   redundant forceFullStrength() + applyEvalModeOptions() setoption storm
+    //   (5 setoptions × N steps = 5N redundant UCI round-trips). The batch is
+    //   closed by engineEvalDeepEndBatch() which restores gameplay options via
+    //   applySettings(). The flag is volatile because the JS binder thread sets
+    //   it while the engine executor thread reads it.
+    private volatile boolean _evalDeepBatchActive = false;
+
     private volatile boolean _heartbeatRunning = false;
     // v1.0.8 PHASE 49: volatile — written inside synchronized startHeartbeat(),
     //   read+joined in unsynchronized shutdown(). Without volatile the shutdown
@@ -337,6 +347,11 @@ public class StockfishNative {
     // overload. ECMAScript IdentifierName subset (no reserved words, no
     // Unicode escapes, no keywords) — sufficient for our onXxx callback names.
     private static final Pattern EVENT_NAME_PATTERN = Pattern.compile("^[A-Za-z_$][A-Za-z0-9_$]*$");
+    // v1.2.3 P1 (Round 17 P1-2): Pre-compiled CR/LF stripper pattern for UCI
+    //   command sanitization. Previously sendSetOptionAndWait called
+    //   String.replaceAll("[\\r\\n]", "") on every invocation, re-compiling
+    //   the regex every time. Reusing one Pattern avoids that per-call cost.
+    private static final Pattern NEWLINE_PATTERN = Pattern.compile("[\\r\\n]");
 
     // ===================== ENGINE CONFIGURATION FIELDS =====================
 
@@ -519,6 +534,7 @@ public class StockfishNative {
             @Override public void sendUciCommand(String command) { StockfishNative.this.sendUciCommand(command); }
             @Override public void notifyEngineInfo() { StockfishNative.this.notifyEngineInfo(); }
             @Override public void postJsCallback(String jsExpression) { StockfishNative.this.postJsCallback(jsExpression); }
+            @Override public void postJsCallback(String eventName, Object... args) { StockfishNative.this.postJsCallback(eventName, args); }
         });
     }
 
@@ -647,9 +663,10 @@ public class StockfishNative {
         if (engineProcess == null) return false;
         // v1.2.1 round-10 (review-D P3): Process.isAlive() is API 26+ only.
         //   Previously every call (heartbeat ~1Hz + every UCI send path) took
-        //   the NoSuchMethodError hit on API 21-25. Pre-check SDK_INT so the
-        //   common path (API 26+) is a direct virtual invoke with no
-        //   try/catch overhead, and the legacy path uses exitValue() probing.
+        //   the NoSuchMethodError hit on API 23-25 (minSdk=23). Pre-check
+        //   SDK_INT so the common path (API 26+) is a direct virtual invoke
+        //   with no try/catch overhead, and the legacy path uses exitValue()
+        //   probing.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             return engineProcess.isAlive();
         }
@@ -664,7 +681,7 @@ public class StockfishNative {
     }
 
     // v1.0.2 FIX: Safe wrapper for Process.destroyForcibly() — that method is
-    // API 26+ only, but our minSdk is 21. On API 21-25, fall back to a second
+    // API 26+ only, but our minSdk is 23. On API 23-25, fall back to a second
     // destroy() call (the OS will eventually reap the process). Also uses
     // isProcessAlive() instead of engineProcess.isAlive() for the same reason.
     private void destroyForciblySafe() {
@@ -673,7 +690,7 @@ public class StockfishNative {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 engineProcess.destroyForcibly();
             } else {
-                // API 21-25: destroyForcibly() not available; second destroy()
+                // API 23-25: destroyForcibly() not available; second destroy()
                 // call is a no-op if the process is already dead, but kicks
                 // the OS to reap it if the first destroy() was graceful.
                 engineProcess.destroy();
@@ -807,6 +824,23 @@ public class StockfishNative {
                         }
                         _stopLatch = null;
                         Log.w(TAG, callerTag + ": stopAndWaitForBestmove timed out — discarding late bestmove");
+                        // v1.2.3 P2 (Round 17 P2-5): After a stop-timeout, check
+                        //   whether the engine process is actually alive. A
+                        //   frozen-but-alive engine will recover on its own (the
+                        //   discard flag handles the late bestmove); a DEAD
+                        //   process needs proactive recovery, otherwise the next
+                        //   call will fail with "Engine not ready" and the user
+                        //   has to manually restart. Marking the thread dead
+                        //   triggers the heartbeat's Check-0 recovery path.
+                        if (engineProcess != null && !isProcessAlive()) {
+                            Log.e(TAG, callerTag + ": stop timeout + engine process dead — marking for recovery");
+                            engineReady = false;
+                            try {
+                                markEngineThreadDead("stopAndWaitForBestmove(" + callerTag + ")");
+                            } catch (Throwable t) {
+                                Log.w(TAG, "markEngineThreadDead call failed", t);
+                            }
+                        }
                     } else {
                         // bestmove handler already claimed the latch just before our
                         // timeout — the late bestmove was already consumed. Do NOT
@@ -1049,14 +1083,75 @@ public class StockfishNative {
                 _lastEvalDepth = 0; _lastEvalSeldepth = 0; // v1.0.4 Rev33: reset seldepth too
                 _storedWdlW = -1; _storedWdlD = -1; _storedWdlL = -1;
                 _evalDepthLimit = 22;
-                forceFullStrength();
-                // v1.0.4 Rev32 UCI EVAL OPTIMIZATION: same as engineEval —
-                // Contempt=0, MultiPV=1, UCI_ShowWDL=true for objective deep eval.
-                applyEvalModeOptions();
+                // v1.2.3 P1 (Round 17 P1-3 / Round 18 A-P1-2): Skip the
+                //   forceFullStrength() + applyEvalModeOptions() setoption
+                //   storm when inside a batch — the batch's begin-hook already
+                //   set these once, and they don't change between steps.
+                //   5 setoptions × N steps = 5N UCI round-trips saved.
+                if (!_evalDeepBatchActive) {
+                    forceFullStrength();
+                    // v1.0.4 Rev32 UCI EVAL OPTIMIZATION: same as engineEval —
+                    // Contempt=0, MultiPV=1, UCI_ShowWDL=true for objective deep eval.
+                    applyEvalModeOptions();
+                }
                 sendUciCommand("position fen " + fen);
                 sendUciCommand("go depth 22");
             }
         }, "engineEvalDeep");
+    }
+
+    /**
+     * v1.2.3 P1 (Round 17 P1-3 / Round 18 A-P1-2): Begin a batch of
+     * engineEvalDeep() calls. Sets the eval-mode UCI options once
+     * (forceFullStrength + applyEvalModeOptions) and marks the batch active
+     * so subsequent engineEvalDeep() calls skip the per-step setoption storm.
+     * Caller MUST pair with engineEvalDeepEndBatch() to restore gameplay
+     * options (applySettings). Safe to call when the engine is not ready —
+     * the flag is set but the option application is skipped; the first
+     * engineEvalDeep() will then fail-fast with onEngineError.
+     */
+    @JavascriptInterface
+    public void engineEvalDeepBeginBatch() {
+        _evalDeepBatchActive = true;
+        _safeExecute(new Runnable() { // tag: engineEvalDeepBeginBatch
+            public void run() {
+                if (!engineReady) {
+                    // Flag stays set; engineEvalDeep will fail-fast.
+                    return;
+                }
+                // Stop any in-flight gameplay search before changing options.
+                stopAndWaitForBestmove("engineEvalDeepBeginBatch");
+                synchronized (stateLock) {
+                    currentState = STATE_EVAL;
+                }
+                forceFullStrength();
+                applyEvalModeOptions();
+            }
+        }, "engineEvalDeepBeginBatch");
+    }
+
+    /**
+     * v1.2.3 P1 (Round 17 P1-3 / Round 18 A-P1-2): End a batch of
+     * engineEvalDeep() calls. Clears the batch flag and restores the
+     * user's gameplay UCI options via applySettings(). Safe to call when
+     * no batch was started (idempotent).
+     */
+    @JavascriptInterface
+    public void engineEvalDeepEndBatch() {
+        _evalDeepBatchActive = false;
+        _safeExecute(new Runnable() { // tag: engineEvalDeepEndBatch
+            public void run() {
+                if (!engineReady) return;
+                // Stop any in-flight eval search before restoring options.
+                stopAndWaitForBestmove("engineEvalDeepEndBatch");
+                synchronized (stateLock) {
+                    currentState = STATE_NONE;
+                }
+                // Restore gameplay-appropriate UCI options (Skill Level,
+                // UCI_LimitStrength, MultiPV, Contempt, etc.).
+                applySettings();
+            }
+        }, "engineEvalDeepEndBatch");
     }
 
     /**
@@ -1235,7 +1330,7 @@ public class StockfishNative {
     // 导致 prefers-color-scheme 始终为固定值（在某些 OEM ROM 如小米澎湃 OS 3 上
     // 可能始终为 dark）。此方法通过 UiModeManager 直接检测系统夜间模式，
     // 让 JS 在 CSS 媒体查询之外额外检查，确保浅/深色模式正确切换。
-    // 兼容 Android 5.0 (API 21) 及以上，包括小米澎湃 OS 3。
+    // 兼容 Android 6.0 (API 23, minSdk) 及以上，包括小米澎湃 OS 3。
     @JavascriptInterface
     public boolean isSystemDarkMode() {
         try {
@@ -1666,7 +1761,7 @@ public class StockfishNative {
                 try { Thread.sleep(PROCESS_DESTROY_GRACE_MS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
                 // v1.0.2 FIX: use isProcessAlive() + destroyForciblySafe() —
                 // direct engineProcess.isAlive() / destroyForcibly() throw
-                // NoSuchMethodError on API 21-25 (minSdk).
+                // NoSuchMethodError on API 23-25 (minSdk).
                 if (isProcessAlive()) destroyForciblySafe();
             } catch (Throwable ignored) {}
             engineProcess = null;
@@ -2425,8 +2520,14 @@ public class StockfishNative {
         }
         // v1.2.1: Strip CR/LF from name/value to prevent UCI command injection
         //   (a malicious value could otherwise inject an extra UCI line).
-        String safeName = name == null ? "" : name.replaceAll("[\\r\\n]", "");
-        String safeValue = value == null ? "" : value.replaceAll("[\\r\\n]", "");
+        // v1.2.3 P1 (Round 17 P1-2): Reuse a pre-compiled Pattern instead of
+        //   calling String.replaceAll(regex, ...) on every invocation. The
+        //   String.replaceAll overload re-compiles the regex every call (~µs
+        //   overhead per call, called many times during engine init + settings
+        //   apply). Pre-compiling to a static Pattern + Matcher is the standard
+        //   idiom and avoids the per-call compile cost.
+        String safeName = stripNewlines(name);
+        String safeValue = stripNewlines(value);
         synchronized (_readyOkLock) {
             final CountDownLatch latch = new CountDownLatch(1);
             readyOkLatchHolder = latch;
@@ -2628,7 +2729,7 @@ public class StockfishNative {
                 try { Thread.sleep(200); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
                 // v1.0.2 FIX: use isProcessAlive() + destroyForciblySafe() —
                 // direct engineProcess.isAlive() / destroyForcibly() throw
-                // NoSuchMethodError on API 21-25 (minSdk).
+                // NoSuchMethodError on API 23-25 (minSdk).
                 if (isProcessAlive()) {
                     destroyForciblySafe();
                     Log.w(TAG, "Engine process did not exit gracefully, force-killed");
@@ -2693,7 +2794,7 @@ public class StockfishNative {
                 try { Thread.sleep(PROCESS_DESTROY_GRACE_MS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
                 // v1.0.2 FIX: use isProcessAlive() + destroyForciblySafe() —
                 // direct engineProcess.isAlive() / destroyForcibly() throw
-                // NoSuchMethodError on API 21-25 (minSdk).
+                // NoSuchMethodError on API 23-25 (minSdk).
                 if (isProcessAlive()) destroyForciblySafe();
             } catch (Throwable ignored) {}
             engineProcess = null;
@@ -2874,6 +2975,18 @@ public class StockfishNative {
                 }
             });
         }
+    }
+
+    /**
+     * v1.2.3 P1 (Round 17 P1-2): Strip CR/LF from a UCI command argument
+     * using the pre-compiled {@link #NEWLINE_PATTERN}. Returns "" for null
+     * input (UCI does not distinguish empty from null). Centralizing this
+     * here keeps the sanitization rule in one place if we ever need to
+     * tighten it further (e.g. reject other control chars).
+     */
+    private static String stripNewlines(String s) {
+        if (s == null) return "";
+        return NEWLINE_PATTERN.matcher(s).replaceAll("");
     }
 
     private static String escapeJsString(String s) {
@@ -3424,9 +3537,18 @@ public class StockfishNative {
     @JavascriptInterface
     public boolean saveEvalCacheSync(String json) {
         if (json == null) return false;
+        // v1.2.3 P1 (Round 17 P1-3): Track tmpFile in a finally-cleaned local
+        //   so it cannot leak. Previously, if Files.move failed with
+        //   AtomicMoveNotSupportedException and the legacy rename also failed
+        //   (e.g. cross-device on some OEM ROMs), the code fell through to
+        //   Files.copy() — but never deleted tmpFile afterwards. Over time
+        //   this leaked a stale .tmp on every save, and a later save could
+        //   read a half-written tmp if the FS crashed mid-write. The finally
+        //   block now guarantees tmpFile cleanup regardless of the path taken.
+        File tmpFile = new File(context.getFilesDir(), EVAL_CACHE_FILE + ".tmp");
+        boolean success = false;
         try {
             File finalFile = new File(context.getFilesDir(), EVAL_CACHE_FILE);
-            File tmpFile = new File(context.getFilesDir(), EVAL_CACHE_FILE + ".tmp");
             // Write to tmp file
             try (java.io.FileOutputStream fos = new java.io.FileOutputStream(tmpFile);
                  java.io.OutputStreamWriter writer = new java.io.OutputStreamWriter(fos, "UTF-8")) {
@@ -3447,27 +3569,52 @@ public class StockfishNative {
                     java.nio.file.Files.move(tmpFile.toPath(), finalFile.toPath(),
                             java.nio.file.StandardCopyOption.ATOMIC_MOVE,
                             java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                    // tmpFile was consumed by the move — mark it so the finally
+                    // block does not attempt a redundant (and harmless) delete.
+                    tmpFile = null;
+                    success = true;
                     return true;
                 } catch (java.nio.file.AtomicMoveNotSupportedException e) {
-                    // Cross-device tmp/final — fall through to legacy path
+                    // Cross-device tmp/final — fall through to legacy path.
+                    // tmpFile is still on disk; the legacy path will consume it.
                     Log.w(TAG, "saveEvalCacheSync: ATOMIC_MOVE not supported, falling back");
                 }
             }
-            // Legacy path (API 21-25 or cross-device fallback)
+            // Legacy path (API 23-25 or cross-device fallback)
             // v1.2.0 Phase 73 (SonarCloud B29): check delete() return value
             if (finalFile.exists() && !finalFile.delete()) {
                 Log.w(TAG, "saveEvalCacheSync: failed to delete old cache file");
             }
-            if (!tmpFile.renameTo(finalFile)) {
-                // Fallback: copy tmp to final if rename fails (cross-device?)
-                Log.w(TAG, "saveEvalCacheSync: rename failed, falling back to copy");
-                java.nio.file.Files.copy(tmpFile.toPath(), finalFile.toPath(),
-                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            if (tmpFile.renameTo(finalFile)) {
+                // renameTo consumed the tmp file — mark null so finally skips.
+                tmpFile = null;
+                success = true;
+                return true;
             }
+            // Fallback: copy tmp to final if rename fails (cross-device?)
+            Log.w(TAG, "saveEvalCacheSync: rename failed, falling back to copy");
+            java.nio.file.Files.copy(tmpFile.toPath(), finalFile.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            // copy did NOT consume tmpFile — finally will delete it.
+            success = true;
             return true;
         } catch (Throwable e) {
             Log.w(TAG, "saveEvalCacheSync failed", e);
             return false;
+        } finally {
+            // v1.2.3 P1 (Round 17 P1-3): Always clean up the tmp file when it
+            //   still exists (i.e. the legacy-copy path was taken or any path
+            //   threw). Skipping when tmpFile==null avoids a spurious delete
+            //   of a file that was already consumed by move/rename.
+            if (tmpFile != null) {
+                try {
+                    if (!tmpFile.delete() && tmpFile.exists()) {
+                        Log.w(TAG, "saveEvalCacheSync: failed to clean up tmp file (success=" + success + ")");
+                    }
+                } catch (Throwable ignored) {
+                    // Best-effort cleanup — never mask the original result.
+                }
+            }
         }
     }
 

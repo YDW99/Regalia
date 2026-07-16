@@ -65,7 +65,12 @@ function secureRandomInt(max){
 
 function T(key){return _i18n[key]?.[_lang]||_i18n[key]?.zh||key;}
 function toggleLang(){_lang=(_lang==='zh')?'en':'zh';
-  try{if(typeof Store!=='undefined'&&Store&&typeof Store.dispatch==='function')Store.dispatch('SET_LANG',_lang);}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}try{localStorage.setItem('Regalia_lang',_lang);}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.saveLangPref)AndroidBridge.saveLangPref(_lang);}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_lang',_lang);}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}try{if(typeof HapticManager!=='undefined'&&HapticManager.fire)HapticManager.fire('TOGGLE_ON');}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}try{if(typeof playSound==='function')playSound('select');}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}render();}
+  try{if(typeof Store!=='undefined'&&Store&&typeof Store.dispatch==='function')Store.dispatch('SET_LANG',_lang);}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}try{localStorage.setItem('Regalia_lang',_lang);}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.saveLangPref)AndroidBridge.saveLangPref(_lang);}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_lang',_lang);}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}try{if(typeof HapticManager!=='undefined'&&HapticManager.fire)HapticManager.fire('TOGGLE_ON');}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}try{if(typeof playSound==='function')playSound('select');}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}
+  // v1.2.3 P1 (Round 18 i18n-P1-3): Sync <html lang> so TalkBack uses the
+  //   correct TTS engine for the active UI language. Previously the attribute
+  //   stayed at zh-CN forever, so English UI users heard Chinese speech.
+  try{document.documentElement.lang=(_lang==='zh')?'zh-CN':'en';}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}
+  render();}
 const _i18n={
 'app_name':{zh:'Regalia',en:'Regalia'},
 'new_game':{zh:'新游戏',en:'New Game'},
@@ -146,6 +151,8 @@ const _i18n={
 'load_more':{zh:'加载更多',en:'Load More'},
 'ai_book':{zh:'AI开局库',en:'AI Opening Book'},
 'about_title':{zh:'关于 Regalia',en:'About Regalia'},
+// v1.2.3 P1 (Round 18 i18n-P1-1): short aria-label for the ℹ️ header button.
+'about':{zh:'关于',en:'About'},
 'about_app':{zh:'应用',en:'App'},
 'about_engine':{zh:'引擎',en:'Engine'},
 'about_platform':{zh:'平台',en:'Platform'},
@@ -276,6 +283,11 @@ const _i18n={
 //   hint, users see only "正在分析..." and may not realize they need to wait
 //   (and that the stats page will open on its own).
 'stats_will_open_after_analysis':{zh:'分析完成后将进入统计页面',en:'Statistics will open after analysis completes'},
+// v1.2.3 P2 (Issue #47 path 4): Toast shown right before the stats page opens
+//   automatically after a deferred analyze-all batch completes. Previously
+//   there was no feedback at this transition — the user waited in silence
+//   until the stats Activity suddenly appeared.
+'analysis_complete_opening_stats':{zh:'分析完成，正在打开统计页面...',en:'Analysis complete, opening statistics...'},
 // v1.2.1 round-16: Proper i18n for the 10-min safety-timeout toast in
 //   openStatsPage() — previously mixed zh + en ("正在分析... timed out").
 'analysis_timed_out_retry':{zh:'分析超时，请重试',en:'Analysis timed out, please retry'},
@@ -428,7 +440,7 @@ const _i18n={
 'elo_target':{zh:'Elo目标',en:'ELO Target'},
 'export_settings_btn':{zh:'📤 导出设置',en:'📤 Export'},
 'import_settings_btn':{zh:'📥 导入设置',en:'📥 Import'},
-'loading_title':{zh:'Regalia v1.2.2',en:'Regalia v1.2.2'},
+'loading_title':{zh:'Regalia v1.2.3',en:'Regalia v1.2.3'},
 'click_skip_loading':{zh:'点击跳过加载',en:'Click to skip loading'},
 'white_checkmate':{zh:'白方将杀获胜',en:'White wins by checkmate'},
 'black_checkmate':{zh:'黑方将杀获胜',en:'Black wins by checkmate'},
@@ -583,6 +595,9 @@ const _i18n={
   try{if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.getSystemLanguage==='function'){const sysLang=AndroidBridge.getSystemLanguage();_lang=(sysLang&&sysLang.startsWith('zh'))?'zh':'en';return;}}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}
   try{const navLang=navigator.language||navigator.userLanguage||'';_lang=navLang.startsWith('zh')?'zh':'en';}catch(e){_lang='zh';}
 })();
+// v1.2.3 P1 (Round 18 i18n-P1-3): Sync <html lang> with the detected startup
+//   language so TalkBack uses the correct TTS engine before the first toggle.
+try{document.documentElement.lang=(_lang==='zh')?'zh-CN':'en';}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}
 
 window.onerror=function(msg,url,line,col,error){
     const errInfo={
@@ -1668,9 +1683,18 @@ function computeVisibleEpMark(s){
 // Only clone array structure — reduces 64 object copies to 8 array slices per clone
 function cloneB(b){return b.map(r=>r.slice())}
 // posCount deep-copied for search correctness
+// v1.2.3 P1 (Round 17 P1-1): cloneS() now copies Chess960-specific fields
+//   chess960 and spid. Previously these were dropped on clone, so any state
+//   produced by makeMv(s,mv) (which calls cloneS) lost its Chess960 identity.
+//   Effect: Shredder-FEN generation, Chess960 castling rights, and SP-ID
+//   round-trip verification all silently degraded after the first move.
 function cloneS(s){return{board:cloneB(s.board),currentTurn:s.currentTurn,castlingRights:{...s.castlingRights},enPassantTarget:s.enPassantTarget?{...s.enPassantTarget}:null,halfMoveClock:s.halfMoveClock,fullMoveNumber:s.fullMoveNumber,// moveHistory: array shallow-copied (move objects are never mutated in place,
 // only pushed/popped), so sharing by reference would corrupt the parent's array
-moveHistory:s.moveHistory?s.moveHistory.slice():[],posCount:new Map(s.posCount),wk:s.wk?{...s.wk}:null,bk:s.bk?{...s.bk}:null,hash:s.hash||0,boardVersion:s.boardVersion||0}}
+moveHistory:s.moveHistory?s.moveHistory.slice():[],posCount:new Map(s.posCount),wk:s.wk?{...s.wk}:null,bk:s.bk?{...s.bk}:null,hash:s.hash||0,boardVersion:s.boardVersion||0,
+// Chess960 identity fields — only present on Chess960 states (chess960.js).
+// Using conditional spread avoids adding undefined keys to standard-chess states.
+...(s.chess960?{chess960:true}:{}),
+...(s.spid!=null?{spid:s.spid}:{})}}
 
 function sqAttackedFast(b,pos,byCo){if(!b||!pos||!inB(pos.row,pos.col))return false;const r=pos.row,c=pos.col;const pd=byCo==='white'?1:-1;if(inB(r+pd,c-1)&&b[r+pd][c-1]&&b[r+pd][c-1].color===byCo&&b[r+pd][c-1].type==='pawn')return true;if(inB(r+pd,c+1)&&b[r+pd][c+1]&&b[r+pd][c+1].color===byCo&&b[r+pd][c+1].type==='pawn')return true;for(const[dr,dc]of KNIGHT_OFFSETS){if(inB(r+dr,c+dc)&&b[r+dr][c+dc]&&b[r+dr][c+dc].color===byCo&&b[r+dr][c+dc].type==='knight')return true}for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){if(!dr&&!dc)continue;if(inB(r+dr,c+dc)&&b[r+dr][c+dc]&&b[r+dr][c+dc].color===byCo&&b[r+dr][c+dc].type==='king')return true}for(const[dr,dc]of DIR_ROOK){let nr=r+dr,nc=c+dc;while(inB(nr,nc)){const p=b[nr][nc];if(p){if(p.color===byCo&&(p.type==='rook'||p.type==='queen'))return true;break}nr+=dr;nc+=dc}}for(const[dr,dc]of DIR_BISHOP){let nr=r+dr,nc=c+dc;while(inB(nr,nc)){const p=b[nr][nc];if(p){if(p.color===byCo&&(p.type==='bishop'||p.type==='queen'))return true;break}nr+=dr;nc+=dc}}return false}
 /**
