@@ -1,3 +1,54 @@
+v1.2.3 round-13 (2026.7.16) — CMake re-enablement + first-principles code review:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - StockfishNative.java (GPL v3): Four fixes — (1) P0: reset shutdownRequested
+    in restartEngine so the engine can actually restart (previously bailed at
+    startEngineInternal's guard, leaving the engine permanently dead); (2) P1:
+    clear _evalDeepBatchActive in cleanupEngineResources to prevent biased eval
+    after crash; (3) P2: use PROCESS_DESTROY_GRACE_MS constant in shutdown()
+    instead of bare 200 literal; (4) P3: removed dead _pgnCacheDir() and
+    _sanitizeCacheName() private wrappers + redundant case '\u0000' in
+    escapeJsString.
+  - SafPickerHelper.java (GPL v3): P1 — added openInputStream null-check in
+    readTextFromUri and readPgnFromUri (mirrors write path's pattern).
+  - StatsActivity.java (AGPL v3): P1 — added openInputStream null-check in
+    PGN import path.
+  - StabilizationHelper.java (AGPL v3): P1 — check registerListener return
+    value and log warning on failure instead of silently reporting success.
+  - ChessWebViewClient.java (AGPL v3): P1 — show fallback UI after render-
+    crash backoff instead of frozen screen; P2 — use getApplicationContext()
+    for URL open when Activity is destroyed.
+  - MainActivity.java (AGPL v3): P1 — showFallbackUI changed from private to
+    package-private so ChessWebViewClient can call it; P3 — corrected stale
+    version tag (v1.1.0 → v1.2.3) and stabilizationHelper comment.
+  - EngineConfigHelper.java (GPL v3): P3 — removed dead ternary fallback
+    (level < ELO_MAP.length) ? ELO_MAP[level] : 1500 — outer guard makes
+    fallback unreachable.
+  - EngineService.java (AGPL v3): P3 — corrected misleading context comment.
+  - FileIoHelper.java (GPL v3): P3 — corrected stale getDefaultPaths comment
+    (claimed MediaStore/mark-as-public, neither was true).
+  - TlsSecurityHelper.java (AGPL v3): P3 — removed stray `**` typo in Javadoc.
+  - PgnCacheManager.java (GPL v3): P2 — delete() now returns true if any
+    deletion occurred (PGN and/or tags), not only when PGN was deleted.
+  - Other Java files (ChessApp, EngineProcessManager, EngineHealthMonitor,
+    EngineSettingsHelper, JsBridgeGateway, PermissionHelper, RootDetector):
+    No changes this round — audited and verified clean.
+  - License classification: all files retain their existing classification.
+
+v1.2.3 round-12 (2026.7.16) — SonarCloud bug fixes + first-principles review:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - StockfishNative.java (GPL v3): recoverEngine() auto-recovery sleep now has
+    a dedicated catch (InterruptedException e) block that restores
+    Thread.currentThread().interrupt() + _clearRestartInProgress() + early
+    return (SonarCloud Bug #2, java:S2142). Previously the catch (Throwable t)
+    swallowed InterruptedException without re-asserting the interrupt flag,
+    risking engine process leaks on shutdown. All 11 Thread.sleep/Thread.join
+    locations in this file now have consistent interrupt handling.
+  - Other Java files (MainActivity, StatsActivity, EngineConfigHelper, etc.):
+    No changes this round — audited for method length, cyclomatic complexity,
+    @JavascriptInterface annotations (93 total, all properly annotated), and
+    WebView setup alignment with PDF best practices. No issues found.
+  - License classification: all files retain their existing classification.
+
 v1.2.3 optimization pass (2026.7.16) — first-principles line-by-line review:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — no version bump).
   - StockfishNative.java (GPL v3): Stale "API 21-25" comments corrected to

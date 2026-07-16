@@ -1,3 +1,21 @@
+v1.2.3 round-13 (2026.7.16) — CMake re-enablement + first-principles code review:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - Regalia-v1.2.3-manual-zh.html (AGPL v3): Updated with round-13 changelog
+    entry at the top (newest-first per dev guide §6.4). Diagrams reviewed
+    for accuracy against current source — no diagram changes needed this
+    round (all changes were internal bug fixes with no UI impact).
+  - Regalia-v1.2.3-manual-en.html (AGPL v3): Updated with round-13 changelog
+    entry at the top (newest-first per dev guide §6.4).
+  - License classification: both manuals remain AGPL v3 (original works).
+
+v1.2.3 round-12 (2026.7.16) — SonarCloud bug fixes + first-principles review:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - Regalia-v1.2.3-manual-zh.html (AGPL v3): Updated with round-12 changelog
+    entry at the top (newest-first per dev guide §6.4).
+  - Regalia-v1.2.3-manual-en.html (AGPL v3): Updated with round-12 changelog
+    entry at the top (newest-first per dev guide §6.4).
+  - License classification: both manuals remain AGPL v3 (original works).
+
 v1.2.3 optimization pass (2026.7.16) — first-principles line-by-line review:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — no version bump).
   - Regalia-v1.2.3-manual-{zh,en}.html: Fixed the header-bar wireframe

@@ -120,7 +120,12 @@ android {
             // 安全签名配置：使用外部注入的签名信息
             // 本地开发：创建 keystore.properties 文件（已加入 .gitignore）
             // CI/CD 环境：使用环境变量注入
-            if (file(releaseKeystorePath).exists()) {
+            // v1.2.3 round-13 (P2): guard against empty path — file("") resolves
+            //   to projectDir which exists, so without the isEmpty() check a
+            //   fresh clone without keystore.properties / env var would set
+            //   storeFile to the project directory and fail with a cryptic
+            //   "keystore load error" instead of a clear "no keystore" message.
+            if (!releaseKeystorePath.isEmpty() && file(releaseKeystorePath).exists()) {
                 storeFile file(releaseKeystorePath)
                 storePassword releaseKeystorePassword
                 keyAlias releaseKeyAlias
@@ -176,8 +181,15 @@ android {
     externalNativeBuild {
         cmake {
             path "src/main/cpp/CMakeLists.txt"
-            // 使用 "3.22.1+" 允许 Gradle 自动匹配已安装的最新 CMake 版本
-            version "3.22.1+"
+            // v1.2.3 round-13: pinned to 3.31.6+ to avoid the CMake 3.22.1
+            //   re-run loop bug ("manifest 'build.ninja' still dirty after 100
+            //   tries"). The root cause was actually source files extracted
+            //   with future timestamps from the zip, which ninja interpreted
+            //   as "always out of date". CMake 3.31.6's ninja provides a
+            //   clearer error message ("perhaps system time is not set") that
+            //   surfaced the real issue. Either way, pinning to 3.31.6+ is
+            //   safer for fresh environments.
+            version "3.31.6+"
         }
     }
 

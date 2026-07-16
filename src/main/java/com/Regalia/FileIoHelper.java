@@ -284,9 +284,14 @@ public class FileIoHelper {
             // hints; if a path is unreachable the picker will show it but
             // selections will route through SAF content URIs anyway.
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                // API 29+: use MediaStore-relative descriptors. The absolute path
-                // is still /storage/emulated/0/Downloads etc., but we mark it as
-                // "public" so the JS picker can show a "use SAF" hint.
+                // v1.2.3 round-13 (P3): corrected stale comment. This branch
+                //   does NOT use MediaStore and does NOT mark paths as "public".
+                //   It returns the canonical absolute paths as navigation hints
+                //   for the JS file browser; actual I/O always routes through
+                //   SAF content URIs (see SafPickerHelper). Scoped storage on
+                //   API 29+ forbids direct File-API access to public
+                //   Downloads/Documents, but the path strings are still useful
+                //   for display.
                 paths.put("downloads", Environment.getExternalStorageDirectory()
                         .getAbsolutePath() + "/Download");
                 paths.put("documents", Environment.getExternalStorageDirectory()

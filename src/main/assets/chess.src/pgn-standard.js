@@ -941,6 +941,14 @@ export {
   formatEvalTag,
   formatClkTag,
   formatEmtTag,
+  // v1.2.3 round-13 (P3): added formatEvalAnnotation + _pgnWhitePerspectiveLabel
+  //   to the export list. In bundled mode (build-chess.py) the export line is
+  //   stripped and all top-level functions become global, so production is
+  //   unaffected. In source-module mode the missing export caused the typeof
+  //   check in ai-bridge.js to return 'undefined', silently skipping the
+  //   every-5-moves PGN annotation. Adding them here makes both modes consistent.
+  formatEvalAnnotation,
+  _pgnWhitePerspectiveLabel,
   NAG_MAP, nagToSymbol, symbolToNag, formatNagToken,
   formatCslTag, formatCalTag, parseCslTag, parseCalTag,
   parseTimeControl, formatTimeControl,

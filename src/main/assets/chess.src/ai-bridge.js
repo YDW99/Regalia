@@ -242,12 +242,11 @@ let _reviewEvalCache=new function(){
   //     in-flight engine eval to "miss" the cache on its return, producing a
   //     brief "analyzing..." flash for the step the user is staring at.
   //   - TDZ safety: _reviewEvalRequestedStep is declared with `let` LATER in
-  //     this module (line 254 in the original layout). _evictIfOverCap is a
-  //     closure that only reads _reviewEvalRequestedStep at runtime (when
-  //     set() is called), by which point the module has fully loaded and the
-  //     binding is initialized. The typeof guard + try/catch belt-and-braces
-  //     any edge case (e.g., a set() called during module init by a future
-  //     refactor).
+  //     this module (line 323). _evictIfOverCap is a closure that only reads
+  //     _reviewEvalRequestedStep at runtime (when set() is called), by which
+  //     point the module has fully loaded and the binding is initialized. The
+  //     typeof guard + try/catch belt-and-braces any edge case (e.g., a set()
+  //     called during module init by a future refactor).
   //   - Type-robust comparison: persisted JSON parses keys as strings, while
   //     fresh set() calls use numeric keys. Compare as String() on both sides
   //     so the current step is correctly skipped regardless of key type.

@@ -2861,7 +2861,7 @@ const _rvSliderHTML='<div class="rv-slider-wrap">'+
     '<div class="rv-slider-base"></div>'+
     '<div class="rv-slider-fill" id="rvSliderFill" style="width:'+_rvSliderFillW+'"></div>'+
     '<div class="rv-slider-thumb" id="rvSliderThumb" style="left:'+_rvSliderThumbLeft+'"></div>'+
-    '<input type="range" class="rv-slider-input" min="0" max="'+_rvSliderMax+'" value="'+reviewStep+'" oninput="reviewGoTo(parseInt(this.value))" aria-label="'+T('step_label')+'">'+
+    '<input type="range" class="rv-slider-input" min="0" max="'+_rvSliderMax+'" value="'+reviewStep+'" oninput="reviewGoTo(parseInt(this.value))" aria-label="'+T('review_move_slider')+'">'+
   '</div>'+
   '<div class="rv-slider-labels"><span>'+T('start_pos')+'</span><span>'+T('step_label')+' '+ reviewStep + ' / ' + _rvSliderMax + '</span><span>'+T('end_pos')+'</span></div>'+
   '</div>';
@@ -8404,6 +8404,11 @@ function _cleanupEventListeners(){
   if(_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
   // FIX: Clean up notification throttle timer to prevent callback after context destruction
   if(typeof _notificationThrottleTimer!=='undefined'&&_notificationThrottleTimer){clearTimeout(_notificationThrottleTimer);_notificationThrottleTimer=0;}
+  // v1.2.3 round-13 (P1): clear the game-clock interval so a timed game in
+  //   progress doesn't keep firing _tickGameClock (200ms) after the Activity
+  //   is destroyed. The interval is set at _startGameClock and was previously
+  //   only cleared in the resign/timeout paths, not in the destroy-cleanup.
+  if(typeof gameClockTimerId!=='undefined'&&gameClockTimerId){clearInterval(gameClockTimerId);gameClockTimerId=null;}
   renderPending=false;
 }
 

@@ -1,3 +1,19 @@
+v1.2.3 round-13 (2026.7.16) — CMake re-enablement + first-principles code review:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - AndroidManifest.xml (AGPL v3): Two changes — (1) P1: added <queries>
+    block with 12 root-detection package names so RootDetector.checkRootPackages
+    works on Android 11+ (API 30+ package visibility restrictions); (2) P2:
+    removed dead android:fullBackupContent and android:dataExtractionRules
+    attributes (allowBackup="false" makes them unreachable). FGS subtype
+    property "chess_engine_analysis" is intact (verified in APK).
+  - License classification: AndroidManifest.xml remains AGPL v3.
+
+v1.2.3 round-12 (2026.7.16) — SonarCloud bug fixes + first-principles review:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - AndroidManifest.xml (AGPL v3): No changes this round. FGS subtype
+    property "chess_engine_analysis" is intact (verified in APK).
+  - License classification: AndroidManifest.xml remains AGPL v3.
+
 v1.2.3 optimization pass (2026.7.16) — first-principles line-by-line review:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — no version bump).
   - AndroidManifest.xml (AGPL v3): no changes. Reviewed for accuracy —

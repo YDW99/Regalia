@@ -2802,6 +2802,68 @@ function moveRookForCastling(state, kingFrom, kingTo) {
     <strong style="color:#e74c3c">⚠️ 版本号约定：</strong>曾在开发阶段使用版本号：<b>v18.x.x</b>，未来版本号超过<b>v17.x.x</b>以后，<span style="color:red; font-weight:bold;">应当跳过 v18.x.x</span>，从<b>v19.x.x</b>继续。
   </div>
 
+  <!-- ============================== -->                    <!-- v1.2.3 round-13 CMake re-enablement + code review -->
+    <h3 style="color:#d4a017">v1.2.3 round-13（CMake 重新启用 + 第一性原理代码审查，2026.7.16）</h3>
+    <div class="changelog-content">
+      <p><strong>版本号</strong>：保持 versionCode=123，versionName="1.2.3"——本轮为 bug 修复 + 健壮性加固轮，不做版本升级。</p>
+      <p><strong>CMake 重新启用</strong>：round-12 的"build.ninja 仍然脏"重运行循环 bug 根因已查明——并非 AGP/CMake 不兼容，而是源文件从 zip 解压后带有<strong>未来时间戳</strong>（zip 存储了来自未来日期构建环境的 mtime）。ninja 将这些文件视为"始终比 build.ninja 新"，每次都重新运行 CMake。修复方案：解压后执行 <code>find &lt;src&gt; -type f -exec touch {} \;</code>。已升级至 CMake 3.31.6（<code>build.gradle</code> 中 <code>version "3.31.6+"</code>），其 ninja 提供更清晰的错误信息（"perhaps system time is not set"）帮助诊断。<code>externalNativeBuild</code> 全部重新启用；预编译的 <code>libengine_bridge.so</code> 和 <code>libc++_shared.so</code> 已从 <code>jniLibs/</code> 移除——CMake 现从源码构建 <code>libengine_bridge.so</code>，<code>libc++_shared.so</code> 由 AGP 通过 NDK 自动打包。</p>
+      <p><strong>第一性原理代码审查</strong>：使用 6 个并行审查代理覆盖全部 18 个 Java 文件 + 9 个 JS 模块 + 构建基础设施。优先级：bug 修复 &gt; 健壮性 &gt; 功能完善 &gt; 性能 &gt; 冗余清理 &gt; 简化。共修复 2 个 P0 + 8 个 P1 + 8 个 P2 + 11 个 P3。</p>
+      <p><strong>P0 修复（bug）</strong>：</p>
+      <ul>
+        <li><strong>JsBridgeGateway UCI 命令注入</strong>：<code>isUciCommandAllowed</code> 此前仅验证第一个 token。JS 调用者可传入 <code>"setoption name X value 1\nquit"</code>——第一个 token "setoption" 在白名单内，但引擎收到两行（包括 <code>quit</code>，会杀死引擎）。新增 CR/LF 拒绝守卫——UCI 命令按规范为单行。</li>
+        <li><strong>StockfishNative restartEngine 永久死引擎</strong>：<code>restartEngine()</code> 调用 <code>shutdown()</code>（设置 <code>shutdownRequested=true</code>），然后 <code>startEngine()</code>。但 <code>startEngineInternal()</code> 在顶部检查 <code>shutdownRequested</code>（v1.2.1 round-10 添加以防 recoverEngine 与并发 shutdown 竞态）。未重置标志时，重启路径在该守卫处早退，引擎永不重启——用户得到永久死亡的引擎。修复：在 <code>shutdown()</code> 返回后、<code>startEngine()</code> 入队前添加 <code>shutdownRequested = false;</code>。若此重置与 <code>startEngine()</code> 之间发生并发 <code>shutdown()</code>，会重新设置标志且 <code>startEngine</code> 会正确早退，保留原竞态保护。</li>
+      </ul>
+      <p><strong>P1 修复（健壮性）</strong>：</p>
+      <ul>
+        <li><strong>StockfishNative _evalDeepBatchActive 跨重启泄漏</strong>：若引擎在 <code>engineEvalDeepBeginBatch()</code> 与 <code>engineEvalDeepEndBatch()</code> 之间崩溃，标志在新引擎上保持 <code>true</code>。后续 <code>engineEvalDeep()</code> 跳过 <code>forceFullStrength()</code> + <code>applyEvalModeOptions()</code>，以游戏内 <code>Contempt=24</code>（偏向）和用户的 <code>MultiPV</code> 设置运行而非预期的评估模式选项。已在 <code>cleanupEngineResources()</code> 添加 <code>_evalDeepBatchActive = false;</code>。</li>
+        <li><strong>SafPickerHelper + StatsActivity openInputStream 空检查</strong>：<code>ContentResolver.openInputStream(Uri)</code> 可返回 null（提供者不可用、选择器与读取之间文件被删）。两个读取方法直接将结果传给 <code>new InputStreamReader(null, "UTF-8")</code>，产生无 URI 上下文的混乱 NPE。镜像写入路径的空检查模式：抛出描述性 <code>IOException</code>。</li>
+        <li><strong>StabilizationHelper registerListener 返回值</strong>：<code>SensorManager.registerListener</code> 返回 <code>boolean</code>——某些 OEM ROM 上传感器处于错误状态时返回 <code>false</code>。代码无条件设置 <code>anyRegistered = true</code> 而不论注册是否成功，留下静默失效的防抖功能。现已检查返回值并在失败时记录警告。</li>
+        <li><strong>RootDetector manifest &lt;queries&gt; 元素</strong>：Android 11+（API 30）包可见性限制静默隐藏其他应用的包。无 <code>&lt;queries&gt;</code> 块时，<code>RootDetector.checkRootPackages</code> 在每个 API 30+ 设备上返回 false，即使 Magisk 已安装。新增针对性 <code>&lt;queries&gt;</code> 块，列出全部 12 个 root 检测包名。优先选择针对性 queries 而非 <code>QUERY_ALL_PACKAGES</code>（受 Google Play 政策限制）。</li>
+        <li><strong>ChessWebViewClient 渲染崩溃退避后备 UI</strong>：60 秒内 4+ 次渲染进程崩溃后，WebView 被销毁但 Activity 留下冻结屏幕无恢复路径。新增调用 <code>MainActivity.showFallbackUI(...)</code>（从 <code>private</code> 改为包私有），带双语恢复消息。用户现看到原生覆盖层而非挂起。</li>
+        <li><strong>ChessWebViewClient 后备上下文</strong>：<code>activityRef.get()</code> 为 null 时（Activity 已 GC），<code>shouldOverrideUrlLoading</code> 使用 <code>view.getContext()</code> 返回死亡的 Activity，可能抛 <code>IllegalStateException</code>。改为 <code>view.getContext().getApplicationContext()</code>（<code>FLAG_ACTIVITY_NEW_TASK</code> 已设置）。</li>
+        <li><strong>ui.js gameClockTimerId 清理</strong>：<code>_cleanupEventListeners</code> 未清除 <code>gameClockTimerId</code>（通过 <code>setInterval(_tickGameClock, 200)</code> 设置）。若 Activity 销毁时计时赛进行中，200ms 间隔持续触发，浪费 CPU 并可能抛错。已在清理函数添加 <code>clearInterval(gameClockTimerId)</code>。</li>
+      </ul>
+      <p><strong>P2 修复（健壮性/冗余）</strong>：8 项——StockfishNative <code>PROCESS_DESTROY_GRACE_MS</code> 在 shutdown() 中对齐常量（原为裸 200 字面量）、PgnCacheManager.delete 返回值修正（任一删除即返回 true）、eco-data 缓存污染守卫（length&gt;0 检查防 parse 失败覆盖有效缓存）、tablebase 变例 moveNum 偏移（应用 <code>_importedStartMoveNum</code>）、build.gradle 空 keystore 路径守卫、gradle.properties 死属性移除、build-chess.py 死 CSP 哈希块移除、AndroidManifest allowBackup 矛盾解决（移除 dead fullBackupContent/dataExtractionRules 属性）。</p>
+      <p><strong>P3 修复（清理/简化）</strong>：11 项——MainActivity 版本标签（v1.1.0 → v1.2.3）+ stabilizationHelper 注释、EngineService 误导性上下文注释、TlsSecurityHelper Javadoc 中多余 <code>**</code>、network_security_config.xml ISRG Root X2 过期日期（2035-09-06 → 2035-09-17）、ai-bridge.js 过时行号引用、FileIoHelper 过时 getDefaultPaths 注释、StockfishNative 死代码移除（<code>_pgnCacheDir</code>/<code>_sanitizeCacheName</code> 包装器 + 多余 <code>case '\u0000'</code>）、EngineConfigHelper 死三元（<code>: 1500</code> 不可达分支）、tablebase.js 静默 catch（添加 console.warn）、pgn-standard.js 缺失导出（formatEvalAnnotation + _pgnWhitePerspectiveLabel）。</p>
+      <p><strong>构建验证（round-13）</strong>：</p>
+      <ul>
+        <li>✅ 全部 9 个 JS 模块通过 <code>node --check</code></li>
+        <li>✅ <code>chess.html</code> 重建：22,136 行，1,331,262 字节</li>
+        <li>✅ Release APK 重建：78,150,221 字节，v1+v2+v3 签名全部启用，versionCode=123，versionName="1.2.3"</li>
+        <li>✅ FGS 子类型属性存在（<code>chess_engine_analysis</code>）</li>
+        <li>✅ <code>&lt;queries&gt;</code> 元素存在（12 个 root 检测包名）</li>
+        <li>✅ Stockfish dotprod 引擎 SHA-256 三方一致：<code>8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5</code></li>
+        <li>✅ Tar 源码包：114 文件，0 个禁用条目</li>
+        <li>✅ CMake 从源码构建 <code>libengine_bridge.so</code>（APK 中 5096 字节，已剥离）</li>
+      </ul>
+    </div>
+
+  <!-- ============================== -->                    <!-- v1.2.3 round-12 SonarCloud bugs -->
+    <h3 style="color:#d4a017">v1.2.3 round-12（SonarCloud Bug 修复 + 第一性原理审查，2026.7.16）</h3>
+    <div class="changelog-content">
+      <p><strong>版本号</strong>：保持 versionCode=123，versionName="1.2.3"——本轮为 bug 修复轮，不做版本升级。</p>
+      <p><strong>Bug #1（SonarCloud P2，Web:InputWithoutLabelCheck）</strong>：复盘模式滑块 <code>&lt;input type="range"&gt;</code> 透明覆盖层（处理触摸/拖拽/键盘交互）的 <code>aria-label</code> 此前为 <code>T('step_label')</code>（"Step" / "第"）——对屏幕阅读器过于简短（TalkBack 仅播报"Step"无上下文）。修复：新增 <code>'review_move_slider'</code> i18n 键（<code>{zh:'复盘步数', en:'Review move number'}</code>）于 <code>game-logic.js</code>；滑块 <code>aria-label</code> 改用 <code>T('review_move_slider')</code>。滑块的可见标签仍为 <code>step_label</code>（"第 N / M"）——仅无障碍标签变更。符合 WCAG 2.1 Level A 4.1.2（Name, Role, Value）。</p>
+      <p><strong>Bug #2（SonarCloud P1，java:S2142）</strong>：<code>StockfishNative.recoverEngine()</code> 自动恢复延迟任务通过 <code>_engineExecutor.execute(...)</code> 调度，内部 <code>Runnable</code> 调用 <code>Thread.sleep(delay)</code>（1-5 秒指数退避）。原 <code>try</code> 块后仅一个 <code>catch (Throwable t)</code> 捕获 <code>InterruptedException</code> 但未调用 <code>Thread.currentThread().interrupt()</code>。<code>Thread.sleep()</code> 抛出 <code>InterruptedException</code> 时会清除线程中断标志——吞掉异常使标志保持清除状态，后续 <code>shutdownRequested</code> 检查（及任何下游阻塞调用）无法观测到中断。在应用关闭/进程终止时，恢复任务会越过 shutdown 信号继续执行，泄漏引擎进程（潜在僵尸）。修复：在 <code>catch (Throwable t)</code> 之前新增专用 <code>catch (InterruptedException e)</code> 块——(1) 通过 <code>Thread.currentThread().interrupt()</code> 恢复中断标志，(2) 调用 <code>_clearRestartInProgress()</code> 释放重启锁，(3) 记录中止日志，(4) 提前 return——跳过整个恢复逻辑以便执行器及时拆除。与 <code>StockfishNative.java</code> 中其他 10 处 <code>Thread.sleep</code> / <code>Thread.join</code> 位置的中断处理保持一致（修复后已逐一验证）。</p>
+      <p><strong>第一性原理代码审查（逐文件、逐行）</strong>：基于上传的三份 PDF 参考资料（《AI 大模型代码生成防缺陷终极指南》《Android WebView App 开发专业指南》《SonarCloud 完美通过审查指南》）应用清单。优先级：bug 修复 &gt; 健壮性 &gt; 功能完善 &gt; 性能 &gt; 冗余清理 &gt; 简化。</p>
+      <ul>
+        <li><strong>StockfishNative.java</strong>：审查全部 11 处 <code>Thread.sleep</code> / <code>Thread.join</code> 位置（修复后全部一致）；审查 93 个 <code>@JavascriptInterface</code> 注解方法（全部正确注解）；验证 <code>postJsCallback</code> 已有 WebView 空检查 + Activity finishing/destroyed 检查 + 结构化 <code>eventName</code> 验证（上一轮 v1.2.3 P0 修复完好）。</li>
+        <li><strong>MainActivity.java</strong>：WebView 配置已完全符合《Android WebView App 开发专业指南》——<code>setAllowFileAccess(false)</code>、<code>setAllowContentAccess(false)</code>、<code>setAllowFileAccessFromFileURLs(false)</code>、<code>setAllowUniversalAccessFromFileURLs(false)</code>、<code>setMixedContentMode(MIXED_CONTENT_NEVER_ALLOW)</code>（比 PDF 建议的 <code>COMPATIBILITY_MODE</code> 更严格）、API 26+ 启用 Safe Browsing、完整 <code>onDestroy</code> 清理序列（stopLoading → removeView → clearHistory → loadUrl("about:blank") → removeJavascriptInterface → onPause → destroy）。无需改动。</li>
+        <li><strong>ui.js / game-logic.js / ai-bridge.js</strong>：审查 27 个空 catch 块——全部为窄范围防御性 catch，附意图说明注释（如 <code>/* fallback: no suffix */</code>、<code>/* defaults stay 0 */</code>、<code>/* measurement failed */</code>）。无任何匹配《AI 缺陷指南》"宽泛的异常捕获"反模式。无需改动。</li>
+        <li><strong>其他 18 个 Java 文件</strong>：按 SonarCloud 指南审查方法长度（&lt;50 行）、圈复杂度、命名规范——全部符合（代码库已通过 v1.2.1 11 轮 + v1.2.2 8 轮 + v1.2.3 先前优化轮精化）。</li>
+      </ul>
+      <p><strong>结论</strong>：两个 SonarCloud bug 是本轮唯一可操作的发现。为避免在已稳定的代码库中引入新 bug 或冗余，未做额外变更（"保持小心谨慎，避免引入新bug或冗余"）。</p>
+      <p><strong>构建环境备注</strong>：AGP 8.7.3 + CMake 3.22.1 + ninja 组合存在已知重运行循环 bug（"manifest 'build.ninja' still dirty after 100 tries"）。v1.2.3 round-12 工作流：<code>build.gradle</code> 中三处 <code>externalNativeBuild</code> 块暂时注释；<code>libengine_bridge.so</code> 使用相同 NDK r27c <code>clang++</code> + <code>-std=c++20 -O3 -DNDEBUG -fvisibility=hidden -ffunction-sections -fdata-sections</code> 标志预编译，放置于 <code>src/main/jniLibs/arm64-v8a/</code>（与 <code>libstockfish.so</code>、<code>libc++_shared.so</code> 同目录）。源代码（<code>CMakeLists.txt</code>、<code>engine_jni.cpp</code>）未变更。要重新启用 CMake，取消注释 <code>build.gradle</code> 中的 <code>externalNativeBuild</code> 块并从 <code>jniLibs/</code> 删除预编译 <code>libengine_bridge.so</code>。</p>
+      <p><strong>构建验证（round-12）</strong>：</p>
+      <ul>
+        <li>✅ 全部 9 个 JS 模块通过 <code>node --check</code></li>
+        <li>✅ <code>chess.html</code> 重建：22,114 行，1,329,375 字节</li>
+        <li>✅ Release APK 重建：78,148,728 字节，v1+v2+v3 签名全部启用，versionCode=123，versionName="1.2.3"</li>
+        <li>✅ FGS 子类型属性存在（<code>chess_engine_analysis</code>）</li>
+        <li>✅ Stockfish dotprod 引擎 SHA-256 三方一致：<code>8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5</code></li>
+        <li>✅ Tar 源码包：<code>create_v123_tar.sh</code> 打包，114 文件，0 个禁用条目</li>
+      </ul>
+    </div>
+
   <!-- ============================== -->                    <!-- v1.2.2 version bump -->
     <h3 style="color:#d4a017">v1.2.3（第 17/18 轮审查修复 + P0 JS 错误修复 + Toast UX 优化 + 版本号升级，2026.7.16）</h3>
     <div class="changelog-content">

@@ -1794,6 +1794,15 @@ public class StockfishNative {
         // holders so a stale latch from the dead engine doesn't block the new
         // engine's isready handshake.
         _isPondering = false;
+        // v1.2.3 round-13 (P1): clear the eval-deep-batch flag so a crashed
+        //   engine doesn't leave it set on the new engine. Without this, if
+        //   the engine crashes between engineEvalDeepBeginBatch() and
+        //   engineEvalDeepEndBatch() (e.g. HyperOS kills the process mid-batch),
+        //   subsequent engineEvalDeep() calls skip forceFullStrength() +
+        //   applyEvalModeOptions() and run with gameplay Contempt=24 and the
+        //   user's MultiPV setting instead of the intended eval-mode options,
+        //   producing biased eval results.
+        _evalDeepBatchActive = false;
         // v1.2.1 round-10 (review-D P2): clear under _discardFlagLock for
         //   consistency with all other writes.
         synchronized (_discardFlagLock) {
@@ -1902,6 +1911,22 @@ public class StockfishNative {
                                 }
                             }
                         });
+                    } catch (InterruptedException e) {
+                        // v1.2.3 round-12 (SonarCloud Bug #2 fix, java:S2142):
+                        //   Thread.sleep() throws InterruptedException AND clears
+                        //   the thread's interrupt flag. The previous catch
+                        //   (Throwable t) swallowed it without re-asserting the
+                        //   flag, so the subsequent shutdownRequested check (and
+                        //   any downstream blocking calls) could not observe the
+                        //   interrupt. On app shutdown / process termination this
+                        //   meant the recovery task kept running past the
+                        //   shutdown signal, leaking the engine process
+                        //   (potential zombie). Restore the flag and bail out
+                        //   cleanly so the executor can be torn down promptly.
+                        Thread.currentThread().interrupt();
+                        _clearRestartInProgress();
+                        Log.i(TAG, "Auto-recovery sleep interrupted — aborting attempt " + attemptNum + " (" + reason + ")");
+                        return;
                     } catch (Throwable t) {
                         Log.e(TAG, "Auto-recovery attempt " + attemptNum + " failed (" + reason + ")", t);
                         _clearRestartInProgress();
@@ -2726,7 +2751,15 @@ public class StockfishNative {
         if (engineProcess != null) {
             try {
                 engineProcess.destroy();
-                try { Thread.sleep(200); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+                // v1.2.3 round-13 (P2): use the named constant instead of a
+                //   bare 200 literal. cleanupEngineResources() and
+                //   cleanupFailedEngine() both use PROCESS_DESTROY_GRACE_MS
+                //   (=100); this shutdown() path used 200 — an undocumented
+                //   divergence. The 100ms grace is sufficient per the original
+                //   v1.0.2 comment (process.destroy() returns immediately and
+                //   the engine exits promptly on SIGTERM). Aligning prevents
+                //   future drift and matches the documentation in BUILDING.md.
+                try { Thread.sleep(PROCESS_DESTROY_GRACE_MS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
                 // v1.0.2 FIX: use isProcessAlive() + destroyForciblySafe() —
                 // direct engineProcess.isAlive() / destroyForcibly() throw
                 // NoSuchMethodError on API 23-25 (minSdk).
@@ -2942,6 +2975,16 @@ public class StockfishNative {
                     // Recreate the executor since shutdown() destroyed it
                     _engineExecutor = _createEngineExecutor();
                     initStarted = false;
+                    // v1.2.3 round-13 (P0): shutdown() sets shutdownRequested=true.
+                    //   startEngineInternal() guards on shutdownRequested at the top
+                    //   (added v1.2.1 round-10 to prevent recoverEngine from racing
+                    //   with concurrent shutdown). Without resetting the flag here,
+                    //   the restart path bails at that guard and the engine never
+                    //   restarts — leaving the user with a permanently dead engine.
+                    //   A concurrent shutdown() between this reset and startEngine()
+                    //   would re-set the flag and startEngine would correctly bail,
+                    //   preserving the L1474 guard's original race protection.
+                    shutdownRequested = false;
                     _engineExecutor.execute(new Runnable() {
                         public void run() {
                             try {
@@ -3006,7 +3049,11 @@ public class StockfishNative {
                 // when PGN files contain them. Also escape NULL byte and other C0 controls.
                 case '\u2028': sb.append("\\u2028"); break;
                 case '\u2029': sb.append("\\u2029"); break;
-                case '\u0000': sb.append("\\u0000"); break;
+                // v1.2.3 round-13 (P3): removed explicit `case '\u0000'` — the
+                //   default branch below handles all C0 controls (0x00-0x1F)
+                //   via String.format("\\u%04x", ...), producing the identical
+                //   "\\u0000" output. The explicit case was unreachable for any
+                //   different behavior.
                 default:
                     // v1.2.1 round-10 (review-D P3): The previous guard
                     //   `c != '\t' && c != '\n' && c != '\r'` was dead code —
@@ -3630,15 +3677,11 @@ public class StockfishNative {
 
     private static final String PGN_CACHE_DIR = "pgn_cache";
 
-    private File _pgnCacheDir() {
-        // v1.2.0 Phase 73: Delegate to PgnCacheManager
-        return _pgnCacheManager.getCacheDir();
-    }
-
-    private String _sanitizeCacheName(String name) {
-        // v1.2.0 Phase 73: Delegate to PgnCacheManager
-        return _pgnCacheManager.sanitizeName(name);
-    }
+    // v1.2.3 round-13 (P3): removed dead _pgnCacheDir() and _sanitizeCacheName()
+    //   private wrappers. Both were leftover scaffolding from the v1.2.0 Phase
+    //   73 extraction — all PGN cache @JavascriptInterface methods below
+    //   delegate directly to _pgnCacheManager and never called these wrappers.
+    //   R8 confirmed they were stripped as unused (proguard usage.txt).
 
     // v1.2.0 Phase 73: PGN cache methods delegate to PgnCacheManager.
     // The @JavascriptInterface signatures are preserved for JS compatibility.

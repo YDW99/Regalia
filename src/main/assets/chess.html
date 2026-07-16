@@ -1617,6 +1617,12 @@ const _i18n={
 'board':{zh:'棋盘',en:'Board'},
 'chart_global':{zh:'↹全局',en:'↹Global'},
 'step_label':{zh:'第',en:'Step'},
+// v1.2.3 round-12 (SonarCloud Bug #1 fix): Descriptive aria-label for the
+// review-mode slider <input type="range">. The previous aria-label used
+// step_label ("Step" / "第"), which is too terse for screen readers —
+// TalkBack would announce just "Step" with no context. This key gives the
+// control an unambiguous name (WCAG 2.1 Level A 4.1.2 Name, Role, Value).
+'review_move_slider':{zh:'复盘步数',en:'Review move number'},
 'built_in':{zh:'内置',en:'Built-in'},
 'skill_level_desc':{zh:'降低引擎技术水平（0=最弱，20=最强）',en:'Reduce engine skill (0=weakest, 20=strongest)'},
 'skill_elo_note':{zh:'限制Elo开启时，Skill Level由UCI_Elo自动决定',en:'Skill Level auto-set by UCI_Elo when Limit Elo is on'},
@@ -7246,12 +7252,11 @@ let _reviewEvalCache=new function(){
   //     in-flight engine eval to "miss" the cache on its return, producing a
   //     brief "analyzing..." flash for the step the user is staring at.
   //   - TDZ safety: _reviewEvalRequestedStep is declared with `let` LATER in
-  //     this module (line 254 in the original layout). _evictIfOverCap is a
-  //     closure that only reads _reviewEvalRequestedStep at runtime (when
-  //     set() is called), by which point the module has fully loaded and the
-  //     binding is initialized. The typeof guard + try/catch belt-and-braces
-  //     any edge case (e.g., a set() called during module init by a future
-  //     refactor).
+  //     this module (line 323). _evictIfOverCap is a closure that only reads
+  //     _reviewEvalRequestedStep at runtime (when set() is called), by which
+  //     point the module has fully loaded and the binding is initialized. The
+  //     typeof guard + try/catch belt-and-braces any edge case (e.g., a set()
+  //     called during module init by a future refactor).
   //   - Type-robust comparison: persisted JSON parses keys as strings, while
   //     fresh set() calls use numeric keys. Compare as String() on both sides
   //     so the current step is correctly skipped regardless of key type.
@@ -12990,7 +12995,15 @@ function importPGN(pgnText){
           if(targetMr){
             if(!targetMr.variations)targetMr.variations=[];
             const isWhite=(divergeIdx%2===0);
-            const moveNum=Math.floor(divergeIdx/2)+1;
+            // v1.2.3 round-13 (P2): apply the imported-start-move-number
+            //   offset so variations relocated to a FEN-started game display
+            //   the correct move-number prefix. The rest of the codebase
+            //   (ui.js _mvStartOffset, ai-bridge.js _pgnMvStartOffset)
+            //   already applies this offset; this relocation path was missed,
+            //   causing _formatSANAsRAV to show "1. Nf3" instead of "5. Nf3"
+            //   for a game imported from a FEN at move 5.
+            const _mvStartOffset=(typeof _importedStartMoveNum!=='undefined'&&_importedStartMoveNum>0)?_importedStartMoveNum:1;
+            const moveNum=Math.floor(divergeIdx/2)+_mvStartOffset;
             targetMr.variations.push({
               group:'pgn',
               san:remainingSAN,
@@ -13416,7 +13429,11 @@ _tbLoading=false;
 // Auto-select piece on tablebase recommendation
 if(d){const bm=bestMoveFromTablebase(d);if(bm){autoSelectTablebaseMove(bm.uci);}}
 render();
-}).catch(function(){_tbLoading=false;render();});
+// v1.2.3 round-13 (P3): log the error so a bug in bestMoveFromTablebase or
+//   autoSelectTablebaseMove is not silently swallowed. probeTablebase itself
+//   has its own internal try/catch that logs and returns null; this catch
+//   covers errors from the downstream callbacks in the promise chain.
+}).catch(function(e){console.warn('probeTablebase callback failed:',e);_tbLoading=false;render();});
 }
 
 // Auto-select the piece for a tablebase-recommended move
@@ -13584,7 +13601,13 @@ function _ensureEcoParsed(){
     o._familyU=o.family.toUpperCase();
   }
   // Save parsed data to IndexedDB for faster subsequent loads
-  _saveEcoToCache(_ecoData);
+  // v1.2.3 round-13 (P2): guard against cache pollution — if JSON.parse failed
+  //   above, _ecoData is []. Saving [] would overwrite the cached valid data
+  //   with an empty array, and the IDB load path (length > 0 check) would
+  //   reject it on next start, forcing a re-parse from the (still-corrupted)
+  //   source. The app would never recover ECO functionality even after the
+  //   source is fixed — the user would have to manually clear app data.
+  if(_ecoData.length>0)_saveEcoToCache(_ecoData);
   // Free the raw JSON string to save memory (~125KB)
   _ecoRawJson=null;
 }
@@ -16500,7 +16523,7 @@ const _rvSliderHTML='<div class="rv-slider-wrap">'+
     '<div class="rv-slider-base"></div>'+
     '<div class="rv-slider-fill" id="rvSliderFill" style="width:'+_rvSliderFillW+'"></div>'+
     '<div class="rv-slider-thumb" id="rvSliderThumb" style="left:'+_rvSliderThumbLeft+'"></div>'+
-    '<input type="range" class="rv-slider-input" min="0" max="'+_rvSliderMax+'" value="'+reviewStep+'" oninput="reviewGoTo(parseInt(this.value))" aria-label="'+T('step_label')+'">'+
+    '<input type="range" class="rv-slider-input" min="0" max="'+_rvSliderMax+'" value="'+reviewStep+'" oninput="reviewGoTo(parseInt(this.value))" aria-label="'+T('review_move_slider')+'">'+
   '</div>'+
   '<div class="rv-slider-labels"><span>'+T('start_pos')+'</span><span>'+T('step_label')+' '+ reviewStep + ' / ' + _rvSliderMax + '</span><span>'+T('end_pos')+'</span></div>'+
   '</div>';
@@ -22043,6 +22066,11 @@ function _cleanupEventListeners(){
   if(_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
   // FIX: Clean up notification throttle timer to prevent callback after context destruction
   if(typeof _notificationThrottleTimer!=='undefined'&&_notificationThrottleTimer){clearTimeout(_notificationThrottleTimer);_notificationThrottleTimer=0;}
+  // v1.2.3 round-13 (P1): clear the game-clock interval so a timed game in
+  //   progress doesn't keep firing _tickGameClock (200ms) after the Activity
+  //   is destroyed. The interval is set at _startGameClock and was previously
+  //   only cleared in the resign/timeout paths, not in the destroy-cleanup.
+  if(typeof gameClockTimerId!=='undefined'&&gameClockTimerId){clearInterval(gameClockTimerId);gameClockTimerId=null;}
   renderPending=false;
 }
 

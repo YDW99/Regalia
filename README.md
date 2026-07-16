@@ -152,6 +152,10 @@ Regalia/
 │   ├── Regalia-v1.2.3-manual-zh.html  # Chinese user manual (current v1.2.3)
 │   ├── Regalia-v1.2.3-manual-en.html  # English user manual (current v1.2.3)
 │   └── README.license          # Manual license classification
+├── assets/                     # README assets (not packaged into APK)
+│   ├── screenshot.jpg          # Gameplay screenshot (referenced by README.md)
+│   ├── screenshot.png          # Same screenshot, PNG fallback
+│   └── README.license          # License classification for this directory (AGPL v3)
 ├── gradle/wrapper/             # Gradle wrapper (8.11.1)
 │   ├── gradle-wrapper.jar
 │   └── gradle-wrapper.properties
@@ -166,7 +170,7 @@ Regalia/
 ├── PRIVACY.md                  # Privacy policy
 ├── BUILDING.md                 # Build instructions
 ├── UBIQUITOUS_LANGUAGE.md      # Domain terminology glossary (English) — 80+ chess/engine/PGN/UI terms
-├── build.gradle                # Gradle build config (reads ../version.properties for versionCode=123, v1/v2/v3 signing, NDK 27.2, cmake 3.22.1)
+├── build.gradle                # Gradle build config (reads ../version.properties for versionCode=123, v1/v2/v3 signing, NDK 27.2, cmake 3.31.6+)
 ├── settings.gradle             # Gradle settings (plugin/repo config)
 ├── gradle.properties           # Gradle properties (JDK 21, Xmx2048m)
 ├── build-chess.py              # Python build script (merges JS modules → chess.html)
@@ -244,6 +248,48 @@ Contributions are welcome! Please ensure:
 During the development stage, the version number used was: **v18.x.x**. For future versions, once the version number exceeds **v17.x.x**, <span style="color:red; font-weight:bold;">**v18.x.x** should be skipped</span> and the next version should be **v19.x.x**.
 
 **v1.2.3** (versionCode 123) — current release
+
+The v1.2.3 release is a **bug-fix + review-response release** on top of v1.2.2, driven by a user-reported P0 JS error and two multi-skill review reports (Round 17 — Issue #48, 24 findings; Round 18 — Issue #49, 32 findings). After rigorous false-positive verification, the actionable findings were fixed and the version was bumped v1.2.2→v1.2.3 (versionCode 122→123).
+
+### v1.2.3 round-13 (2026.7.16) — CMake re-enablement + first-principles code review
+
+This sub-round re-enabled CMake (resolving the round-12 build workaround) and applied a comprehensive first-principles per-file/per-line code review using 6 parallel review agents covering all 18 Java files, 9 JS modules, and build infrastructure. Version stays at v1.2.3 (versionCode 123) — all changes are bug fixes and robustness improvements, no version bump.
+
+**CMake re-enablement**: The round-12 "CMake re-run loop" root cause was identified as source files extracted from the zip with future timestamps (not an AGP/CMake incompatibility). Fix: `find ... -exec touch {} \;` after extraction. Upgraded to CMake 3.31.6 (pinned `version "3.31.6+"` in build.gradle). `externalNativeBuild` fully re-enabled; prebuilt `libengine_bridge.so` and `libc++_shared.so` removed from `jniLibs/`. CMake now builds `libengine_bridge.so` from source.
+
+**P0 fixes (bugs)**:
+- **JsBridgeGateway UCI command injection via CR/LF**: `isUciCommandAllowed` only validated the first token. A JS caller could inject `"setoption name X value 1\nquit"` — the first token was whitelisted but the engine received two lines (including `quit`). Added CR/LF rejection guard.
+- **StockfishNative restartEngine permanently dead engine**: `restartEngine()` called `shutdown()` (sets `shutdownRequested=true`), then `startEngine()`. But `startEngineInternal()` guards on `shutdownRequested` at the top. Without resetting the flag, the engine never restarted. Added `shutdownRequested = false;` after `shutdown()` returns.
+
+**P1 fixes (robustness)**:
+- StockfishNative `_evalDeepBatchActive` flag leak across restart (biased eval after crash)
+- SafPickerHelper + StatsActivity `openInputStream` null-check (mirror write path)
+- StabilizationHelper `registerListener` return value check (silently-broken feature)
+- RootDetector manifest `<queries>` element (Android 11+ package visibility)
+- ChessWebViewClient render-crash backoff fallback UI (frozen screen → recovery message)
+- ChessWebViewClient fallback context (dead Activity → Application context)
+- ui.js `gameClockTimerId` cleanup (interval leak on Activity destroy)
+
+**P2 fixes (robustness/redundancy)**: 8 fixes including StockfishNative `PROCESS_DESTROY_GRACE_MS` alignment, PgnCacheManager.delete return value, eco-data cache pollution guard, tablebase variation moveNum offset, build.gradle empty-keystore guard, gradle.properties dead property removal, build-chess.py dead CSP block removal, AndroidManifest allowBackup resolution.
+
+**P3 fixes (cleanup)**: 11 fixes including stale comments (MainActivity version tag, EngineService context, FileIoHelper MediaStore, TlsSecurityHelper typo, network_security_config date, ai-bridge line number), dead code removal (StockfishNative `_pgnCacheDir`/`_sanitizeCacheName`/`case '\u0000'`, EngineConfigHelper dead ternary), tablebase silent catch, pgn-standard missing exports.
+
+**Verification**: All 9 JS modules pass `node --check`. `chess.html` rebuilt (22,136 lines, 1,331,262 bytes). Release APK rebuilt (78,150,221 bytes), signature v1+v2+v3 all true. APK `lib/arm64-v8a/libstockfish.so` SHA-256 = `8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5` — three-way match. FGS subtype property present. `<queries>` element present. Tarball: 114 files, 0 forbidden entries. CMake builds `libengine_bridge.so` from source (5096 bytes stripped in APK).
+
+**Documentation**: BUILDING.md, PRIVACY.md, README.md, NOTICE, all 8 README.license files (including new `assets/README.license`), and Chinese/English HTML manuals updated with v1.2.3 round-13 entries.
+
+### v1.2.3 round-12 (2026.7.16) — SonarCloud bug fixes + first-principles review
+
+This sub-round addresses the two open SonarCloud bugs reported in `2bugs.md` and applies a first-principles per-file/per-line review guided by three uploaded PDFs (AI code-gen defect prevention, Android WebView dev, SonarCloud pass guide). Version stays at v1.2.3 (versionCode 123) — bug-fix only, no version bump.
+
+- **SonarCloud Bug #1 (P2, Web:InputWithoutLabelCheck)**: Review-mode slider `<input type="range">` had `aria-label="T('step_label')"` ("Step" / "第") — too terse for screen readers. Added `'review_move_slider'` i18n key (`{zh:'复盘步数', en:'Review move number'}`); slider now uses `aria-label="T('review_move_slider')"`. WCAG 2.1 Level A 4.1.2 (Name, Role, Value) compliance. (`game-logic.js` + `ui.js`)
+- **SonarCloud Bug #2 (P1, java:S2142)**: `StockfishNative.recoverEngine()` auto-recovery sleep caught `Throwable` without restoring the interrupt flag, risking engine process leaks (zombie) on app shutdown. Added dedicated `catch (InterruptedException e)` block that restores `Thread.currentThread().interrupt()` + clears restart lock + returns early. Consistent with all 10 other `Thread.sleep` / `Thread.join` locations. (`StockfishNative.java`)
+- **First-principles review**: Audited all 11 `Thread.sleep`/`Thread.join` locations in StockfishNative (all consistent post-fix), 93 `@JavascriptInterface` methods (all properly annotated), MainActivity WebView setup (fully aligned with PDF best practices), 27 empty catch blocks in JS modules (all narrow defensive catches with intent-documenting comments). No additional changes needed — codebase already polished through v1.2.1's 11 rounds + v1.2.2's 8 rounds + v1.2.3's prior optimization pass.
+- **Build workaround**: `externalNativeBuild` blocks in `build.gradle` temporarily commented out due to AGP 8.7.3 + CMake 3.22.1 re-run loop bug ("manifest 'build.ninja' still dirty after 100 tries"). `libengine_bridge.so` pre-built with the same NDK r27c clang++ + flags and placed in `jniLibs/`. No source code (CMakeLists.txt, engine_jni.cpp) changes.
+- **Verification**: All 9 JS modules pass `node --check`. `chess.html` rebuilt (22,114 lines, 1,329,375 bytes). Release APK rebuilt (78,148,728 bytes), signature v1+v2+v3 all true. APK `lib/arm64-v8a/libstockfish.so` SHA-256 = `8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5` — three-way match. FGS subtype property present. Tarball: 114 files, 0 forbidden entries. Version: versionCode=123, versionName="1.2.3" (unchanged).
+- **Documentation**: BUILDING.md, PRIVACY.md, README.md, NOTICE, all 7 README.license files, and Chinese/English HTML manuals updated with v1.2.3 round-12 entries.
+
+### v1.2.3 initial release (2026.7.16) — Round 17/18 review fixes + P0 JS error fix + Toast UX
 
 The v1.2.3 release is a **bug-fix + review-response release** on top of v1.2.2, driven by a user-reported P0 JS error and two multi-skill review reports (Round 17 — Issue #48, 24 findings; Round 18 — Issue #49, 32 findings). After rigorous false-positive verification, the actionable findings were fixed and the version was bumped v1.2.2→v1.2.3 (versionCode 122→123).
 

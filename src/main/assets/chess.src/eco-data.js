@@ -130,7 +130,13 @@ function _ensureEcoParsed(){
     o._familyU=o.family.toUpperCase();
   }
   // Save parsed data to IndexedDB for faster subsequent loads
-  _saveEcoToCache(_ecoData);
+  // v1.2.3 round-13 (P2): guard against cache pollution — if JSON.parse failed
+  //   above, _ecoData is []. Saving [] would overwrite the cached valid data
+  //   with an empty array, and the IDB load path (length > 0 check) would
+  //   reject it on next start, forcing a re-parse from the (still-corrupted)
+  //   source. The app would never recover ECO functionality even after the
+  //   source is fixed — the user would have to manually clear app data.
+  if(_ecoData.length>0)_saveEcoToCache(_ecoData);
   // Free the raw JSON string to save memory (~125KB)
   _ecoRawJson=null;
 }

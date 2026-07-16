@@ -206,6 +206,42 @@ The Stockfish 18 engine binary (`libstockfish.so`) is shipped as an arm64-v8a na
 
 If either check fails, the engine refuses to start and reports the error to the user via the UI. The binary is never downloaded at runtime; it is statically embedded in the APK.
 
+## v1.2.3 round-13 refinement (2026.7.16)
+
+The round-13 refinement re-enabled CMake (resolving the round-12 build workaround) and applied a comprehensive first-principles per-file/per-line code review using 6 parallel review agents. **No new permissions, no new data collection, no new network access, no changes to data flow or storage.** All changes are internal bug fixes and robustness improvements with zero privacy impact:
+
+- **`JsBridgeGateway.java` UCI command injection guard (P0)**: Added CR/LF rejection in `isUciCommandAllowed` before the whitelist lookup. A JS caller could previously inject arbitrary UCI commands (including `quit`) via `sendToEngine("setoption name X value 1\nquit")`. No privacy impact — defense-in-depth for engine process integrity.
+- **`StockfishNative.java` restartEngine fix (P0)**: Reset `shutdownRequested` flag after `shutdown()` so `startEngine()` can proceed. Previously, a user-initiated engine restart would leave the engine permanently dead. No privacy impact — internal engine lifecycle fix.
+- **`StockfishNative.java` _evalDeepBatchActive clear (P1)**: Added `_evalDeepBatchActive = false` to `cleanupEngineResources()` so a crashed engine doesn't leak the batch flag to the new engine, producing biased eval results. No privacy impact — internal correctness fix.
+- **`SafPickerHelper.java` + `StatsActivity.java` openInputStream null-check (P1)**: `ContentResolver.openInputStream(Uri)` can return null; two read methods now throw a descriptive `IOException` instead of a confusing NPE. No privacy impact — better error diagnostics for file imports.
+- **`StabilizationHelper.java` registerListener return check (P1)**: Now checks `SensorManager.registerListener` return value; logs a warning on failure instead of silently reporting stabilization as active. No privacy impact — sensor anti-shake feature reliability.
+- **`AndroidManifest.xml` `<queries>` element (P1)**: Added targeted `<queries>` block listing 12 root-detection package names so `RootDetector.checkRootPackages` works on Android 11+ (API 30+ package visibility restrictions). No privacy impact — the root detection is informational-only (app never refuses to run on rooted devices); the `<queries>` declaration is a manifest-level visibility grant, not a new permission. The declared packages are common root-detection app package names (Magisk, SuperSU, etc.) — declaring them does NOT install or query them unless they're already present on the device.
+- **`ChessWebViewClient.java` render-crash fallback UI (P1)**: After 4+ render-process crashes in 60s, the user now sees a bilingual recovery message instead of a frozen screen. No privacy impact — UX improvement.
+- **`ChessWebViewClient.java` fallback context (P2)**: When opening an external URL and the Activity is destroyed, now uses `getApplicationContext()` instead of the dead Activity context. No privacy impact — prevents silent URL-open failures.
+- **`ui.js` gameClockTimerId cleanup (P1)**: Added `clearInterval(gameClockTimerId)` to `_cleanupEventListeners` so a timed game's 200ms interval doesn't keep firing after Activity destroy. No privacy impact — resource cleanup.
+- **`StockfishNative.java` PROCESS_DESTROY_GRACE_MS alignment (P2)**: `shutdown()` now uses the named constant instead of a bare `200` literal. No privacy impact — consistency fix.
+- **`PgnCacheManager.java` delete return value (P2)**: Now returns `true` if any deletion occurred (PGN and/or tags), not only when the PGN file was deleted. No privacy impact — accurate batch-deletion counting.
+- **`eco-data.js` cache pollution guard (P2)**: Added `if(_ecoData.length>0)` guard before saving to IndexedDB, preventing a parse failure from overwriting valid cached data with an empty array. No privacy impact — ECO data is bundled in the app (not user data); the cache is a performance optimization.
+- **`tablebase.js` variation moveNum offset (P2)**: Applied `_importedStartMoveNum` offset to relocated variation move numbers so they display correctly for FEN-started games. No privacy impact — display correctness.
+- **`build.gradle` empty-keystore-path guard (P2)**: Added `!releaseKeystorePath.isEmpty()` check. No privacy impact — better error message for fresh checkouts.
+- **`gradle.properties` dead property removal (P2)**: Removed `android.enablePngCrunchInReleaseBuildsLibs=false` (not a recognized AGP property). No privacy impact — config cleanup.
+- **`build-chess.py` dead CSP hash block removal (P2)**: Removed the stats.html CSP sha256 hash auto-update block (stats.html now uses `'unsafe-inline'`). No privacy impact — dead code removal.
+- **`AndroidManifest.xml` allowBackup resolution (P2)**: Removed `android:fullBackupContent` and `android:dataExtractionRules` attributes (dead config when `allowBackup="false"`). The two XML rule files are retained in `res/xml/` for reference. No privacy impact — `allowBackup="false"` (the documented v1.0.4 design decision) is unchanged; the app still does not participate in Android backup/restore. Removing the dead references just makes the manifest accurately reflect the actual behavior.
+- **P3 cleanup (stale comments, dead code)**: 11 minor fixes across `MainActivity.java`, `EngineService.java`, `TlsSecurityHelper.java`, `network_security_config.xml`, `ai-bridge.js`, `FileIoHelper.java`, `StockfishNative.java`, `EngineConfigHelper.java`, `tablebase.js`, `pgn-standard.js`. All are documentation-only or dead-code removal. No privacy impact.
+
+Version: `versionCode=123`, `versionName="1.2.3"` (unchanged — bug-fix round, no version bump).
+
+## v1.2.3 round-12 refinement (2026.7.16)
+
+The round-12 refinement addresses two open SonarCloud bugs and applies a first-principles code review guided by three uploaded PDFs (AI code-gen defect prevention, Android WebView dev, SonarCloud pass guide). **No new permissions, no new data collection, no new network access, no changes to data flow or storage.** All changes are internal to the app and have zero privacy impact:
+
+- **`game-logic.js` + `ui.js` slider aria-label (SonarCloud Bug #1, Web:InputWithoutLabelCheck)**: The review-mode slider's `<input type="range">` overlay (transparent, handles touch/keyboard) now uses a descriptive `aria-label` (`T('review_move_slider')` → "复盘步数" / "Review move number") instead of the terse `T('step_label')` ("Step" / "第"). WCAG 2.1 Level A 4.1.2 (Name, Role, Value) compliance. No privacy impact — accessibility-only change.
+- **`StockfishNative.java` InterruptedException handling (SonarCloud Bug #2, java:S2142)**: `recoverEngine()` auto-recovery sleep now restores `Thread.currentThread().interrupt()` + clears the restart lock + returns early on `InterruptedException`. Previously the catch (Throwable t) swallowed the interrupt flag, risking engine process leaks on shutdown. No privacy impact — internal concurrency hardening.
+- **`build.gradle` CMake workaround**: `externalNativeBuild` blocks temporarily commented out due to AGP 8.7.3 + CMake 3.22.1 re-run loop bug ("manifest 'build.ninja' still dirty after 100 tries"). `libengine_bridge.so` pre-built with the same NDK r27c clang++ + flags and placed in `jniLibs/`. No source code (CMakeLists.txt, engine_jni.cpp) changes. No privacy impact — build-time workaround only.
+- **First-principles code review**: Audited all 11 `Thread.sleep` / `Thread.join` locations in `StockfishNative.java` (all now consistent), all 93 `@JavascriptInterface`-annotated methods (all properly annotated), `MainActivity.java` WebView setup (fully aligned with PDF best practices: `setAllowFileAccess(false)`, `MIXED_CONTENT_NEVER_ALLOW`, Safe Browsing, full `onDestroy` cleanup), 27 empty catch blocks in JS modules (all narrow defensive catches with intent-documenting comments). No additional changes needed — codebase already polished through v1.2.1's 11 rounds + v1.2.2's 8 rounds + v1.2.3's prior optimization pass.
+
+Version: `versionCode=123`, `versionName="1.2.3"` (unchanged — bug-fix round, no version bump).
+
 ## v1.2.1 round-7 refinement (2026.7.13)
 
 The seventh-pass refinement is a code-quality and security-hardening pass. **No new permissions, no new data collection, no new network access, no changes to data flow or storage.** All changes are internal to the app and have zero privacy impact:

@@ -1477,7 +1477,15 @@ function importPGN(pgnText){
           if(targetMr){
             if(!targetMr.variations)targetMr.variations=[];
             const isWhite=(divergeIdx%2===0);
-            const moveNum=Math.floor(divergeIdx/2)+1;
+            // v1.2.3 round-13 (P2): apply the imported-start-move-number
+            //   offset so variations relocated to a FEN-started game display
+            //   the correct move-number prefix. The rest of the codebase
+            //   (ui.js _mvStartOffset, ai-bridge.js _pgnMvStartOffset)
+            //   already applies this offset; this relocation path was missed,
+            //   causing _formatSANAsRAV to show "1. Nf3" instead of "5. Nf3"
+            //   for a game imported from a FEN at move 5.
+            const _mvStartOffset=(typeof _importedStartMoveNum!=='undefined'&&_importedStartMoveNum>0)?_importedStartMoveNum:1;
+            const moveNum=Math.floor(divergeIdx/2)+_mvStartOffset;
             targetMr.variations.push({
               group:'pgn',
               san:remainingSAN,
@@ -1903,7 +1911,11 @@ _tbLoading=false;
 // Auto-select piece on tablebase recommendation
 if(d){const bm=bestMoveFromTablebase(d);if(bm){autoSelectTablebaseMove(bm.uci);}}
 render();
-}).catch(function(){_tbLoading=false;render();});
+// v1.2.3 round-13 (P3): log the error so a bug in bestMoveFromTablebase or
+//   autoSelectTablebaseMove is not silently swallowed. probeTablebase itself
+//   has its own internal try/catch that logs and returns null; this catch
+//   covers errors from the downstream callbacks in the promise chain.
+}).catch(function(e){console.warn('probeTablebase callback failed:',e);_tbLoading=false;render();});
 }
 
 // Auto-select the piece for a tablebase-recommended move

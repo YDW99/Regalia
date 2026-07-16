@@ -1,3 +1,28 @@
+v1.2.3 round-13 (2026.7.16) — CMake re-enablement + first-principles code review:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - CMakeLists.txt (AGPL v3): No changes this round.
+  - engine_jni.cpp (GPL v3): No changes this round.
+  - Build note: externalNativeBuild is now FULLY RE-ENABLED in build.gradle
+    (the round-12 workaround is removed). CMake 3.31.6 builds libengine_bridge.so
+    from source. The root cause of the round-12 re-run loop was source files
+    extracted from the zip with future timestamps — fixed by touching all
+    files after extraction. The CMakeLists.txt and engine_jni.cpp source
+    files are unchanged from round-12.
+  - License classification: CMakeLists.txt remains AGPL v3 (original);
+    engine_jni.cpp remains GPL v3 (DroidFish-derived chmod/renice logic).
+
+v1.2.3 round-12 (2026.7.16) — SonarCloud bug fixes + first-principles review:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - CMakeLists.txt (AGPL v3): No changes this round.
+  - engine_jni.cpp (GPL v3): No changes this round.
+  - Build note: externalNativeBuild is temporarily disabled in build.gradle
+    as a workaround for the AGP 8.7.3 + CMake 3.22.1 re-run loop bug.
+    libengine_bridge.so is pre-built with the same NDK r27c clang++ + flags
+    and placed in src/main/jniLibs/arm64-v8a/. The CMakeLists.txt and
+    engine_jni.cpp source files are unchanged.
+  - License classification: CMakeLists.txt remains AGPL v3 (original);
+    engine_jni.cpp remains GPL v3 (DroidFish-derived chmod/renice logic).
+
 v1.2.3 optimization pass (2026.7.16) — first-principles line-by-line review:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — no version bump).
   - engine_jni.cpp (GPL v3): no changes this pass. Reviewed the nativeChmod

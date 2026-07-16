@@ -1,3 +1,23 @@
+v1.2.3 round-13 (2026.7.16) — CMake re-enablement + first-principles code review:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - chess.html (AGPL v3): Rebuilt from chess.src/ after round-13 JS fixes.
+    22,136 lines, 1,331,262 bytes. Contains the round-13 ui.js/ai-bridge.js/
+    tablebase.js/eco-data.js/pgn-standard.js changes.
+  - stats.html (AGPL v3): No changes this round. (The build-chess.py CSP
+    hash auto-update block that referenced stats.html was removed as dead
+    code — stats.html has used 'unsafe-inline' CSP since v1.1.2 PHASE 71.)
+  - License classification: chess.html and stats.html remain AGPL v3
+    (original works, not derived from DroidFish or Stockfish).
+
+v1.2.3 round-12 (2026.7.16) — SonarCloud bug fixes + first-principles review:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - chess.html (AGPL v3): Rebuilt from chess.src/ after Bug #1 fix.
+    22,114 lines, 1,329,375 bytes. The slider input at L16509 now uses
+    aria-label="'+T('review_move_slider')+'" instead of T('step_label').
+  - stats.html (AGPL v3): No changes this round.
+  - License classification: chess.html and stats.html remain AGPL v3
+    (original works, not derived from DroidFish or Stockfish).
+
 v1.2.3 optimization pass (2026.7.16) — first-principles line-by-line review:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — no version bump).
   - chess.html: rebuilt from the updated ai-bridge.js (openStatsPage toast

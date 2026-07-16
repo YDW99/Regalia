@@ -22,6 +22,7 @@ package com.Regalia;
  */
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.util.Log;
@@ -82,9 +83,18 @@ public class ChessWebViewClient extends WebViewClient {
                 if (activity != null) {
                     activity.startActivity(intent);
                 } else {
-                    // Activity was destroyed — use the application context instead
-                    if (view.getContext() != null) {
-                        view.getContext().startActivity(intent);
+                    // v1.2.3 round-13 (P2): Activity was destroyed — fall back
+                    //   to the Application context. FLAG_ACTIVITY_NEW_TASK (set
+                    //   above) is required for non-Activity contexts. Using
+                    //   view.getContext() directly would return the dead Activity
+                    //   (MainActivity passes `this` to the WebView constructor),
+                    //   which could throw IllegalStateException on a destroyed
+                    //   Activity. The outer catch (Throwable) masks it, but the
+                    //   URL open would silently fail.
+                    Context appCtx = view.getContext() != null
+                            ? view.getContext().getApplicationContext() : null;
+                    if (appCtx != null) {
+                        appCtx.startActivity(intent);
                     }
                 }
                 Log.i(TAG, "Opened external URL via WebViewClient: " + url);
@@ -162,6 +172,24 @@ public class ChessWebViewClient extends WebViewClient {
                 }
             } catch (Throwable e) {
                 Log.w(TAG, "Failed to destroy crashed WebView (backoff path)", e);
+            }
+            // v1.2.3 round-13 (P1): show the user a recovery message instead
+            //   of leaving them with a frozen screen. The Activity's WebView
+            //   reference is now stale, so we hand off to showFallbackUI which
+            //   builds a native recovery overlay.
+            final MainActivity activity = activityRef.get();
+            if (activity != null) {
+                activity.runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            activity.showFallbackUI(
+                                "渲染进程多次崩溃，请手动重启应用 / Renderer crashed repeatedly, please restart the app manually.");
+                        } catch (Throwable e2) {
+                            Log.w(TAG, "Failed to show fallback UI after render-crash backoff", e2);
+                        }
+                    }
+                });
             }
             return true; // We handled it — don't kill the app process
         }

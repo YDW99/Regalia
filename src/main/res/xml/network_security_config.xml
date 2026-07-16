@@ -51,7 +51,7 @@
             <pin digest="SHA-256">y7xVm0TVJNahMr2sZydE2jQH8SquXV9yLF9seROHHHU=</pin>
             <!-- Backup 1: ISRG Root X1 (RSA root, valid until 2035-06-04) -->
             <pin digest="SHA-256">C5+lpZ7tcVwmwQIMcRtPbsQtWLABXhQzejna0wHFr8M=</pin>
-            <!-- Backup 2: ISRG Root X2 (ECDSA root, valid until 2035-09-06) -->
+            <!-- Backup 2: ISRG Root X2 (ECDSA root, valid until 2035-09-17) -->
             <pin digest="SHA-256">diGVwiVYbubAI3RW4hB9xU8e/CH2GnkuvVFZE8zmgzI=</pin>
         </pin-set>
     </domain-config>

@@ -124,6 +124,17 @@ public class JsBridgeGateway {
      */
     public boolean isUciCommandAllowed(String command) {
         if (command == null || command.trim().isEmpty()) return false;
+        // v1.2.3 round-13 (P0): UCI commands are single-line by spec. Reject
+        //   embedded CR/LF to prevent command injection — a whitelisted prefix
+        //   must not smuggle extra lines (e.g. "setoption name X value 1\nquit"
+        //   would otherwise kill the engine). sendSetOptionAndWait already
+        //   strips newlines via stripNewlines(), but sendToEngine (which calls
+        //   sendUciCommand directly) does not, so the whitelist is the only
+        //   gate for that path.
+        if (command.indexOf('\n') >= 0 || command.indexOf('\r') >= 0) {
+            Log.w(TAG, "Blocked UCI command with embedded newline: " + command.trim());
+            return false;
+        }
         String trimmed = command.trim();
         // 提取第一个 token（命令名）
         int spaceIdx = trimmed.indexOf(' ');

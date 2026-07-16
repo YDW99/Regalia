@@ -90,6 +90,126 @@ The signed APK (v1+v2+v3 signed with `../debug.keystore`) will be at
   preferred. If you still hit 502s, temporarily comment out the Aliyun mirror
   blocks in both files.
 
+- **CMake re-run loop (AGP 8.7.3 + CMake 3.22.1)**: In a fresh build environment,
+  the `externalNativeBuild` task can fall into a "manifest 'build.ninja' still
+  dirty after 100 tries" re-run loop.
+  - **v1.2.3 round-12 workaround** (now superseded): `externalNativeBuild` was
+    temporarily commented out; `libengine_bridge.so` was pre-built manually and
+    placed in `jniLibs/`.
+  - **v1.2.3 round-13 root-cause fix**: The actual root cause was source files
+    extracted from the zip with **future timestamps** (the zip stored mtimes
+    from a future-dated build environment). Ninja interpreted these as "always
+    newer than build.ninja" and re-ran CMake on every invocation. The fix is
+    `find <src> -type f -exec touch {} \;` after extraction. CMake 3.31.6's
+    ninja also surfaces this with a clearer error message ("perhaps system
+    time is not set") that helped diagnose the real issue.
+  - **Current state**: `externalNativeBuild` is fully re-enabled in
+    `build.gradle` with `version "3.31.6+"` (pinned to the newer CMake that
+    provides better diagnostics). CMake 3.31.6 is installed via
+    `sdkmanager "cmake;3.31.6"`. The prebuilt `libengine_bridge.so` and
+    `libc++_shared.so` workaround files have been removed from `jniLibs/` —
+    CMake now builds `libengine_bridge.so` from source, and `libc++_shared.so`
+    is bundled automatically by AGP via the NDK.
+
+## v1.2.3 round-13 (2026.7.16) — CMake re-enablement + first-principles code review
+
+This round re-enabled CMake (resolving the round-12 workaround), then performed a comprehensive first-principles per-file/per-line code review using 6 parallel review agents covering all 18 Java files, 9 JS modules, and build infrastructure. Version stays at v1.2.3 (versionCode 123) — all changes are bug fixes and robustness improvements, no version bump.
+
+### CMake re-enablement
+
+- **Root cause identified**: The round-12 "CMake re-run loop" was caused by source files extracted from the zip with future timestamps, not by an AGP/CMake incompatibility. `find ... -exec touch {} \;` after extraction fixes it.
+- **CMake upgraded**: Installed CMake 3.31.6 via `sdkmanager "cmake;3.31.6"`. Pinned `version "3.31.6+"` in `build.gradle` (was `"3.22.1+"`). CMake 3.31.6's ninja provides a clearer error message ("perhaps system time is not set") that surfaces the real issue.
+- **externalNativeBuild re-enabled**: Uncommented all 4 blocks in `build.gradle` (defaultConfig, release buildType, debug buildType, project-level). Removed the prebuilt `libengine_bridge.so` and `libc++_shared.so` from `jniLibs/`. CMake now builds `libengine_bridge.so` from source; `libc++_shared.so` is bundled by AGP via the NDK.
+- **Verification**: APK contains `libengine_bridge.so` (5096 bytes, stripped from 47704 unstripped), `libstockfish.so` (114,115,752 bytes, dotprod SHA-256 verified), `libc++_shared.so` (1,292,904 bytes from NDK r27c).
+
+### P0 fixes (bugs)
+
+1. **JsBridgeGateway UCI command injection via CR/LF** (`JsBridgeGateway.java`): `isUciCommandAllowed` only validated the first token against the whitelist. A JS caller could pass `"setoption name X value 1\nquit"` — the first token `"setoption"` was whitelisted, but the engine received two lines (the setoption AND `quit`, killing the engine). Added a CR/LF rejection guard before the whitelist lookup. UCI commands are single-line by spec.
+2. **StockfishNative restartEngine permanently dead engine** (`StockfishNative.java`): `restartEngine()` called `shutdown()` (which sets `shutdownRequested=true`), then `startEngine()`. But `startEngineInternal()` guards on `shutdownRequested` at the top (added v1.2.1 round-10 to prevent `recoverEngine` from racing with concurrent `shutdown`). Without resetting the flag, the restart path bailed at that guard and the engine never restarted — leaving the user with a permanently dead engine. Added `shutdownRequested = false;` after `shutdown()` returns, before queuing `startEngine()`. A concurrent `shutdown()` between this reset and `startEngine()` would re-set the flag and correctly bail, preserving the original race protection.
+
+### P1 fixes (robustness)
+
+1. **StockfishNative _evalDeepBatchActive flag leak across restart** (`StockfishNative.java`): If the engine crashed between `engineEvalDeepBeginBatch()` and `engineEvalDeepEndBatch()`, the flag stayed `true` on the new engine. Subsequent `engineEvalDeep()` calls skipped `forceFullStrength()` + `applyEvalModeOptions()` and ran with gameplay `Contempt=24` (biased) and the user's `MultiPV` setting instead of the intended eval-mode options. Added `_evalDeepBatchActive = false;` to `cleanupEngineResources()`.
+2. **SafPickerHelper openInputStream null-check** (`SafPickerHelper.java`): `ContentResolver.openInputStream(Uri)` can return null (provider unavailable, file deleted between picker and read). Two read methods (`readTextFromUri`, `readPgnFromUri`) passed the result directly to `new InputStreamReader(null, "UTF-8")`, producing a confusing NPE with no URI context. Mirrored the write path's null-check pattern: throw a descriptive `IOException` instead.
+3. **StatsActivity openInputStream null-check** (`StatsActivity.java`): Same issue as SafPickerHelper — the IMPORT path missed the null-check that the EXPORT path already had.
+4. **StabilizationHelper registerListener return value** (`StabilizationHelper.java`): `SensorManager.registerListener` returns `boolean` — `false` on some OEM ROMs when the sensor is in an error state. The code unconditionally set `anyRegistered = true` regardless of whether registration succeeded, leaving the user with a silently-broken stabilization feature. Now checks the return value and logs a warning on failure.
+5. **RootDetector manifest `<queries>` element** (`AndroidManifest.xml`): Android 11+ (API 30) package visibility restrictions silently hide other apps' packages from `PackageManager.getPackageInfo`. Without a `<queries>` block, `RootDetector.checkRootPackages` returned false on every API 30+ device even when Magisk was installed. Added a targeted `<queries>` block listing all 12 root-detection packages. Targeted queries preferred over `QUERY_ALL_PACKAGES` (restricted by Google Play policy).
+6. **ChessWebViewClient render-crash backoff fallback UI** (`ChessWebViewClient.java` + `MainActivity.java`): After 4+ render-process crashes in 60s, the WebView was destroyed but the Activity was left with a frozen screen and no recovery path. Added a call to `MainActivity.showFallbackUI(...)` (changed from `private` to package-private) with a bilingual recovery message. The user now sees a native overlay instead of a hang.
+7. **ChessWebViewClient fallback context** (`ChessWebViewClient.java`): When `activityRef.get()` was null (Activity GC'd), `shouldOverrideUrlLoading` used `view.getContext()` which returns the dead Activity, potentially throwing `IllegalStateException`. Changed to `view.getContext().getApplicationContext()` (with `FLAG_ACTIVITY_NEW_TASK` already set). Added `import android.content.Context`.
+8. **ui.js gameClockTimerId cleanup** (`ui.js`): `_cleanupEventListeners` did not clear `gameClockTimerId` (set via `setInterval(_tickGameClock, 200)`). If a timed game was in progress when the Activity was destroyed, the 200ms interval kept firing, wasting CPU and potentially throwing errors. Added `clearInterval(gameClockTimerId)` to the cleanup function.
+
+### P2 fixes (robustness/redundancy)
+
+1. **StockfishNative PROCESS_DESTROY_GRACE_MS in shutdown()** (`StockfishNative.java`): `shutdown()` used a bare `200` literal while `cleanupEngineResources()` and `cleanupFailedEngine()` used the named `PROCESS_DESTROY_GRACE_MS` (=100) constant. Aligned to the constant per the documentation in BUILDING.md.
+2. **PgnCacheManager.delete return value** (`PgnCacheManager.java`): `delete()` returned only `pgnDeleted`, ignoring tags cleanup. An orphan tags cleanup (PGN file didn't exist but `.tags.json` did) returned `false`, misleading `deleteBatch`'s count. Now returns `true` if any deletion occurred.
+3. **eco-data cache pollution guard** (`eco-data.js`): On `JSON.parse` failure, `_ecoData` was set to `[]`, then `_saveEcoToCache(_ecoData)` overwrote the IndexedDB cache with an empty array. The app would never recover ECO functionality even after the source was fixed. Added `if(_ecoData.length>0)` guard before the save.
+4. **tablebase variation moveNum offset** (`tablebase.js`): Variation relocation used `Math.floor(divergeIdx/2)+1`, assuming `moveRecords[0]` corresponds to move 1. For games imported from a FEN starting at move N (`_importedStartMoveNum`), the `varMoveNum` was wrong, causing `_formatSANAsRAV` to display incorrect move-number prefixes. Applied the `_mvStartOffset` consistent with the rest of the codebase.
+5. **build.gradle empty-keystore-path guard** (`build.gradle`): `file("")` resolves to `projectDir` which exists, so without an `isEmpty()` check, a fresh clone without `keystore.properties` / env var would set `storeFile` to the project directory and fail with a cryptic "keystore load error". Added `!releaseKeystorePath.isEmpty()` guard.
+6. **gradle.properties dead property removal** (`gradle.properties`): Removed `android.enablePngCrunchInReleaseBuildsLibs=false` — not a recognized AGP property (only `android.enablePngCrunchInReleaseBuilds` exists). Unknown `android.*` keys are silently ignored by Gradle, so the line was a no-op. The comment about "library modules" was also inapplicable (single-module project).
+7. **build-chess.py dead CSP hash block removal** (`build-chess.py`): Removed the stats.html CSP sha256 hash auto-update block. As of stats.html v1.1.2 PHASE 71, the CSP switched from a fixed sha256- hash to `'unsafe-inline'`. The regex never matched, so the block was silent dead code providing no protection.
+8. **AndroidManifest allowBackup resolution** (`AndroidManifest.xml`): `android:allowBackup="false"` (the documented v1.0.4 design decision) made `android:fullBackupContent` and `android:dataExtractionRules` dead config. Removed both attributes (the XML files are retained in `res/xml/` for reference).
+
+### P3 fixes (cleanup/simplification)
+
+1. **MainActivity stale version tag** (`MainActivity.java`): Class Javadoc `Version: v1.1.0` → `v1.2.3` (the field at L64 uses `BuildConfig.VERSION_NAME` dynamically, but the Javadoc tag was stale).
+2. **MainActivity stabilizationHelper comment** (`MainActivity.java`): Comment said "recreated on each start() to reset state" — actually reused; state reset is internal to `StabilizationHelper.start()`. Corrected.
+3. **EngineService misleading context comment** (`EngineService.java`): Comment said "Must use the service's own context" but `NotificationManager.notify` works with any Context; the channel is looked up by `CHANNEL_ID`. Corrected.
+4. **TlsSecurityHelper stray `**` typo** (`TlsSecurityHelper.java`): Javadoc had `{@link ...getPublicKey()}**.getEncoded()` — removed the stray `**` (unclosed Markdown bold marker).
+5. **network_security_config.xml ISRG Root X2 expiry date** (`network_security_config.xml`): Comment said "valid until 2035-09-06" — actual date is 2035-09-17. Corrected.
+6. **ai-bridge.js stale line-number reference** (`ai-bridge.js`): TDZ safety comment referenced "line 254 in the original layout" — actual declaration is at line 323. Updated.
+7. **FileIoHelper stale getDefaultPaths comment** (`FileIoHelper.java`): Comment claimed "use MediaStore-relative descriptors" and "mark it as public" — neither was true. Corrected to accurately describe the canonical path hints.
+8. **StockfishNative dead code removal** (`StockfishNative.java`): Removed `_pgnCacheDir()` and `_sanitizeCacheName()` private wrappers (leftover scaffolding from v1.2.0 Phase 73 extraction; all callers delegate directly to `_pgnCacheManager`). Removed redundant `case '\u0000':` in `escapeJsString` (the default branch handles all C0 controls identically).
+9. **EngineConfigHelper dead ternary** (`EngineConfigHelper.java`): `(level < ELO_MAP.length) ? ELO_MAP[level] : 1500` — the outer guard restricts `level` to [1, 6] and `ELO_MAP` has length 8, so the fallback was unreachable. Simplified to `ELO_MAP[level]`.
+10. **tablebase.js silent catch** (`tablebase.js`): `probeTablebase` promise chain `.catch(function(){...})` didn't log the error. Added `console.warn` so downstream callback bugs are diagnosable.
+11. **pgn-standard.js missing exports** (`pgn-standard.js`): `formatEvalAnnotation` and `_pgnWhitePerspectiveLabel` were missing from the export block. In bundled mode this was harmless (export stripped, functions global), but in source-module mode the `typeof` check in `ai-bridge.js` returned `'undefined'`, silently skipping the every-5-moves PGN annotation. Added both to exports.
+
+### Build verification (round-13)
+
+- ✅ All 9 JS modules pass `node --check`
+- ✅ `chess.html` rebuilt: 22,136 lines, 1,331,262 bytes
+- ✅ Release APK rebuilt: 78,150,221 bytes, v1+v2+v3 signatures all enabled, versionCode=123, versionName="1.2.3"
+- ✅ FGS subtype property present (`chess_engine_analysis`)
+- ✅ `<queries>` element present in AndroidManifest (12 root-detection packages)
+- ✅ Stockfish dotprod engine SHA-256 three-way consistency: `8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5`
+- ✅ Tarball repackaged via `create_v123_tar.sh`: 114 files, 0 forbidden entries
+- ✅ CMake builds `libengine_bridge.so` from source (5096 bytes stripped in APK)
+
+## v1.2.3 round-12 (2026.7.16) — SonarCloud bug fixes + first-principles review
+
+This round addresses the two open SonarCloud bugs reported in `2bugs.md`, then performs a first-principles per-file/per-line review applying PDF reference guidance ("AI 大模型代码生成防缺陷终极指南", "Android WebView App 开发专业指南", "SonarCloud 完美通过审查指南"). Version stays at v1.2.3 (versionCode 123) — these are bug fixes only, no version bump.
+
+### Bug #1 — `chess.html` slider InputWithoutLabel (SonarCloud Web:InputWithoutLabelCheck, P2)
+
+**Root cause**: The review-mode slider uses a custom visual layer (`.rv-slider-base` / `.rv-slider-fill` / `.rv-slider-thumb`) with a transparent native `<input type="range">` overlay (`opacity:0`) handling touch/drag/keyboard interaction. The overlay input had an `aria-label` set to `T('step_label')` which resolves to "Step" / "第" — too terse for screen readers (TalkBack announced just "Step" with no context). This violated WCAG 2.1 Level A 4.1.2 (Name, Role, Value).
+
+**Fix**: Added a new `'review_move_slider'` i18n key (`{zh:'复盘步数', en:'Review move number'}`) to `game-logic.js`. Updated `ui.js` L2864 (slider input HTML) to use `aria-label="'+T('review_move_slider')+'"` instead of `T('step_label')`. The slider's visible label still uses `step_label` ("Step N / M") — only the accessibility label changed.
+
+### Bug #2 — `StockfishNative.java` InterruptedException swallowed (SonarCloud java:S2142, P1)
+
+**Root cause**: `recoverEngine()` schedules a delayed auto-recovery task via `_engineExecutor.execute(...)`. The inner `Runnable` calls `Thread.sleep(delay)` (delay = 1-5 seconds, exponential backoff). The `try` block was followed by a single `catch (Throwable t)` that caught `InterruptedException` without calling `Thread.currentThread().interrupt()`. `Thread.sleep()` clears the thread's interrupt flag when it throws — swallowing the exception leaves the flag cleared, so the subsequent `shutdownRequested` check (and any downstream blocking calls) cannot observe the interrupt. On app shutdown / process termination this meant the recovery task kept running past the shutdown signal, leaking the engine process (potential zombie).
+
+**Fix**: Added a specific `catch (InterruptedException e)` block BEFORE the `catch (Throwable t)` block. The new block: (1) restores the interrupt flag via `Thread.currentThread().interrupt()`, (2) calls `_clearRestartInProgress()` to release the restart lock, (3) logs the abort, and (4) returns early — skipping the recovery logic entirely so the executor can be torn down promptly. This is consistent with all 10 other `Thread.sleep` / `Thread.join` locations in `StockfishNative.java` (verified post-fix).
+
+### First-principles code review (per-file, per-line)
+
+Applied PDF-derived checklists across the codebase. Priority order: bug-fix > robustness > features > performance > redundancy > simplification.
+
+- **`StockfishNative.java`**: Audited all 11 `Thread.sleep` / `Thread.join` locations — all now have consistent `Thread.currentThread().interrupt()` handling (Bug #2 was the only outlier). Audited the 93 `@JavascriptInterface`-annotated methods exposed to JS — all properly annotated. Verified `postJsCallback` already has WebView null check + Activity finishing/destroyed check + structured `eventName` validation (the v1.2.3 P0 fix from the prior round is intact).
+- **`MainActivity.java`**: WebView setup already fully aligned with "Android WebView App 开发专业指南" — `setAllowFileAccess(false)`, `setAllowContentAccess(false)`, `setAllowFileAccessFromFileURLs(false)`, `setAllowUniversalAccessFromFileURLs(false)`, `setMixedContentMode(MIXED_CONTENT_NEVER_ALLOW)` (stricter than the PDF's `COMPATIBILITY_MODE` recommendation), Safe Browsing enabled on API 26+, full `onDestroy` cleanup sequence (stopLoading → removeView → clearHistory → loadUrl("about:blank") → removeJavascriptInterface → onPause → destroy). No changes needed.
+- **`ui.js`, `game-logic.js`, `ai-bridge.js`**: Reviewed empty catch blocks (27 in JS) — all are narrow defensive catches with intent-documenting comments (e.g., `/* fallback: no suffix */`, `/* defaults stay 0 */`, `/* measurement failed */`). None match the "宽泛的异常捕获" anti-pattern from the AI Defect Guide. No changes needed.
+- **Other Java files**: 18 Java files audited for method length (SonarCloud <50 lines guideline), cyclomatic complexity, and naming conventions. All conform — codebase already polished through v1.2.1's 11 rounds + v1.2.2's 8 rounds + v1.2.3's prior optimization pass.
+
+**Conclusion**: The two SonarCloud bugs were the only actionable findings. No additional changes were introduced to avoid regressions in an already-stable codebase ("保持小心谨慎，避免引入新bug或冗余").
+
+### Build verification (round-12)
+
+- ✅ All 9 JS modules pass `node --check`
+- ✅ `chess.html` rebuilt: 22,114 lines, 1,329,375 bytes
+- ✅ Release APK rebuilt: 78,148,728 bytes, v1+v2+v3 signatures all enabled, versionCode=123, versionName="1.2.3"
+- ✅ FGS subtype property present (`chess_engine_analysis`)
+- ✅ Stockfish dotprod engine SHA-256 three-way consistency: `8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5`
+- ✅ Tarball repackaged via `create_v123_tar.sh`: 114 files, 0 forbidden entries
+
 ## v1.2.3 (2026.7.16) — Round 17/18 review fixes + P0 JS error fix + Toast UX
 
 This version is based on the uploaded Round 17 (`Issues #48`, 24 findings) and Round 18 (`Issues #49`, 32 findings) multi-skill review reports, plus a user-reported P0 JS error and Issue #47 Toast UX optimization. After rigorous false-positive verification, **3 Round-17 findings and 4 Round-18 findings were confirmed as false positives** (already-fixed in prior rounds or stale references to deleted code), and the remaining actionable findings were fixed. Version bump v1.2.2→v1.2.3 (versionCode 122→123).

@@ -305,6 +305,12 @@ const _i18n={
 'board':{zh:'棋盘',en:'Board'},
 'chart_global':{zh:'↹全局',en:'↹Global'},
 'step_label':{zh:'第',en:'Step'},
+// v1.2.3 round-12 (SonarCloud Bug #1 fix): Descriptive aria-label for the
+// review-mode slider <input type="range">. The previous aria-label used
+// step_label ("Step" / "第"), which is too terse for screen readers —
+// TalkBack would announce just "Step" with no context. This key gives the
+// control an unambiguous name (WCAG 2.1 Level A 4.1.2 Name, Role, Value).
+'review_move_slider':{zh:'复盘步数',en:'Review move number'},
 'built_in':{zh:'内置',en:'Built-in'},
 'skill_level_desc':{zh:'降低引擎技术水平（0=最弱，20=最强）',en:'Reduce engine skill (0=weakest, 20=strongest)'},
 'skill_elo_note':{zh:'限制Elo开启时，Skill Level由UCI_Elo自动决定',en:'Skill Level auto-set by UCI_Elo when Limit Elo is on'},

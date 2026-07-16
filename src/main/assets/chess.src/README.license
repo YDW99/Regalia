@@ -1,3 +1,42 @@
+v1.2.3 round-13 (2026.7.16) — CMake re-enablement + first-principles code review:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - ui.js (GPL v3): P1 — added gameClockTimerId cleanup to
+    _cleanupEventListeners so a timed game's 200ms interval doesn't keep
+    firing after Activity destroy.
+  - ai-bridge.js (GPL v3): P3 — corrected stale line-number reference in
+    TDZ safety comment (was "line 254 in the original layout", actual is
+    line 323).
+  - tablebase.js (GPL v3): P2 — apply _importedStartMoveNum offset to
+    relocated variation moveNum so FEN-started games display correct
+    move-number prefixes; P3 — add console.warn to silent catch in
+    probeTablebase promise chain.
+  - eco-data.js (AGPL v3): P2 — added length>0 guard before _saveEcoToCache
+    to prevent cache pollution on JSON.parse failure (was overwriting valid
+    cached data with empty array).
+  - pgn-standard.js (GPL v3): P3 — added formatEvalAnnotation and
+    _pgnWhitePerspectiveLabel to export block (were missing; in source-module
+    mode the typeof check in ai-bridge.js returned 'undefined', silently
+    skipping the every-5-moves PGN annotation).
+  - Other JS modules (game-logic.js, chess960.js, pgn-standard.js,
+    worker-pool.js, state-store.js): No changes this round — audited and
+    verified clean.
+  - License classification: all files retain their existing classification.
+
+v1.2.3 round-12 (2026.7.16) — SonarCloud bug fixes + first-principles review:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - game-logic.js (GPL v3): Added 'review_move_slider' i18n key
+    ({zh:'复盘步数', en:'Review move number'}) for the review-mode slider's
+    accessible name (SonarCloud Bug #1, Web:InputWithoutLabelCheck).
+  - ui.js (GPL v3): Slider <input type="range"> aria-label switched from
+    T('step_label') ("Step" / "第") to T('review_move_slider') ("复盘步数" /
+    "Review move number") for WCAG 2.1 Level A 4.1.2 compliance.
+  - Other JS modules (ai-bridge.js, chess960.js, pgn-standard.js, worker-pool.js,
+    state-store.js, tablebase.js, eco-data.js): No changes this round —
+    audited 27 empty catch blocks (all narrow defensive catches with
+    intent-documenting comments, none match the "宽泛的异常捕获" anti-pattern
+    from the AI Defect Guide).
+  - License classification: all files retain their existing classification.
+
 v1.2.3 optimization pass (2026.7.16) — first-principles line-by-line review:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — no version bump).
   - ai-bridge.js (GPL v3): openStatsPage() path-3 toast staging refined —

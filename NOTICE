@@ -20,6 +20,101 @@ The original NOTICE files from third-party projects are preserved alongside this
 - AUTHORS-stockfish: Stockfish project authors list
 
 ===== LICENSE CLASSIFICATION BY FILE ==========================================
+v1.2.3 round-13 (2026.7.16) — CMake re-enablement + first-principles code review:
+  - Re-enabled externalNativeBuild in `build.gradle` (AGPL v3). The round-12
+    workaround (pre-built libengine_bridge.so in jniLibs) is removed; CMake
+    3.31.6 now builds libengine_bridge.so from source. Root cause of the
+    round-12 re-run loop was source files extracted with future timestamps.
+  - `JsBridgeGateway.java` (GPL v3): Added CR/LF rejection guard in
+    isUciCommandAllowed to prevent UCI command injection via embedded newlines
+    (P0 bug fix).
+  - `StockfishNative.java` (GPL v3): Three fixes — (1) reset shutdownRequested
+    in restartEngine so the engine can actually restart (P0 bug fix); (2) clear
+    _evalDeepBatchActive in cleanupEngineResources to prevent biased eval after
+    crash (P1); (3) use PROCESS_DESTROY_GRACE_MS constant in shutdown() instead
+    of bare 200 literal (P2); (4) removed dead _pgnCacheDir/_sanitizeCacheName
+    wrappers and redundant case '\u0000' in escapeJsString (P3).
+  - `SafPickerHelper.java` (GPL v3): Added openInputStream null-check in
+    readTextFromUri and readPgnFromUri (P1).
+  - `StatsActivity.java` (AGPL v3): Added openInputStream null-check in PGN
+    import path (P1).
+  - `StabilizationHelper.java` (AGPL v3): Check registerListener return value
+    and log warning on failure (P1).
+  - `ChessWebViewClient.java` (AGPL v3): Two fixes — (1) show fallback UI after
+    render-crash backoff instead of frozen screen (P1); (2) use
+    getApplicationContext() for URL open when Activity is destroyed (P2).
+  - `MainActivity.java` (AGPL v3): showFallbackUI changed from private to
+    package-private so ChessWebViewClient can call it (P1); stale version tag
+    and stabilizationHelper comment corrected (P3).
+  - `EngineConfigHelper.java` (GPL v3): Removed dead ternary fallback in
+    setGameDifficulty (P3).
+  - `EngineService.java` (AGPL v3): Corrected misleading context comment (P3).
+  - `FileIoHelper.java` (GPL v3): Corrected stale getDefaultPaths comment (P3).
+  - `TlsSecurityHelper.java` (AGPL v3): Removed stray `**` typo in Javadoc (P3).
+  - `PgnCacheManager.java` (GPL v3): delete() now returns true if any deletion
+    occurred (PGN and/or tags), not only when PGN was deleted (P2).
+  - `AndroidManifest.xml` (AGPL v3): Two changes — (1) added <queries> block
+    with 12 root-detection package names for Android 11+ package visibility
+    (P1); (2) removed dead fullBackupContent and dataExtractionRules attributes
+    (allowBackup="false" makes them unreachable) (P2).
+  - `network_security_config.xml` (AGPL v3): Corrected ISRG Root X2 expiry date
+    in comment (2035-09-06 → 2035-09-17) (P3).
+  - `build.gradle` (AGPL v3): Re-enabled externalNativeBuild with CMake 3.31.6+;
+    added empty-keystore-path guard (P2).
+  - `gradle.properties` (AGPL v3): Removed dead
+    android.enablePngCrunchInReleaseBuildsLibs property (P2).
+  - `build-chess.py` (AGPL v3): Removed dead stats.html CSP hash update block
+    (stats.html now uses 'unsafe-inline') (P2).
+  - `ui.js` (GPL v3): Added gameClockTimerId cleanup to _cleanupEventListeners (P1).
+  - `ai-bridge.js` (GPL v3): Corrected stale line-number reference in TDZ
+    safety comment (P3).
+  - `tablebase.js` (GPL v3): Two fixes — (1) apply _importedStartMoveNum offset
+    to relocated variation moveNum (P2); (2) add console.warn to silent catch
+    in probeTablebase promise chain (P3).
+  - `eco-data.js` (AGPL v3): Added length>0 guard before _saveEcoToCache to
+    prevent cache pollution on parse failure (P2).
+  - `pgn-standard.js` (GPL v3): Added formatEvalAnnotation and
+    _pgnWhitePerspectiveLabel to export block (P3).
+  - New file: `assets/README.license` (AGPL v3) — documents the license
+    classification for the root-level assets/ directory (screenshots referenced
+    by README.md). Created for completeness; the codebase already had 7
+    README.license files in src/main/* subdirs + Manual, but assets/ was
+    missing one.
+  - License classification: all files retain their existing classification.
+    The new assets/README.license is AGPL v3 (original work — screenshots are
+    gameplay captures of the Regalia app itself).
+  - AI-GEN: AI assisted — this round's changes were AI-assisted and reviewed
+    for AGPL v3 / GPL v3 compliance per the dual-license convention.
+
+v1.2.3 round-12 (2026.7.16) — SonarCloud bug fixes + first-principles review:
+  - `game-logic.js` (GPL v3): Added `'review_move_slider'` i18n key
+    (`{zh:'复盘步数', en:'Review move number'}`) for the review-mode slider's
+    accessible name (SonarCloud Bug #1, Web:InputWithoutLabelCheck).
+  - `ui.js` (GPL v3): Slider `<input type="range">` aria-label switched from
+    `T('step_label')` ("Step" / "第") to `T('review_move_slider')` ("复盘步数" /
+    "Review move number") for WCAG 2.1 Level A 4.1.2 compliance.
+  - `StockfishNative.java` (GPL v3): `recoverEngine()` auto-recovery sleep now
+    has a dedicated `catch (InterruptedException e)` block that restores
+    `Thread.currentThread().interrupt()` + `_clearRestartInProgress()` + early
+    return (SonarCloud Bug #2, java:S2142). Previously the catch (Throwable t)
+    swallowed InterruptedException without re-asserting the interrupt flag,
+    risking engine process leaks on shutdown.
+  - `build.gradle` (AGPL v3): `externalNativeBuild` blocks temporarily commented
+    out as a workaround for the AGP 8.7.3 + CMake 3.22.1 "manifest 'build.ninja'
+    still dirty after 100 tries" re-run loop. `libengine_bridge.so` is pre-built
+    with the same NDK r27c clang++ + -std=c++20 + optimization flags and placed
+    in `src/main/jniLibs/arm64-v8a/` alongside `libstockfish.so` and
+    `libc++_shared.so`. No source code (CMakeLists.txt, engine_jni.cpp) changes.
+  - No new files added; no files deleted; no license classification changes.
+  - First-principles per-file/per-line review applied PDF reference guidance
+    ("AI 大模型代码生成防缺陷终极指南", "Android WebView App 开发专业指南",
+    "SonarCloud 完美通过审查指南"). All 11 Thread.sleep/Thread.join locations
+    in StockfishNative.java verified for consistent interrupt handling. All 93
+    @JavascriptInterface methods verified. WebView setup in MainActivity.java
+    confirmed fully aligned with PDF best practices. No additional changes
+    needed — codebase already polished through v1.2.1's 11 rounds + v1.2.2's
+    8 rounds + v1.2.3's prior optimization pass.
+
 v1.2.1 (2026.7.13) — Fourth-pass refinement (round-4 cleanup — dead-code purge):
   - Deleted MessageBus.java (AGPL v3): JS side had only a console.log stub and
     zero dispatch() callers; the entire Java→JS event-bus was dead code.

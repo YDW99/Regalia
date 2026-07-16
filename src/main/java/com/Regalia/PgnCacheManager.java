@@ -182,19 +182,26 @@ public class PgnCacheManager {
         }
     }
 
-    /** 删除单个 PGN 缓存条目（同时删除关联的标签文件）。返回 true 表示成功 */
+    /** 删除单个 PGN 缓存条目（同时删除关联的标签文件）。返回 true 表示至少一项删除成功 */
     public boolean delete(String name) {
         if (name == null) return false;
         String safe = sanitizeName(name);
         if (safe == null) return false;
         try {
             File file = new File(getCacheDir(), safe + ".pgn");
-            boolean pgnDeleted = false;
+            // v1.2.3 round-13 (P2): track any deletion so orphan tags cleanup
+            //   is reported as success. Previously the method returned only
+            //   pgnDeleted, so a successful tags-only cleanup (e.g. after a
+            //   previous save() for the PGN failed mid-write, or the PGN was
+            //   deleted out-of-band) returned false, misleading deleteBatch's
+            //   count and hiding partial-success states.
+            boolean anyDeleted = false;
             if (file.exists()) {
-                pgnDeleted = file.delete();
+                boolean pgnDeleted = file.delete();
                 if (!pgnDeleted) {
                     Log.w(TAG, "delete: failed to delete PGN file " + safe);
                 }
+                anyDeleted = anyDeleted || pgnDeleted;
             }
             // 同时删除关联的标签文件
             File tagsFile = new File(getCacheDir(), safe + ".tags.json");
@@ -203,8 +210,9 @@ public class PgnCacheManager {
                 if (!tagsDeleted) {
                     Log.w(TAG, "delete: failed to delete tags file " + safe);
                 }
+                anyDeleted = anyDeleted || tagsDeleted;
             }
-            return pgnDeleted;
+            return anyDeleted;
         } catch (Throwable e) {
             Log.w(TAG, "delete failed for name=" + safe, e);
             return false;
