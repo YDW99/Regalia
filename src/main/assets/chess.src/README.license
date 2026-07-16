@@ -1,3 +1,65 @@
+v1.2.3 round-17 (2026.7.17) — SonarCloud high-priority cleanup + God Class refactor (ui split):
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - ui-gameflow.js (GPL v3): NEW FILE (313 lines) — God Class refactor:
+    game start (startGame/_startGameImpl) + the game-clock subsystem
+    (initGameClocks/_tickGameClock/_onGameClockExpired/recordMoveEnd/
+    formatClock/_updateClockDisplay) extracted from ui.js. All functions
+    moved verbatim; same global-scope module pattern (hoisted top-level
+    function declarations, no top-level executable code moved — no
+    TDZ/load-order change).
+  - ui-interactions.js (GPL v3): NEW FILE (1,438 lines) — God Class refactor:
+    board click handling (sqClick/setupClick/_getCastlingRookForClick), move
+    execution & undo/redo (executeMove/_clearAnimationState/undoMove/redoMove),
+    toolbar actions (flipBoard/quickFreeOpening/toggleSound/doPromotion/
+    getHint/setDifficultyLevel), setup-mode entry/exit (toggleSetup/exitSetup/
+    _exitSetupImpl/undoSetupClick/redoSetupClick), PGN-save prompt chain
+    (_withPGNSaveCheck/_savePGNYes/_savePGNNo/_savePGNCancel), back-press
+    routing (handleBackPress), import wrappers (_doPastePGN/
+    _importFENWithSaveCheck/_importPGNFileWithSaveCheck), player rename &
+    stats-import prompt (_renameHumanPlayer/_showStatsImportBackPrompt),
+    resign (_resignGame) — all extracted from ui.js verbatim.
+  - ui.js (GPL v3): 8,475 → 6,761 lines (-20%). Beyond the extraction:
+    (1) S2703 REAL BUG FIX — _refreshEvalTrendChart referenced `_trendH`,
+    a const LOCAL to _renderReviewMode (undeclared global in this scope):
+    latent ReferenceError whenever the chart container had zero layout
+    height. Fixed by extracting the shared height formula into a new
+    top-level _computeTrendChartHeight() helper used by both call sites.
+    The PDF's other ~121 claimed S2703 implicit globals were verified false
+    positives (all variables are properly let/const-declared; ECO_OPENINGS
+    is an intentional lazy window property; gameEvent/gameSite are
+    typeof-guarded optional externals). (2) S7740 — 9 `const self = this`
+    closures converted to arrow functions (4 onended + 5 forEach in
+    ChessAudioEngine). (3) S7741 — typeof-undefined comparisons converted
+    to direct !== undefined ONLY where the variable is declared in the same
+    module (6 sites: reviewMode/reviewStep/moveRecords/gameClockTimerId×2);
+    cross-module typeof guards intentionally retained (round-11 design:
+    resilience against single-module load failure), as are guards on
+    externally-injected globals (AndroidBridge, gameEvent, gameSite).
+  - All JS modules: S7773 — 99 global isNaN/parseInt/isFinite calls converted
+    to Number.isNaN/Number.parseInt/Number.isFinite across ai-bridge.js,
+    game-logic.js, pgn-standard.js, tablebase.js, ui.js (each call site
+    individually verified to pass number-typed arguments, so the dropped
+    string-coercion of the globals is behavior-preserving).
+  - ai-bridge.js (GPL v3): S7761 — setAttribute('data-theme') →
+    documentElement.dataset.theme. S7741 — 3 same-module typeof conversions
+    (_reviewEvalRequestedStep, playerWhite, playerBlack).
+  - chess960.js (AGPL v3): S7767 — 3 `|0` truncations → Math.trunc
+    (identical for the spid ∈ [0,959] domain).
+  - worker-pool.js (AGPL v3): S8786 — nested-quantifier move-number regex
+    /\d+\.+(\d+\.+)*/g simplified to /\d+\.+/g in BOTH the worker-side
+    (template-literal, keeps double-escaping) and sync-side copies; the
+    (\d+\.+)* tail was redundant for the replace use-case. Pipeline-level
+    equivalence (incl. the subsequent \s+→' ' normalization) verified on
+    7 test inputs incl. adversarial ones.
+  - S7781: 3 string-first-arg .replace calls converted to .replaceAll where
+    global replacement is intended (ui.js i18n placeholders N1/N2/{count}/
+    {total}/{filter}); printf-style SEQUENTIAL %d substitution in stats.html
+    intentionally left as .replace (replaceAll would break it).
+  - build-chess.py: MODULES list now includes ui-gameflow.js and
+    ui-interactions.js before ui.js (concatenation order safe — hoisting).
+  - License classification: new files inherit ui.js's GPL v3 (derived from
+    DroidFish-referencing code); all other files retain their classification.
+
 v1.2.3 round-13 (2026.7.16) — CMake re-enablement + first-principles code review:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
   - ui.js (GPL v3): P1 — added gameClockTimerId cleanup to

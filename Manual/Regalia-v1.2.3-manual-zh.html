@@ -2802,6 +2802,47 @@ function moveRookForCastling(state, kingFrom, kingTo) {
     <strong style="color:#e74c3c">⚠️ 版本号约定：</strong>曾在开发阶段使用版本号：<b>v18.x.x</b>，未来版本号超过<b>v17.x.x</b>以后，<span style="color:red; font-weight:bold;">应当跳过 v18.x.x</span>，从<b>v19.x.x</b>继续。
   </div>
 
+  <!-- ============================== -->                    <!-- v1.2.3 round-17 SonarCloud cleanup + God Class refactor -->
+    <h3 style="color:#d4a017">v1.2.3 round-17（SonarCloud 高优先级清理 + God Class 重构，2026.7.17）</h3>
+    <div class="changelog-content">
+      <p><strong>版本号</strong>：保持 versionCode=123，versionName="1.2.3"——本轮为 bug 修复 + 代码质量轮，不做版本升级。</p>
+      <p><strong>任务来源</strong>：《较高优先级问题汇总.pdf》（SonarCloud 扫描）与《God Class 重构成果.md》中记录的待完成任务。PDF 为 AI 生成，全部 500+ 条声称的问题已逐一对照实际源码验证——大量为误报，仅真实问题被修复（例如 S2703 声称 122 处隐式全局变量，实际仅 1 处真实，其余全部为已有 let/const 声明或 typeof 防护的可选外部全局）。</p>
+      <p><strong>真实 bug 修复</strong>：</p>
+      <ul>
+        <li><strong>_trendH 潜在 ReferenceError（S2703）</strong>：<code>ui.js</code> 的 <code>_refreshEvalTrendChart()</code> 引用了 <code>_trendH</code>——该变量是 <code>_renderReviewMode()</code> 的局部 const，在此作用域中为未声明全局。当图表容器布局高度为 0 时（clientHeight 为假值）会触发 ReferenceError。修复：提取共享高度公式为新的顶层函数 <code>_computeTrendChartHeight()</code>，两处调用点共用。</li>
+        <li><strong>S1141 嵌套 try（StockfishNative.java）</strong>：新增 <code>sleepGracefully(long)</code> 辅助方法，替换 6 处嵌套 try 的 Thread.sleep 模式（思考停止宽限、3 处进程销毁宽限、2 处心跳恢复等待）；心跳两处改为在辅助方法后检查 <code>Thread.currentThread().isInterrupted()</code> 决定是否 break——语义完全等价（中断标志在辅助方法内已恢复）。</li>
+      </ul>
+      <p><strong>God Class 重构（round-17，成果.md 待完成项）</strong>：</p>
+      <ul>
+        <li><strong>HapticManager.java（新文件，459 行，GPL v3）</strong>：从 StockfishNative.java 提取约 420 行触觉反馈逻辑（isHapticEnabled / performHaptic / performHapticInternal / tryPwleVibrate / fallbackVibrate），六种棋子触觉人格（兵的微颤、后的重击、王的庄重、马的跃落、象的滑行、车的冲锋）原样保留。StockfishNative 保留 @JavascriptInterface 委托包装器，JS 调用 API 完全不变。这是 round-10 被删的死代码 HapticHelper 的真正全接线继任者。StockfishNative.java 从 4,674 行降至 4,307 行（-8%）。</li>
+        <li><strong>ui-gameflow.js（新文件，313 行，GPL v3）</strong>：从 ui.js 提取新局启动（startGame/_startGameImpl）与棋钟子系统（initGameClocks/_tickGameClock/_onGameClockExpired/recordMoveEnd/formatClock/_updateClockDisplay）。</li>
+        <li><strong>ui-interactions.js（新文件，1,438 行，GPL v3）</strong>：从 ui.js 提取棋盘点击（sqClick/setupClick）、走子执行与撤销（executeMove/undoMove/redoMove）、工具栏动作、摆棋模式进出、PGN 保存提示链、返回键路由、导入包装、认输等交互处理。</li>
+        <li><strong>ui.js 从 8,475 行降至 6,761 行（-20%）</strong>。全部提取为纯函数声明迁移（bundle 内全局提升），无顶层可执行代码移动，无 TDZ/加载顺序变化。build-chess.py 的 MODULES 列表已加入两个新模块（位于 ui.js 之前）。</li>
+      </ul>
+      <p><strong>SonarCloud 代码质量修复（均已验证语义等价）</strong>：</p>
+      <ul>
+        <li><strong>S7773（99 处）</strong>：全局 isNaN/parseInt/isFinite → Number.isNaN/Number.parseInt/Number.isFinite，横跨 ai-bridge.js、game-logic.js、pgn-standard.js、tablebase.js、ui.js、stats.html——每个调用点逐一验证参数为 number 类型（不依赖全局函数的字符串强转）。</li>
+        <li><strong>S7740（9 处）</strong>：ui.js ChessAudioEngine 中 <code>const self = this</code> 闭包改为箭头函数（4 处 onended + 5 处 forEach）。</li>
+        <li><strong>S1181（Java，6 处转换 + 2 处有意保留）</strong>：ChessWebViewClient.java 全部 6 处 catch (Throwable) → catch (Exception)（被保护调用仅抛 Exception 子类；OOM 等 Error 必须传播）；提取 destroyWebViewSafely() 消除两处重复的 WebView 销毁块。HapticManager 的 tryPwleVibrate/fallbackVibrate 有意保留 catch (Throwable) 并附注释说明（反射调用在 OEM ROM 上可能抛 NoSuchMethodError——属于 Error 而非 Exception，必须容忍）。</li>
+        <li><strong>S7761（2 处）</strong>：setAttribute('data-theme') → documentElement.dataset.theme（ai-bridge.js、stats.html）。</li>
+        <li><strong>S7767（3 处）</strong>：chess960.js 的 <code>|0</code> 截断 → Math.trunc（spid ∈ [0,959] 域内完全等价）。</li>
+        <li><strong>S7781（3 处转换 + 1 类有意保留）</strong>：i18n 占位符替换（N1/N2/{count}/{total}/{filter}）→ replaceAll；stats.html 的 printf 式顺序 %d 替换链有意保留 .replace（replaceAll 会把所有 %d 替换成同一个值——会破坏功能）。</li>
+        <li><strong>S8786（2 处）</strong>：worker-pool.js 走法序号正则 <code>/\d+\.+(\d+\.+)*/g</code> 简化为 <code>/\d+\.+/g</code>（worker 端模板字符串与 sync 端两份拷贝同步修改），消除嵌套量词；包含后续 \s+ 归一化的完整流水线在 7 组测试输入（含对抗性输入）上验证语义完全等价。</li>
+        <li><strong>S7741（9 处转换 + 跨模块守卫有意保留）</strong>：typeof undefined 比较转为直接 !== undefined——仅限同模块内已声明变量（reviewMode/reviewStep/moveRecords/gameClockTimerId 等）；跨模块 typeof 守卫有意保留（round-11 容错设计：防单模块加载失败连锁崩溃），外部注入全局（AndroidBridge/gameEvent/gameSite）的 typeof 守卫亦保留。</li>
+        <li><strong>验证为误报未改动</strong>：S125（ChessWebViewClient 无注释掉的代码块）、S3626（StockfishNative 自动恢复的 return 是合法提前退出而非冗余跳转）。</li>
+      </ul>
+      <p><strong>健壮性加固</strong>：StockfishNative.postJsCallback 新增 null/空白 JS 表达式前置拒绝（开发指南 §5.1 方向 1——空载荷此前会静默求值为 no-op try{}catch，掩盖调用方 bug）。</p>
+      <p><strong>构建验证（round-17）</strong>：</p>
+      <ul>
+        <li>✅ 全部 11 个 JS 模块通过 <code>node --check</code>（含 2 个新模块）</li>
+        <li>✅ Bundle 级 eslint no-undef 分析：0 个隐式全局</li>
+        <li>✅ Node vm 浏览器桩运行时烟雾测试：加载期零 TDZ 错误，34/34 关键函数存在，formatClock 行为正确</li>
+        <li>✅ <code>chess.html</code> 已重建（22,204 行 / 1,334,211 字节）</li>
+        <li>✅ release APK 已重建，v1+v2+v3 签名齐全，兼容小米澎湃 OS 3</li>
+        <li>✅ Stockfish dotprod 引擎 SHA-256 三方一致（8f7116d3...）</li>
+      </ul>
+    </div>
+
   <!-- ============================== -->                    <!-- v1.2.3 round-13 CMake re-enablement + code review -->
     <h3 style="color:#d4a017">v1.2.3 round-13（CMake 重新启用 + 第一性原理代码审查，2026.7.16）</h3>
     <div class="changelog-content">

@@ -1,3 +1,44 @@
+v1.2.3 round-17 (2026.7.17) — SonarCloud high-priority cleanup + God Class refactor (HapticManager):
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - HapticManager.java (GPL v3): NEW FILE — extracted from StockfishNative.java
+    (God Class refactor, ~420 lines of haptic logic: isHapticEnabled /
+    performHaptic / performHapticInternal / tryPwleVibrate / fallbackVibrate).
+    Piece-specific haptic personalities (pawn quiver, queen impact, king regal,
+    knight jump-land, bishop glide, rook charge) preserved verbatim.
+    StockfishNative keeps thin @JavascriptInterface delegate wrappers
+    (isHapticEnabled / performHaptic) so the JS API surface is unchanged.
+    This is the real, fully-wired successor of the round-10-removed dead
+    HapticHelper. S1181 handling: non-reflection paths converted
+    catch (Throwable) → catch (Exception); tryPwleVibrate / fallbackVibrate
+    intentionally retain catch (Throwable) with documented rationale
+    (reflection against android.os.VibrationEffect$Composition can fail with
+    NoSuchMethodError / NoClassDefFoundError on OEM ROMs whose API-35 surface
+    differs from AOSP — those are Errors, not Exceptions).
+  - StockfishNative.java (GPL v3): 4,674 → 4,307 lines (-8%). Beyond the
+    haptic extraction: (1) S1141 — new sleepGracefully(long) helper replaces
+    6 copies of the nested-try Thread.sleep pattern (ponder-stop grace,
+    3× process-destroy grace, 2× heartbeat-recovery waits); the two
+    heartbeat sites now check Thread.currentThread().isInterrupted() after
+    the helper instead of breaking from inside a nested catch — semantics
+    identical (interrupt flag restored inside the helper). (2) Robustness —
+    postJsCallback now rejects null/blank JS expressions up front (dev-guide
+    §5.1 direction-1 hardening; an empty payload previously evaluated to a
+    silent no-op try{}catch, masking caller bugs). (3) S3626 verified false
+    positive: the flagged auto-recovery `return;` is a legitimate early exit
+    from the retry loop after interruption, not a redundant jump.
+  - ChessWebViewClient.java (AGPL v3): S1181 — all 6 catch (Throwable) sites
+    converted to catch (Exception) (protected calls throw only Exception
+    subtypes: startActivity, WebView.destroy, showFallbackUI, recreate,
+    runOnUiThread; Errors such as OOM must propagate). DRY — the duplicated
+    detach+destroy WebView blocks (render-crash path and backoff path)
+    extracted into a new private static destroyWebViewSafely(view, pathTag)
+    helper. S125 verified false positive: no commented-out code block exists
+    in this file (PDF line numbers were stale).
+  - Other Java files: no changes this round.
+  - License classification: HapticManager.java is GPL v3 (derived from
+    StockfishNative haptic code, which references DroidFish logic); all
+    other files retain their existing classification.
+
 v1.2.3 round-13 (2026.7.16) — CMake re-enablement + first-principles code review:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
   - StockfishNative.java (GPL v3): Four fixes — (1) P0: reset shutdownRequested

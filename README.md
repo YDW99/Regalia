@@ -251,6 +251,18 @@ During the development stage, the version number used was: **v18.x.x**. For futu
 
 The v1.2.3 release is a **bug-fix + review-response release** on top of v1.2.2, driven by a user-reported P0 JS error and two multi-skill review reports (Round 17 — Issue #48, 24 findings; Round 18 — Issue #49, 32 findings). After rigorous false-positive verification, the actionable findings were fixed and the version was bumped v1.2.2→v1.2.3 (versionCode 122→123).
 
+### v1.2.3 round-17 (2026.7.17) — SonarCloud high-priority cleanup + God Class refactor
+
+This sub-round completes the pending tasks recorded in the uploaded *High-Priority Issues Summary* (SonarCloud scan) and *God Class Refactoring Results* documents. Every claimed issue (500+) was verified against the actual source before changing code — most were AI-generated false positives and were deliberately left untouched (e.g. S2703: 122 claimed implicit globals → exactly 1 real; S125/S3626: verified false).
+
+**Real bug fixes**: (1) `_trendH` latent ReferenceError (S2703) — `_refreshEvalTrendChart()` referenced `_trendH`, a const local to `_renderReviewMode()`; the reference fired on the zero-layout-height path. Fixed via a shared top-level `_computeTrendChartHeight()` helper. (2) java:S1141 nested-try — new `sleepGracefully(long)` helper replaces 6 copies of the nested-try sleep pattern in StockfishNative.
+
+**God Class refactor (round-17)**: new `HapticManager.java` (459 lines, GPL v3) extracts ~420 lines of haptic logic from StockfishNative.java (4,674 → 4,307 lines, -8%); new `ui-gameflow.js` (313 lines, game start + clocks) and `ui-interactions.js` (1,438 lines, clicks/move-exec/toolbar/dialogs/back-press) extracted from ui.js (8,475 → 6,761 lines, -20%). Pure function-declaration moves only — bundle-hoisted, no load-order change; @JavascriptInterface delegates keep the JS API surface identical.
+
+**SonarCloud cleanups** (all verified semantics-preserving): S7773 (99× global isNaN/parseInt/isFinite → `Number.*`), S7740 (9× `const self = this` → arrow functions), S1181 (6× `catch (Throwable)` → `catch (Exception)` in ChessWebViewClient + `destroyWebViewSafely` DRY helper; HapticManager reflection paths intentionally keep Throwable with documented NoSuchMethodError rationale), S7761 (2× setAttribute → dataset), S7767 (3× `|0` → Math.trunc), S7781 (3× replace → replaceAll; printf-style sequential `%d` chain intentionally kept), S8786 (nested-quantifier regex simplified in both worker-pool.js copies, pipeline-level equivalence proven), S7741 (typeof-undefined → `!== undefined` only for same-module-declared variables; cross-module guards kept per the round-11 resilience design). Robustness: `postJsCallback` rejects null/blank JS up front.
+
+**Verification**: All 11 JS modules pass `node --check`. Bundle-level eslint `no-undef` analysis: 0 implicit globals. Node-vm browser-stub smoke test: 34/34 key functions present, zero load-time TDZ errors from the extraction. `chess.html` rebuilt (22,204 lines, 1,334,211 bytes). Release APK rebuilt, signature v1+v2+v3 all true. APK `lib/arm64-v8a/libstockfish.so` SHA-256 = `8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5` — three-way match. FGS subtype property present. Version: versionCode=123, versionName="1.2.3" (unchanged).
+
 ### v1.2.3 round-13 (2026.7.16) — CMake re-enablement + first-principles code review
 
 This sub-round re-enabled CMake (resolving the round-12 build workaround) and applied a comprehensive first-principles per-file/per-line code review using 6 parallel review agents covering all 18 Java files, 9 JS modules, and build infrastructure. Version stays at v1.2.3 (versionCode 123) — all changes are bug fixes and robustness improvements, no version bump.

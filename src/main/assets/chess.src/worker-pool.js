@@ -166,7 +166,7 @@ function _parsePGNText(pgnText) {
     if (depth === 0) movetext += text[i];
   }
   // Clean up movetext
-  movetext = movetext.replace(/\\d+\\.+(\\d+\\.+)*/g, ' ');
+  movetext = movetext.replace(/\\d+\\.+/g, ' '); // v1.2.3 (S8786): (\d+\.+)* 尾组对 replace 语义冗余，去除嵌套量词
   movetext = movetext.replace(/\\$\\d+/g, ' ');
   var result = '*';
   var resultMatch = movetext.match(/(1-0|0-1|1\\/2-1\\/2|\\*)/);
@@ -477,7 +477,7 @@ function _syncParsePGNText(pgnText) {
     if (text[i] === ')') { if (depth > 0) depth--; continue; }
     if (depth === 0) movetext += text[i];
   }
-  movetext = movetext.replace(/\d+\.+(\d+\.+)*/g, ' ');
+  movetext = movetext.replace(/\d+\.+/g, ' '); // v1.2.3 (S8786): (\d+\.+)* 尾组对 replace 语义冗余，去除嵌套量词
   movetext = movetext.replace(/\$\d+/g, ' ');
   var result = '*';
   var resultMatch = movetext.match(/(1-0|0-1|1\/2-1\/2|\*)/);

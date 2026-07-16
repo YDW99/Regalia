@@ -658,7 +658,7 @@ let _safeInsets={top:0,bottom:0,left:0,right:0};
 function _readSafeInsets(){
   try{
     const cs=getComputedStyle(document.documentElement);
-    const _parse=(v)=>{const m=Number.parseFloat(v);return isNaN(m)?0:m;};
+    const _parse=(v)=>{const m=Number.parseFloat(v);return Number.isNaN(m)?0:m;};
     _safeInsets.top=_parse(cs.getPropertyValue('--safe-top'))||0;
     _safeInsets.bottom=_parse(cs.getPropertyValue('--safe-bottom'))||0;
     _safeInsets.left=_parse(cs.getPropertyValue('--safe-left'))||0;
@@ -836,7 +836,7 @@ function algPos(a){if(!a)return null;
   // v1.0.8 PHASE 30: also reject strings longer than 2 chars (e.g. 'e4e5' move
   //   strings, 'e10' malformed input) which were silently truncated before.
   if(typeof a!=='string'||a.length!==2)return null;
-  try{const col=a.charCodeAt(0)-97,row=8-parseInt(a[1],10);if(col<0||col>7||isNaN(row)||row<0||row>7)return null;return{row,col}}catch(e){return null}}
+  try{const col=a.charCodeAt(0)-97,row=8-Number.parseInt(a[1],10);if(col<0||col>7||Number.isNaN(row)||row<0||row>7)return null;return{row,col}}catch(e){return null}}
 function inB(r,c){return r>=0&&r<8&&c>=0&&c<8}
 
 // AI-GEN: AI assisted
@@ -1498,7 +1498,7 @@ function _validateSetupCastleMarks(s,errs){
   // Group markers by color of the rook on that square.
   const byColor={white:[],black:[]};
   for(const key of s.setupCastleMarks){
-    const idx=parseInt(key,10);
+    const idx=Number.parseInt(key,10);
     // v1.2.1 round-9: Guard against malformed keys. parseInt returns NaN for
     // non-numeric strings; `NaN>>3` is 0 and `NaN&7` is 0, so a malformed key
     // would silently map to (row=0, col=0) = a8 and either be incorrectly

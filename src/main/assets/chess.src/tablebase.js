@@ -322,23 +322,23 @@ function _parsePGN(pgnText){
           let _ev=null,_mate=null;
           if(_val.startsWith('#')){
             // Mate notation: #5, #-3
-            const _mn=parseInt(_val.substring(1),10);
-            if(!isNaN(_mn)){
+            const _mn=Number.parseInt(_val.substring(1),10);
+            if(!Number.isNaN(_mn)){
               _mate=_mn;
               _ev=_mn>0?99999:-99999;
             }
           }else if(/^[-+]?M\d+$/i.test(_val)){
             // Alternate mate notation: M5, -M3, +M5 (rare, some engines)
             const _sign=_val.startsWith('-')?-1:1;
-            const _mn=parseInt(_val.replace(/^[-+]*M/i,''),10);
-            if(!isNaN(_mn)){
+            const _mn=Number.parseInt(_val.replace(/^[-+]*M/i,''),10);
+            if(!Number.isNaN(_mn)){
               _mate=_sign*_mn;
               _ev=_sign>0?99999:-99999;
             }
           }else{
             // Centipawn / pawn value: 0.35, -1.5, +2.00
             const _pawns=Number.parseFloat(_val);
-            if(!isNaN(_pawns)){
+            if(!Number.isNaN(_pawns)){
               _ev=Math.round(_pawns*100);
               _mate=0;
             }
@@ -842,9 +842,9 @@ function _applySANMove(state,san){
   let destCol,destRow;
   try{
     destCol=destStr.charCodeAt(0)-97;
-    destRow=8-parseInt(destStr[1],10);
+    destRow=8-Number.parseInt(destStr[1],10);
   }catch(e){return null;}
-  if(destCol<0||destCol>7||destRow<0||destRow>7||isNaN(destRow))return null;
+  if(destCol<0||destCol>7||destRow<0||destRow>7||Number.isNaN(destRow))return null;
   
   // Disambiguation: everything between piece letter and destination
   let disambig=cleanSAN.slice(idx,-2);
@@ -854,7 +854,7 @@ function _applySANMove(state,san){
   let disambigFile=-1,disambigRank=-1;
   for(const ch of disambig){
     if(ch>='a'&&ch<='h')disambigFile=ch.charCodeAt(0)-97;
-    else if(ch>='1'&&ch<='8')disambigRank=8-parseInt(ch,10);
+    else if(ch>='1'&&ch<='8')disambigRank=8-Number.parseInt(ch,10);
   }
   
   // Determine if capture was indicated in original SAN
@@ -1013,7 +1013,7 @@ function importPGN(pgnText){
           const backRank=[];
           let idx=0;
           for(const ch of whiteRow){
-            if(ch>='1'&&ch<='8'){for(let k=0;k<parseInt(ch,10);k++){backRank[idx++]=null;}}
+            if(ch>='1'&&ch<='8'){for(let k=0;k<Number.parseInt(ch,10);k++){backRank[idx++]=null;}}
             else{
               const t=ch.toLowerCase()==='r'?'rook':ch.toLowerCase()==='n'?'knight':ch.toLowerCase()==='b'?'bishop':ch.toLowerCase()==='q'?'queen':ch.toLowerCase()==='k'?'king':null;
               if(t)backRank[idx++]=t;
@@ -1758,7 +1758,7 @@ let wk=null,bk=null;
 for(let r=0;r<8;r++){
 let c=0;
 for(const ch of rows[r]){
-if(ch>='1'&&ch<='8'){c+=parseInt(ch,10);continue}
+if(ch>='1'&&ch<='8'){c+=Number.parseInt(ch,10);continue}
 const isWhite=ch===ch.toUpperCase();
 const type=ch.toLowerCase()==='p'?'pawn':ch.toLowerCase()==='n'?'knight':ch.toLowerCase()==='b'?'bishop':ch.toLowerCase()==='r'?'rook':ch.toLowerCase()==='q'?'queen':ch.toLowerCase()==='k'?'king':null;
 if(!type)return null;
@@ -1797,7 +1797,7 @@ if(typeof parseShredderCastling==='function'){
   castlingRights={whiteKingside:crStr.includes('K'),whiteQueenside:crStr.includes('Q'),blackKingside:crStr.includes('k'),blackQueenside:crStr.includes('q')};
 }
 let enPassantTarget=null;
-if(parts[3]&&parts[3]!=='-'){const ec=parts[3].charCodeAt(0)-97;const er=8-parseInt(parts[3][1],10);if(er>=0&&er<8&&ec>=0&&ec<8){
+if(parts[3]&&parts[3]!=='-'){const ec=parts[3].charCodeAt(0)-97;const er=8-Number.parseInt(parts[3][1],10);if(er>=0&&er<8&&ec>=0&&ec<8){
 // Validate: en passant row must be rank 6 (er=2) for white's turn or rank 3 (er=5) for black's turn
 const validRow=(turn==='white'&&er===2)||(turn==='black'&&er===5);
 if(validRow){
@@ -1806,8 +1806,8 @@ const opp=turn;const pd=opp==='white'?1:-1;let _epHasCap=false;for(const dc of[-
 if(_epHasCap)enPassantTarget={row:er,col:ec};
 }
 }}
-const halfMoveClock=parts[4]?parseInt(parts[4],10)||0:0;
-const fullMoveNumber=parts[5]?parseInt(parts[5],10)||1:1;
+const halfMoveClock=parts[4]?Number.parseInt(parts[4],10)||0:0;
+const fullMoveNumber=parts[5]?Number.parseInt(parts[5],10)||1:1;
 const s={board,currentTurn:turn,castlingRights,enPassantTarget,halfMoveClock,fullMoveNumber,moveHistory:[],posCount:new Map(),wk,bk,hash:0,boardVersion:1};
 syncHash(s);s.posCount.set(s.hash,1);
 // Validate: the side NOT to move must not be in check (illegal position)

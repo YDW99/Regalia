@@ -217,7 +217,7 @@ function formatEvalAnnotation(cached){
     if(seldepth>0&&seldepth>depth)s+=' SD'+seldepth;
   }
   // WDL — only when all three are non-negative AND sum > 0.
-  if(!isNaN(wW)&&!isNaN(wD)&&!isNaN(wL)&&wW>=0&&wD>=0&&wL>=0){
+  if(!Number.isNaN(wW)&&!Number.isNaN(wD)&&!Number.isNaN(wL)&&wW>=0&&wD>=0&&wL>=0){
     const total=wW+wD+wL;
     if(total>0){
       const wP=Math.round(wW/total*100);
@@ -257,7 +257,7 @@ function _pgnWhitePerspectiveLabel(ev){
  * @returns {string} e.g. "[%clk 0:05:23]" or ""
  */
 function formatClkTag(remainingSec){
-  if(remainingSec==null||remainingSec<0||!isFinite(remainingSec))return '';
+  if(remainingSec==null||remainingSec<0||!Number.isFinite(remainingSec))return '';
   const h=Math.floor(remainingSec/3600);
   const m=Math.floor((remainingSec%3600)/60);
   const s=Math.floor(remainingSec%60);
@@ -281,7 +281,7 @@ function formatClkTag(remainingSec){
  * @returns {string} e.g. "[%emt 0:00:03]" or "" if elapsedSec is null/0
  */
 function formatEmtTag(elapsedSec){
-  if(elapsedSec==null||elapsedSec<0||!isFinite(elapsedSec))return '';
+  if(elapsedSec==null||elapsedSec<0||!Number.isFinite(elapsedSec))return '';
   // Round to nearest second for the HH:MM:SS format
   const total=Math.round(elapsedSec);
   if(total===0)return ''; // skip zero-time moves (e.g., pre-played opening moves)
@@ -471,30 +471,30 @@ function parseCalTag(tagStr){
 function parseTimeControl(tcStr){
   if(!tcStr||tcStr==='?')return {type:'unknown'};
   // Hourglass
-  if(tcStr.startsWith('*'))return {type:'hourglass',baseSec:parseInt(tcStr.substring(1),10)||0};
+  if(tcStr.startsWith('*'))return {type:'hourglass',baseSec:Number.parseInt(tcStr.substring(1),10)||0};
   // Staged: "40/7200:3600" or "40/7200:20/3600:3600"
   if(tcStr.includes('/')||tcStr.includes(':')){
     const stages=[];
     const parts=tcStr.split(':');
     for(const p of parts){
       const sm=p.match(/^(\d+)\/(\d+)$/);
-      if(sm){stages.push({moves:parseInt(sm[1],10),baseSec:parseInt(sm[2],10)});}
-      else{const n=parseInt(p,10);if(!isNaN(n))stages.push({baseSec:n});}
+      if(sm){stages.push({moves:Number.parseInt(sm[1],10),baseSec:Number.parseInt(sm[2],10)});}
+      else{const n=Number.parseInt(p,10);if(!Number.isNaN(n))stages.push({baseSec:n});}
     }
     return {type:'staged',stages:stages};
   }
   // Fischer increment
   const fm=tcStr.match(/^(\d+)\+(\d+)$/);
-  if(fm)return {type:'fischer',baseSec:parseInt(fm[1],10),incrementSec:parseInt(fm[2],10)};
+  if(fm)return {type:'fischer',baseSec:Number.parseInt(fm[1],10),incrementSec:Number.parseInt(fm[2],10)};
   // Bronstein delay
   const bm=tcStr.match(/^(\d+)d(\d+)$/i);
-  if(bm)return {type:'bronstein',baseSec:parseInt(bm[1],10),delaySec:parseInt(bm[2],10)};
+  if(bm)return {type:'bronstein',baseSec:Number.parseInt(bm[1],10),delaySec:Number.parseInt(bm[2],10)};
   // US delay
   const um=tcStr.match(/^(\d+)i(\d+)$/i);
-  if(um)return {type:'usdelay',baseSec:parseInt(um[1],10),delaySec:parseInt(um[2],10)};
+  if(um)return {type:'usdelay',baseSec:Number.parseInt(um[1],10),delaySec:Number.parseInt(um[2],10)};
   // Sudden death
   const sm=tcStr.match(/^(\d+)$/);
-  if(sm)return {type:'sudden',baseSec:parseInt(sm[1],10)};
+  if(sm)return {type:'sudden',baseSec:Number.parseInt(sm[1],10)};
   return {type:'unknown'};
 }
 
@@ -782,7 +782,7 @@ function parseStandardPGN(pgnText){
     // FEN field 6 is the full-move number, field 1 is side to move
     const fenParts=tags.FEN.split(/\s+/);
     if(fenParts[1]==='b')startColor='black';
-    const fenMove=parseInt(fenParts[5],10);
+    const fenMove=Number.parseInt(fenParts[5],10);
     if(fenMove>0)startMoveNum=fenMove;
   }
   const halfMoves=[];
@@ -844,7 +844,7 @@ function parseStandardPGN(pgnText){
       // Extract the move number and side indicator from "N." or "N..."
       const mm=tok.value.match(/^(\d+)(\.+)$/);
       if(mm){
-        const num=parseInt(mm[1],10);
+        const num=Number.parseInt(mm[1],10);
         const dots=mm[2];
         if(dots.length>=3){
           // "N..." — black to move, advance move number

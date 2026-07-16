@@ -266,7 +266,7 @@ let _reviewEvalCache=new function(){
       // Skip the step the user is currently viewing (in-flight eval).
       let _isCurrent=false;
       try{
-        if(typeof _reviewEvalRequestedStep!=='undefined'&&
+        if(_reviewEvalRequestedStep!==undefined&&
            String(k)===String(_reviewEvalRequestedStep)){
           _isCurrent=true;
         }
@@ -690,7 +690,7 @@ function _hideLoadingOverlay(){
 function _applySystemTheme(){
   try{
     const isLight=_isLightMode();
-    document.documentElement.setAttribute('data-theme', isLight?'light':'dark');
+    document.documentElement.dataset.theme = isLight?'light':'dark'; // v1.2.3 (S7761): dataset API
   }catch(e){
     // Fallback: default dark theme (no attribute = dark :root variables)
   }
@@ -939,8 +939,8 @@ function _buildStrInfo(result){
     site:typeof gameSite!=='undefined'?gameSite:'?',
     date:_formatTodayPGNDate(),
     round:'?',
-    white:typeof playerWhite!=='undefined'?playerWhite:(playerColor==='white'?(_humanPlayerName||T('you')):(_aiOpponentNameWithLevel())),
-    black:typeof playerBlack!=='undefined'?playerBlack:(playerColor==='black'?(_humanPlayerName||T('you')):(_aiOpponentNameWithLevel())),
+    white:playerWhite!==undefined?playerWhite:(playerColor==='white'?(_humanPlayerName||T('you')):(_aiOpponentNameWithLevel())),
+    black:playerBlack!==undefined?playerBlack:(playerColor==='black'?(_humanPlayerName||T('you')):(_aiOpponentNameWithLevel())),
     result:result
   };
 }
@@ -1817,9 +1817,9 @@ function _formatVariationGroups(variations, moveNum, isAfterWhiteMove){
 function _uciToSimple(uci){
   if(!uci||typeof uci!=='string'||uci.length<4)return (uci!=null?String(uci):'');
   const fromCol=uci.charCodeAt(0)-97;
-  const fromRow=8-parseInt(uci[1]);
+  const fromRow=8-Number.parseInt(uci[1]);
   const toCol=uci.charCodeAt(2)-97;
-  const toRow=8-parseInt(uci[3]);
+  const toRow=8-Number.parseInt(uci[3]);
   const promo=uci.length>4?uci[4]:null;
   const toFile=String.fromCodePoint(97+toCol);
   const toRank=String(8-toRow);
@@ -1892,9 +1892,9 @@ function _uciToSimple(uci){
 function _uciToSAN(uci, state){
   if(!uci||typeof uci!=='string'||uci.length<4||!state||!state.board) return { san: _uciToSimple(uci), postState: state };
   const fromCol=uci.charCodeAt(0)-97;
-  const fromRow=8-parseInt(uci[1]);
+  const fromRow=8-Number.parseInt(uci[1]);
   let toCol=uci.charCodeAt(2)-97;
-  let toRow=8-parseInt(uci[3]);
+  let toRow=8-Number.parseInt(uci[3]);
   // Bounds check
   if(fromRow<0||fromRow>7||fromCol<0||fromCol>7||toRow<0||toRow>7||toCol<0||toCol>7)
     return { san: _uciToSimple(uci), postState: state };
@@ -2148,7 +2148,7 @@ function _sanitizeFenForEngine(fen){
   for(let r=0;r<8;r++){
     let c=0;
     for(const ch of rows[r]){
-      if(ch>='1'&&ch<='8'){c+=parseInt(ch);continue;}
+      if(ch>='1'&&ch<='8'){c+=Number.parseInt(ch);continue;}
       if(c>=8)break;
       const isWhite=ch===ch.toUpperCase();
       // v1.0.8 PHASE 24 (PERF): cache toLowerCase once instead of 6× per piece.
@@ -2207,9 +2207,9 @@ function _sanitizeFenForEngine(fen){
 // UCI move to internal coordinate converter (e.g., "e2e4" -> {from:{row:6,col:4},to:{row:4,col:4}})
 function uciToCoords(uci){
   if(!uci||typeof uci!=='string'||uci.length<4)return null;
-  const fc=uci.charCodeAt(0)-97, fr=8-parseInt(uci[1]);
-  const tc=uci.charCodeAt(2)-97, tr=8-parseInt(uci[3]);
-  if(isNaN(fc)||isNaN(fr)||isNaN(tc)||isNaN(tr))return null;
+  const fc=uci.charCodeAt(0)-97, fr=8-Number.parseInt(uci[1]);
+  const tc=uci.charCodeAt(2)-97, tr=8-Number.parseInt(uci[3]);
+  if(Number.isNaN(fc)||Number.isNaN(fr)||Number.isNaN(tc)||Number.isNaN(tr))return null;
   if(fc<0||fc>7||fr<0||fr>7||tc<0||tc>7||tr<0||tr>7)return null;
   const result={from:{row:fr,col:fc},to:{row:tr,col:tc}};
   if(uci.length>=5){
@@ -2724,7 +2724,7 @@ function onEngineProgress(depth,nodes,nps,scoreCp,scoreMate,wdlW,wdlD,wdlL,selde
   const wCp=isBlackToMove?-scoreCp:scoreCp;
   const wMate=isBlackToMove?-scoreMate:scoreMate;
   let scoreStr='';
-  if(scoreMate!=null){const m=parseInt(wMate);scoreStr=m>0?' #+'+Math.abs(m):m<0?' #-'+Math.abs(m):' #0';}
+  if(scoreMate!=null){const m=Number.parseInt(wMate);scoreStr=m>0?' #+'+Math.abs(m):m<0?' #-'+Math.abs(m):' #0';}
   else if(scoreCp!=null){const pd=(wCp/100).toFixed(1);scoreStr=' '+T('eval_label')+':'+(wCp>0?'+':'')+pd;}
   if(scoreStr)infoParts.push(scoreStr.trim());
   aiThinkInfo=infoParts.join(' ');
@@ -2821,7 +2821,7 @@ function onPonderProgress(depth,nodes,nps,scoreCp,scoreMate,seldepth){
   const wCp=isBlackToMove?-scoreCp:scoreCp;
   const wMate=isBlackToMove?-scoreMate:scoreMate;
   let scoreStr='';
-  if(scoreMate!=null&&scoreMate!==0){const m=parseInt(wMate);scoreStr=m>0?' #+'+Math.abs(m):m<0?' #-'+Math.abs(m):'';}
+  if(scoreMate!=null&&scoreMate!==0){const m=Number.parseInt(wMate);scoreStr=m>0?' #+'+Math.abs(m):m<0?' #-'+Math.abs(m):'';}
   else if(scoreCp!=null){const pd=(wCp/100).toFixed(1);scoreStr=' '+T('eval_label')+':'+(wCp>0?'+':'')+pd;}
   if(scoreStr)infoParts.push(scoreStr.trim());
   _ponderBarInfo=infoParts.join(' ');
@@ -2866,8 +2866,8 @@ function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth){
   if(_evalForBlackTurn&&_bgW>=0){const tmp=_bgW;_bgW=_bgL;_bgL=tmp;}
   let _bgEval,_bgMate;
   if(scoreMate!=null){
-    const mateN=parseInt(scoreMate,10);
-    if(!isNaN(mateN)){
+    const mateN=Number.parseInt(scoreMate,10);
+    if(!Number.isNaN(mateN)){
       const whiteWins=(_evalForBlackTurn?mateN<=0:mateN>0);
       _bgEval=whiteWins?99999:-99999;
       _bgMate=_evalForBlackTurn?-mateN:mateN;
@@ -3281,10 +3281,10 @@ function restartCurrentEngine(){
     }
   },2500);
 }
-function setConfigThreads(v){v=Math.max(1,Math.min(64,parseInt(v)||1));if(engineSettingsData)engineSettingsData.threads=v;_bridgeCall(function(bridge){bridge.setEngineThreads(v);});renderEngineConfigAndUpdate();}
-function setConfigHash(v){v=Math.max(1,Math.min(4096,parseInt(v)||64));if(engineSettingsData)engineSettingsData.hash=v;_bridgeCall(function(bridge){bridge.setEngineHash(v);});renderEngineConfigAndUpdate();}
+function setConfigThreads(v){v=Math.max(1,Math.min(64,Number.parseInt(v)||1));if(engineSettingsData)engineSettingsData.threads=v;_bridgeCall(function(bridge){bridge.setEngineThreads(v);});renderEngineConfigAndUpdate();}
+function setConfigHash(v){v=Math.max(1,Math.min(4096,Number.parseInt(v)||64));if(engineSettingsData)engineSettingsData.hash=v;_bridgeCall(function(bridge){bridge.setEngineHash(v);});renderEngineConfigAndUpdate();}
 function setConfigMultiPV(v){
-  v=Math.max(1,Math.min(8,parseInt(v)||1));
+  v=Math.max(1,Math.min(8,Number.parseInt(v)||1));
   if(engineSettingsData)engineSettingsData.multiPV=v;
   _cachedMultiPV=v;
   // v1.0.5 Rev56 BUG FIX: When MultiPV is toggled OFF (set to 1) mid-search,
@@ -3306,7 +3306,7 @@ function setConfigMultiPV(v){
   _bridgeCall(function(bridge){bridge.setEngineMultiPV(v);});
   renderEngineConfigAndUpdate();
 }
-function setConfigMoveOverhead(v){v=Math.max(0,Math.min(5000,parseInt(v)||30));if(engineSettingsData)engineSettingsData.moveOverhead=v;_bridgeCall(function(bridge){bridge.setEngineMoveOverhead(v);});renderEngineConfigAndUpdate();}
+function setConfigMoveOverhead(v){v=Math.max(0,Math.min(5000,Number.parseInt(v)||30));if(engineSettingsData)engineSettingsData.moveOverhead=v;_bridgeCall(function(bridge){bridge.setEngineMoveOverhead(v);});renderEngineConfigAndUpdate();}
 function togglePonder(){
   const newVal=!engineSettingsData||!engineSettingsData.ponder;
   if(engineSettingsData)engineSettingsData.ponder=newVal;
@@ -3319,14 +3319,14 @@ function toggleShowWDL(){
   HapticManager.fire(newVal?'TOGGLE_ON':'TOGGLE_OFF');
   _bridgeCall(function(bridge){bridge.setEngineShowWDL(newVal);});renderEngineConfigAndUpdate();
 }
-function setConfigSkillLevel(v){v=Math.max(0,Math.min(20,parseInt(v)||20));if(engineSettingsData)engineSettingsData.skillLevel=v;_bridgeCall(function(bridge){bridge.setEngineSkillLevel(v);});renderEngineConfigAndUpdate();}
+function setConfigSkillLevel(v){v=Math.max(0,Math.min(20,Number.parseInt(v)||20));if(engineSettingsData)engineSettingsData.skillLevel=v;_bridgeCall(function(bridge){bridge.setEngineSkillLevel(v);});renderEngineConfigAndUpdate();}
 function toggleLimitElo(){
   const newVal=!engineSettingsData||!engineSettingsData.limitStrength;
   if(engineSettingsData)engineSettingsData.limitStrength=newVal;
   HapticManager.fire(newVal?'TOGGLE_ON':'TOGGLE_OFF');
   _bridgeCall(function(bridge){bridge.setEngineLimitElo(newVal,engineSettingsData?engineSettingsData.elo:2800);});renderEngineConfigAndUpdate();
 }
-function setConfigElo(v){v=Math.max(500,Math.min(3500,parseInt(v)||2800));if(engineSettingsData)engineSettingsData.elo=v;_bridgeCall(function(bridge){bridge.setEngineLimitElo(engineSettingsData?engineSettingsData.limitStrength:false,v);});renderEngineConfigAndUpdate();}
+function setConfigElo(v){v=Math.max(500,Math.min(3500,Number.parseInt(v)||2800));if(engineSettingsData)engineSettingsData.elo=v;_bridgeCall(function(bridge){bridge.setEngineLimitElo(engineSettingsData?engineSettingsData.limitStrength:false,v);});renderEngineConfigAndUpdate();}
 function toggleAutoConfig(){
   const newVal=!engineSettingsData||!engineSettingsData.autoConfig;
   if(engineSettingsData)engineSettingsData.autoConfig=newVal;
@@ -3992,8 +3992,8 @@ function _updateMultiPVDisplay(){
     // Cache miss — compute the display text for this line
     let scoreStr='';
     if(pv.scoreMate!=null){
-      const m=parseInt(pv.scoreMate,10);
-      if(!isNaN(m))scoreStr=m>0?'#+'+Math.abs(m):m<0?'#-'+Math.abs(m):'#0';
+      const m=Number.parseInt(pv.scoreMate,10);
+      if(!Number.isNaN(m))scoreStr=m>0?'#+'+Math.abs(m):m<0?'#-'+Math.abs(m):'#0';
     }else if(pv.scoreCp!=null){
       const pd=(pv.scoreCp/100).toFixed(1);
       scoreStr=(pv.scoreCp>0?'+':'')+pd;
@@ -4060,7 +4060,7 @@ let _pendingBestMoveInfo=null;
 function onGameDifficultyChanged(limitStrength,elo){
   if(!engineSettingsData)return;
   engineSettingsData.limitStrength=!!limitStrength;
-  if(elo>0)engineSettingsData.elo=parseInt(elo)||2800;
+  if(elo>0)engineSettingsData.elo=Number.parseInt(elo)||2800;
   // If config panel is open, refresh its display
   if(document.querySelector('.dov[role="dialog"]'))renderEngineConfigAndUpdate();
   // Re-render toolbar to reflect updated difficulty level immediately

@@ -54,6 +54,12 @@ This data:
 - The eval cache (`eval_cache.json`) contains per-move Stockfish evaluation scores (centipawn values, mate distances, search depths, WDL probabilities) keyed by review step index. It contains no personal or position-identifying information beyond the chess evaluation data itself. (v1.0.7+: capped at 2000 entries via LRU eviction — the currently-viewed step is never evicted; eviction order is preserved across app restarts.)
 - The tag files contain user-defined tag strings (e.g., "opening", "tactics") for organizing PGN cache entries. They contain no personal or device-identifying information.
 
+### v1.2.3 round-17: SonarCloud cleanup + God Class refactor (HapticManager / ui split)
+
+The v1.2.3 round-17 change (2026.7.17) is a pure code-quality and code-organization change: SonarCloud-driven cleanups (`Number.*` conversions, arrow functions, `catch (Exception)` narrowing, `dataset`, `Math.trunc`, `replaceAll`, regex simplification) and a God Class refactor extracting `HapticManager.java` from StockfishNative.java plus `ui-gameflow.js` / `ui-interactions.js` from ui.js. **No new permissions, no new network access, no new data collection, no changes to how data is stored or transmitted.** All extracted code runs with the same privileges and data access as before; the JS↔Java bridge API surface is unchanged (thin `@JavascriptInterface` delegates).
+
+Version: `versionCode=123`, `versionName="1.2.3"` (unchanged — same version, quality/refactor round).
+
 ### v1.2.0 Phase 82+++: renderInternal AI/player/info bars extraction
 
 The v1.2.0 Phase 82+++ change (2026.7.12) extracts 3 more rendering blocks from `renderInternal()` into dedicated functions: `_renderAIBar(h, oppC)`, `_renderPlayerBar(h)`, and `_renderInfoBars(h)`. `renderInternal()` was further reduced from 476 to 359 lines. This is a pure code-organization change — **no new permissions, no new network access, no new data collection, no changes to how data is stored or transmitted**. All extracted functions use global state only (with `oppC` passed as a parameter where needed); the `h` string concatenation pattern is preserved.

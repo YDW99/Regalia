@@ -21,7 +21,7 @@ chmod +x src/main/jniLibs/arm64-v8a/libstockfish.so
 python3 build-chess.py
 ```
 The build script merges `src/main/assets/chess.src/*.js` (in order:
-game-logic → chess960 → pgn-standard → worker-pool → state-store → ai-bridge → tablebase → eco-data → ui)
+game-logic → chess960 → pgn-standard → worker-pool → state-store → ai-bridge → tablebase → eco-data → ui-gameflow → ui-interactions → ui)
 into `src/main/assets/chess.html`, stripping `export` statements.
 As of v1.1.2 Phase 67 (MED-3), the script wraps every file I/O in try/except
 for clearer diagnostics and uses an `if __name__ == '__main__':` guard.
@@ -29,6 +29,13 @@ v1.2.1 (round-4 cleanup) removed the four Phase-74 ui-*.js extracts
 (ui-audio / ui-board / ui-review / ui-toolbar) — they duplicated inline logic
 in ui.js / ai-bridge.js with subtly different conventions and were never on
 the hot path. Bundle order is now 9 modules (down from 13).
+v1.2.3 (round-17 God Class refactor) split ui.js again — this time as real,
+fully-wired extractions: ui-gameflow.js (game start + clock subsystem,
+313 lines) and ui-interactions.js (click handling, move execution, toolbar,
+dialogs, back-press routing, 1,438 lines). ui.js is down to 6,761 lines
+(-20%). The new modules sit immediately before ui.js in the bundle; all
+extracted units are pure function declarations (hoisted bundle-wide), so
+load order is unchanged. Bundle order is now 11 modules.
 
 ## Build APK
 ```
@@ -40,7 +47,9 @@ The signed APK (v1+v2+v3 signed with `../debug.keystore`) will be at
 
 ## Requirements
 - JDK 21 (e.g. Temurin JDK 21.0.5+11) — must include `javac` (JRE-only is insufficient)
-- Android SDK API 35, Build-Tools 34.0.0, NDK 27.2.12479018, CMake 3.22.1
+- Android SDK API 35, Build-Tools 34.0.0, NDK 27.2.12479018, CMake 3.31.6
+  (pinned `version "3.31.6+"` in `build.gradle` since v1.2.3 round-13;
+  install via `sdkmanager "cmake;3.31.6"`)
 - Gradle 8.11.1 (wrapper included)
 - Set `JAVA_HOME` to your JDK 21 path (or add `org.gradle.java.home=...` to
   `~/.gradle/gradle.properties` — never commit machine-specific paths to the

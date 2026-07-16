@@ -52,6 +52,13 @@ def main():
         "ai-bridge.js",
         "tablebase.js",
         "eco-data.js",
+        # v1.2.3 (God Class round-17): ui.js split — interaction handlers and
+        #   game-flow/clock logic extracted into two global-scope modules.
+        #   Concatenation order is safe: all extracted units are pure function
+        #   declarations (hoisted bundle-wide); no top-level executable code
+        #   was moved, so no TDZ/load-order change.
+        "ui-gameflow.js",      # v1.2.3: game start + game-clock subsystem
+        "ui-interactions.js",  # v1.2.3: clicks, move exec, toolbar, dialogs, back-press
         "ui.js",               # main UI (inline ChessAudioEngine + board rendering)
     ]
 

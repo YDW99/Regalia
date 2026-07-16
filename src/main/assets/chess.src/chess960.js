@@ -60,9 +60,11 @@ const _BINOMIAL_5_2 = [
 function spidToBackRank(spid){
   if(spid<0||spid>959||!Number.isInteger(spid))spid=518; // default: traditional
   const lightBishopIdx=spid%4;
-  const darkBishopIdx=((spid/4)|0)%4;
-  const queenIdx=((spid/16)|0)%6;
-  const knightPairIdx=((spid/96)|0)%10;
+  // v1.2.3 (S7767): Math.trunc instead of |0 — identical for spid ∈ [0,959]
+  //   (guaranteed by the clamp above), but clearer intent.
+  const darkBishopIdx=(Math.trunc(spid/4))%4;
+  const queenIdx=(Math.trunc(spid/16))%6;
+  const knightPairIdx=(Math.trunc(spid/96))%10;
   // Build empty 8-slot array
   const slots=new Array(8).fill(null);
   // 1. Place bishops

@@ -20,6 +20,32 @@ The original NOTICE files from third-party projects are preserved alongside this
 - AUTHORS-stockfish: Stockfish project authors list
 
 ===== LICENSE CLASSIFICATION BY FILE ==========================================
+v1.2.3 round-17 (2026.7.17) — SonarCloud high-priority cleanup + God Class refactor:
+  - NEW FILE `HapticManager.java` (GPL v3): extracted from StockfishNative.java
+    (~420 lines of haptic logic referencing DroidFish patterns). StockfishNative
+    (4,674 → 4,307 lines) keeps thin @JavascriptInterface delegates; JS API
+    unchanged. Real successor of the round-10-removed dead HapticHelper.
+  - NEW FILES `ui-gameflow.js` (313 lines, GPL v3) and `ui-interactions.js`
+    (1,438 lines, GPL v3): extracted from ui.js (8,475 → 6,761 lines, -20%).
+    Game start + clock subsystem; click handling, move execution, toolbar,
+    dialogs, back-press routing. Pure function-declaration moves.
+  - `StockfishNative.java` (GPL v3): sleepGracefully() helper replaces 6
+    nested-try Thread.sleep sites (S1141); postJsCallback null/blank guard.
+  - `ChessWebViewClient.java` (AGPL v3): 6× catch (Throwable) → catch
+    (Exception) (S1181); destroyWebViewSafely() DRY helper.
+  - JS modules (GPL v3 unless noted): 99× isNaN/parseInt/isFinite → Number.*;
+    9× self=this → arrow functions (ui.js); 2× setAttribute → dataset
+    (ai-bridge.js, stats.html [AGPL v3]); 3× |0 → Math.trunc (chess960.js
+    [AGPL v3]); 3× replace → replaceAll; worker-pool.js [AGPL v3] nested-
+    quantifier regex simplified; typeof-undefined → !== undefined for
+    same-module-declared variables only. _trendH latent ReferenceError fixed
+    via shared _computeTrendChartHeight() helper.
+  - `build-chess.py` (AGPL v3): MODULES list += ui-gameflow.js,
+    ui-interactions.js (11 modules total).
+  - License classification: new files inherit their source file's
+    classification (GPL v3 — derived from DroidFish-referencing code);
+    all other files retain their existing classification.
+
 v1.2.3 round-13 (2026.7.16) — CMake re-enablement + first-principles code review:
   - Re-enabled externalNativeBuild in `build.gradle` (AGPL v3). The round-12
     workaround (pre-built libengine_bridge.so in jniLibs) is removed; CMake

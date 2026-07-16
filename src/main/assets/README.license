@@ -1,3 +1,18 @@
+v1.2.3 round-17 (2026.7.17) — SonarCloud high-priority cleanup:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - chess.html (AGPL v3): Rebuilt from chess.src/ after round-17 JS fixes and
+    the ui.js God Class split (ui-gameflow.js + ui-interactions.js added).
+    22,204 lines, 1,334,211 bytes. Contains all round-17 chess.src changes.
+  - stats.html (AGPL v3): S7773 — 7 isNaN + 16 parseInt call sites converted
+    to Number.isNaN/Number.parseInt (all arguments verified number-typed).
+    S7761 — setAttribute('data-theme') → documentElement.dataset.theme.
+    S7781 — one `rest.replace('x','')` → replaceAll (SAN disambiguation has
+    at most one 'x'; equivalent); the printf-style sequential %d replacement
+    chain intentionally left as .replace (replaceAll would substitute every
+    %d with the first value — verified, would be a bug).
+  - License classification: chess.html and stats.html remain AGPL v3
+    (original works, not derived from DroidFish or Stockfish).
+
 v1.2.3 round-13 (2026.7.16) — CMake re-enablement + first-principles code review:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
   - chess.html (AGPL v3): Rebuilt from chess.src/ after round-13 JS fixes.

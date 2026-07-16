@@ -163,6 +163,8 @@ public class StockfishNative {
     // v1.2.0 Phase 73+: Additional helper classes for further God Module reduction
     private final FileIoHelper _fileIoHelper;
     private final PermissionHelper _permissionHelper;
+    // v1.2.3 (God Class round-17): haptic feedback manager, extracted from this class.
+    private HapticManager _hapticManager;
     private final SafPickerHelper _safPickerHelper;
     private final EngineSettingsHelper _engineSettingsHelper;
     // v1.2.0 Phase 81: Engine config helper — extracted from StockfishNative to reduce God Module size.
@@ -455,10 +457,15 @@ public class StockfishNative {
         // v1.2.0 Phase 73+: Initialize additional helper classes
         this._fileIoHelper = new FileIoHelper(this.context, this.activityRef);
         this._permissionHelper = new PermissionHelper(this.context, this.activityRef);
-        // v1.2.1 round-10 (review-E P2): HapticHelper removed — it was a Phase 73
-        //   extraction that was never wired in (performHaptic still calls the
-        //   inline performHapticInternal). The dead class/field/instantiation
-        //   have been removed; no behavior change.
+        // v1.2.1 round-10 (review-E P2): the dead Phase-73 HapticHelper (never
+        //   wired in) was removed; performHaptic then called the inline
+        //   performHapticInternal directly.
+        // v1.2.3 (God Class round-17): the inline haptic implementation
+        //   (~420 lines) has now been properly extracted into HapticManager
+        //   and is wired here — the real, fully-wired successor of the
+        //   removed dead HapticHelper. The @JavascriptInterface delegates
+        //   (isHapticEnabled / performHaptic) keep the JS API surface identical.
+        this._hapticManager = new HapticManager(this.context, this.prefs, this.mainHandler);
         this._safPickerHelper = new SafPickerHelper(this.context, this.activityRef, new SafPickerHelper.Callbacks() {
             @Override
             public void postJsCallback(String jsExpression) {
@@ -659,6 +666,22 @@ public class StockfishNative {
         sEngineThreadDiedName = null;
     }
 
+    /**
+     * v1.2.3 (S1141): Graceful sleep helper — sleeps {@code ms}, and on
+     *   InterruptedException restores the thread's interrupt flag so callers
+     *   can still observe the interrupt (via {@code isInterrupted()}) before
+     *   returning. Extracted to eliminate the nested-try pattern flagged by
+     *   SonarCloud java:S1141 and to keep the re-interrupt idiom consistent
+     *   across all process-cleanup / ponder-stop grace sleeps.
+     */
+    private static void sleepGracefully(long ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
     private boolean isProcessAlive() {
         if (engineProcess == null) return false;
         // v1.2.1 round-10 (review-D P3): Process.isAlive() is API 26+ only.
@@ -780,7 +803,7 @@ public class StockfishNative {
                 currentState = STATE_NONE;
             }
             sendUciCommand("stop");
-            try { Thread.sleep(PONDER_STOP_GRACE_MS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            sleepGracefully(PONDER_STOP_GRACE_MS);
             // FIX: After stopping ponder, the engine is now idle (bestmove was discarded).
             // Previously, the code fell through to create a new latch and send "stop" again,
             // but the engine already sent its bestmove (which was discarded). The new latch
@@ -1758,7 +1781,7 @@ public class StockfishNative {
             try { engineProcess.getErrorStream().close(); } catch (Throwable ignored) {}
             try {
                 engineProcess.destroy();
-                try { Thread.sleep(PROCESS_DESTROY_GRACE_MS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+                sleepGracefully(PROCESS_DESTROY_GRACE_MS);
                 // v1.0.2 FIX: use isProcessAlive() + destroyForciblySafe() —
                 // direct engineProcess.isAlive() / destroyForcibly() throw
                 // NoSuchMethodError on API 23-25 (minSdk).
@@ -2604,6 +2627,14 @@ public class StockfishNative {
      * Deliver a JS callback to the WebView via evaluateJavascript.
      */
     private void postJsCallback(final String jsExpression) {
+        // v1.2.3 (robustness, dev-guide §5.1 direction-1): reject null/blank
+        //   JS before wrapping — an empty payload would evaluate to the
+        //   no-op `try{}catch(e){...}`, silently masking caller bugs; a null
+        //   payload would produce the misleading script "try{null}catch...".
+        if (jsExpression == null || jsExpression.trim().isEmpty()) {
+            Log.w(TAG, "postJsCallback: null/empty JS expression, skipping");
+            return;
+        }
         final String cleanJs = jsExpression;
         try {
             mainHandler.post(new Runnable() {
@@ -2759,7 +2790,7 @@ public class StockfishNative {
                 //   v1.0.2 comment (process.destroy() returns immediately and
                 //   the engine exits promptly on SIGTERM). Aligning prevents
                 //   future drift and matches the documentation in BUILDING.md.
-                try { Thread.sleep(PROCESS_DESTROY_GRACE_MS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+                sleepGracefully(PROCESS_DESTROY_GRACE_MS);
                 // v1.0.2 FIX: use isProcessAlive() + destroyForciblySafe() —
                 // direct engineProcess.isAlive() / destroyForcibly() throw
                 // NoSuchMethodError on API 23-25 (minSdk).
@@ -2824,7 +2855,7 @@ public class StockfishNative {
         if (engineProcess != null) {
             try {
                 engineProcess.destroy();
-                try { Thread.sleep(PROCESS_DESTROY_GRACE_MS); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+                sleepGracefully(PROCESS_DESTROY_GRACE_MS);
                 // v1.0.2 FIX: use isProcessAlive() + destroyForciblySafe() —
                 // direct engineProcess.isAlive() / destroyForcibly() throw
                 // NoSuchMethodError on API 23-25 (minSdk).
@@ -2917,11 +2948,11 @@ public class StockfishNative {
                                 } catch (IOException ignored) {}
                             }
                             // Wait briefly for graceful exit
-                            try { Thread.sleep(200); } catch (InterruptedException e) { Thread.currentThread().interrupt(); break; }
+                            sleepGracefully(200); if (Thread.currentThread().isInterrupted()) break;
                             // Clean up all resources
                             cleanupEngineResources();
                             // Wait before restarting
-                            try { Thread.sleep(500); } catch (InterruptedException e) { Thread.currentThread().interrupt(); break; }
+                            sleepGracefully(500); if (Thread.currentThread().isInterrupted()) break;
                             // Attempt recovery (recoverEngine handles counter incrementing)
                             recoverEngine("heartbeat-zombie",
                                     "\u5f15\u64ce\u53cd\u590d\u65e0\u54cd\u5e94\uff0c\u8bf7\u5c1d\u8bd5\u624b\u52a8\u91cd\u542f");
@@ -3824,346 +3855,16 @@ public class StockfishNative {
 
     @JavascriptInterface
     public boolean isHapticEnabled() {
-        try {
-            boolean systemEnabled = android.provider.Settings.System.getInt(
-                context.getContentResolver(),
-                android.provider.Settings.System.HAPTIC_FEEDBACK_ENABLED, 1
-            ) != 0;
-            boolean appEnabled = prefs.getBoolean("hapticFeedbackEnabled", true);
-            // FIX: Both system AND app must be enabled. Previously used OR (||)
-            // which meant disabling haptic in app settings had no effect.
-            return systemEnabled && appEnabled;
-        } catch (Throwable e) {
-            return true;
-        }
+        // v1.2.3 (God Class round-17): delegate to HapticManager — JS API unchanged.
+        return _hapticManager.isHapticEnabled();
     }
 
     @JavascriptInterface
     public void performHaptic(String type) {
-        try {
-            android.os.Vibrator vibrator = (android.os.Vibrator) context.getSystemService(Context.VIBRATOR_SERVICE);
-            if (vibrator == null || !vibrator.hasVibrator()) return;
-
-            if (!isHapticEnabled()) return;
-
-            int apiLevel = Build.VERSION.SDK_INT;
-            final android.os.Vibrator finalVibrator = vibrator;
-
-            Runnable hapticRunnable = new Runnable() {
-                public void run() {
-                    try {
-                        performHapticInternal(finalVibrator, type, apiLevel);
-                    } catch (Throwable e) {
-                        Log.w(TAG, "performHapticInternal failed: " + e.getMessage());
-                    }
-                }
-            };
-
-            mainHandler.post(hapticRunnable);
-        } catch (Throwable e) {
-            Log.w(TAG, "performHaptic failed: " + e.getMessage());
-        }
+        // v1.2.3 (God Class round-17): delegate to HapticManager — JS API unchanged.
+        _hapticManager.performHaptic(type);
     }
 
-    private void performHapticInternal(android.os.Vibrator vibrator, String type, int apiLevel) {
-        switch (type) {
-                case "BUTTON_PRESS":
-                    if (apiLevel >= 31) {
-                        try {
-                            android.os.VibrationEffect effect = android.os.VibrationEffect.createPredefined(
-                                android.os.VibrationEffect.EFFECT_CLICK);
-                            vibrator.vibrate(effect);
-                        } catch (Throwable e) {
-                            fallbackVibrate(vibrator, apiLevel, 15);
-                        }
-                    } else {
-                        fallbackVibrate(vibrator, apiLevel, 15);
-                    }
-                    break;
-
-                case "PIECE_SELECT":
-                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.3f, 0.0f}, new long[]{0, 30, 20})) {
-                        // PWLE succeeded (or falls through to waveform below)
-                    } else if (apiLevel >= 31) {
-                        try {
-                            android.os.VibrationEffect effect = android.os.VibrationEffect.createPredefined(
-                                android.os.VibrationEffect.EFFECT_TICK);
-                            vibrator.vibrate(effect);
-                        } catch (Throwable e) {
-                            fallbackVibrate(vibrator, apiLevel, 10);
-                        }
-                    } else {
-                        fallbackVibrate(vibrator, apiLevel, 10);
-                    }
-                    break;
-
-                case "PIECE_MOVE":
-                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.5f, 0.0f}, new long[]{0, 40, 25})) {
-                        // PWLE succeeded (or falls through to waveform below)
-                    } else if (apiLevel >= 31) {
-                        try {
-                            android.os.VibrationEffect effect = android.os.VibrationEffect.createPredefined(
-                                android.os.VibrationEffect.EFFECT_HEAVY_CLICK);
-                            vibrator.vibrate(effect);
-                        } catch (Throwable e) {
-                            fallbackVibrate(vibrator, apiLevel, 25);
-                        }
-                    } else {
-                        fallbackVibrate(vibrator, apiLevel, 25);
-                    }
-                    break;
-
-                // v1.0.8 PHASE 26: piece-specific haptics for pawn (light quiver),
-                //   queen (massive impact), king (heavy regal).
-                // v1.0.8 PHASE 27: added knight (jump + crisp landing),
-                //   bishop (smooth glide), rook (charge + impact) haptics so all
-                //   six piece types have distinct, personality-matched feedback.
-                case "PAWN_MOVE":
-                    // Light quiver — three tiny ticks (the "瑟瑟发抖" shiver)
-                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.15f, 0.05f, 0.15f, 0.05f, 0.15f, 0.0f}, new long[]{0, 12, 8, 12, 8, 12, 8})) {
-                        // PWLE succeeded (or falls through to waveform below)
-                    } else if (apiLevel >= 26) {
-                        try {
-                            long[] timings = {0, 12, 8, 12, 8, 12};
-                            int[] amplitudes = {0, 60, 20, 60, 20, 60};
-                            vibrator.vibrate(android.os.VibrationEffect.createWaveform(timings, amplitudes, -1));
-                        } catch (Throwable e) {
-                            fallbackVibrate(vibrator, apiLevel, 20);
-                        }
-                    } else {
-                        fallbackVibrate(vibrator, apiLevel, 20);
-                    }
-                    break;
-
-                case "KNIGHT_MOVE":
-                    // Agile jump + crisp landing — a gentle lift-off ramp, a brief
-                    // mid-air gap, then a sharp crisp "ding" tick (the L-shape
-                    // parabolic jump + crisp ding landing from the sound/animation).
-                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.35f, 0.1f, 0.7f, 0.0f}, new long[]{0, 30, 40, 25, 15})) {
-                        // PWLE: ramp up (lift-off) → gap (mid-air) → sharp peak (landing ding)
-                    } else if (apiLevel >= 26) {
-                        try {
-                            long[] timings = {0, 30, 40, 25};
-                            int[] amplitudes = {0, 100, 30, 200};
-                            vibrator.vibrate(android.os.VibrationEffect.createWaveform(timings, amplitudes, -1));
-                        } catch (Throwable e) {
-                            fallbackVibrate(vibrator, apiLevel, 60);
-                        }
-                    } else {
-                        fallbackVibrate(vibrator, apiLevel, 60);
-                    }
-                    break;
-
-                case "BISHOP_MOVE":
-                    // Sharp smooth glide — a single smooth swell (no hard peak);
-                    // the bishop slides swiftly and cleanly along the diagonal.
-                    // Matches the sawtooth-glide + filter-sweep sound (270ms).
-                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.4f, 0.45f, 0.2f, 0.0f}, new long[]{0, 40, 50, 40, 20})) {
-                        // PWLE: smooth ramp up → smooth ramp down (bell-curve, no tick)
-                    } else if (apiLevel >= 26) {
-                        try {
-                            long[] timings = {0, 40, 50, 40};
-                            int[] amplitudes = {0, 120, 140, 60};
-                            vibrator.vibrate(android.os.VibrationEffect.createWaveform(timings, amplitudes, -1));
-                        } catch (Throwable e) {
-                            fallbackVibrate(vibrator, apiLevel, 70);
-                        }
-                    } else {
-                        fallbackVibrate(vibrator, apiLevel, 70);
-                    }
-                    break;
-
-                case "ROOK_MOVE":
-                    // Fierce charge-dash-impact — a low charge rumble, a brief dash
-                    // gap, then a heavy impact thud (matches the 3-stage rook sound
-                    // and the light board shake on landing).
-                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.5f, 0.15f, 0.85f, 0.3f, 0.5f, 0.0f}, new long[]{0, 25, 35, 60, 25, 40, 20})) {
-                        // PWLE: low charge → gap (dash whoosh) → heavy impact thud
-                    } else if (apiLevel >= 26) {
-                        try {
-                            long[] timings = {0, 25, 35, 60, 25, 40};
-                            int[] amplitudes = {0, 150, 40, 255, 80, 150};
-                            vibrator.vibrate(android.os.VibrationEffect.createWaveform(timings, amplitudes, -1));
-                        } catch (Throwable e) {
-                            fallbackVibrate(vibrator, apiLevel, 120);
-                        }
-                    } else {
-                        fallbackVibrate(vibrator, apiLevel, 120);
-                    }
-                    break;
-
-                case "QUEEN_MOVE":
-                    // Massive impact — the "铿锵有声、掷地有声" resounding slam
-                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.8f, 0.3f, 1.0f, 0.2f, 0.7f, 0.0f}, new long[]{0, 60, 40, 120, 50, 80, 40})) {
-                        // PWLE succeeded (or falls through to waveform below)
-                    } else if (apiLevel >= 26) {
-                        try {
-                            long[] timings = {0, 60, 40, 120, 50, 80};
-                            int[] amplitudes = {0, 200, 80, 255, 130, 180};
-                            vibrator.vibrate(android.os.VibrationEffect.createWaveform(timings, amplitudes, -1));
-                        } catch (Throwable e) {
-                            fallbackVibrate(vibrator, apiLevel, 300);
-                        }
-                    } else {
-                        fallbackVibrate(vibrator, apiLevel, 300);
-                    }
-                    break;
-
-                case "KING_MOVE":
-                    // Heavy regal — four measured thuds (the "威严庄重" solemn steps)
-                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.6f, 0.2f, 0.6f, 0.2f, 0.6f, 0.2f, 0.6f, 0.0f}, new long[]{0, 50, 60, 50, 60, 50, 60, 50, 40})) {
-                        // PWLE succeeded (or falls through to waveform below)
-                    } else if (apiLevel >= 26) {
-                        try {
-                            long[] timings = {0, 50, 60, 50, 60, 50, 60, 50};
-                            int[] amplitudes = {0, 180, 60, 180, 60, 180, 60, 180};
-                            vibrator.vibrate(android.os.VibrationEffect.createWaveform(timings, amplitudes, -1));
-                        } catch (Throwable e) {
-                            fallbackVibrate(vibrator, apiLevel, 250);
-                        }
-                    } else {
-                        fallbackVibrate(vibrator, apiLevel, 250);
-                    }
-                    break;
-
-                case "PIECE_CAPTURE":
-                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.6f, 0.2f, 0.6f, 0.0f}, new long[]{0, 30, 20, 30, 20})) {
-                        // PWLE succeeded (or falls through to waveform below)
-                    } else if (apiLevel >= 31) {
-                        try {
-                            vibrator.vibrate(android.os.VibrationEffect.createPredefined(
-                                android.os.VibrationEffect.EFFECT_DOUBLE_CLICK));
-                        } catch (Throwable e) {
-                            fallbackVibrate(vibrator, apiLevel, 40);
-                        }
-                    } else {
-                        fallbackVibrate(vibrator, apiLevel, 40);
-                    }
-                    break;
-
-                case "SLIDER_DRAG":
-                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.15f, 0.0f}, new long[]{0, 15, 10})) {
-                        // PWLE succeeded (or falls through to waveform below)
-                    } else {
-                        fallbackVibrate(vibrator, apiLevel, 8);
-                    }
-                    break;
-
-                case "TAB_SWITCH":
-                    if (apiLevel >= 31) {
-                        try {
-                            vibrator.vibrate(android.os.VibrationEffect.createPredefined(
-                                android.os.VibrationEffect.EFFECT_CLICK));
-                        } catch (Throwable e) {
-                            fallbackVibrate(vibrator, apiLevel, 20);
-                        }
-                    } else {
-                        fallbackVibrate(vibrator, apiLevel, 20);
-                    }
-                    break;
-
-                case "TOGGLE_ON":
-                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.2f, 0.5f, 0.0f}, new long[]{0, 30, 30, 20})) {
-                        // PWLE succeeded (or falls through to waveform below)
-                    } else {
-                        fallbackVibrate(vibrator, apiLevel, 30);
-                    }
-                    break;
-
-                case "TOGGLE_OFF":
-                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.5f, 0.2f, 0.0f}, new long[]{0, 30, 30, 20})) {
-                        // PWLE succeeded (or falls through to waveform below)
-                    } else {
-                        fallbackVibrate(vibrator, apiLevel, 20);
-                    }
-                    break;
-
-                case "CHECK_ALERT":
-                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.8f, 0.3f, 0.8f, 0.3f, 0.8f, 0.0f}, new long[]{0, 50, 30, 50, 30, 50, 30})) {
-                        // PWLE succeeded (or falls through to waveform below)
-                    } else if (apiLevel >= 26) {
-                        try {
-                            long[] timings = {0, 50, 30, 50, 30, 50};
-                            int[] amplitudes = {0, 255, 100, 255, 100, 255};
-                            vibrator.vibrate(android.os.VibrationEffect.createWaveform(timings, amplitudes, -1));
-                        } catch (Throwable e) {
-                            fallbackVibrate(vibrator, apiLevel, 200);
-                        }
-                    } else {
-                        fallbackVibrate(vibrator, apiLevel, 200);
-                    }
-                    break;
-
-                case "GAME_OVER":
-                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.6f, 0.3f, 0.8f, 0.1f, 0.0f}, new long[]{0, 100, 50, 200, 80, 50})) {
-                        // PWLE succeeded (or falls through to waveform below)
-                    } else if (apiLevel >= 26) {
-                        try {
-                            long[] timings = {0, 100, 50, 200, 80};
-                            int[] amplitudes = {0, 200, 100, 255, 30};
-                            vibrator.vibrate(android.os.VibrationEffect.createWaveform(timings, amplitudes, -1));
-                        } catch (Throwable e) {
-                            fallbackVibrate(vibrator, apiLevel, 400);
-                        }
-                    } else {
-                        fallbackVibrate(vibrator, apiLevel, 400);
-                    }
-                    break;
-
-                // v1.0.8 PHASE 28: CASTLE and PROMOTION haptics (previously fell to
-                //   the 15ms default — castling felt LESS tactile than a normal move,
-                //   promotion had no celebratory feedback).
-                // v1.0.8 PHASE 29: CASTLE redesigned to match the new rapid "snap +
-                //   slam" sound (playCastleRookMove in ui.js). The old pattern
-                //   (40-30-50ms, amplitudes 160/50/200) was too gentle and too slow
-                //   for the new impactful sound. New pattern mirrors the two-stage
-                //   audio design:
-                //     Stage 1 (0-35ms): sharp intense snap — amplitude 255 (max),
-                //                       matching the 110Hz thump + noise crack
-                //     Stage 2 (45-105ms): heavy rumble slam — amplitude 220,
-                //                         matching the sawtooth down-sweep + shimmer
-                //   Total ~105ms (vs old 120ms) — tighter, more decisive.
-                //   The "威严的迅猛" (majestic rapidity) feel: the king commands,
-                //   the rook obeys instantly with a heavy thud.
-                case "CASTLE":
-                    // Two-stage snap + slam — synchronized with playCastleRookMove
-                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 1.0f, 0.3f, 0.85f, 0.0f}, new long[]{0, 35, 10, 60, 15})) {
-                        // PWLE succeeded
-                    } else if (apiLevel >= 26) {
-                        try {
-                            long[] timings = {0, 35, 10, 60};
-                            int[] amplitudes = {0, 255, 80, 220};
-                            vibrator.vibrate(android.os.VibrationEffect.createWaveform(timings, amplitudes, -1));
-                        } catch (Throwable e) {
-                            fallbackVibrate(vibrator, apiLevel, 105);
-                        }
-                    } else {
-                        fallbackVibrate(vibrator, apiLevel, 105);
-                    }
-                    break;
-
-                case "PROMOTION":
-                    // Celebratory ascending triad — three rising pulses
-                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.3f, 0.15f, 0.5f, 0.2f, 0.8f, 0.0f}, new long[]{0, 30, 20, 30, 20, 50, 20})) {
-                        // PWLE succeeded
-                    } else if (apiLevel >= 26) {
-                        try {
-                            long[] timings = {0, 30, 20, 30, 20, 50};
-                            int[] amplitudes = {0, 80, 30, 140, 50, 220};
-                            vibrator.vibrate(android.os.VibrationEffect.createWaveform(timings, amplitudes, -1));
-                        } catch (Throwable e) {
-                            fallbackVibrate(vibrator, apiLevel, 100);
-                        }
-                    } else {
-                        fallbackVibrate(vibrator, apiLevel, 100);
-                    }
-                    break;
-
-                default:
-                    fallbackVibrate(vibrator, apiLevel, 15);
-                    break;
-            }
-    }
 
     @JavascriptInterface
     public void setHapticEnabled(boolean enabled) {
@@ -4171,50 +3872,7 @@ public class StockfishNative {
         Log.i(TAG, "Haptic feedback preference set to: " + enabled);
     }
 
-    // v1.0.8 PHASE 28 (bug fix): tryPwleVibrate now returns boolean (true if
-    //   PWLE succeeded, false if it fell back). The internal fallback was a
-    //   single OneShot which lost the multi-stage pattern (e.g. queen's
-    //   charge-impact became a single 390ms buzz). Now: if PWLE fails, return
-    //   false so the case statement's API 26+ waveform branch can run (which
-    //   has the correct multi-stage pattern). The old internal fallback is
-    //   removed — no more silent single-buzz degradation.
-    private boolean tryPwleVibrate(android.os.Vibrator vibrator, float[] amplitudes, long[] durations) {
-        if (Build.VERSION.SDK_INT >= 35) {
-            try {
-                Class<?> builderClass = Class.forName("android.os.VibrationEffect$Composition");
-                java.lang.reflect.Method startPwleMethod = builderClass.getMethod("startPwle");
-                java.lang.reflect.Method addPwleRampMethod = builderClass.getMethod("addPwleRamp", long.class, float.class);
-                java.lang.reflect.Method composeMethod = builderClass.getMethod("compose");
 
-                Object composition = builderClass.getDeclaredConstructor().newInstance();
-                startPwleMethod.invoke(composition);
-
-                for (int i = 0; i < amplitudes.length; i++) {
-                    addPwleRampMethod.invoke(composition, durations[i], amplitudes[i]);
-                }
-
-                Object effect = composeMethod.invoke(composition);
-                vibrator.vibrate((android.os.VibrationEffect) effect);
-                return true;
-            } catch (Throwable e) {
-                Log.d(TAG, "PWLE not available, falling back to waveform");
-                return false;
-            }
-        }
-        return false;
-    }
-
-    private void fallbackVibrate(android.os.Vibrator vibrator, int apiLevel, long durationMs) {
-        try {
-            if (apiLevel >= 26) {
-                vibrator.vibrate(android.os.VibrationEffect.createOneShot(durationMs, 128));
-            } else {
-                vibrator.vibrate(durationMs);
-            }
-        } catch (Throwable e) {
-            // Silent - vibrator unavailable
-        }
-    }
 
     // ===================== ASSET LOADING =====================
     // v1.2.0 Phase 73+: Delegated to FileIoHelper
