@@ -116,6 +116,10 @@ public class EngineConfigHelper {
         void sendUciCommand(String command);
         void notifyEngineInfo();
         void postJsCallback(String jsExpression);
+        // v1.2.3: structured postJsCallback overload — JSON-encodes args via
+        //   JSONArray so callers don't need to manually escape/concatenate.
+        //   Matches StockfishNative.postJsCallback(String, Object...).
+        void postJsCallback(String eventName, Object... args);
     }
 
     public EngineConfigHelper(Context context, Callbacks callbacks) {
@@ -555,8 +559,18 @@ public class EngineConfigHelper {
                 callbacks.sendUciCommand("setoption name Skill Level value " + callbacks.getEngineSkillLevel());
             }
         }
-        callbacks.postJsCallback("onGameDifficultyChanged(" + callbacks.getEngineLimitElo()
-                + "," + callbacks.getEngineElo() + ")");
+        // v1.2.3 first-principles: use the structured postJsCallback(eventName, args...)
+        //   overload instead of the raw string-concat overload. The structured
+        //   overload JSON-encodes args via JSONArray, guaranteeing correct
+        //   type serialization (boolean as true/false, int as number) and
+        //   eliminating any theoretical injection via the elo field. The raw
+        //   overload was safe here because getEngineLimitElo() returns a
+        //   boolean and getEngineElo() returns an int (no quotes to escape),
+        //   but the structured overload is the recommended pattern for all
+        //   non-hardcoded-literal callbacks (per StockfishNative.postJsCallback
+        //   Javadoc, v1.2.1 round-7 R3).
+        callbacks.postJsCallback("onGameDifficultyChanged",
+                callbacks.getEngineLimitElo(), callbacks.getEngineElo());
     }
 
     /**

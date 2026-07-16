@@ -425,7 +425,7 @@ function _updateEvalDisplayIncremental() {
       if (app) {
         app.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:var(--bg);color:var(--text);padding:20px;text-align:center;font-family:system-ui,sans-serif">' +
           '<div style="font-size:3rem;margin-bottom:16px">♔</div>' +
-          '<h2 style="color:var(--accent2);margin-bottom:12px">'+T('app_name')+' v1.2.2</h2>' +
+          '<h2 style="color:var(--accent2);margin-bottom:12px">'+T('app_name')+' v1.2.3</h2>' +
           '<p style="color:#a08050;margin-bottom:20px;max-width:300px">'+T('render_error')+'</p>' +
           '<button onclick="location.reload()" style="padding:12px 24px;background:var(--btn-a-bg);color:var(--bg);border:none;border-radius:6px;font-size:1rem;font-weight:700;cursor:pointer">'+T('refresh_page')+'</button>' +
           '</div>';
@@ -1657,7 +1657,14 @@ function getCheckKingPos(s){
 // emoji/desc: from the player's perspective via evP
 function formatEval(){
   if(gameOver&&!reviewMode){
-    if(_gameOverStatusKey==='checkmate'||gameOver.includes('将杀')||gameOver.toLowerCase().includes('checkmate')){
+    // v1.2.3 P1 (Round 18 i18n-P1-2): Rely solely on _gameOverStatusKey for
+    //   branching. The previous code also did `gameOver.includes('将杀')` /
+    //   `.includes('Checkmate')` as a fallback, which breaks when the UI is
+    //   English (gameOver would say "Checkmate!", not "将杀!") and silently
+    //   fell through to the wrong branch. _gameOverStatusKey is the language-
+    //   independent status set by _applyGameOver() / _gameOverStrFromStatus(),
+    //   so it is the authoritative source.
+    if(_gameOverStatusKey==='checkmate'){
       const whiteWins=gameOver.includes(T('white_wins'))||gameOver.includes('White wins');
       const playerWins=(playerColor==='white')===whiteWins;
       // Checkmate already on the board — show mate distance if available
@@ -1673,13 +1680,13 @@ function formatEval(){
     // correct win/lose emoji (🏆/💀) instead of the draw emoji (🤝).
     // v1.0.4 Rev46: changed eval bar emoji from 🏆/💀 to ⌛ for timeout —
     // the game-over overlay also shows ⌛ for timeout (not 🤝).
-    if(_gameOverStatusKey==='timeout'||gameOver.includes('超时')||gameOver.toLowerCase().includes('timeout')){
-      const whiteWins=gameOver.includes(T('white_wins'))||gameOver.includes('White wins')||gameOver.includes('白方');
+    if(_gameOverStatusKey==='timeout'){
+      const whiteWins=gameOver.includes(T('white_wins'))||gameOver.includes('White wins')||gameOver.includes(T('white_short'));
       const playerWins=(playerColor==='white')===whiteWins;
       return{emoji:'⌛',desc:playerWins?T('winning'):T('losing'),score:playerWins?'+∞':'-∞'};
     }
     // v1.0.4 FIX: resignation also needs win/lose emoji, not draw.
-    if(_gameOverStatusKey==='resign'||gameOver.includes('认输')||gameOver.toLowerCase().includes('resign')){
+    if(_gameOverStatusKey==='resign'){
       // v1.0.4 Rev27: Use _resignWinnerColor directly (set by _resignGame()).
       // The gameOver text only contains "resigns", not "wins", so the old
       // .includes('White wins') check always returned false — making the
@@ -1765,9 +1772,18 @@ return null;
 function _applyGameOver(cachedSt){
   const st=cachedSt||gameStatus(gameState);
   const goStr=_gameOverStrFromStatus(st);
-  if(goStr){gameOver=goStr;_gameOverStatusKey=st;if((st==='checkmate'||goStr.includes('将杀')||goStr.includes('Checkmate'))&&moveRecords.length>0){const last=moveRecords[moveRecords.length-1];// v1.0.2 FIX: null-safe — last entry may be the black-to-move null placeholder
+  if(goStr){gameOver=goStr;_gameOverStatusKey=st;
+    // v1.2.3 P1 (Round 18 i18n-P1-2): Use _gameOverStatusKey instead of
+    //   `goStr.includes('将杀')` — the localized text varies with language,
+    //   but the status key is language-independent. Patching the move
+    //   notation with '#' is correct whenever st==='checkmate'.
+    if(st==='checkmate'&&moveRecords.length>0){
+      const last=moveRecords[moveRecords.length-1];// v1.0.2 FIX: null-safe — last entry may be the black-to-move null placeholder
       // in pathological edge cases (no real moves executed). Skip notation patching if so.
-      if(last&&last.notation&&!last.notation.endsWith('#')){last.notation=last.notation.replace(/\+$/,'')+'#';}_sfMateDistance=0;_sfDepth=0;_sfSeldepth=0;_sfEval=gameState.currentTurn==='black'?99999:-99999;_sfEvalReady=true;}}
+      if(last&&last.notation&&!last.notation.endsWith('#')){last.notation=last.notation.replace(/\+$/,'')+'#';}
+      _sfMateDistance=0;_sfDepth=0;_sfSeldepth=0;_sfEval=gameState.currentTurn==='black'?99999:-99999;_sfEvalReady=true;
+    }
+  }
 }
 
 // v1.2.1 round-12 (S3358): Extracted game-over icon + style computation into
@@ -2280,7 +2296,7 @@ return h;
 function _renderAboutDialog(h){
 let _gplSvgSrc='';
 try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.loadAssetAsBase64){const b64=AndroidBridge.loadAssetAsBase64('AGPLv3_Logo.svg');if(b64)_gplSvgSrc='data:image/svg+xml;base64,'+b64;}}catch(e){console.warn('[About] AGPL SVG load failed:',e.message);_gplSvgSrc='';}
-h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="About"><div class="dlg" style="max-width:460px"><h2>${T('about_title')}</h2><div class="dlg-sec"><div class="crow"><span class="lb">${T('about_app')}</span><span class="vl">${T("app_name")} v1.2.2</span></div><div class="crow"><span class="lb">${T('about_engine')}</span><span class="vl">Stockfish 18 (arm64-v8a-dotprod)</span></div><div class="crow"><span class="lb">${T('about_platform')}</span><span class="vl">Android arm64-v8a</span></div></div><div class="dlg-sec"><h3>${T('copyright_license')}</h3>`+(_gplSvgSrc?`<div style="text-align:center;margin-bottom:10px"><img src="${_gplSvgSrc}" alt="AGPL v3 Logo" style="width:120px;height:auto;opacity:.9" /></div>`:'')+`<div style="font-size:.75rem;color:var(--text);line-height:1.6"><p style="margin-bottom:8px">${T('about_copyright')}</p><p style="margin-bottom:8px">${T('about_source_code_prefix')}<a href="${T('about_source_code_url')}" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">${T('about_source_code_url')}</a></p><p style="margin-bottom:8px">${T('about_agpl')} <a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GNU AGPL v3</a>${T('about_agpl_desc')}</p><p style="margin-bottom:8px">${T('about_droidfish')}<a href="https://github.com/peterosterlund2/droidfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">DroidFish</a>${T('about_droidfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a>${T('about_droidfish_tail')}</p><p style="margin-bottom:8px">${T('about_stockfish')}<a href="https://github.com/official-stockfish/Stockfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">Stockfish</a>${T('about_stockfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a> ${T('about_gplv3')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_disclaimer')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_ai')}</p></div></div><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="showAboutPage=false;render()" style="flex:1;justify-content:center">${T('close')}</button></div></div></div>`;
+h+=`<div class="dov" role="dialog" aria-modal="true" aria-label="${T('about_title')}"><div class="dlg" style="max-width:460px"><h2>${T('about_title')}</h2><div class="dlg-sec"><div class="crow"><span class="lb">${T('about_app')}</span><span class="vl">${T("app_name")} v1.2.3</span></div><div class="crow"><span class="lb">${T('about_engine')}</span><span class="vl">Stockfish 18 (arm64-v8a-dotprod)</span></div><div class="crow"><span class="lb">${T('about_platform')}</span><span class="vl">Android arm64-v8a</span></div></div><div class="dlg-sec"><h3>${T('copyright_license')}</h3>`+(_gplSvgSrc?`<div style="text-align:center;margin-bottom:10px"><img src="${_gplSvgSrc}" alt="AGPL v3 Logo" style="width:120px;height:auto;opacity:.9" /></div>`:'')+`<div style="font-size:.75rem;color:var(--text);line-height:1.6"><p style="margin-bottom:8px">${T('about_copyright')}</p><p style="margin-bottom:8px">${T('about_source_code_prefix')}<a href="${T('about_source_code_url')}" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">${T('about_source_code_url')}</a></p><p style="margin-bottom:8px">${T('about_agpl')} <a href="https://www.gnu.org/licenses/agpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GNU AGPL v3</a>${T('about_agpl_desc')}</p><p style="margin-bottom:8px">${T('about_droidfish')}<a href="https://github.com/peterosterlund2/droidfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">DroidFish</a>${T('about_droidfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a>${T('about_droidfish_tail')}</p><p style="margin-bottom:8px">${T('about_stockfish')}<a href="https://github.com/official-stockfish/Stockfish" style="color:var(--accent2);text-decoration:underline;word-break:break-all" target="_blank" rel="noopener">Stockfish</a>${T('about_stockfish_desc')} <a href="https://www.gnu.org/licenses/gpl-3.0.html" style="color:var(--accent2);text-decoration:underline" target="_blank" rel="noopener">GPL v3</a> ${T('about_gplv3')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_disclaimer')}</p><p style="margin-bottom:8px;color:var(--muted)">${T('about_ai')}</p></div></div><div class="dlg-btns"><button type="button" class="btn btn-p" onclick="showAboutPage=false;render()" style="flex:1;justify-content:center">${T('close')}</button></div></div></div>`;
 return h;
 }
 
@@ -3233,7 +3249,7 @@ let _hdrProgressStr='';if(_evalLoading&&_sfDepth>0){let _hpp=[];if(_lastProgress
 // v1.2.1: Defensive checks, _applyGameOver, and cm/infoSq/infoCtrl/oppC/flip computation
 // moved to _computeRenderState() to fix critical scoping bug.
 
-let h='<div class="hdr" role="banner"><div class="hdr-top"><div class="hdr-l">'+_hdrKingIconHTML()+'<h1>'+T('app_name')+'<span class="ver">v1.2.2</span><button onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showAboutPage=true;render()" class="hdr-btn" style="margin-left:4px;cursor:pointer">ℹ️</button></h1></div><button onclick="toggleLang()" class="hdr-btn-lg" style="cursor:pointer">'+(_lang==='zh'?'↔️中':'↔️EN')+'</button><div class="ev" id="eval-disp" role="status" aria-label="'+T('evaluating')+'">'+(setupMode?T('setup_label'):(isAIThinking?'<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>':'<span class="ev-e">'+pe+'</span><span>'+pd+'</span><span style="color:var(--muted)">('+scoreStr+')</span>'+_hdrDepthStr+_hdrProgressStr))+'</div></div><div class="hdr-tools" role="toolbar" aria-label="'+T('ctrl_range')+'">'+(setupMode?'':'<div class="diff-sel" role="radiogroup" aria-label="AI">'+getAI_LEVELS().map(l=>'<button class="diff-b'+(getEffectiveAILevel()===l.id?' act':'')+'" onclick="if(!isAIThinking){'+(l.id===8?'openEngineConfig()':('aiLevel='+l.id+';try{AndroidBridge.syncGameDifficulty('+l.id+')}catch(e){console.warn("[AI] syncGameDifficulty failed:",e&&e.message?e.message:e)}render()'))+'}" title="'+l.desc+'" role="radio" aria-checked="'+(getEffectiveAILevel()===l.id)+'">'+(l.id===8?'⚙️':l.id===7?('SL'+(function(){try{let _sl=20;if(typeof engineSettingsData!=='undefined'&&engineSettingsData&&engineSettingsData.skillLevel!=null)_sl=engineSettingsData.skillLevel;else if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getEngineSkillLevel)_sl=AndroidBridge.getEngineSkillLevel();return _sl;}catch(e){return 20;}})()):l.id)+'</button>').join('')+'</div>')+'<button type="button" class="btn" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()" aria-label="'+T('new_game')+'"><span style="font-size:1.4rem">⚔️</span> '+T('new_game')+'</button>'+'<button class="btn" onclick="quickFreeOpening()" aria-label="'+T('free_opening')+'">'+(playerColor==='white'?'<span style=\"font-size:1.4rem;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text\">♔&#xFE0E;</span>':'<span style=\"font-size:1.4rem;font-weight:400;color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans Symbol&#x27;,sans-serif;font-variant-emoji:text\">♚&#xFE0E;</span>')+' '+T('free_opening')+'</button>'+(setupMode?'':'<button class="btn" onclick="toggleSound()" id="btnSound" aria-label="'+T('sound')+'">'+(soundOn?'<span style="font-size:1.4rem">🔊</span> '+T('sound'):'<span style="font-size:1.4rem">🔇</span> '+T('sound'))+'</button>')+'<button class="btn" onclick="copyFEN()" title="'+T('copy_fen')+'" aria-label="'+T('copy_fen')+'"><span style="font-size:1.4rem">📝</span> FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="'+T('import_fen')+'" aria-label="'+T('import_fen')+'"><span style="font-size:1.4rem">🗃️</span> '+T('import_label')+'</button><button class="btn" onclick="'+(setupMode?'exitSetup()':'toggleSetup()')+'" aria-label="'+(setupMode?T('setup_done'):T('setup_mode'))+'">'+(setupMode?'<span style="font-size:1.4rem">✓</span> '+T('setup_done'):'<span style="font-size:1.4rem">🏗️</span> '+T('setup_mode'))+'</button></div></div>';
+let h='<div class="hdr" role="banner"><div class="hdr-top"><div class="hdr-l">'+_hdrKingIconHTML()+'<h1>'+T('app_name')+'<span class="ver">v1.2.3</span><button onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showAboutPage=true;render()" class="hdr-btn" style="margin-left:4px;cursor:pointer" aria-label="'+T('about')+'">ℹ️</button></h1></div><button onclick="toggleLang()" class="hdr-btn-lg" style="cursor:pointer">'+(_lang==='zh'?'↔️中':'↔️EN')+'</button><div class="ev" id="eval-disp" role="status" aria-label="'+T('evaluating')+'">'+(setupMode?T('setup_label'):(isAIThinking?'<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>':'<span class="ev-e">'+pe+'</span><span>'+pd+'</span><span style="color:var(--muted)">('+scoreStr+')</span>'+_hdrDepthStr+_hdrProgressStr))+'</div></div><div class="hdr-tools" role="toolbar" aria-label="'+T('ctrl_range')+'">'+(setupMode?'':'<div class="diff-sel" role="radiogroup" aria-label="AI">'+getAI_LEVELS().map(l=>'<button class="diff-b'+(getEffectiveAILevel()===l.id?' act':'')+'" onclick="setDifficultyLevel('+l.id+')" title="'+l.desc+'" role="radio" aria-checked="'+(getEffectiveAILevel()===l.id)+'">'+(l.id===8?'⚙️':l.id===7?('SL'+(function(){try{let _sl=20;if(typeof engineSettingsData!=='undefined'&&engineSettingsData&&engineSettingsData.skillLevel!=null)_sl=engineSettingsData.skillLevel;else if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getEngineSkillLevel)_sl=AndroidBridge.getEngineSkillLevel();return _sl;}catch(e){return 20;}})()):l.id)+'</button>').join('')+'</div>')+'<button type="button" class="btn" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()" aria-label="'+T('new_game')+'"><span style="font-size:1.4rem">⚔️</span> '+T('new_game')+'</button>'+'<button class="btn" onclick="quickFreeOpening()" aria-label="'+T('free_opening')+'">'+(playerColor==='white'?'<span style=\"font-size:1.4rem;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text\">♔&#xFE0E;</span>':'<span style=\"font-size:1.4rem;font-weight:400;color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans Symbol&#x27;,sans-serif;font-variant-emoji:text\">♚&#xFE0E;</span>')+' '+T('free_opening')+'</button>'+(setupMode?'':'<button class="btn" onclick="toggleSound()" id="btnSound" aria-label="'+T('sound')+'">'+(soundOn?'<span style="font-size:1.4rem">🔊</span> '+T('sound'):'<span style="font-size:1.4rem">🔇</span> '+T('sound'))+'</button>')+'<button class="btn" onclick="copyFEN()" title="'+T('copy_fen')+'" aria-label="'+T('copy_fen')+'"><span style="font-size:1.4rem">📝</span> FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="'+T('import_fen')+'" aria-label="'+T('import_fen')+'"><span style="font-size:1.4rem">🗃️</span> '+T('import_label')+'</button><button class="btn" onclick="'+(setupMode?'exitSetup()':'toggleSetup()')+'" aria-label="'+(setupMode?T('setup_done'):T('setup_mode'))+'">'+(setupMode?'<span style="font-size:1.4rem">✓</span> '+T('setup_done'):'<span style="font-size:1.4rem">🏗️</span> '+T('setup_mode'))+'</button></div></div>';
 return h;
 } // end _renderHeader
 
@@ -4793,6 +4809,32 @@ function getHint(){
     isHintLoading=false;hintText=T('engine_unavailable_hint');
     render();
   },10);
+}
+// === Set AI difficulty level (toolbar difficulty button) ===
+// v1.2.3 P0 FIX (user-reported "Unexpected end of input" JS error):
+//   Refactored from an inline onclick attribute to a named global function.
+//   The previous inline onclick used a JS string literal of the form
+//   console.warn("...") inside a double-quoted HTML attribute. The HTML
+//   parser terminated the attribute at the first inner double quote,
+//   producing a truncated JS expression that the browser evaluated as
+//   "Uncaught SyntaxError: Unexpected end of input". Moving the logic
+//   into a function eliminates the entire class of HTML/JS quote-nesting
+//   bugs and makes the difficulty button testable.
+function setDifficultyLevel(level){
+  if(isAIThinking)return;
+  if(level===8){
+    openEngineConfig();
+    return;
+  }
+  aiLevel=level;
+  try{
+    if(typeof AndroidBridge!=='undefined'&&AndroidBridge&&typeof AndroidBridge.syncGameDifficulty==='function'){
+      AndroidBridge.syncGameDifficulty(level);
+    }
+  }catch(e){
+    console.warn('[AI] syncGameDifficulty failed:',e&&e.message?e.message:e);
+  }
+  render();
 }
 function toggleSetup(){if(isAIThinking&&!setupMode)return;_cachedStatus=null;_cachedStatusKey='';setupMode=!setupMode;
 // v1.0.8 PHASE 24 (bug fix): clear any in-progress animation.
@@ -6829,8 +6871,32 @@ function _prioritizeReviewStep(step){
   }
 }
 
+// v1.2.3 P1 (Round 17 P1-3 / Round 18 A-P1-2): Helper to end the Java-side
+//   eval-deep batch. Idempotent — safe to call when no batch was started.
+//   Feature-detected so older AndroidBridge (without engineEvalDeepEndBatch)
+//   degrades gracefully to the per-step setoption path.
+function _endEvalDeepBatchIfActive(){
+  try{
+    if(typeof AndroidBridge!=='undefined'&&AndroidBridge&&typeof AndroidBridge.engineEvalDeepEndBatch==='function'){
+      AndroidBridge.engineEvalDeepEndBatch();
+    }
+  }catch(e){console.warn('[UI] engineEvalDeepEndBatch failed:',e&&e.message?e.message:e);}
+}
+
 function reviewAnalyzeAll(){
   if(!reviewMode||!reviewStates||reviewStates.length===0)return;
+  // v1.2.3 P1 (Round 17 P1-3 / Round 18 A-P1-2): Begin the Java-side batch
+  //   flag so engineEvalDeep() skips the per-step forceFullStrength() +
+  //   applyEvalModeOptions() setoption storm. The begin-hook sets the
+  //   eval-mode UCI options exactly once; the matching end-hook (called
+  //   from every batch-termination path) restores gameplay options via
+  //   applySettings(). Wrapped in try/catch + feature-detect so older
+  //   AndroidBridge without the new methods still works (per-step fallback).
+  try{
+    if(typeof AndroidBridge!=='undefined'&&AndroidBridge&&typeof AndroidBridge.engineEvalDeepBeginBatch==='function'){
+      AndroidBridge.engineEvalDeepBeginBatch();
+    }
+  }catch(e){console.warn('[UI] engineEvalDeepBeginBatch failed:',e&&e.message?e.message:e);}
   // v1.0.4 Rev24: If every step is already cached, complete INSTANTLY.
   // v1.0.8 PHASE 15: Analyze-all now includes step 0 (the initial position).
   const _lastStep=moveRecords.length; // = reviewStates.length - 1
@@ -6839,6 +6905,10 @@ function reviewAnalyzeAll(){
     if(!_reviewEvalCache.has(i))_uncachedCount++;
   }
   if(_uncachedCount===0){
+    // v1.2.3 P1: We called engineEvalDeepBeginBatch() above but no actual
+    //   eval ran (everything cached). End the batch immediately so the
+    //   Java-side flag is cleared and gameplay options are restored.
+    _endEvalDeepBatchIfActive();
     showToast(T('analysis_done')+' '+(_lastStep+1)+' '+T('step'));
     try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
     render();
@@ -6965,6 +7035,9 @@ function _reviewAnalyzeAdvance(){
   }
   if(nextStep>_lastStep){
     _reviewAnalyzeAllActive=false;
+    // v1.2.3 P1: Batch completed normally — restore gameplay UCI options
+    //   that were overridden by engineEvalDeepBeginBatch().
+    _endEvalDeepBatchIfActive();
     if(_reviewAnalyzeSafetyTimer){clearTimeout(_reviewAnalyzeSafetyTimer);_reviewAnalyzeSafetyTimer=null;}
     // v1.1.1 Phase 59 Task 59.6: Reset batch state
     _reviewAnalyzeStep=-1;
@@ -7020,6 +7093,11 @@ function _reviewAnalyzeAdvance(){
       //   150ms delay mirrors the pending-save pattern: gives the UI time to
       //   paint the restored step before the stats Activity is pushed.
       if(_pendingStats){
+        // v1.2.3 P2 (Issue #47 path 4): Show a completion toast BEFORE the
+        //   stats Activity is pushed. This is the transition the user most
+        //   needs to know about — from "waiting for analysis" to "results
+        //   ready". Previously this moment had zero feedback.
+        try{showToast(T('analysis_complete_opening_stats'),2500);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
         try{setTimeout(function(){
           try{if(typeof openStatsPage==='function')openStatsPage();}
           catch(e){console.error('Deferred openStatsPage failed:',e);}
@@ -7036,6 +7114,9 @@ function _reviewAnalyzeAdvance(){
       },150);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
     }
     if(_pendingStats){
+      // v1.2.3 P2 (Issue #47 path 4): same completion toast as the
+      //   _targetStep-valid branch above.
+      try{showToast(T('analysis_complete_opening_stats'),2500);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
       try{setTimeout(function(){
         try{if(typeof openStatsPage==='function')openStatsPage();}
         catch(e){console.error('Deferred openStatsPage failed:',e);}
@@ -7123,6 +7204,9 @@ function exitReview(){
   _clearAnimationState();
   reviewMode=false;
   _reviewAnalyzeAllActive=false;
+  // v1.2.3 P1: Exiting review cancels any in-flight batch — restore the
+  //   gameplay UCI options that engineEvalDeepBeginBatch() overrode.
+  _endEvalDeepBatchIfActive();
   // v1.1.1 Phase 59 Task 59.6: Clear batch session state so a stale
   //   in-flight callback (if any) doesn't try to advance a canceled batch.
   _reviewAnalyzeStep=-1;

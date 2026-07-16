@@ -1,3 +1,46 @@
+v1.2.3 optimization pass (2026.7.16) — first-principles line-by-line review:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — no version bump).
+  - StockfishNative.java (GPL v3): Stale "API 21-25" comments corrected to
+    "API 23-25" to match minSdk 23. isSystemDarkMode comment "Android 5.0
+    (API 21)" → "Android 6.0 (API 23, minSdk)". No code behavior change.
+  - EngineConfigHelper.java (GPL v3): setGameDifficulty() converted from raw
+    postJsCallback(string-concat) to structured postJsCallback(eventName,
+    args...) overload. Added the structured overload to the Callbacks
+    interface. No license change.
+  - MainActivity.java (AGPL v3): VERSION comment example "v1.2.1" → "v1.2.3".
+  - ChessWebViewClient.java (AGPL v3): Version header "v1.2.2" → "v1.2.3";
+    "API 21-23" → "API 23 (minSdk)".
+  - StatsActivity.java (AGPL v3): Added clarifying comment on the anonymous
+    JS bridge safety (Round 17 P1-5 false-positive documentation).
+  - StabilizationHelper.java (AGPL v3): No changes this pass (P2-3 fix was
+    in the prior v1.2.3 entry).
+  - License classification: all files retain their existing classification.
+
+v1.2.3 (2026.7.16) — Round 17/18 review fixes + P0 JS error fix + Toast UX:
+  - Version: versionCode=123, versionName="1.2.3" (version bump from v1.2.2).
+  - StockfishNative.java (GPL v3):
+    * New pre-compiled NEWLINE_PATTERN + stripNewlines() helper (Round 17
+      P1-2). sendSetOptionAndWait now uses stripNewlines() instead of
+      String.replaceAll("[\\r\\n]", "") on every call.
+    * saveEvalCacheSync() now guarantees .tmp cleanup via finally block
+      (Round 17 P1-3).
+    * New _evalDeepBatchActive volatile field + engineEvalDeepBeginBatch()
+      + engineEvalDeepEndBatch() @JavascriptInterface methods (Round 18
+      A-P1-2). engineEvalDeep() skips forceFullStrength() +
+      applyEvalModeOptions() when inside a batch.
+    * stopAndWaitForBestmove() now checks isProcessAlive() after a
+      stop-timeout and calls markEngineThreadDead() if the engine process
+      is dead (Round 17 P2-5).
+  - StabilizationHelper.java (AGPL v3): start() now calls
+    unregisterListener(this) before registerListener() as a defensive
+    idempotency guard (Round 17 P2-3).
+  - ChessWebViewClient.java (AGPL v3): no code changes; version comment
+    uses BuildConfig.VERSION_NAME (auto-synced).
+  - MainActivity.java, ChessApp.java: no code changes; use
+    BuildConfig.VERSION_NAME (auto-synced from build.gradle via AGP).
+  - License classification: all files in this directory retain their
+    existing classification.
+
 v1.2.2 (2026.7.14) — Comprehensive audit-report non-false-positive fix + version bump:
   - Version: versionCode=122, versionName="1.2.2" (version bump from v1.2.1).
   - ChessWebViewClient.java (AGPL v3): version comment updated from

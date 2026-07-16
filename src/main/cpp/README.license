@@ -1,3 +1,24 @@
+v1.2.3 optimization pass (2026.7.16) — first-principles line-by-line review:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — no version bump).
+  - engine_jni.cpp (GPL v3): no changes this pass. Reviewed the nativeChmod
+    errno-logging fix from the prior v1.2.3 entry — confirmed correct.
+  - CMakeLists.txt (AGPL v3): no changes this pass. Reviewed the cxx_std_20
+    fix from the prior v1.2.3 entry — confirmed correct.
+  - License classification: unchanged.
+
+v1.2.3 (2026.7.16) — Round 17/18 review fixes + P0 JS error fix + Toast UX:
+  - Version: versionCode=123, versionName="1.2.3" (version bump from v1.2.2).
+  - engine_jni.cpp (GPL v3): nativeChmod() now logs errno + strerror on
+    failure (Round 17 P2-4). Previously a silent JNI_FALSE return left no
+    diagnostic trail.
+  - CMakeLists.txt (AGPL v3): cxx_std_17 → cxx_std_20 to align with
+    build.gradle's -std=c++20 cppFlag (Round 17 P1-6). The actual build
+    already used C++20 (cppFlags wins on the command line); this change
+    makes the declared standard match the actual standard.
+  - License classification: engine_jni.cpp retains GPL v3 (DroidFish-derived
+    chmod/reNice logic); CMakeLists.txt retains AGPL v3 (original build
+    configuration).
+
 v1.2.2 (2026.7.14) — Comprehensive audit-report non-false-positive fix + version bump:
   - Version: versionCode=122, versionName="1.2.2" (version bump from v1.2.1).
   - No C++ source files modified in this pass. The only code change was in

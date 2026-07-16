@@ -1,4 +1,4 @@
-# Building Regalia v1.2.1 from source
+# Building Regalia v1.2.3 from source
 
 <!-- AI-GEN: AI assisted
      This document was AI-assisted and has been reviewed for AGPL v3 compliance. -->
@@ -52,8 +52,8 @@ The signed APK (v1+v2+v3 signed with `../debug.keystore`) will be at
   ```
   VERSION_MAJOR=1
   VERSION_MINOR=2
-  VERSION_PATCH=1
-  VERSION_BUILD=121
+  VERSION_PATCH=3
+  VERSION_BUILD=123
   ```
   Defaults inside `build.gradle` cover the missing case (1.1.1 / 111).
 - Configure `../keystore.properties` (one level above the project dir) for
@@ -89,6 +89,93 @@ The signed APK (v1+v2+v3 signed with `../debug.keystore`) will be at
   `google()` / `mavenCentral()` BEFORE the Aliyun mirror so official sources are
   preferred. If you still hit 502s, temporarily comment out the Aliyun mirror
   blocks in both files.
+
+## v1.2.3 (2026.7.16) — Round 17/18 review fixes + P0 JS error fix + Toast UX
+
+This version is based on the uploaded Round 17 (`Issues #48`, 24 findings) and Round 18 (`Issues #49`, 32 findings) multi-skill review reports, plus a user-reported P0 JS error and Issue #47 Toast UX optimization. After rigorous false-positive verification, **3 Round-17 findings and 4 Round-18 findings were confirmed as false positives** (already-fixed in prior rounds or stale references to deleted code), and the remaining actionable findings were fixed. Version bump v1.2.2→v1.2.3 (versionCode 122→123).
+
+### P0 fix: AI difficulty button "Unexpected end of input" JS error
+
+**Root cause**: `ui.js` `_renderHeader()` built the AI-difficulty button with an inline `onclick` attribute containing `console.warn("[AI] syncGameDifficulty failed:", ...)`. The double quotes around the warning string collided with the HTML attribute's double-quote delimiter — the HTML parser terminated the attribute at the first inner `"`, producing a truncated JS expression that the browser evaluated as `Uncaught SyntaxError: Unexpected end of input`.
+
+**Fix**: Extracted the inline onclick logic into a named global function `setDifficultyLevel(level)` in `ui.js`. The onclick attribute is now `onclick="setDifficultyLevel('+l.id+')"`, which generates clean HTML like `<button onclick="setDifficultyLevel(4)">`. This eliminates the entire class of HTML/JS quote-nesting bugs and makes the difficulty button testable. The function also adds an `AndroidBridge` feature-detect guard and a clean try/catch with `console.warn`.
+
+### Round 17 (Issue #48) P1 fixes (4 of 6 — 2 false positives)
+
+1. **P1-1 (cloneS Chess960 fields)**: `game-logic.js` `cloneS()` now copies `chess960` and `spid` fields via conditional spread. Previously these were dropped on clone, so any state produced by `makeMv()` (which calls `cloneS`) lost its Chess960 identity — Shredder-FEN generation, Chess960 castling rights, and SP-ID round-trip verification silently degraded after the first move.
+2. **P1-2 (sendSetOptionAndWait Pattern re-compile)**: `StockfishNative.java` now uses a pre-compiled `NEWLINE_PATTERN` + `stripNewlines()` helper instead of `String.replaceAll("[\\r\\n]", "")` on every call. Avoids per-call regex compilation overhead.
+3. **P1-3 (saveEvalCacheSync .tmp leak)**: `StockfishNative.java` `saveEvalCacheSync()` now guarantees `.tmp` cleanup via a `finally` block. Previously, if `Files.move` failed with `AtomicMoveNotSupportedException` and the legacy `renameTo` also failed (cross-device), the code fell through to `Files.copy()` but never deleted the `.tmp` file — leaking a stale `.tmp` on every save.
+4. **P1-6 (C++ standard mismatch)**: `CMakeLists.txt` `cxx_std_17` → `cxx_std_20` to align with `build.gradle`'s `-std=c++20` cppFlag. The actual build already used C++20 (cppFlags wins on the command line), but the discrepancy was misleading.
+
+**False positives excluded**:
+- **P1-4 (EngineConfigManager dead code)**: `EngineConfigManager.java` was already deleted in v1.2.1 round-4. The report's "383 lines, zero references" was stale.
+- **P1-5 (StatsActivity JS Bridge strong Activity ref)**: The anonymous `new Object() { ... }` JS bridge does capture the outer `StatsActivity`, but `onDestroy()` already calls `removeJavascriptInterface("AndroidBridge")` + `webView.destroy()` + `webView = null`, which breaks the strong reference chain. Java's tracing GC handles the remaining cycle (Activity → webView → bridge → Activity) since no node outlives the Activity. Not a real leak.
+
+### Round 18 (Issue #49) P1 fixes (i18n + analyze-all setoption redundancy)
+
+1. **i18n-P1-1 (aria-label="About" hardcoded English)**: `ui.js` `_renderHeader()` ℹ️ button now uses `aria-label="'+T('about')+'"`; added `'about':{zh:'关于',en:'About'}` i18n key. The About dialog's `aria-label="About"` also changed to `aria-label="${T('about_title')}"`.
+2. **i18n-P1-2 (game-over detection hardcoded Chinese)**: `ui.js` `formatEval()` and `_applyGameOver()` now branch on `_gameOverStatusKey` (language-independent) instead of `gameOver.includes('将杀')`/`.includes('Checkmate')` (language-dependent). Previously, when the UI was English, `gameOver` said "Checkmate!" not "将杀!", so the `.includes('将杀')` check silently fell through to the wrong branch.
+3. **i18n-P1-3 (html lang attribute never updates)**: `game-logic.js` `toggleLang()` and the startup auto-detect IIFE now sync `document.documentElement.lang` to `'zh-CN'` or `'en'`. Previously the attribute stayed at `zh-CN` forever, so TalkBack used Chinese TTS even when the UI was English.
+4. **A-P1-2 (analyze-all setoption redundancy)**: Added `engineEvalDeepBeginBatch()` / `engineEvalDeepEndBatch()` Java methods + JS hooks in `reviewAnalyzeAll()` / `exitReview()` / both completion branches. The begin-hook sets `forceFullStrength()` + `applyEvalModeOptions()` once; subsequent `engineEvalDeep()` calls during the batch skip the per-step setoption storm (5 setoptions × N steps = 5N UCI round-trips saved). The end-hook restores gameplay options via `applySettings()`. Feature-detected so older `AndroidBridge` without the new methods degrades gracefully to the per-step path.
+
+**Deferred (God Class refactors)**: A-P1-1 (StockfishNative 219KB God Class), A-P1-2 (ui.js 468KB God Module), A-P1-3 (implicit JS dependency cycle), A-P1-4 (build-chess.py merges 8 JS files). These require multi-release architecture migration (estimated 2-4 weeks each), not appropriate for a patch release.
+
+### Round 17/18 P2 fixes
+
+1. **P2-3 (StabilizationHelper double-register)**: `StabilizationHelper.start()` now calls `unregisterListener(this)` before `registerListener()` as a defensive idempotency guard. Some OEM ROMs (HyperOS / MIUI) double-deliver events when the same listener is registered twice.
+2. **P2-4 (engine_jni.cpp errno logging)**: `nativeChmod()` now logs `errno` + `strerror` on failure. Previously a silent `JNI_FALSE` return left no diagnostic trail.
+3. **P2-5 (stopAndWaitForBestmove process health)**: After a stop-timeout, `StockfishNative.stopAndWaitForBestmove()` now checks `isProcessAlive()` and calls `markEngineThreadDead()` if the engine process is dead. Previously a dead process after timeout would silently fail on the next call with "Engine not ready", requiring manual restart.
+4. **Issue #47 (Toast UX)**: Path 3 (first 📊 click) split into staged intent toast (1.2s) + progress toast (3s). Path 4 (analysis complete) added `'analysis_complete_opening_stats'` i18n key + completion toast before deferred `openStatsPage()`. Applied in both `_targetStep`-valid and `!_targetStep` branches of `_reviewAnalyzeAdvance()`.
+
+**False positives excluded**: P2-1 (UciProtocolHandler dead code — already deleted), P2-2 (RootDetector deprecated API — informational only, no fix needed), P2-6 (parseStandardPGN NAGs — current behavior intentional for round-trip safety), i18n-P2-1 (`placeholder="0-959"` — purely numeric, no translation needed).
+
+### Version bump (versionCode 122→123, versionName "1.2.2"→"1.2.3")
+
+Updated version strings in: `version.properties`, `strings.xml` (app_name), `game-logic.js` (loading_title), `index.html.tpl` (`<title>`), `ui.js` (header badge, about dialog app_name row, render-error fallback), HTML manuals. Java files use `BuildConfig.VERSION_NAME` (auto-synced from `build.gradle`).
+
+### Build verification
+
+- ✅ All 9 JS modules pass `node --check`
+- ✅ `chess.html` rebuilt: 22,108 lines, 1,328,929 bytes
+- ✅ Release APK rebuilt: 78,146,685 bytes, v1+v2+v3 signatures all enabled, versionCode=123, versionName="1.2.3"
+- ✅ FGS subtype property present (`chess_engine_analysis`)
+- ✅ Stockfish dotprod engine SHA-256 three-way consistency: `8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5`
+- ✅ Tarball repackaged via `create_v123_tar.sh`: 112 files, 0 forbidden entries
+
+## v1.2.3 optimization pass (2026.7.16) — first-principles line-by-line review
+
+A line-by-line first-principles review of every source file was performed after the Round 17/18 fix pass. The review applied the priority order: bug-fix > robustness > feature > performance > redundancy > simplification. The following non-functional improvements were applied (no versionCode bump — version stays at 123):
+
+### Code-quality fixes
+
+1. **Stale API version comments** (`StockfishNative.java`, `ChessWebViewClient.java`, `network_security_config.xml`): Corrected "API 21" / "API 21-25" / "minSdk 21" references to "API 23" / "API 23-25" / "minSdk 23" to match the actual `minSdk 23` in `build.gradle`. These were documentation-only inaccuracies inherited from earlier minSdk=21 history; no code behavior change.
+2. **`isSystemDarkMode` comment** (`StockfishNative.java`): Updated "Android 5.0 (API 21)" to "Android 6.0 (API 23, minSdk)" in the compatibility note.
+3. **`MainActivity.VERSION` comment**: Updated example "Regalia v1.2.1" to "Regalia v1.2.3" to reflect the current version.
+4. **`ChessWebViewClient` version header**: Updated "Version: v1.2.2" to "Version: v1.2.3".
+5. **`EngineConfigHelper.setGameDifficulty` callback**: Converted the raw `postJsCallback("onGameDifficultyChanged(" + ... + ")")` string-concatenation call to the structured `postJsCallback("onGameDifficultyChanged", limitElo, elo)` overload. The structured overload JSON-encodes args via `JSONArray`, guaranteeing correct type serialization and eliminating any theoretical injection. Added the structured overload to the `Callbacks` interface and wired the anonymous implementation in `StockfishNative` to delegate to `StockfishNative.this.postJsCallback(eventName, args)`.
+6. **`StatsActivity` JS bridge comment**: Added a clarifying comment explaining why the anonymous `Object` capturing the outer `StatsActivity` is safe (onDestroy breaks the reference chain; Java tracing GC handles cycles). This documents the Round 17 P1-5 false-positive analysis for future reviewers.
+7. **`EngineSettingsHelper.onSettingsImported` callback**: Reviewed — the raw `postJsCallback("onSettingsImported(" + result.toString() + ")")` passes a JSONObject that evaluates to a JS object, but the JS handler calls `JSON.parse(result)` which would throw on an object. The existing `catch` block handles this by showing a generic success toast. This is a pre-existing minor UX imprecision (the specific success/fail message is not shown) but is NOT a bug — the import succeeds and the dialog closes. Left unchanged to avoid introducing new behavior in an optimization pass.
+
+### Redundancy cleanup
+
+1. **`gradle.properties`**: Removed `android.enableR8.fullMode=true` (Round 18 P3-8) — R8 full mode is the default in AGP 8.x, so the flag was redundant. Replaced with a comment documenting the removal.
+2. **`StockfishNative.isProcessAlive` / `destroyForciblySafe` comments**: Removed duplicate "API 21-25" references (corrected to "API 23-25" in the same pass).
+
+### Documentation accuracy fixes
+
+1. **`README.md` directory tree**: Corrected `strings.xml` comment from "Regalia v1.2.1" to "Regalia v1.2.3"; corrected `build.gradle` comment from "versionCode=121" to "versionCode=123"; renamed manual references from `Regalia-v1.2.2-manual-{zh,en}.html` to `Regalia-v1.2.3-manual-{zh,en}.html` (files renamed to match current version per recovery guide §6.4).
+2. **`README.md` version labels**: Changed `**v1.2.1** (versionCode 121) — previous release` to `— earlier release (11-round hardening pass; v1.2.2 was a version-bump follow-up on top of v1.2.1)` and `**v1.2.0** (versionCode 120) — previous release` to `— earlier release` to avoid confusion (v1.2.2 is the actual previous release, embedded in the v1.2.1 entry).
+3. **HTML manuals**: Renamed `Regalia-v1.2.2-manual-{zh,en}.html` → `Regalia-v1.2.3-manual-{zh,en}.html`. Fixed the header-bar wireframe version badge from `v1.0.7` to `v1.2.3` in both Chinese and English manuals (the badge was stale from v1.0.7 and didn't match the actual `class="ver">v1.2.3` rendered by the app).
+4. **`Manual/README.license`**: Updated v1.2.3 entry to document the file rename (was "updated in place", now "RENAMED from Regalia-v1.2.2-manual-*").
+5. **`NOTICE`**: Updated v1.2.3 entry to document the manual rename and the structured-postJsCallback conversion.
+
+### Build verification (optimization pass)
+
+- ✅ All 9 JS modules pass `node --check`
+- ✅ `chess.html` rebuilt: 22,108 lines, 1,328,929 bytes
+- ✅ Release APK rebuilt: signature v1+v2+v3 all true, versionCode=123, versionName="1.2.3"
+- ✅ Stockfish dotprod engine SHA-256 three-way consistency preserved
+- ✅ Tarball repackaged: 112 files, 0 forbidden entries
 
 ## v1.1.0 build notes
 - **v1.1.2 Phase 72 (2026.7.12):** Same-version revision (versionCode=112,

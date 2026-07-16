@@ -1,3 +1,17 @@
+v1.2.3 optimization pass (2026.7.16) — first-principles line-by-line review:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — no version bump).
+  - AndroidManifest.xml (AGPL v3): no changes. Reviewed for accuracy —
+    FGS subtype property, allowBackup=false, networkSecurityConfig, and
+    all permission declarations confirmed correct.
+  - License classification: AndroidManifest.xml retains AGPL v3.
+
+v1.2.3 (2026.7.16) — Round 17/18 review fixes + P0 JS error fix + Toast UX:
+  - Version: versionCode=123, versionName="1.2.3" (version bump from v1.2.2).
+  - AndroidManifest.xml (AGPL v3): no changes. FGS subtype property
+    (android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE = chess_engine_analysis)
+    preserved from v1.2.1 round-9.
+  - License classification: AndroidManifest.xml retains AGPL v3.
+
 v1.2.2 (2026.7.14) — Comprehensive audit-report non-false-positive fix + version bump:
   - Version: versionCode=122, versionName="1.2.2" (version bump from v1.2.1).
   - No source files in this directory modified in this pass. The only code

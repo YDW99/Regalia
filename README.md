@@ -135,7 +135,7 @@ Regalia/
 │   │   ├── CMakeLists.txt
 │   │   └── README.license      # Per-file license classification for this directory
 │   ├── res/
-│   │   ├── values/strings.xml  # Application name ("Regalia v1.2.1")
+│   │   ├── values/strings.xml  # Application name ("Regalia v1.2.3")
 │   │   ├── xml/network_security_config.xml  # TLS + certificate pinning for tablebase API
 │   │   ├── xml/backup_rules.xml             # Backup rules (Android < 12)
 │   │   ├── xml/data_extraction_rules.xml    # Data extraction rules (Android 12+)
@@ -149,8 +149,8 @@ Regalia/
                                 #   to keep the tarball small and avoid redistributing the
                                 #   114MB engine binary with the source.
 ├── Manual/                     # User manuals (HTML, self-contained)
-│   ├── Regalia-v1.2.2-manual-zh.html  # Chinese user manual (current v1.2.2)
-│   ├── Regalia-v1.2.2-manual-en.html  # English user manual (current v1.2.2)
+│   ├── Regalia-v1.2.3-manual-zh.html  # Chinese user manual (current v1.2.3)
+│   ├── Regalia-v1.2.3-manual-en.html  # English user manual (current v1.2.3)
 │   └── README.license          # Manual license classification
 ├── gradle/wrapper/             # Gradle wrapper (8.11.1)
 │   ├── gradle-wrapper.jar
@@ -166,7 +166,7 @@ Regalia/
 ├── PRIVACY.md                  # Privacy policy
 ├── BUILDING.md                 # Build instructions
 ├── UBIQUITOUS_LANGUAGE.md      # Domain terminology glossary (English) — 80+ chess/engine/PGN/UI terms
-├── build.gradle                # Gradle build config (reads ../version.properties for versionCode=121, v1/v2/v3 signing, NDK 27.2, cmake 3.22.1)
+├── build.gradle                # Gradle build config (reads ../version.properties for versionCode=123, v1/v2/v3 signing, NDK 27.2, cmake 3.22.1)
 ├── settings.gradle             # Gradle settings (plugin/repo config)
 ├── gradle.properties           # Gradle properties (JDK 21, Xmx2048m)
 ├── build-chess.py              # Python build script (merges JS modules → chess.html)
@@ -243,7 +243,31 @@ Contributions are welcome! Please ensure:
 
 During the development stage, the version number used was: **v18.x.x**. For future versions, once the version number exceeds **v17.x.x**, <span style="color:red; font-weight:bold;">**v18.x.x** should be skipped</span> and the next version should be **v19.x.x**.
 
-**v1.2.1** (versionCode 121) — current release
+**v1.2.3** (versionCode 123) — current release
+
+The v1.2.3 release is a **bug-fix + review-response release** on top of v1.2.2, driven by a user-reported P0 JS error and two multi-skill review reports (Round 17 — Issue #48, 24 findings; Round 18 — Issue #49, 32 findings). After rigorous false-positive verification, the actionable findings were fixed and the version was bumped v1.2.2→v1.2.3 (versionCode 122→123).
+
+- **P0 (critical, user-reported)**: AI difficulty button "Unexpected end of input" JS error — `ui.js` `_renderHeader()` built the AI-difficulty button with an inline `onclick` attribute containing `console.warn("[AI] syncGameDifficulty failed:", ...)`. The double quotes collided with the HTML attribute's double-quote delimiter; the HTML parser terminated the attribute at the first inner `"`, producing a truncated JS expression → `Uncaught SyntaxError: Unexpected end of input`. Fix: extracted the inline logic into a named global function `setDifficultyLevel(level)`; onclick is now `onclick="setDifficultyLevel('+l.id+')"`. Eliminates the entire class of HTML/JS quote-nesting bugs.
+- **P1 (Round 17 — cloneS Chess960 fields)**: `game-logic.js` `cloneS()` now copies `chess960` and `spid` fields via conditional spread. Previously these were dropped on clone, so any state produced by `makeMv()` lost its Chess960 identity — Shredder-FEN generation, Chess960 castling rights, and SP-ID round-trip verification silently degraded after the first move.
+- **P1 (Round 17 — sendSetOptionAndWait Pattern re-compile)**: `StockfishNative.java` now uses a pre-compiled `NEWLINE_PATTERN` + `stripNewlines()` helper instead of `String.replaceAll("[\\r\\n]", "")` on every call. Avoids per-call regex compilation overhead.
+- **P1 (Round 17 — saveEvalCacheSync .tmp leak)**: `StockfishNative.java` `saveEvalCacheSync()` now guarantees `.tmp` cleanup via a `finally` block. Previously, the legacy-copy fallback path leaked a stale `.tmp` on every save.
+- **P1 (Round 17 — C++ standard mismatch)**: `CMakeLists.txt` `cxx_std_17` → `cxx_std_20` to align with `build.gradle`'s `-std=c++20` cppFlag.
+- **P1 (Round 18 i18n — aria-label)**: `ui.js` ℹ️ button now uses `aria-label="'+T('about')+'"`; added `'about'` i18n key. About dialog `aria-label="About"` → `aria-label="${T('about_title')}"`.
+- **P1 (Round 18 i18n — game-over detection)**: `formatEval()` and `_applyGameOver()` now branch on `_gameOverStatusKey` (language-independent) instead of `gameOver.includes('将杀')`/`.includes('Checkmate')` (language-dependent). Previously, English-UI users got wrong game-over eval branching.
+- **P1 (Round 18 i18n — html lang attribute)**: `toggleLang()` and the startup auto-detect IIFE now sync `document.documentElement.lang` to `'zh-CN'` or `'en'`. Previously the attribute stayed at `zh-CN` forever, so TalkBack used Chinese TTS even when the UI was English.
+- **P1 (Round 18 — analyze-all setoption redundancy)**: Added `engineEvalDeepBeginBatch()` / `engineEvalDeepEndBatch()` Java methods + JS hooks in `reviewAnalyzeAll()` / `exitReview()` / both completion branches. The begin-hook sets `forceFullStrength()` + `applyEvalModeOptions()` once; subsequent `engineEvalDeep()` calls during the batch skip the per-step setoption storm (5 setoptions × N steps = 5N UCI round-trips saved). Feature-detected so older `AndroidBridge` degrades gracefully.
+- **P2 (Issue #47 — Toast UX)**: Path 3 (first 📊 click) split into staged intent toast (1.2s) + progress toast (3s). Path 4 (analysis complete) added `'analysis_complete_opening_stats'` i18n key + completion toast before deferred `openStatsPage()`.
+- **P2 (Round 17 — StabilizationHelper double-register)**: `start()` now calls `unregisterListener(this)` before `registerListener()` as a defensive idempotency guard for OEM ROMs that double-deliver events.
+- **P2 (Round 17 — engine_jni.cpp errno logging)**: `nativeChmod()` now logs `errno` + `strerror` on failure (was silent `JNI_FALSE`).
+- **P2 (Round 17 — stopAndWaitForBestmove process health)**: After a stop-timeout, now checks `isProcessAlive()` and calls `markEngineThreadDead()` if the engine process is dead, triggering proactive recovery instead of silent "Engine not ready" on the next call.
+- **False positives excluded (Round 17)**: P1-4 (EngineConfigManager dead code — already deleted in v1.2.1 round-4); P1-5 (StatsActivity JS Bridge strong Activity ref — onDestroy already cleans up); P2-1 (UciProtocolHandler dead code — already deleted); P2-2 (RootDetector deprecated API — informational only).
+- **False positives excluded (Round 18)**: i18n-P2-1 (`placeholder="0-959"` — purely numeric, no translation needed); A-P1-1/2/3/4 (God Class refactors — require multi-release architecture migration, deferred).
+- **Verification**: All 9 JS modules pass `node --check`. `chess.html` rebuilt (22,106 lines, 1,328,785 bytes). Release APK rebuilt (78,146,685 bytes), signature v1+v2+v3 all true. APK `lib/arm64-v8a/libstockfish.so` SHA-256 = `8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5` — three-way match. FGS subtype property present. Version: versionCode=123, versionName="1.2.3".
+- **Documentation**: BUILDING.md, PRIVACY.md, README.md directory tree, NOTICE, all 7 README.license files, and Chinese/English HTML manuals updated with v1.2.3 entries.
+
+---
+
+**v1.2.1** (versionCode 121) — earlier release (11-round hardening pass; v1.2.2 was a version-bump follow-up on top of v1.2.1)
 
 The v1.2.1 release is a **hardening + bug-fix refinement pass** on top of v1.2.0, based on a comprehensive first-principles code review of all 32K+ source lines (4 parallel review agents covering Java engine/bridge, Java UI/util, JS core, and JS UI). It spans three refinement passes (initial defect fix, second-pass bug fixes, third-pass unused-file activation). **No new features, no new permissions, no new network access, no versionCode bump.** The release focuses on reliability, correctness, security, and completing the Phase 73-75 God Module split:
 
@@ -413,7 +437,7 @@ The v1.2.1 release is a **hardening + bug-fix refinement pass** on top of v1.2.0
 
 ---
 
-**v1.2.0** (versionCode 120) — previous release
+**v1.2.0** (versionCode 120) — earlier release
 
 The v1.2.0 release is an **architecture refactor major version**. **Phase 73-80** (2026.7.11) — God Module split + SonarCloud fixes + review board coordinate labels + documentation sync. (A) **Java God Module split**: `StockfishNative.java` (5,443→4,492 lines) refactored into Facade + 11 manager/helper classes: `EngineProcessManager.java`, `UciProtocolHandler.java`, `EngineConfigManager.java`, `JsBridgeGateway.java`, `PgnCacheManager.java`, `EngineHealthMonitor.java`, `FileIoHelper.java`, `PermissionHelper.java`, `HapticHelper.java`, `SafPickerHelper.java`, `EngineSettingsHelper.java`. All `@JavascriptInterface` method signatures preserved (JS-side `AndroidBridge` calls unchanged). (B) **JS God Module split**: `ui.js` (8,245→8,061 lines) split into 4 new modules + `_computeAndCacheVisualAnnotations` (439 lines) decomposed into 4 sub-functions + `_buildEvalTrendSVG` (267 lines) decomposed into 6 sub-functions. `build-chess.py` updated to merge 13 modules in dependency order. (C) **MessageBus.java + state-store.js** (Phase 75): unified JS↔Java message dispatch and Redux-like global state store. (D) **SonarCloud fixes**: All 42 Bugs fixed (InterruptedException re-interrupt, delete()/renameTo() return value checks, AtomicInteger for thread-safe counters); 5 Vulnerabilities fixed (Chess960 SP-ID uses secureRandomInt()); `_buildPGNString` decomposed into 6 sub-functions to reduce cognitive complexity. (E) **Review board coordinate labels** (Phase 77): left 1-8 rank labels + top a-h file labels + per-square coordinate labels, matching main board and stats board. (F) **Version**: versionCode=120, versionName="1.2.0".
 │   │   ├── EngineConfigHelper.java   # Engine config: setAutoConfig/detectHardware/configure/setGameDifficulty (v1.2.0 Phase 81 NEW)

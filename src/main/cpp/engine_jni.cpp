@@ -81,6 +81,15 @@ Java_com_Regalia_StockfishNative_nativeChmod(JNIEnv *env, jclass, jstring jPath)
     const char* path = env->GetStringUTFChars(jPath, NULL);
     if (!path) return JNI_FALSE;
     int result = chmod(path, 0700);
+    // v1.2.3 P2 (Round 17 P2-4): Log errno on chmod failure. Previously a
+    //   silent JNI_FALSE return left no diagnostic trail — a chmod failure
+    //   (e.g. ENOENT for a race-deleted file, EACCES for a read-only fs,
+    //   EPERM for SELinux denial) was indistinguishable from success at the
+    //   Java layer except by the boolean return. Logging errno + strerror
+    //   here lets logcat pinpoint the cause during engine-binary setup.
+    if (result != 0) {
+        LOGE("nativeChmod failed for %s: %s (errno=%d)", path, strerror(errno), errno);
+    }
     env->ReleaseStringUTFChars(jPath, path);
     return (result == 0) ? JNI_TRUE : JNI_FALSE;
 }

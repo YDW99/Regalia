@@ -1,3 +1,21 @@
+v1.2.3 optimization pass (2026.7.16) — first-principles line-by-line review:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — no version bump).
+  - Regalia-v1.2.3-manual-{zh,en}.html: Fixed the header-bar wireframe
+    version badge from "v1.0.7" to "v1.2.3" in both Chinese and English
+    manuals. The badge was stale from v1.0.7 and didn't match the actual
+    class="ver">v1.2.3 rendered by the app. No other content changes.
+  - License classification: both HTML manuals retain AGPL v3.
+
+v1.2.3 (2026.7.16) — Round 17/18 review fixes + P0 JS error fix + Toast UX:
+  - Version: versionCode=123, versionName="1.2.3" (version bump from v1.2.2).
+  - Regalia-v1.2.2-manual-zh.html and Regalia-v1.2.2-manual-en.html:
+    RENAMED to Regalia-v1.2.3-manual-zh.html and Regalia-v1.2.3-manual-en.html
+    (per recovery guide §6.4: manual filenames match the current version).
+    Content updated with v1.2.3 changelog entry at the top of the update
+    log (newest-first ordering). Cover/footer/title version strings updated
+    from "v1.2.2" to "v1.2.3". Intro paragraph updated with v1.2.3 summary.
+  - License classification: both HTML manuals retain AGPL v3.
+
 v1.2.2 (2026.7.14) — Comprehensive audit-report non-false-positive fix + version bump:
   - Version: versionCode=122, versionName="1.2.2" (version bump from v1.2.1).
   - Regalia-v1.2.1-manual-zh.html and Regalia-v1.2.1-manual-en.html:

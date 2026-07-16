@@ -1,3 +1,21 @@
+v1.2.3 optimization pass (2026.7.16) — first-principles line-by-line review:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — no version bump).
+  - network_security_config.xml (AGPL v3): Corrected "minSdk 21" comment to
+    "minSdk 23" to match build.gradle. No XML change.
+  - strings.xml, backup_rules.xml, data_extraction_rules.xml: no changes.
+  - All mipmap-* icon resources: no changes.
+  - License classification: unchanged (all AGPL v3).
+
+v1.2.3 (2026.7.16) — Round 17/18 review fixes + P0 JS error fix + Toast UX:
+  - Version: versionCode=123, versionName="1.2.3" (version bump from v1.2.2).
+  - strings.xml (AGPL v3): app_name updated from "Regalia v1.2.2" to
+    "Regalia v1.2.3".
+  - All mipmap-* icon resources: no changes.
+  - xml/network_security_config.xml, xml/backup_rules.xml,
+    xml/data_extraction_rules.xml: no changes.
+  - License classification: all files in this directory retain their
+    existing AGPL v3 classification.
+
 v1.2.2 (2026.7.14) — Comprehensive audit-report non-false-positive fix + version bump:
   - Version: versionCode=122, versionName="1.2.2" (version bump from v1.2.1).
   - strings.xml (AGPL v3): app_name updated from "Regalia v1.2.1" to
