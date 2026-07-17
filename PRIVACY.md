@@ -54,6 +54,12 @@ This data:
 - The eval cache (`eval_cache.json`) contains per-move Stockfish evaluation scores (centipawn values, mate distances, search depths, WDL probabilities) keyed by review step index. It contains no personal or position-identifying information beyond the chess evaluation data itself. (v1.0.7+: capped at 2000 entries via LRU eviction — the currently-viewed step is never evicted; eviction order is preserved across app restarts.)
 - The tag files contain user-defined tag strings (e.g., "opening", "tactics") for organizing PGN cache entries. They contain no personal or device-identifying information.
 
+### v1.2.3 round-21: edge-case fix (per-color gated king signal)
+
+The v1.2.3 round-21 change (2026.7.17) fixes a user-reported edge case in the round-20 FEN-import Chess960 detection: the king-position signal in `_needsShredderFEN` is now gated per color with that color's own castling rights, so a fully legal standard position where the opponent's king has wandered off the e-file is no longer mislabeled as Chess960. **No new permissions, no new network access, no new data collection.** (Environment note: the build sandbox was reset this round; the toolchain was re-downloaded and the release signing key regenerated and backed up — the APK certificate fingerprint differs from previous rounds.)
+
+Version: `versionCode=123`, `versionName="1.2.3"` (unchanged — same version, fix round).
+
 ### v1.2.3 round-20: 4 known leftovers resolved + hint relocation
 
 The v1.2.3 round-20 change (2026.7.17) resolves the four documented known leftovers (castling designated-rook-file disambiguation, Chess960 detection on FEN import, removal of the unreachable DIRTY_* incremental-render subsystem, cached PWLE haptics probe), applies the actionable items of a third external review report (PGN regex hardening, Number.parseFloat, replaceAll), and relocates the batch-analysis hint to a right-aligned span inside the "Analyze All" button. **No new permissions, no new network access, no new data collection, no changes to how data is stored or transmitted.** All changes are pure client-side logic/refactors; the haptics change only reduces redundant reflection calls against local OS APIs.

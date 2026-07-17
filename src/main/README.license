@@ -1,3 +1,10 @@
+v1.2.3 round-21 (2026.7.17) — edge-case fix (per-color gated king signal):
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - AndroidManifest.xml (AGPL v3): No changes this round.
+  - Changes this round: assets/chess.src/ai-bridge.js (see
+    chess.src/README.license) and the rebuilt assets/chess.html.
+  - License classification: AndroidManifest.xml remains AGPL v3.
+
 v1.2.3 round-20 (2026.7.17) — 4 known leftovers + 3rd review report + hint relocation:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — hardening round).
   - AndroidManifest.xml (AGPL v3): No changes this round. FGS subtype property

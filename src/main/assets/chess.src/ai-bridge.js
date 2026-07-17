@@ -909,8 +909,19 @@ function _needsShredderFEN(s){
     const br=s.board[0]?.[0];
     if(!br||br.type!=='rook'||br.color!=='black')return true;
   }
-  if(s.wk&&(s.wk.row!==7||s.wk.col!==4))return true;
-  if(s.bk&&(s.bk.row!==0||s.bk.col!==4))return true;
+  // v1.2.3 round-21 (edge-case fix): the king-position signal must be gated
+  //   PER COLOR together with THAT COLOR's own castling rights — not OR'ed
+  //   across both kings. In standard chess a side that still holds castling
+  //   rights necessarily has its king on the home square; the OPPONENT's
+  //   king is irrelevant here (it may have wandered after losing its own
+  //   rights). Previously, e.g. 3k4/8/8/8/8/8/8/R3K2R w KQ - 0 1 (white
+  //   keeps KQ on standard squares; the black king has wandered to d8 with
+  //   no black rights) returned true and the FEN-import Chess960 detection
+  //   (round-20) mislabeled a fully legal standard position as Chess960
+  //   (gameVariant / UCI_Chess960 / PGN Variant tag). The corner-rook
+  //   checks above are already gated per individual right.
+  if((cr.whiteKingside||cr.whiteQueenside)&&s.wk&&(s.wk.row!==7||s.wk.col!==4))return true;
+  if((cr.blackKingside||cr.blackQueenside)&&s.bk&&(s.bk.row!==0||s.bk.col!==4))return true;
   return false;
 }
 

@@ -1,3 +1,14 @@
+v1.2.3 round-21 (2026.7.17) — edge-case fix (per-color gated king signal):
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - ai-bridge.js (GPL v3): _needsShredderFEN king-position check now gated
+    per color with that color's own castling rights — fixes mislabeling of
+    fully legal standard positions where the opponent's king has wandered
+    off the e-file (e.g. 3k4/8/8/8/8/8/8/R3K2R w KQ - 0 1). All three
+    consumers benefit (FEN-import 960 detection, engine Shredder-FEN
+    emission, PGN [FEN] conversion).
+  - All other modules: No changes this round.
+  - License classification: unchanged.
+
 v1.2.3 round-20 (2026.7.17) — 4 known leftovers + hint relocation:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — hardening round).
   - chess960.js (GPL v3): A-1 RESOLVED — castlingRights gains designated rook

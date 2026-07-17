@@ -1,3 +1,9 @@
+v1.2.3 round-21 (2026.7.17): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - The round-21 change is limited to src/main/assets/chess.src/ai-bridge.js
+    (per-color gated king signal in _needsShredderFEN) plus rebuilt chess.html
+    and the top-level docs/Manual.
+
 v1.2.3 round-20 (2026.7.17) — 4 known leftovers + 3rd review report + hint relocation:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — hardening round).
   - No changes to any resource files this round (strings.xml, icons,

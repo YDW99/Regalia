@@ -1,3 +1,9 @@
+v1.2.3 round-21 (2026.7.17) — edge-case fix (per-color gated king signal):
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - chess.html (AGPL v3): Rebuilt from chess.src/ via build-chess.py after
+    the ai-bridge.js fix (see chess.src/README.license). 22,434 lines.
+  - stats.html (AGPL v3): No changes this round.
+
 v1.2.3 round-20 (2026.7.17) — 4 known leftovers + 3rd review report + hint relocation:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — hardening round).
   - chess.html (AGPL v3): Rebuilt from chess.src/ via build-chess.py after the

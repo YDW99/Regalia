@@ -251,6 +251,16 @@ During the development stage, the version number used was: **v18.x.x**. For futu
 
 The v1.2.3 release is a **bug-fix + review-response release** on top of v1.2.2, driven by a user-reported P0 JS error and two multi-skill review reports (Round 17 — Issue #48, 24 findings; Round 18 — Issue #49, 32 findings). After rigorous false-positive verification, the actionable findings were fixed and the version was bumped v1.2.2→v1.2.3 (versionCode 122→123).
 
+### v1.2.3 round-21 (2026.7.17) — edge-case fix: per-color gated king signal in _needsShredderFEN
+
+User-reported edge case, verified NOT a false report: the round-20 FEN-import Chess960 detection reuses `_needsShredderFEN`, whose king-position check was a global OR — any castling right held AND *either* king off its home square. A fully legal standard position with the opponent's king off the e-file (`3k4/8/8/8/8/8/8/R3K2R w KQ - 0 1` — white keeps KQ with king/rooks standard; black king wandered to d8, no black rights) was mislabeled Chess960 (`setChess960Mode(true)`, `gameVariant='chess960'`, engine UCI_Chess960, Chess960-labelled PGN round-trip; move legality unaffected there since the castling targets coincide). Fix: the king-position signal is now gated per color with that color's own rights (`(cr.whiteKingside||cr.whiteQueenside) && s.wk off home`, same for black) — in standard chess a rights-holding king is necessarily home, so the opponent's king position is irrelevant. The corner-rook checks were already gated per individual right. All three `_needsShredderFEN` consumers benefit (import detection, engine Shredder-FEN emission, PGN [FEN] conversion).
+
+**Verification**: new smoke-test scenario M — reported FEN no longer flagged; rights-holder-king-off-home still flagged (both colors); standard start / 960 SP0 unchanged; import path end-to-end no mislabel. All 13 scenarios pass; chess.html rebuilt (inline script `node --check` OK).
+
+**Environment**: the sandbox was reset mid-round — `/tmp` wiped (toolchain, build copy, engine, keystore lost). Rebuilt: JDK 21.0.11, cmdline-tools, SDK platform-35 + build-tools 34.0.0 + NDK 27.2.12479018 + cmake 3.31.6, Gradle 8.11.1, Stockfish sf_18 (SHA-256 `8f7116d3…` re-verified identical). **The release signing key was lost in the reset and has been regenerated with the original parameters** (alias `debug`, password `android`, CN=Android Debug, RSA-2048, 10950 days) and backed up at `/mnt/agents/tools/debug.keystore.bak`. ⚠️ **This APK's certificate fingerprint (SHA-256 `8bc19e69…`) differs from previous rounds — installing over an older build will be rejected for signature mismatch; uninstall the old build first (data will be cleared).**
+
+Release APK: signature v1+v2+v3 all true, versionCode=123/versionName="1.2.3"/targetSdk 35, FGS specialUse subtype intact, no `ACCESS_NETWORK_STATE`, engine hash three-way match.
+
 ### v1.2.3 round-20 (2026.7.17) — 4 known leftovers resolved + 3rd review report + hint relocation
 
 This sub-round thoroughly resolves the four documented known leftovers, processes the third external review report ("PR #51 reliability-affecting code smells"), and relocates the batch-analysis hint per user request. Version stays at v1.2.3 (versionCode 123).

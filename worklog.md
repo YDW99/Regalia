@@ -1,3 +1,55 @@
+# Regalia v1.2.3 — round-21 工作日志（2026-07-17）
+
+## 任务来源
+用户报告边缘情形：round-20 的 FEN 导入 Chess960 检测在「对方王离 e 列」时误触发
+（例：3k4/8/8/8/8/8/8/R3K2R w KQ - 0 1），询问是否为误报。
+
+## 排查结论：非误报（报告成立）
+_needsShredderFEN 的王位置检查为全局或：任一易位权存在 且 任意王不在初始格 → true。
+报告局面中白方持 KQ 权且王车全在标准位，黑王游走至 d8（黑方无权）——完全合法的
+标准局面被误判 960（gameVariant/引擎 UCI_Chess960/PGN 变体标签连锁误标；该局面两种
+规则易位目标格重合，走子合法性不受影响，影响限于变体误标+引擎配置）。
+
+## 修复
+ai-bridge.js _needsShredderFEN：王位置信号按颜色与己方易位权联动门控——
+(whiteKingside||whiteQueenside)&&s.wk 离家 才 true；黑方同理。标准规则下持权方王
+必在初始格，对方王位置无关。角落车检查本就逐权门控，未动。三个消费方（导入检测、
+引擎 Shredder-FEN 输出、PGN [FEN] 转换）同时受益。
+
+## 环境重建（沙箱重置）
+本轮 /tmp 被重置（工具链/构建副本/引擎/keystore 全失，/mnt/agents 幸存）：
+- /mnt/agents/tools 下 jdk21.tar.gz 与 cmdtools.zip 为 100MiB 截断损坏品（挂载上限），
+  gradle-home 仅 wrapper。全部重新下载：JDK 21.0.11、cmdline-tools、SDK
+  platform-35+build-tools 34.0.0+platform-tools+cmake 3.31.6+NDK 27.2.12479018、
+  Gradle 8.11.1（tuna/腾讯镜像，分块下载绕单连接上限）。
+- 引擎重新下载 stockfish sf_18，SHA-256 复核一致（8f7116d3…）。
+- **签名密钥丢失**：按原参数重新生成（alias debug，CN=Android Debug，RSA-2048，
+  10950 天）并持久化备份 /mnt/agents/tools/debug.keystore.bak。
+  ⚠️ 新证书指纹 SHA-256=8bc19e69…，与旧轮次不同——覆盖安装旧版会被拒，需先卸载。
+- 踩坑：首轮构建 versionCode=111/1.1.1 —— version.properties 在项目**父目录**
+  （../version.properties），补拷后恢复 123/1.2.3。
+
+## 验证
+- 烟雾测试 13 场景全过：新增场景 M（报告 FEN 回归不误标；持权方王离家双方仍触发；
+  标准初始/960 SP0 不变；导入路径端到端不误标）。chess.html 重建内嵌脚本 check 过。
+- APK（78,176,601 字节）：v1+v2+v3 全过；123/1.2.3/targetSdk 35；无 ACCESS_NETWORK_STATE；
+  FGS subtype 完整；引擎哈希三方一致；chess.html 含修复代码。
+
+## 文档更新
+- 双语说明书 round-21 条目置顶（含签名证书变更醒目说明）；
+- NOTICE/PRIVACY/README round-21 小节；8× README.license（chess.src/assets/src/main
+  变更条目，Manual 变更条目，其余 no-changes）；worklog 本条目置顶。
+
+## 最终交付记录（round-21）
+- /tmp 本轮遭遇**两次**重置：首次重置后重建工具链并发现 keystore 丢失（重新生成+备份）；
+  第二次重置后再次重建（keystore 从备份恢复，证书指纹保持一致 8bc19e69…）。
+  重建要点：cmdtools 需完整重下（续传与非并发）、lintVitalRelease 首次自动生成
+  lint-baseline.xml 需二次构建、version.properties 在项目父目录。
+- 交付物（/mnt/agents/output/）：
+  - Regalia-release.apk（78,177,683 字节）— SHA-256=3ce653d469512bb251a7a38bd98866652e84e0d423ab1501cdb082489bc8a9be
+  - Regalia-v1.2.3-src.tar.gz — 118 条目，0 禁用条目
+  - Regalia-v1.2.3-manual-{zh,en}.html、SHA256SUMS.txt
+
 # Regalia v1.2.3 — round-20 工作日志（2026-07-17）
 
 ## 任务来源

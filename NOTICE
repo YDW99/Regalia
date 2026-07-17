@@ -20,6 +20,25 @@ The original NOTICE files from third-party projects are preserved alongside this
 - AUTHORS-stockfish: Stockfish project authors list
 
 ===== LICENSE CLASSIFICATION BY FILE ==========================================
+v1.2.3 round-21 (2026.7.17) — edge-case fix: per-color gated king signal in _needsShredderFEN:
+  - `ai-bridge.js` (GPL v3): USER-REPORTED EDGE CASE FIXED — the
+    king-position check in _needsShredderFEN was a global OR (any right
+    held AND either king off its home square), so a fully legal standard
+    position with the opponent's king wandered off the e-file (e.g.
+    3k4/8/8/8/8/8/8/R3K2R w KQ - 0 1) was mislabeled Chess960 by the
+    round-20 FEN-import detection (variant/engine misconfig; legality
+    unaffected there). The signal is now gated per color with that color's
+    own rights: non-standard is concluded only when a rights-HOLDING side's
+    own king is off the home square.
+  - Environment: sandbox reset wiped /tmp — toolchain re-downloaded
+    (JDK 21 / cmdline-tools / SDK platform-35 + build-tools 34 + NDK
+    27.2.12479018 + cmake 3.31.6 / Gradle 8.11.1), Stockfish sf_18 engine
+    re-downloaded and SHA-256 re-verified identical. Release signing key
+    lost in the reset → regenerated with the original parameters and backed
+    up (/mnt/agents/tools/debug.keystore.bak); certificate fingerprint
+    differs from previous rounds (noted in manuals/worklog).
+  - Version unchanged: versionCode=123, versionName="1.2.3".
+  - AI-GEN: AI assisted (reviewed for AGPL v3 / GPL v3 compliance).
 v1.2.3 round-20 (2026.7.17) — 4 known leftovers resolved + 3rd review report + hint relocation:
   - `chess960.js` (GPL v3): KNOWN-ISSUE A-1 RESOLVED — castling rights now
     carry designated rook files (parseShredderCastling records them from the

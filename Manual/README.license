@@ -1,3 +1,11 @@
+v1.2.3 round-21 (2026.7.17) — edge-case fix (per-color gated king signal):
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - Regalia-v1.2.3-manual-zh.html (AGPL v3): round-21 changelog entry inserted
+    newest-first — the _needsShredderFEN per-color gating fix, plus the
+    environment/signing-key note (certificate fingerprint changed).
+  - Regalia-v1.2.3-manual-en.html (AGPL v3): same round-21 entry, English.
+  - License classification: both manuals remain AGPL v3 (original works).
+
 v1.2.3 round-20 (2026.7.17) — 4 known leftovers + 3rd review report + hint relocation:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — hardening round).
   - Regalia-v1.2.3-manual-zh.html (AGPL v3): round-20 changelog entry inserted
