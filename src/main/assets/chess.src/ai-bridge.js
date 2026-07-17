@@ -679,6 +679,14 @@ function _hideLoadingOverlay(){
   _updateLoadingStatus(T('engine_ready'),100);
   const lo=document.getElementById('_loadingOverlay');
   if(lo){lo.style.opacity='0';lo.style.transition='opacity .5s';setTimeout(()=>{if(lo.parentNode)lo.remove();},500);}
+  // v1.2.3 round-19: the board becomes visible once the overlay finishes
+  //   fading out — fire the one-time anti-shake hint even if no render
+  //   follows soon (e.g. a long first AI think). typeof guard per the
+  //   cross-module convention (the helper is defined in ui.js, which loads
+  //   after this module); the helper's own flag prevents double-firing.
+  setTimeout(function(){
+    try{if(typeof _maybeShowBoardDebounceHint==='function')_maybeShowBoardDebounceHint();}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+  },600);
 }
 // v1.0.8 PHASE 22 (bug fix): Apply system dark/light theme to <html> via
 // data-theme attribute. This works on ALL devices (including Xiaomi HyperOS 3
@@ -976,8 +984,16 @@ function _buildPGNString(forceIncludeVariations, includeAnnotations){
   // v1.0.4: Build supplementary tags
   const supObj=buildSupplementaryTagsObject({
     variant:(gameVariant !== undefined)?gameVariant:null,
-    startFEN:(typeof _setupFEN!=='undefined'&&_setupFEN)?_setupFEN:((gameVariant !== undefined&&gameVariant==='chess960')?generateFEN(gameState):null),
-    plyCount:moveRecords.length
+    // v1.2.3 round-18 (robustness): when _setupFEN is unavailable for a
+    //   Chess960 game (e.g., an imported Chess960 PGN that omitted its [FEN]
+    //   tag), fall back to the game's TRUE initial position (stateHistory[0])
+    //   instead of the current mid-game gameState. Per the PGN spec the [FEN]
+    //   tag must hold the position the movetext started from.
+    startFEN:(typeof _setupFEN!=='undefined'&&_setupFEN)?_setupFEN:((gameVariant !== undefined&&gameVariant==='chess960'&&typeof stateHistory!=='undefined'&&stateHistory&&stateHistory.length&&stateHistory[0].state)?generateFEN(stateHistory[0].state):null),
+    // v1.2.3 round-18 (bug fix): PlyCount must count actual half-moves.
+    //   For black-to-move starts moveRecords[0] is an intentional null
+    //   placeholder, so raw .length overcounts by one.
+    plyCount:moveRecords.reduce(function(n,m){return n+(m?1:0);},0)
   });
   // v1.2.0 Phase 76+: Shredder FEN conversion logic extracted
   _applyShredderFENIfNeeded(supObj);
@@ -2422,20 +2438,24 @@ function onBestMove(uciMove){
   if(!_bmCoords){
     console.error('onBestMove: failed to parse UCI move:',uciMove);
     // v1.2.1 round-11 (review P3 fix): reset isAIThinking on validation
-    //   failure so the UI doesn't stay stuck in "AI thinking" state. The
-    //   safety timer remains armed (we didn't clear _aiSafetyTimerId above)
-    //   so the auto-retry still fires after 360s if the user doesn't undo.
-    //   This prevents a soft-lock where the user sees "thinking..." forever
-    //   if the engine emits an unparseable bestmove line.
+    //   failure so the UI doesn't stay stuck in "AI thinking" state.
+    // v1.2.3 round-18 (bug fix): actually FIRE the auto-retry the old comment
+    //   promised — the armed 360s safety timer guards on `isAIThinking`, which
+    //   we just cleared, so it would never have retried (mechanism/comment
+    //   mismatch). Retry immediately instead; doAIMove() re-arms its own
+    //   timer (clearing the stale one) and _aiRetryCount caps attempts at 3.
     isAIThinking=false;_aiBarInfo='';
     render();
+    setTimeout(()=>{if(!gameOver&&!reviewMode&&!setupMode&&gameState.currentTurn!==playerColor)doAIMove();},0);
     return;
   }
   if(!gameState.board[_bmCoords.from.row]||!gameState.board[_bmCoords.from.row][_bmCoords.from.col]){
     console.error('onBestMove: no piece at from square for UCI move:',uciMove);
     // v1.2.1 round-11 (review P3 fix): same reset as above.
+    // v1.2.3 round-18 (bug fix): same immediate-retry fix as above.
     isAIThinking=false;_aiBarInfo='';
     render();
+    setTimeout(()=>{if(!gameOver&&!reviewMode&&!setupMode&&gameState.currentTurn!==playerColor)doAIMove();},0);
     return;
   }
   // Cancel safety timeout — engine responded (and it's the current request)
@@ -2517,6 +2537,19 @@ function onBestMove(uciMove){
   const coords=uciToCoords(uciMove);
   const from=coords.from, to=coords.to;
   const piece=gameState.board[from.row][from.col];
+  // v1.2.3 round-18 (bug fix): discard the bestmove if the game has already
+  //   ended (timeout forfeit / resignation) while the engine was thinking.
+  //   Clock expiry runs on a 1s interval and resign is user-driven, so an
+  //   in-flight bestmove can arrive AFTER gameOver was set — without this
+  //   guard it would be applied on top of the finished game, corrupting
+  //   moveRecords and the PGN. AI state was already cleared above; skip the
+  //   move, variation processing, and ponder.
+  if(typeof gameOver!=='undefined'&&gameOver){
+    _pendingBestMoveInfo=null;
+    console.warn('onBestMove: discarding bestmove — game already over:',uciMove);
+    render();
+    return;
+  }
   executeMove(from,to,coords.promotion);
 
   // After AI moves, start Ponder if enabled and we have a ponder move
@@ -3525,7 +3558,9 @@ function _processDeferredVariations(){
   // if the engine's hash happened to collide between unrelated positions.
   _pvCache.clear();
 
-  const{uciMove,lastIdx,isAfterWhiteMove,moveNum,preMoveState,ponderMove,ponderEnabled,multiPVEnabled}=info;
+  // v1.2.3 round-18 (cleanup): removed unused `moveNum` from the destructure
+  //   (superseded by aiMoveNum recomputed below from aiMoveIdx).
+  const{uciMove,lastIdx,isAfterWhiteMove,preMoveState,ponderMove,ponderEnabled,multiPVEnabled}=info;
 
   // The move record at lastIdx should exist (it was the last record before the bestmove was executed)
   // But after executeMove(), a new record was added. So the record we want is at lastIdx,
@@ -3544,7 +3579,13 @@ function _processDeferredVariations(){
 
   // Recalculate move metadata for the AI's move record
   const aiIsAfterWhiteMove=(aiMoveIdx%2===0);
-  const aiMoveNum=Math.floor(aiMoveIdx/2)+1;
+  // v1.2.3 round-18 (bug fix): apply the imported-start-move-number offset,
+  //   same as the mainline (ui.js _mvStartOffset, _pgnMvStartOffset below) and
+  //   the round-13 fix in tablebase.js. Previously engine-attached variations
+  //   on FEN/PGN-imported games (start move N>1) were numbered from 1,
+  //   contradicting the mainline numbering.
+  const _dvMvStartOffset=(typeof _importedStartMoveNum!=='undefined'&&_importedStartMoveNum>0)?_importedStartMoveNum:1;
+  const aiMoveNum=Math.floor(aiMoveIdx/2)+_dvMvStartOffset;
 
   // After the AI's move, the next move is from the opposite side:
   //   AI played white → continuation starts with black → firstMoveIsWhite=false, varMoveNum=aiMoveNum
@@ -3727,7 +3768,11 @@ function _checkPVDivergenceSANs(){
           }
           if(!alreadyExists){
             const isWhite=(divergeIdx%2===0);
-            const moveNum=Math.floor(divergeIdx/2)+1;
+            // v1.2.3 round-18 (bug fix): apply _importedStartMoveNum offset
+            //   (same as round-13 fix in tablebase.js) so MultiPV variations
+            //   on FEN-started games display the correct move number.
+            const _mpvMvStartOffset=(typeof _importedStartMoveNum!=='undefined'&&_importedStartMoveNum>0)?_importedStartMoveNum:1;
+            const moveNum=Math.floor(divergeIdx/2)+_mpvMvStartOffset;
             targetMr.variations.push({
               group:'multipv',
               san:remainingSAN,
@@ -3921,7 +3966,11 @@ function _attachDivergentPV(divergeAtIdx,pvRemainder,pending){
   // ACTUAL move. The PV remainder's first move is an ALTERNATIVE to it
   // (same side, same move number).
   const isWhite=(divergeAtIdx%2===0);
-  const moveNum=Math.floor(divergeAtIdx/2)+1;
+  // v1.2.3 round-18 (bug fix): apply _importedStartMoveNum offset (same as
+  //   round-13 fix in tablebase.js) so divergence variations on FEN-started
+  //   games display the correct move number.
+  const _divMvStartOffset=(typeof _importedStartMoveNum!=='undefined'&&_importedStartMoveNum>0)?_importedStartMoveNum:1;
+  const moveNum=Math.floor(divergeAtIdx/2)+_divMvStartOffset;
 
   // Build the variation entry — same format as PGN variations.
   const varEntry={
@@ -4505,4 +4554,7 @@ function _updateAIThinkDisplay(){
 // `export {...}` line via regex, so there was no production impact, but
 // the list was misleading. Verified each removal by grep — none of these
 // symbols are declared in ai-bridge.js.
-export {showToast,_bridgeCall,_showLoadingOverlay,_updateLoadingStatus,_hideLoadingOverlay,_attemptEngineInit,onInitProgress,onEngineReady,onBestMove,onHintMove,onEngineProgress,onPonderProgress,onEngineEval,onEngineInfo,onEngineSwitched,onSettingsImported,onSettingsExported,onPGNExported,onStatsHTMLExported,onStatsRequestReview,onGameDifficultyChanged,onEngineError,onMultiPVProgress,onMultiPVResult,copyMoveHistory,copyReviewPGN,exportPGNToFile,openStatsPage,renderEngineConfig,renderEngineConfigAndUpdate,openEngineConfig,closeEngineConfig,switchEngine,importExternalEngine,restartCurrentEngine,setConfigThreads,setConfigHash,setConfigMultiPV,setConfigMoveOverhead,togglePonder,toggleShowWDL,setConfigSkillLevel,toggleLimitElo,setConfigElo,toggleAutoConfig,exportEngineSettings,importEngineSettings,requestEngineEval,_requestBatchEval,_showPGNExportAnnotationDialog,_pgnExportDialogActive,_pgnExportDialogDismiss,_updateEvalDisplay,_updateReviewEvalUI,_resetEvalState,_updateAllEvalDisplays,_formatVariationGroups,_commentHasText};
+export {showToast,_bridgeCall,_showLoadingOverlay,_updateLoadingStatus,_hideLoadingOverlay,_attemptEngineInit,onInitProgress,onEngineReady,onBestMove,onHintMove,onEngineProgress,onPonderProgress,onEngineEval,onEngineInfo,onEngineSwitched,onSettingsImported,onSettingsExported,onPGNExported,onStatsHTMLExported,onStatsRequestReview,onGameDifficultyChanged,onEngineError,onMultiPVProgress,onMultiPVResult,copyMoveHistory,copyReviewPGN,exportPGNToFile,openStatsPage,renderEngineConfig,renderEngineConfigAndUpdate,openEngineConfig,closeEngineConfig,switchEngine,importExternalEngine,restartCurrentEngine,setConfigThreads,setConfigHash,setConfigMultiPV,setConfigMoveOverhead,togglePonder,toggleShowWDL,setConfigSkillLevel,toggleLimitElo,setConfigElo,toggleAutoConfig,exportEngineSettings,importEngineSettings,requestEngineEval,_requestBatchEval,_showPGNExportAnnotationDialog,_pgnExportDialogActive,_pgnExportDialogDismiss,_updateEvalDisplay,_updateReviewEvalUI,_resetEvalState,_updateAllEvalDisplays,_formatVariationGroups,_commentHasText,
+// v1.2.3 round-18: added generateFEN/uciToCoords/_esc — defined in this
+//   module and previously (incorrectly) exported from game-logic.js.
+generateFEN,uciToCoords,_esc};

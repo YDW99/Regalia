@@ -1,3 +1,15 @@
+v1.2.3 round-19 (2026.7.17) — 2 bilingual UX hints + log-injection fix:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — feature + fix round).
+  - No changes to any resource files this round (strings.xml, icons,
+    network_security_config.xml, backup_rules.xml, data_extraction_rules.xml).
+  - License classification: all resources remain AGPL v3 (original works).
+
+v1.2.3 round-18 (2026.7.17) — Chess960 PGN [FEN] bug fix + 7-agent line-by-line review:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - No changes to any resource files this round (strings.xml, icons,
+    network_security_config.xml, backup_rules.xml, data_extraction_rules.xml).
+  - License classification: all resources remain AGPL v3 (original works).
+
 v1.2.3 round-13 (2026.7.16) — CMake re-enablement + first-principles code review:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
   - network_security_config.xml (AGPL v3): P3 — corrected ISRG Root X2 expiry

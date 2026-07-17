@@ -1843,6 +1843,12 @@ let reviewBaseState=null,_cachedStatus=null,_cachedStatusKey='';
 let cachedCtrlMap=null,cachedCtrlKey='',renderPending=false,
     lastRenderTime=0,lastRenderRequest=0,renderTimerId=null;
 let _animRetryCount=0; // v1.1.0 Phase 54: guard against stuck animationInProgress
+// v1.2.3 round-18 (bug fix): tracks "user is typing in the Chess960 SP-ID
+//   input" so the full re-render triggered by each keystroke can restore
+//   focus afterwards (mirrors the _ecoSearchFocused mechanism). Previously
+//   every keystroke destroyed the input → focus/soft-keyboard lost →
+//   multi-digit SP-IDs were effectively un-typeable.
+let _spidEditing=false;
 let _heartbeatIntervalId=null; // Interval ID for engine heartbeat monitor
 let _heartbeatRunning=false; // Flag for engine heartbeat monitor state
 // Dialog state
@@ -2142,7 +2148,12 @@ function render(){
         return;
       }
       renderPending=true;
-      setTimeout(()=>{renderPending=false;_animRetryCount=0;lastRenderTime=Date.now();render();},200);
+      // v1.2.3 round-18 (bug fix): do NOT reset _animRetryCount here — the
+      //   reset made the counter oscillate 0→1 so the ">10 retries →
+      //   force-clear stuck animationInProgress" guard above could never
+      //   fire (dead code, infinite 200ms spin instead of 2s self-heal).
+      //   The healthy-path reset at the non-animating branch below suffices.
+      setTimeout(()=>{renderPending=false;lastRenderTime=Date.now();render();},200);
     }
     return;
   }
@@ -2247,7 +2258,9 @@ function _renderChess960Settings(h){
   h+=`<label style="font-size:.78rem;color:var(--muted)">${T('chess960_spid')}: </label>`;
   h+=`<button class="btn" style="padding:4px 10px;font-size:.78rem;${curSPID===-1?'background:var(--accent);color:var(--bg);font-weight:700':''}" onclick="HapticManager.fire('BUTTON_PRESS');dlgChess960SPID=-1;render()">${T('chess960_random')}</button>`;
   h+=`<div style="display:flex;gap:6px;align-items:center;flex:1;min-width:120px">`;
-  h+=`<input type="number" min="0" max="959" value="${curSPID>=0?curSPID:''}" placeholder="0-959" style="flex:1;width:80px;min-width:0;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;text-align:center" oninput="const v=Number.parseInt(this.value,10);if(!Number.isNaN(v)&&v>=0&&v<960){dlgChess960SPID=v;render();}else if(this.value===''){dlgChess960SPID=-1;render();}">`;
+  // v1.2.3 round-18: id + _spidEditing flag so _postRenderFinalize can
+  //   restore focus after the keystroke-triggered re-render (see declaration).
+  h+=`<input id="spidInput" type="number" min="0" max="959" value="${curSPID>=0?curSPID:''}" placeholder="0-959" style="flex:1;width:80px;min-width:0;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;text-align:center" oninput="_spidEditing=true;const v=Number.parseInt(this.value,10);if(!Number.isNaN(v)&&v>=0&&v<960){dlgChess960SPID=v;render();}else if(this.value===''){dlgChess960SPID=-1;render();}">`;
   // v1.2.1 round-16: secureRandomInt is exported by game-logic.js (loaded
   //   before ui.js), so the typeof guard is unreachable defensive code.
   //   Simplified to direct call (removes Math.random() that triggered
@@ -2828,6 +2841,17 @@ if(_sfWdlW>=0&&_sfWdlD>=0&&_sfWdlL>=0){const _rt=_sfWdlW+_sfWdlD+_sfWdlL;const _
 const _rvEvalFontSize='.8rem';
 const _rvEvalEmojiSize='1.05rem';
 const _rvEvalBarHTML='<div class="ev" id="review-eval-bar" style="margin:2px 0;width:100%;box-sizing:border-box;font-size:'+_rvEvalFontSize+'!important;padding:5px 10px!important;gap:5px;max-height:2.4em;overflow:hidden;white-space:nowrap"><span class="ev-e" style="font-size:'+_rvEvalEmojiSize+'">'+_re.emoji+'</span><span>'+_re.desc+'</span><span style="color:var(--muted)">('+_re.score+')</span>'+_rDepthStr+_rProgressStr+_rWdlStr+_rDelta+'</div>';
+// v1.2.3 round-19: while an analyze-all batch is running, show a hint line
+//   directly under the eval bar telling the user that long-pressing a move
+//   in the move list prioritizes it (_prioritizeReviewStep). The eval bar
+//   itself is strictly single-line (overflow:hidden + nowrap), so the hint
+//   cannot go INSIDE it — it would be clipped. This separate line is
+//   rendered from state on every full render; _updateReviewBatchHint()
+//   handles the immediate in-place insert at batch start (reviewAnalyzeAll
+//   does not re-render when the batch begins).
+const _rvBatchHintHTML=_reviewAnalyzeAllActive
+  ?'<div id="review-batch-hint" style="margin:0 0 2px;width:100%;box-sizing:border-box;font-size:.72rem;color:var(--accent);padding:2px 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+T('review_batch_analyzing_hint')+'</div>'
+  :'';
 
 // Review step slider — custom slider with pixel-perfect alignment to chart data points.
 // v1.1.0 Phase 54: Replaced the native <input type="range"> visual with a custom
@@ -2997,6 +3021,7 @@ h+='</div>'; // close .review-top
 // .review-bottom: full-width chart + controls, edge-to-edge
 h+='<div class="review-bottom">';
 h+=_rvEvalBarHTML;
+h+=_rvBatchHintHTML;
 h+=_rvSliderHTML;
 h+=_rvChartHTML;
 h+=_rvNavHTML;
@@ -3219,7 +3244,18 @@ if(!gameState||!gameState.board){console.error('renderInternal: gameState is inv
 if(setupMode){gameOver=null;_gameOverStatusKey=null;}
 if(gameOver&&_gameOverStatusKey){const _reLocStr=_gameOverStrFromStatus(_gameOverStatusKey);if(_reLocStr)gameOver=_reLocStr;}
 if(!gameOver&&!setupMode&&!isAIThinking&&!reviewMode){const _gsKey=gameState.hash+'|'+gameState.currentTurn;if(_cachedStatusKey!==_gsKey){_cachedStatus=gameStatus(gameState);_cachedStatusKey=_gsKey;}_applyGameOver(_cachedStatus);}
-const ctrlKey=showCtrlMap?gameState.hash:'off';if(ctrlKey!==cachedCtrlKey){cachedCtrlMap=showCtrlMap?getCtrlMap(gameState.board):null;cachedCtrlKey=ctrlKey}const cm=cachedCtrlMap;
+// v1.2.3 round-18 (perf): skip the main-board control map entirely in review
+//   mode — the main board isn't rendered then, and the review board maintains
+//   its own cache key below. Previously both paths shared cachedCtrlKey/
+//   cachedCtrlMap and ping-ponged between the main and review position
+//   hashes, forcing TWO full getCtrlMap() recomputes per render while
+//   reviewing with 🌈 enabled.
+let cm=null;
+if(showCtrlMap&&!reviewMode){
+  const ctrlKey=gameState.hash;
+  if(ctrlKey!==cachedCtrlKey){cachedCtrlMap=getCtrlMap(gameState.board);cachedCtrlKey=ctrlKey;}
+  cm=cachedCtrlMap;
+}
 const infoSq=hoveredSquare||selectedSquare;let infoCtrl=null;
 if(infoSq&&cm){const e=cm[infoSq.row][infoSq.col];if(e)infoCtrl=e;}
 const oppC=OPP_COLOR[playerColor];
@@ -3390,7 +3426,10 @@ return h;
  */
 function _renderInfoBars(h){
 // Tablebase status bar (player turn only, ≤7 pieces, manual query)
-if(!gameOver&&!reviewMode&&pieceCountLE7(gameState.board)){
+// v1.2.3 round-18: typeof guard for cross-module symbol (round-11 defensive
+//   pattern, same as game-logic.js:2794 — a failed tablebase.js load should
+//   not cascade into a full-page render error).
+if(!gameOver&&!reviewMode&&typeof pieceCountLE7==='function'&&pieceCountLE7(gameState.board)){
 const _tbFen=generateFEN(gameState);
 let _tbBarHtml='';
 const _cachedTb=_tbCache.get(_tbFen);
@@ -3399,7 +3438,11 @@ else if(_cachedTb){
 // API returns moves[] already sorted best-first; use moves[0] directly
 const _cat=_cachedTb.category||'';
 const _catMap={'win':T('tb_cat_win'),'syzygy-win':T('tb_cat_syzygy_win'),'maybe-win':T('tb_cat_maybe_win'),'cursed-win':T('tb_cat_cursed_win'),'draw':T('tb_cat_draw'),'blessed-loss':T('tb_cat_blessed_loss'),'maybe-loss':T('tb_cat_maybe_loss'),'syzygy-loss':T('tb_cat_syzygy_loss'),'loss':T('tb_cat_loss')};
-const _catLabel=_catMap[_cat]||_cat;
+// v1.2.3 round-18 (XSS hardening): escape the fallback — an unknown
+//   `category` from the tablebase API would otherwise flow raw into
+//   innerHTML below (same threat model as the _best.uci escaping noted in
+//   the v1.0.8 PHASE 30 comment below).
+const _catLabel=_catMap[_cat]||_esc(_cat);
 let _dtzLabel='';
 const _dtm=_cachedTb.dtm;
 const _dtz=_cachedTb.precise_dtz!=null?_cachedTb.precise_dtz:_cachedTb.dtz;
@@ -3637,6 +3680,24 @@ if(ctx.containerScrolls.length>0){
  *
  * @param {boolean} wasEcoFocused - Whether ECO search was focused before render
  */
+// v1.2.3 round-19: One-time startup hint — "long-press the board toggles
+//   board anti-shake" (the sensor stabilization added in v1.0.5 Rev49, see
+//   the long-press handler at the top of this file). Fires once per app
+//   launch (page load) on the first completed render after the loading
+//   overlay is gone — i.e. the moment the board is actually visible.
+//   _hideLoadingOverlay (ai-bridge.js) also schedules a delayed call so the
+//   hint still appears when no render follows soon (e.g. a long first AI
+//   think before onBestMove triggers the next render).
+let _boardDebounceHintShown=false;
+function _maybeShowBoardDebounceHint(){
+  if(_boardDebounceHintShown)return;
+  if(document.getElementById('_loadingOverlay'))return;
+  _boardDebounceHintShown=true;
+  setTimeout(function(){
+    try{showToast(T('board_debounce_hint'),4500);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  },400);
+}
+
 function _postRenderFinalize(wasEcoFocused){
 _cachedBwrap=null;_cachedSvgEl=null;_cachedSvgLines=[];_cachedArrowKey='';_cachedCtrlCard=null;
 _prevHoverSq=hoveredSquare?{row:hoveredSquare.row,col:hoveredSquare.col}:null;
@@ -3676,7 +3737,13 @@ _invalidateElCache(); _sqElCache = null; _prevBoardVersion = gameState.boardVers
 _evalDispPrevSig = '';
 _rListEl = document.getElementById('reviewMovesList');
 if(wasEcoFocused){const el=document.getElementById('ecoSearch');if(el){el.focus();_ecoSearchFocused=true;try{el.setSelectionRange(el.value.length,el.value.length)}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}}}
+// v1.2.3 round-18: restore SP-ID input focus after keystroke-triggered
+//   re-render (same pattern as the ECO search restore above).
+if(_spidEditing){_spidEditing=false;const _spEl=document.getElementById('spidInput');if(_spEl&&document.activeElement!==_spEl){_spEl.focus();try{_spEl.setSelectionRange(_spEl.value.length,_spEl.value.length)}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}}}
 if(showNewGameDialog&&dlgOpeningId&&!reviewMode){setTimeout(()=>{const list=document.querySelector('.op-list');if(list){const active=list.querySelector('.op-btn.act');if(active)active.scrollIntoView({block:'center',behavior:'smooth'})}},50)}
+// v1.2.3 round-19: fire the one-time board anti-shake hint once the board
+//   is visible (no-op until the loading overlay is gone; see above).
+_maybeShowBoardDebounceHint();
 }
 
 // v1.2.1 round-13 (S3776): renderInternal refactored into a thin orchestrator.
@@ -4558,7 +4625,11 @@ function _replayMovesToState(moveIdx){
     if(!st)return null;
     for(let i=0;i<=moveIdx;i++){
       const mr=moveRecords[i];
-      if(!mr)return null;
+      // v1.2.3 round-18 (bug fix): skip the intentional null placeholder
+      //   (moveRecords[0] for black-to-move starts) instead of aborting the
+      //   whole replay — previously EVERY black-first game got no visual
+      //   annotations because the replay bailed at index 0.
+      if(!mr)continue;
       const from=algPos(mr.from);
       const to=algPos(mr.to);
       if(!from||!to)return null;
@@ -5146,6 +5217,27 @@ function _resetGameUIState(){
   //   new game invalidates queued step indices because reviewStates will be
   //   rebuilt for the new game.
   _reviewAnalyzePriorityQueue=[];
+  // v1.2.3 round-18 (bug fix): terminate any in-flight analyze-all batch.
+  //   Previously _resetGameUIState cleared reviewMode/reviewStates but left
+  //   the batch state machine running: _reviewAnalyzeAllActive stayed true,
+  //   the safety timer kept firing toast+render every 60s (ghost loop), and
+  //   the Java-side _evalDeepBatchActive flag was never ended — leaving the
+  //   engine in eval-mode options for the next game until engine restart.
+  //   Mirror the exitReview() cleanup (function decls are bundle-hoisted).
+  if(typeof _reviewAnalyzeAllActive!=='undefined'&&_reviewAnalyzeAllActive){
+    _reviewAnalyzeAllActive=false;
+    try{if(typeof _endEvalDeepBatchIfActive==='function')_endEvalDeepBatchIfActive();}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+    if(typeof _reviewAnalyzeSafetyTimer!=='undefined'&&_reviewAnalyzeSafetyTimer){clearTimeout(_reviewAnalyzeSafetyTimer);_reviewAnalyzeSafetyTimer=null;}
+    if(typeof _evalRequestBatchGen!=='undefined')_evalRequestBatchGen=0;
+  }
+  // v1.2.3 round-18 (bug fix): also clear the pending open-stats flag/timer —
+  //   exitReview() does this, but _resetGameUIState can run WITHOUT exitReview
+  //   (FEN/PGN import from the review dialog). A stale flag would spuriously
+  //   open the stats page when the NEXT game's analysis completes.
+  if(typeof window!=='undefined'){
+    window._pendingOpenStats=false;
+    if(window._pendingOpenStatsTimer){clearTimeout(window._pendingOpenStatsTimer);window._pendingOpenStatsTimer=null;}
+  }
   // v1.0.4 REV13: Reset scroll state on new game
   // v1.0.4 Rev30: also reset the restore guard (in case a render is in flight)
   if(typeof _mlistScrollState!=='undefined'){_mlistScrollState.scrollTop=0;_mlistScrollState.atBottom=false;_mlistScrollState.valid=false;}
@@ -5230,9 +5322,9 @@ function _resetGameUIState(){
   if(typeof _pvCache!=='undefined'&&_pvCache&&typeof _pvCache.clear==='function')_pvCache.clear();
   if(typeof _pendingEngineSANs!=='undefined')_pendingEngineSANs=[];
   if(typeof _pendingEnginePVs!=='undefined')_pendingEnginePVs=[];
-  if(typeof _multiPVLines!=='undefined')_multiPVLines=[];
-  if(typeof _multiPVResult!=='undefined')_multiPVResult=null;
-  if(typeof _lastEngineVariation!=='undefined')_lastEngineVariation=null;
+  // v1.2.3 round-18 (cleanup): removed duplicate resets of _multiPVLines/
+  //   _multiPVResult/_lastEngineVariation/_sfEvalReady/_evalLoading — each was
+  //   already reset earlier in this function (see the AI/ponder/eval block).
   if(typeof reviewCritical!=='undefined')reviewCritical=[];
   if(typeof _sfEval!=='undefined')_sfEval=0;
   if(typeof _sfMateDistance!=='undefined')_sfMateDistance=0;
@@ -5241,8 +5333,6 @@ function _resetGameUIState(){
   if(typeof _sfWdlW!=='undefined')_sfWdlW=-1;
   if(typeof _sfWdlD!=='undefined')_sfWdlD=-1;
   if(typeof _sfWdlL!=='undefined')_sfWdlL=-1;
-  if(typeof _sfEvalReady!=='undefined')_sfEvalReady=false;
-  if(typeof _evalLoading!=='undefined')_evalLoading=false;
   if(_reviewEvalCache !== undefined&&_reviewEvalCache&&typeof _reviewEvalCache.clear==='function'){
     try{_reviewEvalCache.clear();}catch(e){console.warn('_resetGameUIState: review eval cache clear failed',e);}
   }
@@ -5284,7 +5374,10 @@ function reviewGoTo(step){
   if(cached!=null){
     _sfEval=cached.eval;_sfMateDistance=cached.mate!=null?cached.mate:0;
     _sfWdlW=cached.wdlW!=null?cached.wdlW:-1;_sfWdlD=cached.wdlD!=null?cached.wdlD:-1;_sfWdlL=cached.wdlL!=null?cached.wdlL:-1;
-    _sfDepth=cached.depth!=null?cached.depth:0;_sfEvalReady=true;_evalLoading=false;
+    _sfDepth=cached.depth!=null?cached.depth:0;_sfSeldepth=cached.seldepth!=null?cached.seldepth:0;_sfEvalReady=true;_evalLoading=false;
+    // v1.2.3 round-18 (bug fix): also restore _sfSeldepth from the cache —
+    //   the live-eval path (ai-bridge.js) restores all six fields; omitting
+    //   seldepth here left the previous step's value on screen (stale SD).
   }else{
     _resetEvalState();
     // FIX: Auto-start analysis when selecting an unanalyzed move in review mode.
@@ -5362,6 +5455,31 @@ function _updateReviewAnalyzeBtn(){
   const btn=document.getElementById('review-analyze-btn');
   if(!btn)return;
   btn.textContent=_rvAnalyzeBtnLabel();
+}
+
+/**
+ * v1.2.3 round-19: In-place insert/remove of the #review-batch-hint line
+ *   under the review eval bar. reviewAnalyzeAll() sets
+ *   _reviewAnalyzeAllActive=true WITHOUT a full render, so the hint must be
+ *   inserted dynamically; batch completion/cancel paths already re-render
+ *   (reviewGoTo/render at the end of _reviewAnalyzeAdvance, exitReview),
+ *   which rebuilds the line from state via _rvBatchHintHTML. The id-check
+ *   makes this idempotent, so a following full render never duplicates it.
+ */
+function _updateReviewBatchHint(){
+  const _existing=document.getElementById('review-batch-hint');
+  if(!reviewMode||!_reviewAnalyzeAllActive){
+    if(_existing)_existing.remove();
+    return;
+  }
+  if(_existing)return;
+  const _bar=document.getElementById('review-eval-bar');
+  if(!_bar)return;
+  const _d=document.createElement('div');
+  _d.id='review-batch-hint';
+  _d.style.cssText='margin:0 0 2px;width:100%;box-sizing:border-box;font-size:.72rem;color:var(--accent);padding:2px 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+  _d.textContent=T('review_batch_analyzing_hint');
+  _bar.insertAdjacentElement('afterend',_d);
 }
 
 /**
@@ -5502,6 +5620,10 @@ function reviewAnalyzeAll(){
     return;
   }
   _reviewAnalyzeAllActive=true;
+  // v1.2.3 round-19: show the "batch in progress — long-press a move to
+  //   prioritize" hint line under the eval bar immediately (no full render
+  //   happens at batch start; the helper inserts it in place).
+  _updateReviewBatchHint();
   // v1.1.2 Phase 68 (Issue 30 P2): Clear any stale priority queue at batch
   //   start (defensive — should already be empty if the previous batch
   //   completed normally, but a crashed/canceled batch might have left entries).
@@ -6757,4 +6879,7 @@ function _cleanupEventListeners(){
 // whole `export {...}` line via regex, so there was no production impact,
 // but the list was misleading. Verified by grep — neither symbol is
 // declared in ui.js.
-export {render,markDirty,enterReview,reviewGoTo,reviewAnalyzeAll,exitReview,_resetGameUIState,_buildEvalTrendSVG,_refreshEvalTrendChart,_startEngineHeartbeat,_cleanupEventListeners,_reviewAnalyzeAdvance,_rvAnalyzeBtnLabel,_updateReviewAnalyzeBtn};
+export {render,markDirty,enterReview,reviewGoTo,reviewAnalyzeAll,exitReview,_resetGameUIState,_buildEvalTrendSVG,_refreshEvalTrendChart,_startEngineHeartbeat,_cleanupEventListeners,_reviewAnalyzeAdvance,_rvAnalyzeBtnLabel,_updateReviewAnalyzeBtn,
+// v1.2.3 round-18: added posDesc — defined in this module and previously
+//   (incorrectly) exported from game-logic.js.
+posDesc};

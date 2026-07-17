@@ -1562,6 +1562,11 @@ public class StockfishNative {
         engineAuthor = "Unknown";
         engineOptionsJson = "{}";
         supportedOptionNames.clear();
+        // v1.2.3 round-18 (bug fix): also reset optionsBuilder — on a
+        //   handshake retry the previous JSONArray was still live, so every
+        //   "option name" line was appended a second time (duplicated options
+        //   in the engine-config panel after engine restart).
+        optionsBuilder = null;
 
         isUciHandshakeActive = true;
 

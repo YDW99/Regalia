@@ -54,6 +54,18 @@ This data:
 - The eval cache (`eval_cache.json`) contains per-move Stockfish evaluation scores (centipawn values, mate distances, search depths, WDL probabilities) keyed by review step index. It contains no personal or position-identifying information beyond the chess evaluation data itself. (v1.0.7+: capped at 2000 entries via LRU eviction — the currently-viewed step is never evicted; eviction order is preserved across app restarts.)
 - The tag files contain user-defined tag strings (e.g., "opening", "tactics") for organizing PGN cache entries. They contain no personal or device-identifying information.
 
+### v1.2.3 round-19: 2 bilingual UX hints + log-injection fix
+
+The v1.2.3 round-19 change (2026.7.17) adds two user-requested UI hints (a one-time startup Toast "long-press the board toggles board stabilization", and a "batch analysis in progress — long-press a move to prioritize it" line under the review eval bar while analyze-all runs) and fixes the single non-false-positive finding of two external review reports (gitar-bot / SonarCloud java:S5443: CR/LF in a rejected UCI command is now escaped before being written to logcat). **No new permissions, no new network access, no new data collection, no changes to how data is stored or transmitted.** The hints are pure client-side UI text rendered from existing state; the log-injection fix only changes how a blocked UCI command is displayed in local logcat.
+
+Version: `versionCode=123`, `versionName="1.2.3"` (unchanged — same version, feature + fix round).
+
+### v1.2.3 round-18: Chess960 PGN [FEN] fix + 7-agent review (ACCESS_NETWORK_STATE removed)
+
+The v1.2.3 round-18 change (2026.7.17) is a bug-fix + review round: the main bug fix (a newly started Chess960 game's PGN recorded the *current* position in its `[FEN]` tag instead of the *initial* position) plus the non-false-positive findings of a 7-agent line-by-line review. **One permission was REMOVED: `ACCESS_NETWORK_STATE`** — a whole-codebase audit confirmed zero usage (no `ConnectivityManager`/`NetworkCallback`/`navigator.onLine` anywhere; the WebView queries network state in its own process), so the manifest declaration was dropped per permission minimization. **No new permissions, no new network access, no new data collection, no changes to how data is stored or transmitted.** The remaining changes are internal correctness/robustness fixes (PGN building, review/analysis state cleanup, PGN/regex parsing fixes, fsync on PGN cache save, CSP/CSS cleanup) with zero privacy impact.
+
+Version: `versionCode=123`, `versionName="1.2.3"` (unchanged — same version, bug-fix round).
+
 ### v1.2.3 round-17: SonarCloud cleanup + God Class refactor (HapticManager / ui split)
 
 The v1.2.3 round-17 change (2026.7.17) is a pure code-quality and code-organization change: SonarCloud-driven cleanups (`Number.*` conversions, arrow functions, `catch (Exception)` narrowing, `dataset`, `Math.trunc`, `replaceAll`, regex simplification) and a God Class refactor extracting `HapticManager.java` from StockfishNative.java plus `ui-gameflow.js` / `ui-interactions.js` from ui.js. **No new permissions, no new network access, no new data collection, no changes to how data is stored or transmitted.** All extracted code runs with the same privileges and data access as before; the JS↔Java bridge API surface is unchanged (thin `@JavascriptInterface` delegates).
@@ -181,7 +193,7 @@ Version: `versionCode=121`, `versionName="1.2.1"`.
 | Permission | Purpose | Required |
 |-----------|---------|----------|
 | INTERNET | Tablebase API queries | No (only for tablebase feature) |
-| ACCESS_NETWORK_STATE | Detect offline status | No |
+| ~~ACCESS_NETWORK_STATE~~ | ~~Detect offline status~~ | Removed in v1.2.3 round-18 (zero usage in codebase) |
 | WAKE_LOCK | Keep engine process alive during analysis | Yes (foreground service) |
 | VIBRATE | Haptic feedback (personified per-piece haptics, v1.0.8+) | No |
 | FOREGROUND_SERVICE | Engine stability notification | Yes (Android 14+) |

@@ -295,6 +295,15 @@ const _i18n={
 'priority_eval_toast':{zh:'已优先分析此走法，批量分析将在该步完成后继续',en:'Prioritizing this move. Batch resumes after this step completes.'},
 'priority_eval_already_cached':{zh:'此走法已分析完成',en:'This move is already analyzed.'},
 'priority_eval_not_in_review':{zh:'长按优先分析仅在复盘模式可用',en:'Long-press priority is only available in review mode.'},
+// v1.2.3 round-19: One-time startup hint toast — long-pressing the board
+//   toggles the sensor-based board anti-shake (MainActivity
+//   toggleStabilization; terminology aligned with its "棋盘防抖 /
+//   Board stabilization" toasts).
+'board_debounce_hint':{zh:'长按棋盘可开/关棋盘防抖',en:'Long-press the board to toggle board stabilization'},
+// v1.2.3 round-19: Hint line shown under the review eval bar while an
+//   analyze-all batch is running — tells the user about the existing
+//   long-press-to-prioritize feature (_prioritizeReviewStep).
+'review_batch_analyzing_hint':{zh:'批量分析进行中… 长按走法可设为优先',en:'Batch analysis in progress… Long-press a move to prioritize it'},
 'js_error':{zh:'JS错误',en:'JS error'},
 'promise_error':{zh:'Promise错误',en:'Promise error'},
 'engine_unavailable_hint':{zh:'引擎不可用',en:'Engine unavailable'},
@@ -590,6 +599,7 @@ const _i18n={
 'setup_ep_err_multiple':{zh:'棋盘上最多只能有一个过路兵标记',en:'At most one en-passant marker is allowed on the board'},
 'setup_ep_err_no_pawn':{zh:'过路兵标记必须与兵在同一格',en:'En-passant marker must share the square with a pawn'},
 'setup_ep_err_wrong_rank':{zh:'过路兵标记所在的兵必须在第 4 行（白兵）或第 5 行（黑兵）',en:'Pawn with en-passant marker must be on rank 4 (white) or rank 5 (black)'},
+'setup_ep_err_blocked':{zh:'过路兵的跳过格或起始格被占用，该标记非法',en:'En-passant marker illegal: skipped or origin square is occupied'},
 'setup_ep_err_wrong_color':{zh:'过路兵标记所在的兵的颜色必须与走棋方不同',en:'Pawn with en-passant marker must be the opposite color of the side to move'},
 'setup_ep_err_no_capturer':{zh:'过路兵标记所在的兵的左或右侧必须有相邻的异色兵（可吃过路兵的兵）',en:'Pawn with en-passant marker must have an adjacent enemy pawn that can capture it'},
 };
@@ -1582,6 +1592,17 @@ function _validateSetupEpMark(s,errs){
   }
   // v1.0.7 PHASE 6: en-passant target = the SKIPPED square.
   const epTargetRow=p.color==='white'?row+1:row-1;
+  // v1.2.3 round-18 (bug fix): the skipped square AND the pawn's origin
+  //   square must both be EMPTY — a double push passes over the skipped
+  //   square from the origin, so an occupied square on either makes the
+  //   en-passant marker illegal (fenToState has the same gap, noted in the
+  //   round-18 review). Origin: white pawn on row 4 came from row 6; black
+  //   pawn on row 3 came from row 1.
+  const _epOriginRow=p.color==='white'?row+2:row-2;
+  if((s.board[epTargetRow]&&s.board[epTargetRow][col])||(s.board[_epOriginRow]&&s.board[_epOriginRow][col])){
+    errs.push(T('setup_ep_err_blocked')+' ('+posAlg({row,col})+')');
+    s.enPassantTarget=null;return;
+  }
   s.enPassantTarget={row:epTargetRow,col};
 }
 
@@ -2803,7 +2824,13 @@ const tbMove=bestMoveFromTablebase(tbData);
 if(tbMove){
 const coords=uciToCoords(tbMove.uci);
 // Use saved board reference to validate move still applies
-if(coords&&_tbSavedBoard[coords.from.row]&&_tbSavedBoard[coords.from.row][coords.from.col]){
+// v1.2.3 round-18 (bug fix): also require the live board to BE the saved
+//   board (reference equality). The TB fetch is async — if the position
+//   changed while in-flight (undo/new game), the saved-board check alone
+//   would pass and executeMove would inject the TB move into a DIFFERENT
+//   game. On mismatch fall through to the Stockfish path, which recomputes
+//   from the fresh state.
+if(coords&&gameState.board===_tbSavedBoard&&_tbSavedBoard[coords.from.row]&&_tbSavedBoard[coords.from.row][coords.from.col]){
 // v1.0.4 Rev32 FIX: same as ECO book move — reset _aiRetryCount so the
 // safety-counter doesn't accumulate across tablebase-served moves.
 isAIThinking=false;_aiBarInfo='';_aiRetryCount=0;if(_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
@@ -3088,4 +3115,9 @@ function _prependBlackToMovePlaceholder(){
 //   2. Removed `fenToState` — it is defined in tablebase.js (line 1729),
 //      NOT in this file. It belongs in tablebase.js's export list (added
 //      there in this round). The previous entry here was wrong.
-export {PV,OPP_COLOR,SQ_LIGHT,SQ_DARK,SQ_SEL,LBL_LIGHT,LBL_DARK,LBL_STROKE_LIGHT,LBL_STROKE_DARK,SYM,PN,PN_EN,pieceName,_principlesHTML,KNIGHT_OFFSETS,DIR_ROOK,DIR_BISHOP,DIR_QUEEN,ELO_MATCH,getAI_LEVELS,CELL,REVIEW_CELL,zobrist,initBoard,attacked,initState,validateSetupPosition,cloneB,cloneS,sqAttackedFast,inCheck,pseudoMoves,legalMoves,hasLegalMoves,moveAlg,getCtrlMap,makeMv,makeMvInPlace,unmakeMv,gameStatus,isDeadPosition,generateFEN,uciToCoords,_esc,posAlg,algPos,inB,pieceZobristIdx,computeHash,syncHash,_refreshStateAfterSetup,_recalcCellSize,getEffectiveAILevel,posEmoji,posDesc,T,toggleLang,_lang,_i18n,_prependBlackToMovePlaceholder,_reattachActiveAnimations,_activeAnimEls,computeVisibleCastleMarks,computeVisibleEpMark};
+// v1.2.3 round-18: Removed `generateFEN`/`uciToCoords`/`_esc` (defined in
+//   ai-bridge.js and exported there) and `posDesc` (defined in ui.js and
+//   exported there). Exporting symbols not declared in this module is a
+//   link-time SyntaxError in source-module mode; bundled mode strips this
+//   line so production was unaffected, but the list was misleading.
+export {PV,OPP_COLOR,SQ_LIGHT,SQ_DARK,SQ_SEL,LBL_LIGHT,LBL_DARK,LBL_STROKE_LIGHT,LBL_STROKE_DARK,SYM,PN,PN_EN,pieceName,_principlesHTML,KNIGHT_OFFSETS,DIR_ROOK,DIR_BISHOP,DIR_QUEEN,ELO_MATCH,getAI_LEVELS,CELL,REVIEW_CELL,zobrist,initBoard,attacked,initState,validateSetupPosition,cloneB,cloneS,sqAttackedFast,inCheck,pseudoMoves,legalMoves,hasLegalMoves,moveAlg,getCtrlMap,makeMv,makeMvInPlace,unmakeMv,gameStatus,isDeadPosition,posAlg,algPos,inB,pieceZobristIdx,computeHash,syncHash,_refreshStateAfterSetup,_recalcCellSize,getEffectiveAILevel,posEmoji,T,toggleLang,_lang,_i18n,_prependBlackToMovePlaceholder,_reattachActiveAnimations,_activeAnimEls,computeVisibleCastleMarks,computeVisibleEpMark};

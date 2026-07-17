@@ -638,6 +638,14 @@ function _formatRAV(v){
  * @returns {Object|null} parsed game record, or null if completely unparseable
  */
 function parseStandardPGN(pgnText){
+  // v1.2.3 round-18 audit notes (function currently has no call sites —
+  //   production PGN import uses tablebase.js _parsePGN):
+  //   FIXED: stray '}' in movetext caused an infinite tokenizer loop.
+  //   KNOWN LIMITATIONS (documented, not worth churn while unused):
+  //   - RAV variations attach to the FOLLOWING move instead of the preceding
+  //     move required by the PGN spec.
+  //   - Tag pairs with missing quotes (e.g. [FEN rnbq...]) are extracted into
+  //     `tags` but not stripped from movetext, leaving pseudo-SAN tokens.
   if(!pgnText||typeof pgnText!=='string')return null;
   const errors=[];
   // 1. Strip BOM
@@ -750,6 +758,14 @@ function parseStandardPGN(pgnText){
     }
     if(ch===')'){
       tokens.push({type:'closeVar'});i++;continue;
+    }
+    // v1.2.3 round-18 (bug fix): skip a stray close-brace. Previously a `}`
+    //   without a matching `{` (malformed movetext) reached the token reader
+    //   below, which breaks immediately on '}' with an EMPTY token — the
+    //   `if(!tok)continue;` then looped forever without advancing i.
+    if(ch==='}'){
+      errors.push('Skipped stray close brace in movetext');
+      i++;continue;
     }
     // Read a whitespace/paren/brace-delimited token
     let j=i;

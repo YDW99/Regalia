@@ -1,3 +1,100 @@
+v1.2.3 round-19 (2026.7.17) — 2 bilingual UX hints (2 new i18n keys):
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — feature + fix round).
+  - game-logic.js (GPL v3): two new i18n keys — 'board_debounce_hint'
+    (zh: 长按棋盘可开/关棋盘防抖 / en: Long-press the board to toggle board
+    stabilization) and 'review_batch_analyzing_hint' (zh: 批量分析进行中…
+    长按走法可设为优先 / en: Batch analysis in progress… Long-press a move
+    to prioritize it).
+  - ui.js (GPL v3): NEW FEATURE 1 — one-time startup hint Toast
+    (_maybeShowBoardDebounceHint): fires once per app launch on the first
+    completed render after the loading overlay is gone; called from
+    _postRenderFinalize. NEW FEATURE 2 — while an analyze-all batch runs,
+    a hint line renders under the review eval bar (_rvBatchHintHTML on
+    full renders; the eval bar itself is strictly single-line
+    overflow:hidden so the hint cannot go inside it) plus in-place
+    insertion at batch start via _updateReviewBatchHint() (reviewAnalyzeAll
+    does not re-render when the batch begins); completion/cancel paths
+    already re-render, removing the line.
+  - ai-bridge.js (GPL v3): _hideLoadingOverlay schedules a delayed
+    typeof-guarded _maybeShowBoardDebounceHint call (cross-module
+    convention) so the startup hint still fires when no render follows
+    soon (e.g. a long first AI think).
+  - All other modules (index.html.tpl, chess960.js, pgn-standard.js,
+    worker-pool.js, state-store.js, tablebase.js, eco-data.js,
+    ui-gameflow.js, ui-interactions.js): No changes this round.
+  - License classification: unchanged.
+
+v1.2.3 round-18 (2026.7.17) — Chess960 PGN [FEN] bug fix + 7-agent line-by-line review:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - ui-gameflow.js (GPL v3): MAIN BUG FIX — a newly started Chess960 game's
+    PGN recorded the CURRENT position in its [FEN] tag instead of the
+    INITIAL position. Root cause: _startGameImpl() assigned _setupFEN BEFORE
+    _resetGameUIState(), which centrally nulls _setupFEN (silently
+    re-breaking the v1.0.8 fix). Fixed by capturing the setup FEN in a
+    local variable (_newGameInitialFEN) and assigning _setupFEN AFTER the
+    reset (mirroring importPGN/_applyImportedFEN); reviewBaseState
+    assignment likewise moved after the reset; the now-redundant manual
+    state clears at the top of _startGameImpl removed.
+  - ai-bridge.js (GPL v3): _buildPGNString startFEN fallback uses
+    stateHistory[0] (the game's TRUE initial position) when _setupFEN is
+    unavailable for a Chess960 game; PlyCount counts actual half-moves
+    (the intentional null placeholder for black-to-move starts no longer
+    over-counts by 1); onBestMove discards the bestmove when the game is
+    already over (gameOver guard) and the validation-failure auto-retry
+    now actually fires (2 sites — the timer callback guards on
+    isAIThinking, which the branch had just cleared, so the promised
+    retry never ran; now an immediate retry, _aiRetryCount cap 3); engine
+    variation numbering applies the _importedStartMoveNum offset (3 sites,
+    same class as the round-13 tablebase.js fix); export list gains
+    generateFEN/uciToCoords/_esc (defined in-module, previously listed by
+    game-logic.js); removed the unused moveNum destructure in
+    _processDeferredVariations.
+  - ui.js (GPL v3): render() no longer resets _animRetryCount early (the
+    >10-retries stuck-animation force-clear was dead code — guard
+    restored); _resetGameUIState terminates any in-flight analyze-all
+    batch (mirrors exitReview: _reviewAnalyzeAllActive, safety timer,
+    _evalRequestBatchGen, _endEvalDeepBatchIfActive) and clears
+    _pendingOpenStats; _replayMovesToState skips the intentional null
+    placeholder of black-to-move games instead of aborting (visual
+    annotations worked again for black-to-move games); reviewGoTo
+    cache-hit path also restores _sfSeldepth (parity with the 6-field
+    restore); SP-ID input keeps focus across keystroke-triggered
+    re-renders (id=spidInput + _spidEditing flag + _postRenderFinalize
+    restore, mirroring the ECO search box's _ecoSearchFocused mechanism);
+    tablebase API unknown-category fallback HTML-escaped
+    before entering innerHTML (same XSS threat model as the v1.0.8 PHASE
+    30 _best.uci escaping); review-mode render skips the main-board
+    control map (🌈 heatmap — main and review boards previously shared
+    cachedCtrlKey/cachedCtrlMap and ping-ponged, forcing 2 full
+    getCtrlMap() recomputes per render); cleanup: duplicate resets of 5
+    variables removed from _resetGameUIState, export list gains posDesc
+    (defined in-module).
+  - game-logic.js (GPL v3): _validateSetupEpMark now requires both the
+    skipped square AND the pawn's origin square to be empty (new i18n key
+    setup_ep_err_blocked, zh+en); doAIMove tablebase path requires the
+    live board to BE the saved board (gameState.board===_tbSavedBoard) so
+    a TB move is never injected into a different game after an in-flight
+    position change (falls through to the Stockfish path); export list
+    drops the 4 foreign symbols generateFEN/uciToCoords/_esc (now
+    exported by ai-bridge.js) and posDesc (now exported by ui.js).
+  - tablebase.js (GPL v3): _parsePGN annotation-scan character class now
+    includes '0' — digit-style 0-0/0-0-0 castling is counted, so trailing
+    [%eval]/[%csl]/[%cal]/comment annotations no longer shift by one move;
+    a Chess960 PGN without a [FEN] tag now clears the stale gameSPID.
+  - pgn-standard.js (GPL v3): parseStandardPGN skips a stray close-brace
+    (defensive infinite-loop fix; the function currently has no call
+    sites).
+  - worker-pool.js (GPL v3): PGN tokenizer header-strip regex now consumes
+    the closing \] in BOTH the worker-side (template-literal, keeps
+    double-escaping) and sync-side mirror copies.
+  - index.html.tpl (GPL v3): invalid CSS contain-intrinsic-size:auto fixed
+    to "auto 300px" (Chromium was dropping the whole declaration);
+    removed the ineffective frame-ancestors directive from the CSP <meta>
+    (frame-ancestors is only honored as an HTTP header).
+  - chess.html: rebuilt from the updated modules + template (22,379 lines,
+    1,346,688 bytes). See src/main/assets/README.license.
+  - License classification: all files retain their existing classification.
+
 v1.2.3 round-17 (2026.7.17) — SonarCloud high-priority cleanup + God Class refactor (ui split):
   - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
   - ui-gameflow.js (GPL v3): NEW FILE (313 lines) — God Class refactor:

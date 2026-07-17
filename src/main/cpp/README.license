@@ -1,3 +1,17 @@
+v1.2.3 round-19 (2026.7.17) — 2 bilingual UX hints + log-injection fix:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — feature + fix round).
+  - CMakeLists.txt (AGPL v3): No changes this round.
+  - engine_jni.cpp (GPL v3): No changes this round.
+  - License classification: CMakeLists.txt remains AGPL v3 (original);
+    engine_jni.cpp remains GPL v3 (DroidFish-derived chmod/renice logic).
+
+v1.2.3 round-18 (2026.7.17) — Chess960 PGN [FEN] bug fix + 7-agent line-by-line review:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - CMakeLists.txt (AGPL v3): No changes this round.
+  - engine_jni.cpp (GPL v3): No changes this round.
+  - License classification: CMakeLists.txt remains AGPL v3 (original);
+    engine_jni.cpp remains GPL v3 (DroidFish-derived chmod/renice logic).
+
 v1.2.3 round-13 (2026.7.16) — CMake re-enablement + first-principles code review:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
   - CMakeLists.txt (AGPL v3): No changes this round.

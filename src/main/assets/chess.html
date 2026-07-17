@@ -33,7 +33,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; worker-src blob:; connect-src https://tablebase.lichess.ovh; img-src data: file: blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'none'; object-src 'none'">
+<!-- v1.2.3 round-18: removed frame-ancestors — ignored inside <meta> (only
+     honored as an HTTP response header), dead directive. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; worker-src blob:; connect-src https://tablebase.lichess.ovh; img-src data: file: blob:; base-uri 'self'; form-action 'none'; object-src 'none'">
 <title>Regalia v1.2.3</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -206,7 +208,10 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
    intrinsic size and break the responsive CELL recalculation. The .sq
    cells already have `contain:layout style paint` so child-paint cost is
    already optimized. */
-.bgrid{display:grid;transform:translateZ(0);touch-action:none;backface-visibility:hidden;content-visibility:auto;contain-intrinsic-size:auto}
+/* v1.2.3 round-18 (bug fix): contain-intrinsic-size requires a length after
+   `auto` — bare `auto` is invalid and Chromium drops the whole declaration,
+   losing the off-screen layout skip for the board grid. */
+.bgrid{display:grid;transform:translateZ(0);touch-action:none;backface-visibility:hidden;content-visibility:auto;contain-intrinsic-size:auto 300px}
 .sq{display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;user-select:none;font-size:2rem;line-height:1;transition:background .15s;touch-action:manipulation;contain:layout style paint;transform:translateZ(0)}
 .sq:hover{background-color:var(--sq-hover)}
 .sq .lbl{position:absolute;top:1px;left:2px;font-size:9px;opacity:.95;font-family:"DejaVu Sans",system-ui,sans-serif;pointer-events:none;z-index:2;letter-spacing:0}
@@ -1607,6 +1612,15 @@ const _i18n={
 'priority_eval_toast':{zh:'已优先分析此走法，批量分析将在该步完成后继续',en:'Prioritizing this move. Batch resumes after this step completes.'},
 'priority_eval_already_cached':{zh:'此走法已分析完成',en:'This move is already analyzed.'},
 'priority_eval_not_in_review':{zh:'长按优先分析仅在复盘模式可用',en:'Long-press priority is only available in review mode.'},
+// v1.2.3 round-19: One-time startup hint toast — long-pressing the board
+//   toggles the sensor-based board anti-shake (MainActivity
+//   toggleStabilization; terminology aligned with its "棋盘防抖 /
+//   Board stabilization" toasts).
+'board_debounce_hint':{zh:'长按棋盘可开/关棋盘防抖',en:'Long-press the board to toggle board stabilization'},
+// v1.2.3 round-19: Hint line shown under the review eval bar while an
+//   analyze-all batch is running — tells the user about the existing
+//   long-press-to-prioritize feature (_prioritizeReviewStep).
+'review_batch_analyzing_hint':{zh:'批量分析进行中… 长按走法可设为优先',en:'Batch analysis in progress… Long-press a move to prioritize it'},
 'js_error':{zh:'JS错误',en:'JS error'},
 'promise_error':{zh:'Promise错误',en:'Promise error'},
 'engine_unavailable_hint':{zh:'引擎不可用',en:'Engine unavailable'},
@@ -1902,6 +1916,7 @@ const _i18n={
 'setup_ep_err_multiple':{zh:'棋盘上最多只能有一个过路兵标记',en:'At most one en-passant marker is allowed on the board'},
 'setup_ep_err_no_pawn':{zh:'过路兵标记必须与兵在同一格',en:'En-passant marker must share the square with a pawn'},
 'setup_ep_err_wrong_rank':{zh:'过路兵标记所在的兵必须在第 4 行（白兵）或第 5 行（黑兵）',en:'Pawn with en-passant marker must be on rank 4 (white) or rank 5 (black)'},
+'setup_ep_err_blocked':{zh:'过路兵的跳过格或起始格被占用，该标记非法',en:'En-passant marker illegal: skipped or origin square is occupied'},
 'setup_ep_err_wrong_color':{zh:'过路兵标记所在的兵的颜色必须与走棋方不同',en:'Pawn with en-passant marker must be the opposite color of the side to move'},
 'setup_ep_err_no_capturer':{zh:'过路兵标记所在的兵的左或右侧必须有相邻的异色兵（可吃过路兵的兵）',en:'Pawn with en-passant marker must have an adjacent enemy pawn that can capture it'},
 };
@@ -2894,6 +2909,17 @@ function _validateSetupEpMark(s,errs){
   }
   // v1.0.7 PHASE 6: en-passant target = the SKIPPED square.
   const epTargetRow=p.color==='white'?row+1:row-1;
+  // v1.2.3 round-18 (bug fix): the skipped square AND the pawn's origin
+  //   square must both be EMPTY — a double push passes over the skipped
+  //   square from the origin, so an occupied square on either makes the
+  //   en-passant marker illegal (fenToState has the same gap, noted in the
+  //   round-18 review). Origin: white pawn on row 4 came from row 6; black
+  //   pawn on row 3 came from row 1.
+  const _epOriginRow=p.color==='white'?row+2:row-2;
+  if((s.board[epTargetRow]&&s.board[epTargetRow][col])||(s.board[_epOriginRow]&&s.board[_epOriginRow][col])){
+    errs.push(T('setup_ep_err_blocked')+' ('+posAlg({row,col})+')');
+    s.enPassantTarget=null;return;
+  }
   s.enPassantTarget={row:epTargetRow,col};
 }
 
@@ -4115,7 +4141,13 @@ const tbMove=bestMoveFromTablebase(tbData);
 if(tbMove){
 const coords=uciToCoords(tbMove.uci);
 // Use saved board reference to validate move still applies
-if(coords&&_tbSavedBoard[coords.from.row]&&_tbSavedBoard[coords.from.row][coords.from.col]){
+// v1.2.3 round-18 (bug fix): also require the live board to BE the saved
+//   board (reference equality). The TB fetch is async — if the position
+//   changed while in-flight (undo/new game), the saved-board check alone
+//   would pass and executeMove would inject the TB move into a DIFFERENT
+//   game. On mismatch fall through to the Stockfish path, which recomputes
+//   from the fresh state.
+if(coords&&gameState.board===_tbSavedBoard&&_tbSavedBoard[coords.from.row]&&_tbSavedBoard[coords.from.row][coords.from.col]){
 // v1.0.4 Rev32 FIX: same as ECO book move — reset _aiRetryCount so the
 // safety-counter doesn't accumulate across tablebase-served moves.
 isAIThinking=false;_aiBarInfo='';_aiRetryCount=0;if(_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
@@ -4400,6 +4432,11 @@ function _prependBlackToMovePlaceholder(){
 //   2. Removed `fenToState` — it is defined in tablebase.js (line 1729),
 //      NOT in this file. It belongs in tablebase.js's export list (added
 //      there in this round). The previous entry here was wrong.
+// v1.2.3 round-18: Removed `generateFEN`/`uciToCoords`/`_esc` (defined in
+//   ai-bridge.js and exported there) and `posDesc` (defined in ui.js and
+//   exported there). Exporting symbols not declared in this module is a
+//   link-time SyntaxError in source-module mode; bundled mode strips this
+//   line so production was unaffected, but the list was misleading.
 
 // ===================== MODULE: chess960 =====================
 // Chess960 (Fischer Random Chess) support
@@ -5674,6 +5711,14 @@ function _formatRAV(v){
  * @returns {Object|null} parsed game record, or null if completely unparseable
  */
 function parseStandardPGN(pgnText){
+  // v1.2.3 round-18 audit notes (function currently has no call sites —
+  //   production PGN import uses tablebase.js _parsePGN):
+  //   FIXED: stray '}' in movetext caused an infinite tokenizer loop.
+  //   KNOWN LIMITATIONS (documented, not worth churn while unused):
+  //   - RAV variations attach to the FOLLOWING move instead of the preceding
+  //     move required by the PGN spec.
+  //   - Tag pairs with missing quotes (e.g. [FEN rnbq...]) are extracted into
+  //     `tags` but not stripped from movetext, leaving pseudo-SAN tokens.
   if(!pgnText||typeof pgnText!=='string')return null;
   const errors=[];
   // 1. Strip BOM
@@ -5786,6 +5831,14 @@ function parseStandardPGN(pgnText){
     }
     if(ch===')'){
       tokens.push({type:'closeVar'});i++;continue;
+    }
+    // v1.2.3 round-18 (bug fix): skip a stray close-brace. Previously a `}`
+    //   without a matching `{` (malformed movetext) reached the token reader
+    //   below, which breaks immediately on '}' with an EMPTY token — the
+    //   `if(!tok)continue;` then looped forever without advancing i.
+    if(ch==='}'){
+      errors.push('Skipped stray close brace in movetext');
+      i++;continue;
     }
     // Read a whitespace/paren/brace-delimited token
     let j=i;
@@ -6089,7 +6142,11 @@ function _parsePGNText(pgnText) {
   }
   // Extract headers
   var headers = {};
-  var headerRe = /\\[(\\w+)\\s+"((?:[^"\\\\]|\\\\.)*)"/g;
+  // v1.2.3 round-18 (bug fix): consume the closing bracket too. Without
+  //   the trailing bracket the replace below left a stray ']' token per
+  //   header, polluting the movetext token stream (7-tag roster = 7 junk
+  //   tokens). NOTE: no backticks here — inside the Worker template string.
+  var headerRe = /\\[(\\w+)\\s+"((?:[^"\\\\]|\\\\.)*)"\\]/g;
   var m;
   while ((m = headerRe.exec(text)) !== null) {
     headers[m[1]] = m[2].replace(/\\\\"/g, '"').replace(/\\\\\\\\/g, '\\\\');
@@ -6407,7 +6464,9 @@ function _syncParsePGNText(pgnText) {
     if (fenNoQuoteMatch) { startFEN = fenNoQuoteMatch[1].trim(); }
   }
   var headers = {};
-  var headerRe = /\[(\w+)\s+"((?:[^"\\]|\\.)*)"/g;
+  // v1.2.3 round-18 (bug fix): consume the closing bracket too (sync mirror
+  //   of the worker-side fix above — keep both copies semantically identical).
+  var headerRe = /\[(\w+)\s+"((?:[^"\\]|\\.)*)"\]/g;
   var m;
   while ((m = headerRe.exec(text)) !== null) {
     headers[m[1]] = m[2].replace(/\\"/g, '"').replace(/\\\\/g, '\\');
@@ -7691,6 +7750,14 @@ function _hideLoadingOverlay(){
   _updateLoadingStatus(T('engine_ready'),100);
   const lo=document.getElementById('_loadingOverlay');
   if(lo){lo.style.opacity='0';lo.style.transition='opacity .5s';setTimeout(()=>{if(lo.parentNode)lo.remove();},500);}
+  // v1.2.3 round-19: the board becomes visible once the overlay finishes
+  //   fading out — fire the one-time anti-shake hint even if no render
+  //   follows soon (e.g. a long first AI think). typeof guard per the
+  //   cross-module convention (the helper is defined in ui.js, which loads
+  //   after this module); the helper's own flag prevents double-firing.
+  setTimeout(function(){
+    try{if(typeof _maybeShowBoardDebounceHint==='function')_maybeShowBoardDebounceHint();}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+  },600);
 }
 // v1.0.8 PHASE 22 (bug fix): Apply system dark/light theme to <html> via
 // data-theme attribute. This works on ALL devices (including Xiaomi HyperOS 3
@@ -7988,8 +8055,16 @@ function _buildPGNString(forceIncludeVariations, includeAnnotations){
   // v1.0.4: Build supplementary tags
   const supObj=buildSupplementaryTagsObject({
     variant:(gameVariant !== undefined)?gameVariant:null,
-    startFEN:(typeof _setupFEN!=='undefined'&&_setupFEN)?_setupFEN:((gameVariant !== undefined&&gameVariant==='chess960')?generateFEN(gameState):null),
-    plyCount:moveRecords.length
+    // v1.2.3 round-18 (robustness): when _setupFEN is unavailable for a
+    //   Chess960 game (e.g., an imported Chess960 PGN that omitted its [FEN]
+    //   tag), fall back to the game's TRUE initial position (stateHistory[0])
+    //   instead of the current mid-game gameState. Per the PGN spec the [FEN]
+    //   tag must hold the position the movetext started from.
+    startFEN:(typeof _setupFEN!=='undefined'&&_setupFEN)?_setupFEN:((gameVariant !== undefined&&gameVariant==='chess960'&&typeof stateHistory!=='undefined'&&stateHistory&&stateHistory.length&&stateHistory[0].state)?generateFEN(stateHistory[0].state):null),
+    // v1.2.3 round-18 (bug fix): PlyCount must count actual half-moves.
+    //   For black-to-move starts moveRecords[0] is an intentional null
+    //   placeholder, so raw .length overcounts by one.
+    plyCount:moveRecords.reduce(function(n,m){return n+(m?1:0);},0)
   });
   // v1.2.0 Phase 76+: Shredder FEN conversion logic extracted
   _applyShredderFENIfNeeded(supObj);
@@ -9434,20 +9509,24 @@ function onBestMove(uciMove){
   if(!_bmCoords){
     console.error('onBestMove: failed to parse UCI move:',uciMove);
     // v1.2.1 round-11 (review P3 fix): reset isAIThinking on validation
-    //   failure so the UI doesn't stay stuck in "AI thinking" state. The
-    //   safety timer remains armed (we didn't clear _aiSafetyTimerId above)
-    //   so the auto-retry still fires after 360s if the user doesn't undo.
-    //   This prevents a soft-lock where the user sees "thinking..." forever
-    //   if the engine emits an unparseable bestmove line.
+    //   failure so the UI doesn't stay stuck in "AI thinking" state.
+    // v1.2.3 round-18 (bug fix): actually FIRE the auto-retry the old comment
+    //   promised — the armed 360s safety timer guards on `isAIThinking`, which
+    //   we just cleared, so it would never have retried (mechanism/comment
+    //   mismatch). Retry immediately instead; doAIMove() re-arms its own
+    //   timer (clearing the stale one) and _aiRetryCount caps attempts at 3.
     isAIThinking=false;_aiBarInfo='';
     render();
+    setTimeout(()=>{if(!gameOver&&!reviewMode&&!setupMode&&gameState.currentTurn!==playerColor)doAIMove();},0);
     return;
   }
   if(!gameState.board[_bmCoords.from.row]||!gameState.board[_bmCoords.from.row][_bmCoords.from.col]){
     console.error('onBestMove: no piece at from square for UCI move:',uciMove);
     // v1.2.1 round-11 (review P3 fix): same reset as above.
+    // v1.2.3 round-18 (bug fix): same immediate-retry fix as above.
     isAIThinking=false;_aiBarInfo='';
     render();
+    setTimeout(()=>{if(!gameOver&&!reviewMode&&!setupMode&&gameState.currentTurn!==playerColor)doAIMove();},0);
     return;
   }
   // Cancel safety timeout — engine responded (and it's the current request)
@@ -9529,6 +9608,19 @@ function onBestMove(uciMove){
   const coords=uciToCoords(uciMove);
   const from=coords.from, to=coords.to;
   const piece=gameState.board[from.row][from.col];
+  // v1.2.3 round-18 (bug fix): discard the bestmove if the game has already
+  //   ended (timeout forfeit / resignation) while the engine was thinking.
+  //   Clock expiry runs on a 1s interval and resign is user-driven, so an
+  //   in-flight bestmove can arrive AFTER gameOver was set — without this
+  //   guard it would be applied on top of the finished game, corrupting
+  //   moveRecords and the PGN. AI state was already cleared above; skip the
+  //   move, variation processing, and ponder.
+  if(typeof gameOver!=='undefined'&&gameOver){
+    _pendingBestMoveInfo=null;
+    console.warn('onBestMove: discarding bestmove — game already over:',uciMove);
+    render();
+    return;
+  }
   executeMove(from,to,coords.promotion);
 
   // After AI moves, start Ponder if enabled and we have a ponder move
@@ -10537,7 +10629,9 @@ function _processDeferredVariations(){
   // if the engine's hash happened to collide between unrelated positions.
   _pvCache.clear();
 
-  const{uciMove,lastIdx,isAfterWhiteMove,moveNum,preMoveState,ponderMove,ponderEnabled,multiPVEnabled}=info;
+  // v1.2.3 round-18 (cleanup): removed unused `moveNum` from the destructure
+  //   (superseded by aiMoveNum recomputed below from aiMoveIdx).
+  const{uciMove,lastIdx,isAfterWhiteMove,preMoveState,ponderMove,ponderEnabled,multiPVEnabled}=info;
 
   // The move record at lastIdx should exist (it was the last record before the bestmove was executed)
   // But after executeMove(), a new record was added. So the record we want is at lastIdx,
@@ -10556,7 +10650,13 @@ function _processDeferredVariations(){
 
   // Recalculate move metadata for the AI's move record
   const aiIsAfterWhiteMove=(aiMoveIdx%2===0);
-  const aiMoveNum=Math.floor(aiMoveIdx/2)+1;
+  // v1.2.3 round-18 (bug fix): apply the imported-start-move-number offset,
+  //   same as the mainline (ui.js _mvStartOffset, _pgnMvStartOffset below) and
+  //   the round-13 fix in tablebase.js. Previously engine-attached variations
+  //   on FEN/PGN-imported games (start move N>1) were numbered from 1,
+  //   contradicting the mainline numbering.
+  const _dvMvStartOffset=(typeof _importedStartMoveNum!=='undefined'&&_importedStartMoveNum>0)?_importedStartMoveNum:1;
+  const aiMoveNum=Math.floor(aiMoveIdx/2)+_dvMvStartOffset;
 
   // After the AI's move, the next move is from the opposite side:
   //   AI played white → continuation starts with black → firstMoveIsWhite=false, varMoveNum=aiMoveNum
@@ -10739,7 +10839,11 @@ function _checkPVDivergenceSANs(){
           }
           if(!alreadyExists){
             const isWhite=(divergeIdx%2===0);
-            const moveNum=Math.floor(divergeIdx/2)+1;
+            // v1.2.3 round-18 (bug fix): apply _importedStartMoveNum offset
+            //   (same as round-13 fix in tablebase.js) so MultiPV variations
+            //   on FEN-started games display the correct move number.
+            const _mpvMvStartOffset=(typeof _importedStartMoveNum!=='undefined'&&_importedStartMoveNum>0)?_importedStartMoveNum:1;
+            const moveNum=Math.floor(divergeIdx/2)+_mpvMvStartOffset;
             targetMr.variations.push({
               group:'multipv',
               san:remainingSAN,
@@ -10933,7 +11037,11 @@ function _attachDivergentPV(divergeAtIdx,pvRemainder,pending){
   // ACTUAL move. The PV remainder's first move is an ALTERNATIVE to it
   // (same side, same move number).
   const isWhite=(divergeAtIdx%2===0);
-  const moveNum=Math.floor(divergeAtIdx/2)+1;
+  // v1.2.3 round-18 (bug fix): apply _importedStartMoveNum offset (same as
+  //   round-13 fix in tablebase.js) so divergence variations on FEN-started
+  //   games display the correct move number.
+  const _divMvStartOffset=(typeof _importedStartMoveNum!=='undefined'&&_importedStartMoveNum>0)?_importedStartMoveNum:1;
+  const moveNum=Math.floor(divergeAtIdx/2)+_divMvStartOffset;
 
   // Build the variation entry — same format as PGN variations.
   const varEntry={
@@ -11934,7 +12042,11 @@ function _parsePGN(pgnText){
       if(_ch==='('){_depth++;_i++;continue;}
       if(_ch===')'){_depth=Math.max(0,_depth-1);_i++;continue;}
       // Outside parens (depth 0): a non-whitespace token starting a move
-      if(_depth===0&&/[a-hKQRBNBO]/.test(_ch)){
+      // v1.2.3 round-18 (bug fix): include '0' so digit-style castling
+      //   (0-0 / 0-0-0) is counted as a move. Previously these tokens were
+      //   skipped, so _moveCount lagged by one and ALL subsequent annotations
+      //   ([%eval]/[%csl]/[%cal]/comments) attached to the wrong move.
+      if(_depth===0&&/[a-hKQRBNBO0]/.test(_ch)){
         // Check if this looks like a SAN move (not a move number, result, etc.)
         // Read the token
         let _j=_i;
@@ -12544,6 +12656,12 @@ function importPGN(pgnText){
             if(spid>=0)gameSPID=spid;
           }
         }
+      }else{
+        // v1.2.3 round-18 (bug fix): Chess960 PGN without a [FEN] tag —
+        //   clear any stale SP-ID from the previous game. Otherwise the old
+        //   gameSPID persisted while the position is the standard initial
+        //   one, mislabeling the game (and any SP-ID display) going forward.
+        gameSPID=null;
       }
     }
   }else{
@@ -13711,18 +13829,16 @@ function _startGameImpl(){
   // '=!' operator typo detector. Rewrite using De Morgan's law for the same
   // semantics: ECO is enabled when dlgChess960 is undefined OR falsy.
   _ecoEnabled=dlgChess960 === undefined||!dlgChess960;
-  // v1.0.3: Clear cached original PGN and setup FEN — new game means no imported PGN.
-  if(typeof _cachedOriginalPGN!=='undefined')_cachedOriginalPGN=null;
-  if(typeof _setupFEN!=='undefined')_setupFEN=null;
-  // v1.0.3: Reset the imported-start-move-number offset — a fresh game from the
-  // initial position starts at move 1. Subsequent ECO opening moves (if any)
-  // also start from move 1.
-  if(typeof _importedStartMoveNum!=='undefined')_importedStartMoveNum=1;
-  // v1.0.4 Rev24: Clear imported player names — a new game uses the default
-  // "你"/"AI对手" (or _humanPlayerName if set via rename). Don't clear
-  // _humanPlayerName itself — that's a persistent user preference.
-  if(typeof playerWhite!=='undefined')playerWhite=undefined;
-  if(typeof playerBlack!=='undefined')playerBlack=undefined;
+  // v1.2.3 round-18: The manual clears formerly here (_cachedOriginalPGN,
+  //   _setupFEN, _importedStartMoveNum, playerWhite/playerBlack) are covered by
+  //   the centralized _resetGameUIState() call below and were removed as
+  //   redundant. NOTE: _resetGameUIState() runs LATER in this function (after
+  //   the Chess960/ECO init), so any per-game value computed during init must
+  //   be captured in a local and assigned AFTER the reset — see
+  //   _newGameInitialFEN below.
+  // v1.2.3 round-18: Local capture for the Chess960 initial-position FEN
+  //   (assigned to _setupFEN after _resetGameUIState(), see below).
+  let _newGameInitialFEN=null;
   // v1.0.4 NEW: Chess960 mode handling.
   // - If dlgChess960 is true, build a Chess960 starting position.
   // - If dlgChess960SPID is set (0..959), use it; otherwise pick a random SP-ID.
@@ -13740,7 +13856,13 @@ function _startGameImpl(){
     //   games started from the New Game dialog, causing _buildPGNString to
     //   fall back to generateFEN(gameState) (the CURRENT mid-game state),
     //   producing a corrupt [FEN] tag that re-imports to the wrong position.
-    if(typeof _setupFEN!=='undefined')_setupFEN=generateFEN(gameState);
+    // v1.2.3 round-18 (bug fix): Capture into a LOCAL instead of assigning
+    //   _setupFEN directly — _resetGameUIState() below centrally nulls
+    //   _setupFEN, which silently re-broke this v1.0.8 fix (the FEN tag fell
+    //   back to the current mid-game position again). The local is assigned
+    //   to _setupFEN AFTER the reset, mirroring the importPGN/_applyImportedFEN
+    //   pattern.
+    _newGameInitialFEN=generateFEN(gameState);
   }else{
     if(typeof setChess960Mode==='function')setChess960Mode(false);
     gameState=initState();
@@ -13819,13 +13941,24 @@ function _startGameImpl(){
     }
   }
   _needNewGameForEngine=true;
-  reviewBaseState=cloneS(gameState);
+  // v1.2.3 round-18: reviewBaseState assignment moved AFTER _resetGameUIState()
+  //   below — the reset centrally nulls reviewBaseState (ui.js), so assigning
+  //   it here was a dead write (same class of ordering bug as the Chess960
+  //   _setupFEN fix in this function).
   // v1.1.1 Phase 61: _resetGameUIState() now clears ALL per-game caches
   //   centrally (including _reviewEvalCache, _pendingEngineSANs/_pendingEnginePVs,
   //   _multiPV*, reviewCritical, _sfEval, _cachedOriginalPGN, playerWhite/
   //   playerBlack, _setupFEN, _importedStartMoveNum, _needNewGameForEngine,
   //   etc). The manual clears that were here are now redundant.
   _resetGameUIState();
+  // v1.2.3 round-18 (bug fix): Restore the Chess960 initial-position FEN
+  //   captured above — _resetGameUIState() just nulled _setupFEN. Per the PGN
+  //   spec, a Chess960 game MUST record [SetUp "1"] + [FEN "<initial pos>"]
+  //   so the game can be reconstructed from its true starting position.
+  if(_newGameInitialFEN!==null&&typeof _setupFEN!=='undefined')_setupFEN=_newGameInitialFEN;
+  // v1.2.3 round-18: reviewBaseState must reflect THIS game's initial state
+  //   (ECO moves included), assigned after the central reset (see above).
+  reviewBaseState=cloneS(gameState);
   _resetEvalState();
   // v1.0.4 EXPANSION (this round): Initialize the game clocks based on dlgTimeControl.
   // If type === 'off', gameClocks remains null and PGN export will use [%emt] (elapsed
@@ -17284,6 +17417,12 @@ let reviewBaseState=null,_cachedStatus=null,_cachedStatusKey='';
 let cachedCtrlMap=null,cachedCtrlKey='',renderPending=false,
     lastRenderTime=0,lastRenderRequest=0,renderTimerId=null;
 let _animRetryCount=0; // v1.1.0 Phase 54: guard against stuck animationInProgress
+// v1.2.3 round-18 (bug fix): tracks "user is typing in the Chess960 SP-ID
+//   input" so the full re-render triggered by each keystroke can restore
+//   focus afterwards (mirrors the _ecoSearchFocused mechanism). Previously
+//   every keystroke destroyed the input → focus/soft-keyboard lost →
+//   multi-digit SP-IDs were effectively un-typeable.
+let _spidEditing=false;
 let _heartbeatIntervalId=null; // Interval ID for engine heartbeat monitor
 let _heartbeatRunning=false; // Flag for engine heartbeat monitor state
 // Dialog state
@@ -17583,7 +17722,12 @@ function render(){
         return;
       }
       renderPending=true;
-      setTimeout(()=>{renderPending=false;_animRetryCount=0;lastRenderTime=Date.now();render();},200);
+      // v1.2.3 round-18 (bug fix): do NOT reset _animRetryCount here — the
+      //   reset made the counter oscillate 0→1 so the ">10 retries →
+      //   force-clear stuck animationInProgress" guard above could never
+      //   fire (dead code, infinite 200ms spin instead of 2s self-heal).
+      //   The healthy-path reset at the non-animating branch below suffices.
+      setTimeout(()=>{renderPending=false;lastRenderTime=Date.now();render();},200);
     }
     return;
   }
@@ -17688,7 +17832,9 @@ function _renderChess960Settings(h){
   h+=`<label style="font-size:.78rem;color:var(--muted)">${T('chess960_spid')}: </label>`;
   h+=`<button class="btn" style="padding:4px 10px;font-size:.78rem;${curSPID===-1?'background:var(--accent);color:var(--bg);font-weight:700':''}" onclick="HapticManager.fire('BUTTON_PRESS');dlgChess960SPID=-1;render()">${T('chess960_random')}</button>`;
   h+=`<div style="display:flex;gap:6px;align-items:center;flex:1;min-width:120px">`;
-  h+=`<input type="number" min="0" max="959" value="${curSPID>=0?curSPID:''}" placeholder="0-959" style="flex:1;width:80px;min-width:0;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;text-align:center" oninput="const v=Number.parseInt(this.value,10);if(!Number.isNaN(v)&&v>=0&&v<960){dlgChess960SPID=v;render();}else if(this.value===''){dlgChess960SPID=-1;render();}">`;
+  // v1.2.3 round-18: id + _spidEditing flag so _postRenderFinalize can
+  //   restore focus after the keystroke-triggered re-render (see declaration).
+  h+=`<input id="spidInput" type="number" min="0" max="959" value="${curSPID>=0?curSPID:''}" placeholder="0-959" style="flex:1;width:80px;min-width:0;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;text-align:center" oninput="_spidEditing=true;const v=Number.parseInt(this.value,10);if(!Number.isNaN(v)&&v>=0&&v<960){dlgChess960SPID=v;render();}else if(this.value===''){dlgChess960SPID=-1;render();}">`;
   // v1.2.1 round-16: secureRandomInt is exported by game-logic.js (loaded
   //   before ui.js), so the typeof guard is unreachable defensive code.
   //   Simplified to direct call (removes Math.random() that triggered
@@ -18269,6 +18415,17 @@ if(_sfWdlW>=0&&_sfWdlD>=0&&_sfWdlL>=0){const _rt=_sfWdlW+_sfWdlD+_sfWdlL;const _
 const _rvEvalFontSize='.8rem';
 const _rvEvalEmojiSize='1.05rem';
 const _rvEvalBarHTML='<div class="ev" id="review-eval-bar" style="margin:2px 0;width:100%;box-sizing:border-box;font-size:'+_rvEvalFontSize+'!important;padding:5px 10px!important;gap:5px;max-height:2.4em;overflow:hidden;white-space:nowrap"><span class="ev-e" style="font-size:'+_rvEvalEmojiSize+'">'+_re.emoji+'</span><span>'+_re.desc+'</span><span style="color:var(--muted)">('+_re.score+')</span>'+_rDepthStr+_rProgressStr+_rWdlStr+_rDelta+'</div>';
+// v1.2.3 round-19: while an analyze-all batch is running, show a hint line
+//   directly under the eval bar telling the user that long-pressing a move
+//   in the move list prioritizes it (_prioritizeReviewStep). The eval bar
+//   itself is strictly single-line (overflow:hidden + nowrap), so the hint
+//   cannot go INSIDE it — it would be clipped. This separate line is
+//   rendered from state on every full render; _updateReviewBatchHint()
+//   handles the immediate in-place insert at batch start (reviewAnalyzeAll
+//   does not re-render when the batch begins).
+const _rvBatchHintHTML=_reviewAnalyzeAllActive
+  ?'<div id="review-batch-hint" style="margin:0 0 2px;width:100%;box-sizing:border-box;font-size:.72rem;color:var(--accent);padding:2px 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+T('review_batch_analyzing_hint')+'</div>'
+  :'';
 
 // Review step slider — custom slider with pixel-perfect alignment to chart data points.
 // v1.1.0 Phase 54: Replaced the native <input type="range"> visual with a custom
@@ -18438,6 +18595,7 @@ h+='</div>'; // close .review-top
 // .review-bottom: full-width chart + controls, edge-to-edge
 h+='<div class="review-bottom">';
 h+=_rvEvalBarHTML;
+h+=_rvBatchHintHTML;
 h+=_rvSliderHTML;
 h+=_rvChartHTML;
 h+=_rvNavHTML;
@@ -18660,7 +18818,18 @@ if(!gameState||!gameState.board){console.error('renderInternal: gameState is inv
 if(setupMode){gameOver=null;_gameOverStatusKey=null;}
 if(gameOver&&_gameOverStatusKey){const _reLocStr=_gameOverStrFromStatus(_gameOverStatusKey);if(_reLocStr)gameOver=_reLocStr;}
 if(!gameOver&&!setupMode&&!isAIThinking&&!reviewMode){const _gsKey=gameState.hash+'|'+gameState.currentTurn;if(_cachedStatusKey!==_gsKey){_cachedStatus=gameStatus(gameState);_cachedStatusKey=_gsKey;}_applyGameOver(_cachedStatus);}
-const ctrlKey=showCtrlMap?gameState.hash:'off';if(ctrlKey!==cachedCtrlKey){cachedCtrlMap=showCtrlMap?getCtrlMap(gameState.board):null;cachedCtrlKey=ctrlKey}const cm=cachedCtrlMap;
+// v1.2.3 round-18 (perf): skip the main-board control map entirely in review
+//   mode — the main board isn't rendered then, and the review board maintains
+//   its own cache key below. Previously both paths shared cachedCtrlKey/
+//   cachedCtrlMap and ping-ponged between the main and review position
+//   hashes, forcing TWO full getCtrlMap() recomputes per render while
+//   reviewing with 🌈 enabled.
+let cm=null;
+if(showCtrlMap&&!reviewMode){
+  const ctrlKey=gameState.hash;
+  if(ctrlKey!==cachedCtrlKey){cachedCtrlMap=getCtrlMap(gameState.board);cachedCtrlKey=ctrlKey;}
+  cm=cachedCtrlMap;
+}
 const infoSq=hoveredSquare||selectedSquare;let infoCtrl=null;
 if(infoSq&&cm){const e=cm[infoSq.row][infoSq.col];if(e)infoCtrl=e;}
 const oppC=OPP_COLOR[playerColor];
@@ -18831,7 +19000,10 @@ return h;
  */
 function _renderInfoBars(h){
 // Tablebase status bar (player turn only, ≤7 pieces, manual query)
-if(!gameOver&&!reviewMode&&pieceCountLE7(gameState.board)){
+// v1.2.3 round-18: typeof guard for cross-module symbol (round-11 defensive
+//   pattern, same as game-logic.js:2794 — a failed tablebase.js load should
+//   not cascade into a full-page render error).
+if(!gameOver&&!reviewMode&&typeof pieceCountLE7==='function'&&pieceCountLE7(gameState.board)){
 const _tbFen=generateFEN(gameState);
 let _tbBarHtml='';
 const _cachedTb=_tbCache.get(_tbFen);
@@ -18840,7 +19012,11 @@ else if(_cachedTb){
 // API returns moves[] already sorted best-first; use moves[0] directly
 const _cat=_cachedTb.category||'';
 const _catMap={'win':T('tb_cat_win'),'syzygy-win':T('tb_cat_syzygy_win'),'maybe-win':T('tb_cat_maybe_win'),'cursed-win':T('tb_cat_cursed_win'),'draw':T('tb_cat_draw'),'blessed-loss':T('tb_cat_blessed_loss'),'maybe-loss':T('tb_cat_maybe_loss'),'syzygy-loss':T('tb_cat_syzygy_loss'),'loss':T('tb_cat_loss')};
-const _catLabel=_catMap[_cat]||_cat;
+// v1.2.3 round-18 (XSS hardening): escape the fallback — an unknown
+//   `category` from the tablebase API would otherwise flow raw into
+//   innerHTML below (same threat model as the _best.uci escaping noted in
+//   the v1.0.8 PHASE 30 comment below).
+const _catLabel=_catMap[_cat]||_esc(_cat);
 let _dtzLabel='';
 const _dtm=_cachedTb.dtm;
 const _dtz=_cachedTb.precise_dtz!=null?_cachedTb.precise_dtz:_cachedTb.dtz;
@@ -19078,6 +19254,24 @@ if(ctx.containerScrolls.length>0){
  *
  * @param {boolean} wasEcoFocused - Whether ECO search was focused before render
  */
+// v1.2.3 round-19: One-time startup hint — "long-press the board toggles
+//   board anti-shake" (the sensor stabilization added in v1.0.5 Rev49, see
+//   the long-press handler at the top of this file). Fires once per app
+//   launch (page load) on the first completed render after the loading
+//   overlay is gone — i.e. the moment the board is actually visible.
+//   _hideLoadingOverlay (ai-bridge.js) also schedules a delayed call so the
+//   hint still appears when no render follows soon (e.g. a long first AI
+//   think before onBestMove triggers the next render).
+let _boardDebounceHintShown=false;
+function _maybeShowBoardDebounceHint(){
+  if(_boardDebounceHintShown)return;
+  if(document.getElementById('_loadingOverlay'))return;
+  _boardDebounceHintShown=true;
+  setTimeout(function(){
+    try{showToast(T('board_debounce_hint'),4500);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  },400);
+}
+
 function _postRenderFinalize(wasEcoFocused){
 _cachedBwrap=null;_cachedSvgEl=null;_cachedSvgLines=[];_cachedArrowKey='';_cachedCtrlCard=null;
 _prevHoverSq=hoveredSquare?{row:hoveredSquare.row,col:hoveredSquare.col}:null;
@@ -19117,7 +19311,13 @@ _invalidateElCache(); _sqElCache = null; _prevBoardVersion = gameState.boardVers
 _evalDispPrevSig = '';
 _rListEl = document.getElementById('reviewMovesList');
 if(wasEcoFocused){const el=document.getElementById('ecoSearch');if(el){el.focus();_ecoSearchFocused=true;try{el.setSelectionRange(el.value.length,el.value.length)}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}}}
+// v1.2.3 round-18: restore SP-ID input focus after keystroke-triggered
+//   re-render (same pattern as the ECO search restore above).
+if(_spidEditing){_spidEditing=false;const _spEl=document.getElementById('spidInput');if(_spEl&&document.activeElement!==_spEl){_spEl.focus();try{_spEl.setSelectionRange(_spEl.value.length,_spEl.value.length)}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}}}
 if(showNewGameDialog&&dlgOpeningId&&!reviewMode){setTimeout(()=>{const list=document.querySelector('.op-list');if(list){const active=list.querySelector('.op-btn.act');if(active)active.scrollIntoView({block:'center',behavior:'smooth'})}},50)}
+// v1.2.3 round-19: fire the one-time board anti-shake hint once the board
+//   is visible (no-op until the loading overlay is gone; see above).
+_maybeShowBoardDebounceHint();
 }
 
 // v1.2.1 round-13 (S3776): renderInternal refactored into a thin orchestrator.
@@ -19999,7 +20199,11 @@ function _replayMovesToState(moveIdx){
     if(!st)return null;
     for(let i=0;i<=moveIdx;i++){
       const mr=moveRecords[i];
-      if(!mr)return null;
+      // v1.2.3 round-18 (bug fix): skip the intentional null placeholder
+      //   (moveRecords[0] for black-to-move starts) instead of aborting the
+      //   whole replay — previously EVERY black-first game got no visual
+      //   annotations because the replay bailed at index 0.
+      if(!mr)continue;
       const from=algPos(mr.from);
       const to=algPos(mr.to);
       if(!from||!to)return null;
@@ -20587,6 +20791,27 @@ function _resetGameUIState(){
   //   new game invalidates queued step indices because reviewStates will be
   //   rebuilt for the new game.
   _reviewAnalyzePriorityQueue=[];
+  // v1.2.3 round-18 (bug fix): terminate any in-flight analyze-all batch.
+  //   Previously _resetGameUIState cleared reviewMode/reviewStates but left
+  //   the batch state machine running: _reviewAnalyzeAllActive stayed true,
+  //   the safety timer kept firing toast+render every 60s (ghost loop), and
+  //   the Java-side _evalDeepBatchActive flag was never ended — leaving the
+  //   engine in eval-mode options for the next game until engine restart.
+  //   Mirror the exitReview() cleanup (function decls are bundle-hoisted).
+  if(typeof _reviewAnalyzeAllActive!=='undefined'&&_reviewAnalyzeAllActive){
+    _reviewAnalyzeAllActive=false;
+    try{if(typeof _endEvalDeepBatchIfActive==='function')_endEvalDeepBatchIfActive();}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+    if(typeof _reviewAnalyzeSafetyTimer!=='undefined'&&_reviewAnalyzeSafetyTimer){clearTimeout(_reviewAnalyzeSafetyTimer);_reviewAnalyzeSafetyTimer=null;}
+    if(typeof _evalRequestBatchGen!=='undefined')_evalRequestBatchGen=0;
+  }
+  // v1.2.3 round-18 (bug fix): also clear the pending open-stats flag/timer —
+  //   exitReview() does this, but _resetGameUIState can run WITHOUT exitReview
+  //   (FEN/PGN import from the review dialog). A stale flag would spuriously
+  //   open the stats page when the NEXT game's analysis completes.
+  if(typeof window!=='undefined'){
+    window._pendingOpenStats=false;
+    if(window._pendingOpenStatsTimer){clearTimeout(window._pendingOpenStatsTimer);window._pendingOpenStatsTimer=null;}
+  }
   // v1.0.4 REV13: Reset scroll state on new game
   // v1.0.4 Rev30: also reset the restore guard (in case a render is in flight)
   if(typeof _mlistScrollState!=='undefined'){_mlistScrollState.scrollTop=0;_mlistScrollState.atBottom=false;_mlistScrollState.valid=false;}
@@ -20671,9 +20896,9 @@ function _resetGameUIState(){
   if(typeof _pvCache!=='undefined'&&_pvCache&&typeof _pvCache.clear==='function')_pvCache.clear();
   if(typeof _pendingEngineSANs!=='undefined')_pendingEngineSANs=[];
   if(typeof _pendingEnginePVs!=='undefined')_pendingEnginePVs=[];
-  if(typeof _multiPVLines!=='undefined')_multiPVLines=[];
-  if(typeof _multiPVResult!=='undefined')_multiPVResult=null;
-  if(typeof _lastEngineVariation!=='undefined')_lastEngineVariation=null;
+  // v1.2.3 round-18 (cleanup): removed duplicate resets of _multiPVLines/
+  //   _multiPVResult/_lastEngineVariation/_sfEvalReady/_evalLoading — each was
+  //   already reset earlier in this function (see the AI/ponder/eval block).
   if(typeof reviewCritical!=='undefined')reviewCritical=[];
   if(typeof _sfEval!=='undefined')_sfEval=0;
   if(typeof _sfMateDistance!=='undefined')_sfMateDistance=0;
@@ -20682,8 +20907,6 @@ function _resetGameUIState(){
   if(typeof _sfWdlW!=='undefined')_sfWdlW=-1;
   if(typeof _sfWdlD!=='undefined')_sfWdlD=-1;
   if(typeof _sfWdlL!=='undefined')_sfWdlL=-1;
-  if(typeof _sfEvalReady!=='undefined')_sfEvalReady=false;
-  if(typeof _evalLoading!=='undefined')_evalLoading=false;
   if(_reviewEvalCache !== undefined&&_reviewEvalCache&&typeof _reviewEvalCache.clear==='function'){
     try{_reviewEvalCache.clear();}catch(e){console.warn('_resetGameUIState: review eval cache clear failed',e);}
   }
@@ -20725,7 +20948,10 @@ function reviewGoTo(step){
   if(cached!=null){
     _sfEval=cached.eval;_sfMateDistance=cached.mate!=null?cached.mate:0;
     _sfWdlW=cached.wdlW!=null?cached.wdlW:-1;_sfWdlD=cached.wdlD!=null?cached.wdlD:-1;_sfWdlL=cached.wdlL!=null?cached.wdlL:-1;
-    _sfDepth=cached.depth!=null?cached.depth:0;_sfEvalReady=true;_evalLoading=false;
+    _sfDepth=cached.depth!=null?cached.depth:0;_sfSeldepth=cached.seldepth!=null?cached.seldepth:0;_sfEvalReady=true;_evalLoading=false;
+    // v1.2.3 round-18 (bug fix): also restore _sfSeldepth from the cache —
+    //   the live-eval path (ai-bridge.js) restores all six fields; omitting
+    //   seldepth here left the previous step's value on screen (stale SD).
   }else{
     _resetEvalState();
     // FIX: Auto-start analysis when selecting an unanalyzed move in review mode.
@@ -20803,6 +21029,31 @@ function _updateReviewAnalyzeBtn(){
   const btn=document.getElementById('review-analyze-btn');
   if(!btn)return;
   btn.textContent=_rvAnalyzeBtnLabel();
+}
+
+/**
+ * v1.2.3 round-19: In-place insert/remove of the #review-batch-hint line
+ *   under the review eval bar. reviewAnalyzeAll() sets
+ *   _reviewAnalyzeAllActive=true WITHOUT a full render, so the hint must be
+ *   inserted dynamically; batch completion/cancel paths already re-render
+ *   (reviewGoTo/render at the end of _reviewAnalyzeAdvance, exitReview),
+ *   which rebuilds the line from state via _rvBatchHintHTML. The id-check
+ *   makes this idempotent, so a following full render never duplicates it.
+ */
+function _updateReviewBatchHint(){
+  const _existing=document.getElementById('review-batch-hint');
+  if(!reviewMode||!_reviewAnalyzeAllActive){
+    if(_existing)_existing.remove();
+    return;
+  }
+  if(_existing)return;
+  const _bar=document.getElementById('review-eval-bar');
+  if(!_bar)return;
+  const _d=document.createElement('div');
+  _d.id='review-batch-hint';
+  _d.style.cssText='margin:0 0 2px;width:100%;box-sizing:border-box;font-size:.72rem;color:var(--accent);padding:2px 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+  _d.textContent=T('review_batch_analyzing_hint');
+  _bar.insertAdjacentElement('afterend',_d);
 }
 
 /**
@@ -20943,6 +21194,10 @@ function reviewAnalyzeAll(){
     return;
   }
   _reviewAnalyzeAllActive=true;
+  // v1.2.3 round-19: show the "batch in progress — long-press a move to
+  //   prioritize" hint line under the eval bar immediately (no full render
+  //   happens at batch start; the helper inserts it in place).
+  _updateReviewBatchHint();
   // v1.1.2 Phase 68 (Issue 30 P2): Clear any stale priority queue at batch
   //   start (defensive — should already be empty if the previous batch
   //   completed normally, but a crashed/canceled batch might have left entries).

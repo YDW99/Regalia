@@ -38,7 +38,9 @@
      asset (file:///android_asset/) with no externally injected content and all
      JavaScript is inlined, 'unsafe-inline' is safe here and removes the need
      to recompute the hash after every JS edit. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; img-src data:; worker-src blob:; connect-src 'none'; frame-ancestors 'none'; base-uri 'self'">
+<!-- v1.2.3 round-18: removed frame-ancestors — ignored inside <meta> (only
+     honored as an HTTP response header), dead directive. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; img-src data:; worker-src blob:; connect-src 'none'; base-uri 'self'">
 <title>📊 Statistics</title>
 <style>
 /* AI-GEN: AI assisted
@@ -1509,7 +1511,11 @@ function extractMoveTimes(pgnText){
   }
   if(!isBlackToMoveStart){
     // Check if movetext starts with "N..." (Black's move first)
-    let mtCheck=text.replace(/^\[.*\]$/gm,'').trim();
+    // v1.2.3 round-18 (bug fix): use the v1.0.9 PHASE 52 tag-format regex
+    //   (same as parsePGN at lines 696/711). The old `/^\[.*\]$/gm` only
+    //   stripped headers occupying an ENTIRE line — for single-line PGN the
+    //   headers survived and broke this Black-to-move detection.
+    let mtCheck=text.replace(/\[[A-Za-z]\w*\s+[^\]]+\]/g,'').trim();
     const firstNumMatch=mtCheck.match(/^(\d+\.+)/);
     if(firstNumMatch&&firstNumMatch[1].includes('...'))isBlackToMoveStart=true;
   }
@@ -1542,9 +1548,14 @@ function extractMoveTimes(pgnText){
     // — we'll fall back to direct {Ns} parsing only.
   }
   // --- Walk the movetext (headers stripped) and collect per-move times ---
-  // Remove header tags [...] (anything in square brackets at line start)
-  // so they don't interfere with the movetext walk below.
-  let moveText=text.replace(/^\[.*\]$/gm,'');
+  // Remove header tags [...] so they don't interfere with the movetext walk.
+  // v1.2.3 round-18 (bug fix): use the v1.0.9 PHASE 52 tag-format regex
+  //   (same as parsePGN at lines 696/711). The old `/^\[.*\]$/gm` required
+  //   headers to occupy an ENTIRE line; for single-line PGN the [FEN] header
+  //   survived and its board coordinates (e.g. "b1") were mis-tokenized as
+  //   pawn moves — shifting every subsequent time entry by one slot and
+  //   swapping the White/Black attribution.
+  let moveText=text.replace(/\[[A-Za-z]\w*\s+[^\]]+\]/g,'');
   const usedTimes=[];
   const clkTimes=[];
   let i=0;
@@ -3904,7 +3915,12 @@ function _exportFullHTML(){
   scriptJS=_stripFnBody(scriptJS,'_exportFullHTML');
   scriptJS=_stripFnBody(scriptJS,'_updateButtonText');
   // Prepend embedded payload
-  scriptJS='var _payload={pgn:'+JSON.stringify(pgnText)+',lang:'+JSON.stringify(lang)+'};\n'+
+  // v1.2.3 round-18 (bug fix): escape "</" as "<\/" inside the JSON strings —
+  //   a PGN comment containing a closing-script-tag sequence would otherwise
+  //   terminate the script block of the exported HTML, corrupting the file.
+  //   ("<\/" is a valid, equivalent JS string escape. This comment itself
+  //   must avoid the literal sequence — inline script constraint.)
+  scriptJS='var _payload={pgn:'+JSON.stringify(pgnText).replace(/<\//g,'<\\/')+',lang:'+JSON.stringify(lang)+'};\n'+
     'var _lang='+JSON.stringify(lang)+';\n'+
     scriptJS;
 

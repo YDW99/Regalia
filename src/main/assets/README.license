@@ -1,3 +1,31 @@
+v1.2.3 round-19 (2026.7.17) — 2 bilingual UX hints + log-injection fix:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — feature + fix round).
+  - chess.html (AGPL v3): Rebuilt from chess.src/ via build-chess.py after
+    the round-19 JS changes. 22,459 lines, 1,351,368 bytes. Contains all
+    round-19 chess.src changes (see chess.src/README.license: 2 new i18n
+    keys, startup anti-shake hint Toast, analyze-all batch hint line).
+  - stats.html (AGPL v3): No changes this round.
+  - chess.src/: see chess.src/README.license for the per-module details.
+
+v1.2.3 round-18 (2026.7.17) — Chess960 PGN [FEN] bug fix + 7-agent line-by-line review:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - chess.html (AGPL v3): Rebuilt from chess.src/ after the round-18 JS
+    fixes. 22,379 lines, 1,346,688 bytes. Contains all round-18 chess.src
+    changes (see chess.src/README.license).
+  - stats.html (AGPL v3): extractMoveTimes now uses the v1.0.9 PHASE 52
+    tag-format header regex at 2 sites (same as parsePGN) — the old
+    /^\[.*\]$/gm only stripped headers occupying an ENTIRE line, so for
+    single-line PGNs the [FEN] header survived and its board coordinates
+    were mis-tokenized as pawn moves, shifting every per-move time entry
+    by one slot and swapping the White/Black attribution. Exported HTML
+    now escapes "</" inside the inline PGN JSON strings (a PGN comment
+    containing a closing-script-tag sequence can no longer terminate the
+    script block of the exported file). Removed the ineffective
+    frame-ancestors directive from the CSP <meta> (only honored as an
+    HTTP header).
+  - License classification: chess.html and stats.html remain AGPL v3
+    (original works, not derived from DroidFish or Stockfish).
+
 v1.2.3 round-17 (2026.7.17) — SonarCloud high-priority cleanup:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
   - chess.html (AGPL v3): Rebuilt from chess.src/ after round-17 JS fixes and

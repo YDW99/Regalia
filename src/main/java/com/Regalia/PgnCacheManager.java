@@ -149,6 +149,13 @@ public class PgnCacheManager {
                  OutputStreamWriter writer = new OutputStreamWriter(fos, "UTF-8")) {
                 writer.write(pgn);
                 writer.flush();
+                // v1.2.3 round-18 (robustness): fsync before close so the PGN
+                //   survives a process crash right after save() returns true —
+                //   same guarantee setTags() already provides (see its
+                //   fos.getFD().sync() below).
+                try { fos.getFD().sync(); } catch (Throwable ignored) {
+                    // best-effort on filesystems without fsync support
+                }
             }
             Log.i(TAG, "PGN cache saved: " + safe + " (" + pgn.length() + " chars)");
             return true;

@@ -47,18 +47,16 @@ function _startGameImpl(){
   // '=!' operator typo detector. Rewrite using De Morgan's law for the same
   // semantics: ECO is enabled when dlgChess960 is undefined OR falsy.
   _ecoEnabled=dlgChess960 === undefined||!dlgChess960;
-  // v1.0.3: Clear cached original PGN and setup FEN — new game means no imported PGN.
-  if(typeof _cachedOriginalPGN!=='undefined')_cachedOriginalPGN=null;
-  if(typeof _setupFEN!=='undefined')_setupFEN=null;
-  // v1.0.3: Reset the imported-start-move-number offset — a fresh game from the
-  // initial position starts at move 1. Subsequent ECO opening moves (if any)
-  // also start from move 1.
-  if(typeof _importedStartMoveNum!=='undefined')_importedStartMoveNum=1;
-  // v1.0.4 Rev24: Clear imported player names — a new game uses the default
-  // "你"/"AI对手" (or _humanPlayerName if set via rename). Don't clear
-  // _humanPlayerName itself — that's a persistent user preference.
-  if(typeof playerWhite!=='undefined')playerWhite=undefined;
-  if(typeof playerBlack!=='undefined')playerBlack=undefined;
+  // v1.2.3 round-18: The manual clears formerly here (_cachedOriginalPGN,
+  //   _setupFEN, _importedStartMoveNum, playerWhite/playerBlack) are covered by
+  //   the centralized _resetGameUIState() call below and were removed as
+  //   redundant. NOTE: _resetGameUIState() runs LATER in this function (after
+  //   the Chess960/ECO init), so any per-game value computed during init must
+  //   be captured in a local and assigned AFTER the reset — see
+  //   _newGameInitialFEN below.
+  // v1.2.3 round-18: Local capture for the Chess960 initial-position FEN
+  //   (assigned to _setupFEN after _resetGameUIState(), see below).
+  let _newGameInitialFEN=null;
   // v1.0.4 NEW: Chess960 mode handling.
   // - If dlgChess960 is true, build a Chess960 starting position.
   // - If dlgChess960SPID is set (0..959), use it; otherwise pick a random SP-ID.
@@ -76,7 +74,13 @@ function _startGameImpl(){
     //   games started from the New Game dialog, causing _buildPGNString to
     //   fall back to generateFEN(gameState) (the CURRENT mid-game state),
     //   producing a corrupt [FEN] tag that re-imports to the wrong position.
-    if(typeof _setupFEN!=='undefined')_setupFEN=generateFEN(gameState);
+    // v1.2.3 round-18 (bug fix): Capture into a LOCAL instead of assigning
+    //   _setupFEN directly — _resetGameUIState() below centrally nulls
+    //   _setupFEN, which silently re-broke this v1.0.8 fix (the FEN tag fell
+    //   back to the current mid-game position again). The local is assigned
+    //   to _setupFEN AFTER the reset, mirroring the importPGN/_applyImportedFEN
+    //   pattern.
+    _newGameInitialFEN=generateFEN(gameState);
   }else{
     if(typeof setChess960Mode==='function')setChess960Mode(false);
     gameState=initState();
@@ -155,13 +159,24 @@ function _startGameImpl(){
     }
   }
   _needNewGameForEngine=true;
-  reviewBaseState=cloneS(gameState);
+  // v1.2.3 round-18: reviewBaseState assignment moved AFTER _resetGameUIState()
+  //   below — the reset centrally nulls reviewBaseState (ui.js), so assigning
+  //   it here was a dead write (same class of ordering bug as the Chess960
+  //   _setupFEN fix in this function).
   // v1.1.1 Phase 61: _resetGameUIState() now clears ALL per-game caches
   //   centrally (including _reviewEvalCache, _pendingEngineSANs/_pendingEnginePVs,
   //   _multiPV*, reviewCritical, _sfEval, _cachedOriginalPGN, playerWhite/
   //   playerBlack, _setupFEN, _importedStartMoveNum, _needNewGameForEngine,
   //   etc). The manual clears that were here are now redundant.
   _resetGameUIState();
+  // v1.2.3 round-18 (bug fix): Restore the Chess960 initial-position FEN
+  //   captured above — _resetGameUIState() just nulled _setupFEN. Per the PGN
+  //   spec, a Chess960 game MUST record [SetUp "1"] + [FEN "<initial pos>"]
+  //   so the game can be reconstructed from its true starting position.
+  if(_newGameInitialFEN!==null&&typeof _setupFEN!=='undefined')_setupFEN=_newGameInitialFEN;
+  // v1.2.3 round-18: reviewBaseState must reflect THIS game's initial state
+  //   (ECO moves included), assigned after the central reset (see above).
+  reviewBaseState=cloneS(gameState);
   _resetEvalState();
   // v1.0.4 EXPANSION (this round): Initialize the game clocks based on dlgTimeControl.
   // If type === 'off', gameClocks remains null and PGN export will use [%emt] (elapsed

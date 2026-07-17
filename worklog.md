@@ -1,4 +1,208 @@
-# Regalia v1.2.3 — round-17 工作日志（2026-07-17）
+# Regalia v1.2.3 — round-19 工作日志（2026-07-17）
+
+## 任务来源
+- 用户新需求（中英双语适配）：
+  1. 每次打开 app 进入主界面、棋盘刚显示时，Toast 提示「长按棋盘可开/关棋盘防抖」。
+  2. 批量分析（分析全部）进行期间，复盘界面评估栏增加「批量分析进行中… 长按走法可设为优先」文字。
+- 完整读取两份外部审查报告（/mnt/agents/upload/gitar-bot报告.md、
+  PR #51 概述与代码异味总结.pdf），排查误报后修复非误报部分。
+- 要求：小心谨慎、版本号 v1.2.3 不变、更新全部文档、交付 release APK
+  （澎湃OS3、v1+v2+v3 签名）+ tar 源码备份（无引擎）+ 双语说明书。
+
+## 审查报告逐项排查结论
+gitar-bot 报告仅 1 项；PR #51 PDF 为 AI 推测性总结（文末自述"无法确保真实准确"）共 8 项。
+两份报告交叉指向同一处问题，逐项复核：
+
+| 报告项 | 结论 | 依据 |
+|---|---|---|
+| gitar-bot：JsBridgeGateway CR/LF 拦截日志直接记录 command.trim()，嵌入换行可伪造 logcat 日志行 | **非误报 → 已修复** | 源码 JsBridgeGateway.java:135 确认 trim() 不去嵌入 CR/LF |
+| PDF 同项（java:S5443 日志注入） | 同上（同一处） | 与 gitar-bot 交叉印证 |
+| PDF java:S1448 上帝类（提取 HapticManager） | 误报 | HapticManager.java 已存在（round-17） |
+| PDF javascript:S138 ui.js 过长（拆分） | 误报 | ui-gameflow.js / ui-interactions.js 已拆分（round-17） |
+| PDF javascript:S109 parseInt 魔法数字 | 误报 | 全库 grep 无非 Number.parseInt 命中 |
+| PDF java:S2221 通用异常（sleepGracefully） | 误报 | StockfishNative.java:677 已存在并 4 处使用 |
+| PDF javascript:S134 嵌套过深 | 误报 | dataset/箭头函数/Math.trunc 重构已完成 |
+| PDF java:S2095 引擎重启清理 _evalDeepBatchActive | 误报 | ui.js:5194/5558/5687/5856 四处已覆盖 |
+| PDF 构建配置（CMake 固定 3.31.6+/keystore 验证） | 误报 | build.gradle:184 round-13 已固定 |
+
+## 修复与实现
+1. **安全修复（唯一非误报）** JsBridgeGateway.java：CR/LF 拦截日志改为
+   `command.trim().replace("\r","\\r").replace("\n","\\n")`（String.replace 字面量，
+   无正则陷阱），被拦截载荷单行显示。
+2. **功能 1（启动 Toast）**：
+   - ui.js：新增 `_boardDebounceHintShown` 标志 + `_maybeShowBoardDebounceHint()`
+     （overlay 未消失则跳过；标志保证每次页面加载仅触发一次；4500ms toast），
+     在 `_postRenderFinalize` 末尾调用。
+   - ai-bridge.js：`_hideLoadingOverlay` 延迟 600ms 以 typeof 守卫调用同一函数，
+     覆盖"overlay 消失后长时间无 render"路径（如 AI 首步长考）。
+   - i18n 键 `board_debounce_hint`（术语对齐 MainActivity「棋盘防抖/Board stabilization」）。
+3. **功能 2（批量分析提示行）**：
+   - 评估栏 `#review-eval-bar` 为严格单行（overflow:hidden+nowrap），提示不能内嵌，
+     故在评估栏正下方新增独立提示行 `#review-batch-hint`。
+   - 全量渲染路径：`_rvBatchHintHTML`（仅 `_reviewAnalyzeAllActive` 为真时非空），
+     在 `.review-bottom` 中紧随 `h+=_rvEvalBarHTML` 输出。
+   - 原地更新路径：`_updateReviewBatchHint()`（insertAdjacentElement('afterend') /
+     remove，幂等）；在 `reviewAnalyzeAll()` 置 active=true 后立即调用（批量开始无全量
+     render）；批量完成/取消/退出复盘路径本就有 reviewGoTo/render，提示自动消失。
+   - i18n 键 `review_batch_analyzing_hint`；对应已有功能 `_prioritizeReviewStep`
+     （v1.1.2 长按走法优先）。
+4. **i18n**：game-logic.js 键表新增上述 2 键（zh/en）。
+
+## 验证
+- 11 个 JS 模块 node --check 全过；build-chess.py 重建 chess.html
+  （22,459 行 / 1,351,368 字节），内嵌脚本 node --check 通过。
+- Node vm 烟雾测试扩展到 10 场景全过：A–H 既有 + 新增 I（启动提示 once 守卫 + 双语键）、
+  J（批量提示行插入/幂等/移除 + 双语键）。
+  - 顺带修复测试工装自身 bug：场景 H 的模板字符串转义层错误导致正则字面量损坏
+    （`\/`→`/`、`\\`→`\` 后变成未闭合分组），此前恒 ERROR；重写为 indexOf 切片 +
+    charCodeAt 校验（规避转义歧义）+ new RegExp 编译 + 语义解析验证，并修正变量名
+    `_PGN_WORKER_SOURCE`→`_WORKER_SRC`。场景 I 初跑暴露 `_lang` 依赖（启动语言探测在
+    node UA 下落 en），改为显式置位+恢复。生产代码无问题。
+- APK（/tmp/build …/Regalia-release.apk，78,172,965 字节）：
+  apksigner v1+v2+v3 全 true；versionCode=123 / versionName=1.2.3 / targetSdk 35；
+  权限无 ACCESS_NETWORK_STATE、FOREGROUND_SERVICE_SPECIAL_USE 保留；
+  FGS subtype "chess_engine_analysis"（type 0x40000000 specialUse）；
+  引擎 SHA-256=8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5 三方一致；
+  APK 内 chess.html 含全部新代码（11 处命中）；dex 字节级验证含 `\r`/`\n` 替换字面量各 1 条。
+
+## 文档更新
+- 双语说明书：round-19 条目插入第一章行流最前（新到旧）。
+- NOTICE / PRIVACY.md / README.md：round-19 小节置顶。
+- 8× README.license：有改动目录（Manual、src/main、src/main/assets、chess.src、
+  java/com/Regalia）写变更条目；无改动目录（根 assets、cpp、res）写 no-changes 条目。
+- worklog.md：本条目置顶。
+
+## 最终交付记录（round-19）
+- 文档在首轮 APK 构建后更新，且 src/main/assets 下 2 个 README.license 内嵌于 APK
+  assets → 全部文档同步构建副本后**增量重建 APK**（78,173,702 字节），重新完整验证：
+  v1+v2+v3 签名全过、版本 123/1.2.3/targetSdk 35、引擎哈希三方一致、APK 内嵌
+  README.license 含 round-19 条目。
+- 交付物（/mnt/agents/output/）：
+  - Regalia-release.apk — SHA-256=eb416435c30c241c16a512bf6b1efc5dd57a9b1555d536ad02b2f0904de9031b
+  - Regalia-v1.2.3-src.tar.gz — 118 条目，0 禁用条目（build.gradle/settings.gradle 为合法源码）
+  - Regalia-v1.2.3-manual-{zh,en}.html、SHA256SUMS.txt
+
+# Regalia v1.2.3 — round-18 工作日志（2026-07-17）
+
+## 任务来源
+- 用户报告 Bug（P0）：Chess960 模式下导出 PGN 的 [FEN] 标签不是开局初始局面。
+- 用户要求：完成《Regalia v1.2.3 开发进度恢复指南.md》全部任务；修复后逐文件
+  逐行基于设计意图审查优化（优先级：bug修复 > 健壮性 > 功能完善 > 性能 >
+  冗余清理 > 简化）；node --check 全量验证；重建 chess.html；构建 v1+v2+v3
+  签名 release APK（兼容小米澎湃OS3）；引擎 SHA-256 三方一致；tar 源码备份
+  （无引擎）；更新全部文档与说明书；更新 worklog.md。
+
+## 环境说明（本轮沙箱限制与对策）
+- 本轮沙箱 /home 为临时目录且被重置过一次（round-17 的 /home/kimi 工具链丢失）；
+  源码与交付物改放 /mnt/agents（portal 持久挂载）。
+- /mnt/agents 挂载单文件 100 MiB 上限（dd 实测截断）→ 工具链（JDK/SDK/NDK/
+  Gradle）安装到 /tmp/tools；下载走 Range 分块（单连接亦被 100MB 截断）。
+- 引擎：官方 Stockfish sf_18 stockfish-android-armv8-dotprod，
+  SHA-256=8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5
+  （与指南预期值一致；sf_17.1/17/16.1/16 均不匹配，逐一实测排除）。
+
+## 主 Bug（用户报告）根因与修复
+- 根因：_startGameImpl() 的 Chess960 分支在 _resetGameUIState()（集中复位，
+  ui.js 内将 _setupFEN=null）**之前**赋值 _setupFEN=generateFEN(gameState)。
+  v1.0.8 PHASE 24 曾修过同一 bug；v1.1.1 Phase 61 把复位集中进 _startGameImpl
+  后改变了赋值/复位顺序，静默回潮。importPGN/_applyImportedFEN 当年均已改为
+  「局部捕获 → reset → 再赋值」，唯独新局对话框路径遗漏。
+  → PGN 导出回退 generateFEN(gameState)（当前局面），违反 PGN 规范
+  （Chess960 必须 [SetUp "1"] + [FEN "初始局面"]）。
+- 修复（ui-gameflow.js）：局部变量 _newGameInitialFEN 捕获初始 FEN，
+  _resetGameUIState() 之后再赋给 _setupFEN；同步清理函数头部被 reset 覆盖的
+  5 处手动清零；reviewBaseState 死赋值改为 reset 后赋值（同类时序 bug）。
+- 加固（ai-bridge.js）：_buildPGNString 的 startFEN 回退由 generateFEN(gameState)
+  改为 stateHistory[0].state（真实初始局面）；PlyCount 不再计入黑先 null 占位。
+- 验证：Node vm 烟雾测试（基于构建产物 chess.html）7 场景全过——Chess960 新局
+  FEN 标签=初始局面（含走子后/undo 后）、标准局无 FEN/SetUp 标签、Chess960 PGN
+  导入往返一致、FEN 导入路径、黑先 PlyCount=1、黑先注解回放不再中止。
+
+## 逐行审查（7 个并行审查代理 × 全代码库）与修复清单
+审查域：game-logic/chess960/pgn-standard；ai-bridge/worker-pool/state-store；
+tablebase/eco-data/ui-gameflow/ui-interactions；ui.js 前/后半；19 个 Java 文件+
+manifest+cpp；误报专项+stats.html/index.html.tpl/build-chess.py。
+误报专项结论：round-17 全部误报判定独立复查**维持**（S125=0 处、S3626 恢复路径
+无冗余 return、S2703 bundle 级 eslint 仅命中既有设计、printf .replace 链、
+worker 模板双反斜线、HapticManager catch (Throwable)）。
+
+已应用修复（按优先级）：
+1. bug：
+   - ui.js _replayMovesToState：黑先 null 占位 return null（全局注解失效）→ continue。
+   - ui.js _resetGameUIState：新增 analyze-all 批处理终止（幽灵批处理 + Java 侧
+     _evalDeepBatchActive 永不复位）+ 清 window._pendingOpenStats 标志/计时器。
+   - ai-bridge.js onBestMove：新增 gameOver 守卫（超时/认输后在途 bestmove 丢弃）；
+     校验失败分支承诺的 360s 重试不会触发（timer 以 isAIThinking 为守卫）→ 立即重试。
+   - ui.js render()：_animRetryCount 在 200ms 回调被提前重置（卡死守卫成死代码）→ 移除。
+   - tablebase.js _parsePGN：注解扫描字符类补 '0'（0-0/0-0-0 计入走法，注解不错位）。
+   - ai-bridge.js：引擎变例（MultiPV/分叉）编号 3 处补 _importedStartMoveNum 偏移
+     （与 round-13 tablebase.js 同款）。
+   - worker-pool.js：头部剥离正则补闭合 \]（worker 模板 + sync 镜像两处；
+     worker 字符串内注释不得含反引号——本轮实测踩坑修复）。
+   - pgn-standard.js parseStandardPGN：游离 } 死循环防御修复（函数当前无调用方；
+     RAV 归属方向/无引号标签未剥离两点记录为已知限制）。
+   - stats.html extractMoveTimes 2 处：弃用 /^\\[.*\\]$/gm（单行 PGN [FEN] 头残留
+     → 计时错位+黑白颠倒），改用 parsePGN 同款标签格式正则。
+   - ui.js reviewGoTo：缓存命中补 _sfSeldepth 恢复（对照 ai-bridge 六字段）。
+   - game-logic.js _validateSetupEpMark：补跳过格/起始格占用检查
+     （新增 i18n 键 setup_ep_err_blocked，中英双语）。
+   - tablebase.js importPGN：Chess960 无 [FEN] 时清残留 gameSPID。
+   - game-logic.js doAIMove：TB 路径要求 gameState.board===_tbSavedBoard
+     （防异步期间局面变化注入异局着法）。
+   - MainActivity.java：fallback 错误页 BACK 键不再被吞。
+   - StockfishNative.java：握手重试前重置 optionsBuilder（防选项重复）。
+   - index.html.tpl：contain-intrinsic-size:auto → auto 300px（非法声明被 Chromium 丢弃）。
+2. 健壮性：
+   - ui.js：tablebase category 回退 _esc(_cat)（XSS 防护模型一致性）；
+     pieceCountLE7 补 typeof 守卫（round-11 模式一致）。
+   - stats.html：导出 HTML 的 PGN JSON 补 </ → <\/ 转义（防闭合 script 截断；
+     注释本身也须避开字面序列——inline script 约束）。
+   - PgnCacheManager.java：save() 补 fsync（与 setTags 一致）。
+3. 功能完善：Chess960 SP-ID 输入框焦点保持（id=spidInput + _spidEditing +
+   _postRenderFinalize 恢复，镜像 _ecoSearchFocused 机制）。
+4. 性能：复盘+热力图时主棋盘控制图不再与复盘棋盘共用缓存键（每帧 2 次全量
+   getCtrlMap → 1 次）。
+5. 冗余清理：_startGameImpl 头部 5 处手动清零；_resetGameUIState 内 5 变量
+   重复复位；game-logic.js export 列表移除 4 个外来符号（generateFEN/uciToCoords/
+   _esc 改由 ai-bridge.js 导出，posDesc 改由 ui.js 导出）；_processDeferredVariations
+   未使用解构变量；AndroidManifest 移除零使用 ACCESS_NETWORK_STATE；两处 CSP meta
+   移除无效 frame-ancestors。
+6. 简化：无独立项。
+
+## 记录在案的已知遗留（下轮候选）
+- 易位权「王同侧最近车」启发式在同侧双车时归属歧义（正规对局不可达；
+  修复需易位权数据结构改造，回归风险高于收益）。
+- FEN 导入路径未做 Chess960 检测（绕过摆棋检测逻辑）。
+- DIRTY_* 增量渲染子系统死代码（~200 行，无设备验证暂不移除）。
+- 棋钟 undo 不回表、超时未查对方材料不足等功能级议题。
+- ui-interactions.js:97 尾置 return 与全文件分支风格一致，保留。
+
+## 验证记录
+- node --check：11 个 JS 模块 + stats.html 内嵌脚本 + chess.html 内嵌脚本全过。
+- bundle 级 eslint no-undef：仅 ECO_OPENINGS 惰性挂载/gameEvent/gameSite 注入
+  全局命中（既有设计），零新增。
+- Node vm 烟雾测试 7 场景全过（见上）。
+- worker 头部正则：模板求值后语义实跑验证（7 标签头剥离无残留）。
+- chess.html 重建（build-chess.py）。
+- release APK：v1+v2+v3 签名齐全；versionCode=123 / versionName=1.2.3；
+  targetSdk 35；FGS subtype 属性存在；APK 内 libstockfish.so SHA-256 与
+  官方发布、本地工具链三方一致。
+- tar 源码备份：排除 build/.gradle/.cxx/local.properties/lint-baseline.xml/
+  jniLibs/*.keystore/keystore.properties/version.properties/.git/.idea，抽查 0 禁用条目。
+
+## 最终交付记录
+- 文档表述修正（_esc(_cat) 计 1 处）同步构建副本后做了一次增量重建，
+  保证 APK 内嵌 assets 文档与 tar 内文档完全一致；最终 APK 重新通过
+  v1+v2+v3 签名、版本号、FGS subtype、引擎哈希全部验证。
+- Regalia-release.apk：78,169,550 字节，
+  SHA-256=60e7f13d5c041b57b1046b0a674763eae936b299ab09cc489c4cd4817ce47abb
+- Regalia-v1.2.3-src.tar.gz：5,099,332 字节（118 条目，无引擎），
+  内容抽样确认含 _newGameInitialFEN 修复与本日志。
+- 交付物：APK + 源码 tar + 中英文说明书 HTML + SHA256SUMS.txt。
+
+（下附 round-17 完整日志，保留备查）
+
+---
 
 ## 任务来源
 - 《较高优先级问题汇总.pdf》（SonarCloud 扫描结果，AI 生成，需逐条验证）

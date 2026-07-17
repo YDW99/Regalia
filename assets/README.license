@@ -1,6 +1,20 @@
 assets/ — README screenshots
 ============================
 
+v1.2.3 round-19 (2026.7.17): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — feature + fix round).
+  - screenshot.jpg / screenshot.png: unchanged. All round-19 changes are in
+    src/main (JS modules + rebuilt chess.html + JsBridgeGateway.java),
+    Manual/ (both manuals) and the top-level docs (NOTICE, PRIVACY.md,
+    README.md, worklog.md).
+
+v1.2.3 round-18 (2026.7.17): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - screenshot.jpg / screenshot.png: unchanged. All round-18 changes are in
+    src/main/ source files and the Manual (see the other README.license
+    files).
+  - License classification: unchanged (both screenshots remain AGPL v3).
+
 v1.2.3 round-13 (2026.7.16) — README.license created:
   - This file documents the license classification for the root-level
     `assets/` directory, which contains screenshots referenced by README.md.

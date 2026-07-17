@@ -132,7 +132,14 @@ public class JsBridgeGateway {
         //   sendUciCommand directly) does not, so the whitelist is the only
         //   gate for that path.
         if (command.indexOf('\n') >= 0 || command.indexOf('\r') >= 0) {
-            Log.w(TAG, "Blocked UCI command with embedded newline: " + command.trim());
+            // v1.2.3 round-19 (gitar-bot / SonarCloud java:S5443): sanitize
+            //   CR/LF BEFORE logging. trim() only strips leading/trailing
+            //   whitespace, so an embedded '\n'/'\r' would still reach
+            //   logcat and allow forged log lines. String.replace is literal
+            //   (no regex), turning each CR/LF into a visible escape so the
+            //   blocked payload stays on a single log line.
+            Log.w(TAG, "Blocked UCI command with embedded newline: "
+                    + command.trim().replace("\r", "\\r").replace("\n", "\\n"));
             return false;
         }
         String trimmed = command.trim();

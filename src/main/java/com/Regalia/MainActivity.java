@@ -790,8 +790,12 @@ public class MainActivity extends Activity {
                 } catch (Throwable e) {
                     Log.w(TAG, "evaluateJavascript for back key failed", e);
                 }
+                return true;
             }
-            return true;
+            // v1.2.3 round-18 (bug fix): WebView creation failed (fallback
+            //   error UI is showing) — do NOT consume BACK; let the system
+            //   finish the activity so the user is not trapped.
+            return super.onKeyDown(keyCode, event);
         }
         return super.onKeyDown(keyCode, event);
     }

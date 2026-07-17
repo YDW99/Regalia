@@ -28,7 +28,10 @@
 
     <!-- Required permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- v1.2.3 round-18: removed ACCESS_NETWORK_STATE — zero usage anywhere in
+         the codebase (no ConnectivityManager/NetworkCallback/navigator.onLine;
+         WebView queries network state in its own process). Permission
+         minimization. -->
     <!-- Keep screen on during gameplay -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- v18.4.5 FIX: VIBRATE permission required for haptic feedback -->

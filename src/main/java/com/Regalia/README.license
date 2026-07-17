@@ -1,3 +1,35 @@
+v1.2.3 round-19 (2026.7.17) — log-injection fix (gitar-bot / SonarCloud java:S5443):
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — feature + fix round).
+  - JsBridgeGateway.java (AGPL v3): SECURITY FIX — the CR/LF rejection
+    guard in isUciCommandAllowed() logged command.trim(), but trim() only
+    strips leading/trailing whitespace, so an embedded '\n'/'\r' still
+    reached logcat and could forge log lines. CR/LF are now replaced with
+    visible escape text (\r / \n) before logging via literal
+    String.replace (no regex), keeping the blocked payload on a single
+    line. This was the only non-false-positive across the gitar-bot
+    report and the PR #51 code-smell summary; the other 7 PR #51
+    categories were re-verified as false positives (fixes landed in
+    earlier rounds: HapticManager extraction, ui.js split, Number.parseInt
+    standardization, sleepGracefully, nesting simplification,
+    _evalDeepBatchActive cleanup on engine restart, CMake 3.31.6+ pinning).
+  - All other files in this directory: No changes this round.
+  - License classification: unchanged.
+
+v1.2.3 round-18 (2026.7.17) — Chess960 PGN [FEN] bug fix + 7-agent line-by-line review:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - MainActivity.java (AGPL v3): BACK key is no longer consumed when the
+    WebView-creation-failure fallback error UI is showing — the system now
+    finishes the activity so the user is not trapped on the fallback page.
+  - StockfishNative.java (GPL v3): UCI handshake retry now also resets
+    optionsBuilder — previously the previous JSONArray was still live on a
+    retry, so every "option name" line was appended a second time
+    (duplicated options in the engine-config panel after engine restart).
+  - PgnCacheManager.java (GPL v3): save() now fsyncs (getFD().sync())
+    before close, consistent with setTags() — the PGN cache entry is
+    durable across an abrupt process death.
+  - Other Java files: no changes this round.
+  - License classification: all files retain their existing classification.
+
 v1.2.3 round-17 (2026.7.17) — SonarCloud high-priority cleanup + God Class refactor (HapticManager):
   - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
   - HapticManager.java (GPL v3): NEW FILE — extracted from StockfishNative.java

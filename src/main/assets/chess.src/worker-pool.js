@@ -118,7 +118,11 @@ function _parsePGNText(pgnText) {
   }
   // Extract headers
   var headers = {};
-  var headerRe = /\\[(\\w+)\\s+"((?:[^"\\\\]|\\\\.)*)"/g;
+  // v1.2.3 round-18 (bug fix): consume the closing bracket too. Without
+  //   the trailing bracket the replace below left a stray ']' token per
+  //   header, polluting the movetext token stream (7-tag roster = 7 junk
+  //   tokens). NOTE: no backticks here — inside the Worker template string.
+  var headerRe = /\\[(\\w+)\\s+"((?:[^"\\\\]|\\\\.)*)"\\]/g;
   var m;
   while ((m = headerRe.exec(text)) !== null) {
     headers[m[1]] = m[2].replace(/\\\\"/g, '"').replace(/\\\\\\\\/g, '\\\\');
@@ -436,7 +440,9 @@ function _syncParsePGNText(pgnText) {
     if (fenNoQuoteMatch) { startFEN = fenNoQuoteMatch[1].trim(); }
   }
   var headers = {};
-  var headerRe = /\[(\w+)\s+"((?:[^"\\]|\\.)*)"/g;
+  // v1.2.3 round-18 (bug fix): consume the closing bracket too (sync mirror
+  //   of the worker-side fix above — keep both copies semantically identical).
+  var headerRe = /\[(\w+)\s+"((?:[^"\\]|\\.)*)"\]/g;
   var m;
   while ((m = headerRe.exec(text)) !== null) {
     headers[m[1]] = m[2].replace(/\\"/g, '"').replace(/\\\\/g, '\\');

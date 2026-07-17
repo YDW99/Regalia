@@ -1,3 +1,23 @@
+v1.2.3 round-19 (2026.7.17) — 2 bilingual UX hints + log-injection fix:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — feature + fix round).
+  - AndroidManifest.xml (AGPL v3): No changes this round. The FGS subtype
+    property "chess_engine_analysis" remains intact; ACCESS_NETWORK_STATE
+    remains removed (round-18).
+  - Changes this round are in subdirectories: assets/chess.src/
+    (game-logic.js, ui.js, ai-bridge.js — see chess.src/README.license),
+    assets/chess.html (rebuilt), java/com/Regalia/ (JsBridgeGateway.java
+    log-injection fix — see java/com/Regalia/README.license).
+  - License classification: AndroidManifest.xml remains AGPL v3.
+
+v1.2.3 round-18 (2026.7.17) — Chess960 PGN [FEN] bug fix + 7-agent line-by-line review:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - AndroidManifest.xml (AGPL v3): removed the ACCESS_NETWORK_STATE
+    <uses-permission> — a whole-codebase audit confirmed zero usage (no
+    ConnectivityManager/NetworkCallback/navigator.onLine anywhere; the
+    WebView queries network state in its own process). Permission
+    minimization. FGS subtype property "chess_engine_analysis" is intact.
+  - License classification: AndroidManifest.xml remains AGPL v3.
+
 v1.2.3 round-13 (2026.7.16) — CMake re-enablement + first-principles code review:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
   - AndroidManifest.xml (AGPL v3): Two changes — (1) P1: added <queries>

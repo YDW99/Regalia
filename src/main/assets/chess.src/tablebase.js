@@ -414,7 +414,11 @@ function _parsePGN(pgnText){
       if(_ch==='('){_depth++;_i++;continue;}
       if(_ch===')'){_depth=Math.max(0,_depth-1);_i++;continue;}
       // Outside parens (depth 0): a non-whitespace token starting a move
-      if(_depth===0&&/[a-hKQRBNBO]/.test(_ch)){
+      // v1.2.3 round-18 (bug fix): include '0' so digit-style castling
+      //   (0-0 / 0-0-0) is counted as a move. Previously these tokens were
+      //   skipped, so _moveCount lagged by one and ALL subsequent annotations
+      //   ([%eval]/[%csl]/[%cal]/comments) attached to the wrong move.
+      if(_depth===0&&/[a-hKQRBNBO0]/.test(_ch)){
         // Check if this looks like a SAN move (not a move number, result, etc.)
         // Read the token
         let _j=_i;
@@ -1024,6 +1028,12 @@ function importPGN(pgnText){
             if(spid>=0)gameSPID=spid;
           }
         }
+      }else{
+        // v1.2.3 round-18 (bug fix): Chess960 PGN without a [FEN] tag —
+        //   clear any stale SP-ID from the previous game. Otherwise the old
+        //   gameSPID persisted while the position is the standard initial
+        //   one, mislabeling the game (and any SP-ID display) going forward.
+        gameSPID=null;
       }
     }
   }else{
