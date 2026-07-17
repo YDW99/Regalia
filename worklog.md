@@ -1,3 +1,73 @@
+# Regalia v1.2.3 — round-20 工作日志（2026-07-17）
+
+## 任务来源
+- 完整读取《PR #51 中影响可靠性的代码异味.pdf》，排查误报，修复非误报。
+- 彻底完善记录在案的 4 项已知遗留：易位权最近车启发式同侧双车歧义（A-1）、
+  FEN 导入未做 Chess960 检测（B）、DIRTY_* 增量渲染死代码 ~200 行（C）、
+  HapticManager PWLE 反射公开 SDK 失效（E-3）。
+- 批量分析提示改为仅在「分析全部」按钮上右对齐显示（仅批量进行中），中英双语。
+- 版本号 v1.2.3 不变；交付 release APK + tar（无引擎）+ 双语说明书。
+
+## 新 PDF 排查（4 类）
+| 报告项 | 结论 | 处理 |
+|---|---|---|
+| S8786 worker-pool.js:486 / chess.html:6510 正则 | 误报 | 更早轮次已修（\d+\.+ 无嵌套量词，注释在案） |
+| S8786 stats.html:1518/1558 PGN 标签剥离正则 | **非误报** | `/\[[A-Za-z]\w*\s+[^\]]+\]/g`（\s+ 与 [^\]]+ 空白重叠→多项式回溯）改为 `/\[\w+\s+\S[^\]]*\]/g`（相邻量词类互斥），同款 5 处全改（stats.html×4 + tablebase.js×1）；10 个代表性 PGN 语义等价验证通过，未闭合 '[' 病态输入线性 |
+| S7758 charCodeAt（ai-bridge/game-logic/tablebase/chess.html 多处） | 全部误报 | 所涉均为已验证 ASCII 棋谱记法（代数格/UCI 走法），codePointAt 无意义 |
+| S7773 parseFloat（stats.html:1602/1639） | 非误报（风格） | → Number.parseFloat |
+| S7781 replace（stats.html:3923） | 非误报（风格） | → replaceAll('</','<\\/') |
+
+## 已知遗留完善（4 项）
+1. **A-1 指定车列**：castlingRights 新增 *RookFile 四字段；parseShredderCastling
+   从 FEN 易位字段记录（含 KQkq 兼容映射）；initState=a/h；initChess960State=实际车列；
+   摆棋 🔁 标记记录标记车。新 findDesignatedCastlingRook（指定列在场验证优先，退化启发式）
+   用于 960 易位执行与合法性；toShredderCastling 输出指定列（X-FEN 精确往返）；
+   makeMv/makeMvInPlace 全部清权点（车移动/被吃/王移动/角落兜底）指定列感知并置空。
+   cloneS/undo 展开复制天然兼容。
+2. **B FEN 导入检测**：_applyImportedFEN 用 _needsShredderFEN 判定非标准布置 →
+   gameVariant='chess960' + 引擎模式 + state.chess960 + 完整初始布置时推导 SP-ID；
+   标准 FEN 导入重置残留 Chess960 模式（原模式跨局残留问题一并修复）。
+3. **C DIRTY 死代码移除**：全部 markDirty 调用点历来只走全量渲染分支（DIRTY_FULL /
+   MOVES|PANEL|EVAL 均触发 full-render），细粒度增量路径不可达。移除常量/markDirty/
+   _scheduleRender/_performDirtyRender/Integer_bitcount/_updateBoardIncremental/
+   _updateEvalDisplayIncremental（~200 行），调用点直接 render()（行为等价）。
+   共享原语 _updateSingleSq/_updateChangedSquares/_getSqElCache 保留（_updateBoardLightweight
+   活跃路径在用）。boardVersion 字段保留（唯一消费方已移除，留作状态计数）。
+4. **E-3 PWLE 缓存探测**：tryPwleVibrate 原每次震动完整反射（Class.forName+3×getMethod
+   +构造器），公开 SDK 失效机型每帧抛异常静默兜底。改为进程内一次探测三态缓存：
+   AVAILABLE 复用句柄；UNAVAILABLE 跳过反射直走波形兜底，仅探测时记一次 Log.d。
+
+## 功能调整
+- 移除 round-19 的 #review-batch-hint 独立提示行（_rvBatchHintHTML/_updateReviewBatchHint
+  及全部引用）；
+- 「分析全部」按钮改 flex 布局：左标签 + 右对齐提示（accent 色 .66rem，可省略），
+  仅 _reviewAnalyzeAllActive 时显示；_rvAnalyzeBtnInnerHTML 统一渲染，
+  _updateReviewAnalyzeBtn 改用 innerHTML；reviewAnalyzeAll 开始时原地刷新按钮。
+
+## 验证
+- 11 个 JS 模块 node --check 全过；build-chess.py 重建（22,428 行 / 1,356,181 字节）；
+  chess.html 与 stats.html 内嵌脚本 node --check 全过；Java 两文件括号配平。
+- 烟雾测试 12 场景全过：新增 K（指定车列：init/X-FEN/查找/往返/指定车移动清权+
+  非指定车移动**不**清权/960 初始）、L（FEN 导入 960 检测 + 标准局清洁）、
+  J 重写适配按钮右对齐新结构。
+- 正则语义等价：node 专项脚本 10 用例新旧正则输出完全一致。
+- APK：v1+v2+v3 全过；123/1.2.3/targetSdk 35；无 ACCESS_NETWORK_STATE；
+  FGS subtype "chess_engine_analysis"；引擎 SHA-256 三方一致；
+  chess.html 含新代码（17 处命中）；dex 含 startPwle/addPwleRamp 反射字面量。
+
+## 文档更新
+- 双语说明书 round-20 条目置顶；NOTICE/PRIVACY/README round-20 小节；
+  8× README.license（5 目录变更条目 + 3 目录 no-changes）；worklog 本条目置顶。
+
+## 最终交付记录（round-20）
+- 文档更新后同步构建副本并**增量重建 APK**（78,176,620 字节），重新验证：
+  v1+v2+v3 签名全过、版本 123/1.2.3/targetSdk 35、引擎哈希三方一致、
+  APK 内嵌 README.license 含 round-20 条目。
+- 交付物（/mnt/agents/output/）：
+  - Regalia-release.apk — SHA-256=ab713dde2e48342eb56125855436937f551deb6168eb54723484151b384e0417
+  - Regalia-v1.2.3-src.tar.gz — 118 条目，0 禁用条目
+  - Regalia-v1.2.3-manual-{zh,en}.html、SHA256SUMS.txt
+
 # Regalia v1.2.3 — round-19 工作日志（2026-07-17）
 
 ## 任务来源

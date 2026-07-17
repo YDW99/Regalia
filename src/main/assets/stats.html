@@ -695,7 +695,7 @@ function parsePGN(pgnText){
     // no `$` end-anchor) so it works for single-line PGN where tags and
     // movetext coexist on one line. The previous `/^\[.*\]$/gm` required the
     // ENTIRE line to be `[...]`, which never matched single-line PGN.
-    let mtCheck=text.replace(/\[[A-Za-z]\w*\s+[^\]]+\]/g,'').trim();
+    let mtCheck=text.replace(/\[\w+\s+\S[^\]]*\]/g,'').trim(); // v1.2.3 round-20 (S8786): 相邻量词类互斥，消除超线性回溯
     const firstNumMatch=mtCheck.match(/^(\d+\.+)/);
     if(firstNumMatch&&firstNumMatch[1].includes('...')){
       isBlackToMoveStart=true;
@@ -710,7 +710,7 @@ function parsePGN(pgnText){
   // letter). This avoids stripping `[%csl ...]` / `[%cal ...]` / `[%eval ...]`
   // / `[%emt ...]` from inside brace comments (since `%` is not in [A-Za-z]),
   // and works correctly for single-line PGN files (no `^` line-anchor).
-  let moveText=text.replace(/\[[A-Za-z]\w*\s+[^\]]+\]/g,'');
+  let moveText=text.replace(/\[\w+\s+\S[^\]]*\]/g,''); // v1.2.3 round-20 (S8786): 相邻量词类互斥，消除超线性回溯
   // Remove comments (brace-style).
   // v1.0.5 Round-6 Rev61 (2026.6.27) FIX: was `while(moveText.includes('{'))...`
   // which infinite-loops on a malformed PGN with an unclosed `{` (no matching `}`).
@@ -1515,7 +1515,7 @@ function extractMoveTimes(pgnText){
     //   (same as parsePGN at lines 696/711). The old `/^\[.*\]$/gm` only
     //   stripped headers occupying an ENTIRE line — for single-line PGN the
     //   headers survived and broke this Black-to-move detection.
-    let mtCheck=text.replace(/\[[A-Za-z]\w*\s+[^\]]+\]/g,'').trim();
+    let mtCheck=text.replace(/\[\w+\s+\S[^\]]*\]/g,'').trim(); // v1.2.3 round-20 (S8786): 相邻量词类互斥，消除超线性回溯
     const firstNumMatch=mtCheck.match(/^(\d+\.+)/);
     if(firstNumMatch&&firstNumMatch[1].includes('...'))isBlackToMoveStart=true;
   }
@@ -1555,7 +1555,7 @@ function extractMoveTimes(pgnText){
   //   survived and its board coordinates (e.g. "b1") were mis-tokenized as
   //   pawn moves — shifting every subsequent time entry by one slot and
   //   swapping the White/Black attribution.
-  let moveText=text.replace(/\[[A-Za-z]\w*\s+[^\]]+\]/g,'');
+  let moveText=text.replace(/\[\w+\s+\S[^\]]*\]/g,''); // v1.2.3 round-20 (S8786): 相邻量词类互斥，消除超线性回溯
   const usedTimes=[];
   const clkTimes=[];
   let i=0;
@@ -1599,7 +1599,7 @@ function extractMoveTimes(pgnText){
       // so the parity is inverted.
       const isWhite=isBlackToMoveStart?(targetIdx%2===1):(targetIdx%2===0);
       if(clkMatch){
-        const h=Number.parseInt(clkMatch[1]),m=Number.parseInt(clkMatch[2]),s=parseFloat(clkMatch[3]);
+        const h=Number.parseInt(clkMatch[1]),m=Number.parseInt(clkMatch[2]),s=Number.parseFloat(clkMatch[3]);
         const totalSec=h*3600+m*60+s;
         if(!Number.isNaN(totalSec)){
           if(clkTimes[targetIdx]==null)clkTimes[targetIdx]=totalSec;
@@ -1636,7 +1636,7 @@ function extractMoveTimes(pgnText){
       }
       // v1.0.4 ROUND-5 REV16: [%emt] — elapsed move time (untimed games)
       if(emtMatch){
-        const eh=Number.parseInt(emtMatch[1]),em=Number.parseInt(emtMatch[2]),es=parseFloat(emtMatch[3]);
+        const eh=Number.parseInt(emtMatch[1]),em=Number.parseInt(emtMatch[2]),es=Number.parseFloat(emtMatch[3]);
         const totalSec=eh*3600+em*60+es;
         if(!Number.isNaN(totalSec))usedTimes[targetIdx]=totalSec;
       }
@@ -3920,7 +3920,7 @@ function _exportFullHTML(){
   //   terminate the script block of the exported HTML, corrupting the file.
   //   ("<\/" is a valid, equivalent JS string escape. This comment itself
   //   must avoid the literal sequence — inline script constraint.)
-  scriptJS='var _payload={pgn:'+JSON.stringify(pgnText).replace(/<\//g,'<\\/')+',lang:'+JSON.stringify(lang)+'};\n'+
+  scriptJS='var _payload={pgn:'+JSON.stringify(pgnText).replaceAll('</','<\\/')+',lang:'+JSON.stringify(lang)+'};\n'+
     'var _lang='+JSON.stringify(lang)+';\n'+
     scriptJS;
 

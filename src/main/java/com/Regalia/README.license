@@ -1,3 +1,17 @@
+v1.2.3 round-20 (2026.7.17) — HapticManager PWLE caching (known-issue E-3):
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — hardening round).
+  - HapticManager.java (AGPL v3): KNOWN-ISSUE E-3 RESOLVED — PWLE reflection
+    is now probed once per process and cached (pwleState tri-state +
+    cached Method/Constructor handles). Previously every haptic event ran
+    the full Class.forName + 3× getMethod + constructor sequence; on public
+    SDKs lacking the PWLE surface (the common case) it threw on EVERY call —
+    silent per-call overhead plus a logcat line per haptic. Now: AVAILABLE
+    reuses handles; UNAVAILABLE skips reflection and falls back to waveform
+    directly, with one diagnostic Log.d at probe time instead of per call.
+    Behavior on supported devices unchanged.
+  - All other files in this directory: No changes this round.
+  - License classification: unchanged.
+
 v1.2.3 round-19 (2026.7.17) — log-injection fix (gitar-bot / SonarCloud java:S5443):
   - Version: versionCode=123, versionName="1.2.3" (unchanged — feature + fix round).
   - JsBridgeGateway.java (AGPL v3): SECURITY FIX — the CR/LF rejection

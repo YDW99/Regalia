@@ -1,3 +1,13 @@
+v1.2.3 round-20 (2026.7.17) — 4 known leftovers + 3rd review report + hint relocation:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — hardening round).
+  - chess.html (AGPL v3): Rebuilt from chess.src/ via build-chess.py after the
+    round-20 changes. 22,428 lines, 1,356,181 bytes.
+  - stats.html (AGPL v3): S8786 — PGN tag-strip regex rewritten at 4 sites
+    (/\[\w+\s+\S[^\]]*\]/g, mutually exclusive adjacent quantifier classes,
+    eliminating polynomial backtracking on unclosed '['); S7773 — parseFloat
+    →Number.parseFloat (2 sites); S7781 — replace→replaceAll (1 site).
+  - chess.src/: see chess.src/README.license for the per-module details.
+
 v1.2.3 round-19 (2026.7.17) — 2 bilingual UX hints + log-injection fix:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — feature + fix round).
   - chess.html (AGPL v3): Rebuilt from chess.src/ via build-chess.py after

@@ -1,6 +1,12 @@
 assets/ — README screenshots
 ============================
 
+v1.2.3 round-20 (2026.7.17): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — hardening round).
+  - screenshot.jpg / screenshot.png: unchanged. All round-20 changes are in
+    src/main (JS modules + rebuilt chess.html + stats.html + HapticManager.java),
+    Manual/ (both manuals) and the top-level docs.
+
 v1.2.3 round-19 (2026.7.17): no changes in this directory.
   - Version: versionCode=123, versionName="1.2.3" (unchanged — feature + fix round).
   - screenshot.jpg / screenshot.png: unchanged. All round-19 changes are in

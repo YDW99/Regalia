@@ -1,3 +1,10 @@
+v1.2.3 round-20 (2026.7.17) — 4 known leftovers + 3rd review report + hint relocation:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — hardening round).
+  - CMakeLists.txt (AGPL v3): No changes this round.
+  - engine_jni.cpp (GPL v3): No changes this round.
+  - License classification: CMakeLists.txt remains AGPL v3 (original);
+    engine_jni.cpp remains GPL v3 (DroidFish-derived chmod/renice logic).
+
 v1.2.3 round-19 (2026.7.17) — 2 bilingual UX hints + log-injection fix:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — feature + fix round).
   - CMakeLists.txt (AGPL v3): No changes this round.

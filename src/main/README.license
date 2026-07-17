@@ -1,3 +1,13 @@
+v1.2.3 round-20 (2026.7.17) — 4 known leftovers + 3rd review report + hint relocation:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — hardening round).
+  - AndroidManifest.xml (AGPL v3): No changes this round. FGS subtype property
+    "chess_engine_analysis" remains intact; ACCESS_NETWORK_STATE remains removed.
+  - Changes this round are in subdirectories: assets/chess.src/ (chess960.js,
+    game-logic.js, tablebase.js, ui.js, ui-interactions.js), assets/chess.html
+    (rebuilt), assets/stats.html (S8786/S7773/S7781), java/com/Regalia/
+    (HapticManager.java PWLE caching).
+  - License classification: AndroidManifest.xml remains AGPL v3.
+
 v1.2.3 round-19 (2026.7.17) — 2 bilingual UX hints + log-injection fix:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — feature + fix round).
   - AndroidManifest.xml (AGPL v3): No changes this round. The FGS subtype

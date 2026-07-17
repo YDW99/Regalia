@@ -54,6 +54,12 @@ This data:
 - The eval cache (`eval_cache.json`) contains per-move Stockfish evaluation scores (centipawn values, mate distances, search depths, WDL probabilities) keyed by review step index. It contains no personal or position-identifying information beyond the chess evaluation data itself. (v1.0.7+: capped at 2000 entries via LRU eviction — the currently-viewed step is never evicted; eviction order is preserved across app restarts.)
 - The tag files contain user-defined tag strings (e.g., "opening", "tactics") for organizing PGN cache entries. They contain no personal or device-identifying information.
 
+### v1.2.3 round-20: 4 known leftovers resolved + hint relocation
+
+The v1.2.3 round-20 change (2026.7.17) resolves the four documented known leftovers (castling designated-rook-file disambiguation, Chess960 detection on FEN import, removal of the unreachable DIRTY_* incremental-render subsystem, cached PWLE haptics probe), applies the actionable items of a third external review report (PGN regex hardening, Number.parseFloat, replaceAll), and relocates the batch-analysis hint to a right-aligned span inside the "Analyze All" button. **No new permissions, no new network access, no new data collection, no changes to how data is stored or transmitted.** All changes are pure client-side logic/refactors; the haptics change only reduces redundant reflection calls against local OS APIs.
+
+Version: `versionCode=123`, `versionName="1.2.3"` (unchanged — same version, hardening round).
+
 ### v1.2.3 round-19: 2 bilingual UX hints + log-injection fix
 
 The v1.2.3 round-19 change (2026.7.17) adds two user-requested UI hints (a one-time startup Toast "long-press the board toggles board stabilization", and a "batch analysis in progress — long-press a move to prioritize it" line under the review eval bar while analyze-all runs) and fixes the single non-false-positive finding of two external review reports (gitar-bot / SonarCloud java:S5443: CR/LF in a rejected UCI command is now escaped before being written to logcat). **No new permissions, no new network access, no new data collection, no changes to how data is stored or transmitted.** The hints are pure client-side UI text rendered from existing state; the log-injection fix only changes how a blocked UCI command is displayed in local logcat.

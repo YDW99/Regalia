@@ -411,35 +411,63 @@ public class HapticManager {
     //   false so the case statement's API 26+ waveform branch can run (which
     //   has the correct multi-stage pattern). The old internal fallback is
     //   removed — no more silent single-buzz degradation.
+    // v1.2.3 round-20 (known-issue E-3): PWLE reflection is now probed ONCE
+    //   per process and cached. Previously every haptic event ran the full
+    //   Class.forName + 3× getMethod + constructor sequence; on devices whose
+    //   public SDK lacks the PWLE surface (the common case today — the
+    //   Composition/PWLE methods are hidden on most API-35 ROMs) the
+    //   reflection threw on EVERY call, producing a silent per-call overhead
+    //   and a logcat line per haptic. Now: UNKNOWN → probe once; AVAILABLE →
+    //   reuse the cached Method/Constructor handles; UNAVAILABLE → skip
+    //   reflection entirely and go straight to the waveform fallback (one
+    //   diagnostic Log.d at probe time, not per call).
+    private static final int PWLE_UNKNOWN = 0;
+    private static final int PWLE_AVAILABLE = 1;
+    private static final int PWLE_UNAVAILABLE = 2;
+    private static volatile int pwleState = PWLE_UNKNOWN;
+    private static java.lang.reflect.Constructor<?> pwleCtor = null;
+    private static java.lang.reflect.Method pwleStartMethod = null;
+    private static java.lang.reflect.Method pwleAddPwleRampMethod = null;
+    private static java.lang.reflect.Method pwleComposeMethod = null;
+
     private boolean tryPwleVibrate(android.os.Vibrator vibrator, float[] amplitudes, long[] durations) {
-        if (Build.VERSION.SDK_INT >= 35) {
-            try {
+        if (Build.VERSION.SDK_INT < 35) return false;
+        if (pwleState == PWLE_UNAVAILABLE) return false;
+        try {
+            if (pwleState == PWLE_UNKNOWN) {
                 Class<?> builderClass = Class.forName("android.os.VibrationEffect$Composition");
-                java.lang.reflect.Method startPwleMethod = builderClass.getMethod("startPwle");
-                java.lang.reflect.Method addPwleRampMethod = builderClass.getMethod("addPwleRamp", long.class, float.class);
-                java.lang.reflect.Method composeMethod = builderClass.getMethod("compose");
-
-                Object composition = builderClass.getDeclaredConstructor().newInstance();
-                startPwleMethod.invoke(composition);
-
-                for (int i = 0; i < amplitudes.length; i++) {
-                    addPwleRampMethod.invoke(composition, durations[i], amplitudes[i]);
-                }
-
-                Object effect = composeMethod.invoke(composition);
-                vibrator.vibrate((android.os.VibrationEffect) effect);
-                return true;
-            } catch (Throwable e) {
-                // INTENTIONAL Throwable (S1181 justified): reflection against
-                //   android.os.VibrationEffect$Composition can fail with
-                //   NoSuchMethodError / NoClassDefFoundError on OEM ROMs whose
-                //   API-35 surface differs from AOSP — those are Errors, not
-                //   Exceptions, and must be tolerated by falling back.
-                Log.d(TAG, "PWLE not available, falling back to waveform");
-                return false;
+                pwleStartMethod = builderClass.getMethod("startPwle");
+                pwleAddPwleRampMethod = builderClass.getMethod("addPwleRamp", long.class, float.class);
+                pwleComposeMethod = builderClass.getMethod("compose");
+                pwleCtor = builderClass.getDeclaredConstructor();
+                pwleState = PWLE_AVAILABLE;
+                Log.d(TAG, "PWLE haptics available (probed once, cached)");
             }
+
+            Object composition = pwleCtor.newInstance();
+            pwleStartMethod.invoke(composition);
+
+            for (int i = 0; i < amplitudes.length; i++) {
+                pwleAddPwleRampMethod.invoke(composition, durations[i], amplitudes[i]);
+            }
+
+            Object effect = pwleComposeMethod.invoke(composition);
+            vibrator.vibrate((android.os.VibrationEffect) effect);
+            return true;
+        } catch (Throwable e) {
+            // INTENTIONAL Throwable (S1181 justified): reflection against
+            //   android.os.VibrationEffect$Composition can fail with
+            //   NoSuchMethodError / NoClassDefFoundError on OEM ROMs whose
+            //   API-35 surface differs from AOSP — those are Errors, not
+            //   Exceptions, and must be tolerated by falling back.
+            pwleState = PWLE_UNAVAILABLE;
+            pwleCtor = null;
+            pwleStartMethod = null;
+            pwleAddPwleRampMethod = null;
+            pwleComposeMethod = null;
+            Log.d(TAG, "PWLE not available (cached; no further reflection attempts) — falling back to waveform: " + e);
+            return false;
         }
-        return false;
     }
 
     private void fallbackVibrate(android.os.Vibrator vibrator, int apiLevel, long durationMs) {

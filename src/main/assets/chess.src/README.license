@@ -1,3 +1,31 @@
+v1.2.3 round-20 (2026.7.17) — 4 known leftovers + hint relocation:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — hardening round).
+  - chess960.js (GPL v3): A-1 RESOLVED — castlingRights gains designated rook
+    files; parseShredderCastling records them; initChess960State sets them;
+    NEW findDesignatedCastlingRook (exported) used by chess960CastlingRookMove
+    and isChess960CastlingLegal; toShredderCastling emits designated files
+    (exact X-FEN round-trip for ambiguous same-side-two-rooks positions).
+  - game-logic.js (GPL v3): A-1 — initState designates a/h files; all
+    right-clearing sites (makeMv/makeMvInPlace rook move/capture, king move,
+    corner fallbacks) designated-aware + null-on-clear; setup-mode castle
+    markers record the marked rook's file.
+  - tablebase.js (GPL v3): B RESOLVED — _applyImportedFEN auto-detects
+    Chess960 via _needsShredderFEN (variant/mode/state.chess960/SP-ID), and
+    resets stale Chess960 mode on standard FEN import. S8786 — tag-strip
+    regex rewritten (same as stats.html).
+  - ui.js (GPL v3): C RESOLVED — DIRTY_* incremental-render subsystem removed
+    as dead code (~200 lines; call sites always routed to full render);
+    markDirty call sites now call render() directly; shared square primitives
+    kept for _updateBoardLightweight. HINT RELOCATION — round-19
+    #review-batch-hint line removed; hint now right-aligned inside the
+    Analyze All button (_rvAnalyzeBtnInnerHTML) only while batch runs;
+    _updateReviewAnalyzeBtn uses innerHTML; markDirty removed from exports.
+  - ui-interactions.js (GPL v3): markDirty(DIRTY_FULL) → render().
+  - All other modules (index.html.tpl, pgn-standard.js, worker-pool.js,
+    state-store.js, ai-bridge.js, eco-data.js, ui-gameflow.js): No changes
+    this round.
+  - License classification: unchanged.
+
 v1.2.3 round-19 (2026.7.17) — 2 bilingual UX hints (2 new i18n keys):
   - Version: versionCode=123, versionName="1.2.3" (unchanged — feature + fix round).
   - game-logic.js (GPL v3): two new i18n keys — 'board_debounce_hint'

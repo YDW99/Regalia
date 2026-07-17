@@ -20,6 +20,42 @@ The original NOTICE files from third-party projects are preserved alongside this
 - AUTHORS-stockfish: Stockfish project authors list
 
 ===== LICENSE CLASSIFICATION BY FILE ==========================================
+v1.2.3 round-20 (2026.7.17) — 4 known leftovers resolved + 3rd review report + hint relocation:
+  - `chess960.js` (GPL v3): KNOWN-ISSUE A-1 RESOLVED — castling rights now
+    carry designated rook files (parseShredderCastling records them from the
+    FEN castling field; initChess960State from the actual start; new
+    findDesignatedCastlingRook prefers them over the closest-rook heuristic
+    in movegen; toShredderCastling emits them for exact X-FEN round-trip).
+  - `game-logic.js` (GPL v3): A-1 — initState designates a/h files; all
+    right-clearing sites (makeMv/makeMvInPlace, rook move/capture, king
+    move, corner fallbacks) use the designated file and null it on clear;
+    setup-mode castle markers record the marked rook's file.
+  - `tablebase.js` (GPL v3): KNOWN-ISSUE B RESOLVED — _applyImportedFEN now
+    auto-detects Chess960 (via _needsShredderFEN), sets variant/mode/SP-ID,
+    and resets stale Chess960 mode on standard FEN import. S8786 — tag-strip
+    regex rewritten with mutually exclusive adjacent quantifier classes.
+  - `stats.html` (AGPL v3): S8786 — same tag-strip regex rewrite at 4 sites;
+    S7773 — parseFloat→Number.parseFloat (2); S7781 — replace→replaceAll (1).
+  - `ui.js` (GPL v3): KNOWN-ISSUE C RESOLVED — DIRTY_* incremental-render
+    subsystem removed as dead code (~200 lines: constants, markDirty,
+    _scheduleRender, _performDirtyRender, Integer_bitcount,
+    _updateBoardIncremental, _updateEvalDisplayIncremental); every call site
+    always routed to full render, so call sites now call render() directly
+    (identical behavior). HINT RELOCATION (user request): round-19's
+    #review-batch-hint line removed; the "batch in progress — long-press a
+    move to prioritize" text now shows RIGHT-ALIGNED inside the Analyze All
+    button (_rvAnalyzeBtnInnerHTML) only while _reviewAnalyzeAllActive;
+    _updateReviewAnalyzeBtn uses innerHTML accordingly.
+  - `ui-interactions.js` (GPL v3): markDirty(DIRTY_FULL) call site → render().
+  - `HapticManager.java` (AGPL v3): KNOWN-ISSUE E-3 RESOLVED — PWLE
+    reflection probed once per process and cached (AVAILABLE reuses cached
+    Method/Constructor handles; UNAVAILABLE skips reflection and falls back
+    to waveform, one diagnostic Log.d at probe time instead of per call).
+  - New PDF false-positive audit: S7758 charCodeAt sites all parse validated
+    ASCII chess notation (codePointAt meaningless) — false positives; the
+    S8786 worker-pool.js/chess.html sites were already fixed pre-round-19.
+  - Version unchanged: versionCode=123, versionName="1.2.3".
+  - AI-GEN: AI assisted (reviewed for AGPL v3 / GPL v3 compliance).
 v1.2.3 round-19 (2026.7.17) — 2 bilingual UX hints + log-injection fix (external review reports):
   - `JsBridgeGateway.java` (AGPL v3): SECURITY FIX (gitar-bot / SonarCloud
     java:S5443 log injection — the only non-false-positive across the

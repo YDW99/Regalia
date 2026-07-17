@@ -2734,7 +2734,9 @@ function _reattachActiveAnimations(){
 function initBoard(){const b=Array.from({length:8},()=>Array(8).fill(null));const backRank=['rook','knight','bishop','queen','king','bishop','knight','rook'];for(let c=0;c<8;c++){b[0][c]={type:backRank[c],color:'black'};b[1][c]={type:'pawn',color:'black'};b[6][c]={type:'pawn',color:'white'};b[7][c]={type:backRank[c],color:'white'}}return b}
 // Returns all squares this piece attacks
 function attacked(board,pos){const b=board,p=b[pos.row][pos.col];if(!p)return[];const r=pos.row,c=pos.col,co=p.color,mv=[];if(p.type==='pawn'){const d=co==='white'?-1:1;for(const dc of[-1,1])if(inB(r+d,c+dc))mv.push({row:r+d,col:c+dc})}else if(p.type==='knight'){for(const[dr,dc]of KNIGHT_OFFSETS)if(inB(r+dr,c+dc))mv.push({row:r+dr,col:c+dc})}else if(p.type==='king'){for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++)if((dr||dc)&&inB(r+dr,c+dc))mv.push({row:r+dr,col:c+dc})}else{const dirs=p.type==='rook'?DIR_ROOK:p.type==='bishop'?DIR_BISHOP:DIR_QUEEN;for(const[dr,dc]of dirs){let nr=r+dr,nc=c+dc;while(inB(nr,nc)){mv.push({row:nr,col:nc});if(b[nr][nc])break;nr+=dr;nc+=dc}}}return mv}
-function initState(){const s={board:initBoard(),currentTurn:'white',castlingRights:{whiteKingside:true,whiteQueenside:true,blackKingside:true,blackQueenside:true},enPassantTarget:null,halfMoveClock:0,fullMoveNumber:1,moveHistory:[],posCount:new Map(),wk:{row:7,col:4},bk:{row:0,col:4},hash:0,boardVersion:1};syncHash(s);s.posCount.set(s.hash,1);return s}
+function initState(){const s={board:initBoard(),currentTurn:'white',castlingRights:{whiteKingside:true,whiteQueenside:true,blackKingside:true,blackQueenside:true,
+// v1.2.3 round-20 (A-1): standard chess designates the corner rooks (h/a files)
+whiteKingsideRookFile:7,whiteQueensideRookFile:0,blackKingsideRookFile:7,blackQueensideRookFile:0},enPassantTarget:null,halfMoveClock:0,fullMoveNumber:1,moveHistory:[],posCount:new Map(),wk:{row:7,col:4},bk:{row:0,col:4},hash:0,boardVersion:1};syncHash(s);s.posCount.set(s.hash,1);return s}
 // v1.0.7: validateSetupPosition now also validates the manual 🔁 castle markers
 // and the ⚡ en-passant marker carried on s.setupCastleMarks (a Set of "r*8+c"
 // keys) and s.setupEpMark ({row,col}|null). Both validations follow the
@@ -2817,11 +2819,12 @@ function _validateSetupCastleMarks(s,errs){
   if(!errs)return;
   if(!s.setupCastleMarks||s.setupCastleMarks.size===0){
     // No markers → no castling rights for either color.
-    s.castlingRights={whiteKingside:false,whiteQueenside:false,blackKingside:false,blackQueenside:false};
+    // v1.2.3 round-20 (A-1): also reset the designated rook files.
+    s.castlingRights={whiteKingside:false,whiteQueenside:false,blackKingside:false,blackQueenside:false,whiteKingsideRookFile:null,whiteQueensideRookFile:null,blackKingsideRookFile:null,blackQueensideRookFile:null};
     return;
   }
   // Reset all rights — only marker-validated rights will be set true.
-  s.castlingRights={whiteKingside:false,whiteQueenside:false,blackKingside:false,blackQueenside:false};
+  s.castlingRights={whiteKingside:false,whiteQueenside:false,blackKingside:false,blackQueenside:false,whiteKingsideRookFile:null,whiteQueensideRookFile:null,blackKingsideRookFile:null,blackQueensideRookFile:null};
   // Group markers by color of the rook on that square.
   const byColor={white:[],black:[]};
   for(const key of s.setupCastleMarks){
@@ -2861,8 +2864,11 @@ function _validateSetupCastleMarks(s,errs){
     if(ksr.length>1)errs.push(T('setup_castle_err_dup_side')+' ('+(color==='white'?'O-O':'o-o')+')');
     if(qsr.length>1)errs.push(T('setup_castle_err_dup_side')+' ('+(color==='white'?'O-O-O':'o-o-o')+')');
     // Mark valid rights (no error if exactly one rook on the side)
-    if(ksr.length===1)s.castlingRights[color+'Kingside']=true;
-    if(qsr.length===1)s.castlingRights[color+'Queenside']=true;
+    // v1.2.3 round-20 (A-1): the explicitly 🔁-marked rook IS the designated
+    //   castling rook — record its file so later ambiguity resolution
+    //   (findDesignatedCastlingRook) needs no heuristic.
+    if(ksr.length===1){s.castlingRights[color+'Kingside']=true;s.castlingRights[color+'KingsideRookFile']=ksr[0].c;}
+    if(qsr.length===1){s.castlingRights[color+'Queenside']=true;s.castlingRights[color+'QueensideRookFile']=qsr[0].c;}
   }
 }
 
@@ -3364,7 +3370,7 @@ if(_cs&&_savedRook&&_rookFrom>=0&&_rookTo>=0){
   }
 }
 if(promotion)ns.board[to.row][to.col]={type:promotion,color:piece.color};
-if(piece.type==='king'){if(piece.color==='white'){ns.wk={row:to.row,col:to.col};ns.castlingRights.whiteKingside=false;ns.castlingRights.whiteQueenside=false}else{ns.bk={row:to.row,col:to.col};ns.castlingRights.blackKingside=false;ns.castlingRights.blackQueenside=false}}
+if(piece.type==='king'){if(piece.color==='white'){ns.wk={row:to.row,col:to.col};ns.castlingRights.whiteKingside=false;ns.castlingRights.whiteQueenside=false;ns.castlingRights.whiteKingsideRookFile=null;ns.castlingRights.whiteQueensideRookFile=null}else{ns.bk={row:to.row,col:to.col};ns.castlingRights.blackKingside=false;ns.castlingRights.blackQueenside=false;ns.castlingRights.blackKingsideRookFile=null;ns.castlingRights.blackQueensideRookFile=null}}
 if(piece.type==='rook'){
 // v1.0.7 PHASE 3: Always use Chess960 rook-position detection (findCastlingRooks)
 // so that castling rights are correctly cleared when a rook that holds castle
@@ -3373,22 +3379,30 @@ if(piece.type==='rook'){
 if(typeof findCastlingRooks==='function'){
   const rooks=findCastlingRooks(s.board,piece.color);
   if(rooks){
-    if(piece.color==='white'){if(from.col===rooks.kingside)ns.castlingRights.whiteKingside=false;if(from.col===rooks.queenside)ns.castlingRights.whiteQueenside=false;}
-    else{if(from.col===rooks.kingside)ns.castlingRights.blackKingside=false;if(from.col===rooks.queenside)ns.castlingRights.blackQueenside=false;}
+    // v1.2.3 round-20 (A-1): the rook whose move clears a right is the
+    //   FEN/game-DESIGNATED one when recorded (same-side-two-rooks
+    //   disambiguation); the closest-rook heuristic is only the fallback.
+    const _mvKs=(typeof findDesignatedCastlingRook==='function')?findDesignatedCastlingRook(s,piece.color,'kingside'):rooks.kingside;
+    const _mvQs=(typeof findDesignatedCastlingRook==='function')?findDesignatedCastlingRook(s,piece.color,'queenside'):rooks.queenside;
+    if(piece.color==='white'){if(from.col===_mvKs){ns.castlingRights.whiteKingside=false;ns.castlingRights.whiteKingsideRookFile=null;}if(from.col===_mvQs){ns.castlingRights.whiteQueenside=false;ns.castlingRights.whiteQueensideRookFile=null;}}
+    else{if(from.col===_mvKs){ns.castlingRights.blackKingside=false;ns.castlingRights.blackKingsideRookFile=null;}if(from.col===_mvQs){ns.castlingRights.blackQueenside=false;ns.castlingRights.blackQueensideRookFile=null;}}
   }
 }else{
-  if(from.row===7&&from.col===0)ns.castlingRights.whiteQueenside=false;if(from.row===7&&from.col===7)ns.castlingRights.whiteKingside=false;if(from.row===0&&from.col===0)ns.castlingRights.blackQueenside=false;if(from.row===0&&from.col===7)ns.castlingRights.blackKingside=false;
+  if(from.row===7&&from.col===0){ns.castlingRights.whiteQueenside=false;ns.castlingRights.whiteQueensideRookFile=null;}if(from.row===7&&from.col===7){ns.castlingRights.whiteKingside=false;ns.castlingRights.whiteKingsideRookFile=null;}if(from.row===0&&from.col===0){ns.castlingRights.blackQueenside=false;ns.castlingRights.blackQueensideRookFile=null;}if(from.row===0&&from.col===7){ns.castlingRights.blackKingside=false;ns.castlingRights.blackKingsideRookFile=null;}
 }
 }
 if(capPiece&&capPiece.type==='rook'){
 if(typeof findCastlingRooks==='function'){
   const rooks=findCastlingRooks(s.board,capPiece.color);
   if(rooks){
-    if(capPiece.color==='white'){if(to.col===rooks.kingside)ns.castlingRights.whiteKingside=false;if(to.col===rooks.queenside)ns.castlingRights.whiteQueenside=false;}
-    else{if(to.col===rooks.kingside)ns.castlingRights.blackKingside=false;if(to.col===rooks.queenside)ns.castlingRights.blackQueenside=false;}
+    // v1.2.3 round-20 (A-1): designated-file precedence (see rook-move above).
+    const _cpKs=(typeof findDesignatedCastlingRook==='function')?findDesignatedCastlingRook(s,capPiece.color,'kingside'):rooks.kingside;
+    const _cpQs=(typeof findDesignatedCastlingRook==='function')?findDesignatedCastlingRook(s,capPiece.color,'queenside'):rooks.queenside;
+    if(capPiece.color==='white'){if(to.col===_cpKs){ns.castlingRights.whiteKingside=false;ns.castlingRights.whiteKingsideRookFile=null;}if(to.col===_cpQs){ns.castlingRights.whiteQueenside=false;ns.castlingRights.whiteQueensideRookFile=null;}}
+    else{if(to.col===_cpKs){ns.castlingRights.blackKingside=false;ns.castlingRights.blackKingsideRookFile=null;}if(to.col===_cpQs){ns.castlingRights.blackQueenside=false;ns.castlingRights.blackQueensideRookFile=null;}}
   }
 }else{
-  if(capPiece.color==='white'){if(to.row===7&&to.col===0)ns.castlingRights.whiteQueenside=false;if(to.row===7&&to.col===7)ns.castlingRights.whiteKingside=false}else{if(to.row===0&&to.col===0)ns.castlingRights.blackQueenside=false;if(to.row===0&&to.col===7)ns.castlingRights.blackKingside=false}
+  if(capPiece.color==='white'){if(to.row===7&&to.col===0){ns.castlingRights.whiteQueenside=false;ns.castlingRights.whiteQueensideRookFile=null;}if(to.row===7&&to.col===7){ns.castlingRights.whiteKingside=false;ns.castlingRights.whiteKingsideRookFile=null;}}else{if(to.row===0&&to.col===0){ns.castlingRights.blackQueenside=false;ns.castlingRights.blackQueensideRookFile=null;}if(to.row===0&&to.col===7){ns.castlingRights.blackKingside=false;ns.castlingRights.blackKingsideRookFile=null;}}
 }
 }
 if(piece.type==='pawn'&&Math.abs(to.row-from.row)===2){const epRow=(from.row+to.row)/2;const opp=OPP_COLOR[piece.color];const pd=opp==='white'?1:-1;let _epH=false;for(const dc of[-1,1]){const cr=epRow+pd,cc=from.col+dc;if(inB(cr,cc)&&ns.board[cr][cc]&&ns.board[cr][cc].type==='pawn'&&ns.board[cr][cc].color===opp){_epH=true;break;}}ns.enPassantTarget=_epH?{row:epRow,col:from.col}:null;}else{ns.enPassantTarget=null;}
@@ -3492,15 +3506,21 @@ let _capturedRookSide=null;
 if(!_cs && piece.type==='rook' && typeof findCastlingRooks==='function'){
   const _r=findCastlingRooks(s.board,piece.color);
   if(_r){
-    if(_r.kingside!==null&&_r.kingside===from.col)_movingRookSide='kingside';
-    else if(_r.queenside!==null&&_r.queenside===from.col)_movingRookSide='queenside';
+    // v1.2.3 round-20 (A-1): designated-file precedence over closest-rook.
+    const _mvKs2=(typeof findDesignatedCastlingRook==='function')?findDesignatedCastlingRook(s,piece.color,'kingside'):_r.kingside;
+    const _mvQs2=(typeof findDesignatedCastlingRook==='function')?findDesignatedCastlingRook(s,piece.color,'queenside'):_r.queenside;
+    if(_mvKs2!==null&&_mvKs2===from.col)_movingRookSide='kingside';
+    else if(_mvQs2!==null&&_mvQs2===from.col)_movingRookSide='queenside';
   }
 }
 if(!_cs && capPiece && capPiece.type==='rook' && typeof findCastlingRooks==='function'){
   const _r=findCastlingRooks(s.board,capPiece.color);
   if(_r){
-    if(_r.kingside!==null&&_r.kingside===to.col)_capturedRookSide='kingside';
-    else if(_r.queenside!==null&&_r.queenside===to.col)_capturedRookSide='queenside';
+    // v1.2.3 round-20 (A-1): designated-file precedence over closest-rook.
+    const _cpKs2=(typeof findDesignatedCastlingRook==='function')?findDesignatedCastlingRook(s,capPiece.color,'kingside'):_r.kingside;
+    const _cpQs2=(typeof findDesignatedCastlingRook==='function')?findDesignatedCastlingRook(s,capPiece.color,'queenside'):_r.queenside;
+    if(_cpKs2!==null&&_cpKs2===to.col)_capturedRookSide='kingside';
+    else if(_cpQs2!==null&&_cpQs2===to.col)_capturedRookSide='queenside';
   }
 }
 // Capture undo info
@@ -3566,8 +3586,8 @@ if(_cs&&_savedRook&&_rookFrom>=0&&_rookTo>=0){
 if(promotion)s.board[to.row][to.col]={type:promotion,color:piece.color};
 // 5. Update king position + castling rights
 if(piece.type==='king'){
-if(piece.color==='white'){s.wk={row:to.row,col:to.col};s.castlingRights.whiteKingside=false;s.castlingRights.whiteQueenside=false}
-else{s.bk={row:to.row,col:to.col};s.castlingRights.blackKingside=false;s.castlingRights.blackQueenside=false}
+if(piece.color==='white'){s.wk={row:to.row,col:to.col};s.castlingRights.whiteKingside=false;s.castlingRights.whiteQueenside=false;s.castlingRights.whiteKingsideRookFile=null;s.castlingRights.whiteQueensideRookFile=null}
+else{s.bk={row:to.row,col:to.col};s.castlingRights.blackKingside=false;s.castlingRights.blackQueenside=false;s.castlingRights.blackKingsideRookFile=null;s.castlingRights.blackQueensideRookFile=null}
 }
 // 6. Update castling rights for rook moves
 // v1.0.7 PHASE 18 Task 3 (bug fix): Use the pre-mutation snapshot
@@ -3578,33 +3598,33 @@ else{s.bk={row:to.row,col:to.col};s.castlingRights.blackKingside=false;s.castlin
 // (a small perf win).
 if(piece.type==='rook'&&_movingRookSide){
   if(piece.color==='white'){
-    if(_movingRookSide==='kingside')s.castlingRights.whiteKingside=false;
-    else s.castlingRights.whiteQueenside=false;
+    if(_movingRookSide==='kingside'){s.castlingRights.whiteKingside=false;s.castlingRights.whiteKingsideRookFile=null;}
+    else{s.castlingRights.whiteQueenside=false;s.castlingRights.whiteQueensideRookFile=null;}
   }else{
-    if(_movingRookSide==='kingside')s.castlingRights.blackKingside=false;
-    else s.castlingRights.blackQueenside=false;
+    if(_movingRookSide==='kingside'){s.castlingRights.blackKingside=false;s.castlingRights.blackKingsideRookFile=null;}
+    else{s.castlingRights.blackQueenside=false;s.castlingRights.blackQueensideRookFile=null;}
   }
 }else if(piece.type==='rook'&&!_movingRookSide){
   // Fallback: chess960.js not loaded OR rook not on a castling source square.
   // Use standard-chess rook positions as a safe default.
-  if(from.row===7&&from.col===0)s.castlingRights.whiteQueenside=false;
-  if(from.row===7&&from.col===7)s.castlingRights.whiteKingside=false;
-  if(from.row===0&&from.col===0)s.castlingRights.blackQueenside=false;
-  if(from.row===0&&from.col===7)s.castlingRights.blackKingside=false;
+  if(from.row===7&&from.col===0){s.castlingRights.whiteQueenside=false;s.castlingRights.whiteQueensideRookFile=null;}
+  if(from.row===7&&from.col===7){s.castlingRights.whiteKingside=false;s.castlingRights.whiteKingsideRookFile=null;}
+  if(from.row===0&&from.col===0){s.castlingRights.blackQueenside=false;s.castlingRights.blackQueensideRookFile=null;}
+  if(from.row===0&&from.col===7){s.castlingRights.blackKingside=false;s.castlingRights.blackKingsideRookFile=null;}
 }
 // 7. Update castling rights for rook captures
 if(capPiece&&capPiece.type==='rook'&&_capturedRookSide){
   if(capPiece.color==='white'){
-    if(_capturedRookSide==='kingside')s.castlingRights.whiteKingside=false;
-    else s.castlingRights.whiteQueenside=false;
+    if(_capturedRookSide==='kingside'){s.castlingRights.whiteKingside=false;s.castlingRights.whiteKingsideRookFile=null;}
+    else{s.castlingRights.whiteQueenside=false;s.castlingRights.whiteQueensideRookFile=null;}
   }else{
-    if(_capturedRookSide==='kingside')s.castlingRights.blackKingside=false;
-    else s.castlingRights.blackQueenside=false;
+    if(_capturedRookSide==='kingside'){s.castlingRights.blackKingside=false;s.castlingRights.blackKingsideRookFile=null;}
+    else{s.castlingRights.blackQueenside=false;s.castlingRights.blackQueensideRookFile=null;}
   }
 }else if(capPiece&&capPiece.type==='rook'&&!_capturedRookSide){
   // Fallback: standard-chess rook positions.
-  if(capPiece.color==='white'){if(to.row===7&&to.col===0)s.castlingRights.whiteQueenside=false;if(to.row===7&&to.col===7)s.castlingRights.whiteKingside=false}
-  else{if(to.row===0&&to.col===0)s.castlingRights.blackQueenside=false;if(to.row===0&&to.col===7)s.castlingRights.blackKingside=false}
+  if(capPiece.color==='white'){if(to.row===7&&to.col===0){s.castlingRights.whiteQueenside=false;s.castlingRights.whiteQueensideRookFile=null;}if(to.row===7&&to.col===7){s.castlingRights.whiteKingside=false;s.castlingRights.whiteKingsideRookFile=null;}}
+  else{if(to.row===0&&to.col===0){s.castlingRights.blackQueenside=false;s.castlingRights.blackQueensideRookFile=null;}if(to.row===0&&to.col===7){s.castlingRights.blackKingside=false;s.castlingRights.blackKingsideRookFile=null;}}
 }
 // 8. Set en passant target (only if an enemy pawn can actually capture)
 const oldEP=s.enPassantTarget;
@@ -4684,27 +4704,39 @@ function toShredderCastling(cr,board){
     if(board[0][c]&&board[0][c].type==='rook'&&board[0][c].color==='black')bRooks.push(c);
   }
   // Collect (file, isWhite) pairs for each right that's set + has a valid rook.
+  // v1.2.3 round-20 (known-issue A-1): when castlingRights carries a
+  //   designated rook file (parseShredderCastling / initState /
+  //   initChess960State) and that rook is still present, emit THAT file —
+  //   this keeps the exact X-FEN letters on round-trip for ambiguous
+  //   same-side-two-rooks positions instead of re-deriving the closest rook.
+  const _rookOn=(row,f,co)=>{const p=board[row]&&board[row][f];return !!(p&&p.type==='rook'&&p.color===co);};
   const pairs=[];
   if(wKing!==null){
     if(cr.whiteKingside){
-      // Closest white rook to the RIGHT of the king
-      for(const c of wRooks)if(c>wKing){pairs.push({file:c,isWhite:true});break;}
+      let f=null;
+      if(cr.whiteKingsideRookFile!=null&&_rookOn(7,cr.whiteKingsideRookFile,'white'))f=cr.whiteKingsideRookFile;
+      else{for(const c of wRooks)if(c>wKing){f=c;break;}} // closest rook RIGHT of king
+      if(f!=null)pairs.push({file:f,isWhite:true});
     }
     if(cr.whiteQueenside){
-      // Closest white rook to the LEFT of the king (rightmost of the left-side rooks)
-      let best=-1;
-      for(const c of wRooks)if(c<wKing&&c>best)best=c;
-      if(best>=0)pairs.push({file:best,isWhite:true});
+      let f=null;
+      if(cr.whiteQueensideRookFile!=null&&_rookOn(7,cr.whiteQueensideRookFile,'white'))f=cr.whiteQueensideRookFile;
+      else{let best=-1;for(const c of wRooks)if(c<wKing&&c>best)best=c;if(best>=0)f=best;} // closest LEFT
+      if(f!=null)pairs.push({file:f,isWhite:true});
     }
   }
   if(bKing!==null){
     if(cr.blackKingside){
-      for(const c of bRooks)if(c>bKing){pairs.push({file:c,isWhite:false});break;}
+      let f=null;
+      if(cr.blackKingsideRookFile!=null&&_rookOn(0,cr.blackKingsideRookFile,'black'))f=cr.blackKingsideRookFile;
+      else{for(const c of bRooks)if(c>bKing){f=c;break;}}
+      if(f!=null)pairs.push({file:f,isWhite:false});
     }
     if(cr.blackQueenside){
-      let best=-1;
-      for(const c of bRooks)if(c<bKing&&c>best)best=c;
-      if(best>=0)pairs.push({file:best,isWhite:false});
+      let f=null;
+      if(cr.blackQueensideRookFile!=null&&_rookOn(0,cr.blackQueensideRookFile,'black'))f=cr.blackQueensideRookFile;
+      else{let best=-1;for(const c of bRooks)if(c<bKing&&c>best)best=c;if(best>=0)f=best;}
+      if(f!=null)pairs.push({file:f,isWhite:false});
     }
   }
   if(pairs.length===0)return '-';
@@ -4741,7 +4773,13 @@ function toShredderCastling(cr,board){
  * @returns {Object} {whiteKingside, whiteQueenside, blackKingside, blackQueenside}
  */
 function parseShredderCastling(str,board){
-  const cr={whiteKingside:false,whiteQueenside:false,blackKingside:false,blackQueenside:false};
+  // v1.2.3 round-20 (known-issue A-1): the four *RookFile fields record the
+  //   EXACT rook file designated by the FEN castling field (Shredder letters
+  //   AND the KQkq compat mapping — K always means the h-file rook). They
+  //   disambiguate the case of two same-color rooks on the SAME side of the
+  //   king, where the closest-rook heuristic alone could pick the wrong rook.
+  const cr={whiteKingside:false,whiteQueenside:false,blackKingside:false,blackQueenside:false,
+    whiteKingsideRookFile:null,whiteQueensideRookFile:null,blackKingsideRookFile:null,blackQueensideRookFile:null};
   if(!str||str==='-')return cr;
   // v1.2.1 round-9: defensive null guard on board (matches toShredderCastling
   // at line ~228 which already has the same guard). Without this, a null/undefined
@@ -4773,13 +4811,13 @@ function parseShredderCastling(str,board){
     if(!_hasRookOn(isWhite?'white':'black',file))continue;
     if(isWhite){
       if(wKing<0)continue;
-      if(file>wKing)cr.whiteKingside=true;
-      else if(file<wKing)cr.whiteQueenside=true;
+      if(file>wKing){cr.whiteKingside=true;cr.whiteKingsideRookFile=file;}
+      else if(file<wKing){cr.whiteQueenside=true;cr.whiteQueensideRookFile=file;}
       // file === wKing is illegal (rook on king's square) -- silently drop.
     }else{
       if(bKing<0)continue;
-      if(file>bKing)cr.blackKingside=true;
-      else if(file<bKing)cr.blackQueenside=true;
+      if(file>bKing){cr.blackKingside=true;cr.blackKingsideRookFile=file;}
+      else if(file<bKing){cr.blackQueenside=true;cr.blackQueensideRookFile=file;}
     }
   }
   return cr;
@@ -4877,6 +4915,42 @@ function findCastlingRookForSide(board,color,side){
 }
 
 /**
+ * v1.2.3 round-20 (known-issue A-1): designated-rook-file disambiguation.
+ * When castlingRights carries an explicit rook file for the requested side
+ * (recorded by parseShredderCastling from the FEN castling field, by
+ * initState / initChess960State at game start, or by the setup-mode castle
+ * markers), and a same-color rook still stands on that file, THAT rook is
+ * the castling rook — not merely the closest one. This resolves the
+ * same-side-two-rooks ambiguity (e.g. after a rook promotion on the
+ * king's side in Chess960, or a hand-crafted FEN) where the closest-rook
+ * heuristic could select the wrong rook. Falls back to the heuristic when
+ * no file is designated or the designated rook is gone (defensive — e.g.
+ * rights state hand-built by setup mode without file fields).
+ *
+ * @param {Object} s -- game state (needs .board + .castlingRights)
+ * @param {string} color -- 'white' or 'black'
+ * @param {string} side -- 'kingside' or 'queenside'
+ * @returns {number|null} rook column, or null if no rook on that side
+ */
+function findDesignatedCastlingRook(s,color,side){
+  if(!s||!s.board)return null;
+  const cr=s.castlingRights;
+  const field=color==='white'
+    ?(side==='kingside'?'whiteKingsideRookFile':'whiteQueensideRookFile')
+    :(side==='kingside'?'blackKingsideRookFile':'blackQueensideRookFile');
+  const f=cr?cr[field]:null;
+  if(f!=null&&f>=0&&f<8){
+    const row=color==='white'?7:0;
+    const p=s.board[row]&&s.board[row][f];
+    if(p&&p.type==='rook'&&p.color===color)return f;
+    // Designated rook no longer on its file (moved/captured without the
+    //   right being cleared — only possible via setup-mode edits) — fall
+    //   through to the heuristic rather than returning a stale column.
+  }
+  return findCastlingRookForSide(s.board,color,side);
+}
+
+/**
  * Compute the rook source/dest for a Chess960 castling move.
  *
  * v1.0.7 PHASE 4: now uses findCastlingRookForSide so that castling to one
@@ -4891,7 +4965,9 @@ function findCastlingRookForSide(board,color,side){
  */
 function chess960CastlingRookMove(s,color,side){
   const row=color==='white'?7:0;
-  const rookFrom=findCastlingRookForSide(s.board,color,side);
+  // v1.2.3 round-20 (A-1): prefer the FEN/game-designated rook file over the
+  //   closest-rook heuristic (same-side-two-rooks disambiguation).
+  const rookFrom=findDesignatedCastlingRook(s,color,side);
   if(rookFrom===null)return null;
   const kingTo=side==='kingside'?6:2;
   const rookTo=side==='kingside'?5:3;
@@ -4977,7 +5053,9 @@ function isChess960CastlingLegal(s,color,side){
   }
   if(kingCol<0)return false;
   // v1.0.7 PHASE 4: only need a rook on THIS side, not both sides.
-  const rookCol=findCastlingRookForSide(s.board,color,side);
+  // v1.2.3 round-20 (A-1): prefer the FEN/game-designated rook file over the
+  //   closest-rook heuristic (same-side-two-rooks disambiguation).
+  const rookCol=findDesignatedCastlingRook(s,color,side);
   if(rookCol===null)return false;
   const kingTo=side==='kingside'?6:2;
   const rookTo=side==='kingside'?5:3;
@@ -5048,10 +5126,19 @@ function initChess960State(spid){
   for(let c=0;c<8;c++){
     if(backRank[c]==='king'){wk={row:7,col:c};bk={row:0,col:c};}
   }
+  // v1.2.3 round-20 (A-1): record the designated rook files — in a Chess960
+  //   start the castling rooks are exactly known (the one rook right of the
+  //   king = kingside, the one left = queenside), so no heuristic is ever
+  //   needed for the opening position.
+  let _kCol=-1;const _rookCols=[];
+  for(let c=0;c<8;c++){if(backRank[c]==='king')_kCol=c;else if(backRank[c]==='rook')_rookCols.push(c);}
+  let _ksFile=null,_qsFile=null;
+  for(const c of _rookCols){if(c>_kCol)_ksFile=c;else if(c<_kCol)_qsFile=c;}
   const s={
     board:b,
     currentTurn:'white',
-    castlingRights:{whiteKingside:true,whiteQueenside:true,blackKingside:true,blackQueenside:true},
+    castlingRights:{whiteKingside:true,whiteQueenside:true,blackKingside:true,blackQueenside:true,
+      whiteKingsideRookFile:_ksFile,whiteQueensideRookFile:_qsFile,blackKingsideRookFile:_ksFile,blackQueensideRookFile:_qsFile},
     enPassantTarget:null,
     halfMoveClock:0,
     fullMoveNumber:1,
@@ -11683,6 +11770,44 @@ if(ns){
 //   We call it FIRST, then set the FEN-import-specific values AFTER so
 //   they survive the reset.
 gameState=ns;_resetGameUIState();gameOverSoundPlayed=false;
+// v1.2.3 round-20 (known-issue B): Chess960 auto-detection on direct FEN
+//   import. Previously only importPGN did any variant detection (via the PGN
+//   [Variant] tag), so a Chess960 FEN pasted/loaded directly was treated as
+//   standard chess — standard castling movegen assumes king on e-file +
+//   corner rooks, so castling broke, the engine never got UCI_Chess960, and
+//   PGN round-trip lost the variant. Detection reuses _needsShredderFEN:
+//   any surviving castling right whose designated rook/king sits on a
+//   non-standard file implies a non-standard (Chess960) arrangement. The
+//   else-branch also resets a stale Chess960 mode from a previous game
+//   (previously the mode persisted across a standard FEN import).
+const _fenIs960=(typeof _needsShredderFEN==='function')&&_needsShredderFEN(ns);
+if(_fenIs960){
+  if(typeof setChess960Mode==='function')setChess960Mode(true);
+  if(typeof gameVariant!=='undefined')gameVariant='chess960';
+  ns.chess960=true;
+  // Try to derive the SP-ID from the WHITE back rank (meaningful only for a
+  //   full starting arrangement; mid-game FENs simply yield no SP-ID).
+  if(typeof gameSPID!=='undefined'){
+    gameSPID=null;
+    try{
+      if(typeof backRankToSPID==='function'){
+        const fenRows=fenStr.trim().split(/\s+/)[0].split('/');
+        if(fenRows.length===8){
+          const backRank=[];let _idx=0;
+          for(const ch of fenRows[7]){
+            if(ch>='1'&&ch<='8'){for(let k=0;k<Number.parseInt(ch,10);k++)backRank[_idx++]=null;}
+            else{const t=ch.toLowerCase()==='r'?'rook':ch.toLowerCase()==='n'?'knight':ch.toLowerCase()==='b'?'bishop':ch.toLowerCase()==='q'?'queen':ch.toLowerCase()==='k'?'king':null;if(t)backRank[_idx++]=t;}
+          }
+          if(_idx===8){const _spid=backRankToSPID(backRank);if(_spid>=0){gameSPID=_spid;ns.spid=_spid;}}
+        }
+      }
+    }catch(e){console.warn('[Import] SP-ID derivation failed:',e&&e.message?e.message:e);}
+  }
+}else{
+  if(typeof setChess960Mode==='function')setChess960Mode(false);
+  if(typeof gameVariant!=='undefined')gameVariant=null;
+  if(typeof gameSPID!=='undefined')gameSPID=null;
+}
 // v1.1.1 Phase 61: Now set the FEN-import-specific values (after reset).
 // _importedStartMoveNum: Track FEN's starting move number for correct display numbering.
 if(typeof _importedStartMoveNum!=='undefined'){
@@ -11792,7 +11917,7 @@ function _parsePGN(pgnText){
   //   single-line and multi-line PGN), and ALSO avoids stripping `[%csl ...]`
   //   / `[%cal ...]` / `[%eval ...]` / `[%emt ...]` inside brace comments
   //   (because `%` is not in `[A-Za-z]`).
-  let moveText=pgnText.replace(/\[[A-Za-z]\w*\s+[^\]]+\]/g,'').trim();
+  let moveText=pgnText.replace(/\[\w+\s+\S[^\]]*\]/g,'').trim(); // v1.2.3 round-20 (S8786): 相邻量词类互斥，消除超线性回溯（与 stats.html 四处同款修复）
   // Remove line continuation markers (\ at end of line)
   moveText=moveText.replace(/\\\s*\n/g,' ');
   
@@ -15518,7 +15643,9 @@ function _resignGame(){
   //   430ms multi-stage pattern matching the somber arpeggio.
   try{HapticManager.fire('GAME_OVER');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
   // Force a full re-render to show the game-over overlay
-  markDirty(DIRTY_FULL);
+  //   (v1.2.3 round-20: markDirty removed as dead code — it always routed to
+  //   render() anyway, so call render() directly.)
+  render();
   // v1.1.1 Phase 66: Removed stale console.log (was left over from debugging).
 }
 
@@ -15732,88 +15859,17 @@ document.addEventListener('click', function(e) {
 // [ENGINE_CFG] - Engine configuration panel
 // =====================================================================
 
-// ===================== DIRTY FLAG RENDERING SYSTEM =====================
-const DIRTY_NONE = 0;
-const DIRTY_BOARD = 1;       // Board grid squares changed
-const DIRTY_TOOLBAR = 2;     // Header/toolbar changed
-const DIRTY_EVAL = 4;        // Eval display changed
-const DIRTY_PANEL = 8;       // Side panel changed
-const DIRTY_MOVES = 16;      // Move history changed
-const DIRTY_DIALOG = 32;     // Dialog state changed
-const DIRTY_REVIEW = 64;     // Review mode changed
-const DIRTY_FULL = DIRTY_BOARD | DIRTY_TOOLBAR | DIRTY_EVAL | DIRTY_PANEL | DIRTY_MOVES | DIRTY_DIALOG | DIRTY_REVIEW;
-
-let _dirtyFlags = DIRTY_FULL; // Start with full render
-let _renderScheduled = false;
-let _rAFId = null;
-
-/**
- * Mark components as needing re-render and schedule a batched update.
- * @param {number} flags - Bitmask of DIRTY_* flags indicating what changed
- */
-function markDirty(flags) {
-  _dirtyFlags |= flags;
-  _scheduleRender();
-}
-
-/**
- * Schedule a batched render using requestAnimationFrame.
- * Multiple markDirty() calls between frames are coalesced into one render.
- */
-function _scheduleRender() {
-  if (_renderScheduled) return;
-  _renderScheduled = true;
-  _rAFId = requestAnimationFrame(function() {
-    _renderScheduled = false;
-    _rAFId = null;
-    _performDirtyRender();
-  });
-}
-
-/**
- * Perform incremental render based on dirty flags.
- * Only rebuilds the components that actually changed.
- */
-function _performDirtyRender() {
-  if (_dirtyFlags === DIRTY_NONE) return;
-
-  // If dialog/review states changed, or many components are dirty, do full render
-  if ((_dirtyFlags & DIRTY_DIALOG) || (_dirtyFlags & DIRTY_REVIEW) ||
-      (_dirtyFlags & DIRTY_TOOLBAR) || (_dirtyFlags & DIRTY_PANEL) ||
-      (_dirtyFlags & DIRTY_MOVES) ||
-      // If more than 2 components are dirty, full render is likely faster
-      Integer_bitcount(_dirtyFlags) > 2) {
-    _dirtyFlags = DIRTY_NONE;
-    // v1.0.4 ROUND-5 REV13: Route through render() to share throttle
-    render();
-    return;
-  }
-
-  // Targeted updates only
-  if (_dirtyFlags & DIRTY_BOARD) {
-    _updateBoardIncremental();
-  }
-  if (_dirtyFlags & DIRTY_EVAL) {
-    _updateEvalDisplayIncremental();
-  }
-
-  _dirtyFlags = DIRTY_NONE;
-}
-
-/** Count set bits in a number.
- * v1.1.1 Phase 60 (audit P0-3.5): Guard against negative input — the old
- *   `while (n) { n &= n - 1; }` loops forever for negative numbers (the
- *   sign bit is always 1 in two's complement). Use `n >>> 0` to coerce to
- *   an unsigned 32-bit integer, then iterate. The dirty-flag bitfield is
- *   always non-negative in practice (DIRTY_* constants are positive), but
- *   this is a defensive guard against future misuse.
- */
-function Integer_bitcount(n) {
-  let count = 0;
-  n = n >>> 0; // coerce to unsigned 32-bit
-  while (n) { count++; n &= n - 1; }
-  return count;
-}
+// ===================== RENDER SCHEDULING NOTE =====================
+// v1.2.3 round-20 (known-issue C): the DIRTY_* incremental-render subsystem
+//   (constants/markDirty/_scheduleRender/_performDirtyRender/Integer_bitcount,
+//   ~80 lines) was REMOVED as dead code. Every markDirty() call site passed
+//   DIRTY_FULL or DIRTY_MOVES|DIRTY_PANEL|DIRTY_EVAL — both always routed to
+//   a full render() via _performDirtyRender's full-render branch, so the
+//   granular board/eval incremental path was unreachable. markDirty(x) call
+//   sites now call render() directly (identical behavior; render() has its
+//   own rAF throttle). The shared square-rendering primitives
+//   (_updateSingleSq/_updateChangedSquares/_getSqElCache) remain — used by
+//   the live _updateBoardLightweight selection/hover path.
 
 // ===================== DOM ELEMENT CACHE =====================
 let _cachedElements = {};
@@ -15891,79 +15947,6 @@ function _getSqElCache() {
     _sqElCache[i] = sqs[i];
   }
   return _sqElCache;
-}
-
-// ===================== INCREMENTAL BOARD UPDATE =====================
-// v1.0.2 PERF (audit): replaced JSON.stringify(gameState.board) dirty check
-// with a monotonic boardVersion integer (incremented in makeMv/makeMvInPlace,
-// restored in unmakeMv). At 10-50 engine progress callbacks/sec this avoids
-// ~50 board serializations/sec of ~1KB each.
-let _prevBoardVersion = -1;
-
-/**
- * Incrementally update only the board squares that changed.
- * Compares current gameState.boardVersion with previously rendered version.
- */
-function _updateBoardIncremental() {
-  const currentBoardVersion = gameState.boardVersion || 0;
-  if (currentBoardVersion === _prevBoardVersion) return; // No change
-
-  const sqCache = _getSqElCache();
-  if (!sqCache) { markDirty(DIRTY_FULL); return; }
-
-  const flip = playerColor === 'black';
-  const cm = showCtrlMap ? cachedCtrlMap : null;
-  let _checkKingPos = getCheckKingPos(gameState);
-
-  for (let r = 0; r < 8; r++) {
-    for (let c = 0; c < 8; c++) {
-      const rr = flip ? 7 - r : r;
-      const cc = flip ? 7 - c : c;
-      // v1.0.2 (qw3.7max audit): 1D array access — _sqElCache[r*8+c]
-      const el = sqCache[r * 8 + c];
-      if (!el) continue;
-      const p = gameState.board[rr][cc];
-      const isL = (r + c) % 2 === 0;
-      _updateSingleSq(el, p, rr, cc, cm, isL, lastMove, _checkKingPos);
-    }
-  }
-
-  _prevBoardVersion = currentBoardVersion;
-  _updateArrows(hoveredSquare || selectedSquare);
-}
-
-/**
- * Incrementally update eval display without full render.
- * v1.0.5 Rev56 PERF: Added a signature check so we skip the innerHTML rebuild
- * when the eval display content is identical to the last render. Previously,
- * every DIRTY_EVAL tick (10-50×/sec during search) rebuilt the innerHTML even
- * if the eval values hadn't changed (common during deep search where depth
- * increments but score stays stable). The signature captures all fields that
- * affect the displayed text: emoji, desc, score, depth, seldepth, setupMode,
- * isAIThinking, and the localized strings (which change on language toggle).
- */
-let _evalDispPrevSig = '';
-function _updateEvalDisplayIncremental() {
-  const evalEl = _el(_EL_EVAL_DISP);
-  if (!evalEl) { markDirty(DIRTY_FULL); return; }
-  const _fe = formatEval();
-  const pe = _fe.emoji, pd = _fe.desc, scoreStr = _fe.score;
-  // v1.0.5 Rev56: build the signature BEFORE the innerHTML string so we can
-  // short-circuit on a cache hit. The signature must include every value that
-  // flows into the innerHTML — if any changes, the signature changes.
-  const _sig = (setupMode?'S':'N')+'|'+(isAIThinking?'A':'I')+'|'+pe+'|'+pd+'|'+scoreStr+'|'+_sfDepth+'|'+_sfSeldepth;
-  if(_evalDispPrevSig === _sig) return; // No change — skip DOM write
-  _evalDispPrevSig = _sig;
-  // v1.0.4 Rev33: display "D15 SD22" — depth + seldepth (tactical depth).
-  // SD only shown when > 0 AND > depth (seldepth == depth is redundant).
-  const _hdrDepthStr = _sfDepth > 0 ? '<span style="font-size:.65rem;color:var(--muted);margin-left:4px">D' + _sfDepth + '</span>' + (_sfSeldepth > 0 && _sfSeldepth > _sfDepth ? '<span style="font-size:.65rem;color:var(--muted);margin-left:2px">SD' + _sfSeldepth + '</span>' : '') : '';
-  if (setupMode) {
-    evalEl.innerHTML = T('setup_label');
-  } else if (isAIThinking) {
-    evalEl.innerHTML = '<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>';
-  } else {
-    evalEl.innerHTML = '<span class="ev-e">' + pe + '</span><span>' + pd + '</span><span style="color:var(--muted)">(' + scoreStr + ')</span>' + _hdrDepthStr;
-  }
 }
 
 // ===================== STATE MANAGEMENT =====================
@@ -18415,17 +18398,10 @@ if(_sfWdlW>=0&&_sfWdlD>=0&&_sfWdlL>=0){const _rt=_sfWdlW+_sfWdlD+_sfWdlL;const _
 const _rvEvalFontSize='.8rem';
 const _rvEvalEmojiSize='1.05rem';
 const _rvEvalBarHTML='<div class="ev" id="review-eval-bar" style="margin:2px 0;width:100%;box-sizing:border-box;font-size:'+_rvEvalFontSize+'!important;padding:5px 10px!important;gap:5px;max-height:2.4em;overflow:hidden;white-space:nowrap"><span class="ev-e" style="font-size:'+_rvEvalEmojiSize+'">'+_re.emoji+'</span><span>'+_re.desc+'</span><span style="color:var(--muted)">('+_re.score+')</span>'+_rDepthStr+_rProgressStr+_rWdlStr+_rDelta+'</div>';
-// v1.2.3 round-19: while an analyze-all batch is running, show a hint line
-//   directly under the eval bar telling the user that long-pressing a move
-//   in the move list prioritizes it (_prioritizeReviewStep). The eval bar
-//   itself is strictly single-line (overflow:hidden + nowrap), so the hint
-//   cannot go INSIDE it — it would be clipped. This separate line is
-//   rendered from state on every full render; _updateReviewBatchHint()
-//   handles the immediate in-place insert at batch start (reviewAnalyzeAll
-//   does not re-render when the batch begins).
-const _rvBatchHintHTML=_reviewAnalyzeAllActive
-  ?'<div id="review-batch-hint" style="margin:0 0 2px;width:100%;box-sizing:border-box;font-size:.72rem;color:var(--accent);padding:2px 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+T('review_batch_analyzing_hint')+'</div>'
-  :'';
+// v1.2.3 round-20 (relocation): the round-19 standalone #review-batch-hint
+//   line under the eval bar was replaced by a hint RIGHT-ALIGNED INSIDE the
+//   "Analyze All" button itself (see _rvAnalyzeBtnInnerHTML below) — shown
+//   only while _reviewAnalyzeAllActive. No separate DOM line anymore.
 
 // Review step slider — custom slider with pixel-perfect alignment to chart data points.
 // v1.1.0 Phase 54: Replaced the native <input type="range"> visual with a custom
@@ -18560,7 +18536,7 @@ const _totalSteps=moveRecords.length+1;
 const _allCached=_cachedCount>=_totalSteps;
 // v1.0.8 PHASE 20 (UX): Enlarged font .7rem → .8rem and min-height 28px → 34px
 // so the button text + emoji display fully with comfortable breathing room.
-const _rvAnalyzeHTML='<button id="review-analyze-btn" class="btn" style="margin-top:4px;width:100%;font-size:.8rem;min-height:34px;padding:6px 10px" onclick="reviewAnalyzeAll()">'+(_rvAnalyzeBtnLabel())+'</button>';
+const _rvAnalyzeHTML='<button id="review-analyze-btn" class="btn" style="margin-top:4px;width:100%;font-size:.8rem;min-height:34px;padding:6px 10px;display:flex;align-items:center;justify-content:space-between;gap:8px" onclick="reviewAnalyzeAll()">'+_rvAnalyzeBtnInnerHTML()+'</button>';
 
 // v1.0.8 PHASE 18 Task 2: Enable virtual list when the move list exceeds the
 // threshold. When enabled, only the visible window (plus overscan) is rendered
@@ -18595,7 +18571,6 @@ h+='</div>'; // close .review-top
 // .review-bottom: full-width chart + controls, edge-to-edge
 h+='<div class="review-bottom">';
 h+=_rvEvalBarHTML;
-h+=_rvBatchHintHTML;
 h+=_rvSliderHTML;
 h+=_rvChartHTML;
 h+=_rvNavHTML;
@@ -19307,8 +19282,7 @@ if(reviewMode && reviewStep !== _lastReviewStepScrolled){
   });
 }
 _updateArrows(hoveredSquare||selectedSquare);
-_invalidateElCache(); _sqElCache = null; _prevBoardVersion = gameState.boardVersion || 0;
-_evalDispPrevSig = '';
+_invalidateElCache(); _sqElCache = null;
 _rListEl = document.getElementById('reviewMovesList');
 if(wasEcoFocused){const el=document.getElementById('ecoSearch');if(el){el.focus();_ecoSearchFocused=true;try{el.setSelectionRange(el.value.length,el.value.length)}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}}}
 // v1.2.3 round-18: restore SP-ID input focus after keystroke-triggered
@@ -19505,10 +19479,11 @@ function updateAfterMove(){requestEngineEval();
   _updateArrows(hoveredSquare||selectedSquare);
 
   // v1.0.8 PHASE 22: landing animation state removed (Web Animations API).
-  // Use markDirty for delayed panel/moves update.
   // Schedule a full render later for move history + other side panel updates.
+  //   (v1.2.3 round-20: markDirty removed as dead code — it always routed to
+  //   render() anyway, so call render() directly.)
   if(_fullRenderTimer)clearTimeout(_fullRenderTimer);
-  _fullRenderTimer=setTimeout(()=>{if(!animationInProgress&&!isAIThinking)markDirty(DIRTY_MOVES|DIRTY_PANEL|DIRTY_EVAL);},350);
+  _fullRenderTimer=setTimeout(()=>{if(!animationInProgress&&!isAIThinking)render();},350);
   }catch(e){render();}
 }
 
@@ -21008,6 +20983,23 @@ function _rvAnalyzeBtnLabel(){
   return T('analyze_all_steps')+' '+_totalSteps+(_cachedCount>0?' ('+_cachedCount+'/'+_totalSteps+')':'');
 }
 /**
+ * v1.2.3 round-20 (user request, supersedes round-19's hint line): inner
+ * HTML of the "Analyze All" button. While an analyze-all batch is running
+ * (_reviewAnalyzeAllActive), the button shows the label on the LEFT and the
+ * hint "批量分析进行中… 长按走法可设为优先 / Batch analysis in progress…
+ * Long-press a move to prioritize it" RIGHT-ALIGNED on the same button —
+ * surfacing the existing long-press-to-prioritize feature
+ * (_prioritizeReviewStep) exactly when it is useful. When no batch runs,
+ * the button is just the plain label. Rendered from state on full renders
+ * (_rvAnalyzeHTML) and kept in sync in place by _updateReviewAnalyzeBtn().
+ */
+function _rvAnalyzeBtnInnerHTML(){
+  const _label=_rvAnalyzeBtnLabel();
+  if(!_reviewAnalyzeAllActive)return _esc(_label);
+  return '<span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_esc(_label)+'</span>'
+    +'<span style="color:var(--accent);font-size:.66rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:1;min-width:0">'+T('review_batch_analyzing_hint')+'</span>';
+}
+/**
  * v1.0.8 PHASE 17: Live-refresh the "Analyze All" button label without
  * triggering a full render. Called from onEngineEval after each manual eval
  * completes — fixes the bug where the button stayed at "Analyze All (k/N)"
@@ -21028,32 +21020,9 @@ function _updateReviewAnalyzeBtn(){
   if(!reviewMode)return;
   const btn=document.getElementById('review-analyze-btn');
   if(!btn)return;
-  btn.textContent=_rvAnalyzeBtnLabel();
-}
-
-/**
- * v1.2.3 round-19: In-place insert/remove of the #review-batch-hint line
- *   under the review eval bar. reviewAnalyzeAll() sets
- *   _reviewAnalyzeAllActive=true WITHOUT a full render, so the hint must be
- *   inserted dynamically; batch completion/cancel paths already re-render
- *   (reviewGoTo/render at the end of _reviewAnalyzeAdvance, exitReview),
- *   which rebuilds the line from state via _rvBatchHintHTML. The id-check
- *   makes this idempotent, so a following full render never duplicates it.
- */
-function _updateReviewBatchHint(){
-  const _existing=document.getElementById('review-batch-hint');
-  if(!reviewMode||!_reviewAnalyzeAllActive){
-    if(_existing)_existing.remove();
-    return;
-  }
-  if(_existing)return;
-  const _bar=document.getElementById('review-eval-bar');
-  if(!_bar)return;
-  const _d=document.createElement('div');
-  _d.id='review-batch-hint';
-  _d.style.cssText='margin:0 0 2px;width:100%;box-sizing:border-box;font-size:.72rem;color:var(--accent);padding:2px 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
-  _d.textContent=T('review_batch_analyzing_hint');
-  _bar.insertAdjacentElement('afterend',_d);
+  // v1.2.3 round-20: innerHTML (not textContent) — while a batch runs the
+  //   button carries the right-aligned hint span (_rvAnalyzeBtnInnerHTML).
+  btn.innerHTML=_rvAnalyzeBtnInnerHTML();
 }
 
 /**
@@ -21194,10 +21163,10 @@ function reviewAnalyzeAll(){
     return;
   }
   _reviewAnalyzeAllActive=true;
-  // v1.2.3 round-19: show the "batch in progress — long-press a move to
-  //   prioritize" hint line under the eval bar immediately (no full render
-  //   happens at batch start; the helper inserts it in place).
-  _updateReviewBatchHint();
+  // v1.2.3 round-20: immediately switch the analyze button to
+  //   label + right-aligned "batch in progress" hint (no full render
+  //   happens at batch start; the helper rewrites the button in place).
+  _updateReviewAnalyzeBtn();
   // v1.1.2 Phase 68 (Issue 30 P2): Clear any stale priority queue at batch
   //   start (defensive — should already be empty if the previous batch
   //   completed normally, but a crashed/canceled batch might have left entries).

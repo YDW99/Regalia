@@ -158,88 +158,17 @@ document.addEventListener('click', function(e) {
 // [ENGINE_CFG] - Engine configuration panel
 // =====================================================================
 
-// ===================== DIRTY FLAG RENDERING SYSTEM =====================
-const DIRTY_NONE = 0;
-const DIRTY_BOARD = 1;       // Board grid squares changed
-const DIRTY_TOOLBAR = 2;     // Header/toolbar changed
-const DIRTY_EVAL = 4;        // Eval display changed
-const DIRTY_PANEL = 8;       // Side panel changed
-const DIRTY_MOVES = 16;      // Move history changed
-const DIRTY_DIALOG = 32;     // Dialog state changed
-const DIRTY_REVIEW = 64;     // Review mode changed
-const DIRTY_FULL = DIRTY_BOARD | DIRTY_TOOLBAR | DIRTY_EVAL | DIRTY_PANEL | DIRTY_MOVES | DIRTY_DIALOG | DIRTY_REVIEW;
-
-let _dirtyFlags = DIRTY_FULL; // Start with full render
-let _renderScheduled = false;
-let _rAFId = null;
-
-/**
- * Mark components as needing re-render and schedule a batched update.
- * @param {number} flags - Bitmask of DIRTY_* flags indicating what changed
- */
-function markDirty(flags) {
-  _dirtyFlags |= flags;
-  _scheduleRender();
-}
-
-/**
- * Schedule a batched render using requestAnimationFrame.
- * Multiple markDirty() calls between frames are coalesced into one render.
- */
-function _scheduleRender() {
-  if (_renderScheduled) return;
-  _renderScheduled = true;
-  _rAFId = requestAnimationFrame(function() {
-    _renderScheduled = false;
-    _rAFId = null;
-    _performDirtyRender();
-  });
-}
-
-/**
- * Perform incremental render based on dirty flags.
- * Only rebuilds the components that actually changed.
- */
-function _performDirtyRender() {
-  if (_dirtyFlags === DIRTY_NONE) return;
-
-  // If dialog/review states changed, or many components are dirty, do full render
-  if ((_dirtyFlags & DIRTY_DIALOG) || (_dirtyFlags & DIRTY_REVIEW) ||
-      (_dirtyFlags & DIRTY_TOOLBAR) || (_dirtyFlags & DIRTY_PANEL) ||
-      (_dirtyFlags & DIRTY_MOVES) ||
-      // If more than 2 components are dirty, full render is likely faster
-      Integer_bitcount(_dirtyFlags) > 2) {
-    _dirtyFlags = DIRTY_NONE;
-    // v1.0.4 ROUND-5 REV13: Route through render() to share throttle
-    render();
-    return;
-  }
-
-  // Targeted updates only
-  if (_dirtyFlags & DIRTY_BOARD) {
-    _updateBoardIncremental();
-  }
-  if (_dirtyFlags & DIRTY_EVAL) {
-    _updateEvalDisplayIncremental();
-  }
-
-  _dirtyFlags = DIRTY_NONE;
-}
-
-/** Count set bits in a number.
- * v1.1.1 Phase 60 (audit P0-3.5): Guard against negative input — the old
- *   `while (n) { n &= n - 1; }` loops forever for negative numbers (the
- *   sign bit is always 1 in two's complement). Use `n >>> 0` to coerce to
- *   an unsigned 32-bit integer, then iterate. The dirty-flag bitfield is
- *   always non-negative in practice (DIRTY_* constants are positive), but
- *   this is a defensive guard against future misuse.
- */
-function Integer_bitcount(n) {
-  let count = 0;
-  n = n >>> 0; // coerce to unsigned 32-bit
-  while (n) { count++; n &= n - 1; }
-  return count;
-}
+// ===================== RENDER SCHEDULING NOTE =====================
+// v1.2.3 round-20 (known-issue C): the DIRTY_* incremental-render subsystem
+//   (constants/markDirty/_scheduleRender/_performDirtyRender/Integer_bitcount,
+//   ~80 lines) was REMOVED as dead code. Every markDirty() call site passed
+//   DIRTY_FULL or DIRTY_MOVES|DIRTY_PANEL|DIRTY_EVAL — both always routed to
+//   a full render() via _performDirtyRender's full-render branch, so the
+//   granular board/eval incremental path was unreachable. markDirty(x) call
+//   sites now call render() directly (identical behavior; render() has its
+//   own rAF throttle). The shared square-rendering primitives
+//   (_updateSingleSq/_updateChangedSquares/_getSqElCache) remain — used by
+//   the live _updateBoardLightweight selection/hover path.
 
 // ===================== DOM ELEMENT CACHE =====================
 let _cachedElements = {};
@@ -317,79 +246,6 @@ function _getSqElCache() {
     _sqElCache[i] = sqs[i];
   }
   return _sqElCache;
-}
-
-// ===================== INCREMENTAL BOARD UPDATE =====================
-// v1.0.2 PERF (audit): replaced JSON.stringify(gameState.board) dirty check
-// with a monotonic boardVersion integer (incremented in makeMv/makeMvInPlace,
-// restored in unmakeMv). At 10-50 engine progress callbacks/sec this avoids
-// ~50 board serializations/sec of ~1KB each.
-let _prevBoardVersion = -1;
-
-/**
- * Incrementally update only the board squares that changed.
- * Compares current gameState.boardVersion with previously rendered version.
- */
-function _updateBoardIncremental() {
-  const currentBoardVersion = gameState.boardVersion || 0;
-  if (currentBoardVersion === _prevBoardVersion) return; // No change
-
-  const sqCache = _getSqElCache();
-  if (!sqCache) { markDirty(DIRTY_FULL); return; }
-
-  const flip = playerColor === 'black';
-  const cm = showCtrlMap ? cachedCtrlMap : null;
-  let _checkKingPos = getCheckKingPos(gameState);
-
-  for (let r = 0; r < 8; r++) {
-    for (let c = 0; c < 8; c++) {
-      const rr = flip ? 7 - r : r;
-      const cc = flip ? 7 - c : c;
-      // v1.0.2 (qw3.7max audit): 1D array access — _sqElCache[r*8+c]
-      const el = sqCache[r * 8 + c];
-      if (!el) continue;
-      const p = gameState.board[rr][cc];
-      const isL = (r + c) % 2 === 0;
-      _updateSingleSq(el, p, rr, cc, cm, isL, lastMove, _checkKingPos);
-    }
-  }
-
-  _prevBoardVersion = currentBoardVersion;
-  _updateArrows(hoveredSquare || selectedSquare);
-}
-
-/**
- * Incrementally update eval display without full render.
- * v1.0.5 Rev56 PERF: Added a signature check so we skip the innerHTML rebuild
- * when the eval display content is identical to the last render. Previously,
- * every DIRTY_EVAL tick (10-50×/sec during search) rebuilt the innerHTML even
- * if the eval values hadn't changed (common during deep search where depth
- * increments but score stays stable). The signature captures all fields that
- * affect the displayed text: emoji, desc, score, depth, seldepth, setupMode,
- * isAIThinking, and the localized strings (which change on language toggle).
- */
-let _evalDispPrevSig = '';
-function _updateEvalDisplayIncremental() {
-  const evalEl = _el(_EL_EVAL_DISP);
-  if (!evalEl) { markDirty(DIRTY_FULL); return; }
-  const _fe = formatEval();
-  const pe = _fe.emoji, pd = _fe.desc, scoreStr = _fe.score;
-  // v1.0.5 Rev56: build the signature BEFORE the innerHTML string so we can
-  // short-circuit on a cache hit. The signature must include every value that
-  // flows into the innerHTML — if any changes, the signature changes.
-  const _sig = (setupMode?'S':'N')+'|'+(isAIThinking?'A':'I')+'|'+pe+'|'+pd+'|'+scoreStr+'|'+_sfDepth+'|'+_sfSeldepth;
-  if(_evalDispPrevSig === _sig) return; // No change — skip DOM write
-  _evalDispPrevSig = _sig;
-  // v1.0.4 Rev33: display "D15 SD22" — depth + seldepth (tactical depth).
-  // SD only shown when > 0 AND > depth (seldepth == depth is redundant).
-  const _hdrDepthStr = _sfDepth > 0 ? '<span style="font-size:.65rem;color:var(--muted);margin-left:4px">D' + _sfDepth + '</span>' + (_sfSeldepth > 0 && _sfSeldepth > _sfDepth ? '<span style="font-size:.65rem;color:var(--muted);margin-left:2px">SD' + _sfSeldepth + '</span>' : '') : '';
-  if (setupMode) {
-    evalEl.innerHTML = T('setup_label');
-  } else if (isAIThinking) {
-    evalEl.innerHTML = '<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>';
-  } else {
-    evalEl.innerHTML = '<span class="ev-e">' + pe + '</span><span>' + pd + '</span><span style="color:var(--muted)">(' + scoreStr + ')</span>' + _hdrDepthStr;
-  }
 }
 
 // ===================== STATE MANAGEMENT =====================
@@ -2841,17 +2697,10 @@ if(_sfWdlW>=0&&_sfWdlD>=0&&_sfWdlL>=0){const _rt=_sfWdlW+_sfWdlD+_sfWdlL;const _
 const _rvEvalFontSize='.8rem';
 const _rvEvalEmojiSize='1.05rem';
 const _rvEvalBarHTML='<div class="ev" id="review-eval-bar" style="margin:2px 0;width:100%;box-sizing:border-box;font-size:'+_rvEvalFontSize+'!important;padding:5px 10px!important;gap:5px;max-height:2.4em;overflow:hidden;white-space:nowrap"><span class="ev-e" style="font-size:'+_rvEvalEmojiSize+'">'+_re.emoji+'</span><span>'+_re.desc+'</span><span style="color:var(--muted)">('+_re.score+')</span>'+_rDepthStr+_rProgressStr+_rWdlStr+_rDelta+'</div>';
-// v1.2.3 round-19: while an analyze-all batch is running, show a hint line
-//   directly under the eval bar telling the user that long-pressing a move
-//   in the move list prioritizes it (_prioritizeReviewStep). The eval bar
-//   itself is strictly single-line (overflow:hidden + nowrap), so the hint
-//   cannot go INSIDE it — it would be clipped. This separate line is
-//   rendered from state on every full render; _updateReviewBatchHint()
-//   handles the immediate in-place insert at batch start (reviewAnalyzeAll
-//   does not re-render when the batch begins).
-const _rvBatchHintHTML=_reviewAnalyzeAllActive
-  ?'<div id="review-batch-hint" style="margin:0 0 2px;width:100%;box-sizing:border-box;font-size:.72rem;color:var(--accent);padding:2px 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+T('review_batch_analyzing_hint')+'</div>'
-  :'';
+// v1.2.3 round-20 (relocation): the round-19 standalone #review-batch-hint
+//   line under the eval bar was replaced by a hint RIGHT-ALIGNED INSIDE the
+//   "Analyze All" button itself (see _rvAnalyzeBtnInnerHTML below) — shown
+//   only while _reviewAnalyzeAllActive. No separate DOM line anymore.
 
 // Review step slider — custom slider with pixel-perfect alignment to chart data points.
 // v1.1.0 Phase 54: Replaced the native <input type="range"> visual with a custom
@@ -2986,7 +2835,7 @@ const _totalSteps=moveRecords.length+1;
 const _allCached=_cachedCount>=_totalSteps;
 // v1.0.8 PHASE 20 (UX): Enlarged font .7rem → .8rem and min-height 28px → 34px
 // so the button text + emoji display fully with comfortable breathing room.
-const _rvAnalyzeHTML='<button id="review-analyze-btn" class="btn" style="margin-top:4px;width:100%;font-size:.8rem;min-height:34px;padding:6px 10px" onclick="reviewAnalyzeAll()">'+(_rvAnalyzeBtnLabel())+'</button>';
+const _rvAnalyzeHTML='<button id="review-analyze-btn" class="btn" style="margin-top:4px;width:100%;font-size:.8rem;min-height:34px;padding:6px 10px;display:flex;align-items:center;justify-content:space-between;gap:8px" onclick="reviewAnalyzeAll()">'+_rvAnalyzeBtnInnerHTML()+'</button>';
 
 // v1.0.8 PHASE 18 Task 2: Enable virtual list when the move list exceeds the
 // threshold. When enabled, only the visible window (plus overscan) is rendered
@@ -3021,7 +2870,6 @@ h+='</div>'; // close .review-top
 // .review-bottom: full-width chart + controls, edge-to-edge
 h+='<div class="review-bottom">';
 h+=_rvEvalBarHTML;
-h+=_rvBatchHintHTML;
 h+=_rvSliderHTML;
 h+=_rvChartHTML;
 h+=_rvNavHTML;
@@ -3733,8 +3581,7 @@ if(reviewMode && reviewStep !== _lastReviewStepScrolled){
   });
 }
 _updateArrows(hoveredSquare||selectedSquare);
-_invalidateElCache(); _sqElCache = null; _prevBoardVersion = gameState.boardVersion || 0;
-_evalDispPrevSig = '';
+_invalidateElCache(); _sqElCache = null;
 _rListEl = document.getElementById('reviewMovesList');
 if(wasEcoFocused){const el=document.getElementById('ecoSearch');if(el){el.focus();_ecoSearchFocused=true;try{el.setSelectionRange(el.value.length,el.value.length)}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}}}
 // v1.2.3 round-18: restore SP-ID input focus after keystroke-triggered
@@ -3931,10 +3778,11 @@ function updateAfterMove(){requestEngineEval();
   _updateArrows(hoveredSquare||selectedSquare);
 
   // v1.0.8 PHASE 22: landing animation state removed (Web Animations API).
-  // Use markDirty for delayed panel/moves update.
   // Schedule a full render later for move history + other side panel updates.
+  //   (v1.2.3 round-20: markDirty removed as dead code — it always routed to
+  //   render() anyway, so call render() directly.)
   if(_fullRenderTimer)clearTimeout(_fullRenderTimer);
-  _fullRenderTimer=setTimeout(()=>{if(!animationInProgress&&!isAIThinking)markDirty(DIRTY_MOVES|DIRTY_PANEL|DIRTY_EVAL);},350);
+  _fullRenderTimer=setTimeout(()=>{if(!animationInProgress&&!isAIThinking)render();},350);
   }catch(e){render();}
 }
 
@@ -5434,6 +5282,23 @@ function _rvAnalyzeBtnLabel(){
   return T('analyze_all_steps')+' '+_totalSteps+(_cachedCount>0?' ('+_cachedCount+'/'+_totalSteps+')':'');
 }
 /**
+ * v1.2.3 round-20 (user request, supersedes round-19's hint line): inner
+ * HTML of the "Analyze All" button. While an analyze-all batch is running
+ * (_reviewAnalyzeAllActive), the button shows the label on the LEFT and the
+ * hint "批量分析进行中… 长按走法可设为优先 / Batch analysis in progress…
+ * Long-press a move to prioritize it" RIGHT-ALIGNED on the same button —
+ * surfacing the existing long-press-to-prioritize feature
+ * (_prioritizeReviewStep) exactly when it is useful. When no batch runs,
+ * the button is just the plain label. Rendered from state on full renders
+ * (_rvAnalyzeHTML) and kept in sync in place by _updateReviewAnalyzeBtn().
+ */
+function _rvAnalyzeBtnInnerHTML(){
+  const _label=_rvAnalyzeBtnLabel();
+  if(!_reviewAnalyzeAllActive)return _esc(_label);
+  return '<span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_esc(_label)+'</span>'
+    +'<span style="color:var(--accent);font-size:.66rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:1;min-width:0">'+T('review_batch_analyzing_hint')+'</span>';
+}
+/**
  * v1.0.8 PHASE 17: Live-refresh the "Analyze All" button label without
  * triggering a full render. Called from onEngineEval after each manual eval
  * completes — fixes the bug where the button stayed at "Analyze All (k/N)"
@@ -5454,32 +5319,9 @@ function _updateReviewAnalyzeBtn(){
   if(!reviewMode)return;
   const btn=document.getElementById('review-analyze-btn');
   if(!btn)return;
-  btn.textContent=_rvAnalyzeBtnLabel();
-}
-
-/**
- * v1.2.3 round-19: In-place insert/remove of the #review-batch-hint line
- *   under the review eval bar. reviewAnalyzeAll() sets
- *   _reviewAnalyzeAllActive=true WITHOUT a full render, so the hint must be
- *   inserted dynamically; batch completion/cancel paths already re-render
- *   (reviewGoTo/render at the end of _reviewAnalyzeAdvance, exitReview),
- *   which rebuilds the line from state via _rvBatchHintHTML. The id-check
- *   makes this idempotent, so a following full render never duplicates it.
- */
-function _updateReviewBatchHint(){
-  const _existing=document.getElementById('review-batch-hint');
-  if(!reviewMode||!_reviewAnalyzeAllActive){
-    if(_existing)_existing.remove();
-    return;
-  }
-  if(_existing)return;
-  const _bar=document.getElementById('review-eval-bar');
-  if(!_bar)return;
-  const _d=document.createElement('div');
-  _d.id='review-batch-hint';
-  _d.style.cssText='margin:0 0 2px;width:100%;box-sizing:border-box;font-size:.72rem;color:var(--accent);padding:2px 10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
-  _d.textContent=T('review_batch_analyzing_hint');
-  _bar.insertAdjacentElement('afterend',_d);
+  // v1.2.3 round-20: innerHTML (not textContent) — while a batch runs the
+  //   button carries the right-aligned hint span (_rvAnalyzeBtnInnerHTML).
+  btn.innerHTML=_rvAnalyzeBtnInnerHTML();
 }
 
 /**
@@ -5620,10 +5462,10 @@ function reviewAnalyzeAll(){
     return;
   }
   _reviewAnalyzeAllActive=true;
-  // v1.2.3 round-19: show the "batch in progress — long-press a move to
-  //   prioritize" hint line under the eval bar immediately (no full render
-  //   happens at batch start; the helper inserts it in place).
-  _updateReviewBatchHint();
+  // v1.2.3 round-20: immediately switch the analyze button to
+  //   label + right-aligned "batch in progress" hint (no full render
+  //   happens at batch start; the helper rewrites the button in place).
+  _updateReviewAnalyzeBtn();
   // v1.1.2 Phase 68 (Issue 30 P2): Clear any stale priority queue at batch
   //   start (defensive — should already be empty if the previous batch
   //   completed normally, but a crashed/canceled batch might have left entries).
@@ -6879,7 +6721,7 @@ function _cleanupEventListeners(){
 // whole `export {...}` line via regex, so there was no production impact,
 // but the list was misleading. Verified by grep — neither symbol is
 // declared in ui.js.
-export {render,markDirty,enterReview,reviewGoTo,reviewAnalyzeAll,exitReview,_resetGameUIState,_buildEvalTrendSVG,_refreshEvalTrendChart,_startEngineHeartbeat,_cleanupEventListeners,_reviewAnalyzeAdvance,_rvAnalyzeBtnLabel,_updateReviewAnalyzeBtn,
+export {render,enterReview,reviewGoTo,reviewAnalyzeAll,exitReview,_resetGameUIState,_buildEvalTrendSVG,_refreshEvalTrendChart,_startEngineHeartbeat,_cleanupEventListeners,_reviewAnalyzeAdvance,_rvAnalyzeBtnLabel,_updateReviewAnalyzeBtn,
 // v1.2.3 round-18: added posDesc — defined in this module and previously
 //   (incorrectly) exported from game-logic.js.
 posDesc};

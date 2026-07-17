@@ -55,6 +55,44 @@ if(ns){
 //   We call it FIRST, then set the FEN-import-specific values AFTER so
 //   they survive the reset.
 gameState=ns;_resetGameUIState();gameOverSoundPlayed=false;
+// v1.2.3 round-20 (known-issue B): Chess960 auto-detection on direct FEN
+//   import. Previously only importPGN did any variant detection (via the PGN
+//   [Variant] tag), so a Chess960 FEN pasted/loaded directly was treated as
+//   standard chess — standard castling movegen assumes king on e-file +
+//   corner rooks, so castling broke, the engine never got UCI_Chess960, and
+//   PGN round-trip lost the variant. Detection reuses _needsShredderFEN:
+//   any surviving castling right whose designated rook/king sits on a
+//   non-standard file implies a non-standard (Chess960) arrangement. The
+//   else-branch also resets a stale Chess960 mode from a previous game
+//   (previously the mode persisted across a standard FEN import).
+const _fenIs960=(typeof _needsShredderFEN==='function')&&_needsShredderFEN(ns);
+if(_fenIs960){
+  if(typeof setChess960Mode==='function')setChess960Mode(true);
+  if(typeof gameVariant!=='undefined')gameVariant='chess960';
+  ns.chess960=true;
+  // Try to derive the SP-ID from the WHITE back rank (meaningful only for a
+  //   full starting arrangement; mid-game FENs simply yield no SP-ID).
+  if(typeof gameSPID!=='undefined'){
+    gameSPID=null;
+    try{
+      if(typeof backRankToSPID==='function'){
+        const fenRows=fenStr.trim().split(/\s+/)[0].split('/');
+        if(fenRows.length===8){
+          const backRank=[];let _idx=0;
+          for(const ch of fenRows[7]){
+            if(ch>='1'&&ch<='8'){for(let k=0;k<Number.parseInt(ch,10);k++)backRank[_idx++]=null;}
+            else{const t=ch.toLowerCase()==='r'?'rook':ch.toLowerCase()==='n'?'knight':ch.toLowerCase()==='b'?'bishop':ch.toLowerCase()==='q'?'queen':ch.toLowerCase()==='k'?'king':null;if(t)backRank[_idx++]=t;}
+          }
+          if(_idx===8){const _spid=backRankToSPID(backRank);if(_spid>=0){gameSPID=_spid;ns.spid=_spid;}}
+        }
+      }
+    }catch(e){console.warn('[Import] SP-ID derivation failed:',e&&e.message?e.message:e);}
+  }
+}else{
+  if(typeof setChess960Mode==='function')setChess960Mode(false);
+  if(typeof gameVariant!=='undefined')gameVariant=null;
+  if(typeof gameSPID!=='undefined')gameSPID=null;
+}
 // v1.1.1 Phase 61: Now set the FEN-import-specific values (after reset).
 // _importedStartMoveNum: Track FEN's starting move number for correct display numbering.
 if(typeof _importedStartMoveNum!=='undefined'){
@@ -164,7 +202,7 @@ function _parsePGN(pgnText){
   //   single-line and multi-line PGN), and ALSO avoids stripping `[%csl ...]`
   //   / `[%cal ...]` / `[%eval ...]` / `[%emt ...]` inside brace comments
   //   (because `%` is not in `[A-Za-z]`).
-  let moveText=pgnText.replace(/\[[A-Za-z]\w*\s+[^\]]+\]/g,'').trim();
+  let moveText=pgnText.replace(/\[\w+\s+\S[^\]]*\]/g,'').trim(); // v1.2.3 round-20 (S8786): 相邻量词类互斥，消除超线性回溯（与 stats.html 四处同款修复）
   // Remove line continuation markers (\ at end of line)
   moveText=moveText.replace(/\\\s*\n/g,' ');
   

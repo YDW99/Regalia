@@ -1398,7 +1398,9 @@ function _resignGame(){
   //   430ms multi-stage pattern matching the somber arpeggio.
   try{HapticManager.fire('GAME_OVER');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
   // Force a full re-render to show the game-over overlay
-  markDirty(DIRTY_FULL);
+  //   (v1.2.3 round-20: markDirty removed as dead code — it always routed to
+  //   render() anyway, so call render() directly.)
+  render();
   // v1.1.1 Phase 66: Removed stale console.log (was left over from debugging).
 }
 
