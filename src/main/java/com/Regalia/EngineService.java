@@ -292,8 +292,10 @@ public class EngineService extends Service {
         if (!isRunning || info == null) return;
         lastStatusInfo = info;
         try {
-            // Must use the service's own context to update the notification
-            // since we need access to the notification channel
+            // v1.2.3 round-13 (P3): corrected misleading comment — NotificationManager.notify
+            //   works with any Context; the channel is looked up by CHANNEL_ID string,
+            //   not by Context identity. The caller-supplied context (typically an Activity
+            //   from the JS bridge) is fine here.
             android.app.NotificationManager nm =
                     (android.app.NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm == null) return;

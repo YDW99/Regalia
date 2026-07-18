@@ -118,7 +118,11 @@ function _parsePGNText(pgnText) {
   }
   // Extract headers
   var headers = {};
-  var headerRe = /\\[(\\w+)\\s+"((?:[^"\\\\]|\\\\.)*)"/g;
+  // v1.2.3 round-18 (bug fix): consume the closing bracket too. Without
+  //   the trailing bracket the replace below left a stray ']' token per
+  //   header, polluting the movetext token stream (7-tag roster = 7 junk
+  //   tokens). NOTE: no backticks here — inside the Worker template string.
+  var headerRe = /\\[(\\w+)\\s+"((?:[^"\\\\]|\\\\.)*)"\\]/g;
   var m;
   while ((m = headerRe.exec(text)) !== null) {
     headers[m[1]] = m[2].replace(/\\\\"/g, '"').replace(/\\\\\\\\/g, '\\\\');
@@ -166,7 +170,7 @@ function _parsePGNText(pgnText) {
     if (depth === 0) movetext += text[i];
   }
   // Clean up movetext
-  movetext = movetext.replace(/\\d+\\.+(\\d+\\.+)*/g, ' ');
+  movetext = movetext.replace(/\\d+\\.+/g, ' '); // v1.2.3 (S8786): (\d+\.+)* 尾组对 replace 语义冗余，去除嵌套量词
   movetext = movetext.replace(/\\$\\d+/g, ' ');
   var result = '*';
   var resultMatch = movetext.match(/(1-0|0-1|1\\/2-1\\/2|\\*)/);
@@ -436,7 +440,9 @@ function _syncParsePGNText(pgnText) {
     if (fenNoQuoteMatch) { startFEN = fenNoQuoteMatch[1].trim(); }
   }
   var headers = {};
-  var headerRe = /\[(\w+)\s+"((?:[^"\\]|\\.)*)"/g;
+  // v1.2.3 round-18 (bug fix): consume the closing bracket too (sync mirror
+  //   of the worker-side fix above — keep both copies semantically identical).
+  var headerRe = /\[(\w+)\s+"((?:[^"\\]|\\.)*)"\]/g;
   var m;
   while ((m = headerRe.exec(text)) !== null) {
     headers[m[1]] = m[2].replace(/\\"/g, '"').replace(/\\\\/g, '\\');
@@ -477,7 +483,7 @@ function _syncParsePGNText(pgnText) {
     if (text[i] === ')') { if (depth > 0) depth--; continue; }
     if (depth === 0) movetext += text[i];
   }
-  movetext = movetext.replace(/\d+\.+(\d+\.+)*/g, ' ');
+  movetext = movetext.replace(/\d+\.+/g, ' '); // v1.2.3 (S8786): (\d+\.+)* 尾组对 replace 语义冗余，去除嵌套量词
   movetext = movetext.replace(/\$\d+/g, ' ');
   var result = '*';
   var resultMatch = movetext.match(/(1-0|0-1|1\/2-1\/2|\*)/);

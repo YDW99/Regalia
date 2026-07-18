@@ -295,6 +295,15 @@ const _i18n={
 'priority_eval_toast':{zh:'已优先分析此走法，批量分析将在该步完成后继续',en:'Prioritizing this move. Batch resumes after this step completes.'},
 'priority_eval_already_cached':{zh:'此走法已分析完成',en:'This move is already analyzed.'},
 'priority_eval_not_in_review':{zh:'长按优先分析仅在复盘模式可用',en:'Long-press priority is only available in review mode.'},
+// v1.2.3 round-19: One-time startup hint toast — long-pressing the board
+//   toggles the sensor-based board anti-shake (MainActivity
+//   toggleStabilization; terminology aligned with its "棋盘防抖 /
+//   Board stabilization" toasts).
+'board_debounce_hint':{zh:'长按棋盘可开/关棋盘防抖',en:'Long-press the board to toggle board stabilization'},
+// v1.2.3 round-19: Hint line shown under the review eval bar while an
+//   analyze-all batch is running — tells the user about the existing
+//   long-press-to-prioritize feature (_prioritizeReviewStep).
+'review_batch_analyzing_hint':{zh:'批量分析进行中… 长按走法可设为优先',en:'Batch analysis in progress… Long-press a move to prioritize it'},
 'js_error':{zh:'JS错误',en:'JS error'},
 'promise_error':{zh:'Promise错误',en:'Promise error'},
 'engine_unavailable_hint':{zh:'引擎不可用',en:'Engine unavailable'},
@@ -305,6 +314,12 @@ const _i18n={
 'board':{zh:'棋盘',en:'Board'},
 'chart_global':{zh:'↹全局',en:'↹Global'},
 'step_label':{zh:'第',en:'Step'},
+// v1.2.3 round-12 (SonarCloud Bug #1 fix): Descriptive aria-label for the
+// review-mode slider <input type="range">. The previous aria-label used
+// step_label ("Step" / "第"), which is too terse for screen readers —
+// TalkBack would announce just "Step" with no context. This key gives the
+// control an unambiguous name (WCAG 2.1 Level A 4.1.2 Name, Role, Value).
+'review_move_slider':{zh:'复盘步数',en:'Review move number'},
 'built_in':{zh:'内置',en:'Built-in'},
 'skill_level_desc':{zh:'降低引擎技术水平（0=最弱，20=最强）',en:'Reduce engine skill (0=weakest, 20=strongest)'},
 'skill_elo_note':{zh:'限制Elo开启时，Skill Level由UCI_Elo自动决定',en:'Skill Level auto-set by UCI_Elo when Limit Elo is on'},
@@ -584,6 +599,7 @@ const _i18n={
 'setup_ep_err_multiple':{zh:'棋盘上最多只能有一个过路兵标记',en:'At most one en-passant marker is allowed on the board'},
 'setup_ep_err_no_pawn':{zh:'过路兵标记必须与兵在同一格',en:'En-passant marker must share the square with a pawn'},
 'setup_ep_err_wrong_rank':{zh:'过路兵标记所在的兵必须在第 4 行（白兵）或第 5 行（黑兵）',en:'Pawn with en-passant marker must be on rank 4 (white) or rank 5 (black)'},
+'setup_ep_err_blocked':{zh:'过路兵的跳过格或起始格被占用，该标记非法',en:'En-passant marker illegal: skipped or origin square is occupied'},
 'setup_ep_err_wrong_color':{zh:'过路兵标记所在的兵的颜色必须与走棋方不同',en:'Pawn with en-passant marker must be the opposite color of the side to move'},
 'setup_ep_err_no_capturer':{zh:'过路兵标记所在的兵的左或右侧必须有相邻的异色兵（可吃过路兵的兵）',en:'Pawn with en-passant marker must have an adjacent enemy pawn that can capture it'},
 };
@@ -652,7 +668,7 @@ let _safeInsets={top:0,bottom:0,left:0,right:0};
 function _readSafeInsets(){
   try{
     const cs=getComputedStyle(document.documentElement);
-    const _parse=(v)=>{const m=Number.parseFloat(v);return isNaN(m)?0:m;};
+    const _parse=(v)=>{const m=Number.parseFloat(v);return Number.isNaN(m)?0:m;};
     _safeInsets.top=_parse(cs.getPropertyValue('--safe-top'))||0;
     _safeInsets.bottom=_parse(cs.getPropertyValue('--safe-bottom'))||0;
     _safeInsets.left=_parse(cs.getPropertyValue('--safe-left'))||0;
@@ -830,7 +846,7 @@ function algPos(a){if(!a)return null;
   // v1.0.8 PHASE 30: also reject strings longer than 2 chars (e.g. 'e4e5' move
   //   strings, 'e10' malformed input) which were silently truncated before.
   if(typeof a!=='string'||a.length!==2)return null;
-  try{const col=a.charCodeAt(0)-97,row=8-parseInt(a[1],10);if(col<0||col>7||isNaN(row)||row<0||row>7)return null;return{row,col}}catch(e){return null}}
+  try{const col=a.charCodeAt(0)-97,row=8-Number.parseInt(a[1],10);if(col<0||col>7||Number.isNaN(row)||row<0||row>7)return null;return{row,col}}catch(e){return null}}
 function inB(r,c){return r>=0&&r<8&&c>=0&&c<8}
 
 // AI-GEN: AI assisted
@@ -1401,7 +1417,9 @@ function _reattachActiveAnimations(){
 function initBoard(){const b=Array.from({length:8},()=>Array(8).fill(null));const backRank=['rook','knight','bishop','queen','king','bishop','knight','rook'];for(let c=0;c<8;c++){b[0][c]={type:backRank[c],color:'black'};b[1][c]={type:'pawn',color:'black'};b[6][c]={type:'pawn',color:'white'};b[7][c]={type:backRank[c],color:'white'}}return b}
 // Returns all squares this piece attacks
 function attacked(board,pos){const b=board,p=b[pos.row][pos.col];if(!p)return[];const r=pos.row,c=pos.col,co=p.color,mv=[];if(p.type==='pawn'){const d=co==='white'?-1:1;for(const dc of[-1,1])if(inB(r+d,c+dc))mv.push({row:r+d,col:c+dc})}else if(p.type==='knight'){for(const[dr,dc]of KNIGHT_OFFSETS)if(inB(r+dr,c+dc))mv.push({row:r+dr,col:c+dc})}else if(p.type==='king'){for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++)if((dr||dc)&&inB(r+dr,c+dc))mv.push({row:r+dr,col:c+dc})}else{const dirs=p.type==='rook'?DIR_ROOK:p.type==='bishop'?DIR_BISHOP:DIR_QUEEN;for(const[dr,dc]of dirs){let nr=r+dr,nc=c+dc;while(inB(nr,nc)){mv.push({row:nr,col:nc});if(b[nr][nc])break;nr+=dr;nc+=dc}}}return mv}
-function initState(){const s={board:initBoard(),currentTurn:'white',castlingRights:{whiteKingside:true,whiteQueenside:true,blackKingside:true,blackQueenside:true},enPassantTarget:null,halfMoveClock:0,fullMoveNumber:1,moveHistory:[],posCount:new Map(),wk:{row:7,col:4},bk:{row:0,col:4},hash:0,boardVersion:1};syncHash(s);s.posCount.set(s.hash,1);return s}
+function initState(){const s={board:initBoard(),currentTurn:'white',castlingRights:{whiteKingside:true,whiteQueenside:true,blackKingside:true,blackQueenside:true,
+// v1.2.3 round-20 (A-1): standard chess designates the corner rooks (h/a files)
+whiteKingsideRookFile:7,whiteQueensideRookFile:0,blackKingsideRookFile:7,blackQueensideRookFile:0},enPassantTarget:null,halfMoveClock:0,fullMoveNumber:1,moveHistory:[],posCount:new Map(),wk:{row:7,col:4},bk:{row:0,col:4},hash:0,boardVersion:1};syncHash(s);s.posCount.set(s.hash,1);return s}
 // v1.0.7: validateSetupPosition now also validates the manual 🔁 castle markers
 // and the ⚡ en-passant marker carried on s.setupCastleMarks (a Set of "r*8+c"
 // keys) and s.setupEpMark ({row,col}|null). Both validations follow the
@@ -1484,15 +1502,16 @@ function _validateSetupCastleMarks(s,errs){
   if(!errs)return;
   if(!s.setupCastleMarks||s.setupCastleMarks.size===0){
     // No markers → no castling rights for either color.
-    s.castlingRights={whiteKingside:false,whiteQueenside:false,blackKingside:false,blackQueenside:false};
+    // v1.2.3 round-20 (A-1): also reset the designated rook files.
+    s.castlingRights={whiteKingside:false,whiteQueenside:false,blackKingside:false,blackQueenside:false,whiteKingsideRookFile:null,whiteQueensideRookFile:null,blackKingsideRookFile:null,blackQueensideRookFile:null};
     return;
   }
   // Reset all rights — only marker-validated rights will be set true.
-  s.castlingRights={whiteKingside:false,whiteQueenside:false,blackKingside:false,blackQueenside:false};
+  s.castlingRights={whiteKingside:false,whiteQueenside:false,blackKingside:false,blackQueenside:false,whiteKingsideRookFile:null,whiteQueensideRookFile:null,blackKingsideRookFile:null,blackQueensideRookFile:null};
   // Group markers by color of the rook on that square.
   const byColor={white:[],black:[]};
   for(const key of s.setupCastleMarks){
-    const idx=parseInt(key,10);
+    const idx=Number.parseInt(key,10);
     // v1.2.1 round-9: Guard against malformed keys. parseInt returns NaN for
     // non-numeric strings; `NaN>>3` is 0 and `NaN&7` is 0, so a malformed key
     // would silently map to (row=0, col=0) = a8 and either be incorrectly
@@ -1528,8 +1547,11 @@ function _validateSetupCastleMarks(s,errs){
     if(ksr.length>1)errs.push(T('setup_castle_err_dup_side')+' ('+(color==='white'?'O-O':'o-o')+')');
     if(qsr.length>1)errs.push(T('setup_castle_err_dup_side')+' ('+(color==='white'?'O-O-O':'o-o-o')+')');
     // Mark valid rights (no error if exactly one rook on the side)
-    if(ksr.length===1)s.castlingRights[color+'Kingside']=true;
-    if(qsr.length===1)s.castlingRights[color+'Queenside']=true;
+    // v1.2.3 round-20 (A-1): the explicitly 🔁-marked rook IS the designated
+    //   castling rook — record its file so later ambiguity resolution
+    //   (findDesignatedCastlingRook) needs no heuristic.
+    if(ksr.length===1){s.castlingRights[color+'Kingside']=true;s.castlingRights[color+'KingsideRookFile']=ksr[0].c;}
+    if(qsr.length===1){s.castlingRights[color+'Queenside']=true;s.castlingRights[color+'QueensideRookFile']=qsr[0].c;}
   }
 }
 
@@ -1576,6 +1598,17 @@ function _validateSetupEpMark(s,errs){
   }
   // v1.0.7 PHASE 6: en-passant target = the SKIPPED square.
   const epTargetRow=p.color==='white'?row+1:row-1;
+  // v1.2.3 round-18 (bug fix): the skipped square AND the pawn's origin
+  //   square must both be EMPTY — a double push passes over the skipped
+  //   square from the origin, so an occupied square on either makes the
+  //   en-passant marker illegal (fenToState has the same gap, noted in the
+  //   round-18 review). Origin: white pawn on row 4 came from row 6; black
+  //   pawn on row 3 came from row 1.
+  const _epOriginRow=p.color==='white'?row+2:row-2;
+  if((s.board[epTargetRow]&&s.board[epTargetRow][col])||(s.board[_epOriginRow]&&s.board[_epOriginRow][col])){
+    errs.push(T('setup_ep_err_blocked')+' ('+posAlg({row,col})+')');
+    s.enPassantTarget=null;return;
+  }
   s.enPassantTarget={row:epTargetRow,col};
 }
 
@@ -2020,7 +2053,7 @@ if(_cs&&_savedRook&&_rookFrom>=0&&_rookTo>=0){
   }
 }
 if(promotion)ns.board[to.row][to.col]={type:promotion,color:piece.color};
-if(piece.type==='king'){if(piece.color==='white'){ns.wk={row:to.row,col:to.col};ns.castlingRights.whiteKingside=false;ns.castlingRights.whiteQueenside=false}else{ns.bk={row:to.row,col:to.col};ns.castlingRights.blackKingside=false;ns.castlingRights.blackQueenside=false}}
+if(piece.type==='king'){if(piece.color==='white'){ns.wk={row:to.row,col:to.col};ns.castlingRights.whiteKingside=false;ns.castlingRights.whiteQueenside=false;ns.castlingRights.whiteKingsideRookFile=null;ns.castlingRights.whiteQueensideRookFile=null}else{ns.bk={row:to.row,col:to.col};ns.castlingRights.blackKingside=false;ns.castlingRights.blackQueenside=false;ns.castlingRights.blackKingsideRookFile=null;ns.castlingRights.blackQueensideRookFile=null}}
 if(piece.type==='rook'){
 // v1.0.7 PHASE 3: Always use Chess960 rook-position detection (findCastlingRooks)
 // so that castling rights are correctly cleared when a rook that holds castle
@@ -2029,22 +2062,30 @@ if(piece.type==='rook'){
 if(typeof findCastlingRooks==='function'){
   const rooks=findCastlingRooks(s.board,piece.color);
   if(rooks){
-    if(piece.color==='white'){if(from.col===rooks.kingside)ns.castlingRights.whiteKingside=false;if(from.col===rooks.queenside)ns.castlingRights.whiteQueenside=false;}
-    else{if(from.col===rooks.kingside)ns.castlingRights.blackKingside=false;if(from.col===rooks.queenside)ns.castlingRights.blackQueenside=false;}
+    // v1.2.3 round-20 (A-1): the rook whose move clears a right is the
+    //   FEN/game-DESIGNATED one when recorded (same-side-two-rooks
+    //   disambiguation); the closest-rook heuristic is only the fallback.
+    const _mvKs=(typeof findDesignatedCastlingRook==='function')?findDesignatedCastlingRook(s,piece.color,'kingside'):rooks.kingside;
+    const _mvQs=(typeof findDesignatedCastlingRook==='function')?findDesignatedCastlingRook(s,piece.color,'queenside'):rooks.queenside;
+    if(piece.color==='white'){if(from.col===_mvKs){ns.castlingRights.whiteKingside=false;ns.castlingRights.whiteKingsideRookFile=null;}if(from.col===_mvQs){ns.castlingRights.whiteQueenside=false;ns.castlingRights.whiteQueensideRookFile=null;}}
+    else{if(from.col===_mvKs){ns.castlingRights.blackKingside=false;ns.castlingRights.blackKingsideRookFile=null;}if(from.col===_mvQs){ns.castlingRights.blackQueenside=false;ns.castlingRights.blackQueensideRookFile=null;}}
   }
 }else{
-  if(from.row===7&&from.col===0)ns.castlingRights.whiteQueenside=false;if(from.row===7&&from.col===7)ns.castlingRights.whiteKingside=false;if(from.row===0&&from.col===0)ns.castlingRights.blackQueenside=false;if(from.row===0&&from.col===7)ns.castlingRights.blackKingside=false;
+  if(from.row===7&&from.col===0){ns.castlingRights.whiteQueenside=false;ns.castlingRights.whiteQueensideRookFile=null;}if(from.row===7&&from.col===7){ns.castlingRights.whiteKingside=false;ns.castlingRights.whiteKingsideRookFile=null;}if(from.row===0&&from.col===0){ns.castlingRights.blackQueenside=false;ns.castlingRights.blackQueensideRookFile=null;}if(from.row===0&&from.col===7){ns.castlingRights.blackKingside=false;ns.castlingRights.blackKingsideRookFile=null;}
 }
 }
 if(capPiece&&capPiece.type==='rook'){
 if(typeof findCastlingRooks==='function'){
   const rooks=findCastlingRooks(s.board,capPiece.color);
   if(rooks){
-    if(capPiece.color==='white'){if(to.col===rooks.kingside)ns.castlingRights.whiteKingside=false;if(to.col===rooks.queenside)ns.castlingRights.whiteQueenside=false;}
-    else{if(to.col===rooks.kingside)ns.castlingRights.blackKingside=false;if(to.col===rooks.queenside)ns.castlingRights.blackQueenside=false;}
+    // v1.2.3 round-20 (A-1): designated-file precedence (see rook-move above).
+    const _cpKs=(typeof findDesignatedCastlingRook==='function')?findDesignatedCastlingRook(s,capPiece.color,'kingside'):rooks.kingside;
+    const _cpQs=(typeof findDesignatedCastlingRook==='function')?findDesignatedCastlingRook(s,capPiece.color,'queenside'):rooks.queenside;
+    if(capPiece.color==='white'){if(to.col===_cpKs){ns.castlingRights.whiteKingside=false;ns.castlingRights.whiteKingsideRookFile=null;}if(to.col===_cpQs){ns.castlingRights.whiteQueenside=false;ns.castlingRights.whiteQueensideRookFile=null;}}
+    else{if(to.col===_cpKs){ns.castlingRights.blackKingside=false;ns.castlingRights.blackKingsideRookFile=null;}if(to.col===_cpQs){ns.castlingRights.blackQueenside=false;ns.castlingRights.blackQueensideRookFile=null;}}
   }
 }else{
-  if(capPiece.color==='white'){if(to.row===7&&to.col===0)ns.castlingRights.whiteQueenside=false;if(to.row===7&&to.col===7)ns.castlingRights.whiteKingside=false}else{if(to.row===0&&to.col===0)ns.castlingRights.blackQueenside=false;if(to.row===0&&to.col===7)ns.castlingRights.blackKingside=false}
+  if(capPiece.color==='white'){if(to.row===7&&to.col===0){ns.castlingRights.whiteQueenside=false;ns.castlingRights.whiteQueensideRookFile=null;}if(to.row===7&&to.col===7){ns.castlingRights.whiteKingside=false;ns.castlingRights.whiteKingsideRookFile=null;}}else{if(to.row===0&&to.col===0){ns.castlingRights.blackQueenside=false;ns.castlingRights.blackQueensideRookFile=null;}if(to.row===0&&to.col===7){ns.castlingRights.blackKingside=false;ns.castlingRights.blackKingsideRookFile=null;}}
 }
 }
 if(piece.type==='pawn'&&Math.abs(to.row-from.row)===2){const epRow=(from.row+to.row)/2;const opp=OPP_COLOR[piece.color];const pd=opp==='white'?1:-1;let _epH=false;for(const dc of[-1,1]){const cr=epRow+pd,cc=from.col+dc;if(inB(cr,cc)&&ns.board[cr][cc]&&ns.board[cr][cc].type==='pawn'&&ns.board[cr][cc].color===opp){_epH=true;break;}}ns.enPassantTarget=_epH?{row:epRow,col:from.col}:null;}else{ns.enPassantTarget=null;}
@@ -2148,15 +2189,21 @@ let _capturedRookSide=null;
 if(!_cs && piece.type==='rook' && typeof findCastlingRooks==='function'){
   const _r=findCastlingRooks(s.board,piece.color);
   if(_r){
-    if(_r.kingside!==null&&_r.kingside===from.col)_movingRookSide='kingside';
-    else if(_r.queenside!==null&&_r.queenside===from.col)_movingRookSide='queenside';
+    // v1.2.3 round-20 (A-1): designated-file precedence over closest-rook.
+    const _mvKs2=(typeof findDesignatedCastlingRook==='function')?findDesignatedCastlingRook(s,piece.color,'kingside'):_r.kingside;
+    const _mvQs2=(typeof findDesignatedCastlingRook==='function')?findDesignatedCastlingRook(s,piece.color,'queenside'):_r.queenside;
+    if(_mvKs2!==null&&_mvKs2===from.col)_movingRookSide='kingside';
+    else if(_mvQs2!==null&&_mvQs2===from.col)_movingRookSide='queenside';
   }
 }
 if(!_cs && capPiece && capPiece.type==='rook' && typeof findCastlingRooks==='function'){
   const _r=findCastlingRooks(s.board,capPiece.color);
   if(_r){
-    if(_r.kingside!==null&&_r.kingside===to.col)_capturedRookSide='kingside';
-    else if(_r.queenside!==null&&_r.queenside===to.col)_capturedRookSide='queenside';
+    // v1.2.3 round-20 (A-1): designated-file precedence over closest-rook.
+    const _cpKs2=(typeof findDesignatedCastlingRook==='function')?findDesignatedCastlingRook(s,capPiece.color,'kingside'):_r.kingside;
+    const _cpQs2=(typeof findDesignatedCastlingRook==='function')?findDesignatedCastlingRook(s,capPiece.color,'queenside'):_r.queenside;
+    if(_cpKs2!==null&&_cpKs2===to.col)_capturedRookSide='kingside';
+    else if(_cpQs2!==null&&_cpQs2===to.col)_capturedRookSide='queenside';
   }
 }
 // Capture undo info
@@ -2222,8 +2269,8 @@ if(_cs&&_savedRook&&_rookFrom>=0&&_rookTo>=0){
 if(promotion)s.board[to.row][to.col]={type:promotion,color:piece.color};
 // 5. Update king position + castling rights
 if(piece.type==='king'){
-if(piece.color==='white'){s.wk={row:to.row,col:to.col};s.castlingRights.whiteKingside=false;s.castlingRights.whiteQueenside=false}
-else{s.bk={row:to.row,col:to.col};s.castlingRights.blackKingside=false;s.castlingRights.blackQueenside=false}
+if(piece.color==='white'){s.wk={row:to.row,col:to.col};s.castlingRights.whiteKingside=false;s.castlingRights.whiteQueenside=false;s.castlingRights.whiteKingsideRookFile=null;s.castlingRights.whiteQueensideRookFile=null}
+else{s.bk={row:to.row,col:to.col};s.castlingRights.blackKingside=false;s.castlingRights.blackQueenside=false;s.castlingRights.blackKingsideRookFile=null;s.castlingRights.blackQueensideRookFile=null}
 }
 // 6. Update castling rights for rook moves
 // v1.0.7 PHASE 18 Task 3 (bug fix): Use the pre-mutation snapshot
@@ -2234,33 +2281,33 @@ else{s.bk={row:to.row,col:to.col};s.castlingRights.blackKingside=false;s.castlin
 // (a small perf win).
 if(piece.type==='rook'&&_movingRookSide){
   if(piece.color==='white'){
-    if(_movingRookSide==='kingside')s.castlingRights.whiteKingside=false;
-    else s.castlingRights.whiteQueenside=false;
+    if(_movingRookSide==='kingside'){s.castlingRights.whiteKingside=false;s.castlingRights.whiteKingsideRookFile=null;}
+    else{s.castlingRights.whiteQueenside=false;s.castlingRights.whiteQueensideRookFile=null;}
   }else{
-    if(_movingRookSide==='kingside')s.castlingRights.blackKingside=false;
-    else s.castlingRights.blackQueenside=false;
+    if(_movingRookSide==='kingside'){s.castlingRights.blackKingside=false;s.castlingRights.blackKingsideRookFile=null;}
+    else{s.castlingRights.blackQueenside=false;s.castlingRights.blackQueensideRookFile=null;}
   }
 }else if(piece.type==='rook'&&!_movingRookSide){
   // Fallback: chess960.js not loaded OR rook not on a castling source square.
   // Use standard-chess rook positions as a safe default.
-  if(from.row===7&&from.col===0)s.castlingRights.whiteQueenside=false;
-  if(from.row===7&&from.col===7)s.castlingRights.whiteKingside=false;
-  if(from.row===0&&from.col===0)s.castlingRights.blackQueenside=false;
-  if(from.row===0&&from.col===7)s.castlingRights.blackKingside=false;
+  if(from.row===7&&from.col===0){s.castlingRights.whiteQueenside=false;s.castlingRights.whiteQueensideRookFile=null;}
+  if(from.row===7&&from.col===7){s.castlingRights.whiteKingside=false;s.castlingRights.whiteKingsideRookFile=null;}
+  if(from.row===0&&from.col===0){s.castlingRights.blackQueenside=false;s.castlingRights.blackQueensideRookFile=null;}
+  if(from.row===0&&from.col===7){s.castlingRights.blackKingside=false;s.castlingRights.blackKingsideRookFile=null;}
 }
 // 7. Update castling rights for rook captures
 if(capPiece&&capPiece.type==='rook'&&_capturedRookSide){
   if(capPiece.color==='white'){
-    if(_capturedRookSide==='kingside')s.castlingRights.whiteKingside=false;
-    else s.castlingRights.whiteQueenside=false;
+    if(_capturedRookSide==='kingside'){s.castlingRights.whiteKingside=false;s.castlingRights.whiteKingsideRookFile=null;}
+    else{s.castlingRights.whiteQueenside=false;s.castlingRights.whiteQueensideRookFile=null;}
   }else{
-    if(_capturedRookSide==='kingside')s.castlingRights.blackKingside=false;
-    else s.castlingRights.blackQueenside=false;
+    if(_capturedRookSide==='kingside'){s.castlingRights.blackKingside=false;s.castlingRights.blackKingsideRookFile=null;}
+    else{s.castlingRights.blackQueenside=false;s.castlingRights.blackQueensideRookFile=null;}
   }
 }else if(capPiece&&capPiece.type==='rook'&&!_capturedRookSide){
   // Fallback: standard-chess rook positions.
-  if(capPiece.color==='white'){if(to.row===7&&to.col===0)s.castlingRights.whiteQueenside=false;if(to.row===7&&to.col===7)s.castlingRights.whiteKingside=false}
-  else{if(to.row===0&&to.col===0)s.castlingRights.blackQueenside=false;if(to.row===0&&to.col===7)s.castlingRights.blackKingside=false}
+  if(capPiece.color==='white'){if(to.row===7&&to.col===0){s.castlingRights.whiteQueenside=false;s.castlingRights.whiteQueensideRookFile=null;}if(to.row===7&&to.col===7){s.castlingRights.whiteKingside=false;s.castlingRights.whiteKingsideRookFile=null;}}
+  else{if(to.row===0&&to.col===0){s.castlingRights.blackQueenside=false;s.castlingRights.blackQueensideRookFile=null;}if(to.row===0&&to.col===7){s.castlingRights.blackKingside=false;s.castlingRights.blackKingsideRookFile=null;}}
 }
 // 8. Set en passant target (only if an enemy pawn can actually capture)
 const oldEP=s.enPassantTarget;
@@ -2797,7 +2844,13 @@ const tbMove=bestMoveFromTablebase(tbData);
 if(tbMove){
 const coords=uciToCoords(tbMove.uci);
 // Use saved board reference to validate move still applies
-if(coords&&_tbSavedBoard[coords.from.row]&&_tbSavedBoard[coords.from.row][coords.from.col]){
+// v1.2.3 round-18 (bug fix): also require the live board to BE the saved
+//   board (reference equality). The TB fetch is async — if the position
+//   changed while in-flight (undo/new game), the saved-board check alone
+//   would pass and executeMove would inject the TB move into a DIFFERENT
+//   game. On mismatch fall through to the Stockfish path, which recomputes
+//   from the fresh state.
+if(coords&&gameState.board===_tbSavedBoard&&_tbSavedBoard[coords.from.row]&&_tbSavedBoard[coords.from.row][coords.from.col]){
 // v1.0.4 Rev32 FIX: same as ECO book move — reset _aiRetryCount so the
 // safety-counter doesn't accumulate across tablebase-served moves.
 isAIThinking=false;_aiBarInfo='';_aiRetryCount=0;if(_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
@@ -3082,4 +3135,9 @@ function _prependBlackToMovePlaceholder(){
 //   2. Removed `fenToState` — it is defined in tablebase.js (line 1729),
 //      NOT in this file. It belongs in tablebase.js's export list (added
 //      there in this round). The previous entry here was wrong.
-export {PV,OPP_COLOR,SQ_LIGHT,SQ_DARK,SQ_SEL,LBL_LIGHT,LBL_DARK,LBL_STROKE_LIGHT,LBL_STROKE_DARK,SYM,PN,PN_EN,pieceName,_principlesHTML,KNIGHT_OFFSETS,DIR_ROOK,DIR_BISHOP,DIR_QUEEN,ELO_MATCH,getAI_LEVELS,CELL,REVIEW_CELL,zobrist,initBoard,attacked,initState,validateSetupPosition,cloneB,cloneS,sqAttackedFast,inCheck,pseudoMoves,legalMoves,hasLegalMoves,moveAlg,getCtrlMap,makeMv,makeMvInPlace,unmakeMv,gameStatus,isDeadPosition,generateFEN,uciToCoords,_esc,posAlg,algPos,inB,pieceZobristIdx,computeHash,syncHash,_refreshStateAfterSetup,_recalcCellSize,getEffectiveAILevel,posEmoji,posDesc,T,toggleLang,_lang,_i18n,_prependBlackToMovePlaceholder,_reattachActiveAnimations,_activeAnimEls,computeVisibleCastleMarks,computeVisibleEpMark};
+// v1.2.3 round-18: Removed `generateFEN`/`uciToCoords`/`_esc` (defined in
+//   ai-bridge.js and exported there) and `posDesc` (defined in ui.js and
+//   exported there). Exporting symbols not declared in this module is a
+//   link-time SyntaxError in source-module mode; bundled mode strips this
+//   line so production was unaffected, but the list was misleading.
+export {PV,OPP_COLOR,SQ_LIGHT,SQ_DARK,SQ_SEL,LBL_LIGHT,LBL_DARK,LBL_STROKE_LIGHT,LBL_STROKE_DARK,SYM,PN,PN_EN,pieceName,_principlesHTML,KNIGHT_OFFSETS,DIR_ROOK,DIR_BISHOP,DIR_QUEEN,ELO_MATCH,getAI_LEVELS,CELL,REVIEW_CELL,zobrist,initBoard,attacked,initState,validateSetupPosition,cloneB,cloneS,sqAttackedFast,inCheck,pseudoMoves,legalMoves,hasLegalMoves,moveAlg,getCtrlMap,makeMv,makeMvInPlace,unmakeMv,gameStatus,isDeadPosition,posAlg,algPos,inB,pieceZobristIdx,computeHash,syncHash,_refreshStateAfterSetup,_recalcCellSize,getEffectiveAILevel,posEmoji,T,toggleLang,_lang,_i18n,_prependBlackToMovePlaceholder,_reattachActiveAnimations,_activeAnimEls,computeVisibleCastleMarks,computeVisibleEpMark};

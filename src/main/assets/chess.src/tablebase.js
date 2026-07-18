@@ -55,6 +55,44 @@ if(ns){
 //   We call it FIRST, then set the FEN-import-specific values AFTER so
 //   they survive the reset.
 gameState=ns;_resetGameUIState();gameOverSoundPlayed=false;
+// v1.2.3 round-20 (known-issue B): Chess960 auto-detection on direct FEN
+//   import. Previously only importPGN did any variant detection (via the PGN
+//   [Variant] tag), so a Chess960 FEN pasted/loaded directly was treated as
+//   standard chess — standard castling movegen assumes king on e-file +
+//   corner rooks, so castling broke, the engine never got UCI_Chess960, and
+//   PGN round-trip lost the variant. Detection reuses _needsShredderFEN:
+//   any surviving castling right whose designated rook/king sits on a
+//   non-standard file implies a non-standard (Chess960) arrangement. The
+//   else-branch also resets a stale Chess960 mode from a previous game
+//   (previously the mode persisted across a standard FEN import).
+const _fenIs960=(typeof _needsShredderFEN==='function')&&_needsShredderFEN(ns);
+if(_fenIs960){
+  if(typeof setChess960Mode==='function')setChess960Mode(true);
+  if(typeof gameVariant!=='undefined')gameVariant='chess960';
+  ns.chess960=true;
+  // Try to derive the SP-ID from the WHITE back rank (meaningful only for a
+  //   full starting arrangement; mid-game FENs simply yield no SP-ID).
+  if(typeof gameSPID!=='undefined'){
+    gameSPID=null;
+    try{
+      if(typeof backRankToSPID==='function'){
+        const fenRows=fenStr.trim().split(/\s+/)[0].split('/');
+        if(fenRows.length===8){
+          const backRank=[];let _idx=0;
+          for(const ch of fenRows[7]){
+            if(ch>='1'&&ch<='8'){for(let k=0;k<Number.parseInt(ch,10);k++)backRank[_idx++]=null;}
+            else{const t=ch.toLowerCase()==='r'?'rook':ch.toLowerCase()==='n'?'knight':ch.toLowerCase()==='b'?'bishop':ch.toLowerCase()==='q'?'queen':ch.toLowerCase()==='k'?'king':null;if(t)backRank[_idx++]=t;}
+          }
+          if(_idx===8){const _spid=backRankToSPID(backRank);if(_spid>=0){gameSPID=_spid;ns.spid=_spid;}}
+        }
+      }
+    }catch(e){console.warn('[Import] SP-ID derivation failed:',e&&e.message?e.message:e);}
+  }
+}else{
+  if(typeof setChess960Mode==='function')setChess960Mode(false);
+  if(typeof gameVariant!=='undefined')gameVariant=null;
+  if(typeof gameSPID!=='undefined')gameSPID=null;
+}
 // v1.1.1 Phase 61: Now set the FEN-import-specific values (after reset).
 // _importedStartMoveNum: Track FEN's starting move number for correct display numbering.
 if(typeof _importedStartMoveNum!=='undefined'){
@@ -164,7 +202,7 @@ function _parsePGN(pgnText){
   //   single-line and multi-line PGN), and ALSO avoids stripping `[%csl ...]`
   //   / `[%cal ...]` / `[%eval ...]` / `[%emt ...]` inside brace comments
   //   (because `%` is not in `[A-Za-z]`).
-  let moveText=pgnText.replace(/\[[A-Za-z]\w*\s+[^\]]+\]/g,'').trim();
+  let moveText=pgnText.replace(/\[\w+\s+\S[^\]]*\]/g,'').trim(); // v1.2.3 round-20 (S8786): 相邻量词类互斥，消除超线性回溯（与 stats.html 四处同款修复）
   // Remove line continuation markers (\ at end of line)
   moveText=moveText.replace(/\\\s*\n/g,' ');
   
@@ -322,23 +360,23 @@ function _parsePGN(pgnText){
           let _ev=null,_mate=null;
           if(_val.startsWith('#')){
             // Mate notation: #5, #-3
-            const _mn=parseInt(_val.substring(1),10);
-            if(!isNaN(_mn)){
+            const _mn=Number.parseInt(_val.substring(1),10);
+            if(!Number.isNaN(_mn)){
               _mate=_mn;
               _ev=_mn>0?99999:-99999;
             }
           }else if(/^[-+]?M\d+$/i.test(_val)){
             // Alternate mate notation: M5, -M3, +M5 (rare, some engines)
             const _sign=_val.startsWith('-')?-1:1;
-            const _mn=parseInt(_val.replace(/^[-+]*M/i,''),10);
-            if(!isNaN(_mn)){
+            const _mn=Number.parseInt(_val.replace(/^[-+]*M/i,''),10);
+            if(!Number.isNaN(_mn)){
               _mate=_sign*_mn;
               _ev=_sign>0?99999:-99999;
             }
           }else{
             // Centipawn / pawn value: 0.35, -1.5, +2.00
             const _pawns=Number.parseFloat(_val);
-            if(!isNaN(_pawns)){
+            if(!Number.isNaN(_pawns)){
               _ev=Math.round(_pawns*100);
               _mate=0;
             }
@@ -414,7 +452,11 @@ function _parsePGN(pgnText){
       if(_ch==='('){_depth++;_i++;continue;}
       if(_ch===')'){_depth=Math.max(0,_depth-1);_i++;continue;}
       // Outside parens (depth 0): a non-whitespace token starting a move
-      if(_depth===0&&/[a-hKQRBNBO]/.test(_ch)){
+      // v1.2.3 round-18 (bug fix): include '0' so digit-style castling
+      //   (0-0 / 0-0-0) is counted as a move. Previously these tokens were
+      //   skipped, so _moveCount lagged by one and ALL subsequent annotations
+      //   ([%eval]/[%csl]/[%cal]/comments) attached to the wrong move.
+      if(_depth===0&&/[a-hKQRBNBO0]/.test(_ch)){
         // Check if this looks like a SAN move (not a move number, result, etc.)
         // Read the token
         let _j=_i;
@@ -842,9 +884,9 @@ function _applySANMove(state,san){
   let destCol,destRow;
   try{
     destCol=destStr.charCodeAt(0)-97;
-    destRow=8-parseInt(destStr[1],10);
+    destRow=8-Number.parseInt(destStr[1],10);
   }catch(e){return null;}
-  if(destCol<0||destCol>7||destRow<0||destRow>7||isNaN(destRow))return null;
+  if(destCol<0||destCol>7||destRow<0||destRow>7||Number.isNaN(destRow))return null;
   
   // Disambiguation: everything between piece letter and destination
   let disambig=cleanSAN.slice(idx,-2);
@@ -854,7 +896,7 @@ function _applySANMove(state,san){
   let disambigFile=-1,disambigRank=-1;
   for(const ch of disambig){
     if(ch>='a'&&ch<='h')disambigFile=ch.charCodeAt(0)-97;
-    else if(ch>='1'&&ch<='8')disambigRank=8-parseInt(ch,10);
+    else if(ch>='1'&&ch<='8')disambigRank=8-Number.parseInt(ch,10);
   }
   
   // Determine if capture was indicated in original SAN
@@ -1013,7 +1055,7 @@ function importPGN(pgnText){
           const backRank=[];
           let idx=0;
           for(const ch of whiteRow){
-            if(ch>='1'&&ch<='8'){for(let k=0;k<parseInt(ch,10);k++){backRank[idx++]=null;}}
+            if(ch>='1'&&ch<='8'){for(let k=0;k<Number.parseInt(ch,10);k++){backRank[idx++]=null;}}
             else{
               const t=ch.toLowerCase()==='r'?'rook':ch.toLowerCase()==='n'?'knight':ch.toLowerCase()==='b'?'bishop':ch.toLowerCase()==='q'?'queen':ch.toLowerCase()==='k'?'king':null;
               if(t)backRank[idx++]=t;
@@ -1024,6 +1066,12 @@ function importPGN(pgnText){
             if(spid>=0)gameSPID=spid;
           }
         }
+      }else{
+        // v1.2.3 round-18 (bug fix): Chess960 PGN without a [FEN] tag —
+        //   clear any stale SP-ID from the previous game. Otherwise the old
+        //   gameSPID persisted while the position is the standard initial
+        //   one, mislabeling the game (and any SP-ID display) going forward.
+        gameSPID=null;
       }
     }
   }else{
@@ -1477,7 +1525,15 @@ function importPGN(pgnText){
           if(targetMr){
             if(!targetMr.variations)targetMr.variations=[];
             const isWhite=(divergeIdx%2===0);
-            const moveNum=Math.floor(divergeIdx/2)+1;
+            // v1.2.3 round-13 (P2): apply the imported-start-move-number
+            //   offset so variations relocated to a FEN-started game display
+            //   the correct move-number prefix. The rest of the codebase
+            //   (ui.js _mvStartOffset, ai-bridge.js _pgnMvStartOffset)
+            //   already applies this offset; this relocation path was missed,
+            //   causing _formatSANAsRAV to show "1. Nf3" instead of "5. Nf3"
+            //   for a game imported from a FEN at move 5.
+            const _mvStartOffset=(typeof _importedStartMoveNum!=='undefined'&&_importedStartMoveNum>0)?_importedStartMoveNum:1;
+            const moveNum=Math.floor(divergeIdx/2)+_mvStartOffset;
             targetMr.variations.push({
               group:'pgn',
               san:remainingSAN,
@@ -1750,7 +1806,7 @@ let wk=null,bk=null;
 for(let r=0;r<8;r++){
 let c=0;
 for(const ch of rows[r]){
-if(ch>='1'&&ch<='8'){c+=parseInt(ch,10);continue}
+if(ch>='1'&&ch<='8'){c+=Number.parseInt(ch,10);continue}
 const isWhite=ch===ch.toUpperCase();
 const type=ch.toLowerCase()==='p'?'pawn':ch.toLowerCase()==='n'?'knight':ch.toLowerCase()==='b'?'bishop':ch.toLowerCase()==='r'?'rook':ch.toLowerCase()==='q'?'queen':ch.toLowerCase()==='k'?'king':null;
 if(!type)return null;
@@ -1789,7 +1845,7 @@ if(typeof parseShredderCastling==='function'){
   castlingRights={whiteKingside:crStr.includes('K'),whiteQueenside:crStr.includes('Q'),blackKingside:crStr.includes('k'),blackQueenside:crStr.includes('q')};
 }
 let enPassantTarget=null;
-if(parts[3]&&parts[3]!=='-'){const ec=parts[3].charCodeAt(0)-97;const er=8-parseInt(parts[3][1],10);if(er>=0&&er<8&&ec>=0&&ec<8){
+if(parts[3]&&parts[3]!=='-'){const ec=parts[3].charCodeAt(0)-97;const er=8-Number.parseInt(parts[3][1],10);if(er>=0&&er<8&&ec>=0&&ec<8){
 // Validate: en passant row must be rank 6 (er=2) for white's turn or rank 3 (er=5) for black's turn
 const validRow=(turn==='white'&&er===2)||(turn==='black'&&er===5);
 if(validRow){
@@ -1798,8 +1854,8 @@ const opp=turn;const pd=opp==='white'?1:-1;let _epHasCap=false;for(const dc of[-
 if(_epHasCap)enPassantTarget={row:er,col:ec};
 }
 }}
-const halfMoveClock=parts[4]?parseInt(parts[4],10)||0:0;
-const fullMoveNumber=parts[5]?parseInt(parts[5],10)||1:1;
+const halfMoveClock=parts[4]?Number.parseInt(parts[4],10)||0:0;
+const fullMoveNumber=parts[5]?Number.parseInt(parts[5],10)||1:1;
 const s={board,currentTurn:turn,castlingRights,enPassantTarget,halfMoveClock,fullMoveNumber,moveHistory:[],posCount:new Map(),wk,bk,hash:0,boardVersion:1};
 syncHash(s);s.posCount.set(s.hash,1);
 // Validate: the side NOT to move must not be in check (illegal position)
@@ -1903,7 +1959,11 @@ _tbLoading=false;
 // Auto-select piece on tablebase recommendation
 if(d){const bm=bestMoveFromTablebase(d);if(bm){autoSelectTablebaseMove(bm.uci);}}
 render();
-}).catch(function(){_tbLoading=false;render();});
+// v1.2.3 round-13 (P3): log the error so a bug in bestMoveFromTablebase or
+//   autoSelectTablebaseMove is not silently swallowed. probeTablebase itself
+//   has its own internal try/catch that logs and returns null; this catch
+//   covers errors from the downstream callbacks in the promise chain.
+}).catch(function(e){console.warn('probeTablebase callback failed:',e);_tbLoading=false;render();});
 }
 
 // Auto-select the piece for a tablebase-recommended move

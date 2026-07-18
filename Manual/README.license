@@ -1,3 +1,88 @@
+v1.2.3 round-22 (2026.7.18) — eval bar perspective fix (player-POV report):
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - Regalia-v1.2.3-manual-zh.html (AGPL v3): round-22 changelog entry inserted
+    newest-first — the eval bar perspective fix (timeout/resign White-POV
+    score, player-POV WDL labels, player-POV eval-delta colour, review WDL
+    total>0 guard). Diagrams unchanged (no UI layout change this round).
+  - Regalia-v1.2.3-manual-en.html (AGPL v3): same round-22 entry, English
+    (content-equivalent, not a machine translation).
+  - License classification: both manuals remain AGPL v3 (original works).
+
+v1.2.3 round-21 (2026.7.17) — edge-case fix (per-color gated king signal):
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - Regalia-v1.2.3-manual-zh.html (AGPL v3): round-21 changelog entry inserted
+    newest-first — the _needsShredderFEN per-color gating fix, plus the
+    environment/signing-key note (certificate fingerprint changed).
+  - Regalia-v1.2.3-manual-en.html (AGPL v3): same round-21 entry, English.
+  - License classification: both manuals remain AGPL v3 (original works).
+
+v1.2.3 round-20 (2026.7.17) — 4 known leftovers + 3rd review report + hint relocation:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — hardening round).
+  - Regalia-v1.2.3-manual-zh.html (AGPL v3): round-20 changelog entry inserted
+    newest-first — covers the four known leftovers (A-1 designated rook
+    files, B FEN-import Chess960 detection, C DIRTY_* dead-code removal,
+    E-3 cached PWLE probe), the third review report triage (S8786 fixed at
+    5 sites / S7773 / S7781 / S7758 false positives), and the batch-hint
+    relocation into the Analyze All button.
+  - Regalia-v1.2.3-manual-en.html (AGPL v3): same round-20 entry, English.
+  - License classification: both manuals remain AGPL v3 (original works).
+
+v1.2.3 round-19 (2026.7.17) — 2 bilingual UX hints + log-injection fix:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — feature + fix round).
+  - Regalia-v1.2.3-manual-zh.html (AGPL v3): Updated with the round-19
+    changelog entry at the top (newest-first per dev guide §6.4) — covers
+    the two new bilingual UX hints (startup board anti-shake Toast;
+    analyze-all batch hint under the review eval bar), the gitar-bot /
+    SonarCloud java:S5443 log-injection fix, and the PR #51 false-positive
+    audit (7 categories re-verified, fixes landed in earlier rounds).
+  - Regalia-v1.2.3-manual-en.html (AGPL v3): same round-19 changelog entry,
+    English version, inserted newest-first.
+  - License classification: both manuals remain AGPL v3 (original works).
+
+v1.2.3 round-18 (2026.7.17) — Chess960 PGN [FEN] bug fix + 7-agent line-by-line review:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - Regalia-v1.2.3-manual-zh.html (AGPL v3): Updated with round-18 changelog
+    entry at the top (newest-first per dev guide §6.4) — covers the
+    user-reported Chess960 new-game PGN [FEN] tag bug fix (current
+    position → initial position), the 7-agent review non-false-positive
+    fixes, the SP-ID input focus retention, the heatmap control-map
+    ping-pong perf fix, and the ACCESS_NETWORK_STATE permission removal.
+  - Regalia-v1.2.3-manual-en.html (AGPL v3): Updated with round-18
+    changelog paragraph at the top of the App Introduction version
+    history (newest-first per dev guide §6.4).
+  - License classification: both manuals remain AGPL v3 (original works).
+
+v1.2.3 round-17 (2026.7.17) — SonarCloud high-priority cleanup + God Class refactor:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - Regalia-v1.2.3-manual-zh.html (AGPL v3): Updated with round-17 changelog
+    entry at the top (newest-first per dev guide §6.4) — covers the _trendH
+    latent ReferenceError fix, S1141 nested-try sleepGracefully extraction,
+    HapticManager.java / ui-gameflow.js / ui-interactions.js God Class
+    extractions, and the verified-semantics-preserving SonarCloud cleanups
+    (S7773/S7740/S1181/S7761/S7767/S7781/S8786/S7741).
+  - Regalia-v1.2.3-manual-en.html (AGPL v3): Updated with round-17 changelog
+    paragraph at the top of the App Introduction version history
+    (newest-first per dev guide §6.4).
+  - License classification: both manuals remain AGPL v3 (original works).
+
+v1.2.3 round-13 (2026.7.16) — CMake re-enablement + first-principles code review:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - Regalia-v1.2.3-manual-zh.html (AGPL v3): Updated with round-13 changelog
+    entry at the top (newest-first per dev guide §6.4). Diagrams reviewed
+    for accuracy against current source — no diagram changes needed this
+    round (all changes were internal bug fixes with no UI impact).
+  - Regalia-v1.2.3-manual-en.html (AGPL v3): Updated with round-13 changelog
+    entry at the top (newest-first per dev guide §6.4).
+  - License classification: both manuals remain AGPL v3 (original works).
+
+v1.2.3 round-12 (2026.7.16) — SonarCloud bug fixes + first-principles review:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - Regalia-v1.2.3-manual-zh.html (AGPL v3): Updated with round-12 changelog
+    entry at the top (newest-first per dev guide §6.4).
+  - Regalia-v1.2.3-manual-en.html (AGPL v3): Updated with round-12 changelog
+    entry at the top (newest-first per dev guide §6.4).
+  - License classification: both manuals remain AGPL v3 (original works).
+
 v1.2.3 optimization pass (2026.7.16) — first-principles line-by-line review:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — no version bump).
   - Regalia-v1.2.3-manual-{zh,en}.html: Fixed the header-bar wireframe

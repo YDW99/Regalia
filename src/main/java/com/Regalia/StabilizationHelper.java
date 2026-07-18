@@ -137,8 +137,18 @@ public class StabilizationHelper implements SensorEventListener {
         int rate = SensorManager.SENSOR_DELAY_GAME;
         boolean anyRegistered = false;
         if (linAccelSensor != null) {
-            sensorManager.registerListener(this, linAccelSensor, rate);
-            anyRegistered = true;
+            // v1.2.3 round-13 (P1): registerListener returns false on some OEM
+            //   ROMs when the sensor is in an error state or already registered
+            //   to another listener. Without checking, start() would report
+            //   success and the caller would think stabilization is on, but no
+            //   onSensorChanged events would ever fire — leaving the user with
+            //   a silently-broken feature.
+            boolean registered = sensorManager.registerListener(this, linAccelSensor, rate);
+            if (registered) {
+                anyRegistered = true;
+            } else {
+                Log.w(TAG, "registerListener returned false for TYPE_LINEAR_ACCELERATION — stabilization inactive");
+            }
         }
 
         // Reset state

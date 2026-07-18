@@ -38,7 +38,9 @@
      asset (file:///android_asset/) with no externally injected content and all
      JavaScript is inlined, 'unsafe-inline' is safe here and removes the need
      to recompute the hash after every JS edit. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; img-src data:; worker-src blob:; connect-src 'none'; frame-ancestors 'none'; base-uri 'self'">
+<!-- v1.2.3 round-18: removed frame-ancestors — ignored inside <meta> (only
+     honored as an HTTP response header), dead directive. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; img-src data:; worker-src blob:; connect-src 'none'; base-uri 'self'">
 <title>📊 Statistics</title>
 <style>
 /* AI-GEN: AI assisted
@@ -693,7 +695,7 @@ function parsePGN(pgnText){
     // no `$` end-anchor) so it works for single-line PGN where tags and
     // movetext coexist on one line. The previous `/^\[.*\]$/gm` required the
     // ENTIRE line to be `[...]`, which never matched single-line PGN.
-    let mtCheck=text.replace(/\[[A-Za-z]\w*\s+[^\]]+\]/g,'').trim();
+    let mtCheck=text.replace(/\[\w+\s+\S[^\]]*\]/g,'').trim(); // v1.2.3 round-20 (S8786): 相邻量词类互斥，消除超线性回溯
     const firstNumMatch=mtCheck.match(/^(\d+\.+)/);
     if(firstNumMatch&&firstNumMatch[1].includes('...')){
       isBlackToMoveStart=true;
@@ -708,7 +710,7 @@ function parsePGN(pgnText){
   // letter). This avoids stripping `[%csl ...]` / `[%cal ...]` / `[%eval ...]`
   // / `[%emt ...]` from inside brace comments (since `%` is not in [A-Za-z]),
   // and works correctly for single-line PGN files (no `^` line-anchor).
-  let moveText=text.replace(/\[[A-Za-z]\w*\s+[^\]]+\]/g,'');
+  let moveText=text.replace(/\[\w+\s+\S[^\]]*\]/g,''); // v1.2.3 round-20 (S8786): 相邻量词类互斥，消除超线性回溯
   // Remove comments (brace-style).
   // v1.0.5 Round-6 Rev61 (2026.6.27) FIX: was `while(moveText.includes('{'))...`
   // which infinite-loops on a malformed PGN with an unclosed `{` (no matching `}`).
@@ -796,7 +798,7 @@ function parseFromMoveRecords(records,startFEN,headers,comments){
   function algToObj(a){
     if(!a||typeof a!=='string'||a.length<2)return null;
     const col=a.charCodeAt(0)-97;
-    const row=8-parseInt(a[1]);
+    const row=8-Number.parseInt(a[1]);
     if(col<0||col>7||row<0||row>7)return null;
     return {row,col};
   }
@@ -847,7 +849,7 @@ function fenToState(fen){
       board[r]=[];
       let c=0;
       for(const ch of rows[r]){
-        if(/\d/.test(ch)){c+=parseInt(ch);continue;}
+        if(/\d/.test(ch)){c+=Number.parseInt(ch);continue;}
         const pieceMap={'P':'pawn','N':'knight','B':'bishop','R':'rook','Q':'queen','K':'king'};
         const upper=ch.toUpperCase();
         if(!pieceMap[upper])return null;
@@ -892,7 +894,7 @@ function fenToState(fen){
       const p=board[r][c];
       if(p&&p.type==='king'){if(p.color==='white')wk={row:r,col:c};else bk={row:r,col:c};}
     }
-    return {board,currentTurn,castlingRights,enPassantTarget:null,halfMoveClock:0,fullMoveNumber:parseInt(parts[5])||1,wk,bk};
+    return {board,currentTurn,castlingRights,enPassantTarget:null,halfMoveClock:0,fullMoveNumber:Number.parseInt(parts[5])||1,wk,bk};
   }catch(e){return null;}
 }
 
@@ -951,15 +953,15 @@ function applySANMove(state,san){
   if(cleanSAN.length<2)return null;
   const destStr=cleanSAN.slice(-2);
   const destCol=destStr.charCodeAt(0)-97;
-  const destRow=8-parseInt(destStr[1]);
+  const destRow=8-Number.parseInt(destStr[1]);
   if(destCol<0||destCol>7||destRow<0||destRow>7)return null;
   // Disambiguation
   let disambFile=-1,disambRank=-1;
   let rest=cleanSAN.slice(idx,-2);
-  if(rest.includes('x'))rest=rest.replace('x','');
+  if(rest.includes('x'))rest=rest.replaceAll('x',''); // v1.2.3 (S7781): replaceAll — SAN 至多一个 x，语义等价
   for(const ch of rest){
     if(ch>='a'&&ch<='h')disambFile=ch.charCodeAt(0)-97;
-    else if(ch>='1'&&ch<='8')disambRank=8-parseInt(ch);
+    else if(ch>='1'&&ch<='8')disambRank=8-Number.parseInt(ch);
   }
   // Find matching piece
   for(let r=0;r<8;r++){
@@ -1509,7 +1511,11 @@ function extractMoveTimes(pgnText){
   }
   if(!isBlackToMoveStart){
     // Check if movetext starts with "N..." (Black's move first)
-    let mtCheck=text.replace(/^\[.*\]$/gm,'').trim();
+    // v1.2.3 round-18 (bug fix): use the v1.0.9 PHASE 52 tag-format regex
+    //   (same as parsePGN at lines 696/711). The old `/^\[.*\]$/gm` only
+    //   stripped headers occupying an ENTIRE line — for single-line PGN the
+    //   headers survived and broke this Black-to-move detection.
+    let mtCheck=text.replace(/\[\w+\s+\S[^\]]*\]/g,'').trim(); // v1.2.3 round-20 (S8786): 相邻量词类互斥，消除超线性回溯
     const firstNumMatch=mtCheck.match(/^(\d+\.+)/);
     if(firstNumMatch&&firstNumMatch[1].includes('...'))isBlackToMoveStart=true;
   }
@@ -1526,15 +1532,15 @@ function extractMoveTimes(pgnText){
     const noIncMatch=tc.match(/^(\d+)$/);
     const movesPerTimeMatch=tc.match(/^\d+\/(\d+)$/);
     if(incMatch){
-      baseTime=parseInt(incMatch[1]);
-      increment=parseInt(incMatch[2]);
+      baseTime=Number.parseInt(incMatch[1]);
+      increment=Number.parseInt(incMatch[2]);
       hasTimeControl=true;
     }else if(noIncMatch){
-      baseTime=parseInt(noIncMatch[1]);
+      baseTime=Number.parseInt(noIncMatch[1]);
       increment=0;
       hasTimeControl=true;
     }else if(movesPerTimeMatch){
-      baseTime=parseInt(movesPerTimeMatch[1]);
+      baseTime=Number.parseInt(movesPerTimeMatch[1]);
       increment=0;
       hasTimeControl=true;
     }
@@ -1542,9 +1548,14 @@ function extractMoveTimes(pgnText){
     // — we'll fall back to direct {Ns} parsing only.
   }
   // --- Walk the movetext (headers stripped) and collect per-move times ---
-  // Remove header tags [...] (anything in square brackets at line start)
-  // so they don't interfere with the movetext walk below.
-  let moveText=text.replace(/^\[.*\]$/gm,'');
+  // Remove header tags [...] so they don't interfere with the movetext walk.
+  // v1.2.3 round-18 (bug fix): use the v1.0.9 PHASE 52 tag-format regex
+  //   (same as parsePGN at lines 696/711). The old `/^\[.*\]$/gm` required
+  //   headers to occupy an ENTIRE line; for single-line PGN the [FEN] header
+  //   survived and its board coordinates (e.g. "b1") were mis-tokenized as
+  //   pawn moves — shifting every subsequent time entry by one slot and
+  //   swapping the White/Black attribution.
+  let moveText=text.replace(/\[\w+\s+\S[^\]]*\]/g,''); // v1.2.3 round-20 (S8786): 相邻量词类互斥，消除超线性回溯
   const usedTimes=[];
   const clkTimes=[];
   let i=0;
@@ -1588,9 +1599,9 @@ function extractMoveTimes(pgnText){
       // so the parity is inverted.
       const isWhite=isBlackToMoveStart?(targetIdx%2===1):(targetIdx%2===0);
       if(clkMatch){
-        const h=parseInt(clkMatch[1]),m=parseInt(clkMatch[2]),s=parseFloat(clkMatch[3]);
+        const h=Number.parseInt(clkMatch[1]),m=Number.parseInt(clkMatch[2]),s=Number.parseFloat(clkMatch[3]);
         const totalSec=h*3600+m*60+s;
-        if(!isNaN(totalSec)){
+        if(!Number.isNaN(totalSec)){
           if(clkTimes[targetIdx]==null)clkTimes[targetIdx]=totalSec;
           // If we have a TimeControl header, derive used time via increment:
           //   used = (previousClock + increment) - currentClk
@@ -1619,15 +1630,15 @@ function extractMoveTimes(pgnText){
       }
       if(timeMatch){
         const sec=parseFloat(timeMatch[1]);
-        if(!isNaN(sec)){
+        if(!Number.isNaN(sec)){
           usedTimes[targetIdx]=sec;
         }
       }
       // v1.0.4 ROUND-5 REV16: [%emt] — elapsed move time (untimed games)
       if(emtMatch){
-        const eh=parseInt(emtMatch[1]),em=parseInt(emtMatch[2]),es=parseFloat(emtMatch[3]);
+        const eh=Number.parseInt(emtMatch[1]),em=Number.parseInt(emtMatch[2]),es=Number.parseFloat(emtMatch[3]);
         const totalSec=eh*3600+em*60+es;
-        if(!isNaN(totalSec))usedTimes[targetIdx]=totalSec;
+        if(!Number.isNaN(totalSec))usedTimes[targetIdx]=totalSec;
       }
       i=end+1;
       continue;
@@ -1689,7 +1700,7 @@ function extractMoveTimes(pgnText){
 //   < 60min: "3m 25s"
 //   >= 60min: "1h 12m 30s"
 function formatTime(sec){
-  if(sec==null||isNaN(sec))return '—';
+  if(sec==null||Number.isNaN(sec))return '—';
   if(sec<60)return sec.toFixed(1)+T('time_sec_short');
   if(sec<3600){
     const m=Math.floor(sec/60);
@@ -1744,7 +1755,7 @@ function moveNumDisplay(i,parsed){
 
 // Calculate accuracy from CPL (Chess.com-style formula)
 function calcAccuracy(avgCPL){
-  if(avgCPL==null||isNaN(avgCPL))return null;
+  if(avgCPL==null||Number.isNaN(avgCPL))return null;
   const acc=103.1668*Math.exp(-0.04354*avgCPL);
   return Math.max(0,Math.min(100,acc)).toFixed(1);
 }
@@ -2664,8 +2675,8 @@ function renderStats(parsed,evalData){
     let _hasVaFromPayload=false;
     if(_vaPayload){
       for(const k in _vaPayload){
-        const idx=parseInt(k,10);
-        if(isNaN(idx))continue;
+        const idx=Number.parseInt(k,10);
+        if(Number.isNaN(idx))continue;
         if(_cutoffIdx>=0&&idx>_cutoffIdx)continue;
         const e=_vaPayload[k];
         if(e&&((e.csl&&e.csl.length>0)||(e.cal&&e.cal.length>0))){_hasVaFromPayload=true;break;}
@@ -2686,8 +2697,8 @@ function renderStats(parsed,evalData){
     // v1.2.1 (round-6 bugfix): Count from the payload field first (primary source).
     if(_vaPayload){
       for(const k in _vaPayload){
-        const idx=parseInt(k,10);
-        if(isNaN(idx))continue;
+        const idx=Number.parseInt(k,10);
+        if(Number.isNaN(idx))continue;
         if(_cutoffIdx>=0&&idx>_cutoffIdx)continue;
         const e=_vaPayload[k];
         if(!e)continue;
@@ -2753,7 +2764,7 @@ function renderStats(parsed,evalData){
       const nagRe=/\$(\d+)/g;
       let cm;
       while((cm=nagRe.exec(_effectivePgnText))!==null){
-        const n=parseInt(cm[1],10);
+        const n=Number.parseInt(cm[1],10);
         if(n>=1&&n<=6){nagDist[n]++;nagCount++;}
       }
     }
@@ -3904,7 +3915,12 @@ function _exportFullHTML(){
   scriptJS=_stripFnBody(scriptJS,'_exportFullHTML');
   scriptJS=_stripFnBody(scriptJS,'_updateButtonText');
   // Prepend embedded payload
-  scriptJS='var _payload={pgn:'+JSON.stringify(pgnText)+',lang:'+JSON.stringify(lang)+'};\n'+
+  // v1.2.3 round-18 (bug fix): escape "</" as "<\/" inside the JSON strings —
+  //   a PGN comment containing a closing-script-tag sequence would otherwise
+  //   terminate the script block of the exported HTML, corrupting the file.
+  //   ("<\/" is a valid, equivalent JS string escape. This comment itself
+  //   must avoid the literal sequence — inline script constraint.)
+  scriptJS='var _payload={pgn:'+JSON.stringify(pgnText).replaceAll('</','<\\/')+',lang:'+JSON.stringify(lang)+'};\n'+
     'var _lang='+JSON.stringify(lang)+';\n'+
     scriptJS;
 
@@ -4200,7 +4216,7 @@ function init(){
     }else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches){
       isLight=true;
     }
-    document.documentElement.setAttribute('data-theme', isLight?'light':'dark');
+    document.documentElement.dataset.theme = isLight?'light':'dark'; // v1.2.3 (S7761): dataset API
   }catch(e){console.warn('[Stats] theme apply failed:',e.message);}
   if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getStatsPayload){
     try{

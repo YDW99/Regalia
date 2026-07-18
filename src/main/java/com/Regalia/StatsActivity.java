@@ -593,7 +593,15 @@ public class StatsActivity extends Activity {
                 //   且会无谓占用 SAF 512 上限。transient FLAG_GRANT_READ_URI_PERMISSION
                 //   from ACTION_OPEN_DOCUMENT 已足够读取本次内容。
                 StringBuilder sb = new StringBuilder();
-                try (InputStream is = getContentResolver().openInputStream(uri);
+                // v1.2.3 round-13 (P1): openInputStream may return null (e.g.
+                //   provider unavailable, file deleted between picker and read).
+                //   Mirrors SafPickerHelper.readTextFromUri and the EXPORT path's
+                //   openOutputStream null-check at line ~547.
+                InputStream rawIs = getContentResolver().openInputStream(uri);
+                if (rawIs == null) {
+                    throw new IOException("openInputStream returned null for " + uri);
+                }
+                try (InputStream is = rawIs;
                      BufferedReader reader = new BufferedReader(new InputStreamReader(is, "UTF-8"))) {
                     String line;
                     int lineCount = 0;

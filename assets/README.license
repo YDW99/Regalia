@@ -1,0 +1,54 @@
+assets/ — README screenshots
+============================
+
+v1.2.3 round-22 (2026.7.18): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - screenshot.jpg / screenshot.png: unchanged. All round-22 changes are in
+    src/main/assets/chess.src/ (ui.js, ai-bridge.js eval-perspective fixes),
+    the rebuilt chess.html, the Manual (both manuals) and the top-level docs
+    (BUILDING.md, PRIVACY.md, NOTICE, README.md, worklog.md).
+
+v1.2.3 round-21 (2026.7.17): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - The round-21 change is limited to src/main/assets/chess.src/ai-bridge.js
+    (per-color gated king signal in _needsShredderFEN) plus rebuilt chess.html
+    and the top-level docs/Manual.
+
+v1.2.3 round-20 (2026.7.17): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — hardening round).
+  - screenshot.jpg / screenshot.png: unchanged. All round-20 changes are in
+    src/main (JS modules + rebuilt chess.html + stats.html + HapticManager.java),
+    Manual/ (both manuals) and the top-level docs.
+
+v1.2.3 round-19 (2026.7.17): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — feature + fix round).
+  - screenshot.jpg / screenshot.png: unchanged. All round-19 changes are in
+    src/main (JS modules + rebuilt chess.html + JsBridgeGateway.java),
+    Manual/ (both manuals) and the top-level docs (NOTICE, PRIVACY.md,
+    README.md, worklog.md).
+
+v1.2.3 round-18 (2026.7.17): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - screenshot.jpg / screenshot.png: unchanged. All round-18 changes are in
+    src/main/ source files and the Manual (see the other README.license
+    files).
+  - License classification: unchanged (both screenshots remain AGPL v3).
+
+v1.2.3 round-13 (2026.7.16) — README.license created:
+  - This file documents the license classification for the root-level
+    `assets/` directory, which contains screenshots referenced by README.md.
+    Created for completeness — previously this directory had no
+    README.license, unlike the 7 other directories (src/main, src/main/assets,
+    src/main/assets/chess.src, src/main/cpp, src/main/java/com/Regalia,
+    src/main/res, Manual) that each have one.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - Files:
+    * screenshot.jpg (AGPL v3): Gameplay screenshot shown at the top of
+      README.md. Original work of the Regalia project.
+    * screenshot.png (AGPL v3): Same screenshot in PNG format as a fallback
+      for environments that don't render JPG inline. Original work.
+  - License classification: both files are AGPL v3 (original works of the
+    Regalia project). They are NOT packaged into the APK — they exist solely
+    for README.md display on GitHub/F-Droid/source code browsers.
+  - AI-GEN: AI assisted — this README.license was AI-assisted and has been
+    reviewed for AGPL v3 compliance.

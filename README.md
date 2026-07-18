@@ -102,7 +102,9 @@ Regalia/
 │   │   │   ├── ai-bridge.js    # Engine communication, eval display, PGN export, FEN sanitization, theme detection
 │   │   │   ├── tablebase.js    # Lichess Syzygy tablebase queries + PGN import
 │   │   │   ├── eco-data.js     # ECO opening classification data
-│   │   │   ├── ui.js           # Core rendering, dialogs, interaction, review mode, ChessAudioEngine
+│   │   │   ├── ui-gameflow.js  # Game start + game-clock subsystem (v1.2.3 round-17 God-Class split NEW)
+│   │   │   ├── ui-interactions.js # Click handling, move execution, toolbar, setup, dialogs, back-press (v1.2.3 round-17 NEW)
+│   │   │   ├── ui.js           # Core rendering, review mode, ChessAudioEngine, eval bar (round-17 slimmed to ~6,761 lines)
 │   │   │   ├── index.html.tpl  # CSS template (theme variables, responsive layout, animation keyframes)
 │   │   │   └── README.license  # Per-file license classification for this directory
 │   │   ├── chess.html          # Built output (combined JS+CSS+HTML)
@@ -126,6 +128,7 @@ Regalia/
 │   │   ├── ChessWebViewClient.java # Page load handler, render-process crash recovery
 │   │   ├── EngineService.java  # Foreground service for engine stability
 │   │   ├── ChessApp.java       # Application class, crash protection
+│   │   ├── HapticManager.java  # Haptic feedback (@JavascriptInterface delegate, PWLE/vibration; v1.2.3 round-17 NEW, 487 lines)
 │   │   ├── StabilizationHelper.java # Sensor-fusion board anti-shake (v1.0.5 NEW)
 │   │   ├── TlsSecurityHelper.java # TLS 1.2+ enforcement for tablebase API
 │   │   ├── RootDetector.java   # Informational root detection (About dialog)
@@ -152,6 +155,10 @@ Regalia/
 │   ├── Regalia-v1.2.3-manual-zh.html  # Chinese user manual (current v1.2.3)
 │   ├── Regalia-v1.2.3-manual-en.html  # English user manual (current v1.2.3)
 │   └── README.license          # Manual license classification
+├── assets/                     # README assets (not packaged into APK)
+│   ├── screenshot.jpg          # Gameplay screenshot (referenced by README.md)
+│   ├── screenshot.png          # Same screenshot, PNG fallback
+│   └── README.license          # License classification for this directory (AGPL v3)
 ├── gradle/wrapper/             # Gradle wrapper (8.11.1)
 │   ├── gradle-wrapper.jar
 │   └── gradle-wrapper.properties
@@ -166,13 +173,18 @@ Regalia/
 ├── PRIVACY.md                  # Privacy policy
 ├── BUILDING.md                 # Build instructions
 ├── UBIQUITOUS_LANGUAGE.md      # Domain terminology glossary (English) — 80+ chess/engine/PGN/UI terms
-├── build.gradle                # Gradle build config (reads ../version.properties for versionCode=123, v1/v2/v3 signing, NDK 27.2, cmake 3.22.1)
+├── build.gradle                # Gradle build config (reads ../version.properties for versionCode=123, v1/v2/v3 signing, NDK 27.2, cmake 3.31.6+)
 ├── settings.gradle             # Gradle settings (plugin/repo config)
 ├── gradle.properties           # Gradle properties (JDK 21, Xmx2048m)
 ├── build-chess.py              # Python build script (merges JS modules → chess.html)
 ├── proguard-rules.pro          # ProGuard/R8 rules (JS bridge keep, JNI keep, log stripping)
 ├── lint.xml                    # Lint severity config (security=error, i18n/icon=ignore)
 ├── gradlew / gradlew.bat       # Gradle wrapper scripts
+├── CONTRIBUTING-zh.md / CONTRIBUTING-en.md # Contributing guidelines (zh/en)
+├── SECURITY_FIXES.md           # Security hardening changelog (MobSF findings)
+├── About_v18.x.x_.md          # Engine version notes (Stockfish 18.x.x)
+├── LICENSE&NOTICE.zip          # Archive of all license/notice files (for redistribution)
+├── worklog.md                  # Development work log (newest round first)
 └── README.md
 ```
 
@@ -244,6 +256,114 @@ Contributions are welcome! Please ensure:
 During the development stage, the version number used was: **v18.x.x**. For future versions, once the version number exceeds **v17.x.x**, <span style="color:red; font-weight:bold;">**v18.x.x** should be skipped</span> and the next version should be **v19.x.x**.
 
 **v1.2.3** (versionCode 123) — current release
+
+The v1.2.3 release is a **bug-fix + review-response release** on top of v1.2.2, driven by a user-reported P0 JS error and two multi-skill review reports (Round 17 — Issue #48, 24 findings; Round 18 — Issue #49, 32 findings). After rigorous false-positive verification, the actionable findings were fixed and the version was bumped v1.2.2→v1.2.3 (versionCode 122→123).
+
+### v1.2.3 round-21 (2026.7.17) — edge-case fix: per-color gated king signal in _needsShredderFEN
+
+User-reported edge case, verified NOT a false report: the round-20 FEN-import Chess960 detection reuses `_needsShredderFEN`, whose king-position check was a global OR — any castling right held AND *either* king off its home square. A fully legal standard position with the opponent's king off the e-file (`3k4/8/8/8/8/8/8/R3K2R w KQ - 0 1` — white keeps KQ with king/rooks standard; black king wandered to d8, no black rights) was mislabeled Chess960 (`setChess960Mode(true)`, `gameVariant='chess960'`, engine UCI_Chess960, Chess960-labelled PGN round-trip; move legality unaffected there since the castling targets coincide). Fix: the king-position signal is now gated per color with that color's own rights (`(cr.whiteKingside||cr.whiteQueenside) && s.wk off home`, same for black) — in standard chess a rights-holding king is necessarily home, so the opponent's king position is irrelevant. The corner-rook checks were already gated per individual right. All three `_needsShredderFEN` consumers benefit (import detection, engine Shredder-FEN emission, PGN [FEN] conversion).
+
+**Verification**: new smoke-test scenario M — reported FEN no longer flagged; rights-holder-king-off-home still flagged (both colors); standard start / 960 SP0 unchanged; import path end-to-end no mislabel. All 13 scenarios pass; chess.html rebuilt (inline script `node --check` OK).
+
+**Environment**: the sandbox was reset mid-round — `/tmp` wiped (toolchain, build copy, engine, keystore lost). Rebuilt: JDK 21.0.11, cmdline-tools, SDK platform-35 + build-tools 34.0.0 + NDK 27.2.12479018 + cmake 3.31.6, Gradle 8.11.1, Stockfish sf_18 (SHA-256 `8f7116d3…` re-verified identical). **The release signing key was lost in the reset and has been regenerated with the original parameters** (alias `debug`, password `android`, CN=Android Debug, RSA-2048, 10950 days) and backed up at `/mnt/agents/tools/debug.keystore.bak`. ⚠️ **This APK's certificate fingerprint (SHA-256 `8bc19e69…`) differs from previous rounds — installing over an older build will be rejected for signature mismatch; uninstall the old build first (data will be cleared).**
+
+Release APK: signature v1+v2+v3 all true, versionCode=123/versionName="1.2.3"/targetSdk 35, FGS specialUse subtype intact, no `ACCESS_NETWORK_STATE`, engine hash three-way match.
+
+### v1.2.3 round-20 (2026.7.17) — 4 known leftovers resolved + 3rd review report + hint relocation
+
+This sub-round thoroughly resolves the four documented known leftovers, processes the third external review report ("PR #51 reliability-affecting code smells"), and relocates the batch-analysis hint per user request. Version stays at v1.2.3 (versionCode 123).
+
+**A-1 — same-side two-rooks castling ambiguity RESOLVED**: castling rights now carry designated rook files (`whiteKingsideRookFile` etc.), recorded by `parseShredderCastling` from the FEN castling field (Shredder letters and the KQkq compat mapping), by `initState` (a/h) and `initChess960State` (actual files), and by setup-mode 🔁 markers. New `findDesignatedCastlingRook()` prefers the designated file (verified on-board) over the closest-rook heuristic in 960 movegen; `toShredderCastling` emits the designated file for exact X-FEN round-trip; all right-clearing sites in makeMv/makeMvInPlace (rook move/capture, king move, corner fallbacks) compare against the designated file and null it on clear. `cloneS`/undo ride along automatically (spread copies).
+
+**B — Chess960 detection on FEN import RESOLVED**: `_applyImportedFEN` auto-detects a non-standard arrangement via `_needsShredderFEN` (any surviving right with rook/king off standard files), sets `gameVariant='chess960'` + engine mode + `state.chess960`, derives the SP-ID from the white back rank for full starting arrangements, and resets a stale Chess960 mode when a standard FEN is imported.
+
+**C — DIRTY_* dead code REMOVED (~200 lines)**: every `markDirty` call site passed `DIRTY_FULL` or `DIRTY_MOVES|DIRTY_PANEL|DIRTY_EVAL`, both of which always routed to a full `render()` in `_performDirtyRender` — the granular incremental path was unreachable. Removed: DIRTY_* constants, `markDirty`, `_scheduleRender`, `_performDirtyRender`, `Integer_bitcount`, `_updateBoardIncremental`, `_updateEvalDisplayIncremental` (+ `_evalDispPrevSig`/`_prevBoardVersion` bookkeeping); call sites now call `render()` directly (identical behavior; render has its own rAF throttle). Shared primitives (`_updateSingleSq`, `_updateChangedSquares`, `_getSqElCache`) remain — used by the live `_updateBoardLightweight` selection/hover path. (`boardVersion` state field kept; its only consumer was the removed function.)
+
+**E-3 — PWLE reflection cached**: `HapticManager.tryPwleVibrate` previously ran full `Class.forName` + 3× getMethod + constructor on EVERY haptic event — on public SDKs lacking the PWLE surface it threw every time (silent per-call overhead + per-call log). Now: probe once per process; AVAILABLE reuses cached handles; UNAVAILABLE skips reflection and falls back to waveform directly, with a single diagnostic `Log.d` at probe time.
+
+**3rd review report triage**: S8786 super-linear regex — NOT a false positive: the PGN tag-strip regex `/\[[A-Za-z]\w*\s+[^\]]+\]/g` (whitespace overlap between `\s+` and `[^\]]+` → polynomial backtracking on unclosed `[`) rewritten at 5 sites (stats.html ×4, tablebase.js ×1) to the equivalent `/\[\w+\s+\S[^\]]*\]/g` with mutually exclusive adjacent classes (semantic equivalence verified on 10 representative PGNs; pathological input now linear). The other 2 flagged sites (worker-pool.js:486, chess.html:6510) were already fixed pre-round-19 — false positives. S7773 parseFloat→Number.parseFloat (2 sites) and S7781 replace→replaceAll (1 site) applied. S7758 charCodeAt — ALL false positives: every flagged site parses validated ASCII chess notation (algebraic squares/UCI moves), where codePointAt is meaningless.
+
+**Hint relocation (user request)**: round-19's standalone `#review-batch-hint` line under the eval bar removed; the same bilingual text now shows RIGHT-ALIGNED inside the "Analyze All" button (`_rvAnalyzeBtnInnerHTML`, label left / hint right, flex layout) only while `_reviewAnalyzeAllActive`; `_updateReviewAnalyzeBtn` uses innerHTML; batch completion paths re-render as before.
+
+**Verification**: All 11 JS modules pass `node --check`; `chess.html` rebuilt via build-chess.py (22,428 lines; inline script passes `node --check`); stats.html inline script passes `node --check`. Node-vm smoke test extended to 12 scenarios — new K (designated rook files: init/X-FEN/lookup/round-trip/right-clearing-on-designated-rook-move + non-designated-rook-move must NOT clear/960 starts), L (FEN-import 960 detection + standard clean), J rewritten for the button-relocated hint — all 12 pass. Release APK rebuilt: signature v1+v2+v3 all true, versionCode=123/versionName="1.2.3"/targetSdk 35, FGS specialUse subtype intact, no `ACCESS_NETWORK_STATE`; `libstockfish.so` SHA-256 = `8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5` (three-way match); reflection literals `startPwle`/`addPwleRamp` present in dex.
+
+### v1.2.3 round-19 (2026.7.17) — 2 bilingual UX hints + log-injection fix (external review reports)
+
+This sub-round adds two user-requested UI hints (both bilingual zh/en) and fixes the single non-false-positive finding across two external review reports (gitar-bot security report + PR #51 SonarCloud code-smell summary). Version stays at v1.2.3 (versionCode 123) — feature + fix round, no version bump.
+
+**New feature 1 — startup hint Toast**: every time the app is opened and the main board first becomes visible, a one-time Toast appears ("长按棋盘可开/关棋盘防抖" / "Long-press the board to toggle board stabilization"), surfacing the sensor-based board anti-shake long-press toggle (v1.0.5). Implemented as `_maybeShowBoardDebounceHint()` (ui.js): fires once per page load on the first completed render after the loading overlay is gone; `_hideLoadingOverlay` (ai-bridge.js) also schedules a delayed typeof-guarded call so the hint still fires when no render follows soon (e.g. a long first AI think).
+
+**New feature 2 — batch-analysis hint**: while an analyze-all batch runs in review mode, a hint line appears directly under the eval bar ("批量分析进行中… 长按走法可设为优先" / "Batch analysis in progress… Long-press a move to prioritize it"), surfacing long-press-to-prioritize (v1.1.2 `_prioritizeReviewStep`). The eval bar itself is strictly single-line (overflow:hidden), so the hint is a separate line rendered from `_reviewAnalyzeAllActive` state on full renders (`_rvBatchHintHTML`), plus in-place insertion at batch start via `_updateReviewBatchHint()` (reviewAnalyzeAll does not re-render when the batch begins); completion/cancel paths already re-render, removing it.
+
+**Security fix (gitar-bot / SonarCloud java:S5443 — the only non-false-positive)**: `JsBridgeGateway.isUciCommandAllowed()` logged `command.trim()` when rejecting CR/LF-containing UCI commands — trim() only strips leading/trailing whitespace, so an embedded newline still reached logcat (forged log lines). CR/LF are now replaced with visible escape text (`\r` / `\n`) before logging via literal `String.replace` (no regex).
+
+**False-positive audit**: the remaining 7 PR #51 categories were re-verified item by item — all false positives (fixes landed in earlier rounds): HapticManager extraction (round-17), ui.js split into ui-gameflow/ui-interactions (round-17), `Number.parseInt` standardization (0 raw parseInt hits), `sleepGracefully` + narrowed catches (StockfishNative.java:677), JS nesting simplification (dataset/arrow functions/Math.trunc), `_evalDeepBatchActive` cleanup on engine restart (ui.js:5194/5558/5687/5856), CMake pinned to 3.31.6+ (round-13, build.gradle:184).
+
+**Verification**: All 11 JS modules pass `node --check`; `chess.html` rebuilt via build-chess.py (inline script passes `node --check`). Node-vm smoke test extended to 10 scenarios (A–H existing + I startup-hint once-guard/i18n + J batch-hint insert/idempotent/remove/i18n) — all pass; the scenario-H harness regex (broken escape layers in the test itself) was fixed and now semantically verifies the worker header regex compiles, parses headers and consumes the closing bracket. Release APK rebuilt: signature v1+v2+v3 all true, versionCode=123/versionName="1.2.3"/targetSdk 35, FGS specialUse subtype intact, no `ACCESS_NETWORK_STATE`. APK `lib/arm64-v8a/libstockfish.so` SHA-256 = `8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5` — three-way match. The compiled dex contains the escaped `\r`/`\n` replacement literals (byte-level verified).
+
+### v1.2.3 round-18 (2026.7.17) — Chess960 PGN [FEN] fix + full-codebase review
+
+This sub-round fixes a Chess960 PGN correctness bug and applies the non-false-positive findings of a 7-agent line-by-line review of the whole codebase. Version stays at v1.2.3 (versionCode 123) — bug-fix round, no version bump.
+
+**Main bug fix (Chess960 PGN [FEN] tag)**: A newly started Chess960 game's PGN recorded the CURRENT position in its `[FEN]` tag instead of the INITIAL position. Root cause: `_startGameImpl()` (ui-gameflow.js) assigned `_setupFEN` BEFORE `_resetGameUIState()`, which centrally nulls `_setupFEN` — silently re-breaking the v1.0.8 fix. Fixed by capturing the setup FEN in a local variable and assigning `_setupFEN` AFTER the reset (mirroring `importPGN`/`_applyImportedFEN`); the `reviewBaseState` assignment was likewise moved after the reset. Two companion fixes: `_buildPGNString` falls back to `stateHistory[0]` (the game's true initial position) when `_setupFEN` is unavailable, and `PlyCount` counts actual half-moves (the intentional null placeholder for black-to-move starts no longer over-counts by 1).
+
+**Review fixes (7 parallel review agents, non-false-positives only)**: `_replayMovesToState` skips intentional null placeholders instead of aborting; `_resetGameUIState` terminates any in-flight analyze-all batch and clears `_pendingOpenStats`; `onBestMove` discards the bestmove when the game is already over + the validation-failure auto-retry now actually fires; `render()` no longer resets `_animRetryCount` early (stuck-animation guard restored); `reviewGoTo` cache-hit path also restores `_sfSeldepth`; `_parsePGN` annotation-scan character class includes `'0'` (digit-style 0-0 castling count); engine variation numbering applies the `_importedStartMoveNum` offset (3 sites); worker-pool header regex consumes the closing `\]` (worker + sync copies); `parseStandardPGN` skips stray close-braces (infinite-loop defense); stats.html `extractMoveTimes` uses the tag-format header regex at 2 sites (per-move times were misaligned for single-line PGNs); tablebase category fallback HTML-escaped; stats.html exported HTML escapes `</` inside JSON strings; `_validateSetupEpMark` requires the skipped square AND the pawn's origin square to be empty (new i18n key `setup_ep_err_blocked`); Chess960 PGN without a `[FEN]` tag clears `gameSPID`; doAIMove tablebase path requires live-board reference equality; MainActivity fallback page BACK key fixed; StockfishNative handshake retry resets `optionsBuilder`; PgnCacheManager.save fsyncs before close; index.html.tpl `contain-intrinsic-size: auto 300px`; ineffective `frame-ancestors` removed from both CSP `<meta>` tags; SP-ID input keeps focus across keystroke-triggered re-renders (`_spidEditing`); review-mode render skips the main-board control map (🌈 heatmap cache ping-pong fix); plus redundancy cleanup (duplicate resets, dead assignments, export-list foreign symbols).
+
+**Permission removal**: `ACCESS_NETWORK_STATE` removed from AndroidManifest.xml — zero usage anywhere in the codebase (no `ConnectivityManager`/`NetworkCallback`/`navigator.onLine`; the WebView queries network state in its own process). Permission minimization; no other manifest change.
+
+**Verification**: All 11 JS modules pass `node --check`. Bundle-level eslint `no-undef` analysis: zero new implicit globals. Node-vm browser-stub smoke test: 7 scenarios pass (run against the built chess.html). Worker-regex template evaluation verified. `chess.html` rebuilt (22,379 lines, 1,346,688 bytes). Release APK rebuilt, signature v1+v2+v3 all true. APK `lib/arm64-v8a/libstockfish.so` SHA-256 = `8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5` — three-way match. Version: versionCode=123, versionName="1.2.3" (unchanged).
+
+### v1.2.3 round-17 (2026.7.17) — SonarCloud high-priority cleanup + God Class refactor
+
+This sub-round completes the pending tasks recorded in the uploaded *High-Priority Issues Summary* (SonarCloud scan) and *God Class Refactoring Results* documents. Every claimed issue (500+) was verified against the actual source before changing code — most were AI-generated false positives and were deliberately left untouched (e.g. S2703: 122 claimed implicit globals → exactly 1 real; S125/S3626: verified false).
+
+**Real bug fixes**: (1) `_trendH` latent ReferenceError (S2703) — `_refreshEvalTrendChart()` referenced `_trendH`, a const local to `_renderReviewMode()`; the reference fired on the zero-layout-height path. Fixed via a shared top-level `_computeTrendChartHeight()` helper. (2) java:S1141 nested-try — new `sleepGracefully(long)` helper replaces 6 copies of the nested-try sleep pattern in StockfishNative.
+
+**God Class refactor (round-17)**: new `HapticManager.java` (459 lines, GPL v3) extracts ~420 lines of haptic logic from StockfishNative.java (4,674 → 4,307 lines, -8%); new `ui-gameflow.js` (313 lines, game start + clocks) and `ui-interactions.js` (1,438 lines, clicks/move-exec/toolbar/dialogs/back-press) extracted from ui.js (8,475 → 6,761 lines, -20%). Pure function-declaration moves only — bundle-hoisted, no load-order change; @JavascriptInterface delegates keep the JS API surface identical.
+
+**SonarCloud cleanups** (all verified semantics-preserving): S7773 (99× global isNaN/parseInt/isFinite → `Number.*`), S7740 (9× `const self = this` → arrow functions), S1181 (6× `catch (Throwable)` → `catch (Exception)` in ChessWebViewClient + `destroyWebViewSafely` DRY helper; HapticManager reflection paths intentionally keep Throwable with documented NoSuchMethodError rationale), S7761 (2× setAttribute → dataset), S7767 (3× `|0` → Math.trunc), S7781 (3× replace → replaceAll; printf-style sequential `%d` chain intentionally kept), S8786 (nested-quantifier regex simplified in both worker-pool.js copies, pipeline-level equivalence proven), S7741 (typeof-undefined → `!== undefined` only for same-module-declared variables; cross-module guards kept per the round-11 resilience design). Robustness: `postJsCallback` rejects null/blank JS up front.
+
+**Verification**: All 11 JS modules pass `node --check`. Bundle-level eslint `no-undef` analysis: 0 implicit globals. Node-vm browser-stub smoke test: 34/34 key functions present, zero load-time TDZ errors from the extraction. `chess.html` rebuilt (22,204 lines, 1,334,211 bytes). Release APK rebuilt, signature v1+v2+v3 all true. APK `lib/arm64-v8a/libstockfish.so` SHA-256 = `8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5` — three-way match. FGS subtype property present. Version: versionCode=123, versionName="1.2.3" (unchanged).
+
+### v1.2.3 round-13 (2026.7.16) — CMake re-enablement + first-principles code review
+
+This sub-round re-enabled CMake (resolving the round-12 build workaround) and applied a comprehensive first-principles per-file/per-line code review using 6 parallel review agents covering all 18 Java files, 9 JS modules, and build infrastructure. Version stays at v1.2.3 (versionCode 123) — all changes are bug fixes and robustness improvements, no version bump.
+
+**CMake re-enablement**: The round-12 "CMake re-run loop" root cause was identified as source files extracted from the zip with future timestamps (not an AGP/CMake incompatibility). Fix: `find ... -exec touch {} \;` after extraction. Upgraded to CMake 3.31.6 (pinned `version "3.31.6+"` in build.gradle). `externalNativeBuild` fully re-enabled; prebuilt `libengine_bridge.so` and `libc++_shared.so` removed from `jniLibs/`. CMake now builds `libengine_bridge.so` from source.
+
+**P0 fixes (bugs)**:
+- **JsBridgeGateway UCI command injection via CR/LF**: `isUciCommandAllowed` only validated the first token. A JS caller could inject `"setoption name X value 1\nquit"` — the first token was whitelisted but the engine received two lines (including `quit`). Added CR/LF rejection guard.
+- **StockfishNative restartEngine permanently dead engine**: `restartEngine()` called `shutdown()` (sets `shutdownRequested=true`), then `startEngine()`. But `startEngineInternal()` guards on `shutdownRequested` at the top. Without resetting the flag, the engine never restarted. Added `shutdownRequested = false;` after `shutdown()` returns.
+
+**P1 fixes (robustness)**:
+- StockfishNative `_evalDeepBatchActive` flag leak across restart (biased eval after crash)
+- SafPickerHelper + StatsActivity `openInputStream` null-check (mirror write path)
+- StabilizationHelper `registerListener` return value check (silently-broken feature)
+- RootDetector manifest `<queries>` element (Android 11+ package visibility)
+- ChessWebViewClient render-crash backoff fallback UI (frozen screen → recovery message)
+- ChessWebViewClient fallback context (dead Activity → Application context)
+- ui.js `gameClockTimerId` cleanup (interval leak on Activity destroy)
+
+**P2 fixes (robustness/redundancy)**: 8 fixes including StockfishNative `PROCESS_DESTROY_GRACE_MS` alignment, PgnCacheManager.delete return value, eco-data cache pollution guard, tablebase variation moveNum offset, build.gradle empty-keystore guard, gradle.properties dead property removal, build-chess.py dead CSP block removal, AndroidManifest allowBackup resolution.
+
+**P3 fixes (cleanup)**: 11 fixes including stale comments (MainActivity version tag, EngineService context, FileIoHelper MediaStore, TlsSecurityHelper typo, network_security_config date, ai-bridge line number), dead code removal (StockfishNative `_pgnCacheDir`/`_sanitizeCacheName`/`case '\u0000'`, EngineConfigHelper dead ternary), tablebase silent catch, pgn-standard missing exports.
+
+**Verification**: All 9 JS modules pass `node --check`. `chess.html` rebuilt (22,136 lines, 1,331,262 bytes). Release APK rebuilt (78,150,221 bytes), signature v1+v2+v3 all true. APK `lib/arm64-v8a/libstockfish.so` SHA-256 = `8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5` — three-way match. FGS subtype property present. `<queries>` element present. Tarball: 114 files, 0 forbidden entries. CMake builds `libengine_bridge.so` from source (5096 bytes stripped in APK).
+
+**Documentation**: BUILDING.md, PRIVACY.md, README.md, NOTICE, all 8 README.license files (including new `assets/README.license`), and Chinese/English HTML manuals updated with v1.2.3 round-13 entries.
+
+### v1.2.3 round-12 (2026.7.16) — SonarCloud bug fixes + first-principles review
+
+This sub-round addresses the two open SonarCloud bugs reported in `2bugs.md` and applies a first-principles per-file/per-line review guided by three uploaded PDFs (AI code-gen defect prevention, Android WebView dev, SonarCloud pass guide). Version stays at v1.2.3 (versionCode 123) — bug-fix only, no version bump.
+
+- **SonarCloud Bug #1 (P2, Web:InputWithoutLabelCheck)**: Review-mode slider `<input type="range">` had `aria-label="T('step_label')"` ("Step" / "第") — too terse for screen readers. Added `'review_move_slider'` i18n key (`{zh:'复盘步数', en:'Review move number'}`); slider now uses `aria-label="T('review_move_slider')"`. WCAG 2.1 Level A 4.1.2 (Name, Role, Value) compliance. (`game-logic.js` + `ui.js`)
+- **SonarCloud Bug #2 (P1, java:S2142)**: `StockfishNative.recoverEngine()` auto-recovery sleep caught `Throwable` without restoring the interrupt flag, risking engine process leaks (zombie) on app shutdown. Added dedicated `catch (InterruptedException e)` block that restores `Thread.currentThread().interrupt()` + clears restart lock + returns early. Consistent with all 10 other `Thread.sleep` / `Thread.join` locations. (`StockfishNative.java`)
+- **First-principles review**: Audited all 11 `Thread.sleep`/`Thread.join` locations in StockfishNative (all consistent post-fix), 93 `@JavascriptInterface` methods (all properly annotated), MainActivity WebView setup (fully aligned with PDF best practices), 27 empty catch blocks in JS modules (all narrow defensive catches with intent-documenting comments). No additional changes needed — codebase already polished through v1.2.1's 11 rounds + v1.2.2's 8 rounds + v1.2.3's prior optimization pass.
+- **Build workaround**: `externalNativeBuild` blocks in `build.gradle` temporarily commented out due to AGP 8.7.3 + CMake 3.22.1 re-run loop bug ("manifest 'build.ninja' still dirty after 100 tries"). `libengine_bridge.so` pre-built with the same NDK r27c clang++ + flags and placed in `jniLibs/`. No source code (CMakeLists.txt, engine_jni.cpp) changes.
+- **Verification**: All 9 JS modules pass `node --check`. `chess.html` rebuilt (22,114 lines, 1,329,375 bytes). Release APK rebuilt (78,148,728 bytes), signature v1+v2+v3 all true. APK `lib/arm64-v8a/libstockfish.so` SHA-256 = `8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5` — three-way match. FGS subtype property present. Tarball: 114 files, 0 forbidden entries. Version: versionCode=123, versionName="1.2.3" (unchanged).
+- **Documentation**: BUILDING.md, PRIVACY.md, README.md, NOTICE, all 7 README.license files, and Chinese/English HTML manuals updated with v1.2.3 round-12 entries.
+
+### v1.2.3 initial release (2026.7.16) — Round 17/18 review fixes + P0 JS error fix + Toast UX
 
 The v1.2.3 release is a **bug-fix + review-response release** on top of v1.2.2, driven by a user-reported P0 JS error and two multi-skill review reports (Round 17 — Issue #48, 24 findings; Round 18 — Issue #49, 32 findings). After rigorous false-positive verification, the actionable findings were fixed and the version was bumped v1.2.2→v1.2.3 (versionCode 122→123).
 

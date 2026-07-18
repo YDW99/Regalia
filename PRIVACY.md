@@ -54,6 +54,52 @@ This data:
 - The eval cache (`eval_cache.json`) contains per-move Stockfish evaluation scores (centipawn values, mate distances, search depths, WDL probabilities) keyed by review step index. It contains no personal or position-identifying information beyond the chess evaluation data itself. (v1.0.7+: capped at 2000 entries via LRU eviction — the currently-viewed step is never evicted; eviction order is preserved across app restarts.)
 - The tag files contain user-defined tag strings (e.g., "opening", "tactics") for organizing PGN cache entries. They contain no personal or device-identifying information.
 
+### v1.2.3 round-22: eval bar perspective fix (pure code change)
+
+The v1.2.3 round-22 change (2026.7.18) fixes a user-reported bug where the
+evaluation bar's advantage/disadvantage "report" (emoji + description, the
+eval-delta colour, and the W/D/L labels) sometimes contradicted the player's
+stance when the player played Black. Four fixes in `ui.js` / `ai-bridge.js`:
+(1) the timeout/resign game-over score is now White-POV (`+∞` = White wins) to
+agree with the emoji, instead of player-POV; (2) the in-app W/D/L labels are
+now player-perspective ("W" = the player's win) — the PGN export stays
+White-POV; (3) the eval-delta good/bad colour is now player-perspective (the
+displayed numeric delta stays White-POV to match the adjacent score); (4) a
+missing `total>0` guard was added to the review eval-bar WDL to prevent a
+`NaN%` display if the engine ever emits `wdl 0 0 0`. **No new permissions, no
+new network access, no new data collection — pure code-organization /
+display-perspective fixes.**
+
+### v1.2.3 round-21: edge-case fix (per-color gated king signal)
+
+The v1.2.3 round-21 change (2026.7.17) fixes a user-reported edge case in the round-20 FEN-import Chess960 detection: the king-position signal in `_needsShredderFEN` is now gated per color with that color's own castling rights, so a fully legal standard position where the opponent's king has wandered off the e-file is no longer mislabeled as Chess960. **No new permissions, no new network access, no new data collection.** (Environment note: the build sandbox was reset this round; the toolchain was re-downloaded and the release signing key regenerated and backed up — the APK certificate fingerprint differs from previous rounds.)
+
+Version: `versionCode=123`, `versionName="1.2.3"` (unchanged — same version, fix round).
+
+### v1.2.3 round-20: 4 known leftovers resolved + hint relocation
+
+The v1.2.3 round-20 change (2026.7.17) resolves the four documented known leftovers (castling designated-rook-file disambiguation, Chess960 detection on FEN import, removal of the unreachable DIRTY_* incremental-render subsystem, cached PWLE haptics probe), applies the actionable items of a third external review report (PGN regex hardening, Number.parseFloat, replaceAll), and relocates the batch-analysis hint to a right-aligned span inside the "Analyze All" button. **No new permissions, no new network access, no new data collection, no changes to how data is stored or transmitted.** All changes are pure client-side logic/refactors; the haptics change only reduces redundant reflection calls against local OS APIs.
+
+Version: `versionCode=123`, `versionName="1.2.3"` (unchanged — same version, hardening round).
+
+### v1.2.3 round-19: 2 bilingual UX hints + log-injection fix
+
+The v1.2.3 round-19 change (2026.7.17) adds two user-requested UI hints (a one-time startup Toast "long-press the board toggles board stabilization", and a "batch analysis in progress — long-press a move to prioritize it" line under the review eval bar while analyze-all runs) and fixes the single non-false-positive finding of two external review reports (gitar-bot / SonarCloud java:S5443: CR/LF in a rejected UCI command is now escaped before being written to logcat). **No new permissions, no new network access, no new data collection, no changes to how data is stored or transmitted.** The hints are pure client-side UI text rendered from existing state; the log-injection fix only changes how a blocked UCI command is displayed in local logcat.
+
+Version: `versionCode=123`, `versionName="1.2.3"` (unchanged — same version, feature + fix round).
+
+### v1.2.3 round-18: Chess960 PGN [FEN] fix + 7-agent review (ACCESS_NETWORK_STATE removed)
+
+The v1.2.3 round-18 change (2026.7.17) is a bug-fix + review round: the main bug fix (a newly started Chess960 game's PGN recorded the *current* position in its `[FEN]` tag instead of the *initial* position) plus the non-false-positive findings of a 7-agent line-by-line review. **One permission was REMOVED: `ACCESS_NETWORK_STATE`** — a whole-codebase audit confirmed zero usage (no `ConnectivityManager`/`NetworkCallback`/`navigator.onLine` anywhere; the WebView queries network state in its own process), so the manifest declaration was dropped per permission minimization. **No new permissions, no new network access, no new data collection, no changes to how data is stored or transmitted.** The remaining changes are internal correctness/robustness fixes (PGN building, review/analysis state cleanup, PGN/regex parsing fixes, fsync on PGN cache save, CSP/CSS cleanup) with zero privacy impact.
+
+Version: `versionCode=123`, `versionName="1.2.3"` (unchanged — same version, bug-fix round).
+
+### v1.2.3 round-17: SonarCloud cleanup + God Class refactor (HapticManager / ui split)
+
+The v1.2.3 round-17 change (2026.7.17) is a pure code-quality and code-organization change: SonarCloud-driven cleanups (`Number.*` conversions, arrow functions, `catch (Exception)` narrowing, `dataset`, `Math.trunc`, `replaceAll`, regex simplification) and a God Class refactor extracting `HapticManager.java` from StockfishNative.java plus `ui-gameflow.js` / `ui-interactions.js` from ui.js. **No new permissions, no new network access, no new data collection, no changes to how data is stored or transmitted.** All extracted code runs with the same privileges and data access as before; the JS↔Java bridge API surface is unchanged (thin `@JavascriptInterface` delegates).
+
+Version: `versionCode=123`, `versionName="1.2.3"` (unchanged — same version, quality/refactor round).
+
 ### v1.2.0 Phase 82+++: renderInternal AI/player/info bars extraction
 
 The v1.2.0 Phase 82+++ change (2026.7.12) extracts 3 more rendering blocks from `renderInternal()` into dedicated functions: `_renderAIBar(h, oppC)`, `_renderPlayerBar(h)`, and `_renderInfoBars(h)`. `renderInternal()` was further reduced from 476 to 359 lines. This is a pure code-organization change — **no new permissions, no new network access, no new data collection, no changes to how data is stored or transmitted**. All extracted functions use global state only (with `oppC` passed as a parameter where needed); the `h` string concatenation pattern is preserved.
@@ -175,7 +221,7 @@ Version: `versionCode=121`, `versionName="1.2.1"`.
 | Permission | Purpose | Required |
 |-----------|---------|----------|
 | INTERNET | Tablebase API queries | No (only for tablebase feature) |
-| ACCESS_NETWORK_STATE | Detect offline status | No |
+| ~~ACCESS_NETWORK_STATE~~ | ~~Detect offline status~~ | Removed in v1.2.3 round-18 (zero usage in codebase) |
 | WAKE_LOCK | Keep engine process alive during analysis | Yes (foreground service) |
 | VIBRATE | Haptic feedback (personified per-piece haptics, v1.0.8+) | No |
 | FOREGROUND_SERVICE | Engine stability notification | Yes (Android 14+) |
@@ -205,6 +251,42 @@ The Stockfish 18 engine binary (`libstockfish.so`) is shipped as an arm64-v8a na
 - **SHA-256 hash verification** against a baked-in expected hash — guards against tampering.
 
 If either check fails, the engine refuses to start and reports the error to the user via the UI. The binary is never downloaded at runtime; it is statically embedded in the APK.
+
+## v1.2.3 round-13 refinement (2026.7.16)
+
+The round-13 refinement re-enabled CMake (resolving the round-12 build workaround) and applied a comprehensive first-principles per-file/per-line code review using 6 parallel review agents. **No new permissions, no new data collection, no new network access, no changes to data flow or storage.** All changes are internal bug fixes and robustness improvements with zero privacy impact:
+
+- **`JsBridgeGateway.java` UCI command injection guard (P0)**: Added CR/LF rejection in `isUciCommandAllowed` before the whitelist lookup. A JS caller could previously inject arbitrary UCI commands (including `quit`) via `sendToEngine("setoption name X value 1\nquit")`. No privacy impact — defense-in-depth for engine process integrity.
+- **`StockfishNative.java` restartEngine fix (P0)**: Reset `shutdownRequested` flag after `shutdown()` so `startEngine()` can proceed. Previously, a user-initiated engine restart would leave the engine permanently dead. No privacy impact — internal engine lifecycle fix.
+- **`StockfishNative.java` _evalDeepBatchActive clear (P1)**: Added `_evalDeepBatchActive = false` to `cleanupEngineResources()` so a crashed engine doesn't leak the batch flag to the new engine, producing biased eval results. No privacy impact — internal correctness fix.
+- **`SafPickerHelper.java` + `StatsActivity.java` openInputStream null-check (P1)**: `ContentResolver.openInputStream(Uri)` can return null; two read methods now throw a descriptive `IOException` instead of a confusing NPE. No privacy impact — better error diagnostics for file imports.
+- **`StabilizationHelper.java` registerListener return check (P1)**: Now checks `SensorManager.registerListener` return value; logs a warning on failure instead of silently reporting stabilization as active. No privacy impact — sensor anti-shake feature reliability.
+- **`AndroidManifest.xml` `<queries>` element (P1)**: Added targeted `<queries>` block listing 12 root-detection package names so `RootDetector.checkRootPackages` works on Android 11+ (API 30+ package visibility restrictions). No privacy impact — the root detection is informational-only (app never refuses to run on rooted devices); the `<queries>` declaration is a manifest-level visibility grant, not a new permission. The declared packages are common root-detection app package names (Magisk, SuperSU, etc.) — declaring them does NOT install or query them unless they're already present on the device.
+- **`ChessWebViewClient.java` render-crash fallback UI (P1)**: After 4+ render-process crashes in 60s, the user now sees a bilingual recovery message instead of a frozen screen. No privacy impact — UX improvement.
+- **`ChessWebViewClient.java` fallback context (P2)**: When opening an external URL and the Activity is destroyed, now uses `getApplicationContext()` instead of the dead Activity context. No privacy impact — prevents silent URL-open failures.
+- **`ui.js` gameClockTimerId cleanup (P1)**: Added `clearInterval(gameClockTimerId)` to `_cleanupEventListeners` so a timed game's 200ms interval doesn't keep firing after Activity destroy. No privacy impact — resource cleanup.
+- **`StockfishNative.java` PROCESS_DESTROY_GRACE_MS alignment (P2)**: `shutdown()` now uses the named constant instead of a bare `200` literal. No privacy impact — consistency fix.
+- **`PgnCacheManager.java` delete return value (P2)**: Now returns `true` if any deletion occurred (PGN and/or tags), not only when the PGN file was deleted. No privacy impact — accurate batch-deletion counting.
+- **`eco-data.js` cache pollution guard (P2)**: Added `if(_ecoData.length>0)` guard before saving to IndexedDB, preventing a parse failure from overwriting valid cached data with an empty array. No privacy impact — ECO data is bundled in the app (not user data); the cache is a performance optimization.
+- **`tablebase.js` variation moveNum offset (P2)**: Applied `_importedStartMoveNum` offset to relocated variation move numbers so they display correctly for FEN-started games. No privacy impact — display correctness.
+- **`build.gradle` empty-keystore-path guard (P2)**: Added `!releaseKeystorePath.isEmpty()` check. No privacy impact — better error message for fresh checkouts.
+- **`gradle.properties` dead property removal (P2)**: Removed `android.enablePngCrunchInReleaseBuildsLibs=false` (not a recognized AGP property). No privacy impact — config cleanup.
+- **`build-chess.py` dead CSP hash block removal (P2)**: Removed the stats.html CSP sha256 hash auto-update block (stats.html now uses `'unsafe-inline'`). No privacy impact — dead code removal.
+- **`AndroidManifest.xml` allowBackup resolution (P2)**: Removed `android:fullBackupContent` and `android:dataExtractionRules` attributes (dead config when `allowBackup="false"`). The two XML rule files are retained in `res/xml/` for reference. No privacy impact — `allowBackup="false"` (the documented v1.0.4 design decision) is unchanged; the app still does not participate in Android backup/restore. Removing the dead references just makes the manifest accurately reflect the actual behavior.
+- **P3 cleanup (stale comments, dead code)**: 11 minor fixes across `MainActivity.java`, `EngineService.java`, `TlsSecurityHelper.java`, `network_security_config.xml`, `ai-bridge.js`, `FileIoHelper.java`, `StockfishNative.java`, `EngineConfigHelper.java`, `tablebase.js`, `pgn-standard.js`. All are documentation-only or dead-code removal. No privacy impact.
+
+Version: `versionCode=123`, `versionName="1.2.3"` (unchanged — bug-fix round, no version bump).
+
+## v1.2.3 round-12 refinement (2026.7.16)
+
+The round-12 refinement addresses two open SonarCloud bugs and applies a first-principles code review guided by three uploaded PDFs (AI code-gen defect prevention, Android WebView dev, SonarCloud pass guide). **No new permissions, no new data collection, no new network access, no changes to data flow or storage.** All changes are internal to the app and have zero privacy impact:
+
+- **`game-logic.js` + `ui.js` slider aria-label (SonarCloud Bug #1, Web:InputWithoutLabelCheck)**: The review-mode slider's `<input type="range">` overlay (transparent, handles touch/keyboard) now uses a descriptive `aria-label` (`T('review_move_slider')` → "复盘步数" / "Review move number") instead of the terse `T('step_label')` ("Step" / "第"). WCAG 2.1 Level A 4.1.2 (Name, Role, Value) compliance. No privacy impact — accessibility-only change.
+- **`StockfishNative.java` InterruptedException handling (SonarCloud Bug #2, java:S2142)**: `recoverEngine()` auto-recovery sleep now restores `Thread.currentThread().interrupt()` + clears the restart lock + returns early on `InterruptedException`. Previously the catch (Throwable t) swallowed the interrupt flag, risking engine process leaks on shutdown. No privacy impact — internal concurrency hardening.
+- **`build.gradle` CMake workaround**: `externalNativeBuild` blocks temporarily commented out due to AGP 8.7.3 + CMake 3.22.1 re-run loop bug ("manifest 'build.ninja' still dirty after 100 tries"). `libengine_bridge.so` pre-built with the same NDK r27c clang++ + flags and placed in `jniLibs/`. No source code (CMakeLists.txt, engine_jni.cpp) changes. No privacy impact — build-time workaround only.
+- **First-principles code review**: Audited all 11 `Thread.sleep` / `Thread.join` locations in `StockfishNative.java` (all now consistent), all 93 `@JavascriptInterface`-annotated methods (all properly annotated), `MainActivity.java` WebView setup (fully aligned with PDF best practices: `setAllowFileAccess(false)`, `MIXED_CONTENT_NEVER_ALLOW`, Safe Browsing, full `onDestroy` cleanup), 27 empty catch blocks in JS modules (all narrow defensive catches with intent-documenting comments). No additional changes needed — codebase already polished through v1.2.1's 11 rounds + v1.2.2's 8 rounds + v1.2.3's prior optimization pass.
+
+Version: `versionCode=123`, `versionName="1.2.3"` (unchanged — bug-fix round, no version bump).
 
 ## v1.2.1 round-7 refinement (2026.7.13)
 

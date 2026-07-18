@@ -1,3 +1,153 @@
+v1.2.3 round-22 (2026.7.18): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - The round-22 change is limited to src/main/assets/chess.src/ (ui.js,
+    ai-bridge.js eval-perspective fixes) plus the rebuilt chess.html and the
+    top-level docs / Manual.
+
+v1.2.3 round-21 (2026.7.17): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - The round-21 change is limited to src/main/assets/chess.src/ai-bridge.js
+    (per-color gated king signal in _needsShredderFEN) plus rebuilt chess.html
+    and the top-level docs/Manual.
+
+v1.2.3 round-20 (2026.7.17) — HapticManager PWLE caching (known-issue E-3):
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — hardening round).
+  - HapticManager.java (AGPL v3): KNOWN-ISSUE E-3 RESOLVED — PWLE reflection
+    is now probed once per process and cached (pwleState tri-state +
+    cached Method/Constructor handles). Previously every haptic event ran
+    the full Class.forName + 3× getMethod + constructor sequence; on public
+    SDKs lacking the PWLE surface (the common case) it threw on EVERY call —
+    silent per-call overhead plus a logcat line per haptic. Now: AVAILABLE
+    reuses handles; UNAVAILABLE skips reflection and falls back to waveform
+    directly, with one diagnostic Log.d at probe time instead of per call.
+    Behavior on supported devices unchanged.
+  - All other files in this directory: No changes this round.
+  - License classification: unchanged.
+
+v1.2.3 round-19 (2026.7.17) — log-injection fix (gitar-bot / SonarCloud java:S5443):
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — feature + fix round).
+  - JsBridgeGateway.java (AGPL v3): SECURITY FIX — the CR/LF rejection
+    guard in isUciCommandAllowed() logged command.trim(), but trim() only
+    strips leading/trailing whitespace, so an embedded '\n'/'\r' still
+    reached logcat and could forge log lines. CR/LF are now replaced with
+    visible escape text (\r / \n) before logging via literal
+    String.replace (no regex), keeping the blocked payload on a single
+    line. This was the only non-false-positive across the gitar-bot
+    report and the PR #51 code-smell summary; the other 7 PR #51
+    categories were re-verified as false positives (fixes landed in
+    earlier rounds: HapticManager extraction, ui.js split, Number.parseInt
+    standardization, sleepGracefully, nesting simplification,
+    _evalDeepBatchActive cleanup on engine restart, CMake 3.31.6+ pinning).
+  - All other files in this directory: No changes this round.
+  - License classification: unchanged.
+
+v1.2.3 round-18 (2026.7.17) — Chess960 PGN [FEN] bug fix + 7-agent line-by-line review:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - MainActivity.java (AGPL v3): BACK key is no longer consumed when the
+    WebView-creation-failure fallback error UI is showing — the system now
+    finishes the activity so the user is not trapped on the fallback page.
+  - StockfishNative.java (GPL v3): UCI handshake retry now also resets
+    optionsBuilder — previously the previous JSONArray was still live on a
+    retry, so every "option name" line was appended a second time
+    (duplicated options in the engine-config panel after engine restart).
+  - PgnCacheManager.java (GPL v3): save() now fsyncs (getFD().sync())
+    before close, consistent with setTags() — the PGN cache entry is
+    durable across an abrupt process death.
+  - Other Java files: no changes this round.
+  - License classification: all files retain their existing classification.
+
+v1.2.3 round-17 (2026.7.17) — SonarCloud high-priority cleanup + God Class refactor (HapticManager):
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - HapticManager.java (GPL v3): NEW FILE — extracted from StockfishNative.java
+    (God Class refactor, ~420 lines of haptic logic: isHapticEnabled /
+    performHaptic / performHapticInternal / tryPwleVibrate / fallbackVibrate).
+    Piece-specific haptic personalities (pawn quiver, queen impact, king regal,
+    knight jump-land, bishop glide, rook charge) preserved verbatim.
+    StockfishNative keeps thin @JavascriptInterface delegate wrappers
+    (isHapticEnabled / performHaptic) so the JS API surface is unchanged.
+    This is the real, fully-wired successor of the round-10-removed dead
+    HapticHelper. S1181 handling: non-reflection paths converted
+    catch (Throwable) → catch (Exception); tryPwleVibrate / fallbackVibrate
+    intentionally retain catch (Throwable) with documented rationale
+    (reflection against android.os.VibrationEffect$Composition can fail with
+    NoSuchMethodError / NoClassDefFoundError on OEM ROMs whose API-35 surface
+    differs from AOSP — those are Errors, not Exceptions).
+  - StockfishNative.java (GPL v3): 4,674 → 4,307 lines (-8%). Beyond the
+    haptic extraction: (1) S1141 — new sleepGracefully(long) helper replaces
+    6 copies of the nested-try Thread.sleep pattern (ponder-stop grace,
+    3× process-destroy grace, 2× heartbeat-recovery waits); the two
+    heartbeat sites now check Thread.currentThread().isInterrupted() after
+    the helper instead of breaking from inside a nested catch — semantics
+    identical (interrupt flag restored inside the helper). (2) Robustness —
+    postJsCallback now rejects null/blank JS expressions up front (dev-guide
+    §5.1 direction-1 hardening; an empty payload previously evaluated to a
+    silent no-op try{}catch, masking caller bugs). (3) S3626 verified false
+    positive: the flagged auto-recovery `return;` is a legitimate early exit
+    from the retry loop after interruption, not a redundant jump.
+  - ChessWebViewClient.java (AGPL v3): S1181 — all 6 catch (Throwable) sites
+    converted to catch (Exception) (protected calls throw only Exception
+    subtypes: startActivity, WebView.destroy, showFallbackUI, recreate,
+    runOnUiThread; Errors such as OOM must propagate). DRY — the duplicated
+    detach+destroy WebView blocks (render-crash path and backoff path)
+    extracted into a new private static destroyWebViewSafely(view, pathTag)
+    helper. S125 verified false positive: no commented-out code block exists
+    in this file (PDF line numbers were stale).
+  - Other Java files: no changes this round.
+  - License classification: HapticManager.java is GPL v3 (derived from
+    StockfishNative haptic code, which references DroidFish logic); all
+    other files retain their existing classification.
+
+v1.2.3 round-13 (2026.7.16) — CMake re-enablement + first-principles code review:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - StockfishNative.java (GPL v3): Four fixes — (1) P0: reset shutdownRequested
+    in restartEngine so the engine can actually restart (previously bailed at
+    startEngineInternal's guard, leaving the engine permanently dead); (2) P1:
+    clear _evalDeepBatchActive in cleanupEngineResources to prevent biased eval
+    after crash; (3) P2: use PROCESS_DESTROY_GRACE_MS constant in shutdown()
+    instead of bare 200 literal; (4) P3: removed dead _pgnCacheDir() and
+    _sanitizeCacheName() private wrappers + redundant case '\u0000' in
+    escapeJsString.
+  - SafPickerHelper.java (GPL v3): P1 — added openInputStream null-check in
+    readTextFromUri and readPgnFromUri (mirrors write path's pattern).
+  - StatsActivity.java (AGPL v3): P1 — added openInputStream null-check in
+    PGN import path.
+  - StabilizationHelper.java (AGPL v3): P1 — check registerListener return
+    value and log warning on failure instead of silently reporting success.
+  - ChessWebViewClient.java (AGPL v3): P1 — show fallback UI after render-
+    crash backoff instead of frozen screen; P2 — use getApplicationContext()
+    for URL open when Activity is destroyed.
+  - MainActivity.java (AGPL v3): P1 — showFallbackUI changed from private to
+    package-private so ChessWebViewClient can call it; P3 — corrected stale
+    version tag (v1.1.0 → v1.2.3) and stabilizationHelper comment.
+  - EngineConfigHelper.java (GPL v3): P3 — removed dead ternary fallback
+    (level < ELO_MAP.length) ? ELO_MAP[level] : 1500 — outer guard makes
+    fallback unreachable.
+  - EngineService.java (AGPL v3): P3 — corrected misleading context comment.
+  - FileIoHelper.java (GPL v3): P3 — corrected stale getDefaultPaths comment
+    (claimed MediaStore/mark-as-public, neither was true).
+  - TlsSecurityHelper.java (AGPL v3): P3 — removed stray `**` typo in Javadoc.
+  - PgnCacheManager.java (GPL v3): P2 — delete() now returns true if any
+    deletion occurred (PGN and/or tags), not only when PGN was deleted.
+  - Other Java files (ChessApp, EngineProcessManager, EngineHealthMonitor,
+    EngineSettingsHelper, JsBridgeGateway, PermissionHelper, RootDetector):
+    No changes this round — audited and verified clean.
+  - License classification: all files retain their existing classification.
+
+v1.2.3 round-12 (2026.7.16) — SonarCloud bug fixes + first-principles review:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - StockfishNative.java (GPL v3): recoverEngine() auto-recovery sleep now has
+    a dedicated catch (InterruptedException e) block that restores
+    Thread.currentThread().interrupt() + _clearRestartInProgress() + early
+    return (SonarCloud Bug #2, java:S2142). Previously the catch (Throwable t)
+    swallowed InterruptedException without re-asserting the interrupt flag,
+    risking engine process leaks on shutdown. All 11 Thread.sleep/Thread.join
+    locations in this file now have consistent interrupt handling.
+  - Other Java files (MainActivity, StatsActivity, EngineConfigHelper, etc.):
+    No changes this round — audited for method length, cyclomatic complexity,
+    @JavascriptInterface annotations (93 total, all properly annotated), and
+    WebView setup alignment with PDF best practices. No issues found.
+  - License classification: all files retain their existing classification.
+
 v1.2.3 optimization pass (2026.7.16) — first-principles line-by-line review:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — no version bump).
   - StockfishNative.java (GPL v3): Stale "API 21-25" comments corrected to

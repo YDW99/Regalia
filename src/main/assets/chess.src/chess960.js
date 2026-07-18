@@ -60,9 +60,11 @@ const _BINOMIAL_5_2 = [
 function spidToBackRank(spid){
   if(spid<0||spid>959||!Number.isInteger(spid))spid=518; // default: traditional
   const lightBishopIdx=spid%4;
-  const darkBishopIdx=((spid/4)|0)%4;
-  const queenIdx=((spid/16)|0)%6;
-  const knightPairIdx=((spid/96)|0)%10;
+  // v1.2.3 (S7767): Math.trunc instead of |0 — identical for spid ∈ [0,959]
+  //   (guaranteed by the clamp above), but clearer intent.
+  const darkBishopIdx=(Math.trunc(spid/4))%4;
+  const queenIdx=(Math.trunc(spid/16))%6;
+  const knightPairIdx=(Math.trunc(spid/96))%10;
   // Build empty 8-slot array
   const slots=new Array(8).fill(null);
   // 1. Place bishops
@@ -242,27 +244,39 @@ function toShredderCastling(cr,board){
     if(board[0][c]&&board[0][c].type==='rook'&&board[0][c].color==='black')bRooks.push(c);
   }
   // Collect (file, isWhite) pairs for each right that's set + has a valid rook.
+  // v1.2.3 round-20 (known-issue A-1): when castlingRights carries a
+  //   designated rook file (parseShredderCastling / initState /
+  //   initChess960State) and that rook is still present, emit THAT file —
+  //   this keeps the exact X-FEN letters on round-trip for ambiguous
+  //   same-side-two-rooks positions instead of re-deriving the closest rook.
+  const _rookOn=(row,f,co)=>{const p=board[row]&&board[row][f];return !!(p&&p.type==='rook'&&p.color===co);};
   const pairs=[];
   if(wKing!==null){
     if(cr.whiteKingside){
-      // Closest white rook to the RIGHT of the king
-      for(const c of wRooks)if(c>wKing){pairs.push({file:c,isWhite:true});break;}
+      let f=null;
+      if(cr.whiteKingsideRookFile!=null&&_rookOn(7,cr.whiteKingsideRookFile,'white'))f=cr.whiteKingsideRookFile;
+      else{for(const c of wRooks)if(c>wKing){f=c;break;}} // closest rook RIGHT of king
+      if(f!=null)pairs.push({file:f,isWhite:true});
     }
     if(cr.whiteQueenside){
-      // Closest white rook to the LEFT of the king (rightmost of the left-side rooks)
-      let best=-1;
-      for(const c of wRooks)if(c<wKing&&c>best)best=c;
-      if(best>=0)pairs.push({file:best,isWhite:true});
+      let f=null;
+      if(cr.whiteQueensideRookFile!=null&&_rookOn(7,cr.whiteQueensideRookFile,'white'))f=cr.whiteQueensideRookFile;
+      else{let best=-1;for(const c of wRooks)if(c<wKing&&c>best)best=c;if(best>=0)f=best;} // closest LEFT
+      if(f!=null)pairs.push({file:f,isWhite:true});
     }
   }
   if(bKing!==null){
     if(cr.blackKingside){
-      for(const c of bRooks)if(c>bKing){pairs.push({file:c,isWhite:false});break;}
+      let f=null;
+      if(cr.blackKingsideRookFile!=null&&_rookOn(0,cr.blackKingsideRookFile,'black'))f=cr.blackKingsideRookFile;
+      else{for(const c of bRooks)if(c>bKing){f=c;break;}}
+      if(f!=null)pairs.push({file:f,isWhite:false});
     }
     if(cr.blackQueenside){
-      let best=-1;
-      for(const c of bRooks)if(c<bKing&&c>best)best=c;
-      if(best>=0)pairs.push({file:best,isWhite:false});
+      let f=null;
+      if(cr.blackQueensideRookFile!=null&&_rookOn(0,cr.blackQueensideRookFile,'black'))f=cr.blackQueensideRookFile;
+      else{let best=-1;for(const c of bRooks)if(c<bKing&&c>best)best=c;if(best>=0)f=best;}
+      if(f!=null)pairs.push({file:f,isWhite:false});
     }
   }
   if(pairs.length===0)return '-';
@@ -299,7 +313,13 @@ function toShredderCastling(cr,board){
  * @returns {Object} {whiteKingside, whiteQueenside, blackKingside, blackQueenside}
  */
 function parseShredderCastling(str,board){
-  const cr={whiteKingside:false,whiteQueenside:false,blackKingside:false,blackQueenside:false};
+  // v1.2.3 round-20 (known-issue A-1): the four *RookFile fields record the
+  //   EXACT rook file designated by the FEN castling field (Shredder letters
+  //   AND the KQkq compat mapping — K always means the h-file rook). They
+  //   disambiguate the case of two same-color rooks on the SAME side of the
+  //   king, where the closest-rook heuristic alone could pick the wrong rook.
+  const cr={whiteKingside:false,whiteQueenside:false,blackKingside:false,blackQueenside:false,
+    whiteKingsideRookFile:null,whiteQueensideRookFile:null,blackKingsideRookFile:null,blackQueensideRookFile:null};
   if(!str||str==='-')return cr;
   // v1.2.1 round-9: defensive null guard on board (matches toShredderCastling
   // at line ~228 which already has the same guard). Without this, a null/undefined
@@ -331,13 +351,13 @@ function parseShredderCastling(str,board){
     if(!_hasRookOn(isWhite?'white':'black',file))continue;
     if(isWhite){
       if(wKing<0)continue;
-      if(file>wKing)cr.whiteKingside=true;
-      else if(file<wKing)cr.whiteQueenside=true;
+      if(file>wKing){cr.whiteKingside=true;cr.whiteKingsideRookFile=file;}
+      else if(file<wKing){cr.whiteQueenside=true;cr.whiteQueensideRookFile=file;}
       // file === wKing is illegal (rook on king's square) -- silently drop.
     }else{
       if(bKing<0)continue;
-      if(file>bKing)cr.blackKingside=true;
-      else if(file<bKing)cr.blackQueenside=true;
+      if(file>bKing){cr.blackKingside=true;cr.blackKingsideRookFile=file;}
+      else if(file<bKing){cr.blackQueenside=true;cr.blackQueensideRookFile=file;}
     }
   }
   return cr;
@@ -435,6 +455,42 @@ function findCastlingRookForSide(board,color,side){
 }
 
 /**
+ * v1.2.3 round-20 (known-issue A-1): designated-rook-file disambiguation.
+ * When castlingRights carries an explicit rook file for the requested side
+ * (recorded by parseShredderCastling from the FEN castling field, by
+ * initState / initChess960State at game start, or by the setup-mode castle
+ * markers), and a same-color rook still stands on that file, THAT rook is
+ * the castling rook — not merely the closest one. This resolves the
+ * same-side-two-rooks ambiguity (e.g. after a rook promotion on the
+ * king's side in Chess960, or a hand-crafted FEN) where the closest-rook
+ * heuristic could select the wrong rook. Falls back to the heuristic when
+ * no file is designated or the designated rook is gone (defensive — e.g.
+ * rights state hand-built by setup mode without file fields).
+ *
+ * @param {Object} s -- game state (needs .board + .castlingRights)
+ * @param {string} color -- 'white' or 'black'
+ * @param {string} side -- 'kingside' or 'queenside'
+ * @returns {number|null} rook column, or null if no rook on that side
+ */
+function findDesignatedCastlingRook(s,color,side){
+  if(!s||!s.board)return null;
+  const cr=s.castlingRights;
+  const field=color==='white'
+    ?(side==='kingside'?'whiteKingsideRookFile':'whiteQueensideRookFile')
+    :(side==='kingside'?'blackKingsideRookFile':'blackQueensideRookFile');
+  const f=cr?cr[field]:null;
+  if(f!=null&&f>=0&&f<8){
+    const row=color==='white'?7:0;
+    const p=s.board[row]&&s.board[row][f];
+    if(p&&p.type==='rook'&&p.color===color)return f;
+    // Designated rook no longer on its file (moved/captured without the
+    //   right being cleared — only possible via setup-mode edits) — fall
+    //   through to the heuristic rather than returning a stale column.
+  }
+  return findCastlingRookForSide(s.board,color,side);
+}
+
+/**
  * Compute the rook source/dest for a Chess960 castling move.
  *
  * v1.0.7 PHASE 4: now uses findCastlingRookForSide so that castling to one
@@ -449,7 +505,9 @@ function findCastlingRookForSide(board,color,side){
  */
 function chess960CastlingRookMove(s,color,side){
   const row=color==='white'?7:0;
-  const rookFrom=findCastlingRookForSide(s.board,color,side);
+  // v1.2.3 round-20 (A-1): prefer the FEN/game-designated rook file over the
+  //   closest-rook heuristic (same-side-two-rooks disambiguation).
+  const rookFrom=findDesignatedCastlingRook(s,color,side);
   if(rookFrom===null)return null;
   const kingTo=side==='kingside'?6:2;
   const rookTo=side==='kingside'?5:3;
@@ -535,7 +593,9 @@ function isChess960CastlingLegal(s,color,side){
   }
   if(kingCol<0)return false;
   // v1.0.7 PHASE 4: only need a rook on THIS side, not both sides.
-  const rookCol=findCastlingRookForSide(s.board,color,side);
+  // v1.2.3 round-20 (A-1): prefer the FEN/game-designated rook file over the
+  //   closest-rook heuristic (same-side-two-rooks disambiguation).
+  const rookCol=findDesignatedCastlingRook(s,color,side);
   if(rookCol===null)return false;
   const kingTo=side==='kingside'?6:2;
   const rookTo=side==='kingside'?5:3;
@@ -606,10 +666,19 @@ function initChess960State(spid){
   for(let c=0;c<8;c++){
     if(backRank[c]==='king'){wk={row:7,col:c};bk={row:0,col:c};}
   }
+  // v1.2.3 round-20 (A-1): record the designated rook files — in a Chess960
+  //   start the castling rooks are exactly known (the one rook right of the
+  //   king = kingside, the one left = queenside), so no heuristic is ever
+  //   needed for the opening position.
+  let _kCol=-1;const _rookCols=[];
+  for(let c=0;c<8;c++){if(backRank[c]==='king')_kCol=c;else if(backRank[c]==='rook')_rookCols.push(c);}
+  let _ksFile=null,_qsFile=null;
+  for(const c of _rookCols){if(c>_kCol)_ksFile=c;else if(c<_kCol)_qsFile=c;}
   const s={
     board:b,
     currentTurn:'white',
-    castlingRights:{whiteKingside:true,whiteQueenside:true,blackKingside:true,blackQueenside:true},
+    castlingRights:{whiteKingside:true,whiteQueenside:true,blackKingside:true,blackQueenside:true,
+      whiteKingsideRookFile:_ksFile,whiteQueensideRookFile:_qsFile,blackKingsideRookFile:_ksFile,blackQueensideRookFile:_qsFile},
     enPassantTarget:null,
     halfMoveClock:0,
     fullMoveNumber:1,
@@ -631,7 +700,7 @@ function initChess960State(spid){
 export {
   spidToBackRank, backRankToSPID, randomSPID,
   toShredderCastling, parseShredderCastling,
-  findCastlingRooks, findCastlingRookForSide, chess960CastlingRookMove, isChess960CastlingLegal,
+  findCastlingRooks, findCastlingRookForSide, findDesignatedCastlingRook, chess960CastlingRookMove, isChess960CastlingLegal,
   setChess960Mode, isChess960Mode,
   initChess960State
 };

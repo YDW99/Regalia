@@ -52,6 +52,13 @@ def main():
         "ai-bridge.js",
         "tablebase.js",
         "eco-data.js",
+        # v1.2.3 (God Class round-17): ui.js split — interaction handlers and
+        #   game-flow/clock logic extracted into two global-scope modules.
+        #   Concatenation order is safe: all extracted units are pure function
+        #   declarations (hoisted bundle-wide); no top-level executable code
+        #   was moved, so no TDZ/load-order change.
+        "ui-gameflow.js",      # v1.2.3: game start + game-clock subsystem
+        "ui-interactions.js",  # v1.2.3: clicks, move exec, toolbar, dialogs, back-press
         "ui.js",               # main UI (inline ChessAudioEngine + board rendering)
     ]
 
@@ -92,30 +99,12 @@ def main():
     byte_count = len(result.encode('utf-8'))
     print(f"Built chess.html ({line_count} lines, {byte_count} bytes)")
 
-    # v1.1.2 Phase 69 (Bug 4): Auto-fix stats.html CSP hash. stats.html has an
-    # inline <script> whose SHA-256 must match the 'sha256-...' in the CSP
-    # <meta> tag. If the script changes but the hash isn't updated, the browser
-    # refuses to execute it → stats page blank. We compute the actual hash and
-    # update the CSP tag automatically so this can't break again.
-    stats_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "src", "main", "assets", "stats.html")
-    try:
-        with open(stats_path, 'r', encoding='utf-8') as f:
-            stats_content = f.read()
-        stats_scripts = re.findall(r'<script[^>]*>([\s\S]*?)</script>', stats_content)
-        if stats_scripts:
-            import hashlib, base64
-            actual_hash = 'sha256-' + base64.b64encode(
-                hashlib.sha256(stats_scripts[0].encode('utf-8')).digest()
-            ).decode('ascii')
-            csp_pattern = r"(script-src ')(sha256-[A-Za-z0-9+/=]+)(')"
-            m = re.search(csp_pattern, stats_content)
-            if m and m.group(2) != actual_hash:
-                new_stats = stats_content[:m.start(2)] + actual_hash + stats_content[m.end(2):]
-                with open(stats_path, 'w', encoding='utf-8') as f:
-                    f.write(new_stats)
-                print(f"Updated stats.html CSP hash to {actual_hash}")
-    except Exception as e:
-        print(f"WARN: stats.html CSP hash update failed: {e}", file=sys.stderr)
+    # v1.2.3 round-13 (P2): removed the stats.html CSP sha256 hash auto-update
+    #   block. As of stats.html v1.1.2 PHASE 71, the CSP switched from a fixed
+    #   sha256- hash to 'unsafe-inline' (stats.html line ~41: script-src
+    #   'unsafe-inline' blob:). The regex `csp_pattern` never matched, so the
+    #   block was silent dead code providing no protection. If a future policy
+    #   reverts to hash-based CSP, the block can be re-added at that time.
 
 
 if __name__ == '__main__':

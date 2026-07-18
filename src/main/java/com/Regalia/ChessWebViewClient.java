@@ -22,6 +22,7 @@ package com.Regalia;
  */
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.util.Log;
@@ -82,13 +83,25 @@ public class ChessWebViewClient extends WebViewClient {
                 if (activity != null) {
                     activity.startActivity(intent);
                 } else {
-                    // Activity was destroyed — use the application context instead
-                    if (view.getContext() != null) {
-                        view.getContext().startActivity(intent);
+                    // v1.2.3 round-13 (P2): Activity was destroyed — fall back
+                    //   to the Application context. FLAG_ACTIVITY_NEW_TASK (set
+                    //   above) is required for non-Activity contexts. Using
+                    //   view.getContext() directly would return the dead Activity
+                    //   (MainActivity passes `this` to the WebView constructor),
+                    //   which could throw IllegalStateException on a destroyed
+                    //   Activity. The outer catch (Throwable) masks it, but the
+                    //   URL open would silently fail.
+                    Context appCtx = view.getContext() != null
+                            ? view.getContext().getApplicationContext() : null;
+                    if (appCtx != null) {
+                        appCtx.startActivity(intent);
                     }
                 }
                 Log.i(TAG, "Opened external URL via WebViewClient: " + url);
-            } catch (Throwable e) {
+            } catch (Exception e) {
+                // v1.2.3 (S1181): catch Exception, not Throwable — startActivity
+                //   throws ActivityNotFoundException/SecurityException/IllegalStateException
+                //   (all Exception subtypes). Errors (OOM etc.) must not be swallowed.
                 Log.w(TAG, "Failed to open external URL: " + url, e);
             }
             return true; // Always return true so the WebView itself doesn't try to load it
@@ -153,31 +166,34 @@ public class ChessWebViewClient extends WebViewClient {
         if (_renderCrashCount > 3) {
             Log.e(TAG, "Render process crashed " + _renderCrashCount + " times within 60s — "
                     + "stopping recreate loop to prevent battery drain. User must restart app manually.");
-            try {
-                if (view != null) {
-                    if (view.getParent() instanceof android.view.ViewGroup) {
-                        ((android.view.ViewGroup) view.getParent()).removeView(view);
+            destroyWebViewSafely(view, "backoff path");
+            // v1.2.3 round-13 (P1): show the user a recovery message instead
+            //   of leaving them with a frozen screen. The Activity's WebView
+            //   reference is now stale, so we hand off to showFallbackUI which
+            //   builds a native recovery overlay.
+            final MainActivity activity = activityRef.get();
+            if (activity != null) {
+                activity.runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        try {
+                            activity.showFallbackUI(
+                                "渲染进程多次崩溃，请手动重启应用 / Renderer crashed repeatedly, please restart the app manually.");
+                        } catch (Exception e2) {
+                            // v1.2.3 (S1181): showFallbackUI throws RuntimeException
+                            //   subtypes at most — catching Throwable would also mask
+                            //   OOM/StackOverflow, which must propagate.
+                            Log.w(TAG, "Failed to show fallback UI after render-crash backoff", e2);
+                        }
                     }
-                    view.destroy();
-                }
-            } catch (Throwable e) {
-                Log.w(TAG, "Failed to destroy crashed WebView (backoff path)", e);
+                });
             }
             return true; // We handled it — don't kill the app process
         }
         Log.w(TAG, "Render process crash count within 60s: " + _renderCrashCount + "/3");
-        try {
-            if (view != null) {
-                // Remove the dead WebView from its parent to avoid
-                // WindowLeaked exceptions during Activity teardown.
-                if (view.getParent() instanceof android.view.ViewGroup) {
-                    ((android.view.ViewGroup) view.getParent()).removeView(view);
-                }
-                view.destroy();
-            }
-        } catch (Throwable e) {
-            Log.w(TAG, "Failed to destroy crashed WebView", e);
-        }
+        // Remove the dead WebView from its parent to avoid
+        // WindowLeaked exceptions during Activity teardown.
+        destroyWebViewSafely(view, "render-crash");
         // Notify the Activity so it can recreate the WebView (e.g., by
         // calling recreate() or showing a "Renderer crashed, tap to reload"
         // overlay). We use a WeakReference so we don't leak the Activity.
@@ -194,15 +210,36 @@ public class ChessWebViewClient extends WebViewClient {
                     public void run() {
                         try {
                             activity.recreate();
-                        } catch (Throwable e) {
+                        } catch (Exception e) {
                             Log.w(TAG, "Activity.recreate() failed after renderer crash", e);
                         }
                     }
                 });
-            } catch (Throwable e) {
+            } catch (Exception e) {
                 Log.w(TAG, "Failed to notify Activity of renderer crash", e);
             }
         }
         return true; // We handled it — don't kill the app process
+    }
+
+    /**
+     * v1.2.3 (DRY + S1181): Best-effort WebView teardown shared by both
+     *   render-crash paths (backoff and normal). Detaches the view from its
+     *   parent (prevents WindowLeaked during Activity teardown) then destroys
+     *   it. WebView.destroy() on an already-crashed renderer throws
+     *   RuntimeException subtypes on some OEM ROMs — caught and logged.
+     *   Errors (OOM etc.) are intentionally NOT caught (S1181).
+     */
+    private static void destroyWebViewSafely(WebView view, String pathTag) {
+        try {
+            if (view != null) {
+                if (view.getParent() instanceof android.view.ViewGroup) {
+                    ((android.view.ViewGroup) view.getParent()).removeView(view);
+                }
+                view.destroy();
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Failed to destroy crashed WebView (" + pathTag + ")", e);
+        }
     }
 }

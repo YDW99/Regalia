@@ -52,7 +52,7 @@ import android.widget.TextView;
  * - AndroidX immersive mode uses reflection fallback if classes are missing
  * - All exception handlers log to logcat for debugging
  *
- * Version: v1.1.0
+ * Version: v1.2.3
  */
 public class MainActivity extends Activity {
 
@@ -73,7 +73,9 @@ public class MainActivity extends Activity {
     // OPT: P0 - Track if Activity is destroyed to prevent post-delayed callbacks from executing
     private volatile boolean isDestroyed = false;
     // v1.0.5 Round-6 Rev49: Sensor-based board anti-shake helper.
-    // Null until first toggle on; recreated on each start() to reset state.
+    // v1.2.3 round-13 (P3): corrected stale comment — helper is NOT recreated
+    //   on each start(); it's created once on first toggle and reused. State
+    //   reset is handled internally by StabilizationHelper.start().
     private StabilizationHelper stabilizationHelper = null;
     private boolean stabilizationEnabled = false;
 
@@ -370,7 +372,10 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void showFallbackUI(String message) {
+    // v1.2.3 round-13 (P1): package-private (not private) so ChessWebViewClient
+    //   can invoke it from the render-crash backoff path (4+ crashes in 60s)
+    //   to show the user a recovery message instead of a frozen screen.
+    void showFallbackUI(String message) {
         try {
             LinearLayout layout = new LinearLayout(this);
             layout.setOrientation(LinearLayout.VERTICAL);
@@ -785,8 +790,12 @@ public class MainActivity extends Activity {
                 } catch (Throwable e) {
                     Log.w(TAG, "evaluateJavascript for back key failed", e);
                 }
+                return true;
             }
-            return true;
+            // v1.2.3 round-18 (bug fix): WebView creation failed (fallback
+            //   error UI is showing) — do NOT consume BACK; let the system
+            //   finish the activity so the user is not trapped.
+            return super.onKeyDown(keyCode, event);
         }
         return super.onKeyDown(keyCode, event);
     }

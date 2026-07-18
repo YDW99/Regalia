@@ -170,7 +170,7 @@ public final class TlsSecurityHelper {
      *
      * v1.2.1: Now implements ACTUAL SPKI SHA-256 pin validation per RFC 7469.
      * The SubjectPublicKeyInfo (SPKI) is extracted from the certificate via
-     * {@link java.security.cert.X509Certificate#getPublicKey()}**.getEncoded(),
+     * {@link java.security.cert.X509Certificate#getPublicKey()}.getEncoded(),
      * hashed with SHA-256, Base64-encoded, and compared against the three
      * configured pins (PIN_LE_E7, PIN_ISRG_X1, PIN_ISRG_X2). A mismatch
      * throws CertificateException.

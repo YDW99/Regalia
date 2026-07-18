@@ -39,6 +39,7 @@ import android.util.Log;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
@@ -333,9 +334,14 @@ public class SafPickerHelper {
 
     /** 从 URI 读取文本内容（设置文件） */
     private String readTextFromUri(Uri uri) throws Throwable {
-        try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(
-                        context.getContentResolver().openInputStream(uri), "UTF-8"))) {
+        // v1.2.3 round-13 (P1): ContentResolver.openInputStream may return null
+        //   (e.g. provider unavailable, file deleted between picker and read).
+        //   Mirrors the write path's openOutputStream null-check (line ~204).
+        InputStream is = context.getContentResolver().openInputStream(uri);
+        if (is == null) {
+            throw new java.io.IOException("openInputStream returned null for " + uri);
+        }
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(is, "UTF-8"))) {
             StringBuilder sb = new StringBuilder();
             String line;
             while ((line = reader.readLine()) != null) {
@@ -347,9 +353,12 @@ public class SafPickerHelper {
 
     /** 从 URI 读取 PGN 内容（含截断保护） */
     private String readPgnFromUri(Uri uri) throws Throwable {
-        try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(
-                        context.getContentResolver().openInputStream(uri), "UTF-8"))) {
+        // v1.2.3 round-13 (P1): see readTextFromUri — openInputStream may return null.
+        InputStream is = context.getContentResolver().openInputStream(uri);
+        if (is == null) {
+            throw new java.io.IOException("openInputStream returned null for " + uri);
+        }
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(is, "UTF-8"))) {
             StringBuilder sb = new StringBuilder();
             String line;
             int lineCount = 0;

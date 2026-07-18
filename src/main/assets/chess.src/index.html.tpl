@@ -33,7 +33,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; worker-src blob:; connect-src https://tablebase.lichess.ovh; img-src data: file: blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'none'; object-src 'none'">
+<!-- v1.2.3 round-18: removed frame-ancestors — ignored inside <meta> (only
+     honored as an HTTP response header), dead directive. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; worker-src blob:; connect-src https://tablebase.lichess.ovh; img-src data: file: blob:; base-uri 'self'; form-action 'none'; object-src 'none'">
 <title>Regalia v1.2.3</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -206,7 +208,10 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
    intrinsic size and break the responsive CELL recalculation. The .sq
    cells already have `contain:layout style paint` so child-paint cost is
    already optimized. */
-.bgrid{display:grid;transform:translateZ(0);touch-action:none;backface-visibility:hidden;content-visibility:auto;contain-intrinsic-size:auto}
+/* v1.2.3 round-18 (bug fix): contain-intrinsic-size requires a length after
+   `auto` — bare `auto` is invalid and Chromium drops the whole declaration,
+   losing the off-screen layout skip for the board grid. */
+.bgrid{display:grid;transform:translateZ(0);touch-action:none;backface-visibility:hidden;content-visibility:auto;contain-intrinsic-size:auto 300px}
 .sq{display:flex;align-items:center;justify-content:center;cursor:pointer;position:relative;user-select:none;font-size:2rem;line-height:1;transition:background .15s;touch-action:manipulation;contain:layout style paint;transform:translateZ(0)}
 .sq:hover{background-color:var(--sq-hover)}
 .sq .lbl{position:absolute;top:1px;left:2px;font-size:9px;opacity:.95;font-family:"DejaVu Sans",system-ui,sans-serif;pointer-events:none;z-index:2;letter-spacing:0}

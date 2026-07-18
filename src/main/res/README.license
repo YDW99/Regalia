@@ -1,3 +1,53 @@
+v1.2.3 round-22 (2026.7.18): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - The round-22 change is limited to src/main/assets/chess.src/ (ui.js,
+    ai-bridge.js eval-perspective fixes) plus the rebuilt chess.html and the
+    top-level docs / Manual.
+
+v1.2.3 round-21 (2026.7.17): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - The round-21 change is limited to src/main/assets/chess.src/ai-bridge.js
+    (per-color gated king signal in _needsShredderFEN) plus rebuilt chess.html
+    and the top-level docs/Manual.
+
+v1.2.3 round-20 (2026.7.17) — 4 known leftovers + 3rd review report + hint relocation:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — hardening round).
+  - No changes to any resource files this round (strings.xml, icons,
+    network_security_config.xml, backup_rules.xml, data_extraction_rules.xml).
+  - License classification: all resources remain AGPL v3 (original works).
+
+v1.2.3 round-19 (2026.7.17) — 2 bilingual UX hints + log-injection fix:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — feature + fix round).
+  - No changes to any resource files this round (strings.xml, icons,
+    network_security_config.xml, backup_rules.xml, data_extraction_rules.xml).
+  - License classification: all resources remain AGPL v3 (original works).
+
+v1.2.3 round-18 (2026.7.17) — Chess960 PGN [FEN] bug fix + 7-agent line-by-line review:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - No changes to any resource files this round (strings.xml, icons,
+    network_security_config.xml, backup_rules.xml, data_extraction_rules.xml).
+  - License classification: all resources remain AGPL v3 (original works).
+
+v1.2.3 round-13 (2026.7.16) — CMake re-enablement + first-principles code review:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - network_security_config.xml (AGPL v3): P3 — corrected ISRG Root X2 expiry
+    date in comment (was 2035-09-06, actual is 2035-09-17). The pin itself
+    was already correct.
+  - strings.xml, backup_rules.xml, data_extraction_rules.xml: no changes.
+    (Note: backup_rules.xml and data_extraction_rules.xml are no longer
+    referenced by AndroidManifest.xml — the fullBackupContent and
+    dataExtractionRules attributes were removed because allowBackup="false"
+    makes them dead config. The XML files are retained in res/xml/ for
+    reference in case allowBackup is ever set to true in the future.)
+  - All mipmap-* icon resources: no changes.
+  - License classification: all resources remain AGPL v3 (original works).
+
+v1.2.3 round-12 (2026.7.16) — SonarCloud bug fixes + first-principles review:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - No changes to any resource files this round (strings.xml, icons,
+    network_security_config.xml, backup_rules.xml, data_extraction_rules.xml).
+  - License classification: all resources remain AGPL v3 (original works).
+
 v1.2.3 optimization pass (2026.7.16) — first-principles line-by-line review:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — no version bump).
   - network_security_config.xml (AGPL v3): Corrected "minSdk 21" comment to

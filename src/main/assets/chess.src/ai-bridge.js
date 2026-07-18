@@ -242,12 +242,11 @@ let _reviewEvalCache=new function(){
   //     in-flight engine eval to "miss" the cache on its return, producing a
   //     brief "analyzing..." flash for the step the user is staring at.
   //   - TDZ safety: _reviewEvalRequestedStep is declared with `let` LATER in
-  //     this module (line 254 in the original layout). _evictIfOverCap is a
-  //     closure that only reads _reviewEvalRequestedStep at runtime (when
-  //     set() is called), by which point the module has fully loaded and the
-  //     binding is initialized. The typeof guard + try/catch belt-and-braces
-  //     any edge case (e.g., a set() called during module init by a future
-  //     refactor).
+  //     this module (line 323). _evictIfOverCap is a closure that only reads
+  //     _reviewEvalRequestedStep at runtime (when set() is called), by which
+  //     point the module has fully loaded and the binding is initialized. The
+  //     typeof guard + try/catch belt-and-braces any edge case (e.g., a set()
+  //     called during module init by a future refactor).
   //   - Type-robust comparison: persisted JSON parses keys as strings, while
   //     fresh set() calls use numeric keys. Compare as String() on both sides
   //     so the current step is correctly skipped regardless of key type.
@@ -267,7 +266,7 @@ let _reviewEvalCache=new function(){
       // Skip the step the user is currently viewing (in-flight eval).
       let _isCurrent=false;
       try{
-        if(typeof _reviewEvalRequestedStep!=='undefined'&&
+        if(_reviewEvalRequestedStep!==undefined&&
            String(k)===String(_reviewEvalRequestedStep)){
           _isCurrent=true;
         }
@@ -680,6 +679,14 @@ function _hideLoadingOverlay(){
   _updateLoadingStatus(T('engine_ready'),100);
   const lo=document.getElementById('_loadingOverlay');
   if(lo){lo.style.opacity='0';lo.style.transition='opacity .5s';setTimeout(()=>{if(lo.parentNode)lo.remove();},500);}
+  // v1.2.3 round-19: the board becomes visible once the overlay finishes
+  //   fading out — fire the one-time anti-shake hint even if no render
+  //   follows soon (e.g. a long first AI think). typeof guard per the
+  //   cross-module convention (the helper is defined in ui.js, which loads
+  //   after this module); the helper's own flag prevents double-firing.
+  setTimeout(function(){
+    try{if(typeof _maybeShowBoardDebounceHint==='function')_maybeShowBoardDebounceHint();}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+  },600);
 }
 // v1.0.8 PHASE 22 (bug fix): Apply system dark/light theme to <html> via
 // data-theme attribute. This works on ALL devices (including Xiaomi HyperOS 3
@@ -691,7 +698,7 @@ function _hideLoadingOverlay(){
 function _applySystemTheme(){
   try{
     const isLight=_isLightMode();
-    document.documentElement.setAttribute('data-theme', isLight?'light':'dark');
+    document.documentElement.dataset.theme = isLight?'light':'dark'; // v1.2.3 (S7761): dataset API
   }catch(e){
     // Fallback: default dark theme (no attribute = dark :root variables)
   }
@@ -902,8 +909,19 @@ function _needsShredderFEN(s){
     const br=s.board[0]?.[0];
     if(!br||br.type!=='rook'||br.color!=='black')return true;
   }
-  if(s.wk&&(s.wk.row!==7||s.wk.col!==4))return true;
-  if(s.bk&&(s.bk.row!==0||s.bk.col!==4))return true;
+  // v1.2.3 round-21 (edge-case fix): the king-position signal must be gated
+  //   PER COLOR together with THAT COLOR's own castling rights — not OR'ed
+  //   across both kings. In standard chess a side that still holds castling
+  //   rights necessarily has its king on the home square; the OPPONENT's
+  //   king is irrelevant here (it may have wandered after losing its own
+  //   rights). Previously, e.g. 3k4/8/8/8/8/8/8/R3K2R w KQ - 0 1 (white
+  //   keeps KQ on standard squares; the black king has wandered to d8 with
+  //   no black rights) returned true and the FEN-import Chess960 detection
+  //   (round-20) mislabeled a fully legal standard position as Chess960
+  //   (gameVariant / UCI_Chess960 / PGN Variant tag). The corner-rook
+  //   checks above are already gated per individual right.
+  if((cr.whiteKingside||cr.whiteQueenside)&&s.wk&&(s.wk.row!==7||s.wk.col!==4))return true;
+  if((cr.blackKingside||cr.blackQueenside)&&s.bk&&(s.bk.row!==0||s.bk.col!==4))return true;
   return false;
 }
 
@@ -940,8 +958,8 @@ function _buildStrInfo(result){
     site:typeof gameSite!=='undefined'?gameSite:'?',
     date:_formatTodayPGNDate(),
     round:'?',
-    white:typeof playerWhite!=='undefined'?playerWhite:(playerColor==='white'?(_humanPlayerName||T('you')):(_aiOpponentNameWithLevel())),
-    black:typeof playerBlack!=='undefined'?playerBlack:(playerColor==='black'?(_humanPlayerName||T('you')):(_aiOpponentNameWithLevel())),
+    white:playerWhite!==undefined?playerWhite:(playerColor==='white'?(_humanPlayerName||T('you')):(_aiOpponentNameWithLevel())),
+    black:playerBlack!==undefined?playerBlack:(playerColor==='black'?(_humanPlayerName||T('you')):(_aiOpponentNameWithLevel())),
     result:result
   };
 }
@@ -977,8 +995,16 @@ function _buildPGNString(forceIncludeVariations, includeAnnotations){
   // v1.0.4: Build supplementary tags
   const supObj=buildSupplementaryTagsObject({
     variant:(gameVariant !== undefined)?gameVariant:null,
-    startFEN:(typeof _setupFEN!=='undefined'&&_setupFEN)?_setupFEN:((gameVariant !== undefined&&gameVariant==='chess960')?generateFEN(gameState):null),
-    plyCount:moveRecords.length
+    // v1.2.3 round-18 (robustness): when _setupFEN is unavailable for a
+    //   Chess960 game (e.g., an imported Chess960 PGN that omitted its [FEN]
+    //   tag), fall back to the game's TRUE initial position (stateHistory[0])
+    //   instead of the current mid-game gameState. Per the PGN spec the [FEN]
+    //   tag must hold the position the movetext started from.
+    startFEN:(typeof _setupFEN!=='undefined'&&_setupFEN)?_setupFEN:((gameVariant !== undefined&&gameVariant==='chess960'&&typeof stateHistory!=='undefined'&&stateHistory&&stateHistory.length&&stateHistory[0].state)?generateFEN(stateHistory[0].state):null),
+    // v1.2.3 round-18 (bug fix): PlyCount must count actual half-moves.
+    //   For black-to-move starts moveRecords[0] is an intentional null
+    //   placeholder, so raw .length overcounts by one.
+    plyCount:moveRecords.reduce(function(n,m){return n+(m?1:0);},0)
   });
   // v1.2.0 Phase 76+: Shredder FEN conversion logic extracted
   _applyShredderFENIfNeeded(supObj);
@@ -1818,9 +1844,9 @@ function _formatVariationGroups(variations, moveNum, isAfterWhiteMove){
 function _uciToSimple(uci){
   if(!uci||typeof uci!=='string'||uci.length<4)return (uci!=null?String(uci):'');
   const fromCol=uci.charCodeAt(0)-97;
-  const fromRow=8-parseInt(uci[1]);
+  const fromRow=8-Number.parseInt(uci[1]);
   const toCol=uci.charCodeAt(2)-97;
-  const toRow=8-parseInt(uci[3]);
+  const toRow=8-Number.parseInt(uci[3]);
   const promo=uci.length>4?uci[4]:null;
   const toFile=String.fromCodePoint(97+toCol);
   const toRank=String(8-toRow);
@@ -1893,9 +1919,9 @@ function _uciToSimple(uci){
 function _uciToSAN(uci, state){
   if(!uci||typeof uci!=='string'||uci.length<4||!state||!state.board) return { san: _uciToSimple(uci), postState: state };
   const fromCol=uci.charCodeAt(0)-97;
-  const fromRow=8-parseInt(uci[1]);
+  const fromRow=8-Number.parseInt(uci[1]);
   let toCol=uci.charCodeAt(2)-97;
-  let toRow=8-parseInt(uci[3]);
+  let toRow=8-Number.parseInt(uci[3]);
   // Bounds check
   if(fromRow<0||fromRow>7||fromCol<0||fromCol>7||toRow<0||toRow>7||toCol<0||toCol>7)
     return { san: _uciToSimple(uci), postState: state };
@@ -2149,7 +2175,7 @@ function _sanitizeFenForEngine(fen){
   for(let r=0;r<8;r++){
     let c=0;
     for(const ch of rows[r]){
-      if(ch>='1'&&ch<='8'){c+=parseInt(ch);continue;}
+      if(ch>='1'&&ch<='8'){c+=Number.parseInt(ch);continue;}
       if(c>=8)break;
       const isWhite=ch===ch.toUpperCase();
       // v1.0.8 PHASE 24 (PERF): cache toLowerCase once instead of 6× per piece.
@@ -2208,9 +2234,9 @@ function _sanitizeFenForEngine(fen){
 // UCI move to internal coordinate converter (e.g., "e2e4" -> {from:{row:6,col:4},to:{row:4,col:4}})
 function uciToCoords(uci){
   if(!uci||typeof uci!=='string'||uci.length<4)return null;
-  const fc=uci.charCodeAt(0)-97, fr=8-parseInt(uci[1]);
-  const tc=uci.charCodeAt(2)-97, tr=8-parseInt(uci[3]);
-  if(isNaN(fc)||isNaN(fr)||isNaN(tc)||isNaN(tr))return null;
+  const fc=uci.charCodeAt(0)-97, fr=8-Number.parseInt(uci[1]);
+  const tc=uci.charCodeAt(2)-97, tr=8-Number.parseInt(uci[3]);
+  if(Number.isNaN(fc)||Number.isNaN(fr)||Number.isNaN(tc)||Number.isNaN(tr))return null;
   if(fc<0||fc>7||fr<0||fr>7||tc<0||tc>7||tr<0||tr>7)return null;
   const result={from:{row:fr,col:fc},to:{row:tr,col:tc}};
   if(uci.length>=5){
@@ -2423,20 +2449,24 @@ function onBestMove(uciMove){
   if(!_bmCoords){
     console.error('onBestMove: failed to parse UCI move:',uciMove);
     // v1.2.1 round-11 (review P3 fix): reset isAIThinking on validation
-    //   failure so the UI doesn't stay stuck in "AI thinking" state. The
-    //   safety timer remains armed (we didn't clear _aiSafetyTimerId above)
-    //   so the auto-retry still fires after 360s if the user doesn't undo.
-    //   This prevents a soft-lock where the user sees "thinking..." forever
-    //   if the engine emits an unparseable bestmove line.
+    //   failure so the UI doesn't stay stuck in "AI thinking" state.
+    // v1.2.3 round-18 (bug fix): actually FIRE the auto-retry the old comment
+    //   promised — the armed 360s safety timer guards on `isAIThinking`, which
+    //   we just cleared, so it would never have retried (mechanism/comment
+    //   mismatch). Retry immediately instead; doAIMove() re-arms its own
+    //   timer (clearing the stale one) and _aiRetryCount caps attempts at 3.
     isAIThinking=false;_aiBarInfo='';
     render();
+    setTimeout(()=>{if(!gameOver&&!reviewMode&&!setupMode&&gameState.currentTurn!==playerColor)doAIMove();},0);
     return;
   }
   if(!gameState.board[_bmCoords.from.row]||!gameState.board[_bmCoords.from.row][_bmCoords.from.col]){
     console.error('onBestMove: no piece at from square for UCI move:',uciMove);
     // v1.2.1 round-11 (review P3 fix): same reset as above.
+    // v1.2.3 round-18 (bug fix): same immediate-retry fix as above.
     isAIThinking=false;_aiBarInfo='';
     render();
+    setTimeout(()=>{if(!gameOver&&!reviewMode&&!setupMode&&gameState.currentTurn!==playerColor)doAIMove();},0);
     return;
   }
   // Cancel safety timeout — engine responded (and it's the current request)
@@ -2518,6 +2548,19 @@ function onBestMove(uciMove){
   const coords=uciToCoords(uciMove);
   const from=coords.from, to=coords.to;
   const piece=gameState.board[from.row][from.col];
+  // v1.2.3 round-18 (bug fix): discard the bestmove if the game has already
+  //   ended (timeout forfeit / resignation) while the engine was thinking.
+  //   Clock expiry runs on a 1s interval and resign is user-driven, so an
+  //   in-flight bestmove can arrive AFTER gameOver was set — without this
+  //   guard it would be applied on top of the finished game, corrupting
+  //   moveRecords and the PGN. AI state was already cleared above; skip the
+  //   move, variation processing, and ponder.
+  if(typeof gameOver!=='undefined'&&gameOver){
+    _pendingBestMoveInfo=null;
+    console.warn('onBestMove: discarding bestmove — game already over:',uciMove);
+    render();
+    return;
+  }
   executeMove(from,to,coords.promotion);
 
   // After AI moves, start Ponder if enabled and we have a ponder move
@@ -2725,7 +2768,7 @@ function onEngineProgress(depth,nodes,nps,scoreCp,scoreMate,wdlW,wdlD,wdlL,selde
   const wCp=isBlackToMove?-scoreCp:scoreCp;
   const wMate=isBlackToMove?-scoreMate:scoreMate;
   let scoreStr='';
-  if(scoreMate!=null){const m=parseInt(wMate);scoreStr=m>0?' #+'+Math.abs(m):m<0?' #-'+Math.abs(m):' #0';}
+  if(scoreMate!=null){const m=Number.parseInt(wMate);scoreStr=m>0?' #+'+Math.abs(m):m<0?' #-'+Math.abs(m):' #0';}
   else if(scoreCp!=null){const pd=(wCp/100).toFixed(1);scoreStr=' '+T('eval_label')+':'+(wCp>0?'+':'')+pd;}
   if(scoreStr)infoParts.push(scoreStr.trim());
   aiThinkInfo=infoParts.join(' ');
@@ -2822,7 +2865,7 @@ function onPonderProgress(depth,nodes,nps,scoreCp,scoreMate,seldepth){
   const wCp=isBlackToMove?-scoreCp:scoreCp;
   const wMate=isBlackToMove?-scoreMate:scoreMate;
   let scoreStr='';
-  if(scoreMate!=null&&scoreMate!==0){const m=parseInt(wMate);scoreStr=m>0?' #+'+Math.abs(m):m<0?' #-'+Math.abs(m):'';}
+  if(scoreMate!=null&&scoreMate!==0){const m=Number.parseInt(wMate);scoreStr=m>0?' #+'+Math.abs(m):m<0?' #-'+Math.abs(m):'';}
   else if(scoreCp!=null){const pd=(wCp/100).toFixed(1);scoreStr=' '+T('eval_label')+':'+(wCp>0?'+':'')+pd;}
   if(scoreStr)infoParts.push(scoreStr.trim());
   _ponderBarInfo=infoParts.join(' ');
@@ -2867,8 +2910,8 @@ function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth){
   if(_evalForBlackTurn&&_bgW>=0){const tmp=_bgW;_bgW=_bgL;_bgL=tmp;}
   let _bgEval,_bgMate;
   if(scoreMate!=null){
-    const mateN=parseInt(scoreMate,10);
-    if(!isNaN(mateN)){
+    const mateN=Number.parseInt(scoreMate,10);
+    if(!Number.isNaN(mateN)){
       const whiteWins=(_evalForBlackTurn?mateN<=0:mateN>0);
       _bgEval=whiteWins?99999:-99999;
       _bgMate=_evalForBlackTurn?-mateN:mateN;
@@ -3282,10 +3325,10 @@ function restartCurrentEngine(){
     }
   },2500);
 }
-function setConfigThreads(v){v=Math.max(1,Math.min(64,parseInt(v)||1));if(engineSettingsData)engineSettingsData.threads=v;_bridgeCall(function(bridge){bridge.setEngineThreads(v);});renderEngineConfigAndUpdate();}
-function setConfigHash(v){v=Math.max(1,Math.min(4096,parseInt(v)||64));if(engineSettingsData)engineSettingsData.hash=v;_bridgeCall(function(bridge){bridge.setEngineHash(v);});renderEngineConfigAndUpdate();}
+function setConfigThreads(v){v=Math.max(1,Math.min(64,Number.parseInt(v)||1));if(engineSettingsData)engineSettingsData.threads=v;_bridgeCall(function(bridge){bridge.setEngineThreads(v);});renderEngineConfigAndUpdate();}
+function setConfigHash(v){v=Math.max(1,Math.min(4096,Number.parseInt(v)||64));if(engineSettingsData)engineSettingsData.hash=v;_bridgeCall(function(bridge){bridge.setEngineHash(v);});renderEngineConfigAndUpdate();}
 function setConfigMultiPV(v){
-  v=Math.max(1,Math.min(8,parseInt(v)||1));
+  v=Math.max(1,Math.min(8,Number.parseInt(v)||1));
   if(engineSettingsData)engineSettingsData.multiPV=v;
   _cachedMultiPV=v;
   // v1.0.5 Rev56 BUG FIX: When MultiPV is toggled OFF (set to 1) mid-search,
@@ -3307,7 +3350,7 @@ function setConfigMultiPV(v){
   _bridgeCall(function(bridge){bridge.setEngineMultiPV(v);});
   renderEngineConfigAndUpdate();
 }
-function setConfigMoveOverhead(v){v=Math.max(0,Math.min(5000,parseInt(v)||30));if(engineSettingsData)engineSettingsData.moveOverhead=v;_bridgeCall(function(bridge){bridge.setEngineMoveOverhead(v);});renderEngineConfigAndUpdate();}
+function setConfigMoveOverhead(v){v=Math.max(0,Math.min(5000,Number.parseInt(v)||30));if(engineSettingsData)engineSettingsData.moveOverhead=v;_bridgeCall(function(bridge){bridge.setEngineMoveOverhead(v);});renderEngineConfigAndUpdate();}
 function togglePonder(){
   const newVal=!engineSettingsData||!engineSettingsData.ponder;
   if(engineSettingsData)engineSettingsData.ponder=newVal;
@@ -3320,14 +3363,14 @@ function toggleShowWDL(){
   HapticManager.fire(newVal?'TOGGLE_ON':'TOGGLE_OFF');
   _bridgeCall(function(bridge){bridge.setEngineShowWDL(newVal);});renderEngineConfigAndUpdate();
 }
-function setConfigSkillLevel(v){v=Math.max(0,Math.min(20,parseInt(v)||20));if(engineSettingsData)engineSettingsData.skillLevel=v;_bridgeCall(function(bridge){bridge.setEngineSkillLevel(v);});renderEngineConfigAndUpdate();}
+function setConfigSkillLevel(v){v=Math.max(0,Math.min(20,Number.parseInt(v)||20));if(engineSettingsData)engineSettingsData.skillLevel=v;_bridgeCall(function(bridge){bridge.setEngineSkillLevel(v);});renderEngineConfigAndUpdate();}
 function toggleLimitElo(){
   const newVal=!engineSettingsData||!engineSettingsData.limitStrength;
   if(engineSettingsData)engineSettingsData.limitStrength=newVal;
   HapticManager.fire(newVal?'TOGGLE_ON':'TOGGLE_OFF');
   _bridgeCall(function(bridge){bridge.setEngineLimitElo(newVal,engineSettingsData?engineSettingsData.elo:2800);});renderEngineConfigAndUpdate();
 }
-function setConfigElo(v){v=Math.max(500,Math.min(3500,parseInt(v)||2800));if(engineSettingsData)engineSettingsData.elo=v;_bridgeCall(function(bridge){bridge.setEngineLimitElo(engineSettingsData?engineSettingsData.limitStrength:false,v);});renderEngineConfigAndUpdate();}
+function setConfigElo(v){v=Math.max(500,Math.min(3500,Number.parseInt(v)||2800));if(engineSettingsData)engineSettingsData.elo=v;_bridgeCall(function(bridge){bridge.setEngineLimitElo(engineSettingsData?engineSettingsData.limitStrength:false,v);});renderEngineConfigAndUpdate();}
 function toggleAutoConfig(){
   const newVal=!engineSettingsData||!engineSettingsData.autoConfig;
   if(engineSettingsData)engineSettingsData.autoConfig=newVal;
@@ -3526,7 +3569,9 @@ function _processDeferredVariations(){
   // if the engine's hash happened to collide between unrelated positions.
   _pvCache.clear();
 
-  const{uciMove,lastIdx,isAfterWhiteMove,moveNum,preMoveState,ponderMove,ponderEnabled,multiPVEnabled}=info;
+  // v1.2.3 round-18 (cleanup): removed unused `moveNum` from the destructure
+  //   (superseded by aiMoveNum recomputed below from aiMoveIdx).
+  const{uciMove,lastIdx,isAfterWhiteMove,preMoveState,ponderMove,ponderEnabled,multiPVEnabled}=info;
 
   // The move record at lastIdx should exist (it was the last record before the bestmove was executed)
   // But after executeMove(), a new record was added. So the record we want is at lastIdx,
@@ -3545,7 +3590,13 @@ function _processDeferredVariations(){
 
   // Recalculate move metadata for the AI's move record
   const aiIsAfterWhiteMove=(aiMoveIdx%2===0);
-  const aiMoveNum=Math.floor(aiMoveIdx/2)+1;
+  // v1.2.3 round-18 (bug fix): apply the imported-start-move-number offset,
+  //   same as the mainline (ui.js _mvStartOffset, _pgnMvStartOffset below) and
+  //   the round-13 fix in tablebase.js. Previously engine-attached variations
+  //   on FEN/PGN-imported games (start move N>1) were numbered from 1,
+  //   contradicting the mainline numbering.
+  const _dvMvStartOffset=(typeof _importedStartMoveNum!=='undefined'&&_importedStartMoveNum>0)?_importedStartMoveNum:1;
+  const aiMoveNum=Math.floor(aiMoveIdx/2)+_dvMvStartOffset;
 
   // After the AI's move, the next move is from the opposite side:
   //   AI played white → continuation starts with black → firstMoveIsWhite=false, varMoveNum=aiMoveNum
@@ -3728,7 +3779,11 @@ function _checkPVDivergenceSANs(){
           }
           if(!alreadyExists){
             const isWhite=(divergeIdx%2===0);
-            const moveNum=Math.floor(divergeIdx/2)+1;
+            // v1.2.3 round-18 (bug fix): apply _importedStartMoveNum offset
+            //   (same as round-13 fix in tablebase.js) so MultiPV variations
+            //   on FEN-started games display the correct move number.
+            const _mpvMvStartOffset=(typeof _importedStartMoveNum!=='undefined'&&_importedStartMoveNum>0)?_importedStartMoveNum:1;
+            const moveNum=Math.floor(divergeIdx/2)+_mpvMvStartOffset;
             targetMr.variations.push({
               group:'multipv',
               san:remainingSAN,
@@ -3922,7 +3977,11 @@ function _attachDivergentPV(divergeAtIdx,pvRemainder,pending){
   // ACTUAL move. The PV remainder's first move is an ALTERNATIVE to it
   // (same side, same move number).
   const isWhite=(divergeAtIdx%2===0);
-  const moveNum=Math.floor(divergeAtIdx/2)+1;
+  // v1.2.3 round-18 (bug fix): apply _importedStartMoveNum offset (same as
+  //   round-13 fix in tablebase.js) so divergence variations on FEN-started
+  //   games display the correct move number.
+  const _divMvStartOffset=(typeof _importedStartMoveNum!=='undefined'&&_importedStartMoveNum>0)?_importedStartMoveNum:1;
+  const moveNum=Math.floor(divergeAtIdx/2)+_divMvStartOffset;
 
   // Build the variation entry — same format as PGN variations.
   const varEntry={
@@ -3993,8 +4052,8 @@ function _updateMultiPVDisplay(){
     // Cache miss — compute the display text for this line
     let scoreStr='';
     if(pv.scoreMate!=null){
-      const m=parseInt(pv.scoreMate,10);
-      if(!isNaN(m))scoreStr=m>0?'#+'+Math.abs(m):m<0?'#-'+Math.abs(m):'#0';
+      const m=Number.parseInt(pv.scoreMate,10);
+      if(!Number.isNaN(m))scoreStr=m>0?'#+'+Math.abs(m):m<0?'#-'+Math.abs(m):'#0';
     }else if(pv.scoreCp!=null){
       const pd=(pv.scoreCp/100).toFixed(1);
       scoreStr=(pv.scoreCp>0?'+':'')+pd;
@@ -4061,7 +4120,7 @@ let _pendingBestMoveInfo=null;
 function onGameDifficultyChanged(limitStrength,elo){
   if(!engineSettingsData)return;
   engineSettingsData.limitStrength=!!limitStrength;
-  if(elo>0)engineSettingsData.elo=parseInt(elo)||2800;
+  if(elo>0)engineSettingsData.elo=Number.parseInt(elo)||2800;
   // If config panel is open, refresh its display
   if(document.querySelector('.dov[role="dialog"]'))renderEngineConfigAndUpdate();
   // Re-render toolbar to reflect updated difficulty level immediately
@@ -4387,7 +4446,15 @@ function _buildEvalHTML(e,opts){
   }
   s+=progressStr;
   let wdlStr='';
-  if(_sfWdlW>=0&&_sfWdlD>=0&&_sfWdlL>=0){const total=_sfWdlW+_sfWdlD+_sfWdlL;if(total>0){const wP=Math.round(_sfWdlW/total*100);const dP=Math.round(_sfWdlD/total*100);const lP=Math.round(_sfWdlL/total*100);wdlStr='<span style="font-size:.65rem;color:var(--muted);margin-left:4px">('+wP+'%W/'+dP+'%D/'+lP+'%L)</span>';}}
+  if(_sfWdlW>=0&&_sfWdlD>=0&&_sfWdlL>=0){const total=_sfWdlW+_sfWdlD+_sfWdlL;if(total>0){
+    // v1.2.3 round-22: WDL labels are player-perspective (W = the player's
+    //   win probability). _sfWdlW/_sfWdlL are White-POV; swap for a black
+    //   player so "W" reads as "my win" — matching the emoji/desc report.
+    const _blackP=(typeof playerColor!=='undefined'&&playerColor==='black');
+    const wP=Math.round((_blackP?_sfWdlL:_sfWdlW)/total*100);
+    const dP=Math.round(_sfWdlD/total*100);
+    const lP=Math.round((_blackP?_sfWdlW:_sfWdlL)/total*100);
+    wdlStr='<span style="font-size:.65rem;color:var(--muted);margin-left:4px">('+wP+'%W/'+dP+'%D/'+lP+'%L)</span>';}}
   s+=wdlStr;
   if(opts.delta)s+=opts.delta;
   return s;
@@ -4434,18 +4501,40 @@ function _updateReviewEvalUI(){
 }
 // Format eval delta between two eval values (centipawns, White's perspective).
 // Consolidates mate-transition handling and threshold logic in one place.
+// v1.2.3 round-22: the displayed numeric delta is White-POV (consistent with
+//   the adjacent score, which is White-POV), but the good/bad COLOUR is now
+//   player-perspective. Previously the colour was White-POV (green whenever
+//   White improved), which told a black player "good" exactly when their
+//   position worsened — a perspective bug in the 优劣 report. The mate
+//   transitions were likewise coloured White-POV; they now colour green when
+//   the change favours the player (player forces mate / player escapes mate).
 function _formatEvalDelta(curEval,prevEval,fontSize){
   if(curEval==null||prevEval==null)return '';
   const _isM=Math.abs(curEval)>=90000,_wasM=Math.abs(prevEval)>=90000;
   const fs=fontSize?'font-size:'+fontSize+';':'';
+  // Player-perspective sign: +1 for White, -1 for Black. curP/prevP > 0 means
+  //   the player is winning (forcing mate). typeof guard follows the round-11
+  //   cross-module defensive pattern (playerColor lives in ui.js).
+  const _sign=(typeof playerColor!=='undefined'&&playerColor==='black')?-1:1;
   if(_isM||_wasM){
-    if(_isM&&!_wasM)return '<span style="color:#27ae60;'+fs+'">'+T('checkmate_arrow')+'</span>';
-    if(!_isM&&_wasM)return '<span style="color:#c0392b;'+fs+'">'+T('escape_mate')+'</span>';
+    const curP=_sign*curEval,prevP=_sign*prevEval;
+    if(_isM&&!_wasM){
+      // Position became a forced mate — green for the mating side, red for the mated side.
+      const good=curP>0;
+      return '<span style="color:'+(good?'#27ae60':'#c0392b')+';'+fs+'">'+T('checkmate_arrow')+'</span>';
+    }
+    if(!_isM&&_wasM){
+      // Escaped a forced mate — green for the side that was being mated, red for the side that lost the mate.
+      const good=prevP<0;
+      return '<span style="color:'+(good?'#27ae60':'#c0392b')+';'+fs+'">'+T('escape_mate')+'</span>';
+    }
     return '';
   }
   const d=curEval-prevEval,dp=(d/100).toFixed(1);
-  if(d>2)return '<span style="color:#27ae60;'+fs+'">+'+dp+'</span>';
-  if(d<-2)return '<span style="color:#c0392b;'+fs+'">'+dp+'</span>';
+  // Colour by player-perspective delta (_sign*d); dp stays White-POV so it
+  //   matches the score shown next to it.
+  if(_sign*d>2)return '<span style="color:#27ae60;'+fs+'">+'+dp+'</span>';
+  if(_sign*d<-2)return '<span style="color:#c0392b;'+fs+'">'+dp+'</span>';
   return '';
 }
 function _resetEvalState(){_sfMateDistance=0;_sfWdlW=-1;_sfWdlD=-1;_sfWdlL=-1;_sfDepth=0;_sfSeldepth=0;_sfEvalReady=false;_evalLoading=true;_evalStaleGen++;_lastProgressNodes=null;_lastProgressNps=null;_ponderGen++;_ponderBarInfo='';_ponderMoveSAN='';_pendingPonderMoveUCI=null;_updateAIThinkDisplay();}
@@ -4506,4 +4595,7 @@ function _updateAIThinkDisplay(){
 // `export {...}` line via regex, so there was no production impact, but
 // the list was misleading. Verified each removal by grep — none of these
 // symbols are declared in ai-bridge.js.
-export {showToast,_bridgeCall,_showLoadingOverlay,_updateLoadingStatus,_hideLoadingOverlay,_attemptEngineInit,onInitProgress,onEngineReady,onBestMove,onHintMove,onEngineProgress,onPonderProgress,onEngineEval,onEngineInfo,onEngineSwitched,onSettingsImported,onSettingsExported,onPGNExported,onStatsHTMLExported,onStatsRequestReview,onGameDifficultyChanged,onEngineError,onMultiPVProgress,onMultiPVResult,copyMoveHistory,copyReviewPGN,exportPGNToFile,openStatsPage,renderEngineConfig,renderEngineConfigAndUpdate,openEngineConfig,closeEngineConfig,switchEngine,importExternalEngine,restartCurrentEngine,setConfigThreads,setConfigHash,setConfigMultiPV,setConfigMoveOverhead,togglePonder,toggleShowWDL,setConfigSkillLevel,toggleLimitElo,setConfigElo,toggleAutoConfig,exportEngineSettings,importEngineSettings,requestEngineEval,_requestBatchEval,_showPGNExportAnnotationDialog,_pgnExportDialogActive,_pgnExportDialogDismiss,_updateEvalDisplay,_updateReviewEvalUI,_resetEvalState,_updateAllEvalDisplays,_formatVariationGroups,_commentHasText};
+export {showToast,_bridgeCall,_showLoadingOverlay,_updateLoadingStatus,_hideLoadingOverlay,_attemptEngineInit,onInitProgress,onEngineReady,onBestMove,onHintMove,onEngineProgress,onPonderProgress,onEngineEval,onEngineInfo,onEngineSwitched,onSettingsImported,onSettingsExported,onPGNExported,onStatsHTMLExported,onStatsRequestReview,onGameDifficultyChanged,onEngineError,onMultiPVProgress,onMultiPVResult,copyMoveHistory,copyReviewPGN,exportPGNToFile,openStatsPage,renderEngineConfig,renderEngineConfigAndUpdate,openEngineConfig,closeEngineConfig,switchEngine,importExternalEngine,restartCurrentEngine,setConfigThreads,setConfigHash,setConfigMultiPV,setConfigMoveOverhead,togglePonder,toggleShowWDL,setConfigSkillLevel,toggleLimitElo,setConfigElo,toggleAutoConfig,exportEngineSettings,importEngineSettings,requestEngineEval,_requestBatchEval,_showPGNExportAnnotationDialog,_pgnExportDialogActive,_pgnExportDialogDismiss,_updateEvalDisplay,_updateReviewEvalUI,_resetEvalState,_updateAllEvalDisplays,_formatVariationGroups,_commentHasText,
+// v1.2.3 round-18: added generateFEN/uciToCoords/_esc — defined in this
+//   module and previously (incorrectly) exported from game-logic.js.
+generateFEN,uciToCoords,_esc};

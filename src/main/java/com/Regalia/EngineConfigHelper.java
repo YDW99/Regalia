@@ -541,7 +541,11 @@ public class EngineConfigHelper {
         //   because they are only called from applySettings() which itself
         //   is only called when the engine is idle.
         if (level >= 1 && level <= 6) {
-            int elo = (level < ELO_MAP.length) ? ELO_MAP[level] : 1500;
+            // v1.2.3 round-13 (P3): removed dead `: 1500` ternary fallback.
+            //   The outer guard restricts level to [1, 6] and ELO_MAP has
+            //   length 8 (indices 0-7), so `level < ELO_MAP.length` is always
+            //   true here — the fallback was unreachable.
+            int elo = ELO_MAP[level];
             callbacks.setLimitEloField(true);
             callbacks.setEloField(elo);
             if (callbacks.engineSupportsOption("UCI_LimitStrength")) {

@@ -1,3 +1,89 @@
+v1.2.3 round-22 (2026.7.18) — eval bar perspective fix (player-POV report):
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - chess.html (AGPL v3): Rebuilt from chess.src/ via build-chess.py after the
+    ui.js / ai-bridge.js eval-perspective fixes (see chess.src/README.license).
+    22,489 lines, 1,360,036 bytes.
+  - stats.html (AGPL v3): No changes this round.
+
+v1.2.3 round-21 (2026.7.17) — edge-case fix (per-color gated king signal):
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - chess.html (AGPL v3): Rebuilt from chess.src/ via build-chess.py after
+    the ai-bridge.js fix (see chess.src/README.license). 22,434 lines.
+  - stats.html (AGPL v3): No changes this round.
+
+v1.2.3 round-20 (2026.7.17) — 4 known leftovers + 3rd review report + hint relocation:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — hardening round).
+  - chess.html (AGPL v3): Rebuilt from chess.src/ via build-chess.py after the
+    round-20 changes. 22,428 lines, 1,356,181 bytes.
+  - stats.html (AGPL v3): S8786 — PGN tag-strip regex rewritten at 4 sites
+    (/\[\w+\s+\S[^\]]*\]/g, mutually exclusive adjacent quantifier classes,
+    eliminating polynomial backtracking on unclosed '['); S7773 — parseFloat
+    →Number.parseFloat (2 sites); S7781 — replace→replaceAll (1 site).
+  - chess.src/: see chess.src/README.license for the per-module details.
+
+v1.2.3 round-19 (2026.7.17) — 2 bilingual UX hints + log-injection fix:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — feature + fix round).
+  - chess.html (AGPL v3): Rebuilt from chess.src/ via build-chess.py after
+    the round-19 JS changes. 22,459 lines, 1,351,368 bytes. Contains all
+    round-19 chess.src changes (see chess.src/README.license: 2 new i18n
+    keys, startup anti-shake hint Toast, analyze-all batch hint line).
+  - stats.html (AGPL v3): No changes this round.
+  - chess.src/: see chess.src/README.license for the per-module details.
+
+v1.2.3 round-18 (2026.7.17) — Chess960 PGN [FEN] bug fix + 7-agent line-by-line review:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - chess.html (AGPL v3): Rebuilt from chess.src/ after the round-18 JS
+    fixes. 22,379 lines, 1,346,688 bytes. Contains all round-18 chess.src
+    changes (see chess.src/README.license).
+  - stats.html (AGPL v3): extractMoveTimes now uses the v1.0.9 PHASE 52
+    tag-format header regex at 2 sites (same as parsePGN) — the old
+    /^\[.*\]$/gm only stripped headers occupying an ENTIRE line, so for
+    single-line PGNs the [FEN] header survived and its board coordinates
+    were mis-tokenized as pawn moves, shifting every per-move time entry
+    by one slot and swapping the White/Black attribution. Exported HTML
+    now escapes "</" inside the inline PGN JSON strings (a PGN comment
+    containing a closing-script-tag sequence can no longer terminate the
+    script block of the exported file). Removed the ineffective
+    frame-ancestors directive from the CSP <meta> (only honored as an
+    HTTP header).
+  - License classification: chess.html and stats.html remain AGPL v3
+    (original works, not derived from DroidFish or Stockfish).
+
+v1.2.3 round-17 (2026.7.17) — SonarCloud high-priority cleanup:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - chess.html (AGPL v3): Rebuilt from chess.src/ after round-17 JS fixes and
+    the ui.js God Class split (ui-gameflow.js + ui-interactions.js added).
+    22,204 lines, 1,334,211 bytes. Contains all round-17 chess.src changes.
+  - stats.html (AGPL v3): S7773 — 7 isNaN + 16 parseInt call sites converted
+    to Number.isNaN/Number.parseInt (all arguments verified number-typed).
+    S7761 — setAttribute('data-theme') → documentElement.dataset.theme.
+    S7781 — one `rest.replace('x','')` → replaceAll (SAN disambiguation has
+    at most one 'x'; equivalent); the printf-style sequential %d replacement
+    chain intentionally left as .replace (replaceAll would substitute every
+    %d with the first value — verified, would be a bug).
+  - License classification: chess.html and stats.html remain AGPL v3
+    (original works, not derived from DroidFish or Stockfish).
+
+v1.2.3 round-13 (2026.7.16) — CMake re-enablement + first-principles code review:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - chess.html (AGPL v3): Rebuilt from chess.src/ after round-13 JS fixes.
+    22,136 lines, 1,331,262 bytes. Contains the round-13 ui.js/ai-bridge.js/
+    tablebase.js/eco-data.js/pgn-standard.js changes.
+  - stats.html (AGPL v3): No changes this round. (The build-chess.py CSP
+    hash auto-update block that referenced stats.html was removed as dead
+    code — stats.html has used 'unsafe-inline' CSP since v1.1.2 PHASE 71.)
+  - License classification: chess.html and stats.html remain AGPL v3
+    (original works, not derived from DroidFish or Stockfish).
+
+v1.2.3 round-12 (2026.7.16) — SonarCloud bug fixes + first-principles review:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - chess.html (AGPL v3): Rebuilt from chess.src/ after Bug #1 fix.
+    22,114 lines, 1,329,375 bytes. The slider input at L16509 now uses
+    aria-label="'+T('review_move_slider')+'" instead of T('step_label').
+  - stats.html (AGPL v3): No changes this round.
+  - License classification: chess.html and stats.html remain AGPL v3
+    (original works, not derived from DroidFish or Stockfish).
+
 v1.2.3 optimization pass (2026.7.16) — first-principles line-by-line review:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — no version bump).
   - chess.html: rebuilt from the updated ai-bridge.js (openStatsPage toast

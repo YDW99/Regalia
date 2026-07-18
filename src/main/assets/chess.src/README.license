@@ -1,3 +1,264 @@
+v1.2.3 round-22 (2026.7.18) — eval bar perspective fix (player-POV report):
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - ui.js (GPL v3): formatEval() timeout & resign game-over branches now use
+    `score:whiteWins?'+∞':'-∞'` (was `playerWins`) so the score stays
+    White-POV and agrees with the player-POV emoji/desc — fixes the
+    contradictory "+∞ + 🏆" a Black player saw when winning by
+    timeout/resignation. Review eval-bar WDL now swaps W/L for a Black
+    player (player-perspective labels, "W" = the player's win) AND gains a
+    `if(_rt>0)` guard against `wdl 0 0 0` → NaN% (the main eval bar already
+    had the guard). posDesc/posEmoji already received player-POV evP —
+    unchanged. Eval trend chart stays White-POV (positive = White) by
+    design — unchanged.
+  - ai-bridge.js (GPL v3): _formatEvalDelta colour is now player-perspective
+    (green when the change favours the player; the displayed numeric delta
+    stays White-POV to match the adjacent score). Mate-transition colouring
+    (→# / escape) likewise player-perspective. Main eval-bar WDL swaps W/L
+    for a Black player (player-perspective labels). _sfEval / _sfMateDistance
+    stay White-POV (converted in onEngineEval) — unchanged. PGN-export WDL
+    (pgn-standard.js) intentionally stays White-POV — unchanged.
+  - All other modules (index.html.tpl, game-logic.js, chess960.js,
+    pgn-standard.js, worker-pool.js, state-store.js, tablebase.js,
+    eco-data.js, ui-gameflow.js, ui-interactions.js): No changes this round.
+  - License classification: unchanged.
+
+v1.2.3 round-21 (2026.7.17) — edge-case fix (per-color gated king signal):
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - ai-bridge.js (GPL v3): _needsShredderFEN king-position check now gated
+    per color with that color's own castling rights — fixes mislabeling of
+    fully legal standard positions where the opponent's king has wandered
+    off the e-file (e.g. 3k4/8/8/8/8/8/8/R3K2R w KQ - 0 1). All three
+    consumers benefit (FEN-import 960 detection, engine Shredder-FEN
+    emission, PGN [FEN] conversion).
+  - All other modules: No changes this round.
+  - License classification: unchanged.
+
+v1.2.3 round-20 (2026.7.17) — 4 known leftovers + hint relocation:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — hardening round).
+  - chess960.js (GPL v3): A-1 RESOLVED — castlingRights gains designated rook
+    files; parseShredderCastling records them; initChess960State sets them;
+    NEW findDesignatedCastlingRook (exported) used by chess960CastlingRookMove
+    and isChess960CastlingLegal; toShredderCastling emits designated files
+    (exact X-FEN round-trip for ambiguous same-side-two-rooks positions).
+  - game-logic.js (GPL v3): A-1 — initState designates a/h files; all
+    right-clearing sites (makeMv/makeMvInPlace rook move/capture, king move,
+    corner fallbacks) designated-aware + null-on-clear; setup-mode castle
+    markers record the marked rook's file.
+  - tablebase.js (GPL v3): B RESOLVED — _applyImportedFEN auto-detects
+    Chess960 via _needsShredderFEN (variant/mode/state.chess960/SP-ID), and
+    resets stale Chess960 mode on standard FEN import. S8786 — tag-strip
+    regex rewritten (same as stats.html).
+  - ui.js (GPL v3): C RESOLVED — DIRTY_* incremental-render subsystem removed
+    as dead code (~200 lines; call sites always routed to full render);
+    markDirty call sites now call render() directly; shared square primitives
+    kept for _updateBoardLightweight. HINT RELOCATION — round-19
+    #review-batch-hint line removed; hint now right-aligned inside the
+    Analyze All button (_rvAnalyzeBtnInnerHTML) only while batch runs;
+    _updateReviewAnalyzeBtn uses innerHTML; markDirty removed from exports.
+  - ui-interactions.js (GPL v3): markDirty(DIRTY_FULL) → render().
+  - All other modules (index.html.tpl, pgn-standard.js, worker-pool.js,
+    state-store.js, ai-bridge.js, eco-data.js, ui-gameflow.js): No changes
+    this round.
+  - License classification: unchanged.
+
+v1.2.3 round-19 (2026.7.17) — 2 bilingual UX hints (2 new i18n keys):
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — feature + fix round).
+  - game-logic.js (GPL v3): two new i18n keys — 'board_debounce_hint'
+    (zh: 长按棋盘可开/关棋盘防抖 / en: Long-press the board to toggle board
+    stabilization) and 'review_batch_analyzing_hint' (zh: 批量分析进行中…
+    长按走法可设为优先 / en: Batch analysis in progress… Long-press a move
+    to prioritize it).
+  - ui.js (GPL v3): NEW FEATURE 1 — one-time startup hint Toast
+    (_maybeShowBoardDebounceHint): fires once per app launch on the first
+    completed render after the loading overlay is gone; called from
+    _postRenderFinalize. NEW FEATURE 2 — while an analyze-all batch runs,
+    a hint line renders under the review eval bar (_rvBatchHintHTML on
+    full renders; the eval bar itself is strictly single-line
+    overflow:hidden so the hint cannot go inside it) plus in-place
+    insertion at batch start via _updateReviewBatchHint() (reviewAnalyzeAll
+    does not re-render when the batch begins); completion/cancel paths
+    already re-render, removing the line.
+  - ai-bridge.js (GPL v3): _hideLoadingOverlay schedules a delayed
+    typeof-guarded _maybeShowBoardDebounceHint call (cross-module
+    convention) so the startup hint still fires when no render follows
+    soon (e.g. a long first AI think).
+  - All other modules (index.html.tpl, chess960.js, pgn-standard.js,
+    worker-pool.js, state-store.js, tablebase.js, eco-data.js,
+    ui-gameflow.js, ui-interactions.js): No changes this round.
+  - License classification: unchanged.
+
+v1.2.3 round-18 (2026.7.17) — Chess960 PGN [FEN] bug fix + 7-agent line-by-line review:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - ui-gameflow.js (GPL v3): MAIN BUG FIX — a newly started Chess960 game's
+    PGN recorded the CURRENT position in its [FEN] tag instead of the
+    INITIAL position. Root cause: _startGameImpl() assigned _setupFEN BEFORE
+    _resetGameUIState(), which centrally nulls _setupFEN (silently
+    re-breaking the v1.0.8 fix). Fixed by capturing the setup FEN in a
+    local variable (_newGameInitialFEN) and assigning _setupFEN AFTER the
+    reset (mirroring importPGN/_applyImportedFEN); reviewBaseState
+    assignment likewise moved after the reset; the now-redundant manual
+    state clears at the top of _startGameImpl removed.
+  - ai-bridge.js (GPL v3): _buildPGNString startFEN fallback uses
+    stateHistory[0] (the game's TRUE initial position) when _setupFEN is
+    unavailable for a Chess960 game; PlyCount counts actual half-moves
+    (the intentional null placeholder for black-to-move starts no longer
+    over-counts by 1); onBestMove discards the bestmove when the game is
+    already over (gameOver guard) and the validation-failure auto-retry
+    now actually fires (2 sites — the timer callback guards on
+    isAIThinking, which the branch had just cleared, so the promised
+    retry never ran; now an immediate retry, _aiRetryCount cap 3); engine
+    variation numbering applies the _importedStartMoveNum offset (3 sites,
+    same class as the round-13 tablebase.js fix); export list gains
+    generateFEN/uciToCoords/_esc (defined in-module, previously listed by
+    game-logic.js); removed the unused moveNum destructure in
+    _processDeferredVariations.
+  - ui.js (GPL v3): render() no longer resets _animRetryCount early (the
+    >10-retries stuck-animation force-clear was dead code — guard
+    restored); _resetGameUIState terminates any in-flight analyze-all
+    batch (mirrors exitReview: _reviewAnalyzeAllActive, safety timer,
+    _evalRequestBatchGen, _endEvalDeepBatchIfActive) and clears
+    _pendingOpenStats; _replayMovesToState skips the intentional null
+    placeholder of black-to-move games instead of aborting (visual
+    annotations worked again for black-to-move games); reviewGoTo
+    cache-hit path also restores _sfSeldepth (parity with the 6-field
+    restore); SP-ID input keeps focus across keystroke-triggered
+    re-renders (id=spidInput + _spidEditing flag + _postRenderFinalize
+    restore, mirroring the ECO search box's _ecoSearchFocused mechanism);
+    tablebase API unknown-category fallback HTML-escaped
+    before entering innerHTML (same XSS threat model as the v1.0.8 PHASE
+    30 _best.uci escaping); review-mode render skips the main-board
+    control map (🌈 heatmap — main and review boards previously shared
+    cachedCtrlKey/cachedCtrlMap and ping-ponged, forcing 2 full
+    getCtrlMap() recomputes per render); cleanup: duplicate resets of 5
+    variables removed from _resetGameUIState, export list gains posDesc
+    (defined in-module).
+  - game-logic.js (GPL v3): _validateSetupEpMark now requires both the
+    skipped square AND the pawn's origin square to be empty (new i18n key
+    setup_ep_err_blocked, zh+en); doAIMove tablebase path requires the
+    live board to BE the saved board (gameState.board===_tbSavedBoard) so
+    a TB move is never injected into a different game after an in-flight
+    position change (falls through to the Stockfish path); export list
+    drops the 4 foreign symbols generateFEN/uciToCoords/_esc (now
+    exported by ai-bridge.js) and posDesc (now exported by ui.js).
+  - tablebase.js (GPL v3): _parsePGN annotation-scan character class now
+    includes '0' — digit-style 0-0/0-0-0 castling is counted, so trailing
+    [%eval]/[%csl]/[%cal]/comment annotations no longer shift by one move;
+    a Chess960 PGN without a [FEN] tag now clears the stale gameSPID.
+  - pgn-standard.js (GPL v3): parseStandardPGN skips a stray close-brace
+    (defensive infinite-loop fix; the function currently has no call
+    sites).
+  - worker-pool.js (GPL v3): PGN tokenizer header-strip regex now consumes
+    the closing \] in BOTH the worker-side (template-literal, keeps
+    double-escaping) and sync-side mirror copies.
+  - index.html.tpl (GPL v3): invalid CSS contain-intrinsic-size:auto fixed
+    to "auto 300px" (Chromium was dropping the whole declaration);
+    removed the ineffective frame-ancestors directive from the CSP <meta>
+    (frame-ancestors is only honored as an HTTP header).
+  - chess.html: rebuilt from the updated modules + template (22,379 lines,
+    1,346,688 bytes). See src/main/assets/README.license.
+  - License classification: all files retain their existing classification.
+
+v1.2.3 round-17 (2026.7.17) — SonarCloud high-priority cleanup + God Class refactor (ui split):
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - ui-gameflow.js (GPL v3): NEW FILE (313 lines) — God Class refactor:
+    game start (startGame/_startGameImpl) + the game-clock subsystem
+    (initGameClocks/_tickGameClock/_onGameClockExpired/recordMoveEnd/
+    formatClock/_updateClockDisplay) extracted from ui.js. All functions
+    moved verbatim; same global-scope module pattern (hoisted top-level
+    function declarations, no top-level executable code moved — no
+    TDZ/load-order change).
+  - ui-interactions.js (GPL v3): NEW FILE (1,438 lines) — God Class refactor:
+    board click handling (sqClick/setupClick/_getCastlingRookForClick), move
+    execution & undo/redo (executeMove/_clearAnimationState/undoMove/redoMove),
+    toolbar actions (flipBoard/quickFreeOpening/toggleSound/doPromotion/
+    getHint/setDifficultyLevel), setup-mode entry/exit (toggleSetup/exitSetup/
+    _exitSetupImpl/undoSetupClick/redoSetupClick), PGN-save prompt chain
+    (_withPGNSaveCheck/_savePGNYes/_savePGNNo/_savePGNCancel), back-press
+    routing (handleBackPress), import wrappers (_doPastePGN/
+    _importFENWithSaveCheck/_importPGNFileWithSaveCheck), player rename &
+    stats-import prompt (_renameHumanPlayer/_showStatsImportBackPrompt),
+    resign (_resignGame) — all extracted from ui.js verbatim.
+  - ui.js (GPL v3): 8,475 → 6,761 lines (-20%). Beyond the extraction:
+    (1) S2703 REAL BUG FIX — _refreshEvalTrendChart referenced `_trendH`,
+    a const LOCAL to _renderReviewMode (undeclared global in this scope):
+    latent ReferenceError whenever the chart container had zero layout
+    height. Fixed by extracting the shared height formula into a new
+    top-level _computeTrendChartHeight() helper used by both call sites.
+    The PDF's other ~121 claimed S2703 implicit globals were verified false
+    positives (all variables are properly let/const-declared; ECO_OPENINGS
+    is an intentional lazy window property; gameEvent/gameSite are
+    typeof-guarded optional externals). (2) S7740 — 9 `const self = this`
+    closures converted to arrow functions (4 onended + 5 forEach in
+    ChessAudioEngine). (3) S7741 — typeof-undefined comparisons converted
+    to direct !== undefined ONLY where the variable is declared in the same
+    module (6 sites: reviewMode/reviewStep/moveRecords/gameClockTimerId×2);
+    cross-module typeof guards intentionally retained (round-11 design:
+    resilience against single-module load failure), as are guards on
+    externally-injected globals (AndroidBridge, gameEvent, gameSite).
+  - All JS modules: S7773 — 99 global isNaN/parseInt/isFinite calls converted
+    to Number.isNaN/Number.parseInt/Number.isFinite across ai-bridge.js,
+    game-logic.js, pgn-standard.js, tablebase.js, ui.js (each call site
+    individually verified to pass number-typed arguments, so the dropped
+    string-coercion of the globals is behavior-preserving).
+  - ai-bridge.js (GPL v3): S7761 — setAttribute('data-theme') →
+    documentElement.dataset.theme. S7741 — 3 same-module typeof conversions
+    (_reviewEvalRequestedStep, playerWhite, playerBlack).
+  - chess960.js (AGPL v3): S7767 — 3 `|0` truncations → Math.trunc
+    (identical for the spid ∈ [0,959] domain).
+  - worker-pool.js (AGPL v3): S8786 — nested-quantifier move-number regex
+    /\d+\.+(\d+\.+)*/g simplified to /\d+\.+/g in BOTH the worker-side
+    (template-literal, keeps double-escaping) and sync-side copies; the
+    (\d+\.+)* tail was redundant for the replace use-case. Pipeline-level
+    equivalence (incl. the subsequent \s+→' ' normalization) verified on
+    7 test inputs incl. adversarial ones.
+  - S7781: 3 string-first-arg .replace calls converted to .replaceAll where
+    global replacement is intended (ui.js i18n placeholders N1/N2/{count}/
+    {total}/{filter}); printf-style SEQUENTIAL %d substitution in stats.html
+    intentionally left as .replace (replaceAll would break it).
+  - build-chess.py: MODULES list now includes ui-gameflow.js and
+    ui-interactions.js before ui.js (concatenation order safe — hoisting).
+  - License classification: new files inherit ui.js's GPL v3 (derived from
+    DroidFish-referencing code); all other files retain their classification.
+
+v1.2.3 round-13 (2026.7.16) — CMake re-enablement + first-principles code review:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - ui.js (GPL v3): P1 — added gameClockTimerId cleanup to
+    _cleanupEventListeners so a timed game's 200ms interval doesn't keep
+    firing after Activity destroy.
+  - ai-bridge.js (GPL v3): P3 — corrected stale line-number reference in
+    TDZ safety comment (was "line 254 in the original layout", actual is
+    line 323).
+  - tablebase.js (GPL v3): P2 — apply _importedStartMoveNum offset to
+    relocated variation moveNum so FEN-started games display correct
+    move-number prefixes; P3 — add console.warn to silent catch in
+    probeTablebase promise chain.
+  - eco-data.js (AGPL v3): P2 — added length>0 guard before _saveEcoToCache
+    to prevent cache pollution on JSON.parse failure (was overwriting valid
+    cached data with empty array).
+  - pgn-standard.js (GPL v3): P3 — added formatEvalAnnotation and
+    _pgnWhitePerspectiveLabel to export block (were missing; in source-module
+    mode the typeof check in ai-bridge.js returned 'undefined', silently
+    skipping the every-5-moves PGN annotation).
+  - Other JS modules (game-logic.js, chess960.js, pgn-standard.js,
+    worker-pool.js, state-store.js): No changes this round — audited and
+    verified clean.
+  - License classification: all files retain their existing classification.
+
+v1.2.3 round-12 (2026.7.16) — SonarCloud bug fixes + first-principles review:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
+  - game-logic.js (GPL v3): Added 'review_move_slider' i18n key
+    ({zh:'复盘步数', en:'Review move number'}) for the review-mode slider's
+    accessible name (SonarCloud Bug #1, Web:InputWithoutLabelCheck).
+  - ui.js (GPL v3): Slider <input type="range"> aria-label switched from
+    T('step_label') ("Step" / "第") to T('review_move_slider') ("复盘步数" /
+    "Review move number") for WCAG 2.1 Level A 4.1.2 compliance.
+  - Other JS modules (ai-bridge.js, chess960.js, pgn-standard.js, worker-pool.js,
+    state-store.js, tablebase.js, eco-data.js): No changes this round —
+    audited 27 empty catch blocks (all narrow defensive catches with
+    intent-documenting comments, none match the "宽泛的异常捕获" anti-pattern
+    from the AI Defect Guide).
+  - License classification: all files retain their existing classification.
+
 v1.2.3 optimization pass (2026.7.16) — first-principles line-by-line review:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — no version bump).
   - ai-bridge.js (GPL v3): openStatsPage() path-3 toast staging refined —

@@ -122,7 +122,7 @@ document.addEventListener('click', function(e) {
     // whole review body (the user explicitly requested this). Only block the
     // default scroll in non-review modes (main game, setup) where board slides
     // should NOT scroll the page.
-    if(typeof reviewMode!=='undefined'&&reviewMode)return;
+    if(reviewMode!==undefined&&reviewMode)return;
     if(dx>10||dy>10){
       e.preventDefault();
     }
@@ -158,88 +158,17 @@ document.addEventListener('click', function(e) {
 // [ENGINE_CFG] - Engine configuration panel
 // =====================================================================
 
-// ===================== DIRTY FLAG RENDERING SYSTEM =====================
-const DIRTY_NONE = 0;
-const DIRTY_BOARD = 1;       // Board grid squares changed
-const DIRTY_TOOLBAR = 2;     // Header/toolbar changed
-const DIRTY_EVAL = 4;        // Eval display changed
-const DIRTY_PANEL = 8;       // Side panel changed
-const DIRTY_MOVES = 16;      // Move history changed
-const DIRTY_DIALOG = 32;     // Dialog state changed
-const DIRTY_REVIEW = 64;     // Review mode changed
-const DIRTY_FULL = DIRTY_BOARD | DIRTY_TOOLBAR | DIRTY_EVAL | DIRTY_PANEL | DIRTY_MOVES | DIRTY_DIALOG | DIRTY_REVIEW;
-
-let _dirtyFlags = DIRTY_FULL; // Start with full render
-let _renderScheduled = false;
-let _rAFId = null;
-
-/**
- * Mark components as needing re-render and schedule a batched update.
- * @param {number} flags - Bitmask of DIRTY_* flags indicating what changed
- */
-function markDirty(flags) {
-  _dirtyFlags |= flags;
-  _scheduleRender();
-}
-
-/**
- * Schedule a batched render using requestAnimationFrame.
- * Multiple markDirty() calls between frames are coalesced into one render.
- */
-function _scheduleRender() {
-  if (_renderScheduled) return;
-  _renderScheduled = true;
-  _rAFId = requestAnimationFrame(function() {
-    _renderScheduled = false;
-    _rAFId = null;
-    _performDirtyRender();
-  });
-}
-
-/**
- * Perform incremental render based on dirty flags.
- * Only rebuilds the components that actually changed.
- */
-function _performDirtyRender() {
-  if (_dirtyFlags === DIRTY_NONE) return;
-
-  // If dialog/review states changed, or many components are dirty, do full render
-  if ((_dirtyFlags & DIRTY_DIALOG) || (_dirtyFlags & DIRTY_REVIEW) ||
-      (_dirtyFlags & DIRTY_TOOLBAR) || (_dirtyFlags & DIRTY_PANEL) ||
-      (_dirtyFlags & DIRTY_MOVES) ||
-      // If more than 2 components are dirty, full render is likely faster
-      Integer_bitcount(_dirtyFlags) > 2) {
-    _dirtyFlags = DIRTY_NONE;
-    // v1.0.4 ROUND-5 REV13: Route through render() to share throttle
-    render();
-    return;
-  }
-
-  // Targeted updates only
-  if (_dirtyFlags & DIRTY_BOARD) {
-    _updateBoardIncremental();
-  }
-  if (_dirtyFlags & DIRTY_EVAL) {
-    _updateEvalDisplayIncremental();
-  }
-
-  _dirtyFlags = DIRTY_NONE;
-}
-
-/** Count set bits in a number.
- * v1.1.1 Phase 60 (audit P0-3.5): Guard against negative input — the old
- *   `while (n) { n &= n - 1; }` loops forever for negative numbers (the
- *   sign bit is always 1 in two's complement). Use `n >>> 0` to coerce to
- *   an unsigned 32-bit integer, then iterate. The dirty-flag bitfield is
- *   always non-negative in practice (DIRTY_* constants are positive), but
- *   this is a defensive guard against future misuse.
- */
-function Integer_bitcount(n) {
-  let count = 0;
-  n = n >>> 0; // coerce to unsigned 32-bit
-  while (n) { count++; n &= n - 1; }
-  return count;
-}
+// ===================== RENDER SCHEDULING NOTE =====================
+// v1.2.3 round-20 (known-issue C): the DIRTY_* incremental-render subsystem
+//   (constants/markDirty/_scheduleRender/_performDirtyRender/Integer_bitcount,
+//   ~80 lines) was REMOVED as dead code. Every markDirty() call site passed
+//   DIRTY_FULL or DIRTY_MOVES|DIRTY_PANEL|DIRTY_EVAL — both always routed to
+//   a full render() via _performDirtyRender's full-render branch, so the
+//   granular board/eval incremental path was unreachable. markDirty(x) call
+//   sites now call render() directly (identical behavior; render() has its
+//   own rAF throttle). The shared square-rendering primitives
+//   (_updateSingleSq/_updateChangedSquares/_getSqElCache) remain — used by
+//   the live _updateBoardLightweight selection/hover path.
 
 // ===================== DOM ELEMENT CACHE =====================
 let _cachedElements = {};
@@ -317,79 +246,6 @@ function _getSqElCache() {
     _sqElCache[i] = sqs[i];
   }
   return _sqElCache;
-}
-
-// ===================== INCREMENTAL BOARD UPDATE =====================
-// v1.0.2 PERF (audit): replaced JSON.stringify(gameState.board) dirty check
-// with a monotonic boardVersion integer (incremented in makeMv/makeMvInPlace,
-// restored in unmakeMv). At 10-50 engine progress callbacks/sec this avoids
-// ~50 board serializations/sec of ~1KB each.
-let _prevBoardVersion = -1;
-
-/**
- * Incrementally update only the board squares that changed.
- * Compares current gameState.boardVersion with previously rendered version.
- */
-function _updateBoardIncremental() {
-  const currentBoardVersion = gameState.boardVersion || 0;
-  if (currentBoardVersion === _prevBoardVersion) return; // No change
-
-  const sqCache = _getSqElCache();
-  if (!sqCache) { markDirty(DIRTY_FULL); return; }
-
-  const flip = playerColor === 'black';
-  const cm = showCtrlMap ? cachedCtrlMap : null;
-  let _checkKingPos = getCheckKingPos(gameState);
-
-  for (let r = 0; r < 8; r++) {
-    for (let c = 0; c < 8; c++) {
-      const rr = flip ? 7 - r : r;
-      const cc = flip ? 7 - c : c;
-      // v1.0.2 (qw3.7max audit): 1D array access — _sqElCache[r*8+c]
-      const el = sqCache[r * 8 + c];
-      if (!el) continue;
-      const p = gameState.board[rr][cc];
-      const isL = (r + c) % 2 === 0;
-      _updateSingleSq(el, p, rr, cc, cm, isL, lastMove, _checkKingPos);
-    }
-  }
-
-  _prevBoardVersion = currentBoardVersion;
-  _updateArrows(hoveredSquare || selectedSquare);
-}
-
-/**
- * Incrementally update eval display without full render.
- * v1.0.5 Rev56 PERF: Added a signature check so we skip the innerHTML rebuild
- * when the eval display content is identical to the last render. Previously,
- * every DIRTY_EVAL tick (10-50×/sec during search) rebuilt the innerHTML even
- * if the eval values hadn't changed (common during deep search where depth
- * increments but score stays stable). The signature captures all fields that
- * affect the displayed text: emoji, desc, score, depth, seldepth, setupMode,
- * isAIThinking, and the localized strings (which change on language toggle).
- */
-let _evalDispPrevSig = '';
-function _updateEvalDisplayIncremental() {
-  const evalEl = _el(_EL_EVAL_DISP);
-  if (!evalEl) { markDirty(DIRTY_FULL); return; }
-  const _fe = formatEval();
-  const pe = _fe.emoji, pd = _fe.desc, scoreStr = _fe.score;
-  // v1.0.5 Rev56: build the signature BEFORE the innerHTML string so we can
-  // short-circuit on a cache hit. The signature must include every value that
-  // flows into the innerHTML — if any changes, the signature changes.
-  const _sig = (setupMode?'S':'N')+'|'+(isAIThinking?'A':'I')+'|'+pe+'|'+pd+'|'+scoreStr+'|'+_sfDepth+'|'+_sfSeldepth;
-  if(_evalDispPrevSig === _sig) return; // No change — skip DOM write
-  _evalDispPrevSig = _sig;
-  // v1.0.4 Rev33: display "D15 SD22" — depth + seldepth (tactical depth).
-  // SD only shown when > 0 AND > depth (seldepth == depth is redundant).
-  const _hdrDepthStr = _sfDepth > 0 ? '<span style="font-size:.65rem;color:var(--muted);margin-left:4px">D' + _sfDepth + '</span>' + (_sfSeldepth > 0 && _sfSeldepth > _sfDepth ? '<span style="font-size:.65rem;color:var(--muted);margin-left:2px">SD' + _sfSeldepth + '</span>' : '') : '';
-  if (setupMode) {
-    evalEl.innerHTML = T('setup_label');
-  } else if (isAIThinking) {
-    evalEl.innerHTML = '<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>';
-  } else {
-    evalEl.innerHTML = '<span class="ev-e">' + pe + '</span><span>' + pd + '</span><span style="color:var(--muted)">(' + scoreStr + ')</span>' + _hdrDepthStr;
-  }
 }
 
 // ===================== STATE MANAGEMENT =====================
@@ -665,8 +521,7 @@ class ChessAudioEngine {
     osc.start(t0);
     osc.stop(t0 + dur + 0.05);
     this._activeNodes.add(osc);
-    const self = this;
-    osc.onended = function() { self._activeNodes.delete(osc); };
+    osc.onended = () => { this._activeNodes.delete(osc); };
     return osc;
   }
 
@@ -697,8 +552,7 @@ class ChessAudioEngine {
     src.stop(t0 + dur + 0.02);
     this._env(g, t0, 0.002, peak, 0.04, 0.3, dur * 0.5, dur * 0.4);
     this._activeNodes.add(src);
-    const self = this;
-    src.onended = function() { self._activeNodes.delete(src); };
+    src.onended = () => { this._activeNodes.delete(src); };
     return { src: src, filt: filt, g: g };
   }
 
@@ -821,8 +675,7 @@ class ChessAudioEngine {
     osc.start(t0);
     osc.stop(t0 + 0.29);
     this._activeNodes.add(osc);
-    const self = this;
-    osc.onended = function() { self._activeNodes.delete(osc); };
+    osc.onended = () => { this._activeNodes.delete(osc); };
     this._env(g, t0, 0.005, 0.18, 0.05, 0.6, 0.16, 0.06);
   }
 
@@ -854,8 +707,7 @@ class ChessAudioEngine {
     src.stop(t1 + 0.22);
     this._env(ng, t1, 0.01, 0.14, 0.05, 0.7, 0.13, 0.05);
     this._activeNodes.add(src);
-    const self = this;
-    src.onended = function() { self._activeNodes.delete(src); };
+    src.onended = () => { this._activeNodes.delete(src); };
     // Heavy impact
     const t2 = t0 + 0.25;
     const g2 = this.ctx.createGain();
@@ -923,12 +775,11 @@ class ChessAudioEngine {
       { f: 360, g: 0.05, d: 0.25 },
       { f: 450, g: 0.03, d: 0.19 }
     ];
-    const self = this;
-    partials.forEach(function(p) {
-      const g = self.ctx.createGain();
-      g.connect(self.master);
-      self._osc('sine', p.f, t0, p.d, g);
-      self._env(g, t0, 0.06, p.g, 0.12, 0.3, p.d * 0.4, p.d * 0.4);
+    partials.forEach((p) => {
+      const g = this.ctx.createGain();
+      g.connect(this.master);
+      this._osc('sine', p.f, t0, p.d, g);
+      this._env(g, t0, 0.06, p.g, 0.12, 0.3, p.d * 0.4, p.d * 0.4);
     });
     // Four measured footsteps (slower + deeper — synced with 560ms animation's
     // 4-step wobble at ~140ms intervals). Deeper freq (80Hz) than before (95Hz).
@@ -987,13 +838,12 @@ class ChessAudioEngine {
     if (!this.enabled || !this.ctx) return;
     const t0 = this.now();
     const notes = [523, 659, 784, 1047];
-    const self = this;
-    notes.forEach(function(freq, i) {
+    notes.forEach((freq, i) => {
       const t = t0 + i * 0.08;
-      const g = self.ctx.createGain();
-      g.connect(self.master);
-      self._osc('sine', freq, t, 0.18, g);
-      self._env(g, t, 0.005, 0.15, 0.03, 0.3, 0.06, 0.09);
+      const g = this.ctx.createGain();
+      g.connect(this.master);
+      this._osc('sine', freq, t, 0.18, g);
+      this._env(g, t, 0.005, 0.15, 0.03, 0.3, 0.06, 0.09);
     });
   }
 
@@ -1015,13 +865,12 @@ class ChessAudioEngine {
     const t0 = this.now();
     const notes = [523, 440, 349, 262];
     const durs = [0.12, 0.14, 0.18, 0.30];
-    const self = this;
-    notes.forEach(function(freq, i) {
+    notes.forEach((freq, i) => {
       const t = t0 + (i === 0 ? 0 : [0.12, 0.26, 0.44][i - 1] || 0);
-      const g = self.ctx.createGain();
-      g.connect(self.master);
-      self._osc('sine', freq, t, durs[i], g);
-      self._env(g, t, 0.01, 0.20, 0.04, 0.3, durs[i] * 0.4, durs[i] * 0.5);
+      const g = this.ctx.createGain();
+      g.connect(this.master);
+      this._osc('sine', freq, t, durs[i], g);
+      this._env(g, t, 0.01, 0.20, 0.04, 0.3, durs[i] * 0.4, durs[i] * 0.5);
     });
   }
 
@@ -1099,13 +948,12 @@ class ChessAudioEngine {
     if (!this.enabled || !this.ctx) return;
     const t0 = this.now();
     const notes = [392, 523, 659]; // G-C-E (号角感)
-    const self = this;
-    notes.forEach(function(freq, i) {
+    notes.forEach((freq, i) => {
       const t = t0 + i * 0.04;
-      const g = self.ctx.createGain();
-      g.connect(self.master);
-      self._osc('triangle', freq, t, 0.30, g);
-      self._env(g, t, 0.02, 0.16, 0.06, 0.5, 0.12, 0.12);
+      const g = this.ctx.createGain();
+      g.connect(this.master);
+      this._osc('triangle', freq, t, 0.30, g);
+      this._env(g, t, 0.02, 0.16, 0.06, 0.5, 0.12, 0.12);
     });
   }
 
@@ -1154,13 +1002,12 @@ class ChessAudioEngine {
     const t0 = this.now();
     const notes = [440, 349, 262]; // A-F-C
     const durs = [0.18, 0.22, 0.40];
-    const self = this;
-    notes.forEach(function(freq, i) {
+    notes.forEach((freq, i) => {
       const t = t0 + (i === 0 ? 0 : [0.18, 0.40][i - 1] || 0);
-      const g = self.ctx.createGain();
-      g.connect(self.master);
-      self._osc('sine', freq, t, durs[i], g);
-      self._env(g, t, 0.02, 0.18, 0.05, 0.3, durs[i] * 0.4, durs[i] * 0.5);
+      const g = this.ctx.createGain();
+      g.connect(this.master);
+      this._osc('sine', freq, t, durs[i], g);
+      this._env(g, t, 0.02, 0.18, 0.05, 0.3, durs[i] * 0.4, durs[i] * 0.5);
     });
   }
 
@@ -1390,6 +1237,20 @@ function _buildReviewMovesInnerHTML(startIdx,endIdx){
 // during initial page load. The JSON string (~125KB) is parsed only when first needed.
 // ===================== EVAL TREND CHART =====================
 /**
+ * v1.2.3 (S2703 fix): Shared review-chart height formula, extracted to top
+ *   level. Previously _refreshEvalTrendChart referenced `_trendH`, which is a
+ *   const LOCAL to _renderReviewMode — an undeclared global in this scope.
+ *   The reference was only reached when the container had zero layout height
+ *   (clientHeight falsy), producing a latent ReferenceError on that path.
+ *   Formula mirrors the render path: landscape 120-200px (30% of height-28),
+ *   portrait 100-120px (18% of height-200).
+ */
+function _computeTrendChartHeight(){
+  return window.innerWidth > window.innerHeight
+    ? Math.max(120, Math.min(200, Math.floor((window.innerHeight - 28) * 0.30)))
+    : Math.max(100, Math.min(120, Math.floor((window.innerHeight - 200) * 0.18)));
+}
+/**
  * v1.1.1 Phase 59 Task 59.3: Lightweight refresh of the eval trend chart's
  *   SVG content without triggering a full render(). Called from onEngineEval
  *   when a stale callback (e.g. step 0's eval) gets cached — the chart
@@ -1407,7 +1268,7 @@ function _refreshEvalTrendChart(){
   let _w=Math.max(120,window.innerWidth-28);
   const _actualW=_container.clientWidth;
   if(_actualW>0)_w=_actualW;
-  const _h=_container.clientHeight||_trendH||120;
+  const _h=_container.clientHeight||_computeTrendChartHeight();
   // Rebuild the SVG
   const _svg=_buildEvalTrendSVG(_w,_h);
   if(_svg){
@@ -1683,7 +1544,13 @@ function formatEval(){
     if(_gameOverStatusKey==='timeout'){
       const whiteWins=gameOver.includes(T('white_wins'))||gameOver.includes('White wins')||gameOver.includes(T('white_short'));
       const playerWins=(playerColor==='white')===whiteWins;
-      return{emoji:'⌛',desc:playerWins?T('winning'):T('losing'),score:playerWins?'+∞':'-∞'};
+      // v1.2.3 round-22: score stays White-POV (+∞ = White wins) so it agrees
+      //   with the emoji/desc and the rest of the eval bar's convention
+      //   (positive = White advantage). Previously this used playerWins, which
+      //   made a black player who won by timeout see "+∞" (a White-advantage
+      //   score) next to a 🏆 (player-winning emoji) — a contradictory
+      //   perspective report. emoji/desc remain player-POV as designed.
+      return{emoji:'⌛',desc:playerWins?T('winning'):T('losing'),score:whiteWins?'+∞':'-∞'};
     }
     // v1.0.4 FIX: resignation also needs win/lose emoji, not draw.
     if(_gameOverStatusKey==='resign'){
@@ -1693,7 +1560,10 @@ function formatEval(){
       // player always appear to lose even when they won (e.g. AI resigns).
       const whiteWins=(typeof _resignWinnerColor!=='undefined'&&_resignWinnerColor==='white');
       const playerWins=(playerColor==='white')===whiteWins;
-      return{emoji:playerWins?'🏆':'💀',desc:playerWins?T('winning'):T('losing'),score:playerWins?'+∞':'-∞'};
+      // v1.2.3 round-22: score is White-POV (+∞ = White wins) — see timeout
+      //   branch above for the rationale. Keeps the score/emoji perspectives
+      //   consistent for the player regardless of which side they played.
+      return{emoji:playerWins?'🏆':'💀',desc:playerWins?T('winning'):T('losing'),score:whiteWins?'+∞':'-∞'};
     }
     // Genuine draws (stalemate, 50-move, repetition, insufficient material, agreement)
     return{emoji:'🤝',desc:T('draw_game'),score:'0.0'};
@@ -1702,7 +1572,7 @@ function formatEval(){
   // If the cache has the eval for the current reviewStep, return it immediately —
   // don't show "analyzing" even if _evalLoading is true (e.g. from a stale debounce
   // timer or a race condition between reviewGoTo and render throttle).
-  if(reviewMode&&typeof reviewStep!=='undefined'&&_reviewEvalCache !== undefined){
+  if(reviewMode&&reviewStep!==undefined&&_reviewEvalCache !== undefined){
     const cachedReview=_reviewEvalCache.peek(reviewStep);
     if(cachedReview!=null){
       const evP=playerColor==='white'?cachedReview.eval:-cachedReview.eval;
@@ -1838,6 +1708,12 @@ let reviewBaseState=null,_cachedStatus=null,_cachedStatusKey='';
 let cachedCtrlMap=null,cachedCtrlKey='',renderPending=false,
     lastRenderTime=0,lastRenderRequest=0,renderTimerId=null;
 let _animRetryCount=0; // v1.1.0 Phase 54: guard against stuck animationInProgress
+// v1.2.3 round-18 (bug fix): tracks "user is typing in the Chess960 SP-ID
+//   input" so the full re-render triggered by each keystroke can restore
+//   focus afterwards (mirrors the _ecoSearchFocused mechanism). Previously
+//   every keystroke destroyed the input → focus/soft-keyboard lost →
+//   multi-digit SP-IDs were effectively un-typeable.
+let _spidEditing=false;
 let _heartbeatIntervalId=null; // Interval ID for engine heartbeat monitor
 let _heartbeatRunning=false; // Flag for engine heartbeat monitor state
 // Dialog state
@@ -2036,7 +1912,7 @@ function getCapturedPieces(board, color, moveRecordsArg) {
  */
 function capturedPiecesHtml(board, pieceColor, playerColor, splitAt) {
   // v1.0.4 FIX: pass moveRecords (global) as the authoritative source
-  const captured = getCapturedPieces(board, pieceColor, (typeof moveRecords !== 'undefined') ? moveRecords : null);
+  const captured = getCapturedPieces(board, pieceColor, (moveRecords !== undefined) ? moveRecords : null);
   if (!captured.length) return '';
   // Style: same color scheme as the king icon in the bar
   const isW = pieceColor === 'white';
@@ -2137,7 +2013,12 @@ function render(){
         return;
       }
       renderPending=true;
-      setTimeout(()=>{renderPending=false;_animRetryCount=0;lastRenderTime=Date.now();render();},200);
+      // v1.2.3 round-18 (bug fix): do NOT reset _animRetryCount here — the
+      //   reset made the counter oscillate 0→1 so the ">10 retries →
+      //   force-clear stuck animationInProgress" guard above could never
+      //   fire (dead code, infinite 200ms spin instead of 2s self-heal).
+      //   The healthy-path reset at the non-animating branch below suffices.
+      setTimeout(()=>{renderPending=false;lastRenderTime=Date.now();render();},200);
     }
     return;
   }
@@ -2205,12 +2086,12 @@ for(const [v,key] of _tcTypes){
 }
 h+=`</select>`;
 if(dlgTimeControl.type!=='off'){
-  h+=`<div class="portrait-stack" style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><label style="font-size:.78rem;color:var(--muted);flex:1">${T('time_control_base_min')}</label><input type="number" min="1" max="600" value="${Math.round((dlgTimeControl.baseSec||300)/60)}" style="width:80px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;text-align:center" oninput="const v=parseInt(this.value,10);if(!isNaN(v)&&v>=1){dlgTimeControl.baseSec=v*60;}"></div>`;
+  h+=`<div class="portrait-stack" style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><label style="font-size:.78rem;color:var(--muted);flex:1">${T('time_control_base_min')}</label><input type="number" min="1" max="600" value="${Math.round((dlgTimeControl.baseSec||300)/60)}" style="width:80px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;text-align:center" oninput="const v=Number.parseInt(this.value,10);if(!Number.isNaN(v)&&v>=1){dlgTimeControl.baseSec=v*60;}"></div>`;
   if(dlgTimeControl.type==='fischer'){
-    h+=`<div class="portrait-stack" style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><label style="font-size:.78rem;color:var(--muted);flex:1">${T('time_control_inc_sec')}</label><input type="number" min="0" max="60" value="${dlgTimeControl.incrementSec||0}" style="width:80px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;text-align:center" oninput="const v=parseInt(this.value,10);if(!isNaN(v)&&v>=0){dlgTimeControl.incrementSec=v;}"></div>`;
+    h+=`<div class="portrait-stack" style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><label style="font-size:.78rem;color:var(--muted);flex:1">${T('time_control_inc_sec')}</label><input type="number" min="0" max="60" value="${dlgTimeControl.incrementSec||0}" style="width:80px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;text-align:center" oninput="const v=Number.parseInt(this.value,10);if(!Number.isNaN(v)&&v>=0){dlgTimeControl.incrementSec=v;}"></div>`;
   }
   if(dlgTimeControl.type==='bronstein'||dlgTimeControl.type==='usdelay'){
-    h+=`<div class="portrait-stack" style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><label style="font-size:.78rem;color:var(--muted);flex:1">${T('time_control_delay_sec')}</label><input type="number" min="0" max="60" value="${dlgTimeControl.delaySec||0}" style="width:80px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;text-align:center" oninput="const v=parseInt(this.value,10);if(!isNaN(v)&&v>=0){dlgTimeControl.delaySec=v;}"></div>`;
+    h+=`<div class="portrait-stack" style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><label style="font-size:.78rem;color:var(--muted);flex:1">${T('time_control_delay_sec')}</label><input type="number" min="0" max="60" value="${dlgTimeControl.delaySec||0}" style="width:80px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;text-align:center" oninput="const v=Number.parseInt(this.value,10);if(!Number.isNaN(v)&&v>=0){dlgTimeControl.delaySec=v;}"></div>`;
   }
 }
 h+=`<div style="font-size:.7rem;color:var(--muted);margin-top:4px">${T('time_control_note')}</div>`;
@@ -2242,7 +2123,9 @@ function _renderChess960Settings(h){
   h+=`<label style="font-size:.78rem;color:var(--muted)">${T('chess960_spid')}: </label>`;
   h+=`<button class="btn" style="padding:4px 10px;font-size:.78rem;${curSPID===-1?'background:var(--accent);color:var(--bg);font-weight:700':''}" onclick="HapticManager.fire('BUTTON_PRESS');dlgChess960SPID=-1;render()">${T('chess960_random')}</button>`;
   h+=`<div style="display:flex;gap:6px;align-items:center;flex:1;min-width:120px">`;
-  h+=`<input type="number" min="0" max="959" value="${curSPID>=0?curSPID:''}" placeholder="0-959" style="flex:1;width:80px;min-width:0;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;text-align:center" oninput="const v=parseInt(this.value,10);if(!isNaN(v)&&v>=0&&v<960){dlgChess960SPID=v;render();}else if(this.value===''){dlgChess960SPID=-1;render();}">`;
+  // v1.2.3 round-18: id + _spidEditing flag so _postRenderFinalize can
+  //   restore focus after the keystroke-triggered re-render (see declaration).
+  h+=`<input id="spidInput" type="number" min="0" max="959" value="${curSPID>=0?curSPID:''}" placeholder="0-959" style="flex:1;width:80px;min-width:0;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;text-align:center" oninput="_spidEditing=true;const v=Number.parseInt(this.value,10);if(!Number.isNaN(v)&&v>=0&&v<960){dlgChess960SPID=v;render();}else if(this.value===''){dlgChess960SPID=-1;render();}">`;
   // v1.2.1 round-16: secureRandomInt is exported by game-logic.js (loaded
   //   before ui.js), so the typeof guard is unreachable defensive code.
   //   Simplified to direct call (removes Math.random() that triggered
@@ -2723,8 +2606,8 @@ if(_rvCalList&&_rvCalList.length>0){
   for(const _a of _rvCalList){
     if(!_a||!_a.color||!_a.from||!_a.to)continue;
     if(_a.from.length!==2||_a.to.length!==2)continue;
-    const _fc=_a.from.charCodeAt(0)-97, _fr=8-parseInt(_a.from[1],10);
-    const _tc=_a.to.charCodeAt(0)-97, _tr=8-parseInt(_a.to[1],10);
+    const _fc=_a.from.charCodeAt(0)-97, _fr=8-Number.parseInt(_a.from[1],10);
+    const _tc=_a.to.charCodeAt(0)-97, _tr=8-Number.parseInt(_a.to[1],10);
     if(_fc<0||_fc>7||_fr<0||_fr>7||_tc<0||_tc>7||_tr<0||_tr>7)continue;
     const _dedupKey=_a.color+'|'+_a.from+'|'+_a.to;
     if(_seenArrowKeys.has(_dedupKey))continue;
@@ -2733,8 +2616,8 @@ if(_rvCalList&&_rvCalList.length>0){
   }
   // Render each arrow with the per-color diagonal offset.
   for(const _a of _allArrows){
-    const _fc=_a.from.charCodeAt(0)-97, _fr=8-parseInt(_a.from[1],10);
-    const _tc=_a.to.charCodeAt(0)-97, _tr=8-parseInt(_a.to[1],10);
+    const _fc=_a.from.charCodeAt(0)-97, _fr=8-Number.parseInt(_a.from[1],10);
+    const _tc=_a.to.charCodeAt(0)-97, _tr=8-Number.parseInt(_a.to[1],10);
     // Apply flip (display position)
     const _dfc=flip?7-_fc:_fc, _dfr=flip?7-_fr:_fr;
     const _dtc=flip?7-_tc:_tc, _dtr=flip?7-_tr:_tr;
@@ -2792,7 +2675,18 @@ if(_evalLoading&&_sfDepth>0){
 // Build WDL string for review eval bar (same as main eval bar).
 // v1.0.8 PHASE 14: removed the .65rem override (inherit title size).
 let _rWdlStr='';
-if(_sfWdlW>=0&&_sfWdlD>=0&&_sfWdlL>=0){const _rt=_sfWdlW+_sfWdlD+_sfWdlL;const _rw=Math.round(_sfWdlW/_rt*100);const _rd=Math.round(_sfWdlD/_rt*100);const _rl=100-_rw-_rd;_rWdlStr='<span style="color:var(--muted);margin-left:4px">('+_rw+'%W/'+_rd+'%D/'+_rl+'%L)</span>';}
+if(_sfWdlW>=0&&_sfWdlD>=0&&_sfWdlL>=0){const _rt=_sfWdlW+_sfWdlD+_sfWdlL;if(_rt>0){
+  // v1.2.3 round-22: WDL labels are player-perspective (W = the player's win
+  //   probability, L = the player's loss probability). _sfWdlW/_sfWdlL are
+  //   White-POV (W = White wins); swap them for a black player so "W" reads
+  //   as "my win" — matching the emoji/desc report. Also added the _rt>0
+  //   guard (the main eval bar in ai-bridge.js already had it) to avoid a
+  //   NaN display if the engine ever emits `wdl 0 0 0`.
+  const _blackP=(typeof playerColor!=='undefined'&&playerColor==='black');
+  const _rw=Math.round((_blackP?_sfWdlL:_sfWdlW)/_rt*100);
+  const _rd=Math.round(_sfWdlD/_rt*100);
+  const _rl=100-_rw-_rd;
+  _rWdlStr='<span style="color:var(--muted);margin-left:4px">('+_rw+'%W/'+_rd+'%D/'+_rl+'%L)</span>';}}
 // v1.0.8 PHASE 14: enlarge review eval-bar fonts and cap the bar's height
 // so it never grows beyond a single line of text. Previously the bar used
 // .62rem / .58rem with flex-wrap:wrap, which let long content (emoji + desc
@@ -2823,6 +2717,10 @@ if(_sfWdlW>=0&&_sfWdlD>=0&&_sfWdlL>=0){const _rt=_sfWdlW+_sfWdlD+_sfWdlL;const _
 const _rvEvalFontSize='.8rem';
 const _rvEvalEmojiSize='1.05rem';
 const _rvEvalBarHTML='<div class="ev" id="review-eval-bar" style="margin:2px 0;width:100%;box-sizing:border-box;font-size:'+_rvEvalFontSize+'!important;padding:5px 10px!important;gap:5px;max-height:2.4em;overflow:hidden;white-space:nowrap"><span class="ev-e" style="font-size:'+_rvEvalEmojiSize+'">'+_re.emoji+'</span><span>'+_re.desc+'</span><span style="color:var(--muted)">('+_re.score+')</span>'+_rDepthStr+_rProgressStr+_rWdlStr+_rDelta+'</div>';
+// v1.2.3 round-20 (relocation): the round-19 standalone #review-batch-hint
+//   line under the eval bar was replaced by a hint RIGHT-ALIGNED INSIDE the
+//   "Analyze All" button itself (see _rvAnalyzeBtnInnerHTML below) — shown
+//   only while _reviewAnalyzeAllActive. No separate DOM line anymore.
 
 // Review step slider — custom slider with pixel-perfect alignment to chart data points.
 // v1.1.0 Phase 54: Replaced the native <input type="range"> visual with a custom
@@ -2861,7 +2759,7 @@ const _rvSliderHTML='<div class="rv-slider-wrap">'+
     '<div class="rv-slider-base"></div>'+
     '<div class="rv-slider-fill" id="rvSliderFill" style="width:'+_rvSliderFillW+'"></div>'+
     '<div class="rv-slider-thumb" id="rvSliderThumb" style="left:'+_rvSliderThumbLeft+'"></div>'+
-    '<input type="range" class="rv-slider-input" min="0" max="'+_rvSliderMax+'" value="'+reviewStep+'" oninput="reviewGoTo(parseInt(this.value))" aria-label="'+T('step_label')+'">'+
+    '<input type="range" class="rv-slider-input" min="0" max="'+_rvSliderMax+'" value="'+reviewStep+'" oninput="reviewGoTo(Number.parseInt(this.value))" aria-label="'+T('review_move_slider')+'">'+
   '</div>'+
   '<div class="rv-slider-labels"><span>'+T('start_pos')+'</span><span>'+T('step_label')+' '+ reviewStep + ' / ' + _rvSliderMax + '</span><span>'+T('end_pos')+'</span></div>'+
   '</div>';
@@ -2876,7 +2774,6 @@ const _rvSliderHTML='<div class="rv-slider-wrap">'+
 // .review-bottom which spans the FULL viewport width. This gives the chart
 // a much wider canvas (edge-to-edge) than the previous design where it was
 // squeezed under the board.
-const _isLandscapeTrend = window.innerWidth > window.innerHeight;
 // v1.1.0 Phase 54 rev8: _buildEvalTrendSVG no longer takes width/height —
 //   it uses a fixed viewBox="0 0 100 100" with preserveAspectRatio="xMidYMid
 //   slice", so the SVG always fills the container edge-to-edge regardless of
@@ -2886,9 +2783,8 @@ const _isLandscapeTrend = window.innerWidth > window.innerHeight;
 //   too tall (up to 200px), leaving too little room for the move list. Reduced
 //   the portrait max to 120px (from 200px). Landscape unchanged (120-200px).
 //   min stays 120px so the trend line + labels remain readable.
-const _trendH = _isLandscapeTrend
-  ? Math.max(120, Math.min(200, Math.floor((window.innerHeight - 28) * 0.30)))
-  : Math.max(100, Math.min(120, Math.floor((window.innerHeight - 200) * 0.18)));
+// v1.2.3 (S2703 fix): formula shared with _refreshEvalTrendChart via helper.
+const _trendH = _computeTrendChartHeight();
 // v1.1.0 Phase 54 rev11: Measure the existing .review-chart container's
 //   clientWidth so the viewBox width == container pixel width. With
 //   preserveAspectRatio="xMidYMid slice", when the viewBox aspect ratio
@@ -2959,7 +2855,7 @@ const _totalSteps=moveRecords.length+1;
 const _allCached=_cachedCount>=_totalSteps;
 // v1.0.8 PHASE 20 (UX): Enlarged font .7rem → .8rem and min-height 28px → 34px
 // so the button text + emoji display fully with comfortable breathing room.
-const _rvAnalyzeHTML='<button id="review-analyze-btn" class="btn" style="margin-top:4px;width:100%;font-size:.8rem;min-height:34px;padding:6px 10px" onclick="reviewAnalyzeAll()">'+(_rvAnalyzeBtnLabel())+'</button>';
+const _rvAnalyzeHTML='<button id="review-analyze-btn" class="btn" style="margin-top:4px;width:100%;font-size:.8rem;min-height:34px;padding:6px 10px;display:flex;align-items:center;justify-content:space-between;gap:8px" onclick="reviewAnalyzeAll()">'+_rvAnalyzeBtnInnerHTML()+'</button>';
 
 // v1.0.8 PHASE 18 Task 2: Enable virtual list when the move list exceeds the
 // threshold. When enabled, only the visible window (plus overscan) is rendered
@@ -3216,7 +3112,18 @@ if(!gameState||!gameState.board){console.error('renderInternal: gameState is inv
 if(setupMode){gameOver=null;_gameOverStatusKey=null;}
 if(gameOver&&_gameOverStatusKey){const _reLocStr=_gameOverStrFromStatus(_gameOverStatusKey);if(_reLocStr)gameOver=_reLocStr;}
 if(!gameOver&&!setupMode&&!isAIThinking&&!reviewMode){const _gsKey=gameState.hash+'|'+gameState.currentTurn;if(_cachedStatusKey!==_gsKey){_cachedStatus=gameStatus(gameState);_cachedStatusKey=_gsKey;}_applyGameOver(_cachedStatus);}
-const ctrlKey=showCtrlMap?gameState.hash:'off';if(ctrlKey!==cachedCtrlKey){cachedCtrlMap=showCtrlMap?getCtrlMap(gameState.board):null;cachedCtrlKey=ctrlKey}const cm=cachedCtrlMap;
+// v1.2.3 round-18 (perf): skip the main-board control map entirely in review
+//   mode — the main board isn't rendered then, and the review board maintains
+//   its own cache key below. Previously both paths shared cachedCtrlKey/
+//   cachedCtrlMap and ping-ponged between the main and review position
+//   hashes, forcing TWO full getCtrlMap() recomputes per render while
+//   reviewing with 🌈 enabled.
+let cm=null;
+if(showCtrlMap&&!reviewMode){
+  const ctrlKey=gameState.hash;
+  if(ctrlKey!==cachedCtrlKey){cachedCtrlMap=getCtrlMap(gameState.board);cachedCtrlKey=ctrlKey;}
+  cm=cachedCtrlMap;
+}
 const infoSq=hoveredSquare||selectedSquare;let infoCtrl=null;
 if(infoSq&&cm){const e=cm[infoSq.row][infoSq.col];if(e)infoCtrl=e;}
 const oppC=OPP_COLOR[playerColor];
@@ -3387,7 +3294,10 @@ return h;
  */
 function _renderInfoBars(h){
 // Tablebase status bar (player turn only, ≤7 pieces, manual query)
-if(!gameOver&&!reviewMode&&pieceCountLE7(gameState.board)){
+// v1.2.3 round-18: typeof guard for cross-module symbol (round-11 defensive
+//   pattern, same as game-logic.js:2794 — a failed tablebase.js load should
+//   not cascade into a full-page render error).
+if(!gameOver&&!reviewMode&&typeof pieceCountLE7==='function'&&pieceCountLE7(gameState.board)){
 const _tbFen=generateFEN(gameState);
 let _tbBarHtml='';
 const _cachedTb=_tbCache.get(_tbFen);
@@ -3396,7 +3306,11 @@ else if(_cachedTb){
 // API returns moves[] already sorted best-first; use moves[0] directly
 const _cat=_cachedTb.category||'';
 const _catMap={'win':T('tb_cat_win'),'syzygy-win':T('tb_cat_syzygy_win'),'maybe-win':T('tb_cat_maybe_win'),'cursed-win':T('tb_cat_cursed_win'),'draw':T('tb_cat_draw'),'blessed-loss':T('tb_cat_blessed_loss'),'maybe-loss':T('tb_cat_maybe_loss'),'syzygy-loss':T('tb_cat_syzygy_loss'),'loss':T('tb_cat_loss')};
-const _catLabel=_catMap[_cat]||_cat;
+// v1.2.3 round-18 (XSS hardening): escape the fallback — an unknown
+//   `category` from the tablebase API would otherwise flow raw into
+//   innerHTML below (same threat model as the _best.uci escaping noted in
+//   the v1.0.8 PHASE 30 comment below).
+const _catLabel=_catMap[_cat]||_esc(_cat);
 let _dtzLabel='';
 const _dtm=_cachedTb.dtm;
 const _dtz=_cachedTb.precise_dtz!=null?_cachedTb.precise_dtz:_cachedTb.dtz;
@@ -3446,7 +3360,7 @@ h+=`<div style="padding:6px 12px;background:var(--card);border:1px solid var(--p
 // Ponder move is now displayed inline in hintText (set by onHintMove)
 // when the engine provides "bestmove X ponder Y". No separate display needed here.
 // Show MultiPV alternative lines if available
-if(_multiPVLines.length>=1){h+='<div style="margin-top:6px;border-top:1px solid rgba(212,160,23,.15);padding-top:6px"><div style="font-size:.65rem;color:var(--muted);margin-bottom:4px">'+T('multi_analysis')+'</div>';for(const pv of _multiPVLines){let scoreStr='';if(pv.scoreMate!=null&&pv.scoreMate!==null){const m=parseInt(pv.scoreMate,10);if(!isNaN(m))scoreStr=m>0?'#+'+Math.abs(m):m<0?'#-'+Math.abs(m):'#0';}else if(pv.scoreCp!=null&&pv.scoreCp!==null){const pd=(pv.scoreCp/100).toFixed(1);scoreStr=(pv.scoreCp>0?'+':'')+pd;} let pvSAN='';if(pv.pv){try{const _conv=_convertPVtoSAN(pv.pv,gameState);pvSAN=_conv.sanMoves.split(/\s+/).slice(0,3).join(' ');}catch(e){pvSAN=pv.pv.split(/\s+/).slice(0,3).join(' ');}} h+='<div style="font-size:.65rem;color:'+(pv.index===1?'var(--accent2)':'var(--muted)')+';margin-bottom:2px">'+(pv.index===1?'⭐':'·')+' '+scoreStr+(pvSAN?' <span style="font-family:monospace;font-size:.6rem">'+_esc(pvSAN)+'</span>':'')+'</div>';}h+='</div>';} h+='</div>';}}// Player bar
+if(_multiPVLines.length>=1){h+='<div style="margin-top:6px;border-top:1px solid rgba(212,160,23,.15);padding-top:6px"><div style="font-size:.65rem;color:var(--muted);margin-bottom:4px">'+T('multi_analysis')+'</div>';for(const pv of _multiPVLines){let scoreStr='';if(pv.scoreMate!=null&&pv.scoreMate!==null){const m=Number.parseInt(pv.scoreMate,10);if(!Number.isNaN(m))scoreStr=m>0?'#+'+Math.abs(m):m<0?'#-'+Math.abs(m):'#0';}else if(pv.scoreCp!=null&&pv.scoreCp!==null){const pd=(pv.scoreCp/100).toFixed(1);scoreStr=(pv.scoreCp>0?'+':'')+pd;} let pvSAN='';if(pv.pv){try{const _conv=_convertPVtoSAN(pv.pv,gameState);pvSAN=_conv.sanMoves.split(/\s+/).slice(0,3).join(' ');}catch(e){pvSAN=pv.pv.split(/\s+/).slice(0,3).join(' ');}} h+='<div style="font-size:.65rem;color:'+(pv.index===1?'var(--accent2)':'var(--muted)')+';margin-bottom:2px">'+(pv.index===1?'⭐':'·')+' '+scoreStr+(pvSAN?' <span style="font-family:monospace;font-size:.6rem">'+_esc(pvSAN)+'</span>':'')+'</div>';}h+='</div>';} h+='</div>';}}// Player bar
 return h;
 } // end _renderInfoBars
 
@@ -3634,6 +3548,24 @@ if(ctx.containerScrolls.length>0){
  *
  * @param {boolean} wasEcoFocused - Whether ECO search was focused before render
  */
+// v1.2.3 round-19: One-time startup hint — "long-press the board toggles
+//   board anti-shake" (the sensor stabilization added in v1.0.5 Rev49, see
+//   the long-press handler at the top of this file). Fires once per app
+//   launch (page load) on the first completed render after the loading
+//   overlay is gone — i.e. the moment the board is actually visible.
+//   _hideLoadingOverlay (ai-bridge.js) also schedules a delayed call so the
+//   hint still appears when no render follows soon (e.g. a long first AI
+//   think before onBestMove triggers the next render).
+let _boardDebounceHintShown=false;
+function _maybeShowBoardDebounceHint(){
+  if(_boardDebounceHintShown)return;
+  if(document.getElementById('_loadingOverlay'))return;
+  _boardDebounceHintShown=true;
+  setTimeout(function(){
+    try{showToast(T('board_debounce_hint'),4500);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  },400);
+}
+
 function _postRenderFinalize(wasEcoFocused){
 _cachedBwrap=null;_cachedSvgEl=null;_cachedSvgLines=[];_cachedArrowKey='';_cachedCtrlCard=null;
 _prevHoverSq=hoveredSquare?{row:hoveredSquare.row,col:hoveredSquare.col}:null;
@@ -3669,11 +3601,16 @@ if(reviewMode && reviewStep !== _lastReviewStepScrolled){
   });
 }
 _updateArrows(hoveredSquare||selectedSquare);
-_invalidateElCache(); _sqElCache = null; _prevBoardVersion = gameState.boardVersion || 0;
-_evalDispPrevSig = '';
+_invalidateElCache(); _sqElCache = null;
 _rListEl = document.getElementById('reviewMovesList');
 if(wasEcoFocused){const el=document.getElementById('ecoSearch');if(el){el.focus();_ecoSearchFocused=true;try{el.setSelectionRange(el.value.length,el.value.length)}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}}}
+// v1.2.3 round-18: restore SP-ID input focus after keystroke-triggered
+//   re-render (same pattern as the ECO search restore above).
+if(_spidEditing){_spidEditing=false;const _spEl=document.getElementById('spidInput');if(_spEl&&document.activeElement!==_spEl){_spEl.focus();try{_spEl.setSelectionRange(_spEl.value.length,_spEl.value.length)}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}}}
 if(showNewGameDialog&&dlgOpeningId&&!reviewMode){setTimeout(()=>{const list=document.querySelector('.op-list');if(list){const active=list.querySelector('.op-btn.act');if(active)active.scrollIntoView({block:'center',behavior:'smooth'})}},50)}
+// v1.2.3 round-19: fire the one-time board anti-shake hint once the board
+//   is visible (no-op until the loading overlay is gone; see above).
+_maybeShowBoardDebounceHint();
 }
 
 // v1.2.1 round-13 (S3776): renderInternal refactored into a thin orchestrator.
@@ -3861,10 +3798,11 @@ function updateAfterMove(){requestEngineEval();
   _updateArrows(hoveredSquare||selectedSquare);
 
   // v1.0.8 PHASE 22: landing animation state removed (Web Animations API).
-  // Use markDirty for delayed panel/moves update.
   // Schedule a full render later for move history + other side panel updates.
+  //   (v1.2.3 round-20: markDirty removed as dead code — it always routed to
+  //   render() anyway, so call render() directly.)
   if(_fullRenderTimer)clearTimeout(_fullRenderTimer);
-  _fullRenderTimer=setTimeout(()=>{if(!animationInProgress&&!isAIThinking)markDirty(DIRTY_MOVES|DIRTY_PANEL|DIRTY_EVAL);},350);
+  _fullRenderTimer=setTimeout(()=>{if(!animationInProgress&&!isAIThinking)render();},350);
   }catch(e){render();}
 }
 
@@ -4226,1054 +4164,8 @@ if(!showCtrlMap){var cc=document.getElementById('ctrl-info-card');if(cc)cc.style
   }
 }
 
-function sqClick(r,c){
-if(animationInProgress)return;
-// v1.0.5 Round-6 Rev49: if a long-press just fired (toggling stabilization),
-// suppress this click so the square doesn't also get selected/deselected.
-if(window._suppressNextBoardClick){
-  window._suppressNextBoardClick=false;
-  return;
-}
-if(setupMode){setupClick(r,c);return}
-const pos={row:r,col:c};const p=gameState.board[r][c];
-const canMove=!gameOver&&!isAIThinking&&!pendingPromotion&&!reviewMode&&gameState.currentTurn===playerColor;
-// v1.0.6 NEW: King-then-rook castling gesture.
-// When the user has selected a king that can castle, the castling-capable
-// rooks are visually marked (see _getCastlingRookSquares() below). Clicking
-// a marked rook triggers the castling move directly — this is essential for
-// Chess960 where some positions can ONLY be castled this way (e.g. when the
-// king's destination square is the same as the rook's source square, the
-// standard "click the king's destination" gesture is ambiguous).
-if(selectedSquare&&canMove){
-  const _selPiece=gameState.board[selectedSquare.row]&&gameState.board[selectedSquare.row][selectedSquare.col];
-  if(_selPiece&&_selPiece.type==='king'&&_selPiece.color===playerColor){
-    // Check if the clicked square is a castling rook for the selected king.
-    const _cr=_getCastlingRookForClick(selectedSquare,{row:r,col:c});
-    if(_cr){
-      // Trigger the castling move: king goes to col 6 (kingside) or col 2 (queenside).
-      const _kingToCol=_cr.side==='kingside'?6:2;
-      const _kingTo={row:selectedSquare.row,col:_kingToCol};
-      // Verify this is a legal move (defensive — _getCastlingRookForClick
-      // already checked legality, but double-check here).
-      if(legalSet.has(_kingTo.row*8+_kingTo.col)){
-        executeMove(selectedSquare,_kingTo);
-        return;
-      }
-    }
-  }
-}
-// Toggle deselection — clicking the already-selected piece deselects it.
-// Previously, clicking the selected piece would re-select it (same legalMvs, same highlight),
-// making it impossible to deselect. This was especially problematic after AI hint auto-selection,
-// where the user had no way to clear the selection highlight.
-if(selectedSquare&&selectedSquare.row===r&&selectedSquare.col===c){
-  selectedSquare=null;legalMvs=[];legalSet=new Set();
-  HapticManager.fire('BUTTON_PRESS');
-  // v1.0.8 PHASE 22 supplement: deselect sound (下行短音)
-  try{if(typeof playSound==='function')playSound('deselect');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-  _updateBoardLightweight();return
-}
-if(selectedSquare&&canMove){
-  const isLegal=legalSet.has(r*8+c);
-  if(isLegal){
-    const mp=gameState.board[selectedSquare.row][selectedSquare.col];
-    if(mp&&mp.type==='pawn'){
-      const pr=mp.color==='white'?0:7;
-      if(r===pr){pendingPromotion={from:selectedSquare,to:pos,piece:mp};render();return}
-    }
-    executeMove(selectedSquare,pos);
-    return
-  }
-  // Clicked a non-legal square while a piece is selected.
-  // If it's another own piece, switch selection to it (not "simultaneous selection").
-  // If it's an empty/opponent square (not a legal move target), deselect the old
-  // piece AND select the new square in one step — this shows control info for the
-  // clicked square while clearing the old selection highlight.
-  if(p&&p.color===playerColor){
-    selectedSquare=pos;legalMvs=legalMoves(gameState,pos);legalSet=new Set(legalMvs.map(m=>m.row*8+m.col));
-    HapticManager.fire('PIECE_SELECT');
-    // v1.0.8 PHASE 22 supplement: piece-select sound (清脆短音)
-    try{if(typeof playSound==='function')playSound('select');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-    _updateBoardLightweight();return
-  }
-  // Clicked empty/opponent square that's not a legal move → deselect old & select new
-  selectedSquare=pos;legalMvs=[];legalSet=new Set();
-  HapticManager.fire('BUTTON_PRESS');_updateBoardLightweight();return
-}
-// No piece currently selected — allow selecting own piece or any square for control info
-if(canMove&&p&&p.color===playerColor){selectedSquare=pos;legalMvs=legalMoves(gameState,pos);legalSet=new Set(legalMvs.map(m=>m.row*8+m.col));HapticManager.fire('PIECE_SELECT');
-  // v1.0.8 PHASE 22 supplement: piece-select sound (清脆短音)
-  try{if(typeof playSound==='function')playSound('select');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-  _updateBoardLightweight();return}
-// Clicked empty/opponent square with no selection — allow for control info, but prefer deselect
-if(selectedSquare){selectedSquare=null;legalMvs=[];legalSet=new Set();HapticManager.fire('BUTTON_PRESS');_updateBoardLightweight();return}
-selectedSquare=pos;legalMvs=[];legalSet=new Set();HapticManager.fire('BUTTON_PRESS');_updateBoardLightweight();return
-}
 
-// v1.0.6 NEW: King-then-rook castling gesture helpers.
-// When a king is selected and can castle, we identify the rook(s) that
-// participate in castling. These rooks are visually marked (golden ring)
-// so the user can click them to trigger castling — essential for Chess960
-// positions where the king's castling destination is occupied by the rook.
-// v1.0.6 CLEANUP: _getCastlingRookSquares() was removed (dead code after
-// renderInternal switched to calling _computeCastlingRookSetForSelection
-// directly). The .side field it returned was never used by any caller.
-/**
- * Given a clicked square, returns the castling side ('kingside'|'queenside')
- * if the clicked square is a castling rook for the selected king. Null otherwise.
- */
-function _getCastlingRookForClick(kingPos,clickedPos){
-  if(!kingPos||!clickedPos||!gameState||!gameState.board)return null;
-  try{
-  const _p=gameState.board[kingPos.row]&&gameState.board[kingPos.row][kingPos.col];
-  if(!_p||_p.type!=='king'||_p.color!==playerColor)return null;
-  const _moves=legalMvs||[];
-  for(const m of _moves){
-    if(m&&m.castle){
-      let rookCol=-1;
-      if(gameVariant !== undefined&&gameVariant==='chess960'&&typeof chess960CastlingRookMove==='function'){
-        try{
-          const rm=chess960CastlingRookMove(gameState,_p.color,m.castle);
-          if(rm)rookCol=rm.rookFrom;
-        }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-      }else{
-        rookCol=m.castle==='kingside'?7:0;
-      }
-      if(rookCol>=0&&clickedPos.row===kingPos.row&&clickedPos.col===rookCol){
-        return {side:m.castle};
-      }
-    }
-  }
-  return null;
-  }catch(e){return null;}
-}
-function executeMove(from,to,promotion){
-try{
-// Handle Ponder mode — if engine is pondering, check if the move matches the ponder move
-if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.isEngineReady==='function'&&AndroidBridge.isEngineReady()&&typeof AndroidBridge.isPondering==='function'){
-  if(AndroidBridge.isPondering()){
-    // v1.0.2 CRITICAL FIX (audit): getLastPonderMove() is a one-shot read that
-    // CLEARS the Java field after returning. onBestMove() already consumed it
-    // (ai-bridge.js:778) and stored the value in _lastPonderMoveFromEngine.
-    // Re-calling getLastPonderMove() here always returned null → ponderHit()
-    // never fired → every player move stopPonder()'d and started a fresh
-    // search, defeating the entire ponder optimization.
-    // Fix: use the JS-side cached value (_lastPonderMoveFromEngine) instead.
-    const ponderMove=(typeof _lastPonderMoveFromEngine!=='undefined'&&_lastPonderMoveFromEngine)?_lastPonderMoveFromEngine:null;
-    // v1.0.2 FIX: Map promotion piece-type names to UCI letters (q/r/b/n).
-    // Previously this appended the full piece name (e.g., "e7e8queen") which
-    // never matched the engine's UCI ponder move (e.g., "e7e8q"), so ponderHit
-    // never fired for any promotion move — every promotion fell back to
-    // stopPonder() + a fresh search, defeating the ponder optimization.
-    const promoChar=promotion?{queen:'q',rook:'r',bishop:'b',knight:'n'}[promotion]||'':'';
-    const moveUCI=String.fromCodePoint(97+from.col)+(8-from.row)+String.fromCodePoint(97+to.col)+(8-to.row)+promoChar;
-    if(ponderMove&&ponderMove===moveUCI){
-      // Player played the expected move — hit ponder and continue analysis
-      AndroidBridge.ponderHit();
-    }else{
-      // Player played a different move — stop pondering
-      AndroidBridge.stopPonder();
-    }
-  }
-}
-// Clear stale ponder info — player's move invalidates previous ponder data
-// FIX: Also update DOM immediately to prevent stale ponder info from lingering
-// in #ai-ponder-info until the next render() call
-// Increment _ponderGen to invalidate any in-flight onPonderProgress() callbacks
-_ponderGen++;_ponderBarInfo='';_ponderMoveSAN='';_pendingPonderMoveUCI=null;
-if(typeof _updateAIThinkDisplay==='function')_updateAIThinkDisplay();
-// Clear Stockfish bridge emergency timer (move is being executed)
-const piece=gameState.board[from.row][from.col];
-if(piece&&piece.type==='pawn'&&!promotion){
-const pr=piece.color==='white'?0:7;
-if(to.row===pr){pendingPromotion={from,to,piece};render();return}
-}
-if(!piece)return;
-// Defense-in-depth: only pawns can be promoted — discard spurious promotion
-// from any source (e.g., corrupted UCI parsing, tablebase, etc.)
-if(promotion&&piece.type!=='pawn')promotion=null;
-stateHistory.push({state:cloneS(gameState),selectedSquare:selectedSquare?{...selectedSquare}:null,legalMvs:[...legalMvs],moveRecords:[...moveRecords],lastMove:lastMove?{...lastMove}:null,gameOver});
-if(stateHistory.length>200)stateHistory.shift();
-// v1.0.6 FIX: Build mv with the castle flag preserved from legalMvs.
-// Without this, makeMv/moveAlg/_castleSide cannot detect Chess960 castling
-// where the king moves only 1 column (e.g. f1→g1). We look up the matching
-// legal move (same from/to) and copy its castle flag. This is O(n) but n is
-// small (max ~27 legal moves for a king) and executeMove is called at most
-// once per user interaction.
-const mv={from,to,piece,promotion};
-if(piece.type==='king'){
-  // v1.1.2 PHASE 71 (bug fix): Primary source of the castle flag is now
-  // `to.castle` (set by uciToCoords when it rewrites Chess960 castling UCI
-  // moves, and by pseudoMoves for user-click castling). This covers AI moves
-  // where `legalMvs` is empty (cleared after the player's previous move) —
-  // previously the legalMvs lookup failed silently and `mv.castle` was
-  // undefined, causing `_castleSide` to fall back to the distance heuristic
-  // which rejects 0-distance king moves (king already on g1/c1) → king nulled
-  // in `makeMv`. The legalMvs lookup remains as a fallback for the case where
-  // `to` is a plain {row,col} object without the castle flag.
-  if(to&&to.castle){
-    mv.castle=to.castle;
-  }else{
-    for(const _lm of (legalMvs||[])){
-      if(_lm&&_lm.castle&&_lm.row===to.row&&_lm.col===to.col){
-        mv.castle=_lm.castle;
-        break;
-      }
-    }
-  }
-}
-const ns=makeMv(gameState,mv);const notation=moveAlg(gameState,mv,ns);
-// v1.0.6: Use _castleSide() for Chess960 correctness (king may move 1 col).
-const opp=OPP_COLOR[piece.color];const ic=inCheck(ns.board,opp,opp==='white'?ns.wk:ns.bk);const cast=!!(typeof _castleSide==='function'&&_castleSide(mv));
-const epCap=piece.type==='pawn'&&gameState.enPassantTarget&&to.row===gameState.enPassantTarget.row&&to.col===gameState.enPassantTarget.col;
-const _elapsed=((Date.now()-_turnStartTime)/1000).toFixed(1);moveRecords.push({notation,from:posAlg(from),to:posAlg(to),piece,captured:gameState.board[to.row][to.col]||(epCap?gameState.board[piece.color==='white'?to.row+1:to.row-1][to.col]:undefined),isCheck:ic,isCastling:cast,promotion:promotion||null,time:_elapsed});_turnStartTime=Date.now();
-// v1.0.4 EXPANSION (this round): commit the elapsed time to the moving side's clock.
-// This applies Fischer increment / Bronstein-US-delay deduction rules.
-if(typeof recordMoveEnd==='function')recordMoveEnd(piece.color);
-// v1.0.4 EXPANSION (this round): compute and cache visual annotations
-// ([%csl]/[%cal]) for this move. The cache key is the moveRecords index.
-// Selection rules:
-//   - Blue arrows: top piece→square control paths (e.g., knight to center)
-//   - Red arrow: if this move gives check, the checker → checked king path
-//   - Green arrows: the checked king's escape squares
-//   - Yellow arrows: if this move threatens the opponent's queen, the mover → queen path
-if(typeof _computeAndCacheVisualAnnotations==='function')_computeAndCacheVisualAnnotations(moveRecords.length-1);
-// v1.0.8 PHASE 22: Sound dispatch — animateMove now triggers the per-piece
-// personified sound (playPawn/playKnight/playBishop/playRook/playQueen/
-// playKing), the capture sound (playCapture), and the castle rook-move
-// sound (playCastleRookMove) internally via _playPieceSound() /
-// _playCastleSound(). So we only handle the SPECIAL cases here that
-// animateMove doesn't cover:
-//   - promote: playSound('promote')  — promotion arpeggio (animateMove doesn't
-//                                       know about promotion; it animates the
-//                                       pawn reaching the 8th rank)
-//   - check:   playSound('check')    — check alert tone (overlaid on top of
-//                                       the piece sound; animateMove plays the
-//                                       mover's piece sound, then this adds
-//                                       the check alert)
-// Haptics for all move types are fired here (animateMove doesn't do haptics).
-// v1.0.8 PHASE 26: piece-specific haptics for pawn/queen/king to match the
-//   personified animation + sound. Pawn = light quiver (瑟瑟发抖),
-//   queen = massive impact (铿锵有声), king = heavy regal (威严庄重).
-// Sounds don't cancel — fire both promote+check if both apply.
-// Haptics DO cancel (Android vibrator) — fire only one per turn.
-if(promotion)playSound('promote');
-if(ic)playSound('check');
-// Haptics DO cancel (Android vibrator) — fire only one, priority: special > castle > capture > piece.
-if(promotion)HapticManager.fire('PROMOTION');
-else if(ic)HapticManager.fire('CHECK_ALERT');
-else if(cast)HapticManager.fire('CASTLE');
-else if(gameState.board[to.row][to.col]||epCap)HapticManager.fire('PIECE_CAPTURE');
-else HapticManager.fire(piece.type.toUpperCase()+'_MOVE');
-// v1.0.6: Set _lastAnimMv so animateMove can detect castling via _castleSide()
-// (needed for Chess960 where the king may move only 1 column when castling).
-_lastAnimMv=mv;
-animateMove(from,to,SYM[piece.color][piece.type],piece.type,!!(gameState.board[to.row][to.col]||epCap),ic,piece.color);gameState=ns;_cachedStatus=null;_cachedStatusKey='';lastMove={from,to};selectedSquare=null;legalMvs=[];legalSet=new Set();
-// v1.0.8 PHASE 24 (bug fix): Immediately mark eval as stale so the eval bar
-// shows "分析中" during the 560ms animation window, NOT the pre-move eval.
-// Previously only _updateEvalDisplay() was called (which re-renders with the
-// STALE eval data); _resetEvalState() was deferred to requestEngineEval()
-// inside the setTimeout callback, leaving the bar showing the old eval.
-_resetEvalState();
-_updateEvalDisplay();
-
-// Heavy computation deferred until after animation completes
-// v1.0.2 FIX (audit): Capture gameState.hash BEFORE the timeout — if the user
-// undoes/redoes/flips during the 420ms animation window, the stale callback
-// would otherwise compute gameStatus() on the OLD state and overwrite the new
-// gameOver/_cachedStatus, manifesting as a "ghost" game-over banner.
-// Also moved doAIMove() out of the rAF callback into setTimeout(0) so the
-// browser can paint the post-move UI before the engine starts computing.
-// v1.0.8 PHASE 26: ANIMATION_DEFER_MS=600 matches the v1.0.8 PHASE 26 animation
-//   system. The two longest piece animations are King (560ms) and Queen (520ms).
-//   King triggers heavy shake (SHAKE_HEAVY_DUR=450ms); Queen triggers massive
-//   shake (SHAKE_MASSIVE_DUR=620ms). The massive shake extends beyond the queen
-//   animation, so we use 600ms (queen 520 + 80 buffer) to let the shake settle
-//   before the deferred callback fires. For king, 560+40=600 also works.
-//   If this fires too early, updateAfterMove() calls render() which gets
-//   throttled by the animationInProgress guard, so it is safe — but increasing
-//   the delay avoids the unnecessary throttle cycle.
-const ANIMATION_DEFER_MS=600;
-// v1.0.8 PHASE 49: when prefers-reduced-motion is on, animateMove returns
-//   immediately (no WAAPI motion, no shake) — see game-logic.js:1064-1073.
-//   The 600ms defer was sized to let the longest animation + shake settle
-//   before updateAfterMove fires. With no animation, 600ms is pure latency
-//   that delays the AI's reply and the game-over check for no reason.
-//   Reduce to 30ms (one frame + tiny buffer) under reduced-motion.
-let _deferMs=ANIMATION_DEFER_MS;
-try{if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches)_deferMs=30;}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-const _hashAtSched=gameState.hash;
-setTimeout(()=>{
-try{
-if(gameState.hash!==_hashAtSched)return; // stale — abort
-const gsr=!setupMode&&gameStatus(gameState);
-const _gsKey=gameState.hash+'|'+gameState.currentTurn;_cachedStatus=gsr;_cachedStatusKey=_gsKey;
-if(gsr&&!gameOver){
-gameOverSoundPlayed=false;_applyGameOver(gsr);
-requestAnimationFrame(()=>{updateAfterMove();});
-// v1.0.2 NEW FEATURE: After a player move, check if any pending engine PV
-// has diverged from the actual game. This must be called AFTER the move is
-// pushed to moveRecords (which happens before this setTimeout).
-// We call it here (in the deferred callback) because the move record needs
-// to be fully populated first.
-try{if(typeof _checkPVDivergence==='function')_checkPVDivergence();}catch(e){console.warn('PVDivergence check failed:',e);}
-try{if(typeof _checkPVDivergenceSANs==='function')_checkPVDivergenceSANs();}catch(e){console.warn('PVDivergenceSANs check failed:',e);}
-if(!gameOver&&gameState.currentTurn!==playerColor){setTimeout(doAIMove,0);}
-}
-}catch(e){console.error('executeMove deferred callback error:',e)}
-},_deferMs);
-}catch(e){console.error('executeMove error:',e)}}
 let _redoStack=[]; // Stack for redo (stores states pushed by undoMove)
-// P3: Common animation cleanup for undo/redo/flip operations
-function _clearAnimationState(){
-  // v1.0.8 PHASE 23: clear _activeAnimEls and remove any leftover .move-anim
-  //   overlay nodes from the DOM. Without this, if the user undoes/flips during
-  //   an animation, _reattachActiveAnimations() (called by render) would
-  //   re-append the stale overlay to the new DOM, showing a ghost piece.
-  //   Also bump _animGen so any in-flight _finishAnim closure self-invalidates.
-  animationInProgress=false;
-  _activeAnimEls=[];
-  ++_animGen;
-  try{
-    const bwrap=_cachedBwrap||(_cachedBwrap=document.querySelector('.bwrap'));
-    if(bwrap){
-      const old=bwrap.querySelectorAll('.move-anim');
-      for(let i=0;i<old.length;i++)old[i].remove();
-    }
-  }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-  if(_fullRenderTimer){clearTimeout(_fullRenderTimer);_fullRenderTimer=0;}
-}
-function undoMove(){
-if(isAIThinking&&!setupMode)return;
-// v1.0.2 FIX: When undo is at the end (no more history), give BUTTON_PRESS
-// feedback instead of the normal undo (PIECE_SELECT) feedback.
-if(stateHistory.length===0){
-  HapticManager.fire('BUTTON_PRESS');
-  // v1.0.8 PHASE 22 supplement: error sound (nothing to undo)
-  try{if(typeof playSound==='function')playSound('error');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-  return;
-}
-// v1.0.8 PHASE 22 supplement: undo sound (逆向回旋音)
-try{if(typeof playSound==='function')playSound('undo');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-_cachedStatus=null;_cachedStatusKey='';_updateEvalDisplay(); // _resetEvalState now inside requestEngineEval()
-_clearAnimationState();
-if(pendingPromotion)pendingPromotion=null;
-let steps=0;
-// Track the from-position of the most recent PLAYER move being undone.
-// v1.0.1 FIX: We must capture `lastMove` BEFORE popping — that's the move actually
-// being undone in this iteration. After the pop, gameState is restored to the
-// PRE-move state, and the piece that moved is now BACK at lastMove.from.
-// (The previous code read `prev.lastMove.from`, which is the move from BEFORE the
-// one being undone — that pointed to the wrong square, so auto-select never fired.)
-let _playerMoveFrom=null;
-while(stateHistory.length>0&&steps<3){
-// Capture the move being undone BEFORE we pop the state history entry.
-// After we restore, gameState will be the pre-move state — and the piece
-// that was moved will be back at this from-square.
-const _undoneMove=lastMove?{from:{row:lastMove.from.row,col:lastMove.from.col},to:{row:lastMove.to.row,col:lastMove.to.col}}:null;
-const prev=stateHistory.pop();
-// Validate prev before using it — if invalid, push back and stop
-if(!prev||!prev.state){
-  console.error('undoMove: invalid stateHistory entry, stopping undo');
-  // Push back the invalid entry to prevent data loss
-  if(prev)stateHistory.push(prev);
-  break;
-}
-// Push current state to redo stack BEFORE restoring
-_redoStack.push({state:cloneS(gameState),moveRecords:[...moveRecords],lastMove:lastMove?{...lastMove}:null});
-gameState=prev.state;
-// If the move being undone was a PLAYER move, capture its from-position.
-// The piece is now back at that square in the restored gameState.
-if(_undoneMove&&_undoneMove.from){
-  const fromRow=_undoneMove.from.row,fromCol=_undoneMove.from.col;
-  const pieceAtFrom=gameState.board[fromRow]&&gameState.board[fromRow][fromCol];
-  if(pieceAtFrom&&pieceAtFrom.color===playerColor){
-    _playerMoveFrom={row:fromRow,col:fromCol};
-  }
-}
-moveRecords=prev.moveRecords||[];lastMove=prev.lastMove;gameOver=null;_gameOverStatusKey=null;gameOverSoundPlayed=false;
-steps++;
-if(gameState.currentTurn===playerColor)break;
-}
-// v1.0.5 Round-6 Rev64 (2026.6.27): Invalidate cached PGN-related data for the
-// undone moves. After undo, moveRecords is shorter; any cache entries keyed by
-// move index beyond the new length correspond to moves that no longer exist.
-// Without this, the user could undo a move, then re-play a different move at
-// the same index, and see stale eval/annotation data from the undone move.
-//
-// Three caches are invalidated:
-//   1. _reviewEvalCache — keyed by reviewStep (0-based since v1.0.8 Phase 15:
-//      step 0 = initial position, steps 1..N = positions after each move).
-//      Entries with key > moveRecords.length are for undone moves and must
-//      be deleted. Step 0 is always retained (initial position doesn't
-//      change on undo). This is the "后台实时缓存的PGN" the user referred
-//      to — the real-time per-move evaluation cache that backs the
-//      review-mode eval bar and the PGN's [%eval ...] annotations.
-//   2. _visualAnnotationsCache — keyed by moveIdx (0-based). Entries with
-//      key >= moveRecords.length are for undone moves and must be deleted.
-//      These back the [%csl]/[%cal] annotations in the PGN.
-//   3. _cachedOriginalPGN — if set (from a PGN import), it represents the
-//      imported text. After undo, the current game diverges from the import,
-//      so we null it to ensure _buildPGNString() (which reads moveRecords)
-//      is used for all subsequent PGN operations (stats page, 📚 save, etc.).
-//      This was already partially handled by openStatsPage()/_pgnCacheSaveCurrent()
-//      which always use _buildPGNString(true), but nulling here is belt-and-
-//      suspenders and makes the intent explicit.
-//
-// Note: _redoStack preserves the undone moves' data so redoMove() can restore
-// them. We do NOT clear _redoStack here — that would make undo irreversible.
-// If the user redoes, the cache entries will be re-created as needed (eval
-// re-requested, annotations re-computed).
-if(typeof _invalidateCachesForUndoneMoves==='function'){
-  _invalidateCachesForUndoneMoves(moveRecords.length);
-}else{
-  // Inline fallback (in case the function isn't defined yet — defensive)
-  try{
-    if(_reviewEvalCache !== undefined&&_reviewEvalCache){
-      const _keysToDelete=[];
-      if(typeof _reviewEvalCache.keys==='function'){
-        for(const k of _reviewEvalCache.keys()){
-          if(typeof k==='number'&&k>moveRecords.length)_keysToDelete.push(k);
-        }
-      }
-      for(const k of _keysToDelete)_reviewEvalCache.delete(k);
-    }
-  }catch(e){console.warn('undoMove: eval cache invalidation failed',e);}
-  try{
-    if(typeof _visualAnnotationsCache!=='undefined'&&_visualAnnotationsCache){
-      const _vaKeysToDelete=[];
-      for(const k of _visualAnnotationsCache.keys()){
-        if(typeof k==='number'&&k>=moveRecords.length)_vaKeysToDelete.push(k);
-      }
-      for(const k of _vaKeysToDelete)_visualAnnotationsCache.delete(k);
-    }
-  }catch(e){console.warn('undoMove: visual annotation cache invalidation failed',e);}
-  try{
-    if(typeof _cachedOriginalPGN!=='undefined')_cachedOriginalPGN=null;
-  }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-}
-// After undo, select the piece at the player's original (from) position.
-// This is the position the piece was at BEFORE the player moved it, so the user
-// can see its legal moves and potentially make a different move.
-// v1.0.1: Removed the fallback that selected lastMove.to — that was pointing
-// to an AI piece (wrong color), so selection silently failed. Now we only
-// select if we successfully tracked a player move's from-square.
-if(_playerMoveFrom&&!gameOver){
-  const tp=gameState.board[_playerMoveFrom.row]&&gameState.board[_playerMoveFrom.row][_playerMoveFrom.col];
-  if(tp&&tp.color===playerColor){
-    selectedSquare={row:_playerMoveFrom.row,col:_playerMoveFrom.col};
-    legalMvs=legalMoves(gameState,selectedSquare);legalSet=new Set(legalMvs.map(m=>m.row*8+m.col));
-    HapticManager.fire('PIECE_SELECT');
-  }else{
-    selectedSquare=null;legalMvs=[];legalSet=new Set();
-  }
-}else{
-  selectedSquare=null;legalMvs=[];legalSet=new Set();
-}
-render();requestEngineEval();if(!gameOver&&!setupMode&&gameState.currentTurn!==playerColor){doAIMove();}}
-function redoMove(){
-if(isAIThinking)return;
-// v1.0.2 FIX: When redo is at the end (empty redo stack), give BUTTON_PRESS
-// feedback instead of the normal redo feedback — consistent with undo behavior.
-if(_redoStack.length===0){
-  HapticManager.fire('BUTTON_PRESS');
-  // v1.0.8 PHASE 22 supplement: error sound (nothing to redo)
-  try{if(typeof playSound==='function')playSound('error');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-  return;
-}
-// v1.0.8 PHASE 22 supplement: redo sound (正向回旋音)
-try{if(typeof playSound==='function')playSound('redo');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-_cachedStatus=null;_cachedStatusKey='';_updateEvalDisplay();
-_clearAnimationState();
-// Pop from redo stack and restore
-const nxt=_redoStack.pop();
-// Validate redo entry before using it
-if(!nxt||!nxt.state){
-  console.error('redoMove: invalid redoStack entry, discarding');
-  render();return;
-}
-// Save current state to history so we can undo again
-stateHistory.push({state:cloneS(gameState),moveRecords:[...moveRecords],lastMove:lastMove?{...lastMove}:null,selectedSquare:null});
-gameState=nxt.state;
-// Preserve selectedSquare after redo
-if(selectedSquare){
-  const sp=gameState.board[selectedSquare.row][selectedSquare.col];
-  if(sp&&sp.color===playerColor&&!gameOver){
-    legalMvs=legalMoves(gameState,selectedSquare);legalSet=new Set(legalMvs.map(m=>m.row*8+m.col));
-  }else{
-    selectedSquare=null;legalMvs=[];legalSet=new Set();
-  }
-}else{legalMvs=[];legalSet=new Set();}
-moveRecords=nxt.moveRecords;lastMove=nxt.lastMove;gameOver=null;_gameOverStatusKey=null;gameOverSoundPlayed=false;
-// v1.0.2 FIX (first-principles): Redo must NOT trigger AI.
-// The redo stack contains moves that were ALREADY played (and then undone).
-// Each redo pops one entry and restores the corresponding state. Undo always
-// runs in pairs (player move + AI reply) so that after undo it's the player's
-// turn; therefore redo also runs in pairs (AI reply + player move), so after
-// redo it's STILL the player's turn — AI has nothing to do.
-// The previous `if(gameState.currentTurn!==playerColor){doAIMove();}` was a
-// misfire: in the rare case where the redo stack only had ONE entry (e.g.,
-// player undid right after their own move, before AI replied), this would
-// trigger a FRESH AI search instead of letting the user redo the AI's
-// pre-recorded reply from the stack — corrupting the redo stack and losing
-// the original AI move. Removed entirely; requestEngineEval() still refreshes
-// the eval bar for the restored position.
-render();requestEngineEval();
-// v1.0.2: Haptic feedback for successful redo (matching undo's PIECE_SELECT)
-HapticManager.fire('PIECE_SELECT');
-}
-function flipBoard(){
-  // v1.0.8 PHASE 22 supplement: flip sound (嗖声)
-  try{if(typeof playSound==='function')playSound('flip');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-  // v1.0.8 PHASE 24 (bug fix): clear animation state so a mid-animation flip
-  //   doesn't leave an overlay at the wrong orientation.
-  _clearAnimationState();
-  playerColor=OPP_COLOR[playerColor];
-  selectedSquare=null;legalMvs=[];legalSet=new Set();
-  _cachedBwrap=null;
-  render();
-  requestEngineEval();
-  // If after flip it's AI's turn, trigger AI move
-  if(!gameOver&&!setupMode&&!isAIThinking&&gameState.currentTurn!==playerColor){doAIMove();}
-  showToast(playerColor==='white'?T('view_white'):T('view_black'));
-}
-// === Quick free opening: start new game with current color, no opening ===
-function quickFreeOpening(){
-  if(isAIThinking)return;
-  // v1.0.8 PHASE 7: If in setup mode, exit setup FIRST before starting a new
-  // game. Previously, startGame() replaced gameState with initState() but
-  // left setupMode=true. When the user then exited setup, exitSetup() ran
-  // validateSetupPosition() on the new (standard) gameState which had no
-  // setupCastleMarks — causing _validateSetupCastleMarks to reset ALL
-  // castlingRights to false, making the 🔁 markers disappear.
-  // Fix: clear setupMode and related state BEFORE calling startGame(), so
-  // exitSetup() is never called on the new gameState.
-  if(typeof setupMode!=='undefined'&&setupMode){
-    setupMode=false;
-    setupMarkerMode=null;
-    setupPiece=null;
-    setupErrors=[];
-    setupHistory=[];
-    setupRedoStack=[];
-  }
-  showNewGameDialog=false;
-  dlgPlayerColor=playerColor;
-  dlgOpeningId=null;
-  dlgBookMoves=useBookMoves;
-  startGame();
-  showToast(T('new_game_free'));
-}
-// === Toggle sound on/off (toolbar button) ===
-function toggleSound(){
-  soundOn=!soundOn;
-  try{if(typeof Store!=='undefined'&&Store&&typeof Store.dispatch==='function')Store.dispatch('TOGGLE_SOUND',soundOn);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-  const btn=document.getElementById('btnSound');
-  if(btn)btn.innerHTML=soundOn?'<span style=\"font-size:1.4rem\">🔊</span> '+T('sound'):'<span style=\"font-size:1.4rem\">🔇</span> '+T('sound');
-  HapticManager.fire(soundOn?'TOGGLE_ON':'TOGGLE_OFF');
-  // v1.0.8 PHASE 22 (bug fix): Sync audioEngine.enabled with soundOn. The
-  // ChessAudioEngine's play* methods check this.enabled, and _playPieceSound /
-  // _playCastleSound in game-logic.js check soundOn. Both must be in sync so
-  // that muting truly silences ALL sounds (including move/castle sounds that
-  // bypass playSound()). setEnabled() smoothly ramps the master gain to 0.
-  try{
-    if(typeof audioEngine!=='undefined'&&audioEngine){
-      audioEngine.setEnabled(soundOn);
-    }
-  }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-  // v1.0.8 PHASE 22 supplement: when turning sound ON, play a select sound
-  // so the user immediately hears confirmation that sound is now active.
-  // (When turning OFF, no sound — by definition.)
-  if(soundOn){
-    try{if(typeof playSound==='function')playSound('select');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-  }
-  showToast(soundOn?T('sound_on'):T('sound_off'),1200);
-}
-function doPromotion(type){if(pendingPromotion){try{executeMove(pendingPromotion.from,pendingPromotion.to,type);}finally{pendingPromotion=null;render();}}}
-function getHint(){
-  if(gameOver||isAIThinking||reviewMode||gameState.currentTurn!==playerColor)return;
-  if(!_engineReady){showToast(T('engine_not_ready'));return;}
-  // v1.0.8 PHASE 22 supplement: hint sound (柔和三角波) — requesting AI hint
-  try{if(typeof playSound==='function')playSound('hint');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-  isHintLoading=true;hintText='';_aiBarInfo='';aiThinkInfo=T('thinking');_hintBarInfo=T('thinking');
-  // Clear stale ponder info when starting a new hint search
-  _ponderGen++;_ponderBarInfo='';_ponderMoveSAN='';_pendingPonderMoveUCI=null;
-  // Clear previous MultiPV data
-  _multiPVLines=[];_multiPVResult=null;
-  _updateAIThinkDisplay();
-  render();
-  setTimeout(()=>{
-    if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.isEngineReady==='function'&&AndroidBridge.isEngineReady()){
-      try{AndroidBridge.engineHint((typeof _sanitizeFenForEngine==='function')?_sanitizeFenForEngine(generateFEN(gameState)):generateFEN(gameState));}catch(e){console.error('engineHint error:',e);isHintLoading=false;_hintBarInfo='';hintText=T('hint_request_failed');render();}
-      return;
-    }
-    isHintLoading=false;hintText=T('engine_unavailable_hint');
-    render();
-  },10);
-}
-// === Set AI difficulty level (toolbar difficulty button) ===
-// v1.2.3 P0 FIX (user-reported "Unexpected end of input" JS error):
-//   Refactored from an inline onclick attribute to a named global function.
-//   The previous inline onclick used a JS string literal of the form
-//   console.warn("...") inside a double-quoted HTML attribute. The HTML
-//   parser terminated the attribute at the first inner double quote,
-//   producing a truncated JS expression that the browser evaluated as
-//   "Uncaught SyntaxError: Unexpected end of input". Moving the logic
-//   into a function eliminates the entire class of HTML/JS quote-nesting
-//   bugs and makes the difficulty button testable.
-function setDifficultyLevel(level){
-  if(isAIThinking)return;
-  if(level===8){
-    openEngineConfig();
-    return;
-  }
-  aiLevel=level;
-  try{
-    if(typeof AndroidBridge!=='undefined'&&AndroidBridge&&typeof AndroidBridge.syncGameDifficulty==='function'){
-      AndroidBridge.syncGameDifficulty(level);
-    }
-  }catch(e){
-    console.warn('[AI] syncGameDifficulty failed:',e&&e.message?e.message:e);
-  }
-  render();
-}
-function toggleSetup(){if(isAIThinking&&!setupMode)return;_cachedStatus=null;_cachedStatusKey='';setupMode=!setupMode;
-// v1.0.8 PHASE 24 (bug fix): clear any in-progress animation.
-_clearAnimationState();
-// v1.0.8 PHASE 22 supplement: setup-toggle sound (木质放置音)
-try{if(typeof playSound==='function')playSound('setupToggle');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-// v1.0.2 FIX (audit): extract common reset out of both branches.
-gameOver=null;_gameOverStatusKey=null;
-if(setupMode){setupPiece='pawn';setupColor='white';selectedSquare=null;legalMvs=[];legalSet=new Set();lastMove=null;gameOverSoundPlayed=false;setupErrors=[];setupHistory=[];
-// v1.0.8: Initialize castle-marker set and en-passant marker on gameState.
-// If the user is entering setup mode from a normal game (e.g., to tweak the
-// position), seed the markers from the existing castlingRights + enPassantTarget
-// so the user sees the current state instead of an empty marker set.
-// For Chess960 positions, the king may be on any column; the kingside rook is
-// the rightmost same-color rook (col > king.col), the queenside rook is the
-// leftmost (col < king.col).
-if(!gameState.setupCastleMarks)gameState.setupCastleMarks=new Set();
-else gameState.setupCastleMarks.clear();
-if(typeof gameState.setupEpMark==='undefined')gameState.setupEpMark=null;
-// Seed castle markers from existing castlingRights — Chess960-aware.
-// For Chess960, the king may be on any column of the initial rank; the
-// kingside rook is the closest same-color rook to the right of the king,
-// the queenside rook is the closest to the left.
-if(gameState.castlingRights){
-  // White: scan rank 1 (row 7) for king and rooks
-  if(gameState.wk&&gameState.wk.row===7){
-    const wkCol=gameState.wk.col;
-    if(gameState.castlingRights.whiteKingside){
-      let best=-1;
-      for(let c=wkCol+1;c<8;c++){
-        const p=gameState.board[7][c];
-        if(p&&p.type==='rook'&&p.color==='white'){best=c;break;}
-      }
-      if(best>=0)gameState.setupCastleMarks.add(String(7*8+best));
-    }
-    if(gameState.castlingRights.whiteQueenside){
-      let best=-1;
-      for(let c=wkCol-1;c>=0;c--){
-        const p=gameState.board[7][c];
-        if(p&&p.type==='rook'&&p.color==='white'){best=c;break;}
-      }
-      if(best>=0)gameState.setupCastleMarks.add(String(7*8+best));
-    }
-  }
-  // Black: scan rank 8 (row 0) for king and rooks
-  if(gameState.bk&&gameState.bk.row===0){
-    const bkCol=gameState.bk.col;
-    if(gameState.castlingRights.blackKingside){
-      let best=-1;
-      for(let c=bkCol+1;c<8;c++){
-        const p=gameState.board[0][c];
-        if(p&&p.type==='rook'&&p.color==='black'){best=c;break;}
-      }
-      if(best>=0)gameState.setupCastleMarks.add(String(0*8+best));
-    }
-    if(gameState.castlingRights.blackQueenside){
-      let best=-1;
-      for(let c=bkCol-1;c>=0;c--){
-        const p=gameState.board[0][c];
-        if(p&&p.type==='rook'&&p.color==='black'){best=c;break;}
-      }
-      if(best>=0)gameState.setupCastleMarks.add(String(0*8+best));
-    }
-  }
-}
-// v1.0.8 PHASE 12 FIX: Seed ep marker from existing enPassantTarget.
-// BUG: The previous code did `{...gameState.enPassantTarget}` directly — but
-// enPassantTarget is the SKIPPED square (where a capturing pawn lands), while
-// setupEpMark must be the PAWN's current square (the double-stepped pawn).
-// This caused the ⚡ marker to render on the wrong square (the en-passant
-// capture target) when entering setup mode from an in-progress game.
-// Fix: convert enPassantTarget back to the pawn's square.
-//   White pawn (row 4) → enPassantTarget.row === 5
-//   Black pawn (row 3) → enPassantTarget.row === 2
-// We also defensively verify the pawn is actually on the expected square —
-// if not (state inconsistency), we leave setupEpMark null.
-if(gameState.enPassantTarget){
-  const _epT=gameState.enPassantTarget;
-  let _pawnRow=null;
-  if(_epT.row===5){
-    // White pawn just double-stepped; pawn sits on row 4
-    const _p=gameState.board[4]&&gameState.board[4][_epT.col];
-    if(_p&&_p.type==='pawn'&&_p.color==='white')_pawnRow=4;
-  }else if(_epT.row===2){
-    // Black pawn just double-stepped; pawn sits on row 3
-    const _p=gameState.board[3]&&gameState.board[3][_epT.col];
-    if(_p&&_p.type==='pawn'&&_p.color==='black')_pawnRow=3;
-  }
-  gameState.setupEpMark=_pawnRow!==null?{row:_pawnRow,col:_epT.col}:null;
-}else{
-  gameState.setupEpMark=null;
-}
-// Reset marker mode
-setupMarkerMode=null;
-}else{
-// Leaving setup mode via the toggle button (not via "Done"/exitSetup).
-// Re-validate castlingRights from setupCastleMarks before clearing them.
-// (_refreshStateAfterSetup reset them to all-false during setup.)
-if(gameState.setupCastleMarks&&gameState.setupCastleMarks.size>0){
-  try{validateSetupPosition(gameState);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-}
-setupMarkerMode=null;
-gameState.setupEpMark=null;
-gameState.setupCastleMarks=new Set();
-// v1.0.2 SIMPLIFY (audit): _applyGameOver() already no-ops for non-terminal
-// statuses (returns null from _gameOverStrFromStatus for 'check'/'ongoing').
-// The previous `if(_exitSt && _exitSt!=='play')` guard was checking against
-// a 'play' value that gameStatus() never returns — dead check. Simplified to
-// a direct call which internally decides whether to apply game-over.
-_applyGameOver(gameStatus(gameState));
-_sfEvalReady=false;_evalLoading=true;requestEngineEval();if(!gameOver&&gameState.currentTurn!==playerColor){doAIMove()}}render()}
-function exitSetup(){setupErrors=validateSetupPosition(gameState);if(setupErrors.length>0){render();return}
-_withPGNSaveCheck(_exitSetupImpl);}
-// v1.0.8 PHASE 29 (task 4 verification): Castle rights + en passant marker
-//   preservation audit. The full data flow has been verified end-to-end:
-//
-//   ENTER setup mode (toggleSetup, setupMode=false→true):
-//     1. setupCastleMarks.clear() then seeded from castlingRights — for each
-//        true right, find the same-color rook on the king's side (standard
-//        Chess960 convention: king between two rooks, so exactly one rook
-//        per side) and add its square to the Set.
-//     2. setupEpMark seeded from enPassantTarget — convert the SKIPPED square
-//        (enPassantTarget) back to the PAWN's square (row 4 for white, row 3
-//        for black), defensively verifying the pawn is actually there.
-//
-//   DURING setup mode:
-//     - _refreshStateAfterSetup resets castlingRights to all-false and
-//       enPassantTarget to null on every board mutation (place/delete piece,
-//       clear, reset, turn-side change, undo, redo). The markers
-//       (setupCastleMarks / setupEpMark) are PRESERVED across these resets
-//       so the user's input is not lost.
-//     - Deleting a piece also clears any marker on that square (setupClick).
-//
-//   EXIT setup mode (exitSetup → validateSetupPosition → _exitSetupImpl):
-//     1. _validateSetupCastleMarks: re-derives castlingRights from
-//        setupCastleMarks. For each marker, validates the square holds a
-//        same-color rook on its initial rank, with the king also on its
-//        initial rank, and the rook on the correct side of the king. Sets
-//        the corresponding right true; all others false.
-//     2. _validateSetupEpMark: re-derives enPassantTarget from setupEpMark.
-//        Validates the marked square holds a pawn of the correct color on
-//        the correct rank (white row 4 / black row 3), that the pawn's color
-//        is the OPPOSITE of currentTurn (the pawn just double-stepped), and
-//        that an adjacent enemy pawn exists to actually capture en passant.
-//        Sets enPassantTarget to the SKIPPED square.
-//     3. syncHash(s) re-computes the Zobrist hash with the validated rights.
-//     4. If validation passes, _exitSetupImpl:
-//        - Generates _setupFEN from the validated gameState (castlingRights
-//          and enPassantTarget are now correct, and generateFEN only emits
-//          the ep target if an adjacent capturer exists — consistent with
-//          the validation check).
-//        - Clears setupEpMark=null and setupCastleMarks=new Set() (they're
-//          setup-only transient fields; the authoritative state is now in
-//          castlingRights / enPassantTarget).
-//        - stateHistory=[{state:cloneS(gameState),...}] — cloneS deep-clones
-//          castlingRights (spread) and enPassantTarget (spread), so the
-//          initial state snapshot retains the validated rights.
-//        - reviewBaseState=cloneS(gameState) — same deep-clone.
-//
-//   PLAY mode (after exit):
-//     - computeVisibleCastleMarks: derives visible 🔁 markers from
-//       castlingRights (finds the same-color rook on the king's side).
-//     - computeVisibleEpMark: derives visible ⚡ marker from
-//       enPassantTarget (converts back to the pawn's square).
-//     - Both functions check setupCastleMarks / setupEpMark FIRST (for
-//       setup-mode input), but in play mode these are empty/null, so they
-//       fall through to the castlingRights / enPassantTarget derivation.
-//
-//   VERDICT: The round-trip is correct. castlingRights and enPassantTarget
-//   are preserved through setup mode and correctly reflected in the FEN,
-//   state history, and visible markers during play. No code change needed
-//   for the core preservation logic — the existing implementation is sound.
-//
-//   The only defensive improvement added below: after validation succeeds,
-//   explicitly assert that castlingRights is non-null and enPassantTarget
-//   is either null or a valid {row,col} object before proceeding. This
-//   catches any future regression that might leave these fields in an
-//   inconsistent state.
-function _exitSetupImpl(){
-// v1.1.0 Phase 53: Call _resetGameUIState() to clear ALL stale UI state
-// from the previous game — same as _applyImportedFEN and importPGN.
-// Without this, the following would leak from the previous game:
-// - _cachedOriginalPGN (old PGN text → stats page / PGN export pollution)
-// - playerWhite/playerBlack (old player names from PGN import)
-// - _visualAnnotationsCache (old [%csl]/[%cal] → new game's PGN export)
-// - _aiBarInfo/_hintBarInfo/hintText (old AI/hint bar text)
-// - _cachedStatus/_cachedStatusKey (old game status cache)
-// - isAIThinking/_aiSafetyTimerId (AI thinking state)
-// - _evalLoading/_sfEvalReady/_ponderGen (engine eval state)
-// - showResignConfirm/_resignWinnerColor (resign state)
-// - cachedCtrlKey (control map cache key)
-// - _redoStack (old redo entries)
-// - _mlistScrollState (old scroll position)
-// - gameClockTimerId (old clock timer)
-_resetGameUIState();
-// v1.1.1 Phase 61: The manual clears below were redundant with the old
-//   _resetGameUIState and are now fully covered by it (it clears
-//   _pendingEngineSANs/_pendingEnginePVs, reviewCritical, _cachedOriginalPGN,
-//   playerWhite/playerBlack, _ecoRecCache, _sfEval/_sfDepth/etc,
-//   _evalLoading, _needNewGameForEngine, _tbLoading, _tbRetryCount, etc).
-//   Removed to avoid duplication.
-if(typeof _updateEvalDisplay==='function')_updateEvalDisplay();
-// as the new starting position (step 0). This means:
-// - moveRecords is cleared (no move history from before setup)
-// - stateHistory is reset with the setup position as the initial state
-// - reviewBaseState is set to the setup position
-// - lastMove is cleared
-// - _redoStack is cleared
-// This ensures the user starts fresh from the setup position.
-// v1.0.3: Cache the setup position FEN for PGN export with [FEN]/[SetUp] headers.
-// v1.0.8 PHASE 3: If the setup position has castle rights on non-standard squares
-// (king not on e1/e8, or rook not on a1/h1/a8/h8), use Shredder-FEN castling
-// notation (file letters) instead of standard KQkq. Standard KQkq is ambiguous
-// in that case — it would imply rook on h1/a1 etc., which is not the actual
-// position. Shredder notation explicitly names the rook's source file, so the
-// position can be losslessly round-tripped through PGN/FEN.
-if(typeof _setupFEN!=='undefined'&&typeof generateFEN==='function'){
-  _setupFEN=generateFEN(gameState);
-  if(typeof toShredderCastling==='function'&&gameState.castlingRights){
-    const cr=gameState.castlingRights;
-    const hasRights=cr.whiteKingside||cr.whiteQueenside||cr.blackKingside||cr.blackQueenside;
-    if(hasRights){
-      let needsShredder=false;
-      // Check king positions
-      if(gameState.wk&&(gameState.wk.row!==7||gameState.wk.col!==4))needsShredder=true;
-      if(gameState.bk&&(gameState.bk.row!==0||gameState.bk.col!==4))needsShredder=true;
-      // Check rook positions for each right that's set
-      if(!needsShredder&&cr.whiteKingside){
-        const wr=gameState.board[7]&&gameState.board[7][7];
-        if(!wr||wr.type!=='rook'||wr.color!=='white')needsShredder=true;
-      }
-      if(!needsShredder&&cr.whiteQueenside){
-        const wr=gameState.board[7]&&gameState.board[7][0];
-        if(!wr||wr.type!=='rook'||wr.color!=='white')needsShredder=true;
-      }
-      if(!needsShredder&&cr.blackKingside){
-        const br=gameState.board[0]&&gameState.board[0][7];
-        if(!br||br.type!=='rook'||br.color!=='black')needsShredder=true;
-      }
-      if(!needsShredder&&cr.blackQueenside){
-        const br=gameState.board[0]&&gameState.board[0][0];
-        if(!br||br.type!=='rook'||br.color!=='black')needsShredder=true;
-      }
-      if(needsShredder){
-        const parts=_setupFEN.split(' ');
-        if(parts.length>=3){
-          parts[2]=toShredderCastling(gameState.castlingRights,gameState.board);
-          _setupFEN=parts.join(' ');
-        }
-      }
-    }
-  }
-}
-// v1.0.3: Track the setup position's starting move number for display.
-// When the user places pieces in setup mode, gameState.fullMoveNumber is
-// preserved from the FEN-derived or default value (typically 1). Setting
-// this explicitly ensures the move list uses correct numbering even when
-// the user starts from a FEN with fullMoveNumber>1.
-if(typeof _importedStartMoveNum!=='undefined'){
-  _importedStartMoveNum=(gameState.fullMoveNumber&&gameState.fullMoveNumber>0)?gameState.fullMoveNumber:1;
-}
-// v1.0.8 PHASE 29 (task 4 defensive check): Assert that validateSetupPosition
-//   has left castlingRights and enPassantTarget in a consistent state before
-//   we snapshot the state into stateHistory/reviewBaseState. If any of these
-//   invariants are violated, fix them defensively rather than crash. This
-//   guards against future regressions in _validateSetupCastleMarks /
-//   _validateSetupEpMark that might leave the state half-mutated.
-if(!gameState.castlingRights||typeof gameState.castlingRights!=='object'){
-  console.warn('[exitSetup] castlingRights missing after validation — restoring defaults');
-  gameState.castlingRights={whiteKingside:false,whiteQueenside:false,blackKingside:false,blackQueenside:false};
-}
-if(gameState.enPassantTarget){
-  if(typeof gameState.enPassantTarget!=='object'||typeof gameState.enPassantTarget.row!=='number'||typeof gameState.enPassantTarget.col!=='number'||gameState.enPassantTarget.row<0||gameState.enPassantTarget.row>7||gameState.enPassantTarget.col<0||gameState.enPassantTarget.col>7){
-    console.warn('[exitSetup] enPassantTarget malformed after validation — clearing');
-    gameState.enPassantTarget=null;
-  }
-}
-moveRecords=[];
-stateHistory=[{state:cloneS(gameState),selectedSquare:null,legalMvs:[],moveRecords:[],lastMove:null,gameOver:null}];
-lastMove=null;
-_redoStack=[];
-gameOver=null;_gameOverStatusKey=null;
-gameOverSoundPlayed=false;
-_ecoEnabled=false; // Setup mode — disable ECO recognition
-// Clear the setup-mode transient input fields. setupEpMark and
-// setupCastleMarks are the user's marker placements during setup; after
-// validation, the authoritative state is enPassantTarget / castlingRights
-// (set by _validateSetupEpMark / _validateSetupCastleMarks). These
-// transient fields are setup-only and must not leak into play/review mode.
-gameState.setupEpMark=null;
-gameState.setupCastleMarks=new Set();
-reviewBaseState=cloneS(gameState);
-_reviewEvalCache.clear();_reviewEvalRequestedStep=-1; // Clear eval cache on board setup complete
-// v1.0.8 PHASE 4: Enable UCI_Chess960 on the engine if the setup position
-// has any castling rights on non-standard squares (king not on e1/e8, or a
-// castle-right rook not on a1/h1/a8/h8). Without UCI_Chess960=true, the
-// engine cannot correctly interpret castling in such positions — it would
-// assume standard king-on-e1/rook-on-a1h1 castling and either fail to
-// generate castling moves or produce illegal ones.
-// We ALSO keep UCI_Chess960 enabled for explicit Chess960 games (already
-// handled in startGame). For standard-position setups we leave it disabled
-// to preserve compatibility with the engine's standard-FEN parsing.
-if(typeof setChess960Mode==='function'&&typeof isChess960Mode==='function'){
-  const _cr=gameState.castlingRights||{};
-  const _hasRights=_cr.whiteKingside||_cr.whiteQueenside||_cr.blackKingside||_cr.blackQueenside;
-  let _needsChess960=false;
-  if(_hasRights){
-    if(gameState.wk&&(gameState.wk.row!==7||gameState.wk.col!==4))_needsChess960=true;
-    if(gameState.bk&&(gameState.bk.row!==0||gameState.bk.col!==4))_needsChess960=true;
-    if(!_needsChess960&&_cr.whiteKingside){
-      const wr=gameState.board[7]&&gameState.board[7][7];
-      if(!wr||wr.type!=='rook'||wr.color!=='white')_needsChess960=true;
-    }
-    if(!_needsChess960&&_cr.whiteQueenside){
-      const wr=gameState.board[7]&&gameState.board[7][0];
-      if(!wr||wr.type!=='rook'||wr.color!=='white')_needsChess960=true;
-    }
-    if(!_needsChess960&&_cr.blackKingside){
-      const br=gameState.board[0]&&gameState.board[0][7];
-      if(!br||br.type!=='rook'||br.color!=='black')_needsChess960=true;
-    }
-    if(!_needsChess960&&_cr.blackQueenside){
-      const br=gameState.board[0]&&gameState.board[0][0];
-      if(!br||br.type!=='rook'||br.color!=='black')_needsChess960=true;
-    }
-  }
-  // Only call setChess960Mode if the desired state differs from the current
-  // state, to avoid an unnecessary engine stop/wait cycle.
-  if(_needsChess960&&!isChess960Mode()){
-    setChess960Mode(true);
-    if(gameVariant !== undefined)gameVariant='chess960'; // treat as Chess960 for PGN export
-  }else if(!_needsChess960&&isChess960Mode()&&(gameVariant === undefined||gameVariant!=='chess960')){
-    // Setup produced a standard position — disable Chess960 mode unless we're
-    // in an explicit Chess960 game (gameVariant === 'chess960').
-    setChess960Mode(false);
-  }
-}
-// v1.0.2 FIX: Black-to-move opening move record fix.
-// If the setup position has black to move, prepend null placeholder so the first
-// real move (black's) lands in the black slot, not the white slot.
-_prependBlackToMovePlaceholder();
-toggleSetup()}
-function setupClick(r,c){
-if(!setupMode||isAIThinking)return;
-HapticManager.fire('PIECE_SELECT');
-// v1.0.8: Snapshot must also capture setupCastleMarks + setupEpMark so that
-// undo/redo correctly restores the marker state alongside the board.
-if(!gameState.setupCastleMarks)gameState.setupCastleMarks=new Set();
-if(typeof gameState.setupEpMark==='undefined')gameState.setupEpMark=null;
-// Save snapshot before each modification for undo
-setupRedoStack=[];setupHistory.push({
-  board:gameState.board.map(row=>row.map(cell=>cell?{...cell}:null)),
-  wk:gameState.wk?{...gameState.wk}:null,
-  bk:gameState.bk?{...gameState.bk}:null,
-  castlingRights:{...gameState.castlingRights},
-  currentTurn:gameState.currentTurn,
-  hash:gameState.hash,
-  setupCastleMarks:new Set(gameState.setupCastleMarks),
-  setupEpMark:gameState.setupEpMark?{...gameState.setupEpMark}:null
-});
-if(setupHistory.length>50)setupHistory.shift();
-// v1.0.8 PHASE 6: Marker mode and piece selection are INDEPENDENT.
-// If BOTH are active, we apply the piece first, then toggle the marker.
-// If only one is active, only that action is taken.
-// Delete mode is exclusive — it clears the square and its markers.
-if(setupPiece==='delete'){
-if(gameState.board[r][c]&&gameState.board[r][c].type==='king'){
-if(gameState.board[r][c].color==='white')gameState.wk=null;
-else gameState.bk=null;
-}
-// v1.0.8: When deleting a piece, also clear any castle/ep markers on that square.
-const key=String(r*8+c);
-gameState.setupCastleMarks.delete(key);
-if(gameState.setupEpMark&&gameState.setupEpMark.row===r&&gameState.setupEpMark.col===c)gameState.setupEpMark=null;
-gameState.board[r][c]=null;_refreshStateAfterSetup(gameState);render();return
-}
-// Place piece if a piece is selected (not delete, not null)
-if(setupPiece&&setupPiece!=='delete'){
-if(setupPiece==='king'){
-// Remove existing king of same color before placing new one
-if(setupColor==='white'&&gameState.wk){gameState.board[gameState.wk.row][gameState.wk.col]=null;gameState.wk=null}
-else if(setupColor==='black'&&gameState.bk){gameState.board[gameState.bk.row][gameState.bk.col]=null;gameState.bk=null}
-}
-gameState.board[r][c]={type:setupPiece,color:setupColor};
-if(setupPiece==='king'){
-if(setupColor==='white')gameState.wk={row:r,col:c};
-else gameState.bk={row:r,col:c};
-}
-_refreshStateAfterSetup(gameState);
-// v1.0.8 PHASE 6: do NOT return here — fall through to marker toggle.
-}
-// Toggle marker if a marker mode is active
-if(setupMarkerMode==='castle'){
-  // Toggle castle marker on this square. Validation happens on "Done".
-  const key=String(r*8+c);
-  if(gameState.setupCastleMarks.has(key))gameState.setupCastleMarks.delete(key);
-  else gameState.setupCastleMarks.add(key);
-  setupErrors=[]; // clear stale errors so user sees fresh state
-  render();return;
-}
-if(setupMarkerMode==='ep'){
-  // Toggle ep marker. Only one allowed — clicking another square moves it.
-  if(gameState.setupEpMark&&gameState.setupEpMark.row===r&&gameState.setupEpMark.col===c){
-    gameState.setupEpMark=null;
-  }else{
-    gameState.setupEpMark={row:r,col:c};
-  }
-  setupErrors=[];
-  render();return;
-}
-// If we placed a piece but no marker mode, render now.
-if(setupPiece&&setupPiece!=='delete'){render();return}
-}
-function undoSetupClick(){
-if(!setupMode||setupHistory.length===0)return;
-// Save current state to redo stack before undoing
-var _curSnap={board:gameState.board.map(r=>r.map(c=>c?{...c}:null)),wk:gameState.wk?{...gameState.wk}:null,bk:gameState.bk?{...gameState.bk}:null,castlingRights:{...gameState.castlingRights},currentTurn:gameState.currentTurn,hash:gameState.hash,setupCastleMarks:new Set(gameState.setupCastleMarks||[]),setupEpMark:gameState.setupEpMark?{...gameState.setupEpMark}:null};
-setupRedoStack.push(_curSnap);if(setupRedoStack.length>50)setupRedoStack.shift();
-const snap=setupHistory.pop();
-gameState.board=snap.board;gameState.wk=snap.wk;gameState.bk=snap.bk;gameState.castlingRights=snap.castlingRights;gameState.currentTurn=snap.currentTurn;
-// v1.0.8: Restore marker state from snapshot
-gameState.setupCastleMarks=snap.setupCastleMarks?new Set(snap.setupCastleMarks):new Set();
-gameState.setupEpMark=snap.setupEpMark?{...snap.setupEpMark}:null;
-_refreshStateAfterSetup(gameState);
-render();
-}
-function redoSetupClick(){if(!setupMode||setupRedoStack.length===0)return;
-const snap=setupRedoStack.pop();
-setupHistory.push({board:gameState.board.map(r=>r.map(c=>c?{...c}:null)),wk:gameState.wk?{...gameState.wk}:null,bk:gameState.bk?{...gameState.bk}:null,castlingRights:{...gameState.castlingRights},currentTurn:gameState.currentTurn,hash:gameState.hash,setupCastleMarks:new Set(gameState.setupCastleMarks||[]),setupEpMark:gameState.setupEpMark?{...gameState.setupEpMark}:null});
-if(setupHistory.length>50)setupHistory.shift();
-gameState.board=snap.board.map(r=>r.map(c=>c?{type:c.type,color:c.color}:null));
-gameState.wk=snap.wk?{...snap.wk}:null;gameState.bk=snap.bk?{...snap.bk}:null;
-gameState.castlingRights={...snap.castlingRights};
-gameState.currentTurn=snap.currentTurn;
-gameState.hash=snap.hash;
-// v1.0.8: Restore marker state from redo snapshot
-gameState.setupCastleMarks=snap.setupCastleMarks?new Set(snap.setupCastleMarks):new Set();
-gameState.setupEpMark=snap.setupEpMark?{...snap.setupEpMark}:null;
-setupErrors=[];render();}
 
 /**
  * Enter review mode — replay all moves and prepare review states.
@@ -5501,242 +4393,6 @@ function _classifyMove(evalDelta,isMoverWhite){
 
 // ===================== MISSING CRITICAL FUNCTIONS =====================
 
-/**
- * Start a new game based on dialog settings.
- * Called from the new game dialog button "开始游戏".
- */
-// v1.0.2: PGN save prompt — called before clearing move records.
-// Checks if there are any moves; if so, shows a "💾是否保存PGN文件？" dialog.
-// The callback is executed after the user chooses (or immediately if no moves).
-function _withPGNSaveCheck(callback){
-  if(_skipPGNSavePrompt||!moveRecords||!moveRecords.some(function(r){return r!=null;})){
-    callback();
-    return;
-  }
-  _pendingActionAfterSave=callback;
-  showSavePGNPrompt=true;
-  render();
-}
-function _savePGNYes(){
-  showSavePGNPrompt=false;
-  _skipPGNSavePrompt=true;
-  // v1.1.1 Phase 66: exportPGNToFile now shows an annotation dialog (async).
-  //   We must defer the pending action until AFTER the dialog is dismissed,
-  //   not on a fixed 200ms timer. The annotation dialog's callback handles
-  //   the export; we schedule the pending action to run after the dialog
-  //   is dismissed by wrapping it in a function that checks if the dialog
-  //   is still active.
-  var cb=_pendingActionAfterSave;
-  _pendingActionAfterSave=null;
-  try{exportPGNToFile();}catch(e){console.warn('PGN export during save prompt failed',e);}
-  if(cb){
-    // Wait for the annotation dialog to be dismissed before executing cb.
-    // Poll every 200ms; if dialog is not active (never opened or dismissed),
-    // execute immediately.
-    function _waitForDialog(){
-      if(typeof _pgnExportDialogActive!=='undefined'&&_pgnExportDialogActive){
-        setTimeout(_waitForDialog,200);
-      }else{
-        cb();
-        _skipPGNSavePrompt=false;
-      }
-    }
-    setTimeout(_waitForDialog,200);
-  }else{
-    _skipPGNSavePrompt=false;
-  }
-  render();
-}
-function _savePGNNo(){
-  showSavePGNPrompt=false;
-  _skipPGNSavePrompt=true;
-  var cb=_pendingActionAfterSave;
-  _pendingActionAfterSave=null;
-  if(cb){cb();}
-  setTimeout(function(){_skipPGNSavePrompt=false;},100);
-  render();
-}
-// v1.0.4 LATEST: Cancel button — returns to the original screen WITHOUT
-// clearing any cache or executing the pending action. The user stays exactly
-// where they were before the save prompt appeared.
-function _savePGNCancel(){
-  showSavePGNPrompt=false;
-  _pendingActionAfterSave=null; // discard the pending action — do NOT execute it
-  // Do NOT set _skipPGNSavePrompt=true — we want the prompt to appear again
-  // next time the user tries to start a new game / import FEN / import PGN.
-  render();
-}
-function startGame(){
-  _withPGNSaveCheck(_startGameImpl);
-}
-function _startGameImpl(){
-  // v1.0.8 PHASE 22 supplement: new-game sound (号角式三音和弦)
-  try{if(typeof playSound==='function')playSound('newgame');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-  showNewGameDialog=false;
-  playerColor=dlgPlayerColor;
-  useBookMoves=dlgBookMoves;
-  // v1.0.8 PHASE 18 Task 2: Reset virtual list state on new game.
-  _resetRvVirtualState();
-  // v1.0.8 BUG FIX:
-  // _reviewEvalCache is keyed by reviewStep (0-based per-game index since
-  // v1.0.8 Phase 15: step 0 = initial position, steps 1..N = post-move).
-  // When the user starts a new game, the new game's reviewStep 0,1,2,...
-  // map to completely different positions than the previous game's, so the
-  // cache would return stale evals for the wrong positions. Clear the cache
-  // on every new game so review mode re-evaluates from scratch.
-  // Note: This intentionally trades cross-session eval persistence for
-  // correctness. The previous design assumed "same step index → same
-  // position", which is only true within ONE game.
-  try{
-    if(_reviewEvalCache !== undefined&&_reviewEvalCache){
-      _reviewEvalCache.clear();
-    }
-    if(typeof _reviewEvalRequestedStep!=='undefined')_reviewEvalRequestedStep=-1;
-  }catch(e){console.warn('_startGameImpl: review eval cache clear failed',e);}
-  // v1.0.6: Disable ECO recognition entirely in Chess960 mode. The new-game
-  // dialog already grays out the ECO book toggle when Chess960 is on; this
-  // mirror ensures imported Chess960 PGNs (which never set dlgChess960) and
-  // any other entry point also keep ECO off. The UI gates in render() check
-  // gameVariant==='chess960' for defense in depth, but _ecoEnabled=false
-  // here is the primary switch so getECORecommendation() is never even
-  // called for Chess960 positions (saves CPU).
-  // v1.2.1 round-12 (S2757 false-positive refactor): The original
-  // `!(dlgChess960 !== undefined&&dlgChess960)` triggered SonarCloud's
-  // '=!' operator typo detector. Rewrite using De Morgan's law for the same
-  // semantics: ECO is enabled when dlgChess960 is undefined OR falsy.
-  _ecoEnabled=dlgChess960 === undefined||!dlgChess960;
-  // v1.0.3: Clear cached original PGN and setup FEN — new game means no imported PGN.
-  if(typeof _cachedOriginalPGN!=='undefined')_cachedOriginalPGN=null;
-  if(typeof _setupFEN!=='undefined')_setupFEN=null;
-  // v1.0.3: Reset the imported-start-move-number offset — a fresh game from the
-  // initial position starts at move 1. Subsequent ECO opening moves (if any)
-  // also start from move 1.
-  if(typeof _importedStartMoveNum!=='undefined')_importedStartMoveNum=1;
-  // v1.0.4 Rev24: Clear imported player names — a new game uses the default
-  // "你"/"AI对手" (or _humanPlayerName if set via rename). Don't clear
-  // _humanPlayerName itself — that's a persistent user preference.
-  if(typeof playerWhite!=='undefined')playerWhite=undefined;
-  if(typeof playerBlack!=='undefined')playerBlack=undefined;
-  // v1.0.4 NEW: Chess960 mode handling.
-  // - If dlgChess960 is true, build a Chess960 starting position.
-  // - If dlgChess960SPID is set (0..959), use it; otherwise pick a random SP-ID.
-  // - Tell StockfishNative to enable UCI_Chess960 so castling works correctly.
-  // - For Chess960 we skip ECO openings (they assume the standard start position).
-  if(dlgChess960 !== undefined&&dlgChess960){
-    const spid=(typeof dlgChess960SPID!=='undefined'&&dlgChess960SPID>=0&&dlgChess960SPID<960)?dlgChess960SPID:randomSPID();
-    if(typeof setChess960Mode==='function')setChess960Mode(true);
-    gameState=initChess960State(spid);
-    // Track game variant for PGN export
-    if(gameVariant !== undefined)gameVariant='chess960';
-    if(typeof gameSPID!=='undefined')gameSPID=spid;
-    // v1.0.8 PHASE 24 (bug fix): Store the Chess960 starting FEN so PGN export
-    //   emits the correct [FEN] tag. Previously _setupFEN was null for Chess960
-    //   games started from the New Game dialog, causing _buildPGNString to
-    //   fall back to generateFEN(gameState) (the CURRENT mid-game state),
-    //   producing a corrupt [FEN] tag that re-imports to the wrong position.
-    if(typeof _setupFEN!=='undefined')_setupFEN=generateFEN(gameState);
-  }else{
-    if(typeof setChess960Mode==='function')setChess960Mode(false);
-    gameState=initState();
-    if(gameVariant !== undefined)gameVariant=null;
-    if(typeof gameSPID!=='undefined')gameSPID=null;
-  }
-  stateHistory=[{state:cloneS(gameState),selectedSquare:null,legalMvs:[],moveRecords:[],lastMove:null,gameOver:null}];
-  moveRecords=[];
-  gameOver=null;_gameOverStatusKey=null;
-  // If an opening is selected AND we're NOT in Chess960 mode, apply ECO opening moves.
-  // (ECO openings assume the standard start position — they don't make sense in Chess960.)
-  if(dlgOpeningId&&!(dlgChess960 !== undefined&&dlgChess960)){
-    _ensureEcoParsed();
-    const pipeIdx=dlgOpeningId.indexOf('|');
-    const ecoCode=pipeIdx>=0?dlgOpeningId.substring(0,pipeIdx):dlgOpeningId;
-    const ecoName=pipeIdx>=0?dlgOpeningId.substring(pipeIdx+1):'';
-    // Find the specific opening variant by code + name
-    const opList=ECO_BY_ID[ecoCode];
-    if(opList&&opList.length>0){
-      let opening=null;
-      for(const op of opList){
-        if(op.name===ecoName){opening=op;break;}
-      }
-      // Fallback: if exact name not found, use first variant with that code
-      if(!opening)opening=opList[0];
-      // Apply all moves from the opening's coordinate array.
-      // v1.0.2 NEW FEATURE: ECO openings record every move in their `moves` array,
-      // so we auto-fill the in-game moveRecords with proper SAN notation as we
-      // replay each move. This means the user sees the full opening sequence in
-      // the move history from move #1, with correct PGN numbering — no "..."
-      // placeholder is needed even when the opening's last move was Black's.
-      // (The black-to-move placeholder only kicks in when NO ECO moves are
-      // applied — i.e., for FEN/setup/PGN imports with black to move.)
-      const mv=opening.moves;
-      for(let i=0;i+3<mv.length;i+=4){
-        const from={row:mv[i],col:mv[i+1]};
-        const to={row:mv[i+2],col:mv[i+3]};
-        const piece=gameState.board[from.row]?gameState.board[from.row][from.col]:null;
-        if(piece){
-          const moveObj={from:from,to:to,piece:piece};
-          // Snapshot state BEFORE the move (matches executeMove's order)
-          stateHistory.push({state:cloneS(gameState),selectedSquare:null,legalMvs:[],moveRecords:[...moveRecords],lastMove:lastMove?{...lastMove}:null,gameOver:null});
-          if(stateHistory.length>200)stateHistory.shift();
-          // Apply the move
-          const ns=makeMv(gameState,moveObj);
-          const notation=moveAlg(gameState,moveObj,ns);
-          const opp=OPP_COLOR[piece.color];
-          const ic=inCheck(ns.board,opp,opp==='white'?ns.wk:ns.bk);
-          const cast=!!(typeof _castleSide==='function'&&_castleSide(moveObj));
-          const epCap=piece.type==='pawn'&&gameState.enPassantTarget&&to.row===gameState.enPassantTarget.row&&to.col===gameState.enPassantTarget.col;
-          // Build the move record exactly like executeMove (without the time field
-          // since these are pre-played opening moves, not user/AI moves)
-          moveRecords.push({
-            notation:notation,
-            from:posAlg(from),
-            to:posAlg(to),
-            piece:piece,
-            captured:gameState.board[to.row][to.col]||(epCap?gameState.board[piece.color==='white'?to.row+1:to.row-1][to.col]:undefined),
-            isCheck:ic,
-            isCastling:cast,
-            promotion:null,
-            time:null
-          });
-          gameState=ns;
-          lastMove={from:{...from},to:{...to}};
-        }else{
-          console.warn('[startGame] ECO move #'+(i/4+1)+' invalid at',from,'— skipping remaining moves');
-          break;
-        }
-      }
-      // If the opening had moves, clear the stale stateHistory[0] entry so that
-      // undo back to the start position correctly restores the initial position
-      // (stateHistory[0] is still the initial state, which is correct).
-    }else{
-      console.warn('[startGame] ECO code not found:',ecoCode);
-    }
-  }
-  _needNewGameForEngine=true;
-  reviewBaseState=cloneS(gameState);
-  // v1.1.1 Phase 61: _resetGameUIState() now clears ALL per-game caches
-  //   centrally (including _reviewEvalCache, _pendingEngineSANs/_pendingEnginePVs,
-  //   _multiPV*, reviewCritical, _sfEval, _cachedOriginalPGN, playerWhite/
-  //   playerBlack, _setupFEN, _importedStartMoveNum, _needNewGameForEngine,
-  //   etc). The manual clears that were here are now redundant.
-  _resetGameUIState();
-  _resetEvalState();
-  // v1.0.4 EXPANSION (this round): Initialize the game clocks based on dlgTimeControl.
-  // If type === 'off', gameClocks remains null and PGN export will use [%emt] (elapsed
-  // move time). Otherwise, both clocks start at baseSec and tick down on each move.
-  initGameClocks();
-  // v1.0.2 FIX: Black-to-move opening move record fix.
-  // Only relevant when NO ECO moves were applied — e.g., a free opening with
-  // a custom starting FEN that has black to move. When ECO moves ARE applied
-  // (the common case), moveRecords already has all moves correctly placed
-  // and _prependBlackToMovePlaceholder() is a no-op (moveRecords is non-empty).
-  _prependBlackToMovePlaceholder();
-  render();
-  requestEngineEval();
-  if(gameState.currentTurn!==playerColor){
-    doAIMove();
-  }
-}
 
 /**
  * Reset all game UI state variables.
@@ -5770,145 +4426,11 @@ function _startGameImpl(){
 // The PGN export uses gameClocks[color].remainingSec AFTER each move to emit [%clk HH:MM:SS].
 // For untimed games, moveRecords[i].time (elapsedSec) is emitted as [%emt HH:MM:SS].
 
-function initGameClocks(){
-  // Stop any existing clock timer
-  if(gameClockTimerId){clearInterval(gameClockTimerId);gameClockTimerId=null;}
-  gameClockExpired=null;
-  if(!dlgTimeControl||dlgTimeControl.type==='off'){
-    gameClocks=null;
-    return;
-  }
-  const base=dlgTimeControl.baseSec||300;
-  gameClocks={
-    white:{remainingSec:base,displayRemainingSec:base,lastMoveTimestamp:Date.now()},
-    black:{remainingSec:base,displayRemainingSec:base,lastMoveTimestamp:Date.now()},
-    type:dlgTimeControl.type,
-    baseSec:base, // v1.0.4 FIX (this round): store baseSec on gameClocks so PGN export can emit the correct [TimeControl] header without relying on dlgTimeControl (which may be stale after import).
-    incrementSec:dlgTimeControl.incrementSec||0,
-    delaySec:dlgTimeControl.delaySec||0
-  };
-  // Start a 200ms-poll timer (the actual deduction happens on each move; the
-  // timer is only for refreshing the displayed clock so the user sees the
-  // seconds tick down live for the side to move).
-  gameClockTimerId=setInterval(_tickGameClock,200);
-}
 
-// Tick function: deduct time from the side-to-move's clock based on wall-clock
-// elapsed since the last move. This is the source of truth for "time remaining".
-// On each tick we also check for flag-fall (remaining <= 0).
-function _tickGameClock(){
-  if(!gameClocks||gameClockExpired)return;
-  if(gameOver||setupMode||reviewMode)return;
-  const color=gameState.currentTurn;
-  const clock=gameClocks[color];
-  if(!clock)return;
-  const now=Date.now();
-  const elapsedMs=now-clock.lastMoveTimestamp;
-  const elapsedSec=elapsedMs/1000;
-  // For US delay / Bronstein: subtract delay first
-  let deductSec=elapsedSec;
-  if(gameClocks.type==='bronstein'||gameClocks.type==='usdelay'){
-    deductSec=Math.max(0,elapsedSec-gameClocks.delaySec);
-  }
-  // Update the displayed remaining time (NOT the committed remaining; the
-  // committed remaining is updated only on each move via recordMoveEnd).
-  clock.displayRemainingSec=Math.max(0,clock.remainingSec-deductSec);
-  // Check for flag fall
-  if(clock.displayRemainingSec<=0&&!gameClockExpired){
-    gameClockExpired=color;
-    _onGameClockExpired(color);
-  }
-  // Update the clock display in the header (lightweight DOM update)
-  _updateClockDisplay();
-}
 
-// Called when a side's clock runs out
-function _onGameClockExpired(color){
-  if(gameClockTimerId){clearInterval(gameClockTimerId);gameClockTimerId=null;}
-  // v1.0.4 Rev35 FIX (CRITICAL): Stop the engine IMMEDIATELY when the clock
-  // expires. Previously, the engine continued searching after flag-fall
-  // because no "stop" command was sent. The engine's internal wtime-based
-  // time management may not align perfectly with the GUI's wall-clock
-  // deduction (especially under HyperOS 3's aggressive CPU throttling),
-  // causing the engine to search far past the 0-second mark. This made
-  // timed games feel "broken" — the engine kept thinking after time was up.
-  // Now we send a hard "stop" via engineStop() so the engine returns
-  // bestmove immediately and the game-over overlay shows promptly.
-  try{
-    if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.isEngineReady==='function'&&AndroidBridge.isEngineReady()){
-      if(typeof AndroidBridge.engineStop==='function'){
-        AndroidBridge.engineStop();
-      }else if(typeof AndroidBridge.sendToEngine==='function'){
-        // Fallback for older builds: send raw "stop"
-        AndroidBridge.sendToEngine('stop');
-      }
-    }
-    // Clear AI thinking state so UI updates promptly
-    isAIThinking=false;
-    if(typeof _aiBarInfo!=='undefined')_aiBarInfo='';
-    if(typeof _aiSafetyTimerId!=='undefined'&&_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
-  }catch(e){console.warn('engineStop on clock expiry failed:',e);}
-  // Game over: the OTHER side wins by time
-  // v1.0.4 Rev47: Use _gameOverStrFromStatus() for proper T()-based localization
-  // instead of hardcoding _lang. This ensures the text re-localizes when the
-  // user toggles language after the game-over overlay is shown.
-  const winner=color==='white'?'black':'white';
-  if(typeof _timeoutWinnerColor!=='undefined')_timeoutWinnerColor=winner;
-  _gameOverStatusKey='timeout';
-  gameOver=_gameOverStrFromStatus('timeout');
-  render();
-}
 
-// Called by executeMove() right AFTER applying a move: commits the elapsed time
-// deduction to the moving side's clock, applies increment for Fischer, and
-// resets the timestamp for the next side.
-function recordMoveEnd(color){
-  if(!gameClocks||gameClockExpired)return;
-  const clock=gameClocks[color];
-  if(!clock)return;
-  const now=Date.now();
-  const elapsedSec=(now-clock.lastMoveTimestamp)/1000;
-  let deductSec=elapsedSec;
-  if(gameClocks.type==='bronstein'||gameClocks.type==='usdelay'){
-    deductSec=Math.max(0,elapsedSec-gameClocks.delaySec);
-  }
-  clock.remainingSec=Math.max(0,clock.remainingSec-deductSec);
-  // Fischer increment: add AFTER the deduction
-  if(gameClocks.type==='fischer'){
-    clock.remainingSec+=gameClocks.incrementSec||0;
-  }
-  clock.displayRemainingSec=clock.remainingSec;
-  clock.lastMoveTimestamp=now;
-  // Reset the OTHER side's timestamp too (it'll start ticking from now)
-  const otherColor=color==='white'?'black':'white';
-  if(gameClocks[otherColor])gameClocks[otherColor].lastMoveTimestamp=now;
-}
 
-// Format a clock value as M:SS or H:MM:SS
-function formatClock(sec){
-  if(sec==null||!isFinite(sec))return '--:--';
-  const s=Math.max(0,Math.floor(sec));
-  const h=Math.floor(s/3600);
-  const m=Math.floor((s%3600)/60);
-  const ss=s%60;
-  const pad=n=>(n<10?'0':'')+n;
-  if(h>0)return h+':'+pad(m)+':'+pad(ss);
-  return m+':'+pad(ss);
-}
 
-// Lightweight DOM update for clock display (avoid full render() on every tick)
-function _updateClockDisplay(){
-  if(!gameClocks)return;
-  const wEl=document.getElementById('clock-white');
-  const bEl=document.getElementById('clock-black');
-  const wRem=gameClocks.white.displayRemainingSec!=null?gameClocks.white.displayRemainingSec:gameClocks.white.remainingSec;
-  const bRem=gameClocks.black.displayRemainingSec!=null?gameClocks.black.displayRemainingSec:gameClocks.black.remainingSec;
-  if(wEl)wEl.textContent=formatClock(wRem);
-  if(bEl)bEl.textContent=formatClock(bRem);
-  // Highlight low-time clocks (< 30s)
-  if(wEl)wEl.style.color=(wRem<30)?'#e74c3c':'var(--text)';
-  if(bEl)bEl.style.color=(bRem<30)?'#e74c3c':'var(--text)';
-}
 
 // v1.0.4 EXPANSION (this round): Visual Annotations cache & selector
 // ===========================================================================
@@ -5971,7 +4493,11 @@ function _replayMovesToState(moveIdx){
     if(!st)return null;
     for(let i=0;i<=moveIdx;i++){
       const mr=moveRecords[i];
-      if(!mr)return null;
+      // v1.2.3 round-18 (bug fix): skip the intentional null placeholder
+      //   (moveRecords[0] for black-to-move starts) instead of aborting the
+      //   whole replay — previously EVERY black-first game got no visual
+      //   annotations because the replay bailed at index 0.
+      if(!mr)continue;
       const from=algPos(mr.from);
       const to=algPos(mr.to);
       if(!from||!to)return null;
@@ -6525,7 +5051,7 @@ function _resetGameUIState(){
   //   through to the correct replay-from-moveRecords path.
   if(typeof reviewStates!=='undefined')reviewStates=[];
   if(typeof reviewMode!=='undefined')reviewMode=false;
-  if(typeof reviewStep!=='undefined')reviewStep=0;
+  if(reviewStep!==undefined)reviewStep=0;
   if(typeof reviewBaseState!=='undefined')reviewBaseState=null;
   // v1.1.1 Phase 65: Clear _preReviewSnapshot — if the user was in review mode
   //   when a new game started, this snapshot holds references to the old game's
@@ -6559,6 +5085,27 @@ function _resetGameUIState(){
   //   new game invalidates queued step indices because reviewStates will be
   //   rebuilt for the new game.
   _reviewAnalyzePriorityQueue=[];
+  // v1.2.3 round-18 (bug fix): terminate any in-flight analyze-all batch.
+  //   Previously _resetGameUIState cleared reviewMode/reviewStates but left
+  //   the batch state machine running: _reviewAnalyzeAllActive stayed true,
+  //   the safety timer kept firing toast+render every 60s (ghost loop), and
+  //   the Java-side _evalDeepBatchActive flag was never ended — leaving the
+  //   engine in eval-mode options for the next game until engine restart.
+  //   Mirror the exitReview() cleanup (function decls are bundle-hoisted).
+  if(typeof _reviewAnalyzeAllActive!=='undefined'&&_reviewAnalyzeAllActive){
+    _reviewAnalyzeAllActive=false;
+    try{if(typeof _endEvalDeepBatchIfActive==='function')_endEvalDeepBatchIfActive();}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+    if(typeof _reviewAnalyzeSafetyTimer!=='undefined'&&_reviewAnalyzeSafetyTimer){clearTimeout(_reviewAnalyzeSafetyTimer);_reviewAnalyzeSafetyTimer=null;}
+    if(typeof _evalRequestBatchGen!=='undefined')_evalRequestBatchGen=0;
+  }
+  // v1.2.3 round-18 (bug fix): also clear the pending open-stats flag/timer —
+  //   exitReview() does this, but _resetGameUIState can run WITHOUT exitReview
+  //   (FEN/PGN import from the review dialog). A stale flag would spuriously
+  //   open the stats page when the NEXT game's analysis completes.
+  if(typeof window!=='undefined'){
+    window._pendingOpenStats=false;
+    if(window._pendingOpenStatsTimer){clearTimeout(window._pendingOpenStatsTimer);window._pendingOpenStatsTimer=null;}
+  }
   // v1.0.4 REV13: Reset scroll state on new game
   // v1.0.4 Rev30: also reset the restore guard (in case a render is in flight)
   if(typeof _mlistScrollState!=='undefined'){_mlistScrollState.scrollTop=0;_mlistScrollState.atBottom=false;_mlistScrollState.valid=false;}
@@ -6568,7 +5115,7 @@ function _resetGameUIState(){
   // user starts a new untimed game (or a new timed game with different
   // settings). initGameClocks() is called separately from _startGameImpl()
   // to set up the new game's clocks; here we just stop the old timer.
-  if(typeof gameClockTimerId!=='undefined'&&gameClockTimerId){clearInterval(gameClockTimerId);gameClockTimerId=null;}
+  if(gameClockTimerId!==undefined&&gameClockTimerId){clearInterval(gameClockTimerId);gameClockTimerId=null;}
   if(typeof gameClockExpired!=='undefined')gameClockExpired=null;
   // v1.1.0 Phase 56 FIX: Reset _turnStartTime so the FIRST move of the new
   //   game (or the first move after FEN/PGN import / setup-complete) has an
@@ -6643,9 +5190,9 @@ function _resetGameUIState(){
   if(typeof _pvCache!=='undefined'&&_pvCache&&typeof _pvCache.clear==='function')_pvCache.clear();
   if(typeof _pendingEngineSANs!=='undefined')_pendingEngineSANs=[];
   if(typeof _pendingEnginePVs!=='undefined')_pendingEnginePVs=[];
-  if(typeof _multiPVLines!=='undefined')_multiPVLines=[];
-  if(typeof _multiPVResult!=='undefined')_multiPVResult=null;
-  if(typeof _lastEngineVariation!=='undefined')_lastEngineVariation=null;
+  // v1.2.3 round-18 (cleanup): removed duplicate resets of _multiPVLines/
+  //   _multiPVResult/_lastEngineVariation/_sfEvalReady/_evalLoading — each was
+  //   already reset earlier in this function (see the AI/ponder/eval block).
   if(typeof reviewCritical!=='undefined')reviewCritical=[];
   if(typeof _sfEval!=='undefined')_sfEval=0;
   if(typeof _sfMateDistance!=='undefined')_sfMateDistance=0;
@@ -6654,8 +5201,6 @@ function _resetGameUIState(){
   if(typeof _sfWdlW!=='undefined')_sfWdlW=-1;
   if(typeof _sfWdlD!=='undefined')_sfWdlD=-1;
   if(typeof _sfWdlL!=='undefined')_sfWdlL=-1;
-  if(typeof _sfEvalReady!=='undefined')_sfEvalReady=false;
-  if(typeof _evalLoading!=='undefined')_evalLoading=false;
   if(_reviewEvalCache !== undefined&&_reviewEvalCache&&typeof _reviewEvalCache.clear==='function'){
     try{_reviewEvalCache.clear();}catch(e){console.warn('_resetGameUIState: review eval cache clear failed',e);}
   }
@@ -6697,7 +5242,10 @@ function reviewGoTo(step){
   if(cached!=null){
     _sfEval=cached.eval;_sfMateDistance=cached.mate!=null?cached.mate:0;
     _sfWdlW=cached.wdlW!=null?cached.wdlW:-1;_sfWdlD=cached.wdlD!=null?cached.wdlD:-1;_sfWdlL=cached.wdlL!=null?cached.wdlL:-1;
-    _sfDepth=cached.depth!=null?cached.depth:0;_sfEvalReady=true;_evalLoading=false;
+    _sfDepth=cached.depth!=null?cached.depth:0;_sfSeldepth=cached.seldepth!=null?cached.seldepth:0;_sfEvalReady=true;_evalLoading=false;
+    // v1.2.3 round-18 (bug fix): also restore _sfSeldepth from the cache —
+    //   the live-eval path (ai-bridge.js) restores all six fields; omitting
+    //   seldepth here left the previous step's value on screen (stale SD).
   }else{
     _resetEvalState();
     // FIX: Auto-start analysis when selecting an unanalyzed move in review mode.
@@ -6754,6 +5302,23 @@ function _rvAnalyzeBtnLabel(){
   return T('analyze_all_steps')+' '+_totalSteps+(_cachedCount>0?' ('+_cachedCount+'/'+_totalSteps+')':'');
 }
 /**
+ * v1.2.3 round-20 (user request, supersedes round-19's hint line): inner
+ * HTML of the "Analyze All" button. While an analyze-all batch is running
+ * (_reviewAnalyzeAllActive), the button shows the label on the LEFT and the
+ * hint "批量分析进行中… 长按走法可设为优先 / Batch analysis in progress…
+ * Long-press a move to prioritize it" RIGHT-ALIGNED on the same button —
+ * surfacing the existing long-press-to-prioritize feature
+ * (_prioritizeReviewStep) exactly when it is useful. When no batch runs,
+ * the button is just the plain label. Rendered from state on full renders
+ * (_rvAnalyzeHTML) and kept in sync in place by _updateReviewAnalyzeBtn().
+ */
+function _rvAnalyzeBtnInnerHTML(){
+  const _label=_rvAnalyzeBtnLabel();
+  if(!_reviewAnalyzeAllActive)return _esc(_label);
+  return '<span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+_esc(_label)+'</span>'
+    +'<span style="color:var(--accent);font-size:.66rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:1;min-width:0">'+T('review_batch_analyzing_hint')+'</span>';
+}
+/**
  * v1.0.8 PHASE 17: Live-refresh the "Analyze All" button label without
  * triggering a full render. Called from onEngineEval after each manual eval
  * completes — fixes the bug where the button stayed at "Analyze All (k/N)"
@@ -6774,7 +5339,9 @@ function _updateReviewAnalyzeBtn(){
   if(!reviewMode)return;
   const btn=document.getElementById('review-analyze-btn');
   if(!btn)return;
-  btn.textContent=_rvAnalyzeBtnLabel();
+  // v1.2.3 round-20: innerHTML (not textContent) — while a batch runs the
+  //   button carries the right-aligned hint span (_rvAnalyzeBtnInnerHTML).
+  btn.innerHTML=_rvAnalyzeBtnInnerHTML();
 }
 
 /**
@@ -6915,6 +5482,10 @@ function reviewAnalyzeAll(){
     return;
   }
   _reviewAnalyzeAllActive=true;
+  // v1.2.3 round-20: immediately switch the analyze button to
+  //   label + right-aligned "batch in progress" hint (no full render
+  //   happens at batch start; the helper rewrites the button in place).
+  _updateReviewAnalyzeBtn();
   // v1.1.2 Phase 68 (Issue 30 P2): Clear any stale priority queue at batch
   //   start (defensive — should already be empty if the previous batch
   //   completed normally, but a crashed/canceled batch might have left entries).
@@ -8101,264 +6672,12 @@ function _jsAttrEncode(s){
   return JSON.stringify(String(s)).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-/**
- * Handle Android back button press.
- * Closes open dialogs/overlays, exits review/setup modes.
- */
-function handleBackPress(){
-  // v1.1.1 Phase 65: Export annotation dialog — back button = Cancel
-  if(typeof _pgnExportDialogActive!=='undefined'&&_pgnExportDialogActive){
-    if(typeof _pgnExportDialogDismiss==='function')_pgnExportDialogDismiss();
-    return;
-  }
-  // v1.1.2 Phase 68: Partial-eval-coverage dialog — back button = Cancel
-  //   (matches the export annotation dialog pattern).
-  if(typeof _pgnPartialEvalDialogActive!=='undefined'&&_pgnPartialEvalDialogActive){
-    if(typeof _pgnPartialEvalDialogDismiss==='function')_pgnPartialEvalDialogDismiss();
-    return;
-  }
-  // v1.0.8 UI: Promotion dialog takes highest priority — it blocks all other
-  // input and must be dismissed before any other overlay can be closed.
-  if(pendingPromotion){
-    pendingPromotion=null;
-    render();
-    return;
-  }
-  // v1.0.8 UI: Save-PGN prompt — back button = Cancel (matches the visible
-  // "Cancel" button behavior, so the user is not surprised by an implicit
-  // Yes/No decision).
-  if(showSavePGNPrompt){
-    if(typeof _savePGNCancel==='function')_savePGNCancel();
-    else{showSavePGNPrompt=false;render();}
-    return;
-  }
-  if(showPGNCacheManager){
-    _pgnCacheClose();
-    return;
-  }
-  // v1.0.4 Rev27: Close resign confirmation dialog on back press
-  if(showResignConfirm){
-    showResignConfirm=false;
-    render();
-    return;
-  }
-  // v1.0.8 PHASE 6: If ANY setup-mode selection is active (marker mode OR
-  // piece selection OR delete mode OR color selection), back button cancels
-  // the selection first (instead of exiting setup). This covers:
-  //   - setupMarkerMode ('castle' / 'ep')
-  //   - setupPiece (any piece type, including 'delete')
-  // The user presses back again to actually exit setup mode.
-  // We cancel in priority order: marker mode → piece selection.
-  if(typeof setupMode!=='undefined'&&setupMode){
-    if(typeof setupMarkerMode!=='undefined'&&setupMarkerMode){
-      setupMarkerMode=null;
-      render();
-      return;
-    }
-    if(typeof setupPiece!=='undefined'&&setupPiece){
-      setupPiece=null;
-      render();
-      return;
-    }
-  }
-  if(showEngineConfig){
-    showEngineConfig=false;
-    render();
-    return;
-  }
-  if(showNewGameDialog){
-    showNewGameDialog=false;
-    render();
-    return;
-  }
-  if(showAboutPage){
-    showAboutPage=false;
-    render();
-    return;
-  }
-  if(showImportDialog){
-    showImportDialog=false;
-    render();
-    return;
-  }
-  // File browser: Android back button navigates up one directory level
-  // or closes the browser if already at root
-  const fileBrowserOverlay=document.getElementById('_fileBrowserOverlay');
-  if(fileBrowserOverlay){
-    if(typeof _fileBrowserHandleBack==='function'){
-      _fileBrowserHandleBack();
-    }
-    return;
-  }
-  if(reviewMode){
-    exitReview();
-    return;
-  }
-  if(setupMode){
-    exitSetup();
-    return;
-  }
-  // No action — could show exit confirmation in the future
-}
 
-/**
- * v1.0.4 Rev24 NEW: Rename the human player.
- * Opens a prompt pre-filled with the current name (or default "你"/"You").
- * The new name is:
- *   - Trimmed and length-capped (30 chars)
- *   - Persisted via AndroidBridge.persistentSet('Regalia_humanName', ...)
- *   - Stored in the global _humanPlayerName variable
- *   - Reflected in all subsequent PGN text ([White "..."] / [Black "..."])
- *   - Reflected in PGN cache archives and clipboard copies
- *
- * Passing an empty string or cancelling the prompt RESETS the name to the
- * default "你"/"You" (clears the persisted preference).
- */
-function _renameHumanPlayer(){
-  try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-  const _current=(typeof _humanPlayerName!=='undefined'&&_humanPlayerName)?_humanPlayerName:T('you');
-  let _newName='';
-  try{_newName=prompt(T('rename_player_prompt'),_current)||'';}catch(e){_newName='';}
-  _newName=_newName.trim();
-  if(_newName.length>30)_newName=_newName.substring(0,30);
-  // If the user typed the default name or cancelled, clear the rename
-  if(!_newName||_newName===T('you')||_newName==='你'||_newName==='You'){
-    _humanPlayerName=null;
-    try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentRemove)AndroidBridge.persistentRemove('Regalia_humanName');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-    showToast(T('rename_player_reset'),2000);
-  }else{
-    _humanPlayerName=_newName;
-    try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_humanName',_newName);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-    showToast(T('rename_player_saved')+'：'+_newName,2000);
-  }
-  render();
-}
 
-/**
- * v1.0.4 Round-5 Rev28: Show the "💾 Save PGN file?" prompt before importing
- * a PGN that was imported on the stats page.
- *
- * Called from MainActivity.onResume() via evaluateJavascript when
- * StatsActivity.importedPGNOnStats is non-null (i.e., the user tapped "Yes"
- * on the stats page's "🗃️ Import PGN to game?" dialog).
- *
- * Flow:
- *   1. If the current game has move records, show the existing "💾 Save PGN
- *      file?" prompt (showSavePGNPrompt) with the import as the pending
- *      action. This gives the user a chance to save the current game's PGN
- *      before it gets replaced.
- *   2. If the current game is empty (no moves), skip the save prompt and
- *      import directly.
- *   3. The pending action (executed after the save prompt's Yes/No/Cancel)
- *      is: importPGN(pgn). Cancel = don't import (the user stays on the
- *      current game).
- *
- * @param {string} pgnText — The PGN text imported on the stats page.
- */
-function _showStatsImportBackPrompt(pgnText){
-  if(!pgnText){
-    showToast(T('stats_import_back_no_pgn'));
-    return;
-  }
-  // v1.0.8 PHASE 19 (bug fix): Close over pgnText directly instead of stashing
-  // in a module-level global. The global stash had a race: if this function was
-  // called twice before the first save-prompt resolved, the second call would
-  // overwrite the stash and the first import would be silently lost.
-  var importAction=function(){
-    try{
-      // v1.0.8 PHASE 34: use async import with worker offloading
-      if(typeof importPGNAsync==='function'){
-        importPGNAsync(pgnText);
-      }else if(typeof importPGN==='function'){
-        importPGN(pgnText);
-      }else{
-        console.error('importPGN function not available for stats import-back');
-        showToast(T('pgn_invalid'));
-      }
-    }catch(e){
-      console.error('Stats import-back failed:',e);
-      showToast(T('pgn_invalid'));
-    }
-  };
-  // Use the existing _withPGNSaveCheck mechanism: if there are move records,
-  // show the "💾 Save PGN file?" prompt first; otherwise import directly.
-  _withPGNSaveCheck(importAction);
-}
 // v1.0.8 PHASE 30: expose globally so Java's evaluateJavascript("typeof _showStatsImportBackPrompt==='function'...")
 //   works. ES module exports aren't global; the bundled chess.html masks this (top-level funcs become global).
 window._showStatsImportBackPrompt=_showStatsImportBackPrompt;
 
-/**
- * v1.0.4 Round-5 Rev27: Resign the current game (DeepSeek review 2.1).
- *
- * Called from the resign confirmation dialog when the user taps "Yes, Resign".
- * Implements PGN resignation per the 元宝 PGN report:
- *   - [Result "0-1"] if White (human) resigns → Black (AI) wins
- *   - [Result "1-0"] if Black (human) resigns → White (AI) wins
- *   - [Termination "Resignation"] supplementary tag
- *   - "{White resigns.}" / "{Black resigns.}" comment on the last move
- *
- * Side effects:
- *   - Sets gameOver and _gameOverStatusKey='resign' so the game-over overlay
- *     shows the correct message and the eval display shows win/lose emoji.
- *   - Sets _resignWinnerColor (the color that WINS) so _gameOverStrFromStatus
- *     and _buildPGNString can produce the correct text and tags.
- *   - Stops the engine: send 'stop' + isAIThinking=false so any in-flight
- *     search is aborted.
- *   - Stops the game clock (sets gameClocks.running=false).
- *   - Plays a soft "lose" sound if sound is enabled.
- */
-function _resignGame(){
-  if(gameOver)return; // Already over — no-op
-  // v1.0.8 PHASE 22 supplement: resign sound (降旗音)
-  try{if(typeof playSound==='function')playSound('resign');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-  // The resigner is the human player (playerColor). The winner is the AI.
-  _resignWinnerColor = (playerColor==='white') ? 'black' : 'white';
-  // Stop any in-flight engine search
-  try{
-    isAIThinking=false;
-    if(typeof _engineReady!=='undefined'&&_engineReady){
-      // v1.0.4 Rev35: prefer engineStop() (hard stop, discards bestmove) over
-      // sendToEngine('stop') (soft stop, bestmove still processed). engineStop()
-      // was added in Rev35 specifically for cases like resign/game-over where
-      // the engine's bestmove should be silently discarded.
-      try{
-        if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.engineStop==='function'){
-          AndroidBridge.engineStop();
-        }else if(typeof AndroidBridge!=='undefined'&&AndroidBridge.sendToEngine){
-          AndroidBridge.sendToEngine('stop');
-        }
-      }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-    }
-  }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-  // Stop the game clock
-  // v1.0.8 PHASE 19 (bug fix): gameClocks.running=false was a no-op (the field
-  // doesn't exist). The 200ms interval kept firing for the rest of the session,
-  // wasting CPU. Now properly clear the interval like _onGameClockExpired does.
-  try{
-    if(typeof gameClockTimerId!=='undefined'&&gameClockTimerId){
-      clearInterval(gameClockTimerId);
-      gameClockTimerId=null;
-    }
-  }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-  // Set game-over state
-  _gameOverStatusKey='resign';
-  gameOver=_gameOverStrFromStatus('resign');
-  // Play a soft "gameover" sound for the loss.
-  try{
-    if(soundOn !== undefined&&soundOn&&typeof playSound==='function'){
-      playSound('gameover');
-    }
-  }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-  // v1.0.8 PHASE 41: use GAME_OVER haptic (not ERROR) — resignation plays the
-  //   same 'gameover' sound as natural game-over, so the haptic should match.
-  //   ERROR had no Java case (fell to 15ms default); GAME_OVER has a proper
-  //   430ms multi-stage pattern matching the somber arpeggio.
-  try{HapticManager.fire('GAME_OVER');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-  // Force a full re-render to show the game-over overlay
-  markDirty(DIRTY_FULL);
-  // v1.1.1 Phase 66: Removed stale console.log (was left over from debugging).
-}
 
 /**
  * Start a heartbeat monitor to detect engine crashes.
@@ -8404,57 +6723,16 @@ function _cleanupEventListeners(){
   if(_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
   // FIX: Clean up notification throttle timer to prevent callback after context destruction
   if(typeof _notificationThrottleTimer!=='undefined'&&_notificationThrottleTimer){clearTimeout(_notificationThrottleTimer);_notificationThrottleTimer=0;}
+  // v1.2.3 round-13 (P1): clear the game-clock interval so a timed game in
+  //   progress doesn't keep firing _tickGameClock (200ms) after the Activity
+  //   is destroyed. The interval is set at _startGameClock and was previously
+  //   only cleared in the resign/timeout paths, not in the destroy-cleanup.
+  if(gameClockTimerId!==undefined&&gameClockTimerId){clearInterval(gameClockTimerId);gameClockTimerId=null;}
   renderPending=false;
 }
 
-// Paste PGN from clipboard — uses prompt() for simplicity
-// v1.0.2: Wrapped with _withPGNSaveCheck to prompt save before clearing
-function _doPastePGN(){
-  _withPGNSaveCheck(function(){
-    // v1.0.8 PHASE 18 Task 3 (bug fix): Reset virtual list state on PGN paste
-    // so stale avgRowH / window from a previous long game don't carry over.
-    _resetRvVirtualState();
-    const text=prompt(T('pgn_paste_hint'));
-    if(!text)return;
-    const trimmed=text.trim();
-    const hasPGNMoveNumbers=!!trimmed.match(/\d+\.\s*[a-zA-ZNBRQOKO]/);
-    const hasPGNHeaders=/\[/.test(trimmed);
-    const hasPGNVariations=/\(/.test(trimmed);
-    const hasPGNMarkers=hasPGNMoveNumbers||hasPGNHeaders||hasPGNVariations;
-    const isLikelyFEN=!hasPGNMarkers&&trimmed.includes('/')&&
-      (trimmed.split('\n').length<=2)&&
-      trimmed.split('/').length>=8;
-    if(fenToState(trimmed)||isLikelyFEN){
-      showToast(T('pgn_fen_rejected'),2500);
-      return;
-    }
-    // v1.0.8 PHASE 34: use async import with worker offloading
-    if(typeof importPGNAsync==='function'){
-      importPGNAsync(text);
-    }else{
-      importPGN(text);
-    }
-  });
-}
 
-// v1.0.2: Wrapper for importFEN with PGN save check
-function _importFENWithSaveCheck(){
-  _withPGNSaveCheck(function(){
-    // v1.0.8 PHASE 18 Task 3 (bug fix): Reset virtual list state on FEN import
-    // so stale avgRowH / window from a previous long game don't carry over.
-    _resetRvVirtualState();
-    importFEN();
-  });
-}
 
-// v1.0.2: Wrapper for importPGNFile with PGN save check
-function _importPGNFileWithSaveCheck(){
-  _withPGNSaveCheck(function(){
-    // v1.0.8 PHASE 18 Task 3 (bug fix): Reset virtual list state on PGN file import.
-    _resetRvVirtualState();
-    importPGNFile();
-  });
-}
 
 // ---- Exports ----
 // v1.2.1 round-9: Removed doAIMove and _requestStockfishMove — both are
@@ -8463,4 +6741,7 @@ function _importPGNFileWithSaveCheck(){
 // whole `export {...}` line via regex, so there was no production impact,
 // but the list was misleading. Verified by grep — neither symbol is
 // declared in ui.js.
-export {render,markDirty,sqClick,executeMove,undoMove,redoMove,flipBoard,quickFreeOpening,toggleSound,doPromotion,getHint,toggleSetup,exitSetup,setupClick,enterReview,reviewGoTo,reviewAnalyzeAll,exitReview,startGame,_resetGameUIState,_buildEvalTrendSVG,_refreshEvalTrendChart,handleBackPress,_startEngineHeartbeat,_cleanupEventListeners,_reviewAnalyzeAdvance,_rvAnalyzeBtnLabel,_updateReviewAnalyzeBtn,_doPastePGN};
+export {render,enterReview,reviewGoTo,reviewAnalyzeAll,exitReview,_resetGameUIState,_buildEvalTrendSVG,_refreshEvalTrendChart,_startEngineHeartbeat,_cleanupEventListeners,_reviewAnalyzeAdvance,_rvAnalyzeBtnLabel,_updateReviewAnalyzeBtn,
+// v1.2.3 round-18: added posDesc — defined in this module and previously
+//   (incorrectly) exported from game-logic.js.
+posDesc};
