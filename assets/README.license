@@ -1,6 +1,13 @@
 assets/ — README screenshots
 ============================
 
+v1.2.3 round-22 (2026.7.18): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - screenshot.jpg / screenshot.png: unchanged. All round-22 changes are in
+    src/main/assets/chess.src/ (ui.js, ai-bridge.js eval-perspective fixes),
+    the rebuilt chess.html, the Manual (both manuals) and the top-level docs
+    (BUILDING.md, PRIVACY.md, NOTICE, README.md, worklog.md).
+
 v1.2.3 round-21 (2026.7.17): no changes in this directory.
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
   - The round-21 change is limited to src/main/assets/chess.src/ai-bridge.js

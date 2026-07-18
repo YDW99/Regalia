@@ -54,6 +54,22 @@ This data:
 - The eval cache (`eval_cache.json`) contains per-move Stockfish evaluation scores (centipawn values, mate distances, search depths, WDL probabilities) keyed by review step index. It contains no personal or position-identifying information beyond the chess evaluation data itself. (v1.0.7+: capped at 2000 entries via LRU eviction — the currently-viewed step is never evicted; eviction order is preserved across app restarts.)
 - The tag files contain user-defined tag strings (e.g., "opening", "tactics") for organizing PGN cache entries. They contain no personal or device-identifying information.
 
+### v1.2.3 round-22: eval bar perspective fix (pure code change)
+
+The v1.2.3 round-22 change (2026.7.18) fixes a user-reported bug where the
+evaluation bar's advantage/disadvantage "report" (emoji + description, the
+eval-delta colour, and the W/D/L labels) sometimes contradicted the player's
+stance when the player played Black. Four fixes in `ui.js` / `ai-bridge.js`:
+(1) the timeout/resign game-over score is now White-POV (`+∞` = White wins) to
+agree with the emoji, instead of player-POV; (2) the in-app W/D/L labels are
+now player-perspective ("W" = the player's win) — the PGN export stays
+White-POV; (3) the eval-delta good/bad colour is now player-perspective (the
+displayed numeric delta stays White-POV to match the adjacent score); (4) a
+missing `total>0` guard was added to the review eval-bar WDL to prevent a
+`NaN%` display if the engine ever emits `wdl 0 0 0`. **No new permissions, no
+new network access, no new data collection — pure code-organization /
+display-perspective fixes.**
+
 ### v1.2.3 round-21: edge-case fix (per-color gated king signal)
 
 The v1.2.3 round-21 change (2026.7.17) fixes a user-reported edge case in the round-20 FEN-import Chess960 detection: the king-position signal in `_needsShredderFEN` is now gated per color with that color's own castling rights, so a fully legal standard position where the opponent's king has wandered off the e-file is no longer mislabeled as Chess960. **No new permissions, no new network access, no new data collection.** (Environment note: the build sandbox was reset this round; the toolchain was re-downloaded and the release signing key regenerated and backed up — the APK certificate fingerprint differs from previous rounds.)

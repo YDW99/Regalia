@@ -1,3 +1,10 @@
+v1.2.3 round-22 (2026.7.18) — eval bar perspective fix (player-POV report):
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - chess.html (AGPL v3): Rebuilt from chess.src/ via build-chess.py after the
+    ui.js / ai-bridge.js eval-perspective fixes (see chess.src/README.license).
+    22,489 lines, 1,360,036 bytes.
+  - stats.html (AGPL v3): No changes this round.
+
 v1.2.3 round-21 (2026.7.17) — edge-case fix (per-color gated king signal):
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
   - chess.html (AGPL v3): Rebuilt from chess.src/ via build-chess.py after

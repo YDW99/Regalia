@@ -41,9 +41,19 @@ load order is unchanged. Bundle order is now 11 modules.
 ```
 ./gradlew assembleRelease
 ```
-The signed APK (v1+v2+v3 signed with `../debug.keystore`) will be at
-`/tmp/regalia_build/Regalia/outputs/apk/release/Regalia-release.apk`
-(per `buildDir` in `build.gradle`).
+The signed APK (v1+v2+v3 signed with `../debug.keystore`) is output at
+`build/outputs/apk/release/Regalia-release.apk` (the default Gradle `buildDir`
+under the project root — `build.gradle` does not override `buildDir`, so older
+docs referencing `/tmp/regalia_build/...` are stale; trust the actual output
+path). This is a single-module project (root `build.gradle` applies
+`com.android.application` directly), so the task is `assembleRelease` — NOT
+`:app:assembleRelease`.
+
+> **lint baseline (first build only):** `lint-baseline.xml` is excluded from the
+> source tar (it is machine-specific). On a clean source tree the first
+> `assembleRelease` run creates a fresh baseline and aborts with
+> *"Aborting build since new baseline file was created"* — this is expected;
+> simply re-run `./gradlew assembleRelease` and it passes.
 
 ## Requirements
 - JDK 21 (e.g. Temurin JDK 21.0.5+11) — must include `javac` (JRE-only is insufficient)
@@ -119,6 +129,77 @@ The signed APK (v1+v2+v3 signed with `../debug.keystore`) will be at
     `libc++_shared.so` workaround files have been removed from `jniLibs/` —
     CMake now builds `libengine_bridge.so` from source, and `libc++_shared.so`
     is bundled automatically by AGP via the NDK.
+
+## v1.2.3 round-22 (2026.7.18) — eval bar perspective fix + first-principles review
+
+User-reported bug: the evaluation bar's advantage/disadvantage "report"
+sometimes contradicted the player's stance. Version stays at v1.2.3
+(versionCode 123) — all changes are bug fixes / robustness, no version bump.
+
+### The perspective contract (verified against source)
+
+The eval bar deliberately keeps TWO perspectives side by side, by design:
+
+- **Score value, eval trend chart, and mate notation** are **White-POV**
+  (positive / above the 0-axis / `#+` = White advantage; negative / below /
+  `#-` = Black advantage; `#+1` = White mates in 1, `#-1` = Black mates in 1).
+  This is correct and unchanged.
+- **The "report" — emoji + description (你占优 / Advantage), the eval-delta
+  colour, the W/D/L labels, and the game-over score** are **player-POV**, so
+  the player always sees their own advantage/disadvantage regardless of
+  whether they play White or Black.
+
+### Bug fixes (real, verified against source)
+
+1. **`formatEval()` timeout & resign score was player-POV, not White-POV**
+   (`ui.js`): the checkmate branch already used `whiteWins` for the score
+   (`#+`/`#-`), but the timeout and resign branches used `playerWins`, emitting
+   `+∞` whenever the *player* won. A Black player who won by timeout/resignation
+   saw `+∞` (a White-advantage score) next to a 🏆 (player-winning emoji) — a
+   contradictory perspective. Fixed: both branches now use
+   `score:whiteWins?'+∞':'-∞'`. emoji/desc stay player-POV as designed.
+2. **W/D/L labels were White-POV** (`ai-bridge.js` main eval bar +
+   `ui.js` review eval bar): `_sfWdlW` is White's win probability, but the
+   label "W" reads as "my win". A Black player saw the opponent's win%
+   mislabelled as "W". Fixed: swap W/L for a Black player so "W" = the player's
+   win%. The PGN export (`pgn-standard.js`) intentionally stays White-POV (PGN
+   is a portable, side-neutral format) — only the in-app display is flipped.
+3. **Eval-delta colour was White-POV** (`_formatEvalDelta` in `ai-bridge.js`):
+   green meant "White improved", which told a Black player "good" exactly when
+   their position worsened. The displayed numeric delta stays White-POV (so it
+   matches the adjacent White-POV score); only the good/bad **colour** is now
+   player-perspective. The mate-transition colouring (`→#` / escape) was
+   likewise White-POV and is now player-perspective (green when the player
+   forces mate / escapes mate).
+4. **Review eval-bar WDL missing `total>0` guard** (`ui.js`): the main eval bar
+   (in `ai-bridge.js`) already guarded against `wdl 0 0 0` (division by zero →
+   `NaN%`), but the review eval bar did not. Added the same `if(_rt>0)` guard.
+
+### Verification
+
+- ✅ All 11 JS modules pass `node --check`; `chess.html` inline script passes.
+- ✅ Bundle-level `no-undef` + Node `vm` smoke test: 11/11 key functions
+  present, zero load-time TDZ errors.
+- ✅ `chess.html` rebuilt (22,489 lines / 1,360,036 bytes); eval-fix markers
+  present (timeout/resign `score:whiteWins`, two WDL player-POV swaps, delta
+  player-POV colour).
+- ✅ Release APK: v1+v2+v3 signatures, versionCode=123 / versionName="1.2.3",
+  targetSdk 35, FGS subtype attribute present, dotprod engine SHA-256
+  three-way consistent.
+
+### Toolchain facts (authoritative as of round-22)
+
+| Component | Version |
+|---|---|
+| JDK | 21 (Temurin / OpenJDK 21.0.x) |
+| Android SDK | API 35, Build-Tools 34.0.0 |
+| NDK | 27.2.12479018 |
+| CMake | 3.31.6 (pinned `version "3.31.6+"` in `build.gradle`) |
+| Gradle | 8.11.1 (wrapper) |
+| AGP | 8.7.3 (`com.android.tools.build:gradle:8.7.3`) |
+| minSdk / targetSdk | 23 / 35 (HyperOS 3 compatible) |
+| ABI | arm64-v8a only |
+| Stockfish | sf_18 arm64-v8a-dotprod (SHA-256 `8f7116d3…23b61b5`) |
 
 ## v1.2.3 round-13 (2026.7.16) — CMake re-enablement + first-principles code review
 

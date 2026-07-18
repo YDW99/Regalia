@@ -4446,7 +4446,15 @@ function _buildEvalHTML(e,opts){
   }
   s+=progressStr;
   let wdlStr='';
-  if(_sfWdlW>=0&&_sfWdlD>=0&&_sfWdlL>=0){const total=_sfWdlW+_sfWdlD+_sfWdlL;if(total>0){const wP=Math.round(_sfWdlW/total*100);const dP=Math.round(_sfWdlD/total*100);const lP=Math.round(_sfWdlL/total*100);wdlStr='<span style="font-size:.65rem;color:var(--muted);margin-left:4px">('+wP+'%W/'+dP+'%D/'+lP+'%L)</span>';}}
+  if(_sfWdlW>=0&&_sfWdlD>=0&&_sfWdlL>=0){const total=_sfWdlW+_sfWdlD+_sfWdlL;if(total>0){
+    // v1.2.3 round-22: WDL labels are player-perspective (W = the player's
+    //   win probability). _sfWdlW/_sfWdlL are White-POV; swap for a black
+    //   player so "W" reads as "my win" — matching the emoji/desc report.
+    const _blackP=(typeof playerColor!=='undefined'&&playerColor==='black');
+    const wP=Math.round((_blackP?_sfWdlL:_sfWdlW)/total*100);
+    const dP=Math.round(_sfWdlD/total*100);
+    const lP=Math.round((_blackP?_sfWdlW:_sfWdlL)/total*100);
+    wdlStr='<span style="font-size:.65rem;color:var(--muted);margin-left:4px">('+wP+'%W/'+dP+'%D/'+lP+'%L)</span>';}}
   s+=wdlStr;
   if(opts.delta)s+=opts.delta;
   return s;
@@ -4493,18 +4501,40 @@ function _updateReviewEvalUI(){
 }
 // Format eval delta between two eval values (centipawns, White's perspective).
 // Consolidates mate-transition handling and threshold logic in one place.
+// v1.2.3 round-22: the displayed numeric delta is White-POV (consistent with
+//   the adjacent score, which is White-POV), but the good/bad COLOUR is now
+//   player-perspective. Previously the colour was White-POV (green whenever
+//   White improved), which told a black player "good" exactly when their
+//   position worsened — a perspective bug in the 优劣 report. The mate
+//   transitions were likewise coloured White-POV; they now colour green when
+//   the change favours the player (player forces mate / player escapes mate).
 function _formatEvalDelta(curEval,prevEval,fontSize){
   if(curEval==null||prevEval==null)return '';
   const _isM=Math.abs(curEval)>=90000,_wasM=Math.abs(prevEval)>=90000;
   const fs=fontSize?'font-size:'+fontSize+';':'';
+  // Player-perspective sign: +1 for White, -1 for Black. curP/prevP > 0 means
+  //   the player is winning (forcing mate). typeof guard follows the round-11
+  //   cross-module defensive pattern (playerColor lives in ui.js).
+  const _sign=(typeof playerColor!=='undefined'&&playerColor==='black')?-1:1;
   if(_isM||_wasM){
-    if(_isM&&!_wasM)return '<span style="color:#27ae60;'+fs+'">'+T('checkmate_arrow')+'</span>';
-    if(!_isM&&_wasM)return '<span style="color:#c0392b;'+fs+'">'+T('escape_mate')+'</span>';
+    const curP=_sign*curEval,prevP=_sign*prevEval;
+    if(_isM&&!_wasM){
+      // Position became a forced mate — green for the mating side, red for the mated side.
+      const good=curP>0;
+      return '<span style="color:'+(good?'#27ae60':'#c0392b')+';'+fs+'">'+T('checkmate_arrow')+'</span>';
+    }
+    if(!_isM&&_wasM){
+      // Escaped a forced mate — green for the side that was being mated, red for the side that lost the mate.
+      const good=prevP<0;
+      return '<span style="color:'+(good?'#27ae60':'#c0392b')+';'+fs+'">'+T('escape_mate')+'</span>';
+    }
     return '';
   }
   const d=curEval-prevEval,dp=(d/100).toFixed(1);
-  if(d>2)return '<span style="color:#27ae60;'+fs+'">+'+dp+'</span>';
-  if(d<-2)return '<span style="color:#c0392b;'+fs+'">'+dp+'</span>';
+  // Colour by player-perspective delta (_sign*d); dp stays White-POV so it
+  //   matches the score shown next to it.
+  if(_sign*d>2)return '<span style="color:#27ae60;'+fs+'">+'+dp+'</span>';
+  if(_sign*d<-2)return '<span style="color:#c0392b;'+fs+'">'+dp+'</span>';
   return '';
 }
 function _resetEvalState(){_sfMateDistance=0;_sfWdlW=-1;_sfWdlD=-1;_sfWdlL=-1;_sfDepth=0;_sfSeldepth=0;_sfEvalReady=false;_evalLoading=true;_evalStaleGen++;_lastProgressNodes=null;_lastProgressNps=null;_ponderGen++;_ponderBarInfo='';_ponderMoveSAN='';_pendingPonderMoveUCI=null;_updateAIThinkDisplay();}

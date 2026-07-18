@@ -1,3 +1,27 @@
+v1.2.3 round-22 (2026.7.18) — eval bar perspective fix (player-POV report):
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - ui.js (GPL v3): formatEval() timeout & resign game-over branches now use
+    `score:whiteWins?'+∞':'-∞'` (was `playerWins`) so the score stays
+    White-POV and agrees with the player-POV emoji/desc — fixes the
+    contradictory "+∞ + 🏆" a Black player saw when winning by
+    timeout/resignation. Review eval-bar WDL now swaps W/L for a Black
+    player (player-perspective labels, "W" = the player's win) AND gains a
+    `if(_rt>0)` guard against `wdl 0 0 0` → NaN% (the main eval bar already
+    had the guard). posDesc/posEmoji already received player-POV evP —
+    unchanged. Eval trend chart stays White-POV (positive = White) by
+    design — unchanged.
+  - ai-bridge.js (GPL v3): _formatEvalDelta colour is now player-perspective
+    (green when the change favours the player; the displayed numeric delta
+    stays White-POV to match the adjacent score). Mate-transition colouring
+    (→# / escape) likewise player-perspective. Main eval-bar WDL swaps W/L
+    for a Black player (player-perspective labels). _sfEval / _sfMateDistance
+    stay White-POV (converted in onEngineEval) — unchanged. PGN-export WDL
+    (pgn-standard.js) intentionally stays White-POV — unchanged.
+  - All other modules (index.html.tpl, game-logic.js, chess960.js,
+    pgn-standard.js, worker-pool.js, state-store.js, tablebase.js,
+    eco-data.js, ui-gameflow.js, ui-interactions.js): No changes this round.
+  - License classification: unchanged.
+
 v1.2.3 round-21 (2026.7.17) — edge-case fix (per-color gated king signal):
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
   - ai-bridge.js (GPL v3): _needsShredderFEN king-position check now gated

@@ -1,3 +1,13 @@
+v1.2.3 round-22 (2026.7.18) — eval bar perspective fix (player-POV report):
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - Regalia-v1.2.3-manual-zh.html (AGPL v3): round-22 changelog entry inserted
+    newest-first — the eval bar perspective fix (timeout/resign White-POV
+    score, player-POV WDL labels, player-POV eval-delta colour, review WDL
+    total>0 guard). Diagrams unchanged (no UI layout change this round).
+  - Regalia-v1.2.3-manual-en.html (AGPL v3): same round-22 entry, English
+    (content-equivalent, not a machine translation).
+  - License classification: both manuals remain AGPL v3 (original works).
+
 v1.2.3 round-21 (2026.7.17) — edge-case fix (per-color gated king signal):
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
   - Regalia-v1.2.3-manual-zh.html (AGPL v3): round-21 changelog entry inserted

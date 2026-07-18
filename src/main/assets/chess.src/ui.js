@@ -1544,7 +1544,13 @@ function formatEval(){
     if(_gameOverStatusKey==='timeout'){
       const whiteWins=gameOver.includes(T('white_wins'))||gameOver.includes('White wins')||gameOver.includes(T('white_short'));
       const playerWins=(playerColor==='white')===whiteWins;
-      return{emoji:'⌛',desc:playerWins?T('winning'):T('losing'),score:playerWins?'+∞':'-∞'};
+      // v1.2.3 round-22: score stays White-POV (+∞ = White wins) so it agrees
+      //   with the emoji/desc and the rest of the eval bar's convention
+      //   (positive = White advantage). Previously this used playerWins, which
+      //   made a black player who won by timeout see "+∞" (a White-advantage
+      //   score) next to a 🏆 (player-winning emoji) — a contradictory
+      //   perspective report. emoji/desc remain player-POV as designed.
+      return{emoji:'⌛',desc:playerWins?T('winning'):T('losing'),score:whiteWins?'+∞':'-∞'};
     }
     // v1.0.4 FIX: resignation also needs win/lose emoji, not draw.
     if(_gameOverStatusKey==='resign'){
@@ -1554,7 +1560,10 @@ function formatEval(){
       // player always appear to lose even when they won (e.g. AI resigns).
       const whiteWins=(typeof _resignWinnerColor!=='undefined'&&_resignWinnerColor==='white');
       const playerWins=(playerColor==='white')===whiteWins;
-      return{emoji:playerWins?'🏆':'💀',desc:playerWins?T('winning'):T('losing'),score:playerWins?'+∞':'-∞'};
+      // v1.2.3 round-22: score is White-POV (+∞ = White wins) — see timeout
+      //   branch above for the rationale. Keeps the score/emoji perspectives
+      //   consistent for the player regardless of which side they played.
+      return{emoji:playerWins?'🏆':'💀',desc:playerWins?T('winning'):T('losing'),score:whiteWins?'+∞':'-∞'};
     }
     // Genuine draws (stalemate, 50-move, repetition, insufficient material, agreement)
     return{emoji:'🤝',desc:T('draw_game'),score:'0.0'};
@@ -2666,7 +2675,18 @@ if(_evalLoading&&_sfDepth>0){
 // Build WDL string for review eval bar (same as main eval bar).
 // v1.0.8 PHASE 14: removed the .65rem override (inherit title size).
 let _rWdlStr='';
-if(_sfWdlW>=0&&_sfWdlD>=0&&_sfWdlL>=0){const _rt=_sfWdlW+_sfWdlD+_sfWdlL;const _rw=Math.round(_sfWdlW/_rt*100);const _rd=Math.round(_sfWdlD/_rt*100);const _rl=100-_rw-_rd;_rWdlStr='<span style="color:var(--muted);margin-left:4px">('+_rw+'%W/'+_rd+'%D/'+_rl+'%L)</span>';}
+if(_sfWdlW>=0&&_sfWdlD>=0&&_sfWdlL>=0){const _rt=_sfWdlW+_sfWdlD+_sfWdlL;if(_rt>0){
+  // v1.2.3 round-22: WDL labels are player-perspective (W = the player's win
+  //   probability, L = the player's loss probability). _sfWdlW/_sfWdlL are
+  //   White-POV (W = White wins); swap them for a black player so "W" reads
+  //   as "my win" — matching the emoji/desc report. Also added the _rt>0
+  //   guard (the main eval bar in ai-bridge.js already had it) to avoid a
+  //   NaN display if the engine ever emits `wdl 0 0 0`.
+  const _blackP=(typeof playerColor!=='undefined'&&playerColor==='black');
+  const _rw=Math.round((_blackP?_sfWdlL:_sfWdlW)/_rt*100);
+  const _rd=Math.round(_sfWdlD/_rt*100);
+  const _rl=100-_rw-_rd;
+  _rWdlStr='<span style="color:var(--muted);margin-left:4px">('+_rw+'%W/'+_rd+'%D/'+_rl+'%L)</span>';}}
 // v1.0.8 PHASE 14: enlarge review eval-bar fonts and cap the bar's height
 // so it never grows beyond a single line of text. Previously the bar used
 // .62rem / .58rem with flex-wrap:wrap, which let long content (emoji + desc

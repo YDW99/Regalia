@@ -1,3 +1,9 @@
+v1.2.3 round-22 (2026.7.18): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - The round-22 change is limited to src/main/assets/chess.src/ (ui.js,
+    ai-bridge.js eval-perspective fixes) plus the rebuilt chess.html and the
+    top-level docs / Manual.
+
 v1.2.3 round-21 (2026.7.17): no changes in this directory.
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
   - The round-21 change is limited to src/main/assets/chess.src/ai-bridge.js

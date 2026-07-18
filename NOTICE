@@ -20,6 +20,28 @@ The original NOTICE files from third-party projects are preserved alongside this
 - AUTHORS-stockfish: Stockfish project authors list
 
 ===== LICENSE CLASSIFICATION BY FILE ==========================================
+v1.2.3 round-22 (2026.7.18) — eval bar perspective fix: player-POV 优劣 report:
+  - `ui.js` (GPL v3): USER-REPORTED BUG FIXED — the evaluation bar's
+    advantage/disadvantage "report" sometimes contradicted the player's stance
+    when the player played Black. formatEval() timeout & resign game-over
+    branches now emit `score:whiteWins?'+∞':'-∞'` (was `playerWins`), so the
+    score stays White-POV and agrees with the player-POV emoji/desc — a Black
+    player winning by timeout/resignation no longer sees "+∞ + 🏆". Review
+    eval-bar WDL swaps W/L for a Black player (player-perspective labels) and
+    gains a `total>0` guard against `wdl 0 0 0` → NaN%.
+  - `ai-bridge.js` (GPL v3): _formatEvalDelta colour is now player-perspective
+    (green when the change favours the player; the displayed numeric delta
+    stays White-POV to match the adjacent score). Mate-transition colouring
+    (→# / escape) likewise player-perspective. Main eval-bar WDL swaps W/L
+    for a Black player (player-perspective labels).
+  - Score value, eval trend chart, and mate notation (#+/#-) remain White-POV
+    by design — unchanged. PGN-export WDL (pgn-standard.js) stays White-POV
+    (portable side-neutral format) — unchanged. No new permissions, no new
+    network access, no new data collection.
+  - License classification: unchanged (ui.js / ai-bridge.js remain GPL v3
+    as DroidFish-derived code; chess.html remains AGPL v3 as original work).
+  - Version unchanged: versionCode=123, versionName="1.2.3".
+
 v1.2.3 round-21 (2026.7.17) — edge-case fix: per-color gated king signal in _needsShredderFEN:
   - `ai-bridge.js` (GPL v3): USER-REPORTED EDGE CASE FIXED — the
     king-position check in _needsShredderFEN was a global OR (any right

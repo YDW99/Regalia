@@ -102,7 +102,9 @@ Regalia/
 │   │   │   ├── ai-bridge.js    # Engine communication, eval display, PGN export, FEN sanitization, theme detection
 │   │   │   ├── tablebase.js    # Lichess Syzygy tablebase queries + PGN import
 │   │   │   ├── eco-data.js     # ECO opening classification data
-│   │   │   ├── ui.js           # Core rendering, dialogs, interaction, review mode, ChessAudioEngine
+│   │   │   ├── ui-gameflow.js  # Game start + game-clock subsystem (v1.2.3 round-17 God-Class split NEW)
+│   │   │   ├── ui-interactions.js # Click handling, move execution, toolbar, setup, dialogs, back-press (v1.2.3 round-17 NEW)
+│   │   │   ├── ui.js           # Core rendering, review mode, ChessAudioEngine, eval bar (round-17 slimmed to ~6,761 lines)
 │   │   │   ├── index.html.tpl  # CSS template (theme variables, responsive layout, animation keyframes)
 │   │   │   └── README.license  # Per-file license classification for this directory
 │   │   ├── chess.html          # Built output (combined JS+CSS+HTML)
@@ -126,6 +128,7 @@ Regalia/
 │   │   ├── ChessWebViewClient.java # Page load handler, render-process crash recovery
 │   │   ├── EngineService.java  # Foreground service for engine stability
 │   │   ├── ChessApp.java       # Application class, crash protection
+│   │   ├── HapticManager.java  # Haptic feedback (@JavascriptInterface delegate, PWLE/vibration; v1.2.3 round-17 NEW, 487 lines)
 │   │   ├── StabilizationHelper.java # Sensor-fusion board anti-shake (v1.0.5 NEW)
 │   │   ├── TlsSecurityHelper.java # TLS 1.2+ enforcement for tablebase API
 │   │   ├── RootDetector.java   # Informational root detection (About dialog)
@@ -177,6 +180,11 @@ Regalia/
 ├── proguard-rules.pro          # ProGuard/R8 rules (JS bridge keep, JNI keep, log stripping)
 ├── lint.xml                    # Lint severity config (security=error, i18n/icon=ignore)
 ├── gradlew / gradlew.bat       # Gradle wrapper scripts
+├── CONTRIBUTING-zh.md / CONTRIBUTING-en.md # Contributing guidelines (zh/en)
+├── SECURITY_FIXES.md           # Security hardening changelog (MobSF findings)
+├── About_v18.x.x_.md          # Engine version notes (Stockfish 18.x.x)
+├── LICENSE&NOTICE.zip          # Archive of all license/notice files (for redistribution)
+├── worklog.md                  # Development work log (newest round first)
 └── README.md
 ```
 

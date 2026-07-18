@@ -1,12 +1,40 @@
+// ===================== MODULE: ui-gameflow =====================
+// Game start (startGame/_startGameImpl) and the game-clock subsystem
+// (initGameClocks/_tickGameClock/_onGameClockExpired/recordMoveEnd/formatClock/
+//  _updateClockDisplay).
+// Depends on: game-logic, ai-bridge, ui (globals).
+//
+// Copyright (C) 2026 Regalia
+//
+// Game-flow and clock patterns derived from DroidFish
+// (Copyright (C) Peter Österlund, GPL v3)
+// Modified by Regalia on 2026-06-15
+//
+// AI-GEN: AI assisted + DroidFish source code logic reference
+// This code was AI-assisted and has been reviewed for GPL v3 compliance.
+//
+// v1.2.3 (God Class refactor round-17): extracted verbatim from ui.js to slim
+//   the God Class. Same global-scope module pattern as the other chess.src
+//   modules — all functions remain top-level globals; build-chess.py
+//   concatenates the modules in MODULES order and strips the export statement
+//   for the bundle. No behavior change intended: every function body is moved
+//   verbatim.
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+// ============================================================================
+
 // Regalia Chess — Game flow & clocks (ui-gameflow.js)
-// v1.2.3 (God Class refactor round-17): extracted from ui.js to slim the God
-//   Class. Same global-scope module pattern as the other chess.src modules —
-//   all functions remain top-level globals; build-chess.py concatenates the
-//   modules in MODULES order and strips the export statement for the bundle.
-//   No behavior change intended: every function body is moved verbatim.
-// Contents: game start (startGame/_startGameImpl) and the game-clock
-//   subsystem (initGameClocks/_tickGameClock/_onGameClockExpired/recordMoveEnd/
-//   formatClock/_updateClockDisplay).
 function startGame(){
   _withPGNSaveCheck(_startGameImpl);
 }

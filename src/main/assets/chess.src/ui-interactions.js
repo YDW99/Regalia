@@ -1,18 +1,46 @@
+// ===================== MODULE: ui-interactions =====================
+// Board click handling (sqClick/setupClick & helpers), move execution &
+// undo/redo (executeMove/_clearAnimationState/undoMove/redoMove), toolbar
+// actions (flipBoard/quickFreeOpening/toggleSound/doPromotion/getHint/
+// setDifficultyLevel), setup-mode entry/exit (toggleSetup/exitSetup/
+// _exitSetupImpl), PGN-save prompt chain (_withPGNSaveCheck/_savePGNYes/
+// _savePGNNo/_savePGNCancel), back-press routing (handleBackPress), import
+// wrappers (_doPastePGN/_importFENWithSaveCheck/_importPGNFileWithSaveCheck),
+// player rename & stats-import prompt (_renameHumanPlayer/
+// _showStatsImportBackPrompt) and resign (_resignGame).
+// Depends on: game-logic, ai-bridge, ui (globals).
+//
+// Copyright (C) 2026 Regalia
+//
+// UI interaction patterns derived from DroidFish
+// (Copyright (C) Peter Österlund, GPL v3)
+// Modified by Regalia on 2026-06-15
+//
+// AI-GEN: AI assisted + DroidFish source code logic reference
+// This code was AI-assisted and has been reviewed for GPL v3 compliance.
+//
+// v1.2.3 (God Class refactor round-17): extracted verbatim from ui.js to slim
+//   the God Class. Same global-scope module pattern as the other chess.src
+//   modules — all functions remain top-level globals; build-chess.py
+//   concatenates the modules in MODULES order and strips the export statement
+//   for the bundle. No behavior change intended: every function body is moved
+//   verbatim.
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program. If not, see <https://www.gnu.org/licenses/>.
+// ============================================================================
+
 // Regalia Chess — User interactions (ui-interactions.js)
-// v1.2.3 (God Class refactor round-17): extracted from ui.js to slim the God
-//   Class. Same global-scope module pattern as the other chess.src modules —
-//   all functions remain top-level globals; build-chess.py concatenates the
-//   modules in MODULES order and strips the export statement for the bundle.
-//   No behavior change intended: every function body is moved verbatim.
-// Contents: board click handling (sqClick/setupClick & helpers), move
-//   execution & undo/redo (executeMove/_clearAnimationState/undoMove/redoMove),
-//   toolbar actions (flipBoard/quickFreeOpening/toggleSound/doPromotion/getHint/
-//   setDifficultyLevel), setup-mode entry/exit (toggleSetup/exitSetup/
-//   _exitSetupImpl), PGN-save prompt chain (_withPGNSaveCheck/_savePGNYes/
-//   _savePGNNo/_savePGNCancel), back-press routing (handleBackPress), import
-//   wrappers (_doPastePGN/_importFENWithSaveCheck/_importPGNFileWithSaveCheck),
-//   player rename & stats-import prompt (_renameHumanPlayer/
-//   _showStatsImportBackPrompt) and resign (_resignGame).
 function sqClick(r,c){
 if(animationInProgress)return;
 // v1.0.5 Round-6 Rev49: if a long-press just fired (toggling stabilization),

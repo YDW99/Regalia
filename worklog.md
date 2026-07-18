@@ -1,3 +1,64 @@
+# Regalia v1.2.3 — round-22 工作日志（2026-07-18）
+
+## 任务来源
+用户报告评估栏视角 Bug：评估栏显示的优劣之视角有时不符合玩家立场。明确设计契约：
+分值/折线图/将杀记号（#+/#-）为白方视角（正数=白方优势），emoji+描述/增减色标/WDL 标签/
+终局分值为玩家视角（无论玩家执白或执黑都看到自己的优劣势报告）。要求修复违反该契约的缺陷，
+并对每个文件逐行第一性原理审查优化（bug>健壮性>功能>性能>冗余>简化），版本号保持 123/1.2.3，
+交付 release APK（v1+v2+v3 签名、兼容澎湃 OS 3）+ tar 源码包（无引擎）+ 中英文 HTML 说明书。
+
+## 评估栏视角 Bug 修复（4 处，均对照源码验证）
+1. **formatEval() 超时/认输终局分值**（ui.js）：已杀分支已正确用 `whiteWins` 生成 `#+`/`#-`，
+   但超时与认输分支用 `playerWins` 生成 `+∞`/`-∞`——黑方玩家靠超时/认输获胜时会看到 `+∞`
+   （白方优势分值）配 🏆（玩家获胜 emoji）的矛盾视图。修复为统一 `score:whiteWins?'+∞':'-∞'`，
+   emoji/desc 保持玩家视角。
+2. **应用内 W/D/L 标签**（ai-bridge.js 主评估栏 + ui.js 复盘评估栏）：`_sfWdlW` 为白方胜率却
+   标为 "W"，黑方玩家看到的 "W" 实为对手胜率。修复为玩家视角（黑方玩家时交换 W/L，"W"=我的胜率）。
+   PGN 导出 WDL（pgn-standard.js）仍为白方视角（PGN 为可移植中立格式），不变。
+3. **评估增减色标**（_formatEvalDelta, ai-bridge.js）：绿色原为白方改善，黑方玩家局面恶化时却显示
+   绿色"良好"。修复为玩家视角色标（绿色=对玩家有利；显示数值仍为白方视角以与相邻分值一致）。
+   将杀转换色标（→#/脱险）同样改为玩家视角（玩家将杀/脱险=绿色）。
+4. **复盘评估栏 WDL 缺 total>0 守卫**（ui.js）：主评估栏已有，复盘评估栏缺失，引擎输出 `wdl 0 0 0`
+   时会显示 `NaN%`。补齐守卫。
+
+## 第一性原理逐文件审查
+对照 3 份 PDF 参考资料（AI 防缺陷指南、Android WebView 指南、SonarCloud 指南——均为通用指南，
+按恢复指南警告 PDF 误报率高，仅汲取通用原则：边缘情况处理、不吞异常、单一职责、DRY、WebView
+生命周期管理）。round-17/20/21 已做大量清理，本轮重点：
+- 评估栏全链路视角审计（formatEval/posDesc/posEmoji/_formatEvalDelta/WDL/折线图/_classifyMove），
+  确认 emoji+desc 经 evP 玩家视角、分值/折线图/将杀记号白方视角、走法分类 mover 视角——均正确，
+  仅上述 4 处违反契约。
+- Java 文件抽查（EngineHealthMonitor/EngineProcessManager/ChessApp）：clean，round-17/20 已加固。
+- ui-gameflow.js / ui-interactions.js 头部补齐 GPL v3 版权声明块（与 ui.js 风格一致，round-17 遗漏）。
+
+## 文档同步
+- BUILDING.md：新增 round-22 章节（视角契约说明 + 4 处修复 + 验证 + 工具链事实表）；修正 buildDir
+  路径（`/tmp/regalia_build/...` 为陈旧，实际为 `build/outputs/apk/release/`）；补充 lint baseline
+  首次构建行为说明 + 单模块无 `:app:` 前缀。
+- PRIVACY.md：round-22 条目置顶（纯显示视角修复，无新权限/网络/数据收集）。
+- NOTICE：round-22 条目置顶（ui.js/ai-bridge.js GPL v3 归类不变，chess.html AGPL v3 不变）。
+- 8× README.license：chess.src/assets/src/main/Manual 变更条目，java/res/cpp/assets(root) no-changes 条目。
+- README.md 目录树：补齐 ui-gameflow.js、ui-interactions.js、HapticManager.java、worklog.md、
+  CONTRIBUTING-{zh,en}.md、SECURITY_FIXES.md、About_v18.x.x_.md、LICENSE&NOTICE.zip。
+- 中英文说明书：round-22 更新日志条目置顶（内容对等非机翻），示意图无 UI 布局变更故不变。
+
+## 验证
+- ✅ 11 个 JS 模块 + chess.html 内嵌脚本 `node --check` 全过。
+- ✅ chess.html 重建：22,545 行 / 1,362,350 字节；评估修复标记存在（5×round-22、2×score:whiteWins）。
+- ✅ bundle 级 eslint no-undef + Node vm 烟雾测试：11/11 关键函数存在，零加载期 TDZ 错误。
+- ✅ release APK（78,182,170 字节）：v1+v2+v3 签名全 true（v3.1 false 可选，不影响）；versionCode=123/
+  versionName="1.2.3"；targetSdk 35 / minSdk 23；FGS subtype 属性存在（specialUse + chess_engine_analysis）；
+  引擎 SHA-256 三方一致（APK == 源 == 预期 8f7116d3...）；libengine_bridge.so(5096)+libc++_shared.so+
+  libstockfish.so 齐全；HapticManager 编入 dex。
+- ✅ tar 源码包：97 条目，0 引擎/构建产物/keystore/local.properties/lint-baseline。
+
+## 最终交付（/home/z/my-project/download/）
+- Regalia-release.apk — SHA-256=2c67d65693ba3f9513ac27b7c2ccd65ee36109b178bf1daf8ff49c3bd899b597
+- Regalia-v1.2.3-src.tar — SHA-256=81f66b7f90e44e820ae6841a82b8603c6cf9619badf1e04a0260cfdca88ad19f
+- Regalia-v1.2.3-manual-zh.html — SHA-256=48342fd5147100a71122f03f11426fac4e5f4b78586a9a34eb374b776d213600
+- Regalia-v1.2.3-manual-en.html — SHA-256=7cd37df0d7f049136798ebe293eb65fe08d25608976f2319ca9bfe544e1ed68c
+- SHA256SUMS.txt
+
 # Regalia v1.2.3 — round-21 工作日志（2026-07-17）
 
 ## 任务来源
