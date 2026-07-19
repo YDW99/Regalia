@@ -69,7 +69,7 @@ function toggleLang(){_lang=(_lang==='zh')?'en':'zh';
   // v1.2.3 P1 (Round 18 i18n-P1-3): Sync <html lang> so TalkBack uses the
   //   correct TTS engine for the active UI language. Previously the attribute
   //   stayed at zh-CN forever, so English UI users heard Chinese speech.
-  try{document.documentElement.lang=(_lang==='zh')?'zh-CN':'en';}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}
+  try{document.documentElement.lang=(_lang==='zh')?'zh-CN':'en';}catch(e){console.warn('[GameLogic]',e?.message?e.message:e);}
   render();}
 const _i18n={
 'app_name':{zh:'Regalia',en:'Regalia'},
@@ -510,6 +510,8 @@ const _i18n={
 'pgn_resign_black':{zh:'黑方认输',en:'Black resigns'},
 'pgn_timeout_white_wins':{zh:'白方超时胜',en:'White wins by timeout'},
 'pgn_timeout_black_wins':{zh:'黑方超时胜',en:'Black wins by timeout'},
+// v1.2.3 round-25 (FIDE 6.9): timeout with insufficient material → draw comment
+'pgn_timeout_draw_insufficient':{zh:'超时但子力不足，和棋',en:'Timeout but insufficient material, draw'},
 // v1.1.1 Phase 59 Task 59.4: Prefix label for the initial-position annotation
 //   appended to the first move's {} comment (mirrors the every-5-moves
 //   annotation but marks it as the initial position so dedup can detect it).
@@ -605,7 +607,7 @@ const _i18n={
 };
 // Auto-detect language on startup
 (function(){
-  try{const saved=localStorage.getItem('Regalia_lang');if(saved==='zh'||saved==='en'){_lang=saved;return;}}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}
+  try{const saved=localStorage.getItem('Regalia_lang');if(saved==='zh'||saved==='en'){_lang=saved;return;}}catch(e){console.warn('[GameLogic]',e?.message?e.message:e);}
   // v1.0.4 Round-5 Rev16: Fall back to persistent Java store when HyperOS 3 wiped localStorage
   try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentGet){const persisted=AndroidBridge.persistentGet('Regalia_lang');if(persisted==='zh'||persisted==='en'){_lang=persisted;try{localStorage.setItem('Regalia_lang',persisted);}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}return;}}}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}
   try{if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.getSystemLanguage==='function'){const sysLang=AndroidBridge.getSystemLanguage();_lang=(sysLang&&sysLang.startsWith('zh'))?'zh':'en';return;}}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}
@@ -613,7 +615,7 @@ const _i18n={
 })();
 // v1.2.3 P1 (Round 18 i18n-P1-3): Sync <html lang> with the detected startup
 //   language so TalkBack uses the correct TTS engine before the first toggle.
-try{document.documentElement.lang=(_lang==='zh')?'zh-CN':'en';}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}
+try{document.documentElement.lang=(_lang==='zh')?'zh-CN':'en';}catch(e){console.warn('[GameLogic]',e?.message?e.message:e);}
 
 window.onerror=function(msg,url,line,col,error){
     const errInfo={
@@ -621,7 +623,7 @@ window.onerror=function(msg,url,line,col,error){
         url:String(url||''),
         line:line||0,
         column:col||0,
-        stack:error&&error.stack?String(error.stack):'no stack',
+        stack:error?.stack?String(error.stack):'no stack',
         timestamp:new Date().toISOString(),
         engineReady:typeof _engineReady!=='undefined'?_engineReady:undefined
     };
@@ -706,7 +708,7 @@ function _recalcCellSize(){
   let _appContentH=vh;
   try{
     const appEl=document.getElementById('app');
-    if(appEl&&appEl.clientWidth>0){
+    if(appEl?.clientWidth>0){
       const cs=getComputedStyle(appEl);
       // With box-sizing:border-box, clientWidth = content + padding.
       // Content width = clientWidth - paddingLeft - paddingRight.
@@ -927,12 +929,12 @@ function _triggerBoardShake(strength){
     const baseDur=strength==='massive'?SHAKE_MASSIVE_DUR:(strength==='heavy'?SHAKE_HEAVY_DUR:SHAKE_LIGHT_DUR);
     const dur=baseDur+30;
     setTimeout(()=>{
-      try{bwrap.classList.remove(cls);}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}
+      try{bwrap.classList.remove(cls);}catch(e){console.warn('[GameLogic]',e?.message?e.message:e);}
       // Restoration of .stabilized happens naturally on the next sensor event;
       // we don't force-restore here to avoid conflicting with a mid-flight
       // sensor sample that may have a different translation.
     },dur);
-  }catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}
+  }catch(e){console.warn('[GameLogic]',e?.message?e.message:e);}
 }
 
 // Personified piece animations. Each returns a Promise resolving on finish.
@@ -1160,7 +1162,7 @@ function _playPieceSound(pieceType,isCapture){
       const fn=audioEngine[fnName];
       if(typeof fn==='function')fn.call(audioEngine);
     }
-  }catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}
+  }catch(e){console.warn('[GameLogic]',e?.message?e.message:e);}
 }
 
 // v1.0.8 PHASE 22: Trigger castle sound via audioEngine (rook move + king + rook land).
@@ -1171,7 +1173,7 @@ function _playCastleSound(){
     if(typeof audioEngine!=='undefined'&&audioEngine){
       if(typeof audioEngine.playCastleRookMove==='function')audioEngine.playCastleRookMove();
     }
-  }catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}
+  }catch(e){console.warn('[GameLogic]',e?.message?e.message:e);}
 }
 
 // Main animation entry point. Signature preserved from v1.0.7:
@@ -1186,7 +1188,7 @@ function animateMove(from,to,pieceSym,pieceType,isCapture,isCheck,pieceColor){
     if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches){
       _reducedMotion=true;
     }
-  }catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}
+  }catch(e){console.warn('[GameLogic]',e?.message?e.message:e);}
   if(_reducedMotion){
     animationInProgress=false;
     _activeAnimEls=[];
@@ -1200,7 +1202,7 @@ function animateMove(from,to,pieceSym,pieceType,isCapture,isCheck,pieceColor){
     if(typeof _lastAnimMv!=='undefined'&&_lastAnimMv&&typeof _castleSide==='function'){
       _castleside=_castleSide(_lastAnimMv);
     }
-  }catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}
+  }catch(e){console.warn('[GameLogic]',e?.message?e.message:e);}
   if(!_castleside&&pieceType==='king'&&Math.abs(to.col-from.col)===2){
     _castleside=to.col===6?'kingside':'queenside';
   }
@@ -1272,7 +1274,7 @@ function animateMove(from,to,pieceSym,pieceType,isCapture,isCheck,pieceColor){
         const rm=chess960CastlingRookMove(gameState,pieceColor,_castleside);
         if(rm){rFromCol=rm.rookFrom;rToCol=rm.rookTo;}
       }
-    }catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}
+    }catch(e){console.warn('[GameLogic]',e?.message?e.message:e);}
     // Fallback to standard chess rook positions if helper fails
     if(rFromCol<0){
       if(_castleside==='kingside'){rFromCol=7;rToCol=5;}
@@ -1407,7 +1409,7 @@ function _reattachActiveAnimations(){
         a.el.getAnimations().forEach(an=>an.cancel());
         const _sx=a.dx*(cs/a.lastCell), _sy=a.dy*(cs/a.lastCell);
         a.el.style.transform='translate3d('+_sx.toFixed(2)+'px,'+_sy.toFixed(2)+'px,0)';
-      }catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}
+      }catch(e){console.warn('[GameLogic]',e?.message?e.message:e);}
     }
     a.lastCell=cs;
   }
@@ -1430,7 +1432,7 @@ whiteKingsideRookFile:7,whiteQueensideRookFile:0,blackKingsideRookFile:7,blackQu
 // is allowed on the entire board.
 function validateSetupPosition(s){
   // First pass: locate kings (existing behavior)
-  for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=s.board[r][c];if(p&&p.type==='king'){if(p.color==='white')s.wk={row:r,col:c};else s.bk={row:r,col:c}}}
+  for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=s.board[r][c];if(p?.type==='king'){if(p.color==='white')s.wk={row:r,col:c};else s.bk={row:r,col:c}}}
   const errs=[];
   const wPieces=[],bPieces=[];
   // v1.0.8 PHASE 24 (PERF + bug fix): single-pass piece collection with
@@ -1590,7 +1592,7 @@ function _validateSetupEpMark(s,errs){
     const nc=col+dc;
     if(nc<0||nc>7)continue;
     const cp=s.board[row]&&s.board[row][nc];
-    if(cp&&cp.type==='pawn'&&cp.color===capturerColor){_hasCapturer=true;break;}
+    if(cp?.type==='pawn'&&cp.color===capturerColor){_hasCapturer=true;break;}
   }
   if(!_hasCapturer){
     errs.push(T('setup_ep_err_no_capturer')+' ('+posAlg({row,col})+')');
@@ -1642,13 +1644,13 @@ function computeVisibleCastleMarks(s){
       // Find closest white rook to the right of king on row 7
       for(let c=wkCol+1;c<8;c++){
         const p=s.board[7][c];
-        if(p&&p.type==='rook'&&p.color==='white'){marks.add(String(7*8+c));break;}
+        if(p?.type==='rook'&&p.color==='white'){marks.add(String(7*8+c));break;}
       }
     }
     if(s.castlingRights.whiteQueenside){
       for(let c=wkCol-1;c>=0;c--){
         const p=s.board[7][c];
-        if(p&&p.type==='rook'&&p.color==='white'){marks.add(String(7*8+c));break;}
+        if(p?.type==='rook'&&p.color==='white'){marks.add(String(7*8+c));break;}
       }
     }
   }
@@ -1658,13 +1660,13 @@ function computeVisibleCastleMarks(s){
     if(s.castlingRights.blackKingside){
       for(let c=bkCol+1;c<8;c++){
         const p=s.board[0][c];
-        if(p&&p.type==='rook'&&p.color==='black'){marks.add(String(0*8+c));break;}
+        if(p?.type==='rook'&&p.color==='black'){marks.add(String(0*8+c));break;}
       }
     }
     if(s.castlingRights.blackQueenside){
       for(let c=bkCol-1;c>=0;c--){
         const p=s.board[0][c];
-        if(p&&p.type==='rook'&&p.color==='black'){marks.add(String(0*8+c));break;}
+        if(p?.type==='rook'&&p.color==='black'){marks.add(String(0*8+c));break;}
       }
     }
   }
@@ -1700,13 +1702,13 @@ function computeVisibleEpMark(s){
   if(row===5){
     // White pawn just double-stepped; pawn sits on row 4
     const p=s.board[4]&&s.board[4][col];
-    if(p&&p.type==='pawn'&&p.color==='white'){
+    if(p?.type==='pawn'&&p.color==='white'){
       if(s.currentTurn==='black')return {row:4,col};
     }
   }else if(row===2){
     // Black pawn just double-stepped; pawn sits on row 3
     const p=s.board[3]&&s.board[3][col];
-    if(p&&p.type==='pawn'&&p.color==='black'){
+    if(p?.type==='pawn'&&p.color==='black'){
       if(s.currentTurn==='white')return {row:3,col};
     }
   }
@@ -1795,7 +1797,7 @@ function legalMoves(s,pos){
     const all=[];
     for(let r=0;r<8;r++)for(let c=0;c<8;c++){
       const p=s.board[r][c];
-      if(p&&p.color===s.currentTurn){
+      if(p?.color===s.currentTurn){
         const pm=pseudoMoves(s,{row:r,col:c});
         for(const m of pm){
           const mv={from:{row:r,col:c},to:m,piece:p,promotion:m.promotion};
@@ -1812,7 +1814,7 @@ function legalMoves(s,pos){
   }
   const pm=pseudoMoves(s,pos),p=s.board[pos.row][pos.col];if(!p)return[];const legal=[];for(const m of pm){const mv={from:{row:pos.row,col:pos.col},to:m,piece:p,promotion:m.promotion};const undo=makeMvInPlace(s,mv);if(!undo)continue;const kPos=p.type==='king'?{row:m.row,col:m.col}:s[p.color==='white'?'wk':'bk'];const isLegal=kPos?!inCheck(s.board,p.color,kPos):false;unmakeMv(s,undo);if(isLegal)legal.push(m)}return legal}
 // Fast game-over check: returns true as soon as ONE legal move is found
-function hasLegalMoves(s){for(let r=0;r<8;r++){for(let c=0;c<8;c++){const p=s.board[r][c];if(p&&p.color===s.currentTurn){const pm=pseudoMoves(s,{row:r,col:c});for(const m of pm){const mv={from:{row:r,col:c},to:m,piece:p,promotion:m.promotion};const undo=makeMvInPlace(s,mv);if(!undo)continue;const kPos=p.type==='king'?{row:m.row,col:m.col}:s[p.color==='white'?'wk':'bk'];const legal=kPos?!inCheck(s.board,p.color,kPos):false;unmakeMv(s,undo);if(legal)return true}}}}return false}
+function hasLegalMoves(s){for(let r=0;r<8;r++){for(let c=0;c<8;c++){const p=s.board[r][c];if(p?.color===s.currentTurn){const pm=pseudoMoves(s,{row:r,col:c});for(const m of pm){const mv={from:{row:r,col:c},to:m,piece:p,promotion:m.promotion};const undo=makeMvInPlace(s,mv);if(!undo)continue;const kPos=p.type==='king'?{row:m.row,col:m.col}:s[p.color==='white'?'wk':'bk'];const legal=kPos?!inCheck(s.board,p.color,kPos):false;unmakeMv(s,undo);if(legal)return true}}}}return false}
 // Move execution
 /**
  * v1.0.6: Detect whether a move is a castling move.
@@ -1908,7 +1910,7 @@ function _castleSide(mv,s){
       //   local state), fall back to `gameState` (the live game state during
       //   interactive play, which is correct for that use case).
       const _st=s||(typeof gameState!=='undefined'?gameState:null);
-      const _cr=(_st&&_st.castlingRights)?_st.castlingRights:null;
+      const _cr=(_st?.castlingRights)?_st.castlingRights:null;
       // v1.1.0 Phase 55 FIX: In Chess960, the king's destination square may
       //   be occupied by the participating rook (e.g. SP-ID with king on d1
       //   and queenside rook on c1: O-O-O puts the king on c1, which IS the
@@ -1918,7 +1920,7 @@ function _castleSide(mv,s){
       //   on the castling side (the participating rook, which moves away).
       //   Standard chess is unaffected (rook is always on a1/h1, king dest
       //   c1/g1 is always empty).
-      const _destPiece=_st&&_st.board&&_st.board[mv.to.row]?_st.board[mv.to.row][mv.to.col]:null;
+      const _destPiece=_st?.board&&_st.board[mv.to.row]?_st.board[mv.to.row][mv.to.col]:null;
       const _destValid=!_destPiece||(_destPiece.type==='rook'&&_destPiece.color===mv.piece.color);
       // v1.1.2 PHASE 71 (defense-in-depth): Chess960 0-distance castling.
       // When the engine emits a UCI castling move for an SP-ID where the king
@@ -1984,7 +1986,7 @@ if(_cs){
   // castling actually works in the resulting game.
   if(typeof chess960CastlingRookMove==='function'){
     const rm=chess960CastlingRookMove(s,piece.color,_cs);
-    if(rm&&rm.rookFrom!==rm.rookTo){
+    if(rm?.rookFrom!==rm.rookTo){
       _rookFrom=rm.rookFrom;_rookTo=rm.rookTo;
       _savedRook=ns.board[rm.row][rm.rookFrom]; // save rook before king overwrites it
     }
@@ -2031,7 +2033,7 @@ if(piece.type==='pawn'&&s.enPassantTarget&&to.row===s.enPassantTarget.row&&to.co
 //   so `cr` is 3 or 4 — always in-bounds. But if a corrupted FEN import or
 //   setup-mode misuse produces an out-of-range enPassantTarget, `cr` could be
 //   -1 or 8, and `ns.board[cr]` would be undefined → TypeError. Defense-in-depth.
-if(inB(cr,to.col)){const epP=ns.board[cr][to.col];if(epP&&epP.type==='pawn'&&epP.color!==piece.color){ns.board[cr][to.col]=null}else if(epP){console.error('[En Passant Bug] Target set but captured piece is not an opposing pawn:',epP)}}}
+if(inB(cr,to.col)){const epP=ns.board[cr][to.col];if(epP?.type==='pawn'&&epP.color!==piece.color){ns.board[cr][to.col]=null}else if(epP){console.error('[En Passant Bug] Target set but captured piece is not an opposing pawn:',epP)}}}
 // v1.0.6 FIX: Move the rook for castling. _savedRook was saved BEFORE the
 // king moved, so it's the actual rook piece (not the king that overwrote
 // it). Place it at the rook destination, clear the rook source.
@@ -2074,7 +2076,7 @@ if(typeof findCastlingRooks==='function'){
   if(from.row===7&&from.col===0){ns.castlingRights.whiteQueenside=false;ns.castlingRights.whiteQueensideRookFile=null;}if(from.row===7&&from.col===7){ns.castlingRights.whiteKingside=false;ns.castlingRights.whiteKingsideRookFile=null;}if(from.row===0&&from.col===0){ns.castlingRights.blackQueenside=false;ns.castlingRights.blackQueensideRookFile=null;}if(from.row===0&&from.col===7){ns.castlingRights.blackKingside=false;ns.castlingRights.blackKingsideRookFile=null;}
 }
 }
-if(capPiece&&capPiece.type==='rook'){
+if(capPiece?.type==='rook'){
 if(typeof findCastlingRooks==='function'){
   const rooks=findCastlingRooks(s.board,capPiece.color);
   if(rooks){
@@ -2108,7 +2110,7 @@ h^=zobrist.pieceTable[to.row*8+to.col][pieceZobristIdx(placedPiece)];
 if(piece.type==='pawn'&&s.enPassantTarget&&to.row===s.enPassantTarget.row&&to.col===s.enPassantTarget.col){const cr=piece.color==='white'?to.row+1:to.row-1;const epPiece={type:'pawn',color:OPP_COLOR[piece.color]};
 // v1.1.2 PHASE 71 (robustness): bounds-check `cr` before indexing s.board
 //   (mirrors the makeMv/makeMvInPlace en-passant bounds checks above).
-if(inB(cr,to.col)){const epP=s.board[cr][to.col];if(epP&&epP.type==='pawn'&&epP.color!==piece.color){h^=zobrist.pieceTable[cr*8+to.col][pieceZobristIdx(epPiece)]};}}
+if(inB(cr,to.col)){const epP=s.board[cr][to.col];if(epP?.type==='pawn'&&epP.color!==piece.color){h^=zobrist.pieceTable[cr*8+to.col][pieceZobristIdx(epPiece)]};}}
 // 5. Castling: move rook (v1.0.6: use actual rook from/to cols for Chess960)
 if(_cs&&_rookFrom>=0&&_rookTo>=0){
   const rookIdx=pieceZobristIdx({type:'rook',color:piece.color});
@@ -2163,7 +2165,7 @@ if(_cs){
   // detailed first-principles rationale.
   if(typeof chess960CastlingRookMove==='function'){
     const rm=chess960CastlingRookMove(s,piece.color,_cs);
-    if(rm&&rm.rookFrom!==rm.rookTo){
+    if(rm?.rookFrom!==rm.rookTo){
       _rookFrom=rm.rookFrom;_rookTo=rm.rookTo;
       _savedRook=s.board[rm.row][rm.rookFrom];
     }
@@ -2243,7 +2245,7 @@ const cr=piece.color==='white'?to.row+1:to.row-1;
 //   (defense-in-depth — mirrors the makeMv fix above).
 if(inB(cr,to.col)){
 const epP=s.board[cr][to.col];
-if(epP&&epP.type==='pawn'&&epP.color!==piece.color){
+if(epP?.type==='pawn'&&epP.color!==piece.color){
 undo.epCaptured={r:cr,c:to.col,piece:{type:epP.type,color:epP.color}};
 s.board[cr][to.col]=null;
 }
@@ -2296,7 +2298,7 @@ if(piece.type==='rook'&&_movingRookSide){
   if(from.row===0&&from.col===7){s.castlingRights.blackKingside=false;s.castlingRights.blackKingsideRookFile=null;}
 }
 // 7. Update castling rights for rook captures
-if(capPiece&&capPiece.type==='rook'&&_capturedRookSide){
+if(capPiece?.type==='rook'&&_capturedRookSide){
   if(capPiece.color==='white'){
     if(_capturedRookSide==='kingside'){s.castlingRights.whiteKingside=false;s.castlingRights.whiteKingsideRookFile=null;}
     else{s.castlingRights.whiteQueenside=false;s.castlingRights.whiteQueensideRookFile=null;}
@@ -2304,7 +2306,7 @@ if(capPiece&&capPiece.type==='rook'&&_capturedRookSide){
     if(_capturedRookSide==='kingside'){s.castlingRights.blackKingside=false;s.castlingRights.blackKingsideRookFile=null;}
     else{s.castlingRights.blackQueenside=false;s.castlingRights.blackQueensideRookFile=null;}
   }
-}else if(capPiece&&capPiece.type==='rook'&&!_capturedRookSide){
+}else if(capPiece?.type==='rook'&&!_capturedRookSide){
   // Fallback: standard-chess rook positions.
   if(capPiece.color==='white'){if(to.row===7&&to.col===0){s.castlingRights.whiteQueenside=false;s.castlingRights.whiteQueensideRookFile=null;}if(to.row===7&&to.col===7){s.castlingRights.whiteKingside=false;s.castlingRights.whiteKingsideRookFile=null;}}
   else{if(to.row===0&&to.col===0){s.castlingRights.blackQueenside=false;s.castlingRights.blackQueensideRookFile=null;}if(to.row===0&&to.col===7){s.castlingRights.blackKingside=false;s.castlingRights.blackKingsideRookFile=null;}}
@@ -2548,7 +2550,7 @@ n+=piece.type==='knight'?'N':piece.type[0].toUpperCase();
 // This mirrors the optimization already applied to legalMoves() and
 // hasLegalMoves() (see comments above legalMoves).
 let numSameTarget=0,numSameFile=0,numSameRow=0;
-for(let r=0;r<8;r++)for(let c=0;c<8;c++){if(r===from.row&&c===from.col)continue;const p=s.board[r][c];if(p&&p.type===piece.type&&p.color===piece.color){const pm=pseudoMoves(s,{row:r,col:c});if(pm.some(m=>m.row===to.row&&m.col===to.col)){const mv2={from:{row:r,col:c},to:{row:to.row,col:to.col},piece:p,promotion:undefined};const undo=makeMvInPlace(s,mv2);if(undo){const kPos=p.type==='king'?{row:to.row,col:to.col}:(p.color==='white'?s.wk:s.bk);if(kPos&&!inCheck(s.board,p.color,kPos)){numSameTarget++;if(c===from.col)numSameFile++;if(r===from.row)numSameRow++;}unmakeMv(s,undo);}}}}
+for(let r=0;r<8;r++)for(let c=0;c<8;c++){if(r===from.row&&c===from.col)continue;const p=s.board[r][c];if(p?.type===piece.type&&p.color===piece.color){const pm=pseudoMoves(s,{row:r,col:c});if(pm.some(m=>m.row===to.row&&m.col===to.col)){const mv2={from:{row:r,col:c},to:{row:to.row,col:to.col},piece:p,promotion:undefined};const undo=makeMvInPlace(s,mv2);if(undo){const kPos=p.type==='king'?{row:to.row,col:to.col}:(p.color==='white'?s.wk:s.bk);if(kPos&&!inCheck(s.board,p.color,kPos)){numSameTarget++;if(c===from.col)numSameFile++;if(r===from.row)numSameRow++;}unmakeMv(s,undo);}}}}
 // PGN standard disambiguation: file first, then rank, then both
 if(numSameTarget>0){if(numSameFile===0)n+=String.fromCodePoint(97+from.col);else if(numSameRow===0)n+=(8-from.row);else n+=String.fromCodePoint(97+from.col)+(8-from.row)}
 }
@@ -3059,7 +3061,7 @@ const stepOffset=hist.length*4;
 const from={row:mv[stepOffset],col:mv[stepOffset+1]};
 const to={row:mv[stepOffset+2],col:mv[stepOffset+3]};
 const piece=s.board[from.row][from.col];
-if(piece&&piece.color===playerColor){
+if(piece?.color===playerColor){
 // Lightweight material eval to pick best among multiple paths
 let score=0;
 const cap=s.board[to.row][to.col];
@@ -3084,7 +3086,7 @@ _ecoRecCache.set(ck,result);
 return result;
 }
 
-let _ecoComposing=false;let _ecoSearchFocused=false;let _ecoBlurTimer=0;let ecoSearchTimer=0;let ecoDisplayList=[];let ecoShowCount=30;function setEcoQuery(v){window.ecoSearchQuery=v;ecoShowCount=30;if(ecoSearchTimer)clearTimeout(ecoSearchTimer);if(_ecoComposing){ecoSearchTimer=setTimeout(_ecoUpdateResults,300)}else{ecoSearchTimer=setTimeout(_ecoUpdateResults,80)}}function _ecoUpdateResults(){_ensureEcoParsed();if(!showNewGameDialog)return;const listEl=document.querySelector('.op-list');if(!listEl)return;const el=document.getElementById('ecoSearch');if(el)window.ecoSearchQuery=el.value;const q=(window.ecoSearchQuery||'').trim().toUpperCase();let results=q?searchEco(q):ECO_OPENINGS;const ff=window.ecoFamilyFilter;if(ff)results=results.filter(o=>o.family===ff);ecoDisplayList=results.slice(0,ecoShowCount);let oh='<button class="op-btn'+(!dlgOpeningId?' act':'')+'" onclick="dlgOpeningId=null;window.ecoSearchQuery=\'\';window.ecoFamilyFilter=\'\';ecoShowCount=30;_ecoUpdateResults()"><div class="on">'+T('free_opening')+'</div><div class="os">'+T('from_start')+'</div></button>';for(const o of ecoDisplayList){const isOpen=o.moves&&o.moves.length>=4;oh+=`<button class="op-btn${dlgOpeningId===o.id+'|'+o.name?' act':''}" onclick="dlgOpeningId='${_escJs(o.id)}|${_escJs(o.name)}';ecoShowCount=30;_ecoUpdateResults()"><div class="on">${_esc(o.id)} ${_esc(o.name)}</div>${isOpen?'<div class="os">'+_esc(o.family)+'</div>':''}</button>`}listEl.innerHTML=oh;_ecoRestoreFocus()}function _ecoRestoreFocus(){if(!_ecoSearchFocused)return;const ae=document.activeElement;if(ae&&(ae.tagName==='BUTTON'||ae.tagName==='SELECT'||ae.tagName==='OPTION'))return;const el=document.getElementById('ecoSearch');if(el&&document.activeElement!==el){el.focus();try{const len=el.value.length;el.setSelectionRange(len,len)}catch(e){/* v1.2.1 round-16: setSelectionRange may fail on hidden/disabled inputs — non-critical, user can still type. */console.warn('[ECO] setSelectionRange failed:',e&&e.message?e.message:e);}}}function _ecoDoSearch(){if(ecoSearchTimer)clearTimeout(ecoSearchTimer);const el=document.getElementById('ecoSearch');if(el){window.ecoSearchQuery=el.value;_ecoComposing=false;if(_ecoBlurTimer){clearTimeout(_ecoBlurTimer);_ecoBlurTimer=0}}_ecoSearchFocused=true;_ecoUpdateResults()}
+let _ecoComposing=false;let _ecoSearchFocused=false;let _ecoBlurTimer=0;let ecoSearchTimer=0;let ecoDisplayList=[];let ecoShowCount=30;function setEcoQuery(v){window.ecoSearchQuery=v;ecoShowCount=30;if(ecoSearchTimer)clearTimeout(ecoSearchTimer);if(_ecoComposing){ecoSearchTimer=setTimeout(_ecoUpdateResults,300)}else{ecoSearchTimer=setTimeout(_ecoUpdateResults,80)}}function _ecoUpdateResults(){_ensureEcoParsed();if(!showNewGameDialog)return;const listEl=document.querySelector('.op-list');if(!listEl)return;const el=document.getElementById('ecoSearch');if(el)window.ecoSearchQuery=el.value;const q=(window.ecoSearchQuery||'').trim().toUpperCase();let results=q?searchEco(q):ECO_OPENINGS;const ff=window.ecoFamilyFilter;if(ff)results=results.filter(o=>o.family===ff);ecoDisplayList=results.slice(0,ecoShowCount);let oh='<button class="op-btn'+(!dlgOpeningId?' act':'')+'" onclick="dlgOpeningId=null;window.ecoSearchQuery=\'\';window.ecoFamilyFilter=\'\';ecoShowCount=30;_ecoUpdateResults()"><div class="on">'+T('free_opening')+'</div><div class="os">'+T('from_start')+'</div></button>';for(const o of ecoDisplayList){const isOpen=o.moves&&o.moves.length>=4;oh+=`<button class="op-btn${dlgOpeningId===o.id+'|'+o.name?' act':''}" onclick="dlgOpeningId='${_escJs(o.id)}|${_escJs(o.name)}';ecoShowCount=30;_ecoUpdateResults()"><div class="on">${_esc(o.id)} ${_esc(o.name)}</div>${isOpen?'<div class="os">'+_esc(o.family)+'</div>':''}</button>`}listEl.innerHTML=oh;_ecoRestoreFocus()}function _ecoRestoreFocus(){if(!_ecoSearchFocused)return;const ae=document.activeElement;if(ae&&(ae.tagName==='BUTTON'||ae.tagName==='SELECT'||ae.tagName==='OPTION'))return;const el=document.getElementById('ecoSearch');if(el&&document.activeElement!==el){el.focus();try{const len=el.value.length;el.setSelectionRange(len,len)}catch(e){/* v1.2.1 round-16: setSelectionRange may fail on hidden/disabled inputs — non-critical, user can still type. */console.warn('[ECO] setSelectionRange failed:',e?.message?e.message:e);}}}function _ecoDoSearch(){if(ecoSearchTimer)clearTimeout(ecoSearchTimer);const el=document.getElementById('ecoSearch');if(el){window.ecoSearchQuery=el.value;_ecoComposing=false;if(_ecoBlurTimer){clearTimeout(_ecoBlurTimer);_ecoBlurTimer=0}}_ecoSearchFocused=true;_ecoUpdateResults()}
 
 
 function posEmoji(ev){if(ev>600)return'🏆';if(ev>350)return'😄';if(ev>150)return'😊';if(ev>50)return'🙂';if(ev>-50)return'😐';if(ev>-150)return'😟';if(ev>-350)return'😰';if(ev>-600)return'😱';return'💀'}
@@ -3111,7 +3113,7 @@ function posEmoji(ev){if(ev>600)return'🏆';if(ev>350)return'😄';if(ev>150)re
 function _prependBlackToMovePlaceholder(){
   // Only act when (a) we have a gameState, (b) black is to move, and
   // (c) moveRecords is still empty (no moves executed yet).
-  if(gameState && gameState.currentTurn==='black' && moveRecords.length===0){
+  if(gameState?.currentTurn==='black' && moveRecords.length===0){
     moveRecords.push(null);
     // Also sync stateHistory[0].moveRecords so undoing past the first move
     // doesn't lose the placeholder. Without this, undoing all the way back

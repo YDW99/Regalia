@@ -127,7 +127,7 @@ function _startGameImpl(){
     const ecoName=pipeIdx>=0?dlgOpeningId.substring(pipeIdx+1):'';
     // Find the specific opening variant by code + name
     const opList=ECO_BY_ID[ecoCode];
-    if(opList&&opList.length>0){
+    if(opList?.length>0){
       let opening=null;
       for(const op of opList){
         if(op.name===ecoName){opening=op;break;}
@@ -301,14 +301,34 @@ function _onGameClockExpired(color){
     if(typeof _aiBarInfo!=='undefined')_aiBarInfo='';
     if(typeof _aiSafetyTimerId!=='undefined'&&_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
   }catch(e){console.warn('engineStop on clock expiry failed:',e);}
-  // Game over: the OTHER side wins by time
-  // v1.0.4 Rev47: Use _gameOverStrFromStatus() for proper T()-based localization
-  // instead of hardcoding _lang. This ensures the text re-localizes when the
-  // user toggles language after the game-over overlay is shown.
+  // Game over: the OTHER side wins by time — UNLESS the OTHER side has
+  //   insufficient material to checkmate (FIDE 6.9). In that case the game
+  //   is drawn, not won. v1.2.3 round-25 (feature gap): previously a player
+  //   could "win" on time against a lone king (K vs K) or K+B/K+N —
+  //   positions where checkmate is impossible by any sequence of legal
+  //   moves. Now: if the winner's side is a dead position, declare a draw
+  //   by insufficient material instead.
   const winner=color==='white'?'black':'white';
-  if(typeof _timeoutWinnerColor!=='undefined')_timeoutWinnerColor=winner;
-  _gameOverStatusKey='timeout';
-  gameOver=_gameOverStrFromStatus('timeout');
+  let _isDrawByInsufficientMaterial=false;
+  try{
+    if(typeof isDeadPosition==='function'&&gameState){
+      // v1.2.3 round-25 (FIDE 6.9): isDeadPosition checks whether checkmate
+      //   is possible by ANY sequence of legal moves (not necessarily forced).
+      //   FIDE 6.9: if the winner cannot checkmate, the game is drawn.
+      //   isDeadPosition returns true exactly when checkmate is impossible,
+      //   which is the correct condition for the timeout draw.
+      _isDrawByInsufficientMaterial=isDeadPosition(gameState);
+    }
+  }catch(e){console.warn('isDeadPosition check on timeout failed:',e);}
+  if(_isDrawByInsufficientMaterial){
+    if(typeof _timeoutWinnerColor!=='undefined')_timeoutWinnerColor=null;
+    _gameOverStatusKey='draw_insufficient';
+    gameOver=_gameOverStrFromStatus('draw_insufficient');
+  }else{
+    if(typeof _timeoutWinnerColor!=='undefined')_timeoutWinnerColor=winner;
+    _gameOverStatusKey='timeout';
+    gameOver=_gameOverStrFromStatus('timeout');
+  }
   render();
 }
 
@@ -326,7 +346,25 @@ function recordMoveEnd(color){
     deductSec=Math.max(0,elapsedSec-gameClocks.delaySec);
   }
   clock.remainingSec=Math.max(0,clock.remainingSec-deductSec);
-  // Fischer increment: add AFTER the deduction
+  // v1.2.3 round-23 (Q2 fix): detect flag fall BEFORE applying Fischer
+  //   increment. Previously the increment was applied immediately after the
+  //   deduction, so a player who moved at the exact moment of flag fall
+  //   would have their clock bumped from 0 to incrementSec and the timeout
+  //   would never fire. Now: if remaining <= 0 after deduction, fire expiry
+  //   and return WITHOUT applying the increment. Only when time remains do
+  //   we add the Fischer bonus.
+  if(clock.remainingSec<=0){
+    clock.displayRemainingSec=0;
+    clock.lastMoveTimestamp=now;
+    const _other=color==='white'?'black':'white';
+    if(gameClocks[_other])gameClocks[_other].lastMoveTimestamp=now;
+    if(!gameClockExpired){
+      gameClockExpired=color;
+      _onGameClockExpired(color);
+    }
+    return;
+  }
+  // Fischer increment: add AFTER the deduction (only when not expired)
   if(gameClocks.type==='fischer'){
     clock.remainingSec+=gameClocks.incrementSec||0;
   }

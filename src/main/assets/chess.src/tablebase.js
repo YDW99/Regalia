@@ -86,7 +86,7 @@ if(_fenIs960){
           if(_idx===8){const _spid=backRankToSPID(backRank);if(_spid>=0){gameSPID=_spid;ns.spid=_spid;}}
         }
       }
-    }catch(e){console.warn('[Import] SP-ID derivation failed:',e&&e.message?e.message:e);}
+    }catch(e){console.warn('[Import] SP-ID derivation failed:',e?.message?e.message:e);}
   }
 }else{
   if(typeof setChess960Mode==='function')setChess960Mode(false);
@@ -202,7 +202,7 @@ function _parsePGN(pgnText){
   //   single-line and multi-line PGN), and ALSO avoids stripping `[%csl ...]`
   //   / `[%cal ...]` / `[%eval ...]` / `[%emt ...]` inside brace comments
   //   (because `%` is not in `[A-Za-z]`).
-  let moveText=pgnText.replace(/\[\w+\s+\S[^\]]*\]/g,'').trim(); // v1.2.3 round-20 (S8786): 相邻量词类互斥，消除超线性回溯（与 stats.html 四处同款修复）
+  let moveText=pgnText.replace(/\[\s*\w+\s+(?:"[^"]*"|[^\]]*?)\s*\]/g,'').trim(); // v1.2.3 round-20 (S8786): 相邻量词类互斥，消除超线性回溯（与 stats.html 四处同款修复）. v1.2.3 round-23 (Q7 fix): quote-aware — value 内含 ] 不再被截断（如 [Event "Tournament [A]"] 完整消耗）。`[^\]]*?` 非贪婪分支兜底无引号 tag（PGN 规范罕见但合法）。
   // Remove line continuation markers (\ at end of line)
   moveText=moveText.replace(/\\\s*\n/g,' ');
   
@@ -832,7 +832,7 @@ function _applySANMove(state,san){
   if(upperSAN==='O-O'||cleanSAN==='0-0'){
     const row=state.currentTurn==='white'?7:0;
     let kingCol=4; // default: standard chess
-    for(let c=0;c<8;c++){const p=state.board[row][c];if(p&&p.type==='king'&&p.color===state.currentTurn){kingCol=c;break;}}
+    for(let c=0;c<8;c++){const p=state.board[row][c];if(p?.type==='king'&&p.color===state.currentTurn){kingCol=c;break;}}
     const kingFrom={row,col:kingCol};
     const kingTo={row,col:6};
     const move=_findLegalMove(state,kingFrom,kingTo,'king');
@@ -842,7 +842,7 @@ function _applySANMove(state,san){
   if(upperSAN==='O-O-O'||cleanSAN==='0-0-0'){
     const row=state.currentTurn==='white'?7:0;
     let kingCol=4; // default: standard chess
-    for(let c=0;c<8;c++){const p=state.board[row][c];if(p&&p.type==='king'&&p.color===state.currentTurn){kingCol=c;break;}}
+    for(let c=0;c<8;c++){const p=state.board[row][c];if(p?.type==='king'&&p.color===state.currentTurn){kingCol=c;break;}}
     const kingFrom={row,col:kingCol};
     const kingTo={row,col:2};
     const move=_findLegalMove(state,kingFrom,kingTo,'king');
@@ -950,7 +950,7 @@ function _applySANMove(state,san){
         if(alg===sanClean||alg.replace(/[+#!?]+$/,'')===sanClean){
           return _executeAndRecord(state,m,alg);
         }
-      }catch(e){console.warn('[Tablebase]',e&&e.message?e.message:e);}
+      }catch(e){console.warn('[Tablebase]',e?.message?e.message:e);}
     }
   }
   
@@ -972,7 +972,7 @@ function _findLegalMove(state,from,to,pieceType){
   const allMoves=legalMoves(state,null);
   return allMoves.find(m=>{
     const piece=state.board[m.from.row][m.from.col];
-    return piece&&piece.type===pieceType&&piece.color===state.currentTurn&&
+    return piece?.type===pieceType&&piece.color===state.currentTurn&&
            m.from.row===from.row&&m.from.col===from.col&&
            m.to.row===to.row&&m.to.col===to.col;
   })||null;
@@ -1041,10 +1041,19 @@ function importPGN(pgnText){
   
   // v1.0.4 NEW: Detect Chess960 variant from PGN [Variant] tag.
   // If detected, enable Chess960 engine mode and set gameVariant for PGN round-trip.
+  // v1.2.3 round-23 (Q1 fix): unconditionally reset Chess960 identity BEFORE
+  //   the derivation runs. Previously a failed backRankToSPID derivation
+  //   would leave the previous game's SP-ID/variant flag in place,
+  //   polluting the new game. Now: reset to defaults first, then let a
+  //   successful derivation overwrite. The else branch (variant!=='chess960')
+  //   still sets gameSPID=null as before.
   if(result.variant==='chess960'){
     if(typeof setChess960Mode==='function')setChess960Mode(true);
     if(gameVariant !== undefined)gameVariant='chess960';
     if(typeof gameSPID!=='undefined'){
+      // Reset to null FIRST so a failed derivation below cannot retain the
+      // previous game's SP-ID.
+      gameSPID=null;
       // Try to derive SP-ID from the starting FEN's back rank
       if(result.startFEN&&typeof backRankToSPID==='function'){
         // FEN row 8 (top) is for black; we look at row 1 (bottom) for white's pieces
@@ -1172,7 +1181,7 @@ function importPGN(pgnText){
     // couldn't be parsed). Push a null moveRecord so moveRecords indices
     // stay aligned with PGN move numbers. The display layer renders null
     // entries as a dimmed "—" marker (same as the black-to-move placeholder).
-    if(parsedMove&&parsedMove.skipped){
+    if(parsedMove?.skipped){
       stateHistory.push({state:cloneS(replayState),moveRecords:[...moveRecords],lastMove:lastMove?{...lastMove}:null,selectedSquare:null});
       moveRecords.push(null);
       moveIdx++;
@@ -1208,7 +1217,7 @@ function importPGN(pgnText){
     const _varKey=(parsedMove.mainTokenIdx!=null)?parsedMove.mainTokenIdx:moveIdx;
     const pgnVars=result.variations&&result.variations.get(_varKey);
     const varEntries=[];
-    if(pgnVars&&pgnVars.length>0){
+    if(pgnVars?.length>0){
       const postMoveState=replayState; // read-only: replayState already updated by makeMvInPlace
       const branchMoveIsWhite=preMoveState.currentTurn==='white';
       const branchMoveNum=preMoveState.fullMoveNumber||Math.floor(moveIdx/2)+1;
@@ -1219,7 +1228,7 @@ function importPGN(pgnText){
         // For nested variations, sanTokens already includes the parent variation's
         // prefix moves, so the entire array replays from the start position.
         const vEntry=pgnVars[vi];
-        const vTokens=(vEntry&&vEntry.sanTokens)?vEntry.sanTokens:vEntry; // backward-compatible
+        const vTokens=(vEntry?.sanTokens)?vEntry.sanTokens:vEntry; // backward-compatible
         const sanParts=[];
         let vState=null, vIsWhite, vMoveNum, startIdx=0;
         // PGN variations can start from either side:
@@ -1417,7 +1426,7 @@ function importPGN(pgnText){
       // was caught by the surrounding try/catch and surfaced to the user as
       // "PGN invalid" — making EVERY PGN import fail. Fixed to use
       // parsedMove.move.promotion (the move object on the parsed result).
-      promotion:(parsedMove&&parsedMove.move&&parsedMove.move.promotion)||null,
+      promotion:(parsedMove?.move&&parsedMove.move.promotion)||null,
       isCheck:_isCheck,
       isCastling:_isCastling,
       time:null,
@@ -1560,7 +1569,7 @@ function importPGN(pgnText){
   // Clean up _relocated flags (not needed for display)
   // v1.0.2: Also deduplicate variations — remove identical SAN content
   for(const mr of moveRecords){
-    if(mr&&mr.variations){
+    if(mr?.variations){
       const seen=new Set();
       const deduped=[];
       for(const v of mr.variations){
@@ -1721,7 +1730,7 @@ function importPGNAsync(pgnText){
     }
   }
   // Show loading indicator
-  try{showToast(T('importing_pgn'),3000);}catch(e){console.warn('[Tablebase]',e&&e.message?e.message:e);}
+  try{showToast(T('importing_pgn'),3000);}catch(e){console.warn('[Tablebase]',e?.message?e.message:e);}
   // v1.0.8 PHASE 49: removed the dead workerParsePGN round-trip. The old code
   //   called workerParsePGN(pgnText,30000) but discarded its result in BOTH
   //   .then and .catch — both branches ran the SAME synchronous importPGN(pgnText)

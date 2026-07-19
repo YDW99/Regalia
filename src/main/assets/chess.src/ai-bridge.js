@@ -102,7 +102,7 @@ let _reviewEvalCache=new function(){
   // work (just without persistent evals).
   function _warnEvalCache(op,e){
     if(typeof console!=='undefined'&&console.warn){
-      console.warn('[eval-cache] '+op+' failed:',e&&e.message?e.message:e);
+      console.warn('[eval-cache] '+op+' failed:',e?.message?e.message:e);
     }
   }
 
@@ -270,7 +270,7 @@ let _reviewEvalCache=new function(){
            String(k)===String(_reviewEvalRequestedStep)){
           _isCurrent=true;
         }
-      }catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+      }catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
       if(_isCurrent)continue;
       _victimKeys.push(k);
       _toEvict--;
@@ -299,12 +299,12 @@ window._flushReviewEvalCache=function(){
     if(_reviewEvalCache !== undefined&&_reviewEvalCache&&typeof _reviewEvalCache._flushSync==='function'){
       _reviewEvalCache._flushSync();
     }
-  }catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+  }catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
 };
 // Critical event handlers — flush synchronously before app can be killed
 (function(){
   function _flushOnExit(){
-    try{window._flushReviewEvalCache();}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+    try{window._flushReviewEvalCache();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
     // Also flush SharedPreferences pending writes (covers persistentSet async writes)
     try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentFlush)AndroidBridge.persistentFlush();}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
   }
@@ -760,7 +760,7 @@ let _emergencyFallbackTimerId=setTimeout(function(){
     console.error('EMERGENCY: Force hiding loading overlay after 35s');
     _loadingOverlayHiding=true;
     const lo=document.getElementById('_loadingOverlay');
-    if(lo){lo.style.opacity='0';lo.style.transition='opacity .3s';setTimeout(()=>{if(lo&&lo.parentNode)lo.remove();},300);}
+    if(lo){lo.style.opacity='0';lo.style.transition='opacity .3s';setTimeout(()=>{if(lo?.parentNode)lo.remove();},300);}
     render();
     if(!_engineReady) showToast(T('engine_init_failed'));
   }
@@ -851,7 +851,7 @@ function _commentHasText(commentParts,importedComment,targetText){
   if(!targetText)return false;
   const _normT=targetText.replace(/\s+/g,' ').trim();
   if(!_normT)return false;
-  if(commentParts&&commentParts.length>0){
+  if(commentParts?.length>0){
     for(const _p of commentParts){
       if(typeof _p!=='string')continue;
       if(_p.replace(/\s+/g,' ').trim().includes(_normT))return true;
@@ -877,12 +877,27 @@ function _deriveGameResult(){
      &&typeof _resignWinnerColor!=='undefined'&&_resignWinnerColor){
     return (_resignWinnerColor==='white')?'1-0':'0-1';
   }
-  // Timeout: winner is _timeoutWinnerColor
+  // Timeout: winner is _timeoutWinnerColor (null when FIDE 6.9 insufficient-
+  //   material draw — round-25 fix; falls through to draw below)
   if(_gameOverStatusKey !== undefined&&_gameOverStatusKey==='timeout'
      &&typeof _timeoutWinnerColor!=='undefined'&&_timeoutWinnerColor){
     return (_timeoutWinnerColor==='white')?'1-0':'0-1';
   }
-  // Checkmate/stalemate: parse gameOver text
+  // v1.2.3 round-25: all draw_* keys (and timeout with null winner) produce
+  //   '1/2-1/2' regardless of gameOver text (which may be localized).
+  //   The explicit list covers all draw statuses; timeout-draw falls through
+  //   to the final fallback '1/2-1/2' as well.
+  if(_gameOverStatusKey !== undefined){
+    if(_gameOverStatusKey==='draw_stalemate'
+       ||_gameOverStatusKey==='draw_insufficient'
+       ||_gameOverStatusKey==='draw_50move'
+       ||_gameOverStatusKey==='draw_75move'
+       ||_gameOverStatusKey==='draw_repetition'
+       ||_gameOverStatusKey==='draw_5fold'){
+      return '1/2-1/2';
+    }
+  }
+  // Checkmate: parse gameOver text (status key may not be set in legacy paths)
   if(gameOver.includes(T('white_wins'))||gameOver.includes('White wins'))return '1-0';
   if(gameOver.includes(T('black_wins'))||gameOver.includes('Black wins'))return '0-1';
   return '1/2-1/2';
@@ -981,7 +996,27 @@ function _buildTimeControlTag(){
 function _buildTerminationTag(){
   if(_gameOverStatusKey === undefined)return null;
   if(_gameOverStatusKey==='resign')return '[Termination "Resignation"]';
-  if(_gameOverStatusKey==='timeout')return '[Termination "Time forfeit"]';
+  // v1.2.3 round-25 (FIDE 6.9): timeout with insufficient material is a draw,
+  //   not a time forfeit. When _timeoutWinnerColor is null, the game was drawn
+  //   by insufficient material (FIDE 6.9), so the Termination tag should
+  //   reflect the draw, not "Time forfeit".
+  if(_gameOverStatusKey==='timeout'){
+    if(typeof _timeoutWinnerColor!=='undefined'&&_timeoutWinnerColor){
+      return '[Termination "Time forfeit"]';
+    }
+    return '[Termination "Both flag fall / insufficient material"]';
+  }
+  // v1.2.3 round-25 (FIDE 5.2.2): dead position draws get a Termination tag.
+  //   Per PGN spec, Termination values are free-form strings. "Dead position"
+  //   is the most descriptive for FIDE 5.2.2 (insufficient material / impossible
+  //   mate). Other draw types use their FIDE rule name.
+  if(_gameOverStatusKey==='draw_insufficient')return '[Termination "Dead position"]';
+  if(_gameOverStatusKey==='draw_stalemate')return '[Termination "Stalemate"]';
+  if(_gameOverStatusKey==='draw_50move')return '[Termination "50-move rule"]';
+  if(_gameOverStatusKey==='draw_75move')return '[Termination "75-move rule"]';
+  if(_gameOverStatusKey==='draw_repetition')return '[Termination "Threefold repetition"]';
+  if(_gameOverStatusKey==='draw_5fold')return '[Termination "Fivefold repetition"]';
+  if(_gameOverStatusKey==='checkmate')return '[Termination "Normal"]';
   return null;
 }
 
@@ -1248,12 +1283,20 @@ function _buildPGNString(forceIncludeVariations, includeAnnotations){
     //   pgn_timeout_white_wins / pgn_timeout_black_wins were added in
     //   game-logic.js. Dedup: skip if mr.comment already contains it.
     if(_gameOverStatusKey !== undefined&&_gameOverStatusKey==='timeout'
-       && typeof _timeoutWinnerColor!=='undefined'&&_timeoutWinnerColor
        && i===moveRecords.length-1){
-      const _timeoutKey=_timeoutWinnerColor==='white'?'pgn_timeout_white_wins':'pgn_timeout_black_wins';
-      const _timeoutText=T(_timeoutKey);
-      const _alreadyHas=_commentHasText(commentParts,mr.comment,_timeoutText);
-      if(!_alreadyHas)commentParts.push(_timeoutText);
+      // v1.2.3 round-25 (FIDE 6.9): if _timeoutWinnerColor is null, the game
+      //   was drawn by insufficient material (timeout but no mating material).
+      //   Append the draw comment instead of the "wins by timeout" comment.
+      if(typeof _timeoutWinnerColor!=='undefined'&&_timeoutWinnerColor){
+        const _timeoutKey=_timeoutWinnerColor==='white'?'pgn_timeout_white_wins':'pgn_timeout_black_wins';
+        const _timeoutText=T(_timeoutKey);
+        const _alreadyHas=_commentHasText(commentParts,mr.comment,_timeoutText);
+        if(!_alreadyHas)commentParts.push(_timeoutText);
+      }else{
+        const _drawText=T('pgn_timeout_draw_insufficient');
+        const _alreadyHas=_commentHasText(commentParts,mr.comment,_drawText);
+        if(!_alreadyHas)commentParts.push(_drawText);
+      }
     }
     const comment=commentParts.length>0?commentParts.join(' '):undefined;
     // Variations: include from moveRecords[i].variations if available
@@ -1293,8 +1336,11 @@ function _buildPGNString(forceIncludeVariations, includeAnnotations){
         const cur=_reviewEvalCache.peek(i+1);
         const prev=_reviewEvalCache.peek(i);
         if(!cur||!prev)return undefined;
-        const curEv=cur.mate?(cur.mate>0?90000:-90000):cur.eval;
-        const prevEv=prev.mate?(prev.mate>0?90000:-90000):prev.eval;
+        // v1.2.3 round-25 (S3358): nested ternary flattened to helper.
+        //   cur.mate>0 → +90000 (White mates), cur.mate<0 → -90000 (Black mates),
+        //   no mate → use cur.eval directly.
+        const curEv=cur.mate!=null?(cur.mate>0?90000:-90000):cur.eval;
+        const prevEv=prev.mate!=null?(prev.mate>0?90000:-90000):prev.eval;
         const delta=curEv-prevEv;
         const isW=(color==='white');
         const md=isW?delta:-delta;
@@ -1352,7 +1398,7 @@ function _showPGNExportAnnotationDialog(callback){
   // v1.1.1 Phase 65: Expose _dismiss globally so handleBackPress can call it.
   _pgnExportDialogDismiss=function(){_dismiss(null);};
   document.body.appendChild(overlay);
-  try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+  try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
 }
 function copyMoveHistory(){
   // v1.1.1 Phase 63: Ask whether to include annotations
@@ -1432,7 +1478,7 @@ function openStatsPage(){
             // v1.2.1 round-16: include the 'stats will open after analysis'
             //   hint so the user knows to wait instead of clicking 📊 again.
             showToast(T('analyzing_progress')+' ('+_cached+'/'+_total+') \u2014 '+T('stats_will_open_after_analysis'));
-          }catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+          }catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
           return;
         }
         window._pendingOpenStats=true;
@@ -1453,7 +1499,7 @@ function openStatsPage(){
             console.warn('openStatsPage: pending-stats safety timeout fired (10min) — batch did not complete');
             // v1.2.1 round-16: proper i18n (was previously mixed zh+en
             //   "T('analyzing_progress') + ' timed out'").
-            try{showToast(T('analysis_timed_out_retry'));}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+            try{showToast(T('analysis_timed_out_retry'));}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
           }
           window._pendingOpenStatsTimer=null;
         },600000); // 10 minutes
@@ -1467,7 +1513,7 @@ function openStatsPage(){
         try{
           // v1.2.1 round-16: include the 'stats will open after analysis' hint.
           showToast(T('analyzing_progress')+' ('+_reviewEvalCache.size+'/'+(_lastStep+1)+') \u2014 '+T('stats_will_open_after_analysis'));
-        }catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+        }catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
         return; // existing batch will trigger openStatsPage on completion
       }
       // Kick off analyze-all. reviewAnalyzeAll() is exported by ui.js and
@@ -1486,7 +1532,7 @@ function openStatsPage(){
           //   enough not to feel sluggish (analysis itself takes much longer)
           //   but long enough to read the 10-char intent message.
           showToast(T('stats_will_open_after_analysis'),1000);
-          try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+          try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
           setTimeout(function(){
             try{reviewAnalyzeAll();}catch(e){console.error('openStatsPage: deferred analyze-all trigger failed:',e);}
           },1000);
@@ -1629,7 +1675,7 @@ function onStatsHTMLExported(success,fileName){
 // silently doing nothing — the user otherwise has no feedback that the tap
 // was registered but the request couldn't be honored.
 function onStatsRequestReview(){
-  if(moveRecords&&moveRecords.length>0){
+  if(moveRecords?.length>0){
     enterReview();
   }else{
     showToast(T('no_move_records'));
@@ -1852,7 +1898,7 @@ function _uciToSimple(uci){
   const toRank=String(8-toRow);
   // Try to determine piece type from current game state
   let pieceType='pawn';
-  if(gameState&&gameState.board&&gameState.board[fromRow]){
+  if(gameState?.board&&gameState.board[fromRow]){
     const p=gameState.board[fromRow][fromCol];
     if(p)pieceType=p.type;
   }
@@ -1880,10 +1926,10 @@ function _uciToSimple(uci){
   // king (right of king → kingside O-O; left → queenside O-O-O).
   if(pieceType==='king'){
     // v1.0.7 PHASE 4: Check for UCI_Chess960 king-captures-rook format first.
-    if(gameState&&gameState.board&&gameState.board[fromRow]&&gameState.board[toRow]){
+    if(gameState?.board&&gameState.board[fromRow]&&gameState.board[toRow]){
       const _fp=gameState.board[fromRow][fromCol];
       const _tp=gameState.board[toRow][toCol];
-      if(_fp&&_fp.type==='king'&&_tp&&_tp.type==='rook'&&_fp.color===_tp.color&&fromRow===toRow){
+      if(_fp?.type==='king'&&_tp?.type==='rook'&&_fp.color===_tp.color&&fromRow===toRow){
         // King "captures" own rook → Chess960 castling notation.
         if(toCol>fromCol)return 'O-O';
         if(toCol<fromCol)return 'O-O-O';
@@ -1934,9 +1980,9 @@ function _uciToSAN(uci, state){
   // rook on the same rank) and rewrite the destination to the king's actual
   // castling destination (col 6 kingside, col 2 queenside). This makes the
   // downstream makeMv/moveAlg correctly detect castling via _castleSide().
-  if(piece&&piece.type==='king'&&state.board[toRow]){
+  if(piece?.type==='king'&&state.board[toRow]){
     const toPiece=state.board[toRow][toCol];
-    if(toPiece&&toPiece.type==='rook'&&toPiece.color===piece.color&&fromRow===toRow){
+    if(toPiece?.type==='rook'&&toPiece.color===piece.color&&fromRow===toRow){
       if(toCol>fromCol){
         // Kingside castling — king ends on col 6 (g1/g8)
         toCol=6;
@@ -2022,7 +2068,7 @@ const _PV_CACHE_MAX=200; // Bound: ~8 PV lines × ~25 moves = 200 entries max
 // (e.g. "e2e4") applied from different states produces different SAN.
 function _convertPVtoSANCached(pvString, state, stateHash){
   if(!pvString||!state) return { sanMoves: '', finalState: state };
-  const uciMoves=pvString.trim().split(/\s+/).filter(m=>m&&m.length>=4);
+  const uciMoves=pvString.trim().split(/\s+/).filter(m=>m?.length>=4);
   if(uciMoves.length===0) return { sanMoves: '', finalState: state };
   const sanParts=[];
   let currentState=state;
@@ -2201,28 +2247,28 @@ function _sanitizeFenForEngine(fen){
   if(crRaw.includes('K')){
     // White kingside: white king on e1 (row 7, col 4) AND white rook on h1 (row 7, col 7)
     const wk=board[7][4], wr=board[7][7];
-    if(wk&&wk.type==='king'&&wk.color==='white'&&wr&&wr.type==='rook'&&wr.color==='white'){
+    if(wk?.type==='king'&&wk.color==='white'&&wr?.type==='rook'&&wr.color==='white'){
       cr+='K';
     }
   }
   if(crRaw.includes('Q')){
     // White queenside: white king on e1 (row 7, col 4) AND white rook on a1 (row 7, col 0)
     const wk=board[7][4], wr=board[7][0];
-    if(wk&&wk.type==='king'&&wk.color==='white'&&wr&&wr.type==='rook'&&wr.color==='white'){
+    if(wk?.type==='king'&&wk.color==='white'&&wr?.type==='rook'&&wr.color==='white'){
       cr+='Q';
     }
   }
   if(crRaw.includes('k')){
     // Black kingside: black king on e8 (row 0, col 4) AND black rook on h8 (row 0, col 7)
     const bk=board[0][4], br=board[0][7];
-    if(bk&&bk.type==='king'&&bk.color==='black'&&br&&br.type==='rook'&&br.color==='black'){
+    if(bk?.type==='king'&&bk.color==='black'&&br?.type==='rook'&&br.color==='black'){
       cr+='k';
     }
   }
   if(crRaw.includes('q')){
     // Black queenside: black king on e8 (row 0, col 4) AND black rook on a8 (row 0, col 0)
     const bk=board[0][4], br=board[0][0];
-    if(bk&&bk.type==='king'&&bk.color==='black'&&br&&br.type==='rook'&&br.color==='black'){
+    if(bk?.type==='king'&&bk.color==='black'&&br?.type==='rook'&&br.color==='black'){
       cr+='q';
     }
   }
@@ -2268,10 +2314,10 @@ function uciToCoords(uci){
   // engine (with UCI_Chess960=false) sends "e1g1", which does NOT match
   // (g1 doesn't hold a rook), so we don't rewrite. The rewrite only happens
   // when the engine actually uses the Chess960 castling notation.
-  if(gameState&&gameState.board&&gameState.board[fr]&&gameState.board[tr]){
+  if(gameState?.board&&gameState.board[fr]&&gameState.board[tr]){
     const fromPiece=gameState.board[fr][fc];
     const toPiece=gameState.board[tr][tc];
-    if(fromPiece&&fromPiece.type==='king'&&toPiece&&toPiece.type==='rook'&&fromPiece.color===toPiece.color&&fr===tr){
+    if(fromPiece?.type==='king'&&toPiece?.type==='rook'&&fromPiece.color===toPiece.color&&fr===tr){
       // King "captures" own rook on the same rank → Chess960 castling notation.
       // v1.1.2 PHASE 71 (bug fix): Attach the castle flag to `result.to` so that
       // downstream `_castleSide()` detects castling via its primary path
@@ -2494,7 +2540,7 @@ function onBestMove(uciMove){
       const pm=AndroidBridge.getLastPonderMove();
       if(pm)_lastPonderMoveFromEngine=pm;
     }
-  }catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+  }catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
 
   // Clear MultiPV progress lines for next search
   _multiPVLines=[];
@@ -2523,8 +2569,8 @@ function onBestMove(uciMove){
     moveNum:moveNum,
     preMoveState:cloneS(gameState),
     ponderMove:_lastPonderMoveFromEngine,
-    ponderEnabled:!!(engineSettingsData&&engineSettingsData.ponder),
-    multiPVEnabled:!!(engineSettingsData&&engineSettingsData.multiPV&&engineSettingsData.multiPV>1)
+    ponderEnabled:!!(engineSettingsData?.ponder),
+    multiPVEnabled:!!(engineSettingsData?.multiPV&&engineSettingsData.multiPV>1)
   };
   // v1.0.8 PHASE 49: defensive cleanup. The Java side always fires
   //   onMultiPVResult immediately after onBestMove (same postJsCallback queue),
@@ -2690,7 +2736,7 @@ function onHintMove(uciMove){
       const pm=AndroidBridge.getLastPonderMove();
       if(pm)_lastPonderMoveFromEngine=pm;
     }
-  }catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+  }catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
   // Convert ponder move to SAN for display alongside the hint (bestmove).
   // The ponder move is the opponent's predicted reply AFTER the recommended move.
   // For correct SAN, we must convert from the post-hint-move position (postState).
@@ -2988,7 +3034,7 @@ function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth){
              &&typeof reviewMode!=='undefined'&&reviewMode){
             _refreshEvalTrendChart();
           }
-        }catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+        }catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
       }
     }
     return; // Don't update display (stale for current view)
@@ -3015,7 +3061,7 @@ function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth){
   // at "Analyze All N (k/N)" until the next full render.
   try{
     if(typeof _updateReviewAnalyzeBtn==='function')_updateReviewAnalyzeBtn();
-  }catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+  }catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
   // v1.2.1 round-11 (Bug #1 fix): Live-refresh the eval trend chart so the
   //   newly-cached data point appears on the line chart IMMEDIATELY when the
   //   current step's eval completes — without requiring the user to navigate
@@ -3027,7 +3073,7 @@ function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth){
   //   container doesn't exist, so this call is safe in all contexts.
   try{
     if(typeof _refreshEvalTrendChart==='function')_refreshEvalTrendChart();
-  }catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+  }catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
 }
 
 // Callback: Engine error
@@ -3175,7 +3221,7 @@ function _showFileBrowser(){
       let parentPath='';
       try{
         parentPath=bridge.getParentPath(_fileBrowserPath)||'';
-      }catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+      }catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
       let h='<div class="dov" role="dialog" aria-modal="true" aria-label="'+T('file_browse_label')+'" onclick="if(event.target===this){_closeFileBrowser()}"><div class="dlg" style="max-width:520px;max-height:80vh;overflow-y:auto">';
       h+='<h2>'+T('import_settings_title')+'</h2>';
       h+='<div style="background:var(--card);border:1px solid var(--border);border-radius:4px;padding:6px 10px;font-size:.72rem;color:var(--muted);margin-bottom:10px;word-break:break-all">'+_esc(_fileBrowserPath)+'</div>';
@@ -3250,7 +3296,7 @@ function _fileBrowserHandleBack(){
         return true; // Handled — don't close browser
       }
     }
-  }catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+  }catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
   // No parent — close the file browser
   _closeFileBrowser();
   return true;
@@ -3321,7 +3367,7 @@ function restartCurrentEngine(){
   // Refresh engine info after a delay
   setTimeout(function(){
     if(typeof AndroidBridge!=='undefined'){
-      try{const info=AndroidBridge.getEngineInfo();engineConfigData=JSON.parse(info);renderEngineConfigAndUpdate();}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+      try{const info=AndroidBridge.getEngineInfo();engineConfigData=JSON.parse(info);renderEngineConfigAndUpdate();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
     }
   },2500);
 }
@@ -3397,13 +3443,13 @@ function exportEngineSettings(){
           savedPath=exportDir+'/Regalia_engine_settings.txt';
           saved=bridge.writeTextFile(savedPath,txt);
         }
-      }catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+      }catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
       if(!saved){
         try{
           const downloadsPath='/storage/emulated/0/Download/Regalia_engine_settings.txt';
           saved=bridge.writeTextFile(downloadsPath,txt);
           if(saved) savedPath=downloadsPath;
-        }catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+        }catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
       }
       if(saved&&savedPath){
         showToast(T('settings_exported')+': '+savedPath);
@@ -3475,8 +3521,8 @@ function onSettingsImported(result){
       if(fb){fb.remove();}
       // Refresh cached data
       if(typeof AndroidBridge!=='undefined'){
-        try{var info=AndroidBridge.getEngineInfo();if(info)engineConfigData=JSON.parse(info);}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
-        try{var s=AndroidBridge.getEngineSettings();if(s)engineSettingsData=JSON.parse(s);}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+        try{var info=AndroidBridge.getEngineInfo();if(info)engineConfigData=JSON.parse(info);}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
+        try{var s=AndroidBridge.getEngineSettings();if(s)engineSettingsData=JSON.parse(s);}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
       }
       if(engineSettingsData){
         _cachedMultiPV=engineSettingsData.multiPV||1;
@@ -3540,7 +3586,7 @@ function onMultiPVResult(result){
     const data=typeof result==='string'?JSON.parse(result):result;
     _multiPVResult=data;
     // Store the primary PV as the move's variation
-    if(data&&data.length>0){
+    if(data?.length>0){
       const primary=data[0];
       if(primary.pv){
         // Store variation for the current/last move
@@ -3608,7 +3654,7 @@ function _processDeferredVariations(){
   // v1.0.2 FIX: Fall back to _multiPVResult[0].pv when _lastEngineVariation is
   // empty. Previously, if the bestmove didn't carry a PV (some Stockfish builds
   // omit it when MultiPV is on), the mainline variation was silently dropped.
-  const primaryPV=_lastEngineVariation||(_multiPVResult&&_multiPVResult.length>0?_multiPVResult[0].pv:null);
+  const primaryPV=_lastEngineVariation||(_multiPVResult?.length>0?_multiPVResult[0].pv:null);
 
   // --- Mainline prediction: continuation after the played move ---
   // v1.0.2 FIX: The mainline prediction should NOT be displayed immediately.
@@ -3659,7 +3705,7 @@ function _processDeferredVariations(){
   // which transparently reuses the converted SAN + post-state of any shared
   // prefix with previously-converted lines (including the mainline above).
   // For 8 lines sharing a 5-move prefix, this saves ~35 makeMv+moveAlg calls.
-  if(_multiPVResult&&_multiPVResult.length>1){
+  if(_multiPVResult?.length>1){
     const startIdx=primaryStartedWithBestmove?1:0;
     // Pre-compute the preMoveState hash for cache keys
     const preMoveHash=preMoveState.hash||0;
@@ -3832,7 +3878,7 @@ let _pendingEngineSANs=[];
 function _registerEnginePVForDivergence(pvUci,fromMoveIdx,preMoveState){
   if(!pvUci||!preMoveState)return;
   // Don't track PVs that are too short (just the bestmove — no continuation)
-  const moves=pvUci.trim().split(/\s+/).filter(m=>m&&m.length>=4);
+  const moves=pvUci.trim().split(/\s+/).filter(m=>m?.length>=4);
   if(moves.length<2)return; // Need at least bestmove + 1 continuation move
   _pendingEnginePVs.push({
     pvUci:moves.join(' '),
@@ -3888,7 +3934,7 @@ function _checkPVDivergence(){
       //   Chess960 castling move in a PV continuation triggers a false
       //   divergence. Skip the divergence check for castling moves in
       //   Chess960 mode (treat as match).
-      if(gameVariant !== undefined&&gameVariant==='chess960'&&mr&&mr.isCastling){
+      if(gameVariant !== undefined&&gameVariant==='chess960'&&mr?.isCastling){
         pending.matchedUpTo=k;
         continue;
       }
@@ -4039,11 +4085,11 @@ function _updateMultiPVDisplay(){
     // v1.0.5 Rev56: skip lines with no PV content — they contribute nothing
     // to the display except an empty score string, and would trigger a
     // wasteful _convertPVtoSAN('') call.
-    const hasPV = pv.pv && pv.pv.length>0;
+    const hasPV = pv.pv?.pv.length>0;
     // Build a cheap signature to detect whether this line actually changed
     const sig = (pv.index||0)+'|'+(pv.scoreCp!=null?pv.scoreCp:'')+'|'+(pv.scoreMate!=null?pv.scoreMate:'')+'|'+(hasPV?pv.pv:'');
     const cached = _multiPVDisplayCache[pv.index];
-    if(cached && cached.sig === sig){
+    if(cached?.sig === sig){
       // Cache hit — reuse the previously computed display text
       hintParts.push(cached.text);
       continue;
@@ -4139,7 +4185,7 @@ function onEngineError(msg){
   try{
     const _errShort=(msg&&typeof msg==='string')?msg.slice(0,80):String(msg);
     _updateEngineNotification(T('engine_error')+': '+_errShort);
-  }catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+  }catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
   // v1.0.8 PHASE 22: Reset animation flag to prevent permanent UI freeze.
   // If an engine error occurs DURING an animation, render() and sqClick()
   // would block forever since animationInProgress is only cleared by
@@ -4218,7 +4264,7 @@ function requestEngineEval(){
   if(!reviewMode&&!gameOver&&gameState.currentTurn!==playerColor)return;
   // v1.0.4 ROUND-5 REV12: Check cache BEFORE _resetEvalState() to avoid
   // a brief "analyzing..." flash when returning from stats page to review.
-  if(reviewMode&&reviewStates&&reviewStates.length>0&&reviewStep>=0&&reviewStep<reviewStates.length){
+  if(reviewMode&&reviewStates?.length>0&&reviewStep>=0&&reviewStep<reviewStates.length){
     const cachedEarly=_reviewEvalCache.get(reviewStep);
     if(cachedEarly!=null){
       _sfEval=cachedEarly.eval;_sfMateDistance=cachedEarly.mate!=null?cachedEarly.mate:0;_sfWdlW=cachedEarly.wdlW!=null?cachedEarly.wdlW:-1;_sfWdlD=cachedEarly.wdlD!=null?cachedEarly.wdlD:-1;_sfWdlL=cachedEarly.wdlL!=null?cachedEarly.wdlL:-1;_sfDepth=cachedEarly.depth!=null?cachedEarly.depth:0;_sfSeldepth=cachedEarly.seldepth!=null?cachedEarly.seldepth:0;_sfEvalReady=true;_evalLoading=false;
@@ -4253,14 +4299,14 @@ function requestEngineEval(){
     if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.isPondering==='function'&&AndroidBridge.isPondering()){
       if(typeof AndroidBridge.stopPonder==='function')AndroidBridge.stopPonder();
     }
-  }catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+  }catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
   _ponderGen++;_ponderMoveSAN='';_ponderBarInfo='';_pendingPonderMoveUCI=null;
   _updateAIThinkDisplay(); // Immediately clear stale ponder from DOM
   _evalRequestGen=_evalStaleGen; // Fresh eval request — accept onEngineEval callbacks with this gen
   _evalRequestReviewMode=!!reviewMode; // v1.0.7 PHASE 19: capture mode for cross-mode rejection
   // v1.1.1 Phase 59 Task 59.6: Clear batch gen — this is a user-nav request
   _evalRequestBatchGen=0;
-  if(reviewMode&&reviewStates&&reviewStates.length>0&&reviewStep>=0&&reviewStep<reviewStates.length){
+  if(reviewMode&&reviewStates?.length>0&&reviewStep>=0&&reviewStep<reviewStates.length){
     const _rs=reviewStates[reviewStep].state;
     const _termStatus=gameStatus(_rs);
     const _invalidateInFlight=function(){
@@ -4392,7 +4438,7 @@ function _requestBatchEval(step){
     if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.isPondering==='function'&&AndroidBridge.isPondering()){
       if(typeof AndroidBridge.stopPonder==='function')AndroidBridge.stopPonder();
     }
-  }catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+  }catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
   _ponderGen++;_ponderMoveSAN='';_ponderBarInfo='';_pendingPonderMoveUCI=null;
   // Clear any pending user-nav debounce timer
   if(_reviewEvalDebounceTimer){clearTimeout(_reviewEvalDebounceTimer);_reviewEvalDebounceTimer=null;}
@@ -4530,11 +4576,17 @@ function _formatEvalDelta(curEval,prevEval,fontSize){
     }
     return '';
   }
-  const d=curEval-prevEval,dp=(d/100).toFixed(1);
-  // Colour by player-perspective delta (_sign*d); dp stays White-POV so it
-  //   matches the score shown next to it.
+  const d=curEval-prevEval,dp=(Math.abs(d)/100).toFixed(1);
+  // v1.2.3 round-23 (Q10 fix): derive the displayed sign from the PLAYER-
+  //   perspective delta (_sign*d), not from d itself. Previously the '+'
+  //   prefix was hardcoded, so a black player improving (d<0) saw "+-1.2"
+  //   (green plus negative). Now: the colour branch already decides
+  //   good/bad via _sign*d; we just prefix the absolute delta with the
+  //   correct sign so the displayed value matches the colour semantics.
+  //   White-POV dp stays as Math.abs(d)/100 so it matches the adjacent
+  //   score shown next to it (White-POV).
   if(_sign*d>2)return '<span style="color:#27ae60;'+fs+'">+'+dp+'</span>';
-  if(_sign*d<-2)return '<span style="color:#c0392b;'+fs+'">'+dp+'</span>';
+  if(_sign*d<-2)return '<span style="color:#c0392b;'+fs+'">\u2212'+dp+'</span>';
   return '';
 }
 function _resetEvalState(){_sfMateDistance=0;_sfWdlW=-1;_sfWdlD=-1;_sfWdlL=-1;_sfDepth=0;_sfSeldepth=0;_sfEvalReady=false;_evalLoading=true;_evalStaleGen++;_lastProgressNodes=null;_lastProgressNps=null;_ponderGen++;_ponderBarInfo='';_ponderMoveSAN='';_pendingPonderMoveUCI=null;_updateAIThinkDisplay();}

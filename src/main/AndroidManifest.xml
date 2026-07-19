@@ -61,10 +61,13 @@
     <!-- v1.2.3 round-13 (P1): Android 11+ (API 30) package visibility restrictions
          silently hide other apps' packages from PackageManager.getPackageInfo.
          Without this <queries> block, RootDetector.checkRootPackages returns false
-         on every API 30+ device even when Magisk is installed — defeating signal #1
-         of the root detection. Targeted <queries> is preferred over QUERY_ALL_PACKAGES
-         (the latter is restricted by Google Play policy and triggers MobSF warnings).
-         The package names mirror RootDetector.ROOT_PACKAGES exactly. -->
+         on every API 30+ device even when Magisk is installed — defeating signal #2
+         of the root detection (signal #1 is the filesystem su-binary path scan in
+         RootDetector.checkRootFiles; signal #2 is the package-installed check;
+         signal #3 is the test-keys build tag check). Targeted <queries> is
+         preferred over QUERY_ALL_PACKAGES (the latter is restricted by Google
+         Play policy and triggers MobSF warnings). The package names mirror
+         RootDetector.ROOT_PACKAGES exactly. -->
     <queries>
         <package android:name="com.topjohnwu.magisk" />
         <package android:name="eu.chainfire.supersu" />

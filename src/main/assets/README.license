@@ -1,3 +1,53 @@
+v1.2.3 round-28 (2026.7.19) — Undo/Redo clock restoration audit + baseSec completeness:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — audit round).
+  - chess.html (AGPL v3): Rebuilt from chess.src/ via build-chess.py after the
+    round-28 baseSec completeness fix in ui-interactions.js.
+    22,766 lines, 1,372,057 bytes.
+  - stats.html (AGPL v3): No changes this round.
+
+v1.2.3 round-27 (2026.7.19) — First-principles review + manual mockup fix:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — review round).
+  - chess.html (AGPL v3): Rebuilt from chess.src/ via build-chess.py after the
+    round-27 comment-accuracy + redundancy-removal changes.
+    22,761 lines, 1,371,753 bytes.
+  - stats.html (AGPL v3): No changes this round.
+
+v1.2.3 round-26 (2026.7.19) — PGN Termination/comment配套修复 for FIDE 6.9 timeout draw:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - chess.html (AGPL v3): Rebuilt from chess.src/ via build-chess.py after the
+    round-26 ai-bridge.js + game-logic.js PGN export fixes.
+    22,766 lines, 1,371,956 bytes.
+  - stats.html (AGPL v3): No changes this round.
+
+v1.2.3 round-25 (2026.7.19) — SonarCloud S6582/S3358 style cleanup + FIDE 6.9 timeout draw:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — style + feature round).
+  - chess.html (AGPL v3): Rebuilt from chess.src/ via build-chess.py after the
+    round-25 S6582/S3358 style cleanup + FIDE 6.9 timeout-draw feature.
+    22,719 lines, 1,369,260 bytes.
+  - stats.html (AGPL v3): No changes this round.
+
+v1.2.3 round-24 (2026.7.19) — God Function split (S3776) + StatsActivity license fix:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — refactor round).
+  - chess.html (AGPL v3): Rebuilt from chess.src/ via build-chess.py after the
+    round-24 ui.js God Function split (see chess.src/README.license for the
+    10 extracted helper functions). 22,677 lines, 1,368,101 bytes. No behavior
+    change — every rendering path produces identical output.
+  - stats.html (AGPL v3): No changes this round.
+
+v1.2.3 round-23 (2026.7.19) — PR #51 CodeRabbit review fixes + SonarCloud triage:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - chess.html (AGPL v3): Rebuilt from chess.src/ via build-chess.py after
+    the round-23 JS changes (see chess.src/README.license for per-module
+    details). 22,659 lines, 1,368,542 bytes.
+  - stats.html (AGPL v3): Q7 — 4 tag-strip regex sites rewritten quote-aware
+    (was `/\[\w+\s+\S[^\]]*\]/g`, now `/\[\s*\w+\s+(?:"[^"]*"|[^\]]*?)\s*\]/g`)
+    so PGN tag values containing `]` (e.g. `[Event "Tournament [A]"]`) are
+    no longer truncated. Q9 — `_enc(s)` helper encodes every `<` as
+    `\u003c` (OWASP JSON-in-HTML pattern, replacing the lowercase-`</`-
+    only replaceAll) for both pgnText and lang in the export-HTML inline
+    script payload, so `<S`-style sequences can no longer trigger the
+    HTML parser's script-data-escaped state.
+
 v1.2.3 round-22 (2026.7.18) — eval bar perspective fix (player-POV report):
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
   - chess.html (AGPL v3): Rebuilt from chess.src/ via build-chess.py after the

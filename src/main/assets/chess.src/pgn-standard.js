@@ -838,7 +838,7 @@ function parseStandardPGN(pgnText){
       if(tok.type==='openVar'){varDepth++;if(varBuf)varBuf.push('(');continue;}
       if(tok.type==='closeVar'){varDepth--;if(varDepth===0){
         // Close out the variation
-        if(varBuf&&varBuf.length>0){
+        if(varBuf?.length>0){
           pendingVariations.push({san:varBuf.join(' ')});
         }
         varBuf=null;

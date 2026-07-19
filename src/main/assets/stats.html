@@ -695,7 +695,7 @@ function parsePGN(pgnText){
     // no `$` end-anchor) so it works for single-line PGN where tags and
     // movetext coexist on one line. The previous `/^\[.*\]$/gm` required the
     // ENTIRE line to be `[...]`, which never matched single-line PGN.
-    let mtCheck=text.replace(/\[\w+\s+\S[^\]]*\]/g,'').trim(); // v1.2.3 round-20 (S8786): 相邻量词类互斥，消除超线性回溯
+    let mtCheck=text.replace(/\[\s*\w+\s+(?:"[^"]*"|[^\]]*?)\s*\]/g,'').trim(); // v1.2.3 round-20 (S8786): 相邻量词类互斥，消除超线性回溯
     const firstNumMatch=mtCheck.match(/^(\d+\.+)/);
     if(firstNumMatch&&firstNumMatch[1].includes('...')){
       isBlackToMoveStart=true;
@@ -710,7 +710,7 @@ function parsePGN(pgnText){
   // letter). This avoids stripping `[%csl ...]` / `[%cal ...]` / `[%eval ...]`
   // / `[%emt ...]` from inside brace comments (since `%` is not in [A-Za-z]),
   // and works correctly for single-line PGN files (no `^` line-anchor).
-  let moveText=text.replace(/\[\w+\s+\S[^\]]*\]/g,''); // v1.2.3 round-20 (S8786): 相邻量词类互斥，消除超线性回溯
+  let moveText=text.replace(/\[\s*\w+\s+(?:"[^"]*"|[^\]]*?)\s*\]/g,''); // v1.2.3 round-20 (S8786): 相邻量词类互斥，消除超线性回溯
   // Remove comments (brace-style).
   // v1.0.5 Round-6 Rev61 (2026.6.27) FIX: was `while(moveText.includes('{'))...`
   // which infinite-loops on a malformed PGN with an unclosed `{` (no matching `}`).
@@ -1515,7 +1515,7 @@ function extractMoveTimes(pgnText){
     //   (same as parsePGN at lines 696/711). The old `/^\[.*\]$/gm` only
     //   stripped headers occupying an ENTIRE line — for single-line PGN the
     //   headers survived and broke this Black-to-move detection.
-    let mtCheck=text.replace(/\[\w+\s+\S[^\]]*\]/g,'').trim(); // v1.2.3 round-20 (S8786): 相邻量词类互斥，消除超线性回溯
+    let mtCheck=text.replace(/\[\s*\w+\s+(?:"[^"]*"|[^\]]*?)\s*\]/g,'').trim(); // v1.2.3 round-20 (S8786): 相邻量词类互斥，消除超线性回溯
     const firstNumMatch=mtCheck.match(/^(\d+\.+)/);
     if(firstNumMatch&&firstNumMatch[1].includes('...'))isBlackToMoveStart=true;
   }
@@ -1555,7 +1555,7 @@ function extractMoveTimes(pgnText){
   //   survived and its board coordinates (e.g. "b1") were mis-tokenized as
   //   pawn moves — shifting every subsequent time entry by one slot and
   //   swapping the White/Black attribution.
-  let moveText=text.replace(/\[\w+\s+\S[^\]]*\]/g,''); // v1.2.3 round-20 (S8786): 相邻量词类互斥，消除超线性回溯
+  let moveText=text.replace(/\[\s*\w+\s+(?:"[^"]*"|[^\]]*?)\s*\]/g,''); // v1.2.3 round-20 (S8786): 相邻量词类互斥，消除超线性回溯
   const usedTimes=[];
   const clkTimes=[];
   let i=0;
@@ -3920,8 +3920,14 @@ function _exportFullHTML(){
   //   terminate the script block of the exported HTML, corrupting the file.
   //   ("<\/" is a valid, equivalent JS string escape. This comment itself
   //   must avoid the literal sequence — inline script constraint.)
-  scriptJS='var _payload={pgn:'+JSON.stringify(pgnText).replaceAll('</','<\\/')+',lang:'+JSON.stringify(lang)+'};\n'+
-    'var _lang='+JSON.stringify(lang)+';\n'+
+  // v1.2.3 round-23 (Q9 fix): per OWASP JSON-in-HTML guidance, encode EVERY
+  //   '<' as '\u003c' (not just the lowercase '</' sequence). This prevents
+  //   edge cases where '<' followed by a non-'/' character (e.g. '<S' or
+  //   '<' followed by whitespace) could confuse certain HTML parsers in
+  //   script-data-escaped state. Both pgnText and lang are encoded.
+  const _enc = (s) => JSON.stringify(s).replace(/</g, '\\u003c');
+  scriptJS='var _payload={pgn:'+_enc(pgnText)+',lang:'+_enc(lang)+'};\n'+
+    'var _lang='+_enc(lang)+';\n'+
     scriptJS;
 
   const title=lang==='zh'?'📊 统计数据 — 完整导出':'📊 Statistics — Full Export';

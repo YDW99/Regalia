@@ -1,3 +1,60 @@
+v1.2.3 round-28 (2026.7.19) — Undo/Redo clock restoration audit + baseSec completeness:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — audit round).
+  - Regalia-v1.2.3-manual-zh.html (AGPL v3): round-28 changelog entry inserted
+    at the top of Chapter 1 — Undo/Redo clock restoration audit confirms the
+    round-23 Q3 fix works correctly; baseSec added to clock snapshot for
+    completeness.
+  - Regalia-v1.2.3-manual-en.html (AGPL v3): same round-28 entry, English.
+  - License classification: both manuals remain AGPL v3 (original works).
+
+v1.2.3 round-27 (2026.7.19) — First-principles review + manual mockup fix:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — review round).
+  - Regalia-v1.2.3-manual-zh.html (AGPL v3): Fixed cache-manager mockup —
+    removed 📥 (import) button elements that were removed from the actual UI
+    in v1.0.4 Rev24 but never removed from the mockup. Updated text
+    descriptions from "three buttons" to "two buttons" and the table row
+    from "Click entry name or 📥 button" to "Click entry name".
+  - Regalia-v1.2.3-manual-en.html (AGPL v3): same mockup fix, English.
+  - License classification: both manuals remain AGPL v3 (original works).
+
+v1.2.3 round-26 (2026.7.19) — PGN Termination/comment配套修复 for FIDE 6.9 timeout draw:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - Regalia-v1.2.3-manual-zh.html (AGPL v3): round-26 changelog entry inserted
+    at the top of Chapter 1 — PGN [Termination] tag and last-move comment
+    fixes for FIDE 6.9 timeout insufficient-material draw.
+  - Regalia-v1.2.3-manual-en.html (AGPL v3): same round-26 entry, English.
+  - License classification: both manuals remain AGPL v3 (original works).
+
+v1.2.3 round-25 (2026.7.19) — SonarCloud S6582/S3358 style cleanup + FIDE 6.9 timeout draw:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — style + feature round).
+  - Regalia-v1.2.3-manual-zh.html (AGPL v3): round-25 changelog entry inserted
+    at the top of Chapter 1 — S6582 optional-chaining cleanup (174 lines across
+    8 files), S3358 nested-ternary flatten (4 high-value sites), FIDE 6.9 timeout
+    insufficient-material draw feature.
+  - Regalia-v1.2.3-manual-en.html (AGPL v3): same round-25 entry, English.
+  - License classification: both manuals remain AGPL v3 (original works).
+
+v1.2.3 round-24 (2026.7.19) — God Function split + StatsActivity license fix:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — refactor round).
+  - Regalia-v1.2.3-manual-zh.html (AGPL v3): round-24 changelog entry
+    inserted at the top of Chapter 1 — God Function split summary
+    (_renderReviewMode -35%, _reviewAnalyzeAdvance -22%, 10 helper functions
+    extracted) + StatsActivity.java license label correction.
+  - Regalia-v1.2.3-manual-en.html (AGPL v3): same round-24 entry, English.
+  - License classification: both manuals remain AGPL v3 (original works).
+
+v1.2.3 round-23 (2026.7.19) — PR #51 CodeRabbit review fixes + SonarCloud triage:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - Regalia-v1.2.3-manual-zh.html (AGPL v3): round-23 changelog entry
+    inserted at the top of Chapter 1 — full PR #51 fix list (16 real
+    defects fixed, 2 false positives documented) + Q14 fix (the embedded
+    build-chess.py MODULES example now lists state-store.js,
+    ui-gameflow.js, and ui-interactions.js to match the actual
+    build-chess.py).
+  - Regalia-v1.2.3-manual-en.html (AGPL v3): same round-23 entry, English
+    (content-equivalent, not a machine translation). Same Q14 MODULES fix.
+  - License classification: both manuals remain AGPL v3 (original works).
+
 v1.2.3 round-22 (2026.7.18) — eval bar perspective fix (player-POV report):
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
   - Regalia-v1.2.3-manual-zh.html (AGPL v3): round-22 changelog entry inserted

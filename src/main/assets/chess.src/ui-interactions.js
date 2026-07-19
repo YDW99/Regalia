@@ -41,6 +41,73 @@
 // ============================================================================
 
 // Regalia Chess — User interactions (ui-interactions.js)
+
+// v1.2.3 round-23 (Q3 fix): clock snapshot helpers for stateHistory/redoStack.
+//   gameClocks is a global from ui-gameflow.js (typeof guard follows the
+//   round-11 cross-module defensive pattern). Returns a deep-ish copy of the
+//   per-side clock state (remainingSec/displayRemainingSec/lastMoveTimestamp
+//   + the type/baseSec/increment/delay fields) so undo/redo can restore it
+//   exactly. v1.2.3 round-28: added baseSec to the snapshot (was missing —
+//   only mattered for PGN [TimeControl] tag which reads gameClocks.baseSec,
+//   but restoring it keeps the snapshot complete).
+function _snapshotClocks(){
+  if(typeof gameClocks==='undefined'||!gameClocks)return null;
+  return {
+    type:gameClocks.type,
+    baseSec:gameClocks.baseSec||0,
+    incrementSec:gameClocks.incrementSec||0,
+    delaySec:gameClocks.delaySec||0,
+    white:{
+      remainingSec:gameClocks.white.remainingSec,
+      displayRemainingSec:gameClocks.white.displayRemainingSec,
+      lastMoveTimestamp:gameClocks.white.lastMoveTimestamp
+    },
+    black:{
+      remainingSec:gameClocks.black.remainingSec,
+      displayRemainingSec:gameClocks.black.displayRemainingSec,
+      lastMoveTimestamp:gameClocks.black.lastMoveTimestamp
+    }
+  };
+}
+// Restore clocks from a snapshot, rebasing lastMoveTimestamp to Date.now()
+//   so the resumed clock doesn't immediately deduct the elapsed wall-clock
+//   time between snapshot and restore. Also clears gameClockExpired and
+//   restarts the tick interval (initGameClocks is idempotent — it clears
+//   any prior interval before starting a new one).
+function _restoreClocks(snap){
+  if(!snap){
+    // No snapshot (pre-round-23 history entry or no clock game) — leave
+    // gameClocks untouched.
+    return;
+  }
+  if(typeof gameClocks==='undefined'||!gameClocks){
+    // Clocks were torn down (e.g. between games); don't reinitialize.
+    return;
+  }
+  const now=Date.now();
+  gameClocks.type=snap.type;
+  if(snap.baseSec!==undefined)gameClocks.baseSec=snap.baseSec;
+  gameClocks.incrementSec=snap.incrementSec||0;
+  gameClocks.delaySec=snap.delaySec||0;
+  gameClocks.white.remainingSec=snap.white.remainingSec;
+  gameClocks.white.displayRemainingSec=snap.white.displayRemainingSec;
+  gameClocks.white.lastMoveTimestamp=now;
+  gameClocks.black.remainingSec=snap.black.remainingSec;
+  gameClocks.black.displayRemainingSec=snap.black.displayRemainingSec;
+  gameClocks.black.lastMoveTimestamp=now;
+  // Clear any prior timeout state so the resumed clock can tick afresh.
+  if(typeof gameClockExpired!=='undefined')gameClockExpired=null;
+  // Restart the tick interval if the clock UI is active (gameClockTimerId
+  // is owned by ui-gameflow.js). typeof guard — round-11 cross-module safety.
+  if(typeof gameClockTimerId!=='undefined'){
+    if(gameClockTimerId){clearInterval(gameClockTimerId);gameClockTimerId=null;}
+    if(typeof initGameClocks==='function'&&!gameOver){
+      initGameClocks();
+    }
+  }
+  if(typeof _updateClockDisplay==='function')_updateClockDisplay();
+}
+
 function sqClick(r,c){
 if(animationInProgress)return;
 // v1.0.5 Round-6 Rev49: if a long-press just fired (toggling stabilization),
@@ -61,7 +128,7 @@ const canMove=!gameOver&&!isAIThinking&&!pendingPromotion&&!reviewMode&&gameStat
 // standard "click the king's destination" gesture is ambiguous).
 if(selectedSquare&&canMove){
   const _selPiece=gameState.board[selectedSquare.row]&&gameState.board[selectedSquare.row][selectedSquare.col];
-  if(_selPiece&&_selPiece.type==='king'&&_selPiece.color===playerColor){
+  if(_selPiece?.type==='king'&&_selPiece.color===playerColor){
     // Check if the clicked square is a castling rook for the selected king.
     const _cr=_getCastlingRookForClick(selectedSquare,{row:r,col:c});
     if(_cr){
@@ -81,7 +148,7 @@ if(selectedSquare&&canMove){
 // Previously, clicking the selected piece would re-select it (same legalMvs, same highlight),
 // making it impossible to deselect. This was especially problematic after AI hint auto-selection,
 // where the user had no way to clear the selection highlight.
-if(selectedSquare&&selectedSquare.row===r&&selectedSquare.col===c){
+if(selectedSquare?.row===r&&selectedSquare.col===c){
   selectedSquare=null;legalMvs=[];legalSet=new Set();
   HapticManager.fire('BUTTON_PRESS');
   // v1.0.8 PHASE 22 supplement: deselect sound (下行短音)
@@ -92,7 +159,7 @@ if(selectedSquare&&canMove){
   const isLegal=legalSet.has(r*8+c);
   if(isLegal){
     const mp=gameState.board[selectedSquare.row][selectedSquare.col];
-    if(mp&&mp.type==='pawn'){
+    if(mp?.type==='pawn'){
       const pr=mp.color==='white'?0:7;
       if(r===pr){pendingPromotion={from:selectedSquare,to:pos,piece:mp};render();return}
     }
@@ -104,7 +171,7 @@ if(selectedSquare&&canMove){
   // If it's an empty/opponent square (not a legal move target), deselect the old
   // piece AND select the new square in one step — this shows control info for the
   // clicked square while clearing the old selection highlight.
-  if(p&&p.color===playerColor){
+  if(p?.color===playerColor){
     selectedSquare=pos;legalMvs=legalMoves(gameState,pos);legalSet=new Set(legalMvs.map(m=>m.row*8+m.col));
     HapticManager.fire('PIECE_SELECT');
     // v1.0.8 PHASE 22 supplement: piece-select sound (清脆短音)
@@ -116,7 +183,7 @@ if(selectedSquare&&canMove){
   HapticManager.fire('BUTTON_PRESS');_updateBoardLightweight();return
 }
 // No piece currently selected — allow selecting own piece or any square for control info
-if(canMove&&p&&p.color===playerColor){selectedSquare=pos;legalMvs=legalMoves(gameState,pos);legalSet=new Set(legalMvs.map(m=>m.row*8+m.col));HapticManager.fire('PIECE_SELECT');
+if(canMove&&p?.color===playerColor){selectedSquare=pos;legalMvs=legalMoves(gameState,pos);legalSet=new Set(legalMvs.map(m=>m.row*8+m.col));HapticManager.fire('PIECE_SELECT');
   // v1.0.8 PHASE 22 supplement: piece-select sound (清脆短音)
   try{if(typeof playSound==='function')playSound('select');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
   _updateBoardLightweight();return}
@@ -144,13 +211,13 @@ function _getCastlingRookForClick(kingPos,clickedPos){
   if(!_p||_p.type!=='king'||_p.color!==playerColor)return null;
   const _moves=legalMvs||[];
   for(const m of _moves){
-    if(m&&m.castle){
+    if(m?.castle){
       let rookCol=-1;
       if(gameVariant !== undefined&&gameVariant==='chess960'&&typeof chess960CastlingRookMove==='function'){
         try{
           const rm=chess960CastlingRookMove(gameState,_p.color,m.castle);
           if(rm)rookCol=rm.rookFrom;
-        }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+        }catch(e){console.warn('[UI]',e?.message?e.message:e);}
       }else{
         rookCol=m.castle==='kingside'?7:0;
       }
@@ -200,7 +267,7 @@ _ponderGen++;_ponderBarInfo='';_ponderMoveSAN='';_pendingPonderMoveUCI=null;
 if(typeof _updateAIThinkDisplay==='function')_updateAIThinkDisplay();
 // Clear Stockfish bridge emergency timer (move is being executed)
 const piece=gameState.board[from.row][from.col];
-if(piece&&piece.type==='pawn'&&!promotion){
+if(piece?.type==='pawn'&&!promotion){
 const pr=piece.color==='white'?0:7;
 if(to.row===pr){pendingPromotion={from,to,piece};render();return}
 }
@@ -208,7 +275,7 @@ if(!piece)return;
 // Defense-in-depth: only pawns can be promoted — discard spurious promotion
 // from any source (e.g., corrupted UCI parsing, tablebase, etc.)
 if(promotion&&piece.type!=='pawn')promotion=null;
-stateHistory.push({state:cloneS(gameState),selectedSquare:selectedSquare?{...selectedSquare}:null,legalMvs:[...legalMvs],moveRecords:[...moveRecords],lastMove:lastMove?{...lastMove}:null,gameOver});
+stateHistory.push({state:cloneS(gameState),selectedSquare:selectedSquare?{...selectedSquare}:null,legalMvs:[...legalMvs],moveRecords:[...moveRecords],lastMove:lastMove?{...lastMove}:null,gameOver,clocks:_snapshotClocks()});
 if(stateHistory.length>200)stateHistory.shift();
 // v1.0.6 FIX: Build mv with the castle flag preserved from legalMvs.
 // Without this, makeMv/moveAlg/_castleSide cannot detect Chess960 castling
@@ -227,11 +294,11 @@ if(piece.type==='king'){
   // which rejects 0-distance king moves (king already on g1/c1) → king nulled
   // in `makeMv`. The legalMvs lookup remains as a fallback for the case where
   // `to` is a plain {row,col} object without the castle flag.
-  if(to&&to.castle){
+  if(to?.castle){
     mv.castle=to.castle;
   }else{
     for(const _lm of (legalMvs||[])){
-      if(_lm&&_lm.castle&&_lm.row===to.row&&_lm.col===to.col){
+      if(_lm?.castle&&_lm.row===to.row&&_lm.col===to.col){
         mv.castle=_lm.castle;
         break;
       }
@@ -317,7 +384,7 @@ const ANIMATION_DEFER_MS=600;
 //   that delays the AI's reply and the game-over check for no reason.
 //   Reduce to 30ms (one frame + tiny buffer) under reduced-motion.
 let _deferMs=ANIMATION_DEFER_MS;
-try{if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches)_deferMs=30;}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+try{if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches)_deferMs=30;}catch(e){console.warn('[UI]',e?.message?e.message:e);}
 const _hashAtSched=gameState.hash;
 setTimeout(()=>{
 try{
@@ -356,7 +423,7 @@ function _clearAnimationState(){
       const old=bwrap.querySelectorAll('.move-anim');
       for(let i=0;i<old.length;i++)old[i].remove();
     }
-  }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  }catch(e){console.warn('[UI]',e?.message?e.message:e);}
   if(_fullRenderTimer){clearTimeout(_fullRenderTimer);_fullRenderTimer=0;}
 }
 
@@ -397,18 +464,21 @@ if(!prev||!prev.state){
   break;
 }
 // Push current state to redo stack BEFORE restoring
-_redoStack.push({state:cloneS(gameState),moveRecords:[...moveRecords],lastMove:lastMove?{...lastMove}:null});
+_redoStack.push({state:cloneS(gameState),moveRecords:[...moveRecords],lastMove:lastMove?{...lastMove}:null,clocks:_snapshotClocks()});
 gameState=prev.state;
 // If the move being undone was a PLAYER move, capture its from-position.
 // The piece is now back at that square in the restored gameState.
-if(_undoneMove&&_undoneMove.from){
+if(_undoneMove?.from){
   const fromRow=_undoneMove.from.row,fromCol=_undoneMove.from.col;
   const pieceAtFrom=gameState.board[fromRow]&&gameState.board[fromRow][fromCol];
-  if(pieceAtFrom&&pieceAtFrom.color===playerColor){
+  if(pieceAtFrom?.color===playerColor){
     _playerMoveFrom={row:fromRow,col:fromCol};
   }
 }
 moveRecords=prev.moveRecords||[];lastMove=prev.lastMove;gameOver=null;_gameOverStatusKey=null;gameOverSoundPlayed=false;
+// v1.2.3 round-23 (Q3 fix): restore clocks from snapshot so the clock
+//   state stays in sync with the board state after undo.
+_restoreClocks(prev.clocks);
 steps++;
 if(gameState.currentTurn===playerColor)break;
 }
@@ -467,7 +537,7 @@ if(typeof _invalidateCachesForUndoneMoves==='function'){
   }catch(e){console.warn('undoMove: visual annotation cache invalidation failed',e);}
   try{
     if(typeof _cachedOriginalPGN!=='undefined')_cachedOriginalPGN=null;
-  }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  }catch(e){console.warn('[UI]',e?.message?e.message:e);}
 }
 // After undo, select the piece at the player's original (from) position.
 // This is the position the piece was at BEFORE the player moved it, so the user
@@ -477,7 +547,7 @@ if(typeof _invalidateCachesForUndoneMoves==='function'){
 // select if we successfully tracked a player move's from-square.
 if(_playerMoveFrom&&!gameOver){
   const tp=gameState.board[_playerMoveFrom.row]&&gameState.board[_playerMoveFrom.row][_playerMoveFrom.col];
-  if(tp&&tp.color===playerColor){
+  if(tp?.color===playerColor){
     selectedSquare={row:_playerMoveFrom.row,col:_playerMoveFrom.col};
     legalMvs=legalMoves(gameState,selectedSquare);legalSet=new Set(legalMvs.map(m=>m.row*8+m.col));
     HapticManager.fire('PIECE_SELECT');
@@ -511,18 +581,20 @@ if(!nxt||!nxt.state){
   render();return;
 }
 // Save current state to history so we can undo again
-stateHistory.push({state:cloneS(gameState),moveRecords:[...moveRecords],lastMove:lastMove?{...lastMove}:null,selectedSquare:null});
+stateHistory.push({state:cloneS(gameState),moveRecords:[...moveRecords],lastMove:lastMove?{...lastMove}:null,selectedSquare:null,clocks:_snapshotClocks()});
 gameState=nxt.state;
 // Preserve selectedSquare after redo
 if(selectedSquare){
   const sp=gameState.board[selectedSquare.row][selectedSquare.col];
-  if(sp&&sp.color===playerColor&&!gameOver){
+  if(sp?.color===playerColor&&!gameOver){
     legalMvs=legalMoves(gameState,selectedSquare);legalSet=new Set(legalMvs.map(m=>m.row*8+m.col));
   }else{
     selectedSquare=null;legalMvs=[];legalSet=new Set();
   }
 }else{legalMvs=[];legalSet=new Set();}
 moveRecords=nxt.moveRecords;lastMove=nxt.lastMove;gameOver=null;_gameOverStatusKey=null;gameOverSoundPlayed=false;
+// v1.2.3 round-23 (Q3 fix): restore clocks from snapshot after redo too.
+_restoreClocks(nxt.clocks);
 // v1.0.2 FIX (first-principles): Redo must NOT trigger AI.
 // The redo stack contains moves that were ALREADY played (and then undone).
 // Each redo pops one entry and restores the corresponding state. Undo always
@@ -600,7 +672,7 @@ function toggleSound(){
     if(typeof audioEngine!=='undefined'&&audioEngine){
       audioEngine.setEnabled(soundOn);
     }
-  }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  }catch(e){console.warn('[UI]',e?.message?e.message:e);}
   // v1.0.8 PHASE 22 supplement: when turning sound ON, play a select sound
   // so the user immediately hears confirmation that sound is now active.
   // (When turning OFF, no sound — by definition.)
@@ -656,7 +728,7 @@ function setDifficultyLevel(level){
       AndroidBridge.syncGameDifficulty(level);
     }
   }catch(e){
-    console.warn('[AI] syncGameDifficulty failed:',e&&e.message?e.message:e);
+    console.warn('[AI] syncGameDifficulty failed:',e?.message?e.message:e);
   }
   render();
 }
@@ -691,7 +763,7 @@ if(gameState.castlingRights){
       let best=-1;
       for(let c=wkCol+1;c<8;c++){
         const p=gameState.board[7][c];
-        if(p&&p.type==='rook'&&p.color==='white'){best=c;break;}
+        if(p?.type==='rook'&&p.color==='white'){best=c;break;}
       }
       if(best>=0)gameState.setupCastleMarks.add(String(7*8+best));
     }
@@ -699,7 +771,7 @@ if(gameState.castlingRights){
       let best=-1;
       for(let c=wkCol-1;c>=0;c--){
         const p=gameState.board[7][c];
-        if(p&&p.type==='rook'&&p.color==='white'){best=c;break;}
+        if(p?.type==='rook'&&p.color==='white'){best=c;break;}
       }
       if(best>=0)gameState.setupCastleMarks.add(String(7*8+best));
     }
@@ -711,7 +783,7 @@ if(gameState.castlingRights){
       let best=-1;
       for(let c=bkCol+1;c<8;c++){
         const p=gameState.board[0][c];
-        if(p&&p.type==='rook'&&p.color==='black'){best=c;break;}
+        if(p?.type==='rook'&&p.color==='black'){best=c;break;}
       }
       if(best>=0)gameState.setupCastleMarks.add(String(0*8+best));
     }
@@ -719,7 +791,7 @@ if(gameState.castlingRights){
       let best=-1;
       for(let c=bkCol-1;c>=0;c--){
         const p=gameState.board[0][c];
-        if(p&&p.type==='rook'&&p.color==='black'){best=c;break;}
+        if(p?.type==='rook'&&p.color==='black'){best=c;break;}
       }
       if(best>=0)gameState.setupCastleMarks.add(String(0*8+best));
     }
@@ -742,11 +814,11 @@ if(gameState.enPassantTarget){
   if(_epT.row===5){
     // White pawn just double-stepped; pawn sits on row 4
     const _p=gameState.board[4]&&gameState.board[4][_epT.col];
-    if(_p&&_p.type==='pawn'&&_p.color==='white')_pawnRow=4;
+    if(_p?.type==='pawn'&&_p.color==='white')_pawnRow=4;
   }else if(_epT.row===2){
     // Black pawn just double-stepped; pawn sits on row 3
     const _p=gameState.board[3]&&gameState.board[3][_epT.col];
-    if(_p&&_p.type==='pawn'&&_p.color==='black')_pawnRow=3;
+    if(_p?.type==='pawn'&&_p.color==='black')_pawnRow=3;
   }
   gameState.setupEpMark=_pawnRow!==null?{row:_pawnRow,col:_epT.col}:null;
 }else{
@@ -759,7 +831,7 @@ setupMarkerMode=null;
 // Re-validate castlingRights from setupCastleMarks before clearing them.
 // (_refreshStateAfterSetup reset them to all-false during setup.)
 if(gameState.setupCastleMarks&&gameState.setupCastleMarks.size>0){
-  try{validateSetupPosition(gameState);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{validateSetupPosition(gameState);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
 }
 setupMarkerMode=null;
 gameState.setupEpMark=null;
@@ -997,6 +1069,10 @@ if(typeof setChess960Mode==='function'&&typeof isChess960Mode==='function'){
     // Setup produced a standard position — disable Chess960 mode unless we're
     // in an explicit Chess960 game (gameVariant === 'chess960').
     setChess960Mode(false);
+    // v1.2.3 round-23 (Q1 fix): clear gameSPID too. Previously the previous
+    //   game's SP-ID persisted when a non-Chess960 setup was applied, so
+    //   PGN export / Shredder-FEN generation could read a stale SP-ID.
+    if(typeof gameSPID!=='undefined')gameSPID=null;
   }
 }
 // v1.0.2 FIX: Black-to-move opening move record fix.
@@ -1288,7 +1364,7 @@ function handleBackPress(){
  * default "你"/"You" (clears the persisted preference).
  */
 function _renameHumanPlayer(){
-  try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   const _current=(typeof _humanPlayerName!=='undefined'&&_humanPlayerName)?_humanPlayerName:T('you');
   let _newName='';
   try{_newName=prompt(T('rename_player_prompt'),_current)||'';}catch(e){_newName='';}
@@ -1398,9 +1474,9 @@ function _resignGame(){
         }else if(typeof AndroidBridge!=='undefined'&&AndroidBridge.sendToEngine){
           AndroidBridge.sendToEngine('stop');
         }
-      }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+      }catch(e){console.warn('[UI]',e?.message?e.message:e);}
     }
-  }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  }catch(e){console.warn('[UI]',e?.message?e.message:e);}
   // Stop the game clock
   // v1.0.8 PHASE 19 (bug fix): gameClocks.running=false was a no-op (the field
   // doesn't exist). The 200ms interval kept firing for the rest of the session,
@@ -1410,7 +1486,7 @@ function _resignGame(){
       clearInterval(gameClockTimerId);
       gameClockTimerId=null;
     }
-  }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  }catch(e){console.warn('[UI]',e?.message?e.message:e);}
   // Set game-over state
   _gameOverStatusKey='resign';
   gameOver=_gameOverStrFromStatus('resign');
@@ -1419,12 +1495,12 @@ function _resignGame(){
     if(soundOn !== undefined&&soundOn&&typeof playSound==='function'){
       playSound('gameover');
     }
-  }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  }catch(e){console.warn('[UI]',e?.message?e.message:e);}
   // v1.0.8 PHASE 41: use GAME_OVER haptic (not ERROR) — resignation plays the
   //   same 'gameover' sound as natural game-over, so the haptic should match.
   //   ERROR had no Java case (fell to 15ms default); GAME_OVER has a proper
   //   430ms multi-stage pattern matching the somber arpeggio.
-  try{HapticManager.fire('GAME_OVER');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{HapticManager.fire('GAME_OVER');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   // Force a full re-render to show the game-over overlay
   //   (v1.2.3 round-20: markDirty removed as dead code — it always routed to
   //   render() anyway, so call render() directly.)

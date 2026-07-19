@@ -104,7 +104,7 @@ Regalia/
 │   │   │   ├── eco-data.js     # ECO opening classification data
 │   │   │   ├── ui-gameflow.js  # Game start + game-clock subsystem (v1.2.3 round-17 God-Class split NEW)
 │   │   │   ├── ui-interactions.js # Click handling, move execution, toolbar, setup, dialogs, back-press (v1.2.3 round-17 NEW)
-│   │   │   ├── ui.js           # Core rendering, review mode, ChessAudioEngine, eval bar (round-17 slimmed to ~6,761 lines)
+│   │   │   ├── ui.js           # Core rendering, review mode, ChessAudioEngine, eval bar (round-24 God Function split: 10 helpers extracted, ~6,791 lines)
 │   │   │   ├── index.html.tpl  # CSS template (theme variables, responsive layout, animation keyframes)
 │   │   │   └── README.license  # Per-file license classification for this directory
 │   │   ├── chess.html          # Built output (combined JS+CSS+HTML)
@@ -128,7 +128,7 @@ Regalia/
 │   │   ├── ChessWebViewClient.java # Page load handler, render-process crash recovery
 │   │   ├── EngineService.java  # Foreground service for engine stability
 │   │   ├── ChessApp.java       # Application class, crash protection
-│   │   ├── HapticManager.java  # Haptic feedback (@JavascriptInterface delegate, PWLE/vibration; v1.2.3 round-17 NEW, 487 lines)
+│   │   ├── HapticManager.java  # Haptic feedback (@JavascriptInterface delegate, vibration waveform API; v1.2.3 round-17 NEW, 471 lines; round-23 PWLE reflection removed → public createWaveform API)
 │   │   ├── StabilizationHelper.java # Sensor-fusion board anti-shake (v1.0.5 NEW)
 │   │   ├── TlsSecurityHelper.java # TLS 1.2+ enforcement for tablebase API
 │   │   ├── RootDetector.java   # Informational root detection (About dialog)
@@ -258,6 +258,87 @@ During the development stage, the version number used was: **v18.x.x**. For futu
 **v1.2.3** (versionCode 123) — current release
 
 The v1.2.3 release is a **bug-fix + review-response release** on top of v1.2.2, driven by a user-reported P0 JS error and two multi-skill review reports (Round 17 — Issue #48, 24 findings; Round 18 — Issue #49, 32 findings). After rigorous false-positive verification, the actionable findings were fixed and the version was bumped v1.2.2→v1.2.3 (versionCode 122→123).
+
+### v1.2.3 round-28 (2026.7.19) — Undo/Redo clock restoration audit + baseSec completeness
+
+User reported: "悔棋(Undo)时应当记录剩余时间，便于撤悔(Redo)后恢复剩余时间."
+
+**Audit result**: The Undo/Redo clock restoration feature was already implemented in round-23 (Q3 fix) via `_snapshotClocks`/`_restoreClocks` helpers. A full round-trip verification confirms it works correctly — Undo records remaining time, Redo restores it. The only code change is adding `baseSec` to the clock snapshot for completeness (was missing — only affected PGN `[TimeControl]` tag, no bug since the existing value was retained).
+
+**First-principles review** of all clock-related code:
+- `recordMoveEnd`: correctly handles null/expired clocks, Fischer increment (round-23 Q2 fix), Bronstein/US-delay
+- `_tickGameClock`: only updates display value, not committed value
+- `_restoreClocks`: correctly rebases timestamp, clears expired flag, restarts tick interval
+- `_redoStack` push timing: captures post-move state and clocks before restore
+
+**Verification**: all 11 JS modules pass `node --check`; chess.html rebuilt (22,766 lines / 1,372,057 bytes); release APK v1+v2+v3 signed; Stockfish dotprod SHA-256 three-way consistent (8f7116d3...); tar 118 entries, 0 excluded.
+
+### v1.2.3 round-27 (2026.7.19) — First-principles review + manual mockup fix
+
+Continuation of the per-file, per-line first-principles review:
+
+- **i18n completeness audit** — verified all 480+ `T('key')` calls have corresponding i18n entries with BOTH `zh` and `en` values. No gaps found.
+- **FIDE 6.9 comment accuracy** (ui-gameflow.js) — fixed misleading comment in `_onGameClockExpired` about `isDeadPosition` semantics. Now accurately states that `isDeadPosition` checks whether checkmate is possible by any sequence of legal moves (FIDE 5.2.2), which is exactly the FIDE 6.9 condition.
+- **Redundancy removal** (ai-bridge.js) — removed unreachable `if(_gameOverStatusKey==='timeout') return '1/2-1/2'` branch in `_deriveGameResult`. The fallback already produces the correct result for timeout-draw.
+- **Manual mockup accuracy fix** — the cache-manager mockup in both zh and en manuals still showed the 📥 (import) button on each cache entry, but this button was removed from the actual UI in v1.0.4 Rev24 (clicking the entry name directly imports it). Removed all 📥 button elements from the HTML mockup and fixed text descriptions ("three buttons" → "two buttons", "Click entry name or 📥 button" → "Click entry name").
+- **README.md directory tree** — updated `ui.js` line count (6,761 → 6,791) and `HapticManager.java` line count (487 → 471) to reflect current file sizes.
+
+**Verification**: all 11 JS modules pass `node --check`; chess.html rebuilt (22,761 lines / 1,371,753 bytes); release APK v1+v2+v3 signed; Stockfish dotprod SHA-256 three-way consistent (8f7116d3...); tar 118 entries, 0 excluded.
+
+### v1.2.3 round-26 (2026.7.19) — PGN Termination/comment配套修复 for FIDE 6.9 timeout draw
+
+Follow-up to round-25's FIDE 6.9 timeout insufficient-material draw feature. The round-25 fix set `_gameOverStatusKey='draw_insufficient'` and `_timeoutWinnerColor=null` for the draw case, but the PGN export side still treated all `timeout` statuses as "Time forfeit". This round closes that gap:
+
+- **`_buildTerminationTag`** — now distinguishes timeout-win (`[Termination "Time forfeit"]`) from timeout-draw (`[Termination "Both flag fall / insufficient material"]`). Also added Termination tags for all other terminal statuses (draw_insufficient → "Dead position", stalemate, 50-move, 75-move, threefold, fivefold, checkmate → "Normal") that were previously missing them.
+- **`_buildPGNString` timeout comment** — the last-move `{}` comment now appends the new `pgn_timeout_draw_insufficient` i18n string ("超时但子力不足，和棋" / "Timeout but insufficient material, draw") when `_timeoutWinnerColor` is null.
+- **`_deriveGameResult`** — explicit draw_* status branches returning `'1/2-1/2'` directly (no longer relies on localized text matching).
+- **New i18n key** — `pgn_timeout_draw_insufficient` (zh/en).
+
+**Verification**: all 11 JS modules pass `node --check`; chess.html rebuilt (22,766 lines / 1,371,956 bytes); release APK v1+v2+v3 signed; Stockfish dotprod SHA-256 three-way consistent (8f7116d3...); tar 118 entries, 0 excluded.
+
+### v1.2.3 round-25 (2026.7.19) — SonarCloud S6582/S3358 style cleanup + FIDE 6.9 timeout draw
+
+Continuation of the SonarCloud style-cleanup backlog plus a feature-gap fix:
+
+- **S6582 optional-chaining cleanup (174 lines)** — a Python script mechanically converted `x && x.prop` → `x?.prop` across 8 JS files (ai-bridge 50, ui 33, game-logic 28, worker-pool 24, state-store 15, ui-interactions 10, chess960 8, eco-data 6). Only same-identifier `&&` chains converted (semantically identical); typeof guards and method-call chains skipped.
+- **S3358 nested-ternary flatten (4 sites)** — 3 mate-label nested ternaries in ui.js converted to if/else chains; 1 NAG-eval ternary in ai-bridge.js flattened (also fixes a latent falsy-0 bug where `mate=0` fell through to the wrong branch).
+- **FIDE 6.9 timeout insufficient-material draw** — `_onGameClockExpired` now calls `isDeadPosition(gameState)` before declaring the winner. If the position is a dead position (K vs K, K+minor vs K, K+B vs K+B same-color, K+B+B same-color vs K), the game is drawn by insufficient material instead of won on time. Uses the existing `draw_insufficient` status key and i18n string.
+- **Clock-undo feature** — re-verified as complete (round-23 Q3's `_snapshotClocks/_restoreClocks` helpers already handle undo/redo with timestamp rebasing).
+
+**Verification**: all 11 JS modules pass `node --check`; chess.html rebuilt (22,719 lines / 1,369,260 bytes); release APK v1+v2+v3 signed; Stockfish dotprod SHA-256 three-way consistent (8f7116d3...); tar 118 entries, 0 excluded.
+
+### v1.2.3 round-24 (2026.7.19) — God Function split (S3776) + StatsActivity license fix
+
+Continuation of the round-23 God Function analysis. Two large ui.js functions split into focused helpers; one left unchanged after analysis:
+
+- **_renderReviewMode: 552 → 357 lines (-35%)** — extracted 8 helper functions (`_computeRvBoardMetrics`, `_renderRvBoardCells`, `_renderRvArrowSvg`, `_buildRvEvalBarHTML`, `_buildRvSliderHTML`, `_buildRvChartHTML`, `_buildRvNavHTML`, `_buildRvAnalyzeBtnHTML`) + 1 module-level const (`_RV_VA_COLORS`). All helpers are pure (explicit params, no side effects beyond reading module globals). No behavior change.
+- **_reviewAnalyzeAdvance: 218 → 171 lines (-22%)** — extracted 2 helpers (`_findNextUncachedBatchStep`, `_triggerPendingPostBatchActions`). The latter eliminates S1192 code duplication (two copies of the pending-save+pending-stats trigger block in the completion branch).
+- **_resetGameUIState: 231 lines — UNCHANGED** — flat sequence of typeof guards, low cognitive complexity. S3776 measures branching/nesting, not line count. Forcing a split would add overhead and require passing many module globals. Documented as intentional design.
+- **StatsActivity.java license label correction** — 12 historical changelog entries in `README.license` (java/com/Regalia) that incorrectly labelled this file as "AGPL v3" corrected to "GPL v3" to match the file header. No source code change — the classification was always GPL v3.
+
+**Verification**: all 11 JS modules pass `node --check`; chess.html rebuilt (22,677 lines / 1,368,101 bytes); Node vm smoke test — 10 extracted helpers present and callable; release APK v1+v2+v3 signed; Stockfish dotprod SHA-256 three-way consistent (8f7116d3...); tar source archive 118 entries, 0 excluded patterns.
+
+### v1.2.3 round-23 (2026.7.19) — PR #51 CodeRabbit review fixes + SonarCloud triage
+
+Systematic processing of the 18 remaining CodeRabbit review items from PR #51 plus the SonarCloud 931-issue code-smell report (both PDFs are AI-generated; every item verified against the actual source). **16 of the 18 PR51 items are real defects and have been fixed; 2 are false positives (Q15, Q8).** Highlights:
+
+- **Q11 (Major)** — `HapticManager.java` PWLE reflection on non-existent APIs (`VibrationEffect.Composition.startPwle/addPwleRamp`) removed entirely. The reflection targeted hidden APIs that do not exist in any public Android SDK (Composition only exposes `addPrimitive`/`compose`), so it always failed. Replaced by the public `VibrationEffect.createWaveform(long[], int[], int)` API (available since API 26). All 17 piece-specific haptic personalities preserved verbatim. New `tryWaveformVibrate` / `fallbackVibrate` are `private static` (SonarCloud java:S2696).
+- **Q1 (Major)** — Chess960 identity now unconditionally reset to `gameSPID=null` before derivation runs in `tablebase.js importPGN` and on non-Chess960 setup exit in `ui-interactions.js`. Failed derivation or setup-exit no longer retains the previous game's SP-ID.
+- **Q2 (Major)** — `recordMoveEnd` clock expiry now checked BEFORE applying Fischer increment. Previously 0+increment>0 masked genuine timeouts (the player who should have lost on time got a 5-second extension).
+- **Q3 (Major)** — `stateHistory` and `_redoStack` snapshots now include `gameClocks` via new `_snapshotClocks/_restoreClocks` helpers. Undo/redo restores clock state, rebases `lastMoveTimestamp` to `Date.now()`, and restarts the tick interval if the saved state was running.
+- **Q7 (Major)** — PGN tag-strip regex rewritten quote-aware in `tablebase.js` + `stats.html` (4 sites): `/\[\s*\w+\s+(?:"[^"]*"|[^\]]*?)\s*\]/g` (was `/\[\w+\s+\S[^\]]*\]/g`). Tag values containing `]` (e.g. `[Event "Tournament [A]"]`) are no longer truncated. No ReDoS risk.
+- **Q9 (Minor)** — `stats.html scriptJS` now encodes every `<` as `\u003c` (OWASP JSON-in-HTML pattern, replacing the lowercase-`</`-only replaceAll) for both pgnText and lang.
+- **Q10 (Minor)** — `_formatEvalDelta` no longer hardcodes the `+` sign. A Black player improving (d<0) no longer sees "+-1.2" in green — the sign is derived from the player-perspective delta direction.
+- **Q12 (Major)** — `README.license` (java/com/Regalia) round-19/round-20 entries corrected from AGPL v3 to GPL v3 for `HapticManager.java` and `JsBridgeGateway.java` (matches file headers and other entries).
+- **Q4/Q5/Q6 (Major)** — ui.js time-control dialog input clamping; `_replayMovesToState` null-move handling; SPID out-of-range rejection.
+- **Q13 (Minor)** — `AndroidManifest.xml` `<queries>` comment corrected: package detection is signal #2, not #1 (RootDetector: #1 = su-binary paths, #2 = package detection, #3 = test-keys).
+- **Q14 (Minor)** — Bilingual manuals' embedded `build-chess.py MODULES` example now lists `state-store.js`, `ui-gameflow.js`, `ui-interactions.js` (matches actual build-chess.py).
+- **Q15 (Trivial, FALSE POSITIVE)** — `assets/README.license` has no v1.2.1 manual references (already updated to v1.2.3 in earlier rounds).
+- **Q16 (Trivial)** — `chess.html` rebuild size inconsistency between README.license and manual-en.html resolved (both now use round-23 actual values: 22,659 lines / 1,368,542 bytes).
+- **Q17 (Trivial)** — `tryPwleVibrate` static fix rolled into Q11 (method no longer exists).
+- **Q18 (Trivial)** — `worklog.md` Markdown table MD058 resolved in this round's worklog.
+
+**Verification**: all 11 JS modules pass `node --check`; `chess.html` rebuilt (22,659 lines / 1,368,542 bytes); release APK v1+v2+v3 signed (HyperOS 3 compatible); Stockfish dotprod SHA-256 three-way consistent (8f7116d3...); tar source archive 118 entries, 0 excluded patterns.
 
 ### v1.2.3 round-21 (2026.7.17) — edge-case fix: per-color gated king signal in _needsShredderFEN
 

@@ -1,3 +1,32 @@
+v1.2.3 round-28 (2026.7.19): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — audit round).
+
+v1.2.3 round-27 (2026.7.19): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — review round).
+  - The round-27 change is limited to src/main/assets/chess.src/ and the rebuilt chess.html.
+
+v1.2.3 round-26 (2026.7.19): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - The round-26 change is limited to src/main/assets/chess.src/ and the rebuilt chess.html.
+
+v1.2.3 round-25 (2026.7.19): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — style + feature round).
+  - The round-25 change is limited to src/main/assets/chess.src/ and the rebuilt chess.html.
+
+v1.2.3 round-24 (2026.7.19): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — refactor round).
+  - The round-24 change is limited to src/main/assets/chess.src/ui.js (God
+    Function split) and src/main/java/com/Regalia/README.license (StatsActivity
+    license label correction).
+
+v1.2.3 round-23 (2026.7.19): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - The round-23 changes are limited to src/main/java/com/Regalia/
+    (HapticManager.java PWLE reflection removal — Q11+Q17),
+    src/main/assets/chess.src/ (PR51 JS fixes Q1-Q7, Q10),
+    src/main/assets/stats.html (Q7+Q9), src/main/AndroidManifest.xml
+    (Q13 comment fix), and the rebuilt chess.html plus top-level docs.
+
 v1.2.3 round-22 (2026.7.18): no changes in this directory.
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
   - The round-22 change is limited to src/main/assets/chess.src/ (ui.js,

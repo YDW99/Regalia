@@ -1,3 +1,161 @@
+v1.2.3 round-28 (2026.7.19) — Undo/Redo clock restoration audit + baseSec completeness:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — audit round).
+  - ui-interactions.js (GPL v3): _snapshotClocks now captures baseSec (was
+    missing — only affected PGN [TimeControl] tag, no bug). _restoreClocks
+    now restores baseSec from snapshot. Full round-trip verification confirms
+    Undo/Redo clock restoration works correctly (round-23 Q3 fix).
+  - All other modules: No changes this round.
+  - License classification: unchanged.
+
+v1.2.3 round-27 (2026.7.19) — First-principles review + manual mockup fix:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — review round).
+  - ui-gameflow.js (GPL v3): Fixed misleading comment in _onGameClockExpired
+    about isDeadPosition semantics — now accurately describes that
+    isDeadPosition checks whether checkmate is possible by any sequence of
+    legal moves (FIDE 5.2.2), which is exactly the FIDE 6.9 condition.
+  - ai-bridge.js (GPL v3): Removed redundant `if(_gameOverStatusKey==='timeout')
+    return '1/2-1/2'` branch in _deriveGameResult — the fallback already
+    produces the correct result for timeout-draw (unreachable redundancy).
+  - All other modules: No changes this round.
+  - License classification: unchanged.
+
+v1.2.3 round-26 (2026.7.19) — PGN Termination/comment配套修复 for FIDE 6.9 timeout draw:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - ai-bridge.js (GPL v3): _buildTerminationTag now correctly distinguishes
+    timeout-win from timeout-draw. When _timeoutWinnerColor is null (FIDE 6.9
+    insufficient-material draw), the Termination tag is
+    `[Termination "Both flag fall / insufficient material"]` instead of
+    `[Termination "Time forfeit"]`. Also added Termination tags for all other
+    terminal statuses that were previously missing them: draw_insufficient
+    → "Dead position", draw_stalemate → "Stalemate", draw_50move → "50-move
+    rule", draw_75move → "75-move rule", draw_repetition → "Threefold
+    repetition", draw_5fold → "Fivefold repetition", checkmate → "Normal"
+    (PGN spec recommended value).
+  - ai-bridge.js (GPL v3): _buildPGNString timeout comment now handles the
+    draw case. When _timeoutWinnerColor is null, the last move's {} comment
+    gets the new pgn_timeout_draw_insufficient i18n string ("超时但子力不足，
+    和棋" / "Timeout but insufficient material, draw") instead of no comment.
+  - ai-bridge.js (GPL v3): _deriveGameResult now has explicit draw_* status
+    branches that return '1/2-1/2' directly, instead of relying on the
+    gameOver-text-includes-T('white_wins') fallback. Behavior unchanged but
+    logic is clearer and no longer depends on localized text matching.
+  - game-logic.js (GPL v3): new i18n key `pgn_timeout_draw_insufficient`
+    (zh='超时但子力不足，和棋', en='Timeout but insufficient material, draw').
+  - All other modules: No changes this round.
+  - License classification: unchanged.
+
+v1.2.3 round-25 (2026.7.19) — SonarCloud S6582/S3358 style cleanup + FIDE 6.9 timeout draw:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — style + feature round).
+  - All 11 JS modules (GPL v3 / AGPL v3 per existing classification): S6582 optional-
+    chaining cleanup. A Python script (scripts/apply_optional_chaining.py) converted
+    174 lines of `x && x.prop` → `x?.prop` across 8 files (ai-bridge.js 50, ui.js 33,
+    game-logic.js 28, worker-pool.js 24, state-store.js 15, ui-interactions.js 10,
+    chess960.js 8, eco-data.js 6). Only same-identifier && chains converted (semantically
+    identical); typeof guards (round-11 design) and method-call chains (?.() changes
+    `this` binding) skipped.
+  - ui.js (GPL v3): S3358 nested-ternary flatten — 3 mate-label nested ternaries in
+    _buildEvalTrendPoints and formatEval converted to if/else chains (semantically
+    identical, more readable).
+  - ai-bridge.js (GPL v3): S3358 nested-ternary flatten — _findCriticalMoves NAG eval
+    `cur.mate?(cur.mate>0?90000:-90000):cur.eval` → `cur.mate!=null?(...)`. Also fixes
+    a latent falsy-0 bug: mate=0 previously fell through to the eval branch; now
+    explicitly checked with !=null.
+  - ui-gameflow.js (GPL v3): FIDE 6.9 timeout insufficient-material draw. _onGameClockExpired
+    now calls isDeadPosition(gameState) before declaring the winner. If the position is
+    a dead position (K vs K, K+minor vs K, K+B vs K+B same-color, K+B+B same-color vs K),
+    the game is drawn by insufficient material instead of won on time. Uses the existing
+    `draw_insufficient` status key and i18n string (`insufficient_draw`: zh='子力不足和棋！',
+    en='Insufficient material!').
+  - All other modules: No changes this round.
+  - License classification: unchanged.
+
+v1.2.3 round-24 (2026.7.19) — God Function split (S3776) + StatsActivity license fix:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — refactor round).
+  - ui.js (GPL v3): _renderReviewMode refactored from 552 → 357 lines (-35%).
+    Extracted 8 helper functions + 1 module-level const:
+    - `_RV_VA_COLORS` (module-level const): visual-annotation color palette,
+      moved from inside _renderReviewMode so multiple helpers can share it.
+    - `_computeRvBoardMetrics()`: pure function, computes review board sizing
+      (cell size, label dimensions, full board height).
+    - `_renderRvBoardCells(rBoard, flip, _rvCell, _rvCm, _rvCslMap, ...)`: renders
+      the 8×8 board cells with control-map coloring, [%csl] highlights,
+      coordinate labels, piece symbols, 🔁/⚡ markers.
+    - `_renderRvArrowSvg(_rvCalList, flip, _rvCell, ...)`: renders the SVG arrow
+      overlay for [%cal] visual annotations (dedup + per-color diagonal offset).
+    - `_buildRvEvalBarHTML(_re, _rDelta, _rDepthStr, _rProgressStr, _rWdlStr)`:
+      builds the eval bar HTML string.
+    - `_buildRvSliderHTML()`: builds the review step-slider HTML.
+    - `_buildRvChartHTML(_trendH, _trendW, _trendSVG)`: builds the eval-trend
+      chart HTML wrapper.
+    - `_buildRvNavHTML()`: builds the nav buttons (⏮ ◀ ▶ ⏭).
+    - `_buildRvAnalyzeBtnHTML()`: builds the analyze-all button HTML.
+    All helpers are function declarations (bundle-hoisted), take explicit
+    parameters for local dependencies, and produce no side effects beyond
+    reading module-level globals. No behavior change — every rendering path
+    produces identical output.
+  - ui.js (GPL v3): _reviewAnalyzeAdvance refactored from 218 → 171 lines (-22%).
+    Extracted 2 helper functions:
+    - `_findNextUncachedBatchStep(fromStep, lastStep)`: scans for the next
+      uncached step (forward fast-path + full-range fallback for priority
+      interruption). Consolidates the if/else nesting from the original.
+    - `_triggerPendingPostBatchActions(_pendingSave, _pendingStats)`: triggers
+      the pending PGN cache save + stats page open after batch completion.
+      Eliminates S1192 code duplication (the completion branch had two copies
+      of this ~15-line block — one for targetStep-valid, one for invalid).
+  - ui.js (GPL v3): _resetGameUIState (231 lines) UNCHANGED. Analysis: the
+    function is a flat sequence of `if(typeof X!=='undefined')X=null;` guards
+    with no nesting. S3776 measures branching/nesting complexity, not line
+    count — this function's cognitive complexity is already low. Forcing a
+    split would add function-call overhead and require passing many module-
+    level global references, increasing cognitive load. Documented as
+    intentional design.
+  - All other modules: No changes this round.
+  - License classification: unchanged.
+
+v1.2.3 round-23 (2026.7.19) — PR #51 CodeRabbit review fixes + SonarCloud triage:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - ui.js (GPL v3): Q4 — time-control dialog base/incr/delay `oninput`
+    handlers now clamp out-of-range values (v>600/v>60) and write the
+    clamped value back to the input box, eliminating the display-vs-state
+    mismatch. Q5 — `_replayMovesToState` no longer silently skips null
+    moveRecords at indices >0; only the intentional Black-to-move null
+    placeholder at index 0 is skipped, any other null logs `console.error`
+    and aborts the replay (returns null) to prevent annotation-index drift.
+    Q6 — SPID input now rejects out-of-range values (<0 or >959) by
+    clearing the input and setting `dlgChess960SPID=-1`, forcing re-entry
+    (was: silently retained previous valid value, "see ≠ start").
+  - ui-interactions.js (GPL v3): Q1 — non-Chess960 setup branch now clears
+    `gameSPID=null` alongside `setChess960Mode(false)` so a stale SP-ID
+    from the previous game cannot pollute PGN export / Shredder-FEN
+    generation. Q3 — `stateHistory.push` and `_redoStack.push` now include
+    a `clocks` snapshot via new `_snapshotClocks()` helper; `undoMove` and
+    `redoMove` call new `_restoreClocks(snap)` to restore clock state,
+    rebasing `lastMoveTimestamp` to `Date.now()` and restarting the tick
+    interval if the saved state was running.
+  - ui-gameflow.js (GPL v3): Q2 — `recordMoveEnd` now detects flag fall
+    BEFORE applying the Fischer increment; if `remainingSec<=0` after
+    deduction, it fires `_onGameClockExpired` and returns early without
+    adding the increment, so 0+increment>0 can no longer mask a genuine
+    timeout.
+  - ai-bridge.js (GPL v3): Q10 — `_formatEvalDelta` no longer hardcodes
+    the `+` sign; `dp=(Math.abs(d)/100).toFixed(1)` and the positive
+    branch emits `+dp` while the negative branch emits `\u2212dp`
+    (Unicode minus), consistent with the round-22 player-POV colour
+    contract (a Black player improving no longer sees "+-1.2" in green).
+  - tablebase.js (AGPL v3): Q1 — `importPGN` Chess960 branch now resets
+    `gameSPID=null` BEFORE the FEN-derivation runs, so a failed
+    `backRankToSPID` cannot retain the previous game's SP-ID. Q7 — tag-
+    strip regex rewritten quote-aware: `/\[\s*\w+\s+(?:"[^"]*"|[^\]]*?)\s*\]/g`
+    (was `/\[\w+\s+\S[^\]]*\]/g`), so values containing `]` (e.g.
+    `[Event "Tournament [A]"]`) are no longer truncated. No ReDoS risk
+    (mutually exclusive branches, non-greedy fallback).
+  - worker-pool.js (AGPL v3): Q8 — re-verified that `headerRe` is already
+    quote-aware (`"((?:[^"\\]|\\.)*)" ` handles escaped quotes); no change.
+    Recorded as a partial false positive.
+  - All other modules (index.html.tpl, game-logic.js, chess960.js,
+    pgn-standard.js, state-store.js, eco-data.js): No changes this round.
+  - License classification: unchanged.
+
 v1.2.3 round-22 (2026.7.18) — eval bar perspective fix (player-POV report):
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
   - ui.js (GPL v3): formatEval() timeout & resign game-over branches now use

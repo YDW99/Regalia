@@ -1,3 +1,37 @@
+v1.2.3 round-28 (2026.7.19): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — audit round).
+  - The round-28 change is limited to src/main/assets/chess.src/ and the rebuilt chess.html.
+
+v1.2.3 round-27 (2026.7.19): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — review round).
+  - The round-27 change is limited to src/main/assets/chess.src/ and the rebuilt chess.html.
+
+v1.2.3 round-26 (2026.7.19): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - The round-26 change is limited to src/main/assets/chess.src/ and the rebuilt chess.html.
+
+v1.2.3 round-25 (2026.7.19): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — style + feature round).
+  - The round-25 change is limited to src/main/assets/chess.src/ (S6582/S3358 style
+    cleanup + FIDE 6.9 timeout-draw feature) and the rebuilt chess.html.
+
+v1.2.3 round-24 (2026.7.19): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — refactor round).
+  - The round-24 change is limited to src/main/assets/chess.src/ui.js (God
+    Function split — 10 helper functions extracted from _renderReviewMode and
+    _reviewAnalyzeAdvance) and src/main/java/com/Regalia/README.license
+    (StatsActivity.java license label correction — AGPL v3 → GPL v3 to match
+    the file header).
+
+v1.2.3 round-23 (2026.7.19) — PR #51 CodeRabbit review fixes + SonarCloud triage:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - AndroidManifest.xml (AGPL v3): Q13 — corrected the <queries> block
+    comment to label package detection as "signal #2" (was "signal #1").
+    RootDetector's actual signal order: #1 = su-binary path scan
+    (checkRootFiles), #2 = root-management package detection
+    (checkRootPackages, requires <queries> on API 30+), #3 = test-keys
+    build tag check (checkBuildTags). No code change.
+
 v1.2.3 round-22 (2026.7.18) — eval bar perspective fix (player-POV report):
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
   - AndroidManifest.xml (AGPL v3): No changes this round.

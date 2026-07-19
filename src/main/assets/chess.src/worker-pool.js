@@ -86,10 +86,10 @@ self.onmessage = function(e) {
     Promise.resolve(result).then(function(r) {
       self.postMessage({type: 'result', taskId: taskId, result: r});
     }).catch(function(err) {
-      self.postMessage({type: 'error', taskId: taskId, error: String(err && err.message || err)});
+      self.postMessage({type: 'error', taskId: taskId, error: String(err?.message || err)});
     });
   } catch (err) {
-    self.postMessage({type: 'error', taskId: taskId, error: String(err && err.message || err)});
+    self.postMessage({type: 'error', taskId: taskId, error: String(err?.message || err)});
   }
 };
 // === PGN tokenizer (full lexer — mirrors tablebase.js _parsePGN tokenization) ===
@@ -287,7 +287,7 @@ function _createWorker() {
       for (const [tid, task] of toReject) {
         _pendingTasks.delete(tid);
         if (task.timeout) { clearTimeout(task.timeout); task.timeout = null; }
-        task.reject(new Error('Worker crashed: ' + (e && e.message || e)));
+        task.reject(new Error('Worker crashed: ' + (e?.message || e)));
       }
       w._busy = false;
       _removeWorker(w);

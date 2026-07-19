@@ -189,7 +189,7 @@ function randomSPID(){
       // Fallback if all 8 retries exceeded (extremely unlikely)
       return buf[0]%960;
     }
-  }catch(e){console.warn('[Chess960]',e&&e.message?e.message:e);}
+  }catch(e){console.warn('[Chess960]',e?.message?e.message:e);}
   // SECURITY: Return standard position instead of Math.random() when crypto
   // is unavailable. SP-ID 518 = traditional RNBQKBNR.
   return 518;
@@ -249,7 +249,7 @@ function toShredderCastling(cr,board){
   //   initChess960State) and that rook is still present, emit THAT file —
   //   this keeps the exact X-FEN letters on round-trip for ambiguous
   //   same-side-two-rooks positions instead of re-deriving the closest rook.
-  const _rookOn=(row,f,co)=>{const p=board[row]&&board[row][f];return !!(p&&p.type==='rook'&&p.color===co);};
+  const _rookOn=(row,f,co)=>{const p=board[row]&&board[row][f];return !!(p?.type==='rook'&&p.color===co);};
   const pairs=[];
   if(wKing!==null){
     if(cr.whiteKingside){
@@ -335,7 +335,7 @@ function parseShredderCastling(str,board){
   function _hasRookOn(color,file){
     const row=color==='white'?7:0;
     const p=board[row]&&board[row][file];
-    return !!(p&&p.type==='rook'&&p.color===color);
+    return !!(p?.type==='rook'&&p.color===color);
   }
   for(const ch of str){
     // X-FEN backward compatibility: K/Q/k/q map to file h/a respectively.
@@ -420,8 +420,8 @@ function findCastlingRooks(board,color){
   const rookCols=[];
   for(let c=0;c<8;c++){
     const p=board[row][c];
-    if(p&&p.type==='king'&&p.color===color)kingCol=c;
-    if(p&&p.type==='rook'&&p.color===color)rookCols.push(c);
+    if(p?.type==='king'&&p.color===color)kingCol=c;
+    if(p?.type==='rook'&&p.color===color)rookCols.push(c);
   }
   if(kingCol<0)return null;
   // Kingside rook: closest rook to the RIGHT of the king (smallest col > kingCol).
@@ -482,7 +482,7 @@ function findDesignatedCastlingRook(s,color,side){
   if(f!=null&&f>=0&&f<8){
     const row=color==='white'?7:0;
     const p=s.board[row]&&s.board[row][f];
-    if(p&&p.type==='rook'&&p.color===color)return f;
+    if(p?.type==='rook'&&p.color===color)return f;
     // Designated rook no longer on its file (moved/captured without the
     //   right being cleared — only possible via setup-mode edits) — fall
     //   through to the heuristic rather than returning a stale column.
@@ -580,7 +580,7 @@ function isChess960CastlingLegal(s,color,side){
      && cachedKing.row===row){
     // Verify the cache still points at a same-color king (defensive).
     const kp=s.board[cachedKing.row][cachedKing.col];
-    if(kp && kp.type==='king' && kp.color===color){
+    if(kp?.type==='king' && kp.color===color){
       kingCol=cachedKing.col;
     }
   }
@@ -588,7 +588,7 @@ function isChess960CastlingLegal(s,color,side){
     // Fallback: scan the back rank for the king.
     for(let c=0;c<8;c++){
       const p=s.board[row][c];
-      if(p&&p.type==='king'&&p.color===color){kingCol=c;break;}
+      if(p?.type==='king'&&p.color===color){kingCol=c;break;}
     }
   }
   if(kingCol<0)return false;

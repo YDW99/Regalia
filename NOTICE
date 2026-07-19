@@ -20,6 +20,113 @@ The original NOTICE files from third-party projects are preserved alongside this
 - AUTHORS-stockfish: Stockfish project authors list
 
 ===== LICENSE CLASSIFICATION BY FILE ==========================================
+v1.2.3 round-28 (2026.7.19) — Undo/Redo clock restoration audit + baseSec completeness:
+  - `ui-interactions.js` (GPL v3): _snapshotClocks now captures baseSec (was
+    missing). _restoreClocks now restores baseSec. Full round-trip verification
+    confirms Undo/Redo clock restoration works correctly (round-23 Q3 fix).
+  - `chess.html` (AGPL v3): Rebuilt (22,766 lines / 1,372,057 bytes).
+  - All other files: license classification unchanged.
+
+v1.2.3 round-27 (2026.7.19) — First-principles review + manual mockup fix:
+  - `ui-gameflow.js` (GPL v3): Fixed misleading comment about isDeadPosition
+    semantics in _onGameClockExpired.
+  - `ai-bridge.js` (GPL v3): Removed redundant timeout-draw branch in
+    _deriveGameResult (unreachable — fallback already handles it).
+  - `chess.html` (AGPL v3): Rebuilt (22,761 lines / 1,371,753 bytes).
+  - `Regalia-v1.2.3-manual-zh.html` / `-en.html` (AGPL v3): Fixed cache-manager
+    mockup — removed 📥 button elements (removed from actual UI in v1.0.4 Rev24).
+  - All other files: license classification unchanged.
+
+v1.2.3 round-26 (2026.7.19) — PGN Termination/comment配套修复 for FIDE 6.9 timeout draw:
+  - `ai-bridge.js` (GPL v3): _buildTerminationTag now distinguishes timeout-win
+    (`[Termination "Time forfeit"]`) from timeout-draw (`[Termination "Both flag
+    fall / insufficient material"]`). Added Termination tags for all other
+    terminal statuses (draw_insufficient/stalemate/50move/75move/repetition/
+    5fold/checkmate) that were previously missing them.
+  - `ai-bridge.js` (GPL v3): _buildPGNString timeout comment now handles the
+    draw case — appends the new `pgn_timeout_draw_insufficient` i18n string
+    when _timeoutWinnerColor is null.
+  - `ai-bridge.js` (GPL v3): _deriveGameResult now has explicit draw_* status
+    branches returning '1/2-1/2' directly (no longer relies on localized text).
+  - `game-logic.js` (GPL v3): new i18n key `pgn_timeout_draw_insufficient`.
+  - `chess.html` (AGPL v3): Rebuilt (22,766 lines / 1,371,956 bytes).
+  - All other files: license classification unchanged.
+
+v1.2.3 round-25 (2026.7.19) — SonarCloud S6582/S3358 style cleanup + FIDE 6.9 timeout draw:
+  - All 11 JS modules (GPL v3 / AGPL v3 per existing classification): S6582 optional-
+    chaining cleanup — 174 lines of `x && x.prop` → `x?.prop` converted across 8 files.
+    Only same-identifier && chains converted (semantically identical); typeof guards
+    (round-11 design) and method-call chains skipped.
+  - `ui.js` (GPL v3): S3358 nested-ternary flatten — 3 mate-label nested ternaries
+    converted to if/else chains.
+  - `ai-bridge.js` (GPL v3): S3358 nested-ternary flatten — _findCriticalMoves NAG eval;
+    also fixes a latent falsy-0 bug (mate=0 now explicitly !=null-checked).
+  - `ui-gameflow.js` (GPL v3): FIDE 6.9 timeout insufficient-material draw.
+    _onGameClockExpired now calls isDeadPosition(gameState); if the position is dead
+    (K vs K, K+minor vs K, K+B vs K+B same-color, K+B+B same-color vs K), the game is
+    drawn by insufficient material instead of won on time.
+  - `chess.html` (AGPL v3): Rebuilt (22,719 lines / 1,369,260 bytes).
+  - All other files: license classification unchanged.
+
+v1.2.3 round-24 (2026.7.19) — God Function split (S3776) + StatsActivity license fix:
+  - `ui.js` (GPL v3): _renderReviewMode refactored 552 → 357 lines (-35%).
+    Extracted 8 helper functions (`_computeRvBoardMetrics`, `_renderRvBoardCells`,
+    `_renderRvArrowSvg`, `_buildRvEvalBarHTML`, `_buildRvSliderHTML`,
+    `_buildRvChartHTML`, `_buildRvNavHTML`, `_buildRvAnalyzeBtnHTML`) + 1
+    module-level const (`_RV_VA_COLORS`). All helpers are pure (explicit params,
+    no side effects beyond reading module globals). No behavior change.
+  - `ui.js` (GPL v3): _reviewAnalyzeAdvance refactored 218 → 171 lines (-22%).
+    Extracted 2 helpers (`_findNextUncachedBatchStep`,
+    `_triggerPendingPostBatchActions`). The latter eliminates S1192 code
+    duplication (two copies of the pending-save+pending-stats trigger block).
+  - `ui.js` (GPL v3): _resetGameUIState (231 lines) UNCHANGED — flat sequence
+    of typeof guards, low cognitive complexity. Documented as intentional.
+  - `StatsActivity.java` (GPL v3): LICENSE LABEL CORRECTION — 12 historical
+    changelog entries in `README.license` (java/com/Regalia) previously labelled
+    this file as "AGPL v3", but the file header has always declared GPL v3.
+    All 12 entries corrected to "GPL v3". No source code change.
+  - `chess.html` (AGPL v3): Rebuilt (22,677 lines / 1,368,101 bytes).
+  - All other files: license classification unchanged.
+
+v1.2.3 round-23 (2026.7.19) — PR #51 CodeRabbit review fixes + SonarCloud triage:
+  - `HapticManager.java` (GPL v3): Q11+Q17 — removed the entire PWLE reflection
+    subsystem (pwleState/pwleCtor/pwleStartMethod/pwleAddPwleRampMethod/
+    pwleComposeMethod cached handles). The reflection targeted
+    `VibrationEffect.Composition.startPwle/addPwleRamp`, which do NOT exist
+    in any public Android SDK (Composition only exposes addPrimitive/compose),
+    so the reflection always failed. Replaced by the public
+    `VibrationEffect.createWaveform(long[], int[], int)` API (API 26+).
+    New `tryWaveformVibrate` and `fallbackVibrate` are both `private static`
+    (SonarCloud java:S2696). All 17 piece-specific haptic personalities
+    preserved verbatim.
+  - `ui.js` (GPL v3): Q4 — time-control dialog base/incr/delay inputs now
+    clamp out-of-range values. Q5 — `_replayMovesToState` aborts on null
+    moveRecords at indices >0 (only the index-0 Black-to-move placeholder
+    is skipped). Q6 — SPID input rejects out-of-range values by clearing.
+  - `ui-interactions.js` (GPL v3): Q1 — non-Chess960 setup branch clears
+    `gameSPID=null`. Q3 — `stateHistory`/`_redoStack` now snapshot
+    `gameClocks` via new `_snapshotClocks/_restoreClocks` helpers.
+  - `ui-gameflow.js` (GPL v3): Q2 — `recordMoveEnd` detects flag fall BEFORE
+    applying Fischer increment (0+increment>0 no longer masks timeout).
+  - `ai-bridge.js` (GPL v3): Q10 — `_formatEvalDelta` derives sign from
+    delta direction (was hardcoded `+`, Black player improving saw "+-1.2").
+  - `tablebase.js` (AGPL v3): Q1 — Chess960 importPGN resets `gameSPID=null`
+    before derivation. Q7 — tag-strip regex rewritten quote-aware.
+  - `stats.html` (AGPL v3): Q7 — 4 tag-strip regex sites quote-aware. Q9 —
+    `_enc(s)` encodes every `<` as `\u003c` (OWASP JSON-in-HTML pattern).
+  - `worker-pool.js` (AGPL v3): Q8 — re-verified already quote-aware; no change.
+  - `AndroidManifest.xml` (AGPL v3): Q13 — comment fix (signal #2, not #1).
+  - `README.license` (java/com/Regalia): Q12 — round-19/round-20 entries
+    corrected from AGPL v3 to GPL v3 for HapticManager.java and
+    JsBridgeGateway.java (matches file headers and other entries).
+  - All other files: license classification unchanged.
+  - Q15 (assets/README.license v1.2.1 manual references): FALSE POSITIVE —
+    no v1.2.1 references remain (earlier rounds already updated to v1.2.3).
+  - Q16 (chess.html rebuild size inconsistency): RESOLVED — both
+    README.license and manual-en.html now use the round-23 actual values
+    (22,659 lines / 1,368,542 bytes).
+  - Q18 (worklog.md Markdown table MD058): resolved in this round's worklog.
+
 v1.2.3 round-22 (2026.7.18) — eval bar perspective fix: player-POV 优劣 report:
   - `ui.js` (GPL v3): USER-REPORTED BUG FIXED — the evaluation bar's
     advantage/disadvantage "report" sometimes contradicted the player's stance
