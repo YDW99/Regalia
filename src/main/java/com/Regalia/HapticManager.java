@@ -29,6 +29,7 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Build;
 import android.os.Handler;
+import android.os.SystemClock;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
 import android.util.Log;
@@ -67,7 +68,16 @@ public class HapticManager {
             //   trivial overhead. The app-side preference is also cached
             //   (SharedPreferences.getBoolean is fast but still involves a
             //   synchronized lookup).
-            long now = System.currentTimeMillis();
+            // v1.2.3 round-31 (PR52 CodeRabbit stability): use
+            //   SystemClock.elapsedRealtime() instead of currentTimeMillis().
+            //   The wall clock can jump backward (user manually changes date/
+            //   time, NTP sync) — backward jumps make `now - ts` go negative,
+            //   so the 5s TTL check `> 5000` is false forever and the cache
+            //   never refreshes. Forward jumps cause unnecessary IPC storms.
+            //   elapsedRealtime() is monotonic from boot, immune to wall-clock
+            //   adjustments, and the standard Android idiom for interval
+            //   measurement.
+            long now = SystemClock.elapsedRealtime();
             boolean systemEnabled;
             if (now - _systemHapticCacheTs > 5000) {
                 _systemHapticCached = android.provider.Settings.System.getInt(
@@ -93,6 +103,9 @@ public class HapticManager {
     //   volatile for cross-thread visibility (performHaptic is called from
     //   the main Handler thread; isHapticEnabled may also be queried from
     //   the JS binder thread).
+    // v1.2.3 round-31: timestamp source is SystemClock.elapsedRealtime()
+    //   (monotonic, immune to wall-clock changes) — see isHapticEnabled()
+    //   comment for the rationale.
     private volatile boolean _systemHapticCached = true;
     private volatile long _systemHapticCacheTs = 0;
 

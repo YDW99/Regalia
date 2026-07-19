@@ -1,3 +1,25 @@
+v1.2.3 round-32 (2026.7.20) — Manuals updated with round-32 changelog entry:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - Regalia-v1.2.3-manual-zh.html: round-32 entry prepended to the
+    changelog section (newest-first ordering preserved).
+  - Regalia-v1.2.3-manual-en.html: equivalent English entry prepended.
+  - Both manuals: content is parallel (non-machine-translated); only the
+    changelog section changed. All other chapters (overview, toolbar,
+    engine config, Chess960, PGN, stats, troubleshooting) unchanged.
+  - License classification: both manuals are AGPL v3 (original work of
+    the Regalia project, not derived from DroidFish or other GPL projects).
+
+v1.2.3 round-31 (2026.7.20) — Manuals updated with round-31 changelog entry:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - Regalia-v1.2.3-manual-zh.html: round-31 entry prepended to the
+    changelog section (newest-first ordering preserved).
+  - Regalia-v1.2.3-manual-en.html: equivalent English entry prepended.
+  - Both manuals: content is parallel (non-machine-translated); only the
+    changelog section changed. All other chapters (overview, toolbar,
+    engine config, Chess960, PGN, stats, troubleshooting) unchanged.
+  - License classification: both manuals are AGPL v3 (original work of
+    the Regalia project, not derived from DroidFish or other GPL projects).
+
 v1.2.3 round-30 (2026.7.19) — First-principles per-file review + robustness/perf optimizations:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
   - Regalia-v1.2.3-manual-zh.html (AGPL v3): round-30 changelog entry

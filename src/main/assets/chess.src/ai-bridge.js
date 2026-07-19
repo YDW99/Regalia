@@ -3588,7 +3588,13 @@ function onSettingsImported(result){
       //   onSettingsImported call (or any user action that opens another
       //   dialog) invalidates the pending safety-net closures — otherwise
       //   they would clobber a dialog the user just opened within 300ms.
-      _settingsImportGen=(_settingsImportGen|0)+1;
+      // v1.2.3 round-31 (PR52 SonarCloud S8786): replace `|0` bitwise coercion
+      //   with Math.trunc for SonarCloud rule compliance. _settingsImportGen
+      //   is always a non-negative integer (declared `=0` at line 420 and
+      //   only incremented by 1 here), so the two are semantically equivalent
+      //   in this codebase — but Math.trunc has no 32-bit truncation risk and
+      //   is the SonarCloud-recommended idiom.
+      _settingsImportGen=Math.trunc(_settingsImportGen)+1;
       const myGen=_settingsImportGen;
       setTimeout(function(){
         if(myGen!==_settingsImportGen)return;
@@ -4611,8 +4617,18 @@ function _updateReviewEvalUI(){
 //   White-POV): mate>0 → +90000, mate<0 → -90000, no mate → fallback eval.
 //   The ±90000 sentinel is what _formatEvalDelta and the trend-chart shading
 //   already use to detect mate transitions.
+// v1.2.3 round-31 (PR52 CodeRabbit): treat mate===0 as "no active mate" and
+//   return fallbackEval. The codebase stores mate:0 in several distinct
+//   scenarios — (a) onEngineEval fallback when scoreMate is null/NaN,
+//   (b) stale-cache / game-over cache entries, (c) the evalData builder at
+//   line ~1628 which coerces null → 0 with `c.mate!=null?c.mate:0`. The
+//   previous code's `if(mate==null)` only caught null/undefined and let
+//   mate===0 fall through to `mate>0?90000:-90000`, which evaluated `0>0` as
+//   false and returned -90000 — incorrectly marking every "no active mate"
+//   position as a black-mating position. This matches stats.html's existing
+//   truthy-check pattern `e.mate ? (e.mate>0?90000:-90000) : e.eval`.
 function _evalOrMate(mate,fallbackEval){
-  if(mate==null)return fallbackEval;
+  if(!mate)return fallbackEval;
   return mate>0?90000:-90000;
 }
 // Format eval delta between two eval values (centipawns, White's perspective).

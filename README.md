@@ -1,3 +1,175 @@
+## Round-32 update (2026-07-20) — System.currentTimeMillis() bug-class propagation + comment cleanup
+
+**No new features** this round — pure bug-fix propagation + comment cleanup.
+After round-31 fixed `System.currentTimeMillis()` → `SystemClock.elapsedRealtime()`
+in HapticManager + StabilizationHelper, a first-principles per-file review
+identified the SAME bug class in 3 more Java files (13 additional sites) that
+round-31 had not reached. This round closes that gap.
+
+### Bug fixes (HIGH severity — engine stability)
+- **StockfishNative.java** (11 sites): all interval-measurement timestamps
+  switched to `SystemClock.elapsedRealtime()`. Affected subsystems:
+  - **Heartbeat zombie detection** (line 2942): `timeSinceLastResponse`
+    compared against `ZOMBIE_SEARCH_TIMEOUT_MS`. Wall-clock backward jumps
+    cause false-positive zombies (unnecessary 1-5s recovery); forward
+    jumps mask hung engines (appears healthy indefinitely).
+  - **sendSetOptionAndWait 3s deadline** (lines 2601-2602): `deadline`
+    loop. Wall-clock jumps cause premature timeout (option not applied) or
+    extended hang.
+  - **engineGoTimed setup-elapsed deduction** (lines 982, 1025): deducts
+    the stopAndWait + ucinewgame + readyok overhead from wtime/btime. Wall-
+    clock jumps cause incorrect clock values sent to the engine.
+  - **restart-stale detection** (lines 1871, 1880, 2990, 2998): 4 sites
+    for `RESTART_STALE_THRESHOLD_MS` check. Wall-clock jumps cause stale
+    `_restartInProgress` to never reset (future recoveries all early-exit)
+    or reset prematurely (concurrent restarts).
+  - **recovery-count reset timer** (lines 1884, 1897): `timeSinceLastRecovery`
+    compared against `RECOVERY_COUNT_RESET_INTERVAL_MS`. Wall-clock jumps
+    prevent recovery-count reset (永久 stuck at MAX_AUTO_RECOVERY) or reset
+    it prematurely.
+- **EngineHealthMonitor.java** (2 sites): `lastResponseTime` field init +
+  `onResponseReceived()` switched to `SystemClock.elapsedRealtime()`. Must
+  use the same clock as StockfishNative's heartbeat consumer — round-32
+  fixes both consistently.
+- **ChessWebViewClient.java** (1 site): render-crash 60s backoff window
+  switched to `SystemClock.elapsedRealtime()`. Backward wall-clock jumps
+  reset the crash counter prematurely (allowing battery-drain recreate
+  loops); forward jumps extend it indefinitely.
+
+### Redundancy cleanup (LOW severity — comments)
+- **Stale "API 21" / "Android 5.0" comments** corrected to "API 23" /
+  "Android 6.0" across 4 Java files (15 sites total): MainActivity.java
+  (5), StatsActivity.java (4), PermissionHelper.java (2), FileIoHelper.java
+  (4). minSdk has been 23 since v1.0.5 (round-6); these comments were left
+  over from the v1.0.4 era when minSdk was 21. Comments only — no code
+  behavior change.
+- **state-store.js header comment**: the previous "All state mutations go
+  through dispatch()" was misleading — only ~5 of 25 registered reducers
+  are currently dispatched; the remaining 20 are intentional architectural
+  placeholders for the v1.2.0 Phase 75 Redux migration. Header comment
+  updated to document the partial-migration status; NO CODE CHANGE.
+- **eco-data.js**: extracted `_buildEcoLookups()` helper to eliminate an
+  8-line loop duplicated verbatim between the IDB-cache-hit path and the
+  JSON.parse path. Single source of truth; semantics byte-for-byte
+  equivalent.
+- **pgn-standard.js**: corrected a stale comment that claimed brace comments
+  are preserved during tokenization — they are flattened (removed) before
+  tokenization, so the `{` tokenizer branch is unreachable in the normal
+  flow. Comment now reflects reality.
+
+### First-principles review scope
+2 parallel review agents covered all 11 JS modules (21,722 lines) and all
+19 Java files (10,730 lines, including StockfishNative at 4,324 lines).
+Total findings: 6 (1 HIGH BUG, 1 LOW BUG, 4 LOW REDUNDANCY). All 6 applied;
+0 false positives after re-verification against source.
+
+### False positives filtered
+- `state-store.js` unused reducers (~20 of 25): INTENTIONAL architectural
+  placeholders for the v1.2.0 Phase 75 Redux migration. Removing them
+  would be a feature retreat.
+- `subscribe()` / `getState()` zero external callers: INTENTIONAL — wired
+  for future migration rounds.
+- `parseStandardPGN()` zero call sites (pgn-standard.js): round-18
+  decision to keep as defensive safety net.
+- All `typeof X === 'function'` cross-module guards (~40+ instances):
+  round-11 intentional defensive design pattern.
+- `catch (Throwable e)` in HapticManager PWLE reflection paths:
+  INTENTIONAL — OEM ROM throws NoSuchMethodError (an Error, not Exception).
+
+### Verification
+- 11 chess.src/*.js modules + chess.html inline script: `node --check` PASS.
+- Release APK v1+v2+v3 signing verified; versionCode=123 / 1.2.3 / targetSdk 35.
+- Stockfish engine SHA-256 three-way consistent: `8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5`.
+- APK class files contain round-32 fix markers (lastResponseTime,
+  _lastRecoveryTimestamp, _restartStartTimeMs, _lastRenderCrashTime,
+  _renderCrashCount — all preserved through R8 minification).
+
+Version: **v1.2.3** (versionCode=123, versionName="1.2.3") — unchanged (fix round).
+
+## Round-31 update (2026-07-20) — PR52 CodeRabbit review fixes
+
+**No new features** this round — pure code-quality + stability hardening in
+response to CodeRabbit's 9 actionable comments on PR #52. After filtering
+false positives, 9 real issues were fixed and 4 flagged items were verified
+as already-correct (declined with rationale).
+
+### Bug fixes
+- **`_evalOrMate` mate===0 mishandling** (ai-bridge.js): when the engine
+  cache stored `mate:0` (which the codebase uses for "no active mate" —
+  stale cache, game-over, null-coerced entries), the function returned
+  `-90000` (the "black mates" sentinel) instead of the fallback eval. This
+  affected move classification in the eval-trend chart. Now `mate===0`
+  returns `fallbackEval`, matching `stats.html`'s existing truthy-check
+  pattern.
+- **MainActivity BACK key in fallback mode**: when `showFallbackUI()` had
+  replaced the content view (engine-init failure, render crash, etc.),
+  BACK presses were still dispatched to the hidden WebView's
+  `handleBackPress()` JS handler — trapping the user in the fallback
+  screen. Now `_isFallbackMode` flag routes BACK to `super.onKeyDown()`,
+  letting the system finish the Activity.
+
+### Robustness hardening
+- **toggleStabilization lifecycle race**: the JS binder thread calling
+  `toggleStabilization()` could race with the main thread's `onDestroy()`
+  (e.g., user toggles stabilization as the Activity is being destroyed),
+  leaking sensors that `onDestroy` thought it had stopped. Added
+  `_stabilizationLock` (fine-grained, not `this`) + `isDestroyed` guard.
+- **HapticManager clock source**: `isHapticEnabled()` 5s cache TTL used
+  `System.currentTimeMillis()` (wall clock) — backward wall-clock jumps
+  (manual date change, NTP sync) made `now - ts` negative, freezing the
+  cache. Switched to `SystemClock.elapsedRealtime()` (monotonic from boot).
+- **StabilizationHelper clock source** (first-principles find, same class):
+  the 16ms JS-callback throttle had the same wall-clock issue — backward
+  jumps would freeze stabilization entirely. Same fix applied.
+
+### Performance / maintainability
+- **state-store.js duplicate deep-clone**: `dispatch()` and `reset()` were
+  deep-cloning `_state` twice per call — once inside `_notifyListeners()`
+  for the listener snapshot, and again for the return value. Now the
+  snapshot is computed once and reused for both. State history can hold
+  up to 200 entries + moveRecords, so this is a measurable saving on
+  rapid undo/redo.
+- **winnerLacksMatingMaterial cognitive complexity** (SonarCloud S3776
+  CRITICAL): complexity was 29 (threshold 15) — the SonarCloud Quality
+  Gate blocker. Refactored into `_scanWinnerMaterial()` (board scan +
+  piece counts + bishop parity) and `_bishopParityIsUniform()` helpers.
+  Main function complexity now ~6. 14-test FIDE 6.9 suite passes (was 11
+  in round-30; added 3 new tests for null-state, no-king, and black-as-
+  winner scenarios).
+- **`|0` → `Math.trunc`** (SonarCloud S8786 CRITICAL): the last remaining
+  `|0` bitwise coercion in `ai-bridge.js` (`_settingsImportGen` increment)
+  replaced with `Math.trunc`. Round-17 had converted the `chess960.js`
+  occurrences; this one was missed.
+
+### Documentation fixes
+- **chess.src/README.license state-store.js misclassification**: round-30
+  entry had copy-pasted state-store.js into the GPL v3 list, but the file
+  header says AGPL v3 and all prior rounds (9, 11, 17, etc.) agree.
+  Corrected.
+- **assets/README.license missing round-23~28 entries**: the screenshots
+  directory's history jumped from round-22 directly to round-29, leaving
+  a 6-round gap. Filled in no-change entries for rounds 23-28.
+
+### False positives declined (with rationale)
+- **ui-gameflow.js S1871** (duplicate branches): the code already uses
+  `else if` (short-circuit) and the two branches carry distinct FIDE 6.9
+  vs FIDE 5.2.2 semantic comments. Merging would lose the distinction.
+- **worklog.md MD029/MD040** (markdownlint): the continuous cross-section
+  numbering is intentional project style (consistent across rounds 13-30).
+  MD040 is applied to new round-31 entries; older entries are not
+  retroactively edited.
+- **PR-level merge conflict** + **SonarCloud Quality Gate**: GitHub CI
+  state, not source-code issues. The SonarCloud CRITICAL findings
+  (S3776 + S8786) ARE addressed in this round.
+
+### Verification
+- 11 chess.src/*.js modules + chess.html inline script: `node --check` PASS.
+- 14 FIDE 6.9 scenarios + 20 state-store/_evalOrMate scenarios: all PASS.
+- Release APK v1+v2+v3 signing verified; versionCode=123 / 1.2.3 / targetSdk 35.
+- Stockfish engine SHA-256三方一致: `8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5`.
+
+Version: **v1.2.3** (versionCode=123, versionName="1.2.3") — unchanged (fix round).
+
 # Regalia ♔
 
 <!-- AI-GEN: AI assisted
@@ -118,7 +290,7 @@ Regalia/
 │   │   ├── EngineProcessManager.java # makeExecutable chmod helper (v1.2.0 Phase 73 NEW; v1.2.1 round-4 slimmed to 111 lines; round-9 ChmodProvider interface slimmed to 1 method, 118 lines)
 │   │   ├── JsBridgeGateway.java      # Sandbox path validation & UCI whitelist (v1.2.0 Phase 73 NEW)
 │   │   ├── PgnCacheManager.java      # PGN cache CRUD (v1.2.0 Phase 73 NEW)
-│   │   ├── EngineHealthMonitor.java  # Engine response-time + recovery-count state holder (v1.2.0 Phase 73 NEW; v1.2.1 slimmed to 85 lines)
+│   │   ├── EngineHealthMonitor.java  # Engine response-time + recovery-count state holder (v1.2.0 Phase 73 NEW; v1.2.1 slimmed to 85 lines; round-32 SystemClock.elapsedRealtime for monotonic timestamps, 97 lines)
 │   │   ├── FileIoHelper.java         # File I/O operations (v1.2.0 Phase 73+ NEW)
 │   │   ├── PermissionHelper.java     # Runtime permission checks (v1.2.0 Phase 73+ NEW)
 │   │   ├── SafPickerHelper.java      # SAF file picker: export/import settings & PGN (v1.2.0 Phase 73+ NEW)
@@ -128,8 +300,8 @@ Regalia/
 │   │   ├── ChessWebViewClient.java # Page load handler, render-process crash recovery
 │   │   ├── EngineService.java  # Foreground service for engine stability
 │   │   ├── ChessApp.java       # Application class, crash protection
-│   │   ├── HapticManager.java  # Haptic feedback (@JavascriptInterface delegate, vibration waveform API; v1.2.3 round-17 NEW; round-23 PWLE reflection removed → public createWaveform API; round-30 isHapticEnabled 5s setting cache, 493 lines)
-│   │   ├── StabilizationHelper.java # Sensor-fusion board anti-shake (v1.0.5 NEW)
+│   │   ├── HapticManager.java  # Haptic feedback (@JavascriptInterface delegate, vibration waveform API; v1.2.3 round-17 NEW; round-23 PWLE reflection removed → public createWaveform API; round-30 isHapticEnabled 5s setting cache; round-31 SystemClock.elapsedRealtime for cache TTL, 506 lines)
+│   │   ├── StabilizationHelper.java # Sensor-fusion board anti-shake (v1.0.5 NEW; round-31 SystemClock.elapsedRealtime for 16ms JS-callback throttle, 386 lines)
 │   │   ├── TlsSecurityHelper.java # TLS 1.2+ enforcement for tablebase API
 │   │   ├── RootDetector.java   # Informational root detection (About dialog)
 │   │   └── README.license      # Per-file license classification for this directory

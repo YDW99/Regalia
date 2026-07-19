@@ -2467,60 +2467,85 @@ const k=s.currentTurn==='white'?s.wk:s.bk;return inCheck(s.board,s.currentTurn,k
 //   K+N only → Black wins on time but cannot mate → FIDE 6.9 draw. isDeadPosition
 //   returns false here (White may have a queen), so the old code wrongly judged
 //   "Black wins". winnerLacksMatingMaterial(state,'black') returns true → draw.
+// v1.2.3 round-31 (PR52 SonarCloud S3776): refactored to reduce cognitive
+//   complexity from 29 → ~6 by extracting _scanWinnerMaterial() and
+//   _bishopParityIsUniform(). The 11-test FIDE 6.9 suite (round-30) still
+//   passes — semantics are byte-for-byte equivalent.
 function winnerLacksMatingMaterial(s,winnerColor){
   if(!s||!s.board)return false;
-  // Scan board; collect winner's non-king piece counts + bishop square-parity.
-  // Loser-side material is irrelevant to FIDE 6.9 — the winner's mating
-  // ability depends only on the winner's own pieces (the loser's pieces can
-  // only be in the way). Bishop square-color parity is tracked because
-  // K+B+B (both on same color) vs K cannot force mate (the enemy king
-  // escapes to the opposite-color squares), per FIDE rules.
-  let wPawn=0,wKnight=0,wBishop=0,wRook=0,wQueen=0,wKing=0;
-  let wBishopParity=-1; // -1 = no bishop seen; 0/1 = light/dark; -2 = mixed
-  for(let r=0;r<8;r++){
-    const row=s.board[r];if(!row)continue;
-    for(let c=0;c<8;c++){
-      const p=row[c];
-      if(!p)continue;
-      if(p.color!==winnerColor)continue;
-      switch(p.type){
-        case'pawn':wPawn++;break;
-        case'knight':wKnight++;break;
-        case'rook':wRook++;break;
-        case'queen':wQueen++;break;
-        case'king':wKing++;break;
-        case'bishop':{
-          wBishop++;
-          const parity=(r+c)%2;
-          if(wBishopParity===-1)wBishopParity=parity;
-          else if(wBishopParity!==parity)wBishopParity=-2; // mixed-parity flag
-          break;
-        }
-      }
-    }
-  }
+  const counts=_scanWinnerMaterial(s.board,winnerColor);
   // Sanity: winner must have exactly one king (otherwise state is corrupt).
-  if(wKing!==1)return false;
+  if(counts.king!==1)return false;
   // Any pawn / rook / queen → mating is possible.
-  if(wPawn>0||wRook>0||wQueen>0)return false;
+  if(counts.pawn>0||counts.rook>0||counts.queen>0)return false;
   // K vs K (winner has only king) → cannot mate.
-  if(wKnight===0&&wBishop===0)return true;
+  if(counts.knight===0&&counts.bishop===0)return true;
   // K + single minor (N or B) → cannot mate.
-  if(wKnight+wBishop===1)return true;
+  if(counts.knight+counts.bishop===1)return true;
   // K + 2N → cannot force mate (FIDE rules; help-mate possible but not forced).
-  if(wKnight===2&&wBishop===0)return true;
+  if(counts.knight===2&&counts.bishop===0)return true;
   // K + B+B same color (no knight) → cannot force mate (enemy king escapes
-  // to the opposite-color squares). wBishopParity>=0 ensures ALL bishops
+  // to the opposite-color squares). The parity check ensures ALL bishops
   // are the same color; the no-knight guard excludes K+N+B+B(same color)
   // which CAN mate (knight attacks both square colors).
   // v1.2.3 round-30: added this case (was missing — the FIDE 6.9 timeout
   //   draw was incorrectly judged a win for K+B+B same-color winners).
-  if(wBishop>=2&&wKnight===0&&wBishopParity>=0)return true;
+  if(counts.bishop>=2&&counts.knight===0&&_bishopParityIsUniform(counts.bishopParity))return true;
   // K + B+B same color + knight → CAN mate.
   // K + B+B opposite color → CAN mate (covers both square colors).
   // K + N+B → CAN mate.
   // K + 2N+anything else → CAN mate (the anything-else enables mate).
   return false;
+}
+
+/**
+ * Scan the board and return the winner's non-king piece counts plus the
+ * bishop square-color parity. Loser-side material is irrelevant to FIDE 6.9
+ * — the winner's mating ability depends only on the winner's own pieces.
+ *
+ * @param {Array} board - 8×8 array of pieces (or null)
+ * @param {string} winnerColor - 'white' | 'black'
+ * @returns {Object} {pawn,knight,bishop,rook,queen,king,bishopParity}
+ *   bishopParity: -1 = no bishop seen; 0/1 = light/dark uniform; -2 = mixed
+ */
+function _scanWinnerMaterial(board,winnerColor){
+  let pawn=0,knight=0,bishop=0,rook=0,queen=0,king=0;
+  let bishopParity=-1;
+  for(let r=0;r<8;r++){
+    const row=board[r];
+    if(!row)continue;
+    for(let c=0;c<8;c++){
+      const p=row[c];
+      if(!p||p.color!==winnerColor)continue;
+      switch(p.type){
+        case'pawn':pawn++;break;
+        case'knight':knight++;break;
+        case'rook':rook++;break;
+        case'queen':queen++;break;
+        case'king':king++;break;
+        case'bishop':{
+          bishop++;
+          const parity=(r+c)%2;
+          if(bishopParity===-1)bishopParity=parity;
+          else if(bishopParity!==parity)bishopParity=-2; // mixed-parity flag
+          break;
+        }
+      }
+    }
+  }
+  return {pawn:pawn,knight:knight,bishop:bishop,rook:rook,queen:queen,king:king,bishopParity:bishopParity};
+}
+
+/**
+ * Returns true iff all bishops the winner owns sit on the SAME square color.
+ * Used by the FIDE 6.9 K+B+B same-color rule: K+B+B(uniform color) vs K cannot
+ * force mate (the enemy king escapes to the opposite-color squares).
+ * bishopParity === -2 means mixed colors; any other non-negative value means
+ * uniform (or no bishops, in which case the caller's `bishop>=2` guard fails
+ * first).
+ */
+function _bishopParityIsUniform(bishopParity){
+  return bishopParity>=0;
 }
 function isDeadPosition(s){
 // v1.0.2 PERF (first-principles): single-pass piece scan with early returns.
@@ -3209,4 +3234,4 @@ function _prependBlackToMovePlaceholder(){
 //   exported there). Exporting symbols not declared in this module is a
 //   link-time SyntaxError in source-module mode; bundled mode strips this
 //   line so production was unaffected, but the list was misleading.
-export {PV,OPP_COLOR,SQ_LIGHT,SQ_DARK,SQ_SEL,LBL_LIGHT,LBL_DARK,LBL_STROKE_LIGHT,LBL_STROKE_DARK,SYM,PN,PN_EN,pieceName,_principlesHTML,KNIGHT_OFFSETS,DIR_ROOK,DIR_BISHOP,DIR_QUEEN,ELO_MATCH,getAI_LEVELS,CELL,REVIEW_CELL,zobrist,initBoard,attacked,initState,validateSetupPosition,cloneB,cloneS,sqAttackedFast,inCheck,pseudoMoves,legalMoves,hasLegalMoves,moveAlg,getCtrlMap,makeMv,makeMvInPlace,unmakeMv,gameStatus,isDeadPosition,posAlg,algPos,inB,pieceZobristIdx,computeHash,syncHash,_refreshStateAfterSetup,_recalcCellSize,getEffectiveAILevel,posEmoji,T,toggleLang,_lang,_i18n,_prependBlackToMovePlaceholder,_reattachActiveAnimations,_activeAnimEls,computeVisibleCastleMarks,computeVisibleEpMark};
+export {PV,OPP_COLOR,SQ_LIGHT,SQ_DARK,SQ_SEL,LBL_LIGHT,LBL_DARK,LBL_STROKE_LIGHT,LBL_STROKE_DARK,SYM,PN,PN_EN,pieceName,_principlesHTML,KNIGHT_OFFSETS,DIR_ROOK,DIR_BISHOP,DIR_QUEEN,ELO_MATCH,getAI_LEVELS,CELL,REVIEW_CELL,zobrist,initBoard,attacked,initState,validateSetupPosition,cloneB,cloneS,sqAttackedFast,inCheck,pseudoMoves,legalMoves,hasLegalMoves,moveAlg,getCtrlMap,makeMv,makeMvInPlace,unmakeMv,gameStatus,isDeadPosition,winnerLacksMatingMaterial,posAlg,algPos,inB,pieceZobristIdx,computeHash,syncHash,_refreshStateAfterSetup,_recalcCellSize,getEffectiveAILevel,posEmoji,T,toggleLang,_lang,_i18n,_prependBlackToMovePlaceholder,_reattachActiveAnimations,_activeAnimEls,computeVisibleCastleMarks,computeVisibleEpMark};

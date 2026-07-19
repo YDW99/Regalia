@@ -1,3 +1,61 @@
+## Round-32 changes (2026-07-20)
+
+**No privacy-relevant changes.** This round is pure bug-fix propagation +
+comment cleanup — no new permissions, no new network endpoints, no new data
+collection, no changes to existing data flows.
+
+Specifically:
+- StockfishNative + EngineHealthMonitor + ChessWebViewClient: switched
+  interval-measurement timestamps from `System.currentTimeMillis()` to
+  `SystemClock.elapsedRealtime()` (monotonic). Affects only in-process
+  engine-health monitoring; no data leaves the device.
+- state-store.js: header comment clarification (no code change).
+- eco-data.js: extracted `_buildEcoLookups()` helper (refactor, no behavior
+  change).
+- pgn-standard.js: corrected a stale comment (no code change).
+- MainActivity + StatsActivity + PermissionHelper + FileIoHelper: stale
+  "API 21" / "Android 5.0" comments → "API 23" / "Android 6.0" to match
+  minSdk=23. Comments only.
+
+All changes are confined to:
+- `src/main/assets/chess.src/{state-store,eco-data,pgn-standard}.js`
+- `src/main/java/com/Regalia/{StockfishNative,EngineHealthMonitor,ChessWebViewClient,MainActivity,StatsActivity,PermissionHelper,FileIoHelper}.java`
+- rebuilt `chess.html` (deterministic build from the .js modules above)
+
+The Lichess Tablebase API remains the only network endpoint (unchanged since
+v1.0.4). All other features remain fully offline.
+
+## Round-31 changes (2026-07-20)
+
+**No privacy-relevant changes.** This round is pure code-quality + stability
+hardening — no new permissions, no new network endpoints, no new data
+collection, no changes to existing data flows.
+
+Specifically:
+- `_evalOrMate` (ai-bridge.js): corrected mate===0 to return fallback eval
+  instead of a -90000 sentinel. Affects in-app eval display only; no data
+  leaves the device.
+- `state-store.js`: dispatch/reset now deep-clone once instead of twice
+  (pure performance optimization; same data, same external behavior).
+- `winnerLacksMatingMaterial` (game-logic.js): refactored into helpers to
+  reduce cognitive complexity. Semantics byte-for-byte equivalent (14-test
+  FIDE 6.9 suite passes).
+- `_settingsImportGen` `|0` → `Math.trunc`: SonarCloud S8786 style fix,
+  no behavioral change.
+- HapticManager + StabilizationHelper: cache/throttle timestamps switched
+  from `System.currentTimeMillis()` to `SystemClock.elapsedRealtime()`
+  (monotonic). No new sensor access, no new data collected.
+- MainActivity: `_isFallbackMode` flag + `_stabilizationLock` synchronization.
+  Affects only in-process event routing; no IPC, no network, no storage.
+
+All changes are confined to:
+- `src/main/assets/chess.src/{ai-bridge,state-store,game-logic}.js`
+- `src/main/java/com/Regalia/{HapticManager,StabilizationHelper,MainActivity}.java`
+- rebuilt `chess.html` (deterministic build from the .js modules above)
+
+The Lichess Tablebase API remains the only network endpoint (unchanged since
+v1.0.4). All other features remain fully offline.
+
 <!--
   Privacy Policy — Regalia
   Copyright (C) 2026 Regalia

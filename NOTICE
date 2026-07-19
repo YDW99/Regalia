@@ -1,3 +1,147 @@
+Round-32 (2026-07-20) — System.currentTimeMillis() bug-class fix propagation + comment cleanup
+==========================================================================================================
+
+License classification: NO CHANGES. All files retain their existing
+classifications (AGPL v3 for original works; GPL v3 for DroidFish-derived
+code; Apache v2.0 for Gradle wrapper; licenses for Stockfish engine and
+other third-party components unchanged).
+
+Changes:
+  - StockfishNative.java (GPL v3): 11 sites of System.currentTimeMillis()
+    replaced with SystemClock.elapsedRealtime() (monotonic, immune to
+    wall-clock changes). All sites are interval measurements (heartbeat
+    zombie detection, sendSetOption 3s deadline, engineGoTimed setup-
+    elapsed deduction, restart-stale detection, recovery-count reset
+    timer). Same fix class as round-31 HapticManager/StabilizationHelper.
+  - EngineHealthMonitor.java (GPL v3): lastResponseTime field +
+    onResponseReceived() + getLastResponseTime() javadoc updated to
+    SystemClock.elapsedRealtime(). StockfishNative's heartbeat consumer
+    must use the same clock (round-32 fixes both consistently).
+  - ChessWebViewClient.java (AGPL v3): render-crash 60s backoff window
+    switched to SystemClock.elapsedRealtime().
+  - state-store.js (AGPL v3): header comment clarification — partial-
+    migration status documented (5 of 25 reducers wired, 20 intentional
+    placeholders for future migration). NO CODE CHANGE.
+  - eco-data.js (AGPL v3): extracted _buildEcoLookups() helper to
+    eliminate an 8-line loop duplicated between IDB-cache-hit and
+    JSON.parse paths. Single source of truth; semantics byte-for-byte
+    equivalent.
+  - pgn-standard.js (GPL v3): corrected a stale comment about brace-
+    comment tokenization. NO CODE CHANGE.
+  - MainActivity.java (AGPL v3): 5 stale "API 21" / "Android 5.0"
+    comments → "API 23" / "Android 6.0" (matches minSdk=23). Comments only.
+  - StatsActivity.java (AGPL v3): 4 stale comment sites (same fix class).
+  - PermissionHelper.java (GPL v3): 2 stale comment sites.
+  - FileIoHelper.java (GPL v3): 4 stale comment sites.
+
+False positives declined (during first-principles review):
+  - state-store.js unused reducers (~20 of 25 registered reducers have
+    zero dispatch callers): INTENTIONAL architectural placeholders for
+    the v1.2.0 Phase 75 Redux migration. Removing them would be a
+    feature retreat. Header comment updated to document the partial-
+    migration status.
+  - subscribe()/getState() zero external callers: INTENTIONAL — wired
+    for future migration rounds. Documented in the new header comment.
+  - parseStandardPGN() zero call sites (pgn-standard.js): round-18
+    decision to keep as defensive safety net. Stale comment corrected
+    but function retained.
+  - All `typeof X === 'function'` cross-module guards (~40+ instances):
+    round-11 intentional defensive design pattern. Not flagged.
+  - catch (Throwable e) in HapticManager PWLE reflection paths:
+    INTENTIONAL — OEM ROM throws NoSuchMethodError (an Error, not
+    Exception). Not flagged.
+
+Documentation:
+  - 8× README.license: round-32 entry prepended (chess.src, assets,
+    src/main, src/main/assets, src/main/cpp, src/main/java/com/Regalia,
+    src/main/res, Manual).
+  - BUILDING.md, PRIVACY.md, README.md, NOTICE: round-32 section prepended.
+  - Manual/Regalia-v1.2.3-manual-{zh,en}.html: round-32 changelog entry
+    prepended (newest-first ordering preserved).
+  - README.md directory tree: HapticManager.java line count 493→506,
+    StabilizationHelper.java added "(round-31 ..., 386 lines)",
+    EngineHealthMonitor.java added "(round-32 ..., 97 lines)".
+
+Verification:
+  - All 11 chess.src/*.js modules pass `node --check`.
+  - chess.html inline script passes `node --check`.
+  - Release APK: v1+v2+v3 signing all verified; versionCode=123 /
+    versionName="1.2.3" / targetSdk 35 / minSdk 23.
+  - Stockfish engine SHA-256 three-way consistent: 8f7116d3f1a7004a6581d4fb0c1ff891
+    ce095bab6d45e52f1578897cf23b61b5 (source / jniLibs / APK-extracted).
+  - APK class files contain round-32 fix markers (lastResponseTime,
+    _lastRecoveryTimestamp, _restartStartTimeMs, _lastRenderCrashTime,
+    _renderCrashCount — all preserved through R8 minification).
+
+Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+
+Round-31 (2026-07-20) — PR52 CodeRabbit review fixes + first-principles hardening
+=====================================================================================
+
+License classification: NO CHANGES. All files retain their existing
+classifications (AGPL v3 for original works; GPL v3 for DroidFish-derived
+code; Apache v2.0 for Gradle wrapper; licenses for Stockfish engine and
+other third-party components unchanged).
+
+Changes:
+  - ai-bridge.js (GPL v3): _evalOrMate mate===0 → fallbackEval (was -90000
+    sentinel — incorrect for "no active mate" cached entries). Replaced
+    `|0` with `Math.trunc` in _settingsImportGen increment (SonarCloud
+    S8786).
+  - state-store.js (AGPL v3): _notifyListeners accepts optional pre-computed
+    snapshot; dispatch() and reset() reuse the snapshot (was deep-cloning
+    twice per call — performance).
+  - game-logic.js (GPL v3): winnerLacksMatingMaterial refactored into
+    _scanWinnerMaterial() + _bishopParityIsUniform() helpers (SonarCloud
+    S3776 cognitive complexity 29 → ~6). Added to export list (was missing
+    since round-29 — pre-existing inconsistency).
+  - HapticManager.java (GPL v3): isHapticEnabled() cache TTL clock source
+    switched from System.currentTimeMillis() to SystemClock.elapsedRealtime()
+    (monotonic — wall-clock jumps could freeze the 5s cache).
+  - StabilizationHelper.java (GPL v3): JS-callback throttle clock source
+    switched to SystemClock.elapsedRealtime() (same fix class — wall-clock
+    jumps could freeze stabilization).
+  - MainActivity.java (AGPL v3): added _isFallbackMode flag set by
+    showFallbackUI(); onKeyDown(BACK) routes to super in fallback mode
+    (was dispatching to hidden WebView, trapping user). Added
+    _stabilizationLock + isDestroyed guard in toggleStabilization() to
+    serialize against onDestroy() (JS-binder-thread toggle vs main-thread
+    destroy race fix).
+
+False positives declined (CodeRabbit flagged, verified against source):
+  - ui-gameflow.js S1871 (duplicate branches): code already uses `else if`
+    with distinct FIDE 6.9 vs FIDE 5.2.2 comments.
+  - worklog.md MD029/MD040: continuous numbering is intentional project
+    style; new round-31 entries do specify code-block languages.
+  - PR-level merge conflict + SonarCloud Quality Gate: GitHub CI state,
+    not source-code issues. SonarCloud CRITICAL findings (S3776 + S8786)
+    ARE addressed in this round.
+
+Documentation:
+  - 8× README.license: round-31 entry prepended (chess.src, assets,
+    src/main, src/main/assets, src/main/cpp, src/main/java/com/Regalia,
+    src/main/res, Manual).
+  - assets/README.license: filled in missing round-23 through round-28
+    no-change entries (license-audit gap flagged by CodeRabbit).
+  - chess.src/README.license: corrected round-30 entry's misclassification
+    of state-store.js as GPL v3 → AGPL v3 (file header says AGPL v3, all
+    prior rounds agree).
+  - BUILDING.md, PRIVACY.md, README.md: round-31 section prepended.
+  - Manual/Regalia-v1.2.3-manual-{zh,en}.html: round-31 changelog entry
+    prepended (newest-first ordering preserved).
+
+Verification:
+  - All 11 chess.src/*.js modules pass `node --check`.
+  - chess.html inline script passes `node --check`.
+  - 14-test FIDE 6.9 suite for winnerLacksMatingMaterial: 14/14 PASS.
+  - 20-test smoke suite for state-store + _evalOrMate: 20/20 PASS.
+  - Release APK: v1+v2+v3 signing all verified; versionCode=123 /
+    versionName="1.2.3" / targetSdk 35 / minSdk 23.
+  - Stockfish engine SHA-256三方一致: 8f7116d3f1a7004a6581d4fb0c1ff891
+    ce095bab6d45e52f1578897cf23b61b5 (source / jniLibs / APK-extracted).
+
+Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+
 Regalia - Notice of Third-Party Components
 ===========================================
 

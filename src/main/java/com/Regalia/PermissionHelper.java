@@ -48,7 +48,7 @@ import java.lang.ref.WeakReference;
  * 兼容性:
  *   - Android 13+ (API 33+) 使用 POST_NOTIFICATIONS 运行时权限
  *   - Android 10+ (API 29+) scoped storage 下应用私有目录无需存储权限
- *   - Android 5-9 (API 21-28) 使用 WRITE_EXTERNAL_STORAGE / READ_EXTERNAL_STORAGE
+ *   - Android 6-9 (API 23-28) 使用 WRITE_EXTERNAL_STORAGE / READ_EXTERNAL_STORAGE
  */
 public class PermissionHelper {
     private static final String TAG = "PermissionHelper";
@@ -79,7 +79,7 @@ public class PermissionHelper {
      * 检查是否拥有存储权限。
      * Android 13+: 无需运行时存储权限，SAF 处理所有文件访问。
      * Android 10-12: scoped storage 下应用私有目录无需权限，但 File API 访问公共目录需 READ_EXTERNAL_STORAGE。
-     * Android 5-9: 需要 WRITE_EXTERNAL_STORAGE。
+     * Android 6-9: 需要 WRITE_EXTERNAL_STORAGE。
      */
     public boolean hasStoragePermission() {
         if (Build.VERSION.SDK_INT >= 33) {

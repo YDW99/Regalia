@@ -721,7 +721,10 @@ function parseStandardPGN(pgnText){
   // Remove line-comments (;...) — must run AFTER brace-comment flattening
   //   so `;` inside `{...}` is already gone.
   moveText=moveText.replace(/;[^\n]*/g,'');
-  // Extract comments inline as we tokenize (so we don't lose them)
+  // Extract comments inline as we tokenize. NOTE: brace comments were
+  //   flattened (removed) above, so the `{` tokenizer branch below is
+  //   unreachable in the normal flow — kept as a defensive safety net in
+  //   case a future caller passes movetext that skipped the flattening pass.
   // Strategy: tokenize the movetext into a stream of {type, value} tokens
   const tokens=[];
   let i=0;

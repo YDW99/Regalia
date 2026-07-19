@@ -33,6 +33,7 @@ package com.Regalia;
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
+import android.os.SystemClock;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -49,9 +50,19 @@ import java.util.concurrent.atomic.AtomicInteger;
  * of truth for these two values.
  *
  * Thread safety: counter uses AtomicInteger; timestamp is volatile.
+ *
+ * v1.2.3 round-32: timestamp source switched from System.currentTimeMillis()
+ *   to SystemClock.elapsedRealtime() (monotonic). Wall-clock jumps (user
+ *   changes date/time, NTP sync) would otherwise make the heartbeat zombie
+ *   detector in StockfishNative misfire — backward jumps cause false
+ *   zombies (unnecessary recovery), forward jumps mask hung engines.
+ *   Same fix class as round-31 HapticManager/StabilizationHelper.
  */
 public class EngineHealthMonitor {
-    private volatile long lastResponseTime = System.currentTimeMillis();
+    // v1.2.3 round-32: elapsedRealtime() — monotonic since boot, immune to
+    //   wall-clock changes. getLastResponseTime() consumers in StockfishNative
+    //   must use the same clock for the delta (round-32 fixes that too).
+    private volatile long lastResponseTime = SystemClock.elapsedRealtime();
     private final AtomicInteger autoRecoveryCount = new AtomicInteger(0);
 
     /** No-arg constructor — StockfishNative no longer wires a RecoveryCallback. */
@@ -60,10 +71,11 @@ public class EngineHealthMonitor {
 
     /** Update the last-response timestamp (called whenever the engine emits any output). */
     public void onResponseReceived() {
-        lastResponseTime = System.currentTimeMillis();
+        lastResponseTime = SystemClock.elapsedRealtime();
     }
 
-    /** @return the last engine response timestamp, in milliseconds since epoch. */
+    /** @return the last engine response timestamp, in elapsedRealtime() millis
+     *         (monotonic since boot — NOT wall-clock epoch millis). */
     public long getLastResponseTime() {
         return lastResponseTime;
     }

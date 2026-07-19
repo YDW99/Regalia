@@ -1,3 +1,62 @@
+v1.2.3 round-32 (2026.7.20) — System.currentTimeMillis() bug-class fix propagation:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - StockfishNative.java (GPL v3): 11 sites of System.currentTimeMillis()
+    replaced with SystemClock.elapsedRealtime() (monotonic). All sites
+    are interval measurements (heartbeat zombie detection, sendSetOption
+    3s deadline, engineGoTimed setup-elapsed deduction, restart-stale
+    detection, recovery-count reset timer). Wall-clock jumps (user
+    changes date/time, NTP sync) would otherwise cause false-positive
+    zombie detection or hung-engine masking. Same fix class as round-31
+    HapticManager/StabilizationHelper.
+  - EngineHealthMonitor.java (GPL v3): lastResponseTime field init +
+    onResponseReceived() + getLastResponseTime() javadoc updated to
+    SystemClock.elapsedRealtime(). Must use the same clock as
+    StockfishNative's heartbeat consumer (round-32 fixes both
+    consistently).
+  - ChessWebViewClient.java (AGPL v3): render-crash 60s backoff window
+    switched to SystemClock.elapsedRealtime(). Backward wall-clock jumps
+    would reset the crash counter prematurely; forward jumps extend it.
+  - MainActivity.java (AGPL v3): stale "API 21" / "Android 5.0" comments
+    corrected to "API 23" / "Android 6.0" to match minSdk=23 in
+    build.gradle. Comments only — no code behavior change. 5 sites.
+  - StatsActivity.java (AGPL v3): same stale-comment cleanup — 4 sites
+    ("API 21-29" → "API 23-29", "API 21-23" → "API 23", etc.).
+  - PermissionHelper.java (GPL v3): 2 stale "Android 5-9" / "API 21-28"
+    comments → "Android 6-9" / "API 23-28".
+  - FileIoHelper.java (GPL v3): 4 stale "Android 5-9" comments →
+    "Android 6-9".
+  - All other .java files: unchanged this round.
+  - License classification: all files unchanged (HapticManager.java,
+    EngineProcessManager.java, EngineService.java, EngineHealthMonitor.java,
+    EngineConfigHelper.java, EngineSettingsHelper.java, StockfishNative.java,
+    PgnCacheManager.java, ChessWebViewClient.java, JsBridgeGateway.java,
+    FileIoHelper.java, SafPickerHelper.java, PermissionHelper.java,
+    RootDetector.java, StabilizationHelper.java, TlsSecurityHelper.java,
+    StatsActivity.java = GPL v3; MainActivity.java, ChessApp.java = AGPL v3).
+
+v1.2.3 round-31 (2026.7.20) — PR52 CodeRabbit stability fixes:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - HapticManager.java (GPL v3): isHapticEnabled() cache-TTL timestamp
+    source switched from System.currentTimeMillis() to
+    SystemClock.elapsedRealtime() (monotonic, immune to wall-clock
+    changes — backward jumps previously made the 5s TTL check false
+    forever, freezing the cached value).
+  - MainActivity.java (AGPL v3): added _isFallbackMode flag set by
+    showFallbackUI(); onKeyDown(BACK) now routes to super when in
+    fallback mode (was dispatching to the hidden WebView, trapping the
+    user). Added _stabilizationLock + isDestroyed guard in
+    toggleStabilization() to serialize against onDestroy() (prevents
+    the JS-binder-thread toggle vs main-thread destroy race that could
+    leak sensors).
+  - All other .java files: unchanged this round.
+  - License classification: all files unchanged (HapticManager.java,
+    EngineProcessManager.java, EngineService.java, EngineHealthMonitor.java,
+    EngineConfigHelper.java, EngineSettingsHelper.java, StockfishNative.java,
+    PgnCacheManager.java, ChessWebViewClient.java, JsBridgeGateway.java,
+    FileIoHelper.java, SafPickerHelper.java, PermissionHelper.java,
+    RootDetector.java, StabilizationHelper.java, TlsSecurityHelper.java,
+    StatsActivity.java = GPL v3; MainActivity.java, ChessApp.java = AGPL v3).
+
 v1.2.3 round-30 (2026.7.19) — First-principles per-file review + robustness/perf optimizations:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
   - StockfishNative.java (GPL v3): engineGoDepth now clamps depth to

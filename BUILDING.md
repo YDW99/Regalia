@@ -1,3 +1,114 @@
+## Round-32 build notes (2026-07-20)
+
+- **No build-config changes** this round — `build.gradle`, `settings.gradle`,
+  `gradle.properties`, `gradle-wrapper.properties`, `lint.xml`, `proguard-rules.pro`
+  all unchanged.
+- **Source-tree changes** (rebuilt chess.html picks up all JS fixes; .java
+  changes are compiled into the release APK):
+  - `src/main/assets/chess.src/state-store.js` — header comment updated to
+    clarify partial-migration status (no code change).
+  - `src/main/assets/chess.src/eco-data.js` — extracted `_buildEcoLookups()`
+    helper to eliminate an 8-line loop duplicated between IDB-cache-hit and
+    JSON.parse paths.
+  - `src/main/assets/chess.src/pgn-standard.js` — corrected a stale comment
+    about brace-comment tokenization (the `{` tokenizer branch is
+    unreachable after flattening).
+  - `src/main/java/com/Regalia/StockfishNative.java` — 11 sites of
+    `System.currentTimeMillis()` → `SystemClock.elapsedRealtime()`
+    (monotonic). All sites are interval measurements: heartbeat zombie
+    detection, sendSetOption 3s deadline, engineGoTimed setup-elapsed
+    deduction, restart-stale detection, recovery-count reset timer.
+  - `src/main/java/com/Regalia/EngineHealthMonitor.java` — `lastResponseTime`
+    field init + `onResponseReceived()` + `getLastResponseTime()` javadoc
+    updated to `SystemClock.elapsedRealtime()`.
+  - `src/main/java/com/Regalia/ChessWebViewClient.java` — render-crash 60s
+    backoff window switched to `SystemClock.elapsedRealtime()`.
+  - `src/main/java/com/Regalia/{MainActivity,StatsActivity,PermissionHelper,
+    FileIoHelper}.java` — stale "API 21" / "Android 5.0" comments corrected
+    to "API 23" / "Android 6.0" to match minSdk=23 (15 sites total,
+    comments only — no code behavior change).
+- **Toolchain**: unchanged from round-31 (Temurin JDK 21.0.11, Android SDK
+  API 35 / Build-Tools 34.0.0 / NDK 27.2.12479018 / CMake 3.31.6, Gradle
+  8.11.1 wrapper, AGP 8.7.3).
+- **Verification**:
+  - `node --check` on all 11 `chess.src/*.js` modules: PASS.
+  - `node --check` on `chess.html` inline script: PASS.
+  - `python3 build-chess.py` rebuilt `chess.html` (23,027 lines / 1,386,590
+    bytes).
+  - `./gradlew --no-daemon assembleRelease -x lint -x lintRelease -x
+    lintVitalRelease` → BUILD SUCCESSFUL in 55s.
+  - `apksigner verify --verbose`: v1+v2+v3 all true.
+  - Stockfish engine SHA-256 three-way consistent: `8f7116d3f1a7004a6581d4fb0c1ff891
+    ce095bab6d45e52f1578897cf23b61b5` (source / jniLibs / APK-extracted).
+  - APK class files contain `lastResponseTime` (EngineHealthMonitor),
+    `_lastRecoveryTimestamp` + `_restartStartTimeMs` (StockfishNative),
+    `_lastRenderCrashTime` + `_renderCrashCount` (ChessWebViewClient) — all
+    preserved through R8 minification.
+- **First-principles review scope**: 2 parallel review agents covered all
+  11 JS modules (21,722 lines) and all 19 Java files (10,730 lines,
+  including StockfishNative at 4,324 lines). Total findings: 6 (1 HIGH
+  BUG, 1 LOW BUG, 4 LOW REDUNDANCY). All 6 applied; 0 false positives
+  after re-verification against source.
+
+## Round-31 build notes (2026-07-20)
+
+- **No build-config changes** this round — `build.gradle`, `settings.gradle`,
+  `gradle.properties`, `gradle-wrapper.properties`, `lint.xml`, `proguard-rules.pro`
+  all unchanged.
+- **Source-tree changes** (rebuilt chess.html picks up all JS fixes; .java
+  changes are compiled into the release APK):
+  - `src/main/assets/chess.src/ai-bridge.js` — `_evalOrMate` mate===0 fix;
+    `|0` → `Math.trunc` (SonarCloud S8786).
+  - `src/main/assets/chess.src/state-store.js` — `_notifyListeners` accepts
+    optional snapshot; `dispatch()` and `reset()` reuse the snapshot for
+    listener notification + return value (was deep-cloning twice).
+  - `src/main/assets/chess.src/game-logic.js` — `winnerLacksMatingMaterial`
+    refactored into `_scanWinnerMaterial()` + `_bishopParityIsUniform()`
+    helpers (SonarCloud S3776 cognitive complexity 29 → ~6). Added the
+    function to the export list (was missing — pre-existing inconsistency
+    from round-29).
+  - `src/main/java/com/Regalia/HapticManager.java` — `isHapticEnabled()`
+    cache TTL now uses `SystemClock.elapsedRealtime()` (was `System.
+    currentTimeMillis()` — wall-clock jumps could freeze the cache).
+  - `src/main/java/com/Regalia/StabilizationHelper.java` — JS-callback
+    throttle now uses `SystemClock.elapsedRealtime()` (same fix class).
+  - `src/main/java/com/Regalia/MainActivity.java` — added `_isFallbackMode`
+    flag set by `showFallbackUI()`; `onKeyDown(BACK)` routes to `super`
+    when in fallback mode (was dispatching to hidden WebView, trapping
+    user). Added `_stabilizationLock` + `isDestroyed` guard in
+    `toggleStabilization()` to serialize against `onDestroy()`.
+- **Toolchain note (sandbox rebuild)**: this round's release APK was built
+  with Temurin JDK 21.0.11 (provides javac — the system `openjdk-21-jre-
+  headless` package is JRE-only and AGP 8.7.3 requires the compiler).
+  Android SDK API 35 / Build-Tools 34.0.0 / NDK 27.2.12479018 / CMake
+  3.31.6 / Gradle 8.11.1 wrapper — all unchanged.
+- **Verification**:
+  - `node --check` on all 11 `chess.src/*.js` modules: PASS.
+  - `node --check` on `chess.html` inline script: PASS.
+  - `python3 build-chess.py` rebuilt `chess.html` (23,009 lines / 1,385,411
+    bytes).
+  - 14-test FIDE 6.9 suite for `winnerLacksMatingMaterial`: 14/14 PASS.
+  - 20-test smoke suite for state-store snapshot reuse + `_evalOrMate`:
+    20/20 PASS.
+  - `./gradlew --no-daemon assembleRelease -x lint -x lintRelease -x
+    lintVitalRelease` → BUILD SUCCESSFUL in 1m 11s.
+  - `apksigner verify --verbose`: v1+v2+v3 all true.
+  - Stockfish engine SHA-256三方一致: `8f7116d3f1a7004a6581d4fb0c1ff891
+    ce095bab6d45e52f1578897cf23b61b5` (source / jniLibs / APK-extracted).
+- **False positives declined** (CodeRabbit had flagged, verified against
+  source, no action needed):
+  - `ui-gameflow.js` S1871 (duplicate branches): the code already uses
+    `else if` (short-circuit); the two branches carry distinct FIDE 6.9
+    vs FIDE 5.2.2 semantic comments. Merging would lose the distinction.
+  - `worklog.md` MD029/MD040 (markdownlint): the continuous cross-section
+    numbering is intentional project style (consistent across rounds 13-30).
+    MD040 (fenced-code-language) is fixed for new round-31 entries; older
+    entries are not retroactively edited (out of scope, no correctness
+    impact).
+  - PR-level merge conflict + SonarCloud Quality Gate: GitHub CI state,
+    not source-code issues. The SonarCloud CRITICAL findings
+    (cognitive complexity + `|0`) ARE addressed in this round.
+
 # Building Regalia v1.2.3 from source
 
 <!-- AI-GEN: AI assisted

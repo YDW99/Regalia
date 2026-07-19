@@ -1,10 +1,73 @@
+v1.2.3 round-32 (2026.7.20) — First-principles per-file review + bug fix propagation:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - state-store.js (AGPL v3): header comment updated to clarify partial-
+    migration status — only ~5 of 25 registered reducers are currently
+    dispatched (SET_LANG, TOGGLE_SOUND, ENTER_REVIEW, SETUP_EXIT,
+    PGN_CLEARED); the remaining 20 are intentional architectural
+    placeholders for future migration rounds. subscribe()/getState() are
+    wired but currently have zero external callers. NO CODE CHANGE —
+    comment-only clarification (the previous comment's "All state mutations
+    go through dispatch()" was misleading).
+  - eco-data.js (AGPL v3): extracted _buildEcoLookups() helper to
+    eliminate an 8-line loop duplicated verbatim between the IDB-cache-hit
+    path and the JSON.parse path. Single source of truth now; semantics
+    byte-for-byte equivalent.
+  - pgn-standard.js (GPL v3): corrected a stale comment that claimed brace
+    comments are preserved during tokenization — they are flattened
+    (removed) before tokenization, so the `{` tokenizer branch is
+    unreachable in the normal flow. Comment now reflects reality. (The
+    function parseStandardPGN itself remains unused — kept as a defensive
+    safety net per round-18 decision.)
+  - ai-bridge.js, game-logic.js, chess960.js, ui.js, ui-gameflow.js,
+    ui-interactions.js, tablebase.js, worker-pool.js, index.html.tpl:
+    no changes this round.
+  - License classification: all files unchanged (game-logic.js, pgn-standard.js,
+    ai-bridge.js, tablebase.js, worker-pool.js, ui-gameflow.js,
+    ui-interactions.js, ui.js, index.html.tpl = GPL v3; chess960.js,
+    eco-data.js, state-store.js = AGPL v3).
+
+v1.2.3 round-31 (2026.7.20) — PR52 CodeRabbit review fixes + false-positive triage:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - ai-bridge.js (GPL v3): _evalOrMate now treats mate===0 as "no active
+    mate" and returns fallbackEval (consistency with stats.html truthy
+    pattern). _settingsImportGen increment replaced `|0` with Math.trunc
+    (SonarCloud S8786).
+  - state-store.js (AGPL v3): _notifyListeners accepts an optional pre-
+    computed snapshot; dispatch() and reset() now deep-clone ONCE and
+    reuse the snapshot for both listener notification and return value
+    (was cloning twice per call).
+  - game-logic.js (GPL v3): winnerLacksMatingMaterial refactored to reduce
+    cognitive complexity from 29 → ~6 (SonarCloud S3776). Extracted
+    _scanWinnerMaterial() and _bishopParityIsUniform() helpers. Added
+    winnerLacksMatingMaterial to the export list (was missing — pre-existing
+    inconsistency from round-29). 14-test FIDE 6.9 suite passes.
+  - ui-gameflow.js (GPL v3): NO CODE CHANGE this round. CodeRabbit had
+    flagged the winnerLacksMatingMaterial/isDeadPosition branches as
+    S1871 (duplicate branches) — FALSE POSITIVE, the code already uses
+    `else if` (short-circuit) and the two branches carry distinct FIDE
+    6.9 vs FIDE 5.2.2 semantic comments. Merging would lose the
+    distinction.
+  - chess960.js, pgn-standard.js, worker-pool.js, eco-data.js, ui.js,
+    ui-interactions.js, tablebase.js, index.html.tpl: no changes this round.
+  - License classification: all files unchanged. round-30 entry below
+    had a copy-paste error classifying state-store.js as GPL v3; the
+    correct classification is AGPL v3 (state-store.js is an original
+    work, not DroidFish-derived — see its file header). This round's
+    entry has the correct classification. (game-logic.js, pgn-standard.js,
+    ai-bridge.js, tablebase.js, worker-pool.js, ui-gameflow.js,
+    ui-interactions.js, ui.js, index.html.tpl = GPL v3; chess960.js,
+    eco-data.js, state-store.js = AGPL v3).
+
 v1.2.3 round-30 (2026.7.19) — First-principles per-file review + robustness/perf optimizations:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
   - game-logic.js (GPL v3): winnerLacksMatingMaterial now tracks winner's
     bishop square-color parity; returns true for K+B+B same-color (no
     knight). 11 unit-test scenarios pass.
-  - state-store.js (GPL v3): _notifyListeners now deep-clones _state before
-    passing to listeners (was passing live reference).
+  - state-store.js (AGPL v3 — corrected round-31): _notifyListeners now
+    deep-clones _state before passing to listeners (was passing live
+    reference). [Round-31 correction: round-30 entry below originally
+    misclassified state-store.js as GPL v3 — it is AGPL v3 per the file
+    header and all prior rounds.]
   - ui.js (GPL v3): _updateCtrlInfoPanel uses getElementById('ctrl-info-card')
     instead of querySelectorAll('.card') + text-scan. Removed dead
     lastRenderRequest state. Removed _cachedCtrlCard cache.
@@ -18,9 +81,9 @@ v1.2.3 round-30 (2026.7.19) — First-principles per-file review + robustness/pe
   - chess960.js, pgn-standard.js, worker-pool.js, eco-data.js, ui-gameflow.js,
     index.html.tpl: no changes this round.
   - License classification: all files unchanged (game-logic.js, pgn-standard.js,
-    state-store.js, ai-bridge.js, tablebase.js, worker-pool.js, ui-gameflow.js,
-    ui-interactions.js, ui.js, index.html.tpl = GPL v3; chess960.js, eco-data.js
-    = AGPL v3).
+    ai-bridge.js, tablebase.js, worker-pool.js, ui-gameflow.js,
+    ui-interactions.js, ui.js, index.html.tpl = GPL v3; chess960.js, eco-data.js,
+    state-store.js = AGPL v3).
 
 v1.2.3 round-29 (2026.7.19) — PR52 SonarCloud + CodeRabbit review fixes:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).

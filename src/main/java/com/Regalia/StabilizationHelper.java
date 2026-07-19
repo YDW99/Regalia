@@ -67,6 +67,7 @@ import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.util.Log;
 import android.view.Surface;
 import android.view.WindowManager;
@@ -327,8 +328,18 @@ public class StabilizationHelper implements SensorEventListener {
         boardPxX = Math.max(-MAX_DISPLACEMENT_PX, Math.min(MAX_DISPLACEMENT_PX, boardPxX));
         boardPxY = Math.max(-MAX_DISPLACEMENT_PX, Math.min(MAX_DISPLACEMENT_PX, boardPxY));
 
-        // Throttle JS callback
-        long now = System.currentTimeMillis();
+        // Throttle JS callback.
+        // v1.2.3 round-31 (first-principles): use SystemClock.elapsedRealtime()
+        //   instead of System.currentTimeMillis() — the wall clock can jump
+        //   backward (user manually changes date/time, NTP sync), which would
+        //   make `now - lastJsCallbackTime` go negative. Since the throttle
+        //   check is `< JS_CALLBACK_MIN_INTERVAL_MS` (16ms, positive), a
+        //   negative delta would always satisfy it → EVERY sensor event
+        //   would be skipped → stabilization freezes until the wall clock
+        //   catches back up to its previous value (could be hours/days if
+        //   the user changed the date significantly). Same fix class as
+        //   HapticManager.isHapticEnabled() round-31.
+        long now = SystemClock.elapsedRealtime();
         if (now - lastJsCallbackTime < JS_CALLBACK_MIN_INTERVAL_MS) return;
         lastJsCallbackTime = now;
 

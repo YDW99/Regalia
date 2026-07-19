@@ -1,3 +1,20 @@
+v1.2.3 round-32 (2026.7.20): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - All round-32 changes are in src/main/assets/chess.src/ (state-store.js,
+    eco-data.js, pgn-standard.js) and src/main/java/com/Regalia/
+    (StockfishNative.java, EngineHealthMonitor.java, ChessWebViewClient.java,
+    MainActivity.java, StatsActivity.java, PermissionHelper.java,
+    FileIoHelper.java) plus the rebuilt chess.html and top-level docs/Manual.
+    The cpp/ tree (engine_jni.cpp, CMakeLists.txt) is unchanged.
+
+v1.2.3 round-31 (2026.7.20): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - All round-31 changes are in src/main/assets/chess.src/ (ai-bridge.js,
+    state-store.js, game-logic.js) and src/main/java/com/Regalia/
+    (HapticManager.java, MainActivity.java) plus the rebuilt chess.html and
+    top-level docs/Manual. The cpp/ tree (engine_jni.cpp, CMakeLists.txt)
+    is unchanged.
+
 v1.2.3 round-30 (2026.7.19) — First-principles per-file review + robustness/perf optimizations:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
   - No changes to cpp/ files this round.

@@ -44,7 +44,7 @@ import android.widget.TextView;
 /**
  * Regalia MainActivity - WebView-based chess game with Stockfish engine.
  *
- * Compatibility: Supports Android 5.0 (API 21) through Android 15 (API 35).
+ * Compatibility: Supports Android 6.0 (API 23) through Android 15 (API 35).
  * Android 15+ (API 35) Edge-to-Edge enforcement is handled via enableImmersiveMode().
  *
  * v18.4.1 CRITICAL FIX: Added robust crash protection:
@@ -82,8 +82,25 @@ public class MainActivity extends Activity {
     //   thread (onResume/onPause/onDestroy). Without volatile, the main
     //   thread may see a stale `false` after the user toggled stabilization
     //   on from JS, causing onResume to skip sensor restart.
+    // v1.2.3 round-31 (PR52 CodeRabbit stability): volatile alone is not
+    //   enough — the check-then-act pattern in toggleStabilization() (read
+    //   stabilizationEnabled, then act) races with onDestroy() (set null,
+    //   set false). Added _stabilizationLock to serialize toggle vs destroy
+    //   and _destroyed guard to short-circuit post-destroy toggles. The
+    //   fields stay volatile for the onResume/onPause single-reads.
     private volatile StabilizationHelper stabilizationHelper = null;
     private volatile boolean stabilizationEnabled = false;
+    // v1.2.3 round-31: lock object for toggleStabilization() ↔ onDestroy()
+    //   serialization. Fine-grained (not `this`) so unrelated main-thread
+    //   entry points aren't blocked by a long sensor unregister.
+    private final Object _stabilizationLock = new Object();
+    // v1.2.3 round-31: tracks whether showFallbackUI() has been called and
+    //   replaced the WebView content view. When true, BACK must NOT be
+    //   dispatched to the (now-detached) WebView — it should fall through to
+    //   super.onKeyDown() so the system finishes the Activity. Previously
+    //   BACK was always dispatched to webView if webView!=null, which trapped
+    //   the user in fallback mode (webView was still alive but invisible).
+    private volatile boolean _isFallbackMode = false;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -119,7 +136,7 @@ public class MainActivity extends Activity {
         }
 
         // v18.4.6: Do NOT set FLAG_FULLSCREEN on API 30+ — it conflicts with Edge-to-Edge.
-        // On API 21-29, FLAG_FULLSCREEN is still valid and needed for true fullscreen.
+        // On API 23-29, FLAG_FULLSCREEN is still valid and needed for true fullscreen.
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
             try {
                 getWindow().setFlags(
@@ -270,7 +287,7 @@ public class MainActivity extends Activity {
             //   1. WebView only loads trusted local content (file:///android_asset/chess.html).
             //      No remote URLs are ever loaded (verified in ChessWebViewClient).
             //   2. All 64+ exposed methods carry @JavascriptInterface (verified by grep).
-            //      On API 17+ (our minSdk=21), only annotated methods are reachable from JS,
+            //      On API 17+ (our minSdk=23), only annotated methods are reachable from JS,
             //      closing the historic reflection-based JS interface exploit.
             //   3. JavaScript is enabled only AFTER the WebView client is configured, so
             //      no remote content can race the JS interface registration.
@@ -414,6 +431,14 @@ public class MainActivity extends Activity {
             layout.addView(titleView);
             layout.addView(msgView);
             setContentView(layout);
+            // v1.2.3 round-31 (PR52 CodeRabbit stability): mark fallback mode
+            //   so onKeyDown(BACK) routes to super instead of the now-hidden
+            //   WebView. setContentView replaces the WebView as the visible
+            //   content but does NOT null out the webView field or destroy
+            //   it — without this flag, BACK presses would still be forwarded
+            //   to webView.evaluateJavascript("handleBackPress()"), trapping
+            //   the user in the fallback screen.
+            _isFallbackMode = true;
         } catch (Throwable e) {
             Log.e(TAG, "Fallback UI failed", e);
         }
@@ -432,7 +457,7 @@ public class MainActivity extends Activity {
      * FIX: On Android 15+ (API 35), do NOT call setDecorFitsSystemWindows at all —
      * let the system handle Edge-to-Edge natively. On Android 11-14 (API 30-34),
      * use the platform WindowInsetsController API directly (no AndroidX reflection).
-     * On Android 5-10, use legacy system UI visibility flags.
+     * On Android 6-10, use legacy system UI visibility flags.
      *
      * This eliminates the AndroidX reflection chain that was causing ClassNotFoundException
      * and VerifyError on some devices, and removes the conflicting setDecorFitsSystemWindows
@@ -479,7 +504,7 @@ public class MainActivity extends Activity {
                 return;
             }
 
-            // Android 5-10 (API 21-29): Legacy system ui visibility flags
+            // Android 6-10 (API 23-29): Legacy system ui visibility flags
             View decorView = getWindow().getDecorView();
             if (decorView != null) {
                 applyLegacyImmersiveMode(decorView);
@@ -491,7 +516,7 @@ public class MainActivity extends Activity {
 
     /**
      * OPT: P0/P4 - Extracted legacy immersive mode logic for reuse and clarity.
-     * Used on Android 5.x through Android 10 (API 21-29).
+     * Used on Android 6.x through Android 10 (API 23-29).
      */
     private void applyLegacyImmersiveMode(View decorView) {
         decorView.setSystemUiVisibility(
@@ -691,11 +716,17 @@ public class MainActivity extends Activity {
         isDestroyed = true;
 
         // v1.0.5 Round-6 Rev49: Stop sensor-based stabilization and release sensors.
-        if (stabilizationHelper != null) {
-            try { stabilizationHelper.stop(); } catch (Throwable e) { Log.w(TAG, "stab stop on destroy failed", e); }
-            stabilizationHelper = null;
+        // v1.2.3 round-31 (PR52 CodeRabbit stability): acquire _stabilizationLock
+        //   so toggleStabilization() on the JS binder thread can't be mid-flight
+        //   (creating/starting a helper) while we null out the field. The lock
+        //   is fine-grained; sensor unregister is fast (~ms).
+        synchronized (_stabilizationLock) {
+            if (stabilizationHelper != null) {
+                try { stabilizationHelper.stop(); } catch (Throwable e) { Log.w(TAG, "stab stop on destroy failed", e); }
+                stabilizationHelper = null;
+            }
+            stabilizationEnabled = false;
         }
-        stabilizationEnabled = false;
 
         // OPT: P0 - Cancel any pending init retry callbacks and release Handler reference
         // to prevent memory leaks and late callback execution.
@@ -799,6 +830,17 @@ public class MainActivity extends Activity {
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if (keyCode == KeyEvent.KEYCODE_BACK) {
+            // v1.2.3 round-31 (PR52 CodeRabbit stability): if showFallbackUI()
+            //   replaced the content view, the WebView is hidden but still
+            //   alive in memory — dispatching BACK to it would call a JS
+            //   handler on an invisible page and trap the user. Route to
+            //   super instead so the system finishes the Activity.
+            //   The pre-round-31 `webView != null` check only covered the
+            //   "WebView creation failed" path; the "WebView exists but
+            //   fallback UI replaced it" path was missed.
+            if (_isFallbackMode) {
+                return super.onKeyDown(keyCode, event);
+            }
             if (webView != null) {
                 try {
                     webView.evaluateJavascript("if(typeof handleBackPress==='function'){handleBackPress();}", null);
@@ -882,32 +924,50 @@ public class MainActivity extends Activity {
      * Shows a Toast in the current language (zh/en).
      */
     public void toggleStabilization() {
-        if (stabilizationEnabled) {
-            // Turn OFF
-            if (stabilizationHelper != null) {
-                try { stabilizationHelper.stop(); } catch (Throwable e) { Log.w(TAG, "stab stop failed", e); }
+        // v1.2.3 round-31 (PR52 CodeRabbit stability): serialize against
+        //   onDestroy() to prevent the race where the JS binder thread is
+        //   mid-toggle (just created a new StabilizationHelper, about to
+        //   start()) while the main thread enters onDestroy() and nulls
+        //   out the field. Without this lock, the Binder thread would
+        //   call start() on a helper whose owner reference was just nulled,
+        //   leaking sensors that onDestroy() thought it had stopped.
+        //   The lock is fine-grained (_stabilizationLock, not `this`) so
+        //   unrelated main-thread entry points (onResume, onPause) aren't
+        //   blocked by a long sensor unregister. isDestroyed is checked
+        //   inside the lock to short-circuit post-destroy toggles.
+        synchronized (_stabilizationLock) {
+            if (isDestroyed) {
+                // Activity is being destroyed — drop the toggle silently.
+                Log.i(TAG, "toggleStabilization ignored — Activity destroyed");
+                return;
             }
-            stabilizationEnabled = false;
-            showToastLocalized("stabilization_off");
-        } else {
-            // Turn ON
-            if (stabilizationHelper == null && webView != null) {
-                try {
-                    stabilizationHelper = new StabilizationHelper(this, webView);
-                } catch (Throwable e) {
-                    Log.e(TAG, "StabilizationHelper creation failed", e);
-                    showToastLocalized("stabilization_unavailable");
-                    return;
+            if (stabilizationEnabled) {
+                // Turn OFF
+                if (stabilizationHelper != null) {
+                    try { stabilizationHelper.stop(); } catch (Throwable e) { Log.w(TAG, "stab stop failed", e); }
                 }
-            }
-            if (stabilizationHelper != null) {
-                boolean ok = false;
-                try { ok = stabilizationHelper.start(); } catch (Throwable e) { Log.e(TAG, "stab start failed", e); }
-                if (ok) {
-                    stabilizationEnabled = true;
-                    showToastLocalized("stabilization_on");
-                } else {
-                    showToastLocalized("stabilization_unavailable");
+                stabilizationEnabled = false;
+                showToastLocalized("stabilization_off");
+            } else {
+                // Turn ON
+                if (stabilizationHelper == null && webView != null) {
+                    try {
+                        stabilizationHelper = new StabilizationHelper(this, webView);
+                    } catch (Throwable e) {
+                        Log.e(TAG, "StabilizationHelper creation failed", e);
+                        showToastLocalized("stabilization_unavailable");
+                        return;
+                    }
+                }
+                if (stabilizationHelper != null) {
+                    boolean ok = false;
+                    try { ok = stabilizationHelper.start(); } catch (Throwable e) { Log.e(TAG, "stab start failed", e); }
+                    if (ok) {
+                        stabilizationEnabled = true;
+                        showToastLocalized("stabilization_on");
+                    } else {
+                        showToastLocalized("stabilization_unavailable");
+                    }
                 }
             }
         }

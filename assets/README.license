@@ -1,3 +1,18 @@
+v1.2.3 round-32 (2026.7.20): no changes to assets/ files this round.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - screenshot.jpg / screenshot.png: unchanged. All round-32 changes are
+    in src/main/ (JS modules + rebuilt chess.html + Java files) and the
+    Manual + top-level docs.
+
+v1.2.3 round-31 (2026.7.20) — PR52 CodeRabbit review fixes + false-positive triage:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - No changes to assets/ files this round (screenshot.png, screenshot.jpg).
+  - Documentation cleanup: filled in the missing round-23 through round-28
+    no-change entries below (they were absent in the previous release tar —
+    CodeRabbit flagged this as a license-audit gap. The screenshots
+    themselves were never touched in those rounds; only the changelog
+    entries were missing).
+
 v1.2.3 round-30 (2026.7.19) — First-principles per-file review + robustness/perf optimizations:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
   - No changes to assets/ files this round (screenshot.png, screenshot.jpg).
@@ -5,6 +20,50 @@ v1.2.3 round-30 (2026.7.19) — First-principles per-file review + robustness/pe
 v1.2.3 round-29 (2026.7.19) — PR52 SonarCloud + CodeRabbit review fixes:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
   - No changes to assets/ files this round (screenshot.png, screenshot.jpg).
+
+v1.2.3 round-28 (2026.7.19): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - screenshot.jpg / screenshot.png: unchanged. Round-28 was an Undo/Redo
+    clock-restoration audit + baseSec completeness fix — all changes were
+    in src/main/assets/chess.src/ (ui-interactions.js, ui-gameflow.js,
+    ai-bridge.js, tablebase.js) plus the rebuilt chess.html and top-level
+    docs/Manual.
+
+v1.2.3 round-27 (2026.7.19): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - screenshot.jpg / screenshot.png: unchanged. Round-27 was a first-
+    principles review + manual mockup fix — all changes were in
+    src/main/assets/chess.src/ (ui.js mockup HTML) plus the rebuilt
+    chess.html, the Manual, and top-level docs.
+
+v1.2.3 round-26 (2026.7.19): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - screenshot.jpg / screenshot.png: unchanged. Round-26 was a PGN
+    Termination/comment配套修复 for FIDE 6.9 timeout draw — all changes
+    were in src/main/assets/chess.src/ (ai-bridge.js, game-logic.js,
+    ui-gameflow.js, pgn-standard.js) plus the rebuilt chess.html and
+    top-level docs/Manual.
+
+v1.2.3 round-25 (2026.7.19): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - screenshot.jpg / screenshot.png: unchanged. Round-25 was a SonarCloud
+    S6582/S3358 style cleanup + FIDE 6.9 timeout draw fix — all changes
+    were in src/main/assets/chess.src/ (ai-bridge.js, game-logic.js,
+    ui-gameflow.js) plus the rebuilt chess.html and top-level docs/Manual.
+
+v1.2.3 round-24 (2026.7.19): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - screenshot.jpg / screenshot.png: unchanged. Round-24 was a God Function
+    split (S3776) + StatsActivity license-label fix — all changes were in
+    src/main/ (StatsActivity.java split, JS modules) plus the rebuilt
+    chess.html and top-level docs.
+
+v1.2.3 round-23 (2026.7.19): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - screenshot.jpg / screenshot.png: unchanged. Round-23 was a PR #51
+    CodeRabbit review fix + SonarCloud triage — all changes were in
+    src/main/ (JS modules + StockfishNative.java + JsBridgeGateway.java)
+    plus the rebuilt chess.html and top-level docs.
 
 assets/ — README screenshots
 ============================

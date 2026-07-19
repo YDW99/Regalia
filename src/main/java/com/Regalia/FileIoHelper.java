@@ -69,7 +69,7 @@ import java.util.TreeMap;
  *
  * 安全设计:
  *   - 写入操作有三重后备：主路径 → 应用私有目录 → 剪贴板
- *   - 读取操作检查 READ_EXTERNAL_STORAGE 权限（Android 5-9）
+ *   - 读取操作检查 READ_EXTERNAL_STORAGE 权限（Android 6-9）
  *   - listFiles 在 Android 11+ 使用 MediaStore 补充查询被 scoped storage 隐藏的文件
  *   - Asset 读取验证路径不含 ".." 防止目录穿越
  */
@@ -182,14 +182,14 @@ public class FileIoHelper {
 
     /**
      * 读取文本文件内容。
-     * v18.6.0: Android 5-9 需要 READ_EXTERNAL_STORAGE 权限。
+     * v18.6.0: Android 6-9 需要 READ_EXTERNAL_STORAGE 权限。
      * Android 10+ scoped storage 下应用私有目录无需权限。
      *
      * @param path 文件路径
      * @return 文件内容字符串，失败返回 null
      */
     public String readTextFile(String path) {
-        // Android 5-9: 检查并请求 READ_EXTERNAL_STORAGE
+        // Android 6-9: 检查并请求 READ_EXTERNAL_STORAGE
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             requestReadExternalStoragePermission();
         }
@@ -215,7 +215,7 @@ public class FileIoHelper {
     }
 
     /**
-     * 请求 READ_EXTERNAL_STORAGE 权限（Android 5-9）。
+     * 请求 READ_EXTERNAL_STORAGE 权限（Android 6-9）。
      *
      * v1.2.1 round-10 (review-E P2): renamed from {@code ensureReadExternalStoragePermission}
      *   to {@code requestReadExternalStoragePermission}. The previous name "ensure"

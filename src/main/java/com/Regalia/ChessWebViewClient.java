@@ -25,6 +25,7 @@ import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
+import android.os.SystemClock;
 import android.util.Log;
 import android.webkit.RenderProcessGoneDetail;
 import android.webkit.WebResourceRequest;
@@ -156,7 +157,13 @@ public class ChessWebViewClient extends WebViewClient {
         //   recreate attempts within a 60-second window; beyond that, we just
         //   destroy the WebView and let the user manually restart the app.
         //   The counter resets after 60 seconds of stability.
-        long now = System.currentTimeMillis();
+        // v1.2.3 round-32: use SystemClock.elapsedRealtime() (monotonic) so the
+        //   60s render-crash backoff window is immune to wall-clock jumps —
+        //   backward jumps would reset the crash counter prematurely; forward
+        //   jumps would extend it indefinitely. Same fix class as round-31
+        //   HapticManager/StabilizationHelper + round-32 EngineHealthMonitor/
+        //   StockfishNative.
+        long now = SystemClock.elapsedRealtime();
         if (now - _lastRenderCrashTime > 60000) {
             // Window expired — reset counter
             _renderCrashCount = 0;

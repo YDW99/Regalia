@@ -1,3 +1,15 @@
+v1.2.3 round-32 (2026.7.20): no changes to top-level src/main/ files.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - AndroidManifest.xml: unchanged. Network security config unchanged.
+    All round-32 changes are in subdirectories (chess.src/, java/com/Regalia/)
+    — see the per-subdirectory README.license entries.
+
+v1.2.3 round-31 (2026.7.20): no changes to top-level src/main/ files.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - AndroidManifest.xml: unchanged. Network security config unchanged.
+    All round-31 changes are in subdirectories (chess.src/, java/com/Regalia/)
+    — see the per-subdirectory README.license entries.
+
 v1.2.3 round-30 (2026.7.19) — First-principles per-file review + robustness/perf optimizations:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
   - AndroidManifest.xml (AGPL v3): No changes this round.

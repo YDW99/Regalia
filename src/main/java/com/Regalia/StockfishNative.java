@@ -44,6 +44,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.util.Log;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
@@ -979,7 +980,7 @@ public class StockfishNative {
                 // "go" is actually sent, the real clock has decreased (by up to
                 // 1s for stopAndWait, up to 5s for ucinewgame+readyok). The engine
                 // then over-allocates search time, searching past the GUI's 0-mark.
-                final long _callTimeMs = System.currentTimeMillis();
+                final long _callTimeMs = SystemClock.elapsedRealtime();
 
                 stopAndWaitForBestmove("engineGoTimed");
 
@@ -1022,7 +1023,7 @@ public class StockfishNative {
                 // stale snapshot. We also add a safety margin (engineMoveOverhead,
                 // default 30ms but user-configurable up to 10s) to avoid the
                 // engine's bestmove arriving AFTER the GUI clock hits 0.
-                long setupElapsedMs = System.currentTimeMillis() - _callTimeMs;
+                long setupElapsedMs = SystemClock.elapsedRealtime() - _callTimeMs;
                 // Clamp setup elapsed to a reasonable bound (cap at 6s — if it
                 // took longer, the engine state is suspect anyway)
                 if (setupElapsedMs > 6000) setupElapsedMs = 6000;
@@ -1868,7 +1869,7 @@ public class StockfishNative {
                 // v1.2.1: stale detection —— inner task 可能被 shutdownNow() 静默
                 //   丢弃（execute() 成功但任务从未运行），导致 _restartInProgress
                 //   永久卡住、未来 recoverEngine 全部早退。超过阈值则强制重置。
-                long stuckMs = System.currentTimeMillis() - _restartStartTimeMs;
+                long stuckMs = SystemClock.elapsedRealtime() - _restartStartTimeMs;
                 if (stuckMs < RESTART_STALE_THRESHOLD_MS) {
                     Log.w(TAG, "Recovery skipped — restart already in progress (" + reason + ")");
                     return;
@@ -1877,11 +1878,11 @@ public class StockfishNative {
                         + "s), forcing reset for new recovery (" + reason + ")");
             }
             _restartInProgress = true;
-            _restartStartTimeMs = System.currentTimeMillis();
+            _restartStartTimeMs = SystemClock.elapsedRealtime();
         }
 
         // Reset recovery count if engine has been stable for a while
-        long timeSinceLastRecovery = System.currentTimeMillis() - _lastRecoveryTimestamp;
+        long timeSinceLastRecovery = SystemClock.elapsedRealtime() - _lastRecoveryTimestamp;
         if (timeSinceLastRecovery > RECOVERY_COUNT_RESET_INTERVAL_MS && _engineHealthMonitor.getRecoveryCount() > 0) {
             Log.i(TAG, "Resetting auto-recovery count (" + _engineHealthMonitor.getRecoveryCount() + ") after " + (timeSinceLastRecovery/1000) + "s of stable operation");
             _engineHealthMonitor.resetRecoveryCount();
@@ -1894,7 +1895,7 @@ public class StockfishNative {
             return;
         }
         _engineHealthMonitor.incrementRecoveryCount();
-        _lastRecoveryTimestamp = System.currentTimeMillis();
+        _lastRecoveryTimestamp = SystemClock.elapsedRealtime();
         final int attemptNum = _engineHealthMonitor.getRecoveryCount();
 
         // CRITICAL FIX: Notify JS that engine is restarting so it can reset stale state.
@@ -2598,8 +2599,8 @@ public class StockfishNative {
             sendUciCommand("setoption name " + safeName + " value " + safeValue);
             sendUciCommand("isready");
             try {
-                long deadline = System.currentTimeMillis() + 3000;
-                while (System.currentTimeMillis() < deadline) {
+                long deadline = SystemClock.elapsedRealtime() + 3000;
+                while (SystemClock.elapsedRealtime() < deadline) {
                     if (latch.await(100, TimeUnit.MILLISECONDS)) {
                         return true;
                     }
@@ -2939,7 +2940,7 @@ public class StockfishNative {
                     //   ZOMBIE_SEARCH_TIMEOUT_MS; ZOMBIE_TIMEOUT_MS was unreachable). Use the
                     //   search timeout directly.
                     if (engineReady && (currentState != STATE_NONE)) {
-                        long timeSinceLastResponse = System.currentTimeMillis() - _engineHealthMonitor.getLastResponseTime();
+                        long timeSinceLastResponse = SystemClock.elapsedRealtime() - _engineHealthMonitor.getLastResponseTime();
                         if (timeSinceLastResponse > ZOMBIE_SEARCH_TIMEOUT_MS) {
                             Log.e(TAG, "Heartbeat: engine zombie detected (no response for " + timeSinceLastResponse + " ms), attempting recovery");
                             // v1.1.0 Phase 58: P0 concurrency fix — use _writerLock instead
@@ -2987,7 +2988,7 @@ public class StockfishNative {
         synchronized (_restartLock) {
             if (_restartInProgress) {
                 // v1.2.1: stale detection —— 与 recoverEngine 保持一致
-                long stuckMs = System.currentTimeMillis() - _restartStartTimeMs;
+                long stuckMs = SystemClock.elapsedRealtime() - _restartStartTimeMs;
                 if (stuckMs < RESTART_STALE_THRESHOLD_MS) {
                     Log.w(TAG, "restartEngine: skipping — restart already in progress");
                     return;
@@ -2995,7 +2996,7 @@ public class StockfishNative {
                 Log.w(TAG, "restartEngine: stale _restartInProgress detected (" + (stuckMs/1000) + "s), forcing reset");
             }
             _restartInProgress = true;
-            _restartStartTimeMs = System.currentTimeMillis();
+            _restartStartTimeMs = SystemClock.elapsedRealtime();
         }
 
         // Ensure executor is available — recreate if shutdown (common after recoverEngine)

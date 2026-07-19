@@ -115,7 +115,7 @@ public class StatsActivity extends Activity {
             Log.w(TAG, "requestWindowFeature failed", e);
         }
         if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) {
-            // FLAG_FULLSCREEN is valid on API 21-29 only; on API 30+ it
+            // FLAG_FULLSCREEN is valid on API 23-29 only; on API 30+ it
             // conflicts with Edge-to-Edge.
             getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
                     WindowManager.LayoutParams.FLAG_FULLSCREEN);
@@ -387,7 +387,7 @@ public class StatsActivity extends Activity {
         // v1.0.4 Rev27: External http(s) URLs are now opened in the system browser
         // (defense-in-depth alongside the JS-side openUrlInBrowser bridge).
         // v1.1.2 PHASE 71 (robustness): Add the deprecated shouldOverrideUrlLoading
-        //   overload (WebView, String) so that on API 21-23 (minSdk=21) external
+        //   overload (WebView, String) so that on API 23 (minSdk=23) external
         //   http(s) URLs are also redirected to the system browser. On those API
         //   levels, only the deprecated overload fires; the new
         //   WebResourceRequest-based overload is API 24+ only. Without this, a
@@ -439,7 +439,7 @@ public class StatsActivity extends Activity {
      * v1.1.2 PHASE 71: Shared URL-override logic for both the API 24+
      * {@link WebViewClient#shouldOverrideUrlLoading(WebView, WebResourceRequest)}
      * and the deprecated {@link WebViewClient#shouldOverrideUrlLoading(WebView, String)}
-     * (which is the only one that fires on API 21-23). Returns {@code true} to
+     * (which is the only one that fires on API 23). Returns {@code true} to
      * block the WebView from loading the URL ourselves; {@code false} to let
      * the WebView proceed (only for our own asset:// URLs).
      */
@@ -470,7 +470,7 @@ public class StatsActivity extends Activity {
     /**
      * v1.0.5 Rev55: Apply immersive mode to hide system bars.
      * Mirrors MainActivity.enableImmersiveMode() — uses platform
-     * WindowInsetsController on API 30+, legacy flags on API 21-29.
+     * WindowInsetsController on API 30+, legacy flags on API 23-29.
      */
     @android.annotation.SuppressLint("NewApi")
     private void _applyImmersiveMode() {

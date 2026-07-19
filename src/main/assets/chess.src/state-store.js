@@ -35,6 +35,18 @@
  *   - 订阅者通过 subscribe(listener) 监听状态变化
  *   - 状态分类: 游戏核心 / 复盘 / 引擎 / UI
  *
+ * v1.2.3 round-32 (partial-migration clarification): the v1.2.0 design
+ *   goal was a full Redux migration, but only ~5 of the 25 registered
+ *   reducers are currently dispatched (SET_LANG, TOGGLE_SOUND, ENTER_REVIEW,
+ *   SETUP_EXIT, PGN_CLEARED). The remaining 20 reducers are registered as
+ *   architectural placeholders for future migration rounds. The bulk of
+ *   game state still lives in module-level globals (gameState, moveRecords,
+ *   stateHistory, redoStack, etc.) in game-logic.js / ui-interactions.js /
+ *   ai-bridge.js. subscribe() / getState() are wired but currently have
+ *   zero external callers — they exist for the future migration. This is
+ *   intentional; do NOT remove the unused reducers without a migration
+ *   plan that moves the corresponding global state into the store.
+ *
  * 使用示例:
  *   const state = Store.getState();
  *   const unsub = Store.subscribe((newState) => { ... });
@@ -231,7 +243,16 @@ const Store = (function() {
         const partial = reducer(_state, payload);
         if (partial && typeof partial === 'object') {
             _state = Object.assign({}, _state, partial);
-            _notifyListeners();
+            // v1.2.3 round-31 (PR52 CodeRabbit perf): compute the snapshot
+            //   ONCE and pass it to _notifyListeners + return it. Previously
+            //   _notifyListeners() deep-cloned _state internally and dispatch()
+            //   then deep-cloned _state again for its return value — two full
+            //   tree walks per dispatch (stateHistory max 200 + moveRecords).
+            //   The snapshot is also passed to listeners, preserving the
+            //   round-30 single-source-of-truth invariant.
+            const snapshot = _deepClone(_state);
+            _notifyListeners(snapshot);
+            return snapshot;
         }
         // v1.2.1: Return deep clone (P0-2)
         return _deepClone(_state);
@@ -269,9 +290,13 @@ const Store = (function() {
      *   and could mutate it directly, bypassing dispatch() and breaking the
      *   single-source-of-truth contract that getState() / dispatch() already
      *   enforce via _deepClone. Consistent with the v1.2.1 P0-1/P0-2 invariant.
+     * v1.2.3 round-31 (PR52 CodeRabbit perf): accept an optional pre-computed
+     *   snapshot so dispatch() / reset() can avoid a redundant second deep
+     *   clone (they already clone for their return value). When called without
+     *   an argument (legacy/internal callers), falls back to cloning _state.
      */
-    function _notifyListeners() {
-        const snapshot = _deepClone(_state);
+    function _notifyListeners(snapshot) {
+        if (snapshot === undefined) snapshot = _deepClone(_state);
         const listeners = _listeners.slice();
         for (let i = 0; i < listeners.length; i++) {
             try {
@@ -291,10 +316,13 @@ const Store = (function() {
      */
     function reset(overrides) {
         _state = Object.assign(_deepClone(_initialState), overrides || {});
-        _notifyListeners();
+        // v1.2.3 round-31 (PR52 CodeRabbit perf): single deep-clone reuse —
+        //   see dispatch() above for the rationale.
+        const snapshot = _deepClone(_state);
+        _notifyListeners(snapshot);
         // v1.2.1 round-9: 返回深拷贝，与 getState()/dispatch() 保持一致。
         // 旧版直接返回 _state 引用，调用者修改返回值会污染内部状态。
-        return _deepClone(_state);
+        return snapshot;
     }
 
     // ========== 注册核心 reducers ==========

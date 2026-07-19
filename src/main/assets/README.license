@@ -1,3 +1,16 @@
+v1.2.3 round-32 (2026.7.20): no changes to src/main/assets/ top-level files.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - chess.html: rebuilt via build-chess.py to pick up the chess.src/
+    module changes (see chess.src/README.license).
+  - stats.html: unchanged. AGPLv3_Logo.svg / GPLv3_Logo.svg: unchanged.
+
+v1.2.3 round-31 (2026.7.20): no changes to src/main/assets/ top-level files.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - chess.html: rebuilt via build-chess.py to pick up the chess.src/
+    module changes (see chess.src/README.license).
+  - stats.html: unchanged. AGPLv3_Logo.svg / GPLv3_Logo.svg: unchanged.
+  - chess.src/ module changes documented in chess.src/README.license.
+
 v1.2.3 round-30 (2026.7.19) — First-principles per-file review + robustness/perf optimizations:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
   - chess.html (AGPL v3): Rebuilt from chess.src/ via build-chess.py after
