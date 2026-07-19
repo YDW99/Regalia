@@ -90,6 +90,10 @@ public class StatsActivity extends Activity {
     //   runOnUiThread). Without volatile the main thread could see a stale
     //   null and skip the export, or see a stale non-null and export twice.
     private volatile String pendingExportHTML;
+    // v1.2.3 round-30 (redundant): lazily-initialized HapticManager for the
+    //   stats page's performHaptic @JavascriptInterface. Volatile for the
+    //   same cross-thread reason as pendingExportHTML.
+    private volatile HapticManager _statsHapticManager = null;
     // v1.0.4 Rev28: The PGN text imported on the stats page (via 🗃️ Paste PGN or
     // 📂 Select PGN File). When the user returns to the main activity, if this is
     // non-null, MainActivity prompts "🗃️ Import PGN to game?" Yes/No/Cancel.
@@ -219,34 +223,25 @@ public class StatsActivity extends Activity {
             // vibrate(long) on newer APIs).
             @JavascriptInterface
             public void performHaptic(String type) {
+                // v1.2.3 round-30 (redundant): delegate to HapticManager.
+                //   Previously this method reimplemented the haptic-enabled
+                //   check + VibrationEffect fallback chain inline, duplicating
+                //   HapticManager's logic. The duplication created two sources
+                //   of truth that could diverge (e.g. round-30's 5s setting
+                //   cache would have needed to be applied in both places).
+                //   The stats page only uses BUTTON_PRESS-style feedback, so
+                //   the single 20ms pulse is sufficient. We delegate to
+                //   HapticManager.performHaptic, which handles the gating +
+                //   vibrator lookup + API-level dispatch centrally.
                 try {
-                    // Check user preference (same prefs file as StockfishNative)
-                    android.content.SharedPreferences prefs =
-                            getSharedPreferences("RegaliaEngine", MODE_PRIVATE);
-                    boolean appEnabled = prefs.getBoolean("hapticFeedbackEnabled", true);
-                    boolean systemEnabled = android.provider.Settings.System.getInt(
-                            getContentResolver(),
-                            android.provider.Settings.System.HAPTIC_FEEDBACK_ENABLED, 1) != 0;
-                    if (!appEnabled || !systemEnabled) return;
-
-                    android.os.Vibrator v = (android.os.Vibrator) getSystemService(VIBRATOR_SERVICE);
-                    if (v == null || !v.hasVibrator()) return;
-
-                    // Use VibrationEffect on API 26+ for consistency with StockfishNative.
-                    // Stats page only uses BUTTON_PRESS-style feedback, so a single
-                    // short pulse is sufficient — we don't need the rich per-type
-                    // patterns that the main app uses.
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                        try {
-                            v.vibrate(android.os.VibrationEffect.createOneShot(
-                                    20, android.os.VibrationEffect.DEFAULT_AMPLITUDE));
-                        } catch (Throwable e) {
-                            // Fallback: deprecated vibrate(long)
-                            v.vibrate(20);
-                        }
-                    } else {
-                        v.vibrate(20);
+                    if (_statsHapticManager == null) {
+                        _statsHapticManager = new HapticManager(
+                            StatsActivity.this,
+                            getSharedPreferences("RegaliaEngine", MODE_PRIVATE),
+                            new android.os.Handler(android.os.Looper.getMainLooper())
+                        );
                     }
+                    _statsHapticManager.performHaptic(type);
                 } catch (Throwable e) {
                     Log.w(TAG, "performHaptic failed", e);
                 }
@@ -320,6 +315,14 @@ public class StatsActivity extends Activity {
             // v1.0.3: Load an asset file as base64 — used for GPL v3 logo in export dialog
             @JavascriptInterface
             public String loadAssetAsBase64(String assetPath) {
+                // v1.2.3 round-30 (robustness): path-traversal check, mirroring
+                //   FileIoHelper.loadAssetAsBase64 (line 481). AssetManager.open
+                //   itself rejects ".." traversal, but the explicit guard is
+                //   defense-in-depth and matches the parallel implementation.
+                if (assetPath == null || assetPath.isEmpty() || assetPath.contains("..")) {
+                    Log.w(TAG, "loadAssetAsBase64: blocked path traversal: " + assetPath);
+                    return null;
+                }
                 // v1.0.5 Rev61: try-with-resources guarantees InputStream is closed
                 // even if baos.write throws (e.g. OOM on a huge asset).
                 try (java.io.InputStream is = getAssets().open(assetPath)) {

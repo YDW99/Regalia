@@ -414,6 +414,10 @@ let scannedEngines=[];
 let _pendingSwitchPath=null;
 // Cached multiPV setting from engine config — avoids JNI call per progress tick
 let _cachedMultiPV=1;
+// v1.2.3 round-30 (robustness): generation token for onSettingsImported's
+//   safety-net setTimeout closures. Incremented on each new import so any
+//   pending closures from a previous import become no-ops.
+let _settingsImportGen=0;
 
 // ===================== HAPTIC FEEDBACK MANAGER =====================
 // 5-level compatibility degradation chain for haptic feedback
@@ -503,7 +507,11 @@ const HapticManager = (function() {
   // Initialize on creation
   _init();
 
-  return { fire, refreshSettings, _init };
+  // v1.2.3 round-30 (redundant): removed `_init` from the exported API.
+  //   It was only ever called once internally (above) and no external
+  //   caller invoked HapticManager._init(). Keeping it exposed created dead
+  //   API surface and a maintenance trap.
+  return { fire, refreshSettings };
 })();
 
 // Stale eval detection: incremented by _resetEvalState() when game state changes,
@@ -524,6 +532,10 @@ let _evalRequestReviewMode=false;
 let _evalSafetyTimerId=null;
 
 let _toastTimer=0;
+// v1.2.3 round-30 (perf): track the inner 300ms removal timer so rapid
+//   showToast() calls don't leave orphaned timers that fire on already-
+//   detached toast nodes (harmless but wasteful).
+let _toastRemoveTimer=0;
 // v1.0.8 PHASE 22 supplement: Smart toast sound — auto-detect success/error
 //   from the message's i18n key pattern and play a matching sound.
 //   - "已复制/已导出/已保存/copied/exported/saved" → playCopy (清脆叮声)
@@ -552,7 +564,28 @@ function _playToastSound(msg){
 }
 function showToast(msg,duration=2500){
   _playToastSound(msg);
-  const old=document.getElementById('_toast');if(old)old.remove();if(_toastTimer)clearTimeout(_toastTimer);const t=document.createElement('div');t.id='_toast';t.style.cssText='position:fixed;bottom:60px;left:50%;transform:translateX(-50%);background:var(--overlay-card-bg);color:var(--text);padding:10px 24px;border-radius:6px;font-size:.85rem;z-index:10000;border:1px solid var(--border2);box-shadow:var(--panel-shadow);pointer-events:none;opacity:0;transition:opacity .3s;font-family:system-ui,-apple-system,sans-serif';t.textContent=msg;document.body.appendChild(t);requestAnimationFrame(()=>{t.style.opacity='1'});_toastTimer=setTimeout(()=>{t.style.opacity='0';setTimeout(()=>t.remove(),300)},duration)}
+  const old=document.getElementById('_toast');
+  if(old)old.remove();
+  if(_toastTimer)clearTimeout(_toastTimer);
+  // v1.2.3 round-30 (perf): clear the inner removal timer too — without this,
+  //   a rapid second showToast() leaves the first toast's 300ms removal timer
+  //   armed, which fires on the (already-removed) first toast node.
+  if(_toastRemoveTimer)clearTimeout(_toastRemoveTimer);
+  const t=document.createElement('div');
+  t.id='_toast';
+  t.style.cssText='position:fixed;bottom:60px;left:50%;transform:translateX(-50%);background:var(--overlay-card-bg);color:var(--text);padding:10px 24px;border-radius:6px;font-size:.85rem;z-index:10000;border:1px solid var(--border2);box-shadow:var(--panel-shadow);pointer-events:none;opacity:0;transition:opacity .3s;font-family:system-ui,-apple-system,sans-serif';
+  t.textContent=msg;
+  document.body.appendChild(t);
+  requestAnimationFrame(()=>{t.style.opacity='1'});
+  _toastTimer=setTimeout(()=>{
+    t.style.opacity='0';
+    _toastRemoveTimer=setTimeout(()=>{
+      t.remove();
+      _toastRemoveTimer=0;
+    },300);
+    _toastTimer=0;
+  },duration);
+}
 
 // Update the foreground service notification with engine process info.
 // This prevents the OS from killing the engine process on aggressive
@@ -768,7 +801,14 @@ let _emergencyFallbackTimerId=setTimeout(function(){
 
 // Layer 4: Click to skip — allow user to dismiss loading screen manually
 (function _makeLoadingClickable(){
+  // v1.2.3 round-30 (robustness): cap polling at 25 iterations (5s). If the
+  //   loading overlay never appears (e.g. _showLoadingOverlay threw and the
+  //   overlay div was never appended), the interval would otherwise leak
+  //   forever. After 5s, clear the interval regardless.
+  let _ticks=0;
+  const MAX_TICKS=25;
   const loCheck=setInterval(()=>{
+    _ticks++;
     const lo=document.getElementById('_loadingOverlay');
     if(lo){
       clearInterval(loCheck);
@@ -785,6 +825,8 @@ let _emergencyFallbackTimerId=setTimeout(function(){
           if(_emergencyFallbackTimerId){clearTimeout(_emergencyFallbackTimerId);_emergencyFallbackTimerId=null;}
         }
       });
+    }else if(_ticks>=MAX_TICKS){
+      clearInterval(loCheck);
     }
   },200);
 })();
@@ -1339,8 +1381,10 @@ function _buildPGNString(forceIncludeVariations, includeAnnotations){
         // v1.2.3 round-25 (S3358): nested ternary flattened to helper.
         //   cur.mate>0 → +90000 (White mates), cur.mate<0 → -90000 (Black mates),
         //   no mate → use cur.eval directly.
-        const curEv=cur.mate!=null?(cur.mate>0?90000:-90000):cur.eval;
-        const prevEv=prev.mate!=null?(prev.mate>0?90000:-90000):prev.eval;
+        // v1.2.3 round-29 (PR52 S3358): extract _evalOrMate helper to flatten
+        //   the previously-nested ternary `mate!=null?(mate>0?90000:-90000):eval`.
+        const curEv=_evalOrMate(cur.mate,cur.eval);
+        const prevEv=_evalOrMate(prev.mate,prev.eval);
         const delta=curEv-prevEv;
         const isW=(color==='white');
         const md=isW?delta:-delta;
@@ -1898,7 +1942,10 @@ function _uciToSimple(uci){
   const toRank=String(8-toRow);
   // Try to determine piece type from current game state
   let pieceType='pawn';
-  if(gameState?.board&&gameState.board[fromRow]){
+  // v1.2.3 round-29 (PR52 S6582): collapse `gameState?.board && gameState.board[fromRow]`
+  //   into the equivalent `gameState?.board?.[fromRow]` — same semantics, one
+  //   fewer property access, no `&&` short-circuit noise.
+  if(gameState?.board?.[fromRow]){
     const p=gameState.board[fromRow][fromCol];
     if(p)pieceType=p.type;
   }
@@ -1926,7 +1973,8 @@ function _uciToSimple(uci){
   // king (right of king → kingside O-O; left → queenside O-O-O).
   if(pieceType==='king'){
     // v1.0.7 PHASE 4: Check for UCI_Chess960 king-captures-rook format first.
-    if(gameState?.board&&gameState.board[fromRow]&&gameState.board[toRow]){
+    // v1.2.3 round-29 (PR52 S6582): collapse `gameState?.board && ...` chain.
+    if(gameState?.board?.[fromRow]&&gameState.board[toRow]){
       const _fp=gameState.board[fromRow][fromCol];
       const _tp=gameState.board[toRow][toCol];
       if(_fp?.type==='king'&&_tp?.type==='rook'&&_fp.color===_tp.color&&fromRow===toRow){
@@ -2314,7 +2362,8 @@ function uciToCoords(uci){
   // engine (with UCI_Chess960=false) sends "e1g1", which does NOT match
   // (g1 doesn't hold a rook), so we don't rewrite. The rewrite only happens
   // when the engine actually uses the Chess960 castling notation.
-  if(gameState?.board&&gameState.board[fr]&&gameState.board[tr]){
+  // v1.2.3 round-29 (PR52 S6582): collapse `gameState?.board && ...` chain.
+  if(gameState?.board?.[fr]&&gameState.board[tr]){
     const fromPiece=gameState.board[fr][fc];
     const toPiece=gameState.board[tr][tc];
     if(fromPiece?.type==='king'&&toPiece?.type==='rook'&&fromPiece.color===toPiece.color&&fr===tr){
@@ -3514,15 +3563,15 @@ function onSettingsImported(result){
       // Set state, remove dialog from DOM directly, then render.
       showEngineConfig=false;
       // Force-remove any open dialog overlay from the DOM
-      var dov=document.querySelector('.dov[role="dialog"]');
+      const dov=document.querySelector('.dov[role="dialog"]');
       if(dov){dov.remove();}
       // Also remove any file-browser overlay that might still be open
-      var fb=document.getElementById('_fileBrowserOverlay');
+      const fb=document.getElementById('_fileBrowserOverlay');
       if(fb){fb.remove();}
       // Refresh cached data
       if(typeof AndroidBridge!=='undefined'){
-        try{var info=AndroidBridge.getEngineInfo();if(info)engineConfigData=JSON.parse(info);}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
-        try{var s=AndroidBridge.getEngineSettings();if(s)engineSettingsData=JSON.parse(s);}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
+        try{const info=AndroidBridge.getEngineInfo();if(info)engineConfigData=JSON.parse(info);}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
+        try{const s=AndroidBridge.getEngineSettings();if(s)engineSettingsData=JSON.parse(s);}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
       }
       if(engineSettingsData){
         _cachedMultiPV=engineSettingsData.multiPV||1;
@@ -3534,14 +3583,22 @@ function onSettingsImported(result){
         render();
       }
       // v1.0.3: Safety net — force close again after 100ms AND 300ms to handle
-      // late-arriving onEngineInfo callbacks that might re-render the dialog.
+      //   late-arriving onEngineInfo callbacks that might re-render the dialog.
+      // v1.2.3 round-30 (robustness): use a generation token so a NEW
+      //   onSettingsImported call (or any user action that opens another
+      //   dialog) invalidates the pending safety-net closures — otherwise
+      //   they would clobber a dialog the user just opened within 300ms.
+      _settingsImportGen=(_settingsImportGen|0)+1;
+      const myGen=_settingsImportGen;
       setTimeout(function(){
+        if(myGen!==_settingsImportGen)return;
         showEngineConfig=false;
         var dov2=document.querySelector('.dov[role="dialog"]');
         if(dov2){dov2.remove();}
         render();
       },100);
       setTimeout(function(){
+        if(myGen!==_settingsImportGen)return;
         showEngineConfig=false;
         var dov3=document.querySelector('.dov[role="dialog"]');
         if(dov3){dov3.remove();}
@@ -4462,11 +4519,15 @@ function _requestBatchEval(step){
       _reviewAnalyzeResetSafetyTimer();
     }
   }else{
-    // Engine not ready — advance to next step (the batch will resume when
-    // engine becomes ready via onEngineReady)
-    if(typeof _reviewAnalyzeAdvance==='function'){
-      setTimeout(function(){try{_reviewAnalyzeAdvance();}catch(_e){}},100);
-    }
+    // Engine not ready — DO NOT schedule an immediate retry. The previous
+    //   logic called setTimeout(_reviewAnalyzeAdvance, 100) here, which
+    //   re-entered _requestBatchEval → same not-ready branch → another
+    //   100ms timer, spinning every 100ms for 60s+ doing nothing.
+    //   The engine's onEngineReady callback (line 2440) already has logic
+    //   to resume the batch when the engine becomes ready, so we just
+    //   leave the batch paused and let that callback pick it up.
+    // v1.2.3 round-30 (robustness): removed the spinning-retry timer.
+    console.log('[AIBridge] Batch eval paused — engine not ready. Will resume on onEngineReady.');
   }
 }
 
@@ -4544,6 +4605,15 @@ function _updateReviewEvalUI(){
   }
   // P4 SIMPLIFY: Use shared helper for consistent eval display formatting
   el.innerHTML=_buildEvalHTML(e,{delta:deltaStr});
+}
+// v1.2.3 round-29 (PR52 S3358): extract the "mate-or-eval" selection so callers
+//   don't write nested ternaries. Returns a numeric eval score (centipawns,
+//   White-POV): mate>0 → +90000, mate<0 → -90000, no mate → fallback eval.
+//   The ±90000 sentinel is what _formatEvalDelta and the trend-chart shading
+//   already use to detect mate transitions.
+function _evalOrMate(mate,fallbackEval){
+  if(mate==null)return fallbackEval;
+  return mate>0?90000:-90000;
 }
 // Format eval delta between two eval values (centipawns, White's perspective).
 // Consolidates mate-transition handling and threshold logic in one place.

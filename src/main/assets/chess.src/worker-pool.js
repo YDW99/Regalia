@@ -287,7 +287,11 @@ function _createWorker() {
       for (const [tid, task] of toReject) {
         _pendingTasks.delete(tid);
         if (task.timeout) { clearTimeout(task.timeout); task.timeout = null; }
-        task.reject(new Error('Worker crashed: ' + (e?.message || e)));
+        // v1.2.3 round-29 (PR52 S6551): use String(e) instead of bare `e` so
+        //   ErrorEvent / Event objects stringify meaningfully instead of
+        //   "[object Object]". When e is a string (legacy onerror contract)
+        //   String(e) returns it unchanged.
+        task.reject(new Error('Worker crashed: ' + (e?.message || String(e))));
       }
       w._busy = false;
       _removeWorker(w);

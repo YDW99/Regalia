@@ -303,23 +303,30 @@ function _onGameClockExpired(color){
   }catch(e){console.warn('engineStop on clock expiry failed:',e);}
   // Game over: the OTHER side wins by time — UNLESS the OTHER side has
   //   insufficient material to checkmate (FIDE 6.9). In that case the game
-  //   is drawn, not won. v1.2.3 round-25 (feature gap): previously a player
-  //   could "win" on time against a lone king (K vs K) or K+B/K+N —
-  //   positions where checkmate is impossible by any sequence of legal
-  //   moves. Now: if the winner's side is a dead position, declare a draw
-  //   by insufficient material instead.
+  //   is drawn, not won. v1.2.3 round-25 introduced this check but used the
+  //   symmetric isDeadPosition() (FIDE 5.2.2 — both sides lack material),
+  //   which misses the asymmetric case (winner has only K, K+N, K+B, or
+  //   K+N+N → cannot mate the loser). v1.2.3 round-29 (PR52) replaces it
+  //   with winnerLacksMatingMaterial(state, winner) which checks the
+  //   WINNER's mating ability specifically. We still fall back to
+  //   isDeadPosition for the symmetric case (e.g. K vs K) so the existing
+  //   FIDE 5.2.2 path stays intact.
   const winner=color==='white'?'black':'white';
   let _isDrawByInsufficientMaterial=false;
   try{
-    if(typeof isDeadPosition==='function'&&gameState){
-      // v1.2.3 round-25 (FIDE 6.9): isDeadPosition checks whether checkmate
-      //   is possible by ANY sequence of legal moves (not necessarily forced).
-      //   FIDE 6.9: if the winner cannot checkmate, the game is drawn.
-      //   isDeadPosition returns true exactly when checkmate is impossible,
-      //   which is the correct condition for the timeout draw.
-      _isDrawByInsufficientMaterial=isDeadPosition(gameState);
+    if(gameState){
+      // FIDE 6.9: if the WINNER cannot checkmate the LOSER by any series of
+      //   legal moves, the game is drawn (not won on time).
+      if(typeof winnerLacksMatingMaterial==='function'
+         && winnerLacksMatingMaterial(gameState,winner)){
+        _isDrawByInsufficientMaterial=true;
+      }else if(typeof isDeadPosition==='function'&&isDeadPosition(gameState)){
+        // FIDE 5.2.2 fallback: whole position is dead (both sides lack
+        //   material). This subsumes K vs K and the rare mutual case.
+        _isDrawByInsufficientMaterial=true;
+      }
     }
-  }catch(e){console.warn('isDeadPosition check on timeout failed:',e);}
+  }catch(e){console.warn('insufficient-material check on timeout failed:',e);}
   if(_isDrawByInsufficientMaterial){
     if(typeof _timeoutWinnerColor!=='undefined')_timeoutWinnerColor=null;
     _gameOverStatusKey='draw_insufficient';

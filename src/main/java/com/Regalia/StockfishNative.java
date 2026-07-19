@@ -164,7 +164,11 @@ public class StockfishNative {
     private final FileIoHelper _fileIoHelper;
     private final PermissionHelper _permissionHelper;
     // v1.2.3 (God Class round-17): haptic feedback manager, extracted from this class.
-    private HapticManager _hapticManager;
+    // v1.2.3 round-29 (PR52): declared `final` for safe-publication across the
+    //   JS binder thread (consistent with _pgnCacheManager / _jsBridgeGateway /
+    //   _engineConfigHelper / _safPickerHelper). Assigned exactly once in the
+    //   constructor and never reassigned.
+    private final HapticManager _hapticManager;
     private final SafPickerHelper _safPickerHelper;
     private final EngineSettingsHelper _engineSettingsHelper;
     // v1.2.0 Phase 81: Engine config helper — extracted from StockfishNative to reduce God Module size.
@@ -750,6 +754,13 @@ public class StockfishNative {
     @JavascriptInterface
     public void engineGoDepth(final String fen, final int depth) {
         // v1.0.2 FIX (audit): use _safeExecute to catch RejectedExecutionException
+        // v1.2.3 round-30 (robustness): clamp depth to [1, MAX_REASONABLE_DEPTH]
+        //   before sending to the engine. A JS bug passing depth=0 would cause
+        //   the engine to return instantly with a poor move; depth>60 would
+        //   cause an hours-long search. The MAX_REASONABLE_DEPTH constant (60)
+        //   was previously only used for filtering info lines, not for
+        //   clamping the go command.
+        final int safeDepth = Math.max(1, Math.min(MAX_REASONABLE_DEPTH, depth));
         _safeExecute(new Runnable() { // tag: engineGoDepth
             public void run() {
                 if (!engineReady) {
@@ -765,14 +776,14 @@ public class StockfishNative {
                 _storedEvalMate = null;
                 _lastEvalDepth = 0; _lastEvalSeldepth = 0; // v1.0.4 Rev33: reset seldepth too
                 _storedWdlW = -1; _storedWdlD = -1; _storedWdlL = -1;
-                _evalDepthLimit = depth;
+                _evalDepthLimit = safeDepth;
                 forceFullStrength();
                 // v1.0.5 Rev55: Apply eval-mode options for objective analysis.
                 // Without this, deep eval used gameplay Contempt=24 (biased)
                 // and the user's MultiPV (possibly >1, reducing depth).
                 applyEvalModeOptions();
                 sendUciCommand("position fen " + fen);
-                sendUciCommand("go depth " + depth);
+                sendUciCommand("go depth " + safeDepth);
             }
         }, "engineGoDepth");
     }

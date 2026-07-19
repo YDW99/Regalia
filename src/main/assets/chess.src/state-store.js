@@ -264,9 +264,14 @@ const Store = (function() {
 
     /**
      * 通知所有订阅者
+     * v1.2.3 round-30 (robustness): deep-clone the state snapshot handed to
+     *   listeners — without this, listeners received the LIVE _state reference
+     *   and could mutate it directly, bypassing dispatch() and breaking the
+     *   single-source-of-truth contract that getState() / dispatch() already
+     *   enforce via _deepClone. Consistent with the v1.2.1 P0-1/P0-2 invariant.
      */
     function _notifyListeners() {
-        const snapshot = _state;
+        const snapshot = _deepClone(_state);
         const listeners = _listeners.slice();
         for (let i = 0; i < listeners.length; i++) {
             try {

@@ -72,8 +72,9 @@ function _snapshotClocks(){
 // Restore clocks from a snapshot, rebasing lastMoveTimestamp to Date.now()
 //   so the resumed clock doesn't immediately deduct the elapsed wall-clock
 //   time between snapshot and restore. Also clears gameClockExpired and
-//   restarts the tick interval (initGameClocks is idempotent — it clears
-//   any prior interval before starting a new one).
+//   restarts the tick interval (we clear any prior interval before starting
+//   a new one — see the round-29 PR52 fix note inside the function body for
+//   why we no longer delegate to initGameClocks).
 function _restoreClocks(snap){
   if(!snap){
     // No snapshot (pre-round-23 history entry or no clock game) — leave
@@ -97,9 +98,14 @@ function _restoreClocks(snap){
   gameClocks.black.lastMoveTimestamp=now;
   // Clear any prior timeout state so the resumed clock can tick afresh.
   if(typeof gameClockExpired!=='undefined')gameClockExpired=null;
-  // Restart ONLY the tick interval — do NOT call initGameClocks(), which
-  // rebuilds gameClocks from dlgTimeControl and would clobber the values
-  // just restored above (remainingSec/displayRemainingSec reset to base).
+  // Restart the tick interval if the clock UI is active (gameClockTimerId
+  // is owned by ui-gameflow.js). typeof guard — round-11 cross-module safety.
+  // v1.2.3 round-29 (PR52): we used to call initGameClocks() here, but that
+  //   rebuilds gameClocks from dlgTimeControl.baseSec — overwriting the
+  //   restored remainingSec / displayRemainingSec values from the snapshot.
+  //   This broke Undo/Redo clock restoration. Now we only restart the tick
+  //   interval (setInterval(_tickGameClock, 200)) without touching the
+  //   clock values. Matches initGameClocks's interval setup exactly.
   if(typeof gameClockTimerId!=='undefined'){
     if(gameClockTimerId){clearInterval(gameClockTimerId);gameClockTimerId=null;}
     if(typeof _tickGameClock==='function'&&!gameOver){
@@ -385,7 +391,7 @@ const ANIMATION_DEFER_MS=600;
 //   that delays the AI's reply and the game-over check for no reason.
 //   Reduce to 30ms (one frame + tiny buffer) under reduced-motion.
 let _deferMs=ANIMATION_DEFER_MS;
-try{if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches)_deferMs=30;}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+try{if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches)_deferMs=30;}catch(e){console.warn('[UI]',e?.message??e);}
 const _hashAtSched=gameState.hash;
 setTimeout(()=>{
 try{
@@ -1215,11 +1221,21 @@ function _savePGNYes(){
     // Wait for the annotation dialog to be dismissed before executing cb.
     // Poll every 200ms; if dialog is not active (never opened or dismissed),
     // execute immediately.
+    // v1.2.3 round-30 (robustness): cap at 50 iterations (10s). If the
+    //   dialog flag is never cleared (e.g. dismiss callback fails to fire),
+    //   execute cb anyway and reset _skipPGNSavePrompt — prevents an
+    //   unbounded polling loop that leaks memory across the session.
+    let _polls=0;
+    const MAX_POLLS=50;
     function _waitForDialog(){
-      if(typeof _pgnExportDialogActive!=='undefined'&&_pgnExportDialogActive){
+      if(typeof _pgnExportDialogActive!=='undefined'&&_pgnExportDialogActive&&_polls<MAX_POLLS){
+        _polls++;
         setTimeout(_waitForDialog,200);
       }else{
-        cb();
+        if(_polls>=MAX_POLLS){
+          console.warn('[UI] _savePGNYes: gave up waiting for PGN export dialog after 10s — proceeding with pending action.');
+        }
+        try{cb();}catch(e){console.warn('[UI] pending action after PGN save failed:',e?.message??e);}
         _skipPGNSavePrompt=false;
       }
     }

@@ -20,6 +20,130 @@ The original NOTICE files from third-party projects are preserved alongside this
 - AUTHORS-stockfish: Stockfish project authors list
 
 ===== LICENSE CLASSIFICATION BY FILE ==========================================
+v1.2.3 round-30 (2026.7.19) — First-principles per-file review + robustness/perf optimizations:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - game-logic.js (GPL v3): winnerLacksMatingMaterial now tracks winner's
+    bishop square-color parity and returns true for K+B+B same-color (both
+    bishops on light or both on dark squares, no knight) — a position where
+    mate cannot be forced. The previous code (round-29) missed this case.
+    11 unit-test scenarios pass.
+  - state-store.js (GPL v3): _notifyListeners now passes a deep-clone of
+    _state to each listener (was passing the live reference, breaking the
+    single-source-of-truth contract that getState()/dispatch() enforce).
+  - ui.js (GPL v3): _updateCtrlInfoPanel uses getElementById('ctrl-info-card')
+    instead of querySelectorAll('.card') + text-scan (O(1) vs O(cards) on
+    every hover). Removed dead lastRenderRequest state (leftover from
+    round-20's DIRTY_* removal). Removed _cachedCtrlCard cache.
+  - ui-interactions.js (GPL v3): _savePGNYes polling capped at 50 iterations
+    (10s) — prevents unbounded polling if the dismiss callback fails to fire.
+  - ai-bridge.js (GPL v3): _makeLoadingClickable polling capped at 25
+    iterations (5s). onSettingsImported safety-net setTimeouts use a
+    generation token (_settingsImportGen) so a new import invalidates pending
+    closures. _requestBatchEval not-ready branch no longer schedules a
+    spinning 100ms retry (relies on onEngineReady to resume the batch).
+    showToast tracks the inner 300ms removal timer in _toastRemoveTimer (was
+    orphaned on rapid showToast calls). Removed HapticManager._init from
+    the exported API (was only called once internally).
+  - tablebase.js (GPL v3): _tbCache LRU refresh collapsed from has()+get()+
+    delete()+set() to get()+nullish+delete()+set() (saves one Map lookup).
+    Brace-comment loop pre-checks includes('{') to skip 10 regex passes on
+    comment-free PGNs.
+  - StockfishNative.java (GPL v3): engineGoDepth now clamps depth to
+    [1, MAX_REASONABLE_DEPTH] (60) before sending "go depth N" — protects
+    against JS bugs passing 0 or extreme values.
+  - HapticManager.java (GPL v3): isHapticEnabled now caches the system-side
+    Settings.System.HAPTIC_FEEDBACK_ENABLED setting for 5s (was a Binder IPC
+    on every haptic call). Two new volatile fields (_systemHapticCached,
+    _systemHapticCacheTs).
+  - MainActivity.java (AGPL v3): stabilizationHelper/stabilizationEnabled
+    declared volatile (cross-thread visibility — JS binder thread + main
+    thread). scheduleInitRetry now calls showFallbackUI after all 3 retries
+    are exhausted (previously silent failure).
+  - StatsActivity.java (GPL v3): performHaptic now delegates to a lazily-
+    initialized HapticManager instance (instead of reimplementing the gating
+    + VibrationEffect fallback chain inline). New volatile HapticManager
+    _statsHapticManager field. loadAssetAsBase64 now has the same ".."
+    path-traversal check as FileIoHelper.loadAssetAsBase64 (defense-in-depth).
+  - EngineConfigHelper.java (GPL v3): detectBigCoreCount now correctly
+    handles ARM64 kernels that emit both "CPU max MHz" and "BogoMIPS" —
+    "CPU max MHz" (authoritative) always wins; "BogoMIPS" (rough proxy) only
+    fills in when no MHz reading was seen.
+  - FileIoHelper.java (GPL v3): addMediaStoreResults now escapes SQL LIKE
+    wildcards (_, %, \\) in directory paths and adds ESCAPE '\\' clause
+    to both LIKE expressions.
+  - PgnCacheManager.java (GPL v3): sanitizeName now uses two pre-compiled
+    static final Pattern instances (was recompiling regex on every call).
+    New import java.util.regex.Pattern.
+  - chess.html (AGPL v3): Rebuilt (22,951 lines / 1,382,039 bytes).
+  - All other files: license classification unchanged.
+
+v1.2.3 round-29 (2026.7.19) — PR52 SonarCloud + CodeRabbit review fixes:
+  - `game-logic.js` (GPL v3): NEW function `winnerLacksMatingMaterial(s, winner)`
+    for FIDE 6.9 timeout-draw (checks WINNER's mating ability, not the symmetric
+    dead-position check). `isDeadPosition` retained as FIDE 5.2.2 fallback.
+    S6582: `_st?.board && _st.board[mv.to.row] ? ...` collapsed to
+    `_st?.board?.[mv.to.row]?.[mv.to.col] ?? null`.
+  - `ui-gameflow.js` (GPL v3): `_onGameClockExpired` now uses
+    `winnerLacksMatingMaterial(gameState, winner)` as the primary FIDE 6.9
+    check, with `isDeadPosition(gameState)` as the symmetric fallback (covers
+    K vs K). Old code wrongly used isDeadPosition alone, missing the asymmetric
+    case (winner has K, K+N, K+B, or K+2N → cannot mate).
+  - `ui-interactions.js` (GPL v3): `_restoreClocks` no longer calls
+    `initGameClocks()` (which would rebuild gameClocks from baseSec, overwriting
+    the just-restored remainingSec/displayRemainingSec values from the snapshot).
+    Now only restarts the tick interval via `setInterval(_tickGameClock, 200)`.
+    Fixes Undo/Redo clock restoration regression (PR52 CodeRabbit finding).
+    S6582: `e?.message ? e.message : e` collapsed to `e?.message ?? e`.
+  - `ai-bridge.js` (GPL v3): S3358 nested ternary `mate!=null?(mate>0?90000:-90000):eval`
+    extracted to helper `_evalOrMate(mate, fallbackEval)`. S6582: three
+    `gameState?.board && gameState.board[...]` chains collapsed to
+    `gameState?.board?.[...]`. S3504: three `var` declarations (dov, fb, info, s)
+    changed to `const` (scoped to their try-blocks).
+  - `tablebase.js` (GPL v3): S8786 PGN tag regex replaced with canonical form
+    `/\[\s*[A-Za-z]\w*\s+"(?:[^"\\]|\\.)*"\s*\]/g` (matches pgn-standard.js:696).
+    Eliminates alternation-induced polynomial backtracking. S6582:
+    `(parsedMove?.move && parsedMove.move.promotion) || null` collapsed to
+    `parsedMove?.move?.promotion || null`.
+  - `worker-pool.js` (GPL v3): S6551 `e?.message || e` changed to
+    `e?.message || String(e)` so ErrorEvent objects stringify meaningfully
+    instead of "[object Object]".
+  - `ui.js` (GPL v3): S1481 removed dead local `_isLandscapeReview` (declared
+    but never consumed after round-12 unified portrait/landscape DOM skeleton).
+  - `stats.html` (GPL v3): S8786 four PGN tag-strip regex sites (L698, L713,
+    L1518, L1558) replaced with canonical form (same as tablebase.js above).
+    S7780+S7781: `JSON.stringify(s).replace(/</g, '\\u003c')` changed to
+    `JSON.stringify(s).replaceAll('<', String.raw\`\u003c\`)` (clearer intent,
+    no global-regex form).
+  - `StockfishNative.java` (GPL v3): `_hapticManager` field declared `final`
+    (safe-publication across JS binder thread; consistent with all other
+    manager fields).
+  - `HapticManager.java` (GPL v3): S3358 nested ternary
+    `a < 0 ? 0 : (a > 255 ? 255 : a)` replaced with `Math.max(0, Math.min(255, a))`
+    (clearer clamp intent).
+  - `chess.html` (AGPL v3): Rebuilt (22,854 lines / 1,377,004 bytes).
+  - `README.md` (AGPL v3): Removed public signing-key credentials (alias,
+    password, backup path) from round-13 release notes. Keystore credentials
+    are now documented as loaded from `keystore.properties` (gitignored).
+  - `src/main/README.license` (AGPL v3): Removed `ACCESS_NETWORK_STATE` from
+    AndroidManifest permission list (was removed from manifest in round-18
+    but the doc summary was not synced).
+  - `Manual/Regalia-v1.2.3-manual-{zh,en}.html` (AGPL v3): PGN Cache Manager
+    section's toolbar order description now mentions the 💾 (Export PGN to
+    file) button between 📝 PGN and 📚, matching the mockup.
+  - `src/main/res/README.license` (AGPL v3): xml/ summary for backup_rules.xml
+    and data_extraction_rules.xml updated to note they are NOT currently
+    referenced by AndroidManifest (allowBackup="false" makes them dead config).
+  - `worklog.md` (AGPL v3): round-23 PDF reference count corrected (4 → 6,
+    matching the 6 listed file names).
+  - License classification corrections (49 entries across NOTICE + 5
+    README.license files): `tablebase.js`, `stats.html`, `worker-pool.js`,
+    `JsBridgeGateway.java` AGPL v3 → GPL v3 in historical round entries.
+    These 4 files are DroidFish-derived per their file headers (PGN parsing /
+    tokenization / control-map / engine-management logic from Peter Österlund's
+    DroidFish, GPL v3). The historical entries had incorrectly labeled them
+    AGPL v3 in past rounds.
+  - All other files: license classification unchanged.
+
 v1.2.3 round-28 (2026.7.19) — Undo/Redo clock restoration audit + baseSec completeness:
   - `ui-interactions.js` (GPL v3): _snapshotClocks now captures baseSec (was
     missing). _restoreClocks now restores baseSec. Full round-trip verification
@@ -110,11 +234,11 @@ v1.2.3 round-23 (2026.7.19) — PR #51 CodeRabbit review fixes + SonarCloud tria
     applying Fischer increment (0+increment>0 no longer masks timeout).
   - `ai-bridge.js` (GPL v3): Q10 — `_formatEvalDelta` derives sign from
     delta direction (was hardcoded `+`, Black player improving saw "+-1.2").
-  - `tablebase.js` (AGPL v3): Q1 — Chess960 importPGN resets `gameSPID=null`
+  - `tablebase.js` (GPL v3): Q1 — Chess960 importPGN resets `gameSPID=null`
     before derivation. Q7 — tag-strip regex rewritten quote-aware.
-  - `stats.html` (AGPL v3): Q7 — 4 tag-strip regex sites quote-aware. Q9 —
+  - `stats.html` (GPL v3): Q7 — 4 tag-strip regex sites quote-aware. Q9 —
     `_enc(s)` encodes every `<` as `\u003c` (OWASP JSON-in-HTML pattern).
-  - `worker-pool.js` (AGPL v3): Q8 — re-verified already quote-aware; no change.
+  - `worker-pool.js` (GPL v3): Q8 — re-verified already quote-aware; no change.
   - `AndroidManifest.xml` (AGPL v3): Q13 — comment fix (signal #2, not #1).
   - `README.license` (java/com/Regalia): Q12 — round-19/round-20 entries
     corrected from AGPL v3 to GPL v3 for HapticManager.java and
@@ -182,7 +306,7 @@ v1.2.3 round-20 (2026.7.17) — 4 known leftovers resolved + 3rd review report +
     auto-detects Chess960 (via _needsShredderFEN), sets variant/mode/SP-ID,
     and resets stale Chess960 mode on standard FEN import. S8786 — tag-strip
     regex rewritten with mutually exclusive adjacent quantifier classes.
-  - `stats.html` (AGPL v3): S8786 — same tag-strip regex rewrite at 4 sites;
+  - `stats.html` (GPL v3): S8786 — same tag-strip regex rewrite at 4 sites;
     S7773 — parseFloat→Number.parseFloat (2); S7781 — replace→replaceAll (1).
   - `ui.js` (GPL v3): KNOWN-ISSUE C RESOLVED — DIRTY_* incremental-render
     subsystem removed as dead code (~200 lines: constants, markDirty,
@@ -205,7 +329,7 @@ v1.2.3 round-20 (2026.7.17) — 4 known leftovers resolved + 3rd review report +
   - Version unchanged: versionCode=123, versionName="1.2.3".
   - AI-GEN: AI assisted (reviewed for AGPL v3 / GPL v3 compliance).
 v1.2.3 round-19 (2026.7.17) — 2 bilingual UX hints + log-injection fix (external review reports):
-  - `JsBridgeGateway.java` (AGPL v3): SECURITY FIX (gitar-bot / SonarCloud
+  - `JsBridgeGateway.java` (GPL v3): SECURITY FIX (gitar-bot / SonarCloud
     java:S5443 log injection — the only non-false-positive across the
     gitar-bot report and the PR #51 code-smell summary). The CR/LF
     rejection guard in isUciCommandAllowed() logged command.trim(), but
@@ -281,7 +405,7 @@ v1.2.3 round-18 (2026.7.17) — Chess960 PGN [FEN] bug fix + 7-agent line-by-lin
     "auto 300px" (the bare keyword was invalid CSS); removed the
     ineffective frame-ancestors directive from the CSP <meta> (ignored
     inside <meta> per CSP spec).
-  - `stats.html` (AGPL v3): extractMoveTimes uses the v1.0.9 PHASE 52
+  - `stats.html` (GPL v3): extractMoveTimes uses the v1.0.9 PHASE 52
     tag-format header regex at 2 sites (fixes per-move time misalignment
     and White/Black swap for single-line PGNs); exported HTML escapes
     "</" inside JSON strings (a PGN comment can no longer terminate the
@@ -319,8 +443,8 @@ v1.2.3 round-17 (2026.7.17) — SonarCloud high-priority cleanup + God Class ref
     (Exception) (S1181); destroyWebViewSafely() DRY helper.
   - JS modules (GPL v3 unless noted): 99× isNaN/parseInt/isFinite → Number.*;
     9× self=this → arrow functions (ui.js); 2× setAttribute → dataset
-    (ai-bridge.js, stats.html [AGPL v3]); 3× |0 → Math.trunc (chess960.js
-    [AGPL v3]); 3× replace → replaceAll; worker-pool.js [AGPL v3] nested-
+    (ai-bridge.js, stats.html [GPL v3]); 3× |0 → Math.trunc (chess960.js
+    [AGPL v3]); 3× replace → replaceAll; worker-pool.js [GPL v3] nested-
     quantifier regex simplified; typeof-undefined → !== undefined for
     same-module-declared variables only. _trendH latent ReferenceError fixed
     via shared _computeTrendChartHeight() helper.
@@ -511,7 +635,7 @@ v1.2.1 (2026.7.13) — Sixth-pass refinement (round-6 review — stats page visu
     stats page only saw imported=true annotations (via PGN text scan),
     so auto-generated annotations from newly-played games were silently
     missing.
-  - stats.html (AGPL v3): visual annotations section now reads
+  - stats.html (GPL v3): visual annotations section now reads
     _payload.visualAnnotations as the PRIMARY data source, applies the
     selected-move cutoff, and falls back to PGN-text scan only if the
     payload field is absent. NAG scanning from PGN text is preserved.
@@ -1794,7 +1918,7 @@ S3776 — _renderReviewMode partial extraction (612 → 561 lines, -51 lines):
     avoid risk. Full extraction (state-object refactor) deferred.
 
 S108 — stats.html empty catch blocks (6 sites):
-  - stats.html (AGPL v3): Added console.warn('[Stats]', e.message) to
+  - stats.html (GPL v3): Added console.warn('[Stats]', e.message) to
     6 empty catch(e){} blocks:
     - Line 3155: piece-size CSS variable set
     - Line 3544: scroll position restore
@@ -7783,7 +7907,7 @@ v1.0.8 Phase 25 (robust Web Worker multi-threading + portrait review chart heigh
       stayed dark while the page turned silver. Fixed to use a new --hdr-bg
       theme variable (dark: #1a0a0a, light: #f0f0f3).
 
-  License classification: worker-pool.js is AGPL v3 (original code). stats.html
+  License classification: worker-pool.js is GPL v3 (DroidFish-derived). stats.html
   changes are in a GPL-v3-licensed file (DroidFish-derived PGN parsing). ui.js
   and index.html.tpl changes are in GPL-v3-licensed files (DroidFish-derived).
   No new third-party code was introduced.

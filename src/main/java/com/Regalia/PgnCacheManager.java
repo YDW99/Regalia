@@ -39,6 +39,7 @@ import java.io.FileOutputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.StringWriter;
+import java.util.regex.Pattern;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -59,6 +60,13 @@ public class PgnCacheManager {
     private static final String TAG = "PgnCacheManager";
 
     private static final String PGN_CACHE_DIR = "pgn_cache";
+
+    // v1.2.3 round-30 (perf): pre-compiled patterns for sanitizeName.
+    //   String.replaceAll(String, String) recompiles the Pattern on every
+    //   call; sanitizeName is invoked on every PGN cache operation
+    //   (save/get/delete/rename/setTags/getTags).
+    private static final Pattern ILLEGAL_CHARS = Pattern.compile("[/\\\\:*?\"<>|]");
+    private static final Pattern CONTROL_CHARS = Pattern.compile("[\\x00-\\x1f\\x7f]");
 
     private final Context context;
 
@@ -83,9 +91,9 @@ public class PgnCacheManager {
         if (name == null) return null;
         String s = name.trim();
         // 移除路径类字符（禁止目录穿越）
-        s = s.replaceAll("[/\\\\:*?\"<>|]", "");
+        s = ILLEGAL_CHARS.matcher(s).replaceAll("");
         // 移除控制字符
-        s = s.replaceAll("[\\x00-\\x1f\\x7f]", "");
+        s = CONTROL_CHARS.matcher(s).replaceAll("");
         // 限制长度，避免文件系统问题
         if (s.length() > 100) s = s.substring(0, 100);
         return s.isEmpty() ? null : s;

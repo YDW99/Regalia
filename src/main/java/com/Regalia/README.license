@@ -1,3 +1,42 @@
+v1.2.3 round-30 (2026.7.19) — First-principles per-file review + robustness/perf optimizations:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - StockfishNative.java (GPL v3): engineGoDepth now clamps depth to
+    [1, MAX_REASONABLE_DEPTH] (60). The MAX_REASONABLE_DEPTH constant (60)
+    was previously only used for filtering info lines.
+  - HapticManager.java (GPL v3): isHapticEnabled now caches the system-side
+    Settings.System.HAPTIC_FEEDBACK_ENABLED setting for 5s. Two new volatile
+    fields (_systemHapticCached, _systemHapticCacheTs).
+  - MainActivity.java (AGPL v3): stabilizationHelper/stabilizationEnabled
+    declared volatile. scheduleInitRetry now calls showFallbackUI after all
+    3 retries exhausted.
+  - StatsActivity.java (GPL v3): performHaptic now delegates to a lazily-
+    initialized HapticManager instance. loadAssetAsBase64 now has ".."
+    path-traversal check (mirrors FileIoHelper.loadAssetAsBase64).
+  - EngineConfigHelper.java (GPL v3): detectBigCoreCount correctly handles
+    ARM64 kernels emitting both "CPU max MHz" and "BogoMIPS" — "CPU max MHz"
+    always wins.
+  - FileIoHelper.java (GPL v3): addMediaStoreResults escapes SQL LIKE
+    wildcards (_, %, \\) and adds ESCAPE '\\' clause.
+  - PgnCacheManager.java (GPL v3): sanitizeName uses two pre-compiled
+    static final Pattern instances. New import java.util.regex.Pattern.
+  - All other Java files: no changes this round.
+  - License classification: unchanged (DroidFish-derived = GPL v3,
+    original = AGPL v3).
+
+v1.2.3 round-29 (2026.7.19) — PR52 SonarCloud + CodeRabbit review fixes:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - StockfishNative.java (GPL v3): `_hapticManager` field declared `final`
+    (safe-publication across JS binder thread; consistent with all other
+    manager fields — _pgnCacheManager, _jsBridgeGateway, _engineConfigHelper,
+    _safPickerHelper, _engineSettingsHelper, etc.).
+  - HapticManager.java (GPL v3): S3358 nested ternary
+    `a < 0 ? 0 : (a > 255 ? 255 : a)` replaced with `Math.max(0, Math.min(255, a))`
+    (clearer amplitude clamp intent in tryWaveformVibrate).
+  - All other Java files: no changes this round.
+  - License classification: JsBridgeGateway.java remains GPL v3
+    (DroidFish-derived engine management logic); historical entries that
+    mislabeled it AGPL v3 have been corrected in this round.
+
 v1.2.3 round-28 (2026.7.19): no changes in this directory.
   - Version: versionCode=123, versionName="1.2.3" (unchanged — audit round).
   - The round-28 change is limited to src/main/assets/chess.src/ui-interactions.js
@@ -1157,7 +1196,7 @@ v1.0.3 patch changes (version number unchanged — still v1.0.3 / versionCode 10
       Contempt=24 (biased toward avoiding draws) and the user's MultiPV setting
       (potentially >1, reducing search depth). engineEval already had this call;
       engineGoDepth was missing it (oversight when engineGoDepth was added).
-    - worker-pool.js (AGPL v3): consistency fix — the worker's fenToState()
+    - worker-pool.js (GPL v3): consistency fix — the worker's fenToState()
       checked `parts.length<4`, while the main-thread fenToState in
       tablebase.js checks `parts.length<2`. Changed worker to `<2` for
       consistency.

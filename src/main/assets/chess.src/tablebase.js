@@ -202,7 +202,7 @@ function _parsePGN(pgnText){
   //   single-line and multi-line PGN), and ALSO avoids stripping `[%csl ...]`
   //   / `[%cal ...]` / `[%eval ...]` / `[%emt ...]` inside brace comments
   //   (because `%` is not in `[A-Za-z]`).
-  let moveText=pgnText.replace(/\[\s*\w+\s+(?:"[^"]*"|[^\]]*?)\s*\]/g,'').trim(); // v1.2.3 round-20 (S8786): 相邻量词类互斥，消除超线性回溯（与 stats.html 四处同款修复）. v1.2.3 round-23 (Q7 fix): quote-aware — value 内含 ] 不再被截断（如 [Event "Tournament [A]"] 完整消耗）。`[^\]]*?` 非贪婪分支兜底无引号 tag（PGN 规范罕见但合法）。
+  let moveText=pgnText.replace(/\[\s*[A-Za-z]\w*\s+"(?:[^"\\]|\\.)*"\s*\]/g,'').trim(); // v1.2.3 round-29 (PR52 S8786): switch to canonical PGN tag regex (same as pgn-standard.js:696). Eliminates the alternation `[^\]]*?` overlap with `\s*` that produced polynomial backtracking on unclosed-bracket input; the strict pattern is linear and also correctly handles escaped quotes inside values (`[Event "Tournament \"Open\""]`).
   // Remove line continuation markers (\ at end of line)
   moveText=moveText.replace(/\\\s*\n/g,' ');
   
@@ -544,7 +544,14 @@ function _parsePGN(pgnText){
   //   cascade-failure path and aborting the parse.
   //   After brace stripping (fixed): `1. e4 e5  2. Bd3`  ← two valid tokens.
   //   The whitespace normalization at line ~490 collapses the double space.
-  {let _braceIter=0;while(moveText.includes('{')&&_braceIter++<10)moveText=moveText.replace(/\{[^{}]*\}/g,' ');}
+  // v1.2.3 round-30 (perf): pre-check `includes('{')` to skip the loop
+  //   entirely when there are no comments — most PGNs have no comments,
+  //   and the previous code ran up to 10 regex passes (each O(n)) plus
+  //   an `includes('{')` check per iteration even on comment-free input.
+  if(moveText.includes('{')){
+    let _braceIter=0;
+    while(moveText.includes('{')&&_braceIter++<10)moveText=moveText.replace(/\{[^{}]*\}/g,' ');
+  }
   // v1.0.4 Rev29: Remove unclosed brace + everything to end-of-string.
   // This is the PGN spec's tolerant behavior: an unclosed comment consumes
   // the rest of the movetext. We log a warning so the user knows.
@@ -1426,7 +1433,9 @@ function importPGN(pgnText){
       // was caught by the surrounding try/catch and surfaced to the user as
       // "PGN invalid" — making EVERY PGN import fail. Fixed to use
       // parsedMove.move.promotion (the move object on the parsed result).
-      promotion:(parsedMove?.move&&parsedMove.move.promotion)||null,
+      // v1.2.3 round-29 (PR52 S6582): collapse `parsedMove?.move && parsedMove.move.promotion`
+      //   into the equivalent `parsedMove?.move?.promotion`.
+      promotion:parsedMove?.move?.promotion||null,
       isCheck:_isCheck,
       isCastling:_isCastling,
       time:null,
@@ -1901,11 +1910,14 @@ const fen=generateFEN(s);
 // evicted before rarely-accessed ones — defeating the LRU cache's purpose.
 // The delete+set pattern moves the entry to the "newest" position (Map
 // preserves insertion order in JS).
-if(_tbCache.has(fen)){
-  const v=_tbCache.get(fen);
+// v1.2.3 round-30 (perf): collapse has()+get() into a single get() call —
+//   Map.get returns undefined for missing keys, so the nullish check
+//   replaces has(). Saves one Map lookup per cache hit.
+const _cached=_tbCache.get(fen);
+if(_cached!==undefined){
   _tbCache.delete(fen);
-  _tbCache.set(fen,v);
-  return v;
+  _tbCache.set(fen,_cached);
+  return _cached;
 }
 // Rate limit: ≥600ms between requests
 // FIX: Reserve the time slot immediately (before async wait) to prevent TOCTOU race

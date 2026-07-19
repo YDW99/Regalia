@@ -1,3 +1,16 @@
+v1.2.3 round-30 (2026.7.19) — First-principles per-file review + robustness/perf optimizations:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - No resource files changed this round.
+
+v1.2.3 round-29 (2026.7.19) — PR52 SonarCloud + CodeRabbit review fixes:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - No resource files changed this round.
+  - xml/ summary updated: noted that backup_rules.xml and
+    data_extraction_rules.xml are NOT currently referenced by AndroidManifest
+    (allowBackup="false" makes them dead config since round-13). The XML
+    files are retained in res/xml/ for reference in case allowBackup is
+    ever set to true in the future.
+
 v1.2.3 round-28 (2026.7.19): no changes in this directory.
   - Version: versionCode=123, versionName="1.2.3" (unchanged — audit round).
 
@@ -232,8 +245,12 @@ Subdirectory license summary:
       user data to be preserved during cloud backup.
       data_extraction_rules.xml (<data-extraction-rules>, Android 12+)
       mirrors this for cloud-backup and device-transfer scenarios.
-      Referenced by AndroidManifest.xml's android:fullBackupContent and
-      android:dataExtractionRules attributes.
+      v1.2.3 round-13 NOTE: AndroidManifest.xml's android:fullBackupContent
+      and android:dataExtractionRules attributes were REMOVED (because
+      allowBackup="false" makes them dead config). The XML files are
+      retained in res/xml/ for reference in case allowBackup is ever set
+      to true in the future, but they are NOT currently referenced by
+      the manifest.
   - mipmap-hdpi/ ... mipmap-xxxhdpi/: AGPL v3 (AI-generated assets)
       App launcher icons (ic_launcher, ic_launcher_round,
       ic_launcher_foreground) in 5 density buckets (hdpi, mdpi, xhdpi,

@@ -1,3 +1,377 @@
+# Regalia v1.2.3 — round-30 工作日志（2026-07-19）
+
+## 任务来源
+
+用户要求：以最具健壮性的方法继续完成更多进一步优化。检查每一个文件的每一行代码，理解设计意图，基于第一性原理思考是否有优化空间。优化方向按优先级排序：bug修复 > 健壮性巩固 > 功能完善 > 性能突破 > 冗余清理 > 简化代码。版本号保持 v1.2.3。
+
+附加要求：更新 BUILDING.md & PRIVACY.md；检查所有 README/LICENSE/NOTICE 文件；检查 README.md 目录树；检查新增文件的头部权利声明与 AI-GEN 声明；检查中英文说明书与 APP 源代码的匹配度（尤其是示意图）；html 说明书中更新日志由上至下从新到旧排列；交付 release APK（v1+v2+v3 签名齐全，兼容小米澎湃OS3）+ tar 源码备份包（无引擎文件）+ 更新后的 html 说明书。
+
+## 第一性原理审查（3 个并行代理）
+
+启动 3 个并行审查代理：
+
+1. **review-js-modules**（game-logic/chess960/pgn-standard/worker-pool/state-store/eco-data）— 识别 10 项发现，前 5 项高价值。
+2. **review-ui-modules**（ui-gameflow/ui-interactions/ui/ai-bridge/tablebase）— 识别 15 项发现，0 个 bug、4 个健壮性、5 个性能、3 个冗余、3 个简化。
+3. **review-java-files**（19 个 Java 文件）— 识别 15 项发现，5 个 bug、4 个健壮性、1 个功能、3 个性能、1 个冗余、1 个简化。
+
+总计 20 项可操作发现，实施 18 项（2 项暂缓——`_escapeHTML` 包装保留以兼容现有调用点；`JsBridgeGateway.isSafeFileName` 的 `..` 检查作为纵深防御保留）。
+
+## 实施的优化（18 项）
+
+### Bug 修复（6 项）
+
+1. **FIDE 6.9 K+B+B 同色象遗漏**（game-logic.js）— `winnerLacksMatingMaterial` 此前遗漏 K+B+B 同色象场景（两个象都在浅色格或都在深色格）——此局面下无法强制将杀。现跟踪赢方象的格子色奇偶性，K+B+B 同色（无马）时返回 true。马+象+象同色正确返回 false。11 个单元测试场景全部通过。
+
+2. **MediaStore SQL LIKE 通配符注入**（FileIoHelper.addMediaStoreResults）— 目录路径含 `_`（匹配任意单字符）或 `%`（匹配任意序列）时会过度匹配。现转义 `\\`、`%`、`_` 并添加 `ESCAPE '\\'` 子句到两个 LIKE 表达式。
+
+3. **StatsActivity.loadAssetAsBase64 缺少路径穿越检查** — 添加 `..` 路径穿越检查（与 FileIoHelper 一致，纵深防御）。
+
+4. **EngineConfigHelper.detectBigCoreCount BogoMIPS 覆盖 CPU max MHz** — ARM64 内核同时输出 "CPU max MHz"（权威）和 "BogoMIPS"（粗略代理）时，最后的胜出（常为 BogoMIPS）。现 "CPU max MHz" 始终胜出；"BogoMIPS" 仅在无 MHz 读数时填充。
+
+5. **MainActivity stabilizationHelper/stabilizationEnabled 未声明 volatile** — JS binder 线程与主线程跨线程访问，缺少 volatile 可能导致主线程看到陈旧的 false 值。两个字段现声明为 `volatile`。
+
+6. **MainActivity.scheduleInitRetry 静默失败** — 3 次重试全部耗尽后，重试循环静默停止，用户无反馈。现调用 `showFallbackUI("engine init failed. Please restart the app.")`。
+
+### 健壮性巩固（7 项）
+
+7. **state-store._notifyListeners 深拷贝** — 监听器此前接收 LIVE `_state` 引用，可能直接修改破坏单一数据源契约。现传递 `_deepClone(_state)`（与 v1.2.1 P0-1/P0-2 不变量一致）。
+
+8. **_savePGNYes 轮询无上限**（ui-interactions.js）— 递归 `setTimeout(_waitForDialog, 200)` 无上限——若 dismiss 回调失败，轮询持续到会话结束。现上限 50 次（10s）；超时后执行回调并重置 `_skipPGNSavePrompt`。
+
+9. **_makeLoadingClickable 轮询无上限**（ai-bridge.js）— `setInterval(..., 200)` 无上限——若 `_showLoadingOverlay` 静默失败，interval 永久泄漏。现上限 25 次（5s）。
+
+10. **onSettingsImported 安全网 setTimeout 覆盖用户对话框**（ai-bridge.js）— 100ms/300ms 安全网闭包无条件移除任何 `.dov[role="dialog"]`。若用户在 300ms 内打开另一个对话框，迟到的 timer 会破坏它。现使用代际 token（`_settingsImportGen`）——新导入使旧闭包失效。
+
+11. **_requestBatchEval 未就绪分支旋转重试**（ai-bridge.js）— 引擎未就绪时调度 `setTimeout(_reviewAnalyzeAdvance, 100)`，重入 `_requestBatchEval` → 同一未就绪分支 → 另一个 100ms timer，旋转 60s+。现不再调度重试，依赖 `onEngineReady` 恢复批量。
+
+12. **StockfishNative.engineGoDepth 无 depth 钳制** — `depth` 参数直接传给 `go depth N`。JS bug 传 0 会瞬时返回劣着；传 100 会搜索数小时。现钳制到 `[1, MAX_REASONABLE_DEPTH]`（60）。
+
+13. **HapticManager.isHapticEnabled 每次 Binder IPC** — `Settings.System.getInt` 每次触觉调用都做跨进程 Binder 调用（5-10 次/秒）。现缓存系统侧设置 5 秒；`volatile` 跨线程可见。
+
+### 性能突破（6 项）
+
+14. **_updateCtrlInfoPanel O(cards) 文本扫描**（ui.js）— 每次悬停运行 `querySelectorAll('.card')` + `.textContent.includes('控制'/'Control')`。元素已有稳定 id `ctrl-info-card`。改为单次 `getElementById` 调用；移除 `_cachedCtrlCard` 缓存。
+
+15. **PgnCacheManager.sanitizeName 重新编译正则** — `String.replaceAll(String, String)` 每次调用都重新编译 Pattern。现使用两个预编译 `static final Pattern` 实例。
+
+16. **tablebase._tbCache LRU 刷新两次 Map 查找** — `has(fen)` + `get(fen)` + `delete(fen)` + `set(fen,v)`。简化为 `get(fen)` + nullish 检查 + `delete(fen)` + `set(fen,v)`——少一次 Map 查找。
+
+17. **tablebase._parsePGN 花括号注释循环在无注释 PGN 上跑 10 次** — `while(moveText.includes('{')&&_braceIter++<10)` 每次迭代都做 O(n) `includes('{')` 检查。现预检查 `if(moveText.includes('{'))` 一次以在无注释输入上跳过整个循环。
+
+18. **showToast 孤立的 300ms 移除定时器**（ai-bridge.js）— 快速 `showToast()` 调用每次清除 `_toastTimer` 但留下内部的 300ms `setTimeout(()=>t.remove(),300)` 武装——孤立 timer 在已分离节点上触发。现追踪内部 timer 在 `_toastRemoveTimer` 并在每次新 `showToast()` 时清除。
+
+### 冗余清理（3 项）
+
+19. **ui.js lastRenderRequest 死状态** — 在 line 1725 声明、line 2017 写入，但任何地方都未读取。round-20 DIRTY_* 移除后的残留。移除声明 + 写入。
+
+20. **StatsActivity.performHaptic 重复 HapticManager 逻辑** — 内联重复 haptic-enabled 检查 + VibrationEffect fallback 链，而非委托给 `HapticManager`。两个数据源可能分歧（如 round-30 的 5s 设置缓存需要在两处应用）。现委托给懒初始化的 `HapticManager` 实例（与 StockfishNative line 472 相同模式）。
+
+21. **HapticManager._init 外露 API**（ai-bridge.js）— IIFE 的 `return { fire, refreshSettings, _init }` 外露 `_init`，但仅内部构造时调用一次。无外部调用方。从导出 API 移除。
+
+## 暂缓的优化（2 项）
+
+1. **`_escapeHTML` 包装移除**（ui.js）— 代理标记为低可信度冗余。注释明确声明为有意保留以兼容现有调用点。grep 显示有 7 处调用点（包括 mockup HTML）。移除需要批量重写所有调用点，回归风险高于收益。保留。
+
+2. **`JsBridgeGateway.isSafeFileName` 的 `..` 检查** — 代理标记为低可信度冗余。`/` 和 `\\` 检查已经阻止目录穿越，`..` 检查是过度严格的冗余防御，会拒绝合法文件名如 `my..file.txt`。然而作为安全检查，保持过度严格比放宽更安全。保留作为纵深防御。
+
+## 验证
+
+### JS 语法
+
+```
+所有 11 个 chess.src/*.js 模块通过 node --check ✓
+stats.html 内联脚本通过 node --check ✓
+chess.html 重建后内联脚本通过 node --check ✓
+```
+
+### Node vm 烟雾测试（winnerLacksMatingMaterial + state-store）
+
+11 个 FIDE 6.9 场景全部通过：
+- Test 1: K vs K — winner cannot mate ✓
+- Test 2: K+Q vs K — winner can mate ✓
+- Test 3: K+N vs K — winner cannot mate ✓
+- Test 4: K+B vs K — winner cannot mate ✓
+- Test 5: K+R vs K — winner can mate ✓
+- Test 6: K+2N vs K — winner cannot mate ✓
+- Test 7: K+N+B vs K — winner can mate ✓
+- Test 8: FIDE 6.9 asymmetric — winner has K+N only, draw ✓
+- Test 9 (NEW round-30): K+B+B same color — winner cannot mate ✓
+- Test 10 (NEW round-30): K+B+B opposite colors — winner can mate ✓
+- Test 11 (NEW round-30): K+N+B+B same color — winner can mate (knight helps) ✓
+
+### chess.html 重建
+
+```
+python3 build-chess.py
+Built chess.html (22951 lines, 1382039 bytes)
+```
+
+### APK 构建
+
+```
+./gradlew --no-daemon assembleRelease -x lint -x lintRelease -x lintVitalRelease --offline
+BUILD SUCCESSFUL in 8s
+```
+
+### APK 签名
+
+```
+apksigner verify --verbose Regalia-release.apk
+Verifies
+Verified using v1 scheme (JAR signing): true
+Verified using v2 scheme (APK Signature Scheme v2): true
+Verified using v3 scheme (APK Signature Scheme v3): true
+```
+
+### Stockfish 引擎 SHA-256 三方一致
+
+```
+源文件：8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5
+jniLibs：8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5
+APK 内：8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5
+三方一致 ✓
+```
+
+### tar 打包
+
+```
+bash /home/z/my-project/scripts/create_v123_tar.sh
+Tar entry count: 118
+排除清单全部生效
+```
+
+## 文档同步
+
+- `NOTICE`：round-30 条目置顶（18 项实施的优化 + 2 项暂缓的完整记录）。
+- `8× README.license`：round-30 条目置顶。
+- `README.md`：round-30 章节置顶；目录树更新（ui.js 6,795 行，HapticManager.java 493 行，round-30 注释）。
+- `BUILDING.md`：round-30 章节置顶（构建相关变更 + 误报说明 + 验证）。
+- `PRIVACY.md`：round-30 条目置顶（纯代码组织 + bug 修复 + 健壮性 + 性能轮，无新权限/网络/数据收集）。
+- 中英文说明书：round-30 更新日志条目置顶（内容对等非机翻）。
+
+## 最终交付（/home/z/my-project/download/）
+
+- `Regalia-release.apk` — SHA-256 见 SHA256SUMS.txt
+- `Regalia-v1.2.3-src.tar` — 118 条目，0 禁用模式
+- `Regalia-v1.2.3-manual-zh.html` — 中文说明书
+- `Regalia-v1.2.3-manual-en.html` — 英文说明书
+- `README.md` / `BUILDING.md` / `PRIVACY.md` / `NOTICE` / `worklog.md` — 同步更新
+- `SHA256SUMS.txt` — 所有交付物 SHA-256 汇总
+
+版本号保持 v1.2.3（versionCode=123, versionName="1.2.3"）。
+
+---
+
+# Regalia v1.2.3 — round-29 工作日志（2026-07-19）
+
+## 任务来源
+
+用户上传了 2 份新审查报告（SonarCloud_PR52_Issues_Summary.docx、PR52_Unresolved_Issues_Optimization.docx）+ 3 份参考资料（🛡️ AI大模型代码生成防缺陷终极指南.pdf、Android WebView App 开发专业指南.pdf、SonarCloud 完美通过审查指南.pdf）+ 1 份源码包 Regalia-v1.2.3-src.tar + 1 份开发进度恢复指南。
+
+任务要求：
+
+1. 完整读取上传的 docx 文件，排查误报，剔除误报后了解清楚需要修复的问题；
+2. 精确实施修复（重要的改动完成后要测试）；
+3. 修复后逐文件用 `node --check` 验证所有 JS 语法；
+4. 重建 chess.html；
+5. 构建 release APK（v1+v2+v3 签名齐全，兼容小米澎湃OS3）；
+6. 用 `create_v123_tar.sh` 打包 tar 源码备份（无引擎文件）；
+7. 验证 Stockfish 引擎是 dotprod 版本（SHA-256 三方一致）；
+8. 更新 BUILDING.md、PRIVACY.md、README.md、NOTICE、所有 README.license；
+9. 更新中英文 HTML 说明书（更新日志由上至下从新到旧排列）；
+10. 版本号保持 v1.2.3（versionCode=123, versionName="1.2.3"）；
+11. 所有交付物保存到 `/home/z/my-project/download/`；
+12. 完成后更新 worklog.md。
+
+## 环境重建（沙箱重置后）
+
+- JDK 21.0.11（Temurin）：`/home/z/my-project/tools/jdk21`
+- Android SDK：API 35 / Build-Tools 34.0.0 / NDK 27.2.12479018 / CMake 3.31.6
+- Stockfish 引擎 SHA-256 验证：`8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5`（源文件 / 部署到 jniLibs / APK 内三方一致）
+- keystore：`/home/z/my-project/workspace/debug.keystore`（alias `debug`，storepass/keypass `android`）
+- keystore.properties：`/home/z/my-project/workspace/keystore.properties`（驱动 build.gradle 的 signingConfigs.release）
+
+## PR52 问题排查与误报剔除
+
+### SonarCloud_PR52_Issues_Summary.docx
+
+声称 80 个 OPEN 状态问题（5 BLOCKER + 12 CRITICAL + 41 MAJOR + 22 MINOR）。逐项对照源码验证：
+
+**真实缺陷（14 项，已修复）：**
+
+1. **FIDE 6.9 超时判和 Bug**（ui-gameflow.js:311-322）— round-25 使用 `isDeadPosition`（对称检查双方），遗漏非对称场景（赢方仅有 K/K+N/K+B/K+2N → 无法将杀）。新增 `winnerLacksMatingMaterial(s, winner)` 函数检查 WINNER 的将杀能力，作为主判据；`isDeadPosition` 保留为 FIDE 5.2.2 对称兜底。8 个单元测试场景全部通过。
+2. **`_restoreClocks` 调用 `initGameClocks()` 覆盖已恢复时钟值**（ui-interactions.js:104-107）— `initGameClocks()` 从 `dlgTimeControl.baseSec` 重建 `gameClocks`，覆盖快照恢复的 `remainingSec`/`displayRemainingSec`。改为仅重启 tick 间隔。
+3. **README.md 公开签名密钥凭据**（README.md:349）— round-13 发布说明暴露 alias/password/backup path。移除凭据；改为引用 `keystore.properties`（gitignored）。
+4. **AGPL v3/GPL v3 许可证标签错误**（NOTICE + 5 README.license，共 49 处）— `tablebase.js`、`stats.html`、`worker-pool.js`、`JsBridgeGateway.java` 这 4 个 DroidFish 派生文件在历史条目中误标为 AGPL v3，实际各文件头部声明为 GPL v3。已批量修正。
+5. **stats.html + tablebase.js PGN 标签正则 ReDoS**（5 处）— 替换为规范形式 `/\[\s*[A-Za-z]\w*\s+"(?:[^"\\]|\\.)*"\s*\]/g`（与 pgn-standard.js:696 一致），消除多项式回溯。
+6. **ai-bridge.js var→const**（4 处）— `dov`/`fb`/`info`/`s` 改为 const（S3504）。
+7. **StockfishNative.java `_hapticManager` 未声明 final** — 改为 `private final HapticManager`，与同字段一致（safe-publication）。
+8. **S6582 可选链**（6 处）— `_st?.board && _st.board[mv.to.row] ? ...` → `_st?.board?.[mv.to.row]?.[mv.to.col] ?? null`；`gameState?.board && gameState.board[...]` → `gameState?.board?.[...]`；`parsedMove?.move && parsedMove.move.promotion` → `parsedMove?.move?.promotion`；`e?.message ? e.message : e` → `e?.message ?? e`。
+9. **S3358 嵌套三元**（2 处）— ai-bridge.js 提取 `_evalOrMate` 辅助函数；HapticManager.java 改用 `Math.max(0, Math.min(255, a))`。
+10. **stats.html S7780/S7781**（1 处）— `JSON.stringify(s).replace(/</g, '\\u003c')` → `JSON.stringify(s).replaceAll('<', String.raw\`\u003c\`)`。
+11. **worker-pool.js S6551**（1 处）— `e?.message || e` → `e?.message || String(e)`。
+12. **ui.js S1481**（1 处）— 移除死局部变量 `_isLandscapeReview`（round-12 统一 portrait/landscape DOM 后未再使用）。
+13. **`src/main/README.license` 权限清单未移除 ACCESS_NETWORK_STATE** — round-18 已从 AndroidManifest 移除但文档未同步；已修正。
+14. **Manual 工具栏顺序描述遗漏 💾 按钮**（zh + en）— PGN 缓存管理章节的工具栏顺序段落现包含 💾（导出 PGN 到文件）按钮，与示意图一致。
+- 附：worklog.md round-23 PDF 计数 4→6（与列出的 6 个文件名一致）；`src/main/res/README.license` xml/ 摘要更新（说明 backup_rules.xml/data_extraction_rules.xml 不再被 AndroidManifest 引用）。
+
+**误报（6 项，跳过）：**
+
+1. **build.gradle:184-192 CMake version "3.31.6+"** — 误报。AGP 接受 Gradle 风格版本范围（`+` 是通配符）；项目自 round-13 起一直使用此设置且构建成功。
+2. **HapticManager.java:413, 467 S125** — 误报。这些是描述历史 API 变更的文档注释，不是被注释的代码。
+3. **game-logic.js:3089, 2553, 1817 S2681** — 误报。这些是单行表达式，没有多行代码块。
+4. **ai-bridge.js:1004, 1290 S7741 `typeof _timeoutWinnerColor!=='undefined'`** — 误报。这是 round-11 设计的跨模块 typeof 守卫（`_timeoutWinnerColor` 在 ui-gameflow.js 声明，ai-bridge.js 使用），防止单模块加载失败连锁崩溃。
+5. **assets/README.license:4-9 历史记录未更新至 round-28** — 误报。基于过时的行号；该文件已更新至 round-28。
+6. **README.md:393-395 权限清单未移除 ACCESS_NETWORK_STATE** — 误报。该位置是描述移除 ACCESS_NETWORK_STATE 的文字段落，不是权限清单。
+
+### PR52_Unresolved_Issues_Optimization.docx
+
+声称 18 个未解决问题。逐项验证：
+
+- **#1-3 阻断级（合并冲突、Quality Gate 失败、Autofix 无法运行）**：GitHub PR 状态问题，不属于源码修复范围。跳过。
+- **#4 FIDE 6.9 超时判和**：真实缺陷，已修复（见真实缺陷 #1）。
+- **#5 README.md 签名密钥泄露**：真实问题，已修复（见真实缺陷 #3）。
+- **#6 AGPL/GPL 标签错误**：真实问题，已修复（见真实缺陷 #4）。
+- **#7 stats.html 正则回溯风险**：真实问题，已修复（见真实缺陷 #5）。
+- **#8 build.gradle CMake 版本语义错误**：误报（见误报 #1）。
+- **#9 ui-interactions.js initGameClocks**：docx 声称已在 commit acda070 修复，但实际源码仍调用 initGameClocks()。真实缺陷，已修复（见真实缺陷 #2）。
+- **#10 ai-bridge.js var→const**：真实问题，已修复（见真实缺陷 #6）。
+- **#11 权限清单未移除 ACCESS_NETWORK_STATE**：真实问题，已修复（见真实缺陷 #13）。
+- **#12 assets/README.license 历史未更新至 round-28**：误报（见误报 #5）。
+- **#13 Manual 工具栏遗漏 💾**：真实问题，已修复（见真实缺陷 #14）。
+- **#14 res/README.license 资源摘要与清单不同步**：真实问题，已修复。
+- **#15 worklog.md round-23 PDF 计数错误**：真实问题，已修复。
+- **#16 StockfishNative _hapticManager final**：真实问题，已修复（见真实缺陷 #7）。
+- **#17 worklog.md Markdown 规范违规**：跳过（markdownlint 是辅助工具，不影响代码正确性；后续轮次可统一处理）。
+- **#18 Docstring 覆盖率 62.4% < 80%**：跳过（Pre-merge 检查项，不属于代码修复范围）。
+
+### PDF 资料汲取
+
+- 《Android WebView App 开发专业指南》— 通用指南，项目已实现全部最佳实践（WebSettings 显式配置、JS 接口 @JavascriptInterface 注解、URL 拦截、生命周期管理、destroy 清理）。
+- 《SonarCloud 完美通过审查指南》— 通用指南，项目已遵循 Sonar way 质量门禁原则（新增代码零缺陷、控制代码异味、覆盖率达标）。
+- 《AI大模型代码生成防缺陷终极指南》— 通用指南，本轮工作中已应用：边缘情况处理（winnerLacksMatingMaterial 覆盖 K/K+N/K+B/K+2N/K+N+B/K+2N 等所有 FIDE 6.9 场景）、安全规范（移除硬编码密钥）、单一职责（提取 _evalOrMate 辅助函数）。
+
+## 修复实施
+
+### P0 Bug 修复
+
+**Bug #1: FIDE 6.9 超时判和**（game-logic.js + ui-gameflow.js）
+
+新增 `winnerLacksMatingMaterial(s, winnerColor)` 函数：
+- 扫描棋盘，统计 winner 的非王棋子数（pawn/knight/bishop/rook/queen）
+- K vs K（winner 仅有王）→ 无法将杀 → true
+- K + 单 minor（N 或 B）→ 无法将杀 → true
+- K + 2N → 无法强制将杀（FIDE 规则）→ true
+- K + 2B 同色 / K + N+B / K + 2N+其他 → CAN mate → false
+- 任何 pawn/rook/queen → CAN mate → false
+
+`_onGameClockExpired` 修改：
+- 主判据改为 `winnerLacksMatingMaterial(gameState, winner)` → draw
+- 兜底 `isDeadPosition(gameState)` → draw（覆盖 K vs K 等对称场景）
+- 否则 → timeout win
+
+**Bug #2: Undo/Redo 时钟恢复**（ui-interactions.js）
+
+`_restoreClocks` 修改：
+- 移除 `if(typeof initGameClocks==='function'&&!gameOver){initGameClocks();}`
+- 改为 `if(typeof _tickGameClock==='function'&&!gameOver){gameClockTimerId=setInterval(_tickGameClock,200);}`
+- 这避免了 `initGameClocks()` 重建 `gameClocks` 覆盖已恢复值
+
+### P3 代码质量修复
+
+详见上文「真实缺陷」清单。所有修改均为语义保持，已通过 node --check + Node vm 烟雾测试验证。
+
+## 验证
+
+### JS 语法
+
+```
+所有 11 个 chess.src/*.js 模块通过 node --check ✓
+stats.html 内联脚本通过 node --check ✓
+chess.html 重建后内联脚本通过 node --check ✓
+```
+
+### Node vm 烟雾测试（winnerLacksMatingMaterial）
+
+8 个 FIDE 6.9 场景全部通过：
+- Test 1: K vs K — winner cannot mate ✓
+- Test 2: K+Q vs K — winner can mate ✓
+- Test 3: K+N vs K — winner cannot mate ✓
+- Test 4: K+B vs K — winner cannot mate ✓
+- Test 5: K+R vs K — winner can mate ✓
+- Test 6: K+2N vs K — winner cannot mate ✓
+- Test 7: K+N+B vs K — winner can mate ✓
+- Test 8: FIDE 6.9 asymmetric case — winner has K+N only, draw ✓
+
+### chess.html 重建
+
+```
+python3 build-chess.py
+Built chess.html (22854 lines, 1377004 bytes)
+```
+
+### APK 构建
+
+```
+./gradlew --no-daemon assembleRelease -x lint -x lintRelease -x lintVitalRelease --offline
+BUILD SUCCESSFUL in 1m 5s
+```
+
+### APK 签名
+
+```
+apksigner verify --verbose Regalia-release.apk
+Verifies
+Verified using v1 scheme (JAR signing): true
+Verified using v2 scheme (APK Signature Scheme v2): true
+Verified using v3 scheme (APK Signature Scheme v3): true
+```
+
+### Stockfish 引擎 SHA-256 三方一致
+
+```
+源文件（/home/z/my-project/tools/stockfish/...）：
+  8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5
+
+部署到 jniLibs（src/main/jniLibs/arm64-v8a/libstockfish.so）：
+  8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5
+
+APK 内（lib/arm64-v8a/libstockfish.so）：
+  8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5
+
+三方一致 ✓
+```
+
+### tar 打包
+
+```
+bash /home/z/my-project/scripts/create_v123_tar.sh
+Tar entry count: 118
+排除清单全部生效（无 build/、.gradle/、.cxx/、local.properties、lint-baseline.xml、jniLibs/、keystore、keystore.properties、version.properties、.git/、.idea/）
+```
+
+## 文档同步
+
+- `NOTICE`：round-29 条目置顶（14 项真实缺陷 + 6 项误报 + 49 处许可证标签修正的完整记录）。
+- `8× README.license`：round-29 条目置顶（assets/chess.src/assets/src/main/java/com/Regalia/res/cpp/Manual）。
+- `README.md`：round-29 章节置顶；GPL v3 文件清单新增 `JsBridgeGateway.java`。
+- `BUILDING.md`：round-29 章节置顶（构建相关变更 + 误报说明 + 验证）。
+- `PRIVACY.md`：round-29 条目置顶（纯代码组织 + bug 修复 + 文档同步，无新权限/网络/数据收集）。
+- 中英文说明书：round-29 更新日志条目置顶（内容对等非机翻）。
+
+## 最终交付（/home/z/my-project/download/）
+
+- `Regalia-release.apk` — SHA-256 见 SHA256SUMS.txt
+- `Regalia-v1.2.3-src.tar` — 118 条目，0 禁用模式
+- `Regalia-v1.2.3-manual-zh.html` — 中文说明书
+- `Regalia-v1.2.3-manual-en.html` — 英文说明书
+- `README.md` / `BUILDING.md` / `PRIVACY.md` / `NOTICE` — 同步更新
+- `SHA256SUMS.txt` — 所有交付物 SHA-256 汇总
+
+版本号保持 v1.2.3（versionCode=123, versionName="1.2.3"）。
+
+---
+
 # Regalia v1.2.3 — round-28 工作日志（2026-07-19）
 
 ## 任务来源
@@ -414,7 +788,7 @@
 # Regalia v1.2.3 — round-23 工作日志（2026-07-19）
 
 ## 任务来源
-用户上传了 4 份新 PDF 参考资料（Regalia-PR51-剩余问题完善方案.pdf、SonarCloud_Regalia_修复方案.pdf、
+用户上传了 6 份新 PDF 参考资料（Regalia-PR51-剩余问题完善方案.pdf、SonarCloud_Regalia_修复方案.pdf、
 931个代码异味问题.pdf、AI大模型代码生成防缺陷终极指南.pdf、Android WebView App 开发专业指南.pdf、
 SonarCloud 完美通过审查指南.pdf），要求：
 

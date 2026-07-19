@@ -1,3 +1,21 @@
+v1.2.3 round-30 (2026.7.19) — First-principles per-file review + robustness/perf optimizations:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - AndroidManifest.xml (AGPL v3): No changes this round.
+  - All other files in src/main/ (assets/, res/, cpp/, java/com/Regalia/):
+    see the per-file changes in NOTICE round-30 entry. No license
+    classification changes.
+
+v1.2.3 round-29 (2026.7.19) — PR52 SonarCloud + CodeRabbit review fixes:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - AndroidManifest.xml (AGPL v3): No changes this round. Permission list
+    in this file's summary updated — removed ACCESS_NETWORK_STATE (was
+    removed from manifest in round-18 but the doc summary was not synced).
+  - All other files in src/main/ (assets/, res/, cpp/, java/com/Regalia/):
+    no license classification changes.
+  - License classification corrections: JsBridgeGateway.java
+    AGPL v3 → GPL v3 in historical round entries (DroidFish-derived per file
+    header — engine management logic from Peter Österlund's DroidFish).
+
 v1.2.3 round-28 (2026.7.19): no changes in this directory.
   - Version: versionCode=123, versionName="1.2.3" (unchanged — audit round).
   - The round-28 change is limited to src/main/assets/chess.src/ and the rebuilt chess.html.
@@ -316,7 +334,7 @@ Subdirectory license summary:
   - res/: AGPL v3 (original code and AI-generated assets)
       See res/README.license for details.
   - AndroidManifest.xml: AGPL v3 (original configuration)
-      Permissions: INTERNET + ACCESS_NETWORK_STATE (Lichess Tablebase API),
+      Permissions: INTERNET (Lichess Tablebase API),
       WAKE_LOCK (keep screen on during play), VIBRATE (haptic feedback),
       FOREGROUND_SERVICE + FOREGROUND_SERVICE_SPECIAL_USE (engine stability
       on Android 14/15 / Xiaomi HyperOS 3), POST_NOTIFICATIONS (Android 13+
@@ -324,6 +342,8 @@ Subdirectory license summary:
       READ_EXTERNAL_STORAGE are scoped to legacy Android versions only;
       READ_MEDIA_IMAGES was removed in v1.0.2 (the built-in file browser
       queries MediaStore.Files, not MediaStore.Images).
+      ACCESS_NETWORK_STATE was removed in v1.2.3 round-18 (zero usage in the
+      codebase — the WebView queries network state in its own process).
       v1.0.3: versionCode 102 → 103, versionName "1.0.2" → "1.0.3".
       v1.0.4: versionCode 103 → 104, versionName "1.0.3" → "1.0.4".
 
@@ -542,7 +562,7 @@ v1.0.4 Round-5 Rev48 changes:
   - src/main/assets/chess.src/ui.js (GPL v3): Blue/Yellow arrows; review board overlay.
   - src/main/assets/chess.src/pgn-standard.js (AGPL v3): Updated color docs.
   - src/main/assets/chess.src/index.html.tpl (AGPL v3): .review-board position:relative.
-  - src/main/assets/stats.html (AGPL v3): 4-color arrow display; conditional sections.
+  - src/main/assets/stats.html (GPL v3): 4-color arrow display; conditional sections.
   - src/main/assets/chess.html: rebuilt from chess.src/ changes.
   - No changes to AndroidManifest.xml, cpp/, res/, java/, or jniLibs/.
 

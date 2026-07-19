@@ -130,6 +130,77 @@ path). This is a single-module project (root `build.gradle` applies
     CMake now builds `libengine_bridge.so` from source, and `libc++_shared.so`
     is bundled automatically by AGP via the NDK.
 
+## v1.2.3 round-30 (2026.7.19) — First-principles per-file review + robustness/perf optimizations
+
+Continuation of the per-file, per-line first-principles review (3 parallel review agents covering all 11 JS modules + 19 Java files + C++/build configs). 20 actionable findings identified; 18 implemented (2 deferred — `_escapeHTML` wrapper kept for backward compatibility, `JsBridgeGateway.isSafeFileName` `..` check kept as defense-in-depth). All changes are semantics-preserving or pure robustness/perf improvements; no behavior change for valid inputs.
+
+### Build-relevant changes
+
+- **`build.gradle`**: NO changes (round-29's verification that `version "3.31.6+"` is a valid Gradle range still holds).
+- **`StockfishNative.java`**: `engineGoDepth` now clamps `depth` to `[1, MAX_REASONABLE_DEPTH]` (60) before sending `go depth N` — protects against JS bugs passing 0 or extreme values.
+- **`HapticManager.java`**: `isHapticEnabled` now caches the system-side `Settings.System.HAPTIC_FEEDBACK_ENABLED` setting for 5s (was a Binder IPC on every haptic call). Two new `volatile` fields (`_systemHapticCached`, `_systemHapticCacheTs`).
+- **`MainActivity.java`**: `stabilizationHelper`/`stabilizationEnabled` declared `volatile` (cross-thread visibility — JS binder thread + main thread). `scheduleInitRetry` now calls `showFallbackUI` after all 3 retries are exhausted (previously silent failure).
+- **`StatsActivity.java`**: `performHaptic` now delegates to a lazily-initialized `HapticManager` instance (instead of reimplementing the gating + VibrationEffect fallback chain inline). New `volatile HapticManager _statsHapticManager` field. `loadAssetAsBase64` now has the same `..` path-traversal check as `FileIoHelper.loadAssetAsBase64` (defense-in-depth).
+- **`EngineConfigHelper.java`**: `detectBigCoreCount` now correctly handles ARM64 kernels that emit both "CPU max MHz" and "BogoMIPS" — "CPU max MHz" (authoritative) always wins; "BogoMIPS" (rough proxy) only fills in when no MHz reading was seen.
+- **`FileIoHelper.java`**: `addMediaStoreResults` now escapes SQL LIKE wildcards (`_`, `%`, `\\`) in directory paths and adds `ESCAPE '\\'` clause to both LIKE expressions.
+- **`PgnCacheManager.java`**: `sanitizeName` now uses two pre-compiled `static final Pattern` instances (was recompiling regex on every call). New `import java.util.regex.Pattern`.
+
+### Code-quality fixes (first-principles)
+
+- **`game-logic.js`**: `winnerLacksMatingMaterial` now tracks winner's bishop square-color parity and returns `true` for K+B+B same-color (both bishops on light or both on dark squares, no knight) — a position where mate cannot be forced. The previous code missed this case. 11 unit-test scenarios pass.
+- **`state-store.js`**: `_notifyListeners` now passes a deep-clone of `_state` to each listener (was passing the live reference, breaking the single-source-of-truth contract).
+- **`ui.js`**: `_updateCtrlInfoPanel` now uses `getElementById('ctrl-info-card')` instead of `querySelectorAll('.card')` + text-scan (O(1) vs O(cards) on every hover). Removed dead `lastRenderRequest` state (leftover from round-20's DIRTY_* removal). Removed `_cachedCtrlCard` cache (no longer needed).
+- **`ui-interactions.js`**: `_savePGNYes` polling now capped at 50 iterations (10s) — prevents unbounded polling if the dismiss callback fails to fire.
+- **`ai-bridge.js`**: `_makeLoadingClickable` polling capped at 25 iterations (5s). `onSettingsImported` safety-net setTimeouts now use a generation token (`_settingsImportGen`) so a new import invalidates pending closures. `_requestBatchEval` not-ready branch no longer schedules a spinning 100ms retry (relies on `onEngineReady` to resume the batch). `showToast` now tracks the inner 300ms removal timer in `_toastRemoveTimer` (was orphaned on rapid showToast calls). Removed `HapticManager._init` from the exported API (was only called once internally).
+- **`tablebase.js`**: `_tbCache` LRU refresh collapsed from `has()+get()+delete()+set()` to `get()+nullish+delete()+set()` (saves one Map lookup). Brace-comment loop pre-checks `includes('{')` to skip 10 regex passes on comment-free PGNs.
+
+### Documentation sync
+
+- `README.md`: round-30 changelog entry added at the top; directory tree updated (ui.js 6,795 lines, HapticManager.java 493 lines, round-30 notes).
+- `BUILDING.md`: round-30 section added at the top.
+- `PRIVACY.md`: round-30 entry added at the top (pure code-organization + bug-fix + perf round, no new permissions/network/data collection).
+- 8× `README.license`: round-30 entries added at the top (assets/chess.src/assets/src/main/java/com/Regalia/res/cpp/Manual).
+- `NOTICE`: round-30 entry added at the top.
+- 中英文说明书: round-29 + round-30 changelog entries added at the top (newest first).
+
+### Verification
+
+All 11 JS modules pass `node --check`. `chess.html` rebuilt via build-chess.py (22,951 lines / 1,382,039 bytes; inline script passes `node --check`). `stats.html` inline script passes `node --check`. Node-vm smoke test of `winnerLacksMatingMaterial` — 11/11 FIDE 6.9 scenarios pass (including the new K+B+B same-color case + the opposite-color negative case + the K+N+B+B same-color negative case). Release APK rebuilt: signature v1+v2+v3 all true, versionCode=123/versionName="1.2.3"/targetSdk 35, FGS specialUse subtype intact, no `ACCESS_NETWORK_STATE`. APK `lib/arm64-v8a/libstockfish.so` SHA-256 = `8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5` — three-way match (source / deployed / APK-internal). Version: versionCode=123, versionName="1.2.3" (unchanged).
+
+## v1.2.3 round-29 (2026.7.19) — PR #52 SonarCloud + CodeRabbit review fixes
+
+This round processes the PR #52 review reports (`SonarCloud_PR52_Issues_Summary.docx` + `PR52_Unresolved_Issues_Optimization.docx`). Every claimed issue was verified against the actual source — 14 real defects fixed, 6 false positives identified and skipped. See `README.md` round-29 entry for the full false-positive rationale.
+
+### Build-relevant changes
+
+- **`build.gradle`**: NO changes. The docx claim that `version "3.31.6+"` is a "semantic error" is a FALSE POSITIVE — AGP accepts Gradle-style version ranges (the `+` is a wildcard), and the project has built successfully with this setting since round-13. The setting remains unchanged.
+- **`StockfishNative.java`**: `_hapticManager` field declared `final` (safe-publication across JS binder thread; consistent with all other manager fields).
+- **`HapticManager.java`**: S3358 nested ternary `a < 0 ? 0 : (a > 255 ? 255 : a)` replaced with `Math.max(0, Math.min(255, a))` (clearer amplitude clamp intent).
+
+### Code-quality fixes (SonarCloud)
+
+- **`game-logic.js`**: NEW function `winnerLacksMatingMaterial(s, winner)` for FIDE 6.9 timeout-draw (checks WINNER's mating ability specifically, not the symmetric dead-position check). `isDeadPosition` retained as FIDE 5.2.2 fallback. S6582: `_st?.board && _st.board[mv.to.row] ? ...` collapsed to `_st?.board?.[mv.to.row]?.[mv.to.col] ?? null`.
+- **`ui-gameflow.js`**: `_onGameClockExpired` now uses `winnerLacksMatingMaterial(gameState, winner)` as primary FIDE 6.9 check; `isDeadPosition` retained as symmetric fallback. The old code used `isDeadPosition` alone, missing the asymmetric case (winner has K, K+N, K+B, or K+2N → cannot mate; should be a draw, not a win on time).
+- **`ui-interactions.js`**: `_restoreClocks` no longer calls `initGameClocks()` (which rebuilds `gameClocks` from `dlgTimeControl.baseSec`, overwriting the just-restored `remainingSec`/`displayRemainingSec` from the snapshot). Now only restarts the tick interval via `setInterval(_tickGameClock, 200)`. This restores the round-23 Q3 + round-28 baseSec fix's intended behavior — Undo/Redo now correctly preserves clock values. S6582: `e?.message ? e.message : e` → `e?.message ?? e`.
+- **`ai-bridge.js`**: S3358 nested ternary extracted to `_evalOrMate` helper. S6582: three `gameState?.board && gameState.board[...]` chains collapsed to `gameState?.board?.[...]`. S3504: 4× `var` → `const` (dov, fb, info, s — scoped to their try-blocks).
+- **`tablebase.js`**: S8786 PGN tag regex replaced with canonical form `/\[\s*[A-Za-z]\w*\s+"(?:[^"\\]|\\.)*"\s*\]/g` (matches `pgn-standard.js:696`). Eliminates alternation-induced polynomial backtracking. S6582: `(parsedMove?.move && parsedMove.move.promotion) || null` → `parsedMove?.move?.promotion || null`.
+- **`worker-pool.js`**: S6551 `e?.message || e` → `e?.message || String(e)` (so ErrorEvent objects stringify meaningfully instead of "[object Object]").
+- **`ui.js`**: S1481 removed dead local `_isLandscapeReview` (declared but never consumed after round-12 unified portrait/landscape DOM skeleton).
+- **`stats.html`**: S8786 four PGN tag-strip regex sites (L698, L713, L1518, L1558) replaced with canonical form (same as tablebase.js). S7780+S7781: `JSON.stringify(s).replace(/</g, '\\u003c')` → `JSON.stringify(s).replaceAll('<', String.raw\`\u003c\`)` (clearer intent, no global-regex form).
+
+### Documentation sync
+
+- `README.md`: round-13 release notes' signing-key credentials (alias, password, backup path) removed. Keystore credentials are now loaded from `keystore.properties` (gitignored).
+- `src/main/README.license`: AndroidManifest permission list removed `ACCESS_NETWORK_STATE` (was removed from manifest in round-18 but doc was unsynced).
+- `Manual/Regalia-v1.2.3-manual-{zh,en}.html`: PGN Cache Manager section's toolbar order description now mentions the 💾 (Export PGN to file) button between 📝 PGN and 📚, matching the existing mockup.
+- `src/main/res/README.license`: xml/ summary updated to note `backup_rules.xml`/`data_extraction_rules.xml` are NOT currently referenced by AndroidManifest (`allowBackup="false"`).
+- `worklog.md`: round-23 PDF count corrected (4→6, matching the 6 listed file names).
+- 49 historical round entries across NOTICE + 5 README.license files: AGPL v3 → GPL v3 corrections for `tablebase.js`, `stats.html`, `worker-pool.js`, `JsBridgeGateway.java` (all 4 are DroidFish-derived per file headers).
+
+### Verification
+
+All 11 JS modules pass `node --check`. `chess.html` rebuilt via build-chess.py (22,854 lines / 1,377,004 bytes; inline script passes `node --check`). `stats.html` inline script passes `node --check`. Node-vm smoke test of `winnerLacksMatingMaterial` — 8/8 FIDE 6.9 scenarios pass (including the asymmetric timeout case that was previously buggy). Release APK rebuilt: signature v1+v2+v3 all true, versionCode=123/versionName="1.2.3"/targetSdk 35, FGS specialUse subtype intact, no `ACCESS_NETWORK_STATE`. APK `lib/arm64-v8a/libstockfish.so` SHA-256 = `8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5` — three-way match (source / deployed / APK-internal). Version: versionCode=123, versionName="1.2.3" (unchanged).
+
 ## v1.2.3 round-28 (2026.7.19) — Undo/Redo clock restoration audit + baseSec completeness
 
 User reported: "悔棋(Undo)时应当记录剩余时间，便于撤悔(Redo)后恢复剩余时间."
@@ -1479,7 +1550,7 @@ A line-by-line first-principles review of every source file was performed after 
   - **Fix**: `openStatsPage()` (ai-bridge.js) now sends a separate `visualAnnotations` field in the payload, containing ALL cache entries (both `imported=true` and `imported=false`), keyed by moveIdx. The stats page uses this field as the PRIMARY data source, falling back to PGN-text scan only if the field is absent (older callers). NAGs (`$N`) are still scanned from PGN text (they're PGN-only, not in the visualAnnotations cache).
   - **Files changed**:
     - `ai-bridge.js` (GPL v3): `openStatsPage()` now collects all `_visualAnnotationsCache` entries (skipping the `_initial` key) into a `vaData` object and includes it in the JSON payload as `visualAnnotations`.
-    - `stats.html` (AGPL v3): visual annotations section now reads `_payload.visualAnnotations` first (primary source), applies the selected-move cutoff, and falls back to PGN-text scan only if the payload field is absent. NAG scanning from PGN text is preserved (NAGs are not in the payload).
+    - `stats.html` (GPL v3): visual annotations section now reads `_payload.visualAnnotations` first (primary source), applies the selected-move cutoff, and falls back to PGN-text scan only if the payload field is absent. NAG scanning from PGN text is preserved (NAGs are not in the payload).
   - **Design preserved**: The Phase 62 `imported` flag logic in `_buildPGNString()` is UNCHANGED — auto-generated annotations still do NOT pollute PGN export. The fix is purely additive: a new payload field that gives the stats page access to all annotations without changing PGN export semantics.
   - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version refinement)
 

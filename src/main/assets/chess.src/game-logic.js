@@ -1920,7 +1920,12 @@ function _castleSide(mv,s){
       //   on the castling side (the participating rook, which moves away).
       //   Standard chess is unaffected (rook is always on a1/h1, king dest
       //   c1/g1 is always empty).
-      const _destPiece=_st?.board&&_st.board[mv.to.row]?_st.board[mv.to.row][mv.to.col]:null;
+      // v1.2.3 round-29 (PR52 S6582): collapse `_st?.board && _st.board[mv.to.row] ? _st.board[mv.to.row][mv.to.col] : null`
+      //   into the equivalent `_st?.board?.[mv.to.row]?.[mv.to.col] ?? null`.
+      //   Note: the new form returns `null` (not `undefined`) when the square
+      //   is empty — the only consumer (`!_destPiece || ...`) treats both the
+      //   same, so behavior is preserved.
+      const _destPiece=_st?.board?.[mv.to.row]?.[mv.to.col]??null;
       const _destValid=!_destPiece||(_destPiece.type==='rook'&&_destPiece.color===mv.piece.color);
       // v1.1.2 PHASE 71 (defense-in-depth): Chess960 0-distance castling.
       // When the engine emits a UCI castling move for an SP-ID where the king
@@ -2455,6 +2460,68 @@ const k=s.currentTurn==='white'?s.wk:s.bk;return inCheck(s.board,s.currentTurn,k
 // isDeadPosition: FIDE 5.2.2 — no possible checkmate by any series of legal moves
 // Covers: K vs K, K+minor vs K, K+B vs K+B (same color), K+B+B(same color) vs K
 // Note: K+N+N vs K is NOT a dead position (checkmate possible with opponent's help)
+// v1.2.3 round-29 (PR52): winnerLacksMatingMaterial added for FIDE 6.9 — checks
+//   whether a SPECIFIC side has enough material to checkmate the opponent.
+//   isDeadPosition checks the WHOLE position (both sides); for FIDE 6.9 timeout
+//   draws we need to check the WINNER side only. Example: White flags, Black has
+//   K+N only → Black wins on time but cannot mate → FIDE 6.9 draw. isDeadPosition
+//   returns false here (White may have a queen), so the old code wrongly judged
+//   "Black wins". winnerLacksMatingMaterial(state,'black') returns true → draw.
+function winnerLacksMatingMaterial(s,winnerColor){
+  if(!s||!s.board)return false;
+  // Scan board; collect winner's non-king piece counts + bishop square-parity.
+  // Loser-side material is irrelevant to FIDE 6.9 — the winner's mating
+  // ability depends only on the winner's own pieces (the loser's pieces can
+  // only be in the way). Bishop square-color parity is tracked because
+  // K+B+B (both on same color) vs K cannot force mate (the enemy king
+  // escapes to the opposite-color squares), per FIDE rules.
+  let wPawn=0,wKnight=0,wBishop=0,wRook=0,wQueen=0,wKing=0;
+  let wBishopParity=-1; // -1 = no bishop seen; 0/1 = light/dark; -2 = mixed
+  for(let r=0;r<8;r++){
+    const row=s.board[r];if(!row)continue;
+    for(let c=0;c<8;c++){
+      const p=row[c];
+      if(!p)continue;
+      if(p.color!==winnerColor)continue;
+      switch(p.type){
+        case'pawn':wPawn++;break;
+        case'knight':wKnight++;break;
+        case'rook':wRook++;break;
+        case'queen':wQueen++;break;
+        case'king':wKing++;break;
+        case'bishop':{
+          wBishop++;
+          const parity=(r+c)%2;
+          if(wBishopParity===-1)wBishopParity=parity;
+          else if(wBishopParity!==parity)wBishopParity=-2; // mixed-parity flag
+          break;
+        }
+      }
+    }
+  }
+  // Sanity: winner must have exactly one king (otherwise state is corrupt).
+  if(wKing!==1)return false;
+  // Any pawn / rook / queen → mating is possible.
+  if(wPawn>0||wRook>0||wQueen>0)return false;
+  // K vs K (winner has only king) → cannot mate.
+  if(wKnight===0&&wBishop===0)return true;
+  // K + single minor (N or B) → cannot mate.
+  if(wKnight+wBishop===1)return true;
+  // K + 2N → cannot force mate (FIDE rules; help-mate possible but not forced).
+  if(wKnight===2&&wBishop===0)return true;
+  // K + B+B same color (no knight) → cannot force mate (enemy king escapes
+  // to the opposite-color squares). wBishopParity>=0 ensures ALL bishops
+  // are the same color; the no-knight guard excludes K+N+B+B(same color)
+  // which CAN mate (knight attacks both square colors).
+  // v1.2.3 round-30: added this case (was missing — the FIDE 6.9 timeout
+  //   draw was incorrectly judged a win for K+B+B same-color winners).
+  if(wBishop>=2&&wKnight===0&&wBishopParity>=0)return true;
+  // K + B+B same color + knight → CAN mate.
+  // K + B+B opposite color → CAN mate (covers both square colors).
+  // K + N+B → CAN mate.
+  // K + 2N+anything else → CAN mate (the anything-else enables mate).
+  return false;
+}
 function isDeadPosition(s){
 // v1.0.2 PERF (first-principles): single-pass piece scan with early returns.
 // The previous code allocated a pcs[] array, then ran multiple .filter() /

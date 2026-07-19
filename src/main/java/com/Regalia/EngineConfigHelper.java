@@ -213,10 +213,27 @@ public class EngineConfigHelper {
                             frequencies.add(currentFreq);
                         }
                         currentFreq = 0;
-                    } else if (line.contains("CPU max MHz") || line.contains("BogoMIPS")) {
+                    } else if (line.contains("CPU max MHz")) {
+                        // v1.2.3 round-30 (bug fix): split the previous combined
+                        //   `|| line.contains("BogoMIPS")` branch. The old code
+                        //   unconditionally set currentFreq, so on ARM64 kernels
+                        //   that emit BOTH "CPU max MHz" and "BogoMIPS" for the
+                        //   same core, the LAST one wins — often BogoMIPS, which
+                        //   is a rough proxy not actual MHz. Now "CPU max MHz"
+                        //   (authoritative) always wins, and BogoMIPS only fills
+                        //   in when no MHz reading was seen for this core.
                         try {
                             String[] parts = line.split(":");
                             if (parts.length >= 2) {
+                                double freq = Double.parseDouble(parts[1].trim());
+                                currentFreq = (long) (freq * 1000);
+                            }
+                        } catch (NumberFormatException ignored) {}
+                    } else if (line.contains("BogoMIPS")) {
+                        // Fallback only — don't overwrite a real MHz reading.
+                        try {
+                            String[] parts = line.split(":");
+                            if (parts.length >= 2 && currentFreq == 0) {
                                 double freq = Double.parseDouble(parts[1].trim());
                                 currentFreq = (long) (freq * 1000);
                             }

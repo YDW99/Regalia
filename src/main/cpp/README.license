@@ -1,3 +1,11 @@
+v1.2.3 round-30 (2026.7.19) — First-principles per-file review + robustness/perf optimizations:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - No changes to cpp/ files this round.
+
+v1.2.3 round-29 (2026.7.19) — PR52 SonarCloud + CodeRabbit review fixes:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - No changes to cpp/ files this round.
+
 v1.2.3 round-28 (2026.7.19): no changes in this directory.
   - Version: versionCode=123, versionName="1.2.3" (unchanged — audit round).
 

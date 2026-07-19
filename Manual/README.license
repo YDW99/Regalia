@@ -1,3 +1,20 @@
+v1.2.3 round-30 (2026.7.19) — First-principles per-file review + robustness/perf optimizations:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - Regalia-v1.2.3-manual-zh.html (AGPL v3): round-30 changelog entry
+    added at the top of the changelog section (newest first).
+  - Regalia-v1.2.3-manual-en.html (AGPL v3): same round-30 entry added
+    (content-equivalent, not machine-translated).
+
+v1.2.3 round-29 (2026.7.19) — PR52 SonarCloud + CodeRabbit review fixes:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - Regalia-v1.2.3-manual-zh.html (AGPL v3): PGN Cache Manager section's
+    toolbar order description now mentions the 💾 (Export PGN to file)
+    button between 📝 PGN and 📚, matching the existing mockup.
+  - Regalia-v1.2.3-manual-en.html (AGPL v3): Same 💾 button fix applied
+    to the English manual.
+  - Both manuals: round-29 changelog entry added at the top of the
+    changelog section (newest first, per project convention).
+
 v1.2.3 round-28 (2026.7.19) — Undo/Redo clock restoration audit + baseSec completeness:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — audit round).
   - Regalia-v1.2.3-manual-zh.html (AGPL v3): round-28 changelog entry inserted

@@ -3237,7 +3237,12 @@ function _castleSide(mv,s){
       //   on the castling side (the participating rook, which moves away).
       //   Standard chess is unaffected (rook is always on a1/h1, king dest
       //   c1/g1 is always empty).
-      const _destPiece=_st?.board&&_st.board[mv.to.row]?_st.board[mv.to.row][mv.to.col]:null;
+      // v1.2.3 round-29 (PR52 S6582): collapse `_st?.board && _st.board[mv.to.row] ? _st.board[mv.to.row][mv.to.col] : null`
+      //   into the equivalent `_st?.board?.[mv.to.row]?.[mv.to.col] ?? null`.
+      //   Note: the new form returns `null` (not `undefined`) when the square
+      //   is empty — the only consumer (`!_destPiece || ...`) treats both the
+      //   same, so behavior is preserved.
+      const _destPiece=_st?.board?.[mv.to.row]?.[mv.to.col]??null;
       const _destValid=!_destPiece||(_destPiece.type==='rook'&&_destPiece.color===mv.piece.color);
       // v1.1.2 PHASE 71 (defense-in-depth): Chess960 0-distance castling.
       // When the engine emits a UCI castling move for an SP-ID where the king
@@ -3772,6 +3777,68 @@ const k=s.currentTurn==='white'?s.wk:s.bk;return inCheck(s.board,s.currentTurn,k
 // isDeadPosition: FIDE 5.2.2 — no possible checkmate by any series of legal moves
 // Covers: K vs K, K+minor vs K, K+B vs K+B (same color), K+B+B(same color) vs K
 // Note: K+N+N vs K is NOT a dead position (checkmate possible with opponent's help)
+// v1.2.3 round-29 (PR52): winnerLacksMatingMaterial added for FIDE 6.9 — checks
+//   whether a SPECIFIC side has enough material to checkmate the opponent.
+//   isDeadPosition checks the WHOLE position (both sides); for FIDE 6.9 timeout
+//   draws we need to check the WINNER side only. Example: White flags, Black has
+//   K+N only → Black wins on time but cannot mate → FIDE 6.9 draw. isDeadPosition
+//   returns false here (White may have a queen), so the old code wrongly judged
+//   "Black wins". winnerLacksMatingMaterial(state,'black') returns true → draw.
+function winnerLacksMatingMaterial(s,winnerColor){
+  if(!s||!s.board)return false;
+  // Scan board; collect winner's non-king piece counts + bishop square-parity.
+  // Loser-side material is irrelevant to FIDE 6.9 — the winner's mating
+  // ability depends only on the winner's own pieces (the loser's pieces can
+  // only be in the way). Bishop square-color parity is tracked because
+  // K+B+B (both on same color) vs K cannot force mate (the enemy king
+  // escapes to the opposite-color squares), per FIDE rules.
+  let wPawn=0,wKnight=0,wBishop=0,wRook=0,wQueen=0,wKing=0;
+  let wBishopParity=-1; // -1 = no bishop seen; 0/1 = light/dark; -2 = mixed
+  for(let r=0;r<8;r++){
+    const row=s.board[r];if(!row)continue;
+    for(let c=0;c<8;c++){
+      const p=row[c];
+      if(!p)continue;
+      if(p.color!==winnerColor)continue;
+      switch(p.type){
+        case'pawn':wPawn++;break;
+        case'knight':wKnight++;break;
+        case'rook':wRook++;break;
+        case'queen':wQueen++;break;
+        case'king':wKing++;break;
+        case'bishop':{
+          wBishop++;
+          const parity=(r+c)%2;
+          if(wBishopParity===-1)wBishopParity=parity;
+          else if(wBishopParity!==parity)wBishopParity=-2; // mixed-parity flag
+          break;
+        }
+      }
+    }
+  }
+  // Sanity: winner must have exactly one king (otherwise state is corrupt).
+  if(wKing!==1)return false;
+  // Any pawn / rook / queen → mating is possible.
+  if(wPawn>0||wRook>0||wQueen>0)return false;
+  // K vs K (winner has only king) → cannot mate.
+  if(wKnight===0&&wBishop===0)return true;
+  // K + single minor (N or B) → cannot mate.
+  if(wKnight+wBishop===1)return true;
+  // K + 2N → cannot force mate (FIDE rules; help-mate possible but not forced).
+  if(wKnight===2&&wBishop===0)return true;
+  // K + B+B same color (no knight) → cannot force mate (enemy king escapes
+  // to the opposite-color squares). wBishopParity>=0 ensures ALL bishops
+  // are the same color; the no-knight guard excludes K+N+B+B(same color)
+  // which CAN mate (knight attacks both square colors).
+  // v1.2.3 round-30: added this case (was missing — the FIDE 6.9 timeout
+  //   draw was incorrectly judged a win for K+B+B same-color winners).
+  if(wBishop>=2&&wKnight===0&&wBishopParity>=0)return true;
+  // K + B+B same color + knight → CAN mate.
+  // K + B+B opposite color → CAN mate (covers both square colors).
+  // K + N+B → CAN mate.
+  // K + 2N+anything else → CAN mate (the anything-else enables mate).
+  return false;
+}
 function isDeadPosition(s){
 // v1.0.2 PERF (first-principles): single-pass piece scan with early returns.
 // The previous code allocated a pcs[] array, then ran multiple .filter() /
@@ -6400,7 +6467,11 @@ function _createWorker() {
       for (const [tid, task] of toReject) {
         _pendingTasks.delete(tid);
         if (task.timeout) { clearTimeout(task.timeout); task.timeout = null; }
-        task.reject(new Error('Worker crashed: ' + (e?.message || e)));
+        // v1.2.3 round-29 (PR52 S6551): use String(e) instead of bare `e` so
+        //   ErrorEvent / Event objects stringify meaningfully instead of
+        //   "[object Object]". When e is a string (legacy onerror contract)
+        //   String(e) returns it unchanged.
+        task.reject(new Error('Worker crashed: ' + (e?.message || String(e))));
       }
       w._busy = false;
       _removeWorker(w);
@@ -6983,9 +7054,14 @@ const Store = (function() {
 
     /**
      * 通知所有订阅者
+     * v1.2.3 round-30 (robustness): deep-clone the state snapshot handed to
+     *   listeners — without this, listeners received the LIVE _state reference
+     *   and could mutate it directly, bypassing dispatch() and breaking the
+     *   single-source-of-truth contract that getState() / dispatch() already
+     *   enforce via _deepClone. Consistent with the v1.2.1 P0-1/P0-2 invariant.
      */
     function _notifyListeners() {
-        const snapshot = _state;
+        const snapshot = _deepClone(_state);
         const listeners = _listeners.slice();
         for (let i = 0; i < listeners.length; i++) {
             try {
@@ -7574,6 +7650,10 @@ let scannedEngines=[];
 let _pendingSwitchPath=null;
 // Cached multiPV setting from engine config — avoids JNI call per progress tick
 let _cachedMultiPV=1;
+// v1.2.3 round-30 (robustness): generation token for onSettingsImported's
+//   safety-net setTimeout closures. Incremented on each new import so any
+//   pending closures from a previous import become no-ops.
+let _settingsImportGen=0;
 
 // ===================== HAPTIC FEEDBACK MANAGER =====================
 // 5-level compatibility degradation chain for haptic feedback
@@ -7663,7 +7743,11 @@ const HapticManager = (function() {
   // Initialize on creation
   _init();
 
-  return { fire, refreshSettings, _init };
+  // v1.2.3 round-30 (redundant): removed `_init` from the exported API.
+  //   It was only ever called once internally (above) and no external
+  //   caller invoked HapticManager._init(). Keeping it exposed created dead
+  //   API surface and a maintenance trap.
+  return { fire, refreshSettings };
 })();
 
 // Stale eval detection: incremented by _resetEvalState() when game state changes,
@@ -7684,6 +7768,10 @@ let _evalRequestReviewMode=false;
 let _evalSafetyTimerId=null;
 
 let _toastTimer=0;
+// v1.2.3 round-30 (perf): track the inner 300ms removal timer so rapid
+//   showToast() calls don't leave orphaned timers that fire on already-
+//   detached toast nodes (harmless but wasteful).
+let _toastRemoveTimer=0;
 // v1.0.8 PHASE 22 supplement: Smart toast sound — auto-detect success/error
 //   from the message's i18n key pattern and play a matching sound.
 //   - "已复制/已导出/已保存/copied/exported/saved" → playCopy (清脆叮声)
@@ -7712,7 +7800,28 @@ function _playToastSound(msg){
 }
 function showToast(msg,duration=2500){
   _playToastSound(msg);
-  const old=document.getElementById('_toast');if(old)old.remove();if(_toastTimer)clearTimeout(_toastTimer);const t=document.createElement('div');t.id='_toast';t.style.cssText='position:fixed;bottom:60px;left:50%;transform:translateX(-50%);background:var(--overlay-card-bg);color:var(--text);padding:10px 24px;border-radius:6px;font-size:.85rem;z-index:10000;border:1px solid var(--border2);box-shadow:var(--panel-shadow);pointer-events:none;opacity:0;transition:opacity .3s;font-family:system-ui,-apple-system,sans-serif';t.textContent=msg;document.body.appendChild(t);requestAnimationFrame(()=>{t.style.opacity='1'});_toastTimer=setTimeout(()=>{t.style.opacity='0';setTimeout(()=>t.remove(),300)},duration)}
+  const old=document.getElementById('_toast');
+  if(old)old.remove();
+  if(_toastTimer)clearTimeout(_toastTimer);
+  // v1.2.3 round-30 (perf): clear the inner removal timer too — without this,
+  //   a rapid second showToast() leaves the first toast's 300ms removal timer
+  //   armed, which fires on the (already-removed) first toast node.
+  if(_toastRemoveTimer)clearTimeout(_toastRemoveTimer);
+  const t=document.createElement('div');
+  t.id='_toast';
+  t.style.cssText='position:fixed;bottom:60px;left:50%;transform:translateX(-50%);background:var(--overlay-card-bg);color:var(--text);padding:10px 24px;border-radius:6px;font-size:.85rem;z-index:10000;border:1px solid var(--border2);box-shadow:var(--panel-shadow);pointer-events:none;opacity:0;transition:opacity .3s;font-family:system-ui,-apple-system,sans-serif';
+  t.textContent=msg;
+  document.body.appendChild(t);
+  requestAnimationFrame(()=>{t.style.opacity='1'});
+  _toastTimer=setTimeout(()=>{
+    t.style.opacity='0';
+    _toastRemoveTimer=setTimeout(()=>{
+      t.remove();
+      _toastRemoveTimer=0;
+    },300);
+    _toastTimer=0;
+  },duration);
+}
 
 // Update the foreground service notification with engine process info.
 // This prevents the OS from killing the engine process on aggressive
@@ -7928,7 +8037,14 @@ let _emergencyFallbackTimerId=setTimeout(function(){
 
 // Layer 4: Click to skip — allow user to dismiss loading screen manually
 (function _makeLoadingClickable(){
+  // v1.2.3 round-30 (robustness): cap polling at 25 iterations (5s). If the
+  //   loading overlay never appears (e.g. _showLoadingOverlay threw and the
+  //   overlay div was never appended), the interval would otherwise leak
+  //   forever. After 5s, clear the interval regardless.
+  let _ticks=0;
+  const MAX_TICKS=25;
   const loCheck=setInterval(()=>{
+    _ticks++;
     const lo=document.getElementById('_loadingOverlay');
     if(lo){
       clearInterval(loCheck);
@@ -7945,6 +8061,8 @@ let _emergencyFallbackTimerId=setTimeout(function(){
           if(_emergencyFallbackTimerId){clearTimeout(_emergencyFallbackTimerId);_emergencyFallbackTimerId=null;}
         }
       });
+    }else if(_ticks>=MAX_TICKS){
+      clearInterval(loCheck);
     }
   },200);
 })();
@@ -8499,8 +8617,10 @@ function _buildPGNString(forceIncludeVariations, includeAnnotations){
         // v1.2.3 round-25 (S3358): nested ternary flattened to helper.
         //   cur.mate>0 → +90000 (White mates), cur.mate<0 → -90000 (Black mates),
         //   no mate → use cur.eval directly.
-        const curEv=cur.mate!=null?(cur.mate>0?90000:-90000):cur.eval;
-        const prevEv=prev.mate!=null?(prev.mate>0?90000:-90000):prev.eval;
+        // v1.2.3 round-29 (PR52 S3358): extract _evalOrMate helper to flatten
+        //   the previously-nested ternary `mate!=null?(mate>0?90000:-90000):eval`.
+        const curEv=_evalOrMate(cur.mate,cur.eval);
+        const prevEv=_evalOrMate(prev.mate,prev.eval);
         const delta=curEv-prevEv;
         const isW=(color==='white');
         const md=isW?delta:-delta;
@@ -9058,7 +9178,10 @@ function _uciToSimple(uci){
   const toRank=String(8-toRow);
   // Try to determine piece type from current game state
   let pieceType='pawn';
-  if(gameState?.board&&gameState.board[fromRow]){
+  // v1.2.3 round-29 (PR52 S6582): collapse `gameState?.board && gameState.board[fromRow]`
+  //   into the equivalent `gameState?.board?.[fromRow]` — same semantics, one
+  //   fewer property access, no `&&` short-circuit noise.
+  if(gameState?.board?.[fromRow]){
     const p=gameState.board[fromRow][fromCol];
     if(p)pieceType=p.type;
   }
@@ -9086,7 +9209,8 @@ function _uciToSimple(uci){
   // king (right of king → kingside O-O; left → queenside O-O-O).
   if(pieceType==='king'){
     // v1.0.7 PHASE 4: Check for UCI_Chess960 king-captures-rook format first.
-    if(gameState?.board&&gameState.board[fromRow]&&gameState.board[toRow]){
+    // v1.2.3 round-29 (PR52 S6582): collapse `gameState?.board && ...` chain.
+    if(gameState?.board?.[fromRow]&&gameState.board[toRow]){
       const _fp=gameState.board[fromRow][fromCol];
       const _tp=gameState.board[toRow][toCol];
       if(_fp?.type==='king'&&_tp?.type==='rook'&&_fp.color===_tp.color&&fromRow===toRow){
@@ -9474,7 +9598,8 @@ function uciToCoords(uci){
   // engine (with UCI_Chess960=false) sends "e1g1", which does NOT match
   // (g1 doesn't hold a rook), so we don't rewrite. The rewrite only happens
   // when the engine actually uses the Chess960 castling notation.
-  if(gameState?.board&&gameState.board[fr]&&gameState.board[tr]){
+  // v1.2.3 round-29 (PR52 S6582): collapse `gameState?.board && ...` chain.
+  if(gameState?.board?.[fr]&&gameState.board[tr]){
     const fromPiece=gameState.board[fr][fc];
     const toPiece=gameState.board[tr][tc];
     if(fromPiece?.type==='king'&&toPiece?.type==='rook'&&fromPiece.color===toPiece.color&&fr===tr){
@@ -10674,15 +10799,15 @@ function onSettingsImported(result){
       // Set state, remove dialog from DOM directly, then render.
       showEngineConfig=false;
       // Force-remove any open dialog overlay from the DOM
-      var dov=document.querySelector('.dov[role="dialog"]');
+      const dov=document.querySelector('.dov[role="dialog"]');
       if(dov){dov.remove();}
       // Also remove any file-browser overlay that might still be open
-      var fb=document.getElementById('_fileBrowserOverlay');
+      const fb=document.getElementById('_fileBrowserOverlay');
       if(fb){fb.remove();}
       // Refresh cached data
       if(typeof AndroidBridge!=='undefined'){
-        try{var info=AndroidBridge.getEngineInfo();if(info)engineConfigData=JSON.parse(info);}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
-        try{var s=AndroidBridge.getEngineSettings();if(s)engineSettingsData=JSON.parse(s);}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
+        try{const info=AndroidBridge.getEngineInfo();if(info)engineConfigData=JSON.parse(info);}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
+        try{const s=AndroidBridge.getEngineSettings();if(s)engineSettingsData=JSON.parse(s);}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
       }
       if(engineSettingsData){
         _cachedMultiPV=engineSettingsData.multiPV||1;
@@ -10694,14 +10819,22 @@ function onSettingsImported(result){
         render();
       }
       // v1.0.3: Safety net — force close again after 100ms AND 300ms to handle
-      // late-arriving onEngineInfo callbacks that might re-render the dialog.
+      //   late-arriving onEngineInfo callbacks that might re-render the dialog.
+      // v1.2.3 round-30 (robustness): use a generation token so a NEW
+      //   onSettingsImported call (or any user action that opens another
+      //   dialog) invalidates the pending safety-net closures — otherwise
+      //   they would clobber a dialog the user just opened within 300ms.
+      _settingsImportGen=(_settingsImportGen|0)+1;
+      const myGen=_settingsImportGen;
       setTimeout(function(){
+        if(myGen!==_settingsImportGen)return;
         showEngineConfig=false;
         var dov2=document.querySelector('.dov[role="dialog"]');
         if(dov2){dov2.remove();}
         render();
       },100);
       setTimeout(function(){
+        if(myGen!==_settingsImportGen)return;
         showEngineConfig=false;
         var dov3=document.querySelector('.dov[role="dialog"]');
         if(dov3){dov3.remove();}
@@ -11622,11 +11755,15 @@ function _requestBatchEval(step){
       _reviewAnalyzeResetSafetyTimer();
     }
   }else{
-    // Engine not ready — advance to next step (the batch will resume when
-    // engine becomes ready via onEngineReady)
-    if(typeof _reviewAnalyzeAdvance==='function'){
-      setTimeout(function(){try{_reviewAnalyzeAdvance();}catch(_e){}},100);
-    }
+    // Engine not ready — DO NOT schedule an immediate retry. The previous
+    //   logic called setTimeout(_reviewAnalyzeAdvance, 100) here, which
+    //   re-entered _requestBatchEval → same not-ready branch → another
+    //   100ms timer, spinning every 100ms for 60s+ doing nothing.
+    //   The engine's onEngineReady callback (line 2440) already has logic
+    //   to resume the batch when the engine becomes ready, so we just
+    //   leave the batch paused and let that callback pick it up.
+    // v1.2.3 round-30 (robustness): removed the spinning-retry timer.
+    console.log('[AIBridge] Batch eval paused — engine not ready. Will resume on onEngineReady.');
   }
 }
 
@@ -11704,6 +11841,15 @@ function _updateReviewEvalUI(){
   }
   // P4 SIMPLIFY: Use shared helper for consistent eval display formatting
   el.innerHTML=_buildEvalHTML(e,{delta:deltaStr});
+}
+// v1.2.3 round-29 (PR52 S3358): extract the "mate-or-eval" selection so callers
+//   don't write nested ternaries. Returns a numeric eval score (centipawns,
+//   White-POV): mate>0 → +90000, mate<0 → -90000, no mate → fallback eval.
+//   The ±90000 sentinel is what _formatEvalDelta and the trend-chart shading
+//   already use to detect mate transitions.
+function _evalOrMate(mate,fallbackEval){
+  if(mate==null)return fallbackEval;
+  return mate>0?90000:-90000;
 }
 // Format eval delta between two eval values (centipawns, White's perspective).
 // Consolidates mate-transition handling and threshold logic in one place.
@@ -12012,7 +12158,7 @@ function _parsePGN(pgnText){
   //   single-line and multi-line PGN), and ALSO avoids stripping `[%csl ...]`
   //   / `[%cal ...]` / `[%eval ...]` / `[%emt ...]` inside brace comments
   //   (because `%` is not in `[A-Za-z]`).
-  let moveText=pgnText.replace(/\[\s*\w+\s+(?:"[^"]*"|[^\]]*?)\s*\]/g,'').trim(); // v1.2.3 round-20 (S8786): 相邻量词类互斥，消除超线性回溯（与 stats.html 四处同款修复）. v1.2.3 round-23 (Q7 fix): quote-aware — value 内含 ] 不再被截断（如 [Event "Tournament [A]"] 完整消耗）。`[^\]]*?` 非贪婪分支兜底无引号 tag（PGN 规范罕见但合法）。
+  let moveText=pgnText.replace(/\[\s*[A-Za-z]\w*\s+"(?:[^"\\]|\\.)*"\s*\]/g,'').trim(); // v1.2.3 round-29 (PR52 S8786): switch to canonical PGN tag regex (same as pgn-standard.js:696). Eliminates the alternation `[^\]]*?` overlap with `\s*` that produced polynomial backtracking on unclosed-bracket input; the strict pattern is linear and also correctly handles escaped quotes inside values (`[Event "Tournament \"Open\""]`).
   // Remove line continuation markers (\ at end of line)
   moveText=moveText.replace(/\\\s*\n/g,' ');
   
@@ -12354,7 +12500,14 @@ function _parsePGN(pgnText){
   //   cascade-failure path and aborting the parse.
   //   After brace stripping (fixed): `1. e4 e5  2. Bd3`  ← two valid tokens.
   //   The whitespace normalization at line ~490 collapses the double space.
-  {let _braceIter=0;while(moveText.includes('{')&&_braceIter++<10)moveText=moveText.replace(/\{[^{}]*\}/g,' ');}
+  // v1.2.3 round-30 (perf): pre-check `includes('{')` to skip the loop
+  //   entirely when there are no comments — most PGNs have no comments,
+  //   and the previous code ran up to 10 regex passes (each O(n)) plus
+  //   an `includes('{')` check per iteration even on comment-free input.
+  if(moveText.includes('{')){
+    let _braceIter=0;
+    while(moveText.includes('{')&&_braceIter++<10)moveText=moveText.replace(/\{[^{}]*\}/g,' ');
+  }
   // v1.0.4 Rev29: Remove unclosed brace + everything to end-of-string.
   // This is the PGN spec's tolerant behavior: an unclosed comment consumes
   // the rest of the movetext. We log a warning so the user knows.
@@ -13236,7 +13389,9 @@ function importPGN(pgnText){
       // was caught by the surrounding try/catch and surfaced to the user as
       // "PGN invalid" — making EVERY PGN import fail. Fixed to use
       // parsedMove.move.promotion (the move object on the parsed result).
-      promotion:(parsedMove?.move&&parsedMove.move.promotion)||null,
+      // v1.2.3 round-29 (PR52 S6582): collapse `parsedMove?.move && parsedMove.move.promotion`
+      //   into the equivalent `parsedMove?.move?.promotion`.
+      promotion:parsedMove?.move?.promotion||null,
       isCheck:_isCheck,
       isCastling:_isCastling,
       time:null,
@@ -13711,11 +13866,14 @@ const fen=generateFEN(s);
 // evicted before rarely-accessed ones — defeating the LRU cache's purpose.
 // The delete+set pattern moves the entry to the "newest" position (Map
 // preserves insertion order in JS).
-if(_tbCache.has(fen)){
-  const v=_tbCache.get(fen);
+// v1.2.3 round-30 (perf): collapse has()+get() into a single get() call —
+//   Map.get returns undefined for missing keys, so the nullish check
+//   replaces has(). Saves one Map lookup per cache hit.
+const _cached=_tbCache.get(fen);
+if(_cached!==undefined){
   _tbCache.delete(fen);
-  _tbCache.set(fen,v);
-  return v;
+  _tbCache.set(fen,_cached);
+  return _cached;
 }
 // Rate limit: ≥600ms between requests
 // FIX: Reserve the time slot immediately (before async wait) to prevent TOCTOU race
@@ -14314,23 +14472,30 @@ function _onGameClockExpired(color){
   }catch(e){console.warn('engineStop on clock expiry failed:',e);}
   // Game over: the OTHER side wins by time — UNLESS the OTHER side has
   //   insufficient material to checkmate (FIDE 6.9). In that case the game
-  //   is drawn, not won. v1.2.3 round-25 (feature gap): previously a player
-  //   could "win" on time against a lone king (K vs K) or K+B/K+N —
-  //   positions where checkmate is impossible by any sequence of legal
-  //   moves. Now: if the winner's side is a dead position, declare a draw
-  //   by insufficient material instead.
+  //   is drawn, not won. v1.2.3 round-25 introduced this check but used the
+  //   symmetric isDeadPosition() (FIDE 5.2.2 — both sides lack material),
+  //   which misses the asymmetric case (winner has only K, K+N, K+B, or
+  //   K+N+N → cannot mate the loser). v1.2.3 round-29 (PR52) replaces it
+  //   with winnerLacksMatingMaterial(state, winner) which checks the
+  //   WINNER's mating ability specifically. We still fall back to
+  //   isDeadPosition for the symmetric case (e.g. K vs K) so the existing
+  //   FIDE 5.2.2 path stays intact.
   const winner=color==='white'?'black':'white';
   let _isDrawByInsufficientMaterial=false;
   try{
-    if(typeof isDeadPosition==='function'&&gameState){
-      // v1.2.3 round-25 (FIDE 6.9): isDeadPosition checks whether checkmate
-      //   is possible by ANY sequence of legal moves (not necessarily forced).
-      //   FIDE 6.9: if the winner cannot checkmate, the game is drawn.
-      //   isDeadPosition returns true exactly when checkmate is impossible,
-      //   which is the correct condition for the timeout draw.
-      _isDrawByInsufficientMaterial=isDeadPosition(gameState);
+    if(gameState){
+      // FIDE 6.9: if the WINNER cannot checkmate the LOSER by any series of
+      //   legal moves, the game is drawn (not won on time).
+      if(typeof winnerLacksMatingMaterial==='function'
+         && winnerLacksMatingMaterial(gameState,winner)){
+        _isDrawByInsufficientMaterial=true;
+      }else if(typeof isDeadPosition==='function'&&isDeadPosition(gameState)){
+        // FIDE 5.2.2 fallback: whole position is dead (both sides lack
+        //   material). This subsumes K vs K and the rare mutual case.
+        _isDrawByInsufficientMaterial=true;
+      }
     }
-  }catch(e){console.warn('isDeadPosition check on timeout failed:',e);}
+  }catch(e){console.warn('insufficient-material check on timeout failed:',e);}
   if(_isDrawByInsufficientMaterial){
     if(typeof _timeoutWinnerColor!=='undefined')_timeoutWinnerColor=null;
     _gameOverStatusKey='draw_insufficient';
@@ -14487,8 +14652,9 @@ function _snapshotClocks(){
 // Restore clocks from a snapshot, rebasing lastMoveTimestamp to Date.now()
 //   so the resumed clock doesn't immediately deduct the elapsed wall-clock
 //   time between snapshot and restore. Also clears gameClockExpired and
-//   restarts the tick interval (initGameClocks is idempotent — it clears
-//   any prior interval before starting a new one).
+//   restarts the tick interval (we clear any prior interval before starting
+//   a new one — see the round-29 PR52 fix note inside the function body for
+//   why we no longer delegate to initGameClocks).
 function _restoreClocks(snap){
   if(!snap){
     // No snapshot (pre-round-23 history entry or no clock game) — leave
@@ -14514,10 +14680,16 @@ function _restoreClocks(snap){
   if(typeof gameClockExpired!=='undefined')gameClockExpired=null;
   // Restart the tick interval if the clock UI is active (gameClockTimerId
   // is owned by ui-gameflow.js). typeof guard — round-11 cross-module safety.
+  // v1.2.3 round-29 (PR52): we used to call initGameClocks() here, but that
+  //   rebuilds gameClocks from dlgTimeControl.baseSec — overwriting the
+  //   restored remainingSec / displayRemainingSec values from the snapshot.
+  //   This broke Undo/Redo clock restoration. Now we only restart the tick
+  //   interval (setInterval(_tickGameClock, 200)) without touching the
+  //   clock values. Matches initGameClocks's interval setup exactly.
   if(typeof gameClockTimerId!=='undefined'){
     if(gameClockTimerId){clearInterval(gameClockTimerId);gameClockTimerId=null;}
-    if(typeof initGameClocks==='function'&&!gameOver){
-      initGameClocks();
+    if(typeof _tickGameClock==='function'&&!gameOver){
+      gameClockTimerId=setInterval(_tickGameClock,200);
     }
   }
   if(typeof _updateClockDisplay==='function')_updateClockDisplay();
@@ -14799,7 +14971,7 @@ const ANIMATION_DEFER_MS=600;
 //   that delays the AI's reply and the game-over check for no reason.
 //   Reduce to 30ms (one frame + tiny buffer) under reduced-motion.
 let _deferMs=ANIMATION_DEFER_MS;
-try{if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches)_deferMs=30;}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+try{if(window.matchMedia&&window.matchMedia('(prefers-reduced-motion: reduce)').matches)_deferMs=30;}catch(e){console.warn('[UI]',e?.message??e);}
 const _hashAtSched=gameState.hash;
 setTimeout(()=>{
 try{
@@ -15629,11 +15801,21 @@ function _savePGNYes(){
     // Wait for the annotation dialog to be dismissed before executing cb.
     // Poll every 200ms; if dialog is not active (never opened or dismissed),
     // execute immediately.
+    // v1.2.3 round-30 (robustness): cap at 50 iterations (10s). If the
+    //   dialog flag is never cleared (e.g. dismiss callback fails to fire),
+    //   execute cb anyway and reset _skipPGNSavePrompt — prevents an
+    //   unbounded polling loop that leaks memory across the session.
+    let _polls=0;
+    const MAX_POLLS=50;
     function _waitForDialog(){
-      if(typeof _pgnExportDialogActive!=='undefined'&&_pgnExportDialogActive){
+      if(typeof _pgnExportDialogActive!=='undefined'&&_pgnExportDialogActive&&_polls<MAX_POLLS){
+        _polls++;
         setTimeout(_waitForDialog,200);
       }else{
-        cb();
+        if(_polls>=MAX_POLLS){
+          console.warn('[UI] _savePGNYes: gave up waiting for PGN export dialog after 10s — proceeding with pending action.');
+        }
+        try{cb();}catch(e){console.warn('[UI] pending action after PGN save failed:',e?.message??e);}
         _skipPGNSavePrompt=false;
       }
     }
@@ -17697,7 +17879,10 @@ let soundOn=true;
 let reviewBaseState=null,_cachedStatus=null,_cachedStatusKey='';
 // Control map cache
 let cachedCtrlMap=null,cachedCtrlKey='',renderPending=false,
-    lastRenderTime=0,lastRenderRequest=0,renderTimerId=null;
+    lastRenderTime=0,renderTimerId=null;
+// v1.2.3 round-30 (redundant): removed `lastRenderRequest` — it was written
+//   but never read anywhere (leftover from the removed DIRTY_* incremental-
+//   render subsystem, see line-161 comment block).
 let _animRetryCount=0; // v1.1.0 Phase 54: guard against stuck animationInProgress
 // v1.2.3 round-18 (bug fix): tracks "user is typing in the Chess960 SP-ID
 //   input" so the full re-render triggered by each keystroke can restore
@@ -17986,7 +18171,7 @@ function _hdrKingIconHTML(){
 // in the same rAF callback when _reqAtTick>lastRenderTime — the second
 // call's save phase read scrollTop=0 from the just-rebuilt DOM.
 function render(){
-  if(renderPending){lastRenderRequest=Date.now();return;}
+  if(renderPending){return;}
   // v1.0.8 PHASE 22: throttle render while piece-move animation is in
   //   progress (Web Animations API overlay is on screen). Landing anim is
   //   no longer a separate phase — the overlay covers the destination
@@ -18561,7 +18746,12 @@ h+=`<div class="review-hdr"><h2>${T('review_analysis')}</h2><div style="display:
 // v1.2.3 round-24 (God Function split): board metrics extracted to
 //   _computeRvBoardMetrics() — pure function, no side effects.
 const _rvM=_computeRvBoardMetrics();
-const _isLandscapeReview=_rvM._isLandscapeReview;
+// v1.2.3 round-29 (PR52 S1481): removed dead local `_isLandscapeReview` —
+//   round-12 unified the portrait/landscape DOM skeleton (the conditional
+//   branch was deleted), and the only remaining reference was the
+//   declaration itself. The mockup at line 1945-1953 of the manual still
+//   shows the flag in _computeRvBoardMetrics's return signature for
+//   backward compatibility, but the render path no longer consumes it.
 const _rvCell=_rvM._rvCell;
 const _rvLabelW=_rvM._rvLabelW;
 const _rvLabelH=_rvM._rvLabelH;
@@ -18569,8 +18759,6 @@ const _rvLabelGap=_rvM._rvLabelGap;
 const _rvBoardPx=_rvM._rvBoardPx;
 const _rvFullBoardH=_rvM._rvFullBoardH;
 // v1.1.0 Phase 53: Portrait and landscape now use the same DOM skeleton.
-// The _isLandscapeReview flag is still used later for board sizing (cell width)
-// and two-layer scroll decisions, but the initial DOM structure is identical.
 // v1.2.1 round-12 (S3923): Removed duplicate if/else — both branches produced
 // the exact same markup, leaving a redundant conditional that hid the unified
 // layout intent. The .review-top wrapper is now always emitted (it was
@@ -19577,7 +19765,7 @@ function _maybeShowBoardDebounceHint(){
 }
 
 function _postRenderFinalize(wasEcoFocused){
-_cachedBwrap=null;_cachedSvgEl=null;_cachedSvgLines=[];_cachedArrowKey='';_cachedCtrlCard=null;
+_cachedBwrap=null;_cachedSvgEl=null;_cachedSvgLines=[];_cachedArrowKey='';
 _prevHoverSq=hoveredSquare?{row:hoveredSquare.row,col:hoveredSquare.col}:null;
 _prevSelSq=selectedSquare?{row:selectedSquare.row,col:selectedSquare.col}:null;
 _prevLegalSet=new Set();if(selectedSquare){for(const m of legalMvs)_prevLegalSet.add(m.row*8+m.col);}
@@ -20123,19 +20311,17 @@ function _updateBoardLightweight(){
   _prevLegalSet=curLegalSet;
 }
 
-// Cached reference to control info card (invalidated on full render)
-let _cachedCtrlCard=null;
+// v1.2.3 round-30 (perf): the ctrl-info-card element has a stable id
+//   (rendered at line 3104). The previous text-scan fallback
+//   (querySelectorAll('.card') + .textContent.includes('控制')/'Control')
+//   ran on every hover/selection change and was O(cards) per call.
+//   Removed the _cachedCtrlCard cache — getElementById is O(1) and the
+//   element lookup is already cheap.
 function _updateCtrlInfoPanel(){
-if(!showCtrlMap){var cc=document.getElementById('ctrl-info-card');if(cc)cc.style.display='none';return;}var cc2=document.getElementById('ctrl-info-card');if(cc2)cc2.style.display='';
-  // Try cached card first; if detached from DOM, re-query
-  let ctrlCard=_cachedCtrlCard;
-  if(!ctrlCard||!ctrlCard.parentNode){
-    const cards=document.querySelectorAll('.card');
-    ctrlCard=null;
-    for(const cd of cards){const t=cd.querySelector('.card-t');if(t&&(t.textContent.includes('控制')||t.textContent.includes('Control'))){ctrlCard=cd;break;}}
-    _cachedCtrlCard=ctrlCard;
-  }
+  const ctrlCard=document.getElementById('ctrl-info-card');
   if(!ctrlCard)return;
+  if(!showCtrlMap){ctrlCard.style.display='none';return;}
+  ctrlCard.style.display='';
   const infoSq=hoveredSquare||selectedSquare;
   const cm=showCtrlMap?cachedCtrlMap:null;
   let infoCtrl=null;

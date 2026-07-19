@@ -1722,7 +1722,10 @@ let soundOn=true;
 let reviewBaseState=null,_cachedStatus=null,_cachedStatusKey='';
 // Control map cache
 let cachedCtrlMap=null,cachedCtrlKey='',renderPending=false,
-    lastRenderTime=0,lastRenderRequest=0,renderTimerId=null;
+    lastRenderTime=0,renderTimerId=null;
+// v1.2.3 round-30 (redundant): removed `lastRenderRequest` — it was written
+//   but never read anywhere (leftover from the removed DIRTY_* incremental-
+//   render subsystem, see line-161 comment block).
 let _animRetryCount=0; // v1.1.0 Phase 54: guard against stuck animationInProgress
 // v1.2.3 round-18 (bug fix): tracks "user is typing in the Chess960 SP-ID
 //   input" so the full re-render triggered by each keystroke can restore
@@ -2011,7 +2014,7 @@ function _hdrKingIconHTML(){
 // in the same rAF callback when _reqAtTick>lastRenderTime — the second
 // call's save phase read scrollTop=0 from the just-rebuilt DOM.
 function render(){
-  if(renderPending){lastRenderRequest=Date.now();return;}
+  if(renderPending){return;}
   // v1.0.8 PHASE 22: throttle render while piece-move animation is in
   //   progress (Web Animations API overlay is on screen). Landing anim is
   //   no longer a separate phase — the overlay covers the destination
@@ -2586,7 +2589,12 @@ h+=`<div class="review-hdr"><h2>${T('review_analysis')}</h2><div style="display:
 // v1.2.3 round-24 (God Function split): board metrics extracted to
 //   _computeRvBoardMetrics() — pure function, no side effects.
 const _rvM=_computeRvBoardMetrics();
-const _isLandscapeReview=_rvM._isLandscapeReview;
+// v1.2.3 round-29 (PR52 S1481): removed dead local `_isLandscapeReview` —
+//   round-12 unified the portrait/landscape DOM skeleton (the conditional
+//   branch was deleted), and the only remaining reference was the
+//   declaration itself. The mockup at line 1945-1953 of the manual still
+//   shows the flag in _computeRvBoardMetrics's return signature for
+//   backward compatibility, but the render path no longer consumes it.
 const _rvCell=_rvM._rvCell;
 const _rvLabelW=_rvM._rvLabelW;
 const _rvLabelH=_rvM._rvLabelH;
@@ -2594,8 +2602,6 @@ const _rvLabelGap=_rvM._rvLabelGap;
 const _rvBoardPx=_rvM._rvBoardPx;
 const _rvFullBoardH=_rvM._rvFullBoardH;
 // v1.1.0 Phase 53: Portrait and landscape now use the same DOM skeleton.
-// The _isLandscapeReview flag is still used later for board sizing (cell width)
-// and two-layer scroll decisions, but the initial DOM structure is identical.
 // v1.2.1 round-12 (S3923): Removed duplicate if/else — both branches produced
 // the exact same markup, leaving a redundant conditional that hid the unified
 // layout intent. The .review-top wrapper is now always emitted (it was
@@ -3602,7 +3608,7 @@ function _maybeShowBoardDebounceHint(){
 }
 
 function _postRenderFinalize(wasEcoFocused){
-_cachedBwrap=null;_cachedSvgEl=null;_cachedSvgLines=[];_cachedArrowKey='';_cachedCtrlCard=null;
+_cachedBwrap=null;_cachedSvgEl=null;_cachedSvgLines=[];_cachedArrowKey='';
 _prevHoverSq=hoveredSquare?{row:hoveredSquare.row,col:hoveredSquare.col}:null;
 _prevSelSq=selectedSquare?{row:selectedSquare.row,col:selectedSquare.col}:null;
 _prevLegalSet=new Set();if(selectedSquare){for(const m of legalMvs)_prevLegalSet.add(m.row*8+m.col);}
@@ -4148,19 +4154,17 @@ function _updateBoardLightweight(){
   _prevLegalSet=curLegalSet;
 }
 
-// Cached reference to control info card (invalidated on full render)
-let _cachedCtrlCard=null;
+// v1.2.3 round-30 (perf): the ctrl-info-card element has a stable id
+//   (rendered at line 3104). The previous text-scan fallback
+//   (querySelectorAll('.card') + .textContent.includes('控制')/'Control')
+//   ran on every hover/selection change and was O(cards) per call.
+//   Removed the _cachedCtrlCard cache — getElementById is O(1) and the
+//   element lookup is already cheap.
 function _updateCtrlInfoPanel(){
-if(!showCtrlMap){var cc=document.getElementById('ctrl-info-card');if(cc)cc.style.display='none';return;}var cc2=document.getElementById('ctrl-info-card');if(cc2)cc2.style.display='';
-  // Try cached card first; if detached from DOM, re-query
-  let ctrlCard=_cachedCtrlCard;
-  if(!ctrlCard||!ctrlCard.parentNode){
-    const cards=document.querySelectorAll('.card');
-    ctrlCard=null;
-    for(const cd of cards){const t=cd.querySelector('.card-t');if(t&&(t.textContent.includes('控制')||t.textContent.includes('Control'))){ctrlCard=cd;break;}}
-    _cachedCtrlCard=ctrlCard;
-  }
+  const ctrlCard=document.getElementById('ctrl-info-card');
   if(!ctrlCard)return;
+  if(!showCtrlMap){ctrlCard.style.display='none';return;}
+  ctrlCard.style.display='';
   const infoSq=hoveredSquare||selectedSquare;
   const cm=showCtrlMap?cachedCtrlMap:null;
   let infoCtrl=null;

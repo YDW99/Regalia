@@ -368,12 +368,23 @@ public class FileIoHelper {
                 MediaStore.MediaColumns.DATA,
                 MediaStore.MediaColumns.SIZE
             };
+            // v1.2.3 round-30 (bug fix): escape SQL LIKE wildcards in dirPath.
+            //   Without escaping, a path containing `_` (matches any single char)
+            //   or `%` (matches any sequence) would over-match — e.g.
+            //   /sdcard/my_data_2024 would also match /sdcard/myXdataX2024.
+            //   The ESCAPE '\\' clause tells SQLite to treat `\%` and `\_` as
+            //   literal characters.
+            String escaped = dirPath.replace("\\", "\\\\")
+                                     .replace("%", "\\%")
+                                     .replace("_", "\\_");
+            // The NOT LIKE ? exclusion also needs the ESCAPE clause to apply
+            // (SQLite requires ESCAPE on each LIKE expression that uses escapes).
             android.database.Cursor cursor = context.getContentResolver().query(
                 MediaStore.Files.getContentUri("external"),
                 projection,
-                MediaStore.MediaColumns.DATA + " LIKE ? AND " +
-                MediaStore.MediaColumns.DATA + " NOT LIKE ?",
-                new String[]{dirPath + "/%", dirPath + "/%/%"},
+                MediaStore.MediaColumns.DATA + " LIKE ? ESCAPE '\\' AND " +
+                MediaStore.MediaColumns.DATA + " NOT LIKE ? ESCAPE '\\'",
+                new String[]{escaped + "/%", escaped + "/%/%"},
                 null
             );
             if (cursor == null) return;

@@ -76,8 +76,14 @@ public class MainActivity extends Activity {
     // v1.2.3 round-13 (P3): corrected stale comment — helper is NOT recreated
     //   on each start(); it's created once on first toggle and reused. State
     //   reset is handled internally by StabilizationHelper.start().
-    private StabilizationHelper stabilizationHelper = null;
-    private boolean stabilizationEnabled = false;
+    // v1.2.3 round-30 (robustness): declared `volatile` — both fields are
+    //   read/written from the JS binder thread (via StockfishNative.toggle-
+    //   Stabilization @JavascriptInterface entry point) AND from the main
+    //   thread (onResume/onPause/onDestroy). Without volatile, the main
+    //   thread may see a stale `false` after the user toggled stabilization
+    //   on from JS, causing onResume to skip sensor restart.
+    private volatile StabilizationHelper stabilizationHelper = null;
+    private volatile boolean stabilizationEnabled = false;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -335,6 +341,15 @@ public class MainActivity extends Activity {
                         Log.w(TAG, "JS delayed init call failed", e);
                     }
                     scheduleInitRetry();
+                } else if (stockfishEngine != null && !stockfishEngine.isEngineReady()
+                           && initRetryCount >= INIT_MAX_RETRIES) {
+                    // v1.2.3 round-30 (feature): all retries exhausted and the
+                    //   engine still isn't ready. Show the fallback UI so the
+                    //   user gets feedback instead of an indefinite spinner.
+                    //   Previously the retry loop silently stopped, leaving the
+                    //   user with a non-functional engine and no error message.
+                    Log.e(TAG, "All " + INIT_MAX_RETRIES + " init retries exhausted — showing fallback UI");
+                    showFallbackUI(getString(R.string.app_name) + ": engine init failed. Please restart the app.");
                 }
             }
         }, INIT_RETRY_DELAY_MS);

@@ -59,10 +59,24 @@ public class HapticManager {
 
     public boolean isHapticEnabled() {
         try {
-            boolean systemEnabled = android.provider.Settings.System.getInt(
-                context.getContentResolver(),
-                android.provider.Settings.System.HAPTIC_FEEDBACK_ENABLED, 1
-            ) != 0;
+            // v1.2.3 round-30 (perf): cache the system-side setting for 5s.
+            //   Settings.System.getInt does a Binder IPC to the system Settings
+            //   provider on every call — called on every performHaptic()
+            //   invocation (every button press / piece move / slider drag).
+            //   At 5-10 haptic events/sec during active use, this was non-
+            //   trivial overhead. The app-side preference is also cached
+            //   (SharedPreferences.getBoolean is fast but still involves a
+            //   synchronized lookup).
+            long now = System.currentTimeMillis();
+            boolean systemEnabled;
+            if (now - _systemHapticCacheTs > 5000) {
+                _systemHapticCached = android.provider.Settings.System.getInt(
+                    context.getContentResolver(),
+                    android.provider.Settings.System.HAPTIC_FEEDBACK_ENABLED, 1
+                ) != 0;
+                _systemHapticCacheTs = now;
+            }
+            systemEnabled = _systemHapticCached;
             boolean appEnabled = prefs.getBoolean("hapticFeedbackEnabled", true);
             // FIX: Both system AND app must be enabled. Previously used OR (||)
             // which meant disabling haptic in app settings had no effect.
@@ -75,6 +89,12 @@ public class HapticManager {
             return true;
         }
     }
+    // v1.2.3 round-30 (perf): system-haptic-setting cache (5s TTL).
+    //   volatile for cross-thread visibility (performHaptic is called from
+    //   the main Handler thread; isHapticEnabled may also be queried from
+    //   the JS binder thread).
+    private volatile boolean _systemHapticCached = true;
+    private volatile long _systemHapticCacheTs = 0;
 
     public void performHaptic(String type) {
         try {
@@ -441,8 +461,10 @@ public class HapticManager {
                 timings[i] = durations[i];
                 // Clamp amplitude to [0, 255]. Float input is in [0.0, 1.0]
                 // but defensive clamping guards against caller overflow.
+                // v1.2.3 round-29 (PR52 S3358): replace nested ternary with
+                //   Math.max(0, Math.min(255, a)) — same semantics, clearer intent.
                 int a = Math.round(amplitudes[i] * 255f);
-                amps[i] = a < 0 ? 0 : (a > 255 ? 255 : a);
+                amps[i] = Math.max(0, Math.min(255, a));
             }
             vibrator.vibrate(VibrationEffect.createWaveform(timings, amps, -1));
             return true;
