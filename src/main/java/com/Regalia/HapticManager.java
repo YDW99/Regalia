@@ -53,7 +53,15 @@ public class HapticManager {
     private final Handler mainHandler;
 
     public HapticManager(Context context, SharedPreferences prefs, Handler mainHandler) {
-        this.context = context;
+        // v1.2.3 round-33 (PR52 v3 #4.2.8): normalize to Application Context
+        //   to avoid leaking an Activity reference. StatsActivity passes `this`
+        //   (an Activity), and performHaptic's Runnable is posted to mainHandler
+        //   — if the Activity is destroyed before the Runnable runs, the
+        //   Activity reference would be retained until the Runnable completes.
+        //   StockfishNative already normalizes via context.getApplicationContext()
+        //   (line 434) before passing here; this defensive normalization ensures
+        //   ALL callers (including future ones) are safe.
+        this.context = context != null ? context.getApplicationContext() : null;
         this.prefs = prefs;
         this.mainHandler = mainHandler;
     }
@@ -79,7 +87,16 @@ public class HapticManager {
             //   measurement.
             long now = SystemClock.elapsedRealtime();
             boolean systemEnabled;
-            if (now - _systemHapticCacheTs > 5000) {
+            // v1.2.3 round-33 (PR52 v3 #4.2.7): treat _systemHapticCacheTs == 0
+            //   as "never cached" and force a refresh on the first call. The
+            //   previous code's `now - 0 > 5000` check was false for any app
+            //   launched within 5 seconds of boot (rare but possible on
+            //   fast-boot devices), so the first call would return the default
+            //   _systemHapticCached=true even if the system had haptic disabled
+            //   — silently ignoring the user's system setting until the 5s TTL
+            //   expired. The explicit `== 0` check makes the "never cached"
+            //   state unambiguous and immune to boot-time edge cases.
+            if (_systemHapticCacheTs == 0 || (now - _systemHapticCacheTs) > 5000) {
                 _systemHapticCached = android.provider.Settings.System.getInt(
                     context.getContentResolver(),
                     android.provider.Settings.System.HAPTIC_FEEDBACK_ENABLED, 1

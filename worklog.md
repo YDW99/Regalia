@@ -1,3 +1,165 @@
+# Regalia v1.2.3 — round-32 工作日志（2026-07-20）
+
+## 任务来源
+
+用户要求：彻彻底底地严格实施——检查每一个文件的每一行代码，理解设计意图，基于对设计意图的理解，使用第一性原理思考是否有优化空间，优化方向包括（按优先度排序）：bug修复、功能完善、性能突破、冗余清理（包括注释）、简化代码（不与前述要求冲突的话）。版本号保持不变。检查新增文件的头部权利声明与 AI-GEN 声明是否完善（风格与旧有文件保持一致）。检查中英文说明书与 APP 源代码的匹配度（尤其是示意图）。文件名包含 README、LICENSE、NOTICE 的每个文件都检查一遍，检查 README.md 目录树。交付完善后的 APK（release，兼容小米澎湃 OS3，v1+v2+v3 签名齐全）+ tar 源码备份包（无引擎文件）+ 更新后的 HTML 说明书（中英文同步，更新日志由上至下从新到旧排列）。
+
+## 第一性原理审查（2 个并行代理）
+
+启动 2 个并行审查代理：
+
+1. **REVIEW-JS-R32**（11 个 JS 模块，21,722 行）— 识别 3 项 REDUNDANCY 发现（0 BUG、0 FEATURE、0 PERF、0 SIMPLIFY）。
+2. **REVIEW-JAVA-R32**（19 个 Java 文件，10,730 行，含 StockfishNative 4,324 行）— 识别 2 项 BUG 发现（1 HIGH + 1 LOW）+ 1 项 REDUNDANCY。
+
+总计 6 项可操作发现，全部实施；0 项误报。
+
+## 实施的优化（6 项）
+
+### Bug 修复（2 项，HIGH + LOW 严重度——引擎稳定性）
+
+1. **StockfishNative.java + EngineHealthMonitor.java + ChessWebViewClient.java 时钟源修复**（13 处，HIGH）— round-31 修复了 HapticManager + StabilizationHelper 中的 `System.currentTimeMillis()` 时钟源问题（墙钟跳跃会导致缓存冻结/节流永久命中），本轮通过第一性原理逐文件审查发现**同类 bug 存在于 3 个 Java 文件共 13 处**，全部修复。
+
+   具体修复：
+   - `StockfishNative.java`（11 处）：所有**间隔测量**时间戳从 `System.currentTimeMillis()` 改为 `SystemClock.elapsedRealtime()`（单调，自设备启动）。受影响的子系统：
+     - **心跳僵尸检测**（line 2942）：`timeSinceLastResponse` 对比 `ZOMBIE_SEARCH_TIMEOUT_MS`。墙钟后跳导致误报僵尸（不必要的 1-5s 恢复），前跳掩盖挂死引擎。
+     - **sendSetOptionAndWait 3s 超时**（lines 2601-2602）：`deadline` 循环。墙钟跳跃导致提前超时（选项未应用）或延长挂起。
+     - **engineGoTimed 设置耗时扣除**（lines 982, 1025）：从 wtime/btime 扣除 stopAndWait + ucinewgame + readyok 开销。墙钟跳跃导致发送给引擎的时钟值不正确。
+     - **restart-stale 检测**（lines 1871, 1880, 2990, 2998）：4 处 `RESTART_STALE_THRESHOLD_MS` 检查。墙钟跳跃导致 `_restartInProgress` 永不重置（未来恢复全部早退）或过早重置（并发重启）。
+     - **recovery-count 重置计时器**（lines 1884, 1897）：`timeSinceLastResponse` 对比 `RECOVERY_COUNT_RESET_INTERVAL_MS`。墙钟跳跃导致恢复计数永远卡在 `MAX_AUTO_RECOVERY` 或过早重置。
+   - `EngineHealthMonitor.java`（2 处）：`lastResponseTime` 字段初始化 + `onResponseReceived()` + `getLastResponseTime()` javadoc 改为 `SystemClock.elapsedRealtime()`。必须与 StockfishNative 心跳消费者使用同一时钟——本轮同时修复两者保证一致性。
+   - `ChessWebViewClient.java`（1 处）：渲染崩溃 60s 退避窗口改为 `SystemClock.elapsedRealtime()`。墙钟后跳导致崩溃计数器过早重置（允许耗电的重建循环），前跳导致无限延长。
+
+2. **Stale "API 21" / "Android 5.0" 注释清理**（15 处，LOW）— 4 个 Java 文件共 15 处过时注释修正为 "API 23" / "Android 6.0" 以匹配 `minSdk=23`（minSdk 自 v1.0.5 round-6 起即为 23，这些注释是 v1.0.4 时代 minSdk=21 的残留）。仅注释变更，无代码行为变化。
+
+   具体修复：
+   - `MainActivity.java`（5 处）：Compatibility 行、FLAG_FULLSCREEN 注释、minSdk=21 → 23、Android 5-10 → 6-10、Android 5.x-10 → 6.x-10。
+   - `StatsActivity.java`（4 处）：FLAG_FULLSCREEN API 21-29 → 23-29、shouldOverrideUrlLoading API 21-23 → 23、javadoc API 21-23 → 23、legacy flags API 21-29 → 23-29。
+   - `PermissionHelper.java`（2 处）：Android 5-9 → 6-9（类注释 + hasStoragePermission 方法注释）。
+   - `FileIoHelper.java`（4 处）：Android 5-9 → 6-9（类注释 + readTextFile + 内联注释 + requestReadExternalStoragePermission）。
+
+### 冗余清理（4 项，LOW 严重度）
+
+3. **state-store.js 头部注释误导性修正**（MEDIUM）— 之前的 "All state mutations go through dispatch()" 具有误导性——实际仅 ~5/25 reducer 已接入（SET_LANG, TOGGLE_SOUND, ENTER_REVIEW, SETUP_EXIT, PGN_CLEARED），其余 20 个是 v1.2.0 Phase 75 Redux 迁移的有意架构占位符。subscribe()/getState() 已接线但目前零外部调用方。头部注释更新为 partial-migration 状态文档；NO CODE CHANGE。
+
+4. **eco-data.js 重复查找表循环消除**（LOW）— 提取 `_buildEcoLookups()` 辅助函数，消除 IDB 缓存命中路径与 JSON.parse 路径之间重复的 8 行循环（v1.0.8 PHASE 31 PERF 的 _nameU/_familyU 预计算）。单一事实来源；语义字节级等价。
+
+5. **pgn-standard.js 过时注释修正**（LOW）— 修正一处过时注释（声称花括号注释在分词时保留——实际在分词前已被扁平化移除，`{` 分词分支正常流程不可达，作为防御性安全网保留）。函数 `parseStandardPGN` 本身仍无调用点（round-18 决定保留为防御性安全网）。
+
+6. **README.md 目录树更新**（LOW）— `HapticManager.java` 行数 493→506、`StabilizationHelper.java` 添加 "(round-31 SystemClock.elapsedRealtime for 16ms JS-callback throttle, 386 lines)"、`EngineHealthMonitor.java` 添加 "(round-32 SystemClock.elapsedRealtime for monotonic timestamps, 97 lines)"。目录树现反映当前文件规模。
+
+## 误报剔除（5 项，跳过）
+
+1. **state-store.js 未使用的 ~20 个 reducer** — INTENTIONAL 架构占位符（v1.2.0 Phase 75 Redux 迁移）。移除属于功能倒退。头部注释更新为 partial-migration 状态文档。
+2. **subscribe()/getState() 零外部调用方** — INTENTIONAL，为未来迁移轮保留。文档化在新的头部注释中。
+3. **parseStandardPGN() 零调用点**（pgn-standard.js）— round-18 决定保留为防御性安全网。过时注释已修正，函数保留。
+4. **所有 `typeof X === 'function'` 跨模块守卫**（40+ 处）— round-11 有意防御设计模式，防止单模块加载失败连锁崩溃。不标记。
+5. **HapticManager PWLE 反射路径的 `catch(Throwable)`** — INTENTIONAL，OEM ROM 抛 NoSuchMethodError（属 Error 非 Exception）。不标记。
+
+## 验证
+
+### JS 语法
+
+```text
+所有 11 个 chess.src/*.js 模块通过 node --check ✓
+stats.html 内联脚本通过 node --check ✓
+chess.html 重建后内联脚本通过 node --check ✓
+```
+
+### chess.html 重建
+
+```text
+python3 build-chess.py
+Built chess.html (23027 lines, 1386590 bytes)
+```
+
+### APK 构建
+
+```text
+./gradlew --no-daemon assembleRelease -x lint -x lintRelease -x lintVitalRelease
+BUILD SUCCESSFUL in 55s（首次构建）
+BUILD SUCCESSFUL in 23s（手册更新后增量重建）
+```
+
+### APK 签名
+
+```text
+apksigner verify --verbose Regalia-release.apk
+Verifies
+Verified using v1 scheme (JAR signing): true
+Verified using v2 scheme (APK Signature Scheme v2): true
+Verified using v3 scheme (APK Signature Scheme v3): true
+```
+
+### APK 元数据
+
+```text
+package: name='com.Regalia' versionCode='123' versionName='1.2.3'
+sdkVersion:'23'  targetSdkVersion:'35'
+application-label:'Regalia v1.2.3'
+```
+
+### Stockfish 引擎 SHA-256 三方一致
+
+```text
+源文件（/home/z/my-project/tools/stockfish/.../stockfish-android-armv8-dotprod）：
+  8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5
+部署到 jniLibs（src/main/jniLibs/arm64-v8a/libstockfish.so）：
+  8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5
+APK 内（lib/arm64-v8a/libstockfish.so）：
+  8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5
+三方一致 ✓
+```
+
+### APK 内代码验证
+
+```text
+chess.html 含 round-32 修复：
+  _buildEcoLookups helper ✓ (3 处)
+  partial-migration clarification ✓ (1 处)
+
+Java 类文件含 round-32 修复（通过 R8 混淆保留）：
+  EngineHealthMonitor.class: lastResponseTime ✓
+  StockfishNative.class: _lastRecoveryTimestamp ✓
+  StockfishNative.class: _restartStartTimeMs ✓
+  ChessWebViewClient.class: _lastRenderCrashTime ✓
+  ChessWebViewClient.class: _renderCrashCount ✓
+
+HTML 说明书 round-32 changelog 条目：
+  Regalia-v1.2.3-manual-zh.html: "第三十二轮" ✓ (1 处)
+  Regalia-v1.2.3-manual-en.html: "thirty-second" ✓ (1 处)
+```
+
+### tar 打包
+
+```text
+bash /home/z/my-project/scripts/create_v123_tar.sh
+Tar entry count: 118（与 round-30/31 一致）
+排除清单全部生效（含 round-31 新增的 src/main/assets/Regalia-v1.2.3-manual-{zh,en}.html
+排除——这些是 build-time 副本，canonical 副本在 Manual/）
+```
+
+## 文档同步
+
+- `NOTICE`：round-32 条目置顶（6 项实施 + 5 项误报的完整记录）。
+- `8× README.license`：round-32 条目置顶（assets/chess.src/assets/src/main/java/com/Regalia/res/cpp/Manual/src/main）。
+- `README.md`：round-32 章节置顶；目录树 HapticManager 493→506、StabilizationHelper +round-31 标注、EngineHealthMonitor +round-32 标注。
+- `BUILDING.md`：round-32 章节置顶（构建相关变更 + 误报说明 + 验证 + 工具链说明）。
+- `PRIVACY.md`：round-32 条目置顶（纯 bug 修复 + 注释清理，无新权限/网络/数据收集）。
+- 中英文说明书：round-32 更新日志条目置顶（内容对等非机翻）。
+
+## 最终交付（/home/z/my-project/download/）
+
+- `Regalia-release.apk` — 78,870,153 字节，SHA-256: `4f82e63f599af3afff8420ba30d7a73dc13a332e376250c3300f539c5889f2a5`
+- `Regalia-v1.2.3-src.tar` — 118 条目，0 禁用模式
+- `Regalia-v1.2.3-manual-zh.html` — 中文说明书（含 round-32 更新日志）
+- `Regalia-v1.2.3-manual-en.html` — 英文说明书（含 round-32 更新日志）
+- `README.md` / `BUILDING.md` / `PRIVACY.md` / `NOTICE` — 同步更新
+- `SHA256SUMS.txt` — 所有交付物 SHA-256 汇总
+
+版本号保持 v1.2.3（versionCode=123, versionName="1.2.3"）。
+
+---
+
 # Regalia v1.2.3 — round-31 工作日志（2026-07-20）
 
 ## 任务来源

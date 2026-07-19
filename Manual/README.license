@@ -1,3 +1,17 @@
+v1.2.3 round-33 (2026.7.20) — Manuals updated with round-33 changelog entry + UI architecture diagram fix:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - Regalia-v1.2.3-manual-zh.html: (1) UI architecture diagram updated to
+    show ui-gameflow.js + ui-interactions.js as separate modules alongside
+    ui.js (round-17 God Class split was not reflected in the diagram — the
+    build script below the diagram already listed the new modules, creating
+    an inconsistency). (2) Round-33 changelog entry prepended to the
+    changelog section (newest-first ordering preserved).
+  - Regalia-v1.2.3-manual-en.html: equivalent English updates.
+  - Both manuals: content is parallel (non-machine-translated); only the
+    UI architecture diagram + changelog section changed.
+  - License classification: both manuals are AGPL v3 (original work of
+    the Regalia project, not derived from DroidFish or other GPL projects).
+
 v1.2.3 round-32 (2026.7.20) — Manuals updated with round-32 changelog entry:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
   - Regalia-v1.2.3-manual-zh.html: round-32 entry prepended to the

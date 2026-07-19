@@ -1,3 +1,9 @@
+v1.2.3 round-33 (2026.7.20): no changes to top-level src/main/ files.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - AndroidManifest.xml: unchanged. Network security config unchanged.
+    All round-33 changes are in src/main/java/com/Regalia/ — see that
+    directory's README.license entry.
+
 v1.2.3 round-32 (2026.7.20): no changes to top-level src/main/ files.
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
   - AndroidManifest.xml: unchanged. Network security config unchanged.

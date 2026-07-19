@@ -366,7 +366,24 @@ public class MainActivity extends Activity {
                     //   Previously the retry loop silently stopped, leaving the
                     //   user with a non-functional engine and no error message.
                     Log.e(TAG, "All " + INIT_MAX_RETRIES + " init retries exhausted — showing fallback UI");
-                    showFallbackUI(getString(R.string.app_name) + ": engine init failed. Please restart the app.");
+                    // v1.2.3 round-33 (PR52 v3 #4.2.10): bilingual message —
+                    //   the rest of showFallbackUI's calls use Chinese (unicode
+                    //   escapes) for consistency with the project convention,
+                    //   but ChessWebViewClient.java uses bilingual format for
+                    //   runtime fallback messages. This round-30 message was
+                    //   English-only, breaking the convention. Now bilingual.
+                    showFallbackUI(getString(R.string.app_name) + ": \u5f15\u64ce\u521d\u59cb\u5316\u5931\u8d25\uff0c\u8bf7\u91cd\u542f\u5e94\u7528 / Engine init failed. Please restart the app.");
+                } else if (stockfishEngine == null && initRetryCount >= INIT_MAX_RETRIES) {
+                    // v1.2.3 round-33 (PR52 v3 #4.1.3): the StockfishNative
+                    //   constructor persistently failed (native init error —
+                    //   e.g., libstockfish.so missing/corrupt, or chmod failed
+                    //   on this OEM ROM). stockfishEngine remains null across
+                    //   all retries; the round-30 fallback branch above
+                    //   requires `stockfishEngine != null` so it never fires,
+                    //   leaving the retry loop permanently stuck with no user
+                    //   feedback. Mirror the round-30 fallback for this case.
+                    Log.e(TAG, "All " + INIT_MAX_RETRIES + " init retries exhausted — stockfishEngine is null (constructor persistently failed), showing fallback UI");
+                    showFallbackUI(getString(R.string.app_name) + ": \u5f15\u64ce\u52a0\u8f7d\u5931\u8d25\uff0c\u8bf7\u91cd\u542f\u5e94\u7528 / Engine load failed. Please restart the app.");
                 }
             }
         }, INIT_RETRY_DELAY_MS);
@@ -579,9 +596,22 @@ public class MainActivity extends Activity {
         enableImmersiveMode();
 
         // v1.0.5 Round-6 Rev49: Re-start sensor-based stabilization if it was
-        // enabled before pause (battery-saving stop in onPause).
-        if (stabilizationEnabled && stabilizationHelper != null) {
-            try { stabilizationHelper.start(); } catch (Throwable e) { Log.w(TAG, "stab restart on resume failed", e); }
+        //   enabled before pause (battery-saving stop in onPause).
+        // v1.2.3 round-33 (PR52 v3 #4.1.4): synchronize on _stabilizationLock
+        //   to close the race window — without the lock, the JS binder thread
+        //   could call toggleStabilization() (which IS locked) concurrently
+        //   with this read, causing us to see a stale stabilizationEnabled /
+        //   stabilizationHelper pair. Round-31 added the lock for
+        //   toggleStabilization + onDestroy but missed onResume/onPause; this
+        //   round closes that gap. The lock is fine-grained (not `this`) so
+        //   unrelated main-thread entry points aren't blocked.
+        synchronized (_stabilizationLock) {
+            if (isDestroyed) {
+                // Activity is being destroyed — skip (matches onDestroy's
+                // short-circuit in toggleStabilization).
+            } else if (stabilizationEnabled && stabilizationHelper != null) {
+                try { stabilizationHelper.start(); } catch (Throwable e) { Log.w(TAG, "stab restart on resume failed", e); }
+            }
         }
 
         // Retry engine init if not ready (handles case where init failed previously)
@@ -642,9 +672,13 @@ public class MainActivity extends Activity {
     public void onPause() {
         super.onPause();
         // v1.0.5 Round-6 Rev49: Stop sensor-based stabilization when backgrounded
-        // (battery saving). onResume will restart it IF it was enabled.
-        if (stabilizationEnabled && stabilizationHelper != null) {
-            try { stabilizationHelper.stop(); } catch (Throwable e) { Log.w(TAG, "stab stop on pause failed", e); }
+        //   (battery saving). onResume will restart it IF it was enabled.
+        // v1.2.3 round-33 (PR52 v3 #4.1.4): synchronize on _stabilizationLock
+        //   to close the race window (see onResume comment for rationale).
+        synchronized (_stabilizationLock) {
+            if (stabilizationEnabled && stabilizationHelper != null) {
+                try { stabilizationHelper.stop(); } catch (Throwable e) { Log.w(TAG, "stab stop on pause failed", e); }
+            }
         }
         // v1.0.4 Round-5 Rev20: Flush any pending JS localStorage writes to the
         // persistent Java store BEFORE the OS can kill the app. HyperOS 3 is

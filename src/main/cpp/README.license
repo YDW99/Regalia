@@ -1,3 +1,10 @@
+v1.2.3 round-33 (2026.7.20): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - All round-33 changes are in src/main/java/com/Regalia/ (StockfishNative,
+    EngineHealthMonitor, ChessWebViewClient, MainActivity, HapticManager) +
+    NOTICE (canonical GPL list update) + Manual (UI architecture diagram).
+    The cpp/ tree (engine_jni.cpp, CMakeLists.txt) is unchanged.
+
 v1.2.3 round-32 (2026.7.20): no changes in this directory.
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
   - All round-32 changes are in src/main/assets/chess.src/ (state-store.js,

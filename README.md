@@ -1,3 +1,105 @@
+## Round-33 update (2026-07-20) — PR52 v3 CodeRabbit Major+Minor stability fixes + canonical GPL list sync
+
+**No new features** this round — pure bug fixes + doc cleanup in response to
+CodeRabbit's v3 review (13 actionable comments on PR #52 commit 406b8a1).
+After filtering false positives, **11 real issues fixed; 2 false positives
+declined** (with documented rationale).
+
+### Bug fixes (Major severity — engine + activity stability)
+- **StockfishNative shutdown() vs restart race** (lines ~3026-3047): the
+  restart task's `shutdownRequested = false` reset (line 3035) was
+  unconditional after the 500ms sleep, overriding any concurrent shutdown()
+  call during the sleep. The subsequent `startEngine()` would launch a new
+  engine AFTER the user had exited the app. Fix: added `_lifecycleGeneration`
+  volatile counter, bumped on every shutdown(); the restart task captures
+  the generation before the sleep and re-checks after — if changed, abort
+  the restart (no executor recreation, no flag reset, no startEngine).
+- **StockfishNative engineGoTimed queue-wait clock skew** (lines 975-983):
+  `_callTimeMs` was captured INSIDE the executor runnable, so any time
+  spent waiting in the single-thread executor queue (e.g., behind another
+  engineGoTimed call) was EXCLUDED from `setupElapsedMs`. The engine
+  received a stale clock value and could over-allocate search time,
+  searching past the GUI's 0-mark. Fix: capture `_callTimeMs` BEFORE
+  `_safeExecute` so the queue wait is included.
+- **MainActivity stockfishEngine==null permanent stuck** (lines 361-369):
+  the round-30 fallback branch required `stockfishEngine != null`, so if
+  the StockfishNative constructor persistently failed (native init error —
+  e.g., libstockfish.so missing/corrupt), `stockfishEngine` remained null
+  across all retries and the fallback never fired, leaving the retry loop
+  permanently stuck with no user feedback. Fix: added an `else if
+  (stockfishEngine == null && initRetryCount >= INIT_MAX_RETRIES)` branch
+  that mirrors the round-30 fallback.
+- **MainActivity _stabilizationLock race in onResume/onPause** (lines 76-103):
+  round-31 added `_stabilizationLock` for `toggleStabilization()` +
+  `onDestroy()`, but `onResume` (line 583) and `onPause` (line 646) accessed
+  `stabilizationEnabled` / `stabilizationHelper` WITHOUT the lock — the JS
+  binder thread could call `toggleStabilization()` (locked) concurrently
+  with these reads, causing stale values on weak-memory ARM. Fix: wrap
+  onResume/onPause stabilization access in `synchronized(_stabilizationLock)`.
+
+### Bug fixes (Minor severity — leak prevention + UX)
+- **ChessWebViewClient isFinishing/isDestroyed check** (lines 83-100):
+  `activityRef.get()` only tells us the Activity hasn't been GC'd — it may
+  still be finishing/destroyed. Calling `startActivity()` on a destroyed
+  Activity throws IllegalStateException (silently swallowed by the outer
+  catch). Fix: add `!activity.isFinishing() && !activity.isDestroyed()`
+  checks; route finishing/destroyed cases to the Application Context
+  fallback path.
+- **HapticManager Activity context leak** (lines 55-58): StatsActivity
+  passes `this` (an Activity) to the HapticManager constructor; the posted
+  Runnable could outlive the Activity, leaking it. Fix: constructor now
+  calls `context.getApplicationContext()` defensively (same pattern as
+  StockfishNative line 434).
+- **HapticManager cache timestamp=0 boot-time edge case** (lines 80-88):
+  `_systemHapticCacheTs = 0` (initial) caused `now - 0 > 5000` to be false
+  for any app launched within 5s of boot, so the first call would return
+  the default `_systemHapticCached=true` even if the system had haptic
+  disabled. Fix: treat `== 0` as "never cached" and force a refresh.
+- **MainActivity fallback message English-only** (line 369): the round-30
+  fallback message was English-only, breaking the project convention
+  (ChessWebViewClient uses bilingual format for runtime fallback messages).
+  Fix: changed to bilingual "Chinese / English".
+
+### Documentation fixes
+- **NOTICE canonical GPL v3 file list** (lines 1383-1480): the list was
+  stale relative to the round-17 God Class refactor. Added:
+  HapticManager.java, ui-gameflow.js, ui-interactions.js (round-17
+  additions that were missed). Marked as "NEVER CREATED":
+  UciProtocolHandler.java, EngineConfigManager.java, MessageBus.java
+  (Phase-73/75 plans that were never implemented — EngineConfigHelper.java
+  was the eventual implementation with a different name). Noted as
+  REMOVED: ui-board.js, ui-review.js, ui-audio.js, ui-toolbar.js
+  (Phase-74 extracts that were deleted in round-4).
+- **Manual UI architecture diagram** (ZH + EN, lines ~676-694): the diagram
+  showed `ui.js` as the only UI/interaction module, but the build script
+  below it (lines 710-711) listed `ui-gameflow.js` and `ui-interactions.js`
+  as separate modules added in round-17. Fix: updated the diagram to show
+  all three modules with their respective responsibilities.
+
+### False positives declined (with rationale)
+- **worker-pool.js license history "internal inconsistency"** (#4.1.6): the
+  history accurately records Phase 35 (GPL→AGPL correction) then Phase 36
+  (AGPL→GPL reclassification). These are sequential decisions at different
+  times, NOT duplicates. Removing Phase 35's entry would falsify history.
+- **worklog.md / FileIoHelper.java dates "7/20 vs 7/19"** (#4.3.12, #4.3.13):
+  intentional UTC+8 vs UTC discrepancy. User timezone is Asia/Shanghai
+  (UTC+8); 2026-07-20 00:30 local = 2026-07-19 16:30 UTC. PR/CI context
+  uses UTC. A timezone note is added to round-33 docs but the dates are
+  NOT changed (changing them would misrepresent when the work actually
+  happened in the user's local time).
+
+### Verification
+- 11 chess.src/*.js modules + chess.html inline script: `node --check` PASS.
+- Java compile sanity check: `./gradlew compileReleaseJavaWithJavac` PASS.
+- Release APK v1+v2+v3 signing verified; versionCode=123 / 1.2.3 / targetSdk 35.
+- Stockfish engine SHA-256 three-way consistent: `8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5`.
+- APK class files contain round-33 fix markers (`_lifecycleGeneration`,
+  `_isFallbackMode`, `_stabilizationLock`, `_systemHapticCacheTs`,
+  `_lastRenderCrashTime`, `_renderCrashCount` — all preserved through R8
+  minification).
+
+Version: **v1.2.3** (versionCode=123, versionName="1.2.3") — unchanged (fix round).
+
 ## Round-32 update (2026-07-20) — System.currentTimeMillis() bug-class propagation + comment cleanup
 
 **No new features** this round — pure bug-fix propagation + comment cleanup.

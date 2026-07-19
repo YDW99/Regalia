@@ -194,6 +194,15 @@ public class StockfishNative {
     private volatile int currentState = STATE_NONE;
     private volatile boolean engineReady = false;
     private volatile boolean shutdownRequested = false;
+    // v1.2.3 round-33 (PR52 v3 #4.1.1): lifecycle generation token — incremented
+    //   on every shutdown() call so the restart task's 500ms sleep can detect
+    //   a concurrent shutdown. Without this, the restart path's
+    //   `shutdownRequested = false` reset (line ~3035) would override the
+    //   concurrent shutdown, and the subsequent startEngine() would launch a
+    //   new engine AFTER the user has exited the app. The token is volatile
+    //   for cross-thread visibility (shutdown may run on the JS binder thread
+    //   while restart runs on the main Handler thread).
+    private volatile int _lifecycleGeneration = 0;
     // Latch used to wait for stale bestmove after sending "stop".
     private volatile CountDownLatch _stopLatch = null;
     private final Object _stopLatchLock = new Object();
@@ -966,6 +975,16 @@ public class StockfishNative {
     public void engineGoTimed(final String fen, final int level, final boolean needNewGame,
                                final long wtimeMs, final long btimeMs,
                                final long wincMs, final long bincMs) {
+        // v1.2.3 round-33 (PR52 v3 #4.1.2): capture the call timestamp BEFORE
+        //   _safeExecute so the queue wait is INCLUDED in setupElapsedMs. The
+        //   previous code captured _callTimeMs inside the executor runnable,
+        //   which meant any time spent waiting in the single-thread executor
+        //   queue (e.g., behind another engineGoTimed call) was excluded —
+        //   the engine received a stale clock value and could over-allocate
+        //   search time, searching past the GUI's 0-mark. Capturing outside
+        //   the runnable ensures setupElapsedMs reflects the true elapsed
+        //   time since JS called us.
+        final long _callTimeMs = SystemClock.elapsedRealtime();
         _safeExecute(new Runnable() { // tag: engineGoTimed
             public void run() {
                 if (!engineReady) {
@@ -980,7 +999,8 @@ public class StockfishNative {
                 // "go" is actually sent, the real clock has decreased (by up to
                 // 1s for stopAndWait, up to 5s for ucinewgame+readyok). The engine
                 // then over-allocates search time, searching past the GUI's 0-mark.
-                final long _callTimeMs = SystemClock.elapsedRealtime();
+                // v1.2.3 round-33: _callTimeMs is now captured OUTSIDE the runnable
+                //   (above _safeExecute) so the queue wait is included.
 
                 stopAndWaitForBestmove("engineGoTimed");
 
@@ -2766,6 +2786,13 @@ public class StockfishNative {
             _heartbeatThread = null;
         }
 
+        // v1.2.3 round-33 (PR52 v3 #4.1.1): bump lifecycle generation BEFORE
+        //   setting shutdownRequested. The restart task captures the generation
+        //   before its 500ms sleep and re-checks after — if the generation
+        //   changed during the sleep, a concurrent shutdown occurred and the
+        //   restart must abort (do NOT recreate the executor, do NOT reset
+        //   shutdownRequested, do NOT submit startEngine).
+        _lifecycleGeneration++;
         shutdownRequested = true;
         synchronized (stateLock) {
             currentState = STATE_NONE;
@@ -3015,10 +3042,24 @@ public class StockfishNative {
                     Log.i(TAG, "Restarting engine by JS request");
                     _engineHealthMonitor.resetRecoveryCount();
                     shutdown();
+                    // v1.2.3 round-33 (PR52 v3 #4.1.1): capture the lifecycle
+                    //   generation BEFORE the 500ms sleep so we can detect a
+                    //   concurrent shutdown() during the sleep. If the generation
+                    //   changes, a shutdown occurred and we must abort the restart
+                    //   (do NOT recreate the executor, do NOT reset
+                    //   shutdownRequested, do NOT submit startEngine) — otherwise
+                    //   we'd launch a new engine AFTER the user has exited.
+                    final int genAtShutdown = _lifecycleGeneration;
                     try {
                         Thread.sleep(500);
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
+                    }
+                    // Re-check: did a concurrent shutdown happen during the sleep?
+                    if (genAtShutdown != _lifecycleGeneration) {
+                        Log.i(TAG, "Restart aborted — concurrent shutdown detected (gen " + genAtShutdown + " → " + _lifecycleGeneration + ")");
+                        _clearRestartInProgress();
+                        return;
                     }
                     // Recreate the executor since shutdown() destroyed it
                     _engineExecutor = _createEngineExecutor();
@@ -3032,6 +3073,10 @@ public class StockfishNative {
                     //   A concurrent shutdown() between this reset and startEngine()
                     //   would re-set the flag and startEngine would correctly bail,
                     //   preserving the L1474 guard's original race protection.
+                    //   v1.2.3 round-33: the gen-token check above closes the
+                    //   remaining 500ms-sleep window — a concurrent shutdown
+                    //   during the sleep is now detected and the restart aborts
+                    //   BEFORE reaching this reset.
                     shutdownRequested = false;
                     _engineExecutor.execute(new Runnable() {
                         public void run() {

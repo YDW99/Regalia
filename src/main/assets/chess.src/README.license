@@ -1,3 +1,14 @@
+v1.2.3 round-33 (2026.7.20): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - All 11 chess.src/*.js modules unchanged this round. Round-33 fixes are
+    in src/main/java/com/Regalia/ (StockfishNative, EngineHealthMonitor,
+    ChessWebViewClient, MainActivity, HapticManager) + NOTICE canonical GPL
+    list + Manual UI architecture diagram.
+  - License classification: all files unchanged (game-logic.js, pgn-standard.js,
+    ai-bridge.js, tablebase.js, worker-pool.js, ui-gameflow.js,
+    ui-interactions.js, ui.js, index.html.tpl = GPL v3; chess960.js,
+    eco-data.js, state-store.js = AGPL v3).
+
 v1.2.3 round-32 (2026.7.20) — First-principles per-file review + bug fix propagation:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
   - state-store.js (AGPL v3): header comment updated to clarify partial-

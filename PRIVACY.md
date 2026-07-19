@@ -1,3 +1,31 @@
+## Round-33 changes (2026-07-20)
+
+**No privacy-relevant changes.** This round is pure bug-fix + doc cleanup —
+no new permissions, no new network endpoints, no new data collection, no
+changes to existing data flows.
+
+Specifically:
+- StockfishNative shutdown() race fix + engineGoTimed timestamp capture:
+  affects only in-process engine lifecycle; no data leaves the device.
+- ChessWebViewClient isFinishing/isDestroyed check: affects only how
+  external URLs are dispatched to the system browser; the URL itself is the
+  only datum transmitted (unchanged from prior rounds).
+- MainActivity stockfishEngine==null fallback + _stabilizationLock in
+  onResume/onPause: affects only in-process state recovery; no IPC, no
+  network, no storage.
+- HapticManager Application Context normalization + cache timestamp=0 fix:
+  affects only in-process haptic gating; no data leaves the device.
+- NOTICE canonical GPL list update + Manual UI architecture diagram: pure
+  documentation.
+
+All changes are confined to:
+- `src/main/java/com/Regalia/{StockfishNative,ChessWebViewClient,MainActivity,HapticManager}.java`
+- `NOTICE` (canonical GPL list section only)
+- `Manual/Regalia-v1.2.3-manual-{zh,en}.html` (UI architecture diagram + changelog)
+
+The Lichess Tablebase API remains the only network endpoint (unchanged since
+v1.0.4). All other features remain fully offline.
+
 ## Round-32 changes (2026-07-20)
 
 **No privacy-relevant changes.** This round is pure bug-fix propagation +

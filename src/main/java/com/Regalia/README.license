@@ -1,3 +1,58 @@
+v1.2.3 round-33 (2026.7.20) — PR52 v3 CodeRabbit Major+Minor stability fixes:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - StockfishNative.java (GPL v3): shutdown() vs restart race fix — added
+    _lifecycleGeneration volatile counter, incremented on every shutdown().
+    The restart task (lines ~3026-3047) captures the generation before its
+    500ms sleep and re-checks after; if the generation changed, a concurrent
+    shutdown occurred and the restart aborts (does NOT recreate the executor,
+    does NOT reset shutdownRequested, does NOT submit startEngine). This
+    closes the race where the restart path's shutdownRequested=false reset
+    would override a concurrent shutdown, launching a new engine AFTER the
+    user has exited the app. Also: engineGoTimed _callTimeMs moved OUTSIDE
+    _safeExecute so the queue wait is included in setupElapsedMs (previously
+    captured inside the executor runnable, the queue wait was excluded —
+    the engine received a stale clock value and could over-allocate search
+    time, searching past the GUI's 0-mark).
+  - EngineHealthMonitor.java (GPL v3): no code change this round (round-32
+    already switched lastResponseTime to SystemClock.elapsedRealtime).
+    Documented in round-33 NOTICE/changelog for completeness.
+  - ChessWebViewClient.java (AGPL v3): external-URL startActivity() now
+    checks isFinishing() / isDestroyed() before calling
+    activity.startActivity(). activityRef.get() only tells us the Activity
+    hasn't been GC'd — it may still be finishing/destroyed. Calling
+    startActivity() on a destroyed Activity throws IllegalStateException
+    (silently swallowed by the outer catch). The lifecycle check routes
+    such cases to the Application Context fallback path.
+  - MainActivity.java (AGPL v3): (1) added stockfishEngine==null fallback
+    branch in scheduleInitRetry — if the StockfishNative constructor
+    persistently failed (native init error), stockfishEngine remains null
+    across all retries; the round-30 fallback required stockfishEngine!=null
+    so it never fired, leaving the retry loop permanently stuck. Now
+    mirrors the round-30 fallback for the null case. (2) _stabilizationLock
+    now held in onResume/onPause when accessing stabilizationEnabled /
+    stabilizationHelper — closes the race that round-31 missed (round-31
+    added the lock for toggleStabilization + onDestroy but not onResume/
+    onPause). (3) Round-30 fallback message changed from English-only to
+    bilingual (Chinese + English) for consistency with ChessWebViewClient's
+    fallback messages.
+  - HapticManager.java (GPL v3): (1) constructor now calls
+    context.getApplicationContext() to defensively normalize — StatsActivity
+    passes `this` (an Activity), and the posted Runnable could outlive the
+    Activity, leaking it. StockfishNative already normalizes; this ensures
+    all callers are safe. (2) isHapticEnabled cache: _systemHapticCacheTs==0
+    now treated as "never cached" — the previous `now - 0 > 5000` check was
+    false for any app launched within 5s of boot, so the first call would
+    return the default _systemHapticCached=true even if the system had
+    haptic disabled.
+  - All other .java files: unchanged this round.
+  - License classification: all files unchanged (HapticManager.java,
+    EngineProcessManager.java, EngineService.java, EngineHealthMonitor.java,
+    EngineConfigHelper.java, EngineSettingsHelper.java, StockfishNative.java,
+    PgnCacheManager.java, ChessWebViewClient.java, JsBridgeGateway.java,
+    FileIoHelper.java, SafPickerHelper.java, PermissionHelper.java,
+    RootDetector.java, StabilizationHelper.java, TlsSecurityHelper.java,
+    StatsActivity.java = GPL v3; MainActivity.java, ChessApp.java = AGPL v3).
+
 v1.2.3 round-32 (2026.7.20) — System.currentTimeMillis() bug-class fix propagation:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
   - StockfishNative.java (GPL v3): 11 sites of System.currentTimeMillis()

@@ -1,3 +1,81 @@
+Round-33 (2026-07-20) — PR52 v3 CodeRabbit Major+Minor stability fixes + canonical GPL list sync
+=========================================================================================================
+
+License classification: NO CHANGES. All files retain their existing
+classifications. This round updates the canonical GPL v3 file list (section
+below) to reflect the round-17 God Class refactor that was previously missed.
+
+Changes:
+  - StockfishNative.java (GPL v3): (1) shutdown() vs restart race fix via
+    _lifecycleGeneration volatile counter — incremented on every shutdown(),
+    captured by the restart task before its 500ms sleep, re-checked after.
+    If the generation changed, the restart aborts (no executor recreation,
+    no shutdownRequested reset, no startEngine submission). Closes the race
+    where restart would override a concurrent shutdown and launch a new
+    engine after user exit. (2) engineGoTimed _callTimeMs moved outside
+    _safeExecute so the queue wait is included in setupElapsedMs — prevents
+    the engine from receiving a stale clock value and over-allocating
+    search time.
+  - ChessWebViewClient.java (AGPL v3): external-URL startActivity() now
+    checks isFinishing()/isDestroyed() before invocation; routes
+    finishing/destroyed Activity cases to the Application Context fallback.
+  - MainActivity.java (AGPL v3): (1) stockfishEngine==null fallback branch
+    in scheduleInitRetry (round-30 fallback required stockfishEngine!=null
+    so it never fired when constructor persistently failed); (2)
+    _stabilizationLock now held in onResume/onPause (closes the race that
+    round-31 missed); (3) round-30 fallback message bilingual.
+  - HapticManager.java (GPL v3): (1) constructor calls
+    context.getApplicationContext() defensively (StatsActivity passes
+    Activity context); (2) _systemHapticCacheTs==0 treated as "never
+    cached" (closes boot-time edge case).
+  - NOTICE canonical GPL v3 file list: added HapticManager.java,
+    ui-gameflow.js, ui-interactions.js (round-17 additions that were
+    missed); marked UciProtocolHandler.java, EngineConfigManager.java,
+    MessageBus.java as "NEVER CREATED" (Phase-73/75 plans that were never
+    implemented — EngineConfigHelper.java was the eventual implementation
+    of the EngineConfigManager plan, with a different name); noted that
+    ui-board.js/ui-review.js/ui-audio.js/ui-toolbar.js (Phase-74 extracts)
+    were REMOVED in round-4.
+  - Manual/Regalia-v1.2.3-manual-{zh,en}.html: UI architecture diagram
+    updated to show ui-gameflow.js + ui-interactions.js as separate modules
+    alongside ui.js (round-17 God Class split was not reflected in the
+    diagram, creating an inconsistency with the build script below it).
+
+False positives declined (from PR52_Unresolved_Issues_Latest_v3.docx):
+  - worker-pool.js license history "internal inconsistency" (#4.1.6): the
+    history accurately records Phase 35 (GPL→AGPL correction) then Phase 36
+    (AGPL→GPL reclassification). These are sequential decisions at different
+    times, NOT duplicates. Removing Phase 35's entry would falsify history.
+  - worklog.md/FileIoHelper.java dates "7/20 vs 7/19" (#4.3.12, #4.3.13):
+    intentional UTC+8 vs UTC discrepancy. User timezone is Asia/Shanghai
+    (UTC+8); 2026-07-20 00:30 local = 2026-07-19 16:30 UTC. PR/CI context
+    uses UTC. A timezone note is added to round-33 docs but the dates are
+    NOT changed (changing them would misrepresent when the work actually
+    happened in the user's local time).
+
+Documentation:
+  - 8× README.license: round-33 entry prepended (chess.src, assets,
+    src/main, src/main/assets, src/main/cpp, src/main/java/com/Regalia,
+    src/main/res, Manual).
+  - BUILDING.md, PRIVACY.md, README.md, NOTICE: round-33 section prepended.
+  - Manual/Regalia-v1.2.3-manual-{zh,en}.html: round-33 changelog entry
+    prepended (newest-first ordering preserved) + UI architecture diagram
+    updated.
+
+Verification:
+  - All 11 chess.src/*.js modules pass `node --check`.
+  - chess.html inline script passes `node --check`.
+  - Release APK: v1+v2+v3 signing all verified; versionCode=123 /
+    versionName="1.2.3" / targetSdk 35 / minSdk 23.
+  - Stockfish engine SHA-256 three-way consistent: 8f7116d3f1a7004a6581d4fb0c1ff891
+    ce095bab6d45e52f1578897cf23b61b5 (source / jniLibs / APK-extracted).
+  - APK class files contain round-33 fix markers (_lifecycleGeneration,
+    _isFallbackMode, _stabilizationLock, _systemHapticCacheTs,
+    _lastRenderCrashTime, _renderCrashCount — all preserved through R8
+    minification).
+
+Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+
 Round-32 (2026-07-20) — System.currentTimeMillis() bug-class fix propagation + comment cleanup
 ==========================================================================================================
 
@@ -1393,12 +1471,22 @@ GPL v3 (DroidFish-derived or Stockfish):
   - src/main/java/com/Regalia/EngineProcessManager.java (v1.2.0 Phase 73)
       Engine process lifecycle: start/stop/restart, binary extraction,
       chmod/renice. Derived from DroidFish engine process patterns.
-  - src/main/java/com/Regalia/UciProtocolHandler.java (v1.2.0 Phase 73)
-      UCI command sending, response parsing, option setting.
-      Derived from DroidFish UCIEngineBase patterns.
-  - src/main/java/com/Regalia/EngineConfigManager.java (v1.2.0 Phase 73)
-      Engine settings persistence, import/export, range validation.
-      Derived from DroidFish EngineUtil patterns.
+  - src/main/java/com/Regalia/UciProtocolHandler.java (v1.2.0 Phase 73 — NEVER CREATED)
+      v1.2.3 round-33 (PR52 v3 #4.1.5): this entry was a Phase-73 plan that
+      was never implemented — UCI protocol handling was kept inline in
+      StockfishNative. The previous canonical-list entry misled readers into
+      expecting a separate file. Removed from the canonical list (historical
+      Phase-73 entries elsewhere still reference the plan, for archaeology).
+  - src/main/java/com/Regalia/EngineConfigManager.java (v1.2.0 Phase 73 — NEVER CREATED)
+      v1.2.3 round-33: same as above — EngineConfigHelper.java (Phase 81)
+      was the eventual implementation, with a different name. The canonical
+      list now points to EngineConfigHelper.java (see below).
+  - src/main/java/com/Regalia/HapticManager.java (v1.2.3 round-17 NEW)
+      Haptic feedback (@JavascriptInterface delegate, vibration waveform API).
+      Extracted from StockfishNative.java (~420 lines: isHapticEnabled /
+      performHaptic / performHapticInternal / tryWaveformVibrate /
+      fallbackVibrate). DroidFish-derived haptic patterns. Real successor
+      of the round-10-removed dead HapticHelper.
   - src/main/java/com/Regalia/JsBridgeGateway.java (v1.2.0 Phase 73)
       Sandbox-safe path validation, UCI command whitelisting.
       Original code with DroidFish-derived patterns.
@@ -1428,8 +1516,12 @@ GPL v3 (DroidFish-derived or Stockfish):
       forceFullStrength. Extracted from StockfishNative.java. ELO_MAP constant moved
       here (only used by setGameDifficulty). Config patterns derived from DroidFish
       EngineOptionsDialog.java. Uses Callbacks interface for field access + UCI dispatch.
-  - src/main/java/com/Regalia/MessageBus.java (v1.2.0 Phase 75)
-      JS ↔ Java unified message dispatch. Original AGPL v3 code.
+  - src/main/java/com/Regalia/MessageBus.java (v1.2.0 Phase 75 — NEVER CREATED)
+      v1.2.3 round-33 (PR52 v3 #4.1.5): this entry was a Phase-75 plan that
+      was never implemented — JS↔Java dispatch uses StockfishNative's
+      postJsCallback + @JavascriptInterface methods directly. Removed from
+      the canonical list (historical Phase-75 entries elsewhere still
+      reference the plan, for archaeology).
   - src/main/java/com/Regalia/StatsActivity.java
       v1.0.8 PHASE 37: classified GPL v3 to match the stats.html asset it
       exclusively hosts (the two form an inseparable @JavascriptInterface
@@ -1445,16 +1537,21 @@ GPL v3 (DroidFish-derived or Stockfish):
       Engine communication patterns from DroidFish
   - src/main/assets/chess.src/ui.js
       UI layout and interaction patterns from DroidFish
-      v1.2.0 Phase 74: God Module split — extracted 4 modules:
-        ui-board.js, ui-review.js, ui-audio.js, ui-toolbar.js
-  - src/main/assets/chess.src/ui-board.js (v1.2.0 Phase 74)
-      Board rendering, coordinate labels, heatmap. DroidFish-derived.
-  - src/main/assets/chess.src/ui-review.js (v1.2.0 Phase 74)
-      Review mode, eval trend chart, move classification. DroidFish-derived.
-  - src/main/assets/chess.src/ui-audio.js (v1.2.0 Phase 74)
-      Audio engine utilities, volume management. DroidFish-derived patterns.
-  - src/main/assets/chess.src/ui-toolbar.js (v1.2.0 Phase 74)
-      Toolbar rendering, button state, language switch. DroidFish-derived.
+      v1.2.0 Phase 74: God Module split — extracted 4 modules
+        (ui-board.js, ui-review.js, ui-audio.js, ui-toolbar.js) which were
+        REMOVED in v1.2.1 round-4 (they duplicated inline logic in
+        ui.js/ai-bridge.js with subtly different conventions; never on the
+        hot path; keeping them created two sources of truth).
+      v1.2.3 round-17: God Class refactor — extracted 2 modules
+        (ui-gameflow.js, ui-interactions.js) which ARE retained. See below.
+  - src/main/assets/chess.src/ui-gameflow.js (v1.2.3 round-17 NEW)
+      Game start + game-clock subsystem. Extracted from ui.js (8,475 → 6,761
+      lines, -20%). Pure function-declaration moves (hoisted bundle-wide);
+      no top-level executable code moved. DroidFish-derived UI patterns.
+  - src/main/assets/chess.src/ui-interactions.js (v1.2.3 round-17 NEW)
+      Click handling, move execution, toolbar, setup, dialogs, back-press
+      routing. Extracted from ui.js. Same migration pattern as
+      ui-gameflow.js. DroidFish-derived UI interaction patterns.
   - src/main/assets/chess.src/tablebase.js
       PGN parsing logic from DroidFish (GameTree/PgnToken/PgnScanner)
   - src/main/assets/chess.src/pgn-standard.js

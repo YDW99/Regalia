@@ -1,3 +1,74 @@
+## Round-33 build notes (2026-07-20)
+
+- **No build-config changes** this round — `build.gradle`, `settings.gradle`,
+  `gradle.properties`, `gradle-wrapper.properties`, `lint.xml`, `proguard-rules.pro`
+  all unchanged.
+- **Source-tree changes** (Java only — chess.src/ untouched, chess.html
+  rebuilt as a sanity check and is byte-identical to round-32):
+  - `src/main/java/com/Regalia/StockfishNative.java` — (1) added
+    `_lifecycleGeneration` volatile counter, bumped in `shutdown()`, checked
+    in the restart task after its 500ms sleep to detect concurrent shutdown
+    (closes the race where restart would override a concurrent shutdown and
+    launch a new engine after user exit). (2) `engineGoTimed` `_callTimeMs`
+    moved outside `_safeExecute` so the executor queue wait is included in
+    `setupElapsedMs` (previously the queue wait was excluded, sending a
+    stale clock to the engine).
+  - `src/main/java/com/Regalia/ChessWebViewClient.java` — external-URL
+    `startActivity()` now checks `isFinishing()` / `isDestroyed()` before
+    invocation; routes finishing/destroyed Activity cases to the Application
+    Context fallback (which works because `FLAG_ACTIVITY_NEW_TASK` was set).
+  - `src/main/java/com/Regalia/MainActivity.java` — (1) added
+    `stockfishEngine == null` fallback branch in `scheduleInitRetry` (the
+    round-30 fallback required `stockfishEngine != null` so it never fired
+    when the constructor persistently failed); (2) `_stabilizationLock` now
+    held in `onResume`/`onPause` when accessing stabilization fields (closes
+    the race that round-31 missed); (3) round-30 fallback message changed
+    from English-only to bilingual.
+  - `src/main/java/com/Regalia/HapticManager.java` — (1) constructor now
+    calls `context.getApplicationContext()` defensively (StatsActivity passes
+    `this`); (2) `_systemHapticCacheTs == 0` treated as "never cached"
+    (closes the boot-time edge case).
+  - `NOTICE` — canonical GPL v3 file list updated: added HapticManager.java,
+    ui-gameflow.js, ui-interactions.js (round-17 additions that were missed);
+    marked UciProtocolHandler.java, EngineConfigManager.java, MessageBus.java
+    as "NEVER CREATED" (Phase-73/75 plans that were never implemented); noted
+    that ui-board.js/ui-review.js/ui-audio.js/ui-toolbar.js (Phase-74 extracts)
+    were REMOVED in round-4.
+  - `Manual/Regalia-v1.2.3-manual-{zh,en}.html` — UI architecture diagram
+    updated to show ui-gameflow.js + ui-interactions.js as separate modules
+    alongside ui.js (round-17 God Class split was not reflected in the
+    diagram, creating an inconsistency with the build script below it).
+- **Toolchain**: unchanged from round-32 (Temurin JDK 21.0.11, Android SDK
+  API 35 / Build-Tools 34.0.0 / NDK 27.2.12479018 / CMake 3.31.6, Gradle
+  8.11.1 wrapper, AGP 8.7.3).
+- **Verification**:
+  - `node --check` on all 11 `chess.src/*.js` modules: PASS.
+  - `node --check` on `chess.html` inline script: PASS.
+  - `python3 build-chess.py` rebuilt `chess.html` (23,027 lines / 1,386,590
+    bytes — byte-identical to round-32, confirming no JS source changes).
+  - `./gradlew --no-daemon compileReleaseJavaWithJavac` → BUILD SUCCESSFUL
+    in 10s (Java compile sanity check after the multi-file Java changes).
+  - `./gradlew --no-daemon assembleRelease -x lint -x lintRelease -x
+    lintVitalRelease` → BUILD SUCCESSFUL in 45s.
+  - `apksigner verify --verbose`: v1+v2+v3 all true.
+  - Stockfish engine SHA-256 three-way consistent: `8f7116d3f1a7004a6581d4fb0c1ff891
+    ce095bab6d45e52f1578897cf23b61b5` (source / jniLibs / APK-extracted).
+  - APK class files contain round-33 fix markers: `_lifecycleGeneration`
+    (StockfishNative), `_isFallbackMode` + `_stabilizationLock`
+    (MainActivity), `_systemHapticCacheTs` (HapticManager),
+    `_lastRenderCrashTime` + `_renderCrashCount` (ChessWebViewClient) — all
+    preserved through R8 minification.
+- **False positives declined** (from v3 docx):
+  - worker-pool.js license history "internal inconsistency" (#4.1.6): the
+    history accurately records Phase 35 (GPL→AGPL correction) then Phase 36
+    (AGPL→GPL reclassification). These are sequential decisions at different
+    times, NOT duplicates. Removing Phase 35's entry would falsify history.
+  - worklog.md/FileIoHelper.java dates "7/20 vs 7/19" (#4.3.12, #4.3.13):
+    intentional UTC+8 vs UTC discrepancy. The user's timezone is Asia/Shanghai
+    (UTC+8); 2026-07-20 00:30 local = 2026-07-19 16:30 UTC. PR/CI context
+    uses UTC. A timezone note is added to round-33 docs but the dates are
+    NOT changed.
+
 ## Round-32 build notes (2026-07-20)
 
 - **No build-config changes** this round — `build.gradle`, `settings.gradle`,

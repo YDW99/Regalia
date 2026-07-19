@@ -1,3 +1,12 @@
+v1.2.3 round-33 (2026.7.20): no changes to src/main/assets/ top-level files.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - chess.html: rebuilt as a sanity check (byte-identical to round-32 — no
+    chess.src/ module changes this round).
+  - stats.html: unchanged. AGPLv3_Logo.svg / GPLv3_Logo.svg: unchanged.
+  - Manuals (Regalia-v1.2.3-manual-{zh,en}.html): UI architecture diagram
+    updated to reflect the round-17 God Class split (ui-gameflow.js +
+    ui-interactions.js now shown as separate modules alongside ui.js).
+
 v1.2.3 round-32 (2026.7.20): no changes to src/main/assets/ top-level files.
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
   - chess.html: rebuilt via build-chess.py to pick up the chess.src/

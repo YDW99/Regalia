@@ -81,7 +81,19 @@ public class ChessWebViewClient extends WebViewClient {
                 Intent intent = new Intent(Intent.ACTION_VIEW, parsed);
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                 Activity activity = activityRef.get();
-                if (activity != null) {
+                // v1.2.3 round-33 (PR52 v3 #4.2.9): check isFinishing() /
+                //   isDestroyed() BEFORE calling activity.startActivity().
+                //   activityRef.get() only tells us the Activity hasn't been
+                //   GC'd — it may still be in the finishing or destroyed state
+                //   (e.g., user pressed BACK, or the OS killed the activity
+                //   but the WeakReference hasn't been cleared yet). Calling
+                //   startActivity() on a destroyed Activity throws
+                //   IllegalStateException, which the outer catch (Exception)
+                //   would silently swallow — the URL open would fail with no
+                //   user feedback. The lifecycle check routes such cases to
+                //   the Application Context fallback path (which works because
+                //   FLAG_ACTIVITY_NEW_TASK was set above).
+                if (activity != null && !activity.isFinishing() && !activity.isDestroyed()) {
                     activity.startActivity(intent);
                 } else {
                     // v1.2.3 round-13 (P2): Activity was destroyed — fall back
@@ -92,6 +104,9 @@ public class ChessWebViewClient extends WebViewClient {
                     //   which could throw IllegalStateException on a destroyed
                     //   Activity. The outer catch (Throwable) masks it, but the
                     //   URL open would silently fail.
+                    // v1.2.3 round-33: this branch now also fires when the
+                    //   Activity is alive but finishing/destroyed (lifecycle
+                    //   check above), not just when activityRef.get() == null.
                     Context appCtx = view.getContext() != null
                             ? view.getContext().getApplicationContext() : null;
                     if (appCtx != null) {
