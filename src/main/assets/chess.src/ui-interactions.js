@@ -97,12 +97,13 @@ function _restoreClocks(snap){
   gameClocks.black.lastMoveTimestamp=now;
   // Clear any prior timeout state so the resumed clock can tick afresh.
   if(typeof gameClockExpired!=='undefined')gameClockExpired=null;
-  // Restart the tick interval if the clock UI is active (gameClockTimerId
-  // is owned by ui-gameflow.js). typeof guard — round-11 cross-module safety.
+  // Restart ONLY the tick interval — do NOT call initGameClocks(), which
+  // rebuilds gameClocks from dlgTimeControl and would clobber the values
+  // just restored above (remainingSec/displayRemainingSec reset to base).
   if(typeof gameClockTimerId!=='undefined'){
     if(gameClockTimerId){clearInterval(gameClockTimerId);gameClockTimerId=null;}
-    if(typeof initGameClocks==='function'&&!gameOver){
-      initGameClocks();
+    if(typeof _tickGameClock==='function'&&!gameOver){
+      gameClockTimerId=setInterval(_tickGameClock,200);
     }
   }
   if(typeof _updateClockDisplay==='function')_updateClockDisplay();
