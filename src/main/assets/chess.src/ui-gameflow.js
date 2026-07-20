@@ -41,7 +41,7 @@ function startGame(){
 
 function _startGameImpl(){
   // v1.0.8 PHASE 22 supplement: new-game sound (号角式三音和弦)
-  try{if(typeof playSound==='function')playSound('newgame');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{if(typeof playSound==='function')playSound('newgame');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   showNewGameDialog=false;
   playerColor=dlgPlayerColor;
   useBookMoves=dlgBookMoves;
@@ -285,16 +285,13 @@ function _onGameClockExpired(color){
   // deduction (especially under HyperOS 3's aggressive CPU throttling),
   // causing the engine to search far past the 0-second mark. This made
   // timed games feel "broken" — the engine kept thinking after time was up.
-  // Now we send a hard "stop" via engineStop() so the engine returns
+  // Now we send a hard "stop" via _engineStopHard() so the engine returns
   // bestmove immediately and the game-over overlay shows promptly.
+  // v1.2.3 round-36 (dedup): replaced inline engineStop+fallback with
+  //   the canonical _engineStopHard() helper from ai-bridge.js.
   try{
     if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.isEngineReady==='function'&&AndroidBridge.isEngineReady()){
-      if(typeof AndroidBridge.engineStop==='function'){
-        AndroidBridge.engineStop();
-      }else if(typeof AndroidBridge.sendToEngine==='function'){
-        // Fallback for older builds: send raw "stop"
-        AndroidBridge.sendToEngine('stop');
-      }
+      _engineStopHard();
     }
     // Clear AI thinking state so UI updates promptly
     isAIThinking=false;
@@ -389,9 +386,10 @@ function formatClock(sec){
   const h=Math.floor(s/3600);
   const m=Math.floor((s%3600)/60);
   const ss=s%60;
-  const pad=n=>(n<10?'0':'')+n;
-  if(h>0)return h+':'+pad(m)+':'+pad(ss);
-  return m+':'+pad(ss);
+  // v1.2.3 round-36 (dedup): use _pad2() from pgn-standard.js (loaded
+  //   before ui-gameflow.js per build-chess.py MODULES order).
+  if(h>0)return h+':'+_pad2(m)+':'+_pad2(ss);
+  return m+':'+_pad2(ss);
 }
 
 // Lightweight DOM update for clock display (avoid full render() on every tick)

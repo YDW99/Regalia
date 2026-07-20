@@ -167,7 +167,9 @@ const Store = (function() {
             }
             return obj;
         }
-        if (obj instanceof Date) return new Date(obj.getTime());
+        // v1.2.3 round-37 (SonarCloud S7719): `new Date(date)` accepts a Date
+        //   instance directly and clones it — no need for `.getTime()`.
+        if (obj instanceof Date) return new Date(obj);
         // RegExp: use explicit source+flags construction (semantically
         // equivalent to `new RegExp(obj)` but avoids Semgrep FP on non-
         // literal-RegExp construction, since `obj` is already instanceof
@@ -201,7 +203,12 @@ const Store = (function() {
         if (Array.isArray(obj)) return obj.map(function (v) { return _deepClone(v, _depth + 1); });
         const cloned = {};
         for (const key in obj) {
-            if (Object.prototype.hasOwnProperty.call(obj, key)) {
+            // v1.2.3 round-37 (SonarCloud S6653): Object.hasOwn is the ES2022
+            //   static method — safer than obj.hasOwnProperty (which can be
+            //   shadowed by a user-defined hasOwnProperty property) and more
+            //   concise than Object.prototype.hasOwnProperty.call. Android
+            //   WebView API 35+ supports ES2022.
+            if (Object.hasOwn(obj, key)) {
                 cloned[key] = _deepClone(obj[key], _depth + 1);
             }
         }
@@ -219,10 +226,12 @@ const Store = (function() {
      */
     function registerReducer(actionType, reducer) {
         if (typeof actionType !== 'string' || actionType.length === 0) {
-            throw new Error('actionType must be a non-empty string');
+            // v1.2.3 round-37 (SonarCloud S7786): use TypeError for type-check
+            //   failures (more specific than generic Error).
+            throw new TypeError('actionType must be a non-empty string');
         }
         if (typeof reducer !== 'function') {
-            throw new Error('reducer must be a function');
+            throw new TypeError('reducer must be a function');
         }
         if (_reducers[actionType] && typeof console !== 'undefined' && console.warn) console.warn('[Store] Reducer overwrite:', actionType);
         _reducers[actionType] = reducer;
@@ -242,7 +251,9 @@ const Store = (function() {
         }
         const partial = reducer(_state, payload);
         if (partial && typeof partial === 'object') {
-            _state = Object.assign({}, _state, partial);
+            // v1.2.3 round-37 (SonarCloud S6661): use object spread instead of
+            //   Object.assign for declarative merge.
+            _state = { ..._state, ...partial };
             // v1.2.3 round-31 (PR52 CodeRabbit perf): compute the snapshot
             //   ONCE and pass it to _notifyListeners + return it. Previously
             //   _notifyListeners() deep-cloned _state internally and dispatch()
@@ -274,7 +285,9 @@ const Store = (function() {
      */
     function subscribe(listener) {
         if (typeof listener !== 'function') {
-            throw new Error('listener must be a function');
+            // v1.2.3 round-37 (SonarCloud S7786): use TypeError for type-check
+            //   failures (more specific than generic Error).
+            throw new TypeError('listener must be a function');
         }
         _listeners.push(listener);
         return function unsubscribe() {
@@ -315,7 +328,8 @@ const Store = (function() {
      *                   调用者可安全修改返回值而不影响内部 _state）
      */
     function reset(overrides) {
-        _state = Object.assign(_deepClone(_initialState), overrides || {});
+        // v1.2.3 round-37 (SonarCloud S6661): use object spread.
+        _state = { ..._deepClone(_initialState), ...(overrides || {}) };
         // v1.2.3 round-31 (PR52 CodeRabbit perf): single deep-clone reuse —
         //   see dispatch() above for the rationale.
         const snapshot = _deepClone(_state);
@@ -388,7 +402,8 @@ const Store = (function() {
         aiThinking: false
     }));
     registerReducer('UPDATE_EVAL', (state, payload) => ({
-        eval: Object.assign({}, state.eval, payload)
+        // v1.2.3 round-37 (SonarCloud S6661): use object spread.
+        eval: { ...state.eval, ...payload }
     }));
 
     // UI 偏好
@@ -427,7 +442,8 @@ const Store = (function() {
 
     // 对局时钟
     registerReducer('UPDATE_CLOCKS', (state, payload) => ({
-        gameClocks: Object.assign({}, state.gameClocks, payload)
+        // v1.2.3 round-37 (SonarCloud S6661): use object spread.
+        gameClocks: { ...state.gameClocks, ...payload }
     }));
 
     // 视觉注解
@@ -443,11 +459,13 @@ const Store = (function() {
     // 等垃圾键污染 dialogVisible。非字符串 payload 视为 no-op 返回 {}。
     registerReducer('SHOW_DIALOG', (state, payload) => {
         if (typeof payload !== 'string' || !payload) return {};
-        return { dialogVisible: Object.assign({}, state.dialogVisible, { [payload]: true }) };
+        // v1.2.3 round-37 (SonarCloud S6661): use object spread.
+        return { dialogVisible: { ...state.dialogVisible, [payload]: true } };
     });
     registerReducer('HIDE_DIALOG', (state, payload) => {
         if (typeof payload !== 'string' || !payload) return {};
-        return { dialogVisible: Object.assign({}, state.dialogVisible, { [payload]: false }) };
+        // v1.2.3 round-37 (SonarCloud S6661): use object spread.
+        return { dialogVisible: { ...state.dialogVisible, [payload]: false } };
     });
     registerReducer('HIDE_ALL_DIALOGS', (state) => {
         const cleared = {};

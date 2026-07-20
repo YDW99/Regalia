@@ -177,22 +177,29 @@ function backRankToSPID(backRank){
  *     number generator is safe here" hotspot.
  */
 function randomSPID(){
-  try{
-    if(typeof crypto!=='undefined'&&crypto.getRandomValues){
-      const buf=new Uint16Array(1);
-      // Rejection-sample to eliminate modulo bias
-      const LIMIT=65280; // largest multiple of 960 <= 65536
-      for(let _i=0;_i<8;_i++){ // bounded retries (8 is plenty -- P(>8 retries) approx 0)
-        crypto.getRandomValues(buf);
-        if(buf[0]<LIMIT)return buf[0]%960;
-      }
-      // Fallback if all 8 retries exceeded (extremely unlikely)
-      return buf[0]%960;
-    }
-  }catch(e){console.warn('[Chess960]',e?.message?e.message:e);}
-  // SECURITY: Return standard position instead of Math.random() when crypto
-  // is unavailable. SP-ID 518 = traditional RNBQKBNR.
-  return 518;
+  // v1.2.3 round-36 (dedup): delegate to secureRandomInt(960) from
+  //   game-logic.js. The two functions implemented the same rejection-
+  //   sampling algorithm (crypto.getRandomValues + bounded retries +
+  //   modulo-bias elimination); keeping them in sync was a maintenance
+  //   burden. secureRandomInt uses Uint32Array (full 32-bit range) vs
+  //   this function's previous Uint16Array (16-bit), but the rejection-
+  //   sampling math is equivalent — P(retry) is actually smaller with
+  //   32-bit. Behavior on success is identical (uniform modulo).
+  // Fail-safe: when crypto is unavailable, secureRandomInt returns 0
+  //   (= SP-ID 0, a valid Chess960 position). The previous fail-safe
+  //   returned 518 (= standard chess position). We preserve the 518
+  //   fail-safe here because SP-ID 518 is the documented "standard
+  //   position" choice and matches user expectation when crypto fails.
+  if(typeof crypto==='undefined'||!crypto||typeof crypto.getRandomValues!=='function'){
+    return 518;
+  }
+  if(typeof secureRandomInt!=='function'){
+    // Defensive: game-logic.js should always be loaded before chess960.js
+    // (per build-chess.py MODULES order), but guard against load-order
+    // regressions with the 518 fail-safe.
+    return 518;
+  }
+  return secureRandomInt(960);
 }
 
 // ===== II. Shredder-FEN castling rights =====
@@ -640,6 +647,23 @@ function setChess960Mode(enabled){
   }catch(e){console.warn('setChess960Mode bridge call failed:',e);}
 }
 function isChess960Mode(){return _chess960ModeActive;}
+
+// v1.2.3 round-36 (dedup + robustness): canonical "is the current game
+//   Chess960 for FEN/PGN purposes" predicate. Previously this 2-clause
+//   OR expression was inlined verbatim at ai-bridge.js:generateFEN and
+//   game-logic.js:_castleSide, creating a drift risk — a future change
+//   to the detection rule (e.g., adding a third signal) would need to
+//   be applied at both sites. Centralizing here makes the rule a single
+//   source of truth.
+// NOTE: do NOT use this for sites that intentionally check ONLY
+//   gameVariant==='chess960' (e.g. ECO gating in ui.js — those gate on
+//   the EXPLICIT variant flag set in _startGameImpl, not on the runtime
+//   UCI_Chess960 mode). This helper is only for sites that already use
+//   the full 2-clause expression.
+function isChess960Active(){
+  return (typeof gameVariant!=='undefined'&&gameVariant==='chess960')
+      || (typeof isChess960Mode==='function'&&isChess960Mode());
+}
 
 // ===== V. Generate a Chess960 starting position state object =====
 /**

@@ -1,3 +1,31 @@
+v1.2.3 round-39 (2026.7.20): no changes to files in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — code-quality round).
+  - License classification: all files unchanged.
+
+v1.2.3 round-38 (2026.7.20): no changes to files in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — code-quality round).
+  - All resource files: no changes this round.
+  - License classification: all files unchanged.
+
+v1.2.3 round-37 (2026.7.20): no changes to files in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — code-quality round).
+  - All resource files: no changes this round.
+  - License classification: all files unchanged.
+
+v1.2.3 round-36 (2026.7.20): no changes to files in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — refactor round).
+  - All resource files (strings.xml, network_security_config.xml,
+    backup_rules.xml, data_extraction_rules.xml, mipmap icons):
+    no changes this round.
+  - License classification: all files unchanged.
+
+v1.2.3 round-35 (2026.7.20): no changes to files in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - All resource files (strings.xml, network_security_config.xml,
+    backup_rules.xml, data_extraction_rules.xml, mipmap icons):
+    no changes this round.
+  - License classification: all files unchanged.
+
 v1.2.3 round-34 (2026.7.20): no changes in this directory.
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
   - All round-34 changes are in src/main/java/com/Regalia/ + README.md +

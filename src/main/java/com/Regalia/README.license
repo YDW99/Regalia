@@ -1,3 +1,54 @@
+v1.2.3 round-39 (2026.7.20): no changes to files in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — code-quality round).
+  - All Java files: no changes this round.
+  - License classification: all files unchanged.
+
+v1.2.3 round-38 (2026.7.20): no changes to files in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — code-quality round).
+  - All Java files in this directory: no changes this round. Round-38
+    fixes are confined to chess.src/*.js + stats.html.
+  - License classification: all files unchanged.
+
+v1.2.3 round-37 (2026.7.20): no changes to files in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — code-quality round).
+  - All Java files in this directory: no changes this round. Round-37
+    fixes are confined to chess.src/*.js + stats.html + engine_jni.cpp.
+  - License classification: all files unchanged (StockfishNative,
+    JsBridgeGateway, HapticManager, EngineConfigHelper, SafPickerHelper,
+    EngineSettingsHelper, PgnCacheManager, FileIoHelper, PermissionHelper,
+    EngineProcessManager, EngineHealthMonitor, StatsActivity = GPL v3;
+    MainActivity, ChessWebViewClient, EngineService, StabilizationHelper,
+    ChessApp, TlsSecurityHelper, RootDetector = AGPL v3).
+
+v1.2.3 round-36 (2026.7.20): no changes to files in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — refactor round).
+  - All Java files in this directory: no changes this round. Round-36
+    refactoring is confined to src/main/assets/chess.src/*.js (JS modules).
+  - License classification: all files unchanged (StockfishNative,
+    JsBridgeGateway, HapticManager, EngineConfigHelper, SafPickerHelper,
+    EngineSettingsHelper, PgnCacheManager, FileIoHelper, PermissionHelper,
+    EngineProcessManager, EngineHealthMonitor, StatsActivity = GPL v3;
+    MainActivity, ChessWebViewClient, EngineService, StabilizationHelper,
+    ChessApp, TlsSecurityHelper, RootDetector = AGPL v3).
+
+v1.2.3 round-35 (2026.7.20): StockfishNative AtomicInteger fix.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - StockfishNative.java (GPL v3): converted _lifecycleGeneration field
+    from `volatile int` to `AtomicInteger` (SonarCloud java:S3078 BUG).
+    The `++` compound operation on a volatile int is non-atomic
+    (read-modify-write). Field is now `private final AtomicInteger
+    _lifecycleGeneration = new AtomicInteger(0)`; the single mutation
+    site uses `.incrementAndGet()`; all 4 read sites use `.get()`.
+    Behavior is byte-for-byte equivalent (the field is still a monotonic
+    counter); only the concurrency semantics are now correctly atomic.
+  - All other Java files in this directory: no changes this round.
+  - License classification: all files unchanged (StockfishNative,
+    JsBridgeGateway, HapticManager, EngineConfigHelper, SafPickerHelper,
+    EngineSettingsHelper, PgnCacheManager, FileIoHelper, PermissionHelper,
+    EngineProcessManager, EngineHealthMonitor, StatsActivity = GPL v3;
+    MainActivity, ChessWebViewClient, EngineService, StabilizationHelper,
+    ChessApp, TlsSecurityHelper, RootDetector = AGPL v3).
+
 v1.2.3 round-34 (2026.7.20) — PR52 v4 Gitar Changes Requested + CodeRabbit Major race fix:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
   - StockfishNative.java (GPL v3): closed remaining post-check shutdown race

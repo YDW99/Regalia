@@ -95,7 +95,7 @@ let _reviewEvalCache=new function(){
   //   immediately, with NO "analyzing..." flash.
 
   // v1.2.1 round-9: Best-effort warning helper for eval-cache persistence
-  // paths. Previously all catch blocks were empty (`catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}`) — silent
+  // paths. Previously all catch blocks were empty (`catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}`) — silent
   // failure meant corrupted cache files, QuotaExceededError on localStorage,
   // and JNI failures were invisible. We log at `warn` (not `error`) because
   // these are non-fatal — the cache is best-effort and the app continues to
@@ -306,7 +306,7 @@ window._flushReviewEvalCache=function(){
   function _flushOnExit(){
     try{window._flushReviewEvalCache();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
     // Also flush SharedPreferences pending writes (covers persistentSet async writes)
-    try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentFlush)AndroidBridge.persistentFlush();}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+    try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentFlush)AndroidBridge.persistentFlush();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
   }
   // pagehide: fired when the page is being unloaded (mobile browsers including WebView)
   window.addEventListener('pagehide',_flushOnExit);
@@ -395,10 +395,13 @@ let _evalRequestBatchGen=0;
 // Persists across sessions via AndroidBridge.persistentSet('Regalia_humanName', ...).
 let _humanPlayerName=null;
 // v1.0.4 Rev24 NEW: Explicit player names from PGN import.
-// When set (non-undefined), _buildPGNString uses these verbatim for [White]/[Black]
+// When set (non-null), _buildPGNString uses these verbatim for [White]/[Black]
 // instead of the default "你"/"AI对手". Cleared by startGame().
-let playerWhite=undefined;
-let playerBlack=undefined;
+// v1.2.3 round-37 (SonarCloud S6645): removed `= undefined` initializers —
+//   `let x;` is already undefined by default; explicit `= undefined` is
+//   redundant and can mislead readers into thinking there's special semantics.
+let playerWhite;
+let playerBlack;
 // v1.0.4 Rev24: Load _humanPlayerName from persistent storage at module init.
 // This runs synchronously, so the name is available before the first render.
 try{
@@ -644,6 +647,32 @@ function _bridgeCall(fn,fallback,requireEngine){
   return null;
 }
 
+// v1.2.3 round-36 (dedup + robustness): canonical "hard-stop the engine"
+//   helper. Replaces 3 inline blocks (ui-gameflow.js:290-298,
+//   ui-interactions.js:1488-1494, ui.js:5466-5470) that each implemented
+//   the same logic with subtle inconsistencies:
+//   - ui.js:5466 was MISSING the sendToEngine('stop') fallback for older
+//     builds without engineStop() — the priority-stop would silently
+//     no-op on those builds. This helper closes that gap.
+//   - ui-interactions.js:1488 used `AndroidBridge.sendToEngine` (truthy
+//     check) instead of `typeof AndroidBridge.sendToEngine==='function'`.
+//     Both work in practice, but the typeof check is the project's
+//     consistent pattern (per round-11 resilience design).
+//   - ui-gameflow.js:290 gated on isEngineReady() first; the other two
+//     didn't. This helper does NOT gate on isEngineReady() (the callers
+//     that need that gate already check it before calling).
+// Use this for game-over / resign / priority-preempt / clock-expiry
+//   paths where the bestmove must be discarded. NOT for soft-stop during
+//   normal flow.
+function _engineStopHard(){
+  try{
+    if(typeof AndroidBridge!=='undefined'){
+      if(typeof AndroidBridge.engineStop==='function'){AndroidBridge.engineStop();return;}
+      if(typeof AndroidBridge.sendToEngine==='function'){AndroidBridge.sendToEngine('stop');}
+    }
+  }catch(e){console.warn('[AIBridge] engineStop failed:',e?.message?e.message:e);}
+}
+
 // Loading overlay for engine initialization — progress is REAL, driven by onEngineProgress callbacks
 let _loadingPct=0;
 // v1.0.8 PHASE 22: Light/Dark mode detection for the loading overlay's king icon.
@@ -666,9 +695,11 @@ function _isLightMode(){
     return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches);
   }catch(e){
     // 最终回退：默认深色模式（与原设计一致）
+    // v1.2.3 round-37 (SonarCloud S7718): nested catch uses `error` (not
+    //   `e2`) per the project's modern catch-param naming convention.
     try{
       return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches);
-    }catch(e2){return false;}
+    }catch(error){return false;}
   }
 }
 function _loadingKingIconHTML(){
@@ -718,7 +749,7 @@ function _hideLoadingOverlay(){
   //   cross-module convention (the helper is defined in ui.js, which loads
   //   after this module); the helper's own flag prevents double-firing.
   setTimeout(function(){
-    try{if(typeof _maybeShowBoardDebounceHint==='function')_maybeShowBoardDebounceHint();}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+    try{if(typeof _maybeShowBoardDebounceHint==='function')_maybeShowBoardDebounceHint();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
   },600);
 }
 // v1.0.8 PHASE 22 (bug fix): Apply system dark/light theme to <html> via
@@ -1345,11 +1376,20 @@ function _buildPGNString(forceIncludeVariations, includeAnnotations){
     // v1.0.4 Rev24: forceIncludeVariations (used by PGN cache save) bypasses
     // the showVariations UI toggle so the saved PGN archive always contains
     // the complete game record with variations.
-    let variations=undefined;
+    // v1.2.3 round-37 (SonarCloud S6645): `let variations;` is undefined by
+    //   default — no need for explicit `= undefined`. The re-assignment at
+    //   line ~1388 (when filter returns empty) is kept as `= undefined` to
+    //   match the consumer pattern (`if(m.variations && m.variations.length>0)`
+    //   — both null and undefined are falsy, so behavior is identical).
+    let variations;
     if((showVariations||forceIncludeVariations)&&mr.variations&&mr.variations.length>0){
       variations=mr.variations.filter(v=>v.san&&v.group!=='analysis'&&v.group!=='ponder').map(v=>{
         const vmn=(v.varMoveNum!=null)?v.varMoveNum:_moveNum;
-        const fiw=(v.firstMoveIsWhite!=null)?v.firstMoveIsWhite:(color==='white'?false:true);
+        // v1.2.3 round-37 (SonarCloud S6644): the inner ternary
+        //   `color==='white'?false:true` is `color!=='white'`. The outer
+        //   ternary is a nullish-coalescing fallback (NOT S6644 — the
+        //   branches return different values), so it stays.
+        const fiw=(v.firstMoveIsWhite!=null)?v.firstMoveIsWhite:(color!=='white');
         // v1.0.4 Rev29 FIX: was `v.prefixEllipsisNum||vmn` — but if prefixEllipsisNum
         // is 0 (legitimate, though rare — move "0..." shouldn't normally occur, but
         // defensive), `||` would fall back to vmn. Use explicit null check instead.
@@ -1687,7 +1727,9 @@ function openStatsPage(){
     }else{
       // Plain-object fallback (defensive — current code always uses Map)
       for(const k in _visualAnnotationsCache){
-        if(!_visualAnnotationsCache.hasOwnProperty(k))continue;
+        // v1.2.3 round-38 (SonarCloud S6653): use Object.hasOwn instead of
+        //   .hasOwnProperty (safer against shadowed hasOwnProperty, ES2022).
+        if(!Object.hasOwn(_visualAnnotationsCache,k))continue;
         if(k==='_initial')continue;
         const v=_visualAnnotationsCache[k];
         if(!v||(!v.csl&&!v.cal))continue;
@@ -1729,7 +1771,7 @@ function copyReviewPGN(){
   if(!moveRecords||!moveRecords.length){showToast(T('no_move_records'));return}
   copyMoveHistory();
 }
-function _fallbackCopy(text,successMsg){const ta=document.createElement('textarea');ta.value=text;ta.style.cssText='position:fixed;left:-9999px;top:-9999px';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');if(successMsg)showToast(successMsg)}catch(e){showToast(T('copy_failed'))}finally{document.body.removeChild(ta)}}
+function _fallbackCopy(text,successMsg){const ta=document.createElement('textarea');ta.value=text;ta.style.cssText='position:fixed;left:-9999px;top:-9999px';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');if(successMsg)showToast(successMsg)}catch(e){showToast(T('copy_failed'))}finally{ta.remove()}}
 // Unified clipboard helper — handles WebView compatibility (secure context, user gesture)
 function safeCopyToClipboard(text,successMsg){
   const fb=function(){_fallbackCopy(text,successMsg)};
@@ -2202,19 +2244,21 @@ function generateFEN(s){
   // lossless way to represent the position.
   // Standard positions (king on e1/e8, rooks on a1/h1/a8/h8) continue to
   // use KQkq for backward compatibility with v1.0.6 and earlier.
+  // v1.2.3 round-36 (dedup + robustness): the inline king-position +
+  //   corner-rook checks were an UNFIXED copy of _needsShredderFEN() —
+  //   they missed the v1.2.3 round-21 per-color gating fix (the inline
+  //   king check ran for BOTH colors regardless of which side actually
+  //   held castling rights, misclassifying standard positions like
+  //   3k4/8/8/8/8/8/8/R3K2R w KQ - 0 1 as Chess960). Replaced with a
+  //   single call to _needsShredderFEN(s), which is the canonical,
+  //   field-proven implementation already used by tablebase.js for FEN
+  //   import. Behavior is now byte-for-byte identical across all 4
+  //   Shredder-detection sites.
   let _useShredder=false;
-  const _is960=(gameVariant !== undefined&&gameVariant==='chess960')||(typeof isChess960Mode==='function'&&isChess960Mode());
+  const _is960=isChess960Active();
   if(_is960)_useShredder=true;
   else{
-    const _hasRights=cr.whiteKingside||cr.whiteQueenside||cr.blackKingside||cr.blackQueenside;
-    if(_hasRights){
-      if(s.wk&&(s.wk.row!==7||s.wk.col!==4))_useShredder=true;
-      if(s.bk&&(s.bk.row!==0||s.bk.col!==4))_useShredder=true;
-      if(!_useShredder&&cr.whiteKingside){const wr=s.board[7]&&s.board[7][7];if(!wr||wr.type!=='rook'||wr.color!=='white')_useShredder=true;}
-      if(!_useShredder&&cr.whiteQueenside){const wr=s.board[7]&&s.board[7][0];if(!wr||wr.type!=='rook'||wr.color!=='white')_useShredder=true;}
-      if(!_useShredder&&cr.blackKingside){const br=s.board[0]&&s.board[0][7];if(!br||br.type!=='rook'||br.color!=='black')_useShredder=true;}
-      if(!_useShredder&&cr.blackQueenside){const br=s.board[0]&&s.board[0][0];if(!br||br.type!=='rook'||br.color!=='black')_useShredder=true;}
-    }
+    _useShredder=_needsShredderFEN(s);
   }
   let castle;
   if(_useShredder&&typeof toShredderCastling==='function'){
@@ -2465,7 +2509,7 @@ function onEngineReady(){
   _aiRetryCount=0;
   _updateLoadingStatus(T('engine_ready'),100);
   // Sync language preference to SharedPreferences for notification i18n
-  try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.saveLangPref)AndroidBridge.saveLangPref(_lang);}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+  try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.saveLangPref)AndroidBridge.saveLangPref(_lang);}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
   // Update foreground service notification with engine ready status
   _updateEngineNotification(T('engine_ready'));
   setTimeout(function(){
@@ -2567,7 +2611,7 @@ function onBestMove(uciMove){
   // Cancel safety timeout — engine responded (and it's the current request)
   if(_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
   // v1.0.8 PHASE 22 supplement: AI-think-end sound (轻微答声) — engine found a move
-  try{if(typeof playSound==='function')playSound('aiThinkEnd');}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+  try{if(typeof playSound==='function')playSound('aiThinkEnd');}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
   isAIThinking=false;_aiBarInfo='';_aiRetryCount=0;
 
   // CRITICAL FIX: Always clear ponder display state at the start of onBestMove.
@@ -2815,7 +2859,7 @@ function onHintMove(uciMove){
   legalSet=new Set(legalMvs.map(m=>m.row*8+m.col));
   HapticManager.fire('PIECE_SELECT');
   // v1.0.8 PHASE 22 supplement: piece-select sound
-  try{if(typeof playSound==='function')playSound('select');}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+  try{if(typeof playSound==='function')playSound('select');}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
   _updateBoardLightweight();
   render();
 }
@@ -3046,7 +3090,7 @@ function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth){
     // Clear the eval safety timer — engine responded successfully
     if(_evalSafetyTimerId){clearTimeout(_evalSafetyTimerId);_evalSafetyTimerId=null;}
     // Live-refresh the analyze-all button label (progress update)
-    try{if(typeof _updateReviewAnalyzeBtn==='function')_updateReviewAnalyzeBtn();}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+    try{if(typeof _updateReviewAnalyzeBtn==='function')_updateReviewAnalyzeBtn();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
     // Advance the batch (decoupled from reviewStep)
     try{
       if(typeof _reviewAnalyzeAdvance==='function')_reviewAnalyzeAdvance();
@@ -3073,7 +3117,7 @@ function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth){
         });
         // Live-refresh the analyze-all button label (in case batch is also
         // active and watching the cache size)
-        try{if(typeof _updateReviewAnalyzeBtn==='function')_updateReviewAnalyzeBtn();}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+        try{if(typeof _updateReviewAnalyzeBtn==='function')_updateReviewAnalyzeBtn();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
         // v1.1.1 Phase 59 Task 59.3: If the chart is currently displayed and
         //   step 0 just got cached, re-render the chart so the data point
         //   appears. We use a lightweight DOM update (not full render) to

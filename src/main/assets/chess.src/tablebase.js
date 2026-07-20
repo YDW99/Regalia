@@ -210,7 +210,11 @@ function _parsePGN(pgnText){
   // BEFORE the eval-extraction loop, so each move is a separate token. Without
   // this, "1.e4" starts with '1' and the loop's /[a-hKQRBNBO]/ check skips it,
   // missing the eval attachment for that move.
-  moveText=moveText.replace(/(\d+\.+)(?=[a-hKQRBNBO])/gi,'$1 ');
+  // v1.2.3 round-38 (SonarCloud S5869): removed duplicate 'B' in character
+  //   class [a-hKQRBNBO] → [a-hKQRBNO]. The second 'B' was redundant (the
+  //   first 'B' already matches white Bishop; with /i flag it also matches
+  //   black bishop 'b'). 'O' is for castling notation (O-O / O-O-O).
+  moveText=moveText.replace(/(\d+\.+)(?=[a-hKQRBNO])/gi,'$1 ');
   
   // v1.0.4 Rev24 NEW: Extract [%eval ...] tags from comments BEFORE stripping
   // them, so we can populate the review eval cache and skip engine analysis
@@ -456,7 +460,8 @@ function _parsePGN(pgnText){
       //   (0-0 / 0-0-0) is counted as a move. Previously these tokens were
       //   skipped, so _moveCount lagged by one and ALL subsequent annotations
       //   ([%eval]/[%csl]/[%cal]/comments) attached to the wrong move.
-      if(_depth===0&&/[a-hKQRBNBO0]/.test(_ch)){
+      // v1.2.3 round-38 (SonarCloud S5869): removed duplicate 'B' (see line ~213).
+      if(_depth===0&&/[a-hKQRBNO0]/.test(_ch)){
         // Check if this looks like a SAN move (not a move number, result, etc.)
         // Read the token
         let _j=_i;
@@ -1167,7 +1172,7 @@ function importPGN(pgnText){
         const _isDefault=(_humanName===T('you')||_humanName==='你'||_humanName==='You'||_humanName===T('ai_opponent')||_humanName==='AI对手'||_humanName==='AI Opponent'||/Lv\.\d/.test(_humanName)||/SL/.test(_humanName));
         if(!_isDefault){
           _humanPlayerName=_humanName;
-          try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_humanName',_humanName);}catch(e){console.warn('[Tablebase]',e&&e.message?e.message:e);}
+          try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_humanName',_humanName);}catch(e){console.warn('[Tablebase]',e?.message?e.message:e);}
         }
       }
     }

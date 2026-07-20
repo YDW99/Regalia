@@ -78,7 +78,10 @@
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_Regalia_StockfishNative_nativeChmod(JNIEnv *env, jclass, jstring jPath) {
     if (!jPath) return JNI_FALSE;
-    const char* path = env->GetStringUTFChars(jPath, NULL);
+    // v1.2.3 round-37 (SonarCloud cpp:S4962): use nullptr instead of NULL
+    //   for type-safe null pointer constant (C++11). Behavior is identical
+    //   for GetStringUTFChars (it accepts jboolean* or nullptr).
+    const char* path = env->GetStringUTFChars(jPath, nullptr);
     if (!path) return JNI_FALSE;
     int result = chmod(path, 0700);
     // v1.2.3 P2 (Round 17 P2-4): Log errno on chmod failure. Previously a
@@ -109,7 +112,12 @@ Java_com_Regalia_StockfishNative_nativeChmod(JNIEnv *env, jclass, jstring jPath)
  * to preserve the DroidFish-derived pattern for future use.
  */
 extern "C" JNIEXPORT void JNICALL
+// v1.2.3 round-37 (SonarCloud cpp:S1172): `env` is unused but required by
+//   the JNI signature. Renaming to `/*env*/` would break JNI name mangling
+//   (the symbol must match Java_com_Regalia_StockfishNative_nativeRenice
+//   exactly). Kept as `env` with this explanatory comment.
 Java_com_Regalia_StockfishNative_nativeRenice(JNIEnv *env, jclass, jint pid, jint prio) {
+    (void)env;  // suppress unused-parameter warning
     if (pid <= 0) return;
     // v1.1.2 Phase 67: Code review P0 fix - validate prio range and check setpriority() return value.
     // PRIO_MIN/PRIO_MAX are typically -20/19 on Linux/Android. Clamping prevents undefined behavior

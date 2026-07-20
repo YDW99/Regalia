@@ -159,7 +159,7 @@ if(selectedSquare?.row===r&&selectedSquare.col===c){
   selectedSquare=null;legalMvs=[];legalSet=new Set();
   HapticManager.fire('BUTTON_PRESS');
   // v1.0.8 PHASE 22 supplement: deselect sound (下行短音)
-  try{if(typeof playSound==='function')playSound('deselect');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{if(typeof playSound==='function')playSound('deselect');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   _updateBoardLightweight();return
 }
 if(selectedSquare&&canMove){
@@ -182,7 +182,7 @@ if(selectedSquare&&canMove){
     selectedSquare=pos;legalMvs=legalMoves(gameState,pos);legalSet=new Set(legalMvs.map(m=>m.row*8+m.col));
     HapticManager.fire('PIECE_SELECT');
     // v1.0.8 PHASE 22 supplement: piece-select sound (清脆短音)
-    try{if(typeof playSound==='function')playSound('select');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+    try{if(typeof playSound==='function')playSound('select');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     _updateBoardLightweight();return
   }
   // Clicked empty/opponent square that's not a legal move → deselect old & select new
@@ -192,7 +192,7 @@ if(selectedSquare&&canMove){
 // No piece currently selected — allow selecting own piece or any square for control info
 if(canMove&&p?.color===playerColor){selectedSquare=pos;legalMvs=legalMoves(gameState,pos);legalSet=new Set(legalMvs.map(m=>m.row*8+m.col));HapticManager.fire('PIECE_SELECT');
   // v1.0.8 PHASE 22 supplement: piece-select sound (清脆短音)
-  try{if(typeof playSound==='function')playSound('select');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{if(typeof playSound==='function')playSound('select');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   _updateBoardLightweight();return}
 // Clicked empty/opponent square with no selection — allow for control info, but prefer deselect
 if(selectedSquare){selectedSquare=null;legalMvs=[];legalSet=new Set();HapticManager.fire('BUTTON_PRESS');_updateBoardLightweight();return}
@@ -441,11 +441,11 @@ if(isAIThinking&&!setupMode)return;
 if(stateHistory.length===0){
   HapticManager.fire('BUTTON_PRESS');
   // v1.0.8 PHASE 22 supplement: error sound (nothing to undo)
-  try{if(typeof playSound==='function')playSound('error');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{if(typeof playSound==='function')playSound('error');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   return;
 }
 // v1.0.8 PHASE 22 supplement: undo sound (逆向回旋音)
-try{if(typeof playSound==='function')playSound('undo');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+try{if(typeof playSound==='function')playSound('undo');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
 _cachedStatus=null;_cachedStatusKey='';_updateEvalDisplay(); // _resetEvalState now inside requestEngineEval()
 _clearAnimationState();
 if(pendingPromotion)pendingPromotion=null;
@@ -573,11 +573,11 @@ if(isAIThinking)return;
 if(_redoStack.length===0){
   HapticManager.fire('BUTTON_PRESS');
   // v1.0.8 PHASE 22 supplement: error sound (nothing to redo)
-  try{if(typeof playSound==='function')playSound('error');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{if(typeof playSound==='function')playSound('error');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   return;
 }
 // v1.0.8 PHASE 22 supplement: redo sound (正向回旋音)
-try{if(typeof playSound==='function')playSound('redo');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+try{if(typeof playSound==='function')playSound('redo');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
 _cachedStatus=null;_cachedStatusKey='';_updateEvalDisplay();
 _clearAnimationState();
 // Pop from redo stack and restore
@@ -622,7 +622,7 @@ HapticManager.fire('PIECE_SELECT');
 
 function flipBoard(){
   // v1.0.8 PHASE 22 supplement: flip sound (嗖声)
-  try{if(typeof playSound==='function')playSound('flip');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{if(typeof playSound==='function')playSound('flip');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   // v1.0.8 PHASE 24 (bug fix): clear animation state so a mid-animation flip
   //   doesn't leave an overlay at the wrong orientation.
   _clearAnimationState();
@@ -666,7 +666,7 @@ function quickFreeOpening(){
 // === Toggle sound on/off (toolbar button) ===
 function toggleSound(){
   soundOn=!soundOn;
-  try{if(typeof Store!=='undefined'&&Store&&typeof Store.dispatch==='function')Store.dispatch('TOGGLE_SOUND',soundOn);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{if(typeof Store!=='undefined'&&Store&&typeof Store.dispatch==='function')Store.dispatch('TOGGLE_SOUND',soundOn);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   const btn=document.getElementById('btnSound');
   if(btn)btn.innerHTML=soundOn?'<span style=\"font-size:1.4rem\">🔊</span> '+T('sound'):'<span style=\"font-size:1.4rem\">🔇</span> '+T('sound');
   HapticManager.fire(soundOn?'TOGGLE_ON':'TOGGLE_OFF');
@@ -684,7 +684,7 @@ function toggleSound(){
   // so the user immediately hears confirmation that sound is now active.
   // (When turning OFF, no sound — by definition.)
   if(soundOn){
-    try{if(typeof playSound==='function')playSound('select');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+    try{if(typeof playSound==='function')playSound('select');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   }
   showToast(soundOn?T('sound_on'):T('sound_off'),1200);
 }
@@ -695,7 +695,7 @@ function getHint(){
   if(gameOver||isAIThinking||reviewMode||gameState.currentTurn!==playerColor)return;
   if(!_engineReady){showToast(T('engine_not_ready'));return;}
   // v1.0.8 PHASE 22 supplement: hint sound (柔和三角波) — requesting AI hint
-  try{if(typeof playSound==='function')playSound('hint');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{if(typeof playSound==='function')playSound('hint');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   isHintLoading=true;hintText='';_aiBarInfo='';aiThinkInfo=T('thinking');_hintBarInfo=T('thinking');
   // Clear stale ponder info when starting a new hint search
   _ponderGen++;_ponderBarInfo='';_ponderMoveSAN='';_pendingPonderMoveUCI=null;
@@ -744,7 +744,7 @@ function toggleSetup(){if(isAIThinking&&!setupMode)return;_cachedStatus=null;_ca
 // v1.0.8 PHASE 24 (bug fix): clear any in-progress animation.
 _clearAnimationState();
 // v1.0.8 PHASE 22 supplement: setup-toggle sound (木质放置音)
-try{if(typeof playSound==='function')playSound('setupToggle');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+try{if(typeof playSound==='function')playSound('setupToggle');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
 // v1.0.2 FIX (audit): extract common reset out of both branches.
 gameOver=null;_gameOverStatusKey=null;
 if(setupMode){setupPiece='pawn';setupColor='white';selectedSquare=null;legalMvs=[];legalSet=new Set();lastMove=null;gameOverSoundPlayed=false;setupErrors=[];setupHistory=[];
@@ -957,39 +957,21 @@ if(typeof _updateEvalDisplay==='function')_updateEvalDisplay();
 // in that case — it would imply rook on h1/a1 etc., which is not the actual
 // position. Shredder notation explicitly names the rook's source file, so the
 // position can be losslessly round-tripped through PGN/FEN.
+// v1.2.3 round-36 (dedup + robustness): replaced the inline king-position +
+//   corner-rook checks (an UNFIXED copy of _needsShredderFEN that missed
+//   the v1.2.3 round-21 per-color gating fix) with a single call to
+//   _needsShredderFEN(gameState). Behavior is now byte-for-byte identical
+//   across all 4 Shredder-detection sites (tablebase._applyImportedFEN,
+//   ai-bridge.generateFEN, this site, and the Chess960-mode detection
+//   below).
 if(typeof _setupFEN!=='undefined'&&typeof generateFEN==='function'){
   _setupFEN=generateFEN(gameState);
-  if(typeof toShredderCastling==='function'&&gameState.castlingRights){
-    const cr=gameState.castlingRights;
-    const hasRights=cr.whiteKingside||cr.whiteQueenside||cr.blackKingside||cr.blackQueenside;
-    if(hasRights){
-      let needsShredder=false;
-      // Check king positions
-      if(gameState.wk&&(gameState.wk.row!==7||gameState.wk.col!==4))needsShredder=true;
-      if(gameState.bk&&(gameState.bk.row!==0||gameState.bk.col!==4))needsShredder=true;
-      // Check rook positions for each right that's set
-      if(!needsShredder&&cr.whiteKingside){
-        const wr=gameState.board[7]&&gameState.board[7][7];
-        if(!wr||wr.type!=='rook'||wr.color!=='white')needsShredder=true;
-      }
-      if(!needsShredder&&cr.whiteQueenside){
-        const wr=gameState.board[7]&&gameState.board[7][0];
-        if(!wr||wr.type!=='rook'||wr.color!=='white')needsShredder=true;
-      }
-      if(!needsShredder&&cr.blackKingside){
-        const br=gameState.board[0]&&gameState.board[0][7];
-        if(!br||br.type!=='rook'||br.color!=='black')needsShredder=true;
-      }
-      if(!needsShredder&&cr.blackQueenside){
-        const br=gameState.board[0]&&gameState.board[0][0];
-        if(!br||br.type!=='rook'||br.color!=='black')needsShredder=true;
-      }
-      if(needsShredder){
-        const parts=_setupFEN.split(' ');
-        if(parts.length>=3){
-          parts[2]=toShredderCastling(gameState.castlingRights,gameState.board);
-          _setupFEN=parts.join(' ');
-        }
+  if(typeof toShredderCastling==='function'&&typeof _needsShredderFEN==='function'&&gameState.castlingRights){
+    if(_needsShredderFEN(gameState)){
+      const parts=_setupFEN.split(' ');
+      if(parts.length>=3){
+        parts[2]=toShredderCastling(gameState.castlingRights,gameState.board);
+        _setupFEN=parts.join(' ');
       }
     }
   }
@@ -1043,30 +1025,12 @@ _reviewEvalCache.clear();_reviewEvalRequestedStep=-1; // Clear eval cache on boa
 // We ALSO keep UCI_Chess960 enabled for explicit Chess960 games (already
 // handled in startGame). For standard-position setups we leave it disabled
 // to preserve compatibility with the engine's standard-FEN parsing.
-if(typeof setChess960Mode==='function'&&typeof isChess960Mode==='function'){
-  const _cr=gameState.castlingRights||{};
-  const _hasRights=_cr.whiteKingside||_cr.whiteQueenside||_cr.blackKingside||_cr.blackQueenside;
-  let _needsChess960=false;
-  if(_hasRights){
-    if(gameState.wk&&(gameState.wk.row!==7||gameState.wk.col!==4))_needsChess960=true;
-    if(gameState.bk&&(gameState.bk.row!==0||gameState.bk.col!==4))_needsChess960=true;
-    if(!_needsChess960&&_cr.whiteKingside){
-      const wr=gameState.board[7]&&gameState.board[7][7];
-      if(!wr||wr.type!=='rook'||wr.color!=='white')_needsChess960=true;
-    }
-    if(!_needsChess960&&_cr.whiteQueenside){
-      const wr=gameState.board[7]&&gameState.board[7][0];
-      if(!wr||wr.type!=='rook'||wr.color!=='white')_needsChess960=true;
-    }
-    if(!_needsChess960&&_cr.blackKingside){
-      const br=gameState.board[0]&&gameState.board[0][7];
-      if(!br||br.type!=='rook'||br.color!=='black')_needsChess960=true;
-    }
-    if(!_needsChess960&&_cr.blackQueenside){
-      const br=gameState.board[0]&&gameState.board[0][0];
-      if(!br||br.type!=='rook'||br.color!=='black')_needsChess960=true;
-    }
-  }
+// v1.2.3 round-36 (dedup + robustness): replaced the inline king-position +
+//   corner-rook checks (an UNFIXED copy of _needsShredderFEN that missed
+//   the v1.2.3 round-21 per-color gating fix) with a single call to
+//   _needsShredderFEN(gameState).
+if(typeof setChess960Mode==='function'&&typeof isChess960Mode==='function'&&typeof _needsShredderFEN==='function'){
+  const _needsChess960=_needsShredderFEN(gameState);
   // Only call setChess960Mode if the desired state differs from the current
   // state, to avoid an unnecessary engine stop/wait cycle.
   if(_needsChess960&&!isChess960Mode()){
@@ -1390,11 +1354,11 @@ function _renameHumanPlayer(){
   // If the user typed the default name or cancelled, clear the rename
   if(!_newName||_newName===T('you')||_newName==='你'||_newName==='You'){
     _humanPlayerName=null;
-    try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentRemove)AndroidBridge.persistentRemove('Regalia_humanName');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+    try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentRemove)AndroidBridge.persistentRemove('Regalia_humanName');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     showToast(T('rename_player_reset'),2000);
   }else{
     _humanPlayerName=_newName;
-    try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_humanName',_newName);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+    try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_humanName',_newName);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     showToast(T('rename_player_saved')+'：'+_newName,2000);
   }
   render();
@@ -1474,7 +1438,7 @@ function _showStatsImportBackPrompt(pgnText){
 function _resignGame(){
   if(gameOver)return; // Already over — no-op
   // v1.0.8 PHASE 22 supplement: resign sound (降旗音)
-  try{if(typeof playSound==='function')playSound('resign');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{if(typeof playSound==='function')playSound('resign');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   // The resigner is the human player (playerColor). The winner is the AI.
   _resignWinnerColor = (playerColor==='white') ? 'black' : 'white';
   // Stop any in-flight engine search
@@ -1485,11 +1449,11 @@ function _resignGame(){
       // sendToEngine('stop') (soft stop, bestmove still processed). engineStop()
       // was added in Rev35 specifically for cases like resign/game-over where
       // the engine's bestmove should be silently discarded.
+      // v1.2.3 round-36 (dedup): replaced inline engineStop+fallback with
+      //   the canonical _engineStopHard() helper from ai-bridge.js.
       try{
-        if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.engineStop==='function'){
-          AndroidBridge.engineStop();
-        }else if(typeof AndroidBridge!=='undefined'&&AndroidBridge.sendToEngine){
-          AndroidBridge.sendToEngine('stop');
+        if(typeof AndroidBridge!=='undefined'){
+          _engineStopHard();
         }
       }catch(e){console.warn('[UI]',e?.message?e.message:e);}
     }
@@ -1535,7 +1499,12 @@ function _doPastePGN(){
     const text=prompt(T('pgn_paste_hint'));
     if(!text)return;
     const trimmed=text.trim();
-    const hasPGNMoveNumbers=!!trimmed.match(/\d+\.\s*[a-zA-ZNBRQOKO]/);
+    // v1.2.3 round-38 (SonarCloud S5869): removed duplicate 'O' in
+    //   [a-zA-ZNBRQOKO] → [a-zA-ZNBRQOK]. The second 'O' was redundant.
+    //   (The whole class is technically redundant since a-zA-Z covers all
+    //   letters, but kept for semantic clarity — the explicit piece letters
+    //   document that this is a SAN-move-start check.)
+    const hasPGNMoveNumbers=!!trimmed.match(/\d+\.\s*[a-zA-ZNBRQOK]/);
     const hasPGNHeaders=/\[/.test(trimmed);
     const hasPGNVariations=/\(/.test(trimmed);
     const hasPGNMarkers=hasPGNMoveNumbers||hasPGNHeaders||hasPGNVariations;

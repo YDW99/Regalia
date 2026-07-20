@@ -1,3 +1,147 @@
+v1.2.3 round-39 (2026.7.20): S6582 optional-chaining consistency + S1481/S1854 dead-code removal.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — code-quality round).
+  - ai-bridge.js (GPL v3): 8× `e&&e.message?e.message:e` → `e?.message?e.message:e`
+    (SonarCloud S6582 — optional chaining, exact semantic equivalent).
+  - game-logic.js (GPL v3): 10× same conversion.
+  - ui.js (GPL v3): (1) 12× same conversion; (2) `href.indexOf('http://')!==0`
+    → `!href.startsWith('http://')` (S7765); (3) removed unused `rLast` (S1481);
+    (4) removed unused `prevEval` + `ad` (S1481/S1854).
+  - ui-interactions.js (GPL v3): 15× same `e&&e.message` → `e?.message` conversion.
+  - ui-gameflow.js (GPL v3): 1× same conversion.
+  - tablebase.js (AGPL v3): 1× same conversion.
+  - chess960.js, pgn-standard.js, state-store.js, eco-data.js, index.html.tpl:
+    no changes this round.
+  - chess.html: rebuilt via build-chess.py (23,261 lines / 1,399,130 bytes).
+  - License classification: all files unchanged.
+
+v1.2.3 round-38 (2026.7.20): continued SonarCloud rule fixes (real issues only).
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — code-quality round).
+  - ui.js (GPL v3): (1) removed unnecessary `\/` escape in char class
+    `[\/\\:*?"<>|\x00-\x1f\x7f]` → `[/\\:*?"<>|\x00-\x1f\x7f]`
+    (SonarCloud S6535 — inside `[]`, `/` doesn't need escaping); (2)
+    `error.stack.indexOf('renderInternal') !== -1` → `.includes('renderInternal')`
+    (SonarCloud S7765); (3) `_reviewAnalyzePriorityQueue.indexOf(step) >= 0`
+    → `.includes(step)` (SonarCloud S7765); (4) 2× `Math.sqrt(dx*dx + dy*dy)`
+    → `Math.hypot(dx, dy)` (SonarCloud S7769 — clearer intent, native impl,
+    avoids overflow/underflow).
+  - worker-pool.js (AGPL v3): 2× `text.indexOf('{') >= 0` → `text.includes('{')`
+    (SonarCloud S7765). Applied to both Worker template + sync fallback.
+  - pgn-standard.js (GPL v3): flattened `}else{if(varBuf)varBuf.push(')');}`
+    to `}else if(varBuf)varBuf.push(')');` (SonarCloud S6660).
+  - tablebase.js (AGPL v3): 2× removed duplicate `B` in char class
+    `[a-hKQRBNBO]` → `[a-hKQRBNO]` (SonarCloud S5869 — second `B` redundant
+    with /i flag).
+  - ui-interactions.js (GPL v3): removed duplicate `O` in char class
+    `[a-zA-ZNBRQOKO]` → `[a-zA-ZNBRQOK]` (SonarCloud S5869).
+  - ai-bridge.js (GPL v3): `.hasOwnProperty(k)` → `Object.hasOwn(obj, k)`
+    (SonarCloud S6653 — ES2022 static method).
+  - chess960.js, game-logic.js, state-store.js, eco-data.js, ui-gameflow.js,
+    index.html.tpl: no changes this round.
+  - chess.html: rebuilt via build-chess.py (23,253 lines / 1,398,540 bytes).
+  - License classification: all files unchanged (game-logic.js,
+    pgn-standard.js, ai-bridge.js, tablebase.js, worker-pool.js,
+    ui-gameflow.js, ui-interactions.js, ui.js, index.html.tpl = GPL v3;
+    chess960.js, eco-data.js, state-store.js = AGPL v3).
+
+v1.2.3 round-37 (2026.7.20): SonarCloud code-quality fixes (real issues only, false positives skipped).
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — code-quality round).
+  - ai-bridge.js (GPL v3): (1) removed `= undefined` initializers on
+    playerWhite/playerBlack (SonarCloud S6645); (2) `color==='white'?false:true`
+    → `color!=='white'` (SonarCloud S6644); (3) nested `catch(e2)` →
+    `catch(error)` (SonarCloud S7718); (4) `document.body.removeChild(ta)` →
+    `ta.remove()` in _fallbackCopy (SonarCloud S7762).
+  - game-logic.js (GPL v3): nested `catch(e2)` → `catch(error)` (SonarCloud S7718).
+  - state-store.js (AGPL v3): (1) `throw new Error(...)` after type checks →
+    `throw new TypeError(...)` (SonarCloud S7786); (2) `Object.prototype.hasOwnProperty.call`
+    → `Object.hasOwn` (SonarCloud S6653); (3) `new Date(obj.getTime())` →
+    `new Date(obj)` (SonarCloud S7719); (4) 6× `Object.assign({}, ...)` → `{...}`
+    object spread (SonarCloud S6661).
+  - ui.js (GPL v3): (1) `cond ? true : false` → `!!cond` (SonarCloud S6644);
+    (2) `Object.assign({}, r)` → `{...r}` in _preReviewSnapshot (SonarCloud S6661).
+  - worker-pool.js (AGPL v3): `function workerRun(fnName, args, timeoutMs)`
+    with body `timeoutMs = timeoutMs || 30000` → default param `timeoutMs = 30000`
+    (SonarCloud S7760). Subtle behavior improvement: old `||` coerced `0` to
+    `30000` (latent bug); new default param only applies when `undefined`.
+    No current caller passes 0.
+  - chess960.js, pgn-standard.js, tablebase.js, eco-data.js, ui-gameflow.js,
+    ui-interactions.js, index.html.tpl: no changes this round.
+  - chess.html: rebuilt via build-chess.py (23,226 lines / 1,396,582 bytes).
+  - License classification: all files unchanged (game-logic.js,
+    pgn-standard.js, ai-bridge.js, tablebase.js, worker-pool.js,
+    ui-gameflow.js, ui-interactions.js, ui.js, index.html.tpl = GPL v3;
+    chess960.js, eco-data.js, state-store.js = AGPL v3).
+
+v1.2.3 round-36 (2026.7.20): duplicate-logic refactoring (BUG fix + robustness + dedup).
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — refactor round).
+  - game-logic.js (GPL v3): extracted 3 shared helpers used by makeMv /
+    makeMvInPlace / legalMoves / hasLegalMoves / moveAlg:
+    (1) _computeEpTarget(board, from, to, pieceColor) — EP-target computation
+        after a pawn double-push (was duplicated byte-for-byte in makeMv +
+        makeMvInPlace).
+    (2) _applyKingMove(state, color, to) — king-position cache update +
+        8-field castling-rights clear (was duplicated in makeMv +
+        makeMvInPlace).
+    (3) _kingPosAfterMove(s, piece, to) — king position after a trial move
+        (was duplicated at 4 sites with TWO different syntaxes for the same
+        logic).
+    Also added evalBucket(ev) classifier + _POV_LABEL_KEYS_PLAYER /
+    _POV_LABEL_KEYS_WHITE lookup tables. Replaces duplicated eval-threshold
+    ladders in ui.js:posDesc and pgn-standard.js:_pgnWhitePerspectiveLabel.
+  - chess960.js (AGPL v3): added isChess960Active() predicate (canonical
+    "is the current game Chess960 for FEN/PGN purposes"). Replaces the
+    inlined 2-clause OR expression at ai-bridge.js:generateFEN and
+    game-logic.js:_castleSide. randomSPID() now delegates to
+    secureRandomInt(960) from game-logic.js (preserves the 518 fail-safe).
+  - ai-bridge.js (GPL v3): added _engineStopHard() helper (canonical
+    hard-stop with sendToEngine('stop') fallback). Replaces 3 inline blocks
+    at ui-gameflow.js:290, ui-interactions.js:1488, ui.js:5466. BUG FIX:
+    the ui.js:5466 site was MISSING the sendToEngine('stop') fallback for
+    older builds — the priority-stop would silently no-op on builds
+    without engineStop(). generateFEN Shredder-FEN detection now calls
+    _needsShredderFEN(s) instead of inline-checking. BUG FIX: the inline
+    copy missed the v1.2.3 round-21 per-color gating fix — it checked
+    BOTH kings' positions regardless of which side actually held castling
+    rights, misclassifying standard positions like 3k4/8/8/8/8/8/8/R3K2R
+    w KQ - 0 1 as Chess960.
+  - pgn-standard.js (GPL v3): added _pad2(n) helper (zero-pad to 2 digits).
+    Replaces 3 inlined `const pad=n=>(n<10?'0':'')+n;` arrows at
+    formatClkTag, formatEmtTag (this file) + formatClock (ui-gameflow.js).
+    _pgnWhitePerspectiveLabel now uses evalBucket() + lookup table.
+  - ui.js (GPL v3): posDesc now uses evalBucket() + lookup table.
+    ui.js:5466 engineStop replaced with _engineStopHard() (closes
+    missed-fallback gap).
+  - ui-gameflow.js (GPL v3): formatClock now uses _pad2(). engineStop
+    inline block replaced with _engineStopHard().
+  - ui-interactions.js (GPL v3): 2 Shredder-FEN detection sites (Shredder
+    conversion of _setupFEN + Chess960-mode detection) replaced with
+    _needsShredderFEN(s) calls. engineStop inline block replaced with
+    _engineStopHard().
+  - tablebase.js, eco-data.js, state-store.js, worker-pool.js,
+    index.html.tpl: no changes this round.
+  - chess.html: rebuilt via build-chess.py (23,182 lines / 1,393,547 bytes).
+  - License classification: all files unchanged (game-logic.js,
+    pgn-standard.js, ai-bridge.js, tablebase.js, worker-pool.js,
+    ui-gameflow.js, ui-interactions.js, ui.js, index.html.tpl = GPL v3;
+    chess960.js, eco-data.js, state-store.js = AGPL v3).
+
+v1.2.3 round-35 (2026.7.20): game-logic.js optional-chaining fix.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - game-logic.js (GPL v3): 2× optional-chaining conversion (SonarCloud
+    javascript:S6582). winnerLacksMatingMaterial: `!s||!s.board` →
+    `!s?.board`; _scanWinnerMaterial: `!p||p.color!==winnerColor` →
+    `p?.color!==winnerColor`. Both are property accesses (not method
+    calls), so the `?.` conversion is safe — `this` binding is not a
+    concern. Semantics verified equivalent.
+  - chess.html: rebuilt from chess.src/*.js via build-chess.py after the
+    game-logic.js change. 23,033 lines, 1,387,027 bytes.
+  - ai-bridge.js, chess960.js, pgn-standard.js, worker-pool.js,
+    state-store.js, tablebase.js, eco-data.js, ui-gameflow.js,
+    ui-interactions.js, ui.js, index.html.tpl: no changes this round.
+  - License classification: all files unchanged (game-logic.js,
+    pgn-standard.js, ai-bridge.js, tablebase.js, worker-pool.js,
+    ui-gameflow.js, ui-interactions.js, ui.js, index.html.tpl = GPL v3;
+    chess960.js, eco-data.js, state-store.js = AGPL v3).
+
 v1.2.3 round-34 (2026.7.20): no changes in this directory.
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
   - All 11 chess.src/*.js modules unchanged this round. Round-34 fixes are

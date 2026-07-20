@@ -140,7 +140,8 @@ function _parsePGNText(pgnText) {
   var calRe = /\\[%cal\\s+([^\\]]*)\\]/g;
   var evalRe = /\\[%eval\\s+([^\\]]*)\\]/g;
   var iter = 0;
-  while (text.indexOf('{') >= 0 && iter++ < 20) {
+  // v1.2.3 round-38 (SonarCloud S7765): use .includes() instead of .indexOf() >= 0.
+  while (text.includes('{') && iter++ < 20) {
     var prev = text;
     // Extract annotations from comments before removing them
     var cm;
@@ -374,8 +375,14 @@ function _dispatchNext() {
 
 // === Public API ===
 
-function workerRun(fnName, args, timeoutMs) {
-  timeoutMs = timeoutMs || 30000;
+// v1.2.3 round-37 (SonarCloud S7760): use default parameter syntax
+//   `timeoutMs = 30000` instead of `timeoutMs = timeoutMs || 30000`.
+//   Default params apply only when the argument is `undefined` (not other
+//   falsy values like 0), which is the correct semantics here — a caller
+//   passing `timeoutMs = 0` previously got 30000 (bug!); now they get 0
+//   (intentional, though unusual). No current caller passes 0, so behavior
+//   is unchanged for all existing call sites.
+function workerRun(fnName, args, timeoutMs = 30000) {
   if (!_workerSupported) {
     // v1.0.8 PHASE 35: defer into Promise chain so sync throws (unknown fnName)
     //   become rejected Promises instead of synchronous throws out of workerRun.
@@ -461,7 +468,8 @@ function _syncParsePGNText(pgnText) {
   var calRe = /\[%cal\s+([^\]]*)\]/g;
   var evalRe = /\[%eval\s+([^\]]*)\]/g;
   var iter = 0;
-  while (text.indexOf('{') >= 0 && iter++ < 20) {
+  // v1.2.3 round-38 (SonarCloud S7765): use .includes() instead of .indexOf() >= 0.
+  while (text.includes('{') && iter++ < 20) {
     var prev = text;
     var cm;
     while ((cm = cslRe.exec(text)) !== null) { cslAnnotations.push(cm[1].trim()); }

@@ -1,3 +1,51 @@
+v1.2.3 round-39 (2026.7.20): chess.html rebuilt + stats.html S7765 fix.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — code-quality round).
+  - chess.html: rebuilt from chess.src/*.js. License classification unchanged (GPL v3).
+  - stats.html: `href.indexOf('http://')!==0` → `!href.startsWith('http://')`
+    (SonarCloud S7765 — clearer prefix check). License classification unchanged (GPL v3).
+  - License classification: all files unchanged.
+
+v1.2.3 round-38 (2026.7.20): chess.html rebuilt + stats.html SonarCloud fixes.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — code-quality round).
+  - chess.html: rebuilt from chess.src/*.js after the round-38 SonarCloud
+    rule fixes. License classification unchanged (GPL v3).
+  - stats.html: SonarCloud fixes — (1) 2× `[0-9]` → `\d` (S6353); (2) 4×
+    `indexOf(...) >= 0` / `< 0` → `.includes(...)` / `!.includes(...)` (S7765);
+    (3) `new RegExp('...\\(\\)...')` → `String.raw\`...\`` (S7780).
+    License classification unchanged (GPL v3).
+  - License classification: all files unchanged.
+
+v1.2.3 round-37 (2026.7.20): chess.html rebuilt + stats.html SonarCloud fixes.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — code-quality round).
+  - chess.html: rebuilt from chess.src/*.js after the round-37 SonarCloud
+    rule fixes. chess.html itself is a generated bundle (build-chess.py
+    output); license classification unchanged (GPL v3 — derived from
+    DroidFish UI patterns, same as chess.src/*.js sources).
+  - stats.html: 3 SonarCloud fixes — (1) `banner.parentNode.removeChild(banner)`
+    → `banner.remove()` (S7762); (2) `document.body.removeChild(ta)` →
+    `ta.remove()` (S7762); (3) `parseFloat(...)` → `Number.parseFloat(...)`
+    (S7773). License classification unchanged (GPL v3 — PGN parsing logic
+    derived from DroidFish).
+  - License classification: all files unchanged.
+
+v1.2.3 round-36 (2026.7.20): chess.html rebuilt; no other changes.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — refactor round).
+  - chess.html: rebuilt from chess.src/*.js after the round-36 duplicate-
+    logic refactoring. chess.html itself is a generated bundle
+    (build-chess.py output); license classification unchanged (GPL v3 —
+    derived from DroidFish UI patterns, same as chess.src/*.js sources).
+  - stats.html: no changes this round.
+  - License classification: all files unchanged.
+
+v1.2.3 round-35 (2026.7.20): no changes to files in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - chess.html: rebuilt from chess.src/*.js after the game-logic.js
+    optional-chaining fix. chess.html itself is a generated bundle
+    (build-chess.py output); license classification unchanged (GPL v3 —
+    derived from DroidFish UI patterns, same as chess.src/*.js sources).
+  - stats.html: no changes this round.
+  - License classification: all files unchanged.
+
 v1.2.3 round-34 (2026.7.20): no changes to src/main/assets/ top-level files.
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
   - chess.html: rebuilt as a sanity check (byte-identical to round-32/33 —

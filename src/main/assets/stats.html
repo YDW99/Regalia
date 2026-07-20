@@ -1587,9 +1587,10 @@ function extractMoveTimes(pgnText){
       // comment — but NOT "D22" (no 's' suffix) or "0:05:30" (no 's' suffix).
       const timeMatch=comment.match(/(\d+(?:\.\d+)?)s/);
       // Clock-remaining format: [%clk HH:MM:SS]
-      const clkMatch=comment.match(/\[%clk\s+([0-9]+):([0-9]+):([0-9]+\.?[0-9]*)\]/);
+      // v1.2.3 round-38 (SonarCloud S6353): use \d instead of [0-9] (concise form).
+      const clkMatch=comment.match(/\[%clk\s+(\d+):(\d+):(\d+\.?\d*)\]/);
       // v1.0.4 ROUND-5 REV16: Elapsed move time format: [%emt H:MM:SS]
-      const emtMatch=comment.match(/\[%emt\s+([0-9]+):([0-9]+):([0-9]+\.?[0-9]*)\]/);
+      const emtMatch=comment.match(/\[%emt\s+(\d+):(\d+):(\d+\.?\d*)\]/);
       // The comment belongs to the move that JUST HAPPENED — i.e., the
       // previous mainline move. So we attach it to usedTimes[len-1].
       // If no mainline move yet, attach to index 0 (initial position comment).
@@ -1629,7 +1630,10 @@ function extractMoveTimes(pgnText){
         }
       }
       if(timeMatch){
-        const sec=parseFloat(timeMatch[1]);
+        // v1.2.3 round-37 (SonarCloud S7773): Number.parseFloat is preferred
+        //   over the global parseFloat (clearer lexical scope, no implicit
+        //   global). Behavior is identical.
+        const sec=Number.parseFloat(timeMatch[1]);
         if(!Number.isNaN(sec)){
           usedTimes[targetIdx]=sec;
         }
@@ -2968,7 +2972,11 @@ function copyFENToClipboard(){
     banner.style.cssText='position:fixed;bottom:60px;left:50%;transform:translateX(-50%);background:'+(ok?'rgba(39,174,96,.95)':'rgba(192,57,43,.95)')+';color:#fff;padding:8px 16px;border-radius:6px;font-size:.8rem;z-index:10001;box-shadow:0 2px 8px rgba(0,0,0,.4)';
     banner.textContent=ok?T('fen_copied'):T('fen_copy_failed');
     document.body.appendChild(banner);
-    setTimeout(()=>{if(banner.parentNode)banner.parentNode.removeChild(banner);},1500);
+    // v1.2.3 round-37 (SonarCloud S7762): use banner.remove() instead of
+    //   banner.parentNode.removeChild(banner). remove() is the modern API,
+    //   doesn't require a parent reference, and is supported on all modern
+    //   Android WebView versions (API 23+).
+    setTimeout(()=>{banner.remove();},1500);
   }
   try{
     if(navigator.clipboard&&navigator.clipboard.writeText){
@@ -2986,7 +2994,9 @@ function fallbackCopy(text,cb){
     document.body.appendChild(ta);
     ta.select();
     const ok=document.execCommand('copy');
-    document.body.removeChild(ta);
+    // v1.2.3 round-37 (SonarCloud S7762): use ta.remove() instead of
+    //   document.body.removeChild(ta).
+    ta.remove();
     cb(ok);
   }catch(e){cb(false);}
 }
@@ -3854,7 +3864,8 @@ function _exportStaticHTML(){
       const btns=div.querySelectorAll('button');
       if(btns.length===4){
         const texts=Array.from(btns).map(b=>b.textContent.trim());
-        if(texts.indexOf('⏮')>=0&&texts.indexOf('◀')>=0&&texts.indexOf('▶')>=0&&texts.indexOf('⏭')>=0){
+        // v1.2.3 round-38 (SonarCloud S7765): use .includes() instead of .indexOf() >= 0.
+        if(texts.includes('⏮')&&texts.includes('◀')&&texts.includes('▶')&&texts.includes('⏭')){
           div.remove();
           return;
         }
@@ -3902,7 +3913,10 @@ function _exportFullHTML(){
     // using a regex that matches from the function declaration to the next
     // line-start `}`. This works because all our target functions follow the
     // standard JS convention of having their closing brace at column 0.
-    const re = new RegExp('function ' + fnName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\(\\)\\{[\\s\\S]*?\\n\\}');
+    // v1.2.3 round-38 (SonarCloud S7780): use String.raw for the regex
+    //   source string to avoid double-escaping backslashes. The `\\(` becomes
+    //   `\(` etc. — String.raw treats backslashes as literal characters.
+    const re = new RegExp('function ' + fnName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + String.raw`\(\)\{[\s\S]*?\n\}`);
     return js.replace(re, 'function ' + fnName + '(){}');
   }
   scriptJS=_stripFnBody(scriptJS,'exportHTML');
@@ -4170,7 +4184,8 @@ function _statsImportBackDismiss(){
   var overlays=document.querySelectorAll('.dov[role="dialog"]');
   for(var i=0;i<overlays.length;i++){
     var ariaLabel=overlays[i].getAttribute('aria-label')||'';
-    if(ariaLabel.indexOf('Import PGN to game')>=0||ariaLabel.indexOf('将PGN导入到对局')>=0){
+    // v1.2.3 round-38 (SonarCloud S7765): use .includes() instead of .indexOf() >= 0.
+    if(ariaLabel.includes('Import PGN to game')||ariaLabel.includes('将PGN导入到对局')){
       overlays[i].remove();
       return;
     }
@@ -4198,7 +4213,8 @@ function handleStatsBackPress(){
       var ariaLabel=topmost.getAttribute('aria-label')||'';
       // Don't double-handle the import-back dialog (already returned true above
       // when _statsImportBackDialogVisible is true). Defensive: skip it.
-      if(ariaLabel.indexOf('Import PGN to game')<0&&ariaLabel.indexOf('将PGN导入到对局')<0){
+      // v1.2.3 round-38 (SonarCloud S7765): use .includes() instead of .indexOf() < 0.
+      if(!ariaLabel.includes('Import PGN to game')&&!ariaLabel.includes('将PGN导入到对局')){
         topmost.remove();
         return true;
       }
@@ -4251,7 +4267,8 @@ function init(){
       if(!a)return;
       var href=a.getAttribute('href')||'';
       if(!href||href.charAt(0)==='#')return;
-      if(href.indexOf('http://')!==0&&href.indexOf('https://')!==0)return;
+      // v1.2.3 round-39: use .startsWith() instead of .indexOf() !== 0.
+      if(!href.startsWith('http://')&&!href.startsWith('https://'))return;
       e.preventDefault();
       try{
         if(typeof AndroidBridge!=='undefined'&&AndroidBridge.openUrlInBrowser){

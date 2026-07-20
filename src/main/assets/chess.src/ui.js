@@ -56,7 +56,8 @@ document.addEventListener('click', function(e) {
   if (!href || href.charAt(0) === '#') return;
   // Only intercept http(s) links — let mailto:/tel: etc. be handled by the OS
   // through shouldOverrideUrlLoading in ChessWebViewClient.
-  if (href.indexOf('http://') !== 0 && href.indexOf('https://') !== 0) return;
+  // v1.2.3 round-39: use .startsWith() instead of .indexOf() !== 0 (clearer intent).
+  if (!href.startsWith('http://') && !href.startsWith('https://')) return;
   e.preventDefault();
   try {
     if (typeof AndroidBridge !== 'undefined' && AndroidBridge.openUrlInBrowser) {
@@ -272,11 +273,14 @@ function _getSqElCache() {
       const recoveryJson = JSON.stringify(recoveryData);
       localStorage.setItem('Regalia_recovery', recoveryJson);
       // v1.0.4 Round-5 Rev16: Also persist to Java side (HyperOS 3 cache-wipe proof)
-      try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_recovery',recoveryJson);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+      try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_recovery',recoveryJson);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     } catch(e){console.warn('[UI]',e?.message?e.message:e);}
 
     // If this is a render error (indicated by the stack trace), show recovery UI
-    if (error?.stack && error.stack.indexOf('renderInternal') !== -1) {
+    // v1.2.3 round-38 (SonarCloud S7765): use .includes() instead of
+    //   .indexOf() !== -1 for the existence check (clearer semantics, handles
+    //   NaN correctly via SameValueZero).
+    if (error?.stack && error.stack.includes('renderInternal')) {
       const app = document.getElementById('app');
       if (app) {
         app.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:var(--bg);color:var(--text);padding:20px;text-align:center;font-family:system-ui,sans-serif">' +
@@ -311,7 +315,7 @@ function _getSqElCache() {
     let saved = localStorage.getItem('Regalia_recovery');
     // v1.0.4 Round-5 Rev16: Fall back to persistent Java store if HyperOS 3 wiped localStorage
     if(!saved){
-      try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentGet){const persisted=AndroidBridge.persistentGet('Regalia_recovery');if(persisted){saved=persisted;try{localStorage.setItem('Regalia_recovery',persisted);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}}}}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+      try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentGet){const persisted=AndroidBridge.persistentGet('Regalia_recovery');if(persisted){saved=persisted;try{localStorage.setItem('Regalia_recovery',persisted);}catch(e){console.warn('[UI]',e?.message?e.message:e);}}}}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     }
     if (saved) {
       // v1.2.1 round-9: Parse to validate the data shape, but do NOT apply
@@ -329,7 +333,7 @@ function _getSqElCache() {
       setTimeout(function() {
         if (typeof _engineReady !== 'undefined' && (_engineReady || document.getElementById('board-grid'))) {
           try{localStorage.removeItem('Regalia_recovery');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
-          try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentRemove)AndroidBridge.persistentRemove('Regalia_recovery');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+          try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentRemove)AndroidBridge.persistentRemove('Regalia_recovery');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
         }
       }, 5000);
     }
@@ -1512,7 +1516,9 @@ function _buildEvalTrendSVG(trendW, trendH) {
   svg += '</svg>';
   return svg;
 }
-function posDesc(ev){if(ev>600)return T('you_winning');if(ev>350)return T('huge_adv');if(ev>150)return T('advantage');if(ev>50)return T('slight_adv');if(ev>-50)return T('equal_pos');if(ev>-150)return T('slight_dis');if(ev>-350)return T('disadvantage');if(ev>-600)return T('huge_dis');return T('you_losing')}
+// v1.2.3 round-36 (dedup): thresholds centralized in game-logic.js evalBucket().
+//   Lookup uses _POV_LABEL_KEYS_PLAYER[bucket] for the player-POV label.
+function posDesc(ev){const k=_POV_LABEL_KEYS_PLAYER[evalBucket(ev)];return T(k!==undefined?k:'equal_pos');}
 
 // Helper: get position of king that is currently in check, or null (eliminates 3x duplication)
 function getCheckKingPos(s){
@@ -2494,7 +2500,10 @@ function _renderRvArrowSvg(_rvCalList, flip, _rvCell, _rvBoardPx, _rvLabelW, _rv
     const _co=_colorOffset[_a.color]||{x:0,y:0};
     _fx+=_co.x; _fy+=_co.y;
     _tx+=_co.x; _ty+=_co.y;
-    const _dx=_tx-_fx, _dy=_ty-_fy, _len=Math.sqrt(_dx*_dx+_dy*_dy);
+    // v1.2.3 round-38 (SonarCloud S7769): use Math.hypot(_dx,_dy) instead of
+    //   Math.sqrt(_dx*_dx + _dy*_dy) — clearer intent, native implementation,
+    //   avoids overflow/underflow for extreme values.
+    const _dx=_tx-_fx, _dy=_ty-_fy, _len=Math.hypot(_dx,_dy);
     const _sh=4, _rt=_len>0?(_len-_sh)/_len:1;
     const _ex=_fx+_dx*_rt, _ey=_fy+_dy*_rt;
     const _hex=_RV_VA_COLORS[_a.color]||'#ffffff';
@@ -2583,7 +2592,11 @@ const safeStep=Math.max(0,Math.min(reviewStep,reviewStates.length-1));
 reviewStep=safeStep;
 const rs=reviewStates[safeStep];
 if(!rs){reviewMode=false;render();return{h,done:true}}
-const rBoard=rs.state.board;const rLast=rs.lastMove;
+// v1.2.3 round-39 (SonarCloud S1481): removed unused `const rLast=rs.lastMove;`
+//   — rLast was declared but never referenced in _renderReviewMode. The review
+//   board rendering uses rBoard (rs.state.board) but not rs.lastMove (the
+//   last move is displayed via the move list, not the board renderer).
+const rBoard=rs.state.board;
 h+='<div class="review-overlay">';
 h+=`<div class="review-hdr"><h2>${T('review_analysis')}</h2><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><div class="toggle" style="padding:2px 6px;font-size:.65rem" onclick="showVariations=!showVariations;HapticManager.fire(showVariations?'TOGGLE_ON':'TOGGLE_OFF');render()"><span>${T('variation_toggle')}</span><div class="toggle-sw sm${showVariations?' on':''}"></div></div><button class="btn" onclick="showCtrlMap=!showCtrlMap;cachedCtrlKey=&quot;&quot;;render()" title="${T('ctrl_range')}">${showCtrlMap?'🌈':'🌗'}</button><button class="btn" onclick="copyReviewPGN()" title="${T('copy_review_pgn')}">📝 PGN</button><button class="btn" onclick="exportPGNToFile()" title="${T('export_pgn')||'Export PGN to file'}">💾</button><button class="btn" onclick="openPGNCacheManager()" title="${T('pgn_cache_manager')}" style="font-weight:700">📚</button><button class="btn" onclick="copyReviewFEN()" title="${T('copy_review_fen')}">📝 FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="${T('import_label')}">🗃️</button><button class="btn" onclick="openStatsPage()" title="${T('stats')}">📊</button><button class="btn" onclick="exitReview()">${T('return_game')}</button></div></div>`;
 // v1.2.3 round-24 (God Function split): board metrics extracted to
@@ -3510,7 +3523,7 @@ return ctx;
  * @param {Object} ctx - Context from _saveScrollState()
  */
 function _restoreScrollState(ctx){
-if(typeof _reattachActiveAnimations==='function'){try{_reattachActiveAnimations();}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}}
+if(typeof _reattachActiveAnimations==='function'){try{_reattachActiveAnimations();}catch(e){console.warn('[UI]',e?.message?e.message:e);}}
 if(!reviewMode){
   const _newMlist=document.querySelector('.mlist');
   if(_newMlist){
@@ -3937,7 +3950,9 @@ function _updateArrows(infoSq){
     const _afc=flip?7-ar.from.col:ar.from.col,_afr=flip?7-ar.from.row:ar.from.row;
     const _atc=flip?7-ar.to.col:ar.to.col,_atr=flip?7-ar.to.row:ar.to.row;
     const fx=_afc*CELL+CELL/2,fy=_afr*CELL+CELL/2,tx=_atc*CELL+CELL/2,ty=_atr*CELL+CELL/2;
-    const dx=tx-fx,dy=ty-fy,len=Math.sqrt(dx*dx+dy*dy),sh=14,rt=len>0?(len-sh)/len:1;
+    // v1.2.3 round-38 (SonarCloud S7769): use Math.hypot(dx,dy) instead of
+    //   Math.sqrt(dx*dx + dy*dy).
+    const dx=tx-fx,dy=ty-fy,len=Math.hypot(dx,dy),sh=14,rt=len>0?(len-sh)/len:1;
     const ex=fx+dx*rt,ey=fy+dy*rt;
     const line=document.createElementNS('http://www.w3.org/2000/svg','line');
     line.setAttribute('x1',fx);line.setAttribute('y1',fy);
@@ -4215,7 +4230,7 @@ function enterReview(){_cachedStatus=null;_cachedStatusKey='';
 //   doesn't persist into review mode.
 _clearAnimationState();
 // v1.0.8 PHASE 22 supplement: enter-review sound (沉思音)
-try{if(typeof playSound==='function')playSound('enterReview');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+try{if(typeof playSound==='function')playSound('enterReview');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
 // v1.1.0 Phase 57 FIX (visual annotation residue): Clear the '_initial' key
 //   from the visual annotations cache to ensure fresh computation. The cached
 //   '_initial' annotations may be stale from a previous review session:
@@ -4252,7 +4267,7 @@ _resetRvVirtualState();
 // exact position they were at (not the initial position).
 _preReviewSnapshot={
   gameState:cloneS(gameState),
-  moveRecords:moveRecords.map(function(r){if(r===null)return null;const c=Object.assign({},r);if(r.variations)c.variations=r.variations.map(function(v){return Object.assign({},v);});return c;}),
+  moveRecords:moveRecords.map(function(r){if(r===null)return null;const c={...r};if(r.variations)c.variations=r.variations.map(function(v){return {...v};});return c;}),
   lastMove:lastMove?{from:{row:lastMove.from.row,col:lastMove.from.col},to:{row:lastMove.to.row,col:lastMove.to.col}}:null,
   stateHistory:stateHistory.map(function(s){return{state:cloneS(s.state),selectedSquare:s.selectedSquare?{row:s.selectedSquare.row,col:s.selectedSquare.col}:null,legalMvs:s.legalMvs?[].concat(s.legalMvs):[],moveRecords:s.moveRecords?[].concat(s.moveRecords):[],lastMove:s.lastMove?(s.lastMove.from?{from:{row:s.lastMove.from.row,col:s.lastMove.from.col},to:{row:s.lastMove.to.row,col:s.lastMove.to.col}}:s.lastMove):null,gameOver:s.gameOver};}),
   _redoStack:_redoStack.map(function(s){return{state:cloneS(s.state),moveRecords:[].concat(s.moveRecords),lastMove:s.lastMove?(s.lastMove.from?{from:{row:s.lastMove.from.row,col:s.lastMove.from.col},to:{row:s.lastMove.to.row,col:s.lastMove.to.col}}:s.lastMove):null};}),
@@ -4376,7 +4391,11 @@ reviewCritical=_findCriticalMoves();requestEngineEval();render();
 function _findCriticalMoves(){
   const critical=[];
   if(!reviewStates||reviewStates.length<2)return critical;
-  let prevEval=0;
+  // v1.2.3 round-39 (SonarCloud S1481/S1854): removed unused `let prevEval=0;`
+  //   and unused `const ad=Math.abs(moverDelta);`. prevEval was a leftover
+  //   from an earlier version that tracked running eval; the current code
+  //   uses prevEv (from cache peek) instead. ad was computed but never
+  //   referenced — the threshold checks use moverDelta directly.
   for(let i=1;i<reviewStates.length;i++){
     // v1.0.2 PERF: use peek() — this loop iterates over all review steps to
     // find critical moves, so refreshing LRU on each access is wasteful.
@@ -4389,7 +4408,6 @@ function _findCriticalMoves(){
       // means White moved (step 1 = White's first move).
       const isMoverWhite=(i%2)===1; // step is odd → White moved
       const moverDelta=isMoverWhite?delta:-delta;
-      const ad=Math.abs(moverDelta);
       if(moverDelta<-300){
         const cls=_classifyMove(delta,isMoverWhite);
         critical.push({step:i,reason:cls.label+' ('+(moverDelta/100).toFixed(1)+')'});
@@ -5143,7 +5161,7 @@ function _resetGameUIState(){
   //   Mirror the exitReview() cleanup (function decls are bundle-hoisted).
   if(typeof _reviewAnalyzeAllActive!=='undefined'&&_reviewAnalyzeAllActive){
     _reviewAnalyzeAllActive=false;
-    try{if(typeof _endEvalDeepBatchIfActive==='function')_endEvalDeepBatchIfActive();}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+    try{if(typeof _endEvalDeepBatchIfActive==='function')_endEvalDeepBatchIfActive();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     if(typeof _reviewAnalyzeSafetyTimer!=='undefined'&&_reviewAnalyzeSafetyTimer){clearTimeout(_reviewAnalyzeSafetyTimer);_reviewAnalyzeSafetyTimer=null;}
     if(typeof _evalRequestBatchGen!=='undefined')_evalRequestBatchGen=0;
   }
@@ -5262,7 +5280,7 @@ function _resetGameUIState(){
   if(typeof _needNewGameForEngine!=='undefined')_needNewGameForEngine=true;
   if(typeof _tbLoading!=='undefined')_tbLoading=false;
   if(typeof _tbRetryCount!=='undefined')_tbRetryCount=0;
-  try{if(typeof Store!=='undefined'&&Store&&typeof Store.dispatch==='function'){Store.dispatch('SETUP_EXIT');Store.dispatch('PGN_CLEARED');}}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{if(typeof Store!=='undefined'&&Store&&typeof Store.dispatch==='function'){Store.dispatch('SETUP_EXIT');Store.dispatch('PGN_CLEARED');}}catch(e){console.warn('[UI]',e?.message?e.message:e);}
 }
 
 /**
@@ -5438,7 +5456,8 @@ function _prioritizeReviewStep(step){
     return;
   }
   // Deduplicate: don't add the same step twice
-  if(_reviewAnalyzePriorityQueue.indexOf(step)>=0){
+  // v1.2.3 round-38 (SonarCloud S7765): use .includes() instead of .indexOf() >= 0.
+  if(_reviewAnalyzePriorityQueue.includes(step)){
     try{showToast(T('priority_eval_toast'),2500);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     return;
   }
@@ -5463,10 +5482,13 @@ function _prioritizeReviewStep(step){
   // onEngineEval is skipped; the user-nav stale path caches the result for
   // _reviewEvalRequestedStep (the step that was being evaluated when the
   // user long-pressed).
+  // v1.2.3 round-36 (dedup + robustness): replaced inline engineStop call
+  //   (which was MISSING the sendToEngine('stop') fallback for older builds)
+  //   with the canonical _engineStopHard() helper. This closes a real
+  //   robustness gap — on builds without engineStop(), the priority-stop
+  //   would previously silently no-op.
   try{
-    if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.engineStop==='function'){
-      AndroidBridge.engineStop();
-    }
+    _engineStopHard();
   }catch(e){console.warn('engineStop for priority failed',e);}
   // Trigger _reviewAnalyzeAdvance after a short delay to pick up the priority
   // entry. The delay (100ms) gives the engine time to process the stop
@@ -5696,7 +5718,7 @@ function _reviewAnalyzeAdvance(){
     _reviewAnalyzePriorityQueue=[];
     // v1.0.8 PHASE 19 (bug fix): Recompute reviewCritical now that the eval cache
     // is fully populated.
-    try{if(typeof _findCriticalMoves==='function')reviewCritical=_findCriticalMoves();}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+    try{if(typeof _findCriticalMoves==='function')reviewCritical=_findCriticalMoves();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     // v1.1.2 Phase 67 Task 67.2: If a PGN cache save is pending (user chose
     //   "Analyze All first" in the partial-eval dialog), trigger it now.
     //   The save will use the now-fully-populated _reviewEvalCache so every
@@ -5709,7 +5731,11 @@ function _reviewAnalyzeAdvance(){
     //   populated — re-invoke openStatsPage() so it builds the payload with
     //   the complete evals array. Clear the flag BEFORE the call so the
     //   second invocation takes the normal "all cached → open stats" path.
-    const _pendingStats=(typeof window!=='undefined'&&window._pendingOpenStats)?true:false;
+    // v1.2.3 round-37 (SonarCloud S6644): `cond ? true : false` is redundant —
+    //   the boolean expression itself is the boolean. Use `!!` to coerce to
+    //   boolean (defensive — `window._pendingOpenStats` could be a truthy
+    //   non-boolean; the original code returned a strict boolean).
+    const _pendingStats=!!(typeof window!=='undefined'&&window._pendingOpenStats);
     if(typeof window!=='undefined'){
       window._pendingOpenStats=false;
       // v1.2.1 round-11 (Bug #2 fix hardening): clear the safety timeout
@@ -5766,8 +5792,8 @@ function _reviewAnalyzeAdvance(){
   //     that the move list feels responsive, infrequent enough to avoid the
   //     O(n) DOM rebuild cost that caused WebView memory pressure on 100+
   //     step games.
-  try{if(typeof _updateReviewAnalyzeBtn==='function')_updateReviewAnalyzeBtn();}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-  try{if(typeof _refreshEvalTrendChart==='function')_refreshEvalTrendChart();}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{if(typeof _updateReviewAnalyzeBtn==='function')_updateReviewAnalyzeBtn();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+  try{if(typeof _refreshEvalTrendChart==='function')_refreshEvalTrendChart();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   if(nextStep%10===0){
     try{render();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   }
@@ -5818,7 +5844,7 @@ function _reviewAnalyzeAdvance(){
  */
 function exitReview(){
   // v1.0.8 PHASE 22 supplement: exit-review sound (归位音)
-  try{if(typeof playSound==='function')playSound('exitReview');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{if(typeof playSound==='function')playSound('exitReview');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   // v1.0.8 PHASE 24 (bug fix): clear any in-progress animation.
   _clearAnimationState();
   reviewMode=false;
@@ -6004,7 +6030,10 @@ function _pgnCacheSaveCurrent(){
     try{showToast(T('pgn_cache_name_too_long')||'Name too long (max 60)');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     return;
   }
-  if(/[\/\\:*?"<>|\x00-\x1f\x7f]/.test(name)){
+  // v1.2.3 round-38 (SonarCloud S6535): inside a character class, '/' does
+  //   not need escaping (only ']', '\\', '^' at start, and '-' in certain
+  //   positions need escaping inside []). Removed the unnecessary '\\/' → '/'.
+  if(/[/\\:*?"<>|\x00-\x1f\x7f]/.test(name)){
     try{showToast(T('pgn_cache_name_invalid')||'Name contains invalid characters');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     return;
   }

@@ -1,3 +1,34 @@
+v1.2.3 round-39 (2026.7.20): no changes to files in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — code-quality round).
+  - License classification: all files unchanged (GPL v3 — DroidFish-derived).
+
+v1.2.3 round-38 (2026.7.20): no changes to files in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — code-quality round).
+  - engine_jni.cpp, CMakeLists.txt: no changes this round (round-37 already
+    applied cpp:S4962 nullptr + cpp:S1172 unused-param fixes).
+  - License classification: all files unchanged (GPL v3 — DroidFish-derived).
+
+v1.2.3 round-37 (2026.7.20): engine_jni.cpp C++ modernization (SonarCloud cpp:S4962 + cpp:S1172).
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — code-quality round).
+  - engine_jni.cpp: (1) `GetStringUTFChars(jPath, NULL)` →
+    `GetStringUTFChars(jPath, nullptr)` (SonarCloud cpp:S4962 — C++11
+    type-safe null pointer); (2) added `(void)env;` + explanatory comment
+    for the unused `JNIEnv *env` parameter in `nativeRenice` (SonarCloud
+    cpp:S1172 — parameter is required by JNI signature, cannot be renamed
+    without breaking JNI name mangling).
+  - CMakeLists.txt: no changes this round.
+  - License classification: all files unchanged (GPL v3 — DroidFish-derived).
+
+v1.2.3 round-36 (2026.7.20): no changes to files in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — refactor round).
+  - engine_jni.cpp, CMakeLists.txt: no changes this round.
+  - License classification: all files unchanged (GPL v3 — DroidFish-derived).
+
+v1.2.3 round-35 (2026.7.20): no changes to files in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - engine_jni.cpp, CMakeLists.txt: no changes this round.
+  - License classification: all files unchanged (GPL v3 — DroidFish-derived).
+
 v1.2.3 round-34 (2026.7.20): no changes in this directory.
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
   - All round-34 changes are in src/main/java/com/Regalia/ (StockfishNative,

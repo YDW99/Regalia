@@ -1,3 +1,56 @@
+v1.2.3 round-39 (2026.7.20): Manuals updated with round-39 changelog entry.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — code-quality round).
+  - Regalia-v1.2.3-manual-zh.html: round-39 changelog entry prepended.
+  - Regalia-v1.2.3-manual-en.html: equivalent English entry prepended.
+  - License classification: both manuals are AGPL v3 (original work).
+
+v1.2.3 round-38 (2026.7.20): Manuals updated with round-38 changelog entry.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — code-quality round).
+  - Regalia-v1.2.3-manual-zh.html: round-38 changelog entry prepended
+    (newest-first ordering preserved). Content: continued SonarCloud rule
+    fixes (S6535, S7765, S7769, S6660, S5869, S6653, S6353, S7780).
+  - Regalia-v1.2.3-manual-en.html: equivalent English entry prepended.
+  - Both manuals: content is parallel (non-machine-translated); only the
+    changelog section changed.
+  - License classification: both manuals are AGPL v3 (original work).
+
+v1.2.3 round-37 (2026.7.20): Manuals updated with round-37 changelog entry.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — code-quality round).
+  - Regalia-v1.2.3-manual-zh.html: round-37 changelog entry prepended
+    (newest-first ordering preserved). Content: SonarCloud rule fixes
+    (S6645, S6644, S7718, S7786, S6653, S7719, S6661, S7760, S7762, S7773,
+    cpp:S4962, cpp:S1172) with full false-positive triage.
+  - Regalia-v1.2.3-manual-en.html: equivalent English entry prepended.
+  - Both manuals: content is parallel (non-machine-translated); only the
+    changelog section changed.
+  - License classification: both manuals are AGPL v3 (original work of
+    the Regalia project, not derived from DroidFish or other GPL projects).
+
+v1.2.3 round-36 (2026.7.20): Manuals updated with round-36 changelog entry.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — refactor round).
+  - Regalia-v1.2.3-manual-zh.html: round-36 changelog entry prepended
+    (newest-first ordering preserved). Content: 7 extracted helpers
+    (_computeEpTarget, _applyKingMove, _kingPosAfterMove, evalBucket,
+    isChess960Active, _engineStopHard, _pad2) + 2 BUG fixes (Shredder-FEN
+    detection per-color gating + ui.js:5466 missing sendToEngine fallback).
+  - Regalia-v1.2.3-manual-en.html: equivalent English entry prepended.
+  - Both manuals: content is parallel (non-machine-translated); only the
+    changelog section changed.
+  - License classification: both manuals are AGPL v3 (original work of
+    the Regalia project, not derived from DroidFish or other GPL projects).
+
+v1.2.3 round-35 (2026.7.20): Manuals updated with round-35 changelog entry.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - Regalia-v1.2.3-manual-zh.html: round-35 changelog entry prepended
+    (newest-first ordering preserved). Content: StockfishNative
+    AtomicInteger fix (SonarCloud java:S3078 BUG) + game-logic.js
+    optional-chaining fix (SonarCloud javascript:S6582).
+  - Regalia-v1.2.3-manual-en.html: equivalent English entry prepended.
+  - Both manuals: content is parallel (non-machine-translated); only the
+    changelog section changed.
+  - License classification: both manuals are AGPL v3 (original work of
+    the Regalia project, not derived from DroidFish or other GPL projects).
+
 v1.2.3 round-34 (2026.7.20): no changes to manuals this round.
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
   - Round-33 already updated the UI architecture diagram. Round-34 only

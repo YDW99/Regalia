@@ -1,3 +1,187 @@
+## Round-39 changes (2026-07-20)
+
+**No privacy-relevant changes.** This round is pure code-quality cleanup
+(continued SonarCloud rule fixes) — no new permissions, no new network
+endpoints, no new data collection, no changes to existing data flows.
+
+Specifically:
+- `ai-bridge.js`, `game-logic.js`, `ui.js`, `ui-interactions.js`,
+  `ui-gameflow.js`, `tablebase.js`: 47× `e&&e.message?e.message:e` →
+  `e?.message?e.message:e` (SonarCloud S6582 — optional chaining, exact
+  semantic equivalent). Affects only in-process error logging format.
+- `ui.js`, `stats.html`: `href.indexOf('http://') !== 0` →
+  `!href.startsWith('http://')` (SonarCloud S7765 — clearer prefix check).
+  Affects only in-process URL scheme detection for the external-browser
+  open path.
+- `ui.js`: removed 3 unused local variables (`rLast`, `prevEval`, `ad`)
+  (SonarCloud S1481/S1854 — dead code removal). No behavior change.
+- `chess.html` rebuild: pure bundle regeneration from chess.src/*.js.
+- BUILDING.md / PRIVACY.md / README.md / NOTICE / 8 README.license /
+  Manual (zh+en) / worklog.md: pure documentation.
+
+The Lichess Tablebase API remains the only network endpoint (unchanged since
+v1.0.4). All other features remain fully offline.
+
+## Round-38 changes (2026-07-20)
+
+**No privacy-relevant changes.** This round is pure code-quality cleanup
+(continued SonarCloud rule fixes) — no new permissions, no new network
+endpoints, no new data collection, no changes to existing data flows.
+
+Specifically:
+- `ui.js`, `worker-pool.js`, `pgn-standard.js`, `tablebase.js`,
+  `ui-interactions.js`, `ai-bridge.js`: SonarCloud rule fixes (S6535, S7765,
+  S7769, S6660, S5869, S6653). All affect only in-process regex character
+  classes, existence checks, math operations, or DOM API modernization; no
+  IPC, no network, no storage changes.
+- `stats.html`: SonarCloud rule fixes (S6353, S7765, S7780). Affects only
+  in-process regex matching, existence checks, and string literal style.
+- `chess.html` rebuild: pure bundle regeneration from chess.src/*.js.
+- BUILDING.md / PRIVACY.md / README.md / NOTICE / 8 README.license /
+  Manual (zh+en) / worklog.md: pure documentation.
+
+All changes are confined to:
+- `src/main/assets/chess.src/{ui,worker-pool,pgn-standard,tablebase,ui-interactions,ai-bridge}.js`
+- `src/main/assets/chess.html` (rebuilt)
+- `src/main/assets/stats.html`
+- `BUILDING.md`, `README.md`, `NOTICE`, `PRIVACY.md`,
+  `src/main/assets/chess.src/README.license`,
+  `src/main/java/com/Regalia/README.license`,
+  `src/main/assets/README.license`, `src/main/README.license`,
+  `src/main/res/README.license`, `src/main/cpp/README.license`,
+  `Manual/README.license`, `assets/README.license`,
+  `worklog.md`, `Manual/Regalia-v1.2.3-manual-{zh,en}.html`
+
+The Lichess Tablebase API remains the only network endpoint (unchanged since
+v1.0.4). All other features remain fully offline.
+
+## Round-37 changes (2026-07-20)
+
+**No privacy-relevant changes.** This round is pure code-quality cleanup
+(SonarCloud rule fixes) — no new permissions, no new network endpoints,
+no new data collection, no changes to existing data flows.
+
+Specifically:
+- `ai-bridge.js`, `game-logic.js`, `state-store.js`, `ui.js`,
+  `worker-pool.js`: SonarCloud rule fixes (S6645, S6644, S7718, S7786,
+  S6653, S7719, S6661, S7760, S7762). All affect only in-process display
+  label selection, error-type specificity, or DOM API modernization; no
+  IPC, no network, no storage changes.
+- `stats.html`: SonarCloud rule fixes (S7762, S7773). Affects only
+  in-process DOM manipulation and parseFloat lexical scope.
+- `engine_jni.cpp`: C++ modernization (cpp:S4962 nullptr, cpp:S1172
+  unused parameter comment). Affects only JNI bridge compilation; no
+  behavior change.
+- `chess.html` rebuild: pure bundle regeneration from chess.src/*.js.
+- BUILDING.md / PRIVACY.md / README.md / NOTICE / 8 README.license /
+  Manual (zh+en) / worklog.md: pure documentation.
+
+All changes are confined to:
+- `src/main/assets/chess.src/{ai-bridge,game-logic,state-store,ui,worker-pool}.js`
+- `src/main/assets/chess.html` (rebuilt)
+- `src/main/assets/stats.html`
+- `src/main/cpp/engine_jni.cpp`
+- `BUILDING.md`, `README.md`, `NOTICE`, `PRIVACY.md`,
+  `src/main/assets/chess.src/README.license`,
+  `src/main/java/com/Regalia/README.license`,
+  `src/main/assets/README.license`, `src/main/README.license`,
+  `src/main/res/README.license`, `src/main/cpp/README.license`,
+  `Manual/README.license`, `assets/README.license`,
+  `worklog.md`, `Manual/Regalia-v1.2.3-manual-{zh,en}.html`
+
+The Lichess Tablebase API remains the only network endpoint (unchanged since
+v1.0.4). All other features remain fully offline.
+
+## Round-36 changes (2026-07-20)
+
+**No privacy-relevant changes.** This round is pure code-deduplication +
+robustness refactoring of chess.src/*.js modules — no new permissions, no
+new network endpoints, no new data collection, no changes to existing
+data flows.
+
+Specifically:
+- `_computeEpTarget` / `_applyKingMove` / `_kingPosAfterMove` extractions
+  in `game-logic.js`: affect only in-process chess move legality/state
+  computation; no data leaves the device. The extracted helpers are
+  byte-for-byte equivalent to the previous inline code (verified by
+  Node-vm smoke tests).
+- `evalBucket` / `_POV_LABEL_KEYS_PLAYER` / `_POV_LABEL_KEYS_WHITE` in
+  `game-logic.js`: centralize the eval-threshold ladder previously
+  duplicated between `ui.js:posDesc` and `pgn-standard.js:_pgnWhitePerspectiveLabel`.
+  Affects only in-process display label selection; no IPC, no network.
+- `isChess960Active()` in `chess960.js`: canonical Chess960-detection
+  predicate. Affects only in-process variant detection; no IPC, no
+  network.
+- `randomSPID()` delegation to `secureRandomInt(960)`: affects only
+  in-process SP-ID selection; no IPC, no network. The 518 fail-safe
+  for crypto-unavailable is preserved.
+- `_engineStopHard()` in `ai-bridge.js`: canonical hard-stop helper.
+  Affects only in-process engine lifecycle; no data leaves the device.
+  The helper closes a real robustness gap (ui.js:5466 was missing the
+  sendToEngine('stop') fallback for older builds) — this is a
+  behavior-correctness fix, not a privacy change.
+- Shredder-FEN detection dedup (3 sites now delegate to
+  `_needsShredderFEN`): affects only in-process FEN/PGN generation;
+  no IPC, no network. **BUG FIX**: the inline copies missed the
+  v1.2.3 round-21 per-color gating fix, misclassifying some standard
+  positions as Chess960. Centralizing fixes this — behavior-correctness,
+  not privacy.
+- `_pad2` in `pgn-standard.js`: trivial zero-pad helper. Affects only
+  in-process time-formatting; no IPC, no network.
+- chess.html rebuild: pure bundle regeneration from chess.src/*.js.
+- BUILDING.md / PRIVACY.md / README.md / NOTICE / 8 README.license /
+  Manual (zh+en) / worklog.md: pure documentation.
+
+All changes are confined to:
+- `src/main/assets/chess.src/{game-logic,chess960,ai-bridge,pgn-standard,ui,ui-gameflow,ui-interactions}.js`
+- `src/main/assets/chess.html` (rebuilt from chess.src/*.js)
+- `BUILDING.md`, `README.md`, `NOTICE`, `PRIVACY.md`,
+  `src/main/assets/chess.src/README.license`,
+  `src/main/java/com/Regalia/README.license`,
+  `src/main/assets/README.license`, `src/main/README.license`,
+  `src/main/res/README.license`, `src/main/cpp/README.license`,
+  `Manual/README.license`, `assets/README.license`,
+  `worklog.md`, `Manual/Regalia-v1.2.3-manual-{zh,en}.html`
+
+The Lichess Tablebase API remains the only network endpoint (unchanged since
+v1.0.4). All other features remain fully offline.
+
+## Round-35 changes (2026-07-20)
+
+**No privacy-relevant changes.** This round is pure code-quality fix
+(SonarCloud BUG + 2 MINOR code smells) + doc sync — no new permissions,
+no new network endpoints, no new data collection, no changes to existing
+data flows.
+
+Specifically:
+- StockfishNative `_lifecycleGeneration` AtomicInteger conversion
+  (SonarCloud java:S3078): affects only in-process engine lifecycle
+  concurrency semantics; no data leaves the device. The fix changes the
+  field type from `volatile int` to `AtomicInteger` to make the `++`
+  operation atomic — behavior is byte-for-byte equivalent.
+- game-logic.js optional-chaining conversion (SonarCloud javascript:S6582
+  ×2 sites): affects only in-process chess logic; no IPC, no network, no
+  storage. The fix changes `!s||!s.board` → `!s?.board` and
+  `!p||p.color!==winnerColor` → `p?.color!==winnerColor` — semantics
+  verified equivalent.
+- BUILDING.md H1 title addition + round-35 build notes: pure documentation.
+- README.md/NOTICE/worklog.md/Manual round-35 entries: pure documentation.
+
+All changes are confined to:
+- `src/main/java/com/Regalia/StockfishNative.java`
+- `src/main/assets/chess.src/game-logic.js`
+- `src/main/assets/chess.html` (rebuilt from chess.src/*.js)
+- `BUILDING.md`, `README.md`, `NOTICE`, `PRIVACY.md`,
+  `src/main/assets/chess.src/README.license`,
+  `src/main/java/com/Regalia/README.license`,
+  `src/main/assets/README.license`, `src/main/README.license`,
+  `src/main/res/README.license`, `src/main/cpp/README.license`,
+  `Manual/README.license`, `assets/README.license`,
+  `worklog.md`, `Manual/Regalia-v1.2.3-manual-{zh,en}.html`
+
+The Lichess Tablebase API remains the only network endpoint (unchanged since
+v1.0.4). All other features remain fully offline.
+
 ## Round-34 changes (2026-07-20)
 
 **No privacy-relevant changes.** This round is pure bug-fix (Gitar

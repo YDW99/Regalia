@@ -67,6 +67,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.zip.ZipEntry;
@@ -202,7 +203,18 @@ public class StockfishNative {
     //   new engine AFTER the user has exited the app. The token is volatile
     //   for cross-thread visibility (shutdown may run on the JS binder thread
     //   while restart runs on the main Handler thread).
-    private volatile int _lifecycleGeneration = 0;
+    // v1.2.3 round-35 (PR52 SonarCloud java:S3078 BUG): converted from
+    //   `volatile int` to `AtomicInteger`. The `++` compound operation on a
+    //   volatile int is non-atomic (read-modify-write) and is flagged by
+    //   SonarCloud as a concurrency BUG. Although in this design the race
+    //   only causes a "lost" increment (the value still monotonically
+    //   increases, so the restart task's `genAtShutdown != current` check
+    //   still detects the concurrent shutdown), converting to AtomicInteger
+    //   is the idiomatic fix and silences the BUG finding without behavior
+    //   change. `incrementAndGet()` is atomic; `get()` provides volatile-read
+    //   semantics. Field is `final` because the AtomicInteger instance itself
+    //   is never reassigned (only its internal value is mutated).
+    private final AtomicInteger _lifecycleGeneration = new AtomicInteger(0);
     // Latch used to wait for stale bestmove after sending "stop".
     private volatile CountDownLatch _stopLatch = null;
     private final Object _stopLatchLock = new Object();
@@ -2792,7 +2804,9 @@ public class StockfishNative {
         //   changed during the sleep, a concurrent shutdown occurred and the
         //   restart must abort (do NOT recreate the executor, do NOT reset
         //   shutdownRequested, do NOT submit startEngine).
-        _lifecycleGeneration++;
+        // v1.2.3 round-35 (PR52 java:S3078): use AtomicInteger.incrementAndGet()
+        //   instead of `++` — the compound `++` on a volatile int is non-atomic.
+        _lifecycleGeneration.incrementAndGet();
         shutdownRequested = true;
         synchronized (stateLock) {
             currentState = STATE_NONE;
@@ -3049,15 +3063,18 @@ public class StockfishNative {
                     //   (do NOT recreate the executor, do NOT reset
                     //   shutdownRequested, do NOT submit startEngine) — otherwise
                     //   we'd launch a new engine AFTER the user has exited.
-                    final int genAtShutdown = _lifecycleGeneration;
+                    // v1.2.3 round-35 (PR52 java:S3078): use AtomicInteger.get()
+                    //   instead of bare field read — volatile-int read was OK,
+                    //   but AtomicInteger is now the field type.
+                    final int genAtShutdown = _lifecycleGeneration.get();
                     try {
                         Thread.sleep(500);
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                     }
                     // Re-check: did a concurrent shutdown happen during the sleep?
-                    if (genAtShutdown != _lifecycleGeneration) {
-                        Log.i(TAG, "Restart aborted — concurrent shutdown detected (gen " + genAtShutdown + " → " + _lifecycleGeneration + ")");
+                    if (genAtShutdown != _lifecycleGeneration.get()) {
+                        Log.i(TAG, "Restart aborted — concurrent shutdown detected (gen " + genAtShutdown + " → " + _lifecycleGeneration.get() + ")");
                         _clearRestartInProgress();
                         return;
                     }
@@ -3085,8 +3102,8 @@ public class StockfishNative {
                     //   and the subsequent startEngine would launch a new engine
                     //   after the user exited. This closes the remaining race
                     //   window that CodeRabbit identified in v4 review.
-                    if (genAtShutdown != _lifecycleGeneration) {
-                        Log.i(TAG, "Restart aborted — concurrent shutdown detected post-executor-recreation (gen " + genAtShutdown + " → " + _lifecycleGeneration + ")");
+                    if (genAtShutdown != _lifecycleGeneration.get()) {
+                        Log.i(TAG, "Restart aborted — concurrent shutdown detected post-executor-recreation (gen " + genAtShutdown + " → " + _lifecycleGeneration.get() + ")");
                         _clearRestartInProgress();
                         return;
                     }

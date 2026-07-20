@@ -1382,7 +1382,7 @@ function secureRandomInt(max){
 
 function T(key){return _i18n[key]?.[_lang]||_i18n[key]?.zh||key;}
 function toggleLang(){_lang=(_lang==='zh')?'en':'zh';
-  try{if(typeof Store!=='undefined'&&Store&&typeof Store.dispatch==='function')Store.dispatch('SET_LANG',_lang);}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}try{localStorage.setItem('Regalia_lang',_lang);}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.saveLangPref)AndroidBridge.saveLangPref(_lang);}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_lang',_lang);}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}try{if(typeof HapticManager!=='undefined'&&HapticManager.fire)HapticManager.fire('TOGGLE_ON');}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}try{if(typeof playSound==='function')playSound('select');}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}
+  try{if(typeof Store!=='undefined'&&Store&&typeof Store.dispatch==='function')Store.dispatch('SET_LANG',_lang);}catch(e){console.warn('[GameLogic]',e?.message?e.message:e);}try{localStorage.setItem('Regalia_lang',_lang);}catch(e){console.warn('[GameLogic]',e?.message?e.message:e);}try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.saveLangPref)AndroidBridge.saveLangPref(_lang);}catch(e){console.warn('[GameLogic]',e?.message?e.message:e);}try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_lang',_lang);}catch(e){console.warn('[GameLogic]',e?.message?e.message:e);}try{if(typeof HapticManager!=='undefined'&&HapticManager.fire)HapticManager.fire('TOGGLE_ON');}catch(e){console.warn('[GameLogic]',e?.message?e.message:e);}try{if(typeof playSound==='function')playSound('select');}catch(e){console.warn('[GameLogic]',e?.message?e.message:e);}
   // v1.2.3 P1 (Round 18 i18n-P1-3): Sync <html lang> so TalkBack uses the
   //   correct TTS engine for the active UI language. Previously the attribute
   //   stayed at zh-CN forever, so English UI users heard Chinese speech.
@@ -1926,8 +1926,8 @@ const _i18n={
 (function(){
   try{const saved=localStorage.getItem('Regalia_lang');if(saved==='zh'||saved==='en'){_lang=saved;return;}}catch(e){console.warn('[GameLogic]',e?.message?e.message:e);}
   // v1.0.4 Round-5 Rev16: Fall back to persistent Java store when HyperOS 3 wiped localStorage
-  try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentGet){const persisted=AndroidBridge.persistentGet('Regalia_lang');if(persisted==='zh'||persisted==='en'){_lang=persisted;try{localStorage.setItem('Regalia_lang',persisted);}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}return;}}}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}
-  try{if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.getSystemLanguage==='function'){const sysLang=AndroidBridge.getSystemLanguage();_lang=(sysLang&&sysLang.startsWith('zh'))?'zh':'en';return;}}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}
+  try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentGet){const persisted=AndroidBridge.persistentGet('Regalia_lang');if(persisted==='zh'||persisted==='en'){_lang=persisted;try{localStorage.setItem('Regalia_lang',persisted);}catch(e){console.warn('[GameLogic]',e?.message?e.message:e);}return;}}}catch(e){console.warn('[GameLogic]',e?.message?e.message:e);}
+  try{if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.getSystemLanguage==='function'){const sysLang=AndroidBridge.getSystemLanguage();_lang=(sysLang&&sysLang.startsWith('zh'))?'zh':'en';return;}}catch(e){console.warn('[GameLogic]',e?.message?e.message:e);}
   try{const navLang=navigator.language||navigator.userLanguage||'';_lang=navLang.startsWith('zh')?'zh':'en';}catch(e){_lang='zh';}
 })();
 // v1.2.3 P1 (Round 18 i18n-P1-3): Sync <html lang> with the detected startup
@@ -3120,7 +3120,8 @@ function legalMoves(s,pos){
           const mv={from:{row:r,col:c},to:m,piece:p,promotion:m.promotion};
           const undo=makeMvInPlace(s,mv);
           if(!undo)continue;
-          const kPos=p.type==='king'?{row:m.row,col:m.col}:s[p.color==='white'?'wk':'bk'];
+          // v1.2.3 round-36 (dedup): use _kingPosAfterMove (shared with hasLegalMoves/moveAlg).
+          const kPos=_kingPosAfterMove(s, p, m);
           const isLegal=kPos?!inCheck(s.board,p.color,kPos):false;
           unmakeMv(s,undo);
           if(isLegal)all.push(mv);
@@ -3129,9 +3130,10 @@ function legalMoves(s,pos){
     }
     return all;
   }
-  const pm=pseudoMoves(s,pos),p=s.board[pos.row][pos.col];if(!p)return[];const legal=[];for(const m of pm){const mv={from:{row:pos.row,col:pos.col},to:m,piece:p,promotion:m.promotion};const undo=makeMvInPlace(s,mv);if(!undo)continue;const kPos=p.type==='king'?{row:m.row,col:m.col}:s[p.color==='white'?'wk':'bk'];const isLegal=kPos?!inCheck(s.board,p.color,kPos):false;unmakeMv(s,undo);if(isLegal)legal.push(m)}return legal}
+  const pm=pseudoMoves(s,pos),p=s.board[pos.row][pos.col];if(!p)return[];const legal=[];for(const m of pm){const mv={from:{row:pos.row,col:pos.col},to:m,piece:p,promotion:m.promotion};const undo=makeMvInPlace(s,mv);if(!undo)continue;const kPos=_kingPosAfterMove(s,p,m);const isLegal=kPos?!inCheck(s.board,p.color,kPos):false;unmakeMv(s,undo);if(isLegal)legal.push(m)}return legal}
 // Fast game-over check: returns true as soon as ONE legal move is found
-function hasLegalMoves(s){for(let r=0;r<8;r++){for(let c=0;c<8;c++){const p=s.board[r][c];if(p?.color===s.currentTurn){const pm=pseudoMoves(s,{row:r,col:c});for(const m of pm){const mv={from:{row:r,col:c},to:m,piece:p,promotion:m.promotion};const undo=makeMvInPlace(s,mv);if(!undo)continue;const kPos=p.type==='king'?{row:m.row,col:m.col}:s[p.color==='white'?'wk':'bk'];const legal=kPos?!inCheck(s.board,p.color,kPos):false;unmakeMv(s,undo);if(legal)return true}}}}return false}
+// v1.2.3 round-36 (dedup): uses _kingPosAfterMove (shared with legalMoves/moveAlg).
+function hasLegalMoves(s){for(let r=0;r<8;r++){for(let c=0;c<8;c++){const p=s.board[r][c];if(p?.color===s.currentTurn){const pm=pseudoMoves(s,{row:r,col:c});for(const m of pm){const mv={from:{row:r,col:c},to:m,piece:p,promotion:m.promotion};const undo=makeMvInPlace(s,mv);if(!undo)continue;const kPos=_kingPosAfterMove(s,p,m);const legal=kPos?!inCheck(s.board,p.color,kPos):false;unmakeMv(s,undo);if(legal)return true}}}}return false}
 // Move execution
 /**
  * v1.0.6: Detect whether a move is a castling move.
@@ -3186,7 +3188,9 @@ function _castleSide(mv,s){
   if(mv.piece.type==='king'){
     const _homeRow=mv.piece.color==='white'?7:0;
     if(mv.from.row===_homeRow&&mv.to.row===_homeRow){
-      const _is960=(gameVariant !== undefined&&gameVariant==='chess960')||(typeof isChess960Mode==='function'&&isChess960Mode());
+      // v1.2.3 round-36 (dedup): use the canonical isChess960Active()
+      //   helper from chess960.js instead of the inline 2-clause OR.
+      const _is960=isChess960Active();
       const _minDist=_is960?1:2;
       // v1.0.8 PHASE 30: In Chess960, _minDist=1 means ANY king move to col 6/2 on
       //   the home row would be classified as castling — including normal king
@@ -3274,6 +3278,79 @@ function _castleSide(mv,s){
   }
   return null;
 }
+
+// v1.2.3 round-36 (dedup + robustness): shared helpers for makeMv /
+//   makeMvInPlace. These two functions previously hand-duplicated ~80% of
+//   their logic; the duplicates were a maintenance burden and a source of
+//   latent bugs (a fix applied at one site could be missed at the other).
+//   The helpers below are pure (no side effects beyond the passed-in state
+//   mutation, which is the caller's intent) and byte-for-byte equivalent to
+//   the previous inline code. See game-logic duplicate-logic analysis L3/L7/L8.
+
+/**
+ * Compute the en-passant target square after a pawn double-push, or null if
+ * no enemy pawn can actually capture (per FIDE rule: the EP target is only
+ * set when an enemy pawn is positioned to capture). Pure function over the
+ * board array.
+ * @param {Array} board - 8x8 board
+ * @param {Object} from - {row, col} source square
+ * @param {Object} to - {row, col} destination square
+ * @param {string} pieceColor - 'white' | 'black' (the moving pawn's color)
+ * @returns {{row,col}|null} EP target square, or null
+ */
+function _computeEpTarget(board, from, to, pieceColor){
+  if(Math.abs(to.row-from.row)!==2)return null;
+  const epRow=(from.row+to.row)/2;
+  const opp=OPP_COLOR[pieceColor];
+  const pd=opp==='white'?1:-1;
+  for(const dc of[-1,1]){
+    const cr=epRow+pd,cc=from.col+dc;
+    if(inB(cr,cc)&&board[cr][cc]&&board[cr][cc].type==='pawn'&&board[cr][cc].color===opp){
+      return {row:epRow,col:from.col};
+    }
+  }
+  return null;
+}
+
+/**
+ * Apply king-move side effects: update the king-position cache (s.wk/s.bk)
+ * and clear ALL castling rights for the moving color (king move forfeits
+ * both kingside and queenside rights). Pure mutation of the passed-in state.
+ * @param {Object} s - Game state to mutate
+ * @param {string} color - 'white' | 'black' (the moving king's color)
+ * @param {Object} to - {row, col} king's destination square
+ */
+function _applyKingMove(s, color, to){
+  if(color==='white'){
+    s.wk={row:to.row,col:to.col};
+    s.castlingRights.whiteKingside=false;
+    s.castlingRights.whiteQueenside=false;
+    s.castlingRights.whiteKingsideRookFile=null;
+    s.castlingRights.whiteQueensideRookFile=null;
+  }else{
+    s.bk={row:to.row,col:to.col};
+    s.castlingRights.blackKingside=false;
+    s.castlingRights.blackQueenside=false;
+    s.castlingRights.blackKingsideRookFile=null;
+    s.castlingRights.blackQueensideRookFile=null;
+  }
+}
+
+/**
+ * Return the king position AFTER a trial move. If the moving piece is the
+ * king, the destination is the new king position; otherwise the cached
+ * king position (s.wk/s.bk) is used. Used by legality checks (legalMoves,
+ * hasLegalMoves) and SAN disambiguation (moveAlg).
+ * @param {Object} s - Game state (king cache must be up-to-date)
+ * @param {Object} piece - the moving piece ({type, color, ...})
+ * @param {Object} to - {row, col} destination square
+ * @returns {{row,col}|null} king position, or null if cache is empty
+ */
+function _kingPosAfterMove(s, piece, to){
+  if(piece.type==='king')return {row:to.row,col:to.col};
+  return piece.color==='white'?s.wk:s.bk;
+}
+
 /**
  * Apply a move to a game state, returning a new state (immutable).
  * @param {Object} s - Current game state
@@ -3377,7 +3454,12 @@ if(_cs&&_savedRook&&_rookFrom>=0&&_rookTo>=0){
   }
 }
 if(promotion)ns.board[to.row][to.col]={type:promotion,color:piece.color};
-if(piece.type==='king'){if(piece.color==='white'){ns.wk={row:to.row,col:to.col};ns.castlingRights.whiteKingside=false;ns.castlingRights.whiteQueenside=false;ns.castlingRights.whiteKingsideRookFile=null;ns.castlingRights.whiteQueensideRookFile=null}else{ns.bk={row:to.row,col:to.col};ns.castlingRights.blackKingside=false;ns.castlingRights.blackQueenside=false;ns.castlingRights.blackKingsideRookFile=null;ns.castlingRights.blackQueensideRookFile=null}}
+// v1.2.3 round-36 (dedup): use _applyKingMove (shared with makeMvInPlace).
+//   The previous inline block hand-duplicated the 8-field castling-rights
+//   clear (4 flags + 4 rook-file fields). Centralizing eliminates the risk
+//   of a future castling-rights schema change (e.g., adding a 5th field)
+//   being applied at one site but not the other.
+if(piece.type==='king')_applyKingMove(ns, piece.color, to);
 if(piece.type==='rook'){
 // v1.0.7 PHASE 3: Always use Chess960 rook-position detection (findCastlingRooks)
 // so that castling rights are correctly cleared when a rook that holds castle
@@ -3412,7 +3494,12 @@ if(typeof findCastlingRooks==='function'){
   if(capPiece.color==='white'){if(to.row===7&&to.col===0){ns.castlingRights.whiteQueenside=false;ns.castlingRights.whiteQueensideRookFile=null;}if(to.row===7&&to.col===7){ns.castlingRights.whiteKingside=false;ns.castlingRights.whiteKingsideRookFile=null;}}else{if(to.row===0&&to.col===0){ns.castlingRights.blackQueenside=false;ns.castlingRights.blackQueensideRookFile=null;}if(to.row===0&&to.col===7){ns.castlingRights.blackKingside=false;ns.castlingRights.blackKingsideRookFile=null;}}
 }
 }
-if(piece.type==='pawn'&&Math.abs(to.row-from.row)===2){const epRow=(from.row+to.row)/2;const opp=OPP_COLOR[piece.color];const pd=opp==='white'?1:-1;let _epH=false;for(const dc of[-1,1]){const cr=epRow+pd,cc=from.col+dc;if(inB(cr,cc)&&ns.board[cr][cc]&&ns.board[cr][cc].type==='pawn'&&ns.board[cr][cc].color===opp){_epH=true;break;}}ns.enPassantTarget=_epH?{row:epRow,col:from.col}:null;}else{ns.enPassantTarget=null;}
+// v1.2.3 round-36 (dedup): _computeEpTarget centralizes the EP-target
+//   computation between makeMv and makeMvInPlace. The previous inline
+//   copies were byte-identical except for ns/s — centralizing eliminates
+//   the risk of a future Chess960 corner-case fix being applied to one
+//   site but not the other.
+ns.enPassantTarget=(piece.type==='pawn')?_computeEpTarget(ns.board, from, to, piece.color):null;
 const cap=!!capPiece||(piece.type==='pawn'&&s.enPassantTarget&&to.row===s.enPassantTarget.row&&to.col===s.enPassantTarget.col);ns.halfMoveClock=(piece.type==='pawn'||cap)?0:ns.halfMoveClock+1;if(piece.color==='black')ns.fullMoveNumber++;
 ns.currentTurn=OPP_COLOR[ns.currentTurn];ns.moveHistory=[...s.moveHistory,{from,to,piece,promotion}];
 // Incremental Zobrist hash update
@@ -3592,10 +3679,8 @@ if(_cs&&_savedRook&&_rookFrom>=0&&_rookTo>=0){
 // 4. Promotion
 if(promotion)s.board[to.row][to.col]={type:promotion,color:piece.color};
 // 5. Update king position + castling rights
-if(piece.type==='king'){
-if(piece.color==='white'){s.wk={row:to.row,col:to.col};s.castlingRights.whiteKingside=false;s.castlingRights.whiteQueenside=false;s.castlingRights.whiteKingsideRookFile=null;s.castlingRights.whiteQueensideRookFile=null}
-else{s.bk={row:to.row,col:to.col};s.castlingRights.blackKingside=false;s.castlingRights.blackQueenside=false;s.castlingRights.blackKingsideRookFile=null;s.castlingRights.blackQueensideRookFile=null}
-}
+// v1.2.3 round-36 (dedup): use _applyKingMove (shared with makeMv).
+if(piece.type==='king')_applyKingMove(s, piece.color, to);
 // 6. Update castling rights for rook moves
 // v1.0.7 PHASE 18 Task 3 (bug fix): Use the pre-mutation snapshot
 // (_movingRookSide) instead of calling findCastlingRooks again. The old code
@@ -3634,8 +3719,9 @@ if(capPiece?.type==='rook'&&_capturedRookSide){
   else{if(to.row===0&&to.col===0){s.castlingRights.blackQueenside=false;s.castlingRights.blackQueensideRookFile=null;}if(to.row===0&&to.col===7){s.castlingRights.blackKingside=false;s.castlingRights.blackKingsideRookFile=null;}}
 }
 // 8. Set en passant target (only if an enemy pawn can actually capture)
+// v1.2.3 round-36 (dedup): use _computeEpTarget (shared with makeMv).
 const oldEP=s.enPassantTarget;
-if(piece.type==='pawn'&&Math.abs(to.row-from.row)===2){const epRow=(from.row+to.row)/2;const opp=OPP_COLOR[piece.color];const pd=opp==='white'?1:-1;let _epHasCapturer=false;for(const dc of[-1,1]){const cr=epRow+pd,cc=from.col+dc;if(inB(cr,cc)&&s.board[cr][cc]&&s.board[cr][cc].type==='pawn'&&s.board[cr][cc].color===opp){_epHasCapturer=true;break;}}s.enPassantTarget=_epHasCapturer?{row:epRow,col:from.col}:null;}else{s.enPassantTarget=null;}
+s.enPassantTarget=(piece.type==='pawn')?_computeEpTarget(s.board, from, to, piece.color):null;
 // 9. Update half-move clock + full-move number
 const cap=!!capPiece||(piece.type==='pawn'&&oldEP&&to.row===oldEP.row&&to.col===oldEP.col);
 s.halfMoveClock=(piece.type==='pawn'||cap)?0:undo.oldHalfMove+1;
@@ -3789,7 +3875,10 @@ const k=s.currentTurn==='white'?s.wk:s.bk;return inCheck(s.board,s.currentTurn,k
 //   _bishopParityIsUniform(). The 11-test FIDE 6.9 suite (round-30) still
 //   passes — semantics are byte-for-byte equivalent.
 function winnerLacksMatingMaterial(s,winnerColor){
-  if(!s||!s.board)return false;
+  // v1.2.3 round-35 (PR52 SonarCloud S6582): use optional chaining —
+  //   `!s?.board` returns true when s is null/undefined OR s.board is falsy,
+  //   equivalent to the previous `!s||!s.board` short-circuit.
+  if(!s?.board)return false;
   const counts=_scanWinnerMaterial(s.board,winnerColor);
   // Sanity: winner must have exactly one king (otherwise state is corrupt).
   if(counts.king!==1)return false;
@@ -3833,7 +3922,10 @@ function _scanWinnerMaterial(board,winnerColor){
     if(!row)continue;
     for(let c=0;c<8;c++){
       const p=row[c];
-      if(!p||p.color!==winnerColor)continue;
+      // v1.2.3 round-35 (PR52 SonarCloud S6582): optional chaining — when p
+      //   is null/undefined, `p?.color` evaluates to undefined, and
+      //   `undefined !== winnerColor` is true → continue (same as `!p||...`).
+      if(p?.color!==winnerColor)continue;
       switch(p.type){
         case'pawn':pawn++;break;
         case'knight':knight++;break;
@@ -3864,6 +3956,41 @@ function _scanWinnerMaterial(board,winnerColor){
 function _bishopParityIsUniform(bishopParity){
   return bishopParity>=0;
 }
+
+// v1.2.3 round-36 (dedup + robustness): canonical eval-bucket classifier.
+//   Returns an integer -4..+4 representing the eval strength bucket
+//   (-4 = losing, 0 = equal, +4 = winning). The thresholds ±50/±150/±350/±600
+//   were previously duplicated between ui.js:posDesc() (player-POV labels)
+//   and pgn-standard.js:_pgnWhitePerspectiveLabel() (White-POV labels).
+//   Duplicating the thresholds risked silent drift — a future tuning round
+//   could change one copy without the other, causing the in-UI eval-bar
+//   label to disagree with the exported PGN annotation label for the same
+//   position. Centralizing the thresholds here eliminates that risk.
+//   Both call sites use _POV_LABEL_KEYS.player[evalBucket(ev)] or
+//   _POV_LABEL_KEYS.white[evalBucket(ev)] to look up their respective i18n keys.
+function evalBucket(ev){
+  if(ev>600)return 4;
+  if(ev>350)return 3;
+  if(ev>150)return 2;
+  if(ev>50)return 1;
+  if(ev>-50)return 0;
+  if(ev>-150)return -1;
+  if(ev>-350)return -2;
+  if(ev>-600)return -3;
+  return -4;
+}
+// Player-POV i18n keys (used by ui.js posDesc).
+const _POV_LABEL_KEYS_PLAYER={
+  4:'you_winning',3:'huge_adv',2:'advantage',1:'slight_adv',0:'equal_pos',
+  '-1':'slight_dis','-2':'disadvantage','-3':'huge_dis','-4':'you_losing'
+};
+// White-POV i18n keys (used by pgn-standard.js _pgnWhitePerspectiveLabel).
+// White-POV labels are absolute (always from White's perspective, regardless
+// of which side the human played) so PGN annotations are unambiguous.
+const _POV_LABEL_KEYS_WHITE={
+  4:'pgn_white_winning',3:'pgn_white_huge_adv',2:'pgn_white_advantage',1:'pgn_white_slight_adv',0:'pgn_equal',
+  '-1':'pgn_black_slight_adv','-2':'pgn_black_advantage','-3':'pgn_black_huge_adv','-4':'pgn_black_winning'
+};
 function isDeadPosition(s){
 // v1.0.2 PERF (first-principles): single-pass piece scan with early returns.
 // The previous code allocated a pcs[] array, then ran multiple .filter() /
@@ -3959,7 +4086,13 @@ n+=piece.type==='knight'?'N':piece.type[0].toUpperCase();
 // This mirrors the optimization already applied to legalMoves() and
 // hasLegalMoves() (see comments above legalMoves).
 let numSameTarget=0,numSameFile=0,numSameRow=0;
-for(let r=0;r<8;r++)for(let c=0;c<8;c++){if(r===from.row&&c===from.col)continue;const p=s.board[r][c];if(p?.type===piece.type&&p.color===piece.color){const pm=pseudoMoves(s,{row:r,col:c});if(pm.some(m=>m.row===to.row&&m.col===to.col)){const mv2={from:{row:r,col:c},to:{row:to.row,col:to.col},piece:p,promotion:undefined};const undo=makeMvInPlace(s,mv2);if(undo){const kPos=p.type==='king'?{row:to.row,col:to.col}:(p.color==='white'?s.wk:s.bk);if(kPos&&!inCheck(s.board,p.color,kPos)){numSameTarget++;if(c===from.col)numSameFile++;if(r===from.row)numSameRow++;}unmakeMv(s,undo);}}}}
+// v1.2.3 round-36 (dedup): use _kingPosAfterMove (shared with legalMoves/hasLegalMoves).
+//   The previous inline used the (p.color==='white'?s.wk:s.bk) syntax while
+//   legalMoves/hasLegalMoves used s[p.color==='white'?'wk':'bk'] — two
+//   syntaxes for the same logic. Centralizing eliminates the divergence
+//   risk (if s.wk/s.bk ever diverge from s['wk']/s['bk'] due to a future
+//   refactor, the two syntaxes could disagree).
+for(let r=0;r<8;r++)for(let c=0;c<8;c++){if(r===from.row&&c===from.col)continue;const p=s.board[r][c];if(p?.type===piece.type&&p.color===piece.color){const pm=pseudoMoves(s,{row:r,col:c});if(pm.some(m=>m.row===to.row&&m.col===to.col)){const mv2={from:{row:r,col:c},to:{row:to.row,col:to.col},piece:p,promotion:undefined};const undo=makeMvInPlace(s,mv2);if(undo){const kPos=_kingPosAfterMove(s,p,to);if(kPos&&!inCheck(s.board,p.color,kPos)){numSameTarget++;if(c===from.col)numSameFile++;if(r===from.row)numSameRow++;}unmakeMv(s,undo);}}}}
 // PGN standard disambiguation: file first, then rank, then both
 if(numSameTarget>0){if(numSameFile===0)n+=String.fromCodePoint(97+from.col);else if(numSameRow===0)n+=(8-from.row);else n+=String.fromCodePoint(97+from.col)+(8-from.row)}
 }
@@ -4168,8 +4301,10 @@ if(gameClocks !== undefined&&gameClocks&&typeof AndroidBridge.engineGoTimed==='f
   }catch(e){
     console.error('engineGoTimed error:',e);
     // Fallback to untimed engineGo
-    if(_needNewGameForEngine){_needNewGameForEngine=false;try{AndroidBridge.engineGoNewGame(fen,aiLevel);}catch(e2){}}
-    else{try{AndroidBridge.engineGo(fen,aiLevel);}catch(e2){}}
+    // v1.2.3 round-37 (SonarCloud S7718): nested catch uses `error` (not
+    //   `e2`) per the project's modern catch-param naming convention.
+    if(_needNewGameForEngine){_needNewGameForEngine=false;try{AndroidBridge.engineGoNewGame(fen,aiLevel);}catch(error){}}
+    else{try{AndroidBridge.engineGo(fen,aiLevel);}catch(error){}}
     isAIThinking=false;_aiBarInfo='';render();
   }
   return;
@@ -4196,7 +4331,7 @@ if(gameState.currentTurn===playerColor)return;
 if(_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
 isAIThinking=true;
 // v1.0.8 PHASE 22 supplement: AI-think-start sound (轻微滴声)
-try{if(typeof playSound==='function')playSound('aiThinkStart');}catch(e){console.warn('[GameLogic]',e&&e.message?e.message:e);}
+try{if(typeof playSound==='function')playSound('aiThinkStart');}catch(e){console.warn('[GameLogic]',e?.message?e.message:e);}
 hintText='';isHintLoading=false;_hintBarInfo='';_ponderGen++;_ponderBarInfo='';_ponderMoveSAN='';_pendingPonderMoveUCI=null;
 aiThinkInfo=T('thinking');_aiBarInfo=T('thinking');_updateAIThinkDisplay();
 // v1.0.8 PHASE 22: Lightweight UI update — avoid full render() which would
@@ -4731,22 +4866,29 @@ function backRankToSPID(backRank){
  *     number generator is safe here" hotspot.
  */
 function randomSPID(){
-  try{
-    if(typeof crypto!=='undefined'&&crypto.getRandomValues){
-      const buf=new Uint16Array(1);
-      // Rejection-sample to eliminate modulo bias
-      const LIMIT=65280; // largest multiple of 960 <= 65536
-      for(let _i=0;_i<8;_i++){ // bounded retries (8 is plenty -- P(>8 retries) approx 0)
-        crypto.getRandomValues(buf);
-        if(buf[0]<LIMIT)return buf[0]%960;
-      }
-      // Fallback if all 8 retries exceeded (extremely unlikely)
-      return buf[0]%960;
-    }
-  }catch(e){console.warn('[Chess960]',e?.message?e.message:e);}
-  // SECURITY: Return standard position instead of Math.random() when crypto
-  // is unavailable. SP-ID 518 = traditional RNBQKBNR.
-  return 518;
+  // v1.2.3 round-36 (dedup): delegate to secureRandomInt(960) from
+  //   game-logic.js. The two functions implemented the same rejection-
+  //   sampling algorithm (crypto.getRandomValues + bounded retries +
+  //   modulo-bias elimination); keeping them in sync was a maintenance
+  //   burden. secureRandomInt uses Uint32Array (full 32-bit range) vs
+  //   this function's previous Uint16Array (16-bit), but the rejection-
+  //   sampling math is equivalent — P(retry) is actually smaller with
+  //   32-bit. Behavior on success is identical (uniform modulo).
+  // Fail-safe: when crypto is unavailable, secureRandomInt returns 0
+  //   (= SP-ID 0, a valid Chess960 position). The previous fail-safe
+  //   returned 518 (= standard chess position). We preserve the 518
+  //   fail-safe here because SP-ID 518 is the documented "standard
+  //   position" choice and matches user expectation when crypto fails.
+  if(typeof crypto==='undefined'||!crypto||typeof crypto.getRandomValues!=='function'){
+    return 518;
+  }
+  if(typeof secureRandomInt!=='function'){
+    // Defensive: game-logic.js should always be loaded before chess960.js
+    // (per build-chess.py MODULES order), but guard against load-order
+    // regressions with the 518 fail-safe.
+    return 518;
+  }
+  return secureRandomInt(960);
 }
 
 // ===== II. Shredder-FEN castling rights =====
@@ -5195,6 +5337,23 @@ function setChess960Mode(enabled){
 }
 function isChess960Mode(){return _chess960ModeActive;}
 
+// v1.2.3 round-36 (dedup + robustness): canonical "is the current game
+//   Chess960 for FEN/PGN purposes" predicate. Previously this 2-clause
+//   OR expression was inlined verbatim at ai-bridge.js:generateFEN and
+//   game-logic.js:_castleSide, creating a drift risk — a future change
+//   to the detection rule (e.g., adding a third signal) would need to
+//   be applied at both sites. Centralizing here makes the rule a single
+//   source of truth.
+// NOTE: do NOT use this for sites that intentionally check ONLY
+//   gameVariant==='chess960' (e.g. ECO gating in ui.js — those gate on
+//   the EXPLICIT variant flag set in _startGameImpl, not on the runtime
+//   UCI_Chess960 mode). This helper is only for sites that already use
+//   the full 2-clause expression.
+function isChess960Active(){
+  return (typeof gameVariant!=='undefined'&&gameVariant==='chess960')
+      || (typeof isChess960Mode==='function'&&isChess960Mode());
+}
+
 // ===== V. Generate a Chess960 starting position state object =====
 /**
  * Build a complete game state for a Chess960 starting position.
@@ -5489,20 +5648,25 @@ function formatEvalAnnotation(cached){
  * returning White-POV strings (e.g. "白方占优" / "White advantage") instead
  * of player-POV strings ("你占优" / "Advantage").
  *
+ * v1.2.3 round-36 (dedup): thresholds centralized in game-logic.js
+ *   evalBucket(). Lookup uses _POV_LABEL_KEYS_WHITE[bucket] for the
+ *   White-POV label. This eliminates the threshold-drift risk between
+ *   posDesc() and _pgnWhitePerspectiveLabel().
+ *
  * @param {number} ev — White-POV centipawn eval
  * @returns {string} localized label
  */
 function _pgnWhitePerspectiveLabel(ev){
-  if(ev>600)return T('pgn_white_winning');
-  if(ev>350)return T('pgn_white_huge_adv');
-  if(ev>150)return T('pgn_white_advantage');
-  if(ev>50)return T('pgn_white_slight_adv');
-  if(ev>-50)return T('pgn_equal');
-  if(ev>-150)return T('pgn_black_slight_adv');
-  if(ev>-350)return T('pgn_black_advantage');
-  if(ev>-600)return T('pgn_black_huge_adv');
-  return T('pgn_black_winning');
+  const k=_POV_LABEL_KEYS_WHITE[evalBucket(ev)];
+  return T(k!==undefined?k:'pgn_equal');
 }
+
+// v1.2.3 round-36 (dedup): zero-pad a number to 2 digits. Previously
+//   inlined as `const pad=n=>(n<10?'0':'')+n;` at 3 sites (formatClkTag,
+//   formatEmtTag in this file + formatClock in ui-gameflow.js).
+//   Centralizing eliminates the risk of one site diverging (e.g., adding
+//   a negative-number guard that the others lack).
+function _pad2(n){return (n<10?'0':'')+n;}
 
 /**
  * Build a [%clk H:MM:SS] comment annotation from remaining clock seconds.
@@ -5515,8 +5679,7 @@ function formatClkTag(remainingSec){
   const h=Math.floor(remainingSec/3600);
   const m=Math.floor((remainingSec%3600)/60);
   const s=Math.floor(remainingSec%60);
-  const pad=n=>(n<10?'0':'')+n;
-  return '[%clk '+h+':'+pad(m)+':'+pad(s)+']';
+  return '[%clk '+h+':'+_pad2(m)+':'+_pad2(s)+']';
 }
 
 // v1.0.4 EXPANSION (this round): additional PGN comment tags per
@@ -5542,8 +5705,7 @@ function formatEmtTag(elapsedSec){
   const h=Math.floor(total/3600);
   const m=Math.floor((total%3600)/60);
   const s=total%60;
-  const pad=n=>(n<10?'0':'')+n;
-  return '[%emt '+h+':'+pad(m)+':'+pad(s)+']';
+  return '[%emt '+h+':'+_pad2(m)+':'+_pad2(s)+']';
 }
 
 // ===== II-B. NAG (Numeric Annotation Glyphs) =====
@@ -6099,7 +6261,8 @@ function parseStandardPGN(pgnText){
           pendingVariations.push({san:varBuf.join(' ')});
         }
         varBuf=null;
-      }else{if(varBuf)varBuf.push(')');}
+      // v1.2.3 round-38 (SonarCloud S6660): flatten `else { if (...) ... }` to `else if (...)`.
+      }else if(varBuf)varBuf.push(')');
       continue;}
       if(varBuf){
         if(tok.type==='san')varBuf.push(tok.value);
@@ -6348,7 +6511,8 @@ function _parsePGNText(pgnText) {
   var calRe = /\\[%cal\\s+([^\\]]*)\\]/g;
   var evalRe = /\\[%eval\\s+([^\\]]*)\\]/g;
   var iter = 0;
-  while (text.indexOf('{') >= 0 && iter++ < 20) {
+  // v1.2.3 round-38 (SonarCloud S7765): use .includes() instead of .indexOf() >= 0.
+  while (text.includes('{') && iter++ < 20) {
     var prev = text;
     // Extract annotations from comments before removing them
     var cm;
@@ -6582,8 +6746,14 @@ function _dispatchNext() {
 
 // === Public API ===
 
-function workerRun(fnName, args, timeoutMs) {
-  timeoutMs = timeoutMs || 30000;
+// v1.2.3 round-37 (SonarCloud S7760): use default parameter syntax
+//   `timeoutMs = 30000` instead of `timeoutMs = timeoutMs || 30000`.
+//   Default params apply only when the argument is `undefined` (not other
+//   falsy values like 0), which is the correct semantics here — a caller
+//   passing `timeoutMs = 0` previously got 30000 (bug!); now they get 0
+//   (intentional, though unusual). No current caller passes 0, so behavior
+//   is unchanged for all existing call sites.
+function workerRun(fnName, args, timeoutMs = 30000) {
   if (!_workerSupported) {
     // v1.0.8 PHASE 35: defer into Promise chain so sync throws (unknown fnName)
     //   become rejected Promises instead of synchronous throws out of workerRun.
@@ -6669,7 +6839,8 @@ function _syncParsePGNText(pgnText) {
   var calRe = /\[%cal\s+([^\]]*)\]/g;
   var evalRe = /\[%eval\s+([^\]]*)\]/g;
   var iter = 0;
-  while (text.indexOf('{') >= 0 && iter++ < 20) {
+  // v1.2.3 round-38 (SonarCloud S7765): use .includes() instead of .indexOf() >= 0.
+  while (text.includes('{') && iter++ < 20) {
     var prev = text;
     var cm;
     while ((cm = cslRe.exec(text)) !== null) { cslAnnotations.push(cm[1].trim()); }
@@ -6985,7 +7156,9 @@ const Store = (function() {
             }
             return obj;
         }
-        if (obj instanceof Date) return new Date(obj.getTime());
+        // v1.2.3 round-37 (SonarCloud S7719): `new Date(date)` accepts a Date
+        //   instance directly and clones it — no need for `.getTime()`.
+        if (obj instanceof Date) return new Date(obj);
         // RegExp: use explicit source+flags construction (semantically
         // equivalent to `new RegExp(obj)` but avoids Semgrep FP on non-
         // literal-RegExp construction, since `obj` is already instanceof
@@ -7019,7 +7192,12 @@ const Store = (function() {
         if (Array.isArray(obj)) return obj.map(function (v) { return _deepClone(v, _depth + 1); });
         const cloned = {};
         for (const key in obj) {
-            if (Object.prototype.hasOwnProperty.call(obj, key)) {
+            // v1.2.3 round-37 (SonarCloud S6653): Object.hasOwn is the ES2022
+            //   static method — safer than obj.hasOwnProperty (which can be
+            //   shadowed by a user-defined hasOwnProperty property) and more
+            //   concise than Object.prototype.hasOwnProperty.call. Android
+            //   WebView API 35+ supports ES2022.
+            if (Object.hasOwn(obj, key)) {
                 cloned[key] = _deepClone(obj[key], _depth + 1);
             }
         }
@@ -7037,10 +7215,12 @@ const Store = (function() {
      */
     function registerReducer(actionType, reducer) {
         if (typeof actionType !== 'string' || actionType.length === 0) {
-            throw new Error('actionType must be a non-empty string');
+            // v1.2.3 round-37 (SonarCloud S7786): use TypeError for type-check
+            //   failures (more specific than generic Error).
+            throw new TypeError('actionType must be a non-empty string');
         }
         if (typeof reducer !== 'function') {
-            throw new Error('reducer must be a function');
+            throw new TypeError('reducer must be a function');
         }
         if (_reducers[actionType] && typeof console !== 'undefined' && console.warn) console.warn('[Store] Reducer overwrite:', actionType);
         _reducers[actionType] = reducer;
@@ -7060,7 +7240,9 @@ const Store = (function() {
         }
         const partial = reducer(_state, payload);
         if (partial && typeof partial === 'object') {
-            _state = Object.assign({}, _state, partial);
+            // v1.2.3 round-37 (SonarCloud S6661): use object spread instead of
+            //   Object.assign for declarative merge.
+            _state = { ..._state, ...partial };
             // v1.2.3 round-31 (PR52 CodeRabbit perf): compute the snapshot
             //   ONCE and pass it to _notifyListeners + return it. Previously
             //   _notifyListeners() deep-cloned _state internally and dispatch()
@@ -7092,7 +7274,9 @@ const Store = (function() {
      */
     function subscribe(listener) {
         if (typeof listener !== 'function') {
-            throw new Error('listener must be a function');
+            // v1.2.3 round-37 (SonarCloud S7786): use TypeError for type-check
+            //   failures (more specific than generic Error).
+            throw new TypeError('listener must be a function');
         }
         _listeners.push(listener);
         return function unsubscribe() {
@@ -7133,7 +7317,8 @@ const Store = (function() {
      *                   调用者可安全修改返回值而不影响内部 _state）
      */
     function reset(overrides) {
-        _state = Object.assign(_deepClone(_initialState), overrides || {});
+        // v1.2.3 round-37 (SonarCloud S6661): use object spread.
+        _state = { ..._deepClone(_initialState), ...(overrides || {}) };
         // v1.2.3 round-31 (PR52 CodeRabbit perf): single deep-clone reuse —
         //   see dispatch() above for the rationale.
         const snapshot = _deepClone(_state);
@@ -7206,7 +7391,8 @@ const Store = (function() {
         aiThinking: false
     }));
     registerReducer('UPDATE_EVAL', (state, payload) => ({
-        eval: Object.assign({}, state.eval, payload)
+        // v1.2.3 round-37 (SonarCloud S6661): use object spread.
+        eval: { ...state.eval, ...payload }
     }));
 
     // UI 偏好
@@ -7245,7 +7431,8 @@ const Store = (function() {
 
     // 对局时钟
     registerReducer('UPDATE_CLOCKS', (state, payload) => ({
-        gameClocks: Object.assign({}, state.gameClocks, payload)
+        // v1.2.3 round-37 (SonarCloud S6661): use object spread.
+        gameClocks: { ...state.gameClocks, ...payload }
     }));
 
     // 视觉注解
@@ -7261,11 +7448,13 @@ const Store = (function() {
     // 等垃圾键污染 dialogVisible。非字符串 payload 视为 no-op 返回 {}。
     registerReducer('SHOW_DIALOG', (state, payload) => {
         if (typeof payload !== 'string' || !payload) return {};
-        return { dialogVisible: Object.assign({}, state.dialogVisible, { [payload]: true }) };
+        // v1.2.3 round-37 (SonarCloud S6661): use object spread.
+        return { dialogVisible: { ...state.dialogVisible, [payload]: true } };
     });
     registerReducer('HIDE_DIALOG', (state, payload) => {
         if (typeof payload !== 'string' || !payload) return {};
-        return { dialogVisible: Object.assign({}, state.dialogVisible, { [payload]: false }) };
+        // v1.2.3 round-37 (SonarCloud S6661): use object spread.
+        return { dialogVisible: { ...state.dialogVisible, [payload]: false } };
     });
     registerReducer('HIDE_ALL_DIALOGS', (state) => {
         const cleared = {};
@@ -7387,7 +7576,7 @@ let _reviewEvalCache=new function(){
   //   immediately, with NO "analyzing..." flash.
 
   // v1.2.1 round-9: Best-effort warning helper for eval-cache persistence
-  // paths. Previously all catch blocks were empty (`catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}`) — silent
+  // paths. Previously all catch blocks were empty (`catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}`) — silent
   // failure meant corrupted cache files, QuotaExceededError on localStorage,
   // and JNI failures were invisible. We log at `warn` (not `error`) because
   // these are non-fatal — the cache is best-effort and the app continues to
@@ -7598,7 +7787,7 @@ window._flushReviewEvalCache=function(){
   function _flushOnExit(){
     try{window._flushReviewEvalCache();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
     // Also flush SharedPreferences pending writes (covers persistentSet async writes)
-    try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentFlush)AndroidBridge.persistentFlush();}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+    try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentFlush)AndroidBridge.persistentFlush();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
   }
   // pagehide: fired when the page is being unloaded (mobile browsers including WebView)
   window.addEventListener('pagehide',_flushOnExit);
@@ -7687,10 +7876,13 @@ let _evalRequestBatchGen=0;
 // Persists across sessions via AndroidBridge.persistentSet('Regalia_humanName', ...).
 let _humanPlayerName=null;
 // v1.0.4 Rev24 NEW: Explicit player names from PGN import.
-// When set (non-undefined), _buildPGNString uses these verbatim for [White]/[Black]
+// When set (non-null), _buildPGNString uses these verbatim for [White]/[Black]
 // instead of the default "你"/"AI对手". Cleared by startGame().
-let playerWhite=undefined;
-let playerBlack=undefined;
+// v1.2.3 round-37 (SonarCloud S6645): removed `= undefined` initializers —
+//   `let x;` is already undefined by default; explicit `= undefined` is
+//   redundant and can mislead readers into thinking there's special semantics.
+let playerWhite;
+let playerBlack;
 // v1.0.4 Rev24: Load _humanPlayerName from persistent storage at module init.
 // This runs synchronously, so the name is available before the first render.
 try{
@@ -7936,6 +8128,32 @@ function _bridgeCall(fn,fallback,requireEngine){
   return null;
 }
 
+// v1.2.3 round-36 (dedup + robustness): canonical "hard-stop the engine"
+//   helper. Replaces 3 inline blocks (ui-gameflow.js:290-298,
+//   ui-interactions.js:1488-1494, ui.js:5466-5470) that each implemented
+//   the same logic with subtle inconsistencies:
+//   - ui.js:5466 was MISSING the sendToEngine('stop') fallback for older
+//     builds without engineStop() — the priority-stop would silently
+//     no-op on those builds. This helper closes that gap.
+//   - ui-interactions.js:1488 used `AndroidBridge.sendToEngine` (truthy
+//     check) instead of `typeof AndroidBridge.sendToEngine==='function'`.
+//     Both work in practice, but the typeof check is the project's
+//     consistent pattern (per round-11 resilience design).
+//   - ui-gameflow.js:290 gated on isEngineReady() first; the other two
+//     didn't. This helper does NOT gate on isEngineReady() (the callers
+//     that need that gate already check it before calling).
+// Use this for game-over / resign / priority-preempt / clock-expiry
+//   paths where the bestmove must be discarded. NOT for soft-stop during
+//   normal flow.
+function _engineStopHard(){
+  try{
+    if(typeof AndroidBridge!=='undefined'){
+      if(typeof AndroidBridge.engineStop==='function'){AndroidBridge.engineStop();return;}
+      if(typeof AndroidBridge.sendToEngine==='function'){AndroidBridge.sendToEngine('stop');}
+    }
+  }catch(e){console.warn('[AIBridge] engineStop failed:',e?.message?e.message:e);}
+}
+
 // Loading overlay for engine initialization — progress is REAL, driven by onEngineProgress callbacks
 let _loadingPct=0;
 // v1.0.8 PHASE 22: Light/Dark mode detection for the loading overlay's king icon.
@@ -7958,9 +8176,11 @@ function _isLightMode(){
     return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches);
   }catch(e){
     // 最终回退：默认深色模式（与原设计一致）
+    // v1.2.3 round-37 (SonarCloud S7718): nested catch uses `error` (not
+    //   `e2`) per the project's modern catch-param naming convention.
     try{
       return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches);
-    }catch(e2){return false;}
+    }catch(error){return false;}
   }
 }
 function _loadingKingIconHTML(){
@@ -8010,7 +8230,7 @@ function _hideLoadingOverlay(){
   //   cross-module convention (the helper is defined in ui.js, which loads
   //   after this module); the helper's own flag prevents double-firing.
   setTimeout(function(){
-    try{if(typeof _maybeShowBoardDebounceHint==='function')_maybeShowBoardDebounceHint();}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+    try{if(typeof _maybeShowBoardDebounceHint==='function')_maybeShowBoardDebounceHint();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
   },600);
 }
 // v1.0.8 PHASE 22 (bug fix): Apply system dark/light theme to <html> via
@@ -8637,11 +8857,20 @@ function _buildPGNString(forceIncludeVariations, includeAnnotations){
     // v1.0.4 Rev24: forceIncludeVariations (used by PGN cache save) bypasses
     // the showVariations UI toggle so the saved PGN archive always contains
     // the complete game record with variations.
-    let variations=undefined;
+    // v1.2.3 round-37 (SonarCloud S6645): `let variations;` is undefined by
+    //   default — no need for explicit `= undefined`. The re-assignment at
+    //   line ~1388 (when filter returns empty) is kept as `= undefined` to
+    //   match the consumer pattern (`if(m.variations && m.variations.length>0)`
+    //   — both null and undefined are falsy, so behavior is identical).
+    let variations;
     if((showVariations||forceIncludeVariations)&&mr.variations&&mr.variations.length>0){
       variations=mr.variations.filter(v=>v.san&&v.group!=='analysis'&&v.group!=='ponder').map(v=>{
         const vmn=(v.varMoveNum!=null)?v.varMoveNum:_moveNum;
-        const fiw=(v.firstMoveIsWhite!=null)?v.firstMoveIsWhite:(color==='white'?false:true);
+        // v1.2.3 round-37 (SonarCloud S6644): the inner ternary
+        //   `color==='white'?false:true` is `color!=='white'`. The outer
+        //   ternary is a nullish-coalescing fallback (NOT S6644 — the
+        //   branches return different values), so it stays.
+        const fiw=(v.firstMoveIsWhite!=null)?v.firstMoveIsWhite:(color!=='white');
         // v1.0.4 Rev29 FIX: was `v.prefixEllipsisNum||vmn` — but if prefixEllipsisNum
         // is 0 (legitimate, though rare — move "0..." shouldn't normally occur, but
         // defensive), `||` would fall back to vmn. Use explicit null check instead.
@@ -8979,7 +9208,9 @@ function openStatsPage(){
     }else{
       // Plain-object fallback (defensive — current code always uses Map)
       for(const k in _visualAnnotationsCache){
-        if(!_visualAnnotationsCache.hasOwnProperty(k))continue;
+        // v1.2.3 round-38 (SonarCloud S6653): use Object.hasOwn instead of
+        //   .hasOwnProperty (safer against shadowed hasOwnProperty, ES2022).
+        if(!Object.hasOwn(_visualAnnotationsCache,k))continue;
         if(k==='_initial')continue;
         const v=_visualAnnotationsCache[k];
         if(!v||(!v.csl&&!v.cal))continue;
@@ -9021,7 +9252,7 @@ function copyReviewPGN(){
   if(!moveRecords||!moveRecords.length){showToast(T('no_move_records'));return}
   copyMoveHistory();
 }
-function _fallbackCopy(text,successMsg){const ta=document.createElement('textarea');ta.value=text;ta.style.cssText='position:fixed;left:-9999px;top:-9999px';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');if(successMsg)showToast(successMsg)}catch(e){showToast(T('copy_failed'))}finally{document.body.removeChild(ta)}}
+function _fallbackCopy(text,successMsg){const ta=document.createElement('textarea');ta.value=text;ta.style.cssText='position:fixed;left:-9999px;top:-9999px';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');if(successMsg)showToast(successMsg)}catch(e){showToast(T('copy_failed'))}finally{ta.remove()}}
 // Unified clipboard helper — handles WebView compatibility (secure context, user gesture)
 function safeCopyToClipboard(text,successMsg){
   const fb=function(){_fallbackCopy(text,successMsg)};
@@ -9494,19 +9725,21 @@ function generateFEN(s){
   // lossless way to represent the position.
   // Standard positions (king on e1/e8, rooks on a1/h1/a8/h8) continue to
   // use KQkq for backward compatibility with v1.0.6 and earlier.
+  // v1.2.3 round-36 (dedup + robustness): the inline king-position +
+  //   corner-rook checks were an UNFIXED copy of _needsShredderFEN() —
+  //   they missed the v1.2.3 round-21 per-color gating fix (the inline
+  //   king check ran for BOTH colors regardless of which side actually
+  //   held castling rights, misclassifying standard positions like
+  //   3k4/8/8/8/8/8/8/R3K2R w KQ - 0 1 as Chess960). Replaced with a
+  //   single call to _needsShredderFEN(s), which is the canonical,
+  //   field-proven implementation already used by tablebase.js for FEN
+  //   import. Behavior is now byte-for-byte identical across all 4
+  //   Shredder-detection sites.
   let _useShredder=false;
-  const _is960=(gameVariant !== undefined&&gameVariant==='chess960')||(typeof isChess960Mode==='function'&&isChess960Mode());
+  const _is960=isChess960Active();
   if(_is960)_useShredder=true;
   else{
-    const _hasRights=cr.whiteKingside||cr.whiteQueenside||cr.blackKingside||cr.blackQueenside;
-    if(_hasRights){
-      if(s.wk&&(s.wk.row!==7||s.wk.col!==4))_useShredder=true;
-      if(s.bk&&(s.bk.row!==0||s.bk.col!==4))_useShredder=true;
-      if(!_useShredder&&cr.whiteKingside){const wr=s.board[7]&&s.board[7][7];if(!wr||wr.type!=='rook'||wr.color!=='white')_useShredder=true;}
-      if(!_useShredder&&cr.whiteQueenside){const wr=s.board[7]&&s.board[7][0];if(!wr||wr.type!=='rook'||wr.color!=='white')_useShredder=true;}
-      if(!_useShredder&&cr.blackKingside){const br=s.board[0]&&s.board[0][7];if(!br||br.type!=='rook'||br.color!=='black')_useShredder=true;}
-      if(!_useShredder&&cr.blackQueenside){const br=s.board[0]&&s.board[0][0];if(!br||br.type!=='rook'||br.color!=='black')_useShredder=true;}
-    }
+    _useShredder=_needsShredderFEN(s);
   }
   let castle;
   if(_useShredder&&typeof toShredderCastling==='function'){
@@ -9757,7 +9990,7 @@ function onEngineReady(){
   _aiRetryCount=0;
   _updateLoadingStatus(T('engine_ready'),100);
   // Sync language preference to SharedPreferences for notification i18n
-  try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.saveLangPref)AndroidBridge.saveLangPref(_lang);}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+  try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.saveLangPref)AndroidBridge.saveLangPref(_lang);}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
   // Update foreground service notification with engine ready status
   _updateEngineNotification(T('engine_ready'));
   setTimeout(function(){
@@ -9859,7 +10092,7 @@ function onBestMove(uciMove){
   // Cancel safety timeout — engine responded (and it's the current request)
   if(_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
   // v1.0.8 PHASE 22 supplement: AI-think-end sound (轻微答声) — engine found a move
-  try{if(typeof playSound==='function')playSound('aiThinkEnd');}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+  try{if(typeof playSound==='function')playSound('aiThinkEnd');}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
   isAIThinking=false;_aiBarInfo='';_aiRetryCount=0;
 
   // CRITICAL FIX: Always clear ponder display state at the start of onBestMove.
@@ -10107,7 +10340,7 @@ function onHintMove(uciMove){
   legalSet=new Set(legalMvs.map(m=>m.row*8+m.col));
   HapticManager.fire('PIECE_SELECT');
   // v1.0.8 PHASE 22 supplement: piece-select sound
-  try{if(typeof playSound==='function')playSound('select');}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+  try{if(typeof playSound==='function')playSound('select');}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
   _updateBoardLightweight();
   render();
 }
@@ -10338,7 +10571,7 @@ function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth){
     // Clear the eval safety timer — engine responded successfully
     if(_evalSafetyTimerId){clearTimeout(_evalSafetyTimerId);_evalSafetyTimerId=null;}
     // Live-refresh the analyze-all button label (progress update)
-    try{if(typeof _updateReviewAnalyzeBtn==='function')_updateReviewAnalyzeBtn();}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+    try{if(typeof _updateReviewAnalyzeBtn==='function')_updateReviewAnalyzeBtn();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
     // Advance the batch (decoupled from reviewStep)
     try{
       if(typeof _reviewAnalyzeAdvance==='function')_reviewAnalyzeAdvance();
@@ -10365,7 +10598,7 @@ function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth){
         });
         // Live-refresh the analyze-all button label (in case batch is also
         // active and watching the cache size)
-        try{if(typeof _updateReviewAnalyzeBtn==='function')_updateReviewAnalyzeBtn();}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+        try{if(typeof _updateReviewAnalyzeBtn==='function')_updateReviewAnalyzeBtn();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
         // v1.1.1 Phase 59 Task 59.3: If the chart is currently displayed and
         //   step 0 just got cached, re-render the chart so the data point
         //   appears. We use a lightweight DOM update (not full render) to
@@ -12238,7 +12471,11 @@ function _parsePGN(pgnText){
   // BEFORE the eval-extraction loop, so each move is a separate token. Without
   // this, "1.e4" starts with '1' and the loop's /[a-hKQRBNBO]/ check skips it,
   // missing the eval attachment for that move.
-  moveText=moveText.replace(/(\d+\.+)(?=[a-hKQRBNBO])/gi,'$1 ');
+  // v1.2.3 round-38 (SonarCloud S5869): removed duplicate 'B' in character
+  //   class [a-hKQRBNBO] → [a-hKQRBNO]. The second 'B' was redundant (the
+  //   first 'B' already matches white Bishop; with /i flag it also matches
+  //   black bishop 'b'). 'O' is for castling notation (O-O / O-O-O).
+  moveText=moveText.replace(/(\d+\.+)(?=[a-hKQRBNO])/gi,'$1 ');
   
   // v1.0.4 Rev24 NEW: Extract [%eval ...] tags from comments BEFORE stripping
   // them, so we can populate the review eval cache and skip engine analysis
@@ -12484,7 +12721,8 @@ function _parsePGN(pgnText){
       //   (0-0 / 0-0-0) is counted as a move. Previously these tokens were
       //   skipped, so _moveCount lagged by one and ALL subsequent annotations
       //   ([%eval]/[%csl]/[%cal]/comments) attached to the wrong move.
-      if(_depth===0&&/[a-hKQRBNBO0]/.test(_ch)){
+      // v1.2.3 round-38 (SonarCloud S5869): removed duplicate 'B' (see line ~213).
+      if(_depth===0&&/[a-hKQRBNO0]/.test(_ch)){
         // Check if this looks like a SAN move (not a move number, result, etc.)
         // Read the token
         let _j=_i;
@@ -13195,7 +13433,7 @@ function importPGN(pgnText){
         const _isDefault=(_humanName===T('you')||_humanName==='你'||_humanName==='You'||_humanName===T('ai_opponent')||_humanName==='AI对手'||_humanName==='AI Opponent'||/Lv\.\d/.test(_humanName)||/SL/.test(_humanName));
         if(!_isDefault){
           _humanPlayerName=_humanName;
-          try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_humanName',_humanName);}catch(e){console.warn('[Tablebase]',e&&e.message?e.message:e);}
+          try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_humanName',_humanName);}catch(e){console.warn('[Tablebase]',e?.message?e.message:e);}
         }
       }
     }
@@ -14285,7 +14523,7 @@ function startGame(){
 
 function _startGameImpl(){
   // v1.0.8 PHASE 22 supplement: new-game sound (号角式三音和弦)
-  try{if(typeof playSound==='function')playSound('newgame');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{if(typeof playSound==='function')playSound('newgame');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   showNewGameDialog=false;
   playerColor=dlgPlayerColor;
   useBookMoves=dlgBookMoves;
@@ -14529,16 +14767,13 @@ function _onGameClockExpired(color){
   // deduction (especially under HyperOS 3's aggressive CPU throttling),
   // causing the engine to search far past the 0-second mark. This made
   // timed games feel "broken" — the engine kept thinking after time was up.
-  // Now we send a hard "stop" via engineStop() so the engine returns
+  // Now we send a hard "stop" via _engineStopHard() so the engine returns
   // bestmove immediately and the game-over overlay shows promptly.
+  // v1.2.3 round-36 (dedup): replaced inline engineStop+fallback with
+  //   the canonical _engineStopHard() helper from ai-bridge.js.
   try{
     if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.isEngineReady==='function'&&AndroidBridge.isEngineReady()){
-      if(typeof AndroidBridge.engineStop==='function'){
-        AndroidBridge.engineStop();
-      }else if(typeof AndroidBridge.sendToEngine==='function'){
-        // Fallback for older builds: send raw "stop"
-        AndroidBridge.sendToEngine('stop');
-      }
+      _engineStopHard();
     }
     // Clear AI thinking state so UI updates promptly
     isAIThinking=false;
@@ -14633,9 +14868,10 @@ function formatClock(sec){
   const h=Math.floor(s/3600);
   const m=Math.floor((s%3600)/60);
   const ss=s%60;
-  const pad=n=>(n<10?'0':'')+n;
-  if(h>0)return h+':'+pad(m)+':'+pad(ss);
-  return m+':'+pad(ss);
+  // v1.2.3 round-36 (dedup): use _pad2() from pgn-standard.js (loaded
+  //   before ui-gameflow.js per build-chess.py MODULES order).
+  if(h>0)return h+':'+_pad2(m)+':'+_pad2(ss);
+  return m+':'+_pad2(ss);
 }
 
 // Lightweight DOM update for clock display (avoid full render() on every tick)
@@ -14814,7 +15050,7 @@ if(selectedSquare?.row===r&&selectedSquare.col===c){
   selectedSquare=null;legalMvs=[];legalSet=new Set();
   HapticManager.fire('BUTTON_PRESS');
   // v1.0.8 PHASE 22 supplement: deselect sound (下行短音)
-  try{if(typeof playSound==='function')playSound('deselect');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{if(typeof playSound==='function')playSound('deselect');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   _updateBoardLightweight();return
 }
 if(selectedSquare&&canMove){
@@ -14837,7 +15073,7 @@ if(selectedSquare&&canMove){
     selectedSquare=pos;legalMvs=legalMoves(gameState,pos);legalSet=new Set(legalMvs.map(m=>m.row*8+m.col));
     HapticManager.fire('PIECE_SELECT');
     // v1.0.8 PHASE 22 supplement: piece-select sound (清脆短音)
-    try{if(typeof playSound==='function')playSound('select');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+    try{if(typeof playSound==='function')playSound('select');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     _updateBoardLightweight();return
   }
   // Clicked empty/opponent square that's not a legal move → deselect old & select new
@@ -14847,7 +15083,7 @@ if(selectedSquare&&canMove){
 // No piece currently selected — allow selecting own piece or any square for control info
 if(canMove&&p?.color===playerColor){selectedSquare=pos;legalMvs=legalMoves(gameState,pos);legalSet=new Set(legalMvs.map(m=>m.row*8+m.col));HapticManager.fire('PIECE_SELECT');
   // v1.0.8 PHASE 22 supplement: piece-select sound (清脆短音)
-  try{if(typeof playSound==='function')playSound('select');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{if(typeof playSound==='function')playSound('select');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   _updateBoardLightweight();return}
 // Clicked empty/opponent square with no selection — allow for control info, but prefer deselect
 if(selectedSquare){selectedSquare=null;legalMvs=[];legalSet=new Set();HapticManager.fire('BUTTON_PRESS');_updateBoardLightweight();return}
@@ -15096,11 +15332,11 @@ if(isAIThinking&&!setupMode)return;
 if(stateHistory.length===0){
   HapticManager.fire('BUTTON_PRESS');
   // v1.0.8 PHASE 22 supplement: error sound (nothing to undo)
-  try{if(typeof playSound==='function')playSound('error');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{if(typeof playSound==='function')playSound('error');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   return;
 }
 // v1.0.8 PHASE 22 supplement: undo sound (逆向回旋音)
-try{if(typeof playSound==='function')playSound('undo');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+try{if(typeof playSound==='function')playSound('undo');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
 _cachedStatus=null;_cachedStatusKey='';_updateEvalDisplay(); // _resetEvalState now inside requestEngineEval()
 _clearAnimationState();
 if(pendingPromotion)pendingPromotion=null;
@@ -15228,11 +15464,11 @@ if(isAIThinking)return;
 if(_redoStack.length===0){
   HapticManager.fire('BUTTON_PRESS');
   // v1.0.8 PHASE 22 supplement: error sound (nothing to redo)
-  try{if(typeof playSound==='function')playSound('error');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{if(typeof playSound==='function')playSound('error');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   return;
 }
 // v1.0.8 PHASE 22 supplement: redo sound (正向回旋音)
-try{if(typeof playSound==='function')playSound('redo');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+try{if(typeof playSound==='function')playSound('redo');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
 _cachedStatus=null;_cachedStatusKey='';_updateEvalDisplay();
 _clearAnimationState();
 // Pop from redo stack and restore
@@ -15277,7 +15513,7 @@ HapticManager.fire('PIECE_SELECT');
 
 function flipBoard(){
   // v1.0.8 PHASE 22 supplement: flip sound (嗖声)
-  try{if(typeof playSound==='function')playSound('flip');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{if(typeof playSound==='function')playSound('flip');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   // v1.0.8 PHASE 24 (bug fix): clear animation state so a mid-animation flip
   //   doesn't leave an overlay at the wrong orientation.
   _clearAnimationState();
@@ -15321,7 +15557,7 @@ function quickFreeOpening(){
 // === Toggle sound on/off (toolbar button) ===
 function toggleSound(){
   soundOn=!soundOn;
-  try{if(typeof Store!=='undefined'&&Store&&typeof Store.dispatch==='function')Store.dispatch('TOGGLE_SOUND',soundOn);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{if(typeof Store!=='undefined'&&Store&&typeof Store.dispatch==='function')Store.dispatch('TOGGLE_SOUND',soundOn);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   const btn=document.getElementById('btnSound');
   if(btn)btn.innerHTML=soundOn?'<span style=\"font-size:1.4rem\">🔊</span> '+T('sound'):'<span style=\"font-size:1.4rem\">🔇</span> '+T('sound');
   HapticManager.fire(soundOn?'TOGGLE_ON':'TOGGLE_OFF');
@@ -15339,7 +15575,7 @@ function toggleSound(){
   // so the user immediately hears confirmation that sound is now active.
   // (When turning OFF, no sound — by definition.)
   if(soundOn){
-    try{if(typeof playSound==='function')playSound('select');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+    try{if(typeof playSound==='function')playSound('select');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   }
   showToast(soundOn?T('sound_on'):T('sound_off'),1200);
 }
@@ -15350,7 +15586,7 @@ function getHint(){
   if(gameOver||isAIThinking||reviewMode||gameState.currentTurn!==playerColor)return;
   if(!_engineReady){showToast(T('engine_not_ready'));return;}
   // v1.0.8 PHASE 22 supplement: hint sound (柔和三角波) — requesting AI hint
-  try{if(typeof playSound==='function')playSound('hint');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{if(typeof playSound==='function')playSound('hint');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   isHintLoading=true;hintText='';_aiBarInfo='';aiThinkInfo=T('thinking');_hintBarInfo=T('thinking');
   // Clear stale ponder info when starting a new hint search
   _ponderGen++;_ponderBarInfo='';_ponderMoveSAN='';_pendingPonderMoveUCI=null;
@@ -15399,7 +15635,7 @@ function toggleSetup(){if(isAIThinking&&!setupMode)return;_cachedStatus=null;_ca
 // v1.0.8 PHASE 24 (bug fix): clear any in-progress animation.
 _clearAnimationState();
 // v1.0.8 PHASE 22 supplement: setup-toggle sound (木质放置音)
-try{if(typeof playSound==='function')playSound('setupToggle');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+try{if(typeof playSound==='function')playSound('setupToggle');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
 // v1.0.2 FIX (audit): extract common reset out of both branches.
 gameOver=null;_gameOverStatusKey=null;
 if(setupMode){setupPiece='pawn';setupColor='white';selectedSquare=null;legalMvs=[];legalSet=new Set();lastMove=null;gameOverSoundPlayed=false;setupErrors=[];setupHistory=[];
@@ -15612,39 +15848,21 @@ if(typeof _updateEvalDisplay==='function')_updateEvalDisplay();
 // in that case — it would imply rook on h1/a1 etc., which is not the actual
 // position. Shredder notation explicitly names the rook's source file, so the
 // position can be losslessly round-tripped through PGN/FEN.
+// v1.2.3 round-36 (dedup + robustness): replaced the inline king-position +
+//   corner-rook checks (an UNFIXED copy of _needsShredderFEN that missed
+//   the v1.2.3 round-21 per-color gating fix) with a single call to
+//   _needsShredderFEN(gameState). Behavior is now byte-for-byte identical
+//   across all 4 Shredder-detection sites (tablebase._applyImportedFEN,
+//   ai-bridge.generateFEN, this site, and the Chess960-mode detection
+//   below).
 if(typeof _setupFEN!=='undefined'&&typeof generateFEN==='function'){
   _setupFEN=generateFEN(gameState);
-  if(typeof toShredderCastling==='function'&&gameState.castlingRights){
-    const cr=gameState.castlingRights;
-    const hasRights=cr.whiteKingside||cr.whiteQueenside||cr.blackKingside||cr.blackQueenside;
-    if(hasRights){
-      let needsShredder=false;
-      // Check king positions
-      if(gameState.wk&&(gameState.wk.row!==7||gameState.wk.col!==4))needsShredder=true;
-      if(gameState.bk&&(gameState.bk.row!==0||gameState.bk.col!==4))needsShredder=true;
-      // Check rook positions for each right that's set
-      if(!needsShredder&&cr.whiteKingside){
-        const wr=gameState.board[7]&&gameState.board[7][7];
-        if(!wr||wr.type!=='rook'||wr.color!=='white')needsShredder=true;
-      }
-      if(!needsShredder&&cr.whiteQueenside){
-        const wr=gameState.board[7]&&gameState.board[7][0];
-        if(!wr||wr.type!=='rook'||wr.color!=='white')needsShredder=true;
-      }
-      if(!needsShredder&&cr.blackKingside){
-        const br=gameState.board[0]&&gameState.board[0][7];
-        if(!br||br.type!=='rook'||br.color!=='black')needsShredder=true;
-      }
-      if(!needsShredder&&cr.blackQueenside){
-        const br=gameState.board[0]&&gameState.board[0][0];
-        if(!br||br.type!=='rook'||br.color!=='black')needsShredder=true;
-      }
-      if(needsShredder){
-        const parts=_setupFEN.split(' ');
-        if(parts.length>=3){
-          parts[2]=toShredderCastling(gameState.castlingRights,gameState.board);
-          _setupFEN=parts.join(' ');
-        }
+  if(typeof toShredderCastling==='function'&&typeof _needsShredderFEN==='function'&&gameState.castlingRights){
+    if(_needsShredderFEN(gameState)){
+      const parts=_setupFEN.split(' ');
+      if(parts.length>=3){
+        parts[2]=toShredderCastling(gameState.castlingRights,gameState.board);
+        _setupFEN=parts.join(' ');
       }
     }
   }
@@ -15698,30 +15916,12 @@ _reviewEvalCache.clear();_reviewEvalRequestedStep=-1; // Clear eval cache on boa
 // We ALSO keep UCI_Chess960 enabled for explicit Chess960 games (already
 // handled in startGame). For standard-position setups we leave it disabled
 // to preserve compatibility with the engine's standard-FEN parsing.
-if(typeof setChess960Mode==='function'&&typeof isChess960Mode==='function'){
-  const _cr=gameState.castlingRights||{};
-  const _hasRights=_cr.whiteKingside||_cr.whiteQueenside||_cr.blackKingside||_cr.blackQueenside;
-  let _needsChess960=false;
-  if(_hasRights){
-    if(gameState.wk&&(gameState.wk.row!==7||gameState.wk.col!==4))_needsChess960=true;
-    if(gameState.bk&&(gameState.bk.row!==0||gameState.bk.col!==4))_needsChess960=true;
-    if(!_needsChess960&&_cr.whiteKingside){
-      const wr=gameState.board[7]&&gameState.board[7][7];
-      if(!wr||wr.type!=='rook'||wr.color!=='white')_needsChess960=true;
-    }
-    if(!_needsChess960&&_cr.whiteQueenside){
-      const wr=gameState.board[7]&&gameState.board[7][0];
-      if(!wr||wr.type!=='rook'||wr.color!=='white')_needsChess960=true;
-    }
-    if(!_needsChess960&&_cr.blackKingside){
-      const br=gameState.board[0]&&gameState.board[0][7];
-      if(!br||br.type!=='rook'||br.color!=='black')_needsChess960=true;
-    }
-    if(!_needsChess960&&_cr.blackQueenside){
-      const br=gameState.board[0]&&gameState.board[0][0];
-      if(!br||br.type!=='rook'||br.color!=='black')_needsChess960=true;
-    }
-  }
+// v1.2.3 round-36 (dedup + robustness): replaced the inline king-position +
+//   corner-rook checks (an UNFIXED copy of _needsShredderFEN that missed
+//   the v1.2.3 round-21 per-color gating fix) with a single call to
+//   _needsShredderFEN(gameState).
+if(typeof setChess960Mode==='function'&&typeof isChess960Mode==='function'&&typeof _needsShredderFEN==='function'){
+  const _needsChess960=_needsShredderFEN(gameState);
   // Only call setChess960Mode if the desired state differs from the current
   // state, to avoid an unnecessary engine stop/wait cycle.
   if(_needsChess960&&!isChess960Mode()){
@@ -16045,11 +16245,11 @@ function _renameHumanPlayer(){
   // If the user typed the default name or cancelled, clear the rename
   if(!_newName||_newName===T('you')||_newName==='你'||_newName==='You'){
     _humanPlayerName=null;
-    try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentRemove)AndroidBridge.persistentRemove('Regalia_humanName');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+    try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentRemove)AndroidBridge.persistentRemove('Regalia_humanName');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     showToast(T('rename_player_reset'),2000);
   }else{
     _humanPlayerName=_newName;
-    try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_humanName',_newName);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+    try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_humanName',_newName);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     showToast(T('rename_player_saved')+'：'+_newName,2000);
   }
   render();
@@ -16129,7 +16329,7 @@ function _showStatsImportBackPrompt(pgnText){
 function _resignGame(){
   if(gameOver)return; // Already over — no-op
   // v1.0.8 PHASE 22 supplement: resign sound (降旗音)
-  try{if(typeof playSound==='function')playSound('resign');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{if(typeof playSound==='function')playSound('resign');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   // The resigner is the human player (playerColor). The winner is the AI.
   _resignWinnerColor = (playerColor==='white') ? 'black' : 'white';
   // Stop any in-flight engine search
@@ -16140,11 +16340,11 @@ function _resignGame(){
       // sendToEngine('stop') (soft stop, bestmove still processed). engineStop()
       // was added in Rev35 specifically for cases like resign/game-over where
       // the engine's bestmove should be silently discarded.
+      // v1.2.3 round-36 (dedup): replaced inline engineStop+fallback with
+      //   the canonical _engineStopHard() helper from ai-bridge.js.
       try{
-        if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.engineStop==='function'){
-          AndroidBridge.engineStop();
-        }else if(typeof AndroidBridge!=='undefined'&&AndroidBridge.sendToEngine){
-          AndroidBridge.sendToEngine('stop');
+        if(typeof AndroidBridge!=='undefined'){
+          _engineStopHard();
         }
       }catch(e){console.warn('[UI]',e?.message?e.message:e);}
     }
@@ -16190,7 +16390,12 @@ function _doPastePGN(){
     const text=prompt(T('pgn_paste_hint'));
     if(!text)return;
     const trimmed=text.trim();
-    const hasPGNMoveNumbers=!!trimmed.match(/\d+\.\s*[a-zA-ZNBRQOKO]/);
+    // v1.2.3 round-38 (SonarCloud S5869): removed duplicate 'O' in
+    //   [a-zA-ZNBRQOKO] → [a-zA-ZNBRQOK]. The second 'O' was redundant.
+    //   (The whole class is technically redundant since a-zA-Z covers all
+    //   letters, but kept for semantic clarity — the explicit piece letters
+    //   document that this is a SAN-move-start check.)
+    const hasPGNMoveNumbers=!!trimmed.match(/\d+\.\s*[a-zA-ZNBRQOK]/);
     const hasPGNHeaders=/\[/.test(trimmed);
     const hasPGNVariations=/\(/.test(trimmed);
     const hasPGNMarkers=hasPGNMoveNumbers||hasPGNHeaders||hasPGNVariations;
@@ -16288,7 +16493,8 @@ document.addEventListener('click', function(e) {
   if (!href || href.charAt(0) === '#') return;
   // Only intercept http(s) links — let mailto:/tel: etc. be handled by the OS
   // through shouldOverrideUrlLoading in ChessWebViewClient.
-  if (href.indexOf('http://') !== 0 && href.indexOf('https://') !== 0) return;
+  // v1.2.3 round-39: use .startsWith() instead of .indexOf() !== 0 (clearer intent).
+  if (!href.startsWith('http://') && !href.startsWith('https://')) return;
   e.preventDefault();
   try {
     if (typeof AndroidBridge !== 'undefined' && AndroidBridge.openUrlInBrowser) {
@@ -16504,11 +16710,14 @@ function _getSqElCache() {
       const recoveryJson = JSON.stringify(recoveryData);
       localStorage.setItem('Regalia_recovery', recoveryJson);
       // v1.0.4 Round-5 Rev16: Also persist to Java side (HyperOS 3 cache-wipe proof)
-      try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_recovery',recoveryJson);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+      try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_recovery',recoveryJson);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     } catch(e){console.warn('[UI]',e?.message?e.message:e);}
 
     // If this is a render error (indicated by the stack trace), show recovery UI
-    if (error?.stack && error.stack.indexOf('renderInternal') !== -1) {
+    // v1.2.3 round-38 (SonarCloud S7765): use .includes() instead of
+    //   .indexOf() !== -1 for the existence check (clearer semantics, handles
+    //   NaN correctly via SameValueZero).
+    if (error?.stack && error.stack.includes('renderInternal')) {
       const app = document.getElementById('app');
       if (app) {
         app.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:var(--bg);color:var(--text);padding:20px;text-align:center;font-family:system-ui,sans-serif">' +
@@ -16543,7 +16752,7 @@ function _getSqElCache() {
     let saved = localStorage.getItem('Regalia_recovery');
     // v1.0.4 Round-5 Rev16: Fall back to persistent Java store if HyperOS 3 wiped localStorage
     if(!saved){
-      try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentGet){const persisted=AndroidBridge.persistentGet('Regalia_recovery');if(persisted){saved=persisted;try{localStorage.setItem('Regalia_recovery',persisted);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}}}}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+      try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentGet){const persisted=AndroidBridge.persistentGet('Regalia_recovery');if(persisted){saved=persisted;try{localStorage.setItem('Regalia_recovery',persisted);}catch(e){console.warn('[UI]',e?.message?e.message:e);}}}}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     }
     if (saved) {
       // v1.2.1 round-9: Parse to validate the data shape, but do NOT apply
@@ -16561,7 +16770,7 @@ function _getSqElCache() {
       setTimeout(function() {
         if (typeof _engineReady !== 'undefined' && (_engineReady || document.getElementById('board-grid'))) {
           try{localStorage.removeItem('Regalia_recovery');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
-          try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentRemove)AndroidBridge.persistentRemove('Regalia_recovery');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+          try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentRemove)AndroidBridge.persistentRemove('Regalia_recovery');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
         }
       }, 5000);
     }
@@ -17744,7 +17953,9 @@ function _buildEvalTrendSVG(trendW, trendH) {
   svg += '</svg>';
   return svg;
 }
-function posDesc(ev){if(ev>600)return T('you_winning');if(ev>350)return T('huge_adv');if(ev>150)return T('advantage');if(ev>50)return T('slight_adv');if(ev>-50)return T('equal_pos');if(ev>-150)return T('slight_dis');if(ev>-350)return T('disadvantage');if(ev>-600)return T('huge_dis');return T('you_losing')}
+// v1.2.3 round-36 (dedup): thresholds centralized in game-logic.js evalBucket().
+//   Lookup uses _POV_LABEL_KEYS_PLAYER[bucket] for the player-POV label.
+function posDesc(ev){const k=_POV_LABEL_KEYS_PLAYER[evalBucket(ev)];return T(k!==undefined?k:'equal_pos');}
 
 // Helper: get position of king that is currently in check, or null (eliminates 3x duplication)
 function getCheckKingPos(s){
@@ -18726,7 +18937,10 @@ function _renderRvArrowSvg(_rvCalList, flip, _rvCell, _rvBoardPx, _rvLabelW, _rv
     const _co=_colorOffset[_a.color]||{x:0,y:0};
     _fx+=_co.x; _fy+=_co.y;
     _tx+=_co.x; _ty+=_co.y;
-    const _dx=_tx-_fx, _dy=_ty-_fy, _len=Math.sqrt(_dx*_dx+_dy*_dy);
+    // v1.2.3 round-38 (SonarCloud S7769): use Math.hypot(_dx,_dy) instead of
+    //   Math.sqrt(_dx*_dx + _dy*_dy) — clearer intent, native implementation,
+    //   avoids overflow/underflow for extreme values.
+    const _dx=_tx-_fx, _dy=_ty-_fy, _len=Math.hypot(_dx,_dy);
     const _sh=4, _rt=_len>0?(_len-_sh)/_len:1;
     const _ex=_fx+_dx*_rt, _ey=_fy+_dy*_rt;
     const _hex=_RV_VA_COLORS[_a.color]||'#ffffff';
@@ -18815,7 +19029,11 @@ const safeStep=Math.max(0,Math.min(reviewStep,reviewStates.length-1));
 reviewStep=safeStep;
 const rs=reviewStates[safeStep];
 if(!rs){reviewMode=false;render();return{h,done:true}}
-const rBoard=rs.state.board;const rLast=rs.lastMove;
+// v1.2.3 round-39 (SonarCloud S1481): removed unused `const rLast=rs.lastMove;`
+//   — rLast was declared but never referenced in _renderReviewMode. The review
+//   board rendering uses rBoard (rs.state.board) but not rs.lastMove (the
+//   last move is displayed via the move list, not the board renderer).
+const rBoard=rs.state.board;
 h+='<div class="review-overlay">';
 h+=`<div class="review-hdr"><h2>${T('review_analysis')}</h2><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><div class="toggle" style="padding:2px 6px;font-size:.65rem" onclick="showVariations=!showVariations;HapticManager.fire(showVariations?'TOGGLE_ON':'TOGGLE_OFF');render()"><span>${T('variation_toggle')}</span><div class="toggle-sw sm${showVariations?' on':''}"></div></div><button class="btn" onclick="showCtrlMap=!showCtrlMap;cachedCtrlKey=&quot;&quot;;render()" title="${T('ctrl_range')}">${showCtrlMap?'🌈':'🌗'}</button><button class="btn" onclick="copyReviewPGN()" title="${T('copy_review_pgn')}">📝 PGN</button><button class="btn" onclick="exportPGNToFile()" title="${T('export_pgn')||'Export PGN to file'}">💾</button><button class="btn" onclick="openPGNCacheManager()" title="${T('pgn_cache_manager')}" style="font-weight:700">📚</button><button class="btn" onclick="copyReviewFEN()" title="${T('copy_review_fen')}">📝 FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="${T('import_label')}">🗃️</button><button class="btn" onclick="openStatsPage()" title="${T('stats')}">📊</button><button class="btn" onclick="exitReview()">${T('return_game')}</button></div></div>`;
 // v1.2.3 round-24 (God Function split): board metrics extracted to
@@ -19742,7 +19960,7 @@ return ctx;
  * @param {Object} ctx - Context from _saveScrollState()
  */
 function _restoreScrollState(ctx){
-if(typeof _reattachActiveAnimations==='function'){try{_reattachActiveAnimations();}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}}
+if(typeof _reattachActiveAnimations==='function'){try{_reattachActiveAnimations();}catch(e){console.warn('[UI]',e?.message?e.message:e);}}
 if(!reviewMode){
   const _newMlist=document.querySelector('.mlist');
   if(_newMlist){
@@ -20169,7 +20387,9 @@ function _updateArrows(infoSq){
     const _afc=flip?7-ar.from.col:ar.from.col,_afr=flip?7-ar.from.row:ar.from.row;
     const _atc=flip?7-ar.to.col:ar.to.col,_atr=flip?7-ar.to.row:ar.to.row;
     const fx=_afc*CELL+CELL/2,fy=_afr*CELL+CELL/2,tx=_atc*CELL+CELL/2,ty=_atr*CELL+CELL/2;
-    const dx=tx-fx,dy=ty-fy,len=Math.sqrt(dx*dx+dy*dy),sh=14,rt=len>0?(len-sh)/len:1;
+    // v1.2.3 round-38 (SonarCloud S7769): use Math.hypot(dx,dy) instead of
+    //   Math.sqrt(dx*dx + dy*dy).
+    const dx=tx-fx,dy=ty-fy,len=Math.hypot(dx,dy),sh=14,rt=len>0?(len-sh)/len:1;
     const ex=fx+dx*rt,ey=fy+dy*rt;
     const line=document.createElementNS('http://www.w3.org/2000/svg','line');
     line.setAttribute('x1',fx);line.setAttribute('y1',fy);
@@ -20447,7 +20667,7 @@ function enterReview(){_cachedStatus=null;_cachedStatusKey='';
 //   doesn't persist into review mode.
 _clearAnimationState();
 // v1.0.8 PHASE 22 supplement: enter-review sound (沉思音)
-try{if(typeof playSound==='function')playSound('enterReview');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+try{if(typeof playSound==='function')playSound('enterReview');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
 // v1.1.0 Phase 57 FIX (visual annotation residue): Clear the '_initial' key
 //   from the visual annotations cache to ensure fresh computation. The cached
 //   '_initial' annotations may be stale from a previous review session:
@@ -20484,7 +20704,7 @@ _resetRvVirtualState();
 // exact position they were at (not the initial position).
 _preReviewSnapshot={
   gameState:cloneS(gameState),
-  moveRecords:moveRecords.map(function(r){if(r===null)return null;const c=Object.assign({},r);if(r.variations)c.variations=r.variations.map(function(v){return Object.assign({},v);});return c;}),
+  moveRecords:moveRecords.map(function(r){if(r===null)return null;const c={...r};if(r.variations)c.variations=r.variations.map(function(v){return {...v};});return c;}),
   lastMove:lastMove?{from:{row:lastMove.from.row,col:lastMove.from.col},to:{row:lastMove.to.row,col:lastMove.to.col}}:null,
   stateHistory:stateHistory.map(function(s){return{state:cloneS(s.state),selectedSquare:s.selectedSquare?{row:s.selectedSquare.row,col:s.selectedSquare.col}:null,legalMvs:s.legalMvs?[].concat(s.legalMvs):[],moveRecords:s.moveRecords?[].concat(s.moveRecords):[],lastMove:s.lastMove?(s.lastMove.from?{from:{row:s.lastMove.from.row,col:s.lastMove.from.col},to:{row:s.lastMove.to.row,col:s.lastMove.to.col}}:s.lastMove):null,gameOver:s.gameOver};}),
   _redoStack:_redoStack.map(function(s){return{state:cloneS(s.state),moveRecords:[].concat(s.moveRecords),lastMove:s.lastMove?(s.lastMove.from?{from:{row:s.lastMove.from.row,col:s.lastMove.from.col},to:{row:s.lastMove.to.row,col:s.lastMove.to.col}}:s.lastMove):null};}),
@@ -20608,7 +20828,11 @@ reviewCritical=_findCriticalMoves();requestEngineEval();render();
 function _findCriticalMoves(){
   const critical=[];
   if(!reviewStates||reviewStates.length<2)return critical;
-  let prevEval=0;
+  // v1.2.3 round-39 (SonarCloud S1481/S1854): removed unused `let prevEval=0;`
+  //   and unused `const ad=Math.abs(moverDelta);`. prevEval was a leftover
+  //   from an earlier version that tracked running eval; the current code
+  //   uses prevEv (from cache peek) instead. ad was computed but never
+  //   referenced — the threshold checks use moverDelta directly.
   for(let i=1;i<reviewStates.length;i++){
     // v1.0.2 PERF: use peek() — this loop iterates over all review steps to
     // find critical moves, so refreshing LRU on each access is wasteful.
@@ -20621,7 +20845,6 @@ function _findCriticalMoves(){
       // means White moved (step 1 = White's first move).
       const isMoverWhite=(i%2)===1; // step is odd → White moved
       const moverDelta=isMoverWhite?delta:-delta;
-      const ad=Math.abs(moverDelta);
       if(moverDelta<-300){
         const cls=_classifyMove(delta,isMoverWhite);
         critical.push({step:i,reason:cls.label+' ('+(moverDelta/100).toFixed(1)+')'});
@@ -21375,7 +21598,7 @@ function _resetGameUIState(){
   //   Mirror the exitReview() cleanup (function decls are bundle-hoisted).
   if(typeof _reviewAnalyzeAllActive!=='undefined'&&_reviewAnalyzeAllActive){
     _reviewAnalyzeAllActive=false;
-    try{if(typeof _endEvalDeepBatchIfActive==='function')_endEvalDeepBatchIfActive();}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+    try{if(typeof _endEvalDeepBatchIfActive==='function')_endEvalDeepBatchIfActive();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     if(typeof _reviewAnalyzeSafetyTimer!=='undefined'&&_reviewAnalyzeSafetyTimer){clearTimeout(_reviewAnalyzeSafetyTimer);_reviewAnalyzeSafetyTimer=null;}
     if(typeof _evalRequestBatchGen!=='undefined')_evalRequestBatchGen=0;
   }
@@ -21494,7 +21717,7 @@ function _resetGameUIState(){
   if(typeof _needNewGameForEngine!=='undefined')_needNewGameForEngine=true;
   if(typeof _tbLoading!=='undefined')_tbLoading=false;
   if(typeof _tbRetryCount!=='undefined')_tbRetryCount=0;
-  try{if(typeof Store!=='undefined'&&Store&&typeof Store.dispatch==='function'){Store.dispatch('SETUP_EXIT');Store.dispatch('PGN_CLEARED');}}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{if(typeof Store!=='undefined'&&Store&&typeof Store.dispatch==='function'){Store.dispatch('SETUP_EXIT');Store.dispatch('PGN_CLEARED');}}catch(e){console.warn('[UI]',e?.message?e.message:e);}
 }
 
 /**
@@ -21670,7 +21893,8 @@ function _prioritizeReviewStep(step){
     return;
   }
   // Deduplicate: don't add the same step twice
-  if(_reviewAnalyzePriorityQueue.indexOf(step)>=0){
+  // v1.2.3 round-38 (SonarCloud S7765): use .includes() instead of .indexOf() >= 0.
+  if(_reviewAnalyzePriorityQueue.includes(step)){
     try{showToast(T('priority_eval_toast'),2500);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     return;
   }
@@ -21695,10 +21919,13 @@ function _prioritizeReviewStep(step){
   // onEngineEval is skipped; the user-nav stale path caches the result for
   // _reviewEvalRequestedStep (the step that was being evaluated when the
   // user long-pressed).
+  // v1.2.3 round-36 (dedup + robustness): replaced inline engineStop call
+  //   (which was MISSING the sendToEngine('stop') fallback for older builds)
+  //   with the canonical _engineStopHard() helper. This closes a real
+  //   robustness gap — on builds without engineStop(), the priority-stop
+  //   would previously silently no-op.
   try{
-    if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.engineStop==='function'){
-      AndroidBridge.engineStop();
-    }
+    _engineStopHard();
   }catch(e){console.warn('engineStop for priority failed',e);}
   // Trigger _reviewAnalyzeAdvance after a short delay to pick up the priority
   // entry. The delay (100ms) gives the engine time to process the stop
@@ -21928,7 +22155,7 @@ function _reviewAnalyzeAdvance(){
     _reviewAnalyzePriorityQueue=[];
     // v1.0.8 PHASE 19 (bug fix): Recompute reviewCritical now that the eval cache
     // is fully populated.
-    try{if(typeof _findCriticalMoves==='function')reviewCritical=_findCriticalMoves();}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+    try{if(typeof _findCriticalMoves==='function')reviewCritical=_findCriticalMoves();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     // v1.1.2 Phase 67 Task 67.2: If a PGN cache save is pending (user chose
     //   "Analyze All first" in the partial-eval dialog), trigger it now.
     //   The save will use the now-fully-populated _reviewEvalCache so every
@@ -21941,7 +22168,11 @@ function _reviewAnalyzeAdvance(){
     //   populated — re-invoke openStatsPage() so it builds the payload with
     //   the complete evals array. Clear the flag BEFORE the call so the
     //   second invocation takes the normal "all cached → open stats" path.
-    const _pendingStats=(typeof window!=='undefined'&&window._pendingOpenStats)?true:false;
+    // v1.2.3 round-37 (SonarCloud S6644): `cond ? true : false` is redundant —
+    //   the boolean expression itself is the boolean. Use `!!` to coerce to
+    //   boolean (defensive — `window._pendingOpenStats` could be a truthy
+    //   non-boolean; the original code returned a strict boolean).
+    const _pendingStats=!!(typeof window!=='undefined'&&window._pendingOpenStats);
     if(typeof window!=='undefined'){
       window._pendingOpenStats=false;
       // v1.2.1 round-11 (Bug #2 fix hardening): clear the safety timeout
@@ -21998,8 +22229,8 @@ function _reviewAnalyzeAdvance(){
   //     that the move list feels responsive, infrequent enough to avoid the
   //     O(n) DOM rebuild cost that caused WebView memory pressure on 100+
   //     step games.
-  try{if(typeof _updateReviewAnalyzeBtn==='function')_updateReviewAnalyzeBtn();}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-  try{if(typeof _refreshEvalTrendChart==='function')_refreshEvalTrendChart();}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{if(typeof _updateReviewAnalyzeBtn==='function')_updateReviewAnalyzeBtn();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+  try{if(typeof _refreshEvalTrendChart==='function')_refreshEvalTrendChart();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   if(nextStep%10===0){
     try{render();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   }
@@ -22050,7 +22281,7 @@ function _reviewAnalyzeAdvance(){
  */
 function exitReview(){
   // v1.0.8 PHASE 22 supplement: exit-review sound (归位音)
-  try{if(typeof playSound==='function')playSound('exitReview');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{if(typeof playSound==='function')playSound('exitReview');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   // v1.0.8 PHASE 24 (bug fix): clear any in-progress animation.
   _clearAnimationState();
   reviewMode=false;
@@ -22236,7 +22467,10 @@ function _pgnCacheSaveCurrent(){
     try{showToast(T('pgn_cache_name_too_long')||'Name too long (max 60)');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     return;
   }
-  if(/[\/\\:*?"<>|\x00-\x1f\x7f]/.test(name)){
+  // v1.2.3 round-38 (SonarCloud S6535): inside a character class, '/' does
+  //   not need escaping (only ']', '\\', '^' at start, and '-' in certain
+  //   positions need escaping inside []). Removed the unnecessary '\\/' → '/'.
+  if(/[/\\:*?"<>|\x00-\x1f\x7f]/.test(name)){
     try{showToast(T('pgn_cache_name_invalid')||'Name contains invalid characters');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     return;
   }

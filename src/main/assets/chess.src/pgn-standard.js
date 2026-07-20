@@ -235,20 +235,25 @@ function formatEvalAnnotation(cached){
  * returning White-POV strings (e.g. "白方占优" / "White advantage") instead
  * of player-POV strings ("你占优" / "Advantage").
  *
+ * v1.2.3 round-36 (dedup): thresholds centralized in game-logic.js
+ *   evalBucket(). Lookup uses _POV_LABEL_KEYS_WHITE[bucket] for the
+ *   White-POV label. This eliminates the threshold-drift risk between
+ *   posDesc() and _pgnWhitePerspectiveLabel().
+ *
  * @param {number} ev — White-POV centipawn eval
  * @returns {string} localized label
  */
 function _pgnWhitePerspectiveLabel(ev){
-  if(ev>600)return T('pgn_white_winning');
-  if(ev>350)return T('pgn_white_huge_adv');
-  if(ev>150)return T('pgn_white_advantage');
-  if(ev>50)return T('pgn_white_slight_adv');
-  if(ev>-50)return T('pgn_equal');
-  if(ev>-150)return T('pgn_black_slight_adv');
-  if(ev>-350)return T('pgn_black_advantage');
-  if(ev>-600)return T('pgn_black_huge_adv');
-  return T('pgn_black_winning');
+  const k=_POV_LABEL_KEYS_WHITE[evalBucket(ev)];
+  return T(k!==undefined?k:'pgn_equal');
 }
+
+// v1.2.3 round-36 (dedup): zero-pad a number to 2 digits. Previously
+//   inlined as `const pad=n=>(n<10?'0':'')+n;` at 3 sites (formatClkTag,
+//   formatEmtTag in this file + formatClock in ui-gameflow.js).
+//   Centralizing eliminates the risk of one site diverging (e.g., adding
+//   a negative-number guard that the others lack).
+function _pad2(n){return (n<10?'0':'')+n;}
 
 /**
  * Build a [%clk H:MM:SS] comment annotation from remaining clock seconds.
@@ -261,8 +266,7 @@ function formatClkTag(remainingSec){
   const h=Math.floor(remainingSec/3600);
   const m=Math.floor((remainingSec%3600)/60);
   const s=Math.floor(remainingSec%60);
-  const pad=n=>(n<10?'0':'')+n;
-  return '[%clk '+h+':'+pad(m)+':'+pad(s)+']';
+  return '[%clk '+h+':'+_pad2(m)+':'+_pad2(s)+']';
 }
 
 // v1.0.4 EXPANSION (this round): additional PGN comment tags per
@@ -288,8 +292,7 @@ function formatEmtTag(elapsedSec){
   const h=Math.floor(total/3600);
   const m=Math.floor((total%3600)/60);
   const s=total%60;
-  const pad=n=>(n<10?'0':'')+n;
-  return '[%emt '+h+':'+pad(m)+':'+pad(s)+']';
+  return '[%emt '+h+':'+_pad2(m)+':'+_pad2(s)+']';
 }
 
 // ===== II-B. NAG (Numeric Annotation Glyphs) =====
@@ -845,7 +848,8 @@ function parseStandardPGN(pgnText){
           pendingVariations.push({san:varBuf.join(' ')});
         }
         varBuf=null;
-      }else{if(varBuf)varBuf.push(')');}
+      // v1.2.3 round-38 (SonarCloud S6660): flatten `else { if (...) ... }` to `else if (...)`.
+      }else if(varBuf)varBuf.push(')');
       continue;}
       if(varBuf){
         if(tok.type==='san')varBuf.push(tok.value);
