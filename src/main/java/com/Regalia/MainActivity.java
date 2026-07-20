@@ -343,6 +343,28 @@ public class MainActivity extends Activity {
                     } catch (Throwable e) {
                         Log.e(TAG, "Engine re-creation failed", e);
                     }
+                    // v1.2.3 round-34 (PR52 v4 Gitar Changes Requested): if the
+                    //   constructor persistently fails, stockfishEngine remains
+                    //   null. The round-33 fallback branch
+                    //   `else if (stockfishEngine == null && initRetryCount >= INIT_MAX_RETRIES)`
+                    //   was UNREACHABLE because initRetryCount was only
+                    //   incremented in the `stockfishEngine != null` branch
+                    //   below — so it stayed at 0 forever and the fallback
+                    //   never fired. Fix: increment initRetryCount HERE when
+                    //   re-creation failed, and re-schedule so the retry loop
+                    //   continues until INIT_MAX_RETRIES is exhausted.
+                    if (stockfishEngine == null) {
+                        if (initRetryCount < INIT_MAX_RETRIES) {
+                            initRetryCount++;
+                            Log.w(TAG, "Engine re-creation failed — retry " + initRetryCount + "/" + INIT_MAX_RETRIES);
+                            scheduleInitRetry();
+                            return;
+                        }
+                        // All retries exhausted with stockfishEngine still null.
+                        Log.e(TAG, "stockfishEngine null after " + INIT_MAX_RETRIES + " recreation attempts — showing fallback UI");
+                        showFallbackUI(getString(R.string.app_name) + ": \u5f15\u64ce\u52a0\u8f7d\u5931\u8d25\uff0c\u8bf7\u91cd\u542f\u5e94\u7528 / Engine load failed. Please restart the app.");
+                        return;
+                    }
                 }
                 if (stockfishEngine != null && !stockfishEngine.isEngineReady() && initRetryCount < INIT_MAX_RETRIES) {
                     initRetryCount++;
@@ -373,17 +395,6 @@ public class MainActivity extends Activity {
                     //   runtime fallback messages. This round-30 message was
                     //   English-only, breaking the convention. Now bilingual.
                     showFallbackUI(getString(R.string.app_name) + ": \u5f15\u64ce\u521d\u59cb\u5316\u5931\u8d25\uff0c\u8bf7\u91cd\u542f\u5e94\u7528 / Engine init failed. Please restart the app.");
-                } else if (stockfishEngine == null && initRetryCount >= INIT_MAX_RETRIES) {
-                    // v1.2.3 round-33 (PR52 v3 #4.1.3): the StockfishNative
-                    //   constructor persistently failed (native init error —
-                    //   e.g., libstockfish.so missing/corrupt, or chmod failed
-                    //   on this OEM ROM). stockfishEngine remains null across
-                    //   all retries; the round-30 fallback branch above
-                    //   requires `stockfishEngine != null` so it never fires,
-                    //   leaving the retry loop permanently stuck with no user
-                    //   feedback. Mirror the round-30 fallback for this case.
-                    Log.e(TAG, "All " + INIT_MAX_RETRIES + " init retries exhausted — stockfishEngine is null (constructor persistently failed), showing fallback UI");
-                    showFallbackUI(getString(R.string.app_name) + ": \u5f15\u64ce\u52a0\u8f7d\u5931\u8d25\uff0c\u8bf7\u91cd\u542f\u5e94\u7528 / Engine load failed. Please restart the app.");
                 }
             }
         }, INIT_RETRY_DELAY_MS);

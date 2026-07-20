@@ -3061,22 +3061,46 @@ public class StockfishNative {
                         _clearRestartInProgress();
                         return;
                     }
+                    // v1.2.3 round-34 (PR52 v4 #4.2.1): also abort if the thread
+                    //   was interrupted during sleep. shutdownNow() on the old
+                    //   executor interrupts this task; the catch above restores
+                    //   the interrupt flag but execution continued. Without this
+                    //   check, the restart would proceed (recreate executor +
+                    //   reset shutdownRequested + submit startEngine) despite
+                    //   the concurrent shutdownNow() — defeating the gen-token
+                    //   check's purpose.
+                    if (Thread.currentThread().isInterrupted()) {
+                        Log.i(TAG, "Restart aborted — thread interrupted during sleep (shutdownNow)");
+                        _clearRestartInProgress();
+                        return;
+                    }
                     // Recreate the executor since shutdown() destroyed it
                     _engineExecutor = _createEngineExecutor();
                     initStarted = false;
+                    // v1.2.3 round-34 (PR52 v4 #4.2.1): FINAL generation re-check
+                    //   BEFORE resetting shutdownRequested. A concurrent shutdown()
+                    //   between the sleep-check above and this point would have
+                    //   bumped _lifecycleGeneration; resetting shutdownRequested
+                    //   here would override the concurrent shutdown's true value,
+                    //   and the subsequent startEngine would launch a new engine
+                    //   after the user exited. This closes the remaining race
+                    //   window that CodeRabbit identified in v4 review.
+                    if (genAtShutdown != _lifecycleGeneration) {
+                        Log.i(TAG, "Restart aborted — concurrent shutdown detected post-executor-recreation (gen " + genAtShutdown + " → " + _lifecycleGeneration + ")");
+                        _clearRestartInProgress();
+                        return;
+                    }
                     // v1.2.3 round-13 (P0): shutdown() sets shutdownRequested=true.
                     //   startEngineInternal() guards on shutdownRequested at the top
                     //   (added v1.2.1 round-10 to prevent recoverEngine from racing
                     //   with concurrent shutdown). Without resetting the flag here,
                     //   the restart path bails at that guard and the engine never
                     //   restarts — leaving the user with a permanently dead engine.
-                    //   A concurrent shutdown() between this reset and startEngine()
-                    //   would re-set the flag and startEngine would correctly bail,
-                    //   preserving the L1474 guard's original race protection.
-                    //   v1.2.3 round-33: the gen-token check above closes the
-                    //   remaining 500ms-sleep window — a concurrent shutdown
-                    //   during the sleep is now detected and the restart aborts
-                    //   BEFORE reaching this reset.
+                    //   v1.2.3 round-33: gen-token check before sleep.
+                    //   v1.2.3 round-34: gen-token re-check + interrupt check
+                    //     after sleep + gen-token final re-check before reset.
+                    //     Together these close all race windows between the initial
+                    //     shutdown() call and the startEngine submission.
                     shutdownRequested = false;
                     _engineExecutor.execute(new Runnable() {
                         public void run() {
@@ -3095,6 +3119,16 @@ public class StockfishNative {
         } catch (java.util.concurrent.RejectedExecutionException e) {
             // Executor was shutdown — recreate and retry directly
             Log.w(TAG, "restartEngine: executor rejected, recreating");
+            // v1.2.3 round-34 (PR52 v4 #4.2.1): if a concurrent shutdown()
+            //   happened, the new executor we'd recreate would also be
+            //   shut down by that concurrent shutdown's _engineExecutor.
+            //   shutdownNow(). Check shutdownRequested before retrying to
+            //   avoid launching a new engine after the user exited.
+            if (shutdownRequested) {
+                Log.i(TAG, "Restart retry aborted — shutdownRequested is true (concurrent shutdown)");
+                _clearRestartInProgress();
+                return;
+            }
             _engineExecutor = _createEngineExecutor();
             _engineExecutor.execute(new Runnable() {
                 public void run() {

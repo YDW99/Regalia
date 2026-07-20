@@ -1,3 +1,54 @@
+## Round-34 update (2026-07-20) — PR52 v4: Gitar Changes Requested fix + CodeRabbit Major race closure + doc sync
+
+**No new features** — pure bug-fix + doc cleanup in response to PR #52 v4
+review (Gitar Changes Requested + CodeRabbit 8 actionable comments).
+**2 real bugs fixed; 6 doc fixes applied; 0 false positives.**
+
+### Bug fixes (Critical + Major)
+- **MainActivity null-engine fallback unreachable** (Gitar Changes Requested,
+  regression from round-33): round-33 added `else if (stockfishEngine ==
+  null && initRetryCount >= INIT_MAX_RETRIES)` but `initRetryCount` was
+  only incremented in the `stockfishEngine != null` branch — so when the
+  constructor persistently failed, `initRetryCount` stayed at 0 and the
+  fallback was unreachable. The retry loop fired only once then silently
+  stopped. Fix: when re-creation fails (stockfishEngine still null),
+  increment `initRetryCount` HERE and call `scheduleInitRetry()` to
+  continue the loop; show fallback UI only after `INIT_MAX_RETRIES`
+  exhausted.
+- **StockfishNative post-check shutdown race** (CodeRabbit Major, continuation
+  of round-33): round-33's gen-token check after the 500ms sleep was
+  insufficient — a concurrent shutdown() could fire between the sleep-check
+  and the `shutdownRequested = false` reset, overriding the concurrent
+  shutdown's true value. Fix: (1) `Thread.isInterrupted()` check after
+  sleep (shutdownNow() interrupt detection); (2) FINAL gen re-check AFTER
+  executor recreation but BEFORE shutdownRequested reset; (3)
+  `shutdownRequested` check in `RejectedExecutionException` catch block.
+
+### Documentation fixes
+- **README.md GPL v3 file list**: added `HapticManager.java`,
+  `ui-gameflow.js`, `ui-interactions.js` (round-17 additions that were
+  missed in the public license list).
+- **README.md CMake prerequisite**: updated from "3.22.1" to "3.31.6" to
+  match build.gradle's pinned version.
+- **NOTICE Phase-73 summary**: changed "extracted 6 manager classes" to
+  "planned 6 manager classes" with a note that only 4 were actually
+  created (UciProtocolHandler never created; EngineConfigManager
+  eventually implemented as EngineConfigHelper.java).
+- **java/com/Regalia/README.license**: corrected 3 historical entries
+  that mislabeled StatsActivity.java as AGPL v3 → GPL v3 (round-24
+  fixed 12 but missed these 3).
+- **worklog.md**: clock fix count 13 → 14 (11+2+1=14); replaced all
+  machine-specific paths `/home/z/my-project/...` with `<project-root>/...`
+  for portability.
+
+### Verification
+- 11 chess.src/*.js modules: `node --check` PASS.
+- Java compile: `./gradlew compileReleaseJavaWithJavac` PASS.
+- Release APK v1+v2+v3 signing verified; versionCode=123 / 1.2.3.
+- Stockfish SHA-256 three-way consistent: `8f7116d3...`.
+
+Version: **v1.2.3** (versionCode=123, versionName="1.2.3") — unchanged.
+
 ## Round-33 update (2026-07-20) — PR52 v3 CodeRabbit Major+Minor stability fixes + canonical GPL list sync
 
 **No new features** this round — pure bug fixes + doc cleanup in response to
@@ -337,7 +388,7 @@ Download the latest APK from [GitHub Releases](https://github.com/YDW99/Regalia/
 ### Prerequisites
 
 - JDK 21 (e.g. Temurin JDK 21.0.5+11) — provides `javac`
-- Android SDK with API 35 (Android 15), Build-Tools 34.0.0, NDK 27.2.12479018, CMake 3.22.1
+- Android SDK with API 35 (Android 15), Build-Tools 34.0.0, NDK 27.2.12479018, CMake 3.31.6
 - Gradle 8.11.1 (wrapper included)
 - Stockfish 18 engine binary for arm64-v8a-dotprod
 
@@ -482,10 +533,13 @@ Per GPL v3 Section 13, these licenses are compatible for combination. Each compo
 
 - `StockfishNative.java` — Engine management logic
 - `JsBridgeGateway.java` — Engine management logic (sandbox path validation, UCI whitelist)
+- `HapticManager.java` — Haptic feedback (vibration waveform API, DroidFish-derived patterns)
 - `engine_jni.cpp` — Native chmod/renice from DroidFish
 - `game-logic.js` — PGN disambiguation and SAN notation
 - `ai-bridge.js` — Engine communication patterns
 - `ui.js` — UI layout and interaction patterns
+- `ui-gameflow.js` — Game start + game-clock subsystem (extracted from ui.js, round-17)
+- `ui-interactions.js` — Click handling, move execution, toolbar, dialogs (extracted from ui.js, round-17)
 - `tablebase.js` — PGN parsing (GameTree/PgnToken/PgnScanner)
 - `stats.html` — PGN parsing logic (parsePGN) derived from DroidFish
 - `index.html.tpl` — CSS template (DroidFish-derived layout patterns)

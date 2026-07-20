@@ -1,3 +1,9 @@
+v1.2.3 round-34 (2026.7.20): no changes to manuals this round.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - Round-33 already updated the UI architecture diagram. Round-34 only
+    prepends a changelog entry to both manuals (newest-first ordering).
+  - License classification: both manuals are AGPL v3 (unchanged).
+
 v1.2.3 round-33 (2026.7.20) — Manuals updated with round-33 changelog entry + UI architecture diagram fix:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
   - Regalia-v1.2.3-manual-zh.html: (1) UI architecture diagram updated to

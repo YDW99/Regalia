@@ -1,3 +1,31 @@
+v1.2.3 round-34 (2026.7.20) — PR52 v4 Gitar Changes Requested + CodeRabbit Major race fix:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - StockfishNative.java (GPL v3): closed remaining post-check shutdown race
+    window in restartEngine(). Round-33 added _lifecycleGeneration check
+    after the 500ms sleep, but CodeRabbit v4 identified that a concurrent
+    shutdown() could still fire BETWEEN the sleep-check and the
+    shutdownRequested=false reset (lines ~3064-3080). Round-34 adds:
+    (1) Thread.isInterrupted() check after sleep (shutdownNow() interrupt
+    detection); (2) FINAL _lifecycleGeneration re-check AFTER executor
+    recreation but BEFORE shutdownRequested reset; (3) shutdownRequested
+    check in the RejectedExecutionException catch block (prevents retry
+    after concurrent shutdown). Together these close all race windows.
+  - MainActivity.java (AGPL v3): fixed Gitar Changes Requested regression
+    in scheduleInitRetry. Round-33 added an `else if (stockfishEngine ==
+    null && initRetryCount >= INIT_MAX_RETRIES)` fallback branch, but
+    initRetryCount was ONLY incremented in the `stockfishEngine != null`
+    branch — so when the constructor persistently failed, initRetryCount
+    stayed at 0 and the fallback was UNREACHABLE. Round-34 restructures:
+    when re-creation fails (stockfishEngine still null), increment
+    initRetryCount HERE and call scheduleInitRetry() to continue the retry
+    loop; only show fallback UI after INIT_MAX_RETRIES is exhausted.
+  - StatsActivity.java (GPL v3): 3 historical entries in this file that
+    mislabeled StatsActivity as AGPL v3 corrected to GPL v3 (round-24
+    fixed 12 such entries but missed these 3 — Rev27, Rev28, and a
+    Phase-66 "no changes" entry).
+  - All other .java files: unchanged this round.
+  - License classification: all files unchanged.
+
 v1.2.3 round-33 (2026.7.20) — PR52 v3 CodeRabbit Major+Minor stability fixes:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
   - StockfishNative.java (GPL v3): shutdown() vs restart race fix — added
@@ -74,7 +102,7 @@ v1.2.3 round-32 (2026.7.20) — System.currentTimeMillis() bug-class fix propaga
   - MainActivity.java (AGPL v3): stale "API 21" / "Android 5.0" comments
     corrected to "API 23" / "Android 6.0" to match minSdk=23 in
     build.gradle. Comments only — no code behavior change. 5 sites.
-  - StatsActivity.java (AGPL v3): same stale-comment cleanup — 4 sites
+  - StatsActivity.java (GPL v3): same stale-comment cleanup — 4 sites
     ("API 21-29" → "API 23-29", "API 21-23" → "API 23", etc.).
   - PermissionHelper.java (GPL v3): 2 stale "Android 5-9" / "API 21-28"
     comments → "Android 6-9" / "API 23-28".
@@ -1028,7 +1056,7 @@ v1.0.3 patch changes (version number unchanged — still v1.0.3 / versionCode 10
       means (meta refresh, JS window.open), this WebViewClient layer
       catches it. URLs are validated to be http(s); all other schemes are
       blocked.
-    - StatsActivity.java (Rev27, AGPL v3): added new @JavascriptInterface
+    - StatsActivity.java (Rev27, GPL v3 — corrected round-24/34): added new @JavascriptInterface
       method openUrlInBrowser(String url) to the inline JS bridge object —
       same security model as StockfishNative.openUrlInBrowser (http(s)
       only). Also updated the WebViewClient's shouldOverrideUrlLoading to
@@ -1043,7 +1071,7 @@ v1.0.3 patch changes (version number unchanged — still v1.0.3 / versionCode 10
       click handler, i18n key for board section heading).
 
   v1.0.4 Round-5 Rev28 changes:
-    - StatsActivity.java (Rev28, AGPL v3): added new static volatile field
+    - StatsActivity.java (Rev28, GPL v3 — corrected round-24/34): added new static volatile field
       `importedPGNOnStats` (String) — stashes the PGN text imported on the
       stats page for MainActivity.onResume to read. Added new
       @JavascriptInterface method `setImportedPGN(String pgnText)` that
@@ -1766,7 +1794,7 @@ v1.1.2 Phase 67 (2026.7.7):
   - ChessApp.java (AGPL v3): version bump in init log "v1.1.1" → "v1.1.2".
   - ChessWebViewClient.java (AGPL v3): version comment "v1.1.1" → "v1.1.2".
   - EngineService.java, StabilizationHelper.java, RootDetector.java,
-    TlsSecurityHelper.java, StatsActivity.java (all AGPL v3): no changes.
+    TlsSecurityHelper.java (AGPL v3), StatsActivity.java (GPL v3 — corrected round-24): no changes.
   - No new Java files; no new third-party code introduced.
 
 v1.1.1 Phase 66 (2026.7.5, same-version revision):

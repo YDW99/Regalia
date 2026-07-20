@@ -1,3 +1,20 @@
+## Round-34 changes (2026-07-20)
+
+**No privacy-relevant changes.** This round is pure bug-fix (Gitar
+Changes Requested regression + CodeRabbit Major race fix) + doc cleanup
+— no new permissions, no new network endpoints, no new data collection.
+
+Specifically:
+- StockfishNative shutdown race closure: affects only in-process engine
+  lifecycle; no data leaves the device.
+- MainActivity null-engine fallback fix: affects only in-process engine
+  initialization retry logic; no IPC, no network, no storage.
+- README.md/NOTICE/README.license/worklog.md: pure documentation.
+
+All changes are confined to:
+- `src/main/java/com/Regalia/{StockfishNative,MainActivity}.java`
+- `README.md`, `NOTICE`, `src/main/java/com/Regalia/README.license`, `worklog.md`
+
 ## Round-33 changes (2026-07-20)
 
 **No privacy-relevant changes.** This round is pure bug-fix + doc cleanup —

@@ -1,3 +1,48 @@
+## Round-34 build notes (2026-07-20)
+
+- **No build-config changes** — `build.gradle`, `settings.gradle`,
+  `gradle.properties`, `gradle-wrapper.properties`, `lint.xml`,
+  `proguard-rules.pro` all unchanged.
+- **Source-tree changes** (Java only — chess.src/ untouched):
+  - `StockfishNative.java`: closed remaining post-check shutdown race
+    window. Round-33's gen-token check after sleep was insufficient —
+    CodeRabbit v4 identified that a concurrent shutdown() could fire
+    between the sleep-check and the `shutdownRequested = false` reset.
+    Round-34 adds: (1) `Thread.isInterrupted()` check (shutdownNow()
+    interrupt detection); (2) FINAL gen re-check after executor
+    recreation but before shutdownRequested reset; (3) shutdownRequested
+    check in RejectedExecutionException catch.
+  - `MainActivity.java`: fixed Gitar Changes Requested regression.
+    Round-33's null-engine fallback branch was unreachable because
+    `initRetryCount` was only incremented when `stockfishEngine != null`.
+    Round-34 restructures: increment initRetryCount in the null path
+    and call scheduleInitRetry() to continue the loop; show fallback UI
+    only after INIT_MAX_RETRIES is exhausted.
+- **Documentation fixes**:
+  - `README.md`: (1) added `HapticManager.java`, `ui-gameflow.js`,
+    `ui-interactions.js` to the GPL v3 file list (round-17 additions
+    that were missed); (2) updated CMake prerequisite from "3.22.1" to
+    "3.31.6" to match build.gradle's pinned version.
+  - `NOTICE`: updated Phase-73 summary from "extracted 6 manager classes"
+    to "planned 6 manager classes" with a note that only 4 were actually
+    created (UciProtocolHandler never created; EngineConfigManager
+    eventually implemented as EngineConfigHelper.java in Phase 81).
+  - `src/main/java/com/Regalia/README.license`: corrected 3 historical
+    entries that mislabeled StatsActivity.java as AGPL v3 → GPL v3.
+  - `worklog.md`: (1) clock fix count 13 → 14 (StockfishNative 11 +
+    EngineHealthMonitor 2 + ChessWebViewClient 1 = 14); (2) replaced
+    all machine-specific paths `/home/z/my-project/...` with generic
+    `<project-root>/...` placeholders for portability.
+- **Verification**:
+  - `node --check` on all 11 `chess.src/*.js` modules: PASS.
+  - `./gradlew compileReleaseJavaWithJavac`: BUILD SUCCESSFUL in 19s.
+  - `./gradlew assembleRelease`: BUILD SUCCESSFUL in 44s.
+  - `apksigner verify --verbose`: v1+v2+v3 all true.
+  - Stockfish SHA-256 three-way consistent: `8f7116d3...`.
+  - APK class files contain round-34 fix markers: `_lifecycleGeneration`
+    (StockfishNative), `_isFallbackMode` + `_stabilizationLock`
+    (MainActivity) — all preserved through R8 minification.
+
 ## Round-33 build notes (2026-07-20)
 
 - **No build-config changes** this round — `build.gradle`, `settings.gradle`,

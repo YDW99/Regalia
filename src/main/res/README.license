@@ -1,3 +1,8 @@
+v1.2.3 round-34 (2026.7.20): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - All round-34 changes are in src/main/java/com/Regalia/ + README.md +
+    NOTICE + worklog.md. The res/ tree is unchanged.
+
 v1.2.3 round-33 (2026.7.20): no changes in this directory.
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
   - All round-33 changes are in src/main/java/com/Regalia/ (Java files) +

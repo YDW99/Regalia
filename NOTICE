@@ -1,3 +1,41 @@
+Round-34 (2026-07-20) — PR52 v4 Gitar Changes Requested fix + CodeRabbit Major race closure + doc sync
+=============================================================================================================
+
+License classification: NO CHANGES. All files retain their existing
+classifications. This round fixes a regression (round-33's unreachable
+fallback), closes a remaining race window, and syncs documentation.
+
+Changes:
+  - StockfishNative.java (GPL v3): closed remaining post-check shutdown
+    race. Round-33 added _lifecycleGeneration check after 500ms sleep;
+    CodeRabbit v4 identified that a concurrent shutdown() could still
+    fire between the sleep-check and shutdownRequested=false reset.
+    Round-34 adds: (1) Thread.isInterrupted() check; (2) FINAL gen
+    re-check after executor recreation; (3) shutdownRequested check in
+    RejectedExecutionException catch.
+  - MainActivity.java (AGPL v3): fixed Gitar Changes Requested regression.
+    Round-33's null-engine fallback was unreachable (initRetryCount only
+    incremented when stockfishEngine != null). Round-34 restructures to
+    increment initRetryCount in the null path and continue retrying.
+  - README.md: added HapticManager.java + ui-gameflow.js + ui-interactions.js
+    to GPL v3 file list; updated CMake prerequisite 3.22.1 → 3.31.6.
+  - NOTICE: Phase-73 summary "extracted 6" → "planned 6" with note that
+    2 were never created.
+  - java/com/Regalia/README.license: 3 historical StatsActivity AGPL→GPL
+    corrections (Rev27, Rev28, Phase-66 entry).
+  - worklog.md: clock fix count 13→14; machine-specific paths replaced
+    with <project-root> placeholders.
+
+Verification:
+  - All 11 chess.src/*.js modules pass `node --check`.
+  - Release APK: v1+v2+v3 signing all verified; versionCode=123 /
+    versionName="1.2.3" / targetSdk 35 / minSdk 23.
+  - Stockfish engine SHA-256 three-way consistent: 8f7116d3...
+  - APK class files contain round-34 fix markers (_lifecycleGeneration,
+    _isFallbackMode, _stabilizationLock — all preserved through R8).
+
+Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+
 Round-33 (2026-07-20) — PR52 v3 CodeRabbit Major+Minor stability fixes + canonical GPL list sync
 =========================================================================================================
 
@@ -1463,10 +1501,17 @@ GPL v3 (DroidFish-derived or Stockfish):
       Engine management logic from DroidFish (ExternalEngine.java,
       InternalStockFish.java, UCIEngineBase.java, EngineUtil.java,
       DroidComputerPlayer.java)
-      v1.2.0 Phase 73: God Module split — extracted 6 manager classes:
+      v1.2.0 Phase 73: God Module split — planned 6 manager classes:
         EngineProcessManager.java, UciProtocolHandler.java,
         EngineConfigManager.java, JsBridgeGateway.java,
         PgnCacheManager.java, EngineHealthMonitor.java.
+      v1.2.3 round-34 (PR52 v4 #4.3.10): of the 6 planned, only 4 were
+        actually created (EngineProcessManager, JsBridgeGateway,
+        PgnCacheManager, EngineHealthMonitor). UciProtocolHandler was
+        never created (UCI handling kept inline in StockfishNative).
+        EngineConfigManager was eventually implemented as
+        EngineConfigHelper.java in Phase 81 (different name). See the
+        individual entries below for details.
       StockfishNative now acts as a facade delegating to these managers.
   - src/main/java/com/Regalia/EngineProcessManager.java (v1.2.0 Phase 73)
       Engine process lifecycle: start/stop/restart, binary extraction,

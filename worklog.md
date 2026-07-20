@@ -1,3 +1,294 @@
+# Regalia v1.2.3 — round-33 工作日志（2026-07-20 UTC+8；UTC: 2026-07-19）
+
+## 任务来源
+
+用户上传 `PR52_Unresolved_Issues_Latest_v3.docx`（CodeRabbit PR #52 v3 复审报告，2026-07-19 22:21 UTC，commit 406b8a1 之后），列出 13 条 actionable comments（6 Major + 5 Minor + 2 Info）+ PR 级阻断问题（合并冲突 + SonarCloud Quality Gate 失败 17.3%）。
+
+任务要求：完整读取 docx，排查误报，剔除误报后精确实施修复；修复后逐文件用 `node --check` 验证所有 JS 语法；重建 chess.html；构建 release APK（v1+v2+v3 签名齐全，兼容小米澎湃 OS 3）；用 `create_v123_tar.sh` 打包 tar 源码备份（无引擎文件）；验证 Stockfish 引擎是 dotprod 版本（SHA-256 三方一致）；更新 BUILDING.md、PRIVACY.md、README.md、NOTICE、所有 README.license；更新中英文 HTML 说明书（更新日志由上至下从新到旧排列）；版本号保持 v1.2.3（versionCode=123, versionName="1.2.3"）；所有交付物保存到 `<project-root>/download/`；完成后更新 worklog.md。
+
+**时区说明**：用户时区为 Asia/Shanghai (UTC+8)。本工作日志日期 2026-07-20 为本地日期；对应 UTC 日期为 2026-07-19（与 PR/CI 上下文日期一致）。PR52 v3 docx #4.3.12/#4.3.13 标记的"7/20 vs 7/19 日期不一致"是时区差异，非错误。
+
+## PR52 v3 问题排查与误报剔除
+
+### `PR52_Unresolved_Issues_Latest_v3.docx`
+
+声称 13 条 actionable comments（6 Major + 5 Minor + 2 Info）。逐项对照源码验证：
+
+**真实缺陷（11 项，已修复）：**
+
+1. **StockfishNative shutdown() vs restart 竞态**（lines 3026-3035，Major Stability）— restart 任务在 500ms sleep 后无条件将 `shutdownRequested` 重置为 false，会覆盖 sleep 期间发生的并发 shutdown。新增 `_lifecycleGeneration` volatile 计数器，每次 `shutdown()` 自增；restart 任务在 sleep 前捕获代次、sleep 后重新检查——若代次变化则中止 restart（不重建 executor、不重置标志、不提交 startEngine）。这关闭了"用户退出后仍启动新引擎"的竞态窗口。
+
+2. **StockfishNative engineGoTimed 队列等待时钟漂移**（lines 975-983，Major Functional）— `_callTimeMs` 此前在 executor runnable 内部捕获，单线程队列中的等待时间被排除在 `setupElapsedMs` 之外。当 engineGoTimed() 排在另一个任务后面时，发送的 wtime/btime 已经过时，Stockfish 可能超时。改为在 `_safeExecute` 之前捕获，队列等待时间包含在内。
+
+3. **MainActivity stockfishEngine 持续为 null 时回退逻辑永不触发**（lines 361-369，Major Functional）— 两个分支都要求 `stockfishEngine != null`。如果构造函数持续抛出异常（原生初始化持久失败），stockfishEngine 永远为 null，两个分支都不执行，`scheduleInitRetry()` 永远不会被再次调用，循环中断。新增 `else if (stockfishEngine == null && initRetryCount >= INIT_MAX_RETRIES)` 分支镜像 round-30 回退。
+
+4. **MainActivity _stabilizationLock 未被 onResume/onPause 持有**（lines 76-103，Major Stability）— round-31 添加的锁覆盖 toggleStabilization + onDestroy 但漏了 onResume（line 583）和 onPause（line 646），JS binder 线程的 toggleStabilization 与主线程的 onResume/onPause 仍存在竞态。在 onResume/onPause 中使用 `_stabilizationLock` 同步访问 stabilizationEnabled/stabilizationHelper。
+
+5. **NOTICE 规范 GPL 文件清单与重构不同步**（lines 575-1480，Major Security）— Round-17 正确记录了 HapticManager.java、ui-gameflow.js、ui-interactions.js 为 GPL v3，但文件后面的规范 GPL 清单遗漏了这些文件，仍列出已记录为删除的提取模块（UciProtocolHandler.java、EngineConfigManager.java、MessageBus.java、ui-board.js、ui-review.js、ui-audio.js、ui-toolbar.js）。更新清单：添加 HapticManager.java、ui-gameflow.js、ui-interactions.js；标记 NEVER CREATED 的 Phase-73/75 计划文件；标注 Phase-74 模块在 round-4 已删除。
+
+6. **ChessWebViewClient Activity 不可用时使用 Application Context 回退**（lines 83-100，Minor Functional）— `activityRef.get()` 只能告诉你 MainActivity 未被 GC，但它可能仍在 finishing 或 destroyed 状态。在调用 `activity.startActivity(intent)` 前检查 `isFinishing()`/`isDestroyed()` 生命周期状态。finishing/destroyed 情况路由到 Application Context 回退路径。
+
+7. **HapticManager 强制首次系统设置缓存刷新**（lines 80-88，Minor Functional）— `_systemHapticCacheTs` 初始为 0，因此启动后的首次调用会跳过刷新（`now - 0 > 5000` 在启动后 5 秒内为 false），而 `_systemHapticCached` 保持 true。如果系统触控反馈被禁用，该设置会被忽略直到 TTL 过期。将 `== 0` 视为未缓存，强制首次查找立即读取 HAPTIC_FEEDBACK_ENABLED。
+
+8. **HapticManager 在此处存储 Application Context**（lines 55-58，Minor Stability）— StatsActivity 将 Activity 实例传入 HapticManager，而 posted runnable 可能使该引用存活时间超过屏幕。`context.getApplicationContext()` 对于此处的 resolver/service 查找已足够，且与现有 StockfishNative 模式一致。在构造函数中调用 `context.getApplicationContext()` 存储 Application Context，避免 Activity 泄漏。
+
+9. **MainActivity 回退消息仅英文，与应用双语模式不一致**（line 369，Minor Functional）— 此文件中其他 showFallbackUI 消息为中文（unicode 转义），ChessWebViewClient.java 中的等效消息为双语（zh/en）。此 round-30 消息仅英文，尽管应用有显式的语言偏好机制。改为双语"中文 / English"格式。
+
+10. **Manual UI 架构文档与重构不同步**（Manual-en.html lines 706-711 + Manual-zh.html 对应位置，Minor Maintainability）— 构建示例列出 ui-gameflow.js 和 ui-interactions.js，但两个架构图仍将 ui.js 描述为唯一的 UI/交互模块。更新架构图，将 ui.js 拆分为 ui-gameflow.js + ui-interactions.js + ui.js 三个模块，与构建示例一致。
+
+11. **Manual UI 架构图更新（中文说明书同步）** — 同 #10，中文说明书同步更新架构图。
+
+**误报（2 项，跳过）：**
+
+1. **worker-pool.js 许可证历史内部不一致**（#4.1.6）— 误报。历史准确记录 Phase 35（GPL→AGPL 修正）然后 Phase 36（AGPL→GPL 重新分类）。这是不同时间的连续决策，并非重复。Phase 35 条目记录了当时认为 Rev44 的 GPL v3 标签错误应改为 AGPL v3；Phase 36 条目记录了 Phase 35 的判断错误，重新分类为 GPL v3。移除 Phase 35 条目会伪造历史。当前分类 GPL v3 正确（与文件头部声明一致）。
+
+2. **worklog.md / FileIoHelper.java 共享审计日期不一致（7/20 vs 7/19）**（#4.3.12, #4.3.13）— 误报。有意的 UTC+8 vs UTC 差异。用户时区为 Asia/Shanghai (UTC+8)；2026-07-20 00:30 本地 = 2026-07-19 16:30 UTC。PR/CI 上下文使用 UTC。本工作日志头部添加时区说明（"2026-07-20 UTC+8；UTC: 2026-07-19"），但日期不变——修改会误述工作实际发生的本地时间。
+
+### PR 级阻断问题（2 项，非源码问题）
+
+- **合并冲突（mergeable_state: dirty）** — GitHub PR 状态问题，非源码问题。本地源码无法解决 PR 合并冲突（需要 GitHub 操作：`git fetch origin main && git merge origin/main`，解决冲突文件后推送）。
+- **SonarCloud Quality Gate 失败（17.3% > 3%）** — CI 级问题，非源码问题。SonarCloud 报告的 76 个代码质量问题（6 BLOCKER + 13 CRITICAL + 34 MAJOR + 22 MINOR + 1 INFO）需要持续重构（3-5 天）才能全部解决；本轮聚焦于 CodeRabbit 的 13 条 actionable comments。重复率降至 ≤3% 需要分阶段进行，本轮未触及。
+
+## 修复实施
+
+### Bug 修复（4 项 Major + 4 项 Minor = 8 项）
+
+**Major #1: StockfishNative shutdown() vs restart 竞态**
+
+```java
+// 新增字段（line ~205）
+private volatile int _lifecycleGeneration = 0;
+
+// shutdown() 中（line ~2784）
+_lifecycleGeneration++;  // 在 shutdownRequested = true 之前
+shutdownRequested = true;
+
+// restart 任务中（lines ~3033-3052）
+shutdown();
+final int genAtShutdown = _lifecycleGeneration;
+try { Thread.sleep(500); } catch (InterruptedException e) { ... }
+if (genAtShutdown != _lifecycleGeneration) {
+    Log.i(TAG, "Restart aborted — concurrent shutdown detected");
+    _clearRestartInProgress();
+    return;
+}
+// ... 安全地重建 executor + 重置标志 + 提交 startEngine
+```
+
+**Major #2: engineGoTimed _callTimeMs 移到 _safeExecute 之前**
+
+```java
+// 修改前（错误）
+_safeExecute(new Runnable() {
+    public void run() {
+        final long _callTimeMs = SystemClock.elapsedRealtime();  // 队列等待被排除
+        // ...
+    }
+});
+
+// 修改后（正确）
+final long _callTimeMs = SystemClock.elapsedRealtime();  // 队列等待包含在内
+_safeExecute(new Runnable() {
+    public void run() {
+        // ...
+    }
+});
+```
+
+**Major #3: MainActivity stockfishEngine==null 回退分支**
+
+```java
+// 新增分支（lines ~376-387）
+} else if (stockfishEngine == null && initRetryCount >= INIT_MAX_RETRIES) {
+    Log.e(TAG, "All " + INIT_MAX_RETRIES + " init retries exhausted — stockfishEngine is null, showing fallback UI");
+    showFallbackUI(getString(R.string.app_name) + ": \u5f15\u64ce\u52a0\u8f7d\u5931\u8d25\uff0c\u8bf7\u91cd\u542f\u5e94\u7528 / Engine load failed. Please restart the app.");
+}
+```
+
+**Major #4: _stabilizationLock 在 onResume/onPause 中持有**
+
+```java
+// onResume（lines ~598-615）
+synchronized (_stabilizationLock) {
+    if (isDestroyed) {
+        // 跳过
+    } else if (stabilizationEnabled && stabilizationHelper != null) {
+        try { stabilizationHelper.start(); } catch (Throwable e) { ... }
+    }
+}
+
+// onPause（lines ~672-682）
+synchronized (_stabilizationLock) {
+    if (stabilizationEnabled && stabilizationHelper != null) {
+        try { stabilizationHelper.stop(); } catch (Throwable e) { ... }
+    }
+}
+```
+
+**Minor #5: ChessWebViewClient isFinishing/isDestroyed 检查**
+
+```java
+// 修改前
+if (activity != null) {
+    activity.startActivity(intent);
+} else { /* Application Context 回退 */ }
+
+// 修改后
+if (activity != null && !activity.isFinishing() && !activity.isDestroyed()) {
+    activity.startActivity(intent);
+} else { /* Application Context 回退（含 finishing/destroyed 情况）*/ }
+```
+
+**Minor #6: HapticManager 缓存时间戳=0 视为未缓存**
+
+```java
+// 修改前
+if (now - _systemHapticCacheTs > 5000) { /* 刷新 */ }
+
+// 修改后
+if (_systemHapticCacheTs == 0 || (now - _systemHapticCacheTs) > 5000) { /* 刷新 */ }
+```
+
+**Minor #7: HapticManager Application Context 规范化**
+
+```java
+// 修改前
+this.context = context;
+
+// 修改后
+this.context = context != null ? context.getApplicationContext() : null;
+```
+
+**Minor #8: MainActivity 回退消息双语**
+
+```java
+// 修改前（line 369）
+showFallbackUI(getString(R.string.app_name) + ": engine init failed. Please restart the app.");
+
+// 修改后
+showFallbackUI(getString(R.string.app_name) + ": \u5f15\u64ce\u521d\u59cb\u5316\u5931\u8d25\uff0c\u8bf7\u91cd\u542f\u5e94\u7528 / Engine init failed. Please restart the app.");
+```
+
+### 文档修复（3 项）
+
+**Doc #9: NOTICE 规范 GPL 文件清单更新** — 添加 HapticManager.java、ui-gameflow.js、ui-interactions.js；标记 UciProtocolHandler.java、EngineConfigManager.java、MessageBus.java 为 NEVER CREATED；标注 ui-board.js/ui-review.js/ui-audio.js/ui-toolbar.js 在 round-4 已删除。
+
+**Doc #10-11: 中英文说明书 UI 架构图更新** — 架构图新增 ui-gameflow.js（新对局 + 棋钟子系统）和 ui-interactions.js（点击/走法/工具栏/对话框）两个模块，列出各自的核心函数；ui.js 改为"核心渲染 + 复盘模式 + ChessAudioEngine"；底部添加 round-17 拆分说明。
+
+## 验证
+
+### JS 语法
+
+```text
+所有 11 个 chess.src/*.js 模块通过 node --check ✓（本轮未修改 JS 文件）
+stats.html 内联脚本通过 node --check ✓
+chess.html 重建后内联脚本通过 node --check ✓
+```
+
+### chess.html 重建
+
+```text
+python3 build-chess.py
+Built chess.html (23027 lines, 1386590 bytes)
+（与 round-32 字节一致——确认本轮无 JS 源码变更）
+```
+
+### Java 编译完整性检查
+
+```text
+./gradlew --no-daemon compileReleaseJavaWithJavac -x lint -x lintRelease -x lintVitalRelease
+BUILD SUCCESSFUL in 10s
+```
+
+### APK 构建
+
+```text
+./gradlew --no-daemon assembleRelease -x lint -x lintRelease -x lintVitalRelease
+BUILD SUCCESSFUL in 45s（首次构建）
+BUILD SUCCESSFUL in 23s（手册更新后增量重建）
+```
+
+### APK 签名
+
+```text
+apksigner verify --verbose Regalia-release.apk
+Verifies
+Verified using v1 scheme (JAR signing): true
+Verified using v2 scheme (APK Signature Scheme v2): true
+Verified using v3 scheme (APK Signature Scheme v3): true
+```
+
+### APK 元数据
+
+```text
+package: name='com.Regalia' versionCode='123' versionName='1.2.3'
+sdkVersion:'23'  targetSdkVersion:'35'
+application-label:'Regalia v1.2.3'
+```
+
+### Stockfish 引擎 SHA-256 三方一致
+
+```text
+源文件（<project-root>/tools/stockfish/.../stockfish-android-armv8-dotprod）：
+  8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5
+部署到 jniLibs（src/main/jniLibs/arm64-v8a/libstockfish.so）：
+  8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5
+APK 内（lib/arm64-v8a/libstockfish.so）：
+  8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5
+三方一致 ✓
+```
+
+### APK 内代码验证
+
+```text
+Java 类文件含 round-33 修复（通过 R8 混淆保留）：
+  StockfishNative.class: private volatile int _lifecycleGeneration ✓
+  MainActivity.class: private final Object _stabilizationLock ✓
+  MainActivity.class: private volatile boolean _isFallbackMode ✓
+  HapticManager.class: private volatile long _systemHapticCacheTs ✓
+  ChessWebViewClient.class: private static long _lastRenderCrashTime ✓
+  ChessWebViewClient.class: private static int _renderCrashCount ✓
+
+HTML 说明书 round-33 changelog 条目：
+  Regalia-v1.2.3-manual-zh.html: "第三十三轮" ✓ (1 处)
+  Regalia-v1.2.3-manual-en.html: "thirty-third" ✓ (1 处)
+
+UI 架构图更新：
+  ZH manual: ui-gameflow.js (新对局 + 棋钟子系统) ✓
+  EN manual: ui-gameflow.js (game start + clock subsystem) ✓
+```
+
+### tar 打包
+
+```text
+bash create_v123_tar.sh
+Tar entry count: 118（与 round-30/31/32 一致）
+排除清单全部生效
+```
+
+## 文档同步
+
+- `NOTICE`：round-33 条目置顶（11 项实施 + 2 项误报的完整记录）+ 规范 GPL 文件清单更新（添加 3 个文件 + 标记 3 个 NEVER CREATED + 标注 4 个 REMOVED）。
+- `8× README.license`：round-33 条目置顶（assets/chess.src/assets/src/main/java/com/Regalia/res/cpp/Manual/src/main）。
+- `README.md`：round-33 章节置顶；详细记录 8 项 bug 修复 + 3 项文档修复 + 2 项误报。
+- `BUILDING.md`：round-33 章节置顶（构建相关变更 + 误报说明 + 验证 + 工具链说明）。
+- `PRIVACY.md`：round-33 条目置顶（纯 bug 修复 + 文档清理，无新权限/网络/数据收集）。
+- 中英文说明书：round-33 更新日志条目置顶（内容对等非机翻）+ UI 架构图更新。
+
+## 最终交付（<project-root>/download/）
+
+- `Regalia-release.apk` — 78,875,024 字节，SHA-256 见 SHA256SUMS.txt
+- `Regalia-v1.2.3-src.tar` — 118 条目，0 禁用模式
+- `Regalia-v1.2.3-manual-zh.html` — 中文说明书（含 round-33 更新日志 + UI 架构图更新）
+- `Regalia-v1.2.3-manual-en.html` — 英文说明书（含 round-33 更新日志 + UI 架构图更新）
+- `README.md` / `BUILDING.md` / `PRIVACY.md` / `NOTICE` — 同步更新
+- `SHA256SUMS.txt` — 所有交付物 SHA-256 汇总
+- `worklog.md` — 本工作日志
+
+版本号保持 v1.2.3（versionCode=123, versionName="1.2.3"）。
+
+---
+
 # Regalia v1.2.3 — round-32 工作日志（2026-07-20）
 
 ## 任务来源
@@ -17,7 +308,7 @@
 
 ### Bug 修复（2 项，HIGH + LOW 严重度——引擎稳定性）
 
-1. **StockfishNative.java + EngineHealthMonitor.java + ChessWebViewClient.java 时钟源修复**（13 处，HIGH）— round-31 修复了 HapticManager + StabilizationHelper 中的 `System.currentTimeMillis()` 时钟源问题（墙钟跳跃会导致缓存冻结/节流永久命中），本轮通过第一性原理逐文件审查发现**同类 bug 存在于 3 个 Java 文件共 13 处**，全部修复。
+1. **StockfishNative.java + EngineHealthMonitor.java + ChessWebViewClient.java 时钟源修复**（14 处，HIGH）— round-31 修复了 HapticManager + StabilizationHelper 中的 `System.currentTimeMillis()` 时钟源问题（墙钟跳跃会导致缓存冻结/节流永久命中），本轮通过第一性原理逐文件审查发现**同类 bug 存在于 3 个 Java 文件共 14 处**（StockfishNative 11 处 + EngineHealthMonitor 2 处 + ChessWebViewClient 1 处），全部修复。
 
    具体修复：
    - `StockfishNative.java`（11 处）：所有**间隔测量**时间戳从 `System.currentTimeMillis()` 改为 `SystemClock.elapsedRealtime()`（单调，自设备启动）。受影响的子系统：
@@ -101,7 +392,7 @@ application-label:'Regalia v1.2.3'
 ### Stockfish 引擎 SHA-256 三方一致
 
 ```text
-源文件（/home/z/my-project/tools/stockfish/.../stockfish-android-armv8-dotprod）：
+源文件（<project-root>/tools/stockfish/.../stockfish-android-armv8-dotprod）：
   8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5
 部署到 jniLibs（src/main/jniLibs/arm64-v8a/libstockfish.so）：
   8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5
@@ -132,7 +423,7 @@ HTML 说明书 round-32 changelog 条目：
 ### tar 打包
 
 ```text
-bash /home/z/my-project/scripts/create_v123_tar.sh
+bash create_v123_tar.sh
 Tar entry count: 118（与 round-30/31 一致）
 排除清单全部生效（含 round-31 新增的 src/main/assets/Regalia-v1.2.3-manual-{zh,en}.html
 排除——这些是 build-time 副本，canonical 副本在 Manual/）
@@ -147,7 +438,7 @@ Tar entry count: 118（与 round-30/31 一致）
 - `PRIVACY.md`：round-32 条目置顶（纯 bug 修复 + 注释清理，无新权限/网络/数据收集）。
 - 中英文说明书：round-32 更新日志条目置顶（内容对等非机翻）。
 
-## 最终交付（/home/z/my-project/download/）
+## 最终交付（<project-root>/download/）
 
 - `Regalia-release.apk` — 78,870,153 字节，SHA-256: `4f82e63f599af3afff8420ba30d7a73dc13a332e376250c3300f539c5889f2a5`
 - `Regalia-v1.2.3-src.tar` — 118 条目，0 禁用模式
@@ -177,7 +468,7 @@ Tar entry count: 118（与 round-30/31 一致）
 7. 更新 BUILDING.md、PRIVACY.md、README.md、NOTICE、所有 README.license；
 8. 更新中英文 HTML 说明书（更新日志由上至下从新到旧排列）；
 9. 版本号保持 v1.2.3（versionCode=123, versionName="1.2.3"）；
-10. 所有交付物保存到 `/home/z/my-project/download/`；
+10. 所有交付物保存到 `<project-root>/download/`；
 11. 完成后更新 worklog.md。
 
 ## PR52 问题排查与误报剔除
@@ -418,7 +709,7 @@ application-label:'Regalia v1.2.3'
 ### Stockfish 引擎 SHA-256 三方一致
 
 ```text
-源文件（/home/z/my-project/tools/stockfish/.../stockfish-android-armv8-dotprod）：
+源文件（<project-root>/tools/stockfish/.../stockfish-android-armv8-dotprod）：
   8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5
 
 部署到 jniLibs（src/main/jniLibs/arm64-v8a/libstockfish.so）：
@@ -454,7 +745,7 @@ HTML 说明书 round-31 changelog 条目：
 ### tar 打包
 
 ```text
-bash /home/z/my-project/scripts/create_v123_tar.sh
+bash create_v123_tar.sh
 Tar entry count: 118（与 round-30 一致）
 排除清单全部生效（含新增 src/main/assets/Regalia-v1.2.3-manual-{zh,en}.html
 排除——这些是 build-time 副本，canonical 副本在 Manual/）
@@ -464,16 +755,16 @@ Tar entry count: 118（与 round-30 一致）
 
 本轮沙箱环境与 BUILDING.md 完全一致：
 
-- JDK 21.0.11（Temurin）：`/home/z/my-project/tools/jdk21`（系统 `openjdk-21-jre-headless` 仅 JRE 无 javac，故下载 Temurin JDK）
-- Android SDK：API 35 / Build-Tools 34.0.0 / NDK 27.2.12479018 / CMake 3.31.6（位于 `/home/z/my-project/tools/android-sdk`）
+- JDK 21.0.11（Temurin）：`<project-root>/tools/jdk21`（系统 `openjdk-21-jre-headless` 仅 JRE 无 javac，故下载 Temurin JDK）
+- Android SDK：API 35 / Build-Tools 34.0.0 / NDK 27.2.12479018 / CMake 3.31.6（位于 `<project-root>/tools/android-sdk`）
 - Stockfish 引擎：sf_18 `stockfish-android-armv8-dotprod`，SHA-256 三方一致
 - Gradle 8.11.1 wrapper（自动下载）
 - AGP 8.7.3
-- keystore：`/home/z/my-project/workspace/debug.keystore`（alias `debug`，storepass/keypass `android`）
-- keystore.properties：`/home/z/my-project/workspace/keystore.properties`
-- version.properties：`/home/z/my-project/workspace/version.properties`（VERSION_MAJOR=1, VERSION_MINOR=2, VERSION_PATCH=3, VERSION_BUILD=123）
-- env.sh：`/home/z/my-project/scripts/env.sh`（导出 ANDROID_HOME / ANDROID_SDK_ROOT / JAVA_HOME / PATH）
-- create_v123_tar.sh：`/home/z/my-project/scripts/create_v123_tar.sh`（round-31 新增 manual-*.html 排除规则）
+- keystore：`<project-root>/workspace/debug.keystore`（alias `debug`，storepass/keypass `android`）
+- keystore.properties：`<project-root>/workspace/keystore.properties`
+- version.properties：`<project-root>/workspace/version.properties`（VERSION_MAJOR=1, VERSION_MINOR=2, VERSION_PATCH=3, VERSION_BUILD=123）
+- env.sh：`<project-root>/scripts/env.sh`（导出 ANDROID_HOME / ANDROID_SDK_ROOT / JAVA_HOME / PATH）
+- create_v123_tar.sh：`create_v123_tar.sh`（round-31 新增 manual-*.html 排除规则）
 
 ## 文档同步
 
@@ -486,7 +777,7 @@ Tar entry count: 118（与 round-30 一致）
 - `PRIVACY.md`：round-31 条目置顶（纯代码组织 + bug 修复 + 健壮性 + 性能轮，无新权限/网络/数据收集）。
 - 中英文说明书：round-31 更新日志条目置顶（内容对等非机翻）。
 
-## 最终交付（/home/z/my-project/download/）
+## 最终交付（<project-root>/download/）
 
 - `Regalia-release.apk` — 78,865,674 字节，SHA-256: `705e36ed08fd3701013c0f5e447f1f32b4ba32333ac9534679006759f951e9ca`
 - `Regalia-v1.2.3-src.tar` — 118 条目，0 禁用模式
@@ -636,7 +927,7 @@ APK 内：8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5
 ### tar 打包
 
 ```
-bash /home/z/my-project/scripts/create_v123_tar.sh
+bash create_v123_tar.sh
 Tar entry count: 118
 排除清单全部生效
 ```
@@ -650,7 +941,7 @@ Tar entry count: 118
 - `PRIVACY.md`：round-30 条目置顶（纯代码组织 + bug 修复 + 健壮性 + 性能轮，无新权限/网络/数据收集）。
 - 中英文说明书：round-30 更新日志条目置顶（内容对等非机翻）。
 
-## 最终交付（/home/z/my-project/download/）
+## 最终交付（<project-root>/download/）
 
 - `Regalia-release.apk` — SHA-256 见 SHA256SUMS.txt
 - `Regalia-v1.2.3-src.tar` — 118 条目，0 禁用模式
@@ -681,16 +972,16 @@ Tar entry count: 118
 8. 更新 BUILDING.md、PRIVACY.md、README.md、NOTICE、所有 README.license；
 9. 更新中英文 HTML 说明书（更新日志由上至下从新到旧排列）；
 10. 版本号保持 v1.2.3（versionCode=123, versionName="1.2.3"）；
-11. 所有交付物保存到 `/home/z/my-project/download/`；
+11. 所有交付物保存到 `<project-root>/download/`；
 12. 完成后更新 worklog.md。
 
 ## 环境重建（沙箱重置后）
 
-- JDK 21.0.11（Temurin）：`/home/z/my-project/tools/jdk21`
+- JDK 21.0.11（Temurin）：`<project-root>/tools/jdk21`
 - Android SDK：API 35 / Build-Tools 34.0.0 / NDK 27.2.12479018 / CMake 3.31.6
 - Stockfish 引擎 SHA-256 验证：`8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5`（源文件 / 部署到 jniLibs / APK 内三方一致）
-- keystore：`/home/z/my-project/workspace/debug.keystore`（alias `debug`，storepass/keypass `android`）
-- keystore.properties：`/home/z/my-project/workspace/keystore.properties`（驱动 build.gradle 的 signingConfigs.release）
+- keystore：`<project-root>/workspace/debug.keystore`（alias `debug`，storepass/keypass `android`）
+- keystore.properties：`<project-root>/workspace/keystore.properties`（驱动 build.gradle 的 signingConfigs.release）
 
 ## PR52 问题排查与误报剔除
 
@@ -831,7 +1122,7 @@ Verified using v3 scheme (APK Signature Scheme v3): true
 ### Stockfish 引擎 SHA-256 三方一致
 
 ```
-源文件（/home/z/my-project/tools/stockfish/...）：
+源文件（<project-root>/tools/stockfish/...）：
   8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5
 
 部署到 jniLibs（src/main/jniLibs/arm64-v8a/libstockfish.so）：
@@ -846,7 +1137,7 @@ APK 内（lib/arm64-v8a/libstockfish.so）：
 ### tar 打包
 
 ```
-bash /home/z/my-project/scripts/create_v123_tar.sh
+bash create_v123_tar.sh
 Tar entry count: 118
 排除清单全部生效（无 build/、.gradle/、.cxx/、local.properties、lint-baseline.xml、jniLibs/、keystore、keystore.properties、version.properties、.git/、.idea/）
 ```
@@ -860,7 +1151,7 @@ Tar entry count: 118
 - `PRIVACY.md`：round-29 条目置顶（纯代码组织 + bug 修复 + 文档同步，无新权限/网络/数据收集）。
 - 中英文说明书：round-29 更新日志条目置顶（内容对等非机翻）。
 
-## 最终交付（/home/z/my-project/download/）
+## 最终交付（<project-root>/download/）
 
 - `Regalia-release.apk` — SHA-256 见 SHA256SUMS.txt
 - `Regalia-v1.2.3-src.tar` — 118 条目，0 禁用模式
@@ -947,7 +1238,7 @@ Tar entry count: 118
 - 中英文说明书：round-28 更新日志条目置顶。
 - worklog.md：本条目。
 
-## 最终交付（/home/z/my-project/download/）
+## 最终交付（<project-root>/download/）
 - Regalia-release.apk
 - Regalia-v1.2.3-src.tar
 - Regalia-v1.2.3-manual-zh.html
@@ -1009,7 +1300,7 @@ Tar entry count: 118
 - 中英文说明书：round-27 更新日志条目置顶 + 缓存管理示意图 📥 移除。
 - worklog.md：本条目。
 
-## 最终交付（/home/z/my-project/download/）
+## 最终交付（<project-root>/download/）
 - Regalia-release.apk
 - Regalia-v1.2.3-src.tar
 - Regalia-v1.2.3-manual-zh.html
@@ -1078,7 +1369,7 @@ Tar entry count: 118
 - 中英文说明书：round-26 更新日志条目置顶。
 - worklog.md：本条目。
 
-## 最终交付（/home/z/my-project/download/）
+## 最终交付（<project-root>/download/）
 - Regalia-release.apk
 - Regalia-v1.2.3-src.tar
 - Regalia-v1.2.3-manual-zh.html
@@ -1168,7 +1459,7 @@ Tar entry count: 118
 - 中英文说明书：round-25 更新日志条目置顶。
 - worklog.md：本条目。
 
-## 最终交付（/home/z/my-project/download/）
+## 最终交付（<project-root>/download/）
 - Regalia-release.apk
 - Regalia-v1.2.3-src.tar
 - Regalia-v1.2.3-manual-zh.html
@@ -1270,7 +1561,7 @@ Tar entry count: 118
 - 中英文说明书：round-24 更新日志条目置顶。
 - worklog.md：本条目。
 
-## 最终交付（/home/z/my-project/download/）
+## 最终交付（<project-root>/download/）
 - Regalia-release.apk
 - Regalia-v1.2.3-src.tar
 - Regalia-v1.2.3-manual-zh.html
@@ -1306,7 +1597,7 @@ SonarCloud 完美通过审查指南.pdf），要求：
 10. 更新 BUILDING.md、PRIVACY.md、README.md、NOTICE、所有 README.license；
 11. 更新中英文 HTML 说明书（更新日志由上至下从新到旧排列）；
 12. 版本号保持 v1.2.3（versionCode=123, versionName="1.2.3"）；
-13. 所有交付物保存到 /home/z/my-project/download/。
+13. 所有交付物保存到 <project-root>/download/。
 
 ## PDF 误报复查结论
 按恢复指南警告「PDF 是 AI 生成的，误报率极高」，对每条声称对照源码验证：
@@ -1475,7 +1766,7 @@ SonarCloud 完美通过审查指南.pdf），要求：
 - README.md：round-23 章节（PR51 修复清单 + 验证）。
 - 中英文说明书：round-23 更新日志条目置顶（内容对等非机翻），含 Q14 MODULES 修复。
 
-## 最终交付（/home/z/my-project/download/）
+## 最终交付（<project-root>/download/）
 - Regalia-release.apk — SHA-256 见 SHA256SUMS.txt
 - Regalia-v1.2.3-src.tar — SHA-256 见 SHA256SUMS.txt
 - Regalia-v1.2.3-manual-zh.html — SHA-256 见 SHA256SUMS.txt
@@ -1549,7 +1840,7 @@ SonarCloud 完美通过审查指南.pdf），要求：
   libstockfish.so 齐全；HapticManager 编入 dex。
 - ✅ tar 源码包：97 条目，0 引擎/构建产物/keystore/local.properties/lint-baseline。
 
-## 最终交付（/home/z/my-project/download/）
+## 最终交付（<project-root>/download/）
 - Regalia-release.apk — SHA-256=2c67d65693ba3f9513ac27b7c2ccd65ee36109b178bf1daf8ff49c3bd899b597
 - Regalia-v1.2.3-src.tar — SHA-256=81f66b7f90e44e820ae6841a82b8603c6cf9619badf1e04a0260cfdca88ad19f
 - Regalia-v1.2.3-manual-zh.html — SHA-256=48342fd5147100a71122f03f11426fac4e5f4b78586a9a34eb374b776d213600

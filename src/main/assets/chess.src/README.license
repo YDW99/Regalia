@@ -1,3 +1,10 @@
+v1.2.3 round-34 (2026.7.20): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - All 11 chess.src/*.js modules unchanged this round. Round-34 fixes are
+    in src/main/java/com/Regalia/ (StockfishNative, MainActivity) + README.md
+    + NOTICE + worklog.md.
+  - License classification: all files unchanged.
+
 v1.2.3 round-33 (2026.7.20): no changes in this directory.
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
   - All 11 chess.src/*.js modules unchanged this round. Round-33 fixes are

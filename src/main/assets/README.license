@@ -1,3 +1,10 @@
+v1.2.3 round-34 (2026.7.20): no changes to src/main/assets/ top-level files.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - chess.html: rebuilt as a sanity check (byte-identical to round-32/33 —
+    no chess.src/ module changes this round).
+  - Manuals: unchanged this round (round-33 already updated the UI
+    architecture diagram).
+
 v1.2.3 round-33 (2026.7.20): no changes to src/main/assets/ top-level files.
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
   - chess.html: rebuilt as a sanity check (byte-identical to round-32 — no
