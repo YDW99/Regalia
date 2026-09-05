@@ -224,6 +224,7 @@ const _i18n={
 'copy_failed':{zh:'复制失败，请手动复制',en:'Copy failed, please copy manually'},
 'file_browse_failed':{zh:'文件浏览失败',en:'File browse failed'},
 'settings_read_fail':{zh:'无法读取设置文件',en:'Cannot read settings file'},
+'settings_permission_pending':{zh:'需要存储权限，请在系统弹窗中授权后重试',en:'Storage permission required — grant it in the system dialog and retry'},
 'restarting_engine':{zh:'正在重启引擎...',en:'Restarting engine...'},
 'engine_unavailable_bridge':{zh:'引擎接口不可用',en:'Engine interface unavailable'},
 'restart_failed':{zh:'重启失败',en:'Restart failed'},
@@ -2020,7 +2021,7 @@ if(_cs){
   // castling actually works in the resulting game.
   if(typeof chess960CastlingRookMove==='function'){
     const rm=chess960CastlingRookMove(s,piece.color,_cs);
-    if(rm?.rookFrom!==rm.rookTo){
+    if(rm&&rm.rookFrom!==rm.rookTo){ // v1.2.3 round-46 (PR53 CR#5): guard rm itself — chess960CastlingRookMove returns null when no rook exists on that side (setup-mode edits / imported FEN with stale castling rights); rm?.rookFrom!==rm.rookTo still dereferenced rm.rookTo and threw TypeError.
       _rookFrom=rm.rookFrom;_rookTo=rm.rookTo;
       _savedRook=ns.board[rm.row][rm.rookFrom]; // save rook before king overwrites it
     }
@@ -2219,7 +2220,7 @@ if(_cs){
   // detailed first-principles rationale.
   if(typeof chess960CastlingRookMove==='function'){
     const rm=chess960CastlingRookMove(s,piece.color,_cs);
-    if(rm?.rookFrom!==rm.rookTo){
+    if(rm&&rm.rookFrom!==rm.rookTo){ // v1.2.3 round-46 (PR53 CR#5): guard rm itself — chess960CastlingRookMove returns null when no rook exists on that side (setup-mode edits / imported FEN with stale castling rights); rm?.rookFrom!==rm.rookTo still dereferenced rm.rookTo and threw TypeError.
       _rookFrom=rm.rookFrom;_rookTo=rm.rookTo;
       _savedRook=s.board[rm.row][rm.rookFrom];
     }
@@ -2974,7 +2975,13 @@ if(gameClocks !== undefined&&gameClocks&&typeof AndroidBridge.engineGoTimed==='f
       if(_aiRetryCount<3){setTimeout(()=>{if(!gameOver&&gameState.currentTurn!==playerColor)doAIMove();},500);}
       else{showToast(T('ai_timeout'));_aiRetryCount=0;render();}
     }}
-    else{try{AndroidBridge.engineGo(fen,aiLevel);}catch(error){}}
+    else{try{AndroidBridge.engineGo(fen,aiLevel);}catch(error){
+      // v1.2.3 round-46 (PR53 CR#6): mirror the engineGoNewGame branch —
+      //   both fallbacks failing means the engine never received the search
+      //   command; silence left the user staring at a hung AI with no toast.
+      console.error('engineGo fallback failed:',error);
+      showToast(T('engine_unavailable_hint'));
+    }}
     isAIThinking=false;_aiBarInfo='';render();
   }
   return;

@@ -109,12 +109,18 @@
              are considered private), both backup rule files are never
              consulted, so the references were dead config that misled readers
              into thinking selective backup was active. -->
-        <!-- v1.2.3 round-44 (F12): the two rule files themselves
-             (backup_rules.xml, data_extraction_rules.xml) have now been
-             DELETED — backup_rules.xml still contained
+        <!-- v1.2.3 round-44 (F12): the two rule files (backup_rules.xml,
+             data_extraction_rules.xml) were deleted from the round-44 BUILD
+             tree — backup_rules.xml still contained
              &lt;include domain="file" path="pgn_cache/"/&gt;, contradicting
-             the "PGN cache private" decision above. To re-enable selective
-             backup, set allowBackup="true" and author fresh rule files. -->
+             the "PGN cache private" decision above.
+             v1.2.3 round-46 (PR53 CR#18) correction: the deletion did NOT
+             reach the git upload branch (the zip-based sync only adds/
+             overwrites files), so both files are still present in res/xml/
+             as UNREFERENCED dead config (no manifest attributes point at
+             them — removed in round-13). Harmless; a future git-side
+             cleanup may delete them. To re-enable selective backup, set
+             allowBackup="true" and author fresh rule files. -->
         <!-- v1.2.1 round-10 (review-F P3): removed android:requestLegacyExternalStorage="true"
              — this attribute is ignored when targetSdk >= 30 (we use 35). The app
              uses SAF for all file I/O (no File API external-storage access), so the

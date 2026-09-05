@@ -37,8 +37,10 @@ README.md restructure, NOTICE / NOTICE-DroidFish / BUILDING.md /
   with a 30-minute timeout and is **not** re-acquired by `onStartCommand`
   (an earlier wording claimed longer sessions re-acquire it — they do not).
 - The "Engine Binary Integrity" section below now matches the code: the
-  runtime checks are the ELF magic check plus a 50 MB minimum-size check
-  (`StockfishNative.java`); there is no baked-in SHA-256 runtime check.
+  runtime checks are the ELF magic check plus a minimum-size check
+  (`StockfishNative.java`; the threshold was 50 MB at the time — round-44
+  (A16) later lowered it to 5 MB, see the round-44 section above); there is
+  no baked-in SHA-256 runtime check.
   The known-good engine SHA-256 is documented in BUILDING.md for manual
   verification.
 

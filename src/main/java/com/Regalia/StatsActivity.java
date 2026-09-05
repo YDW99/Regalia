@@ -103,8 +103,9 @@ public class StatsActivity extends Activity {
     // v1.2.3 round-44 (E4): BACK 键兜底状态。onKeyDown 把返回决策交给 JS
     //   （handleStatsBackPress/returnToGame），若 JS 异常或未定义则 Activity
     //   永远不会 finish，用户以为 BACK 失灵。JS 正常关闭路径会经桥接方法
-    //   closeStatsPage() 置位 backCloseHandled，250ms 超时兜底检测到已置位
-    //   即放弃 finish()。
+    //   closeStatsPage()（关闭）或 ackStatsBackHandled()（留在本页，
+    //   v1.2.3 round-46 PR53 CR#26 新增）置位 backCloseHandled，250ms 超时
+    //   兜底检测到已置位即放弃 finish()。
     private final java.util.concurrent.atomic.AtomicBoolean backCloseHandled =
             new java.util.concurrent.atomic.AtomicBoolean(false);
     private android.os.Handler backFallbackHandler;
@@ -221,6 +222,17 @@ public class StatsActivity extends Activity {
                         finish();
                     }
                 });
+            }
+
+            // v1.2.3 round-46 (PR53 CR#26): BACK 键的「已处理但留在本页」回执。
+            //   handleStatsBackPress() 有多条合法分支只关对话框/取消导入而
+            //   不关闭页面（不调用 closeStatsPage）——原设计里这些分支不会
+            //   置位 backCloseHandled，250ms 兜底会误判 JS 无响应并 finish()，
+            //   把按「取消」的用户踢出统计页。JS 在每条消费分支末尾必须调用
+            //   本方法回执（置位但不 finish）。
+            @JavascriptInterface
+            public void ackStatsBackHandled() {
+                backCloseHandled.set(true);
             }
 
             // v1.0.2: Haptic feedback for stats page buttons.
@@ -689,7 +701,7 @@ public class StatsActivity extends Activity {
         if (keyCode == KeyEvent.KEYCODE_BACK) {
             if (webView != null) {
                 // v1.2.3 round-44 (E4): 先复位标志，再发 JS；250ms 后若 JS 未
-                //   经 closeStatsPage() 置位（JS 异常/函数未定义），兜底
+                //   经 closeStatsPage()/ackStatsBackHandled() 置位（JS 异常/函数未定义），兜底
                 //   finish()。正常关闭路径会置位 backCloseHandled，兜底
                 //   Runnable 检测到后放弃 —— 超时兜底可被正常 closeStatsPage
                 //   取消。

@@ -695,7 +695,7 @@ function parsePGN(pgnText){
     // no `$` end-anchor) so it works for single-line PGN where tags and
     // movetext coexist on one line. The previous `/^\[.*\]$/gm` required the
     // ENTIRE line to be `[...]`, which never matched single-line PGN.
-    let mtCheck=text.replace(/\[\s*[A-Za-z]\w*\s+"(?:[^"\\]|\\.)*"\s*\]/g,'').trim(); // v1.2.3 round-29 (PR52 S8786): canonical PGN tag regex (same as pgn-standard.js:696 + tablebase.js:205). Eliminates alternation-induced polynomial backtracking; correctly handles escaped quotes inside values.
+    let mtCheck=text.replace(/\[\s*[A-Za-z]\w*\s+(?:"(?:[^"\\]|\\.)*"\s*|\S[^\]\n]*?)\]/g,'').trim(); // v1.2.3 round-46 (PR53 CR#11): broadened tag regex (same as tablebase.js:211 round-40) — also strips UNQUOTED tag values such as [WhiteElo 2400], which the quoted-only round-29 regex left in the movetext (breaking Black-to-move detection and tokenization). Backtracking-safe: quoted branch unchanged, unquoted branch starts with a non-space char.
     const firstNumMatch=mtCheck.match(/^(\d+\.+)/);
     if(firstNumMatch&&firstNumMatch[1].includes('...')){
       isBlackToMoveStart=true;
@@ -710,7 +710,7 @@ function parsePGN(pgnText){
   // letter). This avoids stripping `[%csl ...]` / `[%cal ...]` / `[%eval ...]`
   // / `[%emt ...]` from inside brace comments (since `%` is not in [A-Za-z]),
   // and works correctly for single-line PGN files (no `^` line-anchor).
-  let moveText=text.replace(/\[\s*[A-Za-z]\w*\s+"(?:[^"\\]|\\.)*"\s*\]/g,''); // v1.2.3 round-29 (PR52 S8786): canonical PGN tag regex (see line 698 above).
+  let moveText=text.replace(/\[\s*[A-Za-z]\w*\s+(?:"(?:[^"\\]|\\.)*"\s*|\S[^\]\n]*?)\]/g,''); // v1.2.3 round-46 (PR53 CR#11): broadened tag regex (see line 698 above) — also strips unquoted tag values.
   // Remove comments (brace-style).
   // v1.0.5 Round-6 Rev61 (2026.6.27) FIX: was `while(moveText.includes('{'))...`
   // which infinite-loops on a malformed PGN with an unclosed `{` (no matching `}`).
@@ -1515,7 +1515,7 @@ function extractMoveTimes(pgnText){
     //   (same as parsePGN at lines 696/711). The old `/^\[.*\]$/gm` only
     //   stripped headers occupying an ENTIRE line — for single-line PGN the
     //   headers survived and broke this Black-to-move detection.
-    let mtCheck=text.replace(/\[\s*[A-Za-z]\w*\s+"(?:[^"\\]|\\.)*"\s*\]/g,'').trim(); // v1.2.3 round-29 (PR52 S8786): canonical PGN tag regex (same as pgn-standard.js:696 + tablebase.js:205). Eliminates alternation-induced polynomial backtracking; correctly handles escaped quotes inside values.
+    let mtCheck=text.replace(/\[\s*[A-Za-z]\w*\s+(?:"(?:[^"\\]|\\.)*"\s*|\S[^\]\n]*?)\]/g,'').trim(); // v1.2.3 round-46 (PR53 CR#11): broadened tag regex (same as tablebase.js:211 round-40) — also strips UNQUOTED tag values such as [WhiteElo 2400], which the quoted-only round-29 regex left in the movetext (breaking Black-to-move detection and tokenization). Backtracking-safe: quoted branch unchanged, unquoted branch starts with a non-space char.
     const firstNumMatch=mtCheck.match(/^(\d+\.+)/);
     if(firstNumMatch&&firstNumMatch[1].includes('...'))isBlackToMoveStart=true;
   }
@@ -1555,7 +1555,7 @@ function extractMoveTimes(pgnText){
   //   survived and its board coordinates (e.g. "b1") were mis-tokenized as
   //   pawn moves — shifting every subsequent time entry by one slot and
   //   swapping the White/Black attribution.
-  let moveText=text.replace(/\[\s*[A-Za-z]\w*\s+"(?:[^"\\]|\\.)*"\s*\]/g,''); // v1.2.3 round-29 (PR52 S8786): canonical PGN tag regex (see line 698 above).
+  let moveText=text.replace(/\[\s*[A-Za-z]\w*\s+(?:"(?:[^"\\]|\\.)*"\s*|\S[^\]\n]*?)\]/g,''); // v1.2.3 round-46 (PR53 CR#11): broadened tag regex (see line 698 above) — also strips unquoted tag values.
   const usedTimes=[];
   const clkTimes=[];
   let i=0;
@@ -4212,10 +4212,24 @@ function _statsImportBackDismiss(){
 //   3. returnToGame() — close the stats activity and return to MainActivity
 // Returns true if the back press was consumed (so StatsActivity should NOT
 // call finish()), false if the activity should be closed.
+// v1.2.3 round-46 (PR53 CR#26): every consumed branch must acknowledge to
+//   the native side. StatsActivity's 250ms fallback finishes the Activity
+//   unless backCloseHandled is set — previously only closeStatsPage() set it,
+//   so the legal "handled but stay on page" branches below (dismiss dialog /
+//   close overlay / Cancel in the import-back interceptor) were misjudged as
+//   an unresponsive JS and the user got kicked out 250ms later.
+function _ackStatsBack(){
+  try{
+    if(typeof AndroidBridge!=='undefined'&&AndroidBridge.ackStatsBackHandled){
+      AndroidBridge.ackStatsBackHandled();
+    }
+  }catch(e){/* best-effort ack */}
+}
 function handleStatsBackPress(){
   try{
     if(typeof _statsImportBackDialogVisible!=='undefined'&&_statsImportBackDialogVisible){
       _statsImportBackDismiss();
+      _ackStatsBack(); // v1.2.3 round-46 (PR53 CR#26): stay-on-page ack
       return true;
     }
     // Close the topmost .dov overlay (export/import dialogs created via DOM appendChild).
@@ -4230,6 +4244,7 @@ function handleStatsBackPress(){
       // v1.2.3 round-38 (SonarCloud S7765): use .includes() instead of .indexOf() < 0.
       if(!ariaLabel.includes('Import PGN to game')&&!ariaLabel.includes('将PGN导入到对局')){
         topmost.remove();
+        _ackStatsBack(); // v1.2.3 round-46 (PR53 CR#26): stay-on-page ack
         return true;
       }
     }
@@ -4237,6 +4252,12 @@ function handleStatsBackPress(){
     // import-back interceptor or close the activity).
     if(typeof returnToGame==='function'){
       returnToGame();
+      // v1.2.3 round-46 (PR53 CR#26): returnToGame either closed the page via
+      //   closeStatsPage (flag already set) or showed the import-back
+      //   interceptor (user may Cancel = stay). Ack unconditionally — if the
+      //   page did close, this late ack is harmless because finish() is
+      //   already enqueued on the UI thread.
+      _ackStatsBack();
       return true;
     }
   }catch(e){console.error('handleStatsBackPress failed',e);}

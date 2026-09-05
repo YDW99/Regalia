@@ -3024,8 +3024,10 @@ for full license texts and attribution details.
     - worker-pool.js (GPL v3): terminateWorker() function + pagehide/
       beforeunload event registration. Fixes Worker memory leak (review
       report item 1). New export: terminateWorker.
-      (v1.0.8 PHASE 35: corrected license classification — worker-pool.js is
-      original code, NOT DroidFish-derived, so it is AGPL v3, not GPL v3.)
+      (v1.0.8 PHASE 35 briefly retagged worker-pool.js as AGPL v3 "original
+      code"; v1.2.3 round-29 restored the GPL v3 tag — the file header marks
+      it DroidFish-derived, Copyright (C) Peter Österlund. v1.2.3 round-46
+      (PR53 CR#7): this parenthetical corrected to match the header.)
     - chess.html: rebuilt from the above chess.src/ changes.
 
   v1.0.4 Round-5 Rev45 changes:
@@ -4070,7 +4072,9 @@ v1.0.8 Phase 34 (2026.7.1):
 v1.0.8 Phase 35 (2026.7.1):
   - worker-pool.js (GPL v3): terminateWorkerPool now rejects queued tasks;
     workerRun timeout splices ghost tasks from queue; sync fallback deferred
-    into Promise chain. Corrected Rev44 license tag from "GPL v3" to "AGPL v3".
+    into Promise chain. (The "Rev44 license tag corrected to AGPL v3" change
+    made here was later reverted: v1.2.3 round-29 restored GPL v3 per the
+    file header — DroidFish-derived. v1.2.3 round-46, PR53 CR#7.)
   - tablebase.js (GPL v3): importPGNAsync resolves with boolean success flag
     (detected via moveRecords growth).
   - ui.js (GPL v3): PGN cache manager .then() checks success flag; added

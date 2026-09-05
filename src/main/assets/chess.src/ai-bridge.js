@@ -3510,7 +3510,13 @@ function _fileBrowserSelect(filePath){
   // FIX: Use requireEngine=false — file reading doesn't need engine
   _bridgeCall(function(bridge){
     const content=bridge.readTextFile(filePath);
-    if(content){
+    // v1.2.3 round-46 (PR53 CR#21): on Android 6-9 the first read may return
+    //   the {"error":"permission_pending"} sentinel (the permission dialog is
+    //   async and Java cannot block on it). Recognize the sentinel and prompt
+    //   a retry instead of feeding the JSON marker into importSettings.
+    if(content&&content.indexOf('"permission_pending"')!==-1){
+      showToast(T('settings_permission_pending'));
+    }else if(content){
       // importSettings() is async on the Java side — onSettingsImported
       // callback will fire the success/failure toast.
       bridge.importSettings(content);

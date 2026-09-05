@@ -339,6 +339,14 @@ public class MainActivity extends Activity {
      * or the engine init thread hangs.
      */
     private void scheduleInitRetry() {
+        // v1.2.3 round-46 (PR53 CR#22): never schedule engine-init retries
+        //   while the fallback UI is showing — the WebView is gone, so a
+        //   queued retry would NPE on webView (swallowed by its own catch)
+        //   and could build a StockfishNative with no JS bridge attached.
+        if (_isFallbackMode) {
+            Log.d(TAG, "Init retry skipped - fallback UI is showing");
+            return;
+        }
         initRetryHandler.removeCallbacksAndMessages(null);
         // v18.3.0: Lambda eliminated for HyperOS 3 ART compatibility (invokedynamic issue)
         initRetryHandler.postDelayed(new Runnable() {
@@ -450,6 +458,16 @@ public class MainActivity extends Activity {
     //   can invoke it from the render-crash backoff path (4+ crashes in 60s)
     //   to show the user a recovery message instead of a frozen screen.
     void showFallbackUI(String message) {
+        // v1.2.3 round-46 (PR53 CR#22): cancel pending engine-init retries
+        //   FIRST — once the fallback UI replaces the WebView, a queued retry
+        //   would dereference the destroyed/null webView (NPE swallowed by its
+        //   own catch) and could construct a StockfishNative with no JS bridge.
+        //   scheduleInitRetry() is additionally guarded by _isFallbackMode so
+        //   retries not yet posted (e.g. the loadUrl-failure path below in
+        //   onCreateInternal) are skipped as well.
+        if (initRetryHandler != null) {
+            initRetryHandler.removeCallbacksAndMessages(null);
+        }
         // v1.2.3 round-44 (B3): destroy the old WebView before swapping in the
         //   fallback view — previously it stayed alive (hidden), pinning the
         //   engine JS bridge + native resources for the rest of the process
@@ -461,6 +479,15 @@ public class MainActivity extends Activity {
             try { oldWebView.stopLoading(); } catch (Throwable t) { Log.w(TAG, "fallback: stopLoading failed", t); }
             try { oldWebView.loadUrl("about:blank"); } catch (Throwable t) { Log.w(TAG, "fallback: about:blank failed", t); }
             try { oldWebView.removeJavascriptInterface("AndroidBridge"); } catch (Throwable t) { Log.w(TAG, "fallback: removeJavascriptInterface failed", t); }
+            // v1.2.3 round-46 (PR53 CR#23): detach from the parent view BEFORE
+            //   destroy() — Android requires a WebView to be removed from the
+            //   view hierarchy first; destroying an attached WebView can throw
+            //   or leak the window (same step order as runWebViewTeardown).
+            try {
+                if (oldWebView.getParent() instanceof android.view.ViewGroup) {
+                    ((android.view.ViewGroup) oldWebView.getParent()).removeView(oldWebView);
+                }
+            } catch (Throwable t) { Log.w(TAG, "fallback: removeView failed", t); }
             try { oldWebView.destroy(); } catch (Throwable t) { Log.w(TAG, "fallback: destroy failed", t); }
             webView = null;
         }
@@ -823,7 +850,7 @@ public class MainActivity extends Activity {
         // Notify JS to clean up event listeners and timers before destroying
         // the WebView. v1.2.3 round-44 (B2): the teardown is CHAINED to this
         //   evaluateJavascript's value callback so the JS cleanup (and the
-        //   flush above) actually execute before native destroy; a 100ms
+        //   flush above) actually execute before native destroy; a 500ms
         //   postDelayed fallback forces teardown if the renderer is frozen and
         //   the callback never fires. runWebViewTeardown is idempotent
         //   (AtomicBoolean guard), so both paths may fire safely.
@@ -844,7 +871,7 @@ public class MainActivity extends Activity {
                 public void run() {
                     runWebViewTeardown(wvToTeardown);
                 }
-            }, 100);
+            }, 500);
         }
         if (stockfishEngine != null) {
             try {
@@ -857,7 +884,10 @@ public class MainActivity extends Activity {
     }
 
     // v1.2.3 round-44 (B2): one-shot guard — teardown runs from the JS cleanup
-    //   callback OR the 100ms fallback, whichever fires first.
+    //   callback OR the timed fallback, whichever fires first.
+    // v1.2.3 round-46 (PR53 CR#24): fallback raised 100ms -> 500ms — under load
+    //   the JS cleanup callback can legitimately take >100ms to arrive, and the
+    //   100ms fallback fired early, skipping the JS-side listener cleanup.
     private final java.util.concurrent.atomic.AtomicBoolean _webViewTeardownDone =
             new java.util.concurrent.atomic.AtomicBoolean(false);
 
@@ -1039,6 +1069,16 @@ public class MainActivity extends Activity {
 
     public WebView getWebView() {
         return webView;
+    }
+
+    // v1.2.3 round-46 (PR53 CR#20): called by ChessWebViewClient just before
+    //   it destroys a render-crashed WebView, so this Activity's `webView`
+    //   field never keeps referencing a destroyed instance — reusing a
+    //   destroyed WebView violates the WebView API contract and can crash.
+    void clearWebViewIfMatches(WebView destroyed) {
+        if (webView == destroyed) {
+            webView = null;
+        }
     }
 
     // ========================================================================

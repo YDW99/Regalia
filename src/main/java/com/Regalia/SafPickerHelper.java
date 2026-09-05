@@ -348,20 +348,22 @@ public class SafPickerHelper {
             throw new java.io.IOException("openInputStream returned null for " + uri);
         }
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(is, "UTF-8"))) {
+            // v1.2.3 round-46 (PR53 CR#15): read in fixed-size chunks with a
+            //   hard cap instead of readLine(). The round-41 pre-append check
+            //   was NOT sufficient: readLine() itself materializes an entire
+            //   line in memory BEFORE the check runs, so a single multi-GB
+            //   line could OOM the process anyway. Memory use is now strictly
+            //   bounded by SETTINGS_MAX_CHARS + one 8KB chunk buffer. Line
+            //   endings are preserved as-is (downstream importSettings splits
+            //   on \r?\n, so CRLF input is fine).
             StringBuilder sb = new StringBuilder();
-            String line;
-            // v1.2.3 round-41: accumulate a running length and fail fast with
-            //   IOException BEFORE appending an over-limit line (the check is
-            //   pre-append, so a single giant line is also rejected). Without
-            //   this, a multi-GB "settings" file would OOM the StringBuilder
-            //   before any downstream validation could run.
-            int totalChars = 0;
-            while ((line = reader.readLine()) != null) {
-                if (totalChars + line.length() + 1 > SETTINGS_MAX_CHARS) {
+            char[] chunk = new char[8192];
+            int n;
+            while ((n = reader.read(chunk, 0, chunk.length)) != -1) {
+                if (sb.length() + n > SETTINGS_MAX_CHARS) {
                     throw new java.io.IOException("Settings file too large (>" + SETTINGS_MAX_CHARS + " chars)");
                 }
-                sb.append(line).append("\n");
-                totalChars += line.length() + 1;
+                sb.append(chunk, 0, n);
             }
             return sb.toString();
         }

@@ -103,17 +103,22 @@ public final class TlsSecurityHelper {
     // v1.2.3 round-44 (D5): 由类加载期静态初始化改为懒加载 + 防御性解码。
     //   原实现中 Base64.decode 若抛异常（pin 字符串损坏、ROM 的 Base64 实现
     //   异常），会以 ExceptionInInitializerError 炸掉整个类（连 init() 的
-    //   MobSF 引用都不可达）。现在 decodePin catch Throwable -> Log.e ->
+    //   MobSF 引用都不可达）。现在 decodePin catch Exception -> Log.e ->
     //   返回空数组；MessageDigest.isEqual 对空数组必然不匹配，属于安全失败
     //   （fail-closed），且缓存避免重复告警。
+    // v1.2.3 round-46 (PR53 CR#27): catch 由 Throwable 收窄为 Exception（项目
+    //   S1181 约定）——损坏输入抛的 IllegalArgumentException 仍被兜住，
+    //   而 OOM 等 Error 必须上抛，不再被吞。
     private static final java.util.concurrent.ConcurrentHashMap<String, byte[]> PIN_BYTES_CACHE =
             new java.util.concurrent.ConcurrentHashMap<>();
 
-    /** v1.2.3 round-44 (D5): 防御性 Base64 解码 —— 永不抛出，失败返回空数组。 */
+    /** v1.2.3 round-44 (D5): 防御性 Base64 解码 —— 损坏输入不抛出（失败返回
+        空数组，fail-closed）；v1.2.3 round-46 (PR53 CR#27): 仅 catch Exception，
+        OOM 等 Error 按 S1181 约定继续上抛。 */
     private static byte[] decodePin(String pin) {
         try {
             return android.util.Base64.decode(pin, android.util.Base64.NO_WRAP);
-        } catch (Throwable e) {
+        } catch (Exception e) {
             Log.e(TAG, "decodePin failed (fail-closed: pin will never match)", e);
             return new byte[0];
         }

@@ -196,6 +196,14 @@ public class StockfishNative {
 
     private volatile int currentState = STATE_NONE;
     private volatile boolean engineReady = false;
+    // v1.2.3 round-46 (PR53 CR#16): true only during the Step-6 init-time
+    //   applySettings() window. The UCI handshake has completed by then, but
+    //   engineReady is deliberately still false (round-44 A7: block concurrent
+    //   engineGo until options are applied). EngineConfigHelper's readiness
+    //   gate and sendSetOptionAndWait both accept this flag as a readiness
+    //   substitute so init-time configuration actually reaches the engine —
+    //   previously the whole Step-6 configuration silently no-opped.
+    private volatile boolean initConfigInProgress = false;
     private volatile boolean shutdownRequested = false;
     // v1.2.3 round-40: distinguishes an EXTERNAL shutdown() (JS bridge entry,
     //   e.g. user exit / engine switch) from the INTERNAL shutdown performed
@@ -606,7 +614,11 @@ public class StockfishNative {
         // v1.2.0 Phase 81: Engine config helper — Callbacks provide raw field access
         // (field + persist, no UCI command) so the helper owns all UCI command dispatch.
         this._engineConfigHelper = new EngineConfigHelper(this.context, new EngineConfigHelper.Callbacks() {
-            @Override public boolean isEngineReady() { return engineReady; }
+            // v1.2.3 round-46 (PR53 CR#16): also report ready during the
+            //   init-time configuration window (see initConfigInProgress) —
+            //   the engine process is handshaked and accepting setoption;
+            //   only the public engineReady flag is still pending.
+            @Override public boolean isEngineReady() { return engineReady || initConfigInProgress; }
             @Override public boolean isAutoConfigEnabled() { return autoConfigEnabled; }
             @Override public int getEngineThreads() { return engineThreads; }
             @Override public int getEngineHash() { return engineHash; }
@@ -1778,7 +1790,12 @@ public class StockfishNative {
 
         // Step 6: Apply settings with correct ordering
         postJsCallback("onInitProgress(80, " + escapeJsString(isEnglishMode() ? "Applying engine configuration..." : "\u6b63\u5728\u5e94\u7528\u5f15\u64ce\u914d\u7f6e...") + ")");
-        applySettings();
+        initConfigInProgress = true; // v1.2.3 round-46 (PR53 CR#16): see field doc
+        try {
+            applySettings();
+        } finally {
+            initConfigInProgress = false;
+        }
         // v1.2.3 round-44 (A7): engineReady set AFTER applySettings() and before
         //   notifyEngineInfo(). Previously it was set before applySettings, so a
         //   concurrent engineGo on another thread could pass the engineReady
@@ -2790,7 +2807,10 @@ public class StockfishNative {
      *   wait for a queued caller.
      */
     private boolean sendSetOptionAndWait(String name, String value) {
-        if (!engineReady || engineWriter == null) {
+        // v1.2.3 round-46 (PR53 CR#16): initConfigInProgress counts as ready —
+        //   during Step-6 init the handshake is done and only the engineReady
+        //   flag is still pending (kept false for A7's engineGo race guard).
+        if ((!engineReady && !initConfigInProgress) || engineWriter == null) {
             Log.w(TAG, "Cannot set option " + name + " - engine not ready");
             return false;
         }
@@ -3720,12 +3740,19 @@ public class StockfishNative {
 
     @JavascriptInterface
     public void ponderHit() {
+        // v1.2.3 round-46 (PR53 CR#17): snapshot the submission counter BEFORE
+        //   the _isPondering guard. The snapshot exists so a queued startPonder
+        //   detects a ponderhit that raced ahead of its "go ponder" — but in
+        //   exactly that race _isPondering is still false, so the old order
+        //   returned early and startPonder's compensation branch was
+        //   unreachable (the ponderhit was silently dropped). _cmdSeq is
+        //   monotonic, so a snapshot from a stale/duplicate call can never
+        //   exceed a future startPonder's enqSeq — moving this up is safe.
+        // v1.2.3 round-44 (A3/A4): a queued startPonder with seq <= this
+        //   snapshot re-applies ponderhit after its "go ponder" (see _cmdSeq).
+        _lastPonderHitSeq = _cmdSeq.get();
         if (!_isPondering) return;
         Log.i(TAG, "ponderhit — opponent played expected move");
-        // v1.2.3 round-44 (A3/A4): snapshot the submission counter before the
-        //   direct "ponderhit" below — a queued startPonder with seq <= this
-        //   re-applies ponderhit after its "go ponder" (see _cmdSeq).
-        _lastPonderHitSeq = _cmdSeq.get();
         _isPondering = false;
         // FIX: Set state to STATE_GO so that the resulting bestmove is processed
         // correctly as the AI's move response, not dropped. Previously STATE_NONE

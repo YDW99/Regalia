@@ -1541,6 +1541,7 @@ const _i18n={
 'copy_failed':{zh:'复制失败，请手动复制',en:'Copy failed, please copy manually'},
 'file_browse_failed':{zh:'文件浏览失败',en:'File browse failed'},
 'settings_read_fail':{zh:'无法读取设置文件',en:'Cannot read settings file'},
+'settings_permission_pending':{zh:'需要存储权限，请在系统弹窗中授权后重试',en:'Storage permission required — grant it in the system dialog and retry'},
 'restarting_engine':{zh:'正在重启引擎...',en:'Restarting engine...'},
 'engine_unavailable_bridge':{zh:'引擎接口不可用',en:'Engine interface unavailable'},
 'restart_failed':{zh:'重启失败',en:'Restart failed'},
@@ -3337,7 +3338,7 @@ if(_cs){
   // castling actually works in the resulting game.
   if(typeof chess960CastlingRookMove==='function'){
     const rm=chess960CastlingRookMove(s,piece.color,_cs);
-    if(rm?.rookFrom!==rm.rookTo){
+    if(rm&&rm.rookFrom!==rm.rookTo){ // v1.2.3 round-46 (PR53 CR#5): guard rm itself — chess960CastlingRookMove returns null when no rook exists on that side (setup-mode edits / imported FEN with stale castling rights); rm?.rookFrom!==rm.rookTo still dereferenced rm.rookTo and threw TypeError.
       _rookFrom=rm.rookFrom;_rookTo=rm.rookTo;
       _savedRook=ns.board[rm.row][rm.rookFrom]; // save rook before king overwrites it
     }
@@ -3536,7 +3537,7 @@ if(_cs){
   // detailed first-principles rationale.
   if(typeof chess960CastlingRookMove==='function'){
     const rm=chess960CastlingRookMove(s,piece.color,_cs);
-    if(rm?.rookFrom!==rm.rookTo){
+    if(rm&&rm.rookFrom!==rm.rookTo){ // v1.2.3 round-46 (PR53 CR#5): guard rm itself — chess960CastlingRookMove returns null when no rook exists on that side (setup-mode edits / imported FEN with stale castling rights); rm?.rookFrom!==rm.rookTo still dereferenced rm.rookTo and threw TypeError.
       _rookFrom=rm.rookFrom;_rookTo=rm.rookTo;
       _savedRook=s.board[rm.row][rm.rookFrom];
     }
@@ -4291,7 +4292,13 @@ if(gameClocks !== undefined&&gameClocks&&typeof AndroidBridge.engineGoTimed==='f
       if(_aiRetryCount<3){setTimeout(()=>{if(!gameOver&&gameState.currentTurn!==playerColor)doAIMove();},500);}
       else{showToast(T('ai_timeout'));_aiRetryCount=0;render();}
     }}
-    else{try{AndroidBridge.engineGo(fen,aiLevel);}catch(error){}}
+    else{try{AndroidBridge.engineGo(fen,aiLevel);}catch(error){
+      // v1.2.3 round-46 (PR53 CR#6): mirror the engineGoNewGame branch —
+      //   both fallbacks failing means the engine never received the search
+      //   command; silence left the user staring at a hung AI with no toast.
+      console.error('engineGo fallback failed:',error);
+      showToast(T('engine_unavailable_hint'));
+    }}
     isAIThinking=false;_aiBarInfo='';render();
   }
   return;
@@ -6766,11 +6773,24 @@ function _dispatchNext() {
       //   instantaneous-retry semantics (next workerRun re-attempts
       //   _createWorker) are unchanged.
       if (_workerPool.length === 0) {
-        const task = _taskQueue.shift();
-        clearTimeout(task.timeout);
-        Promise.resolve().then(function() { return _syncFallback(task.fnName, task.args); })
-          .then(task.resolve, task.reject);
-        continue;
+        // v1.2.3 round-46 (PR53 CR#9): drain the WHOLE queue in this pass
+        //   instead of `continue`-ing per task. The old loop re-entered
+        //   _getIdleWorker() -> _createWorker() once per queued task, so 3+
+        //   queued tasks inside one transient-failure window tripped the
+        //   Phase-71 3-strike counter and set _workerSupported=false —
+        //   permanently disabling the pool (contradicting the round-41 note
+        //   above). With drain-all, each dispatch pass costs at most one
+        //   creation attempt, so the counter again counts INDEPENDENT events
+        //   as Phase 71 intended. An empty pool also means no busy worker
+        //   exists to re-trigger dispatch, so queued tasks would otherwise
+        //   wait for their 30s timeouts.
+        while (_taskQueue.length > 0) {
+          const task = _taskQueue.shift();
+          clearTimeout(task.timeout);
+          Promise.resolve().then(function() { return _syncFallback(task.fnName, task.args); })
+            .then(task.resolve, task.reject);
+        }
+        return;
       }
       break;
     }
@@ -7234,12 +7254,13 @@ const Store = (function() {
         if (Array.isArray(obj)) return obj.map(function (v) { return _deepClone(v, _depth + 1); });
         const cloned = {};
         for (const key in obj) {
-            // v1.2.3 round-37 (SonarCloud S6653): Object.hasOwn is the ES2022
-            //   static method — safer than obj.hasOwnProperty (which can be
-            //   shadowed by a user-defined hasOwnProperty property) and more
-            //   concise than Object.prototype.hasOwnProperty.call. Android
-            //   WebView API 35+ supports ES2022.
-            if (Object.hasOwn(obj, key)) {
+            // v1.2.3 round-37 (SonarCloud S6653): avoid obj.hasOwnProperty
+            //   (it can be shadowed by a user-defined hasOwnProperty key).
+            // v1.2.3 round-46 (PR53 CR#8): Object.hasOwn needs Chrome 93+;
+            //   minSdk 23 devices with an older system WebView would throw
+            //   "Object.hasOwn is not a function". Use the ES3-safe,
+            //   shadow-proof equivalent instead.
+            if (Object.prototype.hasOwnProperty.call(obj, key)) {
                 cloned[key] = _deepClone(obj[key], _depth + 1);
             }
         }
@@ -11047,7 +11068,13 @@ function _fileBrowserSelect(filePath){
   // FIX: Use requireEngine=false — file reading doesn't need engine
   _bridgeCall(function(bridge){
     const content=bridge.readTextFile(filePath);
-    if(content){
+    // v1.2.3 round-46 (PR53 CR#21): on Android 6-9 the first read may return
+    //   the {"error":"permission_pending"} sentinel (the permission dialog is
+    //   async and Java cannot block on it). Recognize the sentinel and prompt
+    //   a retry instead of feeding the JSON marker into importSettings.
+    if(content&&content.indexOf('"permission_pending"')!==-1){
+      showToast(T('settings_permission_pending'));
+    }else if(content){
       // importSettings() is async on the Java side — onSettingsImported
       // callback will fire the success/failure toast.
       bridge.importSettings(content);

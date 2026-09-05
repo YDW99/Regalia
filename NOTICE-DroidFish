@@ -119,7 +119,10 @@ WebView-based architecture. Key architectural differences:
 - Regalia: WebView-based UI with HTML/CSS/JS frontend
 
 - Original DroidFish: Direct JNI calls to engine
-- Regalia: AndroidBridge JavaScript interface + pipe-based dlopen() bridge
+- Regalia: AndroidBridge JavaScript interface + engine launched as a
+  subprocess via ProcessBuilder (UCI over stdin/stdout). v1.2.3 round-46
+  (PR53 CR#1): corrected — the pipe-based dlopen() bridge was removed in
+  v1.0.2 (see section 2 above); the old wording here contradicted that.
 
 - Original DroidFish: Single-language UI
 - Regalia: Bilingual (Chinese/English) with i18n system

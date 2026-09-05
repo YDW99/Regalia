@@ -202,13 +202,17 @@ v1.2.3 round-33 (2026.7.20) — PR52 v3 CodeRabbit Major+Minor stability fixes:
     return the default _systemHapticCached=true even if the system had
     haptic disabled.
   - All other .java files: unchanged this round.
-  - License classification: all files unchanged (HapticManager.java,
-    EngineProcessManager.java, EngineService.java, EngineHealthMonitor.java,
-    EngineConfigHelper.java, EngineSettingsHelper.java, StockfishNative.java,
-    PgnCacheManager.java, ChessWebViewClient.java, JsBridgeGateway.java,
-    FileIoHelper.java, SafPickerHelper.java, PermissionHelper.java,
-    RootDetector.java, StabilizationHelper.java, TlsSecurityHelper.java,
-    StatsActivity.java = GPL v3; MainActivity.java, ChessApp.java = AGPL v3).
+  - License classification: all files unchanged (StockfishNative.java,
+    JsBridgeGateway.java, HapticManager.java, EngineConfigHelper.java,
+    SafPickerHelper.java, EngineSettingsHelper.java, PgnCacheManager.java,
+    FileIoHelper.java, PermissionHelper.java, EngineProcessManager.java,
+    EngineHealthMonitor.java, StatsActivity.java = GPL v3; MainActivity.java,
+    ChessWebViewClient.java, EngineService.java, StabilizationHelper.java,
+    ChessApp.java, TlsSecurityHelper.java, RootDetector.java = AGPL v3).
+    (v1.2.3 round-46, PR53 CR#14: corrected — this entry previously listed
+    EngineService / ChessWebViewClient / RootDetector / StabilizationHelper /
+    TlsSecurityHelper under GPL v3, contradicting their AGPL v3 file headers
+    and the round-36/37 entries.)
 
 v1.2.3 round-32 (2026.7.20) — System.currentTimeMillis() bug-class fix propagation:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
@@ -238,13 +242,17 @@ v1.2.3 round-32 (2026.7.20) — System.currentTimeMillis() bug-class fix propaga
   - FileIoHelper.java (GPL v3): 4 stale "Android 5-9" comments →
     "Android 6-9".
   - All other .java files: unchanged this round.
-  - License classification: all files unchanged (HapticManager.java,
-    EngineProcessManager.java, EngineService.java, EngineHealthMonitor.java,
-    EngineConfigHelper.java, EngineSettingsHelper.java, StockfishNative.java,
-    PgnCacheManager.java, ChessWebViewClient.java, JsBridgeGateway.java,
-    FileIoHelper.java, SafPickerHelper.java, PermissionHelper.java,
-    RootDetector.java, StabilizationHelper.java, TlsSecurityHelper.java,
-    StatsActivity.java = GPL v3; MainActivity.java, ChessApp.java = AGPL v3).
+  - License classification: all files unchanged (StockfishNative.java,
+    JsBridgeGateway.java, HapticManager.java, EngineConfigHelper.java,
+    SafPickerHelper.java, EngineSettingsHelper.java, PgnCacheManager.java,
+    FileIoHelper.java, PermissionHelper.java, EngineProcessManager.java,
+    EngineHealthMonitor.java, StatsActivity.java = GPL v3; MainActivity.java,
+    ChessWebViewClient.java, EngineService.java, StabilizationHelper.java,
+    ChessApp.java, TlsSecurityHelper.java, RootDetector.java = AGPL v3).
+    (v1.2.3 round-46, PR53 CR#14: corrected — this entry previously listed
+    EngineService / ChessWebViewClient / RootDetector / StabilizationHelper /
+    TlsSecurityHelper under GPL v3, contradicting their AGPL v3 file headers
+    and the round-36/37 entries.)
 
 v1.2.3 round-31 (2026.7.20) — PR52 CodeRabbit stability fixes:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
@@ -261,13 +269,17 @@ v1.2.3 round-31 (2026.7.20) — PR52 CodeRabbit stability fixes:
     the JS-binder-thread toggle vs main-thread destroy race that could
     leak sensors).
   - All other .java files: unchanged this round.
-  - License classification: all files unchanged (HapticManager.java,
-    EngineProcessManager.java, EngineService.java, EngineHealthMonitor.java,
-    EngineConfigHelper.java, EngineSettingsHelper.java, StockfishNative.java,
-    PgnCacheManager.java, ChessWebViewClient.java, JsBridgeGateway.java,
-    FileIoHelper.java, SafPickerHelper.java, PermissionHelper.java,
-    RootDetector.java, StabilizationHelper.java, TlsSecurityHelper.java,
-    StatsActivity.java = GPL v3; MainActivity.java, ChessApp.java = AGPL v3).
+  - License classification: all files unchanged (StockfishNative.java,
+    JsBridgeGateway.java, HapticManager.java, EngineConfigHelper.java,
+    SafPickerHelper.java, EngineSettingsHelper.java, PgnCacheManager.java,
+    FileIoHelper.java, PermissionHelper.java, EngineProcessManager.java,
+    EngineHealthMonitor.java, StatsActivity.java = GPL v3; MainActivity.java,
+    ChessWebViewClient.java, EngineService.java, StabilizationHelper.java,
+    ChessApp.java, TlsSecurityHelper.java, RootDetector.java = AGPL v3).
+    (v1.2.3 round-46, PR53 CR#14: corrected — this entry previously listed
+    EngineService / ChessWebViewClient / RootDetector / StabilizationHelper /
+    TlsSecurityHelper under GPL v3, contradicting their AGPL v3 file headers
+    and the round-36/37 entries.)
 
 v1.2.3 round-30 (2026.7.19) — First-principles per-file review + robustness/perf optimizations:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).

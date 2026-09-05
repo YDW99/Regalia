@@ -405,11 +405,24 @@ function _dispatchNext() {
       //   instantaneous-retry semantics (next workerRun re-attempts
       //   _createWorker) are unchanged.
       if (_workerPool.length === 0) {
-        const task = _taskQueue.shift();
-        clearTimeout(task.timeout);
-        Promise.resolve().then(function() { return _syncFallback(task.fnName, task.args); })
-          .then(task.resolve, task.reject);
-        continue;
+        // v1.2.3 round-46 (PR53 CR#9): drain the WHOLE queue in this pass
+        //   instead of `continue`-ing per task. The old loop re-entered
+        //   _getIdleWorker() -> _createWorker() once per queued task, so 3+
+        //   queued tasks inside one transient-failure window tripped the
+        //   Phase-71 3-strike counter and set _workerSupported=false —
+        //   permanently disabling the pool (contradicting the round-41 note
+        //   above). With drain-all, each dispatch pass costs at most one
+        //   creation attempt, so the counter again counts INDEPENDENT events
+        //   as Phase 71 intended. An empty pool also means no busy worker
+        //   exists to re-trigger dispatch, so queued tasks would otherwise
+        //   wait for their 30s timeouts.
+        while (_taskQueue.length > 0) {
+          const task = _taskQueue.shift();
+          clearTimeout(task.timeout);
+          Promise.resolve().then(function() { return _syncFallback(task.fnName, task.args); })
+            .then(task.resolve, task.reject);
+        }
+        return;
       }
       break;
     }

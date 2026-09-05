@@ -188,12 +188,16 @@ public class ChessWebViewClient extends WebViewClient {
         if (_renderCrashCount > 3) {
             Log.e(TAG, "Render process crashed " + _renderCrashCount + " times within 60s — "
                     + "stopping recreate loop to prevent battery drain. User must restart app manually.");
-            destroyWebViewSafely(view, "backoff path");
+            // v1.2.3 round-46 (PR53 CR#20): clear the Activity's webView
+            //   reference BEFORE destroying (inside destroyWebViewSafely) —
+            //   otherwise showFallbackUI / getWebView() could reuse a
+            //   destroyed WebView instance (illegal per WebView API contract).
+            final MainActivity activity = activityRef.get();
+            destroyWebViewSafely(view, "backoff path", activity);
             // v1.2.3 round-13 (P1): show the user a recovery message instead
             //   of leaving them with a frozen screen. The Activity's WebView
-            //   reference is now stale, so we hand off to showFallbackUI which
+            //   reference is now cleared, so we hand off to showFallbackUI which
             //   builds a native recovery overlay.
-            final MainActivity activity = activityRef.get();
             if (activity != null) {
                 activity.runOnUiThread(new Runnable() {
                     @Override
@@ -215,11 +219,13 @@ public class ChessWebViewClient extends WebViewClient {
         Log.w(TAG, "Render process crash count within 60s: " + _renderCrashCount + "/3");
         // Remove the dead WebView from its parent to avoid
         // WindowLeaked exceptions during Activity teardown.
-        destroyWebViewSafely(view, "render-crash");
+        // v1.2.3 round-46 (PR53 CR#20): clear the Activity's webView reference
+        //   before destroying (see backoff path above).
+        MainActivity activity = activityRef.get();
+        destroyWebViewSafely(view, "render-crash", activity);
         // Notify the Activity so it can recreate the WebView (e.g., by
         // calling recreate() or showing a "Renderer crashed, tap to reload"
         // overlay). We use a WeakReference so we don't leak the Activity.
-        MainActivity activity = activityRef.get();
         if (activity != null) {
             try {
                 // Use recreate() to fully rebuild the Activity + WebView.
@@ -246,13 +252,17 @@ public class ChessWebViewClient extends WebViewClient {
 
     /**
      * v1.2.3 (DRY + S1181): Best-effort WebView teardown shared by both
-     *   render-crash paths (backoff and normal). Detaches the view from its
-     *   parent (prevents WindowLeaked during Activity teardown) then destroys
-     *   it. WebView.destroy() on an already-crashed renderer throws
-     *   RuntimeException subtypes on some OEM ROMs — caught and logged.
+     *   render-crash paths (backoff and normal). Clears the Activity's
+     *   webView reference first (round-46, PR53 CR#20), then detaches the
+     *   view from its parent (prevents WindowLeaked during Activity teardown)
+     *   and destroys it. WebView.destroy() on an already-crashed renderer
+     *   throws RuntimeException subtypes on some OEM ROMs — caught and logged.
      *   Errors (OOM etc.) are intentionally NOT caught (S1181).
      */
-    private static void destroyWebViewSafely(WebView view, String pathTag) {
+    private static void destroyWebViewSafely(WebView view, String pathTag, MainActivity activity) {
+        if (activity != null) {
+            activity.clearWebViewIfMatches(view);
+        }
         try {
             if (view != null) {
                 if (view.getParent() instanceof android.view.ViewGroup) {

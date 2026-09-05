@@ -265,8 +265,8 @@ v1.2.3 round-18 (2026.7.17) — Chess960 PGN [FEN] bug fix + 7-agent line-by-lin
     script block of the exported file). Removed the ineffective
     frame-ancestors directive from the CSP <meta> (only honored as an
     HTTP header).
-  - License classification: chess.html remains AGPL v3; stats.html is GPL v3 (DroidFish-derived per file header)
-    (original works, not derived from DroidFish or Stockfish).
+  - License classification: chess.html remains AGPL v3; stats.html is GPL v3
+    (DroidFish-derived per file header).
 
 v1.2.3 round-17 (2026.7.17) — SonarCloud high-priority cleanup:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
@@ -280,8 +280,8 @@ v1.2.3 round-17 (2026.7.17) — SonarCloud high-priority cleanup:
     at most one 'x'; equivalent); the printf-style sequential %d replacement
     chain intentionally left as .replace (replaceAll would substitute every
     %d with the first value — verified, would be a bug).
-  - License classification: chess.html remains AGPL v3; stats.html is GPL v3 (DroidFish-derived per file header)
-    (original works, not derived from DroidFish or Stockfish).
+  - License classification: chess.html remains AGPL v3; stats.html is GPL v3
+    (DroidFish-derived per file header).
 
 v1.2.3 round-13 (2026.7.16) — CMake re-enablement + first-principles code review:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
@@ -291,8 +291,8 @@ v1.2.3 round-13 (2026.7.16) — CMake re-enablement + first-principles code revi
   - stats.html (GPL v3): No changes this round. (The build-chess.py CSP
     hash auto-update block that referenced stats.html was removed as dead
     code — stats.html has used 'unsafe-inline' CSP since v1.1.2 PHASE 71.)
-  - License classification: chess.html remains AGPL v3; stats.html is GPL v3 (DroidFish-derived per file header)
-    (original works, not derived from DroidFish or Stockfish).
+  - License classification: chess.html remains AGPL v3; stats.html is GPL v3
+    (DroidFish-derived per file header).
 
 v1.2.3 round-12 (2026.7.16) — SonarCloud bug fixes + first-principles review:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — bug-fix round).
@@ -300,8 +300,8 @@ v1.2.3 round-12 (2026.7.16) — SonarCloud bug fixes + first-principles review:
     22,114 lines, 1,329,375 bytes. The slider input at L16509 now uses
     aria-label="'+T('review_move_slider')+'" instead of T('step_label').
   - stats.html (GPL v3): No changes this round.
-  - License classification: chess.html remains AGPL v3; stats.html is GPL v3 (DroidFish-derived per file header)
-    (original works, not derived from DroidFish or Stockfish).
+  - License classification: chess.html remains AGPL v3; stats.html is GPL v3
+    (DroidFish-derived per file header).
 
 v1.2.3 optimization pass (2026.7.16) — first-principles line-by-line review:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — no version bump).

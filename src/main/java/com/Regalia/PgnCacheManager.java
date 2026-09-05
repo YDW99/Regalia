@@ -362,8 +362,10 @@ public class PgnCacheManager {
     }
 
     /**
-     * v1.2.3 round-44 (E1): 复制 src 到 dst（+fsync）成功后删除 src；
-     * 任何一步失败返回 false（dst 残留由调用方语义决定，量小无害）。
+     * v1.2.3 round-44 (E1): 复制 src 到 dst（+fsync）成功后删除 src。
+     * v1.2.3 round-46 (PR53 CR#25): 复制中途失败时删除可能已截断的 dst ——
+     * 此前异常路径直接 return false，残留的半截 .tags.json 会让 JS 侧
+     * JSON.parse 抛异常；源文件仍在，删除残次副本可安全重试。
      */
     private static boolean copyAndDelete(File src, File dst) {
         try {
@@ -382,6 +384,13 @@ public class PgnCacheManager {
             return src.delete();
         } catch (Throwable e) {
             Log.w(TAG, "copyAndDelete failed: " + src + " -> " + dst, e);
+            try {
+                if (dst.exists() && !dst.delete()) {
+                    Log.w(TAG, "copyAndDelete: could not remove truncated dst " + dst);
+                }
+            } catch (Throwable e2) {
+                Log.w(TAG, "copyAndDelete: dst cleanup failed", e2);
+            }
             return false;
         }
     }

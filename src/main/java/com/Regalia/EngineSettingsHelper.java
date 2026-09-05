@@ -318,6 +318,13 @@ public class EngineSettingsHelper {
                 return 1;
             case "engine.autoConfig":
                 callbacks.setAutoConfigEnabled(Boolean.parseBoolean(value));
+                // v1.2.3 round-46 (PR53 CR#13): record the explicit key —
+                //   without this, handleAutoConfigOverride's
+                //   explicitlySet.contains("engine.autoConfig") was always
+                //   false, so a file combining autoConfig=true with
+                //   threads/hash had the user's explicit choice overridden
+                //   (round-44 C11's stated goal was defeated).
+                explicitlySet.add("engine.autoConfig");
                 return 1;
             default:
                 return 0;

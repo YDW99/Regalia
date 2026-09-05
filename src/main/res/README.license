@@ -6,9 +6,13 @@ v1.2.3 round-44 (2026.9.4): strings.xml app_name removed + xml/ rule files delet
     resValue "string", "app_name", "Regalia v${computedVersionName}"
     (single source of truth: version.properties). The file now carries
     only its license header.
-  - xml/backup_rules.xml + xml/data_extraction_rules.xml: DELETED — dead
-    config since allowBackup="false" (the manifest attributes referencing
-    them were removed back in round-13); no behavior change.
+  - xml/backup_rules.xml + xml/data_extraction_rules.xml: DELETED from the
+    round-44 build tree — dead config since allowBackup="false" (the manifest
+    attributes referencing them were removed back in round-13); no behavior
+    change. (v1.2.3 round-46, PR53 CR#18 correction: the deletion did not
+    reach the git upload branch — the zip-based sync cannot delete files —
+    so both files remain in res/xml/ as unreferenced dead config. See the
+    xml/ subsection below.)
   - xml/network_security_config.xml (AGPL v3): added a debug-overrides
     block (debug builds only; release trust anchors and the
     cleartextTrafficPermitted="false" policy are unchanged).
@@ -312,11 +316,15 @@ NOTE on README.license placement:
 
 Subdirectory license summary:
   - values/: AGPL v3 (original)
-      strings.xml — application name ("Regalia v1.1.1") and string
-      resources. Contains app_name, dialog titles, button labels,
-      toast messages, ECO family names, and all user-facing strings
-      in both Chinese and English (selected at runtime via _lang).
-      (v1.0.8 PHASE 30: updated from stale "Regalia v1.0.3" reference.)
+      strings.xml — since v1.2.3 round-44 (F4) this file carries ONLY its
+      license header: the hardcoded app_name string was removed and the
+      launcher label is now injected by build.gradle via
+      resValue "string", "app_name", "Regalia v${computedVersionName}"
+      (single source of truth: version.properties). The app's user-facing
+      strings live in the chess.src/*.js i18n tables (selected at runtime
+      via _lang), not in Android resources.
+      (v1.2.3 round-46, PR53 CR#18: rewritten — the previous text still
+      described the pre-round-44 app_name "Regalia v1.1.1" content.)
   - xml/: AGPL v3 (original)
       network_security_config.xml — TLS 1.2+ enforcement + cleartext
       block for HTTPS connections to the Lichess Tablebase API.
@@ -333,10 +341,14 @@ Subdirectory license summary:
       mirrors this for cloud-backup and device-transfer scenarios.
       v1.2.3 round-13 NOTE: AndroidManifest.xml's android:fullBackupContent
       and android:dataExtractionRules attributes were REMOVED (because
-      allowBackup="false" makes them dead config). The XML files are
-      retained in res/xml/ for reference in case allowBackup is ever set
-      to true in the future, but they are NOT currently referenced by
-      the manifest.
+      allowBackup="false" makes them dead config).
+      v1.2.3 round-46 NOTE (PR53 CR#18): round-44 (F12) deleted
+      backup_rules.xml / data_extraction_rules.xml from the BUILD tree,
+      but the deletion never reached this git branch (zip-based sync
+      cannot delete files). Both files therefore still exist here as
+      UNREFERENCED dead config — the manifest does not point at them.
+      network_security_config.xml IS referenced (android:
+      networkSecurityConfig) and fully active.
   - mipmap-hdpi/ ... mipmap-xxxhdpi/: AGPL v3 (AI-generated assets)
       App launcher icons (ic_launcher, ic_launcher_round,
       ic_launcher_foreground) in 5 density buckets (hdpi, mdpi, xhdpi,

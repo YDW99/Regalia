@@ -203,12 +203,13 @@ const Store = (function() {
         if (Array.isArray(obj)) return obj.map(function (v) { return _deepClone(v, _depth + 1); });
         const cloned = {};
         for (const key in obj) {
-            // v1.2.3 round-37 (SonarCloud S6653): Object.hasOwn is the ES2022
-            //   static method — safer than obj.hasOwnProperty (which can be
-            //   shadowed by a user-defined hasOwnProperty property) and more
-            //   concise than Object.prototype.hasOwnProperty.call. Android
-            //   WebView API 35+ supports ES2022.
-            if (Object.hasOwn(obj, key)) {
+            // v1.2.3 round-37 (SonarCloud S6653): avoid obj.hasOwnProperty
+            //   (it can be shadowed by a user-defined hasOwnProperty key).
+            // v1.2.3 round-46 (PR53 CR#8): Object.hasOwn needs Chrome 93+;
+            //   minSdk 23 devices with an older system WebView would throw
+            //   "Object.hasOwn is not a function". Use the ES3-safe,
+            //   shadow-proof equivalent instead.
+            if (Object.prototype.hasOwnProperty.call(obj, key)) {
                 cloned[key] = _deepClone(obj[key], _depth + 1);
             }
         }
