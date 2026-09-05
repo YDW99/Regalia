@@ -128,6 +128,7 @@ public class EngineService extends Service {
         } else {
             startForeground(NOTIFICATION_ID, notification);
         }
+        // round-47 (S2696 kept): isRunning/lastStatusInfo 是进程级 Service 状态，由静态访问器跨组件读取（Service 为单例），有意保持 static 字段写入。
         isRunning = true;
 
         // Acquire partial wake lock to prevent CPU suspension during analysis.
@@ -166,6 +167,7 @@ public class EngineService extends Service {
     @Override
     public void onDestroy() {
         super.onDestroy();
+        // round-47 (S2696 kept): 同上 —— 进程级 Service 状态复位，有意写入 static 字段。
         isRunning = false;
         lastStatusInfo = "";
 

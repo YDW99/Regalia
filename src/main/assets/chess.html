@@ -2112,7 +2112,7 @@ function algPos(a){if(!a)return null;
   // v1.0.8 PHASE 30: also reject strings longer than 2 chars (e.g. 'e4e5' move
   //   strings, 'e10' malformed input) which were silently truncated before.
   if(typeof a!=='string'||a.length!==2)return null;
-  try{const col=a.charCodeAt(0)-97,row=8-Number.parseInt(a[1],10);if(col<0||col>7||Number.isNaN(row)||row<0||row>7)return null;return{row,col}}catch(e){return null}}
+  try{const col=a.charCodeAt(0)-97,row=8-Number.parseInt(a[1],10);if(col<0||col>7||Number.isNaN(row)||row<0||row>7){return null;}return{row,col}}catch(e){return null}}
 function inB(r,c){return r>=0&&r<8&&c>=0&&c<8}
 
 // AI-GEN: AI assisted
@@ -2686,7 +2686,7 @@ function _reattachActiveAnimations(){
 
 function initBoard(){const b=Array.from({length:8},()=>Array(8).fill(null));const backRank=['rook','knight','bishop','queen','king','bishop','knight','rook'];for(let c=0;c<8;c++){b[0][c]={type:backRank[c],color:'black'};b[1][c]={type:'pawn',color:'black'};b[6][c]={type:'pawn',color:'white'};b[7][c]={type:backRank[c],color:'white'}}return b}
 // Returns all squares this piece attacks
-function attacked(board,pos){const b=board,p=b[pos.row][pos.col];if(!p)return[];const r=pos.row,c=pos.col,co=p.color,mv=[];if(p.type==='pawn'){const d=co==='white'?-1:1;for(const dc of[-1,1])if(inB(r+d,c+dc))mv.push({row:r+d,col:c+dc})}else if(p.type==='knight'){for(const[dr,dc]of KNIGHT_OFFSETS)if(inB(r+dr,c+dc))mv.push({row:r+dr,col:c+dc})}else if(p.type==='king'){for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++)if((dr||dc)&&inB(r+dr,c+dc))mv.push({row:r+dr,col:c+dc})}else{const dirs=p.type==='rook'?DIR_ROOK:p.type==='bishop'?DIR_BISHOP:DIR_QUEEN;for(const[dr,dc]of dirs){let nr=r+dr,nc=c+dc;while(inB(nr,nc)){mv.push({row:nr,col:nc});if(b[nr][nc])break;nr+=dr;nc+=dc}}}return mv}
+function attacked(board,pos){const b=board,p=b[pos.row][pos.col];if(!p){return[];}const r=pos.row,c=pos.col,co=p.color,mv=[];if(p.type==='pawn'){const d=co==='white'?-1:1;for(const dc of[-1,1])if(inB(r+d,c+dc))mv.push({row:r+d,col:c+dc})}else {if(p.type==='knight'){for(const[dr,dc]of KNIGHT_OFFSETS)if(inB(r+dr,c+dc))mv.push({row:r+dr,col:c+dc})}else if(p.type==='king'){for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++)if((dr||dc)&&inB(r+dr,c+dc))mv.push({row:r+dr,col:c+dc})}else{const dirs=p.type==='rook'?DIR_ROOK:p.type==='bishop'?DIR_BISHOP:DIR_QUEEN;for(const[dr,dc]of dirs){let nr=r+dr,nc=c+dc;while(inB(nr,nc)){mv.push({row:nr,col:nc});if(b[nr][nc]){break;}nr+=dr;nc+=dc}}}}return mv}
 function initState(){const s={board:initBoard(),currentTurn:'white',castlingRights:{whiteKingside:true,whiteQueenside:true,blackKingside:true,blackQueenside:true,
 // v1.2.3 round-20 (A-1): standard chess designates the corner rooks (h/a files)
 whiteKingsideRookFile:7,whiteQueensideRookFile:0,blackKingsideRookFile:7,blackQueensideRookFile:0},enPassantTarget:null,halfMoveClock:0,fullMoveNumber:1,moveHistory:[],posCount:new Map(),wk:{row:7,col:4},bk:{row:0,col:4},hash:0,boardVersion:1};syncHash(s);s.posCount.set(s.hash,1);return s}
@@ -3001,7 +3001,7 @@ moveHistory:s.moveHistory?s.moveHistory.slice():[],posCount:new Map(s.posCount),
 ...(s.chess960?{chess960:true}:{}),
 ...(s.spid!=null?{spid:s.spid}:{})}}
 
-function sqAttackedFast(b,pos,byCo){if(!b||!pos||!inB(pos.row,pos.col))return false;const r=pos.row,c=pos.col;const pd=byCo==='white'?1:-1;if(inB(r+pd,c-1)&&b[r+pd][c-1]&&b[r+pd][c-1].color===byCo&&b[r+pd][c-1].type==='pawn')return true;if(inB(r+pd,c+1)&&b[r+pd][c+1]&&b[r+pd][c+1].color===byCo&&b[r+pd][c+1].type==='pawn')return true;for(const[dr,dc]of KNIGHT_OFFSETS){if(inB(r+dr,c+dc)&&b[r+dr][c+dc]&&b[r+dr][c+dc].color===byCo&&b[r+dr][c+dc].type==='knight')return true}for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){if(!dr&&!dc)continue;if(inB(r+dr,c+dc)&&b[r+dr][c+dc]&&b[r+dr][c+dc].color===byCo&&b[r+dr][c+dc].type==='king')return true}for(const[dr,dc]of DIR_ROOK){let nr=r+dr,nc=c+dc;while(inB(nr,nc)){const p=b[nr][nc];if(p){if(p.color===byCo&&(p.type==='rook'||p.type==='queen'))return true;break}nr+=dr;nc+=dc}}for(const[dr,dc]of DIR_BISHOP){let nr=r+dr,nc=c+dc;while(inB(nr,nc)){const p=b[nr][nc];if(p){if(p.color===byCo&&(p.type==='bishop'||p.type==='queen'))return true;break}nr+=dr;nc+=dc}}return false}
+function sqAttackedFast(b,pos,byCo){if(!b||!pos||!inB(pos.row,pos.col)){return false;}const r=pos.row,c=pos.col;const pd=byCo==='white'?1:-1;if(inB(r+pd,c-1)&&b[r+pd][c-1]&&b[r+pd][c-1].color===byCo&&b[r+pd][c-1].type==='pawn'){return true;}if(inB(r+pd,c+1)&&b[r+pd][c+1]&&b[r+pd][c+1].color===byCo&&b[r+pd][c+1].type==='pawn'){return true;}for(const[dr,dc]of KNIGHT_OFFSETS){if(inB(r+dr,c+dc)&&b[r+dr][c+dc]&&b[r+dr][c+dc].color===byCo&&b[r+dr][c+dc].type==='knight')return true}for(let dr=-1;dr<=1;dr++){for(let dc=-1;dc<=1;dc++){if(!dr&&!dc){continue;}if(inB(r+dr,c+dc)&&b[r+dr][c+dc]&&b[r+dr][c+dc].color===byCo&&b[r+dr][c+dc].type==='king')return true}}for(const[dr,dc]of DIR_ROOK){let nr=r+dr,nc=c+dc;while(inB(nr,nc)){const p=b[nr][nc];if(p){if(p.color===byCo&&(p.type==='rook'||p.type==='queen')){return true;}break}nr+=dr;nc+=dc}}for(const[dr,dc]of DIR_BISHOP){let nr=r+dr,nc=c+dc;while(inB(nr,nc)){const p=b[nr][nc];if(p){if(p.color===byCo&&(p.type==='bishop'||p.type==='queen')){return true;}break}nr+=dr;nc+=dc}}return false}
 /**
  * Check if the given color's king is in check.
  * @param {Array} b - 8x8 board array
@@ -3010,7 +3010,7 @@ function sqAttackedFast(b,pos,byCo){if(!b||!pos||!inB(pos.row,pos.col))return fa
  * @returns {boolean} True if the king is in check
  */
 function inCheck(b,co,kPos=null){const k=kPos;return k?sqAttackedFast(b,k,OPP_COLOR[co]):false}
-function pseudoMoves(s,pos){const b=s.board,p=b[pos.row][pos.col];if(!p)return[];const r=pos.row,c=pos.col,co=p.color,mv=[],opp=OPP_COLOR[co],pr=co==='white'?0:7,d=co==='white'?-1:1;
+function pseudoMoves(s,pos){const b=s.board,p=b[pos.row][pos.col];if(!p){return[];}const r=pos.row,c=pos.col,co=p.color,mv=[],opp=OPP_COLOR[co],pr=co==='white'?0:7,d=co==='white'?-1:1;
 if(p.type==='pawn'){
 if(inB(r+d,c)&&!b[r+d][c]){if(r+d===pr)for(const pt of['queen','rook','bishop','knight'])mv.push({row:r+d,col:c,promotion:pt});else{mv.push({row:r+d,col:c});if(r===(co==='white'?6:1)&&!b[r+2*d][c])mv.push({row:r+2*d,col:c})}}
 for(const dc of[-1,1])if(inB(r+d,c+dc)){if(b[r+d][c+dc]&&b[r+d][c+dc].color!==co){if(r+d===pr)for(const pt of['queen','rook','bishop','knight'])mv.push({row:r+d,col:c+dc,promotion:pt});else mv.push({row:r+d,col:c+dc})}if(s.enPassantTarget&&s.enPassantTarget.row===r+d&&s.enPassantTarget.col===c+dc)mv.push({row:r+d,col:c+dc})}}
@@ -3050,9 +3050,9 @@ if(typeof isChess960CastlingLegal==='function'){
   }
 }else{
   // Fallback (only used if chess960.js failed to load): original standard-chess logic
-  if(r===hr&&c===4){const cr=s.castlingRights;if(cr[co+'Kingside']&&!b[hr][5]&&!b[hr][6]&&b[hr][7]&&b[hr][7].type==='rook'&&b[hr][7].color===co&&!sqAttackedFast(b,{row:hr,col:4},opp)&&!sqAttackedFast(b,{row:hr,col:5},opp)&&!sqAttackedFast(b,{row:hr,col:6},opp))mv.push({row:hr,col:6,castle:'kingside'});if(cr[co+'Queenside']&&!b[hr][3]&&!b[hr][2]&&!b[hr][1]&&b[hr][0]&&b[hr][0].type==='rook'&&b[hr][0].color===co&&!sqAttackedFast(b,{row:hr,col:4},opp)&&!sqAttackedFast(b,{row:hr,col:3},opp)&&!sqAttackedFast(b,{row:hr,col:2},opp))mv.push({row:hr,col:2,castle:'queenside'})}
+  if(r===hr&&c===4){const cr=s.castlingRights;if(cr[co+'Kingside']&&!b[hr][5]&&!b[hr][6]&&b[hr][7]&&b[hr][7].type==='rook'&&b[hr][7].color===co&&!sqAttackedFast(b,{row:hr,col:4},opp)&&!sqAttackedFast(b,{row:hr,col:5},opp)&&!sqAttackedFast(b,{row:hr,col:6},opp)){mv.push({row:hr,col:6,castle:'kingside'});}if(cr[co+'Queenside']&&!b[hr][3]&&!b[hr][2]&&!b[hr][1]&&b[hr][0]&&b[hr][0].type==='rook'&&b[hr][0].color===co&&!sqAttackedFast(b,{row:hr,col:4},opp)&&!sqAttackedFast(b,{row:hr,col:3},opp)&&!sqAttackedFast(b,{row:hr,col:2},opp))mv.push({row:hr,col:2,castle:'queenside'})}
 }}
-else{const dirs=p.type==='rook'?DIR_ROOK:p.type==='bishop'?DIR_BISHOP:DIR_QUEEN;for(const[dr,dc]of dirs){let nr=r+dr,nc=c+dc;while(inB(nr,nc)){if(!b[nr][nc])mv.push({row:nr,col:nc});else{if(b[nr][nc].color!==co)mv.push({row:nr,col:nc});break}nr+=dr;nc+=dc}}}
+else{const dirs=p.type==='rook'?DIR_ROOK:p.type==='bishop'?DIR_BISHOP:DIR_QUEEN;for(const[dr,dc]of dirs){let nr=r+dr,nc=c+dc;while(inB(nr,nc)){if(!b[nr][nc])mv.push({row:nr,col:nc});else{if(b[nr][nc].color!==co){mv.push({row:nr,col:nc});}break}nr+=dr;nc+=dc}}}
 return mv}
 // Optimized: uses makeMvInPlace/unmakeMv instead of cloneB per candidate move
 // Same pattern as hasLegalMoves() — eliminates ~5-10x board allocations
@@ -3083,10 +3083,10 @@ function legalMoves(s,pos){
     }
     return all;
   }
-  const pm=pseudoMoves(s,pos),p=s.board[pos.row][pos.col];if(!p)return[];const legal=[];for(const m of pm){const mv={from:{row:pos.row,col:pos.col},to:m,piece:p,promotion:m.promotion};const undo=makeMvInPlace(s,mv);if(!undo)continue;const kPos=_kingPosAfterMove(s,p,m);const isLegal=kPos?!inCheck(s.board,p.color,kPos):false;unmakeMv(s,undo);if(isLegal)legal.push(m)}return legal}
+  const pm=pseudoMoves(s,pos),p=s.board[pos.row][pos.col];if(!p){return[];}const legal=[];for(const m of pm){const mv={from:{row:pos.row,col:pos.col},to:m,piece:p,promotion:m.promotion};const undo=makeMvInPlace(s,mv);if(!undo){continue;}const kPos=_kingPosAfterMove(s,p,m);const isLegal=kPos?!inCheck(s.board,p.color,kPos):false;unmakeMv(s,undo);if(isLegal)legal.push(m)}return legal}
 // Fast game-over check: returns true as soon as ONE legal move is found
 // v1.2.3 round-36 (dedup): uses _kingPosAfterMove (shared with legalMoves/moveAlg).
-function hasLegalMoves(s){for(let r=0;r<8;r++){for(let c=0;c<8;c++){const p=s.board[r][c];if(p?.color===s.currentTurn){const pm=pseudoMoves(s,{row:r,col:c});for(const m of pm){const mv={from:{row:r,col:c},to:m,piece:p,promotion:m.promotion};const undo=makeMvInPlace(s,mv);if(!undo)continue;const kPos=_kingPosAfterMove(s,p,m);const legal=kPos?!inCheck(s.board,p.color,kPos):false;unmakeMv(s,undo);if(legal)return true}}}}return false}
+function hasLegalMoves(s){for(let r=0;r<8;r++){for(let c=0;c<8;c++){const p=s.board[r][c];if(p?.color===s.currentTurn){const pm=pseudoMoves(s,{row:r,col:c});for(const m of pm){const mv={from:{row:r,col:c},to:m,piece:p,promotion:m.promotion};const undo=makeMvInPlace(s,mv);if(!undo){continue;}const kPos=_kingPosAfterMove(s,p,m);const legal=kPos?!inCheck(s.board,p.color,kPos):false;unmakeMv(s,undo);if(legal)return true}}}}return false}
 // Move execution
 /**
  * v1.0.6: Detect whether a move is a castling move.
@@ -4064,11 +4064,11 @@ let numSameTarget=0,numSameFile=0,numSameRow=0;
 //   syntaxes for the same logic. Centralizing eliminates the divergence
 //   risk (if s.wk/s.bk ever diverge from s['wk']/s['bk'] due to a future
 //   refactor, the two syntaxes could disagree).
-for(let r=0;r<8;r++)for(let c=0;c<8;c++){if(r===from.row&&c===from.col)continue;const p=s.board[r][c];if(p?.type===piece.type&&p.color===piece.color){const pm=pseudoMoves(s,{row:r,col:c});if(pm.some(m=>m.row===to.row&&m.col===to.col)){const mv2={from:{row:r,col:c},to:{row:to.row,col:to.col},piece:p,promotion:undefined};const undo=makeMvInPlace(s,mv2);if(undo){const kPos=_kingPosAfterMove(s,p,to);if(kPos&&!inCheck(s.board,p.color,kPos)){numSameTarget++;if(c===from.col)numSameFile++;if(r===from.row)numSameRow++;}unmakeMv(s,undo);}}}}
+for(let r=0;r<8;r++)for(let c=0;c<8;c++){if(r===from.row&&c===from.col){continue;}const p=s.board[r][c];if(p?.type===piece.type&&p.color===piece.color){const pm=pseudoMoves(s,{row:r,col:c});if(pm.some(m=>m.row===to.row&&m.col===to.col)){const mv2={from:{row:r,col:c},to:{row:to.row,col:to.col},piece:p,promotion:undefined};const undo=makeMvInPlace(s,mv2);if(undo){const kPos=_kingPosAfterMove(s,p,to);if(kPos&&!inCheck(s.board,p.color,kPos)){numSameTarget++;if(c===from.col){numSameFile++;}if(r===from.row)numSameRow++;}unmakeMv(s,undo);}}}}
 // PGN standard disambiguation: file first, then rank, then both
 if(numSameTarget>0){if(numSameFile===0)n+=String.fromCodePoint(97+from.col);else if(numSameRow===0)n+=(8-from.row);else n+=String.fromCodePoint(97+from.col)+(8-from.row)}
 }
-if(piece.type==='pawn'&&isCap)n+=String.fromCodePoint(97+from.col);if(isCap)n+='x';n+=posAlg(to);if(promotion)n+='='+(promotion==='knight'?'N':promotion[0].toUpperCase())}
+if(piece.type==='pawn'&&isCap){n+=String.fromCodePoint(97+from.col);}if(isCap){n+='x';}n+=posAlg(to);if(promotion)n+='='+(promotion==='knight'?'N':promotion[0].toUpperCase())}
 // v1.1.2 PHASE 71 (robustness): guard against `setupMode` being undefined
 // (e.g. if moveAlg is called before ui.js has declared the global). Other
 // call sites in this file use `typeof setupMode!=='undefined'&&setupMode`;
@@ -4110,8 +4110,8 @@ function getCtrlMap(b){const cm=[];for(let r=0;r<8;r++){cm[r]=[];for(let c=0;c<8
 // SAME for all those pushes. Previously we allocated a fresh {row:r,col:c} object
 // on every push (≈256 allocations per ctrl-map = per render tick when heatmap
 // is on). Now we allocate ONE position object per piece (max 32) and reuse it.
-for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=b[r][c];if(p){const atks=attacked(b,{row:r,col:c});const _pos={row:r,col:c};for(const a of atks){cm[a.row][a.col][p.color].push({piece:p,position:_pos})}
-}}return cm}
+for(let r=0;r<8;r++){for(let c=0;c<8;c++){const p=b[r][c];if(p){const atks=attacked(b,{row:r,col:c});const _pos={row:r,col:c};for(const a of atks){cm[a.row][a.col][p.color].push({piece:p,position:_pos})}
+}}}return cm}
 
 
 // ===================== CHESS AI =====================
@@ -4209,7 +4209,7 @@ function syncHash(s){s.hash=computeHash(s)}
 // (The ⚡ marker is re-applied on "Done" via _validateSetupEpMark.)
 function _refreshStateAfterSetup(s){
 s.wk=null;s.bk=null;s.enPassantTarget=null;
-for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=s.board[r][c];if(p){if(p.type==='king'&&p.color==='white')s.wk={row:r,col:c};if(p.type==='king'&&p.color==='black')s.bk={row:r,col:c};}}
+for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=s.board[r][c];if(p){if(p.type==='king'&&p.color==='white'){s.wk={row:r,col:c};}if(p.type==='king'&&p.color==='black')s.bk={row:r,col:c};}}
 // v1.0.7: When the board is mutated (place/remove piece, clear, reset), any
 // previously-applied 🔁 marker may now point at a square that no longer holds
 // a rook. We DON'T auto-delete the marker — the validation pass on "Done"
@@ -4624,10 +4624,10 @@ _ecoRecCache.set(ck,result);
 return result;
 }
 
-let _ecoComposing=false;let _ecoSearchFocused=false;let _ecoBlurTimer=0;let ecoSearchTimer=0;let ecoDisplayList=[];let ecoShowCount=30;function setEcoQuery(v){window.ecoSearchQuery=v;ecoShowCount=30;if(ecoSearchTimer)clearTimeout(ecoSearchTimer);if(_ecoComposing){ecoSearchTimer=setTimeout(_ecoUpdateResults,300)}else{ecoSearchTimer=setTimeout(_ecoUpdateResults,80)}}function _ecoUpdateResults(){_ensureEcoParsed();if(!showNewGameDialog)return;const listEl=document.querySelector('.op-list');if(!listEl)return;const el=document.getElementById('ecoSearch');if(el)window.ecoSearchQuery=el.value;const q=(window.ecoSearchQuery||'').trim().toUpperCase();let results=q?searchEco(q):ECO_OPENINGS;const ff=window.ecoFamilyFilter;if(ff)results=results.filter(o=>o.family===ff);ecoDisplayList=results.slice(0,ecoShowCount);let oh='<button class="op-btn'+(!dlgOpeningId?' act':'')+'" onclick="dlgOpeningId=null;window.ecoSearchQuery=\'\';window.ecoFamilyFilter=\'\';ecoShowCount=30;_ecoUpdateResults()"><div class="on">'+T('free_opening')+'</div><div class="os">'+T('from_start')+'</div></button>';for(const o of ecoDisplayList){const isOpen=o.moves&&o.moves.length>=4;oh+=`<button class="op-btn${dlgOpeningId===o.id+'|'+o.name?' act':''}" onclick="dlgOpeningId='${_escJs(o.id)}|${_escJs(o.name)}';ecoShowCount=30;_ecoUpdateResults()"><div class="on">${_esc(o.id)} ${_esc(o.name)}</div>${isOpen?'<div class="os">'+_esc(o.family)+'</div>':''}</button>`}listEl.innerHTML=oh;_ecoRestoreFocus()}function _ecoRestoreFocus(){if(!_ecoSearchFocused)return;const ae=document.activeElement;if(ae&&(ae.tagName==='BUTTON'||ae.tagName==='SELECT'||ae.tagName==='OPTION'))return;const el=document.getElementById('ecoSearch');if(el&&document.activeElement!==el){el.focus();try{const len=el.value.length;el.setSelectionRange(len,len)}catch(e){/* v1.2.1 round-16: setSelectionRange may fail on hidden/disabled inputs — non-critical, user can still type. */console.warn('[ECO] setSelectionRange failed:',e?.message?e.message:e);}}}function _ecoDoSearch(){if(ecoSearchTimer)clearTimeout(ecoSearchTimer);const el=document.getElementById('ecoSearch');if(el){window.ecoSearchQuery=el.value;_ecoComposing=false;if(_ecoBlurTimer){clearTimeout(_ecoBlurTimer);_ecoBlurTimer=0}}_ecoSearchFocused=true;_ecoUpdateResults()}
+let _ecoComposing=false;let _ecoSearchFocused=false;let _ecoBlurTimer=0;let ecoSearchTimer=0;let ecoDisplayList=[];let ecoShowCount=30;function setEcoQuery(v){window.ecoSearchQuery=v;ecoShowCount=30;if(ecoSearchTimer){clearTimeout(ecoSearchTimer);}if(_ecoComposing){ecoSearchTimer=setTimeout(_ecoUpdateResults,300)}else{ecoSearchTimer=setTimeout(_ecoUpdateResults,80)}}function _ecoUpdateResults(){_ensureEcoParsed();if(!showNewGameDialog){return;}const listEl=document.querySelector('.op-list');if(!listEl){return;}const el=document.getElementById('ecoSearch');if(el){window.ecoSearchQuery=el.value;}const q=(window.ecoSearchQuery||'').trim().toUpperCase();let results=q?searchEco(q):ECO_OPENINGS;const ff=window.ecoFamilyFilter;if(ff){results=results.filter(o=>o.family===ff);}ecoDisplayList=results.slice(0,ecoShowCount);let oh='<button class="op-btn'+(!dlgOpeningId?' act':'')+'" onclick="dlgOpeningId=null;window.ecoSearchQuery=\'\';window.ecoFamilyFilter=\'\';ecoShowCount=30;_ecoUpdateResults()"><div class="on">'+T('free_opening')+'</div><div class="os">'+T('from_start')+'</div></button>';for(const o of ecoDisplayList){const isOpen=o.moves&&o.moves.length>=4;oh+=`<button class="op-btn${dlgOpeningId===o.id+'|'+o.name?' act':''}" onclick="dlgOpeningId='${_escJs(o.id)}|${_escJs(o.name)}';ecoShowCount=30;_ecoUpdateResults()"><div class="on">${_esc(o.id)} ${_esc(o.name)}</div>${isOpen?'<div class="os">'+_esc(o.family)+'</div>':''}</button>`}listEl.innerHTML=oh;_ecoRestoreFocus()}function _ecoRestoreFocus(){if(!_ecoSearchFocused){return;}const ae=document.activeElement;if(ae&&(ae.tagName==='BUTTON'||ae.tagName==='SELECT'||ae.tagName==='OPTION')){return;}const el=document.getElementById('ecoSearch');if(el&&document.activeElement!==el){el.focus();try{const len=el.value.length;el.setSelectionRange(len,len)}catch(e){/* v1.2.1 round-16: setSelectionRange may fail on hidden/disabled inputs — non-critical, user can still type. */console.warn('[ECO] setSelectionRange failed:',e?.message?e.message:e);}}}function _ecoDoSearch(){if(ecoSearchTimer){clearTimeout(ecoSearchTimer);}const el=document.getElementById('ecoSearch');if(el){window.ecoSearchQuery=el.value;_ecoComposing=false;if(_ecoBlurTimer){clearTimeout(_ecoBlurTimer);_ecoBlurTimer=0}}_ecoSearchFocused=true;_ecoUpdateResults()}
 
 
-function posEmoji(ev){if(ev>600)return'🏆';if(ev>350)return'😄';if(ev>150)return'😊';if(ev>50)return'🙂';if(ev>-50)return'😐';if(ev>-150)return'😟';if(ev>-350)return'😰';if(ev>-600)return'😱';return'💀'}
+function posEmoji(ev){if(ev>600){return'🏆';}if(ev>350){return'😄';}if(ev>150){return'😊';}if(ev>50){return'🙂';}if(ev>-50){return'😐';}if(ev>-150){return'😟';}if(ev>-350){return'😰';}if(ev>-600){return'😱';}return'💀'}
 
 // v1.0.2 FIX: Black-to-move opening move record fix.
 //
@@ -5313,7 +5313,9 @@ function isChess960CastlingLegal(s,color,side){
   // King's PATH (every square the king crosses, INCLUDING destination) must not be attacked.
   // King moves from kingCol to kingTo, stepping one square at a time.
   const step=kingTo>kingCol?1:-1;
-  for(let c=kingCol;c!==kingTo+step;c+=step){
+  // step is exactly +1 or -1, so c always lands precisely on kingTo+step;
+  // use a directional comparison (SonarCloud S888) with identical semantics.
+  for(let c=kingCol;step>0?c<kingTo+step:c>kingTo+step;c+=step){
     if(c===kingCol)continue; // already checked above
     if(sqAttackedFast(s.board,{row,col:c},opp))return false;
   }
@@ -6251,7 +6253,7 @@ function parseStandardPGN(pgnText){
   let varDepth=0;
   for(const tok of tokens){
     if(varDepth>0){
-      if(tok.type==='openVar'){varDepth++;if(varBuf)varBuf.push('(');continue;}
+      if(tok.type==='openVar'){varDepth++;if(varBuf){varBuf.push('(');}continue;}
       if(tok.type==='closeVar'){varDepth--;if(varDepth===0){
         // Close out the variation
         if(varBuf?.length>0){
@@ -6872,7 +6874,7 @@ function _syncParsePGNText(pgnText) {
   var text = pgnText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   text = text.replace(/^%.*$/gm, '');
   text = text.replace(/\u00a0/g, ' ');
-  var gameBlocks = text.split(/\n\s*\n(?=\[)/);
+  var gameBlocks = text.split(/\n[^\S\n]*\n(?:[^\S\n]*\n)*(?=\[)/); // v1.2.3 round-47 (S8786): unambiguous equivalent of \n\s*\n (horizontal-ws runs separated by \n) — same split points, no polynomial backtracking
   if (gameBlocks.length > 1) text = gameBlocks[0];
   var startFEN = null;
   var fenMatch = text.match(/\[FEN\s+"([^"]+)"\]/i);
@@ -6895,9 +6897,9 @@ function _syncParsePGNText(pgnText) {
   var cslAnnotations = [];
   var calAnnotations = [];
   var evals = [];
-  var cslRe = /\[%csl\s+([^\]]*)\]/g;
-  var calRe = /\[%cal\s+([^\]]*)\]/g;
-  var evalRe = /\[%eval\s+([^\]]*)\]/g;
+  var cslRe = /\[%csl\s([^\]]*)\]/g; // v1.2.3 round-47 (S8786): \s+ -> \s — trailing [^\]]* already covers extra whitespace; capture is .trim()'d at use site
+  var calRe = /\[%cal\s([^\]]*)\]/g; // v1.2.3 round-47 (S8786): same as cslRe above
+  var evalRe = /\[%eval\s([^\]]*)\]/g; // v1.2.3 round-47 (S8786): same as cslRe above
   var iter = 0;
   // v1.2.3 round-38 (SonarCloud S7765): use .includes() instead of .indexOf() >= 0.
   while (text.includes('{') && iter++ < 20) {
@@ -6916,14 +6918,14 @@ function _syncParsePGNText(pgnText) {
   var variations = [];
   var depth = 0, start = -1;
   for (var i = 0; i < text.length; i++) {
-    if (text[i] === '(') { if (depth === 0) start = i + 1; depth++; }
+    if (text[i] === '(') { if (depth === 0) { start = i + 1; } depth++; }
     else if (text[i] === ')') { depth--; if (depth === 0 && start >= 0) { variations.push(text.substring(start, i)); start = -1; } }
   }
   var movetext = '';
   depth = 0;
-  for (var i = 0; i < text.length; i++) {
+  for (i = 0; i < text.length; i++) {
     if (text[i] === '(') { depth++; continue; }
-    if (text[i] === ')') { if (depth > 0) depth--; continue; }
+    if (text[i] === ')') { if (depth > 0) { depth--; } continue; }
     if (depth === 0) movetext += text[i];
   }
   movetext = movetext.replace(/\d+\.+/g, ' '); // v1.2.3 (S8786): (\d+\.+)* 尾组对 replace 语义冗余，去除嵌套量词
@@ -6970,8 +6972,8 @@ function _syncComputeHeatmapStats(boards) {
       var dirs = p.type === 'rook' ? [[-1,0],[1,0],[0,-1],[0,1]]
         : p.type === 'bishop' ? [[-1,-1],[-1,1],[1,-1],[1,1]]
         : [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]];
-      for (var i = 0; i < dirs.length; i++) {
-        var nr = r+dirs[i][0], nc = c+dirs[i][1];
+      for (i = 0; i < dirs.length; i++) {
+        nr = r+dirs[i][0], nc = c+dirs[i][1];
         while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
           mv.push({row: nr, col: nc}); if (board[nr][nc]) break;
           nr += dirs[i][0]; nc += dirs[i][1];
@@ -7017,7 +7019,7 @@ function terminateWorkerPool() {
   }
   _workerPool = [];
   // v1.0.8 PHASE 35: reject in-flight (dispatched) tasks
-  for (const [tid, task] of _pendingTasks) {
+  for (const task of _pendingTasks.values()) {
     if (task.timeout) { clearTimeout(task.timeout); task.timeout = null; }
     try { task.reject(new Error('Pool terminated')); } catch (e) {}
   }
@@ -7845,7 +7847,7 @@ let _reviewEvalCache=new function(){
   // v1.0.7 PHASE 18 Task 1: set() now also calls _evictIfOverCap() to enforce
   // the soft MAX_ENTRIES cap. Eviction happens BEFORE the debounced save, so
   // the persisted file never exceeds the cap (after the next flush).
-  this.set=function(k,v){if(m.has(k))m.delete(k);m.set(k,v);_evictIfOverCap();_saveToStorage(false);};
+  this.set=function(k,v){if(m.has(k)){m.delete(k);}m.set(k,v);_evictIfOverCap();_saveToStorage(false);};
   this.delete=function(k){const r=m.delete(k);_saveToStorage(false);return r;};
   Object.defineProperty(this,'size',{get:function(){return m.size;},configurable:true});
   this.clear=function(){m.clear();_saveToStorage(true);};
@@ -8320,7 +8322,7 @@ function _updateLoadingStatus(msg,pct){
 }
 let _loadingOverlayHiding=false;
 function _hideLoadingOverlay(){
-  if(_loadingOverlayHiding)return;_loadingOverlayHiding=true;
+  if(_loadingOverlayHiding){return;}_loadingOverlayHiding=true;
   _updateLoadingStatus(T('engine_ready'),100);
   const lo=document.getElementById('_loadingOverlay');
   if(lo){lo.style.opacity='0';lo.style.transition='opacity .5s';setTimeout(()=>{if(lo.parentNode)lo.remove();},500);}
@@ -10296,7 +10298,6 @@ function onBestMove(uciMove){
   //   此处保留 coords 解析以提取 from/to/promotion 字段供 executeMove 使用。
   const coords=uciToCoords(uciMove);
   const from=coords.from, to=coords.to;
-  const piece=gameState.board[from.row][from.col];
   // v1.2.3 round-18 (bug fix): discard the bestmove if the game has already
   //   ended (timeout forfeit / resignation) while the engine was thinking.
   //   Clock expiry runs on a 1s interval and resign is user-driven, so an
@@ -11126,8 +11127,8 @@ function restartCurrentEngine(){
     }
   },2500);
 }
-function setConfigThreads(v){v=Math.max(1,Math.min(64,Number.parseInt(v)||1));if(engineSettingsData)engineSettingsData.threads=v;_bridgeCall(function(bridge){bridge.setEngineThreads(v);});renderEngineConfigAndUpdate();}
-function setConfigHash(v){v=Math.max(1,Math.min(4096,Number.parseInt(v)||64));if(engineSettingsData)engineSettingsData.hash=v;_bridgeCall(function(bridge){bridge.setEngineHash(v);});renderEngineConfigAndUpdate();}
+function setConfigThreads(v){v=Math.max(1,Math.min(64,Number.parseInt(v)||1));if(engineSettingsData){engineSettingsData.threads=v;}_bridgeCall(function(bridge){bridge.setEngineThreads(v);});renderEngineConfigAndUpdate();}
+function setConfigHash(v){v=Math.max(1,Math.min(4096,Number.parseInt(v)||64));if(engineSettingsData){engineSettingsData.hash=v;}_bridgeCall(function(bridge){bridge.setEngineHash(v);});renderEngineConfigAndUpdate();}
 function setConfigMultiPV(v){
   v=Math.max(1,Math.min(8,Number.parseInt(v)||1));
   if(engineSettingsData)engineSettingsData.multiPV=v;
@@ -11151,7 +11152,7 @@ function setConfigMultiPV(v){
   _bridgeCall(function(bridge){bridge.setEngineMultiPV(v);});
   renderEngineConfigAndUpdate();
 }
-function setConfigMoveOverhead(v){v=Math.max(0,Math.min(5000,Number.parseInt(v)||30));if(engineSettingsData)engineSettingsData.moveOverhead=v;_bridgeCall(function(bridge){bridge.setEngineMoveOverhead(v);});renderEngineConfigAndUpdate();}
+function setConfigMoveOverhead(v){v=Math.max(0,Math.min(5000,Number.parseInt(v)||30));if(engineSettingsData){engineSettingsData.moveOverhead=v;}_bridgeCall(function(bridge){bridge.setEngineMoveOverhead(v);});renderEngineConfigAndUpdate();}
 function togglePonder(){
   const newVal=!engineSettingsData||!engineSettingsData.ponder;
   if(engineSettingsData)engineSettingsData.ponder=newVal;
@@ -11164,14 +11165,14 @@ function toggleShowWDL(){
   HapticManager.fire(newVal?'TOGGLE_ON':'TOGGLE_OFF');
   _bridgeCall(function(bridge){bridge.setEngineShowWDL(newVal);});renderEngineConfigAndUpdate();
 }
-function setConfigSkillLevel(v){v=Math.max(0,Math.min(20,Number.parseInt(v)||20));if(engineSettingsData)engineSettingsData.skillLevel=v;_bridgeCall(function(bridge){bridge.setEngineSkillLevel(v);});renderEngineConfigAndUpdate();}
+function setConfigSkillLevel(v){v=Math.max(0,Math.min(20,Number.parseInt(v)||20));if(engineSettingsData){engineSettingsData.skillLevel=v;}_bridgeCall(function(bridge){bridge.setEngineSkillLevel(v);});renderEngineConfigAndUpdate();}
 function toggleLimitElo(){
   const newVal=!engineSettingsData||!engineSettingsData.limitStrength;
   if(engineSettingsData)engineSettingsData.limitStrength=newVal;
   HapticManager.fire(newVal?'TOGGLE_ON':'TOGGLE_OFF');
   _bridgeCall(function(bridge){bridge.setEngineLimitElo(newVal,engineSettingsData?engineSettingsData.elo:2800);});renderEngineConfigAndUpdate();
 }
-function setConfigElo(v){v=Math.max(500,Math.min(3500,Number.parseInt(v)||2800));if(engineSettingsData)engineSettingsData.elo=v;_bridgeCall(function(bridge){bridge.setEngineLimitElo(engineSettingsData?engineSettingsData.limitStrength:false,v);});renderEngineConfigAndUpdate();}
+function setConfigElo(v){v=Math.max(500,Math.min(3500,Number.parseInt(v)||2800));if(engineSettingsData){engineSettingsData.elo=v;}_bridgeCall(function(bridge){bridge.setEngineLimitElo(engineSettingsData?engineSettingsData.limitStrength:false,v);});renderEngineConfigAndUpdate();}
 function toggleAutoConfig(){
   const newVal=!engineSettingsData||!engineSettingsData.autoConfig;
   if(engineSettingsData)engineSettingsData.autoConfig=newVal;
@@ -11388,7 +11389,7 @@ function _processDeferredVariations(){
 
   // v1.2.3 round-18 (cleanup): removed unused `moveNum` from the destructure
   //   (superseded by aiMoveNum recomputed below from aiMoveIdx).
-  const{uciMove,lastIdx,isAfterWhiteMove,preMoveState,ponderMove,ponderEnabled,multiPVEnabled}=info;
+  const{uciMove,lastIdx,preMoveState}=info;
 
   // The move record at lastIdx should exist (it was the last record before the bestmove was executed)
   // But after executeMove(), a new record was added. So the record we want is at lastIdx,
@@ -13531,7 +13532,7 @@ function _findLegalMove(state,from,to,pieceType){
 function _executeAndRecord(state,move,notation){
   // Defensive: validate move object before proceeding
   if(!move||!move.from||!move.to||typeof move.from.row!=='number'||typeof move.from.col!=='number'||typeof move.to.row!=='number'||typeof move.to.col!=='number')return null;
-  const undoInfo=makeMvInPlace(state,move);
+  makeMvInPlace(state,move);
   // makeMvInPlace mutates state in place and returns undo info, NOT the post-move state.
   // After the call, 'state' IS the post-move state.
   // Determine check status using the mutated post-move state
@@ -14381,7 +14382,7 @@ const color=isWhite?'white':'black';
 board[r][c]={type,color};
 // v1.2.3 round-40: exactly ONE king per side — a second king makes the FEN
 //   malformed (previously the later king silently overwrote the earlier one).
-if(type==='king'){if(color==='white'){if(wk)return null;wk={row:r,col:c};}else{if(bk)return null;bk={row:r,col:c};}}
+if(type==='king'){if(color==='white'){if(wk){return null;}wk={row:r,col:c};}else{if(bk){return null;}bk={row:r,col:c};}}
 c++;
 }
 if(c!==8)return null;
@@ -14429,8 +14430,8 @@ if(_epHasCap)enPassantTarget={row:er,col:ec};
 //   `parseInt()||fallback` silently coerced garbage ("12x" → 12, "-5" → 0/1),
 //   accepting malformed FENs.
 let halfMoveClock=0,fullMoveNumber=1;
-if(parts[4]){if(!/^\d+$/.test(parts[4]))return null;halfMoveClock=Number.parseInt(parts[4],10);}
-if(parts[5]){if(!/^\d+$/.test(parts[5]))return null;fullMoveNumber=Number.parseInt(parts[5],10);if(fullMoveNumber<1)return null;}
+if(parts[4]){if(!/^\d+$/.test(parts[4])){return null;}halfMoveClock=Number.parseInt(parts[4],10);}
+if(parts[5]){if(!/^\d+$/.test(parts[5])){return null;}fullMoveNumber=Number.parseInt(parts[5],10);if(fullMoveNumber<1){return null;}}
 const s={board,currentTurn:turn,castlingRights,enPassantTarget,halfMoveClock,fullMoveNumber,moveHistory:[],posCount:new Map(),wk,bk,hash:0,boardVersion:1};
 syncHash(s);s.posCount.set(s.hash,1);
 // Validate: the side NOT to move must not be in check (illegal position)
@@ -14454,7 +14455,7 @@ const _tbCache = new Map();
 const _TB_CACHE_MAX = 50;
 
 // Helper: count total pieces on board
-function countPieces(board){let n=0;for(let r=0;r<8;r++)for(let c=0;c<8;c++)if(board[r][c])n++;return n}
+function countPieces(board){let n=0;for(let r=0;r<8;r++){for(let c=0;c<8;c++){if(board[r][c]){n++;}}}return n}
 function pieceCountLE7(board){return countPieces(board)<=7}
 
 // Probe Syzygy tablebase API (with timeout + offline fallback + rate limiting)
@@ -15109,12 +15110,13 @@ function _onGameClockExpired(color){
     if(gameState){
       // FIDE 6.9: if the WINNER cannot checkmate the LOSER by any series of
       //   legal moves, the game is drawn (not won on time).
-      if(typeof winnerLacksMatingMaterial==='function'
-         && winnerLacksMatingMaterial(gameState,winner)){
-        _isDrawByInsufficientMaterial=true;
-      }else if(typeof isDeadPosition==='function'&&isDeadPosition(gameState)){
-        // FIDE 5.2.2 fallback: whole position is dead (both sides lack
-        //   material). This subsumes K vs K and the rare mutual case.
+      // v1.2.3 round-47 (S1871): both branches set the same flag, so the two
+      //   checks are merged into one condition — FIDE 6.9 (the WINNER lacks
+      //   mating material) plus the FIDE 5.2.2 fallback (the whole position
+      //   is dead; subsumes K vs K and the rare mutual case).
+      if((typeof winnerLacksMatingMaterial==='function'
+         && winnerLacksMatingMaterial(gameState,winner))
+         ||(typeof isDeadPosition==='function'&&isDeadPosition(gameState))){
         _isDrawByInsufficientMaterial=true;
       }
     }
@@ -15953,7 +15955,7 @@ function setDifficultyLevel(level){
   render();
 }
 
-function toggleSetup(){if(isAIThinking&&!setupMode)return;_cachedStatus=null;_cachedStatusKey='';setupMode=!setupMode;
+function toggleSetup(){if(isAIThinking&&!setupMode){return;}_cachedStatus=null;_cachedStatusKey='';setupMode=!setupMode;
 // v1.0.8 PHASE 24 (bug fix): clear any in-progress animation.
 _clearAnimationState();
 // v1.0.8 PHASE 22 supplement: setup-toggle sound (木质放置音)
@@ -16717,7 +16719,11 @@ function _doPastePGN(){
     //   (The whole class is technically redundant since a-zA-Z covers all
     //   letters, but kept for semantic clarity — the explicit piece letters
     //   document that this is a SAN-move-start check.)
-    const hasPGNMoveNumbers=!!trimmed.match(/\d+\.\s*[a-zA-ZNBRQOK]/);
+    // v1.2.3 round-47 (SonarCloud S8786): \d+\. → \d\. — a match exists iff
+    //   some digit sits immediately before the '.', so the '+' was redundant
+    //   for this boolean test and caused super-linear backtracking on long
+    //   digit runs. The result of !!trimmed.match(...) is unchanged.
+    const hasPGNMoveNumbers=!!trimmed.match(/\d\.\s*[a-zA-ZNBRQOK]/);
     const hasPGNHeaders=/\[/.test(trimmed);
     const hasPGNVariations=/\(/.test(trimmed);
     const hasPGNMarkers=hasPGNMoveNumbers||hasPGNHeaders||hasPGNVariations;
@@ -19683,9 +19689,10 @@ const _rvNavHTML=_buildRvNavHTML();
 // move list, the cache was filled by onEngineEval but the button text stayed at
 // "Analyze All Steps N (k/N+1)" instead of switching to "All Analyzed" once
 // complete. The id + helper function close this gap.
-const _cachedCount=_reviewEvalCache.size;
-const _totalSteps=moveRecords.length+1;
-const _allCached=_cachedCount>=_totalSteps;
+// v1.2.3 round-47 (S1481): removed the unused _cachedCount/_totalSteps/
+//   _allCached locals — nothing here reads them anymore; the analyze-all
+//   button logic lives in _buildRvAnalyzeBtnHTML() (which computes its own
+//   copies), so only the call below remains.
 // v1.0.8 PHASE 20 (UX): Enlarged font .7rem → .8rem and min-height 28px → 34px
 // so the button text + emoji display fully with comfortable breathing room.
 // v1.2.3 round-24 (God Function split): analyze button HTML extracted to
@@ -19906,7 +19913,7 @@ h+=`<div class="crow"><span class="lb">${T('total_ctrl')}</span><span class="vl"
 h+=`<div class="crow"><span class="lb">${T('my_ctrl')}</span><span class="vl b">${myCtrl}</span></div>`;
 h+=`<div class="crow"><span class="lb">${T('op_ctrl')}</span><span class="vl r">${opCtrl}</span></div>`;
 h+=`<div class="crow"><span class="lb">${T('net_ctrl')}</span><span class="vl ${netCtrl>0?'b':netCtrl<0?'r':''}">${netCtrl>0?'+':''}${netCtrl}</span></div>`;
-if(infoCtrl){h+=`<div class="plist">`;for(const c of infoCtrl[playerColor])h+=`<div class="pitem"><span class="dot2 b"></span>${pieceName(c.piece.type)}@${posAlg(c.position)}</div>`;for(const c of infoCtrl[oppC])h+=`<div class="pitem"><span class="dot2 r"></span>${pieceName(c.piece.type)}@${posAlg(c.position)}</div>`;h+=`</div>`}}
+if(infoCtrl){h+=`<div class="plist">`;for(const c of infoCtrl[playerColor]){h+=`<div class="pitem"><span class="dot2 b"></span>${pieceName(c.piece.type)}@${posAlg(c.position)}</div>`;}for(const c of infoCtrl[oppC]){h+=`<div class="pitem"><span class="dot2 r"></span>${pieceName(c.piece.type)}@${posAlg(c.position)}</div>`;}h+=`</div>`}}
 else{h+=`<div style="color:#64748b;font-size:.85rem">${T('click_sq')}</div>`}
 h+=`</div>`;}
 // ECO Opening Info (only when _ecoEnabled)
@@ -19926,7 +19933,7 @@ const _mvStartOffset=(typeof _importedStartMoveNum!=='undefined'&&_importedStart
 // compute the correct reviewStep (= i + 1, since reviewStates[0] is the
 // starting position) regardless of the FEN-based move-number offset.
 const pairs=[];for(let i=0;i<moveRecords.length;i+=2){pairs.push({n:Math.floor(i/2)+_mvStartOffset,wi:i,bi:i+1,w:moveRecords[i],b:moveRecords[i+1]})}
-for(const pr of pairs){h+='<div class="mrow"><span class="mnum">'+pr.n+'.</span>';if(pr.w){h+='<span class="mw" onclick="if(!isAIThinking&&!setupMode&&!reviewMode){showNewGameDialog=false;enterReview();reviewGoTo('+(pr.wi+1)+');event.stopPropagation()}">'+_esc(pr.w.notation)+(pr.w.time?'<span style="font-size:.6rem;color:var(--muted);margin-left:2px">'+pr.w.time+'s</span>':'')+'</span>';if(showVariations&&pr.w&&pr.w.variations&&pr.w.variations.length>0){h+=_formatVariationGroups(pr.w.variations,pr.n,true);}}else if(pr.w===null){h+='<span class="mw" style="opacity:.55;font-style:italic" title="'+T('white_concedes_move')+'">...</span>';}if(pr.b){h+='<span class="mb" onclick="if(!isAIThinking&&!setupMode&&!reviewMode){showNewGameDialog=false;enterReview();reviewGoTo('+(pr.bi+1)+');event.stopPropagation()}">'+_esc(pr.b.notation)+(pr.b.time?'<span style="font-size:.6rem;color:var(--muted);margin-left:2px">'+pr.b.time+'s</span>':'')+'</span>';if(showVariations&&pr.b&&pr.b.variations&&pr.b.variations.length>0){h+=_formatVariationGroups(pr.b.variations,pr.n,false);}}h+='</div>'}
+for(const pr of pairs){h+='<div class="mrow"><span class="mnum">'+pr.n+'.</span>';if(pr.w){h+='<span class="mw" onclick="if(!isAIThinking&&!setupMode&&!reviewMode){showNewGameDialog=false;enterReview();reviewGoTo('+(pr.wi+1)+');event.stopPropagation()}">'+_esc(pr.w.notation)+(pr.w.time?'<span style="font-size:.6rem;color:var(--muted);margin-left:2px">'+pr.w.time+'s</span>':'')+'</span>';if(showVariations&&pr.w&&pr.w.variations&&pr.w.variations.length>0){h+=_formatVariationGroups(pr.w.variations,pr.n,true);}}else{if(pr.w===null){h+='<span class="mw" style="opacity:.55;font-style:italic" title="'+T('white_concedes_move')+'">...</span>';}}if(pr.b){h+='<span class="mb" onclick="if(!isAIThinking&&!setupMode&&!reviewMode){showNewGameDialog=false;enterReview();reviewGoTo('+(pr.bi+1)+');event.stopPropagation()}">'+_esc(pr.b.notation)+(pr.b.time?'<span style="font-size:.6rem;color:var(--muted);margin-left:2px">'+pr.b.time+'s</span>':'')+'</span>';if(showVariations&&pr.b&&pr.b.variations&&pr.b.variations.length>0){h+=_formatVariationGroups(pr.b.variations,pr.n,false);}}h+='</div>'}
 if(!pairs.length)h+=`<div style="color:#64748b;font-size:.85rem;cursor:pointer;padding:4px 0;text-decoration:underline dotted rgba(100,116,139,.4);text-underline-offset:3px" onclick="if(!isAIThinking&&!setupMode&&!reviewMode){showNewGameDialog=false;enterReview();event.stopPropagation()}" title="${T('enter_review_hint')}">${T('no_moves')}</div>`;
 h+=`</div></div>`;
 // Tips
@@ -19991,7 +19998,7 @@ let _hdrProgressStr='';if(_evalLoading&&_sfDepth>0){let _hpp=[];if(_lastProgress
 // v1.2.1: Defensive checks, _applyGameOver, and cm/infoSq/infoCtrl/oppC/flip computation
 // moved to _computeRenderState() to fix critical scoping bug.
 
-let h='<div class="hdr" role="banner"><div class="hdr-top"><div class="hdr-l">'+_hdrKingIconHTML()+'<h1>'+T('app_name')+'<span class="ver">v1.2.3</span><button onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showAboutPage=true;render()" class="hdr-btn" style="margin-left:4px;cursor:pointer" aria-label="'+T('about')+'">ℹ️</button></h1></div><button onclick="toggleLang()" class="hdr-btn-lg" style="cursor:pointer">'+(_lang==='zh'?'↔️中':'↔️EN')+'</button><div class="ev" id="eval-disp" role="status" aria-label="'+T('evaluating')+'">'+(setupMode?T('setup_label'):(isAIThinking?'<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>':'<span class="ev-e">'+pe+'</span><span>'+pd+'</span><span style="color:var(--muted)">('+scoreStr+')</span>'+_hdrDepthStr+_hdrProgressStr))+'</div></div><div class="hdr-tools" role="toolbar" aria-label="'+T('ctrl_range')+'">'+(setupMode?'':'<div class="diff-sel" role="radiogroup" aria-label="AI">'+getAI_LEVELS().map(l=>'<button class="diff-b'+(getEffectiveAILevel()===l.id?' act':'')+'" onclick="setDifficultyLevel('+l.id+')" title="'+l.desc+'" role="radio" aria-checked="'+(getEffectiveAILevel()===l.id)+'">'+(l.id===8?'⚙️':l.id===7?('SL'+(function(){try{let _sl=20;if(typeof engineSettingsData!=='undefined'&&engineSettingsData&&engineSettingsData.skillLevel!=null)_sl=engineSettingsData.skillLevel;else if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getEngineSkillLevel)_sl=AndroidBridge.getEngineSkillLevel();return _sl;}catch(e){return 20;}})()):l.id)+'</button>').join('')+'</div>')+'<button type="button" class="btn" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()" aria-label="'+T('new_game')+'"><span style="font-size:1.4rem">⚔️</span> '+T('new_game')+'</button>'+'<button class="btn" onclick="quickFreeOpening()" aria-label="'+T('free_opening')+'">'+(playerColor==='white'?'<span style=\"font-size:1.4rem;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text\">♔&#xFE0E;</span>':'<span style=\"font-size:1.4rem;font-weight:400;color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans Symbol&#x27;,sans-serif;font-variant-emoji:text\">♚&#xFE0E;</span>')+' '+T('free_opening')+'</button>'+(setupMode?'':'<button class="btn" onclick="toggleSound()" id="btnSound" aria-label="'+T('sound')+'">'+(soundOn?'<span style="font-size:1.4rem">🔊</span> '+T('sound'):'<span style="font-size:1.4rem">🔇</span> '+T('sound'))+'</button>')+'<button class="btn" onclick="copyFEN()" title="'+T('copy_fen')+'" aria-label="'+T('copy_fen')+'"><span style="font-size:1.4rem">📝</span> FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="'+T('import_fen')+'" aria-label="'+T('import_fen')+'"><span style="font-size:1.4rem">🗃️</span> '+T('import_label')+'</button><button class="btn" onclick="'+(setupMode?'exitSetup()':'toggleSetup()')+'" aria-label="'+(setupMode?T('setup_done'):T('setup_mode'))+'">'+(setupMode?'<span style="font-size:1.4rem">✓</span> '+T('setup_done'):'<span style="font-size:1.4rem">🏗️</span> '+T('setup_mode'))+'</button></div></div>';
+let h='<div class="hdr" role="banner"><div class="hdr-top"><div class="hdr-l">'+_hdrKingIconHTML()+'<h1>'+T('app_name')+'<span class="ver">v1.2.3</span><button onclick="HapticManager.fire(&apos;BUTTON_PRESS&apos;);showAboutPage=true;render()" class="hdr-btn" style="margin-left:4px;cursor:pointer" aria-label="'+T('about')+'">ℹ️</button></h1></div><button onclick="toggleLang()" class="hdr-btn-lg" style="cursor:pointer">'+(_lang==='zh'?'↔️中':'↔️EN')+'</button><div class="ev" id="eval-disp" role="status" aria-label="'+T('evaluating')+'">'+(setupMode?T('setup_label'):(isAIThinking?'<span class="ev-e">⏳</span><span>'+T('analyzing')+'</span>':'<span class="ev-e">'+pe+'</span><span>'+pd+'</span><span style="color:var(--muted)">('+scoreStr+')</span>'+_hdrDepthStr+_hdrProgressStr))+'</div></div><div class="hdr-tools" role="toolbar" aria-label="'+T('ctrl_range')+'">'+(setupMode?'':'<div class="diff-sel" role="radiogroup" aria-label="AI">'+getAI_LEVELS().map(l=>'<button class="diff-b'+(getEffectiveAILevel()===l.id?' act':'')+'" onclick="setDifficultyLevel('+l.id+')" title="'+l.desc+'" role="radio" aria-checked="'+(getEffectiveAILevel()===l.id)+'">'+(l.id===8?'⚙️':l.id===7?('SL'+(function(){try{let _sl=20;if(typeof engineSettingsData!=='undefined'&&engineSettingsData&&engineSettingsData.skillLevel!=null){_sl=engineSettingsData.skillLevel;}else{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getEngineSkillLevel){_sl=AndroidBridge.getEngineSkillLevel();}}return _sl;}catch(e){return 20;}})()):l.id)+'</button>').join('')+'</div>')+'<button type="button" class="btn" onclick="showNewGameDialog=true;dlgPlayerColor=playerColor;dlgOpeningId=null;ecoShowCount=30;dlgBookMoves=useBookMoves;render()" aria-label="'+T('new_game')+'"><span style="font-size:1.4rem">⚔️</span> '+T('new_game')+'</button>'+'<button class="btn" onclick="quickFreeOpening()" aria-label="'+T('free_opening')+'">'+(playerColor==='white'?'<span style=\"font-size:1.4rem;font-weight:400;color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans&#x27;,&#x27;Segoe UI Symbol&#x27;,sans-serif;font-variant-emoji:text\">♔&#xFE0E;</span>':'<span style=\"font-size:1.4rem;font-weight:400;color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55);font-family:&#x27;DejaVu Sans&#x27;,&#x27;Noto Sans Symbol&#x27;,sans-serif;font-variant-emoji:text\">♚&#xFE0E;</span>')+' '+T('free_opening')+'</button>'+(setupMode?'':'<button class="btn" onclick="toggleSound()" id="btnSound" aria-label="'+T('sound')+'">'+(soundOn?'<span style="font-size:1.4rem">🔊</span> '+T('sound'):'<span style="font-size:1.4rem">🔇</span> '+T('sound'))+'</button>')+'<button class="btn" onclick="copyFEN()" title="'+T('copy_fen')+'" aria-label="'+T('copy_fen')+'"><span style="font-size:1.4rem">📝</span> FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="'+T('import_fen')+'" aria-label="'+T('import_fen')+'"><span style="font-size:1.4rem">🗃️</span> '+T('import_label')+'</button><button class="btn" onclick="'+(setupMode?'exitSetup()':'toggleSetup()')+'" aria-label="'+(setupMode?T('setup_done'):T('setup_mode'))+'">'+(setupMode?'<span style="font-size:1.4rem">✓</span> '+T('setup_done'):'<span style="font-size:1.4rem">🏗️</span> '+T('setup_mode'))+'</button></div></div>';
 return h;
 } // end _renderHeader
 
@@ -20048,7 +20055,7 @@ const _aiClockHtml=(gameClocks !== undefined&&gameClocks)?`<span id="${_aiClockI
 const _aiCapOverflowMatch=_aiCapHtml.match(/<div id="ai-cap-overflow"[^>]*>[\s\S]*?<\/div>/);
 const _aiCapOverflow=_aiCapOverflowMatch?_aiCapOverflowMatch[0]:'';
 const _aiCapMain=_aiCapOverflowMatch?_aiCapHtml.replace(_aiCapOverflowMatch[0],''):_aiCapHtml;
-h+=`<div class="pbar" id="ai-bar" role="status" aria-label="AI" style="flex-wrap:wrap"><span class="pico">${playerColor==='white'?'<span style="color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55)">♚&#xFE0E;</span>':'<span style="color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55)">♔&#xFE0E;</span>'}</span><div style="flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><div class="pname">${T('ai_opponent')}</div><div class="pbar-sub">${getEffectiveAILevel()===8?T('manual_config'):getEffectiveAILevel()===7?('SL'+(function(){try{let _sl=20;if(typeof engineSettingsData!=='undefined'&&engineSettingsData&&engineSettingsData.skillLevel!=null)_sl=engineSettingsData.skillLevel;else if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getEngineSkillLevel)_sl=AndroidBridge.getEngineSkillLevel();return _sl;}catch(e){return 20;}})()):('Lv.'+getEffectiveAILevel())}</div>${_aiClockHtml}${gameState.currentTurn!==playerColor&&!gameOver&&!isAIThinking?'<span class="tind">'+T('waiting')+'</span>':''}${isAIThinking?'<span class="tind">'+T('thinking')+'</span>':''}</div>${_aiCapMain}<div id="ai-search-info" style="display:flex;justify-content:flex-end;text-align:right;font-size:.65rem;color:var(--accent2);font-family:monospace,system-ui,-apple-system,sans-serif;letter-spacing:.5px;padding-top:2px;line-height:1.3;min-height:1.3em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;width:100%;box-sizing:border-box">${isAIThinking&&_aiBarInfo?_esc(_aiBarInfo):''}</div><div style="display:flex;align-items:center;width:100%;gap:6px;min-width:0;overflow:hidden">${_aiCapOverflow}<div id="ai-ponder-info" style="text-align:right;font-size:.65rem;color:var(--muted);font-family:monospace,system-ui,-apple-system,sans-serif;letter-spacing:.5px;padding-top:1px;line-height:1.3;min-height:1.3em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto;min-width:0;margin-left:auto">${(!isAIThinking&&!isHintLoading&&!hintText&&_ponderMoveSAN&&_ponderBarInfo&&!gameOver&&!setupMode&&!reviewMode)?('🔮 '+_esc(_ponderMoveSAN)+' '+_esc(_ponderBarInfo)):''}</div></div></div></div>`;}
+h+=`<div class="pbar" id="ai-bar" role="status" aria-label="AI" style="flex-wrap:wrap"><span class="pico">${playerColor==='white'?'<span style="color:#1A1A2E;-webkit-text-stroke:.3px rgba(255,230,150,.85);text-shadow:0 0 .8px rgba(255,230,150,.55)">♚&#xFE0E;</span>':'<span style="color:#E8E8F0;-webkit-text-stroke:.3px rgba(30,15,0,.85);text-shadow:0 0 .8px rgba(30,15,0,.55)">♔&#xFE0E;</span>'}</span><div style="flex:1;min-width:0;display:flex;flex-direction:column;overflow:hidden"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><div class="pname">${T('ai_opponent')}</div><div class="pbar-sub">${getEffectiveAILevel()===8?T('manual_config'):getEffectiveAILevel()===7?('SL'+(function(){try{let _sl=20;if(typeof engineSettingsData!=='undefined'&&engineSettingsData&&engineSettingsData.skillLevel!=null){_sl=engineSettingsData.skillLevel;}else{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.getEngineSkillLevel){_sl=AndroidBridge.getEngineSkillLevel();}}return _sl;}catch(e){return 20;}})()):('Lv.'+getEffectiveAILevel())}</div>${_aiClockHtml}${gameState.currentTurn!==playerColor&&!gameOver&&!isAIThinking?'<span class="tind">'+T('waiting')+'</span>':''}${isAIThinking?'<span class="tind">'+T('thinking')+'</span>':''}</div>${_aiCapMain}<div id="ai-search-info" style="display:flex;justify-content:flex-end;text-align:right;font-size:.65rem;color:var(--accent2);font-family:monospace,system-ui,-apple-system,sans-serif;letter-spacing:.5px;padding-top:2px;line-height:1.3;min-height:1.3em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;width:100%;box-sizing:border-box">${isAIThinking&&_aiBarInfo?_esc(_aiBarInfo):''}</div><div style="display:flex;align-items:center;width:100%;gap:6px;min-width:0;overflow:hidden">${_aiCapOverflow}<div id="ai-ponder-info" style="text-align:right;font-size:.65rem;color:var(--muted);font-family:monospace,system-ui,-apple-system,sans-serif;letter-spacing:.5px;padding-top:1px;line-height:1.3;min-height:1.3em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:0 1 auto;min-width:0;margin-left:auto">${(!isAIThinking&&!isHintLoading&&!hintText&&_ponderMoveSAN&&_ponderBarInfo&&!gameOver&&!setupMode&&!reviewMode)?('🔮 '+_esc(_ponderMoveSAN)+' '+_esc(_ponderBarInfo)):''}</div></div></div></div>`;}
 return h;
 } // end _renderAIBar
 
@@ -20191,11 +20198,11 @@ h+=`<div style="padding:6px 12px;background:var(--card);border:1px solid var(--p
 }
 // Hint area: only shown when user clicked hint button (isHintLoading or hintText set)
 // Search info in hint area only shown during hint loading, NOT during AI thinking
-{if(isHintLoading||hintText){h+='<div class="hint-area"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:.85rem">💡</span><span style="font-size:.75rem;color:var(--accent2)">'+T('ai_hint')+'</span></div>';if(isHintLoading)h+='<div class="hint-text" style="animation:pulse 1.2s infinite">'+T('hint_thinking')+'</div>';else if(hintText)h+='<div class="hint-text">'+_esc(hintText)+'</div>';if(isHintLoading&&_hintBarInfo)h+='<div id="hint-search-info" style="font-size:.72rem;color:var(--accent);margin-top:4px;font-family:monospace;letter-spacing:.5px">'+_esc(_hintBarInfo)+'</div>';
+{if(isHintLoading||hintText){h+='<div class="hint-area"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:.85rem">💡</span><span style="font-size:.75rem;color:var(--accent2)">'+T('ai_hint')+'</span></div>';if(isHintLoading){h+='<div class="hint-text" style="animation:pulse 1.2s infinite">'+T('hint_thinking')+'</div>';}else{if(hintText){h+='<div class="hint-text">'+_esc(hintText)+'</div>';}}if(isHintLoading&&_hintBarInfo)h+='<div id="hint-search-info" style="font-size:.72rem;color:var(--accent);margin-top:4px;font-family:monospace;letter-spacing:.5px">'+_esc(_hintBarInfo)+'</div>';
 // Ponder move is now displayed inline in hintText (set by onHintMove)
 // when the engine provides "bestmove X ponder Y". No separate display needed here.
 // Show MultiPV alternative lines if available
-if(_multiPVLines.length>=1){h+='<div style="margin-top:6px;border-top:1px solid rgba(212,160,23,.15);padding-top:6px"><div style="font-size:.65rem;color:var(--muted);margin-bottom:4px">'+T('multi_analysis')+'</div>';for(const pv of _multiPVLines){let scoreStr='';const _isBTM=gameState&&gameState.currentTurn==='black';if(pv.scoreMate!=null&&pv.scoreMate!==null){const m=Number.parseInt(pv.scoreMate,10);if(!Number.isNaN(m)){const _wM=_isBTM?-m:m;scoreStr=_wM>0?'#+'+Math.abs(_wM):_wM<0?'#-'+Math.abs(_wM):(_isBTM?'#+0':'#-0');}}else if(pv.scoreCp!=null&&pv.scoreCp!==null){const _wCp=_isBTM?-pv.scoreCp:pv.scoreCp;const pd=(_wCp/100).toFixed(1);scoreStr=(_wCp>0?'+':'')+pd;} /* v1.2.3 (R1/R3): White-POV scores */ let pvSAN='';if(pv.pv){try{const _conv=_convertPVtoSAN(pv.pv,gameState);pvSAN=_conv.sanMoves.split(/\s+/).slice(0,3).join(' ');}catch(e){pvSAN=pv.pv.split(/\s+/).slice(0,3).join(' ');}} h+='<div style="font-size:.65rem;color:'+(pv.index===1?'var(--accent2)':'var(--muted)')+';margin-bottom:2px">'+(pv.index===1?'⭐':'·')+' '+scoreStr+(pvSAN?' <span style="font-family:monospace;font-size:.6rem">'+_esc(pvSAN)+'</span>':'')+'</div>';}h+='</div>';} h+='</div>';}}// Player bar
+if(_multiPVLines.length>=1){h+='<div style="margin-top:6px;border-top:1px solid rgba(212,160,23,.15);padding-top:6px"><div style="font-size:.65rem;color:var(--muted);margin-bottom:4px">'+T('multi_analysis')+'</div>';for(const pv of _multiPVLines){let scoreStr='';const _isBTM=gameState&&gameState.currentTurn==='black';if(pv.scoreMate!=null&&pv.scoreMate!==null){const m=Number.parseInt(pv.scoreMate,10);if(!Number.isNaN(m)){const _wM=_isBTM?-m:m;scoreStr=_wM>0?'#+'+Math.abs(_wM):_wM<0?'#-'+Math.abs(_wM):(_isBTM?'#+0':'#-0');}}else{if(pv.scoreCp!=null&&pv.scoreCp!==null){const _wCp=_isBTM?-pv.scoreCp:pv.scoreCp;const pd=(_wCp/100).toFixed(1);scoreStr=(_wCp>0?'+':'')+pd;}} /* v1.2.3 (R1/R3): White-POV scores */ let pvSAN='';if(pv.pv){try{const _conv=_convertPVtoSAN(pv.pv,gameState);pvSAN=_conv.sanMoves.split(/\s+/).slice(0,3).join(' ');}catch(e){pvSAN=pv.pv.split(/\s+/).slice(0,3).join(' ');}} h+='<div style="font-size:.65rem;color:'+(pv.index===1?'var(--accent2)':'var(--muted)')+';margin-bottom:2px">'+(pv.index===1?'⭐':'·')+' '+scoreStr+(pvSAN?' <span style="font-family:monospace;font-size:.6rem">'+_esc(pvSAN)+'</span>':'')+'</div>';}h+='</div>';} h+='</div>';}}// Player bar
 return h;
 } // end _renderInfoBars
 
@@ -20466,7 +20473,7 @@ const _scrollCtx=_saveScrollState();
 app.innerHTML=_htmlResult.h;
 _restoreScrollState(_scrollCtx);
 _postRenderFinalize(_scrollCtx.wasEcoFocused);
-}catch(e){const _app=document.getElementById('app');if(_app)_app.innerHTML='<div style="color:red;padding:20px;font-family:monospace;background:#1a0000;border:2px solid red;border-radius:8px;margin:20px"><h3>'+T('render_error_title')+'</h3><pre style="white-space:pre-wrap;font-size:12px">'+_esc(e.toString())+'\n\n'+_esc(e.stack)+'</pre></div>';console.error('Render error:',e)}}
+}catch(e){const _app=document.getElementById('app');if(_app){_app.innerHTML='<div style="color:red;padding:20px;font-family:monospace;background:#1a0000;border:2px solid red;border-radius:8px;margin:20px"><h3>'+T('render_error_title')+'</h3><pre style="white-space:pre-wrap;font-size:12px">'+_esc(e.toString())+'\n\n'+_esc(e.stack)+'</pre></div>';}console.error('Render error:',e)}}
 
 
 
@@ -20483,7 +20490,7 @@ let _fullRenderTimer=0;
 function _getSqBg(rr,cc,cm,isL,lastMove){
   let bg=isL?SQ_LIGHT:SQ_DARK;
   let ctrlBg=null;
-  if(cm){const e=cm[rr][cc];if(e){const wc=e.white.length,bc=e.black.length;const myC=playerColor==='white'?wc:bc;const opC=playerColor==='white'?bc:wc;const net=myC-opC;const total=myC+opC;const adv=total>0?net/total:0;const str=Math.min(1,total/8);let hue;if(myC===0&&opC===0){ctrlBg='#3a2020'}else{if(adv>=0)hue=280-adv*60;else hue=280-adv*80;if(hue>=360)hue-=360;const sat=0.50+str*0.40;const lit=0.48-str*0.12;ctrlBg=`hsl(${Math.round(hue)},${Math.round(sat*100)}%,${Math.round(lit*100)}%)`}}}
+  if(cm){const e=cm[rr][cc];if(e){const wc=e.white.length,bc=e.black.length;const myC=playerColor==='white'?wc:bc;const opC=playerColor==='white'?bc:wc;const net=myC-opC;const total=myC+opC;const adv=total>0?net/total:0;const str=Math.min(1,total/8);let hue;if(myC===0&&opC===0){ctrlBg='#3a2020'}else{if(adv>=0){hue=280-adv*60;}else{hue=280-adv*80;}if(hue>=360){hue-=360;}const sat=0.50+str*0.40;const lit=0.48-str*0.12;ctrlBg=`hsl(${Math.round(hue)},${Math.round(sat*100)}%,${Math.round(lit*100)}%)`}}}
   if(ctrlBg){bg=ctrlBg}
   return bg;
 }
@@ -21048,7 +21055,7 @@ _resetRvVirtualState();
 // exact position they were at (not the initial position).
 _preReviewSnapshot={
   gameState:cloneS(gameState),
-  moveRecords:moveRecords.map(function(r){if(r===null)return null;const c={...r};if(r.variations)c.variations=r.variations.map(function(v){return {...v};});return c;}),
+  moveRecords:moveRecords.map(function(r){if(r===null){return null;}const c={...r};if(r.variations){c.variations=r.variations.map(function(v){return {...v};});}return c;}),
   lastMove:lastMove?{from:{row:lastMove.from.row,col:lastMove.from.col},to:{row:lastMove.to.row,col:lastMove.to.col}}:null,
   stateHistory:stateHistory.map(function(s){return{state:cloneS(s.state),selectedSquare:s.selectedSquare?{row:s.selectedSquare.row,col:s.selectedSquare.col}:null,legalMvs:s.legalMvs?[].concat(s.legalMvs):[],moveRecords:s.moveRecords?[].concat(s.moveRecords):[],lastMove:s.lastMove?(s.lastMove.from?{from:{row:s.lastMove.from.row,col:s.lastMove.from.col},to:{row:s.lastMove.to.row,col:s.lastMove.to.col}}:s.lastMove):null,gameOver:s.gameOver};}),
   _redoStack:_redoStack.map(function(s){return{state:cloneS(s.state),moveRecords:[].concat(s.moveRecords),lastMove:s.lastMove?(s.lastMove.from?{from:{row:s.lastMove.from.row,col:s.lastMove.from.col},to:{row:s.lastMove.to.row,col:s.lastMove.to.col}}:s.lastMove):null};}),
@@ -21660,15 +21667,15 @@ function _computeInitialPositionAnnotations(){
       st=gameState; // last-resort fallback
     }
     if(!st)return;
-    // Determine "mover" and "opp" for the initial position. At the start,
-    // it's the side to move's turn. We compute annotations from BOTH sides'
-    // perspectives (the threat detection below examines both directions for
-    // blue/yellow arrows). No red/green check arrows are generated for the
-    // initial position (no move was just made).
+    // We compute annotations from BOTH sides' perspectives (the threat
+    // detection below examines both directions for blue/yellow arrows).
+    // No red/green check arrows are generated for the initial position
+    // (no move was just made).
+    // v1.2.3 round-47 (S1481/S1854): removed the unused moverColor/oppColor
+    //   locals — the annotation logic below works off playerCol/aiCol and
+    //   per-piece colors instead.
     const csl=[];  // [{color, square}]
     const cal=[];  // [{color, from, to}]
-    const moverColor=st.currentTurn||'white';
-    const oppColor=moverColor==='white'?'black':'white';
     const playerCol=(typeof playerColor!=='undefined')?playerColor:'white';
     const aiCol=playerCol==='white'?'black':'white';
     let cm=null;

@@ -179,6 +179,7 @@ public class ChessWebViewClient extends WebViewClient {
         //   HapticManager/StabilizationHelper + round-32 EngineHealthMonitor/
         //   StockfishNative.
         long now = SystemClock.elapsedRealtime();
+        // round-47 (S2696 kept): 渲染崩溃计数为跨实例共享状态（static 使计数在 Activity recreate 后仍保留，见字段声明注释），有意在实例方法中写 static 字段。
         if (now - _lastRenderCrashTime > 60000) {
             // Window expired — reset counter
             _renderCrashCount = 0;

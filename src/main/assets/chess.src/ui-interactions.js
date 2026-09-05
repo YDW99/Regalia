@@ -740,7 +740,7 @@ function setDifficultyLevel(level){
   render();
 }
 
-function toggleSetup(){if(isAIThinking&&!setupMode)return;_cachedStatus=null;_cachedStatusKey='';setupMode=!setupMode;
+function toggleSetup(){if(isAIThinking&&!setupMode){return;}_cachedStatus=null;_cachedStatusKey='';setupMode=!setupMode;
 // v1.0.8 PHASE 24 (bug fix): clear any in-progress animation.
 _clearAnimationState();
 // v1.0.8 PHASE 22 supplement: setup-toggle sound (木质放置音)
@@ -1504,7 +1504,11 @@ function _doPastePGN(){
     //   (The whole class is technically redundant since a-zA-Z covers all
     //   letters, but kept for semantic clarity — the explicit piece letters
     //   document that this is a SAN-move-start check.)
-    const hasPGNMoveNumbers=!!trimmed.match(/\d+\.\s*[a-zA-ZNBRQOK]/);
+    // v1.2.3 round-47 (SonarCloud S8786): \d+\. → \d\. — a match exists iff
+    //   some digit sits immediately before the '.', so the '+' was redundant
+    //   for this boolean test and caused super-linear backtracking on long
+    //   digit runs. The result of !!trimmed.match(...) is unchanged.
+    const hasPGNMoveNumbers=!!trimmed.match(/\d\.\s*[a-zA-ZNBRQOK]/);
     const hasPGNHeaders=/\[/.test(trimmed);
     const hasPGNVariations=/\(/.test(trimmed);
     const hasPGNMarkers=hasPGNMoveNumbers||hasPGNHeaders||hasPGNVariations;

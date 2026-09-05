@@ -341,6 +341,7 @@ public class StatsActivity extends Activity {
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
+                        // round-47 (S2696 kept): 跨 Activity 一次性请求标记（此处写、MainActivity.onResume 消费），有意写 static 字段。
                         MainActivity.pendingStatsReviewRequest = true;
                         finish();
                     }
@@ -383,6 +384,7 @@ public class StatsActivity extends Activity {
             // One-shot: MainActivity clears the field after reading it.
             @JavascriptInterface
             public void setImportedPGN(String pgnText) {
+                // round-47 (S2696 kept): importedPGNOnStats 为跨 Activity 静态握手字段（此处 stash、MainActivity.onResume 读取后清零），有意写 static 字段。
                 importedPGNOnStats = pgnText;
                 Log.i(TAG, "Recorded imported PGN on stats page (" +
                         (pgnText != null ? pgnText.length() : 0) + " chars)");

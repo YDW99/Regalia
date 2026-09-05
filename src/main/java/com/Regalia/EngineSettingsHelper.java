@@ -175,7 +175,7 @@ public class EngineSettingsHelper {
             sb.append("engine.autoConfig=").append(callbacks.isAutoConfigEnabled()).append("\n");
 
             return sb.toString();
-        } catch (Throwable e) {
+        } catch (Exception e) {
             Log.e(TAG, "Error exporting settings", e);
             return "# Error exporting settings\n";
         }
@@ -236,7 +236,7 @@ public class EngineSettingsHelper {
                     if (callbacks.isEngineReady()) {
                         try {
                             callbacks.stopAndWaitForBestmove("importSettings");
-                        } catch (Throwable t) {
+                        } catch (Exception t) {
                             Log.w(TAG, "stopAndWaitForBestmove during import failed", t);
                         }
                         callbacks.applySettings();

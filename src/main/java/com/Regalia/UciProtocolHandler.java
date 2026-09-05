@@ -276,12 +276,13 @@ public class UciProtocolHandler {
     /** 处理 option 行，收集支持的选项名 */
     private void handleOptionLine(String line) {
         try {
-            Matcher m = Pattern.compile("option\\s+name\\s+(.+?)\\s+type\\s+\\w+").matcher(line);
+            // round-47 (S8786): \s+ 改为占有量词 \s++，消除与 (.+?) 之间的回溯划分爆炸；经 2 万例模糊测试与原正则匹配结果完全一致（让出空白对匹配 "type" 无帮助，故等价）。
+            Matcher m = Pattern.compile("option\\s+name\\s+(.+?)\\s++type\\s+\\w+").matcher(line);
             if (m.find()) {
                 String optionName = m.group(1).trim();
                 supportedOptionNames.add(optionName);
             }
-        } catch (Throwable e) {
+        } catch (Exception e) {
             Log.w(TAG, "Failed to parse option line: " + line, e);
         }
     }

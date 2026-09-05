@@ -504,7 +504,7 @@ function _syncParsePGNText(pgnText) {
   var text = pgnText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   text = text.replace(/^%.*$/gm, '');
   text = text.replace(/\u00a0/g, ' ');
-  var gameBlocks = text.split(/\n\s*\n(?=\[)/);
+  var gameBlocks = text.split(/\n[^\S\n]*\n(?:[^\S\n]*\n)*(?=\[)/); // v1.2.3 round-47 (S8786): unambiguous equivalent of \n\s*\n (horizontal-ws runs separated by \n) — same split points, no polynomial backtracking
   if (gameBlocks.length > 1) text = gameBlocks[0];
   var startFEN = null;
   var fenMatch = text.match(/\[FEN\s+"([^"]+)"\]/i);
@@ -527,9 +527,9 @@ function _syncParsePGNText(pgnText) {
   var cslAnnotations = [];
   var calAnnotations = [];
   var evals = [];
-  var cslRe = /\[%csl\s+([^\]]*)\]/g;
-  var calRe = /\[%cal\s+([^\]]*)\]/g;
-  var evalRe = /\[%eval\s+([^\]]*)\]/g;
+  var cslRe = /\[%csl\s([^\]]*)\]/g; // v1.2.3 round-47 (S8786): \s+ -> \s — trailing [^\]]* already covers extra whitespace; capture is .trim()'d at use site
+  var calRe = /\[%cal\s([^\]]*)\]/g; // v1.2.3 round-47 (S8786): same as cslRe above
+  var evalRe = /\[%eval\s([^\]]*)\]/g; // v1.2.3 round-47 (S8786): same as cslRe above
   var iter = 0;
   // v1.2.3 round-38 (SonarCloud S7765): use .includes() instead of .indexOf() >= 0.
   while (text.includes('{') && iter++ < 20) {
@@ -548,14 +548,14 @@ function _syncParsePGNText(pgnText) {
   var variations = [];
   var depth = 0, start = -1;
   for (var i = 0; i < text.length; i++) {
-    if (text[i] === '(') { if (depth === 0) start = i + 1; depth++; }
+    if (text[i] === '(') { if (depth === 0) { start = i + 1; } depth++; }
     else if (text[i] === ')') { depth--; if (depth === 0 && start >= 0) { variations.push(text.substring(start, i)); start = -1; } }
   }
   var movetext = '';
   depth = 0;
-  for (var i = 0; i < text.length; i++) {
+  for (i = 0; i < text.length; i++) {
     if (text[i] === '(') { depth++; continue; }
-    if (text[i] === ')') { if (depth > 0) depth--; continue; }
+    if (text[i] === ')') { if (depth > 0) { depth--; } continue; }
     if (depth === 0) movetext += text[i];
   }
   movetext = movetext.replace(/\d+\.+/g, ' '); // v1.2.3 (S8786): (\d+\.+)* 尾组对 replace 语义冗余，去除嵌套量词
@@ -602,8 +602,8 @@ function _syncComputeHeatmapStats(boards) {
       var dirs = p.type === 'rook' ? [[-1,0],[1,0],[0,-1],[0,1]]
         : p.type === 'bishop' ? [[-1,-1],[-1,1],[1,-1],[1,1]]
         : [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]];
-      for (var i = 0; i < dirs.length; i++) {
-        var nr = r+dirs[i][0], nc = c+dirs[i][1];
+      for (i = 0; i < dirs.length; i++) {
+        nr = r+dirs[i][0], nc = c+dirs[i][1];
         while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
           mv.push({row: nr, col: nc}); if (board[nr][nc]) break;
           nr += dirs[i][0]; nc += dirs[i][1];
@@ -649,7 +649,7 @@ function terminateWorkerPool() {
   }
   _workerPool = [];
   // v1.0.8 PHASE 35: reject in-flight (dispatched) tasks
-  for (const [tid, task] of _pendingTasks) {
+  for (const task of _pendingTasks.values()) {
     if (task.timeout) { clearTimeout(task.timeout); task.timeout = null; }
     try { task.reject(new Error('Pool terminated')); } catch (e) {}
   }

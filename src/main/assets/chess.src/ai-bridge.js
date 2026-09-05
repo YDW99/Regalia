@@ -287,7 +287,7 @@ let _reviewEvalCache=new function(){
   // v1.0.7 PHASE 18 Task 1: set() now also calls _evictIfOverCap() to enforce
   // the soft MAX_ENTRIES cap. Eviction happens BEFORE the debounced save, so
   // the persisted file never exceeds the cap (after the next flush).
-  this.set=function(k,v){if(m.has(k))m.delete(k);m.set(k,v);_evictIfOverCap();_saveToStorage(false);};
+  this.set=function(k,v){if(m.has(k)){m.delete(k);}m.set(k,v);_evictIfOverCap();_saveToStorage(false);};
   this.delete=function(k){const r=m.delete(k);_saveToStorage(false);return r;};
   Object.defineProperty(this,'size',{get:function(){return m.size;},configurable:true});
   this.clear=function(){m.clear();_saveToStorage(true);};
@@ -762,7 +762,7 @@ function _updateLoadingStatus(msg,pct){
 }
 let _loadingOverlayHiding=false;
 function _hideLoadingOverlay(){
-  if(_loadingOverlayHiding)return;_loadingOverlayHiding=true;
+  if(_loadingOverlayHiding){return;}_loadingOverlayHiding=true;
   _updateLoadingStatus(T('engine_ready'),100);
   const lo=document.getElementById('_loadingOverlay');
   if(lo){lo.style.opacity='0';lo.style.transition='opacity .5s';setTimeout(()=>{if(lo.parentNode)lo.remove();},500);}
@@ -2738,7 +2738,6 @@ function onBestMove(uciMove){
   //   此处保留 coords 解析以提取 from/to/promotion 字段供 executeMove 使用。
   const coords=uciToCoords(uciMove);
   const from=coords.from, to=coords.to;
-  const piece=gameState.board[from.row][from.col];
   // v1.2.3 round-18 (bug fix): discard the bestmove if the game has already
   //   ended (timeout forfeit / resignation) while the engine was thinking.
   //   Clock expiry runs on a 1s interval and resign is user-driven, so an
@@ -3568,8 +3567,8 @@ function restartCurrentEngine(){
     }
   },2500);
 }
-function setConfigThreads(v){v=Math.max(1,Math.min(64,Number.parseInt(v)||1));if(engineSettingsData)engineSettingsData.threads=v;_bridgeCall(function(bridge){bridge.setEngineThreads(v);});renderEngineConfigAndUpdate();}
-function setConfigHash(v){v=Math.max(1,Math.min(4096,Number.parseInt(v)||64));if(engineSettingsData)engineSettingsData.hash=v;_bridgeCall(function(bridge){bridge.setEngineHash(v);});renderEngineConfigAndUpdate();}
+function setConfigThreads(v){v=Math.max(1,Math.min(64,Number.parseInt(v)||1));if(engineSettingsData){engineSettingsData.threads=v;}_bridgeCall(function(bridge){bridge.setEngineThreads(v);});renderEngineConfigAndUpdate();}
+function setConfigHash(v){v=Math.max(1,Math.min(4096,Number.parseInt(v)||64));if(engineSettingsData){engineSettingsData.hash=v;}_bridgeCall(function(bridge){bridge.setEngineHash(v);});renderEngineConfigAndUpdate();}
 function setConfigMultiPV(v){
   v=Math.max(1,Math.min(8,Number.parseInt(v)||1));
   if(engineSettingsData)engineSettingsData.multiPV=v;
@@ -3593,7 +3592,7 @@ function setConfigMultiPV(v){
   _bridgeCall(function(bridge){bridge.setEngineMultiPV(v);});
   renderEngineConfigAndUpdate();
 }
-function setConfigMoveOverhead(v){v=Math.max(0,Math.min(5000,Number.parseInt(v)||30));if(engineSettingsData)engineSettingsData.moveOverhead=v;_bridgeCall(function(bridge){bridge.setEngineMoveOverhead(v);});renderEngineConfigAndUpdate();}
+function setConfigMoveOverhead(v){v=Math.max(0,Math.min(5000,Number.parseInt(v)||30));if(engineSettingsData){engineSettingsData.moveOverhead=v;}_bridgeCall(function(bridge){bridge.setEngineMoveOverhead(v);});renderEngineConfigAndUpdate();}
 function togglePonder(){
   const newVal=!engineSettingsData||!engineSettingsData.ponder;
   if(engineSettingsData)engineSettingsData.ponder=newVal;
@@ -3606,14 +3605,14 @@ function toggleShowWDL(){
   HapticManager.fire(newVal?'TOGGLE_ON':'TOGGLE_OFF');
   _bridgeCall(function(bridge){bridge.setEngineShowWDL(newVal);});renderEngineConfigAndUpdate();
 }
-function setConfigSkillLevel(v){v=Math.max(0,Math.min(20,Number.parseInt(v)||20));if(engineSettingsData)engineSettingsData.skillLevel=v;_bridgeCall(function(bridge){bridge.setEngineSkillLevel(v);});renderEngineConfigAndUpdate();}
+function setConfigSkillLevel(v){v=Math.max(0,Math.min(20,Number.parseInt(v)||20));if(engineSettingsData){engineSettingsData.skillLevel=v;}_bridgeCall(function(bridge){bridge.setEngineSkillLevel(v);});renderEngineConfigAndUpdate();}
 function toggleLimitElo(){
   const newVal=!engineSettingsData||!engineSettingsData.limitStrength;
   if(engineSettingsData)engineSettingsData.limitStrength=newVal;
   HapticManager.fire(newVal?'TOGGLE_ON':'TOGGLE_OFF');
   _bridgeCall(function(bridge){bridge.setEngineLimitElo(newVal,engineSettingsData?engineSettingsData.elo:2800);});renderEngineConfigAndUpdate();
 }
-function setConfigElo(v){v=Math.max(500,Math.min(3500,Number.parseInt(v)||2800));if(engineSettingsData)engineSettingsData.elo=v;_bridgeCall(function(bridge){bridge.setEngineLimitElo(engineSettingsData?engineSettingsData.limitStrength:false,v);});renderEngineConfigAndUpdate();}
+function setConfigElo(v){v=Math.max(500,Math.min(3500,Number.parseInt(v)||2800));if(engineSettingsData){engineSettingsData.elo=v;}_bridgeCall(function(bridge){bridge.setEngineLimitElo(engineSettingsData?engineSettingsData.limitStrength:false,v);});renderEngineConfigAndUpdate();}
 function toggleAutoConfig(){
   const newVal=!engineSettingsData||!engineSettingsData.autoConfig;
   if(engineSettingsData)engineSettingsData.autoConfig=newVal;
@@ -3830,7 +3829,7 @@ function _processDeferredVariations(){
 
   // v1.2.3 round-18 (cleanup): removed unused `moveNum` from the destructure
   //   (superseded by aiMoveNum recomputed below from aiMoveIdx).
-  const{uciMove,lastIdx,isAfterWhiteMove,preMoveState,ponderMove,ponderEnabled,multiPVEnabled}=info;
+  const{uciMove,lastIdx,preMoveState}=info;
 
   // The move record at lastIdx should exist (it was the last record before the bestmove was executed)
   // But after executeMove(), a new record was added. So the record we want is at lastIdx,

@@ -135,13 +135,16 @@ public class StockfishNative {
     // Movetime mapping: index 0 unused, 1-7 = game levels
     private static final int[] MOVETIME_MAP = {0, 500, 800, 1000, 1500, 2000, 3000, 5000};
 
-    // v18.4.10: Native chmod and renice — derived from DroidFish EngineUtil.java (nativeutil.cpp).
+    // v18.4.10: Native chmod — derived from DroidFish EngineUtil.java (nativeutil.cpp).
     // Copyright (C) Peter Österlund (original DroidFish logic).
     // Modified by Regalia on 2026-06-12.
     // Native chmod is more reliable than Runtime.exec("chmod ...") for setting
     // engine binary permissions, following DroidFish's proven approach.
     private static native boolean nativeChmod(String path);
-    private static native boolean nativeRenice(int pid, int prio); // v1.2.3 round-44 (F1): void→boolean (JNI side updated in engine_jni.cpp)
+    // round-47 (S1144): removed the unused nativeRenice declaration — no Java callers
+    //   (the JNI implementation in engine_jni.cpp is only ever invoked via this
+    //   declaration, so it is now dead on the native side too, but that file is
+    //   outside this round's scope).
 
     // B8 FIX: Use Application context to prevent Activity memory leak.
     // The context field holds getApplicationContext(), which is safe for
@@ -388,7 +391,7 @@ public class StockfishNative {
             Log.w(TAG, tag + ": executor rejected (shutdown in progress?)", e);
             try {
                 postJsCallback("onEngineError(" + escapeJsString(isEnglishMode() ? "Engine busy, please retry" : "\u5f15\u64ce\u5fd9\uff0c\u8bf7\u91cd\u8bd5") + ")");
-            } catch (Throwable ignored) {}
+            } catch (Exception ignored) {}
         }
     }
 
@@ -691,10 +694,6 @@ public class StockfishNative {
         prefs.edit().putInt(key, value).apply();
     }
 
-    private void saveStringSetting(String key, String value) {
-        prefs.edit().putString(key, value).apply();
-    }
-
     // ===================== JS CALLBACK HELPERS =====================
     // (v1.0.2: removed dead postJsCallbackJson() — all callers use postJsCallback directly.)
 
@@ -717,7 +716,7 @@ public class StockfishNative {
             if (_engineExecutor.isShutdown()) {
                 _engineExecutor = _createEngineExecutor();
             }
-        } catch (Throwable e) {
+        } catch (Exception e) {
             _engineExecutor = _createEngineExecutor();
         }
         initStarted = true;
@@ -744,7 +743,7 @@ public class StockfishNative {
                 public void run() {
                     try {
                         startEngine();
-                    } catch (Throwable e) {
+                    } catch (Throwable e) { // round-47: 有意兜底 —— 执行器任务 run() 的最外层捕获，吞掉 Error 也要复位状态并通知 JS，防止引擎初始化线程因 Error 死亡
                         Log.e(TAG, "Failed to initialize engine", e);
                         initStarted = false;
                         engineReady = false;
@@ -760,7 +759,7 @@ public class StockfishNative {
                 public void run() {
                     try {
                         startEngine();
-                    } catch (Throwable t) {
+                    } catch (Throwable t) { // round-47: 有意兜底 —— 执行器任务 run() 的最外层捕获，防止引擎初始化重试线程因 Error 死亡
                         Log.e(TAG, "initEngine retry failed", t);
                         initStarted = false;
                         engineReady = false;
@@ -786,6 +785,9 @@ public class StockfishNative {
 
     /** v1.2.1: 在引擎成功启动后清除死亡标记 */
     private void clearEngineThreadDeadFlag() {
+        // round-47 (S2696 保留): 有意为之 —— sEngineThreadDied/sEngineThreadDiedName 是
+        //   进程级静态标记（由静态方法 markEngineThreadDead 设置），实例方法负责在引擎
+        //   重启成功后统一清零，故不改为 static 方法。
         sEngineThreadDied = false;
         sEngineThreadDiedName = null;
     }
@@ -822,7 +824,7 @@ public class StockfishNative {
             return false;
         } catch (IllegalThreadStateException ex) {
             return true;
-        } catch (Throwable e) {
+        } catch (Exception e) {
             return false;
         }
     }
@@ -842,7 +844,7 @@ public class StockfishNative {
                 // the OS to reap it if the first destroy() was graceful.
                 engineProcess.destroy();
             }
-        } catch (Throwable ignored) {}
+        } catch (Exception ignored) {}
     }
 
     @JavascriptInterface
@@ -993,7 +995,7 @@ public class StockfishNative {
                             engineReady = false;
                             try {
                                 markEngineThreadDead("stopAndWaitForBestmove(" + callerTag + ")");
-                            } catch (Throwable t) {
+                            } catch (Exception t) {
                                 Log.w(TAG, "markEngineThreadDead call failed", t);
                             }
                         }
@@ -1373,7 +1375,7 @@ public class StockfishNative {
             if (engineSupportsOption("UCI_AnalyseMode")) {
                 sendUciCommand("setoption name UCI_AnalyseMode value true");
             }
-        } catch (Throwable e) {
+        } catch (Exception e) {
             Log.w(TAG, "applyEvalModeOptions failed", e);
         }
     }
@@ -1403,7 +1405,7 @@ public class StockfishNative {
             if (engineSupportsOption("UCI_AnalyseMode")) {
                 sendUciCommand("setoption name UCI_AnalyseMode value false");
             }
-        } catch (Throwable e) {
+        } catch (Exception e) {
             Log.w(TAG, "restoreGameplayOptions failed", e);
         }
     }
@@ -1909,9 +1911,9 @@ public class StockfishNative {
                     Log.e(TAG, "Exit 139 = SIGSEGV (wrong ABI or corrupted binary)");
                 }
             } catch (Throwable ignored) {}
-            try { engineProcess.getInputStream().close(); } catch (Throwable ignored) {}
-            try { engineProcess.getOutputStream().close(); } catch (Throwable ignored) {}
-            try { engineProcess.getErrorStream().close(); } catch (Throwable ignored) {}
+            try { engineProcess.getInputStream().close(); } catch (Exception ignored) {}
+            try { engineProcess.getOutputStream().close(); } catch (Exception ignored) {}
+            try { engineProcess.getErrorStream().close(); } catch (Exception ignored) {}
             engineProcess = null;
             return false;
         }
@@ -1991,9 +1993,9 @@ public class StockfishNative {
         }
         // Close process streams
         if (engineProcess != null) {
-            try { engineProcess.getInputStream().close(); } catch (Throwable ignored) {}
-            try { engineProcess.getOutputStream().close(); } catch (Throwable ignored) {}
-            try { engineProcess.getErrorStream().close(); } catch (Throwable ignored) {}
+            try { engineProcess.getInputStream().close(); } catch (Exception ignored) {}
+            try { engineProcess.getOutputStream().close(); } catch (Exception ignored) {}
+            try { engineProcess.getErrorStream().close(); } catch (Exception ignored) {}
             try {
                 engineProcess.destroy();
                 sleepGracefully(PROCESS_DESTROY_GRACE_MS);
@@ -2001,7 +2003,7 @@ public class StockfishNative {
                 // direct engineProcess.isAlive() / destroyForcibly() throw
                 // NoSuchMethodError on API 23-25 (minSdk).
                 if (isProcessAlive()) destroyForciblySafe();
-            } catch (Throwable ignored) {}
+            } catch (Exception ignored) {}
             engineProcess = null;
         }
         // Close writer
@@ -2019,7 +2021,7 @@ public class StockfishNative {
         // Interrupt reader thread
         if (readerThread != null) {
             readerThread.interrupt();
-            try { readerThread.join(1000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); } catch (Throwable ignored) {}
+            try { readerThread.join(1000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); } catch (Exception ignored) {}
             readerThread = null;
         }
         engineReader = null;
@@ -2100,7 +2102,7 @@ public class StockfishNative {
             if (_engineExecutor.isShutdown()) {
                 _engineExecutor = _createEngineExecutor();
             }
-        } catch (Throwable e) {
+        } catch (Exception e) {
             _engineExecutor = _createEngineExecutor();
         }
         // v1.2.1 round-10 (review-D P2): re-check shutdownRequested AFTER
@@ -2136,13 +2138,13 @@ public class StockfishNative {
                         //   before creating a fresh one. Previously each recovery
                         //   cycle leaked an ExecutorService (and its non-daemon
                         //   thread) because the old executor was never shut down.
-                        try { _engineExecutor.shutdown(); } catch (Throwable tsh) {}
+                        try { _engineExecutor.shutdown(); } catch (Exception tsh) {}
                         _engineExecutor = _createEngineExecutor(); // Fresh executor after cleanup
                         _engineExecutor.execute(new Runnable() {
                             public void run() {
                                 try {
                                     startEngine();
-                                } catch (Throwable t2) {
+                                } catch (Throwable t2) { // round-47: 有意兜底 —— 执行器任务 run() 的最外层捕获，防止引擎自动恢复线程因 Error 死亡
                                     Log.e(TAG, "Auto-recovery startEngine failed (" + reason + ")", t2);
                                     if (attemptNum >= MAX_AUTO_RECOVERY) {
                                         postJsCallback("onEngineError(" + escapeJsString(userMessage) + ")");
@@ -2479,7 +2481,7 @@ public class StockfishNative {
                 try {
                     seldepth = Integer.parseInt(seldepthMatcher.group(1));
                     if (seldepth > MAX_REASONABLE_DEPTH * 2) seldepth = 0; // sanity cap
-                } catch (Throwable ignored) { seldepth = 0; }
+                } catch (Exception ignored) { seldepth = 0; }
             }
 
             Long nodes = null;
@@ -3049,7 +3051,7 @@ public class StockfishNative {
         _heartbeatRunning = false;
         if (_heartbeatThread != null) {
             _heartbeatThread.interrupt();
-            try { _heartbeatThread.join(1000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); } catch (Throwable ignored) {}
+            try { _heartbeatThread.join(1000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); } catch (Exception ignored) {}
             _heartbeatThread = null;
         }
 
@@ -3087,7 +3089,7 @@ public class StockfishNative {
                     } catch (IOException ignored) {}
                     engineWriter = null;
                 }
-            } catch (Throwable e) {
+            } catch (Exception e) {
                 Log.w(TAG, "Error during shutdown", e);
             }
         }
@@ -3123,7 +3125,7 @@ public class StockfishNative {
                 readerThread.join(1000);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-            } catch (Throwable ignored) {}
+            } catch (Exception ignored) {}
             readerThread = null;
         }
 
@@ -3178,13 +3180,13 @@ public class StockfishNative {
                 // direct engineProcess.isAlive() / destroyForcibly() throw
                 // NoSuchMethodError on API 23-25 (minSdk).
                 if (isProcessAlive()) destroyForciblySafe();
-            } catch (Throwable ignored) {}
+            } catch (Exception ignored) {}
             engineProcess = null;
         }
 
         if (readerThread != null) {
             readerThread.interrupt();
-            try { readerThread.join(1000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); } catch (Throwable ignored) {}
+            try { readerThread.join(1000); } catch (InterruptedException e) { Thread.currentThread().interrupt(); } catch (Exception ignored) {}
             readerThread = null;
         }
 
@@ -3324,7 +3326,7 @@ public class StockfishNative {
             if (_engineExecutor.isShutdown()) {
                 _engineExecutor = _createEngineExecutor();
             }
-        } catch (Throwable e) {
+        } catch (Exception e) {
             _engineExecutor = _createEngineExecutor();
         }
 
@@ -3427,7 +3429,7 @@ public class StockfishNative {
                         public void run() {
                             try {
                                 startEngine();
-                            } catch (Throwable e) {
+                            } catch (Throwable e) { // round-47: 有意兜底 —— 执行器任务 run() 的最外层捕获，防止引擎重启任务线程因 Error 死亡
                                 Log.e(TAG, "Engine restart failed", e);
                                 postJsCallback("onEngineError(" + escapeJsString((isEnglishMode() ? "Engine restart failed: " : "\u5f15\u64ce\u91cd\u542f\u5931\u8d25: ") + (e.getMessage() != null ? e.getMessage() : "Unknown")) + ")");
                             } finally {
@@ -3457,7 +3459,7 @@ public class StockfishNative {
                         _engineHealthMonitor.resetRecoveryCount();
                         cleanupEngineResources();
                         startEngine();
-                    } catch (Throwable t) {
+                    } catch (Throwable t) { // round-47: 有意兜底 —— 执行器任务 run() 的最外层捕获，防止引擎重启任务线程因 Error 死亡
                         Log.e(TAG, "Engine restart retry failed", t);
                         postJsCallback("onEngineError(" + escapeJsString((isEnglishMode() ? "Engine restart failed: " : "\u5f15\u64ce\u91cd\u542f\u5931\u8d25: ") + (t.getMessage() != null ? t.getMessage() : "Unknown")) + ")");
                     } finally {
@@ -3826,7 +3828,7 @@ public class StockfishNative {
             }
             try {
                 sendUciCommand("stop");
-            } catch (Throwable e) {
+            } catch (Exception e) {
                 Log.w(TAG, "engineStop: sendUciCommand failed", e);
             }
             // v1.2.1: 若被打断的是 STATE_EVAL，需要主动恢复 gameplay 选项 ——
@@ -3835,7 +3837,7 @@ public class StockfishNative {
             //   才会调用 restoreGameplayOptions()，但 discard 路径不会进入该分支）。
             if (stateBefore == STATE_EVAL) {
                 try { restoreGameplayOptions(); }
-                catch (Throwable t) { Log.w(TAG, "engineStop: restoreGameplayOptions failed", t); }
+                catch (Exception t) { Log.w(TAG, "engineStop: restoreGameplayOptions failed", t); }
             }
             // v1.2.3 round-44 (A5): drop MultiPV rows accumulated by the stopped
             //   search so the next search never displays stale lines.
@@ -3866,7 +3868,7 @@ public class StockfishNative {
                 if (!engineReady) return;
                 try {
                     sendUciCommand(command);
-                } catch (Throwable e) {
+                } catch (Throwable e) { // round-47: 有意兜底 —— 执行器任务 run() 的最外层捕获，防止 UCI 命令任务线程因 Error 死亡
                     Log.w(TAG, "sendToEngine failed: " + command, e);
                 }
             }
@@ -3906,7 +3908,7 @@ public class StockfishNative {
         if (info == null || info.isEmpty()) return;
         try {
             EngineService.updateNotification(context, info);
-        } catch (Throwable e) {
+        } catch (Exception e) {
             Log.w(TAG, "updateEngineNotification failed", e);
         }
     }
@@ -4098,7 +4100,7 @@ public class StockfishNative {
                 // v1.0.4 Round-5 Rev20: sync() for crash safety.
                 // FileDescriptor.sync() is available since Java 1.0 / Android API 1.
                 // If sync fails (rare), we still proceed — the rename is atomic.
-                try { fos.getFD().sync(); } catch (Throwable ignored) {}
+                try { fos.getFD().sync(); } catch (Exception ignored) {}
             }
             // v1.0.4 Rev23: Use Files.move with ATOMIC_MOVE + REPLACE_EXISTING
             // on API 26+ for true atomic rename. The old delete+rename sequence

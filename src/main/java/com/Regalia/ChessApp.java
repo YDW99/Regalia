@@ -73,6 +73,7 @@ public class ChessApp extends Application {
                     Log.e(TAG, "Engine thread died: " + threadName);
                     try {
                         StockfishNative.markEngineThreadDead(threadName);
+                    // round-47: 有意兜底，防止 Error 逃逸导致组件死亡（此处需兜住 NoClassDefFoundError —— StockfishNative 类可能尚未加载）
                     } catch (Throwable ignored) {
                         // StockfishNative 类尚未加载时忽略 —— 此时也没有引擎可恢复
                     }

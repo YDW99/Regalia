@@ -106,7 +106,7 @@ public class EngineProcessManager {
                 } catch (InterruptedException e) {
                     killProcess(p);
                     Thread.currentThread().interrupt();
-                } catch (Throwable e2) {
+                } catch (Exception e2) {
                     // v1.2.3 round-44 (C3, evaluated — fallback KEPT): the array
                     //   form above is already a shell-free invocation, and this
                     //   sh -c fallback has no injection surface (the path comes
@@ -127,7 +127,7 @@ public class EngineProcessManager {
                     } catch (InterruptedException e3) {
                         killProcess(p2);
                         Thread.currentThread().interrupt();
-                    } catch (Throwable ignored) {
+                    } catch (Exception ignored) {
                         // Last-resort fallback failed — non-fatal.
                     } finally {
                         closeProcessStreams(p2);
@@ -136,7 +136,7 @@ public class EngineProcessManager {
                     closeProcessStreams(p);
                 }
             }
-        } catch (Throwable e) {
+        } catch (Exception e) {
             Log.w(TAG, "Failed to make executable: " + file.getAbsolutePath(), e);
         }
     }
@@ -154,7 +154,7 @@ public class EngineProcessManager {
             } else {
                 p.destroy();
             }
-        } catch (Throwable ignored) {}
+        } catch (Exception ignored) {}
     }
 
     /**
@@ -164,8 +164,8 @@ public class EngineProcessManager {
      */
     private static void closeProcessStreams(Process p) {
         if (p == null) return;
-        try { p.getOutputStream().close(); } catch (Throwable ignored) {}
-        try { p.getInputStream().close(); } catch (Throwable ignored) {}
-        try { p.getErrorStream().close(); } catch (Throwable ignored) {}
+        try { p.getOutputStream().close(); } catch (Exception ignored) {}
+        try { p.getInputStream().close(); } catch (Exception ignored) {}
+        try { p.getErrorStream().close(); } catch (Exception ignored) {}
     }
 }

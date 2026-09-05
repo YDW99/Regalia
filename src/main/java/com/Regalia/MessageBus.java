@@ -115,7 +115,7 @@ public class MessageBus {
         try {
             String result = handler.handle(payload);
             return result != null ? result : successResult();
-        } catch (Throwable e) {
+        } catch (Exception e) {
             Log.e(TAG, "dispatch: handler error for " + action, e);
             return errorResult(e.getMessage());
         }

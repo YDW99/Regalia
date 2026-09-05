@@ -630,7 +630,9 @@ function isChess960CastlingLegal(s,color,side){
   // King's PATH (every square the king crosses, INCLUDING destination) must not be attacked.
   // King moves from kingCol to kingTo, stepping one square at a time.
   const step=kingTo>kingCol?1:-1;
-  for(let c=kingCol;c!==kingTo+step;c+=step){
+  // step is exactly +1 or -1, so c always lands precisely on kingTo+step;
+  // use a directional comparison (SonarCloud S888) with identical semantics.
+  for(let c=kingCol;step>0?c<kingTo+step:c>kingTo+step;c+=step){
     if(c===kingCol)continue; // already checked above
     if(sqAttackedFast(s.board,{row,col:c},opp))return false;
   }

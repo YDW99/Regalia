@@ -327,12 +327,13 @@ function _onGameClockExpired(color){
     if(gameState){
       // FIDE 6.9: if the WINNER cannot checkmate the LOSER by any series of
       //   legal moves, the game is drawn (not won on time).
-      if(typeof winnerLacksMatingMaterial==='function'
-         && winnerLacksMatingMaterial(gameState,winner)){
-        _isDrawByInsufficientMaterial=true;
-      }else if(typeof isDeadPosition==='function'&&isDeadPosition(gameState)){
-        // FIDE 5.2.2 fallback: whole position is dead (both sides lack
-        //   material). This subsumes K vs K and the rare mutual case.
+      // v1.2.3 round-47 (S1871): both branches set the same flag, so the two
+      //   checks are merged into one condition — FIDE 6.9 (the WINNER lacks
+      //   mating material) plus the FIDE 5.2.2 fallback (the whole position
+      //   is dead; subsumes K vs K and the rare mutual case).
+      if((typeof winnerLacksMatingMaterial==='function'
+         && winnerLacksMatingMaterial(gameState,winner))
+         ||(typeof isDeadPosition==='function'&&isDeadPosition(gameState))){
         _isDrawByInsufficientMaterial=true;
       }
     }

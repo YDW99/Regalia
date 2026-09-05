@@ -119,18 +119,20 @@ public class MainActivity extends Activity {
         // Previously, any uncaught exception here would crash the app immediately (闪退).
         // Now, we catch everything and show a fallback UI with the error message.
         try {
-            onCreateInternal(savedInstanceState);
+            onCreateInternal();
+        // round-47: 有意兜底，防止 Error 逃逸导致组件死亡（onCreate 全局防闪退兜底，必须兜住 Error 以展示降级 UI）
         } catch (Throwable e) {
             Log.e(TAG, "=== FATAL: onCreate crashed ===", e);
             try {
                 showFallbackUI("\u5e94\u7528\u521d\u59cb\u5316\u5931\u8d25: " + e.getMessage());
+            // round-47: 有意兜底，防止 Error 逃逸导致组件死亡（降级 UI 自身的最后兜底）
             } catch (Throwable e2) {
                 Log.e(TAG, "Even fallback UI failed", e2);
             }
         }
     }
 
-    private void onCreateInternal(Bundle savedInstanceState) {
+    private void onCreateInternal() {
         // v18.4.6 CRITICAL FIX: Removed FLAG_FULLSCREEN — it is DEPRECATED since API 30
         // and CONFLICTS with Android 15+ Edge-to-Edge enforcement (targetSdk=35).
         // On Xiaomi HyperOS 3, FLAG_FULLSCREEN + setDecorFitsSystemWindows(false) causes
@@ -448,7 +450,7 @@ public class MainActivity extends Activity {
         if (stockfishEngine != null && !stockfishEngine.isEngineReady()) {
             try {
                 stockfishEngine.initEngine();
-            } catch (Throwable e) {
+            } catch (Exception e) {
                 Log.e(TAG, "Engine init failed", e);
             }
         }
@@ -678,7 +680,7 @@ public class MainActivity extends Activity {
                 // Activity is being destroyed — skip (matches onDestroy's
                 // short-circuit in toggleStabilization).
             } else if (stabilizationEnabled && stabilizationHelper != null) {
-                try { stabilizationHelper.start(); } catch (Throwable e) { Log.w(TAG, "stab restart on resume failed", e); }
+                try { stabilizationHelper.start(); } catch (Exception e) { Log.w(TAG, "stab restart on resume failed", e); }
             }
         }
 
@@ -693,6 +695,7 @@ public class MainActivity extends Activity {
 
         // v1.0.2 FEATURE: Handle pending review request from StatsActivity.
         if (pendingStatsReviewRequest) {
+            // round-47 (S2696 kept): pendingStatsReviewRequest 为跨 Activity 一次性请求标记（StatsActivity 写、此处消费），有意保持 static。
             pendingStatsReviewRequest = false;
             // Enter review mode on the main WebView
             if (webView != null) {
@@ -715,6 +718,7 @@ public class MainActivity extends Activity {
         // stats.html's returnToGame() interceptor.
         if (StatsActivity.importedPGNOnStats != null) {
             final String importedPGN = StatsActivity.importedPGNOnStats;
+            // round-47 (S2696 kept): importedPGNOnStats 为跨 Activity 静态握手字段（StatsActivity 写入、此处读取后清零），有意为之。
             StatsActivity.importedPGNOnStats = null; // One-shot consume
             if (webView != null && importedPGN.length() > 0) {
                 // JSON-encode the PGN text for safe JS string passing.
@@ -767,7 +771,7 @@ public class MainActivity extends Activity {
         if (stockfishEngine != null) {
             try {
                 stockfishEngine.persistentFlush();
-            } catch (Throwable e) {
+            } catch (Exception e) {
                 Log.w(TAG, "persistentFlush failed (" + reason + ")", e);
             }
         }
@@ -786,7 +790,7 @@ public class MainActivity extends Activity {
         //   to close the race window (see onResume comment for rationale).
         synchronized (_stabilizationLock) {
             if (stabilizationEnabled && stabilizationHelper != null) {
-                try { stabilizationHelper.stop(); } catch (Throwable e) { Log.w(TAG, "stab stop on pause failed", e); }
+                try { stabilizationHelper.stop(); } catch (Exception e) { Log.w(TAG, "stab stop on pause failed", e); }
             }
         }
         // v1.2.3 round-44 (B1/B7): unified flush entry (Rev20 rationale:
@@ -829,7 +833,7 @@ public class MainActivity extends Activity {
         //   is fine-grained; sensor unregister is fast (~ms).
         synchronized (_stabilizationLock) {
             if (stabilizationHelper != null) {
-                try { stabilizationHelper.stop(); } catch (Throwable e) { Log.w(TAG, "stab stop on destroy failed", e); }
+                try { stabilizationHelper.stop(); } catch (Exception e) { Log.w(TAG, "stab stop on destroy failed", e); }
                 stabilizationHelper = null;
             }
             stabilizationEnabled = false;
@@ -876,7 +880,7 @@ public class MainActivity extends Activity {
         if (stockfishEngine != null) {
             try {
                 stockfishEngine.shutdown();
-            } catch (Throwable e) {
+            } catch (Exception e) {
                 Log.w(TAG, "Engine shutdown failed", e);
             }
         }
@@ -975,7 +979,7 @@ public class MainActivity extends Activity {
         if (level >= TRIM_MEMORY_MODERATE) {
             try {
                 flushAllState("trimMemory");
-            } catch (Throwable e) {
+            } catch (Exception e) {
                 Log.w(TAG, "onTrimMemory flush failed", e);
             }
         }
@@ -1028,7 +1032,7 @@ public class MainActivity extends Activity {
                         || requestCode == StockfishNative.REQUEST_CODE_EXPORT_PGN)) {
                     stockfishEngine.cancelPendingExport();
                 }
-            } catch (Throwable ignored) {}
+            } catch (Exception ignored) {}
             return;
         }
         // v1.2.3 round-44 (B4): engine bridge missing — notify JS so the
@@ -1062,7 +1066,7 @@ public class MainActivity extends Activity {
             } else if (requestCode == StockfishNative.REQUEST_CODE_IMPORT_PGN) {
                 stockfishEngine.handlePGNFilePickerResult(data);
             }
-        } catch (Throwable e) {
+        } catch (Exception e) {
             Log.e(TAG, "onActivityResult failed for request " + requestCode, e);
         }
     }
@@ -1129,7 +1133,7 @@ public class MainActivity extends Activity {
             if (stabilizationEnabled) {
                 // Turn OFF
                 if (stabilizationHelper != null) {
-                    try { stabilizationHelper.stop(); } catch (Throwable e) { Log.w(TAG, "stab stop failed", e); }
+                    try { stabilizationHelper.stop(); } catch (Exception e) { Log.w(TAG, "stab stop failed", e); }
                 }
                 stabilizationEnabled = false;
                 showToastLocalized("stabilization_off");
@@ -1138,7 +1142,7 @@ public class MainActivity extends Activity {
                 if (stabilizationHelper == null && webView != null) {
                     try {
                         stabilizationHelper = new StabilizationHelper(this, webView);
-                    } catch (Throwable e) {
+                    } catch (Exception e) {
                         Log.e(TAG, "StabilizationHelper creation failed", e);
                         showToastLocalized("stabilization_unavailable");
                         return;
@@ -1146,7 +1150,7 @@ public class MainActivity extends Activity {
                 }
                 if (stabilizationHelper != null) {
                     boolean ok = false;
-                    try { ok = stabilizationHelper.start(); } catch (Throwable e) { Log.e(TAG, "stab start failed", e); }
+                    try { ok = stabilizationHelper.start(); } catch (Exception e) { Log.e(TAG, "stab start failed", e); }
                     if (ok) {
                         stabilizationEnabled = true;
                         showToastLocalized("stabilization_on");
