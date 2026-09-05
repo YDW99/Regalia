@@ -1,3 +1,129 @@
+v1.2.3 round-44 (2026.9.4): engine_jni.cpp F1/F5 + CMakeLists.txt F8.
+  - Version: versionCode=10203 (build.gradle F11 formula; was 123),
+    versionName="1.2.3" (unchanged).
+  - engine_jni.cpp (GPL v3 — DroidFish-derived): F1 nativeRenice return
+    type void -> jboolean (caller can now detect renice failure); F5 2x
+    strerror_r for thread-safe error strings.
+  - CMakeLists.txt (AGPL v3 — original): F8 cmake_minimum_required
+    3.22.1 -> 3.31.6, aligned with build.gradle's pinned
+    `version "3.31.6+"` toolchain floor.
+  - License classification: unchanged (engine_jni.cpp GPL v3,
+    CMakeLists.txt AGPL v3).
+
+v1.2.3 round-43 (2026.9.4): no changes to files in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged).
+  - License classification: all files unchanged (engine_jni.cpp GPL v3 — DroidFish-derived; CMakeLists.txt AGPL v3 — original).
+
+v1.2.3 round-42 (2026.8.10): no changes to files in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged).
+  - License classification: all files unchanged (engine_jni.cpp GPL v3 — DroidFish-derived; CMakeLists.txt AGPL v3 — original).
+
+v1.2.3 round-41 (2026.8.10): no changes to files in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged).
+  - License classification: all files unchanged (engine_jni.cpp GPL v3 — DroidFish-derived; CMakeLists.txt AGPL v3 — original).
+
+v1.2.3 round-40 (2026.8.10): no changes to files in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged).
+  - License classification: all files unchanged (engine_jni.cpp GPL v3 — DroidFish-derived; CMakeLists.txt AGPL v3 — original).
+
+v1.2.3 round-39 (2026.7.20): no changes to files in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — code-quality round).
+  - License classification: all files unchanged (engine_jni.cpp GPL v3 — DroidFish-derived; CMakeLists.txt AGPL v3 — original).
+
+v1.2.3 round-38 (2026.7.20): no changes to files in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — code-quality round).
+  - engine_jni.cpp, CMakeLists.txt: no changes this round (round-37 already
+    applied cpp:S4962 nullptr + cpp:S1172 unused-param fixes).
+  - License classification: all files unchanged (engine_jni.cpp GPL v3 — DroidFish-derived; CMakeLists.txt AGPL v3 — original).
+
+v1.2.3 round-37 (2026.7.20): engine_jni.cpp C++ modernization (SonarCloud cpp:S4962 + cpp:S1172).
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — code-quality round).
+  - engine_jni.cpp: (1) `GetStringUTFChars(jPath, NULL)` →
+    `GetStringUTFChars(jPath, nullptr)` (SonarCloud cpp:S4962 — C++11
+    type-safe null pointer); (2) added `(void)env;` + explanatory comment
+    for the unused `JNIEnv *env` parameter in `nativeRenice` (SonarCloud
+    cpp:S1172 — parameter is required by the JNI signature; unused.
+    v1.2.3 round-46 (PR53 CR#28): corrected the rationale — JNI name
+    mangling depends only on the function name, not parameter names).
+  - CMakeLists.txt: no changes this round.
+  - License classification: all files unchanged (engine_jni.cpp GPL v3 — DroidFish-derived; CMakeLists.txt AGPL v3 — original).
+
+v1.2.3 round-36 (2026.7.20): no changes to files in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — refactor round).
+  - engine_jni.cpp, CMakeLists.txt: no changes this round.
+  - License classification: all files unchanged (engine_jni.cpp GPL v3 — DroidFish-derived; CMakeLists.txt AGPL v3 — original).
+
+v1.2.3 round-35 (2026.7.20): no changes to files in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - engine_jni.cpp, CMakeLists.txt: no changes this round.
+  - License classification: all files unchanged (engine_jni.cpp GPL v3 — DroidFish-derived; CMakeLists.txt AGPL v3 — original).
+
+v1.2.3 round-34 (2026.7.20): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - All round-34 changes are in src/main/java/com/Regalia/ (StockfishNative,
+    MainActivity) + README.md + NOTICE + worklog.md. The cpp/ tree is unchanged.
+
+v1.2.3 round-33 (2026.7.20): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - All round-33 changes are in src/main/java/com/Regalia/ (StockfishNative,
+    EngineHealthMonitor, ChessWebViewClient, MainActivity, HapticManager) +
+    NOTICE (canonical GPL list update) + Manual (UI architecture diagram).
+    The cpp/ tree (engine_jni.cpp, CMakeLists.txt) is unchanged.
+
+v1.2.3 round-32 (2026.7.20): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - All round-32 changes are in src/main/assets/chess.src/ (state-store.js,
+    eco-data.js, pgn-standard.js) and src/main/java/com/Regalia/
+    (StockfishNative.java, EngineHealthMonitor.java, ChessWebViewClient.java,
+    MainActivity.java, StatsActivity.java, PermissionHelper.java,
+    FileIoHelper.java) plus the rebuilt chess.html and top-level docs/Manual.
+    The cpp/ tree (engine_jni.cpp, CMakeLists.txt) is unchanged.
+
+v1.2.3 round-31 (2026.7.20): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - All round-31 changes are in src/main/assets/chess.src/ (ai-bridge.js,
+    state-store.js, game-logic.js) and src/main/java/com/Regalia/
+    (HapticManager.java, MainActivity.java) plus the rebuilt chess.html and
+    top-level docs/Manual. The cpp/ tree (engine_jni.cpp, CMakeLists.txt)
+    is unchanged.
+
+v1.2.3 round-30 (2026.7.19) — First-principles per-file review + robustness/perf optimizations:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - No changes to cpp/ files this round.
+
+v1.2.3 round-29 (2026.7.19) — PR52 SonarCloud + CodeRabbit review fixes:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - No changes to cpp/ files this round.
+
+v1.2.3 round-28 (2026.7.19): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — audit round).
+
+v1.2.3 round-27 (2026.7.19): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — review round).
+  - The round-27 change is limited to src/main/assets/chess.src/ and the rebuilt chess.html.
+
+v1.2.3 round-26 (2026.7.19): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - The round-26 change is limited to src/main/assets/chess.src/ and the rebuilt chess.html.
+
+v1.2.3 round-25 (2026.7.19): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — style + feature round).
+  - The round-25 change is limited to src/main/assets/chess.src/ and the rebuilt chess.html.
+
+v1.2.3 round-24 (2026.7.19): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — refactor round).
+  - The round-24 change is limited to src/main/assets/chess.src/ui.js (God
+    Function split) and src/main/java/com/Regalia/README.license (StatsActivity
+    license label correction).
+
+v1.2.3 round-23 (2026.7.19): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - The round-23 changes are limited to src/main/java/com/Regalia/
+    (HapticManager.java PWLE reflection removal — Q11+Q17),
+    src/main/assets/chess.src/ (PR51 JS fixes Q1-Q7, Q10),
+    src/main/assets/stats.html (Q7+Q9), src/main/AndroidManifest.xml
+    (Q13 comment fix), and the rebuilt chess.html plus top-level docs.
+
 v1.2.3 round-22 (2026.7.18): no changes in this directory.
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
   - The round-22 change is limited to src/main/assets/chess.src/ (ui.js,

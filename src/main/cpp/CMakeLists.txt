@@ -12,7 +12,9 @@
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 
-cmake_minimum_required(VERSION 3.22.1)
+# v1.2.3 round-44 (F8): aligned with build.gradle's pinned `version "3.31.6+"`
+#   (previously 3.22.1 — inconsistent with the enforced toolchain floor).
+cmake_minimum_required(VERSION 3.31.6)
 
 project("engine_bridge")
 

@@ -1,3 +1,140 @@
+v1.2.3 round-44 (2026.9.4): AndroidManifest F12/F13/F15 + chess.html rebuild + stats.html mate clamp.
+  - Version: versionCode=10203 (build.gradle F11 formula; was 123),
+    versionName="1.2.3" (unchanged).
+  - AndroidManifest.xml (AGPL v3): F13 added supportsRtl +
+    enableOnBackInvokedCallback; F15 removed usesCleartextTraffic
+    (redundant — network_security_config already blocks cleartext); F12
+    comments updated (backup-rule comment now records the round-44 deletion
+    of res/xml/backup_rules.xml + data_extraction_rules.xml).
+  - assets/chess.html (AGPL v3, combined work): rebuilt via build-chess.py
+    after the round-44 chess.src JS changes (score polarity, Toast x1.5,
+    batch-analysis hardening — see assets/chess.src/README.license).
+  - assets/stats.html (GPL v3): eval-graph mate scores clamped to
+    +/-1000cp for chart display.
+  - License classification: unchanged.
+
+v1.2.3 round-43 (2026.9.4): no changes to files in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged).
+  - License classification: all files unchanged.
+
+v1.2.3 round-42 (2026.8.10): no changes to files in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged).
+  - License classification: all files unchanged.
+
+v1.2.3 round-41 (2026.8.10): no changes to files in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged).
+  - License classification: all files unchanged.
+
+v1.2.3 round-40 (2026.8.10): no changes to files in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged).
+  - License classification: all files unchanged.
+
+v1.2.3 round-39 (2026.7.20): no changes to files directly in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — code-quality round).
+  - License classification: all files unchanged.
+
+v1.2.3 round-38 (2026.7.20): no changes to files directly in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — code-quality round).
+  - AndroidManifest.xml: no changes this round (FGS subtype property
+    `chess_engine_analysis` remains present for HyperOS 3 compatibility).
+  - License classification: all files unchanged.
+
+v1.2.3 round-37 (2026.7.20): no changes to files directly in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — code-quality round).
+  - AndroidManifest.xml: no changes this round (FGS subtype property
+    `android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE` = `chess_engine_analysis`
+    remains present for HyperOS 3 compatibility).
+  - License classification: all files unchanged.
+
+v1.2.3 round-36 (2026.7.20): no changes to files directly in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — refactor round).
+  - AndroidManifest.xml: no changes this round (FGS subtype property
+    `android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE` = `chess_engine_analysis`
+    remains present for HyperOS 3 compatibility).
+  - License classification: all files unchanged.
+
+v1.2.3 round-35 (2026.7.20): no changes to files directly in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - AndroidManifest.xml: no changes this round (FGS subtype property
+    `android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE` = `chess_engine_analysis`
+    remains present for HyperOS 3 compatibility).
+  - License classification: all files unchanged.
+
+v1.2.3 round-34 (2026.7.20): no changes to top-level src/main/ files.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - AndroidManifest.xml: unchanged. All round-34 changes are in
+    src/main/java/com/Regalia/ — see that directory's README.license entry.
+
+v1.2.3 round-33 (2026.7.20): no changes to top-level src/main/ files.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - AndroidManifest.xml: unchanged. Network security config unchanged.
+    All round-33 changes are in src/main/java/com/Regalia/ — see that
+    directory's README.license entry.
+
+v1.2.3 round-32 (2026.7.20): no changes to top-level src/main/ files.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - AndroidManifest.xml: unchanged. Network security config unchanged.
+    All round-32 changes are in subdirectories (chess.src/, java/com/Regalia/)
+    — see the per-subdirectory README.license entries.
+
+v1.2.3 round-31 (2026.7.20): no changes to top-level src/main/ files.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - AndroidManifest.xml: unchanged. Network security config unchanged.
+    All round-31 changes are in subdirectories (chess.src/, java/com/Regalia/)
+    — see the per-subdirectory README.license entries.
+
+v1.2.3 round-30 (2026.7.19) — First-principles per-file review + robustness/perf optimizations:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - AndroidManifest.xml (AGPL v3): No changes this round.
+  - All other files in src/main/ (assets/, res/, cpp/, java/com/Regalia/):
+    see the per-file changes in NOTICE round-30 entry. No license
+    classification changes.
+
+v1.2.3 round-29 (2026.7.19) — PR52 SonarCloud + CodeRabbit review fixes:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - AndroidManifest.xml (AGPL v3): No changes this round. Permission list
+    in this file's summary updated — removed ACCESS_NETWORK_STATE (was
+    removed from manifest in round-18 but the doc summary was not synced).
+  - All other files in src/main/ (assets/, res/, cpp/, java/com/Regalia/):
+    no license classification changes.
+  - License classification corrections: JsBridgeGateway.java
+    AGPL v3 → GPL v3 in historical round entries (DroidFish-derived per file
+    header — engine management logic from Peter Österlund's DroidFish).
+
+v1.2.3 round-28 (2026.7.19): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — audit round).
+  - The round-28 change is limited to src/main/assets/chess.src/ and the rebuilt chess.html.
+
+v1.2.3 round-27 (2026.7.19): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — review round).
+  - The round-27 change is limited to src/main/assets/chess.src/ and the rebuilt chess.html.
+
+v1.2.3 round-26 (2026.7.19): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - The round-26 change is limited to src/main/assets/chess.src/ and the rebuilt chess.html.
+
+v1.2.3 round-25 (2026.7.19): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — style + feature round).
+  - The round-25 change is limited to src/main/assets/chess.src/ (S6582/S3358 style
+    cleanup + FIDE 6.9 timeout-draw feature) and the rebuilt chess.html.
+
+v1.2.3 round-24 (2026.7.19): no changes in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — refactor round).
+  - The round-24 change is limited to src/main/assets/chess.src/ui.js (God
+    Function split — 10 helper functions extracted from _renderReviewMode and
+    _reviewAnalyzeAdvance) and src/main/java/com/Regalia/README.license
+    (StatsActivity.java license label correction — AGPL v3 → GPL v3 to match
+    the file header).
+
+v1.2.3 round-23 (2026.7.19) — PR #51 CodeRabbit review fixes + SonarCloud triage:
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
+  - AndroidManifest.xml (AGPL v3): Q13 — corrected the <queries> block
+    comment to label package detection as "signal #2" (was "signal #1").
+    RootDetector's actual signal order: #1 = su-binary path scan
+    (checkRootFiles), #2 = root-management package detection
+    (checkRootPackages, requires <queries> on API 30+), #3 = test-keys
+    build tag check (checkBuildTags). No code change.
+
 v1.2.3 round-22 (2026.7.18) — eval bar perspective fix (player-POV report):
   - Version: versionCode=123, versionName="1.2.3" (unchanged — fix round).
   - AndroidManifest.xml (AGPL v3): No changes this round.
@@ -282,7 +419,7 @@ Subdirectory license summary:
   - res/: AGPL v3 (original code and AI-generated assets)
       See res/README.license for details.
   - AndroidManifest.xml: AGPL v3 (original configuration)
-      Permissions: INTERNET + ACCESS_NETWORK_STATE (Lichess Tablebase API),
+      Permissions: INTERNET (Lichess Tablebase API),
       WAKE_LOCK (keep screen on during play), VIBRATE (haptic feedback),
       FOREGROUND_SERVICE + FOREGROUND_SERVICE_SPECIAL_USE (engine stability
       on Android 14/15 / Xiaomi HyperOS 3), POST_NOTIFICATIONS (Android 13+
@@ -290,6 +427,8 @@ Subdirectory license summary:
       READ_EXTERNAL_STORAGE are scoped to legacy Android versions only;
       READ_MEDIA_IMAGES was removed in v1.0.2 (the built-in file browser
       queries MediaStore.Files, not MediaStore.Images).
+      ACCESS_NETWORK_STATE was removed in v1.2.3 round-18 (zero usage in the
+      codebase — the WebView queries network state in its own process).
       v1.0.3: versionCode 102 → 103, versionName "1.0.2" → "1.0.3".
       v1.0.4: versionCode 103 → 104, versionName "1.0.3" → "1.0.4".
 
@@ -508,7 +647,7 @@ v1.0.4 Round-5 Rev48 changes:
   - src/main/assets/chess.src/ui.js (GPL v3): Blue/Yellow arrows; review board overlay.
   - src/main/assets/chess.src/pgn-standard.js (AGPL v3): Updated color docs.
   - src/main/assets/chess.src/index.html.tpl (AGPL v3): .review-board position:relative.
-  - src/main/assets/stats.html (AGPL v3): 4-color arrow display; conditional sections.
+  - src/main/assets/stats.html (GPL v3): 4-color arrow display; conditional sections.
   - src/main/assets/chess.html: rebuilt from chess.src/ changes.
   - No changes to AndroidManifest.xml, cpp/, res/, java/, or jniLibs/.
 

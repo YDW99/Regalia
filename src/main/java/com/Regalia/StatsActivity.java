@@ -90,12 +90,25 @@ public class StatsActivity extends Activity {
     //   runOnUiThread). Without volatile the main thread could see a stale
     //   null and skip the export, or see a stale non-null and export twice.
     private volatile String pendingExportHTML;
+    // v1.2.3 round-30 (redundant): lazily-initialized HapticManager for the
+    //   stats page's performHaptic @JavascriptInterface. Volatile for the
+    //   same cross-thread reason as pendingExportHTML.
+    private volatile HapticManager _statsHapticManager = null;
     // v1.0.4 Rev28: The PGN text imported on the stats page (via 🗃️ Paste PGN or
     // 📂 Select PGN File). When the user returns to the main activity, if this is
     // non-null, MainActivity prompts "🗃️ Import PGN to game?" Yes/No/Cancel.
     // Cleared to null when MainActivity reads it (one-shot consumption).
     // Static so MainActivity can access it without holding a StatsActivity ref.
     public static volatile String importedPGNOnStats = null;
+    // v1.2.3 round-44 (E4): BACK 键兜底状态。onKeyDown 把返回决策交给 JS
+    //   （handleStatsBackPress/returnToGame），若 JS 异常或未定义则 Activity
+    //   永远不会 finish，用户以为 BACK 失灵。JS 正常关闭路径会经桥接方法
+    //   closeStatsPage()（关闭）或 ackStatsBackHandled()（留在本页，
+    //   v1.2.3 round-46 PR53 CR#26 新增）置位 backCloseHandled，250ms 超时
+    //   兜底检测到已置位即放弃 finish()。
+    private final java.util.concurrent.atomic.AtomicBoolean backCloseHandled =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+    private android.os.Handler backFallbackHandler;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -111,7 +124,7 @@ public class StatsActivity extends Activity {
             Log.w(TAG, "requestWindowFeature failed", e);
         }
         if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) {
-            // FLAG_FULLSCREEN is valid on API 21-29 only; on API 30+ it
+            // FLAG_FULLSCREEN is valid on API 23-29 only; on API 30+ it
             // conflicts with Edge-to-Edge.
             getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
                     WindowManager.LayoutParams.FLAG_FULLSCREEN);
@@ -132,6 +145,7 @@ public class StatsActivity extends Activity {
         // v1.0.5 Rev55: tapjacking defense (match MainActivity).
         webView.setFilterTouchesWhenObscured(true);
         setContentView(webView);
+        backFallbackHandler = new android.os.Handler(android.os.Looper.getMainLooper()); // v1.2.3 round-44 (E4)
 
         // v1.0.5 Rev55: WebView security configuration — defense-in-depth parity
         // with MainActivity. The stats page also loads only local asset content,
@@ -200,12 +214,25 @@ public class StatsActivity extends Activity {
 
             @JavascriptInterface
             public void closeStatsPage() {
+                // v1.2.3 round-44 (E4): 置位标志以取消 BACK 键的 250ms 超时兜底。
+                backCloseHandled.set(true);
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
                         finish();
                     }
                 });
+            }
+
+            // v1.2.3 round-46 (PR53 CR#26): BACK 键的「已处理但留在本页」回执。
+            //   handleStatsBackPress() 有多条合法分支只关对话框/取消导入而
+            //   不关闭页面（不调用 closeStatsPage）——原设计里这些分支不会
+            //   置位 backCloseHandled，250ms 兜底会误判 JS 无响应并 finish()，
+            //   把按「取消」的用户踢出统计页。JS 在每条消费分支末尾必须调用
+            //   本方法回执（置位但不 finish）。
+            @JavascriptInterface
+            public void ackStatsBackHandled() {
+                backCloseHandled.set(true);
             }
 
             // v1.0.2: Haptic feedback for stats page buttons.
@@ -219,34 +246,37 @@ public class StatsActivity extends Activity {
             // vibrate(long) on newer APIs).
             @JavascriptInterface
             public void performHaptic(String type) {
+                // v1.2.3 round-30 (redundant): delegate to HapticManager.
+                //   Previously this method reimplemented the haptic-enabled
+                //   check + VibrationEffect fallback chain inline, duplicating
+                //   HapticManager's logic. The duplication created two sources
+                //   of truth that could diverge (e.g. round-30's 5s setting
+                //   cache would have needed to be applied in both places).
+                //   The stats page only uses BUTTON_PRESS-style feedback, so
+                //   the single 20ms pulse is sufficient. We delegate to
+                //   HapticManager.performHaptic, which handles the gating +
+                //   vibrator lookup + API-level dispatch centrally.
                 try {
-                    // Check user preference (same prefs file as StockfishNative)
-                    android.content.SharedPreferences prefs =
-                            getSharedPreferences("RegaliaEngine", MODE_PRIVATE);
-                    boolean appEnabled = prefs.getBoolean("hapticFeedbackEnabled", true);
-                    boolean systemEnabled = android.provider.Settings.System.getInt(
-                            getContentResolver(),
-                            android.provider.Settings.System.HAPTIC_FEEDBACK_ENABLED, 1) != 0;
-                    if (!appEnabled || !systemEnabled) return;
-
-                    android.os.Vibrator v = (android.os.Vibrator) getSystemService(VIBRATOR_SERVICE);
-                    if (v == null || !v.hasVibrator()) return;
-
-                    // Use VibrationEffect on API 26+ for consistency with StockfishNative.
-                    // Stats page only uses BUTTON_PRESS-style feedback, so a single
-                    // short pulse is sufficient — we don't need the rich per-type
-                    // patterns that the main app uses.
-                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                        try {
-                            v.vibrate(android.os.VibrationEffect.createOneShot(
-                                    20, android.os.VibrationEffect.DEFAULT_AMPLITUDE));
-                        } catch (Throwable e) {
-                            // Fallback: deprecated vibrate(long)
-                            v.vibrate(20);
+                    // v1.2.3 round-44 (E5): 懒初始化改 DCL。performHaptic 从 JS
+                    //   binder 线程调用，旧的无锁 check-then-act 在快速连点时可
+                    //   构造两个 HapticManager（后者覆盖前者，功能无害但浪费，
+                    //   且字段发布无 happens-before 保证）。字段已是 volatile，
+                    //   此处补 synchronized 双检。
+                    HapticManager hm = _statsHapticManager;
+                    if (hm == null) {
+                        synchronized (StatsActivity.this) {
+                            hm = _statsHapticManager;
+                            if (hm == null) {
+                                hm = new HapticManager(
+                                    StatsActivity.this,
+                                    getSharedPreferences("RegaliaEngine", MODE_PRIVATE),
+                                    new android.os.Handler(android.os.Looper.getMainLooper())
+                                );
+                                _statsHapticManager = hm;
+                            }
                         }
-                    } else {
-                        v.vibrate(20);
                     }
+                    hm.performHaptic(type);
                 } catch (Throwable e) {
                     Log.w(TAG, "performHaptic failed", e);
                 }
@@ -320,6 +350,14 @@ public class StatsActivity extends Activity {
             // v1.0.3: Load an asset file as base64 — used for GPL v3 logo in export dialog
             @JavascriptInterface
             public String loadAssetAsBase64(String assetPath) {
+                // v1.2.3 round-30 (robustness): path-traversal check, mirroring
+                //   FileIoHelper.loadAssetAsBase64 (line 481). AssetManager.open
+                //   itself rejects ".." traversal, but the explicit guard is
+                //   defense-in-depth and matches the parallel implementation.
+                if (assetPath == null || assetPath.isEmpty() || assetPath.contains("..")) {
+                    Log.w(TAG, "loadAssetAsBase64: blocked path traversal: " + assetPath);
+                    return null;
+                }
                 // v1.0.5 Rev61: try-with-resources guarantees InputStream is closed
                 // even if baos.write throws (e.g. OOM on a huge asset).
                 try (java.io.InputStream is = getAssets().open(assetPath)) {
@@ -384,7 +422,7 @@ public class StatsActivity extends Activity {
         // v1.0.4 Rev27: External http(s) URLs are now opened in the system browser
         // (defense-in-depth alongside the JS-side openUrlInBrowser bridge).
         // v1.1.2 PHASE 71 (robustness): Add the deprecated shouldOverrideUrlLoading
-        //   overload (WebView, String) so that on API 21-23 (minSdk=21) external
+        //   overload (WebView, String) so that on API 23 (minSdk=23) external
         //   http(s) URLs are also redirected to the system browser. On those API
         //   levels, only the deprecated overload fires; the new
         //   WebResourceRequest-based overload is API 24+ only. Without this, a
@@ -436,7 +474,7 @@ public class StatsActivity extends Activity {
      * v1.1.2 PHASE 71: Shared URL-override logic for both the API 24+
      * {@link WebViewClient#shouldOverrideUrlLoading(WebView, WebResourceRequest)}
      * and the deprecated {@link WebViewClient#shouldOverrideUrlLoading(WebView, String)}
-     * (which is the only one that fires on API 21-23). Returns {@code true} to
+     * (which is the only one that fires on API 23). Returns {@code true} to
      * block the WebView from loading the URL ourselves; {@code false} to let
      * the WebView proceed (only for our own asset:// URLs).
      */
@@ -467,7 +505,7 @@ public class StatsActivity extends Activity {
     /**
      * v1.0.5 Rev55: Apply immersive mode to hide system bars.
      * Mirrors MainActivity.enableImmersiveMode() — uses platform
-     * WindowInsetsController on API 30+, legacy flags on API 21-29.
+     * WindowInsetsController on API 30+, legacy flags on API 23-29.
      */
     @android.annotation.SuppressLint("NewApi")
     private void _applyImmersiveMode() {
@@ -662,6 +700,12 @@ public class StatsActivity extends Activity {
         // import-back Yes/No/Cancel was handled).
         if (keyCode == KeyEvent.KEYCODE_BACK) {
             if (webView != null) {
+                // v1.2.3 round-44 (E4): 先复位标志，再发 JS；250ms 后若 JS 未
+                //   经 closeStatsPage()/ackStatsBackHandled() 置位（JS 异常/函数未定义），兜底
+                //   finish()。正常关闭路径会置位 backCloseHandled，兜底
+                //   Runnable 检测到后放弃 —— 超时兜底可被正常 closeStatsPage
+                //   取消。
+                backCloseHandled.set(false);
                 webView.evaluateJavascript(
                     "if(typeof handleStatsBackPress==='function'){handleStatsBackPress();}" +
                     "else if(typeof _statsImportBackDialogVisible!=='undefined'&&_statsImportBackDialogVisible){" +
@@ -670,6 +714,17 @@ public class StatsActivity extends Activity {
                     "  returnToGame();" +
                     "}",
                     null);
+                if (backFallbackHandler != null) {
+                    backFallbackHandler.postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (!backCloseHandled.get() && !isFinishing() && !isDestroyed()) {
+                                Log.w(TAG, "BACK fallback: JS did not close stats page within 250ms — finishing");
+                                finish();
+                            }
+                        }
+                    }, 250);
+                }
                 return true;
             }
             finish();
@@ -723,6 +778,11 @@ public class StatsActivity extends Activity {
             try { webView.onPause(); } catch (Throwable ignored) {}
             try { webView.destroy(); } catch (Throwable ignored) {}
             webView = null;
+        }
+        // v1.2.3 round-44 (E4): 清掉未触发的 BACK 兜底 Runnable，避免持有
+        //   Activity 引用到超时。
+        if (backFallbackHandler != null) {
+            backFallbackHandler.removeCallbacksAndMessages(null);
         }
         super.onDestroy();
     }

@@ -57,6 +57,7 @@ import java.lang.ref.WeakReference;
  *
  * 安全设计:
  *   - PGN 导入有 5000 行截断保护防止 OOM
+ *   - 设置导入有 1,000,000 字符上限（SETTINGS_MAX_CHARS），超限快速失败 (v1.2.3 round-41)
  *   - PGN 内容经过控制字符过滤，防止破坏 JS 字符串解析
  *   - 导出内容通过 JSON 编码安全传递到 JS
  *   - 持久化 URI 权限以便后续访问
@@ -74,6 +75,11 @@ public class SafPickerHelper {
 
     // PGN 导入行数上限，防止 OOM
     private static final int PGN_MAX_LINES = 5000;
+
+    // v1.2.3 round-41: 设置导入字符数上限（1MB），防止 OOM。
+    //   与 PGN 导入的行数截断不同，设置文件是 JSON，截断会破坏解析，
+    //   因此超限直接快速失败（抛 IOException → 既有 catch → toast）。
+    private static final int SETTINGS_MAX_CHARS = 1_000_000;
 
     private final Context context;
     private final WeakReference<Activity> activityRef;
@@ -342,10 +348,22 @@ public class SafPickerHelper {
             throw new java.io.IOException("openInputStream returned null for " + uri);
         }
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(is, "UTF-8"))) {
+            // v1.2.3 round-46 (PR53 CR#15): read in fixed-size chunks with a
+            //   hard cap instead of readLine(). The round-41 pre-append check
+            //   was NOT sufficient: readLine() itself materializes an entire
+            //   line in memory BEFORE the check runs, so a single multi-GB
+            //   line could OOM the process anyway. Memory use is now strictly
+            //   bounded by SETTINGS_MAX_CHARS + one 8KB chunk buffer. Line
+            //   endings are preserved as-is (downstream importSettings splits
+            //   on \r?\n, so CRLF input is fine).
             StringBuilder sb = new StringBuilder();
-            String line;
-            while ((line = reader.readLine()) != null) {
-                sb.append(line).append("\n");
+            char[] chunk = new char[8192];
+            int n;
+            while ((n = reader.read(chunk, 0, chunk.length)) != -1) {
+                if (sb.length() + n > SETTINGS_MAX_CHARS) {
+                    throw new java.io.IOException("Settings file too large (>" + SETTINGS_MAX_CHARS + " chars)");
+                }
+                sb.append(chunk, 0, n);
             }
             return sb.toString();
         }

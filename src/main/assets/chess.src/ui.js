@@ -56,7 +56,8 @@ document.addEventListener('click', function(e) {
   if (!href || href.charAt(0) === '#') return;
   // Only intercept http(s) links — let mailto:/tel: etc. be handled by the OS
   // through shouldOverrideUrlLoading in ChessWebViewClient.
-  if (href.indexOf('http://') !== 0 && href.indexOf('https://') !== 0) return;
+  // v1.2.3 round-39: use .startsWith() instead of .indexOf() !== 0 (clearer intent).
+  if (!href.startsWith('http://') && !href.startsWith('https://')) return;
   e.preventDefault();
   try {
     if (typeof AndroidBridge !== 'undefined' && AndroidBridge.openUrlInBrowser) {
@@ -272,11 +273,14 @@ function _getSqElCache() {
       const recoveryJson = JSON.stringify(recoveryData);
       localStorage.setItem('Regalia_recovery', recoveryJson);
       // v1.0.4 Round-5 Rev16: Also persist to Java side (HyperOS 3 cache-wipe proof)
-      try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_recovery',recoveryJson);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-    } catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+      try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_recovery',recoveryJson);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+    } catch(e){console.warn('[UI]',e?.message?e.message:e);}
 
     // If this is a render error (indicated by the stack trace), show recovery UI
-    if (error && error.stack && error.stack.indexOf('renderInternal') !== -1) {
+    // v1.2.3 round-38 (SonarCloud S7765): use .includes() instead of
+    //   .indexOf() !== -1 for the existence check (clearer semantics, handles
+    //   NaN correctly via SameValueZero).
+    if (error?.stack && error.stack.includes('renderInternal')) {
       const app = document.getElementById('app');
       if (app) {
         app.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:var(--bg);color:var(--text);padding:20px;text-align:center;font-family:system-ui,sans-serif">' +
@@ -311,7 +315,7 @@ function _getSqElCache() {
     let saved = localStorage.getItem('Regalia_recovery');
     // v1.0.4 Round-5 Rev16: Fall back to persistent Java store if HyperOS 3 wiped localStorage
     if(!saved){
-      try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentGet){const persisted=AndroidBridge.persistentGet('Regalia_recovery');if(persisted){saved=persisted;try{localStorage.setItem('Regalia_recovery',persisted);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}}}}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+      try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentGet){const persisted=AndroidBridge.persistentGet('Regalia_recovery');if(persisted){saved=persisted;try{localStorage.setItem('Regalia_recovery',persisted);}catch(e){console.warn('[UI]',e?.message?e.message:e);}}}}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     }
     if (saved) {
       // v1.2.1 round-9: Parse to validate the data shape, but do NOT apply
@@ -320,20 +324,20 @@ function _getSqElCache() {
       // original crash. The data is retained in storage for 5s (below) as a
       // diagnostic artifact, then cleared if the engine started successfully.
       let data = null;
-      try { data = JSON.parse(saved); } catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-      if (data && data.gameState && Date.now() - data.timestamp < 3600000) {
+      try { data = JSON.parse(saved); } catch(e){console.warn('[UI]',e?.message?e.message:e);}
+      if (data?.gameState && Date.now() - data.timestamp < 3600000) {
         // Recovery data is valid and fresh — available for inspection via
         // DevTools if needed, but intentionally not auto-applied.
       }
       // Clear recovery data after successful load
       setTimeout(function() {
         if (typeof _engineReady !== 'undefined' && (_engineReady || document.getElementById('board-grid'))) {
-          try{localStorage.removeItem('Regalia_recovery');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-          try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentRemove)AndroidBridge.persistentRemove('Regalia_recovery');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+          try{localStorage.removeItem('Regalia_recovery');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+          try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentRemove)AndroidBridge.persistentRemove('Regalia_recovery');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
         }
       }, 5000);
     }
-  } catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  } catch(e){console.warn('[UI]',e?.message?e.message:e);}
 })();
 
 // AI-GEN: AI assisted
@@ -1387,7 +1391,16 @@ function _buildEvalTrendLabels(svg, colors, points, stepToX, evalToY, width, hei
     if (Math.abs(ev.eval) >= 90000) {
       const md = ev.mate != null ? ev.mate : (ev.mateDistance != null ? ev.mateDistance : 0);
       if (md !== 0 || Math.abs(ev.eval) >= 99999) {
-        label = md > 0 ? '#+' + Math.abs(md) : md < 0 ? '#-' + Math.abs(md) : (ev.eval > 0 ? '#+' : '#-');
+        // v1.2.3 round-25 (S3358): nested ternary flattened to if/else chain.
+        //   Original: md > 0 ? '#+' + Math.abs(md) : md < 0 ? '#-' + Math.abs(md) : (ev.eval > 0 ? '#+' : '#-')
+        //   Behavior: positive mate → "#+N", negative mate → "#-N", mate=0 → sign from eval.
+        if (md > 0) {
+          label = '#+' + Math.abs(md);
+        } else if (md < 0) {
+          label = '#-' + Math.abs(md);
+        } else {
+          label = ev.eval > 0 ? '#+' : '#-';
+        }
         textColor = colors.critical;
         fontSize = 7;
         fontWeight = ' font-weight="bold"';
@@ -1503,7 +1516,9 @@ function _buildEvalTrendSVG(trendW, trendH) {
   svg += '</svg>';
   return svg;
 }
-function posDesc(ev){if(ev>600)return T('you_winning');if(ev>350)return T('huge_adv');if(ev>150)return T('advantage');if(ev>50)return T('slight_adv');if(ev>-50)return T('equal_pos');if(ev>-150)return T('slight_dis');if(ev>-350)return T('disadvantage');if(ev>-600)return T('huge_dis');return T('you_losing')}
+// v1.2.3 round-36 (dedup): thresholds centralized in game-logic.js evalBucket().
+//   Lookup uses _POV_LABEL_KEYS_PLAYER[bucket] for the player-POV label.
+function posDesc(ev){const k=_POV_LABEL_KEYS_PLAYER[evalBucket(ev)];return T(k!==undefined?k:'equal_pos');}
 
 // Helper: get position of king that is currently in check, or null (eliminates 3x duplication)
 function getCheckKingPos(s){
@@ -1542,6 +1557,14 @@ function formatEval(){
     // v1.0.4 Rev46: changed eval bar emoji from 🏆/💀 to ⌛ for timeout —
     // the game-over overlay also shows ⌛ for timeout (not 🤝).
     if(_gameOverStatusKey==='timeout'){
+      // v1.2.3 round-40 (FIDE 6.9): null winner = timeout draw (insufficient
+      //   mating material). The round-25 contract restored by round-40 keeps
+      //   _gameOverStatusKey='timeout' for that case too, so guard on
+      //   _timeoutWinnerColor==null and show the draw display (🤝/draw/0.0)
+      //   instead of win/lose.
+      if(typeof _timeoutWinnerColor!=='undefined'&&_timeoutWinnerColor==null){
+        return{emoji:'🤝',desc:T('draw_game'),score:'0.0'};
+      }
       const whiteWins=gameOver.includes(T('white_wins'))||gameOver.includes('White wins')||gameOver.includes(T('white_short'));
       const playerWins=(playerColor==='white')===whiteWins;
       // v1.2.3 round-22: score stays White-POV (+∞ = White wins) so it agrees
@@ -1578,18 +1601,32 @@ function formatEval(){
       const evP=playerColor==='white'?cachedReview.eval:-cachedReview.eval;
       if(Math.abs(cachedReview.eval)>=90000){
         const md=cachedReview.mate!=null?cachedReview.mate:0;
-        const mateLabel=md>0?'#+'+Math.abs(md):md<0?'#-'+Math.abs(md):(cachedReview.eval>0?'#+':'#-');
+        // v1.2.3 round-25 (S3358): nested ternary flattened to if/else.
+        let mateLabel;
+        if(md>0){mateLabel='#+'+Math.abs(md);}
+        else if(md<0){mateLabel='#-'+Math.abs(md);}
+        else{mateLabel=cachedReview.eval>0?'#+':'#-';}
         return{emoji:posEmoji(evP),desc:posDesc(evP),score:mateLabel};
       }
-      return{emoji:posEmoji(evP),desc:posDesc(evP),score:(evP/100).toFixed(2)};
+      // v1.2.3 (R1): score must be White-POV (+ = White ahead) in the same
+      //   signed 1-decimal format as the in-game branch below. cachedReview.eval
+      //   is already White-POV; evP stays player-POV for emoji/desc only.
+      const _rvRaw=cachedReview.eval/100;
+      let _rvS=_rvRaw.toFixed(1);
+      if(_rvS==='0.0'||_rvS==='+0.0'||_rvS==='-0.0')_rvS='0.0';
+      else if(_rvRaw>0)_rvS='+'+_rvS;
+      return{emoji:posEmoji(evP),desc:posDesc(evP),score:_rvS};
     }
   }
   if(_evalLoading||!_sfEvalReady)return{emoji:'🔬',desc:T('analyzing_ellipsis'),score:'--'};
   const evP=playerColor==='white'?_sfEval:-_sfEval;
   if(Math.abs(_sfEval)>=90000){
     // Show mate distance — White's perspective: #+N means White forces mate, #-N means Black forces mate
-    const _absMd=Math.abs(_sfMateDistance||0);
-    const mateLabel=_sfMateDistance>0?'#+'+Math.abs(_sfMateDistance):_sfMateDistance<0?'#-'+Math.abs(_sfMateDistance):(_sfEval>0?'#+':'#-');
+    // v1.2.3 round-25 (S3358): nested ternary flattened to if/else.
+    let mateLabel;
+    if(_sfMateDistance>0){mateLabel='#+'+Math.abs(_sfMateDistance);}
+    else if(_sfMateDistance<0){mateLabel='#-'+Math.abs(_sfMateDistance);}
+    else{mateLabel=_sfEval>0?'#+':'#-';}
     return{emoji:posEmoji(evP),desc:posDesc(evP),score:mateLabel};
   }
   const raw=_sfEval/100;
@@ -1634,7 +1671,14 @@ if(st==='timeout'){
     const winnerStr=_timeoutWinnerColor==='white'?T('white_short'):T('black_side');
     return winnerStr+T('timeout_win_suffix');
   }
-  return T('timeout_win_suffix');
+  // v1.2.3 round-40 (FIDE 6.9): null winner = timeout DRAW (the winner had
+  //   insufficient mating material). ui-gameflow.js round-40 restored the
+  //   round-25 contract that routes this case through status key 'timeout'
+  //   with _timeoutWinnerColor=null, so this branch is reachable again —
+  //   return the timeout-draw text instead of the bare win suffix.
+  //   v1.2.3 round-42 (42-1): banner wording finalized in game-logic.js to
+  //   strict FIDE 6.9 semantics (no possible legal mating sequence → draw).
+  return T('pgn_timeout_draw_insufficient');
 }
 return null;
 }
@@ -1650,7 +1694,7 @@ function _applyGameOver(cachedSt){
     if(st==='checkmate'&&moveRecords.length>0){
       const last=moveRecords[moveRecords.length-1];// v1.0.2 FIX: null-safe — last entry may be the black-to-move null placeholder
       // in pathological edge cases (no real moves executed). Skip notation patching if so.
-      if(last&&last.notation&&!last.notation.endsWith('#')){last.notation=last.notation.replace(/\+$/,'')+'#';}
+      if(last?.notation&&!last.notation.endsWith('#')){last.notation=last.notation.replace(/\+$/,'')+'#';}
       _sfMateDistance=0;_sfDepth=0;_sfSeldepth=0;_sfEval=gameState.currentTurn==='black'?99999:-99999;_sfEvalReady=true;
     }
   }
@@ -1706,7 +1750,10 @@ let soundOn=true;
 let reviewBaseState=null,_cachedStatus=null,_cachedStatusKey='';
 // Control map cache
 let cachedCtrlMap=null,cachedCtrlKey='',renderPending=false,
-    lastRenderTime=0,lastRenderRequest=0,renderTimerId=null;
+    lastRenderTime=0,renderTimerId=null;
+// v1.2.3 round-30 (redundant): removed `lastRenderRequest` — it was written
+//   but never read anywhere (leftover from the removed DIRTY_* incremental-
+//   render subsystem, see line-161 comment block).
 let _animRetryCount=0; // v1.1.0 Phase 54: guard against stuck animationInProgress
 // v1.2.3 round-18 (bug fix): tracks "user is typing in the Chess960 SP-ID
 //   input" so the full re-render triggered by each keystroke can restore
@@ -1995,7 +2042,7 @@ function _hdrKingIconHTML(){
 // in the same rAF callback when _reqAtTick>lastRenderTime — the second
 // call's save phase read scrollTop=0 from the just-rebuilt DOM.
 function render(){
-  if(renderPending){lastRenderRequest=Date.now();return;}
+  if(renderPending){return;}
   // v1.0.8 PHASE 22: throttle render while piece-move animation is in
   //   progress (Web Animations API overlay is on screen). Landing anim is
   //   no longer a separate phase — the overlay covers the destination
@@ -2086,12 +2133,12 @@ for(const [v,key] of _tcTypes){
 }
 h+=`</select>`;
 if(dlgTimeControl.type!=='off'){
-  h+=`<div class="portrait-stack" style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><label style="font-size:.78rem;color:var(--muted);flex:1">${T('time_control_base_min')}</label><input type="number" min="1" max="600" value="${Math.round((dlgTimeControl.baseSec||300)/60)}" style="width:80px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;text-align:center" oninput="const v=Number.parseInt(this.value,10);if(!Number.isNaN(v)&&v>=1){dlgTimeControl.baseSec=v*60;}"></div>`;
+  h+=`<div class="portrait-stack" style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><label style="font-size:.78rem;color:var(--muted);flex:1">${T('time_control_base_min')}</label><input type="number" min="1" max="600" value="${Math.round((dlgTimeControl.baseSec||300)/60)}" style="width:80px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;text-align:center" oninput="const v=Number.parseInt(this.value,10);if(Number.isNaN(v)||v<1){return;}if(v>600){this.value=600;dlgTimeControl.baseSec=600*60;return;}dlgTimeControl.baseSec=v*60;"></div>`;
   if(dlgTimeControl.type==='fischer'){
-    h+=`<div class="portrait-stack" style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><label style="font-size:.78rem;color:var(--muted);flex:1">${T('time_control_inc_sec')}</label><input type="number" min="0" max="60" value="${dlgTimeControl.incrementSec||0}" style="width:80px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;text-align:center" oninput="const v=Number.parseInt(this.value,10);if(!Number.isNaN(v)&&v>=0){dlgTimeControl.incrementSec=v;}"></div>`;
+    h+=`<div class="portrait-stack" style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><label style="font-size:.78rem;color:var(--muted);flex:1">${T('time_control_inc_sec')}</label><input type="number" min="0" max="60" value="${dlgTimeControl.incrementSec||0}" style="width:80px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;text-align:center" oninput="const v=Number.parseInt(this.value,10);if(Number.isNaN(v)||v<0){return;}if(v>60){this.value=60;dlgTimeControl.incrementSec=60;return;}dlgTimeControl.incrementSec=v;"></div>`;
   }
   if(dlgTimeControl.type==='bronstein'||dlgTimeControl.type==='usdelay'){
-    h+=`<div class="portrait-stack" style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><label style="font-size:.78rem;color:var(--muted);flex:1">${T('time_control_delay_sec')}</label><input type="number" min="0" max="60" value="${dlgTimeControl.delaySec||0}" style="width:80px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;text-align:center" oninput="const v=Number.parseInt(this.value,10);if(!Number.isNaN(v)&&v>=0){dlgTimeControl.delaySec=v;}"></div>`;
+    h+=`<div class="portrait-stack" style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><label style="font-size:.78rem;color:var(--muted);flex:1">${T('time_control_delay_sec')}</label><input type="number" min="0" max="60" value="${dlgTimeControl.delaySec||0}" style="width:80px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;text-align:center" oninput="const v=Number.parseInt(this.value,10);if(Number.isNaN(v)||v<0){return;}if(v>60){this.value=60;dlgTimeControl.delaySec=60;return;}dlgTimeControl.delaySec=v;"></div>`;
   }
 }
 h+=`<div style="font-size:.7rem;color:var(--muted);margin-top:4px">${T('time_control_note')}</div>`;
@@ -2125,7 +2172,7 @@ function _renderChess960Settings(h){
   h+=`<div style="display:flex;gap:6px;align-items:center;flex:1;min-width:120px">`;
   // v1.2.3 round-18: id + _spidEditing flag so _postRenderFinalize can
   //   restore focus after the keystroke-triggered re-render (see declaration).
-  h+=`<input id="spidInput" type="number" min="0" max="959" value="${curSPID>=0?curSPID:''}" placeholder="0-959" style="flex:1;width:80px;min-width:0;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;text-align:center" oninput="_spidEditing=true;const v=Number.parseInt(this.value,10);if(!Number.isNaN(v)&&v>=0&&v<960){dlgChess960SPID=v;render();}else if(this.value===''){dlgChess960SPID=-1;render();}">`;
+  h+=`<input id="spidInput" type="number" min="0" max="959" value="${curSPID>=0?curSPID:''}" placeholder="0-959" style="flex:1;width:80px;min-width:0;padding:4px 8px;border-radius:6px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;text-align:center" oninput="_spidEditing=true;const v=Number.parseInt(this.value,10);if(this.value===''){dlgChess960SPID=-1;render();}else if(Number.isNaN(v)||v<0||v>959){this.value='';dlgChess960SPID=-1;render();}else{dlgChess960SPID=v;render();}">`;
   // v1.2.1 round-16: secureRandomInt is exported by game-logic.js (loaded
   //   before ui.js), so the typeof guard is unreachable defensive code.
   //   Simplified to direct call (removes Math.random() that triggered
@@ -2317,7 +2364,7 @@ function _prepareRvVisualAnnotations(showCtrlMap){
     if(va.csl&&va.csl.length>0){
       cslMap={};
       for(const h of va.csl){
-        if(h&&h.color&&h.square){
+        if(h?.color&&h.square){
           if(!cslMap[h.square])cslMap[h.square]=[];
           cslMap[h.square].push(h.color);
         }
@@ -2329,6 +2376,223 @@ function _prepareRvVisualAnnotations(showCtrlMap){
   }
   return {va,cslMap,calList};
 }
+
+
+// v1.2.3 round-24 (God Function split — S3776): extracted from _renderReviewMode.
+//   These helpers are pure (take explicit params, return strings/objects, no
+//   side effects beyond reading module-level globals). Function declarations
+//   are hoisted bundle-wide so call order is safe.
+// _RV_VA_COLORS: visual-annotation color palette. Moved to module level so
+//   _renderRvBoardCells and _renderRvArrowSvg can share it without parameter
+//   passing. Must match stats.html's per-color value colors exactly.
+const _RV_VA_COLORS={B:'#4a90d9',R:'#e74c3c',Y:'#f1c40f',G:'#27ae60'};
+
+// Compute review-board sizing metrics (cell size, label dimensions, full board height).
+// Reads REVIEW_CELL (game-logic.js) and window dimensions. Pure function.
+function _computeRvBoardMetrics(){
+  const _isLandscapeReview = window.innerWidth > window.innerHeight;
+  let _rvCell = REVIEW_CELL;
+  if (_isLandscapeReview) {
+    const _rvMaxCellW = Math.floor((window.innerWidth * 0.60) / 8);
+    _rvCell = Math.max(22, _rvMaxCellW);
+  }
+  const _rvLabelW=Math.floor(_rvCell*0.4);
+  const _rvLabelH=Math.floor(_rvCell*0.4);
+  const _rvLabelGap=2;
+  const _rvBoardPx=_rvCell*8;
+  const _rvFullBoardH=_rvBoardPx+_rvLabelH+_rvLabelGap;
+  return {_isLandscapeReview, _rvCell, _rvLabelW, _rvLabelH, _rvLabelGap, _rvBoardPx, _rvFullBoardH};
+}
+
+// Render the 8×8 review board cells with control-map coloring, [%csl] highlights,
+// coordinate labels, piece symbols, and 🔁/⚡ markers. Returns the HTML string.
+function _renderRvBoardCells(rBoard, flip, _rvCell, _rvCm, _rvCslMap, _rvVisibleCastle, _rvVisibleEp, _rvCoordFontSize){
+  let h='';
+  for(let r=0;r<8;r++){for(let c=0;c<8;c++){
+    const rr=flip?7-r:r;const cc=flip?7-c:c;
+    const p=rBoard[rr][cc];const isL=(r+c)%2===0;
+    let bg=isL?SQ_LIGHT:SQ_DARK;
+    if(_rvCm){
+      const e=_rvCm[rr][cc];
+      if(e){
+        const wc=e.white.length,bc=e.black.length;
+        const myC=playerColor==='white'?wc:bc;
+        const opC=playerColor==='white'?bc:wc;
+        const net=myC-opC;
+        const total=myC+opC;
+        const adv=total>0?net/total:0;
+        const str=Math.min(1,total/8);
+        let hue;
+        if(myC===0&&opC===0){
+          bg='#3a2020';
+        }else{
+          if(adv>=0)hue=280-adv*60;else hue=280-adv*80;
+          if(hue>=360)hue-=360;
+          const sat=0.50+str*0.40;
+          const lit=0.48-str*0.12;
+          bg='hsl('+Math.round(hue)+','+Math.round(sat*100)+'%,'+Math.round(lit*100)+'%)';
+        }
+      }
+    }
+    let _boxShadowParts=[];
+    let _isYellowSquare=false;
+    if(_rvCslMap){
+      const _sqKey=String.fromCodePoint(97+cc)+(8-rr);
+      const _colors=_rvCslMap[_sqKey];
+      if(_colors&&Array.isArray(_colors)){
+        for(const _color of _colors){
+          if(_color==='Y'){
+            _isYellowSquare=true;
+          }else{
+            const _col=_RV_VA_COLORS[_color]||'#ffffff';
+            _boxShadowParts.push('inset 0 0 0 3px '+_col+',inset 0 0 6px '+_col+'66');
+          }
+        }
+      }
+    }
+    let _boxShadow=_boxShadowParts.length?'box-shadow:'+_boxShadowParts.join(',')+';':'';
+    h+='<div style="background:'+bg+';'+_boxShadow+'width:'+_rvCell+'px;height:'+_rvCell+'px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;position:relative">';
+    {
+      const _sqName=String.fromCodePoint(97+cc)+(8-rr);
+      const _coordColor=isL?'#4a3a0a':'#f0dcb0';
+      const _coordStroke=isL?'rgba(255,230,150,.85)':'rgba(30,15,0,.85)';
+      h+='<span style="position:absolute;left:2px;top:2px;font:'+_rvCoordFontSize+'px/'+_rvCoordFontSize+'px sans-serif;color:'+_coordColor+';text-shadow:0 0 2px '+_coordStroke+',0 0 2px '+_coordStroke+';pointer-events:none;z-index:1;user-select:none">'+_sqName+'</span>';
+    }
+    if(p){h+='<span class="'+(p.color==='white'?'rv-w':'rv-bk')+'" style="pointer-events:none;z-index:2">'+SYM[p.color][p.type]+'</span>';}
+    if(_isYellowSquare){
+      const _inset=Math.max(3, _rvCell*0.10);
+      const _radius=Math.max(3, _rvCell*0.15);
+      const _yw=_rvCell-_inset*2;
+      const _yh=_rvCell-_inset*2;
+      h+='<div style="position:absolute;left:'+_inset.toFixed(1)+'px;top:'+_inset.toFixed(1)+'px;width:'+_yw.toFixed(1)+'px;height:'+_yh.toFixed(1)+'px;border-radius:'+_radius.toFixed(1)+'px;border:2px solid '+_RV_VA_COLORS.Y+';box-shadow:0 0 4px '+_RV_VA_COLORS.Y+'66;pointer-events:none;z-index:5"></div>';
+    }
+    if(_rvVisibleCastle.has(String(rr*8+cc))){
+      h+='<span class="setup-castle-mark" aria-hidden="true" style="font-size:'+(_rvCell*0.4).toFixed(1)+'px">🔁</span>';
+    }
+    if(_rvVisibleEp?.row===rr&&_rvVisibleEp.col===cc){
+      h+='<span class="setup-ep-mark" aria-hidden="true" style="font-size:'+(_rvCell*0.4).toFixed(1)+'px">⚡</span>';
+    }
+    h+='</div>';
+  }}
+  return h;
+}
+
+// Render the SVG arrow overlay for [%cal] visual annotations. Returns the SVG
+// string (empty if no arrows). Arrows are deduplicated by (color, from, to)
+// and offset per-color so different-color arrows never overlap on the same line.
+function _renderRvArrowSvg(_rvCalList, flip, _rvCell, _rvBoardPx, _rvLabelW, _rvLabelGap, _rvLabelH){
+  if(!_rvCalList||_rvCalList.length===0) return '';
+  let h='';
+  const _rvSvgLeft=_rvLabelW+_rvLabelGap;
+  const _rvSvgTop=_rvLabelH+_rvLabelGap;
+  h+='<svg style="position:absolute;left:'+_rvSvgLeft+'px;top:'+_rvSvgTop+'px;width:'+_rvBoardPx+'px;height:'+_rvBoardPx+'px;pointer-events:none;z-index:10" width="'+_rvBoardPx+'" height="'+_rvBoardPx+'" viewBox="0 0 '+_rvBoardPx+' '+_rvBoardPx+'">';
+  h+='<defs>';
+  for(const _col of ['B','R','Y','G']){
+    const _hex=_RV_VA_COLORS[_col];
+    h+='<marker id="rvah-'+_col+'" markerWidth="4" markerHeight="3" refX="3.5" refY="1.5" orient="auto"><polygon points="0 0,4 1.5,0 3" fill="'+_hex+'"/></marker>';
+  }
+  h+='</defs>';
+  const _colorOffsetMag=_rvCell*0.12;
+  const _colorOffset={
+    B:{x:-_colorOffsetMag, y:-_colorOffsetMag},
+    Y:{x:-_colorOffsetMag, y: _colorOffsetMag},
+    R:{x: _colorOffsetMag, y:-_colorOffsetMag},
+    G:{x: _colorOffsetMag, y: _colorOffsetMag}
+  };
+  const _seenArrowKeys=new Set();
+  const _allArrows=[];
+  for(const _a of _rvCalList){
+    if(!_a||!_a.color||!_a.from||!_a.to)continue;
+    if(_a.from.length!==2||_a.to.length!==2)continue;
+    const _fc=_a.from.charCodeAt(0)-97, _fr=8-Number.parseInt(_a.from[1],10);
+    const _tc=_a.to.charCodeAt(0)-97, _tr=8-Number.parseInt(_a.to[1],10);
+    if(_fc<0||_fc>7||_fr<0||_fr>7||_tc<0||_tc>7||_tr<0||_tr>7)continue;
+    const _dedupKey=_a.color+'|'+_a.from+'|'+_a.to;
+    if(_seenArrowKeys.has(_dedupKey))continue;
+    _seenArrowKeys.add(_dedupKey);
+    _allArrows.push(_a);
+  }
+  for(const _a of _allArrows){
+    const _fc=_a.from.charCodeAt(0)-97, _fr=8-Number.parseInt(_a.from[1],10);
+    const _tc=_a.to.charCodeAt(0)-97, _tr=8-Number.parseInt(_a.to[1],10);
+    const _dfc=flip?7-_fc:_fc, _dfr=flip?7-_fr:_fr;
+    const _dtc=flip?7-_tc:_tc, _dtr=flip?7-_tr:_tr;
+    let _fx=_dfc*_rvCell+_rvCell/2, _fy=_dfr*_rvCell+_rvCell/2;
+    let _tx=_dtc*_rvCell+_rvCell/2, _ty=_dtr*_rvCell+_rvCell/2;
+    const _co=_colorOffset[_a.color]||{x:0,y:0};
+    _fx+=_co.x; _fy+=_co.y;
+    _tx+=_co.x; _ty+=_co.y;
+    // v1.2.3 round-38 (SonarCloud S7769): use Math.hypot(_dx,_dy) instead of
+    //   Math.sqrt(_dx*_dx + _dy*_dy) — clearer intent, native implementation,
+    //   avoids overflow/underflow for extreme values.
+    const _dx=_tx-_fx, _dy=_ty-_fy, _len=Math.hypot(_dx,_dy);
+    const _sh=4, _rt=_len>0?(_len-_sh)/_len:1;
+    const _ex=_fx+_dx*_rt, _ey=_fy+_dy*_rt;
+    const _hex=_RV_VA_COLORS[_a.color]||'#ffffff';
+    h+='<line x1="'+_fx.toFixed(1)+'" y1="'+_fy.toFixed(1)+'" x2="'+_ex.toFixed(1)+'" y2="'+_ey.toFixed(1)+'" stroke="'+_hex+'" stroke-width="1.5" stroke-opacity="0.9" stroke-linecap="butt" marker-end="url(#rvah-'+_a.color+')"/>';
+  }
+  h+='</svg>';
+  return h;
+}
+
+// Build the review eval-bar HTML string. Takes the pre-computed eval display
+// parts (emoji/desc/score via _re, delta string, depth string, progress string,
+// WDL string) and wraps them in the .ev container with the review-specific
+// font sizes.
+function _buildRvEvalBarHTML(_re, _rDelta, _rDepthStr, _rProgressStr, _rWdlStr){
+  const _rvEvalFontSize='.8rem';
+  const _rvEvalEmojiSize='1.05rem';
+  return '<div class="ev" id="review-eval-bar" style="margin:2px 0;width:100%;box-sizing:border-box;font-size:'+_rvEvalFontSize+'!important;padding:5px 10px!important;gap:5px;max-height:2.4em;overflow:hidden;white-space:nowrap"><span class="ev-e" style="font-size:'+_rvEvalEmojiSize+'">'+_re.emoji+'</span><span>'+_re.desc+'</span><span style="color:var(--muted)">('+_re.score+')</span>'+_rDepthStr+_rProgressStr+_rWdlStr+_rDelta+'</div>';
+}
+
+// Build the review step-slider HTML. Reads reviewStep and reviewStates (module
+// globals). Returns the slider wrapper HTML string.
+function _buildRvSliderHTML(){
+  const _rvSliderMax=reviewStates.length-1;
+  const _rvSliderRatio=_rvSliderMax>0?reviewStep/_rvSliderMax:0;
+  const _rvSliderThumbLeft='calc('+_rvSliderRatio+' * 100%)';
+  const _rvSliderFillW='calc('+_rvSliderRatio+' * 100%)';
+  return '<div class="rv-slider-wrap">'+
+    '<div class="rv-slider-container" id="rvSliderContainer">'+
+      '<div class="rv-slider-base"></div>'+
+      '<div class="rv-slider-fill" id="rvSliderFill" style="width:'+_rvSliderFillW+'"></div>'+
+      '<div class="rv-slider-thumb" id="rvSliderThumb" style="left:'+_rvSliderThumbLeft+'"></div>'+
+      '<input type="range" class="rv-slider-input" min="0" max="'+_rvSliderMax+'" value="'+reviewStep+'" oninput="reviewGoTo(Number.parseInt(this.value))" aria-label="'+T('review_move_slider')+'">'+
+    '</div>'+
+    '<div class="rv-slider-labels"><span>'+T('start_pos')+'</span><span>'+T('step_label')+' '+ reviewStep + ' / ' + _rvSliderMax + '</span><span>'+T('end_pos')+'</span></div>'+
+    '</div>';
+}
+
+// Build the eval-trend chart HTML wrapper. Takes the chart height, width, and
+// pre-built SVG string. Returns empty string if no SVG.
+function _buildRvChartHTML(_trendH, _trendW, _trendSVG){
+  if(!_trendSVG) return '';
+  let h='';
+  h+='<div style="display:flex;justify-content:flex-start;padding:0 4px">';
+  h+='<div class="toggle" style="font-size:.6rem;padding:2px 4px;gap:4px" onclick="_reviewEvalGlobal=!_reviewEvalGlobal;HapticManager.fire(_reviewEvalGlobal?\'TOGGLE_ON\':\'TOGGLE_OFF\');render()"><span>'+T('chart_global')+'</span><div class="toggle-sw sm'+(_reviewEvalGlobal?' on':'')+'"></div></div>';
+  h+='</div>';
+  h+='<div class="review-chart" style="width:100%;height:'+_trendH+'px;margin:4px 0;background:var(--input-bg);border:1px solid var(--border);border-radius:4px;padding:0;overflow:hidden">';
+  h+=_trendSVG;
+  h+='</div>';
+  return h;
+}
+
+// Build the review navigation buttons (⏮ ◀ ▶ ⏭). Returns the HTML string.
+function _buildRvNavHTML(){
+  return '<div class="review-nav" style="display:flex;gap:4px;margin-top:6px">'+
+    '<button class="btn btn-d" onclick="reviewGoTo(0)">⏮</button>'+
+    '<button class="btn btn-d" onclick="reviewGoTo(Math.max(0,reviewStep-1))">◀</button>'+
+    '<button class="btn btn-d" onclick="reviewGoTo(Math.min(reviewStates.length-1,reviewStep+1))">▶</button>'+
+    '<button class="btn btn-d" onclick="reviewGoTo(reviewStates.length-1)">⏭</button>'+
+    '</div>';
+}
+
+// Build the analyze-all button HTML. Reads _reviewEvalCache and moveRecords
+// (module globals) to compute the cached/total counts. Returns the button HTML.
+function _buildRvAnalyzeBtnHTML(){
+  return '<button id="review-analyze-btn" class="btn" style="margin-top:4px;width:100%;font-size:.8rem;min-height:34px;padding:6px 10px;display:flex;align-items:center;justify-content:space-between;gap:8px" onclick="reviewAnalyzeAll()">'+_rvAnalyzeBtnInnerHTML()+'</button>';
+}
+
 
 /**
  * v1.2.0 Phase 82+: Render review mode UI (board, eval bar, slider, chart, nav, analyze).
@@ -2350,48 +2614,29 @@ const safeStep=Math.max(0,Math.min(reviewStep,reviewStates.length-1));
 reviewStep=safeStep;
 const rs=reviewStates[safeStep];
 if(!rs){reviewMode=false;render();return{h,done:true}}
-const rBoard=rs.state.board;const rLast=rs.lastMove;
+// v1.2.3 round-39 (SonarCloud S1481): removed unused `const rLast=rs.lastMove;`
+//   — rLast was declared but never referenced in _renderReviewMode. The review
+//   board rendering uses rBoard (rs.state.board) but not rs.lastMove (the
+//   last move is displayed via the move list, not the board renderer).
+const rBoard=rs.state.board;
 h+='<div class="review-overlay">';
 h+=`<div class="review-hdr"><h2>${T('review_analysis')}</h2><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><div class="toggle" style="padding:2px 6px;font-size:.65rem" onclick="showVariations=!showVariations;HapticManager.fire(showVariations?'TOGGLE_ON':'TOGGLE_OFF');render()"><span>${T('variation_toggle')}</span><div class="toggle-sw sm${showVariations?' on':''}"></div></div><button class="btn" onclick="showCtrlMap=!showCtrlMap;cachedCtrlKey=&quot;&quot;;render()" title="${T('ctrl_range')}">${showCtrlMap?'🌈':'🌗'}</button><button class="btn" onclick="copyReviewPGN()" title="${T('copy_review_pgn')}">📝 PGN</button><button class="btn" onclick="exportPGNToFile()" title="${T('export_pgn')||'Export PGN to file'}">💾</button><button class="btn" onclick="openPGNCacheManager()" title="${T('pgn_cache_manager')}" style="font-weight:700">📚</button><button class="btn" onclick="copyReviewFEN()" title="${T('copy_review_fen')}">📝 FEN</button><button class="btn" onclick="showImportDialog=true;render()" title="${T('import_label')}">🗃️</button><button class="btn" onclick="openStatsPage()" title="${T('stats')}">📊</button><button class="btn" onclick="exitReview()">${T('return_game')}</button></div></div>`;
-// v1.0.3 FIX: Move _rvCell calculation BEFORE its first use (the --rv-board-w
-// CSS variable on .review-body below). Previously, _rvCell was declared with
-// `let` on line 944 but referenced on line 935 — causing a ReferenceError
-// (temporal dead zone) when entering review mode.
-const _isLandscapeReview = window.innerWidth > window.innerHeight;
-let _rvCell = REVIEW_CELL; // Default from game-logic.js
-if (_isLandscapeReview) {
-  // v1.0.3-p7 redesign: TWO-LAYER SCROLL. Board width is ALWAYS > move-list
-  // width. Board takes ~60% of viewport width, move list takes ~40%. Together
-  // they fill 100% of viewport width edge-to-edge.
-  //
-  // v1.0.3-p7: the board is sized to 60% of viewport width (so board > moves),
-  // NOT capped by viewport height. If the board is taller than the viewport,
-  // the user scrolls the body (layer 1) to see the board's bottom edge + the
-  // chart + controls. This is the "two-layer scroll" design the user requested:
-  //   - Layer 1 (body scroll): reveals chart, slider, eval, nav, analyze (and
-  //     the board's bottom edge if the board is taller than the viewport).
-  //   - Layer 2 (move list independent scroll): scrolls the move list without
-  //     affecting the board.
-  //
-  // We do NOT cap by REVIEW_CELL here — REVIEW_CELL is sized for the main-game
-  // layout (which reserves width for the side panel) and would unnecessarily
-  // limit the review board to a small size.
-  const _rvMaxCellW = Math.floor((window.innerWidth * 0.60) / 8);
-  _rvCell = Math.max(22, _rvMaxCellW);
-}
-// v1.2.0 Phase 83: Pre-compute coordinate label dimensions for the review board.
-// Labels are positioned absolutely OUTSIDE .bgrid (in .review-board's padding area),
-// so .review-board needs padding-top + padding-left to reserve space, and --rv-board-h
-// (used by .review-moves height) must include the label height so the move list
-// aligns with the board's full visual height.
-const _rvLabelW=Math.floor(_rvCell*0.4);
-const _rvLabelH=Math.floor(_rvCell*0.4);
-const _rvLabelGap=2;
-const _rvBoardPx=_rvCell*8;
-const _rvFullBoardH=_rvBoardPx+_rvLabelH+_rvLabelGap; // board + top label row
+// v1.2.3 round-24 (God Function split): board metrics extracted to
+//   _computeRvBoardMetrics() — pure function, no side effects.
+const _rvM=_computeRvBoardMetrics();
+// v1.2.3 round-29 (PR52 S1481): removed dead local `_isLandscapeReview` —
+//   round-12 unified the portrait/landscape DOM skeleton (the conditional
+//   branch was deleted), and the only remaining reference was the
+//   declaration itself. The mockup at line 1945-1953 of the manual still
+//   shows the flag in _computeRvBoardMetrics's return signature for
+//   backward compatibility, but the render path no longer consumes it.
+const _rvCell=_rvM._rvCell;
+const _rvLabelW=_rvM._rvLabelW;
+const _rvLabelH=_rvM._rvLabelH;
+const _rvLabelGap=_rvM._rvLabelGap;
+const _rvBoardPx=_rvM._rvBoardPx;
+const _rvFullBoardH=_rvM._rvFullBoardH;
 // v1.1.0 Phase 53: Portrait and landscape now use the same DOM skeleton.
-// The _isLandscapeReview flag is still used later for board sizing (cell width)
-// and two-layer scroll decisions, but the initial DOM structure is identical.
 // v1.2.1 round-12 (S3923): Removed duplicate if/else — both branches produced
 // the exact same markup, leaving a redundant conditional that hid the unified
 // layout intent. The .review-top wrapper is now always emitted (it was
@@ -2435,10 +2680,8 @@ const _rvAnnResult=_prepareRvVisualAnnotations(showCtrlMap);
 _rvVa=_rvAnnResult.va;
 _rvCslMap=_rvAnnResult.cslMap;
 _rvCalList=_rvAnnResult.calList;
-// v1.0.4 Round-5 Rev48: Color palette for visual annotations — must match
-// stats.html's per-color value colors exactly so the visual association is
-// consistent across the app.
-const _RV_VA_COLORS={B:'#4a90d9',R:'#e74c3c',Y:'#f1c40f',G:'#27ae60'};
+// v1.2.3 round-24: _RV_VA_COLORS moved to module level (shared by
+//   _renderRvBoardCells and _renderRvArrowSvg).
 // v1.0.8 PHASE 3: compute visible 🔁/⚡ markers for the review position.
 // reviewStates[safeStep].state is the source-of-truth game state at step N.
 const _rvVisibleCastle=(typeof computeVisibleCastleMarks==='function')?computeVisibleCastleMarks(rs.state):new Set();
@@ -2463,86 +2706,9 @@ const _rvLabelFontSize=Math.max(10,Math.floor(_rvCell*0.25));
 // (padding-left, padding-top) = (_rvLabelW+_rvLabelGap, _rvLabelH+_rvLabelGap) 位置。
 const _rvFileLabelsHtml=_buildRvFileLabels(flip,_rvLabelW,_rvLabelGap,_rvBoardPx,_rvLabelH,_rvLabelFontSize);
 const _rvRankLabelsHtml=_buildRvRankLabels(flip,_rvLabelW,_rvLabelH,_rvLabelGap,_rvBoardPx,_rvLabelFontSize);
-for(let r=0;r<8;r++){for(let c=0;c<8;c++){
-const rr=flip?7-r:r;const cc=flip?7-c:c;
-const p=rBoard[rr][cc];const isL=(r+c)%2===0;
-let bg=isL?SQ_LIGHT:SQ_DARK;
-// v1.0.2: Apply control map coloring in review mode
-if(_rvCm){
-  const e=_rvCm[rr][cc];
-  if(e){
-    const wc=e.white.length,bc=e.black.length;
-    const myC=playerColor==='white'?wc:bc;
-    const opC=playerColor==='white'?bc:wc;
-    const net=myC-opC;
-    const total=myC+opC;
-    const adv=total>0?net/total:0;
-    const str=Math.min(1,total/8);
-    let hue;
-    if(myC===0&&opC===0){
-      bg='#3a2020';
-    }else{
-      if(adv>=0)hue=280-adv*60;else hue=280-adv*80;
-      if(hue>=360)hue-=360;
-      const sat=0.50+str*0.40;
-      const lit=0.48-str*0.12;
-      bg='hsl('+Math.round(hue)+','+Math.round(sat*100)+'%,'+Math.round(lit*100)+'%)';
-    }
-  }
-}
-// [%csl] square highlights. A square can carry MULTIPLE colors simultaneously
-// (e.g. both B and Y). B/R/G use CSS box-shadow inset (3px) on the cell div,
-// stacked via comma-separated shadows. Y uses a separate rounded-rect overlay
-// div INSIDE the cell (emitted before the cell's </div> so position:absolute
-// anchors correctly). The yellow overlay insets ~10% leaving corner gaps so
-// B/R/G insets remain visible underneath.
-let _boxShadowParts=[];
-let _isYellowSquare=false;
-if(_rvCslMap){
-  const _sqKey=String.fromCodePoint(97+cc)+(8-rr);
-  const _colors=_rvCslMap[_sqKey];
-  if(_colors&&Array.isArray(_colors)){
-    for(const _color of _colors){
-      if(_color==='Y'){
-        _isYellowSquare=true;
-      }else{
-        const _col=_RV_VA_COLORS[_color]||'#ffffff';
-        _boxShadowParts.push('inset 0 0 0 3px '+_col+',inset 0 0 6px '+_col+'66');
-      }
-    }
-  }
-}
-let _boxShadow=_boxShadowParts.length?'box-shadow:'+_boxShadowParts.join(',')+';':'';
-h+='<div style="background:'+bg+';'+_boxShadow+'width:'+_rvCell+'px;height:'+_rvCell+'px;display:flex;align-items:center;justify-content:center;font-size:1.5rem;position:relative">';
-// v1.2.0 Phase 77: 格子内坐标标注（与主界面同款，左上角偏移2px）
-{
-  const _sqName=String.fromCodePoint(97+cc)+(8-rr);
-  const _coordColor=isL?'#4a3a0a':'#f0dcb0';
-  const _coordStroke=isL?'rgba(255,230,150,.85)':'rgba(30,15,0,.85)';
-  h+='<span style="position:absolute;left:2px;top:2px;font:'+_rvCoordFontSize+'px/'+_rvCoordFontSize+'px sans-serif;color:'+_coordColor+';text-shadow:0 0 2px '+_coordStroke+',0 0 2px '+_coordStroke+';pointer-events:none;z-index:1;user-select:none">'+_sqName+'</span>';
-}
-if(p){h+='<span class="'+(p.color==='white'?'rv-w':'rv-bk')+'" style="pointer-events:none;z-index:2">'+SYM[p.color][p.type]+'</span>';}
-// Yellow rounded-rect overlay INSIDE the cell div (before </div>) so
-// position:absolute anchors to THIS cell (position:relative). Multiple B/R/G
-// box-shadow insets are on the cell div itself; the yellow overlay paints on
-// top of them but insets ~10% so the B/R/G insets remain visible at corners.
-// z-index:5 keeps it above cell background but below SVG arrow layer (z-index:10).
-if(_isYellowSquare){
-  const _inset=Math.max(3, _rvCell*0.10);
-  const _radius=Math.max(3, _rvCell*0.15);
-  const _yw=_rvCell-_inset*2;
-  const _yh=_rvCell-_inset*2;
-  h+='<div style="position:absolute;left:'+_inset.toFixed(1)+'px;top:'+_inset.toFixed(1)+'px;width:'+_yw.toFixed(1)+'px;height:'+_yh.toFixed(1)+'px;border-radius:'+_radius.toFixed(1)+'px;border:2px solid '+_RV_VA_COLORS.Y+';box-shadow:0 0 4px '+_RV_VA_COLORS.Y+'66;pointer-events:none;z-index:5"></div>';
-}
-// v1.0.8 PHASE 3: visible 🔁/⚡ markers on the review board
-if(_rvVisibleCastle.has(String(rr*8+cc))){
-  h+='<span class="setup-castle-mark" aria-hidden="true" style="font-size:'+(_rvCell*0.4).toFixed(1)+'px">🔁</span>';
-}
-if(_rvVisibleEp&&_rvVisibleEp.row===rr&&_rvVisibleEp.col===cc){
-  h+='<span class="setup-ep-mark" aria-hidden="true" style="font-size:'+(_rvCell*0.4).toFixed(1)+'px">⚡</span>';
-}
-h+='</div>';
-}}
+// v1.2.3 round-24 (God Function split): 8×8 cell rendering extracted to
+//   _renderRvBoardCells() — pure function taking explicit params.
+h+=_renderRvBoardCells(rBoard, flip, _rvCell, _rvCm, _rvCslMap, _rvVisibleCastle, _rvVisibleEp, _rvCoordFontSize);
 h+='</div>'; // close .bgrid
 // v1.2.0 Phase 83: Insert coordinate labels as absolute-positioned siblings of .bgrid.
 // Labels are OUTSIDE .bgrid (in .review-board's padding area), so they don't
@@ -2573,72 +2739,9 @@ h+=_rvRankLabelsHtml;
 // color arrows sharing the same source+target pair overlap exactly (correct —
 // they represent the same threat). The offset magnitude is 12% of cell size,
 // which scales proportionally across screen sizes and stays within cell bounds.
-if(_rvCalList&&_rvCalList.length>0){
-  // v1.2.0 Phase 83: _rvBoardPx already computed above; re-declaring would shadow.
-  // SVG offset aligns it with .bgrid (after .review-board's padding for labels).
-  const _rvSvgLeft=_rvLabelW+_rvLabelGap;
-  const _rvSvgTop=_rvLabelH+_rvLabelGap;
-  h+='<svg style="position:absolute;left:'+_rvSvgLeft+'px;top:'+_rvSvgTop+'px;width:'+_rvBoardPx+'px;height:'+_rvBoardPx+'px;pointer-events:none;z-index:10" width="'+_rvBoardPx+'" height="'+_rvBoardPx+'" viewBox="0 0 '+_rvBoardPx+' '+_rvBoardPx+'">';
-  // Compact 4×3 triangular arrowhead per color. 4×3 is the smallest size that
-  // still reads as a clear triangle at typical cell sizes (30-60px). refX=3.5
-  // so the tip extends ~0.5px past the line endpoint (clean point, no overshoot).
-  h+='<defs>';
-  for(const _col of ['B','R','Y','G']){
-    const _hex=_RV_VA_COLORS[_col];
-    h+='<marker id="rvah-'+_col+'" markerWidth="4" markerHeight="3" refX="3.5" refY="1.5" orient="auto"><polygon points="0 0,4 1.5,0 3" fill="'+_hex+'"/></marker>';
-  }
-  h+='</defs>';
-  // Offset magnitude: 12% of cell size (scales proportionally, no fixed cap).
-  // Safety: max radial offset = |offset|*sqrt(2); safe bound = cellSize/2 - 2.75
-  // (with strokeWidth=1.5, markerWidth=4). 12% is well within bound for all
-  // realistic cell sizes (≥20px): cellSize=30 → 3.6px (max 8.66px); cellSize=60
-  // → 7.2px (max 19.26px); cellSize=20 → 2.4px (max 5.12px).
-  const _colorOffsetMag=_rvCell*0.12;
-  const _colorOffset={
-    B:{x:-_colorOffsetMag, y:-_colorOffsetMag}, // Upper-Left
-    Y:{x:-_colorOffsetMag, y: _colorOffsetMag}, // Lower-Left
-    R:{x: _colorOffsetMag, y:-_colorOffsetMag}, // Upper-Right
-    G:{x: _colorOffsetMag, y: _colorOffsetMag}  // Lower-Right
-  };
-  // Deduplicate arrows by (color, from, to).
-  const _seenArrowKeys=new Set();
-  const _allArrows=[];
-  for(const _a of _rvCalList){
-    if(!_a||!_a.color||!_a.from||!_a.to)continue;
-    if(_a.from.length!==2||_a.to.length!==2)continue;
-    const _fc=_a.from.charCodeAt(0)-97, _fr=8-Number.parseInt(_a.from[1],10);
-    const _tc=_a.to.charCodeAt(0)-97, _tr=8-Number.parseInt(_a.to[1],10);
-    if(_fc<0||_fc>7||_fr<0||_fr>7||_tc<0||_tc>7||_tr<0||_tr>7)continue;
-    const _dedupKey=_a.color+'|'+_a.from+'|'+_a.to;
-    if(_seenArrowKeys.has(_dedupKey))continue;
-    _seenArrowKeys.add(_dedupKey);
-    _allArrows.push(_a);
-  }
-  // Render each arrow with the per-color diagonal offset.
-  for(const _a of _allArrows){
-    const _fc=_a.from.charCodeAt(0)-97, _fr=8-Number.parseInt(_a.from[1],10);
-    const _tc=_a.to.charCodeAt(0)-97, _tr=8-Number.parseInt(_a.to[1],10);
-    // Apply flip (display position)
-    const _dfc=flip?7-_fc:_fc, _dfr=flip?7-_fr:_fr;
-    const _dtc=flip?7-_tc:_tc, _dtr=flip?7-_tr:_tr;
-    // Pixel centers — exact cell-center formula (scales with any cell size).
-    let _fx=_dfc*_rvCell+_rvCell/2, _fy=_dfr*_rvCell+_rvCell/2;
-    let _tx=_dtc*_rvCell+_rvCell/2, _ty=_dtr*_rvCell+_rvCell/2;
-    // Apply per-color diagonal offset to BOTH start and end equally.
-    const _co=_colorOffset[_a.color]||{x:0,y:0};
-    _fx+=_co.x; _fy+=_co.y;
-    _tx+=_co.x; _ty+=_co.y;
-    // Shorten the line by 4px so the 4×3 arrowhead doesn't overshoot the
-    // target cell center.
-    const _dx=_tx-_fx, _dy=_ty-_fy, _len=Math.sqrt(_dx*_dx+_dy*_dy);
-    const _sh=4, _rt=_len>0?(_len-_sh)/_len:1;
-    const _ex=_fx+_dx*_rt, _ey=_fy+_dy*_rt;
-    const _hex=_RV_VA_COLORS[_a.color]||'#ffffff';
-    // Minimal arrow: 1.5px stroke, butt linecap, 0.9 opacity, 4×3 arrowhead.
-    h+='<line x1="'+_fx.toFixed(1)+'" y1="'+_fy.toFixed(1)+'" x2="'+_ex.toFixed(1)+'" y2="'+_ey.toFixed(1)+'" stroke="'+_hex+'" stroke-width="1.5" stroke-opacity="0.9" stroke-linecap="butt" marker-end="url(#rvah-'+_a.color+')"/>';
-  }
-  h+='</svg>';
-}
+// v1.2.3 round-24 (God Function split): SVG arrow overlay extracted to
+//   _renderRvArrowSvg() — pure function taking explicit params.
+h+=_renderRvArrowSvg(_rvCalList, flip, _rvCell, _rvBoardPx, _rvLabelW, _rvLabelGap, _rvLabelH);
 // v1.2.0 Phase 83: close .review-board (Phase 77's flex wrapper closing divs removed —
 // the flex wrappers were inside .bgrid and broke the grid layout; labels are now
 // absolute-positioned siblings of .bgrid, no extra wrappers to close).
@@ -2685,7 +2788,7 @@ if(_sfWdlW>=0&&_sfWdlD>=0&&_sfWdlL>=0){const _rt=_sfWdlW+_sfWdlD+_sfWdlL;if(_rt>
   const _blackP=(typeof playerColor!=='undefined'&&playerColor==='black');
   const _rw=Math.round((_blackP?_sfWdlL:_sfWdlW)/_rt*100);
   const _rd=Math.round(_sfWdlD/_rt*100);
-  const _rl=100-_rw-_rd;
+  const _rl=Math.round((_blackP?_sfWdlW:_sfWdlL)/_rt*100); // v1.2.3: match _buildEvalHTML (direct rounding, not 100-W-D)
   _rWdlStr='<span style="color:var(--muted);margin-left:4px">('+_rw+'%W/'+_rd+'%D/'+_rl+'%L)</span>';}}
 // v1.0.8 PHASE 14: enlarge review eval-bar fonts and cap the bar's height
 // so it never grows beyond a single line of text. Previously the bar used
@@ -2714,9 +2817,9 @@ if(_sfWdlW>=0&&_sfWdlD>=0&&_sfWdlL>=0){const _rt=_sfWdlW+_sfWdlD+_sfWdlL;if(_rt>
 // The .review-bottom #review-eval-bar CSS rule also sets .8rem via !important,
 // so this inline style is the fallback for when .review-bottom CSS hasn't
 // loaded yet (first render).
-const _rvEvalFontSize='.8rem';
-const _rvEvalEmojiSize='1.05rem';
-const _rvEvalBarHTML='<div class="ev" id="review-eval-bar" style="margin:2px 0;width:100%;box-sizing:border-box;font-size:'+_rvEvalFontSize+'!important;padding:5px 10px!important;gap:5px;max-height:2.4em;overflow:hidden;white-space:nowrap"><span class="ev-e" style="font-size:'+_rvEvalEmojiSize+'">'+_re.emoji+'</span><span>'+_re.desc+'</span><span style="color:var(--muted)">('+_re.score+')</span>'+_rDepthStr+_rProgressStr+_rWdlStr+_rDelta+'</div>';
+// v1.2.3 round-24 (God Function split): eval-bar HTML extracted to
+//   _buildRvEvalBarHTML() — pure function taking the pre-computed eval parts.
+const _rvEvalBarHTML=_buildRvEvalBarHTML(_re, _rDelta, _rDepthStr, _rProgressStr, _rWdlStr);
 // v1.2.3 round-20 (relocation): the round-19 standalone #review-batch-hint
 //   line under the eval bar was replaced by a hint RIGHT-ALIGNED INSIDE the
 //   "Analyze All" button itself (see _rvAnalyzeBtnInnerHTML below) — shown
@@ -2747,22 +2850,9 @@ const _rvEvalBarHTML='<div class="ev" id="review-eval-bar" style="margin:2px 0;w
 //     - At ratio=0: thumbCenter = 0% = left edge = first data point ✓
 //     - At ratio=1: thumbCenter = 100% = right edge = last data point ✓
 //   The fill spans from 0 to the thumb's center.
-const _rvSliderMax=reviewStates.length-1;
-// Compute ratio for initial CSS calc positioning (avoids flicker before rAF).
-// calc(ratio * 100%) places the thumb's CENTER at the correct position,
-// matching the chart's data points at x=0 and x=width.
-const _rvSliderRatio=_rvSliderMax>0?reviewStep/_rvSliderMax:0;
-const _rvSliderThumbLeft='calc('+_rvSliderRatio+' * 100%)';
-const _rvSliderFillW='calc('+_rvSliderRatio+' * 100%)';
-const _rvSliderHTML='<div class="rv-slider-wrap">'+
-  '<div class="rv-slider-container" id="rvSliderContainer">'+
-    '<div class="rv-slider-base"></div>'+
-    '<div class="rv-slider-fill" id="rvSliderFill" style="width:'+_rvSliderFillW+'"></div>'+
-    '<div class="rv-slider-thumb" id="rvSliderThumb" style="left:'+_rvSliderThumbLeft+'"></div>'+
-    '<input type="range" class="rv-slider-input" min="0" max="'+_rvSliderMax+'" value="'+reviewStep+'" oninput="reviewGoTo(Number.parseInt(this.value))" aria-label="'+T('review_move_slider')+'">'+
-  '</div>'+
-  '<div class="rv-slider-labels"><span>'+T('start_pos')+'</span><span>'+T('step_label')+' '+ reviewStep + ' / ' + _rvSliderMax + '</span><span>'+T('end_pos')+'</span></div>'+
-  '</div>';
+// v1.2.3 round-24 (God Function split): slider HTML extracted to
+//   _buildRvSliderHTML() — reads reviewStep/reviewStates module globals.
+const _rvSliderHTML=_buildRvSliderHTML();
 
 // v1.1.0 Phase 54: The slider thumb and fill positions are set via CSS calc()
 // in the inline style (see _rvSliderHTML above). CSS calc() automatically
@@ -2799,30 +2889,14 @@ try{
     if(_actualW>0)_trendW=_actualW;
   }
 }catch(e){/* measurement failed — use estimate */}
+// v1.2.3 round-24 (God Function split): chart HTML extracted to
+//   _buildRvChartHTML() — pure function taking height/width/SVG.
 const _trendSVG = _buildEvalTrendSVG(_trendW, _trendH);
-let _rvChartHTML='';
-if (_trendSVG) {
-  _rvChartHTML+='<div style="display:flex;justify-content:flex-start;padding:0 4px">';
-  // v1.0.8 PHASE 25 (toggle fix): The previous code created a CUSTOM inline
-  //   dot <div> inside .toggle-sw, which conflicted with the .toggle-sw::after
-  //   CSS pseudo-element (both rendered a dot → two dots, visual glitch).
-  //   Fix: use the standard .toggle / .toggle-sw classes without the inline
-  //   dot div — the ::after pseudo-element handles the dot correctly, with
-  //   proper theme colors via --toggle-dot / --toggle-dot-on / --toggle-on-bg.
-  _rvChartHTML+='<div class="toggle" style="font-size:.6rem;padding:2px 4px;gap:4px" onclick="_reviewEvalGlobal=!_reviewEvalGlobal;HapticManager.fire(_reviewEvalGlobal?\'TOGGLE_ON\':\'TOGGLE_OFF\');render()"><span>'+T('chart_global')+'</span><div class="toggle-sw sm'+(_reviewEvalGlobal?' on':'')+'"></div></div>';
-  _rvChartHTML+='</div>';
-  _rvChartHTML+='<div class="review-chart" style="width:100%;height:'+_trendH+'px;margin:4px 0;background:var(--input-bg);border:1px solid var(--border);border-radius:4px;padding:0;overflow:hidden">';
-  _rvChartHTML+=_trendSVG;
-  _rvChartHTML+='</div>';
-}
+const _rvChartHTML=_buildRvChartHTML(_trendH, _trendW, _trendSVG);
 
 // Nav buttons — v1.0.3 patch: wrapped in .review-nav for landscape stretching
-const _rvNavHTML='<div class="review-nav" style="display:flex;gap:4px;margin-top:6px">'+
-  '<button class="btn btn-d" onclick="reviewGoTo(0)">⏮</button>'+
-  '<button class="btn btn-d" onclick="reviewGoTo(Math.max(0,reviewStep-1))">◀</button>'+
-  '<button class="btn btn-d" onclick="reviewGoTo(Math.min(reviewStates.length-1,reviewStep+1))">▶</button>'+
-  '<button class="btn btn-d" onclick="reviewGoTo(reviewStates.length-1)">⏭</button>'+
-  '</div>';
+// v1.2.3 round-24 (God Function split): nav HTML extracted to _buildRvNavHTML().
+const _rvNavHTML=_buildRvNavHTML();
 // v1.1.0 Phase 54 rev16: nav buttons now force scrollIntoView even when the
 //   target step equals the current step (e.g. ▶ at last step, ⏮ at step 0).
 //   reviewGoTo() clamps the step, so calling reviewGoTo(reviewStep) at the
@@ -2855,7 +2929,9 @@ const _totalSteps=moveRecords.length+1;
 const _allCached=_cachedCount>=_totalSteps;
 // v1.0.8 PHASE 20 (UX): Enlarged font .7rem → .8rem and min-height 28px → 34px
 // so the button text + emoji display fully with comfortable breathing room.
-const _rvAnalyzeHTML='<button id="review-analyze-btn" class="btn" style="margin-top:4px;width:100%;font-size:.8rem;min-height:34px;padding:6px 10px;display:flex;align-items:center;justify-content:space-between;gap:8px" onclick="reviewAnalyzeAll()">'+_rvAnalyzeBtnInnerHTML()+'</button>';
+// v1.2.3 round-24 (God Function split): analyze button HTML extracted to
+//   _buildRvAnalyzeBtnHTML().
+const _rvAnalyzeHTML=_buildRvAnalyzeBtnHTML();
 
 // v1.0.8 PHASE 18 Task 2: Enable virtual list when the move list exceeds the
 // threshold. When enabled, only the visible window (plus overscan) is rendered
@@ -2950,13 +3026,13 @@ const rr=flip?7-r:r;const cc=flip?7-c:c;
 const p=gameState.board[rr][cc];const isL=(r+c)%2===0;
 let bg=_getSqBg(rr,cc,cm,isL,lastMove);if(selectedSquare&&rr===selectedSquare.row&&cc===selectedSquare.col)bg=SQ_SEL;
 const lastFrom=lastMove&&rr===lastMove.from.row&&cc===lastMove.from.col;
-const lastTo=lastMove&&lastMove.to.row===rr&&lastMove.to.col===cc;
+const lastTo=lastMove?.to.row===rr&&lastMove.to.col===cc;
 const isLegal=legalSet.has(rr*8+cc);
 const isCheckSq=_checkKingPos&&rr===_checkKingPos.row&&cc===_checkKingPos.col;
 const isCastlingRook=_castlingRookSet.has(rr*8+cc);
 // v1.0.8 PHASE 3: visible markers (work in all modes — setup, play, review)
 const hasCastleMark=_visibleCastleMarks.has(String(rr*8+cc));
-const hasEpMark=_visibleEpMark&&_visibleEpMark.row===rr&&_visibleEpMark.col===cc;
+const hasEpMark=_visibleEpMark?.row===rr&&_visibleEpMark.col===cc;
 const lbl=String.fromCodePoint(97+cc)+(8-rr);
 h+=`<div class="sq${lastFrom?' last-from':''}${lastTo?' last-to':''}${isCheckSq?' in-check':''}${isCastlingRook?' castle-rook':''}" role="gridcell" style="background:${bg}" data-r="${rr}" data-c="${cc}" onclick="sqClick(${rr},${cc})">`;
 h+=`<span class="lbl" style="color:${isL?LBL_LIGHT:LBL_DARK};-webkit-text-stroke:.6px ${isL?LBL_STROKE_LIGHT:LBL_STROKE_DARK};paint-order:stroke fill;text-shadow:0 0 2px ${isL?LBL_STROKE_LIGHT:LBL_STROKE_DARK}">${lbl}</span>`;
@@ -3360,7 +3436,7 @@ h+=`<div style="padding:6px 12px;background:var(--card);border:1px solid var(--p
 // Ponder move is now displayed inline in hintText (set by onHintMove)
 // when the engine provides "bestmove X ponder Y". No separate display needed here.
 // Show MultiPV alternative lines if available
-if(_multiPVLines.length>=1){h+='<div style="margin-top:6px;border-top:1px solid rgba(212,160,23,.15);padding-top:6px"><div style="font-size:.65rem;color:var(--muted);margin-bottom:4px">'+T('multi_analysis')+'</div>';for(const pv of _multiPVLines){let scoreStr='';if(pv.scoreMate!=null&&pv.scoreMate!==null){const m=Number.parseInt(pv.scoreMate,10);if(!Number.isNaN(m))scoreStr=m>0?'#+'+Math.abs(m):m<0?'#-'+Math.abs(m):'#0';}else if(pv.scoreCp!=null&&pv.scoreCp!==null){const pd=(pv.scoreCp/100).toFixed(1);scoreStr=(pv.scoreCp>0?'+':'')+pd;} let pvSAN='';if(pv.pv){try{const _conv=_convertPVtoSAN(pv.pv,gameState);pvSAN=_conv.sanMoves.split(/\s+/).slice(0,3).join(' ');}catch(e){pvSAN=pv.pv.split(/\s+/).slice(0,3).join(' ');}} h+='<div style="font-size:.65rem;color:'+(pv.index===1?'var(--accent2)':'var(--muted)')+';margin-bottom:2px">'+(pv.index===1?'⭐':'·')+' '+scoreStr+(pvSAN?' <span style="font-family:monospace;font-size:.6rem">'+_esc(pvSAN)+'</span>':'')+'</div>';}h+='</div>';} h+='</div>';}}// Player bar
+if(_multiPVLines.length>=1){h+='<div style="margin-top:6px;border-top:1px solid rgba(212,160,23,.15);padding-top:6px"><div style="font-size:.65rem;color:var(--muted);margin-bottom:4px">'+T('multi_analysis')+'</div>';for(const pv of _multiPVLines){let scoreStr='';const _isBTM=gameState&&gameState.currentTurn==='black';if(pv.scoreMate!=null&&pv.scoreMate!==null){const m=Number.parseInt(pv.scoreMate,10);if(!Number.isNaN(m)){const _wM=_isBTM?-m:m;scoreStr=_wM>0?'#+'+Math.abs(_wM):_wM<0?'#-'+Math.abs(_wM):(_isBTM?'#+0':'#-0');}}else if(pv.scoreCp!=null&&pv.scoreCp!==null){const _wCp=_isBTM?-pv.scoreCp:pv.scoreCp;const pd=(_wCp/100).toFixed(1);scoreStr=(_wCp>0?'+':'')+pd;} /* v1.2.3 (R1/R3): White-POV scores */ let pvSAN='';if(pv.pv){try{const _conv=_convertPVtoSAN(pv.pv,gameState);pvSAN=_conv.sanMoves.split(/\s+/).slice(0,3).join(' ');}catch(e){pvSAN=pv.pv.split(/\s+/).slice(0,3).join(' ');}} h+='<div style="font-size:.65rem;color:'+(pv.index===1?'var(--accent2)':'var(--muted)')+';margin-bottom:2px">'+(pv.index===1?'⭐':'·')+' '+scoreStr+(pvSAN?' <span style="font-family:monospace;font-size:.6rem">'+_esc(pvSAN)+'</span>':'')+'</div>';}h+='</div>';} h+='</div>';}}// Player bar
 return h;
 } // end _renderInfoBars
 
@@ -3433,15 +3509,15 @@ try{
     const _els=document.querySelectorAll(_sel);
     for(let _i=0;_i<_els.length;_i++){
       const _el=_els[_i];
-      if(_el&&_el.scrollHeight>0&&_el.clientHeight>0&&_el.scrollTop>0){
+      if(_el?.scrollHeight>0&&_el.clientHeight>0&&_el.scrollTop>0){
         ctx.containerScrolls.push({sel:_sel,idx:_i,scrollTop:_el.scrollTop,scrollHeight:_el.scrollHeight,clientHeight:_el.clientHeight});
       }
     }
   }
-}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+}catch(e){console.warn('[UI]',e?.message?e.message:e);}
 if(!reviewMode){
   const _oldMlist=document.querySelector('.mlist');
-  if(_oldMlist&&_oldMlist.scrollHeight>0&&_oldMlist.clientHeight>0){
+  if(_oldMlist?.scrollHeight>0&&_oldMlist.clientHeight>0){
     _mlistScrollState.scrollTop=_oldMlist.scrollTop;
     _mlistScrollState.atBottom=(_oldMlist.scrollTop + _oldMlist.clientHeight >= _oldMlist.scrollHeight - 40);
     _mlistScrollState.valid=true;
@@ -3469,7 +3545,7 @@ return ctx;
  * @param {Object} ctx - Context from _saveScrollState()
  */
 function _restoreScrollState(ctx){
-if(typeof _reattachActiveAnimations==='function'){try{_reattachActiveAnimations();}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}}
+if(typeof _reattachActiveAnimations==='function'){try{_reattachActiveAnimations();}catch(e){console.warn('[UI]',e?.message?e.message:e);}}
 if(!reviewMode){
   const _newMlist=document.querySelector('.mlist');
   if(_newMlist){
@@ -3485,7 +3561,7 @@ if(!reviewMode){
           const _maxScroll=Math.max(0,_newMlist.scrollHeight-_newMlist.clientHeight);
           _newMlist.scrollTop=Math.min(_mlistScrollState.scrollTop,_maxScroll);
         }
-      }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+      }catch(e){console.warn('[UI]',e?.message?e.message:e);}
       _newMlist.style.scrollBehavior=_savedBehavior;
       requestAnimationFrame(()=>{requestAnimationFrame(()=>{_scrollRestoreGuard=false;});});
     }
@@ -3495,7 +3571,7 @@ if(reviewMode&&ctx.reviewBodyScroll>0&&!_skipReviewBodyScrollRestore){
   const _newReviewBody=document.querySelector('.review-body');
   if(_newReviewBody){
     _newReviewBody.style.scrollBehavior='auto';
-    try{_newReviewBody.scrollTop=ctx.reviewBodyScroll;}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+    try{_newReviewBody.scrollTop=ctx.reviewBodyScroll;}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     _newReviewBody.style.scrollBehavior='';
   }
 }
@@ -3507,7 +3583,7 @@ if(reviewMode&&ctx.reviewMovesScroll>0){
     try{
       const _maxScroll=Math.max(0,_newReviewMoves.scrollHeight-_newReviewMoves.clientHeight);
       _newReviewMoves.scrollTop=Math.min(ctx.reviewMovesScroll,_maxScroll);
-    }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+    }catch(e){console.warn('[UI]',e?.message?e.message:e);}
     _newReviewMoves.style.scrollBehavior='';
   }
 }
@@ -3527,7 +3603,7 @@ if(ctx.containerScrolls.length>0){
           _el.scrollTop=_target;
           _el.style.scrollBehavior=_savedBehavior;
         }
-      }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+      }catch(e){console.warn('[UI]',e?.message?e.message:e);}
     }
   });
 }
@@ -3562,12 +3638,12 @@ function _maybeShowBoardDebounceHint(){
   if(document.getElementById('_loadingOverlay'))return;
   _boardDebounceHintShown=true;
   setTimeout(function(){
-    try{showToast(T('board_debounce_hint'),4500);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+    try{showToast(T('board_debounce_hint'),6750);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   },400);
 }
 
 function _postRenderFinalize(wasEcoFocused){
-_cachedBwrap=null;_cachedSvgEl=null;_cachedSvgLines=[];_cachedArrowKey='';_cachedCtrlCard=null;
+_cachedBwrap=null;_cachedSvgEl=null;_cachedSvgLines=[];_cachedArrowKey='';
 _prevHoverSq=hoveredSquare?{row:hoveredSquare.row,col:hoveredSquare.col}:null;
 _prevSelSq=selectedSquare?{row:selectedSquare.row,col:selectedSquare.col}:null;
 _prevLegalSet=new Set();if(selectedSquare){for(const m of legalMvs)_prevLegalSet.add(m.row*8+m.col);}
@@ -3588,11 +3664,11 @@ if(reviewMode && reviewStep !== _lastReviewStepScrolled){
             if(_listRect.width>0||_listRect.height>0){
               _actTop=(_actRect.top-_listRect.top)+_rList.scrollTop;
             }
-          }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+          }catch(e){console.warn('[UI]',e?.message?e.message:e);}
           if(_actTop>=0){
             const _target=Math.max(0,_actTop+(_actH/2)-(_listH/2));
             _rList.style.scrollBehavior='auto';
-            try{_rList.scrollTop=_target;}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+            try{_rList.scrollTop=_target;}catch(e){console.warn('[UI]',e?.message?e.message:e);}
             _rList.style.scrollBehavior='';
           }
         }
@@ -3603,10 +3679,10 @@ if(reviewMode && reviewStep !== _lastReviewStepScrolled){
 _updateArrows(hoveredSquare||selectedSquare);
 _invalidateElCache(); _sqElCache = null;
 _rListEl = document.getElementById('reviewMovesList');
-if(wasEcoFocused){const el=document.getElementById('ecoSearch');if(el){el.focus();_ecoSearchFocused=true;try{el.setSelectionRange(el.value.length,el.value.length)}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}}}
+if(wasEcoFocused){const el=document.getElementById('ecoSearch');if(el){el.focus();_ecoSearchFocused=true;try{el.setSelectionRange(el.value.length,el.value.length)}catch(e){console.warn('[UI]',e?.message?e.message:e);}}}
 // v1.2.3 round-18: restore SP-ID input focus after keystroke-triggered
 //   re-render (same pattern as the ECO search restore above).
-if(_spidEditing){_spidEditing=false;const _spEl=document.getElementById('spidInput');if(_spEl&&document.activeElement!==_spEl){_spEl.focus();try{_spEl.setSelectionRange(_spEl.value.length,_spEl.value.length)}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}}}
+if(_spidEditing){_spidEditing=false;const _spEl=document.getElementById('spidInput');if(_spEl&&document.activeElement!==_spEl){_spEl.focus();try{_spEl.setSelectionRange(_spEl.value.length,_spEl.value.length)}catch(e){console.warn('[UI]',e?.message?e.message:e);}}}
 if(showNewGameDialog&&dlgOpeningId&&!reviewMode){setTimeout(()=>{const list=document.querySelector('.op-list');if(list){const active=list.querySelector('.op-btn.act');if(active)active.scrollIntoView({block:'center',behavior:'smooth'})}},50)}
 // v1.2.3 round-19: fire the one-time board anti-shake hint once the board
 //   is visible (no-op until the loading overlay is gone; see above).
@@ -3662,7 +3738,7 @@ function _updateSingleSq(el,p,rr,cc,cm,isL,lastMove,_checkKingPos){
   // squares don't change between callbacks.
   const isSel=selectedSquare&&rr===selectedSquare.row&&cc===selectedSquare.col;
   const lastFrom=lastMove&&rr===lastMove.from.row&&cc===lastMove.from.col;
-  const lastTo=lastMove&&lastMove.to.row===rr&&lastMove.to.col===cc;
+  const lastTo=lastMove?.to.row===rr&&lastMove.to.col===cc;
   const isCheckSq=_checkKingPos&&rr===_checkKingPos.row&&cc===_checkKingPos.col;
   const isLegal=legalSet.has(rr*8+cc);
   // v1.0.8 BUG FIX:
@@ -3770,11 +3846,11 @@ function updateAfterMove(){requestEngineEval();
       const bg=_getSqBg(rr,cc,cm,isL,lastMove);
       const isSel=selectedSquare&&rr===selectedSquare.row&&cc===selectedSquare.col;
       const lastFrom=lastMove&&rr===lastMove.from.row&&cc===lastMove.from.col;
-      const lastTo=lastMove&&lastMove.to.row===rr&&lastMove.to.col===cc;
+      const lastTo=lastMove?.to.row===rr&&lastMove.to.col===cc;
       const isCheckSq=_checkKingPos&&rr===_checkKingPos.row&&cc===_checkKingPos.col;
       const isLegal=legalSet.has(rr*8+cc);
       const _hasCM=_fbCastleMarks.has(String(rr*8+cc));
-      const _hasEM=_fbEpMark&&_fbEpMark.row===rr&&_fbEpMark.col===cc;
+      const _hasEM=_fbEpMark?.row===rr&&_fbEpMark.col===cc;
       const lbl=String.fromCodePoint(97+cc)+(8-rr);
       bh+=`<div class="sq${lastFrom?' last-from':''}${lastTo?' last-to':''}${isCheckSq?' in-check':''}" style="background:${isSel?SQ_SEL:bg}" data-r="${rr}" data-c="${cc}" onclick="sqClick(${rr},${cc})">`;
       bh+=`<span class="lbl" style="color:${isL?LBL_LIGHT:LBL_DARK};-webkit-text-stroke:.6px ${isL?LBL_STROKE_LIGHT:LBL_STROKE_DARK};paint-order:stroke fill;text-shadow:0 0 2px ${isL?LBL_STROKE_LIGHT:LBL_STROKE_DARK}">${lbl}</span>`;
@@ -3822,7 +3898,7 @@ function _getSvgOverlay(){
   if(_cachedBwrap&&!document.body.contains(_cachedBwrap))_cachedBwrap=null;
   const bwrapEl=_cachedBwrap||(_cachedBwrap=document.querySelector('.bwrap'));
   if(!bwrapEl)return null;
-  if(_cachedSvgEl&&_cachedSvgEl.parentNode===bwrapEl){_cachedSvgEl.setAttribute('width',8*CELL);_cachedSvgEl.setAttribute('height',8*CELL);return _cachedSvgEl;}
+  if(_cachedSvgEl?.parentNode===bwrapEl){_cachedSvgEl.setAttribute('width',8*CELL);_cachedSvgEl.setAttribute('height',8*CELL);return _cachedSvgEl;}
   // Create persistent SVG with pre-built defs/markers (created once, never recreated)
   const svgEl=document.createElementNS('http://www.w3.org/2000/svg','svg');
   svgEl.style.cssText='position:absolute;inset:0;pointer-events:none;z-index:10';
@@ -3846,7 +3922,7 @@ function _getSvgOverlay(){
   svgEl.appendChild(defs);
   // Insert SVG after bgrid
   const bgrid=bwrapEl.querySelector('.bgrid');
-  if(bgrid&&bgrid.nextSibling){bwrapEl.insertBefore(svgEl,bgrid.nextSibling)}
+  if(bgrid?.nextSibling){bwrapEl.insertBefore(svgEl,bgrid.nextSibling)}
   else{bwrapEl.appendChild(svgEl)}
   _cachedSvgEl=svgEl;_cachedSvgLines=[];
   return svgEl;
@@ -3896,7 +3972,9 @@ function _updateArrows(infoSq){
     const _afc=flip?7-ar.from.col:ar.from.col,_afr=flip?7-ar.from.row:ar.from.row;
     const _atc=flip?7-ar.to.col:ar.to.col,_atr=flip?7-ar.to.row:ar.to.row;
     const fx=_afc*CELL+CELL/2,fy=_afr*CELL+CELL/2,tx=_atc*CELL+CELL/2,ty=_atr*CELL+CELL/2;
-    const dx=tx-fx,dy=ty-fy,len=Math.sqrt(dx*dx+dy*dy),sh=14,rt=len>0?(len-sh)/len:1;
+    // v1.2.3 round-38 (SonarCloud S7769): use Math.hypot(dx,dy) instead of
+    //   Math.sqrt(dx*dx + dy*dy).
+    const dx=tx-fx,dy=ty-fy,len=Math.hypot(dx,dy),sh=14,rt=len>0?(len-sh)/len:1;
     const ex=fx+dx*rt,ey=fy+dy*rt;
     const line=document.createElementNS('http://www.w3.org/2000/svg','line');
     line.setAttribute('x1',fx);line.setAttribute('y1',fy);
@@ -3915,7 +3993,7 @@ function _invalidateArrowCache(){
   // Remove old line elements from DOM before clearing cache
   if(_cachedSvgEl){
     for(let i=0;i<_cachedSvgLines.length;i++){
-      try{_cachedSvgLines[i].remove();}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+      try{_cachedSvgLines[i].remove();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     }
   }
   _cachedArrowKey='';_cachedSvgLines=[];
@@ -3952,7 +4030,7 @@ function _updateChangedSquares(oldInfoSq,newInfoSq,oldLegalSet,newLegalSet){
   if(_prevSelSq){
     try{
       const _prevPiece=gameState.board[_prevSelSq.row]&&gameState.board[_prevSelSq.row][_prevSelSq.col];
-      if(_prevPiece&&_prevPiece.type==='king'&&_prevPiece.color===playerColor){
+      if(_prevPiece?.type==='king'&&_prevPiece.color===playerColor){
         const _homeRow=_prevPiece.color==='white'?7:0;
         if(_prevSelSq.row===_homeRow){
           // Check if kingside (col 6) or queenside (col 2) was in the legal set
@@ -3977,7 +4055,7 @@ function _updateChangedSquares(oldInfoSq,newInfoSq,oldLegalSet,newLegalSet){
           }
         }
       }
-    }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+    }catch(e){console.warn('[UI]',e?.message?e.message:e);}
   }
   // Collect logical positions that need updating
   const logicPositions=new Set();
@@ -4016,14 +4094,14 @@ function _updateChangedSquares(oldInfoSq,newInfoSq,oldLegalSet,newLegalSet){
     const isLegal=newLegalSet.has(lr*8+lc);
     const isCheckSq=_checkKingPos&&lr===_checkKingPos.row&&lc===_checkKingPos.col;
     const lastFrom=lastMove&&lr===lastMove.from.row&&lc===lastMove.from.col;
-    const lastTo=lastMove&&lastMove.to.row===lr&&lastMove.to.col===lc;
+    const lastTo=lastMove?.to.row===lr&&lastMove.to.col===lc;
     // v1.0.6 FIX: Add castle-rook class when this square is a castling rook
     // for the currently-selected king. This keeps the marker in sync with
     // selection changes via the lightweight update path.
     const isCastlingRook=_curCastlingRookSet.has(lr*8+lc);
     // v1.0.8 PHASE 3: visible markers
     const _hasCM=_ucsCastleMarks.has(String(lr*8+lc));
-    const _hasEM=_ucsEpMark&&_ucsEpMark.row===lr&&_ucsEpMark.col===lc;
+    const _hasEM=_ucsEpMark?.row===lr&&_ucsEpMark.col===lc;
     el.style.background=bg;
     el.className='sq'+(lastFrom?' last-from':'')+(lastTo?' last-to':'')+(isCheckSq?' in-check':'')+(isCastlingRook?' castle-rook':'');
     const lbl=String.fromCodePoint(97+lc)+(8-lr);
@@ -4056,13 +4134,13 @@ function _computeCastlingRookSetForSelection(selPos,moves){
     if(gameState.currentTurn!==playerColor)return result;
     const _moves=moves||[];
     for(const m of _moves){
-      if(m&&m.castle){
+      if(m?.castle){
         let rookCol=-1;
         if(gameVariant !== undefined&&gameVariant==='chess960'&&typeof chess960CastlingRookMove==='function'){
           try{
             const rm=chess960CastlingRookMove(gameState,_p.color,m.castle);
             if(rm)rookCol=rm.rookFrom;
-          }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+          }catch(e){console.warn('[UI]',e?.message?e.message:e);}
         }else{
           rookCol=m.castle==='kingside'?7:0;
         }
@@ -4071,7 +4149,7 @@ function _computeCastlingRookSetForSelection(selPos,moves){
         }
       }
     }
-  }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  }catch(e){console.warn('[UI]',e?.message?e.message:e);}
   return result;
 }
 
@@ -4113,19 +4191,17 @@ function _updateBoardLightweight(){
   _prevLegalSet=curLegalSet;
 }
 
-// Cached reference to control info card (invalidated on full render)
-let _cachedCtrlCard=null;
+// v1.2.3 round-30 (perf): the ctrl-info-card element has a stable id
+//   (rendered at line 3104). The previous text-scan fallback
+//   (querySelectorAll('.card') + .textContent.includes('控制')/'Control')
+//   ran on every hover/selection change and was O(cards) per call.
+//   Removed the _cachedCtrlCard cache — getElementById is O(1) and the
+//   element lookup is already cheap.
 function _updateCtrlInfoPanel(){
-if(!showCtrlMap){var cc=document.getElementById('ctrl-info-card');if(cc)cc.style.display='none';return;}var cc2=document.getElementById('ctrl-info-card');if(cc2)cc2.style.display='';
-  // Try cached card first; if detached from DOM, re-query
-  let ctrlCard=_cachedCtrlCard;
-  if(!ctrlCard||!ctrlCard.parentNode){
-    const cards=document.querySelectorAll('.card');
-    ctrlCard=null;
-    for(const cd of cards){const t=cd.querySelector('.card-t');if(t&&(t.textContent.includes('控制')||t.textContent.includes('Control'))){ctrlCard=cd;break;}}
-    _cachedCtrlCard=ctrlCard;
-  }
+  const ctrlCard=document.getElementById('ctrl-info-card');
   if(!ctrlCard)return;
+  if(!showCtrlMap){ctrlCard.style.display='none';return;}
+  ctrlCard.style.display='';
   const infoSq=hoveredSquare||selectedSquare;
   const cm=showCtrlMap?cachedCtrlMap:null;
   let infoCtrl=null;
@@ -4176,7 +4252,7 @@ function enterReview(){_cachedStatus=null;_cachedStatusKey='';
 //   doesn't persist into review mode.
 _clearAnimationState();
 // v1.0.8 PHASE 22 supplement: enter-review sound (沉思音)
-try{if(typeof playSound==='function')playSound('enterReview');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+try{if(typeof playSound==='function')playSound('enterReview');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
 // v1.1.0 Phase 57 FIX (visual annotation residue): Clear the '_initial' key
 //   from the visual annotations cache to ensure fresh computation. The cached
 //   '_initial' annotations may be stale from a previous review session:
@@ -4196,7 +4272,7 @@ try{if(typeof playSound==='function')playSound('enterReview');}catch(e){console.
 //   during play (via _computeAndCacheVisualAnnotations after each move) and are
 //   still valid for the current moveRecords.
 if(typeof _visualAnnotationsCache!=='undefined'&&_visualAnnotationsCache){
-  try{_visualAnnotationsCache.delete('_initial');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{_visualAnnotationsCache.delete('_initial');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
 }
 // v1.0.8 PHASE 18 Task 2: Reset virtual list state on entering review mode.
 // Each new review session starts with a fresh window centered on reviewStep=0.
@@ -4213,7 +4289,7 @@ _resetRvVirtualState();
 // exact position they were at (not the initial position).
 _preReviewSnapshot={
   gameState:cloneS(gameState),
-  moveRecords:moveRecords.map(function(r){if(r===null)return null;const c=Object.assign({},r);if(r.variations)c.variations=r.variations.map(function(v){return Object.assign({},v);});return c;}),
+  moveRecords:moveRecords.map(function(r){if(r===null)return null;const c={...r};if(r.variations)c.variations=r.variations.map(function(v){return {...v};});return c;}),
   lastMove:lastMove?{from:{row:lastMove.from.row,col:lastMove.from.col},to:{row:lastMove.to.row,col:lastMove.to.col}}:null,
   stateHistory:stateHistory.map(function(s){return{state:cloneS(s.state),selectedSquare:s.selectedSquare?{row:s.selectedSquare.row,col:s.selectedSquare.col}:null,legalMvs:s.legalMvs?[].concat(s.legalMvs):[],moveRecords:s.moveRecords?[].concat(s.moveRecords):[],lastMove:s.lastMove?(s.lastMove.from?{from:{row:s.lastMove.from.row,col:s.lastMove.from.col},to:{row:s.lastMove.to.row,col:s.lastMove.to.col}}:s.lastMove):null,gameOver:s.gameOver};}),
   _redoStack:_redoStack.map(function(s){return{state:cloneS(s.state),moveRecords:[].concat(s.moveRecords),lastMove:s.lastMove?(s.lastMove.from?{from:{row:s.lastMove.from.row,col:s.lastMove.from.col},to:{row:s.lastMove.to.row,col:s.lastMove.to.col}}:s.lastMove):null};}),
@@ -4337,7 +4413,11 @@ reviewCritical=_findCriticalMoves();requestEngineEval();render();
 function _findCriticalMoves(){
   const critical=[];
   if(!reviewStates||reviewStates.length<2)return critical;
-  let prevEval=0;
+  // v1.2.3 round-39 (SonarCloud S1481/S1854): removed unused `let prevEval=0;`
+  //   and unused `const ad=Math.abs(moverDelta);`. prevEval was a leftover
+  //   from an earlier version that tracked running eval; the current code
+  //   uses prevEv (from cache peek) instead. ad was computed but never
+  //   referenced — the threshold checks use moverDelta directly.
   for(let i=1;i<reviewStates.length;i++){
     // v1.0.2 PERF: use peek() — this loop iterates over all review steps to
     // find critical moves, so refreshing LRU on each access is wasteful.
@@ -4350,7 +4430,6 @@ function _findCriticalMoves(){
       // means White moved (step 1 = White's first move).
       const isMoverWhite=(i%2)===1; // step is odd → White moved
       const moverDelta=isMoverWhite?delta:-delta;
-      const ad=Math.abs(moverDelta);
       if(moverDelta<-300){
         const cls=_classifyMove(delta,isMoverWhite);
         critical.push({step:i,reason:cls.label+' ('+(moverDelta/100).toFixed(1)+')'});
@@ -4497,7 +4576,17 @@ function _replayMovesToState(moveIdx){
       //   (moveRecords[0] for black-to-move starts) instead of aborting the
       //   whole replay — previously EVERY black-first game got no visual
       //   annotations because the replay bailed at index 0.
-      if(!mr)continue;
+      // v1.2.3 round-23 (Q5 fix): only the index-0 placeholder is a valid
+      //   null. A null at any other index is corruption (PGN parse error,
+      //   concurrent modification, memory corruption) — silently skipping it
+      //   would advance the annotation index out of sync with the actual
+      //   move sequence, producing a wrong board state. Log + abort so the
+      //   caller returns null and the caller's null-handling kicks in.
+      if(!mr){
+        if(i===0)continue;
+        console.error('[replay] null moveRecord at index '+i+' — aborting replay');
+        return null;
+      }
       const from=algPos(mr.from);
       const to=algPos(mr.to);
       if(!from||!to)return null;
@@ -4564,7 +4653,7 @@ function _computeSquareHighlights(cm, playerCol, aiCol){
   }
   for(const [r,c] of centerSquares){
     const entry=cm[r][c];
-    if(entry&&entry.white.length===0&&entry.black.length===0){
+    if(entry?.white.length===0&&entry.black.length===0){
       csl.push({color:'G',square:posAlg({row:r,col:c})});
     }
   }
@@ -4756,7 +4845,7 @@ function _computeAndCacheVisualAnnotations(moveIdx){
   const _movedToAlg=moveRecords[moveIdx].to;
   const _movedToPos=algPos(_movedToAlg);
   const _movedPiece=_movedToPos?postState.board[_movedToPos.row][_movedToPos.col]:null;
-  const _isQueenMovedIntoThreat=_movedPiece&&_movedPiece.type==='queen'&&_movedPiece.color===moverColor;
+  const _isQueenMovedIntoThreat=_movedPiece?.type==='queen'&&_movedPiece.color===moverColor;
   let cm=null;
   try{
     if(typeof getCtrlMap==='function')cm=getCtrlMap(postState.board);
@@ -4864,7 +4953,7 @@ function _computeInitialPositionAnnotations(){
       for(const sq of yellowCandidates.slice(0,3))csl.push({color:'Y',square:posAlg({row:sq.r,col:sq.c})});
       for(const [r,c] of centerSquares){
         const entry=cm[r][c];
-        if(entry&&entry.white.length===0&&entry.black.length===0){
+        if(entry?.white.length===0&&entry.black.length===0){
           csl.push({color:'G',square:posAlg({row:r,col:c})});
         }
       }
@@ -4970,7 +5059,7 @@ function _invalidateCachesForUndoneMoves(currentMoveCount){
     // 3. _cachedOriginalPGN — null it so subsequent PGN operations use
     //    _buildPGNString() (which reads the current, shorter moveRecords).
     if(typeof _cachedOriginalPGN!=='undefined')_cachedOriginalPGN=null;
-  }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  }catch(e){console.warn('[UI]',e?.message?e.message:e);}
   // v1.0.8 BUG FIX:
   // After undo, the critical-moves list (reviewCritical) still contained
   // entries for the now-undone moves, causing misaligned critical-move
@@ -5094,9 +5183,12 @@ function _resetGameUIState(){
   //   Mirror the exitReview() cleanup (function decls are bundle-hoisted).
   if(typeof _reviewAnalyzeAllActive!=='undefined'&&_reviewAnalyzeAllActive){
     _reviewAnalyzeAllActive=false;
-    try{if(typeof _endEvalDeepBatchIfActive==='function')_endEvalDeepBatchIfActive();}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+    try{if(typeof _endEvalDeepBatchIfActive==='function')_endEvalDeepBatchIfActive();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     if(typeof _reviewAnalyzeSafetyTimer!=='undefined'&&_reviewAnalyzeSafetyTimer){clearTimeout(_reviewAnalyzeSafetyTimer);_reviewAnalyzeSafetyTimer=null;}
     if(typeof _evalRequestBatchGen!=='undefined')_evalRequestBatchGen=0;
+    // v1.2.3 round-44 (T1/G11): drop the dispatch record + flush batch writes.
+    if(typeof _batchLastDispatched!=='undefined')_batchLastDispatched=null;
+    try{if(typeof _endBatchWriteMode==='function')_endBatchWriteMode();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   }
   // v1.2.3 round-18 (bug fix): also clear the pending open-stats flag/timer —
   //   exitReview() does this, but _resetGameUIState can run WITHOUT exitReview
@@ -5213,7 +5305,7 @@ function _resetGameUIState(){
   if(typeof _needNewGameForEngine!=='undefined')_needNewGameForEngine=true;
   if(typeof _tbLoading!=='undefined')_tbLoading=false;
   if(typeof _tbRetryCount!=='undefined')_tbRetryCount=0;
-  try{if(typeof Store!=='undefined'&&Store&&typeof Store.dispatch==='function'){Store.dispatch('SETUP_EXIT');Store.dispatch('PGN_CLEARED');}}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{if(typeof Store!=='undefined'&&Store&&typeof Store.dispatch==='function'){Store.dispatch('SETUP_EXIT');Store.dispatch('PGN_CLEARED');}}catch(e){console.warn('[UI]',e?.message?e.message:e);}
 }
 
 /**
@@ -5367,42 +5459,48 @@ function _updateReviewAnalyzeBtn(){
 function _prioritizeReviewStep(step){
   // Validate: must be in review mode
   if(!reviewMode){
-    try{showToast(T('priority_eval_not_in_review'),2500);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+    try{showToast(T('priority_eval_not_in_review'),3750);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     return;
   }
   // Validate: step must be in range
   if(!reviewStates||step<0||step>=reviewStates.length)return;
   // Validate: step must be uncached (no point prioritizing an already-analyzed step)
   if(_reviewEvalCache.has(step)){
-    try{showToast(T('priority_eval_already_cached'),2000);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-    try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+    try{showToast(T('priority_eval_already_cached'),3000);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+    try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     return;
   }
   // Fire haptic feedback (matches the existing long-press pattern)
-  try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   // If no batch is active, just navigate to the step and trigger a single eval
   // (the user can manually inspect it). This is a graceful fallback.
   if(!_reviewAnalyzeAllActive){
     reviewGoTo(step);
-    try{requestEngineEval();}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-    try{showToast(T('priority_eval_toast'),2500);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+    try{requestEngineEval();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+    try{showToast(T('priority_eval_toast'),3750);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     return;
   }
   // Deduplicate: don't add the same step twice
-  if(_reviewAnalyzePriorityQueue.indexOf(step)>=0){
-    try{showToast(T('priority_eval_toast'),2500);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  // v1.2.3 round-38 (SonarCloud S7765): use .includes() instead of .indexOf() >= 0.
+  if(_reviewAnalyzePriorityQueue.includes(step)){
+    try{showToast(T('priority_eval_toast'),3750);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     return;
   }
   // Push onto the priority queue
   _reviewAnalyzePriorityQueue.push(step);
   // Show toast notification
-  try{showToast(T('priority_eval_toast'),2500);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{showToast(T('priority_eval_toast'),3750);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   // Abort the current in-flight batch eval so the priority step can be
   // evaluated next. We bump _reviewAnalyzeGen and clear _evalRequestBatchGen
   // so the in-flight onEngineEval callback is treated as stale (its result
   // will be cached for _reviewEvalRequestedStep via the user-nav stale path,
   // NOT lost). The safety timer (60s) will eventually fire if the engine
   // doesn't respond to the stop, advancing the batch.
+  // v1.2.3 round-44 (T2): clear the batch dispatch record FIRST — a callback
+  //   arriving inside the 150ms stop→advance window below now fails the
+  //   _batchLastDispatched validation in onEngineEval (T1) and is dropped as
+  //   stale, instead of being claimed by the re-armed gen of the next step.
+  if(typeof _batchLastDispatched!=='undefined')_batchLastDispatched=null;
   if(typeof _evalRequestBatchGen!=='undefined')_evalRequestBatchGen=0;
   if(typeof _reviewAnalyzeGen!=='undefined')_reviewAnalyzeGen++;
   // Clear the safety timer — _reviewAnalyzeAdvance will reset it when it
@@ -5414,16 +5512,22 @@ function _prioritizeReviewStep(step){
   // onEngineEval is skipped; the user-nav stale path caches the result for
   // _reviewEvalRequestedStep (the step that was being evaluated when the
   // user long-pressed).
+  // v1.2.3 round-36 (dedup + robustness): replaced inline engineStop call
+  //   (which was MISSING the sendToEngine('stop') fallback for older builds)
+  //   with the canonical _engineStopHard() helper. This closes a real
+  //   robustness gap — on builds without engineStop(), the priority-stop
+  //   would previously silently no-op.
   try{
-    if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.engineStop==='function'){
-      AndroidBridge.engineStop();
-    }
+    _engineStopHard();
   }catch(e){console.warn('engineStop for priority failed',e);}
   // Trigger _reviewAnalyzeAdvance after a short delay to pick up the priority
-  // entry. The delay (100ms) gives the engine time to process the stop
+  // entry. The delay (150ms) gives the engine time to process the stop
   // command and fire its bestmove callback. If the callback hasn't arrived
   // by then, _reviewAnalyzeAdvance will still pick up the priority entry
   // (because the priority queue check happens BEFORE the normal sequence).
+  // v1.2.3 round-44 (T2): a callback arriving INSIDE this 150ms window is no
+  //   longer mis-claimed by the next step — _batchLastDispatched was cleared
+  //   above, so the T1 validation in onEngineEval drops it as stale.
   // We use a flag to prevent multiple advance triggers if the bestmove
   // callback also fires.
   const _advanceFlag='_priorityAdvancePending';
@@ -5447,7 +5551,7 @@ function _endEvalDeepBatchIfActive(){
     if(typeof AndroidBridge!=='undefined'&&AndroidBridge&&typeof AndroidBridge.engineEvalDeepEndBatch==='function'){
       AndroidBridge.engineEvalDeepEndBatch();
     }
-  }catch(e){console.warn('[UI] engineEvalDeepEndBatch failed:',e&&e.message?e.message:e);}
+  }catch(e){console.warn('[UI] engineEvalDeepEndBatch failed:',e?.message?e.message:e);}
 }
 
 function reviewAnalyzeAll(){
@@ -5463,7 +5567,7 @@ function reviewAnalyzeAll(){
     if(typeof AndroidBridge!=='undefined'&&AndroidBridge&&typeof AndroidBridge.engineEvalDeepBeginBatch==='function'){
       AndroidBridge.engineEvalDeepBeginBatch();
     }
-  }catch(e){console.warn('[UI] engineEvalDeepBeginBatch failed:',e&&e.message?e.message:e);}
+  }catch(e){console.warn('[UI] engineEvalDeepBeginBatch failed:',e?.message?e.message:e);}
   // v1.0.4 Rev24: If every step is already cached, complete INSTANTLY.
   // v1.0.8 PHASE 15: Analyze-all now includes step 0 (the initial position).
   const _lastStep=moveRecords.length; // = reviewStates.length - 1
@@ -5477,7 +5581,7 @@ function reviewAnalyzeAll(){
     //   Java-side flag is cleared and gameplay options are restored.
     _endEvalDeepBatchIfActive();
     showToast(T('analysis_done')+' '+(_lastStep+1)+' '+T('step'));
-    try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+    try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     render();
     return;
   }
@@ -5507,7 +5611,7 @@ function reviewAnalyzeAll(){
   //   the user's pre-batch step (which is the same as their current step
   //   unless they navigated during the batch).
   showToast(T('analyzing_all')+' ('+_reviewEvalCache.size+'/'+(_lastStep+1)+')');
-  try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   // Start the batch via _requestBatchEval (always exported by ai-bridge.js).
   _requestBatchEval(startStep);
 }
@@ -5528,11 +5632,72 @@ function _reviewAnalyzeResetSafetyTimer(){
       // v1.1.1 Phase 59 Task 59.6: Clear the batch gen so the stale callback
       //   (if it ever arrives) doesn't double-advance.
       if(typeof _evalRequestBatchGen!=='undefined')_evalRequestBatchGen=0;
+      // v1.2.3 round-44 (T1): also clear the dispatch record — the timed-out
+      //   step's late callback must not be claimed by the next step.
+      if(typeof _batchLastDispatched!=='undefined')_batchLastDispatched=null;
+      // v1.2.3 round-44 (T4): count the timeout as a dispatch failure; at 3
+      //   consecutive failures the batch is terminated (engine likely dead)
+      //   instead of ghost-looping on this 60s safety net forever.
+      if(typeof _batchConsecutiveFail!=='undefined'){
+        _batchConsecutiveFail++;
+        if(_batchConsecutiveFail>=3&&typeof _terminateBatchAfterRepeatedFailures==='function'){
+          try{_terminateBatchAfterRepeatedFailures('safety-net timeout');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+          return;
+        }
+      }
+      // v1.2.3 round-44 (G11): flush any dirty cache writes before advancing.
+      try{if(typeof _endBatchWriteMode==='function')_endBatchWriteMode();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
       _reviewAnalyzeAdvance();
     }else{
       _reviewAnalyzeSafetyTimer=null;
     }
   },60000); // 60s per step
+}
+
+// v1.2.3 round-24 (God Function split — S3776): extracted from
+//   _reviewAnalyzeAdvance. The completion branch had duplicated pending-save
+//   + pending-stats trigger logic (S1192 code duplication) — extracted into
+//   a single helper. Also extracts the "find next uncached step" scan.
+//
+// Find the next uncached step in the review-analyze batch. Fast path: walk
+// forward from _reviewAnalyzeStep+1. If that reaches _lastStep, fall back to
+// a full-range scan [0.._lastStep] to catch uncached steps BEFORE the current
+// position (priority-interruption case). Returns the step index, or -1 if all
+// steps are cached.
+function _findNextUncachedBatchStep(fromStep, lastStep){
+  let nextStep=fromStep+1;
+  while(nextStep<=lastStep){
+    if(!_reviewEvalCache.has(nextStep))break;
+    nextStep++;
+  }
+  if(nextStep>lastStep){
+    let _lowestUncached=-1;
+    for(let i=0;i<=lastStep;i++){
+      if(!_reviewEvalCache.has(i)){_lowestUncached=i;break;}
+    }
+    if(_lowestUncached>=0)nextStep=_lowestUncached;
+  }
+  return nextStep;
+}
+
+// Trigger pending post-batch actions (PGN cache save + stats page open) after
+// the analyze-all batch completes. Both actions use a 150ms setTimeout so the
+// UI can paint the restored step before the save/stats Activity is pushed.
+// Extracted from the duplicated logic in _reviewAnalyzeAdvance's completion branch.
+function _triggerPendingPostBatchActions(_pendingSave, _pendingStats){
+  if(_pendingSave){
+    try{setTimeout(function(){
+      try{_pgnCacheSaveCurrentImpl_SkipCoverageCheck(_pendingSave.name,_pendingSave.includeAnn);}
+      catch(e){showToast(T('pgn_cache_save_failed'),3750);}
+    },150);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+  }
+  if(_pendingStats){
+    try{showToast(T('analysis_complete_opening_stats'),3750);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+    try{setTimeout(function(){
+      try{if(typeof openStatsPage==='function')openStatsPage();}
+      catch(e){console.error('Deferred openStatsPage failed:',e);}
+    },150);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+  }
 }
 
 /**
@@ -5583,32 +5748,17 @@ function _reviewAnalyzeAdvance(){
   //   an uncached step, use it. If it reaches _lastStep, fall through to the
   //   full-range scan to catch any uncached steps BEFORE _reviewAnalyzeStep
   //   (priority-interruption case).
-  let nextStep=_reviewAnalyzeStep+1;
-  while(nextStep<=_lastStep){
-    if(!_reviewEvalCache.has(nextStep))break; // Found un-analyzed step (forward)
-    nextStep++;
-  }
-  if(nextStep>_lastStep){
-    // Forward scan found nothing — but steps BEFORE _reviewAnalyzeStep may
-    // still be uncached (e.g., after a priority eval jumped ahead). Scan
-    // the full range [0.._lastStep] to find the lowest uncached step.
-    // v1.1.2 PHASE 72: This is the fix for the "false completion" bug.
-    let _lowestUncached=-1;
-    for(let i=0;i<=_lastStep;i++){
-      if(!_reviewEvalCache.has(i)){_lowestUncached=i;break;}
-    }
-    if(_lowestUncached>=0){
-      // Resume the batch from the lowest uncached step (before
-      // _reviewAnalyzeStep). This handles the priority-interruption case.
-      nextStep=_lowestUncached;
-    }
-    // else: truly all steps cached → fall through to completion branch below
-  }
+  // v1.2.3 round-24 (God Function split): "find next uncached step"
+  //   extracted to _findNextUncachedBatchStep() — handles both the forward
+  //   fast-path and the full-range fallback (priority-interruption case).
+  const nextStep=_findNextUncachedBatchStep(_reviewAnalyzeStep, _lastStep);
   if(nextStep>_lastStep){
     _reviewAnalyzeAllActive=false;
     // v1.2.3 P1: Batch completed normally — restore gameplay UCI options
     //   that were overridden by engineEvalDeepBeginBatch().
     _endEvalDeepBatchIfActive();
+    // v1.2.3 round-44 (G11): leave batch write mode + flush pending cache writes.
+    try{if(typeof _endBatchWriteMode==='function')_endBatchWriteMode();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     if(_reviewAnalyzeSafetyTimer){clearTimeout(_reviewAnalyzeSafetyTimer);_reviewAnalyzeSafetyTimer=null;}
     // v1.1.1 Phase 59 Task 59.6: Reset batch state
     _reviewAnalyzeStep=-1;
@@ -5618,7 +5768,7 @@ function _reviewAnalyzeAdvance(){
     _reviewAnalyzePriorityQueue=[];
     // v1.0.8 PHASE 19 (bug fix): Recompute reviewCritical now that the eval cache
     // is fully populated.
-    try{if(typeof _findCriticalMoves==='function')reviewCritical=_findCriticalMoves();}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+    try{if(typeof _findCriticalMoves==='function')reviewCritical=_findCriticalMoves();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     // v1.1.2 Phase 67 Task 67.2: If a PGN cache save is pending (user chose
     //   "Analyze All first" in the partial-eval dialog), trigger it now.
     //   The save will use the now-fully-populated _reviewEvalCache so every
@@ -5631,7 +5781,11 @@ function _reviewAnalyzeAdvance(){
     //   populated — re-invoke openStatsPage() so it builds the payload with
     //   the complete evals array. Clear the flag BEFORE the call so the
     //   second invocation takes the normal "all cached → open stats" path.
-    const _pendingStats=(typeof window!=='undefined'&&window._pendingOpenStats)?true:false;
+    // v1.2.3 round-37 (SonarCloud S6644): `cond ? true : false` is redundant —
+    //   the boolean expression itself is the boolean. Use `!!` to coerce to
+    //   boolean (defensive — `window._pendingOpenStats` could be a truthy
+    //   non-boolean; the original code returned a strict boolean).
+    const _pendingStats=!!(typeof window!=='undefined'&&window._pendingOpenStats);
     if(typeof window!=='undefined'){
       window._pendingOpenStats=false;
       // v1.2.1 round-11 (Bug #2 fix hardening): clear the safety timeout
@@ -5653,46 +5807,16 @@ function _reviewAnalyzeAdvance(){
       showToast(T('analysis_done')+' '+_reviewEvalCache.size+' '+T('step'));
       // v1.1.2 Phase 67 Task 67.2: trigger pending save AFTER reviewGoTo so
       //   the UI shows the user's pre-batch step (not the last analyzed step).
-      if(_pendingSave){
-        try{setTimeout(function(){
-          try{_pgnCacheSaveCurrentImpl_SkipCoverageCheck(_pendingSave.name,_pendingSave.includeAnn);}
-          catch(e){showToast(T('pgn_cache_save_failed'),2500);}
-        },150);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-      }
-      // v1.2.1 round-11 (Bug #2 fix): trigger deferred stats page open AFTER
-      //   reviewGoTo so the user's pre-batch step is restored first. The
-      //   150ms delay mirrors the pending-save pattern: gives the UI time to
-      //   paint the restored step before the stats Activity is pushed.
-      if(_pendingStats){
-        // v1.2.3 P2 (Issue #47 path 4): Show a completion toast BEFORE the
-        //   stats Activity is pushed. This is the transition the user most
-        //   needs to know about — from "waiting for analysis" to "results
-        //   ready". Previously this moment had zero feedback.
-        try{showToast(T('analysis_complete_opening_stats'),2500);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-        try{setTimeout(function(){
-          try{if(typeof openStatsPage==='function')openStatsPage();}
-          catch(e){console.error('Deferred openStatsPage failed:',e);}
-        },150);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-      }
+      // v1.2.3 round-24: pending-save + pending-stats trigger extracted to
+      //   _triggerPendingPostBatchActions() (was duplicated in both branches).
+      _triggerPendingPostBatchActions(_pendingSave, _pendingStats);
       return;
     }
     showToast(T('analysis_done')+' '+_reviewEvalCache.size+' '+T('step'));
     render();
-    if(_pendingSave){
-      try{setTimeout(function(){
-        try{_pgnCacheSaveCurrentImpl_SkipCoverageCheck(_pendingSave.name,_pendingSave.includeAnn);}
-        catch(e){showToast(T('pgn_cache_save_failed'),2500);}
-      },150);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-    }
-    if(_pendingStats){
-      // v1.2.3 P2 (Issue #47 path 4): same completion toast as the
-      //   _targetStep-valid branch above.
-      try{showToast(T('analysis_complete_opening_stats'),2500);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-      try{setTimeout(function(){
-        try{if(typeof openStatsPage==='function')openStatsPage();}
-        catch(e){console.error('Deferred openStatsPage failed:',e);}
-      },150);}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-    }
+    // v1.2.3 round-24: pending-save + pending-stats trigger extracted to
+    //   _triggerPendingPostBatchActions() (was duplicated in both branches).
+    _triggerPendingPostBatchActions(_pendingSave, _pendingStats);
     return;
   }
   _reviewAnalyzeStep=nextStep;
@@ -5718,10 +5842,10 @@ function _reviewAnalyzeAdvance(){
   //     that the move list feels responsive, infrequent enough to avoid the
   //     O(n) DOM rebuild cost that caused WebView memory pressure on 100+
   //     step games.
-  try{if(typeof _updateReviewAnalyzeBtn==='function')_updateReviewAnalyzeBtn();}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-  try{if(typeof _refreshEvalTrendChart==='function')_refreshEvalTrendChart();}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{if(typeof _updateReviewAnalyzeBtn==='function')_updateReviewAnalyzeBtn();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+  try{if(typeof _refreshEvalTrendChart==='function')_refreshEvalTrendChart();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   if(nextStep%10===0){
-    try{render();}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+    try{render();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   }
   // v1.1.2 Phase 68 (Issue 30 P1): Main-thread yield — wrap the next
   //   _requestBatchEval call in setTimeout(0) so the JS main thread can
@@ -5770,7 +5894,7 @@ function _reviewAnalyzeAdvance(){
  */
 function exitReview(){
   // v1.0.8 PHASE 22 supplement: exit-review sound (归位音)
-  try{if(typeof playSound==='function')playSound('exitReview');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{if(typeof playSound==='function')playSound('exitReview');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   // v1.0.8 PHASE 24 (bug fix): clear any in-progress animation.
   _clearAnimationState();
   reviewMode=false;
@@ -5778,6 +5902,10 @@ function exitReview(){
   // v1.2.3 P1: Exiting review cancels any in-flight batch — restore the
   //   gameplay UCI options that engineEvalDeepBeginBatch() overrode.
   _endEvalDeepBatchIfActive();
+  // v1.2.3 round-44 (T1/G11): drop the dispatch record (no callback may be
+  //   claimed after exit) and flush any batched cache writes.
+  if(typeof _batchLastDispatched!=='undefined')_batchLastDispatched=null;
+  try{if(typeof _endBatchWriteMode==='function')_endBatchWriteMode();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   // v1.1.1 Phase 59 Task 59.6: Clear batch session state so a stale
   //   in-flight callback (if any) doesn't try to advance a canceled batch.
   _reviewAnalyzeStep=-1;
@@ -5867,7 +5995,7 @@ function exitReview(){
 //   where a user clicks multiple operations before the first completes.
 let _pgnCacheOpInProgress=false;
 function openPGNCacheManager(){
-  try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   _pgnCacheSelected=new Set();
   // v1.0.4 Rev21: Reset filter state when (re)opening the manager.
   _pgnCacheFilter='';
@@ -5915,7 +6043,7 @@ function _formatPGNCacheMtime(mtime){
 function _pgnCacheToggleSel(name){
   if(_pgnCacheSelected.has(name))_pgnCacheSelected.delete(name);
   else _pgnCacheSelected.add(name);
-  try{HapticManager.fire('TOGGLE_ON');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{HapticManager.fire('TOGGLE_ON');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   render();
 }
 
@@ -5953,11 +6081,14 @@ function _pgnCacheSaveCurrent(){
   //   文件系统危险字符 / \ : * ? " < > | 与控制字符。否则恶意/误输入可能
   //   逃逸出沙箱路径或破坏 PGN 缓存索引。
   if(name.length>60){
-    try{showToast(T('pgn_cache_name_too_long')||'Name too long (max 60)');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+    try{showToast(T('pgn_cache_name_too_long')||'Name too long (max 60)');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     return;
   }
-  if(/[\/\\:*?"<>|\x00-\x1f\x7f]/.test(name)){
-    try{showToast(T('pgn_cache_name_invalid')||'Name contains invalid characters');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  // v1.2.3 round-38 (SonarCloud S6535): inside a character class, '/' does
+  //   not need escaping (only ']', '\\', '^' at start, and '-' in certain
+  //   positions need escaping inside []). Removed the unnecessary '\\/' → '/'.
+  if(/[/\\:*?"<>|\x00-\x1f\x7f]/.test(name)){
+    try{showToast(T('pgn_cache_name_invalid')||'Name contains invalid characters');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     return;
   }
   _pgnCacheOpInProgress=true;
@@ -6025,7 +6156,7 @@ function _pgnCacheSaveCurrentImpl(name,includeAnn){
   // Build the PGN text
   const pgn=_pgnCacheBuildPGNText(_ctx, includeAnn);
   if(!pgn){
-    showToast(T('pgn_cache_save_failed'),2500);
+    showToast(T('pgn_cache_save_failed'),3750);
     return;
   }
   _pgnCachePersistSave(name, pgn);
@@ -6041,7 +6172,7 @@ function _pgnCacheBuildSaveContext(includeAnn){
     let _allImported=true;
     for(let i=0;i<moveRecords.length;i++){
       const mr=moveRecords[i];
-      if(mr&&mr.time!==null&&mr.time!==undefined){_allImported=false;break;}
+      if(mr?.time!==null&&mr.time!==undefined){_allImported=false;break;}
     }
     if(_allImported)_useOriginal=true;
   }
@@ -6050,7 +6181,7 @@ function _pgnCacheBuildSaveContext(includeAnn){
     && typeof reviewStates!=='undefined' && reviewStates && reviewStates.length>0
     && _reviewEvalCache !== undefined && _reviewEvalCache;
   let _cachedCount=0;
-  const _totalSteps = (moveRecords&&moveRecords.length>0) ? moveRecords.length : 0;
+  const _totalSteps = (moveRecords?.length>0) ? moveRecords.length : 0;
   if(_inReview){
     for(let i=0;i<=_totalSteps;i++){
       if(_reviewEvalCache.has(i))_cachedCount++;
@@ -6064,7 +6195,7 @@ function _pgnCacheBuildSaveContext(includeAnn){
   //   of reviewMode (it only checks size>0), so the evals WILL be emitted.
   //   Previously, the force was gated on _inReview, which meant exiting review
   //   mode before saving would lose all [%eval] annotations.
-  const _hasAnyCachedEvals = _reviewEvalCache !== undefined && _reviewEvalCache && _reviewEvalCache.size>0;
+  const _hasAnyCachedEvals = _reviewEvalCache !== undefined && _reviewEvalCache?.size>0;
   if(_hasAnyCachedEvals && _useOriginal){
     _useOriginal=false;
   }
@@ -6103,7 +6234,7 @@ function _pgnCacheBuildPGNText(_ctx, includeAnn){
 //   Shared by _pgnCacheSaveCurrentImpl and _pgnCacheSaveCurrentImpl_SkipCoverageCheck.
 function _pgnCachePersistSave(name, pgn){
   if(!pgn){
-    showToast(T('pgn_cache_save_failed'),2500);
+    showToast(T('pgn_cache_save_failed'),3750);
     _pgnCacheOpInProgress=false; // Phase 69 (Bug 3): reset guard on failure
     return;
   }
@@ -6115,11 +6246,11 @@ function _pgnCachePersistSave(name, pgn){
   }catch(e){ok=false;}
   if(ok){
     _refreshPGNCacheList();
-    showToast(T('pgn_cache_saved')+'：'+name,2000);
-    try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+    showToast(T('pgn_cache_saved')+'：'+name,3000);
+    try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     render();
   }else{
-    showToast(T('pgn_cache_save_failed'),2500);
+    showToast(T('pgn_cache_save_failed'),3750);
   }
   _pgnCacheOpInProgress=false; // Phase 69 (Bug 3): reset guard on completion
 }
@@ -6188,7 +6319,7 @@ function _pgnCacheShowPartialEvalDialog(name, includeAnn, totalSteps, cachedCoun
       b.textContent=label;
       b.style.cssText='width:100%;justify-content:center;gap:8px;padding:12px;font-size:.9rem';
       b.onclick=function(){
-        try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+        try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
         _dismiss();
         onClick();
       };
@@ -6197,7 +6328,7 @@ function _pgnCacheShowPartialEvalDialog(name, includeAnn, totalSteps, cachedCoun
     btns.appendChild(makeBtn(T('pgn_cache_partial_eval_analyze_first'), true, function(){
       // Set pending save; reviewAnalyzeAll() will trigger the save on completion.
       _pendingPGNCacheSave={name:name, includeAnn:includeAnn};
-      showToast(T('pgn_cache_analyze_then_save'),2500);
+      showToast(T('pgn_cache_analyze_then_save'),3750);
       try{
         if(typeof reviewAnalyzeAll==='function'){
           reviewAnalyzeAll();
@@ -6208,7 +6339,7 @@ function _pgnCacheShowPartialEvalDialog(name, includeAnn, totalSteps, cachedCoun
         }
       }catch(e){
         _pendingPGNCacheSave=null;
-        showToast(T('pgn_cache_save_failed'),2500);
+        showToast(T('pgn_cache_save_failed'),3750);
       }
     }));
     btns.appendChild(makeBtn(T('pgn_cache_partial_eval_save_as_is'), false, function(){
@@ -6223,7 +6354,7 @@ function _pgnCacheShowPartialEvalDialog(name, includeAnn, totalSteps, cachedCoun
     // Click on overlay (outside dialog) = cancel
     overlay.addEventListener('click', function(e){
       if(e.target===overlay){
-        try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+        try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
         _dismiss();
       }
     });
@@ -6263,7 +6394,7 @@ function _pgnCacheImport(name){
   }catch(e){pgn=null;}
   if(!pgn){
     _pgnCacheOpInProgress=false;
-    showToast(T('pgn_cache_import_failed'),2500);
+    showToast(T('pgn_cache_import_failed'),3750);
     return;
   }
   showPGNCacheManager=false;
@@ -6273,7 +6404,7 @@ function _pgnCacheImport(name){
   const wasReviewMode=typeof reviewMode!=='undefined'&&reviewMode;
   try{
     if(wasReviewMode&&typeof exitReview==='function')exitReview();
-  }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  }catch(e){console.warn('[UI]',e?.message?e.message:e);}
   // v1.0.8 PHASE 34: use async import with worker offloading to prevent UI jank
   //   on large PGN files. Falls back to sync importPGN if importPGNAsync unavailable.
   // v1.1.2 Phase 69 (Bug 3): The .then callback checks _pgnCacheOpInProgress to
@@ -6286,7 +6417,7 @@ function _pgnCacheImport(name){
         // v1.0.8 PHASE 35: check success flag — importPGN shows its own error
         //   toast on invalid PGN, so only show success UI if import succeeded.
         if(!ok){
-          showToast(T('pgn_cache_import_failed'),2500);
+          showToast(T('pgn_cache_import_failed'),3750);
           render();
           return;
         }
@@ -6294,18 +6425,18 @@ function _pgnCacheImport(name){
         if(wasReviewMode){
           try{
             if(typeof enterReview==='function'){
-              setTimeout(()=>{try{enterReview();}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}},100);
+              setTimeout(()=>{try{enterReview();}catch(e){console.warn('[UI]',e?.message?e.message:e);}},100);
             }
-          }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+          }catch(e){console.warn('[UI]',e?.message?e.message:e);}
         }
-        showToast(T('pgn_cache_imported')+'：'+name,2000);
-        try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+        showToast(T('pgn_cache_imported')+'：'+name,3000);
+        try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
         render();
       }).catch(function(e){
         _pgnCacheOpInProgress=false;
         // v1.0.8 PHASE 35: defensive catch in case .then() callback throws
         console.error('PGN cache import .then failed:',e);
-        showToast(T('pgn_cache_import_failed'),2500);
+        showToast(T('pgn_cache_import_failed'),3750);
         render();
       });
       return;
@@ -6314,7 +6445,7 @@ function _pgnCacheImport(name){
     _pgnCacheOpInProgress=false;
   }catch(e){
     _pgnCacheOpInProgress=false;
-    showToast(T('pgn_cache_import_failed'),2500);
+    showToast(T('pgn_cache_import_failed'),3750);
     return;
   }
   // After import, if we were in review mode, re-enter review on the new game
@@ -6322,12 +6453,12 @@ function _pgnCacheImport(name){
     try{
       if(typeof enterReview==='function'){
         // Slight delay to let importPGN settle
-        setTimeout(()=>{try{enterReview();}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}},100);
+        setTimeout(()=>{try{enterReview();}catch(e){console.warn('[UI]',e?.message?e.message:e);}},100);
       }
-    }catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+    }catch(e){console.warn('[UI]',e?.message?e.message:e);}
   }
-  showToast(T('pgn_cache_imported')+'：'+name,2000);
-  try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  showToast(T('pgn_cache_imported')+'：'+name,3000);
+  try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   render();
 }
 
@@ -6348,8 +6479,8 @@ function _pgnCacheDeleteSelected(){
   _pgnCacheSelected.clear();
   _refreshPGNCacheList();
   _pgnCacheOpInProgress=false;
-  try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
-  showToast(T('pgn_cache_deleted')+'：'+deleted,2000);
+  try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+  showToast(T('pgn_cache_deleted')+'：'+deleted,3000);
   render();
 }
 
@@ -6384,11 +6515,11 @@ function _pgnCacheRename(oldName){
   }catch(e){ok=false;}
   if(ok){
     _refreshPGNCacheList();
-    showToast(T('pgn_cache_renamed')+'：'+newName,2000);
-    try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+    showToast(T('pgn_cache_renamed')+'：'+newName,3000);
+    try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     render();
   }else{
-    showToast(T('pgn_cache_rename_failed'),2500);
+    showToast(T('pgn_cache_rename_failed'),3750);
   }
   _pgnCacheOpInProgress=false;
 }
@@ -6430,11 +6561,11 @@ function _pgnCacheEditTags(name){
   }catch(e){ok=false;}
   if(ok){
     _refreshPGNCacheList();
-    showToast(T('pgn_cache_tags_saved')+'：'+name,2000);
-    try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+    showToast(T('pgn_cache_tags_saved')+'：'+name,3000);
+    try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     render();
   }else{
-    showToast(T('pgn_cache_tags_save_failed'),2500);
+    showToast(T('pgn_cache_tags_save_failed'),3750);
   }
   _pgnCacheOpInProgress=false;
 }
@@ -6455,13 +6586,13 @@ function _pgnCacheApplyFilter(){
   _pgnCacheFilter=_pgnCacheFilterInput.trim();
   // Clear selection — selected items might no longer be visible after filter.
   _pgnCacheSelected.clear();
-  try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   render();
 }
 function _pgnCacheClearFilter(){
   _pgnCacheFilter='';
   _pgnCacheFilterInput='';
-  try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   render();
 }
 function _pgnCacheFilterByTag(tag){
@@ -6469,7 +6600,7 @@ function _pgnCacheFilterByTag(tag){
   _pgnCacheFilter=String(tag);
   _pgnCacheFilterInput=String(tag);
   _pgnCacheSelected.clear();
-  try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   render();
 }
 // v1.0.8 PHASE 39: Filter by tag presence (has any tags / has no tags)
@@ -6477,7 +6608,7 @@ function _pgnCacheFilterByTagPresence(hasTags){
   _pgnCacheFilter=hasTags?'__has_tags__':'__no_tags__';
   _pgnCacheFilterInput='';
   _pgnCacheSelected.clear();
-  try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   render();
 }
 // Returns true if an entry matches the current filter.
@@ -6728,6 +6859,14 @@ function _cleanupEventListeners(){
   //   is destroyed. The interval is set at _startGameClock and was previously
   //   only cleared in the resign/timeout paths, not in the destroy-cleanup.
   if(gameClockTimerId!==undefined&&gameClockTimerId){clearInterval(gameClockTimerId);gameClockTimerId=null;}
+  // v1.2.3 round-44 (G8): clear the remaining module timers so nothing fires
+  //   after the Activity/WebView is destroyed.
+  if(typeof _loadingFallbackTimerId!=='undefined'&&_loadingFallbackTimerId){clearTimeout(_loadingFallbackTimerId);_loadingFallbackTimerId=null;}
+  if(typeof _emergencyFallbackTimerId!=='undefined'&&_emergencyFallbackTimerId){clearTimeout(_emergencyFallbackTimerId);_emergencyFallbackTimerId=null;}
+  if(typeof _toastTimer!=='undefined'&&_toastTimer){clearTimeout(_toastTimer);_toastTimer=0;}
+  if(typeof _toastRemoveTimer!=='undefined'&&_toastRemoveTimer){clearTimeout(_toastRemoveTimer);_toastRemoveTimer=0;}
+  if(typeof _evalSafetyTimerId!=='undefined'&&_evalSafetyTimerId){clearTimeout(_evalSafetyTimerId);_evalSafetyTimerId=null;}
+  if(typeof _pbmiTimerId!=='undefined'&&_pbmiTimerId){clearTimeout(_pbmiTimerId);_pbmiTimerId=null;}
   renderPending=false;
 }
 

@@ -78,7 +78,10 @@
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_Regalia_StockfishNative_nativeChmod(JNIEnv *env, jclass, jstring jPath) {
     if (!jPath) return JNI_FALSE;
-    const char* path = env->GetStringUTFChars(jPath, NULL);
+    // v1.2.3 round-37 (SonarCloud cpp:S4962): use nullptr instead of NULL
+    //   for type-safe null pointer constant (C++11). Behavior is identical
+    //   for GetStringUTFChars (it accepts jboolean* or nullptr).
+    const char* path = env->GetStringUTFChars(jPath, nullptr);
     if (!path) return JNI_FALSE;
     int result = chmod(path, 0700);
     // v1.2.3 P2 (Round 17 P2-4): Log errno on chmod failure. Previously a
@@ -88,7 +91,12 @@ Java_com_Regalia_StockfishNative_nativeChmod(JNIEnv *env, jclass, jstring jPath)
     //   Java layer except by the boolean return. Logging errno + strerror
     //   here lets logcat pinpoint the cause during engine-binary setup.
     if (result != 0) {
-        LOGE("nativeChmod failed for %s: %s (errno=%d)", path, strerror(errno), errno);
+        // v1.2.3 round-44 (F5): snapshot errno + strerror_r (plain strerror
+        //   uses a shared static buffer — not thread-safe).
+        int saved_errno = errno;
+        char errbuf[256];
+        strerror_r(saved_errno, errbuf, sizeof(errbuf));
+        LOGE("nativeChmod failed for %s: %s (errno=%d)", path, errbuf, saved_errno);
     }
     env->ReleaseStringUTFChars(jPath, path);
     return (result == 0) ? JNI_TRUE : JNI_FALSE;
@@ -104,19 +112,33 @@ Java_com_Regalia_StockfishNative_nativeChmod(JNIEnv *env, jclass, jstring jPath)
  * Lower values = higher priority. Typical engine priority: 10 (lower than default 0).
  *
  * v1.0.2: declared for API completeness (StockfishNative.java still declares
- * `private static native void nativeRenice(int pid, int prio);`). Currently
+ * `private static native boolean nativeRenice(int pid, int prio);`). Currently
  * no caller invokes it -- kept to avoid changing the JNI symbol surface and
  * to preserve the DroidFish-derived pattern for future use.
  */
-extern "C" JNIEXPORT void JNICALL
+// v1.2.3 round-44 (F1): void → jboolean so callers can distinguish success
+//   from EPERM/ESRCH/EINVAL (previously a silent black box).
+extern "C" JNIEXPORT jboolean JNICALL
+// v1.2.3 round-37 (SonarCloud cpp:S1172): `env` is unused but required by
+//   the JNI signature (every JNI function receives JNIEnv* as its first
+//   parameter). Kept as `env` with this explanatory comment.
+// v1.2.3 round-46 (PR53 CR#28): corrected the round-37 rationale — JNI name
+//   mangling depends only on the FUNCTION name, not on parameter names, so
+//   the old "renaming would break name mangling" claim was inaccurate.
 Java_com_Regalia_StockfishNative_nativeRenice(JNIEnv *env, jclass, jint pid, jint prio) {
-    if (pid <= 0) return;
+    (void)env;  // suppress unused-parameter warning
+    if (pid <= 0) return JNI_FALSE;
     // v1.1.2 Phase 67: Code review P0 fix - validate prio range and check setpriority() return value.
     // PRIO_MIN/PRIO_MAX are typically -20/19 on Linux/Android. Clamping prevents undefined behavior
     // if callers ever pass an out-of-range value (e.g., from a malformed configuration).
     if (prio < PRIO_MIN) prio = PRIO_MIN;
     if (prio > PRIO_MAX) prio = PRIO_MAX;
     if (setpriority(PRIO_PROCESS, pid, prio) != 0) {
-        LOGE("setpriority failed for pid %d (prio=%d): %s", pid, prio, strerror(errno));
+        int saved_errno = errno;  // v1.2.3 round-44 (F5): snapshot + strerror_r
+        char errbuf[256];
+        strerror_r(saved_errno, errbuf, sizeof(errbuf));
+        LOGE("setpriority failed for pid %d (prio=%d): %s", pid, prio, errbuf);
+        return JNI_FALSE;
     }
+    return JNI_TRUE;
 }

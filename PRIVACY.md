@@ -1,3 +1,367 @@
+## Round-44 changes (2026-09-04)
+
+**No new permissions, no new network endpoints, no new data collection.**
+Privacy-relevant items from this review-fix round:
+
+- **Backup rule files deleted**: `res/xml/backup_rules.xml` and
+  `res/xml/data_extraction_rules.xml` were removed. They have been
+  unreferenced since `allowBackup="false"` (the documented v1.0.4 design
+  decision) — the app still does not participate in Android backup/restore;
+  deleting the dead files changes nothing about data flows.
+- **`usesCleartextTraffic` removed from the manifest** (F15): redundant —
+  `network_security_config.xml` already blocks cleartext traffic entirely
+  (`cleartextTrafficPermitted="false"`), and the manifest attribute is
+  ignored when a networkSecurityConfig is set. No behavior change.
+- **`network_security_config.xml` gained a `debug-overrides` block**
+  (debug builds only; release trust anchors unchanged).
+- **Engine binary minimum-size check lowered 50 MB → 5 MB**
+  (`StockfishNative.java`, A16): the ELF magic + size gate still rejects
+  truncated/stub engine binaries; see the "Engine Binary Integrity" section
+  below (updated).
+- Manifest additions `supportsRtl` + `enableOnBackInvokedCallback` (F13) are
+  pure UI/navigation flags — no data-flow impact. The permission table below
+  remains accurate (8 declared permissions, re-verified against
+  `AndroidManifest.xml`).
+
+## Round-43 changes (2026-09-04)
+
+**No privacy-relevant changes.** The 58 dead i18n keys marked in round-42
+(42-8, D5=A) were removed from `game-logic.js` — they were unreferenced
+translation strings (no code path, no data flow). `chess.html` was rebuilt
+(md5-consistent double build). The rest of the round is documentation:
+README.md restructure, NOTICE / NOTICE-DroidFish / BUILDING.md /
+8×README.license synchronization, and two factual corrections in this file:
+
+- The wake-lock note below now matches the code (round-42, 42-4): the
+  `EngineService` partial wake lock is acquired **once** in `onCreate()`
+  with a 30-minute timeout and is **not** re-acquired by `onStartCommand`
+  (an earlier wording claimed longer sessions re-acquire it — they do not).
+- The "Engine Binary Integrity" section below now matches the code: the
+  runtime checks are the ELF magic check plus a minimum-size check
+  (`StockfishNative.java`; the threshold was 50 MB at the time — round-44
+  (A16) later lowered it to 5 MB, see the round-44 section above); there is
+  no baked-in SHA-256 runtime check.
+  The known-good engine SHA-256 is documented in BUILDING.md for manual
+  verification.
+
+No new permissions, no new network endpoints, no new data collection. The
+permission table below was re-verified against `AndroidManifest.xml`
+(8 declared permissions) and the CSP summaries re-verified against
+`index.html.tpl` / `stats.html`.
+
+## Round-42 changes (2026-08-10)
+
+**No privacy-relevant changes.** FIDE 6.9 timeout-draw copy finalization
+(42-1), flag-fall clock zeroing (42-2), castle-mark designated-file
+preference (42-3), wake-lock comment correction (42-4), license-tag
+unification (42-5), SECURITY_FIXES.md sync (42-6/42-7), dead-key marking
+(42-8), stale-comment batch (42-9), `_stripFnBody` hardening (42-10),
+debug `.debug` applicationId suffix (42-11). No new permissions, no new
+network endpoints, no new data collection.
+
+## Round-41 changes (2026-08-10)
+
+**No privacy-relevant changes.** Robustness consolidation (41-1~41-10).
+Worth noting for completeness: 41-3 adds a 1 MB size cap to settings
+import (local file handling only; fails fast with the existing toast);
+41-7 sanitizes intercepted UCI commands before logging (CR/LF escaping —
+log-injection hygiene, consistent with the round-19 JsBridgeGateway fix).
+No new permissions, no new network endpoints, no new data collection.
+
+## Round-40 changes (2026-08-10)
+
+**No privacy-relevant changes.** Bug-fix tier (40-1~40-6): restartEngine
+self-interrupt fix, castling-rights row checks, FIDE 6.9 strict timeout
+draw, PGN tag-strip regex hardening, `fenToState` strict input validation.
+No new permissions, no new network endpoints, no new data collection.
+
+## Round-39 changes (2026-07-20)
+
+**No privacy-relevant changes.** This round is pure code-quality cleanup
+(continued SonarCloud rule fixes) — no new permissions, no new network
+endpoints, no new data collection, no changes to existing data flows.
+
+Specifically:
+- `ai-bridge.js`, `game-logic.js`, `ui.js`, `ui-interactions.js`,
+  `ui-gameflow.js`, `tablebase.js`: 47× `e&&e.message?e.message:e` →
+  `e?.message?e.message:e` (SonarCloud S6582 — optional chaining, exact
+  semantic equivalent). Affects only in-process error logging format.
+- `ui.js`, `stats.html`: `href.indexOf('http://') !== 0` →
+  `!href.startsWith('http://')` (SonarCloud S7765 — clearer prefix check).
+  Affects only in-process URL scheme detection for the external-browser
+  open path.
+- `ui.js`: removed 3 unused local variables (`rLast`, `prevEval`, `ad`)
+  (SonarCloud S1481/S1854 — dead code removal). No behavior change.
+- `chess.html` rebuild: pure bundle regeneration from chess.src/*.js.
+- BUILDING.md / PRIVACY.md / README.md / NOTICE / 8 README.license /
+  Manual (zh+en) / worklog.md: pure documentation.
+
+The Lichess Tablebase API remains the only network endpoint (unchanged since
+v1.0.4). All other features remain fully offline.
+
+## Round-38 changes (2026-07-20)
+
+**No privacy-relevant changes.** This round is pure code-quality cleanup
+(continued SonarCloud rule fixes) — no new permissions, no new network
+endpoints, no new data collection, no changes to existing data flows.
+
+Specifically:
+- `ui.js`, `worker-pool.js`, `pgn-standard.js`, `tablebase.js`,
+  `ui-interactions.js`, `ai-bridge.js`: SonarCloud rule fixes (S6535, S7765,
+  S7769, S6660, S5869, S6653). All affect only in-process regex character
+  classes, existence checks, math operations, or DOM API modernization; no
+  IPC, no network, no storage changes.
+- `stats.html`: SonarCloud rule fixes (S6353, S7765, S7780). Affects only
+  in-process regex matching, existence checks, and string literal style.
+- `chess.html` rebuild: pure bundle regeneration from chess.src/*.js.
+- BUILDING.md / PRIVACY.md / README.md / NOTICE / 8 README.license /
+  Manual (zh+en) / worklog.md: pure documentation.
+
+All changes are confined to:
+- `src/main/assets/chess.src/{ui,worker-pool,pgn-standard,tablebase,ui-interactions,ai-bridge}.js`
+- `src/main/assets/chess.html` (rebuilt)
+- `src/main/assets/stats.html`
+- `BUILDING.md`, `README.md`, `NOTICE`, `PRIVACY.md`,
+  `src/main/assets/chess.src/README.license`,
+  `src/main/java/com/Regalia/README.license`,
+  `src/main/assets/README.license`, `src/main/README.license`,
+  `src/main/res/README.license`, `src/main/cpp/README.license`,
+  `Manual/README.license`, `assets/README.license`,
+  `worklog.md`, `Manual/Regalia-v1.2.3-manual-{zh,en}.html`
+
+The Lichess Tablebase API remains the only network endpoint (unchanged since
+v1.0.4). All other features remain fully offline.
+
+## Round-37 changes (2026-07-20)
+
+**No privacy-relevant changes.** This round is pure code-quality cleanup
+(SonarCloud rule fixes) — no new permissions, no new network endpoints,
+no new data collection, no changes to existing data flows.
+
+Specifically:
+- `ai-bridge.js`, `game-logic.js`, `state-store.js`, `ui.js`,
+  `worker-pool.js`: SonarCloud rule fixes (S6645, S6644, S7718, S7786,
+  S6653, S7719, S6661, S7760, S7762). All affect only in-process display
+  label selection, error-type specificity, or DOM API modernization; no
+  IPC, no network, no storage changes.
+- `stats.html`: SonarCloud rule fixes (S7762, S7773). Affects only
+  in-process DOM manipulation and parseFloat lexical scope.
+- `engine_jni.cpp`: C++ modernization (cpp:S4962 nullptr, cpp:S1172
+  unused parameter comment). Affects only JNI bridge compilation; no
+  behavior change.
+- `chess.html` rebuild: pure bundle regeneration from chess.src/*.js.
+- BUILDING.md / PRIVACY.md / README.md / NOTICE / 8 README.license /
+  Manual (zh+en) / worklog.md: pure documentation.
+
+All changes are confined to:
+- `src/main/assets/chess.src/{ai-bridge,game-logic,state-store,ui,worker-pool}.js`
+- `src/main/assets/chess.html` (rebuilt)
+- `src/main/assets/stats.html`
+- `src/main/cpp/engine_jni.cpp`
+- `BUILDING.md`, `README.md`, `NOTICE`, `PRIVACY.md`,
+  `src/main/assets/chess.src/README.license`,
+  `src/main/java/com/Regalia/README.license`,
+  `src/main/assets/README.license`, `src/main/README.license`,
+  `src/main/res/README.license`, `src/main/cpp/README.license`,
+  `Manual/README.license`, `assets/README.license`,
+  `worklog.md`, `Manual/Regalia-v1.2.3-manual-{zh,en}.html`
+
+The Lichess Tablebase API remains the only network endpoint (unchanged since
+v1.0.4). All other features remain fully offline.
+
+## Round-36 changes (2026-07-20)
+
+**No privacy-relevant changes.** This round is pure code-deduplication +
+robustness refactoring of chess.src/*.js modules — no new permissions, no
+new network endpoints, no new data collection, no changes to existing
+data flows.
+
+Specifically:
+- `_computeEpTarget` / `_applyKingMove` / `_kingPosAfterMove` extractions
+  in `game-logic.js`: affect only in-process chess move legality/state
+  computation; no data leaves the device. The extracted helpers are
+  byte-for-byte equivalent to the previous inline code (verified by
+  Node-vm smoke tests).
+- `evalBucket` / `_POV_LABEL_KEYS_PLAYER` / `_POV_LABEL_KEYS_WHITE` in
+  `game-logic.js`: centralize the eval-threshold ladder previously
+  duplicated between `ui.js:posDesc` and `pgn-standard.js:_pgnWhitePerspectiveLabel`.
+  Affects only in-process display label selection; no IPC, no network.
+- `isChess960Active()` in `chess960.js`: canonical Chess960-detection
+  predicate. Affects only in-process variant detection; no IPC, no
+  network.
+- `randomSPID()` delegation to `secureRandomInt(960)`: affects only
+  in-process SP-ID selection; no IPC, no network. The 518 fail-safe
+  for crypto-unavailable is preserved.
+- `_engineStopHard()` in `ai-bridge.js`: canonical hard-stop helper.
+  Affects only in-process engine lifecycle; no data leaves the device.
+  The helper closes a real robustness gap (ui.js:5466 was missing the
+  sendToEngine('stop') fallback for older builds) — this is a
+  behavior-correctness fix, not a privacy change.
+- Shredder-FEN detection dedup (3 sites now delegate to
+  `_needsShredderFEN`): affects only in-process FEN/PGN generation;
+  no IPC, no network. **BUG FIX**: the inline copies missed the
+  v1.2.3 round-21 per-color gating fix, misclassifying some standard
+  positions as Chess960. Centralizing fixes this — behavior-correctness,
+  not privacy.
+- `_pad2` in `pgn-standard.js`: trivial zero-pad helper. Affects only
+  in-process time-formatting; no IPC, no network.
+- chess.html rebuild: pure bundle regeneration from chess.src/*.js.
+- BUILDING.md / PRIVACY.md / README.md / NOTICE / 8 README.license /
+  Manual (zh+en) / worklog.md: pure documentation.
+
+All changes are confined to:
+- `src/main/assets/chess.src/{game-logic,chess960,ai-bridge,pgn-standard,ui,ui-gameflow,ui-interactions}.js`
+- `src/main/assets/chess.html` (rebuilt from chess.src/*.js)
+- `BUILDING.md`, `README.md`, `NOTICE`, `PRIVACY.md`,
+  `src/main/assets/chess.src/README.license`,
+  `src/main/java/com/Regalia/README.license`,
+  `src/main/assets/README.license`, `src/main/README.license`,
+  `src/main/res/README.license`, `src/main/cpp/README.license`,
+  `Manual/README.license`, `assets/README.license`,
+  `worklog.md`, `Manual/Regalia-v1.2.3-manual-{zh,en}.html`
+
+The Lichess Tablebase API remains the only network endpoint (unchanged since
+v1.0.4). All other features remain fully offline.
+
+## Round-35 changes (2026-07-20)
+
+**No privacy-relevant changes.** This round is pure code-quality fix
+(SonarCloud BUG + 2 MINOR code smells) + doc sync — no new permissions,
+no new network endpoints, no new data collection, no changes to existing
+data flows.
+
+Specifically:
+- StockfishNative `_lifecycleGeneration` AtomicInteger conversion
+  (SonarCloud java:S3078): affects only in-process engine lifecycle
+  concurrency semantics; no data leaves the device. The fix changes the
+  field type from `volatile int` to `AtomicInteger` to make the `++`
+  operation atomic — behavior is byte-for-byte equivalent.
+- game-logic.js optional-chaining conversion (SonarCloud javascript:S6582
+  ×2 sites): affects only in-process chess logic; no IPC, no network, no
+  storage. The fix changes `!s||!s.board` → `!s?.board` and
+  `!p||p.color!==winnerColor` → `p?.color!==winnerColor` — semantics
+  verified equivalent.
+- BUILDING.md H1 title addition + round-35 build notes: pure documentation.
+- README.md/NOTICE/worklog.md/Manual round-35 entries: pure documentation.
+
+All changes are confined to:
+- `src/main/java/com/Regalia/StockfishNative.java`
+- `src/main/assets/chess.src/game-logic.js`
+- `src/main/assets/chess.html` (rebuilt from chess.src/*.js)
+- `BUILDING.md`, `README.md`, `NOTICE`, `PRIVACY.md`,
+  `src/main/assets/chess.src/README.license`,
+  `src/main/java/com/Regalia/README.license`,
+  `src/main/assets/README.license`, `src/main/README.license`,
+  `src/main/res/README.license`, `src/main/cpp/README.license`,
+  `Manual/README.license`, `assets/README.license`,
+  `worklog.md`, `Manual/Regalia-v1.2.3-manual-{zh,en}.html`
+
+The Lichess Tablebase API remains the only network endpoint (unchanged since
+v1.0.4). All other features remain fully offline.
+
+## Round-34 changes (2026-07-20)
+
+**No privacy-relevant changes.** This round is pure bug-fix (Gitar
+Changes Requested regression + CodeRabbit Major race fix) + doc cleanup
+— no new permissions, no new network endpoints, no new data collection.
+
+Specifically:
+- StockfishNative shutdown race closure: affects only in-process engine
+  lifecycle; no data leaves the device.
+- MainActivity null-engine fallback fix: affects only in-process engine
+  initialization retry logic; no IPC, no network, no storage.
+- README.md/NOTICE/README.license/worklog.md: pure documentation.
+
+All changes are confined to:
+- `src/main/java/com/Regalia/{StockfishNative,MainActivity}.java`
+- `README.md`, `NOTICE`, `src/main/java/com/Regalia/README.license`, `worklog.md`
+
+## Round-33 changes (2026-07-20)
+
+**No privacy-relevant changes.** This round is pure bug-fix + doc cleanup —
+no new permissions, no new network endpoints, no new data collection, no
+changes to existing data flows.
+
+Specifically:
+- StockfishNative shutdown() race fix + engineGoTimed timestamp capture:
+  affects only in-process engine lifecycle; no data leaves the device.
+- ChessWebViewClient isFinishing/isDestroyed check: affects only how
+  external URLs are dispatched to the system browser; the URL itself is the
+  only datum transmitted (unchanged from prior rounds).
+- MainActivity stockfishEngine==null fallback + _stabilizationLock in
+  onResume/onPause: affects only in-process state recovery; no IPC, no
+  network, no storage.
+- HapticManager Application Context normalization + cache timestamp=0 fix:
+  affects only in-process haptic gating; no data leaves the device.
+- NOTICE canonical GPL list update + Manual UI architecture diagram: pure
+  documentation.
+
+All changes are confined to:
+- `src/main/java/com/Regalia/{StockfishNative,ChessWebViewClient,MainActivity,HapticManager}.java`
+- `NOTICE` (canonical GPL list section only)
+- `Manual/Regalia-v1.2.3-manual-{zh,en}.html` (UI architecture diagram + changelog)
+
+The Lichess Tablebase API remains the only network endpoint (unchanged since
+v1.0.4). All other features remain fully offline.
+
+## Round-32 changes (2026-07-20)
+
+**No privacy-relevant changes.** This round is pure bug-fix propagation +
+comment cleanup — no new permissions, no new network endpoints, no new data
+collection, no changes to existing data flows.
+
+Specifically:
+- StockfishNative + EngineHealthMonitor + ChessWebViewClient: switched
+  interval-measurement timestamps from `System.currentTimeMillis()` to
+  `SystemClock.elapsedRealtime()` (monotonic). Affects only in-process
+  engine-health monitoring; no data leaves the device.
+- state-store.js: header comment clarification (no code change).
+- eco-data.js: extracted `_buildEcoLookups()` helper (refactor, no behavior
+  change).
+- pgn-standard.js: corrected a stale comment (no code change).
+- MainActivity + StatsActivity + PermissionHelper + FileIoHelper: stale
+  "API 21" / "Android 5.0" comments → "API 23" / "Android 6.0" to match
+  minSdk=23. Comments only.
+
+All changes are confined to:
+- `src/main/assets/chess.src/{state-store,eco-data,pgn-standard}.js`
+- `src/main/java/com/Regalia/{StockfishNative,EngineHealthMonitor,ChessWebViewClient,MainActivity,StatsActivity,PermissionHelper,FileIoHelper}.java`
+- rebuilt `chess.html` (deterministic build from the .js modules above)
+
+The Lichess Tablebase API remains the only network endpoint (unchanged since
+v1.0.4). All other features remain fully offline.
+
+## Round-31 changes (2026-07-20)
+
+**No privacy-relevant changes.** This round is pure code-quality + stability
+hardening — no new permissions, no new network endpoints, no new data
+collection, no changes to existing data flows.
+
+Specifically:
+- `_evalOrMate` (ai-bridge.js): corrected mate===0 to return fallback eval
+  instead of a -90000 sentinel. Affects in-app eval display only; no data
+  leaves the device.
+- `state-store.js`: dispatch/reset now deep-clone once instead of twice
+  (pure performance optimization; same data, same external behavior).
+- `winnerLacksMatingMaterial` (game-logic.js): refactored into helpers to
+  reduce cognitive complexity. Semantics byte-for-byte equivalent (14-test
+  FIDE 6.9 suite passes).
+- `_settingsImportGen` `|0` → `Math.trunc`: SonarCloud S8786 style fix,
+  no behavioral change.
+- HapticManager + StabilizationHelper: cache/throttle timestamps switched
+  from `System.currentTimeMillis()` to `SystemClock.elapsedRealtime()`
+  (monotonic). No new sensor access, no new data collected.
+- MainActivity: `_isFallbackMode` flag + `_stabilizationLock` synchronization.
+  Affects only in-process event routing; no IPC, no network, no storage.
+
+All changes are confined to:
+- `src/main/assets/chess.src/{ai-bridge,state-store,game-logic}.js`
+- `src/main/java/com/Regalia/{HapticManager,StabilizationHelper,MainActivity}.java`
+- rebuilt `chess.html` (deterministic build from the .js modules above)
+
+The Lichess Tablebase API remains the only network endpoint (unchanged since
+v1.0.4). All other features remain fully offline.
+
 <!--
   Privacy Policy — Regalia
   Copyright (C) 2026 Regalia
@@ -28,6 +392,13 @@ Regalia's core features work entirely offline. The only network-dependent featur
 
 All other features, including AI gameplay, review analysis, PGN import/export, and engine configuration, work without any network connection.
 
+**Content Security Policy (verified round-43):** both WebView pages enforce a
+CSP meta policy. The main page (`chess.html`) uses `default-src 'none'` with
+`connect-src https://tablebase.lichess.ovh` — the tablebase API is the only
+permitted network origin — plus `object-src 'none'`, `form-action 'none'` and
+`base-uri 'self'`. The statistics page (`stats.html`) uses
+`connect-src 'none'` — it cannot make any network request at all.
+
 ## Local Data
 
 Game data (board positions, move records, engine settings, PGN cache entries, eval cache) is stored locally on the device using browser localStorage, Android SharedPreferences, and app-private files. The on-device storage locations are:
@@ -53,6 +424,38 @@ This data:
 - The PGN cache entries contain only chess game records (PGN format) — no personal or device-identifying information. They are never uploaded.
 - The eval cache (`eval_cache.json`) contains per-move Stockfish evaluation scores (centipawn values, mate distances, search depths, WDL probabilities) keyed by review step index. It contains no personal or position-identifying information beyond the chess evaluation data itself. (v1.0.7+: capped at 2000 entries via LRU eviction — the currently-viewed step is never evicted; eviction order is preserved across app restarts.)
 - The tag files contain user-defined tag strings (e.g., "opening", "tactics") for organizing PGN cache entries. They contain no personal or device-identifying information.
+
+### v1.2.3 round-30: First-principles per-file review + robustness/perf optimizations (pure code change)
+
+The v1.2.3 round-30 change (2026.7.19) is a continuation of the per-file, per-line first-principles review (3 parallel review agents covering all 11 JS modules + 19 Java files + C++/build configs). 20 actionable findings identified; 18 implemented (2 deferred — `_escapeHTML` wrapper kept for backward compatibility, `JsBridgeGateway.isSafeFileName` `..` check kept as defense-in-depth). All changes are semantics-preserving or pure robustness/perf improvements; no behavior change for valid inputs. Fixes span: (1) FIDE 6.9 K+B+B same-color gap in `winnerLacksMatingMaterial`; (2) MediaStore SQL LIKE wildcard injection in `FileIoHelper.addMediaStoreResults`; (3) `StatsActivity.loadAssetAsBase64` missing path-traversal check; (4) `EngineConfigHelper.detectBigCoreCount` BogoMIPS overwriting CPU max MHz; (5) MainActivity `stabilizationHelper`/`stabilizationEnabled` declared `volatile`; (6) `MainActivity.scheduleInitRetry` shows fallback UI after retries exhausted; (7) `StockfishNative.engineGoDepth` clamps depth to `[1, 60]`; (8) `state-store._notifyListeners` deep-clones the state snapshot handed to listeners; (9) `_savePGNYes` / `_makeLoadingClickable` polling now bounded; (10) `onSettingsImported` safety-net setTimeouts use a generation token; (11) `_requestBatchEval` not-ready branch no longer spins; (12) `_updateCtrlInfoPanel` uses `getElementById` instead of O(cards) text-scan; (13) `HapticManager.isHapticEnabled` caches the system setting for 5s; (14) `PgnCacheManager.sanitizeName` uses pre-compiled Patterns; (15) `_tbCache` LRU refresh saves one Map lookup; (16) `_parsePGN` brace-comment loop pre-checks; (17) `showToast` tracks the inner removal timer; (18) dead state / duplicated logic / dead API removed. **No new permissions, no new network access, no new data collection.** This is a pure code-organization + bug-fix + robustness + performance round.
+
+### v1.2.3 round-29: PR #52 SonarCloud + CodeRabbit review fixes (pure code change)
+
+The v1.2.3 round-29 change (2026.7.19) processes the PR #52 review reports (`SonarCloud_PR52_Issues_Summary.docx` + `PR52_Unresolved_Issues_Optimization.docx`). Every claimed issue was verified against the actual source — 14 real defects fixed, 6 false positives identified and skipped (with rationale documented in `README.md` round-29 entry and `worklog.md`). Fixes span: (1) new `winnerLacksMatingMaterial` function for proper FIDE 6.9 timeout-draw (asymmetric case); (2) `_restoreClocks` no longer calls `initGameClocks()` (which was overwriting restored clock values — Undo/Redo clock restoration regression fix); (3) `README.md` removed public signing-key credentials from round-13 release notes; (4) 49 AGPL v3 → GPL v3 license-tag corrections across NOTICE + 5 README.license files for 4 DroidFish-derived files (tablebase.js, stats.html, worker-pool.js, JsBridgeGateway.java); (5) SonarCloud code-quality cleanups (S8786 PGN regex canonicalization at 5 sites, S6582 optional chaining at 6 sites, S3358 nested ternary at 2 sites, S3504 var→const at 4 sites, S1481 dead local removal, S6551 toString fallback, S7780/S7781 String.raw + replaceAll); (6) documentation sync (permission list, manual toolbar description, res/README.license xml/ summary, worklog PDF count). **No new permissions, no new network access, no new data collection.** This is a pure code-organization + bug-fix + documentation round.
+
+### v1.2.3 round-28: Undo/Redo clock restoration audit + baseSec completeness (pure code change)
+
+The v1.2.3 round-28 change (2026.7.19) audits the Undo/Redo clock restoration feature requested by the user. The feature was already implemented in round-23 (Q3 fix) via `_snapshotClocks`/`_restoreClocks` helpers — a full round-trip verification confirms it works correctly (Undo records remaining time, Redo restores it). The only code change is adding `baseSec` to the clock snapshot for completeness (was missing — only affected PGN `[TimeControl]` tag which reads `gameClocks.baseSec`, but the existing value was retained so no bug). Also performed a first-principles review of all clock-related code (`recordMoveEnd`, `_tickGameClock`, `_restoreClocks`, `_redoStack` push timing) — all confirmed correct. **No new permissions, no new network access, no new data collection.** This is a pure code-completeness + audit round.
+
+### v1.2.3 round-27: First-principles review + manual mockup fix (pure code change)
+
+The v1.2.3 round-27 change (2026.7.19) is a first-principles review continuation. Verified i18n completeness (all 480+ keys have both zh and en values — no gaps). Fixed a misleading comment in `_onGameClockExpired` about `isDeadPosition` semantics. Removed a redundant `timeout` draw branch in `_deriveGameResult` (unreachable — the fallback already handles it). Fixed the cache-manager mockup in both zh and en manuals: removed the 📥 (import) button elements that were removed from the actual UI in v1.0.4 Rev24 but never removed from the mockup; updated text descriptions from "three buttons" to "two buttons". Updated the README.md directory tree with current file sizes (ui.js 6,791 lines, HapticManager.java 471 lines). **No new permissions, no new network access, no new data collection.** This is a pure code-comment + redundancy + documentation-accuracy round.
+
+### v1.2.3 round-26: PGN Termination/comment配套修复 for FIDE 6.9 timeout draw (pure code change)
+
+The v1.2.3 round-26 change (2026.7.19) is a follow-up to round-25's FIDE 6.9 timeout insufficient-material draw feature. The round-25 fix correctly set the game-over status to `draw_insufficient` with `_timeoutWinnerColor=null` for the draw case, but the PGN export side still treated all `timeout` statuses as "Time forfeit". This round closes that gap: `_buildTerminationTag` now distinguishes timeout-win from timeout-draw; the last-move `{}` comment appends the new `pgn_timeout_draw_insufficient` i18n string for the draw case; `_deriveGameResult` has explicit draw_* status branches; and Termination tags were added for all terminal statuses (stalemate, 50-move, 75-move, threefold, fivefold, dead position, checkmate) that were previously missing them. New i18n key: `pgn_timeout_draw_insufficient` (zh/en). **No new permissions, no new network access, no new data collection.** This is a pure PGN-export correctness fix.
+
+### v1.2.3 round-25: SonarCloud S6582/S3358 style cleanup + FIDE 6.9 timeout draw (pure code change)
+
+The v1.2.3 round-25 change (2026.7.19) continues the SonarCloud style-cleanup backlog and closes a feature gap in timeout adjudication. A Python script mechanically converted 174 lines of `x && x.prop` patterns to optional chaining `x?.prop` across 8 JS files (semantically identical — only same-identifier `&&` chains converted; typeof guards and method-call chains skipped). 4 high-value nested ternaries were manually flattened to if/else chains for readability (one also fixes a latent falsy-0 bug where `mate=0` fell through to the wrong branch). The FIDE 6.9 timeout insufficient-material draw feature was added: `_onGameClockExpired` now calls `isDeadPosition(gameState)` before declaring the winner; if the position is a dead position (K vs K, K+minor vs K, K+B vs K+B same-color, K+B+B same-color vs K), the game is drawn by insufficient material instead of won on time. The clock-undo feature (round-23 Q3) was re-verified as complete. **No new permissions, no new network access, no new data collection.** The AndroidManifest, the Stockfish engine binary, the Lichess tablebase API surface, and the TLS pinning configuration are all unchanged. This is a pure code-style + feature-completeness round.
+
+### v1.2.3 round-24: God Function split + StatsActivity license label fix (pure code change)
+
+The v1.2.3 round-24 change (2026.7.19) continues the God Function refactoring identified in round-23. Two large ui.js functions were split into smaller, focused helpers: `_renderReviewMode` (552 → 357 lines, -35%) extracted 8 helper functions + 1 module-level const; `_reviewAnalyzeAdvance` (218 → 171 lines, -22%) extracted 2 helpers (one eliminating S1192 code duplication). `_resetGameUIState` (231 lines) was analyzed and left unchanged — it's a flat sequence of typeof guards with low cognitive complexity. Additionally, 12 historical changelog entries in `README.license` (java/com/Regalia) that incorrectly labelled `StatsActivity.java` as "AGPL v3" were corrected to "GPL v3" to match the file header (no source code change — the classification was always GPL v3). **No new permissions, no new network access, no new data collection.** The AndroidManifest, the Stockfish engine binary, the Lichess tablebase API surface, and the TLS pinning configuration are all unchanged. This is a pure code-organization + license-metadata round.
+
+### v1.2.3 round-23: PR #51 CodeRabbit review fixes + SonarCloud triage (pure code change)
+
+The v1.2.3 round-23 change (2026.7.19) systematically processes the 18 remaining CodeRabbit review items from PR #51 plus the SonarCloud 931-issue code-smell report (both PDFs are AI-generated; every item was verified against the actual source before any change). 16 of the 18 PR51 items are real defects and have been fixed (Q1, Q2, Q3, Q4, Q5, Q6, Q7, Q9, Q10, Q11, Q12, Q13, Q14, Q16, Q17, Q18); 2 are false positives (Q15 — assets/README.license has no v1.2.1 manual references; Q8 — worker-pool.js's headerRe was already quote-aware). The fixes touch `HapticManager.java` (PWLE reflection removed, replaced by the public `VibrationEffect.createWaveform` API), `ui.js` / `ui-interactions.js` / `ui-gameflow.js` / `ai-bridge.js` / `tablebase.js` (PR51 functional fixes), `stats.html` (PGN tag-strip regex quote-awareness + JSON-in-HTML `<` encoding), `AndroidManifest.xml` (comment fix only — signal #2 not #1), `README.license` (license label corrections), `NOTICE`, `BUILDING.md`, `README.md`, the bilingual manuals (round-23 changelog entries), and the rebuilt `chess.html`. **No new permissions, no new network access, no new data collection.** The AndroidManifest's permission list is unchanged (INTERNET, WAKE_LOCK, VIBRATE, WRITE_EXTERNAL_STORAGE (maxSdk 28), READ_EXTERNAL_STORAGE (maxSdk 32), FOREGROUND_SERVICE, FOREGROUND_SERVICE_SPECIAL_USE, POST_NOTIFICATIONS) — round-23 only corrects a comment inside the existing `<queries>` block. The Stockfish engine binary, the Lichess tablebase API surface, and the TLS pinning configuration are all unchanged.
 
 ### v1.2.3 round-22: eval bar perspective fix (pure code change)
 
@@ -232,7 +635,7 @@ Version: `versionCode=121`, `versionName="1.2.1"`.
 
 > **Note on sensors (v1.0.5+):** The board anti-shake feature (`StabilizationHelper.java`) reads the `TYPE_LINEAR_ACCELERATION` sensor for OIS-style translation compensation. This sensor does **not** require any Android permission and the raw motion data is **never** stored or transmitted — it is consumed in real time to apply a `transform: translate()` on the board element and discarded. No permission declaration is needed in the manifest for this sensor.
 
-> **Note on the wake lock (v1.1.0 Phase 57+):** The `EngineService` foreground service acquires a partial wake lock with a **30-minute timeout** as a safety net. If the OEM silently kills the service and `onDestroy` never runs, the wake lock is released automatically after 30 minutes — preventing indefinite CPU wake on misbehaving OEM ROMs. Normal analysis sessions are well under this window; longer sessions re-acquire by re-entering the foreground state.
+> **Note on the wake lock (v1.1.0 Phase 57+):** The `EngineService` foreground service acquires a partial wake lock with a **30-minute timeout** as a safety net. If the OEM silently kills the service and `onDestroy` never runs, the wake lock is released automatically after 30 minutes — preventing indefinite CPU wake on misbehaving OEM ROMs. The lock is acquired **once** in `onCreate()` with the 30-minute timeout and is **not** re-acquired by `onStartCommand`, so 30 minutes after acquisition the CPU may sleep again (wording corrected in round-43 per the round-42 42-4 comment fix — an earlier version of this note claimed longer sessions re-acquire the lock; they do not).
 
 ## Haptic Feedback (v1.0.8+)
 
@@ -247,8 +650,16 @@ v1.0.8 introduces personified haptic feedback — each of the six piece types (p
 
 The Stockfish 18 engine binary (`libstockfish.so`) is shipped as an arm64-v8a native library inside the APK. On first launch, `StockfishNative.java` validates the binary:
 
-- **ELF magic check** (first 4 bytes = `\x7fELF`) — guards against corrupted downloads.
-- **SHA-256 hash verification** against a baked-in expected hash — guards against tampering.
+- **ELF magic check** (first 4 bytes = `\x7fELF`) — guards against corrupted or non-ELF files.
+- **Minimum-size check** (5 MB; lowered from 50 MB in round-44, A16) — the genuine Stockfish 18 binary is ~114 MB; truncated or stub files are rejected.
+
+The known-good SHA-256 of the official Stockfish 18 arm64-v8a-dotprod binary
+(`8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5`) is
+documented in BUILDING.md and is verified three-way (source file / deployed
+jniLibs copy / APK-embedded library) in every release round; the app itself
+performs the ELF + size checks above at runtime (this section was corrected
+in round-43 — it previously claimed a baked-in SHA-256 runtime check that
+the current code does not perform).
 
 If either check fails, the engine refuses to start and reports the error to the user via the UI. The binary is never downloaded at runtime; it is statically embedded in the APK.
 

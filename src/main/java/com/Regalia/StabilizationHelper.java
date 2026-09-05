@@ -67,6 +67,7 @@ import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.util.Log;
 import android.view.Surface;
 import android.view.WindowManager;
@@ -81,16 +82,29 @@ public class StabilizationHelper implements SensorEventListener {
     // Max board translation in CSS pixels.
     private static final float MAX_DISPLACEMENT_PX = 8.0f;
 
-    // Decay for integration (slower = better tracking, returns to center ~300ms).
-    private static final float VELOCITY_DECAY = 0.92f;
-    private static final float DISPLACEMENT_DECAY = 0.95f;
+    // v1.2.3 round-44 (D4): 逐事件常量衰减（0.92/0.95）改为时间常数指数衰减
+    //   Math.exp(-dt/tau)。旧实现在 dt 偏离标称 20ms 的设备上，等效每秒衰减率
+    //   随采样率漂移（50Hz 设备与 100Hz 设备手感不同）。
+    //   TAU_VELOCITY_S=0.05：速度项快速收敛，抑制低频漂移（较旧的等效值
+    //   -0.02/ln(0.92)=0.24s 更激进，取 reviewer 建议值）。
+    //   TAU_DISPLACEMENT_S=0.39：由 DISPLACEMENT_DECAY=0.95 @ dt=0.02 等效换算
+    //   (-0.02/ln(0.95))，位移回中特性与旧实现一致（~300ms 回中）。
+    private static final float TAU_VELOCITY_S = 0.05f;
+    private static final float TAU_DISPLACEMENT_S = 0.39f;
 
-    private static final long JS_CALLBACK_MIN_INTERVAL_MS = 16;
+    // v1.2.3 round-44 (D12): 节流 16ms -> 33ms（60Hz -> 30Hz）。传感器为
+    //   SENSOR_DELAY_GAME(~50Hz)，16ms 节流实际被采样率限在 ~50Hz 而无收益，
+    //   却只省少量 evaluateJavascript；33ms 将 JS 调用与主线程 Runnable 开销
+    //   减半，30Hz 的视觉平滑度对 ±8px 的微调位移已足够（位移幅度小、变化慢）。
+    private static final long JS_CALLBACK_MIN_INTERVAL_MS = 33;
 
     private final SensorManager sensorManager;
     private final WeakReference<WebView> webViewRef;
     private final Handler mainHandler;
     private final WindowManager windowManager;
+    // v1.2.3 round-44 (D9): 保留原始 context 供 API 30+ 的 Context.getDisplay()
+    //   取屏幕旋转（WindowManager.getDefaultDisplay() 自 API 30 弃用）。
+    private final Context context;
 
     private Sensor linAccelSensor;
 
@@ -101,6 +115,7 @@ public class StabilizationHelper implements SensorEventListener {
     private long lastJsCallbackTime = 0;
 
     public StabilizationHelper(Context context, WebView webView) {
+        this.context = context;
         this.sensorManager = (SensorManager) context.getSystemService(Context.SENSOR_SERVICE);
         this.webViewRef = new WeakReference<>(webView);
         this.mainHandler = new Handler(Looper.getMainLooper());
@@ -209,6 +224,15 @@ public class StabilizationHelper implements SensorEventListener {
     public void onAccuracyChanged(Sensor sensor, int accuracy) { }
 
     private int getDisplayRotation() {
+        // v1.2.3 round-44 (D9): API 30+ 优先用 Context.getDisplay()（
+        //   WindowManager.getDefaultDisplay() 已弃用）；取不到（如非可视化
+        //   context 返回 null）时回退旧分支。
+        if (android.os.Build.VERSION.SDK_INT >= 30 && context != null) {
+            try {
+                android.view.Display d = context.getDisplay();
+                if (d != null) return d.getRotation();
+            } catch (Throwable ignored) {}
+        }
         if (windowManager == null) return Surface.ROTATION_0;
         try {
             return windowManager.getDefaultDisplay().getRotation();
@@ -250,10 +274,14 @@ public class StabilizationHelper implements SensorEventListener {
         velY += ay * dt;
         dispX += velX * dt;
         dispY += velY * dt;
-        velX *= VELOCITY_DECAY;
-        velY *= VELOCITY_DECAY;
-        dispX *= DISPLACEMENT_DECAY;
-        dispY *= DISPLACEMENT_DECAY;
+        // v1.2.3 round-44 (D4): 时间常数指数衰减 —— 衰减量只取决于实际流逝
+        //   时间 dt（PHASE 32 的 dt 积分保留），与采样率无关。
+        float decayVel = (float) Math.exp(-dt / TAU_VELOCITY_S);
+        float decayDisp = (float) Math.exp(-dt / TAU_DISPLACEMENT_S);
+        velX *= decayVel;
+        velY *= decayVel;
+        dispX *= decayDisp;
+        dispY *= decayDisp;
         dispatchTransform();
     }
 
@@ -327,8 +355,18 @@ public class StabilizationHelper implements SensorEventListener {
         boardPxX = Math.max(-MAX_DISPLACEMENT_PX, Math.min(MAX_DISPLACEMENT_PX, boardPxX));
         boardPxY = Math.max(-MAX_DISPLACEMENT_PX, Math.min(MAX_DISPLACEMENT_PX, boardPxY));
 
-        // Throttle JS callback
-        long now = System.currentTimeMillis();
+        // Throttle JS callback.
+        // v1.2.3 round-31 (first-principles): use SystemClock.elapsedRealtime()
+        //   instead of System.currentTimeMillis() — the wall clock can jump
+        //   backward (user manually changes date/time, NTP sync), which would
+        //   make `now - lastJsCallbackTime` go negative. Since the throttle
+        //   check is `< JS_CALLBACK_MIN_INTERVAL_MS` (16ms, positive), a
+        //   negative delta would always satisfy it → EVERY sensor event
+        //   would be skipped → stabilization freezes until the wall clock
+        //   catches back up to its previous value (could be hours/days if
+        //   the user changed the date significantly). Same fix class as
+        //   HapticManager.isHapticEnabled() round-31.
+        long now = SystemClock.elapsedRealtime();
         if (now - lastJsCallbackTime < JS_CALLBACK_MIN_INTERVAL_MS) return;
         lastJsCallbackTime = now;
 
@@ -339,7 +377,28 @@ public class StabilizationHelper implements SensorEventListener {
      * Push the transform (translation only) to the WebView.
      * Sets CSS custom properties --stab-x, --stab-y on :root.
      * The .bwrap.stabilized CSS rule consumes them.
+     *
+     * v1.2.3 round-44 (D11): 复用单个 Runnable 字段 + volatile String 载荷，
+     *   removeCallbacks + post —— 旧实现每次调用新建匿名 Runnable 并排队，
+     *   传感器 50Hz 下若主线程繁忙会让大量过期 transform 积压在消息队列里
+     *   依次执行（画面追赶旧数据）。现在同一时刻最多一个待执行实例，新载荷
+     *   直接覆盖旧载荷（transform 是状态量而非事件流，覆盖即最新语义）。
      */
+    private volatile String pendingTransformJs;
+    private final Runnable transformRunnable = new Runnable() {
+        @Override
+        public void run() {
+            try {
+                String js = pendingTransformJs;
+                if (js == null) return;
+                WebView v = webViewRef.get();
+                if (v != null) v.evaluateJavascript(js, null);
+            } catch (Throwable e) {
+                Log.w(TAG, "evaluateJavascript failed", e);
+            }
+        }
+    };
+
     private void applyTransform(float x, float y) {
         WebView wv = webViewRef.get();
         if (wv == null) return;
@@ -350,24 +409,20 @@ public class StabilizationHelper implements SensorEventListener {
         //   the current codebase (Rev64 removed rotation sensors), so the
         //   removeProperty was a no-op executed ~50 times per second. The
         //   one-time clear is now done in start() (above).
+        // v1.2.3 round-44 (D12): .bwrap 元素引用在 JS 侧缓存
+        //   (window.__stabBwrap)，避免 30Hz 的 querySelector 全文档查询；
+        //   元素失效（被移除出 DOM）时自动重查并更新缓存。
         final String finalJs = "(function(){var r=document.documentElement.style;"
                 + "r.setProperty('--stab-x','" + sx + "px');"
                 + "r.setProperty('--stab-y','" + sy + "px');"
-                + "var b=document.querySelector('.bwrap');"
+                + "var b=window.__stabBwrap;"
+                + "if(!b||!b.isConnected){b=window.__stabBwrap=document.querySelector('.bwrap');}"
                 + "if(b){b.classList.add('stabilized');}"
                 + "})();";
         try {
-            mainHandler.post(new Runnable() {
-                @Override
-                public void run() {
-                    try {
-                        WebView v = webViewRef.get();
-                        if (v != null) v.evaluateJavascript(finalJs, null);
-                    } catch (Throwable e) {
-                        Log.w(TAG, "evaluateJavascript failed", e);
-                    }
-                }
-            });
+            pendingTransformJs = finalJs;
+            mainHandler.removeCallbacks(transformRunnable);
+            mainHandler.post(transformRunnable);
         } catch (Throwable e) {
             Log.w(TAG, "applyTransform post failed", e);
         }

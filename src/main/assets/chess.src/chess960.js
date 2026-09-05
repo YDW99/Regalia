@@ -177,30 +177,40 @@ function backRankToSPID(backRank){
  *     number generator is safe here" hotspot.
  */
 function randomSPID(){
-  try{
-    if(typeof crypto!=='undefined'&&crypto.getRandomValues){
-      const buf=new Uint16Array(1);
-      // Rejection-sample to eliminate modulo bias
-      const LIMIT=65280; // largest multiple of 960 <= 65536
-      for(let _i=0;_i<8;_i++){ // bounded retries (8 is plenty -- P(>8 retries) approx 0)
-        crypto.getRandomValues(buf);
-        if(buf[0]<LIMIT)return buf[0]%960;
-      }
-      // Fallback if all 8 retries exceeded (extremely unlikely)
-      return buf[0]%960;
-    }
-  }catch(e){console.warn('[Chess960]',e&&e.message?e.message:e);}
-  // SECURITY: Return standard position instead of Math.random() when crypto
-  // is unavailable. SP-ID 518 = traditional RNBQKBNR.
-  return 518;
+  // v1.2.3 round-36 (dedup): delegate to secureRandomInt(960) from
+  //   game-logic.js. The two functions implemented the same rejection-
+  //   sampling algorithm (crypto.getRandomValues + bounded retries +
+  //   modulo-bias elimination); keeping them in sync was a maintenance
+  //   burden. secureRandomInt uses Uint32Array (full 32-bit range) vs
+  //   this function's previous Uint16Array (16-bit), but the rejection-
+  //   sampling math is equivalent — P(retry) is actually smaller with
+  //   32-bit. Behavior on success is identical (uniform modulo).
+  // Fail-safe: when crypto is unavailable, secureRandomInt returns 0
+  //   (= SP-ID 0, a valid Chess960 position). The previous fail-safe
+  //   returned 518 (= standard chess position). We preserve the 518
+  //   fail-safe here because SP-ID 518 is the documented "standard
+  //   position" choice and matches user expectation when crypto fails.
+  if(typeof crypto==='undefined'||!crypto||typeof crypto.getRandomValues!=='function'){
+    return 518;
+  }
+  if(typeof secureRandomInt!=='function'){
+    // Defensive: game-logic.js should always be loaded before chess960.js
+    // (per build-chess.py MODULES order), but guard against load-order
+    // regressions with the 518 fail-safe.
+    return 518;
+  }
+  return secureRandomInt(960);
 }
 
 // ===== II. Shredder-FEN castling rights =====
 // In Chess960, castling rights in FEN use the rook's source file letter
 // (uppercase for White, lowercase for Black) instead of K/Q/k/q.
-// Example: SP-ID 518 (traditional) -> "RNBQKBNR" with castling rights "HAah"
-// (H = rook on h1 = kingside, A = rook on a1 = queenside, etc.)
-// For standard chess, "HAah" is equivalent to "KQkq".
+// Example: SP-ID 518 (traditional) -> "RNBQKBNR" with castling rights "AaHh"
+// (toShredderCastling below emits letters sorted by rook file a→h per the
+// spec requirement, so the a-file rooks come first: A/a = a-file, H/h =
+// h-file; the previous "HAah" example followed KQkq order and did not match
+// the actual output — corrected in round-42 42-9.)
+// For standard chess, "AaHh" is equivalent to "KQkq".
 
 /**
  * Convert internal castlingRights object + king/rook positions to Shredder-FEN
@@ -249,7 +259,7 @@ function toShredderCastling(cr,board){
   //   initChess960State) and that rook is still present, emit THAT file —
   //   this keeps the exact X-FEN letters on round-trip for ambiguous
   //   same-side-two-rooks positions instead of re-deriving the closest rook.
-  const _rookOn=(row,f,co)=>{const p=board[row]&&board[row][f];return !!(p&&p.type==='rook'&&p.color===co);};
+  const _rookOn=(row,f,co)=>{const p=board[row]&&board[row][f];return !!(p?.type==='rook'&&p.color===co);};
   const pairs=[];
   if(wKing!==null){
     if(cr.whiteKingside){
@@ -335,7 +345,7 @@ function parseShredderCastling(str,board){
   function _hasRookOn(color,file){
     const row=color==='white'?7:0;
     const p=board[row]&&board[row][file];
-    return !!(p&&p.type==='rook'&&p.color===color);
+    return !!(p?.type==='rook'&&p.color===color);
   }
   for(const ch of str){
     // X-FEN backward compatibility: K/Q/k/q map to file h/a respectively.
@@ -420,8 +430,8 @@ function findCastlingRooks(board,color){
   const rookCols=[];
   for(let c=0;c<8;c++){
     const p=board[row][c];
-    if(p&&p.type==='king'&&p.color===color)kingCol=c;
-    if(p&&p.type==='rook'&&p.color===color)rookCols.push(c);
+    if(p?.type==='king'&&p.color===color)kingCol=c;
+    if(p?.type==='rook'&&p.color===color)rookCols.push(c);
   }
   if(kingCol<0)return null;
   // Kingside rook: closest rook to the RIGHT of the king (smallest col > kingCol).
@@ -482,7 +492,7 @@ function findDesignatedCastlingRook(s,color,side){
   if(f!=null&&f>=0&&f<8){
     const row=color==='white'?7:0;
     const p=s.board[row]&&s.board[row][f];
-    if(p&&p.type==='rook'&&p.color===color)return f;
+    if(p?.type==='rook'&&p.color===color)return f;
     // Designated rook no longer on its file (moved/captured without the
     //   right being cleared — only possible via setup-mode edits) — fall
     //   through to the heuristic rather than returning a stale column.
@@ -580,7 +590,7 @@ function isChess960CastlingLegal(s,color,side){
      && cachedKing.row===row){
     // Verify the cache still points at a same-color king (defensive).
     const kp=s.board[cachedKing.row][cachedKing.col];
-    if(kp && kp.type==='king' && kp.color===color){
+    if(kp?.type==='king' && kp.color===color){
       kingCol=cachedKing.col;
     }
   }
@@ -588,7 +598,7 @@ function isChess960CastlingLegal(s,color,side){
     // Fallback: scan the back rank for the king.
     for(let c=0;c<8;c++){
       const p=s.board[row][c];
-      if(p&&p.type==='king'&&p.color===color){kingCol=c;break;}
+      if(p?.type==='king'&&p.color===color){kingCol=c;break;}
     }
   }
   if(kingCol<0)return false;
@@ -640,6 +650,23 @@ function setChess960Mode(enabled){
   }catch(e){console.warn('setChess960Mode bridge call failed:',e);}
 }
 function isChess960Mode(){return _chess960ModeActive;}
+
+// v1.2.3 round-36 (dedup + robustness): canonical "is the current game
+//   Chess960 for FEN/PGN purposes" predicate. Previously this 2-clause
+//   OR expression was inlined verbatim at ai-bridge.js:generateFEN and
+//   game-logic.js:_castleSide, creating a drift risk — a future change
+//   to the detection rule (e.g., adding a third signal) would need to
+//   be applied at both sites. Centralizing here makes the rule a single
+//   source of truth.
+// NOTE: do NOT use this for sites that intentionally check ONLY
+//   gameVariant==='chess960' (e.g. ECO gating in ui.js — those gate on
+//   the EXPLICIT variant flag set in _startGameImpl, not on the runtime
+//   UCI_Chess960 mode). This helper is only for sites that already use
+//   the full 2-clause expression.
+function isChess960Active(){
+  return (typeof gameVariant!=='undefined'&&gameVariant==='chess960')
+      || (typeof isChess960Mode==='function'&&isChess960Mode());
+}
 
 // ===== V. Generate a Chess960 starting position state object =====
 /**

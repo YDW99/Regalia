@@ -695,7 +695,7 @@ function parsePGN(pgnText){
     // no `$` end-anchor) so it works for single-line PGN where tags and
     // movetext coexist on one line. The previous `/^\[.*\]$/gm` required the
     // ENTIRE line to be `[...]`, which never matched single-line PGN.
-    let mtCheck=text.replace(/\[\w+\s+\S[^\]]*\]/g,'').trim(); // v1.2.3 round-20 (S8786): 相邻量词类互斥，消除超线性回溯
+    let mtCheck=text.replace(/\[\s*[A-Za-z]\w*\s+(?:"(?:[^"\\]|\\.)*"\s*|\S[^\]\n]*?)\]/g,'').trim(); // v1.2.3 round-46 (PR53 CR#11): broadened tag regex (same as tablebase.js:211 round-40) — also strips UNQUOTED tag values such as [WhiteElo 2400], which the quoted-only round-29 regex left in the movetext (breaking Black-to-move detection and tokenization). Backtracking-safe: quoted branch unchanged, unquoted branch starts with a non-space char.
     const firstNumMatch=mtCheck.match(/^(\d+\.+)/);
     if(firstNumMatch&&firstNumMatch[1].includes('...')){
       isBlackToMoveStart=true;
@@ -710,7 +710,7 @@ function parsePGN(pgnText){
   // letter). This avoids stripping `[%csl ...]` / `[%cal ...]` / `[%eval ...]`
   // / `[%emt ...]` from inside brace comments (since `%` is not in [A-Za-z]),
   // and works correctly for single-line PGN files (no `^` line-anchor).
-  let moveText=text.replace(/\[\w+\s+\S[^\]]*\]/g,''); // v1.2.3 round-20 (S8786): 相邻量词类互斥，消除超线性回溯
+  let moveText=text.replace(/\[\s*[A-Za-z]\w*\s+(?:"(?:[^"\\]|\\.)*"\s*|\S[^\]\n]*?)\]/g,''); // v1.2.3 round-46 (PR53 CR#11): broadened tag regex (see line 698 above) — also strips unquoted tag values.
   // Remove comments (brace-style).
   // v1.0.5 Round-6 Rev61 (2026.6.27) FIX: was `while(moveText.includes('{'))...`
   // which infinite-loops on a malformed PGN with an unclosed `{` (no matching `}`).
@@ -1515,7 +1515,7 @@ function extractMoveTimes(pgnText){
     //   (same as parsePGN at lines 696/711). The old `/^\[.*\]$/gm` only
     //   stripped headers occupying an ENTIRE line — for single-line PGN the
     //   headers survived and broke this Black-to-move detection.
-    let mtCheck=text.replace(/\[\w+\s+\S[^\]]*\]/g,'').trim(); // v1.2.3 round-20 (S8786): 相邻量词类互斥，消除超线性回溯
+    let mtCheck=text.replace(/\[\s*[A-Za-z]\w*\s+(?:"(?:[^"\\]|\\.)*"\s*|\S[^\]\n]*?)\]/g,'').trim(); // v1.2.3 round-46 (PR53 CR#11): broadened tag regex (same as tablebase.js:211 round-40) — also strips UNQUOTED tag values such as [WhiteElo 2400], which the quoted-only round-29 regex left in the movetext (breaking Black-to-move detection and tokenization). Backtracking-safe: quoted branch unchanged, unquoted branch starts with a non-space char.
     const firstNumMatch=mtCheck.match(/^(\d+\.+)/);
     if(firstNumMatch&&firstNumMatch[1].includes('...'))isBlackToMoveStart=true;
   }
@@ -1555,7 +1555,7 @@ function extractMoveTimes(pgnText){
   //   survived and its board coordinates (e.g. "b1") were mis-tokenized as
   //   pawn moves — shifting every subsequent time entry by one slot and
   //   swapping the White/Black attribution.
-  let moveText=text.replace(/\[\w+\s+\S[^\]]*\]/g,''); // v1.2.3 round-20 (S8786): 相邻量词类互斥，消除超线性回溯
+  let moveText=text.replace(/\[\s*[A-Za-z]\w*\s+(?:"(?:[^"\\]|\\.)*"\s*|\S[^\]\n]*?)\]/g,''); // v1.2.3 round-46 (PR53 CR#11): broadened tag regex (see line 698 above) — also strips unquoted tag values.
   const usedTimes=[];
   const clkTimes=[];
   let i=0;
@@ -1587,9 +1587,12 @@ function extractMoveTimes(pgnText){
       // comment — but NOT "D22" (no 's' suffix) or "0:05:30" (no 's' suffix).
       const timeMatch=comment.match(/(\d+(?:\.\d+)?)s/);
       // Clock-remaining format: [%clk HH:MM:SS]
-      const clkMatch=comment.match(/\[%clk\s+([0-9]+):([0-9]+):([0-9]+\.?[0-9]*)\]/);
+      // v1.2.3 round-38 (SonarCloud S6353): use \d instead of [0-9] (concise form).
+      // v1.2.3 round-45 (PR53 R8, S8786): (?:\.\d+)? removes the \d+\d* shared
+      //   prefix — no polynomial backtracking even on adversarial input.
+      const clkMatch=comment.match(/\[%clk\s+(\d+):(\d+):(\d+(?:\.\d+)?)\]/);
       // v1.0.4 ROUND-5 REV16: Elapsed move time format: [%emt H:MM:SS]
-      const emtMatch=comment.match(/\[%emt\s+([0-9]+):([0-9]+):([0-9]+\.?[0-9]*)\]/);
+      const emtMatch=comment.match(/\[%emt\s+(\d+):(\d+):(\d+(?:\.\d+)?)\]/);
       // The comment belongs to the move that JUST HAPPENED — i.e., the
       // previous mainline move. So we attach it to usedTimes[len-1].
       // If no mainline move yet, attach to index 0 (initial position comment).
@@ -1629,7 +1632,10 @@ function extractMoveTimes(pgnText){
         }
       }
       if(timeMatch){
-        const sec=parseFloat(timeMatch[1]);
+        // v1.2.3 round-37 (SonarCloud S7773): Number.parseFloat is preferred
+        //   over the global parseFloat (clearer lexical scope, no implicit
+        //   global). Behavior is identical.
+        const sec=Number.parseFloat(timeMatch[1]);
         if(!Number.isNaN(sec)){
           usedTimes[targetIdx]=sec;
         }
@@ -2804,7 +2810,8 @@ function renderStats(parsed,evalData){
 
 function renderEvalChart(evalData){
   const w=600,h=120,pad=20;
-  const validEvals=evalData.filter(e=>e).map(e=>e.mate?(e.mate>0?90000:-90000):e.eval);
+  // v1.2.3 round-45 (PR53 R7, S7770/S3358): filter(Boolean) + un-nested branches (same semantics).
+  const validEvals=evalData.filter(Boolean).map(e=>{if(!e.mate)return e.eval;return e.mate>0?1000:-1000;}); // v1.2.3 (R2): clamp mate to +/-1000cp (+/-10 pawns) like ui.js evalToY, so mate sentinels don't flatten the chart
   if(validEvals.length<2)return '<div class="loading">'+T('no_data')+'</div>';
   const maxEv=Math.max(...validEvals,500);
   const minEv=Math.min(...validEvals,-500);
@@ -2968,7 +2975,11 @@ function copyFENToClipboard(){
     banner.style.cssText='position:fixed;bottom:60px;left:50%;transform:translateX(-50%);background:'+(ok?'rgba(39,174,96,.95)':'rgba(192,57,43,.95)')+';color:#fff;padding:8px 16px;border-radius:6px;font-size:.8rem;z-index:10001;box-shadow:0 2px 8px rgba(0,0,0,.4)';
     banner.textContent=ok?T('fen_copied'):T('fen_copy_failed');
     document.body.appendChild(banner);
-    setTimeout(()=>{if(banner.parentNode)banner.parentNode.removeChild(banner);},1500);
+    // v1.2.3 round-37 (SonarCloud S7762): use banner.remove() instead of
+    //   banner.parentNode.removeChild(banner). remove() is the modern API,
+    //   doesn't require a parent reference, and is supported on all modern
+    //   Android WebView versions (API 23+).
+    setTimeout(()=>{banner.remove();},1500);
   }
   try{
     if(navigator.clipboard&&navigator.clipboard.writeText){
@@ -2986,7 +2997,9 @@ function fallbackCopy(text,cb){
     document.body.appendChild(ta);
     ta.select();
     const ok=document.execCommand('copy');
-    document.body.removeChild(ta);
+    // v1.2.3 round-37 (SonarCloud S7762): use ta.remove() instead of
+    //   document.body.removeChild(ta).
+    ta.remove();
     cb(ok);
   }catch(e){cb(false);}
 }
@@ -3854,7 +3867,8 @@ function _exportStaticHTML(){
       const btns=div.querySelectorAll('button');
       if(btns.length===4){
         const texts=Array.from(btns).map(b=>b.textContent.trim());
-        if(texts.indexOf('⏮')>=0&&texts.indexOf('◀')>=0&&texts.indexOf('▶')>=0&&texts.indexOf('⏭')>=0){
+        // v1.2.3 round-38 (SonarCloud S7765): use .includes() instead of .indexOf() >= 0.
+        if(texts.includes('⏮')&&texts.includes('◀')&&texts.includes('▶')&&texts.includes('⏭')){
           div.remove();
           return;
         }
@@ -3902,7 +3916,21 @@ function _exportFullHTML(){
     // using a regex that matches from the function declaration to the next
     // line-start `}`. This works because all our target functions follow the
     // standard JS convention of having their closing brace at column 0.
-    const re = new RegExp('function ' + fnName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\(\\)\\{[\\s\\S]*?\\n\\}');
+    // v1.2.3 round-38 (SonarCloud S7780): use String.raw for the regex
+    //   source string to avoid double-escaping backslashes. The `\\(` becomes
+    //   `\(` etc. — String.raw treats backslashes as literal characters.
+    // v1.2.3 round-42 (42-10, P3-24): convention guard. The regex above ONLY
+    //   matches when fnName's closing brace sits at column 0 — if a future
+    //   edit re-indents one of the 9 target functions, js.replace() would
+    //   silently no-op and the exported HTML would keep the full function
+    //   body (double-definition). Fail loud instead of silent. When adding a
+    //   new strip target, keep its closing brace at column 0 (verified for
+    //   all 9 current targets this round).
+    const re = new RegExp('function ' + fnName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + String.raw`\(\)\{[\s\S]*?\n\}`);
+    if(!re.test(js)){
+      console.error('_stripFnBody: no match for', fnName,
+        '— target function missing or closing-brace-at-column-0 convention broken; body NOT stripped');
+    }
     return js.replace(re, 'function ' + fnName + '(){}');
   }
   scriptJS=_stripFnBody(scriptJS,'exportHTML');
@@ -3920,8 +3948,17 @@ function _exportFullHTML(){
   //   terminate the script block of the exported HTML, corrupting the file.
   //   ("<\/" is a valid, equivalent JS string escape. This comment itself
   //   must avoid the literal sequence — inline script constraint.)
-  scriptJS='var _payload={pgn:'+JSON.stringify(pgnText).replaceAll('</','<\\/')+',lang:'+JSON.stringify(lang)+'};\n'+
-    'var _lang='+JSON.stringify(lang)+';\n'+
+  // v1.2.3 round-23 (Q9 fix): per OWASP JSON-in-HTML guidance, encode EVERY
+  //   '<' as '\u003c' (not just the lowercase '</' sequence). This prevents
+  //   edge cases where '<' followed by a non-'/' character (e.g. '<S' or
+  //   '<' followed by whitespace) could confuse certain HTML parsers in
+  //   script-data-escaped state. Both pgnText and lang are encoded.
+  // v1.2.3 round-29 (PR52 S7780+S7781): use String.raw for the \u003c literal
+  //   (avoids the escaped-backslash eye-noise) and replaceAll('<', ...) for
+  //   the global string replace (avoids the global-regex form).
+  const _enc = (s) => JSON.stringify(s).replaceAll('<', String.raw`\u003c`);
+  scriptJS='var _payload={pgn:'+_enc(pgnText)+',lang:'+_enc(lang)+'};\n'+
+    'var _lang='+_enc(lang)+';\n'+
     scriptJS;
 
   const title=lang==='zh'?'📊 统计数据 — 完整导出':'📊 Statistics — Full Export';
@@ -4161,7 +4198,8 @@ function _statsImportBackDismiss(){
   var overlays=document.querySelectorAll('.dov[role="dialog"]');
   for(var i=0;i<overlays.length;i++){
     var ariaLabel=overlays[i].getAttribute('aria-label')||'';
-    if(ariaLabel.indexOf('Import PGN to game')>=0||ariaLabel.indexOf('将PGN导入到对局')>=0){
+    // v1.2.3 round-38 (SonarCloud S7765): use .includes() instead of .indexOf() >= 0.
+    if(ariaLabel.includes('Import PGN to game')||ariaLabel.includes('将PGN导入到对局')){
       overlays[i].remove();
       return;
     }
@@ -4174,10 +4212,24 @@ function _statsImportBackDismiss(){
 //   3. returnToGame() — close the stats activity and return to MainActivity
 // Returns true if the back press was consumed (so StatsActivity should NOT
 // call finish()), false if the activity should be closed.
+// v1.2.3 round-46 (PR53 CR#26): every consumed branch must acknowledge to
+//   the native side. StatsActivity's 250ms fallback finishes the Activity
+//   unless backCloseHandled is set — previously only closeStatsPage() set it,
+//   so the legal "handled but stay on page" branches below (dismiss dialog /
+//   close overlay / Cancel in the import-back interceptor) were misjudged as
+//   an unresponsive JS and the user got kicked out 250ms later.
+function _ackStatsBack(){
+  try{
+    if(typeof AndroidBridge!=='undefined'&&AndroidBridge.ackStatsBackHandled){
+      AndroidBridge.ackStatsBackHandled();
+    }
+  }catch(e){/* best-effort ack */}
+}
 function handleStatsBackPress(){
   try{
     if(typeof _statsImportBackDialogVisible!=='undefined'&&_statsImportBackDialogVisible){
       _statsImportBackDismiss();
+      _ackStatsBack(); // v1.2.3 round-46 (PR53 CR#26): stay-on-page ack
       return true;
     }
     // Close the topmost .dov overlay (export/import dialogs created via DOM appendChild).
@@ -4189,8 +4241,10 @@ function handleStatsBackPress(){
       var ariaLabel=topmost.getAttribute('aria-label')||'';
       // Don't double-handle the import-back dialog (already returned true above
       // when _statsImportBackDialogVisible is true). Defensive: skip it.
-      if(ariaLabel.indexOf('Import PGN to game')<0&&ariaLabel.indexOf('将PGN导入到对局')<0){
+      // v1.2.3 round-38 (SonarCloud S7765): use .includes() instead of .indexOf() < 0.
+      if(!ariaLabel.includes('Import PGN to game')&&!ariaLabel.includes('将PGN导入到对局')){
         topmost.remove();
+        _ackStatsBack(); // v1.2.3 round-46 (PR53 CR#26): stay-on-page ack
         return true;
       }
     }
@@ -4198,6 +4252,12 @@ function handleStatsBackPress(){
     // import-back interceptor or close the activity).
     if(typeof returnToGame==='function'){
       returnToGame();
+      // v1.2.3 round-46 (PR53 CR#26): returnToGame either closed the page via
+      //   closeStatsPage (flag already set) or showed the import-back
+      //   interceptor (user may Cancel = stay). Ack unconditionally — if the
+      //   page did close, this late ack is harmless because finish() is
+      //   already enqueued on the UI thread.
+      _ackStatsBack();
       return true;
     }
   }catch(e){console.error('handleStatsBackPress failed',e);}
@@ -4242,7 +4302,8 @@ function init(){
       if(!a)return;
       var href=a.getAttribute('href')||'';
       if(!href||href.charAt(0)==='#')return;
-      if(href.indexOf('http://')!==0&&href.indexOf('https://')!==0)return;
+      // v1.2.3 round-39: use .startsWith() instead of .indexOf() !== 0.
+      if(!href.startsWith('http://')&&!href.startsWith('https://'))return;
       e.preventDefault();
       try{
         if(typeof AndroidBridge!=='undefined'&&AndroidBridge.openUrlInBrowser){

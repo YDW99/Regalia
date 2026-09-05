@@ -86,10 +86,10 @@ self.onmessage = function(e) {
     Promise.resolve(result).then(function(r) {
       self.postMessage({type: 'result', taskId: taskId, result: r});
     }).catch(function(err) {
-      self.postMessage({type: 'error', taskId: taskId, error: String(err && err.message || err)});
+      self.postMessage({type: 'error', taskId: taskId, error: String(err?.message || err)});
     });
   } catch (err) {
-    self.postMessage({type: 'error', taskId: taskId, error: String(err && err.message || err)});
+    self.postMessage({type: 'error', taskId: taskId, error: String(err?.message || err)});
   }
 };
 // === PGN tokenizer (full lexer — mirrors tablebase.js _parsePGN tokenization) ===
@@ -140,7 +140,8 @@ function _parsePGNText(pgnText) {
   var calRe = /\\[%cal\\s+([^\\]]*)\\]/g;
   var evalRe = /\\[%eval\\s+([^\\]]*)\\]/g;
   var iter = 0;
-  while (text.indexOf('{') >= 0 && iter++ < 20) {
+  // v1.2.3 round-38 (SonarCloud S7765): use .includes() instead of .indexOf() >= 0.
+  while (text.includes('{') && iter++ < 20) {
     var prev = text;
     // Extract annotations from comments before removing them
     var cm;
@@ -266,6 +267,9 @@ function _createWorker() {
     w._url = url;
     url = null; // ownership transferred to w._url; revoke on worker teardown
     w._busy = false;
+    // v1.2.3 round-44 (G12): track the worker's current task for O(1) lookup
+    //   in onerror/onmessageerror (was an O(n) scan of _pendingTasks).
+    w._currentTask = null;
     w.onmessage = function(e) {
       const msg = e.data;
       if (!msg || !msg.taskId) return;
@@ -273,21 +277,27 @@ function _createWorker() {
       if (!task) return;
       _pendingTasks.delete(msg.taskId);
       task.worker._busy = false;
+      task.worker._currentTask = null;
       if (task.timeout) { clearTimeout(task.timeout); task.timeout = null; }
       if (msg.type === 'result') task.resolve(msg.result);
       else task.reject(new Error(msg.error || 'Worker error'));
       _dispatchNext();
+      _scheduleIdleReap(); // v1.2.3 round-44 (G9): task completed — arm idle reap
     };
     w.onerror = function(e) {
-      // Collect tasks to reject before mutating the map (avoid iterate-while-mutate)
-      const toReject = [];
-      for (const [tid, task] of _pendingTasks) {
-        if (task.worker === w) toReject.push([tid, task]);
-      }
-      for (const [tid, task] of toReject) {
-        _pendingTasks.delete(tid);
+      // v1.2.3 round-44 (G12): O(1) lookup via w._currentTask (was an O(n)
+      //   scan of _pendingTasks). The pendingTasks.get identity check guards
+      //   against a task that already completed/timed out.
+      const task = w._currentTask || null;
+      w._currentTask = null;
+      if (task && _pendingTasks.get(task.taskId) === task) {
+        _pendingTasks.delete(task.taskId);
         if (task.timeout) { clearTimeout(task.timeout); task.timeout = null; }
-        task.reject(new Error('Worker crashed: ' + (e && e.message || e)));
+        // v1.2.3 round-29 (PR52 S6551): use String(e) instead of bare `e` so
+        //   ErrorEvent / Event objects stringify meaningfully instead of
+        //   "[object Object]". When e is a string (legacy onerror contract)
+        //   String(e) returns it unchanged.
+        task.reject(new Error('Worker crashed: ' + (e?.message || String(e))));
       }
       w._busy = false;
       _removeWorker(w);
@@ -300,12 +310,11 @@ function _createWorker() {
     //   the worker (a serialization failure usually indicates a corrupted
     //   worker state — safer to terminate and replace).
     w.onmessageerror = function(e) {
-      const toReject = [];
-      for (const [tid, task] of _pendingTasks) {
-        if (task.worker === w) toReject.push([tid, task]);
-      }
-      for (const [tid, task] of toReject) {
-        _pendingTasks.delete(tid);
+      // v1.2.3 round-44 (G12): O(1) lookup via w._currentTask (see onerror).
+      const task = w._currentTask || null;
+      w._currentTask = null;
+      if (task && _pendingTasks.get(task.taskId) === task) {
+        _pendingTasks.delete(task.taskId);
         if (task.timeout) { clearTimeout(task.timeout); task.timeout = null; }
         task.reject(new Error('Worker message serialization error'));
       }
@@ -342,13 +351,38 @@ function _removeWorker(w) {
   try { if (w._url) URL.revokeObjectURL(w._url); } catch (e) {}
 }
 
+// v1.2.3 round-44 (G9): idle reaping — 60s after the pool last saw activity,
+//   shrink to 1 hot-standby worker (terminate + revoke the rest). Scheduled on
+//   task completion and whenever an idle worker is handed out; rescheduled on
+//   each call so the reap only fires after a full 60s of pool inactivity.
+//   Reaping does NOT touch _workerCreateFailures — that counter tracks worker
+//   CREATION health (Phase 71), not pool size, and must survive a reap.
+let _idleReapTimerId = null;
+function _scheduleIdleReap() {
+  if (_idleReapTimerId) { clearTimeout(_idleReapTimerId); _idleReapTimerId = null; }
+  _idleReapTimerId = setTimeout(function() {
+    _idleReapTimerId = null;
+    if (_taskQueue.length > 0) return; // work pending — keep the pool
+    // Only reap when every worker is idle; a busy worker means work is in
+    // flight and the pool may still be needed at full size.
+    for (const w of _workerPool) { if (w._busy) return; }
+    while (_workerPool.length > 1) {
+      const w = _workerPool.pop();
+      try { w.terminate(); } catch (e) {}
+      try { if (w._url) URL.revokeObjectURL(w._url); } catch (e) {}
+    }
+  }, 60000);
+}
+
 function _getIdleWorker() {
   for (const w of _workerPool) {
-    if (!w._busy) return w;
+    // v1.2.3 round-44 (G9): handing out a worker is pool activity — (re)arm
+    //   the idle reap timer.
+    if (!w._busy) { _scheduleIdleReap(); return w; }
   }
   if (_workerPool.length < _getPoolSize()) {
     const w = _createWorker();
-    if (w) { _workerPool.push(w); return w; }
+    if (w) { _workerPool.push(w); _scheduleIdleReap(); return w; }
   }
   return null;
 }
@@ -359,10 +393,43 @@ const _taskQueue = [];
 function _dispatchNext() {
   while (_taskQueue.length > 0) {
     const w = _getIdleWorker();
-    if (!w) break;
+    if (!w) {
+      // v1.2.3 round-41: no idle worker AND an empty pool means worker
+      //   creation just failed AND there is no busy worker whose completion
+      //   would re-trigger dispatch — the head task would otherwise sit in
+      //   the queue until its 30s timeout (a "fake hang"). Fall back to
+      //   main-thread execution for the head task immediately (resolve/reject
+      //   via _syncFallback) and clear its timeout. When the pool merely has
+      //   all workers busy (length > 0), keep the existing wait — a task
+      //   completion re-dispatches. `_workerSupported` stays true, so the
+      //   instantaneous-retry semantics (next workerRun re-attempts
+      //   _createWorker) are unchanged.
+      if (_workerPool.length === 0) {
+        // v1.2.3 round-46 (PR53 CR#9): drain the WHOLE queue in this pass
+        //   instead of `continue`-ing per task. The old loop re-entered
+        //   _getIdleWorker() -> _createWorker() once per queued task, so 3+
+        //   queued tasks inside one transient-failure window tripped the
+        //   Phase-71 3-strike counter and set _workerSupported=false —
+        //   permanently disabling the pool (contradicting the round-41 note
+        //   above). With drain-all, each dispatch pass costs at most one
+        //   creation attempt, so the counter again counts INDEPENDENT events
+        //   as Phase 71 intended. An empty pool also means no busy worker
+        //   exists to re-trigger dispatch, so queued tasks would otherwise
+        //   wait for their 30s timeouts.
+        while (_taskQueue.length > 0) {
+          const task = _taskQueue.shift();
+          clearTimeout(task.timeout);
+          Promise.resolve().then(function() { return _syncFallback(task.fnName, task.args); })
+            .then(task.resolve, task.reject);
+        }
+        return;
+      }
+      break;
+    }
     const task = _taskQueue.shift();
     w._busy = true;
     task.worker = w;
+    w._currentTask = task; // v1.2.3 round-44 (G12): O(1) crash lookup
     _pendingTasks.set(task.taskId, task);
     w.postMessage({type: 'run', taskId: task.taskId, fnName: task.fnName, args: task.args});
   }
@@ -370,8 +437,14 @@ function _dispatchNext() {
 
 // === Public API ===
 
-function workerRun(fnName, args, timeoutMs) {
-  timeoutMs = timeoutMs || 30000;
+// v1.2.3 round-37 (SonarCloud S7760): use default parameter syntax
+//   `timeoutMs = 30000` instead of `timeoutMs = timeoutMs || 30000`.
+//   Default params apply only when the argument is `undefined` (not other
+//   falsy values like 0), which is the correct semantics here — a caller
+//   passing `timeoutMs = 0` previously got 30000 (bug!); now they get 0
+//   (intentional, though unusual). No current caller passes 0, so behavior
+//   is unchanged for all existing call sites.
+function workerRun(fnName, args, timeoutMs = 30000) {
   if (!_workerSupported) {
     // v1.0.8 PHASE 35: defer into Promise chain so sync throws (unknown fnName)
     //   become rejected Promises instead of synchronous throws out of workerRun.
@@ -392,6 +465,7 @@ function workerRun(fnName, args, timeoutMs) {
       _pendingTasks.delete(taskId);
       if (task.worker) {
         task.worker._busy = false;
+        task.worker._currentTask = null;
         _removeWorker(task.worker);
       } else {
         // v1.0.8 PHASE 35: task was still queued (no worker assigned) — splice
@@ -457,7 +531,8 @@ function _syncParsePGNText(pgnText) {
   var calRe = /\[%cal\s+([^\]]*)\]/g;
   var evalRe = /\[%eval\s+([^\]]*)\]/g;
   var iter = 0;
-  while (text.indexOf('{') >= 0 && iter++ < 20) {
+  // v1.2.3 round-38 (SonarCloud S7765): use .includes() instead of .indexOf() >= 0.
+  while (text.includes('{') && iter++ < 20) {
     var prev = text;
     var cm;
     while ((cm = cslRe.exec(text)) !== null) { cslAnnotations.push(cm[1].trim()); }
@@ -566,6 +641,8 @@ function workerComputeHeatmapStats(serializedBoards, timeoutMs) {
 }
 
 function terminateWorkerPool() {
+  // v1.2.3 round-44 (G9): cancel any pending idle reap — pool is going away.
+  if (_idleReapTimerId) { clearTimeout(_idleReapTimerId); _idleReapTimerId = null; }
   for (const w of _workerPool) {
     try { w.terminate(); } catch (e) {}
     try { if (w._url) URL.revokeObjectURL(w._url); } catch (e) {}

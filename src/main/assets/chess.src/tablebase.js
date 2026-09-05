@@ -86,7 +86,7 @@ if(_fenIs960){
           if(_idx===8){const _spid=backRankToSPID(backRank);if(_spid>=0){gameSPID=_spid;ns.spid=_spid;}}
         }
       }
-    }catch(e){console.warn('[Import] SP-ID derivation failed:',e&&e.message?e.message:e);}
+    }catch(e){console.warn('[Import] SP-ID derivation failed:',e?.message?e.message:e);}
   }
 }else{
   if(typeof setChess960Mode==='function')setChess960Mode(false);
@@ -119,7 +119,7 @@ reviewBaseState=cloneS(gameState);
 _prependBlackToMovePlaceholder();
 render();requestEngineEval();
 if(gameState.currentTurn!==playerColor)doAIMove();
-}else{showToast(T('fen_invalid'),2000)}
+}else{showToast(T('fen_invalid'),3000)}
 }
 
 // PGN parser — robust implementation with DroidFish-compatible variation handling
@@ -202,7 +202,13 @@ function _parsePGN(pgnText){
   //   single-line and multi-line PGN), and ALSO avoids stripping `[%csl ...]`
   //   / `[%cal ...]` / `[%eval ...]` / `[%emt ...]` inside brace comments
   //   (because `%` is not in `[A-Za-z]`).
-  let moveText=pgnText.replace(/\[\w+\s+\S[^\]]*\]/g,'').trim(); // v1.2.3 round-20 (S8786): 相邻量词类互斥，消除超线性回溯（与 stats.html 四处同款修复）
+  // v1.2.3 round-40: extended to also strip UNQUOTED tag values
+  //   (`[WhiteElo 2400]`) — the quoted-value-only regex left such tags in the
+  //   movetext, where the tokenizer choked on them. The alternation is still
+  //   backtracking-safe: the quoted branch is unchanged (round-29 S8786) and
+  //   the unquoted branch `\S[^\]\n]*?` cannot overlap with `\s+` ambiguously
+  //   because the first char is non-space.
+  let moveText=pgnText.replace(/\[\s*[A-Za-z]\w*\s+(?:"(?:[^"\\]|\\.)*"\s*|\S[^\]\n]*?)\]/g,'').trim(); // v1.2.3 round-29 (PR52 S8786): switch to canonical PGN tag regex (same as pgn-standard.js:696). Eliminates the alternation `[^\]]*?` overlap with `\s*` that produced polynomial backtracking on unclosed-bracket input; the strict pattern is linear and also correctly handles escaped quotes inside values (`[Event "Tournament \"Open\""]`).
   // Remove line continuation markers (\ at end of line)
   moveText=moveText.replace(/\\\s*\n/g,' ');
   
@@ -210,7 +216,11 @@ function _parsePGN(pgnText){
   // BEFORE the eval-extraction loop, so each move is a separate token. Without
   // this, "1.e4" starts with '1' and the loop's /[a-hKQRBNBO]/ check skips it,
   // missing the eval attachment for that move.
-  moveText=moveText.replace(/(\d+\.+)(?=[a-hKQRBNBO])/gi,'$1 ');
+  // v1.2.3 round-38 (SonarCloud S5869): removed duplicate 'B' in character
+  //   class [a-hKQRBNBO] → [a-hKQRBNO]. The second 'B' was redundant (the
+  //   first 'B' already matches white Bishop; with /i flag it also matches
+  //   black bishop 'b'). 'O' is for castling notation (O-O / O-O-O).
+  moveText=moveText.replace(/(\d+\.+)(?=[a-hKQRBNO])/gi,'$1 ');
   
   // v1.0.4 Rev24 NEW: Extract [%eval ...] tags from comments BEFORE stripping
   // them, so we can populate the review eval cache and skip engine analysis
@@ -456,7 +466,8 @@ function _parsePGN(pgnText){
       //   (0-0 / 0-0-0) is counted as a move. Previously these tokens were
       //   skipped, so _moveCount lagged by one and ALL subsequent annotations
       //   ([%eval]/[%csl]/[%cal]/comments) attached to the wrong move.
-      if(_depth===0&&/[a-hKQRBNBO0]/.test(_ch)){
+      // v1.2.3 round-38 (SonarCloud S5869): removed duplicate 'B' (see line ~213).
+      if(_depth===0&&/[a-hKQRBNO0]/.test(_ch)){
         // Check if this looks like a SAN move (not a move number, result, etc.)
         // Read the token
         let _j=_i;
@@ -544,7 +555,14 @@ function _parsePGN(pgnText){
   //   cascade-failure path and aborting the parse.
   //   After brace stripping (fixed): `1. e4 e5  2. Bd3`  ← two valid tokens.
   //   The whitespace normalization at line ~490 collapses the double space.
-  {let _braceIter=0;while(moveText.includes('{')&&_braceIter++<10)moveText=moveText.replace(/\{[^{}]*\}/g,' ');}
+  // v1.2.3 round-30 (perf): pre-check `includes('{')` to skip the loop
+  //   entirely when there are no comments — most PGNs have no comments,
+  //   and the previous code ran up to 10 regex passes (each O(n)) plus
+  //   an `includes('{')` check per iteration even on comment-free input.
+  if(moveText.includes('{')){
+    let _braceIter=0;
+    while(moveText.includes('{')&&_braceIter++<10)moveText=moveText.replace(/\{[^{}]*\}/g,' ');
+  }
   // v1.0.4 Rev29: Remove unclosed brace + everything to end-of-string.
   // This is the PGN spec's tolerant behavior: an unclosed comment consumes
   // the rest of the movetext. We log a warning so the user knows.
@@ -832,7 +850,7 @@ function _applySANMove(state,san){
   if(upperSAN==='O-O'||cleanSAN==='0-0'){
     const row=state.currentTurn==='white'?7:0;
     let kingCol=4; // default: standard chess
-    for(let c=0;c<8;c++){const p=state.board[row][c];if(p&&p.type==='king'&&p.color===state.currentTurn){kingCol=c;break;}}
+    for(let c=0;c<8;c++){const p=state.board[row][c];if(p?.type==='king'&&p.color===state.currentTurn){kingCol=c;break;}}
     const kingFrom={row,col:kingCol};
     const kingTo={row,col:6};
     const move=_findLegalMove(state,kingFrom,kingTo,'king');
@@ -842,7 +860,7 @@ function _applySANMove(state,san){
   if(upperSAN==='O-O-O'||cleanSAN==='0-0-0'){
     const row=state.currentTurn==='white'?7:0;
     let kingCol=4; // default: standard chess
-    for(let c=0;c<8;c++){const p=state.board[row][c];if(p&&p.type==='king'&&p.color===state.currentTurn){kingCol=c;break;}}
+    for(let c=0;c<8;c++){const p=state.board[row][c];if(p?.type==='king'&&p.color===state.currentTurn){kingCol=c;break;}}
     const kingFrom={row,col:kingCol};
     const kingTo={row,col:2};
     const move=_findLegalMove(state,kingFrom,kingTo,'king');
@@ -950,7 +968,7 @@ function _applySANMove(state,san){
         if(alg===sanClean||alg.replace(/[+#!?]+$/,'')===sanClean){
           return _executeAndRecord(state,m,alg);
         }
-      }catch(e){console.warn('[Tablebase]',e&&e.message?e.message:e);}
+      }catch(e){console.warn('[Tablebase]',e?.message?e.message:e);}
     }
   }
   
@@ -972,7 +990,7 @@ function _findLegalMove(state,from,to,pieceType){
   const allMoves=legalMoves(state,null);
   return allMoves.find(m=>{
     const piece=state.board[m.from.row][m.from.col];
-    return piece&&piece.type===pieceType&&piece.color===state.currentTurn&&
+    return piece?.type===pieceType&&piece.color===state.currentTurn&&
            m.from.row===from.row&&m.from.col===from.col&&
            m.to.row===to.row&&m.to.col===to.col;
   })||null;
@@ -1009,16 +1027,16 @@ function importPGN(pgnText){
   const firstLine=trimmed.split('\n')[0].trim();
   const looksLikeFEN=firstLine.includes('/')&&firstLine.split('/').length===8&&!firstLine.includes('[')&&!firstLine.includes('(')&&!firstLine.match(/\d+\./);
   if(looksLikeFEN){
-    showToast(T('pgn_fen_rejected'),2500);
+    showToast(T('pgn_fen_rejected'),3750);
     return;
   }
   // Additional heuristic: if the entire text can be parsed as FEN, reject it
   if(fenToState(trimmed)){
-    showToast(T('pgn_fen_rejected'),2500);
+    showToast(T('pgn_fen_rejected'),3750);
     return;
   }
   const result=_parsePGN(pgnText);
-  if(!result||!result.moves||!result.moves.length){showToast(T('pgn_invalid'),2000);return;}
+  if(!result||!result.moves||!result.moves.length){showToast(T('pgn_invalid'),3000);return;}
   // Start from FEN or initial position
   // v1.0.8 PHASE 49: validate startState BEFORE clearing _reviewEvalCache and
   //   toggling Chess960 mode. The old order (clear cache + set Chess960 first,
@@ -1027,7 +1045,7 @@ function importPGN(pgnText){
   //   invalid [FEN] tag — even though the import ultimately failed. Now the
   //   side effects only run once we know the import will succeed.
   const startState=result.startFEN?fenToState(result.startFEN):initState();
-  if(!startState){showToast(T('pgn_invalid'),2000);return;}
+  if(!startState){showToast(T('pgn_invalid'),3000);return;}
   // v1.0.7 BUG FIX:
   // Clear _reviewEvalCache before importing a new PGN — see _startGameImpl()
   // for rationale (cache is keyed by per-game reviewStep, switching games
@@ -1041,10 +1059,19 @@ function importPGN(pgnText){
   
   // v1.0.4 NEW: Detect Chess960 variant from PGN [Variant] tag.
   // If detected, enable Chess960 engine mode and set gameVariant for PGN round-trip.
+  // v1.2.3 round-23 (Q1 fix): unconditionally reset Chess960 identity BEFORE
+  //   the derivation runs. Previously a failed backRankToSPID derivation
+  //   would leave the previous game's SP-ID/variant flag in place,
+  //   polluting the new game. Now: reset to defaults first, then let a
+  //   successful derivation overwrite. The else branch (variant!=='chess960')
+  //   still sets gameSPID=null as before.
   if(result.variant==='chess960'){
     if(typeof setChess960Mode==='function')setChess960Mode(true);
     if(gameVariant !== undefined)gameVariant='chess960';
     if(typeof gameSPID!=='undefined'){
+      // Reset to null FIRST so a failed derivation below cannot retain the
+      // previous game's SP-ID.
+      gameSPID=null;
       // Try to derive SP-ID from the starting FEN's back rank
       if(result.startFEN&&typeof backRankToSPID==='function'){
         // FEN row 8 (top) is for black; we look at row 1 (bottom) for white's pieces
@@ -1151,7 +1178,7 @@ function importPGN(pgnText){
         const _isDefault=(_humanName===T('you')||_humanName==='你'||_humanName==='You'||_humanName===T('ai_opponent')||_humanName==='AI对手'||_humanName==='AI Opponent'||/Lv\.\d/.test(_humanName)||/SL/.test(_humanName));
         if(!_isDefault){
           _humanPlayerName=_humanName;
-          try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_humanName',_humanName);}catch(e){console.warn('[Tablebase]',e&&e.message?e.message:e);}
+          try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_humanName',_humanName);}catch(e){console.warn('[Tablebase]',e?.message?e.message:e);}
         }
       }
     }
@@ -1172,7 +1199,7 @@ function importPGN(pgnText){
     // couldn't be parsed). Push a null moveRecord so moveRecords indices
     // stay aligned with PGN move numbers. The display layer renders null
     // entries as a dimmed "—" marker (same as the black-to-move placeholder).
-    if(parsedMove&&parsedMove.skipped){
+    if(parsedMove?.skipped){
       stateHistory.push({state:cloneS(replayState),moveRecords:[...moveRecords],lastMove:lastMove?{...lastMove}:null,selectedSquare:null});
       moveRecords.push(null);
       moveIdx++;
@@ -1208,7 +1235,7 @@ function importPGN(pgnText){
     const _varKey=(parsedMove.mainTokenIdx!=null)?parsedMove.mainTokenIdx:moveIdx;
     const pgnVars=result.variations&&result.variations.get(_varKey);
     const varEntries=[];
-    if(pgnVars&&pgnVars.length>0){
+    if(pgnVars?.length>0){
       const postMoveState=replayState; // read-only: replayState already updated by makeMvInPlace
       const branchMoveIsWhite=preMoveState.currentTurn==='white';
       const branchMoveNum=preMoveState.fullMoveNumber||Math.floor(moveIdx/2)+1;
@@ -1219,7 +1246,7 @@ function importPGN(pgnText){
         // For nested variations, sanTokens already includes the parent variation's
         // prefix moves, so the entire array replays from the start position.
         const vEntry=pgnVars[vi];
-        const vTokens=(vEntry&&vEntry.sanTokens)?vEntry.sanTokens:vEntry; // backward-compatible
+        const vTokens=(vEntry?.sanTokens)?vEntry.sanTokens:vEntry; // backward-compatible
         const sanParts=[];
         let vState=null, vIsWhite, vMoveNum, startIdx=0;
         // PGN variations can start from either side:
@@ -1417,7 +1444,9 @@ function importPGN(pgnText){
       // was caught by the surrounding try/catch and surfaced to the user as
       // "PGN invalid" — making EVERY PGN import fail. Fixed to use
       // parsedMove.move.promotion (the move object on the parsed result).
-      promotion:(parsedMove&&parsedMove.move&&parsedMove.move.promotion)||null,
+      // v1.2.3 round-29 (PR52 S6582): collapse `parsedMove?.move && parsedMove.move.promotion`
+      //   into the equivalent `parsedMove?.move?.promotion`.
+      promotion:parsedMove?.move?.promotion||null,
       isCheck:_isCheck,
       isCastling:_isCastling,
       time:null,
@@ -1560,7 +1589,7 @@ function importPGN(pgnText){
   // Clean up _relocated flags (not needed for display)
   // v1.0.2: Also deduplicate variations — remove identical SAN content
   for(const mr of moveRecords){
-    if(mr&&mr.variations){
+    if(mr?.variations){
       const seen=new Set();
       const deduped=[];
       for(const v of mr.variations){
@@ -1696,11 +1725,11 @@ function importPGN(pgnText){
   if(typeof _cachedOriginalPGN!=='undefined'){
     _cachedOriginalPGN=pgnText;
   }
-  showToast(T('pgn_imported'),2000);
+  showToast(T('pgn_imported'),3000);
   requestEngineEval();
   }catch(e){
     console.error('importPGN: error during import',e);
-    showToast(T('pgn_invalid'),2000);
+    showToast(T('pgn_invalid'),3000);
   }
 }
 
@@ -1721,7 +1750,7 @@ function importPGNAsync(pgnText){
     }
   }
   // Show loading indicator
-  try{showToast(T('importing_pgn'),3000);}catch(e){console.warn('[Tablebase]',e&&e.message?e.message:e);}
+  try{showToast(T('importing_pgn'),4500);}catch(e){console.warn('[Tablebase]',e?.message?e.message:e);}
   // v1.0.8 PHASE 49: removed the dead workerParsePGN round-trip. The old code
   //   called workerParsePGN(pgnText,30000) but discarded its result in BOTH
   //   .then and .catch — both branches ran the SAME synchronous importPGN(pgnText)
@@ -1737,7 +1766,7 @@ function importPGNAsync(pgnText){
         importPGN(pgnText);
       }catch(e){
         console.error('importPGNAsync: sync import failed',e);
-        try{showToast(T('pgn_invalid'),2000);}catch(_e){}
+        try{showToast(T('pgn_invalid'),3000);}catch(_e){}
         resolve(false);
         return;
       }
@@ -1752,20 +1781,20 @@ function importPGNFile(){
     if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.openPGNFilePicker==='function'){
       AndroidBridge.openPGNFilePicker();
     }else{
-      showToast(T('engine_unavailable_bridge'),2000);
+      showToast(T('engine_unavailable_bridge'),3000);
     }
   }catch(e){
-    showToast(T('engine_unavailable_bridge'),2000);
+    showToast(T('engine_unavailable_bridge'),3000);
   }
 }
 
 // Callback from Java when PGN file content is read via SAF
 function onPGNFileRead(content){
   try{
-  if(!content||typeof content!=='string'){showToast(T('pgn_invalid'),2000);return;}
+  if(!content||typeof content!=='string'){showToast(T('pgn_invalid'),3000);return;}
   // Sanitize: remove control characters that might remain after Java-side cleanup
   const sanitized=content.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g,'');
-  if(!sanitized.trim()){showToast(T('pgn_invalid'),2000);return;}
+  if(!sanitized.trim()){showToast(T('pgn_invalid'),3000);return;}
   // Always try PGN import. FEN-only files should use the FEN import button.
   // Check if the content looks like a FEN (8 ranks separated by /) vs PGN (has move text)
   const firstLine=sanitized.trim().split('\n')[0].trim();
@@ -1782,7 +1811,7 @@ function onPGNFileRead(content){
   }
   }catch(e){
     console.error('onPGNFileRead: error processing file',e);
-    showToast(T('pgn_invalid'),2000);
+    showToast(T('pgn_invalid'),3000);
   }
 }
 
@@ -1798,7 +1827,10 @@ function fenToState(fen){
 if(!fen||typeof fen!=='string')return null;
 if(fen.length>200)return null;
 const parts=fen.trim().split(/\s+/);
-if(parts.length<2)return null;
+// v1.2.3 round-40: FEN has at most 6 fields (board, turn, castling, ep,
+//   halfmove, fullmove). More fields = malformed input — reject instead of
+//   silently ignoring the extras.
+if(parts.length<2||parts.length>6)return null;
 const rows=parts[0].split('/');
 if(rows.length!==8)return null;
 const board=Array.from({length:8},()=>Array(8).fill(null));
@@ -1810,14 +1842,20 @@ if(ch>='1'&&ch<='8'){c+=Number.parseInt(ch,10);continue}
 const isWhite=ch===ch.toUpperCase();
 const type=ch.toLowerCase()==='p'?'pawn':ch.toLowerCase()==='n'?'knight':ch.toLowerCase()==='b'?'bishop':ch.toLowerCase()==='r'?'rook':ch.toLowerCase()==='q'?'queen':ch.toLowerCase()==='k'?'king':null;
 if(!type)return null;
+// v1.2.3 round-40: pawns can never stand on rank 1/8 (board rows 7/0) —
+//   such a FEN is malformed (a pawn there would have promoted).
+if(type==='pawn'&&(r===0||r===7))return null;
 const color=isWhite?'white':'black';
 board[r][c]={type,color};
-if(type==='king'){if(color==='white')wk={row:r,col:c};else bk={row:r,col:c};}
+// v1.2.3 round-40: exactly ONE king per side — a second king makes the FEN
+//   malformed (previously the later king silently overwrote the earlier one).
+if(type==='king'){if(color==='white'){if(wk)return null;wk={row:r,col:c};}else{if(bk)return null;bk={row:r,col:c};}}
 c++;
 }
 if(c!==8)return null;
 }
-// Validate that both kings exist on the board
+// Validate that both kings exist on the board (with the round-40 duplicate
+//   rejection above, this gives exactly one king per side)
 if(!wk||!bk)return null;
 const turn=parts[1]==='b'?'black':'white';
 const crStr=parts[2]||'-';
@@ -1854,8 +1892,13 @@ const opp=turn;const pd=opp==='white'?1:-1;let _epHasCap=false;for(const dc of[-
 if(_epHasCap)enPassantTarget={row:er,col:ec};
 }
 }}
-const halfMoveClock=parts[4]?Number.parseInt(parts[4],10)||0:0;
-const fullMoveNumber=parts[5]?Number.parseInt(parts[5],10)||1:1;
+// v1.2.3 round-40: strict clock validation — halfMoveClock must be a
+//   non-negative integer, fullMoveNumber a positive integer. The previous
+//   `parseInt()||fallback` silently coerced garbage ("12x" → 12, "-5" → 0/1),
+//   accepting malformed FENs.
+let halfMoveClock=0,fullMoveNumber=1;
+if(parts[4]){if(!/^\d+$/.test(parts[4]))return null;halfMoveClock=Number.parseInt(parts[4],10);}
+if(parts[5]){if(!/^\d+$/.test(parts[5]))return null;fullMoveNumber=Number.parseInt(parts[5],10);if(fullMoveNumber<1)return null;}
 const s={board,currentTurn:turn,castlingRights,enPassantTarget,halfMoveClock,fullMoveNumber,moveHistory:[],posCount:new Map(),wk,bk,hash:0,boardVersion:1};
 syncHash(s);s.posCount.set(s.hash,1);
 // Validate: the side NOT to move must not be in check (illegal position)
@@ -1884,6 +1927,11 @@ function pieceCountLE7(board){return countPieces(board)<=7}
 
 // Probe Syzygy tablebase API (with timeout + offline fallback + rate limiting)
 async function probeTablebase(s){
+// v1.2.3 round-41: defensive entry guard — reject a null state, a missing
+//   board, or a >7-piece position BEFORE any work (generateFEN would throw on
+//   a missing board, and >7-piece positions are never in the Syzygy
+//   tablebase). Callers no longer need to pre-check piece count.
+if(!s||!s.board||!pieceCountLE7(s.board))return null;
 if(isTbOffline())return null;
 const fen=generateFEN(s);
 // Check cache first
@@ -1892,11 +1940,14 @@ const fen=generateFEN(s);
 // evicted before rarely-accessed ones — defeating the LRU cache's purpose.
 // The delete+set pattern moves the entry to the "newest" position (Map
 // preserves insertion order in JS).
-if(_tbCache.has(fen)){
-  const v=_tbCache.get(fen);
+// v1.2.3 round-30 (perf): collapse has()+get() into a single get() call —
+//   Map.get returns undefined for missing keys, so the nullish check
+//   replaces has(). Saves one Map lookup per cache hit.
+const _cached=_tbCache.get(fen);
+if(_cached!==undefined){
   _tbCache.delete(fen);
-  _tbCache.set(fen,v);
-  return v;
+  _tbCache.set(fen,_cached);
+  return _cached;
 }
 // Rate limit: ≥600ms between requests
 // FIX: Reserve the time slot immediately (before async wait) to prevent TOCTOU race
@@ -1910,8 +1961,10 @@ const tmr=ctrl?setTimeout(()=>ctrl.abort(),5000):null;
 const resp=await fetch(`https://tablebase.lichess.ovh/standard?fen=${encodeURIComponent(fen)}`,{signal:ctrl?ctrl.signal:undefined});
 if(tmr)clearTimeout(tmr);
 // v1.0.5 Round-6 Rev62 (2026.6.27) FIX: a 404 response means "position not in
-// tablebase" (e.g., 8-piece position that slipped past the pieceCountLE7
-// pre-filter), NOT "server is down". Previously, 3 consecutive 404s would
+// tablebase", NOT "server is down". (The entry is already defended — v1.2.3
+// round-41 added the pieceCountLE7 guard at the top of probeTablebase — but a
+// 404 can still occur for positions outside the tablebase's coverage, e.g.
+// positions with castling rights.) Previously, 3 consecutive 404s would
 // falsely set _tbOffline=true for 60 seconds, blocking ALL tablebase queries
 // even though the server is healthy. Now only 5xx errors and network errors
 // (caught below) count toward _tbFailCount; 4xx errors return null silently.

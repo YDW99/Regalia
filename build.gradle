@@ -54,7 +54,12 @@ def versionPatch = (versionProps['VERSION_PATCH'] ?: "1").toInteger()
 def versionBuild = (versionProps['VERSION_BUILD'] ?: "111").toInteger()
 
 def computedVersionName = "${versionMajor}.${versionMinor}.${versionPatch}"
-def computedVersionCode = versionBuild
+// v1.2.3 round-44 (F11): versionCode derived from the semantic version
+//   (major*10000+minor*100+patch = 10203 for v1.2.3) so a VERSION_BUILD reset
+//   can never make versionCode regress (Google Play rejects non-monotonic
+//   codes). max() with the legacy VERSION_BUILD keeps monotonicity vs every
+//   previously published build either way.
+def computedVersionCode = Math.max(versionBuild, versionMajor * 10000 + versionMinor * 100 + versionPatch)
 
 // ============================================================
 // 签名配置（从 local.properties 或环境变量读取）
@@ -68,6 +73,10 @@ if (keystorePropertiesFile.exists()) {
 }
 
 // 允许通过环境变量覆盖签名配置（CI/CD 友好）
+
+// v1.2.3 round-44 (F2): tracked so the release task graph can fail fast
+//   instead of silently producing an unsigned APK.
+def releaseSigningConfigured = false
 def releaseKeystorePath = System.getenv("RELEASE_KEYSTORE_PATH") ?: keystoreProps['releaseKeystorePath'] ?: ""
 def releaseKeystorePassword = System.getenv("RELEASE_KEYSTORE_PASSWORD") ?: keystoreProps['releaseKeystorePassword'] ?: ""
 def releaseKeyAlias = System.getenv("RELEASE_KEY_ALIAS") ?: keystoreProps['releaseKeyAlias'] ?: ""
@@ -90,6 +99,10 @@ android {
         targetSdk 35
         versionCode computedVersionCode
         versionName computedVersionName
+        // v1.2.3 round-44 (F4): app_name is injected from the single source
+        //   of truth (version.properties) — strings.xml no longer hardcodes it,
+        //   so a version bump can never desync the launcher label.
+        resValue "string", "app_name", "Regalia v${computedVersionName}"
 
         ndk {
             // 仅保留 arm64-v8a 以减少 APK 体积
@@ -100,10 +113,15 @@ android {
         // 导出编译信息供 CMake 使用
         externalNativeBuild {
             cmake {
-                cppFlags "-O3 -fexceptions -frtti -std=c++20"
+                // v1.2.3 round-44 (F9): dropped -fexceptions -frtti —
+                //   engine_jni.cpp has no try/catch, dynamic_cast or typeid,
+                //   so the unwind tables and RTTI were pure dead code.
+                // v1.2.3 round-44 (F3): CMAKE_BUILD_TYPE moved to the
+                //   buildType blocks below — a defaultConfig-level "Release"
+                //   silently defined NDEBUG / disabled asserts in debug builds.
+                cppFlags "-O3 -std=c++20"
                 arguments "-DANDROID_STL=c++_shared",
-                          "-DANDROID_PLATFORM=android-23",
-                          "-DCMAKE_BUILD_TYPE=Release"
+                          "-DANDROID_PLATFORM=android-23"
             }
         }
     }
@@ -130,6 +148,7 @@ android {
                 storePassword releaseKeystorePassword
                 keyAlias releaseKeyAlias
                 keyPassword releaseKeyPassword
+                releaseSigningConfigured = true
             }
             enableV1Signing = true
             enableV2Signing = true
@@ -143,6 +162,14 @@ android {
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             signingConfig signingConfigs.release
+            // v1.2.3 round-44 (F3): per-buildType CMake build type (was pinned
+            //   to Release in defaultConfig, polluting debug builds).
+            externalNativeBuild {
+                cmake {
+                    arguments "-DCMAKE_BUILD_TYPE=Release"
+                    cppFlags "-O3 -DNDEBUG -std=c++20 -fvisibility=hidden -ffunction-sections -fdata-sections"
+                }
+            }
             // Native 代码 Release 编译优化
             externalNativeBuild {
                 cmake {
@@ -157,10 +184,19 @@ android {
             jniDebuggable true
             renderscriptDebuggable true
             signingConfig signingConfigs.debug
+            // v1.2.3 round-42 (42-11, #48-P3-7): distinct applicationId/version
+            //   suffix so debug and release builds can coexist on one device
+            //   (previously the identical applicationId forced uninstall-first).
+            //   The release block above is untouched.
+            applicationIdSuffix ".debug"
+            versionNameSuffix "-debug"
             // Debug 构建附带调试符号
+            // v1.2.3 round-44 (F3): real Debug CMake build type — asserts and
+            //   NDEBUG now behave as a debug build should.
             externalNativeBuild {
                 cmake {
-                    cppFlags "-O0 -g3 -fno-limit-debug-info"
+                    arguments "-DCMAKE_BUILD_TYPE=Debug"
+                    cppFlags "-O0 -g3 -std=c++20 -fno-limit-debug-info"
                 }
             }
         }
@@ -231,9 +267,10 @@ android {
             '-Xlint:unchecked',
             '-Xlint:deprecation'
         ]
-        // 开启编译器守护进程复用
-        options.fork = true
-        options.forkOptions.jvmArgs += ['-Xmx1024m']
+        // v1.2.3 round-44 (F10): removed `options.fork = true` + the 1GB heap
+        //   fork — javac now runs in the Gradle daemon (near-zero startup cost;
+        //   this project has <50 Java files and no annotation processors, so
+        //   forking a fresh 1GB JVM made every incremental compile ~3x slower).
     }
 }
 
@@ -271,5 +308,21 @@ task printBuildInfo {
         println "  AGP          : 8.7.3"
         println "  NDK Bundled  : ${android.ndkDirectory ?: 'Not found'}"
         println "========================================="
+    }
+}
+
+// v1.2.3 round-44 (F2): fail fast on unsigned release builds. Previously a
+//   missing keystore silently produced app-release-unsigned.apk, surfacing
+//   only at install time (INSTALL_PARSE_FAILED_NO_CERTIFICATES).
+gradle.taskGraph.whenReady { graph ->
+    boolean buildsRelease = graph.allTasks.any { t ->
+        (t.name.startsWith('assemble') || t.name.startsWith('package') || t.name.startsWith('bundle')) &&
+                t.name.contains('Release') && !t.name.contains('Debug')
+    }
+    if (buildsRelease && !releaseSigningConfigured) {
+        throw new GradleException(
+                'Release keystore not configured. Set RELEASE_KEYSTORE_PATH / ' +
+                'RELEASE_KEYSTORE_PASSWORD / RELEASE_KEY_ALIAS / RELEASE_KEY_PASSWORD ' +
+                'environment variables or create keystore.properties. See BUILDING.md.')
     }
 }

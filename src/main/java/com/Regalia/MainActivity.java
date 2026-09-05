@@ -24,7 +24,6 @@ package com.Regalia;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.res.Configuration;
-import android.graphics.Color;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -44,7 +43,7 @@ import android.widget.TextView;
 /**
  * Regalia MainActivity - WebView-based chess game with Stockfish engine.
  *
- * Compatibility: Supports Android 5.0 (API 21) through Android 15 (API 35).
+ * Compatibility: Supports Android 6.0 (API 23) through Android 15 (API 35).
  * Android 15+ (API 35) Edge-to-Edge enforcement is handled via enableImmersiveMode().
  *
  * v18.4.1 CRITICAL FIX: Added robust crash protection:
@@ -63,7 +62,16 @@ public class MainActivity extends Activity {
     //   package (com.Regalia) since build.gradle has buildConfig true.
     private static final String VERSION = "v" + BuildConfig.VERSION_NAME;
 
-    private WebView webView;
+    // v1.2.3 round-44 (B6): theme colors as constants (were 4 x
+    //   Color.parseColor literals — re-parsed on every fallback-UI build).
+    private static final int COLOR_BG = 0xFF1A0A0A;
+    private static final int COLOR_GOLD = 0xFFFFD700;
+    private static final int COLOR_CREAM = 0xFFF5E6C8;
+
+    // v1.2.3 round-44 (B5): volatile — written on the main thread (onCreate/
+    //   showFallbackUI/onDestroy) and read via getWebView() from
+    //   StockfishNative's engine/JS-binder threads.
+    private volatile WebView webView;
     private StockfishNative stockfishEngine;
     private volatile boolean engineInitialized = false;
     private Handler initRetryHandler;
@@ -76,8 +84,31 @@ public class MainActivity extends Activity {
     // v1.2.3 round-13 (P3): corrected stale comment — helper is NOT recreated
     //   on each start(); it's created once on first toggle and reused. State
     //   reset is handled internally by StabilizationHelper.start().
-    private StabilizationHelper stabilizationHelper = null;
-    private boolean stabilizationEnabled = false;
+    // v1.2.3 round-30 (robustness): declared `volatile` — both fields are
+    //   read/written from the JS binder thread (via StockfishNative.toggle-
+    //   Stabilization @JavascriptInterface entry point) AND from the main
+    //   thread (onResume/onPause/onDestroy). Without volatile, the main
+    //   thread may see a stale `false` after the user toggled stabilization
+    //   on from JS, causing onResume to skip sensor restart.
+    // v1.2.3 round-31 (PR52 CodeRabbit stability): volatile alone is not
+    //   enough — the check-then-act pattern in toggleStabilization() (read
+    //   stabilizationEnabled, then act) races with onDestroy() (set null,
+    //   set false). Added _stabilizationLock to serialize toggle vs destroy
+    //   and _destroyed guard to short-circuit post-destroy toggles. The
+    //   fields stay volatile for the onResume/onPause single-reads.
+    private volatile StabilizationHelper stabilizationHelper = null;
+    private volatile boolean stabilizationEnabled = false;
+    // v1.2.3 round-31: lock object for toggleStabilization() ↔ onDestroy()
+    //   serialization. Fine-grained (not `this`) so unrelated main-thread
+    //   entry points aren't blocked by a long sensor unregister.
+    private final Object _stabilizationLock = new Object();
+    // v1.2.3 round-31: tracks whether showFallbackUI() has been called and
+    //   replaced the WebView content view. When true, BACK must NOT be
+    //   dispatched to the (now-detached) WebView — it should fall through to
+    //   super.onKeyDown() so the system finishes the Activity. Previously
+    //   BACK was always dispatched to webView if webView!=null, which trapped
+    //   the user in fallback mode (webView was still alive but invisible).
+    private volatile boolean _isFallbackMode = false;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -113,7 +144,7 @@ public class MainActivity extends Activity {
         }
 
         // v18.4.6: Do NOT set FLAG_FULLSCREEN on API 30+ — it conflicts with Edge-to-Edge.
-        // On API 21-29, FLAG_FULLSCREEN is still valid and needed for true fullscreen.
+        // On API 23-29, FLAG_FULLSCREEN is still valid and needed for true fullscreen.
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
             try {
                 getWindow().setFlags(
@@ -131,7 +162,7 @@ public class MainActivity extends Activity {
             // v18.4.6: Set WebView background to match CSS --bg (#1a0a0a) immediately,
             // so the user never sees a white flash or blank screen while chess.html loads.
             // This is critical for perceived startup speed on slow devices.
-            webView.setBackgroundColor(Color.parseColor("#1a0a0a"));
+            webView.setBackgroundColor(COLOR_BG); // v1.2.3 round-44 (B6)
             // SECURITY FIX (MobSF #5): Prevent tapjacking — reject touches delivered
             // while the window is obscured by another overlay. This blocks malicious
             // apps that draw a transparent overlay on top to hijack taps.
@@ -257,6 +288,12 @@ public class MainActivity extends Activity {
 
         // Initialize Stockfish engine
         try {
+            // v1.2.3 round-44 (B10, KNOWN DESIGN DEBT): StockfishNative is
+            //   constructed on the main thread. The constructor is lightweight
+            //   (SharedPreferences read + Handler/manager instantiation — no
+            //   engine process spawn; the engine starts async via initEngine()),
+            //   so startup impact is small. A lazy/async-proxy refactor was
+            //   evaluated and rejected as high-risk for this wave.
             stockfishEngine = new StockfishNative(this);
             // SECURITY (MobSF #2): WebView.addJavascriptInterface is inherently flagged by
             // MobSF because a compromised WebView could call arbitrary Java methods. We
@@ -264,7 +301,7 @@ public class MainActivity extends Activity {
             //   1. WebView only loads trusted local content (file:///android_asset/chess.html).
             //      No remote URLs are ever loaded (verified in ChessWebViewClient).
             //   2. All 64+ exposed methods carry @JavascriptInterface (verified by grep).
-            //      On API 17+ (our minSdk=21), only annotated methods are reachable from JS,
+            //      On API 17+ (our minSdk=23), only annotated methods are reachable from JS,
             //      closing the historic reflection-based JS interface exploit.
             //   3. JavaScript is enabled only AFTER the WebView client is configured, so
             //      no remote content can race the JS interface registration.
@@ -302,6 +339,14 @@ public class MainActivity extends Activity {
      * or the engine init thread hangs.
      */
     private void scheduleInitRetry() {
+        // v1.2.3 round-46 (PR53 CR#22): never schedule engine-init retries
+        //   while the fallback UI is showing — the WebView is gone, so a
+        //   queued retry would NPE on webView (swallowed by its own catch)
+        //   and could build a StockfishNative with no JS bridge attached.
+        if (_isFallbackMode) {
+            Log.d(TAG, "Init retry skipped - fallback UI is showing");
+            return;
+        }
         initRetryHandler.removeCallbacksAndMessages(null);
         // v18.3.0: Lambda eliminated for HyperOS 3 ART compatibility (invokedynamic issue)
         initRetryHandler.postDelayed(new Runnable() {
@@ -320,6 +365,28 @@ public class MainActivity extends Activity {
                     } catch (Throwable e) {
                         Log.e(TAG, "Engine re-creation failed", e);
                     }
+                    // v1.2.3 round-34 (PR52 v4 Gitar Changes Requested): if the
+                    //   constructor persistently fails, stockfishEngine remains
+                    //   null. The round-33 fallback branch
+                    //   `else if (stockfishEngine == null && initRetryCount >= INIT_MAX_RETRIES)`
+                    //   was UNREACHABLE because initRetryCount was only
+                    //   incremented in the `stockfishEngine != null` branch
+                    //   below — so it stayed at 0 forever and the fallback
+                    //   never fired. Fix: increment initRetryCount HERE when
+                    //   re-creation failed, and re-schedule so the retry loop
+                    //   continues until INIT_MAX_RETRIES is exhausted.
+                    if (stockfishEngine == null) {
+                        if (initRetryCount < INIT_MAX_RETRIES) {
+                            initRetryCount++;
+                            Log.w(TAG, "Engine re-creation failed — retry " + initRetryCount + "/" + INIT_MAX_RETRIES);
+                            scheduleInitRetry();
+                            return;
+                        }
+                        // All retries exhausted with stockfishEngine still null.
+                        Log.e(TAG, "stockfishEngine null after " + INIT_MAX_RETRIES + " recreation attempts — showing fallback UI");
+                        showFallbackUI(getString(R.string.app_name) + ": \u5f15\u64ce\u52a0\u8f7d\u5931\u8d25\uff0c\u8bf7\u91cd\u542f\u5e94\u7528 / Engine load failed. Please restart the app.");
+                        return;
+                    }
                 }
                 if (stockfishEngine != null && !stockfishEngine.isEngineReady() && initRetryCount < INIT_MAX_RETRIES) {
                     initRetryCount++;
@@ -335,6 +402,21 @@ public class MainActivity extends Activity {
                         Log.w(TAG, "JS delayed init call failed", e);
                     }
                     scheduleInitRetry();
+                } else if (stockfishEngine != null && !stockfishEngine.isEngineReady()
+                           && initRetryCount >= INIT_MAX_RETRIES) {
+                    // v1.2.3 round-30 (feature): all retries exhausted and the
+                    //   engine still isn't ready. Show the fallback UI so the
+                    //   user gets feedback instead of an indefinite spinner.
+                    //   Previously the retry loop silently stopped, leaving the
+                    //   user with a non-functional engine and no error message.
+                    Log.e(TAG, "All " + INIT_MAX_RETRIES + " init retries exhausted — showing fallback UI");
+                    // v1.2.3 round-33 (PR52 v3 #4.2.10): bilingual message —
+                    //   the rest of showFallbackUI's calls use Chinese (unicode
+                    //   escapes) for consistency with the project convention,
+                    //   but ChessWebViewClient.java uses bilingual format for
+                    //   runtime fallback messages. This round-30 message was
+                    //   English-only, breaking the convention. Now bilingual.
+                    showFallbackUI(getString(R.string.app_name) + ": \u5f15\u64ce\u521d\u59cb\u5316\u5931\u8d25\uff0c\u8bf7\u91cd\u542f\u5e94\u7528 / Engine init failed. Please restart the app.");
                 }
             }
         }, INIT_RETRY_DELAY_MS);
@@ -376,29 +458,70 @@ public class MainActivity extends Activity {
     //   can invoke it from the render-crash backoff path (4+ crashes in 60s)
     //   to show the user a recovery message instead of a frozen screen.
     void showFallbackUI(String message) {
+        // v1.2.3 round-46 (PR53 CR#22): cancel pending engine-init retries
+        //   FIRST — once the fallback UI replaces the WebView, a queued retry
+        //   would dereference the destroyed/null webView (NPE swallowed by its
+        //   own catch) and could construct a StockfishNative with no JS bridge.
+        //   scheduleInitRetry() is additionally guarded by _isFallbackMode so
+        //   retries not yet posted (e.g. the loadUrl-failure path below in
+        //   onCreateInternal) are skipped as well.
+        if (initRetryHandler != null) {
+            initRetryHandler.removeCallbacksAndMessages(null);
+        }
+        // v1.2.3 round-44 (B3): destroy the old WebView before swapping in the
+        //   fallback view — previously it stayed alive (hidden), pinning the
+        //   engine JS bridge + native resources for the rest of the process
+        //   lifetime. All `webView != null` call sites tolerate the null, and
+        //   _isFallbackMode already gates BACK dispatch. Each step guarded so
+        //   a half-broken WebView cannot block the fallback UI itself.
+        final WebView oldWebView = webView;
+        if (oldWebView != null) {
+            try { oldWebView.stopLoading(); } catch (Throwable t) { Log.w(TAG, "fallback: stopLoading failed", t); }
+            try { oldWebView.loadUrl("about:blank"); } catch (Throwable t) { Log.w(TAG, "fallback: about:blank failed", t); }
+            try { oldWebView.removeJavascriptInterface("AndroidBridge"); } catch (Throwable t) { Log.w(TAG, "fallback: removeJavascriptInterface failed", t); }
+            // v1.2.3 round-46 (PR53 CR#23): detach from the parent view BEFORE
+            //   destroy() — Android requires a WebView to be removed from the
+            //   view hierarchy first; destroying an attached WebView can throw
+            //   or leak the window (same step order as runWebViewTeardown).
+            try {
+                if (oldWebView.getParent() instanceof android.view.ViewGroup) {
+                    ((android.view.ViewGroup) oldWebView.getParent()).removeView(oldWebView);
+                }
+            } catch (Throwable t) { Log.w(TAG, "fallback: removeView failed", t); }
+            try { oldWebView.destroy(); } catch (Throwable t) { Log.w(TAG, "fallback: destroy failed", t); }
+            webView = null;
+        }
         try {
             LinearLayout layout = new LinearLayout(this);
             layout.setOrientation(LinearLayout.VERTICAL);
             layout.setGravity(Gravity.CENTER);
-            layout.setBackgroundColor(Color.parseColor("#1a0a0a"));
+            layout.setBackgroundColor(COLOR_BG); // v1.2.3 round-44 (B6)
             layout.setPadding(32, 32, 32, 32);
 
             TextView titleView = new TextView(this);
             titleView.setText("Regalia " + VERSION);
-            titleView.setTextColor(Color.parseColor("#ffd700"));
+            titleView.setTextColor(COLOR_GOLD); // v1.2.3 round-44 (B6)
             titleView.setTextSize(24);
             titleView.setGravity(Gravity.CENTER);
             titleView.setPadding(0, 0, 0, 24);
 
             TextView msgView = new TextView(this);
             msgView.setText(message);
-            msgView.setTextColor(Color.parseColor("#f5e6c8"));
+            msgView.setTextColor(COLOR_CREAM); // v1.2.3 round-44 (B6)
             msgView.setTextSize(16);
             msgView.setGravity(Gravity.CENTER);
 
             layout.addView(titleView);
             layout.addView(msgView);
             setContentView(layout);
+            // v1.2.3 round-31 (PR52 CodeRabbit stability): mark fallback mode
+            //   so onKeyDown(BACK) routes to super instead of the now-hidden
+            //   WebView. setContentView replaces the WebView as the visible
+            //   content but does NOT null out the webView field or destroy
+            //   it — without this flag, BACK presses would still be forwarded
+            //   to webView.evaluateJavascript("handleBackPress()"), trapping
+            //   the user in the fallback screen.
+            _isFallbackMode = true;
         } catch (Throwable e) {
             Log.e(TAG, "Fallback UI failed", e);
         }
@@ -417,7 +540,7 @@ public class MainActivity extends Activity {
      * FIX: On Android 15+ (API 35), do NOT call setDecorFitsSystemWindows at all —
      * let the system handle Edge-to-Edge natively. On Android 11-14 (API 30-34),
      * use the platform WindowInsetsController API directly (no AndroidX reflection).
-     * On Android 5-10, use legacy system UI visibility flags.
+     * On Android 6-10, use legacy system UI visibility flags.
      *
      * This eliminates the AndroidX reflection chain that was causing ClassNotFoundException
      * and VerifyError on some devices, and removes the conflicting setDecorFitsSystemWindows
@@ -464,7 +587,7 @@ public class MainActivity extends Activity {
                 return;
             }
 
-            // Android 5-10 (API 21-29): Legacy system ui visibility flags
+            // Android 6-10 (API 23-29): Legacy system ui visibility flags
             View decorView = getWindow().getDecorView();
             if (decorView != null) {
                 applyLegacyImmersiveMode(decorView);
@@ -476,7 +599,7 @@ public class MainActivity extends Activity {
 
     /**
      * OPT: P0/P4 - Extracted legacy immersive mode logic for reuse and clarity.
-     * Used on Android 5.x through Android 10 (API 21-29).
+     * Used on Android 6.x through Android 10 (API 23-29).
      */
     private void applyLegacyImmersiveMode(View decorView) {
         decorView.setSystemUiVisibility(
@@ -529,6 +652,8 @@ public class MainActivity extends Activity {
     @Override
     public void onResume() {
         super.onResume();
+        // v1.2.3 round-44 (B1/B7): new foreground episode — re-arm the flush dedup.
+        flushedSinceResume = false;
         if (webView != null) {
             try {
                 webView.onResume();
@@ -539,9 +664,22 @@ public class MainActivity extends Activity {
         enableImmersiveMode();
 
         // v1.0.5 Round-6 Rev49: Re-start sensor-based stabilization if it was
-        // enabled before pause (battery-saving stop in onPause).
-        if (stabilizationEnabled && stabilizationHelper != null) {
-            try { stabilizationHelper.start(); } catch (Throwable e) { Log.w(TAG, "stab restart on resume failed", e); }
+        //   enabled before pause (battery-saving stop in onPause).
+        // v1.2.3 round-33 (PR52 v3 #4.1.4): synchronize on _stabilizationLock
+        //   to close the race window — without the lock, the JS binder thread
+        //   could call toggleStabilization() (which IS locked) concurrently
+        //   with this read, causing us to see a stale stabilizationEnabled /
+        //   stabilizationHelper pair. Round-31 added the lock for
+        //   toggleStabilization + onDestroy but missed onResume/onPause; this
+        //   round closes that gap. The lock is fine-grained (not `this`) so
+        //   unrelated main-thread entry points aren't blocked.
+        synchronized (_stabilizationLock) {
+            if (isDestroyed) {
+                // Activity is being destroyed — skip (matches onDestroy's
+                // short-circuit in toggleStabilization).
+            } else if (stabilizationEnabled && stabilizationHelper != null) {
+                try { stabilizationHelper.start(); } catch (Throwable e) { Log.w(TAG, "stab restart on resume failed", e); }
+            }
         }
 
         // Retry engine init if not ready (handles case where init failed previously)
@@ -598,31 +736,63 @@ public class MainActivity extends Activity {
     // v1.0.2 FEATURE: Static flag for cross-activity communication with StatsActivity
     public static volatile boolean pendingStatsReviewRequest = false;
 
-    @Override
-    public void onPause() {
-        super.onPause();
-        // v1.0.5 Round-6 Rev49: Stop sensor-based stabilization when backgrounded
-        // (battery saving). onResume will restart it IF it was enabled.
-        if (stabilizationEnabled && stabilizationHelper != null) {
-            try { stabilizationHelper.stop(); } catch (Throwable e) { Log.w(TAG, "stab stop on pause failed", e); }
+    // v1.2.3 round-44 (B1/B7): dedup flag — at most one flush per
+    //   backgrounding episode (pause->stop->destroy chains would otherwise
+    //   flush 3x). Reset in onResume. onDestroy bypasses the dedup via
+    //   force=true so the FINAL flush is never skipped.
+    private volatile boolean flushedSinceResume = false;
+
+    /**
+     * v1.2.3 round-44 (B1/B7): unified lifecycle state flush, delegating target
+     *   for onPause/onStop/onUserLeaveHint/onDestroy. Order: JS first
+     *   (_flushReviewEvalCache writes eval_cache.json synchronously via the
+     *   bridge), then SharedPreferences pending writes (persistentFlush).
+     *
+     * @param reason caller tag for logging
+     * @param force  when true (onDestroy only), flush even if already flushed
+     *               since resume — the destroy flush is the last chance before
+     *               process death and must not be deduped away.
+     */
+    private void flushAllState(String reason, boolean force) {
+        if (!force && flushedSinceResume) {
+            Log.d(TAG, "flushAllState(" + reason + ") skipped — already flushed since resume");
+            return;
         }
-        // v1.0.4 Round-5 Rev20: Flush any pending JS localStorage writes to the
-        // persistent Java store BEFORE the OS can kill the app. HyperOS 3 is
-        // aggressive about killing backgrounded apps — without this flush, any
-        // writes queued by persistentSet() (which uses async apply()) would be lost.
-        if (stockfishEngine != null) {
-            try {
-                stockfishEngine.persistentFlush();
-            } catch (Throwable e) {
-                Log.w(TAG, "persistentFlush on pause failed", e);
-            }
-        }
-        // Also notify JS to flush its in-memory _reviewEvalCache to disk synchronously
+        flushedSinceResume = true;
         if (webView != null) {
             try {
                 webView.evaluateJavascript("try{if(typeof _flushReviewEvalCache==='function')_flushReviewEvalCache();}catch(e){}", null);
             } catch (Throwable ignored) {}
         }
+        if (stockfishEngine != null) {
+            try {
+                stockfishEngine.persistentFlush();
+            } catch (Throwable e) {
+                Log.w(TAG, "persistentFlush failed (" + reason + ")", e);
+            }
+        }
+    }
+
+    private void flushAllState(String reason) {
+        flushAllState(reason, false);
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        // v1.0.5 Round-6 Rev49: Stop sensor-based stabilization when backgrounded
+        //   (battery saving). onResume will restart it IF it was enabled.
+        // v1.2.3 round-33 (PR52 v3 #4.1.4): synchronize on _stabilizationLock
+        //   to close the race window (see onResume comment for rationale).
+        synchronized (_stabilizationLock) {
+            if (stabilizationEnabled && stabilizationHelper != null) {
+                try { stabilizationHelper.stop(); } catch (Throwable e) { Log.w(TAG, "stab stop on pause failed", e); }
+            }
+        }
+        // v1.2.3 round-44 (B1/B7): unified flush entry (Rev20 rationale:
+        //   HyperOS 3 kills backgrounded apps aggressively; without this flush
+        //   any writes queued by persistentSet()'s async apply() would be lost).
+        flushAllState("pause");
         if (webView != null) {
             try {
                 webView.onPause();
@@ -635,39 +805,16 @@ public class MainActivity extends Activity {
     @Override
     public void onStop() {
         super.onStop();
-        // v1.0.4 Round-5 Rev20: onStop is called when the activity is no longer
-        // visible. HyperOS 3 may SIGKILL the app at this point without further
-        // callbacks. Do a final synchronous flush.
-        if (stockfishEngine != null) {
-            try {
-                stockfishEngine.persistentFlush();
-            } catch (Throwable e) {
-                Log.w(TAG, "persistentFlush on stop failed", e);
-            }
-        }
-        if (webView != null) {
-            try {
-                webView.evaluateJavascript("try{if(typeof _flushReviewEvalCache==='function')_flushReviewEvalCache();}catch(e){}", null);
-            } catch (Throwable ignored) {}
-        }
+        // v1.2.3 round-44 (B1/B7): onStop may be the last callback before a
+        //   HyperOS SIGKILL — flush (deduped against the onPause flush).
+        flushAllState("stop");
     }
 
     @Override
     public void onUserLeaveHint() {
         super.onUserLeaveHint();
-        // v1.0.4 Round-5 Rev20: User pressed Home — same risk as onPause/onStop.
-        if (stockfishEngine != null) {
-            try {
-                stockfishEngine.persistentFlush();
-            } catch (Throwable e) {
-                Log.w(TAG, "persistentFlush on UserLeaveHint failed", e);
-            }
-        }
-        if (webView != null) {
-            try {
-                webView.evaluateJavascript("try{if(typeof _flushReviewEvalCache==='function')_flushReviewEvalCache();}catch(e){}", null);
-            } catch (Throwable ignored) {}
-        }
+        // v1.2.3 round-44 (B1/B7): User pressed Home — same risk as onPause/onStop.
+        flushAllState("userLeaveHint");
     }
 
     @Override
@@ -676,11 +823,17 @@ public class MainActivity extends Activity {
         isDestroyed = true;
 
         // v1.0.5 Round-6 Rev49: Stop sensor-based stabilization and release sensors.
-        if (stabilizationHelper != null) {
-            try { stabilizationHelper.stop(); } catch (Throwable e) { Log.w(TAG, "stab stop on destroy failed", e); }
-            stabilizationHelper = null;
+        // v1.2.3 round-31 (PR52 CodeRabbit stability): acquire _stabilizationLock
+        //   so toggleStabilization() on the JS binder thread can't be mid-flight
+        //   (creating/starting a helper) while we null out the field. The lock
+        //   is fine-grained; sensor unregister is fast (~ms).
+        synchronized (_stabilizationLock) {
+            if (stabilizationHelper != null) {
+                try { stabilizationHelper.stop(); } catch (Throwable e) { Log.w(TAG, "stab stop on destroy failed", e); }
+                stabilizationHelper = null;
+            }
+            stabilizationEnabled = false;
         }
-        stabilizationEnabled = false;
 
         // OPT: P0 - Cancel any pending init retry callbacks and release Handler reference
         // to prevent memory leaks and late callback execution.
@@ -688,29 +841,37 @@ public class MainActivity extends Activity {
             initRetryHandler.removeCallbacksAndMessages(null);
             initRetryHandler = null;
         }
-        // v1.0.4 Round-5 Rev22 (this round): Final flush of eval cache + persistent
-        // store BEFORE the WebView is destroyed. onDestroy may be the last callback
-        // we get if the OS skips onStop (e.g., low-memory kill). Without this flush,
-        // any eval data that arrived between onStop and onDestroy could be lost.
-        // Order matters: flush JS first (writes to eval_cache.json via saveEvalCacheSync),
-        // then flush SharedPreferences pending writes (persistentFlush).
-        if (webView != null) {
+        // v1.2.3 round-44 (B1/B7): final flush — FORCED (ignores the dedup
+        //   flag): onDestroy may be the last callback before process death and
+        //   any eval data that arrived since the onStop flush must hit disk
+        //   (Rev22 rationale: JS eval-cache first, then SharedPreferences —
+        //   that order now lives in flushAllState).
+        flushAllState("destroy", true);
+        // Notify JS to clean up event listeners and timers before destroying
+        // the WebView. v1.2.3 round-44 (B2): the teardown is CHAINED to this
+        //   evaluateJavascript's value callback so the JS cleanup (and the
+        //   flush above) actually execute before native destroy; a 500ms
+        //   postDelayed fallback forces teardown if the renderer is frozen and
+        //   the callback never fires. runWebViewTeardown is idempotent
+        //   (AtomicBoolean guard), so both paths may fire safely.
+        final WebView wvToTeardown = webView;
+        if (wvToTeardown != null) {
             try {
-                webView.evaluateJavascript("try{if(typeof _flushReviewEvalCache==='function')_flushReviewEvalCache();}catch(e){}", null);
-            } catch (Throwable ignored) {}
-        }
-        if (stockfishEngine != null) {
-            try {
-                stockfishEngine.persistentFlush();
+                wvToTeardown.evaluateJavascript(
+                    "try{if(typeof _cleanupEventListeners==='function')_cleanupEventListeners();}catch(e){}",
+                    new android.webkit.ValueCallback<String>() {
+                        @Override public void onReceiveValue(String value) {
+                            runWebViewTeardown(wvToTeardown);
+                        }
+                    });
             } catch (Throwable e) {
-                Log.w(TAG, "persistentFlush on destroy failed", e);
+                Log.w(TAG, "onDestroy JS cleanup eval failed", e);
             }
-        }
-        // Notify JS to clean up event listeners and timers before destroying WebView
-        if (webView != null) {
-            try {
-                webView.evaluateJavascript("try{if(typeof _cleanupEventListeners==='function')_cleanupEventListeners();}catch(e){}", null);
-            } catch (Throwable ignored) {}
+            new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+                public void run() {
+                    runWebViewTeardown(wvToTeardown);
+                }
+            }, 500);
         }
         if (stockfishEngine != null) {
             try {
@@ -719,71 +880,121 @@ public class MainActivity extends Activity {
                 Log.w(TAG, "Engine shutdown failed", e);
             }
         }
-        if (webView != null) {
-            // v1.0.8 PHASE 29 (PDF best practice): Full WebView cleanup sequence
-            //   per "WebView 性能与健壮性优化指南" §健壮性保障 §1.标准销毁流程.
-            //   Order matters: each step prevents a specific leak/crash class.
-            //   1. removeView — prevents WindowLeaked exception if the WebView
-            //      still has an attached window when the Activity is destroyed.
-            //   2. clearHistory — releases the navigation history back/forward
-            //      stack so it can't be restored into a new WebView instance.
-            //   3. loadUrl("about:blank") — drops all JS callbacks and clears
-            //      the document, preventing JS timers from running on a dead
-            //      WebView. Also removes any pending navigation.
-            //   4. removeJavascriptInterface — explicitly unregisters the
-            //      AndroidBridge interface so a stale JS reference can't call
-            //      into the (now-defunct) StockfishNative after destroy.
-            //   5. onPause — pauses any remaining JS timers/media.
-            //   6. destroy — final native teardown.
-            //   v1.1.2 Phase 67 (P3): added step 0 — stopLoading() to abort any
-            //   in-flight page/resource load before tearing down. Otherwise the
-            //   WebView may attempt to dispatch a load callback to a destroyed
-            //   native peer, producing a SIGSEGV on certain OEM ROMs (HyperOS, MIUI).
-            try {
-                webView.stopLoading();
-            } catch (Throwable e) {
-                Log.w(TAG, "WebView stopLoading failed", e);
-            }
-            try {
-                if (webView.getParent() instanceof android.view.ViewGroup) {
-                    ((android.view.ViewGroup) webView.getParent()).removeView(webView);
-                }
-            } catch (Throwable e) {
-                Log.w(TAG, "WebView removeView failed", e);
-            }
-            try {
-                webView.clearHistory();
-            } catch (Throwable e) {
-                Log.w(TAG, "WebView clearHistory failed", e);
-            }
-            try {
-                webView.loadUrl("about:blank");
-            } catch (Throwable e) {
-                Log.w(TAG, "WebView loadUrl about:blank failed", e);
-            }
-            try {
-                webView.removeJavascriptInterface("AndroidBridge");
-            } catch (Throwable e) {
-                Log.w(TAG, "WebView removeJavascriptInterface failed", e);
-            }
-            try {
-                webView.onPause();
-            } catch (Throwable e) {
-                Log.w(TAG, "WebView onPause failed", e);
-            }
-            try {
-                webView.destroy();
-            } catch (Throwable e) {
-                Log.w(TAG, "WebView destroy failed", e);
-            }
-            webView = null;
-        }
         super.onDestroy();
+    }
+
+    // v1.2.3 round-44 (B2): one-shot guard — teardown runs from the JS cleanup
+    //   callback OR the timed fallback, whichever fires first.
+    // v1.2.3 round-46 (PR53 CR#24): fallback raised 100ms -> 500ms — under load
+    //   the JS cleanup callback can legitimately take >100ms to arrive, and the
+    //   100ms fallback fired early, skipping the JS-side listener cleanup.
+    private final java.util.concurrent.atomic.AtomicBoolean _webViewTeardownDone =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+
+    /**
+     * v1.2.3 round-44 (B2): full WebView teardown, extracted from onDestroy so
+     *   it can be chained to the JS cleanup callback with a timed fallback.
+     *   Idempotent via _webViewTeardownDone. Step order preserved from the
+     *   v1.0.8 PHASE 29 / v1.1.2 Phase 67 sequence: stopLoading (abort in-flight
+     *   loads — SIGSEGV guard on HyperOS/MIUI) -> removeView (WindowLeaked) ->
+     *   clearHistory -> about:blank (drop JS callbacks/document) ->
+     *   removeJavascriptInterface (stale AndroidBridge) -> onPause (JS
+     *   timers/media) -> destroy (native teardown). Each step individually
+     *   guarded — a half-destroyed WebView must not block the rest.
+     */
+    private void runWebViewTeardown(final WebView wv) {
+        if (wv == null) return;
+        if (!_webViewTeardownDone.compareAndSet(false, true)) return;
+        try {
+            wv.stopLoading();
+        } catch (Throwable e) {
+            Log.w(TAG, "WebView stopLoading failed", e);
+        }
+        try {
+            if (wv.getParent() instanceof android.view.ViewGroup) {
+                ((android.view.ViewGroup) wv.getParent()).removeView(wv);
+            }
+        } catch (Throwable e) {
+            Log.w(TAG, "WebView removeView failed", e);
+        }
+        try {
+            wv.clearHistory();
+        } catch (Throwable e) {
+            Log.w(TAG, "WebView clearHistory failed", e);
+        }
+        try {
+            wv.loadUrl("about:blank");
+        } catch (Throwable e) {
+            Log.w(TAG, "WebView loadUrl about:blank failed", e);
+        }
+        try {
+            wv.removeJavascriptInterface("AndroidBridge");
+        } catch (Throwable e) {
+            Log.w(TAG, "WebView removeJavascriptInterface failed", e);
+        }
+        try {
+            wv.onPause();
+        } catch (Throwable e) {
+            Log.w(TAG, "WebView onPause failed", e);
+        }
+        try {
+            wv.destroy();
+        } catch (Throwable e) {
+            Log.w(TAG, "WebView destroy failed", e);
+        }
+        webView = null;
+    }
+
+    // v1.2.3 round-44 (B9): persist lightweight Activity state. LIMITATION:
+    //   the live FEN exists only inside the WebView JS context and cannot be
+    //   read synchronously here (evaluateJavascript is async and the page may
+    //   already be suspending), so we persist only flags + force a durability
+    //   flush of the SharedPreferences-backed store; game-state restoration
+    //   relies on the JS layer's own persistence (review/eval cache, PGN).
+    @Override
+    public void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        try {
+            outState.putBoolean("engineInitialized", engineInitialized);
+            outState.putBoolean("fallbackMode", _isFallbackMode);
+            flushAllState("saveInstanceState");
+        } catch (Throwable e) {
+            Log.w(TAG, "onSaveInstanceState failed", e);
+        }
+    }
+
+    // v1.2.3 round-44 (B9): on moderate+ memory pressure, make our own state
+    //   durable. LIMITATION: StockfishNative exposes no partial memory-release
+    //   interface (UCI has no mid-game-safe "shrink hash"; a full shutdown
+    //   would forfeit the game), so there is no engine-side release hook to
+    //   call — engine RAM is reclaimed by the OS only via process kill, after
+    //   which the heartbeat's recoverEngine() restarts it.
+    @Override
+    public void onTrimMemory(int level) {
+        super.onTrimMemory(level);
+        if (level >= TRIM_MEMORY_MODERATE) {
+            try {
+                flushAllState("trimMemory");
+            } catch (Throwable e) {
+                Log.w(TAG, "onTrimMemory flush failed", e);
+            }
+        }
     }
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if (keyCode == KeyEvent.KEYCODE_BACK) {
+            // v1.2.3 round-31 (PR52 CodeRabbit stability): if showFallbackUI()
+            //   replaced the content view, the WebView is hidden but still
+            //   alive in memory — dispatching BACK to it would call a JS
+            //   handler on an invisible page and trap the user. Route to
+            //   super instead so the system finishes the Activity.
+            //   The pre-round-31 `webView != null` check only covered the
+            //   "WebView creation failed" path; the "WebView exists but
+            //   fallback UI replaced it" path was missed.
+            if (_isFallbackMode) {
+                return super.onKeyDown(keyCode, event);
+            }
             if (webView != null) {
                 try {
                     webView.evaluateJavascript("if(typeof handleBackPress==='function'){handleBackPress();}", null);
@@ -820,7 +1031,28 @@ public class MainActivity extends Activity {
             } catch (Throwable ignored) {}
             return;
         }
-        if (stockfishEngine == null) return;
+        // v1.2.3 round-44 (B4): engine bridge missing — notify JS so the
+        //   file-picker UI doesn't hang silently.
+        if (stockfishEngine == null) {
+            if (webView != null) {
+                try {
+                    webView.evaluateJavascript("try{if(typeof onFilePickerError==='function')onFilePickerError('engine_unavailable');}catch(e){}", null);
+                } catch (Throwable ignored) {}
+            }
+            return;
+        }
+        // v1.2.3 round-44 (B8): RESULT_OK with null data is abnormal for SAF
+        //   pickers; SafPickerHelper silently returns on null (that file is out
+        //   of scope this wave), so surface the error to JS here at the
+        //   forwarding layer instead of dropping it.
+        if (data == null) {
+            if (webView != null) {
+                try {
+                    webView.evaluateJavascript("try{if(typeof onFilePickerError==='function')onFilePickerError('no_data');}catch(e){}", null);
+                } catch (Throwable ignored) {}
+            }
+            return;
+        }
         try {
             if (requestCode == StockfishNative.REQUEST_CODE_IMPORT_SETTINGS) {
                 stockfishEngine.handleFilePickerResult(data);
@@ -837,6 +1069,16 @@ public class MainActivity extends Activity {
 
     public WebView getWebView() {
         return webView;
+    }
+
+    // v1.2.3 round-46 (PR53 CR#20): called by ChessWebViewClient just before
+    //   it destroys a render-crashed WebView, so this Activity's `webView`
+    //   field never keeps referencing a destroyed instance — reusing a
+    //   destroyed WebView violates the WebView API contract and can crash.
+    void clearWebViewIfMatches(WebView destroyed) {
+        if (webView == destroyed) {
+            webView = null;
+        }
     }
 
     // ========================================================================
@@ -867,32 +1109,50 @@ public class MainActivity extends Activity {
      * Shows a Toast in the current language (zh/en).
      */
     public void toggleStabilization() {
-        if (stabilizationEnabled) {
-            // Turn OFF
-            if (stabilizationHelper != null) {
-                try { stabilizationHelper.stop(); } catch (Throwable e) { Log.w(TAG, "stab stop failed", e); }
+        // v1.2.3 round-31 (PR52 CodeRabbit stability): serialize against
+        //   onDestroy() to prevent the race where the JS binder thread is
+        //   mid-toggle (just created a new StabilizationHelper, about to
+        //   start()) while the main thread enters onDestroy() and nulls
+        //   out the field. Without this lock, the Binder thread would
+        //   call start() on a helper whose owner reference was just nulled,
+        //   leaking sensors that onDestroy() thought it had stopped.
+        //   The lock is fine-grained (_stabilizationLock, not `this`) so
+        //   unrelated main-thread entry points (onResume, onPause) aren't
+        //   blocked by a long sensor unregister. isDestroyed is checked
+        //   inside the lock to short-circuit post-destroy toggles.
+        synchronized (_stabilizationLock) {
+            if (isDestroyed) {
+                // Activity is being destroyed — drop the toggle silently.
+                Log.i(TAG, "toggleStabilization ignored — Activity destroyed");
+                return;
             }
-            stabilizationEnabled = false;
-            showToastLocalized("stabilization_off");
-        } else {
-            // Turn ON
-            if (stabilizationHelper == null && webView != null) {
-                try {
-                    stabilizationHelper = new StabilizationHelper(this, webView);
-                } catch (Throwable e) {
-                    Log.e(TAG, "StabilizationHelper creation failed", e);
-                    showToastLocalized("stabilization_unavailable");
-                    return;
+            if (stabilizationEnabled) {
+                // Turn OFF
+                if (stabilizationHelper != null) {
+                    try { stabilizationHelper.stop(); } catch (Throwable e) { Log.w(TAG, "stab stop failed", e); }
                 }
-            }
-            if (stabilizationHelper != null) {
-                boolean ok = false;
-                try { ok = stabilizationHelper.start(); } catch (Throwable e) { Log.e(TAG, "stab start failed", e); }
-                if (ok) {
-                    stabilizationEnabled = true;
-                    showToastLocalized("stabilization_on");
-                } else {
-                    showToastLocalized("stabilization_unavailable");
+                stabilizationEnabled = false;
+                showToastLocalized("stabilization_off");
+            } else {
+                // Turn ON
+                if (stabilizationHelper == null && webView != null) {
+                    try {
+                        stabilizationHelper = new StabilizationHelper(this, webView);
+                    } catch (Throwable e) {
+                        Log.e(TAG, "StabilizationHelper creation failed", e);
+                        showToastLocalized("stabilization_unavailable");
+                        return;
+                    }
+                }
+                if (stabilizationHelper != null) {
+                    boolean ok = false;
+                    try { ok = stabilizationHelper.start(); } catch (Throwable e) { Log.e(TAG, "stab start failed", e); }
+                    if (ok) {
+                        stabilizationEnabled = true;
+                        showToastLocalized("stabilization_on");
+                    } else {
+                        showToastLocalized("stabilization_unavailable");
+                    }
                 }
             }
         }
@@ -941,7 +1201,7 @@ public class MainActivity extends Activity {
                 @Override
                 public void run() {
                     try {
-                        android.widget.Toast.makeText(MainActivity.this, msg, android.widget.Toast.LENGTH_SHORT).show();
+                        android.widget.Toast.makeText(MainActivity.this, msg, android.widget.Toast.LENGTH_LONG).show();
                     } catch (Throwable e) {
                         Log.w(TAG, "Toast show failed", e);
                     }

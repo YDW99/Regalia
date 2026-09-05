@@ -41,7 +41,7 @@ function startGame(){
 
 function _startGameImpl(){
   // v1.0.8 PHASE 22 supplement: new-game sound (号角式三音和弦)
-  try{if(typeof playSound==='function')playSound('newgame');}catch(e){console.warn('[UI]',e&&e.message?e.message:e);}
+  try{if(typeof playSound==='function')playSound('newgame');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   showNewGameDialog=false;
   playerColor=dlgPlayerColor;
   useBookMoves=dlgBookMoves;
@@ -127,7 +127,7 @@ function _startGameImpl(){
     const ecoName=pipeIdx>=0?dlgOpeningId.substring(pipeIdx+1):'';
     // Find the specific opening variant by code + name
     const opList=ECO_BY_ID[ecoCode];
-    if(opList&&opList.length>0){
+    if(opList?.length>0){
       let opening=null;
       for(const op of opList){
         if(op.name===ecoName){opening=op;break;}
@@ -278,6 +278,16 @@ function _tickGameClock(){
 // Called when a side's clock runs out
 function _onGameClockExpired(color){
   if(gameClockTimerId){clearInterval(gameClockTimerId);gameClockTimerId=null;}
+  // v1.2.3 round-42 (42-2, P3-14): zero the flagged side's COMMITTED clock.
+  //   The tick path only writes displayRemainingSec (:268) — remainingSec is
+  //   committed per-move in recordMoveEnd — so after a tick-detected flag fall
+  //   the header clock HTML (ui.js render reads gameClocks[c].remainingSec)
+  //   kept showing the stale positive value from the last move instead of
+  //   0:00. Sync both fields here so the final render shows 0:00.
+  if(gameClocks&&gameClocks[color]){
+    gameClocks[color].remainingSec=0;
+    gameClocks[color].displayRemainingSec=0;
+  }
   // v1.0.4 Rev35 FIX (CRITICAL): Stop the engine IMMEDIATELY when the clock
   // expires. Previously, the engine continued searching after flag-fall
   // because no "stop" command was sent. The engine's internal wtime-based
@@ -285,30 +295,66 @@ function _onGameClockExpired(color){
   // deduction (especially under HyperOS 3's aggressive CPU throttling),
   // causing the engine to search far past the 0-second mark. This made
   // timed games feel "broken" — the engine kept thinking after time was up.
-  // Now we send a hard "stop" via engineStop() so the engine returns
+  // Now we send a hard "stop" via _engineStopHard() so the engine returns
   // bestmove immediately and the game-over overlay shows promptly.
+  // v1.2.3 round-36 (dedup): replaced inline engineStop+fallback with
+  //   the canonical _engineStopHard() helper from ai-bridge.js.
   try{
     if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.isEngineReady==='function'&&AndroidBridge.isEngineReady()){
-      if(typeof AndroidBridge.engineStop==='function'){
-        AndroidBridge.engineStop();
-      }else if(typeof AndroidBridge.sendToEngine==='function'){
-        // Fallback for older builds: send raw "stop"
-        AndroidBridge.sendToEngine('stop');
-      }
+      _engineStopHard();
     }
     // Clear AI thinking state so UI updates promptly
     isAIThinking=false;
     if(typeof _aiBarInfo!=='undefined')_aiBarInfo='';
     if(typeof _aiSafetyTimerId!=='undefined'&&_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
   }catch(e){console.warn('engineStop on clock expiry failed:',e);}
-  // Game over: the OTHER side wins by time
-  // v1.0.4 Rev47: Use _gameOverStrFromStatus() for proper T()-based localization
-  // instead of hardcoding _lang. This ensures the text re-localizes when the
-  // user toggles language after the game-over overlay is shown.
+  // Game over: the OTHER side wins by time — UNLESS the OTHER side has
+  //   insufficient material to checkmate (FIDE 6.9). In that case the game
+  //   is drawn, not won. v1.2.3 round-25 introduced this check but used the
+  //   symmetric isDeadPosition() (FIDE 5.2.2 — both sides lack material),
+  //   which misses the asymmetric case (winner has only K, K+N, or K+B →
+  //   cannot mate the loser even with cooperative play; K+N+N is NOT in this
+  //   list — v1.2.3 round-40 removed the KNN exemption per strict FIDE 6.9,
+  //   since K+N+N can deliver mate with the loser's help). v1.2.3 round-29
+  //   (PR52) replaces it
+  //   with winnerLacksMatingMaterial(state, winner) which checks the
+  //   WINNER's mating ability specifically. We still fall back to
+  //   isDeadPosition for the symmetric case (e.g. K vs K) so the existing
+  //   FIDE 5.2.2 path stays intact.
   const winner=color==='white'?'black':'white';
-  if(typeof _timeoutWinnerColor!=='undefined')_timeoutWinnerColor=winner;
-  _gameOverStatusKey='timeout';
-  gameOver=_gameOverStrFromStatus('timeout');
+  let _isDrawByInsufficientMaterial=false;
+  try{
+    if(gameState){
+      // FIDE 6.9: if the WINNER cannot checkmate the LOSER by any series of
+      //   legal moves, the game is drawn (not won on time).
+      if(typeof winnerLacksMatingMaterial==='function'
+         && winnerLacksMatingMaterial(gameState,winner)){
+        _isDrawByInsufficientMaterial=true;
+      }else if(typeof isDeadPosition==='function'&&isDeadPosition(gameState)){
+        // FIDE 5.2.2 fallback: whole position is dead (both sides lack
+        //   material). This subsumes K vs K and the rare mutual case.
+        _isDrawByInsufficientMaterial=true;
+      }
+    }
+  }catch(e){console.warn('insufficient-material check on timeout failed:',e);}
+  // v1.2.3 round-40 (FIDE 6.9): restore the round-25 contract — the draw
+  //   path keeps _gameOverStatusKey='timeout' with _timeoutWinnerColor=null
+  //   (instead of 'draw_insufficient'), so the null-winner branches in
+  //   ai-bridge.js (PGN Termination / annotation text) and ui.js
+  //   (_gameOverStrFromStatus/formatEval) are reachable again and the whole
+  //   pipeline reports a timeout-draw consistently.
+  // v1.2.3 round-42 (42-1): banner wording finalized in game-logic.js
+  //   (key 'pgn_timeout_draw_insufficient') to strict FIDE 6.9 semantics —
+  //   no possible legal mating sequence → draw.
+  if(_isDrawByInsufficientMaterial){
+    if(typeof _timeoutWinnerColor!=='undefined')_timeoutWinnerColor=null;
+    _gameOverStatusKey='timeout';
+    gameOver=_gameOverStrFromStatus('timeout');
+  }else{
+    if(typeof _timeoutWinnerColor!=='undefined')_timeoutWinnerColor=winner;
+    _gameOverStatusKey='timeout';
+    gameOver=_gameOverStrFromStatus('timeout');
+  }
   render();
 }
 
@@ -326,7 +372,25 @@ function recordMoveEnd(color){
     deductSec=Math.max(0,elapsedSec-gameClocks.delaySec);
   }
   clock.remainingSec=Math.max(0,clock.remainingSec-deductSec);
-  // Fischer increment: add AFTER the deduction
+  // v1.2.3 round-23 (Q2 fix): detect flag fall BEFORE applying Fischer
+  //   increment. Previously the increment was applied immediately after the
+  //   deduction, so a player who moved at the exact moment of flag fall
+  //   would have their clock bumped from 0 to incrementSec and the timeout
+  //   would never fire. Now: if remaining <= 0 after deduction, fire expiry
+  //   and return WITHOUT applying the increment. Only when time remains do
+  //   we add the Fischer bonus.
+  if(clock.remainingSec<=0){
+    clock.displayRemainingSec=0;
+    clock.lastMoveTimestamp=now;
+    const _other=color==='white'?'black':'white';
+    if(gameClocks[_other])gameClocks[_other].lastMoveTimestamp=now;
+    if(!gameClockExpired){
+      gameClockExpired=color;
+      _onGameClockExpired(color);
+    }
+    return;
+  }
+  // Fischer increment: add AFTER the deduction (only when not expired)
   if(gameClocks.type==='fischer'){
     clock.remainingSec+=gameClocks.incrementSec||0;
   }
@@ -344,9 +408,10 @@ function formatClock(sec){
   const h=Math.floor(s/3600);
   const m=Math.floor((s%3600)/60);
   const ss=s%60;
-  const pad=n=>(n<10?'0':'')+n;
-  if(h>0)return h+':'+pad(m)+':'+pad(ss);
-  return m+':'+pad(ss);
+  // v1.2.3 round-36 (dedup): use _pad2() from pgn-standard.js (loaded
+  //   before ui-gameflow.js per build-chess.py MODULES order).
+  if(h>0)return h+':'+_pad2(m)+':'+_pad2(ss);
+  return m+':'+_pad2(ss);
 }
 
 // Lightweight DOM update for clock display (avoid full render() on every tick)

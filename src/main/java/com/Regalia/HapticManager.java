@@ -29,6 +29,9 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Build;
 import android.os.Handler;
+import android.os.SystemClock;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
 import android.util.Log;
 
 /**
@@ -36,7 +39,7 @@ import android.util.Log;
  *
  * v1.2.3 (God Class refactor round-17): extracted from StockfishNative.java
  *   (~420 lines: isHapticEnabled / performHaptic / performHapticInternal /
- *   tryPwleVibrate / fallbackVibrate). StockfishNative keeps thin
+ *   tryWaveformVibrate / fallbackVibrate). StockfishNative keeps thin
  *   {@code @JavascriptInterface} delegate wrappers so the JS API surface is
  *   unchanged. Piece-specific haptic "personalities" (pawn quiver, queen
  *   impact, king regal, knight jump-land, bishop glide, rook charge) are
@@ -47,20 +50,66 @@ public class HapticManager {
 
     private final Context context;
     private final SharedPreferences prefs;
+    // v1.2.3 round-44 (E8): mainHandler 不再被 performHaptic 使用（振动改为
+    //   当前线程直调）。字段与构造参数保留以维持既有构造签名（StockfishNative
+    //   / StatsActivity 调用方不属本轮修改范围）。
+    @SuppressWarnings("unused")
     private final Handler mainHandler;
 
     public HapticManager(Context context, SharedPreferences prefs, Handler mainHandler) {
-        this.context = context;
+        // v1.2.3 round-33 (PR52 v3 #4.2.8): normalize to Application Context
+        //   to avoid leaking an Activity reference. StatsActivity passes `this`
+        //   (an Activity); retaining it for the manager's lifetime would pin
+        //   the Activity in memory. StockfishNative already normalizes via
+        //   context.getApplicationContext() (line 434) before passing here;
+        //   this defensive normalization ensures ALL callers (including future
+        //   ones) are safe. (v1.2.3 round-44 (E8): performHaptic no longer
+        //   posts a Runnable to mainHandler — it vibrates on the calling
+        //   thread — so the original Runnable-retention scenario is gone, but
+        //   the normalization stays as cheap defense-in-depth.)
+        this.context = context != null ? context.getApplicationContext() : null;
         this.prefs = prefs;
         this.mainHandler = mainHandler;
     }
 
     public boolean isHapticEnabled() {
         try {
-            boolean systemEnabled = android.provider.Settings.System.getInt(
-                context.getContentResolver(),
-                android.provider.Settings.System.HAPTIC_FEEDBACK_ENABLED, 1
-            ) != 0;
+            // v1.2.3 round-30 (perf): cache the system-side setting for 5s.
+            //   Settings.System.getInt does a Binder IPC to the system Settings
+            //   provider on every call — called on every performHaptic()
+            //   invocation (every button press / piece move / slider drag).
+            //   At 5-10 haptic events/sec during active use, this was non-
+            //   trivial overhead. The app-side preference is also cached
+            //   (SharedPreferences.getBoolean is fast but still involves a
+            //   synchronized lookup).
+            // v1.2.3 round-31 (PR52 CodeRabbit stability): use
+            //   SystemClock.elapsedRealtime() instead of currentTimeMillis().
+            //   The wall clock can jump backward (user manually changes date/
+            //   time, NTP sync) — backward jumps make `now - ts` go negative,
+            //   so the 5s TTL check `> 5000` is false forever and the cache
+            //   never refreshes. Forward jumps cause unnecessary IPC storms.
+            //   elapsedRealtime() is monotonic from boot, immune to wall-clock
+            //   adjustments, and the standard Android idiom for interval
+            //   measurement.
+            long now = SystemClock.elapsedRealtime();
+            boolean systemEnabled;
+            // v1.2.3 round-33 (PR52 v3 #4.2.7): "never cached" must force a
+            //   refresh on the first call — previously encoded as ts == 0.
+            // v1.2.3 round-44 (E6): the ts==0 sentinel is replaced by a null
+            //   AtomicReference (unambiguous "never cached"). On refresh we
+            //   CAS in a fresh immutable Cache; even if the CAS loses a race
+            //   with a concurrent refresher, using our own just-read value is
+            //   safe under the 5s TTL semantics.
+            Cache c = _systemHapticCache.get();
+            if (c == null || (now - c.ts) > 5000) {
+                boolean fresh = android.provider.Settings.System.getInt(
+                    context.getContentResolver(),
+                    android.provider.Settings.System.HAPTIC_FEEDBACK_ENABLED, 1
+                ) != 0;
+                c = new Cache(now, fresh);
+                _systemHapticCache.compareAndSet(_systemHapticCache.get(), c);
+            }
+            systemEnabled = c.value;
             boolean appEnabled = prefs.getBoolean("hapticFeedbackEnabled", true);
             // FIX: Both system AND app must be enabled. Previously used OR (||)
             // which meant disabling haptic in app settings had no effect.
@@ -73,37 +122,63 @@ public class HapticManager {
             return true;
         }
     }
+    // v1.2.3 round-30 (perf): system-haptic-setting cache (5s TTL).
+    //   volatile for cross-thread visibility (performHaptic is called from
+    //   the main Handler thread; isHapticEnabled may also be queried from
+    //   the JS binder thread).
+    // v1.2.3 round-31: timestamp source is SystemClock.elapsedRealtime()
+    //   (monotonic, immune to wall-clock changes) — see isHapticEnabled()
+    //   comment for the rationale.
+    // v1.2.3 round-44 (E6): 两个独立 volatile 字段（值 + 时间戳）合并为一个
+    //   不可变 Cache 对，由 AtomicReference 持有、CAS 写回。旧实现的两步写
+    //   （先 value 后 ts）存在竞态窗口：另一线程可能读到「新 value + 旧 ts」
+    //   的组合，把刚刷新的缓存误判为过期（或反之）。
+    private static final class Cache {
+        final long ts;      // SystemClock.elapsedRealtime() 采集时刻
+        final boolean value; // 系统 haptic 开关缓存值
+        Cache(long ts, boolean value) { this.ts = ts; this.value = value; }
+    }
+    private final java.util.concurrent.atomic.AtomicReference<Cache> _systemHapticCache =
+            new java.util.concurrent.atomic.AtomicReference<>(null);
 
     public void performHaptic(String type) {
         try {
-            android.os.Vibrator vibrator = (android.os.Vibrator) context.getSystemService(Context.VIBRATOR_SERVICE);
+            // v1.2.3 round-44 (D8): API 31+ 弃用了 VIBRATOR_SERVICE 直接返回的
+            //   Vibrator，改走 VibratorManager.getDefaultVibrator()；旧分支
+            //   保留给 API 23-30。
+            android.os.Vibrator vibrator;
+            if (Build.VERSION.SDK_INT >= 31) {
+                android.os.VibratorManager vm = (android.os.VibratorManager)
+                        context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE);
+                vibrator = (vm != null) ? vm.getDefaultVibrator() : null;
+            } else {
+                vibrator = (android.os.Vibrator) context.getSystemService(Context.VIBRATOR_SERVICE);
+            }
             if (vibrator == null || !vibrator.hasVibrator()) return;
 
             if (!isHapticEnabled()) return;
 
             int apiLevel = Build.VERSION.SDK_INT;
-            final android.os.Vibrator finalVibrator = vibrator;
 
-            Runnable hapticRunnable = new Runnable() {
-                public void run() {
-                    try {
-                        performHapticInternal(finalVibrator, type, apiLevel);
-                    } catch (Exception e) {
-                        // v1.2.3 (S1181): vibrate() throws RuntimeException
-                        //   subtypes at most — log and continue.
-                        Log.w(TAG, "performHapticInternal failed: " + e.getMessage());
-                    }
-                }
-            };
-
-            mainHandler.post(hapticRunnable);
+            // v1.2.3 round-44 (E8): 直接在当前线程调用，移除 mainHandler.post。
+            //   Vibrator 是 Binder 代理、线程安全，且 vibrate() 本身非阻塞
+            //   （命令交给系统振动服务后立即返回，不存在 IPC 等待）。旧实现把
+            //   每次震动排队到主线程 Looper，徒增一帧以内的输入延迟并占用主
+            //   线程消息队列。performHapticInternal 内部各分支已自行捕获
+            //   vibrate() 的 RuntimeException。
+            performHapticInternal(vibrator, type, apiLevel);
         } catch (Exception e) {
-            // v1.2.3 (S1181): getSystemService / mainHandler.post throw
+            // v1.2.3 (S1181): getSystemService / hasVibrator throw
             //   RuntimeException subtypes at most — log and continue.
             Log.w(TAG, "performHaptic failed: " + e.getMessage());
         }
     }
 
+    // v1.2.3 round-44 (E7, 设计债): 本方法的 ~300 行 switch 可重构为
+    //   「haptic 类型 -> (timings, amplitudes, fallbackMs)」表驱动 + 统一
+    //   派发，收益是纯简化。但每个 case 的分支链（PWLE 优先 -> 31+ 预定义 ->
+    //   26+ 波形 -> 一锤子 fallback）细节各异，表驱动化回归面大、本类无
+    //   自动化测试覆盖，本轮决定不做，在此标注设计债。
     private void performHapticInternal(android.os.Vibrator vibrator, String type, int apiLevel) {
         switch (type) {
                 case "BUTTON_PRESS":
@@ -121,7 +196,7 @@ public class HapticManager {
                     break;
 
                 case "PIECE_SELECT":
-                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.3f, 0.0f}, new long[]{0, 30, 20})) {
+                    if (apiLevel >= 26 && tryWaveformVibrate(vibrator, new float[]{0.0f, 0.3f, 0.0f}, new long[]{0, 30, 20})) {
                         // PWLE succeeded (or falls through to waveform below)
                     } else if (apiLevel >= 31) {
                         try {
@@ -137,7 +212,7 @@ public class HapticManager {
                     break;
 
                 case "PIECE_MOVE":
-                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.5f, 0.0f}, new long[]{0, 40, 25})) {
+                    if (apiLevel >= 26 && tryWaveformVibrate(vibrator, new float[]{0.0f, 0.5f, 0.0f}, new long[]{0, 40, 25})) {
                         // PWLE succeeded (or falls through to waveform below)
                     } else if (apiLevel >= 31) {
                         try {
@@ -159,7 +234,7 @@ public class HapticManager {
                 //   six piece types have distinct, personality-matched feedback.
                 case "PAWN_MOVE":
                     // Light quiver — three tiny ticks (the "瑟瑟发抖" shiver)
-                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.15f, 0.05f, 0.15f, 0.05f, 0.15f, 0.0f}, new long[]{0, 12, 8, 12, 8, 12, 8})) {
+                    if (apiLevel >= 26 && tryWaveformVibrate(vibrator, new float[]{0.0f, 0.15f, 0.05f, 0.15f, 0.05f, 0.15f, 0.0f}, new long[]{0, 12, 8, 12, 8, 12, 8})) {
                         // PWLE succeeded (or falls through to waveform below)
                     } else if (apiLevel >= 26) {
                         try {
@@ -178,7 +253,7 @@ public class HapticManager {
                     // Agile jump + crisp landing — a gentle lift-off ramp, a brief
                     // mid-air gap, then a sharp crisp "ding" tick (the L-shape
                     // parabolic jump + crisp ding landing from the sound/animation).
-                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.35f, 0.1f, 0.7f, 0.0f}, new long[]{0, 30, 40, 25, 15})) {
+                    if (apiLevel >= 26 && tryWaveformVibrate(vibrator, new float[]{0.0f, 0.35f, 0.1f, 0.7f, 0.0f}, new long[]{0, 30, 40, 25, 15})) {
                         // PWLE: ramp up (lift-off) → gap (mid-air) → sharp peak (landing ding)
                     } else if (apiLevel >= 26) {
                         try {
@@ -197,7 +272,7 @@ public class HapticManager {
                     // Sharp smooth glide — a single smooth swell (no hard peak);
                     // the bishop slides swiftly and cleanly along the diagonal.
                     // Matches the sawtooth-glide + filter-sweep sound (270ms).
-                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.4f, 0.45f, 0.2f, 0.0f}, new long[]{0, 40, 50, 40, 20})) {
+                    if (apiLevel >= 26 && tryWaveformVibrate(vibrator, new float[]{0.0f, 0.4f, 0.45f, 0.2f, 0.0f}, new long[]{0, 40, 50, 40, 20})) {
                         // PWLE: smooth ramp up → smooth ramp down (bell-curve, no tick)
                     } else if (apiLevel >= 26) {
                         try {
@@ -216,7 +291,7 @@ public class HapticManager {
                     // Fierce charge-dash-impact — a low charge rumble, a brief dash
                     // gap, then a heavy impact thud (matches the 3-stage rook sound
                     // and the light board shake on landing).
-                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.5f, 0.15f, 0.85f, 0.3f, 0.5f, 0.0f}, new long[]{0, 25, 35, 60, 25, 40, 20})) {
+                    if (apiLevel >= 26 && tryWaveformVibrate(vibrator, new float[]{0.0f, 0.5f, 0.15f, 0.85f, 0.3f, 0.5f, 0.0f}, new long[]{0, 25, 35, 60, 25, 40, 20})) {
                         // PWLE: low charge → gap (dash whoosh) → heavy impact thud
                     } else if (apiLevel >= 26) {
                         try {
@@ -233,7 +308,7 @@ public class HapticManager {
 
                 case "QUEEN_MOVE":
                     // Massive impact — the "铿锵有声、掷地有声" resounding slam
-                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.8f, 0.3f, 1.0f, 0.2f, 0.7f, 0.0f}, new long[]{0, 60, 40, 120, 50, 80, 40})) {
+                    if (apiLevel >= 26 && tryWaveformVibrate(vibrator, new float[]{0.0f, 0.8f, 0.3f, 1.0f, 0.2f, 0.7f, 0.0f}, new long[]{0, 60, 40, 120, 50, 80, 40})) {
                         // PWLE succeeded (or falls through to waveform below)
                     } else if (apiLevel >= 26) {
                         try {
@@ -250,7 +325,7 @@ public class HapticManager {
 
                 case "KING_MOVE":
                     // Heavy regal — four measured thuds (the "威严庄重" solemn steps)
-                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.6f, 0.2f, 0.6f, 0.2f, 0.6f, 0.2f, 0.6f, 0.0f}, new long[]{0, 50, 60, 50, 60, 50, 60, 50, 40})) {
+                    if (apiLevel >= 26 && tryWaveformVibrate(vibrator, new float[]{0.0f, 0.6f, 0.2f, 0.6f, 0.2f, 0.6f, 0.2f, 0.6f, 0.0f}, new long[]{0, 50, 60, 50, 60, 50, 60, 50, 40})) {
                         // PWLE succeeded (or falls through to waveform below)
                     } else if (apiLevel >= 26) {
                         try {
@@ -266,7 +341,7 @@ public class HapticManager {
                     break;
 
                 case "PIECE_CAPTURE":
-                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.6f, 0.2f, 0.6f, 0.0f}, new long[]{0, 30, 20, 30, 20})) {
+                    if (apiLevel >= 26 && tryWaveformVibrate(vibrator, new float[]{0.0f, 0.6f, 0.2f, 0.6f, 0.0f}, new long[]{0, 30, 20, 30, 20})) {
                         // PWLE succeeded (or falls through to waveform below)
                     } else if (apiLevel >= 31) {
                         try {
@@ -281,7 +356,7 @@ public class HapticManager {
                     break;
 
                 case "SLIDER_DRAG":
-                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.15f, 0.0f}, new long[]{0, 15, 10})) {
+                    if (apiLevel >= 26 && tryWaveformVibrate(vibrator, new float[]{0.0f, 0.15f, 0.0f}, new long[]{0, 15, 10})) {
                         // PWLE succeeded (or falls through to waveform below)
                     } else {
                         fallbackVibrate(vibrator, apiLevel, 8);
@@ -302,7 +377,7 @@ public class HapticManager {
                     break;
 
                 case "TOGGLE_ON":
-                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.2f, 0.5f, 0.0f}, new long[]{0, 30, 30, 20})) {
+                    if (apiLevel >= 26 && tryWaveformVibrate(vibrator, new float[]{0.0f, 0.2f, 0.5f, 0.0f}, new long[]{0, 30, 30, 20})) {
                         // PWLE succeeded (or falls through to waveform below)
                     } else {
                         fallbackVibrate(vibrator, apiLevel, 30);
@@ -310,7 +385,7 @@ public class HapticManager {
                     break;
 
                 case "TOGGLE_OFF":
-                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.5f, 0.2f, 0.0f}, new long[]{0, 30, 30, 20})) {
+                    if (apiLevel >= 26 && tryWaveformVibrate(vibrator, new float[]{0.0f, 0.5f, 0.2f, 0.0f}, new long[]{0, 30, 30, 20})) {
                         // PWLE succeeded (or falls through to waveform below)
                     } else {
                         fallbackVibrate(vibrator, apiLevel, 20);
@@ -318,7 +393,7 @@ public class HapticManager {
                     break;
 
                 case "CHECK_ALERT":
-                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.8f, 0.3f, 0.8f, 0.3f, 0.8f, 0.0f}, new long[]{0, 50, 30, 50, 30, 50, 30})) {
+                    if (apiLevel >= 26 && tryWaveformVibrate(vibrator, new float[]{0.0f, 0.8f, 0.3f, 0.8f, 0.3f, 0.8f, 0.0f}, new long[]{0, 50, 30, 50, 30, 50, 30})) {
                         // PWLE succeeded (or falls through to waveform below)
                     } else if (apiLevel >= 26) {
                         try {
@@ -334,7 +409,7 @@ public class HapticManager {
                     break;
 
                 case "GAME_OVER":
-                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.6f, 0.3f, 0.8f, 0.1f, 0.0f}, new long[]{0, 100, 50, 200, 80, 50})) {
+                    if (apiLevel >= 26 && tryWaveformVibrate(vibrator, new float[]{0.0f, 0.6f, 0.3f, 0.8f, 0.1f, 0.0f}, new long[]{0, 100, 50, 200, 80, 50})) {
                         // PWLE succeeded (or falls through to waveform below)
                     } else if (apiLevel >= 26) {
                         try {
@@ -366,7 +441,7 @@ public class HapticManager {
                 //   the rook obeys instantly with a heavy thud.
                 case "CASTLE":
                     // Two-stage snap + slam — synchronized with playCastleRookMove
-                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 1.0f, 0.3f, 0.85f, 0.0f}, new long[]{0, 35, 10, 60, 15})) {
+                    if (apiLevel >= 26 && tryWaveformVibrate(vibrator, new float[]{0.0f, 1.0f, 0.3f, 0.85f, 0.0f}, new long[]{0, 35, 10, 60, 15})) {
                         // PWLE succeeded
                     } else if (apiLevel >= 26) {
                         try {
@@ -383,7 +458,7 @@ public class HapticManager {
 
                 case "PROMOTION":
                     // Celebratory ascending triad — three rising pulses
-                    if (apiLevel >= 35 && tryPwleVibrate(vibrator, new float[]{0.0f, 0.3f, 0.15f, 0.5f, 0.2f, 0.8f, 0.0f}, new long[]{0, 30, 20, 30, 20, 50, 20})) {
+                    if (apiLevel >= 26 && tryWaveformVibrate(vibrator, new float[]{0.0f, 0.3f, 0.15f, 0.5f, 0.2f, 0.8f, 0.0f}, new long[]{0, 30, 20, 30, 20, 50, 20})) {
                         // PWLE succeeded
                     } else if (apiLevel >= 26) {
                         try {
@@ -404,84 +479,68 @@ public class HapticManager {
             }
     }
 
-    // v1.0.8 PHASE 28 (bug fix): tryPwleVibrate now returns boolean (true if
-    //   PWLE succeeded, false if it fell back). The internal fallback was a
-    //   single OneShot which lost the multi-stage pattern (e.g. queen's
-    //   charge-impact became a single 390ms buzz). Now: if PWLE fails, return
-    //   false so the case statement's API 26+ waveform branch can run (which
-    //   has the correct multi-stage pattern). The old internal fallback is
-    //   removed — no more silent single-buzz degradation.
-    // v1.2.3 round-20 (known-issue E-3): PWLE reflection is now probed ONCE
-    //   per process and cached. Previously every haptic event ran the full
-    //   Class.forName + 3× getMethod + constructor sequence; on devices whose
-    //   public SDK lacks the PWLE surface (the common case today — the
-    //   Composition/PWLE methods are hidden on most API-35 ROMs) the
-    //   reflection threw on EVERY call, producing a silent per-call overhead
-    //   and a logcat line per haptic. Now: UNKNOWN → probe once; AVAILABLE →
-    //   reuse the cached Method/Constructor handles; UNAVAILABLE → skip
-    //   reflection entirely and go straight to the waveform fallback (one
-    //   diagnostic Log.d at probe time, not per call).
-    private static final int PWLE_UNKNOWN = 0;
-    private static final int PWLE_AVAILABLE = 1;
-    private static final int PWLE_UNAVAILABLE = 2;
-    private static volatile int pwleState = PWLE_UNKNOWN;
-    private static java.lang.reflect.Constructor<?> pwleCtor = null;
-    private static java.lang.reflect.Method pwleStartMethod = null;
-    private static java.lang.reflect.Method pwleAddPwleRampMethod = null;
-    private static java.lang.reflect.Method pwleComposeMethod = null;
-
-    private boolean tryPwleVibrate(android.os.Vibrator vibrator, float[] amplitudes, long[] durations) {
-        if (Build.VERSION.SDK_INT < 35) return false;
-        if (pwleState == PWLE_UNAVAILABLE) return false;
+    // v1.0.8 PHASE 28 (bug fix): the waveform helper now returns boolean (true
+    //   if the multi-stage pattern vibrated, false if the caller should fall
+    //   back to a simpler one-shot/predefined effect).
+    // v1.2.3 round-20 (known-issue E-3): previously probed hidden PWLE
+    //   reflection (VibrationEffect.Composition.startPwle / addPwleRamp);
+    //   those methods are NOT in any public Android SDK (Composition only
+    //   exposes addPrimitive / compose), so the reflection always failed.
+    // v1.2.3 round-23 (Q11+Q17 fix — first-principles): replaced the dead
+    //   PWLE reflection with the PUBLIC VibrationEffect.createWaveform(
+    //   long[], int[], int) API (available since API 26). The float[]
+    //   amplitudes (0..1) are scaled to int[] (0..255) and the long[]
+    //   durations are passed through verbatim. This preserves the multi-
+    //   stage envelope semantics (lift-off / gap / peak / release) without
+    //   depending on hidden APIs and without per-call reflection overhead.
+    //   Method is static because it touches no instance state (SonarCloud
+    //   java:S2696 — Q17).
+    private static boolean tryWaveformVibrate(Vibrator vibrator, float[] amplitudes, long[] durations) {
+        if (amplitudes == null || durations == null
+                || amplitudes.length != durations.length
+                || amplitudes.length == 0) {
+            return false;
+        }
+        if (Build.VERSION.SDK_INT < 26) {
+            // createWaveform(int[]) requires API 26+. Caller will fall
+            // through to fallbackVibrate(Vibrator, int, long) which uses
+            // the deprecated vibrate(long) on older API levels.
+            return false;
+        }
         try {
-            if (pwleState == PWLE_UNKNOWN) {
-                Class<?> builderClass = Class.forName("android.os.VibrationEffect$Composition");
-                pwleStartMethod = builderClass.getMethod("startPwle");
-                pwleAddPwleRampMethod = builderClass.getMethod("addPwleRamp", long.class, float.class);
-                pwleComposeMethod = builderClass.getMethod("compose");
-                pwleCtor = builderClass.getDeclaredConstructor();
-                pwleState = PWLE_AVAILABLE;
-                Log.d(TAG, "PWLE haptics available (probed once, cached)");
+            long[] timings = new long[durations.length];
+            int[] amps = new int[durations.length];
+            for (int i = 0; i < durations.length; i++) {
+                timings[i] = durations[i];
+                // Clamp amplitude to [0, 255]. Float input is in [0.0, 1.0]
+                // but defensive clamping guards against caller overflow.
+                // v1.2.3 round-29 (PR52 S3358): replace nested ternary with
+                //   Math.max(0, Math.min(255, a)) — same semantics, clearer intent.
+                int a = Math.round(amplitudes[i] * 255f);
+                amps[i] = Math.max(0, Math.min(255, a));
             }
-
-            Object composition = pwleCtor.newInstance();
-            pwleStartMethod.invoke(composition);
-
-            for (int i = 0; i < amplitudes.length; i++) {
-                pwleAddPwleRampMethod.invoke(composition, durations[i], amplitudes[i]);
-            }
-
-            Object effect = pwleComposeMethod.invoke(composition);
-            vibrator.vibrate((android.os.VibrationEffect) effect);
+            vibrator.vibrate(VibrationEffect.createWaveform(timings, amps, -1));
             return true;
-        } catch (Throwable e) {
-            // INTENTIONAL Throwable (S1181 justified): reflection against
-            //   android.os.VibrationEffect$Composition can fail with
-            //   NoSuchMethodError / NoClassDefFoundError on OEM ROMs whose
-            //   API-35 surface differs from AOSP — those are Errors, not
-            //   Exceptions, and must be tolerated by falling back.
-            pwleState = PWLE_UNAVAILABLE;
-            pwleCtor = null;
-            pwleStartMethod = null;
-            pwleAddPwleRampMethod = null;
-            pwleComposeMethod = null;
-            Log.d(TAG, "PWLE not available (cached; no further reflection attempts) — falling back to waveform: " + e);
+        } catch (Exception e) {
+            // v1.2.3 (S1181): vibrate() throws RuntimeException subtypes
+            //   (e.g. IllegalStateException when the service is unavailable).
+            //   Haptic is best-effort; tell the caller to fall back.
+            Log.d(TAG, "Waveform vibrate failed, will fall back: " + e.getMessage());
             return false;
         }
     }
 
-    private void fallbackVibrate(android.os.Vibrator vibrator, int apiLevel, long durationMs) {
+    private static void fallbackVibrate(Vibrator vibrator, int apiLevel, long durationMs) {
         try {
             if (apiLevel >= 26) {
-                vibrator.vibrate(android.os.VibrationEffect.createOneShot(durationMs, 128));
+                vibrator.vibrate(VibrationEffect.createOneShot(durationMs, 128));
             } else {
                 vibrator.vibrate(durationMs);
             }
-        } catch (Throwable e) {
-            // INTENTIONAL Throwable (S1181 justified): vibrate(long) /
-            //   vibrate(VibrationEffect) on broken OEM driver stacks can throw
-            //   unchecked Errors; haptic is best-effort, so stay silent.
-            // Silent - vibrator unavailable
+        } catch (Exception e) {
+            // v1.2.3 (S1181 narrowed): vibrate(long) / vibrate(VibrationEffect)
+            //   on broken OEM driver stacks throw RuntimeException subtypes;
+            //   haptic is best-effort, so stay silent.
         }
     }
 }

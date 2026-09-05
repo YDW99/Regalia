@@ -35,6 +35,18 @@
  *   - 订阅者通过 subscribe(listener) 监听状态变化
  *   - 状态分类: 游戏核心 / 复盘 / 引擎 / UI
  *
+ * v1.2.3 round-32 (partial-migration clarification): the v1.2.0 design
+ *   goal was a full Redux migration, but only ~5 of the 25 registered
+ *   reducers are currently dispatched (SET_LANG, TOGGLE_SOUND, ENTER_REVIEW,
+ *   SETUP_EXIT, PGN_CLEARED). The remaining 20 reducers are registered as
+ *   architectural placeholders for future migration rounds. The bulk of
+ *   game state still lives in module-level globals (gameState, moveRecords,
+ *   stateHistory, redoStack, etc.) in game-logic.js / ui-interactions.js /
+ *   ai-bridge.js. subscribe() / getState() are wired but currently have
+ *   zero external callers — they exist for the future migration. This is
+ *   intentional; do NOT remove the unused reducers without a migration
+ *   plan that moves the corresponding global state into the store.
+ *
  * 使用示例:
  *   const state = Store.getState();
  *   const unsub = Store.subscribe((newState) => { ... });
@@ -155,7 +167,9 @@ const Store = (function() {
             }
             return obj;
         }
-        if (obj instanceof Date) return new Date(obj.getTime());
+        // v1.2.3 round-37 (SonarCloud S7719): `new Date(date)` accepts a Date
+        //   instance directly and clones it — no need for `.getTime()`.
+        if (obj instanceof Date) return new Date(obj);
         // RegExp: use explicit source+flags construction (semantically
         // equivalent to `new RegExp(obj)` but avoids Semgrep FP on non-
         // literal-RegExp construction, since `obj` is already instanceof
@@ -189,6 +203,12 @@ const Store = (function() {
         if (Array.isArray(obj)) return obj.map(function (v) { return _deepClone(v, _depth + 1); });
         const cloned = {};
         for (const key in obj) {
+            // v1.2.3 round-37 (SonarCloud S6653): avoid obj.hasOwnProperty
+            //   (it can be shadowed by a user-defined hasOwnProperty key).
+            // v1.2.3 round-46 (PR53 CR#8): Object.hasOwn needs Chrome 93+;
+            //   minSdk 23 devices with an older system WebView would throw
+            //   "Object.hasOwn is not a function". Use the ES3-safe,
+            //   shadow-proof equivalent instead.
             if (Object.prototype.hasOwnProperty.call(obj, key)) {
                 cloned[key] = _deepClone(obj[key], _depth + 1);
             }
@@ -207,10 +227,12 @@ const Store = (function() {
      */
     function registerReducer(actionType, reducer) {
         if (typeof actionType !== 'string' || actionType.length === 0) {
-            throw new Error('actionType must be a non-empty string');
+            // v1.2.3 round-37 (SonarCloud S7786): use TypeError for type-check
+            //   failures (more specific than generic Error).
+            throw new TypeError('actionType must be a non-empty string');
         }
         if (typeof reducer !== 'function') {
-            throw new Error('reducer must be a function');
+            throw new TypeError('reducer must be a function');
         }
         if (_reducers[actionType] && typeof console !== 'undefined' && console.warn) console.warn('[Store] Reducer overwrite:', actionType);
         _reducers[actionType] = reducer;
@@ -226,15 +248,36 @@ const Store = (function() {
         const reducer = _reducers[action];
         if (!reducer) {
             if (typeof console !== 'undefined' && console.warn) console.warn('[Store] No reducer for action:', action);
-            return _deepClone(_state);
+            // v1.2.3 round-44 (G10): no consumers of dispatch()'s return value
+            //   — return the live _state instead of a full-tree deep clone.
+            return _state;
         }
         const partial = reducer(_state, payload);
         if (partial && typeof partial === 'object') {
-            _state = Object.assign({}, _state, partial);
-            _notifyListeners();
+            // v1.2.3 round-37 (SonarCloud S6661): use object spread instead of
+            //   Object.assign for declarative merge.
+            _state = { ..._state, ...partial };
+            // v1.2.3 round-31 (PR52 CodeRabbit perf): compute the snapshot
+            //   ONCE and pass it to _notifyListeners + return it. Previously
+            //   _notifyListeners() deep-cloned _state internally and dispatch()
+            //   then deep-cloned _state again for its return value — two full
+            //   tree walks per dispatch (stateHistory max 200 + moveRecords).
+            //   The snapshot is also passed to listeners, preserving the
+            //   round-30 single-source-of-truth invariant.
+            // v1.2.3 round-44 (G10): only deep-clone a snapshot when listeners
+            //   actually exist, and return the live _state — dispatch()'s return
+            //   value has no consumers (verified by grep), so the previous
+            //   unconditional full-tree clone per dispatch was pure waste.
+            //   getState() still returns a deep clone (P0-1 invariant kept).
+            if (_listeners.length > 0) {
+                const snapshot = _deepClone(_state);
+                _notifyListeners(snapshot);
+            }
+            return _state;
         }
-        // v1.2.1: Return deep clone (P0-2)
-        return _deepClone(_state);
+        // v1.2.3 round-44 (G10): return live _state (was a deep clone, P0-2) —
+        //   no consumers of the return value; see the dispatch happy path above.
+        return _state;
     }
 
     /**
@@ -253,7 +296,9 @@ const Store = (function() {
      */
     function subscribe(listener) {
         if (typeof listener !== 'function') {
-            throw new Error('listener must be a function');
+            // v1.2.3 round-37 (SonarCloud S7786): use TypeError for type-check
+            //   failures (more specific than generic Error).
+            throw new TypeError('listener must be a function');
         }
         _listeners.push(listener);
         return function unsubscribe() {
@@ -264,9 +309,20 @@ const Store = (function() {
 
     /**
      * 通知所有订阅者
+     * v1.2.3 round-30 (robustness): deep-clone the state snapshot handed to
+     *   listeners — without this, listeners received the LIVE _state reference
+     *   and could mutate it directly, bypassing dispatch() and breaking the
+     *   single-source-of-truth contract that getState() / dispatch() already
+     *   enforce via _deepClone. Consistent with the v1.2.1 P0-1/P0-2 invariant.
+     * v1.2.3 round-31 (PR52 CodeRabbit perf): accept an optional pre-computed
+     *   snapshot so dispatch() / reset() can avoid a redundant second deep
+     *   clone (they already clone for their return value). When called without
+     *   an argument (legacy/internal callers), falls back to cloning _state.
      */
-    function _notifyListeners() {
-        const snapshot = _state;
+    function _notifyListeners(snapshot) {
+        // v1.2.3 round-44 (G10): skip the clone entirely when nobody listens.
+        if (_listeners.length === 0) return;
+        if (snapshot === undefined) snapshot = _deepClone(_state);
         const listeners = _listeners.slice();
         for (let i = 0; i < listeners.length; i++) {
             try {
@@ -285,11 +341,17 @@ const Store = (function() {
      *                   调用者可安全修改返回值而不影响内部 _state）
      */
     function reset(overrides) {
-        _state = Object.assign(_deepClone(_initialState), overrides || {});
-        _notifyListeners();
+        // v1.2.3 round-37 (SonarCloud S6661): use object spread.
+        // v1.2.3 round-45 (PR53 R2, S7744): object spread is null/undefined-safe
+        //   — the `|| {}` fallback was dead code.
+        _state = { ..._deepClone(_initialState), ...overrides };
+        // v1.2.3 round-31 (PR52 CodeRabbit perf): single deep-clone reuse —
+        //   see dispatch() above for the rationale.
+        const snapshot = _deepClone(_state);
+        _notifyListeners(snapshot);
         // v1.2.1 round-9: 返回深拷贝，与 getState()/dispatch() 保持一致。
         // 旧版直接返回 _state 引用，调用者修改返回值会污染内部状态。
-        return _deepClone(_state);
+        return snapshot;
     }
 
     // ========== 注册核心 reducers ==========
@@ -355,7 +417,8 @@ const Store = (function() {
         aiThinking: false
     }));
     registerReducer('UPDATE_EVAL', (state, payload) => ({
-        eval: Object.assign({}, state.eval, payload)
+        // v1.2.3 round-37 (SonarCloud S6661): use object spread.
+        eval: { ...state.eval, ...payload }
     }));
 
     // UI 偏好
@@ -394,7 +457,8 @@ const Store = (function() {
 
     // 对局时钟
     registerReducer('UPDATE_CLOCKS', (state, payload) => ({
-        gameClocks: Object.assign({}, state.gameClocks, payload)
+        // v1.2.3 round-37 (SonarCloud S6661): use object spread.
+        gameClocks: { ...state.gameClocks, ...payload }
     }));
 
     // 视觉注解
@@ -410,11 +474,13 @@ const Store = (function() {
     // 等垃圾键污染 dialogVisible。非字符串 payload 视为 no-op 返回 {}。
     registerReducer('SHOW_DIALOG', (state, payload) => {
         if (typeof payload !== 'string' || !payload) return {};
-        return { dialogVisible: Object.assign({}, state.dialogVisible, { [payload]: true }) };
+        // v1.2.3 round-37 (SonarCloud S6661): use object spread.
+        return { dialogVisible: { ...state.dialogVisible, [payload]: true } };
     });
     registerReducer('HIDE_DIALOG', (state, payload) => {
         if (typeof payload !== 'string' || !payload) return {};
-        return { dialogVisible: Object.assign({}, state.dialogVisible, { [payload]: false }) };
+        // v1.2.3 round-37 (SonarCloud S6661): use object spread.
+        return { dialogVisible: { ...state.dialogVisible, [payload]: false } };
     });
     registerReducer('HIDE_ALL_DIALOGS', (state) => {
         const cleared = {};

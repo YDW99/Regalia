@@ -77,22 +77,42 @@ def main():
         # Strip export statements (not needed in bundled file)
         content = re.sub(r'^export\s*\{[^}]*\}\s*;?\s*$', '', content, flags=re.MULTILINE)
         content = re.sub(r'^export\s+default\s+.*$', '', content, flags=re.MULTILINE)
+        # v1.2.3 round-41: fail the build if any `export ` survived stripping
+        #   (e.g. a new export form the regexes above don't cover). A leftover
+        #   export in the bundled inline <script> is a runtime SyntaxError.
+        if re.search(r'^\s*export\s', content, flags=re.MULTILINE):
+            print(f"ERROR: residual 'export' statement in module {mod} after stripping", file=sys.stderr)
+            sys.exit(3)
         js_parts.append(content)
 
     combined_js = "\n".join(js_parts)
 
     # Replace ONLY the exact placeholder (not partial matches in JS code)
     placeholder = "/* __MODULE_SCRIPTS__ */"
-    if placeholder not in template:
-        print(f"ERROR: placeholder {placeholder!r} not found in template {TPL}", file=sys.stderr)
+    # v1.2.3 round-41: require EXACTLY ONE placeholder occurrence. A second
+    #   copy would survive replace(..., 1) as a stale marker in the output;
+    #   zero copies means the template is broken. Both are build errors.
+    ph_count = template.count(placeholder)
+    if ph_count != 1:
+        print(f"ERROR: placeholder {placeholder!r} found {ph_count} time(s) in template {TPL} (expected exactly 1)", file=sys.stderr)
         sys.exit(2)
     result = template.replace(placeholder, combined_js, 1)
 
+    # v1.2.3 round-41: atomic write — write to a temp file in the same
+    #   directory and os.replace() it into place, so an interrupted build
+    #   never leaves a truncated chess.html.
+    tmp_out = OUT + ".tmp"
     try:
-        with open(OUT, 'w', encoding='utf-8') as f:
+        with open(tmp_out, 'w', encoding='utf-8') as f:
             f.write(result)
+        os.replace(tmp_out, OUT)
     except OSError as e:
         print(f"ERROR: cannot write output {OUT}: {e}", file=sys.stderr)
+        try:
+            if os.path.exists(tmp_out):
+                os.remove(tmp_out)
+        except OSError:
+            pass
         sys.exit(1)
 
     line_count = result.count('\n') + 1

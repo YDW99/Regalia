@@ -95,14 +95,14 @@ let _reviewEvalCache=new function(){
   //   immediately, with NO "analyzing..." flash.
 
   // v1.2.1 round-9: Best-effort warning helper for eval-cache persistence
-  // paths. Previously all catch blocks were empty (`catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}`) — silent
+  // paths. Previously all catch blocks were empty (`catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}`) — silent
   // failure meant corrupted cache files, QuotaExceededError on localStorage,
   // and JNI failures were invisible. We log at `warn` (not `error`) because
   // these are non-fatal — the cache is best-effort and the app continues to
   // work (just without persistent evals).
   function _warnEvalCache(op,e){
     if(typeof console!=='undefined'&&console.warn){
-      console.warn('[eval-cache] '+op+' failed:',e&&e.message?e.message:e);
+      console.warn('[eval-cache] '+op+' failed:',e?.message?e.message:e);
     }
   }
 
@@ -175,6 +175,10 @@ let _reviewEvalCache=new function(){
   let _dirty=false;
   const DEBOUNCE_MS=150;
   function _saveToStorage(forceSync){
+    // v1.2.3 round-44 (G11): during analyze-all batch mode, skip the per-set
+    //   150ms debounce timer churn — just mark dirty; the batch-end paths call
+    //   _flushSync() once. forceSync (clear()/lifecycle flush) still writes.
+    if(_batchWriteMode&&!forceSync){_dirty=true;return;}
     if(_saveTimer){clearTimeout(_saveTimer);_saveTimer=null;}
     if(forceSync){
       // Synchronous write — blocks until fsync + rename complete
@@ -270,7 +274,7 @@ let _reviewEvalCache=new function(){
            String(k)===String(_reviewEvalRequestedStep)){
           _isCurrent=true;
         }
-      }catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+      }catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
       if(_isCurrent)continue;
       _victimKeys.push(k);
       _toEvict--;
@@ -299,14 +303,14 @@ window._flushReviewEvalCache=function(){
     if(_reviewEvalCache !== undefined&&_reviewEvalCache&&typeof _reviewEvalCache._flushSync==='function'){
       _reviewEvalCache._flushSync();
     }
-  }catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+  }catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
 };
 // Critical event handlers — flush synchronously before app can be killed
 (function(){
   function _flushOnExit(){
-    try{window._flushReviewEvalCache();}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+    try{window._flushReviewEvalCache();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
     // Also flush SharedPreferences pending writes (covers persistentSet async writes)
-    try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentFlush)AndroidBridge.persistentFlush();}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+    try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentFlush)AndroidBridge.persistentFlush();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
   }
   // pagehide: fired when the page is being unloaded (mobile browsers including WebView)
   window.addEventListener('pagehide',_flushOnExit);
@@ -387,6 +391,20 @@ let _pgnExportDialogActive=false;
 let _pgnExportDialogDismiss=null;
 let _reviewAnalyzeGen=0;
 let _evalRequestBatchGen=0;
+// v1.2.3 round-44 (T1): per-request dispatch record for the batch analyze-all
+//   path. Set at the exact engineEvalDeep dispatch point in _requestBatchEval
+//   and consumed (set null) by onEngineEval's batch branch, so a LATE callback
+//   from a previous step can no longer be claimed as the current step's result
+//   (which cached the wrong step and could flip the eval sign via the new
+//   step's _evalForBlackTurn).
+let _batchLastDispatched=null; // {step, gen, fen, blackTurn} or null
+// v1.2.3 round-44 (T4): consecutive batch-dispatch failure counter (safety-net
+//   timeout or engine-not-ready). Reset on successful dispatch/callback; at 3
+//   consecutive failures the batch is terminated instead of ghost-looping.
+let _batchConsecutiveFail=0;
+// v1.2.3 round-44 (G11): batch write mode — during analyze-all, _reviewEvalCache
+//   skips per-set disk writes (marks dirty only); flushed once at batch end.
+let _batchWriteMode=false;
 // v1.0.4 Rev24 NEW: Human player's custom name (rename feature).
 // Loaded from persistent storage at module init. When non-null, used in:
 //   - Player bar display (ui.js)
@@ -395,10 +413,13 @@ let _evalRequestBatchGen=0;
 // Persists across sessions via AndroidBridge.persistentSet('Regalia_humanName', ...).
 let _humanPlayerName=null;
 // v1.0.4 Rev24 NEW: Explicit player names from PGN import.
-// When set (non-undefined), _buildPGNString uses these verbatim for [White]/[Black]
+// When set (non-null), _buildPGNString uses these verbatim for [White]/[Black]
 // instead of the default "你"/"AI对手". Cleared by startGame().
-let playerWhite=undefined;
-let playerBlack=undefined;
+// v1.2.3 round-37 (SonarCloud S6645): removed `= undefined` initializers —
+//   `let x;` is already undefined by default; explicit `= undefined` is
+//   redundant and can mislead readers into thinking there's special semantics.
+let playerWhite;
+let playerBlack;
 // v1.0.4 Rev24: Load _humanPlayerName from persistent storage at module init.
 // This runs synchronously, so the name is available before the first render.
 try{
@@ -414,6 +435,10 @@ let scannedEngines=[];
 let _pendingSwitchPath=null;
 // Cached multiPV setting from engine config — avoids JNI call per progress tick
 let _cachedMultiPV=1;
+// v1.2.3 round-30 (robustness): generation token for onSettingsImported's
+//   safety-net setTimeout closures. Incremented on each new import so any
+//   pending closures from a previous import become no-ops.
+let _settingsImportGen=0;
 
 // ===================== HAPTIC FEEDBACK MANAGER =====================
 // 5-level compatibility degradation chain for haptic feedback
@@ -503,7 +528,11 @@ const HapticManager = (function() {
   // Initialize on creation
   _init();
 
-  return { fire, refreshSettings, _init };
+  // v1.2.3 round-30 (redundant): removed `_init` from the exported API.
+  //   It was only ever called once internally (above) and no external
+  //   caller invoked HapticManager._init(). Keeping it exposed created dead
+  //   API surface and a maintenance trap.
+  return { fire, refreshSettings };
 })();
 
 // Stale eval detection: incremented by _resetEvalState() when game state changes,
@@ -513,6 +542,11 @@ const HapticManager = (function() {
 // environment (Java callbacks can interleave with JS main thread).
 let _evalStaleGen=0;  // Generation counter — stale if onEngineEval's gen < current
 let _evalRequestGen=0; // Generation at time of last requestEngineEval() call
+// v1.2.3 round-44 (G1): gen of the most recent ACTUALLY DISPATCHED user-nav
+//   eval. onEngineEval drops callbacks when _evalRequestGen !== this value —
+//   the debounce/fast paths can bump _evalRequestGen without ever dispatching,
+//   which previously let a superseded request's late callback through.
+let _evalLastDispatchedGen=0;
 // v1.0.7 PHASE 19 (bug fix): Capture the mode at request time so onEngineEval
 // can reject cross-mode stale callbacks. Previously, a review-mode eval callback
 // still in flight after exitReview() would pass the normal-mode gen check
@@ -524,6 +558,10 @@ let _evalRequestReviewMode=false;
 let _evalSafetyTimerId=null;
 
 let _toastTimer=0;
+// v1.2.3 round-30 (perf): track the inner 300ms removal timer so rapid
+//   showToast() calls don't leave orphaned timers that fire on already-
+//   detached toast nodes (harmless but wasteful).
+let _toastRemoveTimer=0;
 // v1.0.8 PHASE 22 supplement: Smart toast sound — auto-detect success/error
 //   from the message's i18n key pattern and play a matching sound.
 //   - "已复制/已导出/已保存/copied/exported/saved" → playCopy (清脆叮声)
@@ -550,9 +588,30 @@ function _playToastSound(msg){
     // Neutral toast — no sound
   }catch(e){console.warn('[Toast] showToast failed:',e.message);}
 }
-function showToast(msg,duration=2500){
+function showToast(msg,duration=3750){
   _playToastSound(msg);
-  const old=document.getElementById('_toast');if(old)old.remove();if(_toastTimer)clearTimeout(_toastTimer);const t=document.createElement('div');t.id='_toast';t.style.cssText='position:fixed;bottom:60px;left:50%;transform:translateX(-50%);background:var(--overlay-card-bg);color:var(--text);padding:10px 24px;border-radius:6px;font-size:.85rem;z-index:10000;border:1px solid var(--border2);box-shadow:var(--panel-shadow);pointer-events:none;opacity:0;transition:opacity .3s;font-family:system-ui,-apple-system,sans-serif';t.textContent=msg;document.body.appendChild(t);requestAnimationFrame(()=>{t.style.opacity='1'});_toastTimer=setTimeout(()=>{t.style.opacity='0';setTimeout(()=>t.remove(),300)},duration)}
+  const old=document.getElementById('_toast');
+  if(old)old.remove();
+  if(_toastTimer)clearTimeout(_toastTimer);
+  // v1.2.3 round-30 (perf): clear the inner removal timer too — without this,
+  //   a rapid second showToast() leaves the first toast's 300ms removal timer
+  //   armed, which fires on the (already-removed) first toast node.
+  if(_toastRemoveTimer)clearTimeout(_toastRemoveTimer);
+  const t=document.createElement('div');
+  t.id='_toast';
+  t.style.cssText='position:fixed;bottom:60px;left:50%;transform:translateX(-50%);background:var(--overlay-card-bg);color:var(--text);padding:10px 24px;border-radius:6px;font-size:.85rem;z-index:10000;border:1px solid var(--border2);box-shadow:var(--panel-shadow);pointer-events:none;opacity:0;transition:opacity .3s;font-family:system-ui,-apple-system,sans-serif';
+  t.textContent=msg;
+  document.body.appendChild(t);
+  requestAnimationFrame(()=>{t.style.opacity='1'});
+  _toastTimer=setTimeout(()=>{
+    t.style.opacity='0';
+    _toastRemoveTimer=setTimeout(()=>{
+      t.remove();
+      _toastRemoveTimer=0;
+    },300);
+    _toastTimer=0;
+  },duration);
+}
 
 // Update the foreground service notification with engine process info.
 // This prevents the OS from killing the engine process on aggressive
@@ -611,6 +670,32 @@ function _bridgeCall(fn,fallback,requireEngine){
   return null;
 }
 
+// v1.2.3 round-36 (dedup + robustness): canonical "hard-stop the engine"
+//   helper. Replaces 3 inline blocks (ui-gameflow.js:290-298,
+//   ui-interactions.js:1488-1494, ui.js:5466-5470) that each implemented
+//   the same logic with subtle inconsistencies:
+//   - ui.js:5466 was MISSING the sendToEngine('stop') fallback for older
+//     builds without engineStop() — the priority-stop would silently
+//     no-op on those builds. This helper closes that gap.
+//   - ui-interactions.js:1488 used `AndroidBridge.sendToEngine` (truthy
+//     check) instead of `typeof AndroidBridge.sendToEngine==='function'`.
+//     Both work in practice, but the typeof check is the project's
+//     consistent pattern (per round-11 resilience design).
+//   - ui-gameflow.js:290 gated on isEngineReady() first; the other two
+//     didn't. This helper does NOT gate on isEngineReady() (the callers
+//     that need that gate already check it before calling).
+// Use this for game-over / resign / priority-preempt / clock-expiry
+//   paths where the bestmove must be discarded. NOT for soft-stop during
+//   normal flow.
+function _engineStopHard(){
+  try{
+    if(typeof AndroidBridge!=='undefined'){
+      if(typeof AndroidBridge.engineStop==='function'){AndroidBridge.engineStop();return;}
+      if(typeof AndroidBridge.sendToEngine==='function'){AndroidBridge.sendToEngine('stop');}
+    }
+  }catch(e){console.warn('[AIBridge] engineStop failed:',e?.message?e.message:e);}
+}
+
 // Loading overlay for engine initialization — progress is REAL, driven by onEngineProgress callbacks
 let _loadingPct=0;
 // v1.0.8 PHASE 22: Light/Dark mode detection for the loading overlay's king icon.
@@ -633,9 +718,11 @@ function _isLightMode(){
     return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches);
   }catch(e){
     // 最终回退：默认深色模式（与原设计一致）
+    // v1.2.3 round-37 (SonarCloud S7718): nested catch uses `error` (not
+    //   `e2`) per the project's modern catch-param naming convention.
     try{
       return !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches);
-    }catch(e2){return false;}
+    }catch(error){return false;}
   }
 }
 function _loadingKingIconHTML(){
@@ -685,7 +772,7 @@ function _hideLoadingOverlay(){
   //   cross-module convention (the helper is defined in ui.js, which loads
   //   after this module); the helper's own flag prevents double-firing.
   setTimeout(function(){
-    try{if(typeof _maybeShowBoardDebounceHint==='function')_maybeShowBoardDebounceHint();}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+    try{if(typeof _maybeShowBoardDebounceHint==='function')_maybeShowBoardDebounceHint();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
   },600);
 }
 // v1.0.8 PHASE 22 (bug fix): Apply system dark/light theme to <html> via
@@ -760,7 +847,7 @@ let _emergencyFallbackTimerId=setTimeout(function(){
     console.error('EMERGENCY: Force hiding loading overlay after 35s');
     _loadingOverlayHiding=true;
     const lo=document.getElementById('_loadingOverlay');
-    if(lo){lo.style.opacity='0';lo.style.transition='opacity .3s';setTimeout(()=>{if(lo&&lo.parentNode)lo.remove();},300);}
+    if(lo){lo.style.opacity='0';lo.style.transition='opacity .3s';setTimeout(()=>{if(lo?.parentNode)lo.remove();},300);}
     render();
     if(!_engineReady) showToast(T('engine_init_failed'));
   }
@@ -768,23 +855,42 @@ let _emergencyFallbackTimerId=setTimeout(function(){
 
 // Layer 4: Click to skip — allow user to dismiss loading screen manually
 (function _makeLoadingClickable(){
+  // v1.2.3 round-44 (#93): _showLoadingOverlay() creates the overlay element
+  //   synchronously just above, so try a direct lookup FIRST and attach the
+  //   click handler immediately — the old 200ms-interval-only approach left a
+  //   0-200ms dead window in which taps on the overlay did nothing.
+  function _attachSkipHandler(lo){
+    lo.style.cursor='pointer';
+    lo.title=T('click_skip_loading');
+    lo.addEventListener('click',function(e){
+      if(!_loadingOverlayHiding){
+        // v1.1.2 Phase 70: removed debug console.log (production cleanup)
+        _hideLoadingOverlay();
+        showToast(T('engine_skip'));
+        render();
+        // Clear all fallback timers
+        if(_loadingFallbackTimerId){clearTimeout(_loadingFallbackTimerId);_loadingFallbackTimerId=null;}
+        if(_emergencyFallbackTimerId){clearTimeout(_emergencyFallbackTimerId);_emergencyFallbackTimerId=null;}
+      }
+    });
+  }
+  const loNow=document.getElementById('_loadingOverlay');
+  if(loNow){_attachSkipHandler(loNow);return;}
+  // Fallback: poll with a hard cap (25 ticks x 200ms = 5s) in case the overlay
+  //   isn't in the DOM yet (e.g. _showLoadingOverlay threw before appending).
+  // v1.2.3 round-30 (robustness): cap polling at 25 iterations (5s). If the
+  //   loading overlay never appears, the interval would otherwise leak
+  //   forever. After 5s, clear the interval regardless.
+  let _ticks=0;
+  const MAX_TICKS=25;
   const loCheck=setInterval(()=>{
+    _ticks++;
     const lo=document.getElementById('_loadingOverlay');
     if(lo){
       clearInterval(loCheck);
-      lo.style.cursor='pointer';
-      lo.title=T('click_skip_loading');
-      lo.addEventListener('click',function(e){
-        if(!_loadingOverlayHiding){
-          // v1.1.2 Phase 70: removed debug console.log (production cleanup)
-          _hideLoadingOverlay();
-          showToast(T('engine_skip'));
-          render();
-          // Clear all fallback timers
-          if(_loadingFallbackTimerId){clearTimeout(_loadingFallbackTimerId);_loadingFallbackTimerId=null;}
-          if(_emergencyFallbackTimerId){clearTimeout(_emergencyFallbackTimerId);_emergencyFallbackTimerId=null;}
-        }
-      });
+      _attachSkipHandler(lo);
+    }else if(_ticks>=MAX_TICKS){
+      clearInterval(loCheck);
     }
   },200);
 })();
@@ -851,7 +957,7 @@ function _commentHasText(commentParts,importedComment,targetText){
   if(!targetText)return false;
   const _normT=targetText.replace(/\s+/g,' ').trim();
   if(!_normT)return false;
-  if(commentParts&&commentParts.length>0){
+  if(commentParts?.length>0){
     for(const _p of commentParts){
       if(typeof _p!=='string')continue;
       if(_p.replace(/\s+/g,' ').trim().includes(_normT))return true;
@@ -877,12 +983,28 @@ function _deriveGameResult(){
      &&typeof _resignWinnerColor!=='undefined'&&_resignWinnerColor){
     return (_resignWinnerColor==='white')?'1-0':'0-1';
   }
-  // Timeout: winner is _timeoutWinnerColor
+  // Timeout: winner is _timeoutWinnerColor (null when the game is drawn per
+  //   FIDE 6.9 — no legal move series can mate; round-42 42-1 wording — falls
+  //   through to draw below)
   if(_gameOverStatusKey !== undefined&&_gameOverStatusKey==='timeout'
      &&typeof _timeoutWinnerColor!=='undefined'&&_timeoutWinnerColor){
     return (_timeoutWinnerColor==='white')?'1-0':'0-1';
   }
-  // Checkmate/stalemate: parse gameOver text
+  // v1.2.3 round-25: all draw_* keys (and timeout with null winner) produce
+  //   '1/2-1/2' regardless of gameOver text (which may be localized).
+  //   The explicit list covers all draw statuses; timeout-draw falls through
+  //   to the final fallback '1/2-1/2' as well.
+  if(_gameOverStatusKey !== undefined){
+    if(_gameOverStatusKey==='draw_stalemate'
+       ||_gameOverStatusKey==='draw_insufficient'
+       ||_gameOverStatusKey==='draw_50move'
+       ||_gameOverStatusKey==='draw_75move'
+       ||_gameOverStatusKey==='draw_repetition'
+       ||_gameOverStatusKey==='draw_5fold'){
+      return '1/2-1/2';
+    }
+  }
+  // Checkmate: parse gameOver text (status key may not be set in legacy paths)
   if(gameOver.includes(T('white_wins'))||gameOver.includes('White wins'))return '1-0';
   if(gameOver.includes(T('black_wins'))||gameOver.includes('Black wins'))return '0-1';
   return '1/2-1/2';
@@ -981,7 +1103,32 @@ function _buildTimeControlTag(){
 function _buildTerminationTag(){
   if(_gameOverStatusKey === undefined)return null;
   if(_gameOverStatusKey==='resign')return '[Termination "Resignation"]';
-  if(_gameOverStatusKey==='timeout')return '[Termination "Time forfeit"]';
+  // v1.2.3 round-25 (FIDE 6.9): timeout with insufficient material is a draw,
+  //   not a time forfeit. When _timeoutWinnerColor is null, the game was drawn
+  //   by insufficient material (FIDE 6.9), so the Termination tag should
+  //   reflect the draw, not "Time forfeit".
+  // v1.2.3 round-42 (42-1): tag value corrected to strict FIDE 6.9 semantics —
+  //   only ONE flag fell (not "Both"), and the draw criterion is that no
+  //   possible series of legal moves can checkmate (not merely "insufficient
+  //   material"). Matches the finalized banner/PGN text in game-logic.js
+  //   ('pgn_timeout_draw_insufficient').
+  if(_gameOverStatusKey==='timeout'){
+    if(typeof _timeoutWinnerColor!=='undefined'&&_timeoutWinnerColor){
+      return '[Termination "Time forfeit"]';
+    }
+    return '[Termination "Time forfeit draw (FIDE 6.9)"]';
+  }
+  // v1.2.3 round-25 (FIDE 5.2.2): dead position draws get a Termination tag.
+  //   Per PGN spec, Termination values are free-form strings. "Dead position"
+  //   is the most descriptive for FIDE 5.2.2 (insufficient material / impossible
+  //   mate). Other draw types use their FIDE rule name.
+  if(_gameOverStatusKey==='draw_insufficient')return '[Termination "Dead position"]';
+  if(_gameOverStatusKey==='draw_stalemate')return '[Termination "Stalemate"]';
+  if(_gameOverStatusKey==='draw_50move')return '[Termination "50-move rule"]';
+  if(_gameOverStatusKey==='draw_75move')return '[Termination "75-move rule"]';
+  if(_gameOverStatusKey==='draw_repetition')return '[Termination "Threefold repetition"]';
+  if(_gameOverStatusKey==='draw_5fold')return '[Termination "Fivefold repetition"]';
+  if(_gameOverStatusKey==='checkmate')return '[Termination "Normal"]';
   return null;
 }
 
@@ -1248,23 +1395,41 @@ function _buildPGNString(forceIncludeVariations, includeAnnotations){
     //   pgn_timeout_white_wins / pgn_timeout_black_wins were added in
     //   game-logic.js. Dedup: skip if mr.comment already contains it.
     if(_gameOverStatusKey !== undefined&&_gameOverStatusKey==='timeout'
-       && typeof _timeoutWinnerColor!=='undefined'&&_timeoutWinnerColor
        && i===moveRecords.length-1){
-      const _timeoutKey=_timeoutWinnerColor==='white'?'pgn_timeout_white_wins':'pgn_timeout_black_wins';
-      const _timeoutText=T(_timeoutKey);
-      const _alreadyHas=_commentHasText(commentParts,mr.comment,_timeoutText);
-      if(!_alreadyHas)commentParts.push(_timeoutText);
+      // v1.2.3 round-25 (FIDE 6.9): if _timeoutWinnerColor is null, the game
+      //   was drawn — the non-flagging side cannot checkmate by any possible
+      //   series of legal moves (round-42 42-1 wording). Append the draw
+      //   comment instead of the "wins by timeout" comment.
+      if(typeof _timeoutWinnerColor!=='undefined'&&_timeoutWinnerColor){
+        const _timeoutKey=_timeoutWinnerColor==='white'?'pgn_timeout_white_wins':'pgn_timeout_black_wins';
+        const _timeoutText=T(_timeoutKey);
+        const _alreadyHas=_commentHasText(commentParts,mr.comment,_timeoutText);
+        if(!_alreadyHas)commentParts.push(_timeoutText);
+      }else{
+        const _drawText=T('pgn_timeout_draw_insufficient');
+        const _alreadyHas=_commentHasText(commentParts,mr.comment,_drawText);
+        if(!_alreadyHas)commentParts.push(_drawText);
+      }
     }
     const comment=commentParts.length>0?commentParts.join(' '):undefined;
     // Variations: include from moveRecords[i].variations if available
     // v1.0.4 Rev24: forceIncludeVariations (used by PGN cache save) bypasses
     // the showVariations UI toggle so the saved PGN archive always contains
     // the complete game record with variations.
-    let variations=undefined;
+    // v1.2.3 round-37 (SonarCloud S6645): `let variations;` is undefined by
+    //   default — no need for explicit `= undefined`. The re-assignment at
+    //   line ~1388 (when filter returns empty) is kept as `= undefined` to
+    //   match the consumer pattern (`if(m.variations && m.variations.length>0)`
+    //   — both null and undefined are falsy, so behavior is identical).
+    let variations;
     if((showVariations||forceIncludeVariations)&&mr.variations&&mr.variations.length>0){
       variations=mr.variations.filter(v=>v.san&&v.group!=='analysis'&&v.group!=='ponder').map(v=>{
         const vmn=(v.varMoveNum!=null)?v.varMoveNum:_moveNum;
-        const fiw=(v.firstMoveIsWhite!=null)?v.firstMoveIsWhite:(color==='white'?false:true);
+        // v1.2.3 round-37 (SonarCloud S6644): the inner ternary
+        //   `color==='white'?false:true` is `color!=='white'`. The outer
+        //   ternary is a nullish-coalescing fallback (NOT S6644 — the
+        //   branches return different values), so it stays.
+        const fiw=(v.firstMoveIsWhite!=null)?v.firstMoveIsWhite:(color!=='white');
         // v1.0.4 Rev29 FIX: was `v.prefixEllipsisNum||vmn` — but if prefixEllipsisNum
         // is 0 (legitimate, though rare — move "0..." shouldn't normally occur, but
         // defensive), `||` would fall back to vmn. Use explicit null check instead.
@@ -1293,8 +1458,13 @@ function _buildPGNString(forceIncludeVariations, includeAnnotations){
         const cur=_reviewEvalCache.peek(i+1);
         const prev=_reviewEvalCache.peek(i);
         if(!cur||!prev)return undefined;
-        const curEv=cur.mate?(cur.mate>0?90000:-90000):cur.eval;
-        const prevEv=prev.mate?(prev.mate>0?90000:-90000):prev.eval;
+        // v1.2.3 round-25 (S3358): nested ternary flattened to helper.
+        //   cur.mate>0 → +90000 (White mates), cur.mate<0 → -90000 (Black mates),
+        //   no mate → use cur.eval directly.
+        // v1.2.3 round-29 (PR52 S3358): extract _evalOrMate helper to flatten
+        //   the previously-nested ternary `mate!=null?(mate>0?90000:-90000):eval`.
+        const curEv=_evalOrMate(cur.mate,cur.eval);
+        const prevEv=_evalOrMate(prev.mate,prev.eval);
         const delta=curEv-prevEv;
         const isW=(color==='white');
         const md=isW?delta:-delta;
@@ -1352,7 +1522,7 @@ function _showPGNExportAnnotationDialog(callback){
   // v1.1.1 Phase 65: Expose _dismiss globally so handleBackPress can call it.
   _pgnExportDialogDismiss=function(){_dismiss(null);};
   document.body.appendChild(overlay);
-  try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+  try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
 }
 function copyMoveHistory(){
   // v1.1.1 Phase 63: Ask whether to include annotations
@@ -1432,7 +1602,7 @@ function openStatsPage(){
             // v1.2.1 round-16: include the 'stats will open after analysis'
             //   hint so the user knows to wait instead of clicking 📊 again.
             showToast(T('analyzing_progress')+' ('+_cached+'/'+_total+') \u2014 '+T('stats_will_open_after_analysis'));
-          }catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+          }catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
           return;
         }
         window._pendingOpenStats=true;
@@ -1453,7 +1623,7 @@ function openStatsPage(){
             console.warn('openStatsPage: pending-stats safety timeout fired (10min) — batch did not complete');
             // v1.2.1 round-16: proper i18n (was previously mixed zh+en
             //   "T('analyzing_progress') + ' timed out'").
-            try{showToast(T('analysis_timed_out_retry'));}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+            try{showToast(T('analysis_timed_out_retry'));}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
           }
           window._pendingOpenStatsTimer=null;
         },600000); // 10 minutes
@@ -1467,7 +1637,7 @@ function openStatsPage(){
         try{
           // v1.2.1 round-16: include the 'stats will open after analysis' hint.
           showToast(T('analyzing_progress')+' ('+_reviewEvalCache.size+'/'+(_lastStep+1)+') \u2014 '+T('stats_will_open_after_analysis'));
-        }catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+        }catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
         return; // existing batch will trigger openStatsPage on completion
       }
       // Kick off analyze-all. reviewAnalyzeAll() is exported by ui.js and
@@ -1485,8 +1655,8 @@ function openStatsPage(){
           //   user a clear intent→progress sequence. The 1s delay is short
           //   enough not to feel sluggish (analysis itself takes much longer)
           //   but long enough to read the 10-char intent message.
-          showToast(T('stats_will_open_after_analysis'),1000);
-          try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+          showToast(T('stats_will_open_after_analysis'),1500);
+          try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
           setTimeout(function(){
             try{reviewAnalyzeAll();}catch(e){console.error('openStatsPage: deferred analyze-all trigger failed:',e);}
           },1000);
@@ -1597,7 +1767,9 @@ function openStatsPage(){
     }else{
       // Plain-object fallback (defensive — current code always uses Map)
       for(const k in _visualAnnotationsCache){
-        if(!_visualAnnotationsCache.hasOwnProperty(k))continue;
+        // v1.2.3 round-38 (SonarCloud S6653): use Object.hasOwn instead of
+        //   .hasOwnProperty (safer against shadowed hasOwnProperty, ES2022).
+        if(!Object.hasOwn(_visualAnnotationsCache,k))continue;
         if(k==='_initial')continue;
         const v=_visualAnnotationsCache[k];
         if(!v||(!v.csl&&!v.cal))continue;
@@ -1629,7 +1801,7 @@ function onStatsHTMLExported(success,fileName){
 // silently doing nothing — the user otherwise has no feedback that the tap
 // was registered but the request couldn't be honored.
 function onStatsRequestReview(){
-  if(moveRecords&&moveRecords.length>0){
+  if(moveRecords?.length>0){
     enterReview();
   }else{
     showToast(T('no_move_records'));
@@ -1639,7 +1811,7 @@ function copyReviewPGN(){
   if(!moveRecords||!moveRecords.length){showToast(T('no_move_records'));return}
   copyMoveHistory();
 }
-function _fallbackCopy(text,successMsg){const ta=document.createElement('textarea');ta.value=text;ta.style.cssText='position:fixed;left:-9999px;top:-9999px';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');if(successMsg)showToast(successMsg)}catch(e){showToast(T('copy_failed'))}finally{document.body.removeChild(ta)}}
+function _fallbackCopy(text,successMsg){const ta=document.createElement('textarea');ta.value=text;ta.style.cssText='position:fixed;left:-9999px;top:-9999px';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');if(successMsg)showToast(successMsg)}catch(e){showToast(T('copy_failed'))}finally{ta.remove()}}
 // Unified clipboard helper — handles WebView compatibility (secure context, user gesture)
 function safeCopyToClipboard(text,successMsg){
   const fb=function(){_fallbackCopy(text,successMsg)};
@@ -1852,7 +2024,10 @@ function _uciToSimple(uci){
   const toRank=String(8-toRow);
   // Try to determine piece type from current game state
   let pieceType='pawn';
-  if(gameState&&gameState.board&&gameState.board[fromRow]){
+  // v1.2.3 round-29 (PR52 S6582): collapse `gameState?.board && gameState.board[fromRow]`
+  //   into the equivalent `gameState?.board?.[fromRow]` — same semantics, one
+  //   fewer property access, no `&&` short-circuit noise.
+  if(gameState?.board?.[fromRow]){
     const p=gameState.board[fromRow][fromCol];
     if(p)pieceType=p.type;
   }
@@ -1880,10 +2055,11 @@ function _uciToSimple(uci){
   // king (right of king → kingside O-O; left → queenside O-O-O).
   if(pieceType==='king'){
     // v1.0.7 PHASE 4: Check for UCI_Chess960 king-captures-rook format first.
-    if(gameState&&gameState.board&&gameState.board[fromRow]&&gameState.board[toRow]){
+    // v1.2.3 round-29 (PR52 S6582): collapse `gameState?.board && ...` chain.
+    if(gameState?.board?.[fromRow]&&gameState.board[toRow]){
       const _fp=gameState.board[fromRow][fromCol];
       const _tp=gameState.board[toRow][toCol];
-      if(_fp&&_fp.type==='king'&&_tp&&_tp.type==='rook'&&_fp.color===_tp.color&&fromRow===toRow){
+      if(_fp?.type==='king'&&_tp?.type==='rook'&&_fp.color===_tp.color&&fromRow===toRow){
         // King "captures" own rook → Chess960 castling notation.
         if(toCol>fromCol)return 'O-O';
         if(toCol<fromCol)return 'O-O-O';
@@ -1934,9 +2110,9 @@ function _uciToSAN(uci, state){
   // rook on the same rank) and rewrite the destination to the king's actual
   // castling destination (col 6 kingside, col 2 queenside). This makes the
   // downstream makeMv/moveAlg correctly detect castling via _castleSide().
-  if(piece&&piece.type==='king'&&state.board[toRow]){
+  if(piece?.type==='king'&&state.board[toRow]){
     const toPiece=state.board[toRow][toCol];
-    if(toPiece&&toPiece.type==='rook'&&toPiece.color===piece.color&&fromRow===toRow){
+    if(toPiece?.type==='rook'&&toPiece.color===piece.color&&fromRow===toRow){
       if(toCol>fromCol){
         // Kingside castling — king ends on col 6 (g1/g8)
         toCol=6;
@@ -2022,7 +2198,7 @@ const _PV_CACHE_MAX=200; // Bound: ~8 PV lines × ~25 moves = 200 entries max
 // (e.g. "e2e4") applied from different states produces different SAN.
 function _convertPVtoSANCached(pvString, state, stateHash){
   if(!pvString||!state) return { sanMoves: '', finalState: state };
-  const uciMoves=pvString.trim().split(/\s+/).filter(m=>m&&m.length>=4);
+  const uciMoves=pvString.trim().split(/\s+/).filter(m=>m?.length>=4);
   if(uciMoves.length===0) return { sanMoves: '', finalState: state };
   const sanParts=[];
   let currentState=state;
@@ -2108,19 +2284,21 @@ function generateFEN(s){
   // lossless way to represent the position.
   // Standard positions (king on e1/e8, rooks on a1/h1/a8/h8) continue to
   // use KQkq for backward compatibility with v1.0.6 and earlier.
+  // v1.2.3 round-36 (dedup + robustness): the inline king-position +
+  //   corner-rook checks were an UNFIXED copy of _needsShredderFEN() —
+  //   they missed the v1.2.3 round-21 per-color gating fix (the inline
+  //   king check ran for BOTH colors regardless of which side actually
+  //   held castling rights, misclassifying standard positions like
+  //   3k4/8/8/8/8/8/8/R3K2R w KQ - 0 1 as Chess960). Replaced with a
+  //   single call to _needsShredderFEN(s), which is the canonical,
+  //   field-proven implementation already used by tablebase.js for FEN
+  //   import. Behavior is now byte-for-byte identical across all 4
+  //   Shredder-detection sites.
   let _useShredder=false;
-  const _is960=(gameVariant !== undefined&&gameVariant==='chess960')||(typeof isChess960Mode==='function'&&isChess960Mode());
+  const _is960=isChess960Active();
   if(_is960)_useShredder=true;
   else{
-    const _hasRights=cr.whiteKingside||cr.whiteQueenside||cr.blackKingside||cr.blackQueenside;
-    if(_hasRights){
-      if(s.wk&&(s.wk.row!==7||s.wk.col!==4))_useShredder=true;
-      if(s.bk&&(s.bk.row!==0||s.bk.col!==4))_useShredder=true;
-      if(!_useShredder&&cr.whiteKingside){const wr=s.board[7]&&s.board[7][7];if(!wr||wr.type!=='rook'||wr.color!=='white')_useShredder=true;}
-      if(!_useShredder&&cr.whiteQueenside){const wr=s.board[7]&&s.board[7][0];if(!wr||wr.type!=='rook'||wr.color!=='white')_useShredder=true;}
-      if(!_useShredder&&cr.blackKingside){const br=s.board[0]&&s.board[0][7];if(!br||br.type!=='rook'||br.color!=='black')_useShredder=true;}
-      if(!_useShredder&&cr.blackQueenside){const br=s.board[0]&&s.board[0][0];if(!br||br.type!=='rook'||br.color!=='black')_useShredder=true;}
-    }
+    _useShredder=_needsShredderFEN(s);
   }
   let castle;
   if(_useShredder&&typeof toShredderCastling==='function'){
@@ -2201,28 +2379,28 @@ function _sanitizeFenForEngine(fen){
   if(crRaw.includes('K')){
     // White kingside: white king on e1 (row 7, col 4) AND white rook on h1 (row 7, col 7)
     const wk=board[7][4], wr=board[7][7];
-    if(wk&&wk.type==='king'&&wk.color==='white'&&wr&&wr.type==='rook'&&wr.color==='white'){
+    if(wk?.type==='king'&&wk.color==='white'&&wr?.type==='rook'&&wr.color==='white'){
       cr+='K';
     }
   }
   if(crRaw.includes('Q')){
     // White queenside: white king on e1 (row 7, col 4) AND white rook on a1 (row 7, col 0)
     const wk=board[7][4], wr=board[7][0];
-    if(wk&&wk.type==='king'&&wk.color==='white'&&wr&&wr.type==='rook'&&wr.color==='white'){
+    if(wk?.type==='king'&&wk.color==='white'&&wr?.type==='rook'&&wr.color==='white'){
       cr+='Q';
     }
   }
   if(crRaw.includes('k')){
     // Black kingside: black king on e8 (row 0, col 4) AND black rook on h8 (row 0, col 7)
     const bk=board[0][4], br=board[0][7];
-    if(bk&&bk.type==='king'&&bk.color==='black'&&br&&br.type==='rook'&&br.color==='black'){
+    if(bk?.type==='king'&&bk.color==='black'&&br?.type==='rook'&&br.color==='black'){
       cr+='k';
     }
   }
   if(crRaw.includes('q')){
     // Black queenside: black king on e8 (row 0, col 4) AND black rook on a8 (row 0, col 0)
     const bk=board[0][4], br=board[0][0];
-    if(bk&&bk.type==='king'&&bk.color==='black'&&br&&br.type==='rook'&&br.color==='black'){
+    if(bk?.type==='king'&&bk.color==='black'&&br?.type==='rook'&&br.color==='black'){
       cr+='q';
     }
   }
@@ -2268,10 +2446,11 @@ function uciToCoords(uci){
   // engine (with UCI_Chess960=false) sends "e1g1", which does NOT match
   // (g1 doesn't hold a rook), so we don't rewrite. The rewrite only happens
   // when the engine actually uses the Chess960 castling notation.
-  if(gameState&&gameState.board&&gameState.board[fr]&&gameState.board[tr]){
+  // v1.2.3 round-29 (PR52 S6582): collapse `gameState?.board && ...` chain.
+  if(gameState?.board?.[fr]&&gameState.board[tr]){
     const fromPiece=gameState.board[fr][fc];
     const toPiece=gameState.board[tr][tc];
-    if(fromPiece&&fromPiece.type==='king'&&toPiece&&toPiece.type==='rook'&&fromPiece.color===toPiece.color&&fr===tr){
+    if(fromPiece?.type==='king'&&toPiece?.type==='rook'&&fromPiece.color===toPiece.color&&fr===tr){
       // King "captures" own rook on the same rank → Chess960 castling notation.
       // v1.1.2 PHASE 71 (bug fix): Attach the castle flag to `result.to` so that
       // downstream `_castleSide()` detects castling via its primary path
@@ -2341,8 +2520,10 @@ function onEngineRestarting(){
 function onEngineReady(){
   // v1.1.2 Phase 70: removed debug console.log (production cleanup)
   _engineReady=true;
-  // Reset restart counter on successful engine init
-  if(window._engineRestartCount)window._engineRestartCount=0;
+  // v1.2.3 round-44 (G5): removed the cumulative _engineRestartCount reset —
+  //   the retry budget is now a 5-minute sliding window (_engineErrorTimestamps
+  //   in onEngineError), so a recovered engine no longer regains infinite
+  //   retries and a single old error no longer burns budget forever.
   // v1.0.7 PHASE 19 (bug fix): Cancel any pending error-restart timer. If the
   // engine auto-recovered (Java recoverEngine) before the 1500ms onEngineError
   // timer fired, that timer would spuriously restart an already-ready engine.
@@ -2370,7 +2551,7 @@ function onEngineReady(){
   _aiRetryCount=0;
   _updateLoadingStatus(T('engine_ready'),100);
   // Sync language preference to SharedPreferences for notification i18n
-  try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.saveLangPref)AndroidBridge.saveLangPref(_lang);}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+  try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.saveLangPref)AndroidBridge.saveLangPref(_lang);}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
   // Update foreground service notification with engine ready status
   _updateEngineNotification(T('engine_ready'));
   setTimeout(function(){
@@ -2385,6 +2566,9 @@ function onEngineReady(){
     // v1.2.1 round-7: removed unreachable `typeof _requestBatchEval === 'function'`
     //   guard — _requestBatchEval is always exported by this module at load time.
     if(typeof _reviewAnalyzeAllActive!=='undefined'&&_reviewAnalyzeAllActive&&typeof reviewMode!=='undefined'&&reviewMode){
+      // v1.2.3 round-44 (T4): engine recovered — reset the consecutive-failure
+      //   counter so the resumed batch gets a fresh failure budget.
+      _batchConsecutiveFail=0;
       try{
         // Find the next uncached step from _reviewAnalyzeStep (or step 0 if reset)
         const _resumeStep=_reviewAnalyzeStep>=0?_reviewAnalyzeStep:0;
@@ -2399,6 +2583,9 @@ function onEngineReady(){
       requestEngineEval();
     }
   },300);
+  // v1.2.3 round-44 (G6): (re)start the JS heartbeat after every engine-ready
+  //   event. _startEngineHeartbeat is idempotent (clears any prior interval).
+  try{if(typeof _startEngineHeartbeat==='function')_startEngineHeartbeat();}catch(e){console.warn('[AIBridge] heartbeat start failed:',e&&e.message||e);}
   // Refresh main UI to reflect engine ready state
   render();
 }
@@ -2472,7 +2659,7 @@ function onBestMove(uciMove){
   // Cancel safety timeout — engine responded (and it's the current request)
   if(_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
   // v1.0.8 PHASE 22 supplement: AI-think-end sound (轻微答声) — engine found a move
-  try{if(typeof playSound==='function')playSound('aiThinkEnd');}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+  try{if(typeof playSound==='function')playSound('aiThinkEnd');}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
   isAIThinking=false;_aiBarInfo='';_aiRetryCount=0;
 
   // CRITICAL FIX: Always clear ponder display state at the start of onBestMove.
@@ -2494,7 +2681,7 @@ function onBestMove(uciMove){
       const pm=AndroidBridge.getLastPonderMove();
       if(pm)_lastPonderMoveFromEngine=pm;
     }
-  }catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+  }catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
 
   // Clear MultiPV progress lines for next search
   _multiPVLines=[];
@@ -2523,8 +2710,8 @@ function onBestMove(uciMove){
     moveNum:moveNum,
     preMoveState:cloneS(gameState),
     ponderMove:_lastPonderMoveFromEngine,
-    ponderEnabled:!!(engineSettingsData&&engineSettingsData.ponder),
-    multiPVEnabled:!!(engineSettingsData&&engineSettingsData.multiPV&&engineSettingsData.multiPV>1)
+    ponderEnabled:!!(engineSettingsData?.ponder),
+    multiPVEnabled:!!(engineSettingsData?.multiPV&&engineSettingsData.multiPV>1)
   };
   // v1.0.8 PHASE 49: defensive cleanup. The Java side always fires
   //   onMultiPVResult immediately after onBestMove (same postJsCallback queue),
@@ -2536,7 +2723,11 @@ function onBestMove(uciMove){
   //   _processDeferredVariations sets _pendingBestMoveInfo=null first) and a
   //   safety net in the abnormal path.
   const _pbmiCaptured=_pendingBestMoveInfo;
-  setTimeout(function(){
+  // v1.2.3 round-44 (G4): track the timer id — the previous anonymous timer
+  //   could outlive a newer _pendingBestMoveInfo and leaked past teardown.
+  if(_pbmiTimerId){clearTimeout(_pbmiTimerId);_pbmiTimerId=null;}
+  _pbmiTimerId=setTimeout(function(){
+    _pbmiTimerId=null;
     if(_pendingBestMoveInfo===_pbmiCaptured){
       console.warn('onBestMove: _pendingBestMoveInfo not processed within 2s, clearing');
       _pendingBestMoveInfo=null;
@@ -2690,7 +2881,7 @@ function onHintMove(uciMove){
       const pm=AndroidBridge.getLastPonderMove();
       if(pm)_lastPonderMoveFromEngine=pm;
     }
-  }catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+  }catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
   // Convert ponder move to SAN for display alongside the hint (bestmove).
   // The ponder move is the opponent's predicted reply AFTER the recommended move.
   // For correct SAN, we must convert from the post-hint-move position (postState).
@@ -2720,7 +2911,7 @@ function onHintMove(uciMove){
   legalSet=new Set(legalMvs.map(m=>m.row*8+m.col));
   HapticManager.fire('PIECE_SELECT');
   // v1.0.8 PHASE 22 supplement: piece-select sound
-  try{if(typeof playSound==='function')playSound('select');}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+  try{if(typeof playSound==='function')playSound('select');}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
   _updateBoardLightweight();
   render();
 }
@@ -2768,7 +2959,7 @@ function onEngineProgress(depth,nodes,nps,scoreCp,scoreMate,wdlW,wdlD,wdlL,selde
   const wCp=isBlackToMove?-scoreCp:scoreCp;
   const wMate=isBlackToMove?-scoreMate:scoreMate;
   let scoreStr='';
-  if(scoreMate!=null){const m=Number.parseInt(wMate);scoreStr=m>0?' #+'+Math.abs(m):m<0?' #-'+Math.abs(m):' #0';}
+  if(scoreMate!=null){const m=Number.parseInt(wMate);scoreStr=m>0?' #+'+Math.abs(m):m<0?' #-'+Math.abs(m):(isBlackToMove?' #+0':' #-0');} // v1.2.3 (R1/R3): wMate is White-POV; mate==0 means the side to move is checkmated, so Black-to-move => White wins => '#+0'
   else if(scoreCp!=null){const pd=(wCp/100).toFixed(1);scoreStr=' '+T('eval_label')+':'+(wCp>0?'+':'')+pd;}
   if(scoreStr)infoParts.push(scoreStr.trim());
   aiThinkInfo=infoParts.join(' ');
@@ -2932,30 +3123,76 @@ function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth){
   //   advance the batch. DO NOT fall through to the user-nav stale filter —
   //   the batch's callback is NOT stale even if the user navigated (because
   //   user-nav during batch doesn't invalidate _evalRequestBatchGen).
-  //   _evalRequestBatchGen is reset to 0 by user-nav requests, so a user-nav
-  //   callback won't be claimed by this batch path.
+  //   v1.2.3 round-44 (T3): user-nav requests no longer reset
+  //   _evalRequestBatchGen while a batch is active — the per-request dispatch
+  //   record (_batchLastDispatched, checked below) is now the authoritative
+  //   guard against mis-claimed callbacks.
   if(reviewMode&&_reviewAnalyzeAllActive&&_evalRequestBatchGen>0
      &&_evalRequestBatchGen===_reviewAnalyzeGen){
+    // v1.2.3 round-44 (T1): per-request validation. The gen check alone cannot
+    //   distinguish a LATE callback from a previous step (the gen globals are
+    //   re-armed by every _requestBatchEval dispatch), so such a callback was
+    //   claimed as the current step's result — caching the wrong step and
+    //   normalizing with the NEW step's _evalForBlackTurn (possible sign flip).
+    //   Require an exact match against the most recent dispatch record; the fen
+    //   is re-derived for the current _reviewAnalyzeStep (same pipeline as the
+    //   dispatch), so it only matches while the batch is still parked on the
+    //   dispatched step. Mismatch → drop as stale: no caching, no advance.
+    const _bd=_batchLastDispatched;
+    const _expectedFen=(_bd&&_reviewAnalyzeStep>=0&&_reviewAnalyzeStep<reviewStates.length)
+      ?_sanitizeFenForEngine(generateFEN(reviewStates[_reviewAnalyzeStep].state)):null;
+    if(!_bd||_bd.gen!==_evalRequestBatchGen||_bd.step!==_reviewAnalyzeStep||_bd.fen!==_expectedFen){
+      console.warn('[AIBridge] Stale batch eval callback dropped (step/gen/fen mismatch vs last dispatch)');
+      return;
+    }
+    // Consume the dispatch record — one dispatch admits exactly one callback.
+    _batchLastDispatched=null;
+    // v1.2.3 round-44 (T4): successful batch callback — the engine is alive
+    //   and responding, so reset the consecutive-failure counter.
+    _batchConsecutiveFail=0;
     // Cache for the batch's step (always, even if user navigated)
-    if(_reviewAnalyzeStep>=0&&_reviewAnalyzeStep<reviewStates.length){
-      // Don't overwrite an existing cache entry (defensive — shouldn't happen)
-      if(!_reviewEvalCache.has(_reviewAnalyzeStep)){
-        _reviewEvalCache.set(_reviewAnalyzeStep,{
-          eval:_bgEval,mate:_bgMate,wdlW:_bgW,wdlD:_bgD,wdlL:_bgL,
-          depth:_bgDepth,seldepth:_bgSeldepth
-        });
+    // v1.2.3 round-44 (T6): try/catch around the cache write — a throw here
+    //   must not break the batch chain (clear validation state and advance).
+    try{
+      if(_reviewAnalyzeStep>=0&&_reviewAnalyzeStep<reviewStates.length){
+        // Don't overwrite an existing cache entry (defensive — shouldn't happen)
+        if(!_reviewEvalCache.has(_reviewAnalyzeStep)){
+          _reviewEvalCache.set(_reviewAnalyzeStep,{
+            eval:_bgEval,mate:_bgMate,wdlW:_bgW,wdlD:_bgD,wdlL:_bgL,
+            depth:_bgDepth,seldepth:_bgSeldepth
+          });
+        }
       }
+    }catch(e){
+      console.error('Batch eval cache write failed:',e);
+      // Clear the batch gen so a duplicate callback (rare) doesn't double-advance
+      _evalRequestBatchGen=0;
+      _batchLastDispatched=null;
+      try{
+        if(typeof _reviewAnalyzeAdvance==='function')_reviewAnalyzeAdvance();
+      }catch(_e){console.error('Analyze-all advance (cache-write recovery) failed:',_e);}
+      return;
     }
     // Clear the batch gen so a duplicate callback (rare) doesn't double-advance
     _evalRequestBatchGen=0;
     // Clear the eval safety timer — engine responded successfully
     if(_evalSafetyTimerId){clearTimeout(_evalSafetyTimerId);_evalSafetyTimerId=null;}
     // Live-refresh the analyze-all button label (progress update)
-    try{if(typeof _updateReviewAnalyzeBtn==='function')_updateReviewAnalyzeBtn();}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+    try{if(typeof _updateReviewAnalyzeBtn==='function')_updateReviewAnalyzeBtn();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
     // Advance the batch (decoupled from reviewStep)
     try{
       if(typeof _reviewAnalyzeAdvance==='function')_reviewAnalyzeAdvance();
     }catch(e){console.error('Analyze-all advance failed:',e);}
+    return;
+  }
+
+  // v1.2.3 round-44 (G1): drop callbacks whose gen doesn't match the most
+  //   recent ACTUALLY DISPATCHED user-nav request. The debounce, cache-hit,
+  //   and terminal fast paths all bump _evalRequestGen without dispatching —
+  //   previously a superseded request's late callback could pass every check
+  //   below and overwrite fresher state.
+  if(_evalRequestGen!==_evalLastDispatchedGen){
+    console.warn('[AIBridge] Stale eval callback dropped (gen '+_evalRequestGen+' !== last dispatched '+_evalLastDispatchedGen+')');
     return;
   }
 
@@ -2978,7 +3215,7 @@ function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth){
         });
         // Live-refresh the analyze-all button label (in case batch is also
         // active and watching the cache size)
-        try{if(typeof _updateReviewAnalyzeBtn==='function')_updateReviewAnalyzeBtn();}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+        try{if(typeof _updateReviewAnalyzeBtn==='function')_updateReviewAnalyzeBtn();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
         // v1.1.1 Phase 59 Task 59.3: If the chart is currently displayed and
         //   step 0 just got cached, re-render the chart so the data point
         //   appears. We use a lightweight DOM update (not full render) to
@@ -2988,7 +3225,7 @@ function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth){
              &&typeof reviewMode!=='undefined'&&reviewMode){
             _refreshEvalTrendChart();
           }
-        }catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+        }catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
       }
     }
     return; // Don't update display (stale for current view)
@@ -3015,7 +3252,7 @@ function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth){
   // at "Analyze All N (k/N)" until the next full render.
   try{
     if(typeof _updateReviewAnalyzeBtn==='function')_updateReviewAnalyzeBtn();
-  }catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+  }catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
   // v1.2.1 round-11 (Bug #1 fix): Live-refresh the eval trend chart so the
   //   newly-cached data point appears on the line chart IMMEDIATELY when the
   //   current step's eval completes — without requiring the user to navigate
@@ -3027,7 +3264,7 @@ function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth){
   //   container doesn't exist, so this call is safe in all contexts.
   try{
     if(typeof _refreshEvalTrendChart==='function')_refreshEvalTrendChart();
-  }catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+  }catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
 }
 
 // Callback: Engine error
@@ -3175,7 +3412,7 @@ function _showFileBrowser(){
       let parentPath='';
       try{
         parentPath=bridge.getParentPath(_fileBrowserPath)||'';
-      }catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+      }catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
       let h='<div class="dov" role="dialog" aria-modal="true" aria-label="'+T('file_browse_label')+'" onclick="if(event.target===this){_closeFileBrowser()}"><div class="dlg" style="max-width:520px;max-height:80vh;overflow-y:auto">';
       h+='<h2>'+T('import_settings_title')+'</h2>';
       h+='<div style="background:var(--card);border:1px solid var(--border);border-radius:4px;padding:6px 10px;font-size:.72rem;color:var(--muted);margin-bottom:10px;word-break:break-all">'+_esc(_fileBrowserPath)+'</div>';
@@ -3250,7 +3487,7 @@ function _fileBrowserHandleBack(){
         return true; // Handled — don't close browser
       }
     }
-  }catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+  }catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
   // No parent — close the file browser
   _closeFileBrowser();
   return true;
@@ -3273,7 +3510,13 @@ function _fileBrowserSelect(filePath){
   // FIX: Use requireEngine=false — file reading doesn't need engine
   _bridgeCall(function(bridge){
     const content=bridge.readTextFile(filePath);
-    if(content){
+    // v1.2.3 round-46 (PR53 CR#21): on Android 6-9 the first read may return
+    //   the {"error":"permission_pending"} sentinel (the permission dialog is
+    //   async and Java cannot block on it). Recognize the sentinel and prompt
+    //   a retry instead of feeding the JSON marker into importSettings.
+    if(content&&content.indexOf('"permission_pending"')!==-1){
+      showToast(T('settings_permission_pending'));
+    }else if(content){
       // importSettings() is async on the Java side — onSettingsImported
       // callback will fire the success/failure toast.
       bridge.importSettings(content);
@@ -3321,7 +3564,7 @@ function restartCurrentEngine(){
   // Refresh engine info after a delay
   setTimeout(function(){
     if(typeof AndroidBridge!=='undefined'){
-      try{const info=AndroidBridge.getEngineInfo();engineConfigData=JSON.parse(info);renderEngineConfigAndUpdate();}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+      try{const info=AndroidBridge.getEngineInfo();engineConfigData=JSON.parse(info);renderEngineConfigAndUpdate();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
     }
   },2500);
 }
@@ -3397,13 +3640,13 @@ function exportEngineSettings(){
           savedPath=exportDir+'/Regalia_engine_settings.txt';
           saved=bridge.writeTextFile(savedPath,txt);
         }
-      }catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+      }catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
       if(!saved){
         try{
           const downloadsPath='/storage/emulated/0/Download/Regalia_engine_settings.txt';
           saved=bridge.writeTextFile(downloadsPath,txt);
           if(saved) savedPath=downloadsPath;
-        }catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+        }catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
       }
       if(saved&&savedPath){
         showToast(T('settings_exported')+': '+savedPath);
@@ -3468,15 +3711,15 @@ function onSettingsImported(result){
       // Set state, remove dialog from DOM directly, then render.
       showEngineConfig=false;
       // Force-remove any open dialog overlay from the DOM
-      var dov=document.querySelector('.dov[role="dialog"]');
+      const dov=document.querySelector('.dov[role="dialog"]');
       if(dov){dov.remove();}
       // Also remove any file-browser overlay that might still be open
-      var fb=document.getElementById('_fileBrowserOverlay');
+      const fb=document.getElementById('_fileBrowserOverlay');
       if(fb){fb.remove();}
       // Refresh cached data
       if(typeof AndroidBridge!=='undefined'){
-        try{var info=AndroidBridge.getEngineInfo();if(info)engineConfigData=JSON.parse(info);}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
-        try{var s=AndroidBridge.getEngineSettings();if(s)engineSettingsData=JSON.parse(s);}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+        try{const info=AndroidBridge.getEngineInfo();if(info)engineConfigData=JSON.parse(info);}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
+        try{const s=AndroidBridge.getEngineSettings();if(s)engineSettingsData=JSON.parse(s);}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
       }
       if(engineSettingsData){
         _cachedMultiPV=engineSettingsData.multiPV||1;
@@ -3488,14 +3731,28 @@ function onSettingsImported(result){
         render();
       }
       // v1.0.3: Safety net — force close again after 100ms AND 300ms to handle
-      // late-arriving onEngineInfo callbacks that might re-render the dialog.
+      //   late-arriving onEngineInfo callbacks that might re-render the dialog.
+      // v1.2.3 round-30 (robustness): use a generation token so a NEW
+      //   onSettingsImported call (or any user action that opens another
+      //   dialog) invalidates the pending safety-net closures — otherwise
+      //   they would clobber a dialog the user just opened within 300ms.
+      // v1.2.3 round-31 (PR52 SonarCloud S8786): replace `|0` bitwise coercion
+      //   with Math.trunc for SonarCloud rule compliance. _settingsImportGen
+      //   is always a non-negative integer (declared `=0` at line 420 and
+      //   only incremented by 1 here), so the two are semantically equivalent
+      //   in this codebase — but Math.trunc has no 32-bit truncation risk and
+      //   is the SonarCloud-recommended idiom.
+      _settingsImportGen=Math.trunc(_settingsImportGen)+1;
+      const myGen=_settingsImportGen;
       setTimeout(function(){
+        if(myGen!==_settingsImportGen)return;
         showEngineConfig=false;
         var dov2=document.querySelector('.dov[role="dialog"]');
         if(dov2){dov2.remove();}
         render();
       },100);
       setTimeout(function(){
+        if(myGen!==_settingsImportGen)return;
         showEngineConfig=false;
         var dov3=document.querySelector('.dov[role="dialog"]');
         if(dov3){dov3.remove();}
@@ -3540,7 +3797,7 @@ function onMultiPVResult(result){
     const data=typeof result==='string'?JSON.parse(result):result;
     _multiPVResult=data;
     // Store the primary PV as the move's variation
-    if(data&&data.length>0){
+    if(data?.length>0){
       const primary=data[0];
       if(primary.pv){
         // Store variation for the current/last move
@@ -3562,6 +3819,8 @@ function _processDeferredVariations(){
   if(!_pendingBestMoveInfo)return;
   const info=_pendingBestMoveInfo;
   _pendingBestMoveInfo=null; // Clear immediately to prevent re-processing
+  // v1.2.3 round-44 (G4): cancel the 2s self-clearing timer — processed.
+  if(_pbmiTimerId){clearTimeout(_pbmiTimerId);_pbmiTimerId=null;}
 
   // v1.0.2 PERF: clear the PV cache at the start of each variation-processing
   // call. The cache is only valid within a single search's MultiPV result set;
@@ -3608,7 +3867,7 @@ function _processDeferredVariations(){
   // v1.0.2 FIX: Fall back to _multiPVResult[0].pv when _lastEngineVariation is
   // empty. Previously, if the bestmove didn't carry a PV (some Stockfish builds
   // omit it when MultiPV is on), the mainline variation was silently dropped.
-  const primaryPV=_lastEngineVariation||(_multiPVResult&&_multiPVResult.length>0?_multiPVResult[0].pv:null);
+  const primaryPV=_lastEngineVariation||(_multiPVResult?.length>0?_multiPVResult[0].pv:null);
 
   // --- Mainline prediction: continuation after the played move ---
   // v1.0.2 FIX: The mainline prediction should NOT be displayed immediately.
@@ -3659,7 +3918,7 @@ function _processDeferredVariations(){
   // which transparently reuses the converted SAN + post-state of any shared
   // prefix with previously-converted lines (including the mainline above).
   // For 8 lines sharing a 5-move prefix, this saves ~35 makeMv+moveAlg calls.
-  if(_multiPVResult&&_multiPVResult.length>1){
+  if(_multiPVResult?.length>1){
     const startIdx=primaryStartedWithBestmove?1:0;
     // Pre-compute the preMoveState hash for cache keys
     const preMoveHash=preMoveState.hash||0;
@@ -3832,7 +4091,7 @@ let _pendingEngineSANs=[];
 function _registerEnginePVForDivergence(pvUci,fromMoveIdx,preMoveState){
   if(!pvUci||!preMoveState)return;
   // Don't track PVs that are too short (just the bestmove — no continuation)
-  const moves=pvUci.trim().split(/\s+/).filter(m=>m&&m.length>=4);
+  const moves=pvUci.trim().split(/\s+/).filter(m=>m?.length>=4);
   if(moves.length<2)return; // Need at least bestmove + 1 continuation move
   _pendingEnginePVs.push({
     pvUci:moves.join(' '),
@@ -3888,7 +4147,7 @@ function _checkPVDivergence(){
       //   Chess960 castling move in a PV continuation triggers a false
       //   divergence. Skip the divergence check for castling moves in
       //   Chess960 mode (treat as match).
-      if(gameVariant !== undefined&&gameVariant==='chess960'&&mr&&mr.isCastling){
+      if(gameVariant !== undefined&&gameVariant==='chess960'&&mr?.isCastling){
         pending.matchedUpTo=k;
         continue;
       }
@@ -4039,11 +4298,19 @@ function _updateMultiPVDisplay(){
     // v1.0.5 Rev56: skip lines with no PV content — they contribute nothing
     // to the display except an empty score string, and would trigger a
     // wasteful _convertPVtoSAN('') call.
-    const hasPV = pv.pv && pv.pv.length>0;
+    // v1.2.3 round-41: pv.pv is a PV STRING (UCI moves), not an object —
+    //   the old `pv.pv?.pv.length>0` dereferenced `.length` of the string's
+    //   (undefined) .pv property and threw a TypeError, so alternative
+    //   MultiPV lines never rendered. Check the string directly.
+    const hasPV = pv.pv!=null&&pv.pv.length>0;
     // Build a cheap signature to detect whether this line actually changed
-    const sig = (pv.index||0)+'|'+(pv.scoreCp!=null?pv.scoreCp:'')+'|'+(pv.scoreMate!=null?pv.scoreMate:'')+'|'+(hasPV?pv.pv:'');
+    // v1.2.3 (R1): engine scores are side-to-move POV; display is White-POV.
+    //   Include the turn in the signature so a cached line is never reused
+    //   with the wrong polarity after the turn changes.
+    const _isBTM = gameState && gameState.currentTurn === 'black';
+    const sig = (pv.index||0)+'|'+(_isBTM?'B':'W')+'|'+(pv.scoreCp!=null?pv.scoreCp:'')+'|'+(pv.scoreMate!=null?pv.scoreMate:'')+'|'+(hasPV?pv.pv:'');
     const cached = _multiPVDisplayCache[pv.index];
-    if(cached && cached.sig === sig){
+    if(cached?.sig === sig){
       // Cache hit — reuse the previously computed display text
       hintParts.push(cached.text);
       continue;
@@ -4053,10 +4320,16 @@ function _updateMultiPVDisplay(){
     let scoreStr='';
     if(pv.scoreMate!=null){
       const m=Number.parseInt(pv.scoreMate,10);
-      if(!Number.isNaN(m))scoreStr=m>0?'#+'+Math.abs(m):m<0?'#-'+Math.abs(m):'#0';
+      if(!Number.isNaN(m)){
+        // v1.2.3 (R1/R3): convert mate to White-POV (#+N = White mates, #-N =
+        //   Black mates); mate==0 = side to move is mated (Black => '#+0').
+        const _wM=_isBTM?-m:m;
+        scoreStr=_wM>0?'#+'+Math.abs(_wM):_wM<0?'#-'+Math.abs(_wM):(_isBTM?'#+0':'#-0');
+      }
     }else if(pv.scoreCp!=null){
-      const pd=(pv.scoreCp/100).toFixed(1);
-      scoreStr=(pv.scoreCp>0?'+':'')+pd;
+      const _wCp=_isBTM?-pv.scoreCp:pv.scoreCp;
+      const pd=(_wCp/100).toFixed(1);
+      scoreStr=(_wCp>0?'+':'')+pd;
     }
     // Convert PV UCI moves to SAN format (only when PV is non-empty)
     let pvPreview='';
@@ -4113,6 +4386,9 @@ let _ponderStartGen=-1; // The _ponderGen value when the current ponder session 
 // _lastEngineVariation and _multiPVResult contain STALE data from the
 // previous search. This caused UCI leaks and wrong move numbering.
 let _pendingBestMoveInfo=null;
+// v1.2.3 round-44 (G4): tracked id of the 2s _pendingBestMoveInfo self-clearing
+//   timer so it can be cancelled on processing / teardown (was anonymous).
+let _pbmiTimerId=null;
 
 // Receive UCI_Elo sync from Java when AI level changes.
 // Updates engineSettingsData so the config panel always matches reality.
@@ -4139,7 +4415,7 @@ function onEngineError(msg){
   try{
     const _errShort=(msg&&typeof msg==='string')?msg.slice(0,80):String(msg);
     _updateEngineNotification(T('engine_error')+': '+_errShort);
-  }catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+  }catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
   // v1.0.8 PHASE 22: Reset animation flag to prevent permanent UI freeze.
   // If an engine error occurs DURING an animation, render() and sqClick()
   // would block forever since animationInProgress is only cleared by
@@ -4168,6 +4444,15 @@ function onEngineError(msg){
   // The per-step safety timer (60s) covers the case where recovery fails.
   // The previous code set _reviewAnalyzeAllActive=false, silently dropping
   // the batch on any transient engine error.
+  // v1.2.3 round-44 (T5): reset batch validation state so a late callback
+  //   from the dead engine can no longer pass the onEngineEval batch checks
+  //   (gen re-armed by _reviewAnalyzeGen++, dispatch record cleared).
+  if(typeof _reviewAnalyzeGen!=='undefined')_reviewAnalyzeGen++;
+  _evalRequestBatchGen=0;
+  _batchLastDispatched=null;
+  // v1.2.3 round-44 (G11): flush any batched cache writes (the batch resumes
+  //   batch write mode on recovery via _requestBatchEval).
+  _endBatchWriteMode();
   if(_reviewAnalyzeAllActive){
     // Reset the safety timer to give the engine time to recover
     if(typeof _reviewAnalyzeResetSafetyTimer==='function')_reviewAnalyzeResetSafetyTimer();
@@ -4176,10 +4461,16 @@ function onEngineError(msg){
   // NOTE: Java-side recoverEngine() handles most restart cases with _restartLock.
   // This JS-side restart is a secondary safety net only. Don't over-retry here
   // because it conflicts with Java-side recovery and causes "Java exception" errors.
-  if(!window._engineRestartCount)window._engineRestartCount=0;
-  window._engineRestartCount++;
-  if(window._engineRestartCount<=2){
-    showToast(T('engine_error_restart')+' ('+window._engineRestartCount+'/2)...');
+  // v1.2.3 round-44 (G5): sliding-window retry budget — stop the JS-side
+  //   restart after 3 errors within 5 minutes (the old cumulative counter was
+  //   reset by onEngineReady, so a crash-looping engine was restarted forever).
+  if(!window._engineErrorTimestamps)window._engineErrorTimestamps=[];
+  const _nowErr=Date.now();
+  window._engineErrorTimestamps=window._engineErrorTimestamps.filter(function(ts){return _nowErr-ts<300000;});
+  window._engineErrorTimestamps.push(_nowErr);
+  const _engineRestartCount=window._engineErrorTimestamps.length;
+  if(_engineRestartCount<=3){
+    showToast(T('engine_error_restart')+' ('+_engineRestartCount+'/3)...');
     // v1.0.7 PHASE 19 (bug fix): Track this timer so onEngineReady can cancel it.
     // Without this, if the engine auto-recovers (Java recoverEngine → onEngineReady)
     // before this 1500ms timer fires, the timer would call restartEngine() on an
@@ -4191,13 +4482,16 @@ function onEngineError(msg){
         try{AndroidBridge.restartEngine();}catch(e){
           console.error('JS restart failed (executor likely shutdown):',e);
           // Don't retry further — Java-side recovery will handle it
-          window._engineRestartCount=3; // Prevent further JS restart attempts
+          // v1.2.3 round-44 (G5): exhaust the sliding-window budget to prevent
+          //   further JS restart attempts.
+          window._engineErrorTimestamps.push(_nowErr,_nowErr,_nowErr);
         }
       }
     },1500);
   }else{
-    showToast(T('engine_error')+': '+msg);
-    window._engineRestartCount=0;
+    // v1.2.3 round-44 (G5): budget exhausted within the window — stop JS
+    //   restarts and surface the unavailable hint instead of a raw error loop.
+    showToast(T('engine_unavailable_hint'));
   }
   _updateAllEvalDisplays();
   render();
@@ -4218,7 +4512,7 @@ function requestEngineEval(){
   if(!reviewMode&&!gameOver&&gameState.currentTurn!==playerColor)return;
   // v1.0.4 ROUND-5 REV12: Check cache BEFORE _resetEvalState() to avoid
   // a brief "analyzing..." flash when returning from stats page to review.
-  if(reviewMode&&reviewStates&&reviewStates.length>0&&reviewStep>=0&&reviewStep<reviewStates.length){
+  if(reviewMode&&reviewStates?.length>0&&reviewStep>=0&&reviewStep<reviewStates.length){
     const cachedEarly=_reviewEvalCache.get(reviewStep);
     if(cachedEarly!=null){
       _sfEval=cachedEarly.eval;_sfMateDistance=cachedEarly.mate!=null?cachedEarly.mate:0;_sfWdlW=cachedEarly.wdlW!=null?cachedEarly.wdlW:-1;_sfWdlD=cachedEarly.wdlD!=null?cachedEarly.wdlD:-1;_sfWdlL=cachedEarly.wdlL!=null?cachedEarly.wdlL:-1;_sfDepth=cachedEarly.depth!=null?cachedEarly.depth:0;_sfSeldepth=cachedEarly.seldepth!=null?cachedEarly.seldepth:0;_sfEvalReady=true;_evalLoading=false;
@@ -4226,9 +4520,12 @@ function requestEngineEval(){
       if(_reviewEvalDebounceTimer){clearTimeout(_reviewEvalDebounceTimer);_reviewEvalDebounceTimer=null;}
       _evalRequestReviewMode=true; // mark mode for cross-mode rejection
       _evalStaleGen++; _evalRequestGen=_evalStaleGen; // invalidate any in-flight callback
-      // v1.1.1 Phase 59 Task 59.6: Clear batch gen so user-nav cache-hit doesn't
-      //   confuse the batch path in onEngineEval.
-      _evalRequestBatchGen=0;
+      // v1.2.3 round-44 (T3): do NOT clear _evalRequestBatchGen while a batch
+      //   is active. The batch-active check below runs AFTER this early return,
+      //   so a user-nav cache hit mid-batch previously disarmed the batch's
+      //   in-flight callback validation — the batch callback then leaked into
+      //   the user-nav stale path (or was lost) and the batch stalled for 60s.
+      if(!_reviewAnalyzeAllActive)_evalRequestBatchGen=0;
       _updateAllEvalDisplays();
       return;
     }
@@ -4242,7 +4539,9 @@ function requestEngineEval(){
   if(reviewMode&&_reviewAnalyzeAllActive){
     _evalLoading=true;_sfEvalReady=false;
     _evalRequestReviewMode=true;
-    _evalRequestBatchGen=0; // user-nav, not batch
+    // v1.2.3 round-44 (T3): do NOT clear _evalRequestBatchGen here — this branch
+    //   dispatches no request of its own, so clearing only disarmed the batch's
+    //   IN-FLIGHT callback validation (T1) and stalled the batch for 60s.
     _updateAllEvalDisplays();
     return;
   }
@@ -4253,14 +4552,14 @@ function requestEngineEval(){
     if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.isPondering==='function'&&AndroidBridge.isPondering()){
       if(typeof AndroidBridge.stopPonder==='function')AndroidBridge.stopPonder();
     }
-  }catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+  }catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
   _ponderGen++;_ponderMoveSAN='';_ponderBarInfo='';_pendingPonderMoveUCI=null;
   _updateAIThinkDisplay(); // Immediately clear stale ponder from DOM
   _evalRequestGen=_evalStaleGen; // Fresh eval request — accept onEngineEval callbacks with this gen
   _evalRequestReviewMode=!!reviewMode; // v1.0.7 PHASE 19: capture mode for cross-mode rejection
   // v1.1.1 Phase 59 Task 59.6: Clear batch gen — this is a user-nav request
   _evalRequestBatchGen=0;
-  if(reviewMode&&reviewStates&&reviewStates.length>0&&reviewStep>=0&&reviewStep<reviewStates.length){
+  if(reviewMode&&reviewStates?.length>0&&reviewStep>=0&&reviewStep<reviewStates.length){
     const _rs=reviewStates[reviewStep].state;
     const _termStatus=gameStatus(_rs);
     const _invalidateInFlight=function(){
@@ -4303,6 +4602,8 @@ function requestEngineEval(){
         try{
           if(typeof AndroidBridge.engineEvalDeep==='function'){AndroidBridge.engineEvalDeep(fen);}
           else{AndroidBridge.engineEval(fen);}
+          // v1.2.3 round-44 (G1): record the gen actually dispatched.
+          _evalLastDispatchedGen=_evalRequestGen;
         }catch(e){console.error("engineEvalDeep error:",e);_evalLoading=false;_updateAllEvalDisplays();}
         if(_evalSafetyTimerId)clearTimeout(_evalSafetyTimerId);
         _evalSafetyTimerId=setTimeout(function(){
@@ -4322,7 +4623,9 @@ function requestEngineEval(){
     if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.isEngineReady==='function'&&AndroidBridge.isEngineReady()){
       _evalLoading=true;
       _updateEvalDisplay();
-      try{AndroidBridge.engineEval(fen);}catch(e){console.error('engineEval error:',e);_evalLoading=false;_updateEvalDisplay();}
+      // v1.2.3 round-44 (G1): record the gen actually dispatched (normal-mode
+      //   path — without this the G1 check would drop every normal-mode eval).
+      try{AndroidBridge.engineEval(fen);_evalLastDispatchedGen=_evalRequestGen;}catch(e){console.error('engineEval error:',e);_evalLoading=false;_updateEvalDisplay();}
       if(_evalSafetyTimerId)clearTimeout(_evalSafetyTimerId);
       _evalSafetyTimerId=setTimeout(function(){
         _evalSafetyTimerId=null;
@@ -4334,6 +4637,32 @@ function requestEngineEval(){
       },30000);
     }
   }
+}
+
+// v1.2.3 round-44 (G11): leave batch write mode and flush pending cache writes.
+function _endBatchWriteMode(){
+  _batchWriteMode=false;
+  try{if(_reviewEvalCache&&typeof _reviewEvalCache._flushSync==='function')_reviewEvalCache._flushSync();}
+  catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
+}
+
+// v1.2.3 round-44 (T4): terminate the analyze-all batch after repeated dispatch
+//   failures (engine dead and not recovering). Reuses the standard batch
+//   cleanup path (active flag, safety timer, Java-side batch end-hook, batch
+//   write mode) instead of ghost-looping forever: safety-net timeout → advance
+//   → engine not ready → nothing scheduled → 60s later the net fires again …
+function _terminateBatchAfterRepeatedFailures(reason){
+  console.warn('[AIBridge] Analyze-all terminated after '+_batchConsecutiveFail+' consecutive failures ('+reason+')');
+  if(typeof _reviewAnalyzeAllActive!=='undefined')_reviewAnalyzeAllActive=false;
+  _reviewAnalyzeStep=-1;
+  if(_reviewAnalyzeSafetyTimer){clearTimeout(_reviewAnalyzeSafetyTimer);_reviewAnalyzeSafetyTimer=null;}
+  _batchConsecutiveFail=0;
+  _evalRequestBatchGen=0;
+  _batchLastDispatched=null;
+  try{if(typeof _endEvalDeepBatchIfActive==='function')_endEvalDeepBatchIfActive();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
+  _endBatchWriteMode();
+  try{if(typeof _updateReviewAnalyzeBtn==='function')_updateReviewAnalyzeBtn();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
+  try{showToast(T('engine_unavailable_hint'));}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
 }
 
 // v1.1.1 Phase 59 Task 59.6: BATCH EVAL REQUEST (decoupled from reviewStep).
@@ -4352,6 +4681,9 @@ function _requestBatchEval(step){
   if(!_engineReady||setupMode)return;
   if(!reviewMode||!reviewStates||reviewStates.length===0)return;
   if(step<0||step>=reviewStates.length)return;
+  // v1.2.3 round-44 (G11): enter batch write mode — cache set() calls during
+  //   the batch only mark dirty; a single _flushSync() runs at batch end.
+  _batchWriteMode=true;
   // Skip if already cached (shouldn't happen — _reviewAnalyzeAdvance skips
   // cached steps — but defensive)
   if(_reviewEvalCache.has(step)){
@@ -4392,7 +4724,7 @@ function _requestBatchEval(step){
     if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.isPondering==='function'&&AndroidBridge.isPondering()){
       if(typeof AndroidBridge.stopPonder==='function')AndroidBridge.stopPonder();
     }
-  }catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+  }catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
   _ponderGen++;_ponderMoveSAN='';_ponderBarInfo='';_pendingPonderMoveUCI=null;
   // Clear any pending user-nav debounce timer
   if(_reviewEvalDebounceTimer){clearTimeout(_reviewEvalDebounceTimer);_reviewEvalDebounceTimer=null;}
@@ -4403,6 +4735,12 @@ function _requestBatchEval(step){
     try{
       if(typeof AndroidBridge.engineEvalDeep==='function'){AndroidBridge.engineEvalDeep(fen);}
       else{AndroidBridge.engineEval(fen);}
+      // v1.2.3 round-44 (T1): record exactly what was dispatched so onEngineEval
+      //   can reject late callbacks from a previous step (the gen-only check
+      //   can't — the gen globals are re-armed by every dispatch).
+      _batchLastDispatched={step:_reviewAnalyzeStep,gen:_evalRequestBatchGen,fen:fen,blackTurn:_evalForBlackTurn};
+      // v1.2.3 round-44 (T4): successful dispatch — reset the failure counter.
+      _batchConsecutiveFail=0;
     }catch(e){
       console.error('Batch engineEvalDeep error:',e);
       // On synchronous failure, advance to the next step (don't stall)
@@ -4416,11 +4754,21 @@ function _requestBatchEval(step){
       _reviewAnalyzeResetSafetyTimer();
     }
   }else{
-    // Engine not ready — advance to next step (the batch will resume when
-    // engine becomes ready via onEngineReady)
-    if(typeof _reviewAnalyzeAdvance==='function'){
-      setTimeout(function(){try{_reviewAnalyzeAdvance();}catch(_e){}},100);
-    }
+    // Engine not ready — DO NOT schedule an immediate retry. The previous
+    //   logic called setTimeout(_reviewAnalyzeAdvance, 100) here, which
+    //   re-entered _requestBatchEval → same not-ready branch → another
+    //   100ms timer, spinning every 100ms for 60s+ doing nothing.
+    //   The engine's onEngineReady callback (line 2440) already has logic
+    //   to resume the batch when the engine becomes ready, so we just
+    //   leave the batch paused and let that callback pick it up.
+    // v1.2.3 round-30 (robustness): removed the spinning-retry timer.
+    console.log('[AIBridge] Batch eval paused — engine not ready. Will resume on onEngineReady.');
+    // v1.2.3 round-44 (T4): count the pause as a dispatch failure; at 3
+    //   consecutive failures terminate the batch instead of ghost-looping on
+    //   the 60s safety net (which also spammed a progress toast every 3 steps).
+    _batchConsecutiveFail++;
+    _batchLastDispatched=null; // nothing in flight — no callback may be claimed
+    if(_batchConsecutiveFail>=3)_terminateBatchAfterRepeatedFailures('engine not ready');
   }
 }
 
@@ -4499,6 +4847,25 @@ function _updateReviewEvalUI(){
   // P4 SIMPLIFY: Use shared helper for consistent eval display formatting
   el.innerHTML=_buildEvalHTML(e,{delta:deltaStr});
 }
+// v1.2.3 round-29 (PR52 S3358): extract the "mate-or-eval" selection so callers
+//   don't write nested ternaries. Returns a numeric eval score (centipawns,
+//   White-POV): mate>0 → +90000, mate<0 → -90000, no mate → fallback eval.
+//   The ±90000 sentinel is what _formatEvalDelta and the trend-chart shading
+//   already use to detect mate transitions.
+// v1.2.3 round-31 (PR52 CodeRabbit): treat mate===0 as "no active mate" and
+//   return fallbackEval. The codebase stores mate:0 in several distinct
+//   scenarios — (a) onEngineEval fallback when scoreMate is null/NaN,
+//   (b) stale-cache / game-over cache entries, (c) the evalData builder at
+//   line ~1628 which coerces null → 0 with `c.mate!=null?c.mate:0`. The
+//   previous code's `if(mate==null)` only caught null/undefined and let
+//   mate===0 fall through to `mate>0?90000:-90000`, which evaluated `0>0` as
+//   false and returned -90000 — incorrectly marking every "no active mate"
+//   position as a black-mating position. This matches stats.html's existing
+//   truthy-check pattern `e.mate ? (e.mate>0?90000:-90000) : e.eval`.
+function _evalOrMate(mate,fallbackEval){
+  if(!mate)return fallbackEval;
+  return mate>0?90000:-90000;
+}
 // Format eval delta between two eval values (centipawns, White's perspective).
 // Consolidates mate-transition handling and threshold logic in one place.
 // v1.2.3 round-22: the displayed numeric delta is White-POV (consistent with
@@ -4530,11 +4897,17 @@ function _formatEvalDelta(curEval,prevEval,fontSize){
     }
     return '';
   }
-  const d=curEval-prevEval,dp=(d/100).toFixed(1);
-  // Colour by player-perspective delta (_sign*d); dp stays White-POV so it
-  //   matches the score shown next to it.
+  const d=curEval-prevEval,dp=(Math.abs(d)/100).toFixed(1);
+  // v1.2.3 round-23 (Q10 fix): derive the displayed sign from the PLAYER-
+  //   perspective delta (_sign*d), not from d itself. Previously the '+'
+  //   prefix was hardcoded, so a black player improving (d<0) saw "+-1.2"
+  //   (green plus negative). Now: the colour branch already decides
+  //   good/bad via _sign*d; we just prefix the absolute delta with the
+  //   correct sign so the displayed value matches the colour semantics.
+  //   White-POV dp stays as Math.abs(d)/100 so it matches the adjacent
+  //   score shown next to it (White-POV).
   if(_sign*d>2)return '<span style="color:#27ae60;'+fs+'">+'+dp+'</span>';
-  if(_sign*d<-2)return '<span style="color:#c0392b;'+fs+'">'+dp+'</span>';
+  if(_sign*d<-2)return '<span style="color:#c0392b;'+fs+'">\u2212'+dp+'</span>';
   return '';
 }
 function _resetEvalState(){_sfMateDistance=0;_sfWdlW=-1;_sfWdlD=-1;_sfWdlL=-1;_sfDepth=0;_sfSeldepth=0;_sfEvalReady=false;_evalLoading=true;_evalStaleGen++;_lastProgressNodes=null;_lastProgressNps=null;_ponderGen++;_ponderBarInfo='';_ponderMoveSAN='';_pendingPonderMoveUCI=null;_updateAIThinkDisplay();}
@@ -4567,7 +4940,10 @@ function _updateAIThinkDisplay(){
     const searchEl=document.getElementById('ai-search-info');
     if(searchEl)searchEl.textContent='';
   }
-  if(isHintLoading){
+  // v1.2.3 round-41: when MultiPV lines are active, the hint bar's ⭐/📌
+  //   line text is rendered from _multiPVLines in the same tick — do not
+  //   overwrite it here with the raw aiThinkInfo search string.
+  if(isHintLoading&&!(_cachedMultiPV>1&&_multiPVLines.length>0)){
     _hintBarInfo=aiThinkInfo;
     const el=document.getElementById('hint-search-info');
     if(el){el.textContent=_hintBarInfo||T('thinking');el.style.display='block';}

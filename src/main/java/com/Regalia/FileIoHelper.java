@@ -69,7 +69,7 @@ import java.util.TreeMap;
  *
  * 安全设计:
  *   - 写入操作有三重后备：主路径 → 应用私有目录 → 剪贴板
- *   - 读取操作检查 READ_EXTERNAL_STORAGE 权限（Android 5-9）
+ *   - 读取操作检查 READ_EXTERNAL_STORAGE 权限（Android 6-9）
  *   - listFiles 在 Android 11+ 使用 MediaStore 补充查询被 scoped storage 隐藏的文件
  *   - Asset 读取验证路径不含 ".." 防止目录穿越
  */
@@ -115,26 +115,39 @@ public class FileIoHelper {
      * @return true 表示写入成功（主路径或后备路径）
      */
     public boolean writeTextFile(String path, String content) {
-        // 主路径：最多 3 次重试，每次间隔 1 秒
+        // 主路径：最多 3 次重试
+        // v1.2.3 round-44 (D1): 重试循环区分错误类型。确定性错误
+        //   （FileNotFoundException=路径无效 / SecurityException=权限拒绝）
+        //   重试无意义，立即 break 进入后备路径；其余 IOException 视为瞬时
+        //   错误，用 Thread.yield() 让出 CPU 后立刻重试 —— 旧实现无条件
+        //   sleep(1000)，把确定性失败也拖成最多 2s 的卡顿。异常类型信息由
+        //   writeToFileInternal 重新抛出（原为吞 Throwable 返回 false，
+        //   拿不到类型）。
         for (int attempt = 1; attempt <= 3; attempt++) {
-            if (writeToFileInternal(path, content, "attempt " + attempt + "/3")) {
-                return true;
+            try {
+                if (writeToFileInternal(path, content, "attempt " + attempt + "/3")) {
+                    return true;
+                }
+            } catch (java.io.FileNotFoundException | SecurityException e) {
+                Log.w(TAG, "writeTextFile: non-retryable error, abandoning primary path: " + e.getMessage());
+                break;
+            } catch (IOException e) {
+                Log.d(TAG, "writeTextFile: transient IOException (attempt " + attempt + "/3)");
             }
             if (attempt < 3) {
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    break;
-                }
+                Thread.yield();
             }
         }
 
         // 后备 1：应用私有导出目录
         String fallbackPath = new File(context.getFilesDir(), "export")
                 .getAbsolutePath() + "/" + new File(path).getName();
-        if (writeToFileInternal(fallbackPath, content, "fallback (app-specific)")) {
-            return true;
+        try {
+            if (writeToFileInternal(fallbackPath, content, "fallback (app-specific)")) {
+                return true;
+            }
+        } catch (IOException | SecurityException e) {
+            // 已在 writeToFileInternal 内记录；继续走剪贴板后备
         }
 
         // 后备 2：复制到剪贴板作为最后手段
@@ -142,8 +155,14 @@ public class FileIoHelper {
         return false;
     }
 
-    /** 内部写入方法，返回 true 表示成功 */
-    private boolean writeToFileInternal(String path, String content, String tag) {
+    /**
+     * 内部写入方法，返回 true 表示成功。
+     * v1.2.3 round-44 (D1): IOException/SecurityException 记录后重新抛出，
+     *   让 writeTextFile 的重试循环能按错误类型分类（最小侵入：方法签名加
+     *   throws IOException，SecurityException 是运行时异常无需声明）；其余
+     *   Throwable 维持原「记录并返回 false」语义。
+     */
+    private boolean writeToFileInternal(String path, String content, String tag) throws IOException {
         try {
             File file = new File(path);
             File parentDir = file.getParentFile();
@@ -159,6 +178,9 @@ public class FileIoHelper {
             }
             Log.i(TAG, "File written (" + tag + "): " + path);
             return true;
+        } catch (IOException | SecurityException e) {
+            Log.w(TAG, "writeTextFile " + tag + " failed: " + path, e);
+            throw e;
         } catch (Throwable e) {
             Log.w(TAG, "writeTextFile " + tag + " failed: " + path, e);
             return false;
@@ -182,16 +204,27 @@ public class FileIoHelper {
 
     /**
      * 读取文本文件内容。
-     * v18.6.0: Android 5-9 需要 READ_EXTERNAL_STORAGE 权限。
+     * v18.6.0: Android 6-9 需要 READ_EXTERNAL_STORAGE 权限。
      * Android 10+ scoped storage 下应用私有目录无需权限。
      *
      * @param path 文件路径
      * @return 文件内容字符串，失败返回 null
      */
     public String readTextFile(String path) {
-        // Android 5-9: 检查并请求 READ_EXTERNAL_STORAGE
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+        // Android 6-9: 检查并请求 READ_EXTERNAL_STORAGE
+        // v1.2.3 round-45 (PR53 R4, java:S1066): collapsed nested if — short-
+        //   circuit && is semantically identical here.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
+                && context.checkSelfPermission(android.Manifest.permission.READ_EXTERNAL_STORAGE)
+                        != PackageManager.PERMISSION_GRANTED) {
             requestReadExternalStoragePermission();
+            // v1.2.3 round-44 (D2): 权限对话框是异步的，继续往下读必然
+            //   失败并返回 null（JS 无法区分「文件不存在」与「等待授权」）。
+            //   立即返回结构化错误状态；JS 端应识别 "permission_pending"
+            //   并提示用户授权后重试。不新增 onRequestPermissionsResult
+            //   跨端协议 —— MainActivity 无该 handler（不属本轮修改范围），
+            //   授权结果依赖用户重试时再走已授权路径。
+            return "{\"error\":\"permission_pending\"}";
         }
 
         try {
@@ -215,7 +248,7 @@ public class FileIoHelper {
     }
 
     /**
-     * 请求 READ_EXTERNAL_STORAGE 权限（Android 5-9）。
+     * 请求 READ_EXTERNAL_STORAGE 权限（Android 6-9）。
      *
      * v1.2.1 round-10 (review-E P2): renamed from {@code ensureReadExternalStoragePermission}
      *   to {@code requestReadExternalStoragePermission}. The previous name "ensure"
@@ -368,12 +401,23 @@ public class FileIoHelper {
                 MediaStore.MediaColumns.DATA,
                 MediaStore.MediaColumns.SIZE
             };
+            // v1.2.3 round-30 (bug fix): escape SQL LIKE wildcards in dirPath.
+            //   Without escaping, a path containing `_` (matches any single char)
+            //   or `%` (matches any sequence) would over-match — e.g.
+            //   /sdcard/my_data_2024 would also match /sdcard/myXdataX2024.
+            //   The ESCAPE '\\' clause tells SQLite to treat `\%` and `\_` as
+            //   literal characters.
+            String escaped = dirPath.replace("\\", "\\\\")
+                                     .replace("%", "\\%")
+                                     .replace("_", "\\_");
+            // The NOT LIKE ? exclusion also needs the ESCAPE clause to apply
+            // (SQLite requires ESCAPE on each LIKE expression that uses escapes).
             android.database.Cursor cursor = context.getContentResolver().query(
                 MediaStore.Files.getContentUri("external"),
                 projection,
-                MediaStore.MediaColumns.DATA + " LIKE ? AND " +
-                MediaStore.MediaColumns.DATA + " NOT LIKE ?",
-                new String[]{dirPath + "/%", dirPath + "/%/%"},
+                MediaStore.MediaColumns.DATA + " LIKE ? ESCAPE '\\' AND " +
+                MediaStore.MediaColumns.DATA + " NOT LIKE ? ESCAPE '\\'",
+                new String[]{escaped + "/%", escaped + "/%/%"},
                 null
             );
             if (cursor == null) return;
@@ -477,10 +521,15 @@ public class FileIoHelper {
      */
     public String loadAssetAsBase64(String assetPath) {
         if (assetPath == null || assetPath.isEmpty()) return "";
-        // 安全：禁止 ".." 防止目录穿越
-        if (assetPath.contains("..")) {
-            Log.w(TAG, "loadAssetAsBase64: path traversal blocked: " + assetPath);
-            return "";
+        // 安全：逐段校验路径，拒绝空段、"."、".." —— 防止目录穿越。
+        // v1.2.3 round-44 (D6): 旧实现用 contains("..") 子串匹配，会把
+        //   "icons..v2/x.png" 这类合法文件名误伤，又漏不掉以 ".." 之外的
+        //   形式（如段首段尾规范化差异）构造的路径；逐段精确比较两全。
+        for (String seg : assetPath.split("/")) {
+            if (seg.isEmpty() || seg.equals(".") || seg.equals("..")) {
+                Log.w(TAG, "loadAssetAsBase64: path traversal blocked: " + assetPath);
+                return "";
+            }
         }
         try (InputStream is = context.getAssets().open(assetPath)) {
             byte[] buffer = new byte[8192];
