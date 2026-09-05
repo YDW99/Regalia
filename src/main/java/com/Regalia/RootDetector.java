@@ -102,7 +102,7 @@ public final class RootDetector {
         for (String path : ROOT_PATHS) {
             try {
                 if (new File(path).exists()) return true;
-            } catch (Throwable ignored) { /* security manager / sandbox */ }
+            } catch (Exception ignored) { /* security manager / sandbox */ }
         }
         return false;
     }
@@ -137,7 +137,7 @@ public final class RootDetector {
         try {
             String tags = Build.TAGS;
             return tags != null && tags.contains("test-keys");
-        } catch (Throwable ignored) {
+        } catch (Exception ignored) {
             return false;
         }
     }

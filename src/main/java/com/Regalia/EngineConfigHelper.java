@@ -182,6 +182,7 @@ public class EngineConfigHelper {
             public void run() {
                 try {
                     detectHardwareAndConfigure();
+                // round-47: 有意兜底，防止 Error 逃逸导致组件死亡（线程最外层 run() 的保命 catch）
                 } catch (Throwable e) {
                     Log.e(TAG, "async hardware detection failed", e);
                 } finally {
@@ -337,7 +338,7 @@ public class EngineConfigHelper {
                     }
                 }
             }
-        } catch (Throwable e) {
+        } catch (Exception e) {
             Log.d(TAG, "big.LITTLE detection failed (non-fatal): " + e.getMessage());
             // v1.2.1 round-10 (review-E P2): Do NOT cache the failure result.
             //   The catch block leaves bigCores=0, but the failure may be

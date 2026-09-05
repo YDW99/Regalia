@@ -172,7 +172,7 @@ public class SafPickerHelper {
         _pendingExportType = "settings";
         try {
             callbacks.postJsCallback("if(typeof onExportCancelled==='function')onExportCancelled();");
-        } catch (Throwable ignored) {
+        } catch (Exception ignored) {
             // 通知 JS 失败不阻塞流程
         }
     }

@@ -176,7 +176,7 @@ public class PgnCacheManager {
                 //   survives a process crash right after save() returns true —
                 //   same guarantee setTags() already provides (see its
                 //   fos.getFD().sync() below).
-                try { fos.getFD().sync(); } catch (Throwable ignored) {
+                try { fos.getFD().sync(); } catch (Exception ignored) {
                     // best-effort on filesystems without fsync support
                 }
             }
@@ -207,7 +207,7 @@ public class PgnCacheManager {
                 }
                 return sw.toString();
             }
-        } catch (Throwable e) {
+        } catch (Exception e) {
             Log.w(TAG, "get failed for name=" + safe, e);
             return null;
         }
@@ -335,10 +335,10 @@ public class PgnCacheManager {
                              OutputStreamWriter writer = new OutputStreamWriter(fos, "UTF-8")) {
                             writer.write("[]");
                             writer.flush();
-                            try { fos.getFD().sync(); } catch (Throwable ignored) {
+                            try { fos.getFD().sync(); } catch (Exception ignored) {
                                 // sync 失败不阻塞写入
                             }
-                        } catch (Throwable e2) {
+                        } catch (Exception e2) {
                             Log.w(TAG, "setTags: empty-array fallback failed " + safe, e2);
                             return false;
                         }
@@ -350,7 +350,7 @@ public class PgnCacheManager {
                  OutputStreamWriter writer = new OutputStreamWriter(fos, "UTF-8")) {
                 writer.write(arr.toString());
                 writer.flush();
-                try { fos.getFD().sync(); } catch (Throwable ignored) {
+                try { fos.getFD().sync(); } catch (Exception ignored) {
                     // sync 失败不阻塞写入
                 }
             }
@@ -377,12 +377,12 @@ public class PgnCacheManager {
                     fos.write(buf, 0, n);
                 }
                 fos.flush();
-                try { fos.getFD().sync(); } catch (Throwable ignored) {
+                try { fos.getFD().sync(); } catch (Exception ignored) {
                     // best-effort
                 }
             }
             return src.delete();
-        } catch (Throwable e) {
+        } catch (Exception e) {
             Log.w(TAG, "copyAndDelete failed: " + src + " -> " + dst, e);
             try {
                 if (dst.exists() && !dst.delete()) {
@@ -460,7 +460,7 @@ public class PgnCacheManager {
                 }
                 return sw.toString();
             }
-        } catch (Throwable e) {
+        } catch (Exception e) {
             Log.w(TAG, "getTags failed for name=" + safe, e);
             return "[]";
         }

@@ -376,10 +376,10 @@ function _computeHeatmapStatsSync(boards){
       if(r+d>=0&&r+d<8&&c+1>=0&&c+1<8)mv.push({row:r+d,col:c+1});
     }else if(p.type==='knight'){var offs=[[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
       for(var i=0;i<offs.length;i++){var nr=r+offs[i][0],nc=c+offs[i][1];if(nr>=0&&nr<8&&nc>=0&&nc<8)mv.push({row:nr,col:nc});}
-    }else if(p.type==='king'){for(var dr=-1;dr<=1;dr++)for(var dc=-1;dc<=1;dc++){if(!dr&&!dc)continue;if(r+dr>=0&&r+dr<8&&c+dc>=0&&c+dc<8)mv.push({row:r+dr,col:c+dc});}
+    }else if(p.type==='king'){for(var dr=-1;dr<=1;dr++)for(var dc=-1;dc<=1;dc++){if(!dr&&!dc){continue;}if(r+dr>=0&&r+dr<8&&c+dc>=0&&c+dc<8)mv.push({row:r+dr,col:c+dc});}
     }else{var dirs=p.type==='rook'?[[-1,0],[1,0],[0,-1],[0,1]]:p.type==='bishop'?[[-1,-1],[-1,1],[1,-1],[1,1]]:[[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]];
-      for(var i=0;i<dirs.length;i++){var nr=r+dirs[i][0],nc=c+dirs[i][1];
-        while(nr>=0&&nr<8&&nc>=0&&nc<8){mv.push({row:nr,col:nc});if(board[nr][nc])break;nr+=dirs[i][0];nc+=dirs[i][1];}
+      for(i=0;i<dirs.length;i++){nr=r+dirs[i][0];nc=c+dirs[i][1];
+        while(nr>=0&&nr<8&&nc>=0&&nc<8){mv.push({row:nr,col:nc});if(board[nr][nc]){break;}nr+=dirs[i][0];nc+=dirs[i][1];}
       }
     }
     return mv;
@@ -2016,10 +2016,8 @@ function renderStats(parsed,evalData){
     let openingPly=0,midgamePly=0,endgamePly=0;
     let openingEndPly=-1, midgameEndPly=-1; // ply at which each phase ended
     let lastPhase='opening';
-    const phaseLabels=[];
     for(let i=0;i<moves.length;i++){
       const ph=_detectPhase(moves[i].state);
-      phaseLabels.push(ph);
       if(ph==='opening')openingPly++;
       else if(ph==='midgame')midgamePly++;
       else endgamePly++;
@@ -2101,7 +2099,6 @@ function renderStats(parsed,evalData){
         const moveIdx=s.move; // 0-based move index
         const moveNum=Math.floor(moveIdx/2)+1;
         const isWhite=moverIsWhite(moveIdx,parsed);
-        const moverDelta=isWhite?s.curr-s.prev:s.prev-s.curr;
         const cls=classifyMove(s.curr-s.prev,isWhite);
         h+='<tr><td>'+(i+1)+'</td><td>'+moveNum+(isWhite?'.':'...')+'</td><td>'+(s.delta/100).toFixed(1)+' cp</td><td><span class="classification '+cls.cls+'">'+cls.label+'</span></td></tr>';
       }
@@ -2579,7 +2576,7 @@ function renderStats(parsed,evalData){
       // Semicolon comments (rest of line)
       if(ch===';'){
         const nl=pgnText.indexOf('\n',i);
-        if(nl>=0){i=nl+1;continue;}else{i=len;break;}
+        if(nl>=0){i=nl+1;continue;}else{break;}
       }
       // NAGs
       if(ch==='$'){
@@ -2811,7 +2808,7 @@ function renderStats(parsed,evalData){
 function renderEvalChart(evalData){
   const w=600,h=120,pad=20;
   // v1.2.3 round-45 (PR53 R7, S7770/S3358): filter(Boolean) + un-nested branches (same semantics).
-  const validEvals=evalData.filter(Boolean).map(e=>{if(!e.mate)return e.eval;return e.mate>0?1000:-1000;}); // v1.2.3 (R2): clamp mate to +/-1000cp (+/-10 pawns) like ui.js evalToY, so mate sentinels don't flatten the chart
+  const validEvals=evalData.filter(Boolean).map(e=>{if(!e.mate){return e.eval;}return e.mate>0?1000:-1000;}); // v1.2.3 (R2): clamp mate to +/-1000cp (+/-10 pawns) like ui.js evalToY, so mate sentinels don't flatten the chart
   if(validEvals.length<2)return '<div class="loading">'+T('no_data')+'</div>';
   const maxEv=Math.max(...validEvals,500);
   const minEv=Math.min(...validEvals,-500);
@@ -3139,7 +3136,6 @@ function _renderStatsBoard(parsed){
   //   - Buttons are hidden when there are no moves (parsed.moves.length === 0).
   //   - Buttons are hidden in FEN-only HTML export (no moves to navigate).
   if(parsed.moves&&parsed.moves.length>0){
-    const _navMode=_variationMoves?'variation':'mainline';
     const _navLabel=_variationMoves?T('nav_variation'):T('nav_main_line');
     // v1.1.2 Phase 68: Nav buttons now use flex:1 1 0 (uniform width, full
     //   width fill) — matches the review-mode nav buttons (.review-nav .btn).
@@ -4193,7 +4189,6 @@ function _showStatsImportBackPrompt(){
 }
 function _statsImportBackDismiss(){
   _statsImportBackDialogVisible=false;
-  var overlay=document.querySelector('.dov[role="dialog"][aria-label]');
   // Remove only the import-back dialog (be careful not to remove other dialogs)
   var overlays=document.querySelectorAll('.dov[role="dialog"]');
   for(var i=0;i<overlays.length;i++){

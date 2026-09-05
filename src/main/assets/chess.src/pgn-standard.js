@@ -841,7 +841,7 @@ function parseStandardPGN(pgnText){
   let varDepth=0;
   for(const tok of tokens){
     if(varDepth>0){
-      if(tok.type==='openVar'){varDepth++;if(varBuf)varBuf.push('(');continue;}
+      if(tok.type==='openVar'){varDepth++;if(varBuf){varBuf.push('(');}continue;}
       if(tok.type==='closeVar'){varDepth--;if(varDepth===0){
         // Close out the variation
         if(varBuf?.length>0){

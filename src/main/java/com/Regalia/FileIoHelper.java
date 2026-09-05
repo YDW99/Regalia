@@ -241,7 +241,7 @@ public class FileIoHelper {
                 }
                 return sb.toString();
             }
-        } catch (Throwable e) {
+        } catch (Exception e) {
             Log.e(TAG, "readTextFile failed: " + path, e);
             return null;
         }
@@ -506,7 +506,7 @@ public class FileIoHelper {
             File dir = new File(path);
             File parent = dir.getParentFile();
             return parent != null ? parent.getAbsolutePath() : "";
-        } catch (Throwable e) {
+        } catch (Exception e) {
             Log.w(TAG, "getParentPath failed: " + path, e);
             return "";
         }

@@ -795,7 +795,7 @@ function algPos(a){if(!a)return null;
   // v1.0.8 PHASE 30: also reject strings longer than 2 chars (e.g. 'e4e5' move
   //   strings, 'e10' malformed input) which were silently truncated before.
   if(typeof a!=='string'||a.length!==2)return null;
-  try{const col=a.charCodeAt(0)-97,row=8-Number.parseInt(a[1],10);if(col<0||col>7||Number.isNaN(row)||row<0||row>7)return null;return{row,col}}catch(e){return null}}
+  try{const col=a.charCodeAt(0)-97,row=8-Number.parseInt(a[1],10);if(col<0||col>7||Number.isNaN(row)||row<0||row>7){return null;}return{row,col}}catch(e){return null}}
 function inB(r,c){return r>=0&&r<8&&c>=0&&c<8}
 
 // AI-GEN: AI assisted
@@ -1369,7 +1369,7 @@ function _reattachActiveAnimations(){
 
 function initBoard(){const b=Array.from({length:8},()=>Array(8).fill(null));const backRank=['rook','knight','bishop','queen','king','bishop','knight','rook'];for(let c=0;c<8;c++){b[0][c]={type:backRank[c],color:'black'};b[1][c]={type:'pawn',color:'black'};b[6][c]={type:'pawn',color:'white'};b[7][c]={type:backRank[c],color:'white'}}return b}
 // Returns all squares this piece attacks
-function attacked(board,pos){const b=board,p=b[pos.row][pos.col];if(!p)return[];const r=pos.row,c=pos.col,co=p.color,mv=[];if(p.type==='pawn'){const d=co==='white'?-1:1;for(const dc of[-1,1])if(inB(r+d,c+dc))mv.push({row:r+d,col:c+dc})}else if(p.type==='knight'){for(const[dr,dc]of KNIGHT_OFFSETS)if(inB(r+dr,c+dc))mv.push({row:r+dr,col:c+dc})}else if(p.type==='king'){for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++)if((dr||dc)&&inB(r+dr,c+dc))mv.push({row:r+dr,col:c+dc})}else{const dirs=p.type==='rook'?DIR_ROOK:p.type==='bishop'?DIR_BISHOP:DIR_QUEEN;for(const[dr,dc]of dirs){let nr=r+dr,nc=c+dc;while(inB(nr,nc)){mv.push({row:nr,col:nc});if(b[nr][nc])break;nr+=dr;nc+=dc}}}return mv}
+function attacked(board,pos){const b=board,p=b[pos.row][pos.col];if(!p){return[];}const r=pos.row,c=pos.col,co=p.color,mv=[];if(p.type==='pawn'){const d=co==='white'?-1:1;for(const dc of[-1,1])if(inB(r+d,c+dc))mv.push({row:r+d,col:c+dc})}else {if(p.type==='knight'){for(const[dr,dc]of KNIGHT_OFFSETS)if(inB(r+dr,c+dc))mv.push({row:r+dr,col:c+dc})}else if(p.type==='king'){for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++)if((dr||dc)&&inB(r+dr,c+dc))mv.push({row:r+dr,col:c+dc})}else{const dirs=p.type==='rook'?DIR_ROOK:p.type==='bishop'?DIR_BISHOP:DIR_QUEEN;for(const[dr,dc]of dirs){let nr=r+dr,nc=c+dc;while(inB(nr,nc)){mv.push({row:nr,col:nc});if(b[nr][nc]){break;}nr+=dr;nc+=dc}}}}return mv}
 function initState(){const s={board:initBoard(),currentTurn:'white',castlingRights:{whiteKingside:true,whiteQueenside:true,blackKingside:true,blackQueenside:true,
 // v1.2.3 round-20 (A-1): standard chess designates the corner rooks (h/a files)
 whiteKingsideRookFile:7,whiteQueensideRookFile:0,blackKingsideRookFile:7,blackQueensideRookFile:0},enPassantTarget:null,halfMoveClock:0,fullMoveNumber:1,moveHistory:[],posCount:new Map(),wk:{row:7,col:4},bk:{row:0,col:4},hash:0,boardVersion:1};syncHash(s);s.posCount.set(s.hash,1);return s}
@@ -1684,7 +1684,7 @@ moveHistory:s.moveHistory?s.moveHistory.slice():[],posCount:new Map(s.posCount),
 ...(s.chess960?{chess960:true}:{}),
 ...(s.spid!=null?{spid:s.spid}:{})}}
 
-function sqAttackedFast(b,pos,byCo){if(!b||!pos||!inB(pos.row,pos.col))return false;const r=pos.row,c=pos.col;const pd=byCo==='white'?1:-1;if(inB(r+pd,c-1)&&b[r+pd][c-1]&&b[r+pd][c-1].color===byCo&&b[r+pd][c-1].type==='pawn')return true;if(inB(r+pd,c+1)&&b[r+pd][c+1]&&b[r+pd][c+1].color===byCo&&b[r+pd][c+1].type==='pawn')return true;for(const[dr,dc]of KNIGHT_OFFSETS){if(inB(r+dr,c+dc)&&b[r+dr][c+dc]&&b[r+dr][c+dc].color===byCo&&b[r+dr][c+dc].type==='knight')return true}for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++){if(!dr&&!dc)continue;if(inB(r+dr,c+dc)&&b[r+dr][c+dc]&&b[r+dr][c+dc].color===byCo&&b[r+dr][c+dc].type==='king')return true}for(const[dr,dc]of DIR_ROOK){let nr=r+dr,nc=c+dc;while(inB(nr,nc)){const p=b[nr][nc];if(p){if(p.color===byCo&&(p.type==='rook'||p.type==='queen'))return true;break}nr+=dr;nc+=dc}}for(const[dr,dc]of DIR_BISHOP){let nr=r+dr,nc=c+dc;while(inB(nr,nc)){const p=b[nr][nc];if(p){if(p.color===byCo&&(p.type==='bishop'||p.type==='queen'))return true;break}nr+=dr;nc+=dc}}return false}
+function sqAttackedFast(b,pos,byCo){if(!b||!pos||!inB(pos.row,pos.col)){return false;}const r=pos.row,c=pos.col;const pd=byCo==='white'?1:-1;if(inB(r+pd,c-1)&&b[r+pd][c-1]&&b[r+pd][c-1].color===byCo&&b[r+pd][c-1].type==='pawn'){return true;}if(inB(r+pd,c+1)&&b[r+pd][c+1]&&b[r+pd][c+1].color===byCo&&b[r+pd][c+1].type==='pawn'){return true;}for(const[dr,dc]of KNIGHT_OFFSETS){if(inB(r+dr,c+dc)&&b[r+dr][c+dc]&&b[r+dr][c+dc].color===byCo&&b[r+dr][c+dc].type==='knight')return true}for(let dr=-1;dr<=1;dr++){for(let dc=-1;dc<=1;dc++){if(!dr&&!dc){continue;}if(inB(r+dr,c+dc)&&b[r+dr][c+dc]&&b[r+dr][c+dc].color===byCo&&b[r+dr][c+dc].type==='king')return true}}for(const[dr,dc]of DIR_ROOK){let nr=r+dr,nc=c+dc;while(inB(nr,nc)){const p=b[nr][nc];if(p){if(p.color===byCo&&(p.type==='rook'||p.type==='queen')){return true;}break}nr+=dr;nc+=dc}}for(const[dr,dc]of DIR_BISHOP){let nr=r+dr,nc=c+dc;while(inB(nr,nc)){const p=b[nr][nc];if(p){if(p.color===byCo&&(p.type==='bishop'||p.type==='queen')){return true;}break}nr+=dr;nc+=dc}}return false}
 /**
  * Check if the given color's king is in check.
  * @param {Array} b - 8x8 board array
@@ -1693,7 +1693,7 @@ function sqAttackedFast(b,pos,byCo){if(!b||!pos||!inB(pos.row,pos.col))return fa
  * @returns {boolean} True if the king is in check
  */
 function inCheck(b,co,kPos=null){const k=kPos;return k?sqAttackedFast(b,k,OPP_COLOR[co]):false}
-function pseudoMoves(s,pos){const b=s.board,p=b[pos.row][pos.col];if(!p)return[];const r=pos.row,c=pos.col,co=p.color,mv=[],opp=OPP_COLOR[co],pr=co==='white'?0:7,d=co==='white'?-1:1;
+function pseudoMoves(s,pos){const b=s.board,p=b[pos.row][pos.col];if(!p){return[];}const r=pos.row,c=pos.col,co=p.color,mv=[],opp=OPP_COLOR[co],pr=co==='white'?0:7,d=co==='white'?-1:1;
 if(p.type==='pawn'){
 if(inB(r+d,c)&&!b[r+d][c]){if(r+d===pr)for(const pt of['queen','rook','bishop','knight'])mv.push({row:r+d,col:c,promotion:pt});else{mv.push({row:r+d,col:c});if(r===(co==='white'?6:1)&&!b[r+2*d][c])mv.push({row:r+2*d,col:c})}}
 for(const dc of[-1,1])if(inB(r+d,c+dc)){if(b[r+d][c+dc]&&b[r+d][c+dc].color!==co){if(r+d===pr)for(const pt of['queen','rook','bishop','knight'])mv.push({row:r+d,col:c+dc,promotion:pt});else mv.push({row:r+d,col:c+dc})}if(s.enPassantTarget&&s.enPassantTarget.row===r+d&&s.enPassantTarget.col===c+dc)mv.push({row:r+d,col:c+dc})}}
@@ -1733,9 +1733,9 @@ if(typeof isChess960CastlingLegal==='function'){
   }
 }else{
   // Fallback (only used if chess960.js failed to load): original standard-chess logic
-  if(r===hr&&c===4){const cr=s.castlingRights;if(cr[co+'Kingside']&&!b[hr][5]&&!b[hr][6]&&b[hr][7]&&b[hr][7].type==='rook'&&b[hr][7].color===co&&!sqAttackedFast(b,{row:hr,col:4},opp)&&!sqAttackedFast(b,{row:hr,col:5},opp)&&!sqAttackedFast(b,{row:hr,col:6},opp))mv.push({row:hr,col:6,castle:'kingside'});if(cr[co+'Queenside']&&!b[hr][3]&&!b[hr][2]&&!b[hr][1]&&b[hr][0]&&b[hr][0].type==='rook'&&b[hr][0].color===co&&!sqAttackedFast(b,{row:hr,col:4},opp)&&!sqAttackedFast(b,{row:hr,col:3},opp)&&!sqAttackedFast(b,{row:hr,col:2},opp))mv.push({row:hr,col:2,castle:'queenside'})}
+  if(r===hr&&c===4){const cr=s.castlingRights;if(cr[co+'Kingside']&&!b[hr][5]&&!b[hr][6]&&b[hr][7]&&b[hr][7].type==='rook'&&b[hr][7].color===co&&!sqAttackedFast(b,{row:hr,col:4},opp)&&!sqAttackedFast(b,{row:hr,col:5},opp)&&!sqAttackedFast(b,{row:hr,col:6},opp)){mv.push({row:hr,col:6,castle:'kingside'});}if(cr[co+'Queenside']&&!b[hr][3]&&!b[hr][2]&&!b[hr][1]&&b[hr][0]&&b[hr][0].type==='rook'&&b[hr][0].color===co&&!sqAttackedFast(b,{row:hr,col:4},opp)&&!sqAttackedFast(b,{row:hr,col:3},opp)&&!sqAttackedFast(b,{row:hr,col:2},opp))mv.push({row:hr,col:2,castle:'queenside'})}
 }}
-else{const dirs=p.type==='rook'?DIR_ROOK:p.type==='bishop'?DIR_BISHOP:DIR_QUEEN;for(const[dr,dc]of dirs){let nr=r+dr,nc=c+dc;while(inB(nr,nc)){if(!b[nr][nc])mv.push({row:nr,col:nc});else{if(b[nr][nc].color!==co)mv.push({row:nr,col:nc});break}nr+=dr;nc+=dc}}}
+else{const dirs=p.type==='rook'?DIR_ROOK:p.type==='bishop'?DIR_BISHOP:DIR_QUEEN;for(const[dr,dc]of dirs){let nr=r+dr,nc=c+dc;while(inB(nr,nc)){if(!b[nr][nc])mv.push({row:nr,col:nc});else{if(b[nr][nc].color!==co){mv.push({row:nr,col:nc});}break}nr+=dr;nc+=dc}}}
 return mv}
 // Optimized: uses makeMvInPlace/unmakeMv instead of cloneB per candidate move
 // Same pattern as hasLegalMoves() — eliminates ~5-10x board allocations
@@ -1766,10 +1766,10 @@ function legalMoves(s,pos){
     }
     return all;
   }
-  const pm=pseudoMoves(s,pos),p=s.board[pos.row][pos.col];if(!p)return[];const legal=[];for(const m of pm){const mv={from:{row:pos.row,col:pos.col},to:m,piece:p,promotion:m.promotion};const undo=makeMvInPlace(s,mv);if(!undo)continue;const kPos=_kingPosAfterMove(s,p,m);const isLegal=kPos?!inCheck(s.board,p.color,kPos):false;unmakeMv(s,undo);if(isLegal)legal.push(m)}return legal}
+  const pm=pseudoMoves(s,pos),p=s.board[pos.row][pos.col];if(!p){return[];}const legal=[];for(const m of pm){const mv={from:{row:pos.row,col:pos.col},to:m,piece:p,promotion:m.promotion};const undo=makeMvInPlace(s,mv);if(!undo){continue;}const kPos=_kingPosAfterMove(s,p,m);const isLegal=kPos?!inCheck(s.board,p.color,kPos):false;unmakeMv(s,undo);if(isLegal)legal.push(m)}return legal}
 // Fast game-over check: returns true as soon as ONE legal move is found
 // v1.2.3 round-36 (dedup): uses _kingPosAfterMove (shared with legalMoves/moveAlg).
-function hasLegalMoves(s){for(let r=0;r<8;r++){for(let c=0;c<8;c++){const p=s.board[r][c];if(p?.color===s.currentTurn){const pm=pseudoMoves(s,{row:r,col:c});for(const m of pm){const mv={from:{row:r,col:c},to:m,piece:p,promotion:m.promotion};const undo=makeMvInPlace(s,mv);if(!undo)continue;const kPos=_kingPosAfterMove(s,p,m);const legal=kPos?!inCheck(s.board,p.color,kPos):false;unmakeMv(s,undo);if(legal)return true}}}}return false}
+function hasLegalMoves(s){for(let r=0;r<8;r++){for(let c=0;c<8;c++){const p=s.board[r][c];if(p?.color===s.currentTurn){const pm=pseudoMoves(s,{row:r,col:c});for(const m of pm){const mv={from:{row:r,col:c},to:m,piece:p,promotion:m.promotion};const undo=makeMvInPlace(s,mv);if(!undo){continue;}const kPos=_kingPosAfterMove(s,p,m);const legal=kPos?!inCheck(s.board,p.color,kPos):false;unmakeMv(s,undo);if(legal)return true}}}}return false}
 // Move execution
 /**
  * v1.0.6: Detect whether a move is a castling move.
@@ -2747,11 +2747,11 @@ let numSameTarget=0,numSameFile=0,numSameRow=0;
 //   syntaxes for the same logic. Centralizing eliminates the divergence
 //   risk (if s.wk/s.bk ever diverge from s['wk']/s['bk'] due to a future
 //   refactor, the two syntaxes could disagree).
-for(let r=0;r<8;r++)for(let c=0;c<8;c++){if(r===from.row&&c===from.col)continue;const p=s.board[r][c];if(p?.type===piece.type&&p.color===piece.color){const pm=pseudoMoves(s,{row:r,col:c});if(pm.some(m=>m.row===to.row&&m.col===to.col)){const mv2={from:{row:r,col:c},to:{row:to.row,col:to.col},piece:p,promotion:undefined};const undo=makeMvInPlace(s,mv2);if(undo){const kPos=_kingPosAfterMove(s,p,to);if(kPos&&!inCheck(s.board,p.color,kPos)){numSameTarget++;if(c===from.col)numSameFile++;if(r===from.row)numSameRow++;}unmakeMv(s,undo);}}}}
+for(let r=0;r<8;r++)for(let c=0;c<8;c++){if(r===from.row&&c===from.col){continue;}const p=s.board[r][c];if(p?.type===piece.type&&p.color===piece.color){const pm=pseudoMoves(s,{row:r,col:c});if(pm.some(m=>m.row===to.row&&m.col===to.col)){const mv2={from:{row:r,col:c},to:{row:to.row,col:to.col},piece:p,promotion:undefined};const undo=makeMvInPlace(s,mv2);if(undo){const kPos=_kingPosAfterMove(s,p,to);if(kPos&&!inCheck(s.board,p.color,kPos)){numSameTarget++;if(c===from.col){numSameFile++;}if(r===from.row)numSameRow++;}unmakeMv(s,undo);}}}}
 // PGN standard disambiguation: file first, then rank, then both
 if(numSameTarget>0){if(numSameFile===0)n+=String.fromCodePoint(97+from.col);else if(numSameRow===0)n+=(8-from.row);else n+=String.fromCodePoint(97+from.col)+(8-from.row)}
 }
-if(piece.type==='pawn'&&isCap)n+=String.fromCodePoint(97+from.col);if(isCap)n+='x';n+=posAlg(to);if(promotion)n+='='+(promotion==='knight'?'N':promotion[0].toUpperCase())}
+if(piece.type==='pawn'&&isCap){n+=String.fromCodePoint(97+from.col);}if(isCap){n+='x';}n+=posAlg(to);if(promotion)n+='='+(promotion==='knight'?'N':promotion[0].toUpperCase())}
 // v1.1.2 PHASE 71 (robustness): guard against `setupMode` being undefined
 // (e.g. if moveAlg is called before ui.js has declared the global). Other
 // call sites in this file use `typeof setupMode!=='undefined'&&setupMode`;
@@ -2793,8 +2793,8 @@ function getCtrlMap(b){const cm=[];for(let r=0;r<8;r++){cm[r]=[];for(let c=0;c<8
 // SAME for all those pushes. Previously we allocated a fresh {row:r,col:c} object
 // on every push (≈256 allocations per ctrl-map = per render tick when heatmap
 // is on). Now we allocate ONE position object per piece (max 32) and reuse it.
-for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=b[r][c];if(p){const atks=attacked(b,{row:r,col:c});const _pos={row:r,col:c};for(const a of atks){cm[a.row][a.col][p.color].push({piece:p,position:_pos})}
-}}return cm}
+for(let r=0;r<8;r++){for(let c=0;c<8;c++){const p=b[r][c];if(p){const atks=attacked(b,{row:r,col:c});const _pos={row:r,col:c};for(const a of atks){cm[a.row][a.col][p.color].push({piece:p,position:_pos})}
+}}}return cm}
 
 
 // ===================== CHESS AI =====================
@@ -2892,7 +2892,7 @@ function syncHash(s){s.hash=computeHash(s)}
 // (The ⚡ marker is re-applied on "Done" via _validateSetupEpMark.)
 function _refreshStateAfterSetup(s){
 s.wk=null;s.bk=null;s.enPassantTarget=null;
-for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=s.board[r][c];if(p){if(p.type==='king'&&p.color==='white')s.wk={row:r,col:c};if(p.type==='king'&&p.color==='black')s.bk={row:r,col:c};}}
+for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=s.board[r][c];if(p){if(p.type==='king'&&p.color==='white'){s.wk={row:r,col:c};}if(p.type==='king'&&p.color==='black')s.bk={row:r,col:c};}}
 // v1.0.7: When the board is mutated (place/remove piece, clear, reset), any
 // previously-applied 🔁 marker may now point at a square that no longer holds
 // a rook. We DON'T auto-delete the marker — the validation pass on "Done"
@@ -3307,10 +3307,10 @@ _ecoRecCache.set(ck,result);
 return result;
 }
 
-let _ecoComposing=false;let _ecoSearchFocused=false;let _ecoBlurTimer=0;let ecoSearchTimer=0;let ecoDisplayList=[];let ecoShowCount=30;function setEcoQuery(v){window.ecoSearchQuery=v;ecoShowCount=30;if(ecoSearchTimer)clearTimeout(ecoSearchTimer);if(_ecoComposing){ecoSearchTimer=setTimeout(_ecoUpdateResults,300)}else{ecoSearchTimer=setTimeout(_ecoUpdateResults,80)}}function _ecoUpdateResults(){_ensureEcoParsed();if(!showNewGameDialog)return;const listEl=document.querySelector('.op-list');if(!listEl)return;const el=document.getElementById('ecoSearch');if(el)window.ecoSearchQuery=el.value;const q=(window.ecoSearchQuery||'').trim().toUpperCase();let results=q?searchEco(q):ECO_OPENINGS;const ff=window.ecoFamilyFilter;if(ff)results=results.filter(o=>o.family===ff);ecoDisplayList=results.slice(0,ecoShowCount);let oh='<button class="op-btn'+(!dlgOpeningId?' act':'')+'" onclick="dlgOpeningId=null;window.ecoSearchQuery=\'\';window.ecoFamilyFilter=\'\';ecoShowCount=30;_ecoUpdateResults()"><div class="on">'+T('free_opening')+'</div><div class="os">'+T('from_start')+'</div></button>';for(const o of ecoDisplayList){const isOpen=o.moves&&o.moves.length>=4;oh+=`<button class="op-btn${dlgOpeningId===o.id+'|'+o.name?' act':''}" onclick="dlgOpeningId='${_escJs(o.id)}|${_escJs(o.name)}';ecoShowCount=30;_ecoUpdateResults()"><div class="on">${_esc(o.id)} ${_esc(o.name)}</div>${isOpen?'<div class="os">'+_esc(o.family)+'</div>':''}</button>`}listEl.innerHTML=oh;_ecoRestoreFocus()}function _ecoRestoreFocus(){if(!_ecoSearchFocused)return;const ae=document.activeElement;if(ae&&(ae.tagName==='BUTTON'||ae.tagName==='SELECT'||ae.tagName==='OPTION'))return;const el=document.getElementById('ecoSearch');if(el&&document.activeElement!==el){el.focus();try{const len=el.value.length;el.setSelectionRange(len,len)}catch(e){/* v1.2.1 round-16: setSelectionRange may fail on hidden/disabled inputs — non-critical, user can still type. */console.warn('[ECO] setSelectionRange failed:',e?.message?e.message:e);}}}function _ecoDoSearch(){if(ecoSearchTimer)clearTimeout(ecoSearchTimer);const el=document.getElementById('ecoSearch');if(el){window.ecoSearchQuery=el.value;_ecoComposing=false;if(_ecoBlurTimer){clearTimeout(_ecoBlurTimer);_ecoBlurTimer=0}}_ecoSearchFocused=true;_ecoUpdateResults()}
+let _ecoComposing=false;let _ecoSearchFocused=false;let _ecoBlurTimer=0;let ecoSearchTimer=0;let ecoDisplayList=[];let ecoShowCount=30;function setEcoQuery(v){window.ecoSearchQuery=v;ecoShowCount=30;if(ecoSearchTimer){clearTimeout(ecoSearchTimer);}if(_ecoComposing){ecoSearchTimer=setTimeout(_ecoUpdateResults,300)}else{ecoSearchTimer=setTimeout(_ecoUpdateResults,80)}}function _ecoUpdateResults(){_ensureEcoParsed();if(!showNewGameDialog){return;}const listEl=document.querySelector('.op-list');if(!listEl){return;}const el=document.getElementById('ecoSearch');if(el){window.ecoSearchQuery=el.value;}const q=(window.ecoSearchQuery||'').trim().toUpperCase();let results=q?searchEco(q):ECO_OPENINGS;const ff=window.ecoFamilyFilter;if(ff){results=results.filter(o=>o.family===ff);}ecoDisplayList=results.slice(0,ecoShowCount);let oh='<button class="op-btn'+(!dlgOpeningId?' act':'')+'" onclick="dlgOpeningId=null;window.ecoSearchQuery=\'\';window.ecoFamilyFilter=\'\';ecoShowCount=30;_ecoUpdateResults()"><div class="on">'+T('free_opening')+'</div><div class="os">'+T('from_start')+'</div></button>';for(const o of ecoDisplayList){const isOpen=o.moves&&o.moves.length>=4;oh+=`<button class="op-btn${dlgOpeningId===o.id+'|'+o.name?' act':''}" onclick="dlgOpeningId='${_escJs(o.id)}|${_escJs(o.name)}';ecoShowCount=30;_ecoUpdateResults()"><div class="on">${_esc(o.id)} ${_esc(o.name)}</div>${isOpen?'<div class="os">'+_esc(o.family)+'</div>':''}</button>`}listEl.innerHTML=oh;_ecoRestoreFocus()}function _ecoRestoreFocus(){if(!_ecoSearchFocused){return;}const ae=document.activeElement;if(ae&&(ae.tagName==='BUTTON'||ae.tagName==='SELECT'||ae.tagName==='OPTION')){return;}const el=document.getElementById('ecoSearch');if(el&&document.activeElement!==el){el.focus();try{const len=el.value.length;el.setSelectionRange(len,len)}catch(e){/* v1.2.1 round-16: setSelectionRange may fail on hidden/disabled inputs — non-critical, user can still type. */console.warn('[ECO] setSelectionRange failed:',e?.message?e.message:e);}}}function _ecoDoSearch(){if(ecoSearchTimer){clearTimeout(ecoSearchTimer);}const el=document.getElementById('ecoSearch');if(el){window.ecoSearchQuery=el.value;_ecoComposing=false;if(_ecoBlurTimer){clearTimeout(_ecoBlurTimer);_ecoBlurTimer=0}}_ecoSearchFocused=true;_ecoUpdateResults()}
 
 
-function posEmoji(ev){if(ev>600)return'🏆';if(ev>350)return'😄';if(ev>150)return'😊';if(ev>50)return'🙂';if(ev>-50)return'😐';if(ev>-150)return'😟';if(ev>-350)return'😰';if(ev>-600)return'😱';return'💀'}
+function posEmoji(ev){if(ev>600){return'🏆';}if(ev>350){return'😄';}if(ev>150){return'😊';}if(ev>50){return'🙂';}if(ev>-50){return'😐';}if(ev>-150){return'😟';}if(ev>-350){return'😰';}if(ev>-600){return'😱';}return'💀'}
 
 // v1.0.2 FIX: Black-to-move opening move record fix.
 //

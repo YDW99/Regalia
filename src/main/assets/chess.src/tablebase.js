@@ -999,7 +999,7 @@ function _findLegalMove(state,from,to,pieceType){
 function _executeAndRecord(state,move,notation){
   // Defensive: validate move object before proceeding
   if(!move||!move.from||!move.to||typeof move.from.row!=='number'||typeof move.from.col!=='number'||typeof move.to.row!=='number'||typeof move.to.col!=='number')return null;
-  const undoInfo=makeMvInPlace(state,move);
+  makeMvInPlace(state,move);
   // makeMvInPlace mutates state in place and returns undo info, NOT the post-move state.
   // After the call, 'state' IS the post-move state.
   // Determine check status using the mutated post-move state
@@ -1849,7 +1849,7 @@ const color=isWhite?'white':'black';
 board[r][c]={type,color};
 // v1.2.3 round-40: exactly ONE king per side — a second king makes the FEN
 //   malformed (previously the later king silently overwrote the earlier one).
-if(type==='king'){if(color==='white'){if(wk)return null;wk={row:r,col:c};}else{if(bk)return null;bk={row:r,col:c};}}
+if(type==='king'){if(color==='white'){if(wk){return null;}wk={row:r,col:c};}else{if(bk){return null;}bk={row:r,col:c};}}
 c++;
 }
 if(c!==8)return null;
@@ -1897,8 +1897,8 @@ if(_epHasCap)enPassantTarget={row:er,col:ec};
 //   `parseInt()||fallback` silently coerced garbage ("12x" → 12, "-5" → 0/1),
 //   accepting malformed FENs.
 let halfMoveClock=0,fullMoveNumber=1;
-if(parts[4]){if(!/^\d+$/.test(parts[4]))return null;halfMoveClock=Number.parseInt(parts[4],10);}
-if(parts[5]){if(!/^\d+$/.test(parts[5]))return null;fullMoveNumber=Number.parseInt(parts[5],10);if(fullMoveNumber<1)return null;}
+if(parts[4]){if(!/^\d+$/.test(parts[4])){return null;}halfMoveClock=Number.parseInt(parts[4],10);}
+if(parts[5]){if(!/^\d+$/.test(parts[5])){return null;}fullMoveNumber=Number.parseInt(parts[5],10);if(fullMoveNumber<1){return null;}}
 const s={board,currentTurn:turn,castlingRights,enPassantTarget,halfMoveClock,fullMoveNumber,moveHistory:[],posCount:new Map(),wk,bk,hash:0,boardVersion:1};
 syncHash(s);s.posCount.set(s.hash,1);
 // Validate: the side NOT to move must not be in check (illegal position)
@@ -1922,7 +1922,7 @@ const _tbCache = new Map();
 const _TB_CACHE_MAX = 50;
 
 // Helper: count total pieces on board
-function countPieces(board){let n=0;for(let r=0;r<8;r++)for(let c=0;c<8;c++)if(board[r][c])n++;return n}
+function countPieces(board){let n=0;for(let r=0;r<8;r++){for(let c=0;c<8;c++){if(board[r][c]){n++;}}}return n}
 function pieceCountLE7(board){return countPieces(board)<=7}
 
 // Probe Syzygy tablebase API (with timeout + offline fallback + rate limiting)
