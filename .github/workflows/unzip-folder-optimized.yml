@@ -6,6 +6,7 @@ on:
       - 'upload.zip'
     branches:
       - upload
+      - main
   workflow_dispatch:
     inputs:
       confirm_overwrite:
