@@ -1588,9 +1588,11 @@ function extractMoveTimes(pgnText){
       const timeMatch=comment.match(/(\d+(?:\.\d+)?)s/);
       // Clock-remaining format: [%clk HH:MM:SS]
       // v1.2.3 round-38 (SonarCloud S6353): use \d instead of [0-9] (concise form).
-      const clkMatch=comment.match(/\[%clk\s+(\d+):(\d+):(\d+\.?\d*)\]/);
+      // v1.2.3 round-45 (PR53 R8, S8786): (?:\.\d+)? removes the \d+\d* shared
+      //   prefix — no polynomial backtracking even on adversarial input.
+      const clkMatch=comment.match(/\[%clk\s+(\d+):(\d+):(\d+(?:\.\d+)?)\]/);
       // v1.0.4 ROUND-5 REV16: Elapsed move time format: [%emt H:MM:SS]
-      const emtMatch=comment.match(/\[%emt\s+(\d+):(\d+):(\d+\.?\d*)\]/);
+      const emtMatch=comment.match(/\[%emt\s+(\d+):(\d+):(\d+(?:\.\d+)?)\]/);
       // The comment belongs to the move that JUST HAPPENED — i.e., the
       // previous mainline move. So we attach it to usedTimes[len-1].
       // If no mainline move yet, attach to index 0 (initial position comment).
@@ -2808,7 +2810,8 @@ function renderStats(parsed,evalData){
 
 function renderEvalChart(evalData){
   const w=600,h=120,pad=20;
-  const validEvals=evalData.filter(e=>e).map(e=>e.mate?(e.mate>0?1000:-1000):e.eval); // v1.2.3 (R2): clamp mate to +/-1000cp (+/-10 pawns) like ui.js evalToY, so mate sentinels don't flatten the chart
+  // v1.2.3 round-45 (PR53 R7, S7770/S3358): filter(Boolean) + un-nested branches (same semantics).
+  const validEvals=evalData.filter(Boolean).map(e=>{if(!e.mate)return e.eval;return e.mate>0?1000:-1000;}); // v1.2.3 (R2): clamp mate to +/-1000cp (+/-10 pawns) like ui.js evalToY, so mate sentinels don't flatten the chart
   if(validEvals.length<2)return '<div class="loading">'+T('no_data')+'</div>';
   const maxEv=Math.max(...validEvals,500);
   const minEv=Math.min(...validEvals,-500);

@@ -212,18 +212,19 @@ public class FileIoHelper {
      */
     public String readTextFile(String path) {
         // Android 6-9: 检查并请求 READ_EXTERNAL_STORAGE
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            if (context.checkSelfPermission(android.Manifest.permission.READ_EXTERNAL_STORAGE)
-                    != PackageManager.PERMISSION_GRANTED) {
-                requestReadExternalStoragePermission();
-                // v1.2.3 round-44 (D2): 权限对话框是异步的，继续往下读必然
-                //   失败并返回 null（JS 无法区分「文件不存在」与「等待授权」）。
-                //   立即返回结构化错误状态；JS 端应识别 "permission_pending"
-                //   并提示用户授权后重试。不新增 onRequestPermissionsResult
-                //   跨端协议 —— MainActivity 无该 handler（不属本轮修改范围），
-                //   授权结果依赖用户重试时再走已授权路径。
-                return "{\"error\":\"permission_pending\"}";
-            }
+        // v1.2.3 round-45 (PR53 R4, java:S1066): collapsed nested if — short-
+        //   circuit && is semantically identical here.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
+                && context.checkSelfPermission(android.Manifest.permission.READ_EXTERNAL_STORAGE)
+                        != PackageManager.PERMISSION_GRANTED) {
+            requestReadExternalStoragePermission();
+            // v1.2.3 round-44 (D2): 权限对话框是异步的，继续往下读必然
+            //   失败并返回 null（JS 无法区分「文件不存在」与「等待授权」）。
+            //   立即返回结构化错误状态；JS 端应识别 "permission_pending"
+            //   并提示用户授权后重试。不新增 onRequestPermissionsResult
+            //   跨端协议 —— MainActivity 无该 handler（不属本轮修改范围），
+            //   授权结果依赖用户重试时再走已授权路径。
+            return "{\"error\":\"permission_pending\"}";
         }
 
         try {

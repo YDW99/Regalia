@@ -120,7 +120,8 @@ Java_com_Regalia_StockfishNative_nativeChmod(JNIEnv *env, jclass, jstring jPath)
 //   from EPERM/ESRCH/EINVAL (previously a silent black box).
 extern "C" JNIEXPORT jboolean JNICALL
 // v1.2.3 round-37 (SonarCloud cpp:S1172): `env` is unused but required by
-//   the JNI signature. Renaming to `/*env*/` would break JNI name mangling
+//   the JNI signature. Renaming to a commented-out form would break JNI name
+//   mangling
 //   (the symbol must match Java_com_Regalia_StockfishNative_nativeRenice
 //   exactly). Kept as `env` with this explanatory comment.
 Java_com_Regalia_StockfishNative_nativeRenice(JNIEnv *env, jclass, jint pid, jint prio) {

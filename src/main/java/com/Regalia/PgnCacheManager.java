@@ -83,10 +83,9 @@ public class PgnCacheManager {
     public PgnCacheManager(Context context) {
         this.context = context.getApplicationContext();
         this.cacheDir = new File(this.context.getFilesDir(), PGN_CACHE_DIR);
-        if (!cacheDir.exists()) {
-            if (!cacheDir.mkdirs()) {
-                Log.w(TAG, "PgnCacheManager: mkdirs failed for " + cacheDir.getAbsolutePath());
-            }
+        // v1.2.3 round-45 (PR53 R4, java:S1066): collapsed nested if.
+        if (!cacheDir.exists() && !cacheDir.mkdirs()) {
+            Log.w(TAG, "PgnCacheManager: mkdirs failed for " + cacheDir.getAbsolutePath());
         }
     }
 

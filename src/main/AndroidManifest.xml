@@ -93,10 +93,13 @@
         android:hardwareAccelerated="true"
         android:networkSecurityConfig="@xml/network_security_config"
         android:supportsRtl="true"
+        android:usesCleartextTraffic="false"
         android:enableOnBackInvokedCallback="true">
-        <!-- v1.2.3 round-44 (F15): removed android:usesCleartextTraffic="false"
-             — it is ignored entirely when networkSecurityConfig is set (the
-             config's cleartextTrafficPermitted="false" is authoritative). -->
+        <!-- v1.2.3 round-45 (PR53 R1, xml:S5332): re-added usesCleartextTraffic=
+             "false" — networkSecurityConfig only applies on API 24+, so on
+             API 23 (minSdk) cleartext would otherwise fall back to the platform
+             default (allowed). Dual-layer: this attribute covers API 23; the
+             config's cleartextTrafficPermitted="false" covers API 24+. -->
         <!-- v1.2.3 round-44 (F13): added supportsRtl + enableOnBackInvokedCallback
              (the latter matches the API-35 default; declared explicitly for
              API 33/34 consistency). -->

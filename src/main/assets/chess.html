@@ -7372,7 +7372,9 @@ const Store = (function() {
      */
     function reset(overrides) {
         // v1.2.3 round-37 (SonarCloud S6661): use object spread.
-        _state = { ..._deepClone(_initialState), ...(overrides || {}) };
+        // v1.2.3 round-45 (PR53 R2, S7744): object spread is null/undefined-safe
+        //   — the `|| {}` fallback was dead code.
+        _state = { ..._deepClone(_initialState), ...overrides };
         // v1.2.3 round-31 (PR52 CodeRabbit perf): single deep-clone reuse —
         //   see dispatch() above for the rationale.
         const snapshot = _deepClone(_state);
