@@ -61,6 +61,11 @@ public class PgnCacheManager {
 
     private static final String PGN_CACHE_DIR = "pgn_cache";
 
+    // v1.2.3 round-44 (E9): LRU 淘汰上限。PGN 缓存此前无界增长（用户长期
+    //   使用后 pgn_cache/ 可占数百 MB）。超过上限时按 lastModified 升序
+    //   删除最旧的 .pgn 及其关联 .tags.json，直到回到上限以内。
+    private static final long MAX_CACHE_BYTES = 50L * 1024 * 1024; // 50MB
+
     // v1.2.3 round-30 (perf): pre-compiled patterns for sanitizeName.
     //   String.replaceAll(String, String) recompiles the Pattern on every
     //   call; sanitizeName is invoked on every PGN cache operation
@@ -69,18 +74,25 @@ public class PgnCacheManager {
     private static final Pattern CONTROL_CHARS = Pattern.compile("[\\x00-\\x1f\\x7f]");
 
     private final Context context;
+    // v1.2.3 round-44 (E10): 缓存目录实例在构造器解析并 mkdirs 一次，
+    //   getCacheDir() 从「每次新建 File + exists() 系统调用」改为直接返回
+    //   缓存字段（该方法在 save/get/delete/rename/setTags/getTags 每次调用
+    //   都会走一到两遍）。
+    private final File cacheDir;
 
     public PgnCacheManager(Context context) {
         this.context = context.getApplicationContext();
+        this.cacheDir = new File(this.context.getFilesDir(), PGN_CACHE_DIR);
+        if (!cacheDir.exists()) {
+            if (!cacheDir.mkdirs()) {
+                Log.w(TAG, "PgnCacheManager: mkdirs failed for " + cacheDir.getAbsolutePath());
+            }
+        }
     }
 
-    /** 获取（必要时创建）PGN 缓存目录 */
+    /** 获取 PGN 缓存目录（构造时已创建；v1.2.3 round-44 (E10) 返回缓存字段） */
     public File getCacheDir() {
-        File dir = new File(context.getFilesDir(), PGN_CACHE_DIR);
-        if (!dir.exists()) {
-            dir.mkdirs();
-        }
-        return dir;
+        return cacheDir;
     }
 
     /**
@@ -126,7 +138,11 @@ public class PgnCacheManager {
                 if (!f.isFile()) continue;
                 String fn = f.getName();
                 if (fn.endsWith(".tags.json")) continue; // 跳过标签文件
-                String displayName = fn.endsWith(".pgn") ? fn.substring(0, fn.length() - 4) : fn;
+                // v1.2.3 round-44 (E2): 只列出 .pgn 条目 —— 目录中的杂散文件
+                //   （备份、半成品临时文件）不应作为缓存条目暴露给 JS。过滤后
+                //   fn 必然以 .pgn 结尾，displayName 直接截尾。
+                if (!fn.endsWith(".pgn")) continue;
+                String displayName = fn.substring(0, fn.length() - 4);
                 try {
                     org.json.JSONObject obj = new org.json.JSONObject();
                     obj.put("name", displayName);
@@ -166,6 +182,7 @@ public class PgnCacheManager {
                 }
             }
             Log.i(TAG, "PGN cache saved: " + safe + " (" + pgn.length() + " chars)");
+            evictIfNeeded(); // v1.2.3 round-44 (E9): 保存成功后做 LRU 淘汰
             return true;
         } catch (Throwable e) {
             Log.w(TAG, "save failed for name=" + safe, e);
@@ -271,7 +288,18 @@ public class PgnCacheManager {
             if (oldTags.exists()) {
                 File newTags = new File(getCacheDir(), newSafe + ".tags.json");
                 if (!oldTags.renameTo(newTags)) {
-                    Log.w(TAG, "rename: tags renameTo failed (best-effort) " + oldSafe);
+                    // v1.2.3 round-44 (E1): renameTo 失败 → 复制-删除回退；
+                    //   仍失败 → 删除原 tags 文件。孤儿防护：旧名 tags 残留
+                    //   会关联到已不存在的旧名 PGN，或在名称被复用时张冠李戴
+                    //   —— 宁可丢标签也不能留错标签。
+                    if (copyAndDelete(oldTags, newTags)) {
+                        Log.i(TAG, "rename: tags moved via copy-delete fallback " + oldSafe);
+                    } else {
+                        Log.w(TAG, "rename: tags copy-delete failed, deleting original tags " + oldSafe);
+                        if (!oldTags.delete()) {
+                            Log.w(TAG, "rename: failed to delete original tags file " + oldSafe);
+                        }
+                    }
                 }
             }
             Log.i(TAG, "PGN cache renamed: " + oldSafe + " -> " + newSafe);
@@ -299,7 +327,22 @@ public class PgnCacheManager {
                 // 无标签 - 删除文件
                 if (tagsFile.exists()) {
                     if (!tagsFile.delete()) {
-                        Log.w(TAG, "setTags: failed to delete empty tags file " + safe);
+                        // v1.2.3 round-44 (E3): delete() 失败（fd 占用/瞬态
+                        //   错误）→ 回退写入空数组 "[]" + fsync（getTags 解析
+                        //   后语义等价于无标签）；仍失败返回 false，让调用方
+                        //   知道清空未生效，而不是静默吞掉。
+                        Log.w(TAG, "setTags: delete failed, falling back to empty-array write " + safe);
+                        try (FileOutputStream fos = new FileOutputStream(tagsFile);
+                             OutputStreamWriter writer = new OutputStreamWriter(fos, "UTF-8")) {
+                            writer.write("[]");
+                            writer.flush();
+                            try { fos.getFD().sync(); } catch (Throwable ignored) {
+                                // sync 失败不阻塞写入
+                            }
+                        } catch (Throwable e2) {
+                            Log.w(TAG, "setTags: empty-array fallback failed " + safe, e2);
+                            return false;
+                        }
                     }
                 }
                 return true;
@@ -316,6 +359,78 @@ public class PgnCacheManager {
         } catch (Throwable e) {
             Log.w(TAG, "setTags failed for name=" + safe, e);
             return false;
+        }
+    }
+
+    /**
+     * v1.2.3 round-44 (E1): 复制 src 到 dst（+fsync）成功后删除 src；
+     * 任何一步失败返回 false（dst 残留由调用方语义决定，量小无害）。
+     */
+    private static boolean copyAndDelete(File src, File dst) {
+        try {
+            byte[] buf = new byte[8192];
+            try (FileInputStream fis = new FileInputStream(src);
+                 FileOutputStream fos = new FileOutputStream(dst)) {
+                int n;
+                while ((n = fis.read(buf)) > 0) {
+                    fos.write(buf, 0, n);
+                }
+                fos.flush();
+                try { fos.getFD().sync(); } catch (Throwable ignored) {
+                    // best-effort
+                }
+            }
+            return src.delete();
+        } catch (Throwable e) {
+            Log.w(TAG, "copyAndDelete failed: " + src + " -> " + dst, e);
+            return false;
+        }
+    }
+
+    /**
+     * v1.2.3 round-44 (E9): LRU 淘汰 —— 缓存目录总大小超过 MAX_CACHE_BYTES
+     * 时，按 lastModified 升序删除最旧的 .pgn（含关联 .tags.json），直到
+     * 回到上限以内。在 save() 成功后调用；best-effort，失败仅记录日志。
+     */
+    private void evictIfNeeded() {
+        try {
+            File dir = getCacheDir();
+            File[] files = dir.listFiles();
+            if (files == null) return;
+            long total = 0;
+            java.util.List<File> pgns = new java.util.ArrayList<>();
+            for (File f : files) {
+                if (!f.isFile()) continue;
+                total += f.length();
+                if (f.getName().endsWith(".pgn")) pgns.add(f);
+            }
+            if (total <= MAX_CACHE_BYTES) return;
+            java.util.Collections.sort(pgns,
+                    (a, b) -> Long.compare(a.lastModified(), b.lastModified()));
+            for (File f : pgns) {
+                if (total <= MAX_CACHE_BYTES) break;
+                String fn = f.getName();
+                String base = fn.substring(0, fn.length() - 4);
+                long len = f.length();
+                File tags = new File(dir, base + ".tags.json");
+                long tagsLen = tags.exists() ? tags.length() : 0;
+                if (f.delete()) {
+                    total -= len;
+                } else {
+                    Log.w(TAG, "evictIfNeeded: failed to delete " + fn);
+                    continue;
+                }
+                if (tags.exists()) {
+                    if (tags.delete()) {
+                        total -= tagsLen;
+                    } else {
+                        Log.w(TAG, "evictIfNeeded: failed to delete tags " + base);
+                    }
+                }
+                Log.i(TAG, "evictIfNeeded: evicted LRU cache entry " + base);
+            }
+        } catch (Throwable e) {
+            Log.w(TAG, "evictIfNeeded failed", e);
         }
     }
 

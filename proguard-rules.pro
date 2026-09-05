@@ -45,7 +45,13 @@
     native <methods>;
 }
 -keep class com.Regalia.EngineProcessManager$ChmodProvider { *; }
--keep class com.Regalia.EngineProcessManager { *; }
+# v1.2.3 round-44 (F7): narrowed from { *; } to the members actually called
+#   from outside (construction + makeExecutable). Private members may now be
+#   obfuscated/inlined by R8. Keep in sync with the real public API.
+-keep class com.Regalia.EngineProcessManager {
+    public <init>(...);
+    public void makeExecutable(java.io.File);
+}
 
 # ----------------------------------------------------------------------------
 # 4. Application / Service / Receiver / Provider (declared in AndroidManifest)
@@ -110,3 +116,9 @@
     public static *** v(...);
     public static *** d(...);
 }
+
+# ----------------------------------------------------------------------------
+# v1.2.3 round-44 (F14): keep generic signatures + inner-class metadata so
+#   reflection and stack traces survive R8 full mode.
+# ----------------------------------------------------------------------------
+-keepattributes Signature, InnerClasses, EnclosingMethod, Exceptions, RuntimeVisibleAnnotations, RuntimeInvisibleAnnotations

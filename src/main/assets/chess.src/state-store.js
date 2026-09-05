@@ -247,7 +247,9 @@ const Store = (function() {
         const reducer = _reducers[action];
         if (!reducer) {
             if (typeof console !== 'undefined' && console.warn) console.warn('[Store] No reducer for action:', action);
-            return _deepClone(_state);
+            // v1.2.3 round-44 (G10): no consumers of dispatch()'s return value
+            //   — return the live _state instead of a full-tree deep clone.
+            return _state;
         }
         const partial = reducer(_state, payload);
         if (partial && typeof partial === 'object') {
@@ -261,12 +263,20 @@ const Store = (function() {
             //   tree walks per dispatch (stateHistory max 200 + moveRecords).
             //   The snapshot is also passed to listeners, preserving the
             //   round-30 single-source-of-truth invariant.
-            const snapshot = _deepClone(_state);
-            _notifyListeners(snapshot);
-            return snapshot;
+            // v1.2.3 round-44 (G10): only deep-clone a snapshot when listeners
+            //   actually exist, and return the live _state — dispatch()'s return
+            //   value has no consumers (verified by grep), so the previous
+            //   unconditional full-tree clone per dispatch was pure waste.
+            //   getState() still returns a deep clone (P0-1 invariant kept).
+            if (_listeners.length > 0) {
+                const snapshot = _deepClone(_state);
+                _notifyListeners(snapshot);
+            }
+            return _state;
         }
-        // v1.2.1: Return deep clone (P0-2)
-        return _deepClone(_state);
+        // v1.2.3 round-44 (G10): return live _state (was a deep clone, P0-2) —
+        //   no consumers of the return value; see the dispatch happy path above.
+        return _state;
     }
 
     /**
@@ -309,6 +319,8 @@ const Store = (function() {
      *   an argument (legacy/internal callers), falls back to cloning _state.
      */
     function _notifyListeners(snapshot) {
+        // v1.2.3 round-44 (G10): skip the clone entirely when nobody listens.
+        if (_listeners.length === 0) return;
         if (snapshot === undefined) snapshot = _deepClone(_state);
         const listeners = _listeners.slice();
         for (let i = 0; i < listeners.length; i++) {

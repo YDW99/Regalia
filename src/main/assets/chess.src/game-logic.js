@@ -97,9 +97,6 @@ const _i18n={
 'enter_review_hint':{zh:'点击进入复盘界面（可使用 📚 缓存管理器或 🗃️ 导入 PGN）',en:'Click to enter review mode (use 📚 Cache Manager or 🗃️ to import PGN)'},
 'stats':{zh:'统计',en:'Stats'},
 'stats_title':{zh:'📊 统计数据',en:'📊 Statistics'},
-'stats_export_html':{zh:'💾 HTML',en:'💾 HTML'},
-'stats_review':{zh:'🗂️ 复盘',en:'🗂️ Review'},
-'stats_save_html':{zh:'保存HTML统计文件',en:'Save HTML stats file'},
 'stats_saved':{zh:'HTML统计文件已保存',en:'HTML stats file saved'},
 'save_pgn_prompt':{zh:'💾 是否保存PGN文件？',en:'💾 Save PGN file?'},
 'save_pgn_yes':{zh:'是',en:'Yes'},
@@ -139,11 +136,6 @@ const _i18n={
 'time_control_inc_sec':{zh:'每步加秒',en:'Increment (sec/move)'},
 'time_control_delay_sec':{zh:'每步延迟秒数',en:'Delay (sec/move)'},
 'time_control_note':{zh:'启用计时赛后，PGN 导出将包含 [TimeControl] 头与每步的 [%clk] 注释（剩余时间）；未启用计时赛时，PGN 注释使用 [%emt]（每步实际用时）。',en:'With time control enabled, PGN export includes [TimeControl] header and per-move [%clk] annotations (remaining clock). Without time control, PGN comments use [%emt] (elapsed move time).'},
-'time_control_white_clock':{zh:'白方时钟',en:'White Clock'},
-'time_control_black_clock':{zh:'黑方时钟',en:'Black Clock'},
-'time_control_flag_fell':{zh:'超时！',en:'Time out!'},
-'time_control_low':{zh:'时间紧张！',en:'Time trouble!'},
-'classic_openings':{zh:'经典开局（可选）',en:'Classic Openings'},
 'free_opening_btn':{zh:'自由开局',en:'Free Play'},
 'from_start':{zh:'从初始局面开始',en:'From starting position'},
 'eco_search_ph':{zh:'输入ECO编号或开局名搜索',en:'Search ECO code or name'},
@@ -160,11 +152,7 @@ const _i18n={
 'copyright_license':{zh:'版权与许可',en:'Copyright & License'},
 'copy_fen':{zh:'复制当前局面的FEN',en:'Copy current FEN'},
 'import_fen':{zh:'导入FEN字符串',en:'Import FEN'},
-'fen':{zh:'FEN',en:'FEN'},
 'import_label':{zh:'导入',en:'Import'},
-'player_color_w':{zh:'执白',en:'White'},
-'player_color_b':{zh:'执黑',en:'Black'},
-'start_game':{zh:'开始游戏',en:'Start Game'},
 'cancel':{zh:'取消',en:'Cancel'},
 'white_wins':{zh:'白方获胜',en:'White wins'},
 'black_wins':{zh:'黑方获胜',en:'Black wins'},
@@ -184,11 +172,6 @@ const _i18n={
 // The eval bar keeps the abbreviated "SD" for compactness.
 'seldepth_label':{zh:'选深',en:'SelDepth'},
 'evaluating':{zh:'局势评估',en:'Position Eval'},
-'lang_toggle_zh':{zh:'↔️中',en:'↔️中'},
-'lang_toggle_en':{zh:'↔️EN',en:'↔️EN'},
-'ponder_depth':{zh:'深度',en:'Depth'},
-'ponder_nodes':{zh:'节点',en:'Nodes'},
-'ponder_eval':{zh:'评估',en:'Eval'},
 'level_1':{zh:'初学者',en:'Beginner'},
 'level_2':{zh:'新手',en:'Novice'},
 'level_3':{zh:'俱乐部棋手',en:'Club'},
@@ -199,15 +182,7 @@ const _i18n={
 'level_8':{zh:'⚙️ 手动设置',en:'⚙️ Custom'},
 'engine_config':{zh:'引擎配置',en:'Engine Config'},
 'threads':{zh:'线程数',en:'Threads'},
-'hash_size':{zh:'哈希表大小',en:'Hash Size'},
-'multi_pv':{zh:'多线分析',en:'MultiPV'},
-'move_overhead':{zh:'走法超时',en:'Move Overhead'},
-'show_wdl':{zh:'显示胜和负概率',en:'Show WDL'},
-'skill_level':{zh:'技能等级',en:'Skill Level'},
-'limit_elo':{zh:'限制ELO',en:'Limit ELO'},
 'auto_config':{zh:'默认配置',en:'Default Config'},
-'export_settings':{zh:'导出设置',en:'Export'},
-'import_settings':{zh:'导入设置',en:'Import'},
 'pgn_copied':{zh:'PGN已复制到剪贴板',en:'PGN copied to clipboard'},
 'export_pgn':{zh:'导出PGN到文件',en:'Export PGN to file'},
 'pgn_exported':{zh:'PGN已导出',en:'PGN exported'},
@@ -218,22 +193,13 @@ const _i18n={
 'pgn_export_include_annotations_yes':{zh:'是，包含特殊注释',en:'Yes, include special annotations'},
 'pgn_export_include_annotations_no':{zh:'否，不包含特殊注释',en:'No, exclude special annotations'},
 'fen_copied':{zh:'FEN已复制到剪贴板',en:'FEN copied to clipboard'},
-'fen_imported':{zh:'FEN导入成功',en:'FEN imported'},
 'settings_imported':{zh:'设置导入成功',en:'Settings imported'},
 'settings_import_fail':{zh:'导入失败',en:'Import failed'},
 'settings_import_done':{zh:'设置导入完成',en:'Settings import done'},
 'engine_unavailable':{zh:'引擎不可用，无法计算提示',en:'Engine unavailable'},
 'hint_request_failed':{zh:'引擎提示请求失败',en:'Hint request failed'},
-'init_failed':{zh:'应用初始化失败',en:'App init failed'},
-'webview_unavailable':{zh:'WebView不可用',en:'WebView unavailable'},
-'ui_create_failed':{zh:'界面创建失败',en:'UI creation failed'},
-'load_failed':{zh:'加载棋盘页面失败',en:'Failed to load board'},
-'review_eval':{zh:'复盘评估',en:'Review Eval'},
-'exit_review':{zh:'退出复盘',en:'Exit Review'},
-'review_analyze':{zh:'🔄 分析全部',en:'🔄 Analyze All'},
 'about_copyright':{zh:'© 2026 Regalia. All rights reserved.',en:'© 2026 Regalia. All rights reserved.'},
 'about_agpl':{zh:'本应用整体采用',en:'This application is licensed under'},
-'about_source_code':{zh:'源代码：https://github.com/YDW99/Regalia',en:'Source code: https://github.com/YDW99/Regalia'},
 // v1.0.4 Round-5 Rev27: Split source-code line into prefix + URL so the URL
 // can be rendered as a real <a> hyperlink that opens in the system browser
 // via AndroidBridge.openUrlInBrowser(). The full-string variant above is
@@ -257,12 +223,10 @@ const _i18n={
 'no_move_records':{zh:'暂无走法记录',en:'No move records'},
 'copy_failed':{zh:'复制失败，请手动复制',en:'Copy failed, please copy manually'},
 'file_browse_failed':{zh:'文件浏览失败',en:'File browse failed'},
-'settings_imported_ok':{zh:'设置已导入',en:'Settings imported'},
 'settings_read_fail':{zh:'无法读取设置文件',en:'Cannot read settings file'},
 'restarting_engine':{zh:'正在重启引擎...',en:'Restarting engine...'},
 'engine_unavailable_bridge':{zh:'引擎接口不可用',en:'Engine interface unavailable'},
 'restart_failed':{zh:'重启失败',en:'Restart failed'},
-'requesting_storage':{zh:'正在请求存储权限...',en:'Requesting storage permission...'},
 'settings_exported':{zh:'设置已导出到',en:'Settings exported to'},
 'settings_clipboard_fallback':{zh:'设置已复制到剪贴板（文件写入失败）',en:'Settings copied to clipboard (file write failed)'},
 'built_in_only':{zh:'v1.0.3: 仅支持内置引擎',en:'v1.0.3: Built-in engine only'},
@@ -374,14 +338,12 @@ const _i18n={
 'copy_review_fen':{zh:'复制当前复盘局面的FEN',en:'Copy FEN'},
 'return_game':{zh:'返回对局',en:'Return to Game'},
 'pgn_cache_manager':{zh:'📚 PGN缓存管理',en:'📚 PGN Cache Manager'},
-'pgn_cache_btn':{zh:'PGN缓存',en:'PGN Cache'},
 'pgn_cache_empty':{zh:'暂无缓存的PGN对局。点击下方"保存当前PGN到缓存"按钮以创建。',en:'No cached PGN games yet. Click "Save current PGN to cache" below to create one.'},
 'pgn_cache_name_prompt':{zh:'请输入缓存名称（如：经典对局1）：',en:'Enter cache name (e.g.: Classic Game 1):'},
 'pgn_cache_save_default':{zh:'我的对局',en:'My Game'},
 'pgn_cache_name_too_long':{zh:'名称过长（最多60字符）',en:'Name too long (max 60 chars)'},
 'pgn_cache_name_invalid':{zh:'名称包含非法字符（/ \\ : * ? \" < > |）',en:'Name contains invalid chars (/ \\ : * ? \" < > |)'},
 'pgn_cache_save_current':{zh:'保存当前PGN到缓存',en:'Save current PGN to cache'},
-'pgn_cache_import':{zh:'导入',en:'Import'},
 'pgn_cache_delete_sel':{zh:'删除选中',en:'Delete Selected'},
 'pgn_cache_close':{zh:'关闭',en:'Close'},
 'pgn_cache_select_all':{zh:'全选',en:'Select All'},
@@ -410,7 +372,6 @@ const _i18n={
 'pgn_cache_tags_save_failed':{zh:'标签保存失败',en:'Failed to save tags'},
 // v1.0.4 Round-5 Rev21: Tag filter / search
 'pgn_cache_search_placeholder':{zh:'搜索名称或标签…',en:'Search name or tags…'},
-'pgn_cache_search_apply':{zh:'应用搜索',en:'Apply search'},
 'pgn_cache_search_clear':{zh:'清除筛选',en:'Clear filter'},
 'pgn_cache_filter_all':{zh:'全部',en:'All'},
 // v1.0.8 PHASE 39: tag-presence filter buttons
@@ -457,10 +418,6 @@ const _i18n={
 'import_settings_btn':{zh:'📥 导入设置',en:'📥 Import'},
 'loading_title':{zh:'Regalia v1.2.3',en:'Regalia v1.2.3'},
 'click_skip_loading':{zh:'点击跳过加载',en:'Click to skip loading'},
-'white_checkmate':{zh:'白方将杀获胜',en:'White wins by checkmate'},
-'black_checkmate':{zh:'黑方将杀获胜',en:'Black wins by checkmate'},
-'white_resign':{zh:'白方认输',en:'White resigns'},
-'black_resign':{zh:'黑方认输',en:'Black resigns'},
 'brilliant':{zh:'妙着',en:'Brilliant'},
 'blunder':{zh:'漏着',en:'Blunder'},
 'great':{zh:'好着',en:'Great'},
@@ -472,7 +429,6 @@ const _i18n={
 'losing':{zh:'你输了',en:'You Lost'},
 'draw_game':{zh:'和棋',en:'Draw'},
 'analyzing_ellipsis':{zh:'分析中',en:'Analyzing'},
-'white_side_short':{zh:'白方',en:'White'},
 'stalemate':{zh:'逼和！平局！',en:'Stalemate! Draw!'},
 'fifty_move_draw':{zh:'50步规则和棋！',en:'50-move rule draw!'},
 'seventy_five_move_draw':{zh:'75步规则和棋！',en:'75-move rule draw!'},
@@ -511,7 +467,11 @@ const _i18n={
 'pgn_timeout_white_wins':{zh:'白方超时胜',en:'White wins by timeout'},
 'pgn_timeout_black_wins':{zh:'黑方超时胜',en:'Black wins by timeout'},
 // v1.2.3 round-25 (FIDE 6.9): timeout with insufficient material → draw comment
-'pgn_timeout_draw_insufficient':{zh:'超时但子力不足，和棋',en:'Timeout but insufficient material, draw'},
+// v1.2.3 round-42 (42-1): wording finalized to strict FIDE 6.9 semantics —
+//   the game is drawn when the side that did NOT flag cannot checkmate by any
+//   possible series of legal moves (a broader criterion than mere "insufficient
+//   material"; winnerLacksMatingMaterial below is the material-based proxy).
+'pgn_timeout_draw_insufficient':{zh:'超时，但任何合法着法序列均无法将杀，和棋',en:'Timeout, but mate is impossible by any series of legal moves — draw'},
 // v1.1.1 Phase 59 Task 59.4: Prefix label for the initial-position annotation
 //   appended to the first move's {} comment (mirrors the every-5-moves
 //   annotation but marks it as the initial position so dedup can detect it).
@@ -522,7 +482,6 @@ const _i18n={
 'manual_path':{zh:'手动输入路径',en:'Manual path'},
 'cancel_btn':{zh:'取消',en:'Cancel'},
 'import_settings_engine':{zh:'引擎',en:'Engine'},
-'import_settings_all':{zh:'设置',en:'Settings'},
 'file_browse_label':{zh:'文件浏览',en:'File Browser'},
 'checkmate_arrow':{zh:'→将杀',en:'→Mate'},
 'escape_mate':{zh:'←脱杀',en:'←Unmate'},
@@ -532,7 +491,6 @@ const _i18n={
 'setup_no_white_king':{zh:'缺少白方王',en:'Missing white king'},
 'setup_no_black_king':{zh:'缺少黑方王',en:'Missing black king'},
 'setup_kings_adjacent':{zh:'双方王不能相邻',en:'Kings cannot be adjacent'},
-'setup_no_pieces':{zh:'棋盘上无棋子',en:'No pieces on board'},
 'setup_pawn_on_rank':{zh:'兵不能在第',en:' pawn cannot be on rank '},
 'setup_check_impossible':{zh:'方王处于被将军状态（非法局面）',en:' king is in check (illegal position)'},
 'setup_king_count_over':{zh:'方王数量超过1个',en:' king count exceeds 1'},
@@ -560,8 +518,6 @@ const _i18n={
 'importing_pgn':{zh:'⏳ 正在导入PGN…',en:'⏳ Importing PGN…'},
 'pgn_fen_rejected':{zh:'此输入为FEN格式，请使用「粘贴FEN」按钮导入。PGN导入仅接受完整棋谱文本。',en:'This is FEN format. Please use the "Paste FEN" button instead. PGN import only accepts full game notation.'},
 'pgn_paste_hint':{zh:'粘贴PGN棋谱字符串（仅限PGN格式，FEN请使用「粘贴FEN」按钮）',en:'Paste PGN game notation only (for FEN, use "Paste FEN" button)'},
-'fen_pgn_paste_label':{zh:'粘贴内容:',en:'Paste content:'},
-'confirm_import':{zh:'导入',en:'Import'},
 // i18n for game-over checkmate message
 'checkmate_excl':{zh:'将杀！',en:'Checkmate! '},
 'wins_excl':{zh:'获胜！',en:' wins!'},
@@ -572,33 +528,23 @@ const _i18n={
 'resign_confirm_msg':{zh:'你确定要认输吗？这将结束当前对局，对方获胜。',en:'Are you sure you want to resign? This ends the current game; your opponent wins.'},
 'resign_yes':{zh:'确认认输',en:'Yes, Resign'},
 'resign_no':{zh:'取消',en:'Cancel'},
-'white_resigns':{zh:'白方认输',en:'White resigns'},
-'black_resigns':{zh:'黑方认输',en:'Black resigns'},
 'resigns_suffix':{zh:'认输',en:'resigns'},
 // v1.0.4 Rev47: Timeout win suffix for _gameOverStrFromStatus('timeout')
 'timeout_win_suffix':{zh:'超时胜',en:'wins by timeout'},
 // v1.0.4 Round-5 Rev28: Stats page → main/review PGN import-back prompt
-'stats_import_back_title':{zh:'🗃️ 是否将PGN导入到对局？',en:'🗃️ Import PGN to game?'},
-'stats_import_back_msg':{zh:'你在统计页面导入过 PGN。是否将其导入到当前对局（会替换主界面/复盘界面已记录的走法）？',en:'You imported a PGN on the stats page. Import it into the current game (replaces the moves recorded in the main/review view)?'},
-'stats_import_back_yes':{zh:'是',en:'Yes'},
-'stats_import_back_no':{zh:'否',en:'No'},
-'stats_import_back_cancel':{zh:'取消',en:'Cancel'},
 'stats_import_back_no_pgn':{zh:'统计页面未导入新 PGN，无需同步。',en:'No new PGN imported on the stats page; nothing to sync.'},
 // v1.0.7 — Quick toolbar (below the board, above the player bar)
 'quick_toolbar':{zh:'快捷工具栏',en:'Quick Toolbar'},
 // v1.0.7 — Setup-mode castle-rights marker (🔁) and en-passant marker (⚡)
 'setup_castle_marker':{zh:'易位权',en:'Castle'},
-'setup_castle_marker_hint':{zh:'易位标记',en:'Castle Mark'},
 'setup_castle_marker_tip':{zh:'点击后，再点击格子添加/取消易位标记（仅对在初始行上的同色车生效）',en:'Tap, then tap a square to toggle the castle marker (only valid on same-color rooks on the initial rank)'},
 'setup_ep_marker':{zh:'可被吃过路兵',en:'En Passant'},
-'setup_ep_marker_hint':{zh:'过路兵标记',en:'En Passant Mark'},
 'setup_ep_marker_tip':{zh:'点击后，再点击格子添加/取消过路兵标记（棋盘上最多 1 个，必须与走棋方不同色的兵同格，该兵位于第 4/5 行，且其左或右侧有相邻的异色兵可吃过路兵）',en:'Tap, then tap a square to toggle the en-passant marker (max 1 on board; must share the square with an opposite-color pawn on rank 4/5, with an adjacent enemy pawn that can capture it)'},
 'setup_castle_err_not_rook':{zh:'易位标记必须与同色车在同一格',en:'Castle marker must share the square with a same-color rook'},
 'setup_castle_err_wrong_rank':{zh:'易位标记所在的同色车必须在初始行（白方 a1–h1；黑方 a8–h8）',en:'Rook with castle marker must be on the initial rank (white: a1–h1; black: a8–h8)'},
 'setup_castle_err_wrong_side':{zh:'易位标记所在的车与同色王的相对位置不合法',en:'Rook with castle marker is on the wrong side of the same-color king'},
 'setup_castle_err_dup_side':{zh:'同一侧的同色车不能同时存在两个易位标记',en:'Two same-color rooks on the same side cannot both carry castle markers'},
 'setup_castle_err_king_missing':{zh:'同色王不在棋盘上，无法判定易位标记的合法性',en:'Same-color king is missing — cannot validate castle marker'},
-'setup_ep_err_multiple':{zh:'棋盘上最多只能有一个过路兵标记',en:'At most one en-passant marker is allowed on the board'},
 'setup_ep_err_no_pawn':{zh:'过路兵标记必须与兵在同一格',en:'En-passant marker must share the square with a pawn'},
 'setup_ep_err_wrong_rank':{zh:'过路兵标记所在的兵必须在第 4 行（白兵）或第 5 行（黑兵）',en:'Pawn with en-passant marker must be on rank 4 (white) or rank 5 (black)'},
 'setup_ep_err_blocked':{zh:'过路兵的跳过格或起始格被占用，该标记非法',en:'En-passant marker illegal: skipped or origin square is occupied'},
@@ -630,13 +576,13 @@ window.onerror=function(msg,url,line,col,error){
     console.error('=== Regalia JS Error ===',errInfo);
     // NON-DESTRUCTIVE: Show toast instead of replacing entire DOM
     // Previous implementation destroyed app.innerHTML which made the app unusable
-    showToast(T('js_error')+': '+String(msg).substring(0,80)+(line?' (line:'+line+')':''), 4000);
+    showToast(T('js_error')+': '+String(msg).substring(0,80)+(line?' (line:'+line+')':''), 6000);
     // For severe errors, log but don't destroy the UI
     return true; // Suppress default error handling
 };
 window.addEventListener('unhandledrejection',function(e){
     console.error('=== Unhandled Promise Rejection ===',e.reason);
-    showToast(T('promise_error')+': '+(e.reason&&e.reason.message?e.reason.message.substring(0,80):String(e.reason).substring(0,80)), 4000);
+    showToast(T('promise_error')+': '+(e.reason&&e.reason.message?e.reason.message.substring(0,80):String(e.reason).substring(0,80)), 6000);
 });
 
 const PV={pawn:100,knight:325,bishop:338,rook:500,queen:975,king:20000};// Piece values for ECO path selection only (not position evaluation)
@@ -1393,7 +1339,11 @@ function _reattachActiveAnimations(){
     //   positions it at the source square, so the transform should be just the
     //   scaled dx/dy (not source + dx/dy — that would double-count the source).
     const _fc=_flip?7-a.from.col:a.from.col, _fr=_flip?7-a.from.row:a.from.row;
-    if(!a.el||!a.el.parentNode){
+    // v1.2.3 round-41: the condition was inverted — `!a.el||!a.el.parentNode`
+    //   dereferenced a.el.style when a.el was null (TypeError mid-render).
+    //   Skip null entries; re-attach only DETACHED elements.
+    if(!a.el)continue;
+    if(!a.el.parentNode){
       a.el.style.left=(_fc*cs)+'px';
       a.el.style.top=(_fr*cs)+'px';
       a.el.style.width=cs+'px';
@@ -1637,38 +1587,40 @@ function computeVisibleCastleMarks(s){
   }
   const marks=new Set();
   if(!s.castlingRights)return marks;
+  const cr=s.castlingRights;
+  // v1.2.3 round-42 (42-3, P3-28): when two same-side rooks share the home
+  //   rank, the closest-rook scan could put the 🔁 marker on the WRONG rook.
+  //   Prefer the designated castling rook file (*RookFile, maintained by
+  //   findCastlingRooks/makeMv/makeMvInPlace; 8-field invariant restored in
+  //   round-41 41-5) when it is set and a same-color rook still occupies it;
+  //   fall back to the closest-rook scan otherwise (legacy states where the
+  //   RookFile fields are null). Display-only change.
+  const _markRook=(row,kingCol,kingside,rookFile,color)=>{
+    if(rookFile!=null){
+      const dp=s.board[row][rookFile];
+      if(dp?.type==='rook'&&dp.color===color){marks.add(String(row*8+rookFile));return;}
+    }
+    if(kingside){
+      for(let c=kingCol+1;c<8;c++){
+        const p=s.board[row][c];
+        if(p?.type==='rook'&&p.color===color){marks.add(String(row*8+c));break;}
+      }
+    }else{
+      for(let c=kingCol-1;c>=0;c--){
+        const p=s.board[row][c];
+        if(p?.type==='rook'&&p.color===color){marks.add(String(row*8+c));break;}
+      }
+    }
+  };
   // White
   if(s.wk&&s.wk.row===7){
-    const wkCol=s.wk.col;
-    if(s.castlingRights.whiteKingside){
-      // Find closest white rook to the right of king on row 7
-      for(let c=wkCol+1;c<8;c++){
-        const p=s.board[7][c];
-        if(p?.type==='rook'&&p.color==='white'){marks.add(String(7*8+c));break;}
-      }
-    }
-    if(s.castlingRights.whiteQueenside){
-      for(let c=wkCol-1;c>=0;c--){
-        const p=s.board[7][c];
-        if(p?.type==='rook'&&p.color==='white'){marks.add(String(7*8+c));break;}
-      }
-    }
+    if(cr.whiteKingside)_markRook(7,s.wk.col,true,cr.whiteKingsideRookFile,'white');
+    if(cr.whiteQueenside)_markRook(7,s.wk.col,false,cr.whiteQueensideRookFile,'white');
   }
   // Black
   if(s.bk&&s.bk.row===0){
-    const bkCol=s.bk.col;
-    if(s.castlingRights.blackKingside){
-      for(let c=bkCol+1;c<8;c++){
-        const p=s.board[0][c];
-        if(p?.type==='rook'&&p.color==='black'){marks.add(String(0*8+c));break;}
-      }
-    }
-    if(s.castlingRights.blackQueenside){
-      for(let c=bkCol-1;c>=0;c--){
-        const p=s.board[0][c];
-        if(p?.type==='rook'&&p.color==='black'){marks.add(String(0*8+c));break;}
-      }
-    }
+    if(cr.blackKingside)_markRook(0,s.bk.col,true,cr.blackKingsideRookFile,'black');
+    if(cr.blackQueenside)_markRook(0,s.bk.col,false,cr.blackQueensideRookFile,'black');
   }
   return marks;
 }
@@ -2156,8 +2108,12 @@ if(typeof findCastlingRooks==='function'){
     //   disambiguation); the closest-rook heuristic is only the fallback.
     const _mvKs=(typeof findDesignatedCastlingRook==='function')?findDesignatedCastlingRook(s,piece.color,'kingside'):rooks.kingside;
     const _mvQs=(typeof findDesignatedCastlingRook==='function')?findDesignatedCastlingRook(s,piece.color,'queenside'):rooks.queenside;
-    if(piece.color==='white'){if(from.col===_mvKs){ns.castlingRights.whiteKingside=false;ns.castlingRights.whiteKingsideRookFile=null;}if(from.col===_mvQs){ns.castlingRights.whiteQueenside=false;ns.castlingRights.whiteQueensideRookFile=null;}}
-    else{if(from.col===_mvKs){ns.castlingRights.blackKingside=false;ns.castlingRights.blackKingsideRookFile=null;}if(from.col===_mvQs){ns.castlingRights.blackQueenside=false;ns.castlingRights.blackQueensideRookFile=null;}}
+    // v1.2.3 round-40 (FIDE): also require the rook to be on its OWN back
+    //   rank (white row 7 / black row 0 — same coordinate convention as the
+    //   corner-fallback path below). A promoted or setup-placed rook on
+    //   another row must not clear castling rights on a column match.
+    if(piece.color==='white'){if(from.row===7&&from.col===_mvKs){ns.castlingRights.whiteKingside=false;ns.castlingRights.whiteKingsideRookFile=null;}if(from.row===7&&from.col===_mvQs){ns.castlingRights.whiteQueenside=false;ns.castlingRights.whiteQueensideRookFile=null;}}
+    else{if(from.row===0&&from.col===_mvKs){ns.castlingRights.blackKingside=false;ns.castlingRights.blackKingsideRookFile=null;}if(from.row===0&&from.col===_mvQs){ns.castlingRights.blackQueenside=false;ns.castlingRights.blackQueensideRookFile=null;}}
   }
 }else{
   if(from.row===7&&from.col===0){ns.castlingRights.whiteQueenside=false;ns.castlingRights.whiteQueensideRookFile=null;}if(from.row===7&&from.col===7){ns.castlingRights.whiteKingside=false;ns.castlingRights.whiteKingsideRookFile=null;}if(from.row===0&&from.col===0){ns.castlingRights.blackQueenside=false;ns.castlingRights.blackQueensideRookFile=null;}if(from.row===0&&from.col===7){ns.castlingRights.blackKingside=false;ns.castlingRights.blackKingsideRookFile=null;}
@@ -2170,8 +2126,11 @@ if(typeof findCastlingRooks==='function'){
     // v1.2.3 round-20 (A-1): designated-file precedence (see rook-move above).
     const _cpKs=(typeof findDesignatedCastlingRook==='function')?findDesignatedCastlingRook(s,capPiece.color,'kingside'):rooks.kingside;
     const _cpQs=(typeof findDesignatedCastlingRook==='function')?findDesignatedCastlingRook(s,capPiece.color,'queenside'):rooks.queenside;
-    if(capPiece.color==='white'){if(to.col===_cpKs){ns.castlingRights.whiteKingside=false;ns.castlingRights.whiteKingsideRookFile=null;}if(to.col===_cpQs){ns.castlingRights.whiteQueenside=false;ns.castlingRights.whiteQueensideRookFile=null;}}
-    else{if(to.col===_cpKs){ns.castlingRights.blackKingside=false;ns.castlingRights.blackKingsideRookFile=null;}if(to.col===_cpQs){ns.castlingRights.blackQueenside=false;ns.castlingRights.blackQueensideRookFile=null;}}
+    // v1.2.3 round-40 (FIDE): back-rank row check for the CAPTURED rook too
+    //   (white row 7 / black row 0) — capturing a non-back-rank rook on a
+    //   matching column must not clear castling rights.
+    if(capPiece.color==='white'){if(to.row===7&&to.col===_cpKs){ns.castlingRights.whiteKingside=false;ns.castlingRights.whiteKingsideRookFile=null;}if(to.row===7&&to.col===_cpQs){ns.castlingRights.whiteQueenside=false;ns.castlingRights.whiteQueensideRookFile=null;}}
+    else{if(to.row===0&&to.col===_cpKs){ns.castlingRights.blackKingside=false;ns.castlingRights.blackKingsideRookFile=null;}if(to.row===0&&to.col===_cpQs){ns.castlingRights.blackQueenside=false;ns.castlingRights.blackQueensideRookFile=null;}}
   }
 }else{
   if(capPiece.color==='white'){if(to.row===7&&to.col===0){ns.castlingRights.whiteQueenside=false;ns.castlingRights.whiteQueensideRookFile=null;}if(to.row===7&&to.col===7){ns.castlingRights.whiteKingside=false;ns.castlingRights.whiteKingsideRookFile=null;}}else{if(to.row===0&&to.col===0){ns.castlingRights.blackQueenside=false;ns.castlingRights.blackQueensideRookFile=null;}if(to.row===0&&to.col===7){ns.castlingRights.blackKingside=false;ns.castlingRights.blackKingsideRookFile=null;}}
@@ -2220,9 +2179,12 @@ if(s.castlingRights.whiteQueenside&&!ns.castlingRights.whiteQueenside)h^=zobrist
 if(s.castlingRights.blackKingside&&!ns.castlingRights.blackKingside)h^=zobrist.castling[2];
 if(s.castlingRights.blackQueenside&&!ns.castlingRights.blackQueenside)h^=zobrist.castling[3];
 ns.hash=(h>>>0);
-// v1.0.2 PERF (audit): bump boardVersion so _updateBoardIncremental can
-// skip the JSON.stringify dirty check (which serializes the 8x8 board on
-// every render tick). Integer compare is ~100x cheaper.
+// v1.0.2 PERF (audit): bump boardVersion on every board mutation.
+// v1.2.3 round-42 (42-9): comment corrected — _updateBoardIncremental (the
+//   dirty-check incremental renderer this counter fed) was REMOVED in
+//   round-20 with the DIRTY_* subsystem (see the ui.js render-scheduling
+//   note). boardVersion currently has no readers; it is retained as state
+//   metadata carried through clone/undo snapshots.
 ns.boardVersion=(s.boardVersion||0)+1;
 ns.posCount.set(ns.hash,(ns.posCount.get(ns.hash)||0)+1);
 return ns}
@@ -2286,8 +2248,11 @@ if(!_cs && piece.type==='rook' && typeof findCastlingRooks==='function'){
     // v1.2.3 round-20 (A-1): designated-file precedence over closest-rook.
     const _mvKs2=(typeof findDesignatedCastlingRook==='function')?findDesignatedCastlingRook(s,piece.color,'kingside'):_r.kingside;
     const _mvQs2=(typeof findDesignatedCastlingRook==='function')?findDesignatedCastlingRook(s,piece.color,'queenside'):_r.queenside;
-    if(_mvKs2!==null&&_mvKs2===from.col)_movingRookSide='kingside';
-    else if(_mvQs2!==null&&_mvQs2===from.col)_movingRookSide='queenside';
+    // v1.2.3 round-40 (FIDE): row check — only a rook on its own back rank
+    //   (white row 7 / black row 0) can hold castling rights.
+    const _mvBackRank=(piece.color==='white')?7:0;
+    if(_mvKs2!==null&&_mvKs2===from.col&&from.row===_mvBackRank)_movingRookSide='kingside';
+    else if(_mvQs2!==null&&_mvQs2===from.col&&from.row===_mvBackRank)_movingRookSide='queenside';
   }
 }
 if(!_cs && capPiece && capPiece.type==='rook' && typeof findCastlingRooks==='function'){
@@ -2296,8 +2261,11 @@ if(!_cs && capPiece && capPiece.type==='rook' && typeof findCastlingRooks==='fun
     // v1.2.3 round-20 (A-1): designated-file precedence over closest-rook.
     const _cpKs2=(typeof findDesignatedCastlingRook==='function')?findDesignatedCastlingRook(s,capPiece.color,'kingside'):_r.kingside;
     const _cpQs2=(typeof findDesignatedCastlingRook==='function')?findDesignatedCastlingRook(s,capPiece.color,'queenside'):_r.queenside;
-    if(_cpKs2!==null&&_cpKs2===to.col)_capturedRookSide='kingside';
-    else if(_cpQs2!==null&&_cpQs2===to.col)_capturedRookSide='queenside';
+    // v1.2.3 round-40 (FIDE): row check for the captured rook (white row 7 /
+    //   black row 0), mirroring _movingRookSide above.
+    const _cpBackRank=(capPiece.color==='white')?7:0;
+    if(_cpKs2!==null&&_cpKs2===to.col&&to.row===_cpBackRank)_capturedRookSide='kingside';
+    else if(_cpQs2!==null&&_cpQs2===to.col&&to.row===_cpBackRank)_capturedRookSide='queenside';
   }
 }
 // Capture undo info
@@ -2439,8 +2407,9 @@ if(undo.oldCastling.whiteQueenside&&!s.castlingRights.whiteQueenside)h^=zobrist.
 if(undo.oldCastling.blackKingside&&!s.castlingRights.blackKingside)h^=zobrist.castling[2];
 if(undo.oldCastling.blackQueenside&&!s.castlingRights.blackQueenside)h^=zobrist.castling[3];
 s.hash=(h>>>0);
-// v1.0.2 PERF (audit): bump boardVersion so _updateBoardIncremental can use
-// an integer compare instead of JSON.stringify on every render tick.
+// v1.0.2 PERF (audit): bump boardVersion (see the makeMv note — the
+//   _updateBoardIncremental consumer was removed in round-20; counter
+//   retained as snapshot metadata, no current readers). round-42 42-9.
 s.boardVersion=(s.boardVersion||0)+1;
 // 12. Incremental posCount
 s.posCount.set(s.hash,(s.posCount.get(s.hash)||0)+1);
@@ -2571,8 +2540,10 @@ function winnerLacksMatingMaterial(s,winnerColor){
   if(counts.knight===0&&counts.bishop===0)return true;
   // K + single minor (N or B) → cannot mate.
   if(counts.knight+counts.bishop===1)return true;
-  // K + 2N → cannot force mate (FIDE rules; help-mate possible but not forced).
-  if(counts.knight===2&&counts.bishop===0)return true;
+  // v1.2.3 round-40 (strict FIDE 6.9): REMOVED the K+N+N exemption. FIDE 6.9
+  //   draws a timeout only when the loser cannot be checkmated "by any
+  //   possible series of legal moves" — and K+N+N CAN deliver mate with the
+  //   loser's cooperation (help-mate), so a K+N+N winner still WINS on time.
   // K + B+B same color (no knight) → cannot force mate (enemy king escapes
   // to the opposite-color squares). The parity check ensures ALL bishops
   // are the same color; the no-knight guard excludes K+N+B+B(same color)
@@ -2927,10 +2898,16 @@ for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=s.board[r][c];if(p){if(p.type==
 // will surface the error and let the user fix it. But we DO need to ensure
 // castlingRights are not left in a stale "true" state from a prior
 // validation pass. Reset them here; they'll be re-derived on "Done".
-s.castlingRights={whiteKingside:false,whiteQueenside:false,blackKingside:false,blackQueenside:false};
+// v1.2.3 round-41: restore the 8-field castling-rights invariant (4 flags +
+//   4 *RookFile slots), same shape as _validateSetupCastleMarks (~:1513/:1517).
+//   The 4-field reset left the RookFile fields stale from a prior validation
+//   pass, breaking the schema consumers rely on.
+s.castlingRights={whiteKingside:false,whiteQueenside:false,blackKingside:false,blackQueenside:false,whiteKingsideRookFile:null,whiteQueensideRookFile:null,blackKingsideRookFile:null,blackQueensideRookFile:null};
 syncHash(s);
-// v1.0.2 PERF (audit): bump boardVersion so _updateBoardIncremental detects
-// setup-mode board mutations (piece placement/deletion/clear-board/reset-board).
+// v1.0.2 PERF (audit): bump boardVersion on setup-mode board mutations
+//   (piece placement/deletion/clear-board/reset-board). round-42 42-9:
+//   _updateBoardIncremental was removed in round-20; no current readers —
+//   counter retained as snapshot metadata.
 s.boardVersion=(s.boardVersion||0)+1;
 }
 
@@ -2986,7 +2963,17 @@ if(gameClocks !== undefined&&gameClocks&&typeof AndroidBridge.engineGoTimed==='f
     // Fallback to untimed engineGo
     // v1.2.3 round-37 (SonarCloud S7718): nested catch uses `error` (not
     //   `e2`) per the project's modern catch-param naming convention.
-    if(_needNewGameForEngine){_needNewGameForEngine=false;try{AndroidBridge.engineGoNewGame(fen,aiLevel);}catch(error){}}
+    // v1.2.3 round-44 (G3): the empty catch previously left the AI permanently
+    //   hung (isAIThinking stayed true with no retry) when even the fallback
+    //   dispatch threw. Now: report, reset thinking state, retry via doAIMove
+    //   (max 3), then surface ai_timeout.
+    if(_needNewGameForEngine){_needNewGameForEngine=false;try{AndroidBridge.engineGoNewGame(fen,aiLevel);}catch(error){
+      console.error('engineGoNewGame fallback failed:',error);
+      showToast(T('engine_unavailable_hint'));
+      isAIThinking=false;_aiBarInfo='';_aiRetryCount++;
+      if(_aiRetryCount<3){setTimeout(()=>{if(!gameOver&&gameState.currentTurn!==playerColor)doAIMove();},500);}
+      else{showToast(T('ai_timeout'));_aiRetryCount=0;render();}
+    }}
     else{try{AndroidBridge.engineGo(fen,aiLevel);}catch(error){}}
     isAIThinking=false;_aiBarInfo='';render();
   }

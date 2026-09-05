@@ -44,6 +44,15 @@
             <certificates src="system"/>
         </trust-anchors>
     </base-config>
+    <!-- v1.2.3 round-44 (F6): debug builds may trust user-added CAs so
+         developers can inspect HTTPS traffic with a proxy. Release builds
+         are unaffected (system CAs + pin-set only). -->
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="system"/>
+            <certificates src="user"/>
+        </trust-anchors>
+    </debug-overrides>
     <domain-config>
         <domain includeSubdomains="false">tablebase.lichess.ovh</domain>
         <pin-set expiration="2028-12-31">

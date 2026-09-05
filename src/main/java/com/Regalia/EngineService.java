@@ -133,9 +133,17 @@ public class EngineService extends Service {
         // Acquire partial wake lock to prevent CPU suspension during analysis.
         // v1.1.0 Phase 57+: Use a bounded timeout (30 min) as a safety net — if the
         // Service is silently killed by the OEM and onDestroy never runs, the wake
-        // lock will still be released automatically. The 30-minute window is well
-        // beyond any single analysis session; longer sessions can re-acquire by
-        // re-entering the foreground state.
+        // lock will still be released automatically.
+        // v1.2.3 round-42 (42-4, P3-17, D4=A): comment corrected — the lock is
+        //   acquired ONCE here in onCreate(); onStartCommand() does NOT
+        //   re-acquire it, so after the 30-minute timeout lapses the CPU may
+        //   suspend during very long background analysis sessions. The earlier
+        //   wording ("longer sessions can re-acquire by re-entering the
+        //   foreground state") described behavior that was never implemented.
+        //   Re-acquisition on expiry was considered (D4) and rejected: sessions
+        //   beyond 30 min of continuous background analysis are not a target
+        //   scenario, and the foreground notification keeps the process alive
+        //   regardless — only the CPU is allowed to sleep.
         try {
             PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
             if (pm != null) {

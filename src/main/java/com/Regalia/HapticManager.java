@@ -50,17 +50,23 @@ public class HapticManager {
 
     private final Context context;
     private final SharedPreferences prefs;
+    // v1.2.3 round-44 (E8): mainHandler 不再被 performHaptic 使用（振动改为
+    //   当前线程直调）。字段与构造参数保留以维持既有构造签名（StockfishNative
+    //   / StatsActivity 调用方不属本轮修改范围）。
+    @SuppressWarnings("unused")
     private final Handler mainHandler;
 
     public HapticManager(Context context, SharedPreferences prefs, Handler mainHandler) {
         // v1.2.3 round-33 (PR52 v3 #4.2.8): normalize to Application Context
         //   to avoid leaking an Activity reference. StatsActivity passes `this`
-        //   (an Activity), and performHaptic's Runnable is posted to mainHandler
-        //   — if the Activity is destroyed before the Runnable runs, the
-        //   Activity reference would be retained until the Runnable completes.
-        //   StockfishNative already normalizes via context.getApplicationContext()
-        //   (line 434) before passing here; this defensive normalization ensures
-        //   ALL callers (including future ones) are safe.
+        //   (an Activity); retaining it for the manager's lifetime would pin
+        //   the Activity in memory. StockfishNative already normalizes via
+        //   context.getApplicationContext() (line 434) before passing here;
+        //   this defensive normalization ensures ALL callers (including future
+        //   ones) are safe. (v1.2.3 round-44 (E8): performHaptic no longer
+        //   posts a Runnable to mainHandler — it vibrates on the calling
+        //   thread — so the original Runnable-retention scenario is gone, but
+        //   the normalization stays as cheap defense-in-depth.)
         this.context = context != null ? context.getApplicationContext() : null;
         this.prefs = prefs;
         this.mainHandler = mainHandler;
@@ -87,23 +93,23 @@ public class HapticManager {
             //   measurement.
             long now = SystemClock.elapsedRealtime();
             boolean systemEnabled;
-            // v1.2.3 round-33 (PR52 v3 #4.2.7): treat _systemHapticCacheTs == 0
-            //   as "never cached" and force a refresh on the first call. The
-            //   previous code's `now - 0 > 5000` check was false for any app
-            //   launched within 5 seconds of boot (rare but possible on
-            //   fast-boot devices), so the first call would return the default
-            //   _systemHapticCached=true even if the system had haptic disabled
-            //   — silently ignoring the user's system setting until the 5s TTL
-            //   expired. The explicit `== 0` check makes the "never cached"
-            //   state unambiguous and immune to boot-time edge cases.
-            if (_systemHapticCacheTs == 0 || (now - _systemHapticCacheTs) > 5000) {
-                _systemHapticCached = android.provider.Settings.System.getInt(
+            // v1.2.3 round-33 (PR52 v3 #4.2.7): "never cached" must force a
+            //   refresh on the first call — previously encoded as ts == 0.
+            // v1.2.3 round-44 (E6): the ts==0 sentinel is replaced by a null
+            //   AtomicReference (unambiguous "never cached"). On refresh we
+            //   CAS in a fresh immutable Cache; even if the CAS loses a race
+            //   with a concurrent refresher, using our own just-read value is
+            //   safe under the 5s TTL semantics.
+            Cache c = _systemHapticCache.get();
+            if (c == null || (now - c.ts) > 5000) {
+                boolean fresh = android.provider.Settings.System.getInt(
                     context.getContentResolver(),
                     android.provider.Settings.System.HAPTIC_FEEDBACK_ENABLED, 1
                 ) != 0;
-                _systemHapticCacheTs = now;
+                c = new Cache(now, fresh);
+                _systemHapticCache.compareAndSet(_systemHapticCache.get(), c);
             }
-            systemEnabled = _systemHapticCached;
+            systemEnabled = c.value;
             boolean appEnabled = prefs.getBoolean("hapticFeedbackEnabled", true);
             // FIX: Both system AND app must be enabled. Previously used OR (||)
             // which meant disabling haptic in app settings had no effect.
@@ -123,39 +129,56 @@ public class HapticManager {
     // v1.2.3 round-31: timestamp source is SystemClock.elapsedRealtime()
     //   (monotonic, immune to wall-clock changes) — see isHapticEnabled()
     //   comment for the rationale.
-    private volatile boolean _systemHapticCached = true;
-    private volatile long _systemHapticCacheTs = 0;
+    // v1.2.3 round-44 (E6): 两个独立 volatile 字段（值 + 时间戳）合并为一个
+    //   不可变 Cache 对，由 AtomicReference 持有、CAS 写回。旧实现的两步写
+    //   （先 value 后 ts）存在竞态窗口：另一线程可能读到「新 value + 旧 ts」
+    //   的组合，把刚刷新的缓存误判为过期（或反之）。
+    private static final class Cache {
+        final long ts;      // SystemClock.elapsedRealtime() 采集时刻
+        final boolean value; // 系统 haptic 开关缓存值
+        Cache(long ts, boolean value) { this.ts = ts; this.value = value; }
+    }
+    private final java.util.concurrent.atomic.AtomicReference<Cache> _systemHapticCache =
+            new java.util.concurrent.atomic.AtomicReference<>(null);
 
     public void performHaptic(String type) {
         try {
-            android.os.Vibrator vibrator = (android.os.Vibrator) context.getSystemService(Context.VIBRATOR_SERVICE);
+            // v1.2.3 round-44 (D8): API 31+ 弃用了 VIBRATOR_SERVICE 直接返回的
+            //   Vibrator，改走 VibratorManager.getDefaultVibrator()；旧分支
+            //   保留给 API 23-30。
+            android.os.Vibrator vibrator;
+            if (Build.VERSION.SDK_INT >= 31) {
+                android.os.VibratorManager vm = (android.os.VibratorManager)
+                        context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE);
+                vibrator = (vm != null) ? vm.getDefaultVibrator() : null;
+            } else {
+                vibrator = (android.os.Vibrator) context.getSystemService(Context.VIBRATOR_SERVICE);
+            }
             if (vibrator == null || !vibrator.hasVibrator()) return;
 
             if (!isHapticEnabled()) return;
 
             int apiLevel = Build.VERSION.SDK_INT;
-            final android.os.Vibrator finalVibrator = vibrator;
 
-            Runnable hapticRunnable = new Runnable() {
-                public void run() {
-                    try {
-                        performHapticInternal(finalVibrator, type, apiLevel);
-                    } catch (Exception e) {
-                        // v1.2.3 (S1181): vibrate() throws RuntimeException
-                        //   subtypes at most — log and continue.
-                        Log.w(TAG, "performHapticInternal failed: " + e.getMessage());
-                    }
-                }
-            };
-
-            mainHandler.post(hapticRunnable);
+            // v1.2.3 round-44 (E8): 直接在当前线程调用，移除 mainHandler.post。
+            //   Vibrator 是 Binder 代理、线程安全，且 vibrate() 本身非阻塞
+            //   （命令交给系统振动服务后立即返回，不存在 IPC 等待）。旧实现把
+            //   每次震动排队到主线程 Looper，徒增一帧以内的输入延迟并占用主
+            //   线程消息队列。performHapticInternal 内部各分支已自行捕获
+            //   vibrate() 的 RuntimeException。
+            performHapticInternal(vibrator, type, apiLevel);
         } catch (Exception e) {
-            // v1.2.3 (S1181): getSystemService / mainHandler.post throw
+            // v1.2.3 (S1181): getSystemService / hasVibrator throw
             //   RuntimeException subtypes at most — log and continue.
             Log.w(TAG, "performHaptic failed: " + e.getMessage());
         }
     }
 
+    // v1.2.3 round-44 (E7, 设计债): 本方法的 ~300 行 switch 可重构为
+    //   「haptic 类型 -> (timings, amplitudes, fallbackMs)」表驱动 + 统一
+    //   派发，收益是纯简化。但每个 case 的分支链（PWLE 优先 -> 31+ 预定义 ->
+    //   26+ 波形 -> 一锤子 fallback）细节各异，表驱动化回归面大、本类无
+    //   自动化测试覆盖，本轮决定不做，在此标注设计债。
     private void performHapticInternal(android.os.Vibrator vibrator, String type, int apiLevel) {
         switch (type) {
                 case "BUTTON_PRESS":

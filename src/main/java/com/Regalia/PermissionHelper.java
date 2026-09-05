@@ -164,6 +164,15 @@ public class PermissionHelper {
      */
     public boolean hasVibrator() {
         try {
+            // v1.2.3 round-44 (D8): API 31+ 弃用了 VIBRATOR_SERVICE 直接返回的
+            //   Vibrator，改走 VibratorManager.getDefaultVibrator()；旧分支
+            //   保留给 API 23-30。
+            if (Build.VERSION.SDK_INT >= 31) {
+                android.os.VibratorManager vm = (android.os.VibratorManager)
+                        context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE);
+                android.os.Vibrator v = (vm != null) ? vm.getDefaultVibrator() : null;
+                return v != null && v.hasVibrator();
+            }
             android.os.Vibrator v = (android.os.Vibrator)
                     context.getSystemService(Context.VIBRATOR_SERVICE);
             return v != null && v.hasVibrator();

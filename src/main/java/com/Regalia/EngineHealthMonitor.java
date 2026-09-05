@@ -62,7 +62,13 @@ public class EngineHealthMonitor {
     // v1.2.3 round-32: elapsedRealtime() — monotonic since boot, immune to
     //   wall-clock changes. getLastResponseTime() consumers in StockfishNative
     //   must use the same clock for the delta (round-32 fixes that too).
-    private volatile long lastResponseTime = SystemClock.elapsedRealtime();
+    // v1.2.3 round-44 (C7): initial value changed from
+    //   SystemClock.elapsedRealtime() to 0L = "no response received yet".
+    //   The old init fabricated a fresh timestamp at construction, so the
+    //   StockfishNative heartbeat could not distinguish "engine just
+    //   constructed, never spoke" from "engine responded right now".
+    //   See getLastResponseTime() for the consumer-side guard.
+    private volatile long lastResponseTime = 0L;
     private final AtomicInteger autoRecoveryCount = new AtomicInteger(0);
 
     /** No-arg constructor — StockfishNative no longer wires a RecoveryCallback. */
@@ -74,10 +80,33 @@ public class EngineHealthMonitor {
         lastResponseTime = SystemClock.elapsedRealtime();
     }
 
-    /** @return the last engine response timestamp, in elapsedRealtime() millis
-     *         (monotonic since boot — NOT wall-clock epoch millis). */
+    /**
+     * @return the last engine response timestamp, in elapsedRealtime() millis
+     *         (monotonic since boot — NOT wall-clock epoch millis).
+     *
+     * v1.2.3 round-44 (C7): pre-first-response guard. Consumers (the
+     *   StockfishNative heartbeat zombie check) compute
+     *   `elapsedRealtime() - getLastResponseTime()`; with the raw 0L sentinel
+     *   that delta would be huge and instantly false-trigger a zombie
+     *   recovery before the engine's first output. Returning the current
+     *   clock while lastResponseTime == 0L yields delta = 0, i.e. "skip
+     *   judgement until the first onResponseReceived()". The caller-side
+     *   alternative (guarding in StockfishNative) is out of scope for this
+     *   wave; hasEverResponded() is provided for that future fix.
+     */
     public long getLastResponseTime() {
-        return lastResponseTime;
+        long t = lastResponseTime;
+        return (t == 0L) ? SystemClock.elapsedRealtime() : t;
+    }
+
+    /**
+     * v1.2.3 round-44 (C7): @return true once the engine has emitted at least
+     * one response. Provided so a future StockfishNative-side guard can skip
+     * zombie/heartbeat judgement explicitly instead of relying on the
+     * getLastResponseTime() sentinel mapping above.
+     */
+    public boolean hasEverResponded() {
+        return lastResponseTime != 0L;
     }
 
     /** Atomically increment the recovery counter and return the new value. */

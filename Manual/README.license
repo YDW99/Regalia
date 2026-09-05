@@ -1,3 +1,36 @@
+## round-40（2026-08-10）
+- 无内容变更。本轮为代码行为修复（FIDE 6.9 超时判定严格化，KNN vs K 超时由判和改为判胜）；zh/en 说明书适配（事实勘误、示意图更新、changelog 补录）按任务划分延期至 Stage 6 统一处理。
+
+## round-41（2026-08-10）
+- 无内容变更（10 项 P2/P3 代码修复均不改变说明书既有表述；示意图与更新日志适配延期至 Stage 6）。
+
+## round-42（2026-08-10）
+- 无内容变更。本轮许可统一（chess960.js→AGPL v3；index.html.tpl/stats.html→GPL v3；build-chess.sh 不存在应移除）与 ECO 计数更正（500→564）涉及说明书 §2 与 §10，适配延期至 Stage 6；round-42 QC 补修同上。
+
+## round-43（2026-08-10）
+- 无内容变更（README/BUILDING/NOTICE/PRIVACY 文档轮）。58 个 i18n 死键删除不影响说明书：说明书现行功能表述未引用任何被删键，更新日志中的历史记述按"宁留勿删"原则保留。
+
+## Stage 6 说明书适配（2026-08-10，round-40~43 延期任务统一落地）
+- zh/en 同步事实勘误：Android 最低版本 5.0→6.0（API 23，封面/特性/系统要求/签名/页脚）；Elo 上限 500-3200→500-3500；ECO 开局记录 500→564（正文+数据结构注释）；评估描述文案对齐 game-logic.js i18n（你必胜/你大优/你占优…；You are winning/Huge Advantage…）；§2 许可清单按文件头重写；超时表述补 FIDE 6.9 例外（sec13 + 时钟到期处理段）；模块结构图 _onGameClockExpired 标注更新；附录引言"当前版本"勘误；§5 工具栏按钮表补 🏳️/📊 位置与认输确认对话框；特性清单认输条目更正为玩家栏。
+- 示意图更新（13 个 wireframe 全部与 ui.js 现行 render 代码比对）：WF1/WF8 评估文案、WF4 加载文案（正在加载界面.../Loading UI...）、WF5 难度按钮（1-6 + SL20 + ⚙️）、WF6 无需修改、WF7 摆棋面板（标记并入棋子行、完整按钮文案、新增复制/导入 FEN 行）、WF9/WF12（AI 栏图标 🤖→王棋、时钟格式 5:23、搜索信息格式 深度:15 选深:22 节点…评估…、ponder 行、轮到你走/You）、WF2/WF3（新增"AI开局库/AI Opening Book"小节标题、不计时（日常对局）/Untimed (casual)、双向互斥提示与红字灰化文案）、WF10 无需修改、WF11 计数改 564、WF13 无需修改。
+- 更新日志：sec1 顶部新增 round-43/42/41/40 条目（保持新→旧顺序）；en 附录补 round-17 卡片翻译（与 zh 对齐，消除双语漂移）；其余附录顺序经核验已为新→旧，无需反转。
+
+v1.2.3 round-44 (2026.9.4): manual adaptation in progress — see the manuals themselves.
+  - Version: versionCode=10203 (build.gradle F11 formula; was 123),
+    versionName="1.2.3" (unchanged).
+  - Regalia-v1.2.3-manual-zh.html / Regalia-v1.2.3-manual-en.html: round-44
+    manual updates (zh/en v1.0.0 changelog card backfill, en escaping
+    fixes, round-44 changelog entry) are applied by a later documentation
+    wave — see the manuals' own changelog sections for the final content.
+  - License classification: unchanged (both manuals AGPL v3, original work).
+
+v1.2.3 round-40~43 (2026.8.10-2026.9.4): no content changes — manual adaptation deferred to Stage 6 (说明书适配留待 Stage 6).
+  - Version: versionCode=123, versionName="1.2.3" (unchanged).
+  - Regalia-v1.2.3-manual-zh.html / Regalia-v1.2.3-manual-en.html: unchanged
+    in rounds 40, 41, 42 and 43 (code/doc rounds; the round-40 decision
+    defers the manual sync of rounds 40-43 to Stage 6).
+  - License classification: unchanged.
+
 v1.2.3 round-39 (2026.7.20): Manuals updated with round-39 changelog entry.
   - Version: versionCode=123, versionName="1.2.3" (unchanged — code-quality round).
   - Regalia-v1.2.3-manual-zh.html: round-39 changelog entry prepended.

@@ -1,3 +1,123 @@
+v1.2.3 round-44 (2026.9.4): JS score-polarity fixes + Toast duration x1.5 + batch-analysis anti-interruption hardening.
+  - Version: versionCode=10203 (build.gradle F11 formula; was 123),
+    versionName="1.2.3" (unchanged).
+  - ai-bridge.js (GPL v3): review-cache scores normalized to white POV with
+    "+" prefix; MultiPV hint lines normalized to white POV; mate-0 displayed
+    as #+0/#-0; showToast default duration 2500 -> 3750 ms (all Toast
+    durations x1.5); batch-analysis hardening — per-request gen/step/fen
+    validation (_batchLastDispatched), abort after >=3 consecutive failures
+    (_terminateBatchAfterRepeatedFailures), onEngineError resets the
+    generation counter, batched-write mode (_batchWriteMode) with
+    end-of-batch flush, JS heartbeat started in onEngineReady, onEngineError
+    5-minute sliding-window retry budget.
+  - ui.js (GPL v3): review WDL rounding unified; _pbmiTimerId resettable;
+    _cleanupEventListeners now clears 6 previously leaked timers;
+    _makeLoadingClickable performs a synchronous first check; Toast call
+    sites updated to the 3750 ms duration.
+  - game-logic.js (GPL v3): G3 — empty catch no longer leaves the AI
+    permanently stalled.
+  - worker-pool.js (GPL v3): G9 — 60 s idle worker reaping; G12 — O(1)
+    worker removal/crash lookup via w._currentTask.
+  - state-store.js (AGPL v3): G10 — dispatch() skips the deep-clone when no
+    listeners are registered; getState() returns the live state (was a deep
+    clone).
+  - tablebase.js / ui-interactions.js: Toast call sites updated to 3750 ms
+    (no logic changes).
+  - chess.html: rebuilt via build-chess.py after all JS changes.
+  - License classification: all files unchanged.
+
+v1.2.3 round-43 (2026.9.4): 58 dead i18n keys removed (42-8 follow-up, D5=A step 2).
+  - Version: versionCode=123, versionName="1.2.3" (unchanged).
+  - game-logic.js (GPL v3): the 58 keys marked "// round-42 marked dead —
+    remove next round" in round-42 (42-8) were deleted from the _i18n table
+    (whole-line removal including the markers). Pre-delete regex validation:
+    58/58 single-line complete key definitions. Post-delete: _i18n = 404 keys
+    with zh==en parity (python3 assert; was 462). Repo-wide reference scan
+    (T('key') / _i18n['key'] / _i18n.key / data-i18n patterns): zero
+    references outside the removed definitions, the chess.html bundle, and
+    Manual/.
+  - chess.html: rebuilt via build-chess.py after the deletion — two
+    consecutive builds byte-identical (md5 49049a41846a1ee33bae7b24f6f4cd1d;
+    23,340 lines / 1,405,381 bytes); dead keys and markers absent from the
+    bundle; 404 key definitions.
+  - node --check: all 11 chess.src/*.js modules PASS.
+  - License classification: all files unchanged.
+
+v1.2.3 round-42 (2026.8.10): code + comment changes (42-1/42-2/42-3/42-8/42-9; the 42-5 license-tag corrections are recorded in the entry below).
+  - Version: versionCode=123, versionName="1.2.3" (unchanged).
+  - game-logic.js (GPL v3): 42-1 pgn_timeout_draw_insufficient zh/en copy
+    finalized (FIDE 6.9 strict semantics); 42-3 computeVisibleCastleMarks
+    prefers the designated rook file (new _markRook helper, 4 branches
+    unified, legacy null-field fallback); 42-8 the 58 zero-reference i18n
+    keys marked "// round-42 marked dead — remove next round" (removed in
+    round-43); 42-9 three stale _updateBoardIncremental comments corrected
+    (consumer removed in round-20; boardVersion kept as snapshot metadata).
+  - ai-bridge.js (GPL v3): 42-1 _buildTerminationTag null-winner branch ->
+    [Termination "Time forfeit draw (FIDE 6.9)"]; PGN annotation branch and
+    _deriveGameResult comment synchronized.
+  - ui-gameflow.js (GPL v3): 42-1 draw-path comment un-pended; 42-2
+    _onGameClockExpired zeroes remainingSec + displayRemainingSec on flag
+    fall.
+  - ui.js (GPL v3): 42-1 _gameOverStrFromStatus('timeout') null-winner
+    branch un-pended (finalized copy).
+  - eco-data.js (AGPL v3): 42-9 comment "all ~3000 openings" -> 564
+    (measured ECO_OPENINGS.length).
+  - chess960.js (AGPL v3): 42-9 SP-518 Shredder-FEN example "HAah" -> "AaHh"
+    (rook files emitted a->h).
+  - chess.html: rebuilt via build-chess.py (23,405 lines / 1,412,514 bytes;
+    two consecutive builds md5-identical).
+  - License classification: unchanged (see the 42-5 entry below for the
+    documentation tag corrections).
+
+v1.2.3 round-42 (2026.8.10): license tag corrections (42-5, P2-8/P3-19, D2=A).
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — doc round).
+  - round-37/38/39 entries above: 4 mislabeled "(AGPL v3)" tags on
+    tablebase.js / worker-pool.js corrected to GPL v3 (DroidFish-derived
+    per file headers; recurrence of the class round-22 already fixed).
+  - round-20-era entries below: 5 mislabeled "(GPL v3)" tags on chess960.js
+    corrected to AGPL v3 (header has always been AGPL v3).
+  - File headers unchanged; per-file classification otherwise unchanged
+    (game-logic.js, pgn-standard.js, ai-bridge.js, tablebase.js,
+    worker-pool.js, ui-gameflow.js, ui-interactions.js, ui.js,
+    index.html.tpl = GPL v3; chess960.js, eco-data.js, state-store.js =
+    AGPL v3). See NOTICE Round-42 entry for the full unification record.
+
+v1.2.3 round-41 (2026.8.10): robustness consolidation (41-1/41-2/41-4/41-5/41-10 in this directory).
+  - Version: versionCode=123, versionName="1.2.3" (unchanged).
+  - ai-bridge.js (GPL v3): 41-1 MultiPV fixes — pv.pv?.pv.length>0 ->
+    pv.pv!=null&&pv.pv.length>0 (pv is a string; the old expression threw a
+    TypeError so alternate lines never rendered); _updateAIThinkDisplay hint
+    branch guarded against same-tick aiThinkInfo overwrite.
+  - worker-pool.js (GPL v3): 41-2 transient-failure sync fallback —
+    _dispatchNext runs the queue head via _syncFallback immediately when the
+    pool is empty and no busy worker can be re-triggered (no more 30 s
+    hang); _workerSupported stays true.
+  - game-logic.js (GPL v3): 41-4 _reattachActiveAnimations inverted
+    condition fixed; 41-5 castlingRights 8-field invariant (4 *RookFile:null
+    added at the rebuild site).
+  - tablebase.js (GPL v3): 41-10 probeTablebase entry defense (8+ pieces ->
+    null immediately, defense-in-depth).
+  - chess.html: rebuilt via build-chess.py (two builds md5-identical).
+  - License classification: all files unchanged.
+
+v1.2.3 round-40 (2026.8.10): bug-fix tier (40-3/40-4/40-5/40-6 in this directory; D1=A).
+  - Version: versionCode=123, versionName="1.2.3" (unchanged).
+  - game-logic.js (GPL v3): 40-3 rook-move/capture castling-rights row
+    checks (white row 7 / black row 0; 4 sites incl. the inPlace paths);
+    40-4 FIDE 6.9 strict — the KNN exemption removed from
+    winnerLacksMatingMaterial (K+N+N has a helpmate) (D1=A).
+  - ui-gameflow.js (GPL v3): 40-4 round-25 timeout-draw contract restored
+    (_gameOverStatusKey='timeout' + _timeoutWinnerColor=null); 40-QC
+    clock-expiry comment corrected (KNN moved out of the no-mate list).
+  - ui.js (GPL v3): 40-4 _gameOverStrFromStatus('timeout') null-winner
+    branch reachable again; formatEval timeout null-winner guard.
+  - tablebase.js (GPL v3): 40-5 PGN tag-strip regex widened (unquoted tags;
+    linear on pathological inputs); 40-6 fenToState strict validation (<= 6
+    fields, no pawns on ranks 1/8, exactly one king per side, halfMoveClock
+    non-negative int, fullMoveNumber positive int).
+  - chess.html: rebuilt via build-chess.py.
+  - License classification: all files unchanged.
+
 v1.2.3 round-39 (2026.7.20): S6582 optional-chaining consistency + S1481/S1854 dead-code removal.
   - Version: versionCode=123, versionName="1.2.3" (unchanged — code-quality round).
   - ai-bridge.js (GPL v3): 8× `e&&e.message?e.message:e` → `e?.message?e.message:e`
@@ -8,7 +128,7 @@ v1.2.3 round-39 (2026.7.20): S6582 optional-chaining consistency + S1481/S1854 d
     (4) removed unused `prevEval` + `ad` (S1481/S1854).
   - ui-interactions.js (GPL v3): 15× same `e&&e.message` → `e?.message` conversion.
   - ui-gameflow.js (GPL v3): 1× same conversion.
-  - tablebase.js (AGPL v3): 1× same conversion.
+  - tablebase.js (GPL v3): 1× same conversion.
   - chess960.js, pgn-standard.js, state-store.js, eco-data.js, index.html.tpl:
     no changes this round.
   - chess.html: rebuilt via build-chess.py (23,261 lines / 1,399,130 bytes).
@@ -24,11 +144,11 @@ v1.2.3 round-38 (2026.7.20): continued SonarCloud rule fixes (real issues only).
     → `.includes(step)` (SonarCloud S7765); (4) 2× `Math.sqrt(dx*dx + dy*dy)`
     → `Math.hypot(dx, dy)` (SonarCloud S7769 — clearer intent, native impl,
     avoids overflow/underflow).
-  - worker-pool.js (AGPL v3): 2× `text.indexOf('{') >= 0` → `text.includes('{')`
+  - worker-pool.js (GPL v3): 2× `text.indexOf('{') >= 0` → `text.includes('{')`
     (SonarCloud S7765). Applied to both Worker template + sync fallback.
   - pgn-standard.js (GPL v3): flattened `}else{if(varBuf)varBuf.push(')');}`
     to `}else if(varBuf)varBuf.push(')');` (SonarCloud S6660).
-  - tablebase.js (AGPL v3): 2× removed duplicate `B` in char class
+  - tablebase.js (GPL v3): 2× removed duplicate `B` in char class
     `[a-hKQRBNBO]` → `[a-hKQRBNO]` (SonarCloud S5869 — second `B` redundant
     with /i flag).
   - ui-interactions.js (GPL v3): removed duplicate `O` in char class
@@ -58,7 +178,7 @@ v1.2.3 round-37 (2026.7.20): SonarCloud code-quality fixes (real issues only, fa
     object spread (SonarCloud S6661).
   - ui.js (GPL v3): (1) `cond ? true : false` → `!!cond` (SonarCloud S6644);
     (2) `Object.assign({}, r)` → `{...r}` in _preReviewSnapshot (SonarCloud S6661).
-  - worker-pool.js (AGPL v3): `function workerRun(fnName, args, timeoutMs)`
+  - worker-pool.js (GPL v3): `function workerRun(fnName, args, timeoutMs)`
     with body `timeoutMs = timeoutMs || 30000` → default param `timeoutMs = 30000`
     (SonarCloud S7760). Subtle behavior improvement: old `||` coerced `0` to
     `30000` (latent bug); new default param only applies when `undefined`.
@@ -470,7 +590,7 @@ v1.2.3 round-21 (2026.7.17) — edge-case fix (per-color gated king signal):
 
 v1.2.3 round-20 (2026.7.17) — 4 known leftovers + hint relocation:
   - Version: versionCode=123, versionName="1.2.3" (unchanged — hardening round).
-  - chess960.js (GPL v3): A-1 RESOLVED — castlingRights gains designated rook
+  - chess960.js (AGPL v3): A-1 RESOLVED — castlingRights gains designated rook
     files; parseShredderCastling records them; initChess960State sets them;
     NEW findDesignatedCastlingRook (exported) used by chess960CastlingRookMove
     and isChess960CastlingLegal; toShredderCastling emits designated files
@@ -749,9 +869,11 @@ v1.2.3 (2026.7.16) — Round 17/18 review fixes + P0 JS error fix + Toast UX:
   - chess.html: rebuilt from the updated JS modules + template
     (22,106 lines, 1,328,785 bytes).
   - License classification: all files in this directory retain their
-    existing classification (GPL v3 for game-logic.js, chess960.js,
-    pgn-standard.js, worker-pool.js, ai-bridge.js, tablebase.js, ui.js,
-    index.html.tpl; AGPL v3 for state-store.js, eco-data.js).
+    existing classification (GPL v3 for game-logic.js, pgn-standard.js,
+    worker-pool.js, ai-bridge.js, tablebase.js, ui.js, index.html.tpl;
+    AGPL v3 for state-store.js, eco-data.js, chess960.js). (Corrected in
+    round-42 (42-5): chess960.js moved to the AGPL list — its file header
+    has always been AGPL v3; cf. NOTICE.)
 
 v1.2.2 (2026.7.14) — Comprehensive audit-report non-false-positive fix + version bump:
   - Version: versionCode=122, versionName="1.2.2" (version bump from v1.2.1).
@@ -875,8 +997,10 @@ v1.2.1 round-13 (2026.7.14) — S3776 cognitive complexity: renderInternal God F
     bytes vs round-12, reflecting removal of long inline comments replaced by
     concise JSDoc on each helper).
   - License classification: all files in this directory retain their
-    existing classification (GPL v3 for ui.js; AGPL v3 for state-store.js,
-    eco-data.js, index.html.tpl; built chess.html inherits GPL v3).
+    existing classification (GPL v3 for ui.js and index.html.tpl (its header
+    since v1.0.8 PHASE 37/49); AGPL v3 for state-store.js, eco-data.js;
+    built chess.html is AGPL v3, combined work). (Corrected in round-42
+    (42-5, D2=A).)
 
 v1.2.1 round-12 (2026.7.14) — SonarCloud PR #43 bugs + code smells cleanup:
   - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version
@@ -901,7 +1025,7 @@ v1.2.1 round-12 (2026.7.14) — SonarCloud PR #43 bugs + code smells cleanup:
   - tablebase.js (GPL v3): 2 changes — (1) S108: 3 empty catches now log
     console.warn('[Tablebase]', e.message); (2) S3523: parseFloat →
     Number.parseFloat (1 site).
-  - chess960.js (GPL v3): 2 changes — (1) S108: 1 empty catch now logs
+  - chess960.js (AGPL v3): 2 changes — (1) S108: 1 empty catch now logs
     console.warn('[Chess960]', e.message); (2) S1154: String.fromCharCode →
     String.fromCodePoint (1 site).
   - index.html.tpl (AGPL v3): S3646 — merged two adjacent
@@ -995,7 +1119,7 @@ v1.2.1 (2026.7.13, ninth-pass refinement — round-9 review):
     dispatch(). SHOW_DIALOG/HIDE_DIALOG reducers now guard against
     non-string payload (prevents "null"/"undefined" junk keys in
     dialogVisible).
-  - chess960.js (GPL v3): Added null guards to parseShredderCastling,
+  - chess960.js (AGPL v3): Added null guards to parseShredderCastling,
     findCastlingRooks, isChess960CastlingLegal — matches existing guard
     in toShredderCastling. A null/undefined board or state would previously
     throw TypeError. Corrected misleading comment in toShredderCastling.
@@ -2757,7 +2881,7 @@ for full license texts and attribution details.
       restore for instant positioning. Same pattern applied to
       .review-body in review mode. _scrollRestoreGuard reset on new
       game.
-    - chess960.js (GPL v3): ROBUSTNESS — randomSPID() modulo bias
+    - chess960.js (AGPL v3): ROBUSTNESS — randomSPID() modulo bias
       elimination. Was `buf[0]%960` (slight bias: values 0..255 ~0.03%
       more likely than 256..959). Now uses rejection sampling: only
       accept values < 65280 (largest multiple of 960 ≤ 65536) before
@@ -2810,7 +2934,7 @@ for full license texts and attribution details.
     - chess.html: rebuilt from the above chess.src/ changes.
 
   v1.0.4 Round-5 Rev34 changes:
-    - chess960.js (GPL v3): CRITICAL FIX — isChess960CastlingLegal() now
+    - chess960.js (AGPL v3): CRITICAL FIX — isChess960CastlingLegal() now
       checks the UNION of the king's path and the rook's path for
       occupancy. Previously only checked squares between king and rook,
       missing the king's destination and rook's destination which could

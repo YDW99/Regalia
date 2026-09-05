@@ -1,3 +1,78 @@
+## Round-44 changes (2026-09-04)
+
+**No new permissions, no new network endpoints, no new data collection.**
+Privacy-relevant items from this review-fix round:
+
+- **Backup rule files deleted**: `res/xml/backup_rules.xml` and
+  `res/xml/data_extraction_rules.xml` were removed. They have been
+  unreferenced since `allowBackup="false"` (the documented v1.0.4 design
+  decision) — the app still does not participate in Android backup/restore;
+  deleting the dead files changes nothing about data flows.
+- **`usesCleartextTraffic` removed from the manifest** (F15): redundant —
+  `network_security_config.xml` already blocks cleartext traffic entirely
+  (`cleartextTrafficPermitted="false"`), and the manifest attribute is
+  ignored when a networkSecurityConfig is set. No behavior change.
+- **`network_security_config.xml` gained a `debug-overrides` block**
+  (debug builds only; release trust anchors unchanged).
+- **Engine binary minimum-size check lowered 50 MB → 5 MB**
+  (`StockfishNative.java`, A16): the ELF magic + size gate still rejects
+  truncated/stub engine binaries; see the "Engine Binary Integrity" section
+  below (updated).
+- Manifest additions `supportsRtl` + `enableOnBackInvokedCallback` (F13) are
+  pure UI/navigation flags — no data-flow impact. The permission table below
+  remains accurate (8 declared permissions, re-verified against
+  `AndroidManifest.xml`).
+
+## Round-43 changes (2026-09-04)
+
+**No privacy-relevant changes.** The 58 dead i18n keys marked in round-42
+(42-8, D5=A) were removed from `game-logic.js` — they were unreferenced
+translation strings (no code path, no data flow). `chess.html` was rebuilt
+(md5-consistent double build). The rest of the round is documentation:
+README.md restructure, NOTICE / NOTICE-DroidFish / BUILDING.md /
+8×README.license synchronization, and two factual corrections in this file:
+
+- The wake-lock note below now matches the code (round-42, 42-4): the
+  `EngineService` partial wake lock is acquired **once** in `onCreate()`
+  with a 30-minute timeout and is **not** re-acquired by `onStartCommand`
+  (an earlier wording claimed longer sessions re-acquire it — they do not).
+- The "Engine Binary Integrity" section below now matches the code: the
+  runtime checks are the ELF magic check plus a 50 MB minimum-size check
+  (`StockfishNative.java`); there is no baked-in SHA-256 runtime check.
+  The known-good engine SHA-256 is documented in BUILDING.md for manual
+  verification.
+
+No new permissions, no new network endpoints, no new data collection. The
+permission table below was re-verified against `AndroidManifest.xml`
+(8 declared permissions) and the CSP summaries re-verified against
+`index.html.tpl` / `stats.html`.
+
+## Round-42 changes (2026-08-10)
+
+**No privacy-relevant changes.** FIDE 6.9 timeout-draw copy finalization
+(42-1), flag-fall clock zeroing (42-2), castle-mark designated-file
+preference (42-3), wake-lock comment correction (42-4), license-tag
+unification (42-5), SECURITY_FIXES.md sync (42-6/42-7), dead-key marking
+(42-8), stale-comment batch (42-9), `_stripFnBody` hardening (42-10),
+debug `.debug` applicationId suffix (42-11). No new permissions, no new
+network endpoints, no new data collection.
+
+## Round-41 changes (2026-08-10)
+
+**No privacy-relevant changes.** Robustness consolidation (41-1~41-10).
+Worth noting for completeness: 41-3 adds a 1 MB size cap to settings
+import (local file handling only; fails fast with the existing toast);
+41-7 sanitizes intercepted UCI commands before logging (CR/LF escaping —
+log-injection hygiene, consistent with the round-19 JsBridgeGateway fix).
+No new permissions, no new network endpoints, no new data collection.
+
+## Round-40 changes (2026-08-10)
+
+**No privacy-relevant changes.** Bug-fix tier (40-1~40-6): restartEngine
+self-interrupt fix, castling-rights row checks, FIDE 6.9 strict timeout
+draw, PGN tag-strip regex hardening, `fenToState` strict input validation.
+No new permissions, no new network endpoints, no new data collection.
+
 ## Round-39 changes (2026-07-20)
 
 **No privacy-relevant changes.** This round is pure code-quality cleanup
@@ -315,6 +390,13 @@ Regalia's core features work entirely offline. The only network-dependent featur
 
 All other features, including AI gameplay, review analysis, PGN import/export, and engine configuration, work without any network connection.
 
+**Content Security Policy (verified round-43):** both WebView pages enforce a
+CSP meta policy. The main page (`chess.html`) uses `default-src 'none'` with
+`connect-src https://tablebase.lichess.ovh` — the tablebase API is the only
+permitted network origin — plus `object-src 'none'`, `form-action 'none'` and
+`base-uri 'self'`. The statistics page (`stats.html`) uses
+`connect-src 'none'` — it cannot make any network request at all.
+
 ## Local Data
 
 Game data (board positions, move records, engine settings, PGN cache entries, eval cache) is stored locally on the device using browser localStorage, Android SharedPreferences, and app-private files. The on-device storage locations are:
@@ -551,7 +633,7 @@ Version: `versionCode=121`, `versionName="1.2.1"`.
 
 > **Note on sensors (v1.0.5+):** The board anti-shake feature (`StabilizationHelper.java`) reads the `TYPE_LINEAR_ACCELERATION` sensor for OIS-style translation compensation. This sensor does **not** require any Android permission and the raw motion data is **never** stored or transmitted — it is consumed in real time to apply a `transform: translate()` on the board element and discarded. No permission declaration is needed in the manifest for this sensor.
 
-> **Note on the wake lock (v1.1.0 Phase 57+):** The `EngineService` foreground service acquires a partial wake lock with a **30-minute timeout** as a safety net. If the OEM silently kills the service and `onDestroy` never runs, the wake lock is released automatically after 30 minutes — preventing indefinite CPU wake on misbehaving OEM ROMs. Normal analysis sessions are well under this window; longer sessions re-acquire by re-entering the foreground state.
+> **Note on the wake lock (v1.1.0 Phase 57+):** The `EngineService` foreground service acquires a partial wake lock with a **30-minute timeout** as a safety net. If the OEM silently kills the service and `onDestroy` never runs, the wake lock is released automatically after 30 minutes — preventing indefinite CPU wake on misbehaving OEM ROMs. The lock is acquired **once** in `onCreate()` with the 30-minute timeout and is **not** re-acquired by `onStartCommand`, so 30 minutes after acquisition the CPU may sleep again (wording corrected in round-43 per the round-42 42-4 comment fix — an earlier version of this note claimed longer sessions re-acquire the lock; they do not).
 
 ## Haptic Feedback (v1.0.8+)
 
@@ -566,8 +648,16 @@ v1.0.8 introduces personified haptic feedback — each of the six piece types (p
 
 The Stockfish 18 engine binary (`libstockfish.so`) is shipped as an arm64-v8a native library inside the APK. On first launch, `StockfishNative.java` validates the binary:
 
-- **ELF magic check** (first 4 bytes = `\x7fELF`) — guards against corrupted downloads.
-- **SHA-256 hash verification** against a baked-in expected hash — guards against tampering.
+- **ELF magic check** (first 4 bytes = `\x7fELF`) — guards against corrupted or non-ELF files.
+- **Minimum-size check** (5 MB; lowered from 50 MB in round-44, A16) — the genuine Stockfish 18 binary is ~114 MB; truncated or stub files are rejected.
+
+The known-good SHA-256 of the official Stockfish 18 arm64-v8a-dotprod binary
+(`8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5`) is
+documented in BUILDING.md and is verified three-way (source file / deployed
+jniLibs copy / APK-embedded library) in every release round; the app itself
+performs the ELF + size checks above at runtime (this section was corrected
+in round-43 — it previously claimed a baked-in SHA-256 runtime check that
+the current code does not perform).
 
 If either check fails, the engine refuses to start and reports the error to the user via the UI. The binary is never downloaded at runtime; it is statically embedded in the APK.
 

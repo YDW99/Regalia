@@ -1,3 +1,34 @@
+v1.2.3 round-44 (2026.9.4): AndroidManifest F12/F13/F15 + chess.html rebuild + stats.html mate clamp.
+  - Version: versionCode=10203 (build.gradle F11 formula; was 123),
+    versionName="1.2.3" (unchanged).
+  - AndroidManifest.xml (AGPL v3): F13 added supportsRtl +
+    enableOnBackInvokedCallback; F15 removed usesCleartextTraffic
+    (redundant — network_security_config already blocks cleartext); F12
+    comments updated (backup-rule comment now records the round-44 deletion
+    of res/xml/backup_rules.xml + data_extraction_rules.xml).
+  - assets/chess.html (AGPL v3, combined work): rebuilt via build-chess.py
+    after the round-44 chess.src JS changes (score polarity, Toast x1.5,
+    batch-analysis hardening — see assets/chess.src/README.license).
+  - assets/stats.html (GPL v3): eval-graph mate scores clamped to
+    +/-1000cp for chart display.
+  - License classification: unchanged.
+
+v1.2.3 round-43 (2026.9.4): no changes to files in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged).
+  - License classification: all files unchanged.
+
+v1.2.3 round-42 (2026.8.10): no changes to files in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged).
+  - License classification: all files unchanged.
+
+v1.2.3 round-41 (2026.8.10): no changes to files in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged).
+  - License classification: all files unchanged.
+
+v1.2.3 round-40 (2026.8.10): no changes to files in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged).
+  - License classification: all files unchanged.
+
 v1.2.3 round-39 (2026.7.20): no changes to files directly in this directory.
   - Version: versionCode=123, versionName="1.2.3" (unchanged — code-quality round).
   - License classification: all files unchanged.

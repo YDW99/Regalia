@@ -152,7 +152,9 @@ const ECO_BY_ID={};const ECO_BY_FAMILY={};
 //   unavoidable for arbitrary substring search without a full-text index, but
 //   the per-opening cost is now just 2 includes() calls (no allocations).
 //   Also: early-exit when results reach 20 (the slice cap) to avoid scanning
-//   all ~3000 openings when the query is common (e.g. "king" matches early).
+//   all 564 openings when the query is common (e.g. "king" matches early).
+//   (round-42 42-9: count corrected — was "~3000"; ECO_OPENINGS.length is
+//   564, verified at runtime this round.)
 function searchEco(query){
   _ensureEcoParsed();
   const q=(query||'').trim().toUpperCase();

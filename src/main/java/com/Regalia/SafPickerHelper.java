@@ -57,6 +57,7 @@ import java.lang.ref.WeakReference;
  *
  * 安全设计:
  *   - PGN 导入有 5000 行截断保护防止 OOM
+ *   - 设置导入有 1,000,000 字符上限（SETTINGS_MAX_CHARS），超限快速失败 (v1.2.3 round-41)
  *   - PGN 内容经过控制字符过滤，防止破坏 JS 字符串解析
  *   - 导出内容通过 JSON 编码安全传递到 JS
  *   - 持久化 URI 权限以便后续访问
@@ -74,6 +75,11 @@ public class SafPickerHelper {
 
     // PGN 导入行数上限，防止 OOM
     private static final int PGN_MAX_LINES = 5000;
+
+    // v1.2.3 round-41: 设置导入字符数上限（1MB），防止 OOM。
+    //   与 PGN 导入的行数截断不同，设置文件是 JSON，截断会破坏解析，
+    //   因此超限直接快速失败（抛 IOException → 既有 catch → toast）。
+    private static final int SETTINGS_MAX_CHARS = 1_000_000;
 
     private final Context context;
     private final WeakReference<Activity> activityRef;
@@ -344,8 +350,18 @@ public class SafPickerHelper {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(is, "UTF-8"))) {
             StringBuilder sb = new StringBuilder();
             String line;
+            // v1.2.3 round-41: accumulate a running length and fail fast with
+            //   IOException BEFORE appending an over-limit line (the check is
+            //   pre-append, so a single giant line is also rejected). Without
+            //   this, a multi-GB "settings" file would OOM the StringBuilder
+            //   before any downstream validation could run.
+            int totalChars = 0;
             while ((line = reader.readLine()) != null) {
+                if (totalChars + line.length() + 1 > SETTINGS_MAX_CHARS) {
+                    throw new java.io.IOException("Settings file too large (>" + SETTINGS_MAX_CHARS + " chars)");
+                }
                 sb.append(line).append("\n");
+                totalChars += line.length() + 1;
             }
             return sb.toString();
         }

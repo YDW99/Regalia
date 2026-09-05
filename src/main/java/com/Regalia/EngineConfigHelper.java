@@ -72,9 +72,16 @@ public class EngineConfigHelper {
      * v18.4.0: ELO_MAP synced with JS ELO_MATCH for consistent level display.
      * Moved from StockfishNative.java in v1.2.0 Phase 81 — only used by
      * setGameDifficulty(), so co-locating reduces StockfishNative's footprint.
-     * Index 0 unused; indices 1-7 map to ELO 800/1350/1700/2000/2200/2350/2800.
+     * Index 0 unused (1-based level alignment placeholder); indices 1-6 map to
+     * ELO 800/1350/1700/2000/2200/2350.
+     *
+     * v1.2.3 round-44 (C10): removed dead index 7 (2800). Level 7 semantics are
+     * "full strength" — setGameDifficulty's else branch disables
+     * UCI_LimitStrength and never looks up ELO_MAP[7] (the outer guard restricts
+     * lookups to [1,6]). grep confirmed no index-7 references. Index 0 is kept
+     * as a placeholder so level numbers align 1:1 with array indices.
      */
-    private static final int[] ELO_MAP = {0, 800, 1350, 1700, 2000, 2200, 2350, 2800};
+    private static final int[] ELO_MAP = {0, 800, 1350, 1700, 2000, 2200, 2350};
 
     /**
      * v1.0.2 PERF (audit): cache detectBigCoreCount() result — CPU topology
@@ -82,6 +89,15 @@ public class EngineConfigHelper {
      * every time detectHardwareAndConfigure() is called.
      */
     private volatile int _cachedBigCoreCount = -1;
+
+    /**
+     * v1.2.3 round-44 (C8): hardware-detection in-flight dedup guard.
+     * After detectHardwareAndConfigure was made asynchronous, rapid repeated
+     * setAutoConfig(true) calls only need one detection run (the result is
+     * idempotent); duplicate triggers are dropped.
+     */
+    private final java.util.concurrent.atomic.AtomicBoolean _detectInFlight =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
 
     /** 回调接口 — 由 StockfishNative 实现 */
     public interface Callbacks {
@@ -137,8 +153,44 @@ public class EngineConfigHelper {
         callbacks.setAutoConfigField(enabled);
         Log.i(TAG, "Auto config " + (enabled ? "enabled" : "disabled"));
         if (enabled && callbacks.isEngineReady()) {
-            detectHardwareAndConfigure();
+            // v1.2.3 round-44 (C8): run hardware detection asynchronously.
+            //   detectHardwareAndConfigure() synchronously reads /proc/cpuinfo
+            //   and sends setoption commands that wait for the engine handshake,
+            //   which can block the calling thread (JS binder thread) for
+            //   hundreds of ms. Now it runs on a background thread and this
+            //   method returns immediately; results reach JS via the existing
+            //   callbacks.notifyEngineInfo() path.
+            detectHardwareAndConfigureAsync();
         }
+    }
+
+    /**
+     * v1.2.3 round-44 (C8): run detectHardwareAndConfigure() on a background
+     * thread. AtomicBoolean in-flight guard: duplicate calls while a detection
+     * is running are dropped (detection is idempotent, reruns add no value);
+     * the flag resets on completion so a later call can detect again.
+     * Note: the applySettings() call site intentionally stays synchronous —
+     * its subsequent option writes depend on Threads/Hash already being set.
+     */
+    private void detectHardwareAndConfigureAsync() {
+        if (!_detectInFlight.compareAndSet(false, true)) {
+            Log.d(TAG, "hardware detection already in flight — skipping duplicate request");
+            return;
+        }
+        Thread t = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    detectHardwareAndConfigure();
+                } catch (Throwable e) {
+                    Log.e(TAG, "async hardware detection failed", e);
+                } finally {
+                    _detectInFlight.set(false);
+                }
+            }
+        }, "Regalia-HwDetect");
+        t.setDaemon(true);
+        t.start();
     }
 
     /**
@@ -146,7 +198,10 @@ public class EngineConfigHelper {
      * Sets optimal Threads and Hash values based on CPU cores and available memory.
      *
      * Stockfish 18 best practice: keep hashfull < 30% for optimal strength.
-     * On mobile, 64MB is the sweet spot; cap at 128MB to avoid OOM on low-RAM devices.
+     * v1.2.3 round-44 (C4): Hash = 50% of the JVM heap, clamped to [16, 128]MB
+     * and rounded down to a 16MB multiple — consistent with setEngineHash()'s
+     * 50%-of-heap cap (v1.1.2 Phase 69 UCI guide section 1.2); the 128MB
+     * ceiling avoids OOM on low-RAM devices.
      */
     public void detectHardwareAndConfigure() {
         try {
@@ -166,9 +221,13 @@ public class EngineConfigHelper {
             optimalThreads = Math.min(optimalThreads, 16);
 
             long maxMemory = Runtime.getRuntime().maxMemory();
-            long optimalHashMB = Math.max(16, maxMemory / (16 * 1024 * 1024));
-            optimalHashMB = Math.min(optimalHashMB, 128);
-            optimalHashMB = Math.max(16, (optimalHashMB / 16) * 16);
+            // v1.2.3 round-44 (C4): the old formula maxMemory/16 yielded only
+            //   32MB on a 512MB-heap device — far below a useful size. New
+            //   formula: half the heap, clamped to [16,128], then rounded down
+            //   to a 16MB multiple (the Math.max(16,...) above guarantees >=16).
+            long halfHeapMB = maxMemory / 2 / (1024 * 1024);
+            long optimalHashMB = Math.max(16, Math.min(128, halfHeapMB));
+            optimalHashMB = (optimalHashMB / 16) * 16;
 
             Log.i(TAG, "Hardware detection: processors=" + availableProcessors
                     + " (bigCores=" + bigCoreCount + ")"
@@ -192,7 +251,15 @@ public class EngineConfigHelper {
      * Detect the number of "big" cores on big.LITTLE ARM architectures.
      * Reads /proc/cpuinfo, extracts per-core max frequency, and counts cores
      * whose frequency is >= 90% of the highest observed frequency (when the
-     * highest is at least 20% above the median — indicating asymmetric topology).
+     * highest is at least 20% above the MINIMUM — indicating asymmetric topology).
+     *
+     * v1.2.3 round-44 (C1): baseline changed from median to minimum. On common
+     * topologies where big cores are fewer than half the total (1+3+4, 2+6),
+     * the median lands in the little/mid cluster and the highest>median*1.2
+     * test is destabilised by mid cores. Using the lowest-frequency cluster as
+     * the baseline directly captures "highest cluster clearly above lowest
+     * cluster". The MHz/BogoMIPS precedence logic and result caching are
+     * unchanged.
      *
      * Result is cached for the lifetime of the helper instance (CPU topology
      * does not change at runtime).
@@ -257,10 +324,12 @@ public class EngineConfigHelper {
 
             if (frequencies.size() >= 2) {
                 java.util.Collections.sort(frequencies);
-                long medianFreq = frequencies.get(frequencies.size() / 2);
+                // v1.2.3 round-44 (C1): baseline = minimum frequency (lowest
+                //   cluster), not the median.
+                long minFreq = frequencies.get(0);
                 long highestFreq = frequencies.get(frequencies.size() - 1);
 
-                if (highestFreq > medianFreq * 1.2) {
+                if (highestFreq > minFreq * 1.2) {
                     for (long freq : frequencies) {
                         if (freq >= highestFreq * 0.9) {
                             bigCores++;
@@ -296,6 +365,13 @@ public class EngineConfigHelper {
      * were applied identically in both branches — duplicated ~50 lines.
      */
     public void applySettings() {
+        // v1.2.3 round-44 (C9, design debt): this method issues
+        //   sendSetOptionAndWait per option (each waits for its own engine
+        //   readyok handshake). The ideal fix is a "batch setoption + single
+        //   handshake wait" protocol in StockfishNative to shorten the startup
+        //   configuration window; that requires changing StockfishNative's
+        //   waiting protocol (cross-file, out of scope for this wave), so it
+        //   is recorded here as design debt.
         if (!callbacks.isEngineReady()) {
             Log.w(TAG, "Cannot apply settings - engine not ready");
             return;
@@ -557,12 +633,29 @@ public class EngineConfigHelper {
         //   setters (setEngineThreads/setEngineHash) use sendSetOptionAndWait
         //   because they are only called from applySettings() which itself
         //   is only called when the engine is idle.
+        // v1.2.3 round-44 (C5/C6): the JS callback now uses local snapshot
+        //   values instead of re-reading the callbacks fields. setLimitEloField
+        //   and setEloField are two independent volatile writes; re-reading
+        //   the fields after them could observe a torn (limitElo, elo) pair
+        //   if another thread mutates the fields in between. The locals below
+        //   capture exactly the pair this invocation committed.
+        //   Residual risk (C5, design debt): the underlying fields are still
+        //   written in two steps, so UI code that polls the fields directly
+        //   keeps its pre-existing read-ordering tolerance issue. The real fix
+        //   is a StockfishNative.setStrengthPair(limitElo, elo) single-write
+        //   API — StockfishNative is out of scope for this wave, so only the
+        //   callback side is fixed here and the debt is annotated.
+        int snapshotElo = callbacks.getEngineElo(); // pre-write snapshot (else branch)
+        final boolean limitEloForJs;
+        final int eloForJs;
         if (level >= 1 && level <= 6) {
             // v1.2.3 round-13 (P3): removed dead `: 1500` ternary fallback.
             //   The outer guard restricts level to [1, 6] and ELO_MAP has
-            //   length 8 (indices 0-7), so `level < ELO_MAP.length` is always
+            //   length 7 (indices 0-6), so `level < ELO_MAP.length` is always
             //   true here — the fallback was unreachable.
             int elo = ELO_MAP[level];
+            limitEloForJs = true;
+            eloForJs = elo;
             callbacks.setLimitEloField(true);
             callbacks.setEloField(elo);
             if (callbacks.engineSupportsOption("UCI_LimitStrength")) {
@@ -572,6 +665,8 @@ public class EngineConfigHelper {
                 callbacks.sendUciCommand("setoption name UCI_Elo value " + elo);
             }
         } else {
+            limitEloForJs = false;
+            eloForJs = snapshotElo; // field preserved for UI display
             callbacks.setLimitEloField(false);
             if (callbacks.engineSupportsOption("UCI_LimitStrength")) {
                 callbacks.sendUciCommand("setoption name UCI_LimitStrength value false");
@@ -585,13 +680,11 @@ public class EngineConfigHelper {
         //   overload JSON-encodes args via JSONArray, guaranteeing correct
         //   type serialization (boolean as true/false, int as number) and
         //   eliminating any theoretical injection via the elo field. The raw
-        //   overload was safe here because getEngineLimitElo() returns a
-        //   boolean and getEngineElo() returns an int (no quotes to escape),
-        //   but the structured overload is the recommended pattern for all
-        //   non-hardcoded-literal callbacks (per StockfishNative.postJsCallback
-        //   Javadoc, v1.2.1 round-7 R3).
-        callbacks.postJsCallback("onGameDifficultyChanged",
-                callbacks.getEngineLimitElo(), callbacks.getEngineElo());
+        //   overload was safe here because the values are a boolean and an int
+        //   (no quotes to escape), but the structured overload is the
+        //   recommended pattern for all non-hardcoded-literal callbacks (per
+        //   StockfishNative.postJsCallback Javadoc, v1.2.1 round-7 R3).
+        callbacks.postJsCallback("onGameDifficultyChanged", limitEloForJs, eloForJs);
     }
 
     /**

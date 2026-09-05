@@ -35,6 +35,7 @@ package com.Regalia;
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
+import android.os.Build;
 import android.util.Log;
 
 import java.io.File;
@@ -88,31 +89,83 @@ public class EngineProcessManager {
                 return;
             }
             if (!file.setExecutable(true, false)) {
+                // v1.2.3 round-44 (C2): the Process reference is hoisted to the
+                //   outer scope on both paths. On InterruptedException we
+                //   destroyForcibly() the child (API 26+; destroy() below that,
+                //   minSdk 23) so an interrupted waitFor cannot leak an orphan
+                //   chmod process, and a finally block closes all three process
+                //   streams — Process streams hold real fds that waitFor() does
+                //   NOT release, so skipping the close leaks fds per attempt.
+                Process p = null;
                 try {
-                    Process p = Runtime.getRuntime().exec(
+                    p = Runtime.getRuntime().exec(
                             new String[]{"/system/bin/chmod", "700", file.getAbsolutePath()});
                     if (!p.waitFor(2, TimeUnit.SECONDS)) {
                         p.destroy();
                     }
                 } catch (InterruptedException e) {
+                    killProcess(p);
                     Thread.currentThread().interrupt();
                 } catch (Throwable e2) {
+                    // v1.2.3 round-44 (C3, evaluated — fallback KEPT): the array
+                    //   form above is already a shell-free invocation, and this
+                    //   sh -c fallback has no injection surface (the path comes
+                    //   from getAbsolutePath() of an engine file inside the
+                    //   app-private directory). It DOES have genuine rescue
+                    //   value: on ROMs where /system/bin/chmod is not symlinked
+                    //   (toybox applet only reachable via the shell's PATH or
+                    //   builtin), the absolute-path exec throws while the
+                    //   shell-resolved `chmod` still succeeds.
+                    Process p2 = null;
                     try {
-                        Process p = Runtime.getRuntime().exec(
+                        p2 = Runtime.getRuntime().exec(
                                 new String[]{"/system/bin/sh", "-c",
                                         "chmod 700 " + file.getAbsolutePath()});
-                        if (!p.waitFor(2, TimeUnit.SECONDS)) {
-                            p.destroy();
+                        if (!p2.waitFor(2, TimeUnit.SECONDS)) {
+                            p2.destroy();
                         }
                     } catch (InterruptedException e3) {
+                        killProcess(p2);
                         Thread.currentThread().interrupt();
                     } catch (Throwable ignored) {
                         // Last-resort fallback failed — non-fatal.
+                    } finally {
+                        closeProcessStreams(p2);
                     }
+                } finally {
+                    closeProcessStreams(p);
                 }
             }
         } catch (Throwable e) {
             Log.w(TAG, "Failed to make executable: " + file.getAbsolutePath(), e);
         }
+    }
+
+    /**
+     * v1.2.3 round-44 (C2): forcibly kill a spawned process after an interrupt.
+     * destroyForcibly() requires API 26 (minSdk is 23); below that, destroy()
+     * is the strongest available signal.
+     */
+    private static void killProcess(Process p) {
+        if (p == null) return;
+        try {
+            if (Build.VERSION.SDK_INT >= 26) {
+                p.destroyForcibly();
+            } else {
+                p.destroy();
+            }
+        } catch (Throwable ignored) {}
+    }
+
+    /**
+     * v1.2.3 round-44 (C2): close a Process's stdin/stdout/stderr streams
+     * (best-effort). Each stream holds a real fd; waitFor() does not close
+     * them, so without this every attempt leaks three fds until GC finalizes.
+     */
+    private static void closeProcessStreams(Process p) {
+        if (p == null) return;
+        try { p.getOutputStream().close(); } catch (Throwable ignored) {}
+        try { p.getInputStream().close(); } catch (Throwable ignored) {}
+        try { p.getErrorStream().close(); } catch (Throwable ignored) {}
     }
 }

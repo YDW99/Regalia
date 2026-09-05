@@ -98,14 +98,36 @@ public final class TlsSecurityHelper {
     private static final String PIN_ISRG_X2 =
             "diGVwiVYbubAI3RW4hB9xU8e/CH2GnkuvVFZE8zmgzI=";
     // v1.2.1 round-10 (review-E P2): pre-decoded bytes for constant-time
-    //   comparison via MessageDigest.isEqual. Decoded once at class-load
-    //   rather than per-validatePin-call.
-    private static final byte[] PIN_LE_E7_BYTES =
-            android.util.Base64.decode(PIN_LE_E7, android.util.Base64.NO_WRAP);
-    private static final byte[] PIN_ISRG_X1_BYTES =
-            android.util.Base64.decode(PIN_ISRG_X1, android.util.Base64.NO_WRAP);
-    private static final byte[] PIN_ISRG_X2_BYTES =
-            android.util.Base64.decode(PIN_ISRG_X2, android.util.Base64.NO_WRAP);
+    //   comparison via MessageDigest.isEqual, decoded once rather than
+    //   per-validatePin-call.
+    // v1.2.3 round-44 (D5): 由类加载期静态初始化改为懒加载 + 防御性解码。
+    //   原实现中 Base64.decode 若抛异常（pin 字符串损坏、ROM 的 Base64 实现
+    //   异常），会以 ExceptionInInitializerError 炸掉整个类（连 init() 的
+    //   MobSF 引用都不可达）。现在 decodePin catch Throwable -> Log.e ->
+    //   返回空数组；MessageDigest.isEqual 对空数组必然不匹配，属于安全失败
+    //   （fail-closed），且缓存避免重复告警。
+    private static final java.util.concurrent.ConcurrentHashMap<String, byte[]> PIN_BYTES_CACHE =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** v1.2.3 round-44 (D5): 防御性 Base64 解码 —— 永不抛出，失败返回空数组。 */
+    private static byte[] decodePin(String pin) {
+        try {
+            return android.util.Base64.decode(pin, android.util.Base64.NO_WRAP);
+        } catch (Throwable e) {
+            Log.e(TAG, "decodePin failed (fail-closed: pin will never match)", e);
+            return new byte[0];
+        }
+    }
+
+    /** v1.2.3 round-44 (D5): 懒加载并缓存 pin 的解码字节。 */
+    private static byte[] pinBytes(String pin) {
+        byte[] b = PIN_BYTES_CACHE.get(pin);
+        if (b == null) {
+            b = decodePin(pin);
+            PIN_BYTES_CACHE.put(pin, b);
+        }
+        return b;
+    }
 
     private TlsSecurityHelper() {
         // Utility class — no instances
@@ -211,9 +233,9 @@ public final class TlsSecurityHelper {
         //   the SonarCloud crypto-bad-comparison hotspot.
         //   Note: we compare the RAW 32-byte SHA-256 digest against the
         //   pre-decoded pin bytes (NOT the Base64-encoded string bytes).
-        boolean matchesLE = MessageDigest.isEqual(hash, PIN_LE_E7_BYTES);
-        boolean matchesX1 = MessageDigest.isEqual(hash, PIN_ISRG_X1_BYTES);
-        boolean matchesX2 = MessageDigest.isEqual(hash, PIN_ISRG_X2_BYTES);
+        boolean matchesLE = MessageDigest.isEqual(hash, pinBytes(PIN_LE_E7));
+        boolean matchesX1 = MessageDigest.isEqual(hash, pinBytes(PIN_ISRG_X1));
+        boolean matchesX2 = MessageDigest.isEqual(hash, pinBytes(PIN_ISRG_X2));
         if (!matchesLE && !matchesX1 && !matchesX2) {
             throw new CertificateException(
                 "Certificate pin mismatch: computed=" + pin

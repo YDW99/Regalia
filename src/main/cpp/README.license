@@ -1,3 +1,31 @@
+v1.2.3 round-44 (2026.9.4): engine_jni.cpp F1/F5 + CMakeLists.txt F8.
+  - Version: versionCode=10203 (build.gradle F11 formula; was 123),
+    versionName="1.2.3" (unchanged).
+  - engine_jni.cpp (GPL v3 — DroidFish-derived): F1 nativeRenice return
+    type void -> jboolean (caller can now detect renice failure); F5 2x
+    strerror_r for thread-safe error strings.
+  - CMakeLists.txt (AGPL v3 — original): F8 cmake_minimum_required
+    3.22.1 -> 3.31.6, aligned with build.gradle's pinned
+    `version "3.31.6+"` toolchain floor.
+  - License classification: unchanged (engine_jni.cpp GPL v3,
+    CMakeLists.txt AGPL v3).
+
+v1.2.3 round-43 (2026.9.4): no changes to files in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged).
+  - License classification: all files unchanged (GPL v3 — DroidFish-derived).
+
+v1.2.3 round-42 (2026.8.10): no changes to files in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged).
+  - License classification: all files unchanged (GPL v3 — DroidFish-derived).
+
+v1.2.3 round-41 (2026.8.10): no changes to files in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged).
+  - License classification: all files unchanged (GPL v3 — DroidFish-derived).
+
+v1.2.3 round-40 (2026.8.10): no changes to files in this directory.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged).
+  - License classification: all files unchanged (GPL v3 — DroidFish-derived).
+
 v1.2.3 round-39 (2026.7.20): no changes to files in this directory.
   - Version: versionCode=123, versionName="1.2.3" (unchanged — code-quality round).
   - License classification: all files unchanged (GPL v3 — DroidFish-derived).

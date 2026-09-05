@@ -1,3 +1,242 @@
+# Regalia v1.2.3 — Stage 6 说明书适配工作日志（2026-08-10 UTC+8）
+
+## v1.2.3 round-44（2026-09-05）—— 用户新需求 + 上传《优化方案报告》93 项分流实施
+
+**输入**：① 用户 6 项新需求（Toast +50%；批量分析防中断；评分正=白优/负=黑优；趋势图 0 轴同；#+/#- 与 #+1/#-1；玩家视角 emoji 报告）；② 上传《Regalia-v1.2.3-优化方案报告.md》（1239 行、93 项，针对基线代码）。
+
+**分流结论**（4 路并行核查 + 极性/Toast/批量专项审计，详见 review/issue-triage-register-v2.md）：FIXED 3（A6、D7、#92）；FP 5（C3 私有目录无注入面、D3 null 有兜底、D10 有意占位、G7 按颜色直读无竞态、#91 有意文档）；设计债 6（G2 FEN 键改造、C9 setoption 批处理、E7 haptic 表驱动、B10 主线程构造代理、A12 注释大扫除等）；**F16 裁决 wontfix**（pickFirsts 为构建期承重墙）；其余 60+ 项全部实施（waves 1a/1b/2/3/4）。
+
+**实施记录**：
+- **前置修复**：en 手册 :572 裸 `<style>` 转义 + en 补 v1.0.0 起源卡（cl-card zh==en==52；均为基线遗留缺陷）。
+- **Wave 1a（JS 极性+Toast）**：ui.js 复盘缓存分数改白方视角（+ 前缀、1 位小数）；ai-bridge.js MultiPV 提示行 _isBTM 归一化（含 ui.js:3439 第二渲染点）；mate=0 → #+0/#-0；复盘 WDL 舍入统一；stats.html 评估图 mate 钳制 ±1000cp；Toast 46 处显式 + 默认值 2500→3750 全量 ×1.5；MainActivity LENGTH_SHORT→LENGTH_LONG。
+- **Wave 1b（批量健壮性+G 模块）**：T1 逐请求 gen+step+fen 校验（_batchLastDispatched）；T2 长按优先竞态防护；T3 导航命中缓存不再误清 batch gen（含审计外同类 bug）；T4 _batchConsecutiveFail ≥3 → _terminateBatchAfterRepeatedFailures（不再 60s 幽灵循环）；T5 onEngineError 复位批量 gen；T6 缓存写入 try/catch 兜底；G1 _evalLastDispatchedGen（含普通模式即时派发点）；G3 engineGoNewGame 空 catch 补全（toast+重试≤3）；G4 _pbmiTimerId 可重置；G5 5 分钟滑动窗口重试预算；G6 onEngineReady 启动 JS 心跳；G8 cleanup 补 6 timer；G9 worker 60s 空闲回收；G10 state-store 无 listener 免克隆；G11 _batchWriteMode 批末 flush；G12 _currentTask O(1)；#93 loading 同步首查。
+- **Wave 2（A+B）**：A1 initEngine 代际快照重置双标志 + 早退 onEngineError("shutdown_in_progress")；A2 _resetEngineRuntimeState()；A3/A4 _cmdSeq/_lastStopSeq/_lastPonderHitSeq 提交序号消竞态；A5 _multiPVData×3 清空；A7 engineReady 移至 applySettings 后；A8 恢复计数移入任务执行处；A9 启动 50ms 轮询替代 1.8s 固定 sleep；A10 九 Matcher 复用；A11 onEngineProgress 16ms 节流合并；A12 删 ZOMBIE_TIMEOUT_MS 死字段；A13 regionMatches；A14 UCI "vars" 解析；A15 删 6s clamp；A16 引擎阈值 50MB→5MB；B1/B7 flushAllState+flushedSinceResume（onDestroy 强制末次落盘）；B2 ValueCallback+100ms 幂等 teardown；B3 fallback 销毁旧 WebView 并置 null；B4/B8 onFilePickerError；B5 volatile webView；B6 颜色常量；B9 onSaveInstanceState/onTrimMemory。
+- **Wave 3（C+D+E，11 文件）**：C1 big.LITTLE minFreq 基准（4+4 拓扑修复）；C2 Process/FD 泄漏修复；C3 保留 sh -c 回退（注释理由）；C4 Hash=半堆 16-128MB 对齐 16MB；C6 回调局部值消 TOCTOU；C7 lastResponseTime 0 哨兵；C8 detectHardwareAndConfigureAsync 去重；C10 删 ELO_MAP 索引 7；C11 尊重显式 autoConfig；D1 永久/瞬时错误分类重试；D2 permission_pending；D5 decodePin 防御懒加载；D6 逐段路径校验；D8 VibratorManager(API31+)；D9 context.getDisplay()(API30+)；D11 单 Runnable 复用；D12 33ms 节流+bwrap 缓存；D4 exp(-dt/tau) 衰减；E1 tags 改名复制-删除回退；E2 .pgn 过滤；E3 delete 失败写 []+fsync；E4 BACK 250ms 兜底 finish；E5 DCL；E6 AtomicReference CAS；E8 vibrate 免主线程 post；E9 50MB LRU 淘汰；E10 cacheDir 缓存。
+- **Wave 4（F，主控直接实施）**：F1 nativeRenice jboolean（JNI+Java 同步）；F2 release 无签名 taskGraph fail-fast；F3 CMAKE_BUILD_TYPE 下沉 buildType；F4 app_name resValue 注入；F5 strerror_r×2；F6 debug-overrides；F7 ProGuard keep 收窄（按真实签名）；F8 cmake_minimum 3.31.6；F9 去 -fexceptions -frtti；F10 去 JavaCompile fork；F11 versionCode=max(VERSION_BUILD, major*10000+minor*100+patch)=max(123,10203)=10203；F12 删 backup_rules.xml/data_extraction_rules.xml；F13 supportsRtl+enableOnBackInvokedCallback；F14 keepattributes；F15 删 usesCleartextTraffic；F16 wontfix（见分流表）。
+- **Wave 5a（仓库文档）**：README.md 目录树删 2 xml + 行数注解实测更新 + versionCode + round-44 条目；BUILDING.md round-44 build notes + 头部 10203；PRIVACY.md round-44 + 5MB 阈值；NOTICE round-44 条目；SECURITY_FIXES.md 6 处行号漂移修正；7× README.license round-44 条目（assets/ 无改动未加）；37+ 文件头部 Copyright+AI-GEN 声明核查（round-44 无新建文件）。
+- **Wave 5b（双语手册）**：round-44 段落插入 round-43 上方（新→旧顺序）；zh:1365/en:1370 极性描述修正为双视角契约（分值白方视角；emoji/文字玩家视角）；Toast 时长/批量行为/versionCode/权限/6 处 UI 示意图描述核查（仅极性 1 处需改，其余与当前 APP 一致）。
+
+**验证**：11×JS 模块 + chess.html 内联脚本 + stats.html 内联脚本 node --check 全过；chess.html 重建 23,616 行 / 1,424,313 字节（md5 39fce9552a222608768a41cc6e79738a，构建期确定性复验一致）；Java 全文件 javalang 解析 + 括号配对通过；XML 良构通过；手册良构 + cl-card zh==en==52；i18n 未新增 key（复用 engine_unavailable_hint/ai_timeout）。
+
+**版本**：versionName "1.2.3" 不变；versionCode 123→10203（公式化，单调性双向保证）。
+
+## 任务来源
+Stage 6 说明书适配：检查 zh/en 说明书与 APP 源代码匹配度，完善说明书适配最新版本；示意图完全符合现状；更新日志新→旧排列；双语同步；版本号 v1.2.3 不变。
+
+## 实施
+1. **代码匹配度审查**：提取说明书全部事实性表述逐项对照源码（ui.js/ui-gameflow.js/ui-interactions.js render 代码、game-logic.js i18n 表与 FIDE 6.9 逻辑、chess960.js spidToBackRank、StockfishNative.java/EngineConfigHelper.java 引擎参数、stats.html、build.gradle）。
+2. **事实勘误（zh/en 各一套，assert count 精确替换）**：Android 最低版本 5.0→6.0（API 23）共 5 处/语言；限制Elo 范围 500-3200→500-3500（ai-bridge.js setConfigElo 钳制）；ECO 记录 500→564（round-42 实测）；评估描述表对齐 eval_bucket i18n；§2 GPL/AGPL 清单按 19 个 Java + 11 个 JS/HTML 文件头重写（移除不存在的 build-chess.sh，index.html.tpl 移入 GPL，补 chess960.js/state-store.js/chess.html）；sec13 超时表述补 FIDE 6.9 例外 + round-40 严格化（KNN vs K 判胜）+ round-42「Time forfeit draw (FIDE 6.9)」与钟面归零；模块结构图标注更新；附录引言 stale「当前版本」删除；工具栏按钮表 🏳️（玩家栏+确认对话框）/📊（走法记录卡+复盘栏）位置更正；特性清单认输条目更正；ponder 信息位置（第 2 行→第 3 行，含 🔮 预判走法）；新增 debug .debug 共存安装条目。
+3. **示意图逐个核查**：13 个 wireframe 全部与 ui.js 现行 render 比对——WF1/WF8 评估描述文案、WF4 loading_ui 文案、WF5 难度按钮（1-6+SL20+⚙️，原误为 1-7+SL+⚙️）、WF7 摆棋面板重构（标记与棋子同行、按钮全名、补 FEN 行）、WF9/WF12（🤖→♚王棋图标、⏱ 05:23→5:23（formatClock 不补零分钟）、搜索信息格式 深度:15 选深:22 节点:… 评估:+x.x、ponder 🔮 行、玩家名 你/You、轮到你走）、WF2/WF3（AI开局库小节标题、不计时（日常对局）、Use ECO Book、搜索/分类/自由开局 i18n 文案、ECO↔Chess960 双向互斥红字提示）、WF6/WF10/WF13 无需修改、WF11 计数 564。
+4. **更新日志**：sec1 与附录顺序经程序化核验已为新→旧（39→18 / round-17→v1.0.4 rev43），无需整节反转；sec1 顶部新增 round-43/42/41/40 双语条目；en 附录补 round-17 卡片完整翻译（zh 已有、en 缺失的双语漂移修复）。
+5. **Manual/README.license**：prepend round-40/41/42/43 无变更记录 + Stage 6 适配条目。
+
+## 验证
+- 全部编辑脚本以 assert count 精确替换（zh 51+结构 7 处、en 48+结构 7 处），无静默失败。
+- python html.parser 良构检查 zh/en 通过；wireframe 数 zh 13 / en 13 不变；版本号 v1.2.3 不变。
+- 历史更新日志记述（含已删 i18n 键引用、API 21、旧超时语义）按"宁留勿删"原则保留。
+
+## 存疑
+- 说明书 §15 统计页与 §16 内容抽样核对一致，未逐行全量比对（体量所限）；WF13 标注为 v1.1.1 布局沿用，未发现矛盾。
+- sec1 各 round 段落与附录为历史记述，其中旧行为描述未追溯改写。
+
+# Regalia v1.2.3 — round-43 工作日志（2026-09-04 UTC+8）
+
+## 任务来源
+
+round-40 既定安排：文档六件套的 round-40~42 变更记录统一在 round-43 批次补记 + 42-8 死键删除（D5=A 第二步）+ README GitHub 最佳实践重构 + 目录树/全文档实况核对（文档总攻）。
+
+## 1. 死键删除（D5=A 第二步）
+
+- game-logic.js `_i18n` 表删除 58 个带 ` // round-42 marked dead — remove next round` 标记的键（整行删除含标记）。
+- 删前 python3 正则验证：58/58 行均为单行完整键定义且恰 58 行（assert）。
+- 删后 `_i18n` 表 zh==en==404 键（python3 实测 assert；删前 462）。
+- 58 键逐一全库引用扫描（`T('key')`/`_i18n['key']`/`_i18n.key`/`data-i18n` 模式，剔定义行、剔 chess.html、剔 Manual/）：零代码引用；NOTICE/README.license/README.md 中的历史 changelog 记述命中属正常，宁留勿删。
+- `node --check` game-logic.js + 其余 10 模块全过；`python3 build-chess.py` 重建 chess.html 两次 md5 逐字节一致（`49049a41846a1ee33bae7b24f6f4cd1d`，23,340 行 / 1,405,381 字节）；bundle 中死键与标记均消失、键定义 404。
+- 版本号 v1.2.3 不变（versionCode=123 未动）。
+
+## 2. README.md 重构（GitHub 最佳实践）
+
+- 新结构：`# Regalia ♔`+一句话简介 → Screenshots → Features → Download（安装须知：round-21 起签名证书变更须先卸旧版 / arm64-v8a 唯一 ABI / HyperOS 3 已验证）→ Requirements → User Manual（Manual/Regalia-v1.2.3-manual-{zh,en}.html）→ Building（指向 BUILDING.md）→ Project Structure → Contributing（CONTRIBUTING-zh/en）→ Privacy（PRIVACY.md）→ Licensing（AGPL+GPL 双许可）→ Acknowledgements（DroidFish/Stockfish/Lichess）→ Version（round-40~43 摘要 + 指向 worklog.md）→ 既有 changelog 全部下沉（v1.1.2 及更早折叠进 `<details>`，语法配平 1/1）。
+- 零丢失核验：切片重排法——新文件全部由原文切片拼装，242 个原标题文本逐一 assert 保留；除 3 处有意修改外每个原始行逐字在位（python3 assert）。块 A（round-31~39）标题层级 ## → ###（文本不变、锚点 slug 不变）。
+- 陈旧修正（均 assert count==1）：说明书文件名 v1.2.0→v1.2.3；最低系统 Android 5.0(API 21)→Android 6.0(API 23)（build.gradle:89 `minSdk 23` 实测）。
+
+## 3. README.md 目录树实测比对
+
+`find . -type f` 全量比对：19 个 Java 类齐、chess.src 11 JS + index.html.tpl 齐、8×README.license 齐、Manual/ 3 文件齐、mipmap 5 档 ×3 图标齐、根目录 26 文件齐；删幽灵条目 `LICENSE&NOTICE.zip`（全库不存在）；jniLibs 保持 (build-time) 标注（不在源码树）；行数注释实测复核：EngineProcessManager 118 / EngineHealthMonitor 97 / HapticManager 523 / StabilizationHelper 386 / ui.js 6,839（"~6,800"）全部仍准确。
+
+## 4. 全文件扫描（16 文件）
+
+LICENSE / LICENSE-AGPL v3 / LICENSE-GPL v3 / LICENSE-Apache v2.0 / NOTICE-gradle / AUTHORS-stockfish / About_v18.x.x_.md 为标准条款或纯清单，一字未动；NOTICE、NOTICE-DroidFish、README.md、8×README.license 按 round-43 任务更新（见下）；许可证全文未动。8 份 README.license 覆盖全部内容目录（chess.src、assets、java、src/main、cpp、res、根 assets、Manual），无缺失、无需新增。
+
+## 5. NOTICE / NOTICE-DroidFish
+
+- NOTICE 顶部补三条目（最新在上，格式仿既有）：Round-43（死键删除 + 文档总攻 + 验证数据）、Round-41（41-1~41-10 全项）、Round-40（40-1~40-6 全项，D1=A/D3=C）；round-42（42-5）条目已有，核对无漏（其范围内 8 处误标纠正 + canonical 清单调整齐全；42-1~42-4/42-8~42-11 为代码/注释项，按 round-40 既定安排由本轮各文档条目承载）。
+- NOTICE-DroidFish 末尾补 round-43 信息性条目（映射与归属不变）。
+
+## 6. BUILDING.md 实况更新
+
+逐项对照实测更新：AGP 8.7.3（build.gradle classpath 实测）补入 Requirements；arm64-v8a 唯一 ABI 注明；debug 构建 `.debug` 后缀可并存（42-11）补入 Build APK；引擎 .so SHA-256（8f7116d3…b61b5）补入 Engine binary 节；tar 源码打包排除清单新节（build/.gradle/.cxx/local.properties/lint-baseline.xml/jniLibs/*.keystore/keystore.properties/version.properties/.git/.idea）；**Aliyun 镜像顺序纠正**——原文「google()/mavenCentral() 在 Aliyun 之前」与实测相反（两 gradle 文件均为 Aliyun 在前、官方源兜底），已按实测改写；JDK 21 / SDK 35 / Build-Tools 34.0.0 / NDK 27.2.12479018 / CMake 3.31.6+ / Gradle 8.11.1 / 签名环境变量四件套 / version.properties 父目录 / lintVitalRelease 双跑 / v1+v2+v3 各项复核仍准确未动。顶部补 round-40~43 build notes。round-37/38/39 历史条目中 4 处 tablebase.js/worker-pool.js 误标 (AGPL v3) 按 42-5 同类裁定更正为 GPL v3 并加注（BUILDING.md 原不在 42-5 范围）。
+
+## 7. PRIVACY.md 实况更新
+
+权限表与 AndroidManifest.xml 实测 8 项逐一相符（INTERNET、WAKE_LOCK、VIBRATE、FOREGROUND_SERVICE、FOREGROUND_SERVICE_SPECIAL_USE、POST_NOTIFICATIONS、READ_EXTERNAL_STORAGE maxSdk32、WRITE_EXTERNAL_STORAGE maxSdk28），未动；网络访问唯一 fetch=tablebase.lichess.ovh（全库 grep 实测）；补 CSP 实况段（chess.html `connect-src` 仅 tablebase.lichess.ovh，stats.html `connect-src 'none'`）；无统计/广告 SDK（dependencies 块为空实测）；**唤醒锁表述按 42-4 纠正**（onCreate 一次性获取 + 30min 超时，onStartCommand 不重取，删「longer sessions re-acquire」不实表述）；**Engine Binary Integrity 节实况纠正**（当前代码为 ELF magic + 50MB 下限检查，无内嵌 SHA-256 运行时校验——实测 StockfishNative.java 无 MessageDigest 引擎校验路径；已知良好 SHA-256 录于 BUILDING.md 供人工核对）；顶部补 round-40~43 条目（无隐私相关变更如实记录）。
+
+## 8. README.license ×8 补录
+
+chess.src、src/main/assets、java/com/Regalia、src/main、cpp、res、根 assets、Manual 各份按既有 changelog 格式补 round-40/41/42/43 条目（实体变更/no-change 如实；chess.src 与 assets 两份含 58 死键删除 + chess.html 重建 23,340 行 / 1,405,381 字节实测值；Manual 份仅补「无内容变更——说明书适配留待 Stage 6」条目）。chess.src/assets 两份原有 round-42(42-5) 条目保留，新增 42 代码条目置其上方，41/40 条目插入 42-5 与 round-39 之间，时序正确。
+
+## 9. 验证汇总
+
+- 死键：58→0；i18n 404 键 zh==en；全库引用扫描零命中（i18n 引用模式）。
+- node --check ×11 全过；build-chess.py 两次重建 md5 一致（49049a41846a1ee33bae7b24f6f4cd1d）。
+- README：242 原标题全保留、3 处有意修改、`<details>` 配平、节序 assert。
+- worklog 安全协议：读全文 → prepend → assert endswith(orig) → 写 → 复读校验（本条目即按此协议写入）。
+
+## 存疑清单
+
+1. PRIVACY.md 「Engine Binary Integrity」原称内嵌 SHA-256 运行时校验，与当前代码矛盾（实测仅 ELF+大小检查）——已按代码实况修正并加注；若历史上确有该校验后被移除，属更早版本事实，未深考。
+2. NOTICE round-42 条目仅覆盖 42-5（既定安排），42-1~42-4/42-8~42-11 未单列 NOTICE 条目——按 round-40 既定安排处理，未臆增。
+3. Round-31~39 顶层标题层级由 ## 降为 ###（文本与锚点不变），如需保持原层级可回退该一处。
+
+# v1.2.3 round-42 QC 补修（2026-08-10）——许可标签残留 + SECURITY_FIXES 引用修正
+
+独立 QC 裁定 round-42 为 FAIL（仅文档残留），本条目记录补修（10 处 assert-count 精确替换，全部 count 校验通过）：
+1. 42-5 许可残留 R1：chess.src/README.license Round-17/18 分类清单 chess960.js 由 GPL 栏移入 AGPL 栏（镜像 NOTICE 已修正同款，附 round-42 更正注）。
+2. R2：同文件 round-13 条目——index.html.tpl 移出 AGPL 栏（其头部自 v1.0.8 PHASE 37/49 即为 GPL v3）；built chess.html 更正为 AGPL v3 combined work。
+3. R3：README.md ×6 "rebuilt from chess.src/ (GPL v3)" → "(AGPL v3, combined work — corrected in round-42 (42-5, D2=A))"；另 Phase 68 枚举中 chess.html 移出 GPL 文件列举。
+4. R4：NOTICE Phase 24 枚举移除 chess960.js（头部始终 AGPL v3，附更正注）。
+5. SECURITY_FIXES.md：×2 "build-chess.py:102-107" → ":122-127"（重建树实际行号）；×2 "v1.2.2 PHASE 71" → "v1.1.2 PHASE 71"；×1 "stats.html:3945" → ":3956"（均已核实实际位置）。
+6. 补修后全库残留扫描：chess.html GPL 误标 0、chess960 GPL 误标 0（仅余修复记述与当时正确的历史标签，宁留勿删）。
+
+# Regalia v1.2.3 — round-42 工作日志（2026-08-10 UTC+8）
+
+## 任务来源
+
+按《Regalia-v1.2.3-优化方案》§3 round-42 任务表（42-1~42-10）+ issue-triage-register.md D 表 42-11 实施，决策点 D2=A（chess.html 组合作品 → AGPL v3 口径）、D4=A（仅纠正注释）、D5=A（死键先标记一轮）。共 12 项：10 项完成、2 项（42-9 内两子项）按硬性规范跳过并留证。
+
+## 环境状态
+
+- 本轮仅 python3 + node 可用；无 JDK/Android SDK（Java/gradle 改动用 python3 精确字符串替换，每处 `assert count==1`，未编译）。
+- 版本号 v1.2.3 不变；未改任何版本字段（42-11 仅 debug 块加后缀，release/defaultConfig 未动）。
+
+## 修复实施
+
+### 42-1 超时和棋文案定稿（P2-7 跟进，FIDE 6.9 严格语义）+ 42-12 衔接抽查
+
+1. game-logic.js 键 `pgn_timeout_draw_insufficient` 定稿：zh「超时，但任何合法着法序列均无法将杀，和棋」/ en「Timeout, but mate is impossible by any series of legal moves — draw」——FIDE 6.9 严格语义（无任何合法着法序列可将杀才判和，宽于"子力不足"表述）；注释注明 winnerLacksMatingMaterial 为子力代理实现。双语键齐全（全表 462 键 zh/en 复核零缺失）。
+2. ai-bridge.js `_buildTerminationTag`：null winner 分支 `[Termination "Both flag fall / insufficient material"]` → `[Termination "Time forfeit draw (FIDE 6.9)"]`——原文案两处失实（仅一方掉旗非 "Both"；判据非单纯子力不足）。
+3. ai-bridge.js PGN 注解分支（:1358-1373）与 `_deriveGameResult` 注释同步为 6.9 措辞；42-12 抽查两分支与定稿文案一致。
+4. ui.js `_gameOverStrFromStatus('timeout')` null winner 分支与 ui-gameflow.js 判和路径注释解除"待 round-42 定稿"挂起表述。
+验证：node vm 提取 T()/_i18n + _buildTerminationTag 实测——zh/en 新文案、draw 分支新 Termination、winner 分支 "Time forfeit" 不变 PASS。
+
+### 42-2 tick 判负钟面归零（P3-14）
+
+ui-gameflow.js `_onGameClockExpired` 入口同步 `gameClocks[color].remainingSec=0; displayRemainingSec=0;`——tick 路径只写 displayRemainingSec（:268），头栏 HTML（ui.js:3261/3309）读 remainingSec，判负后残留上次 committed 正数。验证：node vm 桩实测 147.3→0 PASS。
+
+### 42-3 computeVisibleCastleMarks 优先指定列（P3-28）
+
+game-logic.js：新增 `_markRook` 辅助——`*RookFile` 非空且指定列仍有同色车时 🔁 落在指定车，否则回落最近车扫描（legacy null 字段状态兼容）。4 分支（白/黑 × 王/后翼）统一走辅助。验证：node vm 4 用例（双车指定列/ null 回落最近车/指定车已走回落/标准初始）全 PASS。
+
+### 42-4 EngineService 唤醒锁注释纠正（P3-17，D4=A）
+
+EngineService.java:133-144 注释更正：锁在 onCreate() 一次性 acquire(30min)，onStartCommand 不重取，30 分钟后 CPU 可休眠；删除"longer sessions can re-acquire"不实表述，记录 D4=A 裁定理由。括号配平校验 {}/() 差均为 0。
+
+### 42-5 许可统一（P2-8 + P3-19 + P2-9，D2=A）——方向裁定留证
+
+**关键裁定（与任务书括号建议相左，按证据执行）**：任务书建议"改 tablebase/worker-pool 文件头部 GPL→AGPL"，但证据链指向相反方向——① 底册 P2-8 原文「实为 GPL v3」；② D2=A 选项原文「逐文件标注不变」；③ NOTICE:807-810 记录 round-22 已做过 49 处 AGPL→GPL 同向纠正（两文件为 DroidFish 派生，头部即 GPL）；④ NOTICE:492-496 明文 worker-pool GPL→AGPL→GPL 历史、删历史条目即 falsify history；⑤ 改头部会使 8 处汇总清单 + 全部 round-30~36 历史条目由对变错。**故执行：文档误标对齐文件头部，头部不动、他人版权行不动。**
+改动（29 处纠偏 + 3 个 round-42 条目）：
+- tablebase.js/worker-pool.js 误标 AGPL→GPL：NOTICE 原 :22/:56/:60/:139、chess.src/README.license 原 :11/:27/:31/:61（8 处）。
+- chess960.js 误标 GPL→AGPL（头部一直 AGPL）：NOTICE 原 :965/:1449/:2093、chess.src/README.license 原 :473/:904/:998/:2760/:2813、assets/README.license 原 :883/:922（10 处）。
+- state-store.js NOTICE 原 :699（round-30 条目）GPL→AGPL——round-31 更正注只覆盖 chess.src 副本，NOTICE 副本漏改（1 处）。
+- chess.html 口径统一 AGPL v3（组合作品，D2=A）：assets/README.license round-37/38/39 三条（原 :3/:11/:21-23）、NOTICE 七处（原 :6032/:6070/:6205/:6280/:6415/:6518/:6602）。
+- NOTICE round-17/18 条目 canonical 清单：chess960.js 移入 AGPL 列、stats.html 与 index.html.tpl 移入 GPL 列（对齐头部）。
+- NOTICE / chess.src/README.license / assets/README.license 顶部各加 round-42 42-5 条目（最新在上格式；其余六件套文档同步仍按 round-40 决定留 round-43）。
+全库复核：8 个 README.license 副本逐一 grep——仅 chess.src 与 assets 两份含受影响标签（各副本本即按目录独立的 changelog，不存在逐字节相同的"构建副本"）；其余模块（ai-bridge/game-logic/ui*/pgn-standard=GPL、eco-data/state-store=AGPL）头部与文档一致。v1.0.x 时代 game-logic/pgn-standard "(AGPL v3, original)" 标签系 AGPL→GPL 重分类波前的历史正确表述（与 worker-pool Phase 35→36 同类），按宁留勿删保留。
+
+### 42-6/42-7 SECURITY_FIXES.md 实况更新（用户硬性要求）
+
+通读全文逐项对照当前代码核实后重写（结构保留：新增补录段在上，原始 8 项在下）：
+- 条目 5/6（CSP SHA-256 hash）标注**已回退**：v1.1.2 PHASE 71 有意回退 unsafe-inline（stats.html:43、index.html.tpl:38 实测；hash 值与字符数描述失效）；补「当前 CSP 实况」段（form-action/object-src 'none'、connect-src 白名单、base-uri）。
+- 条目 2（chmod 700）位置更正：已随 round-4 迁移 EngineProcessManager.java:93/:103；条目 7 行号漂移更正（ui.js:459/:478，仍在位）；条目 8 checkSelfPermission 迁移更正（PermissionHelper.java:94/:98/:138、FileIoHelper.java:231）；条目 3 补 round-36 randomSPID 委托 secureRandomInt 演进；条目 1/4 复核在位。
+- 新增「round-17~41 安全修复补录」表 18 条（从 worklog.md 提取并逐条 file:line 复核）：round-18 权限移除/CSP 卫生/XSS 转义、round-19 日志注入（S5443）、round-20/23/29/40 ReDoS 系列、round-21 证书变更、round-30 SQL LIKE 转义 + 路径穿越、round-36 弱随机数、round-40 fenToState 输入校验、round-41 导入上限 + 日志消毒旁路。
+- 「安装方法」hash CSP 注意事项标失效；验证清单更新为 round-42 版。
+
+### 42-8 i18n 死键标记（P3-30，D5=A，只标记不删除）
+
+程序化复核：462 键逐一在 chess.src 全部模块 + stats.html + 全部 Java + res/xml + tpl 做引用扫描（剔除键表定义行与 chess.html 生成副本），零引用键恰 58 个，与底册清单一致。动态引用复核：`T('prefix'+…)` / 模板串拼接 / `_i18n[变量]` 模式零命中；`T(key)`（ui.js:2124）与 `T(cls)`（stats.html:1842）两动态点的键源均为静态字面量数组（_tcTypes/classifications），已被扫描覆盖。**剔除数 0**。58 键行尾各加 ` // round-42 marked dead — remove next round` 标记，下轮删除。标记后 node --check PASS、462 键 zh/en 双语零缺失、333 个静态引用键零缺失。
+
+### 42-9 陈旧注释批次（P3-12/27/29；P3-13/18/20 按规范跳过）
+
+1. eco-data.js:155 "all ~3000 openings" → 564（node 实测 ECO_OPENINGS.length=564）。
+2. chess960.js:208 SP-518 示例 "HAah" → "AaHh"（toShredderCastling 按车文件 a→h 排序输出，实测 AaHh；头注 :7「HAah format」为格式通称，保留）。
+3. game-logic.js 3 处 `_updateBoardIncremental` 注释（:2241/:2463/:2962）更正：该消费者 round-20 已随 DIRTY_* 子系统移除，boardVersion 当前无读者，仅作快照元数据保留（代码不动）。
+跳过留证：P3-13 formatHalfMove（行为变更，方案标注可选，非注释类）；P3-18 strings.xml app_name（硬性规范：版本字符串不动）；P3-20 README.md 目录树（属 round-43 范围）。
+
+### 42-10 `_stripFnBody` 约定加固（P3-24）
+
+stats.html：正则替换前加 `re.test(js)` 静态检查，不匹配即 console.error 响亮报错（原静默 no-op 会导出含全函数体的双定义 HTML）；注释强化「列 0 `}`」约定。当前 9 个目标函数逐一 regex 复验均符合约定。
+
+### 42-11 build.gradle debug applicationIdSuffix（#48-P3-7）
+
+debug 块加 `applicationIdSuffix ".debug"` + `versionNameSuffix "-debug"`（分诊建议一并采纳），debug/release 可并存安装；release 块与 defaultConfig 版本字段零改动（python3 精确替换 count==1）。
+
+## 验证
+
+- `node --check` ×11 模块全部 PASS；chess.html/stats.html 内嵌脚本各 1 块 PASS（含重建后 bundle）。
+- `python3 build-chess.py` 重建两次，md5 逐字节一致（23,405 行 / 1,412,514 字节），chess.html 时间戳新于全部源模块，无 .tmp 残留、`^export` 残留 0、bundle 含 71 处 round-42 引用。
+- node vm 冒烟：42-1（双语新文案 + Termination 两分支）、42-2（掉旗归零 147.3→0）、42-3（指定列/回落 ×4 用例）全 PASS；i18n 462 键双语零缺失、333 静态引用零缺失。
+- Java/gradle：EngineService 括号配平 {}/() 差 0；build.gradle release 块与版本字段零改动（grep 复核）。
+- 全部 round-42 编辑复核在位（58 死键标记 + 各文件 42-x 引用计数 + SECURITY_FIXES.md sha 复读）。
+
+## 偏差记录
+
+- 42-5 方向裁定见上（文档对齐头部，未改文件头部）——证据链 5 条在案，若项目方后续裁定头部确应升 AGPL，需同步改 8 处汇总清单并处理 round-22 口径，属另一决策。
+- 42-9 三子项跳过（证据见上）；P3-20/strings.xml/README.md 属 round-43。
+- 文档六件套（说明书/NOTICE/PRIVACY/README/8×README.license 的 round-40~42 变更记录）仍按 round-40 决定统一在 round-43 批次补记；本轮仅写 42-5/42-6 任务范围内的 NOTICE + 2×README.license 许可条目与 SECURITY_FIXES.md。
+
+
+# Regalia v1.2.3 — round-41 工作日志（2026-08-10 UTC+8）
+
+## 任务来源
+《Regalia-v1.2.3-优化方案》§3 round-41（健壮性巩固，41-1~41-7）+ issue-triage-register.md D 表新增 41-8/41-9/41-10（GitHub issue #48 分诊落地）。
+
+## 修复实施（10 项，全部完成，无误报跳过）
+1. **41-1 MultiPV 两处**：ai-bridge.js `pv.pv?.pv.length>0` → `pv.pv!=null&&pv.pv.length>0`（pv 为字符串，旧表达式抛 TypeError 致备选线路永不渲染）；`_updateAIThinkDisplay` hint 分支加 `!(_cachedMultiPV>1&&_multiPVLines.length>0)` 守卫，⭐/📌 文本不再被同 tick aiThinkInfo 覆盖。
+2. **41-2 worker 瞬时失败同步兜底**：worker-pool.js `_dispatchNext` 池空且无繁忙 worker 可再触发时，队首任务立即 `_syncFallback` 主线程 resolve/reject 并清 timeout——消除 30s 假死；`_workerSupported` 保持 true（瞬时重试语义不变）。
+3. **41-3 设置导入大小上限**：SafPickerHelper.java `SETTINGS_MAX_CHARS=1_000_000`，逐行累计超限追加前抛 IOException 快速失败（单行巨行也拦），既有 catch→toast。
+4. **41-4 `_reattachActiveAnimations` 条件写反修正**：game-logic.js `if(!a.el)continue; if(!a.el.parentNode){...}`。
+5. **41-5 castlingRights 8 字段不变式**：game-logic.js 重建处补 4 个 `*RookFile:null`（与既有 :1513/:1517 区域同款；chess960.js 消费方 `!=null` 检查对 null 安全）。
+6. **41-6 build-chess.py 三处加固**：模块 export 残留→exit 3；占位符 count!=1→exit 2；tmp+`os.replace` 原子写。负向自测全过。
+7. **41-7 拦截 UCI 命令日志消毒**：StockfishNative.java `command.trim().replace("\r","\\r").replace("\n","\\n")`，与 JsBridgeGateway round-19 一致。
+8. **41-8 RootDetector API 33+**：`PackageInfoFlags.of(0)` 分支，旧级保留 int 重载（#48-P2-2）。
+9. **41-9 裸 `Thread.sleep(800)` → `sleepGracefully(800)`**（中断语义统一；同方法 1000ms sleep 不在分诊范围未动）（#48-P2-10）。
+10. **41-10 probeTablebase 入口 pieceCountLE7 防御**：8 子及以上直接 return null，与调用方形成纵深；注释更新为"入口已防御"（#48-P3-5）。
+
+## 验证
+node --check ×11 全过；build-chess.py 两次重建 md5 一致；worker-pool 模板/同步双副本功能等价实测逐字节一致；Java 三文件 {} 配平零差；node vm 烟雾（41-1/41-2/41-4/41-5/41-10）全 PASS；版本字段零改动。
+
+## 备注
+文档六件套的 round-41 变更记录统一在 round-43 批次补记（round-40 既定安排）。
+
+# Regalia v1.2.3 — round-40 工作日志（2026-08-10 UTC+8）
+
+## 任务来源
+《Regalia-v1.2.3-优化方案》§3 round-40（bug 修复梯队，40-1~40-6），决策点 D1=A（FIDE 严格）、D3=C（显式外部关闭标志）。
+
+## 修复实施（6 项，全部完成）
+1. **40-1/40-2（合并）restartEngine 自中断修复 + 状态机巩固**（StockfishNative.java）：新增 `private volatile boolean _externalShutdownRequested`，仅外部关闭入口 `shutdown()` 置位；原方法体移交私有 `shutdownInternal()`；restartEngine 内部改调 `shutdownInternal()`；中断判定分流——外部标志 true 保持 "Restart aborted" 放弃，否则 `Thread.interrupted()` 清自致中断位继续重启；成功路径 `shutdownRequested` 与外部标志双复位（:1541/:1951 守卫语义不变）；restartEngine 头部状态机文档（RUNNING/SHUTTING_DOWN/RESTARTING/RECOVERING/STOPPED）。无重构、无签名变更。
+2. **40-3 王车易位权利行校验**（game-logic.js ×4）：makeMv 车移/车被吃 + inPlace `_movingRookSide`/`_capturedRookSide` 列比较补行校验（白 row===7/黑 row===0），与角落兜底路径自洽。
+3. **40-4 FIDE 6.9 严格化（D1=A）**：game-logic.js 删除 `counts.knight===2&&counts.bishop===0` KNN 豁免（KNN 有帮助杀→超时判胜）；ui-gameflow.js 恢复 round-25 契约（判和 `_gameOverStatusKey='timeout'`+`_timeoutWinnerColor=null`，ai-bridge Termination 与 PGN 注解 null-winner 分支恢复可达）；ui.js `_gameOverStrFromStatus('timeout')` null-winner 返回 `T('pgn_timeout_draw_insufficient')`（文案定稿待 42-1）、formatEval 超时分支 null-winner 守卫（🤝/draw/0.0）。
+4. **40-5 PGN 标签剥离正则**（tablebase.js）：扩为 `/\[\s*[A-Za-z]\w*\s+(?:"(?:[^"\\]|\\.)*"\s*|\S[^\]\n]*?)\]/g`，兼容无引号标签；病态输入实测线性无回溯爆炸。
+5. **40-6 fenToState 严格校验**（tablebase.js）：字段数 ≤6、兵不在 1/8 排、双方王恰好各一、halfMoveClock 非负整数、fullMoveNumber 正整数。
+6. **40-QC 注释修正**：ui-gameflow.js 时钟到期注释 K+N+N 移出"不能将杀"列举（round-40 后 KNN 有帮助杀）。
+
+## 验证
+node --check ×11 全过；build-chess.py 重建成功；node vm 烟雾 27 场景全过（40-3 六场景含 inPlace 捕获、40-4 七组材料、40-5 语义等价+回溯安全、40-6 十组畸形/合法 FEN）；Java 改动方法体及全文件 {} 配平；版本字段零改动。独立 QC：PASS。
+
+## 备注
+文档六件套统一在 round-43 批次更新。
+
 # Regalia v1.2.3 — round-39 工作日志（2026-07-20 UTC+8）
 
 ## 任务来源

@@ -1414,9 +1414,6 @@ const _i18n={
 'enter_review_hint':{zh:'点击进入复盘界面（可使用 📚 缓存管理器或 🗃️ 导入 PGN）',en:'Click to enter review mode (use 📚 Cache Manager or 🗃️ to import PGN)'},
 'stats':{zh:'统计',en:'Stats'},
 'stats_title':{zh:'📊 统计数据',en:'📊 Statistics'},
-'stats_export_html':{zh:'💾 HTML',en:'💾 HTML'},
-'stats_review':{zh:'🗂️ 复盘',en:'🗂️ Review'},
-'stats_save_html':{zh:'保存HTML统计文件',en:'Save HTML stats file'},
 'stats_saved':{zh:'HTML统计文件已保存',en:'HTML stats file saved'},
 'save_pgn_prompt':{zh:'💾 是否保存PGN文件？',en:'💾 Save PGN file?'},
 'save_pgn_yes':{zh:'是',en:'Yes'},
@@ -1456,11 +1453,6 @@ const _i18n={
 'time_control_inc_sec':{zh:'每步加秒',en:'Increment (sec/move)'},
 'time_control_delay_sec':{zh:'每步延迟秒数',en:'Delay (sec/move)'},
 'time_control_note':{zh:'启用计时赛后，PGN 导出将包含 [TimeControl] 头与每步的 [%clk] 注释（剩余时间）；未启用计时赛时，PGN 注释使用 [%emt]（每步实际用时）。',en:'With time control enabled, PGN export includes [TimeControl] header and per-move [%clk] annotations (remaining clock). Without time control, PGN comments use [%emt] (elapsed move time).'},
-'time_control_white_clock':{zh:'白方时钟',en:'White Clock'},
-'time_control_black_clock':{zh:'黑方时钟',en:'Black Clock'},
-'time_control_flag_fell':{zh:'超时！',en:'Time out!'},
-'time_control_low':{zh:'时间紧张！',en:'Time trouble!'},
-'classic_openings':{zh:'经典开局（可选）',en:'Classic Openings'},
 'free_opening_btn':{zh:'自由开局',en:'Free Play'},
 'from_start':{zh:'从初始局面开始',en:'From starting position'},
 'eco_search_ph':{zh:'输入ECO编号或开局名搜索',en:'Search ECO code or name'},
@@ -1477,11 +1469,7 @@ const _i18n={
 'copyright_license':{zh:'版权与许可',en:'Copyright & License'},
 'copy_fen':{zh:'复制当前局面的FEN',en:'Copy current FEN'},
 'import_fen':{zh:'导入FEN字符串',en:'Import FEN'},
-'fen':{zh:'FEN',en:'FEN'},
 'import_label':{zh:'导入',en:'Import'},
-'player_color_w':{zh:'执白',en:'White'},
-'player_color_b':{zh:'执黑',en:'Black'},
-'start_game':{zh:'开始游戏',en:'Start Game'},
 'cancel':{zh:'取消',en:'Cancel'},
 'white_wins':{zh:'白方获胜',en:'White wins'},
 'black_wins':{zh:'黑方获胜',en:'Black wins'},
@@ -1501,11 +1489,6 @@ const _i18n={
 // The eval bar keeps the abbreviated "SD" for compactness.
 'seldepth_label':{zh:'选深',en:'SelDepth'},
 'evaluating':{zh:'局势评估',en:'Position Eval'},
-'lang_toggle_zh':{zh:'↔️中',en:'↔️中'},
-'lang_toggle_en':{zh:'↔️EN',en:'↔️EN'},
-'ponder_depth':{zh:'深度',en:'Depth'},
-'ponder_nodes':{zh:'节点',en:'Nodes'},
-'ponder_eval':{zh:'评估',en:'Eval'},
 'level_1':{zh:'初学者',en:'Beginner'},
 'level_2':{zh:'新手',en:'Novice'},
 'level_3':{zh:'俱乐部棋手',en:'Club'},
@@ -1516,15 +1499,7 @@ const _i18n={
 'level_8':{zh:'⚙️ 手动设置',en:'⚙️ Custom'},
 'engine_config':{zh:'引擎配置',en:'Engine Config'},
 'threads':{zh:'线程数',en:'Threads'},
-'hash_size':{zh:'哈希表大小',en:'Hash Size'},
-'multi_pv':{zh:'多线分析',en:'MultiPV'},
-'move_overhead':{zh:'走法超时',en:'Move Overhead'},
-'show_wdl':{zh:'显示胜和负概率',en:'Show WDL'},
-'skill_level':{zh:'技能等级',en:'Skill Level'},
-'limit_elo':{zh:'限制ELO',en:'Limit ELO'},
 'auto_config':{zh:'默认配置',en:'Default Config'},
-'export_settings':{zh:'导出设置',en:'Export'},
-'import_settings':{zh:'导入设置',en:'Import'},
 'pgn_copied':{zh:'PGN已复制到剪贴板',en:'PGN copied to clipboard'},
 'export_pgn':{zh:'导出PGN到文件',en:'Export PGN to file'},
 'pgn_exported':{zh:'PGN已导出',en:'PGN exported'},
@@ -1535,22 +1510,13 @@ const _i18n={
 'pgn_export_include_annotations_yes':{zh:'是，包含特殊注释',en:'Yes, include special annotations'},
 'pgn_export_include_annotations_no':{zh:'否，不包含特殊注释',en:'No, exclude special annotations'},
 'fen_copied':{zh:'FEN已复制到剪贴板',en:'FEN copied to clipboard'},
-'fen_imported':{zh:'FEN导入成功',en:'FEN imported'},
 'settings_imported':{zh:'设置导入成功',en:'Settings imported'},
 'settings_import_fail':{zh:'导入失败',en:'Import failed'},
 'settings_import_done':{zh:'设置导入完成',en:'Settings import done'},
 'engine_unavailable':{zh:'引擎不可用，无法计算提示',en:'Engine unavailable'},
 'hint_request_failed':{zh:'引擎提示请求失败',en:'Hint request failed'},
-'init_failed':{zh:'应用初始化失败',en:'App init failed'},
-'webview_unavailable':{zh:'WebView不可用',en:'WebView unavailable'},
-'ui_create_failed':{zh:'界面创建失败',en:'UI creation failed'},
-'load_failed':{zh:'加载棋盘页面失败',en:'Failed to load board'},
-'review_eval':{zh:'复盘评估',en:'Review Eval'},
-'exit_review':{zh:'退出复盘',en:'Exit Review'},
-'review_analyze':{zh:'🔄 分析全部',en:'🔄 Analyze All'},
 'about_copyright':{zh:'© 2026 Regalia. All rights reserved.',en:'© 2026 Regalia. All rights reserved.'},
 'about_agpl':{zh:'本应用整体采用',en:'This application is licensed under'},
-'about_source_code':{zh:'源代码：https://github.com/YDW99/Regalia',en:'Source code: https://github.com/YDW99/Regalia'},
 // v1.0.4 Round-5 Rev27: Split source-code line into prefix + URL so the URL
 // can be rendered as a real <a> hyperlink that opens in the system browser
 // via AndroidBridge.openUrlInBrowser(). The full-string variant above is
@@ -1574,12 +1540,10 @@ const _i18n={
 'no_move_records':{zh:'暂无走法记录',en:'No move records'},
 'copy_failed':{zh:'复制失败，请手动复制',en:'Copy failed, please copy manually'},
 'file_browse_failed':{zh:'文件浏览失败',en:'File browse failed'},
-'settings_imported_ok':{zh:'设置已导入',en:'Settings imported'},
 'settings_read_fail':{zh:'无法读取设置文件',en:'Cannot read settings file'},
 'restarting_engine':{zh:'正在重启引擎...',en:'Restarting engine...'},
 'engine_unavailable_bridge':{zh:'引擎接口不可用',en:'Engine interface unavailable'},
 'restart_failed':{zh:'重启失败',en:'Restart failed'},
-'requesting_storage':{zh:'正在请求存储权限...',en:'Requesting storage permission...'},
 'settings_exported':{zh:'设置已导出到',en:'Settings exported to'},
 'settings_clipboard_fallback':{zh:'设置已复制到剪贴板（文件写入失败）',en:'Settings copied to clipboard (file write failed)'},
 'built_in_only':{zh:'v1.0.3: 仅支持内置引擎',en:'v1.0.3: Built-in engine only'},
@@ -1691,14 +1655,12 @@ const _i18n={
 'copy_review_fen':{zh:'复制当前复盘局面的FEN',en:'Copy FEN'},
 'return_game':{zh:'返回对局',en:'Return to Game'},
 'pgn_cache_manager':{zh:'📚 PGN缓存管理',en:'📚 PGN Cache Manager'},
-'pgn_cache_btn':{zh:'PGN缓存',en:'PGN Cache'},
 'pgn_cache_empty':{zh:'暂无缓存的PGN对局。点击下方"保存当前PGN到缓存"按钮以创建。',en:'No cached PGN games yet. Click "Save current PGN to cache" below to create one.'},
 'pgn_cache_name_prompt':{zh:'请输入缓存名称（如：经典对局1）：',en:'Enter cache name (e.g.: Classic Game 1):'},
 'pgn_cache_save_default':{zh:'我的对局',en:'My Game'},
 'pgn_cache_name_too_long':{zh:'名称过长（最多60字符）',en:'Name too long (max 60 chars)'},
 'pgn_cache_name_invalid':{zh:'名称包含非法字符（/ \\ : * ? \" < > |）',en:'Name contains invalid chars (/ \\ : * ? \" < > |)'},
 'pgn_cache_save_current':{zh:'保存当前PGN到缓存',en:'Save current PGN to cache'},
-'pgn_cache_import':{zh:'导入',en:'Import'},
 'pgn_cache_delete_sel':{zh:'删除选中',en:'Delete Selected'},
 'pgn_cache_close':{zh:'关闭',en:'Close'},
 'pgn_cache_select_all':{zh:'全选',en:'Select All'},
@@ -1727,7 +1689,6 @@ const _i18n={
 'pgn_cache_tags_save_failed':{zh:'标签保存失败',en:'Failed to save tags'},
 // v1.0.4 Round-5 Rev21: Tag filter / search
 'pgn_cache_search_placeholder':{zh:'搜索名称或标签…',en:'Search name or tags…'},
-'pgn_cache_search_apply':{zh:'应用搜索',en:'Apply search'},
 'pgn_cache_search_clear':{zh:'清除筛选',en:'Clear filter'},
 'pgn_cache_filter_all':{zh:'全部',en:'All'},
 // v1.0.8 PHASE 39: tag-presence filter buttons
@@ -1774,10 +1735,6 @@ const _i18n={
 'import_settings_btn':{zh:'📥 导入设置',en:'📥 Import'},
 'loading_title':{zh:'Regalia v1.2.3',en:'Regalia v1.2.3'},
 'click_skip_loading':{zh:'点击跳过加载',en:'Click to skip loading'},
-'white_checkmate':{zh:'白方将杀获胜',en:'White wins by checkmate'},
-'black_checkmate':{zh:'黑方将杀获胜',en:'Black wins by checkmate'},
-'white_resign':{zh:'白方认输',en:'White resigns'},
-'black_resign':{zh:'黑方认输',en:'Black resigns'},
 'brilliant':{zh:'妙着',en:'Brilliant'},
 'blunder':{zh:'漏着',en:'Blunder'},
 'great':{zh:'好着',en:'Great'},
@@ -1789,7 +1746,6 @@ const _i18n={
 'losing':{zh:'你输了',en:'You Lost'},
 'draw_game':{zh:'和棋',en:'Draw'},
 'analyzing_ellipsis':{zh:'分析中',en:'Analyzing'},
-'white_side_short':{zh:'白方',en:'White'},
 'stalemate':{zh:'逼和！平局！',en:'Stalemate! Draw!'},
 'fifty_move_draw':{zh:'50步规则和棋！',en:'50-move rule draw!'},
 'seventy_five_move_draw':{zh:'75步规则和棋！',en:'75-move rule draw!'},
@@ -1828,7 +1784,11 @@ const _i18n={
 'pgn_timeout_white_wins':{zh:'白方超时胜',en:'White wins by timeout'},
 'pgn_timeout_black_wins':{zh:'黑方超时胜',en:'Black wins by timeout'},
 // v1.2.3 round-25 (FIDE 6.9): timeout with insufficient material → draw comment
-'pgn_timeout_draw_insufficient':{zh:'超时但子力不足，和棋',en:'Timeout but insufficient material, draw'},
+// v1.2.3 round-42 (42-1): wording finalized to strict FIDE 6.9 semantics —
+//   the game is drawn when the side that did NOT flag cannot checkmate by any
+//   possible series of legal moves (a broader criterion than mere "insufficient
+//   material"; winnerLacksMatingMaterial below is the material-based proxy).
+'pgn_timeout_draw_insufficient':{zh:'超时，但任何合法着法序列均无法将杀，和棋',en:'Timeout, but mate is impossible by any series of legal moves — draw'},
 // v1.1.1 Phase 59 Task 59.4: Prefix label for the initial-position annotation
 //   appended to the first move's {} comment (mirrors the every-5-moves
 //   annotation but marks it as the initial position so dedup can detect it).
@@ -1839,7 +1799,6 @@ const _i18n={
 'manual_path':{zh:'手动输入路径',en:'Manual path'},
 'cancel_btn':{zh:'取消',en:'Cancel'},
 'import_settings_engine':{zh:'引擎',en:'Engine'},
-'import_settings_all':{zh:'设置',en:'Settings'},
 'file_browse_label':{zh:'文件浏览',en:'File Browser'},
 'checkmate_arrow':{zh:'→将杀',en:'→Mate'},
 'escape_mate':{zh:'←脱杀',en:'←Unmate'},
@@ -1849,7 +1808,6 @@ const _i18n={
 'setup_no_white_king':{zh:'缺少白方王',en:'Missing white king'},
 'setup_no_black_king':{zh:'缺少黑方王',en:'Missing black king'},
 'setup_kings_adjacent':{zh:'双方王不能相邻',en:'Kings cannot be adjacent'},
-'setup_no_pieces':{zh:'棋盘上无棋子',en:'No pieces on board'},
 'setup_pawn_on_rank':{zh:'兵不能在第',en:' pawn cannot be on rank '},
 'setup_check_impossible':{zh:'方王处于被将军状态（非法局面）',en:' king is in check (illegal position)'},
 'setup_king_count_over':{zh:'方王数量超过1个',en:' king count exceeds 1'},
@@ -1877,8 +1835,6 @@ const _i18n={
 'importing_pgn':{zh:'⏳ 正在导入PGN…',en:'⏳ Importing PGN…'},
 'pgn_fen_rejected':{zh:'此输入为FEN格式，请使用「粘贴FEN」按钮导入。PGN导入仅接受完整棋谱文本。',en:'This is FEN format. Please use the "Paste FEN" button instead. PGN import only accepts full game notation.'},
 'pgn_paste_hint':{zh:'粘贴PGN棋谱字符串（仅限PGN格式，FEN请使用「粘贴FEN」按钮）',en:'Paste PGN game notation only (for FEN, use "Paste FEN" button)'},
-'fen_pgn_paste_label':{zh:'粘贴内容:',en:'Paste content:'},
-'confirm_import':{zh:'导入',en:'Import'},
 // i18n for game-over checkmate message
 'checkmate_excl':{zh:'将杀！',en:'Checkmate! '},
 'wins_excl':{zh:'获胜！',en:' wins!'},
@@ -1889,33 +1845,23 @@ const _i18n={
 'resign_confirm_msg':{zh:'你确定要认输吗？这将结束当前对局，对方获胜。',en:'Are you sure you want to resign? This ends the current game; your opponent wins.'},
 'resign_yes':{zh:'确认认输',en:'Yes, Resign'},
 'resign_no':{zh:'取消',en:'Cancel'},
-'white_resigns':{zh:'白方认输',en:'White resigns'},
-'black_resigns':{zh:'黑方认输',en:'Black resigns'},
 'resigns_suffix':{zh:'认输',en:'resigns'},
 // v1.0.4 Rev47: Timeout win suffix for _gameOverStrFromStatus('timeout')
 'timeout_win_suffix':{zh:'超时胜',en:'wins by timeout'},
 // v1.0.4 Round-5 Rev28: Stats page → main/review PGN import-back prompt
-'stats_import_back_title':{zh:'🗃️ 是否将PGN导入到对局？',en:'🗃️ Import PGN to game?'},
-'stats_import_back_msg':{zh:'你在统计页面导入过 PGN。是否将其导入到当前对局（会替换主界面/复盘界面已记录的走法）？',en:'You imported a PGN on the stats page. Import it into the current game (replaces the moves recorded in the main/review view)?'},
-'stats_import_back_yes':{zh:'是',en:'Yes'},
-'stats_import_back_no':{zh:'否',en:'No'},
-'stats_import_back_cancel':{zh:'取消',en:'Cancel'},
 'stats_import_back_no_pgn':{zh:'统计页面未导入新 PGN，无需同步。',en:'No new PGN imported on the stats page; nothing to sync.'},
 // v1.0.7 — Quick toolbar (below the board, above the player bar)
 'quick_toolbar':{zh:'快捷工具栏',en:'Quick Toolbar'},
 // v1.0.7 — Setup-mode castle-rights marker (🔁) and en-passant marker (⚡)
 'setup_castle_marker':{zh:'易位权',en:'Castle'},
-'setup_castle_marker_hint':{zh:'易位标记',en:'Castle Mark'},
 'setup_castle_marker_tip':{zh:'点击后，再点击格子添加/取消易位标记（仅对在初始行上的同色车生效）',en:'Tap, then tap a square to toggle the castle marker (only valid on same-color rooks on the initial rank)'},
 'setup_ep_marker':{zh:'可被吃过路兵',en:'En Passant'},
-'setup_ep_marker_hint':{zh:'过路兵标记',en:'En Passant Mark'},
 'setup_ep_marker_tip':{zh:'点击后，再点击格子添加/取消过路兵标记（棋盘上最多 1 个，必须与走棋方不同色的兵同格，该兵位于第 4/5 行，且其左或右侧有相邻的异色兵可吃过路兵）',en:'Tap, then tap a square to toggle the en-passant marker (max 1 on board; must share the square with an opposite-color pawn on rank 4/5, with an adjacent enemy pawn that can capture it)'},
 'setup_castle_err_not_rook':{zh:'易位标记必须与同色车在同一格',en:'Castle marker must share the square with a same-color rook'},
 'setup_castle_err_wrong_rank':{zh:'易位标记所在的同色车必须在初始行（白方 a1–h1；黑方 a8–h8）',en:'Rook with castle marker must be on the initial rank (white: a1–h1; black: a8–h8)'},
 'setup_castle_err_wrong_side':{zh:'易位标记所在的车与同色王的相对位置不合法',en:'Rook with castle marker is on the wrong side of the same-color king'},
 'setup_castle_err_dup_side':{zh:'同一侧的同色车不能同时存在两个易位标记',en:'Two same-color rooks on the same side cannot both carry castle markers'},
 'setup_castle_err_king_missing':{zh:'同色王不在棋盘上，无法判定易位标记的合法性',en:'Same-color king is missing — cannot validate castle marker'},
-'setup_ep_err_multiple':{zh:'棋盘上最多只能有一个过路兵标记',en:'At most one en-passant marker is allowed on the board'},
 'setup_ep_err_no_pawn':{zh:'过路兵标记必须与兵在同一格',en:'En-passant marker must share the square with a pawn'},
 'setup_ep_err_wrong_rank':{zh:'过路兵标记所在的兵必须在第 4 行（白兵）或第 5 行（黑兵）',en:'Pawn with en-passant marker must be on rank 4 (white) or rank 5 (black)'},
 'setup_ep_err_blocked':{zh:'过路兵的跳过格或起始格被占用，该标记非法',en:'En-passant marker illegal: skipped or origin square is occupied'},
@@ -1947,13 +1893,13 @@ window.onerror=function(msg,url,line,col,error){
     console.error('=== Regalia JS Error ===',errInfo);
     // NON-DESTRUCTIVE: Show toast instead of replacing entire DOM
     // Previous implementation destroyed app.innerHTML which made the app unusable
-    showToast(T('js_error')+': '+String(msg).substring(0,80)+(line?' (line:'+line+')':''), 4000);
+    showToast(T('js_error')+': '+String(msg).substring(0,80)+(line?' (line:'+line+')':''), 6000);
     // For severe errors, log but don't destroy the UI
     return true; // Suppress default error handling
 };
 window.addEventListener('unhandledrejection',function(e){
     console.error('=== Unhandled Promise Rejection ===',e.reason);
-    showToast(T('promise_error')+': '+(e.reason&&e.reason.message?e.reason.message.substring(0,80):String(e.reason).substring(0,80)), 4000);
+    showToast(T('promise_error')+': '+(e.reason&&e.reason.message?e.reason.message.substring(0,80):String(e.reason).substring(0,80)), 6000);
 });
 
 const PV={pawn:100,knight:325,bishop:338,rook:500,queen:975,king:20000};// Piece values for ECO path selection only (not position evaluation)
@@ -2710,7 +2656,11 @@ function _reattachActiveAnimations(){
     //   positions it at the source square, so the transform should be just the
     //   scaled dx/dy (not source + dx/dy — that would double-count the source).
     const _fc=_flip?7-a.from.col:a.from.col, _fr=_flip?7-a.from.row:a.from.row;
-    if(!a.el||!a.el.parentNode){
+    // v1.2.3 round-41: the condition was inverted — `!a.el||!a.el.parentNode`
+    //   dereferenced a.el.style when a.el was null (TypeError mid-render).
+    //   Skip null entries; re-attach only DETACHED elements.
+    if(!a.el)continue;
+    if(!a.el.parentNode){
       a.el.style.left=(_fc*cs)+'px';
       a.el.style.top=(_fr*cs)+'px';
       a.el.style.width=cs+'px';
@@ -2954,38 +2904,40 @@ function computeVisibleCastleMarks(s){
   }
   const marks=new Set();
   if(!s.castlingRights)return marks;
+  const cr=s.castlingRights;
+  // v1.2.3 round-42 (42-3, P3-28): when two same-side rooks share the home
+  //   rank, the closest-rook scan could put the 🔁 marker on the WRONG rook.
+  //   Prefer the designated castling rook file (*RookFile, maintained by
+  //   findCastlingRooks/makeMv/makeMvInPlace; 8-field invariant restored in
+  //   round-41 41-5) when it is set and a same-color rook still occupies it;
+  //   fall back to the closest-rook scan otherwise (legacy states where the
+  //   RookFile fields are null). Display-only change.
+  const _markRook=(row,kingCol,kingside,rookFile,color)=>{
+    if(rookFile!=null){
+      const dp=s.board[row][rookFile];
+      if(dp?.type==='rook'&&dp.color===color){marks.add(String(row*8+rookFile));return;}
+    }
+    if(kingside){
+      for(let c=kingCol+1;c<8;c++){
+        const p=s.board[row][c];
+        if(p?.type==='rook'&&p.color===color){marks.add(String(row*8+c));break;}
+      }
+    }else{
+      for(let c=kingCol-1;c>=0;c--){
+        const p=s.board[row][c];
+        if(p?.type==='rook'&&p.color===color){marks.add(String(row*8+c));break;}
+      }
+    }
+  };
   // White
   if(s.wk&&s.wk.row===7){
-    const wkCol=s.wk.col;
-    if(s.castlingRights.whiteKingside){
-      // Find closest white rook to the right of king on row 7
-      for(let c=wkCol+1;c<8;c++){
-        const p=s.board[7][c];
-        if(p?.type==='rook'&&p.color==='white'){marks.add(String(7*8+c));break;}
-      }
-    }
-    if(s.castlingRights.whiteQueenside){
-      for(let c=wkCol-1;c>=0;c--){
-        const p=s.board[7][c];
-        if(p?.type==='rook'&&p.color==='white'){marks.add(String(7*8+c));break;}
-      }
-    }
+    if(cr.whiteKingside)_markRook(7,s.wk.col,true,cr.whiteKingsideRookFile,'white');
+    if(cr.whiteQueenside)_markRook(7,s.wk.col,false,cr.whiteQueensideRookFile,'white');
   }
   // Black
   if(s.bk&&s.bk.row===0){
-    const bkCol=s.bk.col;
-    if(s.castlingRights.blackKingside){
-      for(let c=bkCol+1;c<8;c++){
-        const p=s.board[0][c];
-        if(p?.type==='rook'&&p.color==='black'){marks.add(String(0*8+c));break;}
-      }
-    }
-    if(s.castlingRights.blackQueenside){
-      for(let c=bkCol-1;c>=0;c--){
-        const p=s.board[0][c];
-        if(p?.type==='rook'&&p.color==='black'){marks.add(String(0*8+c));break;}
-      }
-    }
+    if(cr.blackKingside)_markRook(0,s.bk.col,true,cr.blackKingsideRookFile,'black');
+    if(cr.blackQueenside)_markRook(0,s.bk.col,false,cr.blackQueensideRookFile,'black');
   }
   return marks;
 }
@@ -3473,8 +3425,12 @@ if(typeof findCastlingRooks==='function'){
     //   disambiguation); the closest-rook heuristic is only the fallback.
     const _mvKs=(typeof findDesignatedCastlingRook==='function')?findDesignatedCastlingRook(s,piece.color,'kingside'):rooks.kingside;
     const _mvQs=(typeof findDesignatedCastlingRook==='function')?findDesignatedCastlingRook(s,piece.color,'queenside'):rooks.queenside;
-    if(piece.color==='white'){if(from.col===_mvKs){ns.castlingRights.whiteKingside=false;ns.castlingRights.whiteKingsideRookFile=null;}if(from.col===_mvQs){ns.castlingRights.whiteQueenside=false;ns.castlingRights.whiteQueensideRookFile=null;}}
-    else{if(from.col===_mvKs){ns.castlingRights.blackKingside=false;ns.castlingRights.blackKingsideRookFile=null;}if(from.col===_mvQs){ns.castlingRights.blackQueenside=false;ns.castlingRights.blackQueensideRookFile=null;}}
+    // v1.2.3 round-40 (FIDE): also require the rook to be on its OWN back
+    //   rank (white row 7 / black row 0 — same coordinate convention as the
+    //   corner-fallback path below). A promoted or setup-placed rook on
+    //   another row must not clear castling rights on a column match.
+    if(piece.color==='white'){if(from.row===7&&from.col===_mvKs){ns.castlingRights.whiteKingside=false;ns.castlingRights.whiteKingsideRookFile=null;}if(from.row===7&&from.col===_mvQs){ns.castlingRights.whiteQueenside=false;ns.castlingRights.whiteQueensideRookFile=null;}}
+    else{if(from.row===0&&from.col===_mvKs){ns.castlingRights.blackKingside=false;ns.castlingRights.blackKingsideRookFile=null;}if(from.row===0&&from.col===_mvQs){ns.castlingRights.blackQueenside=false;ns.castlingRights.blackQueensideRookFile=null;}}
   }
 }else{
   if(from.row===7&&from.col===0){ns.castlingRights.whiteQueenside=false;ns.castlingRights.whiteQueensideRookFile=null;}if(from.row===7&&from.col===7){ns.castlingRights.whiteKingside=false;ns.castlingRights.whiteKingsideRookFile=null;}if(from.row===0&&from.col===0){ns.castlingRights.blackQueenside=false;ns.castlingRights.blackQueensideRookFile=null;}if(from.row===0&&from.col===7){ns.castlingRights.blackKingside=false;ns.castlingRights.blackKingsideRookFile=null;}
@@ -3487,8 +3443,11 @@ if(typeof findCastlingRooks==='function'){
     // v1.2.3 round-20 (A-1): designated-file precedence (see rook-move above).
     const _cpKs=(typeof findDesignatedCastlingRook==='function')?findDesignatedCastlingRook(s,capPiece.color,'kingside'):rooks.kingside;
     const _cpQs=(typeof findDesignatedCastlingRook==='function')?findDesignatedCastlingRook(s,capPiece.color,'queenside'):rooks.queenside;
-    if(capPiece.color==='white'){if(to.col===_cpKs){ns.castlingRights.whiteKingside=false;ns.castlingRights.whiteKingsideRookFile=null;}if(to.col===_cpQs){ns.castlingRights.whiteQueenside=false;ns.castlingRights.whiteQueensideRookFile=null;}}
-    else{if(to.col===_cpKs){ns.castlingRights.blackKingside=false;ns.castlingRights.blackKingsideRookFile=null;}if(to.col===_cpQs){ns.castlingRights.blackQueenside=false;ns.castlingRights.blackQueensideRookFile=null;}}
+    // v1.2.3 round-40 (FIDE): back-rank row check for the CAPTURED rook too
+    //   (white row 7 / black row 0) — capturing a non-back-rank rook on a
+    //   matching column must not clear castling rights.
+    if(capPiece.color==='white'){if(to.row===7&&to.col===_cpKs){ns.castlingRights.whiteKingside=false;ns.castlingRights.whiteKingsideRookFile=null;}if(to.row===7&&to.col===_cpQs){ns.castlingRights.whiteQueenside=false;ns.castlingRights.whiteQueensideRookFile=null;}}
+    else{if(to.row===0&&to.col===_cpKs){ns.castlingRights.blackKingside=false;ns.castlingRights.blackKingsideRookFile=null;}if(to.row===0&&to.col===_cpQs){ns.castlingRights.blackQueenside=false;ns.castlingRights.blackQueensideRookFile=null;}}
   }
 }else{
   if(capPiece.color==='white'){if(to.row===7&&to.col===0){ns.castlingRights.whiteQueenside=false;ns.castlingRights.whiteQueensideRookFile=null;}if(to.row===7&&to.col===7){ns.castlingRights.whiteKingside=false;ns.castlingRights.whiteKingsideRookFile=null;}}else{if(to.row===0&&to.col===0){ns.castlingRights.blackQueenside=false;ns.castlingRights.blackQueensideRookFile=null;}if(to.row===0&&to.col===7){ns.castlingRights.blackKingside=false;ns.castlingRights.blackKingsideRookFile=null;}}
@@ -3537,9 +3496,12 @@ if(s.castlingRights.whiteQueenside&&!ns.castlingRights.whiteQueenside)h^=zobrist
 if(s.castlingRights.blackKingside&&!ns.castlingRights.blackKingside)h^=zobrist.castling[2];
 if(s.castlingRights.blackQueenside&&!ns.castlingRights.blackQueenside)h^=zobrist.castling[3];
 ns.hash=(h>>>0);
-// v1.0.2 PERF (audit): bump boardVersion so _updateBoardIncremental can
-// skip the JSON.stringify dirty check (which serializes the 8x8 board on
-// every render tick). Integer compare is ~100x cheaper.
+// v1.0.2 PERF (audit): bump boardVersion on every board mutation.
+// v1.2.3 round-42 (42-9): comment corrected — _updateBoardIncremental (the
+//   dirty-check incremental renderer this counter fed) was REMOVED in
+//   round-20 with the DIRTY_* subsystem (see the ui.js render-scheduling
+//   note). boardVersion currently has no readers; it is retained as state
+//   metadata carried through clone/undo snapshots.
 ns.boardVersion=(s.boardVersion||0)+1;
 ns.posCount.set(ns.hash,(ns.posCount.get(ns.hash)||0)+1);
 return ns}
@@ -3603,8 +3565,11 @@ if(!_cs && piece.type==='rook' && typeof findCastlingRooks==='function'){
     // v1.2.3 round-20 (A-1): designated-file precedence over closest-rook.
     const _mvKs2=(typeof findDesignatedCastlingRook==='function')?findDesignatedCastlingRook(s,piece.color,'kingside'):_r.kingside;
     const _mvQs2=(typeof findDesignatedCastlingRook==='function')?findDesignatedCastlingRook(s,piece.color,'queenside'):_r.queenside;
-    if(_mvKs2!==null&&_mvKs2===from.col)_movingRookSide='kingside';
-    else if(_mvQs2!==null&&_mvQs2===from.col)_movingRookSide='queenside';
+    // v1.2.3 round-40 (FIDE): row check — only a rook on its own back rank
+    //   (white row 7 / black row 0) can hold castling rights.
+    const _mvBackRank=(piece.color==='white')?7:0;
+    if(_mvKs2!==null&&_mvKs2===from.col&&from.row===_mvBackRank)_movingRookSide='kingside';
+    else if(_mvQs2!==null&&_mvQs2===from.col&&from.row===_mvBackRank)_movingRookSide='queenside';
   }
 }
 if(!_cs && capPiece && capPiece.type==='rook' && typeof findCastlingRooks==='function'){
@@ -3613,8 +3578,11 @@ if(!_cs && capPiece && capPiece.type==='rook' && typeof findCastlingRooks==='fun
     // v1.2.3 round-20 (A-1): designated-file precedence over closest-rook.
     const _cpKs2=(typeof findDesignatedCastlingRook==='function')?findDesignatedCastlingRook(s,capPiece.color,'kingside'):_r.kingside;
     const _cpQs2=(typeof findDesignatedCastlingRook==='function')?findDesignatedCastlingRook(s,capPiece.color,'queenside'):_r.queenside;
-    if(_cpKs2!==null&&_cpKs2===to.col)_capturedRookSide='kingside';
-    else if(_cpQs2!==null&&_cpQs2===to.col)_capturedRookSide='queenside';
+    // v1.2.3 round-40 (FIDE): row check for the captured rook (white row 7 /
+    //   black row 0), mirroring _movingRookSide above.
+    const _cpBackRank=(capPiece.color==='white')?7:0;
+    if(_cpKs2!==null&&_cpKs2===to.col&&to.row===_cpBackRank)_capturedRookSide='kingside';
+    else if(_cpQs2!==null&&_cpQs2===to.col&&to.row===_cpBackRank)_capturedRookSide='queenside';
   }
 }
 // Capture undo info
@@ -3756,8 +3724,9 @@ if(undo.oldCastling.whiteQueenside&&!s.castlingRights.whiteQueenside)h^=zobrist.
 if(undo.oldCastling.blackKingside&&!s.castlingRights.blackKingside)h^=zobrist.castling[2];
 if(undo.oldCastling.blackQueenside&&!s.castlingRights.blackQueenside)h^=zobrist.castling[3];
 s.hash=(h>>>0);
-// v1.0.2 PERF (audit): bump boardVersion so _updateBoardIncremental can use
-// an integer compare instead of JSON.stringify on every render tick.
+// v1.0.2 PERF (audit): bump boardVersion (see the makeMv note — the
+//   _updateBoardIncremental consumer was removed in round-20; counter
+//   retained as snapshot metadata, no current readers). round-42 42-9.
 s.boardVersion=(s.boardVersion||0)+1;
 // 12. Incremental posCount
 s.posCount.set(s.hash,(s.posCount.get(s.hash)||0)+1);
@@ -3888,8 +3857,10 @@ function winnerLacksMatingMaterial(s,winnerColor){
   if(counts.knight===0&&counts.bishop===0)return true;
   // K + single minor (N or B) → cannot mate.
   if(counts.knight+counts.bishop===1)return true;
-  // K + 2N → cannot force mate (FIDE rules; help-mate possible but not forced).
-  if(counts.knight===2&&counts.bishop===0)return true;
+  // v1.2.3 round-40 (strict FIDE 6.9): REMOVED the K+N+N exemption. FIDE 6.9
+  //   draws a timeout only when the loser cannot be checkmated "by any
+  //   possible series of legal moves" — and K+N+N CAN deliver mate with the
+  //   loser's cooperation (help-mate), so a K+N+N winner still WINS on time.
   // K + B+B same color (no knight) → cannot force mate (enemy king escapes
   // to the opposite-color squares). The parity check ensures ALL bishops
   // are the same color; the no-knight guard excludes K+N+B+B(same color)
@@ -4244,10 +4215,16 @@ for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=s.board[r][c];if(p){if(p.type==
 // will surface the error and let the user fix it. But we DO need to ensure
 // castlingRights are not left in a stale "true" state from a prior
 // validation pass. Reset them here; they'll be re-derived on "Done".
-s.castlingRights={whiteKingside:false,whiteQueenside:false,blackKingside:false,blackQueenside:false};
+// v1.2.3 round-41: restore the 8-field castling-rights invariant (4 flags +
+//   4 *RookFile slots), same shape as _validateSetupCastleMarks (~:1513/:1517).
+//   The 4-field reset left the RookFile fields stale from a prior validation
+//   pass, breaking the schema consumers rely on.
+s.castlingRights={whiteKingside:false,whiteQueenside:false,blackKingside:false,blackQueenside:false,whiteKingsideRookFile:null,whiteQueensideRookFile:null,blackKingsideRookFile:null,blackQueensideRookFile:null};
 syncHash(s);
-// v1.0.2 PERF (audit): bump boardVersion so _updateBoardIncremental detects
-// setup-mode board mutations (piece placement/deletion/clear-board/reset-board).
+// v1.0.2 PERF (audit): bump boardVersion on setup-mode board mutations
+//   (piece placement/deletion/clear-board/reset-board). round-42 42-9:
+//   _updateBoardIncremental was removed in round-20; no current readers —
+//   counter retained as snapshot metadata.
 s.boardVersion=(s.boardVersion||0)+1;
 }
 
@@ -4303,7 +4280,17 @@ if(gameClocks !== undefined&&gameClocks&&typeof AndroidBridge.engineGoTimed==='f
     // Fallback to untimed engineGo
     // v1.2.3 round-37 (SonarCloud S7718): nested catch uses `error` (not
     //   `e2`) per the project's modern catch-param naming convention.
-    if(_needNewGameForEngine){_needNewGameForEngine=false;try{AndroidBridge.engineGoNewGame(fen,aiLevel);}catch(error){}}
+    // v1.2.3 round-44 (G3): the empty catch previously left the AI permanently
+    //   hung (isAIThinking stayed true with no retry) when even the fallback
+    //   dispatch threw. Now: report, reset thinking state, retry via doAIMove
+    //   (max 3), then surface ai_timeout.
+    if(_needNewGameForEngine){_needNewGameForEngine=false;try{AndroidBridge.engineGoNewGame(fen,aiLevel);}catch(error){
+      console.error('engineGoNewGame fallback failed:',error);
+      showToast(T('engine_unavailable_hint'));
+      isAIThinking=false;_aiBarInfo='';_aiRetryCount++;
+      if(_aiRetryCount<3){setTimeout(()=>{if(!gameOver&&gameState.currentTurn!==playerColor)doAIMove();},500);}
+      else{showToast(T('ai_timeout'));_aiRetryCount=0;render();}
+    }}
     else{try{AndroidBridge.engineGo(fen,aiLevel);}catch(error){}}
     isAIThinking=false;_aiBarInfo='';render();
   }
@@ -4894,9 +4881,12 @@ function randomSPID(){
 // ===== II. Shredder-FEN castling rights =====
 // In Chess960, castling rights in FEN use the rook's source file letter
 // (uppercase for White, lowercase for Black) instead of K/Q/k/q.
-// Example: SP-ID 518 (traditional) -> "RNBQKBNR" with castling rights "HAah"
-// (H = rook on h1 = kingside, A = rook on a1 = queenside, etc.)
-// For standard chess, "HAah" is equivalent to "KQkq".
+// Example: SP-ID 518 (traditional) -> "RNBQKBNR" with castling rights "AaHh"
+// (toShredderCastling below emits letters sorted by rook file a→h per the
+// spec requirement, so the a-file rooks come first: A/a = a-file, H/h =
+// h-file; the previous "HAah" example followed KQkq order and did not match
+// the actual output — corrected in round-42 42-9.)
+// For standard chess, "AaHh" is equivalent to "KQkq".
 
 /**
  * Convert internal castlingRights object + king/rook positions to Shredder-FEN
@@ -6638,6 +6628,9 @@ function _createWorker() {
     w._url = url;
     url = null; // ownership transferred to w._url; revoke on worker teardown
     w._busy = false;
+    // v1.2.3 round-44 (G12): track the worker's current task for O(1) lookup
+    //   in onerror/onmessageerror (was an O(n) scan of _pendingTasks).
+    w._currentTask = null;
     w.onmessage = function(e) {
       const msg = e.data;
       if (!msg || !msg.taskId) return;
@@ -6645,19 +6638,21 @@ function _createWorker() {
       if (!task) return;
       _pendingTasks.delete(msg.taskId);
       task.worker._busy = false;
+      task.worker._currentTask = null;
       if (task.timeout) { clearTimeout(task.timeout); task.timeout = null; }
       if (msg.type === 'result') task.resolve(msg.result);
       else task.reject(new Error(msg.error || 'Worker error'));
       _dispatchNext();
+      _scheduleIdleReap(); // v1.2.3 round-44 (G9): task completed — arm idle reap
     };
     w.onerror = function(e) {
-      // Collect tasks to reject before mutating the map (avoid iterate-while-mutate)
-      const toReject = [];
-      for (const [tid, task] of _pendingTasks) {
-        if (task.worker === w) toReject.push([tid, task]);
-      }
-      for (const [tid, task] of toReject) {
-        _pendingTasks.delete(tid);
+      // v1.2.3 round-44 (G12): O(1) lookup via w._currentTask (was an O(n)
+      //   scan of _pendingTasks). The pendingTasks.get identity check guards
+      //   against a task that already completed/timed out.
+      const task = w._currentTask || null;
+      w._currentTask = null;
+      if (task && _pendingTasks.get(task.taskId) === task) {
+        _pendingTasks.delete(task.taskId);
         if (task.timeout) { clearTimeout(task.timeout); task.timeout = null; }
         // v1.2.3 round-29 (PR52 S6551): use String(e) instead of bare `e` so
         //   ErrorEvent / Event objects stringify meaningfully instead of
@@ -6676,12 +6671,11 @@ function _createWorker() {
     //   the worker (a serialization failure usually indicates a corrupted
     //   worker state — safer to terminate and replace).
     w.onmessageerror = function(e) {
-      const toReject = [];
-      for (const [tid, task] of _pendingTasks) {
-        if (task.worker === w) toReject.push([tid, task]);
-      }
-      for (const [tid, task] of toReject) {
-        _pendingTasks.delete(tid);
+      // v1.2.3 round-44 (G12): O(1) lookup via w._currentTask (see onerror).
+      const task = w._currentTask || null;
+      w._currentTask = null;
+      if (task && _pendingTasks.get(task.taskId) === task) {
+        _pendingTasks.delete(task.taskId);
         if (task.timeout) { clearTimeout(task.timeout); task.timeout = null; }
         task.reject(new Error('Worker message serialization error'));
       }
@@ -6718,13 +6712,38 @@ function _removeWorker(w) {
   try { if (w._url) URL.revokeObjectURL(w._url); } catch (e) {}
 }
 
+// v1.2.3 round-44 (G9): idle reaping — 60s after the pool last saw activity,
+//   shrink to 1 hot-standby worker (terminate + revoke the rest). Scheduled on
+//   task completion and whenever an idle worker is handed out; rescheduled on
+//   each call so the reap only fires after a full 60s of pool inactivity.
+//   Reaping does NOT touch _workerCreateFailures — that counter tracks worker
+//   CREATION health (Phase 71), not pool size, and must survive a reap.
+let _idleReapTimerId = null;
+function _scheduleIdleReap() {
+  if (_idleReapTimerId) { clearTimeout(_idleReapTimerId); _idleReapTimerId = null; }
+  _idleReapTimerId = setTimeout(function() {
+    _idleReapTimerId = null;
+    if (_taskQueue.length > 0) return; // work pending — keep the pool
+    // Only reap when every worker is idle; a busy worker means work is in
+    // flight and the pool may still be needed at full size.
+    for (const w of _workerPool) { if (w._busy) return; }
+    while (_workerPool.length > 1) {
+      const w = _workerPool.pop();
+      try { w.terminate(); } catch (e) {}
+      try { if (w._url) URL.revokeObjectURL(w._url); } catch (e) {}
+    }
+  }, 60000);
+}
+
 function _getIdleWorker() {
   for (const w of _workerPool) {
-    if (!w._busy) return w;
+    // v1.2.3 round-44 (G9): handing out a worker is pool activity — (re)arm
+    //   the idle reap timer.
+    if (!w._busy) { _scheduleIdleReap(); return w; }
   }
   if (_workerPool.length < _getPoolSize()) {
     const w = _createWorker();
-    if (w) { _workerPool.push(w); return w; }
+    if (w) { _workerPool.push(w); _scheduleIdleReap(); return w; }
   }
   return null;
 }
@@ -6735,10 +6754,30 @@ const _taskQueue = [];
 function _dispatchNext() {
   while (_taskQueue.length > 0) {
     const w = _getIdleWorker();
-    if (!w) break;
+    if (!w) {
+      // v1.2.3 round-41: no idle worker AND an empty pool means worker
+      //   creation just failed AND there is no busy worker whose completion
+      //   would re-trigger dispatch — the head task would otherwise sit in
+      //   the queue until its 30s timeout (a "fake hang"). Fall back to
+      //   main-thread execution for the head task immediately (resolve/reject
+      //   via _syncFallback) and clear its timeout. When the pool merely has
+      //   all workers busy (length > 0), keep the existing wait — a task
+      //   completion re-dispatches. `_workerSupported` stays true, so the
+      //   instantaneous-retry semantics (next workerRun re-attempts
+      //   _createWorker) are unchanged.
+      if (_workerPool.length === 0) {
+        const task = _taskQueue.shift();
+        clearTimeout(task.timeout);
+        Promise.resolve().then(function() { return _syncFallback(task.fnName, task.args); })
+          .then(task.resolve, task.reject);
+        continue;
+      }
+      break;
+    }
     const task = _taskQueue.shift();
     w._busy = true;
     task.worker = w;
+    w._currentTask = task; // v1.2.3 round-44 (G12): O(1) crash lookup
     _pendingTasks.set(task.taskId, task);
     w.postMessage({type: 'run', taskId: task.taskId, fnName: task.fnName, args: task.args});
   }
@@ -6774,6 +6813,7 @@ function workerRun(fnName, args, timeoutMs = 30000) {
       _pendingTasks.delete(taskId);
       if (task.worker) {
         task.worker._busy = false;
+        task.worker._currentTask = null;
         _removeWorker(task.worker);
       } else {
         // v1.0.8 PHASE 35: task was still queued (no worker assigned) — splice
@@ -6949,6 +6989,8 @@ function workerComputeHeatmapStats(serializedBoards, timeoutMs) {
 }
 
 function terminateWorkerPool() {
+  // v1.2.3 round-44 (G9): cancel any pending idle reap — pool is going away.
+  if (_idleReapTimerId) { clearTimeout(_idleReapTimerId); _idleReapTimerId = null; }
   for (const w of _workerPool) {
     try { w.terminate(); } catch (e) {}
     try { if (w._url) URL.revokeObjectURL(w._url); } catch (e) {}
@@ -7236,7 +7278,9 @@ const Store = (function() {
         const reducer = _reducers[action];
         if (!reducer) {
             if (typeof console !== 'undefined' && console.warn) console.warn('[Store] No reducer for action:', action);
-            return _deepClone(_state);
+            // v1.2.3 round-44 (G10): no consumers of dispatch()'s return value
+            //   — return the live _state instead of a full-tree deep clone.
+            return _state;
         }
         const partial = reducer(_state, payload);
         if (partial && typeof partial === 'object') {
@@ -7250,12 +7294,20 @@ const Store = (function() {
             //   tree walks per dispatch (stateHistory max 200 + moveRecords).
             //   The snapshot is also passed to listeners, preserving the
             //   round-30 single-source-of-truth invariant.
-            const snapshot = _deepClone(_state);
-            _notifyListeners(snapshot);
-            return snapshot;
+            // v1.2.3 round-44 (G10): only deep-clone a snapshot when listeners
+            //   actually exist, and return the live _state — dispatch()'s return
+            //   value has no consumers (verified by grep), so the previous
+            //   unconditional full-tree clone per dispatch was pure waste.
+            //   getState() still returns a deep clone (P0-1 invariant kept).
+            if (_listeners.length > 0) {
+                const snapshot = _deepClone(_state);
+                _notifyListeners(snapshot);
+            }
+            return _state;
         }
-        // v1.2.1: Return deep clone (P0-2)
-        return _deepClone(_state);
+        // v1.2.3 round-44 (G10): return live _state (was a deep clone, P0-2) —
+        //   no consumers of the return value; see the dispatch happy path above.
+        return _state;
     }
 
     /**
@@ -7298,6 +7350,8 @@ const Store = (function() {
      *   an argument (legacy/internal callers), falls back to cloning _state.
      */
     function _notifyListeners(snapshot) {
+        // v1.2.3 round-44 (G10): skip the clone entirely when nobody listens.
+        if (_listeners.length === 0) return;
         if (snapshot === undefined) snapshot = _deepClone(_state);
         const listeners = _listeners.slice();
         for (let i = 0; i < listeners.length; i++) {
@@ -7656,6 +7710,10 @@ let _reviewEvalCache=new function(){
   let _dirty=false;
   const DEBOUNCE_MS=150;
   function _saveToStorage(forceSync){
+    // v1.2.3 round-44 (G11): during analyze-all batch mode, skip the per-set
+    //   150ms debounce timer churn — just mark dirty; the batch-end paths call
+    //   _flushSync() once. forceSync (clear()/lifecycle flush) still writes.
+    if(_batchWriteMode&&!forceSync){_dirty=true;return;}
     if(_saveTimer){clearTimeout(_saveTimer);_saveTimer=null;}
     if(forceSync){
       // Synchronous write — blocks until fsync + rename complete
@@ -7868,6 +7926,20 @@ let _pgnExportDialogActive=false;
 let _pgnExportDialogDismiss=null;
 let _reviewAnalyzeGen=0;
 let _evalRequestBatchGen=0;
+// v1.2.3 round-44 (T1): per-request dispatch record for the batch analyze-all
+//   path. Set at the exact engineEvalDeep dispatch point in _requestBatchEval
+//   and consumed (set null) by onEngineEval's batch branch, so a LATE callback
+//   from a previous step can no longer be claimed as the current step's result
+//   (which cached the wrong step and could flip the eval sign via the new
+//   step's _evalForBlackTurn).
+let _batchLastDispatched=null; // {step, gen, fen, blackTurn} or null
+// v1.2.3 round-44 (T4): consecutive batch-dispatch failure counter (safety-net
+//   timeout or engine-not-ready). Reset on successful dispatch/callback; at 3
+//   consecutive failures the batch is terminated instead of ghost-looping.
+let _batchConsecutiveFail=0;
+// v1.2.3 round-44 (G11): batch write mode — during analyze-all, _reviewEvalCache
+//   skips per-set disk writes (marks dirty only); flushed once at batch end.
+let _batchWriteMode=false;
 // v1.0.4 Rev24 NEW: Human player's custom name (rename feature).
 // Loaded from persistent storage at module init. When non-null, used in:
 //   - Player bar display (ui.js)
@@ -8005,6 +8077,11 @@ const HapticManager = (function() {
 // environment (Java callbacks can interleave with JS main thread).
 let _evalStaleGen=0;  // Generation counter — stale if onEngineEval's gen < current
 let _evalRequestGen=0; // Generation at time of last requestEngineEval() call
+// v1.2.3 round-44 (G1): gen of the most recent ACTUALLY DISPATCHED user-nav
+//   eval. onEngineEval drops callbacks when _evalRequestGen !== this value —
+//   the debounce/fast paths can bump _evalRequestGen without ever dispatching,
+//   which previously let a superseded request's late callback through.
+let _evalLastDispatchedGen=0;
 // v1.0.7 PHASE 19 (bug fix): Capture the mode at request time so onEngineEval
 // can reject cross-mode stale callbacks. Previously, a review-mode eval callback
 // still in flight after exitReview() would pass the normal-mode gen check
@@ -8046,7 +8123,7 @@ function _playToastSound(msg){
     // Neutral toast — no sound
   }catch(e){console.warn('[Toast] showToast failed:',e.message);}
 }
-function showToast(msg,duration=2500){
+function showToast(msg,duration=3750){
   _playToastSound(msg);
   const old=document.getElementById('_toast');
   if(old)old.remove();
@@ -8313,9 +8390,31 @@ let _emergencyFallbackTimerId=setTimeout(function(){
 
 // Layer 4: Click to skip — allow user to dismiss loading screen manually
 (function _makeLoadingClickable(){
+  // v1.2.3 round-44 (#93): _showLoadingOverlay() creates the overlay element
+  //   synchronously just above, so try a direct lookup FIRST and attach the
+  //   click handler immediately — the old 200ms-interval-only approach left a
+  //   0-200ms dead window in which taps on the overlay did nothing.
+  function _attachSkipHandler(lo){
+    lo.style.cursor='pointer';
+    lo.title=T('click_skip_loading');
+    lo.addEventListener('click',function(e){
+      if(!_loadingOverlayHiding){
+        // v1.1.2 Phase 70: removed debug console.log (production cleanup)
+        _hideLoadingOverlay();
+        showToast(T('engine_skip'));
+        render();
+        // Clear all fallback timers
+        if(_loadingFallbackTimerId){clearTimeout(_loadingFallbackTimerId);_loadingFallbackTimerId=null;}
+        if(_emergencyFallbackTimerId){clearTimeout(_emergencyFallbackTimerId);_emergencyFallbackTimerId=null;}
+      }
+    });
+  }
+  const loNow=document.getElementById('_loadingOverlay');
+  if(loNow){_attachSkipHandler(loNow);return;}
+  // Fallback: poll with a hard cap (25 ticks x 200ms = 5s) in case the overlay
+  //   isn't in the DOM yet (e.g. _showLoadingOverlay threw before appending).
   // v1.2.3 round-30 (robustness): cap polling at 25 iterations (5s). If the
-  //   loading overlay never appears (e.g. _showLoadingOverlay threw and the
-  //   overlay div was never appended), the interval would otherwise leak
+  //   loading overlay never appears, the interval would otherwise leak
   //   forever. After 5s, clear the interval regardless.
   let _ticks=0;
   const MAX_TICKS=25;
@@ -8324,19 +8423,7 @@ let _emergencyFallbackTimerId=setTimeout(function(){
     const lo=document.getElementById('_loadingOverlay');
     if(lo){
       clearInterval(loCheck);
-      lo.style.cursor='pointer';
-      lo.title=T('click_skip_loading');
-      lo.addEventListener('click',function(e){
-        if(!_loadingOverlayHiding){
-          // v1.1.2 Phase 70: removed debug console.log (production cleanup)
-          _hideLoadingOverlay();
-          showToast(T('engine_skip'));
-          render();
-          // Clear all fallback timers
-          if(_loadingFallbackTimerId){clearTimeout(_loadingFallbackTimerId);_loadingFallbackTimerId=null;}
-          if(_emergencyFallbackTimerId){clearTimeout(_emergencyFallbackTimerId);_emergencyFallbackTimerId=null;}
-        }
-      });
+      _attachSkipHandler(lo);
     }else if(_ticks>=MAX_TICKS){
       clearInterval(loCheck);
     }
@@ -8431,8 +8518,9 @@ function _deriveGameResult(){
      &&typeof _resignWinnerColor!=='undefined'&&_resignWinnerColor){
     return (_resignWinnerColor==='white')?'1-0':'0-1';
   }
-  // Timeout: winner is _timeoutWinnerColor (null when FIDE 6.9 insufficient-
-  //   material draw — round-25 fix; falls through to draw below)
+  // Timeout: winner is _timeoutWinnerColor (null when the game is drawn per
+  //   FIDE 6.9 — no legal move series can mate; round-42 42-1 wording — falls
+  //   through to draw below)
   if(_gameOverStatusKey !== undefined&&_gameOverStatusKey==='timeout'
      &&typeof _timeoutWinnerColor!=='undefined'&&_timeoutWinnerColor){
     return (_timeoutWinnerColor==='white')?'1-0':'0-1';
@@ -8554,11 +8642,16 @@ function _buildTerminationTag(){
   //   not a time forfeit. When _timeoutWinnerColor is null, the game was drawn
   //   by insufficient material (FIDE 6.9), so the Termination tag should
   //   reflect the draw, not "Time forfeit".
+  // v1.2.3 round-42 (42-1): tag value corrected to strict FIDE 6.9 semantics —
+  //   only ONE flag fell (not "Both"), and the draw criterion is that no
+  //   possible series of legal moves can checkmate (not merely "insufficient
+  //   material"). Matches the finalized banner/PGN text in game-logic.js
+  //   ('pgn_timeout_draw_insufficient').
   if(_gameOverStatusKey==='timeout'){
     if(typeof _timeoutWinnerColor!=='undefined'&&_timeoutWinnerColor){
       return '[Termination "Time forfeit"]';
     }
-    return '[Termination "Both flag fall / insufficient material"]';
+    return '[Termination "Time forfeit draw (FIDE 6.9)"]';
   }
   // v1.2.3 round-25 (FIDE 5.2.2): dead position draws get a Termination tag.
   //   Per PGN spec, Termination values are free-form strings. "Dead position"
@@ -8839,8 +8932,9 @@ function _buildPGNString(forceIncludeVariations, includeAnnotations){
     if(_gameOverStatusKey !== undefined&&_gameOverStatusKey==='timeout'
        && i===moveRecords.length-1){
       // v1.2.3 round-25 (FIDE 6.9): if _timeoutWinnerColor is null, the game
-      //   was drawn by insufficient material (timeout but no mating material).
-      //   Append the draw comment instead of the "wins by timeout" comment.
+      //   was drawn — the non-flagging side cannot checkmate by any possible
+      //   series of legal moves (round-42 42-1 wording). Append the draw
+      //   comment instead of the "wins by timeout" comment.
       if(typeof _timeoutWinnerColor!=='undefined'&&_timeoutWinnerColor){
         const _timeoutKey=_timeoutWinnerColor==='white'?'pgn_timeout_white_wins':'pgn_timeout_black_wins';
         const _timeoutText=T(_timeoutKey);
@@ -9096,7 +9190,7 @@ function openStatsPage(){
           //   user a clear intent→progress sequence. The 1s delay is short
           //   enough not to feel sluggish (analysis itself takes much longer)
           //   but long enough to read the 10-char intent message.
-          showToast(T('stats_will_open_after_analysis'),1000);
+          showToast(T('stats_will_open_after_analysis'),1500);
           try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
           setTimeout(function(){
             try{reviewAnalyzeAll();}catch(e){console.error('openStatsPage: deferred analyze-all trigger failed:',e);}
@@ -9961,8 +10055,10 @@ function onEngineRestarting(){
 function onEngineReady(){
   // v1.1.2 Phase 70: removed debug console.log (production cleanup)
   _engineReady=true;
-  // Reset restart counter on successful engine init
-  if(window._engineRestartCount)window._engineRestartCount=0;
+  // v1.2.3 round-44 (G5): removed the cumulative _engineRestartCount reset —
+  //   the retry budget is now a 5-minute sliding window (_engineErrorTimestamps
+  //   in onEngineError), so a recovered engine no longer regains infinite
+  //   retries and a single old error no longer burns budget forever.
   // v1.0.7 PHASE 19 (bug fix): Cancel any pending error-restart timer. If the
   // engine auto-recovered (Java recoverEngine) before the 1500ms onEngineError
   // timer fired, that timer would spuriously restart an already-ready engine.
@@ -10005,6 +10101,9 @@ function onEngineReady(){
     // v1.2.1 round-7: removed unreachable `typeof _requestBatchEval === 'function'`
     //   guard — _requestBatchEval is always exported by this module at load time.
     if(typeof _reviewAnalyzeAllActive!=='undefined'&&_reviewAnalyzeAllActive&&typeof reviewMode!=='undefined'&&reviewMode){
+      // v1.2.3 round-44 (T4): engine recovered — reset the consecutive-failure
+      //   counter so the resumed batch gets a fresh failure budget.
+      _batchConsecutiveFail=0;
       try{
         // Find the next uncached step from _reviewAnalyzeStep (or step 0 if reset)
         const _resumeStep=_reviewAnalyzeStep>=0?_reviewAnalyzeStep:0;
@@ -10019,6 +10118,9 @@ function onEngineReady(){
       requestEngineEval();
     }
   },300);
+  // v1.2.3 round-44 (G6): (re)start the JS heartbeat after every engine-ready
+  //   event. _startEngineHeartbeat is idempotent (clears any prior interval).
+  try{if(typeof _startEngineHeartbeat==='function')_startEngineHeartbeat();}catch(e){console.warn('[AIBridge] heartbeat start failed:',e&&e.message||e);}
   // Refresh main UI to reflect engine ready state
   render();
 }
@@ -10156,7 +10258,11 @@ function onBestMove(uciMove){
   //   _processDeferredVariations sets _pendingBestMoveInfo=null first) and a
   //   safety net in the abnormal path.
   const _pbmiCaptured=_pendingBestMoveInfo;
-  setTimeout(function(){
+  // v1.2.3 round-44 (G4): track the timer id — the previous anonymous timer
+  //   could outlive a newer _pendingBestMoveInfo and leaked past teardown.
+  if(_pbmiTimerId){clearTimeout(_pbmiTimerId);_pbmiTimerId=null;}
+  _pbmiTimerId=setTimeout(function(){
+    _pbmiTimerId=null;
     if(_pendingBestMoveInfo===_pbmiCaptured){
       console.warn('onBestMove: _pendingBestMoveInfo not processed within 2s, clearing');
       _pendingBestMoveInfo=null;
@@ -10388,7 +10494,7 @@ function onEngineProgress(depth,nodes,nps,scoreCp,scoreMate,wdlW,wdlD,wdlL,selde
   const wCp=isBlackToMove?-scoreCp:scoreCp;
   const wMate=isBlackToMove?-scoreMate:scoreMate;
   let scoreStr='';
-  if(scoreMate!=null){const m=Number.parseInt(wMate);scoreStr=m>0?' #+'+Math.abs(m):m<0?' #-'+Math.abs(m):' #0';}
+  if(scoreMate!=null){const m=Number.parseInt(wMate);scoreStr=m>0?' #+'+Math.abs(m):m<0?' #-'+Math.abs(m):(isBlackToMove?' #+0':' #-0');} // v1.2.3 (R1/R3): wMate is White-POV; mate==0 means the side to move is checkmated, so Black-to-move => White wins => '#+0'
   else if(scoreCp!=null){const pd=(wCp/100).toFixed(1);scoreStr=' '+T('eval_label')+':'+(wCp>0?'+':'')+pd;}
   if(scoreStr)infoParts.push(scoreStr.trim());
   aiThinkInfo=infoParts.join(' ');
@@ -10552,19 +10658,55 @@ function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth){
   //   advance the batch. DO NOT fall through to the user-nav stale filter —
   //   the batch's callback is NOT stale even if the user navigated (because
   //   user-nav during batch doesn't invalidate _evalRequestBatchGen).
-  //   _evalRequestBatchGen is reset to 0 by user-nav requests, so a user-nav
-  //   callback won't be claimed by this batch path.
+  //   v1.2.3 round-44 (T3): user-nav requests no longer reset
+  //   _evalRequestBatchGen while a batch is active — the per-request dispatch
+  //   record (_batchLastDispatched, checked below) is now the authoritative
+  //   guard against mis-claimed callbacks.
   if(reviewMode&&_reviewAnalyzeAllActive&&_evalRequestBatchGen>0
      &&_evalRequestBatchGen===_reviewAnalyzeGen){
+    // v1.2.3 round-44 (T1): per-request validation. The gen check alone cannot
+    //   distinguish a LATE callback from a previous step (the gen globals are
+    //   re-armed by every _requestBatchEval dispatch), so such a callback was
+    //   claimed as the current step's result — caching the wrong step and
+    //   normalizing with the NEW step's _evalForBlackTurn (possible sign flip).
+    //   Require an exact match against the most recent dispatch record; the fen
+    //   is re-derived for the current _reviewAnalyzeStep (same pipeline as the
+    //   dispatch), so it only matches while the batch is still parked on the
+    //   dispatched step. Mismatch → drop as stale: no caching, no advance.
+    const _bd=_batchLastDispatched;
+    const _expectedFen=(_bd&&_reviewAnalyzeStep>=0&&_reviewAnalyzeStep<reviewStates.length)
+      ?_sanitizeFenForEngine(generateFEN(reviewStates[_reviewAnalyzeStep].state)):null;
+    if(!_bd||_bd.gen!==_evalRequestBatchGen||_bd.step!==_reviewAnalyzeStep||_bd.fen!==_expectedFen){
+      console.warn('[AIBridge] Stale batch eval callback dropped (step/gen/fen mismatch vs last dispatch)');
+      return;
+    }
+    // Consume the dispatch record — one dispatch admits exactly one callback.
+    _batchLastDispatched=null;
+    // v1.2.3 round-44 (T4): successful batch callback — the engine is alive
+    //   and responding, so reset the consecutive-failure counter.
+    _batchConsecutiveFail=0;
     // Cache for the batch's step (always, even if user navigated)
-    if(_reviewAnalyzeStep>=0&&_reviewAnalyzeStep<reviewStates.length){
-      // Don't overwrite an existing cache entry (defensive — shouldn't happen)
-      if(!_reviewEvalCache.has(_reviewAnalyzeStep)){
-        _reviewEvalCache.set(_reviewAnalyzeStep,{
-          eval:_bgEval,mate:_bgMate,wdlW:_bgW,wdlD:_bgD,wdlL:_bgL,
-          depth:_bgDepth,seldepth:_bgSeldepth
-        });
+    // v1.2.3 round-44 (T6): try/catch around the cache write — a throw here
+    //   must not break the batch chain (clear validation state and advance).
+    try{
+      if(_reviewAnalyzeStep>=0&&_reviewAnalyzeStep<reviewStates.length){
+        // Don't overwrite an existing cache entry (defensive — shouldn't happen)
+        if(!_reviewEvalCache.has(_reviewAnalyzeStep)){
+          _reviewEvalCache.set(_reviewAnalyzeStep,{
+            eval:_bgEval,mate:_bgMate,wdlW:_bgW,wdlD:_bgD,wdlL:_bgL,
+            depth:_bgDepth,seldepth:_bgSeldepth
+          });
+        }
       }
+    }catch(e){
+      console.error('Batch eval cache write failed:',e);
+      // Clear the batch gen so a duplicate callback (rare) doesn't double-advance
+      _evalRequestBatchGen=0;
+      _batchLastDispatched=null;
+      try{
+        if(typeof _reviewAnalyzeAdvance==='function')_reviewAnalyzeAdvance();
+      }catch(_e){console.error('Analyze-all advance (cache-write recovery) failed:',_e);}
+      return;
     }
     // Clear the batch gen so a duplicate callback (rare) doesn't double-advance
     _evalRequestBatchGen=0;
@@ -10576,6 +10718,16 @@ function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth){
     try{
       if(typeof _reviewAnalyzeAdvance==='function')_reviewAnalyzeAdvance();
     }catch(e){console.error('Analyze-all advance failed:',e);}
+    return;
+  }
+
+  // v1.2.3 round-44 (G1): drop callbacks whose gen doesn't match the most
+  //   recent ACTUALLY DISPATCHED user-nav request. The debounce, cache-hit,
+  //   and terminal fast paths all bump _evalRequestGen without dispatching —
+  //   previously a superseded request's late callback could pass every check
+  //   below and overwrite fresher state.
+  if(_evalRequestGen!==_evalLastDispatchedGen){
+    console.warn('[AIBridge] Stale eval callback dropped (gen '+_evalRequestGen+' !== last dispatched '+_evalLastDispatchedGen+')');
     return;
   }
 
@@ -11196,6 +11348,8 @@ function _processDeferredVariations(){
   if(!_pendingBestMoveInfo)return;
   const info=_pendingBestMoveInfo;
   _pendingBestMoveInfo=null; // Clear immediately to prevent re-processing
+  // v1.2.3 round-44 (G4): cancel the 2s self-clearing timer — processed.
+  if(_pbmiTimerId){clearTimeout(_pbmiTimerId);_pbmiTimerId=null;}
 
   // v1.0.2 PERF: clear the PV cache at the start of each variation-processing
   // call. The cache is only valid within a single search's MultiPV result set;
@@ -11673,9 +11827,17 @@ function _updateMultiPVDisplay(){
     // v1.0.5 Rev56: skip lines with no PV content — they contribute nothing
     // to the display except an empty score string, and would trigger a
     // wasteful _convertPVtoSAN('') call.
-    const hasPV = pv.pv?.pv.length>0;
+    // v1.2.3 round-41: pv.pv is a PV STRING (UCI moves), not an object —
+    //   the old `pv.pv?.pv.length>0` dereferenced `.length` of the string's
+    //   (undefined) .pv property and threw a TypeError, so alternative
+    //   MultiPV lines never rendered. Check the string directly.
+    const hasPV = pv.pv!=null&&pv.pv.length>0;
     // Build a cheap signature to detect whether this line actually changed
-    const sig = (pv.index||0)+'|'+(pv.scoreCp!=null?pv.scoreCp:'')+'|'+(pv.scoreMate!=null?pv.scoreMate:'')+'|'+(hasPV?pv.pv:'');
+    // v1.2.3 (R1): engine scores are side-to-move POV; display is White-POV.
+    //   Include the turn in the signature so a cached line is never reused
+    //   with the wrong polarity after the turn changes.
+    const _isBTM = gameState && gameState.currentTurn === 'black';
+    const sig = (pv.index||0)+'|'+(_isBTM?'B':'W')+'|'+(pv.scoreCp!=null?pv.scoreCp:'')+'|'+(pv.scoreMate!=null?pv.scoreMate:'')+'|'+(hasPV?pv.pv:'');
     const cached = _multiPVDisplayCache[pv.index];
     if(cached?.sig === sig){
       // Cache hit — reuse the previously computed display text
@@ -11687,10 +11849,16 @@ function _updateMultiPVDisplay(){
     let scoreStr='';
     if(pv.scoreMate!=null){
       const m=Number.parseInt(pv.scoreMate,10);
-      if(!Number.isNaN(m))scoreStr=m>0?'#+'+Math.abs(m):m<0?'#-'+Math.abs(m):'#0';
+      if(!Number.isNaN(m)){
+        // v1.2.3 (R1/R3): convert mate to White-POV (#+N = White mates, #-N =
+        //   Black mates); mate==0 = side to move is mated (Black => '#+0').
+        const _wM=_isBTM?-m:m;
+        scoreStr=_wM>0?'#+'+Math.abs(_wM):_wM<0?'#-'+Math.abs(_wM):(_isBTM?'#+0':'#-0');
+      }
     }else if(pv.scoreCp!=null){
-      const pd=(pv.scoreCp/100).toFixed(1);
-      scoreStr=(pv.scoreCp>0?'+':'')+pd;
+      const _wCp=_isBTM?-pv.scoreCp:pv.scoreCp;
+      const pd=(_wCp/100).toFixed(1);
+      scoreStr=(_wCp>0?'+':'')+pd;
     }
     // Convert PV UCI moves to SAN format (only when PV is non-empty)
     let pvPreview='';
@@ -11747,6 +11915,9 @@ let _ponderStartGen=-1; // The _ponderGen value when the current ponder session 
 // _lastEngineVariation and _multiPVResult contain STALE data from the
 // previous search. This caused UCI leaks and wrong move numbering.
 let _pendingBestMoveInfo=null;
+// v1.2.3 round-44 (G4): tracked id of the 2s _pendingBestMoveInfo self-clearing
+//   timer so it can be cancelled on processing / teardown (was anonymous).
+let _pbmiTimerId=null;
 
 // Receive UCI_Elo sync from Java when AI level changes.
 // Updates engineSettingsData so the config panel always matches reality.
@@ -11802,6 +11973,15 @@ function onEngineError(msg){
   // The per-step safety timer (60s) covers the case where recovery fails.
   // The previous code set _reviewAnalyzeAllActive=false, silently dropping
   // the batch on any transient engine error.
+  // v1.2.3 round-44 (T5): reset batch validation state so a late callback
+  //   from the dead engine can no longer pass the onEngineEval batch checks
+  //   (gen re-armed by _reviewAnalyzeGen++, dispatch record cleared).
+  if(typeof _reviewAnalyzeGen!=='undefined')_reviewAnalyzeGen++;
+  _evalRequestBatchGen=0;
+  _batchLastDispatched=null;
+  // v1.2.3 round-44 (G11): flush any batched cache writes (the batch resumes
+  //   batch write mode on recovery via _requestBatchEval).
+  _endBatchWriteMode();
   if(_reviewAnalyzeAllActive){
     // Reset the safety timer to give the engine time to recover
     if(typeof _reviewAnalyzeResetSafetyTimer==='function')_reviewAnalyzeResetSafetyTimer();
@@ -11810,10 +11990,16 @@ function onEngineError(msg){
   // NOTE: Java-side recoverEngine() handles most restart cases with _restartLock.
   // This JS-side restart is a secondary safety net only. Don't over-retry here
   // because it conflicts with Java-side recovery and causes "Java exception" errors.
-  if(!window._engineRestartCount)window._engineRestartCount=0;
-  window._engineRestartCount++;
-  if(window._engineRestartCount<=2){
-    showToast(T('engine_error_restart')+' ('+window._engineRestartCount+'/2)...');
+  // v1.2.3 round-44 (G5): sliding-window retry budget — stop the JS-side
+  //   restart after 3 errors within 5 minutes (the old cumulative counter was
+  //   reset by onEngineReady, so a crash-looping engine was restarted forever).
+  if(!window._engineErrorTimestamps)window._engineErrorTimestamps=[];
+  const _nowErr=Date.now();
+  window._engineErrorTimestamps=window._engineErrorTimestamps.filter(function(ts){return _nowErr-ts<300000;});
+  window._engineErrorTimestamps.push(_nowErr);
+  const _engineRestartCount=window._engineErrorTimestamps.length;
+  if(_engineRestartCount<=3){
+    showToast(T('engine_error_restart')+' ('+_engineRestartCount+'/3)...');
     // v1.0.7 PHASE 19 (bug fix): Track this timer so onEngineReady can cancel it.
     // Without this, if the engine auto-recovers (Java recoverEngine → onEngineReady)
     // before this 1500ms timer fires, the timer would call restartEngine() on an
@@ -11825,13 +12011,16 @@ function onEngineError(msg){
         try{AndroidBridge.restartEngine();}catch(e){
           console.error('JS restart failed (executor likely shutdown):',e);
           // Don't retry further — Java-side recovery will handle it
-          window._engineRestartCount=3; // Prevent further JS restart attempts
+          // v1.2.3 round-44 (G5): exhaust the sliding-window budget to prevent
+          //   further JS restart attempts.
+          window._engineErrorTimestamps.push(_nowErr,_nowErr,_nowErr);
         }
       }
     },1500);
   }else{
-    showToast(T('engine_error')+': '+msg);
-    window._engineRestartCount=0;
+    // v1.2.3 round-44 (G5): budget exhausted within the window — stop JS
+    //   restarts and surface the unavailable hint instead of a raw error loop.
+    showToast(T('engine_unavailable_hint'));
   }
   _updateAllEvalDisplays();
   render();
@@ -11860,9 +12049,12 @@ function requestEngineEval(){
       if(_reviewEvalDebounceTimer){clearTimeout(_reviewEvalDebounceTimer);_reviewEvalDebounceTimer=null;}
       _evalRequestReviewMode=true; // mark mode for cross-mode rejection
       _evalStaleGen++; _evalRequestGen=_evalStaleGen; // invalidate any in-flight callback
-      // v1.1.1 Phase 59 Task 59.6: Clear batch gen so user-nav cache-hit doesn't
-      //   confuse the batch path in onEngineEval.
-      _evalRequestBatchGen=0;
+      // v1.2.3 round-44 (T3): do NOT clear _evalRequestBatchGen while a batch
+      //   is active. The batch-active check below runs AFTER this early return,
+      //   so a user-nav cache hit mid-batch previously disarmed the batch's
+      //   in-flight callback validation — the batch callback then leaked into
+      //   the user-nav stale path (or was lost) and the batch stalled for 60s.
+      if(!_reviewAnalyzeAllActive)_evalRequestBatchGen=0;
       _updateAllEvalDisplays();
       return;
     }
@@ -11876,7 +12068,9 @@ function requestEngineEval(){
   if(reviewMode&&_reviewAnalyzeAllActive){
     _evalLoading=true;_sfEvalReady=false;
     _evalRequestReviewMode=true;
-    _evalRequestBatchGen=0; // user-nav, not batch
+    // v1.2.3 round-44 (T3): do NOT clear _evalRequestBatchGen here — this branch
+    //   dispatches no request of its own, so clearing only disarmed the batch's
+    //   IN-FLIGHT callback validation (T1) and stalled the batch for 60s.
     _updateAllEvalDisplays();
     return;
   }
@@ -11937,6 +12131,8 @@ function requestEngineEval(){
         try{
           if(typeof AndroidBridge.engineEvalDeep==='function'){AndroidBridge.engineEvalDeep(fen);}
           else{AndroidBridge.engineEval(fen);}
+          // v1.2.3 round-44 (G1): record the gen actually dispatched.
+          _evalLastDispatchedGen=_evalRequestGen;
         }catch(e){console.error("engineEvalDeep error:",e);_evalLoading=false;_updateAllEvalDisplays();}
         if(_evalSafetyTimerId)clearTimeout(_evalSafetyTimerId);
         _evalSafetyTimerId=setTimeout(function(){
@@ -11956,7 +12152,9 @@ function requestEngineEval(){
     if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.isEngineReady==='function'&&AndroidBridge.isEngineReady()){
       _evalLoading=true;
       _updateEvalDisplay();
-      try{AndroidBridge.engineEval(fen);}catch(e){console.error('engineEval error:',e);_evalLoading=false;_updateEvalDisplay();}
+      // v1.2.3 round-44 (G1): record the gen actually dispatched (normal-mode
+      //   path — without this the G1 check would drop every normal-mode eval).
+      try{AndroidBridge.engineEval(fen);_evalLastDispatchedGen=_evalRequestGen;}catch(e){console.error('engineEval error:',e);_evalLoading=false;_updateEvalDisplay();}
       if(_evalSafetyTimerId)clearTimeout(_evalSafetyTimerId);
       _evalSafetyTimerId=setTimeout(function(){
         _evalSafetyTimerId=null;
@@ -11968,6 +12166,32 @@ function requestEngineEval(){
       },30000);
     }
   }
+}
+
+// v1.2.3 round-44 (G11): leave batch write mode and flush pending cache writes.
+function _endBatchWriteMode(){
+  _batchWriteMode=false;
+  try{if(_reviewEvalCache&&typeof _reviewEvalCache._flushSync==='function')_reviewEvalCache._flushSync();}
+  catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
+}
+
+// v1.2.3 round-44 (T4): terminate the analyze-all batch after repeated dispatch
+//   failures (engine dead and not recovering). Reuses the standard batch
+//   cleanup path (active flag, safety timer, Java-side batch end-hook, batch
+//   write mode) instead of ghost-looping forever: safety-net timeout → advance
+//   → engine not ready → nothing scheduled → 60s later the net fires again …
+function _terminateBatchAfterRepeatedFailures(reason){
+  console.warn('[AIBridge] Analyze-all terminated after '+_batchConsecutiveFail+' consecutive failures ('+reason+')');
+  if(typeof _reviewAnalyzeAllActive!=='undefined')_reviewAnalyzeAllActive=false;
+  _reviewAnalyzeStep=-1;
+  if(_reviewAnalyzeSafetyTimer){clearTimeout(_reviewAnalyzeSafetyTimer);_reviewAnalyzeSafetyTimer=null;}
+  _batchConsecutiveFail=0;
+  _evalRequestBatchGen=0;
+  _batchLastDispatched=null;
+  try{if(typeof _endEvalDeepBatchIfActive==='function')_endEvalDeepBatchIfActive();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
+  _endBatchWriteMode();
+  try{if(typeof _updateReviewAnalyzeBtn==='function')_updateReviewAnalyzeBtn();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
+  try{showToast(T('engine_unavailable_hint'));}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
 }
 
 // v1.1.1 Phase 59 Task 59.6: BATCH EVAL REQUEST (decoupled from reviewStep).
@@ -11986,6 +12210,9 @@ function _requestBatchEval(step){
   if(!_engineReady||setupMode)return;
   if(!reviewMode||!reviewStates||reviewStates.length===0)return;
   if(step<0||step>=reviewStates.length)return;
+  // v1.2.3 round-44 (G11): enter batch write mode — cache set() calls during
+  //   the batch only mark dirty; a single _flushSync() runs at batch end.
+  _batchWriteMode=true;
   // Skip if already cached (shouldn't happen — _reviewAnalyzeAdvance skips
   // cached steps — but defensive)
   if(_reviewEvalCache.has(step)){
@@ -12037,6 +12264,12 @@ function _requestBatchEval(step){
     try{
       if(typeof AndroidBridge.engineEvalDeep==='function'){AndroidBridge.engineEvalDeep(fen);}
       else{AndroidBridge.engineEval(fen);}
+      // v1.2.3 round-44 (T1): record exactly what was dispatched so onEngineEval
+      //   can reject late callbacks from a previous step (the gen-only check
+      //   can't — the gen globals are re-armed by every dispatch).
+      _batchLastDispatched={step:_reviewAnalyzeStep,gen:_evalRequestBatchGen,fen:fen,blackTurn:_evalForBlackTurn};
+      // v1.2.3 round-44 (T4): successful dispatch — reset the failure counter.
+      _batchConsecutiveFail=0;
     }catch(e){
       console.error('Batch engineEvalDeep error:',e);
       // On synchronous failure, advance to the next step (don't stall)
@@ -12059,6 +12292,12 @@ function _requestBatchEval(step){
     //   leave the batch paused and let that callback pick it up.
     // v1.2.3 round-30 (robustness): removed the spinning-retry timer.
     console.log('[AIBridge] Batch eval paused — engine not ready. Will resume on onEngineReady.');
+    // v1.2.3 round-44 (T4): count the pause as a dispatch failure; at 3
+    //   consecutive failures terminate the batch instead of ghost-looping on
+    //   the 60s safety net (which also spammed a progress toast every 3 steps).
+    _batchConsecutiveFail++;
+    _batchLastDispatched=null; // nothing in flight — no callback may be claimed
+    if(_batchConsecutiveFail>=3)_terminateBatchAfterRepeatedFailures('engine not ready');
   }
 }
 
@@ -12230,7 +12469,10 @@ function _updateAIThinkDisplay(){
     const searchEl=document.getElementById('ai-search-info');
     if(searchEl)searchEl.textContent='';
   }
-  if(isHintLoading){
+  // v1.2.3 round-41: when MultiPV lines are active, the hint bar's ⭐/📌
+  //   line text is rendered from _multiPVLines in the same tick — do not
+  //   overwrite it here with the raw aiThinkInfo search string.
+  if(isHintLoading&&!(_cachedMultiPV>1&&_multiPVLines.length>0)){
     _hintBarInfo=aiThinkInfo;
     const el=document.getElementById('hint-search-info');
     if(el){el.textContent=_hintBarInfo||T('thinking');el.style.display='block';}
@@ -12380,7 +12622,7 @@ reviewBaseState=cloneS(gameState);
 _prependBlackToMovePlaceholder();
 render();requestEngineEval();
 if(gameState.currentTurn!==playerColor)doAIMove();
-}else{showToast(T('fen_invalid'),2000)}
+}else{showToast(T('fen_invalid'),3000)}
 }
 
 // PGN parser — robust implementation with DroidFish-compatible variation handling
@@ -12463,7 +12705,13 @@ function _parsePGN(pgnText){
   //   single-line and multi-line PGN), and ALSO avoids stripping `[%csl ...]`
   //   / `[%cal ...]` / `[%eval ...]` / `[%emt ...]` inside brace comments
   //   (because `%` is not in `[A-Za-z]`).
-  let moveText=pgnText.replace(/\[\s*[A-Za-z]\w*\s+"(?:[^"\\]|\\.)*"\s*\]/g,'').trim(); // v1.2.3 round-29 (PR52 S8786): switch to canonical PGN tag regex (same as pgn-standard.js:696). Eliminates the alternation `[^\]]*?` overlap with `\s*` that produced polynomial backtracking on unclosed-bracket input; the strict pattern is linear and also correctly handles escaped quotes inside values (`[Event "Tournament \"Open\""]`).
+  // v1.2.3 round-40: extended to also strip UNQUOTED tag values
+  //   (`[WhiteElo 2400]`) — the quoted-value-only regex left such tags in the
+  //   movetext, where the tokenizer choked on them. The alternation is still
+  //   backtracking-safe: the quoted branch is unchanged (round-29 S8786) and
+  //   the unquoted branch `\S[^\]\n]*?` cannot overlap with `\s+` ambiguously
+  //   because the first char is non-space.
+  let moveText=pgnText.replace(/\[\s*[A-Za-z]\w*\s+(?:"(?:[^"\\]|\\.)*"\s*|\S[^\]\n]*?)\]/g,'').trim(); // v1.2.3 round-29 (PR52 S8786): switch to canonical PGN tag regex (same as pgn-standard.js:696). Eliminates the alternation `[^\]]*?` overlap with `\s*` that produced polynomial backtracking on unclosed-bracket input; the strict pattern is linear and also correctly handles escaped quotes inside values (`[Event "Tournament \"Open\""]`).
   // Remove line continuation markers (\ at end of line)
   moveText=moveText.replace(/\\\s*\n/g,' ');
   
@@ -13282,16 +13530,16 @@ function importPGN(pgnText){
   const firstLine=trimmed.split('\n')[0].trim();
   const looksLikeFEN=firstLine.includes('/')&&firstLine.split('/').length===8&&!firstLine.includes('[')&&!firstLine.includes('(')&&!firstLine.match(/\d+\./);
   if(looksLikeFEN){
-    showToast(T('pgn_fen_rejected'),2500);
+    showToast(T('pgn_fen_rejected'),3750);
     return;
   }
   // Additional heuristic: if the entire text can be parsed as FEN, reject it
   if(fenToState(trimmed)){
-    showToast(T('pgn_fen_rejected'),2500);
+    showToast(T('pgn_fen_rejected'),3750);
     return;
   }
   const result=_parsePGN(pgnText);
-  if(!result||!result.moves||!result.moves.length){showToast(T('pgn_invalid'),2000);return;}
+  if(!result||!result.moves||!result.moves.length){showToast(T('pgn_invalid'),3000);return;}
   // Start from FEN or initial position
   // v1.0.8 PHASE 49: validate startState BEFORE clearing _reviewEvalCache and
   //   toggling Chess960 mode. The old order (clear cache + set Chess960 first,
@@ -13300,7 +13548,7 @@ function importPGN(pgnText){
   //   invalid [FEN] tag — even though the import ultimately failed. Now the
   //   side effects only run once we know the import will succeed.
   const startState=result.startFEN?fenToState(result.startFEN):initState();
-  if(!startState){showToast(T('pgn_invalid'),2000);return;}
+  if(!startState){showToast(T('pgn_invalid'),3000);return;}
   // v1.0.7 BUG FIX:
   // Clear _reviewEvalCache before importing a new PGN — see _startGameImpl()
   // for rationale (cache is keyed by per-game reviewStep, switching games
@@ -13980,11 +14228,11 @@ function importPGN(pgnText){
   if(typeof _cachedOriginalPGN!=='undefined'){
     _cachedOriginalPGN=pgnText;
   }
-  showToast(T('pgn_imported'),2000);
+  showToast(T('pgn_imported'),3000);
   requestEngineEval();
   }catch(e){
     console.error('importPGN: error during import',e);
-    showToast(T('pgn_invalid'),2000);
+    showToast(T('pgn_invalid'),3000);
   }
 }
 
@@ -14005,7 +14253,7 @@ function importPGNAsync(pgnText){
     }
   }
   // Show loading indicator
-  try{showToast(T('importing_pgn'),3000);}catch(e){console.warn('[Tablebase]',e?.message?e.message:e);}
+  try{showToast(T('importing_pgn'),4500);}catch(e){console.warn('[Tablebase]',e?.message?e.message:e);}
   // v1.0.8 PHASE 49: removed the dead workerParsePGN round-trip. The old code
   //   called workerParsePGN(pgnText,30000) but discarded its result in BOTH
   //   .then and .catch — both branches ran the SAME synchronous importPGN(pgnText)
@@ -14021,7 +14269,7 @@ function importPGNAsync(pgnText){
         importPGN(pgnText);
       }catch(e){
         console.error('importPGNAsync: sync import failed',e);
-        try{showToast(T('pgn_invalid'),2000);}catch(_e){}
+        try{showToast(T('pgn_invalid'),3000);}catch(_e){}
         resolve(false);
         return;
       }
@@ -14036,20 +14284,20 @@ function importPGNFile(){
     if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.openPGNFilePicker==='function'){
       AndroidBridge.openPGNFilePicker();
     }else{
-      showToast(T('engine_unavailable_bridge'),2000);
+      showToast(T('engine_unavailable_bridge'),3000);
     }
   }catch(e){
-    showToast(T('engine_unavailable_bridge'),2000);
+    showToast(T('engine_unavailable_bridge'),3000);
   }
 }
 
 // Callback from Java when PGN file content is read via SAF
 function onPGNFileRead(content){
   try{
-  if(!content||typeof content!=='string'){showToast(T('pgn_invalid'),2000);return;}
+  if(!content||typeof content!=='string'){showToast(T('pgn_invalid'),3000);return;}
   // Sanitize: remove control characters that might remain after Java-side cleanup
   const sanitized=content.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g,'');
-  if(!sanitized.trim()){showToast(T('pgn_invalid'),2000);return;}
+  if(!sanitized.trim()){showToast(T('pgn_invalid'),3000);return;}
   // Always try PGN import. FEN-only files should use the FEN import button.
   // Check if the content looks like a FEN (8 ranks separated by /) vs PGN (has move text)
   const firstLine=sanitized.trim().split('\n')[0].trim();
@@ -14066,7 +14314,7 @@ function onPGNFileRead(content){
   }
   }catch(e){
     console.error('onPGNFileRead: error processing file',e);
-    showToast(T('pgn_invalid'),2000);
+    showToast(T('pgn_invalid'),3000);
   }
 }
 
@@ -14082,7 +14330,10 @@ function fenToState(fen){
 if(!fen||typeof fen!=='string')return null;
 if(fen.length>200)return null;
 const parts=fen.trim().split(/\s+/);
-if(parts.length<2)return null;
+// v1.2.3 round-40: FEN has at most 6 fields (board, turn, castling, ep,
+//   halfmove, fullmove). More fields = malformed input — reject instead of
+//   silently ignoring the extras.
+if(parts.length<2||parts.length>6)return null;
 const rows=parts[0].split('/');
 if(rows.length!==8)return null;
 const board=Array.from({length:8},()=>Array(8).fill(null));
@@ -14094,14 +14345,20 @@ if(ch>='1'&&ch<='8'){c+=Number.parseInt(ch,10);continue}
 const isWhite=ch===ch.toUpperCase();
 const type=ch.toLowerCase()==='p'?'pawn':ch.toLowerCase()==='n'?'knight':ch.toLowerCase()==='b'?'bishop':ch.toLowerCase()==='r'?'rook':ch.toLowerCase()==='q'?'queen':ch.toLowerCase()==='k'?'king':null;
 if(!type)return null;
+// v1.2.3 round-40: pawns can never stand on rank 1/8 (board rows 7/0) —
+//   such a FEN is malformed (a pawn there would have promoted).
+if(type==='pawn'&&(r===0||r===7))return null;
 const color=isWhite?'white':'black';
 board[r][c]={type,color};
-if(type==='king'){if(color==='white')wk={row:r,col:c};else bk={row:r,col:c};}
+// v1.2.3 round-40: exactly ONE king per side — a second king makes the FEN
+//   malformed (previously the later king silently overwrote the earlier one).
+if(type==='king'){if(color==='white'){if(wk)return null;wk={row:r,col:c};}else{if(bk)return null;bk={row:r,col:c};}}
 c++;
 }
 if(c!==8)return null;
 }
-// Validate that both kings exist on the board
+// Validate that both kings exist on the board (with the round-40 duplicate
+//   rejection above, this gives exactly one king per side)
 if(!wk||!bk)return null;
 const turn=parts[1]==='b'?'black':'white';
 const crStr=parts[2]||'-';
@@ -14138,8 +14395,13 @@ const opp=turn;const pd=opp==='white'?1:-1;let _epHasCap=false;for(const dc of[-
 if(_epHasCap)enPassantTarget={row:er,col:ec};
 }
 }}
-const halfMoveClock=parts[4]?Number.parseInt(parts[4],10)||0:0;
-const fullMoveNumber=parts[5]?Number.parseInt(parts[5],10)||1:1;
+// v1.2.3 round-40: strict clock validation — halfMoveClock must be a
+//   non-negative integer, fullMoveNumber a positive integer. The previous
+//   `parseInt()||fallback` silently coerced garbage ("12x" → 12, "-5" → 0/1),
+//   accepting malformed FENs.
+let halfMoveClock=0,fullMoveNumber=1;
+if(parts[4]){if(!/^\d+$/.test(parts[4]))return null;halfMoveClock=Number.parseInt(parts[4],10);}
+if(parts[5]){if(!/^\d+$/.test(parts[5]))return null;fullMoveNumber=Number.parseInt(parts[5],10);if(fullMoveNumber<1)return null;}
 const s={board,currentTurn:turn,castlingRights,enPassantTarget,halfMoveClock,fullMoveNumber,moveHistory:[],posCount:new Map(),wk,bk,hash:0,boardVersion:1};
 syncHash(s);s.posCount.set(s.hash,1);
 // Validate: the side NOT to move must not be in check (illegal position)
@@ -14168,6 +14430,11 @@ function pieceCountLE7(board){return countPieces(board)<=7}
 
 // Probe Syzygy tablebase API (with timeout + offline fallback + rate limiting)
 async function probeTablebase(s){
+// v1.2.3 round-41: defensive entry guard — reject a null state, a missing
+//   board, or a >7-piece position BEFORE any work (generateFEN would throw on
+//   a missing board, and >7-piece positions are never in the Syzygy
+//   tablebase). Callers no longer need to pre-check piece count.
+if(!s||!s.board||!pieceCountLE7(s.board))return null;
 if(isTbOffline())return null;
 const fen=generateFEN(s);
 // Check cache first
@@ -14197,8 +14464,10 @@ const tmr=ctrl?setTimeout(()=>ctrl.abort(),5000):null;
 const resp=await fetch(`https://tablebase.lichess.ovh/standard?fen=${encodeURIComponent(fen)}`,{signal:ctrl?ctrl.signal:undefined});
 if(tmr)clearTimeout(tmr);
 // v1.0.5 Round-6 Rev62 (2026.6.27) FIX: a 404 response means "position not in
-// tablebase" (e.g., 8-piece position that slipped past the pieceCountLE7
-// pre-filter), NOT "server is down". Previously, 3 consecutive 404s would
+// tablebase", NOT "server is down". (The entry is already defended — v1.2.3
+// round-41 added the pieceCountLE7 guard at the top of probeTablebase — but a
+// 404 can still occur for positions outside the tablebase's coverage, e.g.
+// positions with castling rights.) Previously, 3 consecutive 404s would
 // falsely set _tbOffline=true for 60 seconds, blocking ALL tablebase queries
 // even though the server is healthy. Now only 5xx errors and network errors
 // (caught below) count toward _tbFailCount; 4xx errors return null silently.
@@ -14440,7 +14709,9 @@ const ECO_BY_ID={};const ECO_BY_FAMILY={};
 //   unavoidable for arbitrary substring search without a full-text index, but
 //   the per-opening cost is now just 2 includes() calls (no allocations).
 //   Also: early-exit when results reach 20 (the slice cap) to avoid scanning
-//   all ~3000 openings when the query is common (e.g. "king" matches early).
+//   all 564 openings when the query is common (e.g. "king" matches early).
+//   (round-42 42-9: count corrected — was "~3000"; ECO_OPENINGS.length is
+//   564, verified at runtime this round.)
 function searchEco(query){
   _ensureEcoParsed();
   const q=(query||'').trim().toUpperCase();
@@ -14760,6 +15031,16 @@ function _tickGameClock(){
 // Called when a side's clock runs out
 function _onGameClockExpired(color){
   if(gameClockTimerId){clearInterval(gameClockTimerId);gameClockTimerId=null;}
+  // v1.2.3 round-42 (42-2, P3-14): zero the flagged side's COMMITTED clock.
+  //   The tick path only writes displayRemainingSec (:268) — remainingSec is
+  //   committed per-move in recordMoveEnd — so after a tick-detected flag fall
+  //   the header clock HTML (ui.js render reads gameClocks[c].remainingSec)
+  //   kept showing the stale positive value from the last move instead of
+  //   0:00. Sync both fields here so the final render shows 0:00.
+  if(gameClocks&&gameClocks[color]){
+    gameClocks[color].remainingSec=0;
+    gameClocks[color].displayRemainingSec=0;
+  }
   // v1.0.4 Rev35 FIX (CRITICAL): Stop the engine IMMEDIATELY when the clock
   // expires. Previously, the engine continued searching after flag-fall
   // because no "stop" command was sent. The engine's internal wtime-based
@@ -14784,8 +15065,11 @@ function _onGameClockExpired(color){
   //   insufficient material to checkmate (FIDE 6.9). In that case the game
   //   is drawn, not won. v1.2.3 round-25 introduced this check but used the
   //   symmetric isDeadPosition() (FIDE 5.2.2 — both sides lack material),
-  //   which misses the asymmetric case (winner has only K, K+N, K+B, or
-  //   K+N+N → cannot mate the loser). v1.2.3 round-29 (PR52) replaces it
+  //   which misses the asymmetric case (winner has only K, K+N, or K+B →
+  //   cannot mate the loser even with cooperative play; K+N+N is NOT in this
+  //   list — v1.2.3 round-40 removed the KNN exemption per strict FIDE 6.9,
+  //   since K+N+N can deliver mate with the loser's help). v1.2.3 round-29
+  //   (PR52) replaces it
   //   with winnerLacksMatingMaterial(state, winner) which checks the
   //   WINNER's mating ability specifically. We still fall back to
   //   isDeadPosition for the symmetric case (e.g. K vs K) so the existing
@@ -14806,10 +15090,19 @@ function _onGameClockExpired(color){
       }
     }
   }catch(e){console.warn('insufficient-material check on timeout failed:',e);}
+  // v1.2.3 round-40 (FIDE 6.9): restore the round-25 contract — the draw
+  //   path keeps _gameOverStatusKey='timeout' with _timeoutWinnerColor=null
+  //   (instead of 'draw_insufficient'), so the null-winner branches in
+  //   ai-bridge.js (PGN Termination / annotation text) and ui.js
+  //   (_gameOverStrFromStatus/formatEval) are reachable again and the whole
+  //   pipeline reports a timeout-draw consistently.
+  // v1.2.3 round-42 (42-1): banner wording finalized in game-logic.js
+  //   (key 'pgn_timeout_draw_insufficient') to strict FIDE 6.9 semantics —
+  //   no possible legal mating sequence → draw.
   if(_isDrawByInsufficientMaterial){
     if(typeof _timeoutWinnerColor!=='undefined')_timeoutWinnerColor=null;
-    _gameOverStatusKey='draw_insufficient';
-    gameOver=_gameOverStrFromStatus('draw_insufficient');
+    _gameOverStatusKey='timeout';
+    gameOver=_gameOverStrFromStatus('timeout');
   }else{
     if(typeof _timeoutWinnerColor!=='undefined')_timeoutWinnerColor=winner;
     _gameOverStatusKey='timeout';
@@ -15577,7 +15870,7 @@ function toggleSound(){
   if(soundOn){
     try{if(typeof playSound==='function')playSound('select');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   }
-  showToast(soundOn?T('sound_on'):T('sound_off'),1200);
+  showToast(soundOn?T('sound_on'):T('sound_off'),1800);
 }
 
 function doPromotion(type){if(pendingPromotion){try{executeMove(pendingPromotion.from,pendingPromotion.to,type);}finally{pendingPromotion=null;render();}}}
@@ -16246,11 +16539,11 @@ function _renameHumanPlayer(){
   if(!_newName||_newName===T('you')||_newName==='你'||_newName==='You'){
     _humanPlayerName=null;
     try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentRemove)AndroidBridge.persistentRemove('Regalia_humanName');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
-    showToast(T('rename_player_reset'),2000);
+    showToast(T('rename_player_reset'),3000);
   }else{
     _humanPlayerName=_newName;
     try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_humanName',_newName);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
-    showToast(T('rename_player_saved')+'：'+_newName,2000);
+    showToast(T('rename_player_saved')+'：'+_newName,3000);
   }
   render();
 }
@@ -16403,7 +16696,7 @@ function _doPastePGN(){
       (trimmed.split('\n').length<=2)&&
       trimmed.split('/').length>=8;
     if(fenToState(trimmed)||isLikelyFEN){
-      showToast(T('pgn_fen_rejected'),2500);
+      showToast(T('pgn_fen_rejected'),3750);
       return;
     }
     // v1.0.8 PHASE 34: use async import with worker offloading
@@ -17994,6 +18287,14 @@ function formatEval(){
     // v1.0.4 Rev46: changed eval bar emoji from 🏆/💀 to ⌛ for timeout —
     // the game-over overlay also shows ⌛ for timeout (not 🤝).
     if(_gameOverStatusKey==='timeout'){
+      // v1.2.3 round-40 (FIDE 6.9): null winner = timeout draw (insufficient
+      //   mating material). The round-25 contract restored by round-40 keeps
+      //   _gameOverStatusKey='timeout' for that case too, so guard on
+      //   _timeoutWinnerColor==null and show the draw display (🤝/draw/0.0)
+      //   instead of win/lose.
+      if(typeof _timeoutWinnerColor!=='undefined'&&_timeoutWinnerColor==null){
+        return{emoji:'🤝',desc:T('draw_game'),score:'0.0'};
+      }
       const whiteWins=gameOver.includes(T('white_wins'))||gameOver.includes('White wins')||gameOver.includes(T('white_short'));
       const playerWins=(playerColor==='white')===whiteWins;
       // v1.2.3 round-22: score stays White-POV (+∞ = White wins) so it agrees
@@ -18037,7 +18338,14 @@ function formatEval(){
         else{mateLabel=cachedReview.eval>0?'#+':'#-';}
         return{emoji:posEmoji(evP),desc:posDesc(evP),score:mateLabel};
       }
-      return{emoji:posEmoji(evP),desc:posDesc(evP),score:(evP/100).toFixed(2)};
+      // v1.2.3 (R1): score must be White-POV (+ = White ahead) in the same
+      //   signed 1-decimal format as the in-game branch below. cachedReview.eval
+      //   is already White-POV; evP stays player-POV for emoji/desc only.
+      const _rvRaw=cachedReview.eval/100;
+      let _rvS=_rvRaw.toFixed(1);
+      if(_rvS==='0.0'||_rvS==='+0.0'||_rvS==='-0.0')_rvS='0.0';
+      else if(_rvRaw>0)_rvS='+'+_rvS;
+      return{emoji:posEmoji(evP),desc:posDesc(evP),score:_rvS};
     }
   }
   if(_evalLoading||!_sfEvalReady)return{emoji:'🔬',desc:T('analyzing_ellipsis'),score:'--'};
@@ -18093,7 +18401,14 @@ if(st==='timeout'){
     const winnerStr=_timeoutWinnerColor==='white'?T('white_short'):T('black_side');
     return winnerStr+T('timeout_win_suffix');
   }
-  return T('timeout_win_suffix');
+  // v1.2.3 round-40 (FIDE 6.9): null winner = timeout DRAW (the winner had
+  //   insufficient mating material). ui-gameflow.js round-40 restored the
+  //   round-25 contract that routes this case through status key 'timeout'
+  //   with _timeoutWinnerColor=null, so this branch is reachable again —
+  //   return the timeout-draw text instead of the bare win suffix.
+  //   v1.2.3 round-42 (42-1): banner wording finalized in game-logic.js to
+  //   strict FIDE 6.9 semantics (no possible legal mating sequence → draw).
+  return T('pgn_timeout_draw_insufficient');
 }
 return null;
 }
@@ -19203,7 +19518,7 @@ if(_sfWdlW>=0&&_sfWdlD>=0&&_sfWdlL>=0){const _rt=_sfWdlW+_sfWdlD+_sfWdlL;if(_rt>
   const _blackP=(typeof playerColor!=='undefined'&&playerColor==='black');
   const _rw=Math.round((_blackP?_sfWdlL:_sfWdlW)/_rt*100);
   const _rd=Math.round(_sfWdlD/_rt*100);
-  const _rl=100-_rw-_rd;
+  const _rl=Math.round((_blackP?_sfWdlW:_sfWdlL)/_rt*100); // v1.2.3: match _buildEvalHTML (direct rounding, not 100-W-D)
   _rWdlStr='<span style="color:var(--muted);margin-left:4px">('+_rw+'%W/'+_rd+'%D/'+_rl+'%L)</span>';}}
 // v1.0.8 PHASE 14: enlarge review eval-bar fonts and cap the bar's height
 // so it never grows beyond a single line of text. Previously the bar used
@@ -19851,7 +20166,7 @@ h+=`<div style="padding:6px 12px;background:var(--card);border:1px solid var(--p
 // Ponder move is now displayed inline in hintText (set by onHintMove)
 // when the engine provides "bestmove X ponder Y". No separate display needed here.
 // Show MultiPV alternative lines if available
-if(_multiPVLines.length>=1){h+='<div style="margin-top:6px;border-top:1px solid rgba(212,160,23,.15);padding-top:6px"><div style="font-size:.65rem;color:var(--muted);margin-bottom:4px">'+T('multi_analysis')+'</div>';for(const pv of _multiPVLines){let scoreStr='';if(pv.scoreMate!=null&&pv.scoreMate!==null){const m=Number.parseInt(pv.scoreMate,10);if(!Number.isNaN(m))scoreStr=m>0?'#+'+Math.abs(m):m<0?'#-'+Math.abs(m):'#0';}else if(pv.scoreCp!=null&&pv.scoreCp!==null){const pd=(pv.scoreCp/100).toFixed(1);scoreStr=(pv.scoreCp>0?'+':'')+pd;} let pvSAN='';if(pv.pv){try{const _conv=_convertPVtoSAN(pv.pv,gameState);pvSAN=_conv.sanMoves.split(/\s+/).slice(0,3).join(' ');}catch(e){pvSAN=pv.pv.split(/\s+/).slice(0,3).join(' ');}} h+='<div style="font-size:.65rem;color:'+(pv.index===1?'var(--accent2)':'var(--muted)')+';margin-bottom:2px">'+(pv.index===1?'⭐':'·')+' '+scoreStr+(pvSAN?' <span style="font-family:monospace;font-size:.6rem">'+_esc(pvSAN)+'</span>':'')+'</div>';}h+='</div>';} h+='</div>';}}// Player bar
+if(_multiPVLines.length>=1){h+='<div style="margin-top:6px;border-top:1px solid rgba(212,160,23,.15);padding-top:6px"><div style="font-size:.65rem;color:var(--muted);margin-bottom:4px">'+T('multi_analysis')+'</div>';for(const pv of _multiPVLines){let scoreStr='';const _isBTM=gameState&&gameState.currentTurn==='black';if(pv.scoreMate!=null&&pv.scoreMate!==null){const m=Number.parseInt(pv.scoreMate,10);if(!Number.isNaN(m)){const _wM=_isBTM?-m:m;scoreStr=_wM>0?'#+'+Math.abs(_wM):_wM<0?'#-'+Math.abs(_wM):(_isBTM?'#+0':'#-0');}}else if(pv.scoreCp!=null&&pv.scoreCp!==null){const _wCp=_isBTM?-pv.scoreCp:pv.scoreCp;const pd=(_wCp/100).toFixed(1);scoreStr=(_wCp>0?'+':'')+pd;} /* v1.2.3 (R1/R3): White-POV scores */ let pvSAN='';if(pv.pv){try{const _conv=_convertPVtoSAN(pv.pv,gameState);pvSAN=_conv.sanMoves.split(/\s+/).slice(0,3).join(' ');}catch(e){pvSAN=pv.pv.split(/\s+/).slice(0,3).join(' ');}} h+='<div style="font-size:.65rem;color:'+(pv.index===1?'var(--accent2)':'var(--muted)')+';margin-bottom:2px">'+(pv.index===1?'⭐':'·')+' '+scoreStr+(pvSAN?' <span style="font-family:monospace;font-size:.6rem">'+_esc(pvSAN)+'</span>':'')+'</div>';}h+='</div>';} h+='</div>';}}// Player bar
 return h;
 } // end _renderInfoBars
 
@@ -20053,7 +20368,7 @@ function _maybeShowBoardDebounceHint(){
   if(document.getElementById('_loadingOverlay'))return;
   _boardDebounceHintShown=true;
   setTimeout(function(){
-    try{showToast(T('board_debounce_hint'),4500);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+    try{showToast(T('board_debounce_hint'),6750);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   },400);
 }
 
@@ -21601,6 +21916,9 @@ function _resetGameUIState(){
     try{if(typeof _endEvalDeepBatchIfActive==='function')_endEvalDeepBatchIfActive();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     if(typeof _reviewAnalyzeSafetyTimer!=='undefined'&&_reviewAnalyzeSafetyTimer){clearTimeout(_reviewAnalyzeSafetyTimer);_reviewAnalyzeSafetyTimer=null;}
     if(typeof _evalRequestBatchGen!=='undefined')_evalRequestBatchGen=0;
+    // v1.2.3 round-44 (T1/G11): drop the dispatch record + flush batch writes.
+    if(typeof _batchLastDispatched!=='undefined')_batchLastDispatched=null;
+    try{if(typeof _endBatchWriteMode==='function')_endBatchWriteMode();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   }
   // v1.2.3 round-18 (bug fix): also clear the pending open-stats flag/timer —
   //   exitReview() does this, but _resetGameUIState can run WITHOUT exitReview
@@ -21871,14 +22189,14 @@ function _updateReviewAnalyzeBtn(){
 function _prioritizeReviewStep(step){
   // Validate: must be in review mode
   if(!reviewMode){
-    try{showToast(T('priority_eval_not_in_review'),2500);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+    try{showToast(T('priority_eval_not_in_review'),3750);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     return;
   }
   // Validate: step must be in range
   if(!reviewStates||step<0||step>=reviewStates.length)return;
   // Validate: step must be uncached (no point prioritizing an already-analyzed step)
   if(_reviewEvalCache.has(step)){
-    try{showToast(T('priority_eval_already_cached'),2000);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+    try{showToast(T('priority_eval_already_cached'),3000);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     return;
   }
@@ -21889,25 +22207,30 @@ function _prioritizeReviewStep(step){
   if(!_reviewAnalyzeAllActive){
     reviewGoTo(step);
     try{requestEngineEval();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
-    try{showToast(T('priority_eval_toast'),2500);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+    try{showToast(T('priority_eval_toast'),3750);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     return;
   }
   // Deduplicate: don't add the same step twice
   // v1.2.3 round-38 (SonarCloud S7765): use .includes() instead of .indexOf() >= 0.
   if(_reviewAnalyzePriorityQueue.includes(step)){
-    try{showToast(T('priority_eval_toast'),2500);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+    try{showToast(T('priority_eval_toast'),3750);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     return;
   }
   // Push onto the priority queue
   _reviewAnalyzePriorityQueue.push(step);
   // Show toast notification
-  try{showToast(T('priority_eval_toast'),2500);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+  try{showToast(T('priority_eval_toast'),3750);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   // Abort the current in-flight batch eval so the priority step can be
   // evaluated next. We bump _reviewAnalyzeGen and clear _evalRequestBatchGen
   // so the in-flight onEngineEval callback is treated as stale (its result
   // will be cached for _reviewEvalRequestedStep via the user-nav stale path,
   // NOT lost). The safety timer (60s) will eventually fire if the engine
   // doesn't respond to the stop, advancing the batch.
+  // v1.2.3 round-44 (T2): clear the batch dispatch record FIRST — a callback
+  //   arriving inside the 150ms stop→advance window below now fails the
+  //   _batchLastDispatched validation in onEngineEval (T1) and is dropped as
+  //   stale, instead of being claimed by the re-armed gen of the next step.
+  if(typeof _batchLastDispatched!=='undefined')_batchLastDispatched=null;
   if(typeof _evalRequestBatchGen!=='undefined')_evalRequestBatchGen=0;
   if(typeof _reviewAnalyzeGen!=='undefined')_reviewAnalyzeGen++;
   // Clear the safety timer — _reviewAnalyzeAdvance will reset it when it
@@ -21928,10 +22251,13 @@ function _prioritizeReviewStep(step){
     _engineStopHard();
   }catch(e){console.warn('engineStop for priority failed',e);}
   // Trigger _reviewAnalyzeAdvance after a short delay to pick up the priority
-  // entry. The delay (100ms) gives the engine time to process the stop
+  // entry. The delay (150ms) gives the engine time to process the stop
   // command and fire its bestmove callback. If the callback hasn't arrived
   // by then, _reviewAnalyzeAdvance will still pick up the priority entry
   // (because the priority queue check happens BEFORE the normal sequence).
+  // v1.2.3 round-44 (T2): a callback arriving INSIDE this 150ms window is no
+  //   longer mis-claimed by the next step — _batchLastDispatched was cleared
+  //   above, so the T1 validation in onEngineEval drops it as stale.
   // We use a flag to prevent multiple advance triggers if the bestmove
   // callback also fires.
   const _advanceFlag='_priorityAdvancePending';
@@ -22036,6 +22362,21 @@ function _reviewAnalyzeResetSafetyTimer(){
       // v1.1.1 Phase 59 Task 59.6: Clear the batch gen so the stale callback
       //   (if it ever arrives) doesn't double-advance.
       if(typeof _evalRequestBatchGen!=='undefined')_evalRequestBatchGen=0;
+      // v1.2.3 round-44 (T1): also clear the dispatch record — the timed-out
+      //   step's late callback must not be claimed by the next step.
+      if(typeof _batchLastDispatched!=='undefined')_batchLastDispatched=null;
+      // v1.2.3 round-44 (T4): count the timeout as a dispatch failure; at 3
+      //   consecutive failures the batch is terminated (engine likely dead)
+      //   instead of ghost-looping on this 60s safety net forever.
+      if(typeof _batchConsecutiveFail!=='undefined'){
+        _batchConsecutiveFail++;
+        if(_batchConsecutiveFail>=3&&typeof _terminateBatchAfterRepeatedFailures==='function'){
+          try{_terminateBatchAfterRepeatedFailures('safety-net timeout');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+          return;
+        }
+      }
+      // v1.2.3 round-44 (G11): flush any dirty cache writes before advancing.
+      try{if(typeof _endBatchWriteMode==='function')_endBatchWriteMode();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
       _reviewAnalyzeAdvance();
     }else{
       _reviewAnalyzeSafetyTimer=null;
@@ -22077,11 +22418,11 @@ function _triggerPendingPostBatchActions(_pendingSave, _pendingStats){
   if(_pendingSave){
     try{setTimeout(function(){
       try{_pgnCacheSaveCurrentImpl_SkipCoverageCheck(_pendingSave.name,_pendingSave.includeAnn);}
-      catch(e){showToast(T('pgn_cache_save_failed'),2500);}
+      catch(e){showToast(T('pgn_cache_save_failed'),3750);}
     },150);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   }
   if(_pendingStats){
-    try{showToast(T('analysis_complete_opening_stats'),2500);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+    try{showToast(T('analysis_complete_opening_stats'),3750);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     try{setTimeout(function(){
       try{if(typeof openStatsPage==='function')openStatsPage();}
       catch(e){console.error('Deferred openStatsPage failed:',e);}
@@ -22146,6 +22487,8 @@ function _reviewAnalyzeAdvance(){
     // v1.2.3 P1: Batch completed normally — restore gameplay UCI options
     //   that were overridden by engineEvalDeepBeginBatch().
     _endEvalDeepBatchIfActive();
+    // v1.2.3 round-44 (G11): leave batch write mode + flush pending cache writes.
+    try{if(typeof _endBatchWriteMode==='function')_endBatchWriteMode();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     if(_reviewAnalyzeSafetyTimer){clearTimeout(_reviewAnalyzeSafetyTimer);_reviewAnalyzeSafetyTimer=null;}
     // v1.1.1 Phase 59 Task 59.6: Reset batch state
     _reviewAnalyzeStep=-1;
@@ -22289,6 +22632,10 @@ function exitReview(){
   // v1.2.3 P1: Exiting review cancels any in-flight batch — restore the
   //   gameplay UCI options that engineEvalDeepBeginBatch() overrode.
   _endEvalDeepBatchIfActive();
+  // v1.2.3 round-44 (T1/G11): drop the dispatch record (no callback may be
+  //   claimed after exit) and flush any batched cache writes.
+  if(typeof _batchLastDispatched!=='undefined')_batchLastDispatched=null;
+  try{if(typeof _endBatchWriteMode==='function')_endBatchWriteMode();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   // v1.1.1 Phase 59 Task 59.6: Clear batch session state so a stale
   //   in-flight callback (if any) doesn't try to advance a canceled batch.
   _reviewAnalyzeStep=-1;
@@ -22539,7 +22886,7 @@ function _pgnCacheSaveCurrentImpl(name,includeAnn){
   // Build the PGN text
   const pgn=_pgnCacheBuildPGNText(_ctx, includeAnn);
   if(!pgn){
-    showToast(T('pgn_cache_save_failed'),2500);
+    showToast(T('pgn_cache_save_failed'),3750);
     return;
   }
   _pgnCachePersistSave(name, pgn);
@@ -22617,7 +22964,7 @@ function _pgnCacheBuildPGNText(_ctx, includeAnn){
 //   Shared by _pgnCacheSaveCurrentImpl and _pgnCacheSaveCurrentImpl_SkipCoverageCheck.
 function _pgnCachePersistSave(name, pgn){
   if(!pgn){
-    showToast(T('pgn_cache_save_failed'),2500);
+    showToast(T('pgn_cache_save_failed'),3750);
     _pgnCacheOpInProgress=false; // Phase 69 (Bug 3): reset guard on failure
     return;
   }
@@ -22629,11 +22976,11 @@ function _pgnCachePersistSave(name, pgn){
   }catch(e){ok=false;}
   if(ok){
     _refreshPGNCacheList();
-    showToast(T('pgn_cache_saved')+'：'+name,2000);
+    showToast(T('pgn_cache_saved')+'：'+name,3000);
     try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     render();
   }else{
-    showToast(T('pgn_cache_save_failed'),2500);
+    showToast(T('pgn_cache_save_failed'),3750);
   }
   _pgnCacheOpInProgress=false; // Phase 69 (Bug 3): reset guard on completion
 }
@@ -22711,7 +23058,7 @@ function _pgnCacheShowPartialEvalDialog(name, includeAnn, totalSteps, cachedCoun
     btns.appendChild(makeBtn(T('pgn_cache_partial_eval_analyze_first'), true, function(){
       // Set pending save; reviewAnalyzeAll() will trigger the save on completion.
       _pendingPGNCacheSave={name:name, includeAnn:includeAnn};
-      showToast(T('pgn_cache_analyze_then_save'),2500);
+      showToast(T('pgn_cache_analyze_then_save'),3750);
       try{
         if(typeof reviewAnalyzeAll==='function'){
           reviewAnalyzeAll();
@@ -22722,7 +23069,7 @@ function _pgnCacheShowPartialEvalDialog(name, includeAnn, totalSteps, cachedCoun
         }
       }catch(e){
         _pendingPGNCacheSave=null;
-        showToast(T('pgn_cache_save_failed'),2500);
+        showToast(T('pgn_cache_save_failed'),3750);
       }
     }));
     btns.appendChild(makeBtn(T('pgn_cache_partial_eval_save_as_is'), false, function(){
@@ -22777,7 +23124,7 @@ function _pgnCacheImport(name){
   }catch(e){pgn=null;}
   if(!pgn){
     _pgnCacheOpInProgress=false;
-    showToast(T('pgn_cache_import_failed'),2500);
+    showToast(T('pgn_cache_import_failed'),3750);
     return;
   }
   showPGNCacheManager=false;
@@ -22800,7 +23147,7 @@ function _pgnCacheImport(name){
         // v1.0.8 PHASE 35: check success flag — importPGN shows its own error
         //   toast on invalid PGN, so only show success UI if import succeeded.
         if(!ok){
-          showToast(T('pgn_cache_import_failed'),2500);
+          showToast(T('pgn_cache_import_failed'),3750);
           render();
           return;
         }
@@ -22812,14 +23159,14 @@ function _pgnCacheImport(name){
             }
           }catch(e){console.warn('[UI]',e?.message?e.message:e);}
         }
-        showToast(T('pgn_cache_imported')+'：'+name,2000);
+        showToast(T('pgn_cache_imported')+'：'+name,3000);
         try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
         render();
       }).catch(function(e){
         _pgnCacheOpInProgress=false;
         // v1.0.8 PHASE 35: defensive catch in case .then() callback throws
         console.error('PGN cache import .then failed:',e);
-        showToast(T('pgn_cache_import_failed'),2500);
+        showToast(T('pgn_cache_import_failed'),3750);
         render();
       });
       return;
@@ -22828,7 +23175,7 @@ function _pgnCacheImport(name){
     _pgnCacheOpInProgress=false;
   }catch(e){
     _pgnCacheOpInProgress=false;
-    showToast(T('pgn_cache_import_failed'),2500);
+    showToast(T('pgn_cache_import_failed'),3750);
     return;
   }
   // After import, if we were in review mode, re-enter review on the new game
@@ -22840,7 +23187,7 @@ function _pgnCacheImport(name){
       }
     }catch(e){console.warn('[UI]',e?.message?e.message:e);}
   }
-  showToast(T('pgn_cache_imported')+'：'+name,2000);
+  showToast(T('pgn_cache_imported')+'：'+name,3000);
   try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   render();
 }
@@ -22863,7 +23210,7 @@ function _pgnCacheDeleteSelected(){
   _refreshPGNCacheList();
   _pgnCacheOpInProgress=false;
   try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
-  showToast(T('pgn_cache_deleted')+'：'+deleted,2000);
+  showToast(T('pgn_cache_deleted')+'：'+deleted,3000);
   render();
 }
 
@@ -22898,11 +23245,11 @@ function _pgnCacheRename(oldName){
   }catch(e){ok=false;}
   if(ok){
     _refreshPGNCacheList();
-    showToast(T('pgn_cache_renamed')+'：'+newName,2000);
+    showToast(T('pgn_cache_renamed')+'：'+newName,3000);
     try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     render();
   }else{
-    showToast(T('pgn_cache_rename_failed'),2500);
+    showToast(T('pgn_cache_rename_failed'),3750);
   }
   _pgnCacheOpInProgress=false;
 }
@@ -22944,11 +23291,11 @@ function _pgnCacheEditTags(name){
   }catch(e){ok=false;}
   if(ok){
     _refreshPGNCacheList();
-    showToast(T('pgn_cache_tags_saved')+'：'+name,2000);
+    showToast(T('pgn_cache_tags_saved')+'：'+name,3000);
     try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     render();
   }else{
-    showToast(T('pgn_cache_tags_save_failed'),2500);
+    showToast(T('pgn_cache_tags_save_failed'),3750);
   }
   _pgnCacheOpInProgress=false;
 }
@@ -23242,6 +23589,14 @@ function _cleanupEventListeners(){
   //   is destroyed. The interval is set at _startGameClock and was previously
   //   only cleared in the resign/timeout paths, not in the destroy-cleanup.
   if(gameClockTimerId!==undefined&&gameClockTimerId){clearInterval(gameClockTimerId);gameClockTimerId=null;}
+  // v1.2.3 round-44 (G8): clear the remaining module timers so nothing fires
+  //   after the Activity/WebView is destroyed.
+  if(typeof _loadingFallbackTimerId!=='undefined'&&_loadingFallbackTimerId){clearTimeout(_loadingFallbackTimerId);_loadingFallbackTimerId=null;}
+  if(typeof _emergencyFallbackTimerId!=='undefined'&&_emergencyFallbackTimerId){clearTimeout(_emergencyFallbackTimerId);_emergencyFallbackTimerId=null;}
+  if(typeof _toastTimer!=='undefined'&&_toastTimer){clearTimeout(_toastTimer);_toastTimer=0;}
+  if(typeof _toastRemoveTimer!=='undefined'&&_toastRemoveTimer){clearTimeout(_toastRemoveTimer);_toastRemoveTimer=0;}
+  if(typeof _evalSafetyTimerId!=='undefined'&&_evalSafetyTimerId){clearTimeout(_evalSafetyTimerId);_evalSafetyTimerId=null;}
+  if(typeof _pbmiTimerId!=='undefined'&&_pbmiTimerId){clearTimeout(_pbmiTimerId);_pbmiTimerId=null;}
   renderPending=false;
 }
 

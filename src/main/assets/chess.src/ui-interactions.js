@@ -686,7 +686,7 @@ function toggleSound(){
   if(soundOn){
     try{if(typeof playSound==='function')playSound('select');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   }
-  showToast(soundOn?T('sound_on'):T('sound_off'),1200);
+  showToast(soundOn?T('sound_on'):T('sound_off'),1800);
 }
 
 function doPromotion(type){if(pendingPromotion){try{executeMove(pendingPromotion.from,pendingPromotion.to,type);}finally{pendingPromotion=null;render();}}}
@@ -1355,11 +1355,11 @@ function _renameHumanPlayer(){
   if(!_newName||_newName===T('you')||_newName==='你'||_newName==='You'){
     _humanPlayerName=null;
     try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentRemove)AndroidBridge.persistentRemove('Regalia_humanName');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
-    showToast(T('rename_player_reset'),2000);
+    showToast(T('rename_player_reset'),3000);
   }else{
     _humanPlayerName=_newName;
     try{if(typeof AndroidBridge!=='undefined'&&AndroidBridge.persistentSet)AndroidBridge.persistentSet('Regalia_humanName',_newName);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
-    showToast(T('rename_player_saved')+'：'+_newName,2000);
+    showToast(T('rename_player_saved')+'：'+_newName,3000);
   }
   render();
 }
@@ -1512,7 +1512,7 @@ function _doPastePGN(){
       (trimmed.split('\n').length<=2)&&
       trimmed.split('/').length>=8;
     if(fenToState(trimmed)||isLikelyFEN){
-      showToast(T('pgn_fen_rejected'),2500);
+      showToast(T('pgn_fen_rejected'),3750);
       return;
     }
     // v1.0.8 PHASE 34: use async import with worker offloading

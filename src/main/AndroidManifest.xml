@@ -91,18 +91,27 @@
         android:icon="@mipmap/ic_launcher"
         android:extractNativeLibs="true"
         android:hardwareAccelerated="true"
-        android:usesCleartextTraffic="false"
-        android:networkSecurityConfig="@xml/network_security_config">
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:supportsRtl="true"
+        android:enableOnBackInvokedCallback="true">
+        <!-- v1.2.3 round-44 (F15): removed android:usesCleartextTraffic="false"
+             — it is ignored entirely when networkSecurityConfig is set (the
+             config's cleartextTrafficPermitted="false" is authoritative). -->
+        <!-- v1.2.3 round-44 (F13): added supportsRtl + enableOnBackInvokedCallback
+             (the latter matches the API-35 default; declared explicitly for
+             API 33/34 consistency). -->
         <!-- v1.2.3 round-13 (P2): removed android:fullBackupContent and
              android:dataExtractionRules. When allowBackup="false" (the
              documented v1.0.4 design decision — engine config and PGN cache
              are considered private), both backup rule files are never
              consulted, so the references were dead config that misled readers
-             into thinking selective backup was active. The two XML files
-             (backup_rules.xml, data_extraction_rules.xml) are retained in
-             res/xml/ for reference but no longer wired. To re-enable selective
-             backup in the future, set allowBackup="true" and re-add both
-             attributes pointing at the existing rule files. -->
+             into thinking selective backup was active. -->
+        <!-- v1.2.3 round-44 (F12): the two rule files themselves
+             (backup_rules.xml, data_extraction_rules.xml) have now been
+             DELETED — backup_rules.xml still contained
+             &lt;include domain="file" path="pgn_cache/"/&gt;, contradicting
+             the "PGN cache private" decision above. To re-enable selective
+             backup, set allowBackup="true" and author fresh rule files. -->
         <!-- v1.2.1 round-10 (review-F P3): removed android:requestLegacyExternalStorage="true"
              — this attribute is ignored when targetSdk >= 30 (we use 35). The app
              uses SAF for all file I/O (no File API external-storage access), so the

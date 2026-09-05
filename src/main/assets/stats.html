@@ -2808,7 +2808,7 @@ function renderStats(parsed,evalData){
 
 function renderEvalChart(evalData){
   const w=600,h=120,pad=20;
-  const validEvals=evalData.filter(e=>e).map(e=>e.mate?(e.mate>0?90000:-90000):e.eval);
+  const validEvals=evalData.filter(e=>e).map(e=>e.mate?(e.mate>0?1000:-1000):e.eval); // v1.2.3 (R2): clamp mate to +/-1000cp (+/-10 pawns) like ui.js evalToY, so mate sentinels don't flatten the chart
   if(validEvals.length<2)return '<div class="loading">'+T('no_data')+'</div>';
   const maxEv=Math.max(...validEvals,500);
   const minEv=Math.min(...validEvals,-500);
@@ -3916,7 +3916,18 @@ function _exportFullHTML(){
     // v1.2.3 round-38 (SonarCloud S7780): use String.raw for the regex
     //   source string to avoid double-escaping backslashes. The `\\(` becomes
     //   `\(` etc. — String.raw treats backslashes as literal characters.
+    // v1.2.3 round-42 (42-10, P3-24): convention guard. The regex above ONLY
+    //   matches when fnName's closing brace sits at column 0 — if a future
+    //   edit re-indents one of the 9 target functions, js.replace() would
+    //   silently no-op and the exported HTML would keep the full function
+    //   body (double-definition). Fail loud instead of silent. When adding a
+    //   new strip target, keep its closing brace at column 0 (verified for
+    //   all 9 current targets this round).
     const re = new RegExp('function ' + fnName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + String.raw`\(\)\{[\s\S]*?\n\}`);
+    if(!re.test(js)){
+      console.error('_stripFnBody: no match for', fnName,
+        '— target function missing or closing-brace-at-column-0 convention broken; body NOT stripped');
+    }
     return js.replace(re, 'function ' + fnName + '(){}');
   }
   scriptJS=_stripFnBody(scriptJS,'exportHTML');

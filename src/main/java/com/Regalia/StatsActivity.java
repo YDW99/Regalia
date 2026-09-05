@@ -100,6 +100,14 @@ public class StatsActivity extends Activity {
     // Cleared to null when MainActivity reads it (one-shot consumption).
     // Static so MainActivity can access it without holding a StatsActivity ref.
     public static volatile String importedPGNOnStats = null;
+    // v1.2.3 round-44 (E4): BACK 键兜底状态。onKeyDown 把返回决策交给 JS
+    //   （handleStatsBackPress/returnToGame），若 JS 异常或未定义则 Activity
+    //   永远不会 finish，用户以为 BACK 失灵。JS 正常关闭路径会经桥接方法
+    //   closeStatsPage() 置位 backCloseHandled，250ms 超时兜底检测到已置位
+    //   即放弃 finish()。
+    private final java.util.concurrent.atomic.AtomicBoolean backCloseHandled =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+    private android.os.Handler backFallbackHandler;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -136,6 +144,7 @@ public class StatsActivity extends Activity {
         // v1.0.5 Rev55: tapjacking defense (match MainActivity).
         webView.setFilterTouchesWhenObscured(true);
         setContentView(webView);
+        backFallbackHandler = new android.os.Handler(android.os.Looper.getMainLooper()); // v1.2.3 round-44 (E4)
 
         // v1.0.5 Rev55: WebView security configuration — defense-in-depth parity
         // with MainActivity. The stats page also loads only local asset content,
@@ -204,6 +213,8 @@ public class StatsActivity extends Activity {
 
             @JavascriptInterface
             public void closeStatsPage() {
+                // v1.2.3 round-44 (E4): 置位标志以取消 BACK 键的 250ms 超时兜底。
+                backCloseHandled.set(true);
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
@@ -234,14 +245,26 @@ public class StatsActivity extends Activity {
                 //   HapticManager.performHaptic, which handles the gating +
                 //   vibrator lookup + API-level dispatch centrally.
                 try {
-                    if (_statsHapticManager == null) {
-                        _statsHapticManager = new HapticManager(
-                            StatsActivity.this,
-                            getSharedPreferences("RegaliaEngine", MODE_PRIVATE),
-                            new android.os.Handler(android.os.Looper.getMainLooper())
-                        );
+                    // v1.2.3 round-44 (E5): 懒初始化改 DCL。performHaptic 从 JS
+                    //   binder 线程调用，旧的无锁 check-then-act 在快速连点时可
+                    //   构造两个 HapticManager（后者覆盖前者，功能无害但浪费，
+                    //   且字段发布无 happens-before 保证）。字段已是 volatile，
+                    //   此处补 synchronized 双检。
+                    HapticManager hm = _statsHapticManager;
+                    if (hm == null) {
+                        synchronized (StatsActivity.this) {
+                            hm = _statsHapticManager;
+                            if (hm == null) {
+                                hm = new HapticManager(
+                                    StatsActivity.this,
+                                    getSharedPreferences("RegaliaEngine", MODE_PRIVATE),
+                                    new android.os.Handler(android.os.Looper.getMainLooper())
+                                );
+                                _statsHapticManager = hm;
+                            }
+                        }
                     }
-                    _statsHapticManager.performHaptic(type);
+                    hm.performHaptic(type);
                 } catch (Throwable e) {
                     Log.w(TAG, "performHaptic failed", e);
                 }
@@ -665,6 +688,12 @@ public class StatsActivity extends Activity {
         // import-back Yes/No/Cancel was handled).
         if (keyCode == KeyEvent.KEYCODE_BACK) {
             if (webView != null) {
+                // v1.2.3 round-44 (E4): 先复位标志，再发 JS；250ms 后若 JS 未
+                //   经 closeStatsPage() 置位（JS 异常/函数未定义），兜底
+                //   finish()。正常关闭路径会置位 backCloseHandled，兜底
+                //   Runnable 检测到后放弃 —— 超时兜底可被正常 closeStatsPage
+                //   取消。
+                backCloseHandled.set(false);
                 webView.evaluateJavascript(
                     "if(typeof handleStatsBackPress==='function'){handleStatsBackPress();}" +
                     "else if(typeof _statsImportBackDialogVisible!=='undefined'&&_statsImportBackDialogVisible){" +
@@ -673,6 +702,17 @@ public class StatsActivity extends Activity {
                     "  returnToGame();" +
                     "}",
                     null);
+                if (backFallbackHandler != null) {
+                    backFallbackHandler.postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (!backCloseHandled.get() && !isFinishing() && !isDestroyed()) {
+                                Log.w(TAG, "BACK fallback: JS did not close stats page within 250ms — finishing");
+                                finish();
+                            }
+                        }
+                    }, 250);
+                }
                 return true;
             }
             finish();
@@ -726,6 +766,11 @@ public class StatsActivity extends Activity {
             try { webView.onPause(); } catch (Throwable ignored) {}
             try { webView.destroy(); } catch (Throwable ignored) {}
             webView = null;
+        }
+        // v1.2.3 round-44 (E4): 清掉未触发的 BACK 兜底 Runnable，避免持有
+        //   Activity 引用到超时。
+        if (backFallbackHandler != null) {
+            backFallbackHandler.removeCallbacksAndMessages(null);
         }
         super.onDestroy();
     }

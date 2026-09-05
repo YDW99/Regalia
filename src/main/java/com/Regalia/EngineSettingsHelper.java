@@ -327,6 +327,13 @@ public class EngineSettingsHelper {
     /** 若显式导入 threads/hash 且 autoConfig 开启，禁用 autoConfig。返回 1 表示已禁用 */
     private int handleAutoConfigOverride(Set<String> explicitlySet) {
         if (!callbacks.isAutoConfigEnabled()) return 0;
+        // v1.2.3 round-44 (C11): 若用户在同一份导入文件里显式设置了
+        //   engine.autoConfig，尊重其显式选择 —— 不因 threads/hash 的存在而
+        //   覆盖它（导入文件即用户意图的最终来源）。
+        if (explicitlySet.contains("engine.autoConfig")) {
+            Log.w(TAG, "Import explicitly sets engine.autoConfig — keeping user's choice, not overriding");
+            return 0;
+        }
         if (!explicitlySet.contains("engine.threads") && !explicitlySet.contains("engine.hash")) return 0;
         Log.i(TAG, "User explicitly imported threads/hash — disabling autoConfig for this apply cycle");
         callbacks.setAutoConfigEnabled(false);

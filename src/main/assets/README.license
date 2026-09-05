@@ -1,6 +1,65 @@
+v1.2.3 round-44 (2026.9.4): chess.html rebuilt + stats.html eval-graph mate clamp.
+  - Version: versionCode=10203 (build.gradle F11 formula; was 123),
+    versionName="1.2.3" (unchanged).
+  - chess.html (AGPL v3, combined work): rebuilt via build-chess.py after
+    the round-44 chess.src changes (score-polarity fixes, Toast durations
+    x1.5, batch-analysis anti-interruption hardening — see
+    chess.src/README.license round-44 entry).
+  - stats.html (GPL v3): eval-graph mate scores clamped to +/-1000cp so
+    mate values no longer blow out the chart scale.
+  - AGPLv3_Logo.svg, GPLv3_Logo.svg: no changes this round.
+  - License classification: all files unchanged.
+
+v1.2.3 round-43 (2026.9.4): chess.html rebuilt after the 58 dead i18n keys were removed (42-8 follow-up, D5=A step 2).
+  - Version: versionCode=123, versionName="1.2.3" (unchanged).
+  - chess.html (AGPL v3, combined work): rebuilt via build-chess.py after
+    the 58 dead i18n keys were deleted from game-logic.js — two consecutive
+    builds byte-identical (md5 49049a41846a1ee33bae7b24f6f4cd1d; 23,340
+    lines / 1,405,381 bytes); dead keys and round-42 markers absent from the
+    bundle; 404 key definitions.
+  - stats.html, AGPLv3_Logo.svg, GPLv3_Logo.svg: no changes this round.
+  - License classification: all files unchanged.
+
+v1.2.3 round-42 (2026.8.10): chess.html rebuilt + stats.html _stripFnBody hardening (42-10; the 42-5 license-tag corrections are recorded in the entry below).
+  - Version: versionCode=123, versionName="1.2.3" (unchanged).
+  - chess.html (AGPL v3, combined work): rebuilt via build-chess.py after
+    the round-42 chess.src changes (23,405 lines / 1,412,514 bytes; two
+    consecutive builds md5-identical); carries the 58 dead-key markers of
+    42-8 (keys themselves removed in round-43).
+  - stats.html (GPL v3): 42-10 _stripFnBody contract hardening — re.test(js)
+    static check before the regex replacement (loud console.error instead of
+    a silent no-op that would export double definitions); column-0 `}`
+    contract comment reinforced; all 9 target functions re-verified.
+  - License classification: unchanged (see the 42-5 entry below).
+
+v1.2.3 round-42 (2026.8.10): license tag corrections (42-5, P2-9/P3-19, D2=A).
+  - Version: versionCode=123, versionName="1.2.3" (unchanged — doc round).
+  - round-37/38/39 entries below: chess.html "License classification
+    unchanged (GPL v3)" labels corrected to AGPL v3 — chess.html is a
+    combined work of the GPL v3 + AGPL v3 chess.src modules (D2=A),
+    consistent with the round-30+ entries below ("remains AGPL v3
+    (combined work)").
+  - v1.0.x-era entries below: 2 mislabeled "(GPL v3)" tags on
+    chess.src/chess960.js corrected to AGPL v3 (header has always been
+    AGPL v3). stats.html remains GPL v3 (DroidFish-derived per header).
+
+v1.2.3 round-41 (2026.8.10): chess.html rebuilt after the round-41 chess.src changes.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged).
+  - chess.html (AGPL v3, combined work): rebuilt via build-chess.py
+    (41-1/41-4/41-5/41-10 JS changes; two consecutive builds md5-identical).
+  - stats.html, AGPLv3_Logo.svg, GPLv3_Logo.svg: no changes this round.
+  - License classification: all files unchanged.
+
+v1.2.3 round-40 (2026.8.10): chess.html rebuilt after the round-40 chess.src changes.
+  - Version: versionCode=123, versionName="1.2.3" (unchanged).
+  - chess.html (AGPL v3, combined work): rebuilt via build-chess.py
+    (40-3/40-4/40-5/40-6 JS changes).
+  - stats.html, AGPLv3_Logo.svg, GPLv3_Logo.svg: no changes this round.
+  - License classification: all files unchanged.
+
 v1.2.3 round-39 (2026.7.20): chess.html rebuilt + stats.html S7765 fix.
   - Version: versionCode=123, versionName="1.2.3" (unchanged — code-quality round).
-  - chess.html: rebuilt from chess.src/*.js. License classification unchanged (GPL v3).
+  - chess.html: rebuilt from chess.src/*.js. License classification unchanged (AGPL v3 — combined work; corrected in round-42 (42-5, D2=A), was mislabeled GPL v3).
   - stats.html: `href.indexOf('http://')!==0` → `!href.startsWith('http://')`
     (SonarCloud S7765 — clearer prefix check). License classification unchanged (GPL v3).
   - License classification: all files unchanged.
@@ -8,7 +67,7 @@ v1.2.3 round-39 (2026.7.20): chess.html rebuilt + stats.html S7765 fix.
 v1.2.3 round-38 (2026.7.20): chess.html rebuilt + stats.html SonarCloud fixes.
   - Version: versionCode=123, versionName="1.2.3" (unchanged — code-quality round).
   - chess.html: rebuilt from chess.src/*.js after the round-38 SonarCloud
-    rule fixes. License classification unchanged (GPL v3).
+    rule fixes. License classification unchanged (AGPL v3 — combined work; corrected in round-42 (42-5, D2=A), was mislabeled GPL v3).
   - stats.html: SonarCloud fixes — (1) 2× `[0-9]` → `\d` (S6353); (2) 4×
     `indexOf(...) >= 0` / `< 0` → `.includes(...)` / `!.includes(...)` (S7765);
     (3) `new RegExp('...\\(\\)...')` → `String.raw\`...\`` (S7780).
@@ -19,8 +78,9 @@ v1.2.3 round-37 (2026.7.20): chess.html rebuilt + stats.html SonarCloud fixes.
   - Version: versionCode=123, versionName="1.2.3" (unchanged — code-quality round).
   - chess.html: rebuilt from chess.src/*.js after the round-37 SonarCloud
     rule fixes. chess.html itself is a generated bundle (build-chess.py
-    output); license classification unchanged (GPL v3 — derived from
-    DroidFish UI patterns, same as chess.src/*.js sources).
+    output); license classification unchanged (AGPL v3 — combined work of
+    the GPL v3 + AGPL v3 chess.src modules; corrected in round-42 (42-5, D2=A) —
+    the 'GPL v3, same as sources' label contradicted the round-30+ classification).
   - stats.html: 3 SonarCloud fixes — (1) `banner.parentNode.removeChild(banner)`
     → `banner.remove()` (S7762); (2) `document.body.removeChild(ta)` →
     `ta.remove()` (S7762); (3) `parseFloat(...)` → `Number.parseFloat(...)`
@@ -880,7 +940,7 @@ v1.0.4 Round-5 Rev30 changes:
     scroll-behavior temporarily switched to 'auto' during restore.
     Same pattern applied to .review-body in review mode.
     _scrollRestoreGuard reset on new game.
-  - chess.src/chess960.js (GPL v3): ROBUSTNESS — randomSPID() modulo
+  - chess.src/chess960.js (AGPL v3): ROBUSTNESS — randomSPID() modulo
     bias elimination via rejection sampling (was `buf[0]%960` with
     ~0.03% bias; now only accepts values < 65280 before %960).
   - chess.html: rebuilt from chess.src/ changes.
@@ -919,7 +979,7 @@ v1.0.4 Round-5 Rev33 changes:
   - chess.html: rebuilt from chess.src/ changes.
 
 v1.0.4 Round-5 Rev34 changes:
-  - chess.src/chess960.js (GPL v3): CRITICAL — isChess960CastlingLegal()
+  - chess.src/chess960.js (AGPL v3): CRITICAL — isChess960CastlingLegal()
     now checks the full king+rook path union for occupancy, preventing
     castling that would capture/destroy own pieces in Chess960.
   - stats.html (GPL v3): Castling now Chess960-aware (finds king's actual

@@ -1,7 +1,120 @@
 # Regalia v1.2.3 — Build Instructions
 
-> Build guide for the Regalia Android chess app (versionCode=123, versionName="1.2.3").
+> Build guide for the Regalia Android chess app (versionCode=10203, versionName="1.2.3").
 > Round-by-round build notes are appended below (newest first).
+
+## Round-44 build notes (2026-09-04)
+
+- **`build.gradle` (F2/F3/F4/F9/F10/F11)**:
+  - F2 — unsigned release now **fails fast**: a `gradle.taskGraph.whenReady`
+    hook aborts any `assemble*Release`/`package*Release`/`bundle*Release`
+    invocation when no release keystore is configured, throwing
+    `GradleException: Release keystore not configured. Set
+    RELEASE_KEYSTORE_PATH / RELEASE_KEYSTORE_PASSWORD / RELEASE_KEY_ALIAS /
+    RELEASE_KEY_PASSWORD environment variables or create
+    keystore.properties. See BUILDING.md.` (previously a missing keystore
+    silently produced `app-release-unsigned.apk`, surfacing only at install
+    time as `INSTALL_PARSE_FAILED_NO_CERTIFICATES`).
+  - F3 — `CMAKE_BUILD_TYPE` moved from `defaultConfig` to the buildType
+    blocks: release gets `-DCMAKE_BUILD_TYPE=Release`, debug gets
+    `-DCMAKE_BUILD_TYPE=Debug` (a defaultConfig-level `Release` silently
+    defined NDEBUG / disabled asserts in debug builds).
+  - F4 — `app_name` is now injected via
+    `resValue "string", "app_name", "Regalia v${computedVersionName}"`;
+    `strings.xml` no longer hardcodes it (single source of truth:
+    `version.properties`).
+  - F9 — dropped `-fexceptions -frtti` from cppFlags (engine_jni.cpp has no
+    try/catch, dynamic_cast or typeid — unwind tables/RTTI were dead code).
+  - F10 — removed the JavaCompile `options.fork = true` 1 GB fork; javac now
+    runs in the Gradle daemon (~3x faster incremental compiles).
+  - F11 — `versionCode = max(VERSION_BUILD, major*10000+minor*100+patch)`
+    = `max(123, 10203)` = **10203** for v1.2.3, so a VERSION_BUILD reset can
+    never make versionCode regress (Google Play rejects non-monotonic codes).
+- **`src/main/cpp/CMakeLists.txt` (F8)**: `cmake_minimum_required`
+  3.22.1 → 3.31.6, aligned with build.gradle's pinned `version "3.31.6+"`.
+- **`src/main/cpp/engine_jni.cpp` (F1/F5)**: `nativeRenice` void → jboolean;
+  2× `strerror_r` for thread-safe error strings.
+- **`proguard-rules.pro` (F7/F14)**: EngineProcessManager keep narrowed to
+  `public <init>(...)` + `makeExecutable`; added `-keepattributes`.
+- **`AndroidManifest.xml` (F12/F13/F15)**: added `supportsRtl` +
+  `enableOnBackInvokedCallback`; removed `usesCleartextTraffic`; comments
+  updated.
+- **Deleted**: `src/main/res/xml/backup_rules.xml` and
+  `src/main/res/xml/data_extraction_rules.xml` (already unreferenced since
+  `allowBackup="false"`); `network_security_config.xml` gained a
+  `debug-overrides` block.
+- **F16 ruled wontfix**: removing the duplicate `libc++_shared.so` from
+  jniLibs breaks the build (`pickFirsts` duplicate-file error) — the NDK and
+  the engine-supplied copies must coexist under the existing
+  `pickFirsts += ['**/libc++_shared.so']` rule.
+- `chess.html` rebuilt via `python3 build-chess.py` after the round's JS
+  changes (score polarity, Toast ×1.5, batch-analysis hardening);
+  `stats.html` eval-graph mate clamp ±1000cp.
+- Version: versionCode=123→**10203** (F11 formula), versionName="1.2.3"
+  (unchanged).
+
+## Round-43 build notes (2026-09-04)
+
+- **Source-tree change**: `game-logic.js` (GPL v3) — the 58 dead i18n keys
+  marked in round-42 (42-8, D5=A) were deleted from the `_i18n` table
+  (whole-line removal; pre-delete regex validation 58/58; post-delete
+  `_i18n` = 404 keys, zh==en parity asserted; zero remaining references
+  repo-wide outside historical changelog prose).
+- **`chess.html` rebuilt** via `python3 build-chess.py` — two consecutive
+  builds byte-identical (md5 `49049a41846a1ee33bae7b24f6f4cd1d`;
+  23,340 lines / 1,405,381 bytes); dead keys and round-42 markers absent;
+  404 key definitions in the bundle.
+- **Verification**: `node --check` PASS for all 11 chess.src/*.js modules.
+- **Documentation overhaul (this file included)**: AGP 8.7.3 added to
+  Requirements; Aliyun-mirror-first repository order corrected to match
+  `build.gradle` / `settings.gradle`; arm64-v8a-only ABI noted; debug
+  `.debug` suffix (42-11) documented in Build APK; engine SHA-256 added to
+  the Engine binary section; source-tar exclusion list documented;
+  wake-lock/PRIVACY wording aligned with 42-4. Historical round-37/38/39
+  entries below: 4 mislabeled `(AGPL v3)` tags on tablebase.js /
+  worker-pool.js corrected to GPL v3 (same recurrence class as the round-42
+  42-5/D2=A corrections in NOTICE + chess.src/assets README.license;
+  BUILDING.md was outside the 42-5 scope).
+- Version: versionCode=123, versionName="1.2.3" (unchanged — doc/i18n round).
+
+## Round-42 build notes (2026-08-10)
+
+- **`build.gradle` (42-11)**: `debug` build type gained
+  `applicationIdSuffix ".debug"` + `versionNameSuffix "-debug"` — debug and
+  release builds can now coexist on one device. Release block and
+  `defaultConfig` version fields untouched.
+- **No other build-config changes** — toolchain (JDK 21 / SDK 35 /
+  Build-Tools 34.0.0 / NDK 27.2.12479018 / CMake 3.31.6+ / Gradle 8.11.1 /
+  AGP 8.7.3) unchanged.
+- **i18n dead keys marked (42-8, D5=A step 1)**: 58 zero-reference keys in
+  `game-logic.js` tagged `// round-42 marked dead — remove next round`
+  (removed in round-43).
+- `chess.html` rebuilt twice, md5 byte-identical (23,405 lines /
+  1,412,514 bytes).
+- Version: versionCode=123, versionName="1.2.3" (unchanged).
+
+## Round-41 build notes (2026-08-10)
+
+- **`build-chess.py` hardened (41-6)**: leftover module `export` in the
+  bundle now aborts with exit 3; placeholder count != 1 aborts with exit 2;
+  output written via tmp file + `os.replace` (atomic). Negative self-tests
+  all pass.
+- **No build-config changes** — all gradle files / wrapper unchanged.
+- `chess.html` rebuilt twice, md5 byte-identical after the round's JS
+  changes (41-1/41-4/41-5/41-10).
+- Version: versionCode=123, versionName="1.2.3" (unchanged).
+
+## Round-40 build notes (2026-08-10)
+
+- **No build-config changes** — `build.gradle`, `settings.gradle`,
+  `gradle.properties`, wrapper, `lint.xml`, `proguard-rules.pro` unchanged.
+- **Source-tree changes**: `StockfishNative.java` (40-1/40-2 restartEngine
+  self-interrupt fix, D3=C), `game-logic.js` (40-3 rook row checks, 40-4
+  FIDE 6.9 KNN exemption removal, D1=A), `ui-gameflow.js` + `ui.js` (40-4),
+  `tablebase.js` (40-5 tag-strip regex, 40-6 fenToState validation).
+- `chess.html` rebuilt via `python3 build-chess.py`; node-vm smoke 27
+  scenarios all PASS.
+- Version: versionCode=123, versionName="1.2.3" (unchanged).
 
 ## Round-39 build notes (2026-07-20)
 
@@ -25,7 +138,7 @@
   - `ui-interactions.js` (GPL v3): 15× same `e&&e.message` → `e?.message`
     conversion.
   - `ui-gameflow.js` (GPL v3): 1× same conversion.
-  - `tablebase.js` (AGPL v3): 1× same conversion.
+  - `tablebase.js` (GPL v3 — tag corrected in round-43; same recurrence class as the round-42 42-5/D2=A fixes in NOTICE + chess.src/assets README.license): 1× same conversion.
   - `stats.html`: `href.indexOf('http://') !== 0` →
     `!href.startsWith('http://')` (SonarCloud S7765).
   - `chess.html`: rebuilt via `python3 build-chess.py` after all
@@ -55,14 +168,14 @@
     → `.includes(step)` (SonarCloud S7765); (4) 2× `Math.sqrt(dx*dx + dy*dy)`
     → `Math.hypot(dx, dy)` (SonarCloud S7769 — clearer intent, native
     implementation, avoids overflow/underflow for extreme values).
-  - `worker-pool.js` (AGPL v3): 2× `text.indexOf('{') >= 0` → `text.includes('{')`
+  - `worker-pool.js` (GPL v3 — tag corrected in round-43; same recurrence class as the round-42 42-5/D2=A fixes in NOTICE + chess.src/assets README.license): 2× `text.indexOf('{') >= 0` → `text.includes('{')`
     (SonarCloud S7765). Applied to both the Worker template string (line ~144)
     and the sync fallback (line ~470) — `String.prototype.includes` is ES6,
     supported on Android WebView API 23+ (minSdk).
   - `pgn-standard.js` (GPL v3): flattened `}else{if(varBuf)varBuf.push(')');}`
     to `}else if(varBuf)varBuf.push(')');` (SonarCloud S6660 — single-if
     else block should be else-if).
-  - `tablebase.js` (AGPL v3): 2× removed duplicate `B` in character class
+  - `tablebase.js` (GPL v3 — tag corrected in round-43; same recurrence class as the round-42 42-5/D2=A fixes in NOTICE + chess.src/assets README.license): 2× removed duplicate `B` in character class
     `[a-hKQRBNBO]` → `[a-hKQRBNO]` (SonarCloud S5869 — the second `B` was
     redundant; with `/i` flag the first `B` already matches both white and
     black bishop). Applied to both the moveText replace regex (line ~213)
@@ -128,7 +241,7 @@
   - `ui.js` (GPL v3): (1) `cond ? true : false` → `!!cond` (SonarCloud
     S6644 — redundant boolean literals); (2) `Object.assign({}, r)` →
     `{...r}` in `_preReviewSnapshot` builder (SonarCloud S6661).
-  - `worker-pool.js` (AGPL v3): `function workerRun(fnName, args, timeoutMs)`
+  - `worker-pool.js` (GPL v3 — tag corrected in round-43; same recurrence class as the round-42 42-5/D2=A fixes in NOTICE + chess.src/assets README.license): `function workerRun(fnName, args, timeoutMs)`
     with body `timeoutMs = timeoutMs || 30000` → default param
     `timeoutMs = 30000` (SonarCloud S7760). Note: this is a subtle
     behavior change — the old `||` coerced `0` to `30000` (a latent bug
@@ -521,6 +634,14 @@ cp stockfish/stockfish-android-armv8-dotprod src/main/jniLibs/arm64-v8a/libstock
 chmod +x src/main/jniLibs/arm64-v8a/libstockfish.so
 ```
 
+Verify the binary after download — it must match the known-good SHA-256
+(verified three-way consistent — source file / deployed jniLibs copy /
+APK-embedded `lib/arm64-v8a/libstockfish.so` — in every release round):
+```
+sha256sum src/main/jniLibs/arm64-v8a/libstockfish.so
+# 8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5
+```
+
 ## Build chess.html asset
 ```
 python3 build-chess.py
@@ -554,6 +675,10 @@ path). This is a single-module project (root `build.gradle` applies
 `com.android.application` directly), so the task is `assembleRelease` — NOT
 `:app:assembleRelease`.
 
+Debug builds (`./gradlew assembleDebug`) carry `applicationIdSuffix ".debug"`
++ `versionNameSuffix "-debug"` (v1.2.3 round-42, 42-11), so a debug build
+installs alongside the release build on the same device.
+
 > **lint baseline (first build only):** `lint-baseline.xml` is excluded from the
 > source tar (it is machine-specific). On a clean source tree the first
 > `assembleRelease` run creates a fresh baseline and aborts with
@@ -566,6 +691,10 @@ path). This is a single-module project (root `build.gradle` applies
   (pinned `version "3.31.6+"` in `build.gradle` since v1.2.3 round-13;
   install via `sdkmanager "cmake;3.31.6"`)
 - Gradle 8.11.1 (wrapper included)
+- Android Gradle Plugin (AGP) 8.7.3 — pinned as
+  `classpath 'com.android.tools.build:gradle:8.7.3'` in `build.gradle`
+- Only the arm64-v8a ABI is built (`ndk { abiFilters 'arm64-v8a' }` in
+  `build.gradle`) — the APK does not support 32-bit or x86 devices
 - Set `JAVA_HOME` to your JDK 21 path (or add `org.gradle.java.home=...` to
   `~/.gradle/gradle.properties` — never commit machine-specific paths to the
   project's `gradle.properties`; v1.1.2 Phase 67 GOV-2 removed the previously
@@ -580,6 +709,10 @@ path). This is a single-module project (root `build.gradle` applies
   VERSION_BUILD=123
   ```
   Defaults inside `build.gradle` cover the missing case (1.1.1 / 111).
+  Since v1.2.3 round-44 (F11) the effective versionCode is
+  `max(VERSION_BUILD, VERSION_MAJOR*10000 + VERSION_MINOR*100 + VERSION_PATCH)`
+  — for v1.2.3 that is `max(123, 10203)` = **10203**, so versionCode can never
+  regress even if VERSION_BUILD is reset.
 - Configure `../keystore.properties` (one level above the project dir) for
   release signing, or use environment variables `RELEASE_KEYSTORE_PATH` /
   `RELEASE_KEYSTORE_PASSWORD` / `RELEASE_KEY_ALIAS` / `RELEASE_KEY_PASSWORD`:
@@ -593,6 +726,24 @@ path). This is a single-module project (root `build.gradle` applies
   update `signingConfigs.release` in `build.gradle` to your own keystore.
 - The APK is signed with v1+v2+v3 schemes (`enableV1Signing`/`enableV2Signing`/
   `enableV3Signing` all `true`), compatible with Xiaomi HyperOS 3 (Android 15).
+- **Fail-fast on missing release keystore (v1.2.3 round-44, F2):** if none of
+  the above keystore sources is configured, any release task
+  (`assembleRelease` / `packageRelease` / `bundleRelease`) aborts at
+  task-graph time with `GradleException: Release keystore not configured...`
+  instead of silently producing an unsigned APK. Debug builds are unaffected.
+
+## Source tar contents
+
+The source tarball excludes machine-specific and generated files — recreate
+them locally as described above:
+
+- `build/`, `.gradle/`, `.cxx/` — build outputs / caches
+- `local.properties` — your SDK path
+- `lint-baseline.xml` — regenerated on the first `lintVitalRelease` run
+- `src/main/jniLibs/` — the engine binary (download separately, see above)
+- `*.keystore`, `../keystore.properties`, `../version.properties` — signing
+  and version configuration
+- `.git/`, `.idea/` — VCS / IDE metadata
 
 ## Build troubleshooting
 
@@ -609,10 +760,12 @@ path). This is a single-module project (root `build.gradle` applies
   `unzip -DD` (no directory timestamps) to avoid future-dated files.
 - **`./gradlew: Permission denied`**: The wrapper script may lose its executable
   bit after extraction. Fix: `chmod +x gradlew`.
-- **Aliyun Maven mirror 502**: `build.gradle` and `settings.gradle` place
-  `google()` / `mavenCentral()` BEFORE the Aliyun mirror so official sources are
-  preferred. If you still hit 502s, temporarily comment out the Aliyun mirror
-  blocks in both files.
+- **Aliyun Maven mirror 502**: `build.gradle` and `settings.gradle` list the
+  Aliyun mirrors (`maven.aliyun.com/repository/{google,central,gradle-plugin}`)
+  BEFORE `google()` / `mavenCentral()` (verified in both files as of round-43),
+  so Aliyun is tried first and the official repositories act as fallback. If
+  you hit Aliyun 502s, temporarily comment out the Aliyun mirror blocks in
+  both files — the official repos then serve directly.
 
 - **CMake re-run loop (AGP 8.7.3 + CMake 3.22.1)**: In a fresh build environment,
   the `externalNativeBuild` task can fall into a "manifest 'build.ninja' still

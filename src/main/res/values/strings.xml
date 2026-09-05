@@ -20,5 +20,6 @@
   along with this program. If not, see <https://www.gnu.org/licenses/>.
 -->
 <resources>
-    <string name="app_name">Regalia v1.2.3</string>
+    <!-- v1.2.3 round-44 (F4): app_name moved to build.gradle resValue
+         (injected from version.properties) to prevent version desync. -->
 </resources>

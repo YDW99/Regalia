@@ -205,9 +205,12 @@ function randomSPID(){
 // ===== II. Shredder-FEN castling rights =====
 // In Chess960, castling rights in FEN use the rook's source file letter
 // (uppercase for White, lowercase for Black) instead of K/Q/k/q.
-// Example: SP-ID 518 (traditional) -> "RNBQKBNR" with castling rights "HAah"
-// (H = rook on h1 = kingside, A = rook on a1 = queenside, etc.)
-// For standard chess, "HAah" is equivalent to "KQkq".
+// Example: SP-ID 518 (traditional) -> "RNBQKBNR" with castling rights "AaHh"
+// (toShredderCastling below emits letters sorted by rook file a→h per the
+// spec requirement, so the a-file rooks come first: A/a = a-file, H/h =
+// h-file; the previous "HAah" example followed KQkq order and did not match
+// the actual output — corrected in round-42 42-9.)
+// For standard chess, "AaHh" is equivalent to "KQkq".
 
 /**
  * Convert internal castlingRights object + king/rook positions to Shredder-FEN

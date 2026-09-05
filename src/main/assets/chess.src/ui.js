@@ -1557,6 +1557,14 @@ function formatEval(){
     // v1.0.4 Rev46: changed eval bar emoji from 🏆/💀 to ⌛ for timeout —
     // the game-over overlay also shows ⌛ for timeout (not 🤝).
     if(_gameOverStatusKey==='timeout'){
+      // v1.2.3 round-40 (FIDE 6.9): null winner = timeout draw (insufficient
+      //   mating material). The round-25 contract restored by round-40 keeps
+      //   _gameOverStatusKey='timeout' for that case too, so guard on
+      //   _timeoutWinnerColor==null and show the draw display (🤝/draw/0.0)
+      //   instead of win/lose.
+      if(typeof _timeoutWinnerColor!=='undefined'&&_timeoutWinnerColor==null){
+        return{emoji:'🤝',desc:T('draw_game'),score:'0.0'};
+      }
       const whiteWins=gameOver.includes(T('white_wins'))||gameOver.includes('White wins')||gameOver.includes(T('white_short'));
       const playerWins=(playerColor==='white')===whiteWins;
       // v1.2.3 round-22: score stays White-POV (+∞ = White wins) so it agrees
@@ -1600,7 +1608,14 @@ function formatEval(){
         else{mateLabel=cachedReview.eval>0?'#+':'#-';}
         return{emoji:posEmoji(evP),desc:posDesc(evP),score:mateLabel};
       }
-      return{emoji:posEmoji(evP),desc:posDesc(evP),score:(evP/100).toFixed(2)};
+      // v1.2.3 (R1): score must be White-POV (+ = White ahead) in the same
+      //   signed 1-decimal format as the in-game branch below. cachedReview.eval
+      //   is already White-POV; evP stays player-POV for emoji/desc only.
+      const _rvRaw=cachedReview.eval/100;
+      let _rvS=_rvRaw.toFixed(1);
+      if(_rvS==='0.0'||_rvS==='+0.0'||_rvS==='-0.0')_rvS='0.0';
+      else if(_rvRaw>0)_rvS='+'+_rvS;
+      return{emoji:posEmoji(evP),desc:posDesc(evP),score:_rvS};
     }
   }
   if(_evalLoading||!_sfEvalReady)return{emoji:'🔬',desc:T('analyzing_ellipsis'),score:'--'};
@@ -1656,7 +1671,14 @@ if(st==='timeout'){
     const winnerStr=_timeoutWinnerColor==='white'?T('white_short'):T('black_side');
     return winnerStr+T('timeout_win_suffix');
   }
-  return T('timeout_win_suffix');
+  // v1.2.3 round-40 (FIDE 6.9): null winner = timeout DRAW (the winner had
+  //   insufficient mating material). ui-gameflow.js round-40 restored the
+  //   round-25 contract that routes this case through status key 'timeout'
+  //   with _timeoutWinnerColor=null, so this branch is reachable again —
+  //   return the timeout-draw text instead of the bare win suffix.
+  //   v1.2.3 round-42 (42-1): banner wording finalized in game-logic.js to
+  //   strict FIDE 6.9 semantics (no possible legal mating sequence → draw).
+  return T('pgn_timeout_draw_insufficient');
 }
 return null;
 }
@@ -2766,7 +2788,7 @@ if(_sfWdlW>=0&&_sfWdlD>=0&&_sfWdlL>=0){const _rt=_sfWdlW+_sfWdlD+_sfWdlL;if(_rt>
   const _blackP=(typeof playerColor!=='undefined'&&playerColor==='black');
   const _rw=Math.round((_blackP?_sfWdlL:_sfWdlW)/_rt*100);
   const _rd=Math.round(_sfWdlD/_rt*100);
-  const _rl=100-_rw-_rd;
+  const _rl=Math.round((_blackP?_sfWdlW:_sfWdlL)/_rt*100); // v1.2.3: match _buildEvalHTML (direct rounding, not 100-W-D)
   _rWdlStr='<span style="color:var(--muted);margin-left:4px">('+_rw+'%W/'+_rd+'%D/'+_rl+'%L)</span>';}}
 // v1.0.8 PHASE 14: enlarge review eval-bar fonts and cap the bar's height
 // so it never grows beyond a single line of text. Previously the bar used
@@ -3414,7 +3436,7 @@ h+=`<div style="padding:6px 12px;background:var(--card);border:1px solid var(--p
 // Ponder move is now displayed inline in hintText (set by onHintMove)
 // when the engine provides "bestmove X ponder Y". No separate display needed here.
 // Show MultiPV alternative lines if available
-if(_multiPVLines.length>=1){h+='<div style="margin-top:6px;border-top:1px solid rgba(212,160,23,.15);padding-top:6px"><div style="font-size:.65rem;color:var(--muted);margin-bottom:4px">'+T('multi_analysis')+'</div>';for(const pv of _multiPVLines){let scoreStr='';if(pv.scoreMate!=null&&pv.scoreMate!==null){const m=Number.parseInt(pv.scoreMate,10);if(!Number.isNaN(m))scoreStr=m>0?'#+'+Math.abs(m):m<0?'#-'+Math.abs(m):'#0';}else if(pv.scoreCp!=null&&pv.scoreCp!==null){const pd=(pv.scoreCp/100).toFixed(1);scoreStr=(pv.scoreCp>0?'+':'')+pd;} let pvSAN='';if(pv.pv){try{const _conv=_convertPVtoSAN(pv.pv,gameState);pvSAN=_conv.sanMoves.split(/\s+/).slice(0,3).join(' ');}catch(e){pvSAN=pv.pv.split(/\s+/).slice(0,3).join(' ');}} h+='<div style="font-size:.65rem;color:'+(pv.index===1?'var(--accent2)':'var(--muted)')+';margin-bottom:2px">'+(pv.index===1?'⭐':'·')+' '+scoreStr+(pvSAN?' <span style="font-family:monospace;font-size:.6rem">'+_esc(pvSAN)+'</span>':'')+'</div>';}h+='</div>';} h+='</div>';}}// Player bar
+if(_multiPVLines.length>=1){h+='<div style="margin-top:6px;border-top:1px solid rgba(212,160,23,.15);padding-top:6px"><div style="font-size:.65rem;color:var(--muted);margin-bottom:4px">'+T('multi_analysis')+'</div>';for(const pv of _multiPVLines){let scoreStr='';const _isBTM=gameState&&gameState.currentTurn==='black';if(pv.scoreMate!=null&&pv.scoreMate!==null){const m=Number.parseInt(pv.scoreMate,10);if(!Number.isNaN(m)){const _wM=_isBTM?-m:m;scoreStr=_wM>0?'#+'+Math.abs(_wM):_wM<0?'#-'+Math.abs(_wM):(_isBTM?'#+0':'#-0');}}else if(pv.scoreCp!=null&&pv.scoreCp!==null){const _wCp=_isBTM?-pv.scoreCp:pv.scoreCp;const pd=(_wCp/100).toFixed(1);scoreStr=(_wCp>0?'+':'')+pd;} /* v1.2.3 (R1/R3): White-POV scores */ let pvSAN='';if(pv.pv){try{const _conv=_convertPVtoSAN(pv.pv,gameState);pvSAN=_conv.sanMoves.split(/\s+/).slice(0,3).join(' ');}catch(e){pvSAN=pv.pv.split(/\s+/).slice(0,3).join(' ');}} h+='<div style="font-size:.65rem;color:'+(pv.index===1?'var(--accent2)':'var(--muted)')+';margin-bottom:2px">'+(pv.index===1?'⭐':'·')+' '+scoreStr+(pvSAN?' <span style="font-family:monospace;font-size:.6rem">'+_esc(pvSAN)+'</span>':'')+'</div>';}h+='</div>';} h+='</div>';}}// Player bar
 return h;
 } // end _renderInfoBars
 
@@ -3616,7 +3638,7 @@ function _maybeShowBoardDebounceHint(){
   if(document.getElementById('_loadingOverlay'))return;
   _boardDebounceHintShown=true;
   setTimeout(function(){
-    try{showToast(T('board_debounce_hint'),4500);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+    try{showToast(T('board_debounce_hint'),6750);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   },400);
 }
 
@@ -5164,6 +5186,9 @@ function _resetGameUIState(){
     try{if(typeof _endEvalDeepBatchIfActive==='function')_endEvalDeepBatchIfActive();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     if(typeof _reviewAnalyzeSafetyTimer!=='undefined'&&_reviewAnalyzeSafetyTimer){clearTimeout(_reviewAnalyzeSafetyTimer);_reviewAnalyzeSafetyTimer=null;}
     if(typeof _evalRequestBatchGen!=='undefined')_evalRequestBatchGen=0;
+    // v1.2.3 round-44 (T1/G11): drop the dispatch record + flush batch writes.
+    if(typeof _batchLastDispatched!=='undefined')_batchLastDispatched=null;
+    try{if(typeof _endBatchWriteMode==='function')_endBatchWriteMode();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   }
   // v1.2.3 round-18 (bug fix): also clear the pending open-stats flag/timer —
   //   exitReview() does this, but _resetGameUIState can run WITHOUT exitReview
@@ -5434,14 +5459,14 @@ function _updateReviewAnalyzeBtn(){
 function _prioritizeReviewStep(step){
   // Validate: must be in review mode
   if(!reviewMode){
-    try{showToast(T('priority_eval_not_in_review'),2500);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+    try{showToast(T('priority_eval_not_in_review'),3750);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     return;
   }
   // Validate: step must be in range
   if(!reviewStates||step<0||step>=reviewStates.length)return;
   // Validate: step must be uncached (no point prioritizing an already-analyzed step)
   if(_reviewEvalCache.has(step)){
-    try{showToast(T('priority_eval_already_cached'),2000);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+    try{showToast(T('priority_eval_already_cached'),3000);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     return;
   }
@@ -5452,25 +5477,30 @@ function _prioritizeReviewStep(step){
   if(!_reviewAnalyzeAllActive){
     reviewGoTo(step);
     try{requestEngineEval();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
-    try{showToast(T('priority_eval_toast'),2500);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+    try{showToast(T('priority_eval_toast'),3750);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     return;
   }
   // Deduplicate: don't add the same step twice
   // v1.2.3 round-38 (SonarCloud S7765): use .includes() instead of .indexOf() >= 0.
   if(_reviewAnalyzePriorityQueue.includes(step)){
-    try{showToast(T('priority_eval_toast'),2500);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+    try{showToast(T('priority_eval_toast'),3750);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     return;
   }
   // Push onto the priority queue
   _reviewAnalyzePriorityQueue.push(step);
   // Show toast notification
-  try{showToast(T('priority_eval_toast'),2500);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+  try{showToast(T('priority_eval_toast'),3750);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   // Abort the current in-flight batch eval so the priority step can be
   // evaluated next. We bump _reviewAnalyzeGen and clear _evalRequestBatchGen
   // so the in-flight onEngineEval callback is treated as stale (its result
   // will be cached for _reviewEvalRequestedStep via the user-nav stale path,
   // NOT lost). The safety timer (60s) will eventually fire if the engine
   // doesn't respond to the stop, advancing the batch.
+  // v1.2.3 round-44 (T2): clear the batch dispatch record FIRST — a callback
+  //   arriving inside the 150ms stop→advance window below now fails the
+  //   _batchLastDispatched validation in onEngineEval (T1) and is dropped as
+  //   stale, instead of being claimed by the re-armed gen of the next step.
+  if(typeof _batchLastDispatched!=='undefined')_batchLastDispatched=null;
   if(typeof _evalRequestBatchGen!=='undefined')_evalRequestBatchGen=0;
   if(typeof _reviewAnalyzeGen!=='undefined')_reviewAnalyzeGen++;
   // Clear the safety timer — _reviewAnalyzeAdvance will reset it when it
@@ -5491,10 +5521,13 @@ function _prioritizeReviewStep(step){
     _engineStopHard();
   }catch(e){console.warn('engineStop for priority failed',e);}
   // Trigger _reviewAnalyzeAdvance after a short delay to pick up the priority
-  // entry. The delay (100ms) gives the engine time to process the stop
+  // entry. The delay (150ms) gives the engine time to process the stop
   // command and fire its bestmove callback. If the callback hasn't arrived
   // by then, _reviewAnalyzeAdvance will still pick up the priority entry
   // (because the priority queue check happens BEFORE the normal sequence).
+  // v1.2.3 round-44 (T2): a callback arriving INSIDE this 150ms window is no
+  //   longer mis-claimed by the next step — _batchLastDispatched was cleared
+  //   above, so the T1 validation in onEngineEval drops it as stale.
   // We use a flag to prevent multiple advance triggers if the bestmove
   // callback also fires.
   const _advanceFlag='_priorityAdvancePending';
@@ -5599,6 +5632,21 @@ function _reviewAnalyzeResetSafetyTimer(){
       // v1.1.1 Phase 59 Task 59.6: Clear the batch gen so the stale callback
       //   (if it ever arrives) doesn't double-advance.
       if(typeof _evalRequestBatchGen!=='undefined')_evalRequestBatchGen=0;
+      // v1.2.3 round-44 (T1): also clear the dispatch record — the timed-out
+      //   step's late callback must not be claimed by the next step.
+      if(typeof _batchLastDispatched!=='undefined')_batchLastDispatched=null;
+      // v1.2.3 round-44 (T4): count the timeout as a dispatch failure; at 3
+      //   consecutive failures the batch is terminated (engine likely dead)
+      //   instead of ghost-looping on this 60s safety net forever.
+      if(typeof _batchConsecutiveFail!=='undefined'){
+        _batchConsecutiveFail++;
+        if(_batchConsecutiveFail>=3&&typeof _terminateBatchAfterRepeatedFailures==='function'){
+          try{_terminateBatchAfterRepeatedFailures('safety-net timeout');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+          return;
+        }
+      }
+      // v1.2.3 round-44 (G11): flush any dirty cache writes before advancing.
+      try{if(typeof _endBatchWriteMode==='function')_endBatchWriteMode();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
       _reviewAnalyzeAdvance();
     }else{
       _reviewAnalyzeSafetyTimer=null;
@@ -5640,11 +5688,11 @@ function _triggerPendingPostBatchActions(_pendingSave, _pendingStats){
   if(_pendingSave){
     try{setTimeout(function(){
       try{_pgnCacheSaveCurrentImpl_SkipCoverageCheck(_pendingSave.name,_pendingSave.includeAnn);}
-      catch(e){showToast(T('pgn_cache_save_failed'),2500);}
+      catch(e){showToast(T('pgn_cache_save_failed'),3750);}
     },150);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   }
   if(_pendingStats){
-    try{showToast(T('analysis_complete_opening_stats'),2500);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+    try{showToast(T('analysis_complete_opening_stats'),3750);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     try{setTimeout(function(){
       try{if(typeof openStatsPage==='function')openStatsPage();}
       catch(e){console.error('Deferred openStatsPage failed:',e);}
@@ -5709,6 +5757,8 @@ function _reviewAnalyzeAdvance(){
     // v1.2.3 P1: Batch completed normally — restore gameplay UCI options
     //   that were overridden by engineEvalDeepBeginBatch().
     _endEvalDeepBatchIfActive();
+    // v1.2.3 round-44 (G11): leave batch write mode + flush pending cache writes.
+    try{if(typeof _endBatchWriteMode==='function')_endBatchWriteMode();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     if(_reviewAnalyzeSafetyTimer){clearTimeout(_reviewAnalyzeSafetyTimer);_reviewAnalyzeSafetyTimer=null;}
     // v1.1.1 Phase 59 Task 59.6: Reset batch state
     _reviewAnalyzeStep=-1;
@@ -5852,6 +5902,10 @@ function exitReview(){
   // v1.2.3 P1: Exiting review cancels any in-flight batch — restore the
   //   gameplay UCI options that engineEvalDeepBeginBatch() overrode.
   _endEvalDeepBatchIfActive();
+  // v1.2.3 round-44 (T1/G11): drop the dispatch record (no callback may be
+  //   claimed after exit) and flush any batched cache writes.
+  if(typeof _batchLastDispatched!=='undefined')_batchLastDispatched=null;
+  try{if(typeof _endBatchWriteMode==='function')_endBatchWriteMode();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   // v1.1.1 Phase 59 Task 59.6: Clear batch session state so a stale
   //   in-flight callback (if any) doesn't try to advance a canceled batch.
   _reviewAnalyzeStep=-1;
@@ -6102,7 +6156,7 @@ function _pgnCacheSaveCurrentImpl(name,includeAnn){
   // Build the PGN text
   const pgn=_pgnCacheBuildPGNText(_ctx, includeAnn);
   if(!pgn){
-    showToast(T('pgn_cache_save_failed'),2500);
+    showToast(T('pgn_cache_save_failed'),3750);
     return;
   }
   _pgnCachePersistSave(name, pgn);
@@ -6180,7 +6234,7 @@ function _pgnCacheBuildPGNText(_ctx, includeAnn){
 //   Shared by _pgnCacheSaveCurrentImpl and _pgnCacheSaveCurrentImpl_SkipCoverageCheck.
 function _pgnCachePersistSave(name, pgn){
   if(!pgn){
-    showToast(T('pgn_cache_save_failed'),2500);
+    showToast(T('pgn_cache_save_failed'),3750);
     _pgnCacheOpInProgress=false; // Phase 69 (Bug 3): reset guard on failure
     return;
   }
@@ -6192,11 +6246,11 @@ function _pgnCachePersistSave(name, pgn){
   }catch(e){ok=false;}
   if(ok){
     _refreshPGNCacheList();
-    showToast(T('pgn_cache_saved')+'：'+name,2000);
+    showToast(T('pgn_cache_saved')+'：'+name,3000);
     try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     render();
   }else{
-    showToast(T('pgn_cache_save_failed'),2500);
+    showToast(T('pgn_cache_save_failed'),3750);
   }
   _pgnCacheOpInProgress=false; // Phase 69 (Bug 3): reset guard on completion
 }
@@ -6274,7 +6328,7 @@ function _pgnCacheShowPartialEvalDialog(name, includeAnn, totalSteps, cachedCoun
     btns.appendChild(makeBtn(T('pgn_cache_partial_eval_analyze_first'), true, function(){
       // Set pending save; reviewAnalyzeAll() will trigger the save on completion.
       _pendingPGNCacheSave={name:name, includeAnn:includeAnn};
-      showToast(T('pgn_cache_analyze_then_save'),2500);
+      showToast(T('pgn_cache_analyze_then_save'),3750);
       try{
         if(typeof reviewAnalyzeAll==='function'){
           reviewAnalyzeAll();
@@ -6285,7 +6339,7 @@ function _pgnCacheShowPartialEvalDialog(name, includeAnn, totalSteps, cachedCoun
         }
       }catch(e){
         _pendingPGNCacheSave=null;
-        showToast(T('pgn_cache_save_failed'),2500);
+        showToast(T('pgn_cache_save_failed'),3750);
       }
     }));
     btns.appendChild(makeBtn(T('pgn_cache_partial_eval_save_as_is'), false, function(){
@@ -6340,7 +6394,7 @@ function _pgnCacheImport(name){
   }catch(e){pgn=null;}
   if(!pgn){
     _pgnCacheOpInProgress=false;
-    showToast(T('pgn_cache_import_failed'),2500);
+    showToast(T('pgn_cache_import_failed'),3750);
     return;
   }
   showPGNCacheManager=false;
@@ -6363,7 +6417,7 @@ function _pgnCacheImport(name){
         // v1.0.8 PHASE 35: check success flag — importPGN shows its own error
         //   toast on invalid PGN, so only show success UI if import succeeded.
         if(!ok){
-          showToast(T('pgn_cache_import_failed'),2500);
+          showToast(T('pgn_cache_import_failed'),3750);
           render();
           return;
         }
@@ -6375,14 +6429,14 @@ function _pgnCacheImport(name){
             }
           }catch(e){console.warn('[UI]',e?.message?e.message:e);}
         }
-        showToast(T('pgn_cache_imported')+'：'+name,2000);
+        showToast(T('pgn_cache_imported')+'：'+name,3000);
         try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
         render();
       }).catch(function(e){
         _pgnCacheOpInProgress=false;
         // v1.0.8 PHASE 35: defensive catch in case .then() callback throws
         console.error('PGN cache import .then failed:',e);
-        showToast(T('pgn_cache_import_failed'),2500);
+        showToast(T('pgn_cache_import_failed'),3750);
         render();
       });
       return;
@@ -6391,7 +6445,7 @@ function _pgnCacheImport(name){
     _pgnCacheOpInProgress=false;
   }catch(e){
     _pgnCacheOpInProgress=false;
-    showToast(T('pgn_cache_import_failed'),2500);
+    showToast(T('pgn_cache_import_failed'),3750);
     return;
   }
   // After import, if we were in review mode, re-enter review on the new game
@@ -6403,7 +6457,7 @@ function _pgnCacheImport(name){
       }
     }catch(e){console.warn('[UI]',e?.message?e.message:e);}
   }
-  showToast(T('pgn_cache_imported')+'：'+name,2000);
+  showToast(T('pgn_cache_imported')+'：'+name,3000);
   try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   render();
 }
@@ -6426,7 +6480,7 @@ function _pgnCacheDeleteSelected(){
   _refreshPGNCacheList();
   _pgnCacheOpInProgress=false;
   try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
-  showToast(T('pgn_cache_deleted')+'：'+deleted,2000);
+  showToast(T('pgn_cache_deleted')+'：'+deleted,3000);
   render();
 }
 
@@ -6461,11 +6515,11 @@ function _pgnCacheRename(oldName){
   }catch(e){ok=false;}
   if(ok){
     _refreshPGNCacheList();
-    showToast(T('pgn_cache_renamed')+'：'+newName,2000);
+    showToast(T('pgn_cache_renamed')+'：'+newName,3000);
     try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     render();
   }else{
-    showToast(T('pgn_cache_rename_failed'),2500);
+    showToast(T('pgn_cache_rename_failed'),3750);
   }
   _pgnCacheOpInProgress=false;
 }
@@ -6507,11 +6561,11 @@ function _pgnCacheEditTags(name){
   }catch(e){ok=false;}
   if(ok){
     _refreshPGNCacheList();
-    showToast(T('pgn_cache_tags_saved')+'：'+name,2000);
+    showToast(T('pgn_cache_tags_saved')+'：'+name,3000);
     try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     render();
   }else{
-    showToast(T('pgn_cache_tags_save_failed'),2500);
+    showToast(T('pgn_cache_tags_save_failed'),3750);
   }
   _pgnCacheOpInProgress=false;
 }
@@ -6805,6 +6859,14 @@ function _cleanupEventListeners(){
   //   is destroyed. The interval is set at _startGameClock and was previously
   //   only cleared in the resign/timeout paths, not in the destroy-cleanup.
   if(gameClockTimerId!==undefined&&gameClockTimerId){clearInterval(gameClockTimerId);gameClockTimerId=null;}
+  // v1.2.3 round-44 (G8): clear the remaining module timers so nothing fires
+  //   after the Activity/WebView is destroyed.
+  if(typeof _loadingFallbackTimerId!=='undefined'&&_loadingFallbackTimerId){clearTimeout(_loadingFallbackTimerId);_loadingFallbackTimerId=null;}
+  if(typeof _emergencyFallbackTimerId!=='undefined'&&_emergencyFallbackTimerId){clearTimeout(_emergencyFallbackTimerId);_emergencyFallbackTimerId=null;}
+  if(typeof _toastTimer!=='undefined'&&_toastTimer){clearTimeout(_toastTimer);_toastTimer=0;}
+  if(typeof _toastRemoveTimer!=='undefined'&&_toastRemoveTimer){clearTimeout(_toastRemoveTimer);_toastRemoveTimer=0;}
+  if(typeof _evalSafetyTimerId!=='undefined'&&_evalSafetyTimerId){clearTimeout(_evalSafetyTimerId);_evalSafetyTimerId=null;}
+  if(typeof _pbmiTimerId!=='undefined'&&_pbmiTimerId){clearTimeout(_pbmiTimerId);_pbmiTimerId=null;}
   renderPending=false;
 }
 

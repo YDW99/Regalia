@@ -115,7 +115,14 @@ public final class RootDetector {
             if (pm == null) return false;
             for (String pkg : ROOT_PACKAGES) {
                 try {
-                    pm.getPackageInfo(pkg, 0);
+                    // v1.2.3 round-41: the int-flags getPackageInfo overload is
+                    //   deprecated on API 33+ — use PackageInfoFlags.of() there;
+                    //   keep the int overload for older API levels.
+                    if (Build.VERSION.SDK_INT >= 33) {
+                        pm.getPackageInfo(pkg, PackageManager.PackageInfoFlags.of(0));
+                    } else {
+                        pm.getPackageInfo(pkg, 0);
+                    }
                     return true;
                 } catch (PackageManager.NameNotFoundException ignored) {
                     /* not installed — continue */

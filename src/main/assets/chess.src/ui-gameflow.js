@@ -278,6 +278,16 @@ function _tickGameClock(){
 // Called when a side's clock runs out
 function _onGameClockExpired(color){
   if(gameClockTimerId){clearInterval(gameClockTimerId);gameClockTimerId=null;}
+  // v1.2.3 round-42 (42-2, P3-14): zero the flagged side's COMMITTED clock.
+  //   The tick path only writes displayRemainingSec (:268) — remainingSec is
+  //   committed per-move in recordMoveEnd — so after a tick-detected flag fall
+  //   the header clock HTML (ui.js render reads gameClocks[c].remainingSec)
+  //   kept showing the stale positive value from the last move instead of
+  //   0:00. Sync both fields here so the final render shows 0:00.
+  if(gameClocks&&gameClocks[color]){
+    gameClocks[color].remainingSec=0;
+    gameClocks[color].displayRemainingSec=0;
+  }
   // v1.0.4 Rev35 FIX (CRITICAL): Stop the engine IMMEDIATELY when the clock
   // expires. Previously, the engine continued searching after flag-fall
   // because no "stop" command was sent. The engine's internal wtime-based
@@ -302,8 +312,11 @@ function _onGameClockExpired(color){
   //   insufficient material to checkmate (FIDE 6.9). In that case the game
   //   is drawn, not won. v1.2.3 round-25 introduced this check but used the
   //   symmetric isDeadPosition() (FIDE 5.2.2 — both sides lack material),
-  //   which misses the asymmetric case (winner has only K, K+N, K+B, or
-  //   K+N+N → cannot mate the loser). v1.2.3 round-29 (PR52) replaces it
+  //   which misses the asymmetric case (winner has only K, K+N, or K+B →
+  //   cannot mate the loser even with cooperative play; K+N+N is NOT in this
+  //   list — v1.2.3 round-40 removed the KNN exemption per strict FIDE 6.9,
+  //   since K+N+N can deliver mate with the loser's help). v1.2.3 round-29
+  //   (PR52) replaces it
   //   with winnerLacksMatingMaterial(state, winner) which checks the
   //   WINNER's mating ability specifically. We still fall back to
   //   isDeadPosition for the symmetric case (e.g. K vs K) so the existing
@@ -324,10 +337,19 @@ function _onGameClockExpired(color){
       }
     }
   }catch(e){console.warn('insufficient-material check on timeout failed:',e);}
+  // v1.2.3 round-40 (FIDE 6.9): restore the round-25 contract — the draw
+  //   path keeps _gameOverStatusKey='timeout' with _timeoutWinnerColor=null
+  //   (instead of 'draw_insufficient'), so the null-winner branches in
+  //   ai-bridge.js (PGN Termination / annotation text) and ui.js
+  //   (_gameOverStrFromStatus/formatEval) are reachable again and the whole
+  //   pipeline reports a timeout-draw consistently.
+  // v1.2.3 round-42 (42-1): banner wording finalized in game-logic.js
+  //   (key 'pgn_timeout_draw_insufficient') to strict FIDE 6.9 semantics —
+  //   no possible legal mating sequence → draw.
   if(_isDrawByInsufficientMaterial){
     if(typeof _timeoutWinnerColor!=='undefined')_timeoutWinnerColor=null;
-    _gameOverStatusKey='draw_insufficient';
-    gameOver=_gameOverStrFromStatus('draw_insufficient');
+    _gameOverStatusKey='timeout';
+    gameOver=_gameOverStrFromStatus('timeout');
   }else{
     if(typeof _timeoutWinnerColor!=='undefined')_timeoutWinnerColor=winner;
     _gameOverStatusKey='timeout';
