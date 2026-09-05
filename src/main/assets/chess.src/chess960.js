@@ -271,7 +271,7 @@ function toShredderCastling(cr,board){
     if(cr.whiteQueenside){
       let f=null;
       if(cr.whiteQueensideRookFile!=null&&_rookOn(7,cr.whiteQueensideRookFile,'white'))f=cr.whiteQueensideRookFile;
-      else{let best=-1;for(const c of wRooks)if(c<wKing&&c>best)best=c;if(best>=0)f=best;} // closest LEFT
+      else{let best=-1;for(const c of wRooks){if(c<wKing&&c>best)best=c;}if(best>=0)f=best;} // closest LEFT
       if(f!=null)pairs.push({file:f,isWhite:true});
     }
   }
@@ -285,7 +285,7 @@ function toShredderCastling(cr,board){
     if(cr.blackQueenside){
       let f=null;
       if(cr.blackQueensideRookFile!=null&&_rookOn(0,cr.blackQueensideRookFile,'black'))f=cr.blackQueensideRookFile;
-      else{let best=-1;for(const c of bRooks)if(c<bKing&&c>best)best=c;if(best>=0)f=best;}
+      else{let best=-1;for(const c of bRooks){if(c<bKing&&c>best)best=c;}if(best>=0)f=best;}
       if(f!=null)pairs.push({file:f,isWhite:false});
     }
   }
