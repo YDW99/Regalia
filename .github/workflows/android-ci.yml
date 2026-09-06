@@ -54,14 +54,10 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Run Kotlin lint (ktlintCheck)
-        continue-on-error: true
-        run: ./gradlew ktlintCheck --no-daemon --stacktrace
-
-      - name: Compile Java/Kotlin sources (without NDK build)
+      - name: Compile Java sources (without NDK build)
         run: |
-          # Compile only Java/Kotlin sources, skip NDK tasks that require libstockfish.so
-          ./gradlew compileDebugJavaWithJavac compileDebugKotlin \
+          # Compile only Java sources, skip NDK tasks that require libstockfish.so
+          ./gradlew compileDebugJavaWithJavac \
             -x externalNativeBuildDebug \
             -x externalNativeBuildRelease \
             -x mergeDebugNativeLibs \
@@ -83,7 +79,7 @@ jobs:
 
       - name: Validate AndroidManifest.xml exists
         run: |
-          MANIFEST_PATH="app/src/main/AndroidManifest.xml"
+          MANIFEST_PATH="src/main/AndroidManifest.xml"
           if [ ! -f "$MANIFEST_PATH" ]; then
             echo "::error::AndroidManifest.xml not found at $MANIFEST_PATH"
             exit 1
@@ -92,7 +88,7 @@ jobs:
 
       - name: Check AndroidManifest.xml basic structure
         run: |
-          MANIFEST_PATH="app/src/main/AndroidManifest.xml"
+          MANIFEST_PATH="src/main/AndroidManifest.xml"
 
           # Check for required elements
           if ! grep -q '<manifest' "$MANIFEST_PATH"; then
@@ -118,7 +114,7 @@ jobs:
 
       - name: Check for debug-only configurations
         run: |
-          MANIFEST_PATH="app/src/main/AndroidManifest.xml"
+          MANIFEST_PATH="src/main/AndroidManifest.xml"
 
           # Warn if android:debuggable="true" is present in release context
           if grep -q 'android:debuggable="true"' "$MANIFEST_PATH"; then
@@ -180,7 +176,7 @@ jobs:
           # Java/Kotlin files should be PascalCase
           INVALID_NAMES=$(find . -type f \( -name "*.java" -o -name "*.kt" \) \
             ! -path "*/build/*" ! -path "*/.gradle/*" \
-            | grep -v '/[A-Z][a-zA-Z0-9]*\.(java|kt)$' || true)
+            | grep -vE '/[A-Z][A-Za-z0-9]*\.(java|kt)$' || true)
 
           if [ -n "$INVALID_NAMES" ]; then
             echo "::warning::Java/Kotlin files that don't follow PascalCase naming:"
