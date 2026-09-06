@@ -1551,11 +1551,14 @@ public class StockfishNative {
         try {
             ApplicationInfo appInfo = context.getApplicationInfo();
             String nativeLibDir = appInfo.nativeLibraryDir;
-            Log.i(TAG, "nativeLibraryDir: " + nativeLibDir);
+            // v1.2.3 round-48 (SEC-6): downgraded i/w -> d — full private paths
+            //   must not reach release logcat (proguard-rules.pro strips only
+            //   Log.v/d via -assumenosideeffects). Boolean state is kept.
+            Log.d(TAG, "nativeLibraryDir: " + nativeLibDir);
 
             if (nativeLibDir != null && !nativeLibDir.isEmpty()) {
                 File libFile = new File(nativeLibDir, ENGINE_LIB_NAME);
-                Log.i(TAG, "Looking for engine at: " + libFile.getAbsolutePath()
+                Log.d(TAG, "Looking for engine at: " + libFile.getAbsolutePath()
                         + " exists=" + libFile.exists()
                         + " canRead=" + libFile.canRead()
                         + " canExecute=" + libFile.canExecute()
@@ -1567,7 +1570,7 @@ public class StockfishNative {
                         currentEnginePath = libFile.getAbsolutePath();
                         return libFile;
                     } else {
-                        Log.w(TAG, "Engine in nativeLibraryDir failed ELF verification: " + libFile.getAbsolutePath());
+                        Log.d(TAG, "Engine in nativeLibraryDir failed ELF verification: " + libFile.getAbsolutePath());
                     }
                 }
 
@@ -1575,7 +1578,7 @@ public class StockfishNative {
                 File libDir = new File(nativeLibDir);
                 if (libDir.exists() && libDir.isDirectory()) {
                     String[] files = libDir.list();
-                    Log.w(TAG, "nativeLibraryDir contents: " + (files != null ? Arrays.toString(files) : "null"));
+                    Log.d(TAG, "nativeLibraryDir contents: " + (files != null ? Arrays.toString(files) : "null"));
                 }
             }
         } catch (Throwable e) {

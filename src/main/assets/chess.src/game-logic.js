@@ -529,9 +529,13 @@ const _i18n={
 'resign_confirm_msg':{zh:'你确定要认输吗？这将结束当前对局，对方获胜。',en:'Are you sure you want to resign? This ends the current game; your opponent wins.'},
 'resign_yes':{zh:'确认认输',en:'Yes, Resign'},
 'resign_no':{zh:'取消',en:'Cancel'},
-'resigns_suffix':{zh:'认输',en:'resigns'},
+// v1.2.3 round-48 (BUG-11): leading space added to the English values, same
+//   convention as 'wins_excl' (' wins!') — the concatenation sites
+//   (ui.js _gameOverStrFromStatus) join color + suffix with no separator,
+//   producing "⚫ Blackresigns" / "⚪ Whitewins by timeout" before this fix.
+'resigns_suffix':{zh:'认输',en:' resigns'},
 // v1.0.4 Rev47: Timeout win suffix for _gameOverStrFromStatus('timeout')
-'timeout_win_suffix':{zh:'超时胜',en:'wins by timeout'},
+'timeout_win_suffix':{zh:'超时胜',en:' wins by timeout'},
 // v1.0.4 Round-5 Rev28: Stats page → main/review PGN import-back prompt
 'stats_import_back_no_pgn':{zh:'统计页面未导入新 PGN，无需同步。',en:'No new PGN imported on the stats page; nothing to sync.'},
 // v1.0.7 — Quick toolbar (below the board, above the player bar)
@@ -1372,7 +1376,7 @@ function initBoard(){const b=Array.from({length:8},()=>Array(8).fill(null));cons
 function attacked(board,pos){const b=board,p=b[pos.row][pos.col];if(!p){return[];}const r=pos.row,c=pos.col,co=p.color,mv=[];if(p.type==='pawn'){const d=co==='white'?-1:1;for(const dc of[-1,1])if(inB(r+d,c+dc))mv.push({row:r+d,col:c+dc})}else {if(p.type==='knight'){for(const[dr,dc]of KNIGHT_OFFSETS)if(inB(r+dr,c+dc))mv.push({row:r+dr,col:c+dc})}else if(p.type==='king'){for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++)if((dr||dc)&&inB(r+dr,c+dc))mv.push({row:r+dr,col:c+dc})}else{const dirs=p.type==='rook'?DIR_ROOK:p.type==='bishop'?DIR_BISHOP:DIR_QUEEN;for(const[dr,dc]of dirs){let nr=r+dr,nc=c+dc;while(inB(nr,nc)){mv.push({row:nr,col:nc});if(b[nr][nc]){break;}nr+=dr;nc+=dc}}}}return mv}
 function initState(){const s={board:initBoard(),currentTurn:'white',castlingRights:{whiteKingside:true,whiteQueenside:true,blackKingside:true,blackQueenside:true,
 // v1.2.3 round-20 (A-1): standard chess designates the corner rooks (h/a files)
-whiteKingsideRookFile:7,whiteQueensideRookFile:0,blackKingsideRookFile:7,blackQueensideRookFile:0},enPassantTarget:null,halfMoveClock:0,fullMoveNumber:1,moveHistory:[],posCount:new Map(),wk:{row:7,col:4},bk:{row:0,col:4},hash:0,boardVersion:1};syncHash(s);s.posCount.set(s.hash,1);return s}
+whiteKingsideRookFile:7,whiteQueensideRookFile:0,blackKingsideRookFile:7,blackQueensideRookFile:0},enPassantTarget:null,halfMoveClock:0,fullMoveNumber:1,moveHistory:[],posCount:new Map(),wk:{row:7,col:4},bk:{row:0,col:4},hash:0};syncHash(s);s.posCount.set(s.hash,1);return s}
 // v1.0.7: validateSetupPosition now also validates the manual 🔁 castle markers
 // and the ⚡ en-passant marker carried on s.setupCastleMarks (a Set of "r*8+c"
 // keys) and s.setupEpMark ({row,col}|null). Both validations follow the
@@ -1678,7 +1682,7 @@ function cloneB(b){return b.map(r=>r.slice())}
 //   round-trip verification all silently degraded after the first move.
 function cloneS(s){return{board:cloneB(s.board),currentTurn:s.currentTurn,castlingRights:{...s.castlingRights},enPassantTarget:s.enPassantTarget?{...s.enPassantTarget}:null,halfMoveClock:s.halfMoveClock,fullMoveNumber:s.fullMoveNumber,// moveHistory: array shallow-copied (move objects are never mutated in place,
 // only pushed/popped), so sharing by reference would corrupt the parent's array
-moveHistory:s.moveHistory?s.moveHistory.slice():[],posCount:new Map(s.posCount),wk:s.wk?{...s.wk}:null,bk:s.bk?{...s.bk}:null,hash:s.hash||0,boardVersion:s.boardVersion||0,
+moveHistory:s.moveHistory?s.moveHistory.slice():[],posCount:new Map(s.posCount),wk:s.wk?{...s.wk}:null,bk:s.bk?{...s.bk}:null,hash:s.hash||0,
 // Chess960 identity fields — only present on Chess960 states (chess960.js).
 // Using conditional spread avoids adding undefined keys to standard-chess states.
 ...(s.chess960?{chess960:true}:{}),
@@ -2180,13 +2184,6 @@ if(s.castlingRights.whiteQueenside&&!ns.castlingRights.whiteQueenside)h^=zobrist
 if(s.castlingRights.blackKingside&&!ns.castlingRights.blackKingside)h^=zobrist.castling[2];
 if(s.castlingRights.blackQueenside&&!ns.castlingRights.blackQueenside)h^=zobrist.castling[3];
 ns.hash=(h>>>0);
-// v1.0.2 PERF (audit): bump boardVersion on every board mutation.
-// v1.2.3 round-42 (42-9): comment corrected — _updateBoardIncremental (the
-//   dirty-check incremental renderer this counter fed) was REMOVED in
-//   round-20 with the DIRTY_* subsystem (see the ui.js render-scheduling
-//   note). boardVersion currently has no readers; it is retained as state
-//   metadata carried through clone/undo snapshots.
-ns.boardVersion=(s.boardVersion||0)+1;
 ns.posCount.set(ns.hash,(ns.posCount.get(ns.hash)||0)+1);
 return ns}
 // ===================== MAKE/UNMAKE (INCREMENTAL) =====================
@@ -2282,7 +2279,6 @@ oldEnPassant:s.enPassantTarget?{r:s.enPassantTarget.row,c:s.enPassantTarget.col}
 oldHalfMove:s.halfMoveClock,
 oldFullMove:s.fullMoveNumber,
 oldHash:s.hash,
-oldBoardVersion:s.boardVersion||0,
 promotion:promotion||null,
 oldMoveHistoryLength:s.moveHistory?s.moveHistory.length:0,
 isBlackMove:piece.color==='black'
@@ -2408,10 +2404,6 @@ if(undo.oldCastling.whiteQueenside&&!s.castlingRights.whiteQueenside)h^=zobrist.
 if(undo.oldCastling.blackKingside&&!s.castlingRights.blackKingside)h^=zobrist.castling[2];
 if(undo.oldCastling.blackQueenside&&!s.castlingRights.blackQueenside)h^=zobrist.castling[3];
 s.hash=(h>>>0);
-// v1.0.2 PERF (audit): bump boardVersion (see the makeMv note — the
-//   _updateBoardIncremental consumer was removed in round-20; counter
-//   retained as snapshot metadata, no current readers). round-42 42-9.
-s.boardVersion=(s.boardVersion||0)+1;
 // 12. Incremental posCount
 s.posCount.set(s.hash,(s.posCount.get(s.hash)||0)+1);
 return undo;
@@ -2478,8 +2470,6 @@ s.enPassantTarget=undo.oldEnPassant?{row:undo.oldEnPassant.r,col:undo.oldEnPassa
 s.halfMoveClock=undo.oldHalfMove;
 s.fullMoveNumber=undo.oldFullMove;
 s.hash=undo.oldHash;
-// v1.0.2 PERF (audit): restore boardVersion so dirty-check still works after unmake.
-s.boardVersion=undo.oldBoardVersion||0;
 if(s.moveHistory&&undo.oldMoveHistoryLength!==undefined)s.moveHistory.length=undo.oldMoveHistoryLength;
 s.currentTurn=undo.isBlackMove?'black':'white';
 }
@@ -2905,11 +2895,6 @@ for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=s.board[r][c];if(p){if(p.type==
 //   pass, breaking the schema consumers rely on.
 s.castlingRights={whiteKingside:false,whiteQueenside:false,blackKingside:false,blackQueenside:false,whiteKingsideRookFile:null,whiteQueensideRookFile:null,blackKingsideRookFile:null,blackQueensideRookFile:null};
 syncHash(s);
-// v1.0.2 PERF (audit): bump boardVersion on setup-mode board mutations
-//   (piece placement/deletion/clear-board/reset-board). round-42 42-9:
-//   _updateBoardIncremental was removed in round-20; no current readers —
-//   counter retained as snapshot metadata.
-s.boardVersion=(s.boardVersion||0)+1;
 }
 
 // NOTE: All position evaluation comes exclusively from Stockfish18. No JS-side eval code.
@@ -2981,8 +2966,16 @@ if(gameClocks !== undefined&&gameClocks&&typeof AndroidBridge.engineGoTimed==='f
       //   command; silence left the user staring at a hung AI with no toast.
       console.error('engineGo fallback failed:',error);
       showToast(T('engine_unavailable_hint'));
+      isAIThinking=false;_aiBarInfo='';render();
     }}
-    isAIThinking=false;_aiBarInfo='';render();
+    // v1.2.3 round-48 (BUG-8): on SUCCESSFUL fallback dispatch, KEEP
+    //   isAIThinking=true — onBestMove clears it when the engine answers, and
+    //   the 360s safety timer stays armed as the fallback. The old
+    //   unconditional clear here (a) disarmed the safety timer's
+    //   `if(isAIThinking)` guard (a lost engine → permanently silent AI), and
+    //   (b) defeated doAIMove()'s isAIThinking early-return while currentTurn
+    //   was still the AI side, so any reentrant doAIMove (e.g. via exitReview)
+    //   would dispatch a SECOND go command against the in-flight search.
   }
   return;
 }

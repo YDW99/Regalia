@@ -715,7 +715,6 @@ function initChess960State(spid){
     posCount:new Map(),
     wk,bk,
     hash:0,
-    boardVersion:1,
     chess960:true,
     spid:spid
   };
@@ -730,6 +729,6 @@ export {
   spidToBackRank, backRankToSPID, randomSPID,
   toShredderCastling, parseShredderCastling,
   findCastlingRooks, findCastlingRookForSide, findDesignatedCastlingRook, chess960CastlingRookMove, isChess960CastlingLegal,
-  setChess960Mode, isChess960Mode,
+  setChess960Mode, isChess960Mode, isChess960Active,
   initChess960State
 };

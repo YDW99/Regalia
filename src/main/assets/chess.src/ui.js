@@ -168,8 +168,11 @@ document.addEventListener('click', function(e) {
 //   granular board/eval incremental path was unreachable. markDirty(x) call
 //   sites now call render() directly (identical behavior; render() has its
 //   own rAF throttle). The shared square-rendering primitives
-//   (_updateSingleSq/_updateChangedSquares/_getSqElCache) remain — used by
+//   (_updateSingleSq/_updateChangedSquares) remain — used by
 //   the live _updateBoardLightweight selection/hover path.
+//   (v1.2.3 round-48, RED-5: _getSqElCache removed from the list above — it
+//   was dead code with zero call sites; the previous wording falsely implied
+//   it was part of the live path.)
 
 // ===================== DOM ELEMENT CACHE =====================
 let _cachedElements = {};
@@ -197,13 +200,9 @@ function _invalidateElCache() {
   _cachedElements = {};
 }
 
-// v1.0.2 (qw3.7max audit): Cached board square elements — 1D array indexed by
-// (row*8+col) instead of 2D array-of-arrays. A 1D array has better memory
-// locality (contiguous) and avoids the second pointer dereference on every
-// access. With 10-50 engine progress callbacks/sec, this shaves a small but
-// measurable amount off the hot incremental-update path.
-// Invalidated on full render.
-let _sqElCache = null;
+// v1.2.3 round-48 (RED-5): `_sqElCache` DELETED — dead cache. Its only reader
+//   was the (also-deleted) _getSqElCache; all remaining writes were pure
+//   invalidation of a cache nothing consumed.
 // v1.0.2 (qw3.7max audit): Cached review-moves-list element — avoids
 // getElementById('reviewMovesList') on every render's scroll-into-view path.
 // Assigned after full render (when the element is freshly created), cleared
@@ -230,24 +229,9 @@ function _onMlistScroll(e){
   _mlistScrollState.valid=true;
 }
 
-/**
- * Get or build the cached board square elements array.
- * @returns {Array<HTMLElement>|null} 1D array: _sqElCache[displayRow*8 + displayCol]
- */
-function _getSqElCache() {
-  if (_sqElCache) return _sqElCache;
-  const grid = _el(_EL_BOARD_GRID);
-  if (!grid) return null;
-  const sqs = grid.querySelectorAll('.sq');
-  if (sqs.length !== 64) return null;
-  // v1.0.2 (qw3.7max audit): 1D array — single contiguous allocation, no
-  // nested array objects. Index as _sqElCache[r*8 + c].
-  _sqElCache = new Array(64);
-  for (let i = 0; i < 64; i++) {
-    _sqElCache[i] = sqs[i];
-  }
-  return _sqElCache;
-}
+// v1.2.3 round-48 (RED-5): _getSqElCache() DELETED — zero call sites anywhere
+//   in chess.src (verified by full-directory grep); the live incremental paths
+//   (updateAfterMove/_updateChangedSquares) query '.sq' directly.
 
 // ===================== STATE MANAGEMENT =====================
 
@@ -1150,25 +1134,14 @@ window.addEventListener('beforeunload', function() {
 
 // ===================== PHASE 18 TASK 2: VIRTUAL LIST HELPERS =====================
 // v1.0.8 PHASE 18 Task 2: Virtual list helpers for the review move list.
-// These are module-level so they can be called from render() (full rebuild),
-// from _refreshReviewMovesOnly() (scroll-driven partial refresh), and from
-// reviewGoTo() (force window to contain the new active step).
-//
-// The helpers operate on the module-level _rvVirtualState and read
-// moveRecords / reviewStep / reviewCritical directly. They are NO-OPs when
-// the virtual list is disabled (moveRecords.length <= RV_VIRTUAL_THRESHOLD).
-
-// Reset virtual state. Called from enterReview/exitReview/startGame/_doPastePGN
-// so each new review session starts with a fresh window.
-function _resetRvVirtualState(){
-  _rvVirtualState.avgRowH=44;
-  _rvVirtualState.scrollTop=0;
-  _rvVirtualState.windowStart=0;
-  _rvVirtualState.windowEnd=Infinity;
-  _rvVirtualState.measured=false;
-  _rvVirtualState.enabled=false;
-  if(_rvScrollRefreshTimer){clearTimeout(_rvScrollRefreshTimer);_rvScrollRefreshTimer=0;}
-}
+// v1.2.3 round-48 (RED-7): _resetRvVirtualState/_rvVirtualState/
+//   _rvScrollRefreshTimer DELETED — the virtual list is disabled by design
+//   (RV_VIRTUAL_THRESHOLD=Infinity, see the constant below), so the
+//   per-session reset bookkeeping (formerly called from enterReview/
+//   exitReview/startGame/_doPastePGN/FEN+PGN-file import) was dead work.
+//   _buildReviewMovesInnerHTML below remains the SINGLE SOURCE OF TRUTH for
+//   review-moves row rendering; it is always called with the full range
+//   [0, moveRecords.length).
 
 // v1.1.0 Phase 54 rev14: _computeVirtualWindow removed (dead code after
 //   virtual list disabled). When virtual list is off, the full range
@@ -1212,7 +1185,7 @@ function _buildReviewMovesInnerHTML(startIdx,endIdx){
     h+='<div class="rmv-block'+(isAct?' act':'')+'" onclick="reviewGoTo('+(i+1)+')" oncontextmenu="_prioritizeReviewStep('+(i+1)+');return false" data-step="'+(i+1)+'"'+criticalFlag+'>';
     h+='<span class="rmv-num">'+(isW?moveNum+'.':'')+'</span>';
     h+='<div class="rmv-detail"><span class="rmv-notation">'+_esc(mr.notation)+'</span>';
-    if(isCritical&&_criticalReasons.has(i+1)){h+='<span style="font-size:.65rem;color:var(--accent);display:block;margin-top:1px">'+_criticalReasons.get(i+1)+'</span>';}
+    if(isCritical&&_criticalReasons.has(i+1)){h+='<span style="font-size:.65rem;color:var(--accent);display:block;margin-top:1px">'+_esc(_criticalReasons.get(i+1))+'</span>';}
     if(showVariations&&mr.variations&&mr.variations.length>0){h+=_formatVariationGroups(mr.variations,moveNum,isW);}
     const _mvEval=_reviewEvalCache.peek(i+1);
     const _prevMvEval=_reviewEvalCache.peek(i);
@@ -1295,9 +1268,20 @@ function _refreshEvalTrendChart(){
  * @returns {string} SVG string for the eval trend chart
  */
 // v1.2.0 Phase 76+: Extracted chart color reading from _buildEvalTrendSVG.
+// v1.2.3 round-48 (PERF-3b): cache the result — getComputedStyle ran on every
+//   call (every review render / chart refresh). Keyed on html[data-theme],
+//   which is written by both theme-switch points (ui-toolbar.js switchTheme
+//   and ai-bridge.js _applySystemTheme at startup), so the cache
+//   self-invalidates on theme change without a cross-module hook. Per
+//   _applySystemTheme's contract, OS-level scheme changes require an app
+//   restart, so the attribute fully determines the computed values.
+//   Cache lives on the function object (no new top-level identifier).
 function _getChartColors(){
+  const _theme=document.documentElement.getAttribute('data-theme')||'';
+  const _cc=_getChartColors._cache;
+  if(_cc&&_cc.theme===_theme)return _cc.colors;
   const _cs = getComputedStyle(document.documentElement);
-  return {
+  const colors={
     line: _cs.getPropertyValue('--chart-line').trim() || '#5dade2',
     fill: _cs.getPropertyValue('--chart-fill').trim() || '#e74c3c',
     grid: _cs.getPropertyValue('--chart-grid').trim() || '#4a3020',
@@ -1306,6 +1290,8 @@ function _getChartColors(){
     critical: _cs.getPropertyValue('--chart-critical').trim() || '#ffd700',
     label: _cs.getPropertyValue('--chart-label').trim() || '#f5e6c8'
   };
+  _getChartColors._cache={theme:_theme,colors:colors};
+  return colors;
 }
 
 // v1.2.0 Phase 76+: Extracted grid-line rendering.
@@ -1801,7 +1787,9 @@ let _reviewAnalyzeAllActive=false; // Flag for reviewAnalyzeAll batch analysis
 let _reviewAnalyzePriorityQueue=[];
 // v1.1.0 Phase 54 rev14: _lastRenderReviewStep removed (dead code after virtual
 //   list disabled). Was used to detect reviewStep changes for window recompute.
-// v1.0.8 PHASE 18 Task 2: Virtual list state for the review move list.
+// v1.0.8 PHASE 18 Task 2 (HISTORICAL — the state object this introduces was
+//   deleted in v1.2.3 round-48, RED-7; analysis kept as design rationale):
+//   Virtual list state for the review move list.
 // When a game has more than RV_VIRTUAL_THRESHOLD moves, only the visible
 // window (plus RV_OVERSCAN rows above/below) is rendered as DOM nodes; the
 // rest are represented by two tall placeholder <div>s (top spacer + bottom
@@ -1848,15 +1836,13 @@ let _reviewAnalyzePriorityQueue=[];
 //   Setting threshold to Infinity disables virtual list for ALL games —
 //   eliminating ALL virtual-list-related bugs at once.
 const RV_VIRTUAL_THRESHOLD=Infinity;   // v1.1.0 rev14: disabled — render full list always
-let _rvVirtualState={
-  avgRowH:44,
-  scrollTop:0,
-  windowStart:0,
-  windowEnd:Infinity,
-  measured:false,
-  enabled:false,
-};
-let _rvScrollRefreshTimer=0;
+// v1.2.3 round-48 (RED-7): _rvVirtualState and _rvScrollRefreshTimer DELETED.
+//   SENTINEL — do NOT reintroduce the per-session/per-render bookkeeping
+//   without re-enabling the pipeline: with the threshold pinned to Infinity
+//   the virtual list can never engage, so the bookkeeping (5 reset call sites
+//   + a window recompute in every review render) was pure dead work. The
+//   constant and the design analysis above are retained as documentation of
+//   why the pipeline is disabled and what re-enabling it would require.
 // Track the game-over status key so we can re-localize gameOver on language switch.
 // Toggle for global eval trend display in review mode.
 // When true: shows the entire game's eval trend uniformly aligned with the progress bar.
@@ -1914,6 +1900,22 @@ function getCapturedPieces(board, color, moveRecordsArg) {
   // captured — i.e., the OPPONENT of the side whose bar we're rendering.
   // moveRecords[i].captured.color tells us which side lost the piece.
   if (moveRecordsArg && Array.isArray(moveRecordsArg) && moveRecordsArg.length > 0) {
+    // v1.2.3 round-48 (PERF-3a): cache the scan result keyed by (moveRecords
+    //   array identity, length, color). render() triggers this twice per pass
+    //   (once each from _renderAIBar/_renderPlayerBar via capturedPiecesHtml)
+    //   and every call used to re-scan the whole move list. The cache lives on
+    //   the function object (no new top-level identifier in the concatenated
+    //   global scope) and self-invalidates: a move/undo changes length; a
+    //   rebuild (new game / FEN/PGN import / setup / review snapshot restore)
+    //   replaces the array (identity). moveRecords entries are never mutated
+    //   in place (verified by grep — `captured` is only set in literals).
+    let _cc=getCapturedPieces._capCache;
+    if(!_cc||_cc.arr!==moveRecordsArg||_cc.len!==moveRecordsArg.length){
+      _cc={arr:moveRecordsArg,len:moveRecordsArg.length,white:null,black:null};
+      getCapturedPieces._capCache=_cc;
+    }
+    const _cachedRes=(color==='white')?_cc.white:(color==='black'?_cc.black:null);
+    if(_cachedRes)return _cachedRes;
     const order = ['queen','rook','bishop','knight','pawn'];
     const counts = { queen:0, rook:0, bishop:0, knight:0, pawn:0 };
     for (let i = 0; i < moveRecordsArg.length; i++) {
@@ -1929,6 +1931,7 @@ function getCapturedPieces(board, color, moveRecordsArg) {
     for (const t of order) {
       for (let i = 0; i < counts[t]; i++) result.push(t);
     }
+    if(color==='white')_cc.white=result;else if(color==='black')_cc.black=result;
     return result;
   }
   // v1.0.8 PHASE 38: When there are no moveRecords (setup mode / FEN import /
@@ -2050,23 +2053,27 @@ function render(){
   // v1.1.0 Phase 54: Added _animRetryCount guard (max 10 retries = 2s) to
   //   prevent infinite loop if animationInProgress gets stuck true.
   if(animationInProgress){
-    if(!renderPending){
-      _animRetryCount=(_animRetryCount||0)+1;
-      if(_animRetryCount>10){
-        // Stuck — force-clear and render immediately
-        animationInProgress=false;_animRetryCount=0;
-        lastRenderTime=Date.now();
-        renderInternal();
-        return;
-      }
-      renderPending=true;
-      // v1.2.3 round-18 (bug fix): do NOT reset _animRetryCount here — the
-      //   reset made the counter oscillate 0→1 so the ">10 retries →
-      //   force-clear stuck animationInProgress" guard above could never
-      //   fire (dead code, infinite 200ms spin instead of 2s self-heal).
-      //   The healthy-path reset at the non-animating branch below suffices.
-      setTimeout(()=>{renderPending=false;lastRenderTime=Date.now();render();},200);
+    // v1.2.3 round-48 (RED-8): removed the inner `if(!renderPending)` wrapper —
+    //   it was always true here (the early return at the top of render()
+    //   guarantees renderPending===false on this path). Body kept verbatim.
+    _animRetryCount=(_animRetryCount||0)+1;
+    if(_animRetryCount>10){
+      // Stuck — force-clear and render immediately
+      animationInProgress=false;_animRetryCount=0;
+      lastRenderTime=Date.now();
+      renderInternal();
+      return;
     }
+    renderPending=true;
+    // v1.2.3 round-18 (bug fix): do NOT reset _animRetryCount here — the
+    //   reset made the counter oscillate 0→1 so the ">10 retries →
+    //   force-clear stuck animationInProgress" guard above could never
+    //   fire (dead code, infinite 200ms spin instead of 2s self-heal).
+    //   The healthy-path reset at the non-animating branch below suffices.
+    // v1.2.3 round-48 (ROB-4a): store the timeout id on window (no new
+    //   top-level let/const in the concatenated global scope) so
+    //   _cleanupEventListeners() can cancel it on teardown.
+    window._animRetryTimerId=setTimeout(()=>{window._animRetryTimerId=null;renderPending=false;lastRenderTime=Date.now();render();},200);
     return;
   }
   _animRetryCount=0;
@@ -2613,7 +2620,12 @@ function _renderReviewMode(h, flip){
 const safeStep=Math.max(0,Math.min(reviewStep,reviewStates.length-1));
 reviewStep=safeStep;
 const rs=reviewStates[safeStep];
-if(!rs){reviewMode=false;render();return{h,done:true}}
+if(!rs){reviewMode=false;
+// v1.2.3 round-48 (BUG-1): this bailout exits review mode without going
+//   through exitReview(), so resume the clock here too (rebase the
+//   side-to-move's lastMoveTimestamp before the next tick).
+if(typeof _resumeGameClock==='function')_resumeGameClock();
+render();return{h,done:true}}
 // v1.2.3 round-39 (SonarCloud S1481): removed unused `const rLast=rs.lastMove;`
 //   — rLast was declared but never referenced in _renderReviewMode. The review
 //   board rendering uses rBoard (rs.state.board) but not rs.lastMove (the
@@ -2934,7 +2946,10 @@ const _rvNavHTML=_buildRvNavHTML();
 //   _buildRvAnalyzeBtnHTML().
 const _rvAnalyzeHTML=_buildRvAnalyzeBtnHTML();
 
-// v1.0.8 PHASE 18 Task 2: Enable virtual list when the move list exceeds the
+// v1.0.8 PHASE 18 Task 2 (HISTORICAL — the virtual list this describes was
+// disabled in v1.1.0 Phase 54 rev14 and its bookkeeping removed in v1.2.3
+// round-48 (RED-7); kept for design rationale): Enable virtual list when the
+// move list exceeds the
 // threshold. When enabled, only the visible window (plus overscan) is rendered
 // as DOM nodes; the rest are represented by top/bottom spacer <div>s so the
 // scrollbar still reflects the full content height.
@@ -2946,11 +2961,12 @@ const _rvAnalyzeHTML=_buildRvAnalyzeBtnHTML();
 // rows). Now we track _lastRenderReviewStep and only re-center when the step
 // v1.1.0 Phase 54 rev14: Virtual list disabled (RV_VIRTUAL_THRESHOLD=Infinity).
 //   Always render the full move list — no windowing, no spacers.
-_rvVirtualState.enabled=moveRecords.length>RV_VIRTUAL_THRESHOLD;
-_rvVirtualState.windowStart=0;
-_rvVirtualState.windowEnd=moveRecords.length;
-const _rvStart=_rvVirtualState.windowStart;
-const _rvEnd=_rvVirtualState.windowEnd;
+// v1.2.3 round-48 (RED-7): _rvVirtualState window bookkeeping removed — the
+//   pipeline is disabled by design, so the per-render window recompute (which
+//   always produced the full range) was pure overhead. The range is now
+//   computed directly.
+const _rvStart=0;
+const _rvEnd=moveRecords.length;
 
 // v1.1.0 Phase 53 (round-12 S3923 cleanup): Unified layout — both portrait and
 // landscape close .review-left, emit .review-moves, close .review-top, then open
@@ -3503,7 +3519,8 @@ const ctx={
   containerScrolls:[],
 };
 if(_ecoBlurTimer){clearTimeout(_ecoBlurTimer);_ecoBlurTimer=0}
-if(_rvScrollRefreshTimer){clearTimeout(_rvScrollRefreshTimer);_rvScrollRefreshTimer=0;}
+// v1.2.3 round-48 (RED-7): `_rvScrollRefreshTimer` clear removed — the virtual
+//   list pipeline is disabled by design and the timer was deleted.
 try{
   const _selectors=['.dlg','.panel','.op-list'];
   for(const _sel of _selectors){
@@ -3678,7 +3695,7 @@ if(reviewMode && reviewStep !== _lastReviewStepScrolled){
   });
 }
 _updateArrows(hoveredSquare||selectedSquare);
-_invalidateElCache(); _sqElCache = null;
+_invalidateElCache();
 _rListEl = document.getElementById('reviewMovesList');
 if(wasEcoFocused){const el=document.getElementById('ecoSearch');if(el){el.focus();_ecoSearchFocused=true;try{el.setSelectionRange(el.value.length,el.value.length)}catch(e){console.warn('[UI]',e?.message?e.message:e);}}}
 // v1.2.3 round-18: restore SP-ID input focus after keystroke-triggered
@@ -3862,7 +3879,8 @@ function updateAfterMove(){requestEngineEval();
       if(_hasEM)bh+=`<span class="setup-ep-mark" aria-hidden="true">⚡</span>`;
       bh+=`</div>`}}
     gridEl.innerHTML=bh;
-    _sqElCache=null;
+    // v1.2.3 round-48 (RED-5): `_sqElCache=null` removed — the cache was dead
+    //   (zero readers); no invalidation needed anymore.
     // v1.0.2 (qw3.7max audit): clear _rListEl too — the board-only rebuild
     // path doesn't touch the review-moves list, but clearing keeps the cache
     // honest if the element was removed from the DOM by a higher-level rebuild.
@@ -4103,6 +4121,15 @@ function _updateChangedSquares(oldInfoSq,newInfoSq,oldLegalSet,newLegalSet){
     // v1.0.8 PHASE 3: visible markers
     const _hasCM=_ucsCastleMarks.has(String(lr*8+lc));
     const _hasEM=_ucsEpMark?.row===lr&&_ucsEpMark.col===lc;
+    // v1.2.3 round-48 (BUG-7): keep el._sig in sync with the DOM writes below.
+    //   _updateSingleSq (the updateAfterMove path) skips a square entirely when
+    //   its recomputed signature matches el._sig; this path previously wrote
+    //   dots/rings WITHOUT updating _sig, so a later updateAfterMove compared
+    //   against the stale signature, saw a false match, and skipped the DOM
+    //   write — leaving ghost legal-move dots/rings until the next full render.
+    //   The signature components must stay identical to _updateSingleSq's.
+    const sig=(p?p.color[0]+p.type:'--')+'|'+(isSel?1:0)+(lastFrom?1:0)+(lastTo?1:0)+(isCheckSq?1:0)+(isLegal?1:0)+(cm?1:0)+(isCastlingRook?1:0)+(_hasCM?1:0)+(_hasEM?1:0);
+    el._sig=sig;
     el.style.background=bg;
     el.className='sq'+(lastFrom?' last-from':'')+(lastTo?' last-to':'')+(isCheckSq?' in-check':'')+(isCastlingRook?' castle-rook':'');
     const lbl=String.fromCodePoint(97+lc)+(8-lr);
@@ -4275,9 +4302,9 @@ try{if(typeof playSound==='function')playSound('enterReview');}catch(e){console.
 if(typeof _visualAnnotationsCache!=='undefined'&&_visualAnnotationsCache){
   try{_visualAnnotationsCache.delete('_initial');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
 }
-// v1.0.8 PHASE 18 Task 2: Reset virtual list state on entering review mode.
-// Each new review session starts with a fresh window centered on reviewStep=0.
-_resetRvVirtualState();
+// v1.2.3 round-48 (RED-7): _resetRvVirtualState() call removed — the virtual
+// list pipeline is disabled by design (RV_VIRTUAL_THRESHOLD=Infinity) and its
+// per-session bookkeeping was deleted.
 // v1.0.4 Round-5 Rev19: Allow entering review mode with zero move records.
 // Previously this returned early, blocking the user from reaching the review
 // toolbar (which hosts the 📚 PGN Cache Manager and 🗃️ import buttons) when
@@ -4315,6 +4342,11 @@ if(stateHistory.length>0&&stateHistory[0].state){
   reviewBaseState=cloneS(gameState);
 }
 reviewMode=true;reviewStates=[];
+// v1.2.3 round-48 (BUG-1): pause the game clock while reviewing — the tick
+//   early-returns on reviewMode (ui-gameflow.js), so record the freeze; the
+//   matching exit path (exitReview) rebases the side-to-move's
+//   lastMoveTimestamp via _resumeGameClock() before the tick resumes.
+if(typeof _pauseGameClock==='function')_pauseGameClock();
 _reviewEvalRequestedStep=-1; // Preserve _reviewEvalCache across review sessions
 let s=cloneS(reviewBaseState);
 reviewStates.push({state:cloneS(s),lastMove:null});
@@ -5241,6 +5273,11 @@ function _resetGameUIState(){
   //   non-dialog paths (FEN/PGN/setup), the imported game is treated as
   //   untimed unless the user explicitly starts a new timed game.
   if(gameClocks !== undefined){gameClocks=null;}
+  // v1.2.3 round-48 (BUG-1): clear the clock-pause marker too — every
+  //   game-start entry point funnels through here, and the fresh game gets
+  //   fresh clocks (initGameClocks) or none, so a stale pause marker from a
+  //   prior review/setup session must not leak into it.
+  if(typeof window!=='undefined')window._clockPauseStart=null;
   // v1.1.1 Phase 61: Clear ALL remaining per-game caches that could pollute
   //   the new game's PGN records, eval display, and statistics. Previously
   //   these were cleared inconsistently across the 5 entry points
@@ -5936,9 +5973,9 @@ function exitReview(){
   // v1.1.2 Phase 69 (Bug 3): Clear the PGN cache op-in-progress flag — a new
   //   game invalidates any in-flight cache operation.
   if(typeof _pgnCacheOpInProgress!=='undefined')_pgnCacheOpInProgress=false;
-  // v1.0.8 PHASE 18 Task 2: Reset virtual list state on exiting review mode.
-  // Clears the scroll timer and window so the next review session starts fresh.
-  _resetRvVirtualState();
+  // v1.2.3 round-48 (RED-7): _resetRvVirtualState() call removed — the virtual
+  //   list pipeline is disabled by design (RV_VIRTUAL_THRESHOLD=Infinity) and
+  //   its per-session bookkeeping was deleted.
   if(_reviewAnalyzeSafetyTimer){clearTimeout(_reviewAnalyzeSafetyTimer);_reviewAnalyzeSafetyTimer=null;}
   // Restore the complete game state from the pre-review snapshot.
   // Previously, exitReview() only restored gameState from reviewBaseState (the
@@ -5975,6 +6012,12 @@ function exitReview(){
   }
   _resetEvalState();
   _cachedBwrap=null; // Invalidate cached board HTML
+  // v1.2.3 round-48 (BUG-1): resume the game clock BEFORE render() — the next
+  //   _tickGameClock tick (200ms interval) must see a rebased
+  //   lastMoveTimestamp for the side to move, otherwise the entire review
+  //   session's wall-clock duration is deducted in one lump (and can trigger
+  //   a spurious flag fall). Pairs with _pauseGameClock() in enterReview().
+  if(typeof _resumeGameClock==='function')_resumeGameClock();
   render();
   requestEngineEval();
   if(!gameOver&&gameState.currentTurn!==playerColor){
@@ -6868,6 +6911,12 @@ function _cleanupEventListeners(){
   if(typeof _toastRemoveTimer!=='undefined'&&_toastRemoveTimer){clearTimeout(_toastRemoveTimer);_toastRemoveTimer=0;}
   if(typeof _evalSafetyTimerId!=='undefined'&&_evalSafetyTimerId){clearTimeout(_evalSafetyTimerId);_evalSafetyTimerId=null;}
   if(typeof _pbmiTimerId!=='undefined'&&_pbmiTimerId){clearTimeout(_pbmiTimerId);_pbmiTimerId=null;}
+  // v1.2.3 round-48 (ROB-4a): clear the render() animation-retry timeout — its
+  //   id is now stored on window._animRetryTimerId (see render()).
+  if(window._animRetryTimerId){clearTimeout(window._animRetryTimerId);window._animRetryTimerId=null;}
+  // v1.2.3 round-48 (ROB-4b): clear the resize debounce timer owned by
+  //   game-logic.js (typeof guard per cross-module convention).
+  if(typeof _resizeTimer!=='undefined'&&_resizeTimer){clearTimeout(_resizeTimer);_resizeTimer=0;}
   renderPending=false;
 }
 

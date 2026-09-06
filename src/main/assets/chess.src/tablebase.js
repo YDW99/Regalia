@@ -1899,7 +1899,7 @@ if(_epHasCap)enPassantTarget={row:er,col:ec};
 let halfMoveClock=0,fullMoveNumber=1;
 if(parts[4]){if(!/^\d+$/.test(parts[4])){return null;}halfMoveClock=Number.parseInt(parts[4],10);}
 if(parts[5]){if(!/^\d+$/.test(parts[5])){return null;}fullMoveNumber=Number.parseInt(parts[5],10);if(fullMoveNumber<1){return null;}}
-const s={board,currentTurn:turn,castlingRights,enPassantTarget,halfMoveClock,fullMoveNumber,moveHistory:[],posCount:new Map(),wk,bk,hash:0,boardVersion:1};
+const s={board,currentTurn:turn,castlingRights,enPassantTarget,halfMoveClock,fullMoveNumber,moveHistory:[],posCount:new Map(),wk,bk,hash:0};
 syncHash(s);s.posCount.set(s.hash,1);
 // Validate: the side NOT to move must not be in check (illegal position)
 const nonMover=OPP_COLOR[turn];

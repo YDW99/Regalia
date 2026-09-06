@@ -109,6 +109,88 @@ public class StatsActivity extends Activity {
     private final java.util.concurrent.atomic.AtomicBoolean backCloseHandled =
             new java.util.concurrent.atomic.AtomicBoolean(false);
     private android.os.Handler backFallbackHandler;
+    // v1.2.3 round-48 (BUG-2): manifest opts into
+    //   android:enableOnBackInvokedCallback="true", which suppresses
+    //   KeyEvent.KEYCODE_BACK dispatch on API 33+ — without a registered
+    //   callback the system would just finish() and bypass
+    //   handleStatsBackPress()/returnToGame() (import interceptor, dialog
+    //   closing, 250ms fallback). Platform API, no androidx dependency.
+    private android.window.OnBackInvokedCallback _backInvokedCallback = null;
+
+    /**
+     * v1.2.3 round-48 (BUG-2): register the platform OnBackInvokedCallback on
+     *   API 33+; the callback reuses handleBackKeyPress() (the exact logic of
+     *   the onKeyDown(KEYCODE_BACK) branch) and finishes when it declines.
+     */
+    private void registerBackInvokedCallback() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            try {
+                _backInvokedCallback = new android.window.OnBackInvokedCallback() {
+                    @Override
+                    public void onBackInvoked() {
+                        if (!handleBackKeyPress()) {
+                            finish();
+                        }
+                    }
+                };
+                getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                        android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+                        _backInvokedCallback);
+            } catch (Throwable e) {
+                Log.w(TAG, "OnBackInvokedCallback registration failed", e);
+                _backInvokedCallback = null;
+            }
+        }
+    }
+
+    /**
+     * v1.2.3 round-48 (BUG-2): core BACK handling extracted from onKeyDown so
+     *   the API 33+ OnBackInvokedCallback reuses it verbatim.
+     *   Returns true when the press was handed to the JS side; false means the
+     *   caller must apply the system default (finish).
+     */
+    private boolean handleBackKeyPress() {
+        // Handle Android back button.
+        // v1.0.4 Rev28: Delegate to the JS-side returnToGame() so the
+        // "🗃️ Import PGN to game?" interceptor can fire when a PGN was
+        // imported on the stats page. returnToGame() either closes the
+        // activity (no import) or shows the Yes/No/Cancel dialog (Cancel =
+        // stay on stats page). If the import-back dialog is already visible,
+        // back button = Cancel (dismiss dialog, stay on stats page).
+        // v1.0.7 UI: Route through the unified handleStatsBackPress() which
+        // also closes export/import dialogs created via DOM appendChild
+        // (previously these were orphaned by the back button — only the
+        // import-back Yes/No/Cancel was handled).
+        if (webView != null) {
+            // v1.2.3 round-44 (E4): 先复位标志，再发 JS；250ms 后若 JS 未
+            //   经 closeStatsPage()/ackStatsBackHandled() 置位（JS 异常/函数未定义），兜底
+            //   finish()。正常关闭路径会置位 backCloseHandled，兜底
+            //   Runnable 检测到后放弃 —— 超时兜底可被正常 closeStatsPage
+            //   取消。
+            backCloseHandled.set(false);
+            webView.evaluateJavascript(
+                "if(typeof handleStatsBackPress==='function'){handleStatsBackPress();}" +
+                "else if(typeof _statsImportBackDialogVisible!=='undefined'&&_statsImportBackDialogVisible){" +
+                "  _statsImportBackDismiss();" +
+                "} else if(typeof returnToGame==='function'){" +
+                "  returnToGame();" +
+                "}",
+                null);
+            if (backFallbackHandler != null) {
+                backFallbackHandler.postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (!backCloseHandled.get() && !isFinishing() && !isDestroyed()) {
+                                Log.w(TAG, "BACK fallback: JS did not close stats page within 250ms — finishing");
+                                finish();
+                            }
+                        }
+                    }, 250);
+            }
+            return true;
+        }
+        return false;
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -146,6 +228,9 @@ public class StatsActivity extends Activity {
         webView.setFilterTouchesWhenObscured(true);
         setContentView(webView);
         backFallbackHandler = new android.os.Handler(android.os.Looper.getMainLooper()); // v1.2.3 round-44 (E4)
+        // v1.2.3 round-48 (BUG-2): API 33+ back events go to the dispatcher,
+        //   not onKeyDown — register the callback now that webView/handler exist.
+        registerBackInvokedCallback();
 
         // v1.0.5 Rev55: WebView security configuration — defense-in-depth parity
         // with MainActivity. The stats page also loads only local asset content,
@@ -689,44 +774,11 @@ public class StatsActivity extends Activity {
 
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
-        // Handle Android back button.
-        // v1.0.4 Rev28: Delegate to the JS-side returnToGame() so the
-        // "🗃️ Import PGN to game?" interceptor can fire when a PGN was
-        // imported on the stats page. returnToGame() either closes the
-        // activity (no import) or shows the Yes/No/Cancel dialog (Cancel =
-        // stay on stats page). If the import-back dialog is already visible,
-        // back button = Cancel (dismiss dialog, stay on stats page).
-        // v1.0.7 UI: Route through the unified handleStatsBackPress() which
-        // also closes export/import dialogs created via DOM appendChild
-        // (previously these were orphaned by the back button — only the
-        // import-back Yes/No/Cancel was handled).
+        // v1.2.3 round-48 (BUG-2): logic extracted to handleBackKeyPress()
+        //   (shared with the API 33+ OnBackInvokedCallback — on API 33+ this
+        //   onKeyDown branch no longer receives KEYCODE_BACK at all).
         if (keyCode == KeyEvent.KEYCODE_BACK) {
-            if (webView != null) {
-                // v1.2.3 round-44 (E4): 先复位标志，再发 JS；250ms 后若 JS 未
-                //   经 closeStatsPage()/ackStatsBackHandled() 置位（JS 异常/函数未定义），兜底
-                //   finish()。正常关闭路径会置位 backCloseHandled，兜底
-                //   Runnable 检测到后放弃 —— 超时兜底可被正常 closeStatsPage
-                //   取消。
-                backCloseHandled.set(false);
-                webView.evaluateJavascript(
-                    "if(typeof handleStatsBackPress==='function'){handleStatsBackPress();}" +
-                    "else if(typeof _statsImportBackDialogVisible!=='undefined'&&_statsImportBackDialogVisible){" +
-                    "  _statsImportBackDismiss();" +
-                    "} else if(typeof returnToGame==='function'){" +
-                    "  returnToGame();" +
-                    "}",
-                    null);
-                if (backFallbackHandler != null) {
-                    backFallbackHandler.postDelayed(new Runnable() {
-                        @Override
-                        public void run() {
-                            if (!backCloseHandled.get() && !isFinishing() && !isDestroyed()) {
-                                Log.w(TAG, "BACK fallback: JS did not close stats page within 250ms — finishing");
-                                finish();
-                            }
-                        }
-                    }, 250);
-                }
+            if (handleBackKeyPress()) {
                 return true;
             }
             finish();
@@ -760,6 +812,16 @@ public class StatsActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        // v1.2.3 round-48 (BUG-2): unregister the API 33+ back callback so the
+        //   dispatcher cannot invoke a destroyed Activity.
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU && _backInvokedCallback != null) {
+            try {
+                getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(_backInvokedCallback);
+            } catch (Throwable e) {
+                Log.w(TAG, "OnBackInvokedCallback unregister failed", e);
+            }
+            _backInvokedCallback = null;
+        }
         // v1.0.8 PHASE 30: Full 6-step WebView teardown (matching MainActivity).
         //   Previously only webView.destroy() was called, which could leak JS
         //   callbacks, cause WindowLeaked exceptions, and leave a stale

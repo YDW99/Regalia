@@ -110,10 +110,92 @@ public class MainActivity extends Activity {
     //   the user in fallback mode (webView was still alive but invisible).
     private volatile boolean _isFallbackMode = false;
 
+    // v1.2.3 round-48 (BUG-2): the manifest opts into
+    //   android:enableOnBackInvokedCallback="true" — per AOSP lint
+    //   GestureBackNavigation, that suppresses KeyEvent.KEYCODE_BACK dispatch
+    //   on API 33+, so without a registered OnBackInvokedCallback the system
+    //   would just finish the Activity and the whole JS back-handling chain
+    //   (handleBackPress dialog priority etc.) would be bypassed. Register a
+    //   PLATFORM android.window callback (no androidx dependency — the project
+    //   has none) at PRIORITY_DEFAULT; API <= 32 keeps using onKeyDown().
+    //   Unregistered in onDestroy().
+    private android.window.OnBackInvokedCallback _backInvokedCallback = null;
+
+    /**
+     * v1.2.3 round-48 (BUG-2): register the platform OnBackInvokedCallback on
+     *   API 33+ (TIRAMISU). The callback body reuses handleBackKeyPress() — the
+     *   exact same logic as the onKeyDown(KEYCODE_BACK) branch — and finishes
+     *   the Activity when that logic declines to consume the press.
+     */
+    private void registerBackInvokedCallback() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            try {
+                _backInvokedCallback = new android.window.OnBackInvokedCallback() {
+                    @Override
+                    public void onBackInvoked() {
+                        if (!handleBackKeyPress()) {
+                            finish();
+                        }
+                    }
+                };
+                getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                        android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+                        _backInvokedCallback);
+            } catch (Throwable e) {
+                Log.w(TAG, "OnBackInvokedCallback registration failed", e);
+                _backInvokedCallback = null;
+            }
+        }
+    }
+
+    /**
+     * v1.2.3 round-48 (BUG-2): core BACK handling, extracted from onKeyDown so
+     *   the API 33+ OnBackInvokedCallback can reuse it verbatim.
+     *   Returns true when the press was consumed (dispatched to the WebView);
+     *   false means the caller must apply the system default
+     *   (onKeyDown: super.onKeyDown → finish; onBackInvoked: finish()).
+     */
+    private boolean handleBackKeyPress() {
+        // v1.2.3 round-31 (PR52 CodeRabbit stability): if showFallbackUI()
+        //   replaced the content view, the WebView is hidden but still
+        //   alive in memory — dispatching BACK to it would call a JS
+        //   handler on an invisible page and trap the user. Route to
+        //   the system default instead so the system finishes the Activity.
+        //   The pre-round-31 `webView != null` check only covered the
+        //   "WebView creation failed" path; the "WebView exists but
+        //   fallback UI replaced it" path was missed.
+        if (_isFallbackMode) {
+            return false;
+        }
+        if (webView != null) {
+            try {
+                webView.evaluateJavascript("if(typeof handleBackPress==='function'){handleBackPress();}", null);
+            } catch (Throwable e) {
+                // v1.2.3 round-48 (ROB-5): the JS bridge is broken — do NOT
+                //   swallow BACK (the old code returned true unconditionally,
+                //   trapping the user). Return false so the caller applies the
+                //   system default (finish), matching the _isFallbackMode and
+                //   webView==null branches.
+                Log.w(TAG, "evaluateJavascript for back key failed", e);
+                return false;
+            }
+            return true;
+        }
+        // v1.2.3 round-18 (bug fix): WebView creation failed (fallback
+        //   error UI is showing) — do NOT consume BACK; let the system
+        //   finish the activity so the user is not trapped.
+        return false;
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // v1.2.3 round-48 (BUG-2): register BEFORE onCreateInternal so the
+        //   callback is active even if internal init falls into the fallback
+        //   UI (whose BACK must still finish the Activity).
+        registerBackInvokedCallback();
 
         // v18.4.1 CRITICAL FIX: Wrap ENTIRE onCreate in try-catch to prevent hard crash.
         // Previously, any uncaught exception here would crash the app immediately (闪退).
@@ -826,6 +908,17 @@ public class MainActivity extends Activity {
         // OPT: P0 - Set destroyed flag first so delayed callbacks check it before executing.
         isDestroyed = true;
 
+        // v1.2.3 round-48 (BUG-2): unregister the API 33+ back callback so the
+        //   dispatcher cannot invoke a destroyed Activity.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && _backInvokedCallback != null) {
+            try {
+                getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(_backInvokedCallback);
+            } catch (Throwable e) {
+                Log.w(TAG, "OnBackInvokedCallback unregister failed", e);
+            }
+            _backInvokedCallback = null;
+        }
+
         // v1.0.5 Round-6 Rev49: Stop sensor-based stabilization and release sensors.
         // v1.2.3 round-31 (PR52 CodeRabbit stability): acquire _stabilizationLock
         //   so toggleStabilization() on the JS binder thread can't be mid-flight
@@ -988,28 +1081,15 @@ public class MainActivity extends Activity {
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if (keyCode == KeyEvent.KEYCODE_BACK) {
-            // v1.2.3 round-31 (PR52 CodeRabbit stability): if showFallbackUI()
-            //   replaced the content view, the WebView is hidden but still
-            //   alive in memory — dispatching BACK to it would call a JS
-            //   handler on an invisible page and trap the user. Route to
-            //   super instead so the system finishes the Activity.
-            //   The pre-round-31 `webView != null` check only covered the
-            //   "WebView creation failed" path; the "WebView exists but
-            //   fallback UI replaced it" path was missed.
-            if (_isFallbackMode) {
-                return super.onKeyDown(keyCode, event);
-            }
-            if (webView != null) {
-                try {
-                    webView.evaluateJavascript("if(typeof handleBackPress==='function'){handleBackPress();}", null);
-                } catch (Throwable e) {
-                    Log.w(TAG, "evaluateJavascript for back key failed", e);
-                }
+            // v1.2.3 round-48 (BUG-2/ROB-5): logic extracted to
+            //   handleBackKeyPress() (shared with the API 33+
+            //   OnBackInvokedCallback — on API 33+ this onKeyDown branch no
+            //   longer receives KEYCODE_BACK at all). A false return
+            //   (fallback mode / WebView gone / evaluateJavascript threw)
+            //   routes to super so the system finishes the Activity.
+            if (handleBackKeyPress()) {
                 return true;
             }
-            // v1.2.3 round-18 (bug fix): WebView creation failed (fallback
-            //   error UI is showing) — do NOT consume BACK; let the system
-            //   finish the activity so the user is not trapped.
             return super.onKeyDown(keyCode, event);
         }
         return super.onKeyDown(keyCode, event);

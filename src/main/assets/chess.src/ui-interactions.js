@@ -659,6 +659,11 @@ function quickFreeOpening(){
   dlgPlayerColor=playerColor;
   dlgOpeningId=null;
   dlgBookMoves=useBookMoves;
+  // v1.2.3 round-48 (BUG-12): reset the Chess960 dialog flags — _startGameImpl
+  //   decides solely from dlgChess960/dlgChess960SPID, and quickFreeOpening
+  //   bypasses the dialog, so without this a previous 960 game (and its SP-ID)
+  //   would silently carry over into the "free opening" game.
+  dlgChess960=false;dlgChess960SPID=null;
   startGame();
   showToast(T('new_game_free'));
 }
@@ -748,6 +753,10 @@ try{if(typeof playSound==='function')playSound('setupToggle');}catch(e){console.
 // v1.0.2 FIX (audit): extract common reset out of both branches.
 gameOver=null;_gameOverStatusKey=null;
 if(setupMode){setupPiece='pawn';setupColor='white';selectedSquare=null;legalMvs=[];legalSet=new Set();lastMove=null;gameOverSoundPlayed=false;setupErrors=[];setupHistory=[];
+// v1.2.3 round-48 (BUG-1): pause the game clock while in setup mode — the
+//   tick early-returns on setupMode (ui-gameflow.js), so record the freeze;
+//   the matching exit branch below calls _resumeGameClock().
+if(typeof _pauseGameClock==='function')_pauseGameClock();
 // v1.0.8: Initialize castle-marker set and en-passant marker on gameState.
 // If the user is entering setup mode from a normal game (e.g., to tweak the
 // position), seed the markers from the existing castlingRights + enPassantTarget
@@ -840,6 +849,13 @@ setupMarkerMode=null;
 if(gameState.setupCastleMarks&&gameState.setupCastleMarks.size>0){
   try{validateSetupPosition(gameState);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
 }
+// v1.2.3 round-48 (BUG-1): resume the game clock — rebase the side-to-move's
+//   lastMoveTimestamp before the next 200ms tick, otherwise the whole setup
+//   session is deducted in one lump. This branch is ALSO the exit path for
+//   "Done"/exitSetup: _exitSetupImpl ends by calling toggleSetup(). (In that
+//   case _resetGameUIState has already nulled gameClocks and cleared the
+//   pause marker, so this is a harmless no-op there.)
+if(typeof _resumeGameClock==='function')_resumeGameClock();
 setupMarkerMode=null;
 gameState.setupEpMark=null;
 gameState.setupCastleMarks=new Set();
@@ -1088,14 +1104,18 @@ gameState.board[r][c]=null;_refreshStateAfterSetup(gameState);render();return
 }
 // Place piece if a piece is selected (not delete, not null)
 if(setupPiece&&setupPiece!=='delete'){
+// v1.2.3 round-48 (BUG-4): setupColor may be null after the new back-button
+//   color-cancel branch in handleBackPress — default to 'white' so a placed
+//   piece never gets color:null (SYM[null] would crash the board render).
+const _effSetupColor=setupColor||'white';
 if(setupPiece==='king'){
 // Remove existing king of same color before placing new one
-if(setupColor==='white'&&gameState.wk){gameState.board[gameState.wk.row][gameState.wk.col]=null;gameState.wk=null}
-else if(setupColor==='black'&&gameState.bk){gameState.board[gameState.bk.row][gameState.bk.col]=null;gameState.bk=null}
+if(_effSetupColor==='white'&&gameState.wk){gameState.board[gameState.wk.row][gameState.wk.col]=null;gameState.wk=null}
+else if(_effSetupColor==='black'&&gameState.bk){gameState.board[gameState.bk.row][gameState.bk.col]=null;gameState.bk=null}
 }
-gameState.board[r][c]={type:setupPiece,color:setupColor};
+gameState.board[r][c]={type:setupPiece,color:_effSetupColor};
 if(setupPiece==='king'){
-if(setupColor==='white')gameState.wk={row:r,col:c};
+if(_effSetupColor==='white')gameState.wk={row:r,col:c};
 else gameState.bk={row:r,col:c};
 }
 _refreshStateAfterSetup(gameState);
@@ -1272,25 +1292,12 @@ function handleBackPress(){
     render();
     return;
   }
-  // v1.0.8 PHASE 6: If ANY setup-mode selection is active (marker mode OR
-  // piece selection OR delete mode OR color selection), back button cancels
-  // the selection first (instead of exiting setup). This covers:
-  //   - setupMarkerMode ('castle' / 'ep')
-  //   - setupPiece (any piece type, including 'delete')
-  // The user presses back again to actually exit setup mode.
-  // We cancel in priority order: marker mode → piece selection.
-  if(typeof setupMode!=='undefined'&&setupMode){
-    if(typeof setupMarkerMode!=='undefined'&&setupMarkerMode){
-      setupMarkerMode=null;
-      render();
-      return;
-    }
-    if(typeof setupPiece!=='undefined'&&setupPiece){
-      setupPiece=null;
-      render();
-      return;
-    }
-  }
+  // v1.2.3 round-48 (BUG-4): the setup-selection cancel block MOVED DOWN below
+  //   the file-browser check (see below). Previously it sat here — AHEAD of the
+  //   showEngineConfig/showNewGameDialog/showAboutPage/showImportDialog checks
+  //   — so in setup mode with a header dialog open (the header buttons stay
+  //   clickable in setup mode), the back button canceled the invisible board
+  //   selection instead of closing the visible dialog.
   if(showEngineConfig){
     showEngineConfig=false;
     render();
@@ -1319,6 +1326,38 @@ function handleBackPress(){
       _fileBrowserHandleBack();
     }
     return;
+  }
+  // v1.0.8 PHASE 6 (moved in v1.2.3 round-48, BUG-4): If ANY setup-mode
+  // selection is active (marker mode OR piece selection OR color selection),
+  // back button cancels the selection first (instead of exiting setup). This
+  // covers:
+  //   - setupMarkerMode ('castle' / 'ep')
+  //   - setupPiece (any piece type, including 'delete')
+  //   - setupColor (the white/black placement-color choice)
+  // The user presses back again to actually exit setup mode.
+  // We cancel in priority order: marker mode → piece selection → color.
+  // v1.2.3 round-48 (BUG-4): this block must stay BELOW all dialog/overlay
+  //   checks (the six dialog guards above, the four header dialogs, and the
+  //   file browser) — a visible dialog always outranks an invisible board
+  //   selection. Only reviewMode/setupMode exit remain lower priority.
+  if(typeof setupMode!=='undefined'&&setupMode){
+    if(typeof setupMarkerMode!=='undefined'&&setupMarkerMode){
+      setupMarkerMode=null;
+      render();
+      return;
+    }
+    if(typeof setupPiece!=='undefined'&&setupPiece){
+      setupPiece=null;
+      render();
+      return;
+    }
+    // v1.2.3 round-48 (BUG-4): color-selection cancel branch added. Placement
+    //    (setupClick) defensively defaults a null color to 'white'.
+    if(typeof setupColor!=='undefined'&&setupColor){
+      setupColor=null;
+      render();
+      return;
+    }
   }
   if(reviewMode){
     exitReview();
@@ -1493,9 +1532,8 @@ function _resignGame(){
 // v1.0.2: Wrapped with _withPGNSaveCheck to prompt save before clearing
 function _doPastePGN(){
   _withPGNSaveCheck(function(){
-    // v1.0.8 PHASE 18 Task 3 (bug fix): Reset virtual list state on PGN paste
-    // so stale avgRowH / window from a previous long game don't carry over.
-    _resetRvVirtualState();
+    // v1.2.3 round-48 (RED-7): _resetRvVirtualState() call removed — virtual
+    //   list pipeline disabled by design; bookkeeping deleted.
     const text=prompt(T('pgn_paste_hint'));
     if(!text)return;
     const trimmed=text.trim();
@@ -1531,9 +1569,8 @@ function _doPastePGN(){
 // v1.0.2: Wrapper for importFEN with PGN save check
 function _importFENWithSaveCheck(){
   _withPGNSaveCheck(function(){
-    // v1.0.8 PHASE 18 Task 3 (bug fix): Reset virtual list state on FEN import
-    // so stale avgRowH / window from a previous long game don't carry over.
-    _resetRvVirtualState();
+    // v1.2.3 round-48 (RED-7): _resetRvVirtualState() call removed — virtual
+    //   list pipeline disabled by design; bookkeeping deleted.
     importFEN();
   });
 }
@@ -1541,8 +1578,8 @@ function _importFENWithSaveCheck(){
 // v1.0.2: Wrapper for importPGNFile with PGN save check
 function _importPGNFileWithSaveCheck(){
   _withPGNSaveCheck(function(){
-    // v1.0.8 PHASE 18 Task 3 (bug fix): Reset virtual list state on PGN file import.
-    _resetRvVirtualState();
+    // v1.2.3 round-48 (RED-7): _resetRvVirtualState() call removed — virtual
+    //   list pipeline disabled by design; bookkeeping deleted.
     importPGNFile();
   });
 }

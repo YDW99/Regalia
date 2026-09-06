@@ -1777,7 +1777,20 @@ function openStatsPage(){
       }
     }
   }
-  const payload=JSON.stringify({pgn:pgn,evals:evalData,moveRecords:moveData,visualAnnotations:vaData,playerColor:playerColor,lang:(typeof _lang!=='undefined'?_lang:'zh'),gameVariant:(gameVariant !== undefined?gameVariant:null)});
+  let payload=JSON.stringify({pgn:pgn,evals:evalData,moveRecords:moveData,visualAnnotations:vaData,playerColor:playerColor,lang:(typeof _lang!=='undefined'?_lang:'zh'),gameVariant:(gameVariant !== undefined?gameVariant:null)});
+  // v1.2.3 round-48 (ROB-2): the payload is delivered to StatsActivity as an
+  //   Intent extra, which is subject to the ~1MB Binder transaction cap —
+  //   an oversized payload makes StockfishNative.openStatsPage's startActivity
+  //   throw TransactionTooLargeException (caught → only a Toast, the stats
+  //   page silently never opens). If the payload exceeds 900KB, drop the
+  //   visualAnnotations field (the stats page tolerates its absence — it
+  //   falls back to the PGN-text scan, which still finds imported [%csl]/
+  //   [%cal] annotations) and set a truncation marker so consumers can tell.
+  //   (900KB in UTF-16 code units is conservative for mostly-ASCII payloads.)
+  if(payload.length>900*1024){
+    console.warn('openStatsPage: payload exceeds 900KB ('+payload.length+' chars) — dropping visualAnnotations to stay under the Binder transaction limit');
+    payload=JSON.stringify({pgn:pgn,evals:evalData,moveRecords:moveData,playerColor:playerColor,lang:(typeof _lang!=='undefined'?_lang:'zh'),gameVariant:(gameVariant !== undefined?gameVariant:null),visualAnnotationsTruncated:true});
+  }
   _bridgeCall(function(bridge){
     if(typeof bridge.openStatsPage==='function'){
       bridge.openStatsPage(payload);

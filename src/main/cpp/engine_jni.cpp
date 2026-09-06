@@ -30,12 +30,14 @@
  * (nativeLoadEngine, nativeStartEngine, nativeSendCommand, nativeReadOutput,
  * nativeDestroyEngine, nativeIsEngineRunning, nativeGetEngineEntryType, plus
  * findEngineEntryPoint + engineThreadFunc + EngineHandle/EngineEntryType
- * structs) became dead code -- StockfishNative.java declares ONLY nativeChmod
- * and nativeRenice. This file now contains only those two functions.
+ * structs) became dead code -- StockfishNative.java declares ONLY nativeChmod.
+ * This file now contains only that one function.
+ * (v1.2.3 round-48, RED-3: the nativeRenice implementation was removed too --
+ *  round-47 (S1144) had already deleted its Java declaration, leaving the C++
+ *  function an orphan exported symbol with no caller.)
  *
  * Architecture (remaining):
  *   1. Java calls nativeChmod(path) -> sets file permissions to 0700 (DroidFish pattern)
- *   2. Java calls nativeRenice(pid, prio) -> changes process priority (DroidFish pattern)
  *
  * The Stockfish engine binary is packaged as libstockfish.so and executed
  * via ProcessBuilder -- no dlopen/JNI entry-point invocation is involved.
@@ -47,7 +49,6 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/stat.h>
-#include <sys/resource.h>
 
 #define TAG "EngineJniBridge"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
@@ -102,43 +103,8 @@ Java_com_Regalia_StockfishNative_nativeChmod(JNIEnv *env, jclass, jstring jPath)
     return (result == 0) ? JNI_TRUE : JNI_FALSE;
 }
 
-/**
- * Native reNice -- change process priority.
- * Derived from DroidFish EngineUtil.reNice() (nativeutil.cpp).
- * Copyright (C) Peter Osterlund (original DroidFish logic).
- * Modified by Regalia on 2026-06-12.
- *
- * Sets the priority of the given process to the specified value.
- * Lower values = higher priority. Typical engine priority: 10 (lower than default 0).
- *
- * v1.0.2: declared for API completeness (StockfishNative.java still declares
- * `private static native boolean nativeRenice(int pid, int prio);`). Currently
- * no caller invokes it -- kept to avoid changing the JNI symbol surface and
- * to preserve the DroidFish-derived pattern for future use.
- */
-// v1.2.3 round-44 (F1): void → jboolean so callers can distinguish success
-//   from EPERM/ESRCH/EINVAL (previously a silent black box).
-extern "C" JNIEXPORT jboolean JNICALL
-// v1.2.3 round-37 (SonarCloud cpp:S1172): `env` is unused but required by
-//   the JNI signature (every JNI function receives JNIEnv* as its first
-//   parameter). Kept as `env` with this explanatory comment.
-// v1.2.3 round-46 (PR53 CR#28): corrected the round-37 rationale — JNI name
-//   mangling depends only on the FUNCTION name, not on parameter names, so
-//   the old "renaming would break name mangling" claim was inaccurate.
-Java_com_Regalia_StockfishNative_nativeRenice(JNIEnv *env, jclass, jint pid, jint prio) {
-    (void)env;  // suppress unused-parameter warning
-    if (pid <= 0) return JNI_FALSE;
-    // v1.1.2 Phase 67: Code review P0 fix - validate prio range and check setpriority() return value.
-    // PRIO_MIN/PRIO_MAX are typically -20/19 on Linux/Android. Clamping prevents undefined behavior
-    // if callers ever pass an out-of-range value (e.g., from a malformed configuration).
-    if (prio < PRIO_MIN) prio = PRIO_MIN;
-    if (prio > PRIO_MAX) prio = PRIO_MAX;
-    if (setpriority(PRIO_PROCESS, pid, prio) != 0) {
-        int saved_errno = errno;  // v1.2.3 round-44 (F5): snapshot + strerror_r
-        char errbuf[256];
-        strerror_r(saved_errno, errbuf, sizeof(errbuf));
-        LOGE("setpriority failed for pid %d (prio=%d): %s", pid, prio, errbuf);
-        return JNI_FALSE;
-    }
-    return JNI_TRUE;
-}
+// v1.2.3 round-48 (RED-3): the Java_com_Regalia_StockfishNative_nativeRenice
+//   implementation was deleted here — round-47 (S1144) removed the
+//   `nativeRenice` declaration from StockfishNative.java (no Java callers),
+//   so the C++ function was an orphan exported symbol. Along with it went
+//   <sys/resource.h> (only setpriority/PRIO_* used it).
