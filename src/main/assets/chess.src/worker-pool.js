@@ -60,6 +60,15 @@ const _pendingTasks = new Map(); // taskId -> {resolve, reject, worker, timeout}
 const _MAX_QUEUE_SIZE = 50;
 
 // === Worker source code (self-contained, no external deps, no eval) ===
+// ⚠ DUAL-COPY SYNC OBLIGATION (v1.2.3 round-49, F6): _parsePGNText /
+//   _computeHeatmapStats exist TWICE — once inside this _WORKER_SRC template
+//   string (runs in the worker thread) and once as _syncParsePGNText /
+//   _syncComputeHeatmapStats below (main-thread fallback, reached via
+//   _syncFallback). ANY logic change to one copy MUST be mirrored to the
+//   other, keeping them semantically identical (mind the double-escaped
+//   backslashes inside the template string). Precedent: round-47 fixed the
+//   multi-game split regex only in the sync copy; the worker copy kept the
+//   polynomial-backtracking form until round-49.
 // v1.0.8 PHASE 28: Functions are inlined as cases in a switch statement.
 //   This avoids `new Function()` / `eval()` which require CSP 'unsafe-eval'.
 // v1.0.8 PHASE 34: parsePGNText now does FULL tokenization (headers, comments,
@@ -106,7 +115,12 @@ function _parsePGNText(pgnText) {
   // Replace non-breaking spaces
   text = text.replace(/\\u00a0/g, ' ');
   // Handle multiple games: only parse the first game
-  var gameBlocks = text.split(/\\n\\s*\\n(?=\\[)/);
+  // v1.2.3 round-49 (F6/F2): mirror of _syncParsePGNText below — see the
+  //   detailed comment there. The (?<!X) lookbehind anchors match starts to
+  //   the first newline of each blank-line run → linear time (round-47 form
+  //   without it was still O(k^2) on the failure path; Node: 16k -> 587ms,
+  //   with lookbehind 16k -> 1.1ms). Split results identical (300k fuzz).
+  var gameBlocks = text.split(/(?<!\\n)\\n[^\\S\\n]*\\n(?:[^\\S\\n]*\\n)*(?=\\[)/);
   if (gameBlocks.length > 1) text = gameBlocks[0];
   // Extract FEN from headers
   var startFEN = null;
@@ -136,9 +150,13 @@ function _parsePGNText(pgnText) {
   var cslAnnotations = [];
   var calAnnotations = [];
   var evals = [];
-  var cslRe = /\\[%csl\\s+([^\\]]*)\\]/g;
-  var calRe = /\\[%cal\\s+([^\\]]*)\\]/g;
-  var evalRe = /\\[%eval\\s+([^\\]]*)\\]/g;
+  // v1.2.3 round-49 (F6): single whitespace (was one-or-more) to match the
+  //   sync copy exactly (round-47 S8786) — the trailing any-but-bracket run
+  //   already covers extra whitespace and the capture is trim()'d at the use
+  //   site, so semantics are unchanged.
+  var cslRe = /\\[%csl\\s([^\\]]*)\\]/g;
+  var calRe = /\\[%cal\\s([^\\]]*)\\]/g;
+  var evalRe = /\\[%eval\\s([^\\]]*)\\]/g;
   var iter = 0;
   // v1.2.3 round-38 (SonarCloud S7765): use .includes() instead of .indexOf() >= 0.
   while (text.includes('{') && iter++ < 20) {
@@ -431,7 +449,25 @@ function _dispatchNext() {
     task.worker = w;
     w._currentTask = task; // v1.2.3 round-44 (G12): O(1) crash lookup
     _pendingTasks.set(task.taskId, task);
-    w.postMessage({type: 'run', taskId: task.taskId, fnName: task.fnName, args: task.args});
+    // v1.2.3 round-49 (F7): guard postMessage — a synchronous throw (e.g.
+    //   DataCloneError on an uncloneable arg) previously escaped the workerRun
+    //   Promise executor AFTER the worker was marked busy and the task
+    //   registered, stranding the worker as "busy" until the task's 30s
+    //   timeout terminated it (and surfacing as an uncaught exception when
+    //   reached from an onmessage-triggered _dispatchNext). On failure we
+    //   unregister the task, recycle the worker (state unknown — safest to
+    //   terminate + replace), reject the task immediately, and let the loop
+    //   continue dispatching the remaining queue.
+    try {
+      w.postMessage({type: 'run', taskId: task.taskId, fnName: task.fnName, args: task.args});
+    } catch (e) {
+      _pendingTasks.delete(task.taskId);
+      w._currentTask = null;
+      w._busy = false;
+      if (task.timeout) { clearTimeout(task.timeout); task.timeout = null; }
+      _removeWorker(w);
+      task.reject(new Error('Worker postMessage failed: ' + (e && e.message ? e.message : String(e))));
+    }
   }
 }
 
@@ -504,7 +540,21 @@ function _syncParsePGNText(pgnText) {
   var text = pgnText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   text = text.replace(/^%.*$/gm, '');
   text = text.replace(/\u00a0/g, ' ');
-  var gameBlocks = text.split(/\n[^\S\n]*\n(?:[^\S\n]*\n)*(?=\[)/); // v1.2.3 round-47 (S8786): unambiguous equivalent of \n\s*\n (horizontal-ws runs separated by \n) — same split points, no polynomial backtracking
+  // v1.2.3 round-47 (S8786): \n\s*\n -> \n[^\S\n]*\n(?:[^\S\n]*\n)* (horizontal-ws
+  //   runs separated by \n) — same split points, no ambiguous quantifier overlap.
+  // v1.2.3 round-49 (F2/F6): added the (?<!\n) lookbehind — the round-47 form
+  //   was STILL O(k^2) on the failure path (a long blank-line run with no
+  //   following '[': the (?:...)* group re-walks the whole run per start
+  //   position; Node: 16k newlines -> 587ms vs old 440ms, i.e. the S8786 fix
+  //   silenced the lint but not the DoS). The lookbehind restricts match
+  //   starts to the FIRST '\n' of each blank-line run (mid-run starts fail in
+  //   O(1)) -> linear total (16k -> 1.1ms, 900k -> 63ms). Split results are
+  //   identical to the old regex (300k-case fuzz, 0 mismatches): a match
+  //   starting mid-run implies an equivalent match at the run's first '\n',
+  //   which split() finds first. Lookbehind needs Chrome 62+ (WebView>=84
+  //   floor OK). Keep in sync with the _WORKER_SRC copy above and
+  //   stats.html parsePGN.
+  var gameBlocks = text.split(/(?<!\n)\n[^\S\n]*\n(?:[^\S\n]*\n)*(?=\[)/);
   if (gameBlocks.length > 1) text = gameBlocks[0];
   var startFEN = null;
   var fenMatch = text.match(/\[FEN\s+"([^"]+)"\]/i);

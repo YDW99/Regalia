@@ -42,6 +42,29 @@ function startGame(){
 function _startGameImpl(){
   // v1.0.8 PHASE 22 supplement: new-game sound (号角式三音和弦)
   try{if(typeof playSound==='function')playSound('newgame');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+  // v1.2.3 round-49 Stage-3 (review-2 P2): shed ALL setup-mode state when a
+  //   new game is started from the ⚔️ dialog while setup mode is active —
+  //   same fix as quickFreeOpening (ui-interactions.js, v1.0.8 PHASE 7).
+  //   Without this, setupMode stayed true across the gameState=initState()
+  //   replacement below: the fresh game rendered the setup panel, and a later
+  //   Done ran validateSetupPosition on a state without setupCastleMarks
+  //   (resetting ALL castlingRights to false). The stale
+  //   window._setupEntrySnap could also misfire the BUG-13 modification gate
+  //   (exitSetup / toggleSetup exit branch) against the NEW game's position.
+  //   NOTE: this cannot live in _resetGameUIState — _exitSetupImpl calls
+  //   _resetGameUIState while setupMode is still true and then flips the
+  //   flag itself via its tail toggleSetup(); clearing setupMode there would
+  //   invert that flip. A lingering BUG-13 confirm overlay is removed
+  //   centrally by _resetGameUIState (called below).
+  if(typeof setupMode!=='undefined'&&setupMode){
+    setupMode=false;
+    setupMarkerMode=null;
+    setupPiece=null;
+    setupErrors=[];
+    setupHistory=[];
+    setupRedoStack=[];
+  }
+  if(typeof window!=='undefined')window._setupEntrySnap=null;
   showNewGameDialog=false;
   playerColor=dlgPlayerColor;
   useBookMoves=dlgBookMoves;
@@ -309,6 +332,25 @@ function _pauseGameClock(){
 // called BEFORE the tick can run again (i.e., synchronously inside the exit
 // path, after gameState is restored). Only the side to move needs the rebase:
 // the other side's timestamp is reset by recordMoveEnd when the mover moves.
+//
+// v1.2.3 round-49 Stage-3 (review-2 P3-1 — verified UI-UNREACHABLE, documented
+//   only, NO code change): the pause marker is a single timestamp, not a
+//   reference count. In a NESTED pause (setup entered during an active
+//   review), _pauseGameClock keeps the FIRST timestamp, but this resume
+//   unconditionally clears the marker + rebases on the INNER exit (setup
+//   exit). The outer exitReview()'s resume then no-ops (marker already null),
+//   and the next tick deducts the inner-exit→outer-exit wall-clock gap in one
+//   lump (a spurious flag fall is only possible on a nearly-empty clock).
+//   Reachability audit (round-49 Stage-3): the review UI is a fixed
+//   inset:0, z-index:200 overlay (index.html.tpl .review-overlay) that fully
+//   covers the main header's setup button; the review header (.review-hdr,
+//   ui.js _renderReviewMode) has NO setup button; no keyboard binding calls
+//   toggleSetup; handleBackPress exits review BEFORE touching setup mode
+//   (ui-interactions.js). toggleSetup itself has no reviewMode guard, so the
+//   nested sequence is only constructible via console / evaluateJavascript.
+//   Conclusion per review-2.md: NOT UI-reachable → document, don't fix. If a
+//   future UI path ever nests the pauses, fix by reference-counting the pause
+//   or by gating this rebase on `!setupMode && !reviewMode`.
 function _resumeGameClock(){
   if(typeof window._clockPauseStart==='undefined'||window._clockPauseStart==null)return;
   window._clockPauseStart=null;

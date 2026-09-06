@@ -449,17 +449,31 @@ let _statsImportedPGN=null;
 //   Previously render() re-parsed on every call and each of the four nav
 //   handlers (+ selectVariationMove) parsed AGAIN before delegating to
 //   selectMove/selectVariationMove → render, so a single ⏮◀▶⏭ click cost ≥2
-//   full parses. parsePGN depends only on the PGN text + _payload.moveRecords;
-//   the import paths (_statsPastePGN / onStatsPGNFileRead) always install a NEW
-//   pgn string, so a new PGN is an automatic cache miss. A null parse result
-//   is never cached (render must re-attempt to show the error state).
+//   full parses. parsePGN depends on the PGN text + _payload.moveRecords +
+//   gameVariant; the import paths (_statsPastePGN / onStatsPGNFileRead) always
+//   install a NEW pgn string, so a new PGN is an automatic cache miss. A null
+//   parse result is never cached (render must re-attempt to show the error
+//   state).
+// v1.2.3 round-49 (F3): the key also folds in the moveRecords length and
+//   gameVariant. Two violations of the old pgn-only key: (a) pasting text
+//   byte-identical to _payload.pgn hit the cache even though _statsPastePGN
+//   had just nulled moveRecords — serving a result computed via the
+//   authoritative-records path; (b) parsePGN's output depends on gameVariant
+//   (Chess960 castling in executeMove) and itself (re)sets gameVariant from
+//   the [Variant] header, so the stored key is captured AFTER the parse to
+//   fold in the post-parse variant.
 let _parsedCacheKey=null;
 let _parsedCacheResult=null;
 function _getParsed(){
   const pgn=_payload?_payload.pgn:null;
-  if(_parsedCacheKey===pgn&&_parsedCacheResult)return _parsedCacheResult;
+  const _mrLen=(_payload&&_payload.moveRecords&&Array.isArray(_payload.moveRecords))?_payload.moveRecords.length:0;
+  const _key=pgn+'|'+_mrLen+'|'+(gameVariant||'');
+  if(_parsedCacheKey===_key&&_parsedCacheResult)return _parsedCacheResult;
   const parsed=parsePGN(pgn);
-  if(parsed){_parsedCacheKey=pgn;_parsedCacheResult=parsed;}
+  // Key captured post-parse: parsePGN may have (re)set gameVariant from the
+  // [Variant] header, so the stored key must reflect the state the result was
+  // actually computed under (F3).
+  if(parsed){_parsedCacheKey=pgn+'|'+_mrLen+'|'+(gameVariant||'');_parsedCacheResult=parsed;}
   return parsed;
 }
 
@@ -474,6 +488,10 @@ const _i18n={
   'pgn_parse_error':{zh:'PGN 解析失败',en:'PGN parse error'},
   // v1.2.3 round-48 (BUG-14): notice when a multi-game PGN is truncated to its first game
   'multi_game_notice':{zh:'检测到多局 PGN：仅解析并统计第一局',en:'Multi-game PGN detected: only the first game was parsed'},
+  // v1.2.3 round-49 (F8): notice when the payload's visualAnnotations were dropped (900KB cap)
+  'annotations_truncated':{zh:'对局数据过大：部分视觉注解已省略',en:'Game data too large: some visual annotations were omitted'},
+  // v1.2.3 round-49 (F9): notice when a paste/import runs without a game payload (standalone mode)
+  'payload_missing_notice':{zh:'未检测到当前对局数据——已作为独立 PGN 导入',en:'No current game data — imported as a standalone PGN'},
   // v1.2.3 round-48 (ROB-3): user-visible notice when the heatmap computation fails (was silently omitted)
   'heatmap_failed':{zh:'热力图计算失败（已跳过）',en:'Heatmap computation failed (skipped)'},
   // v1.0.4 Rev27: Board display section heading (DeepSeek review feature)
@@ -677,15 +695,29 @@ function parsePGN(pgnText){
   // Normalize
   let text=pgnText.replace(/\r\n/g,'\n').replace(/\r/g,'\n');
   // v1.2.3 round-48 (BUG-14): Multi-game PGN — keep only the FIRST game,
-  //   mirroring the main page's worker-pool.js:108-110
-  //   (text.split(/\n\s*\n(?=\[)/) → take gameBlocks[0]). Previously the whole
+  //   mirroring the main page's worker-pool.js _syncParsePGNText
+  //   (text.split(...) → take gameBlocks[0]). Previously the whole
   //   file was parsed as one game: later games' headers silently overwrote
   //   earlier ones, and the second game's movetext either cascade-failed
   //   (silently dropped by the `if(result)` no-else path) or was mis-merged
   //   into the first game when its moves happened to be legal in the first
   //   game's end position. `_multiGame` is surfaced on the result so render()
   //   can show a user-visible truncation notice.
-  const _gameBlocks=text.split(/\n\s*\n(?=\[)/);
+  // v1.2.3 round-49 (F2/P2-2): fix the polynomial-backtracking DoS. The old
+  //   /\n\s*\n(?=\[)/ is O(k²) on long blank-line runs NOT followed by '['
+  //   (measured: 16k newlines → 440ms; this parse runs on the MAIN thread in
+  //   the paste/import path → ANR; ~900KB run → ~20min). The round-47 form
+  //   /\n[^\S\n]*\n(?:[^\S\n]*\n)*(?=\[)/ only silenced the S8786 lint — on the
+  //   failure path its (?:...)* group still re-walks the whole run per start
+  //   position (measured: 16k → 587ms, same O(k²)). The added lookbehind
+  //   (?<!\n) restricts match starts to the FIRST '\n' of each blank-line run
+  //   (positions inside a run fail in O(1)) → linear total; measured 16k →
+  //   1.1ms, 900k → 63ms. Split results are byte-identical to the old regex
+  //   (300k-case fuzz, 0 mismatches): any match starting mid-run implies an
+  //   equivalent match at the run's first '\n', which split() finds first.
+  //   Lookbehind needs Chrome 62+ — inside the WebView≥84 floor. Keep in sync
+  //   with worker-pool.js (_WORKER_SRC + _syncParsePGNText copies).
+  const _gameBlocks=text.split(/(?<!\n)\n[^\S\n]*\n(?:[^\S\n]*\n)*(?=\[)/);
   const _multiGame=_gameBlocks.length>1;
   if(_multiGame)text=_gameBlocks[0];
   // Extract headers
@@ -697,6 +729,14 @@ function parsePGN(pgnText){
   }
   // Extract FEN if present
   let startFEN=headers.FEN||null;
+  // v1.2.3 round-49 (F3): reset gameVariant at the start of every parse. The
+  //   [Variant] header below only ever SET gameVariant (never cleared it), so
+  //   a Chess960 paste/import leaked into the next standard-rules import, and
+  //   executeMove's _minDist=1 then misread a 1-square king move (with a stale
+  //   castling right in a malformed FEN) as Chess960 castling — corrupting the
+  //   replayed board. Reset to the payload-declared variant first, then let
+  //   the PGN header override.
+  gameVariant=(_payload&&_payload.gameVariant)?_payload.gameVariant:null;
   // v1.1.0 Phase 54 rev22: Detect Chess960 variant from [Variant] header
   if(headers.Variant){
     const v=headers.Variant.toLowerCase().replace(/\s+/g,'');
@@ -1037,7 +1077,7 @@ function applySANMove(state,san){
   // Disambiguation
   let disambFile=-1,disambRank=-1;
   let rest=cleanSAN.slice(idx,-2);
-  if(rest.includes('x'))rest=rest.replaceAll('x',''); // v1.2.3 (S7781): replaceAll — SAN 至多一个 x，语义等价
+  if(rest.includes('x'))rest=rest.replace(/x/g,''); // v1.2.3 round-49: replaceAll→replace — replaceAll 需 Chrome 85，突破 WebView≥84 门禁下限；S7781 有意保留（建议 Accept）
   for(const ch of rest){
     if(ch>='a'&&ch<='h')disambFile=ch.charCodeAt(0)-97;
     else if(ch>='1'&&ch<='8')disambRank=8-Number.parseInt(ch);
@@ -1689,7 +1729,7 @@ function extractMoveTimes(pgnText){
   //   constructing an O(n) substring per token (O(n²) total on long PGNs).
   const sanRe=/([KQRBN][a-h]?[1-8]?x?[a-h][1-8][+#]?=?[QRBN]?|O-O(?:-O)?|0-0(?:-0)?|[a-h]x?[a-h][1-8](?:=[QRBN])?[+#]?|[a-h][1-8][+#]?)/y;
   const moveNumRe=/(\d+\.+)/y;
-  const resultRe=/(1-0|0-1|1\/2-1\/2|\*)\b/y;
+  const resultRe=/(1-0|0-1|1\/2-1\/2|\*)/y; // v1.2.3 round-49 (F4): dropped the trailing \b (same fix as renderPGNText's _resTestSticky) — a bare `*` could never match at a whitespace/EOS boundary; behavior here was equivalent either way (the `i++` skip consumed it), this just removes the dead test/capture asymmetry.
   // Track each player's PREVIOUS remaining clock, for increment-based used-time
   // calculation. Initialized to baseTime when the first [%clk] is seen.
   // (We lazy-init so that PGNs without [TimeControl] don't fabricate times.)
@@ -2730,6 +2770,19 @@ function renderStats(parsed,evalData){
         _tagSticky.lastIndex=i;
         const tagM=_tagSticky.exec(pgnText);
         if(tagM){
+          // v1.2.3 round-49 (F5): find the closing ']' honoring quoted tag
+          //   values — a ']' inside "..." (e.g. [Event "a]b"]) does NOT close
+          //   the tag. Previously indexOf(']',i) closed early and the residue
+          //   (b"]) fell into the token branch below, where its letters were
+          //   mis-counted as a mainline move (annotation cut-off one ply early).
+          let j=i+1,inQ=false;
+          while(j<len){const cj=pgnText[j];if(cj==='"'){inQ=!inQ;}else if(cj===']'&&!inQ){break;}j++;}
+          if(j<len){i=j+1;continue;}
+        }else{
+          // v1.2.3 round-49 (F5): malformed '[' that is not a "[Tag<space>"
+          //   pair (bare [%csl ...]/[%eval ...] outside a comment, "[Tag]"
+          //   with no space) — skip to the closing ']' instead of letting the
+          //   construct fall into the token branch (same off-by-one miscount).
           const close=pgnText.indexOf(']',i);
           if(close>=0){i=close+1;continue;}
         }
@@ -3175,6 +3228,19 @@ function fallbackCopy(text,cb){
   }catch(e){cb(false);}
 }
 
+// v1.2.3 round-49 (F9): transient bottom banner for one-shot user notices —
+//   same visual mechanism as the FEN-copy toast in copyFENToClipboard, but
+//   amber (neutral notice, not success/failure).
+function _showStatsToast(text){
+  try{
+    const banner=document.createElement('div');
+    banner.style.cssText='position:fixed;bottom:60px;left:50%;transform:translateX(-50%);background:rgba(212,160,23,.95);color:#1a0a0a;padding:8px 16px;border-radius:6px;font-size:.8rem;z-index:10001;box-shadow:0 2px 8px rgba(0,0,0,.4)';
+    banner.textContent=text;
+    document.body.appendChild(banner);
+    setTimeout(()=>{banner.remove();},2500);
+  }catch(e){/* best-effort notice */}
+}
+
 // v1.0.4 Rev27 (DeepSeek review): Render a small chess board showing the
 // position after the currently-selected move (or initial position if nothing
 // is selected). The board uses the SAME color scheme as the main chess.html
@@ -3453,7 +3519,7 @@ function renderPGNText(parsed,evalData,comments){
   //   identical matches without an O(n) substring per token. (The variation
   //   inner loop operates on the already-extracted short variationText and is
   //   intentionally left as-is — minimal diff.)
-  const _resTestSticky=/(1-0|0-1|1\/2-1\/2|\*)\b/y;
+  const _resTestSticky=/(1-0|0-1|1\/2-1\/2|\*)/y; // v1.2.3 round-49 (F4): dropped the trailing \b — `*` is a non-word char, so at a whitespace/EOS boundary there is no word boundary and a bare `*` (in-progress game) NEVER matched, losing its result-marker highlight. Tokens here are whitespace-delimited, so \b had no protective value; this also re-aligns the test regex with _resCapSticky below (no \b).
   const _resCapSticky=/(1-0|0-1|1\/2-1\/2|\*)/y;
   const _moveNumSticky=/(\d+\.+)/y;
   const _sanSticky=/([KQRBN][a-h]?[1-8]?x?[a-h][1-8][+#]?=?[QRBN]?|O-O(?:-O)?|0-0(?:-0)?|[a-h]x?[a-h][1-8](?:=[QRBN])?[+#]?|[a-h][1-8](?:=[QRBN])?[+#]?)/y;
@@ -3706,6 +3772,14 @@ function render(){
   //   multiple games and only the first one was parsed (see parsePGN).
   if(parsed.multiGame){
     h+='<div style="background:rgba(212,160,23,.12);border:1px solid rgba(212,160,23,.4);border-radius:6px;padding:8px 12px;margin-bottom:14px;font-size:.82rem;color:var(--accent)">'+_escFEN(T('multi_game_notice'))+'</div>';
+  }
+  // v1.2.3 round-49 (F8): consume the ai-bridge.js ROB-2 marker. When the
+  //   stats payload exceeded ~900KB, the visualAnnotations field was dropped
+  //   to fit the Binder transaction cap and visualAnnotationsTruncated:true
+  //   was set — previously nothing read it, so auto-generated annotations
+  //   silently vanished from the visual-annotations section.
+  if(_payload.visualAnnotationsTruncated){
+    h+='<div style="background:rgba(212,160,23,.12);border:1px solid rgba(212,160,23,.4);border-radius:6px;padding:8px 12px;margin-bottom:14px;font-size:.82rem;color:var(--accent)">'+_escFEN(T('annotations_truncated'))+'</div>';
   }
   // v1.0.3: Selection banner — shows what move is currently selected (mainline
   // or variation) so the user understands the stats below correspond to that
@@ -4144,7 +4218,7 @@ function _exportFullHTML(){
   // v1.2.3 round-29 (PR52 S7780+S7781): use String.raw for the \u003c literal
   //   (avoids the escaped-backslash eye-noise) and replaceAll('<', ...) for
   //   the global string replace (avoids the global-regex form).
-  const _enc = (s) => JSON.stringify(s).replaceAll('<', String.raw`\u003c`);
+  const _enc = (s) => JSON.stringify(s).replace(/</g, String.raw`\u003c`); // round-49: Chrome 85 以下无 replaceAll（WebView 门禁=84）
   scriptJS='var _payload={pgn:'+_enc(pgnText)+',lang:'+_enc(lang)+'};\n'+
     'var _lang='+_enc(lang)+';\n'+
     scriptJS;
@@ -4207,6 +4281,11 @@ function _statsPastePGN(){
   // the paste if the bridge method was absent (which it now is — see the
   // statsSelectPGNFile cleanup).
   if(text){
+    // v1.2.3 round-49 (F9): if getStatsPayload() returned empty/invalid,
+    //   _payload is still null and `_payload.pgn=text` would throw an
+    //   uncaught TypeError inside the onclick handler — the button looked
+    //   dead. Create a stub payload (standalone-PGN mode) and tell the user.
+    if(!_payload){_payload={pgn:null,moveRecords:null,evals:null};_showStatsToast(T('payload_missing_notice'));}
     _payload.pgn=text;
     // v1.0.3 FIX: Clear moveRecords + evals from the PREVIOUS game when a new
     // PGN is pasted. Without this, parsePGN() would detect _payload.moveRecords
@@ -4254,6 +4333,10 @@ function onStatsPGNFileRead(content){
     // Empty content = picker cancelled or read failed — no state change.
     return;
   }
+  // v1.2.3 round-49 (F9): same null-payload guard as _statsPastePGN —
+  //   `_payload.pgn=content` would throw an uncaught TypeError when
+  //   getStatsPayload() had returned empty/invalid (silent "dead button").
+  if(!_payload){_payload={pgn:null,moveRecords:null,evals:null};_showStatsToast(T('payload_missing_notice'));}
   _payload.pgn=content;
   // v1.0.3 FIX: Clear moveRecords + evals from the PREVIOUS game when a new
   // PGN is imported via file picker. Same root cause as _statsPastePGN —

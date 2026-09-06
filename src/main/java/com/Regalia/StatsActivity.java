@@ -547,6 +547,36 @@ public class StatsActivity extends Activity {
 
         webView.setWebChromeClient(new WebChromeClient());
 
+        // v1.2.3 round-49 (ROB-1): same WebView version gate as MainActivity
+        //   (stats.html shares the bundled JS parse floor — optional chaining
+        //   needs Chromium 80+; see MainActivity.MIN_SUPPORTED_CHROME_MAJOR).
+        //   This activity has no showFallbackUI equivalent, so the minimal
+        //   fallback is a bilingual Toast + finish() (the user lands back on
+        //   MainActivity, whose own gate shows the full fallback UI).
+        //   Helpers live in MainActivity (package-private static, single
+        //   source of truth — no public API added).
+        int chromeMajor;
+        try {
+            chromeMajor = MainActivity.extractChromeMajorFromUA(webView.getSettings().getUserAgentString());
+        } catch (Throwable e) {
+            // UA unreadable — conservative: treat as too old, but log for diagnosis.
+            Log.w(TAG, "WebView UA read failed — treating as too old", e);
+            chromeMajor = -1;
+        }
+        if (chromeMajor < 0) {
+            Log.w(TAG, "WebView UA missing/unparseable — treating as too old (conservative)");
+        }
+        if (chromeMajor < MainActivity.MIN_SUPPORTED_CHROME_MAJOR) {
+            Log.w(TAG, "Stats WebView too old: Chrome major=" + chromeMajor
+                    + " < " + MainActivity.MIN_SUPPORTED_CHROME_MAJOR + " — Toast + finish");
+            try {
+                android.widget.Toast.makeText(this, MainActivity.webViewTooOldMessage(),
+                        android.widget.Toast.LENGTH_LONG).show();
+            } catch (Throwable ignored) {}
+            finish();
+            return;
+        }
+
         // Load the stats.html asset
         webView.loadUrl("file:///android_asset/stats.html");
 
@@ -728,16 +758,33 @@ public class StatsActivity extends Activity {
                 }
                 try (InputStream is = rawIs;
                      BufferedReader reader = new BufferedReader(new InputStreamReader(is, "UTF-8"))) {
-                    String line;
-                    int lineCount = 0;
                     final int MAX_LINES = 5000; // Match StockfishNative's limit
+                    // v1.2.3 round-49 (review-4 P2-1): 8KB 分块读 + 字符硬上限，
+                    //   取代 readLine()（镜像 SafPickerHelper.readTextFromUri/
+                    //   readPgnFromUri 的 round-46 CR#15 写法）。readLine() 会
+                    //   在行数检查执行前把整行物化进内存 —— 单个无换行的超大
+                    //   文件会在主线程（onActivityResult）直接 OOM。
+                    final int MAX_CHARS = 10_000_000;
+                    int lineCount = 0;
                     // v1.0.8 PHASE 32 ROBUSTNESS: track truncation and append a
                     //   warning comment (matching StockfishNative's behavior).
                     boolean truncated = false;
-                    while ((line = reader.readLine()) != null) {
+                    char[] chunk = new char[8192];
+                    int n;
+                    while ((n = reader.read(chunk, 0, chunk.length)) != -1) {
                         if (lineCount >= MAX_LINES) { truncated = true; break; }
-                        sb.append(line).append("\n");
-                        lineCount++;
+                        if (sb.length() + n > MAX_CHARS) {
+                            throw new IOException("PGN file too large (>" + MAX_CHARS + " chars)");
+                        }
+                        int appendLen = n;
+                        for (int i = 0; i < n; i++) {
+                            if (chunk[i] == '\n') {
+                                lineCount++;
+                                if (lineCount >= MAX_LINES) { appendLen = i + 1; break; }
+                            }
+                        }
+                        sb.append(chunk, 0, appendLen);
+                        if (appendLen < n) { truncated = true; break; }
                     }
                     if (truncated) {
                         sb.append("\n{ Warning: file truncated at ").append(MAX_LINES)

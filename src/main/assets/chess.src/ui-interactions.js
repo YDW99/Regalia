@@ -745,25 +745,21 @@ function setDifficultyLevel(level){
   render();
 }
 
-function toggleSetup(){if(isAIThinking&&!setupMode){return;}_cachedStatus=null;_cachedStatusKey='';setupMode=!setupMode;
-// v1.0.8 PHASE 24 (bug fix): clear any in-progress animation.
-_clearAnimationState();
-// v1.0.8 PHASE 22 supplement: setup-toggle sound (木质放置音)
-try{if(typeof playSound==='function')playSound('setupToggle');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
-// v1.0.2 FIX (audit): extract common reset out of both branches.
-gameOver=null;_gameOverStatusKey=null;
-if(setupMode){setupPiece='pawn';setupColor='white';selectedSquare=null;legalMvs=[];legalSet=new Set();lastMove=null;gameOverSoundPlayed=false;setupErrors=[];setupHistory=[];
-// v1.2.3 round-48 (BUG-1): pause the game clock while in setup mode — the
-//   tick early-returns on setupMode (ui-gameflow.js), so record the freeze;
-//   the matching exit branch below calls _resumeGameClock().
-if(typeof _pauseGameClock==='function')_pauseGameClock();
-// v1.0.8: Initialize castle-marker set and en-passant marker on gameState.
-// If the user is entering setup mode from a normal game (e.g., to tweak the
-// position), seed the markers from the existing castlingRights + enPassantTarget
-// so the user sees the current state instead of an empty marker set.
-// For Chess960 positions, the king may be on any column; the kingside rook is
-// the rightmost same-color rook (col > king.col), the queenside rook is the
-// leftmost (col < king.col).
+// v1.2.3 round-49 Stage-3 (BUG-13 follow-up): seed setupCastleMarks /
+//   setupEpMark on gameState from the current castlingRights / enPassantTarget.
+//   Extracted VERBATIM from toggleSetup's enter branch so the setup-modified
+//   confirm dialog's "restore" choice can re-seed the markers after rolling
+//   the board back to the pre-setup snapshot — otherwise the next Done would
+//   re-derive castlingRights/enPassantTarget from the user's MODIFIED markers
+//   (validateSetupPosition reads setupCastleMarks/setupEpMark, not
+//   castlingRights), desyncing the markers from the restored board.
+// Original docs: if the user is entering setup mode from a normal game (e.g.,
+//   to tweak the position), seed the markers from the existing
+//   castlingRights + enPassantTarget so the user sees the current state
+//   instead of an empty marker set. For Chess960 positions, the king may be
+//   on any column; the kingside rook is the rightmost same-color rook
+//   (col > king.col), the queenside rook is the leftmost (col < king.col).
+function _seedSetupMarkersFromState(){
 if(!gameState.setupCastleMarks)gameState.setupCastleMarks=new Set();
 else gameState.setupCastleMarks.clear();
 if(typeof gameState.setupEpMark==='undefined')gameState.setupEpMark=null;
@@ -840,6 +836,37 @@ if(gameState.enPassantTarget){
 }else{
   gameState.setupEpMark=null;
 }
+}
+
+function toggleSetup(){if(isAIThinking&&!setupMode){return;}_cachedStatus=null;_cachedStatusKey='';setupMode=!setupMode;
+// v1.0.8 PHASE 24 (bug fix): clear any in-progress animation.
+_clearAnimationState();
+// v1.0.8 PHASE 22 supplement: setup-toggle sound (木质放置音)
+try{if(typeof playSound==='function')playSound('setupToggle');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+// v1.0.2 FIX (audit): extract common reset out of both branches.
+gameOver=null;_gameOverStatusKey=null;
+if(setupMode){setupPiece='pawn';setupColor='white';selectedSquare=null;legalMvs=[];legalSet=new Set();lastMove=null;gameOverSoundPlayed=false;setupErrors=[];setupHistory=[];
+// v1.2.3 round-48 (BUG-1): pause the game clock while in setup mode — the
+//   tick early-returns on setupMode (ui-gameflow.js), so record the freeze;
+//   the matching exit branch below calls _resumeGameClock().
+if(typeof _pauseGameClock==='function')_pauseGameClock();
+// v1.0.8: Initialize castle-marker set and en-passant marker on gameState.
+// v1.2.3 round-49 Stage-3 (BUG-13 follow-up): the seeding logic was extracted
+//   VERBATIM to _seedSetupMarkersFromState() (shared with the setup-modified
+//   confirm dialog's "restore" choice) — this call is behavior-identical to
+//   the former inline block.
+_seedSetupMarkersFromState();
+// v1.2.3 round-49 (BUG-13): snapshot the pre-setup position + FEN as the
+//   baseline for the toggle-exit path's "board actually modified?" check and
+//   for its "restore board & continue" choice. Stored on window (NOT on
+//   gameState): the setup panel's ♻️ reset button REPLACES the gameState
+//   object (ui.js setup toolbar: gameState=initState()), which would silently
+//   drop a gameState-attached baseline. window.* matches the round-48
+//   convention (window._animRetryTimerId) — no new top-level let/const in the
+//   concatenated global scope.
+if(typeof window!=='undefined'&&typeof cloneS==='function'){
+  window._setupEntrySnap={state:cloneS(gameState),fen:(typeof generateFEN==='function')?generateFEN(gameState):null};
+}
 // Reset marker mode
 setupMarkerMode=null;
 }else{
@@ -849,9 +876,54 @@ setupMarkerMode=null;
 if(gameState.setupCastleMarks&&gameState.setupCastleMarks.size>0){
   try{validateSetupPosition(gameState);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
 }
+// v1.2.3 round-49 (BUG-13): if the game already has move history AND the
+//   position was actually modified during this setup session, silently
+//   resuming would desync moveRecords/stateHistory from the board (PGN export
+//   would have no [FEN] anchor reconciling them — the full capture flow lives
+//   in _exitSetupImpl, reachable via the dialog's "restart" choice which
+//   routes through exitSetup()). Compare only the first 4 FEN fields
+//   (board / side-to-move / castling / en-passant): _refreshStateAfterSetup
+//   never touches halfMoveClock/fullMoveNumber, so ignoring the counters
+//   avoids false positives after place-then-undo sequences.
+//   Unchanged position → fall through to the old silent "quick peek" exit.
+// v1.2.3 round-49 Stage-3 (review-2 P1 hardening):
+//   (1) the history test is moveRecords.some(r!=null) — the black-to-move
+//       null placeholder ([null], pushed by _prependBlackToMovePlaceholder)
+//       must NOT count as "history" (it previously made moveRecords.length
+//       === 1 and guaranteed a misfire after a black-first Done);
+//   (2) _exitSetupImpl and _resetGameUIState now clear window._setupEntrySnap
+//       BEFORE the destructive restart, so this gate can no longer fire from
+//       _exitSetupImpl's tail toggleSetup() call AFTER moveRecords/stateHistory
+//       were rebuilt (review-2 P1: that post-destruction firing made "restore"
+//       write the pre-setup board over the NEW game's rebuilt anchors). The
+//       UI-reachable Done path is gated earlier, inside exitSetup() itself;
+//       this branch now only covers the bare toggleSetup exit (no UI binding
+//       reaches it in setup mode — the header uses exitSetup() — but it stays
+//       as the safety net for console/evaluateJavascript invocation).
+const _entrySnap=(typeof window!=='undefined')?window._setupEntrySnap:null;
+if(_entrySnap&&_entrySnap.fen&&moveRecords&&moveRecords.some(function(r){return r!=null;})&&typeof generateFEN==='function'){
+  const _fenPosKey=function(f){return String(f).split(' ').slice(0,4).join(' ');};
+  if(_fenPosKey(generateFEN(gameState))!==_fenPosKey(_entrySnap.fen)){
+    // Stay in setup mode while the user decides (undo the flip above).
+    setupMode=true;
+    _showSetupModifiedDialog(_entrySnap);
+    render();
+    return;
+  }
+}
+window._setupEntrySnap=null;
+_finishToggleSetupExit()}render()}
+
+// v1.2.3 round-49 (BUG-13): shared tail of the toggle-exit path (clock resume
+//   + marker cleanup + cache invalidation + AI-move kickoff).
+// v1.2.3 round-49 Stage-3 (review-2 P1): the dialog's "restore" choice no
+//   longer routes here — restore now rolls back IN PLACE and stays in setup
+//   mode, so this helper is only the fall-through epilogue of the silent
+//   (unmodified-position) toggle exit above.
+function _finishToggleSetupExit(){
 // v1.2.3 round-48 (BUG-1): resume the game clock — rebase the side-to-move's
 //   lastMoveTimestamp before the next 200ms tick, otherwise the whole setup
-//   session is deducted in one lump. This branch is ALSO the exit path for
+//   session is deducted in one lump. This tail is ALSO the exit path for
 //   "Done"/exitSetup: _exitSetupImpl ends by calling toggleSetup(). (In that
 //   case _resetGameUIState has already nulled gameClocks and cleared the
 //   pause marker, so this is a harmless no-op there.)
@@ -865,9 +937,164 @@ gameState.setupCastleMarks=new Set();
 // a 'play' value that gameStatus() never returns — dead check. Simplified to
 // a direct call which internally decides whether to apply game-over.
 _applyGameOver(gameStatus(gameState));
-_sfEvalReady=false;_evalLoading=true;requestEngineEval();if(!gameOver&&gameState.currentTurn!==playerColor){doAIMove()}}render()}
+_sfEvalReady=false;_evalLoading=true;requestEngineEval();if(!gameOver&&gameState.currentTurn!==playerColor){doAIMove()}}
+
+// v1.2.3 round-49 (BUG-13): bilingual strings for the setup-modified confirm
+//   dialog. The canonical _i18n T-table lives in game-logic.js, which is OUT
+//   OF SCOPE for this fix round — so the zh/en pairs are inlined here. Lookup
+//   still goes through T() FIRST: T() returns the key itself for missing
+//   keys, which is the fallback signal. If these keys are later moved into
+//   _i18n, this helper transparently prefers the table (no call-site change).
+function _tSetupExit(key){
+  const viaT=T(key);
+  if(viaT!==key)return viaT;
+  const local={
+    setup_exit_modified_title:{zh:'♟️ 棋盘已被改动',en:'♟️ Position modified'},
+    setup_exit_modified_msg:{zh:'你在摆棋模式中修改了局面，但当前对局已有棋谱记录。直接继续对局会让棋盘与棋谱不再对应（PGN 导出将缺少 [FEN] 标记）。',en:'You modified the position in setup mode, but this game already has a move history. Resuming directly would desync the board from the recorded moves (PGN export would lack a [FEN] tag).'},
+    setup_exit_restart:{zh:'🔄 重开新局（以此局面）',en:'🔄 New game from this position'},
+    setup_exit_restore:{zh:'↩️ 还原棋盘，继续本局',en:'↩️ Restore board, continue game'}
+  };
+  const cur=(typeof _lang!=='undefined')?_lang:'zh';
+  const e=local[key];
+  return e?(e[cur]||e.zh):key;
+}
+
+// v1.2.3 round-49 (BUG-13): restore the pre-setup snapshot into the LIVE
+//   gameState object, field by field (the setup panel's ♻️ reset button may
+//   have replaced gameState entirely, so identity cannot be assumed).
+//   Mirrors cloneS()'s field set so the restored state is exactly the
+//   pre-setup game — board, turn, castling rights, en-passant, clocks,
+//   moveHistory, posCount, king caches, hash, and Chess960 identity fields.
+function _restoreSetupEntrySnap(snap){
+  if(!snap||!snap.state)return;
+  const st=snap.state;
+  gameState.board=st.board.map(r=>r.slice()); // piece objects are immutable (see cloneB)
+  gameState.currentTurn=st.currentTurn;
+  gameState.castlingRights={...st.castlingRights};
+  gameState.enPassantTarget=st.enPassantTarget?{...st.enPassantTarget}:null;
+  gameState.halfMoveClock=st.halfMoveClock;
+  gameState.fullMoveNumber=st.fullMoveNumber;
+  gameState.moveHistory=st.moveHistory?st.moveHistory.slice():[];
+  gameState.posCount=new Map(st.posCount);
+  gameState.wk=st.wk?{...st.wk}:null;
+  gameState.bk=st.bk?{...st.bk}:null;
+  gameState.hash=st.hash||0;
+  if(st.chess960)gameState.chess960=true;else delete gameState.chess960;
+  if(st.spid!=null)gameState.spid=st.spid;else delete gameState.spid;
+}
+
+// v1.2.3 round-49 (BUG-13): "position modified during setup" confirm dialog.
+//   Reuses the dynamic-overlay dialog pattern of _showPGNExportAnnotationDialog
+//   (ai-bridge.js): createElement overlay with .dov/.dlg classes, buttons
+//   dispatch through this.closest('.dov')._cb(choice), dismissal exposed via a
+//   window.* hook so handleBackPress can treat Back as Cancel.
+//   Choices: 'restart' = run the normal Done/exitSetup flow (validates →
+//   optional PGN-save prompt → _exitSetupImpl captures _setupFEN and clears
+//   moveRecords); 'restore' = roll back to the pre-setup snapshot and STAY in
+//   setup mode; null (Cancel button / backdrop / Back) = stay in setup.
+// v1.2.3 round-49 Stage-3 (review-2 P1): 'restore' semantics changed —
+//   the old version exited setup and resumed the game, which desynced
+//   board/moveRecords/PGN-anchor/undo 4 ways whenever the dialog fired after
+//   _exitSetupImpl's destructive restart. Now restore rolls the board back
+//   IN PLACE (setup mode stays active, snapshot stays armed): the restored
+//   board compares EQUAL to snap.fen, so the next Done exits silently.
+// v1.2.3 round-49 Stage-3 (review-2 P3-2): the overlay node handle is
+//   published on window._setupExitDialogOverlay so _resetGameUIState can
+//   force-remove the (body-appended, render()-surviving) overlay without
+//   routing through the dismiss callback (which is the Cancel path and would
+//   re-arm the stale snapshot).
+function _showSetupModifiedDialog(snap){
+  const overlay=document.createElement('div');
+  overlay.className='dov';
+  overlay.setAttribute('role','dialog');
+  overlay.setAttribute('aria-modal','true');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:10000;padding:10px;box-sizing:border-box';
+  overlay.onclick=function(e){if(e.target===overlay){_dismiss(null);}};
+  const dlg=document.createElement('div');
+  dlg.className='dlg';
+  dlg.style.cssText='max-width:380px;background:var(--card,#2a1a0a);border:1px solid var(--border,#4a3520);border-radius:12px;padding:20px;width:90%;color:var(--text,#f5e6c8)';
+  let html='<h2 style="color:var(--accent2,#7eb8da);margin-bottom:14px;font-size:1.05rem">'+_tSetupExit('setup_exit_modified_title')+'</h2>';
+  html+='<p style="font-size:.82rem;line-height:1.6;margin-bottom:16px">'+_tSetupExit('setup_exit_modified_msg')+'</p>';
+  html+='<div style="display:flex;flex-direction:column;gap:8px">';
+  html+='<button class="btn btn-p" style="width:100%;justify-content:center;gap:8px;padding:12px;font-size:.9rem" onclick="try{HapticManager.fire(\'BUTTON_PRESS\')}catch(_){};this.closest(\'.dov\')._cb(\'restart\')">'+_tSetupExit('setup_exit_restart')+'</button>';
+  html+='<button class="btn" style="width:100%;justify-content:center;gap:8px;padding:12px;font-size:.9rem" onclick="try{HapticManager.fire(\'BUTTON_PRESS\')}catch(_){};this.closest(\'.dov\')._cb(\'restore\')">'+_tSetupExit('setup_exit_restore')+'</button>';
+  html+='</div>';
+  html+='<div style="margin-top:10px;text-align:center"><button class="btn" style="font-size:.78rem;padding:6px 14px" onclick="try{HapticManager.fire(\'BUTTON_PRESS\')}catch(_){};this.closest(\'.dov\')._cb(null)">'+T('cancel')+'</button></div>';
+  dlg.innerHTML=html;
+  overlay.appendChild(dlg);
+  function _dismiss(choice){
+    window._setupExitDialogDismiss=null;
+    window._setupExitDialogOverlay=null;
+    overlay.remove();
+    if(choice==='restart'){
+      // Null the snapshot FIRST: this bypasses the modification gate now
+      // living in exitSetup() (and the legacy toggle-exit gate), so the
+      // user's explicit "restart" choice cannot loop back into this dialog.
+      window._setupEntrySnap=null;
+      // Same flow as the setup panel's "Done" button: validate → optional
+      // PGN-save prompt → _exitSetupImpl (captures _setupFEN, clears
+      // moveRecords, rebuilds stateHistory/reviewBaseState) → toggleSetup().
+      exitSetup();
+      // Still in setup mode = validation failed (errors now displayed) or
+      // the PGN-save prompt is pending/cancelled. Re-arm the baseline so a
+      // later exit attempt re-prompts instead of silently desyncing.
+      if(setupMode)window._setupEntrySnap=snap;
+      return;
+    }
+    if(choice==='restore'){
+      // v1.2.3 round-49 Stage-3 (review-2 P1): roll the board back to the
+      //   pre-setup snapshot and STAY in setup mode (the old "exit and resume
+      //   the game" behavior was only safe on the non-destructive toggle
+      //   path, and desynced board/moveRecords/PGN-anchor/undo whenever the
+      //   dialog fired after _exitSetupImpl's restart). Keep the snapshot
+      //   ARMED: the restored board compares EQUAL to snap.fen, so the next
+      //   Done exits silently; any further modification re-arms the dialog.
+      //   Re-seed the castle/ep markers from the restored castlingRights /
+      //   enPassantTarget — validateSetupPosition re-derives the rights from
+      //   the markers on the next Done, so un-seeded (user-modified) markers
+      //   would desync the markers from the restored board.
+      _restoreSetupEntrySnap(snap);
+      _seedSetupMarkersFromState();
+      render();
+      return;
+    }
+    // Cancel / backdrop / Back: stay in setup mode; re-arm the baseline so
+    // the next toggle-exit still detects the modification.
+    window._setupEntrySnap=snap;
+    render();
+  }
+  overlay._cb=_dismiss;
+  window._setupExitDialogDismiss=function(){_dismiss(null);};
+  window._setupExitDialogOverlay=overlay;
+  document.body.appendChild(overlay);
+  try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+}
 
 function exitSetup(){setupErrors=validateSetupPosition(gameState);if(setupErrors.length>0){render();return}
+// v1.2.3 round-49 Stage-3 (review-2 P1 ROOT FIX): the "board was modified
+//   during setup" gate must run HERE — BEFORE _exitSetupImpl's destructive
+//   restart — not in toggleSetup's exit branch (which the old A2 fix only
+//   reached from _exitSetupImpl's TAIL toggleSetup() call, i.e. after
+//   moveRecords/stateHistory/_setupFEN/reviewBaseState were already rebuilt;
+//   'restore' then desynced board/moveRecords/PGN-anchor/undo 4 ways, and
+//   'cancel' looped back into the dialog via the [null] black-to-move
+//   placeholder making moveRecords.length===1).
+//   Same trigger condition as the toggle-exit gate (which stays as the
+//   console-only safety net): a setup-entry snapshot exists AND the game has
+//   REAL history (some(r!=null) — the black-first null placeholder does not
+//   count) AND the first 4 FEN fields differ from the entry snapshot.
+//   On hit: show the confirm dialog and STAY in setup mode (setupMode was
+//   never flipped on this path). The dialog's 'restart' choice nulls the
+//   snapshot first, which bypasses this gate — no dialog loop.
+const _doneSnap=(typeof window!=='undefined')?window._setupEntrySnap:null;
+if(_doneSnap&&_doneSnap.fen&&moveRecords&&moveRecords.some(function(r){return r!=null;})&&typeof generateFEN==='function'){
+  const _fenPosKey=function(f){return String(f).split(' ').slice(0,4).join(' ');};
+  if(_fenPosKey(generateFEN(gameState))!==_fenPosKey(_doneSnap.fen)){
+    _showSetupModifiedDialog(_doneSnap);
+    render();
+    return;
+  }
+}
 _withPGNSaveCheck(_exitSetupImpl);}
 
 // v1.0.8 PHASE 29 (task 4 verification): Castle rights + en passant marker
@@ -936,6 +1163,14 @@ _withPGNSaveCheck(_exitSetupImpl);}
 //   catches any future regression that might leave these fields in an
 //   inconsistent state.
 function _exitSetupImpl(){
+// v1.2.3 round-49 Stage-3 (review-2 P1): drop the setup-entry snapshot BEFORE
+//   the destructive restart below. The modification gate has already run (in
+//   exitSetup(), pre-destruction); a lingering snapshot here could re-trigger
+//   the confirm dialog from this function's tail toggleSetup() call AFTER
+//   moveRecords/stateHistory were rebuilt. _resetGameUIState() (the very next
+//   statement) clears it too — this explicit line anchors the requirement at
+//   the point where the destruction begins.
+if(typeof window!=='undefined')window._setupEntrySnap=null;
 // v1.1.0 Phase 53: Call _resetGameUIState() to clear ALL stale UI state
 // from the previous game — same as _applyImportedFEN and importPGN.
 // Without this, the following would leak from the previous game:
@@ -1265,6 +1500,12 @@ function handleBackPress(){
   //   (matches the export annotation dialog pattern).
   if(typeof _pgnPartialEvalDialogActive!=='undefined'&&_pgnPartialEvalDialogActive){
     if(typeof _pgnPartialEvalDialogDismiss==='function')_pgnPartialEvalDialogDismiss();
+    return;
+  }
+  // v1.2.3 round-49 (BUG-13): setup-modified confirm dialog — back = Cancel
+  //   (stay in setup mode; matches the dialog's visible Cancel button).
+  if(typeof window!=='undefined'&&typeof window._setupExitDialogDismiss==='function'){
+    window._setupExitDialogDismiss();
     return;
   }
   // v1.0.8 UI: Promotion dialog takes highest priority — it blocks all other

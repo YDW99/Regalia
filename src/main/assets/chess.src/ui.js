@@ -1269,12 +1269,16 @@ function _refreshEvalTrendChart(){
  */
 // v1.2.0 Phase 76+: Extracted chart color reading from _buildEvalTrendSVG.
 // v1.2.3 round-48 (PERF-3b): cache the result — getComputedStyle ran on every
-//   call (every review render / chart refresh). Keyed on html[data-theme],
-//   which is written by both theme-switch points (ui-toolbar.js switchTheme
-//   and ai-bridge.js _applySystemTheme at startup), so the cache
-//   self-invalidates on theme change without a cross-module hook. Per
-//   _applySystemTheme's contract, OS-level scheme changes require an app
-//   restart, so the attribute fully determines the computed values.
+//   call (every review render / chart refresh). Keyed on html[data-theme].
+//   v1.2.3 round-49 Stage-3 (review-2 P3-3, comment correction): the previous
+//   comment referenced "ui-toolbar.js switchTheme" — that module/function does
+//   NOT exist in this codebase. data-theme is written exactly once at startup
+//   by ai-bridge.js _applySystemTheme, and per that function's contract an
+//   OS-level scheme change requires an app restart. The attribute therefore
+//   fully determines the computed values for the app's entire lifetime, so
+//   this cache can never go stale. (If a runtime theme switcher is ever added,
+//   it MUST update data-theme — which flips the cache key — or explicitly
+//   invalidate _getChartColors._cache.)
 //   Cache lives on the function object (no new top-level identifier).
 function _getChartColors(){
   const _theme=document.documentElement.getAttribute('data-theme')||'';
@@ -5230,6 +5234,26 @@ function _resetGameUIState(){
   if(typeof window!=='undefined'){
     window._pendingOpenStats=false;
     if(window._pendingOpenStatsTimer){clearTimeout(window._pendingOpenStatsTimer);window._pendingOpenStatsTimer=null;}
+  }
+  // v1.2.3 round-49 Stage-3 (review-2 P1 + P3-2): clear the setup-mode entry
+  //   snapshot (BUG-13 baseline) and force-remove a lingering "board modified
+  //   during setup" confirm overlay. Every game-start entry point funnels
+  //   through here (_startGameImpl / quickFreeOpening / _exitSetupImpl /
+  //   _applyImportedFEN / importPGN), so a stale snapshot can never misfire the
+  //   modification gate against the NEW game's position.
+  //   The overlay is appended to document.body (NOT inside #app), so it
+  //   survives render() rebuilds and would otherwise mask the new game behind
+  //   a z-index:10000 backdrop (review-2 P3-2). Do NOT route through
+  //   window._setupExitDialogDismiss — that callback is the dialog's Cancel
+  //   path and would re-arm the stale snapshot. Remove the node and null both
+  //   hooks directly.
+  if(typeof window!=='undefined'){
+    window._setupEntrySnap=null;
+    if(window._setupExitDialogOverlay){
+      try{window._setupExitDialogOverlay.remove();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+      window._setupExitDialogOverlay=null;
+    }
+    window._setupExitDialogDismiss=null;
   }
   // v1.0.4 REV13: Reset scroll state on new game
   // v1.0.4 Rev30: also reset the restore guard (in case a render is in flight)
