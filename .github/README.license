@@ -1,0 +1,14 @@
+License classification for this directory (.github/)
+=====================================================
+
+All files in this directory — CI workflows (workflows/*.yml), issue
+templates (ISSUE_TEMPLATE/*.yml) and pull-request templates
+(PULL_REQUEST_TEMPLATE-*.md) — are original Regalia project work,
+licensed under AGPL v3 (see the root LICENSE file for the full text).
+
+AI-GEN: AI assisted
+These files were AI-assisted and have been reviewed for AGPL v3
+compliance.
+
+(v1.2.3 round-50: created — this directory previously had no license
+record.)
