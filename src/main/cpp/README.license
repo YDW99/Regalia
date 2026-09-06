@@ -1,3 +1,34 @@
+v1.2.3 round-50 (2026.9.6): no changes to files in this directory.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - License classification: all files unchanged (engine_jni.cpp GPL v3 — DroidFish-derived; CMakeLists.txt AGPL v3 — original).
+
+v1.2.3 round-49 (2026.9.6): no changes to files in this directory.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - License classification: all files unchanged (engine_jni.cpp GPL v3 — DroidFish-derived; CMakeLists.txt AGPL v3 — original).
+
+v1.2.3 round-48 (2026.9.6): engine_jni.cpp RED-3 orphan nativeRenice implementation deleted.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - engine_jni.cpp (GPL v3 — DroidFish-derived): RED-3 — the orphaned
+    nativeRenice implementation deleted (no live caller remained); the
+    source now retains only nativeChmod.
+  - CMakeLists.txt: no changes this round.
+  - License classification: unchanged (engine_jni.cpp GPL v3 — DroidFish-derived; CMakeLists.txt AGPL v3 — original).
+
+v1.2.3 round-47 (2026.9.5): no changes to files in this directory.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - License classification: all files unchanged (engine_jni.cpp GPL v3 — DroidFish-derived; CMakeLists.txt AGPL v3 — original).
+
+v1.2.3 round-46 (2026.9.5): no changes to files in this directory.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - License classification: all files unchanged (engine_jni.cpp GPL v3 — DroidFish-derived; CMakeLists.txt AGPL v3 — original).
+
+v1.2.3 round-45 (2026.9.5): engine_jni.cpp nested-comment rewrite (PR53 R1, R3).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - engine_jni.cpp (GPL v3 — DroidFish-derived): R3 — nested comment
+    rewritten (PR53 R1 SonarCloud batch). No behavior change.
+  - CMakeLists.txt: no changes this round.
+  - License classification: unchanged (engine_jni.cpp GPL v3 — DroidFish-derived; CMakeLists.txt AGPL v3 — original).
+
 v1.2.3 round-44 (2026.9.4): engine_jni.cpp F1/F5 + CMakeLists.txt F8.
   - Version: versionCode=10203 (build.gradle F11 formula; was 123),
     versionName="1.2.3" (unchanged).

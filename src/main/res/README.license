@@ -1,3 +1,37 @@
+v1.2.3 round-50 (2026.9.6): no changes to files in this directory.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - License classification: all files unchanged.
+
+v1.2.3 round-49 (2026.9.6): no changes to files in this directory.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - License classification: all files unchanged.
+
+v1.2.3 round-48 (2026.9.6): xml/backup_rules.xml + xml/data_extraction_rules.xml deleted from git (RED-10).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - xml/backup_rules.xml + xml/data_extraction_rules.xml: DELETED from git
+    (RED-10) — the round-44 (F12) deletion had never reached the git tree
+    (zip-based sync cannot delete files; see the round-46 correction in
+    the round-44 entry below); this round makes the deletion real.
+    res/xml/ now contains only network_security_config.xml. No behavior
+    change (dead config since allowBackup="false").
+  - values/strings.xml, network_security_config.xml, mipmap-* icons: no
+    changes this round.
+  - License classification: unchanged.
+
+v1.2.3 round-47 (2026.9.5): no changes to files in this directory.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - License classification: all files unchanged.
+
+v1.2.3 round-46 (2026.9.5): no changes to files in this directory.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - Documentation only: the round-44 entry below gains the PR53 CR#18
+    correction (the F12 deletion never reached git).
+  - License classification: all files unchanged.
+
+v1.2.3 round-45 (2026.9.5): no changes to files in this directory.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - License classification: all files unchanged.
+
 v1.2.3 round-44 (2026.9.4): strings.xml app_name removed + xml/ rule files deleted + network_security_config debug-overrides.
   - Version: versionCode=10203 (build.gradle F11 formula; was 123),
     versionName="1.2.3" (unchanged).
@@ -11,7 +45,9 @@ v1.2.3 round-44 (2026.9.4): strings.xml app_name removed + xml/ rule files delet
     attributes referencing them were removed back in round-13); no behavior
     change. (v1.2.3 round-46, PR53 CR#18 correction: the deletion did not
     reach the git upload branch — the zip-based sync cannot delete files —
-    so both files remain in res/xml/ as unreferenced dead config. See the
+    so both files remained in res/xml/ as unreferenced dead config.
+    v1.2.3 round-48 (RED-10) update: both files have now been DELETED
+    from git; res/xml/ contains only network_security_config.xml. See the
     xml/ subsection below.)
   - xml/network_security_config.xml (AGPL v3): added a debug-overrides
     block (debug builds only; release trust anchors and the
@@ -345,8 +381,9 @@ Subdirectory license summary:
       v1.2.3 round-46 NOTE (PR53 CR#18): round-44 (F12) deleted
       backup_rules.xml / data_extraction_rules.xml from the BUILD tree,
       but the deletion never reached this git branch (zip-based sync
-      cannot delete files). Both files therefore still exist here as
-      UNREFERENCED dead config — the manifest does not point at them.
+      cannot delete files).
+      v1.2.3 round-48 NOTE (RED-10): both files have now been DELETED
+      from git — res/xml/ contains only network_security_config.xml.
       network_security_config.xml IS referenced (android:
       networkSecurityConfig) and fully active.
   - mipmap-hdpi/ ... mipmap-xxxhdpi/: AGPL v3 (AI-generated assets)

@@ -1,3 +1,78 @@
+v1.2.3 round-50 (2026.9.6): no module content changes.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - No chess.src module content changes this round (the chess.html header
+    license fix is build-side — the corrected AGPL v3 combined-work header
+    is now injected by build-chess.py).
+  - License classification: all files unchanged.
+
+v1.2.3 round-49 (2026.9.6): BUG-10 + FIDE 6.9 two-sided material matrix + BUG-13 structural fix + tablebase.js Chess960 import fixes + regex-DoS lookbehind.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - tablebase.js (GPL v3): P1-1 Chess960 PGN import variant-detection
+    timing — variant pre-scan + _findLegalMove prefers to.castle (960
+    imports no longer misjudged as illegal).
+  - game-logic.js (GPL v3): FIDE 6.9 timeout draw rewritten as a
+    two-sided material matrix (winnerLacksMatingMaterial).
+  - BUG-10 _rookPending cleanup; P1-2 BUG-13 setup-exit confirm-dialog
+    structural root fix — detection moved to the exitSetup() entry,
+    _seedSetupMarkersFromState seeding, three cleanup paths (fixes the
+    round-48 self-introduced defects: fires after destroy / false trigger
+    when Black moves first / restore desync); dedicated harness 68/68.
+  - worker-pool.js (GPL v3): regex-DoS linear lookbehind form
+    (?<!\n)\n[^\S\n]*\n(?:[^\S\n]*\n)*(?=\[) — 16k lines 587 ms -> 1.14 ms,
+    300k-case fuzz zero-diff; the three copies (stats.html + worker-pool.js)
+    synced.
+  - License classification: all files unchanged.
+
+v1.2.3 round-48 (2026.9.6): 13 JS fixes from the external review report.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - BUG-1 clock pause/resume (_pauseGameClock/_resumeGameClock,
+    exhaustive pairing across the review/setup entry-exit paths); BUG-3
+    NAG_MAP corrected per PGN spec §10.3.2; RED-4 dead function
+    parseStandardPGN deleted (pgn-standard.js 981 -> 680 lines); ROB-2
+    ai-bridge.js 900KB payload guard.
+  - Also recorded here: the 4 dead ui-*.js extracts (ui-audio.js,
+    ui-board.js, ui-review.js, ui-toolbar.js) — v1.2.1 round-4 only
+    removed them from the build; the file bodies were revived by a
+    zip-based sync and survived in the tree until the round-47 (RED-1)
+    git deletion (counted in round-48's 13-dead-file tally).
+  - License classification: all files unchanged.
+
+v1.2.3 round-47 (2026.9.5): SonarCloud backlog classes A+B (258 tickets, 178 fixed) + RED-1 dead-file deletion.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - All 9 JS modules touched: javascript:S2681 x72 (missing braces),
+    S1481/S1854 dead-code removals, S8786 regex rewrites (fuzz-verified).
+    r47.1: chess960.js S2681 leftover fixes (delivered with round-48).
+  - 36 in-code comments documented as intentional design; 43 items
+    recommended for SonarCloud-side Accept; class-C style debt untouched.
+  - RED-1: ui-audio.js / ui-board.js / ui-review.js / ui-toolbar.js
+    DELETED from git — v1.2.1 round-4 only removed them from the build;
+    the file bodies had been revived by a zip-based sync and survived in
+    the tree until this deletion.
+  - chess.html: rebuilt via build-chess.py after the JS changes.
+  - License classification: all files unchanged.
+
+v1.2.3 round-46 (2026.9.5): PR53 CodeRabbit wrap-up (18 valid items fixed).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - game-logic.js (GPL v3): rookFrom dereference TypeError x2 when rm is
+    null; engineGo empty catch gains logging + toast; new i18n key
+    settings_permission_pending (zh + en) for the permission_pending
+    sentinel recognized on the JS side.
+  - state-store.js (AGPL v3): Object.hasOwn -> hasOwnProperty.call
+    (older WebViews lack the Chrome 93+ API).
+  - worker-pool.js (GPL v3): when the pool is empty and Worker creation
+    fails, the whole queue falls back to synchronous execution (the old
+    logic permanently disabled the pool after 3 consecutive failures).
+  - chess.html: rebuilt via build-chess.py (23,645 lines).
+  - License classification: all files unchanged.
+
+v1.2.3 round-45 (2026.9.5): PR53 R1 SonarCloud fixes (R2/R5 + game-logic.js).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - state-store.js (AGPL v3): R2 fix.
+  - tablebase.js (GPL v3): R5 gameSPID fix.
+  - game-logic.js (GPL v3): fixes (PR53 R1 batch).
+  - chess.html: rebuilt via build-chess.py after the JS changes.
+  - License classification: all files unchanged.
+
 v1.2.3 round-44 (2026.9.4): JS score-polarity fixes + Toast duration x1.5 + batch-analysis anti-interruption hardening.
   - Version: versionCode=10203 (build.gradle F11 formula; was 123),
     versionName="1.2.3" (unchanged).

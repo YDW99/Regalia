@@ -1,7 +1,38 @@
 Regalia - Native Library License Notice
 ========================================
-This directory contains shared libraries (.so) required by Regalia.
-Each library retains its original license as described below.
+
+CURRENT STATUS (v1.2.3 round-50 rewrite)
+----------------------------------------
+This directory previously shipped three prebuilt shared libraries
+(.so files). They were DELETED from the git tree in v1.2.3 round-48
+(SEC-2): the root-level lib/ directory is NOT the Gradle packaging
+path, so nothing in the build ever read these copies.
+
+The real build-time location of the native libraries is:
+
+    src/main/jniLibs/arm64-v8a/
+
+That directory is populated at build time (Stockfish engine binary
+download + NDK build of the JNI bridge) and is NOT committed to the
+source tree (see BUILDING.md for the exact steps and SHA-256 checks).
+
+License texts and attribution for the native components live at the
+repository root:
+  - LICENSE-GPL v3      — libstockfish.so and libengine_bridge.so
+  - LICENSE-Apache v2.0 — libc++_shared.so (Apache v2.0 with LLVM
+                          Exception; see also https://llvm.org/LICENSE.txt)
+  - NOTICE              — overall attribution and per-file classification
+  - AUTHORS-stockfish   — Stockfish project authors list
+
+========================================================================
+HISTORICAL RECORD — the file bodies are NOT in the git tree
+========================================================================
+The sections below are retained as a historical record of the license
+classification of the three .so files as they existed here before the
+round-48 (SEC-2) deletion. The classifications still describe the
+corresponding build artifacts packaged inside the APK, but the prebuilt
+files themselves are no longer present in this directory or anywhere
+else in the git tree.
 
 ========================================================================
 1. libc++_shared.so
@@ -46,12 +77,13 @@ Copyright: (C) 2026 Regalia
            DroidFish-derived parts: (C) 2011-2014 Peter Österlund
 Source   : src/main/cpp/engine_jni.cpp
 
-This library provides the JNI bridge for loading and communicating with
-the UCI chess engine (libstockfish.so) via dlopen()/dlsym() and pipe-based
-I/O. It also includes native chmod and renice functionality derived from
-DroidFish (nativeutil.cpp by Peter Österlund).
+This library is the JNI bridge between the Java layer and the UCI chess
+engine. Its native code is derived from DroidFish (nativeutil.cpp by
+Peter Österlund). As of v1.2.3 round-48 the source retains only the
+nativeChmod implementation (the nativeRenice orphan implementation was
+deleted in round-48, RED-3).
 
-Full license text: LICENSE-GPL v3 (included in the lib folder)
+Full license text: LICENSE-GPL v3 (at the repository root)
 
 --- GPL v3 notice ---
 
@@ -87,8 +119,8 @@ Stockfish is a free, open-source UCI chess engine. This build is
 Stockfish 18 compiled for the arm64-v8a architecture with dotprod
 extensions enabled.
 
-Full license text: LICENSE-GPL v3 (included in the lib folder)
-Full authors list : AUTHORS-stockfish (included in the lib folder)
+Full license text: LICENSE-GPL v3 (at the repository root)
+Full authors list : AUTHORS-stockfish (at the repository root)
 
 --- GPL v3 notice ---
 
@@ -106,7 +138,7 @@ You should have received a copy of the GNU General Public License
 along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 ========================================================================
-License Summary
+License Summary (APK build artifacts; file bodies not in the git tree)
 ========================================================================
 
   File                    | License
@@ -121,9 +153,11 @@ The combined work (Regalia) is distributed under dual licensing:
 
 Per GPL v3 Section 13, these licenses are compatible for combination.
 
-For the full license texts and detailed attribution, see:
+For the full license texts and detailed attribution, see the
+repository-root files:
   - LICENSE-AGPL v3
   - LICENSE-GPL v3
+  - LICENSE-Apache v2.0
   - NOTICE
   - NOTICE-DroidFish
   - AUTHORS-stockfish

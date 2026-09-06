@@ -1,17 +1,63 @@
+## Round-45~49 changes (2026-09-06)
+
+**No new permissions, no new network endpoints, no new data collection.**
+Privacy-relevant items from these review-fix rounds:
+
+- **`usesCleartextTraffic="false"` re-added to the manifest** (round-45,
+  PR53 R1, xml:S5332): the round-44 F15 removal rationale was invalid on
+  API 23 — `networkSecurityConfig` only applies on API 24+, so on minSdk 23
+  devices cleartext would have fallen back to the platform default
+  (allowed). Dual-layer enforcement restored: the manifest attribute covers
+  API 23, `cleartextTrafficPermitted="false"` covers API 24+. This
+  **supersedes** the round-44 F15 bullet below.
+- **Backup rule files actually deleted from git** (round-48, RED-10):
+  `res/xml/backup_rules.xml` and `res/xml/data_extraction_rules.xml`. The
+  round-44 deletion had not reached the git branch (discovered round-46);
+  both files existed only as unreferenced dead config until now. They are
+  now gone; `res/xml/` contains only `network_security_config.xml`.
+- **CSP tightened** (round-48, SEC-4): `img-src` residual `file:` removed
+  from `index.html.tpl` — chess.html CSP is now `img-src data: blob:`.
+- **Engine path logging downgraded** (round-48, SEC-6): 4 full-path
+  `Log.i/w` calls in `StockfishNative.java` (which leaked the app-private
+  directory structure into logcat) downgraded to `Log.d` and stripped from
+  release builds via R8 `assumenosideeffects`.
+- **SAF import hardening** (round-49): 8 KB chunked reads + 10 MB
+  `PGN_MAX_CHARS` cap in `SafPickerHelper`/`StatsActivity`; new in-memory
+  `onImportCancelled` JS hook (no storage, no network).
+- **WebView minimum-version gate** (round-49, ROB-1): both WebView pages
+  now require Chrome/Android System WebView ≥ 84 (UA check,
+  `MIN_SUPPORTED_CHROME_MAJOR=84` in MainActivity, reused by
+  StatsActivity). Below the threshold the app shows a bilingual fallback
+  message instead of running. Compatibility gate only — no data flow.
+- **New `@JavascriptInterface` methods** (round-49): `ackMainBackHandled`
+  (250 ms BACK-press acknowledgement) and an 8th `fen` echo parameter on
+  the eval callback (T1 cross-talk fix). In-process bridge traffic only;
+  no new data exposure.
+- The rest of rounds 45~49 (FIDE 6.9 two-sided timeout-draw matrix, 960
+  PGN import fix, regex DoS linearization, back-invoked callback,
+  dead-file deletions) is privacy-neutral.
+
+The permission table below remains accurate (8 declared permissions,
+re-verified against `AndroidManifest.xml`).
+
 ## Round-44 changes (2026-09-04)
 
 **No new permissions, no new network endpoints, no new data collection.**
 Privacy-relevant items from this review-fix round:
 
-- **Backup rule files deleted**: `res/xml/backup_rules.xml` and
-  `res/xml/data_extraction_rules.xml` were removed. They have been
-  unreferenced since `allowBackup="false"` (the documented v1.0.4 design
-  decision) — the app still does not participate in Android backup/restore;
-  deleting the dead files changes nothing about data flows.
-- **`usesCleartextTraffic` removed from the manifest** (F15): redundant —
-  `network_security_config.xml` already blocks cleartext traffic entirely
-  (`cleartextTrafficPermitted="false"`), and the manifest attribute is
-  ignored when a networkSecurityConfig is set. No behavior change.
+- **Backup rule files deleted** (attribution corrected): the round-44
+  deletion of `res/xml/backup_rules.xml` and `res/xml/data_extraction_rules.xml`
+  did not reach the git branch (discovered round-46); the files were
+  actually removed in round-48 (RED-10). They had been unreferenced since
+  `allowBackup="false"` (the documented v1.0.4 design decision) — the app
+  still does not participate in Android backup/restore; deleting the dead
+  files changes nothing about data flows.
+- **`usesCleartextTraffic` removed from the manifest (F15) — SUPERSEDED by
+  round-45**: the attribute was re-added in round-45 (PR53 R1, xml:S5332).
+  The "redundant" rationale was invalid on API 23, where
+  `networkSecurityConfig` does not apply. Current state:
+  `usesCleartextTraffic="false"` (API 23) + `cleartextTrafficPermitted="false"`
+  (API 24+) — dual-layer, cleartext blocked everywhere.
 - **`network_security_config.xml` gained a `debug-overrides` block**
   (debug builds only; release trust anchors unchanged).
 - **Engine binary minimum-size check lowered 50 MB → 5 MB**
@@ -387,14 +433,21 @@ Regalia is a fully offline chess application. This policy applies to the Regalia
 
 Regalia's core features work entirely offline. The only network-dependent features are:
 
-- **Syzygy Endgame Tablebase**: Queries the public Lichess Tablebase API (`tablebase.lichess.ovh`) for positions with 7 or fewer pieces. This is optional and automatically disabled when offline. No personal data is sent in these queries — only chess position data (FEN strings). All network traffic is forced over TLS 1.2+ via `TlsSecurityHelper.java` and `network_security_config.xml` (cleartext traffic is blocked entirely).
+- **Syzygy Endgame Tablebase**: Queries the public Lichess Tablebase API (`tablebase.lichess.ovh`) for positions with 7 or fewer pieces. This is optional and automatically disabled when offline. No personal data is sent in these queries — only chess position data (FEN
+  strings). All network traffic is forced over HTTPS by
+  `network_security_config.xml` (cleartext traffic blocked entirely;
+  `usesCleartextTraffic="false"` covers API 23), and the tablebase domain
+  is additionally pinned to the Let's Encrypt E7/ISRG X1/X2 SPKI hashes
+  (expiration 2028-12-31). (`TlsSecurityHelper.java` is an advisory
+  reference class — its pins mirror the config for static-analysis
+  documentation; it performs no runtime enforcement.)
 - **External hyperlinks (v1.0.4 Rev27+)**: When the user taps a hyperlink in the About dialog (e.g. the GitHub source code link, AGPL v3 / GPL v3 license links) or anywhere else in the app, the URL is handed to the system default browser via `Intent.ACTION_VIEW`. Regalia itself does not make any HTTP request — the browser app handles the URL fetch. Only http(s) URLs are allowed; other schemes are silently rejected. No Regalia data is sent to the browser; the URL itself is the only datum transmitted.
 
 All other features, including AI gameplay, review analysis, PGN import/export, and engine configuration, work without any network connection.
 
-**Content Security Policy (verified round-43):** both WebView pages enforce a
+**Content Security Policy (verified round-48):** both WebView pages enforce a
 CSP meta policy. The main page (`chess.html`) uses `default-src 'none'` with
-`connect-src https://tablebase.lichess.ovh` — the tablebase API is the only
+`connect-src https://tablebase.lichess.ovh` with img-src data: blob: — the tablebase API is the only
 permitted network origin — plus `object-src 'none'`, `form-action 'none'` and
 `base-uri 'self'`. The statistics page (`stats.html`) uses
 `connect-src 'none'` — it cannot make any network request at all.
@@ -641,7 +694,11 @@ Version: `versionCode=121`, `versionName="1.2.1"`.
 
 v1.0.8 introduces personified haptic feedback — each of the six piece types (pawn, knight, bishop, rook, queen, king) plus castling and promotion has a dedicated vibration pattern. Haptics are:
 
-- Triggered locally via `Vibrator`/`VibrationEffect` (API 26+) or PWLE (API 35+)
+- Triggered locally via `VibrationEffect.createPredefined` (API 31+) or
+  `VibrationEffect.createWaveform` (API 26+, amplitude envelopes), with a
+  deprecated-API one-shot fallback on older devices. (The experimental
+  PWLE reflection path was removed in round-23; no Composition/PWLE API
+  is used.)
 - Controlled by the user's system haptic-feedback preference (`Settings → Sound & vibration → Haptic feedback`)
 - Throttled per-event-type to avoid vibration fatigue
 - Never recorded or transmitted — the vibration is the only output
@@ -683,7 +740,7 @@ The round-13 refinement re-enabled CMake (resolving the round-12 build workaroun
 - **`build.gradle` empty-keystore-path guard (P2)**: Added `!releaseKeystorePath.isEmpty()` check. No privacy impact — better error message for fresh checkouts.
 - **`gradle.properties` dead property removal (P2)**: Removed `android.enablePngCrunchInReleaseBuildsLibs=false` (not a recognized AGP property). No privacy impact — config cleanup.
 - **`build-chess.py` dead CSP hash block removal (P2)**: Removed the stats.html CSP sha256 hash auto-update block (stats.html now uses `'unsafe-inline'`). No privacy impact — dead code removal.
-- **`AndroidManifest.xml` allowBackup resolution (P2)**: Removed `android:fullBackupContent` and `android:dataExtractionRules` attributes (dead config when `allowBackup="false"`). The two XML rule files are retained in `res/xml/` for reference. No privacy impact — `allowBackup="false"` (the documented v1.0.4 design decision) is unchanged; the app still does not participate in Android backup/restore. Removing the dead references just makes the manifest accurately reflect the actual behavior.
+- **`AndroidManifest.xml` allowBackup resolution (P2)**: Removed `android:fullBackupContent` and `android:dataExtractionRules` attributes (dead config when `allowBackup="false"`). The two XML rule files are retained in `res/xml/` for reference. (Historical note: they were later deleted in round-48, RED-10 — see the round-44/round-45~49 sections above.) No privacy impact — `allowBackup="false"` (the documented v1.0.4 design decision) is unchanged; the app still does not participate in Android backup/restore. Removing the dead references just makes the manifest accurately reflect the actual behavior.
 - **P3 cleanup (stale comments, dead code)**: 11 minor fixes across `MainActivity.java`, `EngineService.java`, `TlsSecurityHelper.java`, `network_security_config.xml`, `ai-bridge.js`, `FileIoHelper.java`, `StockfishNative.java`, `EngineConfigHelper.java`, `tablebase.js`, `pgn-standard.js`. All are documentation-only or dead-code removal. No privacy impact.
 
 Version: `versionCode=123`, `versionName="1.2.3"` (unchanged — bug-fix round, no version bump).

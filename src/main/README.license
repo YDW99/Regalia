@@ -1,3 +1,31 @@
+v1.2.3 round-50 (2026.9.6): no changes to files directly in this directory.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - License classification: all files unchanged.
+
+v1.2.3 round-49 (2026.9.6): no changes to files directly in this directory.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - License classification: all files unchanged.
+
+v1.2.3 round-48 (2026.9.6): no changes to files directly in this directory.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - License classification: all files unchanged.
+
+v1.2.3 round-47 (2026.9.5): no changes to files directly in this directory.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - License classification: all files unchanged.
+
+v1.2.3 round-46 (2026.9.5): no changes to files directly in this directory.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - License classification: all files unchanged.
+
+v1.2.3 round-45 (2026.9.5): AndroidManifest.xml usesCleartextTraffic rollback (PR53 R1, xml:S5332).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - AndroidManifest.xml (AGPL v3): usesCleartextTraffic="false" RE-ADDED —
+    the round-44 F15 removal rationale does not hold on API 23
+    (networkSecurityConfig only takes effect on API 24+), so the attribute
+    is restored as belt-and-braces alongside network_security_config.xml.
+  - License classification: unchanged.
+
 v1.2.3 round-44 (2026.9.4): AndroidManifest F12/F13/F15 + chess.html rebuild + stats.html mate clamp.
   - Version: versionCode=10203 (build.gradle F11 formula; was 123),
     versionName="1.2.3" (unchanged).

@@ -1,3 +1,60 @@
+v1.2.3 round-50 (2026.9.6): chess.html header license mislabel fixed (GPL -> AGPL v3 combined work).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - chess.html (AGPL v3, combined work): the top-of-file license header
+    wrongly said GPL; corrected to AGPL v3 (combined work — per round-42
+    42-5, D2=A) and the corrected header is now pinned by injecting it
+    from build-chess.py so future rebuilds cannot regress it.
+  - stats.html, AGPLv3_Logo.svg, GPLv3_Logo.svg: no changes this round.
+  - License classification: all files unchanged (the header text now
+    matches the long-standing classification).
+
+v1.2.3 round-49 (2026.9.6): stats.html replaceAll -> replace x2 + chess.html rebuilt (24,042 lines).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - stats.html (GPL v3): String.replaceAll -> replace(/x/g) at 2 sites —
+    replaceAll is a Chrome 85+ API that broke the round-49 Chrome >= 84
+    minimum (ROB-1); the linear-lookbehind regex copy synced (regex DoS
+    fix, 16k lines 587 ms -> 1.14 ms).
+  - chess.html (AGPL v3, combined work): rebuilt via build-chess.py after
+    the round-49 chess.src changes — deterministic rebuild, 24,042 lines.
+  - AGPLv3_Logo.svg, GPLv3_Logo.svg: no changes this round.
+  - License classification: all files unchanged.
+
+v1.2.3 round-48 (2026.9.6): stats.html O(n^2) fix + chess.html rebuilt.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - stats.html (GPL v3): O(n^2) PGN processing replaced with sticky
+    regexes + a parse cache + SAN disambiguation.
+  - chess.html (AGPL v3, combined work): rebuilt via build-chess.py after
+    the round-48 chess.src changes (BUG-1/BUG-3/RED-4/ROB-2 — see
+    chess.src/README.license round-48 entry).
+  - AGPLv3_Logo.svg, GPLv3_Logo.svg: no changes this round.
+  - License classification: all files unchanged.
+
+v1.2.3 round-47 (2026.9.5): chess.html rebuilt after the SonarCloud backlog fixes.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - chess.html (AGPL v3, combined work): rebuilt via build-chess.py after
+    the round-47 chess.src changes (S2681 x72 braces etc. — see
+    chess.src/README.license round-47 entry).
+  - stats.html, AGPLv3_Logo.svg, GPLv3_Logo.svg: no changes this round.
+  - License classification: all files unchanged.
+
+v1.2.3 round-46 (2026.9.5): chess.html rebuilt (23,645 lines) + stats.html tag-strip regexes broadened.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - chess.html (AGPL v3, combined work): rebuilt via build-chess.py after
+    the round-46 chess.src changes (23,645 lines).
+  - stats.html (GPL v3): 4 tag-strip regexes broadened to tolerate
+    unquoted tag values.
+  - AGPLv3_Logo.svg, GPLv3_Logo.svg: no changes this round.
+  - License classification: all files unchanged.
+
+v1.2.3 round-45 (2026.9.5): chess.html rebuilt after the PR53 R1 chess.src fixes.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - chess.html (AGPL v3, combined work): rebuilt via build-chess.py after
+    the round-45 chess.src changes (state-store.js R2, tablebase.js
+    gameSPID R5, game-logic.js — see chess.src/README.license round-45
+    entry).
+  - stats.html, AGPLv3_Logo.svg, GPLv3_Logo.svg: no changes this round.
+  - License classification: all files unchanged.
+
 v1.2.3 round-44 (2026.9.4): chess.html rebuilt + stats.html eval-graph mate clamp.
   - Version: versionCode=10203 (build.gradle F11 formula; was 123),
     versionName="1.2.3" (unchanged).
