@@ -1,3 +1,119 @@
+# Regalia v1.2.3 — round-50 工作日志（2026-09-06 UTC+8）
+
+## 任务来源
+
+文档与许可卫生专项：BUILDING.md / PRIVACY.md / README.md 对账补记，头声明普查修复，说明书更新日志与附录排序，NOTICE + 9×README.license + worklog.md 补 round-45~50 条目并订正与 git 史实矛盾的叙述，lib/arm64-v8a/README.license 重写，删除 LICENSE&NOTICE.zip，新增 .github/README.license。
+
+## 实施
+
+- **BUILDING.md**：补 round-45~49 构建记录；版本回退描述按 r48 SEC-1 订正（默认值 1.2.3/123 + 配置期醒目告警）；round-44 F12/F13 删除史加注；round-4/round-33/Phase-81 死文件叙述加注最终删除事实；删除一节逐字节重复；机器特定路径改占位符。
+- **PRIVACY.md**：新增 round-45~49 节（usesCleartextTraffic 回转、备份文件真删、CSP 收紧、日志降级、SAF 加固、Chrome 84 门——均无新权限/新网络/新收集）；订正 PWLE 表述（round-23 已移除）；澄清 TlsSecurityHelper 为参考类（运行时强制由 network_security_config.xml 声明式完成）。
+- **README.md**：目录树对账（Xmx4096m、补 lib/arm64-v8a/ 与 .github/ 条目、jniLibs 注释补 libc++_shared.so、screenshot.png 描述订正、versionCode 122→123 表述澄清）。
+- **头声明普查修复**：chess.html 头部许可错标（GPL→AGPL v3 组合作品）并在 build-chess.py 中固化注入；proguard-rules.pro 与 lint.xml 补全 AGPL 授权段；StatsActivity.java/StabilizationHelper.java 头部风格与措辞对齐 MainActivity 模板（纯注释）。
+- **说明书（中/英）**：更新日志补 round-45~50 条目；附录 A 修正为严格由新到旧（v1.2.3 组内 release→round-17→13→12；总览段下沉至 v1.1.1 节前且内部倒序）。
+- **NOTICE + 9 个 README.license + worklog.md**：补 round-45~50 条目；订正"NEVER CREATED/早已删除"与事实矛盾的叙述（4 死类实存、经 zip 复活、r48 RED-2 删除 1,031 行）；res/README.license 两处"仍存在"改为"r48 (RED-10) 已删除"；Manual/README.license 重排为最新在上并去重。
+- **lib/arm64-v8a/README.license 重写**：.so 已于 r48 SEC-2 删除，改为删除记录 + 指向 src/main/jniLibs/arm64-v8a/（build-time，不入库）与根 LICENSE-GPL v3/LICENSE-Apache v2.0/NOTICE/AUTHORS-stockfish。
+- **删除 LICENSE&NOTICE.zip**（无人引用、与根散装文件重复、内含旧版 NOTICE-DroidFish）；**新增 .github/README.license**（AGPL v3 原创声明）。
+
+## 验证
+
+各文件 grep 新条目关键词在位；NOTICE 与 Manual/README.license 轮次顺序经 python 提取验证降序；wc -l 前后对比记录。
+
+**版本**：versionName "1.2.3" 不变；versionCode=10203 不变。无新权限、无新网络出口、无新数据收集。
+
+# Regalia v1.2.3 — round-49 工作日志（2026-09-06 UTC+8）
+
+## 任务来源
+
+round-48 缓修 5 项清零 + 全新第一性原理复审（5 路并行）。
+
+## 实施
+
+- 复审发现 2 个 P1 + 5 个 P2 + ~15 个 P3，全部修复。
+- **P1-1**：Chess960 PGN 导入变体识别时序——tablebase.js 变体预扫描 + _findLegalMove 优先 to.castle（960 导入不再误判非法）。
+- **P1-2**：r48 自引入的 BUG-13 确认框缺陷（销毁后触发/黑方先行误触发/restore 失同步）——结构性根修：检测前移到 exitSetup() 入口、_seedSetupMarkersFromState 播种、三处清理路径；专项 harness 68/68。
+- **FIDE 6.9** 超时判和重写为双方子力矩阵（winnerLacksMatingMaterial）。
+- **正则 DoS**：线性 lookbehind 形式 `(?<!\n)\n[^\S\n]*\n(?:[^\S\n]*\n)*(?=\[)`，16k 行 587ms→1.14ms，30 万 fuzz 零差异，stats.html+worker-pool.js 三处副本同步。
+- BUG-10 _rookPending 清理；BUG-19 onImportCancelled 钩子；ROB-1 WebView Chrome≥84 门槛（MIN_SUPPORTED_CHROME_MAJOR，UA 解析，MainActivity+StatsActivity）；String.replaceAll→replace(/x/g) ×2（击穿 84 门槛的 85 API 移除）。
+- T1 评估串台修复：onEngineEval 第 8 参回传 fen，JS 批处理门比对 _bd.fen；SAF 8KB 分块+10MB PGN_MAX_CHARS；BACK 250ms 应答 ackMainBackHandled；EngineService startForeground try/catch；listFiles/getParentPath 沙箱校验。
+- **CI 修复**：android-ci.yml manifest 路径 src/main + 删除不存在的 Kotlin 任务 + PascalCase 检查 grep -vE；sonarcloud.yml 填入 projectKey=YDW99_Regalia/organization=ydw99；release-helper.yml compare 链接与 NDK 措辞。
+- build-chess.py 新增 `</script` 注入防护（exit 4）；README.md 许可证清单补 8 个 GPL 助手 + state-store.js AGPL。
+
+## 验证
+
+chess.html 确定性重建 24,042 行；node --check 全过；20 个 Java 文件括号平衡 (0,0)；45+45+68 断言全绿。
+
+**版本**：versionName "1.2.3" 不变；versionCode=10203 不变。
+
+# Regalia v1.2.3 — round-48 工作日志（2026-09-06 UTC+8）
+
+## 任务来源
+
+外部审查报告 41 项处置 + 13 个死文件删除。
+
+## 实施
+
+- **判定**：2 误报（BUG-5 NaN 链反证、BUG-9 FIDE 5.2.2 helpmate 反构造）、32 修复、4 组删除、5 缓修（r49 已清）。
+- BUG-1 时钟暂停/恢复（_pauseGameClock/_resumeGameClock，进出复盘/摆棋路径穷举配对）；BUG-3 NAG_MAP 按 PGN §10.3.2 订正；RED-4 删除死函数 parseStandardPGN（pgn-standard.js 981→680 行）；BUG-2 Android 13+ OnBackInvokedCallback；stats.html O(n²)→sticky 正则+解析缓存+SAN 消歧；SEC-4 CSP img-src 去掉 file:；SEC-6 引擎路径日志降级 Log.d；build.gradle SEC-1 版本回退默认值 1.1.1/111→1.2.3/123 + 配置期醒目告警；engine_jni.cpp RED-3 删除 nativeRenice 孤儿实现；ai-bridge.js ROB-2 900KB payload 防护。
+- **13 个死文件删除（git 级）**：根 lib/arm64-v8a/ 3 个 .so（libstockfish.so/libengine_bridge.so/libc++_shared.so——根 lib/ 非 Gradle 打包路径，真实路径 src/main/jniLibs/arm64-v8a/，不入库）；4 个零实例化 Java 死类（MessageBus/UciProtocolHandler/EngineConfigManager/HapticHelper，共 1,031 行——v1.2.1 round-4/round-10 的删除仅及构建树、未达 git，文件本体经 zip 同步复活后一直存活，本轮彻底清除）；res/xml/backup_rules.xml+data_extraction_rules.xml（round-44 删除未达 git 的补刀，RED-10）；4 个死 JS（round-47 RED-1）。
+
+## 验证
+
+许可分类不变（纯删除）；版本号不变。
+
+**版本**：versionName "1.2.3" 不变；versionCode=10203 不变。
+
+# Regalia v1.2.3 — round-47 工作日志（2026-09-05 UTC+8）
+
+## 任务来源
+
+SonarCloud 存量类 A+B 处置（258 工单，178 修）。
+
+## 实施
+
+- javascript:S2681 ×72（花括号）、java:S1181 ×65（catch(Throwable)→catch(Exception)）、S1481/S1854 死代码、S8786 正则重写（fuzz 验证）。
+- 36 项代码内注释声明为有意设计；43 项建议 SonarCloud 侧 Accept；类 C 风格债 1219 条按决定不动。
+- r47.1：chess960 S2681 残留补修（并入 round-48 交付）。
+- **RED-1**：从 git 删除 4 个死 JS 文件（ui-audio.js/ui-board.js/ui-review.js/ui-toolbar.js）——v1.2.1 round-4 仅移出构建，文件本体此前经 zip 同步复活后一直存活。
+- chess.html 经 build-chess.py 重建。
+
+**版本**：versionName "1.2.3" 不变；versionCode=10203 不变。
+
+# Regalia v1.2.3 — round-46 工作日志（2026-09-05 UTC+8）
+
+## 任务来源
+
+PR53 收尾：CodeRabbit 28 条评论分流，18 属实项全修。
+
+## 实施
+
+- game-logic.js：rm 为 null 时 rookFrom 解引用 TypeError ×2；engineGo 空 catch 补日志+toast。
+- state-store.js：Object.hasOwn → hasOwnProperty.call（老 WebView 无 Chrome 93+ API）。
+- worker-pool.js：池空且 Worker 创建失败时整队转同步回退（旧逻辑 3 连败永久关池）。
+- stats.html：标签剥离正则 4 处 broaden（兼容无引号标签值）。
+- EngineSettingsHelper：autoConfig 导入不再覆盖用户显式 threads；SafPickerHelper 8KB 分块读+硬上限。
+- StockfishNative：initConfigInProgress 修复 round-44 A7 回归（启动 UCI 选项被丢弃）；ponderhit seq 前移恢复竞态补偿分支。
+- ChessWebViewClient：clearWebViewIfMatches 防复用已销毁 WebView；MainActivity fallback 重试守卫。
+- JS 侧识别 permission_pending 哨兵（新增 i18n 键 settings_permission_pending，中英双语）。
+- +7 项文档一致性修复（许可分类更正；res/README.license 记录 round-44 删除未达 git 的事实）。
+- #3 OnBackPressedDispatcher 迁移为设计改进，按裁定缓办。
+
+**版本**：versionName "1.2.3" 不变；versionCode=10203 不变。
+
+# Regalia v1.2.3 — round-45 工作日志（2026-09-05 UTC+8）
+
+## 任务来源
+
+PR53 R1：SonarCloud PR#53 全量 231 项问题调研分流第一波（方案文档：Regalia-v1.2.3-PR53-SonarCloud完善方案.md），落地 7 文件补丁。
+
+## 实施
+
+- **AndroidManifest.xml 重新加回 usesCleartextTraffic="false"**（xml:S5332）——round-44 F15 的移除理由在 API 23 上不成立（networkSecurityConfig 仅 API 24+ 生效），双保险恢复。
+- state-store.js（R2）、tablebase.js gameSPID（R5）、game-logic.js 修复；engine_jni.cpp 嵌套注释改写（R3）；FileIoHelper/PgnCacheManager if 合并（R4）；chess.html 重建。
+- 无新权限、无新网络出口、无新数据收集。
+
+**版本**：versionName "1.2.3" 不变；versionCode=10203 不变。
+
 # Regalia v1.2.3 — Stage 6 说明书适配工作日志（2026-08-10 UTC+8）
 
 ## v1.2.3 round-44（2026-09-05）—— 用户新需求 + 上传《优化方案报告》93 项分流实施

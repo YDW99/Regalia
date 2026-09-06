@@ -3,6 +3,80 @@
 > Build guide for the Regalia Android chess app (versionCode=10203, versionName="1.2.3").
 > Round-by-round build notes are appended below (newest first).
 
+## Round-49 build notes (2026-09-06)
+
+- **`build-chess.py` (R5-8)**: new injection guard — any module containing
+  a literal `</script` now aborts the build with **exit 4** (the module
+  source is inlined verbatim into the template's `<script>` block; a
+  literal `</script` would close it early). Exit-code contract is now:
+  1 = file I/O error, 2 = placeholder count != 1, 3 = residual `export`
+  after stripping (round-41), 4 = `</script` in a module (this round).
+- **CI workflows fixed** (`.github/workflows/`): `android-ci.yml` manifest
+  path corrected to `src/main/AndroidManifest.xml` and non-existent
+  Kotlin tasks (`ktlintCheck` / `compileDebugKotlin`) removed — the repo
+  contains zero `.kt` files; `sonarcloud.yml` now pins the real
+  `projectKey=YDW99_Regalia` / `organization=ydw99`; `release-helper.yml`
+  compare-link and NDK wording corrected.
+- **Source-tree changes**: BUG-10 `_rookPending` reset (game-logic.js);
+  FIDE 6.9 `winnerLacksMatingMaterial` rewritten as a both-sides material
+  matrix; BUG-13 setup-exit confirmation dialog (ui-interactions.js);
+  BUG-19 `onImportCancelled` JsBridge hook; ROB-1 WebView Chrome>=84
+  gate (MIN_SUPPORTED_CHROME_MAJOR); Chess960 PGN import variant
+  pre-scan (tablebase.js F1-F5); linear-regex PGN split (ReDoS);
+  8KB chunked reads + 10MB PGN cap (SafPickerHelper/StatsActivity);
+  EngineService startForeground try/catch; two `String.replaceAll` →
+  `replace(/x/g)` (Chrome 84 floor).
+- `chess.html` rebuilt via `python3 build-chess.py`; 45/45 + 68/68
+  harness PASS. Version: versionCode=10203, versionName="1.2.3"
+  (unchanged).
+
+## Round-48 build notes (2026-09-06)
+
+- **`build.gradle` (SEC-1)**: version fallback defaults raised from
+  1.1.1/111 to the current release 1.2.3/123 — previously a missing
+  `../version.properties` silently produced versionCode 10101 <
+  published 10203 (INSTALL_FAILED_VERSION_DOWNGRADE). A loud
+  `USING FALLBACK VERSION` warning is now printed at configuration time.
+- **Deleted from git (SEC-2 / RED-2 / RED-10 / round-47 RED-1)**:
+  root `lib/arm64-v8a/{libstockfish.so,libengine_bridge.so,libc++_shared.so}`
+  (root lib/ is not a Gradle packaging path; only `README.license`
+  remains); dead Java classes `MessageBus` / `UciProtocolHandler` /
+  `EngineConfigManager` / `HapticHelper` (zero instantiation;
+  `HapticManager` is the live one); unreferenced
+  `res/xml/backup_rules.xml` + `data_extraction_rules.xml`; dead JS
+  files `chess.src/{ui-audio,ui-board,ui-review,ui-toolbar}.js`
+  (excluded from build since v1.2.1 round-4, zero callers).
+- **`src/main/cpp/engine_jni.cpp` (RED-3)**: orphan `nativeRenice`
+  implementation removed (header now declares ONLY `nativeChmod`).
+- **Source-tree changes**: 32 verified fixes — clock pause/resume on
+  review/setup entry (BUG-1), NAG_MAP per PGN §10.3.2 (BUG-3),
+  `parseStandardPGN` dead function removed (pgn-standard.js 981→680
+  lines), Android 13+ `OnBackInvokedCallback` registered (BUG-2),
+  stats.html O(n²)→sticky-regex + parse caching + SAN disambiguation,
+  CSP `img-src` dropped `file:` (index.html.tpl), engine-path log
+  leakage reduced to Log.d (SEC-6).
+- `chess.html` rebuilt: 23,492 lines / 1,426,665 bytes.
+  Version: versionCode=10203, versionName="1.2.3" (unchanged).
+
+## Round-45~47 build notes (2026-09-05/06, PR #53 系列)
+
+- **round-45 (PR53 R1)**: `AndroidManifest.xml` re-added
+  `usesCleartextTraffic="false"` (xml:S5332 — networkSecurityConfig
+  only applies on API 24+; the attribute covers API 23 = minSdk).
+  This supersedes round-44 F13's removal.
+- **round-46 (PR53 收尾)**: 17 code fixes (Chess960 rookFrom null
+  guard, `Object.hasOwn` → `hasOwnProperty.call` for Chrome<93
+  WebViews, worker-pool sync fallback, `initConfigInProgress` fixes
+  the round-44 A7 regression where startup UCI options were dropped,
+  500ms onDestroy JS-cleanup grace, etc.) + 7 doc-consistency fixes
+  (license classifications; res/README.license now records that
+  round-44's res/xml deletion never reached git).
+- **round-47**: 178 SonarCloud findings fixed — javascript:S2681 ×72
+  (braces), java:S1181 ×65 (`catch(Throwable)`→`catch(Exception)`),
+  S1481/S1854 dead-code removal, S8786 regex rewrites (fuzz-verified);
+  36 items documented in-code as intentional; 43 recommended Accept.
+  Version: versionCode=10203, versionName="1.2.3" (unchanged).
+
 ## Round-44 build notes (2026-09-04)
 
 - **`build.gradle` (F2/F3/F4/F9/F10/F11)**:
@@ -37,12 +111,16 @@
 - **`proguard-rules.pro` (F7/F14)**: EngineProcessManager keep narrowed to
   `public <init>(...)` + `makeExecutable`; added `-keepattributes`.
 - **`AndroidManifest.xml` (F12/F13/F15)**: added `supportsRtl` +
-  `enableOnBackInvokedCallback`; removed `usesCleartextTraffic`; comments
-  updated.
+  `enableOnBackInvokedCallback`; removed `usesCleartextTraffic` (REVERTED in
+  round-45, PR53 R1: re-added as ="false" because networkSecurityConfig only
+  applies on API 24+, leaving minSdk 23 unprotected); comments updated.
 - **Deleted**: `src/main/res/xml/backup_rules.xml` and
   `src/main/res/xml/data_extraction_rules.xml` (already unreferenced since
-  `allowBackup="false"`); `network_security_config.xml` gained a
-  `debug-overrides` block.
+  `allowBackup="false"`). Correction (round-46, PR53 CR#18): this deletion
+  only landed in the round-44 BUILD tree — the zip-based sync could not
+  delete files, so both files persisted in git as unreferenced dead config
+  until they were actually deleted from git in round-48 (RED-10);
+  `network_security_config.xml` gained a `debug-overrides` block.
 - **F16 ruled wontfix**: removing the duplicate `libc++_shared.so` from
   jniLibs breaks the build (`pickFirsts` duplicate-file error) — the NDK and
   the engine-supplied copies must coexist under the existing
@@ -467,7 +545,9 @@
   - `NOTICE` — canonical GPL v3 file list updated: added HapticManager.java,
     ui-gameflow.js, ui-interactions.js (round-17 additions that were missed);
     marked UciProtocolHandler.java, EngineConfigManager.java, MessageBus.java
-    as "NEVER CREATED" (Phase-73/75 plans that were never implemented); noted
+    as "NEVER CREATED" (Phase-73/75 plans that were never implemented)
+    (Editor's note, round-48: the classes did exist as zero-instantiation
+    dead code and were finally deleted from git in round-48, RED-2.); noted
     that ui-board.js/ui-review.js/ui-audio.js/ui-toolbar.js (Phase-74 extracts)
     were REMOVED in round-4.
   - `Manual/Regalia-v1.2.3-manual-{zh,en}.html` — UI architecture diagram
@@ -649,12 +729,21 @@ python3 build-chess.py
 The build script merges `src/main/assets/chess.src/*.js` (in order:
 game-logic → chess960 → pgn-standard → worker-pool → state-store → ai-bridge → tablebase → eco-data → ui-gameflow → ui-interactions → ui)
 into `src/main/assets/chess.html`, stripping `export` statements.
+
+Build failure contract (hard aborts): exit 1 = template/module I/O
+error; exit 2 = `/* __MODULE_SCRIPTS__ */` placeholder count != 1
+(round-41); exit 3 = residual `export` statement after stripping
+(round-41); exit 4 = a module contains a literal `</script`, which
+would prematurely close the inline <script> block (round-49, R5-8).
+Output is written atomically via tmp file + `os.replace` (round-41).
+
 As of v1.1.2 Phase 67 (MED-3), the script wraps every file I/O in try/except
 for clearer diagnostics and uses an `if __name__ == '__main__':` guard.
 v1.2.1 (round-4 cleanup) removed the four Phase-74 ui-*.js extracts
 (ui-audio / ui-board / ui-review / ui-toolbar) — they duplicated inline logic
 in ui.js / ai-bridge.js with subtly different conventions and were never on
-the hot path. Bundle order is now 9 modules (down from 13).
+the hot path. The files themselves were finally deleted from git in
+round-47 (RED-1). Bundle order is now 9 modules (down from 13).
 v1.2.3 (round-17 God Class refactor) split ui.js again — this time as real,
 fully-wired extractions: ui-gameflow.js (game start + clock subsystem,
 313 lines) and ui-interactions.js (click handling, move execution, toolbar,
@@ -708,7 +797,11 @@ installs alongside the release build on the same device.
   VERSION_PATCH=3
   VERSION_BUILD=123
   ```
-  Defaults inside `build.gradle` cover the missing case (1.1.1 / 111).
+  Defaults inside `build.gradle` cover the missing case (1.2.3 /
+  VERSION_BUILD=123, so computedVersionCode stays max(123, 10203) =
+  10203) and print a loud "USING FALLBACK VERSION" warning at
+  configuration time (v1.2.3 round-48, SEC-1) — do not ship such a
+  build; restore version.properties.
   Since v1.2.3 round-44 (F11) the effective versionCode is
   `max(VERSION_BUILD, VERSION_MAJOR*10000 + VERSION_MINOR*100 + VERSION_PATCH)`
   — for v1.2.3 that is `max(123, 10203)` = **10203**, so versionCode can never
@@ -1248,10 +1341,10 @@ license-metadata corrections, no version bump.
 Build command (single-module project, no `:app:` prefix):
 
 ```bash
-export JAVA_HOME=/home/z/my-project/tools/jdk21
-export ANDROID_HOME=/home/z/my-project/tools/android-sdk
+export JAVA_HOME=/path/to/tools/jdk21
+export ANDROID_HOME=/path/to/tools/android-sdk
 export ANDROID_SDK_ROOT=$ANDROID_HOME
-cd /home/z/my-project/workspace/Regalia-v1.2.3-src
+cd /path/to/Regalia-v1.2.3-src
 python3 build-chess.py
 ./gradlew --no-daemon assembleRelease -x lint -x lintRelease -x lintVitalRelease
 # APK output: build/outputs/apk/release/Regalia-release.apk
@@ -1373,7 +1466,7 @@ This round re-enabled CMake (resolving the round-12 workaround), then performed 
 5. **build.gradle empty-keystore-path guard** (`build.gradle`): `file("")` resolves to `projectDir` which exists, so without an `isEmpty()` check, a fresh clone without `keystore.properties` / env var would set `storeFile` to the project directory and fail with a cryptic "keystore load error". Added `!releaseKeystorePath.isEmpty()` guard.
 6. **gradle.properties dead property removal** (`gradle.properties`): Removed `android.enablePngCrunchInReleaseBuildsLibs=false` — not a recognized AGP property (only `android.enablePngCrunchInReleaseBuilds` exists). Unknown `android.*` keys are silently ignored by Gradle, so the line was a no-op. The comment about "library modules" was also inapplicable (single-module project).
 7. **build-chess.py dead CSP hash block removal** (`build-chess.py`): Removed the stats.html CSP sha256 hash auto-update block. As of stats.html v1.1.2 PHASE 71, the CSP switched from a fixed sha256- hash to `'unsafe-inline'`. The regex never matched, so the block was silent dead code providing no protection.
-8. **AndroidManifest allowBackup resolution** (`AndroidManifest.xml`): `android:allowBackup="false"` (the documented v1.0.4 design decision) made `android:fullBackupContent` and `android:dataExtractionRules` dead config. Removed both attributes (the XML files are retained in `res/xml/` for reference).
+8. **AndroidManifest allowBackup resolution** (`AndroidManifest.xml`): `android:allowBackup="false"` (the documented v1.0.4 design decision) made `android:fullBackupContent` and `android:dataExtractionRules` dead config. Removed both attributes (the XML files were retained in res/xml/ at the time; deleted from git in round-48, RED-10).
 
 ### P3 fixes (cleanup/simplification)
 
@@ -1939,6 +2032,10 @@ A line-by-line first-principles review of every source file was performed after 
     **Note (v1.2.1 round-4)**: count back down to 11 — `MessageBus`,
     `UciProtocolHandler`, and `EngineConfigManager` were deleted in round-4
     (their functionality was either never wired up or duplicated inline).
+    (they later reappeared via archive re-upload and were finally deleted
+    from git in round-48, RED-2, together with HapticHelper)
+    (they later reappeared via archive re-upload and were finally deleted
+    from git in round-48, RED-2, together with HapticHelper)
 - **v1.2.0 Phase 82 (2026.7.11): renderInternal dialog extraction.**
   - Extracted all 8 modal dialog blocks from `renderInternal()` (1,365 lines) into a
     new `_renderDialogs(h)` function.
@@ -2276,32 +2373,6 @@ This pass implements all non-false-positive findings from the comprehensive audi
 - All changes are additive or behavior-preserving (no API signatures changed, no @JavascriptInterface methods affected).
 - `chess.html` must be rebuilt via `python3 build-chess.py` (the JS source changes in `ai-bridge.js`, `ui.js`, `game-logic.js`, `state-store.js`, `index.html.tpl` need to be merged into the single `chess.html` asset).
 - Version: versionCode=121, versionName="1.2.1" (unchanged — same-version refinement).
-
-
-## v1.2.1 eighth-pass refinement (2026.7.13) — round-8 review: state-store.js TDZ white-screen bug fix
-
-This pass fixes a critical white-screen bug introduced in round-7. **Symptom**: APP opens but only the background color is rendered — no UI content. **Root cause**: the round-7 `_deepClone()` hardening added `const DEEP_CLONE_MAX_DEPTH = 64;` at a position in the IIFE that came AFTER the IIFE-top initialization call `let _state = _deepClone(_initialState);`. Since `const` declarations do NOT hoist like `var` (they are in the "temporal dead zone" until their declaration line executes), the function body's reference to `DEEP_CLONE_MAX_DEPTH` triggered `ReferenceError: Cannot access 'DEEP_CLONE_MAX_DEPTH' before initialization`. The state-store module initialization crashed, every dependent module (ui.js, ai-bridge.js, etc.) failed to load, and the WebView rendered only `<body>`'s background color.
-
-### Fix
-
-- **`state-store.js` (AGPL v3)**: moved the `const DEEP_CLONE_MAX_DEPTH = 64;` declaration from after the `_deepClone` function definition to IIFE-top, BEFORE `let _state = _deepClone(_initialState);`. Function declarations ARE hoisted, so `_deepClone` is callable from line 1 of the IIFE — but any `const`/`let` referenced inside the function body must have already been initialized at the time of the call. Added a documentation comment explaining the TDZ trap so future maintainers do not regress it.
-- **`chess.html`**: rebuilt via `python3 build-chess.py` to pick up the fix (the merged single-file asset is what the APK actually ships).
-
-### Build configuration alignment
-
-While rebuilding the APK in this pass, two latent build-config mismatches were corrected so the round-8 APK can be assembled cleanly on a fresh environment:
-
-- **`build.gradle` — `ndkVersion "27.2.12479018"`**: AGP 8.7.3 defaults to NDK 27.0.12077973 when no version is pinned. On a fresh SDK install, that default NDK was incomplete (no `source.properties`). Uncommented the existing `ndkVersion "27.2.12479018"` line to pin to the verified-installed NDK.
-- **`build.gradle` — `useLegacyPackaging true`**: `AndroidManifest.xml` declares `android:extractNativeLibs="true"`, which requires `useLegacyPackaging=true` in `packagingOptions.jniLibs`. The previous `false` caused `:packageRelease` to emit a 0-byte APK (`Could not find EOCD` error). Switched to `true` to keep `.so` files uncompressed in the APK so the system can memory-map them at install time (the path Stockfish expects for an executable ELF).
-
-### Verification
-
-- All 9 JS modules pass `node --check`.
-- `state-store.js` loads cleanly under `vm.runInContext` (no TDZ ReferenceError at module-load time).
-- `chess.html` rebuilt (21,664 lines, 1,301,609 bytes); `DEEP_CLONE_MAX_DEPTH` now appears BEFORE `let _state = _deepClone(_initialState);`.
-- Release APK built: `Regalia-release.apk`, 78,124,857 bytes.
-- Signature verified: v1 ✓, v2 ✓, v3 ✓ (compatible with Xiaomi HyperOS 3).
-- Version: `versionCode=121`, `versionName="1.2.1"` (unchanged — same-version refinement).
 
 
 ## v1.2.1 eighth-pass refinement (2026.7.13) — round-8 review: state-store.js TDZ white-screen bug fix
@@ -2717,51 +2788,6 @@ The existing `renderEngineConfig()` and `_renderPGNCacheManager()` helpers (alre
 - ✅ All safe-to-convert sites (53 conversions) — fixed in round-14
 - ✅ True globals (`crypto`, `AndroidBridge`) — correctly preserved with `typeof`
 
-## v1.2.2 (2026.7.14) — Comprehensive audit-report non-false-positive fix + version bump
-
-This version is based on the uploaded comprehensive audit-report collection (`Regalia_v1.2.1_全技能审查报告.zip`, 5 sub-reports totaling 4,199 lines) covering 8 security/architecture skills. After rigorous code-level verification against the actual source tree, **7 of the audit's findings were confirmed as false positives** (based on stale code from deleted files or already-fixed issues), and **1 real defect was fixed**. The version number is bumped from v1.2.1 to v1.2.2 (versionCode 121→122).
-
-### Audit-report false positives excluded (7 items)
-
-1. **RED-1 (getStatsPayload XSS)**: `stats.html` already escapes PGN header values via `_escFEN()` at the rendering layer. The audit's suggested Java-layer JSON-string escaping (`"` → `\"`) would corrupt JSON syntax — false positive.
-2. **RED-2 (javascript: protocol not blocked)**: `ChessWebViewClient.shouldOverrideUrlLoading()` already blocks all non-`file:///android_asset/`, non-`http(s)` protocols (including `javascript:`, `data:`, `intent:`, `content:`) via the final `return true` — false positive.
-3. **RED-3 (_buildPGNString i18n XSS)**: i18n strings (`T('you')`="你"/"You", `T('ai_opponent')`="AI对手"/"AI Opponent") are static developer-controlled strings. User names are protected by `normalizeTagValue()` PGN escaping + `_escFEN()` HTML escaping — false positive.
-4. **YELLOW-2 (sendToEngine UCI whitelist)**: `StockfishNative.sendToEngine()` already has `JsBridgeGateway.isUciCommandAllowed()` UCI command whitelist — false positive.
-5. **YELLOW-3 (allowBackup=true)**: `AndroidManifest.xml`'s `android:allowBackup` was set to `false` in round-1 — false positive.
-6. **YELLOW-5 (ProGuard rules too permissive)**: the audit's referenced `-keep class com.Regalia.MessageBus { *; }` rule does not exist — `MessageBus.java` was deleted in round-4. Current `proguard-rules.pro` rules are tight — false positive.
-7. **P0 #4-5 (empty catch blocks) + P1 #12 (HapticHelper dead code)**: round-16 already fixed empty catches, round-10 already deleted `HapticHelper.java` — false positive.
-
-### Non-false-positive defect fix (1 item)
-
-**YELLOW-1 (FEN parsing lacks length limit)**: `tablebase.js` `fenToState()` now has a 200-character length limit. Standard FEN ≤87 chars; 200 allows Chess960 Shredder notation + en passant target squares + extended fields. Prevents DoS via pathologically long FEN strings. The audit's suggested character-whitelist regex was rejected — it would break Chess960 (castling rights use `a-h` file letters) and en passant target squares (`e3` etc.). The existing per-character validation (invalid piece chars return `null`) is the correct whitelist approach.
-
-### Architectural refactoring suggestions (not implemented)
-
-The audit's God Module splitting (StockfishNative 4,354 lines, ui.js 8,522 lines), Store evaluation-state migration, @JavascriptInterface facade aggregation (91→6), render() componentization, etc. are long-term architectural planning (estimated 2-4 weeks), not appropriate for a patch release. These suggestions are documented for future version planning.
-
-### Version bump (versionCode 121→122, versionName "1.2.1"→"1.2.2")
-
-Updated 11 version-number locations per `版本号位置.md`:
-- `version.properties`: VERSION_PATCH=2, VERSION_BUILD=122
-- `build.gradle`: auto-computed from version.properties
-- `strings.xml`: app_name="Regalia v1.2.2"
-- `ChessWebViewClient.java`: version comment
-- `game-logic.js`: loading_title
-- `index.html.tpl`: `<title>`
-- `ui.js`: about-dialog h2, header badge, about-dialog app_name row (3 places)
-- HTML manuals: cover, footer, title (files renamed from v1.2.1 to v1.2.2)
-- `MainActivity.java`, `StockfishNative.java`, `ChessApp.java`: use `BuildConfig.VERSION_NAME` (auto-synced)
-
-### Build verification
-
-- ✅ All 9 JS modules pass `node --check`
-- ✅ `state-store.js` TDZ safety verified (no regression)
-- ✅ `chess.html` rebuilt: 21,988 lines, 1,321,170 bytes
-- ✅ Release APK rebuilt: 78,141,232 bytes, v1+v2+v3 signatures all enabled, versionCode=122, versionName="1.2.2"
-- ✅ FGS subtype property present (`chess_engine_analysis`)
-- ✅ Stockfish dotprod engine SHA-256 three-way consistency: `8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5`
-- ✅ Tarball repackaged via `create_v122_tar.sh`: 112 files, 0 forbidden entries
-
 ## v1.2.1 round-16 (2026.7.14) — User-reported UX clarity + audit-report non-false-positive defect fixes
 
 This round addresses two specific user-reported issues plus the non-false-positive defects from the uploaded audit report (`Regalia v1.2.1 剩余优化修复指南.md`). **No versionCode bump.** No new features, no new permissions, no new network access. The two user-facing changes are UX-clarity fixes (Toast wording + stats-page description wording); the audit-report fixes are robustness/quality hardening.
@@ -2892,6 +2918,51 @@ The 2 `catch(_e){}` blocks (worker terminate/revoke at lines 320-321) are preser
 - ✅ All empty `catch(e){}` blocks in chess.src/*.js — fixed in round-12 (146 sites)
 - ✅ All empty `catch(e){}` blocks in stats.html — fixed in round-15 (6 sites)
 - ✅ `catch(_){}` / `catch(_e){}` convention preserved (intentionally-unused idiom)
+
+## v1.2.2 (2026.7.14) — Comprehensive audit-report non-false-positive fix + version bump
+
+This version is based on the uploaded comprehensive audit-report collection (`Regalia_v1.2.1_全技能审查报告.zip`, 5 sub-reports totaling 4,199 lines) covering 8 security/architecture skills. After rigorous code-level verification against the actual source tree, **7 of the audit's findings were confirmed as false positives** (based on stale code from deleted files or already-fixed issues), and **1 real defect was fixed**. The version number is bumped from v1.2.1 to v1.2.2 (versionCode 121→122).
+
+### Audit-report false positives excluded (7 items)
+
+1. **RED-1 (getStatsPayload XSS)**: `stats.html` already escapes PGN header values via `_escFEN()` at the rendering layer. The audit's suggested Java-layer JSON-string escaping (`"` → `\"`) would corrupt JSON syntax — false positive.
+2. **RED-2 (javascript: protocol not blocked)**: `ChessWebViewClient.shouldOverrideUrlLoading()` already blocks all non-`file:///android_asset/`, non-`http(s)` protocols (including `javascript:`, `data:`, `intent:`, `content:`) via the final `return true` — false positive.
+3. **RED-3 (_buildPGNString i18n XSS)**: i18n strings (`T('you')`="你"/"You", `T('ai_opponent')`="AI对手"/"AI Opponent") are static developer-controlled strings. User names are protected by `normalizeTagValue()` PGN escaping + `_escFEN()` HTML escaping — false positive.
+4. **YELLOW-2 (sendToEngine UCI whitelist)**: `StockfishNative.sendToEngine()` already has `JsBridgeGateway.isUciCommandAllowed()` UCI command whitelist — false positive.
+5. **YELLOW-3 (allowBackup=true)**: `AndroidManifest.xml`'s `android:allowBackup` was set to `false` in round-1 — false positive.
+6. **YELLOW-5 (ProGuard rules too permissive)**: the audit's referenced `-keep class com.Regalia.MessageBus { *; }` rule does not exist — `MessageBus.java` was deleted in round-4. Current `proguard-rules.pro` rules are tight — false positive.
+7. **P0 #4-5 (empty catch blocks) + P1 #12 (HapticHelper dead code)**: round-16 already fixed empty catches, round-10 already deleted `HapticHelper.java` — false positive.
+
+### Non-false-positive defect fix (1 item)
+
+**YELLOW-1 (FEN parsing lacks length limit)**: `tablebase.js` `fenToState()` now has a 200-character length limit. Standard FEN ≤87 chars; 200 allows Chess960 Shredder notation + en passant target squares + extended fields. Prevents DoS via pathologically long FEN strings. The audit's suggested character-whitelist regex was rejected — it would break Chess960 (castling rights use `a-h` file letters) and en passant target squares (`e3` etc.). The existing per-character validation (invalid piece chars return `null`) is the correct whitelist approach.
+
+### Architectural refactoring suggestions (not implemented)
+
+The audit's God Module splitting (StockfishNative 4,354 lines, ui.js 8,522 lines), Store evaluation-state migration, @JavascriptInterface facade aggregation (91→6), render() componentization, etc. are long-term architectural planning (estimated 2-4 weeks), not appropriate for a patch release. These suggestions are documented for future version planning.
+
+### Version bump (versionCode 121→122, versionName "1.2.1"→"1.2.2")
+
+Updated 11 version-number locations per `版本号位置.md`:
+- `version.properties`: VERSION_PATCH=2, VERSION_BUILD=122
+- `build.gradle`: auto-computed from version.properties
+- `strings.xml`: app_name="Regalia v1.2.2"
+- `ChessWebViewClient.java`: version comment
+- `game-logic.js`: loading_title
+- `index.html.tpl`: `<title>`
+- `ui.js`: about-dialog h2, header badge, about-dialog app_name row (3 places)
+- HTML manuals: cover, footer, title (files renamed from v1.2.1 to v1.2.2)
+- `MainActivity.java`, `StockfishNative.java`, `ChessApp.java`: use `BuildConfig.VERSION_NAME` (auto-synced)
+
+### Build verification
+
+- ✅ All 9 JS modules pass `node --check`
+- ✅ `state-store.js` TDZ safety verified (no regression)
+- ✅ `chess.html` rebuilt: 21,988 lines, 1,321,170 bytes
+- ✅ Release APK rebuilt: 78,141,232 bytes, v1+v2+v3 signatures all enabled, versionCode=122, versionName="1.2.2"
+- ✅ FGS subtype property present (`chess_engine_analysis`)
+- ✅ Stockfish dotprod engine SHA-256 three-way consistency: `8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5`
+- ✅ Tarball repackaged via `create_v122_tar.sh`: 112 files, 0 forbidden entries
 
 ---
 

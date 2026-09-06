@@ -1,3 +1,193 @@
+Round-50 (2026-09-06) — Documentation & license-hygiene round (no code behavior changes)
+=============================================================================================================
+
+- BUILDING.md: round-45~49 build notes added; the version-fallback
+  description corrected per round-48 SEC-1 (defaults 1.2.3/123 + a loud
+  configuration-time warning); round-44 F12/F13 deletion history annotated;
+  the round-4 / round-33 / Phase-81 dead-file narrations annotated with the
+  final round-48 git-level deletions; one byte-duplicated section removed;
+  machine-specific paths replaced with placeholders.
+- PRIVACY.md: round-45~49 sections added (usesCleartextTraffic rollback,
+  backup files really deleted, CSP tightening, log demotion, SAF hardening,
+  Chrome >= 84 gate — none introduce new permissions, new network egress,
+  or new data collection); the PWLE wording corrected (the PWLE reflection
+  subsystem was removed in round-23); TlsSecurityHelper clarified as a
+  reference class — runtime TLS enforcement is declarative via
+  network_security_config.xml.
+- README.md: directory tree reconciled with the live tree (Xmx4096m;
+  lib/arm64-v8a/ and .github/ entries added; jniLibs note now mentions
+  libc++_shared.so; screenshot.png description corrected; the
+  versionCode 122 -> 123 wording clarified).
+- File-header sweep: chess.html header license mislabel fixed (GPL ->
+  AGPL v3 combined work) and the correction pinned by injecting it from
+  build-chess.py; proguard-rules.pro and lint.xml AGPL grant sections
+  completed; StatsActivity.java / StabilizationHelper.java header style
+  aligned with the MainActivity template (comments only).
+- Manuals (zh/en): changelog gains round-45~50 entries; Appendix A
+  corrected to strict newest-first ordering (within the v1.2.3 group:
+  release -> round-17 -> 13 -> 12; the overview paragraph moved below the
+  v1.1.1 section with its internal order reversed).
+- NOTICE + 9x README.license + worklog.md: round-45~50 entries added;
+  "NEVER CREATED / already deleted" narratives that contradict the git
+  history annotated (see the editor's notes in the round-33 canonical list
+  and the v1.2.0 Phase-73/75 entries below); res/README.license's two
+  "still exist here" statements updated to the round-48 (RED-10) deletion;
+  Manual/README.license reordered newest-first and de-duplicated.
+- lib/arm64-v8a/README.license rewritten: the three .so files were deleted
+  in round-48 (SEC-2); the file is now a deletion record pointing to the
+  build-time src/main/jniLibs/arm64-v8a/ path (not committed) and the
+  root LICENSE-GPL v3 / LICENSE-Apache v2.0 / NOTICE / AUTHORS-stockfish.
+- LICENSE&NOTICE.zip deleted (unreferenced by any build/doc path, a
+  duplicate of the root-level loose files, and it carried a stale
+  NOTICE-DroidFish missing the round-46 CR#1 correction);
+  .github/README.license added (AGPL v3 original-work declaration).
+- No new permissions, no new network egress, no new data collection.
+- License classification: NO CHANGES.
+
+Version: versionCode=10203, versionName="1.2.3" (unchanged).
+
+Round-49 (2026-09-06) — Round-48 deferred items cleared + fresh first-principles re-review
+=============================================================================================================
+
+- Five parallel review passes found 2 P1 + 5 P2 + ~15 P3; all fixed.
+- P1-1 Chess960 PGN import variant-detection timing: tablebase.js variant
+  pre-scan + _findLegalMove prefers to.castle (960 imports no longer
+  misjudged as illegal).
+- P1-2 the round-48 self-introduced BUG-13 setup-exit confirm-dialog
+  defects (fires after destroy / false trigger when Black moves first /
+  restore desync) — structural root fix: detection moved to the exitSetup()
+  entry, _seedSetupMarkersFromState seeding, three cleanup paths; dedicated
+  harness 68/68.
+- FIDE 6.9 timeout draw rewritten as a two-sided material matrix
+  (winnerLacksMatingMaterial).
+- Regex DoS fix: linear lookbehind form (?<!\n)\n[^\S\n]*\n(?:[^\S\n]*\n)*
+  (?=\[) — 16k lines 587 ms -> 1.14 ms, 300k-case fuzz zero-diff; the three
+  copies (stats.html + worker-pool.js) synced.
+- BUG-10 _rookPending cleanup; BUG-19 onImportCancelled hook; ROB-1 WebView
+  Chrome >= 84 gate (MIN_SUPPORTED_CHROME_MAJOR, UA parsing, MainActivity +
+  StatsActivity); String.replaceAll -> replace(/x/g) x2 (an API-85 method
+  that broke through the 84 floor).
+- T1 eval crosstalk fix: onEngineEval's 8th parameter echoes the fen and
+  the JS batch gate compares _bd.fen; SAF 8KB chunked reads + 10 MB
+  PGN_MAX_CHARS; BACK 250 ms acknowledgement ackMainBackHandled;
+  EngineService startForeground try/catch; listFiles/getParentPath sandbox
+  validation.
+- CI fixes: android-ci.yml manifest path src/main + nonexistent Kotlin
+  tasks removed + PascalCase check grep -vE; sonarcloud.yml gains
+  projectKey=YDW99_Regalia / organization=ydw99; release-helper.yml compare
+  link + NDK wording.
+- build-chess.py: new </script injection guard (exit 4); README.md license
+  list gains the 8 GPL helper files + state-store.js (AGPL).
+- Verification: chess.html deterministic rebuild 24,042 lines;
+  node --check all pass; 20 Java files brace-balanced (0,0); 45+45+68
+  assertions green.
+- License classification: NO CHANGES.
+
+Version: versionCode=10203, versionName="1.2.3" (unchanged).
+
+Round-48 (2026-09-06) — External review report (41 findings) triage + 13 dead files deleted
+=============================================================================================================
+
+- Triage verdict: 2 false positives (BUG-5 NaN chain disproved, BUG-9
+  FIDE 5.2.2 helpmate counter-construction), 32 fixed, 4 deletion groups,
+  5 deferred (all cleared in round-49).
+- BUG-1 clock pause/resume (_pauseGameClock/_resumeGameClock, exhaustive
+  pairing across the review/setup entry-exit paths); BUG-3 NAG_MAP
+  corrected per PGN spec §10.3.2; RED-4 dead function parseStandardPGN
+  deleted (pgn-standard.js 981 -> 680 lines); BUG-2 Android 13+
+  OnBackInvokedCallback; stats.html O(n^2) -> sticky regex + parse cache +
+  SAN disambiguation; SEC-4 CSP img-src drops file:; SEC-6 engine-path
+  logs demoted to Log.d; build.gradle SEC-1 version-fallback defaults
+  1.1.1/111 -> 1.2.3/123 + loud configuration-time warning; engine_jni.cpp
+  RED-3 orphan nativeRenice implementation deleted; ai-bridge.js ROB-2
+  900KB payload guard.
+- 13 dead files deleted (git level):
+  - SEC-2: root lib/arm64-v8a/ three .so files (libstockfish.so /
+    libengine_bridge.so / libc++_shared.so) — the root lib/ directory is
+    NOT the Gradle packaging path; the real build-time location is
+    src/main/jniLibs/arm64-v8a/ (not committed).
+  - RED-2: four zero-instantiation Java dead classes (MessageBus /
+    UciProtocolHandler / EngineConfigManager / HapticHelper, 1,031 lines
+    total). Editor's note: these files DID exist in the git tree — the
+    v1.2.1 round-4/round-10 deletions only removed them from the build
+    tree and never reached git, and a zip-based sync later revived the
+    file bodies, where they survived until this round's deletion. The
+    "NEVER CREATED" narrations in the round-33 canonical list and the
+    Phase-73/75 entries below are corrected accordingly.
+  - RED-10: res/xml/backup_rules.xml + data_extraction_rules.xml — the
+    round-44 deletion that never reached git (see the round-44 entry
+    correction above) made real.
+  - the 4 dead ui-*.js files of round-47 RED-1 (see that entry).
+- License classification: NO CHANGES (deletions only).
+
+Version: versionCode=10203, versionName="1.2.3" (unchanged).
+
+Round-47 (2026-09-05) — SonarCloud backlog classes A+B (258 tickets, 178 fixed)
+=============================================================================================================
+
+- javascript:S2681 x72 (missing braces), java:S1181 x65
+  (catch (Throwable) -> catch (Exception)), S1481/S1854 dead-code removals,
+  S8786 regex rewrites (fuzz-verified).
+- 36 in-code comments documented as intentional design; 43 items
+  recommended for SonarCloud-side Accept; class-C style debt (1,219
+  findings) intentionally untouched per decision.
+- r47.1: chess960 S2681 leftover fixes (delivered together with round-48).
+- RED-1: 4 dead JS files deleted from git (ui-audio.js / ui-board.js /
+  ui-review.js / ui-toolbar.js) — v1.2.1 round-4 only removed them from the
+  build; the file bodies had been revived by a zip-based sync and survived
+  in the tree until this deletion.
+- chess.html rebuilt via build-chess.py after the JS changes.
+- License classification: NO CHANGES.
+
+Version: versionCode=10203, versionName="1.2.3" (unchanged).
+
+Round-46 (2026-09-05) — PR53 wrap-up (CodeRabbit 28 comments triaged; all 18 valid items fixed)
+=============================================================================================================
+
+- game-logic.js (GPL v3): rookFrom dereference TypeError x2 when rm is
+  null; engineGo empty catch gains logging + toast.
+- state-store.js (AGPL v3): Object.hasOwn -> hasOwnProperty.call (older
+  WebViews lack the Chrome 93+ API).
+- worker-pool.js (GPL v3): when the pool is empty and Worker creation
+  fails, the whole queue falls back to synchronous execution (the old
+  logic permanently disabled the pool after 3 consecutive failures).
+- stats.html (GPL v3): 4 tag-strip regexes broadened to tolerate unquoted
+  tag values.
+- EngineSettingsHelper: autoConfig no longer overrides user-explicit
+  threads on import; SafPickerHelper: 8KB chunked reads + hard cap.
+- StockfishNative: initConfigInProgress fixes the round-44 A7 regression
+  (startup UCI options were dropped); the ponderhit seq move restores the
+  race-compensation branch.
+- ChessWebViewClient: clearWebViewIfMatches prevents reusing a destroyed
+  WebView; MainActivity fallback retry guard.
+- JS side recognizes the permission_pending sentinel (new i18n key
+  settings_permission_pending, zh + en).
+- +7 documentation consistency fixes (license-classification corrections;
+  res/README.license records that the round-44 backup-rules deletion never
+  reached git — see the correction note in the round-44 entry below).
+- #3 OnBackPressedDispatcher migration ruled a design improvement —
+  deferred per triage.
+- License classification: NO CHANGES.
+
+Version: versionCode=10203, versionName="1.2.3" (unchanged).
+
+Round-45 (2026-09-05) — PR53 R1 (SonarCloud PR #53 triage, wave 1)
+=============================================================================================================
+
+- All 231 SonarCloud findings on PR #53 triaged (plan document:
+  Regalia-v1.2.3-PR53-SonarCloud完善方案.md); a 7-file patch landed.
+- AndroidManifest.xml (AGPL v3): usesCleartextTraffic="false" RE-ADDED
+  (xml:S5332) — the round-44 F15 removal rationale does not hold on API 23
+  (networkSecurityConfig only takes effect on API 24+), so the attribute
+  is restored as belt-and-braces.
+- state-store.js (R2), tablebase.js gameSPID (R5), game-logic.js fixes;
+  engine_jni.cpp nested-comment rewrite (R3); FileIoHelper /
+  PgnCacheManager if-merge (R4); chess.html rebuilt.
+- No new permissions, no new network egress, no new data collection.
+- License classification: NO CHANGES.
+
+Version: versionCode=10203, versionName="1.2.3" (unchanged).
+
 Round-44 (2026-09-04) — 93-finding review triage: JS polarity/Toast/batch hardening + StockfishNative/MainActivity robustness + build/resource fixes
 =============================================================================================================
 
@@ -48,7 +238,11 @@ Round-44 (2026-09-04) — 93-finding review triage: JS polarity/Toast/batch hard
   max(VERSION_BUILD, major*10000+minor*100+patch) = 10203), strings.xml
   app_name hardcode removed, AndroidManifest (F12 comment update; F13
   +supportsRtl +enableOnBackInvokedCallback; F15 -usesCleartextTraffic),
-  backup_rules.xml + data_extraction_rules.xml deleted,
+  backup_rules.xml + data_extraction_rules.xml deleted (CORRECTION —
+    round-46 PR53 CR#18 proved this deletion never reached the git tree:
+    the zip-based sync cannot delete files, so both files remained in
+    res/xml/ as unreferenced dead config; the deletion became real in
+    round-48, RED-10),
   network_security_config.xml debug-overrides added, proguard-rules.pro
   (F7 EngineProcessManager keep narrowed; F14 -keepattributes added),
   CMakeLists.txt cmake_minimum_required 3.22.1 -> 3.31.6 (F8),
@@ -112,6 +306,40 @@ Round-43 (2026-09-04) — Dead i18n key removal (42-8 follow-up, D5=A step 2) + 
   - NOTICE-DroidFish: informational round-43 entry added.
   - worklog.md: round-43 entry prepended.
 - License classification: NO CHANGES.
+
+Version: versionCode=123, versionName="1.2.3" (unchanged).
+
+Round-42 (2026-08-10) — License unification batch (task 42-5, P2-8/P3-19/P2-9, D2=A)
+=============================================================================================================
+
+License mislabel corrections only; no code or file-header changes.
+
+Decision D2=A: chess.html is a COMBINED work (GPL v3 + AGPL v3 chess.src
+modules via build-chess.py) and is therefore declared AGPL v3, matching the
+top-of-file statement ("The application as a whole is licensed under AGPL
+v3") and the round-30+ per-round entries. Per-file classifications are
+unchanged ("逐文件标注不变") — file headers are authoritative.
+
+Corrections (documentation tags now match file headers):
+  - tablebase.js / worker-pool.js: 4 mislabeled "(AGPL v3)" tags in the
+    round-37/38/39 entries corrected to GPL v3 (both files are DroidFish-
+    derived per their headers — same correction class as round-22's
+    49-entry AGPL→GPL sync; the round-37/38/39 tags were a recurrence).
+  - chess960.js: 3 mislabeled "(GPL v3)" tags (round-20 era entries)
+    corrected to AGPL v3 (header has always been AGPL v3).
+  - state-store.js: 1 mislabeled "(GPL v3)" tag in the round-30 entry
+    corrected to AGPL v3 (the round-31 correction note already covered the
+    chess.src/README.license copy; this NOTICE copy was missed).
+  - chess.html: 7 "(GPL v3, ...)" tags (round-37/38/39 assets/README.license
+    entries and v1.1.x Phase entries here) unified to AGPL v3 (combined
+    work) per D2=A.
+  - Canonical license list (v1.2.3 round-17/18 entry): chess960.js moved to
+    the AGPL list; stats.html and index.html.tpl moved to the GPL list to
+    match their file headers.
+Left for round-43: v1.0.x-era "(AGPL v3, original)" tags on game-logic.js /
+  pgn-standard.js / index.html.tpl predate the deliberate AGPL→GPL
+  reclassification wave (cf. worker-pool Phase 35→36 history, index.html.tpl
+  header note) and were accurate at the time — retained as history.
 
 Version: versionCode=123, versionName="1.2.3" (unchanged).
 
@@ -211,40 +439,6 @@ capture, 40-4 seven material sets, 40-5 semantic-equivalence + backtracking
 safety, 40-6 ten malformed/legal FENs); touched Java method bodies and
 whole-file {} balance checked; version fields untouched. Independent QC:
 PASS.
-
-Version: versionCode=123, versionName="1.2.3" (unchanged).
-
-Round-42 (2026-08-10) — License unification batch (task 42-5, P2-8/P3-19/P2-9, D2=A)
-=============================================================================================================
-
-License mislabel corrections only; no code or file-header changes.
-
-Decision D2=A: chess.html is a COMBINED work (GPL v3 + AGPL v3 chess.src
-modules via build-chess.py) and is therefore declared AGPL v3, matching the
-top-of-file statement ("The application as a whole is licensed under AGPL
-v3") and the round-30+ per-round entries. Per-file classifications are
-unchanged ("逐文件标注不变") — file headers are authoritative.
-
-Corrections (documentation tags now match file headers):
-  - tablebase.js / worker-pool.js: 4 mislabeled "(AGPL v3)" tags in the
-    round-37/38/39 entries corrected to GPL v3 (both files are DroidFish-
-    derived per their headers — same correction class as round-22's
-    49-entry AGPL→GPL sync; the round-37/38/39 tags were a recurrence).
-  - chess960.js: 3 mislabeled "(GPL v3)" tags (round-20 era entries)
-    corrected to AGPL v3 (header has always been AGPL v3).
-  - state-store.js: 1 mislabeled "(GPL v3)" tag in the round-30 entry
-    corrected to AGPL v3 (the round-31 correction note already covered the
-    chess.src/README.license copy; this NOTICE copy was missed).
-  - chess.html: 7 "(GPL v3, ...)" tags (round-37/38/39 assets/README.license
-    entries and v1.1.x Phase entries here) unified to AGPL v3 (combined
-    work) per D2=A.
-  - Canonical license list (v1.2.3 round-17/18 entry): chess960.js moved to
-    the AGPL list; stats.html and index.html.tpl moved to the GPL list to
-    match their file headers.
-Left for round-43: v1.0.x-era "(AGPL v3, original)" tags on game-logic.js /
-  pgn-standard.js / index.html.tpl predate the deliberate AGPL→GPL
-  reclassification wave (cf. worker-pool Phase 35→36 history, index.html.tpl
-  header note) and were accurate at the time — retained as history.
 
 Version: versionCode=123, versionName="1.2.3" (unchanged).
 
@@ -733,6 +927,14 @@ Changes:
     of the EngineConfigManager plan, with a different name); noted that
     ui-board.js/ui-review.js/ui-audio.js/ui-toolbar.js (Phase-74 extracts)
     were REMOVED in round-4.
+    [EDITOR'S NOTE (round-50): the "NEVER CREATED" claim was wrong —
+    UciProtocolHandler.java, EngineConfigManager.java, MessageBus.java and
+    HapticHelper.java DID exist in the git tree: the v1.2.1 round-4/round-10
+    deletions only removed them from the build tree and never reached git,
+    and a zip-based sync later revived the file bodies, where they survived
+    until round-48 (RED-2) deleted them from git (1,031 lines total).
+    Likewise the 4 ui-*.js extracts were revived by the zip sync and were
+    finally deleted from git in round-47 (RED-1).]
   - Manual/Regalia-v1.2.3-manual-{zh,en}.html: UI architecture diagram
     updated to show ui-gameflow.js + ui-interactions.js as separate modules
     alongside ui.js (round-17 God Class split was not reflected in the
@@ -2181,10 +2383,18 @@ GPL v3 (DroidFish-derived or Stockfish):
       StockfishNative. The previous canonical-list entry misled readers into
       expecting a separate file. Removed from the canonical list (historical
       Phase-73 entries elsewhere still reference the plan, for archaeology).
+      [EDITOR'S NOTE (round-50): UciProtocolHandler.java DID exist in the
+      git tree — the v1.2.1 round-4 deletion never reached git and a
+      zip-based sync revived the file body; round-48 (RED-2) deleted it
+      from git for good (part of the 1,031-line RED-2 removal).]
   - src/main/java/com/Regalia/EngineConfigManager.java (v1.2.0 Phase 73 — NEVER CREATED)
       v1.2.3 round-33: same as above — EngineConfigHelper.java (Phase 81)
       was the eventual implementation, with a different name. The canonical
       list now points to EngineConfigHelper.java (see below).
+      [EDITOR'S NOTE (round-50): EngineConfigManager.java DID exist in the
+      git tree — the v1.2.1 round-4 deletion never reached git and a
+      zip-based sync revived the file body; round-48 (RED-2) deleted it
+      from git for good (part of the 1,031-line RED-2 removal).]
   - src/main/java/com/Regalia/HapticManager.java (v1.2.3 round-17 NEW)
       Haptic feedback (@JavascriptInterface delegate, vibration waveform API).
       Extracted from StockfishNative.java (~420 lines: isHapticEnabled /
@@ -2226,6 +2436,10 @@ GPL v3 (DroidFish-derived or Stockfish):
       postJsCallback + @JavascriptInterface methods directly. Removed from
       the canonical list (historical Phase-75 entries elsewhere still
       reference the plan, for archaeology).
+      [EDITOR'S NOTE (round-50): MessageBus.java DID exist in the git
+      tree — the v1.2.1 round-4 deletion never reached git and a zip-based
+      sync revived the file body; round-48 (RED-2) deleted it from git for
+      good (part of the 1,031-line RED-2 removal).]
   - src/main/java/com/Regalia/StatsActivity.java
       v1.0.8 PHASE 37: classified GPL v3 to match the stats.html asset it
       exclusively hosts (the two form an inseparable @JavascriptInterface

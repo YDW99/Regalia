@@ -1,3 +1,60 @@
+v1.2.3 round-50 (2026.9.6): StatsActivity/StabilizationHelper header style unified (comments only).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - StatsActivity.java (GPL v3) / StabilizationHelper.java (AGPL v3):
+    file-header style and wording aligned with the MainActivity template
+    — pure comment changes, no code touched.
+  - License classification: all files unchanged.
+
+v1.2.3 round-49 (2026.9.6): onImportCancelled + Chrome >= 84 gate + ackMainBackHandled + T1 fen echo + SAF hardening + EngineService try/catch.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - BUG-19 onImportCancelled hook added; ROB-1 WebView Chrome >= 84 gate
+    (MIN_SUPPORTED_CHROME_MAJOR, UA parsing; MainActivity:387-412 /
+    StatsActivity:550-578); BACK 250 ms acknowledgement
+    ackMainBackHandled; T1 eval crosstalk fix (onEngineEval's 8th
+    parameter echoes the fen); SAF 8KB chunked reads + 10 MB
+    PGN_MAX_CHARS; EngineService startForeground try/catch;
+    listFiles/getParentPath sandbox validation.
+  - License classification: all files unchanged.
+
+v1.2.3 round-48 (2026.9.6): BUG-2 OnBackInvokedCallback + SEC-6 log demotion + RED-2 dead-class deletion.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - BUG-2: Android 13+ OnBackInvokedCallback; SEC-6: engine-path logs
+    demoted to Log.d.
+  - RED-2: MessageBus.java / UciProtocolHandler.java /
+    EngineConfigManager.java / HapticHelper.java DELETED from git (1,031
+    lines total). These four zero-instantiation dead classes DID exist in
+    the git tree — the v1.2.1 round-4/round-10 deletions recorded below
+    only removed them from the build tree and never reached git, and a
+    zip-based sync later revived the file bodies (see the editor's notes
+    on the round-4 and round-10 entries below). This directory now holds
+    19 live Java classes.
+  - License classification: unchanged (deletions of dead code only; the
+    4 classes are removed from the classification lists).
+
+v1.2.3 round-47 (2026.9.5): SonarCloud backlog — java:S1181 x65 + dead code.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - java:S1181 x65 (catch (Throwable) -> catch (Exception)),
+    S1481/S1854 dead-code removals across the Java tree.
+  - License classification: all files unchanged.
+
+v1.2.3 round-46 (2026.9.5): PR53 CodeRabbit wrap-up — 8 Java files fixed.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - EngineSettingsHelper: autoConfig no longer overrides user-explicit
+    threads on import; SafPickerHelper: 8KB chunked reads + hard cap;
+    StockfishNative: initConfigInProgress fixes the round-44 A7
+    regression (startup UCI options were dropped) + ponderhit seq moved
+    earlier (race-compensation branch restored); ChessWebViewClient:
+    clearWebViewIfMatches prevents reusing a destroyed WebView;
+    MainActivity: fallback retry guard.
+  - License classification: all files unchanged.
+
+v1.2.3 round-45 (2026.9.5): FileIoHelper/PgnCacheManager if-merge (PR53 R1, R4).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - FileIoHelper.java (GPL v3) / PgnCacheManager.java (GPL v3): R4 —
+    redundant nested if conditions merged (PR53 R1 SonarCloud batch).
+    No behavior change.
+  - License classification: all files unchanged.
+
 v1.2.3 round-44 (2026.9.4): StockfishNative A-series + MainActivity B-series + engine config/IO C/D/E-series review fixes.
   - Version: versionCode=10203 (build.gradle F11 formula; was 123),
     versionName="1.2.3" (unchanged).
@@ -692,6 +749,12 @@ v1.2.1 round-10 (2026.7.14) — deep fix of review-D/E/F P2/P3 items:
     calls the inline performHapticInternal directly. Removed: the class
     file, the field declaration, and the instantiation. License
     classification: HapticHelper is no longer in the GPL v3 file list.
+    [EDITOR'S NOTE (v1.2.3 round-50): this round-10 removal never reached
+    the git tree — the zip-based sync cannot delete files, so the file body
+    was revived by a later zip sync and survived in the tree until v1.2.3
+    round-48 (RED-2) deleted HapticHelper.java from git (together with
+    MessageBus / UciProtocolHandler / EngineConfigManager, 1,031 lines
+    total). The historical entry above is preserved as written.]
   - StockfishNative.java (GPL v3): P2 concurrency hardening —
     _restartInProgress lock consistency (all 14 =false writes now go
     through _clearRestartInProgress() helper that takes _restartLock);
@@ -844,6 +907,12 @@ v1.2.1 (2026.7.13) — Fourth-pass refinement (round-4 cleanup — dead-code pur
     StockfishNative constructor but no method on the instance was ever called —
     only the MIN_SKILL_LEVEL / MAX_SKILL_LEVEL constants were referenced from
     EngineConfigHelper. Inlined those two constants (0, 20) and removed the class.
+    [EDITOR'S NOTE (v1.2.3 round-50): these round-4 deletions never reached
+    the git tree — the zip-based sync cannot delete files, so the file bodies
+    were revived by a later zip sync and survived in the tree until v1.2.3
+    round-48 (RED-2) deleted MessageBus.java / UciProtocolHandler.java /
+    EngineConfigManager.java / HapticHelper.java from git (1,031 lines
+    total). The historical entry above is preserved as written.]
   - Slimmed EngineHealthMonitor.java (GPL v3, 208 → 85 lines): removed the
     heartbeat thread, zombie-detection timeouts, and RecoveryCallback interface.
     These duplicated the inline equivalents in StockfishNative and could diverge.

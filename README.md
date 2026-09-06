@@ -25,7 +25,7 @@ Portrait mode — evaluation bar, move history, AI opponent display with ponder 
 - **Chess960 / Fischer Random Chess** (v1.0.4 NEW) — full support for the 960 starting positions with proper castling rules, SP-ID selector in New Game dialog, Shredder-FEN castling rights, and `UCI_Chess960` engine option
 - **Standardized PGN** (v1.0.4 NEW) — import/export follows the 1994 PGN spec strictly: Seven-Tag Roster always emitted, `[%eval]` / `[%clk]` / `[%emt]` annotations embedded, Result terminator enforced, tolerant parser auto-corrects malformed input
 - **NAG &amp; Visual Annotations** (v1.0.4 NEW) — NAG ($1-$19) support; automatic selection &amp; caching of `[%csl ...]` (square highlights) and `[%cal ...]` (arrows) per move: Square highlights — Blue=player net-control strong squares, Red=AI net-control strong squares, Yellow=high total-control squares, Green=neutral center squares; Arrows — Blue=multi-threat (one piece threatens 2+ enemy pieces), Red=check path, Yellow=queen-threat path, Green=escape squares
-- **Time-Control Chess** (v1.0.4 NEW) — Sudden Death / Fischer Increment / Bronstein Delay / US Delay modes; live clock display with low-time warning; auto-emits `[TimeControl "..."]` header and `[%clk HH:MM:SS]` per-move annotations; for untimed games, emits `[%emt HH:MM:SS]` (elapsed move time)
+- **Time-Control Chess** (v1.0.4 NEW) — Sudden Death / Fischer Increment / Bronstein Delay / US Delay modes; live clock display with low-time warning; auto-emits `[TimeControl "..."]` header and `[%clk HH:MM:SS]` per-move annotations; for untimed games, emits `[%emt HH:MM:SS]` (elapsed move time); flag-fall follows FIDE 6.9 — if the winner lacks mating material (incl. K+B+B same-color, KNN since round-40) the game is drawn
 - **Web Worker Pool** (v1.0.4 NEW) — `worker-pool.js` offloads PGN parsing, statistics computation, and control-map computation to a background thread; falls back to inline execution on devices without Worker support
 - **8 Difficulty Levels** — from beginner (800 ELO) to maximum strength (2800+ ELO), plus Skill Level mode
 - **PGN Import** — paste PGN from clipboard, or select a PGN file from your device
@@ -101,7 +101,9 @@ Bilingual, self-contained HTML manuals (open in any browser):
    ./gradlew assembleRelease
    ```
 
-The signed APK will be at `build/outputs/apk/release/`.
+The signed APK will be at `build/outputs/apk/release/`. Debug builds carry
+the `.debug` applicationId / `-debug` versionName suffix and can coexist
+with release installs (round-42, 42-11).
 
 For the full build guide — signing configuration (keystore.properties /
 `RELEASE_*` environment variables), the lint-baseline double-run, engine
@@ -112,6 +114,7 @@ see [BUILDING.md](BUILDING.md).
 
 ```
 Regalia/
+├── .github/                    # GitHub CI workflows (12) + issue/PR templates + README.license
 ├── src/main/
 │   ├── assets/
 │   │   ├── chess.src/          # Source files (JS + CSS + HTML template)
@@ -165,22 +168,25 @@ Regalia/
 │   │   └── README.license      # Per-file license classification for this directory
 │   ├── AndroidManifest.xml
 │   ├── README.license          # Per-file license classification for src/main/
-│   └── jniLibs/arm64-v8a/      # (build-time) libstockfish.so — Stockfish 18 engine binary
-                                #   NOT in source tarball; download separately and place here
-                                #   (see BUILDING.md). Excluded from source distribution
-                                #   to keep the tarball small and avoid redistributing the
-                                #   114MB engine binary with the source.
+│   └── jniLibs/arm64-v8a/      # (build-time) libstockfish.so + libc++_shared.so — Stockfish 18
+                                #   engine binary + NDK C++ runtime; NOT in source tarball;
+                                #   download separately and place here (see BUILDING.md).
+                                #   Excluded from source distribution to keep the tarball
+                                #   small and avoid redistributing the 114MB engine binary
+                                #   with the source.
 ├── Manual/                     # User manuals (HTML, self-contained)
 │   ├── Regalia-v1.2.3-manual-zh.html  # Chinese user manual (current v1.2.3)
 │   ├── Regalia-v1.2.3-manual-en.html  # English user manual (current v1.2.3)
 │   └── README.license          # Manual license classification
 ├── assets/                     # README assets (not packaged into APK)
 │   ├── screenshot.jpg          # Gameplay screenshot (referenced by README.md)
-│   ├── screenshot.png          # Same screenshot, PNG fallback
+│   ├── screenshot.png          # Same screenshot (byte-identical copy; JPEG content despite the .png extension)
 │   └── README.license          # License classification for this directory (AGPL v3)
 ├── gradle/wrapper/             # Gradle wrapper (8.11.1)
 │   ├── gradle-wrapper.jar
 │   └── gradle-wrapper.properties
+├── lib/arm64-v8a/              # Native-library license notices (the .so files themselves are build-time only)
+│   └── README.license          # License classification: libstockfish.so / libengine_bridge.so (GPL v3), libc++_shared.so (Apache v2.0 + LLVM Exception)
 ├── NOTICE                      # Third-party component notices + version history
 ├── NOTICE-DroidFish            # Original DroidFish notice
 ├── NOTICE-gradle               # Gradle notice (Apache v2.0)
@@ -194,7 +200,7 @@ Regalia/
 ├── UBIQUITOUS_LANGUAGE.md      # Domain terminology glossary (English) — 80+ chess/engine/PGN/UI terms
 ├── build.gradle                # Gradle build config (reads ../version.properties; versionCode=max(VERSION_BUILD, major*10000+minor*100+patch)=10203, v1/v2/v3 signing, NDK 27.2, cmake 3.31.6+)
 ├── settings.gradle             # Gradle settings (plugin/repo config)
-├── gradle.properties           # Gradle properties (JDK 21, Xmx2048m)
+├── gradle.properties           # Gradle properties (JDK 21, Xmx4096m)
 ├── build-chess.py              # Python build script (merges JS modules → chess.html)
 ├── proguard-rules.pro          # ProGuard/R8 rules (JS bridge keep, JNI keep, log stripping)
 ├── lint.xml                    # Lint severity config (security=error, i18n/icon=ignore)
@@ -310,7 +316,7 @@ During the development stage, the version number used was: **v18.x.x**. For futu
 
 **v1.2.3** (versionCode 10203) — current release
 
-The v1.2.3 release is a **bug-fix + review-response release** on top of v1.2.2, driven by a user-reported P0 JS error and two multi-skill review reports (Round 17 — Issue #48, 24 findings; Round 18 — Issue #49, 32 findings). After rigorous false-positive verification, the actionable findings were fixed and the version was bumped v1.2.2→v1.2.3 (versionCode 122→123).
+The v1.2.3 release is a **bug-fix + review-response release** on top of v1.2.2, driven by a user-reported P0 JS error and two multi-skill review reports (Round 17 — Issue #48, 24 findings; Round 18 — Issue #49, 32 findings). After rigorous false-positive verification, the actionable findings were fixed and the version was bumped v1.2.2→v1.2.3 (VERSION_BUILD 122→123; since round-44 versionCode = max(VERSION_BUILD, major*10000+minor*100+patch) = 10203).
 
 **Recent rounds (40–44, 2026-08-10 – 2026-09-04)** — round-40: bug-fix tier 40-1~40-6
 (restartEngine self-interrupt fix + state-machine hardening; castling-rights

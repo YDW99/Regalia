@@ -1,33 +1,29 @@
-// StatsActivity.java — Fullscreen WebView activity for the 📊统计 stats page.
-// AI-GEN: AI assisted
-// This code was AI-assisted and has been reviewed for GPL v3 compliance.
-
-//
-// Copyright (C) 2026 Regalia
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with this program. If not, see <https://www.gnu.org/licenses/>.
-//
-// The stats.html asset contains PGN parsing logic derived from DroidFish
-// (GameTree/PgnToken/PgnScanner, Copyright (C) Peter Österlund, GPL v3).
-// v1.0.8 PHASE 37/49: Although this Java file is original Regalia code, it is
-//   classified as GPL v3 (not AGPL v3) to match the license of the stats.html
-//   asset it exclusively hosts — the two form a single inseparable unit
-//   (StatsActivity loads stats.html and the two communicate via
-//   @JavascriptInterface). Keeping them under the same license avoids
-//   dual-license confusion for redistributors. The GPL v3 boilerplate above
-//   is therefore authoritative; earlier comments mentioning "AGPL v3" were
-//   stale and have been removed.
+/*
+ * Regalia - Stats Activity (fullscreen WebView host for stats.html)
+ * Copyright (C) 2026 Regalia
+ *
+ * The hosted stats.html asset contains PGN parsing logic derived from
+ * DroidFish (GameTree/PgnToken/PgnScanner, Copyright (C) Peter Österlund,
+ * GPL v3); this file is original Regalia code but is classified GPL v3
+ * (not AGPL v3) to match stats.html — the two form a single inseparable
+ * unit (v1.0.8 PHASE 37/49).
+ *
+ * AI-GEN: AI assisted
+ * This code was AI-assisted and has been reviewed for GPL v3 compliance.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program. If not, see <https://www.gnu.org/licenses/>.
+ */
 
 package com.Regalia;
 
