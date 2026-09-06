@@ -102,7 +102,7 @@ jobs:
             let notes = `## What's New in ${release.tag_name}\n\n`;
 
             if (previousRelease) {
-              notes += `**Full Changelog**: ${release.html_url}/compare/${previousRelease.tag_name}...${release.tag_name}\n\n`;
+              notes += `**Full Changelog**: https://github.com/${context.repo.owner}/${context.repo.repo}/compare/${previousRelease.tag_name}...${release.tag_name}\n\n`;
             }
 
             // Add contributor list
@@ -130,7 +130,7 @@ jobs:
             notes += `---\n\n`;
             notes += `### Installation\n`;
             notes += `Download the APK from the assets below and install it on your Android device.\n`;
-            notes += `Note: This app requires Stockfish chess engine binaries (\`libstockfish.so\`) to be built separately via NDK.\n\n`;
+            notes += `Note: This app bundles the official prebuilt Stockfish 18 engine binary (\`libstockfish.so\`, downloaded from the official Stockfish release into \`src/main/jniLibs/\`); the NDK is only used to build the \`libengine_bridge.so\` JNI shim from \`engine_jni.cpp\`.\n\n`;
             notes += `> ⚠️ **Note**: If you encounter any issues, please [report them here](https://github.com/${context.repo.owner}/${context.repo.repo}/issues).\n`;
 
             // Update the release with generated notes
