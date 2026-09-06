@@ -76,6 +76,13 @@ public class SafPickerHelper {
     // PGN 导入行数上限，防止 OOM
     private static final int PGN_MAX_LINES = 5000;
 
+    // v1.2.3 round-49 (review-4 P2-1): PGN 导入字符数硬上限（10MB）。
+    //   行数上限（PGN_MAX_LINES）挡不住「单行超大」文件 —— readLine() 会在
+    //   行数检查执行前把整行物化进内存。分块读 + 字符硬上限后内存占用严格
+    //   不超过 PGN_MAX_CHARS + 一个 8KB 块缓冲（同 readTextFromUri 的
+    //   round-46 CR#15 修法）。超限直接 IOException → 既有 catch → toast。
+    private static final int PGN_MAX_CHARS = 10_000_000;
+
     // v1.2.3 round-41: 设置导入字符数上限（1MB），防止 OOM。
     //   与 PGN 导入的行数截断不同，设置文件是 JSON，截断会破坏解析，
     //   因此超限直接快速失败（抛 IOException → 既有 catch → toast）。
@@ -377,14 +384,33 @@ public class SafPickerHelper {
             throw new java.io.IOException("openInputStream returned null for " + uri);
         }
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(is, "UTF-8"))) {
+            // v1.2.3 round-49 (review-4 P2-1): 8KB 分块读 + 字符硬上限 +
+            //   跨块换行计数，取代 readLine()（同 readTextFromUri 的
+            //   round-46 CR#15 写法）。readLine() 会在任何上限检查之前把
+            //   整行物化进内存 —— 单个无换行的数百 MB 文件会直接在主线程
+            //   OOM（onActivityResult 路径，Error 不被非主线程抑制器覆盖）。
+            //   5000 行截断语义保留：内容截到第 5000 行的换行为止，追加
+            //   告警注释。行尾原样保留（CRLF 不再归一化为 \n，下游 PGN
+            //   解析按 \r?\n 分行）。
             StringBuilder sb = new StringBuilder();
-            String line;
+            char[] chunk = new char[8192];
             int lineCount = 0;
             boolean truncated = false;
-            while ((line = reader.readLine()) != null) {
+            int n;
+            while ((n = reader.read(chunk, 0, chunk.length)) != -1) {
                 if (lineCount >= PGN_MAX_LINES) { truncated = true; break; }
-                sb.append(line).append("\n");
-                lineCount++;
+                if (sb.length() + n > PGN_MAX_CHARS) {
+                    throw new java.io.IOException("PGN file too large (>" + PGN_MAX_CHARS + " chars)");
+                }
+                int appendLen = n;
+                for (int i = 0; i < n; i++) {
+                    if (chunk[i] == '\n') {
+                        lineCount++;
+                        if (lineCount >= PGN_MAX_LINES) { appendLen = i + 1; break; }
+                    }
+                }
+                sb.append(chunk, 0, appendLen);
+                if (appendLen < n) { truncated = true; break; }
             }
             String content = sb.toString();
             if (truncated) {

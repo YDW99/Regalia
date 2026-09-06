@@ -42,11 +42,35 @@ function startGame(){
 function _startGameImpl(){
   // v1.0.8 PHASE 22 supplement: new-game sound (号角式三音和弦)
   try{if(typeof playSound==='function')playSound('newgame');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+  // v1.2.3 round-49 Stage-3 (review-2 P2): shed ALL setup-mode state when a
+  //   new game is started from the ⚔️ dialog while setup mode is active —
+  //   same fix as quickFreeOpening (ui-interactions.js, v1.0.8 PHASE 7).
+  //   Without this, setupMode stayed true across the gameState=initState()
+  //   replacement below: the fresh game rendered the setup panel, and a later
+  //   Done ran validateSetupPosition on a state without setupCastleMarks
+  //   (resetting ALL castlingRights to false). The stale
+  //   window._setupEntrySnap could also misfire the BUG-13 modification gate
+  //   (exitSetup / toggleSetup exit branch) against the NEW game's position.
+  //   NOTE: this cannot live in _resetGameUIState — _exitSetupImpl calls
+  //   _resetGameUIState while setupMode is still true and then flips the
+  //   flag itself via its tail toggleSetup(); clearing setupMode there would
+  //   invert that flip. A lingering BUG-13 confirm overlay is removed
+  //   centrally by _resetGameUIState (called below).
+  if(typeof setupMode!=='undefined'&&setupMode){
+    setupMode=false;
+    setupMarkerMode=null;
+    setupPiece=null;
+    setupErrors=[];
+    setupHistory=[];
+    setupRedoStack=[];
+  }
+  if(typeof window!=='undefined')window._setupEntrySnap=null;
   showNewGameDialog=false;
   playerColor=dlgPlayerColor;
   useBookMoves=dlgBookMoves;
-  // v1.0.8 PHASE 18 Task 2: Reset virtual list state on new game.
-  _resetRvVirtualState();
+  // v1.2.3 round-48 (RED-7): _resetRvVirtualState() call removed — the virtual
+  //   list pipeline is disabled by design (RV_VIRTUAL_THRESHOLD=Infinity) and
+  //   its per-session bookkeeping was deleted.
   // v1.0.8 BUG FIX:
   // _reviewEvalCache is keyed by reviewStep (0-based per-game index since
   // v1.0.8 Phase 15: step 0 = initial position, steps 1..N = post-move).
@@ -275,6 +299,67 @@ function _tickGameClock(){
   _updateClockDisplay();
 }
 
+// v1.2.3 round-48 (BUG-1): clock pause/resume for review & setup modes.
+// _tickGameClock early-returns while setupMode||reviewMode (above), but the
+// wall clock keeps aging clock.lastMoveTimestamp during the frozen session —
+// on exit, the next tick (or recordMoveEnd) used to deduct the ENTIRE frozen
+// interval in one lump, often firing a spurious flag fall
+// (_onGameClockExpired). The pause marker lives on window (same pattern as
+// window._pendingOpenStats in ui.js) to avoid a new top-level let/const in
+// the concatenated global scope.
+//
+// Pairing contract (all entry/exit paths):
+//   ENTER: enterReview (ui.js), toggleSetup false→true (ui-interactions.js)
+//   EXIT:  exitReview (ui.js), _renderReviewMode invalid-state bailout (ui.js),
+//          toggleSetup true→false (covers "Done"/exitSetup too — _exitSetupImpl
+//          ends by calling toggleSetup).
+//   Game-start paths (new game / quickFreeOpening / FEN/PGN import /
+//   setup-complete) funnel through _resetGameUIState, which nulls gameClocks
+//   AND clears the pause marker — no resume needed there.
+
+// Record the freeze. No-op when no clock game is active or a side already
+// flagged out; keeps the FIRST pause timestamp if already paused (nested
+// entry, e.g. setup entered during review, must not extend the freeze).
+function _pauseGameClock(){
+  if(typeof gameClocks!=='undefined'&&gameClocks&&!gameClockExpired
+     &&(typeof window._clockPauseStart==='undefined'||window._clockPauseStart==null)){
+    window._clockPauseStart=Date.now();
+  }
+}
+
+// Resume: clear the pause marker and rebase the side-to-move's
+// lastMoveTimestamp to now, so the frozen interval is never deducted. Must be
+// called BEFORE the tick can run again (i.e., synchronously inside the exit
+// path, after gameState is restored). Only the side to move needs the rebase:
+// the other side's timestamp is reset by recordMoveEnd when the mover moves.
+//
+// v1.2.3 round-49 Stage-3 (review-2 P3-1 — verified UI-UNREACHABLE, documented
+//   only, NO code change): the pause marker is a single timestamp, not a
+//   reference count. In a NESTED pause (setup entered during an active
+//   review), _pauseGameClock keeps the FIRST timestamp, but this resume
+//   unconditionally clears the marker + rebases on the INNER exit (setup
+//   exit). The outer exitReview()'s resume then no-ops (marker already null),
+//   and the next tick deducts the inner-exit→outer-exit wall-clock gap in one
+//   lump (a spurious flag fall is only possible on a nearly-empty clock).
+//   Reachability audit (round-49 Stage-3): the review UI is a fixed
+//   inset:0, z-index:200 overlay (index.html.tpl .review-overlay) that fully
+//   covers the main header's setup button; the review header (.review-hdr,
+//   ui.js _renderReviewMode) has NO setup button; no keyboard binding calls
+//   toggleSetup; handleBackPress exits review BEFORE touching setup mode
+//   (ui-interactions.js). toggleSetup itself has no reviewMode guard, so the
+//   nested sequence is only constructible via console / evaluateJavascript.
+//   Conclusion per review-2.md: NOT UI-reachable → document, don't fix. If a
+//   future UI path ever nests the pauses, fix by reference-counting the pause
+//   or by gating this rebase on `!setupMode && !reviewMode`.
+function _resumeGameClock(){
+  if(typeof window._clockPauseStart==='undefined'||window._clockPauseStart==null)return;
+  window._clockPauseStart=null;
+  if(typeof gameClocks!=='undefined'&&gameClocks&&!gameClockExpired&&!gameOver
+     &&typeof gameState!=='undefined'&&gameState&&gameClocks[gameState.currentTurn]){
+    gameClocks[gameState.currentTurn].lastMoveTimestamp=Date.now();
+  }
+}
+
 // Called when a side's clock runs out
 function _onGameClockExpired(color){
   if(gameClockTimerId){clearInterval(gameClockTimerId);gameClockTimerId=null;}
@@ -418,8 +503,14 @@ function formatClock(sec){
 // Lightweight DOM update for clock display (avoid full render() on every tick)
 function _updateClockDisplay(){
   if(!gameClocks)return;
-  const wEl=document.getElementById('clock-white');
-  const bEl=document.getElementById('clock-black');
+  // v1.2.3 round-48 (PERF-4): route the lookups through ui.js's _el() element
+  //   cache instead of two getElementById calls per 200ms tick. The cache is
+  //   invalidated by _invalidateElCache() on every full render's innerHTML
+  //   rebuild (_postRenderFinalize), so element-rebuild staleness is covered;
+  //   the lightweight paths (updateAfterMove/_updateChangedSquares) never
+  //   rebuild the player bars, so the references stay valid between renders.
+  const wEl=_el('clock-white');
+  const bEl=_el('clock-black');
   const wRem=gameClocks.white.displayRemainingSec!=null?gameClocks.white.displayRemainingSec:gameClocks.white.remainingSec;
   const bRem=gameClocks.black.displayRemainingSec!=null?gameClocks.black.displayRemainingSec:gameClocks.black.remainingSec;
   if(wEl)wEl.textContent=formatClock(wRem);
@@ -429,4 +520,4 @@ function _updateClockDisplay(){
   if(bEl)bEl.style.color=(bRem<30)?'#e74c3c':'var(--text)';
 }
 
-export {startGame,_startGameImpl,initGameClocks,_tickGameClock,_onGameClockExpired,recordMoveEnd,formatClock,_updateClockDisplay};
+export {startGame,_startGameImpl,initGameClocks,_tickGameClock,_onGameClockExpired,recordMoveEnd,formatClock,_updateClockDisplay,_pauseGameClock,_resumeGameClock};

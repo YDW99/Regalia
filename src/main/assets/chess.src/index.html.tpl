@@ -35,7 +35,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
 <!-- v1.2.3 round-18: removed frame-ancestors — ignored inside <meta> (only
      honored as an HTTP response header), dead directive. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; worker-src blob:; connect-src https://tablebase.lichess.ovh; img-src data: file: blob:; base-uri 'self'; form-action 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; worker-src blob:; connect-src https://tablebase.lichess.ovh; img-src data: blob:; base-uri 'self'; form-action 'none'; object-src 'none'">
 <title>Regalia v1.2.3</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}

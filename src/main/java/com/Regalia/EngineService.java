@@ -122,11 +122,23 @@ public class EngineService extends Service {
 
         // On Android 14+ (API 34+), startForeground() must include
         // the foreground service type parameter.
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(NOTIFICATION_ID, notification,
-                    android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
-        } else {
-            startForeground(NOTIFICATION_ID, notification);
+        // v1.2.3 round-49 (review-4 P3-5): wrap in try/catch — a throw here
+        //   (OEM specialUse-FGS quirk, SecurityException, etc.) would otherwise
+        //   escape onCreate as a hard crash AND leave the system-side
+        //   "Service.startForeground() not called" superimposed crash. On
+        //   failure: log, keep isRunning=false (callers stay honest), and
+        //   stopSelf() so the service doesn't linger half-started.
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                startForeground(NOTIFICATION_ID, notification,
+                        android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
+            } else {
+                startForeground(NOTIFICATION_ID, notification);
+            }
+        } catch (Throwable e) {
+            Log.e(TAG, "startForeground failed in onCreate — stopping service", e);
+            try { stopSelf(); } catch (Throwable ignored) {}
+            return;
         }
         // round-47 (S2696 kept): isRunning/lastStatusInfo 是进程级 Service 状态，由静态访问器跨组件读取（Service 为单例），有意保持 static 字段写入。
         isRunning = true;

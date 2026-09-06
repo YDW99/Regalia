@@ -240,6 +240,12 @@ let _statsWorker=null;
 let _statsWorkerSupported=(typeof Worker!=='undefined');
 let _heatmapCacheKey=null; // key for cached heatmap result
 let _heatmapCacheResult=null; // cached {ctrlW,ctrlB,posCount}
+// v1.2.3 round-48 (ROB-3): key for which the heatmap computation last FAILED.
+//   Set in the .catch of _computeHeatmapStatsAsync so renderStats can show a
+//   user-visible failure notice instead of silently omitting the section, and
+//   so a failed computation is not retriggered on every render. Cleared when a
+//   new PGN is imported.
+let _heatmapFailedKey=null;
 
 // Worker source — self-contained heatmap computation (no external deps).
 // Mirrors the _computeCtrl + _attacked logic but runs off the main thread.
@@ -357,6 +363,16 @@ function _computeHeatmapStatsAsync(boards){
     var taskId=w._nextTaskId++;
     var timeout=setTimeout(function(){
       delete w._pending[taskId];
+      // v1.2.3 round-48 (ROB-3): terminate the timed-out worker + revoke its
+      //   blob URL + drop the reference (mirrors the onerror branch above).
+      //   Previously a stuck/deadlocked worker was kept alive: every
+      //   subsequent task was posted to the SAME unresponsive worker and
+      //   chained into another 30s timeout. Note: _statsWorkerSupported is
+      //   intentionally left true — a single slow task doesn't condemn the
+      //   worker feature; the next task gets a fresh worker.
+      try{w.terminate();}catch(_e){}
+      try{if(w._url)URL.revokeObjectURL(w._url);}catch(_e){}
+      if(_statsWorker===w)_statsWorker=null;
       reject(new Error('Heatmap worker timeout (30s)'));
     },30000);
     w._pending[taskId]={resolve:function(r){
@@ -429,6 +445,38 @@ let _fenSelected=false;
 // closeStatsPage without setting the imported PGN.
 let _statsImportedPGN=null;
 
+// v1.2.3 round-48 (PERF-2): parsePGN result cache keyed by the exact PGN text.
+//   Previously render() re-parsed on every call and each of the four nav
+//   handlers (+ selectVariationMove) parsed AGAIN before delegating to
+//   selectMove/selectVariationMove → render, so a single ⏮◀▶⏭ click cost ≥2
+//   full parses. parsePGN depends on the PGN text + _payload.moveRecords +
+//   gameVariant; the import paths (_statsPastePGN / onStatsPGNFileRead) always
+//   install a NEW pgn string, so a new PGN is an automatic cache miss. A null
+//   parse result is never cached (render must re-attempt to show the error
+//   state).
+// v1.2.3 round-49 (F3): the key also folds in the moveRecords length and
+//   gameVariant. Two violations of the old pgn-only key: (a) pasting text
+//   byte-identical to _payload.pgn hit the cache even though _statsPastePGN
+//   had just nulled moveRecords — serving a result computed via the
+//   authoritative-records path; (b) parsePGN's output depends on gameVariant
+//   (Chess960 castling in executeMove) and itself (re)sets gameVariant from
+//   the [Variant] header, so the stored key is captured AFTER the parse to
+//   fold in the post-parse variant.
+let _parsedCacheKey=null;
+let _parsedCacheResult=null;
+function _getParsed(){
+  const pgn=_payload?_payload.pgn:null;
+  const _mrLen=(_payload&&_payload.moveRecords&&Array.isArray(_payload.moveRecords))?_payload.moveRecords.length:0;
+  const _key=pgn+'|'+_mrLen+'|'+(gameVariant||'');
+  if(_parsedCacheKey===_key&&_parsedCacheResult)return _parsedCacheResult;
+  const parsed=parsePGN(pgn);
+  // Key captured post-parse: parsePGN may have (re)set gameVariant from the
+  // [Variant] header, so the stored key must reflect the state the result was
+  // actually computed under (F3).
+  if(parsed){_parsedCacheKey=pgn+'|'+_mrLen+'|'+(gameVariant||'');_parsedCacheResult=parsed;}
+  return parsed;
+}
+
 // i18n
 const _i18n={
   'metadata':{zh:'对局元数据',en:'Game Metadata'},
@@ -438,6 +486,14 @@ const _i18n={
   'pgn_text':{zh:'PGN文本（经加工）',en:'PGN Text (After processing)'},
   // v1.0.4 Rev29: i18n key for PGN parse error (was hardcoded English)
   'pgn_parse_error':{zh:'PGN 解析失败',en:'PGN parse error'},
+  // v1.2.3 round-48 (BUG-14): notice when a multi-game PGN is truncated to its first game
+  'multi_game_notice':{zh:'检测到多局 PGN：仅解析并统计第一局',en:'Multi-game PGN detected: only the first game was parsed'},
+  // v1.2.3 round-49 (F8): notice when the payload's visualAnnotations were dropped (900KB cap)
+  'annotations_truncated':{zh:'对局数据过大：部分视觉注解已省略',en:'Game data too large: some visual annotations were omitted'},
+  // v1.2.3 round-49 (F9): notice when a paste/import runs without a game payload (standalone mode)
+  'payload_missing_notice':{zh:'未检测到当前对局数据——已作为独立 PGN 导入',en:'No current game data — imported as a standalone PGN'},
+  // v1.2.3 round-48 (ROB-3): user-visible notice when the heatmap computation fails (was silently omitted)
+  'heatmap_failed':{zh:'热力图计算失败（已跳过）',en:'Heatmap computation failed (skipped)'},
   // v1.0.4 Rev27: Board display section heading (DeepSeek review feature)
   'position_board':{zh:'当前局面',en:'Current Position'},
   // v1.1.1 Phase 60: Navigation button labels (board nav, below stats board)
@@ -638,6 +694,32 @@ function parsePGN(pgnText){
   if(!pgnText)return null;
   // Normalize
   let text=pgnText.replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+  // v1.2.3 round-48 (BUG-14): Multi-game PGN — keep only the FIRST game,
+  //   mirroring the main page's worker-pool.js _syncParsePGNText
+  //   (text.split(...) → take gameBlocks[0]). Previously the whole
+  //   file was parsed as one game: later games' headers silently overwrote
+  //   earlier ones, and the second game's movetext either cascade-failed
+  //   (silently dropped by the `if(result)` no-else path) or was mis-merged
+  //   into the first game when its moves happened to be legal in the first
+  //   game's end position. `_multiGame` is surfaced on the result so render()
+  //   can show a user-visible truncation notice.
+  // v1.2.3 round-49 (F2/P2-2): fix the polynomial-backtracking DoS. The old
+  //   /\n\s*\n(?=\[)/ is O(k²) on long blank-line runs NOT followed by '['
+  //   (measured: 16k newlines → 440ms; this parse runs on the MAIN thread in
+  //   the paste/import path → ANR; ~900KB run → ~20min). The round-47 form
+  //   /\n[^\S\n]*\n(?:[^\S\n]*\n)*(?=\[)/ only silenced the S8786 lint — on the
+  //   failure path its (?:...)* group still re-walks the whole run per start
+  //   position (measured: 16k → 587ms, same O(k²)). The added lookbehind
+  //   (?<!\n) restricts match starts to the FIRST '\n' of each blank-line run
+  //   (positions inside a run fail in O(1)) → linear total; measured 16k →
+  //   1.1ms, 900k → 63ms. Split results are byte-identical to the old regex
+  //   (300k-case fuzz, 0 mismatches): any match starting mid-run implies an
+  //   equivalent match at the run's first '\n', which split() finds first.
+  //   Lookbehind needs Chrome 62+ — inside the WebView≥84 floor. Keep in sync
+  //   with worker-pool.js (_WORKER_SRC + _syncParsePGNText copies).
+  const _gameBlocks=text.split(/(?<!\n)\n[^\S\n]*\n(?:[^\S\n]*\n)*(?=\[)/);
+  const _multiGame=_gameBlocks.length>1;
+  if(_multiGame)text=_gameBlocks[0];
   // Extract headers
   const headers={};
   const headerRe=/\[(\w+)\s+"([^"]*)"\]/g;
@@ -647,6 +729,14 @@ function parsePGN(pgnText){
   }
   // Extract FEN if present
   let startFEN=headers.FEN||null;
+  // v1.2.3 round-49 (F3): reset gameVariant at the start of every parse. The
+  //   [Variant] header below only ever SET gameVariant (never cleared it), so
+  //   a Chess960 paste/import leaked into the next standard-rules import, and
+  //   executeMove's _minDist=1 then misread a 1-square king move (with a stale
+  //   castling right in a malformed FEN) as Chess960 castling — corrupting the
+  //   replayed board. Reset to the payload-declared variant first, then let
+  //   the PGN header override.
+  gameVariant=(_payload&&_payload.gameVariant)?_payload.gameVariant:null;
   // v1.1.0 Phase 54 rev22: Detect Chess960 variant from [Variant] header
   if(headers.Variant){
     const v=headers.Variant.toLowerCase().replace(/\s+/g,'');
@@ -665,8 +755,10 @@ function parsePGN(pgnText){
     if(fenParts.length>=2&&fenParts[1]==='b')isBlackToMoveStart=true;
   }
   // Extract comments (for display in PGN text section)
+  // v1.2.3 round-48 (BUG-14): extract from the first-game text only (not the
+  //   full multi-game input), so dropped games' comments are not collected.
   const comments=[];
-  let cText=pgnText.replace(/\r\n/g,'\n');
+  let cText=text;
   const commentRe=/\{([^{}]*)\}/g;
   let cm;
   while((cm=commentRe.exec(cText))!==null){
@@ -683,7 +775,7 @@ function parsePGN(pgnText){
       isBlackToMoveStart=true;
     }
     const result=parseFromMoveRecords(_payload.moveRecords,startFEN,headers,comments);
-    if(result)result.isBlackToMoveStart=isBlackToMoveStart;
+    if(result){result.isBlackToMoveStart=isBlackToMoveStart;result.multiGame=_multiGame;} // round-48 (BUG-14): surface multi-game truncation
     return result;
   }
 
@@ -773,7 +865,7 @@ function parsePGN(pgnText){
     }
     tokenIdx++;
   }
-  return {headers,moves,startFEN,comments,isBlackToMoveStart};
+  return {headers,moves,startFEN,comments,isBlackToMoveStart,multiGame:_multiGame}; // round-48 (BUG-14): multiGame flag for the truncation notice
 }
 
 // v1.0.2 FIX: Build parsed moves from authoritative move records sent by the
@@ -894,7 +986,34 @@ function fenToState(fen){
       const p=board[r][c];
       if(p&&p.type==='king'){if(p.color==='white')wk={row:r,col:c};else bk={row:r,col:c};}
     }
-    return {board,currentTurn,castlingRights,enPassantTarget:null,halfMoveClock:0,fullMoveNumber:Number.parseInt(parts[5])||1,wk,bk};
+    // v1.2.3 round-48 (BUG-15): parse the en passant target (parts[3]) and the
+    //   halfmove clock (parts[4]) instead of hardcoding null/0. Ep handling
+    //   mirrors the main app's tablebase.js fenToState: the ep square must be
+    //   on rank 6 (row 2) when White is to move / rank 3 (row 5) when Black is
+    //   to move, and a side-to-move pawn must actually be able to capture.
+    //   Malformed ep/halfmove fields are tolerated (fall back to null/0 — the
+    //   whole FEN is NOT rejected; this parser is a lenient display parser and
+    //   is already wrapped in try/catch).
+    let enPassantTarget=null;
+    const epStr=parts[3];
+    if(epStr&&epStr!=='-'&&epStr.length===2){
+      const ec=epStr.charCodeAt(0)-97;
+      const er=8-Number.parseInt(epStr[1],10);
+      if(ec>=0&&ec<8&&er>=0&&er<8){
+        const validRow=(currentTurn==='white'&&er===2)||(currentTurn==='black'&&er===5);
+        if(validRow){
+          const pd=currentTurn==='white'?1:-1;
+          let _epHasCap=false;
+          for(const dc of[-1,1]){
+            const cr2=er+pd,cc2=ec+dc;
+            if(cr2>=0&&cr2<8&&cc2>=0&&cc2<8&&board[cr2][cc2]&&board[cr2][cc2].type==='pawn'&&board[cr2][cc2].color===currentTurn){_epHasCap=true;break;}
+          }
+          if(_epHasCap)enPassantTarget={row:er,col:ec};
+        }
+      }
+    }
+    const halfMoveClock=(parts[4]!=null&&/^\d+$/.test(parts[4]))?Number.parseInt(parts[4],10):0;
+    return {board,currentTurn,castlingRights,enPassantTarget,halfMoveClock,fullMoveNumber:Number.parseInt(parts[5])||1,wk,bk};
   }catch(e){return null;}
 }
 
@@ -958,7 +1077,7 @@ function applySANMove(state,san){
   // Disambiguation
   let disambFile=-1,disambRank=-1;
   let rest=cleanSAN.slice(idx,-2);
-  if(rest.includes('x'))rest=rest.replaceAll('x',''); // v1.2.3 (S7781): replaceAll — SAN 至多一个 x，语义等价
+  if(rest.includes('x'))rest=rest.replace(/x/g,''); // v1.2.3 round-49: replaceAll→replace — replaceAll 需 Chrome 85，突破 WebView≥84 门禁下限；S7781 有意保留（建议 Accept）
   for(const ch of rest){
     if(ch>='a'&&ch<='h')disambFile=ch.charCodeAt(0)-97;
     else if(ch>='1'&&ch<='8')disambRank=8-Number.parseInt(ch);
@@ -1304,6 +1423,51 @@ function buildSAN(state,move,newState,captured){
   }
   if(piece.type!=='pawn'){
     n+=piece.type==='knight'?'N':piece.type[0].toUpperCase();
+    // v1.2.3 round-48 (BUG-16): PGN-standard SAN disambiguation, ported from
+    //   the main app's moveAlg (game-logic.js): find all OTHER same-type,
+    //   same-color pieces that can LEGALLY reach the same target square.
+    //   - if no rival shares the moving piece's file  → file qualifier (Nbd2)
+    //   - else if no rival shares the rank            → rank qualifier (N1d2)
+    //   - else                                        → both (Qa1b2)
+    //   Kings are skipped (one per side — never ambiguous).
+    if(piece.type!=='king'){
+      let numSameTarget=0,numSameFile=0,numSameRow=0;
+      for(let r=0;r<8;r++)for(let c=0;c<8;c++){
+        if(r===move.from.row&&c===move.from.col)continue;
+        const p2=state.board[r][c];
+        if(!p2||p2.type!==piece.type||p2.color!==piece.color)continue;
+        if(!canMoveTo(state,r,c,move.to.row,move.to.col))continue;
+        // King-safety of the rival's move: in-place simulate on the pre-move
+        //   board, verify the moving side's king is not left in check, revert.
+        //   Done manually (not via executeMove) to avoid the recursive
+        //   executeMove→buildSAN→executeMove loop (mirrors the in-place
+        //   simulation style of the checkmate detection below).
+        const savedDest=state.board[move.to.row][move.to.col];
+        state.board[move.to.row][move.to.col]=p2;
+        state.board[r][c]=null;
+        const kPos=piece.color==='white'?state.wk:state.bk;
+        let safe=true;
+        if(kPos){
+          const atk=OPP_COLOR[piece.color];
+          for(let ar=0;ar<8&&safe;ar++)for(let ac=0;ac<8&&safe;ac++){
+            const ap=state.board[ar][ac];
+            if(ap&&ap.color===atk&&canMoveTo(state,ar,ac,kPos.row,kPos.col))safe=false;
+          }
+        }
+        state.board[r][c]=p2;
+        state.board[move.to.row][move.to.col]=savedDest;
+        if(safe){
+          numSameTarget++;
+          if(c===move.from.col)numSameFile++;
+          if(r===move.from.row)numSameRow++;
+        }
+      }
+      if(numSameTarget>0){
+        if(numSameFile===0)n+=String.fromCharCode(97+move.from.col);
+        else if(numSameRow===0)n+=(8-move.from.row);
+        else n+=String.fromCharCode(97+move.from.col)+(8-move.from.row);
+      }
+    }
   }
   if(captured){
     if(piece.type==='pawn')n+=String.fromCharCode(97+move.from.col);
@@ -1559,9 +1723,13 @@ function extractMoveTimes(pgnText){
   const usedTimes=[];
   const clkTimes=[];
   let i=0;
-  const sanRe=/^([KQRBN][a-h]?[1-8]?x?[a-h][1-8][+#]?=?[QRBN]?|O-O(?:-O)?|0-0(?:-0)?|[a-h]x?[a-h][1-8](?:=[QRBN])?[+#]?|[a-h][1-8][+#]?)/;
-  const moveNumRe=/^(\d+\.+)/;
-  const resultRe=/^(1-0|0-1|1\/2-1\/2|\*)\b/;
+  // v1.2.3 round-48 (PERF-1): sticky ('y') regexes anchored via lastIndex=i
+  //   replace moveText.substring(i).match(/^.../) — identical matches (sticky
+  //   anchors at lastIndex, exactly like ^ anchors the substring) without
+  //   constructing an O(n) substring per token (O(n²) total on long PGNs).
+  const sanRe=/([KQRBN][a-h]?[1-8]?x?[a-h][1-8][+#]?=?[QRBN]?|O-O(?:-O)?|0-0(?:-0)?|[a-h]x?[a-h][1-8](?:=[QRBN])?[+#]?|[a-h][1-8][+#]?)/y;
+  const moveNumRe=/(\d+\.+)/y;
+  const resultRe=/(1-0|0-1|1\/2-1\/2|\*)/y; // v1.2.3 round-49 (F4): dropped the trailing \b (same fix as renderPGNText's _resTestSticky) — a bare `*` could never match at a whitespace/EOS boundary; behavior here was equivalent either way (the `i++` skip consumed it), this just removes the dead test/capture asymmetry.
   // Track each player's PREVIOUS remaining clock, for increment-based used-time
   // calculation. Initialized to baseTime when the first [%clk] is seen.
   // (We lazy-init so that PGNs without [TimeControl] don't fabricate times.)
@@ -1675,19 +1843,22 @@ function extractMoveTimes(pgnText){
       continue;
     }
     // Move number (1. or 1...)
-    const numM=moveText.substring(i).match(moveNumRe);
+    moveNumRe.lastIndex=i;
+    const numM=moveNumRe.exec(moveText);
     if(numM){
       i+=numM[0].length;
       continue;
     }
     // Result marker
-    const resM=moveText.substring(i).match(resultRe);
+    resultRe.lastIndex=i;
+    const resM=resultRe.exec(moveText);
     if(resM){
       i+=resM[0].length;
       continue;
     }
     // SAN move — push a slot for it
-    const sanM=moveText.substring(i).match(sanRe);
+    sanRe.lastIndex=i;
+    const sanM=sanRe.exec(moveText);
     if(sanM){
       // Push null initially; the comment that follows will fill it.
       usedTimes.push(null);
@@ -2432,11 +2603,24 @@ function renderStats(parsed,evalData){
     // v1.0.8 PHASE 49: strengthened cache key. The old key
     //   (boards.length + ':' + firstBoard JSON length) collided between a
     //   variation and a mainline selection that happened to share the same
-    //   first board and move count — yielding a stale heatmap. Now hash the
-    //   FULL first board content (cheap — only one stringify of an 8x8 array)
-    //   plus the last board's content, which distinguishes any two board
-    //   sequences that differ in either their start or end position.
-    var _hmKey=_boards.length+':'+
+    //   first board and move count — yielding a stale heatmap.
+    // v1.2.3 round-48 (BUG-17): the length+first+last JSON key still collided
+    //   for TRANSPOSITION sequences (same start & end position, different
+    //   middle moves — e.g. two move orders of the same opening). Fold the
+    //   ENTIRE board sequence into a rolling hash so any mid-sequence
+    //   difference changes the key. Cells are visited in a fixed order; each
+    //   contributes a small code (0 = empty, else piece-letter charCode*2 +
+    //   color bit — all six piece letters have distinct first charCodes).
+    var _hmHash=_boards.length|0;
+    for(var _bi=0;_bi<_boards.length;_bi++){
+      var _bd=_boards[_bi];
+      for(var _hr=0;_hr<8;_hr++)for(var _hc=0;_hc<8;_hc++){
+        var _hp=(_bd&&_bd[_hr])?_bd[_hr][_hc]:null;
+        var _code=_hp?(_hp.type.charCodeAt(0)*2+(_hp.color==='white'?0:1)):0;
+        _hmHash=((_hmHash*31)+_code)|0;
+      }
+    }
+    var _hmKey=_boards.length+':'+_hmHash+':'+
       (_boards[0]?JSON.stringify(_boards[0]):'')+':'+
       (_boards[_boards.length-1]?JSON.stringify(_boards[_boards.length-1]):'');
     var _hmCached=(_heatmapCacheKey===_hmKey&&_heatmapCacheResult);
@@ -2445,6 +2629,15 @@ function renderStats(parsed,evalData){
       _ctrlW=_heatmapCacheResult.ctrlW;
       _ctrlB=_heatmapCacheResult.ctrlB;
       _posCount=_heatmapCacheResult.posCount;
+    }else if(_heatmapFailedKey===_hmKey){
+      // v1.2.3 round-48 (ROB-3): the computation for THIS exact key already
+      //   failed (worker crash/timeout). Show a user-visible notice instead of
+      //   silently omitting the whole heatmap section, and do NOT retrigger
+      //   the failing computation on every render.
+      h+='<div class="section"><h2>'+(T('heatmap_stats')||'Heatmap Control Statistics')+'</h2>';
+      h+='<div class="loading">'+T('heatmap_failed')+'</div>';
+      h+='</div>';
+      _posCount=0;
     }else{
       // Trigger async computation (worker or sync fallback), show placeholder
       _computeHeatmapStatsAsync(_boards).then(function(res){
@@ -2454,6 +2647,12 @@ function renderStats(parsed,evalData){
         try{render();}catch(e){console.warn('Heatmap re-render failed:',e);}
       }).catch(function(e){
         console.warn('Heatmap worker failed:',e);
+        // v1.2.3 round-48 (ROB-3): surface the failure to the user. Previously
+        //   only console.warn ran — _posCount stayed 0, the section silently
+        //   vanished, and every render retriggered the failing computation.
+        //   Mark this key as failed and re-render so the notice shows.
+        _heatmapFailedKey=_hmKey;
+        try{render();}catch(_e){console.warn('Heatmap failure re-render failed:',_e);}
       });
       // Show placeholder for this render
       _posCount=0;
@@ -2555,12 +2754,35 @@ function renderStats(parsed,evalData){
     let varDepth=0;
     let braceDepth=0;
     let lastMoveEnd=-1;
+    // v1.2.3 round-48 (PERF-1): sticky ('y') regexes anchored via lastIndex
+    //   replace pgnText.slice(i).match(/^.../) — identical matches without an
+    //   O(n) slice per token. _nagSticky is shared by both NAG sites (lastIndex
+    //   is set before every exec, so reuse is safe).
+    const _tagSticky=/\[([A-Za-z]\w*)\s+/y;
+    const _nagSticky=/\$\d+/y;
+    const _numSticky=/\d+\.+/y;
+    const _resSticky=/(1-0|0-1|1\/2-1\/2|\*)/y;
+    const _tokSticky=/[^\s(){};\]]+/y;
     while(i<len){
       const ch=pgnText[i];
       // Skip tag pairs [TagName "value"] when not inside a comment or variation
       if(ch==='['&&braceDepth===0&&varDepth===0){
-        const tagM=pgnText.slice(i).match(/^\[([A-Za-z]\w*)\s+/);
+        _tagSticky.lastIndex=i;
+        const tagM=_tagSticky.exec(pgnText);
         if(tagM){
+          // v1.2.3 round-49 (F5): find the closing ']' honoring quoted tag
+          //   values — a ']' inside "..." (e.g. [Event "a]b"]) does NOT close
+          //   the tag. Previously indexOf(']',i) closed early and the residue
+          //   (b"]) fell into the token branch below, where its letters were
+          //   mis-counted as a mainline move (annotation cut-off one ply early).
+          let j=i+1,inQ=false;
+          while(j<len){const cj=pgnText[j];if(cj==='"'){inQ=!inQ;}else if(cj===']'&&!inQ){break;}j++;}
+          if(j<len){i=j+1;continue;}
+        }else{
+          // v1.2.3 round-49 (F5): malformed '[' that is not a "[Tag<space>"
+          //   pair (bare [%csl ...]/[%eval ...] outside a comment, "[Tag]"
+          //   with no space) — skip to the closing ']' instead of letting the
+          //   construct fall into the token branch (same off-by-one miscount).
           const close=pgnText.indexOf(']',i);
           if(close>=0){i=close+1;continue;}
         }
@@ -2580,19 +2802,23 @@ function renderStats(parsed,evalData){
       }
       // NAGs
       if(ch==='$'){
-        const nagM=pgnText.slice(i).match(/^\$\d+/);
+        _nagSticky.lastIndex=i;
+        const nagM=_nagSticky.exec(pgnText);
         if(nagM){i+=nagM[0].length;continue;}
       }
       // Move numbers (e.g., 1., 2..., 12.)
-      const numM=pgnText.slice(i).match(/^\d+\.+/);
+      _numSticky.lastIndex=i;
+      const numM=_numSticky.exec(pgnText);
       if(numM){i+=numM[0].length;continue;}
       // Whitespace
       if(/\s/.test(ch)){i++;continue;}
       // Result tokens
-      const resM=pgnText.slice(i).match(/^(1-0|0-1|1\/2-1\/2|\*)/);
+      _resSticky.lastIndex=i;
+      const resM=_resSticky.exec(pgnText);
       if(resM){i+=resM[0].length;continue;}
       // SAN move token: read non-whitespace, non-delimiter chars
-      const tokM=pgnText.slice(i).match(/^[^\s(){};\]]+/);
+      _tokSticky.lastIndex=i;
+      const tokM=_tokSticky.exec(pgnText);
       if(!tokM){i++;continue;}
       const tok=tokM[0];
       const tokEnd=i+tok.length;
@@ -2612,7 +2838,8 @@ function renderStats(parsed,evalData){
           const close=pgnText.indexOf('}',j);
           if(close>=0){blockEnd=close+1;j=blockEnd;continue;}else{blockEnd=len;break;}
         }
-        const nagM2=pgnText.slice(j).match(/^\$\d+/);
+        _nagSticky.lastIndex=j;
+        const nagM2=_nagSticky.exec(pgnText);
         if(nagM2){blockEnd=j+nagM2[0].length;j=blockEnd;continue;}
         break;
       }
@@ -3001,6 +3228,19 @@ function fallbackCopy(text,cb){
   }catch(e){cb(false);}
 }
 
+// v1.2.3 round-49 (F9): transient bottom banner for one-shot user notices —
+//   same visual mechanism as the FEN-copy toast in copyFENToClipboard, but
+//   amber (neutral notice, not success/failure).
+function _showStatsToast(text){
+  try{
+    const banner=document.createElement('div');
+    banner.style.cssText='position:fixed;bottom:60px;left:50%;transform:translateX(-50%);background:rgba(212,160,23,.95);color:#1a0a0a;padding:8px 16px;border-radius:6px;font-size:.8rem;z-index:10001;box-shadow:0 2px 8px rgba(0,0,0,.4)';
+    banner.textContent=text;
+    document.body.appendChild(banner);
+    setTimeout(()=>{banner.remove();},2500);
+  }catch(e){/* best-effort notice */}
+}
+
 // v1.0.4 Rev27 (DeepSeek review): Render a small chess board showing the
 // position after the currently-selected move (or initial position if nothing
 // is selected). The board uses the SAME color scheme as the main chess.html
@@ -3274,6 +3514,15 @@ function renderPGNText(parsed,evalData,comments){
       return '<span class="'+pieceClass+'">'+sym2+'</span>'+rest;
     }
   }
+  // v1.2.3 round-48 (PERF-1): sticky ('y') regexes anchored via lastIndex=i
+  //   replace movetext.substring(i).match(/^.../) in the mainline walk below —
+  //   identical matches without an O(n) substring per token. (The variation
+  //   inner loop operates on the already-extracted short variationText and is
+  //   intentionally left as-is — minimal diff.)
+  const _resTestSticky=/(1-0|0-1|1\/2-1\/2|\*)/y; // v1.2.3 round-49 (F4): dropped the trailing \b — `*` is a non-word char, so at a whitespace/EOS boundary there is no word boundary and a bare `*` (in-progress game) NEVER matched, losing its result-marker highlight. Tokens here are whitespace-delimited, so \b had no protective value; this also re-aligns the test regex with _resCapSticky below (no \b).
+  const _resCapSticky=/(1-0|0-1|1\/2-1\/2|\*)/y;
+  const _moveNumSticky=/(\d+\.+)/y;
+  const _sanSticky=/([KQRBN][a-h]?[1-8]?x?[a-h][1-8][+#]?=?[QRBN]?|O-O(?:-O)?|0-0(?:-0)?|[a-h]x?[a-h][1-8](?:=[QRBN])?[+#]?|[a-h][1-8](?:=[QRBN])?[+#]?)/y;
   while(i<movetext.length){
     // Comment block {...} — display as-is (原文)
     if(movetext[i]==='{'){
@@ -3411,14 +3660,17 @@ function renderPGNText(parsed,evalData,comments){
       continue;
     }
     // Result markers
-    if(movetext.substring(i).match(/^(1-0|0-1|1\/2-1\/2|\*)\b/)){
-      let m=movetext.substring(i).match(/^(1-0|0-1|1\/2-1\/2|\*)/);
+    _resTestSticky.lastIndex=i;
+    if(_resTestSticky.test(movetext)){
+      _resCapSticky.lastIndex=i;
+      let m=_resCapSticky.exec(movetext);
       result+='<span style="color:var(--accent);font-weight:600">'+m[0]+'</span>';
       i+=m[0].length;
       continue;
     }
     // Move number (e.g. "1.", "2...", "12.")
-    let numMatch=movetext.substring(i).match(/^(\d+\.+)/);
+    _moveNumSticky.lastIndex=i;
+    let numMatch=_moveNumSticky.exec(movetext);
     if(numMatch){
       result+='<span class="move-num">'+numMatch[0]+'</span> ';
       // If it ends with "...", next side is Black; otherwise White
@@ -3437,7 +3689,8 @@ function renderPGNText(parsed,evalData,comments){
     // The capture-promotion alternative `[a-h]x?[a-h][1-8](?:=[QRBN])?[+#]?`
     // already handled "exd8=Q" correctly (it requires two file letters for
     // the capture), but plain "e8=Q" fell through to the non-capture alt.
-    let moveMatch=movetext.substring(i).match(/^([KQRBN][a-h]?[1-8]?x?[a-h][1-8][+#]?=?[QRBN]?|O-O(?:-O)?|0-0(?:-0)?|[a-h]x?[a-h][1-8](?:=[QRBN])?[+#]?|[a-h][1-8](?:=[QRBN])?[+#]?)/);
+    _sanSticky.lastIndex=i;
+    let moveMatch=_sanSticky.exec(movetext);
     if(moveMatch){
       let renderedSAN=renderSAN(moveMatch[0],nextSide);
       // v1.0.2 FIX: Don't put piece-white/piece-black on the move span —
@@ -3471,7 +3724,7 @@ function render(){
     document.getElementById('content').innerHTML='<div class="loading">'+T('no_data')+'</div>';
     return;
   }
-  const parsed=parsePGN(_payload.pgn);
+  const parsed=_getParsed(); // v1.2.3 round-48 (PERF-2): cached parse (keyed by _payload.pgn)
   if(!parsed){
     document.getElementById('content').innerHTML='<div class="loading">'+T('pgn_parse_error')+'</div>';
     return;
@@ -3515,6 +3768,19 @@ function render(){
     effectiveEvalData=_payload.evals?_payload.evals.slice(0,_selectedMoveIdx+1):null;
   }
   let h='';
+  // v1.2.3 round-48 (BUG-14): user-visible notice when the PGN contained
+  //   multiple games and only the first one was parsed (see parsePGN).
+  if(parsed.multiGame){
+    h+='<div style="background:rgba(212,160,23,.12);border:1px solid rgba(212,160,23,.4);border-radius:6px;padding:8px 12px;margin-bottom:14px;font-size:.82rem;color:var(--accent)">'+_escFEN(T('multi_game_notice'))+'</div>';
+  }
+  // v1.2.3 round-49 (F8): consume the ai-bridge.js ROB-2 marker. When the
+  //   stats payload exceeded ~900KB, the visualAnnotations field was dropped
+  //   to fit the Binder transaction cap and visualAnnotationsTruncated:true
+  //   was set — previously nothing read it, so auto-generated annotations
+  //   silently vanished from the visual-annotations section.
+  if(_payload.visualAnnotationsTruncated){
+    h+='<div style="background:rgba(212,160,23,.12);border:1px solid rgba(212,160,23,.4);border-radius:6px;padding:8px 12px;margin-bottom:14px;font-size:.82rem;color:var(--accent)">'+_escFEN(T('annotations_truncated'))+'</div>';
+  }
   // v1.0.3: Selection banner — shows what move is currently selected (mainline
   // or variation) so the user understands the stats below correspond to that
   // specific position. Hidden when no move is selected.
@@ -3613,7 +3879,7 @@ function selectVariationMove(varId,varClickedIdx){
   if(!_variations[varId])return;
   const v=_variations[varId];
   // Get the mainline parsed object to source mainline moves + starting state.
-  const parsed=parsePGN(_payload.pgn);
+  const parsed=_getParsed(); // v1.2.3 round-48 (PERF-2): cached parse (keyed by _payload.pgn)
   if(!parsed)return;
   // Starting state: state AFTER mainline[mainIdxBefore-1] (or initial state
   // if mainIdxBefore === 0).
@@ -3697,7 +3963,7 @@ function selectVariationMove(varId,varClickedIdx){
 //   a full render().
 function statsNavFirst(){
   _haptic('BUTTON_PRESS');
-  const parsed=parsePGN(_payload.pgn);
+  const parsed=_getParsed(); // v1.2.3 round-48 (PERF-2): cached parse (keyed by _payload.pgn)
   if(!parsed||!parsed.moves||parsed.moves.length===0)return;
   if(_variationMoves&&_variationMeta){
     // Variation context — jump to variation's first move
@@ -3718,7 +3984,7 @@ function statsNavFirst(){
 }
 function statsNavPrev(){
   _haptic('BUTTON_PRESS');
-  const parsed=parsePGN(_payload.pgn);
+  const parsed=_getParsed(); // v1.2.3 round-48 (PERF-2): cached parse (keyed by _payload.pgn)
   if(!parsed||!parsed.moves||parsed.moves.length===0)return;
   if(_variationMoves&&_variationMeta){
     // Variation context — step back within variation (clamped at 0)
@@ -3744,7 +4010,7 @@ function statsNavPrev(){
 }
 function statsNavNext(){
   _haptic('BUTTON_PRESS');
-  const parsed=parsePGN(_payload.pgn);
+  const parsed=_getParsed(); // v1.2.3 round-48 (PERF-2): cached parse (keyed by _payload.pgn)
   if(!parsed||!parsed.moves||parsed.moves.length===0)return;
   if(_variationMoves&&_variationMeta){
     // Variation context — step forward within variation (clamped at last)
@@ -3766,7 +4032,7 @@ function statsNavNext(){
 }
 function statsNavLast(){
   _haptic('BUTTON_PRESS');
-  const parsed=parsePGN(_payload.pgn);
+  const parsed=_getParsed(); // v1.2.3 round-48 (PERF-2): cached parse (keyed by _payload.pgn)
   if(!parsed||!parsed.moves||parsed.moves.length===0)return;
   if(_variationMoves&&_variationMeta){
     // Variation context — jump to variation's last move
@@ -3952,7 +4218,7 @@ function _exportFullHTML(){
   // v1.2.3 round-29 (PR52 S7780+S7781): use String.raw for the \u003c literal
   //   (avoids the escaped-backslash eye-noise) and replaceAll('<', ...) for
   //   the global string replace (avoids the global-regex form).
-  const _enc = (s) => JSON.stringify(s).replaceAll('<', String.raw`\u003c`);
+  const _enc = (s) => JSON.stringify(s).replace(/</g, String.raw`\u003c`); // round-49: Chrome 85 以下无 replaceAll（WebView 门禁=84）
   scriptJS='var _payload={pgn:'+_enc(pgnText)+',lang:'+_enc(lang)+'};\n'+
     'var _lang='+_enc(lang)+';\n'+
     scriptJS;
@@ -4015,6 +4281,11 @@ function _statsPastePGN(){
   // the paste if the bridge method was absent (which it now is — see the
   // statsSelectPGNFile cleanup).
   if(text){
+    // v1.2.3 round-49 (F9): if getStatsPayload() returned empty/invalid,
+    //   _payload is still null and `_payload.pgn=text` would throw an
+    //   uncaught TypeError inside the onclick handler — the button looked
+    //   dead. Create a stub payload (standalone-PGN mode) and tell the user.
+    if(!_payload){_payload={pgn:null,moveRecords:null,evals:null};_showStatsToast(T('payload_missing_notice'));}
     _payload.pgn=text;
     // v1.0.3 FIX: Clear moveRecords + evals from the PREVIOUS game when a new
     // PGN is pasted. Without this, parsePGN() would detect _payload.moveRecords
@@ -4034,6 +4305,7 @@ function _statsPastePGN(){
     //   stale heatmap stats from the previous game.
     _heatmapCacheKey=null;
     _heatmapCacheResult=null;
+    _heatmapFailedKey=null; // v1.2.3 round-48 (ROB-3): clear failure notice on new PGN
     // v1.0.4 Rev28: Record the imported PGN so the return-to-game flow can
     // prompt "🗃️ Import PGN to game?" Yes/No/Cancel.
     _statsImportedPGN=text;
@@ -4061,6 +4333,10 @@ function onStatsPGNFileRead(content){
     // Empty content = picker cancelled or read failed — no state change.
     return;
   }
+  // v1.2.3 round-49 (F9): same null-payload guard as _statsPastePGN —
+  //   `_payload.pgn=content` would throw an uncaught TypeError when
+  //   getStatsPayload() had returned empty/invalid (silent "dead button").
+  if(!_payload){_payload={pgn:null,moveRecords:null,evals:null};_showStatsToast(T('payload_missing_notice'));}
   _payload.pgn=content;
   // v1.0.3 FIX: Clear moveRecords + evals from the PREVIOUS game when a new
   // PGN is imported via file picker. Same root cause as _statsPastePGN —
@@ -4074,6 +4350,7 @@ function onStatsPGNFileRead(content){
   // v1.0.8 PHASE 28 (bug fix): Invalidate heatmap cache on new PGN import.
   _heatmapCacheKey=null;
   _heatmapCacheResult=null;
+  _heatmapFailedKey=null; // v1.2.3 round-48 (ROB-3): clear failure notice on new PGN
   // v1.0.4 Rev28: Record the imported PGN so the return-to-game flow can
   // prompt "🗃️ Import PGN to game?" Yes/No/Cancel.
   _statsImportedPGN=content;

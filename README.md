@@ -246,6 +246,14 @@ Per GPL v3 Section 13, these licenses are compatible for combination. Each compo
 - `StockfishNative.java` — Engine management logic
 - `JsBridgeGateway.java` — Engine management logic (sandbox path validation, UCI whitelist)
 - `HapticManager.java` — Haptic feedback (vibration waveform API, DroidFish-derived patterns)
+- `EngineConfigHelper.java` — Engine configuration helper (auto/manual config, big.LITTLE detection)
+- `EngineHealthMonitor.java` — Engine health state holder (last-response timestamp)
+- `EngineProcessManager.java` — Engine binary file-permission helper (`makeExecutable`)
+- `EngineSettingsHelper.java` — Engine settings helper (engine info query)
+- `FileIoHelper.java` — File I/O helper (text read/write, MediaStore)
+- `PermissionHelper.java` — Storage permission check/request helper
+- `PgnCacheManager.java` — PGN cache CRUD manager
+- `SafPickerHelper.java` — SAF file picker helper (export/import)
 - `engine_jni.cpp` — Native chmod/renice from DroidFish
 - `game-logic.js` — PGN disambiguation and SAN notation
 - `ai-bridge.js` — Engine communication patterns
@@ -264,6 +272,7 @@ Per GPL v3 Section 13, these licenses are compatible for combination. Each compo
 
 - `chess960.js` — Original Chess960 SP-ID and Shredder-FEN implementation
 - `eco-data.js` — Original ECO data integration with IndexedDB cache
+- `state-store.js` — Original global state store (Redux-like single source of truth)
 - `MainActivity.java` — Original WebView host and lifecycle management
 - `ChessWebViewClient.java` — Original WebView client with render-process recovery
 - `EngineService.java` — Original foreground service for engine stability

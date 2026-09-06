@@ -988,12 +988,24 @@ function _applySANMove(state,san){
 
 function _findLegalMove(state,from,to,pieceType){
   const allMoves=legalMoves(state,null);
-  return allMoves.find(m=>{
+  const _matches=m=>{
     const piece=state.board[m.from.row][m.from.col];
     return piece?.type===pieceType&&piece.color===state.currentTurn&&
            m.from.row===from.row&&m.from.col===from.col&&
            m.to.row===to.row&&m.to.col===to.col;
-  })||null;
+  };
+  // v1.2.3 round-49 (F1): this helper is only called from the O-O / O-O-O
+  //   branches of _applySANMove, so when BOTH a plain king move and a
+  //   castling move reach the same destination (Chess960 short castle, e.g.
+  //   SP-ID 12 king f1→g1), the candidate carrying the explicit castle flag
+  //   (set by pseudoMoves) MUST win. pseudoMoves pushes the king's 8
+  //   directional moves before the castling candidates, so an unfiltered
+  //   .find() would pick the plain king move and leave the rook behind —
+  //   corrupting every subsequent SAN parsed on that board. Preferring
+  //   to.castle decouples castling SAN resolution from pseudoMoves' push
+  //   order (defense-in-depth alongside the pre-parse variant activation in
+  //   importPGN).
+  return allMoves.find(m=>_matches(m)&&m.to.castle)||allMoves.find(_matches)||null;
 }
 
 function _executeAndRecord(state,move,notation){
@@ -1035,8 +1047,33 @@ function importPGN(pgnText){
     showToast(T('pgn_fen_rejected'),3750);
     return;
   }
+  // v1.2.3 round-49 (F1): pre-scan the [Variant] header and activate Chess960
+  //   mode BEFORE _parsePGN replays the SAN moves. Previously the mode was
+  //   only toggled AFTER parsing (the `result.variant==='chess960'` block
+  //   below), so _applySANMove/legalMoves ran under the PREVIOUS game's
+  //   variant mode — a Chess960 short-distance castle (e.g. SP-ID 12 king
+  //   f1→g1) was matched as a plain king move, the rook stayed behind, and
+  //   every subsequent SAN was parsed on a corrupted board (moves skipped or
+  //   mismatched). If parsing then fails, restore the previous mode so a
+  //   failed import still cannot corrupt the current game's variant state
+  //   (preserves the v1.0.8 Phase 49 guarantee).
+  const _preVariantM=pgnText.match(/\[Variant\s+"([^"]+)"\]/i);
+  const _preIs960=!!_preVariantM&&['chess960','fischerandom','fischer random','frc'].includes(_preVariantM[1].toLowerCase());
+  const _prev960mode=(typeof isChess960Mode==='function')?isChess960Mode():false;
+  const _prevGameVariant=(typeof gameVariant!=='undefined')?gameVariant:null;
+  const _restorePreParseVariant=()=>{
+    if(typeof setChess960Mode==='function')setChess960Mode(_prev960mode);
+    if(gameVariant !== undefined)gameVariant=_prevGameVariant;
+  };
+  if(_preIs960){
+    if(typeof setChess960Mode==='function')setChess960Mode(true);
+    if(gameVariant !== undefined)gameVariant='chess960';
+  }
   const result=_parsePGN(pgnText);
-  if(!result||!result.moves||!result.moves.length){showToast(T('pgn_invalid'),3000);return;}
+  if(!result||!result.moves||!result.moves.length){
+    if(_preIs960)_restorePreParseVariant();
+    showToast(T('pgn_invalid'),3000);return;
+  }
   // Start from FEN or initial position
   // v1.0.8 PHASE 49: validate startState BEFORE clearing _reviewEvalCache and
   //   toggling Chess960 mode. The old order (clear cache + set Chess960 first,
@@ -1045,7 +1082,13 @@ function importPGN(pgnText){
   //   invalid [FEN] tag — even though the import ultimately failed. Now the
   //   side effects only run once we know the import will succeed.
   const startState=result.startFEN?fenToState(result.startFEN):initState();
-  if(!startState){showToast(T('pgn_invalid'),3000);return;}
+  if(!startState){
+    // v1.2.3 round-49 (F1 follow-up): the F1 pre-scan above may have already
+    //   activated Chess960 mode — restore it so this failed import leaves the
+    //   current game's variant state untouched (Phase 49 guarantee).
+    if(_preIs960)_restorePreParseVariant();
+    showToast(T('pgn_invalid'),3000);return;
+  }
   // v1.0.7 BUG FIX:
   // Clear _reviewEvalCache before importing a new PGN — see _startGameImpl()
   // for rationale (cache is keyed by per-game reviewStep, switching games
@@ -1202,6 +1245,21 @@ function importPGN(pgnText){
     if(parsedMove?.skipped){
       stateHistory.push({state:cloneS(replayState),moveRecords:[...moveRecords],lastMove:lastMove?{...lastMove}:null,selectedSquare:null});
       moveRecords.push(null);
+      // v1.2.3 round-49 (F2): the parse phase advances side-to-move (and
+      //   fullMoveNumber when black was to move) on a skipped token — see
+      //   _parsePGN "MUST still advance" — so the replay loop MUST do the
+      //   same. Without this, from the skip point on replayState.currentTurn
+      //   is always the side that JUST moved (makeMvInPlace flips once per
+      //   real move), so an odd number of skips leaves the final
+      //   currentTurn inverted (wrong gameStatus verdict, AI moving on the
+      //   player's turn) and fullMoveNumber under-counted. The hash side bit
+      //   must flip in lockstep with currentTurn — otherwise the Zobrist key
+      //   no longer matches the position's side-to-move and threefold
+      //   repetition counting desyncs. Mirrors the variation-branch
+      //   compensation (vIsWhite/vMoveNum advance) below.
+      if(replayState.currentTurn==='black')replayState.fullMoveNumber++;
+      replayState.currentTurn=OPP_COLOR[replayState.currentTurn];
+      replayState.hash^=zobrist.side;
       moveIdx++;
       continue;
     }
@@ -1218,11 +1276,46 @@ function importPGN(pgnText){
       moveIdx++;continue;
     }
     const piece=replayState.board[from.row][from.col];
-    if(!piece){moveIdx++;continue;}
+    // v1.2.3 round-49 (F3): when the replay board has diverged from the parse
+    //   board (no piece on the from-square), mirror the `skipped` branch
+    //   below — push a null placeholder so moveRecords/stateHistory stay
+    //   index-aligned with moveIdx (otherwise variation keys and exported
+    //   move numbers shift by one from here on), and advance side-to-move +
+    //   fullMoveNumber + hash side bit because the parse phase DID apply
+    //   this move (same compensation as the F2 skip-branch fix).
+    if(!piece){
+      console.warn('importPGN: board diverged at index',moveIdx,'from=',from,'— pushing null placeholder');
+      stateHistory.push({state:cloneS(replayState),moveRecords:[...moveRecords],lastMove:lastMove?{...lastMove}:null,selectedSquare:null});
+      moveRecords.push(null);
+      if(replayState.currentTurn==='black')replayState.fullMoveNumber++;
+      replayState.currentTurn=OPP_COLOR[replayState.currentTurn];
+      replayState.hash^=zobrist.side;
+      moveIdx++;
+      continue;
+    }
     
     // Save pre-move state for stateHistory and variations
     const preMoveState=cloneS(replayState);
     const undoInfo=makeMvInPlace(replayState,parsedMove.move);
+    // v1.2.3 round-49 (F3): validate makeMvInPlace's return value. The `piece`
+    //   guard above only catches an empty from-square; if makeMvInPlace gains
+    //   another null-return path (it currently returns null only BEFORE any
+    //   mutation, so replayState is untouched here), we must not silently
+    //   record the move. Mirror the skip/divergence branches: push a null
+    //   placeholder so moveRecords/stateHistory stay index-aligned, and
+    //   advance side-to-move + fullMoveNumber + hash side bit because the
+    //   parse phase DID apply this move (its turn flip already happened in
+    //   _parsePGN) — see the F2 fix at the skip branch above.
+    if(!undoInfo){
+      console.warn('importPGN: makeMvInPlace returned null at index',moveIdx,'— pushing null placeholder');
+      stateHistory.push({state:cloneS(replayState),moveRecords:[...moveRecords],lastMove:lastMove?{...lastMove}:null,selectedSquare:null});
+      moveRecords.push(null);
+      if(replayState.currentTurn==='black')replayState.fullMoveNumber++;
+      replayState.currentTurn=OPP_COLOR[replayState.currentTurn];
+      replayState.hash^=zobrist.side;
+      moveIdx++;
+      continue;
+    }
     
     // Build proper notation using moveAlg for correct disambiguation per PGN spec
     let properNotation;
@@ -1857,6 +1950,10 @@ if(c!==8)return null;
 // Validate that both kings exist on the board (with the round-40 duplicate
 //   rejection above, this gives exactly one king per side)
 if(!wk||!bk)return null;
+// v1.2.3 round-49 (F4): validate the side-to-move field — previously any
+//   non-'b' garbage ("x", "W", a truncated "w") was silently accepted as
+//   White to move, diverging from the source tool that produced the FEN.
+if(parts[1]!=='w'&&parts[1]!=='b')return null;
 const turn=parts[1]==='b'?'black':'white';
 const crStr=parts[2]||'-';
 // v1.0.7 PHASE 4: X-FEN castling rights parsing.
@@ -1899,7 +1996,7 @@ if(_epHasCap)enPassantTarget={row:er,col:ec};
 let halfMoveClock=0,fullMoveNumber=1;
 if(parts[4]){if(!/^\d+$/.test(parts[4])){return null;}halfMoveClock=Number.parseInt(parts[4],10);}
 if(parts[5]){if(!/^\d+$/.test(parts[5])){return null;}fullMoveNumber=Number.parseInt(parts[5],10);if(fullMoveNumber<1){return null;}}
-const s={board,currentTurn:turn,castlingRights,enPassantTarget,halfMoveClock,fullMoveNumber,moveHistory:[],posCount:new Map(),wk,bk,hash:0,boardVersion:1};
+const s={board,currentTurn:turn,castlingRights,enPassantTarget,halfMoveClock,fullMoveNumber,moveHistory:[],posCount:new Map(),wk,bk,hash:0};
 syncHash(s);s.posCount.set(s.hash,1);
 // Validate: the side NOT to move must not be in check (illegal position)
 const nonMover=OPP_COLOR[turn];

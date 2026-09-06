@@ -1777,7 +1777,20 @@ function openStatsPage(){
       }
     }
   }
-  const payload=JSON.stringify({pgn:pgn,evals:evalData,moveRecords:moveData,visualAnnotations:vaData,playerColor:playerColor,lang:(typeof _lang!=='undefined'?_lang:'zh'),gameVariant:(gameVariant !== undefined?gameVariant:null)});
+  let payload=JSON.stringify({pgn:pgn,evals:evalData,moveRecords:moveData,visualAnnotations:vaData,playerColor:playerColor,lang:(typeof _lang!=='undefined'?_lang:'zh'),gameVariant:(gameVariant !== undefined?gameVariant:null)});
+  // v1.2.3 round-48 (ROB-2): the payload is delivered to StatsActivity as an
+  //   Intent extra, which is subject to the ~1MB Binder transaction cap —
+  //   an oversized payload makes StockfishNative.openStatsPage's startActivity
+  //   throw TransactionTooLargeException (caught → only a Toast, the stats
+  //   page silently never opens). If the payload exceeds 900KB, drop the
+  //   visualAnnotations field (the stats page tolerates its absence — it
+  //   falls back to the PGN-text scan, which still finds imported [%csl]/
+  //   [%cal] annotations) and set a truncation marker so consumers can tell.
+  //   (900KB in UTF-16 code units is conservative for mostly-ASCII payloads.)
+  if(payload.length>900*1024){
+    console.warn('openStatsPage: payload exceeds 900KB ('+payload.length+' chars) — dropping visualAnnotations to stay under the Binder transaction limit');
+    payload=JSON.stringify({pgn:pgn,evals:evalData,moveRecords:moveData,playerColor:playerColor,lang:(typeof _lang!=='undefined'?_lang:'zh'),gameVariant:(gameVariant !== undefined?gameVariant:null),visualAnnotationsTruncated:true});
+  }
   _bridgeCall(function(bridge){
     if(typeof bridge.openStatsPage==='function'){
       bridge.openStatsPage(payload);
@@ -3071,7 +3084,12 @@ function onPonderProgress(depth,nodes,nps,scoreCp,scoreMate,seldepth){
 // In review mode: caches result and discards stale callbacks.
 // Updated: now accepts 6 params (scoreCp, scoreMate, depth, wdlW, wdlD, wdlL)
 // v1.0.4 Rev33: added seldepth (7th param) for "SD" display in eval bar.
-function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth){
+// v1.2.3 round-49 (review-3 F1 / T1): added reqFen (8th param) — Java echoes
+//   back the fen of the eval request this result belongs to (StockfishNative
+//   _lastEvalFen). The batch guard below compares it against the dispatch
+//   record; when the param is missing (older runtime calling the 7-arg form)
+//   we fall back to the legacy re-derivation check.
+function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth,reqFen){
   // Update heartbeat timestamp — prevents false-positive engine death detection
   // during long eval searches (go depth 22 can take several seconds)
   _lastEngineCallbackTime=Date.now();
@@ -3138,9 +3156,23 @@ function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth){
     //   dispatch), so it only matches while the batch is still parked on the
     //   dispatched step. Mismatch → drop as stale: no caching, no advance.
     const _bd=_batchLastDispatched;
-    const _expectedFen=(_bd&&_reviewAnalyzeStep>=0&&_reviewAnalyzeStep<reviewStates.length)
+    // v1.2.3 round-49 (review-3 F1 / T1): the fen CARRIED BY THE CALLBACK
+    //   (8th param, echoed by Java from _lastEvalFen) is the authoritative
+    //   position identity of the search that produced this result. The old
+    //   check re-derived _expectedFen from the CURRENT _reviewAnalyzeStep —
+    //   both sides of `_bd.fen!==_expectedFen` were computed from the same
+    //   current step, so the comparison was an IDENTITY: a late callback from
+    //   step N arriving after the batch advanced to step N+1 passed the guard
+    //   and its score was cached as step N+1's result (wrong-step data, with
+    //   the new step's _evalForBlackTurn flip — possible sign inversion).
+    //   Now: compare the callback's own fen against the dispatch record.
+    //   Legacy fallback (reqFen undefined/'' — older runtime with the 7-arg
+    //   callback): keep the old re-derivation check, documented as unable to
+    //   distinguish two steps.
+    const _cbFen=(typeof reqFen==='string'&&reqFen.length>0)?reqFen:null;
+    const _expectedFen=(_cbFen===null&&_bd&&_reviewAnalyzeStep>=0&&_reviewAnalyzeStep<reviewStates.length)
       ?_sanitizeFenForEngine(generateFEN(reviewStates[_reviewAnalyzeStep].state)):null;
-    if(!_bd||_bd.gen!==_evalRequestBatchGen||_bd.step!==_reviewAnalyzeStep||_bd.fen!==_expectedFen){
+    if(!_bd||_bd.gen!==_evalRequestBatchGen||_bd.step!==_reviewAnalyzeStep||_bd.fen!==(_cbFen!==null?_cbFen:_expectedFen)){
       console.warn('[AIBridge] Stale batch eval callback dropped (step/gen/fen mismatch vs last dispatch)');
       return;
     }
@@ -3663,6 +3695,19 @@ function onSettingsExported(success,fileName){
   }else{
     showToast(T('settings_clipboard_fallback'));
   }
+}
+// v1.2.3 round-49 (BUG-19): SAF IMPORT-cancel callback — called from Java
+//   (MainActivity.onActivityResult) when the user cancels the settings/PGN
+//   import picker. Symmetric counterpart to the export-cancel notification
+//   (onExportCancelled, fired by SafPickerHelper.cancelPendingExport).
+//   GLOBAL-SCOPE RULE: name must stay globally unique in the inlined bundle
+//   (grep-verified unique at introduction). Log-only by design: neither
+//   import chain sets a pending/"importing" flag before opening the picker
+//   (importEngineSettings → bridge.openSystemFilePicker; importPGNFile →
+//   AndroidBridge.openPGNFilePicker), so there is no state to clear here.
+//   which: 'settings' | 'pgn'.
+function onImportCancelled(which){
+  console.log('[AIBridge] import picker cancelled ('+(which||'unknown')+')');
 }
 function importEngineSettings(){
   _bridgeCall(function(bridge){
@@ -4970,7 +5015,7 @@ function _updateAIThinkDisplay(){
 // `export {...}` line via regex, so there was no production impact, but
 // the list was misleading. Verified each removal by grep — none of these
 // symbols are declared in ai-bridge.js.
-export {showToast,_bridgeCall,_showLoadingOverlay,_updateLoadingStatus,_hideLoadingOverlay,_attemptEngineInit,onInitProgress,onEngineReady,onBestMove,onHintMove,onEngineProgress,onPonderProgress,onEngineEval,onEngineInfo,onEngineSwitched,onSettingsImported,onSettingsExported,onPGNExported,onStatsHTMLExported,onStatsRequestReview,onGameDifficultyChanged,onEngineError,onMultiPVProgress,onMultiPVResult,copyMoveHistory,copyReviewPGN,exportPGNToFile,openStatsPage,renderEngineConfig,renderEngineConfigAndUpdate,openEngineConfig,closeEngineConfig,switchEngine,importExternalEngine,restartCurrentEngine,setConfigThreads,setConfigHash,setConfigMultiPV,setConfigMoveOverhead,togglePonder,toggleShowWDL,setConfigSkillLevel,toggleLimitElo,setConfigElo,toggleAutoConfig,exportEngineSettings,importEngineSettings,requestEngineEval,_requestBatchEval,_showPGNExportAnnotationDialog,_pgnExportDialogActive,_pgnExportDialogDismiss,_updateEvalDisplay,_updateReviewEvalUI,_resetEvalState,_updateAllEvalDisplays,_formatVariationGroups,_commentHasText,
+export {showToast,_bridgeCall,_showLoadingOverlay,_updateLoadingStatus,_hideLoadingOverlay,_attemptEngineInit,onInitProgress,onEngineReady,onBestMove,onHintMove,onEngineProgress,onPonderProgress,onEngineEval,onEngineInfo,onEngineSwitched,onSettingsImported,onSettingsExported,onImportCancelled,onPGNExported,onStatsHTMLExported,onStatsRequestReview,onGameDifficultyChanged,onEngineError,onMultiPVProgress,onMultiPVResult,copyMoveHistory,copyReviewPGN,exportPGNToFile,openStatsPage,renderEngineConfig,renderEngineConfigAndUpdate,openEngineConfig,closeEngineConfig,switchEngine,importExternalEngine,restartCurrentEngine,setConfigThreads,setConfigHash,setConfigMultiPV,setConfigMoveOverhead,togglePonder,toggleShowWDL,setConfigSkillLevel,toggleLimitElo,setConfigElo,toggleAutoConfig,exportEngineSettings,importEngineSettings,requestEngineEval,_requestBatchEval,_showPGNExportAnnotationDialog,_pgnExportDialogActive,_pgnExportDialogDismiss,_updateEvalDisplay,_updateReviewEvalUI,_resetEvalState,_updateAllEvalDisplays,_formatVariationGroups,_commentHasText,
 // v1.2.3 round-18: added generateFEN/uciToCoords/_esc — defined in this
 //   module and previously (incorrectly) exported from game-logic.js.
 generateFEN,uciToCoords,_esc};

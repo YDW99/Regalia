@@ -83,6 +83,13 @@ def main():
         if re.search(r'^\s*export\s', content, flags=re.MULTILINE):
             print(f"ERROR: residual 'export' statement in module {mod} after stripping", file=sys.stderr)
             sys.exit(3)
+        # v1.2.3 round-49 (R5-8): fail the build if a module contains
+        #   "</script" — the module source is inlined verbatim into the
+        #   template's <script> block, and a literal "</script" would close
+        #   it early (HTML injection / script truncation).
+        if '</script' in content.lower():
+            print(f"ERROR: module {mod} contains '</script' — would prematurely close the inline <script> block", file=sys.stderr)
+            sys.exit(4)
         js_parts.append(content)
 
     combined_js = "\n".join(js_parts)

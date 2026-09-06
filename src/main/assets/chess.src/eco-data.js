@@ -91,6 +91,7 @@ function _loadEcoFromCache() {
 let _ecoCachedData = null;
 (function _preloadEcoCache() {
   _loadEcoFromCache().then(function(cached) {
+    if (_ecoParsed) return; // BUG-6: parsing already won the race — don't pin ~125KB in _ecoCachedData
     if (cached && Array.isArray(cached) && cached.length > 0) {
       _ecoCachedData = cached;
       // v1.1.2 Phase 70: removed debug console.log (production cleanup)

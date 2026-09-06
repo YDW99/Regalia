@@ -35,7 +35,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
 <!-- v1.2.3 round-18: removed frame-ancestors — ignored inside <meta> (only
      honored as an HTTP response header), dead directive. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; worker-src blob:; connect-src https://tablebase.lichess.ovh; img-src data: file: blob:; base-uri 'self'; form-action 'none'; object-src 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; worker-src blob:; connect-src https://tablebase.lichess.ovh; img-src data: blob:; base-uri 'self'; form-action 'none'; object-src 'none'">
 <title>Regalia v1.2.3</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -1846,9 +1846,13 @@ const _i18n={
 'resign_confirm_msg':{zh:'你确定要认输吗？这将结束当前对局，对方获胜。',en:'Are you sure you want to resign? This ends the current game; your opponent wins.'},
 'resign_yes':{zh:'确认认输',en:'Yes, Resign'},
 'resign_no':{zh:'取消',en:'Cancel'},
-'resigns_suffix':{zh:'认输',en:'resigns'},
+// v1.2.3 round-48 (BUG-11): leading space added to the English values, same
+//   convention as 'wins_excl' (' wins!') — the concatenation sites
+//   (ui.js _gameOverStrFromStatus) join color + suffix with no separator,
+//   producing "⚫ Blackresigns" / "⚪ Whitewins by timeout" before this fix.
+'resigns_suffix':{zh:'认输',en:' resigns'},
 // v1.0.4 Rev47: Timeout win suffix for _gameOverStrFromStatus('timeout')
-'timeout_win_suffix':{zh:'超时胜',en:'wins by timeout'},
+'timeout_win_suffix':{zh:'超时胜',en:' wins by timeout'},
 // v1.0.4 Round-5 Rev28: Stats page → main/review PGN import-back prompt
 'stats_import_back_no_pgn':{zh:'统计页面未导入新 PGN，无需同步。',en:'No new PGN imported on the stats page; nothing to sync.'},
 // v1.0.7 — Quick toolbar (below the board, above the player bar)
@@ -2689,7 +2693,7 @@ function initBoard(){const b=Array.from({length:8},()=>Array(8).fill(null));cons
 function attacked(board,pos){const b=board,p=b[pos.row][pos.col];if(!p){return[];}const r=pos.row,c=pos.col,co=p.color,mv=[];if(p.type==='pawn'){const d=co==='white'?-1:1;for(const dc of[-1,1])if(inB(r+d,c+dc))mv.push({row:r+d,col:c+dc})}else {if(p.type==='knight'){for(const[dr,dc]of KNIGHT_OFFSETS)if(inB(r+dr,c+dc))mv.push({row:r+dr,col:c+dc})}else if(p.type==='king'){for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++)if((dr||dc)&&inB(r+dr,c+dc))mv.push({row:r+dr,col:c+dc})}else{const dirs=p.type==='rook'?DIR_ROOK:p.type==='bishop'?DIR_BISHOP:DIR_QUEEN;for(const[dr,dc]of dirs){let nr=r+dr,nc=c+dc;while(inB(nr,nc)){mv.push({row:nr,col:nc});if(b[nr][nc]){break;}nr+=dr;nc+=dc}}}}return mv}
 function initState(){const s={board:initBoard(),currentTurn:'white',castlingRights:{whiteKingside:true,whiteQueenside:true,blackKingside:true,blackQueenside:true,
 // v1.2.3 round-20 (A-1): standard chess designates the corner rooks (h/a files)
-whiteKingsideRookFile:7,whiteQueensideRookFile:0,blackKingsideRookFile:7,blackQueensideRookFile:0},enPassantTarget:null,halfMoveClock:0,fullMoveNumber:1,moveHistory:[],posCount:new Map(),wk:{row:7,col:4},bk:{row:0,col:4},hash:0,boardVersion:1};syncHash(s);s.posCount.set(s.hash,1);return s}
+whiteKingsideRookFile:7,whiteQueensideRookFile:0,blackKingsideRookFile:7,blackQueensideRookFile:0},enPassantTarget:null,halfMoveClock:0,fullMoveNumber:1,moveHistory:[],posCount:new Map(),wk:{row:7,col:4},bk:{row:0,col:4},hash:0};syncHash(s);s.posCount.set(s.hash,1);return s}
 // v1.0.7: validateSetupPosition now also validates the manual 🔁 castle markers
 // and the ⚡ en-passant marker carried on s.setupCastleMarks (a Set of "r*8+c"
 // keys) and s.setupEpMark ({row,col}|null). Both validations follow the
@@ -2995,7 +2999,7 @@ function cloneB(b){return b.map(r=>r.slice())}
 //   round-trip verification all silently degraded after the first move.
 function cloneS(s){return{board:cloneB(s.board),currentTurn:s.currentTurn,castlingRights:{...s.castlingRights},enPassantTarget:s.enPassantTarget?{...s.enPassantTarget}:null,halfMoveClock:s.halfMoveClock,fullMoveNumber:s.fullMoveNumber,// moveHistory: array shallow-copied (move objects are never mutated in place,
 // only pushed/popped), so sharing by reference would corrupt the parent's array
-moveHistory:s.moveHistory?s.moveHistory.slice():[],posCount:new Map(s.posCount),wk:s.wk?{...s.wk}:null,bk:s.bk?{...s.bk}:null,hash:s.hash||0,boardVersion:s.boardVersion||0,
+moveHistory:s.moveHistory?s.moveHistory.slice():[],posCount:new Map(s.posCount),wk:s.wk?{...s.wk}:null,bk:s.bk?{...s.bk}:null,hash:s.hash||0,
 // Chess960 identity fields — only present on Chess960 states (chess960.js).
 // Using conditional spread avoids adding undefined keys to standard-chess states.
 ...(s.chess960?{chess960:true}:{}),
@@ -3217,15 +3221,35 @@ function _castleSide(mv,s){
       // only the rook moves (handled by makeMv's `from===to` branch added in
       // v1.0.7 PHASE 17).
       const _isZeroDist=mv.from.col===mv.to.col;
+      // v1.2.3 round-49 (BUG-10 hardening): in Chess960, before this fallback
+      //   classifies a flag-less king move as castling on a given side, require
+      //   chess960CastlingRookMove() to confirm that a rook actually exists on
+      //   that side AND needs to move (rookFrom!==rookTo). Previously a normal
+      //   king move like f1→g1 (distance 1 ≥ _minDist) with a stale/present
+      //   kingside right but no kingside rook to move (e.g. rook captured via
+      //   setup-mode edits or a hand-built FEN leaving the right stale) was
+      //   misclassified as 'kingside', making makeMv teleport a non-existent
+      //   rook. All current flag-less callers (pseudoMoves / executeMove /
+      //   PGN / review rebuilds) carry an explicit castle flag, so this branch
+      //   is defense-in-depth for future reconstruction paths; the added check
+      //   mirrors the guard makeMv itself applies (round-46, `rm&&rm.rookFrom
+      //   !==rm.rookTo`) before moving the rook. When chess960.js is not
+      //   loaded we cannot confirm — keep the legacy behavior (isChess960Active
+      //   would already have thrown above in that case, so this is moot).
+      const _rookPending=(side)=>{
+        if(typeof chess960CastlingRookMove!=='function')return true;
+        const rm=chess960CastlingRookMove(_st,mv.piece.color,side);
+        return !!(rm&&rm.rookFrom!==rm.rookTo);
+      };
       if(_is960&&_isZeroDist&&_cr){
-        if(mv.to.col===6&&_cr[mv.piece.color+'Kingside'])return 'kingside';
-        if(mv.to.col===2&&_cr[mv.piece.color+'Queenside'])return 'queenside';
+        if(mv.to.col===6&&_cr[mv.piece.color+'Kingside']&&_rookPending('kingside'))return 'kingside';
+        if(mv.to.col===2&&_cr[mv.piece.color+'Queenside']&&_rookPending('queenside'))return 'queenside';
       }
       if(mv.to.col===6&&Math.abs(mv.to.col-mv.from.col)>=_minDist){
-        if(_destValid&&(!_is960||(_cr&&_cr[mv.piece.color+'Kingside'])))return 'kingside';
+        if(_destValid&&(!_is960||(_cr&&_cr[mv.piece.color+'Kingside']&&_rookPending('kingside'))))return 'kingside';
       }
       if(mv.to.col===2&&Math.abs(mv.to.col-mv.from.col)>=_minDist){
-        if(_destValid&&(!_is960||(_cr&&_cr[mv.piece.color+'Queenside'])))return 'queenside';
+        if(_destValid&&(!_is960||(_cr&&_cr[mv.piece.color+'Queenside']&&_rookPending('queenside'))))return 'queenside';
       }
     }
   }
@@ -3497,13 +3521,6 @@ if(s.castlingRights.whiteQueenside&&!ns.castlingRights.whiteQueenside)h^=zobrist
 if(s.castlingRights.blackKingside&&!ns.castlingRights.blackKingside)h^=zobrist.castling[2];
 if(s.castlingRights.blackQueenside&&!ns.castlingRights.blackQueenside)h^=zobrist.castling[3];
 ns.hash=(h>>>0);
-// v1.0.2 PERF (audit): bump boardVersion on every board mutation.
-// v1.2.3 round-42 (42-9): comment corrected — _updateBoardIncremental (the
-//   dirty-check incremental renderer this counter fed) was REMOVED in
-//   round-20 with the DIRTY_* subsystem (see the ui.js render-scheduling
-//   note). boardVersion currently has no readers; it is retained as state
-//   metadata carried through clone/undo snapshots.
-ns.boardVersion=(s.boardVersion||0)+1;
 ns.posCount.set(ns.hash,(ns.posCount.get(ns.hash)||0)+1);
 return ns}
 // ===================== MAKE/UNMAKE (INCREMENTAL) =====================
@@ -3599,7 +3616,6 @@ oldEnPassant:s.enPassantTarget?{r:s.enPassantTarget.row,c:s.enPassantTarget.col}
 oldHalfMove:s.halfMoveClock,
 oldFullMove:s.fullMoveNumber,
 oldHash:s.hash,
-oldBoardVersion:s.boardVersion||0,
 promotion:promotion||null,
 oldMoveHistoryLength:s.moveHistory?s.moveHistory.length:0,
 isBlackMove:piece.color==='black'
@@ -3725,10 +3741,6 @@ if(undo.oldCastling.whiteQueenside&&!s.castlingRights.whiteQueenside)h^=zobrist.
 if(undo.oldCastling.blackKingside&&!s.castlingRights.blackKingside)h^=zobrist.castling[2];
 if(undo.oldCastling.blackQueenside&&!s.castlingRights.blackQueenside)h^=zobrist.castling[3];
 s.hash=(h>>>0);
-// v1.0.2 PERF (audit): bump boardVersion (see the makeMv note — the
-//   _updateBoardIncremental consumer was removed in round-20; counter
-//   retained as snapshot metadata, no current readers). round-42 42-9.
-s.boardVersion=(s.boardVersion||0)+1;
 // 12. Incremental posCount
 s.posCount.set(s.hash,(s.posCount.get(s.hash)||0)+1);
 return undo;
@@ -3795,8 +3807,6 @@ s.enPassantTarget=undo.oldEnPassant?{row:undo.oldEnPassant.r,col:undo.oldEnPassa
 s.halfMoveClock=undo.oldHalfMove;
 s.fullMoveNumber=undo.oldFullMove;
 s.hash=undo.oldHash;
-// v1.0.2 PERF (audit): restore boardVersion so dirty-check still works after unmake.
-s.boardVersion=undo.oldBoardVersion||0;
 if(s.moveHistory&&undo.oldMoveHistoryLength!==undefined)s.moveHistory.length=undo.oldMoveHistoryLength;
 s.currentTurn=undo.isBlackMove?'black':'white';
 }
@@ -3837,13 +3847,45 @@ const k=s.currentTurn==='white'?s.wk:s.bk;return inCheck(s.board,s.currentTurn,k
 //   whether a SPECIFIC side has enough material to checkmate the opponent.
 //   isDeadPosition checks the WHOLE position (both sides); for FIDE 6.9 timeout
 //   draws we need to check the WINNER side only. Example: White flags, Black has
-//   K+N only → Black wins on time but cannot mate → FIDE 6.9 draw. isDeadPosition
-//   returns false here (White may have a queen), so the old code wrongly judged
-//   "Black wins". winnerLacksMatingMaterial(state,'black') returns true → draw.
+//   K+N only and White has a bare king → Black wins on time but cannot mate →
+//   FIDE 6.9 draw. isDeadPosition returns false here, so the old code wrongly
+//   judged "Black wins". winnerLacksMatingMaterial(state,'black') returns true
+//   → draw.
 // v1.2.3 round-31 (PR52 SonarCloud S3776): refactored to reduce cognitive
 //   complexity from 29 → ~6 by extracting _scanWinnerMaterial() and
-//   _bishopParityIsUniform(). The 11-test FIDE 6.9 suite (round-30) still
-//   passes — semantics are byte-for-byte equivalent.
+//   _bishopParityIsUniform().
+// v1.2.3 round-49 (FIDE 6.9 both-side matrix, BUG-9 verdict follow-up): the
+//   FIDE 6.9 test is "can the WINNER checkmate the LOSER's king by any possible
+//   series of legal moves?" — the LOSER's material matters, because loser
+//   pieces can occupy their own king's escape squares (self-block helpmate).
+//   The old code looked only at the WINNER's material (former _scanWinnerMaterial
+//   doc even claimed "Loser-side material is irrelevant"), so e.g. K+N vs K+B
+//   was misjudged a timeout draw — a legal mating sequence exists (White Kc8+Nc7
+//   vs Black Ka8+Ba7: Nc7+ checks a8, Kc8 covers b8/b7, and the bishop blocks
+//   its own king's a7 escape square and cannot capture Nc7), so it is a WIN
+//   on time.
+//   Matrix (W = winner's pieces, L = loser's pieces, kings not counted):
+//   (1) W has any pawn/rook/queen → mate possible (promotion / major pieces).
+//   (2) W bare king → impossible.
+//   (3) W has bishop AND knight → possible (KBN vs K is a forced mate).
+//   (4) W has ≥2 knights, no bishop → possible even vs bare king (helpmate:
+//       Black Ka8, White Kb6+Nc6+Nc7# — the knight pair covers the corner).
+//   (5) W exactly 1 knight, no bishop → possible iff L has ANY piece (a loser
+//       piece can always self-block the one escape square the knight+king net
+//       cannot cover — see the Kc8+Nc7 vs Ka8+Ba7 construction above; vs a
+//       bare king the single knight can never mate).
+//   (6) W bishops only: bishops on BOTH square colors → possible (classic
+//       opposite-colored bishop pair covers every square); ALL bishops on one
+//       color c → possible UNLESS every L piece is itself a color-c bishop
+//       (the classic K+B vs K+B same-color dead endgame, generalized: a
+//       color-c bishop can never occupy the opposite-color escape square the
+//       mate net needs blocked — L bare king is subsumed here since K+B /
+//       K+BB(same color) vs K cannot mate). Any L knight / opposite-color
+//       bishop / other piece → self-block helpmate exists → possible.
+//   Basis: FIDE Laws of Chess art. 6.9 (flag fall is a draw only if the
+//   opponent cannot checkmate by any possible series of legal moves); the
+//   matrix enumerates the standard insufficient-material/helpmate theory
+//   (same source as the isDeadPosition cases below and the round-40 KNN note).
 function winnerLacksMatingMaterial(s,winnerColor){
   // v1.2.3 round-35 (PR52 SonarCloud S6582): use optional chaining —
   //   `!s?.board` returns true when s is null/undefined OR s.board is falsy,
@@ -3852,37 +3894,48 @@ function winnerLacksMatingMaterial(s,winnerColor){
   const counts=_scanWinnerMaterial(s.board,winnerColor);
   // Sanity: winner must have exactly one king (otherwise state is corrupt).
   if(counts.king!==1)return false;
-  // Any pawn / rook / queen → mating is possible.
+  // (1) Any pawn / rook / queen → mating is possible.
   if(counts.pawn>0||counts.rook>0||counts.queen>0)return false;
-  // K vs K (winner has only king) → cannot mate.
+  // (2) K vs K (winner has only king) → cannot mate.
   if(counts.knight===0&&counts.bishop===0)return true;
-  // K + single minor (N or B) → cannot mate.
-  if(counts.knight+counts.bishop===1)return true;
+  // (3) K + bishop + knight → CAN mate (KBN vs K is a forced mate). Must be
+  //   checked before the knight-only / bishop-only branches below.
+  if(counts.bishop>0&&counts.knight>0)return false;
+  // (4) K + ≥2 knights (no bishop) → CAN mate.
   // v1.2.3 round-40 (strict FIDE 6.9): REMOVED the K+N+N exemption. FIDE 6.9
   //   draws a timeout only when the loser cannot be checkmated "by any
   //   possible series of legal moves" — and K+N+N CAN deliver mate with the
   //   loser's cooperation (help-mate), so a K+N+N winner still WINS on time.
-  // K + B+B same color (no knight) → cannot force mate (enemy king escapes
-  // to the opposite-color squares). The parity check ensures ALL bishops
-  // are the same color; the no-knight guard excludes K+N+B+B(same color)
-  // which CAN mate (knight attacks both square colors).
-  // v1.2.3 round-30: added this case (was missing — the FIDE 6.9 timeout
-  //   draw was incorrectly judged a win for K+B+B same-color winners).
-  if(counts.bishop>=2&&counts.knight===0&&_bishopParityIsUniform(counts.bishopParity))return true;
-  // K + B+B same color + knight → CAN mate.
-  // K + B+B opposite color → CAN mate (covers both square colors).
-  // K + N+B → CAN mate.
-  // K + 2N+anything else → CAN mate (the anything-else enables mate).
-  return false;
+  if(counts.knight>=2)return false;
+  // round-49: scan the LOSER side too — cases (5) and (6) depend on whether
+  //   the loser owns any piece that can self-block an escape square.
+  const loser=_scanWinnerMaterial(s.board,OPP_COLOR[winnerColor]);
+  // (5) K + exactly 1 knight (no bishop) → can mate iff the loser has ANY
+  //   piece to self-block with; vs a bare king it is impossible.
+  if(counts.knight===1){
+    return (loser.pawn+loser.rook+loser.queen+loser.knight+loser.bishop)===0;
+  }
+  // (6) W has only bishops (knight===0 here).
+  // Bishops on both square colors → CAN mate.
+  if(!_bishopParityIsUniform(counts.bishopParity))return false;
+  // All W bishops on one color c. If L owns any non-bishop piece, it can
+  //   self-block (knight/pawn/rook/queen sit on either color) → CAN mate.
+  if(loser.pawn>0||loser.rook>0||loser.queen>0||loser.knight>0)return false;
+  // L has only bishops (or a bare king): mate is impossible iff every L
+  //   bishop is on the SAME color c (bishopParity -1 = no L bishop at all;
+  //   -2 = mixed L colors → an opposite-color bishop exists → CAN mate).
+  return loser.bishopParity===-1||loser.bishopParity===counts.bishopParity;
 }
 
 /**
- * Scan the board and return the winner's non-king piece counts plus the
- * bishop square-color parity. Loser-side material is irrelevant to FIDE 6.9
- * — the winner's mating ability depends only on the winner's own pieces.
+ * Scan the board and return one side's non-king piece counts plus the bishop
+ * square-color parity. Despite the historical name, this is a generic
+ * per-color scanner — v1.2.3 round-49 calls it for BOTH the winner and the
+ * loser, because FIDE 6.9 mating ability also depends on loser pieces that
+ * can self-block their own king's escape squares.
  *
  * @param {Array} board - 8×8 array of pieces (or null)
- * @param {string} winnerColor - 'white' | 'black'
+ * @param {string} winnerColor - 'white' | 'black' (the side to scan)
  * @returns {Object} {pawn,knight,bishop,rook,queen,king,bishopParity}
  *   bishopParity: -1 = no bishop seen; 0/1 = light/dark uniform; -2 = mixed
  */
@@ -3918,12 +3971,13 @@ function _scanWinnerMaterial(board,winnerColor){
 }
 
 /**
- * Returns true iff all bishops the winner owns sit on the SAME square color.
- * Used by the FIDE 6.9 K+B+B same-color rule: K+B+B(uniform color) vs K cannot
- * force mate (the enemy king escapes to the opposite-color squares).
+ * Returns true iff all bishops a side owns sit on the SAME square color.
+ * Used by the FIDE 6.9 matrix case (6) in winnerLacksMatingMaterial:
+ * a winner whose bishops are all on one color c can only be denied mate
+ * when every loser piece is itself a color-c bishop.
  * bishopParity === -2 means mixed colors; any other non-negative value means
- * uniform (or no bishops, in which case the caller's `bishop>=2` guard fails
- * first).
+ * uniform (or no bishops, in which case the caller's bishop-presence guard
+ * fails first).
  */
 function _bishopParityIsUniform(bishopParity){
   return bishopParity>=0;
@@ -4222,11 +4276,6 @@ for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=s.board[r][c];if(p){if(p.type==
 //   pass, breaking the schema consumers rely on.
 s.castlingRights={whiteKingside:false,whiteQueenside:false,blackKingside:false,blackQueenside:false,whiteKingsideRookFile:null,whiteQueensideRookFile:null,blackKingsideRookFile:null,blackQueensideRookFile:null};
 syncHash(s);
-// v1.0.2 PERF (audit): bump boardVersion on setup-mode board mutations
-//   (piece placement/deletion/clear-board/reset-board). round-42 42-9:
-//   _updateBoardIncremental was removed in round-20; no current readers —
-//   counter retained as snapshot metadata.
-s.boardVersion=(s.boardVersion||0)+1;
 }
 
 // NOTE: All position evaluation comes exclusively from Stockfish18. No JS-side eval code.
@@ -4298,8 +4347,16 @@ if(gameClocks !== undefined&&gameClocks&&typeof AndroidBridge.engineGoTimed==='f
       //   command; silence left the user staring at a hung AI with no toast.
       console.error('engineGo fallback failed:',error);
       showToast(T('engine_unavailable_hint'));
+      isAIThinking=false;_aiBarInfo='';render();
     }}
-    isAIThinking=false;_aiBarInfo='';render();
+    // v1.2.3 round-48 (BUG-8): on SUCCESSFUL fallback dispatch, KEEP
+    //   isAIThinking=true — onBestMove clears it when the engine answers, and
+    //   the 360s safety timer stays armed as the fallback. The old
+    //   unconditional clear here (a) disarmed the safety timer's
+    //   `if(isAIThinking)` guard (a lost engine → permanently silent AI), and
+    //   (b) defeated doAIMove()'s isAIThinking early-return while currentTurn
+    //   was still the AI side, so any reentrant doAIMove (e.g. via exitReview)
+    //   would dispatch a SECOND go command against the in-flight search.
   }
   return;
 }
@@ -4954,7 +5011,7 @@ function toShredderCastling(cr,board){
     if(cr.whiteQueenside){
       let f=null;
       if(cr.whiteQueensideRookFile!=null&&_rookOn(7,cr.whiteQueensideRookFile,'white'))f=cr.whiteQueensideRookFile;
-      else{let best=-1;for(const c of wRooks)if(c<wKing&&c>best)best=c;if(best>=0)f=best;} // closest LEFT
+      else{let best=-1;for(const c of wRooks){if(c<wKing&&c>best)best=c;}if(best>=0)f=best;} // closest LEFT
       if(f!=null)pairs.push({file:f,isWhite:true});
     }
   }
@@ -4968,7 +5025,7 @@ function toShredderCastling(cr,board){
     if(cr.blackQueenside){
       let f=null;
       if(cr.blackQueensideRookFile!=null&&_rookOn(0,cr.blackQueensideRookFile,'black'))f=cr.blackQueensideRookFile;
-      else{let best=-1;for(const c of bRooks)if(c<bKing&&c>best)best=c;if(best>=0)f=best;}
+      else{let best=-1;for(const c of bRooks){if(c<bKing&&c>best)best=c;}if(best>=0)f=best;}
       if(f!=null)pairs.push({file:f,isWhite:false});
     }
   }
@@ -5398,7 +5455,6 @@ function initChess960State(spid){
     posCount:new Map(),
     wk,bk,
     hash:0,
-    boardVersion:1,
     chess960:true,
     spid:spid
   };
@@ -5418,7 +5474,6 @@ function initChess960State(spid){
 //
 // Key functions:
 //   - buildStandardPGN()  : compose a PGN-compliant game record
-//   - parseStandardPGN()  : tolerant parser that auto-corrects common errors
 //   - normalizeTagValue() : escape backslashes and quotes in tag values
 //   - sevenTagRoster()    : build the mandatory 7-tag roster
 //
@@ -5717,8 +5772,8 @@ const NAG_MAP={
   // Move quality (spec §10.3.1)
   '!':'$1','?':'$2','!!':'$3','??':'$4','!?':'$5','?!':'$6',
   // Position evaluation (spec §10.3.2)
-  '=':'$10','∞':'$11','⩲':'$13','+/=':'$13','⩱':'$14','=/+':'$14',
-  '±':'$15','+/-':'$15','∓':'$16','-/+':'$16','+-':'$17','-+':'$18'
+  '=':'$10','∞':'$13','⩲':'$14','+/=':'$14','⩱':'$15','=/+':'$15',
+  '±':'$16','+/-':'$16','∓':'$17','-/+':'$17','+-':'$18','-+':'$19'
 };
 
 /**
@@ -6025,306 +6080,6 @@ function _formatRAV(v){
   return '';
 }
 
-// ===== IV. Tolerant PGN parser (auto-correction) =====
-//
-// This parser is designed to handle "wild" PGN text from arbitrary sources
-// (chess.com, lichess, chessbase, hand-typed, OCR'd, etc.). It applies the
-// following auto-corrections:
-//
-//   1. Strip BOM, normalize \r\n → \n
-//   2. Strip PGN escape lines (% at column 0) per spec §4
-//   3. Strip non-breaking spaces (\u00a0) per DroidFish PgnScanner
-//   4. Flatten nested brace comments (spec violation): {a {b} c} → {a b c}
-//   5. Tolerate missing close-brace at EOF (auto-close)
-//   6. Tolerate missing Result token (default to "*")
-//   7. Skip malformed SAN tokens rather than aborting (graceful degradation)
-//   8. Accept "0-0"/"0-0-0" (numeric zeros) as castling, normalize to "O-O"/"O-O-O"
-//   9. Strip ";..." line-comments per spec §8.2.3
-//  10. Strip "$N" NAG tokens (we don't preserve NAGs in the simplified parser)
-//  11. Accept tag pairs with missing quotes: [FEN rnbq...] → [FEN "rnbq..."]
-//
-// Returns: { tags:{}, movetext:string, halfMoves:[{moveNum,color,san,comment,variations?}],
-//            startFEN:string|null, variant:string|null, errors:string[] }
-
-/**
- * Tolerant PGN parser. Auto-corrects common spec violations.
- *
- * @param {string} pgnText — raw PGN text (single or multi-game)
- * @returns {Object|null} parsed game record, or null if completely unparseable
- */
-function parseStandardPGN(pgnText){
-  // v1.2.3 round-18 audit notes (function currently has no call sites —
-  //   production PGN import uses tablebase.js _parsePGN):
-  //   FIXED: stray '}' in movetext caused an infinite tokenizer loop.
-  //   KNOWN LIMITATIONS (documented, not worth churn while unused):
-  //   - RAV variations attach to the FOLLOWING move instead of the preceding
-  //     move required by the PGN spec.
-  //   - Tag pairs with missing quotes (e.g. [FEN rnbq...]) are extracted into
-  //     `tags` but not stripped from movetext, leaving pseudo-SAN tokens.
-  if(!pgnText||typeof pgnText!=='string')return null;
-  const errors=[];
-  // 1. Strip BOM
-  try{if(pgnText.charCodeAt(0)===0xFEFF)pgnText=pgnText.substring(1);}catch(e){return null;}
-  // 2. Normalize line endings
-  pgnText=pgnText.replace(/\r\n/g,'\n').replace(/\r/g,'\n');
-  // 3. Strip PGN escape lines
-  pgnText=pgnText.replace(/^%.*$/gm,'');
-  // 4. Non-breaking spaces
-  pgnText=pgnText.replace(/\u00a0/g,' ');
-  // 5. Multi-game: keep only the first game
-  const gameBlocks=pgnText.split(/\n\s*\n(?=\[)/);
-  if(gameBlocks.length>1)pgnText=gameBlocks[0];
-
-  // === Parse tag pairs ===
-  const tags={};
-  // Match [Key "Value"] with optional missing quotes
-  const tagRe=/\[(\w+)\s+"?((?:[^"\\]|\\.)*)"?\s*\]/g;
-  let m;
-  while((m=tagRe.exec(pgnText))!==null){
-    const key=m[1];
-    let val=m[2]||'';
-    // Unescape \" → " and \\ → \
-    val=val.replace(/\\"/g,'"').replace(/\\\\/g,'\\');
-    tags[key]=val;
-  }
-  // Remove all tag-pair lines from the working text
-  // v1.0.8 PHASE 49: tag-value regex was `[^\]]*` which stops at the first
-  //   `]` inside a value, leaving residual text. Use a non-greedy `[\s\S]*?`
-  //   so values containing `]` (rare but legal per PGN spec when escaped)
-  //   are handled, and anchor to the line start so movetext `[Nf3]`-style
-  //   annotations (which never start a line) are not stripped.
-  // v1.1.0 PHASE 57+: The previous `/^\[[\s\S]*?\]/gm` pattern relied on
-  //   `^` with the `gm` flags to anchor tags to line starts. In single-line
-  //   PGN (all tags + movetext on ONE line, e.g. PGN 2Kbug.pgn) `^` only
-  //   matches the very start of the string, so the first `]` (closing the
-  //   first tag) is the only match — the remaining tags survive as garbage
-  //   tokens in moveText. Replaced with an unanchored, format-strict regex
-  //   `/\[[A-Za-z]\w*\s+"(?:[^"\\]|\\.)*"\]/g` that requires the canonical
-  //   PGN tag shape (key + whitespace + quoted value), so movetext comments
-  //   like `[Nf3]` (no quotes) are never stripped.
-  //   v1.2.1 round-9: Updated the value pattern from `[^"]*` to
-  //   `(?:[^"\\]|\\.)*` to correctly handle escaped quotes inside tag values
-  //   (e.g. `[Event "Some \"Fun\" Event"]`). The tag-EXTRACTION regex at
-  //   line ~658 already handles escaped quotes; this brings the removal
-  //   regex into parity so a tag with escaped quotes is fully stripped from
-  //   movetext (otherwise residual garbage tokens survive).
-  let moveText=pgnText.replace(/\[[A-Za-z]\w*\s+"(?:[^"\\]|\\.)*"\]/g,'').trim();
-  // Remove line continuation markers
-  moveText=moveText.replace(/\\\s*\n/g,' ');
-  // v1.0.8 PHASE 49: Flatten brace comments BEFORE removing line comments.
-  //   The old order (line-comments first) truncated `{...; ...}` brace
-  //   comments at the `;`, losing the rest of the comment and any moves
-  //   on the same line. Brace comments must be removed first so that any
-  //   `;` inside them is gone before the line-comment pass runs.
-  // v1.0.7 PHASE 18 Task 3 (bug fix): Flatten nested brace comments by REMOVING
-  // them entirely (braces + body), matching the proven-correct pattern in
-  // tablebase.js's _parsePGN. The old code stripped only the
-  // braces and left the comment body as bare text in moveText — the tokenizer
-  // then classified each whitespace-delimited comment word as a spurious SAN
-  // token, polluting the move list. (Latent: parseStandardPGN is currently
-  // unused, but this prevents a landmine if it's ever wired in.)
-  {
-    let _iter=0;
-    while(moveText.includes('{')&&_iter++<20){
-      const prev=moveText;
-      moveText=moveText.replace(/\{[^{}]*\}/g,'');
-      if(prev===moveText)break; // no more progress
-    }
-    // Truncate at any unclosed brace (tolerant per PGN spec)
-    if(moveText.includes('{'))moveText=moveText.substring(0,moveText.indexOf('{'));
-  }
-  // Remove line-comments (;...) — must run AFTER brace-comment flattening
-  //   so `;` inside `{...}` is already gone.
-  moveText=moveText.replace(/;[^\n]*/g,'');
-  // Extract comments inline as we tokenize. NOTE: brace comments were
-  //   flattened (removed) above, so the `{` tokenizer branch below is
-  //   unreachable in the normal flow — kept as a defensive safety net in
-  //   case a future caller passes movetext that skipped the flattening pass.
-  // Strategy: tokenize the movetext into a stream of {type, value} tokens
-  const tokens=[];
-  let i=0;
-  while(i<moveText.length){
-    const ch=moveText[i];
-    // v1.0.4 Rev31 CLEANUP: removed dead `ch==='\s'` comparison (a single char
-    // can never equal the 2-char string "\s" — it was a typo for the regex \s
-    // class, but the explicit ' ' / '\t' / '\n' checks already cover all cases).
-    if(ch===' '||ch==='\t'||ch==='\n'){
-      i++;continue;
-    }
-    if(ch==='{'){
-      // Read until matching '}'
-      let j=i+1,depth=1,body='';
-      while(j<moveText.length&&depth>0){
-        if(moveText[j]==='{')depth++;
-        else if(moveText[j]==='}')depth--;
-        if(depth>0)body+=moveText[j];
-        j++;
-      }
-      if(depth>0){
-        // Missing close brace — auto-close
-        errors.push('Auto-closed unclosed comment at EOF');
-        body=moveText.slice(i+1);
-        i=moveText.length;
-      }else{
-        i=j+1;
-      }
-      tokens.push({type:'comment',value:body});
-      continue;
-    }
-    if(ch==='('){
-      tokens.push({type:'openVar'});i++;continue;
-    }
-    if(ch===')'){
-      tokens.push({type:'closeVar'});i++;continue;
-    }
-    // v1.2.3 round-18 (bug fix): skip a stray close-brace. Previously a `}`
-    //   without a matching `{` (malformed movetext) reached the token reader
-    //   below, which breaks immediately on '}' with an EMPTY token — the
-    //   `if(!tok)continue;` then looped forever without advancing i.
-    if(ch==='}'){
-      errors.push('Skipped stray close brace in movetext');
-      i++;continue;
-    }
-    // Read a whitespace/paren/brace-delimited token
-    let j=i;
-    let tok='';
-    while(j<moveText.length){
-      const c2=moveText[j];
-      if(c2===' '||c2==='\t'||c2==='\n'||c2==='{'||c2==='}'||c2==='('||c2===')')break;
-      tok+=c2;j++;
-    }
-    i=j;
-    if(!tok)continue;
-    // Classify the token
-    if(/^\$\d+$/.test(tok)){tokens.push({type:'nag',value:tok});continue;}
-    if(tok==='1-0'||tok==='0-1'||tok==='1/2-1/2'||tok==='*'){
-      tokens.push({type:'result',value:tok});continue;
-    }
-    if(/^\d+\.+$/.test(tok)){tokens.push({type:'moveNum',value:tok});continue;}
-    if(/^\.\.\.+$/.test(tok)){tokens.push({type:'ellipsis'});continue;}
-    tokens.push({type:'san',value:tok});
-  }
-
-  // === Build halfMoves array ===
-  // Walk the token stream, tracking:
-  //   - current move number (defaults to 1, but may be set by [FEN] start)
-  //   - current side to move (defaults to white; flipped if FEN says black)
-  //   - variation stack (for nested RAVs)
-  let startMoveNum=1;
-  let startColor='white';
-  if(tags.FEN){
-    // FEN field 6 is the full-move number, field 1 is side to move
-    const fenParts=tags.FEN.split(/\s+/);
-    if(fenParts[1]==='b')startColor='black';
-    const fenMove=Number.parseInt(fenParts[5],10);
-    if(fenMove>0)startMoveNum=fenMove;
-  }
-  const halfMoves=[];
-  let curMoveNum=startMoveNum;
-  let curColor=startColor;
-  let pendingComment='';
-  let pendingVariations=[];
-
-  function _emitSan(sanTok){
-    // Auto-correct common SAN errors:
-    //   - "0-0" → "O-O", "0-0-0" → "O-O-O"
-    let s=sanTok;
-    if(/^0-0-0$/i.test(s))s='O-O-O';
-    else if(/^0-0$/i.test(s))s='O-O';
-    // Strip check/mate/annotation suffixes for storage (we re-add them at render)
-    const bareSAN=s.replace(/[+#!?]+$/,'');
-    halfMoves.push({
-      moveNum:curMoveNum,
-      color:curColor,
-      san:bareSAN,
-      comment:pendingComment||undefined,
-      variations:pendingVariations.length>0?pendingVariations:undefined
-    });
-    pendingComment='';
-    pendingVariations=[];
-    // Advance side
-    if(curColor==='black'){curMoveNum++;curColor='white';}
-    else{curColor='black';}
-  }
-
-  // Simple variation buffer (we only support flat variations for now — nested
-  // variations are flattened into the parent's variation list)
-  let varBuf=null;
-  let varDepth=0;
-  for(const tok of tokens){
-    if(varDepth>0){
-      if(tok.type==='openVar'){varDepth++;if(varBuf){varBuf.push('(');}continue;}
-      if(tok.type==='closeVar'){varDepth--;if(varDepth===0){
-        // Close out the variation
-        if(varBuf?.length>0){
-          pendingVariations.push({san:varBuf.join(' ')});
-        }
-        varBuf=null;
-      // v1.2.3 round-38 (SonarCloud S6660): flatten `else { if (...) ... }` to `else if (...)`.
-      }else if(varBuf)varBuf.push(')');
-      continue;}
-      if(varBuf){
-        if(tok.type==='san')varBuf.push(tok.value);
-        else if(tok.type==='moveNum')varBuf.push(tok.value);
-        else if(tok.type==='comment'){/* drop comments inside variations for simplicity */}
-        else if(tok.type==='result'){/* ignore results inside variations */}
-      }
-      continue;
-    }
-    if(tok.type==='openVar'){varDepth=1;varBuf=[];continue;}
-    if(tok.type==='closeVar'){errors.push('Unmatched )');continue;}
-    if(tok.type==='comment'){pendingComment=(pendingComment?pendingComment+' ':'')+tok.value;continue;}
-    if(tok.type==='nag'){/* drop NAGs in simplified parser */continue;}
-    if(tok.type==='moveNum'){
-      // Extract the move number and side indicator from "N." or "N..."
-      const mm=tok.value.match(/^(\d+)(\.+)$/);
-      if(mm){
-        const num=Number.parseInt(mm[1],10);
-        const dots=mm[2];
-        if(dots.length>=3){
-          // "N..." — black to move, advance move number
-          curMoveNum=num;curColor='black';
-        }else{
-          // "N." — white to move
-          curMoveNum=num;curColor='white';
-        }
-      }
-      continue;
-    }
-    if(tok.type==='ellipsis'){curColor='black';continue;}
-    if(tok.type==='result'){continue;} // result is appended at the end
-    if(tok.type==='san'){
-      try{_emitSan(tok.value);}catch(e){errors.push('Skipping invalid SAN: '+tok.value);}
-      continue;
-    }
-  }
-
-  if(halfMoves.length===0){
-    errors.push('No half-moves parsed');
-    // Still return the tags so the caller can salvage metadata
-  }
-
-  // Determine the result
-  const result=tags.Result||(function(){
-    // Look at the last token
-    for(let k=tokens.length-1;k>=0;k--){
-      if(tokens[k].type==='result')return tokens[k].value;
-    }
-    return '*';
-  })();
-
-  return {
-    tags:tags,
-    movetext:moveText,
-    halfMoves:halfMoves,
-    startFEN:tags.FEN||null,
-    variant:tags.Variant||null,
-    setUp:tags.SetUp||null,
-    result:result,
-    errors:errors
-  };
-}
-
 // ===== V. Convenience: convert internal game state to a PGN tags object =====
 /**
  * Build a tags object suitable for supplementaryTags() from the current game state.
@@ -6430,6 +6185,15 @@ const _pendingTasks = new Map(); // taskId -> {resolve, reject, worker, timeout}
 const _MAX_QUEUE_SIZE = 50;
 
 // === Worker source code (self-contained, no external deps, no eval) ===
+// ⚠ DUAL-COPY SYNC OBLIGATION (v1.2.3 round-49, F6): _parsePGNText /
+//   _computeHeatmapStats exist TWICE — once inside this _WORKER_SRC template
+//   string (runs in the worker thread) and once as _syncParsePGNText /
+//   _syncComputeHeatmapStats below (main-thread fallback, reached via
+//   _syncFallback). ANY logic change to one copy MUST be mirrored to the
+//   other, keeping them semantically identical (mind the double-escaped
+//   backslashes inside the template string). Precedent: round-47 fixed the
+//   multi-game split regex only in the sync copy; the worker copy kept the
+//   polynomial-backtracking form until round-49.
 // v1.0.8 PHASE 28: Functions are inlined as cases in a switch statement.
 //   This avoids `new Function()` / `eval()` which require CSP 'unsafe-eval'.
 // v1.0.8 PHASE 34: parsePGNText now does FULL tokenization (headers, comments,
@@ -6476,7 +6240,12 @@ function _parsePGNText(pgnText) {
   // Replace non-breaking spaces
   text = text.replace(/\\u00a0/g, ' ');
   // Handle multiple games: only parse the first game
-  var gameBlocks = text.split(/\\n\\s*\\n(?=\\[)/);
+  // v1.2.3 round-49 (F6/F2): mirror of _syncParsePGNText below — see the
+  //   detailed comment there. The (?<!X) lookbehind anchors match starts to
+  //   the first newline of each blank-line run → linear time (round-47 form
+  //   without it was still O(k^2) on the failure path; Node: 16k -> 587ms,
+  //   with lookbehind 16k -> 1.1ms). Split results identical (300k fuzz).
+  var gameBlocks = text.split(/(?<!\\n)\\n[^\\S\\n]*\\n(?:[^\\S\\n]*\\n)*(?=\\[)/);
   if (gameBlocks.length > 1) text = gameBlocks[0];
   // Extract FEN from headers
   var startFEN = null;
@@ -6506,9 +6275,13 @@ function _parsePGNText(pgnText) {
   var cslAnnotations = [];
   var calAnnotations = [];
   var evals = [];
-  var cslRe = /\\[%csl\\s+([^\\]]*)\\]/g;
-  var calRe = /\\[%cal\\s+([^\\]]*)\\]/g;
-  var evalRe = /\\[%eval\\s+([^\\]]*)\\]/g;
+  // v1.2.3 round-49 (F6): single whitespace (was one-or-more) to match the
+  //   sync copy exactly (round-47 S8786) — the trailing any-but-bracket run
+  //   already covers extra whitespace and the capture is trim()'d at the use
+  //   site, so semantics are unchanged.
+  var cslRe = /\\[%csl\\s([^\\]]*)\\]/g;
+  var calRe = /\\[%cal\\s([^\\]]*)\\]/g;
+  var evalRe = /\\[%eval\\s([^\\]]*)\\]/g;
   var iter = 0;
   // v1.2.3 round-38 (SonarCloud S7765): use .includes() instead of .indexOf() >= 0.
   while (text.includes('{') && iter++ < 20) {
@@ -6801,7 +6574,25 @@ function _dispatchNext() {
     task.worker = w;
     w._currentTask = task; // v1.2.3 round-44 (G12): O(1) crash lookup
     _pendingTasks.set(task.taskId, task);
-    w.postMessage({type: 'run', taskId: task.taskId, fnName: task.fnName, args: task.args});
+    // v1.2.3 round-49 (F7): guard postMessage — a synchronous throw (e.g.
+    //   DataCloneError on an uncloneable arg) previously escaped the workerRun
+    //   Promise executor AFTER the worker was marked busy and the task
+    //   registered, stranding the worker as "busy" until the task's 30s
+    //   timeout terminated it (and surfacing as an uncaught exception when
+    //   reached from an onmessage-triggered _dispatchNext). On failure we
+    //   unregister the task, recycle the worker (state unknown — safest to
+    //   terminate + replace), reject the task immediately, and let the loop
+    //   continue dispatching the remaining queue.
+    try {
+      w.postMessage({type: 'run', taskId: task.taskId, fnName: task.fnName, args: task.args});
+    } catch (e) {
+      _pendingTasks.delete(task.taskId);
+      w._currentTask = null;
+      w._busy = false;
+      if (task.timeout) { clearTimeout(task.timeout); task.timeout = null; }
+      _removeWorker(w);
+      task.reject(new Error('Worker postMessage failed: ' + (e && e.message ? e.message : String(e))));
+    }
   }
 }
 
@@ -6874,7 +6665,21 @@ function _syncParsePGNText(pgnText) {
   var text = pgnText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   text = text.replace(/^%.*$/gm, '');
   text = text.replace(/\u00a0/g, ' ');
-  var gameBlocks = text.split(/\n[^\S\n]*\n(?:[^\S\n]*\n)*(?=\[)/); // v1.2.3 round-47 (S8786): unambiguous equivalent of \n\s*\n (horizontal-ws runs separated by \n) — same split points, no polynomial backtracking
+  // v1.2.3 round-47 (S8786): \n\s*\n -> \n[^\S\n]*\n(?:[^\S\n]*\n)* (horizontal-ws
+  //   runs separated by \n) — same split points, no ambiguous quantifier overlap.
+  // v1.2.3 round-49 (F2/F6): added the (?<!\n) lookbehind — the round-47 form
+  //   was STILL O(k^2) on the failure path (a long blank-line run with no
+  //   following '[': the (?:...)* group re-walks the whole run per start
+  //   position; Node: 16k newlines -> 587ms vs old 440ms, i.e. the S8786 fix
+  //   silenced the lint but not the DoS). The lookbehind restricts match
+  //   starts to the FIRST '\n' of each blank-line run (mid-run starts fail in
+  //   O(1)) -> linear total (16k -> 1.1ms, 900k -> 63ms). Split results are
+  //   identical to the old regex (300k-case fuzz, 0 mismatches): a match
+  //   starting mid-run implies an equivalent match at the run's first '\n',
+  //   which split() finds first. Lookbehind needs Chrome 62+ (WebView>=84
+  //   floor OK). Keep in sync with the _WORKER_SRC copy above and
+  //   stats.html parsePGN.
+  var gameBlocks = text.split(/(?<!\n)\n[^\S\n]*\n(?:[^\S\n]*\n)*(?=\[)/);
   if (gameBlocks.length > 1) text = gameBlocks[0];
   var startFEN = null;
   var fenMatch = text.match(/\[FEN\s+"([^"]+)"\]/i);
@@ -9337,7 +9142,20 @@ function openStatsPage(){
       }
     }
   }
-  const payload=JSON.stringify({pgn:pgn,evals:evalData,moveRecords:moveData,visualAnnotations:vaData,playerColor:playerColor,lang:(typeof _lang!=='undefined'?_lang:'zh'),gameVariant:(gameVariant !== undefined?gameVariant:null)});
+  let payload=JSON.stringify({pgn:pgn,evals:evalData,moveRecords:moveData,visualAnnotations:vaData,playerColor:playerColor,lang:(typeof _lang!=='undefined'?_lang:'zh'),gameVariant:(gameVariant !== undefined?gameVariant:null)});
+  // v1.2.3 round-48 (ROB-2): the payload is delivered to StatsActivity as an
+  //   Intent extra, which is subject to the ~1MB Binder transaction cap —
+  //   an oversized payload makes StockfishNative.openStatsPage's startActivity
+  //   throw TransactionTooLargeException (caught → only a Toast, the stats
+  //   page silently never opens). If the payload exceeds 900KB, drop the
+  //   visualAnnotations field (the stats page tolerates its absence — it
+  //   falls back to the PGN-text scan, which still finds imported [%csl]/
+  //   [%cal] annotations) and set a truncation marker so consumers can tell.
+  //   (900KB in UTF-16 code units is conservative for mostly-ASCII payloads.)
+  if(payload.length>900*1024){
+    console.warn('openStatsPage: payload exceeds 900KB ('+payload.length+' chars) — dropping visualAnnotations to stay under the Binder transaction limit');
+    payload=JSON.stringify({pgn:pgn,evals:evalData,moveRecords:moveData,playerColor:playerColor,lang:(typeof _lang!=='undefined'?_lang:'zh'),gameVariant:(gameVariant !== undefined?gameVariant:null),visualAnnotationsTruncated:true});
+  }
   _bridgeCall(function(bridge){
     if(typeof bridge.openStatsPage==='function'){
       bridge.openStatsPage(payload);
@@ -10631,7 +10449,12 @@ function onPonderProgress(depth,nodes,nps,scoreCp,scoreMate,seldepth){
 // In review mode: caches result and discards stale callbacks.
 // Updated: now accepts 6 params (scoreCp, scoreMate, depth, wdlW, wdlD, wdlL)
 // v1.0.4 Rev33: added seldepth (7th param) for "SD" display in eval bar.
-function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth){
+// v1.2.3 round-49 (review-3 F1 / T1): added reqFen (8th param) — Java echoes
+//   back the fen of the eval request this result belongs to (StockfishNative
+//   _lastEvalFen). The batch guard below compares it against the dispatch
+//   record; when the param is missing (older runtime calling the 7-arg form)
+//   we fall back to the legacy re-derivation check.
+function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth,reqFen){
   // Update heartbeat timestamp — prevents false-positive engine death detection
   // during long eval searches (go depth 22 can take several seconds)
   _lastEngineCallbackTime=Date.now();
@@ -10698,9 +10521,23 @@ function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth){
     //   dispatch), so it only matches while the batch is still parked on the
     //   dispatched step. Mismatch → drop as stale: no caching, no advance.
     const _bd=_batchLastDispatched;
-    const _expectedFen=(_bd&&_reviewAnalyzeStep>=0&&_reviewAnalyzeStep<reviewStates.length)
+    // v1.2.3 round-49 (review-3 F1 / T1): the fen CARRIED BY THE CALLBACK
+    //   (8th param, echoed by Java from _lastEvalFen) is the authoritative
+    //   position identity of the search that produced this result. The old
+    //   check re-derived _expectedFen from the CURRENT _reviewAnalyzeStep —
+    //   both sides of `_bd.fen!==_expectedFen` were computed from the same
+    //   current step, so the comparison was an IDENTITY: a late callback from
+    //   step N arriving after the batch advanced to step N+1 passed the guard
+    //   and its score was cached as step N+1's result (wrong-step data, with
+    //   the new step's _evalForBlackTurn flip — possible sign inversion).
+    //   Now: compare the callback's own fen against the dispatch record.
+    //   Legacy fallback (reqFen undefined/'' — older runtime with the 7-arg
+    //   callback): keep the old re-derivation check, documented as unable to
+    //   distinguish two steps.
+    const _cbFen=(typeof reqFen==='string'&&reqFen.length>0)?reqFen:null;
+    const _expectedFen=(_cbFen===null&&_bd&&_reviewAnalyzeStep>=0&&_reviewAnalyzeStep<reviewStates.length)
       ?_sanitizeFenForEngine(generateFEN(reviewStates[_reviewAnalyzeStep].state)):null;
-    if(!_bd||_bd.gen!==_evalRequestBatchGen||_bd.step!==_reviewAnalyzeStep||_bd.fen!==_expectedFen){
+    if(!_bd||_bd.gen!==_evalRequestBatchGen||_bd.step!==_reviewAnalyzeStep||_bd.fen!==(_cbFen!==null?_cbFen:_expectedFen)){
       console.warn('[AIBridge] Stale batch eval callback dropped (step/gen/fen mismatch vs last dispatch)');
       return;
     }
@@ -11223,6 +11060,19 @@ function onSettingsExported(success,fileName){
   }else{
     showToast(T('settings_clipboard_fallback'));
   }
+}
+// v1.2.3 round-49 (BUG-19): SAF IMPORT-cancel callback — called from Java
+//   (MainActivity.onActivityResult) when the user cancels the settings/PGN
+//   import picker. Symmetric counterpart to the export-cancel notification
+//   (onExportCancelled, fired by SafPickerHelper.cancelPendingExport).
+//   GLOBAL-SCOPE RULE: name must stay globally unique in the inlined bundle
+//   (grep-verified unique at introduction). Log-only by design: neither
+//   import chain sets a pending/"importing" flag before opening the picker
+//   (importEngineSettings → bridge.openSystemFilePicker; importPGNFile →
+//   AndroidBridge.openPGNFilePicker), so there is no state to clear here.
+//   which: 'settings' | 'pgn'.
+function onImportCancelled(which){
+  console.log('[AIBridge] import picker cancelled ('+(which||'unknown')+')');
 }
 function importEngineSettings(){
   _bridgeCall(function(bridge){
@@ -13521,12 +13371,24 @@ function _applySANMove(state,san){
 
 function _findLegalMove(state,from,to,pieceType){
   const allMoves=legalMoves(state,null);
-  return allMoves.find(m=>{
+  const _matches=m=>{
     const piece=state.board[m.from.row][m.from.col];
     return piece?.type===pieceType&&piece.color===state.currentTurn&&
            m.from.row===from.row&&m.from.col===from.col&&
            m.to.row===to.row&&m.to.col===to.col;
-  })||null;
+  };
+  // v1.2.3 round-49 (F1): this helper is only called from the O-O / O-O-O
+  //   branches of _applySANMove, so when BOTH a plain king move and a
+  //   castling move reach the same destination (Chess960 short castle, e.g.
+  //   SP-ID 12 king f1→g1), the candidate carrying the explicit castle flag
+  //   (set by pseudoMoves) MUST win. pseudoMoves pushes the king's 8
+  //   directional moves before the castling candidates, so an unfiltered
+  //   .find() would pick the plain king move and leave the rook behind —
+  //   corrupting every subsequent SAN parsed on that board. Preferring
+  //   to.castle decouples castling SAN resolution from pseudoMoves' push
+  //   order (defense-in-depth alongside the pre-parse variant activation in
+  //   importPGN).
+  return allMoves.find(m=>_matches(m)&&m.to.castle)||allMoves.find(_matches)||null;
 }
 
 function _executeAndRecord(state,move,notation){
@@ -13568,8 +13430,33 @@ function importPGN(pgnText){
     showToast(T('pgn_fen_rejected'),3750);
     return;
   }
+  // v1.2.3 round-49 (F1): pre-scan the [Variant] header and activate Chess960
+  //   mode BEFORE _parsePGN replays the SAN moves. Previously the mode was
+  //   only toggled AFTER parsing (the `result.variant==='chess960'` block
+  //   below), so _applySANMove/legalMoves ran under the PREVIOUS game's
+  //   variant mode — a Chess960 short-distance castle (e.g. SP-ID 12 king
+  //   f1→g1) was matched as a plain king move, the rook stayed behind, and
+  //   every subsequent SAN was parsed on a corrupted board (moves skipped or
+  //   mismatched). If parsing then fails, restore the previous mode so a
+  //   failed import still cannot corrupt the current game's variant state
+  //   (preserves the v1.0.8 Phase 49 guarantee).
+  const _preVariantM=pgnText.match(/\[Variant\s+"([^"]+)"\]/i);
+  const _preIs960=!!_preVariantM&&['chess960','fischerandom','fischer random','frc'].includes(_preVariantM[1].toLowerCase());
+  const _prev960mode=(typeof isChess960Mode==='function')?isChess960Mode():false;
+  const _prevGameVariant=(typeof gameVariant!=='undefined')?gameVariant:null;
+  const _restorePreParseVariant=()=>{
+    if(typeof setChess960Mode==='function')setChess960Mode(_prev960mode);
+    if(gameVariant !== undefined)gameVariant=_prevGameVariant;
+  };
+  if(_preIs960){
+    if(typeof setChess960Mode==='function')setChess960Mode(true);
+    if(gameVariant !== undefined)gameVariant='chess960';
+  }
   const result=_parsePGN(pgnText);
-  if(!result||!result.moves||!result.moves.length){showToast(T('pgn_invalid'),3000);return;}
+  if(!result||!result.moves||!result.moves.length){
+    if(_preIs960)_restorePreParseVariant();
+    showToast(T('pgn_invalid'),3000);return;
+  }
   // Start from FEN or initial position
   // v1.0.8 PHASE 49: validate startState BEFORE clearing _reviewEvalCache and
   //   toggling Chess960 mode. The old order (clear cache + set Chess960 first,
@@ -13578,7 +13465,13 @@ function importPGN(pgnText){
   //   invalid [FEN] tag — even though the import ultimately failed. Now the
   //   side effects only run once we know the import will succeed.
   const startState=result.startFEN?fenToState(result.startFEN):initState();
-  if(!startState){showToast(T('pgn_invalid'),3000);return;}
+  if(!startState){
+    // v1.2.3 round-49 (F1 follow-up): the F1 pre-scan above may have already
+    //   activated Chess960 mode — restore it so this failed import leaves the
+    //   current game's variant state untouched (Phase 49 guarantee).
+    if(_preIs960)_restorePreParseVariant();
+    showToast(T('pgn_invalid'),3000);return;
+  }
   // v1.0.7 BUG FIX:
   // Clear _reviewEvalCache before importing a new PGN — see _startGameImpl()
   // for rationale (cache is keyed by per-game reviewStep, switching games
@@ -13735,6 +13628,21 @@ function importPGN(pgnText){
     if(parsedMove?.skipped){
       stateHistory.push({state:cloneS(replayState),moveRecords:[...moveRecords],lastMove:lastMove?{...lastMove}:null,selectedSquare:null});
       moveRecords.push(null);
+      // v1.2.3 round-49 (F2): the parse phase advances side-to-move (and
+      //   fullMoveNumber when black was to move) on a skipped token — see
+      //   _parsePGN "MUST still advance" — so the replay loop MUST do the
+      //   same. Without this, from the skip point on replayState.currentTurn
+      //   is always the side that JUST moved (makeMvInPlace flips once per
+      //   real move), so an odd number of skips leaves the final
+      //   currentTurn inverted (wrong gameStatus verdict, AI moving on the
+      //   player's turn) and fullMoveNumber under-counted. The hash side bit
+      //   must flip in lockstep with currentTurn — otherwise the Zobrist key
+      //   no longer matches the position's side-to-move and threefold
+      //   repetition counting desyncs. Mirrors the variation-branch
+      //   compensation (vIsWhite/vMoveNum advance) below.
+      if(replayState.currentTurn==='black')replayState.fullMoveNumber++;
+      replayState.currentTurn=OPP_COLOR[replayState.currentTurn];
+      replayState.hash^=zobrist.side;
       moveIdx++;
       continue;
     }
@@ -13751,11 +13659,46 @@ function importPGN(pgnText){
       moveIdx++;continue;
     }
     const piece=replayState.board[from.row][from.col];
-    if(!piece){moveIdx++;continue;}
+    // v1.2.3 round-49 (F3): when the replay board has diverged from the parse
+    //   board (no piece on the from-square), mirror the `skipped` branch
+    //   below — push a null placeholder so moveRecords/stateHistory stay
+    //   index-aligned with moveIdx (otherwise variation keys and exported
+    //   move numbers shift by one from here on), and advance side-to-move +
+    //   fullMoveNumber + hash side bit because the parse phase DID apply
+    //   this move (same compensation as the F2 skip-branch fix).
+    if(!piece){
+      console.warn('importPGN: board diverged at index',moveIdx,'from=',from,'— pushing null placeholder');
+      stateHistory.push({state:cloneS(replayState),moveRecords:[...moveRecords],lastMove:lastMove?{...lastMove}:null,selectedSquare:null});
+      moveRecords.push(null);
+      if(replayState.currentTurn==='black')replayState.fullMoveNumber++;
+      replayState.currentTurn=OPP_COLOR[replayState.currentTurn];
+      replayState.hash^=zobrist.side;
+      moveIdx++;
+      continue;
+    }
     
     // Save pre-move state for stateHistory and variations
     const preMoveState=cloneS(replayState);
     const undoInfo=makeMvInPlace(replayState,parsedMove.move);
+    // v1.2.3 round-49 (F3): validate makeMvInPlace's return value. The `piece`
+    //   guard above only catches an empty from-square; if makeMvInPlace gains
+    //   another null-return path (it currently returns null only BEFORE any
+    //   mutation, so replayState is untouched here), we must not silently
+    //   record the move. Mirror the skip/divergence branches: push a null
+    //   placeholder so moveRecords/stateHistory stay index-aligned, and
+    //   advance side-to-move + fullMoveNumber + hash side bit because the
+    //   parse phase DID apply this move (its turn flip already happened in
+    //   _parsePGN) — see the F2 fix at the skip branch above.
+    if(!undoInfo){
+      console.warn('importPGN: makeMvInPlace returned null at index',moveIdx,'— pushing null placeholder');
+      stateHistory.push({state:cloneS(replayState),moveRecords:[...moveRecords],lastMove:lastMove?{...lastMove}:null,selectedSquare:null});
+      moveRecords.push(null);
+      if(replayState.currentTurn==='black')replayState.fullMoveNumber++;
+      replayState.currentTurn=OPP_COLOR[replayState.currentTurn];
+      replayState.hash^=zobrist.side;
+      moveIdx++;
+      continue;
+    }
     
     // Build proper notation using moveAlg for correct disambiguation per PGN spec
     let properNotation;
@@ -14390,6 +14333,10 @@ if(c!==8)return null;
 // Validate that both kings exist on the board (with the round-40 duplicate
 //   rejection above, this gives exactly one king per side)
 if(!wk||!bk)return null;
+// v1.2.3 round-49 (F4): validate the side-to-move field — previously any
+//   non-'b' garbage ("x", "W", a truncated "w") was silently accepted as
+//   White to move, diverging from the source tool that produced the FEN.
+if(parts[1]!=='w'&&parts[1]!=='b')return null;
 const turn=parts[1]==='b'?'black':'white';
 const crStr=parts[2]||'-';
 // v1.0.7 PHASE 4: X-FEN castling rights parsing.
@@ -14432,7 +14379,7 @@ if(_epHasCap)enPassantTarget={row:er,col:ec};
 let halfMoveClock=0,fullMoveNumber=1;
 if(parts[4]){if(!/^\d+$/.test(parts[4])){return null;}halfMoveClock=Number.parseInt(parts[4],10);}
 if(parts[5]){if(!/^\d+$/.test(parts[5])){return null;}fullMoveNumber=Number.parseInt(parts[5],10);if(fullMoveNumber<1){return null;}}
-const s={board,currentTurn:turn,castlingRights,enPassantTarget,halfMoveClock,fullMoveNumber,moveHistory:[],posCount:new Map(),wk,bk,hash:0,boardVersion:1};
+const s={board,currentTurn:turn,castlingRights,enPassantTarget,halfMoveClock,fullMoveNumber,moveHistory:[],posCount:new Map(),wk,bk,hash:0};
 syncHash(s);s.posCount.set(s.hash,1);
 // Validate: the side NOT to move must not be in check (illegal position)
 const nonMover=OPP_COLOR[turn];
@@ -14678,6 +14625,7 @@ function _loadEcoFromCache() {
 let _ecoCachedData = null;
 (function _preloadEcoCache() {
   _loadEcoFromCache().then(function(cached) {
+    if (_ecoParsed) return; // BUG-6: parsing already won the race — don't pin ~125KB in _ecoCachedData
     if (cached && Array.isArray(cached) && cached.length > 0) {
       _ecoCachedData = cached;
       // v1.1.2 Phase 70: removed debug console.log (production cleanup)
@@ -14825,11 +14773,35 @@ function startGame(){
 function _startGameImpl(){
   // v1.0.8 PHASE 22 supplement: new-game sound (号角式三音和弦)
   try{if(typeof playSound==='function')playSound('newgame');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+  // v1.2.3 round-49 Stage-3 (review-2 P2): shed ALL setup-mode state when a
+  //   new game is started from the ⚔️ dialog while setup mode is active —
+  //   same fix as quickFreeOpening (ui-interactions.js, v1.0.8 PHASE 7).
+  //   Without this, setupMode stayed true across the gameState=initState()
+  //   replacement below: the fresh game rendered the setup panel, and a later
+  //   Done ran validateSetupPosition on a state without setupCastleMarks
+  //   (resetting ALL castlingRights to false). The stale
+  //   window._setupEntrySnap could also misfire the BUG-13 modification gate
+  //   (exitSetup / toggleSetup exit branch) against the NEW game's position.
+  //   NOTE: this cannot live in _resetGameUIState — _exitSetupImpl calls
+  //   _resetGameUIState while setupMode is still true and then flips the
+  //   flag itself via its tail toggleSetup(); clearing setupMode there would
+  //   invert that flip. A lingering BUG-13 confirm overlay is removed
+  //   centrally by _resetGameUIState (called below).
+  if(typeof setupMode!=='undefined'&&setupMode){
+    setupMode=false;
+    setupMarkerMode=null;
+    setupPiece=null;
+    setupErrors=[];
+    setupHistory=[];
+    setupRedoStack=[];
+  }
+  if(typeof window!=='undefined')window._setupEntrySnap=null;
   showNewGameDialog=false;
   playerColor=dlgPlayerColor;
   useBookMoves=dlgBookMoves;
-  // v1.0.8 PHASE 18 Task 2: Reset virtual list state on new game.
-  _resetRvVirtualState();
+  // v1.2.3 round-48 (RED-7): _resetRvVirtualState() call removed — the virtual
+  //   list pipeline is disabled by design (RV_VIRTUAL_THRESHOLD=Infinity) and
+  //   its per-session bookkeeping was deleted.
   // v1.0.8 BUG FIX:
   // _reviewEvalCache is keyed by reviewStep (0-based per-game index since
   // v1.0.8 Phase 15: step 0 = initial position, steps 1..N = post-move).
@@ -15058,6 +15030,67 @@ function _tickGameClock(){
   _updateClockDisplay();
 }
 
+// v1.2.3 round-48 (BUG-1): clock pause/resume for review & setup modes.
+// _tickGameClock early-returns while setupMode||reviewMode (above), but the
+// wall clock keeps aging clock.lastMoveTimestamp during the frozen session —
+// on exit, the next tick (or recordMoveEnd) used to deduct the ENTIRE frozen
+// interval in one lump, often firing a spurious flag fall
+// (_onGameClockExpired). The pause marker lives on window (same pattern as
+// window._pendingOpenStats in ui.js) to avoid a new top-level let/const in
+// the concatenated global scope.
+//
+// Pairing contract (all entry/exit paths):
+//   ENTER: enterReview (ui.js), toggleSetup false→true (ui-interactions.js)
+//   EXIT:  exitReview (ui.js), _renderReviewMode invalid-state bailout (ui.js),
+//          toggleSetup true→false (covers "Done"/exitSetup too — _exitSetupImpl
+//          ends by calling toggleSetup).
+//   Game-start paths (new game / quickFreeOpening / FEN/PGN import /
+//   setup-complete) funnel through _resetGameUIState, which nulls gameClocks
+//   AND clears the pause marker — no resume needed there.
+
+// Record the freeze. No-op when no clock game is active or a side already
+// flagged out; keeps the FIRST pause timestamp if already paused (nested
+// entry, e.g. setup entered during review, must not extend the freeze).
+function _pauseGameClock(){
+  if(typeof gameClocks!=='undefined'&&gameClocks&&!gameClockExpired
+     &&(typeof window._clockPauseStart==='undefined'||window._clockPauseStart==null)){
+    window._clockPauseStart=Date.now();
+  }
+}
+
+// Resume: clear the pause marker and rebase the side-to-move's
+// lastMoveTimestamp to now, so the frozen interval is never deducted. Must be
+// called BEFORE the tick can run again (i.e., synchronously inside the exit
+// path, after gameState is restored). Only the side to move needs the rebase:
+// the other side's timestamp is reset by recordMoveEnd when the mover moves.
+//
+// v1.2.3 round-49 Stage-3 (review-2 P3-1 — verified UI-UNREACHABLE, documented
+//   only, NO code change): the pause marker is a single timestamp, not a
+//   reference count. In a NESTED pause (setup entered during an active
+//   review), _pauseGameClock keeps the FIRST timestamp, but this resume
+//   unconditionally clears the marker + rebases on the INNER exit (setup
+//   exit). The outer exitReview()'s resume then no-ops (marker already null),
+//   and the next tick deducts the inner-exit→outer-exit wall-clock gap in one
+//   lump (a spurious flag fall is only possible on a nearly-empty clock).
+//   Reachability audit (round-49 Stage-3): the review UI is a fixed
+//   inset:0, z-index:200 overlay (index.html.tpl .review-overlay) that fully
+//   covers the main header's setup button; the review header (.review-hdr,
+//   ui.js _renderReviewMode) has NO setup button; no keyboard binding calls
+//   toggleSetup; handleBackPress exits review BEFORE touching setup mode
+//   (ui-interactions.js). toggleSetup itself has no reviewMode guard, so the
+//   nested sequence is only constructible via console / evaluateJavascript.
+//   Conclusion per review-2.md: NOT UI-reachable → document, don't fix. If a
+//   future UI path ever nests the pauses, fix by reference-counting the pause
+//   or by gating this rebase on `!setupMode && !reviewMode`.
+function _resumeGameClock(){
+  if(typeof window._clockPauseStart==='undefined'||window._clockPauseStart==null)return;
+  window._clockPauseStart=null;
+  if(typeof gameClocks!=='undefined'&&gameClocks&&!gameClockExpired&&!gameOver
+     &&typeof gameState!=='undefined'&&gameState&&gameClocks[gameState.currentTurn]){
+    gameClocks[gameState.currentTurn].lastMoveTimestamp=Date.now();
+  }
+}
+
 // Called when a side's clock runs out
 function _onGameClockExpired(color){
   if(gameClockTimerId){clearInterval(gameClockTimerId);gameClockTimerId=null;}
@@ -15201,8 +15234,14 @@ function formatClock(sec){
 // Lightweight DOM update for clock display (avoid full render() on every tick)
 function _updateClockDisplay(){
   if(!gameClocks)return;
-  const wEl=document.getElementById('clock-white');
-  const bEl=document.getElementById('clock-black');
+  // v1.2.3 round-48 (PERF-4): route the lookups through ui.js's _el() element
+  //   cache instead of two getElementById calls per 200ms tick. The cache is
+  //   invalidated by _invalidateElCache() on every full render's innerHTML
+  //   rebuild (_postRenderFinalize), so element-rebuild staleness is covered;
+  //   the lightweight paths (updateAfterMove/_updateChangedSquares) never
+  //   rebuild the player bars, so the references stay valid between renders.
+  const wEl=_el('clock-white');
+  const bEl=_el('clock-black');
   const wRem=gameClocks.white.displayRemainingSec!=null?gameClocks.white.displayRemainingSec:gameClocks.white.remainingSec;
   const bRem=gameClocks.black.displayRemainingSec!=null?gameClocks.black.displayRemainingSec:gameClocks.black.remainingSec;
   if(wEl)wEl.textContent=formatClock(wRem);
@@ -15874,6 +15913,11 @@ function quickFreeOpening(){
   dlgPlayerColor=playerColor;
   dlgOpeningId=null;
   dlgBookMoves=useBookMoves;
+  // v1.2.3 round-48 (BUG-12): reset the Chess960 dialog flags — _startGameImpl
+  //   decides solely from dlgChess960/dlgChess960SPID, and quickFreeOpening
+  //   bypasses the dialog, so without this a previous 960 game (and its SP-ID)
+  //   would silently carry over into the "free opening" game.
+  dlgChess960=false;dlgChess960SPID=null;
   startGame();
   showToast(T('new_game_free'));
 }
@@ -15955,21 +15999,21 @@ function setDifficultyLevel(level){
   render();
 }
 
-function toggleSetup(){if(isAIThinking&&!setupMode){return;}_cachedStatus=null;_cachedStatusKey='';setupMode=!setupMode;
-// v1.0.8 PHASE 24 (bug fix): clear any in-progress animation.
-_clearAnimationState();
-// v1.0.8 PHASE 22 supplement: setup-toggle sound (木质放置音)
-try{if(typeof playSound==='function')playSound('setupToggle');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
-// v1.0.2 FIX (audit): extract common reset out of both branches.
-gameOver=null;_gameOverStatusKey=null;
-if(setupMode){setupPiece='pawn';setupColor='white';selectedSquare=null;legalMvs=[];legalSet=new Set();lastMove=null;gameOverSoundPlayed=false;setupErrors=[];setupHistory=[];
-// v1.0.8: Initialize castle-marker set and en-passant marker on gameState.
-// If the user is entering setup mode from a normal game (e.g., to tweak the
-// position), seed the markers from the existing castlingRights + enPassantTarget
-// so the user sees the current state instead of an empty marker set.
-// For Chess960 positions, the king may be on any column; the kingside rook is
-// the rightmost same-color rook (col > king.col), the queenside rook is the
-// leftmost (col < king.col).
+// v1.2.3 round-49 Stage-3 (BUG-13 follow-up): seed setupCastleMarks /
+//   setupEpMark on gameState from the current castlingRights / enPassantTarget.
+//   Extracted VERBATIM from toggleSetup's enter branch so the setup-modified
+//   confirm dialog's "restore" choice can re-seed the markers after rolling
+//   the board back to the pre-setup snapshot — otherwise the next Done would
+//   re-derive castlingRights/enPassantTarget from the user's MODIFIED markers
+//   (validateSetupPosition reads setupCastleMarks/setupEpMark, not
+//   castlingRights), desyncing the markers from the restored board.
+// Original docs: if the user is entering setup mode from a normal game (e.g.,
+//   to tweak the position), seed the markers from the existing
+//   castlingRights + enPassantTarget so the user sees the current state
+//   instead of an empty marker set. For Chess960 positions, the king may be
+//   on any column; the kingside rook is the rightmost same-color rook
+//   (col > king.col), the queenside rook is the leftmost (col < king.col).
+function _seedSetupMarkersFromState(){
 if(!gameState.setupCastleMarks)gameState.setupCastleMarks=new Set();
 else gameState.setupCastleMarks.clear();
 if(typeof gameState.setupEpMark==='undefined')gameState.setupEpMark=null;
@@ -16046,6 +16090,37 @@ if(gameState.enPassantTarget){
 }else{
   gameState.setupEpMark=null;
 }
+}
+
+function toggleSetup(){if(isAIThinking&&!setupMode){return;}_cachedStatus=null;_cachedStatusKey='';setupMode=!setupMode;
+// v1.0.8 PHASE 24 (bug fix): clear any in-progress animation.
+_clearAnimationState();
+// v1.0.8 PHASE 22 supplement: setup-toggle sound (木质放置音)
+try{if(typeof playSound==='function')playSound('setupToggle');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+// v1.0.2 FIX (audit): extract common reset out of both branches.
+gameOver=null;_gameOverStatusKey=null;
+if(setupMode){setupPiece='pawn';setupColor='white';selectedSquare=null;legalMvs=[];legalSet=new Set();lastMove=null;gameOverSoundPlayed=false;setupErrors=[];setupHistory=[];
+// v1.2.3 round-48 (BUG-1): pause the game clock while in setup mode — the
+//   tick early-returns on setupMode (ui-gameflow.js), so record the freeze;
+//   the matching exit branch below calls _resumeGameClock().
+if(typeof _pauseGameClock==='function')_pauseGameClock();
+// v1.0.8: Initialize castle-marker set and en-passant marker on gameState.
+// v1.2.3 round-49 Stage-3 (BUG-13 follow-up): the seeding logic was extracted
+//   VERBATIM to _seedSetupMarkersFromState() (shared with the setup-modified
+//   confirm dialog's "restore" choice) — this call is behavior-identical to
+//   the former inline block.
+_seedSetupMarkersFromState();
+// v1.2.3 round-49 (BUG-13): snapshot the pre-setup position + FEN as the
+//   baseline for the toggle-exit path's "board actually modified?" check and
+//   for its "restore board & continue" choice. Stored on window (NOT on
+//   gameState): the setup panel's ♻️ reset button REPLACES the gameState
+//   object (ui.js setup toolbar: gameState=initState()), which would silently
+//   drop a gameState-attached baseline. window.* matches the round-48
+//   convention (window._animRetryTimerId) — no new top-level let/const in the
+//   concatenated global scope.
+if(typeof window!=='undefined'&&typeof cloneS==='function'){
+  window._setupEntrySnap={state:cloneS(gameState),fen:(typeof generateFEN==='function')?generateFEN(gameState):null};
+}
 // Reset marker mode
 setupMarkerMode=null;
 }else{
@@ -16055,6 +16130,58 @@ setupMarkerMode=null;
 if(gameState.setupCastleMarks&&gameState.setupCastleMarks.size>0){
   try{validateSetupPosition(gameState);}catch(e){console.warn('[UI]',e?.message?e.message:e);}
 }
+// v1.2.3 round-49 (BUG-13): if the game already has move history AND the
+//   position was actually modified during this setup session, silently
+//   resuming would desync moveRecords/stateHistory from the board (PGN export
+//   would have no [FEN] anchor reconciling them — the full capture flow lives
+//   in _exitSetupImpl, reachable via the dialog's "restart" choice which
+//   routes through exitSetup()). Compare only the first 4 FEN fields
+//   (board / side-to-move / castling / en-passant): _refreshStateAfterSetup
+//   never touches halfMoveClock/fullMoveNumber, so ignoring the counters
+//   avoids false positives after place-then-undo sequences.
+//   Unchanged position → fall through to the old silent "quick peek" exit.
+// v1.2.3 round-49 Stage-3 (review-2 P1 hardening):
+//   (1) the history test is moveRecords.some(r!=null) — the black-to-move
+//       null placeholder ([null], pushed by _prependBlackToMovePlaceholder)
+//       must NOT count as "history" (it previously made moveRecords.length
+//       === 1 and guaranteed a misfire after a black-first Done);
+//   (2) _exitSetupImpl and _resetGameUIState now clear window._setupEntrySnap
+//       BEFORE the destructive restart, so this gate can no longer fire from
+//       _exitSetupImpl's tail toggleSetup() call AFTER moveRecords/stateHistory
+//       were rebuilt (review-2 P1: that post-destruction firing made "restore"
+//       write the pre-setup board over the NEW game's rebuilt anchors). The
+//       UI-reachable Done path is gated earlier, inside exitSetup() itself;
+//       this branch now only covers the bare toggleSetup exit (no UI binding
+//       reaches it in setup mode — the header uses exitSetup() — but it stays
+//       as the safety net for console/evaluateJavascript invocation).
+const _entrySnap=(typeof window!=='undefined')?window._setupEntrySnap:null;
+if(_entrySnap&&_entrySnap.fen&&moveRecords&&moveRecords.some(function(r){return r!=null;})&&typeof generateFEN==='function'){
+  const _fenPosKey=function(f){return String(f).split(' ').slice(0,4).join(' ');};
+  if(_fenPosKey(generateFEN(gameState))!==_fenPosKey(_entrySnap.fen)){
+    // Stay in setup mode while the user decides (undo the flip above).
+    setupMode=true;
+    _showSetupModifiedDialog(_entrySnap);
+    render();
+    return;
+  }
+}
+window._setupEntrySnap=null;
+_finishToggleSetupExit()}render()}
+
+// v1.2.3 round-49 (BUG-13): shared tail of the toggle-exit path (clock resume
+//   + marker cleanup + cache invalidation + AI-move kickoff).
+// v1.2.3 round-49 Stage-3 (review-2 P1): the dialog's "restore" choice no
+//   longer routes here — restore now rolls back IN PLACE and stays in setup
+//   mode, so this helper is only the fall-through epilogue of the silent
+//   (unmodified-position) toggle exit above.
+function _finishToggleSetupExit(){
+// v1.2.3 round-48 (BUG-1): resume the game clock — rebase the side-to-move's
+//   lastMoveTimestamp before the next 200ms tick, otherwise the whole setup
+//   session is deducted in one lump. This tail is ALSO the exit path for
+//   "Done"/exitSetup: _exitSetupImpl ends by calling toggleSetup(). (In that
+//   case _resetGameUIState has already nulled gameClocks and cleared the
+//   pause marker, so this is a harmless no-op there.)
+if(typeof _resumeGameClock==='function')_resumeGameClock();
 setupMarkerMode=null;
 gameState.setupEpMark=null;
 gameState.setupCastleMarks=new Set();
@@ -16064,9 +16191,164 @@ gameState.setupCastleMarks=new Set();
 // a 'play' value that gameStatus() never returns — dead check. Simplified to
 // a direct call which internally decides whether to apply game-over.
 _applyGameOver(gameStatus(gameState));
-_sfEvalReady=false;_evalLoading=true;requestEngineEval();if(!gameOver&&gameState.currentTurn!==playerColor){doAIMove()}}render()}
+_sfEvalReady=false;_evalLoading=true;requestEngineEval();if(!gameOver&&gameState.currentTurn!==playerColor){doAIMove()}}
+
+// v1.2.3 round-49 (BUG-13): bilingual strings for the setup-modified confirm
+//   dialog. The canonical _i18n T-table lives in game-logic.js, which is OUT
+//   OF SCOPE for this fix round — so the zh/en pairs are inlined here. Lookup
+//   still goes through T() FIRST: T() returns the key itself for missing
+//   keys, which is the fallback signal. If these keys are later moved into
+//   _i18n, this helper transparently prefers the table (no call-site change).
+function _tSetupExit(key){
+  const viaT=T(key);
+  if(viaT!==key)return viaT;
+  const local={
+    setup_exit_modified_title:{zh:'♟️ 棋盘已被改动',en:'♟️ Position modified'},
+    setup_exit_modified_msg:{zh:'你在摆棋模式中修改了局面，但当前对局已有棋谱记录。直接继续对局会让棋盘与棋谱不再对应（PGN 导出将缺少 [FEN] 标记）。',en:'You modified the position in setup mode, but this game already has a move history. Resuming directly would desync the board from the recorded moves (PGN export would lack a [FEN] tag).'},
+    setup_exit_restart:{zh:'🔄 重开新局（以此局面）',en:'🔄 New game from this position'},
+    setup_exit_restore:{zh:'↩️ 还原棋盘，继续本局',en:'↩️ Restore board, continue game'}
+  };
+  const cur=(typeof _lang!=='undefined')?_lang:'zh';
+  const e=local[key];
+  return e?(e[cur]||e.zh):key;
+}
+
+// v1.2.3 round-49 (BUG-13): restore the pre-setup snapshot into the LIVE
+//   gameState object, field by field (the setup panel's ♻️ reset button may
+//   have replaced gameState entirely, so identity cannot be assumed).
+//   Mirrors cloneS()'s field set so the restored state is exactly the
+//   pre-setup game — board, turn, castling rights, en-passant, clocks,
+//   moveHistory, posCount, king caches, hash, and Chess960 identity fields.
+function _restoreSetupEntrySnap(snap){
+  if(!snap||!snap.state)return;
+  const st=snap.state;
+  gameState.board=st.board.map(r=>r.slice()); // piece objects are immutable (see cloneB)
+  gameState.currentTurn=st.currentTurn;
+  gameState.castlingRights={...st.castlingRights};
+  gameState.enPassantTarget=st.enPassantTarget?{...st.enPassantTarget}:null;
+  gameState.halfMoveClock=st.halfMoveClock;
+  gameState.fullMoveNumber=st.fullMoveNumber;
+  gameState.moveHistory=st.moveHistory?st.moveHistory.slice():[];
+  gameState.posCount=new Map(st.posCount);
+  gameState.wk=st.wk?{...st.wk}:null;
+  gameState.bk=st.bk?{...st.bk}:null;
+  gameState.hash=st.hash||0;
+  if(st.chess960)gameState.chess960=true;else delete gameState.chess960;
+  if(st.spid!=null)gameState.spid=st.spid;else delete gameState.spid;
+}
+
+// v1.2.3 round-49 (BUG-13): "position modified during setup" confirm dialog.
+//   Reuses the dynamic-overlay dialog pattern of _showPGNExportAnnotationDialog
+//   (ai-bridge.js): createElement overlay with .dov/.dlg classes, buttons
+//   dispatch through this.closest('.dov')._cb(choice), dismissal exposed via a
+//   window.* hook so handleBackPress can treat Back as Cancel.
+//   Choices: 'restart' = run the normal Done/exitSetup flow (validates →
+//   optional PGN-save prompt → _exitSetupImpl captures _setupFEN and clears
+//   moveRecords); 'restore' = roll back to the pre-setup snapshot and STAY in
+//   setup mode; null (Cancel button / backdrop / Back) = stay in setup.
+// v1.2.3 round-49 Stage-3 (review-2 P1): 'restore' semantics changed —
+//   the old version exited setup and resumed the game, which desynced
+//   board/moveRecords/PGN-anchor/undo 4 ways whenever the dialog fired after
+//   _exitSetupImpl's destructive restart. Now restore rolls the board back
+//   IN PLACE (setup mode stays active, snapshot stays armed): the restored
+//   board compares EQUAL to snap.fen, so the next Done exits silently.
+// v1.2.3 round-49 Stage-3 (review-2 P3-2): the overlay node handle is
+//   published on window._setupExitDialogOverlay so _resetGameUIState can
+//   force-remove the (body-appended, render()-surviving) overlay without
+//   routing through the dismiss callback (which is the Cancel path and would
+//   re-arm the stale snapshot).
+function _showSetupModifiedDialog(snap){
+  const overlay=document.createElement('div');
+  overlay.className='dov';
+  overlay.setAttribute('role','dialog');
+  overlay.setAttribute('aria-modal','true');
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:10000;padding:10px;box-sizing:border-box';
+  overlay.onclick=function(e){if(e.target===overlay){_dismiss(null);}};
+  const dlg=document.createElement('div');
+  dlg.className='dlg';
+  dlg.style.cssText='max-width:380px;background:var(--card,#2a1a0a);border:1px solid var(--border,#4a3520);border-radius:12px;padding:20px;width:90%;color:var(--text,#f5e6c8)';
+  let html='<h2 style="color:var(--accent2,#7eb8da);margin-bottom:14px;font-size:1.05rem">'+_tSetupExit('setup_exit_modified_title')+'</h2>';
+  html+='<p style="font-size:.82rem;line-height:1.6;margin-bottom:16px">'+_tSetupExit('setup_exit_modified_msg')+'</p>';
+  html+='<div style="display:flex;flex-direction:column;gap:8px">';
+  html+='<button class="btn btn-p" style="width:100%;justify-content:center;gap:8px;padding:12px;font-size:.9rem" onclick="try{HapticManager.fire(\'BUTTON_PRESS\')}catch(_){};this.closest(\'.dov\')._cb(\'restart\')">'+_tSetupExit('setup_exit_restart')+'</button>';
+  html+='<button class="btn" style="width:100%;justify-content:center;gap:8px;padding:12px;font-size:.9rem" onclick="try{HapticManager.fire(\'BUTTON_PRESS\')}catch(_){};this.closest(\'.dov\')._cb(\'restore\')">'+_tSetupExit('setup_exit_restore')+'</button>';
+  html+='</div>';
+  html+='<div style="margin-top:10px;text-align:center"><button class="btn" style="font-size:.78rem;padding:6px 14px" onclick="try{HapticManager.fire(\'BUTTON_PRESS\')}catch(_){};this.closest(\'.dov\')._cb(null)">'+T('cancel')+'</button></div>';
+  dlg.innerHTML=html;
+  overlay.appendChild(dlg);
+  function _dismiss(choice){
+    window._setupExitDialogDismiss=null;
+    window._setupExitDialogOverlay=null;
+    overlay.remove();
+    if(choice==='restart'){
+      // Null the snapshot FIRST: this bypasses the modification gate now
+      // living in exitSetup() (and the legacy toggle-exit gate), so the
+      // user's explicit "restart" choice cannot loop back into this dialog.
+      window._setupEntrySnap=null;
+      // Same flow as the setup panel's "Done" button: validate → optional
+      // PGN-save prompt → _exitSetupImpl (captures _setupFEN, clears
+      // moveRecords, rebuilds stateHistory/reviewBaseState) → toggleSetup().
+      exitSetup();
+      // Still in setup mode = validation failed (errors now displayed) or
+      // the PGN-save prompt is pending/cancelled. Re-arm the baseline so a
+      // later exit attempt re-prompts instead of silently desyncing.
+      if(setupMode)window._setupEntrySnap=snap;
+      return;
+    }
+    if(choice==='restore'){
+      // v1.2.3 round-49 Stage-3 (review-2 P1): roll the board back to the
+      //   pre-setup snapshot and STAY in setup mode (the old "exit and resume
+      //   the game" behavior was only safe on the non-destructive toggle
+      //   path, and desynced board/moveRecords/PGN-anchor/undo whenever the
+      //   dialog fired after _exitSetupImpl's restart). Keep the snapshot
+      //   ARMED: the restored board compares EQUAL to snap.fen, so the next
+      //   Done exits silently; any further modification re-arms the dialog.
+      //   Re-seed the castle/ep markers from the restored castlingRights /
+      //   enPassantTarget — validateSetupPosition re-derives the rights from
+      //   the markers on the next Done, so un-seeded (user-modified) markers
+      //   would desync the markers from the restored board.
+      _restoreSetupEntrySnap(snap);
+      _seedSetupMarkersFromState();
+      render();
+      return;
+    }
+    // Cancel / backdrop / Back: stay in setup mode; re-arm the baseline so
+    // the next toggle-exit still detects the modification.
+    window._setupEntrySnap=snap;
+    render();
+  }
+  overlay._cb=_dismiss;
+  window._setupExitDialogDismiss=function(){_dismiss(null);};
+  window._setupExitDialogOverlay=overlay;
+  document.body.appendChild(overlay);
+  try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+}
 
 function exitSetup(){setupErrors=validateSetupPosition(gameState);if(setupErrors.length>0){render();return}
+// v1.2.3 round-49 Stage-3 (review-2 P1 ROOT FIX): the "board was modified
+//   during setup" gate must run HERE — BEFORE _exitSetupImpl's destructive
+//   restart — not in toggleSetup's exit branch (which the old A2 fix only
+//   reached from _exitSetupImpl's TAIL toggleSetup() call, i.e. after
+//   moveRecords/stateHistory/_setupFEN/reviewBaseState were already rebuilt;
+//   'restore' then desynced board/moveRecords/PGN-anchor/undo 4 ways, and
+//   'cancel' looped back into the dialog via the [null] black-to-move
+//   placeholder making moveRecords.length===1).
+//   Same trigger condition as the toggle-exit gate (which stays as the
+//   console-only safety net): a setup-entry snapshot exists AND the game has
+//   REAL history (some(r!=null) — the black-first null placeholder does not
+//   count) AND the first 4 FEN fields differ from the entry snapshot.
+//   On hit: show the confirm dialog and STAY in setup mode (setupMode was
+//   never flipped on this path). The dialog's 'restart' choice nulls the
+//   snapshot first, which bypasses this gate — no dialog loop.
+const _doneSnap=(typeof window!=='undefined')?window._setupEntrySnap:null;
+if(_doneSnap&&_doneSnap.fen&&moveRecords&&moveRecords.some(function(r){return r!=null;})&&typeof generateFEN==='function'){
+  const _fenPosKey=function(f){return String(f).split(' ').slice(0,4).join(' ');};
+  if(_fenPosKey(generateFEN(gameState))!==_fenPosKey(_doneSnap.fen)){
+    _showSetupModifiedDialog(_doneSnap);
+    render();
+    return;
+  }
+}
 _withPGNSaveCheck(_exitSetupImpl);}
 
 // v1.0.8 PHASE 29 (task 4 verification): Castle rights + en passant marker
@@ -16135,6 +16417,14 @@ _withPGNSaveCheck(_exitSetupImpl);}
 //   catches any future regression that might leave these fields in an
 //   inconsistent state.
 function _exitSetupImpl(){
+// v1.2.3 round-49 Stage-3 (review-2 P1): drop the setup-entry snapshot BEFORE
+//   the destructive restart below. The modification gate has already run (in
+//   exitSetup(), pre-destruction); a lingering snapshot here could re-trigger
+//   the confirm dialog from this function's tail toggleSetup() call AFTER
+//   moveRecords/stateHistory were rebuilt. _resetGameUIState() (the very next
+//   statement) clears it too — this explicit line anchors the requirement at
+//   the point where the destruction begins.
+if(typeof window!=='undefined')window._setupEntrySnap=null;
 // v1.1.0 Phase 53: Call _resetGameUIState() to clear ALL stale UI state
 // from the previous game — same as _applyImportedFEN and importPGN.
 // Without this, the following would leak from the previous game:
@@ -16303,14 +16593,18 @@ gameState.board[r][c]=null;_refreshStateAfterSetup(gameState);render();return
 }
 // Place piece if a piece is selected (not delete, not null)
 if(setupPiece&&setupPiece!=='delete'){
+// v1.2.3 round-48 (BUG-4): setupColor may be null after the new back-button
+//   color-cancel branch in handleBackPress — default to 'white' so a placed
+//   piece never gets color:null (SYM[null] would crash the board render).
+const _effSetupColor=setupColor||'white';
 if(setupPiece==='king'){
 // Remove existing king of same color before placing new one
-if(setupColor==='white'&&gameState.wk){gameState.board[gameState.wk.row][gameState.wk.col]=null;gameState.wk=null}
-else if(setupColor==='black'&&gameState.bk){gameState.board[gameState.bk.row][gameState.bk.col]=null;gameState.bk=null}
+if(_effSetupColor==='white'&&gameState.wk){gameState.board[gameState.wk.row][gameState.wk.col]=null;gameState.wk=null}
+else if(_effSetupColor==='black'&&gameState.bk){gameState.board[gameState.bk.row][gameState.bk.col]=null;gameState.bk=null}
 }
-gameState.board[r][c]={type:setupPiece,color:setupColor};
+gameState.board[r][c]={type:setupPiece,color:_effSetupColor};
 if(setupPiece==='king'){
-if(setupColor==='white')gameState.wk={row:r,col:c};
+if(_effSetupColor==='white')gameState.wk={row:r,col:c};
 else gameState.bk={row:r,col:c};
 }
 _refreshStateAfterSetup(gameState);
@@ -16462,6 +16756,12 @@ function handleBackPress(){
     if(typeof _pgnPartialEvalDialogDismiss==='function')_pgnPartialEvalDialogDismiss();
     return;
   }
+  // v1.2.3 round-49 (BUG-13): setup-modified confirm dialog — back = Cancel
+  //   (stay in setup mode; matches the dialog's visible Cancel button).
+  if(typeof window!=='undefined'&&typeof window._setupExitDialogDismiss==='function'){
+    window._setupExitDialogDismiss();
+    return;
+  }
   // v1.0.8 UI: Promotion dialog takes highest priority — it blocks all other
   // input and must be dismissed before any other overlay can be closed.
   if(pendingPromotion){
@@ -16487,25 +16787,12 @@ function handleBackPress(){
     render();
     return;
   }
-  // v1.0.8 PHASE 6: If ANY setup-mode selection is active (marker mode OR
-  // piece selection OR delete mode OR color selection), back button cancels
-  // the selection first (instead of exiting setup). This covers:
-  //   - setupMarkerMode ('castle' / 'ep')
-  //   - setupPiece (any piece type, including 'delete')
-  // The user presses back again to actually exit setup mode.
-  // We cancel in priority order: marker mode → piece selection.
-  if(typeof setupMode!=='undefined'&&setupMode){
-    if(typeof setupMarkerMode!=='undefined'&&setupMarkerMode){
-      setupMarkerMode=null;
-      render();
-      return;
-    }
-    if(typeof setupPiece!=='undefined'&&setupPiece){
-      setupPiece=null;
-      render();
-      return;
-    }
-  }
+  // v1.2.3 round-48 (BUG-4): the setup-selection cancel block MOVED DOWN below
+  //   the file-browser check (see below). Previously it sat here — AHEAD of the
+  //   showEngineConfig/showNewGameDialog/showAboutPage/showImportDialog checks
+  //   — so in setup mode with a header dialog open (the header buttons stay
+  //   clickable in setup mode), the back button canceled the invisible board
+  //   selection instead of closing the visible dialog.
   if(showEngineConfig){
     showEngineConfig=false;
     render();
@@ -16534,6 +16821,38 @@ function handleBackPress(){
       _fileBrowserHandleBack();
     }
     return;
+  }
+  // v1.0.8 PHASE 6 (moved in v1.2.3 round-48, BUG-4): If ANY setup-mode
+  // selection is active (marker mode OR piece selection OR color selection),
+  // back button cancels the selection first (instead of exiting setup). This
+  // covers:
+  //   - setupMarkerMode ('castle' / 'ep')
+  //   - setupPiece (any piece type, including 'delete')
+  //   - setupColor (the white/black placement-color choice)
+  // The user presses back again to actually exit setup mode.
+  // We cancel in priority order: marker mode → piece selection → color.
+  // v1.2.3 round-48 (BUG-4): this block must stay BELOW all dialog/overlay
+  //   checks (the six dialog guards above, the four header dialogs, and the
+  //   file browser) — a visible dialog always outranks an invisible board
+  //   selection. Only reviewMode/setupMode exit remain lower priority.
+  if(typeof setupMode!=='undefined'&&setupMode){
+    if(typeof setupMarkerMode!=='undefined'&&setupMarkerMode){
+      setupMarkerMode=null;
+      render();
+      return;
+    }
+    if(typeof setupPiece!=='undefined'&&setupPiece){
+      setupPiece=null;
+      render();
+      return;
+    }
+    // v1.2.3 round-48 (BUG-4): color-selection cancel branch added. Placement
+    //    (setupClick) defensively defaults a null color to 'white'.
+    if(typeof setupColor!=='undefined'&&setupColor){
+      setupColor=null;
+      render();
+      return;
+    }
   }
   if(reviewMode){
     exitReview();
@@ -16708,9 +17027,8 @@ function _resignGame(){
 // v1.0.2: Wrapped with _withPGNSaveCheck to prompt save before clearing
 function _doPastePGN(){
   _withPGNSaveCheck(function(){
-    // v1.0.8 PHASE 18 Task 3 (bug fix): Reset virtual list state on PGN paste
-    // so stale avgRowH / window from a previous long game don't carry over.
-    _resetRvVirtualState();
+    // v1.2.3 round-48 (RED-7): _resetRvVirtualState() call removed — virtual
+    //   list pipeline disabled by design; bookkeeping deleted.
     const text=prompt(T('pgn_paste_hint'));
     if(!text)return;
     const trimmed=text.trim();
@@ -16746,9 +17064,8 @@ function _doPastePGN(){
 // v1.0.2: Wrapper for importFEN with PGN save check
 function _importFENWithSaveCheck(){
   _withPGNSaveCheck(function(){
-    // v1.0.8 PHASE 18 Task 3 (bug fix): Reset virtual list state on FEN import
-    // so stale avgRowH / window from a previous long game don't carry over.
-    _resetRvVirtualState();
+    // v1.2.3 round-48 (RED-7): _resetRvVirtualState() call removed — virtual
+    //   list pipeline disabled by design; bookkeeping deleted.
     importFEN();
   });
 }
@@ -16756,8 +17073,8 @@ function _importFENWithSaveCheck(){
 // v1.0.2: Wrapper for importPGNFile with PGN save check
 function _importPGNFileWithSaveCheck(){
   _withPGNSaveCheck(function(){
-    // v1.0.8 PHASE 18 Task 3 (bug fix): Reset virtual list state on PGN file import.
-    _resetRvVirtualState();
+    // v1.2.3 round-48 (RED-7): _resetRvVirtualState() call removed — virtual
+    //   list pipeline disabled by design; bookkeeping deleted.
     importPGNFile();
   });
 }
@@ -16933,8 +17250,11 @@ document.addEventListener('click', function(e) {
 //   granular board/eval incremental path was unreachable. markDirty(x) call
 //   sites now call render() directly (identical behavior; render() has its
 //   own rAF throttle). The shared square-rendering primitives
-//   (_updateSingleSq/_updateChangedSquares/_getSqElCache) remain — used by
+//   (_updateSingleSq/_updateChangedSquares) remain — used by
 //   the live _updateBoardLightweight selection/hover path.
+//   (v1.2.3 round-48, RED-5: _getSqElCache removed from the list above — it
+//   was dead code with zero call sites; the previous wording falsely implied
+//   it was part of the live path.)
 
 // ===================== DOM ELEMENT CACHE =====================
 let _cachedElements = {};
@@ -16962,13 +17282,9 @@ function _invalidateElCache() {
   _cachedElements = {};
 }
 
-// v1.0.2 (qw3.7max audit): Cached board square elements — 1D array indexed by
-// (row*8+col) instead of 2D array-of-arrays. A 1D array has better memory
-// locality (contiguous) and avoids the second pointer dereference on every
-// access. With 10-50 engine progress callbacks/sec, this shaves a small but
-// measurable amount off the hot incremental-update path.
-// Invalidated on full render.
-let _sqElCache = null;
+// v1.2.3 round-48 (RED-5): `_sqElCache` DELETED — dead cache. Its only reader
+//   was the (also-deleted) _getSqElCache; all remaining writes were pure
+//   invalidation of a cache nothing consumed.
 // v1.0.2 (qw3.7max audit): Cached review-moves-list element — avoids
 // getElementById('reviewMovesList') on every render's scroll-into-view path.
 // Assigned after full render (when the element is freshly created), cleared
@@ -16995,24 +17311,9 @@ function _onMlistScroll(e){
   _mlistScrollState.valid=true;
 }
 
-/**
- * Get or build the cached board square elements array.
- * @returns {Array<HTMLElement>|null} 1D array: _sqElCache[displayRow*8 + displayCol]
- */
-function _getSqElCache() {
-  if (_sqElCache) return _sqElCache;
-  const grid = _el(_EL_BOARD_GRID);
-  if (!grid) return null;
-  const sqs = grid.querySelectorAll('.sq');
-  if (sqs.length !== 64) return null;
-  // v1.0.2 (qw3.7max audit): 1D array — single contiguous allocation, no
-  // nested array objects. Index as _sqElCache[r*8 + c].
-  _sqElCache = new Array(64);
-  for (let i = 0; i < 64; i++) {
-    _sqElCache[i] = sqs[i];
-  }
-  return _sqElCache;
-}
+// v1.2.3 round-48 (RED-5): _getSqElCache() DELETED — zero call sites anywhere
+//   in chess.src (verified by full-directory grep); the live incremental paths
+//   (updateAfterMove/_updateChangedSquares) query '.sq' directly.
 
 // ===================== STATE MANAGEMENT =====================
 
@@ -17915,25 +18216,14 @@ window.addEventListener('beforeunload', function() {
 
 // ===================== PHASE 18 TASK 2: VIRTUAL LIST HELPERS =====================
 // v1.0.8 PHASE 18 Task 2: Virtual list helpers for the review move list.
-// These are module-level so they can be called from render() (full rebuild),
-// from _refreshReviewMovesOnly() (scroll-driven partial refresh), and from
-// reviewGoTo() (force window to contain the new active step).
-//
-// The helpers operate on the module-level _rvVirtualState and read
-// moveRecords / reviewStep / reviewCritical directly. They are NO-OPs when
-// the virtual list is disabled (moveRecords.length <= RV_VIRTUAL_THRESHOLD).
-
-// Reset virtual state. Called from enterReview/exitReview/startGame/_doPastePGN
-// so each new review session starts with a fresh window.
-function _resetRvVirtualState(){
-  _rvVirtualState.avgRowH=44;
-  _rvVirtualState.scrollTop=0;
-  _rvVirtualState.windowStart=0;
-  _rvVirtualState.windowEnd=Infinity;
-  _rvVirtualState.measured=false;
-  _rvVirtualState.enabled=false;
-  if(_rvScrollRefreshTimer){clearTimeout(_rvScrollRefreshTimer);_rvScrollRefreshTimer=0;}
-}
+// v1.2.3 round-48 (RED-7): _resetRvVirtualState/_rvVirtualState/
+//   _rvScrollRefreshTimer DELETED — the virtual list is disabled by design
+//   (RV_VIRTUAL_THRESHOLD=Infinity, see the constant below), so the
+//   per-session reset bookkeeping (formerly called from enterReview/
+//   exitReview/startGame/_doPastePGN/FEN+PGN-file import) was dead work.
+//   _buildReviewMovesInnerHTML below remains the SINGLE SOURCE OF TRUTH for
+//   review-moves row rendering; it is always called with the full range
+//   [0, moveRecords.length).
 
 // v1.1.0 Phase 54 rev14: _computeVirtualWindow removed (dead code after
 //   virtual list disabled). When virtual list is off, the full range
@@ -17977,7 +18267,7 @@ function _buildReviewMovesInnerHTML(startIdx,endIdx){
     h+='<div class="rmv-block'+(isAct?' act':'')+'" onclick="reviewGoTo('+(i+1)+')" oncontextmenu="_prioritizeReviewStep('+(i+1)+');return false" data-step="'+(i+1)+'"'+criticalFlag+'>';
     h+='<span class="rmv-num">'+(isW?moveNum+'.':'')+'</span>';
     h+='<div class="rmv-detail"><span class="rmv-notation">'+_esc(mr.notation)+'</span>';
-    if(isCritical&&_criticalReasons.has(i+1)){h+='<span style="font-size:.65rem;color:var(--accent);display:block;margin-top:1px">'+_criticalReasons.get(i+1)+'</span>';}
+    if(isCritical&&_criticalReasons.has(i+1)){h+='<span style="font-size:.65rem;color:var(--accent);display:block;margin-top:1px">'+_esc(_criticalReasons.get(i+1))+'</span>';}
     if(showVariations&&mr.variations&&mr.variations.length>0){h+=_formatVariationGroups(mr.variations,moveNum,isW);}
     const _mvEval=_reviewEvalCache.peek(i+1);
     const _prevMvEval=_reviewEvalCache.peek(i);
@@ -18060,9 +18350,24 @@ function _refreshEvalTrendChart(){
  * @returns {string} SVG string for the eval trend chart
  */
 // v1.2.0 Phase 76+: Extracted chart color reading from _buildEvalTrendSVG.
+// v1.2.3 round-48 (PERF-3b): cache the result — getComputedStyle ran on every
+//   call (every review render / chart refresh). Keyed on html[data-theme].
+//   v1.2.3 round-49 Stage-3 (review-2 P3-3, comment correction): the previous
+//   comment referenced "ui-toolbar.js switchTheme" — that module/function does
+//   NOT exist in this codebase. data-theme is written exactly once at startup
+//   by ai-bridge.js _applySystemTheme, and per that function's contract an
+//   OS-level scheme change requires an app restart. The attribute therefore
+//   fully determines the computed values for the app's entire lifetime, so
+//   this cache can never go stale. (If a runtime theme switcher is ever added,
+//   it MUST update data-theme — which flips the cache key — or explicitly
+//   invalidate _getChartColors._cache.)
+//   Cache lives on the function object (no new top-level identifier).
 function _getChartColors(){
+  const _theme=document.documentElement.getAttribute('data-theme')||'';
+  const _cc=_getChartColors._cache;
+  if(_cc&&_cc.theme===_theme)return _cc.colors;
   const _cs = getComputedStyle(document.documentElement);
-  return {
+  const colors={
     line: _cs.getPropertyValue('--chart-line').trim() || '#5dade2',
     fill: _cs.getPropertyValue('--chart-fill').trim() || '#e74c3c',
     grid: _cs.getPropertyValue('--chart-grid').trim() || '#4a3020',
@@ -18071,6 +18376,8 @@ function _getChartColors(){
     critical: _cs.getPropertyValue('--chart-critical').trim() || '#ffd700',
     label: _cs.getPropertyValue('--chart-label').trim() || '#f5e6c8'
   };
+  _getChartColors._cache={theme:_theme,colors:colors};
+  return colors;
 }
 
 // v1.2.0 Phase 76+: Extracted grid-line rendering.
@@ -18566,7 +18873,9 @@ let _reviewAnalyzeAllActive=false; // Flag for reviewAnalyzeAll batch analysis
 let _reviewAnalyzePriorityQueue=[];
 // v1.1.0 Phase 54 rev14: _lastRenderReviewStep removed (dead code after virtual
 //   list disabled). Was used to detect reviewStep changes for window recompute.
-// v1.0.8 PHASE 18 Task 2: Virtual list state for the review move list.
+// v1.0.8 PHASE 18 Task 2 (HISTORICAL — the state object this introduces was
+//   deleted in v1.2.3 round-48, RED-7; analysis kept as design rationale):
+//   Virtual list state for the review move list.
 // When a game has more than RV_VIRTUAL_THRESHOLD moves, only the visible
 // window (plus RV_OVERSCAN rows above/below) is rendered as DOM nodes; the
 // rest are represented by two tall placeholder <div>s (top spacer + bottom
@@ -18613,15 +18922,13 @@ let _reviewAnalyzePriorityQueue=[];
 //   Setting threshold to Infinity disables virtual list for ALL games —
 //   eliminating ALL virtual-list-related bugs at once.
 const RV_VIRTUAL_THRESHOLD=Infinity;   // v1.1.0 rev14: disabled — render full list always
-let _rvVirtualState={
-  avgRowH:44,
-  scrollTop:0,
-  windowStart:0,
-  windowEnd:Infinity,
-  measured:false,
-  enabled:false,
-};
-let _rvScrollRefreshTimer=0;
+// v1.2.3 round-48 (RED-7): _rvVirtualState and _rvScrollRefreshTimer DELETED.
+//   SENTINEL — do NOT reintroduce the per-session/per-render bookkeeping
+//   without re-enabling the pipeline: with the threshold pinned to Infinity
+//   the virtual list can never engage, so the bookkeeping (5 reset call sites
+//   + a window recompute in every review render) was pure dead work. The
+//   constant and the design analysis above are retained as documentation of
+//   why the pipeline is disabled and what re-enabling it would require.
 // Track the game-over status key so we can re-localize gameOver on language switch.
 // Toggle for global eval trend display in review mode.
 // When true: shows the entire game's eval trend uniformly aligned with the progress bar.
@@ -18679,6 +18986,22 @@ function getCapturedPieces(board, color, moveRecordsArg) {
   // captured — i.e., the OPPONENT of the side whose bar we're rendering.
   // moveRecords[i].captured.color tells us which side lost the piece.
   if (moveRecordsArg && Array.isArray(moveRecordsArg) && moveRecordsArg.length > 0) {
+    // v1.2.3 round-48 (PERF-3a): cache the scan result keyed by (moveRecords
+    //   array identity, length, color). render() triggers this twice per pass
+    //   (once each from _renderAIBar/_renderPlayerBar via capturedPiecesHtml)
+    //   and every call used to re-scan the whole move list. The cache lives on
+    //   the function object (no new top-level identifier in the concatenated
+    //   global scope) and self-invalidates: a move/undo changes length; a
+    //   rebuild (new game / FEN/PGN import / setup / review snapshot restore)
+    //   replaces the array (identity). moveRecords entries are never mutated
+    //   in place (verified by grep — `captured` is only set in literals).
+    let _cc=getCapturedPieces._capCache;
+    if(!_cc||_cc.arr!==moveRecordsArg||_cc.len!==moveRecordsArg.length){
+      _cc={arr:moveRecordsArg,len:moveRecordsArg.length,white:null,black:null};
+      getCapturedPieces._capCache=_cc;
+    }
+    const _cachedRes=(color==='white')?_cc.white:(color==='black'?_cc.black:null);
+    if(_cachedRes)return _cachedRes;
     const order = ['queen','rook','bishop','knight','pawn'];
     const counts = { queen:0, rook:0, bishop:0, knight:0, pawn:0 };
     for (let i = 0; i < moveRecordsArg.length; i++) {
@@ -18694,6 +19017,7 @@ function getCapturedPieces(board, color, moveRecordsArg) {
     for (const t of order) {
       for (let i = 0; i < counts[t]; i++) result.push(t);
     }
+    if(color==='white')_cc.white=result;else if(color==='black')_cc.black=result;
     return result;
   }
   // v1.0.8 PHASE 38: When there are no moveRecords (setup mode / FEN import /
@@ -18815,23 +19139,27 @@ function render(){
   // v1.1.0 Phase 54: Added _animRetryCount guard (max 10 retries = 2s) to
   //   prevent infinite loop if animationInProgress gets stuck true.
   if(animationInProgress){
-    if(!renderPending){
-      _animRetryCount=(_animRetryCount||0)+1;
-      if(_animRetryCount>10){
-        // Stuck — force-clear and render immediately
-        animationInProgress=false;_animRetryCount=0;
-        lastRenderTime=Date.now();
-        renderInternal();
-        return;
-      }
-      renderPending=true;
-      // v1.2.3 round-18 (bug fix): do NOT reset _animRetryCount here — the
-      //   reset made the counter oscillate 0→1 so the ">10 retries →
-      //   force-clear stuck animationInProgress" guard above could never
-      //   fire (dead code, infinite 200ms spin instead of 2s self-heal).
-      //   The healthy-path reset at the non-animating branch below suffices.
-      setTimeout(()=>{renderPending=false;lastRenderTime=Date.now();render();},200);
+    // v1.2.3 round-48 (RED-8): removed the inner `if(!renderPending)` wrapper —
+    //   it was always true here (the early return at the top of render()
+    //   guarantees renderPending===false on this path). Body kept verbatim.
+    _animRetryCount=(_animRetryCount||0)+1;
+    if(_animRetryCount>10){
+      // Stuck — force-clear and render immediately
+      animationInProgress=false;_animRetryCount=0;
+      lastRenderTime=Date.now();
+      renderInternal();
+      return;
     }
+    renderPending=true;
+    // v1.2.3 round-18 (bug fix): do NOT reset _animRetryCount here — the
+    //   reset made the counter oscillate 0→1 so the ">10 retries →
+    //   force-clear stuck animationInProgress" guard above could never
+    //   fire (dead code, infinite 200ms spin instead of 2s self-heal).
+    //   The healthy-path reset at the non-animating branch below suffices.
+    // v1.2.3 round-48 (ROB-4a): store the timeout id on window (no new
+    //   top-level let/const in the concatenated global scope) so
+    //   _cleanupEventListeners() can cancel it on teardown.
+    window._animRetryTimerId=setTimeout(()=>{window._animRetryTimerId=null;renderPending=false;lastRenderTime=Date.now();render();},200);
     return;
   }
   _animRetryCount=0;
@@ -19378,7 +19706,12 @@ function _renderReviewMode(h, flip){
 const safeStep=Math.max(0,Math.min(reviewStep,reviewStates.length-1));
 reviewStep=safeStep;
 const rs=reviewStates[safeStep];
-if(!rs){reviewMode=false;render();return{h,done:true}}
+if(!rs){reviewMode=false;
+// v1.2.3 round-48 (BUG-1): this bailout exits review mode without going
+//   through exitReview(), so resume the clock here too (rebase the
+//   side-to-move's lastMoveTimestamp before the next tick).
+if(typeof _resumeGameClock==='function')_resumeGameClock();
+render();return{h,done:true}}
 // v1.2.3 round-39 (SonarCloud S1481): removed unused `const rLast=rs.lastMove;`
 //   — rLast was declared but never referenced in _renderReviewMode. The review
 //   board rendering uses rBoard (rs.state.board) but not rs.lastMove (the
@@ -19699,7 +20032,10 @@ const _rvNavHTML=_buildRvNavHTML();
 //   _buildRvAnalyzeBtnHTML().
 const _rvAnalyzeHTML=_buildRvAnalyzeBtnHTML();
 
-// v1.0.8 PHASE 18 Task 2: Enable virtual list when the move list exceeds the
+// v1.0.8 PHASE 18 Task 2 (HISTORICAL — the virtual list this describes was
+// disabled in v1.1.0 Phase 54 rev14 and its bookkeeping removed in v1.2.3
+// round-48 (RED-7); kept for design rationale): Enable virtual list when the
+// move list exceeds the
 // threshold. When enabled, only the visible window (plus overscan) is rendered
 // as DOM nodes; the rest are represented by top/bottom spacer <div>s so the
 // scrollbar still reflects the full content height.
@@ -19711,11 +20047,12 @@ const _rvAnalyzeHTML=_buildRvAnalyzeBtnHTML();
 // rows). Now we track _lastRenderReviewStep and only re-center when the step
 // v1.1.0 Phase 54 rev14: Virtual list disabled (RV_VIRTUAL_THRESHOLD=Infinity).
 //   Always render the full move list — no windowing, no spacers.
-_rvVirtualState.enabled=moveRecords.length>RV_VIRTUAL_THRESHOLD;
-_rvVirtualState.windowStart=0;
-_rvVirtualState.windowEnd=moveRecords.length;
-const _rvStart=_rvVirtualState.windowStart;
-const _rvEnd=_rvVirtualState.windowEnd;
+// v1.2.3 round-48 (RED-7): _rvVirtualState window bookkeeping removed — the
+//   pipeline is disabled by design, so the per-render window recompute (which
+//   always produced the full range) was pure overhead. The range is now
+//   computed directly.
+const _rvStart=0;
+const _rvEnd=moveRecords.length;
 
 // v1.1.0 Phase 53 (round-12 S3923 cleanup): Unified layout — both portrait and
 // landscape close .review-left, emit .review-moves, close .review-top, then open
@@ -20268,7 +20605,8 @@ const ctx={
   containerScrolls:[],
 };
 if(_ecoBlurTimer){clearTimeout(_ecoBlurTimer);_ecoBlurTimer=0}
-if(_rvScrollRefreshTimer){clearTimeout(_rvScrollRefreshTimer);_rvScrollRefreshTimer=0;}
+// v1.2.3 round-48 (RED-7): `_rvScrollRefreshTimer` clear removed — the virtual
+//   list pipeline is disabled by design and the timer was deleted.
 try{
   const _selectors=['.dlg','.panel','.op-list'];
   for(const _sel of _selectors){
@@ -20443,7 +20781,7 @@ if(reviewMode && reviewStep !== _lastReviewStepScrolled){
   });
 }
 _updateArrows(hoveredSquare||selectedSquare);
-_invalidateElCache(); _sqElCache = null;
+_invalidateElCache();
 _rListEl = document.getElementById('reviewMovesList');
 if(wasEcoFocused){const el=document.getElementById('ecoSearch');if(el){el.focus();_ecoSearchFocused=true;try{el.setSelectionRange(el.value.length,el.value.length)}catch(e){console.warn('[UI]',e?.message?e.message:e);}}}
 // v1.2.3 round-18: restore SP-ID input focus after keystroke-triggered
@@ -20627,7 +20965,8 @@ function updateAfterMove(){requestEngineEval();
       if(_hasEM)bh+=`<span class="setup-ep-mark" aria-hidden="true">⚡</span>`;
       bh+=`</div>`}}
     gridEl.innerHTML=bh;
-    _sqElCache=null;
+    // v1.2.3 round-48 (RED-5): `_sqElCache=null` removed — the cache was dead
+    //   (zero readers); no invalidation needed anymore.
     // v1.0.2 (qw3.7max audit): clear _rListEl too — the board-only rebuild
     // path doesn't touch the review-moves list, but clearing keeps the cache
     // honest if the element was removed from the DOM by a higher-level rebuild.
@@ -20868,6 +21207,15 @@ function _updateChangedSquares(oldInfoSq,newInfoSq,oldLegalSet,newLegalSet){
     // v1.0.8 PHASE 3: visible markers
     const _hasCM=_ucsCastleMarks.has(String(lr*8+lc));
     const _hasEM=_ucsEpMark?.row===lr&&_ucsEpMark.col===lc;
+    // v1.2.3 round-48 (BUG-7): keep el._sig in sync with the DOM writes below.
+    //   _updateSingleSq (the updateAfterMove path) skips a square entirely when
+    //   its recomputed signature matches el._sig; this path previously wrote
+    //   dots/rings WITHOUT updating _sig, so a later updateAfterMove compared
+    //   against the stale signature, saw a false match, and skipped the DOM
+    //   write — leaving ghost legal-move dots/rings until the next full render.
+    //   The signature components must stay identical to _updateSingleSq's.
+    const sig=(p?p.color[0]+p.type:'--')+'|'+(isSel?1:0)+(lastFrom?1:0)+(lastTo?1:0)+(isCheckSq?1:0)+(isLegal?1:0)+(cm?1:0)+(isCastlingRook?1:0)+(_hasCM?1:0)+(_hasEM?1:0);
+    el._sig=sig;
     el.style.background=bg;
     el.className='sq'+(lastFrom?' last-from':'')+(lastTo?' last-to':'')+(isCheckSq?' in-check':'')+(isCastlingRook?' castle-rook':'');
     const lbl=String.fromCodePoint(97+lc)+(8-lr);
@@ -21040,9 +21388,9 @@ try{if(typeof playSound==='function')playSound('enterReview');}catch(e){console.
 if(typeof _visualAnnotationsCache!=='undefined'&&_visualAnnotationsCache){
   try{_visualAnnotationsCache.delete('_initial');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
 }
-// v1.0.8 PHASE 18 Task 2: Reset virtual list state on entering review mode.
-// Each new review session starts with a fresh window centered on reviewStep=0.
-_resetRvVirtualState();
+// v1.2.3 round-48 (RED-7): _resetRvVirtualState() call removed — the virtual
+// list pipeline is disabled by design (RV_VIRTUAL_THRESHOLD=Infinity) and its
+// per-session bookkeeping was deleted.
 // v1.0.4 Round-5 Rev19: Allow entering review mode with zero move records.
 // Previously this returned early, blocking the user from reaching the review
 // toolbar (which hosts the 📚 PGN Cache Manager and 🗃️ import buttons) when
@@ -21080,6 +21428,11 @@ if(stateHistory.length>0&&stateHistory[0].state){
   reviewBaseState=cloneS(gameState);
 }
 reviewMode=true;reviewStates=[];
+// v1.2.3 round-48 (BUG-1): pause the game clock while reviewing — the tick
+//   early-returns on reviewMode (ui-gameflow.js), so record the freeze; the
+//   matching exit path (exitReview) rebases the side-to-move's
+//   lastMoveTimestamp via _resumeGameClock() before the tick resumes.
+if(typeof _pauseGameClock==='function')_pauseGameClock();
 _reviewEvalRequestedStep=-1; // Preserve _reviewEvalCache across review sessions
 let s=cloneS(reviewBaseState);
 reviewStates.push({state:cloneS(s),lastMove:null});
@@ -21964,6 +22317,26 @@ function _resetGameUIState(){
     window._pendingOpenStats=false;
     if(window._pendingOpenStatsTimer){clearTimeout(window._pendingOpenStatsTimer);window._pendingOpenStatsTimer=null;}
   }
+  // v1.2.3 round-49 Stage-3 (review-2 P1 + P3-2): clear the setup-mode entry
+  //   snapshot (BUG-13 baseline) and force-remove a lingering "board modified
+  //   during setup" confirm overlay. Every game-start entry point funnels
+  //   through here (_startGameImpl / quickFreeOpening / _exitSetupImpl /
+  //   _applyImportedFEN / importPGN), so a stale snapshot can never misfire the
+  //   modification gate against the NEW game's position.
+  //   The overlay is appended to document.body (NOT inside #app), so it
+  //   survives render() rebuilds and would otherwise mask the new game behind
+  //   a z-index:10000 backdrop (review-2 P3-2). Do NOT route through
+  //   window._setupExitDialogDismiss — that callback is the dialog's Cancel
+  //   path and would re-arm the stale snapshot. Remove the node and null both
+  //   hooks directly.
+  if(typeof window!=='undefined'){
+    window._setupEntrySnap=null;
+    if(window._setupExitDialogOverlay){
+      try{window._setupExitDialogOverlay.remove();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+      window._setupExitDialogOverlay=null;
+    }
+    window._setupExitDialogDismiss=null;
+  }
   // v1.0.4 REV13: Reset scroll state on new game
   // v1.0.4 Rev30: also reset the restore guard (in case a render is in flight)
   if(typeof _mlistScrollState!=='undefined'){_mlistScrollState.scrollTop=0;_mlistScrollState.atBottom=false;_mlistScrollState.valid=false;}
@@ -22006,6 +22379,11 @@ function _resetGameUIState(){
   //   non-dialog paths (FEN/PGN/setup), the imported game is treated as
   //   untimed unless the user explicitly starts a new timed game.
   if(gameClocks !== undefined){gameClocks=null;}
+  // v1.2.3 round-48 (BUG-1): clear the clock-pause marker too — every
+  //   game-start entry point funnels through here, and the fresh game gets
+  //   fresh clocks (initGameClocks) or none, so a stale pause marker from a
+  //   prior review/setup session must not leak into it.
+  if(typeof window!=='undefined')window._clockPauseStart=null;
   // v1.1.1 Phase 61: Clear ALL remaining per-game caches that could pollute
   //   the new game's PGN records, eval display, and statistics. Previously
   //   these were cleared inconsistently across the 5 entry points
@@ -22701,9 +23079,9 @@ function exitReview(){
   // v1.1.2 Phase 69 (Bug 3): Clear the PGN cache op-in-progress flag — a new
   //   game invalidates any in-flight cache operation.
   if(typeof _pgnCacheOpInProgress!=='undefined')_pgnCacheOpInProgress=false;
-  // v1.0.8 PHASE 18 Task 2: Reset virtual list state on exiting review mode.
-  // Clears the scroll timer and window so the next review session starts fresh.
-  _resetRvVirtualState();
+  // v1.2.3 round-48 (RED-7): _resetRvVirtualState() call removed — the virtual
+  //   list pipeline is disabled by design (RV_VIRTUAL_THRESHOLD=Infinity) and
+  //   its per-session bookkeeping was deleted.
   if(_reviewAnalyzeSafetyTimer){clearTimeout(_reviewAnalyzeSafetyTimer);_reviewAnalyzeSafetyTimer=null;}
   // Restore the complete game state from the pre-review snapshot.
   // Previously, exitReview() only restored gameState from reviewBaseState (the
@@ -22740,6 +23118,12 @@ function exitReview(){
   }
   _resetEvalState();
   _cachedBwrap=null; // Invalidate cached board HTML
+  // v1.2.3 round-48 (BUG-1): resume the game clock BEFORE render() — the next
+  //   _tickGameClock tick (200ms interval) must see a rebased
+  //   lastMoveTimestamp for the side to move, otherwise the entire review
+  //   session's wall-clock duration is deducted in one lump (and can trigger
+  //   a spurious flag fall). Pairs with _pauseGameClock() in enterReview().
+  if(typeof _resumeGameClock==='function')_resumeGameClock();
   render();
   requestEngineEval();
   if(!gameOver&&gameState.currentTurn!==playerColor){
@@ -23633,6 +24017,12 @@ function _cleanupEventListeners(){
   if(typeof _toastRemoveTimer!=='undefined'&&_toastRemoveTimer){clearTimeout(_toastRemoveTimer);_toastRemoveTimer=0;}
   if(typeof _evalSafetyTimerId!=='undefined'&&_evalSafetyTimerId){clearTimeout(_evalSafetyTimerId);_evalSafetyTimerId=null;}
   if(typeof _pbmiTimerId!=='undefined'&&_pbmiTimerId){clearTimeout(_pbmiTimerId);_pbmiTimerId=null;}
+  // v1.2.3 round-48 (ROB-4a): clear the render() animation-retry timeout — its
+  //   id is now stored on window._animRetryTimerId (see render()).
+  if(window._animRetryTimerId){clearTimeout(window._animRetryTimerId);window._animRetryTimerId=null;}
+  // v1.2.3 round-48 (ROB-4b): clear the resize debounce timer owned by
+  //   game-logic.js (typeof guard per cross-module convention).
+  if(typeof _resizeTimer!=='undefined'&&_resizeTimer){clearTimeout(_resizeTimer);_resizeTimer=0;}
   renderPending=false;
 }
 

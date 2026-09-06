@@ -48,10 +48,18 @@ if (versionPropsFile.exists()) {
     versionPropsFile.withInputStream { versionProps.load(it) }
 }
 
+// v1.2.3 round-48 (SEC-1): fallback defaults raised to the CURRENT release
+//   (1.2.3 / BUILD=123). Previously "1"/"1"/"1"/"111" silently produced
+//   versionCode = max(111, 10101) = 10101 < the already-published 10203 —
+//   installing such a build over the release fails with
+//   INSTALL_FAILED_VERSION_DOWNGRADE, with no warning anywhere. The new
+//   fallbacks keep computedVersionCode at 10203 (max(123, 10203)), and a
+//   loud USING FALLBACK VERSION warning is printed below.
+def usingFallbackVersion = !versionPropsFile.exists()
 def versionMajor = (versionProps['VERSION_MAJOR'] ?: "1").toInteger()
-def versionMinor = (versionProps['VERSION_MINOR'] ?: "1").toInteger()
-def versionPatch = (versionProps['VERSION_PATCH'] ?: "1").toInteger()
-def versionBuild = (versionProps['VERSION_BUILD'] ?: "111").toInteger()
+def versionMinor = (versionProps['VERSION_MINOR'] ?: "2").toInteger()
+def versionPatch = (versionProps['VERSION_PATCH'] ?: "3").toInteger()
+def versionBuild = (versionProps['VERSION_BUILD'] ?: "123").toInteger()
 
 def computedVersionName = "${versionMajor}.${versionMinor}.${versionPatch}"
 // v1.2.3 round-44 (F11): versionCode derived from the semantic version
@@ -60,6 +68,15 @@ def computedVersionName = "${versionMajor}.${versionMinor}.${versionPatch}"
 //   codes). max() with the legacy VERSION_BUILD keeps monotonicity vs every
 //   previously published build either way.
 def computedVersionCode = Math.max(versionBuild, versionMajor * 10000 + versionMinor * 100 + versionPatch)
+
+// v1.2.3 round-48 (SEC-1): never let a fallback version slip through silently.
+if (usingFallbackVersion) {
+    println "=========================================================="
+    println "  WARNING: USING FALLBACK VERSION 1.2.3 (versionCode ${computedVersionCode})"
+    println "  ../version.properties NOT FOUND — this build does NOT carry"
+    println "  the real version. Do not ship it; restore version.properties."
+    println "=========================================================="
+}
 
 // ============================================================
 // 签名配置（从 local.properties 或环境变量读取）
@@ -298,6 +315,9 @@ task printBuildInfo {
         println "========================================="
         println "  Version Name : ${android.defaultConfig.versionName}"
         println "  Version Code : ${android.defaultConfig.versionCode}"
+        if (usingFallbackVersion) {
+            println "  !!! USING FALLBACK VERSION — ../version.properties not found !!!"
+        }
         println "  Compile SDK  : ${android.compileSdk}"
         println "  Min SDK      : ${android.defaultConfig.minSdk}"
         println "  Target SDK   : ${android.defaultConfig.targetSdk}"

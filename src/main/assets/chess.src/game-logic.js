@@ -529,9 +529,13 @@ const _i18n={
 'resign_confirm_msg':{zh:'你确定要认输吗？这将结束当前对局，对方获胜。',en:'Are you sure you want to resign? This ends the current game; your opponent wins.'},
 'resign_yes':{zh:'确认认输',en:'Yes, Resign'},
 'resign_no':{zh:'取消',en:'Cancel'},
-'resigns_suffix':{zh:'认输',en:'resigns'},
+// v1.2.3 round-48 (BUG-11): leading space added to the English values, same
+//   convention as 'wins_excl' (' wins!') — the concatenation sites
+//   (ui.js _gameOverStrFromStatus) join color + suffix with no separator,
+//   producing "⚫ Blackresigns" / "⚪ Whitewins by timeout" before this fix.
+'resigns_suffix':{zh:'认输',en:' resigns'},
 // v1.0.4 Rev47: Timeout win suffix for _gameOverStrFromStatus('timeout')
-'timeout_win_suffix':{zh:'超时胜',en:'wins by timeout'},
+'timeout_win_suffix':{zh:'超时胜',en:' wins by timeout'},
 // v1.0.4 Round-5 Rev28: Stats page → main/review PGN import-back prompt
 'stats_import_back_no_pgn':{zh:'统计页面未导入新 PGN，无需同步。',en:'No new PGN imported on the stats page; nothing to sync.'},
 // v1.0.7 — Quick toolbar (below the board, above the player bar)
@@ -1372,7 +1376,7 @@ function initBoard(){const b=Array.from({length:8},()=>Array(8).fill(null));cons
 function attacked(board,pos){const b=board,p=b[pos.row][pos.col];if(!p){return[];}const r=pos.row,c=pos.col,co=p.color,mv=[];if(p.type==='pawn'){const d=co==='white'?-1:1;for(const dc of[-1,1])if(inB(r+d,c+dc))mv.push({row:r+d,col:c+dc})}else {if(p.type==='knight'){for(const[dr,dc]of KNIGHT_OFFSETS)if(inB(r+dr,c+dc))mv.push({row:r+dr,col:c+dc})}else if(p.type==='king'){for(let dr=-1;dr<=1;dr++)for(let dc=-1;dc<=1;dc++)if((dr||dc)&&inB(r+dr,c+dc))mv.push({row:r+dr,col:c+dc})}else{const dirs=p.type==='rook'?DIR_ROOK:p.type==='bishop'?DIR_BISHOP:DIR_QUEEN;for(const[dr,dc]of dirs){let nr=r+dr,nc=c+dc;while(inB(nr,nc)){mv.push({row:nr,col:nc});if(b[nr][nc]){break;}nr+=dr;nc+=dc}}}}return mv}
 function initState(){const s={board:initBoard(),currentTurn:'white',castlingRights:{whiteKingside:true,whiteQueenside:true,blackKingside:true,blackQueenside:true,
 // v1.2.3 round-20 (A-1): standard chess designates the corner rooks (h/a files)
-whiteKingsideRookFile:7,whiteQueensideRookFile:0,blackKingsideRookFile:7,blackQueensideRookFile:0},enPassantTarget:null,halfMoveClock:0,fullMoveNumber:1,moveHistory:[],posCount:new Map(),wk:{row:7,col:4},bk:{row:0,col:4},hash:0,boardVersion:1};syncHash(s);s.posCount.set(s.hash,1);return s}
+whiteKingsideRookFile:7,whiteQueensideRookFile:0,blackKingsideRookFile:7,blackQueensideRookFile:0},enPassantTarget:null,halfMoveClock:0,fullMoveNumber:1,moveHistory:[],posCount:new Map(),wk:{row:7,col:4},bk:{row:0,col:4},hash:0};syncHash(s);s.posCount.set(s.hash,1);return s}
 // v1.0.7: validateSetupPosition now also validates the manual 🔁 castle markers
 // and the ⚡ en-passant marker carried on s.setupCastleMarks (a Set of "r*8+c"
 // keys) and s.setupEpMark ({row,col}|null). Both validations follow the
@@ -1678,7 +1682,7 @@ function cloneB(b){return b.map(r=>r.slice())}
 //   round-trip verification all silently degraded after the first move.
 function cloneS(s){return{board:cloneB(s.board),currentTurn:s.currentTurn,castlingRights:{...s.castlingRights},enPassantTarget:s.enPassantTarget?{...s.enPassantTarget}:null,halfMoveClock:s.halfMoveClock,fullMoveNumber:s.fullMoveNumber,// moveHistory: array shallow-copied (move objects are never mutated in place,
 // only pushed/popped), so sharing by reference would corrupt the parent's array
-moveHistory:s.moveHistory?s.moveHistory.slice():[],posCount:new Map(s.posCount),wk:s.wk?{...s.wk}:null,bk:s.bk?{...s.bk}:null,hash:s.hash||0,boardVersion:s.boardVersion||0,
+moveHistory:s.moveHistory?s.moveHistory.slice():[],posCount:new Map(s.posCount),wk:s.wk?{...s.wk}:null,bk:s.bk?{...s.bk}:null,hash:s.hash||0,
 // Chess960 identity fields — only present on Chess960 states (chess960.js).
 // Using conditional spread avoids adding undefined keys to standard-chess states.
 ...(s.chess960?{chess960:true}:{}),
@@ -1900,15 +1904,35 @@ function _castleSide(mv,s){
       // only the rook moves (handled by makeMv's `from===to` branch added in
       // v1.0.7 PHASE 17).
       const _isZeroDist=mv.from.col===mv.to.col;
+      // v1.2.3 round-49 (BUG-10 hardening): in Chess960, before this fallback
+      //   classifies a flag-less king move as castling on a given side, require
+      //   chess960CastlingRookMove() to confirm that a rook actually exists on
+      //   that side AND needs to move (rookFrom!==rookTo). Previously a normal
+      //   king move like f1→g1 (distance 1 ≥ _minDist) with a stale/present
+      //   kingside right but no kingside rook to move (e.g. rook captured via
+      //   setup-mode edits or a hand-built FEN leaving the right stale) was
+      //   misclassified as 'kingside', making makeMv teleport a non-existent
+      //   rook. All current flag-less callers (pseudoMoves / executeMove /
+      //   PGN / review rebuilds) carry an explicit castle flag, so this branch
+      //   is defense-in-depth for future reconstruction paths; the added check
+      //   mirrors the guard makeMv itself applies (round-46, `rm&&rm.rookFrom
+      //   !==rm.rookTo`) before moving the rook. When chess960.js is not
+      //   loaded we cannot confirm — keep the legacy behavior (isChess960Active
+      //   would already have thrown above in that case, so this is moot).
+      const _rookPending=(side)=>{
+        if(typeof chess960CastlingRookMove!=='function')return true;
+        const rm=chess960CastlingRookMove(_st,mv.piece.color,side);
+        return !!(rm&&rm.rookFrom!==rm.rookTo);
+      };
       if(_is960&&_isZeroDist&&_cr){
-        if(mv.to.col===6&&_cr[mv.piece.color+'Kingside'])return 'kingside';
-        if(mv.to.col===2&&_cr[mv.piece.color+'Queenside'])return 'queenside';
+        if(mv.to.col===6&&_cr[mv.piece.color+'Kingside']&&_rookPending('kingside'))return 'kingside';
+        if(mv.to.col===2&&_cr[mv.piece.color+'Queenside']&&_rookPending('queenside'))return 'queenside';
       }
       if(mv.to.col===6&&Math.abs(mv.to.col-mv.from.col)>=_minDist){
-        if(_destValid&&(!_is960||(_cr&&_cr[mv.piece.color+'Kingside'])))return 'kingside';
+        if(_destValid&&(!_is960||(_cr&&_cr[mv.piece.color+'Kingside']&&_rookPending('kingside'))))return 'kingside';
       }
       if(mv.to.col===2&&Math.abs(mv.to.col-mv.from.col)>=_minDist){
-        if(_destValid&&(!_is960||(_cr&&_cr[mv.piece.color+'Queenside'])))return 'queenside';
+        if(_destValid&&(!_is960||(_cr&&_cr[mv.piece.color+'Queenside']&&_rookPending('queenside'))))return 'queenside';
       }
     }
   }
@@ -2180,13 +2204,6 @@ if(s.castlingRights.whiteQueenside&&!ns.castlingRights.whiteQueenside)h^=zobrist
 if(s.castlingRights.blackKingside&&!ns.castlingRights.blackKingside)h^=zobrist.castling[2];
 if(s.castlingRights.blackQueenside&&!ns.castlingRights.blackQueenside)h^=zobrist.castling[3];
 ns.hash=(h>>>0);
-// v1.0.2 PERF (audit): bump boardVersion on every board mutation.
-// v1.2.3 round-42 (42-9): comment corrected — _updateBoardIncremental (the
-//   dirty-check incremental renderer this counter fed) was REMOVED in
-//   round-20 with the DIRTY_* subsystem (see the ui.js render-scheduling
-//   note). boardVersion currently has no readers; it is retained as state
-//   metadata carried through clone/undo snapshots.
-ns.boardVersion=(s.boardVersion||0)+1;
 ns.posCount.set(ns.hash,(ns.posCount.get(ns.hash)||0)+1);
 return ns}
 // ===================== MAKE/UNMAKE (INCREMENTAL) =====================
@@ -2282,7 +2299,6 @@ oldEnPassant:s.enPassantTarget?{r:s.enPassantTarget.row,c:s.enPassantTarget.col}
 oldHalfMove:s.halfMoveClock,
 oldFullMove:s.fullMoveNumber,
 oldHash:s.hash,
-oldBoardVersion:s.boardVersion||0,
 promotion:promotion||null,
 oldMoveHistoryLength:s.moveHistory?s.moveHistory.length:0,
 isBlackMove:piece.color==='black'
@@ -2408,10 +2424,6 @@ if(undo.oldCastling.whiteQueenside&&!s.castlingRights.whiteQueenside)h^=zobrist.
 if(undo.oldCastling.blackKingside&&!s.castlingRights.blackKingside)h^=zobrist.castling[2];
 if(undo.oldCastling.blackQueenside&&!s.castlingRights.blackQueenside)h^=zobrist.castling[3];
 s.hash=(h>>>0);
-// v1.0.2 PERF (audit): bump boardVersion (see the makeMv note — the
-//   _updateBoardIncremental consumer was removed in round-20; counter
-//   retained as snapshot metadata, no current readers). round-42 42-9.
-s.boardVersion=(s.boardVersion||0)+1;
 // 12. Incremental posCount
 s.posCount.set(s.hash,(s.posCount.get(s.hash)||0)+1);
 return undo;
@@ -2478,8 +2490,6 @@ s.enPassantTarget=undo.oldEnPassant?{row:undo.oldEnPassant.r,col:undo.oldEnPassa
 s.halfMoveClock=undo.oldHalfMove;
 s.fullMoveNumber=undo.oldFullMove;
 s.hash=undo.oldHash;
-// v1.0.2 PERF (audit): restore boardVersion so dirty-check still works after unmake.
-s.boardVersion=undo.oldBoardVersion||0;
 if(s.moveHistory&&undo.oldMoveHistoryLength!==undefined)s.moveHistory.length=undo.oldMoveHistoryLength;
 s.currentTurn=undo.isBlackMove?'black':'white';
 }
@@ -2520,13 +2530,45 @@ const k=s.currentTurn==='white'?s.wk:s.bk;return inCheck(s.board,s.currentTurn,k
 //   whether a SPECIFIC side has enough material to checkmate the opponent.
 //   isDeadPosition checks the WHOLE position (both sides); for FIDE 6.9 timeout
 //   draws we need to check the WINNER side only. Example: White flags, Black has
-//   K+N only → Black wins on time but cannot mate → FIDE 6.9 draw. isDeadPosition
-//   returns false here (White may have a queen), so the old code wrongly judged
-//   "Black wins". winnerLacksMatingMaterial(state,'black') returns true → draw.
+//   K+N only and White has a bare king → Black wins on time but cannot mate →
+//   FIDE 6.9 draw. isDeadPosition returns false here, so the old code wrongly
+//   judged "Black wins". winnerLacksMatingMaterial(state,'black') returns true
+//   → draw.
 // v1.2.3 round-31 (PR52 SonarCloud S3776): refactored to reduce cognitive
 //   complexity from 29 → ~6 by extracting _scanWinnerMaterial() and
-//   _bishopParityIsUniform(). The 11-test FIDE 6.9 suite (round-30) still
-//   passes — semantics are byte-for-byte equivalent.
+//   _bishopParityIsUniform().
+// v1.2.3 round-49 (FIDE 6.9 both-side matrix, BUG-9 verdict follow-up): the
+//   FIDE 6.9 test is "can the WINNER checkmate the LOSER's king by any possible
+//   series of legal moves?" — the LOSER's material matters, because loser
+//   pieces can occupy their own king's escape squares (self-block helpmate).
+//   The old code looked only at the WINNER's material (former _scanWinnerMaterial
+//   doc even claimed "Loser-side material is irrelevant"), so e.g. K+N vs K+B
+//   was misjudged a timeout draw — a legal mating sequence exists (White Kc8+Nc7
+//   vs Black Ka8+Ba7: Nc7+ checks a8, Kc8 covers b8/b7, and the bishop blocks
+//   its own king's a7 escape square and cannot capture Nc7), so it is a WIN
+//   on time.
+//   Matrix (W = winner's pieces, L = loser's pieces, kings not counted):
+//   (1) W has any pawn/rook/queen → mate possible (promotion / major pieces).
+//   (2) W bare king → impossible.
+//   (3) W has bishop AND knight → possible (KBN vs K is a forced mate).
+//   (4) W has ≥2 knights, no bishop → possible even vs bare king (helpmate:
+//       Black Ka8, White Kb6+Nc6+Nc7# — the knight pair covers the corner).
+//   (5) W exactly 1 knight, no bishop → possible iff L has ANY piece (a loser
+//       piece can always self-block the one escape square the knight+king net
+//       cannot cover — see the Kc8+Nc7 vs Ka8+Ba7 construction above; vs a
+//       bare king the single knight can never mate).
+//   (6) W bishops only: bishops on BOTH square colors → possible (classic
+//       opposite-colored bishop pair covers every square); ALL bishops on one
+//       color c → possible UNLESS every L piece is itself a color-c bishop
+//       (the classic K+B vs K+B same-color dead endgame, generalized: a
+//       color-c bishop can never occupy the opposite-color escape square the
+//       mate net needs blocked — L bare king is subsumed here since K+B /
+//       K+BB(same color) vs K cannot mate). Any L knight / opposite-color
+//       bishop / other piece → self-block helpmate exists → possible.
+//   Basis: FIDE Laws of Chess art. 6.9 (flag fall is a draw only if the
+//   opponent cannot checkmate by any possible series of legal moves); the
+//   matrix enumerates the standard insufficient-material/helpmate theory
+//   (same source as the isDeadPosition cases below and the round-40 KNN note).
 function winnerLacksMatingMaterial(s,winnerColor){
   // v1.2.3 round-35 (PR52 SonarCloud S6582): use optional chaining —
   //   `!s?.board` returns true when s is null/undefined OR s.board is falsy,
@@ -2535,37 +2577,48 @@ function winnerLacksMatingMaterial(s,winnerColor){
   const counts=_scanWinnerMaterial(s.board,winnerColor);
   // Sanity: winner must have exactly one king (otherwise state is corrupt).
   if(counts.king!==1)return false;
-  // Any pawn / rook / queen → mating is possible.
+  // (1) Any pawn / rook / queen → mating is possible.
   if(counts.pawn>0||counts.rook>0||counts.queen>0)return false;
-  // K vs K (winner has only king) → cannot mate.
+  // (2) K vs K (winner has only king) → cannot mate.
   if(counts.knight===0&&counts.bishop===0)return true;
-  // K + single minor (N or B) → cannot mate.
-  if(counts.knight+counts.bishop===1)return true;
+  // (3) K + bishop + knight → CAN mate (KBN vs K is a forced mate). Must be
+  //   checked before the knight-only / bishop-only branches below.
+  if(counts.bishop>0&&counts.knight>0)return false;
+  // (4) K + ≥2 knights (no bishop) → CAN mate.
   // v1.2.3 round-40 (strict FIDE 6.9): REMOVED the K+N+N exemption. FIDE 6.9
   //   draws a timeout only when the loser cannot be checkmated "by any
   //   possible series of legal moves" — and K+N+N CAN deliver mate with the
   //   loser's cooperation (help-mate), so a K+N+N winner still WINS on time.
-  // K + B+B same color (no knight) → cannot force mate (enemy king escapes
-  // to the opposite-color squares). The parity check ensures ALL bishops
-  // are the same color; the no-knight guard excludes K+N+B+B(same color)
-  // which CAN mate (knight attacks both square colors).
-  // v1.2.3 round-30: added this case (was missing — the FIDE 6.9 timeout
-  //   draw was incorrectly judged a win for K+B+B same-color winners).
-  if(counts.bishop>=2&&counts.knight===0&&_bishopParityIsUniform(counts.bishopParity))return true;
-  // K + B+B same color + knight → CAN mate.
-  // K + B+B opposite color → CAN mate (covers both square colors).
-  // K + N+B → CAN mate.
-  // K + 2N+anything else → CAN mate (the anything-else enables mate).
-  return false;
+  if(counts.knight>=2)return false;
+  // round-49: scan the LOSER side too — cases (5) and (6) depend on whether
+  //   the loser owns any piece that can self-block an escape square.
+  const loser=_scanWinnerMaterial(s.board,OPP_COLOR[winnerColor]);
+  // (5) K + exactly 1 knight (no bishop) → can mate iff the loser has ANY
+  //   piece to self-block with; vs a bare king it is impossible.
+  if(counts.knight===1){
+    return (loser.pawn+loser.rook+loser.queen+loser.knight+loser.bishop)===0;
+  }
+  // (6) W has only bishops (knight===0 here).
+  // Bishops on both square colors → CAN mate.
+  if(!_bishopParityIsUniform(counts.bishopParity))return false;
+  // All W bishops on one color c. If L owns any non-bishop piece, it can
+  //   self-block (knight/pawn/rook/queen sit on either color) → CAN mate.
+  if(loser.pawn>0||loser.rook>0||loser.queen>0||loser.knight>0)return false;
+  // L has only bishops (or a bare king): mate is impossible iff every L
+  //   bishop is on the SAME color c (bishopParity -1 = no L bishop at all;
+  //   -2 = mixed L colors → an opposite-color bishop exists → CAN mate).
+  return loser.bishopParity===-1||loser.bishopParity===counts.bishopParity;
 }
 
 /**
- * Scan the board and return the winner's non-king piece counts plus the
- * bishop square-color parity. Loser-side material is irrelevant to FIDE 6.9
- * — the winner's mating ability depends only on the winner's own pieces.
+ * Scan the board and return one side's non-king piece counts plus the bishop
+ * square-color parity. Despite the historical name, this is a generic
+ * per-color scanner — v1.2.3 round-49 calls it for BOTH the winner and the
+ * loser, because FIDE 6.9 mating ability also depends on loser pieces that
+ * can self-block their own king's escape squares.
  *
  * @param {Array} board - 8×8 array of pieces (or null)
- * @param {string} winnerColor - 'white' | 'black'
+ * @param {string} winnerColor - 'white' | 'black' (the side to scan)
  * @returns {Object} {pawn,knight,bishop,rook,queen,king,bishopParity}
  *   bishopParity: -1 = no bishop seen; 0/1 = light/dark uniform; -2 = mixed
  */
@@ -2601,12 +2654,13 @@ function _scanWinnerMaterial(board,winnerColor){
 }
 
 /**
- * Returns true iff all bishops the winner owns sit on the SAME square color.
- * Used by the FIDE 6.9 K+B+B same-color rule: K+B+B(uniform color) vs K cannot
- * force mate (the enemy king escapes to the opposite-color squares).
+ * Returns true iff all bishops a side owns sit on the SAME square color.
+ * Used by the FIDE 6.9 matrix case (6) in winnerLacksMatingMaterial:
+ * a winner whose bishops are all on one color c can only be denied mate
+ * when every loser piece is itself a color-c bishop.
  * bishopParity === -2 means mixed colors; any other non-negative value means
- * uniform (or no bishops, in which case the caller's `bishop>=2` guard fails
- * first).
+ * uniform (or no bishops, in which case the caller's bishop-presence guard
+ * fails first).
  */
 function _bishopParityIsUniform(bishopParity){
   return bishopParity>=0;
@@ -2905,11 +2959,6 @@ for(let r=0;r<8;r++)for(let c=0;c<8;c++){const p=s.board[r][c];if(p){if(p.type==
 //   pass, breaking the schema consumers rely on.
 s.castlingRights={whiteKingside:false,whiteQueenside:false,blackKingside:false,blackQueenside:false,whiteKingsideRookFile:null,whiteQueensideRookFile:null,blackKingsideRookFile:null,blackQueensideRookFile:null};
 syncHash(s);
-// v1.0.2 PERF (audit): bump boardVersion on setup-mode board mutations
-//   (piece placement/deletion/clear-board/reset-board). round-42 42-9:
-//   _updateBoardIncremental was removed in round-20; no current readers —
-//   counter retained as snapshot metadata.
-s.boardVersion=(s.boardVersion||0)+1;
 }
 
 // NOTE: All position evaluation comes exclusively from Stockfish18. No JS-side eval code.
@@ -2981,8 +3030,16 @@ if(gameClocks !== undefined&&gameClocks&&typeof AndroidBridge.engineGoTimed==='f
       //   command; silence left the user staring at a hung AI with no toast.
       console.error('engineGo fallback failed:',error);
       showToast(T('engine_unavailable_hint'));
+      isAIThinking=false;_aiBarInfo='';render();
     }}
-    isAIThinking=false;_aiBarInfo='';render();
+    // v1.2.3 round-48 (BUG-8): on SUCCESSFUL fallback dispatch, KEEP
+    //   isAIThinking=true — onBestMove clears it when the engine answers, and
+    //   the 360s safety timer stays armed as the fallback. The old
+    //   unconditional clear here (a) disarmed the safety timer's
+    //   `if(isAIThinking)` guard (a lost engine → permanently silent AI), and
+    //   (b) defeated doAIMove()'s isAIThinking early-return while currentTurn
+    //   was still the AI side, so any reentrant doAIMove (e.g. via exitReview)
+    //   would dispatch a SECOND go command against the in-flight search.
   }
   return;
 }

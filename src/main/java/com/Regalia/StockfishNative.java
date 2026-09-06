@@ -264,6 +264,20 @@ public class StockfishNative {
     private volatile int _lastEvalDepth = 0;
     // v1.0.4 Rev33: seldepth (selective search depth / tactical depth) for eval display.
     private volatile int _lastEvalSeldepth = 0;
+    // v1.2.3 round-49 (review-3 F1 / T1): fen of the CURRENT eval request,
+    //   echoed back as the 8th onEngineEval parameter so the JS batch guard
+    //   can compare the callback's position identity against its dispatch
+    //   record (_batchLastDispatched.fen). The old JS check re-derived the
+    //   expected fen from the CURRENT step — an identity that a late callback
+    //   from a previous step always passed, letting step N's score be cached
+    //   as step N+1's result.
+    //   Lifecycle: overwritten AFTER stopAndWaitForBestmove() in every
+    //   STATE_EVAL entry point (engineEval / engineEvalDeep / engineGoDepth)
+    //   so a stale bestmove consumed by stopAndWait still carries the OLD
+    //   fen (JS drops it). Deliberately NOT cleared in handleBestMove — a
+    //   duplicate/late callback must keep carrying the old fen (a cleared
+    //   value would reach JS as '' and degrade to the legacy identity check).
+    private volatile String _lastEvalFen = null;
 
     // Stored WDL (Win/Draw/Loss) data during STATE_EVAL
     private volatile int _storedWdlW = -1;
@@ -896,6 +910,7 @@ public class StockfishNative {
                 synchronized (stateLock) {
                     currentState = STATE_EVAL;
                 }
+                _lastEvalFen = fen; // v1.2.3 round-49 (T1): see field doc — must be AFTER stopAndWaitForBestmove
                 _storedEvalCp = null;
                 _storedEvalMate = null;
                 _lastEvalDepth = 0; _lastEvalSeldepth = 0; // v1.0.4 Rev33: reset seldepth too
@@ -1225,6 +1240,7 @@ public class StockfishNative {
                 synchronized (stateLock) {
                     currentState = STATE_EVAL;
                 }
+                _lastEvalFen = fen; // v1.2.3 round-49 (T1): see field doc — must be AFTER stopAndWaitForBestmove
                 _storedEvalCp = null;
                 _storedEvalMate = null;
                 _lastEvalDepth = 0; _lastEvalSeldepth = 0; // v1.0.4 Rev33: reset seldepth too
@@ -1267,6 +1283,7 @@ public class StockfishNative {
                 _lastEvalDepth = 0; _lastEvalSeldepth = 0; // v1.0.4 Rev33: reset seldepth too
                 _storedWdlW = -1; _storedWdlD = -1; _storedWdlL = -1;
                 _evalDepthLimit = 22;
+                _lastEvalFen = fen; // v1.2.3 round-49 (T1): record AFTER stopAndWaitForBestmove — see field doc
                 // v1.2.3 P1 (Round 17 P1-3 / Round 18 A-P1-2): Skip the
                 //   forceFullStrength() + applyEvalModeOptions() setoption
                 //   storm when inside a batch — the batch's begin-hook already
@@ -1551,11 +1568,14 @@ public class StockfishNative {
         try {
             ApplicationInfo appInfo = context.getApplicationInfo();
             String nativeLibDir = appInfo.nativeLibraryDir;
-            Log.i(TAG, "nativeLibraryDir: " + nativeLibDir);
+            // v1.2.3 round-48 (SEC-6): downgraded i/w -> d — full private paths
+            //   must not reach release logcat (proguard-rules.pro strips only
+            //   Log.v/d via -assumenosideeffects). Boolean state is kept.
+            Log.d(TAG, "nativeLibraryDir: " + nativeLibDir);
 
             if (nativeLibDir != null && !nativeLibDir.isEmpty()) {
                 File libFile = new File(nativeLibDir, ENGINE_LIB_NAME);
-                Log.i(TAG, "Looking for engine at: " + libFile.getAbsolutePath()
+                Log.d(TAG, "Looking for engine at: " + libFile.getAbsolutePath()
                         + " exists=" + libFile.exists()
                         + " canRead=" + libFile.canRead()
                         + " canExecute=" + libFile.canExecute()
@@ -1567,7 +1587,7 @@ public class StockfishNative {
                         currentEnginePath = libFile.getAbsolutePath();
                         return libFile;
                     } else {
-                        Log.w(TAG, "Engine in nativeLibraryDir failed ELF verification: " + libFile.getAbsolutePath());
+                        Log.d(TAG, "Engine in nativeLibraryDir failed ELF verification: " + libFile.getAbsolutePath());
                     }
                 }
 
@@ -1575,7 +1595,7 @@ public class StockfishNative {
                 File libDir = new File(nativeLibDir);
                 if (libDir.exists() && libDir.isDirectory()) {
                     String[] files = libDir.list();
-                    Log.w(TAG, "nativeLibraryDir contents: " + (files != null ? Arrays.toString(files) : "null"));
+                    Log.d(TAG, "nativeLibraryDir contents: " + (files != null ? Arrays.toString(files) : "null"));
                 }
             }
         } catch (Throwable e) {
@@ -2698,12 +2718,20 @@ public class StockfishNative {
             case STATE_EVAL:
                 // v1.0.4 Rev33: added _lastEvalSeldepth as 7th param to onEngineEval
                 // so the eval bar can display "D15 SD22" (depth + tactical depth).
+                // v1.2.3 round-49 (review-3 F1 / T1): added _lastEvalFen as 8th
+                //   param — the fen of the request this result belongs to. JS
+                //   compares it against its per-step dispatch record to reject
+                //   late callbacks from a previous batch step (the old
+                //   gen/step/fen re-derivation check was an identity and could
+                //   not tell two steps apart). escapeJsString(null) -> '' — JS
+                //   treats an empty/missing 8th param as "legacy runtime" and
+                //   falls back to the old check.
                 if (_storedEvalMate != null) {
-                    postJsCallback("onEngineEval(" + _storedEvalCp + ", " + _storedEvalMate + ", " + _lastEvalDepth + ", " + _storedWdlW + ", " + _storedWdlD + ", " + _storedWdlL + ", " + _lastEvalSeldepth + ")");
+                    postJsCallback("onEngineEval(" + _storedEvalCp + ", " + _storedEvalMate + ", " + _lastEvalDepth + ", " + _storedWdlW + ", " + _storedWdlD + ", " + _storedWdlL + ", " + _lastEvalSeldepth + ", " + escapeJsString(_lastEvalFen) + ")");
                 } else if (_storedEvalCp != null) {
-                    postJsCallback("onEngineEval(" + _storedEvalCp + ", null, " + _lastEvalDepth + ", " + _storedWdlW + ", " + _storedWdlD + ", " + _storedWdlL + ", " + _lastEvalSeldepth + ")");
+                    postJsCallback("onEngineEval(" + _storedEvalCp + ", null, " + _lastEvalDepth + ", " + _storedWdlW + ", " + _storedWdlD + ", " + _storedWdlL + ", " + _lastEvalSeldepth + ", " + escapeJsString(_lastEvalFen) + ")");
                 } else {
-                    postJsCallback("onEngineEval(0, null, " + _lastEvalDepth + ", " + _storedWdlW + ", " + _storedWdlD + ", " + _storedWdlL + ", " + _lastEvalSeldepth + ")");
+                    postJsCallback("onEngineEval(0, null, " + _lastEvalDepth + ", " + _storedWdlW + ", " + _storedWdlD + ", " + _storedWdlL + ", " + _lastEvalSeldepth + ", " + escapeJsString(_lastEvalFen) + ")");
                 }
                 postJsCallback("onMultiPVResult(" + multiPVJson + ")");
                 _storedEvalCp = null;
@@ -3541,6 +3569,23 @@ public class StockfishNative {
                 }
             }
         });
+    }
+
+    /**
+     * v1.2.3 round-49 (review-4 P3-3): JS-side receipt that a BACK press on
+     *   MainActivity was consumed by handleBackPress() (ANY branch, including
+     *   its intentional no-op tail — the ack wrapper fires from a JS `finally`,
+     *   see MainActivity.handleBackKeyPress). Sets MainActivity's
+     *   backCloseHandled flag so the 250ms hung-renderer fallback does NOT
+     *   finish() the activity. Mirrors StatsActivity.ackStatsBackHandled
+     *   (round-44 E4 / round-46 CR#26).
+     */
+    @JavascriptInterface
+    public void ackMainBackHandled() {
+        Activity activity = activityRef.get();
+        if (activity instanceof MainActivity) {
+            ((MainActivity) activity).notifyBackHandled();
+        }
     }
 
     // ===================== ENGINE CONFIGURATION API =====================
@@ -4504,6 +4549,20 @@ public class StockfishNative {
             }
         } catch (Throwable e) {
             Log.e(TAG, "Failed to extract engine from APK", e);
+            // v1.2.3 round-49 (review-4 P2-2): best-effort delete the partially
+            //   written destFile. A truncated binary >5MB would pass the cached-
+            //   file check above (length > MIN_ENGINE_BINARY_SIZE && ELF magic —
+            //   the magic lives in the file head, so a truncation keeps it) and
+            //   poison every future start (exec dies → handshake timeout →
+            //   cleanupFailedEngine → repeat, with no self-heal). Deleting here
+            //   makes the next start re-extract from a clean slate.
+            try {
+                if (destFile.exists() && !destFile.delete()) {
+                    Log.w(TAG, "Failed to delete partial engine file: " + destFile.getAbsolutePath());
+                }
+            } catch (Throwable delErr) {
+                Log.w(TAG, "delete of partial engine file threw", delErr);
+            }
         }
         return null;
     }
@@ -4556,6 +4615,16 @@ public class StockfishNative {
             return null;
         } catch (Throwable e) {
             Log.w(TAG, "Failed to extract engine from assets", e);
+            // v1.2.3 round-49 (review-4 P2-2): best-effort delete the partially
+            //   written destFile (same rationale as extractEngineFromApk —
+            //   a truncated binary can pass the cached-file length+ELF check).
+            try {
+                if (destFile.exists() && !destFile.delete()) {
+                    Log.w(TAG, "Failed to delete partial engine file: " + destFile.getAbsolutePath());
+                }
+            } catch (Throwable delErr) {
+                Log.w(TAG, "delete of partial engine file threw", delErr);
+            }
             return null;
         }
 
@@ -4717,6 +4786,15 @@ public class StockfishNative {
 
     @JavascriptInterface
     public String listFiles(String dirPath) {
+        // v1.2.3 round-49 (review-4 P3-6): same sandbox gate as writeTextFile/
+        //   readTextFile — without it JS could enumerate names/sizes of any
+        //   process-readable directory. Returns the helper's failure-mode
+        //   value ("[]") so the JS file browser renders an empty listing
+        //   instead of throwing on JSON.parse(null).
+        if (!_jsBridgeGateway.isPathInSandbox(dirPath)) {
+            Log.w(TAG, "listFiles: path rejected by sandbox check");
+            return "[]";
+        }
         return _fileIoHelper.listFiles(dirPath);
     }
 
@@ -4727,6 +4805,12 @@ public class StockfishNative {
 
     @JavascriptInterface
     public String getParentPath(String path) {
+        // v1.2.3 round-49 (review-4 P3-6): sandbox gate (see listFiles above).
+        //   Returns the helper's failure-mode value ("") on rejection.
+        if (!_jsBridgeGateway.isPathInSandbox(path)) {
+            Log.w(TAG, "getParentPath: path rejected by sandbox check");
+            return "";
+        }
         return _fileIoHelper.getParentPath(path);
     }
 

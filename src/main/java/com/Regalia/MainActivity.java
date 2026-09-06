@@ -68,6 +68,20 @@ public class MainActivity extends Activity {
     private static final int COLOR_GOLD = 0xFFFFD700;
     private static final int COLOR_CREAM = 0xFFF5E6C8;
 
+    // v1.2.3 round-49 (ROB-1): minimum Chromium major the bundled JS runs on.
+    //   Parse floor is 80 (optional chaining `?.` x325 / `??` x21 across
+    //   chess.src — below that the inlined <script> fails to parse at all).
+    //   Raised to 84 because game-logic.js:1364 calls
+    //   Element.getAnimations() (Chromium 84+) with only a try/catch, NOT a
+    //   feature guard (no `typeof el.getAnimations==='function'` check), so
+    //   80-83 would throw a runtime TypeError in the board-animation path.
+    //   (Known residual, documented in round-49 fix notes: stats.html uses
+    //   String.prototype.replaceAll — Chromium 85+ — unguarded in its SAN
+    //   parser; a Chromium-84 WebView passes this gate but its stats page is
+    //   still broken. Follow-up: replace those two replaceAll calls with
+    //   regex .replace, or raise this gate to 85.)
+    static final int MIN_SUPPORTED_CHROME_MAJOR = 84;
+
     // v1.2.3 round-44 (B5): volatile — written on the main thread (onCreate/
     //   showFallbackUI/onDestroy) and read via getWebView() from
     //   StockfishNative's engine/JS-binder threads.
@@ -110,10 +124,141 @@ public class MainActivity extends Activity {
     //   the user in fallback mode (webView was still alive but invisible).
     private volatile boolean _isFallbackMode = false;
 
+    // v1.2.3 round-48 (BUG-2): the manifest opts into
+    //   android:enableOnBackInvokedCallback="true" — per AOSP lint
+    //   GestureBackNavigation, that suppresses KeyEvent.KEYCODE_BACK dispatch
+    //   on API 33+, so without a registered OnBackInvokedCallback the system
+    //   would just finish the Activity and the whole JS back-handling chain
+    //   (handleBackPress dialog priority etc.) would be bypassed. Register a
+    //   PLATFORM android.window callback (no androidx dependency — the project
+    //   has none) at PRIORITY_DEFAULT; API <= 32 keeps using onKeyDown().
+    //   Unregistered in onDestroy().
+    private android.window.OnBackInvokedCallback _backInvokedCallback = null;
+
+    // v1.2.3 round-49 (review-4 P3-3): BACK ack fallback, ported from
+    //   StatsActivity (round-44 E4 / round-46 CR#26). evaluateJavascript only
+    //   QUEUES the script — a hung renderer never throws and never runs the
+    //   ack, so without a timeout the user would be trapped by the
+    //   unconditional `return true` below. The JS wrapper acks via
+    //   AndroidBridge.ackMainBackHandled() from a `finally` whenever
+    //   handleBackPress actually ran (any branch, including its intentional
+    //   no-op tail — so the current "BACK with nothing open = no-op" UX is
+    //   preserved). No ack within BACK_FALLBACK_MS → renderer presumed hung →
+    //   finish(). Also: when handleBackPress is undefined (page broken /
+    //   still loading), no ack is sent and the fallback finishes — a broken
+    //   page must not trap the user either.
+    private final java.util.concurrent.atomic.AtomicBoolean backCloseHandled =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+    private Handler backFallbackHandler;
+    private static final int BACK_FALLBACK_MS = 250; // same as StatsActivity
+
+    /**
+     * v1.2.3 round-49 (review-4 P3-3): called from
+     *   StockfishNative.ackMainBackHandled() (JS binder thread) when the
+     *   BACK-dispatch JS actually executed. Package-private — no new public
+     *   API. AtomicBoolean is thread-safe, no main-thread hop needed.
+     */
+    void notifyBackHandled() {
+        backCloseHandled.set(true);
+    }
+
+    /**
+     * v1.2.3 round-48 (BUG-2): register the platform OnBackInvokedCallback on
+     *   API 33+ (TIRAMISU). The callback body reuses handleBackKeyPress() — the
+     *   exact same logic as the onKeyDown(KEYCODE_BACK) branch — and finishes
+     *   the Activity when that logic declines to consume the press.
+     */
+    private void registerBackInvokedCallback() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            try {
+                _backInvokedCallback = new android.window.OnBackInvokedCallback() {
+                    @Override
+                    public void onBackInvoked() {
+                        if (!handleBackKeyPress()) {
+                            finish();
+                        }
+                    }
+                };
+                getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+                        android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+                        _backInvokedCallback);
+            } catch (Throwable e) {
+                Log.w(TAG, "OnBackInvokedCallback registration failed", e);
+                _backInvokedCallback = null;
+            }
+        }
+    }
+
+    /**
+     * v1.2.3 round-48 (BUG-2): core BACK handling, extracted from onKeyDown so
+     *   the API 33+ OnBackInvokedCallback can reuse it verbatim.
+     *   Returns true when the press was consumed (dispatched to the WebView);
+     *   false means the caller must apply the system default
+     *   (onKeyDown: super.onKeyDown → finish; onBackInvoked: finish()).
+     */
+    private boolean handleBackKeyPress() {
+        // v1.2.3 round-31 (PR52 CodeRabbit stability): if showFallbackUI()
+        //   replaced the content view, the WebView is hidden but still
+        //   alive in memory — dispatching BACK to it would call a JS
+        //   handler on an invisible page and trap the user. Route to
+        //   the system default instead so the system finishes the Activity.
+        //   The pre-round-31 `webView != null` check only covered the
+        //   "WebView creation failed" path; the "WebView exists but
+        //   fallback UI replaced it" path was missed.
+        if (_isFallbackMode) {
+            return false;
+        }
+        if (webView != null) {
+            // v1.2.3 round-49 (review-4 P3-3): arm the ack flag BEFORE
+            //   dispatching, then schedule the 250ms fallback (see field doc).
+            backCloseHandled.set(false);
+            try {
+                webView.evaluateJavascript(
+                    "if(typeof handleBackPress==='function'){try{handleBackPress();}finally{" +
+                    "if(typeof AndroidBridge!=='undefined'&&AndroidBridge.ackMainBackHandled){" +
+                    "try{AndroidBridge.ackMainBackHandled();}catch(e){}}}}",
+                    null);
+            } catch (Throwable e) {
+                // v1.2.3 round-48 (ROB-5): the JS bridge is broken — do NOT
+                //   swallow BACK (the old code returned true unconditionally,
+                //   trapping the user). Return false so the caller applies the
+                //   system default (finish), matching the _isFallbackMode and
+                //   webView==null branches.
+                Log.w(TAG, "evaluateJavascript for back key failed", e);
+                return false;
+            }
+            // v1.2.3 round-49 (review-4 P3-3): hung-renderer fallback. The
+            //   ack above only proves the JS RAN; if the renderer is hung the
+            //   script never executes, no ack arrives, and we finish here.
+            //   backCloseHandled is also left true-free when JS handled BACK
+            //   by closing the app itself (exitApp → finish → isFinishing()).
+            if (backFallbackHandler != null) {
+                backFallbackHandler.postDelayed(new Runnable() {
+                    @Override public void run() {
+                        if (!backCloseHandled.get() && !isFinishing() && !isDestroyed) {
+                            Log.w(TAG, "BACK fallback: no JS ack within " + BACK_FALLBACK_MS + "ms — finishing");
+                            finish();
+                        }
+                    }
+                }, BACK_FALLBACK_MS);
+            }
+            return true;
+        }
+        // v1.2.3 round-18 (bug fix): WebView creation failed (fallback
+        //   error UI is showing) — do NOT consume BACK; let the system
+        //   finish the activity so the user is not trapped.
+        return false;
+    }
+
     @SuppressLint("SetJavaScriptEnabled")
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+        // v1.2.3 round-48 (BUG-2): register BEFORE onCreateInternal so the
+        //   callback is active even if internal init falls into the fallback
+        //   UI (whose BACK must still finish the Activity).
+        registerBackInvokedCallback();
 
         // v18.4.1 CRITICAL FIX: Wrap ENTIRE onCreate in try-catch to prevent hard crash.
         // Previously, any uncaught exception here would crash the app immediately (闪退).
@@ -288,6 +433,33 @@ public class MainActivity extends Activity {
         // Set WebChromeClient
         webView.setWebChromeClient(new WebChromeClient());
 
+        // v1.2.3 round-49 (ROB-1): WebView version gate BEFORE any loadUrl.
+        //   The bundled JS uses optional chaining (`?.`, 325x) and nullish
+        //   coalescing (`??`) which need Chromium 80+ just to PARSE — on an
+        //   older WebView the whole inlined <script> dies at parse time, and
+        //   because engine readiness is a Java-side state the init watchdog
+        //   exits early (isEngineReady) without ever triggering the native
+        //   fallback: permanent white screen. Below the gate, skip loadUrl
+        //   and go straight to showFallbackUI with an actionable message.
+        //   Threshold rationale: see MIN_SUPPORTED_CHROME_MAJOR below.
+        int chromeMajor;
+        try {
+            chromeMajor = extractChromeMajorFromUA(webView.getSettings().getUserAgentString());
+        } catch (Throwable e) {
+            // UA unreadable — conservative: treat as too old, but log for diagnosis.
+            Log.w(TAG, "WebView UA read failed — treating as too old", e);
+            chromeMajor = -1;
+        }
+        if (chromeMajor < 0) {
+            Log.w(TAG, "WebView UA missing/unparseable — treating as too old (conservative)");
+        }
+        if (chromeMajor < MIN_SUPPORTED_CHROME_MAJOR) {
+            Log.w(TAG, "WebView too old: Chrome major=" + chromeMajor
+                    + " < " + MIN_SUPPORTED_CHROME_MAJOR + " — showing fallback UI");
+            showFallbackUI(webViewTooOldMessage());
+            return;
+        }
+
         // Initialize Stockfish engine
         try {
             // v1.2.3 round-44 (B10, KNOWN DESIGN DEBT): StockfishNative is
@@ -332,6 +504,8 @@ public class MainActivity extends Activity {
         // Setup delayed init retry as safety net — if onPageFinished fails to trigger
         // or engine init hangs, this will retry initialization
         initRetryHandler = new Handler(Looper.getMainLooper());
+        // v1.2.3 round-49 (review-4 P3-3): handler for the BACK ack fallback.
+        backFallbackHandler = new Handler(Looper.getMainLooper());
         scheduleInitRetry();
     }
 
@@ -529,6 +703,43 @@ public class MainActivity extends Activity {
         }
     }
 
+    /**
+     * v1.2.3 round-49 (ROB-1): extract the Chromium major version from the
+     *   WebView user-agent string ("Mozilla/5.0 ... Chrome/84.0.4147.89 ...").
+     *   The UA is the most reliable cross-provider signal: both the
+     *   Chrome-backed WebView and Android System WebView stamp "Chrome/<n>"
+     *   into the default UA, whereas WebViewPackage.getVersionName() is
+     *   API 26+ only and its package version does not always equal the
+     *   Chromium major. Package-private static (no new public API) so
+     *   StatsActivity applies the identical gate.
+     *   @return the major version, or -1 when the UA is null/unparseable
+     *           (callers treat -1 as "too old" — conservative — but log it).
+     */
+    static int extractChromeMajorFromUA(String ua) {
+        if (ua == null || ua.isEmpty()) {
+            return -1;
+        }
+        try {
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("Chrome/(\\d+)").matcher(ua);
+            if (m.find()) {
+                return Integer.parseInt(m.group(1));
+            }
+        } catch (Throwable ignored) {}
+        return -1;
+    }
+
+    // v1.2.3 round-49 (ROB-1): bilingual (zh + en, both concatenated) gate
+    //   message — follows the existing showFallbackUI convention of hardcoded
+    //   bilingual strings (see the engine-init-failure call above), NOT
+    //   strings.xml. Also reused by StatsActivity's Toast fallback.
+    static String webViewTooOldMessage() {
+        return "系统WebView版本过旧，无法运行（需要 Chrome/Android System WebView ≥ "
+                + MIN_SUPPORTED_CHROME_MAJOR
+                + "）。请前往应用商店更新“Android System WebView”后重试。"
+                + " The system WebView is too old (requires Chrome/Android System WebView ≥ "
+                + MIN_SUPPORTED_CHROME_MAJOR
+                + "). Please update \"Android System WebView\" from the app store and try again.";
+    }
     /**
      * v18.4.6 CRITICAL FIX: Completely rewrote enableImmersiveMode().
      *
@@ -826,6 +1037,17 @@ public class MainActivity extends Activity {
         // OPT: P0 - Set destroyed flag first so delayed callbacks check it before executing.
         isDestroyed = true;
 
+        // v1.2.3 round-48 (BUG-2): unregister the API 33+ back callback so the
+        //   dispatcher cannot invoke a destroyed Activity.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && _backInvokedCallback != null) {
+            try {
+                getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(_backInvokedCallback);
+            } catch (Throwable e) {
+                Log.w(TAG, "OnBackInvokedCallback unregister failed", e);
+            }
+            _backInvokedCallback = null;
+        }
+
         // v1.0.5 Round-6 Rev49: Stop sensor-based stabilization and release sensors.
         // v1.2.3 round-31 (PR52 CodeRabbit stability): acquire _stabilizationLock
         //   so toggleStabilization() on the JS binder thread can't be mid-flight
@@ -844,6 +1066,11 @@ public class MainActivity extends Activity {
         if (initRetryHandler != null) {
             initRetryHandler.removeCallbacksAndMessages(null);
             initRetryHandler = null;
+        }
+        // v1.2.3 round-49 (review-4 P3-3): same for the BACK ack fallback handler.
+        if (backFallbackHandler != null) {
+            backFallbackHandler.removeCallbacksAndMessages(null);
+            backFallbackHandler = null;
         }
         // v1.2.3 round-44 (B1/B7): final flush — FORCED (ignores the dedup
         //   flag): onDestroy may be the last callback before process death and
@@ -988,28 +1215,15 @@ public class MainActivity extends Activity {
     @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if (keyCode == KeyEvent.KEYCODE_BACK) {
-            // v1.2.3 round-31 (PR52 CodeRabbit stability): if showFallbackUI()
-            //   replaced the content view, the WebView is hidden but still
-            //   alive in memory — dispatching BACK to it would call a JS
-            //   handler on an invisible page and trap the user. Route to
-            //   super instead so the system finishes the Activity.
-            //   The pre-round-31 `webView != null` check only covered the
-            //   "WebView creation failed" path; the "WebView exists but
-            //   fallback UI replaced it" path was missed.
-            if (_isFallbackMode) {
-                return super.onKeyDown(keyCode, event);
-            }
-            if (webView != null) {
-                try {
-                    webView.evaluateJavascript("if(typeof handleBackPress==='function'){handleBackPress();}", null);
-                } catch (Throwable e) {
-                    Log.w(TAG, "evaluateJavascript for back key failed", e);
-                }
+            // v1.2.3 round-48 (BUG-2/ROB-5): logic extracted to
+            //   handleBackKeyPress() (shared with the API 33+
+            //   OnBackInvokedCallback — on API 33+ this onKeyDown branch no
+            //   longer receives KEYCODE_BACK at all). A false return
+            //   (fallback mode / WebView gone / evaluateJavascript threw)
+            //   routes to super so the system finishes the Activity.
+            if (handleBackKeyPress()) {
                 return true;
             }
-            // v1.2.3 round-18 (bug fix): WebView creation failed (fallback
-            //   error UI is showing) — do NOT consume BACK; let the system
-            //   finish the activity so the user is not trapped.
             return super.onKeyDown(keyCode, event);
         }
         return super.onKeyDown(keyCode, event);
@@ -1033,6 +1247,24 @@ public class MainActivity extends Activity {
                     stockfishEngine.cancelPendingExport();
                 }
             } catch (Exception ignored) {}
+            // v1.2.3 round-49 (BUG-19): symmetry with the export-cancel path
+            //   above — the two IMPORT pickers previously returned silently.
+            //   Notify JS via the typeof-guarded onImportCancelled hook. The
+            //   hook is currently log-only: both import chains open the SAF
+            //   picker without setting any pending/"importing" state
+            //   (verified round-49: importPGNFile → AndroidBridge.openPGNFilePicker,
+            //   importEngineSettings → bridge.openSystemFilePicker), so there
+            //   is nothing to clear — this just completes the notification
+            //   symmetry and leaves a diagnostic trace. Fired even when
+            //   stockfishEngine is null (the JS side does not depend on it).
+            if (webView != null && (requestCode == StockfishNative.REQUEST_CODE_IMPORT_SETTINGS
+                    || requestCode == StockfishNative.REQUEST_CODE_IMPORT_PGN)) {
+                try {
+                    webView.evaluateJavascript("try{if(typeof onImportCancelled==='function')onImportCancelled('"
+                            + (requestCode == StockfishNative.REQUEST_CODE_IMPORT_SETTINGS ? "settings" : "pgn")
+                            + "');}catch(e){}", null);
+                } catch (Throwable ignored) {}
+            }
             return;
         }
         // v1.2.3 round-44 (B4): engine bridge missing — notify JS so the
