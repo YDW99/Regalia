@@ -195,7 +195,7 @@ Regalia/
 │   ├── v2/                     # v2 acceptance criteria (round-53 SonarCloud triage)
 │   │   └── round53-sonar-triage.js # 19 structural assertions (F1-F6; round-54: F2d/F4b tightened)
 │   ├── v3/                     # v3 acceptance criteria (round-54 PR #56 AI-review triage)
-│   │   └── round54-pr56-triage.js # 27 structural assertions (G1-G9)
+│   │   └── round54-pr56-triage.js # 29 structural assertions (G1-G9; round-54b: G4a updated + G6d/G6e added)
 │   └── runs/                   # Timestamped run artifacts (append-only logs + RESULT.md)
 ├── NOTICE                      # Third-party component notices + version history
 ├── NOTICE-DroidFish            # Original DroidFish notice
@@ -368,6 +368,19 @@ backup_rules.xml / data_extraction_rules.xml deleted, CMake
 3.22.1→3.31.6.
 
 Full development log: [worklog.md](worklog.md) (newest round first).
+
+### Round-54b update (2026-10-05) — SonarCloud follow-up: 2 fixed / 2 false positives
+
+- **Scope**: SonarCloud re-analysis of the round-54 tree surfaced 4 issues.
+  2 real (both introduced by the round-54 edits, fixed): a dangling Javadoc
+  in EngineProcessManager (S8491 — waitForBounded moved above killProcess)
+  and a redundant typeof guard in ai-bridge.js (S7741 — _reviewAnalyzeStep
+  is same-module, direct comparison). 2 false positives kept: S125
+  (explanatory comment, not commented-out code) and S2486 (a pre-existing
+  catch that already has a fallback assignment).
+- **Verifier**: v3 strengthened to 29 assertions (G4a updated, G6d/G6e
+  added) — 29/29 PASS; v2 19/19 + v1 29/29 regression PASS; chess.html
+  rebuilt (24,360 lines); compileReleaseJavaWithJavac BUILD SUCCESSFUL.
 
 ### Round-54 update (2026-10-05) — PR #56 AI-review triage: 12 fixed / 13 false positives
 

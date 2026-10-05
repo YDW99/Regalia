@@ -1,5 +1,15 @@
 # Privacy Policy — Regalia
 
+## Round-54b changes (2026-10-05)
+
+**No new permissions, no new network endpoints, no new data collection.**
+SonarCloud follow-up on the round-54 tree: a Javadoc reorder
+(EngineProcessManager) and a typeof-guard simplification (ai-bridge.js) —
+both are pure code-quality fixes with no privacy impact. Two further
+findings triaged as false positives (an explanatory comment flagged as
+"commented-out code"; a pre-existing catch that already has a fallback
+assignment).
+
 ## Round-54 changes (2026-10-05)
 
 **No new permissions, no new network endpoints, no new data collection.**

@@ -1,0 +1,4 @@
+gradle compileReleaseJavaWithJavac --no-daemon
+ANDROID_HOME=/tmp/sdk (JDK 17.0.20.1, NDK 27.2.12479018, build-tools 35+34, platform-35)
+keystore env vars present (signing config active)
+Result: BUILD SUCCESSFUL in 1m 24s — after the S8491 Javadoc reorder.

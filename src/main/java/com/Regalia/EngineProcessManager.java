@@ -144,11 +144,6 @@ public class EngineProcessManager {
     }
 
     /**
-     * v1.2.3 round-44 (C2): forcibly kill a spawned process after an interrupt.
-     * destroyForcibly() requires API 26 (minSdk is 23); below that, destroy()
-     * is the strongest available signal.
-     */
-    /**
      * v1.2.3 round-54 (PR56 CR#6): Process.waitFor(long, TimeUnit) requires
      * API 26 while minSdk is 23 — on API 23-25 the call throws
      * NoSuchMethodError (an Error subclass, so the catch (Exception) around
@@ -167,6 +162,11 @@ public class EngineProcessManager {
         }
     }
 
+    /**
+     * v1.2.3 round-44 (C2): forcibly kill a spawned process after an interrupt.
+     * destroyForcibly() requires API 26 (minSdk is 23); below that, destroy()
+     * is the strongest available signal.
+     */
     private static void killProcess(Process p) {
         if (p == null) return;
         try {

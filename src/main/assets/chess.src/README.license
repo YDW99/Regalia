@@ -1,3 +1,14 @@
+v1.2.3 round-54b (2026.10.5): SonarCloud follow-up — 1 real fix / 1 false positive.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - ai-bridge.js (AGPL v3): S7741 — the round-54 _bgDone line carried a
+    copy-pasted `typeof _reviewAnalyzeStep!=='undefined'` guard;
+    _reviewAnalyzeStep is declared in THIS module (~line 388), so a direct
+    `!== undefined` comparison suffices. Fixed.
+  - False positive kept: S2486 at ai-bridge.js:4515 (2026-06-27, pre-existing)
+    — the _convertPVtoSAN catch has a real fallback assignment (raw PV,
+    truncated to 4 moves); not an empty catch.
+  - License classification: unchanged.
+
 v1.2.3 round-54 (2026.10.5): PR #56 AI-review JS fixes — game-logic/ui-interactions/ai-bridge.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - game-logic.js (GPL v3, DroidFish-derived): the four engineGo/

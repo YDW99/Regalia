@@ -53,3 +53,4 @@ Round-54 acceptance (GitHub PR #56 AI-review triage):
   void-prefixed/declaration sites; v2 F4b scopes the catch check to the
   try block containing onEvalDeepBatchEnded().
 - 2026-10-05T0500Z · v3 · runs/2026-10-05T0500Z-v3/ · round-54 triage 27/27 PASS + v2 19/19 PASS + v1 29/29 PASS + compileReleaseJavaWithJavac BUILD SUCCESSFUL
+- 2026-10-05T0530Z · v3 · runs/2026-10-05T0530Z-v3/ · round-54b SonarCloud follow-up: v3 strengthened to 29 assertions (G4a direct comparison, G6d dangling-Javadoc, G6e typeof-guard absence) 29/29 PASS + v2 19/19 + v1 29/29 + compile BUILD SUCCESSFUL

@@ -10447,7 +10447,10 @@ function onEngineProgress(depth,nodes,nps,scoreCp,scoreMate,wdlW,wdlD,wdlL,selde
         //   is persisted across games (round-44 G11), so its size inflated the
         //   notification progress for later batches (CodeRabbit). Clamp to the
         //   current game length in case a hijack left the step ahead.
-        const _bgDone=(typeof _reviewAnalyzeStep!=='undefined'&&_reviewAnalyzeStep>=0)?Math.min(_reviewAnalyzeStep+1,_bgTotal):0;
+        //   _reviewAnalyzeStep is declared in THIS module (line ~388), so a
+        //   direct undefined comparison suffices (S7741; the typeof guard was
+        //   copy-paste residue from the cross-module reviewStates guard).
+        const _bgDone=(_reviewAnalyzeStep!==undefined&&_reviewAnalyzeStep>=0)?Math.min(_reviewAnalyzeStep+1,_bgTotal):0;
         _updateEngineNotification(T('analyzing_progress')+' ('+_bgDone+'/'+_bgTotal+')');
       }else{
         _updateEngineNotification(T('analyzing_ellipsis'));

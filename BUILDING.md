@@ -3,6 +3,19 @@
 > Build guide for the Regalia Android chess app (versionCode=10203, versionName="1.2.3").
 > Round-by-round build notes are appended below (newest first).
 
+## Round-54b build notes (2026-10-05)
+
+- **SonarCloud follow-up on the round-54 tree** (4 issues → 2 fixed / 2
+  false positives): EngineProcessManager waitForBounded Javadoc moved above
+  killProcess (S8491 dangling Javadoc — introduced by the round-54 insert);
+  ai-bridge.js _bgDone typeof guard replaced with a direct undefined
+  comparison (S7741 — _reviewAnalyzeStep is same-module). chess.html rebuilt
+  (24,360 lines). compileReleaseJavaWithJavac BUILD SUCCESSFUL.
+- False positives kept: S125 at EngineProcessManager:106 (explanatory
+  comment, not commented-out code); S2486 at ai-bridge.js:4515
+  (pre-existing, the catch has a real fallback assignment).
+- Verifier v3 strengthened to 29 assertions (G4a / G6d / G6e).
+
 ## Round-54 build notes (2026-10-05)
 
 - **PR #56 AI-review triage** (CodeRabbit 5 passes / GitHub Advanced

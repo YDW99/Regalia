@@ -1,3 +1,15 @@
+v1.2.3 round-54b (2026.10.5): SonarCloud follow-up — 1 real fix / 1 false positive.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - EngineProcessManager.java (AGPL v3): S8491 — the round-54 waitForBounded
+    Javadoc had been inserted between killProcess's Javadoc and its method,
+    leaving killProcess's Javadoc dangling (two Javadocs back-to-back).
+    waitForBounded (+ its Javadoc) moved ABOVE killProcess so every Javadoc
+    attaches to its declaration.
+  - False positive kept: S125 at EngineProcessManager.java:106 — the flagged
+    "commented-out code block" is the round-54 explanatory comment for
+    waitForBounded (why the API-26 gate exists), not commented-out code.
+  - License classification: unchanged.
+
 v1.2.3 round-54 (2026.10.5): PR #56 AI-review Java fixes — 6 files.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - EngineProcessManager.java (AGPL v3): Process.waitFor(2, SECONDS) is

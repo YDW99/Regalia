@@ -1,3 +1,10 @@
+v1.2.3 round-54b (2026.10.5): chess.html rebuilt (ai-bridge S7741 fix).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - chess.html (AGPL v3, combined work): rebuilt via build-chess.py after
+    the ai-bridge.js _bgDone typeof-guard fix (24,360 lines); bundle passes
+    node --check.
+  - License classification: unchanged.
+
 v1.2.3 round-54 (2026.10.5): chess.html rebuilt from the round-54 module changes; stats.html fixed.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - chess.html (AGPL v3, combined work): rebuilt via build-chess.py after

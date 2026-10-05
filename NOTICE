@@ -1,3 +1,32 @@
+Round-54b (2026-10-05) — SonarCloud follow-up on the round-54 tree: 2 fixed / 2 false positives
+=============================================================================================================
+
+SonarCloud re-analysis of the round-54 tree surfaced 4 issues:
+
+- EngineProcessManager.java:160 (S8491, dangling Javadoc) — REAL, fixed:
+  the round-54 waitForBounded Javadoc had been inserted between
+  killProcess's Javadoc and its method (two Javadocs back-to-back).
+  waitForBounded (+ Javadoc) moved above killProcess so every Javadoc
+  attaches to its declaration.
+- ai-bridge.js:3055 (S7741, typeof guard) — REAL, fixed: the round-54
+  _bgDone line carried a copy-pasted `typeof _reviewAnalyzeStep!=='undefined'`
+  guard; _reviewAnalyzeStep is declared in the SAME module (~line 388),
+  so a direct `!== undefined` comparison suffices.
+- EngineProcessManager.java:106 (S125, "commented-out code") — FALSE
+  POSITIVE, kept: the flagged block is the round-54 explanatory comment
+  for waitForBounded (why the API-26 gate exists), not commented-out code.
+- ai-bridge.js:4515 (S2486, empty catch; dated 2026-06-27, pre-existing
+  issue outside this PR's diff) — FALSE POSITIVE, kept: the
+  _convertPVtoSAN catch performs a real fallback assignment (raw PV
+  truncated to 4 moves) — it is not an empty catch.
+
+Verifier: v3 strengthened to 29 assertions (G4a updated to the direct
+comparison; G6d dangling-Javadoc check; G6e typeof-guard absence) — all
+PASS; v2 19/19 + v1 29/29 regressions PASS; chess.html rebuilt (24,360
+lines); compileReleaseJavaWithJavac BUILD SUCCESSFUL.
+
+Version: versionCode=10203, versionName="1.2.3" (unchanged).
+
 Round-54 (2026-10-05) — PR #56 AI-review triage: 12 fixed / 13 false positives
 =============================================================================================================
 

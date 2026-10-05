@@ -1,3 +1,26 @@
+# Regalia v1.2.3 — round-54b 工作日志（2026-10-05 UTC+8）
+
+## 任务来源
+
+SonarCloud 对 round-54 树的复分析报出 4 项问题，排查误报后精确修复。
+
+## 分诊
+
+| # | 位置 | 规则 | 结论 |
+|---|------|------|------|
+| 1 | EngineProcessManager.java:160 | S8491 悬空 Javadoc | **真实**：round-54 插入 waitForBounded 的 Javadoc 时把 killProcess 的 Javadoc 顶成悬空（两个 Javadoc 相连）。已修——waitForBounded 连同注释上移至 killProcess 之前 |
+| 2 | ai-bridge.js:3055 | S7741 typeof 守卫 | **真实**：round-54 的 _bgDone 行误用了跨模块 typeof 写法；_reviewAnalyzeStep 声明于同模块（~388 行）。已改为直接 `!== undefined` 比较 |
+| 3 | EngineProcessManager.java:106 | S125「注释代码块」 | **误报**：被标记的是 round-54 的说明性注释（解释 API-26 门的原因），非被注释的代码 |
+| 4 | ai-bridge.js:4515 | S2486 空 catch | **误报**（2026-06-27 存量问题，不在本 PR diff 内）：_convertPVtoSAN 的 catch 有真实回退赋值（原始 PV 截断显示），非空 catch |
+
+## 验证
+
+- verifier v3 收紧至 29 项断言（G4a 改直比较形式；新增 G6d 悬空 Javadoc 检查、G6e typeof 守卫缺失检查）：29/29 PASS；v2 19/19、v1 29/29 回归 PASS。
+- chess.html 重建 24,360 行 / 1,483,387 字节；bundle 语法通过。
+- compileReleaseJavaWithJavac BUILD SUCCESSFUL。
+
+**版本**：versionName "1.2.3" 不变；versionCode=10203 不变。
+
 # Regalia v1.2.3 — round-54 工作日志（2026-10-05 UTC+8）
 
 ## 任务来源

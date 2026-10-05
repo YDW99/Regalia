@@ -79,7 +79,9 @@ ok('G3b no dlgChess960SPID=null reset remains', !ui.includes('dlgChess960SPID=nu
 // G4 — ai-bridge.js
 const ab = read('src/main/assets/chess.src/ai-bridge.js');
 ok('G4a notification uses per-batch completed count (_reviewAnalyzeStep)',
-   /_bgDone=\(typeof _reviewAnalyzeStep!=='undefined'/.test(ab));
+   // round-54b: _reviewAnalyzeStep is same-module (ai-bridge.js ~388) — the
+   //   direct undefined comparison replaced the copy-pasted typeof guard.
+   /_bgDone=\(_reviewAnalyzeStep!==undefined/.test(ab));
 ok('G4b cache size no longer feeds the progress notification',
    !/analyzing_progress'\)\+'\('\+\s*_bgCached/.test(ab));
 ok('G4c openStatsPage re-checks payload after annotation drop',
@@ -107,6 +109,16 @@ ok('G6b no raw timed waitFor calls outside the waitForBounded helper',
    })());
 ok('G6c both call sites routed through waitForBounded',
    (epm.match(/waitForBounded\(p2?\);/g) || []).length === 2);
+ok('G6d no dangling Javadoc (round-54b, S8491) — every /** attaches to a declaration',
+   (() => {
+     const blocks = epm.match(/\/\*\*[\s\S]*?\*\//g) || [];
+     return blocks.every(b => {
+       const after = epm.slice(epm.indexOf(b) + b.length, epm.indexOf(b) + b.length + 400);
+       return /^\s*(?:@\w+\s+)*(?:public|private|protected|static|final|class|void|int|long|boolean|String)[\s]/.test(after);
+     });
+   })());
+ok('G6e S7741 — no typeof _reviewAnalyzeStep guard (same-module binding)',
+   !/typeof _reviewAnalyzeStep/.test(ab));
 
 // G7 — CR-aware line counting
 const saf = read('src/main/java/com/Regalia/SafPickerHelper.java');
