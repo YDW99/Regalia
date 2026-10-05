@@ -1,3 +1,21 @@
+v1.2.3 round-53 (2026.10.5): SonarCloud PR #56 Java fixes — EngineService/StockfishNative; MainActivity comment-only.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - EngineService.java (AGPL v3): S2696 ×2 — the static wakeLock field is
+    now written ONLY from the new static synchronized helpers
+    acquireEngineWakeLock()/releaseEngineWakeLock() (onCreate/onDestroy
+    delegate); refreshWakeLock() is now synchronized, closing the
+    re-arm-vs-release interleave race. The moved blocks catch Exception
+    instead of Throwable (S1181-compliant).
+  - StockfishNative.java (AGPL v3, DroidFish-derived): S6201 — the
+    batch-end dispatch uses pattern matching for instanceof (Java 17);
+    S1181 — catches Exception instead of Throwable there (Errors must
+    propagate).
+  - MainActivity.java (AGPL v3): S116 ×2 triaged FALSE POSITIVE —
+    _activityResumed/_webViewPausedForBatch keep the project-wide `_xxx`
+    private-field convention (round-35 precedent); in-source "S116 kept"
+    notes added. No behavior change.
+  - License classification: all files unchanged.
+
 v1.2.3 round-52 (2026.10.5): StockfishNative — stop/bestmove race hardening (J1-J4).
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - StockfishNative.java (AGPL v3, DroidFish-derived): four race windows

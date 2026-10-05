@@ -1,0 +1,7 @@
+gradle compileReleaseJavaWithJavac --no-daemon
+ANDROID_HOME=/tmp/sdk (JDK 17.0.20.1, NDK 27.2.12479018, build-tools 35+34, platform-35)
+keystore env vars present (signing config active)
+Result: BUILD SUCCESSFUL in 8s — 41 warnings (deprecation only), 0 errors
+Context: re-run after MainActivity.java was repaired from a sandbox splice corruption
+(restored from round-51 source baseline, round-53 S116 comment-only edits reapplied;
+full-tree diff vs round-51 baseline reviewed — only intended round-52/round-53 edits differ).

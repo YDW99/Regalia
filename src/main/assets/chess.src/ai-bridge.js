@@ -3031,8 +3031,13 @@ function onEngineProgress(depth,nodes,nps,scoreCp,scoreMate,wdlW,wdlD,wdlL,selde
     //   _updateEngineNotification throttles to one update per second and
     //   dedupes identical text, so this is cheap.
     try{
-      const _bgTotal=(typeof reviewStates!=='undefined'&&reviewStates&&reviewStates.length)?reviewStates.length:0;
-      const _bgCached=(typeof _reviewEvalCache!=='undefined'&&_reviewEvalCache&&typeof _reviewEvalCache.size==='number')?_reviewEvalCache.size:0;
+      // round-53 (S6582/S7741): `reviewStates?.length` keeps the cross-module
+      //   typeof guard (reviewStates is declared in ui.js — the round-11
+      //   degraded-module defense) while using the optional chain for the
+      //   null check; `_reviewEvalCache` is declared in THIS module (line ~50),
+      //   so a direct undefined comparison is safe and sufficient.
+      const _bgTotal=(typeof reviewStates!=='undefined'&&reviewStates?.length)?reviewStates.length:0;
+      const _bgCached=(_reviewEvalCache!==undefined&&_reviewEvalCache&&typeof _reviewEvalCache.size==='number')?_reviewEvalCache.size:0;
       if(_bgTotal>0){
         _updateEngineNotification(T('analyzing_progress')+' ('+_bgCached+'/'+_bgTotal+')');
       }else{
@@ -3282,8 +3287,9 @@ function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth,reqFen){
     //   current _evalForBlackTurn, which belongs to the newer request) drives
     //   the White-POV conversion.
     if(reviewMode&&reviewStates&&reviewStates.length>0){
-      for(let _ri=0;_ri<_evalRecentDispatches.length;_ri++){
-        const _d=_evalRecentDispatches[_ri];
+      // round-53 (S4138): for-of — the loop index was unused (body only
+      //   reads the element); iteration order (oldest→newest) is unchanged.
+      for(const _d of _evalRecentDispatches){
         if(_d&&_d.states===reviewStates&&_d.fen===_cbFenNav&&_d.step>=0&&_d.step<reviewStates.length){
           if(!_reviewEvalCache.has(_d.step)){
             const _mBlack=reviewStates[_d.step].state.currentTurn==='black';

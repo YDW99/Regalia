@@ -3,6 +3,34 @@
 > Build guide for the Regalia Android chess app (versionCode=10203, versionName="1.2.3").
 > Round-by-round build notes are appended below (newest first).
 
+## Round-53 build notes (2026-10-05)
+
+- **SonarCloud PR #56 triage** (11 open issues → 9 fixed / 2 false
+  positives); version unchanged (versionCode=10203, versionName="1.2.3").
+- **JS (`game-logic.js`, `tablebase.js`, `ui-interactions.js`,
+  `ai-bridge.js`)**: S9383 — animation `Promise.all` wait gains an
+  explicit rejection handler (same guarded `_finishAnim()`); the three
+  bare `importPGNAsync()` fire-and-forget call sites are void-marked.
+  S6582 — `reviewStates?.length` (cross-module typeof guard kept);
+  S7741 — `_reviewEvalCache!==undefined`; S4138 — the round-52 T5
+  dispatch-ring loop converted to for-of.
+- **`EngineService.java` (S2696 ×2)**: the static `wakeLock` field is now
+  written only from the new `private static synchronized` helpers
+  `acquireEngineWakeLock(Context)` / `releaseEngineWakeLock()`;
+  `onCreate()`/`onDestroy()` delegate. `refreshWakeLock()` is now
+  `synchronized`, closing the re-arm-vs-release interleave race. The moved
+  acquire/release blocks catch `Exception` instead of `Throwable`
+  (S1181-compliant).
+- **`StockfishNative.java` (S6201/S1181)**: batch-end dispatch uses Java
+  17 pattern matching (`act instanceof MainActivity mainActivity`) and
+  catches `Exception` instead of `Throwable`.
+- **`MainActivity.java`**: comment-only — S116 ×2 triaged as false
+  positives (project `_xxx` field convention; "S116 kept" notes added).
+- **Rebuild**: `python3 build-chess.py` regenerated `chess.html`
+  (24,309 lines / 1,479,405 bytes); all 11 modules + inline script pass
+  `node --check`; verifier v2 19/19 PASS + v1 regression 28/28 PASS;
+  `gradle compileReleaseJavaWithJavac` clean.
+
 ## Round-52 build notes (2026-10-05)
 
 - **Stale engine-eval race fix (JS fen-identity guard + Java stop/bestmove

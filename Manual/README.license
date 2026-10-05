@@ -1,3 +1,12 @@
+v1.2.3 round-53 (2026.10.5): manuals updated — round-53 changelog entries (zh & en in sync).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - Regalia-v1.2.3-manual-zh.html / Regalia-v1.2.3-manual-en.html: the
+    round-53 entry is prepended at the TOP of the chapter-1 round log
+    (newest-first ordering re-verified). No UI changes this round —
+    mockups/diagrams re-checked against the round-53 build and remain
+    accurate.
+  - License classification: all files unchanged.
+
 v1.2.3 round-52 (2026.10.5): manuals updated — round-52 changelog entries + stale-eval behavior note (zh & en in sync).
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - Regalia-v1.2.3-manual-zh.html / Regalia-v1.2.3-manual-en.html: changelog

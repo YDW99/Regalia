@@ -1401,13 +1401,20 @@ public class StockfishNative {
                 //   the engine executor thread and WebView.onPause() is
                 //   main-thread-only API. Fire-and-forget: the MainActivity
                 //   method is itself guarded and idempotent.
+                // round-53 (S6201): pattern matching for instanceof — the
+                //   pattern variable is effectively final, so the anonymous
+                //   Runnable captures it directly (no cast needed).
                 final Activity act = activityRef.get();
-                if (act instanceof MainActivity) {
+                if (act instanceof MainActivity mainActivity) {
                     mainHandler.post(new Runnable() {
                         public void run() {
                             try {
-                                ((MainActivity) act).onEvalDeepBatchEnded();
-                            } catch (Throwable t) {
+                                mainActivity.onEvalDeepBatchEnded();
+                            // round-53 (S1181): catch Exception, not Throwable —
+                            //   an Error (OOM, ThreadDeath) must not be swallowed
+                            //   here; onEvalDeepBatchEnded only raises RuntimeExceptions
+                            //   in practice (WebView state guards), which Exception covers.
+                            } catch (Exception t) {
                                 Log.w(TAG, "onEvalDeepBatchEnded dispatch failed", t);
                             }
                         }

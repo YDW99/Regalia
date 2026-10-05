@@ -1,3 +1,20 @@
+## Round-53 changes (2026-10-05)
+
+**No new permissions, no new network endpoints, no new data collection.**
+This round is a SonarCloud PR #56 triage (9 style/robustness fixes, 2
+documented false positives); privacy-relevant notes:
+
+- All changes are local code-quality fixes: a Promise rejection handler
+  (game-logic.js), `void` markers on fire-and-forget imports, optional
+  chaining / direct undefined comparison / for-of (ai-bridge.js),
+  static-synchronized wake-lock helpers (EngineService.java), pattern
+  instanceof + catch-Exception (StockfishNative.java), and comment-only
+  annotations (MainActivity.java). No data flows, storage, IPC, network,
+  or permission behavior changed.
+- verifier/v2 adds a structural source-checker (reads project files,
+  asserts patterns); it executes no engine and touches no user data, and
+  is not shipped in the APK.
+
 ## Round-52 changes (2026-10-05)
 
 **No new permissions, no new network endpoints, no new data collection.**

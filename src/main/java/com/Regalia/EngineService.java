@@ -167,16 +167,12 @@ public class EngineService extends Service {
         //   30 minutes, and mid-batch CPU suspension silently stalls the
         //   analysis. StockfishNative re-arms the lock on every
         //   engineEvalDeep() dispatch and on engineEvalDeepBeginBatch().
-        try {
-            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
-            if (pm != null) {
-                wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Regalia:engine-analysis");
-                wakeLock.acquire(30L * 60L * 1000L); // 30 minutes
-                Log.i(TAG, "Partial wake lock acquired (30min timeout)");
-            }
-        } catch (Throwable e) {
-            Log.w(TAG, "Wake lock acquire failed", e);
-        }
+        // v1.2.3 round-53 (S2696): the actual write moved into the static
+        //   synchronized helper acquireEngineWakeLock() — instance methods
+        //   (onCreate/onDestroy) no longer write the static wakeLock field,
+        //   and all three accessors (acquire/refresh/release) now serialize
+        //   on the class monitor, closing the refresh-vs-release race.
+        acquireEngineWakeLock(this);
     }
 
     @Override
@@ -193,17 +189,8 @@ public class EngineService extends Service {
         isRunning = false;
         lastStatusInfo = "";
 
-        // Release wake lock
-        PowerManager.WakeLock wl = wakeLock;
-        wakeLock = null;
-        if (wl != null && wl.isHeld()) {
-            try {
-                wl.release();
-                Log.i(TAG, "Partial wake lock released");
-            } catch (Throwable e) {
-                Log.w(TAG, "Wake lock release failed", e);
-            }
-        }
+        // Release wake lock (round-53 (S2696): static synchronized helper).
+        releaseEngineWakeLock();
 
         Log.i(TAG, "Engine service destroyed");
     }
@@ -290,14 +277,61 @@ public class EngineService extends Service {
      *   the timeout (no extra reference is held); acquiring an already-expired
      *   lock is a plain acquire. Thread-safe — called from the engine executor
      *   thread. No-op when the service/wake lock does not exist.
+     *   round-53 (S2696): synchronized — serializes with acquireEngineWakeLock/
+     *   releaseEngineWakeLock so a re-arm can never interleave with the
+     *   onDestroy release (a re-arm on a just-released lock would throw).
      */
-    public static void refreshWakeLock() {
+    public static synchronized void refreshWakeLock() {
         PowerManager.WakeLock wl = wakeLock;
         if (wl == null) return;
         try {
             wl.acquire(30L * 60L * 1000L);
         } catch (Throwable e) {
             Log.w(TAG, "Wake lock re-arm failed", e);
+        }
+    }
+
+    /**
+     * v1.2.3 round-53 (S2696): static synchronized acquire helper — onCreate()
+     *   delegates here so instance methods no longer write the static wakeLock
+     *   field. Behaves exactly like the pre-round-53 inline block: create the
+     *   PARTIAL_WAKE_LOCK, publish it, then acquire with the 30-minute timeout.
+     *   The publish-then-acquire order matches the old code (a concurrent
+     *   refreshWakeLock() may re-arm the lock between the two statements —
+     *   harmless: a second acquire(timeout) on a held lock just resets the
+     *   timeout). catch (Exception) per S1181: PowerManager only raises
+     *   RuntimeExceptions here; Errors must propagate.
+     */
+    private static synchronized void acquireEngineWakeLock(Context ctx) {
+        try {
+            PowerManager pm = (PowerManager) ctx.getSystemService(Context.POWER_SERVICE);
+            if (pm != null) {
+                PowerManager.WakeLock wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Regalia:engine-analysis");
+                wakeLock = wl;
+                wl.acquire(30L * 60L * 1000L); // 30 minutes
+                Log.i(TAG, "Partial wake lock acquired (30min timeout)");
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Wake lock acquire failed", e);
+        }
+    }
+
+    /**
+     * v1.2.3 round-53 (S2696): static synchronized release helper — onDestroy()
+     *   delegates here. Identical semantics to the pre-round-53 inline block:
+     *   null the field first (so a late refreshWakeLock() no-ops), then release
+     *   if held. catch (Exception) per S1181.
+     */
+    private static synchronized void releaseEngineWakeLock() {
+        PowerManager.WakeLock wl = wakeLock;
+        wakeLock = null;
+        if (wl != null && wl.isHeld()) {
+            try {
+                wl.release();
+                Log.i(TAG, "Partial wake lock released");
+            } catch (Exception e) {
+                Log.w(TAG, "Wake lock release failed", e);
+            }
         }
     }
 

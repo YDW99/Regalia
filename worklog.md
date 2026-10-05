@@ -1,3 +1,33 @@
+# Regalia v1.2.3 — round-53 工作日志（2026-10-05 UTC+8）
+
+## 任务来源
+
+SonarCloud PR #56（head e622c577 = round-52 树）11 项 OPEN 问题排查：剔除误报后制定方案并精确实施，产出 round-53 补丁包（仅含变更文件，按目录结构打包 zip）。版本号保持 v1.2.3。
+
+## 分诊（逐项对照源码）
+
+- 9 项真实 → 全部修复（见下）。
+- 2 项误报：java:S116 ×2（MainActivity `_activityResumed`/`_webViewPausedForBatch`）——项目级 `_xxx` 私有字段命名约定（StockfishNative._evalDeepBatchActive 等 20+ 字段一致；round-35 已有同规则判例）。仅改新字段会破坏一致性 → 保留，源码内加 "S116 kept" 注释。
+
+## 实施（9 项修复）
+
+- **game-logic.js（S9383）**：`Promise.all(promises).then(...)` 动画等待补显式拒绝处理器（同一 `_finishAnim` 守卫清理；_anim* Promise 设计上不 reject，此为前瞻加固+规则合规）。
+- **tablebase.js + ui-interactions.js ×2（S9383）**：3 处有意 fire-and-forget 的 `importPGNAsync()` 调用加 `void` 显式标记（Promise 设计上不 reject、结果无用——importPGNAsync 内部自行 resolve(false) 并弹错误提示）。
+- **ai-bridge.js（S6582/S7741/S4138）**：`reviewStates?.length` 可选链（跨模块 typeof 守卫保留——round-11 降级防御，reviewStates 声明于 ui.js）；`_reviewEvalCache!==undefined` 直接比较（同模块声明，typeof 冗余）；round-52 T5 `_evalRecentDispatches` 循环转 for-of（索引未用，顺序不变）。
+- **EngineService.java（S2696 ×2）**：static wakeLock 字段改为仅由新增的 static synchronized 助手 `acquireEngineWakeLock()/releaseEngineWakeLock()` 写入（onCreate/onDestroy 委托）；`refreshWakeLock()` 同步化，消除 re-arm 与 release 交错竞态（对已释放锁 re-arm 会抛异常）。迁移后的代码块按 S1181 改 catch Exception。
+- **StockfishNative.java（S6201/S1181）**：批量结束派发改用 Java 17 instanceof 模式匹配；catch Throwable → catch Exception（Error 必须传播，不再被吞）。
+
+## 验证
+
+- verifier/v2/round53-sonar-triage.js：19/19 PASS（覆盖每条修复规则 + 2 项 wontfix 标记）。
+- verifier/v1 回归：28/28 PASS（round-52 修复无回归）。
+- 11 个 JS 模块 node --check 全过；chess.html 重建（24,309 行 / 1,479,405 字节）。
+- gradle compileReleaseJavaWithJavac 编译通过。
+
+## 文档
+
+NOTICE、11×README.license（含 verifier/）、worklog、README.md（round-53 章节）、BUILDING.md、PRIVACY.md、中英文说明书（首章更新日志置顶；无 UI 变更，示意图复核一致）同步 round-53。版本号不变（10203/1.2.3）；无新权限/网络/数据收集。
+
 # Regalia v1.2.3 — round-52 工作日志（2026-10-05 UTC+8）
 
 ## 任务来源

@@ -365,6 +365,31 @@ backup_rules.xml / data_extraction_rules.xml deleted, CMake
 
 Full development log: [worklog.md](worklog.md) (newest round first).
 
+### Round-53 update (2026-10-05) — SonarCloud PR #56 triage: 9 fixed / 2 false positives
+
+- **Scope**: all 11 open issues on PR #56 triaged against the round-52
+  tree; 9 real findings fixed, 2 triaged as false positives with
+  in-source justification. Version unchanged (versionCode=10203,
+  versionName="1.2.3"); no new permissions / network / data collection.
+- **JS**: animation `Promise.all` wait gains an explicit rejection handler
+  (S9383); the three intentional fire-and-forget `importPGNAsync()` call
+  sites are void-marked (S9383); `reviewStates?.length` optional chain
+  with the cross-module typeof guard kept (S6582);
+  `_reviewEvalCache!==undefined` direct comparison (S7741); the round-52
+  T5 dispatch-ring loop converted to for-of (S4138).
+- **Java**: EngineService's static `wakeLock` is now written only from new
+  static synchronized helpers (`acquireEngineWakeLock`/
+  `releaseEngineWakeLock`), and `refreshWakeLock()` is synchronized —
+  closing the re-arm-vs-release interleave race (S2696 ×2); the batch-end
+  dispatch uses Java 17 pattern matching for instanceof and catches
+  Exception instead of Throwable (S6201/S1181).
+- **False positives (kept)**: S116 ×2 on `_activityResumed`/
+  `_webViewPausedForBatch` — project-wide `_xxx` private-field convention
+  (round-35 precedent); in-source "S116 kept" notes added.
+- **Verification**: verifier/v2 structural checks 19/19 PASS; verifier/v1
+  round-52 harness regression 28/28 PASS; chess.html rebuilt (24,309
+  lines / 1,479,405 bytes); release Java compiles clean.
+
 ### Round-52 update (2026-10-05) — stale engine-eval race fix (fen-identity guard + stop/bestmove hardening)
 
 - **The bug**: rarely, right after a quick new move, the eval bar still

@@ -1,3 +1,45 @@
+Round-53 (2026-10-05) — SonarCloud PR #56 triage: 9 fixed / 2 false positives
+=============================================================================================================
+
+Triage of the 11 open issues reported by SonarCloud on PR #56 (head
+e622c577 = round-52 tree). 9 real findings fixed, 2 false positives kept
+with in-source justification:
+
+- game-logic.js (S9383): the Promise.all(promises) animation wait now has
+  an explicit rejection handler running the same guarded _finishAnim()
+  cleanup — a future animator rejection can no longer hang the cleanup
+  until the safety timeout.
+- tablebase.js + ui-interactions.js ×2 (S9383): the three intentional
+  fire-and-forget importPGNAsync() call sites are now void-marked (the
+  promise never rejects — importPGNAsync resolves false and shows its own
+  error toast; callers have no use for the result).
+- ai-bridge.js (S6582/S7741/S4138): reviewStates?.length optional chain
+  (the cross-module typeof guard for reviewStates is kept — round-11
+  degraded-module defense); _reviewEvalCache!==undefined direct comparison
+  (same-module binding, typeof was redundant); the round-52 T5
+  _evalRecentDispatches loop converted to for-of (index was unused).
+- EngineService.java (S2696 ×2): the static wakeLock field is now written
+  ONLY from the new static synchronized helpers acquireEngineWakeLock() /
+  releaseEngineWakeLock() — onCreate()/onDestroy() delegate. refreshWakeLock()
+  is now synchronized too, closing the re-arm-vs-release interleave race
+  (a re-arm on a just-released lock would throw). The moved acquire/release
+  blocks catch Exception instead of Throwable (S1181-compliant).
+- StockfishNative.java (S6201/S1181): the batch-end dispatch uses pattern
+  matching for instanceof (Java 17) and catches Exception instead of
+  Throwable — an Error (OOM, ThreadDeath) must propagate, not be logged
+  away.
+- MainActivity.java (S116 ×2 — FALSE POSITIVE, kept):
+  _activityResumed/_webViewPausedForBatch follow the project-wide `_xxx`
+  private-field convention (StockfishNative._evalDeepBatchActive et al.;
+  round-35 precedent). Renaming only the new fields would break
+  consistency. In-source "S116 kept" notes added.
+- verifier/ (v2 added): round53-sonar-triage.js — 19 structural
+  assertions covering every fixed rule + the two wontfix markers; 19/19
+  pass. The round-52 v1 harness still passes 28/28 (no regression).
+- chess.html rebuilt via build-chess.py (24,309 lines / 1,479,405 bytes;
+  inline script passes node --check). Version unchanged:
+  versionCode=10203, versionName="1.2.3".
+
 Round-52 (2026-10-05) — Stale engine-eval race fix (fen-identity guard + stop/bestmove hardening)
 =============================================================================================================
 

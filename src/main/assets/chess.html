@@ -2630,7 +2630,13 @@ function animateMove(from,to,pieceSym,pieceType,isCapture,isCheck,pieceColor){
 
   // Wait for all piece animations, then finish.
   if(promises.length>0){
-    Promise.all(promises).then(function(){_finishAnim();});
+    // v1.2.3 round-53 (S9383): explicit rejection handler. The _anim* promises
+    //   never reject by construction (no reject path — a canceled animation
+    //   just never fires onfinish, and the safety timeout below covers that),
+    //   but if a future animator rejects (e.g. el.animate() throwing inside a
+    //   WAAPI quirk), finishing via the same guarded cleanup is strictly safer
+    //   than an unhandled rejection + waiting for the timeout.
+    Promise.all(promises).then(function(){_finishAnim();},function(){_finishAnim();});
   }else{
     // No overlay created (e.g., kingStayedPut with no rookEl) — finish now.
     _finishAnim();
@@ -10403,8 +10409,13 @@ function onEngineProgress(depth,nodes,nps,scoreCp,scoreMate,wdlW,wdlD,wdlL,selde
     //   _updateEngineNotification throttles to one update per second and
     //   dedupes identical text, so this is cheap.
     try{
-      const _bgTotal=(typeof reviewStates!=='undefined'&&reviewStates&&reviewStates.length)?reviewStates.length:0;
-      const _bgCached=(typeof _reviewEvalCache!=='undefined'&&_reviewEvalCache&&typeof _reviewEvalCache.size==='number')?_reviewEvalCache.size:0;
+      // round-53 (S6582/S7741): `reviewStates?.length` keeps the cross-module
+      //   typeof guard (reviewStates is declared in ui.js — the round-11
+      //   degraded-module defense) while using the optional chain for the
+      //   null check; `_reviewEvalCache` is declared in THIS module (line ~50),
+      //   so a direct undefined comparison is safe and sufficient.
+      const _bgTotal=(typeof reviewStates!=='undefined'&&reviewStates?.length)?reviewStates.length:0;
+      const _bgCached=(_reviewEvalCache!==undefined&&_reviewEvalCache&&typeof _reviewEvalCache.size==='number')?_reviewEvalCache.size:0;
       if(_bgTotal>0){
         _updateEngineNotification(T('analyzing_progress')+' ('+_bgCached+'/'+_bgTotal+')');
       }else{
@@ -10654,8 +10665,9 @@ function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth,reqFen){
     //   current _evalForBlackTurn, which belongs to the newer request) drives
     //   the White-POV conversion.
     if(reviewMode&&reviewStates&&reviewStates.length>0){
-      for(let _ri=0;_ri<_evalRecentDispatches.length;_ri++){
-        const _d=_evalRecentDispatches[_ri];
+      // round-53 (S4138): for-of — the loop index was unused (body only
+      //   reads the element); iteration order (oldest→newest) is unchanged.
+      for(const _d of _evalRecentDispatches){
         if(_d&&_d.states===reviewStates&&_d.fen===_cbFenNav&&_d.step>=0&&_d.step<reviewStates.length){
           if(!_reviewEvalCache.has(_d.step)){
             const _mBlack=reviewStates[_d.step].state.currentTurn==='black';
@@ -14390,8 +14402,12 @@ function onPGNFileRead(content){
     _applyImportedFEN(sanitized.trim());
   }else{
     // v1.0.8 PHASE 34: use async import with worker offloading for large files
+    // v1.2.3 round-53 (S9383): void-marks the intentional fire-and-forget —
+    //   the returned promise never rejects (importPGNAsync resolves false and
+    //   shows its own error toast on failure) and the caller has no use for
+    //   the boolean result, so the call is explicitly marked as ignored.
     if(typeof importPGNAsync==='function'){
-      importPGNAsync(sanitized);
+      void importPGNAsync(sanitized);
     }else{
       importPGN(sanitized);
     }
@@ -17152,8 +17168,10 @@ function _showStatsImportBackPrompt(pgnText){
   var importAction=function(){
     try{
       // v1.0.8 PHASE 34: use async import with worker offloading
+      // v1.2.3 round-53 (S9383): void-marks the intentional fire-and-forget
+      //   (the promise never rejects; importPGNAsync handles errors itself).
       if(typeof importPGNAsync==='function'){
-        importPGNAsync(pgnText);
+        void importPGNAsync(pgnText);
       }else if(typeof importPGN==='function'){
         importPGN(pgnText);
       }else{
@@ -17274,8 +17292,9 @@ function _doPastePGN(){
       return;
     }
     // v1.0.8 PHASE 34: use async import with worker offloading
+    // v1.2.3 round-53 (S9383): void-marks the intentional fire-and-forget.
     if(typeof importPGNAsync==='function'){
-      importPGNAsync(text);
+      void importPGNAsync(text);
     }else{
       importPGN(text);
     }

@@ -1787,8 +1787,10 @@ function _showStatsImportBackPrompt(pgnText){
   var importAction=function(){
     try{
       // v1.0.8 PHASE 34: use async import with worker offloading
+      // v1.2.3 round-53 (S9383): void-marks the intentional fire-and-forget
+      //   (the promise never rejects; importPGNAsync handles errors itself).
       if(typeof importPGNAsync==='function'){
-        importPGNAsync(pgnText);
+        void importPGNAsync(pgnText);
       }else if(typeof importPGN==='function'){
         importPGN(pgnText);
       }else{
@@ -1909,8 +1911,9 @@ function _doPastePGN(){
       return;
     }
     // v1.0.8 PHASE 34: use async import with worker offloading
+    // v1.2.3 round-53 (S9383): void-marks the intentional fire-and-forget.
     if(typeof importPGNAsync==='function'){
-      importPGNAsync(text);
+      void importPGNAsync(text);
     }else{
       importPGN(text);
     }

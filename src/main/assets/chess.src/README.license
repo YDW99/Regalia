@@ -1,3 +1,25 @@
+v1.2.3 round-53 (2026.10.5): SonarCloud PR #56 JS fixes — game-logic/tablebase/ui-interactions/ai-bridge.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - game-logic.js (GPL v3, DroidFish-derived): S9383 — the
+    Promise.all(promises) animation wait gains an explicit rejection
+    handler running the same guarded _finishAnim() cleanup (the _anim*
+    promises never reject by construction; the handler future-proofs
+    against a rejecting animator and satisfies the no-floating-promise
+    rule).
+  - tablebase.js (GPL v3): S9383 — the fire-and-forget
+    importPGNAsync(sanitized) call is void-marked (the promise never
+    rejects; the result is unused by design).
+  - ui-interactions.js (GPL v3, DroidFish-derived): S9383 — the two other
+    bare importPGNAsync() call sites (stats import-back, paste import)
+    void-marked for consistency.
+  - ai-bridge.js (AGPL v3): S6582 — reviewStates?.length optional chain
+    (cross-module typeof guard for reviewStates KEPT — round-11
+    degraded-module defense); S7741 — _reviewEvalCache!==undefined direct
+    comparison (same-module binding, typeof was redundant); S4138 — the
+    round-52 T5 _evalRecentDispatches loop converted to for-of (index was
+    unused; iteration order unchanged).
+  - License classification: all files unchanged.
+
 v1.2.3 round-52 (2026.10.5): ai-bridge.js — stale engine-eval fen-identity guard (T5).
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - ai-bridge.js (AGPL v3): fixes the rare "engine still shows the PREVIOUS

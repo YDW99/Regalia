@@ -1,3 +1,15 @@
+v1.2.3 round-53 (2026.10.5): v2 added — SonarCloud PR #56 triage acceptance checks.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - v2/round53-sonar-triage.js (AGPL v3, AI-GEN: AI assisted): 19
+    structural assertions over the round-53 tree — S9383 rejection
+    handler + void markers, S6582/S7741/S4138 ai-bridge fixes, S6201
+    pattern instanceof, S1181 catch-Exception, S2696 static-synchronized
+    wake-lock helpers (and no residual instance writes), S116-kept
+    markers. 19/19 pass; the v1 harness still passes 28/28.
+  - License classification: v1 harness AGPL v3 (loads AGPL-licensed
+    modules); v2 structural checker AGPL v3; logs and RESULT.md are
+    project documentation (same terms as the project docs).
+
 v1.2.3 round-52 (2026.10.5): directory created — round-52 acceptance verifier.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - README.md: append-only index of verifier versions (one entry per

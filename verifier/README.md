@@ -24,3 +24,13 @@ Measures (acceptance criteria for round-52):
    the source tar; keystore-info.txt NOT in tar.
 - 2026-10-05T0000Z · v1 · runs/2026-10-05T0000Z-v1/ · fixed=28/28 PASS; baseline(pre-fix)=FAIL as expected
 - 2026-10-05T0300Z · v1 · runs/2026-10-05T0300Z-v1/ · final acceptance: harness 28/28, APK v1+v2+v3 signed (cert 45bc6d36...), engine SHA-256 8f7116d3..., tar 146 entries clean
+
+## v2 (2026-10-05, created)
+Round-53 acceptance (SonarCloud PR #56 triage):
+- v2/round53-sonar-triage.js — 19 structural assertions: S9383 rejection
+  handler + void markers, S6582/S7741/S4138 ai-bridge fixes, S6201 pattern
+  instanceof, S1181 catch-Exception, S2696 static-synchronized wake-lock
+  helpers (no residual instance writes), S116-kept markers.
+- Regression gate: v1 harness must still pass 28/28.
+- 2026-10-05T0400Z · v2 · runs/2026-10-05T0400Z-v2/ · round-53 triage 19/19 PASS + v1 regression 28/28 PASS
+- 2026-10-05T0430Z · v2 · runs/2026-10-05T0430Z-v2/ · compileReleaseJavaWithJavac BUILD SUCCESSFUL (post MainActivity repair) + triage 19/19 PASS + v1 regression 28/28 PASS

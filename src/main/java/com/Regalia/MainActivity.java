@@ -970,12 +970,16 @@ public class MainActivity extends Activity {
     //   mainHandler, so it lands on the main thread) to decide whether the
     //   deferred webView.onPause() must be applied when an analyze-all batch
     //   ends while the app is backgrounded.
+    // round-53 (S116 kept): the `_xxx` prefix is the project-wide private-field
+    //   convention (cf. StockfishNative._evalDeepBatchActive et al., round-35
+    //   triage) — renaming only the new fields would break consistency.
     private volatile boolean _activityResumed = false;
     // v1.2.3 round-51 (BG-1): set when onPause() SKIPPED webView.onPause()
     //   because an analyze-all eval batch was active. Cleared by
     //   onEvalDeepBatchEnded() (applies the deferred pause when still
     //   backgrounded) and by onResume() (webView.onResume() makes the
     //   deferred pause moot).
+    // round-53 (S116 kept): same `_xxx` project field-naming convention.
     private volatile boolean _webViewPausedForBatch = false;
 
     /**

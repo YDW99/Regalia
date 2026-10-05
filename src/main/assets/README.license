@@ -1,3 +1,11 @@
+v1.2.3 round-53 (2026.10.5): chess.html rebuilt from the round-53 module changes.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - chess.html (AGPL v3, combined work): rebuilt via build-chess.py after
+    the round-53 game-logic.js / tablebase.js / ui-interactions.js /
+    ai-bridge.js SonarCloud fixes; bundle 24309 lines / 1479405 bytes,
+    inline script passes node --check.
+  - License classification: all files unchanged.
+
 v1.2.3 round-52 (2026.10.5): chess.html rebuilt from the round-52 ai-bridge.js change.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - chess.html (AGPL v3, combined work): rebuilt via build-chess.py after

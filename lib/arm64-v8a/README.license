@@ -1,3 +1,7 @@
+v1.2.3 round-53 (2026.10.5): no changes to files in this directory.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - License classification: all files unchanged.
+
 v1.2.3 round-52 (2026.10.5): no changes — this directory remains README-only
   (deletion record); the build-time engine lives in
   src/main/jniLibs/arm64-v8a/ (not committed; downloaded per BUILDING.md,

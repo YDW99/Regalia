@@ -1,0 +1,41 @@
+[AIBridge] _KING_PIECE_STYLE lookup failed: Cannot access '_KING_PIECE_STYLE' before initialization
+AndroidBridge.initEngine not available
+[suite] load & smoke
+  PASS onEngineEval exported into scope
+  PASS requestEngineEval present
+  PASS round-52 _evalLastDispatchedFen declared
+  PASS round-52 _evalRecentDispatches ring declared
+[A] normal mode: late previous-position callback dropped
+  PASS A1: first eval dispatched
+  PASS A2: dispatched fen recorded
+  PASS A3: second eval dispatched
+  PASS A4: fens differ
+  PASS A5: dispatched fen updated
+[AIBridge] Stale eval callback dropped (fen mismatch vs last dispatched user-nav request)
+  PASS A6: stale callback did NOT mark eval ready
+  PASS A7: stale callback did NOT overwrite _sfEval
+  PASS A8: current callback accepted
+  PASS A9: current callback value correct (got 33)
+[E] duplicate callback for current fen
+  PASS E1: duplicate harmless
+[C] legacy 7-arg path
+  PASS C1: legacy callback accepted (got 44)
+[B] review mode: stale callback cached under matched step
+  PASS B1: review has 4 states (got 4)
+  PASS B2: step-0 eval dispatched
+  PASS B3: step-2 eval dispatched
+  PASS B4: dispatched fen is step-2 fen
+[AIBridge] Stale eval callback dropped (fen mismatch vs last dispatched user-nav request)
+  PASS B5: still on step 2
+  PASS B6: stale step-0 value NOT displayed on step 2 (sfEval=null)
+  PASS B7: stale value cached under step 0 correctly
+[AIBridge] Stale eval callback dropped (fen mismatch vs last dispatched user-nav request)
+  PASS B8: black-to-move stale eval sign-flipped to White POV (got -50)
+  PASS B9: step 3 cache NOT poisoned by step-1 result
+  PASS B10: step-3 (black to move) result cached with correct sign (got -60)
+[D] batch path round-trip
+  PASS D1: batch dispatch recorded with fen
+  PASS D2: batch step-0 cached and batch advanced
+  PASS D3: batch cached all 4 steps (got 4)
+
+===== RESULT: 28 passed, 0 failed =====

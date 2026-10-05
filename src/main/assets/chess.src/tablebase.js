@@ -1896,8 +1896,12 @@ function onPGNFileRead(content){
     _applyImportedFEN(sanitized.trim());
   }else{
     // v1.0.8 PHASE 34: use async import with worker offloading for large files
+    // v1.2.3 round-53 (S9383): void-marks the intentional fire-and-forget —
+    //   the returned promise never rejects (importPGNAsync resolves false and
+    //   shows its own error toast on failure) and the caller has no use for
+    //   the boolean result, so the call is explicitly marked as ignored.
     if(typeof importPGNAsync==='function'){
-      importPGNAsync(sanitized);
+      void importPGNAsync(sanitized);
     }else{
       importPGN(sanitized);
     }

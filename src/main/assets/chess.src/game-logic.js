@@ -1312,7 +1312,13 @@ function animateMove(from,to,pieceSym,pieceType,isCapture,isCheck,pieceColor){
 
   // Wait for all piece animations, then finish.
   if(promises.length>0){
-    Promise.all(promises).then(function(){_finishAnim();});
+    // v1.2.3 round-53 (S9383): explicit rejection handler. The _anim* promises
+    //   never reject by construction (no reject path — a canceled animation
+    //   just never fires onfinish, and the safety timeout below covers that),
+    //   but if a future animator rejects (e.g. el.animate() throwing inside a
+    //   WAAPI quirk), finishing via the same guarded cleanup is strictly safer
+    //   than an unhandled rejection + waiting for the timeout.
+    Promise.all(promises).then(function(){_finishAnim();},function(){_finishAnim();});
   }else{
     // No overlay created (e.g., kingStayedPut with no rookEl) — finish now.
     _finishAnim();
