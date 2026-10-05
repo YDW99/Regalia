@@ -11,6 +11,12 @@ v1.2.3 round-55 (2026.10.5): v3 cwd-independence + round-55 assertions (34 total
     files in either README.license ledger); H3 added (__dirname
     resolution). 29 → 34 assertions, all PASS (also verified from a
     foreign cwd).
+  - License-audit follow-up: v3 strengthened to 37 assertions — H2c (no
+    live "(AGPL v3)" tags on StatsActivity/HapticManager/index.html.tpl
+    in NOTICE), H2d (no "(AGPL v3)" tags on game-logic.js/pgn-standard.js
+    in the src/main + src/main/assets ledgers), H2e (README.md round-55
+    section + GPL/AGPL classification lists). 37/37 PASS (incl. foreign
+    cwd) — runs/2026-10-05T0900Z-v3/.
   - runs/2026-10-05T0630Z-v3/: triage.log + regression logs + RESULT.md.
   - License classification: unchanged (AGPL v3 harness).
 

@@ -46,10 +46,63 @@ actionable comments + 1 outside-diff note. Per-item triage:
   MainActivity/ChessWebViewClient/EngineService/StabilizationHelper/
   ChessApp/TlsSecurityHelper/RootDetector).
 
-Verifier: v3 34 assertions (G2a window 1600; G2c rewritten single-counter;
-G2d added; H1a/H2a/H2b/H3 added) — all PASS incl. a foreign-cwd run; v1
+Verifier: v3 37 assertions (G2a window 1600; G2c rewritten single-counter;
+G2d added; H1a/H2a/H2b/H3 added; license-audit follow-up added H2c
+NOTICE live-tag sweep, H2d ledger AGPL sweep, H2e README.md round-55
+section + classification lists) — all PASS incl. a foreign-cwd run; v1
 29/29 + v2 19/19 regressions PASS; chess.html rebuilt (24,364 lines);
 compileReleaseJavaWithJavac BUILD SUCCESSFUL.
+
+Version: versionCode=10203, versionName="1.2.3" (unchanged).
+
+Round-55 addendum (2026-10-05) — full license-classification audit
+==================================================================
+
+A top-to-bottom audit of every license-classification location (triggered
+by the CodeRabbit README.license comments fixed earlier this round):
+
+Ground truth re-derived from the FILE HEADERS of all 19 live Java classes,
+12 chess.src modules, chess.html, stats.html, engine_jni.cpp and
+CMakeLists.txt. Every recording location was then checked against it:
+
+- README.md GPL/AGPL file lists — CORRECT (all 19 java + 12 chess.src
+  files, matching headers).
+- NOTICE canonical lists (GPL: 22 live files + libstockfish.so;
+  AGPL: 7 java + chess960/eco-data/state-store + build infrastructure) —
+  CORRECT.
+- java README.license definitive classification lists (round-34/35/36) —
+  CORRECT (GPL ×12, AGPL ×7, matching headers).
+- chess.src README.license definitive lists (round-43+, ×4) — CORRECT
+  (GPL ×9 incl. index.html.tpl, AGPL ×3).
+- src/main / src/main/cpp / src/main/res / src/main/assets /
+  Manual / assets / .github / verifier / lib/arm64-v8a README.license
+  classification statements — CORRECT.
+
+Residual live mislabels found and corrected in this audit (in addition to
+the 32 ledger tags fixed in the main round-55 entry):
+- NOTICE: 5 × StatsActivity.java "(AGPL v3)" → GPL v3 (the round-24 fix
+  corrected only the java README.license changelog; these 5 NOTICE
+  entries were missed);
+- NOTICE: 1 × HapticManager.java "(AGPL v3)" (round-31 section) → GPL v3;
+- NOTICE: 1 × StabilizationHelper.java "(GPL v3)" (round-31 section)
+  → AGPL v3 (original sensor anti-shake code);
+- NOTICE: 1 × index.html.tpl "(AGPL v3)" (v1.2.1 round-2 section)
+  → GPL v3 (header has been GPL v3 since v1.0.8 PHASE 37/49);
+- src/main/README.license: 1 × game-logic.js + 1 × pgn-standard.js
+  "(AGPL v3)" → GPL v3;
+- src/main/assets/README.license: 1 × game-logic.js + 1 × pgn-standard.js
+  "(AGPL v3)" → GPL v3.
+Total: 12 tags corrected. Each correction carries an inline "corrected
+round-55" marker; classification itself unchanged everywhere.
+- Historical "NEVER CREATED"/deletion-record narrations (MessageBus.java
+  "(AGPL v3)" in the v1.2.1 round-4 entry, etc.) describe files deleted
+  under their then-recorded labels — left as history (not live
+  classification).
+- Verifier strengthened: v3 H2a/H2b sweep both README.license ledgers,
+  plus H2c (no live AGPL tags on StatsActivity/HapticManager/
+  index.html.tpl in NOTICE), H2d (src/main + assets ledgers: no AGPL
+  tags on game-logic/pgn-standard), H2e (README.md round-55 section +
+  classification lists) — 37/37 PASS.
 
 Version: versionCode=10203, versionName="1.2.3" (unchanged).
 
@@ -1320,7 +1373,7 @@ Changes:
     comment tokenization. NO CODE CHANGE.
   - MainActivity.java (AGPL v3): 5 stale "API 21" / "Android 5.0"
     comments → "API 23" / "Android 6.0" (matches minSdk=23). Comments only.
-  - StatsActivity.java (AGPL v3): 4 stale comment sites (same fix class).
+  - StatsActivity.java (GPL v3 — corrected round-55, was "(AGPL v3)"): 4 stale comment sites (same fix class).
   - PermissionHelper.java (GPL v3): 2 stale comment sites.
   - FileIoHelper.java (GPL v3): 4 stale comment sites.
 
@@ -1388,9 +1441,15 @@ Changes:
   - HapticManager.java (GPL v3): isHapticEnabled() cache TTL clock source
     switched from System.currentTimeMillis() to SystemClock.elapsedRealtime()
     (monotonic — wall-clock jumps could freeze the 5s cache).
-  - StabilizationHelper.java (GPL v3): JS-callback throttle clock source
+  - StabilizationHelper.java (AGPL v3): JS-callback throttle clock source
     switched to SystemClock.elapsedRealtime() (same fix class — wall-clock
     jumps could freeze stabilization).
+    [EDITOR'S NOTE (round-55 license audit): the tag originally read
+    "(GPL v3)" — mislabel. The file header is AGPL v3 (original sensor-
+    fusion anti-shake code); the definitive classification lists (NOTICE
+    canonical list: "v1.0.8 PHASE 49: added to the top-level
+    classification… original", java README.license round-34/35/36 lists)
+    all carry AGPL v3.]
   - MainActivity.java (AGPL v3): added _isFallbackMode flag set by
     showFallbackUI(); onKeyDown(BACK) routes to super in fallback mode
     (was dispatching to hidden WebView, trapping user). Added
@@ -1753,10 +1812,15 @@ v1.2.3 round-20 (2026.7.17) — 4 known leftovers resolved + 3rd review report +
     button (_rvAnalyzeBtnInnerHTML) only while _reviewAnalyzeAllActive;
     _updateReviewAnalyzeBtn uses innerHTML accordingly.
   - `ui-interactions.js` (GPL v3): markDirty(DIRTY_FULL) call site → render().
-  - `HapticManager.java` (AGPL v3): KNOWN-ISSUE E-3 RESOLVED — PWLE
+  - `HapticManager.java` (GPL v3): KNOWN-ISSUE E-3 RESOLVED — PWLE
     reflection probed once per process and cached (AVAILABLE reuses cached
     Method/Constructor handles; UNAVAILABLE skips reflection and falls back
     to waveform, one diagnostic Log.d at probe time instead of per call).
+    [EDITOR'S NOTE (round-55 license audit): the tag originally read
+    "(AGPL v3)" — mislabel. The file header is GPL v3 (DroidFish-derived
+    haptic patterns); the definitive classification lists (NOTICE canonical
+    list, java README.license round-34/35/36 lists) all carry GPL v3, and
+    the round-21 entry in this same section already tags it GPL v3.]
   - New PDF false-positive audit: S7758 charCodeAt sites all parse validated
     ASCII chess notation (codePointAt meaningless) — false positives; the
     S8786 worker-pool.js/chess.html sites were already fixed pre-round-19.
@@ -2220,7 +2284,7 @@ P2 fixes (robustness + redundancy):
   - eco-data.js (AGPL v3): _saveEcoToCache empty catch now logs.
   - game-logic.js (GPL v3): _validateSetupCastleMarks guards against
     malformed (non-integer/out-of-range) keys via Number.isInteger.
-  - StatsActivity.java (AGPL v3) + SafPickerHelper.java (GPL v3):
+  - StatsActivity.java (GPL v3 — corrected round-55, was "(AGPL v3)") + SafPickerHelper.java (GPL v3):
     openOutputStream null check (throws IOException with clear message
     instead of NPE).
   - EngineProcessManager.java (GPL v3) + StockfishNative.java (GPL v3):
@@ -2286,7 +2350,7 @@ P2 fixes (review-E, mixed licenses):
     Uri.parse(url).getScheme() + "http".equalsIgnoreCase(...) instead of
     case-sensitive startsWith("http://"). RFC 3986 §3.1 specifies scheme
     is case-insensitive; the previous check rejected valid "HTTP://..." URLs.
-  - StatsActivity.java (AGPL v3): statsPayload is now volatile (was
+  - StatsActivity.java (GPL v3 — corrected round-55, was "(AGPL v3)"): statsPayload is now volatile (was
     relying on the implicit happens-before from webView.loadUrl).
     Added onPause/onResume overrides that call webView.onPause()/onResume()
     so backgrounded stats pages stop running JS timers (matches
@@ -2475,7 +2539,7 @@ First-principles optimization (this pass):
     cleanupEngineResources() and shutdown() (process-destroy grace period,
     semantically distinct from PONDER_STOP_GRACE_MS — kept separate so each
     can be tuned independently). No Thread.sleep(100) magic numbers remain.
-  - StatsActivity.java (AGPL v3): Removed redundant second Uri.parse(trimmed)
+  - StatsActivity.java (GPL v3 — corrected round-55, was "(AGPL v3)"): Removed redundant second Uri.parse(trimmed)
     call in openUrlInBrowser — the first parse (for scheme check) is now
     reused for the Intent. Was a harmless but unnecessary double-parse.
   - StabilizationHelper.java (AGPL v3): Corrected comment direction ("above"
@@ -2885,7 +2949,8 @@ P1 — S3358 nested ternary operators (2 sites):
     once, then build the string with a single ternary on md.
 
 P1 — S3646 duplicate CSS selectors (2 sites):
-  - index.html.tpl (AGPL v3): Merged two adjacent
+  - index.html.tpl (GPL v3 — corrected round-55, was "(AGPL v3)"; the header
+    has been GPL v3 since v1.0.8 PHASE 37/49): Merged two adjacent
     .dlg:not([style*="max-width"]) rules (one for the layout reset,
     one for the negative-margin cancellation) into a single rule.
     Merged two adjacent .review-left .review-board .bgrid rules (one
@@ -3079,7 +3144,7 @@ Modified files (license unchanged):
   - MainActivity.java (AGPL v3): VERSION comment example "v1.2.1" → "v1.2.3".
   - ChessWebViewClient.java (AGPL v3): Version header "v1.2.2" → "v1.2.3";
     "API 21-23" → "API 23 (minSdk)".
-  - StatsActivity.java (AGPL v3): Added clarifying comment on the anonymous
+  - StatsActivity.java (GPL v3 — corrected round-55, was "(AGPL v3)"): Added clarifying comment on the anonymous
     JS bridge safety (Round 17 P1-5 false-positive documentation).
   - ai-bridge.js (GPL v3): openStatsPage() path-3 toast staging refined —
     deferred reviewAnalyzeAll() by 1s so the intent toast shows first,

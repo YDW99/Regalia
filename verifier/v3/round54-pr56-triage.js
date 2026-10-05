@@ -186,6 +186,25 @@ ok('H2a chess.src ledger: no AGPL tag on GPL-classified modules',
 ok('H2b java ledger: no AGPL tag on GPL-classified classes',
    !/- (?:EngineProcessManager|StockfishNative|JsBridgeGateway|FileIoHelper|SafPickerHelper|StatsActivity)\.java \(AGPL/.test(jlr)
    && !/SafPickerHelper\.java \+ StatsActivity\.java \(AGPL/.test(jlr));
+// H2c/d — round-55 audit addendum: pin the 12 residual fixes across the
+//   other recording locations (NOTICE + src/main + src/main/assets ledgers)
+const nt = read('NOTICE');
+const sml = read('src/main/README.license');
+const sal = read('src/main/assets/README.license');
+ok('H2c NOTICE: no live AGPL tags on GPL-classified files (StatsActivity/HapticManager/index.html.tpl)',
+   !/StatsActivity\.java \(AGPL/.test(nt)
+   && !/HapticManager\.java`? \(AGPL/.test(nt)
+   && !/index\.html\.tpl \(AGPL/.test(nt));
+ok('H2d src/main + assets ledgers: game-logic/pgn-standard not tagged AGPL',
+   !/game-logic\.js \(AGPL/.test(sml) && !/pgn-standard\.js \(AGPL/.test(sml)
+   && !/game-logic\.js \(AGPL/.test(sal) && !/pgn-standard\.js \(AGPL/.test(sal));
+ok('H2e README.md: strict UTF-8 + round-55 section + license lists present',
+   (() => {
+     const rm = read('README.md');
+     return rm.includes('### Round-55 update')
+         && rm.includes('### GPL v3 Files') && rm.includes('### AGPL v3 Files')
+         && rm.includes('License audit addendum');
+   })());
 // H3 — path resolution is __dirname-based (like v1/v2), not cwd-based
 ok('H3 verifier resolves from __dirname (cwd-independent)',
    read('verifier/v3/round54-pr56-triage.js').includes("path.join(__dirname, '..', '..'"));

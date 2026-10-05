@@ -1,6 +1,10 @@
-v1.2.3 round-55 (2026.10.5): no changes to files in this directory.
+v1.2.3 round-55 (2026.10.5): license-tag audit corrections.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
-  - License classification: all files unchanged.
+  - No file-content changes in this directory; two historical per-file
+    tags corrected per the round-55 audit: game-logic.js + pgn-standard.js
+    "(AGPL v3)" → GPL v3 (file headers are authoritative). An editor's
+    note is attached at each corrected site.
+  - License classification: all files unchanged (AndroidManifest.xml AGPL v3).
 
 v1.2.3 round-54b (2026.10.5): no changes to files in this directory.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
@@ -697,7 +701,9 @@ v1.0.4 Round-5 Rev48 changes:
   - src/main/assets/chess.src/tablebase.js (GPL v3): PGN comment completeness fix.
   - src/main/assets/chess.src/ai-bridge.js (GPL v3): mr.comment in _buildPGNString.
   - src/main/assets/chess.src/ui.js (GPL v3): Blue/Yellow arrows; review board overlay.
-  - src/main/assets/chess.src/pgn-standard.js (AGPL v3): Updated color docs.
+  - src/main/assets/chess.src/pgn-standard.js (GPL v3 — corrected round-55;
+    this tag previously read "(AGPL v3)", contradicting the file header and
+    the canonical classification): Updated color docs.
   - src/main/assets/chess.src/index.html.tpl (AGPL v3): .review-board position:relative.
   - src/main/assets/stats.html (GPL v3): 4-color arrow display; conditional sections.
   - src/main/assets/chess.html: rebuilt from chess.src/ changes.
@@ -749,7 +755,6 @@ StockfishNative.java, StatsActivity.java) and assets/chess.src/ (ui.js,
 chess960.js, game-logic.js, tablebase.js, worker-pool.js, pgn-standard.js,
 ai-bridge.js, index.html.tpl) + assets/chess.html (rebuilt). See per-subdirectory
 README.license files for details.
-
 
 v1.0.6 (2026.6.27):
   - AndroidManifest.xml: versionCode=106, versionName="1.0.6".
@@ -830,7 +835,6 @@ v1.0.8 Phase 42 (2026.7.1):
 v1.0.8 Phase 41 (2026.7.1):
   - AndroidManifest.xml: No changes.
 
-
 v1.1.2 Phase 72 (2026.7.12, same-version revision):
   - Version remains versionCode=112, versionName="1.1.2".
   - Bug fix: _reviewAnalyzeAdvance (ui.js, GPL v3) — "false completion"
@@ -895,7 +899,8 @@ v1.1.2 Phase 68 (2026.7.8, same-version revision):
     and the next _reviewAnalyzeAdvance evaluates the prioritized step first.
     New state: _reviewAnalyzePriorityQueue (cleared on batch start/completion/
     cancel/exitReview/_resetGameUIState). New i18n keys (zh/en) in
-    game-logic.js (AGPL v3): priority_eval_toast, priority_eval_already_cached,
+    game-logic.js (GPL v3 — corrected round-55; this tag previously read
+    "(AGPL v3)", contradicting the file header): priority_eval_toast, priority_eval_already_cached,
     priority_eval_not_in_review.
   - CSS: .rmv-block (index.html.tpl, GPL v3) now has user-select:none +
     -webkit-touch-callout:none + touch-action:manipulation to prevent text
@@ -1185,7 +1190,6 @@ v1.1.0 Phase 54 (2026.7.4):
   - tablebase.js: PGN cascade-skip threshold 5 → max(15, len*0.1).
   All changes in GPL-v3-licensed files.
 
-
 v1.1.0 Phase 53 (2026.7.3):
   - AndroidManifest.xml: no changes (versionCode/versionName are in build.gradle).
   - build.gradle: versionCode 109 → 110, versionName "1.0.9" → "1.1.0".
@@ -1206,7 +1210,6 @@ v1.1.0 Phase 53 (2026.7.3):
   - Manual/: old version manuals (v1.0.4–v1.0.9) deleted; only v1.1.0 manual
     distributed (see Manual/README.license).
 
-
 v1.0.9 Phase 52 (2026.7.2):
   - AndroidManifest.xml: no changes (versionCode/versionName are in build.gradle).
   - build.gradle: versionCode 108 → 109, versionName "1.0.8" → "1.0.9".
@@ -1219,7 +1222,6 @@ v1.0.9 Phase 52 (2026.7.2):
   - cpp/: no changes.
   - jniLibs/arm64-v8a/libstockfish.so: unchanged (Stockfish 18 arm64-v8a-dotprod).
 
-
 v1.0.9 Phase 52 supplement (2026.7.2):
   - assets/chess.html: rebuilt again (tablebase.js variation-comment isolation +
     importPGN isCheck/isCastling; ui.js chart outline theme-aware; index.html.tpl
@@ -1228,7 +1230,6 @@ v1.0.9 Phase 52 supplement (2026.7.2):
   - assets/chess.src/: tablebase.js + ui.js + index.html.tpl updated (see
     chess.src/README.license for details).
   - No changes to java/, res/, cpp/, jniLibs/.
-
 
 v1.2.0 Phase 82+++ (2026.7.12) — renderInternal AI/player/info bars extraction:
   - assets/chess.src/ui.js (GPL v3): renderInternal 476→359 lines.
@@ -1275,7 +1276,6 @@ v1.2.0 Phase 81-83 (2026.7.11) — Deep refactor continuation:
   - No new modules; build-order unchanged (13 JS modules).
   - No changes to res/, cpp/, jniLibs/.
 
-
 v1.2.0 Phase 74-75 (2026.7.11):
   - state-store.js (AGPL v3, NEW Phase 75): Global state store (Redux-like).
       Single source of truth for all UI state. All mutations via dispatch().
@@ -1295,7 +1295,6 @@ v1.2.0 Phase 74-75 (2026.7.11):
   - game-logic.js (GPL v3): Version strings updated to v1.2.0.
   - index.html.tpl (GPL v3): Title updated to v1.2.0.
   - build-chess.py (AGPL v3): Added 5 new modules to merge list.
-
 
 v1.2.0 Phase 76+ (2026.7.11) — Code Smells fixes:
   - ai-bridge.js (GPL v3): _buildPGNString decomposed into 6 sub-functions

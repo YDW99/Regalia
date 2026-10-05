@@ -21,9 +21,21 @@
 
 编辑 game-logic.js 时遭遇一次挂载层写入异常（文件被写入 2,588 行交错重复内容，doAIMove 出现两份）。已从 round-54 补丁包提取原文件（md5 a5385685…）恢复并重放三处编辑，diff 逐 hunk 复核无误；ai-bridge.js 同期校验与 round-54b 包内一致（未受损）。
 
+## 许可分类全面复查（round-55 追加）
+
+由 CodeRabbit 的 README.license 评论触发，对**所有记录开源协议分类的位置**做了一次自上而下审计：以 19 个 Java 类、12 个 chess.src 模块、chess.html、stats.html、engine_jni.cpp、CMakeLists.txt 的**文件头**为权威基准，逐处核对：
+
+- **正确的**：README.md GPL/AGPL 文件清单；NOTICE 权威清单（GPL 22 个活文件 + libstockfish.so；AGPL 7 java + chess960/eco-data/state-store + 构建基础设施）；java 账本权威分类表（round-34/35/36，GPL×12/AGPL×7）；chess.src 账本权威分类表（round-43 起 ×4，GPL×9/AGPL×3）；其余 7 个 README.license 的分类表述。
+- **本次新发现并修正的活错标（12 处，均加 round-55 更正标注）**：
+  - NOTICE：StatsActivity.java 「(AGPL v3)」×5 → GPL v3（round-24 只修了 java 账本，NOTICE 这 5 条遗漏）；HapticManager.java「(AGPL v3)」×1（round-31 节）→ GPL v3；StabilizationHelper.java「(GPL v3)」×1（round-31 节）→ AGPL v3（原创传感器防抖代码）；index.html.tpl「(AGPL v3)」×1（v1.2.1 round-2 节）→ GPL v3（头部自 v1.0.8 PHASE 37/49 即 GPL v3）。
+  - src/main/README.license：game-logic.js、pgn-standard.js 各 1 处「(AGPL v3)」→ GPL v3。
+  - src/main/assets/README.license：game-logic.js、pgn-standard.js 各 1 处「(AGPL v3)」→ GPL v3。
+- **保留不动的**：MessageBus.java「(AGPL v3)」等已删文件的历史叙述——描述的是删除当时的记录标签，属历史而非活分类。
+- 分类本身无任何变更。
+
 ## 验证
 
-- verifier v3 34 项断言（G2a 窗口 900→1600；G2c 改写为单计数器契约——全文件语句形式 `_aiRetryCount++` 仅剩 doAIMove 一处；新增 G2d doAIMove 自增+上限保留、H1a 父目录复验门、H2a/H2b 两账本许可标签一致、H3 __dirname 定位）：34/34 PASS（含异目录运行）；v1 29/29、v2 19/19 回归 PASS。
+- verifier v3 37 项断言（G2a 窗口 900→1600；G2c 改写为单计数器契约——全文件语句形式 `_aiRetryCount++` 仅剩 doAIMove 一处；新增 G2d doAIMove 自增+上限保留、H1a 父目录复验门、H2a/H2b 两账本许可标签一致、H3 __dirname 定位；许可复查跟进新增 H2c NOTICE 现行标签清扫、H2d 两账本 AGPL 清扫、H2e README.md round-55 段+分类清单）：37/37 PASS（含异目录运行）；v1 29/29、v2 19/19 回归 PASS。
 - chess.html 重建 24,364 行；bundle 语法通过。
 - compileReleaseJavaWithJavac BUILD SUCCESSFUL，0 error。
 

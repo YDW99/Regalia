@@ -1,9 +1,13 @@
-v1.2.3 round-55 (2026.10.5): chess.html rebuilt (game-logic retry single-counter fix).
+v1.2.3 round-55 (2026.10.5): chess.html rebuilt + license-tag audit corrections.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - chess.html (AGPL v3, combined work): rebuilt via build-chess.py after
     the game-logic.js dispatch-failure retry fix (24,364 lines); bundle
     passes node --check.
-  - License classification: unchanged.
+  - Round-55 license audit corrections in this ledger: 1 × game-logic.js
+    + 1 × pgn-standard.js historical tags "(AGPL v3)" → GPL v3 (file
+    headers are authoritative); editor's notes attached at both sites.
+  - License classification: unchanged (chess.html AGPL v3 combined work;
+    stats.html GPL v3).
 
 v1.2.3 round-54b (2026.10.5): chess.html rebuilt (ai-bridge S7741 fix).
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
@@ -1180,7 +1184,9 @@ v1.0.4 Round-5 Rev48 changes:
   - chess.src/ai-bridge.js (GPL v3): _buildPGNString() includes mr.comment.
   - chess.src/ui.js (GPL v3): Blue/Yellow arrows in _computeAndCacheVisualAnnotations;
     review board [%csl]/[%cal] overlay when heatmap is OFF.
-  - chess.src/pgn-standard.js (AGPL v3): Updated color code documentation.
+  - chess.src/pgn-standard.js (GPL v3 — corrected round-55; this tag
+    previously read "(AGPL v3)", contradicting the file header and the
+    canonical classification): Updated color code documentation.
   - chess.src/index.html.tpl (AGPL v3): .review-board position:relative.
   - stats.html (GPL v3): 4-color arrow display (B/R/Y/G order), conditional
     section display, new i18n keys blue_arrows_threats + yellow_arrows_queen.
@@ -1235,7 +1241,6 @@ v1.0.5 Round-6 Rev54 through Rev68 changes (reflected in chess.html rebuilds):
   - stats.html unchanged from Rev62 baseline.
   - AGPLv3_Logo.svg, GPLv3_Logo.svg unchanged.
 
-
 v1.0.6 (2026.6.27):
   - chess.src/ changes: see src/main/assets/chess.src/README.license for
     full per-file details. Key changes: Chess960 ECO suppression, PGN FEN
@@ -1288,7 +1293,6 @@ v1.0.8 Phase 22 7th/8th supplements (2026.6.30):
     stale will-change/transition cleanup).
   - stats.html: no changes in 7th/8th supplements.
   - AGPLv3_Logo.svg, GPLv3_Logo.svg unchanged.
-
 
 v1.0.8 Phase 23 (2026.7.1):
   - chess.html rebuilt from chess.src/ (see chess.src/README.license for
@@ -1468,7 +1472,9 @@ v1.1.2 Phase 68 (2026.7.8, same-version revision):
       sends engineStop(), pushes step, fires Toast + haptic, schedules advance.
     * PGN cache partial-eval dialog: title has emoji prefix; back-button support
       via _pgnPartialEvalDialogActive/_pgnPartialEvalDialogDismiss globals.
-  - chess.src/game-logic.js (AGPL v3, original):
+  - chess.src/game-logic.js (GPL v3, DroidFish-derived — corrected round-55;
+    this tag previously read "(AGPL v3, original)", contradicting the file
+    header and the canonical classification):
     * 3 new i18n keys (zh/en): priority_eval_toast, priority_eval_already_cached,
       priority_eval_not_in_review.
     * Partial-eval dialog title now has emoji prefix.
@@ -1734,7 +1740,6 @@ v1.1.0 Phase 54 (2026.7.4):
     alternative vs continuation).
   - tablebase.js: PGN cascade-skip threshold 5 → max(15, len*0.1).
   All changes in GPL-v3-licensed files.
-
 
 v1.1.0 Phase 53 (2026.7.3):
   - chess.html rebuilt (Phase 53 changes in chess.src/ui.js, chess.src/game-logic.js,
