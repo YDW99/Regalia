@@ -75,11 +75,13 @@ public class MainActivity extends Activity {
     //   Element.getAnimations() (Chromium 84+) with only a try/catch, NOT a
     //   feature guard (no `typeof el.getAnimations==='function'` check), so
     //   80-83 would throw a runtime TypeError in the board-animation path.
-    //   (Known residual, documented in round-49 fix notes: stats.html uses
-    //   String.prototype.replaceAll — Chromium 85+ — unguarded in its SAN
-    //   parser; a Chromium-84 WebView passes this gate but its stats page is
-    //   still broken. Follow-up: replace those two replaceAll calls with
-    //   regex .replace, or raise this gate to 85.)
+    //   v1.2.3 round-51 (doc fix): the round-49 "known residual" below is
+    //   STALE — stats.html's two String.prototype.replaceAll call sites
+    //   (Chromium 85+) were already converted to regex .replace() within
+    //   round-49 (see stats.html lines ~1080 / ~4221, tagged "round-49:
+    //   replaceAll→replace"). A Chromium-84 WebView now passes this gate
+    //   AND has a working stats page, so the "raise this gate to 85"
+    //   follow-up is no longer required. The comment is kept as history.
     static final int MIN_SUPPORTED_CHROME_MAJOR = 84;
 
     // v1.2.3 round-44 (B5): volatile — written on the main thread (onCreate/
@@ -865,6 +867,12 @@ public class MainActivity extends Activity {
     @Override
     public void onResume() {
         super.onResume();
+        // v1.2.3 round-51 (BG-1): new foreground episode — the deferred
+        //   webView.onPause() from BG-1 is moot now; onResume below un-pauses
+        //   the WebView anyway (webView.onResume() on a non-paused WebView is
+        //   a documented no-op).
+        _activityResumed = true;
+        _webViewPausedForBatch = false;
         // v1.2.3 round-44 (B1/B7): new foreground episode — re-arm the flush dedup.
         flushedSinceResume = false;
         if (webView != null) {
@@ -957,6 +965,19 @@ public class MainActivity extends Activity {
     //   force=true so the FINAL flush is never skipped.
     private volatile boolean flushedSinceResume = false;
 
+    // v1.2.3 round-51 (BG-1): true between onResume and onPause. Read by
+    //   onEvalDeepBatchEnded() (posted from the engine executor thread via
+    //   mainHandler, so it lands on the main thread) to decide whether the
+    //   deferred webView.onPause() must be applied when an analyze-all batch
+    //   ends while the app is backgrounded.
+    private volatile boolean _activityResumed = false;
+    // v1.2.3 round-51 (BG-1): set when onPause() SKIPPED webView.onPause()
+    //   because an analyze-all eval batch was active. Cleared by
+    //   onEvalDeepBatchEnded() (applies the deferred pause when still
+    //   backgrounded) and by onResume() (webView.onResume() makes the
+    //   deferred pause moot).
+    private volatile boolean _webViewPausedForBatch = false;
+
     /**
      * v1.2.3 round-44 (B1/B7): unified lifecycle state flush, delegating target
      *   for onPause/onStop/onUserLeaveHint/onDestroy. Order: JS first
@@ -995,6 +1016,9 @@ public class MainActivity extends Activity {
     @Override
     public void onPause() {
         super.onPause();
+        // v1.2.3 round-51 (BG-1): mark the backgrounded episode for
+        //   onEvalDeepBatchEnded().
+        _activityResumed = false;
         // v1.0.5 Round-6 Rev49: Stop sensor-based stabilization when backgrounded
         //   (battery saving). onResume will restart it IF it was enabled.
         // v1.2.3 round-33 (PR52 v3 #4.1.4): synchronize on _stabilizationLock
@@ -1008,11 +1032,56 @@ public class MainActivity extends Activity {
         //   HyperOS 3 kills backgrounded apps aggressively; without this flush
         //   any writes queued by persistentSet()'s async apply() would be lost).
         flushAllState("pause");
-        if (webView != null) {
+        // v1.2.3 round-51 (BG-1): while an analyze-all eval batch is active,
+        //   SKIP webView.onPause(). Pausing a WebView freezes ALL of its JS
+        //   timers (Chromium setPauseTimers semantics), which would stall the
+        //   batch's step chain (_reviewAnalyzeAdvance's setTimeout(0) yield and
+        //   the 60s per-step safety net) until the app returns to the
+        //   foreground — the "analyze-all continues in the background" feature
+        //   (round-51) requires the timers to keep firing. The other two
+        //   background-survival legs are already in place: the EngineService
+        //   foreground service keeps the process (and the WebView renderer)
+        //   from being frozen/killed, and the partial wake lock is re-armed on
+        //   every batch step (EngineService.refreshWakeLock, BG-2) so the CPU
+        //   stays awake with the screen off. The skipped pause is applied
+        //   later by onEvalDeepBatchEnded() when the batch finishes
+        //   (bounded background churn), or becomes moot on onResume().
+        //   Battery note: this deliberately trades background battery for
+        //   analysis continuity while — and only while — the batch runs.
+        if (stockfishEngine != null && stockfishEngine.isEvalDeepBatchActive()) {
+            if (!_webViewPausedForBatch) {
+                _webViewPausedForBatch = true;
+                Log.i(TAG, "onPause: analyze-all batch active — keeping WebView JS timers running (webView.onPause deferred)");
+            }
+        } else if (webView != null) {
             try {
                 webView.onPause();
             } catch (Throwable e) {
                 Log.w(TAG, "webView.onPause failed", e);
+            }
+        }
+    }
+
+    /**
+     * v1.2.3 round-51 (BG-1): an analyze-all eval batch just ended (Java-side
+     *   engineEvalDeepEndBatch posted this via the main Handler). If onPause()
+     *   deferred webView.onPause() because the batch was active and the app is
+     *   STILL backgrounded, apply the deferred pause now so background
+     *   JS-timer churn (game-clock ticks, notification throttle timers) ends
+     *   with the batch instead of running until the next resume. Idempotent:
+     *   a no-op when the pause was never deferred or was already consumed.
+     *   Package-private — called only from StockfishNative (same package),
+     *   always on the main thread.
+     */
+    void onEvalDeepBatchEnded() {
+        boolean wasDeferred = _webViewPausedForBatch;
+        _webViewPausedForBatch = false;
+        if (wasDeferred && !_activityResumed && webView != null) {
+            try {
+                webView.onPause();
+                Log.i(TAG, "analyze-all batch ended while backgrounded — deferred webView.onPause() applied");
+            } catch (Throwable e) {
+                Log.w(TAG, "deferred webView.onPause failed", e);
             }
         }
     }

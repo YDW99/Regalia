@@ -1,3 +1,45 @@
+v1.2.3 round-52 (2026.10.5): ai-bridge.js — stale engine-eval fen-identity guard (T5).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - ai-bridge.js (AGPL v3): fixes the rare "engine still shows the PREVIOUS
+    position's eval right after a quick new move" race. The engine<->UI
+    channel is asynchronous, so a late bestmove/info callback for an older
+    position can arrive after the user already played/navigated. Round-49
+    added fen-tagging for the batch (analyze-all) path only; round-52
+    extends fen identity to USER-NAVIGATION dispatches:
+    - new fields _evalLastDispatchedFen + _evalRecentDispatches (8-entry
+      ring of {fen, step, states}), recorded at every dispatch point
+      (review-debounce dispatch and normal-mode dispatch);
+    - onEngineEval drops a callback whose reqFen differs from the last
+      dispatched user-nav fen — EXCEPT when the fen matches a recent
+      review-mode dispatch for the SAME reviewStates array, in which case
+      the eval is cached under that MATCHED step (White-POV sign and WDL
+      re-derived from the matched position's side-to-move), preserving the
+      Phase 59.3 background-caching intent without poisoning the current
+      step;
+    - legacy 7-arg callbacks (no reqFen) still fall through to the
+      round-46 generation check, so older bridges keep working.
+  - License classification: all files unchanged.
+
+v1.2.3 round-51 (2026.9.9): ui-interactions/ui/ai-bridge/game-logic — level-by-level BACK + batch background/notification.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - ui-interactions.js (GPL v3, DroidFish-derived): BACK-A — root-level BACK
+    now opens an exit-confirmation dialog (_showExitConfirmDialog; the
+    退出 choice calls the pre-existing AndroidBridge.exitApp() bridge;
+    window._exitConfirmDialogDismiss/_exitConfirmDialogOverlay hooks
+    mirror the setup-exit pattern); BACK-B — the file-browser back check
+    moved above the four header dialogs (its body-appended overlay always
+    paints on top); BACK is a no-op only while the z-99999 startup loading
+    overlay shows.
+  - ui.js (GPL v3, DroidFish-derived): _resetGameUIState removes the exit
+    overlay symmetrically; the analyze-all completion branch posts the
+    final state to the FGS notification (BG-3).
+  - ai-bridge.js (AGPL v3): onEngineProgress surfaces live batch progress
+    ("正在分析... (k/N)") in the FGS notification while
+    _reviewAnalyzeAllActive (BG-3).
+  - game-logic.js (GPL v3, DroidFish-derived): 3 new i18n keys
+    (exit_confirm_title/exit_confirm_msg/exit_confirm_yes, zh+en) — table
+    404 -> 407 keys, parity maintained.
+
 v1.2.3 round-50 (2026.9.6): no module content changes.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - No chess.src module content changes this round (the chess.html header

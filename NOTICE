@@ -1,3 +1,88 @@
+Round-52 (2026-10-05) — Stale engine-eval race fix (fen-identity guard + stop/bestmove hardening)
+=============================================================================================================
+
+- ai-bridge.js (T5): fixes the rare "engine still shows the PREVIOUS
+  position's evaluation right after a quick new move" race caused by the
+  asynchronous engine<->UI channel. New _evalLastDispatchedFen +
+  _evalRecentDispatches (8-entry ring of {fen, step, states}) recorded at
+  every user-navigation dispatch; onEngineEval drops callbacks whose
+  reqFen mismatches the last dispatched user-nav fen, except that a
+  review-mode callback matching a recent dispatch for the SAME
+  reviewStates array is cached under that MATCHED step (White-POV sign and
+  WDL re-derived from the matched position's side-to-move) — preserving
+  the Phase 59.3 background-caching intent without poisoning the current
+  step. Legacy 7-arg callbacks (no reqFen) still use the round-46
+  generation check. Industry references for the approach: Polyglot
+  SyncStop (stop -> wait bestmove before reusing the engine), lichess
+  ceval fen-tagging with stale-result discard, python-chess isready
+  barrier, Stockfish UCI command-ordering guarantees.
+- StockfishNative.java (J1-J4): four race windows closed around
+  stopAndWaitForBestmove()/the reader thread — J1: the stop-timeout branch
+  arms _discardingPonderBestmove only when stateAtTimeout != STATE_NONE
+  (a naturally completed search needs no discard; the old unconditional
+  arming could eat the NEXT search's bestmove); J2: the idle fast-path no
+  longer clears _discardingPonderBestmove (clearing let an in-flight stale
+  bestmove through mislabeled; residue is handled by latch-consumption /
+  the discard path / _resetEngineRuntimeState); J3: the reader skips
+  processInfoLine() while _discardingPonderBestmove is set (stale info
+  lines no longer pollute the UI); J4: the reader's discard branch no
+  longer clobbers currentState to STATE_NONE (it could overwrite a NEWER
+  search's state).
+- verifier/ (new): versioned acceptance verifier — v1/eval-stale-harness.js
+  (Node vm harness, 28 assertions over the 11-module bundle; passes 28/28
+  on the fixed tree and fails on the pre-fix baseline), append-only
+  README.md index, timestamped runs under runs/.
+- chess.html rebuilt via build-chess.py (24290 lines / 1477911 bytes;
+  inline script passes node --check). Version unchanged:
+  versionCode=10203, versionName="1.2.3".
+
+Round-51 (2026-09-09) — Level-by-level BACK navigation + background analyze-all + batch-eval options bug
+=============================================================================================================
+
+- MainActivity.java: onPause() skips webView.onPause() while an analyze-all
+  eval batch is active (isEvalDeepBatchActive()) so the WebView's JS timers
+  keep driving the batch in the background; the deferred pause is applied by
+  the new onEvalDeepBatchEnded() when the batch ends while backgrounded.
+  New volatile flags _activityResumed / _webViewPausedForBatch; the stale
+  round-49 "stats.html replaceAll residual" comment corrected (the two
+  call sites were already regex .replace within round-49).
+- EngineService.java: wakeLock promoted to static volatile + new
+  refreshWakeLock() — the partial wake lock (same WAKE_LOCK permission) is
+  re-armed on every batch step so >30-minute background batches no longer
+  stall at the v1.1.0 Phase 57 timeout; onDestroy nulls the static lock.
+- StockfishNative.java: BUG-1 — handleBestMove's STATE_EVAL branch now
+  skips restoreGameplayOptions() while _evalDeepBatchActive (the per-step
+  restore was undoing the batch's Contempt=0 / MultiPV=1 /
+  UCI_AnalyseMode=true after every step, biasing and shallowing every
+  analyze-all eval from step 2 onward); new public isEvalDeepBatchActive()
+  getter (Java-only, not @JavascriptInterface); EngineService.refreshWakeLock()
+  calls in engineEvalDeepBeginBatch/engineEvalDeep; main-thread
+  onEvalDeepBatchEnded() dispatch at batch end.
+- ui-interactions.js (BACK-A/B): root-level BACK now opens an exit-confirmation
+  dialog (_showExitConfirmDialog, window._exitConfirmDialogDismiss/
+  _exitConfirmDialogOverlay hooks mirroring the setup-exit pattern) that
+  calls the pre-existing AndroidBridge.exitApp() — replacing the historical
+  intentional no-op; the file-browser back check moved above the four header
+  dialogs (the body-appended browser overlay paints on top of them); BACK
+  no-ops only while the z-99999 startup loading overlay is showing.
+- ui.js: _resetGameUIState removes the exit overlay symmetrically; the
+  analyze-all completion branch posts the final state to the FGS
+  notification. ai-bridge.js (BG-3): onEngineProgress surfaces live batch
+  progress ("Analyzing... (k/N)") in the FGS notification while
+  _reviewAnalyzeAllActive.
+- game-logic.js: 3 new i18n keys (exit_confirm_title/exit_confirm_msg/
+  exit_confirm_yes, zh+en) — the table grows 404 -> 407 keys, parity
+  maintained.
+- chess.html rebuilt (24,206 lines / 1,472,348 bytes); release APK rebuilt
+  with v1+v2+v3 signatures; engine SHA-256 three-way consistent
+  (8f7116d3...).
+- No new permissions, no new network egress, no new data collection; no
+  new @JavascriptInterface methods.
+- License classification: NO CHANGES (modified files retain their existing
+  GPL v3 / AGPL v3 classifications).
+
+Version: versionCode=10203, versionName="1.2.3" (unchanged).
+
 Round-50 (2026-09-06) — Documentation & license-hygiene round (no code behavior changes)
 =============================================================================================================
 

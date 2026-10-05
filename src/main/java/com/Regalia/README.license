@@ -1,3 +1,45 @@
+v1.2.3 round-52 (2026.10.5): StockfishNative — stop/bestmove race hardening (J1-J4).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - StockfishNative.java (AGPL v3, DroidFish-derived): four race windows
+    closed around stopAndWaitForBestmove()/the reader thread, complementing
+    the JS-side fen-identity guard (chess.src/README.license round-52):
+    - J1: the stop-timeout branch now arms _discardingPonderBestmove ONLY
+      if the captured stateAtTimeout != STATE_NONE (a search that already
+      completed naturally needs no discard — the old code armed the flag
+      unconditionally and could eat the NEXT search's bestmove);
+    - J2: the idle fast-path no longer clears _discardingPonderBestmove
+      (clearing it let an in-flight stale bestmove through mislabeled);
+      residue is handled by latch-consumption/the discard path/
+      _resetEngineRuntimeState;
+    - J3: the reader's info-line branch skips processInfoLine() entirely
+      while _discardingPonderBestmove is set (stale info lines no longer
+      pollute the UI during the discard window);
+    - J4: the reader's discard branch no longer clobbers currentState back
+      to STATE_NONE (it could overwrite a NEWER search's state).
+  - License classification: all files unchanged.
+
+v1.2.3 round-51 (2026.9.9): MainActivity/EngineService/StockfishNative — background analyze-all + BACK hardening.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - MainActivity.java (AGPL v3): onPause() skips webView.onPause() while an
+    analyze-all eval batch is active (BG-1) so the WebView JS timers keep
+    driving the batch in the background; new onEvalDeepBatchEnded() applies
+    the deferred pause at batch end; new volatile flags
+    _activityResumed/_webViewPausedForBatch; stale round-49
+    MIN_SUPPORTED_CHROME_MAJOR residual comment corrected (doc-only).
+  - EngineService.java (AGPL v3): wakeLock promoted to static volatile; new
+    refreshWakeLock() re-arms the partial wake lock per batch step (BG-2)
+    so >30-minute background batches no longer stall at the Phase 57
+    timeout; onDestroy nulls the static lock.
+  - StockfishNative.java (AGPL v3, engine management GPL v3-derived):
+    BUG-1 — handleBestMove STATE_EVAL skips restoreGameplayOptions() while
+    _evalDeepBatchActive (the per-step restore was undoing the batch's
+    Contempt=0/MultiPV=1/UCI_AnalyseMode=true options, biasing every
+    analyze-all eval from step 2 onward); new public
+    isEvalDeepBatchActive() getter (Java-only); refreshWakeLock calls in
+    engineEvalDeepBeginBatch/engineEvalDeep; main-thread
+    onEvalDeepBatchEnded() dispatch in engineEvalDeepEndBatch.
+  - No new @JavascriptInterface methods; no permission/manifest changes.
+
 v1.2.3 round-50 (2026.9.6): StatsActivity/StabilizationHelper header style unified (comments only).
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - StatsActivity.java (GPL v3) / StabilizationHelper.java (AGPL v3):

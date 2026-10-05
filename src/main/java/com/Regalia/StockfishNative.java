@@ -930,13 +930,18 @@ public class StockfishNative {
     private void stopAndWaitForBestmove(String callerTag) {
         // v18.6.0: Skip stop/wait entirely when engine is idle — avoids unnecessary
         // latch allocation and 1-second timeout when no search is running.
-        // v1.2.1: 同时清空 _discardingPonderBestmove 残留标志 —— 否则上一次
-        //   engineStop() 在 STATE_NONE 路径上设置的丢弃标志会持续到下一次
-        //   bestmove 到达时被错误地丢弃（TOCTOU 残留 bug 修复）。
+        // v1.2.3 round-52 (T6): no longer clears _discardingPonderBestmove here.
+        //   The v1.2.1 clear targeted stale-flag residue, but it also disarmed a
+        //   LEGITIMATELY armed flag whose stale bestmove was still in flight:
+        //   engineStop()/stopPonder() reset currentState to STATE_NONE before
+        //   their "stop"'s bestmove arrives, so a task entering via this fast
+        //   path cleared the flag and the in-flight stale bestmove then fell
+        //   through to handleBestMove under the NEXT search's state and
+        //   _lastEvalFen — a mislabeled stale result that passes even the
+        //   round-49/52 fen identity checks. Real residue is already cleared by
+        //   the latch-consumption path, the reader discard path, and
+        //   _resetEngineRuntimeState() on engine restart.
         if (currentState == STATE_NONE && !_isPondering) {
-            synchronized (_discardFlagLock) {
-                _discardingPonderBestmove = false;
-            }
             return;
         }
 
@@ -991,12 +996,37 @@ public class StockfishNative {
                 //   value while this write was in flight, or vice versa.
                 synchronized (_stopLatchLock) {
                     if (_stopLatch == stopLatch) {
-                        // We still own it — bestmove hasn't arrived. Arm the discard.
-                        synchronized (_discardFlagLock) {
-                            _discardingPonderBestmove = true;
-                        }
+                        // We still own it — bestmove hasn't arrived within 1s.
                         _stopLatch = null;
-                        Log.w(TAG, callerTag + ": stopAndWaitForBestmove timed out — discarding late bestmove");
+                        // v1.2.3 round-52 (T6): distinguish the timeout cause.
+                        //   (a) Engine frozen mid-search: currentState is still
+                        //       a search state — a late bestmove IS coming, so
+                        //       the discard flag must be armed (as before).
+                        //   (b) The "stop" raced with NATURAL completion: the
+                        //       search finished on its own and its bestmove was
+                        //       already consumed by handleBestMove (which resets
+                        //       currentState to STATE_NONE) just before our latch
+                        //       was installed — the "stop" went to an IDLE engine
+                        //       and NO late bestmove exists. Arming the flag here
+                        //       would silently eat the NEXT search's legitimate
+                        //       bestmove: the new position's eval/AI move would
+                        //       never arrive (the round-52 "stale eval shown,
+                        //       then stuck analyzing" failure chain).
+                        //       engineStop()/stopPonder() arm the flag themselves
+                        //       when they reset state, so a genuinely in-flight
+                        //       stale bestmove is still discarded.
+                        int stateAtTimeout;
+                        synchronized (stateLock) {
+                            stateAtTimeout = currentState;
+                        }
+                        if (stateAtTimeout != STATE_NONE) {
+                            synchronized (_discardFlagLock) {
+                                _discardingPonderBestmove = true;
+                            }
+                            Log.w(TAG, callerTag + ": stopAndWaitForBestmove timed out — discarding late bestmove");
+                        } else {
+                            Log.d(TAG, callerTag + ": stopAndWaitForBestmove timed out but the search had already completed naturally — no discard needed");
+                        }
                         // v1.2.3 P2 (Round 17 P2-5): After a stop-timeout, check
                         //   whether the engine process is actually alive. A
                         //   frozen-but-alive engine will recover on its own (the
@@ -1297,6 +1327,12 @@ public class StockfishNative {
                 }
                 sendUciCommand("position fen " + fen);
                 sendUciCommand("go depth 22");
+                // v1.2.3 round-51 (BG-2): re-arm the EngineService partial wake lock
+                //   on every batch step dispatch. Steps arrive 5-15s apart, so the
+                //   30-minute lock can never lapse while a background analyze-all
+                //   batch is actually progressing (a 100+ step batch can exceed
+                //   30 min total). No-op when the service/wake lock doesn't exist.
+                EngineService.refreshWakeLock();
             }
         }, "engineEvalDeep");
     }
@@ -1327,6 +1363,9 @@ public class StockfishNative {
                 }
                 forceFullStrength();
                 applyEvalModeOptions();
+                // v1.2.3 round-51 (BG-2): batch start — re-arm the partial wake lock
+                //   so background analysis starts with a full 30-minute budget.
+                EngineService.refreshWakeLock();
             }
         }, "engineEvalDeepBeginBatch");
     }
@@ -1351,8 +1390,46 @@ public class StockfishNative {
                 // Restore gameplay-appropriate UCI options (Skill Level,
                 // UCI_LimitStrength, MultiPV, Contempt, etc.).
                 applySettings();
+                // v1.2.3 round-51 (BG-1): the batch just ended. If the host
+                //   Activity skipped webView.onPause() when the user
+                //   backgrounded the app mid-batch (MainActivity.onPause BG-1),
+                //   the skipped pause must be applied now so background
+                //   JS-timer churn ends WITH the batch — otherwise the WebView
+                //   would keep ticking (clock/notification throttle timers)
+                //   for as long as the app stays backgrounded. Routed through
+                //   the main Handler because engineEvalDeepEndBatch runs on
+                //   the engine executor thread and WebView.onPause() is
+                //   main-thread-only API. Fire-and-forget: the MainActivity
+                //   method is itself guarded and idempotent.
+                final Activity act = activityRef.get();
+                if (act instanceof MainActivity) {
+                    mainHandler.post(new Runnable() {
+                        public void run() {
+                            try {
+                                ((MainActivity) act).onEvalDeepBatchEnded();
+                            } catch (Throwable t) {
+                                Log.w(TAG, "onEvalDeepBatchEnded dispatch failed", t);
+                            }
+                        }
+                    });
+                }
             }
         }, "engineEvalDeepEndBatch");
+    }
+
+    /**
+     * v1.2.3 round-51 (BG-1): whether an analyze-all eval batch is currently
+     *   active (between engineEvalDeepBeginBatch and engineEvalDeepEndBatch).
+     *   Read by MainActivity.onPause() to decide whether webView.onPause()
+     *   must be deferred — pausing a WebView freezes ALL its JS timers
+     *   (setTimeout/setInterval), which would stall the batch's
+     *   _reviewAnalyzeAdvance setTimeout(0) chain and the 60s per-step
+     *   safety net until the app returns to the foreground.
+     *   NOT @JavascriptInterface — same-package Java caller only.
+     *   Thread-safety: plain volatile read (the field is volatile).
+     */
+    public boolean isEvalDeepBatchActive() {
+        return _evalDeepBatchActive;
     }
 
     /**
@@ -2360,9 +2437,18 @@ public class StockfishNative {
                     _discardingPonderBestmove = false;
                 }
                 if (_shouldDiscard) {
-                    synchronized (stateLock) {
-                        currentState = STATE_NONE;
-                    }
+                    // v1.2.3 round-52 (T6): no longer forces currentState to
+                    //   STATE_NONE here. Every armer of the discard flag either
+                    //   already set STATE_NONE eagerly (engineStop / stopPonder /
+                    //   the ponder-stop branch above), or is a stopAndWait
+                    //   timeout whose caller ALWAYS establishes a fresh state
+                    //   immediately after (engineGo*/engineEval*/BeginBatch set
+                    //   theirs; EndBatch sets STATE_NONE itself). The
+                    //   unconditional write could clobber a NEW search's state
+                    //   when this stale bestmove arrived after the next search
+                    //   had already started — its info lines would then be
+                    //   dropped and its bestmove misrouted (eval never
+                    //   completes until the JS safety timer fires).
                     Log.d(TAG, "Discarding stale bestmove from stopped ponder (stopAndWaitForBestmove)");
                     return;
                 }
@@ -2384,6 +2470,18 @@ public class StockfishNative {
             if (line.startsWith("info")) {
                 synchronized (stateLock) {
                     if (currentState == STATE_NONE) return;
+                }
+                // v1.2.3 round-52 (T6): while a stale bestmove is pending
+                //   discard, every arriving info line still belongs to the
+                //   STOPPED search — UCI output is strictly ordered, so the
+                //   stopped search's bestmove (which consumes the flag) always
+                //   precedes any output of a later search. Processing such
+                //   lines would overwrite the NEW search's _storedEvalCp /
+                //   _lastEvalDepth with old-position data, and the result would
+                //   then carry the NEW fen — passing even the round-49/52 fen
+                //   identity checks. Skip until the stale bestmove arrives.
+                synchronized (_discardFlagLock) {
+                    if (_discardingPonderBestmove) return;
                 }
                 processInfoLine(line);
             }
@@ -2743,7 +2841,23 @@ public class StockfishNative {
                 // search isn't distorted. Use async setoption (no wait) — the next
                 // search's stopAndWaitForBestmove + isready handshake ensures the
                 // options are applied before the new search starts.
-                restoreGameplayOptions();
+                // v1.2.3 round-51 (BUG-1): SKIP the restore while an analyze-all
+                //   eval batch is active. engineEvalDeepBeginBatch() sets
+                //   Contempt=0 / MultiPV=1 / UCI_AnalyseMode=true exactly once for
+                //   the whole batch, and the per-step engineEvalDeep() deliberately
+                //   skips re-applying them (the round-44 P1 optimization). But THIS
+                //   unconditional per-bestmove restore undid those options after
+                //   EVERY step — from step 2 onward each batch search ran with the
+                //   gameplay Contempt=24 (draw-avoidance bias) and the user's
+                //   MultiPV (>1 splits search effort, reducing depth), and
+                //   UCI_AnalyseMode=false — exactly the distortion the batch hook
+                //   design was supposed to prevent. engineEvalDeepEndBatch()
+                //   already restores gameplay options via applySettings() on every
+                //   batch-termination path, so the restore here is only needed for
+                //   single (non-batch) evals.
+                if (!_evalDeepBatchActive) {
+                    restoreGameplayOptions();
+                }
                 break;
         }
 

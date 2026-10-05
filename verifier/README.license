@@ -1,0 +1,18 @@
+v1.2.3 round-52 (2026.10.5): directory created — round-52 acceptance verifier.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - README.md: append-only index of verifier versions (one entry per
+    version; older entries are never edited — corrections go in a new
+    version entry).
+  - v1/eval-stale-harness.js (AGPL v3, AI-GEN: AI assisted): Node vm harness
+    that loads the 11 chess.src modules with browser/AndroidBridge stubs
+    and asserts the round-52 stale-eval behavior (28 assertions): late
+    previous-position callbacks are dropped, review-mode stale callbacks
+    are cached under the MATCHED step with White-POV sign re-derivation,
+    the legacy 7-arg callback path still works, batch analyze-all is
+    unaffected, and duplicate callbacks are idempotent.
+  - runs/<timestamp>-v<version>/: timestamped run artifacts (harness logs +
+    RESULT.md). Runs are append-only records; a re-run creates a new
+    timestamped directory.
+  - License classification: harness AGPL v3 (loads AGPL-licensed modules);
+    logs and RESULT.md are project documentation (same terms as the
+    project docs).

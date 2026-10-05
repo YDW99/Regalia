@@ -1,3 +1,59 @@
+## Round-52 changes (2026-10-05)
+
+**No new permissions, no new network endpoints, no new data collection.**
+This round fixes a stale engine-evaluation race; privacy-relevant notes:
+
+- **JS fen-identity guard (T5)**: the eval pipeline now tags each
+  dispatched request with the position's fen string and keeps an 8-entry
+  in-memory ring of recent dispatches (`_evalRecentDispatches`) so stale
+  callbacks can be dropped or filed under the correct review step. The
+  ring holds only fen strings / step indices / array references for the
+  current game session, lives purely in JS memory, and is never persisted,
+  exported, or transmitted. No storage, PGN-export, or telemetry paths
+  changed.
+- **Java stop/bestmove hardening (J1-J4)**: changes are confined to
+  `StockfishNative.java`'s in-process engine state machine (discard-flag
+  arming conditions, info-line gating, state clobbering removal). No IPC,
+  file, or network behavior changed.
+- **verifier/ (new)**: a build-time/dev-time acceptance harness (Node vm)
+  that runs the bundled JS modules with stubbed browser/bridge objects.
+  It executes no engine, touches no user data, and is not shipped in the
+  APK.
+
+## Round-51 changes (2026-09-09)
+
+**No new permissions, no new network endpoints, no new data collection.**
+Privacy-relevant items from this BACK-navigation + background-analysis round:
+
+- **Deferred `webView.onPause()` during analyze-all** (BG-1): while an eval
+  batch is active, `MainActivity.onPause()` skips pausing the WebView so
+  its JS timers (the batch's step chain) keep running in the background.
+  The skipped pause is applied when the batch ends
+  (`onEvalDeepBatchEnded()`). No data flows change — the WebView keeps
+  loading only local asset content; the batch talks to the engine
+  subprocess via the existing in-process bridge.
+- **Wake-lock re-arm per batch step** (BG-2): `EngineService.refreshWakeLock()`
+  re-arms the existing PARTIAL_WAKE_LOCK (WAKE_LOCK permission was already
+  declared) on every analyze-all step dispatch, so background batches
+  longer than the previous 30-minute lock timeout no longer stall. The
+  foreground-service notification (POST_NOTIFICATIONS, already declared)
+  now shows live batch progress (k/N) and the completion state — status
+  text only, no game data.
+- **Root-level exit-confirmation dialog** (BACK-A): a JS-rendered 退出/取消
+  dialog calls the existing `AndroidBridge.exitApp()` bridge method (no new
+  bridge surface). The exit path flushes state exactly like the existing
+  BACK-finish path (no new persistence).
+- **Batch-eval options bug fix** (BUG-1, `StockfishNative.java`):
+  `restoreGameplayOptions()` is skipped while a batch is active so the
+  engine's objective-eval UCI options survive across steps. Pure engine-
+  option handling; no data flow.
+- The BACK routing reorder (file-browser check above the header dialogs)
+  and the 3 new i18n keys are UI-only and privacy-neutral.
+
+The permission table below remains accurate (8 declared permissions,
+unchanged); the foreground service (specialUse) and its notification are
+unchanged in kind — only the notification's status text is richer.
+
 ## Round-45~49 changes (2026-09-06)
 
 **No new permissions, no new network endpoints, no new data collection.**

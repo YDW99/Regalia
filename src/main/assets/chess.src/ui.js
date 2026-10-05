@@ -5254,6 +5254,20 @@ function _resetGameUIState(){
       window._setupExitDialogOverlay=null;
     }
     window._setupExitDialogDismiss=null;
+    // v1.2.3 round-51 (BACK-A): symmetric removal for the root-level exit
+    //   confirmation overlay (same body-appended z-index:10000 pattern as
+    //   the setup-exit dialog above). A game-state reset while the exit
+    //   dialog is open (e.g. a deferred import completing) must not leave
+    //   the backdrop masking the new game. Do NOT route through
+    //   window._exitConfirmDialogDismiss — that callback would run
+    //   _dismiss(false) → render() (harmless here) — but removing the node
+    //   and nulling both hooks directly is the same forced-removal
+    //   convention used for the setup-exit overlay.
+    if(window._exitConfirmDialogOverlay){
+      try{window._exitConfirmDialogOverlay.remove();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+      window._exitConfirmDialogOverlay=null;
+    }
+    window._exitConfirmDialogDismiss=null;
   }
   // v1.0.4 REV13: Reset scroll state on new game
   // v1.0.4 Rev30: also reset the restore guard (in case a render is in flight)
@@ -5819,6 +5833,19 @@ function _reviewAnalyzeAdvance(){
     // v1.2.3 P1: Batch completed normally — restore gameplay UCI options
     //   that were overridden by engineEvalDeepBeginBatch().
     _endEvalDeepBatchIfActive();
+    // v1.2.3 round-51 (BG-3): surface batch completion in the foreground-service
+    //   notification. The completion toast below is invisible while the app is
+    //   backgrounded (round-51 lets the batch finish in the background), so the
+    //   notification is the only user-visible signal that the analysis is done
+    //   and the "analysis running" state can be retired. _updateEngineNotification
+    //   is defined in ai-bridge.js (loads before this module) and throttles to
+    //   1/sec — a single call here is cheap. typeof-guarded per the
+    //   cross-module convention.
+    try{
+      if(typeof _updateEngineNotification==='function'){
+        _updateEngineNotification(T('analysis_done')+' '+(_lastStep+1)+' '+T('step'));
+      }
+    }catch(e){console.warn('[UI]',e?.message?e.message:e);}
     // v1.2.3 round-44 (G11): leave batch write mode + flush pending cache writes.
     try{if(typeof _endBatchWriteMode==='function')_endBatchWriteMode();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     if(_reviewAnalyzeSafetyTimer){clearTimeout(_reviewAnalyzeSafetyTimer);_reviewAnalyzeSafetyTimer=null;}

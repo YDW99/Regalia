@@ -1,3 +1,11 @@
+v1.2.3 round-52 (2026.10.5): no changes to files in this directory.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - License classification: all files unchanged.
+
+v1.2.3 round-51 (2026.9.9): no changes to files in this directory.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - License classification: all files unchanged.
+
 v1.2.3 round-50 (2026.9.6): no changes to files in this directory.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - License classification: all files unchanged (engine_jni.cpp GPL v3 — DroidFish-derived; CMakeLists.txt AGPL v3 — original).

@@ -1,3 +1,17 @@
+v1.2.3 round-52 (2026.10.5): chess.html rebuilt from the round-52 ai-bridge.js change.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - chess.html (AGPL v3, combined work): rebuilt via build-chess.py after
+    the round-52 ai-bridge.js stale-eval fen-identity guard (T5); bundle
+    24290 lines / 1477911 bytes, inline script passes node --check.
+  - License classification: all files unchanged.
+
+v1.2.3 round-51 (2026.9.9): chess.html rebuilt from the round-51 module changes.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - chess.html (AGPL v3, combined work): rebuilt via build-chess.py after
+    the round-51 ui-interactions.js / ui.js / ai-bridge.js / game-logic.js
+    changes (24,206 lines / 1,472,348 bytes; all modules + the inlined
+    script pass node --check). stats.html unchanged.
+
 v1.2.3 round-50 (2026.9.6): chess.html header license mislabel fixed (GPL -> AGPL v3 combined work).
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - chess.html (AGPL v3, combined work): the top-of-file license header

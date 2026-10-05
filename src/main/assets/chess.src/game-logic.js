@@ -243,6 +243,12 @@ const _i18n={
 'analyzing_all':{zh:'正在分析所有步骤...',en:'Analyzing all steps...'},
 'analysis_done':{zh:'分析完成! 共',en:'Analysis complete! Total'},
 'analyzing_progress':{zh:'正在分析...',en:'Analyzing...'},
+// v1.2.3 round-51 (BACK-A): root-level exit-confirmation dialog strings.
+//   handleBackPress shows the dialog when nothing is open (the final
+//   level-by-level back level); 退出 calls AndroidBridge.exitApp().
+'exit_confirm_title':{zh:'退出 Regalia？',en:'Exit Regalia?'},
+'exit_confirm_msg':{zh:'当前对局与复盘进度已自动保存。确定要退出应用吗？',en:'Your game and review progress are saved automatically. Exit the app?'},
+'exit_confirm_yes':{zh:'退出',en:'Exit'},
 // v1.2.1 round-16: Clarify that 📊 in review mode opens the stats page
 //   automatically once the background batch analysis completes. Without this
 //   hint, users see only "正在分析..." and may not realize they need to wait

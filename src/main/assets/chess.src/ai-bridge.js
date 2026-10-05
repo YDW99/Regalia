@@ -547,6 +547,27 @@ let _evalRequestGen=0; // Generation at time of last requestEngineEval() call
 //   the debounce/fast paths can bump _evalRequestGen without ever dispatching,
 //   which previously let a superseded request's late callback through.
 let _evalLastDispatchedGen=0;
+// v1.2.3 round-52 (T5): fen of the most recent ACTUALLY DISPATCHED user-nav
+//   eval — the position identity of that request. The gen-only check in
+//   onEngineEval becomes an IDENTITY once a newer request has been dispatched
+//   (both globals then hold the new gen), so a late callback from the
+//   PREVIOUS position passed every check and was displayed (and, in review
+//   mode, cached) as the new position's eval — "after a fast move the engine
+//   still shows the previous move's evaluation". Java echoes the request's
+//   fen back as onEngineEval's 8th param (round-49 T1); comparing it against
+//   this record rejects cross-position stale callbacks deterministically.
+//   Set ONLY at real dispatch points (same discipline as _evalLastDispatchedGen).
+let _evalLastDispatchedFen=null;
+// v1.2.3 round-52 (T5): small ring of recent REVIEW-MODE user-nav dispatches
+//   ({fen, step, states}). When a fen-mismatched (superseded) callback arrives
+//   in review mode, the ring identifies the step the result ACTUALLY belongs
+//   to so it can still be cached there — preserving v1.1.1 Phase 59.3's
+//   cache-stale-results intent without poisoning the CURRENT step's entry.
+//   `states` pins each entry to its reviewStates generation (reference
+//   equality), so a late callback from a previous review session can never
+//   write into the new session's cache. Bounded at 8: the 300ms user-nav
+//   debounce means at most a couple of dispatches can still be in flight.
+let _evalRecentDispatches=[];
 // v1.0.7 PHASE 19 (bug fix): Capture the mode at request time so onEngineEval
 // can reject cross-mode stale callbacks. Previously, a review-mode eval callback
 // still in flight after exitReview() would pass the normal-mode gen check
@@ -2998,6 +3019,26 @@ function onEngineProgress(depth,nodes,nps,scoreCp,scoreMate,wdlW,wdlD,wdlL,selde
   // the notification is intentionally minimal to avoid distracting the user.
   if(isAIThinking&&depth>0){
     _updateEngineNotification(T('analyzing_ellipsis'));
+  }else if(typeof _reviewAnalyzeAllActive!=='undefined'&&_reviewAnalyzeAllActive&&depth>0){
+    // v1.2.3 round-51 (BG-3): analyze-all batch in progress — surface the
+    //   step progress in the foreground-service notification so the user
+    //   can see the batch advancing while the app is backgrounded (the
+    //   whole point of the round-51 background-analysis work: JS timers
+    //   keep running via MainActivity's deferred webView.onPause, the CPU
+    //   stays awake via the refreshed wake lock, and this line keeps the
+    //   FGS notification "fresh" — which also signals to OEMs that the
+    //   service is actively in use). Progress format: "正在分析... (k/N)".
+    //   _updateEngineNotification throttles to one update per second and
+    //   dedupes identical text, so this is cheap.
+    try{
+      const _bgTotal=(typeof reviewStates!=='undefined'&&reviewStates&&reviewStates.length)?reviewStates.length:0;
+      const _bgCached=(typeof _reviewEvalCache!=='undefined'&&_reviewEvalCache&&typeof _reviewEvalCache.size==='number')?_reviewEvalCache.size:0;
+      if(_bgTotal>0){
+        _updateEngineNotification(T('analyzing_progress')+' ('+_bgCached+'/'+_bgTotal+')');
+      }else{
+        _updateEngineNotification(T('analyzing_ellipsis'));
+      }
+    }catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
   }
   // Ponder info: when not AI thinking, not hint loading, not eval loading, store as ponder info
   // Note: _ponderBarInfo is ONLY set by onPonderProgress(), not here.
@@ -3089,6 +3130,11 @@ function onPonderProgress(depth,nodes,nps,scoreCp,scoreMate,seldepth){
 //   _lastEvalFen). The batch guard below compares it against the dispatch
 //   record; when the param is missing (older runtime calling the 7-arg form)
 //   we fall back to the legacy re-derivation check.
+// v1.2.3 round-52 (T5): the user-nav path now validates reqFen too (against
+//   _evalLastDispatchedFen) — see the T5 block below. Previously a late
+//   previous-position callback arriving after a newer dispatch passed the
+//   gen-only check (an identity at that point) and displayed/cached the old
+//   position's eval on the new one.
 function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth,reqFen){
   // Update heartbeat timestamp — prevents false-positive engine death detection
   // during long eval searches (go depth 22 can take several seconds)
@@ -3214,6 +3260,53 @@ function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth,reqFen){
     try{
       if(typeof _reviewAnalyzeAdvance==='function')_reviewAnalyzeAdvance();
     }catch(e){console.error('Analyze-all advance failed:',e);}
+    return;
+  }
+
+  // v1.2.3 round-52 (T5): POSITION-IDENTITY check for user-nav callbacks.
+  //   The G1 gen check below compares two globals that BOTH advance with each
+  //   new dispatch — so once request B is dispatched, a late callback from
+  //   request A (previous position) sees _evalRequestGen ===
+  //   _evalLastDispatchedGen and passes. The engine pipeline is serial, so at
+  //   most one superseded user-nav eval can still be in flight; its callback
+  //   carries the OLD position's fen (8th param, echoed by Java). Compare it
+  //   against the fen of the most recent actual dispatch: a mismatch means
+  //   the result belongs to a superseded position. Legacy runtimes (7-arg
+  //   callback, reqFen missing) skip this check and fall through to G1.
+  const _cbFenNav=(typeof reqFen==='string'&&reqFen.length>0)?reqFen:null;
+  if(_cbFenNav!==null&&_evalLastDispatchedFen!==null&&_cbFenNav!==_evalLastDispatchedFen){
+    // Stale for display — but in review mode the engine's work is still valid
+    //   for the step it was requested for: cache it under THAT step (found via
+    //   the dispatch ring) instead of dropping it, preserving Phase 59.3's
+    //   "cache stale results" intent. The matched step's side-to-move (NOT the
+    //   current _evalForBlackTurn, which belongs to the newer request) drives
+    //   the White-POV conversion.
+    if(reviewMode&&reviewStates&&reviewStates.length>0){
+      for(let _ri=0;_ri<_evalRecentDispatches.length;_ri++){
+        const _d=_evalRecentDispatches[_ri];
+        if(_d&&_d.states===reviewStates&&_d.fen===_cbFenNav&&_d.step>=0&&_d.step<reviewStates.length){
+          if(!_reviewEvalCache.has(_d.step)){
+            const _mBlack=reviewStates[_d.step].state.currentTurn==='black';
+            let _mW=_bgWdlW,_mD=_bgWdlD,_mL=_bgWdlL;
+            if(_mBlack&&_mW>=0){const _mt=_mW;_mW=_mL;_mL=_mt;}
+            let _mEval,_mMate;
+            if(scoreMate!=null){
+              const _mN=Number.parseInt(scoreMate,10);
+              if(!Number.isNaN(_mN)){
+                const _mWhiteWins=(_mBlack?_mN<=0:_mN>0);
+                _mEval=_mWhiteWins?99999:-99999;
+                _mMate=_mBlack?-_mN:_mN;
+              }else{_mEval=_mBlack?-scoreCp:scoreCp;_mMate=0;}
+            }else{_mEval=_mBlack?-scoreCp:scoreCp;_mMate=0;}
+            _reviewEvalCache.set(_d.step,{eval:_mEval,mate:_mMate,wdlW:_mW,wdlD:_mD,wdlL:_mL,depth:_bgDepth,seldepth:_bgSeldepth});
+            try{if(typeof _updateReviewAnalyzeBtn==='function')_updateReviewAnalyzeBtn();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
+            try{if(typeof _refreshEvalTrendChart==='function')_refreshEvalTrendChart();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
+          }
+          break;
+        }
+      }
+    }
+    console.warn('[AIBridge] Stale eval callback dropped (fen mismatch vs last dispatched user-nav request)');
     return;
   }
 
@@ -4648,6 +4741,13 @@ function requestEngineEval(){
           else{AndroidBridge.engineEval(fen);}
           // v1.2.3 round-44 (G1): record the gen actually dispatched.
           _evalLastDispatchedGen=_evalRequestGen;
+          // v1.2.3 round-52 (T5): record the dispatched position identity (fen)
+          //   for onEngineEval's stale-callback check, and keep a small ring of
+          //   recent review-mode dispatches so a superseded callback can still
+          //   be cached under the step it belongs to.
+          _evalLastDispatchedFen=fen;
+          _evalRecentDispatches.push({fen:fen,step:_reviewEvalRequestedStep,states:reviewStates});
+          if(_evalRecentDispatches.length>8)_evalRecentDispatches.shift();
         }catch(e){console.error("engineEvalDeep error:",e);_evalLoading=false;_updateAllEvalDisplays();}
         if(_evalSafetyTimerId)clearTimeout(_evalSafetyTimerId);
         _evalSafetyTimerId=setTimeout(function(){
@@ -4669,7 +4769,11 @@ function requestEngineEval(){
       _updateEvalDisplay();
       // v1.2.3 round-44 (G1): record the gen actually dispatched (normal-mode
       //   path — without this the G1 check would drop every normal-mode eval).
-      try{AndroidBridge.engineEval(fen);_evalLastDispatchedGen=_evalRequestGen;}catch(e){console.error('engineEval error:',e);_evalLoading=false;_updateEvalDisplay();}
+      //   v1.2.3 round-52 (T5): also record the dispatched fen — the gen
+      //   record alone cannot reject a late previous-position callback once a
+      //   newer request has been dispatched (both globals then hold the new
+      //   gen); the fen identity can.
+      try{AndroidBridge.engineEval(fen);_evalLastDispatchedGen=_evalRequestGen;_evalLastDispatchedFen=fen;}catch(e){console.error('engineEval error:',e);_evalLoading=false;_updateEvalDisplay();}
       if(_evalSafetyTimerId)clearTimeout(_evalSafetyTimerId);
       _evalSafetyTimerId=setTimeout(function(){
         _evalSafetyTimerId=null;

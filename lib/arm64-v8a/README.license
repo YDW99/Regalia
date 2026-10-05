@@ -1,3 +1,17 @@
+v1.2.3 round-52 (2026.10.5): no changes — this directory remains README-only
+  (deletion record); the build-time engine lives in
+  src/main/jniLibs/arm64-v8a/ (not committed; downloaded per BUILDING.md,
+  SHA-256 8f7116d3... verified again this round).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - License classification: all files unchanged.
+
+v1.2.3 round-51 (2026.9.9): no changes — this directory remains README-only
+  (deletion record); the build-time engine lives in
+  src/main/jniLibs/arm64-v8a/ (not committed; downloaded per BUILDING.md,
+  SHA-256 8f7116d3... verified three-way again this round).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - License classification: all files unchanged.
+
 Regalia - Native Library License Notice
 ========================================
 

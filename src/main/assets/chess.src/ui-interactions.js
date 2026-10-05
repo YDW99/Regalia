@@ -1489,8 +1489,31 @@ function _savePGNCancel(){
 /**
  * Handle Android back button press.
  * Closes open dialogs/overlays, exits review/setup modes.
+ * v1.2.3 round-51 (BACK-A): full level-by-level (逐级) back routing.
+ *   Every screen layer now responds to BACK in strict top-down visual order,
+ *   and the root level (no overlay open) shows an exit-confirmation dialog
+ *   instead of the old intentional no-op — the final "level" before leaving
+ *   the app. The dialog itself is dismissible by BACK (treated as Cancel),
+ *   mirroring the _setupExitDialog pattern.
+ * v1.2.3 round-51 (BACK-B): the file-browser check moved ABOVE the four
+ *   header dialogs (showEngineConfig/showNewGameDialog/showAboutPage/
+ *   showImportDialog). The browser overlay is body-appended with an inner
+ *   .dov (z-index 300, later in DOM order than #app's dialogs), so it
+ *   always paints ON TOP of any open header dialog — BACK must close the
+ *   topmost visible layer first. The old order closed the (covered)
+ *   engine-config dialog first, an invisible change that made the first
+ *   BACK press feel dead while the browser stayed open.
  */
 function handleBackPress(){
+  // v1.2.3 round-51 (BACK-A): exit-confirmation dialog — topmost priority.
+  //   It is a body-appended z-index:10000 overlay (never co-exists with the
+  //   other body-appended dialogs below, but if it ever did it would be the
+  //   newest). BACK = Cancel (stay in the app), matching its visible Cancel
+  //   button and the backdrop click.
+  if(typeof window!=='undefined'&&typeof window._exitConfirmDialogDismiss==='function'){
+    window._exitConfirmDialogDismiss();
+    return;
+  }
   // v1.1.1 Phase 65: Export annotation dialog — back button = Cancel
   if(typeof _pgnExportDialogActive!=='undefined'&&_pgnExportDialogActive){
     if(typeof _pgnExportDialogDismiss==='function')_pgnExportDialogDismiss();
@@ -1533,12 +1556,19 @@ function handleBackPress(){
     render();
     return;
   }
-  // v1.2.3 round-48 (BUG-4): the setup-selection cancel block MOVED DOWN below
-  //   the file-browser check (see below). Previously it sat here — AHEAD of the
-  //   showEngineConfig/showNewGameDialog/showAboutPage/showImportDialog checks
-  //   — so in setup mode with a header dialog open (the header buttons stay
-  //   clickable in setup mode), the back button canceled the invisible board
-  //   selection instead of closing the visible dialog.
+  // v1.2.3 round-51 (BACK-B): file browser FIRST among the dialog-group
+  //   checks — its overlay (body-appended, inner .dov z-index 300 later in
+  //   DOM order) always paints on top of the header dialogs, so it is the
+  //   topmost visible layer whenever it exists. Navigates up one directory
+  //   level (history stack), or closes the browser at the root — full
+  //   level-by-level back inside the browser itself.
+  const fileBrowserOverlay=document.getElementById('_fileBrowserOverlay');
+  if(fileBrowserOverlay){
+    if(typeof _fileBrowserHandleBack==='function'){
+      _fileBrowserHandleBack();
+    }
+    return;
+  }
   if(showEngineConfig){
     showEngineConfig=false;
     render();
@@ -1559,15 +1589,6 @@ function handleBackPress(){
     render();
     return;
   }
-  // File browser: Android back button navigates up one directory level
-  // or closes the browser if already at root
-  const fileBrowserOverlay=document.getElementById('_fileBrowserOverlay');
-  if(fileBrowserOverlay){
-    if(typeof _fileBrowserHandleBack==='function'){
-      _fileBrowserHandleBack();
-    }
-    return;
-  }
   // v1.0.8 PHASE 6 (moved in v1.2.3 round-48, BUG-4): If ANY setup-mode
   // selection is active (marker mode OR piece selection OR color selection),
   // back button cancels the selection first (instead of exiting setup). This
@@ -1578,9 +1599,9 @@ function handleBackPress(){
   // The user presses back again to actually exit setup mode.
   // We cancel in priority order: marker mode → piece selection → color.
   // v1.2.3 round-48 (BUG-4): this block must stay BELOW all dialog/overlay
-  //   checks (the six dialog guards above, the four header dialogs, and the
-  //   file browser) — a visible dialog always outranks an invisible board
-  //   selection. Only reviewMode/setupMode exit remain lower priority.
+  //   checks (the dialog guards above and the file browser) — a visible
+  //   dialog always outranks an invisible board selection. Only
+  //   reviewMode/setupMode exit remain lower priority.
   if(typeof setupMode!=='undefined'&&setupMode){
     if(typeof setupMarkerMode!=='undefined'&&setupMarkerMode){
       setupMarkerMode=null;
@@ -1608,7 +1629,96 @@ function handleBackPress(){
     exitSetup();
     return;
   }
-  // No action — could show exit confirmation in the future
+  // v1.2.3 round-51 (BACK-A): startup loading overlay (z-index 99999) covers
+  //   EVERYTHING including any dialog we would open here — an exit dialog
+  //   opened behind it would be invisible and feel like a dead BACK press.
+  //   The overlay is transient (engine init progress) and auto-dismisses;
+  //   treat BACK as a deliberate no-op while it is showing.
+  if(document.getElementById('_loadingOverlay')){
+    return;
+  }
+  // v1.2.3 round-51 (BACK-A): root level — nothing is open. Show the
+  //   exit-confirmation dialog (the final level before leaving the app),
+  //   replacing the historical intentional no-op ("could show exit
+  //   confirmation in the future" — that future is now). The dialog offers
+  //   退出/取消; BACK while it is open = Cancel (topmost branch above).
+  //   State is safe to lose on exit: MainActivity's pause/stop/destroy
+  //   flush chain (_flushReviewEvalCache + persistentFlush) fires on
+  //   finish(), and the game clock/PGN restore from persisted state.
+  _showExitConfirmDialog();
+}
+
+/**
+ * v1.2.3 round-51 (BACK-A): root-level exit confirmation dialog.
+ *   Rendered with the same dynamic-overlay pattern as
+ *   _showSetupModifiedDialog (ui-interactions.js) and
+ *   _showPGNExportAnnotationDialog (ai-bridge.js): createElement overlay
+ *   with .dov/.dlg classes, dismissal exposed via a window.* hook so
+ *   handleBackPress can treat Back as Cancel.
+ *   退出 (exit) → AndroidBridge.exitApp() (existing bridge method) →
+ *     MainActivity.finish() → full lifecycle flush + WebView teardown.
+ *   取消 (Cancel) / backdrop click / BACK → just remove the dialog.
+ *   Idempotent: a second call while the dialog is visible is a no-op
+ *   (checked via window._exitConfirmDialogDismiss).
+ */
+function _showExitConfirmDialog(){
+  if(typeof window!=='undefined'&&typeof window._exitConfirmDialogDismiss==='function'){
+    // Already visible — do not stack a second overlay.
+    return;
+  }
+  const overlay=document.createElement('div');
+  overlay.className='dov';
+  overlay.setAttribute('role','dialog');
+  overlay.setAttribute('aria-modal','true');
+  overlay.setAttribute('aria-label',T('exit_confirm_title'));
+  overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:10000;padding:10px;box-sizing:border-box';
+  overlay.onclick=function(e){if(e.target===overlay){_dismiss();}};
+  const dlg=document.createElement('div');
+  dlg.className='dlg';
+  dlg.style.cssText='max-width:360px;background:var(--card,#2a1a0a);border:1px solid var(--border,#4a3520);border-radius:12px;padding:20px;width:90%;color:var(--text,#f5e6c8)';
+  let html='<h2 style="color:var(--accent2,#ffd700);margin-bottom:14px;font-size:1.05rem">'+_esc(T('exit_confirm_title'))+'</h2>';
+  html+='<p style="font-size:.85rem;line-height:1.6;margin-bottom:16px">'+_esc(T('exit_confirm_msg'))+'</p>';
+  html+='<div style="display:flex;gap:8px;flex-wrap:wrap">';
+  html+='<button class="btn btn-p" style="flex:1;justify-content:center;padding:12px;font-size:.9rem;background:#c0392b;border-color:#a93226" onclick="try{HapticManager.fire(\'BUTTON_PRESS\')}catch(_){};this.closest(\'.dov\')._cb(true)">'+_esc(T('exit_confirm_yes'))+'</button>';
+  html+='<button class="btn" style="flex:1;justify-content:center;padding:12px;font-size:.9rem" onclick="try{HapticManager.fire(\'BUTTON_PRESS\')}catch(_){};this.closest(\'.dov\')._cb(false)">'+_esc(T('cancel'))+'</button>';
+  html+='</div>';
+  dlg.innerHTML=html;
+  overlay.appendChild(dlg);
+  function _dismiss(exit){
+    window._exitConfirmDialogDismiss=null;
+    window._exitConfirmDialogOverlay=null;
+    overlay.remove();
+    if(exit){
+      // v1.2.3 round-51 (BACK-A): flush the review eval cache BEFORE the
+      //   bridge call — exitApp() finishes the Activity on the main thread,
+      //   and MainActivity.onPause's flushAllState ALSO calls
+      //   _flushReviewEvalCache, but by then this synchronous JS flush has
+      //   already guaranteed the freshest eval data hit disk. Both paths
+      //   are idempotent (the cache write is a whole-file replace).
+      try{if(typeof _flushReviewEvalCache==='function')_flushReviewEvalCache();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+      try{
+        if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.exitApp==='function'){
+          AndroidBridge.exitApp();
+        }else{
+          // Bridge unavailable (broken page) — nothing else to do; stay put.
+          console.error('[UI] AndroidBridge.exitApp unavailable — cannot exit');
+        }
+      }catch(e){console.error('[UI] exitApp failed:',e);}
+      return;
+    }
+    // Cancel: stay in the app — nothing else to do (the overlay is gone).
+    render();
+  }
+  overlay._cb=_dismiss;
+  // v1.2.3 round-51 (BACK-A): publish BOTH hooks (mirroring the
+  //   _setupExitDialog pattern) — the dismiss callback for handleBackPress
+  //   (BACK = Cancel) and the overlay node for _resetGameUIState's forced
+  //   removal (a game-state reset while the dialog is open must not leave
+  //   a z-index:10000 backdrop masking the new game).
+  window._exitConfirmDialogDismiss=function(){_dismiss(false);};
+  window._exitConfirmDialogOverlay=overlay;
+  document.body.appendChild(overlay);
+  try{HapticManager.fire('BUTTON_PRESS');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
 }
 
 /**
@@ -1825,4 +1935,4 @@ function _importPGNFileWithSaveCheck(){
   });
 }
 
-export {sqClick,_getCastlingRookForClick,executeMove,_clearAnimationState,undoMove,redoMove,flipBoard,quickFreeOpening,toggleSound,doPromotion,getHint,setDifficultyLevel,toggleSetup,exitSetup,_exitSetupImpl,setupClick,undoSetupClick,redoSetupClick,_withPGNSaveCheck,_savePGNYes,_savePGNNo,_savePGNCancel,handleBackPress,_doPastePGN,_importFENWithSaveCheck,_importPGNFileWithSaveCheck,_renameHumanPlayer,_showStatsImportBackPrompt,_resignGame};
+export {sqClick,_getCastlingRookForClick,executeMove,_clearAnimationState,undoMove,redoMove,flipBoard,quickFreeOpening,toggleSound,doPromotion,getHint,setDifficultyLevel,toggleSetup,exitSetup,_exitSetupImpl,setupClick,undoSetupClick,redoSetupClick,_withPGNSaveCheck,_savePGNYes,_savePGNNo,_savePGNCancel,handleBackPress,_showExitConfirmDialog,_doPastePGN,_importFENWithSaveCheck,_importPGNFileWithSaveCheck,_renameHumanPlayer,_showStatsImportBackPrompt,_resignGame};

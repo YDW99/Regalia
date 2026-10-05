@@ -61,7 +61,13 @@ public class EngineService extends Service {
     // system default, ignoring the user's in-app language preference.
     private static final String PREFS_NAME = "RegaliaEngine";
 
-    private PowerManager.WakeLock wakeLock = null;
+    // v1.2.3 round-51 (BG-2): static volatile — refreshWakeLock() is invoked
+    //   from StockfishNative's engine executor thread (one re-arm per analyze-
+    //   all batch step) while onCreate/onDestroy write it from the service
+    //   main thread. volatile gives the cross-thread visibility the old
+    //   instance field never needed (it was only touched on the service's
+    //   own thread).
+    private static volatile PowerManager.WakeLock wakeLock = null;
     // v1.0.8 PHASE 24 (bug fix): volatile — read from JS binder thread
     //   (updateNotification, start) and service main thread (onCreate/onDestroy).
     private static volatile boolean isRunning = false;
@@ -153,10 +159,14 @@ public class EngineService extends Service {
         //   suspend during very long background analysis sessions. The earlier
         //   wording ("longer sessions can re-acquire by re-entering the
         //   foreground state") described behavior that was never implemented.
-        //   Re-acquisition on expiry was considered (D4) and rejected: sessions
-        //   beyond 30 min of continuous background analysis are not a target
-        //   scenario, and the foreground notification keeps the process alive
-        //   regardless — only the CPU is allowed to sleep.
+        //   v1.2.3 round-51 (BG-2): re-acquisition on expiry IS now implemented
+        //   for the analyze-all batch use case — see refreshWakeLock(). The
+        //   D4=A rejection ("sessions beyond 30 min are not a target
+        //   scenario") is superseded by the round-51 background-analysis
+        //   requirement: a 100+ step batch at 5-15s/step legitimately exceeds
+        //   30 minutes, and mid-batch CPU suspension silently stalls the
+        //   analysis. StockfishNative re-arms the lock on every
+        //   engineEvalDeep() dispatch and on engineEvalDeepBeginBatch().
         try {
             PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
             if (pm != null) {
@@ -184,14 +194,15 @@ public class EngineService extends Service {
         lastStatusInfo = "";
 
         // Release wake lock
-        if (wakeLock != null && wakeLock.isHeld()) {
+        PowerManager.WakeLock wl = wakeLock;
+        wakeLock = null;
+        if (wl != null && wl.isHeld()) {
             try {
-                wakeLock.release();
+                wl.release();
                 Log.i(TAG, "Partial wake lock released");
             } catch (Throwable e) {
                 Log.w(TAG, "Wake lock release failed", e);
             }
-            wakeLock = null;
         }
 
         Log.i(TAG, "Engine service destroyed");
@@ -266,6 +277,28 @@ public class EngineService extends Service {
      */
     public static boolean isServiceRunning() {
         return isRunning;
+    }
+
+    /**
+     * v1.2.3 round-51 (BG-2): re-arm the partial wake lock (30-minute timeout).
+     *   Called by StockfishNative on every engineEvalDeep() dispatch (once per
+     *   analyze-all batch step, 5-15s apart) and on engineEvalDeepBeginBatch(),
+     *   so the lock can never lapse while a background analyze-all batch is
+     *   actually progressing — the v1.1.0 Phase 57 30-minute safety net no
+     *   longer aborts long batches mid-flight.
+     *   Semantics (AOSP PowerManager): acquire(timeout) on a held lock RESETS
+     *   the timeout (no extra reference is held); acquiring an already-expired
+     *   lock is a plain acquire. Thread-safe — called from the engine executor
+     *   thread. No-op when the service/wake lock does not exist.
+     */
+    public static void refreshWakeLock() {
+        PowerManager.WakeLock wl = wakeLock;
+        if (wl == null) return;
+        try {
+            wl.acquire(30L * 60L * 1000L);
+        } catch (Throwable e) {
+            Log.w(TAG, "Wake lock re-arm failed", e);
+        }
     }
 
     /**

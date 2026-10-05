@@ -3,6 +3,111 @@
 > Build guide for the Regalia Android chess app (versionCode=10203, versionName="1.2.3").
 > Round-by-round build notes are appended below (newest first).
 
+## Round-52 build notes (2026-10-05)
+
+- **Stale engine-eval race fix (JS fen-identity guard + Java stop/bestmove
+  hardening)**; version unchanged (versionCode=10203, versionName="1.2.3").
+- **`ai-bridge.js` (T5)**: closes the rare window where a late engine
+  bestmove/info callback for an older position arrives after the user
+  already played/navigated, so the eval bar briefly shows the PREVIOUS
+  position's score. New `_evalLastDispatchedFen` and
+  `_evalRecentDispatches` (8-entry ring of `{fen, step, states}`) are
+  recorded at every user-navigation dispatch (review-debounce dispatch
+  and normal-mode dispatch). `onEngineEval` drops a callback whose
+  `reqFen` differs from the last dispatched user-nav fen — except when it
+  matches a recent review-mode dispatch for the SAME `reviewStates`
+  array: then the eval is cached under that MATCHED step with White-POV
+  sign / WDL re-derived from the matched position's side-to-move
+  (preserves the Phase 59.3 background-caching intent; never poisons the
+  current step). Legacy 7-arg callbacks (no reqFen) still pass through
+  the round-46 generation check. References for the pattern: Polyglot
+  SyncStop, lichess ceval fen-tagging, python-chess `isready` barrier,
+  Stockfish UCI ordering guarantees.
+- **`StockfishNative.java` (J1-J4)**: J1 — the stop-timeout branch arms
+  `_discardingPonderBestmove` only when the captured `stateAtTimeout !=
+  STATE_NONE` (a naturally completed search needs no discard; the old
+  unconditional arming could eat the NEXT search's bestmove); J2 — the
+  idle fast-path no longer clears `_discardingPonderBestmove` (residue is
+  handled by latch-consumption / the discard path /
+  `_resetEngineRuntimeState`); J3 — the reader thread skips
+  `processInfoLine()` while `_discardingPonderBestmove` is set (stale info
+  lines no longer pollute the UI); J4 — the reader's discard branch no
+  longer clobbers `currentState` back to `STATE_NONE` (could overwrite a
+  NEWER search's state).
+- **`verifier/` (new)**: versioned acceptance verifier —
+  `v1/eval-stale-harness.js` (Node vm harness over the 11 chess.src
+  modules, 28 assertions; 28/28 pass on the fixed tree, expected failure
+  on the pre-fix baseline), append-only `README.md` index, timestamped
+  runs under `runs/`, plus `README.license` (AGPL v3 harness).
+- **Rebuild**: `python3 build-chess.py` regenerated `chess.html`
+  (24,290 lines / 1,477,911 bytes); all 11 modules + the inline script
+  pass `node --check`.
+- **Build environment note**: a full JDK (javac) is required on PATH /
+  via the Gradle toolchain — a JRE-only `java-17-openjdk-amd64`
+  installation fails configuration with "Toolchain installation ... does
+  not provide the required capabilities: [JAVA_COMPILER]".
+- Release APK rebuilt with v1+v2+v3 signatures; Stockfish dotprod engine
+  SHA-256 three-way match (8f7116d3...).
+
+## Round-51 build notes (2026-09-09)
+
+- **BACK navigation (level-by-level) + background analyze-all + batch-eval
+  bug fix**; version unchanged (versionCode=10203, versionName="1.2.3").
+- **`MainActivity.java` (BG-1)**: `onPause()` now SKIPS `webView.onPause()`
+  while an analyze-all eval batch is active (`StockfishNative.isEvalDeepBatchActive()`)
+  — pausing a WebView freezes all its JS timers and stalled the batch's
+  `setTimeout(0)` step chain in the background. The skipped pause is applied
+  later by the new `onEvalDeepBatchEnded()` (posted from the engine executor
+  via `mainHandler`) when the batch ends while still backgrounded, or becomes
+  moot on `onResume()`. New volatile flags `_activityResumed` /
+  `_webViewPausedForBatch`.
+- **`EngineService.java` (BG-2)**: the 30-minute partial wake lock is now
+  re-armed per batch step — `wakeLock` promoted to `static volatile`, new
+  `refreshWakeLock()` (no-op when the lock doesn't exist; AOSP
+  acquire(timeout) resets the timeout). Called from
+  `engineEvalDeepBeginBatch()` and every `engineEvalDeep()` dispatch, so the
+  v1.1.0 Phase 57 timeout safety net can no longer abort a legitimately
+  long (>30 min) background batch.
+- **`StockfishNative.java` (BUG-1 / BG-1)**: `handleBestMove`'s STATE_EVAL
+  branch no longer calls `restoreGameplayOptions()` while
+  `_evalDeepBatchActive` — the per-bestmove restore was silently undoing the
+  batch's objective Contempt=0 / MultiPV=1 / UCI_AnalyseMode=true options
+  after EVERY step, so from step 2 onward each batch eval ran biased
+  (Contempt 24) and shallower (user MultiPV) — the exact distortion the
+  round-44 batch hooks were designed to prevent. `engineEvalDeepEndBatch()`
+  already restores gameplay options on every termination path. Also: new
+  public `isEvalDeepBatchActive()` getter; `EngineService.refreshWakeLock()`
+  calls; `onEvalDeepBatchEnded()` main-thread dispatch at batch end.
+- **JS (`ui-interactions.js` BACK-A/B, `ui.js`, `game-logic.js`)**: root-level
+  BACK now shows an exit-confirmation dialog (new
+  `_showExitConfirmDialog()`, window._exitConfirmDialogDismiss /
+  _exitConfirmDialogOverlay hooks mirroring the setup-exit pattern;
+  退出 → existing `AndroidBridge.exitApp()` bridge → `finish()`; BACK on the
+  dialog = Cancel) instead of the historical intentional no-op; the
+  file-browser back check moved ABOVE the four header dialogs (the
+  body-appended browser overlay always paints on top of them — the old order
+  closed the covered dialog first, a dead-feeling first press); BACK is a
+  deliberate no-op while the z-99999 startup loading overlay is showing
+  (any dialog opened behind it would be invisible). 3 new i18n keys
+  (exit_confirm_title/msg/yes, zh+en). `_resetGameUIState` removes the exit
+  overlay symmetrically.
+- **JS (`ai-bridge.js` BG-3, `ui.js`)**: the FGS notification now shows
+  live batch progress — `onEngineProgress` updates it to
+  "正在分析... (k/N)" while `_reviewAnalyzeAllActive`, and the
+  `_reviewAnalyzeAdvance` completion branch posts the final "分析完成 N 步"
+  state (the completion toast is invisible while backgrounded).
+- **Doc consistency**: `MainActivity.MIN_SUPPORTED_CHROME_MAJOR` comment
+  updated — the round-49 "known residual" (stats.html `replaceAll`) was
+  already converted to regex `.replace` within round-49, so the "raise the
+  gate to 85" follow-up is moot.
+- `chess.html` rebuilt via `python3 build-chess.py` (24,206 lines /
+  1,472,348 bytes; all 11 modules + the inlined script pass `node --check`).
+  Release APK rebuilt: signature v1+v2+v3 all true; APK
+  `lib/arm64-v8a/libstockfish.so` SHA-256 =
+  `8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5`
+  (three-way match). Version: versionCode=10203, versionName="1.2.3"
+  (unchanged).
+
 ## Round-49 build notes (2026-09-06)
 
 - **`build-chess.py` (R5-8)**: new injection guard — any module containing

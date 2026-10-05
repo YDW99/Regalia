@@ -1,3 +1,48 @@
+# Regalia v1.2.3 — round-52 工作日志（2026-10-05 UTC+8）
+
+## 任务来源
+
+用户专项：①修复残余 bug——stockfish 引擎评估与对弈实际节奏异步，小概率出现"新一步棋很快走出后引擎仍显示上一步评估"；联网调研以往 Stockfish 系 App 的解决方式，制定步骤分明的方案并彻底实施，避免新 bug 与冗余；②文档卫生：逐一检查 README/LICENSE/NOTICE 家族文件并按需更新、必要时补 README.license；中英文 HTML 说明书与源码匹配（示意图须与最新版完全一致）、更新日志新→旧排列；更新 BUILDING.md & PRIVACY.md；检查 README.md 目录树；新增文件头部权利声明与 AI-GEN 声明风格与旧文件一致；③版本号不变（v1.2.3）；④交付 release APK（v1+v2+v3 签名，兼容澎湃 OS3，使用上传 keystore）+ tar 源码备份（无引擎文件）。Goal 模式要求 worktree 内含 verifier/ 目录（版本化验收标准、只增不改 README.md 索引、runs/ 时间戳运行记录）。
+
+## 调研结论（业界方案）
+
+- Polyglot（UCI↔XBoard 适配层）SyncStop 模式：stop 之后必须等到 bestmove 才能复用引擎——否则旧搜索的 bestmove 会被误当成新搜索的（talkchess 多个线程）。
+- lichess ceval：每次请求带 fen 标签，回调比对当前 fen，不一致即丢弃（stale discard）。
+- python-chess：用 isready/readyok 屏障串行化引擎命令。
+- Stockfish UCI wiki：引擎按序响应 go/stop/bestmove，但 GUI 端线程时序不保证回调到达顺序与 UI 状态一致。
+结论：JS 侧做 fen 身份校验（丢弃或归位迟到回调）+ Java 侧消除 stop/bestmove 竞态窗口，双层防御。
+
+## 实施
+
+- **JS（ai-bridge.js，T5）**：新增 `_evalLastDispatchedFen` 与 `_evalRecentDispatches`（8 项环形 {fen, step, states}），在复盘防抖派发点与常规派发点记录；`onEngineEval` 丢弃 reqFen 与最近用户导航派发 fen 不一致的回调——例外：命中同一 reviewStates 的近期复盘派发时缓存到匹配步（白方视角符号/WDL 按匹配局面行棋方重推导），不污染当前步；无 reqFen 的 7 参旧回调仍走 round-46 世代检查。
+- **Java（StockfishNative.java，J1-J4）**：J1 stop 超时分支仅当 stateAtTimeout != STATE_NONE 才武装 _discardingPonderBestmove（自然完成的搜索不武装，避免吞掉下一次 bestmove）；J2 空闲快速路径不再清除该标志（残留由 latch 消费/丢弃路径/_resetEngineRuntimeState 处理）；J3 reader 在标志置位期间跳过 processInfoLine（杜绝 info 行污染）；J4 丢弃分支不再把 currentState 写回 STATE_NONE（避免覆盖更新搜索的状态）。
+- **verifier/**：v1/eval-stale-harness.js（Node vm，28 断言）——修复后工作树 28/28 通过；修复前基线按预期失败（捕获原始缺陷）。runs/2026-10-05T0000Z-v1/ 记录运行产物；README.md 为只增不改索引。harness 头部版权/AI-GEN 声明与 build-chess.py 同风格（AGPL v3）。
+- **重建**：build-chess.py 重建 chess.html（24,290 行 / 1,477,911 字节）；11 模块 + 内嵌脚本 node --check 全过。
+- **文档**：NOTICE 顶部加 round-52 条目；5 个 README.license（chess.src / assets / java/com/Regalia / Manual / lib/arm64-v8a）顶部加 round-52 条目；新增 verifier/README.license；BUILDING.md、PRIVACY.md、README.md（目录树补 verifier/ + round-52 章节）、中英文说明书（首章更新日志顶部 + 引擎分析节行为说明）同步；示意图复核——本轮无 UI 变更，既有示意图与当前版本一致。版本号不变；无新权限/网络/数据收集/桥接方法。
+- **交付**：release APK（v1+v2+v3 签名，上传 keystore，引擎 SHA-256 8f7116d3... 三方一致）+ tar 源码备份（无引擎、无 keystore-info.txt）。
+
+# Regalia v1.2.3 — round-51 工作日志（2026-09-09 UTC+8）
+
+## 任务来源
+
+用户专项：①安卓返回操作逐级适配（不遗漏任何窗口/页面层级）；②复盘界面「(一键)分析全部」后台持续不中断 + 引擎正确响应系列分析要求；③全项目逐行第一性原理复审（安全/bug/健壮性/功能/性能/冗余/简化）；④版本号保持 v1.2.3（round-51）；⑤全套更新日志由新到旧补 round-51；⑥sf_18 arm64-v8a-dotprod 引擎下载 + SHA-256 核对 + 按上传 key 构建 release APK（v1/v2/v3 签名齐全，兼容澎湃OS3）+ tar 源码包（无引擎）+ 中英文说明书同步更新。
+
+## 实施
+
+- **返回逐级适配（BACK-A）**：ui-interactions.js 根层级（无浮层打开）BACK 由历史性 no-op 改为弹出「退出 Regalia？」确认对话框（新 _showExitConfirmDialog()；退出→既有 AndroidBridge.exitApp()→MainActivity.finish()；BACK=取消；window._exitConfirmDialogDismiss/_exitConfirmDialogOverlay 双钩子镜像 setup-exit 模式；_resetGameUIState 对称强制移除）；加载浮层（z-99999）期间 BACK 有意空操作（其后任何对话框不可见）。game-logic.js 新增 3 个 i18n 键（exit_confirm_title/msg/yes，zh+en，404→407 键，奇偶校验通过）。
+- **返回层级修正（BACK-B）**：handleBackPress 文件浏览器检查上移至四个头部对话框（showEngineConfig/NewGame/About/Import）之前——浏览器浮层（body 追加、内部 .dov z-300 DOM 序靠后）必然绘制在头部对话框之上，旧顺序先关被覆盖的对话框，首按像失灵；实测确认 .dov=300/.prom-dov=110/.gover=20 层叠关系后修正。
+- **分析全部后台持续（BG-1）**：MainActivity.onPause() 在 isEvalDeepBatchActive() 时跳过 webView.onPause()（该调用冻结 WebView 全部 JS 定时器，会停摆 setTimeout(0) 步进链与 60s 安全网）；新增 _activityResumed/_webViewPausedForBatch volatile 标志；engineEvalDeepEndBatch 经 mainHandler 回调 MainActivity.onEvalDeepBatchEnded()——批量结束时应用仍在后台则补上被跳过的暂停（后台计时器扰动严格止于批量期间）；onResume 无条件 webView.onResume() 使延迟暂停失效。
+- **唤醒锁续期（BG-2）**：EngineService.wakeLock 升级 static volatile + 新增 refreshWakeLock()（AOSP acquire(timeout) 重置超时语义，线程安全，锁不存在时 no-op）；engineEvalDeepBeginBatch/engineEvalDeep 每步派发时续期——30 分钟安全网不再中断 >30 分钟长批量；onDestroy 静态锁置空。
+- **通知进度（BG-3）**：ai-bridge.js onEngineProgress 批量期间将 FGS 通知更新为「正在分析... (k/N)」；ui.js _reviewAnalyzeAdvance 完成分支通知「分析完成 N 步」（后台时完成 Toast 不可见，通知是唯一信号）。
+- **BUG-1（引擎选项批处理污染，真实 bug）**：StockfishNative.handleBestMove STATE_EVAL 分支每步评估后无条件 restoreGameplayOptions()——把批量钩子一次设置的 Contempt=0/MultiPV=1/UCI_AnalyseMode=true 在每步后撤销，第 2 步起每步批量评估在 Contempt=24（求和倾向偏差）+ 用户 MultiPV（分裂搜索）+ AnalyseMode=false 下运行，正是 round-44 批量钩子要防的失真；修复为 !_evalDeepBatchActive 才恢复，engineEvalDeepEndBatch 仍是所有终止路径的唯一恢复点；新增 public isEvalDeepBatchActive()（仅 Java 侧，非 @JavascriptInterface）。
+- **文档一致性**：MainActivity MIN_SUPPORTED_CHROME_MAJOR 的 round-49「stats.html replaceAll 残留」注释已过时（源码两处已在 round-49 内改为正则 .replace）——更正注释，84 门禁维持。
+- **更新日志（全部由新到旧）**：BUILDING.md（round-51 构建记录置顶）、README.md（Version 节新增 Round-51 update）、PRIVACY.md（round-51 节置顶）、NOTICE（round-51 节置顶）、9×README.license（round-51 条目置顶，有改动的目录写明改动）、说明书 zh/en（第一章更新日志 round-51 条目置顶 + 第五章新增「安卓系统返回键（逐级返回）」小节 + 第九章新增「后台持续运行」段落）、本 worklog。
+- **构建与验证**：sf_18 stockfish-android-armv8-dotprod.tar 下载（115,578,880 字节），解压后引擎 SHA-256 = 8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5 与 BUILDING.md 一致；部署 src/main/jniLibs/arm64-v8a/libstockfish.so（114,115,752 字节）；全部 11 个 JS 模块 + chess.html 内嵌脚本 node --check 通过；build-chess.py 重建 chess.html（24,206 行 / 1,472,348 字节）；./gradlew assembleRelease（上传的 release-keystore-backup.keystore，alias=regalia）BUILD SUCCESSFUL；apksigner verify：v1+v2+v3 全 true，证书 SHA-256 45bc6d36...a8d8bc 与 keystore-info.txt 一致；APK 内嵌 libstockfish.so SHA-256 三方一致。
+
+## 版本
+
+versionCode=10203，versionName="1.2.3"（不变）。无新权限、无新网络出口、无新数据收集、无新 @JavascriptInterface 方法。
+
 # Regalia v1.2.3 — round-50 工作日志（2026-09-06 UTC+8）
 
 ## 任务来源

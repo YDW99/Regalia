@@ -1,3 +1,22 @@
+v1.2.3 round-52 (2026.10.5): manuals updated — round-52 changelog entries + stale-eval behavior note (zh & en in sync).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - Regalia-v1.2.3-manual-zh.html / Regalia-v1.2.3-manual-en.html: changelog
+    sections gain the round-52 entry at the TOP (newest-first ordering
+    re-verified for every entry); the engine-analysis section documents
+    that eval results are now validated against the displayed position
+    (stale asynchronous callbacks are discarded or filed under the matching
+    review step). Screenshots/diagrams re-checked against the round-52 UI.
+  - License classification: all files unchanged.
+
+v1.2.3 round-51 (2026.9.9): manuals updated — round-51 changelog entries + BACK/background-analysis sections (zh & en in sync).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - Regalia-v1.2.3-manual-zh.html / Regalia-v1.2.3-manual-en.html: the
+    BACK-button section now documents the root-level exit-confirmation
+    dialog and the file-browser/dialog back ordering; the review-mode
+    section documents that (一键)分析全部 continues in the background
+    (notification progress k/N); changelog gains the round-51 entry
+    (newest first).
+
 v1.2.3 round-50 (2026.9.6): manuals updated — changelog round-45~50 entries + Appendix A strict newest-first.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - Regalia-v1.2.3-manual-zh.html / Regalia-v1.2.3-manual-en.html: changelog
