@@ -1,4 +1,4 @@
-# Regalia round-52 Verifier
+# Regalia round-52+ Verifier
 
 Append-only index of verifier versions. One entry per version.
 
@@ -34,3 +34,22 @@ Round-53 acceptance (SonarCloud PR #56 triage):
 - Regression gate: v1 harness must still pass 28/28.
 - 2026-10-05T0400Z · v2 · runs/2026-10-05T0400Z-v2/ · round-53 triage 19/19 PASS + v1 regression 28/28 PASS
 - 2026-10-05T0430Z · v2 · runs/2026-10-05T0430Z-v2/ · compileReleaseJavaWithJavac BUILD SUCCESSFUL (post MainActivity repair) + triage 19/19 PASS + v1 regression 28/28 PASS
+
+## v3 (2026-10-05, created)
+Round-54 acceptance (GitHub PR #56 AI-review triage):
+- v3/round54-pr56-triage.js — 27 structural assertions: G1 build.gradle
+  fallback-key detection; G2 engineGo failure-branch AI retry (timed +
+  untimed); G3 dlgChess960SPID -1 sentinel; G4 per-batch notification
+  count + openStatsPage Binder-cap re-check; G5 stats.html en-passant
+  victim validation + onStatsPGNFileError; G6 waitForBounded API-26 gate;
+  G7 CR-aware line counting (SafPickerHelper + StatsActivity); G8
+  non-reference-counted wake lock; G9 isPathBrowsable wiring + filesDir +
+  SAF-picker JS escape.
+- Regression gates: v2 must still pass 19/19; v1 (with the new D3a
+  batch-completion assertion) must pass 29/29.
+- Harness-strengthening (accepted CodeRabbit test nitpicks): v1 gained
+  D3a (batch-finished asserted, no longer read-and-discarded); v2 F2d now
+  scans tablebase.js AND ui-interactions.js and only exempts
+  void-prefixed/declaration sites; v2 F4b scopes the catch check to the
+  try block containing onEvalDeepBatchEnded().
+- 2026-10-05T0500Z · v3 · runs/2026-10-05T0500Z-v3/ · round-54 triage 27/27 PASS + v2 19/19 PASS + v1 29/29 PASS + compileReleaseJavaWithJavac BUILD SUCCESSFUL

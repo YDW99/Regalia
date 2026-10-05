@@ -663,7 +663,7 @@ function quickFreeOpening(){
   //   decides solely from dlgChess960/dlgChess960SPID, and quickFreeOpening
   //   bypasses the dialog, so without this a previous 960 game (and its SP-ID)
   //   would silently carry over into the "free opening" game.
-  dlgChess960=false;dlgChess960SPID=null;
+  dlgChess960=false;dlgChess960SPID=-1; // round-54 (PR56 CR#3): -1 is the "random" sentinel (ui.js declaration); null coerces to 0 in >= comparisons and broke both the dialog preview and _startGameImpl's randomSPID pick.
   startGame();
   showToast(T('new_game_free'));
 }

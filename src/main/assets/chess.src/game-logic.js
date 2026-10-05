@@ -487,6 +487,10 @@ const _i18n={
 'empty_dir':{zh:'空目录',en:'Empty directory'},
 'import_settings_title':{zh:'📥 导入设置',en:'📥 Import Settings'},
 'manual_path':{zh:'手动输入路径',en:'Manual path'},
+// round-54 (PR56 CR#12): the built-in browser is sandbox-scoped; public
+//   storage settings files are picked via SAF.
+'settings_saf_button':{zh:'📂 系统文件选择器',en:'📂 System file picker'},
+'settings_saf_hint':{zh:'该目录不可直接浏览，请使用系统文件选择器',en:'This directory is not directly browsable — please use the system file picker'},
 'cancel_btn':{zh:'取消',en:'Cancel'},
 'import_settings_engine':{zh:'引擎',en:'Engine'},
 'file_browse_label':{zh:'文件浏览',en:'File Browser'},
@@ -3042,7 +3046,15 @@ if(gameClocks !== undefined&&gameClocks&&typeof AndroidBridge.engineGoTimed==='f
       //   command; silence left the user staring at a hung AI with no toast.
       console.error('engineGo fallback failed:',error);
       showToast(T('engine_unavailable_hint'));
-      isAIThinking=false;_aiBarInfo='';render();
+      isAIThinking=false;_aiBarInfo='';_aiRetryCount++;
+      // v1.2.3 round-54 (PR56 CR#2): mirror the engineGoNewGame fallback
+      //   branch — the safety timer skips retry once isAIThinking=false, so
+      //   without this reschedule the game stalls on the AI's turn. Same
+      //   increments-here / doAIMove-does-not-double-count contract as the
+      //   sibling branch above (doAIMove's own increment is guarded by its
+      //   isAIThinking early-return... see line ~3070).
+      if(_aiRetryCount<3){setTimeout(()=>{if(!gameOver&&gameState.currentTurn!==playerColor)doAIMove();},500);}
+      else{showToast(T('ai_timeout'));_aiRetryCount=0;render();}
     }}
     // v1.2.3 round-48 (BUG-8): on SUCCESSFUL fallback dispatch, KEEP
     //   isAIThinking=true — onBestMove clears it when the engine answers, and
@@ -3056,8 +3068,13 @@ if(gameClocks !== undefined&&gameClocks&&typeof AndroidBridge.engineGoTimed==='f
   return;
 }
 // Untimed game — use the original movetime-based engineGo
-if(_needNewGameForEngine){_needNewGameForEngine=false;try{AndroidBridge.engineGoNewGame(fen,aiLevel);}catch(e){console.error('engineGoNewGame error:',e);isAIThinking=false;_aiBarInfo='';render();}return;}
-else{try{AndroidBridge.engineGo(fen,aiLevel);}catch(e){console.error('engineGo error:',e);isAIThinking=false;_aiBarInfo='';render();}return;}
+// v1.2.3 round-54 (PR56 CR#2, extended): the untimed path has the same
+//   stall-on-throw defect the timed fallback had — isAIThinking=false with no
+//   retry disarms the safety timer's guard and strands the game on the AI's
+//   turn. Same retry contract as the timed branches (increment here, cap 3,
+//   then ai_timeout).
+if(_needNewGameForEngine){_needNewGameForEngine=false;try{AndroidBridge.engineGoNewGame(fen,aiLevel);}catch(e){console.error('engineGoNewGame error:',e);showToast(T('engine_unavailable_hint'));isAIThinking=false;_aiBarInfo='';_aiRetryCount++;if(_aiRetryCount<3){setTimeout(()=>{if(!gameOver&&gameState.currentTurn!==playerColor)doAIMove();},500);}else{showToast(T('ai_timeout'));_aiRetryCount=0;render();}}return;}
+else{try{AndroidBridge.engineGo(fen,aiLevel);}catch(e){console.error('engineGo error:',e);showToast(T('engine_unavailable_hint'));isAIThinking=false;_aiBarInfo='';_aiRetryCount++;if(_aiRetryCount<3){setTimeout(()=>{if(!gameOver&&gameState.currentTurn!==playerColor)doAIMove();},500);}else{showToast(T('ai_timeout'));_aiRetryCount=0;render();}}return;}
 }
 console.warn('_requestStockfishMove: engine not available, _engineReady=',_engineReady);
 showToast(T('engine_unavailable_hint'));

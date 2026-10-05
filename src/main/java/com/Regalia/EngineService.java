@@ -307,6 +307,17 @@ public class EngineService extends Service {
             PowerManager pm = (PowerManager) ctx.getSystemService(Context.POWER_SERVICE);
             if (pm != null) {
                 PowerManager.WakeLock wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Regalia:engine-analysis");
+                // v1.2.3 round-54 (PR56 CR#10): non-reference-counted — every
+                //   engineEvalDeep* call re-arms via refreshWakeLock(); with
+                //   the default reference counting each timed acquire would
+                //   pile on a reference + its own timeout releaser, so a single
+                //   release() in onDestroy could not drop the lock (CPU held
+                //   awake until the last timeout fired). With refcounting off,
+                //   re-acquire just resets the timeout and one release() frees
+                //   the lock regardless of how many refreshWakeLock() calls ran.
+                //   NOTE: set BEFORE publishing to the static field — a racing
+                //   refreshWakeLock() must never see a reference-counted lock.
+                wl.setReferenceCounted(false);
                 wakeLock = wl;
                 wl.acquire(30L * 60L * 1000L); // 30 minutes
                 Log.i(TAG, "Partial wake lock acquired (30min timeout)");

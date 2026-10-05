@@ -1,0 +1,6 @@
+gradle compileReleaseJavaWithJavac --no-daemon
+ANDROID_HOME=/tmp/sdk (JDK 17.0.20.1, NDK 27.2.12479018, build-tools 35+34, platform-35)
+keystore env vars present (signing config active)
+Run A (after code edits): BUILD SUCCESSFUL in 3m 16s
+Run B (after doc edits + EngineService comment reorder): BUILD SUCCESSFUL in 24s
+0 errors; deprecation warnings only.

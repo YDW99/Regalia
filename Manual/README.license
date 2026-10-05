@@ -1,3 +1,13 @@
+v1.2.3 round-54 (2026.10.5): manuals updated — round-54 changelog entries (zh & en in sync).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - Regalia-v1.2.3-manual-zh.html / Regalia-v1.2.3-manual-en.html: the
+    chapter-1 round log gained the round-54 paragraph (PR #56 AI-review
+    triage summary: 12 fixed / 13 false positives), prepended newest-first
+    above the round-53 entry; ordering verified (zh 五十四→五十三→五十二 /
+    en fifty-fourth→fifty-third→fifty-second). No UI change this round, so
+    screenshots/mockups unchanged.
+  - License classification: unchanged (AGPL v3 documentation).
+
 v1.2.3 round-53 (2026.10.5): manuals updated — round-53 changelog entries (zh & en in sync).
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - Regalia-v1.2.3-manual-zh.html / Regalia-v1.2.3-manual-en.html: the

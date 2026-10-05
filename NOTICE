@@ -1,3 +1,98 @@
+Round-54 (2026-10-05) — PR #56 AI-review triage: 12 fixed / 13 false positives
+=============================================================================================================
+
+Triage of all AI-reported findings on GitHub PR #56 (CodeRabbit 5 review
+passes, 19 actionable comments + 2 review-body notes; GitHub Advanced
+Security mobsfscan 7 log-info findings; PMD summary). SonarCloud-side
+round-53 results stood (quality gate OK; the 2 open S116 field-naming
+issues remain documented false positives).
+
+Real findings fixed (code):
+- build.gradle: a present-but-incomplete version.properties (missing or
+  blank VERSION_* key) now also counts as the fallback state, so the
+  loud "USING FALLBACK VERSION" warning can never be skipped.
+- game-logic.js: all four engineGo/engineGoNewGame dispatch-failure
+  branches now reschedule doAIMove (retry cap 3, then ai_timeout) — a
+  throw previously stranded the game on the AI's turn (the safety timer
+  skips retry once isAIThinking=false).
+- ui-interactions.js: dlgChess960SPID reset sentinel corrected null→-1
+  (null coerces to 0 in >= comparisons, breaking the dialog preview and
+  the randomSPID pick after a "free opening" game).
+- ai-bridge.js: (a) the background analyze-all notification now shows the
+  CURRENT batch's completed count (_reviewAnalyzeStep+1) instead of the
+  persisted cross-game cache size; (b) openStatsPage re-checks the payload
+  size after dropping visualAnnotations and falls back to the PGN
+  clipboard copy if still over the Binder cap; (c) the settings file
+  browser now starts at the internal files dir, drops the dead /sdcard &
+  manual-path entries, and offers a SAF-picker escape (round-49 sandbox
+  gate made the old roots list as "[]").
+- stats.html: (a) an en-passant target is only accepted when an opposing
+  pawn actually sits beside the target square (invalid FENs could
+  previously fabricate en-passant captures); (b) new explicit
+  onStatsPGNFileError() callback + pgn_read_failed i18n — a failed PGN
+  import no longer fails silently.
+- EngineProcessManager.java: Process.waitFor(2, SECONDS) is API 26+;
+  routed through waitForBounded() (blocking waitFor() on API 23-25) —
+  the old call could throw NoSuchMethodError (an Error) past the
+  catch (Exception) and skip the sh -c fallback.
+- EngineService.java: the engine wake lock is now
+  setReferenceCounted(false) before publication — refreshWakeLock()
+  re-arms no longer pile up references, so a single release() in
+  onDestroy always drops the lock.
+- SafPickerHelper.java + StatsActivity.java: the 8KB chunked PGN readers
+  count bare '\r' as a line terminator (folding CRLF pairs, even across
+  chunk boundaries) — CR-only files could previously bypass the 5000-line
+  import cap.
+- JsBridgeGateway.java/StockfishNative.java/FileIoHelper.java: new
+  isPathBrowsable() gate (app-private dirs + app-specific external files
+  + public Download/Documents) used by listFiles/getParentPath;
+  getDefaultPaths() now also returns filesDir. Read/write operations stay
+  on the strict isPathInSandbox() gate.
+
+Verifier: v3/round54-pr56-triage.js (27 assertions, all PASS) added;
+v1 harness strengthened (batch-completion now asserted — D3a) and v2
+triage assertions F2d/F4b tightened per review (both still PASS).
+
+Real findings fixed (docs):
+- PRIVACY.md gained the missing top-level '# Privacy Policy' title
+  (markdownlint MD041).
+- NOTICE: "9x README.license" corrected to 10x (the round-50 set includes
+  .github/ and lib/arm64-v8a/); round-48 "zero-instantiation" corrected
+  to "no effective calls" for HapticHelper (it WAS instantiated but never
+  invoked, per the round-10 record).
+- src/main/java/com/Regalia/README.license: same zero-instantiation
+  correction as NOTICE.
+- BUILDING.md: round-50 "NEVER CREATED" claim scoped to the Phase-73/75
+  plan only; duplicated round-48 reappearance sentence de-duplicated.
+- proguard-rules.pro: stale "legacy nativeRenice" reference removed
+  (deleted in round-48, RED-3).
+- .github/README.license: clarified that the PR templates' "AGPL v3 +
+  GPL v3 dual license" wording refers to the combined-work licensing,
+  not a per-file dual license in this directory.
+- worklog.md: round-48 verification count corrected 20→19 Java files.
+
+False positives declined (documented here; no code change):
+- github-advanced-security mobsfscan CWE-532 ×7 (MainActivity:630,
+  StatsActivity:567, StockfishNative:1658/1674/1682/4682/4744): generic
+  "app logs information" findings. The flagged statements log engine
+  state booleans/paths and UI diagnostics — no PII, credentials, or
+  user content; round-48 SEC-6 already demoted path-bearing logs to
+  Log.d, which proguard-rules.pro strips from release builds.
+- CodeRabbit ai-bridge.js:3046 "per-batch pending count" (2026-10-05
+  pass, superseded form): the underlying notification-metric issue was
+  real and is fixed above via _reviewAnalyzeStep+1; the suggested
+  pending-count refactor is unnecessary churn on top of that fix.
+- CodeRabbit verifier comments (2, on v1/v2 harnesses): test-robustness
+  nitpicks, both accepted and implemented (harness-only changes).
+- CodeRabbit docs comments on historical prose (BUILDING.md 2035 dup,
+  NOTICE round-48 GPL list, java README.license): all addressed above;
+  no remaining action.
+- SonarCloud java:S116 ×2 (_activityResumed/_webViewPausedForBatch):
+  kept per the project-wide `_xxx` private-field convention (round-35
+  precedent; in-source comments + round-53 entry).
+
+Version: versionCode=10203, versionName="1.2.3" (unchanged).
+
 Round-53 (2026-10-05) — SonarCloud PR #56 triage: 9 fixed / 2 false positives
 =============================================================================================================
 
@@ -154,7 +249,10 @@ Round-50 (2026-09-06) — Documentation & license-hygiene round (no code behavio
   corrected to strict newest-first ordering (within the v1.2.3 group:
   release -> round-17 -> 13 -> 12; the overview paragraph moved below the
   v1.1.1 section with its internal order reversed).
-- NOTICE + 9x README.license + worklog.md: round-45~50 entries added;
+- NOTICE + 10x README.license + worklog.md: round-45~50 entries added;
+  (round-54 correction: the count is 10 — the updated set includes
+  .github/README.license and lib/arm64-v8a/README.license, which the
+  earlier "9x" line failed to count);
   "NEVER CREATED / already deleted" narratives that contradict the git
   history annotated (see the editor's notes in the round-33 canonical list
   and the v1.2.0 Phase-73/75 entries below); res/README.license's two
@@ -233,9 +331,13 @@ Round-48 (2026-09-06) — External review report (41 findings) triage + 13 dead 
     libengine_bridge.so / libc++_shared.so) — the root lib/ directory is
     NOT the Gradle packaging path; the real build-time location is
     src/main/jniLibs/arm64-v8a/ (not committed).
-  - RED-2: four zero-instantiation Java dead classes (MessageBus /
+  - RED-2: four Java dead classes with no effective calls (MessageBus /
     UciProtocolHandler / EngineConfigManager / HapticHelper, 1,031 lines
-    total). Editor's note: these files DID exist in the git tree — the
+    total). (round-54 correction: "zero-instantiation" was inaccurate for
+    HapticHelper — per the round-10 record below it WAS instantiated in
+    StockfishNative (`_hapticHelper = new HapticHelper(...)`) but never
+    invoked; "no effective calls" describes all four accurately.)
+    Editor's note: these files DID exist in the git tree — the
     v1.2.1 round-4/round-10 deletions only removed them from the build
     tree and never reached git, and a zip-based sync later revived the
     file bodies, where they survived until this round's deletion. The

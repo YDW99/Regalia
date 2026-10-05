@@ -492,6 +492,10 @@ const _i18n={
   'annotations_truncated':{zh:'对局数据过大：部分视觉注解已省略',en:'Game data too large: some visual annotations were omitted'},
   // v1.2.3 round-49 (F9): notice when a paste/import runs without a game payload (standalone mode)
   'payload_missing_notice':{zh:'未检测到当前对局数据——已作为独立 PGN 导入',en:'No current game data — imported as a standalone PGN'},
+  // round-54 (PR56 CR#11): StatsActivity previously signalled a read failure
+  //   (e.g. PGN over the 10M-char cap) by calling onStatsPGNFileRead('') — the
+  //   handler silently returned and the user saw no error at all.
+  'pgn_read_failed':{zh:'PGN 读取失败：文件过大或无法访问',en:'PGN read failed: file too large or inaccessible'},
   // v1.2.3 round-48 (ROB-3): user-visible notice when the heatmap computation fails (was silently omitted)
   'heatmap_failed':{zh:'热力图计算失败（已跳过）',en:'Heatmap computation failed (skipped)'},
   // v1.0.4 Rev27: Board display section heading (DeepSeek review feature)
@@ -1008,7 +1012,15 @@ function fenToState(fen){
             const cr2=er+pd,cc2=ec+dc;
             if(cr2>=0&&cr2<8&&cc2>=0&&cc2<8&&board[cr2][cc2]&&board[cr2][cc2].type==='pawn'&&board[cr2][cc2].color===currentTurn){_epHasCap=true;break;}
           }
-          if(_epHasCap)enPassantTarget={row:er,col:ec};
+          // v1.2.3 round-54 (PR56 CR#5): also require the pawn that was just
+          //   double-pushed — board[er+pd][ec] must hold an OPPOSING pawn —
+          //   otherwise an invalid FEN could set enPassantTarget and a later
+          //   exd6-style move would fabricate an en-passant capture on an
+          //   empty square (illegal board state).
+          const _epVictim=board[er+pd][ec];
+          if(_epHasCap&&_epVictim&&_epVictim.type==='pawn'&&_epVictim.color!==currentTurn){
+            enPassantTarget={row:er,col:ec};
+          }
         }
       }
     }
@@ -4330,7 +4342,12 @@ function _statsSelectPGNFile(){
 // page with the imported PGN (mirrors _statsPastePGN behavior).
 function onStatsPGNFileRead(content){
   if(!content){
-    // Empty content = picker cancelled or read failed — no state change.
+    // round-54 (PR56 CR#11): empty content used to mean "picker cancelled OR
+    //   read failed" with no way to tell them apart — a failed import (e.g.
+    //   over the 10M-char cap) silently did nothing. Java now emits
+    //   onStatsPGNFileError() on failure; the empty callback remains only as
+    //   the cancellation path (and a legacy fallback for older WebView
+    //   instances still showing this page after an APK update).
     return;
   }
   // v1.2.3 round-49 (F9): same null-payload guard as _statsPastePGN —
@@ -4356,6 +4373,9 @@ function onStatsPGNFileRead(content){
   _statsImportedPGN=content;
   render();
 }
+// round-54 (PR56 CR#11): explicit failure callback from StatsActivity —
+// separates "read failed" from "picker cancelled" (empty onStatsPGNFileRead).
+function onStatsPGNFileError(){_showStatsToast(T('pgn_read_failed'));}
 function requestReview(){
   _haptic('BUTTON_PRESS');
   // v1.0.4 Rev28: If the user imported a PGN on the stats page, the

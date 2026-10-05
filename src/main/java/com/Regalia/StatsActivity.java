@@ -410,7 +410,9 @@ public class StatsActivity extends Activity {
                             startActivityForResult(intent, REQUEST_CODE_IMPORT_PGN);
                         } catch (Throwable e) {
                             Log.e(TAG, "statsSelectPGNFile picker failed", e);
-                            evalJs("if(typeof onStatsPGNFileRead==='function')onStatsPGNFileRead('')");
+                            // round-54 (PR56 CR#11): explicit failure callback.
+                            evalJs("if(typeof onStatsPGNFileError==='function'){onStatsPGNFileError();}"
+                                    + "else if(typeof onStatsPGNFileRead==='function'){onStatsPGNFileRead('');}");
                         }
                     }
                 });
@@ -762,6 +764,12 @@ public class StatsActivity extends Activity {
                     //   文件会在主线程（onActivityResult）直接 OOM。
                     final int MAX_CHARS = 10_000_000;
                     int lineCount = 0;
+                    // v1.2.3 round-54 (PR56 CR#8): mirror SafPickerHelper —
+                    //   count bare '\r' as a line terminator (readLine()
+                    //   semantics), folding CRLF pairs (even across chunk
+                    //   boundaries) into one line. A CR-only file previously
+                    //   bypassed MAX_LINES entirely.
+                    boolean prevWasCr = false;
                     // v1.0.8 PHASE 32 ROBUSTNESS: track truncation and append a
                     //   warning comment (matching StockfishNative's behavior).
                     boolean truncated = false;
@@ -775,9 +783,15 @@ public class StatsActivity extends Activity {
                         int appendLen = n;
                         for (int i = 0; i < n; i++) {
                             if (chunk[i] == '\n') {
-                                lineCount++;
-                                if (lineCount >= MAX_LINES) { appendLen = i + 1; break; }
+                                if (!prevWasCr) lineCount++; // LF — count unless it closes a CRLF pair
+                                prevWasCr = false;
+                            } else if (chunk[i] == '\r') {
+                                lineCount++; // CR — always a line end (a following LF is folded above)
+                                prevWasCr = true;
+                            } else {
+                                prevWasCr = false;
                             }
+                            if (lineCount >= MAX_LINES) { appendLen = i + 1; break; }
                         }
                         sb.append(chunk, 0, appendLen);
                         if (appendLen < n) { truncated = true; break; }
@@ -801,7 +815,13 @@ public class StatsActivity extends Activity {
                 evalJs("if(typeof onStatsPGNFileRead==='function'){try{var _d=" + jsonContent + ";onStatsPGNFileRead(_d.content);}catch(e){console.error('stats PGN read callback error:',e);}}");
             } catch (Throwable e) {
                 Log.e(TAG, "Stats PGN file read failed", e);
-                evalJs("if(typeof onStatsPGNFileRead==='function')onStatsPGNFileRead('')");
+                // v1.2.3 round-54 (PR56 CR#11): signal the failure explicitly
+                //   instead of calling onStatsPGNFileRead('') — an empty
+                //   content callback is indistinguishable from a cancelled
+                //   picker in stats.html, so a failed import (e.g. over the
+                //   10M-char cap) previously failed silently.
+                evalJs("if(typeof onStatsPGNFileError==='function'){onStatsPGNFileError();}"
+                        + "else if(typeof onStatsPGNFileRead==='function'){onStatsPGNFileRead('');}");
             }
         }
     }

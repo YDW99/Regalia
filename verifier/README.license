@@ -1,3 +1,18 @@
+v1.2.3 round-54 (2026.10.5): v3 added — PR #56 AI-review triage acceptance checks.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - v3/round54-pr56-triage.js (AGPL v3, AI-GEN: AI assisted): 27
+    structural assertions (G1-G9) covering build.gradle fallback-key
+    detection, engineGo retry branches, Chess960 sentinel, batch
+    notification count, openStatsPage re-check, stats.html en-passant +
+    error callback, waitForBounded API gate, CR-aware line counting,
+    non-reference-counted wake lock, and the isPathBrowsable wiring.
+  - v1/eval-stale-harness.js: D3a added — the batch-completion flag is
+    now asserted (was read-and-discarded); 29 assertions total.
+  - v2/round53-sonar-triage.js: F2d/F4b tightened per review (dual-file
+    scan, void/declaration-only prefixes; try-block-scoped catch check).
+  - runs/2026-10-05T0500Z-v3/: triage.log + regression logs + RESULT.md.
+  - License classification: unchanged (AGPL v3 harness).
+
 v1.2.3 round-53 (2026.10.5): v2 added — SonarCloud PR #56 triage acceptance checks.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - v2/round53-sonar-triage.js (AGPL v3, AI-GEN: AI assisted): 19

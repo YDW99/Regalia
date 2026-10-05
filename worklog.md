@@ -1,3 +1,54 @@
+# Regalia v1.2.3 — round-54 工作日志（2026-10-05 UTC+8）
+
+## 任务来源
+
+GitHub PR #56 页面 AI 汇报问题排查（CodeRabbit 5 轮评审 19 条 actionable + 2 条综述；GitHub Advanced Security mobsfscan 7 条 CWE-532；PMD 汇总），剔除误报后制定方案并精确实施，产出 round-54 补丁包。版本号保持 v1.2.3（versionCode=10203 不变）。
+
+## 分诊（逐项对照源码）
+
+| # | 来源 | 位置 | 结论 |
+|---|------|------|------|
+| 1 | CodeRabbit | build.gradle:58 | 真实：version.properties 存在但缺键会静默回退 → 已修（缺键/空白键即视为 fallback） |
+| 2 | CodeRabbit | game-logic.js:3045 | 真实：engineGo 回退抛异常后对局停在 AI 回合 → 已修（四处失败分支统一重试，cap 3 → ai_timeout；untimed 同缺陷一并修复） |
+| 3 | CodeRabbit | ui-interactions.js:666 | 真实：dlgChess960SPID 重置为 null（>=0 判定被强制转换破坏）→ 已修为 -1 |
+| 4 | CodeRabbit | ai-bridge.js:1814 | 真实：openStatsPage 去掉 visualAnnotations 后仍可能超 Binder 上限 → 已修（超限回退剪贴板并 return） |
+| 5 | CodeRabbit | stats.html:1011 | 真实：吃过路兵目标格未校验被吃兵 → 已修（要求对方兵在 er+pd 行） |
+| 6 | CodeRabbit | EngineProcessManager.java:109 | 真实：waitFor(2,SECONDS) 为 API 26+，minSdk 23 → NoSuchMethodError 逃逸 catch(Exception) → 已修（waitForBounded 帮助方法） |
+| 7 | CodeRabbit | SafPickerHelper.java:409 | 真实：分块读取只数 \n，CR-only 文件绕过 5000 行上限 → 已修（prevWasCr 折叠 CRLF，跨块安全） |
+| 8 | CodeRabbit | StatsActivity.java:774 | 真实：读取失败回调空串，用户看不到原因 → 已修（新增 onStatsPGNFileError + pgn_read_failed i18n） |
+| 9 | CodeRabbit | StatsActivity.java:779 | 真实：同 7，StatsActivity 读取器同样缺 CR 计数 → 已修（同款 prevWasCr 逻辑） |
+| 10 | CodeRabbit | StockfishNative.java:4918 | 真实：getDefaultPaths 返回的根目录被 isPathInSandbox 拒绝 → 已修（新增 isPathBrowsable 浏览门 + filesDir 起点 + SAF 兜底按钮；读写仍走严格沙箱） |
+| 11 | CodeRabbit | EngineService.java:293 | 真实：wake lock 引用计数导致 onDestroy 一次 release 无法释放 → 已修（setReferenceCounted(false) 先于发布） |
+| 12 | CodeRabbit | ai-bridge.js:3046 | 部分真实：通知进度用跨对局持久缓存大小确实虚高 → 已修（改用本批次 _reviewAnalyzeStep+1）；其 pending-count 重构建议为多余 churn，未采纳 |
+| 13 | CodeRabbit | verifier/v1:272 | 真实（测试薄弱）：doneTxt 读了未断言 → 已修（D3a 断言批次结束） |
+| 14 | CodeRabbit | verifier/v2:60 | 真实（测试过松）：F2d 只扫 tb 且放行 return/赋值 → 已收紧（tb+ui 双扫，仅放行 void/函数声明） |
+| 15 | CodeRabbit | verifier/v2:77 | 真实（测试过松）：F4b 400 字符窗口可能误匹配 → 已收紧（限定 try 块、断言无 catch Throwable，窗口 700） |
+| 16 | GitHub-AS | MainActivity:630 等 7 处 | **误报**：mobsfscan CWE-532 通用「记录日志」提醒；日志仅含引擎状态布尔值/路径与 UI 诊断，无 PII/凭据/用户内容；round-48 SEC-6 已将含路径日志降为 Log.d 且 release 被 ProGuard 剥离 |
+| 17 | CodeRabbit | .github/README.license:7 | **误报**（表述歧义非冲突）：PR 模板「AGPL v3 + GPL v3」指组合作品双许可（见根 README Licensing），已在 README.license 加注澄清，不改许可 |
+| 18 | CodeRabbit | BUILDING.md:683 | 真实（文档自相矛盾）：「NEVER CREATED」与后文「曾存在并于 round-48 删除」冲突 → 已限定为仅指 Phase-73/75 计划 |
+| 19 | CodeRabbit | BUILDING.md:2171 | 真实：round-48 重现句重复两遍 → 已去重 |
+| 20 | CodeRabbit | lib/arm64-v8a/README.license:102 | 真实：proguard-rules.pro 残留 nativeRenice 引用（round-48 已删实现）→ 已同步 |
+| 21 | CodeRabbit | NOTICE:162 | 真实：round-50「9x README.license」与清单 10 个不符 → 已更正为 10x |
+| 22 | CodeRabbit | NOTICE:1064 | 真实：round-48「zero-instantiation」对 HapticHelper 不准确（round-10 记录其被实例化但未调用）→ 已改为「无有效调用」 |
+| 23 | CodeRabbit | PRIVACY.md:74 | 真实：缺一级标题（markdownlint MD041）→ 已加 `# Privacy Policy — Regalia` |
+| 24 | CodeRabbit | java/README.license:90 | 真实：同 22 → 同步修正 |
+| 25 | CodeRabbit | worklog.md:119 | 真实：round-48 验证「20 个 Java 文件」应为 19 → 已更正并注明勘误 |
+
+## 验证
+
+- `gradle compileReleaseJavaWithJavac`：BUILD SUCCESSFUL（0 错误）。
+- verifier v3（round-54 验收，27 项断言）：27/27 PASS。
+- verifier v2（round-53 回归，含收紧后的 F2d/F4b）：19/19 PASS。
+- verifier v1（round-52 回归，含新 D3a 断言）：29/29 PASS。
+- chess.html 经 build-chess.py 重建：24,357 行 / 1,483,165 字节；全部 11 模块 node --check 通过；打包内联脚本语法通过。
+
+## 遗留（已留档，不改代码）
+
+- SonarCloud java:S116 ×2（_activityResumed/_webViewPausedForBatch）：项目级 `_xxx` 私有字段约定（round-35 先例），维持误报结论。
+- CodeRabbit 综述提及的 engine 启动/AI 停滞/Chess960/wake-lock/文件浏览器五项，均即本表 #2/#3/#6/#10/#11，已全部闭环。
+
+**版本**：versionName "1.2.3" 不变；versionCode=10203 不变。
+
 # Regalia v1.2.3 — round-53 工作日志（2026-10-05 UTC+8）
 
 ## 任务来源
@@ -116,7 +167,7 @@ round-48 缓修 5 项清零 + 全新第一性原理复审（5 路并行）。
 
 ## 验证
 
-chess.html 确定性重建 24,042 行；node --check 全过；20 个 Java 文件括号平衡 (0,0)；45+45+68 断言全绿。
+chess.html 确定性重建 24,042 行；node --check 全过；19 个 Java 文件括号平衡 (0,0)（round-54 更正：原日志误写 20——RED-2 删除 4 个死类后 src/main/java 下实为 19 个）；45+45+68 断言全绿。
 
 **版本**：versionName "1.2.3" 不变；versionCode=10203 不变。
 

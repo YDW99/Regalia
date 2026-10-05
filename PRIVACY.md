@@ -1,3 +1,29 @@
+# Privacy Policy — Regalia
+
+## Round-54 changes (2026-10-05)
+
+**No new permissions, no new network endpoints, no new data collection.**
+This round triages the AI-reported findings on GitHub PR #56 (CodeRabbit
+/ GitHub Advanced Security). Privacy-relevant notes:
+
+- The settings file browser (ai-bridge.js + Java bridge) is now
+  explicitly scoped: directory LISTING is allowed under app-private dirs
+  plus the public Download/Documents roots (a new isPathBrowsable gate),
+  while file READ/WRITE remains restricted to the strict internal sandbox
+  (isPathInSandbox). Files in public storage are imported via the SAF
+  system picker (user-initiated, per-file grant) — no broad storage
+  access is requested or used.
+- The PGN import readers (SafPickerHelper / StatsActivity) now count
+  CR-only line endings toward the 5000-line cap — a robustness fix, no
+  data-handling change.
+- A failed stats-page PGN import now surfaces an explicit error toast
+  instead of failing silently — UI feedback only, no data change.
+- The engine wake lock is now non-reference-counted so a single release
+  always frees it — battery/behavior hygiene, no data change.
+- All other changes are local correctness fixes (AI-move retry on engine
+  dispatch failure, Chess960 dialog sentinel, en-passant FEN validation,
+  version-fallback warning) with no privacy impact.
+
 ## Round-53 changes (2026-10-05)
 
 **No new permissions, no new network endpoints, no new data collection.**

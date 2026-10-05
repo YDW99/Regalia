@@ -191,7 +191,11 @@ Regalia/
 │   ├── README.md               # Append-only index of verifier versions
 │   ├── README.license          # License classification for this directory (AGPL v3 harness)
 │   ├── v1/                     # v1 acceptance criteria + harness (eval-stale race)
-│   │   └── eval-stale-harness.js # Node vm harness: 28 stale-eval assertions over the 11-module bundle
+│   │   └── eval-stale-harness.js # Node vm harness: 29 stale-eval assertions over the 11-module bundle (round-54: +D3a batch-completion)
+│   ├── v2/                     # v2 acceptance criteria (round-53 SonarCloud triage)
+│   │   └── round53-sonar-triage.js # 19 structural assertions (F1-F6; round-54: F2d/F4b tightened)
+│   ├── v3/                     # v3 acceptance criteria (round-54 PR #56 AI-review triage)
+│   │   └── round54-pr56-triage.js # 27 structural assertions (G1-G9)
 │   └── runs/                   # Timestamped run artifacts (append-only logs + RESULT.md)
 ├── NOTICE                      # Third-party component notices + version history
 ├── NOTICE-DroidFish            # Original DroidFish notice
@@ -364,6 +368,28 @@ backup_rules.xml / data_extraction_rules.xml deleted, CMake
 3.22.1→3.31.6.
 
 Full development log: [worklog.md](worklog.md) (newest round first).
+
+### Round-54 update (2026-10-05) — PR #56 AI-review triage: 12 fixed / 13 false positives
+
+- **Scope**: all AI-reported findings on GitHub PR #56 triaged — CodeRabbit
+  (5 review passes, 19 actionable comments + 2 review-body notes) and GitHub
+  Advanced Security (7 mobsfscan CWE-532 log-info findings). 12 real findings
+  fixed; 13 triaged as false positives with documentation (see NOTICE /
+  worklog.md for the full table). Version unchanged (versionCode=10203,
+  versionName="1.2.3").
+- **Highlights**: engine-dispatch failure now reschedules the AI move
+  (game-logic.js, retry cap 3); Chess960 dialog sentinel corrected
+  (null→-1); analyze-all background notification shows the current batch's
+  own progress; oversized stats payloads fall back to clipboard instead of
+  a silent no-op; en-passant FEN targets validated (stats.html); stats PGN
+  import failures surface an explicit error; API 23-25 Process.waitFor
+  NoSuchMethodError closed (waitForBounded); engine wake lock made
+  non-reference-counted; CR-only line endings counted by the PGN import
+  caps; the settings file browser is sandbox-aware (new isPathBrowsable
+  gate) with a SAF-picker escape for public storage.
+- **Verifier**: v3/round54-pr56-triage.js (27 assertions) added; v1 harness
+  strengthened (D3a); v2 triage tightened (F2d/F4b). 27/27 + 19/19 + 29/29
+  PASS; compileReleaseJavaWithJavac BUILD SUCCESSFUL.
 
 ### Round-53 update (2026-10-05) — SonarCloud PR #56 triage: 9 fixed / 2 false positives
 

@@ -3,6 +3,38 @@
 > Build guide for the Regalia Android chess app (versionCode=10203, versionName="1.2.3").
 > Round-by-round build notes are appended below (newest first).
 
+## Round-54 build notes (2026-10-05)
+
+- **PR #56 AI-review triage** (CodeRabbit 5 passes / GitHub Advanced
+  Security mobsfscan / PMD): 12 real findings fixed, 13 false positives
+  documented (see NOTICE / worklog.md for the full triage table).
+- **Build-script change (build.gradle)**: `usingFallbackVersion` now also
+  triggers when version.properties EXISTS but any of VERSION_MAJOR /
+  VERSION_MINOR / VERSION_PATCH / VERSION_BUILD is missing or blank —
+  previously the ?: defaults silently filled the gap and the SEC-1
+  warning never fired. No change when the file is complete.
+- **Java changes**: EngineProcessManager (new waitForBounded API-26
+  gate), EngineService (setReferenceCounted(false) on the wake lock),
+  SafPickerHelper + StatsActivity (CR-aware chunked line counting),
+  JsBridgeGateway (new isPathBrowsable gate), StockfishNative
+  (listFiles/getParentPath route through it), FileIoHelper
+  (getDefaultPaths gains filesDir). All compile clean
+  (compileReleaseJavaWithJavac BUILD SUCCESSFUL).
+- **JS changes**: game-logic.js (engineGo failure branches reschedule
+  doAIMove), ui-interactions.js (dlgChess960SPID reset sentinel -1),
+  ai-bridge.js (per-batch notification count, openStatsPage Binder-cap
+  re-check, sandbox-aware settings file browser + SAF escape). Rebuilt
+  via `python3 build-chess.py` (24,357 lines).
+- **stats.html changes**: en-passant victim-pawn validation, explicit
+  onStatsPGNFileError callback + pgn_read_failed i18n.
+- **Docs**: PRIVACY.md top-level title (MD041); NOTICE 9x→10x
+  README.license + HapticHelper "no effective calls" correction;
+  java/README.license same correction; proguard-rules.pro stale
+  nativeRenice reference removed; worklog.md round-48 count 20→19;
+  .github/README.license dual-license clarification.
+- **Verifier**: v3/round54-pr56-triage.js (27 assertions) added; v1
+  harness D3a batch-completion assertion; v2 F2d/F4b tightened.
+
 ## Round-53 build notes (2026-10-05)
 
 - **SonarCloud PR #56 triage** (11 open issues → 9 fixed / 2 false
@@ -680,7 +712,9 @@
     marked UciProtocolHandler.java, EngineConfigManager.java, MessageBus.java
     as "NEVER CREATED" (Phase-73/75 plans that were never implemented)
     (Editor's note, round-48: the classes did exist as zero-instantiation
-    dead code and were finally deleted from git in round-48, RED-2.); noted
+    dead code and were finally deleted from git in round-48, RED-2. The
+    "NEVER CREATED" claim above refers to the Phase-73/75 plan only — the
+    later code-bearing re-uploads did exist; see the round-48 notes.); noted
     that ui-board.js/ui-review.js/ui-audio.js/ui-toolbar.js (Phase-74 extracts)
     were REMOVED in round-4.
   - `Manual/Regalia-v1.2.3-manual-{zh,en}.html` — UI architecture diagram
@@ -2165,8 +2199,6 @@ A line-by-line first-principles review of every source file was performed after 
     **Note (v1.2.1 round-4)**: count back down to 11 — `MessageBus`,
     `UciProtocolHandler`, and `EngineConfigManager` were deleted in round-4
     (their functionality was either never wired up or duplicated inline).
-    (they later reappeared via archive re-upload and were finally deleted
-    from git in round-48, RED-2, together with HapticHelper)
     (they later reappeared via archive re-upload and were finally deleted
     from git in round-48, RED-2, together with HapticHelper)
 - **v1.2.0 Phase 82 (2026.7.11): renderInternal dialog extraction.**

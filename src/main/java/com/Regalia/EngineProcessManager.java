@@ -100,9 +100,12 @@ public class EngineProcessManager {
                 try {
                     p = Runtime.getRuntime().exec(
                             new String[]{"/system/bin/chmod", "700", file.getAbsolutePath()});
-                    if (!p.waitFor(2, TimeUnit.SECONDS)) {
-                        p.destroy();
-                    }
+                    // v1.2.3 round-54 (PR56 CR#6): waitFor(long, TimeUnit) is
+                    //   API 26+, minSdk is 23 — on API 23-25 the call throws
+                    //   NoSuchMethodError (an Error, NOT caught by the
+                    //   catch (Exception) below) and would propagate past the
+                    //   sh -c fallback. Route through waitForBounded().
+                    waitForBounded(p);
                 } catch (InterruptedException e) {
                     killProcess(p);
                     Thread.currentThread().interrupt();
@@ -121,9 +124,8 @@ public class EngineProcessManager {
                         p2 = Runtime.getRuntime().exec(
                                 new String[]{"/system/bin/sh", "-c",
                                         "chmod 700 " + file.getAbsolutePath()});
-                        if (!p2.waitFor(2, TimeUnit.SECONDS)) {
-                            p2.destroy();
-                        }
+                        // round-54 (PR56 CR#6): same API-26 guard as above.
+                        waitForBounded(p2);
                     } catch (InterruptedException e3) {
                         killProcess(p2);
                         Thread.currentThread().interrupt();
@@ -146,6 +148,25 @@ public class EngineProcessManager {
      * destroyForcibly() requires API 26 (minSdk is 23); below that, destroy()
      * is the strongest available signal.
      */
+    /**
+     * v1.2.3 round-54 (PR56 CR#6): Process.waitFor(long, TimeUnit) requires
+     * API 26 while minSdk is 23 — on API 23-25 the call throws
+     * NoSuchMethodError (an Error subclass, so the catch (Exception) around
+     * the call sites would NOT catch it, skipping the sh -c fallback and
+     * propagating into startEngineViaProcessBuilder). API 26+ keeps the
+     * bounded wait; below that, chmod is a short-lived process so a plain
+     * blocking waitFor() is safe.
+     */
+    private static void waitForBounded(Process p) throws InterruptedException {
+        if (Build.VERSION.SDK_INT >= 26) {
+            if (!p.waitFor(2, TimeUnit.SECONDS)) {
+                p.destroy();
+            }
+        } else {
+            p.waitFor();
+        }
+    }
+
     private static void killProcess(Process p) {
         if (p == null) return;
         try {

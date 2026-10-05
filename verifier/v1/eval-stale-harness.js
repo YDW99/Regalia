@@ -268,7 +268,10 @@ function flushTimers() {
     run(`onEngineEval(30,null,22,460,320,220,28,_batchLastDispatched.fen);`);
     await new Promise(r => setTimeout(r, 60));
   }
-  const doneTxt = run(`_reviewAnalyzeAllActive`);
+  // round-54 (PR56 CR#13): actually ASSERT the batch finished — previously the
+  //   flag was read into doneTxt and discarded, so a still-active batch would
+  //   have passed D3.
+  ok(run(`_reviewAnalyzeAllActive`) === false, 'D3a: batch finished (active flag cleared)');
   ok(run(`_reviewEvalCache.size`) === 4, 'D3: batch cached all 4 steps (got ' + run(`_reviewEvalCache.size`) + ')');
 
   console.log('\n===== RESULT: ' + pass + ' passed, ' + fail + ' failed =====');

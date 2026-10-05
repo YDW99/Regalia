@@ -1,3 +1,34 @@
+v1.2.3 round-54 (2026.10.5): PR #56 AI-review Java fixes — 6 files.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - EngineProcessManager.java (AGPL v3): Process.waitFor(2, SECONDS) is
+    API 26+ (minSdk 23) — routed through the new waitForBounded() helper
+    (blocking waitFor() below API 26); the old call could throw
+    NoSuchMethodError (an Error) past the catch (Exception) and skip the
+    sh -c fallback.
+  - EngineService.java (AGPL v3): the engine wake lock is now
+    setReferenceCounted(false) BEFORE publication — refreshWakeLock()
+    re-arms no longer accumulate references, so one release() in
+    onDestroy always drops the lock (CodeRabbit finding on PR #56).
+  - SafPickerHelper.java + StatsActivity.java (AGPL v3): the 8KB chunked
+    PGN readers count bare CR as a line terminator (folding CRLF pairs,
+    even across chunk boundaries) — CR-only files previously bypassed the
+    5000-line import cap. StatsActivity also signals import failures via
+    the new onStatsPGNFileError JS callback instead of an ambiguous empty
+    content callback.
+  - JsBridgeGateway.java (GPL v3, DroidFish-derived): new isPathBrowsable()
+    gate (app-private dirs + app-specific external files + public
+    Download/Documents) — getDefaultPaths() surfaces those roots to the JS
+    file browser, but the round-49 sandbox gate always rejected them.
+  - StockfishNative.java (GPL v3, DroidFish-derived): listFiles /
+    getParentPath route through isPathBrowsable; readTextFile /
+    writeTextFile stay on the strict isPathInSandbox gate.
+  - FileIoHelper.java (AGPL v3): getDefaultPaths() now also returns
+    filesDir (always sandbox-browsable; the JS browser's new start dir).
+  - Also: the round-48 RED-2 "zero-instantiation" wording corrected to
+    "no effective calls" for HapticHelper (instantiated but never invoked,
+    per the round-10 record) — see the round-48 entry below.
+  - License classification: unchanged.
+
 v1.2.3 round-53 (2026.10.5): SonarCloud PR #56 Java fixes — EngineService/StockfishNative; MainActivity comment-only.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - EngineService.java (AGPL v3): S2696 ×2 — the static wakeLock field is
@@ -82,12 +113,14 @@ v1.2.3 round-48 (2026.9.6): BUG-2 OnBackInvokedCallback + SEC-6 log demotion + R
     demoted to Log.d.
   - RED-2: MessageBus.java / UciProtocolHandler.java /
     EngineConfigManager.java / HapticHelper.java DELETED from git (1,031
-    lines total). These four zero-instantiation dead classes DID exist in
-    the git tree — the v1.2.1 round-4/round-10 deletions recorded below
-    only removed them from the build tree and never reached git, and a
-    zip-based sync later revived the file bodies (see the editor's notes
-    on the round-4 and round-10 entries below). This directory now holds
-    19 live Java classes.
+    lines total). These four dead classes had no effective calls
+    (HapticHelper was instantiated in StockfishNative but never invoked —
+    see the round-10 record). They DID exist in the git tree — the
+    v1.2.1 round-4/round-10 deletions recorded below only removed them
+    from the build tree and never reached git, and a zip-based sync
+    later revived the file bodies (see the editor's notes on the round-4
+    and round-10 entries below). This directory now holds 19 live Java
+    classes.
   - License classification: unchanged (deletions of dead code only; the
     4 classes are removed from the classification lists).
 

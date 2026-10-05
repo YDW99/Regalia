@@ -395,6 +395,13 @@ public class SafPickerHelper {
             StringBuilder sb = new StringBuilder();
             char[] chunk = new char[8192];
             int lineCount = 0;
+            // v1.2.3 round-54 (PR56 CR#7): count bare '\r' as a line terminator
+            //   too — BufferedReader.readLine() (the pre-round-49 implementation
+            //   whose semantics this block replaced) treats CR, LF and CRLF all
+            //   as line ends, and a CR-only file could otherwise smuggle N
+            //   "lines" past PGN_MAX_LINES. prevWasCr folds a CRLF pair (even
+            //   one split across chunk boundaries) into a single line count.
+            boolean prevWasCr = false;
             boolean truncated = false;
             int n;
             while ((n = reader.read(chunk, 0, chunk.length)) != -1) {
@@ -405,9 +412,15 @@ public class SafPickerHelper {
                 int appendLen = n;
                 for (int i = 0; i < n; i++) {
                     if (chunk[i] == '\n') {
-                        lineCount++;
-                        if (lineCount >= PGN_MAX_LINES) { appendLen = i + 1; break; }
+                        if (!prevWasCr) lineCount++; // LF — count unless it closes a CRLF pair
+                        prevWasCr = false;
+                    } else if (chunk[i] == '\r') {
+                        lineCount++; // CR — always a line end (a following LF is folded above)
+                        prevWasCr = true;
+                    } else {
+                        prevWasCr = false;
                     }
+                    if (lineCount >= PGN_MAX_LINES) { appendLen = i + 1; break; }
                 }
                 sb.append(chunk, 0, appendLen);
                 if (appendLen < n) { truncated = true; break; }

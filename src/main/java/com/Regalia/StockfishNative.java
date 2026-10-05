@@ -4907,13 +4907,18 @@ public class StockfishNative {
 
     @JavascriptInterface
     public String listFiles(String dirPath) {
-        // v1.2.3 round-49 (review-4 P3-6): same sandbox gate as writeTextFile/
-        //   readTextFile — without it JS could enumerate names/sizes of any
-        //   process-readable directory. Returns the helper's failure-mode
-        //   value ("[]") so the JS file browser renders an empty listing
-        //   instead of throwing on JSON.parse(null).
-        if (!_jsBridgeGateway.isPathInSandbox(dirPath)) {
-            Log.w(TAG, "listFiles: path rejected by sandbox check");
+        // v1.2.3 round-49 (review-4 P3-6): sandbox gate — without it JS could
+        //   enumerate names/sizes of any process-readable directory. Returns
+        //   the helper's failure-mode value ("[]") so the JS file browser
+        //   renders an empty listing instead of throwing on JSON.parse(null).
+        // v1.2.3 round-54 (PR56 CR#12): isPathInSandbox → isPathBrowsable.
+        //   getDefaultPaths() hands the JS browser external-files/Download/
+        //   Documents as roots — outside the strict sandbox on API 29+, so the
+        //   browser always showed "[]" there. Browsing (name/size listing) is
+        //   widened to those whitelisted roots; read/write stay sandbox-gated
+        //   (settings import from public dirs routes through the SAF picker).
+        if (!_jsBridgeGateway.isPathBrowsable(dirPath)) {
+            Log.w(TAG, "listFiles: path rejected by browse gate");
             return "[]";
         }
         return _fileIoHelper.listFiles(dirPath);
@@ -4928,8 +4933,10 @@ public class StockfishNative {
     public String getParentPath(String path) {
         // v1.2.3 round-49 (review-4 P3-6): sandbox gate (see listFiles above).
         //   Returns the helper's failure-mode value ("") on rejection.
-        if (!_jsBridgeGateway.isPathInSandbox(path)) {
-            Log.w(TAG, "getParentPath: path rejected by sandbox check");
+        // v1.2.3 round-54 (PR56 CR#12): same isPathBrowsable widening as
+        //   listFiles — navigating UP from a browsable root must work too.
+        if (!_jsBridgeGateway.isPathBrowsable(path)) {
+            Log.w(TAG, "getParentPath: path rejected by browse gate");
             return "";
         }
         return _fileIoHelper.getParentPath(path);

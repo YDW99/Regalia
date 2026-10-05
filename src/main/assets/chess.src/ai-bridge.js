@@ -1811,6 +1811,16 @@ function openStatsPage(){
   if(payload.length>900*1024){
     console.warn('openStatsPage: payload exceeds 900KB ('+payload.length+' chars) — dropping visualAnnotations to stay under the Binder transaction limit');
     payload=JSON.stringify({pgn:pgn,evals:evalData,moveRecords:moveData,playerColor:playerColor,lang:(typeof _lang!=='undefined'?_lang:'zh'),gameVariant:(gameVariant !== undefined?gameVariant:null),visualAnnotationsTruncated:true});
+    // v1.2.3 round-54 (PR56 CR#4): a pgn/evals/moveRecords payload can still
+    //   exceed the Binder cap after the annotations drop — startActivity would
+    //   throw TransactionTooLargeException in Java, the stats page never opens,
+    //   and the existing clipboard fallback never fires. Bail out here with the
+    //   clipboard fallback instead.
+    if(payload.length>900*1024){
+      console.warn('openStatsPage: payload still exceeds 900KB after dropping annotations — falling back to clipboard');
+      safeCopyToClipboard(pgn,T('pgn_copied'));
+      return;
+    }
   }
   _bridgeCall(function(bridge){
     if(typeof bridge.openStatsPage==='function'){
@@ -3034,12 +3044,16 @@ function onEngineProgress(depth,nodes,nps,scoreCp,scoreMate,wdlW,wdlD,wdlL,selde
       // round-53 (S6582/S7741): `reviewStates?.length` keeps the cross-module
       //   typeof guard (reviewStates is declared in ui.js — the round-11
       //   degraded-module defense) while using the optional chain for the
-      //   null check; `_reviewEvalCache` is declared in THIS module (line ~50),
-      //   so a direct undefined comparison is safe and sufficient.
+      //   null check.
       const _bgTotal=(typeof reviewStates!=='undefined'&&reviewStates?.length)?reviewStates.length:0;
-      const _bgCached=(_reviewEvalCache!==undefined&&_reviewEvalCache&&typeof _reviewEvalCache.size==='number')?_reviewEvalCache.size:0;
       if(_bgTotal>0){
-        _updateEngineNotification(T('analyzing_progress')+' ('+_bgCached+'/'+_bgTotal+')');
+        // v1.2.3 round-54 (PR56 CR#9): display the CURRENT batch's completed
+        //   count (_reviewAnalyzeStep+1), not _reviewEvalCache.size — the cache
+        //   is persisted across games (round-44 G11), so its size inflated the
+        //   notification progress for later batches (CodeRabbit). Clamp to the
+        //   current game length in case a hijack left the step ahead.
+        const _bgDone=(typeof _reviewAnalyzeStep!=='undefined'&&_reviewAnalyzeStep>=0)?Math.min(_reviewAnalyzeStep+1,_bgTotal):0;
+        _updateEngineNotification(T('analyzing_progress')+' ('+_bgDone+'/'+_bgTotal+')');
       }else{
         _updateEngineNotification(T('analyzing_ellipsis'));
       }
@@ -3528,8 +3542,23 @@ function _openSettingsFileBrowser(){
   _bridgeCall(function(bridge){
     try{
       const paths=JSON.parse(bridge.getDefaultPaths());
-      _fileBrowserPath=paths.downloads||paths.externalStorage||'/sdcard';
-    }catch(e){_fileBrowserPath='/sdcard';}
+      // round-54 (PR56 CR#12): round-49's sandbox gate rejects /sdcard & the
+      //   public Download/Documents dirs (isPathInSandbox only covers the
+      //   internal files/cache dirs — settings import from public storage is
+      //   expected to route through the SAF picker instead). Start the browser
+      //   at the FIRST browsable root: internal files dir → app-specific
+      //   external dir (browsable via the new isPathBrowsable gate) → SAF hint.
+      _fileBrowserPath=paths.filesDir||paths.externalStorage||'';
+      if(!_fileBrowserPath){
+        showToast(T('settings_saf_hint'));
+        if(typeof bridge.openSystemFilePicker==='function')bridge.openSystemFilePicker();
+        return;
+      }
+    }catch(e){
+      showToast(T('settings_saf_hint'));
+      if(typeof bridge.openSystemFilePicker==='function')bridge.openSystemFilePicker();
+      return;
+    }
     _showFileBrowser();
   },null,false);
 }
@@ -3548,10 +3577,10 @@ function _showFileBrowser(){
       h+='<div style="background:var(--card);border:1px solid var(--border);border-radius:4px;padding:6px 10px;font-size:.72rem;color:var(--muted);margin-bottom:10px;word-break:break-all">'+_esc(_fileBrowserPath)+'</div>';
       // Navigation buttons
       h+='<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">';
-      h+='<button class="btn" style="font-size:.72rem;padding:3px 8px" onclick="_fileBrowserGoTo(\'/sdcard\')">/sdcard</button>';
-      h+='<button class="btn" style="font-size:.72rem;padding:3px 8px" onclick="_fileBrowserGoTo(\'/storage/emulated/0/Download\')">Download</button>';
-      h+='<button class="btn" style="font-size:.72rem;padding:3px 8px" onclick="_fileBrowserGoTo(\'/storage/emulated/0/Documents\')">Documents</button>';
-      h+='<button class="btn" style="font-size:.72rem;padding:3px 8px" onclick="_fileBrowserInputPath()">'+T('manual_path')+'</button>';
+      // round-54 (PR56 CR#12): /sdcard, public Download/Documents and manual
+      //   paths are outside the round-49 sandbox — listFiles rejects them.
+      //   Settings import from public storage goes through the SAF picker.
+      h+='<button class="btn" style="font-size:.72rem;padding:3px 8px" onclick="if(typeof AndroidBridge!==\'undefined\'&&AndroidBridge.openSystemFilePicker){_closeFileBrowser();AndroidBridge.openSystemFilePicker();}">'+T('settings_saf_button')+'</button>';
       h+='</div>';
       // Parent directory — use Java-resolved parent path instead of /..
       if(parentPath&&parentPath!==_fileBrowserPath){
@@ -3622,10 +3651,10 @@ function _fileBrowserHandleBack(){
   _closeFileBrowser();
   return true;
 }
-function _fileBrowserInputPath(){
-  const path=prompt(T('manual_path')+':',_fileBrowserPath);
-  if(path){_fileBrowserHistory.push(_fileBrowserPath);_fileBrowserPath=path;_showFileBrowser();}
-}
+// round-54 (PR56 CR#12): _fileBrowserInputPath removed — a manually entered
+//   path outside the sandbox always failed listFiles/readTextFile (round-49
+//   gate). Public-storage files are handled by the SAF picker button in the
+//   browser dialog.
 function _fileBrowserSelect(filePath){
   const overlay=document.getElementById('_fileBrowserOverlay');
   if(overlay)overlay.remove();
@@ -3651,7 +3680,10 @@ function _fileBrowserSelect(filePath){
       // callback will fire the success/failure toast.
       bridge.importSettings(content);
     }else{
-      showToast(T('settings_read_fail'));
+      // round-54 (PR56 CR#12): read rejected by the sandbox (round-49) or
+      //   unreadable — offer the SAF picker, which has no path restrictions.
+      showToast(T('settings_saf_hint'));
+      if(typeof bridge.openSystemFilePicker==='function')bridge.openSystemFilePicker();
     }
   },null,false);
 }

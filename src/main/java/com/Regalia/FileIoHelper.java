@@ -304,6 +304,10 @@ public class FileIoHelper {
     public String getDefaultPaths() {
         try {
             JSONObject paths = new JSONObject();
+            // round-54 (PR56 CR#12): internal files dir — always inside the
+            //   strict sandbox (isPathInSandbox), i.e. always listable by the
+            //   JS file browser. This is now the browser's start directory.
+            paths.put("filesDir", context.getFilesDir().getAbsolutePath());
             // App-private external storage — always accessible, no permission needed.
             // This is the only path on Android 11+ that the app can reliably write to.
             File extFilesDir = context.getExternalFilesDir(null);
@@ -339,7 +343,7 @@ public class FileIoHelper {
             return paths.toString();
         } catch (Throwable e) {
             Log.e(TAG, "getDefaultPaths failed", e);
-            return "{\"externalStorage\":\"/sdcard\",\"downloads\":\"/storage/emulated/0/Download\",\"documents\":\"/storage/emulated/0/Documents\"}";
+            return "{\"filesDir\":\"" + context.getFilesDir().getAbsolutePath() + "\",\"externalStorage\":\"/sdcard\",\"downloads\":\"/storage/emulated/0/Download\",\"documents\":\"/storage/emulated/0/Documents\"}";
         }
     }
 

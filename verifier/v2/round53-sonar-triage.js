@@ -53,18 +53,28 @@ const ui = read('src/main/assets/chess.src/ui-interactions.js');
 ok('F2a tablebase.js void importPGNAsync', /void importPGNAsync\(sanitized\)/.test(tb));
 ok('F2b ui-interactions.js void importPGNAsync (stats import-back)', /void importPGNAsync\(pgnText\)/.test(ui));
 ok('F2c ui-interactions.js void importPGNAsync (paste import)', /void importPGNAsync\(text\)/.test(ui));
-ok('F2d no remaining bare importPGNAsync( call without void/.then receiver',
+ok('F2d no remaining bare importPGNAsync( call without void/.then receiver (tb + ui)',
+   // round-54 (PR56 CR#14): tightened per CodeRabbit — scan BOTH tb and ui,
+   //   and drop the permissive return/assignment prefixes: every call site
+   //   must carry an explicit void (or be the function declaration itself).
    [...tb.matchAll(/importPGNAsync\(/g)].every(m => {
-     const before = tb.slice(Math.max(0, m.index - 6), m.index);
-     return /void $|function |return |=\s*$/.test(before) || /function importPGNAsync/.test(tb.slice(m.index - 10, m.index + 30));
+     const before = tb.slice(Math.max(0, m.index - 10), m.index);
+     return /void $|function $/.test(before);
+   }) &&
+   [...ui.matchAll(/importPGNAsync\(/g)].every(m => {
+     const before = ui.slice(Math.max(0, m.index - 10), m.index);
+     return /void $|function $/.test(before);
    }));
 
 // F3 — ai-bridge.js
 const ab = read('src/main/assets/chess.src/ai-bridge.js');
 ok('F3a S6582 reviewStates?.length optional chain',
    ab.includes("typeof reviewStates!=='undefined'&&reviewStates?.length"));
-ok('F3b S7741 direct undefined comparison for _reviewEvalCache',
-   ab.includes('_reviewEvalCache!==undefined'));
+ok('F3b S7741 direct undefined comparison for _reviewEvalCache (same-module, spacing-tolerant)',
+   // round-54: tolerant of whitespace — the round-53 _bgCached line was
+   //   replaced in round-54 (PR56 CR#9), but the same-module pattern persists
+   //   elsewhere in the file.
+   /_reviewEvalCache\s*!==\s*undefined/.test(ab));
 ok('F3c S4138 T5 ring uses for-of', /for\(const _d of _evalRecentDispatches\)/.test(ab));
 ok('F3d T5 ring logic intact (states identity + fen match + step bounds)',
    ab.includes('_d.states===reviewStates&&_d.fen===_cbFenNav&&_d.step>=0&&_d.step<reviewStates.length'));
@@ -73,8 +83,19 @@ ok('F3d T5 ring logic intact (states identity + fen match + step bounds)',
 const sn = read('src/main/java/com/Regalia/StockfishNative.java');
 ok('F4a S6201 pattern instanceof MainActivity',
    sn.includes('act instanceof MainActivity mainActivity'));
-ok('F4b S1181 catch (Exception) at batch-end dispatch',
-   /mainActivity\.onEvalDeepBatchEnded\(\);[\s\S]{0,400}catch \(Exception t\)/.test(sn));
+ok('F4b S1181 batch-end dispatch try block has NO catch (Throwable) and ends with catch (Exception t)',
+   // round-54 (PR56 CR#15): scope the check to the try block that contains
+   //   onEvalDeepBatchEnded() — the old [\s\S]{0,400} window could match an
+   //   unrelated catch nearby. The block must end at catch (Exception t) with
+   //   no Throwable catch inside the window.
+   (() => {
+     const i = sn.indexOf('mainActivity.onEvalDeepBatchEnded();');
+     if (i < 0) return false;
+     const window = sn.slice(i, i + 700);
+     const j = window.indexOf('catch (Exception t)');
+     if (j < 0) return false;
+     return !window.slice(0, j).includes('catch (Throwable');
+   })());
 
 // F5 — EngineService.java S2696
 const es = read('src/main/java/com/Regalia/EngineService.java');

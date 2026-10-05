@@ -1,3 +1,14 @@
+v1.2.3 round-54 (2026.10.5): chess.html rebuilt from the round-54 module changes; stats.html fixed.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - chess.html (AGPL v3, combined work): rebuilt via build-chess.py after
+    the game-logic/ui-interactions/ai-bridge fixes (24,357 lines);
+    bundle + inline script pass node --check.
+  - stats.html (GPL v3, DroidFish-derived): en-passant FEN target now
+    requires an opposing victim pawn; new explicit onStatsPGNFileError
+    callback + pgn_read_failed i18n (a failed PGN import no longer fails
+    silently).
+  - License classification: unchanged.
+
 v1.2.3 round-53 (2026.10.5): chess.html rebuilt from the round-53 module changes.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - chess.html (AGPL v3, combined work): rebuilt via build-chess.py after

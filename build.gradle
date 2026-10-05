@@ -56,6 +56,17 @@ if (versionPropsFile.exists()) {
 //   fallbacks keep computedVersionCode at 10203 (max(123, 10203)), and a
 //   loud USING FALLBACK VERSION warning is printed below.
 def usingFallbackVersion = !versionPropsFile.exists()
+// v1.2.3 round-54 (PR56 CR#1): a PRESENT but INCOMPLETE version.properties is
+//   also a fallback state — the ?: defaults above would silently fill missing
+//   keys and the SEC-1 warning block below would never fire. Treat any missing
+//   or blank required key as fallback so the loud warning always accompanies
+//   a defaulted version component. versionProps.getProperty() (not the Groovy
+//   subscript) returns null for missing keys; trim() also rejects whitespace
+//   values that would otherwise slip past toInteger().
+def requiredVersionKeys = ['VERSION_MAJOR', 'VERSION_MINOR', 'VERSION_PATCH', 'VERSION_BUILD']
+if (!usingFallbackVersion) {
+    usingFallbackVersion = requiredVersionKeys.any { key -> !versionProps.getProperty(key)?.trim() }
+}
 def versionMajor = (versionProps['VERSION_MAJOR'] ?: "1").toInteger()
 def versionMinor = (versionProps['VERSION_MINOR'] ?: "2").toInteger()
 def versionPatch = (versionProps['VERSION_PATCH'] ?: "3").toInteger()

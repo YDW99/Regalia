@@ -116,6 +116,56 @@ public class JsBridgeGateway {
     }
 
     /**
+     * v1.2.3 round-54 (PR56 CR#12): browsing gate for READ-ONLY directory
+     *   navigation (listFiles / getParentPath). getDefaultPaths() surfaces
+     *   app-specific external files, Downloads and Documents as the JS file
+     *   browser's roots — on API 29+ those roots live OUTSIDE the strict
+     *   isPathInSandbox() dirs, so the browser previously opened to a
+     *   guaranteed-"[]" listing (the round-49 review-4 P3-6 sandbox gate is
+     *   correct for reads/writes but made the built-in browser useless on
+     *   modern Android). Widening the shared sandbox was rejected (it would
+     *   re-open arbitrary-path enumeration); instead this separate gate
+     *   whitelists exactly the browsable roots, canonicalized per call.
+     *   Read/write/delete operations must keep using isPathInSandbox() — the
+     *   settings import flow routes through SafPickerHelper (SAF) for files
+     *   outside the sandbox.
+     */
+    public boolean isPathBrowsable(String path) {
+        if (isPathInSandbox(path)) return true;
+        if (path == null || path.isEmpty()) return false;
+        try {
+            String targetPath = new File(path).getCanonicalFile().getPath();
+            java.util.List<File> roots = new java.util.ArrayList<>();
+            File extFiles = context.getExternalFilesDir(null);
+            if (extFiles != null) roots.add(extFiles);
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                File base = android.os.Environment.getExternalStorageDirectory();
+                roots.add(new File(base, "Download"));
+                roots.add(new File(base, "Documents"));
+            } else {
+                roots.add(android.os.Environment.getExternalStoragePublicDirectory(
+                        android.os.Environment.DIRECTORY_DOWNLOADS));
+                roots.add(android.os.Environment.getExternalStoragePublicDirectory(
+                        android.os.Environment.DIRECTORY_DOCUMENTS));
+            }
+            for (File root : roots) {
+                String rootPath = root.getCanonicalFile().getPath();
+                if (targetPath.equals(rootPath)
+                        || targetPath.startsWith(rootPath + File.separator)) {
+                    return true;
+                }
+            }
+            return false;
+        } catch (IOException e) {
+            Log.w(TAG, "Browsable-path canonicalization failed: " + path, e);
+            return false;
+        } catch (SecurityException e) {
+            Log.w(TAG, "Security manager denied access: " + path, e);
+            return false;
+        }
+    }
+
+    /**
      * 验证 UCI 命令是否在白名单内。
      * 提取命令的第一个 token，检查是否在白名单中。
      *

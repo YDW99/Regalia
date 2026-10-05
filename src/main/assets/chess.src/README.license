@@ -1,3 +1,23 @@
+v1.2.3 round-54 (2026.10.5): PR #56 AI-review JS fixes — game-logic/ui-interactions/ai-bridge.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - game-logic.js (GPL v3, DroidFish-derived): the four engineGo/
+    engineGoNewGame dispatch-failure branches (timed + untimed) now
+    reschedule doAIMove (retry cap 3, then ai_timeout) — a thrown bridge
+    call previously stranded the game on the AI's turn. Two i18n entries
+    added (settings_saf_button / settings_saf_hint).
+  - ui-interactions.js (AGPL v3): dlgChess960SPID reset sentinel corrected
+    null → -1 (the declared "random" sentinel; null coerces to 0 under >=
+    and broke the dialog preview + randomSPID pick).
+  - ai-bridge.js (AGPL v3): background analyze-all notification now shows
+    the current batch's completed count (_reviewAnalyzeStep+1) instead of
+    the persisted cross-game cache size; openStatsPage re-checks the
+    payload size after dropping visualAnnotations and falls back to the
+    PGN clipboard copy if still over the Binder cap; the settings file
+    browser starts at the internal files dir, drops the dead /sdcard and
+    manual-path entries, and offers a SAF-picker escape (round-49 sandbox
+    gate made the old roots always list as "[]").
+  - License classification: unchanged.
+
 v1.2.3 round-53 (2026.10.5): SonarCloud PR #56 JS fixes — game-logic/tablebase/ui-interactions/ai-bridge.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - game-logic.js (GPL v3, DroidFish-derived): S9383 — the
