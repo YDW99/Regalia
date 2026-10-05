@@ -1,3 +1,34 @@
+# Regalia v1.2.3 — round-55 工作日志（2026-10-05 UTC+8）
+
+## 任务来源
+
+两封 CodeRabbit 通知邮件（PR #56，13:24 / 13:43 CST，PDF 打印件）携带 7 条 actionable 评论 + 1 条 diff 外提示，逐一排查误报。
+
+## 分诊
+
+| # | 位置 | 内容 | 结论 |
+|---|------|------|------|
+| 1 | ai-bridge.js:3055 | S7741 typeof 守卫 | **过时**（round-54b 已修）：13:24 邮件评审的是 round-54 提交；当前树已是 `!== undefined` 直比较，v3 G4a/G6e 覆盖 |
+| 2 | game-logic.js 四个派发失败分支 | 重试双重计数 | **真实，已修**：doAIMove() 入口自增 _aiRetryCount，round-54 的 catch 分支又对同一次失败自增一次 → 500ms 重试调用把计数顶到 3，doAIMove 在 >=3 上限处直接返回而**未真正重新派发**——一次瞬时 throw 直达 ai_timeout，零次真实重试。四个 catch 分支（定时×2 + 非定时×2）改为单计数器契约：只复位思考态并排程重试；自增与放弃（ai_timeout+清零）均由 doAIMove 独占。一并删除 "see line ~3070" 腐化行号引用 |
+| 3 | EngineProcessManager.java:146-150 | S8491 悬空 Javadoc | **过时**（round-54b 已修）：waitForBounded 连同 Javadoc 已上移至 killProcess 之前，v3 G6d 覆盖 |
+| 4 | StockfishNative.getParentPath | 根目录「上一级」越级 | **真实，已修**：白名单根（files 目录 / external-files / Download / Documents）的原始父目录不在可浏览集内，点「..」会进入必为 "[]" 的空列表。解析出的父目录现同样过 isPathBrowsable 门；不可浏览则返回 ""——JS 三处调用点均已把 "" 当「无父目录」（隐藏「..」按钮 / BACK 关闭对话框） |
+| 5 | verifier/v3 read() | process.cwd() 依赖 | **真实，已修**：v1/v2 用 __dirname 定位仓库根；v3 改为一致。从他目录运行时全部 MISSING 的问题消除（已用 /tmp 下运行验证） |
+| 6 | chess.html:9214 | 按 Parcel 预算限制统计页载荷（diff 外提示） | **已实现**（round-54）：openStatsPage 超 900KB 先丢 visualAnnotations 再复检，仍超则回退剪贴板复制 PGN——正是 Binder 传输预算护栏。无需动作 |
+| 7 | chess.src/README.license | round-54b ai-bridge.js 标 (AGPL v3) 与分类表冲突 | **真实，已修并同类清扫**：文件头为准（DroidFish 衍生 GPL v3）。chess.src 账本共 25 处错标扫正（ai-bridge ×6、ui-interactions ×1、game-logic ×1、pgn-standard ×6、index.html.tpl ×11） |
+| 8 | java/README.license | round-54b EngineProcessManager 标 (AGPL v3) 与分类表冲突 | **真实，已修并同类清扫**：java 账本共 7 处错标扫正（EngineProcessManager ×2、StockfishNative ×3、SafPickerHelper+StatsActivity ×1、FileIoHelper ×1）。分类本身不变（AGPL：MainActivity/ChessWebViewClient/EngineService/StabilizationHelper/ChessApp/TlsSecurityHelper/RootDetector） |
+
+## 插曲
+
+编辑 game-logic.js 时遭遇一次挂载层写入异常（文件被写入 2,588 行交错重复内容，doAIMove 出现两份）。已从 round-54 补丁包提取原文件（md5 a5385685…）恢复并重放三处编辑，diff 逐 hunk 复核无误；ai-bridge.js 同期校验与 round-54b 包内一致（未受损）。
+
+## 验证
+
+- verifier v3 34 项断言（G2a 窗口 900→1600；G2c 改写为单计数器契约——全文件语句形式 `_aiRetryCount++` 仅剩 doAIMove 一处；新增 G2d doAIMove 自增+上限保留、H1a 父目录复验门、H2a/H2b 两账本许可标签一致、H3 __dirname 定位）：34/34 PASS（含异目录运行）；v1 29/29、v2 19/19 回归 PASS。
+- chess.html 重建 24,364 行；bundle 语法通过。
+- compileReleaseJavaWithJavac BUILD SUCCESSFUL，0 error。
+
+**版本**：versionName "1.2.3" 不变；versionCode=10203 不变。
+
 # Regalia v1.2.3 — round-54b 工作日志（2026-10-05 UTC+8）
 
 ## 任务来源

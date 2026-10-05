@@ -1,3 +1,10 @@
+v1.2.3 round-55 (2026.10.5): chess.html rebuilt (game-logic retry single-counter fix).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - chess.html (AGPL v3, combined work): rebuilt via build-chess.py after
+    the game-logic.js dispatch-failure retry fix (24,364 lines); bundle
+    passes node --check.
+  - License classification: unchanged.
+
 v1.2.3 round-54b (2026.10.5): chess.html rebuilt (ai-bridge S7741 fix).
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - chess.html (AGPL v3, combined work): rebuilt via build-chess.py after

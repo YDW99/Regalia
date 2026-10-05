@@ -4354,9 +4354,11 @@ if(gameClocks !== undefined&&gameClocks&&typeof AndroidBridge.engineGoTimed==='f
     if(_needNewGameForEngine){_needNewGameForEngine=false;try{AndroidBridge.engineGoNewGame(fen,aiLevel);}catch(error){
       console.error('engineGoNewGame fallback failed:',error);
       showToast(T('engine_unavailable_hint'));
-      isAIThinking=false;_aiBarInfo='';_aiRetryCount++;
-      if(_aiRetryCount<3){setTimeout(()=>{if(!gameOver&&gameState.currentTurn!==playerColor)doAIMove();},500);}
-      else{showToast(T('ai_timeout'));_aiRetryCount=0;render();}
+      isAIThinking=false;_aiBarInfo='';
+      // v1.2.3 round-55 (PR56 CR follow-up): NO catch-side _aiRetryCount++ —
+      //   doAIMove() is the single counter owner (see the engineGo fallback
+      //   branch below). Just reschedule; doAIMove's own cap decides give-up.
+      setTimeout(()=>{if(!gameOver&&gameState.currentTurn!==playerColor)doAIMove();},500);
     }}
     else{try{AndroidBridge.engineGo(fen,aiLevel);}catch(error){
       // v1.2.3 round-46 (PR53 CR#6): mirror the engineGoNewGame branch —
@@ -4364,15 +4366,17 @@ if(gameClocks !== undefined&&gameClocks&&typeof AndroidBridge.engineGoTimed==='f
       //   command; silence left the user staring at a hung AI with no toast.
       console.error('engineGo fallback failed:',error);
       showToast(T('engine_unavailable_hint'));
-      isAIThinking=false;_aiBarInfo='';_aiRetryCount++;
-      // v1.2.3 round-54 (PR56 CR#2): mirror the engineGoNewGame fallback
-      //   branch — the safety timer skips retry once isAIThinking=false, so
-      //   without this reschedule the game stalls on the AI's turn. Same
-      //   increments-here / doAIMove-does-not-double-count contract as the
-      //   sibling branch above (doAIMove's own increment is guarded by its
-      //   isAIThinking early-return... see line ~3070).
-      if(_aiRetryCount<3){setTimeout(()=>{if(!gameOver&&gameState.currentTurn!==playerColor)doAIMove();},500);}
-      else{showToast(T('ai_timeout'));_aiRetryCount=0;render();}
+      isAIThinking=false;_aiBarInfo='';
+      // v1.2.3 round-55 (PR56 CR follow-up): single-counter contract.
+      //   doAIMove() increments _aiRetryCount on entry and gives up
+      //   (ai_timeout + reset) at >=3; a successful dispatch is zeroed via
+      //   onBestMove/book/tablebase. The round-54 catch-side ++ counted the
+      //   FAILED dispatch a second time, so the 500ms retry call pushed the
+      //   count to 3 and doAIMove returned at its cap WITHOUT re-dispatching
+      //   — one transient throw led straight to ai_timeout with no real
+      //   retry. Catch branches now only reset thinking state and
+      //   reschedule; give-up happens solely in doAIMove.
+      setTimeout(()=>{if(!gameOver&&gameState.currentTurn!==playerColor)doAIMove();},500);
     }}
     // v1.2.3 round-48 (BUG-8): on SUCCESSFUL fallback dispatch, KEEP
     //   isAIThinking=true — onBestMove clears it when the engine answers, and
@@ -4389,10 +4393,10 @@ if(gameClocks !== undefined&&gameClocks&&typeof AndroidBridge.engineGoTimed==='f
 // v1.2.3 round-54 (PR56 CR#2, extended): the untimed path has the same
 //   stall-on-throw defect the timed fallback had — isAIThinking=false with no
 //   retry disarms the safety timer's guard and strands the game on the AI's
-//   turn. Same retry contract as the timed branches (increment here, cap 3,
-//   then ai_timeout).
-if(_needNewGameForEngine){_needNewGameForEngine=false;try{AndroidBridge.engineGoNewGame(fen,aiLevel);}catch(e){console.error('engineGoNewGame error:',e);showToast(T('engine_unavailable_hint'));isAIThinking=false;_aiBarInfo='';_aiRetryCount++;if(_aiRetryCount<3){setTimeout(()=>{if(!gameOver&&gameState.currentTurn!==playerColor)doAIMove();},500);}else{showToast(T('ai_timeout'));_aiRetryCount=0;render();}}return;}
-else{try{AndroidBridge.engineGo(fen,aiLevel);}catch(e){console.error('engineGo error:',e);showToast(T('engine_unavailable_hint'));isAIThinking=false;_aiBarInfo='';_aiRetryCount++;if(_aiRetryCount<3){setTimeout(()=>{if(!gameOver&&gameState.currentTurn!==playerColor)doAIMove();},500);}else{showToast(T('ai_timeout'));_aiRetryCount=0;render();}}return;}
+//   turn. Same retry contract as the timed branches (round-55: no catch-side
+//   increment — doAIMove() owns the counter and the ai_timeout give-up).
+if(_needNewGameForEngine){_needNewGameForEngine=false;try{AndroidBridge.engineGoNewGame(fen,aiLevel);}catch(e){console.error('engineGoNewGame error:',e);showToast(T('engine_unavailable_hint'));isAIThinking=false;_aiBarInfo='';setTimeout(()=>{if(!gameOver&&gameState.currentTurn!==playerColor)doAIMove();},500);}return;}
+else{try{AndroidBridge.engineGo(fen,aiLevel);}catch(e){console.error('engineGo error:',e);showToast(T('engine_unavailable_hint'));isAIThinking=false;_aiBarInfo='';setTimeout(()=>{if(!gameOver&&gameState.currentTurn!==playerColor)doAIMove();},500);}return;}
 }
 console.warn('_requestStockfishMove: engine not available, _engineReady=',_engineReady);
 showToast(T('engine_unavailable_hint'));

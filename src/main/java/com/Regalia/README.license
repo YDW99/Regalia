@@ -1,6 +1,25 @@
+v1.2.3 round-55 (2026.10.5): PR #56 CodeRabbit follow-up — getParentPath root-escape gate + license-tag sweep.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - StockfishNative.java (GPL v3, DroidFish-derived): CodeRabbit follow-up
+    REAL — getParentPath() returned the RAW parent of a whitelisted browse
+    root (e.g. /storage/emulated/0 for Download, or the app-data dir for
+    the files-dir start root). The parent itself is NOT browsable, so
+    tapping ".." at a root navigated into a guaranteed-"[]" listing. The
+    resolved parent now passes the same isPathBrowsable gate; a
+    non-browsable parent returns "" — all three JS call sites already
+    treat "" as "no parent" (the ".." button hides; BACK closes the
+    dialog). Read/write stay on the strict isPathInSandbox gate.
+  - License classification: unchanged — but a CodeRabbit-flagged tag sweep
+    corrected 7 mislabeled "(AGPL v3)" per-file tags to GPL v3
+    (EngineProcessManager ×2, StockfishNative ×3, SafPickerHelper +
+    StatsActivity ×1, FileIoHelper ×1), matching the file headers and the
+    definitive round-34/35/36 classification lists. The round-54b
+    EngineProcessManager tag was the flagged instance; the rest are the
+    same defect class swept in one pass.
+
 v1.2.3 round-54b (2026.10.5): SonarCloud follow-up — 1 real fix / 1 false positive.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
-  - EngineProcessManager.java (AGPL v3): S8491 — the round-54 waitForBounded
+  - EngineProcessManager.java (GPL v3, DroidFish-derived): S8491 — the round-54 waitForBounded
     Javadoc had been inserted between killProcess's Javadoc and its method,
     leaving killProcess's Javadoc dangling (two Javadocs back-to-back).
     waitForBounded (+ its Javadoc) moved ABOVE killProcess so every Javadoc
@@ -12,7 +31,7 @@ v1.2.3 round-54b (2026.10.5): SonarCloud follow-up — 1 real fix / 1 false posi
 
 v1.2.3 round-54 (2026.10.5): PR #56 AI-review Java fixes — 6 files.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
-  - EngineProcessManager.java (AGPL v3): Process.waitFor(2, SECONDS) is
+  - EngineProcessManager.java (GPL v3, DroidFish-derived): Process.waitFor(2, SECONDS) is
     API 26+ (minSdk 23) — routed through the new waitForBounded() helper
     (blocking waitFor() below API 26); the old call could throw
     NoSuchMethodError (an Error) past the catch (Exception) and skip the
@@ -21,7 +40,7 @@ v1.2.3 round-54 (2026.10.5): PR #56 AI-review Java fixes — 6 files.
     setReferenceCounted(false) BEFORE publication — refreshWakeLock()
     re-arms no longer accumulate references, so one release() in
     onDestroy always drops the lock (CodeRabbit finding on PR #56).
-  - SafPickerHelper.java + StatsActivity.java (AGPL v3): the 8KB chunked
+  - SafPickerHelper.java + StatsActivity.java (GPL v3): the 8KB chunked
     PGN readers count bare CR as a line terminator (folding CRLF pairs,
     even across chunk boundaries) — CR-only files previously bypassed the
     5000-line import cap. StatsActivity also signals import failures via
@@ -34,7 +53,7 @@ v1.2.3 round-54 (2026.10.5): PR #56 AI-review Java fixes — 6 files.
   - StockfishNative.java (GPL v3, DroidFish-derived): listFiles /
     getParentPath route through isPathBrowsable; readTextFile /
     writeTextFile stay on the strict isPathInSandbox gate.
-  - FileIoHelper.java (AGPL v3): getDefaultPaths() now also returns
+  - FileIoHelper.java (GPL v3, DroidFish-derived): getDefaultPaths() now also returns
     filesDir (always sandbox-browsable; the JS browser's new start dir).
   - Also: the round-48 RED-2 "zero-instantiation" wording corrected to
     "no effective calls" for HapticHelper (instantiated but never invoked,
@@ -49,7 +68,7 @@ v1.2.3 round-53 (2026.10.5): SonarCloud PR #56 Java fixes — EngineService/Stoc
     delegate); refreshWakeLock() is now synchronized, closing the
     re-arm-vs-release interleave race. The moved blocks catch Exception
     instead of Throwable (S1181-compliant).
-  - StockfishNative.java (AGPL v3, DroidFish-derived): S6201 — the
+  - StockfishNative.java (GPL v3, DroidFish-derived): S6201 — the
     batch-end dispatch uses pattern matching for instanceof (Java 17);
     S1181 — catches Exception instead of Throwable there (Errors must
     propagate).
@@ -61,7 +80,7 @@ v1.2.3 round-53 (2026.10.5): SonarCloud PR #56 Java fixes — EngineService/Stoc
 
 v1.2.3 round-52 (2026.10.5): StockfishNative — stop/bestmove race hardening (J1-J4).
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
-  - StockfishNative.java (AGPL v3, DroidFish-derived): four race windows
+  - StockfishNative.java (GPL v3, DroidFish-derived): four race windows
     closed around stopAndWaitForBestmove()/the reader thread, complementing
     the JS-side fen-identity guard (chess.src/README.license round-52):
     - J1: the stop-timeout branch now arms _discardingPonderBestmove ONLY
@@ -91,7 +110,7 @@ v1.2.3 round-51 (2026.9.9): MainActivity/EngineService/StockfishNative — backg
     refreshWakeLock() re-arms the partial wake lock per batch step (BG-2)
     so >30-minute background batches no longer stall at the Phase 57
     timeout; onDestroy nulls the static lock.
-  - StockfishNative.java (AGPL v3, engine management GPL v3-derived):
+  - StockfishNative.java (GPL v3, DroidFish-derived):
     BUG-1 — handleBestMove STATE_EVAL skips restoreGameplayOptions() while
     _evalDeepBatchActive (the per-step restore was undoing the batch's
     Contempt=0/MultiPV=1/UCI_AnalyseMode=true options, biasing every

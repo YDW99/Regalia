@@ -1,3 +1,58 @@
+Round-55 (2026-10-05) — PR #56 CodeRabbit follow-up email triage: 4 real (fixed) / 4 no-action
+=============================================================================================================
+
+Two CodeRabbit notification emails on PR #56 (13:24 + 13:43 CST) carried 7
+actionable comments + 1 outside-diff note. Per-item triage:
+
+- ai-bridge.js S7741 (typeof _reviewAnalyzeStep guard) — ALREADY FIXED in
+  round-54b (stale comment; the 13:24 mail reviewed the round-54 commit).
+  Current tree has the direct `!== undefined` comparison; v3 G4a/G6e cover it.
+- EngineProcessManager.java S8491 (dangling Javadoc) — ALREADY FIXED in
+  round-54b (stale comment, same reason). waitForBounded sits above
+  killProcess with each Javadoc attached; v3 G6d covers it.
+- game-logic.js dispatch-failure retry double-count — REAL, fixed:
+  doAIMove() increments _aiRetryCount on entry, and the round-54 catch
+  branches incremented it AGAIN for the same failed dispatch, so the 500ms
+  retry call hit doAIMove's >=3 cap and returned WITHOUT re-dispatching —
+  one transient bridge throw led straight to ai_timeout with zero real
+  retries. All four catch branches (timed×2 + untimed×2) now follow the
+  single-counter contract: reset thinking state + reschedule only;
+  doAIMove owns the increment and the give-up. The stale "see line ~3070"
+  comment reference was dropped with the old contract.
+- StockfishNative.getParentPath root escape — REAL, fixed: at a
+  whitelisted browse root (files dir / external-files / Download /
+  Documents) the raw parent (/data/data/<pkg>, /storage/emulated/0, …) is
+  NOT browsable, so tapping ".." navigated into a guaranteed-"[]" listing.
+  The resolved parent now passes the same isPathBrowsable gate; a
+  non-browsable parent returns "" (JS treats "" as "no parent": the ".."
+  button hides, BACK closes the dialog — verified at all 3 call sites).
+- verifier/v3 read() process.cwd() — REAL, fixed: v1/v2 resolve from
+  __dirname; v3 now does too (launched from a foreign cwd, every file
+  reported MISSING).
+- chess.html:9214 "cap stats payload per Parcel budget" (outside-diff
+  note) — ALREADY IMPLEMENTED in round-54: openStatsPage drops
+  visualAnnotations past 900KB and re-checks before falling back to the
+  clipboard copy (Binder TransactionTooLargeException guard). No action.
+- README.license license tags (2 comments: chess.src round-54b ai-bridge.js
+  "(AGPL v3)"; java round-54b EngineProcessManager.java "(AGPL v3)") —
+  REAL, fixed + swept: the tags conflicted with the per-file
+  classification (file headers are authoritative). Swept the same defect
+  class across both ledgers: chess.src 25 tags (ai-bridge.js ×6,
+  ui-interactions.js ×1, game-logic.js ×1, pgn-standard.js ×6,
+  index.html.tpl ×11) and java 7 tags (EngineProcessManager ×2,
+  StockfishNative ×3, SafPickerHelper+StatsActivity ×1, FileIoHelper ×1)
+  corrected AGPL v3 → GPL v3. Classification itself unchanged (AGPL v3
+  chess.src modules = chess960/eco-data/state-store; AGPL v3 java =
+  MainActivity/ChessWebViewClient/EngineService/StabilizationHelper/
+  ChessApp/TlsSecurityHelper/RootDetector).
+
+Verifier: v3 34 assertions (G2a window 1600; G2c rewritten single-counter;
+G2d added; H1a/H2a/H2b/H3 added) — all PASS incl. a foreign-cwd run; v1
+29/29 + v2 19/19 regressions PASS; chess.html rebuilt (24,364 lines);
+compileReleaseJavaWithJavac BUILD SUCCESSFUL.
+
+Version: versionCode=10203, versionName="1.2.3" (unchanged).
+
 Round-54b (2026-10-05) — SonarCloud follow-up on the round-54 tree: 2 fixed / 2 false positives
 =============================================================================================================
 

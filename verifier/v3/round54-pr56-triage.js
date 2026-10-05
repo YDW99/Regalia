@@ -4,6 +4,9 @@
 //        blank VERSION_* key) counts as the fallback state;
 //   (G2) game-logic.js: all four engineGo/engineGoNewGame dispatch-failure
 //        branches (timed + untimed) reschedule doAIMove (cap 3, then ai_timeout);
+//        round-55: doAIMove() is the SINGLE _aiRetryCount owner — no catch-side
+//        increment (the round-54 ++ double-counted a failed dispatch so the
+//        retry never re-dispatched);
 //   (G3) ui-interactions.js: dlgChess960SPID reset sentinel is -1, not null;
 //   (G4) ai-bridge.js: batch notification shows the current batch's completed
 //        count (_reviewAnalyzeStep+1); openStatsPage re-checks the payload size
@@ -19,7 +22,15 @@
 //   (G9) JsBridgeGateway/StockfishNative/FileIoHelper/ai-bridge.js: the
 //        isPathBrowsable browse gate wiring, getDefaultPaths filesDir, and the
 //        SAF-picker escape in the settings file browser.
-// Run from the repo root: node verifier/v3/round54-pr56-triage.js
+//   (H1) round-55: StockfishNative.getParentPath gates the RESOLVED parent
+//        ("" when the parent escapes the browsable set — JS treats "" as
+//        "no parent", hiding the ".." button at a whitelisted root);
+//   (H2) round-55: README.license per-file tags agree with the file headers
+//        (no "(AGPL v3)" tags on GPL v3 files — CodeRabbit PR56 follow-up);
+//   (H3) round-55: this script resolves paths from __dirname (like v1/v2),
+//        not the process cwd.
+// Run from anywhere: node verifier/v3/round54-pr56-triage.js
+// (paths resolve relative to this script, not the caller's cwd)
 //
 // Copyright (C) 2026 Regalia
 //
@@ -48,7 +59,10 @@ function ok(name, cond) {
   else { fail++; console.log('FAIL', name); }
 }
 function read(p) {
-  const f = path.join(process.cwd(), p);
+  // round-55 (PR56 CR follow-up): resolve from this script's location like
+  //   v1/v2 do — process.cwd() made every file report MISSING when the
+  //   verifier was launched from any directory other than the repo root.
+  const f = path.join(__dirname, '..', '..', p);
   if (!fs.existsSync(f)) { console.log('MISSING', p); fail++; return ''; }
   return fs.readFileSync(f, 'utf8');
 }
@@ -63,13 +77,15 @@ ok('G1c versionCode/Name derivation untouched (10203 contract)',
 
 // G2 — game-logic.js AI retry
 const gl = read('src/main/assets/chess.src/game-logic.js');
-const goFallbacks = gl.match(/catch\(error\)\{[\s\S]{0,900}?setTimeout\(\(\)=>\{if\(!gameOver&&gameState\.currentTurn!==playerColor\)doAIMove\(\);\},500\)/g) || [];
+const goFallbacks = gl.match(/catch\(error\)\{[\s\S]{0,1600}?setTimeout\(\(\)=>\{if\(!gameOver&&gameState\.currentTurn!==playerColor\)doAIMove\(\);\},500\)/g) || [];
 ok('G2a timed engineGo fallback reschedules doAIMove (both throw branches)',
    goFallbacks.length >= 2);
 ok('G2b untimed engineGo branches reschedule doAIMove',
    (gl.match(/catch\(e\)\{console\.error\('engineGo(?:NewGame)? error:'[\s\S]{0,400}?doAIMove\(\);\},500\)/g) || []).length === 2);
-ok('G2c retry counter incremented before reschedule (no double-count)',
-   /isAIThinking=false;_aiBarInfo='';_aiRetryCount\+\+;[\s\S]{0,600}?_aiRetryCount<3/.test(gl));
+ok('G2c retry counter NOT incremented in catch branches (round-55 single-counter)',
+   (gl.match(/^\s*_aiRetryCount\+\+\s*;?\s*$/gm) || []).length === 1);
+ok('G2d doAIMove keeps its entry increment + >=3 give-up cap',
+   /_aiRetryCount\+\+;\s*\n\s*if\(_aiRetryCount>=3\)\{[\s\S]{0,300}?ai_timeout/.test(gl));
 
 // G3 — Chess960 sentinel
 const ui = read('src/main/assets/chess.src/ui-interactions.js');
@@ -156,6 +172,23 @@ ok('G9f JS browser: no hardcoded /sdcard entry buttons, SAF button present',
 ok('G9g settings i18n entries (zh+en)',
    /'settings_saf_button':\{zh:'[^']+',en:'[^']+'\}/.test(gl)
    && /'settings_saf_hint':\{zh:'[^']+',en:'[^']+'\}/.test(gl));
+
+// H — round-55 (PR56 CodeRabbit follow-up email triage)
+// H1 — getParentPath gates the RESOLVED parent (no escape-to-"[]" navigation)
+ok('H1a getParentPath re-gates the resolved parent',
+   /String parent = _fileIoHelper\.getParentPath\(path\);[\s\S]{0,800}?!_jsBridgeGateway\.isPathBrowsable\(parent\)[\s\S]{0,120}?return ""/.test(sn));
+// H2 — README.license per-file tags agree with the file headers
+const csr = read('src/main/assets/chess.src/README.license');
+const jlr = read('src/main/java/com/Regalia/README.license');
+ok('H2a chess.src ledger: no AGPL tag on GPL-classified modules',
+   !/- (?:ai-bridge|ui-interactions|game-logic|pgn-standard|ui|worker-pool|tablebase)\.js \(AGPL/.test(csr)
+   && !/- index\.html\.tpl \(AGPL/.test(csr));
+ok('H2b java ledger: no AGPL tag on GPL-classified classes',
+   !/- (?:EngineProcessManager|StockfishNative|JsBridgeGateway|FileIoHelper|SafPickerHelper|StatsActivity)\.java \(AGPL/.test(jlr)
+   && !/SafPickerHelper\.java \+ StatsActivity\.java \(AGPL/.test(jlr));
+// H3 — path resolution is __dirname-based (like v1/v2), not cwd-based
+ok('H3 verifier resolves from __dirname (cwd-independent)',
+   read('verifier/v3/round54-pr56-triage.js').includes("path.join(__dirname, '..', '..'"));
 
 console.log('\n===== RESULT: ' + pass + ' passed, ' + fail + ' failed =====');
 process.exit(fail === 0 ? 0 : 1);

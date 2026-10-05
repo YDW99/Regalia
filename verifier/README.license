@@ -1,3 +1,19 @@
+v1.2.3 round-55 (2026.10.5): v3 cwd-independence + round-55 assertions (34 total).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - v3/round54-pr56-triage.js: read() now resolves from __dirname (like
+    v1/v2) instead of process.cwd() — CodeRabbit PR56 follow-up: launched
+    from another directory, every file reported MISSING. G2a window
+    widened (900→1600) for the round-55 comment blocks; G2c rewritten for
+    the single-counter contract (exactly one statement-form _aiRetryCount++
+    remains — doAIMove's); G2d added (doAIMove keeps its entry increment +
+    >=3 ai_timeout give-up); H1a added (getParentPath re-gates the
+    resolved parent); H2a/H2b added (no "(AGPL v3)" tags on GPL-classified
+    files in either README.license ledger); H3 added (__dirname
+    resolution). 29 → 34 assertions, all PASS (also verified from a
+    foreign cwd).
+  - runs/2026-10-05T0630Z-v3/: triage.log + regression logs + RESULT.md.
+  - License classification: unchanged (AGPL v3 harness).
+
 v1.2.3 round-54b (2026.10.5): v3 assertions strengthened (29 total).
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - v3/round54-pr56-triage.js: G4a updated to the direct-comparison form

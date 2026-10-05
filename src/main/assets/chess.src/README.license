@@ -1,6 +1,28 @@
+v1.2.3 round-55 (2026.10.5): PR #56 CodeRabbit follow-up — retry single-counter fix + license-tag sweep.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - game-logic.js (GPL v3, DroidFish-derived): CodeRabbit follow-up REAL —
+    the round-54 dispatch-failure catch branches incremented _aiRetryCount
+    a SECOND time for the same failed dispatch (doAIMove() already
+    increments on entry), so the 500ms retry call pushed the count to 3
+    and doAIMove returned at its cap WITHOUT re-dispatching — one
+    transient bridge throw led straight to ai_timeout with zero real
+    retries. Fixed to the single-counter contract: the four catch branches
+    (timed×2 + untimed×2) now only reset thinking state and reschedule the
+    guarded retry; doAIMove() owns the increment AND the >=3 give-up
+    (ai_timeout + reset), with success still zeroing the counter via
+    onBestMove/book/tablebase. The stale "see line ~3070" comment
+    reference dropped with the old contract.
+  - License classification: unchanged — but a CodeRabbit-flagged tag sweep
+    corrected 25 mislabeled "(AGPL v3)" per-file tags to GPL v3
+    (ai-bridge.js ×6, ui-interactions.js ×1, game-logic.js ×1,
+    pgn-standard.js ×6, index.html.tpl ×11), matching the file headers and
+    the round-42 classification record (AGPL v3 = chess960.js, eco-data.js,
+    state-store.js only). The round-54b ai-bridge.js tag was the flagged
+    instance; the rest are the same defect class swept in one pass.
+
 v1.2.3 round-54b (2026.10.5): SonarCloud follow-up — 1 real fix / 1 false positive.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
-  - ai-bridge.js (AGPL v3): S7741 — the round-54 _bgDone line carried a
+  - ai-bridge.js (GPL v3): S7741 — the round-54 _bgDone line carried a
     copy-pasted `typeof _reviewAnalyzeStep!=='undefined'` guard;
     _reviewAnalyzeStep is declared in THIS module (~line 388), so a direct
     `!== undefined` comparison suffices. Fixed.
@@ -16,10 +38,10 @@ v1.2.3 round-54 (2026.10.5): PR #56 AI-review JS fixes — game-logic/ui-interac
     reschedule doAIMove (retry cap 3, then ai_timeout) — a thrown bridge
     call previously stranded the game on the AI's turn. Two i18n entries
     added (settings_saf_button / settings_saf_hint).
-  - ui-interactions.js (AGPL v3): dlgChess960SPID reset sentinel corrected
+  - ui-interactions.js (GPL v3, DroidFish-derived): dlgChess960SPID reset sentinel corrected
     null → -1 (the declared "random" sentinel; null coerces to 0 under >=
     and broke the dialog preview + randomSPID pick).
-  - ai-bridge.js (AGPL v3): background analyze-all notification now shows
+  - ai-bridge.js (GPL v3): background analyze-all notification now shows
     the current batch's completed count (_reviewAnalyzeStep+1) instead of
     the persisted cross-game cache size; openStatsPage re-checks the
     payload size after dropping visualAnnotations and falls back to the
@@ -43,7 +65,7 @@ v1.2.3 round-53 (2026.10.5): SonarCloud PR #56 JS fixes — game-logic/tablebase
   - ui-interactions.js (GPL v3, DroidFish-derived): S9383 — the two other
     bare importPGNAsync() call sites (stats import-back, paste import)
     void-marked for consistency.
-  - ai-bridge.js (AGPL v3): S6582 — reviewStates?.length optional chain
+  - ai-bridge.js (GPL v3): S6582 — reviewStates?.length optional chain
     (cross-module typeof guard for reviewStates KEPT — round-11
     degraded-module defense); S7741 — _reviewEvalCache!==undefined direct
     comparison (same-module binding, typeof was redundant); S4138 — the
@@ -53,7 +75,7 @@ v1.2.3 round-53 (2026.10.5): SonarCloud PR #56 JS fixes — game-logic/tablebase
 
 v1.2.3 round-52 (2026.10.5): ai-bridge.js — stale engine-eval fen-identity guard (T5).
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
-  - ai-bridge.js (AGPL v3): fixes the rare "engine still shows the PREVIOUS
+  - ai-bridge.js (GPL v3): fixes the rare "engine still shows the PREVIOUS
     position's eval right after a quick new move" race. The engine<->UI
     channel is asynchronous, so a late bestmove/info callback for an older
     position can arrive after the user already played/navigated. Round-49
@@ -86,7 +108,7 @@ v1.2.3 round-51 (2026.9.9): ui-interactions/ui/ai-bridge/game-logic — level-by
   - ui.js (GPL v3, DroidFish-derived): _resetGameUIState removes the exit
     overlay symmetrically; the analyze-all completion branch posts the
     final state to the FGS notification (BG-3).
-  - ai-bridge.js (AGPL v3): onEngineProgress surfaces live batch progress
+  - ai-bridge.js (GPL v3): onEngineProgress surfaces live batch progress
     ("正在分析... (k/N)") in the FGS notification while
     _reviewAnalyzeAllActive (BG-3).
   - game-logic.js (GPL v3, DroidFish-derived): 3 new i18n keys
@@ -1057,7 +1079,7 @@ v1.2.2 (2026.7.14) — Comprehensive audit-report non-false-positive fix + versi
     correct whitelist approach.
   - game-logic.js (GPL v3): loading_title i18n key updated from
     "Regalia v1.2.1" to "Regalia v1.2.2".
-  - index.html.tpl (AGPL v3): <title> updated from "Regalia v1.2.1" to
+  - index.html.tpl (GPL v3): <title> updated from "Regalia v1.2.1" to
     "Regalia v1.2.2".
   - ui.js (GPL v3): 3 version-string references updated from "v1.2.1" to
     "v1.2.2" (about-dialog h2, header badge, about-dialog app_name row).
@@ -1198,7 +1220,7 @@ v1.2.1 round-12 (2026.7.14) — SonarCloud PR #43 bugs + code smells cleanup:
   - chess960.js (AGPL v3): 2 changes — (1) S108: 1 empty catch now logs
     console.warn('[Chess960]', e.message); (2) S1154: String.fromCharCode →
     String.fromCodePoint (1 site).
-  - index.html.tpl (AGPL v3): S3646 — merged two adjacent
+  - index.html.tpl (GPL v3): S3646 — merged two adjacent
     .dlg:not([style*="max-width"]) rules and two adjacent
     .review-left .review-board .bgrid rules.
   - Other JS modules (pgn-standard.js, worker-pool.js, state-store.js,
@@ -1654,7 +1676,7 @@ v1.1.2 Phase 68 (2026.7.8, same-version revision):
       New state _reviewAnalyzePriorityQueue. New function _prioritizeReviewStep.
     * PGN cache partial-eval dialog: title has emoji prefix; back-button support
       via _pgnPartialEvalDialogActive/_pgnPartialEvalDialogDismiss.
-  - game-logic.js (AGPL v3): 3 new i18n keys (priority_eval_toast,
+  - game-logic.js (GPL v3, DroidFish-derived): 3 new i18n keys (priority_eval_toast,
     priority_eval_already_cached, priority_eval_not_in_review) + emoji in
     partial-eval title.
   - index.html.tpl (GPL v3): .rmv-block CSS — added user-select:none +
@@ -2513,7 +2535,7 @@ v1.0.4 EXPANSION (this round) — in stats.html and chess.src/*.js:
   - game-logic.js (EXPANDED, GPL v3 — DroidFish-derived SAN logic):
       Added i18n strings for Chess960 UI (chess960_*) and time-control
       UI (time_control_*). loading_title updated to v1.0.4.
-  - index.html.tpl (AGPL v3): <title>Regalia v1.0.4</title>.
+  - index.html.tpl (GPL v3): <title>Regalia v1.0.4</title>.
   - chess960.js (NEW in prior v1.0.4 round, AGPL v3): SP-ID generator,
       Shredder-FEN castling rights, 960 castling rules.
   - stats.html (EXPANDED, GPL v3 — DroidFish-derived PGN parsing):
@@ -2840,7 +2862,7 @@ v1.0.3 patch changes (in addition to the v1.0.3 baseline above):
         .review-overlay (position:fixed), skipping the container. Replaced
         with getBoundingClientRect(): _offsetTop = _rActRect.top -
         _rListRect.top + _rList.scrollTop. Works in both orientations.
-  - index.html.tpl (AGPL v3):
+  - index.html.tpl (GPL v3):
       * Landscape review CSS: complete redesign (see ui.js changes above).
         New classes: .review-top, .review-bottom, .review-nav.
         v1.0.3-p7: .review-body is overflow-y:auto (TWO-LAYER SCROLL — body
@@ -3150,7 +3172,7 @@ for full license texts and attribution details.
       to inner column div, max-width:100% + box-sizing:border-box to
       #ai-search-info, min-width:0 + overflow:hidden to line-3 container,
       min-width:0 to #ai-ponder-info. All text now properly truncates.
-    - index.html.tpl (AGPL v3): .pbar CSS gains max-width:100% +
+    - index.html.tpl (GPL v3): .pbar CSS gains max-width:100% +
       overflow:hidden to prevent the bar from being pushed wider than
       its parent by internal content.
     - chess.html: rebuilt from the above chess.src/ changes.
@@ -3243,15 +3265,15 @@ for full license texts and attribution details.
       square highlights via CSS box-shadow inset (3px), arrows via SVG
       overlay (4px stroke, per-color arrowhead markers). New constant
       _RV_VA_COLORS for the 4 annotation colors.
-    - pgn-standard.js (AGPL v3): Updated color code documentation comment
+    - pgn-standard.js (GPL v3): Updated color code documentation comment
       block to reflect the full 4-color arrow semantics (B/R/Y/G).
-    - index.html.tpl (AGPL v3): .review-board CSS rule now has
+    - index.html.tpl (GPL v3): .review-board CSS rule now has
       position:relative so the SVG arrow overlay's position:absolute
       anchors correctly.
     - chess.html: rebuilt from the above chess.src/ changes.
 
   v1.0.5 Round-6 Rev49 changes:
-    - index.html.tpl (AGPL v3): High aspect-ratio screen adaptation (min-width:0
+    - index.html.tpl (GPL v3): High aspect-ratio screen adaptation (min-width:0
       on flex children, flex-wrap:wrap on .hdr-tools, word-break on long text,
       3 new media-query tiers for ultra-tall/wide/short aspect ratios). New
       --safe-top/bottom/left/right CSS variables. New .bwrap.stabilized CSS
@@ -3288,7 +3310,7 @@ for full license texts and attribution details.
     - chess.html: rebuilt.
 
   v1.0.5 Round-6 Rev53 changes:
-    - index.html.tpl (AGPL v3): .bwrap.stabilized CSS updated to
+    - index.html.tpl (GPL v3): .bwrap.stabilized CSS updated to
       translate3d(x,y,0) rotate(var(--stab-rot,0deg)).
     - ui.js (GPL v3): Yellow arrows now bidirectional (both sides' queens).
       Blue arrows also bidirectional. New _computeInitialPositionAnnotations()
@@ -3356,7 +3378,7 @@ for full license texts and attribution details.
     - chess.html: rebuilt from chess.src/ changes.
 
   v1.0.5 Round-6 Rev56 changes (MultiPV + dirty-flag pipeline audit):
-    - ai-bridge.js (AGPL v3): FOUR improvements to the MultiPV processing path:
+    - ai-bridge.js (GPL v3): FOUR improvements to the MultiPV processing path:
       (1) PERF: _updateMultiPVDisplay() — added a per-line signature cache
           (_multiPVDisplayCache) so we skip the expensive _convertPVtoSAN()
           call when a PV line's content hasn't changed since the last display
@@ -3526,7 +3548,7 @@ for full license texts and attribution details.
           Rev49/54/58 multi-revision narrative, Rev65/66 yellow-square redundant
           explanations, Rev62 resign-sound fix comment, Rev63 arrow-design
           change markers. Current-behavior descriptions retained.
-    - index.html.tpl (AGPL v3, original): COMMENT CLEANUP — CSS
+    - index.html.tpl (GPL v3): COMMENT CLEANUP — CSS
       .bwrap.stabilized comment simplified (removed Rev53/Rev64 markers and
       --stab-rot removal note).
     - chess.html: rebuilt from chess.src/ changes.
@@ -3586,7 +3608,7 @@ for full license texts and attribution details.
           redoes, cache entries are re-created as needed.
           New function _invalidateCachesForUndoneMoves(currentMoveCount) added
           near _resetGameUIState().
-    - index.html.tpl (AGPL v3, original): ONE change:
+    - index.html.tpl (GPL v3): ONE change:
       (1) CSS .bwrap.stabilized transform changed from
           translate3d(...) rotate(var(--stab-rot,0deg)) to
           translate3d(var(--stab-x,0px),var(--stab-y,0px),0) only.
@@ -3651,7 +3673,7 @@ for full license texts and attribution details.
       (2) BUG: worker onerror handler called .delete() on _workerPending Map
       during for...of iteration. Fixed to snapshot keys via Array.from()
       before deletion.
-    - pgn-standard.js (AGPL v3, original): REDUNDANCY — removed dead
+    - pgn-standard.js (GPL v3): REDUNDANCY — removed dead
       `let lineLen=0` in composePGN() (wrapping logic uses curLine.length,
       never reads lineLen).
     - ai-bridge.js (GPL v3, DroidFish-derived): FOUR fixes —
@@ -3729,7 +3751,7 @@ for full license texts and attribution details.
       _finishAnim() clears _lastAnimMv. loading_title updated to v1.0.6.
       NEW i18n strings: gray_disabled_by_eco_book, gray_disabled_by_chess960.
     - chess960.js (AGPL v3): No changes (castling helpers unchanged).
-    - pgn-standard.js (AGPL v3): No changes.
+    - pgn-standard.js (GPL v3): No changes.
     - worker-pool.js (GPL v3): Comment fix — removed backtick from a
       comment inside the _WORKER_SOURCE template literal (Rev57-class bug
       that prematurely terminated the template string, causing blank screen).
@@ -3761,7 +3783,7 @@ for full license texts and attribution details.
       .op-list. Analyze-all off-by-one fix (_totalSteps=moveRecords.length,
       reviewAnalyzeAll iterates 1..N, _reviewAnalyzeAdvance terminates at
       nextStep>N). Version strings updated to v1.0.6 (3 locations).
-    - index.html.tpl (AGPL v3): NEW .castle-ring CSS (golden dashed pulse
+    - index.html.tpl (GPL v3): NEW .castle-ring CSS (golden dashed pulse
       animation). Portrait New Game dialog CSS (max-width:460px, tighter
       padding, stacked inputs, ECO search wrap). Title updated to v1.0.6.
     - chess.html: rebuilt from chess.src/ changes.
@@ -4178,7 +4200,7 @@ v1.0.8 Phase 30 (2026.7.1):
     init; header comment updated.
   - chess960.js (AGPL v3): initChess960State integer SP-ID validation;
     dead `||'-'` removed from toShredderCastling.
-  - pgn-standard.js (AGPL v3): JSDoc typo "0-2" → "0-1".
+  - pgn-standard.js (GPL v3): JSDoc typo "0-2" → "0-1".
   - worker-pool.js (GPL v3): truncated AGPL boilerplate completed.
   - ui.js (GPL v3): dead playCastleRookLand() removed; dead --rv-board-w
     removed; tablebase bar XSS _jsAttrEncode+_esc; ECO bar _esc; render
@@ -4208,7 +4230,7 @@ v1.0.8 Phase 32 (2026.7.1):
     vector via path containing "<script>"). Regex includes & in char class.
   - worker-pool.js (GPL v3): added _MAX_QUEUE_SIZE=50 cap; rejects excess
     tasks immediately so callers fall back to sync execution.
-  - pgn-standard.js (AGPL v3): all parseInt() in parseTimeControl now pass
+  - pgn-standard.js (GPL v3): all parseInt() in parseTimeControl now pass
     radix 10 (lint-clean, future-proof).
   - game-logic.js (GPL v3): No changes.
   - ui.js (GPL v3): No changes.
@@ -4223,7 +4245,7 @@ v1.0.8 Phase 33 (2026.7.1):
   - tablebase.js (GPL v3): parseInt radix 10 on 4 fenToState sites; trimmed 3
     memorials + stale .docx reference.
   - chess960.js (AGPL v3): dropped stale "v1.0.4 NEW" version tag.
-  - pgn-standard.js (AGPL v3): dropped stale "v1.0.4 NEW" version tag.
+  - pgn-standard.js (GPL v3): dropped stale "v1.0.4 NEW" version tag.
   - eco-data.js (AGPL v3): trimmed duplicate Phase 31 comment.
   - worker-pool.js (GPL v3): added dead-code-status note; trimmed CSP memorial.
   - index.html.tpl (combined): trimmed legacy @media memorial.

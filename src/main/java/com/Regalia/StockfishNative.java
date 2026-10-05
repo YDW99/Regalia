@@ -4939,7 +4939,18 @@ public class StockfishNative {
             Log.w(TAG, "getParentPath: path rejected by browse gate");
             return "";
         }
-        return _fileIoHelper.getParentPath(path);
+        String parent = _fileIoHelper.getParentPath(path);
+        // v1.2.3 round-55 (PR56 CR follow-up): gate the RESOLVED parent too.
+        //   At a whitelisted root (files dir / external-files / Download /
+        //   Documents) the raw parent escapes the browsable set (e.g.
+        //   /storage/emulated/0), so handing it out made the JS browser
+        //   navigate into a guaranteed-"[]" listing. Returning "" makes the
+        //   JS hide the ".." button / close the dialog instead (all three
+        //   call sites already treat "" as "no parent").
+        if (!parent.isEmpty() && !_jsBridgeGateway.isPathBrowsable(parent)) {
+            return "";
+        }
+        return parent;
     }
 
     // ===================== SAF FILE PICKER (IMPORT) =====================
