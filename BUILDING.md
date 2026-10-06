@@ -1059,7 +1059,12 @@ them locally as described above:
   repositories that actually win are the SETTINGS-level ones — a plain
   `allprojects { repositories { … } }` only adds PROJECT-level repos and
   can never out-rank the settings-level `google()` / `mavenCentral()`.
-  Prepend the mirrors at the settings level instead (round-56b fix):
+  Prepend the mirrors at the settings level instead (round-56b fix;
+  round-56c: use `beforeSettings` — `settingsEvaluated` fires AFTER the
+  settings file is evaluated, by which time the official repos are already
+  registered, so mirrors added there still resolve AFTER them; and name the
+  outer closure parameter — inside `maven { … }` the implicit `it` is the
+  new MavenArtifactRepository, not the URL string):
   ```groovy
   // ~/.gradle/init.d/mirrors.gradle — mirror-first, official as fallback.
   def aliyun = [
@@ -1068,19 +1073,19 @@ them locally as described above:
       'https://maven.aliyun.com/repository/gradle-plugin',
       'https://maven.aliyun.com/repository/public',
   ]
-  settingsEvaluated { settings ->
+  beforeSettings { settings ->                 // runs BEFORE settings.gradle is evaluated
       settings.pluginManagement.repositories {
-          aliyun.each { maven { url it } }          // mirrors FIRST
+          aliyun.each { mirrorUrl -> maven { url mirrorUrl } }   // mirrors FIRST
           google(); mavenCentral(); gradlePluginPortal()
       }
       settings.dependencyResolutionManagement.repositories {
-          aliyun.each { maven { url it } }          // mirrors FIRST
+          aliyun.each { mirrorUrl -> maven { url mirrorUrl } }   // mirrors FIRST
           google(); mavenCentral()
       }
   }
   allprojects {
       buildscript.repositories {                    // buildscript classpath
-          aliyun.each { maven { url it } }
+          aliyun.each { mirrorUrl -> maven { url mirrorUrl } }
       }
   }
   ```
