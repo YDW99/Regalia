@@ -854,16 +854,11 @@ The Stockfish 18 engine binary (`libstockfish.so`) is shipped as an arm64-v8a na
 
 - **ELF magic check** (first 4 bytes = `\x7fELF`) — guards against corrupted or non-ELF files.
 - **Minimum-size check** (5 MB; lowered from 50 MB in round-44, A16) — the genuine Stockfish 18 binary is ~114 MB; truncated or stub files are rejected.
+- **SHA-256 integrity check** (round-56, SEC-09/SEC-011) — the known-good digest `8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5` is pinned in code as `EXPECTED_ENGINE_SHA256` and verified at runtime: **every fresh extraction is always hashed**, and a **cached copy is re-hashed on reuse only on rooted devices** (via `RootDetector`; on non-rooted devices the app-private `filesDir` copy can only have been written by our own process, so the ELF + size gate is sufficient and the 114 MB re-hash is skipped as wasted work). All checks are purely local — no data leaves the device.
 
-The known-good SHA-256 of the official Stockfish 18 arm64-v8a-dotprod binary
-(`8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5`) is
-documented in BUILDING.md and is verified three-way (source file / deployed
-jniLibs copy / APK-embedded library) in every release round; the app itself
-performs the ELF + size checks above at runtime (this section was corrected
-in round-43 — it previously claimed a baked-in SHA-256 runtime check that
-the current code does not perform).
+If any check fails, the engine refuses to start (a tampered/mismatched cached copy is deleted and falls through to a fresh, always-verified extraction) and reports the error to the user via the UI. The binary is never downloaded at runtime; it is statically embedded in the APK.
 
-If either check fails, the engine refuses to start and reports the error to the user via the UI. The binary is never downloaded at runtime; it is statically embedded in the APK.
+_History: this section was corrected in round-43 (it previously claimed a baked-in SHA-256 runtime check that the then-current code did not perform) and updated in round-56 when the runtime SHA-256 verification described above was actually wired in._
 
 ## v1.2.3 round-13 refinement (2026.7.16)
 

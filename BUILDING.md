@@ -1054,18 +1054,39 @@ them locally as described above:
   artifacts resolve from their authoritative source by default).
   Developers in mainland China who prefer mirror-first resolution should
   NOT edit the committed files; inject the mirrors locally via an
-  init-script, e.g. `~/.gradle/init.d/mirrors.gradle`:
+  init-script, e.g. `~/.gradle/init.d/mirrors.gradle`. Because
+  `settings.gradle` uses `RepositoriesMode.PREFER_SETTINGS`, the
+  repositories that actually win are the SETTINGS-level ones — a plain
+  `allprojects { repositories { … } }` only adds PROJECT-level repos and
+  can never out-rank the settings-level `google()` / `mavenCentral()`.
+  Prepend the mirrors at the settings level instead (round-56b fix):
   ```groovy
+  // ~/.gradle/init.d/mirrors.gradle — mirror-first, official as fallback.
+  def aliyun = [
+      'https://maven.aliyun.com/repository/google',
+      'https://maven.aliyun.com/repository/central',
+      'https://maven.aliyun.com/repository/gradle-plugin',
+      'https://maven.aliyun.com/repository/public',
+  ]
+  settingsEvaluated { settings ->
+      settings.pluginManagement.repositories {
+          aliyun.each { maven { url it } }          // mirrors FIRST
+          google(); mavenCentral(); gradlePluginPortal()
+      }
+      settings.dependencyResolutionManagement.repositories {
+          aliyun.each { maven { url it } }          // mirrors FIRST
+          google(); mavenCentral()
+      }
+  }
   allprojects {
-      buildscript { repositories { maven { url 'https://maven.aliyun.com/repository/google' }
-                                   maven { url 'https://maven.aliyun.com/repository/central' } } }
-      repositories { maven { url 'https://maven.aliyun.com/repository/google' }
-                     maven { url 'https://maven.aliyun.com/repository/central' } }
+      buildscript.repositories {                    // buildscript classpath
+          aliyun.each { maven { url it } }
+      }
   }
   ```
-  If you hit Aliyun 502s, comment out the mirror blocks in
-  `settings.gradle`/`build.gradle` or remove the init script — the
-  official repos then serve directly.
+  If you hit Aliyun 502s, remove the init script (or comment out its
+  `aliyun.each` lines) — the official repos committed in
+  `settings.gradle`/`build.gradle` then serve directly.
 
 - **CMake re-run loop (AGP 8.7.3 + CMake 3.22.1)**: In a fresh build environment,
   the `externalNativeBuild` task can fall into a "manifest 'build.ninja' still
