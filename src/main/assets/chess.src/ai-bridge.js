@@ -2977,6 +2977,23 @@ function onHintMove(uciMove){
 function onEngineProgress(depth,nodes,nps,scoreCp,scoreMate,wdlW,wdlD,wdlL,seldepth){
   // v1.1.0 Phase 54: Update heartbeat timestamp — onEngineProgress is proof-of-life.
   _lastEngineCallbackTime=performance.now();
+  // v1.2.3 round-57 (analyze-all treadmill fix): while a batch eval is in
+  //   flight (_evalRequestBatchGen armed), each progress line is proof the
+  //   engine is alive and actively searching — reset the per-step safety
+  //   timer so a slow-but-healthy depth-22 step is never cut at 60s.
+  //   Previously the timer ignored engine activity: a >60s step (thermal
+  //   throttle / memory pressure / hard position) was skipped WITHOUT caching
+  //   any result, and _batchConsecutiveFail reset on every successful
+  //   dispatch, so the 3-strike terminator never fired — the batch marched
+  //   through all remaining steps at 60s apiece, caching nothing, while every
+  //   user-visible progress indicator renders the (frozen) cached count.
+  //   That was the "analyze-all stuck for an hour" bug. The timer now fires
+  //   only after 60s of TRUE engine silence (wedged/dead engine) — exactly
+  //   the case the safety net was designed for. Placed BEFORE the depth
+  //   guards below: any progress line is proof-of-life, even a malformed one.
+  if(typeof _reviewAnalyzeAllActive!=='undefined'&&_reviewAnalyzeAllActive&&_evalRequestBatchGen!==0&&typeof _reviewAnalyzeResetSafetyTimer==='function'){
+    try{_reviewAnalyzeResetSafetyTimer();}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+  }
   if(depth<=0)return;
   // DEFENSE IN DEPTH: Skip unrealistic depth values (>60) that could come from
   // stale info lines due to Java state machine race condition (see StockfishNative
