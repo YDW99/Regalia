@@ -36,7 +36,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
 <!-- v1.2.3 round-18: removed frame-ancestors — ignored inside <meta> (only
      honored as an HTTP response header), dead directive. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; worker-src blob:; connect-src https://tablebase.lichess.ovh; img-src data: blob:; base-uri 'self'; form-action 'none'; object-src 'none'">
+<!-- v1.2.3 round-56 (E1): worker-src blob: removed — worker-pool.js (the only
+     Worker consumer in this page) has been deleted as dead code. default-src
+     'none' now also covers workers. stats.html keeps its own worker-src blob:
+     for its inline heatmap worker — separate file, separate policy. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; connect-src https://tablebase.lichess.ovh; img-src data: blob:; base-uri 'self'; form-action 'none'; object-src 'none'">
 <title>Regalia v1.2.3</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -1543,6 +1547,8 @@ const _i18n={
 'file_browse_failed':{zh:'文件浏览失败',en:'File browse failed'},
 'settings_read_fail':{zh:'无法读取设置文件',en:'Cannot read settings file'},
 'settings_permission_pending':{zh:'需要存储权限，请在系统弹窗中授权后重试',en:'Storage permission required — grant it in the system dialog and retry'},
+// round-56: readTextFile 1 MiB 上限哨兵（FileIoHelper.MAX_READ_TEXT_BYTES）的提示
+'settings_file_too_large':{zh:'文件过大（超过 1 MB），请选择设置导出文件',en:'File too large (over 1 MB) — pick the settings export file'},
 'restarting_engine':{zh:'正在重启引擎...',en:'Restarting engine...'},
 'engine_unavailable_bridge':{zh:'引擎接口不可用',en:'Engine interface unavailable'},
 'restart_failed':{zh:'重启失败',en:'Restart failed'},
@@ -6157,739 +6163,6 @@ function buildSupplementaryTagsObject(ctx){
 
 // Public API
 
-// ===================== MODULE: worker-pool =====================
-// Web Worker pool for offloading heavy computations from the UI thread.
-//
-// v1.0.8 PHASE 34: Originally wired into the PGN import path
-//   (importPGNAsync) to offload PGN tokenization. v1.0.8 PHASE 49 removed
-//   that call site because importPGNAsync discarded the worker result and
-//   re-parsed synchronously anyway (zero offloading benefit, double CPU).
-//   The pool is retained as infrastructure for future offloading and is
-//   still exercised by stats.html's separate inline worker (which does
-//   consume its result). The API (workerParsePGN / terminateWorkerPool)
-//   remains stable.
-//
-// Design (first-principles robustness):
-//   - Pool of N workers (N = min(hardwareConcurrency, 4)), created lazily.
-//   - Each worker is a Blob-URL worker (CSP allows worker-src blob:).
-//   - The worker source is a self-contained JS string with a fixed switch
-//     statement for each task type. Adding a new task type requires adding
-//     a new case (no dynamic evaluation — CSP 'unsafe-eval' not needed).
-//   - Fallback: if Worker creation fails OR the task is unknown, tasks run
-//     synchronously on the main thread via _syncFallback.
-//   - Task cancellation: each task has a 30s timeout. If exceeded, the worker
-//     is terminated and replaced.
-//   - taskId map for concurrent task resolution (Phase 26 race-condition fix).
-//   - Queue cap (_MAX_QUEUE_SIZE=50) prevents unbounded growth.
-//   - pagehide cleanup terminates all workers + rejects pending promises.
-//
-// Copyright (C) 2026 Regalia
-//
-// PGN tokenization and chess control-map logic derived from DroidFish
-// (Copyright (C) Peter Österlund, GPL v3)
-// Modified by Regalia on 2026-06-15
-//
-// AI-GEN: AI assisted
-// This code was AI-assisted and has been reviewed for GPL v3 compliance.
-//
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-// GNU General Public License for more details.
-//
-// You should have received a copy of the GNU General Public License
-// along with this program. If not, see <https://www.gnu.org/licenses/>.
-
-// === Pool state ===
-let _workerPool = [];
-let _poolSize = 0;
-let _workerSupported = (typeof Worker !== 'undefined');
-// v1.1.2 PHASE 71: consecutive-failure counter for _createWorker(). Reset to
-// 0 on success; incremented on failure. When >= 3, _workerSupported is set
-// false (pool disabled). This prevents a single transient OOM from
-// permanently disabling the worker pool for the page lifetime.
-let _workerCreateFailures = 0;
-let _nextTaskId = 1;
-const _pendingTasks = new Map(); // taskId -> {resolve, reject, worker, timeout}
-const _MAX_QUEUE_SIZE = 50;
-
-// === Worker source code (self-contained, no external deps, no eval) ===
-// ⚠ DUAL-COPY SYNC OBLIGATION (v1.2.3 round-49, F6): _parsePGNText /
-//   _computeHeatmapStats exist TWICE — once inside this _WORKER_SRC template
-//   string (runs in the worker thread) and once as _syncParsePGNText /
-//   _syncComputeHeatmapStats below (main-thread fallback, reached via
-//   _syncFallback). ANY logic change to one copy MUST be mirrored to the
-//   other, keeping them semantically identical (mind the double-escaped
-//   backslashes inside the template string). Precedent: round-47 fixed the
-//   multi-game split regex only in the sync copy; the worker copy kept the
-//   polynomial-backtracking form until round-49.
-// v1.0.8 PHASE 28: Functions are inlined as cases in a switch statement.
-//   This avoids `new Function()` / `eval()` which require CSP 'unsafe-eval'.
-// v1.0.8 PHASE 34: parsePGNText now does FULL tokenization (headers, comments,
-//   variations, movetext) matching the main-thread _parsePGN lexer so the
-//   result can be consumed by the structural parser without re-tokenizing.
-const _WORKER_SRC = `
-self.onmessage = function(e) {
-  var msg = e.data;
-  if (msg.type !== 'run') return;
-  var taskId = msg.taskId;
-  var fnName = msg.fnName;
-  var args = msg.args;
-  try {
-    var result;
-    if (fnName === 'parsePGNText') {
-      result = _parsePGNText(args[0]);
-    } else if (fnName === 'computeHeatmapStats') {
-      result = _computeHeatmapStats(args[0]);
-    } else {
-      self.postMessage({type: 'error', taskId: taskId, error: 'Unknown function: ' + fnName});
-      return;
-    }
-    // Use Promise.resolve to handle both sync and async return paths uniformly
-    Promise.resolve(result).then(function(r) {
-      self.postMessage({type: 'result', taskId: taskId, result: r});
-    }).catch(function(err) {
-      self.postMessage({type: 'error', taskId: taskId, error: String(err?.message || err)});
-    });
-  } catch (err) {
-    self.postMessage({type: 'error', taskId: taskId, error: String(err?.message || err)});
-  }
-};
-// === PGN tokenizer (full lexer — mirrors tablebase.js _parsePGN tokenization) ===
-// Returns {headers, tokens, variations, comments, cslAnnotations, calAnnotations,
-//          evals, startFEN, result} — all the raw data the structural parser needs.
-function _parsePGNText(pgnText) {
-  if (!pgnText || typeof pgnText !== 'string') return null;
-  // Remove BOM
-  if (pgnText.charCodeAt(0) === 0xFEFF) pgnText = pgnText.substring(1);
-  // Normalize line endings
-  var text = pgnText.replace(/\\r\\n/g, '\\n').replace(/\\r/g, '\\n');
-  // Strip PGN escape lines (% in column 0)
-  text = text.replace(/^%.*$/gm, '');
-  // Replace non-breaking spaces
-  text = text.replace(/\\u00a0/g, ' ');
-  // Handle multiple games: only parse the first game
-  // v1.2.3 round-49 (F6/F2): mirror of _syncParsePGNText below — see the
-  //   detailed comment there. The (?<!X) lookbehind anchors match starts to
-  //   the first newline of each blank-line run → linear time (round-47 form
-  //   without it was still O(k^2) on the failure path; Node: 16k -> 587ms,
-  //   with lookbehind 16k -> 1.1ms). Split results identical (300k fuzz).
-  var gameBlocks = text.split(/(?<!\\n)\\n[^\\S\\n]*\\n(?:[^\\S\\n]*\\n)*(?=\\[)/);
-  if (gameBlocks.length > 1) text = gameBlocks[0];
-  // Extract FEN from headers
-  var startFEN = null;
-  var fenMatch = text.match(/\\[FEN\\s+"([^"]+)"\\]/i);
-  if (fenMatch) { startFEN = fenMatch[1]; }
-  else {
-    var fenNoQuoteMatch = text.match(/\\[FEN\\s+([^\\]\\n]+)\\]/i);
-    if (fenNoQuoteMatch) { startFEN = fenNoQuoteMatch[1].trim(); }
-  }
-  // Extract headers
-  var headers = {};
-  // v1.2.3 round-18 (bug fix): consume the closing bracket too. Without
-  //   the trailing bracket the replace below left a stray ']' token per
-  //   header, polluting the movetext token stream (7-tag roster = 7 junk
-  //   tokens). NOTE: no backticks here — inside the Worker template string.
-  var headerRe = /\\[(\\w+)\\s+"((?:[^"\\\\]|\\\\.)*)"\\]/g;
-  var m;
-  while ((m = headerRe.exec(text)) !== null) {
-    headers[m[1]] = m[2].replace(/\\\\"/g, '"').replace(/\\\\\\\\/g, '\\\\');
-  }
-  // Remove header lines
-  text = text.replace(headerRe, '');
-  // Remove rest-of-line comments (;)
-  text = text.replace(/;[^\\n]*/g, '');
-  // Remove brace comments, but extract [%csl], [%cal], [%eval] first
-  var comments = [];
-  var cslAnnotations = [];
-  var calAnnotations = [];
-  var evals = [];
-  // v1.2.3 round-49 (F6): single whitespace (was one-or-more) to match the
-  //   sync copy exactly (round-47 S8786) — the trailing any-but-bracket run
-  //   already covers extra whitespace and the capture is trim()'d at the use
-  //   site, so semantics are unchanged.
-  var cslRe = /\\[%csl\\s([^\\]]*)\\]/g;
-  var calRe = /\\[%cal\\s([^\\]]*)\\]/g;
-  var evalRe = /\\[%eval\\s([^\\]]*)\\]/g;
-  var iter = 0;
-  // v1.2.3 round-38 (SonarCloud S7765): use .includes() instead of .indexOf() >= 0.
-  while (text.includes('{') && iter++ < 20) {
-    var prev = text;
-    // Extract annotations from comments before removing them
-    var cm;
-    while ((cm = cslRe.exec(text)) !== null) { cslAnnotations.push(cm[1].trim()); }
-    while ((cm = calRe.exec(text)) !== null) { calAnnotations.push(cm[1].trim()); }
-    while ((cm = evalRe.exec(text)) !== null) { evals.push(cm[1].trim()); }
-    text = text.replace(/\\{[^{}]*\\}/g, function(match) {
-      comments.push(match.substring(1, match.length - 1));
-      return '';
-    });
-    if (text === prev) break;
-  }
-  text = text.replace(/[{}]/g, ' ');
-  // Extract variations (parenthesized)
-  var variations = [];
-  var depth = 0, start = -1;
-  for (var i = 0; i < text.length; i++) {
-    if (text[i] === '(') { if (depth === 0) start = i + 1; depth++; }
-    else if (text[i] === ')') { depth--; if (depth === 0 && start >= 0) { variations.push(text.substring(start, i)); start = -1; } }
-  }
-  // Remove variations from movetext
-  var movetext = '';
-  depth = 0;
-  for (var i = 0; i < text.length; i++) {
-    if (text[i] === '(') { depth++; continue; }
-    if (text[i] === ')') { if (depth > 0) depth--; continue; }
-    if (depth === 0) movetext += text[i];
-  }
-  // Clean up movetext
-  movetext = movetext.replace(/\\d+\\.+/g, ' '); // v1.2.3 (S8786): (\d+\.+)* 尾组对 replace 语义冗余，去除嵌套量词
-  movetext = movetext.replace(/\\$\\d+/g, ' ');
-  var result = '*';
-  var resultMatch = movetext.match(/(1-0|0-1|1\\/2-1\\/2|\\*)/);
-  if (resultMatch) { result = resultMatch[1]; }
-  movetext = movetext.replace(/(1-0|0-1|1\\/2-1\\/2|\\*)/g, ' ');
-  movetext = movetext.replace(/\\s+/g, ' ').trim();
-  var tokens = movetext ? movetext.split(' ').filter(function(t) { return t.length > 0; }) : [];
-  return {
-    headers: headers,
-    tokens: tokens,
-    variations: variations,
-    comments: comments,
-    cslAnnotations: cslAnnotations,
-    calAnnotations: calAnnotations,
-    evals: evals,
-    startFEN: startFEN,
-    result: result
-  };
-}
-// === Heatmap stats (mirrors stats.html worker logic) ===
-function _computeHeatmapStats(boards) {
-  function attacked(board, pos) {
-    var p = board[pos.row][pos.col]; if (!p) return [];
-    var r = pos.row, c = pos.col, co = p.color, mv = [];
-    if (p.type === 'pawn') {
-      var d = co === 'white' ? -1 : 1;
-      if (r+d >= 0 && r+d < 8 && c-1 >= 0 && c-1 < 8) mv.push({row: r+d, col: c-1});
-      if (r+d >= 0 && r+d < 8 && c+1 >= 0 && c+1 < 8) mv.push({row: r+d, col: c+1});
-    } else if (p.type === 'knight') {
-      var offs = [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
-      for (var i = 0; i < offs.length; i++) {
-        var nr = r+offs[i][0], nc = c+offs[i][1];
-        if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) mv.push({row: nr, col: nc});
-      }
-    } else if (p.type === 'king') {
-      for (var dr = -1; dr <= 1; dr++) for (var dc = -1; dc <= 1; dc++) {
-        if (!dr && !dc) continue;
-        if (r+dr >= 0 && r+dr < 8 && c+dc >= 0 && c+dc < 8) mv.push({row: r+dr, col: c+dc});
-      }
-    } else {
-      var dirs = p.type === 'rook' ? [[-1,0],[1,0],[0,-1],[0,1]]
-        : p.type === 'bishop' ? [[-1,-1],[-1,1],[1,-1],[1,1]]
-        : [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]];
-      for (var i = 0; i < dirs.length; i++) {
-        var nr = r+dirs[i][0], nc = c+dirs[i][1];
-        while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
-          mv.push({row: nr, col: nc}); if (board[nr][nc]) break;
-          nr += dirs[i][0]; nc += dirs[i][1];
-        }
-      }
-    }
-    return mv;
-  }
-  var ctrlW = [[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0]];
-  var ctrlB = [[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0]];
-  var posCount = 0;
-  for (var bi = 0; bi < boards.length; bi++) {
-    var b = boards[bi];
-    for (var r = 0; r < 8; r++) for (var c = 0; c < 8; c++) {
-      var p = b[r][c]; if (!p) continue;
-      var atks = attacked(b, {row: r, col: c});
-      for (var ai = 0; ai < atks.length; ai++) {
-        var a = atks[ai];
-        if (p.color === 'white') ctrlW[a.row][a.col]++; else ctrlB[a.row][a.col]++;
-      }
-    }
-    posCount++;
-  }
-  return { ctrlW: ctrlW, ctrlB: ctrlB, posCount: posCount };
-}
-`;
-
-// === Pool management ===
-function _getPoolSize() {
-  if (_poolSize > 0) return _poolSize;
-  try {
-    const hc = (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) || 2;
-    _poolSize = Math.max(1, Math.min(hc, 4));
-  } catch (e) { _poolSize = 2; }
-  return _poolSize;
-}
-
-function _createWorker() {
-  if (!_workerSupported) return null;
-  // v1.0.8 PHASE 49: hoist `url` so the catch block can revoke it if
-  //   `new Worker(url)` throws. The old block-scoped declaration leaked the
-  //   Blob URL on every failed worker-creation attempt.
-  let url = null;
-  try {
-    const blob = new Blob([_WORKER_SRC], {type: 'application/javascript'});
-    url = URL.createObjectURL(blob);
-    const w = new Worker(url);
-    w._url = url;
-    url = null; // ownership transferred to w._url; revoke on worker teardown
-    w._busy = false;
-    // v1.2.3 round-44 (G12): track the worker's current task for O(1) lookup
-    //   in onerror/onmessageerror (was an O(n) scan of _pendingTasks).
-    w._currentTask = null;
-    w.onmessage = function(e) {
-      const msg = e.data;
-      if (!msg || !msg.taskId) return;
-      const task = _pendingTasks.get(msg.taskId);
-      if (!task) return;
-      _pendingTasks.delete(msg.taskId);
-      task.worker._busy = false;
-      task.worker._currentTask = null;
-      if (task.timeout) { clearTimeout(task.timeout); task.timeout = null; }
-      if (msg.type === 'result') task.resolve(msg.result);
-      else task.reject(new Error(msg.error || 'Worker error'));
-      _dispatchNext();
-      _scheduleIdleReap(); // v1.2.3 round-44 (G9): task completed — arm idle reap
-    };
-    w.onerror = function(e) {
-      // v1.2.3 round-44 (G12): O(1) lookup via w._currentTask (was an O(n)
-      //   scan of _pendingTasks). The pendingTasks.get identity check guards
-      //   against a task that already completed/timed out.
-      const task = w._currentTask || null;
-      w._currentTask = null;
-      if (task && _pendingTasks.get(task.taskId) === task) {
-        _pendingTasks.delete(task.taskId);
-        if (task.timeout) { clearTimeout(task.timeout); task.timeout = null; }
-        // v1.2.3 round-29 (PR52 S6551): use String(e) instead of bare `e` so
-        //   ErrorEvent / Event objects stringify meaningfully instead of
-        //   "[object Object]". When e is a string (legacy onerror contract)
-        //   String(e) returns it unchanged.
-        task.reject(new Error('Worker crashed: ' + (e?.message || String(e))));
-      }
-      w._busy = false;
-      _removeWorker(w);
-      _dispatchNext();
-    };
-    // v1.1.2 Phase 69 (Web Worker guide §6.1): onmessageerror fires when the
-    //   message data cannot be deserialized (structured clone failure). Without
-    //   this handler, such failures would silently leave the task's promise
-    //   hanging until the 30s timeout. Now we reject immediately and recycle
-    //   the worker (a serialization failure usually indicates a corrupted
-    //   worker state — safer to terminate and replace).
-    w.onmessageerror = function(e) {
-      // v1.2.3 round-44 (G12): O(1) lookup via w._currentTask (see onerror).
-      const task = w._currentTask || null;
-      w._currentTask = null;
-      if (task && _pendingTasks.get(task.taskId) === task) {
-        _pendingTasks.delete(task.taskId);
-        if (task.timeout) { clearTimeout(task.timeout); task.timeout = null; }
-        task.reject(new Error('Worker message serialization error'));
-      }
-      w._busy = false;
-      _removeWorker(w);
-      _dispatchNext();
-    };
-    // v1.1.2 PHASE 71: reset the consecutive-failure counter on success — a
-    // single successful creation proves the pool is still functional.
-    _workerCreateFailures = 0;
-    return w;
-  } catch (e) {
-    if (url) { try { URL.revokeObjectURL(url); } catch (_) {} }
-    // v1.1.2 PHASE 71 (robustness): do NOT permanently disable the worker pool
-    // on a single transient failure (e.g. transient OOM, Blob URL quota
-    // exhaustion). Previously `_workerSupported = false` was set on any error,
-    // disabling the pool for the entire page lifetime — even if the next
-    // _createWorker() call would have succeeded. We now track a consecutive-
-    // failure counter and only disable after 3 consecutive failures. A
-    // successful _createWorker() resets the counter. This mirrors the
-    // resilience pattern recommended for transient resource-exhaustion errors.
-    _workerCreateFailures = (_workerCreateFailures || 0) + 1;
-    if (_workerCreateFailures >= 3) {
-      _workerSupported = false;
-    }
-    return null;
-  }
-}
-
-function _removeWorker(w) {
-  const idx = _workerPool.indexOf(w);
-  if (idx >= 0) _workerPool.splice(idx, 1);
-  try { w.terminate(); } catch (e) {}
-  try { if (w._url) URL.revokeObjectURL(w._url); } catch (e) {}
-}
-
-// v1.2.3 round-44 (G9): idle reaping — 60s after the pool last saw activity,
-//   shrink to 1 hot-standby worker (terminate + revoke the rest). Scheduled on
-//   task completion and whenever an idle worker is handed out; rescheduled on
-//   each call so the reap only fires after a full 60s of pool inactivity.
-//   Reaping does NOT touch _workerCreateFailures — that counter tracks worker
-//   CREATION health (Phase 71), not pool size, and must survive a reap.
-let _idleReapTimerId = null;
-function _scheduleIdleReap() {
-  if (_idleReapTimerId) { clearTimeout(_idleReapTimerId); _idleReapTimerId = null; }
-  _idleReapTimerId = setTimeout(function() {
-    _idleReapTimerId = null;
-    if (_taskQueue.length > 0) return; // work pending — keep the pool
-    // Only reap when every worker is idle; a busy worker means work is in
-    // flight and the pool may still be needed at full size.
-    for (const w of _workerPool) { if (w._busy) return; }
-    while (_workerPool.length > 1) {
-      const w = _workerPool.pop();
-      try { w.terminate(); } catch (e) {}
-      try { if (w._url) URL.revokeObjectURL(w._url); } catch (e) {}
-    }
-  }, 60000);
-}
-
-function _getIdleWorker() {
-  for (const w of _workerPool) {
-    // v1.2.3 round-44 (G9): handing out a worker is pool activity — (re)arm
-    //   the idle reap timer.
-    if (!w._busy) { _scheduleIdleReap(); return w; }
-  }
-  if (_workerPool.length < _getPoolSize()) {
-    const w = _createWorker();
-    if (w) { _workerPool.push(w); _scheduleIdleReap(); return w; }
-  }
-  return null;
-}
-
-// === Task queue ===
-const _taskQueue = [];
-
-function _dispatchNext() {
-  while (_taskQueue.length > 0) {
-    const w = _getIdleWorker();
-    if (!w) {
-      // v1.2.3 round-41: no idle worker AND an empty pool means worker
-      //   creation just failed AND there is no busy worker whose completion
-      //   would re-trigger dispatch — the head task would otherwise sit in
-      //   the queue until its 30s timeout (a "fake hang"). Fall back to
-      //   main-thread execution for the head task immediately (resolve/reject
-      //   via _syncFallback) and clear its timeout. When the pool merely has
-      //   all workers busy (length > 0), keep the existing wait — a task
-      //   completion re-dispatches. `_workerSupported` stays true, so the
-      //   instantaneous-retry semantics (next workerRun re-attempts
-      //   _createWorker) are unchanged.
-      if (_workerPool.length === 0) {
-        // v1.2.3 round-46 (PR53 CR#9): drain the WHOLE queue in this pass
-        //   instead of `continue`-ing per task. The old loop re-entered
-        //   _getIdleWorker() -> _createWorker() once per queued task, so 3+
-        //   queued tasks inside one transient-failure window tripped the
-        //   Phase-71 3-strike counter and set _workerSupported=false —
-        //   permanently disabling the pool (contradicting the round-41 note
-        //   above). With drain-all, each dispatch pass costs at most one
-        //   creation attempt, so the counter again counts INDEPENDENT events
-        //   as Phase 71 intended. An empty pool also means no busy worker
-        //   exists to re-trigger dispatch, so queued tasks would otherwise
-        //   wait for their 30s timeouts.
-        while (_taskQueue.length > 0) {
-          const task = _taskQueue.shift();
-          clearTimeout(task.timeout);
-          Promise.resolve().then(function() { return _syncFallback(task.fnName, task.args); })
-            .then(task.resolve, task.reject);
-        }
-        return;
-      }
-      break;
-    }
-    const task = _taskQueue.shift();
-    w._busy = true;
-    task.worker = w;
-    w._currentTask = task; // v1.2.3 round-44 (G12): O(1) crash lookup
-    _pendingTasks.set(task.taskId, task);
-    // v1.2.3 round-49 (F7): guard postMessage — a synchronous throw (e.g.
-    //   DataCloneError on an uncloneable arg) previously escaped the workerRun
-    //   Promise executor AFTER the worker was marked busy and the task
-    //   registered, stranding the worker as "busy" until the task's 30s
-    //   timeout terminated it (and surfacing as an uncaught exception when
-    //   reached from an onmessage-triggered _dispatchNext). On failure we
-    //   unregister the task, recycle the worker (state unknown — safest to
-    //   terminate + replace), reject the task immediately, and let the loop
-    //   continue dispatching the remaining queue.
-    try {
-      w.postMessage({type: 'run', taskId: task.taskId, fnName: task.fnName, args: task.args});
-    } catch (e) {
-      _pendingTasks.delete(task.taskId);
-      w._currentTask = null;
-      w._busy = false;
-      if (task.timeout) { clearTimeout(task.timeout); task.timeout = null; }
-      _removeWorker(w);
-      task.reject(new Error('Worker postMessage failed: ' + (e && e.message ? e.message : String(e))));
-    }
-  }
-}
-
-// === Public API ===
-
-// v1.2.3 round-37 (SonarCloud S7760): use default parameter syntax
-//   `timeoutMs = 30000` instead of `timeoutMs = timeoutMs || 30000`.
-//   Default params apply only when the argument is `undefined` (not other
-//   falsy values like 0), which is the correct semantics here — a caller
-//   passing `timeoutMs = 0` previously got 30000 (bug!); now they get 0
-//   (intentional, though unusual). No current caller passes 0, so behavior
-//   is unchanged for all existing call sites.
-function workerRun(fnName, args, timeoutMs = 30000) {
-  if (!_workerSupported) {
-    // v1.0.8 PHASE 35: defer into Promise chain so sync throws (unknown fnName)
-    //   become rejected Promises instead of synchronous throws out of workerRun.
-    return Promise.resolve().then(function() { return _syncFallback(fnName, args); });
-  }
-  return new Promise(function(resolve, reject) {
-    const taskId = _nextTaskId++;
-    const task = {
-      taskId: taskId,
-      fnName: fnName,
-      args: args,
-      worker: null,
-      resolve: resolve,
-      reject: reject,
-      timeout: null
-    };
-    task.timeout = setTimeout(function() {
-      _pendingTasks.delete(taskId);
-      if (task.worker) {
-        task.worker._busy = false;
-        task.worker._currentTask = null;
-        _removeWorker(task.worker);
-      } else {
-        // v1.0.8 PHASE 35: task was still queued (no worker assigned) — splice
-        //   it from _taskQueue to prevent a ghost dispatch later.
-        const idx = _taskQueue.indexOf(task);
-        if (idx >= 0) _taskQueue.splice(idx, 1);
-      }
-      reject(new Error('Worker timeout after ' + timeoutMs + 'ms for ' + fnName));
-      _dispatchNext();
-    }, timeoutMs);
-    // Cap the queue to prevent unbounded growth
-    if (_taskQueue.length >= _MAX_QUEUE_SIZE) {
-      clearTimeout(task.timeout);
-      reject(new Error('Worker pool queue full (' + _MAX_QUEUE_SIZE + ') for ' + fnName));
-      return;
-    }
-    _taskQueue.push(task);
-    _dispatchNext();
-  });
-}
-
-// Synchronous fallback — runs the function on the main thread
-function _syncFallback(fnName, args) {
-  if (fnName === 'parsePGNText') {
-    return _syncParsePGNText(args[0]);
-  } else if (fnName === 'computeHeatmapStats') {
-    return _syncComputeHeatmapStats(args[0]);
-  }
-  throw new Error('Unknown worker function: ' + fnName);
-}
-
-// Inline sync implementations (mirror the worker source for fallback)
-function _syncParsePGNText(pgnText) {
-  if (!pgnText || typeof pgnText !== 'string') return null;
-  if (pgnText.charCodeAt(0) === 0xFEFF) pgnText = pgnText.substring(1);
-  var text = pgnText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
-  text = text.replace(/^%.*$/gm, '');
-  text = text.replace(/\u00a0/g, ' ');
-  // v1.2.3 round-47 (S8786): \n\s*\n -> \n[^\S\n]*\n(?:[^\S\n]*\n)* (horizontal-ws
-  //   runs separated by \n) — same split points, no ambiguous quantifier overlap.
-  // v1.2.3 round-49 (F2/F6): added the (?<!\n) lookbehind — the round-47 form
-  //   was STILL O(k^2) on the failure path (a long blank-line run with no
-  //   following '[': the (?:...)* group re-walks the whole run per start
-  //   position; Node: 16k newlines -> 587ms vs old 440ms, i.e. the S8786 fix
-  //   silenced the lint but not the DoS). The lookbehind restricts match
-  //   starts to the FIRST '\n' of each blank-line run (mid-run starts fail in
-  //   O(1)) -> linear total (16k -> 1.1ms, 900k -> 63ms). Split results are
-  //   identical to the old regex (300k-case fuzz, 0 mismatches): a match
-  //   starting mid-run implies an equivalent match at the run's first '\n',
-  //   which split() finds first. Lookbehind needs Chrome 62+ (WebView>=84
-  //   floor OK). Keep in sync with the _WORKER_SRC copy above and
-  //   stats.html parsePGN.
-  var gameBlocks = text.split(/(?<!\n)\n[^\S\n]*\n(?:[^\S\n]*\n)*(?=\[)/);
-  if (gameBlocks.length > 1) text = gameBlocks[0];
-  var startFEN = null;
-  var fenMatch = text.match(/\[FEN\s+"([^"]+)"\]/i);
-  if (fenMatch) { startFEN = fenMatch[1]; }
-  else {
-    var fenNoQuoteMatch = text.match(/\[FEN\s+([^\]\n]+)\]/i);
-    if (fenNoQuoteMatch) { startFEN = fenNoQuoteMatch[1].trim(); }
-  }
-  var headers = {};
-  // v1.2.3 round-18 (bug fix): consume the closing bracket too (sync mirror
-  //   of the worker-side fix above — keep both copies semantically identical).
-  var headerRe = /\[(\w+)\s+"((?:[^"\\]|\\.)*)"\]/g;
-  var m;
-  while ((m = headerRe.exec(text)) !== null) {
-    headers[m[1]] = m[2].replace(/\\"/g, '"').replace(/\\\\/g, '\\');
-  }
-  text = text.replace(headerRe, '');
-  text = text.replace(/;[^\n]*/g, '');
-  var comments = [];
-  var cslAnnotations = [];
-  var calAnnotations = [];
-  var evals = [];
-  var cslRe = /\[%csl\s([^\]]*)\]/g; // v1.2.3 round-47 (S8786): \s+ -> \s — trailing [^\]]* already covers extra whitespace; capture is .trim()'d at use site
-  var calRe = /\[%cal\s([^\]]*)\]/g; // v1.2.3 round-47 (S8786): same as cslRe above
-  var evalRe = /\[%eval\s([^\]]*)\]/g; // v1.2.3 round-47 (S8786): same as cslRe above
-  var iter = 0;
-  // v1.2.3 round-38 (SonarCloud S7765): use .includes() instead of .indexOf() >= 0.
-  while (text.includes('{') && iter++ < 20) {
-    var prev = text;
-    var cm;
-    while ((cm = cslRe.exec(text)) !== null) { cslAnnotations.push(cm[1].trim()); }
-    while ((cm = calRe.exec(text)) !== null) { calAnnotations.push(cm[1].trim()); }
-    while ((cm = evalRe.exec(text)) !== null) { evals.push(cm[1].trim()); }
-    text = text.replace(/\{[^{}]*\}/g, function(match) {
-      comments.push(match.substring(1, match.length - 1));
-      return '';
-    });
-    if (text === prev) break;
-  }
-  text = text.replace(/[{}]/g, ' ');
-  var variations = [];
-  var depth = 0, start = -1;
-  for (var i = 0; i < text.length; i++) {
-    if (text[i] === '(') { if (depth === 0) { start = i + 1; } depth++; }
-    else if (text[i] === ')') { depth--; if (depth === 0 && start >= 0) { variations.push(text.substring(start, i)); start = -1; } }
-  }
-  var movetext = '';
-  depth = 0;
-  for (i = 0; i < text.length; i++) {
-    if (text[i] === '(') { depth++; continue; }
-    if (text[i] === ')') { if (depth > 0) { depth--; } continue; }
-    if (depth === 0) movetext += text[i];
-  }
-  movetext = movetext.replace(/\d+\.+/g, ' '); // v1.2.3 (S8786): (\d+\.+)* 尾组对 replace 语义冗余，去除嵌套量词
-  movetext = movetext.replace(/\$\d+/g, ' ');
-  var result = '*';
-  var resultMatch = movetext.match(/(1-0|0-1|1\/2-1\/2|\*)/);
-  if (resultMatch) { result = resultMatch[1]; }
-  movetext = movetext.replace(/(1-0|0-1|1\/2-1\/2|\*)/g, ' ');
-  movetext = movetext.replace(/\s+/g, ' ').trim();
-  var tokens = movetext ? movetext.split(' ').filter(function(t) { return t.length > 0; }) : [];
-  return {
-    headers: headers,
-    tokens: tokens,
-    variations: variations,
-    comments: comments,
-    cslAnnotations: cslAnnotations,
-    calAnnotations: calAnnotations,
-    evals: evals,
-    startFEN: startFEN,
-    result: result
-  };
-}
-
-function _syncComputeHeatmapStats(boards) {
-  function attacked(board, pos) {
-    var p = board[pos.row][pos.col]; if (!p) return [];
-    var r = pos.row, c = pos.col, co = p.color, mv = [];
-    if (p.type === 'pawn') {
-      var d = co === 'white' ? -1 : 1;
-      if (r+d >= 0 && r+d < 8 && c-1 >= 0 && c-1 < 8) mv.push({row: r+d, col: c-1});
-      if (r+d >= 0 && r+d < 8 && c+1 >= 0 && c+1 < 8) mv.push({row: r+d, col: c+1});
-    } else if (p.type === 'knight') {
-      var offs = [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
-      for (var i = 0; i < offs.length; i++) {
-        var nr = r+offs[i][0], nc = c+offs[i][1];
-        if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) mv.push({row: nr, col: nc});
-      }
-    } else if (p.type === 'king') {
-      for (var dr = -1; dr <= 1; dr++) for (var dc = -1; dc <= 1; dc++) {
-        if (!dr && !dc) continue;
-        if (r+dr >= 0 && r+dr < 8 && c+dc >= 0 && c+dc < 8) mv.push({row: r+dr, col: c+dc});
-      }
-    } else {
-      var dirs = p.type === 'rook' ? [[-1,0],[1,0],[0,-1],[0,1]]
-        : p.type === 'bishop' ? [[-1,-1],[-1,1],[1,-1],[1,1]]
-        : [[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[-1,1],[1,-1],[1,1]];
-      for (i = 0; i < dirs.length; i++) {
-        nr = r+dirs[i][0], nc = c+dirs[i][1];
-        while (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) {
-          mv.push({row: nr, col: nc}); if (board[nr][nc]) break;
-          nr += dirs[i][0]; nc += dirs[i][1];
-        }
-      }
-    }
-    return mv;
-  }
-  var ctrlW = [[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0]];
-  var ctrlB = [[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0],[0,0,0,0,0,0,0,0]];
-  var posCount = 0;
-  for (var bi = 0; bi < boards.length; bi++) {
-    var b = boards[bi];
-    for (var r = 0; r < 8; r++) for (var c = 0; c < 8; c++) {
-      var p = b[r][c]; if (!p) continue;
-      var atks = attacked(b, {row: r, col: c});
-      for (var ai = 0; ai < atks.length; ai++) {
-        var a = atks[ai];
-        if (p.color === 'white') ctrlW[a.row][a.col]++; else ctrlB[a.row][a.col]++;
-      }
-    }
-    posCount++;
-  }
-  return { ctrlW: ctrlW, ctrlB: ctrlB, posCount: posCount };
-}
-
-// === Convenience wrappers ===
-
-function workerParsePGN(pgnText, timeoutMs) {
-  return workerRun('parsePGNText', [pgnText], timeoutMs);
-}
-
-function workerComputeHeatmapStats(serializedBoards, timeoutMs) {
-  return workerRun('computeHeatmapStats', [serializedBoards], timeoutMs);
-}
-
-function terminateWorkerPool() {
-  // v1.2.3 round-44 (G9): cancel any pending idle reap — pool is going away.
-  if (_idleReapTimerId) { clearTimeout(_idleReapTimerId); _idleReapTimerId = null; }
-  for (const w of _workerPool) {
-    try { w.terminate(); } catch (e) {}
-    try { if (w._url) URL.revokeObjectURL(w._url); } catch (e) {}
-  }
-  _workerPool = [];
-  // v1.0.8 PHASE 35: reject in-flight (dispatched) tasks
-  for (const task of _pendingTasks.values()) {
-    if (task.timeout) { clearTimeout(task.timeout); task.timeout = null; }
-    try { task.reject(new Error('Pool terminated')); } catch (e) {}
-  }
-  _pendingTasks.clear();
-  // v1.0.8 PHASE 35: reject queued (not-yet-dispatched) tasks too — previously
-  //   these were silently dropped by `_taskQueue.length = 0`, leaving their
-  //   promises hanging up to 30s. Now they reject immediately.
-  for (const task of _taskQueue) {
-    if (task.timeout) { clearTimeout(task.timeout); task.timeout = null; }
-    try { task.reject(new Error('Pool terminated')); } catch (e) {}
-  }
-  _taskQueue.length = 0;
-}
-
-// v1.0.8 PHASE 34: Expose globally so callers in tablebase.js / ui.js can use
-//   workerParsePGN without ES module imports (the bundled chess.html is a
-//   non-module script where top-level function declarations ARE global, but
-//   source-module mode requires explicit window assignment).
-if (typeof window !== 'undefined') {
-  window.workerParsePGN = workerParsePGN;
-  window.workerComputeHeatmapStats = workerComputeHeatmapStats;
-  window.terminateWorkerPool = terminateWorkerPool;
-  window.workerRun = workerRun;
-}
-
-if (typeof window !== 'undefined') {
-  window.addEventListener('pagehide', function() {
-    try { terminateWorkerPool(); } catch (e) {}
-  });
-}
-
 // state-store.js — Global State Store (v1.2.0 Phase 75)
 //
 // Regalia - Global State Store
@@ -7771,7 +7044,10 @@ let _setupFEN=null;
 let _importedStartMoveNum=1;
 let showVariations=false; // 💬显示变例 toggle state
 let _reviewAnalyzeSafetyTimer=null; // Safety timeout for reviewAnalyzeAll (prevents infinite hang)
-let _lastEngineCallbackTime=0; // Timestamp of last engine callback — used by heartbeat monitor
+// v1.2.3 round-56 (B1): all writes/reads use performance.now() (monotonic) —
+//   Date.now() jumps on system-clock changes (NTP sync, user adjustment) and
+//   could stall or false-trigger the 120s heartbeat-restart check.
+let _lastEngineCallbackTime=0; // Monotonic timestamp (performance.now()) of last engine callback — used by heartbeat monitor
 // v1.1.1 Phase 59 Task 59.6: Batch analyze-all session state, decoupled from
 //   reviewStep (the user's view). The batch runs in the background — the user
 //   can navigate freely without invalidating in-flight batch callbacks.
@@ -9027,26 +8303,28 @@ function openStatsPage(){
         }
         window._pendingOpenStats=true;
         // v1.2.1 round-11 (Bug #2 fix hardening): safety timeout — if the
-        //   batch never completes within 10 minutes (e.g., engine stuck
+        //   batch never completes within the timeout (e.g., engine stuck
         //   unrecoverable, or a bug prevents the completion branch from
         //   firing), clear the pending flag so the user can retry 📊
-        //   instead of being permanently locked out. The timeout is
-        //   generous: a 200-step game at 60s/step worst-case = 200min,
-        //   but the per-step safety timer (60s) skips stuck steps, so a
-        //   healthy batch finishes in <30min for any realistic game.
-        //   10min covers the common case (engine slow to start) while
-        //   catching genuine deadlocks.
+        //   instead of being permanently locked out.
+        // v1.2.3 round-56 (C1): timeout is now DYNAMIC — the hardcoded 10min
+        //   misfired on long games: _uncachedCount steps at up to 60s/step
+        //   (per-step safety timer) can legitimately need far more than 10min
+        //   (e.g. a 150-move game with a cold engine ≈ 150×60s = 150min worst
+        //   case). Scale with the actual uncached-step count (60s per step,
+        //   matching the per-step safety timer), floor 10min for short games.
+        const _pendingTimeoutMs=Math.max(600000,_uncachedCount*60000);
         if(window._pendingOpenStatsTimer){clearTimeout(window._pendingOpenStatsTimer);}
         window._pendingOpenStatsTimer=setTimeout(function(){
           if(window._pendingOpenStats){
             window._pendingOpenStats=false;
-            console.warn('openStatsPage: pending-stats safety timeout fired (10min) — batch did not complete');
+            console.warn('openStatsPage: pending-stats safety timeout fired ('+Math.round(_pendingTimeoutMs/60000)+'min) — batch did not complete');
             // v1.2.1 round-16: proper i18n (was previously mixed zh+en
             //   "T('analyzing_progress') + ' timed out'").
             try{showToast(T('analysis_timed_out_retry'));}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
           }
           window._pendingOpenStatsTimer=null;
-        },600000); // 10 minutes
+        },_pendingTimeoutMs);
       }
       // v1.2.1 round-11 (Bug #2 fix): If a batch is already running (user
       //   clicked "Analyze All" manually before clicking 📊), DON'T restart
@@ -10039,7 +9317,7 @@ function onBestMove(uciMove){
   // v1.1.0 Phase 54: Update heartbeat timestamp — onBestMove is proof-of-life
   // from a healthy engine. Without this, long AI thinks (>120s) falsely
   // trigger engine restart via the heartbeat monitor.
-  _lastEngineCallbackTime=Date.now();
+  _lastEngineCallbackTime=performance.now();
   // v1.0.3-p9 audit fix: check staleness BEFORE clearing the safety timer.
   // If a stale bestmove arrives, the real bestmove is still pending and the
   // safety timer must remain active to catch a potential timeout.
@@ -10262,7 +9540,7 @@ function onBestMove(uciMove){
 function onHintMove(uciMove){
   // v1.1.2 Phase 67: removed leftover console.log (Phase 66 cleanup miss).
   // v1.1.0 Phase 54: Update heartbeat timestamp — onHintMove is proof-of-life.
-  _lastEngineCallbackTime=Date.now();
+  _lastEngineCallbackTime=performance.now();
   // v1.0.8 PHASE 49: discard stale hint callbacks. If isHintLoading is already
   //   false by the time onHintMove fires, the user has moved (executeMove /
   //   doAIMove) or switched modes (setup/review/new game) since the hint was
@@ -10370,7 +9648,7 @@ function onHintMove(uciMove){
 // "SD<N>" right after "D<N>" to match the existing abbreviated style.
 function onEngineProgress(depth,nodes,nps,scoreCp,scoreMate,wdlW,wdlD,wdlL,seldepth){
   // v1.1.0 Phase 54: Update heartbeat timestamp — onEngineProgress is proof-of-life.
-  _lastEngineCallbackTime=Date.now();
+  _lastEngineCallbackTime=performance.now();
   if(depth<=0)return;
   // DEFENSE IN DEPTH: Skip unrealistic depth values (>60) that could come from
   // stale info lines due to Java state machine race condition (see StockfishNative
@@ -10491,7 +9769,7 @@ function onEngineProgress(depth,nodes,nps,scoreCp,scoreMate,wdlW,wdlD,wdlL,selde
 // v1.0.4 Rev33: added seldepth (6th param) for "SD" display after "D".
 function onPonderProgress(depth,nodes,nps,scoreCp,scoreMate,seldepth){
   // v1.1.0 Phase 54: Update heartbeat timestamp — onPonderProgress is proof-of-life.
-  _lastEngineCallbackTime=Date.now();
+  _lastEngineCallbackTime=performance.now();
   if(depth<=0)return;
   if(depth>60)return; // Skip unrealistic depths from stale info lines
   // FIX: Generation-based staleness guard. If the ponder generation has changed
@@ -10559,7 +9837,7 @@ function onPonderProgress(depth,nodes,nps,scoreCp,scoreMate,seldepth){
 function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth,reqFen){
   // Update heartbeat timestamp — prevents false-positive engine death detection
   // during long eval searches (go depth 22 can take several seconds)
-  _lastEngineCallbackTime=Date.now();
+  _lastEngineCallbackTime=performance.now();
   // v1.0.7 PHASE 19 (bug fix): Cross-mode stale callback rejection. A review-mode
   // eval callback still in flight after exitReview() would previously pass the
   // normal-mode gen check (both gens equal in normal mode). Now we capture the
@@ -11077,6 +10355,10 @@ function _fileBrowserSelect(filePath){
     //   a retry instead of feeding the JSON marker into importSettings.
     if(content&&content.indexOf('"permission_pending"')!==-1){
       showToast(T('settings_permission_pending'));
+    }else if(content&&content.indexOf('"too_large"')!==-1){
+      // round-56: readTextFile 1 MiB 上限哨兵 —— 设置文件正常仅 KB 级，
+      //   超限说明用户选中了错误的大文件，提示其重新选择。
+      showToast(T('settings_file_too_large'));
     }else if(content){
       // importSettings() is async on the Java side — onSettingsImported
       // callback will fire the success/failure toast.
@@ -12331,6 +11613,24 @@ function _requestBatchEval(step){
       _batchConsecutiveFail=0;
     }catch(e){
       console.error('Batch engineEvalDeep error:',e);
+      // v1.2.3 round-56 (A3): a synchronous dispatch throw previously bypassed
+      //   the T4 3-strike terminator entirely — _batchConsecutiveFail was never
+      //   incremented here, so a persistently throwing bridge spun the batch
+      //   through every remaining step in 100ms cycles (or ghost-looped on the
+      //   safety net) instead of failing loudly. Count the throw, and at 3
+      //   consecutive failures terminate via the standard cleanup path (which
+      //   also flushes batch write mode and resets the analyze button).
+      _batchConsecutiveFail++;
+      // v1.2.3 round-56 (A3): clear the STALE dispatch record. The throw above
+      //   happened before this step's record was written, so _batchLastDispatched
+      //   still describes the PREVIOUS step — a late callback arriving now could
+      //   otherwise be claimed against it (T1 mis-claim). Null record → the T1
+      //   check drops any late callback as stale.
+      _batchLastDispatched=null;
+      if(_batchConsecutiveFail>=3){
+        _terminateBatchAfterRepeatedFailures('dispatch throw');
+        return;
+      }
       // On synchronous failure, advance to the next step (don't stall)
       if(typeof _reviewAnalyzeAdvance==='function'){
         setTimeout(function(){try{_reviewAnalyzeAdvance();}catch(_e){}},100);
@@ -14397,13 +13697,11 @@ function importPGN(pgnText){
 //   (invalid PGN). The caller should check the flag before showing success UI.
 function importPGNAsync(pgnText){
   if(!pgnText||typeof pgnText!=='string')return Promise.resolve(false);
-  // If worker pool unavailable, fall back to sync immediately
-  if(typeof workerParsePGN!=='function'){
-    try{importPGN(pgnText);return Promise.resolve(true);}catch(e){
-      // importPGN itself shows the error toast, but if it threw we report false
-      return Promise.resolve(false);
-    }
-  }
+  // v1.2.3 round-56 (E1): worker-pool.js removed — the typeof workerParsePGN
+  //   guard is gone with it. The toast + 50ms paint-yield + synchronous import
+  //   below was ALREADY the effective path since v1.0.8 PHASE 49 (the worker
+  //   round-trip's result was discarded in both branches), so removing the
+  //   module changes nothing for users.
   // Show loading indicator
   try{showToast(T('importing_pgn'),4500);}catch(e){console.warn('[Tablebase]',e?.message?e.message:e);}
   // v1.0.8 PHASE 49: removed the dead workerParsePGN round-trip. The old code
@@ -15089,7 +14387,13 @@ function _startGameImpl(){
           const moveObj={from:from,to:to,piece:piece};
           // Snapshot state BEFORE the move (matches executeMove's order)
           stateHistory.push({state:cloneS(gameState),selectedSquare:null,legalMvs:[],moveRecords:[...moveRecords],lastMove:lastMove?{...lastMove}:null,gameOver:null});
-          if(stateHistory.length>200)stateHistory.shift();
+          // v1.2.3 round-56 (A4): evict index 1, never index 0 — shift() used
+          //   to drop the INITIAL position, breaking every stateHistory[0]
+          //   consumer (reviewBaseState, chess960 startFEN fallback,
+          //   moveRecords[0] placeholder sync). Index-aligned audit: no
+          //   consumer indexes stateHistory by ply (all use [0] or tail
+          //   push/pop), so evicting index 1 is alignment-safe.
+          if(stateHistory.length>200)stateHistory.splice(1,1);
           // Apply the move
           const ns=makeMv(gameState,moveObj);
           const notation=moveAlg(gameState,moveObj,ns);
@@ -15117,9 +14421,10 @@ function _startGameImpl(){
           break;
         }
       }
-      // If the opening had moves, clear the stale stateHistory[0] entry so that
-      // undo back to the start position correctly restores the initial position
-      // (stateHistory[0] is still the initial state, which is correct).
+      // v1.2.3 round-56: the comment that was here ("clear the stale
+      //   stateHistory[0] entry") described code that no longer exists —
+      //   stateHistory[0] IS the initial position and must be preserved
+      //   (see the splice(1,1) eviction note above). Nothing to clear.
     }else{
       console.warn('[startGame] ECO code not found:',ecoCode);
     }
@@ -15720,7 +15025,9 @@ if(!piece)return;
 // from any source (e.g., corrupted UCI parsing, tablebase, etc.)
 if(promotion&&piece.type!=='pawn')promotion=null;
 stateHistory.push({state:cloneS(gameState),selectedSquare:selectedSquare?{...selectedSquare}:null,legalMvs:[...legalMvs],moveRecords:[...moveRecords],lastMove:lastMove?{...lastMove}:null,gameOver,clocks:_snapshotClocks()});
-if(stateHistory.length>200)stateHistory.shift();
+// v1.2.3 round-56 (A4): splice(1,1) not shift() — see ui-gameflow.js for the
+//   full rationale (stateHistory[0] must always remain the initial position).
+if(stateHistory.length>200)stateHistory.splice(1,1);
 // v1.0.6 FIX: Build mv with the castle flag preserved from legalMvs.
 // Without this, makeMv/moveAlg/_castleSide cannot detect Chess960 castling
 // where the king moves only 1 column (e.g. f1→g1). We look up the matching
@@ -24290,11 +23597,11 @@ window._showStatsImportBackPrompt=_showStatsImportBackPrompt;
  */
 function _startEngineHeartbeat(){
   _heartbeatRunning=true;
-  _lastEngineCallbackTime=Date.now();
+  _lastEngineCallbackTime=performance.now();
   if(_heartbeatIntervalId){clearInterval(_heartbeatIntervalId);}
   _heartbeatIntervalId=setInterval(function(){
     if(!_heartbeatRunning)return;
-    const elapsed=Date.now()-_lastEngineCallbackTime;
+    const elapsed=performance.now()-_lastEngineCallbackTime;
     if(elapsed>120000){
       console.warn('Engine heartbeat: no response for 120s, attempting restart');
       try{
@@ -24306,7 +23613,7 @@ function _startEngineHeartbeat(){
           isHintLoading=false;_hintBarInfo='';
           _evalLoading=false;_sfEvalReady=false;
           _ponderGen++;_ponderMoveSAN='';_ponderBarInfo='';_pendingPonderMoveUCI=null;
-          _lastEngineCallbackTime=Date.now();
+          _lastEngineCallbackTime=performance.now();
         }
       }catch(e){console.error('Heartbeat restart failed:',e);}
     }

@@ -19,28 +19,33 @@
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 // ============================================================================
 
+// v1.2.3 round-56 (SEC-03): official repositories come FIRST so artifacts
+//   are resolved from their authoritative source by default (supply-chain
+//   hygiene). Developers in mainland China who need the Aliyun mirrors
+//   should inject them locally via an init.d script (see BUILDING.md)
+//   instead of committing mirror-first ordering.
 pluginManagement {
     repositories {
-        // 阿里云镜像（国内加速）
-        maven { url 'https://maven.aliyun.com/repository/google' }
-        maven { url 'https://maven.aliyun.com/repository/central' }
-        maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
-        // 官方源（镜像不可用时 fallback）
+        // 官方源（权威来源，优先）
         google()
         mavenCentral()
         gradlePluginPortal()
+        // 阿里云镜像（兜底 fallback）
+        maven { url 'https://maven.aliyun.com/repository/google' }
+        maven { url 'https://maven.aliyun.com/repository/central' }
+        maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
     }
 }
 
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.PREFER_SETTINGS)
     repositories {
-        // 阿里云镜像（国内加速）— 放在前面优先匹配
-        maven { url 'https://maven.aliyun.com/repository/google' }
-        maven { url 'https://maven.aliyun.com/repository/central' }
-        // 官方源（镜像不可用时 fallback）
+        // 官方源（权威来源，优先）
         google()
         mavenCentral()
+        // 阿里云镜像（兜底 fallback）
+        maven { url 'https://maven.aliyun.com/repository/google' }
+        maven { url 'https://maven.aliyun.com/repository/central' }
     }
 }
 

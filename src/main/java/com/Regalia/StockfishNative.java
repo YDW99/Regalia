@@ -325,6 +325,18 @@ public class StockfishNative {
     //   50MB. The isElfFile() magic-header AND check at the call sites is
     //   unchanged, so integrity gating is preserved.
     private static final long MIN_ENGINE_BINARY_SIZE = 5_000_000L;
+    // v1.2.3 round-56 (SEC-01①): pinned SHA-256 of the shipped Stockfish
+    //   binary (stockfish-android-armv8-dotprod). Previously the hash was only
+    //   documented in README.md/BUILDING.md — documented but never enforced.
+    //   Verified at two points: (a) ALWAYS after a fresh extraction from the
+    //   APK/assets, catching truncated writes that still pass the length+ELF
+    //   gate (round-49 comment's residual hole); (b) on the cached-copy reuse
+    //   fast path when the device is rooted (SEC-09) — filesDir is app-private,
+    //   so without root there is no tampering vector and the expensive 114MB
+    //   hash is skipped. A mismatch deletes the poisoned copy and re-extracts
+    //   from the signature-protected APK.
+    private static final String EXPECTED_ENGINE_SHA256 =
+            "8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5";
     // v1.2.1 round-10 (review-D P3): extracted magic number — grace period
     //   (ms) to wait after sending "stop" for a ponder search's bestmove to
     //   arrive before assuming the engine is idle. Was a bare `100` literal.
@@ -4574,6 +4586,70 @@ public class StockfishNative {
     // ===================== ENGINE BINARY EXTRACTION HELPERS =====================
 
     /**
+     * v1.2.3 round-56 (SEC-01①): SHA-256 integrity check of an extracted engine
+     * binary against {@link #EXPECTED_ENGINE_SHA256}. minSdk 23 has no
+     * HexFormat, so the digest is hex-encoded manually; comparison goes through
+     * MessageDigest.isEqual (constant-time) on the ASCII hex bytes.
+     *
+     * @return true iff the file's SHA-256 matches the pinned hash
+     */
+    private boolean verifyEngineSha256(File file) {
+        java.security.MessageDigest md;
+        try {
+            md = java.security.MessageDigest.getInstance("SHA-256");
+        } catch (java.security.NoSuchAlgorithmException e) {
+            // SHA-256 is guaranteed on every Android runtime — unreachable in
+            // practice; fail CLOSED here (the fresh-extract caller treats false
+            // as reject), because a runtime without SHA-256 is not a supported
+            // environment anyway.
+            Log.e(TAG, "SHA-256 unavailable", e);
+            return false;
+        }
+        try (FileInputStream in = new FileInputStream(file)) {
+            byte[] buffer = new byte[262144];
+            int len;
+            while ((len = in.read(buffer)) > 0) {
+                md.update(buffer, 0, len);
+            }
+        } catch (Throwable e) {
+            Log.e(TAG, "Engine hash read failed: " + file.getAbsolutePath(), e);
+            return false;
+        }
+        byte[] digest = md.digest();
+        StringBuilder hex = new StringBuilder(digest.length * 2);
+        for (byte b : digest) {
+            hex.append(Character.forDigit((b >> 4) & 0xF, 16));
+            hex.append(Character.forDigit(b & 0xF, 16));
+        }
+        boolean match = java.security.MessageDigest.isEqual(
+                hex.toString().getBytes(java.nio.charset.StandardCharsets.US_ASCII),
+                EXPECTED_ENGINE_SHA256.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+        if (!match) {
+            Log.e(TAG, "Engine SHA-256 mismatch: " + file.getAbsolutePath()
+                    + " actual=" + hex);
+        }
+        return match;
+    }
+
+    /**
+     * v1.2.3 round-56 (SEC-09): cached engine copies live in the app-private
+     * filesDir, which is only writable by our own process or by root. Hash-
+     * verifying the cached copy therefore only adds value on rooted devices;
+     * elsewhere the length+ELF gate is sufficient and the 114MB hash is wasted
+     * work on every cold start. RootDetector caches its result process-wide.
+     * Fail-open on detector errors — consistent with the app's documented
+     * advisory-only root posture (the fresh-extract path still always verifies).
+     */
+    private boolean shouldVerifyCachedEngine() {
+        try {
+            return RootDetector.isDeviceRooted(context);
+        } catch (Throwable t) {
+            Log.w(TAG, "Root detection failed; skipping cached-engine hash check", t);
+            return false;
+        }
+    }
+
+    /**
      * Extract engine binary from APK's lib/ directory to filesDir.
      * Fallback for OEM ROMs that skip extraction of large native libraries during install.
      */
@@ -4582,11 +4658,20 @@ public class StockfishNative {
 
         // FIX: Also verify ELF header on cached file to prevent using corrupted extraction
         if (destFile.exists() && destFile.length() > MIN_ENGINE_BINARY_SIZE && isElfFile(destFile)) {
-            Log.i(TAG, "Using previously extracted engine: " + destFile.getAbsolutePath()
-                    + " size=" + destFile.length());
-            makeExecutable(destFile);
-            currentEnginePath = destFile.getAbsolutePath();
-            return destFile;
+            // v1.2.3 round-56 (SEC-01①/SEC-09): on rooted devices the cached
+            //   copy must additionally pass the pinned SHA-256 check; a
+            //   mismatch deletes the poisoned file and falls through to a
+            //   fresh, always-verified extraction.
+            if (shouldVerifyCachedEngine() && !verifyEngineSha256(destFile)) {
+                Log.e(TAG, "Cached engine failed SHA-256 on rooted device — re-extracting");
+                if (!destFile.delete()) Log.w(TAG, "Failed to delete tampered engine: " + destFile.getAbsolutePath());
+            } else {
+                Log.i(TAG, "Using previously extracted engine: " + destFile.getAbsolutePath()
+                        + " size=" + destFile.length());
+                makeExecutable(destFile);
+                currentEnginePath = destFile.getAbsolutePath();
+                return destFile;
+            }
         }
 
         // Try extracting from assets first (universal APK compatibility)
@@ -4657,9 +4742,18 @@ public class StockfishNative {
 
             if (destFile.exists() && destFile.canRead() && destFile.length() > MIN_ENGINE_BINARY_SIZE) {
                 if (isElfFile(destFile)) {
-                    Log.i(TAG, "Engine extracted successfully, size=" + destFile.length());
-                    currentEnginePath = destFile.getAbsolutePath();
-                    return destFile;
+                    // v1.2.3 round-56 (SEC-01①): fresh extractions ALWAYS pass
+                    //   the pinned SHA-256 gate — a truncated write keeps the
+                    //   ELF magic (file head) and can exceed MIN_ENGINE_BINARY_SIZE,
+                    //   so length+ELF alone cannot prove integrity.
+                    if (verifyEngineSha256(destFile)) {
+                        Log.i(TAG, "Engine extracted successfully, size=" + destFile.length()
+                                + ", SHA-256 verified");
+                        currentEnginePath = destFile.getAbsolutePath();
+                        return destFile;
+                    }
+                    Log.e(TAG, "Extracted engine failed SHA-256 verification — deleting");
+                    if (!destFile.delete()) Log.w(TAG, "Failed to delete: " + destFile.getAbsolutePath());
                 } else {
                     Log.e(TAG, "Extracted engine failed ELF header verification");
                     if (!destFile.delete()) Log.w(TAG, "Failed to delete: " + destFile.getAbsolutePath());
@@ -4697,11 +4791,18 @@ public class StockfishNative {
 
         // FIX: Also verify ELF header on cached file to prevent using corrupted extraction
         if (destFile.exists() && destFile.length() > MIN_ENGINE_BINARY_SIZE && isElfFile(destFile)) {
-            Log.i(TAG, "Using previously asset-extracted engine: " + destFile.getAbsolutePath()
-                    + " size=" + destFile.length());
-            makeExecutable(destFile);
-            currentEnginePath = destFile.getAbsolutePath();
-            return destFile;
+            // v1.2.3 round-56 (SEC-01①/SEC-09): same rooted-device SHA-256 gate
+            //   as extractEngineFromApk's cached path.
+            if (shouldVerifyCachedEngine() && !verifyEngineSha256(destFile)) {
+                Log.e(TAG, "Cached asset-extracted engine failed SHA-256 on rooted device — re-extracting");
+                if (!destFile.delete()) Log.w(TAG, "Failed to delete tampered engine: " + destFile.getAbsolutePath());
+            } else {
+                Log.i(TAG, "Using previously asset-extracted engine: " + destFile.getAbsolutePath()
+                        + " size=" + destFile.length());
+                makeExecutable(destFile);
+                currentEnginePath = destFile.getAbsolutePath();
+                return destFile;
+            }
         }
 
         String assetPath = "engines/" + ENGINE_LIB_NAME;
@@ -4753,9 +4854,16 @@ public class StockfishNative {
 
         if (destFile.exists() && destFile.canRead() && destFile.length() > MIN_ENGINE_BINARY_SIZE) {
             if (isElfFile(destFile)) {
-                Log.i(TAG, "Engine extracted from assets successfully, size=" + destFile.length());
-                currentEnginePath = destFile.getAbsolutePath();
-                return destFile;
+                // v1.2.3 round-56 (SEC-01①): fresh extractions ALWAYS pass the
+                //   pinned SHA-256 gate (see extractEngineFromApk).
+                if (verifyEngineSha256(destFile)) {
+                    Log.i(TAG, "Engine extracted from assets successfully, size=" + destFile.length()
+                            + ", SHA-256 verified");
+                    currentEnginePath = destFile.getAbsolutePath();
+                    return destFile;
+                }
+                Log.e(TAG, "Asset-extracted engine failed SHA-256 verification — deleting");
+                if (!destFile.delete()) Log.w(TAG, "Failed to delete: " + destFile.getAbsolutePath());
             } else {
                 Log.e(TAG, "Asset-extracted engine failed ELF verification — deleting");
                 if (!destFile.delete()) Log.w(TAG, "Failed to delete: " + destFile.getAbsolutePath());

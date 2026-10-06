@@ -372,7 +372,10 @@ let _setupFEN=null;
 let _importedStartMoveNum=1;
 let showVariations=false; // 💬显示变例 toggle state
 let _reviewAnalyzeSafetyTimer=null; // Safety timeout for reviewAnalyzeAll (prevents infinite hang)
-let _lastEngineCallbackTime=0; // Timestamp of last engine callback — used by heartbeat monitor
+// v1.2.3 round-56 (B1): all writes/reads use performance.now() (monotonic) —
+//   Date.now() jumps on system-clock changes (NTP sync, user adjustment) and
+//   could stall or false-trigger the 120s heartbeat-restart check.
+let _lastEngineCallbackTime=0; // Monotonic timestamp (performance.now()) of last engine callback — used by heartbeat monitor
 // v1.1.1 Phase 59 Task 59.6: Batch analyze-all session state, decoupled from
 //   reviewStep (the user's view). The batch runs in the background — the user
 //   can navigate freely without invalidating in-flight batch callbacks.
@@ -1628,26 +1631,28 @@ function openStatsPage(){
         }
         window._pendingOpenStats=true;
         // v1.2.1 round-11 (Bug #2 fix hardening): safety timeout — if the
-        //   batch never completes within 10 minutes (e.g., engine stuck
+        //   batch never completes within the timeout (e.g., engine stuck
         //   unrecoverable, or a bug prevents the completion branch from
         //   firing), clear the pending flag so the user can retry 📊
-        //   instead of being permanently locked out. The timeout is
-        //   generous: a 200-step game at 60s/step worst-case = 200min,
-        //   but the per-step safety timer (60s) skips stuck steps, so a
-        //   healthy batch finishes in <30min for any realistic game.
-        //   10min covers the common case (engine slow to start) while
-        //   catching genuine deadlocks.
+        //   instead of being permanently locked out.
+        // v1.2.3 round-56 (C1): timeout is now DYNAMIC — the hardcoded 10min
+        //   misfired on long games: _uncachedCount steps at up to 60s/step
+        //   (per-step safety timer) can legitimately need far more than 10min
+        //   (e.g. a 150-move game with a cold engine ≈ 150×60s = 150min worst
+        //   case). Scale with the actual uncached-step count (60s per step,
+        //   matching the per-step safety timer), floor 10min for short games.
+        const _pendingTimeoutMs=Math.max(600000,_uncachedCount*60000);
         if(window._pendingOpenStatsTimer){clearTimeout(window._pendingOpenStatsTimer);}
         window._pendingOpenStatsTimer=setTimeout(function(){
           if(window._pendingOpenStats){
             window._pendingOpenStats=false;
-            console.warn('openStatsPage: pending-stats safety timeout fired (10min) — batch did not complete');
+            console.warn('openStatsPage: pending-stats safety timeout fired ('+Math.round(_pendingTimeoutMs/60000)+'min) — batch did not complete');
             // v1.2.1 round-16: proper i18n (was previously mixed zh+en
             //   "T('analyzing_progress') + ' timed out'").
             try{showToast(T('analysis_timed_out_retry'));}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
           }
           window._pendingOpenStatsTimer=null;
-        },600000); // 10 minutes
+        },_pendingTimeoutMs);
       }
       // v1.2.1 round-11 (Bug #2 fix): If a batch is already running (user
       //   clicked "Analyze All" manually before clicking 📊), DON'T restart
@@ -2640,7 +2645,7 @@ function onBestMove(uciMove){
   // v1.1.0 Phase 54: Update heartbeat timestamp — onBestMove is proof-of-life
   // from a healthy engine. Without this, long AI thinks (>120s) falsely
   // trigger engine restart via the heartbeat monitor.
-  _lastEngineCallbackTime=Date.now();
+  _lastEngineCallbackTime=performance.now();
   // v1.0.3-p9 audit fix: check staleness BEFORE clearing the safety timer.
   // If a stale bestmove arrives, the real bestmove is still pending and the
   // safety timer must remain active to catch a potential timeout.
@@ -2863,7 +2868,7 @@ function onBestMove(uciMove){
 function onHintMove(uciMove){
   // v1.1.2 Phase 67: removed leftover console.log (Phase 66 cleanup miss).
   // v1.1.0 Phase 54: Update heartbeat timestamp — onHintMove is proof-of-life.
-  _lastEngineCallbackTime=Date.now();
+  _lastEngineCallbackTime=performance.now();
   // v1.0.8 PHASE 49: discard stale hint callbacks. If isHintLoading is already
   //   false by the time onHintMove fires, the user has moved (executeMove /
   //   doAIMove) or switched modes (setup/review/new game) since the hint was
@@ -2971,7 +2976,7 @@ function onHintMove(uciMove){
 // "SD<N>" right after "D<N>" to match the existing abbreviated style.
 function onEngineProgress(depth,nodes,nps,scoreCp,scoreMate,wdlW,wdlD,wdlL,seldepth){
   // v1.1.0 Phase 54: Update heartbeat timestamp — onEngineProgress is proof-of-life.
-  _lastEngineCallbackTime=Date.now();
+  _lastEngineCallbackTime=performance.now();
   if(depth<=0)return;
   // DEFENSE IN DEPTH: Skip unrealistic depth values (>60) that could come from
   // stale info lines due to Java state machine race condition (see StockfishNative
@@ -3092,7 +3097,7 @@ function onEngineProgress(depth,nodes,nps,scoreCp,scoreMate,wdlW,wdlD,wdlL,selde
 // v1.0.4 Rev33: added seldepth (6th param) for "SD" display after "D".
 function onPonderProgress(depth,nodes,nps,scoreCp,scoreMate,seldepth){
   // v1.1.0 Phase 54: Update heartbeat timestamp — onPonderProgress is proof-of-life.
-  _lastEngineCallbackTime=Date.now();
+  _lastEngineCallbackTime=performance.now();
   if(depth<=0)return;
   if(depth>60)return; // Skip unrealistic depths from stale info lines
   // FIX: Generation-based staleness guard. If the ponder generation has changed
@@ -3160,7 +3165,7 @@ function onPonderProgress(depth,nodes,nps,scoreCp,scoreMate,seldepth){
 function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth,reqFen){
   // Update heartbeat timestamp — prevents false-positive engine death detection
   // during long eval searches (go depth 22 can take several seconds)
-  _lastEngineCallbackTime=Date.now();
+  _lastEngineCallbackTime=performance.now();
   // v1.0.7 PHASE 19 (bug fix): Cross-mode stale callback rejection. A review-mode
   // eval callback still in flight after exitReview() would previously pass the
   // normal-mode gen check (both gens equal in normal mode). Now we capture the
@@ -3678,6 +3683,10 @@ function _fileBrowserSelect(filePath){
     //   a retry instead of feeding the JSON marker into importSettings.
     if(content&&content.indexOf('"permission_pending"')!==-1){
       showToast(T('settings_permission_pending'));
+    }else if(content&&content.indexOf('"too_large"')!==-1){
+      // round-56: readTextFile 1 MiB 上限哨兵 —— 设置文件正常仅 KB 级，
+      //   超限说明用户选中了错误的大文件，提示其重新选择。
+      showToast(T('settings_file_too_large'));
     }else if(content){
       // importSettings() is async on the Java side — onSettingsImported
       // callback will fire the success/failure toast.
@@ -4932,6 +4941,24 @@ function _requestBatchEval(step){
       _batchConsecutiveFail=0;
     }catch(e){
       console.error('Batch engineEvalDeep error:',e);
+      // v1.2.3 round-56 (A3): a synchronous dispatch throw previously bypassed
+      //   the T4 3-strike terminator entirely — _batchConsecutiveFail was never
+      //   incremented here, so a persistently throwing bridge spun the batch
+      //   through every remaining step in 100ms cycles (or ghost-looped on the
+      //   safety net) instead of failing loudly. Count the throw, and at 3
+      //   consecutive failures terminate via the standard cleanup path (which
+      //   also flushes batch write mode and resets the analyze button).
+      _batchConsecutiveFail++;
+      // v1.2.3 round-56 (A3): clear the STALE dispatch record. The throw above
+      //   happened before this step's record was written, so _batchLastDispatched
+      //   still describes the PREVIOUS step — a late callback arriving now could
+      //   otherwise be claimed against it (T1 mis-claim). Null record → the T1
+      //   check drops any late callback as stale.
+      _batchLastDispatched=null;
+      if(_batchConsecutiveFail>=3){
+        _terminateBatchAfterRepeatedFailures('dispatch throw');
+        return;
+      }
       // On synchronous failure, advance to the next step (don't stall)
       if(typeof _reviewAnalyzeAdvance==='function'){
         setTimeout(function(){try{_reviewAnalyzeAdvance();}catch(_e){}},100);

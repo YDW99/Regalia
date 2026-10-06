@@ -1,3 +1,29 @@
+v1.2.3 round-56 (2026.10.5): first-principles review implementation — worker-pool.js removed (zero-caller dead code) + 7 module fixes.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - worker-pool.js (was GPL v3): DELETED — 732 lines, zero callers since
+    the v1.0.8 PHASE 49 switch to the "toast + paint-yield + synchronous
+    import" PGN path. Historical ledger entries for it are kept as
+    history; it is removed from the live classification.
+  - ai-bridge.js (GPL v3): batch-dispatch failure 3-strike termination
+    (_batchConsecutiveFail → _terminateBatchAfterRepeatedFailures);
+    5× timestamps switched to performance.now() (monotonic);
+    openStatsPage dynamic timeout max(600000, uncached×60000);
+    _fileBrowserSelect surfaces the {"error":"too_large"} sentinel as a
+    toast (settings_file_too_large).
+  - game-logic.js (GPL v3): new bilingual i18n key settings_file_too_large
+    (zh/en).
+  - ui.js (GPL v3): 3× heartbeat timestamps → performance.now().
+  - ui-gameflow.js / ui-interactions.js (GPL v3): stateHistory cap
+    eviction splice(0,1) → splice(1,1) — index 0 (initial position) is
+    an invariant consumed by [0] readers.
+  - tablebase.js (GPL v3): importPGNAsync unconditional synchronous path
+    (the effective path since v1.0.8 PHASE 49); worker typeof residue
+    cleaned.
+  - index.html.tpl (GPL v3): CSP drops worker-src blob: (no Worker use
+    remains in the bundle after the worker-pool.js removal).
+  - License classification: unchanged for all remaining files
+    (AGPL v3 = chess960.js, eco-data.js, state-store.js; the rest GPL v3).
+
 v1.2.3 round-55 (2026.10.5): PR #56 CodeRabbit follow-up — retry single-counter fix + license-tag sweep.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - game-logic.js (GPL v3, DroidFish-derived): CodeRabbit follow-up REAL —

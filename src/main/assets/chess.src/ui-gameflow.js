@@ -175,7 +175,13 @@ function _startGameImpl(){
           const moveObj={from:from,to:to,piece:piece};
           // Snapshot state BEFORE the move (matches executeMove's order)
           stateHistory.push({state:cloneS(gameState),selectedSquare:null,legalMvs:[],moveRecords:[...moveRecords],lastMove:lastMove?{...lastMove}:null,gameOver:null});
-          if(stateHistory.length>200)stateHistory.shift();
+          // v1.2.3 round-56 (A4): evict index 1, never index 0 — shift() used
+          //   to drop the INITIAL position, breaking every stateHistory[0]
+          //   consumer (reviewBaseState, chess960 startFEN fallback,
+          //   moveRecords[0] placeholder sync). Index-aligned audit: no
+          //   consumer indexes stateHistory by ply (all use [0] or tail
+          //   push/pop), so evicting index 1 is alignment-safe.
+          if(stateHistory.length>200)stateHistory.splice(1,1);
           // Apply the move
           const ns=makeMv(gameState,moveObj);
           const notation=moveAlg(gameState,moveObj,ns);
@@ -203,9 +209,10 @@ function _startGameImpl(){
           break;
         }
       }
-      // If the opening had moves, clear the stale stateHistory[0] entry so that
-      // undo back to the start position correctly restores the initial position
-      // (stateHistory[0] is still the initial state, which is correct).
+      // v1.2.3 round-56: the comment that was here ("clear the stale
+      //   stateHistory[0] entry") described code that no longer exists —
+      //   stateHistory[0] IS the initial position and must be preserved
+      //   (see the splice(1,1) eviction note above). Nothing to clear.
     }else{
       console.warn('[startGame] ECO code not found:',ecoCode);
     }

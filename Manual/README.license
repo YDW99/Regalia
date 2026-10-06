@@ -1,3 +1,15 @@
+v1.2.3 round-56 (2026.10.5): manuals synced to the round-56 tree.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - Regalia-v1.2.3-manual-zh.html / -en.html: changelog reordered
+    strictly newest-first (the v1.0.8 PHASE 51→22 block had been nested
+    after the v1.0.9 card); round-56 paragraph prepended to the section-1
+    narrative chain; all current-state worker-pool.js references updated
+    (feature bullet, module tree, data-flow text, MODULES snippet, GPL
+    list, heatmap/stats-architecture text, Web Worker section rewritten
+    as page-inline stats Worker) — historical round entries untouched;
+    review-toolbar and cache-manager mockups verified against the code.
+  - License classification: all files unchanged.
+
 v1.2.3 round-55 (2026.10.5): no changes to files in this directory.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - License classification: all files unchanged.

@@ -435,12 +435,19 @@ public class StatsActivity extends Activity {
             @JavascriptInterface
             public String loadAssetAsBase64(String assetPath) {
                 // v1.2.3 round-30 (robustness): path-traversal check, mirroring
-                //   FileIoHelper.loadAssetAsBase64 (line 481). AssetManager.open
+                //   FileIoHelper.loadAssetAsBase64. AssetManager.open
                 //   itself rejects ".." traversal, but the explicit guard is
                 //   defense-in-depth and matches the parallel implementation.
-                if (assetPath == null || assetPath.isEmpty() || assetPath.contains("..")) {
-                    Log.w(TAG, "loadAssetAsBase64: blocked path traversal: " + assetPath);
-                    return null;
+                // v1.2.3 round-56: aligned with FileIoHelper's segment-wise
+                //   exact match (round-44 D6) — the old contains("..") substring
+                //   check both over-rejected legitimate names like
+                //   "icons..v2/x.png" and diverged from the parallel guard.
+                if (assetPath == null || assetPath.isEmpty()) return null;
+                for (String seg : assetPath.split("/")) {
+                    if (seg.isEmpty() || seg.equals(".") || seg.equals("..")) {
+                        Log.w(TAG, "loadAssetAsBase64: blocked path traversal: " + assetPath);
+                        return null;
+                    }
                 }
                 // v1.0.5 Rev61: try-with-resources guarantees InputStream is closed
                 // even if baos.write throws (e.g. OOM on a huge asset).

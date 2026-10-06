@@ -1,5 +1,36 @@
 # Privacy Policy — Regalia
 
+## Round-56 changes (2026-10-05)
+
+**No new permissions, no new network endpoints, no new data collection.**
+This round implements a first-principles code review (bug fixes,
+robustness, dead-code removal, documentation). Privacy-relevant notes:
+
+- **Clipboard disclosure (documentation completeness — behavior
+  unchanged):** the app READS the clipboard only on explicit user action
+  (paste PGN / paste FEN), and WRITES to it only on explicit user action
+  (copy FEN / copy PGN) or as an explicit, toast-announced fallback when
+  a statistics-page payload exceeds the Binder transfer budget (the PGN
+  text is copied so nothing is lost). Clipboard content never leaves the
+  device and is never read in the background.
+- **Tablebase FEN (unchanged, restated):** the only network access
+  remains the optional Lichess tablebase probe
+  (`tablebase.lichess.ovh`, certificate-pinned); on explicit user request
+  it sends only the queried board position (FEN string) — no account, no
+  identifiers, no game metadata. See Network Access below.
+- Settings-file reads are now capped at 1 MB with an explicit
+  `too_large` error (robustness; the file browser's path gates are
+  unchanged from round-54).
+- The Stockfish engine binary's SHA-256 is verified at runtime on
+  extraction (and on cached reuse for rooted devices) — a local
+  integrity check; no data leaves the device.
+- Release builds strip verbose/debug/info/warn logs (ProGuard), reducing
+  what an attached debugger could observe; error logs are kept. No
+  logging ever leaves the device.
+- The removed `worker-pool.js` was zero-caller dead code; its removal
+  changes no data flow. All other changes are local correctness fixes
+  with no privacy impact.
+
 ## Round-54b changes (2026-10-05)
 
 **No new permissions, no new network endpoints, no new data collection.**
@@ -563,7 +594,12 @@ permitted network origin — plus `object-src 'none'`, `form-action 'none'` and
 
 ## Local Data
 
-Game data (board positions, move records, engine settings, PGN cache entries, eval cache) is stored locally on the device using browser localStorage, Android SharedPreferences, and app-private files. The on-device storage locations are:
+Game data (board positions, move records, engine settings, PGN cache entries, eval cache) is stored locally on the device using browser localStorage, Android SharedPreferences, and app-private files.
+
+**Clipboard:** read only on explicit user action (paste PGN / paste FEN);
+written only on explicit user action (copy FEN / copy PGN) or as an
+explicit, toast-announced fallback when a statistics-page payload exceeds
+the Binder transfer budget. Clipboard content never leaves the device. The on-device storage locations are:
 
 - `/data/data/com.Regalia/app_webview/Local Storage/` — WebView localStorage (may be wiped by aggressive OEM memory managers like Xiaomi HyperOS 3)
 - `/data/data/com.Regalia/shared_prefs/RegaliaEngine.xml` — SharedPreferences (engine settings, language preference, persistent kv_* fallback store)

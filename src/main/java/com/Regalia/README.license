@@ -1,3 +1,23 @@
+v1.2.3 round-56 (2026.10.5): first-principles review implementation — engine-integrity verification + path-gate alignment + read cap.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - StockfishNative.java (GPL v3): engine binary SHA-256 verification
+    (EXPECTED_ENGINE_SHA256 = 8f7116d3…) wired at 4 points — fresh
+    extraction always verifies; cached-engine reuse re-verifies on
+    rooted devices (RootDetector-gated).
+  - JsBridgeGateway.java (GPL v3): isSafeFileName switched from substring
+    contains("..") to exact segment semantics (separators are rejected
+    first; only "." / ".." are refused) — legitimate names like "a..b"
+    no longer false-rejected, traversal protection unchanged.
+  - StatsActivity.java (GPL v3): loadAssetAsBase64 traversal check
+    aligned to the same segment semantics (defense-in-depth).
+  - FileIoHelper.java (GPL v3): readTextFile 1 MB cap
+    (MAX_READ_TEXT_BYTES) + {"error":"too_large"} sentinel (JS surfaces
+    it as the bilingual settings_file_too_large toast).
+  - ChessApp.java (AGPL v3): comment-only clarification (B3).
+  - License classification: unchanged (AGPL v3 = MainActivity,
+    ChessWebViewClient, EngineService, StabilizationHelper, ChessApp,
+    TlsSecurityHelper, RootDetector; the other 12 classes GPL v3).
+
 v1.2.3 round-55 (2026.10.5): PR #56 CodeRabbit follow-up — getParentPath root-escape gate + license-tag sweep.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - StockfishNative.java (GPL v3, DroidFish-derived): CodeRabbit follow-up

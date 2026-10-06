@@ -40,7 +40,12 @@
      to recompute the hash after every JS edit. -->
 <!-- v1.2.3 round-18: removed frame-ancestors — ignored inside <meta> (only
      honored as an HTTP response header), dead directive. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; img-src data:; worker-src blob:; connect-src 'none'; base-uri 'self'">
+<!-- v1.2.3 round-56 (SEC-08): added form-action 'none' (no forms exist on this
+     page — block any injected submission) and object-src 'none' (defense-in-depth
+     against plugin content; already implied by default-src 'none', made explicit
+     for scanners and human auditors). worker-src blob: stays — the inline heatmap
+     worker below uses a Blob URL. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline' blob:; style-src 'unsafe-inline'; img-src data:; worker-src blob:; connect-src 'none'; base-uri 'self'; form-action 'none'; object-src 'none'">
 <title>📊 Statistics</title>
 <style>
 /* AI-GEN: AI assisted
@@ -726,10 +731,15 @@ function parsePGN(pgnText){
   if(_multiGame)text=_gameBlocks[0];
   // Extract headers
   const headers={};
-  const headerRe=/\[(\w+)\s+"([^"]*)"\]/g;
+  // v1.2.3 round-56 (C3): tolerate UNQUOTED header values ([FEN <fen>]) from
+  //   non-conformant exporters — they were silently dropped before, which also
+  //   dropped a FEN header and made the replay start from the standard initial
+  //   position instead of the recorded one. Quoted branch now also accepts
+  //   \" escapes instead of cutting the value at the first inner quote.
+  const headerRe=/\[(\w+)\s+(?:"((?:[^"\\]|\\.)*)"|([^\]\n]*?))\s*\]/g;
   let hm;
   while((hm=headerRe.exec(text))!==null){
-    headers[hm[1]]=hm[2];
+    headers[hm[1]]=(hm[2]!==undefined?hm[2]:hm[3]);
   }
   // Extract FEN if present
   let startFEN=headers.FEN||null;
@@ -3142,6 +3152,17 @@ function renderFENPanel(effectiveParsed,selectedIdx){
   let hint='';
   if(selectedIdx>=0&&effectiveParsed.moves&&effectiveParsed.moves[selectedIdx]){
     fen=stateToFEN(effectiveParsed.moves[selectedIdx].state);
+  }else if(effectiveParsed.moves&&effectiveParsed.moves.length>0){
+    // v1.2.3 round-56 (C3): nothing selected — the stats board rendered just
+    //   above shows the LAST move's position (effectiveParsed is full-length
+    //   in this branch), so the FEN panel must show the SAME position.
+    //   Previously this case fell through to the INITIAL FEN, putting two
+    //   different positions on adjacent panels (and the copy button copied
+    //   a FEN that didn't match the visible board).
+    const _lm=effectiveParsed.moves[effectiveParsed.moves.length-1];
+    if(_lm&&_lm.state){fen=stateToFEN(_lm.state);hint=T('fen_hint');}
+    else if(effectiveParsed.startFEN){fen=effectiveParsed.startFEN;hint=T('fen_hint');}
+    else{fen='rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';hint=T('fen_hint');}
   }else if(effectiveParsed.startFEN){
     fen=effectiveParsed.startFEN;
     hint=T('fen_hint');
@@ -4231,7 +4252,20 @@ function _exportFullHTML(){
   //   (avoids the escaped-backslash eye-noise) and replaceAll('<', ...) for
   //   the global string replace (avoids the global-regex form).
   const _enc = (s) => JSON.stringify(s).replace(/</g, String.raw`\u003c`); // round-49: Chrome 85 以下无 replaceAll（WebView 门禁=84）
-  scriptJS='var _payload={pgn:'+_enc(pgnText)+',lang:'+_enc(lang)+'};\n'+
+  // v1.2.3 round-56 (C2): the old payload embedded only {pgn, lang} — the
+  //   exported page then re-parsed the PGN and LOST the engine evals (eval
+  //   trend / move quality sections silently degraded), gameVariant and
+  //   visual annotations. Carry the full analysis payload when present; all
+  //   consumers already guard with Array.isArray/truthy checks, so missing
+  //   fields degrade exactly as before.
+  const _outPayload={pgn:pgnText,lang:lang};
+  if(_payload){
+    if(Array.isArray(_payload.moveRecords))_outPayload.moveRecords=_payload.moveRecords;
+    if(Array.isArray(_payload.evals))_outPayload.evals=_payload.evals;
+    if(_payload.gameVariant)_outPayload.gameVariant=_payload.gameVariant;
+    if(_payload.visualAnnotations)_outPayload.visualAnnotations=_payload.visualAnnotations;
+  }
+  scriptJS='var _payload='+JSON.stringify(_outPayload).replace(/</g, String.raw`\u003c`)+';\n'+
     'var _lang='+_enc(lang)+';\n'+
     scriptJS;
 

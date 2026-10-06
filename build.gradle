@@ -21,12 +21,15 @@
 
 buildscript {
     repositories {
-        maven { url 'https://maven.aliyun.com/repository/google' }
-        maven { url 'https://maven.aliyun.com/repository/central' }
-        maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
+        // v1.2.3 round-56 (SEC-03): official repositories first (authoritative
+        //   source); Aliyun mirrors kept as fallback only. For mirror-first
+        //   local builds use an init.d script — see BUILDING.md.
         google()
         mavenCentral()
         gradlePluginPortal()
+        maven { url 'https://maven.aliyun.com/repository/google' }
+        maven { url 'https://maven.aliyun.com/repository/central' }
+        maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
     }
     dependencies {
         classpath 'com.android.tools.build:gradle:8.7.3'
@@ -38,7 +41,15 @@ apply plugin: 'com.android.application'
 // ============================================================
 // 版本号动态配置（从 version.properties 读取）
 // ============================================================
-def versionPropsFile = file("../version.properties")
+// v1.2.3 round-56: version.properties is COMMITTED at the project root (it
+//   carries only version components — no secrets), so a clean checkout always
+//   has the real version. Read order: project-local first, then the legacy
+//   parent-dir location for older checkout layouts. Release builds now fail
+//   fast when neither exists (see the taskGraph guard below).
+def versionPropsFile = file("version.properties")
+if (!versionPropsFile.exists()) {
+    versionPropsFile = file("../version.properties")
+}
 def versionProps = new Properties()
 if (versionPropsFile.exists()) {
     // v1.2.1 round-9: Use withInputStream to ensure the FileInputStream is
@@ -192,16 +203,14 @@ android {
             signingConfig signingConfigs.release
             // v1.2.3 round-44 (F3): per-buildType CMake build type (was pinned
             //   to Release in defaultConfig, polluting debug builds).
+            // v1.2.3 round-56: merged the previously duplicated
+            //   externalNativeBuild{cmake} blocks into ONE — the second block's
+            //   cppFlags assignment overwrote the first, silently dropping
+            //   -std=c++20 from release builds. Single source now.
             externalNativeBuild {
                 cmake {
                     arguments "-DCMAKE_BUILD_TYPE=Release"
                     cppFlags "-O3 -DNDEBUG -std=c++20 -fvisibility=hidden -ffunction-sections -fdata-sections"
-                }
-            }
-            // Native 代码 Release 编译优化
-            externalNativeBuild {
-                cmake {
-                    cppFlags "-O3 -DNDEBUG -fvisibility=hidden -ffunction-sections -fdata-sections"
                 }
             }
         }
@@ -355,5 +364,15 @@ gradle.taskGraph.whenReady { graph ->
                 'Release keystore not configured. Set RELEASE_KEYSTORE_PATH / ' +
                 'RELEASE_KEYSTORE_PASSWORD / RELEASE_KEY_ALIAS / RELEASE_KEY_PASSWORD ' +
                 'environment variables or create keystore.properties. See BUILDING.md.')
+    }
+    // v1.2.3 round-56: a release build must never carry the silent fallback
+    //   version. version.properties is committed at the project root, so this
+    //   only fires when the file was deleted or left incomplete.
+    if (buildsRelease && usingFallbackVersion) {
+        throw new GradleException(
+                'version.properties missing or incomplete (need VERSION_MAJOR/' +
+                'VERSION_MINOR/VERSION_PATCH/VERSION_BUILD). The committed copy ' +
+                'lives at the project root — restore it before cutting a release. ' +
+                'See BUILDING.md.')
     }
 }

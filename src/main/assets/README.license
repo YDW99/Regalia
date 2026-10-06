@@ -1,3 +1,15 @@
+v1.2.3 round-56 (2026.10.5): first-principles review implementation — stats.html hardening + chess.html rebuild.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - stats.html (GPL v3): CSP gains form-action 'none' + object-src 'none'
+    (worker-src blob: kept — the page-inline heatmap Worker is live);
+    _exportFullHTML escapes </ inside the JSON payload (\u003c);
+    renderFENPanel defaults to the last move; PGN header regex made
+    tolerant of unquoted tag values.
+  - chess.html (AGPL v3 combined work): rebuilt byte-deterministically
+    (23,672 lines) from the 10-module set after the worker-pool.js
+    removal; CSP no longer carries worker-src blob:.
+  - License classification: all files unchanged.
+
 v1.2.3 round-55 (2026.10.5): chess.html rebuilt + license-tag audit corrections.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - chess.html (AGPL v3, combined work): rebuilt via build-chess.py after

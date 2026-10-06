@@ -901,13 +901,17 @@ APK-embedded `lib/arm64-v8a/libstockfish.so` — in every release round):
 sha256sum src/main/jniLibs/arm64-v8a/libstockfish.so
 # 8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5
 ```
+The same hash is enforced as a CI gate in the `unzip-folder-optimized.yml`
+workflow (round-56), and the app verifies it again at runtime on engine
+extraction (`EXPECTED_ENGINE_SHA256` in `StockfishNative.java`, round-56;
+cached-engine reuse is re-verified on rooted devices).
 
 ## Build chess.html asset
 ```
 python3 build-chess.py
 ```
 The build script merges `src/main/assets/chess.src/*.js` (in order:
-game-logic → chess960 → pgn-standard → worker-pool → state-store → ai-bridge → tablebase → eco-data → ui-gameflow → ui-interactions → ui)
+game-logic → chess960 → pgn-standard → state-store → ai-bridge → tablebase → eco-data → ui-gameflow → ui-interactions → ui)
 into `src/main/assets/chess.html`, stripping `export` statements.
 
 Build failure contract (hard aborts): exit 1 = template/module I/O
@@ -931,6 +935,10 @@ dialogs, back-press routing, 1,438 lines). ui.js is down to 6,761 lines
 (-20%). The new modules sit immediately before ui.js in the bundle; all
 extracted units are pure function declarations (hoisted bundle-wide), so
 load order is unchanged. Bundle order is now 11 modules.
+v1.2.3 (round-56) removed worker-pool.js (zero-caller dead code, 732
+lines — PGN import has been synchronous since v1.0.8 PHASE 49, and the
+stats page uses its own page-inline Worker). Bundle order is now 10
+modules.
 
 ## Build APK
 ```
@@ -970,18 +978,22 @@ installs alongside the release build on the same device.
   hardcoded Ubuntu path `/usr/lib/jvm/java-21-openjdk-amd64`).
 - Configure `local.properties`:
   - `sdk.dir` → Android SDK path
-- Configure `../version.properties` (one level above the project dir):
+- Version definition: `version.properties` at the PROJECT ROOT is
+  committed to the repository (round-56) and is the single source of
+  truth:
   ```
   VERSION_MAJOR=1
   VERSION_MINOR=2
   VERSION_PATCH=3
   VERSION_BUILD=123
   ```
-  Defaults inside `build.gradle` cover the missing case (1.2.3 /
-  VERSION_BUILD=123, so computedVersionCode stays max(123, 10203) =
-  10203) and print a loud "USING FALLBACK VERSION" warning at
-  configuration time (v1.2.3 round-48, SEC-1) — do not ship such a
-  build; restore version.properties.
+  It contains no secrets, which is why it is intentionally NOT listed in
+  `.gitignore`. `build.gradle` reads the project-root file first, then
+  falls back to `../version.properties` (one level above the project
+  dir); a RELEASE build fails fast with a GradleException when neither
+  exists (round-56) — debug builds fall back to 1.2.3/123 with a loud
+  "USING FALLBACK VERSION" warning (round-48, SEC-1). Do not ship a
+  fallback build; restore version.properties.
   Since v1.2.3 round-44 (F11) the effective versionCode is
   `max(VERSION_BUILD, VERSION_MAJOR*10000 + VERSION_MINOR*100 + VERSION_PATCH)`
   — for v1.2.3 that is `max(123, 10203)` = **10203**, so versionCode can never
@@ -1014,8 +1026,9 @@ them locally as described above:
 - `local.properties` — your SDK path
 - `lint-baseline.xml` — regenerated on the first `lintVitalRelease` run
 - `src/main/jniLibs/` — the engine binary (download separately, see above)
-- `*.keystore`, `../keystore.properties`, `../version.properties` — signing
-  and version configuration
+- `*.keystore`, `../keystore.properties` — signing configuration
+  (`version.properties` IS included — it is committed at the project
+  root since round-56 and contains no secrets)
 - `.git/`, `.idea/` — VCS / IDE metadata
 
 ## Build troubleshooting
@@ -1033,12 +1046,26 @@ them locally as described above:
   `unzip -DD` (no directory timestamps) to avoid future-dated files.
 - **`./gradlew: Permission denied`**: The wrapper script may lose its executable
   bit after extraction. Fix: `chmod +x gradlew`.
-- **Aliyun Maven mirror 502**: `build.gradle` and `settings.gradle` list the
-  Aliyun mirrors (`maven.aliyun.com/repository/{google,central,gradle-plugin}`)
-  BEFORE `google()` / `mavenCentral()` (verified in both files as of round-43),
-  so Aliyun is tried first and the official repositories act as fallback. If
-  you hit Aliyun 502s, temporarily comment out the Aliyun mirror blocks in
-  both files — the official repos then serve directly.
+- **Repository order / Aliyun mirrors (round-56, SEC-03)**:
+  `settings.gradle` (pluginManagement + dependencyResolutionManagement)
+  and the `build.gradle` buildscript now list the OFFICIAL repositories
+  (`google()` / `mavenCentral()` / `gradlePluginPortal()`) FIRST, with
+  the Aliyun mirrors kept after them as fallback (supply-chain hygiene —
+  artifacts resolve from their authoritative source by default).
+  Developers in mainland China who prefer mirror-first resolution should
+  NOT edit the committed files; inject the mirrors locally via an
+  init-script, e.g. `~/.gradle/init.d/mirrors.gradle`:
+  ```groovy
+  allprojects {
+      buildscript { repositories { maven { url 'https://maven.aliyun.com/repository/google' }
+                                   maven { url 'https://maven.aliyun.com/repository/central' } } }
+      repositories { maven { url 'https://maven.aliyun.com/repository/google' }
+                     maven { url 'https://maven.aliyun.com/repository/central' } }
+  }
+  ```
+  If you hit Aliyun 502s, comment out the mirror blocks in
+  `settings.gradle`/`build.gradle` or remove the init script — the
+  official repos then serve directly.
 
 - **CMake re-run loop (AGP 8.7.3 + CMake 3.22.1)**: In a fresh build environment,
   the `externalNativeBuild` task can fall into a "manifest 'build.ninja' still

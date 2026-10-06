@@ -93,7 +93,13 @@ def main():
         "game-logic.js",
         "chess960.js",
         "pgn-standard.js",
-        "worker-pool.js",
+        # v1.2.3 round-56 (E1): worker-pool.js removed (732 lines, dead code).
+        #   Its only consumer (tablebase.js importPGNAsync) discarded the
+        #   worker result and re-parsed synchronously since v1.0.8 PHASE 49,
+        #   so the pool burned CPU/memory for zero offloading. The effective
+        #   behavior (toast + 50ms paint-yield + sync import) is preserved in
+        #   tablebase.js directly. stats.html keeps its own inline heatmap
+        #   worker — unaffected (separate file, separate CSP).
         "state-store.js",      # v1.2.0 Phase 75: global state store (must be before ui.js)
         "ai-bridge.js",
         "tablebase.js",

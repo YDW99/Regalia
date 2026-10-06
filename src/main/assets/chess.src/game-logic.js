@@ -225,6 +225,8 @@ const _i18n={
 'file_browse_failed':{zh:'文件浏览失败',en:'File browse failed'},
 'settings_read_fail':{zh:'无法读取设置文件',en:'Cannot read settings file'},
 'settings_permission_pending':{zh:'需要存储权限，请在系统弹窗中授权后重试',en:'Storage permission required — grant it in the system dialog and retry'},
+// round-56: readTextFile 1 MiB 上限哨兵（FileIoHelper.MAX_READ_TEXT_BYTES）的提示
+'settings_file_too_large':{zh:'文件过大（超过 1 MB），请选择设置导出文件',en:'File too large (over 1 MB) — pick the settings export file'},
 'restarting_engine':{zh:'正在重启引擎...',en:'Restarting engine...'},
 'engine_unavailable_bridge':{zh:'引擎接口不可用',en:'Engine interface unavailable'},
 'restart_failed':{zh:'重启失败',en:'Restart failed'},

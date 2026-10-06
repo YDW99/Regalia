@@ -283,7 +283,9 @@ if(!piece)return;
 // from any source (e.g., corrupted UCI parsing, tablebase, etc.)
 if(promotion&&piece.type!=='pawn')promotion=null;
 stateHistory.push({state:cloneS(gameState),selectedSquare:selectedSquare?{...selectedSquare}:null,legalMvs:[...legalMvs],moveRecords:[...moveRecords],lastMove:lastMove?{...lastMove}:null,gameOver,clocks:_snapshotClocks()});
-if(stateHistory.length>200)stateHistory.shift();
+// v1.2.3 round-56 (A4): splice(1,1) not shift() — see ui-gameflow.js for the
+//   full rationale (stateHistory[0] must always remain the initial position).
+if(stateHistory.length>200)stateHistory.splice(1,1);
 // v1.0.6 FIX: Build mv with the castle flag preserved from legalMvs.
 // Without this, makeMv/moveAlg/_castleSide cannot detect Chess960 castling
 // where the king moves only 1 column (e.g. f1→g1). We look up the matching

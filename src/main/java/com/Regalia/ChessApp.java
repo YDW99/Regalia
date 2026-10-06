@@ -69,6 +69,14 @@ public class ChessApp extends Application {
                 // v1.2.1: 主动调用 markEngineThreadDead 设置死亡标记 —— 否则
                 //   引擎进程虽然活着但读线程已死，isProcessAlive() 仍返回 true，
                 //   heartbeat 误判健康，AI 静默不动直到 15-30s zombie 超时。
+                // v1.2.3 round-56 (review note): the full recovery path for an
+                //   SF-* RuntimeException is — flag set here → StockfishNative's
+                //   5s heartbeat Check-0 (sEngineThreadDied) → recoverEngine(),
+                //   bounded by MAX_AUTO_RECOVERY=3. Chaining a RuntimeException
+                //   to the default handler would kill the whole process for a
+                //   recoverable subsystem failure (violating the v18.4.1
+                //   HyperOS anti-crash goal), so suppression here is deliberate;
+                //   Error subclasses still chain below (corrupted JVM state).
                 if (threadName.startsWith("SF-")) {
                     Log.e(TAG, "Engine thread died: " + threadName);
                     try {

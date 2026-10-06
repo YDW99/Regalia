@@ -87,6 +87,11 @@ public class FileIoHelper {
     //   PermissionHelper now uses a disjoint 3000-range (see its constants).
     private static final int REQUEST_CODE_READ_EXTERNAL_STORAGE = 1002;
 
+    // v1.2.3 round-56: readTextFile 上限 1 MiB —— 唯一消费者是设置导入
+    //   （KB 级），上限仅防御桥接口被指向超大文件导致的 OOM。见 readTextFile
+    //   javadoc 的契约说明。
+    private static final long MAX_READ_TEXT_BYTES = 1024L * 1024L;
+
     private final Context context;
     private final WeakReference<Activity> activityRef;
 
@@ -207,8 +212,19 @@ public class FileIoHelper {
      * v18.6.0: Android 6-9 需要 READ_EXTERNAL_STORAGE 权限。
      * Android 10+ scoped storage 下应用私有目录无需权限。
      *
+     * v1.2.3 round-56 (robustness): 返回值契约统一为三种形态 ——
+     *   ① 文件内容字符串（成功）；
+     *   ② null（文件不存在 / 不可读 / 读取异常）；
+     *   ③ 结构化哨兵 {"error":"..."}（permission_pending / too_large），
+     *      JS 端按子串识别（与既有 permission_pending 哨兵同一风格）。
+     *   新增 1 MiB 上限：本方法的唯一消费者是设置文件导入（KB 级），
+     *   但桥接口可被 JS 指向沙箱内任意文件；无上限的 readLine 循环会把
+     *   超大文件整个读进堆内存，在低端机上直接 OOM。超限返回哨兵而非
+     *   静默截断 —— 截断的 JSON 会在 importSettings 里变成难以理解的
+     *   解析错误。
+     *
      * @param path 文件路径
-     * @return 文件内容字符串，失败返回 null
+     * @return 文件内容字符串；失败返回 null；待授权/超限返回 {"error":...} 哨兵
      */
     public String readTextFile(String path) {
         // Android 6-9: 检查并请求 READ_EXTERNAL_STORAGE
@@ -230,13 +246,24 @@ public class FileIoHelper {
         try {
             File file = new File(path);
             if (!file.exists() || !file.canRead()) return null;
+            if (file.length() > MAX_READ_TEXT_BYTES) {
+                Log.w(TAG, "readTextFile: file too large (" + file.length() + " bytes): " + path);
+                return "{\"error\":\"too_large\"}";
+            }
             try (FileInputStream fis = new FileInputStream(file);
                  BufferedReader reader = new BufferedReader(
                      new InputStreamReader(fis, "UTF-8")
                  )) {
                 StringBuilder sb = new StringBuilder();
                 String line;
+                long totalChars = 0;
                 while ((line = reader.readLine()) != null) {
+                    totalChars += line.length() + 1;
+                    // 防御性二次上限：length() 可能被竞态改写（读期间文件增长）。
+                    if (totalChars > MAX_READ_TEXT_BYTES) {
+                        Log.w(TAG, "readTextFile: content grew past cap while reading: " + path);
+                        return "{\"error\":\"too_large\"}";
+                    }
                     sb.append(line).append("\n");
                 }
                 return sb.toString();

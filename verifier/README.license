@@ -1,3 +1,13 @@
+v1.2.3 round-56 (2026.10.5): v1 harness module list synced to build-chess.py.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - v1/eval-stale-harness.js (AGPL v3 harness): MODULES updated to the
+    10-module list (worker-pool.js removed from the project as
+    zero-caller dead code) — mirrors build-chess.py; all 29 assertions
+    still pass.
+  - v2 / v3 harnesses: unchanged (v3's worker-pool reference is an
+    absence assertion, still valid).
+  - License classification: all files unchanged.
+
 v1.2.3 round-55 (2026.10.5): v3 cwd-independence + round-55 assertions (34 total).
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - v3/round54-pr56-triage.js: read() now resolves from __dirname (like

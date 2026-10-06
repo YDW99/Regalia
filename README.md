@@ -3,7 +3,7 @@
 <!-- AI-GEN: AI assisted
      This document was AI-assisted and has been reviewed for AGPL v3 compliance. -->
 
-A standalone, open-source chess app for Android — play offline against Stockfish 18, analyze your games, and explore openings. No account, no network, no tracking. Now with **Chess960 (Fischer Random Chess)** support (v1.0.4).
+A standalone, open-source chess app for Android — play offline against Stockfish 18, analyze your games, and explore openings. No account, no tracking; offline-first — the only network access is the optional Lichess tablebase probe (certificate-pinned, on explicit user request; auto-disabled when offline). Now with **Chess960 (Fischer Random Chess)** support (v1.0.4).
 
 "Regalia" is used solely as a project name for this open-source chess app. No trademark rights are claimed. Anyone is free to fork and rename their own version.
 
@@ -26,7 +26,7 @@ Portrait mode — evaluation bar, move history, AI opponent display with ponder 
 - **Standardized PGN** (v1.0.4 NEW) — import/export follows the 1994 PGN spec strictly: Seven-Tag Roster always emitted, `[%eval]` / `[%clk]` / `[%emt]` annotations embedded, Result terminator enforced, tolerant parser auto-corrects malformed input
 - **NAG &amp; Visual Annotations** (v1.0.4 NEW) — NAG ($1-$19) support; automatic selection &amp; caching of `[%csl ...]` (square highlights) and `[%cal ...]` (arrows) per move: Square highlights — Blue=player net-control strong squares, Red=AI net-control strong squares, Yellow=high total-control squares, Green=neutral center squares; Arrows — Blue=multi-threat (one piece threatens 2+ enemy pieces), Red=check path, Yellow=queen-threat path, Green=escape squares
 - **Time-Control Chess** (v1.0.4 NEW) — Sudden Death / Fischer Increment / Bronstein Delay / US Delay modes; live clock display with low-time warning; auto-emits `[TimeControl "..."]` header and `[%clk HH:MM:SS]` per-move annotations; for untimed games, emits `[%emt HH:MM:SS]` (elapsed move time); flag-fall follows FIDE 6.9 — if the winner lacks mating material (incl. K+B+B same-color, KNN since round-40) the game is drawn
-- **Web Worker Pool** (v1.0.4 NEW) — `worker-pool.js` offloads PGN parsing, statistics computation, and control-map computation to a background thread; falls back to inline execution on devices without Worker support
+- **Stats-page background heatmap** — the statistics page (stats.html) computes the full-game control heatmap in a page-inline Web Worker (Blob-URL, taskId-dispatched Promise API, sync fallback when Worker is unavailable); PGN import uses the "toast + paint-yield + synchronous import" path since v1.0.8 PHASE 49 (the standalone `worker-pool.js` module introduced in v1.0.4 was removed as zero-caller dead code in round-56)
 - **8 Difficulty Levels** — from beginner (800 ELO) to maximum strength (2800+ ELO), plus Skill Level mode
 - **PGN Import** — paste PGN from clipboard, or select a PGN file from your device
 - **Review Mode** — full game replay with evaluation trend chart, move-by-move analysis, move classification (brilliant/good/blunder), and engine evaluation cache
@@ -114,14 +114,14 @@ see [BUILDING.md](BUILDING.md).
 
 ```
 Regalia/
-├── .github/                    # GitHub CI workflows (12) + issue/PR templates + README.license
+├── .github/                    # GitHub CI workflows (12) + dependabot.yml (round-56 NEW) + issue/PR templates + README.license
+├── .gitignore                  # Git ignore rules (round-56 NEW: signing material / local.properties / build outputs / .gradle-dumps; version.properties is intentionally NOT ignored)
 ├── src/main/
 │   ├── assets/
 │   │   ├── chess.src/          # Source files (JS + CSS + HTML template)
 │   │   │   ├── game-logic.js   # Chess rules, move generation, i18n, castling detection, move animation
 │   │   │   ├── chess960.js     # Chess960 SP-ID, Shredder-FEN, 960 castling rules (v1.0.4 NEW)
 │   │   │   ├── pgn-standard.js # Standardized PGN encoder/decoder, NAG, [%csl]/[%cal], TimeControl (v1.0.4 NEW)
-│   │   │   ├── worker-pool.js  # Web Worker pool for heavy stats computation offloading (v1.0.8 PHASE 25)
 │   │   │   ├── state-store.js  # Global state store (Redux-like, v1.2.0 Phase 75 NEW)
 │   │   │   ├── ai-bridge.js    # Engine communication, eval display, PGN export, FEN sanitization, theme detection
 │   │   │   ├── tablebase.js    # Lichess Syzygy tablebase queries + PGN import
@@ -187,30 +187,33 @@ Regalia/
 │   └── gradle-wrapper.properties
 ├── lib/arm64-v8a/              # Native-library license notices (the .so files themselves are build-time only)
 │   └── README.license          # License classification: libstockfish.so / libengine_bridge.so (GPL v3), libc++_shared.so (Apache v2.0 + LLVM Exception)
+├── LICENSES/                   # License-file index (round-56 NEW)
+│   └── README.md               # Index of every LICENSE/NOTICE/README.license file in the tree
 ├── verifier/                   # Acceptance verifier (round-52 NEW)
 │   ├── README.md               # Append-only index of verifier versions
 │   ├── README.license          # License classification for this directory (AGPL v3 harness)
 │   ├── v1/                     # v1 acceptance criteria + harness (eval-stale race)
-│   │   └── eval-stale-harness.js # Node vm harness: 29 stale-eval assertions over the 11-module bundle (round-54: +D3a batch-completion)
+│   │   └── eval-stale-harness.js # Node vm harness: 29 stale-eval assertions over the 10-module bundle (round-54: +D3a batch-completion; round-56: module list mirrors build-chess.py after worker-pool.js removal)
 │   ├── v2/                     # v2 acceptance criteria (round-53 SonarCloud triage)
 │   │   └── round53-sonar-triage.js # 19 structural assertions (F1-F6; round-54: F2d/F4b tightened)
 │   ├── v3/                     # v3 acceptance criteria (round-54 PR #56 AI-review triage)
-│   │   └── round54-pr56-triage.js # 34 structural assertions (G1-G9 + H; round-55: __dirname paths, single-counter G2c/G2d, H1a/H2a/H2b/H3)
+│   │   └── round54-pr56-triage.js # 37 structural assertions (G1-G9 + H; round-55: __dirname paths, single-counter G2c/G2d, H1a/H2a/H2b/H2c/H2d/H2e/H3)
 │   └── runs/                   # Timestamped run artifacts (append-only logs + RESULT.md)
-├── NOTICE                      # Third-party component notices + version history
+├── NOTICE                      # Third-party component notices (round-56 rewrite as a true notices document; the former English dev-log content is archived verbatim in worklog.md)
 ├── NOTICE-DroidFish            # Original DroidFish notice
 ├── NOTICE-gradle               # Gradle notice (Apache v2.0)
 ├── AUTHORS-stockfish           # Stockfish project authors list
 ├── LICENSE                     # Standard AGPL v3 full text (alias of LICENSE-AGPL v3; v1.1.2+ for GitHub/F-Droid auto-detection)
 ├── LICENSE-AGPL v3             # AGPL v3 full text (application)
 ├── LICENSE-GPL v3              # GPL v3 full text (engine + DroidFish-derived components)
-├── LICENSE-Apache v2.0         # Apache v2.0 full text (Gradle)
+├── LICENSE-Apache v2.0         # Apache v2.0 full text + LLVM Exception appendix (Gradle; libc++_shared.so)
 ├── PRIVACY.md                  # Privacy policy
 ├── BUILDING.md                 # Build instructions
 ├── UBIQUITOUS_LANGUAGE.md      # Domain terminology glossary (English) — 80+ chess/engine/PGN/UI terms
-├── build.gradle                # Gradle build config (reads ../version.properties; versionCode=max(VERSION_BUILD, major*10000+minor*100+patch)=10203, v1/v2/v3 signing, NDK 27.2, cmake 3.31.6+)
+├── build.gradle                # Gradle build config (reads version.properties at project root, then ../version.properties fallback; release fails fast when missing; versionCode=max(VERSION_BUILD, major*10000+minor*100+patch)=10203, v1/v2/v3 signing, NDK 27.2, cmake 3.31.6+)
 ├── settings.gradle             # Gradle settings (plugin/repo config)
-├── gradle.properties           # Gradle properties (JDK 21, Xmx4096m)
+├── gradle.properties           # Gradle properties (JDK 21, Xmx4096m; heap dumps → .gradle-dumps/, round-56)
+├── version.properties          # Version single-source-of-truth (round-56 NEW, committed: 1/2/3/123 → versionCode 10203; no secrets)
 ├── build-chess.py              # Python build script (merges JS modules → chess.html)
 ├── proguard-rules.pro          # ProGuard/R8 rules (JS bridge keep, JNI keep, log stripping)
 ├── lint.xml                    # Lint severity config (security=error, i18n/icon=ignore)
@@ -280,7 +283,6 @@ Per GPL v3 Section 13, these licenses are compatible for combination. Each compo
 - `stats.html` — PGN parsing logic (parsePGN) derived from DroidFish
 - `index.html.tpl` — CSS template (DroidFish-derived layout patterns)
 - `pgn-standard.js` — PGN encode/decode (PGN parsing)
-- `worker-pool.js` — PGN tokenization + chess control-map logic
 - `StatsActivity.java` — Statistics page, PGN display
 - `libstockfish.so` — Stockfish 18 engine binary (arm64-v8a-dotprod)
 
@@ -368,6 +370,70 @@ backup_rules.xml / data_extraction_rules.xml deleted, CMake
 3.22.1→3.31.6.
 
 Full development log: [worklog.md](worklog.md) (newest round first).
+
+### Round-56 update (2026-10-05) — first-principles review implementation: security, robustness, dead-code removal, docs overhaul
+
+- **Scope**: item-by-item implementation of the external first-principles
+  code-review report (false positives excluded first — prompt() dialogs,
+  JNI bridge exposure, whitelist bypass claims, state-store placeholders
+  and the documented chmod flow were verified intentional and left
+  untouched). Version unchanged (versionCode=10203, versionName="1.2.3").
+- **Security/robustness**: segment-wise `isSafeFileName` (JsBridgeGateway)
+  and segment-wise `loadAssetAsBase64` traversal check (StatsActivity);
+  `FileIoHelper.readTextFile` 1 MB cap with a `{"error":"too_large"}`
+  sentinel + bilingual toast (`settings_file_too_large`); engine-binary
+  SHA-256 verification wired at 4 points in StockfishNative
+  (`EXPECTED_ENGINE_SHA256` = 8f7116d3…, fresh extract always verified,
+  cached reuse re-verified on rooted devices); proguard-rules.pro now
+  strips Log.v/d/i/w (keeps Log.e); `stats.html` CSP gains
+  `form-action 'none'` + `object-src 'none'`; `_exportFullHTML` escapes
+  `</` inside the JSON payload.
+- **One-click analysis reliability**: dispatch-throw 3-strike termination
+  (`_batchConsecutiveFail`) so a persistent bridge failure ends the batch
+  with a clear toast instead of spinning forever; `performance.now()`
+  monotonic timestamps in ai-bridge ×5 / ui.js ×3 heartbeat paths;
+  `openStatsPage` dynamic timeout scales with uncached step count.
+- **Dead code**: `worker-pool.js` (732 lines, zero callers since the
+  v1.0.8 PHASE 49 synchronous-import switch) removed; build-chess.py now
+  merges 10 modules; `index.html.tpl` CSP drops the now-unneeded
+  `worker-src blob:` (stats.html keeps it — its page-inline heatmap
+  Worker is live). chess.html rebuilt byte-deterministically
+  (23,672 lines, sha256 cfd6c8da…). stateHistory cap eviction changed to
+  `splice(1,1)` in ui-gameflow/ui-interactions (index-0 = initial
+  position invariant preserved).
+- **Repo/CI**: `.gitignore` created (signing material, local.properties,
+  build outputs, `.gradle-dumps/`; `version.properties` intentionally NOT
+  ignored); `version.properties` committed as the version single source
+  of truth (build.gradle: project-root first, parent fallback, release
+  fails fast when missing); settings.gradle official repos first with
+  mirrors behind (mirror injection via init.d documented in BUILDING.md);
+  6 scan workflows now also trigger on the `upload` branch;
+  `unzip-folder-optimized.yml` gained an engine SHA-256 gate;
+  `.github/dependabot.yml` added (github-actions weekly).
+- **Docs**: `NOTICE` rewritten as a true third-party notices document
+  (the 605 KB English dev-log it previously held was archived verbatim
+  into worklog.md first); new `LICENSES/README.md` index;
+  `LICENSE-Apache v2.0` gained the LLVM Exception appendix
+  (libc++_shared.so); stale `LICENSE&NOTICE.zip` duplicate deleted
+  (again — see round-50); README tagline/network wording made precise
+  (only network access = optional Lichess tablebase), project tree and
+  GPL file list synced; both HTML manuals reordered their changelogs
+  strictly newest-first (the v1.0.8 phase block had been nested after
+  the v1.0.9 card) and updated all current-state worker-pool references
+  (historical round entries untouched); BUILDING.md / PRIVACY.md synced.
+- **Verification**: verifier v1 harness updated to the 10-module list
+  (mirrors build-chess.py) — v1 29/29, v2 19/19, v3 37/37 all PASS;
+  all 10 chess.src modules + chess.html inline script + stats.html
+  inline script pass `node --check`; manual zh/en div balance 365/365;
+  compileReleaseJavaWithJavac + assembleRelease BUILD SUCCESSFUL — release
+  APK (78,281,521 bytes) verified with apksigner: v1+v2+v3 all true,
+  signer certificate SHA-256 45:BC:6D:36:…:BC unchanged (same key as
+  previous releases), versionCode=10203 / versionName="1.2.3" /
+  minSdk 23 / targetSdk 35; embedded libstockfish.so SHA-256 =
+  8f7116d3…61b5 (matches EXPECTED_ENGINE_SHA256); FGS specialUse subtype
+  chess_engine_analysis present (Xiaomi HyperOS 3 compatible); bundled
+  assets/chess.html SHA-256 = cfd6c8da… (byte-identical to the rebuilt
+  bundle).
 
 ### Round-55 update (2026-10-05) — PR #56 CodeRabbit follow-up: 4 fixed / 4 no-action
 

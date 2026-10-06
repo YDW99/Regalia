@@ -1,5 +1,5 @@
 // round-52 verifier harness: stale engine-eval callback scenarios.
-// Loads the 11-module bundle in a Node vm with browser stubs and asserts:
+// Loads the 10-module bundle in a Node vm with browser stubs and asserts:
 //   (a) late previous-position callback after a new dispatch is dropped;
 //   (b) review-mode stale callback is cached under the MATCHED step (fen
 //       identity) with correct White-POV sign — not the current step;
@@ -30,9 +30,11 @@ const path = require('path');
 const vm = require('vm');
 
 const SRC = path.join(__dirname, '..', '..', 'src', 'main', 'assets', 'chess.src');
-const MODULES = ['game-logic.js','chess960.js','pgn-standard.js','worker-pool.js',
+const MODULES = ['game-logic.js','chess960.js','pgn-standard.js',
   'state-store.js','ai-bridge.js','tablebase.js','eco-data.js',
   'ui-gameflow.js','ui-interactions.js','ui.js'];
+// round-56: worker-pool.js removed from the bundle (zero-caller dead code,
+// 732 lines); MODULES mirrors build-chess.py.
 
 // ---- concatenate modules, stripping export statements (mirrors build-chess.py)
 let combined = '';

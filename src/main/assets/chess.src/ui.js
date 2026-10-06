@@ -6912,11 +6912,11 @@ window._showStatsImportBackPrompt=_showStatsImportBackPrompt;
  */
 function _startEngineHeartbeat(){
   _heartbeatRunning=true;
-  _lastEngineCallbackTime=Date.now();
+  _lastEngineCallbackTime=performance.now();
   if(_heartbeatIntervalId){clearInterval(_heartbeatIntervalId);}
   _heartbeatIntervalId=setInterval(function(){
     if(!_heartbeatRunning)return;
-    const elapsed=Date.now()-_lastEngineCallbackTime;
+    const elapsed=performance.now()-_lastEngineCallbackTime;
     if(elapsed>120000){
       console.warn('Engine heartbeat: no response for 120s, attempting restart');
       try{
@@ -6928,7 +6928,7 @@ function _startEngineHeartbeat(){
           isHintLoading=false;_hintBarInfo='';
           _evalLoading=false;_sfEvalReady=false;
           _ponderGen++;_ponderMoveSAN='';_ponderBarInfo='';_pendingPonderMoveUCI=null;
-          _lastEngineCallbackTime=Date.now();
+          _lastEngineCallbackTime=performance.now();
         }
       }catch(e){console.error('Heartbeat restart failed:',e);}
     }

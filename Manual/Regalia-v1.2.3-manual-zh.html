@@ -540,6 +540,7 @@ details summary:hover { color: var(--accent2); }
     <div class="section-title">应用简介</div>
   </div>
 
+  <p>v1.2.3 第五十六轮（同版本内修订，2026.10.5）实施外部第一性原理代码审查报告（先行剔除误报——prompt() 对话框、JNI 桥暴露、白名单绕过等指控经核实均为有意设计或有既有防护，不予改动）。<strong>（一）安全与健壮性</strong>：引擎二进制 SHA-256（8f7116d3…）接入 StockfishNative 四处运行时校验（解压必验，root 设备缓存复用强制复验）；JsBridgeGateway.isSafeFileName 由子串匹配改为精确段级语义（不再误伤「a..b」类合法文件名）；FileIoHelper.readTextFile 增设 1 MB 上限并以 <code>{"error":"too_large"}</code> 哨兵 + 新增双语 i18n 键 <code>settings_file_too_large</code> 弹 Toast 提示；StatsActivity.loadAssetAsBase64 路径穿越检查对齐段级语义；ProGuard 日志剥离扩展至 Log.v/d/i/w（保留 Log.e）；stats.html CSP 增补 <code>form-action 'none'</code> + <code>object-src 'none'</code>、全量导出 HTML 的 JSON 载荷转义 <code>&lt;/</code>。<strong>（二）一键分析可靠性</strong>：派发失败三连击即终止批量并提示（_batchConsecutiveFail），避免桥接持久故障时无限空转；ai-bridge 5 处、ui.js 3 处时间戳改用 performance.now() 单调时钟；openStatsPage 超时随未缓存步数动态伸缩。<strong>（三）死代码清理</strong>：worker-pool.js（732 行，自 v1.0.8 PHASE 49 同步导入切换后零调用方）删除，build-chess.py 模块清单减至 10 个，index.html.tpl CSP 同步移除不再需要的 <code>worker-src blob:</code>（stats.html 保留——其页内联热力图 Worker 仍在用）；chess.html 字节级确定性重建（23,672 行）；stateHistory 上限剔除改为 splice(1,1)（保持索引 0 为初始局面的不变量）。<strong>（四）仓库与 CI</strong>：新建 .gitignore（签名材料/local.properties/构建产物永不入库，version.properties 有意不排除）；version.properties 入库作为版本单一事实源（build.gradle 项目根优先、父目录兜底，release 缺失即 fail-fast）；settings.gradle 仓库顺序改为官方优先、镜像兜底（国内镜像经 init.d 本地注入，见 BUILDING.md）；6 个扫描工作流触发分支补充 upload；unzip-folder-optimized.yml 新增引擎 SHA-256 门禁；新增 dependabot.yml。<strong>（五）文档</strong>：NOTICE 改写为规范的第三方组件声明（原 605KB 英文开发日志全文归档至 worklog.md，零丢失）；新增 LICENSES/README.md 索引；LICENSE-Apache v2.0 增补 LLVM 例外附录（libc++_shared.so）；删除重新出现的陈旧重复包 LICENSE&amp;NOTICE.zip；README.md 网络表述精确化（唯一网络出口为可选的 Lichess 残局库探测）+ 目录树与许可清单同步；本说明书更新日志重排为严格的新→旧（v1.0.8 阶段块此前错位于 v1.0.9 卡片之后）并更新全部 worker-pool 现状表述（历史轮次记录保持原样）；BUILDING.md / PRIVACY.md 同步。<strong>（六）验证</strong>：verifier v1 29/29（模块清单同步为 10 个）、v2 19/19、v3 37/37 全部通过；全部 10 个 JS 模块 + chess.html 内嵌脚本 + stats.html 内嵌脚本通过 node --check；说明书 zh/en div 配平 365/365；compileReleaseJavaWithJavac 与 assembleRelease 均 BUILD SUCCESSFUL——release APK（78,281,521 字节）经 apksigner 验证 v1+v2+v3 签名齐全，签名证书 SHA-256 指纹 45:BC:6D:36:…:BC 与既往版本一致（沿用原签名），versionCode=10203 / versionName="1.2.3" / minSdk 23 / targetSdk 35；APK 内 libstockfish.so SHA-256 = 8f7116d3…61b5（与 EXPECTED_ENGINE_SHA256 一致）；FGS specialUse subtype <code>chess_engine_analysis</code> 存在（澎湃 OS 3 兼容）；APK 内 assets/chess.html SHA-256 = cfd6c8da…（与重建 bundle 字节级一致）。版本号不变（versionCode=10203，versionName="1.2.3"）；无新权限、无新网络出口、无新数据收集。</p>
   <p>v1.2.3 第五十五轮（同版本内修订，2026.10.5）完成 PR #56 两封 CodeRabbit 通知邮件（7 条可执行评论 + 1 条 diff 外提示）的逐条分诊：<strong>4 项属实已修，2 条为已修复的过时评论，1 条已实现，另有 1 项同类清扫</strong>。<strong>（一）修复</strong>：① 第五十四轮派发失败分支对同一次失败重复自增 _aiRetryCount（doAIMove 入口自增 + catch 分支再增），导致 500ms 重试调用顶到上限而未真正重新派发——四个分支改为单计数器契约（自增与放弃均由 doAIMove 独占）；② getParentPath 对解析出的父目录复验 isPathBrowsable，在白名单根目录点「上一级」不再落入必为空的列表（返回 ""，JS 隐藏「..」或关闭对话框）；③ verifier v3 的 read() 改用 __dirname 定位（与 v1/v2 一致），异目录运行不再全部 MISSING；④ 许可标签清扫——两份 README.license 账本中 32 处与文件头冲突的「(AGPL v3)」错标更正为 GPL v3（chess.src 25 处、java 7 处），分类本身不变。<strong>（二）无需动作</strong>：S7741 typeof 守卫与 S8491 悬空 Javadoc 两条评论针对的是第五十四轮提交，已于第五十四轮补修复；chess.html:9214 的 Parcel 预算提示已由第五十四轮的 900KB 双重护栏实现。<strong>（三）许可分类全面复查</strong>：对每一处记录开源协议分类的位置（README.md 分类清单、NOTICE 规范清单、两本 README.license 权威清单、全部 11 份 README.license 账本）逐一对照文件头复核——分类清单本身全部正确，另发现 12 处历史段落中的残留错标并就地更正（NOTICE 中 StatsActivity 5 处 AGPL→GPL、HapticManager 1 处 AGPL→GPL、StabilizationHelper 1 处 GPL→AGPL 反向错标、index.html.tpl 1 处 AGPL→GPL，均附「corrected round-55」编者注；已删除文件的旧标签保留为历史记录）。<strong>（四）验证</strong>：verifier v3 37/37 通过（含异目录运行），v1 29/29、v2 19/19 回归通过；chess.html 重建（24,364 行）；release Java 编译通过。版本号不变（versionCode=10203，versionName="1.2.3"）；无新权限、无新网络出口、无新数据收集。</p>
   <p>v1.2.3 第五十四轮补（同版本内修订，2026.10.5）处理 SonarCloud 对第五十四轮树的复分析：<strong>2 项属实已修，2 项判定误报保留</strong>。<strong>（一）修复</strong>：EngineProcessManager 的 waitForBounded 帮助方法的 Javadoc 原插于 killProcess 注释与方法之间，形成悬空注释（S8491）——已上移至 killProcess 之前，使每个 Javadoc 依附其声明；ai-bridge.js 后台分析通知的 _bgDone 行误带跨模块 typeof 守卫（S7741），_reviewAnalyzeStep 实为本模块声明，已改为直接 undefined 比较。<strong>（二）误报（保留）</strong>：S125 所谓「注释代码块」实为第五十四轮的说明性注释（解释 API-26 门存在的原因），非被注释代码；S2486（2026.6.27 存量，不在本 PR 范围）的 _convertPVtoSAN catch 含有真实回退赋值（原始 PV 截断显示），并非空 catch。<strong>（三）验证</strong>：verifier v3 收紧至 29/29 通过（G4a 更新、新增 G6d/G6e）；v2 19/19、v1 29/29 回归通过；chess.html 重建（24,360 行）；release Java 编译通过。版本号不变（versionCode=10203，versionName="1.2.3"）；无新权限、无新网络出口、无新数据收集。</p>
   <p>v1.2.3 第五十四轮精化（同版本内修订，2026.10.5）完成 GitHub PR #56 页面 AI 汇报问题的全量分诊处置（CodeRabbit 5 轮评审 19 条可执行意见 + 2 条综述；GitHub Advanced Security mobsfscan 7 条 CWE-532 日志提醒；PMD 汇总）：<strong>12 项属实全部修复，13 项判定误报/无需动作并留档</strong>。<strong>（一）对局可靠性</strong>：引擎走法派发失败（engineGo/engineGoNewGame 抛异常）时四处失败分支统一重排 doAIMove（重试上限 3 次后提示 ai_timeout）——此前对局会停在 AI 回合无响应（安全计时器在 isAIThinking=false 后跳过重试）；自由开局后 Chess960 对话框的 SPID 哨兵由 null 更正为 -1（null 在关系比较中被转为 0，会破坏预览与随机 SPID 选取）。<strong>（二）统计与导入</strong>：复盘后台分析通知改用本批次完成数（_reviewAnalyzeStep+1）而非跨对局持久缓存大小；openStatsPage 在剔除视觉注解后仍超 Binder 上限时回退复制 PGN 到剪贴板；stats.html 的 FEN 吃过路兵目标格须实际存在对方兵才生效；统计页 PGN 导入失败改为显式错误提示（新增 onStatsPGNFileError 回调与 pgn_read_failed 文案），不再静默。<strong>（三）兼容与资源</strong>：EngineProcessManager 的带超时 Process.waitFor 为 API 26+，经新 helper waitForBounded 在 API 23-25 退为阻塞 waitFor——原先会抛 NoSuchMethodError（Error 不被 catch(Exception) 捕获）并跳过 sh -c 回退；引擎唤醒锁改为非引用计数（setReferenceCounted(false) 先于字段发布），onDestroy 单次 release 必定释放；两处 PGN 分块读取器将裸 CR 计入行数（折叠 CRLF，跨块安全），CR-only 文件无法再绕过 5000 行上限。<strong>（四）文件浏览</strong>：设置文件浏览器改为沙箱感知——新增 isPathBrowsable 浏览门（应用私有目录 + 应用专属外部目录 + 公共 Download/Documents），listFiles/getParentPath 走浏览门，读写仍走严格 isPathInSandbox 沙箱；浏览器默认起点改为内部 filesDir，移除必然为空的 /sdcard 与手动路径入口，新增系统文件选择器（SAF）按钮用于公共存储导入。<strong>（五）构建与文档</strong>：build.gradle 在 version.properties 存在但缺键/空白时也触发回退告警；PRIVACY.md 补一级标题（MD041）；NOTICE「9x README.license」更正为 10x、round-48「zero-instantiation」更正为「无有效调用」；proguard-rules.pro 移除已删除的 nativeRenice 残留引用；worklog.md round-48 Java 文件计数 20 更正为 19；.github/README.license 澄清 PR 模板双许可措辞指组合作品许可。<strong>（六）误报（保留）</strong>：mobsfscan CWE-532 ×7 为通用「记录日志」提醒——仅含引擎状态/路径与 UI 诊断，无 PII 或凭据，且含路径日志已在 round-48 降为 Log.d 并随 release 混淆剥离；SonarCloud S116 ×2 维持 round-53 结论（项目级 _xxx 命名约定）。<strong>（七）验证</strong>：新增 verifier/v3 结构检查 27/27 通过；v2（含收紧后的 F2d/F4b）19/19、v1（新增 D3a 批次完成断言）29/29 回归通过；release Java 编译通过；chess.html 重建（24,357 行 / 1,483,165 字节）。本轮无 UI 布局变更——全部示意图与当前版本保持一致。版本号不变（versionCode=10203，versionName="1.2.3"）；无新权限、无新网络出口、无新数据收集。</p>
@@ -613,7 +614,7 @@ details summary:hover { color: var(--accent2); }
     <li><strong>PGN 缓存管理器（📚）</strong>：复盘界面新增 📚 按钮，弹出缓存管理窗口，支持保存/导入/重命名/添加标签/搜索/筛选/批量删除 PGN 缓存条目；存储于应用私有目录 <code>/data/data/com.Regalia/files/pgn_cache/</code>，不被 HyperOS 3 缓存清理器清除 <span class="new-tag">v1.0.4</span></li>
     <li><strong>玩家重命名（📝）</strong>：可重命名 PGN 头部 [White] / [Black] 玩家名；导出的 PGN 中 AI 对手名称现包含难度档位后缀（如 <code>[Black "AI对手 Lv.4"]</code>） <span class="new-tag">v1.0.4</span></li>
     <li><strong>中英双语 UI（🌐 ↔️中 / ↔️EN）</strong>：评估栏左侧的切换按钮可一键切换中英文模式，所有 UI 文本（工具栏、AI 对手栏、侧面板、新游戏对话框、引擎配置、Toast 通知、关于页、前台服务通知）均双语化 <span class="new-tag">v1.0.1</span></li>
-    <li><strong>Web Worker 并行计算</strong>：新增 <code>worker-pool.js</code>，将 PGN 解析、统计计算、控制图计算等重型任务移至 Web Worker 线程，避免阻塞 UI 渲染 <span class="new-tag">v1.0.4</span></li>
+    <li><strong>统计页热力图后台计算</strong>：统计页（stats.html）通过页内联 Web Worker 在后台线程计算全对局控制热力图，避免阻塞页面交互；PGN 导入自 v1.0.8 PHASE 49 起即为「Toast 提示 + 让帧绘制 + 同步导入」路径（v1.0.4 曾引入的 <code>worker-pool.js</code> 因零调用方于 v1.2.3 第五十六轮作为死代码移除）</li>
     <li>6 级预设 AI 难度 + SL档（Skill Level 自定义）+ ⚙️手动设置，适合各水平棋手</li>
     <li>AI 思考进度条实时显示搜索深度、节点数、速度与评估分数</li>
     <li>Ponder（预判）模式，AI 在对手回合继续思考，充电时推荐开启以加速后续走法</li>
@@ -678,12 +679,6 @@ details summary:hover { color: var(--accent2); }
 │  │   ├─ formatCslTag / formatCalTag / parseCslTag /        │
 │  │   │ parseCalTag (视觉注解)                              │
 │  │   └─ TimeControl 解析/格式化 (6 种格式)                  │
-│  ├─ worker-pool.js  (Web Worker 并行计算) [v1.0.4 新增]    │
-│  │   ├─ workerParsePGN()                                   │
-│  │   ├─ workerComputeHeatmapStats()                        │
-│  │   ├─ workerGetCtrlMap()                                 │
-│  │   ├─ terminateWorker() (pagehide/beforeunload)          │
-│  │   └─ 同步回退 (Worker 不可用时)                          │
 │  ├─ ai-bridge.js    (引擎通信层)                           │
 │  │   ├─ UCI 参数配置、导出/导入 (key=value)                │
 │  │   ├─ 引擎回调: onBestMove / onEngineEval /              │
@@ -729,7 +724,7 @@ details summary:hover { color: var(--accent2); }
 │  迁移 (bundle 内提升), 无顶层可执行代码移动, 无 TDZ/加载顺序变化 │
 └─────────────────────────────────────────────────────────┘</div>
 
-    <p>模块间的数据流遵循严格的单向依赖：<code>ui.js</code> 调用 <code>game-logic.js</code> 的纯函数获取棋局状态，通过 <code>ai-bridge.js</code> 与引擎通信，<code>ai-bridge.js</code> 再通过 <code>AndroidBridge</code> 与 Java 层的 Stockfish 进程交互。重型计算任务（PGN 解析、统计、热力图）通过 <code>worker-pool.js</code> 委托给 Web Worker 线程，避免阻塞 UI 渲染。</p>
+    <p>模块间的数据流遵循严格的单向依赖：<code>ui.js</code> 调用 <code>game-logic.js</code> 的纯函数获取棋局状态，通过 <code>ai-bridge.js</code> 与引擎通信，<code>ai-bridge.js</code> 再通过 <code>AndroidBridge</code> 与 Java 层的 Stockfish 进程交互。PGN 导入采用「Toast 提示 + 50ms 让帧绘制 + 同步导入」路径（v1.0.8 PHASE 49 起），统计页热力图由 stats.html 的页内联 Web Worker 在后台计算，均不阻塞 UI 渲染。</p>
 
     <div class="code-block">
       <span class="code-label">build-chess.py — 构建脚本核心逻辑</span>
@@ -738,7 +733,6 @@ modules = [
     "game-logic.js",
     "chess960.js",       # v1.0.4 新增
     "pgn-standard.js",   # v1.0.4 新增
-    "worker-pool.js",    # v1.0.4 新增
     "state-store.js",    # v1.2.0 新增
     "ai-bridge.js",
     "tablebase.js",
@@ -794,7 +788,7 @@ with open("chess.html","w",encoding="utf-8") as f:
     <li><code>ai-bridge.js</code> — 引擎通信模式</li>
     <li><code>ui.js</code>、<code>ui-gameflow.js</code>、<code>ui-interactions.js</code> — UI 布局与交互模式</li>
     <li><code>tablebase.js</code> — PGN 解析（GameTree/PgnToken/PgnScanner）</li>
-    <li><code>pgn-standard.js</code>、<code>worker-pool.js</code>、<code>index.html.tpl</code>、<code>stats.html</code></li>
+    <li><code>pgn-standard.js</code>、<code>index.html.tpl</code>、<code>stats.html</code></li>
   </ul>
 
   <h3>AGPL v3 文件（原创）</h3>
@@ -1045,7 +1039,7 @@ function onEngineReady(){
   <div class="impl-section">
     <h4>实现原理：控制范围热力图</h4>
     <p><code>game-logic.js</code> 中的 <code>getCtrlMap()</code> 遍历棋盘所有格子，对每个有棋子的格调用 <code>attacked()</code> 获取其攻击目标，汇总成 8×8 控制矩阵。矩阵每个元素记录 <code>{white: [{piece, position}], black: [{piece, position}]}</code>。</p>
-    <p><code>ui.js</code> 中的 <code>_getSqBg()</code> 根据控制矩阵计算 HSL 颜色覆盖棋盘格背景；<code>_updateArrows()</code> 在 SVG 叠加层绘制控制箭头，使用持久化 SVG 元素避免重复创建 DOM。重型计算（如统计页面的全对局热力图遍历）通过 <code>worker-pool.js</code> 委托给 Web Worker，避免阻塞 UI。</p>
+    <p><code>ui.js</code> 中的 <code>_getSqBg()</code> 根据控制矩阵计算 HSL 颜色覆盖棋盘格背景；<code>_updateArrows()</code> 在 SVG 叠加层绘制控制箭头，使用持久化 SVG 元素避免重复创建 DOM。统计页的全对局热力图遍历由 stats.html 的页内联 Web Worker 在后台线程执行，避免阻塞 UI。</p>
     <div class="code-block">
       <span class="code-label">game-logic.js — getCtrlMap() 控制范围计算</span>
 function getCtrlMap(b){
@@ -2575,7 +2569,7 @@ const text = pgn.replace(/^\[[^\]]*\]/gm, '');</div>
     <div class="section-title">统计数据页面</div>
   </div>
 
-  <p>统计数据页面（<code>StatsActivity</code> + <code>stats.html</code>）是一个全屏 WebView Activity，通过主界面走法记录卡的 <strong>📊</strong> 按钮或复盘工具栏的 <strong>📊</strong> 按钮进入。它独立于主对局 WebView，自带最小化的 JS 桥接，将繁重的 PGN 解析逻辑与主对局隔离。重型计算任务（热力图统计等）通过 <code>worker-pool.js</code> 委托给 Web Worker。</p>
+  <p>统计数据页面（<code>StatsActivity</code> + <code>stats.html</code>）是一个全屏 WebView Activity，通过主界面走法记录卡的 <strong>📊</strong> 按钮或复盘工具栏的 <strong>📊</strong> 按钮进入。它独立于主对局 WebView，自带最小化的 JS 桥接，将繁重的 PGN 解析逻辑与主对局隔离。热力图统计等重型计算任务由 stats.html 的页内联 Web Worker（<code>_statsWorker</code>）在后台线程执行。</p>
 
   <h3>页面布局</h3>
   <p>统计数据页面从上到下依次为：</p>
@@ -2728,14 +2722,15 @@ const text = pgn.replace(/^\[[^\]]*\]/gm, '');</div>
     <li>v1.0.4 Rev34 新增：热力图控制统计矩阵的每个格子现在在<strong>顶部居中</strong>显示坐标编号（如 <code>a8</code>、<code>e4</code>），方便用户识别每个热力图格子代表哪个棋盘格</li>
   </ul>
 
-  <h3>Web Worker 并行计算 <span class="new-tag">v1.0.4</span></h3>
-  <p>v1.0.4 新增 <code>worker-pool.js</code> 模块，将 PGN 解析、统计计算、控制图计算等重型任务移至 Web Worker 线程，避免阻塞 UI 渲染：</p>
+  <h3>热力图后台计算（页内联 Web Worker）</h3>
+  <p>统计页的全对局控制热力图计算运行在 stats.html 的<strong>页内联 Web Worker</strong>（<code>_statsWorker</code>）中，避免阻塞页面交互：</p>
   <ul class="feature-list">
-    <li>Worker 通过 Blob URL 创建（兼容 WebView 的 <code>script-src 'unsafe-inline'</code> CSP）</li>
-    <li>自带一份精简的国际象棋原语（attacked、getCtrlMap、makeMvInPlace、fenToState 等），无需共享主线程作用域</li>
-    <li>所有公共 API（<code>workerParsePGN</code>、<code>workerComputeHeatmapStats</code>、<code>workerGetCtrlMap</code>）均返回 Promise</li>
+    <li>Worker 脚本以字符串内联于 stats.html（<code>_STATS_WORKER_SRC</code>），经 Blob URL 创建，CSP 保留 <code>worker-src blob:</code></li>
+    <li>自带一份精简的国际象棋原语（attacked、getCtrlMap 等），无需共享主线程作用域</li>
+    <li>主线程按 taskId 分发任务并以 Promise 接收结果（<code>{ctrlW, ctrlB, posCount}</code>）</li>
     <li>若 Worker 不可用（极老设备），自动回退到内联同步执行，保证功能一致</li>
-    <li><span class="new-tag">v1.0.4 Rev44</span> 修复内存泄漏：新增 <code>terminateWorker()</code> 函数，在 <code>pagehide</code> 和 <code>beforeunload</code> 事件中注册。页面退出时终止 Worker 并撤销 Blob URL，防止内存泄漏</li>
+    <li>Worker 出错时立即 <code>terminate()</code> 并 <code>revokeObjectURL()</code>，回收线程与内存，后续计算转同步回退</li>
+    <li>历史说明：v1.0.4 曾引入独立的 <code>worker-pool.js</code> 模块（PGN 解析 / 统计 / 控制图计算，Rev44 修复其内存泄漏）；PGN 导入自 v1.0.8 PHASE 49 起改为「Toast + 让帧 + 同步导入」路径后，该模块再无调用方，已于 v1.2.3 第五十六轮作为零调用方死代码移除（732 行）</li>
   </ul>
 
   <div class="impl-section">
@@ -3681,14 +3676,6 @@ function moveRookForCastling(state, kingFrom, kingTo) {
     <p style="font-size:.78rem;color:#887860;margin-top:10px"><strong>版本号</strong>：升级为 versionCode=109、versionName="1.0.9"。<strong>引擎版本</strong>：Stockfish 18 arm64-v8a-dotprod（不变）。<strong>APK 签名</strong>：v1+v2+v3 三重签名齐全，兼容小米澎湃 OS 3。<strong>源码 tar 包</strong>：已排除所有引擎文件。<strong>构建环境</strong>：JDK 21（Temurin 21.0.5）、Android SDK 35、NDK 27.2.12479018、CMake 3.22.1、build-tools 34.0.0。</p>
   </div>
   <p>v1.0.8（versionCode 108）历经 30 个开发阶段（Phase 22~51），涵盖走棋动画与音效全面重设计、Stockfish 18 dotprod 引擎集成、Web Worker 多线程、六种棋子触觉人格化、全面第一性原理代码审查。</p>
-
-  <!-- ============================== -->
-
-    <!-- v1.0.7 (previous) -->
-  <div class="cl-card" style="border-left:4px solid #2980b9;margin-bottom:18px;padding:12px 16px;background:rgba(41,128,187,.05);border-radius:0 6px 6px 0">
-    <h3 style="color:#2980b9">v1.0.7（versionCode 107，2026.6.28）</h3>
-    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">v1.0.7 是一次代码质量与稳定性维护版本，基于三份独立代码审查报告（共 30+ 项建议）逐项核实并采纳合理建议，未引入新功能但修复了多项隐性 Bug，并完善了关于对话框的开源仓库链接与竖屏全面屏 UI 适配。</p>
-
                     <!-- v1.0.8 PHASE 51 (previous) -->
 <h4 style="color:#d4a017;margin-top:14px;margin-bottom:6px;font-size:.9rem;border-top:1px dashed rgba(212,160,23,.3);padding-top:10px">v1.0.8 第五十一阶段新增（PGN 往返易位修复 + 走法评价用语 + 评估折线图深色模式可见性，2026.7.2）</h4>
     <p style="font-size:.82rem;color:#c8b888;line-height:1.6">本阶段修复三个用户反馈问题。版本号保持 v1.0.8 不变。</p>
@@ -4657,6 +4644,14 @@ function moveRookForCastling(state, kingFrom, kingTo) {
     </ul>
 
     <p style="font-size:.78rem;color:#887860;margin-top:10px"><strong>版本号</strong>：升级为 versionCode=108、versionName="1.0.8"。<strong>引擎版本</strong>：Stockfish 18 arm64-v8a-dotprod（不变）。<strong>APK 签名</strong>：v1+v2+v3 三重签名齐全，兼容小米澎湃 OS 3。<strong>源码 tar 包</strong>：已排除所有引擎文件。<strong>构建环境</strong>：JDK 21（Temurin 21.0.5）、Android SDK 35、NDK 27.2.12479018、CMake 3.22.1、build-tools 34.0.0。</p>
+
+
+  <!-- ============================== -->
+
+    <!-- v1.0.7 (previous) -->
+  <div class="cl-card" style="border-left:4px solid #2980b9;margin-bottom:18px;padding:12px 16px;background:rgba(41,128,187,.05);border-radius:0 6px 6px 0">
+    <h3 style="color:#2980b9">v1.0.7（versionCode 107，2026.6.28）</h3>
+    <p style="font-size:.82rem;color:#c8b888;line-height:1.6">v1.0.7 是一次代码质量与稳定性维护版本，基于三份独立代码审查报告（共 30+ 项建议）逐项核实并采纳合理建议，未引入新功能但修复了多项隐性 Bug，并完善了关于对话框的开源仓库链接与竖屏全面屏 UI 适配。</p>
 
 <h4 style="color:#d4a017;margin-top:14px;margin-bottom:6px;font-size:.9rem;border-top:1px dashed rgba(212,160,23,.3);padding-top:10px">🆕 v1.0.7 第二十一阶段新增（Bug 修复：竖屏弹窗位置精确修正、横屏防抖裁切根因修复、走法记录栏显示不全修复，2026.6.30）</h4>
     <p style="font-size:.82rem;color:#c8b888;line-height:1.6">本阶段修复 Phase 20 中 2 项未达预期的调整，并补充修复横屏走法记录栏显示不全问题。</p>

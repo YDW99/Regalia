@@ -213,10 +213,13 @@ public class JsBridgeGateway {
      */
     public boolean isSafeFileName(String name) {
         if (name == null || name.isEmpty()) return false;
-        // 禁止路径分隔符
+        // 禁止路径分隔符 —— 本接口只接受单个文件名（不含目录），因此分隔符
+        //   一律拒绝，名字自身即唯一路径段。
         if (name.contains("/") || name.contains("\\")) return false;
-        // 禁止 .. 目录穿越
-        if (name.contains("..")) return false;
+        // v1.2.3 round-56: 与 FileIoHelper.loadAssetAsBase64 的段级语义对齐 ——
+        //   单段名字只需精确拒绝 "." / ".."（File(dir, "..") 会解析到父目录）。
+        //   旧 contains("..") 子串匹配会误伤 "a..b" 这类合法名字。
+        if (name.equals(".") || name.equals("..")) return false;
         // 禁止控制字符
         for (int i = 0; i < name.length(); i++) {
             char c = name.charAt(i);
