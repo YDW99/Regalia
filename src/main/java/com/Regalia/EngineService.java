@@ -351,6 +351,16 @@ public class EngineService extends Service {
      * Safe to call multiple times — no-op if already running.
      */
     public static void start(Context context) {
+        // round-60 (F-3 documented non-fix): between stop()'s stopService()
+        // call and the async onDestroy() callback, isRunning is still true —
+        // a start() landing in that millisecond window would early-return
+        // here and then see onDestroy reset the flag (service never starts).
+        // UNREACHABLE under the current call graph (stop only runs from
+        // shutdownInternal; start only from startEngineInternal's success
+        // tail — a full engine restart, seconds apart), and self-healing in
+        // practice (onEngineReady re-invokes start on every engine restart).
+        // If a manual-stop entry point is ever added, reset isRunning in
+        // stop() directly.
         if (isRunning) return;
         try {
             Intent intent = new Intent(context, EngineService.class);

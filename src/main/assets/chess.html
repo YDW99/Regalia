@@ -245,11 +245,15 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
      motion is now driven by Web Animations API in animateMove() (see
      game-logic.js). CSS only handles:
      - .sq.in-check: pulsing red glow on the checked king's square
-     - .bwrap.shake-light / .shake-heavy: board tremor on rook/king landing
    The old per-piece landing keyframes (pawnStep/knightJump/bishopGlide/
    rookSlide/queenGlide/kingStep) and capture-flash keyframes are removed
    because the new animation system handles landing impact via board shake
-   + Web Animations API scale keyframes. */
+   + Web Animations API scale keyframes.
+   v1.2.3 round-57: the board-shake CSS classes (.bwrap.shake-light/heavy/
+   massive) and their @keyframes are REMOVED — _triggerBoardShake() now runs
+   the identical keyframes on the Web Animations API (game-logic.js
+   _SHAKE_KEYFRAMES), eliminating the forced synchronous reflow
+   (`void offsetWidth`) that the class-restart trick required at landing. */
 /* Check animation on king — pulsing red glow + background tint */
 .sq.in-check{animation:checkPulse 1.2s ease-in-out infinite;position:relative;z-index:1;transform:translateZ(0);will-change:box-shadow}
 .sq.in-check::before{content:'';position:absolute;inset:0;animation:checkBgPulse 1.2s ease-in-out infinite;border-radius:inherit;z-index:-1;}
@@ -259,40 +263,6 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 @keyframes checkBgPulse{
   0%,100%{background:rgba(192,57,43,0)}
   50%{background:rgba(192,57,43,.22)}}
-/* v1.0.8 PHASE 22: Board shake on piece landing (rook = light, king = heavy).
-   v1.0.8 PHASE 26: queen = massive (heaviest, > king's heavy).
-   Triggered by _triggerBoardShake() in game-logic.js. Uses void offsetWidth
-   trick to restart the animation on rapid successive calls. */
-.bwrap.shake-light{animation:shakeLight .28s cubic-bezier(.36,.07,.19,.97)}
-.bwrap.shake-heavy{animation:shakeHeavy .45s cubic-bezier(.36,.07,.19,.97)}
-.bwrap.shake-massive{animation:shakeMassive .62s cubic-bezier(.36,.07,.19,.97)}
-@keyframes shakeLight{
-  0%,100%{transform:translate3d(0,0,0)}
-  20%{transform:translate3d(-2px,1px,0)}
-  40%{transform:translate3d(2px,-1px,0)}
-  60%{transform:translate3d(-1px,1px,0)}
-  80%{transform:translate3d(1px,-1px,0)}}
-@keyframes shakeHeavy{
-  0%,100%{transform:translate3d(0,0,0)}
-  10%{transform:translate3d(-3px,2px,0)}
-  25%{transform:translate3d(4px,-2px,0)}
-  40%{transform:translate3d(-4px,2px,0)}
-  55%{transform:translate3d(3px,-2px,0)}
-  70%{transform:translate3d(-2px,1px,0)}
-  85%{transform:translate3d(1px,-1px,0)}}
-/* v1.0.8 PHASE 26: shakeMassive — the heaviest shake, for queen landing.
-   Larger amplitude (±6px) and longer decay than shakeHeavy. The queen is
-   the most powerful piece; her landing should feel "掷地有声" (ground-shaking). */
-@keyframes shakeMassive{
-  0%,100%{transform:translate3d(0,0,0)}
-  8%{transform:translate3d(-5px,3px,0)}
-  18%{transform:translate3d(6px,-3px,0)}
-  30%{transform:translate3d(-6px,4px,0)}
-  42%{transform:translate3d(5px,-3px,0)}
-  54%{transform:translate3d(-4px,2px,0)}
-  66%{transform:translate3d(3px,-2px,0)}
-  78%{transform:translate3d(-2px,1px,0)}
-  90%{transform:translate3d(1px,-1px,0)}}
 /* Board square baroque textures */
 .panel{width:280px;display:flex;flex-direction:column;gap:10px}
 .card{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:12px;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,215,0,.05)}
@@ -1176,16 +1146,21 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .tips{font-size:.75rem;color:var(--muted);line-height:1.6;font-family:system-ui,-apple-system,sans-serif}
 .tip-item{margin-bottom:4px}
 /* Move animation overlay - per-piece types, GPU-accelerated.
-   v1.0.8 PHASE 23 (smoothness): A single static `filter: drop-shadow` is
-   applied here so the overlay's shadow layer is computed ONCE when the
-   element is composited, then cached. The per-piece keyframe animations
-   only mutate `transform` (a GPU-composited property), so each animation
-   frame is a pure layer translation — no per-frame pixel ops. This
-   eliminates the jank caused by the previous design which set a different
-   `filter: drop-shadow(...)` value on every keyframe of knight/bishop/
-   queen/king animations, forcing the browser to re-rasterize the alpha
-   mask every frame. */
-.move-anim{position:absolute;display:flex;align-items:center;justify-content:center;font-size:2rem;z-index:20;pointer-events:none;will-change:transform;backface-visibility:hidden;-webkit-backface-visibility:hidden;transform:translate3d(0,0,0);font-family:'DejaVu Sans','Noto Sans','Segoe UI Symbol',sans-serif;font-variant-emoji:text;-webkit-font-variant-emoji:text;font-weight:400;filter:drop-shadow(0 4px 5px rgba(0,0,0,0.45))}
+   v1.2.3 round-57 (frame-rate fix): the `filter: drop-shadow(...)` is REMOVED.
+   Although static (the v1.0.8 PHASE 23 design), a filter on a WAAPI-animated
+   element still forces a separate render surface + alpha-mask pass, and the
+   scale keyframes in the pawn/knight/queen/king personalities can trigger
+   per-frame re-rasterization of the stroked glyph on Android WebView — the
+   classic source of mid-animation jank. The equivalent elevation shadow is
+   now a second text-shadow layer on .move-anim.w-piece/.bk-piece below,
+   rasterized in the SAME pass as the glyph (no extra surface). Every frame
+   of every piece animation is now a pure compositor transform update. */
+.move-anim{position:absolute;display:flex;align-items:center;justify-content:center;font-size:2rem;z-index:20;pointer-events:none;will-change:transform;backface-visibility:hidden;-webkit-backface-visibility:hidden;transform:translate3d(0,0,0);font-family:'DejaVu Sans','Noto Sans','Segoe UI Symbol',sans-serif;font-variant-emoji:text;-webkit-font-variant-emoji:text;font-weight:400}
+/* round-57: elevation shadow as text-shadow layers (replace the removed
+   drop-shadow filter). Same specificity as the grouped piece-color rules
+   above and later in source order, so these win for .move-anim overlays. */
+.move-anim.w-piece{text-shadow:0 0 .8px rgba(30,15,0,.55),0 3px 5px rgba(0,0,0,.45)}
+.move-anim.bk-piece{text-shadow:0 0 .8px rgba(255,230,150,.55),0 3px 5px rgba(0,0,0,.45)}
 
 /* v1.0.5 Round-6 Rev49: High aspect-ratio screen adaptation.
    Goal: every interface scrolls VERTICALLY ONLY — never horizontal scroll,
@@ -1280,7 +1255,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 /* v1.0.8 PHASE 22: prefers-reduced-motion disables all non-essential
    animations. The Web Animations API motion in animateMove is also
    skipped on the JS side (see animateMove _reducedMotion check). */
-@media(prefers-reduced-motion:reduce){.sq.in-check{animation:none!important}.bwrap.shake-light,.bwrap.shake-heavy,.bwrap.shake-massive{animation:none!important}.ge,.gt,.gover .btn{animation:none!important}.sq .castle-ring{animation:none!important}}
+@media(prefers-reduced-motion:reduce){.sq.in-check{animation:none!important}.ge,.gt,.gover .btn{animation:none!important}.sq .castle-ring{animation:none!important}}
 
 /* v1.0.7 — Quick Toolbar (below board, above player bar).
    Holds the 5 over-the-board actions moved out of the header toolbar:
@@ -1602,6 +1577,13 @@ const _i18n={
 'js_error':{zh:'JS错误',en:'JS error'},
 'promise_error':{zh:'Promise错误',en:'Promise error'},
 'engine_unavailable_hint':{zh:'引擎不可用',en:'Engine unavailable'},
+// v1.2.3 round-57c: visible feedback when the per-step safety timer skips a
+//   silent step (was console-only — the user saw nothing for minutes).
+'batch_step_timeout_skip':{zh:'引擎超时无响应，已跳过该步',en:'Engine timed out — step skipped'},
+// v1.2.3 round-57c: batch termination toast — clearer than the bare
+//   engine_unavailable_hint: tells the user cached progress survives and a
+//   tap on Analyze resumes from the breakpoint.
+'batch_terminated_hint':{zh:'引擎持续无响应，批量分析已停止；已完成进度已保留，重新点击即可继续',en:'Engine unresponsive — batch stopped. Progress kept; tap Analyze All to resume.'},
 'ai_timeout':{zh:'AI思考超时，请重试',en:'AI thinking timeout, please retry'},
 'tb_querying':{zh:'查询残局库...',en:'Querying endgame tablebase...'},
 'fen_copy_prefix':{zh:'FEN已复制: ',en:'FEN copied: '},
@@ -1938,6 +1920,18 @@ const LBL_STROKE_DARK='rgba(30,15,0,0.85)';      // Dark stroke for dark-square 
 const SYM={white:{king:'♔\uFE0E',queen:'♕\uFE0E',rook:'♖\uFE0E',bishop:'♗\uFE0E',knight:'♘\uFE0E',pawn:'♙\uFE0E'},black:{king:'♚\uFE0E',queen:'♛\uFE0E',rook:'♜\uFE0E',bishop:'♝\uFE0E',knight:'♞\uFE0E',pawn:'♟\uFE0E'}};
 const PN={king:'王',queen:'后',rook:'车',bishop:'象',knight:'马',pawn:'兵'};
 const PN_EN={king:'K',queen:'Q',rook:'R',bishop:'B',knight:'N',pawn:'P'};
+// _KING_PIECE_STYLE: shared piece-styling constants for _hdrKingIconHTML
+// (ui.js) and _loadingKingIconHTML (ai-bridge.js). Extracted to avoid
+// duplicating the color/stroke/shadow values across two functions.
+// round-60 (F-1): moved here from ui.js — game-logic.js is the FIRST module
+// in the bundle, so the const is initialized before any consumer runs;
+// ai-bridge.js's top-level _showLoadingOverlay() previously hit the TDZ
+// (typeof does NOT guard a later const — it throws ReferenceError) and the
+// dedup intent was silently void (always the inline fallback copy).
+const _KING_PIECE_STYLE={
+  white:{color:'#E8E8F0',stroke:'rgba(30,15,0,.85)',shadow:'rgba(30,15,0,.55)',sym:'\u2654'},
+  black:{color:'#1A1A2E',stroke:'rgba(255,230,150,.85)',shadow:'rgba(255,230,150,.55)',sym:'\u265A'}
+};
 function pieceName(type){return _lang==='en'?(PN_EN[type]||type):(PN[type]||type);}
 function _principlesHTML(){
 const zh='<div class="tip-item"><b>中心控制</b>：尽早控制中心格(d4,d5,e4,e5)，这是棋盘各方向的交叉点。马在中心控制8格，在边角仅2-4格。控制中心能最大化子力效能，限制对手发展，迫其在局促边翼行棋</div><div class="tip-item"><b>快速出子</b>：尽快出动轻子（马、象）投入战斗，避免重复走同一子或过早出后。让全军协同作战，而非让个别棋子成为"孤狼"</div><div class="tip-item"><b>王的安全</b>：不要轻率推进王城兵（f,g,h兵），兵墙是王翼的坚固堡垒，推进会破坏兵链暴露致命斜线和开放线。尽早易位将王藏于兵盾之后</div><div class="tip-item"><b>兵链完整</b>：孤兵、叠兵和落后兵机动性受限且极易成为攻击靶子。维持相互保护的兵链是确保阵地稳固的关键，正如卡斯帕罗夫所言："兵的结构决定局面的长期优劣"</div><div class="tip-item"><b>空间优势</b>：用稳健的兵链向前推进挤压对手生存空间，使其子力互相干涉、协调困难，从而为你创造致命的战术漏洞</div><div class="tip-item"><b>通路兵</b>：制造并推进通路兵（尤其是连接通路兵），它是中残局的终极武器。通路兵能牵制对手大量子力防守，逼近底线升变将直接决定胜负</div><div class="tip-item"><b>子力协调</b>：单个棋子无论多强都无法独自赢棋。优秀的协调意味着子力间相互支援、合力攻击同一目标，并避免"孤狼综合征"</div><div class="tip-item"><b>开放线</b>：一旦出现开放线或半开放线，迅速用车（或双车重叠）占领，这是重子入侵敌方底线的最有效途径</div><div class="tip-item"><b>侧翼突破</b>：中心封闭时，沿兵链指向的侧翼发起兵突破打开战线。例如：白方兵链d4-e5指向王翼应在王翼突破；黑方d5-e6指向后翼应在后翼突破</div><div class="tip-item"><b>兑换原则</b>："优势时简化，劣势时复杂"。占优时主动兑换导入胜势残局；劣势时保留复杂以寻找战术反击（如长将、陷阱）的机会</div>';
@@ -2151,8 +2145,8 @@ function inB(r,c){return r>=0&&r<8&&c>=0&&c<8}
 //
 // Implementation:
 //   - Web Animations API (el.animate()) for GPU-composited 120fps motion
-//   - All keyframes use translate3d + scale + optional rotate/drop-shadow
-//   - Board shake (.bwrap.shake-light/.shake-heavy) for landing impact
+//   - All keyframes use translate3d + scale + optional rotate (transform-only)
+//   - Board shake (WAAPI on .bwrap, round-57) for landing impact
 //   - prefers-reduced-motion fully respected (skip animation, keep sound)
 //   - Chess960 castling: king + rook animate concurrently (kingStayedPut
 //     skips king overlay when king is already on its castling target)
@@ -2172,13 +2166,9 @@ const ANIM_EASINGS={
   queen:'cubic-bezier(0.5,0,0.1,1)',
   king:'cubic-bezier(0.5,0,0.05,1)'
 };
-// Board shake durations (used by _triggerBoardShake)
-// v1.0.8 PHASE 26: queen shake is now 'massive' — heavier than king's 'heavy',
-//   which is heavier than rook's 'light'. This makes the queen landing feel
-//   "铸锩有声、掷地有声" (resounding/ground-shaking) per the user's request.
-const SHAKE_LIGHT_DUR=280;   // rook landing — light tremor
-const SHAKE_HEAVY_DUR=450;   // king landing — heavy tremor
-const SHAKE_MASSIVE_DUR=620; // queen landing — massive tremor (heaviest)
+// v1.2.3 round-58: per-piece shake durations live in SHAKE_DURATIONS below
+//   (the old SHAKE_LIGHT/HEAVY/MASSIVE_DUR trio is retired with the CSS
+//   strength model — see the per-piece design comment at _shakeKeyframesFor).
 
 let _cachedBwrap=null;
 let animationInProgress=false;
@@ -2190,36 +2180,194 @@ let _animGen=0;
 // after render() rebuilds the .bwrap DOM (e.g., on cell-size recalculation).
 let _activeAnimEls=[];
 
-// Trigger board shake. strength: 'light' (rook), 'heavy' (king), or 'massive' (queen).
-// Uses void offsetWidth trick to restart CSS animation on rapid successive calls.
-// v1.0.8 PHASE 26: 'massive' is the heaviest — reserved for queen landing.
-// v1.0.8 PHASE 26 (anti-shake coexistence): StabilizationHelper applies a
-//   CSS transform to .bwrap.stabilized for sensor-based translation compensation.
-//   If we add .shake-* while .stabilized is active, the shake animation's
-//   transform overrides the stabilization transform, causing a visual jump.
-//   Fix: temporarily remove .stabilized for the shake duration, then restore.
-//   The StabilizationHelper re-applies .stabilized on the next sensor event
-//   (within ~20ms), so the gap is imperceptible.
-function _triggerBoardShake(strength){
+// Board landing feedback. v1.2.3 round-58: PER-PIECE WAAPI signatures.
+//   The CSS-era design had three fixed strengths (light/heavy/massive) with
+//   axis-fixed oscillation. WAAPI builds keyframes at runtime, so each piece
+//   now gets its own signature — and the impulse is DIRECTION-AWARE: the
+//   board is knocked along the move's travel direction (dx,dy of the mover),
+//   which the static CSS keyframes could never do.
+//   Design language (per piece personality):
+//     queen  · 掷地有声 — directional slam, then a vertical ground-pound with
+//              three decaying aftershocks. The most elaborate of the set.
+//     king   · 玉玺重印 (round-58b redesign, round-58c intensified) — an
+//              imperial seal stamping a decree: a short anticipation LIFT,
+//              then ONE hard accelerating downward STAMP (11px — the sharpest
+//              single impact in the set, the "铿锵"), a second smaller contact
+//              THUD as the weight re-settles, then a slow, deep, low-frequency
+//              decay. The heaviest and longest signature (680ms). Gravitas
+//              with a metallic strike, not a soft thud.
+//     rook   · 生猛 — a fast directional charge-jolt with a hard stop and a
+//              single snap-back. Short and brutal.
+//     knight · 灵活 — the L-jump lands on a spring: a quick vertical bounce
+//              with a second smaller hop.
+//     bishop · 机敏 — one thin, sharp zing along the diagonal axis. Barely
+//              there, like a blade.
+//     pawn   · 瑟瑟发抖 — a tiny high-frequency tremble after touchdown.
+//   All keyframes are pure translate3d (compositor-side, zero reflow), with
+//   per-interval easing (CSS keyframe semantics — round-57c).
+//   v1.2.3 round-58b: amplitudes moderately boosted across the board
+//   (~+20-30%) after user feedback that the set felt weak; the king's
+//   signature was rebuilt from scratch (see above).
+//   v1.2.3 round-59: 谐振仿真 (resonance simulation). A real board struck by
+//   a landing piece does not stop after hand-placed thumps — it RINGS. The
+//   board is a damped harmonic oscillator:
+//       y(τ) = A · e^(−d·τ) · cos(2πf·τ)     (τ = seconds since ring onset)
+//   Each piece keeps its signature STRIKE phase (personality: the queen's
+//   directional slam, the king's anticipation-lift + stamp), then the
+//   aftershock tail is GENERATED from this model by _ringKfs below —
+//   quarter-period sampling (4 keyframes per cycle) keeps the sine faithful
+//   under per-interval easing. Per-piece physics:
+//     - natural frequency f: heavier pieces excite the board lower & slower
+//       (king 6.5Hz → pawn 22Hz — heavy things ring deep, light things buzz);
+//     - damping d: brutal stops die fast (rook 20/s), springs ring on
+//       (knight 11/s, underdamped by nature).
+//   Validation: the hand-tuned round-58 tails already sat almost exactly ON
+//   this curve (king: 3.2/1.9/1.1/0.6 hand-tuned vs 3.5/2.2/1.4/0.9 model) —
+//   the model makes the decay exact and the period regular, which is what
+//   reads as "natural" to the eye. Durations (SHAKE_DURATIONS) unchanged.
+const _SHAKE_EASING='cubic-bezier(.36,.07,.19,.97)';
+// Impact easing for the king's stamp segment: accelerate INTO the hit
+//   (ease-in character) so the landing reads as a strike, not a drift.
+const _SHAKE_STAMP_EASING='cubic-bezier(.55,.06,.35,1)';
+// Per-piece durations (ms). Piece overlay ANIM_DURATIONS govern flight;
+//   these govern ONLY the landing shake.
+const SHAKE_DURATIONS={pawn:220,knight:240,bishop:160,rook:280,queen:620,king:680};
+// v1.2.3 round-59: legacy strength-name alias retained for any stale caller
+//   ('light'→pawn-class tremor, 'heavy'→king, 'massive'→queen).
+const _SHAKE_ALIASES={light:'pawn',heavy:'king',massive:'queen'};
+
+// v1.2.3 round-59: damped-harmonic ring tail generator (谐振仿真).
+//   Emits quarter-period samples of y(τ)=A0·e^(−d·τ)·cos(2πf·τ) from onset
+//   offset t0 until the amplitude dies below perception (0.08px, checked at
+//   PEAKS only — zero crossings are legitimately ~0) or the animation window
+//   ends, then closes at rest (1, 0). A0 carries the SIGN of the first peak
+//   (e.g. the king's recoil starts the ring negative). (ax,ay) is the
+//   oscillation axis: vertical ring (0,1), or directional (ux,uy).
+//   τ advances by a quarter period per sample, so cos(2πfτ)=cos(i·π/2).
+function _ringKfs(K,t0,dur,A0,f,d,ax,ay,E){
+  const kfs=[];
+  const q=1000/(4*f)/dur;            // quarter-period, normalized offsets
+  const T=1/(4*f);                   // quarter-period, seconds
+  for(let i=0;i<48;i++){             // hard cap — far past any real ring
+    const t=t0+i*q;
+    if(t>0.995)break;
+    const amp=A0*Math.exp(-d*T*i)*Math.cos(Math.PI/2*i);
+    if(i>0&&i%2===0&&Math.abs(amp)<0.08)break; // peak died below perception
+    kfs.push(K(t,ax*amp,ay*amp,E));
+  }
+  kfs.push(K(1,0,0));
+  return kfs;
+}
+
+// Build the keyframe array for a piece's landing shake.
+//   ux/uy: unit vector of the mover's travel direction (0 when unknown).
+//   Returns WAAPI keyframes: {transform, offset, easing?}.
+//   Structure: signature STRIKE keyframes (personality) + _ringKfs tail
+//   (physics, round-59).
+function _shakeKeyframesFor(piece,ux,uy){
+  const E=_SHAKE_EASING;
+  const K=(t,x,y,e)=>{const kf={transform:'translate3d('+x.toFixed(2)+'px,'+y.toFixed(2)+'px,0)',offset:t};if(e)kf.easing=e;return kf;};
+  const dur=SHAKE_DURATIONS[piece]||220;
+  switch(piece){
+    case 'queen':{
+      // 掷地有声 — strike: directional slam (1.4× along travel) →
+      //   counter-swing, then the vertical ground-pound IS the ring's first
+      //   peak: 8Hz, slow decay (heavy), vertical with a directional lean.
+      const sx=ux*7.5, sy=uy*7.5;
+      return [
+        K(0,0,0,E), K(0.07,sx,sy,E), K(0.16,-sx*0.5,-sy*0.5,E),
+        ..._ringKfs(K,0.26,dur,6,8,8,ux*0.22,1,E)
+      ];
+    }
+    case 'king':{
+      // 玉玺重印 — strike: short anticipation LIFT (the seal rises), then ONE
+      //   hard stamp straight down, accelerating INTO the hit (11px — the
+      //   sharpest single displacement of the set, the 铿锵). The recoil is
+      //   the ring's first peak: 6.5Hz with the slowest decay of the set —
+      //   heavy things ring deep and long. Pure vertical; no lateral skitter.
+      //   (round-60: ring first peak −5.5→−7px — user feedback: the king's
+      //   shake amplitude still reads too light against the queen's 6px
+      //   ground-pound; the stamp keeps 11px, the RING now carries the
+      //   gravitas. Model output: −7/+4.42/−2.79/+1.76/−1.11/+0.70/…)
+      const sx=ux*3;
+      return [
+        K(0,0,0,E),
+        K(0.05,-sx*0.35,-2.2,E),              // anticipation — the seal rises
+        K(0.15,sx,11,_SHAKE_STAMP_EASING),    // THE STAMP — 铿锵
+        ..._ringKfs(K,0.24,dur,-7,6.5,6,0,1,E)
+      ];
+    }
+    case 'rook':{
+      // 生猛 — strike: ONE hard directional charge-jolt. The ring is fast
+      //   (12Hz) and heavily damped (20/s) — a brutal stop that snaps back
+      //   along the travel axis and dies quickly.
+      return [K(0,0,0,E),
+        ..._ringKfs(K,0.09,dur,6.2,12,20,ux,uy,E)];
+    }
+    case 'knight':{
+      // 灵活 — the L-jump lands on a spring: vertical-dominant bounce with a
+      //   whisper of travel direction (0.625·ux ≈ the old 2px at 3.2px peak).
+      //   11Hz with light damping — springs are underdamped, the ring carries.
+      return [K(0,0,0,E),
+        ..._ringKfs(K,0.12,dur,3.2,11,11,ux*0.625,1,E)];
+    }
+    case 'bishop':{
+      // 机敏 — one thin sharp zing along the travel (diagonal) axis, then a
+      //   fast high ring (16Hz) that dies almost immediately (24/s): a
+      //   blade's "ting".
+      return [K(0,0,0,E),
+        ..._ringKfs(K,0.18,dur,2.7,16,24,ux,uy,E)];
+    }
+    case 'pawn':
+    default:{
+      // 瑟瑟发抖 — a tiny high-frequency tremble (22Hz), decaying fast.
+      //   Still the weakest of the set; now a true harmonic tremor along the
+      //   original diagonal axis (1.1,−0.7 normalized → 0.843,−0.537; |A|=1.304)
+      //   instead of hand-placed jitter (round-59).
+      return [K(0,0,0,E),
+        ..._ringKfs(K,0.12,dur,1.304,22,18,0.843,-0.537,E)];
+    }
+  }
+}
+
+// In-flight shake Animation — cancelled (not reflow-restarted) on re-trigger.
+let _shakeAnim=null;
+// _triggerBoardShake(pieceOrStrength, dx, dy): fire the landing shake for a
+//   piece. dx/dy are the mover's total pixel travel (board coords, pre-flip
+//   NOT required — callers pass display-space deltas); the shake impulse is
+//   normalized from their direction. Legacy strength strings map via
+//   _SHAKE_ALIASES.
+function _triggerBoardShake(piece,dx,dy){
   try{
     const bwrap=_cachedBwrap||(_cachedBwrap=document.querySelector('.bwrap'));
     if(!bwrap||!bwrap.parentNode){_cachedBwrap=null;return;}
-    const cls=strength==='massive'?'shake-massive':(strength==='heavy'?'shake-heavy':'shake-light');
-    // v1.0.8 PHASE 26: temporarily suspend stabilization so shake isn't fought
-    const wasStabilized=bwrap.classList.contains('stabilized');
-    if(wasStabilized)bwrap.classList.remove('stabilized');
-    bwrap.classList.remove(cls);
-    void bwrap.offsetWidth; // force reflow to restart animation
-    bwrap.classList.add(cls);
-    const baseDur=strength==='massive'?SHAKE_MASSIVE_DUR:(strength==='heavy'?SHAKE_HEAVY_DUR:SHAKE_LIGHT_DUR);
-    const dur=baseDur+30;
-    setTimeout(()=>{
-      try{bwrap.classList.remove(cls);}catch(e){console.warn('[GameLogic]',e?.message?e.message:e);}
-      // Restoration of .stabilized happens naturally on the next sensor event;
-      // we don't force-restore here to avoid conflicting with a mid-flight
-      // sensor sample that may have a different translation.
-    },dur);
+    // Suspend stabilization so the shake transform isn't fought (the
+    //   StabilizationHelper re-applies .stabilized on the next sensor event,
+    //   ~20ms — imperceptible).
+    if(bwrap.classList.contains('stabilized'))bwrap.classList.remove('stabilized');
+    if(_shakeAnim){try{_shakeAnim.cancel();}catch(e){console.warn('[GameLogic]',e?.message?e.message:e);}_shakeAnim=null;}
+    const kind=_resolveShakeKind(piece);
+    // Unit travel direction (display space). Zero-length → no directional
+    //   component (pure vertical signatures still work).
+    let ux=0,uy=0;
+    if(typeof dx==='number'&&typeof dy==='number'){
+      const len=Math.hypot(dx,dy);
+      if(len>0.001){ux=dx/len;uy=dy/len;}
+    }
+    const kfs=_shakeKeyframesFor(kind,ux,uy);
+    const dur=SHAKE_DURATIONS[kind]||220;
+    const a=bwrap.animate(kfs,{duration:dur});
+    _shakeAnim=a;
+    // Identity-guarded cleanup: a cancel() from a NEWER shake fires the old
+    //   animation's oncancel (not onfinish), so onfinish only runs for a
+    //   naturally-completed shake — safe to release the reference then.
+    a.onfinish=function(){if(_shakeAnim===a)_shakeAnim=null;};
   }catch(e){console.warn('[GameLogic]',e?.message?e.message:e);}
+}
+function _resolveShakeKind(piece){
+  if(typeof piece==='string'&&SHAKE_DURATIONS[piece]!=null)return piece;
+  if(typeof piece==='string'&&_SHAKE_ALIASES[piece])return _SHAKE_ALIASES[piece];
+  return 'pawn';
 }
 
 // Personified piece animations. Each returns a Promise resolving on finish.
@@ -2266,7 +2414,9 @@ function _animPawn(el,dx,dy,dur,easing){
       kfs.push({transform:'translate3d('+x.toFixed(2)+'px,'+y.toFixed(2)+'px,0) scale('+scale.toFixed(3)+')'});
     }
     const a=el.animate(kfs,{duration:dur,easing:easing,fill:'forwards'});
-    a.onfinish=function(){resolve();};
+    // v1.2.3 round-58: the pawn lands with a tiny high-frequency tremble
+    //   (瑟瑟发抖) — its own shake signature, direction-aware via dx/dy.
+    a.onfinish=function(){_triggerBoardShake('pawn',dx,dy);resolve();};
   });
 }
 
@@ -2274,8 +2424,9 @@ function _animPawn(el,dx,dy,dur,easing){
 // v1.0.8 PHASE 22 (优化): keyframe 数量从 24 减至 18 以降低 GC 压力，
 //   提升流畅度。运动公式不变（抛物线弧 + L 形偏向 + 旋转）。
 // v1.0.8 PHASE 23 (smoothness): removed per-frame `filter: drop-shadow`
-//   from keyframes — the static drop-shadow on `.move-anim` (CSS) is
-//   composited once and cached, so each frame is a pure transform update.
+//   from keyframes — the overlay's shadow is a static text-shadow layer on
+//   .move-anim (CSS, round-57; was a drop-shadow filter before that), so
+//   each frame is a pure transform update.
 function _animKnight(el,dx,dy,dur,easing){
   return new Promise(resolve=>{
     const steps=18;
@@ -2293,14 +2444,17 @@ function _animKnight(el,dx,dy,dur,easing){
       kfs.push({transform:'translate3d('+x+'px,'+y+'px,0) scale('+scale+') rotate('+rot+'deg)'});
     }
     const a=el.animate(kfs,{duration:dur,easing:easing,fill:'forwards'});
-    a.onfinish=function(){resolve();};
+    // v1.2.3 round-58: the knight's L-jump lands on a spring — quick
+    //   vertical bounce with a second hop.
+    a.onfinish=function(){_triggerBoardShake('knight',dx,dy);resolve();};
   });
 }
 
 // 象 · 机敏：极快斜线 (sharp: quick diagonal)
 // v1.0.8 PHASE 23 (smoothness): removed per-frame `filter: drop-shadow`
-//   (golden glow) from keyframes — static drop-shadow on `.move-anim` is
-//   cached by the compositor. The bishop's signature "golden trail" is
+//   (golden glow) from keyframes — the overlay's shadow is a static
+//   text-shadow layer on `.move-anim` (round-57; was a drop-shadow filter).
+//   The bishop's signature "golden trail" is
 //   now conveyed by the scale curve alone, which is sufficient for the
 //   short 270ms duration.
 function _animBishop(el,dx,dy,dur,easing){
@@ -2313,7 +2467,8 @@ function _animBishop(el,dx,dy,dur,easing){
       {transform:'translate3d('+dx+'px,'+dy+'px,0) scale(1)',offset:1}
     ];
     const a=el.animate(kfs,{duration:dur,easing:easing,fill:'forwards'});
-    a.onfinish=function(){resolve();};
+    // v1.2.3 round-58: one thin sharp zing along the diagonal axis.
+    a.onfinish=function(){_triggerBoardShake('bishop',dx,dy);resolve();};
   });
 }
 
@@ -2331,7 +2486,7 @@ function _animRook(el,dx,dy,dur,easing){
       {transform:'translate3d('+dx+'px,'+dy+'px,0) scale(1)',offset:1}
     ];
     const a=el.animate(kfs,{duration:dur,easing:easing,fill:'forwards'});
-    a.onfinish=function(){_triggerBoardShake('light');resolve();};
+    a.onfinish=function(){_triggerBoardShake('rook',dx,dy);resolve();};
   });
 }
 
@@ -2340,7 +2495,8 @@ function _animRook(el,dx,dy,dur,easing){
 //   than the rook. Design: long duration (520ms), large scale swell mid-flight
 //   (queen is the most powerful piece — she carries weight), a dramatic
 //   pre-landing compression (t>0.85: scale dips to 0.92 then snaps to 1.18 on
-//   impact), and a MASSIVE board shake on landing (heavier than king's heavy).
+//   impact), and the MASSIVE-class board shake on landing (the most elaborate
+//   signature — directional slam + ground-pound + aftershocks).
 //   The pre-landing dip + impact snap creates the "铿锵" (clanking/resounding)
 //   feel. All keyframes mutate ONLY transform to sustain high fps.
 function _animQueen(el,dx,dy,dur,easing){
@@ -2369,17 +2525,19 @@ function _animQueen(el,dx,dy,dur,easing){
       kfs.push({transform:'translate3d('+x.toFixed(2)+'px,'+y.toFixed(2)+'px,0) scale('+scale.toFixed(3)+')'});
     }
     const a=el.animate(kfs,{duration:dur,easing:easing,fill:'forwards'});
-    // v1.0.8 PHASE 26: queen landing triggers MASSIVE shake (heaviest, > king's heavy)
-    a.onfinish=function(){_triggerBoardShake('massive');resolve();};
+    // v1.0.8 PHASE 26: queen landing triggers the MASSIVE-class shake
+    //   (most elaborate signature; the king's stamp is the sharpest single hit)
+    a.onfinish=function(){_triggerBoardShake('queen',dx,dy);resolve();};
   });
 }
 
 // 王 · 威严庄重：比车更沉稳，每步微沉，落地重击 (solemn: heavier than rook)
 // v1.0.8 PHASE 26 (optimization): The king now "威严庄重" — more solemn/steady
-//   than the rook. Design: longest duration (560ms), four measured "steps"
-//   (the king does not glide — he plants each foot deliberately), a very subtle
-//   scale breath (1.0 → 1.02 → 1.0) to convey regal gravitas, and a HEAVY shake
-//   on landing (lighter than queen's massive, but heavier than rook's light).
+//   than the rook. Design: longest flight duration (560ms), four measured
+//   "steps" (the king does not glide — he plants each foot deliberately), a
+//   very subtle scale breath (1.0 → 1.02 → 1.0) to convey regal gravitas, and
+//   the 玉玺重印 shake on landing (round-58c: the sharpest single stamp and
+//   longest ring-out of the set — see _shakeKeyframesFor).
 //   The step-wise y-wobble is retained but smoothed. All keyframes mutate ONLY
 //   transform to sustain high fps.
 function _animKing(el,dx,dy,dur,easing){
@@ -2403,7 +2561,7 @@ function _animKing(el,dx,dy,dur,easing){
       kfs.push({transform:'translate3d('+x.toFixed(2)+'px,'+y.toFixed(2)+'px,0) scale('+scale.toFixed(3)+')'});
     }
     const a=el.animate(kfs,{duration:dur,easing:easing,fill:'forwards'});
-    a.onfinish=function(){_triggerBoardShake('heavy');resolve();};
+    a.onfinish=function(){_triggerBoardShake('king',dx,dy);resolve();};
   });
 }
 
@@ -6536,12 +6694,18 @@ const Store = (function() {
     }));
 
     // 复盘模式
-    registerReducer('ENTER_REVIEW', (state, payload) => ({
-        reviewMode: true,
-        reviewStep: 0,
-        reviewStates: payload.states || [],
-        reviewBaseState: payload.baseState || null
-    }));
+    registerReducer('ENTER_REVIEW', (state, payload) => {
+        // round-58c (robustness): payload guard — the Phase-71 precedent in
+        //   pgn-standard.js. Without it a payload-less dispatch would throw
+        //   at `payload.states`. Live callers always pass an object.
+        payload = payload || {};
+        return {
+            reviewMode: true,
+            reviewStep: 0,
+            reviewStates: payload.states || [],
+            reviewBaseState: payload.baseState || null
+        };
+    });
     registerReducer('EXIT_REVIEW', () => ({
         reviewMode: false,
         reviewStep: 0,
@@ -6599,19 +6763,29 @@ const Store = (function() {
     registerReducer('FLIP_BOARD', (state, payload) => ({
         boardFlipped: payload
     }));
-    registerReducer('SET_CHESS960', (state, payload) => ({
-        chess960Mode: payload.enabled || false,
-        chess960SPID: payload.spid || -1
-    }));
+    registerReducer('SET_CHESS960', (state, payload) => {
+        // round-58c (bug fix, latent): SP-ID 0 (BBQNNRKR) is a VALID Chess960
+        //   position — `payload.spid || -1` silently mapped 0 → -1 ("unset").
+        //   Use a null/undefined test instead. Also guard a missing payload.
+        payload = payload || {};
+        return {
+            chess960Mode: payload.enabled || false,
+            chess960SPID: payload.spid != null ? payload.spid : -1
+        };
+    });
 
     // PGN
-    registerReducer('PGN_LOADED', (state, payload) => ({
-        pgnLoaded: true,
-        pgnPlayerWhite: payload.playerWhite || '',
-        pgnPlayerBlack: payload.playerBlack || '',
-        pgnEvent: payload.event || '',
-        pgnDate: payload.date || ''
-    }));
+    registerReducer('PGN_LOADED', (state, payload) => {
+        // round-58c (robustness): payload guard, same rationale as ENTER_REVIEW.
+        payload = payload || {};
+        return {
+            pgnLoaded: true,
+            pgnPlayerWhite: payload.playerWhite || '',
+            pgnPlayerBlack: payload.playerBlack || '',
+            pgnEvent: payload.event || '',
+            pgnDate: payload.date || ''
+        };
+    });
     registerReducer('PGN_CLEARED', () => ({
         pgnLoaded: false,
         pgnPlayerWhite: '',
@@ -6923,9 +7097,13 @@ let _reviewEvalCache=new function(){
   //     point the module has fully loaded and the binding is initialized. The
   //     typeof guard + try/catch belt-and-braces any edge case (e.g., a set()
   //     called during module init by a future refactor).
-  //   - Type-robust comparison: persisted JSON parses keys as strings, while
-  //     fresh set() calls use numeric keys. Compare as String() on both sides
-  //     so the current step is correctly skipped regardless of key type.
+  //   - Type-robust comparison (round-60 F-5 correction): the persisted
+  //     format is an array-of-pairs [[key,value],...], so numeric keys
+  //     SURVIVE the JSON round-trip as numbers (the old comment's "JSON
+  //     parses keys as strings" describes OBJECT formats, which this cache
+  //     has never used). The String() comparison is kept as deliberate
+  //     defense-in-depth against a future format change to an object map,
+  //     where keys WOULD come back as strings.
   //   - Backward compat: if a persisted file from a pre-Phase-18 version has
   //     >2000 entries, the constructor loads them all (no migration needed);
   //     the next set() call triggers _evictIfOverCap and trims back to 2000.
@@ -7044,6 +7222,18 @@ let _setupFEN=null;
 let _importedStartMoveNum=1;
 let showVariations=false; // 💬显示变例 toggle state
 let _reviewAnalyzeSafetyTimer=null; // Safety timeout for reviewAnalyzeAll (prevents infinite hang)
+// v1.2.3 round-57c (crash-loop terminator): wall-clock timestamp
+//   (performance.now()) of the last batch step that COMPLETED (cached a
+//   result — engine callback, terminal fast-path, or cache-hit skip). The
+//   per-step safety timer's strike counter alone cannot terminate a
+//   crash-LOOPING engine: every successful recovery (onEngineReady) resets
+//   _batchConsecutiveFail, so die→recover→dispatch→die cycles never reach 3
+//   strikes and the batch ghost-ran forever with zero new results. The
+//   safety-timer fire handler now also terminates the batch when no step has
+//   completed for 180s regardless of the strike count. Updated at batch
+//   start and on every completed step; a healthy batch (each step ≤60s of
+//   silence + cached) can never trip it.
+let _batchLastStepCompletedAt=0;
 // v1.2.3 round-56 (B1): all writes/reads use performance.now() (monotonic) —
 //   Date.now() jumps on system-clock changes (NTP sync, user adjustment) and
 //   could stall or false-trigger the 120s heartbeat-restart check.
@@ -7252,6 +7442,45 @@ let _evalRequestReviewMode=false;
 // v1.0.4 Rev44: Safety timer for eval requests — prevents eval bar from
 // getting stuck at "分析中" if the engine doesn't respond.
 let _evalSafetyTimerId=null;
+// v1.2.3 round-58b: consecutive AUTO-RETRIES of the current manual eval after
+//   true engine silence (see _armEvalSafetyTimer). Reset to 0 on every fresh
+//   user-nav dispatch; the auto-retry path deliberately does NOT reset it, so
+//   a wedged engine can never loop forever.
+let _manualEvalAutoRetries=0;
+// v1.2.3 round-58b: shared manual-eval watchdog (review 45s / normal 30s).
+//   THE TIMER MEASURES TRUE ENGINE SILENCE, NOT ELAPSED TIME: onEngineProgress
+//   re-arms it on every tick, so a healthy-but-slow search is never cut. When
+//   it fires, the search was genuinely lost (wedged engine, swallowed
+//   bestmove) — clear the stuck loading state and, in review mode,
+//   auto-re-dispatch the SAME recorded search ONCE (bounded by
+//   _manualEvalAutoRetries). The re-dispatch reuses _evalLastDispatchedFen and
+//   keeps the gens untouched, so the retried callback passes every
+//   staleness check exactly as the original would have.
+function _armEvalSafetyTimer(isReview){
+  if(_evalSafetyTimerId)clearTimeout(_evalSafetyTimerId);
+  _evalSafetyTimerId=setTimeout(function(){
+    _evalSafetyTimerId=null;
+    if(!_evalLoading)return;
+    console.warn('Eval safety timer: engine silent for '+(isReview?45:30)+'s, resetting'+(isReview?' + auto-retry':''));
+    _evalLoading=false;_sfEvalReady=false;
+    _updateAllEvalDisplays();
+    if(isReview&&typeof reviewMode!=='undefined'&&reviewMode&&_manualEvalAutoRetries<1
+       &&typeof _reviewEvalRequestedStep!=='undefined'&&typeof reviewStep!=='undefined'
+       &&_reviewEvalRequestedStep===reviewStep
+       &&typeof _engineReady!=='undefined'&&_engineReady
+       &&typeof _evalLastDispatchedFen==='string'&&_evalLastDispatchedFen
+       &&typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.isEngineReady==='function'&&AndroidBridge.isEngineReady()){
+      _manualEvalAutoRetries++;
+      try{
+        _evalLoading=true;
+        _updateAllEvalDisplays();
+        if(typeof AndroidBridge.engineEvalDeep==='function'){AndroidBridge.engineEvalDeep(_evalLastDispatchedFen);}
+        else{AndroidBridge.engineEval(_evalLastDispatchedFen);}
+        _armEvalSafetyTimer(true); // watchdog for the retried search
+      }catch(e){console.error('eval auto-retry dispatch error:',e);_evalLoading=false;_updateAllEvalDisplays();}
+    }
+  },isReview?45000:30000);
+}
 
 let _toastTimer=0;
 // v1.2.3 round-30 (perf): track the inner 300ms removal timer so rapid
@@ -7423,17 +7652,14 @@ function _isLightMode(){
 }
 function _loadingKingIconHTML(){
   // Same piece styling as .sq .pc.w (white) / .sq .pc.bk (black) in index.html.tpl.
-  // Uses _KING_PIECE_STYLE constants (defined in ui.js, loaded after ai-bridge.js
-  // — but the typeof check guards against load-order issues during development).
+  // round-60 (F-1): uses the shared _KING_PIECE_STYLE from game-logic.js —
+  // the first module in the bundle, initialized before this top-level call
+  // runs. (Previously the constant lived in ui.js and the typeof guard here
+  // could NOT see it: typeof on a TDZ const throws ReferenceError, the catch
+  // swallowed it, and this function silently used the inline fallback copy
+  // on every app start — the dedup was void. Verifier V1-30 pins the fix.)
   // \uFE0E is Variation Selector-15 (text-presentation).
-  let ps;
-  if(_isLightMode()){
-    ps={color:'#1A1A2E',stroke:'rgba(255,230,150,.85)',shadow:'rgba(255,230,150,.55)',sym:'\u265A'};
-  }else{
-    ps={color:'#E8E8F0',stroke:'rgba(30,15,0,.85)',shadow:'rgba(30,15,0,.55)',sym:'\u2654'};
-  }
-  // Defensive: if _KING_PIECE_STYLE is defined (ui.js loaded), use it for consistency
-  try{if(typeof _KING_PIECE_STYLE!=='undefined'){ps=_isLightMode()?_KING_PIECE_STYLE.black:_KING_PIECE_STYLE.white;}}catch(e){console.warn('[AIBridge] _KING_PIECE_STYLE lookup failed:',e.message);}
+  const ps=_isLightMode()?_KING_PIECE_STYLE.black:_KING_PIECE_STYLE.white;
   return '<div style="font-size:4rem;margin-bottom:16px;font-weight:400;color:'+ps.color+';-webkit-text-stroke:.3px '+ps.stroke+';text-shadow:0 0 .8px '+ps.shadow+';font-family:\'DejaVu Sans\',\'Noto Sans\',\'Segoe UI Symbol\',sans-serif;font-variant-emoji:text">'+ps.sym+'\uFE0E</div>';
 }
 function _showLoadingOverlay(){
@@ -9212,6 +9438,10 @@ function onEngineRestarting(){
   if(isAIThinking){isAIThinking=false;_aiBarInfo='';}
   if(isHintLoading){isHintLoading=false;_hintBarInfo='';}
   if(_evalLoading){_evalLoading=false;_sfEvalReady=false;}
+  // v1.2.3 round-58b: the in-flight manual eval is dead with the old engine —
+  //   disarm its watchdog so it can neither fire a spurious reset nor poison
+  //   the in-flight dedup signal while the restart is in flight.
+  if(_evalSafetyTimerId){clearTimeout(_evalSafetyTimerId);_evalSafetyTimerId=null;}
   _ponderGen++;_ponderMoveSAN='';_ponderBarInfo='';_pendingPonderMoveUCI=null;
   // v1.0.2 FIX (audit): Parity with restartCurrentEngine() — clear review eval
   // cache + MultiPV state so the recovered engine's evaluations are re-fetched
@@ -9264,6 +9494,10 @@ function onEngineReady(){
   if(isAIThinking){isAIThinking=false;_aiBarInfo='';}
   if(isHintLoading){isHintLoading=false;_hintBarInfo='';}
   if(_evalLoading){_evalLoading=false;_sfEvalReady=false;}
+  // v1.2.3 round-58b: disarm the manual-eval watchdog on engine-ready too —
+  //   the resume path below re-requests the eval through the normal dispatch
+  //   pipeline, which arms a FRESH watchdog; a stale one must not linger.
+  if(_evalSafetyTimerId){clearTimeout(_evalSafetyTimerId);_evalSafetyTimerId=null;}
   _ponderGen++;_ponderMoveSAN='';_ponderBarInfo='';_pendingPonderMoveUCI=null;
   if(_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
   // v1.0.2 FIX: Reset AI retry counter on engine ready (covers crash-recovery
@@ -9708,13 +9942,43 @@ function onEngineProgress(depth,nodes,nps,scoreCp,scoreMate,wdlW,wdlD,wdlL,selde
   // so the user saw "分析中" with no depth/nodes/speed info during eval searches.
   // Now Java dispatches onEngineProgress for all states, and we update the eval
   // display's depth indicator in real-time.
-  if(_evalLoading&&depth<=30){
+  // v1.2.3 round-57 (batch UX fix): also run while an analyze-all batch search
+  //   is in flight (_evalRequestBatchGen armed). _requestBatchEval never sets
+  //   _evalLoading (batch uses its own gen machinery), so the old gate skipped
+  //   every progress tick during batch — the review eval bar's live
+  //   depth/nodes/nps never updated. Now the bar ticks in real time; the
+  //   score/emoji half still comes from formatEval()'s cache-first lookup of
+  //   the VIEWED step, only the D/nodes/nps ticker reflects the live search.
+  // v1.2.3 round-58b: a progress tick is also proof-of-life for the MANUAL
+  //   eval watchdog — re-arm it so a healthy-but-slow depth-22 search (weak
+  //   device, thermal throttle) is never cut at 45s/30s of ELAPSED time. The
+  //   timer now measures TRUE ENGINE SILENCE only (see _armEvalSafetyTimer).
+  if(_evalLoading&&_evalSafetyTimerId){
+    try{_armEvalSafetyTimer(!!reviewMode);}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
+  }
+  const _batchLive=(typeof _reviewAnalyzeAllActive!=='undefined'&&_reviewAnalyzeAllActive&&_evalRequestBatchGen>0);
+  if((_evalLoading||_batchLive)&&depth<=30){
     _sfDepth=depth;
     // v1.0.4 Rev33: also track seldepth for the eval bar's "D15 SD22" display.
     _sfSeldepth=(seldepth!=null&&seldepth>0&&seldepth<=60)?seldepth:0;
     if(nodes!=null)_lastProgressNodes=nodes;
     if(nps!=null)_lastProgressNps=nps;
     _updateEvalDisplay();
+    // v1.2.3 round-57: refresh the REVIEW eval bar too (the call above only
+    //   targets the normal-mode #eval-disp element).
+    // v1.2.3 round-58b: tick the review bar for MANUAL single-step evals as
+    //   well — but only while the user is viewing the step the search belongs
+    //   to (_reviewEvalRequestedStep===reviewStep), otherwise the ticker would
+    //   describe a different position's search. Previously the bar only ever
+    //   ticked during analyze-all batches; a manual single-step eval showed a
+    //   frozen "分析中" for the whole 5-60s search — the user reasonably read
+    //   that as a hang and tapped again, restarting the analysis (see the
+    //   same-position in-flight dedup in requestEngineEval).
+    const _manualLive=(!_batchLive&&_evalLoading
+      &&typeof reviewMode!=='undefined'&&reviewMode
+      &&typeof reviewStep!=='undefined'&&typeof _reviewEvalRequestedStep!=='undefined'
+      &&_reviewEvalRequestedStep===reviewStep);
+    if(_batchLive||_manualLive){try{_updateReviewEvalUI();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}}
   }
   if(isAIThinking||isHintLoading)_updateAIThinkDisplay();
   // Update foreground service notification with engine progress info
@@ -9851,6 +10115,50 @@ function onPonderProgress(depth,nodes,nps,scoreCp,scoreMate,seldepth){
 //   previous-position callback arriving after a newer dispatch passed the
 //   gen-only check (an identity at that point) and displayed/cached the old
 //   position's eval on the new one.
+// v1.2.3 round-58b: cache a stale user-nav eval callback under the step it
+//   was REQUESTED for (found in the _evalRecentDispatches ring by fen
+//   identity), instead of dropping the engine's completed work. Extracted
+//   from onEngineEval's fen-mismatch branch so the G1 gen-mismatch branch can
+//   reuse it (a gen bump by a non-dispatching path — cache-hit / terminal /
+//   debounce nav — used to silently throw away the in-flight search's
+//   perfectly good result). The matched step's side-to-move (NOT the current
+//   _evalForBlackTurn, which may belong to a newer request) drives the
+//   White-POV conversion. Returns true when a cache write happened.
+function _cacheStaleReviewEvalByFen(_cbFenNav,scoreCp,scoreMate,bgW,bgD,bgL,bgDepth,bgSeldepth){
+  if(!reviewMode||!reviewStates||reviewStates.length===0||!_cbFenNav)return false;
+  // round-53 (S4138): for-of — the loop index was unused (body only reads
+  //   the element); iteration order (oldest→newest) is unchanged.
+  //   (Parameter keeps the T5 name _cbFenNav so the round-53 structural
+  //   verifier sentinel for this ring logic stays meaningful.)
+  for(const _d of _evalRecentDispatches){
+    if(_d&&_d.states===reviewStates&&_d.fen===_cbFenNav&&_d.step>=0&&_d.step<reviewStates.length){
+      if(!_reviewEvalCache.has(_d.step)){
+        const _mBlack=reviewStates[_d.step].state.currentTurn==='black';
+        let _mW=bgW,_mD=bgD,_mL=bgL;
+        if(_mBlack&&_mW>=0){const _mt=_mW;_mW=_mL;_mL=_mt;}
+        let _mEval,_mMate;
+        if(scoreMate!=null){
+          const _mN=Number.parseInt(scoreMate,10);
+          if(!Number.isNaN(_mN)){
+            const _mWhiteWins=(_mBlack?_mN<=0:_mN>0);
+            _mEval=_mWhiteWins?99999:-99999;
+            _mMate=_mBlack?-_mN:_mN;
+          }else{_mEval=_mBlack?-scoreCp:scoreCp;_mMate=0;}
+        }else{_mEval=_mBlack?-scoreCp:scoreCp;_mMate=0;}
+        _reviewEvalCache.set(_d.step,{eval:_mEval,mate:_mMate,wdlW:_mW,wdlD:_mD,wdlL:_mL,depth:bgDepth,seldepth:bgSeldepth});
+        try{if(typeof _updateReviewAnalyzeBtn==='function')_updateReviewAnalyzeBtn();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
+        try{if(typeof _refreshEvalTrendChart==='function')_refreshEvalTrendChart();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
+        // v1.2.3 round-58b: refresh the move list's per-step eval annotations
+        //   too — a stale-cached step is usually visible in the list, and the
+        //   user should see its score appear immediately.
+        try{if(typeof _refreshReviewMoveListEvals==='function')_refreshReviewMoveListEvals();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
+        return true;
+      }
+      break;
+    }
+  }
+  return false;
+}
 function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth,reqFen){
   // Update heartbeat timestamp — prevents false-positive engine death detection
   // during long eval searches (go depth 22 can take several seconds)
@@ -9955,6 +10263,9 @@ function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth,reqFen){
             depth:_bgDepth,seldepth:_bgSeldepth
           });
         }
+        // v1.2.3 round-57c: a step genuinely completed — re-arm the
+        //   crash-loop wall clock (see the field's doc).
+        _batchLastStepCompletedAt=performance.now();
       }
     }catch(e){
       console.error('Batch eval cache write failed:',e);
@@ -9997,32 +10308,9 @@ function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth,reqFen){
     //   "cache stale results" intent. The matched step's side-to-move (NOT the
     //   current _evalForBlackTurn, which belongs to the newer request) drives
     //   the White-POV conversion.
-    if(reviewMode&&reviewStates&&reviewStates.length>0){
-      // round-53 (S4138): for-of — the loop index was unused (body only
-      //   reads the element); iteration order (oldest→newest) is unchanged.
-      for(const _d of _evalRecentDispatches){
-        if(_d&&_d.states===reviewStates&&_d.fen===_cbFenNav&&_d.step>=0&&_d.step<reviewStates.length){
-          if(!_reviewEvalCache.has(_d.step)){
-            const _mBlack=reviewStates[_d.step].state.currentTurn==='black';
-            let _mW=_bgWdlW,_mD=_bgWdlD,_mL=_bgWdlL;
-            if(_mBlack&&_mW>=0){const _mt=_mW;_mW=_mL;_mL=_mt;}
-            let _mEval,_mMate;
-            if(scoreMate!=null){
-              const _mN=Number.parseInt(scoreMate,10);
-              if(!Number.isNaN(_mN)){
-                const _mWhiteWins=(_mBlack?_mN<=0:_mN>0);
-                _mEval=_mWhiteWins?99999:-99999;
-                _mMate=_mBlack?-_mN:_mN;
-              }else{_mEval=_mBlack?-scoreCp:scoreCp;_mMate=0;}
-            }else{_mEval=_mBlack?-scoreCp:scoreCp;_mMate=0;}
-            _reviewEvalCache.set(_d.step,{eval:_mEval,mate:_mMate,wdlW:_mW,wdlD:_mD,wdlL:_mL,depth:_bgDepth,seldepth:_bgSeldepth});
-            try{if(typeof _updateReviewAnalyzeBtn==='function')_updateReviewAnalyzeBtn();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
-            try{if(typeof _refreshEvalTrendChart==='function')_refreshEvalTrendChart();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
-          }
-          break;
-        }
-      }
-    }
+    // v1.2.3 round-58b: ring-cache logic extracted to _cacheStaleReviewEvalByFen
+    //   (shared with the G1 branch below) + now refreshes the move list too.
+    _cacheStaleReviewEvalByFen(_cbFenNav,scoreCp,scoreMate,_bgWdlW,_bgWdlD,_bgWdlL,_bgDepth,_bgSeldepth);
     console.warn('[AIBridge] Stale eval callback dropped (fen mismatch vs last dispatched user-nav request)');
     return;
   }
@@ -10033,6 +10321,45 @@ function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth,reqFen){
   //   previously a superseded request's late callback could pass every check
   //   below and overwrite fresher state.
   if(_evalRequestGen!==_evalLastDispatchedGen){
+    // v1.2.3 round-58b (completed-work rescue): a gen mismatch with a MATCHING
+    //   callback fen is NOT a superseded request — it is the last-dispatched
+    //   search's OWN callback, and the gen was bumped by a non-dispatching
+    //   path (cache-hit / terminal / debounce nav — see the G1 comment above).
+    //   Example: tap uncached step B (search dispatched, gen N) → tap CACHED
+    //   step C (gen bumped to N+1, nothing dispatched) → B's callback arrives
+    //   with reqFen === _evalLastDispatchedFen. The old code dropped it here
+    //   and B's 5-60s of engine work was silently thrown away — B had to be
+    //   re-analyzed from scratch on the next visit, looking exactly like
+    //   "analysis lost / stuck". Attribute the result by FEN via the dispatch
+    //   ring and cache it under ITS OWN step (never _reviewEvalRequestedStep,
+    //   which intervening navigation may have repointed). If that step is
+    //   still the VIEWED step, mirror reviewGoTo's cache-restore so the bar
+    //   shows the fresh result immediately. Either way the latest search has
+    //   completed: settle _evalLoading and the watchdog (same reasoning as
+    //   the user-nav stale path below).
+    if(_cbFenNav!==null&&_evalLastDispatchedFen!==null&&_cbFenNav===_evalLastDispatchedFen){
+      let _cbStep=-1;
+      if(reviewMode&&reviewStates&&reviewStates.length>0){
+        for(const _d of _evalRecentDispatches){
+          if(_d&&_d.states===reviewStates&&_d.fen===_cbFenNav&&_d.step>=0&&_d.step<reviewStates.length){_cbStep=_d.step;break;}
+        }
+      }
+      const _written=_cacheStaleReviewEvalByFen(_cbFenNav,scoreCp,scoreMate,_bgWdlW,_bgWdlD,_bgWdlL,_bgDepth,_bgSeldepth);
+      _evalLoading=false;
+      if(_evalSafetyTimerId){clearTimeout(_evalSafetyTimerId);_evalSafetyTimerId=null;}
+      if(reviewMode&&_cbStep>=0&&_cbStep===reviewStep){
+        const _c=_reviewEvalCache.get(_cbStep);
+        if(_c!=null){
+          _sfEval=_c.eval;_sfMateDistance=_c.mate!=null?_c.mate:0;
+          _sfWdlW=_c.wdlW!=null?_c.wdlW:-1;_sfWdlD=_c.wdlD!=null?_c.wdlD:-1;_sfWdlL=_c.wdlL!=null?_c.wdlL:-1;
+          _sfDepth=_c.depth!=null?_c.depth:0;_sfSeldepth=_c.seldepth!=null?_c.seldepth:0;
+          _sfEvalReady=true;
+          _updateAllEvalDisplays();
+        }
+      }
+      console.warn('[AIBridge] Late eval callback cached for its original step (gen bumped by non-dispatching nav)');
+      return;
+    }
     console.warn('[AIBridge] Stale eval callback dropped (gen '+_evalRequestGen+' !== last dispatched '+_evalLastDispatchedGen+')');
     return;
   }
@@ -10047,6 +10374,18 @@ function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth,reqFen){
   //   The display variables (_sfEval etc.) are NOT updated (stale for the
   //   user's current view) — only the cache is populated.
   if(reviewMode&&_reviewEvalRequestedStep!==reviewStep){
+    // v1.2.3 round-58b (state-leak fix): reaching this branch means the
+    //   callback passed BOTH identity checks — the fen matched the most
+    //   recent dispatch (or legacy runtime) and G1's gen equality held — so
+    //   this IS the latest user-nav search's completion; no newer manual
+    //   search exists. The old code returned WITHOUT clearing _evalLoading or
+    //   the watchdog: _evalLoading stayed true (a lie that also poisoned the
+    //   round-58b in-flight dedup signal) until some unrelated path happened
+    //   to clear it, and the armed 45s watchdog later fired a spurious
+    //   "engine silent" reset (and, with the new auto-retry, would have
+    //   re-dispatched a search that had ALREADY completed). Settle both now.
+    _evalLoading=false;
+    if(_evalSafetyTimerId){clearTimeout(_evalSafetyTimerId);_evalSafetyTimerId=null;}
     // Stale for display, but cache for the original step
     if(_reviewEvalRequestedStep>=0&&_reviewEvalRequestedStep<reviewStates.length){
       if(!_reviewEvalCache.has(_reviewEvalRequestedStep)){
@@ -10057,6 +10396,9 @@ function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth,reqFen){
         // Live-refresh the analyze-all button label (in case batch is also
         // active and watching the cache size)
         try{if(typeof _updateReviewAnalyzeBtn==='function')_updateReviewAnalyzeBtn();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
+        // v1.2.3 round-58b: refresh the move list's per-step eval annotations
+        //   immediately — the cached step's row is usually on screen.
+        try{if(typeof _refreshReviewMoveListEvals==='function')_refreshReviewMoveListEvals();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
         // v1.1.1 Phase 59 Task 59.3: If the chart is currently displayed and
         //   step 0 just got cached, re-render the chart so the data point
         //   appears. We use a lightweight DOM update (not full render) to
@@ -10086,6 +10428,14 @@ function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth,reqFen){
     _reviewEvalCache.set(reviewStep,{eval:_sfEval,mate:_sfMateDistance,wdlW:_sfWdlW,wdlD:_sfWdlD,wdlL:_sfWdlL,depth:_sfDepth,seldepth:_sfSeldepth});
   }
   _updateAllEvalDisplays();
+  // v1.2.3 round-58b (Bug: move list not updated after a MANUAL single-step
+  //   eval): refresh the review move list's per-step eval annotations the
+  //   moment the viewed step's analysis completes. Round-57b added this only
+  //   to the analyze-all advance path, so manual step-by-step analysis left
+  //   the list showing stale/empty scores until some unrelated full render.
+  try{
+    if(reviewMode&&typeof _refreshReviewMoveListEvals==='function')_refreshReviewMoveListEvals();
+  }catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
   // v1.0.7 PHASE 17: Also live-refresh the "Analyze All" button label so it
   // switches to "All Analyzed" the moment the last step's eval completes —
   // whether via the batch reviewAnalyzeAll() path OR via the user manually
@@ -10403,6 +10753,9 @@ function restartCurrentEngine(){
       isAIThinking=false;_aiBarInfo='';
       isHintLoading=false;_hintBarInfo='';
       _evalLoading=false;_sfEvalReady=false;
+      // v1.2.3 round-58b: disarm the manual-eval watchdog on manual restart
+      //   (same reasoning as onEngineRestarting/onEngineReady).
+      if(_evalSafetyTimerId){clearTimeout(_evalSafetyTimerId);_evalSafetyTimerId=null;}
       _ponderGen++;_ponderMoveSAN='';_ponderBarInfo='';_pendingPonderMoveUCI=null;
       // v1.0.2 FIX (audit): Clear review eval cache so the new engine instance's
       // evaluations are re-fetched. Without this, stale eval values from the
@@ -11309,6 +11662,11 @@ function onEngineError(msg){
   _ponderGen++;_ponderMoveSAN='';_ponderBarInfo='';_pendingPonderMoveUCI=null;
   // FIX: Reset eval loading state so UI doesn't permanently show "分析中"
   _evalLoading=false;_sfEvalReady=false;
+  // v1.2.3 round-58b: also disarm the manual-eval watchdog — otherwise it
+  //   fires up to 45s later, and its true-silence auto-retry would dispatch
+  //   a search against an engine that just errored (and poison the
+  //   in-flight dedup signal in the meantime).
+  if(_evalSafetyTimerId){clearTimeout(_evalSafetyTimerId);_evalSafetyTimerId=null;}
   _hideLoadingOverlay();
   if(showEngineConfig){renderEngineConfigAndUpdate();}
   // Clear loading fallback timers since engine responded (with error)
@@ -11367,7 +11725,16 @@ function onEngineError(msg){
   }else{
     // v1.2.3 round-44 (G5): budget exhausted within the window — stop JS
     //   restarts and surface the unavailable hint instead of a raw error loop.
-    showToast(T('engine_unavailable_hint'));
+    // v1.2.3 round-57c: recovery has conclusively failed — an active batch
+    //   parked on a dead engine would otherwise sit silent until the safety
+    //   net grinds out 3 strikes. Terminate it NOW (its own clearer toast
+    //   supersedes the generic hint, so skip the hint when terminating).
+    if(typeof _reviewAnalyzeAllActive!=='undefined'&&_reviewAnalyzeAllActive
+       &&typeof _terminateBatchAfterRepeatedFailures==='function'){
+      try{_terminateBatchAfterRepeatedFailures('engine recovery exhausted');}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
+    }else{
+      showToast(T('engine_unavailable_hint'));
+    }
   }
   _updateAllEvalDisplays();
   render();
@@ -11383,7 +11750,21 @@ function onEngineError(msg){
 //   user-nav eval requests are blocked (serve from cache or show "analyzing")
 //   to avoid canceling the batch's in-flight engine call.
 function requestEngineEval(){
-  if(!_engineReady||setupMode)return;
+  // v1.2.3 round-58b: engine-restart window (JS _engineReady false between
+  //   onEngineRestarting/onEngineError and onEngineReady). reviewGoTo no
+  //   longer pre-sets the analyzing state, so without this the bar would show
+  //   the PREVIOUS step's stale eval until onEngineReady re-requests. Mark the
+  //   viewed step as pending instead; the eventual onEngineReady →
+  //   requestEngineEval completes the real dispatch and clears this.
+  if((!_engineReady||setupMode)){
+    if(!_engineReady&&reviewMode&&typeof reviewStep!=='undefined'
+       &&reviewStates&&reviewStep>=0&&reviewStep<reviewStates.length
+       &&_reviewEvalCache.get(reviewStep)==null){
+      _sfEvalReady=false;_evalLoading=true;
+      _updateAllEvalDisplays();
+    }
+    return;
+  }
   // CRITICAL FIX: In normal (non-review) mode, skip eval when AI is about to move.
   if(!reviewMode&&!gameOver&&gameState.currentTurn!==playerColor)return;
   // v1.0.4 ROUND-5 REV12: Check cache BEFORE _resetEvalState() to avoid
@@ -11420,6 +11801,34 @@ function requestEngineEval(){
     //   IN-FLIGHT callback validation (T1) and stalled the batch for 60s.
     _updateAllEvalDisplays();
     return;
+  }
+  // v1.2.3 round-58b (root-cure of the single-tap "hang"): SAME-POSITION
+  //   IN-FLIGHT DEDUP. If the engine is ALREADY searching this exact position
+  //   (the previous tap's dispatch is still awaiting its callback — watchdog
+  //   armed, gens and fen identity intact), do NOT dispatch again. A second
+  //   engineEvalDeep would stopAndWait the HEALTHY search: its bestmove is
+  //   swallowed by the Java stop latch (never reaches JS, never cached) and
+  //   the restarted search begins again at depth 1. Before round-58b the
+  //   review bar also hid all live progress for manual evals, so the user saw
+  //   a frozen "分析中", tapped the same step again, and unknowingly killed
+  //   and restarted the analysis — a self-reinforcing stall that looked
+  //   exactly like a hang, and every restart threw away the completed work.
+  //   Now the repeat tap simply re-asserts the analyzing UI and keeps
+  //   waiting; the (now live-ticking) progress display shows the search is
+  //   alive. Truthfulness of the in-flight signal: _evalSafetyTimerId is
+  //   armed only between a manual dispatch and its callback/watchdog fire,
+  //   and _evalLoading is cleared by every completion/error path.
+  if(reviewMode&&_evalLoading&&_evalSafetyTimerId
+     &&_evalLastDispatchedGen===_evalRequestGen
+     &&typeof _evalLastDispatchedFen==='string'&&_evalLastDispatchedFen
+     &&reviewStates&&reviewStep>=0&&reviewStep<reviewStates.length){
+    let _curFen=null;
+    try{_curFen=_sanitizeFenForEngine(generateFEN(reviewStates[reviewStep].state));}catch(e){_curFen=null;}
+    if(_curFen!==null&&_curFen===_evalLastDispatchedFen){
+      _sfEvalReady=false; // show the analyzing state, not a stale cached value
+      _updateAllEvalDisplays();
+      return;
+    }
   }
   // P0 FIX: Reset eval state BEFORE capturing _evalRequestGen.
   _resetEvalState();
@@ -11487,16 +11896,14 @@ function requestEngineEval(){
           _evalLastDispatchedFen=fen;
           _evalRecentDispatches.push({fen:fen,step:_reviewEvalRequestedStep,states:reviewStates});
           if(_evalRecentDispatches.length>8)_evalRecentDispatches.shift();
+          // v1.2.3 round-58b: a FRESH user-nav dispatch — reset the auto-retry
+          //   budget (the auto-retry path in _armEvalSafetyTimer does not pass
+          //   through here, so its budget stays spent until the user acts).
+          _manualEvalAutoRetries=0;
         }catch(e){console.error("engineEvalDeep error:",e);_evalLoading=false;_updateAllEvalDisplays();}
-        if(_evalSafetyTimerId)clearTimeout(_evalSafetyTimerId);
-        _evalSafetyTimerId=setTimeout(function(){
-          _evalSafetyTimerId=null;
-          if(_evalLoading){
-            console.warn('Review eval safety timer: engine did not respond within 45s, resetting');
-            _evalLoading=false;_sfEvalReady=false;
-            _updateAllEvalDisplays();
-          }
-        },45000);
+        // v1.2.3 round-58b: shared watchdog — progress-aware (re-armed by
+        //   every onEngineProgress tick) and auto-retrying on true silence.
+        _armEvalSafetyTimer(true);
       },300);
     }
   }else{
@@ -11513,15 +11920,10 @@ function requestEngineEval(){
       //   newer request has been dispatched (both globals then hold the new
       //   gen); the fen identity can.
       try{AndroidBridge.engineEval(fen);_evalLastDispatchedGen=_evalRequestGen;_evalLastDispatchedFen=fen;}catch(e){console.error('engineEval error:',e);_evalLoading=false;_updateEvalDisplay();}
-      if(_evalSafetyTimerId)clearTimeout(_evalSafetyTimerId);
-      _evalSafetyTimerId=setTimeout(function(){
-        _evalSafetyTimerId=null;
-        if(_evalLoading){
-          console.warn('Eval safety timer: engine did not respond within 30s, resetting');
-          _evalLoading=false;_sfEvalReady=false;
-          _updateEvalDisplay();
-        }
-      },30000);
+      // v1.2.3 round-58b: shared watchdog — progress-aware (a healthy slow
+      //   search is never cut at 30s of elapsed time). No auto-retry in
+      //   normal mode (the post-move eval re-fires on the next state change).
+      _armEvalSafetyTimer(false);
     }
   }
 }
@@ -11549,7 +11951,10 @@ function _terminateBatchAfterRepeatedFailures(reason){
   try{if(typeof _endEvalDeepBatchIfActive==='function')_endEvalDeepBatchIfActive();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
   _endBatchWriteMode();
   try{if(typeof _updateReviewAnalyzeBtn==='function')_updateReviewAnalyzeBtn();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
-  try{showToast(T('engine_unavailable_hint'));}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
+  // v1.2.3 round-57c: clearer termination toast — progress is kept and a tap
+  //   on Analyze All resumes from the breakpoint (bare 'engine_unavailable'
+  //   left users thinking everything was lost).
+  try{showToast(T('batch_terminated_hint'));}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
 }
 
 // v1.1.1 Phase 59 Task 59.6: BATCH EVAL REQUEST (decoupled from reviewStep).
@@ -11574,6 +11979,9 @@ function _requestBatchEval(step){
   // Skip if already cached (shouldn't happen — _reviewAnalyzeAdvance skips
   // cached steps — but defensive)
   if(_reviewEvalCache.has(step)){
+    // v1.2.3 round-57c: a cache-hit skip completes the step instantly —
+    //   re-arm the crash-loop wall clock.
+    _batchLastStepCompletedAt=performance.now();
     // Advance to next step directly
     if(typeof _reviewAnalyzeAdvance==='function'){
       try{_reviewAnalyzeAdvance();}catch(e){console.error('Analyze-all advance (cached) failed:',e);}
@@ -11587,6 +11995,7 @@ function _requestBatchEval(step){
     const _isBlackTurn=_rs.currentTurn==='black';
     const _eval=_isBlackTurn?99999:-99999;
     _reviewEvalCache.set(step,{eval:_eval,mate:0,depth:0,seldepth:0,wdlW:_isBlackTurn?1000:0,wdlD:0,wdlL:_isBlackTurn?0:1000});
+    _batchLastStepCompletedAt=performance.now(); // v1.2.3 round-57c
     if(typeof _reviewAnalyzeAdvance==='function'){
       try{_reviewAnalyzeAdvance();}catch(e){console.error('Analyze-all advance (checkmate) failed:',e);}
     }
@@ -11594,6 +12003,7 @@ function _requestBatchEval(step){
   }
   if(_termStatus==='draw_stalemate'||_termStatus==='draw_insufficient'||_termStatus==='draw_5fold'||_termStatus==='draw_75move'||_termStatus==='draw_50move'||_termStatus==='draw_repetition'){
     _reviewEvalCache.set(step,{eval:0,mate:0,depth:0,seldepth:0,wdlW:333,wdlD:334,wdlL:333});
+    _batchLastStepCompletedAt=performance.now(); // v1.2.3 round-57c
     if(typeof _reviewAnalyzeAdvance==='function'){
       try{_reviewAnalyzeAdvance();}catch(e){console.error('Analyze-all advance (draw) failed:',e);}
     }
@@ -11691,7 +12101,11 @@ function _buildEvalHTML(e,opts){
   const depthStr=_sfDepth>0?'<span style="font-size:.65rem;color:var(--muted);margin-left:4px">D'+_sfDepth+'</span>':'';
   s+=depthStr;
   let progressStr='';
-  if(_evalLoading&&_sfDepth>0){
+  // v1.2.3 round-57: opts.progress forces the nodes/nps ticker even when
+  //   _evalLoading is false — an analyze-all batch search never sets
+  //   _evalLoading (batch uses its own gen machinery), but the review eval
+  //   bar should still show the live search throughput while it runs.
+  if((_evalLoading||opts.progress)&&_sfDepth>0){
     let parts=[];
     if(_lastProgressNodes!=null){const ns=_lastProgressNodes>=1000000?(_lastProgressNodes/1000000).toFixed(1)+'M':_lastProgressNodes>=1000?Math.round(_lastProgressNodes/1000)+'K':String(_lastProgressNodes);parts.push(ns);}
     if(_lastProgressNps!=null){const ns=_lastProgressNps>=1000000?(_lastProgressNps/1000000).toFixed(1)+'M/s':_lastProgressNps>=1000?Math.round(_lastProgressNps/1000)+'K/s':String(_lastProgressNps);parts.push(ns);}
@@ -11750,7 +12164,18 @@ function _updateReviewEvalUI(){
     if(prevEval!=null) deltaStr=' '+_formatEvalDelta(_sfEval,prevEval.eval);
   }
   // P4 SIMPLIFY: Use shared helper for consistent eval display formatting
-  el.innerHTML=_buildEvalHTML(e,{delta:deltaStr});
+  // v1.2.3 round-57: while an analyze-all batch search is in flight, ask
+  //   _buildEvalHTML for the live nodes/nps ticker (batch never sets
+  //   _evalLoading, so the default gate would hide it).
+  // v1.2.3 round-58b: same for a MANUAL single-step eval whose step is being
+  //   viewed — _buildEvalHTML's own _evalLoading gate already covers this,
+  //   but pass the flag explicitly so the ticker's visibility no longer
+  //   depends on which global happens to be set.
+  const _batchLive=(typeof _reviewAnalyzeAllActive!=='undefined'&&_reviewAnalyzeAllActive&&typeof _evalRequestBatchGen!=='undefined'&&_evalRequestBatchGen>0);
+  const _manualLive=(!_batchLive&&_evalLoading
+    &&typeof _reviewEvalRequestedStep!=='undefined'&&typeof reviewStep!=='undefined'
+    &&_reviewEvalRequestedStep===reviewStep);
+  el.innerHTML=_buildEvalHTML(e,{delta:deltaStr,progress:_batchLive||_manualLive});
 }
 // v1.2.3 round-29 (PR52 S3358): extract the "mate-or-eval" selection so callers
 //   don't write nested ternaries. Returns a numeric eval score (centipawns,
@@ -14097,7 +14522,8 @@ function _saveEcoToCache(parsedData) {
       tx.objectStore(_ECO_STORE_NAME).put(parsedData, 'eco_openings');
     } catch(e) {
       // v1.2.1 round-9: log instead of silently swallowing — matches the
-      // convention in _loadEcoFromCache (line 51) and state-store.js.
+      // convention in _openEcoDB (round-58c: comment corrected; the warn
+      // lives in _openEcoDB, not _loadEcoFromCache).
       if (typeof console !== 'undefined' && console.warn) {
         console.warn('ECO cache save failed:', e);
       }
@@ -14224,8 +14650,8 @@ let ecoHashMap=null,ecoHashMap2=null,ecoHashMap3=null;
 // list would throw SyntaxError; in bundled mode build-chess.py strips the
 // whole `export {...}` line via regex, so there was no production impact,
 // but the list was misleading. Also added _ecoCacheKey/_ecoCacheResult
-// (declared above at line 166, used by game-logic.js) for consistency with
-// the ecoHashMap exports.
+// (declared above, used by game-logic.js) for consistency with the
+// ecoHashMap exports. (round-58c: dropped the stale "line 166" reference.)
 
 // ===================== MODULE: ui-gameflow =====================
 // Game start (startGame/_startGameImpl) and the game-clock subsystem
@@ -15137,10 +15563,9 @@ _updateEvalDisplay();
 // browser can paint the post-move UI before the engine starts computing.
 // v1.0.8 PHASE 26: ANIMATION_DEFER_MS=600 matches the v1.0.8 PHASE 26 animation
 //   system. The two longest piece animations are King (560ms) and Queen (520ms).
-//   King triggers heavy shake (SHAKE_HEAVY_DUR=450ms); Queen triggers massive
-//   shake (SHAKE_MASSIVE_DUR=620ms). The massive shake extends beyond the queen
-//   animation, so we use 600ms (queen 520 + 80 buffer) to let the shake settle
-//   before the deferred callback fires. For king, 560+40=600 also works.
+//   Per-piece landing shakes (SHAKE_DURATIONS in game-logic.js, round-58) may
+//   outlive this defer (king 680ms) — harmless: the shake plays on .bwrap and
+//   a render() here is throttled by the animationInProgress guard anyway.
 //   If this fires too early, updateAfterMove() calls render() which gets
 //   throttled by the animationInProgress guard, so it is safe — but increasing
 //   the delay avoids the unnecessary throttle cycle.
@@ -17903,6 +18328,24 @@ function _buildReviewMovesInnerHTML(startIdx,endIdx){
   return h;
 }
 
+// v1.2.3 round-57 (batch UX fix): lightweight move-list refresh used while an
+//   analyze-all batch runs. Rebuilds ONLY #reviewMovesList's innerHTML via
+//   _buildReviewMovesInnerHTML (the single source of truth for row rendering)
+//   so each freshly-cached eval — delta + classification label — appears the
+//   moment its step completes. Previously the rows waited for the
+//   every-10-steps full render() in _reviewAnalyzeAdvance, so the list lagged
+//   up to 10 steps behind the chart. Scroll position is preserved across the
+//   swap. Cost is one O(n) string build + one innerHTML write per step —
+//   trivial next to a multi-second engine search, and far cheaper than the
+//   full-DOM render() that Issue 30 root-cause A flagged for memory pressure.
+function _refreshReviewMoveListEvals(){
+  const ml=document.getElementById('reviewMovesList');
+  if(!ml)return;
+  const st=ml.scrollTop;
+  ml.innerHTML=_buildReviewMovesInnerHTML(0,moveRecords.length);
+  ml.scrollTop=st;
+}
+
 // v1.1.0 Phase 54 rev14: Virtual list scroll-driven refresh functions removed.
 //   _suppressScrollRefresh, _refreshReviewMovesOnly, _onReviewMovesScroll,
 //   _forceReviewWindowToStep were all dead code after RV_VIRTUAL_THRESHOLD=Infinity.
@@ -18729,13 +19172,10 @@ function capturedPiecesHtml(board, pieceColor, playerColor, splitAt) {
 // pieces exactly (same color, stroke, glow). The icon is wrapped in a gold
 // gradient border (unchanged in both modes) — only the king symbol and its
 // piece styling change with the theme.
-// _KING_PIECE_STYLE: shared piece-styling constants for _hdrKingIconHTML
-// (ui.js) and _loadingKingIconHTML (ai-bridge.js). Extracted to avoid
-// duplicating the color/stroke/shadow values across two functions.
-const _KING_PIECE_STYLE={
-  white:{color:'#E8E8F0',stroke:'rgba(30,15,0,.85)',shadow:'rgba(30,15,0,.55)',sym:'\u2654'},
-  black:{color:'#1A1A2E',stroke:'rgba(255,230,150,.85)',shadow:'rgba(255,230,150,.55)',sym:'\u265A'}
-};
+// _KING_PIECE_STYLE lives in game-logic.js (shared constants region, first
+// module in the bundle) since round-60 — see F-1: when it was declared here
+// (last module), ai-bridge.js's top-level _showLoadingOverlay() hit the TDZ
+// and silently fell back to an inline copy on every app start.
 function _hdrKingIconHTML(){
   // Gold gradient border + piece-styled king. Same border in both modes; only
   // the king symbol + piece color/stroke/glow differ.
@@ -22117,7 +22557,14 @@ function reviewGoTo(step){
     //   the live-eval path (ai-bridge.js) restores all six fields; omitting
     //   seldepth here left the previous step's value on screen (stale SD).
   }else{
-    _resetEvalState();
+    // v1.2.3 round-58b: removed the redundant _resetEvalState() call that
+    //   preceded requestEngineEval(). requestEngineEval performs its own
+    //   _resetEvalState() on the dispatch path (and the cache/terminal/batch
+    //   paths set their display state directly), so this call was pure
+    //   duplication — and it force-set _evalLoading=true, destroying the
+    //   truthful "a search is actually in flight" signal that
+    //   requestEngineEval's same-position in-flight dedup relies on (a
+    //   repeat tap on the analyzing step must NOT restart the search).
     // FIX: Auto-start analysis when selecting an unanalyzed move in review mode.
     // Previously, selecting an unanalyzed step would show "分析中" but never actually
     // request the engine eval. The user had to manually trigger analysis.
@@ -22364,6 +22811,11 @@ function reviewAnalyzeAll(){
     return;
   }
   _reviewAnalyzeAllActive=true;
+  // v1.2.3 round-57c: arm the crash-loop wall clock at batch start — the
+  //   safety-timer fire handler terminates the batch when no step completes
+  //   for 180s, regardless of the strike count (crash-looping engines reset
+  //   the strikes on every recovery — see ai-bridge.js field doc).
+  if(typeof _batchLastStepCompletedAt!=='undefined')_batchLastStepCompletedAt=performance.now();
   // v1.2.3 round-20: immediately switch the analyze button to
   //   label + right-aligned "batch in progress" hint (no full render
   //   happens at batch start; the helper rewrites the button in place).
@@ -22406,7 +22858,35 @@ function _reviewAnalyzeResetSafetyTimer(){
     if(_reviewAnalyzeAllActive){
       // v1.0.4 Rev24: Don't abort the whole batch — skip the stuck step and
       // continue. This is more resilient than the old behavior (abort all).
+      // v1.2.3 round-57c: with the round-57 progress-aware reset in place,
+      //   reaching this handler means the engine has been TOTALLY silent for
+      //   60s (no progress lines, no bestmove) — almost certainly wedged or
+      //   dead. Surface the skip to the user (was console-only: the "stuck
+      //   with zero feedback" complaint) and run the crash-loop wall clock.
       console.warn('Analyze-all: step '+_reviewAnalyzeStep+' timed out, skipping');
+      // v1.2.3 round-57c (crash-loop terminator): a crash-LOOPING engine
+      //   never accumulates 3 strikes — onEngineReady resets
+      //   _batchConsecutiveFail on every recovery, so die→recover→dispatch→die
+      //   cycles ghost-ran forever with zero new results (the residual
+      //   "stuck, nothing happening" after round-57). Terminate when no step
+      //   has completed for 180s of wall-clock time, no matter what the
+      //   strike counter says. A healthy batch can't trip this: every
+      //   completed step re-arms the clock, and a healthy step never sees
+      //   60s of silence (progress lines reset this timer). Runs BEFORE the
+      //   skip toast so a terminating fire shows only the termination toast.
+      if(typeof _batchLastStepCompletedAt!=='undefined'
+         &&_batchLastStepCompletedAt>0
+         &&performance.now()-_batchLastStepCompletedAt>180000
+         &&typeof _terminateBatchAfterRepeatedFailures==='function'){
+        try{_terminateBatchAfterRepeatedFailures('no step completed for 180s');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+        return;
+      }
+      // v1.2.3 round-57c: reaching here means the engine has been TOTALLY
+      //   silent for 60s (no progress lines, no bestmove — the round-57
+      //   progress-aware reset only defers on proof-of-life) but the batch
+      //   is still making progress overall. Surface the skip to the user
+      //   (was console-only: the "stuck with zero feedback" complaint).
+      try{showToast(T('batch_step_timeout_skip'));}catch(e){console.warn('[UI]',e?.message?e.message:e);}
       // v1.1.1 Phase 59 Task 59.6: Clear the batch gen so the stale callback
       //   (if it ever arrives) doesn't double-advance.
       if(typeof _evalRequestBatchGen!=='undefined')_evalRequestBatchGen=0;
@@ -22621,23 +23101,27 @@ function _reviewAnalyzeAdvance(){
   // v1.1.2 Phase 68 (Issue 30 P1): Incremental UI update — instead of calling
   //   render() on every step (which rebuilds the entire DOM and causes memory
   //   pressure on long games per Issue 30 root cause A), use lightweight
-  //   updates: refresh the eval trend chart + analyze-all button label, and
-  //   only call full render() every 10 steps (or at the end, which is handled
-  //   by the completion branch above).
+  //   updates: refresh the eval trend chart + analyze-all button label.
   //   - _refreshEvalTrendChart() rebuilds ONLY the SVG inside .review-chart
   //     (one DOM write), keeping the chart visually in sync with new evals.
   //   - _updateReviewAnalyzeBtn() updates the button label (one textContent).
-  //   - Full render() every 10 steps handles: move-list row updates (eval
-  //     delta colors, critical-move markers), scroll-into-view for active step,
-  //     and any layout shifts. 10 was chosen as a balance: frequent enough
-  //     that the move list feels responsive, infrequent enough to avoid the
-  //     O(n) DOM rebuild cost that caused WebView memory pressure on 100+
-  //     step games.
+  // v1.2.3 round-57 (batch UX fix): the every-10-steps full render() is
+  //   REPLACED by two per-step targeted refreshes:
+  //   - _refreshReviewMoveListEvals() rebuilds ONLY #reviewMovesList's rows
+  //     (one innerHTML write, scroll preserved) so each step's eval delta +
+  //     classification label appears the moment its analysis completes —
+  //     previously the list lagged up to 10 steps behind the chart.
+  //   - _updateReviewEvalUI() refreshes the eval bar (score/emoji/depth) so
+  //     completing the step the user is currently viewing updates the bar
+  //     immediately instead of waiting for the next full render.
+  //   The old full render() also handled scroll-into-view for the active step
+  //   and layout shifts — neither applies during a batch: reviewStep (the
+  //   highlighted/active row) doesn't move while the batch runs, and row
+  //   content growth is handled by the innerHTML swap itself.
   try{if(typeof _updateReviewAnalyzeBtn==='function')_updateReviewAnalyzeBtn();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   try{if(typeof _refreshEvalTrendChart==='function')_refreshEvalTrendChart();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
-  if(nextStep%10===0){
-    try{render();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
-  }
+  try{_refreshReviewMoveListEvals();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+  try{if(typeof _updateReviewEvalUI==='function')_updateReviewEvalUI();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   // v1.1.2 Phase 68 (Issue 30 P1): Main-thread yield — wrap the next
   //   _requestBatchEval call in setTimeout(0) so the JS main thread can
   //   process pending UI events (touch events, scroll, paint) between batch

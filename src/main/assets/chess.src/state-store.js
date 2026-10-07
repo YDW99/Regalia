@@ -371,12 +371,18 @@ const Store = (function() {
     }));
 
     // 复盘模式
-    registerReducer('ENTER_REVIEW', (state, payload) => ({
-        reviewMode: true,
-        reviewStep: 0,
-        reviewStates: payload.states || [],
-        reviewBaseState: payload.baseState || null
-    }));
+    registerReducer('ENTER_REVIEW', (state, payload) => {
+        // round-58c (robustness): payload guard — the Phase-71 precedent in
+        //   pgn-standard.js. Without it a payload-less dispatch would throw
+        //   at `payload.states`. Live callers always pass an object.
+        payload = payload || {};
+        return {
+            reviewMode: true,
+            reviewStep: 0,
+            reviewStates: payload.states || [],
+            reviewBaseState: payload.baseState || null
+        };
+    });
     registerReducer('EXIT_REVIEW', () => ({
         reviewMode: false,
         reviewStep: 0,
@@ -434,19 +440,29 @@ const Store = (function() {
     registerReducer('FLIP_BOARD', (state, payload) => ({
         boardFlipped: payload
     }));
-    registerReducer('SET_CHESS960', (state, payload) => ({
-        chess960Mode: payload.enabled || false,
-        chess960SPID: payload.spid || -1
-    }));
+    registerReducer('SET_CHESS960', (state, payload) => {
+        // round-58c (bug fix, latent): SP-ID 0 (BBQNNRKR) is a VALID Chess960
+        //   position — `payload.spid || -1` silently mapped 0 → -1 ("unset").
+        //   Use a null/undefined test instead. Also guard a missing payload.
+        payload = payload || {};
+        return {
+            chess960Mode: payload.enabled || false,
+            chess960SPID: payload.spid != null ? payload.spid : -1
+        };
+    });
 
     // PGN
-    registerReducer('PGN_LOADED', (state, payload) => ({
-        pgnLoaded: true,
-        pgnPlayerWhite: payload.playerWhite || '',
-        pgnPlayerBlack: payload.playerBlack || '',
-        pgnEvent: payload.event || '',
-        pgnDate: payload.date || ''
-    }));
+    registerReducer('PGN_LOADED', (state, payload) => {
+        // round-58c (robustness): payload guard, same rationale as ENTER_REVIEW.
+        payload = payload || {};
+        return {
+            pgnLoaded: true,
+            pgnPlayerWhite: payload.playerWhite || '',
+            pgnPlayerBlack: payload.playerBlack || '',
+            pgnEvent: payload.event || '',
+            pgnDate: payload.date || ''
+        };
+    });
     registerReducer('PGN_CLEARED', () => ({
         pgnLoaded: false,
         pgnPlayerWhite: '',

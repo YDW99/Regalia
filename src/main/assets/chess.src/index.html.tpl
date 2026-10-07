@@ -244,11 +244,15 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
      motion is now driven by Web Animations API in animateMove() (see
      game-logic.js). CSS only handles:
      - .sq.in-check: pulsing red glow on the checked king's square
-     - .bwrap.shake-light / .shake-heavy: board tremor on rook/king landing
    The old per-piece landing keyframes (pawnStep/knightJump/bishopGlide/
    rookSlide/queenGlide/kingStep) and capture-flash keyframes are removed
    because the new animation system handles landing impact via board shake
-   + Web Animations API scale keyframes. */
+   + Web Animations API scale keyframes.
+   v1.2.3 round-57: the board-shake CSS classes (.bwrap.shake-light/heavy/
+   massive) and their @keyframes are REMOVED — _triggerBoardShake() now runs
+   the identical keyframes on the Web Animations API (game-logic.js
+   _SHAKE_KEYFRAMES), eliminating the forced synchronous reflow
+   (`void offsetWidth`) that the class-restart trick required at landing. */
 /* Check animation on king — pulsing red glow + background tint */
 .sq.in-check{animation:checkPulse 1.2s ease-in-out infinite;position:relative;z-index:1;transform:translateZ(0);will-change:box-shadow}
 .sq.in-check::before{content:'';position:absolute;inset:0;animation:checkBgPulse 1.2s ease-in-out infinite;border-radius:inherit;z-index:-1;}
@@ -258,40 +262,6 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 @keyframes checkBgPulse{
   0%,100%{background:rgba(192,57,43,0)}
   50%{background:rgba(192,57,43,.22)}}
-/* v1.0.8 PHASE 22: Board shake on piece landing (rook = light, king = heavy).
-   v1.0.8 PHASE 26: queen = massive (heaviest, > king's heavy).
-   Triggered by _triggerBoardShake() in game-logic.js. Uses void offsetWidth
-   trick to restart the animation on rapid successive calls. */
-.bwrap.shake-light{animation:shakeLight .28s cubic-bezier(.36,.07,.19,.97)}
-.bwrap.shake-heavy{animation:shakeHeavy .45s cubic-bezier(.36,.07,.19,.97)}
-.bwrap.shake-massive{animation:shakeMassive .62s cubic-bezier(.36,.07,.19,.97)}
-@keyframes shakeLight{
-  0%,100%{transform:translate3d(0,0,0)}
-  20%{transform:translate3d(-2px,1px,0)}
-  40%{transform:translate3d(2px,-1px,0)}
-  60%{transform:translate3d(-1px,1px,0)}
-  80%{transform:translate3d(1px,-1px,0)}}
-@keyframes shakeHeavy{
-  0%,100%{transform:translate3d(0,0,0)}
-  10%{transform:translate3d(-3px,2px,0)}
-  25%{transform:translate3d(4px,-2px,0)}
-  40%{transform:translate3d(-4px,2px,0)}
-  55%{transform:translate3d(3px,-2px,0)}
-  70%{transform:translate3d(-2px,1px,0)}
-  85%{transform:translate3d(1px,-1px,0)}}
-/* v1.0.8 PHASE 26: shakeMassive — the heaviest shake, for queen landing.
-   Larger amplitude (±6px) and longer decay than shakeHeavy. The queen is
-   the most powerful piece; her landing should feel "掷地有声" (ground-shaking). */
-@keyframes shakeMassive{
-  0%,100%{transform:translate3d(0,0,0)}
-  8%{transform:translate3d(-5px,3px,0)}
-  18%{transform:translate3d(6px,-3px,0)}
-  30%{transform:translate3d(-6px,4px,0)}
-  42%{transform:translate3d(5px,-3px,0)}
-  54%{transform:translate3d(-4px,2px,0)}
-  66%{transform:translate3d(3px,-2px,0)}
-  78%{transform:translate3d(-2px,1px,0)}
-  90%{transform:translate3d(1px,-1px,0)}}
 /* Board square baroque textures */
 .panel{width:280px;display:flex;flex-direction:column;gap:10px}
 .card{background:var(--card);border:1px solid var(--border);border-radius:6px;padding:12px;overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,215,0,.05)}
@@ -1175,16 +1145,21 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 .tips{font-size:.75rem;color:var(--muted);line-height:1.6;font-family:system-ui,-apple-system,sans-serif}
 .tip-item{margin-bottom:4px}
 /* Move animation overlay - per-piece types, GPU-accelerated.
-   v1.0.8 PHASE 23 (smoothness): A single static `filter: drop-shadow` is
-   applied here so the overlay's shadow layer is computed ONCE when the
-   element is composited, then cached. The per-piece keyframe animations
-   only mutate `transform` (a GPU-composited property), so each animation
-   frame is a pure layer translation — no per-frame pixel ops. This
-   eliminates the jank caused by the previous design which set a different
-   `filter: drop-shadow(...)` value on every keyframe of knight/bishop/
-   queen/king animations, forcing the browser to re-rasterize the alpha
-   mask every frame. */
-.move-anim{position:absolute;display:flex;align-items:center;justify-content:center;font-size:2rem;z-index:20;pointer-events:none;will-change:transform;backface-visibility:hidden;-webkit-backface-visibility:hidden;transform:translate3d(0,0,0);font-family:'DejaVu Sans','Noto Sans','Segoe UI Symbol',sans-serif;font-variant-emoji:text;-webkit-font-variant-emoji:text;font-weight:400;filter:drop-shadow(0 4px 5px rgba(0,0,0,0.45))}
+   v1.2.3 round-57 (frame-rate fix): the `filter: drop-shadow(...)` is REMOVED.
+   Although static (the v1.0.8 PHASE 23 design), a filter on a WAAPI-animated
+   element still forces a separate render surface + alpha-mask pass, and the
+   scale keyframes in the pawn/knight/queen/king personalities can trigger
+   per-frame re-rasterization of the stroked glyph on Android WebView — the
+   classic source of mid-animation jank. The equivalent elevation shadow is
+   now a second text-shadow layer on .move-anim.w-piece/.bk-piece below,
+   rasterized in the SAME pass as the glyph (no extra surface). Every frame
+   of every piece animation is now a pure compositor transform update. */
+.move-anim{position:absolute;display:flex;align-items:center;justify-content:center;font-size:2rem;z-index:20;pointer-events:none;will-change:transform;backface-visibility:hidden;-webkit-backface-visibility:hidden;transform:translate3d(0,0,0);font-family:'DejaVu Sans','Noto Sans','Segoe UI Symbol',sans-serif;font-variant-emoji:text;-webkit-font-variant-emoji:text;font-weight:400}
+/* round-57: elevation shadow as text-shadow layers (replace the removed
+   drop-shadow filter). Same specificity as the grouped piece-color rules
+   above and later in source order, so these win for .move-anim overlays. */
+.move-anim.w-piece{text-shadow:0 0 .8px rgba(30,15,0,.55),0 3px 5px rgba(0,0,0,.45)}
+.move-anim.bk-piece{text-shadow:0 0 .8px rgba(255,230,150,.55),0 3px 5px rgba(0,0,0,.45)}
 
 /* v1.0.5 Round-6 Rev49: High aspect-ratio screen adaptation.
    Goal: every interface scrolls VERTICALLY ONLY — never horizontal scroll,
@@ -1279,7 +1254,7 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 /* v1.0.8 PHASE 22: prefers-reduced-motion disables all non-essential
    animations. The Web Animations API motion in animateMove is also
    skipped on the JS side (see animateMove _reducedMotion check). */
-@media(prefers-reduced-motion:reduce){.sq.in-check{animation:none!important}.bwrap.shake-light,.bwrap.shake-heavy,.bwrap.shake-massive{animation:none!important}.ge,.gt,.gover .btn{animation:none!important}.sq .castle-ring{animation:none!important}}
+@media(prefers-reduced-motion:reduce){.sq.in-check{animation:none!important}.ge,.gt,.gover .btn{animation:none!important}.sq .castle-ring{animation:none!important}}
 
 /* v1.0.7 — Quick Toolbar (below board, above player bar).
    Holds the 5 over-the-board actions moved out of the header toolbar:

@@ -1,3 +1,43 @@
+v1.2.3 round-60 (2026.10.7): locale fallback unification + stop→start window documented.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - MainActivity.java (GPL v3): F-4 — showToastLocalized fallback unified with
+    EngineService/StockfishNative.isEnglishMode() semantics: only zh*
+    locales fall back to Chinese, all others to English (previously a
+    fr/ja/ru user saw a Chinese Toast beside an English service
+    notification). zh/en user behavior unchanged.
+  - EngineService.java (GPL v3): F-3 documented non-fix — comment added at
+    start()'s isRunning early-return explaining the stop→start millisecond
+    window (isRunning stays true until the async onDestroy), its
+    unreachability under the current call graph, the onEngineReady
+    self-healing path, and the trigger condition for a future direct fix.
+  - Other 17 files: covered by the round-59 independent review report (this
+    round's input); no new findings beyond F-3/F-4.
+
+v1.2.3 round-58c (2026.10.7): full line-by-line Java review; one stale comment fixed.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - StabilizationHelper.java (GPL v3): the throttle comment on the JS-callback
+    line still said 16ms although round-44 D12 raised
+    JS_CALLBACK_MIN_INTERVAL_MS to 33ms — comment corrected in place.
+  - All other 18 files (MainActivity, StockfishNative, StatsActivity, the
+    helper/manager set) reviewed line by line with no new findings — the
+    existing defense-in-depth conventions (catch (Throwable) policy, S1181
+    narrowing on wake-lock/haptic paths, sandbox gates, lifecycle state
+    machine) are documented in verifier/runs/round58c-audit.md.
+
+v1.2.3 round-58 (2026.10.6): analyze-all batch-start ghost-state fix.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - StockfishNative.java (GPL v3): engineEvalDeepBeginBatch no longer
+    pre-sets the ghost currentState=STATE_EVAL before any search exists
+    (the phantom state made the first engineEvalDeep's stopAndWaitForBestmove
+    misread an idle engine as searching, arm the late-bestmove discard flag
+    on its 1s latch timeout, and silently eat step 1's real bestmove —
+    exactly the batch-start stall then skip-toast failure chain the round-52
+    T6 comment predicted); engineEvalDeep() sets STATE_EVAL itself at the
+    correct moment, immediately before 'go depth 22'.
+  - StockfishNative.java (GPL v3): engineEvalDeepEndBatch now guards its
+    stopAndWaitForBestmove behind a searchMaybeInFlight check
+    (currentState != STATE_NONE || _isPondering) so a batch that ended
+    with no search running can no longer arm the same discard machinery.
 v1.2.3 round-56 (2026.10.5): first-principles review implementation — engine-integrity verification + path-gate alignment + read cap.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - StockfishNative.java (GPL v3): engine binary SHA-256 verification

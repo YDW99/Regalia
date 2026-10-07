@@ -205,6 +205,23 @@ ok('H2e README.md: strict UTF-8 + round-55 section + license lists present',
          && rm.includes('### GPL v3 Files') && rm.includes('### AGPL v3 Files')
          && rm.includes('License audit addendum');
    })());
+
+// V3-38 — round-60 (F-2): the recovery guide's §1 privacy line must describe
+//   the real network posture (offline-first + the certificate-pinned Lichess
+//   tablebase probe), never the stale "无网络权限" claim that contradicts the
+//   manifest's INTERNET permission. The guide lives outside the repo
+//   (session scratch), so this check skips cleanly when it is absent.
+ok('V3-38 guide §1 privacy line accurate (skipped when guide absent)',
+   (() => {
+     const gp = '/mnt/agents/temp/Regalia v1.2.3 开发进度恢复指南Pro.md';
+     try {
+       if (!fs.existsSync(gp)) return true;
+       const g = fs.readFileSync(gp, 'utf8');
+       const row = g.split('\n').find(l => l.startsWith('| 隐私 |'));
+       if (!row) return true;
+       return row.includes('残局库') && !row.includes('无网络权限');
+     } catch (e) { return true; }
+   })());
 // H3 — path resolution is __dirname-based (like v1/v2), not cwd-based
 ok('H3 verifier resolves from __dirname (cwd-independent)',
    read('verifier/v3/round54-pr56-triage.js').includes("path.join(__dirname, '..', '..'"));

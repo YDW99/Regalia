@@ -1,3 +1,135 @@
+v1.2.3 round-60 (2026.10.7): king shake amplitude raised + F-1 TDZ root-fix + F-5 comment fix.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - game-logic.js (GPL v3): (1) king "imperial seal stamp" ring amplitude
+    raised — the damped-harmonic first peak -5.5px -> -7px (f=6.5Hz, d=6 and
+    the 680ms duration unchanged; the 11px stamp is untouched) so the king
+    reclaims the largest ring of the set (queen's ground-pound is 6px);
+    peaks now -7/+4.42/-2.79/+1.76/-1.11/+0.70/... (independently
+    recomputed). (2) F-1 root-fix: _KING_PIECE_STYLE moved here from ui.js
+    (shared constants region, first module in the bundle) — ai-bridge.js's
+    top-level _showLoadingOverlay() previously hit the TDZ (typeof on a
+    later const THROWS ReferenceError instead of returning 'undefined') and
+    silently used an inline fallback copy on every app start for 7+ rounds;
+    the dedup intent is now real. Added to the export list.
+  - ai-bridge.js (GPL v3): F-1 — _loadingKingIconHTML uses the shared
+    constant directly (dead try/typeof fallback branch deleted); F-5 —
+    _evictIfOverCap comment corrected: array-of-pairs persistence keeps
+    numeric keys numeric across JSON round-trips; the String() comparison is
+    documented as defense against a future object-format change.
+  - ui.js (GPL v3): F-1 — _KING_PIECE_STYLE declaration removed (now in
+    game-logic.js), pointer comment left.
+  - Verifier extensions: V1-30 (TDZ warn sentinel), V2-20 (constant-location
+    sentinel), V3-38 (guide privacy-line sentinel) — new baseline 30/20/38.
+
+v1.2.3 round-59 (2026.10.7): simulated resonance (damped-harmonic ring) for all six landing shakes.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - game-logic.js (GPL v3): aftershock tails of all six per-piece shake
+    signatures are now GENERATED from the damped-harmonic-oscillator model
+    y(τ)=A·e^(−d·τ)·cos(2πf·τ) via the new _ringKfs generator (quarter-period
+    sampling, 0.08px perception-threshold cut-off, 48-frame hard cap), instead
+    of hand-placed thumps. Per-piece physics: king 6.5Hz/d=6 (deepest, slowest
+    — heavy things ring low and long), queen 8Hz/d=8 (vertical with a
+    directional lean), rook 12Hz/d=20 (brutal stop, dies fast), knight
+    11Hz/d=11 (underdamped spring), bishop 16Hz/d=24 (a blade's "ting"), pawn
+    22Hz/d=18 (true harmonic tremor). Strike phases (personality keyframes)
+    and SHAKE_DURATIONS unchanged; pure translate3d, direction-aware.
+  - ui-interactions.js (GPL v3): stale comment fix — ANIMATION_DEFER_MS note
+    still referenced the retired SHAKE_HEAVY_DUR/SHAKE_MASSIVE_DUR constants
+    (missed by the round-58 shake redesign); now cites SHAKE_DURATIONS and
+    explains a shake may safely outlive the 600ms defer.
+
+v1.2.3 round-58c (2026.10.7): king landing-shake heaviness deepened + reducer hardening.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - game-logic.js (GPL v3): king "imperial seal stamp" deepened on the 58b
+    skeleton — main stamp displacement 7.5px -> 11px (sharpest single impact
+    of the set; directional component 2.5 -> 3), anticipation lift -1.4px ->
+    -2.2px, NEW second-contact thud keyframe (the weight re-settles after the
+    strike), widened decay-peak spacing (low-frequency ring-out), duration
+    560ms -> 680ms (longest signature of the set). Queen stays the most
+    elaborate signature; the king keeps the sharpest stamp + longest ring-out.
+  - state-store.js (AGPL v3): reducer hardening — ENTER_REVIEW / PGN_LOADED
+    gained the Phase-71 `payload = payload || {}` guard; SET_CHESS960 fixed a
+    latent bug where `payload.spid || -1` silently mapped the legitimate SPID
+    0 (BBQNNRKR start position) to "unset" — now `!= null`-checked.
+  - eco-data.js (AGPL v3): two comment-target fixes — a stale reference to
+    "_loadEcoFromCache (line 51)" now correctly names _openEcoDB (where the
+    warn actually lives), and a drifted "line 166" citation was removed.
+  - License-ledger hygiene: three round-58b entries above had GPL-classified
+    ai-bridge.js / ui.js / game-logic.js mislabeled (AGPL v3) — corrected to
+    (GPL v3) in place (verifier v3 H2a caught it; classification per the
+    round-42 record: AGPL v3 = chess960.js, eco-data.js, state-store.js).
+
+v1.2.3 round-58b (2026.10.6): manual single-step review-analysis hang root-cure + king shake re-forge.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - ai-bridge.js (GPL v3): six-bug root-cure of the manual (non-batch)
+    review-step analysis "hang" — (C) same-position in-flight dedup in
+    requestEngineEval: a repeat tap on the step whose exact fen is already
+    being searched no longer re-dispatches (previously the Java stop latch
+    killed the healthy search, swallowed its bestmove, and restarted from
+    depth 1 — the self-reinforcing stall); (A) onEngineProgress now ticks
+    the review eval bar for manual evals while the searched step is viewed
+    (_manualLive gate; previously batch-only); (D) shared progress-aware
+    watchdog _armEvalSafetyTimer (review 45s / normal 30s, re-armed by every
+    progress tick — measures TRUE engine silence; on silence auto
+    re-dispatches the same recorded fen once, bounded by
+    _manualEvalAutoRetries); (E) G1 gen-mismatch branch now rescues
+    completed work via fen-identity ring caching (_cacheStaleReviewEvalByFen)
+    instead of dropping it, restoring the bar from cache when the step is
+    still viewed; (B) all three manual completion paths refresh the move
+    list via _refreshReviewMoveListEvals; (F) stale-callback path and
+    onEngineError/onEngineRestarting/onEngineReady/restartCurrentEngine now
+    uniformly disarm the manual watchdog and settle _evalLoading.
+  - ui.js (GPL v3): reviewGoTo no longer pre-calls _resetEvalState() —
+    requestEngineEval manages display state on every path, and the removed
+    call force-set _evalLoading=true, destroying the truthful in-flight
+    signal the dedup relies on.
+  - game-logic.js (GPL v3): king landing shake re-forged as the "imperial
+    seal stamp" — anticipation lift, one hard 7.5px accelerating downward
+    stamp (dedicated _SHAKE_STAMP_EASING — sharpest single impact in the
+    set), deep low-frequency decay (560ms); queen/rook/knight/bishop/pawn
+    amplitudes moderately boosted (~20-30%). Per-keyframe easing and pure
+    translate3d compositor animation unchanged.
+
+v1.2.3 round-58 (2026.10.6): batch-start ghost-state fix + per-piece WAAPI shake redesign.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - game-logic.js (GPL v3): landing shakes rebuilt as runtime-generated
+    WAAPI keyframes — _shakeKeyframesFor(piece,ux,uy) with direction-aware
+    impulse (unit vector of the mover's travel); six per-piece signatures
+    (queen slam+ground-pound+aftershocks / king deep vertical thud + low
+    settles / rook charge-jolt + snap-back / knight double-hop / bishop
+    axial zing / pawn tremble); pawn/knight/bishop gained landing shakes;
+    SHAKE_DURATIONS replaces the SHAKE_LIGHT/HEAVY/MASSIVE_DUR trio;
+    legacy strength strings mapped via _SHAKE_ALIASES.
+  - Other files: No changes (the ghost-STATE_EVAL fix is in
+    src/main/java/com/Regalia/StockfishNative.java — see its ledger).
+
+v1.2.3 round-57 (2026.10.6): analyze-all liveness + move-animation frame-rate fixes.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - ai-bridge.js (GPL v3): onEngineProgress resets the per-step 60s safety
+    timer while a batch eval is in flight (anti-treadmill — slow-but-healthy
+    depth-22 steps no longer killed uncached); live depth/nodes/nps gate
+    extended to batch searches (_batchLive) + review eval bar refresh;
+    _buildEvalHTML progress ticker gains opts.progress; _updateReviewEvalUI
+    passes it while a batch runs. (57c) _batchLastStepCompletedAt wall clock
+    — batch terminates loudly after 180s with no completed step (crash-loop
+    guard); onEngineError recovery-exhausted branch terminates an active
+    batch immediately; termination toast uses the new batch_terminated_hint.
+  - ui.js (GPL v3): new _refreshReviewMoveListEvals() (innerHTML-only move
+    list refresh, scroll preserved); _reviewAnalyzeAdvance per-step targeted
+    refresh replaces the every-10-steps full render(). (57c) batch start arms
+    the wall clock; safety-timer fire shows a skip toast
+    (batch_step_timeout_skip) and runs the 180s no-progress terminator.
+  - game-logic.js (GPL v3): _triggerBoardShake ported to WAAPI
+    (_SHAKE_KEYFRAMES, keyframes/easing/durations 1:1 from the retired CSS)
+    — no more forced synchronous reflow at landing. (57c) easing moved onto
+    each keyframe interval (CSS semantics) — restores the original punch.
+    i18n: +batch_step_timeout_skip, +batch_terminated_hint (zh/en).
+  - index.html.tpl (GPL v3): .move-anim drop-shadow filter removed
+    (equivalent text-shadow layers on .w-piece/.bk-piece); .bwrap.shake-*
+    classes + shakeLight/shakeHeavy/shakeMassive @keyframes removed (moved
+    to JS); reduced-motion media query cleaned accordingly.
+  - Other files: No changes.
+
 v1.2.3 round-56 (2026.10.5): first-principles review implementation — worker-pool.js removed (zero-caller dead code) + 7 module fixes.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - worker-pool.js (was GPL v3): DELETED — 732 lines, zero callers since

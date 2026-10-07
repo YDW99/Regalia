@@ -1,3 +1,43 @@
+v1.2.3 round-60 (2026.10.7): manuals carry the round-60 changelog entry.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - Regalia-v1.2.3-manual-zh.html / -en.html: round-60 paragraph prepended
+    to the Appendix A rounds chain (king shake amplitude raise — ring first
+    peak 5.5px to 7px; the round-59 review report digested: F-1 TDZ
+    root-fix, F-2 guide privacy line, F-3 documented window, F-4 locale
+    fallback unification, F-5 comment correction; verifier extended to
+    30/20/38; methodology document landed); the chain's intro line updated
+    to "第六十轮"/"sixtieth" and the date range kept at
+    2026.10.7; div balance re-verified 365/365 both manuals, strict UTF-8.
+
+v1.2.3 round-58b (2026.10.6): manuals carry the round-58b changelog entry.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - Regalia-v1.2.3-manual-zh.html / -en.html: round-58b paragraph prepended
+    to the Appendix A rounds chain (manual single-step hang root-cure —
+    re-dispatch storm dedup, live ticker, progress-aware watchdog with
+    bounded auto-retry, completed-work rescue, move-list refresh, state-leak
+    cleanup; king shake re-forged as the imperial seal stamp plus a global
+    amplitude boost); the chain's intro line updated to
+    "第五十八轮b至第十八轮" / "fifty-eighth-b through eighteenth";
+    div balance re-verified at 365/365 per manual.
+
+v1.2.3 round-58 (2026.10.6): manuals carry the round-58 changelog entry.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - Regalia-v1.2.3-manual-zh.html / -en.html: round-58 paragraph prepended
+    to the Appendix A rounds chain (batch-start ghost-state fix in
+    StockfishNative — first step's bestmove no longer discarded; per-piece
+    direction-aware WAAPI shake redesign); the chain's intro line updated
+    to "第五十八轮至第十八轮" / "fifty-eighth through eighteenth";
+    div balance re-verified at 365/365 per manual.
+v1.2.3 round-57 (2026.10.6): manuals carry the round-57 changelog entry.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - Regalia-v1.2.3-manual-zh.html / -en.html: round-57 paragraph prepended
+    to the Appendix A rounds chain (anti-treadmill safety-timer fix,
+    per-step move-list/eval-bar live refresh, animation frame-rate fixes);
+    the chain's intro line updated to "第五十七轮至第十八轮" /
+    "fifty-seventh through eighteenth". div balance 365/365 preserved.
+  - Body sections: No changes (the round-57 fixes make the live behavior
+    match what the body already describes).
+
 v1.2.3 round-56 (2026.10.5): manuals synced to the round-56 tree.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - Regalia-v1.2.3-manual-zh.html / -en.html: changelog reordered

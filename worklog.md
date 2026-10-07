@@ -1,3 +1,254 @@
+# Regalia v1.2.3 — round-60 工作日志（2026-10-07 UTC+8）
+
+## 任务来源
+
+1. 王走动的震屏幅度需要增大。
+2. 消化《Regalia-v1.2.3-round59-全量逐行审查报告.md》：排查误报，剔除误报后理解当前版本不足，制定步骤分明的完善方案并彻底实施。
+
+## 王之震屏幅度增大（game-logic.js）
+
+谐振起振首峰 −5.5px → **−7px**（58c 重印的 11px 主冲击不变，振铃余韵加深）：
+
+- 模型参数：f=6.5Hz、d=6 不变，A0=−7——峰值序列 −7/+4.42/−2.79/+1.76/−1.11/+0.70/…（Python 独立复算一致）。
+- 设计判定：此前王的振铃首峰（5.5px）低于后的地面砸击（6px），与"全套最重签名"的人格定位相悖；7px 使王重回首位，同时保持"后最复杂、王最锐+最长"的区分。
+- 时序契约不变（SHAKE_DURATIONS.king=680ms），纯 translate3d 合成器动画不变。
+
+## 审查报告消化（误报排查 → 完善实施）
+
+报告第 5 章负空间记录已自行完成证伪（N-1/N-2/N-3/N-4/N-5/N-10 复核认可），采纳并实施全部五项发现：
+
+### bug 修复
+- **F-1（TDZ 死代码根治，方案 a）**：`_KING_PIECE_STYLE` 从 ui.js（bundle 末模块）上移至 game-logic.js 共享常量区（首模块）。根因：`typeof` 对 TDZ 中的 const **抛 ReferenceError** 而非返回 'undefined'——ai-bridge.js 顶层 `_showLoadingOverlay()` 每次启动都走抛错-回退路径，去重意图被架空 7+ 轮（v1 告警逐轮打印未被分诊）。修复后告警消失，单一事实源名副其实；常量名不变（哨兵纪律）。
+- **F-2（文档失真）**：开发指南 §1 隐私行"完全离线：无网络权限"与 Manifest 的 INTERNET 权限（Lichess 残局库）矛盾——已改为"离线优先：除可选的 Lichess 残局库查询（证书钉扎 + CSP 白名单）外无任何网络出口"。
+
+### 健壮性巩固
+- **F-4（语言回退统一）**：`MainActivity.showToastLocalized` 回退改为 `!startsWith("zh")→en`，与 `EngineService`/`StockfishNative.isEnglishMode` 同语义；zh/en 用户行为不变，第三 locale 用户不再中英混排。
+- **F-3（文档化不动）**：`EngineService.start()` 的 stop→start 毫秒窗口当前调用图不可达（stop 仅 shutdownInternal、start 仅引擎重启成功尾部，秒级相隔），且 `onEngineReady` 每次引擎就绪重调 start 自愈——按先例补注释说明窗口、不可达性与未来触发条件，不引入新锁。
+
+### 冗余清理（注释）
+- **F-5**：`_evictIfOverCap` 注释"JSON parses keys as strings"失真——数组对格式下数字键往返保型；注释修正为"String() 比较是防未来改用对象格式的防御"，防御代码保留。
+
+### 验证器扩展（报告 §7.4 落地）
+- **V1-30**：consoleProxy 捕获 bundle 求值期全部 console.warn，出现 `before initialization` 即 FAIL——TDZ 类缺陷从此硬失败而非噪声。
+- **V2-20**：`_KING_PIECE_STYLE` 必须在 game-logic.js 声明、不得留在 ui.js、ai-bridge.js 不得有 typeof 探测。
+- **V3-38**：指南 §1 隐私行须含"残局库"且不含"无网络权限"（指南缺席时跳过）。
+- 新基线 **30/20/38 全绿**。
+
+### 方法论任务闭环（指南 §5）
+- `Regalia-bug-hunting-methodology.md` 落盘源码树根目录（含 round-59 实例化：第八路侦察"验证器输出噪声分诊"+"装载形态语义差"新维度）；指南 §5 标记完成、§5.5 三项打勾。
+
+## 事故记录（编辑工具竞态复发）
+
+ai-bridge.js 编辑曾引入 4,257 行意外 diff（edit_file 对 5,000+ 行文件异常）——按既定流程处置：round-59 tar 提取干净副本还原 → Python 脚本带 count==1 断言重打补丁 → diff 复核仅剩两组有意改动（27 行）→ node --check 通过。教训重申：大文件改动一律"还原→断言脚本→diff 复核"三段式。
+
+## 验证
+
+- node --check ×10 JS 模块全过；三件套 30/20/38 全绿（三新哨兵生效）。
+- chess.html 重打包：24,173 行 / 1,486,508 字节。
+- 版本号不变（versionCode=10203，versionName="1.2.3"）；无新权限、无新网络出口、无新数据收集。
+
+---
+
+# Regalia v1.2.3 — round-59 工作日志（2026-10-07 UTC+8）
+
+## 任务来源
+
+自然的震动包含谐振——为每一种震屏效果补充仿真谐振，让震动效果更加自然。版本号不变（round-59），UI&UX 风格延续。
+
+## 谐振仿真改造（game-logic.js）
+
+**第一性原理**：真实棋盘被落子撞击后不会在手摆的几下闷响后戛然而止——它会**振铃**。物理上棋盘是一个阻尼谐振子：
+
+```
+y(τ) = A · e^(−d·τ) · cos(2πf·τ)    （τ = 起振后的秒数）
+```
+
+round-58 的手摆余震尾恰好近似这条曲线，但衰减比不规则、峰间距凭手感——人眼对"不自然的衰减"极其敏感。本轮把六种棋子的**余震尾全部改为模型生成**（`_ringKfs`），打击段（人格签名）原样保留：
+
+- **生成器 `_ringKfs`**：四分之一周期采样（每周期 4 关键帧，保证分段缓动下正弦形态保真），峰值衰减到感知阈（0.08px）以下或动画窗口结束时收束回静止；首峰符号由 A0 携带（王的回弹即负向首峰）。
+- **逐棋子物理参数**（越重越低频、越慢衰减；弹簧弱阻尼、急停强阻尼）：
+  - 王 6.5Hz / d=6 —— 全套最低频最慢衰减，重物沉吟；首峰 −5.5px（58c 的回弹即起振点）
+  - 后 8Hz / d=8 —— 砸地峰 6px 起振，垂直主轴带 0.22 倍方向倾侧
+  - 车 12Hz / d=20 —— 生猛急停，6.2px 沿走棋方向振铃速亡
+  - 马 11Hz / d=11 —— 弹簧着陆天然弱阻尼，3.2px 垂直主导弹振
+  - 象 16Hz / d=24 —— 刀锋"铮"的一声，2.7px 轴向高频细振即逝
+  - 兵 22Hz / d=18 —— 高频小幅颤抖改为真谐波颤振（原对角轴向 0.843,−0.537）
+- **模型验证**：手摆 58 尾峰值（王 3.2/1.9/1.1/0.6）与模型输出（3.5/2.2/1.4/0.9）几乎重合——设计直觉本就在谐振曲线上，模型只是让衰减精确、周期规整，这正是"自然感"的来源。
+- **架构不变量**：SHAKE_DURATIONS 六种时长不变（时序契约不动）、纯 translate3d 合成器动画、方向感知、归一化 offset 单调递增（Python 交叉验证六种签名全部通过）、48 帧硬上限防御。
+
+## 冗余清理（注释）
+
+- **ui-interactions.js**：ANIMATION_DEFER_MS 注释仍引用已退役的 SHAKE_HEAVY_DUR=450 / SHAKE_MASSIVE_DUR=620 常量（round-58 震屏重塑时漏改）——改为引用 SHAKE_DURATIONS 并说明震屏可安全超越 600ms 延迟窗口（在 .bwrap 上播放，render 受 animationInProgress 节流保护）。
+
+## 文档修复（round-58c 存量缺陷）
+
+- **中文说明书拼接损坏修复**：编辑附录 A 时检出 Regalia-v1.2.3-manual-zh.html 被拼接损坏——文件中部存在非法 UTF-8 字节（编辑期 splice 残留）、附录 A 整块重复（`id="appendix-changelog"` ×2）、div 失衡 559/563、正文 90824 字符处即与 58b 备份分叉。对照 58b 备份确认为 round-58c 文档更新期引入的存量缺陷（英文说明书健康：严格 UTF-8、单附录、div 365/365）。处置：从 58b 干净备份重建中文说明书，精确重放 58c 两处修订（导语行 + 附录 A 58c 段——段文本从损坏文件的完整副本提取，两副本逐字节一致）并叠加本轮 59 修订；修复后严格 UTF-8、单附录、div 配平 365/365、59/58c/58b 段各一。教训已记：HTML 说明书编辑前后必须做严格 UTF-8 校验 + 锚点计数 + div 配平三检。
+
+## 验证
+
+- node --check 十个 JS 模块全过；Python 模型交叉验证（offset 单调、范围、峰值序列）通过。
+- verifier 三件套全绿：v1 29/29、v2 19/19、v3 37/37。
+- chess.html 重打包：24,159 行 / 1,485,430 字节（build-chess.py 字节确定性）。
+- 版本号不变（versionCode=10203，versionName="1.2.3"）；无新权限、无新网络出口、无新数据收集。
+
+---
+
+# Regalia v1.2.3 — round-58c 工作日志（2026-10-07 UTC+8）
+
+## 任务来源
+
+1. round-58b 实测反馈：王的走棋震屏仍然太弱，需要进一步增强以体现沉重感（58b 已重铸为"玉玺重印"签名，本参数级增强在其骨架上加深）。
+2. 完成后检查每一个文件的每一行代码，理解设计意图，以第一性原理评估优化空间；优先级（冲突时靠前优先）：bug 修复 > 健壮性巩固 > 功能完善 > 性能突破 > 冗余清理（含注释）> 简化代码。
+
+## 王之震屏增强（game-logic.js）
+
+在 58b「玉玺重印」骨架（预备抬升→重印→回弹→低频环形衰减）上按"沉重感"第一性原理加深，位移/时长/节奏三轴齐动：
+
+- **单次冲击更锐**：主重印位移 7.5px → **11px**（保持全套最锐单次冲击；方向分量 2.5→3）；预备抬升 -1.4px → **-2.2px**（抬得越高、砸得越重）。
+- **新增"二次接触闷响"**：K(0.35, 0, 3.2)——重物砸下后重新坐实的那一下（印章压稳玉帛），这是"沉重"与"响亮"的分水岭：响声来自单次冲击，重量感来自二次坐实。
+- **低频余韵拉长**：衰减峰间距拉宽（低频=沉重感知的听觉-触觉通感映射），总时长 560ms → **680ms**（SHAKE_DURATIONS.king），全套最长签名。
+- 同步更新签名汇总注释与各触发点注释；后保持"最复杂签名"定位，王保持"最锐单次冲击+最长余韵"定位——两者人格区分不变。
+- 纯 translate3d 合成器动画、零重排、方向感知（ux/uy 单位矢量）等既有架构不变。
+
+## 全量逐行审查（19 个 Java 文件 + 10 个 JS 模块 + index.html.tpl + build-chess.py）
+
+审查轨迹：verifier/runs/round58c-audit.md（append-only）。结论与处置：
+
+### bug 修复
+- **state-store.js — SET_CHESS960 SPID-0 静默映射 bug**：reducer 旧写法 `payload.spid || -1` 会把合法的 SPID 0（BBQNNRKR 起始位）静默映射为"未设置"。改为 `payload.spid != null ? payload.spid : -1`。当前无运行期影响（grep 全部 dispatch 调用点确认 SET_CHESS960 尚未被派发），属面向未来迁移的隐患清除。
+
+### 健壮性巩固
+- **state-store.js — ENTER_REVIEW / PGN_LOADED 载荷守卫**：补 `payload = payload || {};`（Phase-71 先例），裸 dispatch（无载荷）不再抛 TypeError。
+
+### 冗余清理（注释）
+- **eco-data.js 两处注释指向修正**：①"matches the convention in _loadEcoFromCache (line 51)"实为 _openEcoDB（warn 实际所在函数）；②删除过时的 "line 166" 行号引用（行号随编辑漂移，引用即谎言）。
+- **StabilizationHelper.java 一处过时注释**：节流行注释仍写 16ms，实际 round-44 D12 已提至 33ms（JS_CALLBACK_MIN_INTERVAL_MS）——注释补上修正说明。
+- **chess.src/README.license 三处 round-58b 存量误标**：58b 条目把 GPL v3 分类的 ai-bridge.js / ui.js / game-logic.js 误标为 (AGPL v3)（分类记录：AGPL v3 = chess960.js, eco-data.js, state-store.js；其余 GPL v3）——验证器 v3 H2a 红灯捕获，三处改回 (GPL v3)。
+
+### 审查后判定不动（证据在 audit 中）
+- catch (Throwable) 全库 186 处为既定防御约定（wake lock 等 S1181 敏感路径已刻意收窄为 catch (Exception)，文档化清楚），不做零星改造。
+- HapticManager 六棋子震动签名与震屏分属 haptic/visual 双通道，王的"四下节制重击"人格与本轮震屏增强方向一致，用户仅反馈震屏弱——震动通道不动，避免扩大变更面。
+- EngineConfigHelper E7（switch 表驱动化）、C9（批量 setoption）等设计债均有案可查，回归面大且无测试覆盖，维持不动。
+
+## 事故记录：并行 edit_file 竞态致三文件损坏（教训）
+
+本轮对 game-logic.js / eco-data.js / state-store.js 并行发起多个 edit_file 调用，产生竞态：game-logic.js 被交错写入（3586→6325 行，约 2700 行重复/交错），eco-data.js 出现断裂行，state-store.js 静默丢失 2/3 处编辑（last-writer-wins）。node --check 报语法错误暴露问题。处置：从 round-58b 备份 tar 提取原始文件（注意 tar 内路径带 `./` 前缀），用带 count==1 断言的 Python 补丁脚本恢复并重打全部编辑，diff 逐项核验。**铁律记入：严禁对同一文件并行发起多个编辑调用；改动后必须 diff 上一轮备份核验。**
+
+## 验证
+
+- 10 个 JS 模块 node --check 全部通过。
+- verifier 三件套：v1 29/29、v2 19/19、v3 37/37 全绿（H2a 修复后）。
+- chess.html 重打包：24,132 行 / 1,483,663 字节（58b：24,104 行 / 1,481,995 字节）。
+- 版本号不变（versionCode=10203，versionName="1.2.3"）；无新权限、无新网络出口、无新数据收集。
+
+---
+
+# Regalia v1.2.3 — round-58b 工作日志（2026-10-06 UTC+8）
+
+## 任务来源
+
+round-58 实测反馈：
+1. 复盘界面不点"分析全部"、逐个选中步骤时，分析有时卡死无反应；走法列表不即时更新分析结果；评估栏不实时显示引擎搜索信息。要求以前所未有的视角彻底排查，发觉以往多轮未发现的 bug，精确修复、根治。
+2. 震屏可适度增强；王走动时震屏软弱无力，不符合铿锵有力的角色定位。
+
+## 根因（单步"卡死"）——前所未查的三条独立缺陷链
+
+新视角：批量路径经 57/57c/58 三轮根治后，手动单步路径从未接受过同等级审查。逐行重审 requestEngineEval / onEngineProgress / onEngineEval / reviewGoTo 后发现六个 bug，其中三个相互耦合、共同构成"卡死"体感：
+
+- **Bug C（主根因）——同步重复派发风暴**：用户点了未分析步骤后，评估栏无任何生命迹象（见 Bug A），等几秒以为卡住，再点同一步 → reviewGoTo → requestEngineEval 再次派发 engineEvalDeep → Java stopAndWaitForBestmove 把**健康的在途搜索**停掉，其 bestmove 被 stop latch 吞掉（根本到不了 JS，永不缓存）→ 新搜索从深度 1 重新开始。每点一次就杀一次、丢一次成果，自我强化的停滞，体感与卡死无异。
+- **Bug A——评估栏实时信息门控缺失**：onEngineProgress 仅在 _batchLive（批量在途）时刷新复盘评估栏；手动单步分析只更新普通模式的 #eval-disp（复盘界面不存在该元素）。深度/nodes/nps 全程冻结，深度 22 搜索 5-60 秒里用户看到的是死屏。
+- **Bug D——45 秒安全定时器误杀与死不重试**：定时器按墙上时钟计，不看引擎活动。健康慢搜索（弱机/热降频 45 秒以上）会被误清 _evalLoading；而真正沉默（搜索被状态机缝隙吞掉）时只清状态、不重试，用户只能干等。
+- **Bug B——走法列表刷新缺失**：round-57b 的 _refreshReviewMoveListEvals 只挂进了批量推进路径；手动单步完成时（正常路径+两条 stale 缓存路径）都不刷新列表，分数要等无关的全量 render 才出现。
+- **Bug E——G1 检查误丢已完成成果**：点了未分析的 B（派发 gen N）→ 点了已缓存的 C（缓存快路径只递增 gen 不派发）→ B 的回调带着匹配的 reqFen 回来，却被 G1（gen 不等）丢弃——B 的 5-60 秒引擎成果被静默扔掉，下次访问 B 要重算，看起来就像"分析丢了/卡了"。
+- **Bug F——状态泄漏**：user-nav stale 路径（_reviewEvalRequestedStep!==reviewStep）返回前不清 _evalLoading/安全定时器（回调已通过全部身份校验＝最新搜索完成）；onEngineError/onEngineRestarting/onEngineReady/restartCurrentEngine 也不解除定时器——残留信号会污染新增的去重判据，并让定时器对已完成搜索误触发。
+
+## 实施内容
+
+- ai-bridge.js：
+  - onEngineProgress：手动单步在途且正查看被分析步时同步刷新复盘评估栏（_manualLive 门控）；每条进度 tick 重置手动看门狗（Bug D 进度感知）。
+  - 新增 _armEvalSafetyTimer(isReview) 共享看门狗：复盘 45s / 普通 30s，只计量**真沉默**；触发时清状态并在复盘模式下对同一记录 fen **自动重派一次**（_manualEvalAutoRetries 有界，仅在用户导航派发时清零，重试路径不清，杜绝死循环）。
+  - requestEngineEval：顶部新增**同局面在飞去重**（_evalLoading && 看门狗在役 && gen 相等 && 当前步 fen===_evalLastDispatchedFen → 仅重申"分析中"显示，不重复派发）；引擎重启窗口对未缓存步显示诚实 pending 态而非上一步残值。
+  - onEngineEval：抽出 _cacheStaleReviewEvalByFen 环缓存助手（fen 身份定位所属步、该步行棋方做白方视角换算）；G1 分支 fen 匹配时改为环缓存救援＋若仍在查看该步则镜像 reviewGoTo 缓存回填立即上屏（修复 Bug E）；正常路径与两条 stale 路径全部补 _refreshReviewMoveListEvals（Bug B）；user-nav stale 路径补清 _evalLoading+看门狗（Bug F）。
+  - _updateReviewEvalUI：progress 标志覆盖手动在途（_batchLive||_manualLive）。
+  - onEngineError/onEngineRestarting/onEngineReady/restartCurrentEngine：统一解除手动看门狗（Bug F）。
+- ui.js：reviewGoTo 删除冗余的 _resetEvalState()（requestEngineEval 各路径自管显示态；该调用把 _evalLoading 强置 true，会破坏去重所依赖的真实在飞信号）。
+- 震屏（game-logic.js）：
+  - 王全新签名"玉玺重印"（560ms）：短促抬升预备 → 一段 7.5px 加速直下的**重印**（专用 _SHAKE_STAMP_EASING 冲入感，全套最锐单次冲击，铿锵感来源）→ 深沉低频环形衰减；方向分量 ux*2.5。
+  - 全局适度增强：后 slam 6.5→7.5、砸地 5→6；车 5→6.2；马 2.6→3.2 段幅全面提升；象 2.2→2.7；兵微幅 +20%（仍为最弱）。逐段缓动、纯 translate3d 合成器动画不变。
+- 验证：node --check 三文件通过；v1/v2/v3 验证器 29/19/37 全绿（v2 F3d 结构哨兵通过环缓存助手形参沿用 _cbFenNav 命名保持有效）。
+- 构建：chess.html 重新打包（24,104 行 / 1,481,995 字节）；release APK 重签（v1+v2+v3，证书指纹 45bc6d36…d8bc，versionCode 10203 / versionName 1.2.3 不变）；引擎 SHA-256 8f7116d3…61b5 未变。
+
+# Regalia v1.2.3 — round-58 工作日志（2026-10-06 UTC+8）
+
+## 任务来源
+
+round-57c 实测反馈：
+1. 批量分析开局先停滞一段时间毫无反应 → Toast 报"引擎超时无响应，已跳过该步" → 随后引擎恢复流畅逐步完成。用户怀疑仍有 bug。
+2. 震屏效果仍偏弱，王不够铿锵有力；要求摆脱旧 CSS 设计限制，以 WAAPI 原生思路为每种棋子设计独特震屏风格。
+
+## 根因（批量分析开局停滞）——幽灵 STATE_EVAL 吞掉第一步 bestmove
+
+新视角排查结论：非 JS 定时器问题，是 Java 引擎状态机的虚报状态。
+
+- engineEvalDeepBeginBatch 在没有任何搜索运行时先把 currentState 设为 STATE_EVAL；
+- 第一步 engineEvalDeep 的 stopAndWaitForBestmove 看到 STATE_EVAL → 误判"有搜索在途" → 向空闲引擎发 stop → 等待 1 秒 latch 超时 → 按 round-52 T6 规则（state≠NONE ⇒ 有迟到 bestmove 在路上）武装 _discardingPonderBestmove；
+- 然而空闲引擎不会回 bestmove，标志悬空；引擎实际正常执行 go depth 22（进度实时上报），算完后的真实 bestmove 被该标志丢弃——round-52 注释预言的失败链逐字应验（"eval never completes until the JS safety timer fires"）；
+- 57c 进度感知定时器在最后一条进度后 60 秒触发 → 跳步 Toast → 恰好跳过一步；丢弃路径复位 STATE_NONE → 第二步起全部正常。
+
+该 bug 自 round-17 引入 beginBatch 起即存在，以前静默吞第一步，57c 的跳步 Toast 使其首次可见。
+
+## 实施内容
+
+- Java（StockfishNative.java）：
+  - engineEvalDeepBeginBatch 不再虚设 STATE_EVAL（engineEvalDeep 在真实发出 go depth 22 前一刻自设——正确时机）；endBatch 镜像修复：仅在 state≠NONE 或 ponder 在途时才执行 stopAndWaitForBestmove，避免对空闲引擎发 stop 误武装丢弃标志吞掉下一次合法 eval。
+- 震屏重新设计（game-logic.js，WAAPI 原生）：
+  - 废除三档 strength 模型（light/heavy/massive 及 _SHAKE_KEYFRAMES 静态表、SHAKE_*_DUR 常量），新增按棋子个性的运行时关键帧生成器 _shakeKeyframesFor(piece,ux,uy)；
+  - 方向感知：冲击力沿走棋方向（移动矢量单位化）施加——CSS 静态关键帧做不到的设计；
+  - 六签名：后=方向猛冲+垂直砸地+三段余震（620ms）；王=单段 4.5px 深沉垂直重击+两拍低频沉淀、无横向抖动（500ms，铿锵感来源）；车=方向冲击+急停回弹（280ms）；马=垂直弹簧二段跳（240ms）；象=轴向细锐一颤（160ms）；兵=高频小幅颤抖（220ms，新增）；兵马象此前无落地震屏，现全棋子覆盖；
+  - 缓动逐段挂载（保留 57c 的 CSS 语义修复）；旧 strength 字符串经 _SHAKE_ALIASES 兼容映射；
+  - 仍为纯 translate3d 合成器动画，零重排；.stabilized 互斥逻辑不变；reduced-motion 下 animateMove 提前返回，震屏不触发。
+
+## 验证
+
+- game-logic.js / ui.js / ai-bridge.js node --check 通过；chess.html 重建 23,876 行。
+- verifier v1 29/29、v2 19/19、v3 37/37 全部通过。
+- 版本号不变（versionCode=10203，versionName="1.2.3"）；无新权限、无新网络出口、无新数据收集。
+
+# Regalia v1.2.3 — round-57 工作日志（2026-10-06 UTC+8）
+
+## 任务来源
+
+用户实测反馈两项体验缺陷：
+1. 复盘「一键分析」运行中，折线图每步即时刷新，但步骤列表要等每 10 步一次的全量 render() 才更新（最多滞后 10 步）；评估栏（含 emoji）的引擎实时搜索深度/节点/速度在批量分析期间完全不更新。
+2. 走棋动画帧率流畅度需优化，避免任何卡顿。
+
+另含 round-57 前置修复（同一会话先行交付）：一键分析「空转 treadmill」根治——批处理在途期间每收到一条 onEngineProgress 即重置该步 60s 安全定时器（ai-bridge.js onEngineProgress 顶部），慢但健康的 depth-22 步不再被误杀跳过（此前跳过即丢结果、三连击计数因派发成功恒清零而永不触发，批处理以每步 60s 空转全程、零落盘，表现为「卡住一小时」）。
+
+## 实施内容
+
+- 复盘批量分析实时刷新（ui.js / ai-bridge.js）：
+  - ui.js 新增 _refreshReviewMoveListEvals()：仅重建 #reviewMovesList 的 innerHTML（行渲染单一事实源 _buildReviewMovesInnerHTML），保留滚动位置；_reviewAnalyzeAdvance 中原「每 10 步一次全量 render()」替换为每步「步骤列表轻量刷新 + _updateReviewEvalUI()」——每步分析完成即刻落列表（评估 delta + 好坏标签），评估栏同步刷新；全量 render() 的其余职责（活动步滚动定位、布局位移）在批处理期间本就不适用（reviewStep 不动）。
+  - ai-bridge.js onEngineProgress：实时深度分支的 _evalLoading 门扩展为 (_evalLoading||_batchLive)——_requestBatchEval 从不置 _evalLoading（批处理走独立 gen 机制），旧门使批量期间每秒多条的引擎进度全部丢弃；现批处理在途时 _sfDepth/_sfSeldepth/_lastProgressNodes/_lastProgressNps 实时更新并调 _updateReviewEvalUI()（原仅刷新普通模式 #eval-disp）。分数/emoji 仍来自 formatEval() 对当前查看步的缓存优先查询，仅 D/节点/速度滚动条反映实时搜索。
+  - ai-bridge.js _buildEvalHTML：进度显示条件由 _evalLoading 扩展为 (_evalLoading||opts.progress)；_updateReviewEvalUI 在批处理在途时传 progress:true。
+- 走棋动画流畅度（game-logic.js / index.html.tpl）：
+  - 移除 .move-anim 的 filter:drop-shadow(0 4px 5px rgba(0,0,0,0.45))：滤镜使被 WAAPI 动画的元素需要独立渲染面 + alpha 蒙版通道，且兵/马/后/王关键帧含 scale，在 Android WebView 上可触发描边字形逐帧重栅格化——中频卡顿的经典来源。等效投影改为 .move-anim.w-piece/.bk-piece 的第二层 text-shadow（0 3px 5px rgba(0,0,0,.45)，与字形同一通道一次栅格化）。视觉观感不变。
+  - 落地震屏由 CSS 类切换改为 Web Animations API（_SHAKE_KEYFRAMES，关键帧/缓动/时长 1:1 移植自已删除的 shakeLight/shakeHeavy/shakeMassive）：旧实现的 `void bwrap.offsetWidth` 类重启技巧在落子瞬间强制同步重排整个 64 格棋盘子树（含描边/阴影字形栅格），中端 WebView 上约 10–30ms 主线程顿挫；WAAPI 重启为合成器侧 cancel()+animate()，零样式重算、零布局。index.html.tpl 中 .bwrap.shake-* 规则、三个 @keyframes 及 reduced-motion 媒体查询内的失效选择器一并删除（reduced-motion 下 animateMove 提前返回，震屏本就不触发）。
+  - .stabilized（传感器稳定补偿）与震屏的互斥逻辑保持不变。
+
+## 同日补强（round-57c，用户实测反馈）
+
+- 震屏手感变弱：根因是 CSS 动画的缓动逐段作用于相邻关键帧，而 round-57b 的 WAAPI 移植把 easing 放在 options 级（作用于整体进度），曲线被拉平。修复：缓动改挂到每个关键帧（末帧除外），效果级 easing 保持 linear——与退役 CSS 的逐段语义完全一致。
+- 一键分析仍偶发无限静默：根因是「崩溃→恢复→派发→再崩溃」循环——每次恢复成功（onEngineReady）都把 _batchConsecutiveFail 清零，三连击终止永远攒不到 3；JS 心跳（120s）与 Java 恢复并行补刀，批处理无限泊死且零反馈。修复：
+  - 挂钟式无进展终止（_batchLastStepCompletedAt）：批处理启动与每步完成（回调落缓存/将杀/和棋/缓存命中跳步）都重置该时间戳；安全定时器触发时若距上次完成已超 180s，无论 strike 计数一律 _terminateBatchAfterRepeatedFailures。健康批量（每步 <60s 静默 + 有落盘）永远不会误触。
+  - 超时跳步从 console-only 改为即时 Toast（新增 i18n 键 batch_step_timeout_skip）；终止 Toast 改为明确文案（新增 batch_terminated_hint：进度保留、点击续析）。
+  - onEngineError 恢复预算耗尽分支：批处理仍活动时立即终止（不再等安全网磨完 3 次 strike）。
+
+## 验证
+
+- 10 个 JS 模块 node --check 全部通过；chess.html 重建 23,725 行。
+- verifier v1 29/29、v2 19/19、v3 37/37 全部通过（v1 vm harness 覆盖批处理状态机 D2/D3a/D3 链路）。
+- 版本号不变（versionCode=10203，versionName="1.2.3"）；无新权限、无新网络出口、无新数据收集。
+
 # Regalia v1.2.3 — round-56 工作日志（2026-10-05 UTC+8）
 
 ## 任务来源

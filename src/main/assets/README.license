@@ -1,3 +1,54 @@
+v1.2.3 round-60 (2026.10.7): chess.html rebuilt from the round-60 modules (24,173 lines).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - chess.html (AGPL v3 combined work): rebuilt byte-deterministically by
+    build-chess.py from the 10-module chess.src tree — carries the round-60
+    king-shake amplitude raise (ring first peak 7px), the F-1 TDZ root-fix
+    (_KING_PIECE_STYLE single source of truth in game-logic.js) and the F-5
+    comment correction (see chess.src/README.license).
+
+v1.2.3 round-59 (2026.10.7): chess.html rebuilt from the round-59 modules (24,159 lines).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - chess.html (AGPL v3 combined work): rebuilt byte-deterministically by
+    build-chess.py from the 10-module chess.src tree — carries the round-59
+    simulated-resonance shake tails (_ringKfs damped-harmonic generator, all
+    six pieces) and the ui-interactions stale-comment fix (see
+    chess.src/README.license).
+
+v1.2.3 round-58c (2026.10.7): chess.html rebuilt from the round-58c modules (24,132 lines).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - chess.html (AGPL v3 combined work): rebuilt byte-deterministically by
+    build-chess.py from the 10-module chess.src tree — carries the round-58c
+    king-shake enhancement, the state-store reducer hardening, and the
+    eco-data comment fixes (see chess.src/README.license).
+
+v1.2.3 round-58b (2026.10.6): chess.html rebuilt from the round-58b modules (24,104 lines).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - chess.html (AGPL v3 combined work): rebuilt byte-deterministically by
+    build-chess.py from the 10-module chess.src tree — carries the round-58b
+    manual single-step analysis root-cure (in-flight dedup, live eval-bar
+    ticker, progress-aware auto-retrying watchdog, completed-work rescue,
+    move-list immediate refresh, state-leak cleanup) and the king's
+    "imperial seal stamp" shake with the global amplitude boost.
+
+v1.2.3 round-58 (2026.10.6): chess.html rebuilt from the round-58 modules (23,876 lines).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - chess.html (AGPL v3 combined work): rebuilt byte-deterministically by
+    build-chess.py from the 10-module chess.src tree — carries the round-58
+    per-piece direction-aware WAAPI board-shake redesign (six distinct
+    personalities: queen slam + ground-pound aftershocks, king's deep
+    vertical resonance, rook charge-jolt, knight double-hop, bishop axial
+    zing, pawn tremble; per-keyframe easing; SHAKE_DURATIONS table) plus the
+    round-58 worklog/manual wording.
+v1.2.3 round-57 (2026.10.6): chess.html rebuilt from the round-57 modules (23,725 lines).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - chess.html (AGPL v3 combined work): rebuilt byte-deterministically by
+    build-chess.py from the 10-module chess.src tree — carries the round-57
+    analyze-all liveness fixes (progress-aware safety timer, per-step
+    move-list/eval-bar refresh, live depth ticker) and the animation
+    frame-rate fixes (drop-shadow filter removal, WAAPI board shake).
+  - stats.html: No changes.
+  - chess.src/README.license: round-57 entry (per-module detail).
+
 v1.2.3 round-56 (2026.10.5): first-principles review implementation — stats.html hardening + chess.html rebuild.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - stats.html (GPL v3): CSP gains form-action 'none' + object-src 'none'

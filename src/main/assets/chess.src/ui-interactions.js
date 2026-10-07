@@ -378,10 +378,9 @@ _updateEvalDisplay();
 // browser can paint the post-move UI before the engine starts computing.
 // v1.0.8 PHASE 26: ANIMATION_DEFER_MS=600 matches the v1.0.8 PHASE 26 animation
 //   system. The two longest piece animations are King (560ms) and Queen (520ms).
-//   King triggers heavy shake (SHAKE_HEAVY_DUR=450ms); Queen triggers massive
-//   shake (SHAKE_MASSIVE_DUR=620ms). The massive shake extends beyond the queen
-//   animation, so we use 600ms (queen 520 + 80 buffer) to let the shake settle
-//   before the deferred callback fires. For king, 560+40=600 also works.
+//   Per-piece landing shakes (SHAKE_DURATIONS in game-logic.js, round-58) may
+//   outlive this defer (king 680ms) — harmless: the shake plays on .bwrap and
+//   a render() here is throttled by the animationInProgress guard anyway.
 //   If this fires too early, updateAfterMove() calls render() which gets
 //   throttled by the animationInProgress guard, so it is safe — but increasing
 //   the delay avoids the unnecessary throttle cycle.

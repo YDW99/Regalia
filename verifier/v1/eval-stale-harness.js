@@ -48,6 +48,17 @@ for (const m of MODULES) {
 
 // ---- browser stubs ------------------------------------------------------
 const androidCalls = { engineEval: [], engineEvalDeep: [], stopPonder: 0 };
+// round-60 (V1-30): capture console.warn output during bundle evaluation and
+// bootstrap, so the TDZ class of cross-module const references (F-1:
+// "Cannot access '_KING_PIECE_STYLE' before initialization" printed on EVERY
+// run for 7+ rounds, never triaged) becomes a hard failure instead of noise.
+const warnLog = [];
+const consoleProxy = {
+  log: (...a) => console.log(...a),
+  info: (...a) => console.info(...a),
+  error: (...a) => console.error(...a),
+  warn: (...a) => { warnLog.push(a.map(String).join(' ')); console.warn(...a); },
+};
 const elStub = () => ({ style: {}, classList: { add(){}, remove(){}, toggle(){}, contains(){return false} },
   addEventListener(){}, removeEventListener(){}, appendChild(){}, setAttribute(){}, getAttribute(){return null},
   querySelector(){return null}, querySelectorAll(){return []}, innerHTML: '', textContent: '', title: '',
@@ -55,7 +66,7 @@ const elStub = () => ({ style: {}, classList: { add(){}, remove(){}, toggle(){},
   dataset: {}, disabled: false, value: '', checked: false });
 
 const sandbox = {
-  console, setTimeout, clearTimeout, setInterval, clearInterval, queueMicrotask,
+  console: consoleProxy, setTimeout, clearTimeout, setInterval, clearInterval, queueMicrotask,
   Date, Math, JSON, Number, String, Array, Object, Map, Set, Promise, RegExp, Error, Symbol,
   parseInt, parseFloat, isNaN, isFinite, encodeURIComponent, decodeURIComponent,
   Intl, performance: { now: () => Date.now() },
@@ -275,6 +286,15 @@ function flushTimers() {
   //   have passed D3.
   ok(run(`_reviewAnalyzeAllActive`) === false, 'D3a: batch finished (active flag cleared)');
   ok(run(`_reviewEvalCache.size`) === 4, 'D3: batch cached all 4 steps (got ' + run(`_reviewEvalCache.size`) + ')');
+
+  // round-60 (V1-30): no TDZ ReferenceError may have been swallowed during
+  //   bundle evaluation or bootstrap. F-1's warn ("Cannot access
+  //   '_KING_PIECE_STYLE' before initialization") lived here as untriaged
+  //   noise since round-52; any future cross-module const reference from a
+  //   top-level call re-arms this sentinel.
+  ok(!warnLog.some(w => w.includes('before initialization')),
+     'V1-30: no TDZ ReferenceError swallowed during bundle eval/bootstrap' +
+     (warnLog.length ? ' (warns seen: ' + warnLog.length + ')' : ''));
 
   console.log('\n===== RESULT: ' + pass + ' passed, ' + fail + ' failed =====');
   process.exit(fail === 0 ? 0 : 1);

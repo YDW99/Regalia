@@ -280,6 +280,13 @@ const _i18n={
 'js_error':{zh:'JS错误',en:'JS error'},
 'promise_error':{zh:'Promise错误',en:'Promise error'},
 'engine_unavailable_hint':{zh:'引擎不可用',en:'Engine unavailable'},
+// v1.2.3 round-57c: visible feedback when the per-step safety timer skips a
+//   silent step (was console-only — the user saw nothing for minutes).
+'batch_step_timeout_skip':{zh:'引擎超时无响应，已跳过该步',en:'Engine timed out — step skipped'},
+// v1.2.3 round-57c: batch termination toast — clearer than the bare
+//   engine_unavailable_hint: tells the user cached progress survives and a
+//   tap on Analyze resumes from the breakpoint.
+'batch_terminated_hint':{zh:'引擎持续无响应，批量分析已停止；已完成进度已保留，重新点击即可继续',en:'Engine unresponsive — batch stopped. Progress kept; tap Analyze All to resume.'},
 'ai_timeout':{zh:'AI思考超时，请重试',en:'AI thinking timeout, please retry'},
 'tb_querying':{zh:'查询残局库...',en:'Querying endgame tablebase...'},
 'fen_copy_prefix':{zh:'FEN已复制: ',en:'FEN copied: '},
@@ -616,6 +623,18 @@ const LBL_STROKE_DARK='rgba(30,15,0,0.85)';      // Dark stroke for dark-square 
 const SYM={white:{king:'♔\uFE0E',queen:'♕\uFE0E',rook:'♖\uFE0E',bishop:'♗\uFE0E',knight:'♘\uFE0E',pawn:'♙\uFE0E'},black:{king:'♚\uFE0E',queen:'♛\uFE0E',rook:'♜\uFE0E',bishop:'♝\uFE0E',knight:'♞\uFE0E',pawn:'♟\uFE0E'}};
 const PN={king:'王',queen:'后',rook:'车',bishop:'象',knight:'马',pawn:'兵'};
 const PN_EN={king:'K',queen:'Q',rook:'R',bishop:'B',knight:'N',pawn:'P'};
+// _KING_PIECE_STYLE: shared piece-styling constants for _hdrKingIconHTML
+// (ui.js) and _loadingKingIconHTML (ai-bridge.js). Extracted to avoid
+// duplicating the color/stroke/shadow values across two functions.
+// round-60 (F-1): moved here from ui.js — game-logic.js is the FIRST module
+// in the bundle, so the const is initialized before any consumer runs;
+// ai-bridge.js's top-level _showLoadingOverlay() previously hit the TDZ
+// (typeof does NOT guard a later const — it throws ReferenceError) and the
+// dedup intent was silently void (always the inline fallback copy).
+const _KING_PIECE_STYLE={
+  white:{color:'#E8E8F0',stroke:'rgba(30,15,0,.85)',shadow:'rgba(30,15,0,.55)',sym:'\u2654'},
+  black:{color:'#1A1A2E',stroke:'rgba(255,230,150,.85)',shadow:'rgba(255,230,150,.55)',sym:'\u265A'}
+};
 function pieceName(type){return _lang==='en'?(PN_EN[type]||type):(PN[type]||type);}
 function _principlesHTML(){
 const zh='<div class="tip-item"><b>中心控制</b>：尽早控制中心格(d4,d5,e4,e5)，这是棋盘各方向的交叉点。马在中心控制8格，在边角仅2-4格。控制中心能最大化子力效能，限制对手发展，迫其在局促边翼行棋</div><div class="tip-item"><b>快速出子</b>：尽快出动轻子（马、象）投入战斗，避免重复走同一子或过早出后。让全军协同作战，而非让个别棋子成为"孤狼"</div><div class="tip-item"><b>王的安全</b>：不要轻率推进王城兵（f,g,h兵），兵墙是王翼的坚固堡垒，推进会破坏兵链暴露致命斜线和开放线。尽早易位将王藏于兵盾之后</div><div class="tip-item"><b>兵链完整</b>：孤兵、叠兵和落后兵机动性受限且极易成为攻击靶子。维持相互保护的兵链是确保阵地稳固的关键，正如卡斯帕罗夫所言："兵的结构决定局面的长期优劣"</div><div class="tip-item"><b>空间优势</b>：用稳健的兵链向前推进挤压对手生存空间，使其子力互相干涉、协调困难，从而为你创造致命的战术漏洞</div><div class="tip-item"><b>通路兵</b>：制造并推进通路兵（尤其是连接通路兵），它是中残局的终极武器。通路兵能牵制对手大量子力防守，逼近底线升变将直接决定胜负</div><div class="tip-item"><b>子力协调</b>：单个棋子无论多强都无法独自赢棋。优秀的协调意味着子力间相互支援、合力攻击同一目标，并避免"孤狼综合征"</div><div class="tip-item"><b>开放线</b>：一旦出现开放线或半开放线，迅速用车（或双车重叠）占领，这是重子入侵敌方底线的最有效途径</div><div class="tip-item"><b>侧翼突破</b>：中心封闭时，沿兵链指向的侧翼发起兵突破打开战线。例如：白方兵链d4-e5指向王翼应在王翼突破；黑方d5-e6指向后翼应在后翼突破</div><div class="tip-item"><b>兑换原则</b>："优势时简化，劣势时复杂"。占优时主动兑换导入胜势残局；劣势时保留复杂以寻找战术反击（如长将、陷阱）的机会</div>';
@@ -829,8 +848,8 @@ function inB(r,c){return r>=0&&r<8&&c>=0&&c<8}
 //
 // Implementation:
 //   - Web Animations API (el.animate()) for GPU-composited 120fps motion
-//   - All keyframes use translate3d + scale + optional rotate/drop-shadow
-//   - Board shake (.bwrap.shake-light/.shake-heavy) for landing impact
+//   - All keyframes use translate3d + scale + optional rotate (transform-only)
+//   - Board shake (WAAPI on .bwrap, round-57) for landing impact
 //   - prefers-reduced-motion fully respected (skip animation, keep sound)
 //   - Chess960 castling: king + rook animate concurrently (kingStayedPut
 //     skips king overlay when king is already on its castling target)
@@ -850,13 +869,9 @@ const ANIM_EASINGS={
   queen:'cubic-bezier(0.5,0,0.1,1)',
   king:'cubic-bezier(0.5,0,0.05,1)'
 };
-// Board shake durations (used by _triggerBoardShake)
-// v1.0.8 PHASE 26: queen shake is now 'massive' — heavier than king's 'heavy',
-//   which is heavier than rook's 'light'. This makes the queen landing feel
-//   "铸锩有声、掷地有声" (resounding/ground-shaking) per the user's request.
-const SHAKE_LIGHT_DUR=280;   // rook landing — light tremor
-const SHAKE_HEAVY_DUR=450;   // king landing — heavy tremor
-const SHAKE_MASSIVE_DUR=620; // queen landing — massive tremor (heaviest)
+// v1.2.3 round-58: per-piece shake durations live in SHAKE_DURATIONS below
+//   (the old SHAKE_LIGHT/HEAVY/MASSIVE_DUR trio is retired with the CSS
+//   strength model — see the per-piece design comment at _shakeKeyframesFor).
 
 let _cachedBwrap=null;
 let animationInProgress=false;
@@ -868,36 +883,194 @@ let _animGen=0;
 // after render() rebuilds the .bwrap DOM (e.g., on cell-size recalculation).
 let _activeAnimEls=[];
 
-// Trigger board shake. strength: 'light' (rook), 'heavy' (king), or 'massive' (queen).
-// Uses void offsetWidth trick to restart CSS animation on rapid successive calls.
-// v1.0.8 PHASE 26: 'massive' is the heaviest — reserved for queen landing.
-// v1.0.8 PHASE 26 (anti-shake coexistence): StabilizationHelper applies a
-//   CSS transform to .bwrap.stabilized for sensor-based translation compensation.
-//   If we add .shake-* while .stabilized is active, the shake animation's
-//   transform overrides the stabilization transform, causing a visual jump.
-//   Fix: temporarily remove .stabilized for the shake duration, then restore.
-//   The StabilizationHelper re-applies .stabilized on the next sensor event
-//   (within ~20ms), so the gap is imperceptible.
-function _triggerBoardShake(strength){
+// Board landing feedback. v1.2.3 round-58: PER-PIECE WAAPI signatures.
+//   The CSS-era design had three fixed strengths (light/heavy/massive) with
+//   axis-fixed oscillation. WAAPI builds keyframes at runtime, so each piece
+//   now gets its own signature — and the impulse is DIRECTION-AWARE: the
+//   board is knocked along the move's travel direction (dx,dy of the mover),
+//   which the static CSS keyframes could never do.
+//   Design language (per piece personality):
+//     queen  · 掷地有声 — directional slam, then a vertical ground-pound with
+//              three decaying aftershocks. The most elaborate of the set.
+//     king   · 玉玺重印 (round-58b redesign, round-58c intensified) — an
+//              imperial seal stamping a decree: a short anticipation LIFT,
+//              then ONE hard accelerating downward STAMP (11px — the sharpest
+//              single impact in the set, the "铿锵"), a second smaller contact
+//              THUD as the weight re-settles, then a slow, deep, low-frequency
+//              decay. The heaviest and longest signature (680ms). Gravitas
+//              with a metallic strike, not a soft thud.
+//     rook   · 生猛 — a fast directional charge-jolt with a hard stop and a
+//              single snap-back. Short and brutal.
+//     knight · 灵活 — the L-jump lands on a spring: a quick vertical bounce
+//              with a second smaller hop.
+//     bishop · 机敏 — one thin, sharp zing along the diagonal axis. Barely
+//              there, like a blade.
+//     pawn   · 瑟瑟发抖 — a tiny high-frequency tremble after touchdown.
+//   All keyframes are pure translate3d (compositor-side, zero reflow), with
+//   per-interval easing (CSS keyframe semantics — round-57c).
+//   v1.2.3 round-58b: amplitudes moderately boosted across the board
+//   (~+20-30%) after user feedback that the set felt weak; the king's
+//   signature was rebuilt from scratch (see above).
+//   v1.2.3 round-59: 谐振仿真 (resonance simulation). A real board struck by
+//   a landing piece does not stop after hand-placed thumps — it RINGS. The
+//   board is a damped harmonic oscillator:
+//       y(τ) = A · e^(−d·τ) · cos(2πf·τ)     (τ = seconds since ring onset)
+//   Each piece keeps its signature STRIKE phase (personality: the queen's
+//   directional slam, the king's anticipation-lift + stamp), then the
+//   aftershock tail is GENERATED from this model by _ringKfs below —
+//   quarter-period sampling (4 keyframes per cycle) keeps the sine faithful
+//   under per-interval easing. Per-piece physics:
+//     - natural frequency f: heavier pieces excite the board lower & slower
+//       (king 6.5Hz → pawn 22Hz — heavy things ring deep, light things buzz);
+//     - damping d: brutal stops die fast (rook 20/s), springs ring on
+//       (knight 11/s, underdamped by nature).
+//   Validation: the hand-tuned round-58 tails already sat almost exactly ON
+//   this curve (king: 3.2/1.9/1.1/0.6 hand-tuned vs 3.5/2.2/1.4/0.9 model) —
+//   the model makes the decay exact and the period regular, which is what
+//   reads as "natural" to the eye. Durations (SHAKE_DURATIONS) unchanged.
+const _SHAKE_EASING='cubic-bezier(.36,.07,.19,.97)';
+// Impact easing for the king's stamp segment: accelerate INTO the hit
+//   (ease-in character) so the landing reads as a strike, not a drift.
+const _SHAKE_STAMP_EASING='cubic-bezier(.55,.06,.35,1)';
+// Per-piece durations (ms). Piece overlay ANIM_DURATIONS govern flight;
+//   these govern ONLY the landing shake.
+const SHAKE_DURATIONS={pawn:220,knight:240,bishop:160,rook:280,queen:620,king:680};
+// v1.2.3 round-59: legacy strength-name alias retained for any stale caller
+//   ('light'→pawn-class tremor, 'heavy'→king, 'massive'→queen).
+const _SHAKE_ALIASES={light:'pawn',heavy:'king',massive:'queen'};
+
+// v1.2.3 round-59: damped-harmonic ring tail generator (谐振仿真).
+//   Emits quarter-period samples of y(τ)=A0·e^(−d·τ)·cos(2πf·τ) from onset
+//   offset t0 until the amplitude dies below perception (0.08px, checked at
+//   PEAKS only — zero crossings are legitimately ~0) or the animation window
+//   ends, then closes at rest (1, 0). A0 carries the SIGN of the first peak
+//   (e.g. the king's recoil starts the ring negative). (ax,ay) is the
+//   oscillation axis: vertical ring (0,1), or directional (ux,uy).
+//   τ advances by a quarter period per sample, so cos(2πfτ)=cos(i·π/2).
+function _ringKfs(K,t0,dur,A0,f,d,ax,ay,E){
+  const kfs=[];
+  const q=1000/(4*f)/dur;            // quarter-period, normalized offsets
+  const T=1/(4*f);                   // quarter-period, seconds
+  for(let i=0;i<48;i++){             // hard cap — far past any real ring
+    const t=t0+i*q;
+    if(t>0.995)break;
+    const amp=A0*Math.exp(-d*T*i)*Math.cos(Math.PI/2*i);
+    if(i>0&&i%2===0&&Math.abs(amp)<0.08)break; // peak died below perception
+    kfs.push(K(t,ax*amp,ay*amp,E));
+  }
+  kfs.push(K(1,0,0));
+  return kfs;
+}
+
+// Build the keyframe array for a piece's landing shake.
+//   ux/uy: unit vector of the mover's travel direction (0 when unknown).
+//   Returns WAAPI keyframes: {transform, offset, easing?}.
+//   Structure: signature STRIKE keyframes (personality) + _ringKfs tail
+//   (physics, round-59).
+function _shakeKeyframesFor(piece,ux,uy){
+  const E=_SHAKE_EASING;
+  const K=(t,x,y,e)=>{const kf={transform:'translate3d('+x.toFixed(2)+'px,'+y.toFixed(2)+'px,0)',offset:t};if(e)kf.easing=e;return kf;};
+  const dur=SHAKE_DURATIONS[piece]||220;
+  switch(piece){
+    case 'queen':{
+      // 掷地有声 — strike: directional slam (1.4× along travel) →
+      //   counter-swing, then the vertical ground-pound IS the ring's first
+      //   peak: 8Hz, slow decay (heavy), vertical with a directional lean.
+      const sx=ux*7.5, sy=uy*7.5;
+      return [
+        K(0,0,0,E), K(0.07,sx,sy,E), K(0.16,-sx*0.5,-sy*0.5,E),
+        ..._ringKfs(K,0.26,dur,6,8,8,ux*0.22,1,E)
+      ];
+    }
+    case 'king':{
+      // 玉玺重印 — strike: short anticipation LIFT (the seal rises), then ONE
+      //   hard stamp straight down, accelerating INTO the hit (11px — the
+      //   sharpest single displacement of the set, the 铿锵). The recoil is
+      //   the ring's first peak: 6.5Hz with the slowest decay of the set —
+      //   heavy things ring deep and long. Pure vertical; no lateral skitter.
+      //   (round-60: ring first peak −5.5→−7px — user feedback: the king's
+      //   shake amplitude still reads too light against the queen's 6px
+      //   ground-pound; the stamp keeps 11px, the RING now carries the
+      //   gravitas. Model output: −7/+4.42/−2.79/+1.76/−1.11/+0.70/…)
+      const sx=ux*3;
+      return [
+        K(0,0,0,E),
+        K(0.05,-sx*0.35,-2.2,E),              // anticipation — the seal rises
+        K(0.15,sx,11,_SHAKE_STAMP_EASING),    // THE STAMP — 铿锵
+        ..._ringKfs(K,0.24,dur,-7,6.5,6,0,1,E)
+      ];
+    }
+    case 'rook':{
+      // 生猛 — strike: ONE hard directional charge-jolt. The ring is fast
+      //   (12Hz) and heavily damped (20/s) — a brutal stop that snaps back
+      //   along the travel axis and dies quickly.
+      return [K(0,0,0,E),
+        ..._ringKfs(K,0.09,dur,6.2,12,20,ux,uy,E)];
+    }
+    case 'knight':{
+      // 灵活 — the L-jump lands on a spring: vertical-dominant bounce with a
+      //   whisper of travel direction (0.625·ux ≈ the old 2px at 3.2px peak).
+      //   11Hz with light damping — springs are underdamped, the ring carries.
+      return [K(0,0,0,E),
+        ..._ringKfs(K,0.12,dur,3.2,11,11,ux*0.625,1,E)];
+    }
+    case 'bishop':{
+      // 机敏 — one thin sharp zing along the travel (diagonal) axis, then a
+      //   fast high ring (16Hz) that dies almost immediately (24/s): a
+      //   blade's "ting".
+      return [K(0,0,0,E),
+        ..._ringKfs(K,0.18,dur,2.7,16,24,ux,uy,E)];
+    }
+    case 'pawn':
+    default:{
+      // 瑟瑟发抖 — a tiny high-frequency tremble (22Hz), decaying fast.
+      //   Still the weakest of the set; now a true harmonic tremor along the
+      //   original diagonal axis (1.1,−0.7 normalized → 0.843,−0.537; |A|=1.304)
+      //   instead of hand-placed jitter (round-59).
+      return [K(0,0,0,E),
+        ..._ringKfs(K,0.12,dur,1.304,22,18,0.843,-0.537,E)];
+    }
+  }
+}
+
+// In-flight shake Animation — cancelled (not reflow-restarted) on re-trigger.
+let _shakeAnim=null;
+// _triggerBoardShake(pieceOrStrength, dx, dy): fire the landing shake for a
+//   piece. dx/dy are the mover's total pixel travel (board coords, pre-flip
+//   NOT required — callers pass display-space deltas); the shake impulse is
+//   normalized from their direction. Legacy strength strings map via
+//   _SHAKE_ALIASES.
+function _triggerBoardShake(piece,dx,dy){
   try{
     const bwrap=_cachedBwrap||(_cachedBwrap=document.querySelector('.bwrap'));
     if(!bwrap||!bwrap.parentNode){_cachedBwrap=null;return;}
-    const cls=strength==='massive'?'shake-massive':(strength==='heavy'?'shake-heavy':'shake-light');
-    // v1.0.8 PHASE 26: temporarily suspend stabilization so shake isn't fought
-    const wasStabilized=bwrap.classList.contains('stabilized');
-    if(wasStabilized)bwrap.classList.remove('stabilized');
-    bwrap.classList.remove(cls);
-    void bwrap.offsetWidth; // force reflow to restart animation
-    bwrap.classList.add(cls);
-    const baseDur=strength==='massive'?SHAKE_MASSIVE_DUR:(strength==='heavy'?SHAKE_HEAVY_DUR:SHAKE_LIGHT_DUR);
-    const dur=baseDur+30;
-    setTimeout(()=>{
-      try{bwrap.classList.remove(cls);}catch(e){console.warn('[GameLogic]',e?.message?e.message:e);}
-      // Restoration of .stabilized happens naturally on the next sensor event;
-      // we don't force-restore here to avoid conflicting with a mid-flight
-      // sensor sample that may have a different translation.
-    },dur);
+    // Suspend stabilization so the shake transform isn't fought (the
+    //   StabilizationHelper re-applies .stabilized on the next sensor event,
+    //   ~20ms — imperceptible).
+    if(bwrap.classList.contains('stabilized'))bwrap.classList.remove('stabilized');
+    if(_shakeAnim){try{_shakeAnim.cancel();}catch(e){console.warn('[GameLogic]',e?.message?e.message:e);}_shakeAnim=null;}
+    const kind=_resolveShakeKind(piece);
+    // Unit travel direction (display space). Zero-length → no directional
+    //   component (pure vertical signatures still work).
+    let ux=0,uy=0;
+    if(typeof dx==='number'&&typeof dy==='number'){
+      const len=Math.hypot(dx,dy);
+      if(len>0.001){ux=dx/len;uy=dy/len;}
+    }
+    const kfs=_shakeKeyframesFor(kind,ux,uy);
+    const dur=SHAKE_DURATIONS[kind]||220;
+    const a=bwrap.animate(kfs,{duration:dur});
+    _shakeAnim=a;
+    // Identity-guarded cleanup: a cancel() from a NEWER shake fires the old
+    //   animation's oncancel (not onfinish), so onfinish only runs for a
+    //   naturally-completed shake — safe to release the reference then.
+    a.onfinish=function(){if(_shakeAnim===a)_shakeAnim=null;};
   }catch(e){console.warn('[GameLogic]',e?.message?e.message:e);}
+}
+function _resolveShakeKind(piece){
+  if(typeof piece==='string'&&SHAKE_DURATIONS[piece]!=null)return piece;
+  if(typeof piece==='string'&&_SHAKE_ALIASES[piece])return _SHAKE_ALIASES[piece];
+  return 'pawn';
 }
 
 // Personified piece animations. Each returns a Promise resolving on finish.
@@ -944,7 +1117,9 @@ function _animPawn(el,dx,dy,dur,easing){
       kfs.push({transform:'translate3d('+x.toFixed(2)+'px,'+y.toFixed(2)+'px,0) scale('+scale.toFixed(3)+')'});
     }
     const a=el.animate(kfs,{duration:dur,easing:easing,fill:'forwards'});
-    a.onfinish=function(){resolve();};
+    // v1.2.3 round-58: the pawn lands with a tiny high-frequency tremble
+    //   (瑟瑟发抖) — its own shake signature, direction-aware via dx/dy.
+    a.onfinish=function(){_triggerBoardShake('pawn',dx,dy);resolve();};
   });
 }
 
@@ -952,8 +1127,9 @@ function _animPawn(el,dx,dy,dur,easing){
 // v1.0.8 PHASE 22 (优化): keyframe 数量从 24 减至 18 以降低 GC 压力，
 //   提升流畅度。运动公式不变（抛物线弧 + L 形偏向 + 旋转）。
 // v1.0.8 PHASE 23 (smoothness): removed per-frame `filter: drop-shadow`
-//   from keyframes — the static drop-shadow on `.move-anim` (CSS) is
-//   composited once and cached, so each frame is a pure transform update.
+//   from keyframes — the overlay's shadow is a static text-shadow layer on
+//   .move-anim (CSS, round-57; was a drop-shadow filter before that), so
+//   each frame is a pure transform update.
 function _animKnight(el,dx,dy,dur,easing){
   return new Promise(resolve=>{
     const steps=18;
@@ -971,14 +1147,17 @@ function _animKnight(el,dx,dy,dur,easing){
       kfs.push({transform:'translate3d('+x+'px,'+y+'px,0) scale('+scale+') rotate('+rot+'deg)'});
     }
     const a=el.animate(kfs,{duration:dur,easing:easing,fill:'forwards'});
-    a.onfinish=function(){resolve();};
+    // v1.2.3 round-58: the knight's L-jump lands on a spring — quick
+    //   vertical bounce with a second hop.
+    a.onfinish=function(){_triggerBoardShake('knight',dx,dy);resolve();};
   });
 }
 
 // 象 · 机敏：极快斜线 (sharp: quick diagonal)
 // v1.0.8 PHASE 23 (smoothness): removed per-frame `filter: drop-shadow`
-//   (golden glow) from keyframes — static drop-shadow on `.move-anim` is
-//   cached by the compositor. The bishop's signature "golden trail" is
+//   (golden glow) from keyframes — the overlay's shadow is a static
+//   text-shadow layer on `.move-anim` (round-57; was a drop-shadow filter).
+//   The bishop's signature "golden trail" is
 //   now conveyed by the scale curve alone, which is sufficient for the
 //   short 270ms duration.
 function _animBishop(el,dx,dy,dur,easing){
@@ -991,7 +1170,8 @@ function _animBishop(el,dx,dy,dur,easing){
       {transform:'translate3d('+dx+'px,'+dy+'px,0) scale(1)',offset:1}
     ];
     const a=el.animate(kfs,{duration:dur,easing:easing,fill:'forwards'});
-    a.onfinish=function(){resolve();};
+    // v1.2.3 round-58: one thin sharp zing along the diagonal axis.
+    a.onfinish=function(){_triggerBoardShake('bishop',dx,dy);resolve();};
   });
 }
 
@@ -1009,7 +1189,7 @@ function _animRook(el,dx,dy,dur,easing){
       {transform:'translate3d('+dx+'px,'+dy+'px,0) scale(1)',offset:1}
     ];
     const a=el.animate(kfs,{duration:dur,easing:easing,fill:'forwards'});
-    a.onfinish=function(){_triggerBoardShake('light');resolve();};
+    a.onfinish=function(){_triggerBoardShake('rook',dx,dy);resolve();};
   });
 }
 
@@ -1018,7 +1198,8 @@ function _animRook(el,dx,dy,dur,easing){
 //   than the rook. Design: long duration (520ms), large scale swell mid-flight
 //   (queen is the most powerful piece — she carries weight), a dramatic
 //   pre-landing compression (t>0.85: scale dips to 0.92 then snaps to 1.18 on
-//   impact), and a MASSIVE board shake on landing (heavier than king's heavy).
+//   impact), and the MASSIVE-class board shake on landing (the most elaborate
+//   signature — directional slam + ground-pound + aftershocks).
 //   The pre-landing dip + impact snap creates the "铿锵" (clanking/resounding)
 //   feel. All keyframes mutate ONLY transform to sustain high fps.
 function _animQueen(el,dx,dy,dur,easing){
@@ -1047,17 +1228,19 @@ function _animQueen(el,dx,dy,dur,easing){
       kfs.push({transform:'translate3d('+x.toFixed(2)+'px,'+y.toFixed(2)+'px,0) scale('+scale.toFixed(3)+')'});
     }
     const a=el.animate(kfs,{duration:dur,easing:easing,fill:'forwards'});
-    // v1.0.8 PHASE 26: queen landing triggers MASSIVE shake (heaviest, > king's heavy)
-    a.onfinish=function(){_triggerBoardShake('massive');resolve();};
+    // v1.0.8 PHASE 26: queen landing triggers the MASSIVE-class shake
+    //   (most elaborate signature; the king's stamp is the sharpest single hit)
+    a.onfinish=function(){_triggerBoardShake('queen',dx,dy);resolve();};
   });
 }
 
 // 王 · 威严庄重：比车更沉稳，每步微沉，落地重击 (solemn: heavier than rook)
 // v1.0.8 PHASE 26 (optimization): The king now "威严庄重" — more solemn/steady
-//   than the rook. Design: longest duration (560ms), four measured "steps"
-//   (the king does not glide — he plants each foot deliberately), a very subtle
-//   scale breath (1.0 → 1.02 → 1.0) to convey regal gravitas, and a HEAVY shake
-//   on landing (lighter than queen's massive, but heavier than rook's light).
+//   than the rook. Design: longest flight duration (560ms), four measured
+//   "steps" (the king does not glide — he plants each foot deliberately), a
+//   very subtle scale breath (1.0 → 1.02 → 1.0) to convey regal gravitas, and
+//   the 玉玺重印 shake on landing (round-58c: the sharpest single stamp and
+//   longest ring-out of the set — see _shakeKeyframesFor).
 //   The step-wise y-wobble is retained but smoothed. All keyframes mutate ONLY
 //   transform to sustain high fps.
 function _animKing(el,dx,dy,dur,easing){
@@ -1081,7 +1264,7 @@ function _animKing(el,dx,dy,dur,easing){
       kfs.push({transform:'translate3d('+x.toFixed(2)+'px,'+y.toFixed(2)+'px,0) scale('+scale.toFixed(3)+')'});
     }
     const a=el.animate(kfs,{duration:dur,easing:easing,fill:'forwards'});
-    a.onfinish=function(){_triggerBoardShake('heavy');resolve();};
+    a.onfinish=function(){_triggerBoardShake('king',dx,dy);resolve();};
   });
 }
 
@@ -3455,4 +3638,4 @@ function _prependBlackToMovePlaceholder(){
 //   exported there). Exporting symbols not declared in this module is a
 //   link-time SyntaxError in source-module mode; bundled mode strips this
 //   line so production was unaffected, but the list was misleading.
-export {PV,OPP_COLOR,SQ_LIGHT,SQ_DARK,SQ_SEL,LBL_LIGHT,LBL_DARK,LBL_STROKE_LIGHT,LBL_STROKE_DARK,SYM,PN,PN_EN,pieceName,_principlesHTML,KNIGHT_OFFSETS,DIR_ROOK,DIR_BISHOP,DIR_QUEEN,ELO_MATCH,getAI_LEVELS,CELL,REVIEW_CELL,zobrist,initBoard,attacked,initState,validateSetupPosition,cloneB,cloneS,sqAttackedFast,inCheck,pseudoMoves,legalMoves,hasLegalMoves,moveAlg,getCtrlMap,makeMv,makeMvInPlace,unmakeMv,gameStatus,isDeadPosition,winnerLacksMatingMaterial,posAlg,algPos,inB,pieceZobristIdx,computeHash,syncHash,_refreshStateAfterSetup,_recalcCellSize,getEffectiveAILevel,posEmoji,T,toggleLang,_lang,_i18n,_prependBlackToMovePlaceholder,_reattachActiveAnimations,_activeAnimEls,computeVisibleCastleMarks,computeVisibleEpMark};
+export {PV,OPP_COLOR,SQ_LIGHT,SQ_DARK,SQ_SEL,LBL_LIGHT,LBL_DARK,LBL_STROKE_LIGHT,LBL_STROKE_DARK,SYM,PN,PN_EN,_KING_PIECE_STYLE,pieceName,_principlesHTML,KNIGHT_OFFSETS,DIR_ROOK,DIR_BISHOP,DIR_QUEEN,ELO_MATCH,getAI_LEVELS,CELL,REVIEW_CELL,zobrist,initBoard,attacked,initState,validateSetupPosition,cloneB,cloneS,sqAttackedFast,inCheck,pseudoMoves,legalMoves,hasLegalMoves,moveAlg,getCtrlMap,makeMv,makeMvInPlace,unmakeMv,gameStatus,isDeadPosition,winnerLacksMatingMaterial,posAlg,algPos,inB,pieceZobristIdx,computeHash,syncHash,_refreshStateAfterSetup,_recalcCellSize,getEffectiveAILevel,posEmoji,T,toggleLang,_lang,_i18n,_prependBlackToMovePlaceholder,_reattachActiveAnimations,_activeAnimEls,computeVisibleCastleMarks,computeVisibleEpMark};

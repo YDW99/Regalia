@@ -1370,9 +1370,24 @@ public class StockfishNative {
                 }
                 // Stop any in-flight gameplay search before changing options.
                 stopAndWaitForBestmove("engineEvalDeepBeginBatch");
-                synchronized (stateLock) {
-                    currentState = STATE_EVAL;
-                }
+                // v1.2.3 round-58 (ghost-EVAL fix): do NOT set
+                //   currentState = STATE_EVAL here. No search is running yet
+                //   — beginBatch only applies UCI options. The premature
+                //   EVAL state made the FIRST engineEvalDeep()'s
+                //   stopAndWaitForBestmove misread an IDLE engine as
+                //   "search in flight": it sent "stop", waited out the full
+                //   1s latch timeout, and — per the round-52 T6 rule
+                //   (state != STATE_NONE ⇒ a late bestmove is coming) — armed
+                //   _discardingPonderBestmove. No late bestmove existed, so
+                //   the armed flag ate the FIRST batch step's REAL bestmove
+                //   (exactly the failure the T6 comment predicted: "eval
+                //   never completes until the JS safety timer fires"). The
+                //   user saw: batch starts, ~60-75s of silence, step-0
+                //   skipped by the safety timer, then every later step fine
+                //   (the discard had reset state to NONE, so step 2+ took
+                //   the idle fast-path). engineEvalDeep() sets STATE_EVAL
+                //   itself immediately before "go depth 22" — the correct
+                //   moment.
                 forceFullStrength();
                 applyEvalModeOptions();
                 // v1.2.3 round-51 (BG-2): batch start — re-arm the partial wake lock
@@ -1394,8 +1409,26 @@ public class StockfishNative {
         _safeExecute(new Runnable() { // tag: engineEvalDeepEndBatch
             public void run() {
                 if (!engineReady) return;
-                // Stop any in-flight eval search before restoring options.
-                stopAndWaitForBestmove("engineEvalDeepEndBatch");
+                // v1.2.3 round-58 (ghost-EVAL fix, mirror): only run the
+                //   stop-and-wait when a search COULD be in flight. After a
+                //   normally-completed last step the state is already
+                //   STATE_NONE (handleBestMove resets it); calling
+                //   stopAndWaitForBestmove then would send "stop" to an IDLE
+                //   engine, time out after 1s, see state == STATE_EVAL (set
+                //   below? no — but beginBatch used to) and arm the discard
+                //   flag — eating the NEXT legitimate eval's bestmove. With
+                //   beginBatch no longer setting the ghost state, STATE_EVAL
+                //   here means a search genuinely IS in flight (the batch
+                //   ended mid-step), so the stop is exactly right. When the
+                //   state is already NONE, skip straight to the option
+                //   restore — no stray "stop", no discard flag.
+                boolean searchMaybeInFlight;
+                synchronized (stateLock) {
+                    searchMaybeInFlight = (currentState != STATE_NONE) || _isPondering;
+                }
+                if (searchMaybeInFlight) {
+                    stopAndWaitForBestmove("engineEvalDeepEndBatch");
+                }
                 synchronized (stateLock) {
                     currentState = STATE_NONE;
                 }

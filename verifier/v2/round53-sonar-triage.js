@@ -119,5 +119,17 @@ ok('F6a _activityResumed kept + S116-kept note',
 ok('F6b _webViewPausedForBatch kept',
    ma.includes('private volatile boolean _webViewPausedForBatch'));
 
+// V2-20 — round-60 (F-1): _KING_PIECE_STYLE moved to game-logic.js (first
+//   module) so ai-bridge.js's top-level _showLoadingOverlay() no longer hits
+//   the TDZ; ai-bridge.js must not probe it with typeof (typeof on a TDZ
+//   const throws instead of returning 'undefined').
+const gl60 = read('src/main/assets/chess.src/game-logic.js');
+const aib60 = read('src/main/assets/chess.src/ai-bridge.js');
+const uijs60 = read('src/main/assets/chess.src/ui.js');
+ok('V2-20 _KING_PIECE_STYLE declared in game-logic.js, absent from ui.js, no typeof probe in ai-bridge.js',
+   gl60.includes('const _KING_PIECE_STYLE=')
+   && !uijs60.includes('const _KING_PIECE_STYLE=')
+   && !aib60.includes('typeof _KING_PIECE_STYLE'));
+
 console.log(`===== RESULT: ${pass} passed, ${fail} failed =====`);
 process.exit(fail ? 1 : 0);

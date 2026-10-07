@@ -1473,7 +1473,12 @@ public class MainActivity extends Activity {
      */
     private void showToastLocalized(String key) {
         // Read language preference (same prefs as StockfishNative.saveLangPref)
-        String lang = "zh"; // default
+        // round-60 (F-4): fallback semantics unified with EngineService/
+        // StockfishNative.isEnglishMode() — only zh* locales fall back to
+        // Chinese; every other locale falls back to ENGLISH (previously a
+        // fr/ja/ru user saw a Chinese Toast next to an English service
+        // notification). zh/en user behavior is unchanged.
+        String lang = "zh"; // default (zh* locales / explicit user choice)
         try {
             android.content.SharedPreferences prefs = getSharedPreferences("RegaliaEngine", MODE_PRIVATE);
             String saved = prefs.getString("lang", null);
@@ -1489,7 +1494,7 @@ public class MainActivity extends Activity {
                 } else {
                     sys = getResources().getConfiguration().locale;
                 }
-                if (sys != null && sys.getLanguage() != null && sys.getLanguage().startsWith("en")) lang = "en";
+                if (sys != null && sys.getLanguage() != null && !sys.getLanguage().startsWith("zh")) lang = "en";
             }
         } catch (Throwable e) {
             Log.w(TAG, "showToastLocalized: lang read failed, defaulting to zh", e);
