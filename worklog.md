@@ -1,3 +1,92 @@
+# Regalia v1.2.3 — round-67 工作日志（2026-11-21 UTC+8）
+
+## 任务来源
+
+用户上传《Regalia-round67任务规划与注意事项》（基于远端 upload head `3a083a4a` = round-66
+交付树；CodeRabbit 16:13 评审 9 条已核实全部属实、SonarCloud PR #57 质量门 ERROR：新代码
+重复率 13.2% > 3%、4 个新 Issue 全部属实），指令：完成 round-67、交付老三样。第一目标：
+**PR #57 质量门绿**（消孪生）。
+
+## 沙箱恢复（第六次回滚实录 + 新坑：SDK 掏空）
+
+本地树/worklog 仍在 round-61 态，download/ 有 round-66 全套交付物（含 source-backup 5.67MB）。
+codeload 快照恢复 upload head `3a083a4a`（204 条目）→ 首跑三验证器 **44/27/46——V3-40b RED**，
+T0 现场证实。**新环境坑**：两处遗留 SDK 的 platforms/android-35 与 build-tools/*/ 只剩
+package.xml（回收把大文件掏空而保留目录骨架），NDK/依赖缓存全失——按 r67-sdk-repair.sh 重拉
+（platform-35/build-tools 34+35/platform-tools + NDK r27c 663,987,688 B，腾讯镜像）。
+
+## T0 交付完整性（比规划记载更深一层的根因）
+
+远端 vs 本地 round-66 备份全树 diff 出**四项**差异，逐一定性：
+1. `release-helper.yml`（V3-40b 腿 b RED 的根因）——round-66 zip **明明带了**修复版（7,317B），
+   但 `unzip-folder-optimized.yml` 工作流**按设计剥离 `.github/workflows/` 保护路径**（防工作流
+   注入）后提交——规划"没进 upload zip"的定性**不成立**，真因是**交付渠道无能力**（zip 永远
+   送不进 .github/workflows）。修法：文件在 work 树内已修 + 交付为用户 web 编辑指引（唯一可达
+   通道）。
+2. `.gitignore`——zip 里有（1,086B），bot 提交里没有（stale 上传或解包怪象，无法定案）→
+   round-67 zip 重新携带（该路径不受保护）+ 新哨兵 V3-47 使缺口可见。
+3. `worker-pool.js`——zip 覆盖式上传**结构上不可能删除文件**（cp -a 只增改），round-66 README
+   已指示用户手动删除但尚未执行 → 新哨兵 V3-46 使缺口可见 + 本轮 README 重申。
+4. `LICENSE&NOTICE.zip`——字节差但内容逐字节相同（zip 元数据），良性，无动作。
+**流程硬断言（入指南 §7）**：每轮交付后必须对远端 head 快照复跑三验证器 + bundle 字节核对 +
+改动文件清单对照——本地树全绿不构成交付完成的证明（round-66 的教训升格）。
+
+## 修复实施（批次①→④，T1-T17 全部落地）
+
+**批次① 消孪生（质量门主目标）**：T1 抽 `cachedEngineAcceptable(destFile,label)`（两处逐行相同
+的检查-删除-复用级联 → 一实现两调用）；T2 抽 `commitExtractedEngine(tmp,dest,label)`（两处
+verify-then-commit 级联 → 一实现两调用）；T3 `LOG_DELETE_FAILED` 常量（"Failed to delete: "
+×8 → ×1，**Sonar S1192 CRITICAL 清除**）；T4 优先级 3 嵌套 if 合并（**S1066 MAJOR 清除**）；
+T5 ai-bridge 可选链（**S6582 清除**）。V3-41 **同批重写**（军规 3：重构与哨兵同批）：钉助手实现
+行（早退形）、双调用点、**verify→rename 邻接**（T14/CodeRabbit #8，删验证步/换序均 RED）、
+`if (false`/`if (0)` 字面量死守卫禁令（T15，包裹负例 RED，残余如实声明）。
+
+**批次② 线性化（CodeRabbit #2/#3/#4 全属实）**：T6 多局分割器换**单遍线性扫描**
+`_pgnFirstGameSplit()`（lookbehind 形态的 (?<!\n) 只挡"前字符是换行"的起点——空格空白行内每个
+\n 仍可起点，无 `[` 后随时 Θ(n²)；两文件不共享 bundle 无法单函数共用 → **同构双实现**，字节一致
+由 V3-45 钉）；T7 header 扫描器换**单调缓存**（next-`]`（连带前置空白段起点，消每候选 trim 重扫）
++ next-`\n`，**切片前先查缓存**（拒绝候选零拷贝）；候选值起点 _j 严格递增的证明入审计）；
+T8 **差分 fuzz：分割 64,037 例、扫描头 64,032 例全部零差异**（含空格空白行/无 `[` 尾/前导空白行/
+10MB 单行/引号类）；**敌意基准（新实现）10 项全部 <300ms**（最坏 [FEN+10MB 空格] 293.7ms；旧
+形态同类输入分钟级/外推 3.5s+，对照数据入审计）；T9 V3-45 重写（同构孪生字节等 + 缓存实现行 +
+已知坏形态禁令）+ **N8 基准门**（`verifier/runs/r67-bench.js` 入库，上界 1000ms，线性成为可执行
+断言）；**S7765 随扫描器重写自然清除**。
+
+**批次③ 脚本互斥 + 文档勘误**：T10 r62-negative-tests.sh 加 **flock 工作区互斥**（首备份前取锁、
+持到进程退出——EXIT/INT/TERM 恢复全在锁内；锁文件按 ROOT 哈希入 /tmp 不入库；被占即零触碰
+fail-fast）+ **N9 并发负例**（持锁期间第二实例必须非零退出 + 锁消息 + 树零触碰）；**N9 首版实
+现有 `$` 丢失笔误**（`"_N9H2"` 漏 `$` → 零触碰检查恒假阳性），手动复现 vs 脚本内差分定位后修复；
+T11 round64-audit **ERRATUM-2**（append-only：-P/--project-prop 是项目属性，Gradle 属性
+（org.gradle.*）命令行来源只有 -D；两命名空间各自优先级；沙箱分类实测佐证）；T12 round66-audit
+:44/:46 表格管道符全量转义（未转义管道数复核=5）。
+
+**批次④ 哨兵诚实化 + 方法论升格**：T14 并入批次①；T15 方法论"活语句"表述作废（四级谱系第四级
+改名"行锚定语句形态（仍是文本级）"+ round-67 勘误注记）；T16 方法论新增 **round-67 实例化段
+（第五级封顶）**与三条硬规则（文本哨兵是 tripwire 不是证明 / 对称面修复必须单一实现——"共享助
+手＋调用点"而非"两份相同补丁" / 复杂度声明必须附敌意基准实测）+ 军规 2/5 实例化 + §4 基线表
+44/27/**49** + §5 环境坑（SDK 掏空/flock Linux-only）；T17 V3-39 flock 名实对照（三实现行 +
+"锁先于备份"次序 + N8/N9 接线，对照表入 round67-audit）。
+
+## 验证与交付
+
+- 三验证器新基线 **44 / 27 / 49**（v3 +V3-46/47；V3-39/41/43/45 重写）；负向脚本**九门**全绿
+  （N1-N7 变异 RED + N8 基准 + N9 互斥），exit 0。
+- **元负例 17 场景全 RED**（V3-41 ×7 / V3-43 ×1 / V3-45 ×3 / V3-46 ×1 / V3-47 ×1 / V3-39 ×3
+  / N8 fail-closed ×1——空 harness 假绿缺口当场发现并闭合：N8 现要求退出码**与**成功标记双证）。
+- build-chess.py 确定性重打包 ×2 cmp 0 差异；新 bundle **24,288 行 / 1,493,374 B**；编译门
+  compileReleaseJavaWithJavac BUILD SUCCESSFUL；APK 六连验（见 round67-audit §8）。
+- tar 纯净复核 0 命中（无引擎/密钥/口令/构建产物）；交付老三样 + pr-upload.zip（**含 .gitignore**，
+  不含 .github/workflows——渠道无能力，如实记录）+ 用户 web 手动步骤清单（release-helper 一行
+  编辑 + worker-pool.js 删除——完成前 V3-40b(b)/V3-46 在远端将保持 RED，这是特性不是缺陷）。
+
+## 待办（round-68 候选）
+
+O-1 剩余消重（engineGoInternal/engineGoTimed ~90 行最大组，Sonar 若仍 >3% 则为下一目标）；
+Sonar/PMD/mobsfscan 平台侧 5 类误报 Accept/FP（用户操作）；PR #57 合并收尾（stale 大限
+2026-12-21）。
+
+
+
 # Regalia v1.2.3 — round-66 工作日志（2026-11-21 UTC+8）
 
 ## 任务来源

@@ -1,3 +1,46 @@
+v1.2.3 round-67 (2026.11.21): de-twinning + linearization + delivery-completeness sentinels; baseline 44/27/49.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - verifier/v3/round54-pr56-triage.js (AGPL v3 harness): V3-41 REWRITTEN
+    (round-66's two byte-identical engine cache-gate / verify-then-commit
+    cascades de-twinned into shared cachedEngineAcceptable() +
+    commitExtractedEngine() in StockfishNative.java — PR #57 new-code
+    duplication gate 13.2% > 3%; predicates now pin the helper
+    implementation lines, BOTH label call sites, the
+    verify-SHA-then-rename adjacency (CodeRabbit r66-#8) and a literal
+    if(false)/if(0) death-guard ban (T15)). V3-43 UPGRADED (pins the
+    truncation ASSIGNMENT appendLen = i + 1 before the char-cap throw, not
+    just the declaration — CodeRabbit r66-#9). V3-45 REWRITTEN (the two
+    PGN parsers are single-pass linear now: isomorphic-twin
+    _pgnFirstGameSplit byte-equal across tablebase.js+stats.html, and
+    stats.html's header scanner runs on monotonic next-']'/next-'\n'
+    caches consulted before any slice — CodeRabbit r66-#2/#3/#4 proved both
+    round-66 forms still super-linear). V3-39 UPGRADED (flock workspace
+    mutex pinned before first backup, held to exit — CodeRabbit r66-#5;
+    N8/N9 gates wired). NEW V3-46 (worker-pool.js absence — the zip-overlay
+    upload channel cannot delete files, so the round-66 deletion never
+    landed remotely; the gap is now sentinel-visible) and V3-47 (.gitignore
+    presence + never-commit exclusions — the round-66 zip carried it, the
+    bot commit did not).
+  - verifier/runs/r67-bench.js (NEW, GPL v3): adversarial benchmark gate
+    (N8) — extracts the SHIPPED splitter/scanner implementations from the
+    tree, re-checks the isomorphic-twin invariant at runtime, and fails when
+    any adversarial case exceeds the 1000ms bound (worst round-67 sandbox
+    case 294ms; the round-66 forms cost minutes at these input sizes).
+    Linearity is a behavioral property — this harness makes the bound
+    executable, the v3 text predicates are tripwires against the known-bad
+    forms only.
+  - verifier/runs/r62-negative-tests.sh (GPL v3): flock workspace mutex
+    (T10) taken before the first backup and held to process exit so every
+    trap-path restore runs under the lock; NEW N8 (benchmark gate) and N9
+    (concurrency negative: a second instance must fail fast non-zero with
+    the lock message and zero tree contact).
+  - verifier/runs/round67-audit.md (new, GPL v3): round-67 audit trail —
+    CodeRabbit 9-item + Sonar 4-issue disposition, T0 delivery-completeness
+    root cause (upload-channel capability matrix), differential fuzz +
+    benchmark data, meta-negative RED records.
+  - License classification: v3 harness AGPL v3; shell scripts + bench
+    harness + audit GPL v3 (unchanged).
+
 v1.2.3 round-66 (2026.11.21): sentinel ladder upgrade — six new v3 sentinels, V3-39 third-round hardening, negative-script N7; baseline 44/27/47.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - verifier/v3/round54-pr56-triage.js (AGPL v3 harness): NEW V3-40b (engine

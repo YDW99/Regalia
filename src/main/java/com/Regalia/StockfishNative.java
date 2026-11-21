@@ -353,6 +353,11 @@ public class StockfishNative {
     //   byte-for-byte, so every legitimate copy has exactly this size; any
     //   other size = wrong or truncated engine = reject and re-extract.
     private static final long EXPECTED_ENGINE_SIZE_BYTES = 100_695_968L;
+    // v1.2.3 round-67 (T3, Sonar S1192): the delete-failure log prefix was
+    //   duplicated eight times across the two extraction cascades; both
+    //   cascades are now one shared commitExtractedEngine() (T2) that
+    //   references this single constant.
+    private static final String LOG_DELETE_FAILED = "Failed to delete: ";
     // v1.2.1 round-10 (review-D P3): extracted magic number — grace period
     //   (ms) to wait after sending "stop" for a ponder search's bestmove to
     //   arrive before assuming the engine is idle. Was a bare `100` literal.
@@ -1804,16 +1809,18 @@ public class StockfishNative {
                     });
                     if (candidates != null) {
                         for (File candidate : candidates) {
-                            if (candidate.exists() && candidate.canRead() && candidate.isFile()) {
-                                // v1.2.3 round-66 (O-3): exact-size identity
-                                //   check — a name-matching file of the wrong
-                                //   size (e.g. a stale engine restored by a
-                                //   backup tool) is not our engine.
-                                if (candidate.length() == EXPECTED_ENGINE_SIZE_BYTES && isElfFile(candidate)) {
-                                    Log.i(TAG, "Engine binary found by search: " + candidate.getAbsolutePath());
-                                    currentEnginePath = candidate.getAbsolutePath();
-                                    return candidate;
-                                }
+                            // v1.2.3 round-66 (O-3): exact-size identity
+                            //   check — a name-matching file of the wrong
+                            //   size (e.g. a stale engine restored by a
+                            //   backup tool) is not our engine.
+                            // v1.2.3 round-67 (T4, Sonar S1066): the two
+                            //   nested guards are one condition now — same
+                            //   semantics, one branch level fewer.
+                            if (candidate.exists() && candidate.canRead() && candidate.isFile()
+                                    && candidate.length() == EXPECTED_ENGINE_SIZE_BYTES && isElfFile(candidate)) {
+                                Log.i(TAG, "Engine binary found by search: " + candidate.getAbsolutePath());
+                                currentEnginePath = candidate.getAbsolutePath();
+                                return candidate;
                             }
                         }
                     }
@@ -4753,21 +4760,13 @@ public class StockfishNative {
         //   sf_18 binary) or any truncated file is deterministically
         //   rejected here, without re-opening the ~100MB hash on non-rooted
         //   cold starts. Rooted devices keep the SHA-256 gate on top (SEC-09).
-        if (destFile.exists() && destFile.length() == EXPECTED_ENGINE_SIZE_BYTES && isElfFile(destFile)) {
-            // v1.2.3 round-56 (SEC-01①/SEC-09): on rooted devices the cached
-            //   copy must additionally pass the pinned SHA-256 check; a
-            //   mismatch deletes the poisoned file and falls through to a
-            //   fresh, always-verified extraction.
-            if (shouldVerifyCachedEngine() && !verifyEngineSha256(destFile)) {
-                Log.e(TAG, "Cached engine failed SHA-256 on rooted device — re-extracting");
-                if (!destFile.delete()) Log.w(TAG, "Failed to delete tampered engine: " + destFile.getAbsolutePath());
-            } else {
-                Log.i(TAG, "Using previously extracted engine: " + destFile.getAbsolutePath()
-                        + " size=" + destFile.length());
-                makeExecutable(destFile);
-                currentEnginePath = destFile.getAbsolutePath();
-                return destFile;
-            }
+        // v1.2.3 round-67 (T1): the whole check-delete-reuse cascade moved
+        //   into the shared cachedEngineAcceptable() helper — this path and
+        //   the assets path carried two byte-identical copies (PR #57
+        //   new-code duplication 13.2% > 3% gate). Semantics unchanged.
+        File cached = cachedEngineAcceptable(destFile, "extracted");
+        if (cached != null) {
+            return cached;
         }
 
         // Try extracting from assets first (universal APK compatibility)
@@ -4834,39 +4833,12 @@ public class StockfishNative {
                 }
             }
 
-            if (tmpFile.exists() && tmpFile.canRead() && tmpFile.length() > MIN_ENGINE_BINARY_SIZE) {
-                if (isElfFile(tmpFile)) {
-                    // v1.2.3 round-56 (SEC-01①): fresh extractions ALWAYS pass
-                    //   the pinned SHA-256 gate — a truncated write keeps the
-                    //   ELF magic (file head) and can exceed MIN_ENGINE_BINARY_SIZE,
-                    //   so length+ELF alone cannot prove integrity.
-                    // v1.2.3 round-66 (F-7): verification runs on the .tmp file;
-                    //   only a verified file is renamed onto the cache path.
-                    if (verifyEngineSha256(tmpFile)) {
-                        if (!tmpFile.renameTo(destFile)) {
-                            // Fail-closed: without the atomic commit the cache
-                            // path still holds whatever it held before — retry
-                            // next start rather than execute an unverified file.
-                            Log.e(TAG, "Engine atomic commit failed (renameTo)");
-                            if (!tmpFile.delete()) Log.w(TAG, "Failed to delete: " + tmpFile.getAbsolutePath());
-                            return null;
-                        }
-                        makeExecutable(destFile);
-                        Log.i(TAG, "Engine extracted successfully, size=" + destFile.length()
-                                + ", SHA-256 verified (atomic commit)");
-                        currentEnginePath = destFile.getAbsolutePath();
-                        return destFile;
-                    }
-                    Log.e(TAG, "Extracted engine failed SHA-256 verification — deleting");
-                    if (!tmpFile.delete()) Log.w(TAG, "Failed to delete: " + tmpFile.getAbsolutePath());
-                } else {
-                    Log.e(TAG, "Extracted engine failed ELF header verification");
-                    if (!tmpFile.delete()) Log.w(TAG, "Failed to delete: " + tmpFile.getAbsolutePath());
-                }
-            } else {
-                Log.e(TAG, "Extracted engine file is invalid (size=" + (tmpFile.exists() ? tmpFile.length() : 0) + ")");
-                if (!tmpFile.delete()) Log.w(TAG, "Failed to delete: " + tmpFile.getAbsolutePath());
-            }
+            // v1.2.3 round-67 (T2): the verify-then-commit cascade moved into
+            //   the shared commitExtractedEngine() helper (size gate → ELF
+            //   gate → SHA-256 on the .tmp → atomic renameTo → makeExecutable;
+            //   any failure deletes the .tmp and returns null). Both
+            //   extraction paths shared this code byte-for-byte.
+            return commitExtractedEngine(tmpFile, destFile, "APK");
         } catch (Throwable e) {
             Log.e(TAG, "Failed to extract engine from APK", e);
             // v1.2.3 round-49 (review-4 P2-2): best-effort delete of the partially
@@ -4897,19 +4869,11 @@ public class StockfishNative {
         // FIX: Also verify ELF header on cached file to prevent using corrupted extraction
         // v1.2.3 round-66 (F-1): same exact-size identity gate as
         //   extractEngineFromApk's cached path (see EXPECTED_ENGINE_SIZE_BYTES).
-        if (destFile.exists() && destFile.length() == EXPECTED_ENGINE_SIZE_BYTES && isElfFile(destFile)) {
-            // v1.2.3 round-56 (SEC-01①/SEC-09): same rooted-device SHA-256 gate
-            //   as extractEngineFromApk's cached path.
-            if (shouldVerifyCachedEngine() && !verifyEngineSha256(destFile)) {
-                Log.e(TAG, "Cached asset-extracted engine failed SHA-256 on rooted device — re-extracting");
-                if (!destFile.delete()) Log.w(TAG, "Failed to delete tampered engine: " + destFile.getAbsolutePath());
-            } else {
-                Log.i(TAG, "Using previously asset-extracted engine: " + destFile.getAbsolutePath()
-                        + " size=" + destFile.length());
-                makeExecutable(destFile);
-                currentEnginePath = destFile.getAbsolutePath();
-                return destFile;
-            }
+        // v1.2.3 round-67 (T1): shared cachedEngineAcceptable() — see the
+        //   APK path; the two copies were byte-identical.
+        File cached = cachedEngineAcceptable(destFile, "asset-extracted");
+        if (cached != null) {
+            return cached;
         }
 
         String assetPath = "engines/" + ENGINE_LIB_NAME;
@@ -4964,33 +4928,88 @@ public class StockfishNative {
             return null;
         }
 
+        // v1.2.3 round-67 (T2): shared commitExtractedEngine() — see the APK
+        //   path; the two cascades were byte-identical.
+        return commitExtractedEngine(tmpFile, destFile, "assets");
+    }
+
+    /**
+     * v1.2.3 round-67 (T1): the shared cached-copy gate for both extraction
+     * paths (extractEngineFromApk / extractEngineFromAssets) — round-66 left
+     * two byte-identical copies of this check-delete-reuse cascade, which
+     * pushed PR #57's new-code duplication above the 3% gate. Semantics are
+     * the round-66 F-1/SEC-09 gate, unchanged: the exact-size + ELF identity
+     * gate (EXPECTED_ENGINE_SIZE_BYTES) rejects an older release's cache
+     * (e.g. the sf_18 binary) or any truncated file without re-opening the
+     * ~100MB hash on non-rooted cold starts; on rooted devices the pinned
+     * SHA-256 gate runs on top and a mismatch deletes the poisoned cache and
+     * falls through to a fresh, always-verified extraction. Returns the
+     * accepted cache file (makeExecutable run, currentEnginePath set), or
+     * null when the caller must (re-)extract.
+     */
+    private File cachedEngineAcceptable(File destFile, String label) {
+        if (!destFile.exists() || destFile.length() != EXPECTED_ENGINE_SIZE_BYTES || !isElfFile(destFile)) {
+            return null;
+        }
+        // v1.2.3 round-56 (SEC-01①/SEC-09): on rooted devices the cached copy
+        //   must additionally pass the pinned SHA-256 check; a mismatch
+        //   deletes the poisoned file and falls through to a fresh,
+        //   always-verified extraction.
+        if (shouldVerifyCachedEngine() && !verifyEngineSha256(destFile)) {
+            Log.e(TAG, "Cached " + label + " engine failed SHA-256 on rooted device — re-extracting");
+            if (!destFile.delete()) Log.w(TAG, "Failed to delete tampered engine: " + destFile.getAbsolutePath());
+            return null;
+        }
+        Log.i(TAG, "Using previously " + label + " engine: " + destFile.getAbsolutePath()
+                + " size=" + destFile.length());
+        makeExecutable(destFile);
+        currentEnginePath = destFile.getAbsolutePath();
+        return destFile;
+    }
+
+    /**
+     * v1.2.3 round-67 (T2): the shared verify-then-commit cascade for both
+     * extraction paths (round-66 left two near-identical copies; see
+     * cachedEngineAcceptable). The order is load-bearing and pinned by V3-41:
+     * size gate → ELF gate → pinned SHA-256 on the .tmp file → atomic
+     * renameTo onto the cache path → makeExecutable. Any failed gate deletes
+     * the .tmp and returns null — an unverified file is never renamed onto
+     * the cache path (round-66 F-7 atomic-commit protocol, unchanged).
+     */
+    private File commitExtractedEngine(File tmpFile, File destFile, String label) {
         if (tmpFile.exists() && tmpFile.canRead() && tmpFile.length() > MIN_ENGINE_BINARY_SIZE) {
             if (isElfFile(tmpFile)) {
                 // v1.2.3 round-56 (SEC-01①): fresh extractions ALWAYS pass the
-                //   pinned SHA-256 gate (see extractEngineFromApk).
+                //   pinned SHA-256 gate — a truncated write keeps the ELF magic
+                //   (file head) and can exceed MIN_ENGINE_BINARY_SIZE, so
+                //   length+ELF alone cannot prove integrity.
                 // v1.2.3 round-66 (F-7): verification runs on the .tmp file;
                 //   only a verified file is renamed onto the cache path.
                 if (verifyEngineSha256(tmpFile)) {
                     if (!tmpFile.renameTo(destFile)) {
-                        Log.e(TAG, "Asset engine atomic commit failed (renameTo)");
-                        if (!tmpFile.delete()) Log.w(TAG, "Failed to delete: " + tmpFile.getAbsolutePath());
+                        // Fail-closed: without the atomic commit the cache path
+                        //   still holds whatever it held before — retry next
+                        //   start rather than execute an unverified file.
+                        Log.e(TAG, "Engine (" + label + ") atomic commit failed (renameTo)");
+                        if (!tmpFile.delete()) Log.w(TAG, LOG_DELETE_FAILED + tmpFile.getAbsolutePath());
                         return null;
                     }
                     makeExecutable(destFile);
-                    Log.i(TAG, "Engine extracted from assets successfully, size=" + destFile.length()
+                    Log.i(TAG, "Engine extracted successfully (" + label + "), size=" + destFile.length()
                             + ", SHA-256 verified (atomic commit)");
                     currentEnginePath = destFile.getAbsolutePath();
                     return destFile;
                 }
-                Log.e(TAG, "Asset-extracted engine failed SHA-256 verification — deleting");
-                if (!tmpFile.delete()) Log.w(TAG, "Failed to delete: " + tmpFile.getAbsolutePath());
+                Log.e(TAG, "Extracted engine (" + label + ") failed SHA-256 verification — deleting");
+                if (!tmpFile.delete()) Log.w(TAG, LOG_DELETE_FAILED + tmpFile.getAbsolutePath());
             } else {
-                Log.e(TAG, "Asset-extracted engine failed ELF verification — deleting");
-                if (!tmpFile.delete()) Log.w(TAG, "Failed to delete: " + tmpFile.getAbsolutePath());
+                Log.e(TAG, "Extracted engine (" + label + ") failed ELF header verification — deleting");
+                if (!tmpFile.delete()) Log.w(TAG, LOG_DELETE_FAILED + tmpFile.getAbsolutePath());
             }
         } else {
-            Log.e(TAG, "Asset-extracted engine is invalid (size=" + (tmpFile.exists() ? tmpFile.length() : 0) + ")");
-            if (!tmpFile.delete()) Log.w(TAG, "Failed to delete: " + tmpFile.getAbsolutePath());
+            Log.e(TAG, "Extracted engine (" + label + ") is invalid (size="
+                    + (tmpFile.exists() ? tmpFile.length() : 0) + ") — deleting");
+            if (!tmpFile.delete()) Log.w(TAG, LOG_DELETE_FAILED + tmpFile.getAbsolutePath());
         }
         return null;
     }

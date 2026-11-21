@@ -699,6 +699,41 @@ const OPP_COLOR={white:'black',black:'white'};
 // bug. By replaying the authoritative move records from the main app (which
 // uses the full legalMoves/moveAlg logic), we get correct move counts and
 // states for games of any length.
+// v1.2.3 round-67 (T6, CodeRabbit r66-#2/#3): single-pass linear multi-game
+//   split. The round-66 lookbehind split regex (negative lookbehind + blank-
+//   line run + '[' lookahead; exact form preserved in round66-audit.md — old
+//   code is paraphrased here per the V2-21 comment rule) was NOT linear:
+//   the lookbehind only blocks a match start whose preceding char is a
+//   newline, so inside a spaces-only blank-line run every '\n' still started a
+//   full scan of the remaining run — Θ(n²) when no '[' follows (main-thread
+//   ANR vector; the old "restricts match starts to the FIRST '\n'" claim was
+//   wrong). This scanner walks the lines once: a block boundary exists where
+//   ≥1 blank lines (spaces-only or empty) sit between the previous line and a
+//   '['-starting line, and the separator consumes the opener line's '\n' plus
+//   every blank line (spaces included) — the exact old match span. Split
+//   results are byte-identical to the round-66 regex (differential fuzz incl.
+//   spaces-only runs / no-'[' tails / leading blank runs / 10MB single-line
+//   classes; round67-audit.md §T8). Isomorphic twin of tablebase.js's
+//   _pgnFirstGameSplit — the two files share no bundle, so the algorithm is
+//   necessarily duplicated and kept in shape-sync by V3-45.
+function _pgnFirstGameSplit(text){
+  var _ls=text.split('\n');
+  var _pos=new Array(_ls.length+1);
+  var _cuts=[];
+  var _run=-1;
+  var _i;
+  _pos[0]=0;
+  for(_i=0;_i<_ls.length;_i++)_pos[_i+1]=_pos[_i]+_ls[_i].length+1;
+  for(_i=0;_i<_ls.length;_i++){
+    if(_ls[_i].charAt(0)==='['&&_run!==-1&&(_run>=1||_i>=2))_cuts.push([_pos[_run>=1?_run:1]-1,_pos[_i]]);
+    if(/^\s*$/.test(_ls[_i])){if(_run===-1)_run=_i;}else _run=-1;
+  }
+  if(!_cuts.length)return [text];
+  var _out=[text.slice(0,_cuts[0][0])];
+  for(_i=1;_i<_cuts.length;_i++)_out.push(text.slice(_cuts[_i-1][1],_cuts[_i][0]));
+  _out.push(text.slice(_cuts[_cuts.length-1][1]));
+  return _out;
+}
 function parsePGN(pgnText){
   if(!pgnText)return null;
   // Normalize
@@ -706,32 +741,27 @@ function parsePGN(pgnText){
   // v1.2.3 round-48 (BUG-14): Multi-game PGN — keep only the FIRST game,
   //   mirroring tablebase.js's _parsePGN first-game split (round-66: the
   //   historical mirror source worker-pool.js was unbundled in round-56 and
-  //   deleted in round-66; tablebase.js is the live twin — same hardened
-  //   form since round-66 F-23)
-  //   (text.split(...) → take gameBlocks[0]). Previously the whole
-  //   file was parsed as one game: later games' headers silently overwrote
-  //   earlier ones, and the second game's movetext either cascade-failed
-  //   (silently dropped by the `if(result)` no-else path) or was mis-merged
-  //   into the first game when its moves happened to be legal in the first
-  //   game's end position. `_multiGame` is surfaced on the result so render()
-  //   can show a user-visible truncation notice.
-  // v1.2.3 round-49 (F2/P2-2): fix the polynomial-backtracking DoS. The old
-  //   /\n\s*\n(?=\[)/ is O(k²) on long blank-line runs NOT followed by '['
-  //   (measured: 16k newlines → 440ms; this parse runs on the MAIN thread in
-  //   the paste/import path → ANR; ~900KB run → ~20min). The round-47 form
-  //   /\n[^\S\n]*\n(?:[^\S\n]*\n)*(?=\[)/ only silenced the S8786 lint — on the
-  //   failure path its (?:...)* group still re-walks the whole run per start
-  //   position (measured: 16k → 587ms, same O(k²)). The added lookbehind
-  //   (?<!\n) restricts match starts to the FIRST '\n' of each blank-line run
-  //   (positions inside a run fail in O(1)) → linear total; measured 16k →
-  //   1.1ms, 900k → 63ms. Split results are byte-identical to the old regex
-  //   (300k-case fuzz, 0 mismatches): any match starting mid-run implies an
-  //   equivalent match at the run's first '\n', which split() finds first.
-  //   Lookbehind needs Chrome 62+ — inside the WebView≥84 floor. Keep in sync
-  //   with tablebase.js's _parsePGN split (the two live parsers share this
-  //   hardened form; worker-pool.js's copies are gone with the file,
-  //   round-66).
-  const _gameBlocks=text.split(/(?<!\n)\n[^\S\n]*\n(?:[^\S\n]*\n)*(?=\[)/);
+  //   deleted in round-66; tablebase.js is the live twin).
+  //   Previously the whole file was parsed as one game: later games' headers
+  //   silently overwrote earlier ones, and the second game's movetext either
+  //   cascade-failed (silently dropped by the `if(result)` no-else path) or
+  //   was mis-merged into the first game when its moves happened to be legal
+  //   in the first game's end position. `_multiGame` is surfaced on the
+  //   result so render() can show a user-visible truncation notice.
+  // v1.2.3 round-49 (F2/P2-2) → round-66 (F-23) → round-67 (T6): the split
+  //   went regex (quadratic on blank-line runs) → lookbehind form → and in
+  //   round-67 a single-pass line scanner. CodeRabbit r66-#2/#3 proved the
+  //   lookbehind form was still Θ(n²) on spaces-only blank-line runs
+  //   (the lookbehind only blocks starts preceded by a NEWLINE — a '\n'
+  //   after a space still started a full scan of the remaining run). The
+  //   _pgnFirstGameSplit() scanner walks the lines once and returns
+  //   byte-identical blocks to the round-66 regex (differential fuzz incl.
+  //   spaces-only runs / no-'[' tails / leading blank runs / 10MB
+  //   single-line classes; round67-audit.md §T8). Isomorphic twin of
+  //   tablebase.js's _pgnFirstGameSplit (the files share no bundle; the
+  //   twins are pinned to the same implementation lines by V3-45). The
+  //   WebView lookbehind floor concern is gone with the regex.
+  const _gameBlocks=_pgnFirstGameSplit(text);
   const _multiGame=_gameBlocks.length>1;
   if(_multiGame)text=_gameBlocks[0];
   // Extract headers
@@ -754,7 +784,39 @@ function parsePGN(pgnText){
   //   the quoted branch is a linear escape-aware scan, the unquoted branch
   //   bounds the value at the first ']' via indexOf. Worst case O(n).
   //   Round-56 (C3) unquoted-value and \"-escape tolerance preserved.
+  // v1.2.3 round-67 (T7, CodeRabbit r66-#4): the scanner's forward lookups
+  //   now run through MONOTONIC CACHES. The round-66 form's per-candidate
+  //   ']' lookup could scan to EOF per candidate (no ']' left), and the
+  //   failed-candidate fallback (advancing _hs past the current '[' only)
+  //   let every later candidate rescan the same overlapping suffix — ~4n² on
+  //   '[Event x'.repeat(n); a 10MB single-line input could hang the page
+  //   for minutes (only the char-cap bounds that path, not the line cap).
+  //   The candidate value-start _j strictly increases across candidates
+  //   (the tag+whitespace scan region contains no '['), so each cache scan
+  //   starts where the previous one stopped — every position is examined
+  //   O(1) times, worst case single-pass linear (adversarial benchmark
+  //   data in round67-audit.md §T8 — measured, not asserted). The cached
+  //   ']' also carries the start of its preceding whitespace run (the old
+  //   per-candidate trailing-ws trim re-walked that run once per candidate
+  //   — quadratic on '[A [A [A … <1M spaces> ]'), and the unquoted '\n'
+  //   check consults the newline cache BEFORE any slice, so a rejected
+  //   candidate copies zero bytes. Match semantics unchanged
+  //   (differential-fuzzed against the round-66 scanner).
   let _hs=0;
+  let _nb=text.indexOf(']'),_nbFrom=0,_nbWs=-1;
+  let _nl=text.indexOf('\n'),_nlFrom=0;
+  const _nextClose=(from)=>{
+    if(from<_nbFrom||(_nb>=0&&_nb<from)){_nbFrom=from;_nb=text.indexOf(']',from);_nbWs=-1;}
+    return _nb;
+  };
+  const _nextNl=(from)=>{
+    if(from<_nlFrom||(_nl>=0&&_nl<from)){_nlFrom=from;_nl=text.indexOf('\n',from);}
+    return _nl;
+  };
+  const _closeWsStart=()=>{
+    if(_nbWs<0){_nbWs=_nb;while(_nbWs>0&&/\s/.test(text.charAt(_nbWs-1)))_nbWs--;}
+    return _nbWs;
+  };
   for(;;){
     const _b=text.indexOf('[',_hs);
     if(_b<0)break;
@@ -792,13 +854,17 @@ function parsePGN(pgnText){
     if(!_matched){
       // unquoted branch (also the alternation retry when a quoted match's
       // tail fails, mirroring the old regex): lazy [^\]\n]*? + \s*\] ==
-      // value ends at the first ']', trailing whitespace trimmed, and the
-      // trimmed value must not contain '\n' (the old \s* could span one)
-      const _e=text.indexOf(']',_j);
+      // value ends at the first ']' (monotonic cache), trailing whitespace
+      // trimmed (the cached ']' carries its ws-run start), and the trimmed
+      // value must not contain '\n' (newline cache consulted BEFORE the
+      // slice — a rejected candidate copies zero bytes; the old \s* could
+      // span one newline)
+      const _e=_nextClose(_j);
       if(_e>=0){
-        let _vEnd=_e;
-        while(_vEnd>_j&&/\s/.test(text.charAt(_vEnd-1)))_vEnd--;
-        if(text.slice(_j,_vEnd).indexOf('\n')<0){
+        const _ws=_closeWsStart();
+        const _vEnd=(_ws>_j?_ws:_j);
+        const _nlPos=_nextNl(_j);
+        if(!(_nlPos>=0&&_nlPos<_vEnd)){
           headers[_name]=text.slice(_j,_vEnd);_hs=_e+1;_matched=true;
         }
       }

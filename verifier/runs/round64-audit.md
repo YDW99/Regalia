@@ -306,3 +306,44 @@ exposed the test's own bug. Every "empirical" result owes its reader the
 cross-check — this erratum included.
 This erratum is appended, not written over the history, per append-only
 discipline.
+
+---
+
+## ERRATUM-2 (round-67, T11 / CodeRabbit r66-#6) — ERRATUM-1's list mixes two property namespaces
+
+ERRATUM-1 (above) correctly restored the FILE precedence order (command line >
+GRADLE_USER_HOME > project root > GRADLE_HOME) — but its first line, "command
+line (`-P`, `-D`, `--project-prop`) — highest", lists `-P` and
+`--project-prop` as command-line sources for **Gradle properties**. That mixes
+two namespaces (Gradle docs: "Configuring the Build Environment" /
+"Project Properties"):
+
+1. **Gradle properties** (the `org.gradle.*` namespace — `org.gradle.jvmargs`,
+   `org.gradle.java.home`, …): the ONLY command-line source is
+   **`-D`** (`-Dorg.gradle.jvmargs=…`). `-P`/`--project-prop` do NOT reach
+   this namespace — `-Porg.gradle.jvmargs=…` creates a PROJECT property that
+   happens to be named `org.gradle.jvmargs` and never configures the daemon.
+   File sources keep ERRATUM-1's order: GRADLE_USER_HOME > project root >
+   GRADLE_HOME; `-D` outranks all of them (re-confirmed live in round-67: the
+   build forked a single-use daemon "to honour the JVM settings" from the
+   command line while GRADLE_USER_HOME carried a different jvmargs).
+2. **Project properties** (everything else, `-P`/`--project-prop`, and
+   non-`org.gradle.*` keys in any gradle.properties): their precedence is
+   `-P`/`--project-prop` (command line) > GRADLE_USER_HOME/gradle.properties >
+   project-root/gradle.properties > GRADLE_HOME/gradle.properties. These feed
+   `providers.gradleProperty(...)`/`project.findProperty(...)` — round-66's
+   method (a) measured exactly this file order.
+3. JVM argument examples therefore use `-Dorg.gradle.jvmargs=…` on the command
+   line or `org.gradle.jvmargs=…` in a gradle.properties file — never the
+   `-P` form (the round-67 build script and guide §2.3 already used only the
+   correct forms; ERRATUM-1's prose was the sole carrier of the mistake).
+
+Empirical classification check (round-67 sandbox, Gradle 8.11.1):
+`gradle -q properties -Porg.gradle.jvmargs=-Xmx123m` lists the key under
+PROJECT properties (it is one) — while the same run's daemon keeps the
+GRADLE_USER_HOME jvmargs; only the `-D` form produces the "To honour the JVM
+settings for this build a single-use Daemon process will be forked" fork.
+ERRATUM-1's list line is retained verbatim above (append-only discipline);
+this erratum supersedes it. `grep` audit note: `-P`/`--project-prop` now
+appear in this file only inside the historical ERRATUM-1 list, its
+supersession note here, and the project-property section of this erratum.

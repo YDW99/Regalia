@@ -5218,7 +5218,10 @@ function _requestBatchEval(step){
         //   the batch pipeline — the project's most hang-prone path (rounds
         //   57/57c/58/61). A silently swallowed retry failure destroys the
         //   diagnostic trail exactly when it is needed.
-        setTimeout(function(){try{_reviewAnalyzeAdvance();}catch(_e){console.warn('[BATCH] delayed advance failed',_e&&_e.message?_e.message:_e);}},100);
+        // v1.2.3 round-67 (T5, Sonar S6582): optional chain — same semantics
+        //   (_e?.message||_e === _e&&_e.message?_e.message:_e for every
+        //   _e, incl. falsy throws and empty messages).
+        setTimeout(function(){try{_reviewAnalyzeAdvance();}catch(_e){console.warn('[BATCH] delayed advance failed',_e?.message||_e);}},100);
       }
       return;
     }

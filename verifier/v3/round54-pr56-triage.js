@@ -285,7 +285,7 @@ ok('V3-38 guide §1 privacy line accurate (skip only when guide absent)',
 //   call restore. Meta negative tests for all bypass mutations (empty
 //   handler, implementation deleted comment kept, backup-cp failure,
 //   restore failure, SIGINT double-trap) live in round64-audit.md.
-ok('V3-39 r62-negative-tests.sh self-discipline (line-anchored: self-resolved root, exclusive mktemp -d backup dir, byte-verified backup/restore/per-item cp+cmp at every site, restore-CALLING trap handlers (command shape, not mention), accumulated failures, real exit codes, no absolute paths)',
+ok('V3-39 r62-negative-tests.sh self-discipline (line-anchored: self-resolved root, flock workspace mutex BEFORE first backup held to exit, exclusive mktemp -d backup dir, byte-verified backup/restore/per-item cp+cmp at every site, restore-CALLING trap handlers (command shape, not mention), accumulated failures, real exit codes, no absolute paths; N8 bench gate + N9 lock negative wired)',
    (() => {
      const s = read('verifier/runs/r62-negative-tests.sh');
      const vl = read('verifier/README.license');
@@ -297,8 +297,21 @@ ok('V3-39 r62-negative-tests.sh self-discipline (line-anchored: self-resolved ro
      //   site (backup_one body, restore_one body, per-item restore) is now
      //   pinned by its own implementation line, so deleting any verification
      //   while keeping the mktemp line turns this RED.
+     // round-67 (T10/T17, CodeRabbit r66-#5): the workspace mutex is pinned
+     //   by its three implementation lines, and the lock must be taken
+     //   BEFORE the first backup (source order) — a lock added after the
+     //   mutations would not close the shared-target race it exists for.
+     const lockIdx = s.indexOf('flock -n 9');
+     const bakIdx = s.indexOf('BAK=$(mktemp -d)');
      return !s.includes('/home/')
        && /^ROOT=.*BASH_SOURCE/m.test(s)
+       && lockIdx >= 0 && bakIdx > lockIdx
+       && /^LOCK="\/tmp\/r62neg\.\$\(echo "\$ROOT" \| md5sum \| cut -c1-16\)\.lock"$/m.test(s)
+       && /^exec 9>"\$LOCK" \|\| \{ echo "cannot open lock file: \$LOCK" >&2; exit 1; \}$/m.test(s)
+       && /^flock -n 9 \|\| \{ echo "another r62-negative-tests\.sh run holds the workspace lock: \$LOCK" >&2; exit 1; \}$/m.test(s)
+       && s.includes('node runs/r67-bench.js')
+       && s.includes('bash "$0" >"$_N9LOG" 2>&1')
+       && s.includes('TREE MODIFIED by the second instance')
        && /^BAK=\$\(mktemp -d\)/m.test(s)
        && /^trap\s+'restore\s*\|\|\s*exit\s+1[^']*'\s+EXIT/m.test(s)
        && /^trap\s+'restore\s*\|\|\s*exit\s+1[^']*'\s+INT/m.test(s)
@@ -311,6 +324,7 @@ ok('V3-39 r62-negative-tests.sh self-discipline (line-anchored: self-resolved ro
        && /^set -o pipefail/m.test(s)
        && /^[^#\n]*\[ "\$FAILED" -gt 0 \]/m.test(s)
        && vl.includes('verifier/runs/r62-negative-tests.sh')
+       && vl.includes('verifier/runs/r67-bench.js')
        && !vl.includes('scripts/r62-negative-tests.sh');
    })());
 // H3 — path resolution is __dirname-based (like v1/v2), not cwd-based
@@ -412,29 +426,61 @@ ok('V3-40b engine identity live-doc sweep (BUILDING live guide digest+size, rele
      return true;
    })());
 
-// V3-41 — round-66 (F-1/F-7/O-2/O-3): the engine cache-reuse gates must check
-//   IDENTITY (exact size equality), not just ">5MB + ELF" — an old release's
-//   cached engine (sf_18, 114,115,752 B) sailed through the old gate on
-//   non-rooted fallback devices while the UI claimed SF19; and extraction
-//   must commit ATOMICALLY (write .tmp, verify SHA there, rename) so a killed
-//   process can never leave a half-written cache for the next start.
-ok('V3-41 engine cache identity gate + atomic extraction commit (exact-size gates ×2, size constant, denominator uses constant, tmp+rename ×2, priority-1..3 size checks)',
+// V3-41 — round-66 (F-1/F-7/O-2/O-3), rewritten round-67 (T1/T2/T14): the
+//   engine cache-reuse gates must check IDENTITY (exact size equality), not
+//   just ">5MB + ELF" — an old release's cached engine (sf_18, 114,115,752 B)
+//   sailed through the old gate on non-rooted fallback devices while the UI
+//   claimed SF19; and extraction must commit ATOMICALLY (write .tmp, verify
+//   SHA there, rename). round-67 de-twinned the two byte-identical cascades
+//   (PR #57 new-code duplication 13.2% > 3% gate): ONE shared
+//   cachedEngineAcceptable() + ONE shared commitExtractedEngine(), each
+//   called from BOTH extraction paths (military rule 4: symmetric faces get
+//   ONE implementation, not two matching patches). Predicates pin the helper
+//   implementation lines (line-anchored, early-return shape), BOTH call
+//   sites, and — new, CodeRabbit r66-#8 — the verify-BEFORE-rename order
+//   inside the shared cascade (deleting the SHA call must turn this RED;
+//   the verify/rename adjacency pins containment, not just order). Text
+//   sentinels are tripwires, not proofs: a literal 'if (false'/'if (0)'
+//   wrapper would keep the text while killing the statement — banned below
+//   as a cheap death-guard; deeper wrappers (if (0==1)) remain a documented
+//   residual (methodology §3.10 five-level lineage; the behavioral property
+//   is covered by fixture review + this script's negative mutations).
+ok('V3-41 engine cache identity gate + atomic extraction commit, single shared implementation (exact-size gate + rooted-SHA gate in cachedEngineAcceptable; verify-SHA-then-rename adjacency inside commitExtractedEngine; label call sites ×2 each; LOG constant single-source; tmp sibling streams ×2; priority-1..3 size checks; no dead-literal wrappers)',
    (() => {
      const sn = read('src/main/java/com/Regalia/StockfishNative.java');
      if (!sn) return false;
-     const gates = sn.match(/^ {8}if \(destFile\.exists\(\) && destFile\.length\(\) == EXPECTED_ENGINE_SIZE_BYTES && isElfFile\(destFile\)\)/gm) || [];
-     // line-anchored LIVE guard form: 'if (false && !tmpFile.renameTo(...))'
-     // leaves the call as dead text while still counting 2 — count the
-     // real statement lines instead (meta-neg V41-rename-disabled finding).
-     const renames = sn.match(/^ +if \(!tmpFile\.renameTo\(destFile\)\) \{$/gm) || [];
-     return /^ {4}private static final long EXPECTED_ENGINE_SIZE_BYTES = 100_695_968L;/m.test(sn)
-       && gates.length === 2
-       && /total \* 13L \/ EXPECTED_ENGINE_SIZE_BYTES\)/.test(sn)
-       && /new java\.io\.FileOutputStream\(tmpFile\)\)/.test(sn)
-       && renames.length === 2
-       && /libFile\.length\(\) != EXPECTED_ENGINE_SIZE_BYTES/.test(sn)
-       && /appLibFile\.length\(\) == EXPECTED_ENGINE_SIZE_BYTES && isElfFile\(appLibFile\)/.test(sn)
-       && /candidate\.length\(\) == EXPECTED_ENGINE_SIZE_BYTES && isElfFile\(candidate\)/.test(sn);
+     // (1) size constant (V3-40 pins its cross-file identity)
+     if (!/^ {4}private static final long EXPECTED_ENGINE_SIZE_BYTES = 100_695_968L;$/m.test(sn)) return false;
+     // (2) shared cache-gate helper: identity gate in early-return shape
+     if (!/^ {8}if \(!destFile\.exists\(\) \|\| destFile\.length\(\) != EXPECTED_ENGINE_SIZE_BYTES \|\| !isElfFile\(destFile\)\) \{$/m.test(sn)) return false;
+     // (3) rooted-device SHA gate inside the helper
+     if (!/^ {8}if \(shouldVerifyCachedEngine\(\) && !verifyEngineSha256\(destFile\)\) \{$/m.test(sn)) return false;
+     // (4) helper called from BOTH extraction paths (exact labels)
+     if ((sn.match(/cachedEngineAcceptable\(destFile, "extracted"\)/g) || []).length !== 1) return false;
+     if ((sn.match(/cachedEngineAcceptable\(destFile, "asset-extracted"\)/g) || []).length !== 1) return false;
+     // (5) shared commit cascade: verify + rename exist exactly once
+     if ((sn.match(/^ {16}if \(verifyEngineSha256\(tmpFile\)\) \{$/gm) || []).length !== 1) return false;
+     if ((sn.match(/^ {20}if \(!tmpFile\.renameTo\(destFile\)\) \{$/gm) || []).length !== 1) return false;
+     // (6) ORDER + containment (CodeRabbit r66-#8): the rename sits directly
+     //     inside the verify-success branch — source adjacency
+     if (!/if \(verifyEngineSha256\(tmpFile\)\) \{\n {20}if \(!tmpFile\.renameTo\(destFile\)\) \{/.test(sn)) return false;
+     // (7) commit cascade called from BOTH extraction paths
+     if ((sn.match(/return commitExtractedEngine\(tmpFile, destFile, "APK"\);/g) || []).length !== 1) return false;
+     if ((sn.match(/return commitExtractedEngine\(tmpFile, destFile, "assets"\);/g) || []).length !== 1) return false;
+     // (8) the delete-failure log literal exists ONLY as the shared constant (S1192)
+     if (!/^ {4}private static final String LOG_DELETE_FAILED = "Failed to delete: ";$/m.test(sn)) return false;
+     if ((sn.match(/Log\.w\(TAG, "Failed to delete: " \+/g) || []).length !== 0) return false;
+     // (9) extraction still writes the .tmp sibling in both paths
+     if ((sn.match(/new java\.io\.FileOutputStream\(tmpFile\)\)/g) || []).length !== 2) return false;
+     // (10) priority-1..3 resolution gates unchanged (F-1/O-3)
+     if (!/libFile\.length\(\) != EXPECTED_ENGINE_SIZE_BYTES/.test(sn)) return false;
+     if (!/appLibFile\.length\(\) == EXPECTED_ENGINE_SIZE_BYTES && isElfFile\(appLibFile\)/.test(sn)) return false;
+     if (!/candidate\.length\(\) == EXPECTED_ENGINE_SIZE_BYTES && isElfFile\(candidate\)/.test(sn)) return false;
+     // (11) cheap death-guard (T15): literal 'if (false' / 'if (0)' wrappers
+     //     are banned outright; the residual (if (0==1) etc.) is documented
+     //     in methodology §3.10 — behavior is covered by fixtures + negatives
+     if (/if \(false|if \(0\)/.test(sn)) return false;
+     return true;
    })());
 
 // V3-42 — round-66 (F-5): game-logic.js's module header claimed a bundle
@@ -456,18 +502,24 @@ ok('V3-42 game-logic.js module header states true bundle order (first module; ui
        && bcp.lastIndexOf('"ui.js"') > bcp.lastIndexOf('"ui-interactions.js"');
    })());
 
-// V3-43 — round-66 (F-8): readCappedText must compute the line-cap truncation
-//   (appendLen) BEFORE the char-cap throw, so a file the line cap would
-//   legally truncate is not misrejected as "too large" when its final chunk
-//   crosses maxChars. Ordering pinned by source position of the two anchors.
-ok('V3-43 FileIoHelper.readCappedText: line-cap truncation computed before char-cap throw',
+// V3-43 — round-66 (F-8), upgraded round-67 (T13, CodeRabbit r66-#9):
+//   readCappedText must compute the line-cap truncation (appendLen) BEFORE
+//   the char-cap throw, so a file the line cap would legally truncate is
+//   not misrejected as "too large" when its final chunk crosses maxChars.
+//   round-66 pinned only the DECLARATION position — moving the char-cap
+//   check between the declaration and the truncation assignment kept the
+//   sentinel green while re-breaking F-8 (appendLen would still hold the
+//   whole chunk length). Now the truncation ASSIGNMENT itself is pinned
+//   before the throw, by source position of both anchors.
+ok('V3-43 FileIoHelper.readCappedText: line-cap truncation ASSIGNMENT (appendLen = i + 1) precedes char-cap throw (declaration, assignment and throw pinned by order; old untruncated form gone)',
    (() => {
      const fio = read('src/main/java/com/Regalia/FileIoHelper.java');
      if (!fio) return false;
-     const scan = fio.indexOf('int appendLen = n;');
+     const decl = fio.indexOf('int appendLen = n;');
+     const trunc = fio.indexOf('appendLen = i + 1; break; }');
      const thr = fio.indexOf('if (sb.length() + appendLen > maxChars)');
      const oldThr = fio.indexOf('if (sb.length() + n > maxChars)');
-     return scan >= 0 && thr > scan && oldThr === -1
+     return decl >= 0 && trunc > decl && thr > trunc && oldThr === -1
        && /chunk\[i\] == '\\n'\) \{/.test(fio);
    })());
 
@@ -486,29 +538,96 @@ ok('V3-44 SafPickerHelper: Activity-null export path clears pending content/type
        && /_pendingExportType = "settings";/.test(saf.slice(clr, clr + 120));
    })());
 
-// V3-45 — round-66 (F-9/F-23): the two live PGN parsers must be
-//   backtracking-free. F-9: stats.html's old lazy-branch header regex
-//   exceeded 120 s on a 100k-space malformed tag (measured; main thread =
-//   frozen page) — now a deterministic scanner, differential-fuzzed against
-//   the old regex (zero diff, 343k cases, round66-audit.md). F-23:
-//   tablebase.js's multi-game split still had the pre-round-49 quadratic
-//   form (round-49 fixed three copies, missed this fourth — the MAIN page's
-//   import path); now the hardened linear lookbehind form shared with
-//   stats.html's split.
-ok('V3-45 PGN parsers backtracking-free (stats.html deterministic header scanner, lazy headerRe gone; tablebase.js hardened split form, quadratic form gone)',
+// V3-45 — round-66 (F-9/F-23), rewritten round-67 (T6/T7): the two live
+//   PGN parsers must be backtracking-free AND single-pass linear. Round-66
+//   replaced stats.html's lazy header regex with a deterministic scanner
+//   and tablebase.js's quadratic split with a hardened lookbehind — but
+//   CodeRabbit r66-#2/#3/#4 proved both round-66 forms were STILL
+//   super-linear: the lookbehind did not restrict match starts inside
+//   spaces-only blank-line runs (Θ(n²) when no '[' follows), and the
+//   scanner's ']' lookup + trailing-ws trim rescanned overlapping
+//   suffixes (~4n² on '[Event x'.repeat(n); a 10MB single-line input could
+//   hang the page for minutes). round-67: the split is a shared-shape
+//   _pgnFirstGameSplit() isomorphic twin (tablebase.js and stats.html share
+//   no bundle, so ONE shared function is impossible — the twins are pinned
+//   byte-identical instead), and the scanner runs on monotonic caches
+//   (next-']' with its ws-run start + next-'\n', consulted before any
+//   slice). Text predicates are tripwires against the known-bad forms; the
+//   LINEARITY bound itself is behavioral and enforced by N8 (r67-bench.js).
+ok('V3-45 PGN parsers single-pass linear (isomorphic _pgnFirstGameSplit twins byte-equal in tablebase.js+stats.html, semantic core lines pinned; lookbehind/pre-49 split forms gone; stats.html monotonic-cache scanner: next-] + ws-run start + next-\n checked before slice, no per-candidate ] rescan, no lazy headerRe; N8 bench gate wired)',
    (() => {
      const st = read('src/main/assets/stats.html');
      const tb = read('src/main/assets/chess.src/tablebase.js');
-     if (!st || !tb) return false;
-     // fail-closed direction: the ambiguous lazy header regex tail must be gone
+     const neg = read('verifier/runs/r62-negative-tests.sh');
+     if (!st || !tb || !neg) return false;
+     // (1) isomorphic twins: both bodies extracted, byte-equal
+     const fnRe = /function _pgnFirstGameSplit\(text\)\{[\s\S]*?\n\}/;
+     const a = tb.match(fnRe), b = st.match(fnRe);
+     if (!a || !b || a[0] !== b[0]) return false;
+     // (2) the semantic core lines inside the shared body
+     if (!/^ {4}if\(_ls\[_i\]\.charAt\(0\)==='\['&&_run!==-1&&\(_run>=1\|\|_i>=2\)\)_cuts\.push\(\[_pos\[_run>=1\?_run:1\]-1,_pos\[_i\]\]\);$/m.test(a[0])) return false;
+     if (!/^ {4}if\(\/\^\\s\*\$\/\.test\(_ls\[_i\]\)\)\{if\(_run===-1\)_run=_i;\}else _run=-1;$/m.test(a[0])) return false;
+     // (3) both files actually call it for the first-game split
+     if (!/const gameBlocks=_pgnFirstGameSplit\(pgnText\);/.test(tb)) return false;
+     if (!/const _gameBlocks=_pgnFirstGameSplit\(text\);/.test(st)) return false;
+     // (4) known-bad forms gone from both parsers
+     if (/\.split\(\/\(\?<!\\n/.test(tb) || /\.split\(\/\(\?<!\\n/.test(st)) return false;
+     if (tb.includes('split(/\\n\\s*\\n(?=\\[)/')) return false;
      if (/\*\?\)\)\\s\*\\\]/.test(st)) return false;
-     // deterministic scanner implementation lines
-     if (!/const _b=text\.indexOf\('\[', ?_hs\);/.test(st)) return false;
-     if (!/const _e=text\.indexOf\('\]', ?_j\);/.test(st)) return false;
-     // tablebase: hardened linear lookbehind present, old quadratic gone
-     if (!tb.includes('(?<!\\n)\\n[^\\S\\n]*\\n(?:[^\\S\\n]*\\n)*(?=\\[)')) return false;
-     if (tb.includes('split(/\\n\\s*\\n(?=\\[)/)')) return false;
+     if (/text\.indexOf\('\]',_j\)/.test(st)) return false;
+     if (/slice\(_j,_vEnd\)\.indexOf\('\\n'\)/.test(st)) return false;
+     // (5) the monotonic-cache scanner implementation lines
+     if (!/^  let _nb=text\.indexOf\('\]'\),_nbFrom=0,_nbWs=-1;$/m.test(st)) return false;
+     if (!/^  let _nl=text\.indexOf\('\\n'\),_nlFrom=0;$/m.test(st)) return false;
+     if (!/^    if\(from<_nbFrom\|\|\(_nb>=0&&_nb<from\)\)\{_nbFrom=from;_nb=text\.indexOf\('\]',from\);_nbWs=-1;\}$/m.test(st)) return false;
+     if (!/^        const _vEnd=\(_ws>_j\?_ws:_j\);$/m.test(st)) return false;
+     if (!/^        if\(!\(_nlPos>=0&&_nlPos<_vEnd\)\)\{$/m.test(st)) return false;
+     if (!/^    const _b=text\.indexOf\('\[',_hs\);$/m.test(st)) return false;
+     // (6) the behavioral bound is wired into the negative gate (N8)
+     if (!/node runs\/r67-bench\.js/.test(neg)) return false;
      return true;
+   })());
+
+// V3-46 — round-67 (T0/delivery completeness): round-66 deleted worker-pool.js
+//   (732 lines, dead since the round-56 unbundling) and the chess.src ledger
+//   records the deletion — but the zip-overlay upload channel CANNOT delete
+//   files, so the remote tree silently kept it (found by round-67's
+//   remote-vs-local diff; invisible to every round-66 sentinel — exactly the
+//   blind-spot class V3-40b caught for release-helper.yml). Pin the absence
+//   so any tree that still carries the file goes RED.
+ok('V3-46 worker-pool.js absent from tree and build (round-66 deletion pinned; build-chess.py module list carries no worker-pool entry)',
+   (() => {
+     if (fs.existsSync(path.join(__dirname, '..', '..', 'src/main/assets/chess.src/worker-pool.js'))) return false;
+     const bcp = read('build-chess.py');
+     if (!bcp) return false;
+     // quoted-module form only: the round-56 removal NOTE in build-chess.py
+     // legitimately mentions the filename in a comment — the MODULE LIST
+     // entries are quoted strings (see V3-42's list pins), so this bans a
+     // re-add without banning the history.
+     if (bcp.includes('"worker-pool.js"')) return false;
+     return true;
+   })());
+
+// V3-47 — round-67 (T0/delivery completeness): .gitignore (round-56 SEC-02,
+//   "signing material must never enter git") existed locally since round-56
+//   and the round-66 change set claimed it finally landed remotely — it did
+//   not (the zip carried it, the bot commit did not; root cause undetermined
+//   between a stale upload and an extraction quirk — the mitigation is the
+//   new post-upload remote re-check hard rule, guide §7). Pin its presence
+//   and the never-commit exclusions so any tree lacking it goes RED.
+ok('V3-47 .gitignore present with never-commit exclusions (keystore.properties, *.keystore, *.jks, local.properties, build/.cxx/.gradle, src/main/jniLibs)',
+   (() => {
+     if (!fs.existsSync(path.join(__dirname, '..', '..', '.gitignore'))) return false;
+     const gi = read('.gitignore');
+     if (!gi) return false;
+     return /^keystore\.properties$/m.test(gi)
+       && /^\*\.keystore$/m.test(gi)
+       && /^\*\.jks$/m.test(gi)
+       && /^local\.properties$/m.test(gi)
+       && /^build\/$/m.test(gi)
+       && /^\.cxx\/$/m.test(gi)
+       && /^\.gradle\/$/m.test(gi)
+       && /^src\/main\/jniLibs\/$/m.test(gi);
    })());
 
 console.log('\n===== RESULT: ' + pass + ' passed, ' + fail + ' failed =====');

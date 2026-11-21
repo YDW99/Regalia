@@ -12072,7 +12072,10 @@ function _requestBatchEval(step){
         //   the batch pipeline — the project's most hang-prone path (rounds
         //   57/57c/58/61). A silently swallowed retry failure destroys the
         //   diagnostic trail exactly when it is needed.
-        setTimeout(function(){try{_reviewAnalyzeAdvance();}catch(_e){console.warn('[BATCH] delayed advance failed',_e&&_e.message?_e.message:_e);}},100);
+        // v1.2.3 round-67 (T5, Sonar S6582): optional chain — same semantics
+        //   (_e?.message||_e === _e&&_e.message?_e.message:_e for every
+        //   _e, incl. falsy throws and empty messages).
+        setTimeout(function(){try{_reviewAnalyzeAdvance();}catch(_e){console.warn('[BATCH] delayed advance failed',_e?.message||_e);}},100);
       }
       return;
     }
@@ -12451,6 +12454,41 @@ if(gameState.currentTurn!==playerColor)doAIMove();
 //   - Robust header extraction (handles broken quotes)
 //   - NAG + annotation suffix handling
 //   - Better text normalization for maximum format compatibility
+// v1.2.3 round-67 (T6, CodeRabbit r66-#2/#3): single-pass linear multi-game
+//   split. The round-66 lookbehind split regex (negative lookbehind + blank-
+//   line run + '[' lookahead; exact form preserved in round66-audit.md — old
+//   code is paraphrased here per the V2-21 comment rule) was NOT linear:
+//   the lookbehind only blocks a match start whose preceding char is a
+//   newline, so inside a spaces-only blank-line run every '\n' still started a
+//   full scan of the remaining run — Θ(n²) when no '[' follows (main-thread
+//   ANR vector; the old "restricts match starts to the FIRST '\n'" claim was
+//   wrong). This scanner walks the lines once: a block boundary exists where
+//   ≥1 blank lines (spaces-only or empty) sit between the previous line and a
+//   '['-starting line, and the separator consumes the opener line's '\n' plus
+//   every blank line (spaces included) — the exact old match span. Split
+//   results are byte-identical to the round-66 regex (differential fuzz incl.
+//   spaces-only runs / no-'[' tails / leading blank runs / 10MB single-line
+//   classes; round67-audit.md §T8). Isomorphic twin of stats.html's
+//   _pgnFirstGameSplit — the two files share no bundle, so the algorithm is
+//   necessarily duplicated and kept in shape-sync by V3-45.
+function _pgnFirstGameSplit(text){
+  var _ls=text.split('\n');
+  var _pos=new Array(_ls.length+1);
+  var _cuts=[];
+  var _run=-1;
+  var _i;
+  _pos[0]=0;
+  for(_i=0;_i<_ls.length;_i++)_pos[_i+1]=_pos[_i]+_ls[_i].length+1;
+  for(_i=0;_i<_ls.length;_i++){
+    if(_ls[_i].charAt(0)==='['&&_run!==-1&&(_run>=1||_i>=2))_cuts.push([_pos[_run>=1?_run:1]-1,_pos[_i]]);
+    if(/^\s*$/.test(_ls[_i])){if(_run===-1)_run=_i;}else _run=-1;
+  }
+  if(!_cuts.length)return [text];
+  var _out=[text.slice(0,_cuts[0][0])];
+  for(_i=1;_i<_cuts.length;_i++)_out.push(text.slice(_cuts[_i-1][1],_cuts[_i][0]));
+  _out.push(text.slice(_cuts[_cuts.length-1][1]));
+  return _out;
+}
 function _parsePGN(pgnText){
   if(!pgnText||typeof pgnText!=='string')return null;
   // Remove BOM (byte order mark)
@@ -12467,16 +12505,17 @@ function _parsePGN(pgnText){
   
   // Handle multiple games: only parse the first game.
   // PGN files with multiple games have header blocks starting with [Event ...].
-  // Split on double-newline followed by a header tag to isolate the first game.
-  // v1.2.3 round-66 (F-23): hardened linear lookbehind form — the old
-  //   /\n\s*\n(?=\[)/ backtracks O(k²) on long blank-line runs not followed
-  //   by '[' (the round-49 stats.html fix updated three copies but missed
-  //   this fourth one — the MAIN page's import parser, main thread ANR on
-  //   hostile PGNs). Same form as stats.html's split; split results are
-  //   byte-identical (round-49 proved this transformation with a 300k-case
-  //   fuzz; see round66-audit.md). Lookbehind needs Chrome 62+ — inside the
-  //   WebView≥84 floor.
-  const gameBlocks=pgnText.split(/(?<!\n)\n[^\S\n]*\n(?:[^\S\n]*\n)*(?=\[)/);
+  // Split on a blank-line run followed by a header tag to isolate the first game.
+  // v1.2.3 round-66 (F-23): hardened lookbehind form (the pre-round-49
+  //   quadratic split form backtracked O(k²) — the round-49 stats.html fix
+  //   had missed this fourth copy; a 300k-case fuzz proved the swap
+  //   byte-identical, round66-audit.md).
+  // v1.2.3 round-67 (T6, CodeRabbit r66-#2/#3): the lookbehind form was still
+  //   NOT linear on spaces-only blank-line runs (see _pgnFirstGameSplit's
+  //   header comment) — replaced by the single-pass line scanner above.
+  //   Byte-identical results (differential fuzz, round67-audit.md §T8); the
+  //   WebView lookbehind floor concern is gone with the regex.
+  const gameBlocks=_pgnFirstGameSplit(pgnText);
   if(gameBlocks.length>1)pgnText=gameBlocks[0];
   
   // Extract FEN from headers if present (for custom starting positions)
