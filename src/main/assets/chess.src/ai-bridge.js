@@ -728,7 +728,7 @@ function _updateEngineNotification(info){
   },1000);
   try{
     if(typeof AndroidBridge!=='undefined'&&AndroidBridge.updateEngineNotification){
-      AndroidBridge.updateEngineNotification('Stockfish 18 · '+info);
+      AndroidBridge.updateEngineNotification('Stockfish 19 · '+info);
     }
   }catch(e){console.warn('[AIBridge] updateEngineNotification failed:',e.message);}
 }
@@ -3627,7 +3627,7 @@ function renderEngineConfig(){
     // Engine info section — built-in engine only
     h+='<div class="dlg-sec"><h3>'+T('engine_info')+'</h3>';
     h+='<div style="background:var(--card);border:1px solid var(--border);border-radius:6px;padding:10px;font-size:.8rem;line-height:1.6">';
-    h+='<div><span style="color:var(--muted)">'+T('engine_name')+': </span><span style="font-weight:700">'+_esc(info.name||'Stockfish 18')+'</span><span style="color:var(--accent);font-size:.65rem;margin-left:6px">['+T('built_in')+']</span></div>';
+    h+='<div><span style="color:var(--muted)">'+T('engine_name')+': </span><span style="font-weight:700">'+_esc(info.name||'Stockfish 19')+'</span><span style="color:var(--accent);font-size:.65rem;margin-left:6px">['+T('built_in')+']</span></div>';
     h+='<div><span style="color:var(--muted)">'+T('engine_author')+': </span><span>'+_esc(info.author||'--')+'</span></div>';
     if(info.threads!=null)h+='<div><span style="color:var(--muted)">'+T('engine_threads')+': </span><span>'+info.threads+'</span></div>';
     if(info.hash!=null)h+='<div><span style="color:var(--muted)">'+T('engine_hash')+': </span><span>'+info.hash+' MB</span></div>';
@@ -3709,7 +3709,7 @@ function openEngineConfig(){
   engineSettingsData=null;
   // No engine scanning/import — only built-in engine info
   if(typeof AndroidBridge!=='undefined'){
-    try{const info=AndroidBridge.getEngineInfo();if(info)engineConfigData=JSON.parse(info);}catch(e){engineConfigData={name:'Stockfish 18',author:'T. Romstad, M. Costalba, J. Kiiski, G. Linscott'};}
+    try{const info=AndroidBridge.getEngineInfo();if(info)engineConfigData=JSON.parse(info);}catch(e){engineConfigData={name:'Stockfish 19',author:'T. Romstad, M. Costalba, J. Kiiski, G. Linscott'};}
     try{const settings=AndroidBridge.getEngineSettings();if(settings)engineSettingsData=JSON.parse(settings);}catch(e){engineSettingsData=null;}
   }
   if(!engineSettingsData){
@@ -5251,7 +5251,7 @@ let _lastProgressNps=null;
 function _buildEvalHTML(e,opts){
   opts=opts||{};
   let s='<span class="ev-e">'+e.emoji+'</span><span>'+e.desc+'</span><span style="color:var(--muted)">('+e.score+')</span>';
-  if(opts.sf18){s+='<span style="font-size:.55rem;color:var(--accent);margin-left:4px;border:1px solid rgba(212,160,23,.3);padding:1px 4px;border-radius:3px;background:rgba(212,160,23,.08)">SF18</span>';}
+  if(opts.sf19){s+='<span style="font-size:.55rem;color:var(--accent);margin-left:4px;border:1px solid rgba(212,160,23,.3);padding:1px 4px;border-radius:3px;background:rgba(212,160,23,.08)">SF19</span>';}
   const depthStr=_sfDepth>0?'<span style="font-size:.65rem;color:var(--muted);margin-left:4px">D'+_sfDepth+'</span>':'';
   s+=depthStr;
   let progressStr='';
@@ -5300,7 +5300,7 @@ function _updateEvalDisplay(){
   }
   const e=formatEval();
   // P4 SIMPLIFY: Use shared helper for consistent eval display formatting
-  el.innerHTML=_buildEvalHTML(e,{sf18:true});
+  el.innerHTML=_buildEvalHTML(e,{sf19:true});
 }
 
 // Update review mode eval display (lightweight DOM update, no full render)

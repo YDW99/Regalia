@@ -138,9 +138,10 @@ in worklog.md.
 2. Stockfish (chess engine)
 ---------------------------
 
-The app bundles the Stockfish 18 chess engine (arm64-v8a-dotprod build)
-as a native ARM64 library, libstockfish.so (114,115,752 bytes; SHA-256
-8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5 — the
+The app bundles the Stockfish 19 chess engine (arm64-v8a universal
+build, runtime dotprod-aware) as a native ARM64 library, libstockfish.so
+(100,695,968 bytes; SHA-256
+ffd8fc2004d3d19f9fdab95d84c92709aea92e8d3af405eda0b281b23cf1daf8 — the
 same value is hardcoded as EXPECTED_ENGINE_SHA256 in StockfishNative and
 verified at runtime on engine extraction; on rooted devices, cached
 engine reuse is re-verified via RootDetector). The binary is NOT

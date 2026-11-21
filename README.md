@@ -3,7 +3,7 @@
 <!-- AI-GEN: AI assisted
      This document was AI-assisted and has been reviewed for AGPL v3 compliance. -->
 
-A standalone, open-source chess app for Android — play offline against Stockfish 18, analyze your games, and explore openings. No account, no tracking; offline-first — the only network access is the optional Lichess tablebase probe (certificate-pinned, on explicit user request; auto-disabled when offline). Now with **Chess960 (Fischer Random Chess)** support (v1.0.4).
+A standalone, open-source chess app for Android — play offline against Stockfish 19, analyze your games, and explore openings. No account, no tracking; offline-first — the only network access is the optional Lichess tablebase probe (certificate-pinned, on explicit user request; auto-disabled when offline). Now with **Chess960 (Fischer Random Chess)** support (v1.0.4).
 
 "Regalia" is used solely as a project name for this open-source chess app. No trademark rights are claimed. Anyone is free to fork and rename their own version.
 
@@ -21,7 +21,7 @@ Portrait mode — evaluation bar, move history, AI opponent display with ponder 
 
 ## Features
 
-- **Stockfish 18 Engine** — arm64-v8a-dotprod variant (ARMv8.6-A DOTPROD instructions for NN inference acceleration) for optimal performance on modern devices
+- **Stockfish 19 Engine** — arm64-v8a universal build (runtime CPU-feature detection: dotprod and other ARMv8 extensions used automatically when available) for optimal performance on modern devices
 - **Chess960 / Fischer Random Chess** (v1.0.4 NEW) — full support for the 960 starting positions with proper castling rules, SP-ID selector in New Game dialog, Shredder-FEN castling rights, and `UCI_Chess960` engine option
 - **Standardized PGN** (v1.0.4 NEW) — import/export follows the 1994 PGN spec strictly: Seven-Tag Roster always emitted, `[%eval]` / `[%clk]` / `[%emt]` annotations embedded, Result terminator enforced, tolerant parser auto-corrects malformed input
 - **NAG &amp; Visual Annotations** (v1.0.4 NEW) — NAG ($1-$19) support; automatic selection &amp; caching of `[%csl ...]` (square highlights) and `[%cal ...]` (arrows) per move: Square highlights — Blue=player net-control strong squares, Red=AI net-control strong squares, Yellow=high total-control squares, Green=neutral center squares; Arrows — Blue=multi-threat (one piece threatens 2+ enemy pieces), Red=check path, Yellow=queen-threat path, Green=escape squares
@@ -81,11 +81,11 @@ Bilingual, self-contained HTML manuals (open in any browser):
 - JDK 21 (e.g. Temurin JDK 21.0.5+11) — provides `javac`
 - Android SDK with API 35 (Android 15), Build-Tools 34.0.0, NDK 27.2.12479018, CMake 3.31.6
 - Gradle 8.11.1 (wrapper included)
-- Stockfish 18 engine binary for arm64-v8a-dotprod
+- Stockfish 19 engine binary for arm64-v8a (universal build)
 
 ### Build Steps
 
-1. Download the Stockfish 18 arm64-v8a-dotprod binary from the [official sf_18 release](https://github.com/official-stockfish/Stockfish/releases/download/sf_18/stockfish-android-armv8-dotprod.tar), extract it, and place the binary at:
+1. Download the Stockfish 19 arm64-universal binary from the [official sf_19 release](https://github.com/official-stockfish/Stockfish/releases/download/sf_19/stockfish-android-arm64-universal.tar.gz), extract it, and place the binary at:
    ```
    src/main/jniLibs/arm64-v8a/libstockfish.so
    ```
@@ -168,11 +168,11 @@ Regalia/
 │   │   └── README.license      # Per-file license classification for this directory
 │   ├── AndroidManifest.xml
 │   ├── README.license          # Per-file license classification for src/main/
-│   └── jniLibs/arm64-v8a/      # (build-time) libstockfish.so + libc++_shared.so — Stockfish 18
+│   └── jniLibs/arm64-v8a/      # (build-time) libstockfish.so + libc++_shared.so — Stockfish 19
                                 #   engine binary + NDK C++ runtime; NOT in source tarball;
                                 #   download separately and place here (see BUILDING.md).
                                 #   Excluded from source distribution to keep the tarball
-                                #   small and avoid redistributing the 114MB engine binary
+                                #   small and avoid redistributing the ~100MB engine binary
                                 #   with the source.
 ├── Manual/                     # User manuals (HTML, self-contained)
 │   ├── Regalia-v1.2.3-manual-zh.html  # Chinese user manual (current v1.2.3)
@@ -220,7 +220,6 @@ Regalia/
 ├── gradlew / gradlew.bat       # Gradle wrapper scripts
 ├── CONTRIBUTING-zh.md / CONTRIBUTING-en.md # Contributing guidelines (zh/en)
 ├── SECURITY_FIXES.md           # Security hardening changelog (MobSF findings)
-├── About_v18.x.x_.md          # Engine version notes (Stockfish 18.x.x)
 ├── worklog.md                  # Development work log (newest round first)
 └── README.md
 ```
@@ -252,7 +251,7 @@ Regalia is a **combined work** under dual licensing:
 |-----------|---------|------|
 | Original application code (UI, WebView, services, build scripts) | AGPL v3 | LICENSE-AGPL v3 |
 | DroidFish-derived code (engine management, game logic, PGN parsing, UI patterns) | GPL v3 | LICENSE-GPL v3 |
-| Stockfish 18 engine binary (`libstockfish.so`) | GPL v3 | LICENSE-GPL v3 |
+| Stockfish 19 engine binary (`libstockfish.so`) | GPL v3 | LICENSE-GPL v3 |
 | ECO opening data | CC0 (data) / AGPL v3 (code) | `src/main/assets/chess.src/eco-data.js` |
 | Application icons | AI-generated / AGPL v3 | — |
 
@@ -284,7 +283,7 @@ Per GPL v3 Section 13, these licenses are compatible for combination. Each compo
 - `index.html.tpl` — CSS template (DroidFish-derived layout patterns)
 - `pgn-standard.js` — PGN encode/decode (PGN parsing)
 - `StatsActivity.java` — Statistics page, PGN display
-- `libstockfish.so` — Stockfish 18 engine binary (arm64-v8a-dotprod)
+- `libstockfish.so` — Stockfish 19 engine binary (arm64-v8a universal build)
 
 ### AGPL v3 Files (original)
 
@@ -305,7 +304,7 @@ Per GPL v3 Section 13, these licenses are compatible for combination. Each compo
 ### Third-Party Components
 
 - **DroidFish** — Engine management, game logic, PGN parsing, UI patterns (Copyright © Peter Österlund, GPL v3)
-- **Stockfish 18** — Chess engine (Copyright © T. Romstad, M. Costalba, J. Kiiski, G. Linscott, GPL v3)
+- **Stockfish 19** — Chess engine (Copyright © T. Romstad, M. Costalba, J. Kiiski, G. Linscott, GPL v3)
 - **Lichess Tablebase API** — Endgame tablebase queries (public API, requires network)
 - **lichess-org/chess-openings** — ECO opening classification data (CC0)
 

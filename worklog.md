@@ -1,3 +1,44 @@
+# Regalia v1.2.3 — round-65 工作日志（2026-11-21 UTC+8）
+
+## 任务来源
+
+用户指令：Stockfish 19 dotprod 已发布，将引擎升级至此版本，并将《恢复指南》BUILDING.md 等文件中的引擎相关信息全部升级为 Stockfish 19，SHA-256 校验同步更新。基线源 = 本地工作树（round-64 完成态，沙箱未回收；GitHub upload 分支 head 仍为 `94efed9e`——round-64 变更尚未上传，本轮 upload 包将涵盖两轮）。
+
+**发布形态核实（重要）**：sf_19 官方 release **不再提供** `stockfish-android-armv8-dotprod.tar` 专项包——自 sf_17 起 Android arm64 资产改为 **universal 构建**（`stockfish-android-arm64-universal.tar.gz`，80,233,187 字节，运行时检测 dotprod 等 CPU 特性）。用户要的"dotprod 能力"由 universal 包满足，且带来真实兼容性收益：不支持 ARMv8.6-A DOTPROD 的旧设备（A53/A55/A72/A75）从"启动即崩溃"变为自动退回基础路径。文档措辞全部按此事实表述。
+
+## 引擎身份（新）
+
+- 官方 sf_19 `stockfish-android-arm64-universal.tar.gz`（gh-proxy 8 段并行下载，分段前先 HEAD 取 tar 真实大小——tar ≠ ELF 大小）
+- ELF：`stockfish-android-arm64-universal`，**100,695,968 字节**，SHA-256 `ffd8fc2004d3d19f9fdab95d84c92709aea92e8d3af405eda0b281b23cf1daf8`，file 验证 "ELF 64-bit LSB executable, ARM aarch64, statically linked, for Android 29, built by NDK r27c (12479018)"（加载目标与 sf_18 相同，运行时兼容）
+- 旧值（历史）：sf_18 armv8-dotprod，114,115,752 字节，`8f7116d3…23b61b5`
+
+## 实施
+
+1. **Java 活代码两处**：`StockfishNative.java` 的 `EXPECTED_ENGINE_SHA256` 更新为新摘要（指纹滞留旧值 ⇒ App 运行时防篡改门永远删除并重抽新引擎——最关键的同步点）；引擎提取进度分母 `114115752L → 100695968L`（12%→25% 进度刻度必须随捆绑引擎大小，Rev61 截断修复的乘法优先次序保留）。
+2. **JS 六处（用户可见引擎身份）**：ai-bridge.js 通知文本 `'Stockfish 19 · '`、评估徽标键名 `sf18→sf19` + 显示 `SF19`（`_buildEvalHTML` + 调用点）、引擎配置两处回退名 `'Stockfish 19'`；ui.js 关于页 "Stockfish 19 (arm64-v8a universal)"；game-logic.js 计时赛注释。历史出处注释（"Per SF18 eval best-practices doc"）按出处引用原则保留。chess.html 确定性重打包：**24,208 行 / 1,488,720 字节**（round-64：1,488,718）。
+3. **防回潮哨兵 V3-40（新）**：引擎身份散布多文件（Java 指纹 / NOTICE / BUILDING 顶部 / 进度分母），升级正是"改一处漏一处"高危场景——钉死跨文件一致性：Java 摘要 == NOTICE 摘要 == BUILDING.md 顶部摘要；进度分母 == NOTICE 声明字节数。v3 基线 40 → **41**，三件套 **44/27/41**。
+4. **活文档就地更新**：README.md 顶部主体（简介/特性/构建步骤含 sf_19 下载 URL/目录树注记/许可表/第三方组件；顺带移除目录树中不存在的 About_v18.x.x_.md 失真条目）、NOTICE（引擎声明段）、PRIVACY.md（完整性校验节）、LICENSES/README.md、UBIQUITOUS_LANGUAGE.md、`.github/workflows/release-helper.yml` release 说明模板。
+5. **BUILDING.md**：round-65 build notes 置顶（新引擎 URL/身份/V3-40/代码同步清单 + 指明下方旧轮次中 sf_18 指引为历史）；历史轮次段 append-only 保留。
+6. **台账五本置顶**：lib/arm64-v8a（含活目录描述段更新）、java/（StockfishNative 两处）、src/main/（jniLibs 注记）、assets/（chess.html 重建）、chess.src/（三模块明细）。**H2a 当场抓获本条目一处同向误标**（ai-bridge.js 被我写成 AGPL，实为 GPL）——双向哨兵第三次现场立功（round-61 H2b、round-62 之后又一次），立即更正后 41/41 全绿。
+7. **手册双语**：活章节九处替换（封面/特性/许可表/组件表/免责/时间管理章标题与正文/页脚，功能章与历史段同文处以 h3+正文组合锚精确定位）；附录 A round-65 段置顶，导语"第六十五轮至第十八轮"，三检通过（div 365/365 双语）。
+
+## RED-verified（军规 §3.10：新哨兵当轮验证）
+
+- 变异 1（NOTICE 摘要翻一位十六进制）→ V3-40 **FAIL**（40 passed 1 failed）
+- 变异 2（进度分母回退旧值 114115752L）→ V3-40 **FAIL**
+- 干净对照 → 41/41 全绿
+- 全部在 /tmp fixture 树注入（磁盘 98% 满的教训：fixture 必须排除 build/.cxx/jniLibs 再复制）
+
+## 验证结论
+
+- node --check：ai-bridge.js / game-logic.js / ui.js / v3 全过；三件套 **44/27/41 全绿**（V3-40 加入）。
+- chess.html：24,208 行 / 1,488,720 字节，确定性重建。
+- 版本号 10203/"1.2.3" 不变；无新权限/网络出口/数据收集（UCI 集成零改动）。
+- APK：新引擎全量重建 + 六连验（结果见 round65-audit.md）。
+- 环境事件：构建前磁盘 98% 满（仅剩 226MB）——清理 round-64 构建产物（416MB）、已安装组件的安装包（~1GB）、旧 SF18 引擎解包后恢复 2.0GB 可用。
+
+---
+
 # Regalia v1.2.3 — round-64 工作日志（2026-11-21 UTC+8）
 
 ## 任务来源

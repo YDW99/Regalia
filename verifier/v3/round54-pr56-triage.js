@@ -305,6 +305,38 @@ ok('V3-39 r62-negative-tests.sh self-discipline (line-anchored: self-resolved ro
 // H3 — path resolution is __dirname-based (like v1/v2), not cwd-based
 ok('H3 verifier resolves from __dirname (cwd-independent)',
    read('verifier/v3/round54-pr56-triage.js').includes("path.join(__dirname, '..', '..'"));
+// V3-40 — round-65 (engine upgrade sf_18 armv8-dotprod -> sf_19 arm64-universal):
+//   the engine identity is spread across multiple LIVE artifacts —
+//   StockfishNative.java's EXPECTED_ENGINE_SHA256 (runtime tamper gate:
+//   a stale value makes the app delete and re-extract the new engine
+//   forever) and its extraction-progress denominator, NOTICE's bundle
+//   declaration, BUILDING.md's current (topmost) build notes. The upgrade
+//   risk is exactly the round-64 lesson generalized in methodology §3.10:
+//   change one place, miss another. This sentinel pins CROSS-FILE
+//   CONSISTENCY, not the value itself (the pinned value lives in exactly
+//   one place — the Java constant — and everyone else must agree):
+//   (a) Java digest == NOTICE digest == BUILDING.md topmost digest;
+//   (b) Java progress denominator (bytes) == NOTICE declared engine size.
+//   Line-anchored where anchors exist; RED-verified this round with two
+//   fixture mutations (NOTICE digest flipped one hex digit; denominator
+//   reverted to the old engine size) — see round65-audit.md.
+ok('V3-40 engine identity cross-file consistent (Java digest == NOTICE == topmost BUILDING.md; progress denominator == NOTICE byte size)',
+   (() => {
+     const sn = read('src/main/java/com/Regalia/StockfishNative.java');
+     const notice = read('NOTICE');
+     const building = read('BUILDING.md');
+     if (!sn || !notice || !building) return false;
+     const jd = sn.match(/EXPECTED_ENGINE_SHA256 =\s*"([0-9a-f]{64})"/)
+            || sn.match(/EXPECTED_ENGINE_SHA256 =\s*\n\s*"([0-9a-f]{64})"/);
+     const nd = notice.match(/SHA-256\s+([0-9a-f]{64})/);
+     const bd = building.match(/SHA-256\s*`?([0-9a-f]{64})`?/);
+     const den = sn.match(/total \* 13L \/ (\d+)L/);
+     const nsz = notice.match(/libstockfish\.so\s*\(([\d,]{6,}) bytes/);
+     if (!jd || !nd || !bd || !den || !nsz) return false;
+     return jd[1] === nd[1]
+       && jd[1] === bd[1]
+       && Number(den[1]) === Number(nsz[1].replace(/,/g, ''));
+   })());
 
 console.log('\n===== RESULT: ' + pass + ' passed, ' + fail + ' failed =====');
 process.exit(fail === 0 ? 0 : 1);

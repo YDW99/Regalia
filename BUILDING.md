@@ -3,6 +3,47 @@
 > Build guide for the Regalia Android chess app (versionCode=10203, versionName="1.2.3").
 > Round-by-round build notes are appended below (newest first).
 
+## Round-65 build notes (2026-11-21) — ENGINE UPGRADE sf_18 → sf_19
+
+- **Engine upgraded**: Stockfish 18 `arm64-v8a-dotprod` → Stockfish 19
+  `arm64-universal`. The official sf_19 release no longer ships a
+  dedicated android-armv8-dotprod tar — since sf_17 the Android arm64
+  asset is a **universal build** that detects CPU features (dotprod and
+  other ARMv8 extensions) at runtime, which supersedes the per-variant
+  tars. Download (80,233,187-byte tar.gz):
+  `https://github.com/official-stockfish/Stockfish/releases/download/sf_19/stockfish-android-arm64-universal.tar.gz`
+  Extract and place `stockfish/stockfish-android-arm64-universal` at
+  `src/main/jniLibs/arm64-v8a/libstockfish.so`.
+- **New engine identity (verified before use, ELF 64-bit ARM aarch64,
+  statically linked, for Android 29, built by NDK r27c (12479018))**:
+  size **100,695,968 bytes**; SHA-256
+  `ffd8fc2004d3d19f9fdab95d84c92709aea92e8d3af405eda0b281b23cf1daf8`.
+  Cross-file consistency of this digest and size is now guarded by the
+  v3 sentinel **V3-40** (Java `EXPECTED_ENGINE_SHA256` == NOTICE ==
+  this file's topmost digest; Java extraction-progress denominator ==
+  NOTICE byte size).
+- **Code changes tracking the engine**:
+  - `StockfishNative.java` — `EXPECTED_ENGINE_SHA256` updated to the
+    digest above (a stale value would make the app delete and re-extract
+    the new engine forever); the engine-extraction progress denominator
+    updated `114115752L` → `100695968L` (the 12%→25% progress scale
+    must track the bundled engine size).
+  - `chess.src/ai-bridge.js` / `ui.js` / `game-logic.js` — user-facing
+    engine identity strings updated (notification text, SF19 eval badge
+    `sf18`→`sf19` option key + display, engine-config fallback names,
+    About dialog "Stockfish 19 (arm64-v8a universal)"). `chess.html`
+  rebuilt: 24,208 lines / 1,488,720 bytes (round-64: 1,488,718).
+- **Docs synchronized**: README.md (features/build/licensing/attribution),
+  NOTICE, PRIVACY.md (integrity section), LICENSES/README.md,
+  UBIQUITOUS_LANGUAGE.md, `.github/workflows/release-helper.yml` release
+  notes template; per-directory license ledgers got round-65 entries.
+  Build steps below in the older notes that name the sf_18 tar are
+  historical (append-only) — the sf_19 URL above is authoritative.
+- Mirror-strategy environment notes (throttled official sources,
+  parallel ranged downloads, init-script repo swap, memory override)
+  live in the round-64 recovery guide §2.3; this round reused the
+  surviving build environment with only the engine replaced.
+
 ## Round-54b build notes (2026-10-05)
 
 - **SonarCloud follow-up on the round-54 tree** (4 issues → 2 fixed / 2

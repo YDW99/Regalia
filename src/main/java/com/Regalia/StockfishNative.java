@@ -332,11 +332,12 @@ public class StockfishNative {
     //   APK/assets, catching truncated writes that still pass the length+ELF
     //   gate (round-49 comment's residual hole); (b) on the cached-copy reuse
     //   fast path when the device is rooted (SEC-09) — filesDir is app-private,
-    //   so without root there is no tampering vector and the expensive 114MB
+    //   so without root there is no tampering vector and the expensive ~100MB
     //   hash is skipped. A mismatch deletes the poisoned copy and re-extracts
-    //   from the signature-protected APK.
+    //   from the signature-protected APK. (round-65: expected digest updated
+    //   for the sf_19 arm64-universal engine.)
     private static final String EXPECTED_ENGINE_SHA256 =
-            "8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5";
+            "ffd8fc2004d3d19f9fdab95d84c92709aea92e8d3af405eda0b281b23cf1daf8";
     // v1.2.1 round-10 (review-D P3): extracted magic number — grace period
     //   (ms) to wait after sending "stop" for a ponder search's bestmove to
     //   arrive before assuming the engine is idle. Was a bare `100` literal.
@@ -4876,9 +4877,12 @@ public class StockfishNative {
                     //   total / 114115752L  → 0 for any total < 114 MB (integer truncation)
                     //   0 * 13              → 0
                     // So progress stayed at 12% until extraction completed, then jumped
-                    // to 25%. Reordered to `total * 13L / 114115752L` so the multiply
-                    // happens first (no precision loss for total < 8.8 GB).
-                    int pct = 12 + (int) (total * 13L / 114115752L);
+                    // to 25%. Reordered so the multiply happens first (no precision
+                    // loss for total < 8.8 GB).
+                    // v1.2.3 round-65: denominator updated from 114115752L (sf_18
+                    //   armv8-dotprod) to 100695968L (sf_19 arm64-universal) — the
+                    //   extraction-progress scale must track the bundled engine size.
+                    int pct = 12 + (int) (total * 13L / 100695968L);
                     postJsCallback("onInitProgress(" + pct + ", " + escapeJsString((isEnglishMode() ? "Extracting engine... " : "\u6b63\u5728\u63d0\u53d6\u5f15\u64ce... ") + (total / 1048576) + "MB") + ")");
                 }
             }

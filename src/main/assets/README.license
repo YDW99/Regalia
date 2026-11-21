@@ -1,3 +1,12 @@
+v1.2.3 round-65 (2026.11.21): engine identity strings sf_18 -> sf_19; chess.html rebuilt (24,208 lines / 1,488,720 bytes).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - chess.html (AGPL v3 combined work): rebuilt byte-deterministically by
+    build-chess.py from the chess.src modules carrying the round-65
+    engine-identity updates (see the chess.src ledger entry below for
+    the module-level detail). 24,208 lines / 1,488,720 bytes (round-64:
+    1,488,718).
+  - License classification: all files unchanged.
+
 v1.2.3 round-61 (2026.11.21): chess.html rebuilt from the round-61 modules (24,208 lines).
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - chess.html (AGPL v3 combined work): rebuilt byte-deterministically by

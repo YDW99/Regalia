@@ -1,3 +1,21 @@
+v1.2.3 round-65 (2026.11.21): engine upgrade sf_18 -> sf_19 — NEW sentinel
+  V3-40 (engine identity cross-file consistency; baseline 44/27/41).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - verifier/v3/round54-pr56-triage.js (AGPL v3 harness): NEW V3-40 — the
+    engine identity is spread across live artifacts
+    (StockfishNative.java's EXPECTED_ENGINE_SHA256 runtime tamper gate and
+    its extraction-progress denominator, NOTICE's bundle declaration,
+    BUILDING.md's topmost build notes); an engine upgrade is exactly the
+    "change one place, miss another" hazard, so the sentinel pins
+    cross-file consistency (Java digest == NOTICE digest == topmost
+    BUILDING.md digest; progress denominator == NOTICE declared byte
+    size). RED-verified this round with two /tmp-fixture mutations
+    (NOTICE digest one hex digit flipped -> FAIL; denominator reverted
+    to the old engine size -> FAIL; clean control 41/41 green). v3
+    baseline 40 -> 41; triple baseline now **44/27/41**.
+  - v1/v2: zero changes this round.
+  - License classification: all files unchanged.
+
 v1.2.3 round-64 (2026.11.21): PR #57 CodeRabbit follow-up 2 — guard-script
   data-loss paths closed, meta sentinel V3-39 upgraded to
   implementation-line anchoring (baseline 44/27/40 unchanged).

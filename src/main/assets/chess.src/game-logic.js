@@ -3193,7 +3193,7 @@ if(typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.isEngineReady==='fun
 // v1.0.6: Sanitize the FEN before sending to the engine to strip
 // inconsistent castling rights that can cause the engine to hang.
 const fen=(typeof _sanitizeFenForEngine==='function')?_sanitizeFenForEngine(generateFEN(gameState)):generateFEN(gameState);
-// v1.0.4 LATEST: if the game is timed, use engineGoTimed() so Stockfish 18
+// v1.0.4 LATEST: if the game is timed, use engineGoTimed() so Stockfish 19
 // manages its own time allocation via UCI wtime/btime/winc/binc parameters.
 // This is the correct way to play timed games — the engine will think longer
 // in critical positions and shorter in simple ones, just like a human.

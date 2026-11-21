@@ -106,7 +106,7 @@ UCI ──convertible to──> Coords ──executable as──> Move
 |------|------------|------------------------------------|
 | **UCI (Universal Chess Interface)** | The communication protocol used by Stockfish and most modern chess engines | — |
 | **UCI Handshake** | Initialization sequence: send `uci` → receive `uciok` → send `isready` → receive `readyok` | — |
-| **Stockfish 18** | The engine version Regalia uses (arm64-v8a-dotprod native build, run via JNI subprocess) | Avoid "SF" in domain conversation (code abbreviation only) |
+| **Stockfish 19** | The engine version Regalia uses (arm64-v8a universal native build with runtime dotprod detection, run via JNI subprocess) | Avoid "SF" in domain conversation (code abbreviation only) |
 | **Best Move** | The move the engine returns via `bestmove` after a `go` command | — |
 | **Think / Go** | The engine's search process, triggered by the `go` command | — |
 | **Hint** | A short-time-limit search to produce a "hint move" for the current position | Avoid "suggestion", "advice" |

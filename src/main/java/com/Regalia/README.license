@@ -1,3 +1,16 @@
+v1.2.3 round-65 (2026.11.21): engine upgrade sf_18 -> sf_19 — StockfishNative engine-identity constants updated.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - StockfishNative.java (GPL v3, DroidFish-derived lineage): (1)
+    EXPECTED_ENGINE_SHA256 updated to the sf_19 arm64-universal digest
+    ffd8fc2004d3d19f9fdab95d84c92709aea92e8d3af405eda0b281b23cf1daf8
+    (a stale value would make the runtime tamper gate delete and
+    re-extract the new engine forever); (2) the engine-extraction
+    progress denominator 114115752L -> 100695968L (the 12%-to-25%
+    progress scale must track the bundled engine size; the round-6
+    Rev61 truncation-fix ordering is preserved). No engine-protocol
+    changes — UCI integration unchanged.
+  - License classification: all files unchanged (GPL v3).
+
 v1.2.3 round-62 (2026.11.21): first physical dedup pass — SAF pickers and the 8KB chunked read loop single-sourced.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - SafPickerHelper.java (GPL v3, DroidFish-derived lineage): the two

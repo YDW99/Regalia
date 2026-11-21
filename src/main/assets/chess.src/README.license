@@ -1,3 +1,18 @@
+v1.2.3 round-65 (2026.11.21): engine identity strings updated to Stockfish 19 (sf_18 -> sf_19 upgrade).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - ai-bridge.js (GPL v3): engine notification text
+    ('Stockfish 19 · '), eval badge option key sf18 -> sf19 with display
+    SF19 (_buildEvalHTML + the sf19:true call site), engine-config
+    fallback name 'Stockfish 19' (both the dialog default and the
+    getEngineInfo-catch fallback). Historical "Per SF18 eval
+    best-practices doc" comments kept verbatim (they cite the source
+    document, not the current engine).
+  - ui.js (GPL v3): About dialog engine row -> "Stockfish 19 (arm64-v8a
+    universal)".
+  - game-logic.js (GPL v3): timed-game comment referencing the engine
+    version updated to 19.
+  - License classification: all files unchanged.
+
 v1.2.3 round-61 (2026.11.21): analyze-all progress-hang terminator moved to the progress path (R61-c).
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - ui.js (GPL v3): the 180s no-step-completed whole-batch wall-clock

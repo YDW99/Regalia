@@ -1,3 +1,16 @@
+v1.2.3 round-65 (2026.11.21): engine upgrade sf_18 -> sf_19 — build-time engine placement notes updated.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - src/main/jniLibs/arm64-v8a/ (build-time only, not committed): the
+    bundled engine is now the official sf_19 stockfish-android-arm64-
+    universal binary (100,695,968 bytes, SHA-256
+    ffd8fc2004d3d19f9fdab95d84c92709aea92e8d3af405eda0b281b23cf1daf8,
+    placed as libstockfish.so; the sf_19 release no longer ships a
+    dedicated armv8-dotprod tar — the universal build detects dotprod
+    at runtime). See BUILDING.md round-65 notes and lib/arm64-v8a/
+    README.license for details; cross-file consistency guarded by v3
+    sentinel V3-40.
+  - License classification: all files unchanged.
+
 v1.2.3 round-56 (2026.10.5): no changes to files in this directory.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - License classification: all files unchanged.
