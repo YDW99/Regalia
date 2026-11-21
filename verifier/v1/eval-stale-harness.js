@@ -287,6 +287,33 @@ function flushTimers() {
   ok(run(`_reviewAnalyzeAllActive`) === false, 'D3a: batch finished (active flag cleared)');
   ok(run(`_reviewEvalCache.size`) === 4, 'D3: batch cached all 4 steps (got ' + run(`_reviewEvalCache.size`) + ')');
 
+  // ---------- Scenario R61 (round-61 R61-c): a progress-reporting engine
+  //            that never completes a step must not starve the 180s
+  //            whole-batch wall-clock terminator.
+  console.log('[R61] progress-only batch hang terminator (R61-c)');
+  // Fresh batch on the same 4-step session; the batch-start path re-arms
+  //   _batchLastStepCompletedAt, so healthy progress ticks must NOT
+  //   terminate (negative control first — a terminator that fires on a
+  //   healthy batch would be a regression).
+  run(`_reviewEvalCache.clear(); reviewAnalyzeAll();`);
+  await new Promise(r => setTimeout(r, 100));
+  ok(run(`_reviewAnalyzeAllActive`) === true, 'R61-1: fresh batch started');
+  run(`onEngineProgress(12, 5000, 1000, 30, null, 300, 400, 300, 14);`);
+  await new Promise(r => setTimeout(r, 20));
+  ok(run(`_reviewAnalyzeAllActive`) === true,
+     'R61-2: healthy progress tick (fresh wall clock) does NOT terminate');
+  // Now simulate "engine keeps reporting progress but NO step has completed
+  //   for 200s". Before R61-c the onEngineProgress reset path had no wall
+  //   clock check (it lived only inside the 60s silence fire handler, which
+  //   progress lines perpetually defer) and the batch hung forever.
+  run(`_batchLastStepCompletedAt = performance.now() - 200000;`);
+  run(`onEngineProgress(13, 6000, 1000, 35, null, 300, 400, 300, 15);`);
+  await new Promise(r => setTimeout(r, 20));
+  ok(run(`_reviewAnalyzeAllActive`) === false,
+     'R61-3: progress tick with 180s+ stale wall clock TERMINATES the batch (R61-c)');
+  ok(run(`_reviewAnalyzeStep`) === -1,
+     'R61-4: termination path ran (step reset to -1)');
+
   // round-60 (V1-30): no TDZ ReferenceError may have been swallowed during
   //   bundle evaluation or bootstrap. F-1's warn ("Cannot access
   //   '_KING_PIECE_STYLE' before initialization") lived here as untriaged

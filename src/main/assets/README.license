@@ -1,3 +1,12 @@
+v1.2.3 round-61 (2026.11.21): chess.html rebuilt from the round-61 modules (24,208 lines).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - chess.html (AGPL v3 combined work): rebuilt byte-deterministically by
+    build-chess.py from the 10-module chess.src tree — carries the
+    round-61 R61-c fix only (ui.js: the 180s whole-batch wall-clock
+    terminator moved to the progress path via the new
+    _batchWallClockExceeded() helper; see chess.src/README.license).
+    24,208 lines / 1,488,718 bytes (round-60: 24,173 / 1,486,508).
+
 v1.2.3 round-60 (2026.10.7): chess.html rebuilt from the round-60 modules (24,173 lines).
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - chess.html (AGPL v3 combined work): rebuilt byte-deterministically by

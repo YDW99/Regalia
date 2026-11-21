@@ -131,5 +131,23 @@ ok('V2-20 _KING_PIECE_STYLE declared in game-logic.js, absent from ui.js, no typ
    && !uijs60.includes('const _KING_PIECE_STYLE=')
    && !aib60.includes('typeof _KING_PIECE_STYLE'));
 
+// V2-21 — round-61 (R61-d): engineEvalDeepEndBatch must dispatch the round-51
+//   (BG-1) Activity notification (onEvalDeepBatchEnded) OUTSIDE the engineReady
+//   gate — a mid-batch engine death used to early-return BEFORE the dispatch,
+//   leaving the deferred webView.onPause() unapplied (background battery leak).
+//   Regression direction: inside the method body, the notification call must
+//   appear BEFORE the `if (!engineReady) return;` gate (on the old code this
+//   ordering was inverted and this sentinel fails). Both positions are matched
+//   line-anchored so a comment QUOTING the gate text can never shadow the
+//   real gate line (the round-61 fix comment originally did exactly that).
+const sn61 = read('src/main/java/com/Regalia/StockfishNative.java');
+const eb0 = sn61.indexOf('public void engineEvalDeepEndBatch() {');
+const eb1 = sn61.indexOf('}, "engineEvalDeepEndBatch");', eb0);
+const eb = eb0 >= 0 && eb1 > eb0 ? sn61.slice(eb0, eb1) : '';
+const dIdx = eb.search(/\n\s*mainActivity\.onEvalDeepBatchEnded\(\);/);
+const gIdx = eb.search(/\n\s*if \(!engineReady\) return;/);
+ok('V2-21 R61-d: endBatch dispatches onEvalDeepBatchEnded before the !engineReady gate',
+   eb.length > 0 && dIdx >= 0 && gIdx > dIdx);
+
 console.log(`===== RESULT: ${pass} passed, ${fail} failed =====`);
 process.exit(fail ? 1 : 0);

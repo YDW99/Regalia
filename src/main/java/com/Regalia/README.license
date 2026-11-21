@@ -1,11 +1,30 @@
+v1.2.3 round-61 (2026.11.21): PR#56 review fixes — batch-hang terminator moved to the progress path + dead-engine batch-end notification + license-tag corrections.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - StockfishNative.java (GPL v3, DroidFish-derived): R61-d —
+    engineEvalDeepEndBatch now
+    dispatches the round-51 (BG-1) Activity notification
+    (onEvalDeepBatchEnded) BEFORE the engineReady gate, so a mid-batch
+    engine death still applies the deferred webView.onPause() (the old
+    early-return left the WebView unpaused in the background — a battery
+    leak). The dispatch is guarded/idempotent on the MainActivity side, so
+    the dead-engine and never-started paths dispatch a harmless no-op.
+  - README.license self-correction (R61-a): three historical entries
+    (round-60: MainActivity, EngineService; round-58c: StabilizationHelper)
+    had these AGPL v3 classes tagged (GPL v3) — a slip that went unnoticed
+    because v3's H2b only swept ONE direction (GPL files wrongly tagged
+    AGPL). Corrected in place; v3 gained the reverse sweep (H2f) this round.
+  - License classification: unchanged (AGPL v3 = MainActivity,
+    ChessWebViewClient, EngineService, StabilizationHelper, ChessApp,
+    TlsSecurityHelper, RootDetector; the other 12 classes GPL v3).
+
 v1.2.3 round-60 (2026.10.7): locale fallback unification + stop→start window documented.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
-  - MainActivity.java (GPL v3): F-4 — showToastLocalized fallback unified with
+  - MainActivity.java (AGPL v3): F-4 — showToastLocalized fallback unified with
     EngineService/StockfishNative.isEnglishMode() semantics: only zh*
     locales fall back to Chinese, all others to English (previously a
     fr/ja/ru user saw a Chinese Toast beside an English service
     notification). zh/en user behavior unchanged.
-  - EngineService.java (GPL v3): F-3 documented non-fix — comment added at
+  - EngineService.java (AGPL v3): F-3 documented non-fix — comment added at
     start()'s isRunning early-return explaining the stop→start millisecond
     window (isRunning stays true until the async onDestroy), its
     unreachability under the current call graph, the onEngineReady
@@ -15,7 +34,7 @@ v1.2.3 round-60 (2026.10.7): locale fallback unification + stop→start window d
 
 v1.2.3 round-58c (2026.10.7): full line-by-line Java review; one stale comment fixed.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
-  - StabilizationHelper.java (GPL v3): the throttle comment on the JS-callback
+  - StabilizationHelper.java (AGPL v3): the throttle comment on the JS-callback
     line still said 16ms although round-44 D12 raised
     JS_CALLBACK_MIN_INTERVAL_MS to 33ms — comment corrected in place.
   - All other 18 files (MainActivity, StockfishNative, StatsActivity, the

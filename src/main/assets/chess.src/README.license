@@ -1,3 +1,21 @@
+v1.2.3 round-61 (2026.11.21): analyze-all progress-hang terminator moved to the progress path (R61-c).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - ui.js (GPL v3): the 180s no-step-completed whole-batch wall-clock
+    terminator extracted from the 60s silence-timer fire handler into the
+    new helper _batchWallClockExceeded(), which is now ALSO run at the top
+    of _reviewAnalyzeResetSafetyTimer() — the funnel that every
+    onEngineProgress progress tick reaches via the round-57 progress-aware
+    reset. Before this, an engine that kept REPORTING progress yet never
+    completed a step starved the 60s fire handler forever (every progress
+    line reset it), so the 180s check inside it never ran and the batch
+    hung indefinitely — the round-57c three-strike rule (counted on step
+    completions) couldn't fire either. Two clocks, two meanings: per-step
+    60s SILENCE vs whole-batch 180s NON-PROGRESS; a liveness signal must
+    not veto a whole-batch watchdog. The fire handler keeps calling the
+    helper for the true-silence side. Behavioral coverage: v1 scenario R61
+    (R61-1..R61-4) — healthy ticks don't terminate; a tick with a
+    200s-stale wall clock does.
+
 v1.2.3 round-60 (2026.10.7): king shake amplitude raised + F-1 TDZ root-fix + F-5 comment fix.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - game-logic.js (GPL v3): (1) king "imperial seal stamp" ring amplitude

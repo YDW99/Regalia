@@ -1,6 +1,6 @@
 # Regalia 隐蔽 bug 发现与修复工程方法论
 
-> 抽取自《Regalia v1.2.3 开发进度恢复指南Pro》§5（round-60 实例化定稿）。
+> 抽取自《Regalia v1.2.3 开发进度恢复指南Pro》§5（round-60 实例化定稿；round-61 基线同步）。
 > 每条原则配 round 真实案例与代码出处。本文件随源码树归档，验证器三件套为其执行工具。
 
 ## 1. 为什么本项目的 bug 隐蔽（问题域特征）
@@ -35,9 +35,10 @@
 
 | 验证器 | 覆盖 | 基线 |
 |---|---|---|
-| `verifier/v1/eval-stale-harness.js` | eval 回调陈旧性、批量推进、缓存归属的**行为级**仿真 | 30 项（round-60 +V1-30 TDZ 哨兵） |
-| `verifier/v2/round53-sonar-triage.js` | round-44 起各修复的**结构哨兵**（源码模式存在性） | 20 项（round-60 +V2-20 常量位置哨兵） |
-| `verifier/v3/round54-pr56-triage.js` | round-54~56 PR 评审项、文档/许可完整性 | 38 项（round-60 +V3-38 指南隐私行哨兵） |
+| `verifier/v1/eval-stale-harness.js` | eval 回调陈旧性、批量推进、缓存归属的**行为级**仿真 | 34 项（round-61 +场景 R61：进度挂起终结行为四断言） |
+| `verifier/v2/round53-sonar-triage.js` | round-44 起各修复的**结构哨兵**（源码模式存在性） | 21 项（round-61 +V2-21：endBatch 派发先于 engineReady 门控） |
+| `verifier/v3/round54-pr56-triage.js` | round-54~56 PR 评审项、文档/许可完整性 | 39 项（round-61 +H2f 反向许可哨兵；V3-38 于 round-61 收紧为 fail-closed） |
 
 - 运行：`cd verifier && node v1/eval-stale-harness.js && node v2/round53-sonar-triage.js && node v3/round54-pr56-triage.js`。
-- 扩展位：为 58b 六 bug 各补至少 1 条哨兵/行为断言（v1 适合行为：重复派发抑制、环缓存救援；v2 适合结构：看门狗解除点、去重门控的存在性）。
+- 扩展位：为 58b 六 bug 各补至少 1 条哨兵/行为断言（v1 适合行为：重复派发抑制、环缓存救援；v2 适合结构：看门狗解除点、去重门控的存在性）。**状态真实化（round-61）**：round-60 曾把此项记为完成，实为未落地——已按军规 5 撤回打勾（更正记录见 worklog round-61 节），列为 round-62 待办。
+- round-61 新教训入档：①哨兵单向性（H2f 反向哨兵补齐；且 round-61 新条目自己同向误标被 H2b 当场抓获——双向哨兵必要性现场验证）；②哨兵匹配的代码字面量不得在注释中原样复写（V2-21 被 R61-d 修复注释引用的门控行遮蔽，行锚定正则双保险）；③fail-open 验证器等于没有验证器（V3-38 三态混为一谈的跳过已收紧，负例四连测入轨迹）。

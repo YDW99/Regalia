@@ -1408,33 +1408,25 @@ public class StockfishNative {
         _evalDeepBatchActive = false;
         _safeExecute(new Runnable() { // tag: engineEvalDeepEndBatch
             public void run() {
-                if (!engineReady) return;
-                // v1.2.3 round-58 (ghost-EVAL fix, mirror): only run the
-                //   stop-and-wait when a search COULD be in flight. After a
-                //   normally-completed last step the state is already
-                //   STATE_NONE (handleBestMove resets it); calling
-                //   stopAndWaitForBestmove then would send "stop" to an IDLE
-                //   engine, time out after 1s, see state == STATE_EVAL (set
-                //   below? no — but beginBatch used to) and arm the discard
-                //   flag — eating the NEXT legitimate eval's bestmove. With
-                //   beginBatch no longer setting the ghost state, STATE_EVAL
-                //   here means a search genuinely IS in flight (the batch
-                //   ended mid-step), so the stop is exactly right. When the
-                //   state is already NONE, skip straight to the option
-                //   restore — no stray "stop", no discard flag.
-                boolean searchMaybeInFlight;
-                synchronized (stateLock) {
-                    searchMaybeInFlight = (currentState != STATE_NONE) || _isPondering;
-                }
-                if (searchMaybeInFlight) {
-                    stopAndWaitForBestmove("engineEvalDeepEndBatch");
-                }
-                synchronized (stateLock) {
-                    currentState = STATE_NONE;
-                }
-                // Restore gameplay-appropriate UCI options (Skill Level,
-                // UCI_LimitStrength, MultiPV, Contempt, etc.).
-                applySettings();
+                // v1.2.3 round-61 (R61-d): the round-51 (BG-1) Activity
+                //   notification below is now dispatched BEFORE the
+                //   engineReady gate. When the engine died mid-batch, the old
+                //   !engineReady early-return skipped the dispatch
+                //   entirely, so a deferred webView.onPause() was NEVER applied
+                //   and the WebView kept running JS timers in the background
+                //   until the next resume (a background battery leak — a
+                //   low-probability but real path). onEvalDeepBatchEnded() is
+                //   guarded and idempotent (it acts only when a pause was
+                //   actually skipped AND the app is still backgrounded), so
+                //   the dead-engine path and the never-started idempotent
+                //   call dispatch a harmless no-op. Posting before the engine
+                //   work below is also safe: the JS caller has already torn
+                //   the batch down when it calls engineEvalDeepEndBatch(), and
+                //   the engine-side stop/restore below never touches the
+                //   WebView (stopAndWaitForBestmove may block up to ~1s on
+                //   its latch — the notification merely lands that much
+                //   sooner; the deferred pause only fires while the app is
+                //   backgrounded, when no JS timer is waiting on it).
                 // v1.2.3 round-51 (BG-1): the batch just ended. If the host
                 //   Activity skipped webView.onPause() when the user
                 //   backgrounded the app mid-batch (MainActivity.onPause BG-1),
@@ -1465,6 +1457,33 @@ public class StockfishNative {
                         }
                     });
                 }
+                if (!engineReady) return;
+                // v1.2.3 round-58 (ghost-EVAL fix, mirror): only run the
+                //   stop-and-wait when a search COULD be in flight. After a
+                //   normally-completed last step the state is already
+                //   STATE_NONE (handleBestMove resets it); calling
+                //   stopAndWaitForBestmove then would send "stop" to an IDLE
+                //   engine, time out after 1s, see state == STATE_EVAL (set
+                //   below? no — but beginBatch used to) and arm the discard
+                //   flag — eating the NEXT legitimate eval's bestmove. With
+                //   beginBatch no longer setting the ghost state, STATE_EVAL
+                //   here means a search genuinely IS in flight (the batch
+                //   ended mid-step), so the stop is exactly right. When the
+                //   state is already NONE, skip straight to the option
+                //   restore — no stray "stop", no discard flag.
+                boolean searchMaybeInFlight;
+                synchronized (stateLock) {
+                    searchMaybeInFlight = (currentState != STATE_NONE) || _isPondering;
+                }
+                if (searchMaybeInFlight) {
+                    stopAndWaitForBestmove("engineEvalDeepEndBatch");
+                }
+                synchronized (stateLock) {
+                    currentState = STATE_NONE;
+                }
+                // Restore gameplay-appropriate UCI options (Skill Level,
+                // UCI_LimitStrength, MultiPV, Contempt, etc.).
+                applySettings();
             }
         }, "engineEvalDeepEndBatch");
     }

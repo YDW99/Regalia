@@ -206,21 +206,48 @@ ok('H2e README.md: strict UTF-8 + round-55 section + license lists present',
          && rm.includes('License audit addendum');
    })());
 
+// H2f — round-61 (R61-a): the REVERSE direction of the H2a/H2b sweeps.
+//   H2a/b only guarded "GPL-classified files must not be tagged AGPL"; the
+//   three round-58c/60 entries tagged MainActivity / EngineService /
+//   StabilizationHelper — all AGPL v3 classes per the round-56 classification
+//   list — as (GPL v3), and every existing checker was blind to the opposite
+//   direction (the one-way-sentinel lesson, guide §6.2 #12: every "must not
+//   be mislabeled" check has to be enumerated in BOTH directions).
+ok('H2f reverse license sweep: no (GPL v3) tag on AGPL-classified classes/modules',
+   !/- (?:MainActivity|ChessWebViewClient|EngineService|StabilizationHelper|ChessApp|TlsSecurityHelper|RootDetector)\.java \(GPL/.test(jlr)
+   && !/- (?:chess960|eco-data|state-store)\.js \(GPL/.test(csr));
+
 // V3-38 — round-60 (F-2): the recovery guide's §1 privacy line must describe
 //   the real network posture (offline-first + the certificate-pinned Lichess
 //   tablebase probe), never the stale "无网络权限" claim that contradicts the
-//   manifest's INTERNET permission. The guide lives outside the repo
-//   (session scratch), so this check skips cleanly when it is absent.
-ok('V3-38 guide §1 privacy line accurate (skipped when guide absent)',
+//   manifest's INTERNET permission.
+// round-61 (R61-b) fail-open fix: the guide lives outside the repo (session
+//   scratch), so "absent" is the ONLY case that may skip. Before this, a
+//   PRESENT guide with a missing privacy row, an unreadable file, or stale
+//   wording all silently PASSED — three states conflated into one skip, i.e.
+//   a fail-open sentinel is no sentinel (guide §6.2 #13). Now: absent →
+//   skip; present-but-broken → FAIL. The guide path is configurable via the
+//   REGALIA_V338_GUIDE_PATH env var (path.delimiter-separated candidate list,
+//   first existing entry wins) so CI machines and new sandboxes can point
+//   the sentinel at their own copy instead of relying on the legacy
+//   /mnt/agents/temp default that only exists in the original sandbox.
+ok('V3-38 guide §1 privacy line accurate (skip only when guide absent)',
    (() => {
-     const gp = '/mnt/agents/temp/Regalia v1.2.3 开发进度恢复指南Pro.md';
+     const cands = (process.env.REGALIA_V338_GUIDE_PATH || '')
+       .split(path.delimiter).filter(Boolean);
+     cands.push('/mnt/agents/temp/Regalia v1.2.3 开发进度恢复指南Pro.md');
+     const gp = cands.find(p => fs.existsSync(p));
+     if (!gp) return true; // absent everywhere → the only legitimate skip
+     let g;
      try {
-       if (!fs.existsSync(gp)) return true;
-       const g = fs.readFileSync(gp, 'utf8');
-       const row = g.split('\n').find(l => l.startsWith('| 隐私 |'));
-       if (!row) return true;
-       return row.includes('残局库') && !row.includes('无网络权限');
-     } catch (e) { return true; }
+       g = fs.readFileSync(gp, 'utf8'); // unreadable present guide → FAIL below
+     } catch (e) {
+       console.warn('V3-38: guide present but unreadable (' + gp + '): ' + e.message);
+       return false;
+     }
+     const row = g.split('\n').find(l => l.startsWith('| 隐私 |'));
+     if (!row) return false; // present guide, missing privacy row → FAIL
+     return row.includes('残局库') && !row.includes('无网络权限');
    })());
 // H3 — path resolution is __dirname-based (like v1/v2), not cwd-based
 ok('H3 verifier resolves from __dirname (cwd-independent)',

@@ -1,3 +1,16 @@
+v1.2.3 round-61 (2026.11.21): manuals carry the round-61 changelog entry.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - Regalia-v1.2.3-manual-zh.html / -en.html: round-61 paragraph prepended
+    to the Appendix A rounds chain (four PR#56-review defects digested:
+    R61-a license-ledger mislabels corrected + reverse sentinel H2f, R61-b
+    V3-38 fail-open tightened + configurable guide path, R61-c analyze-all
+    progress-hang terminator moved to the progress path, R61-d dead-engine
+    batch-end notification dispatched outside the engineReady gate;
+    verifier baseline extended to 34/21/39); the chain's intro line updated
+    to "第六十一轮"/"sixty-first" and the date range extended to
+    2026.11.21; div balance re-verified 365/365 both manuals, strict
+    UTF-8, single appendix anchor.
+
 v1.2.3 round-60 (2026.10.7): manuals carry the round-60 changelog entry.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - Regalia-v1.2.3-manual-zh.html / -en.html: round-60 paragraph prepended

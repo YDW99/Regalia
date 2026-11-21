@@ -5719,13 +5719,49 @@ function reviewAnalyzeAll(){
   _requestBatchEval(startStep);
 }
 
+// v1.2.3 round-61 (R61-c): the 180s no-step-completed whole-batch wall-clock
+//   terminator, extracted from the 60s silence-timer fire handler into a
+//   helper so BOTH clock paths can run it: (1) the 60s TRUE-silence fire
+//   handler (engine wedged silently mid-step) and (2) every liveness tick —
+//   _reviewAnalyzeResetSafetyTimer() is the funnel for ALL of those
+//   (onEngineProgress progress lines, per-step advance, engine recovery).
+//   Why the move was mandatory: round-57 made every onEngineProgress progress
+//   line reset the 60s timer, so an engine that keeps REPORTING progress yet
+//   never returns bestmove (and thus never completes a step) starved the
+//   fire handler forever — the 180s check inside it never ran, the batch hung
+//   indefinitely, and the round-57c three-strike rule (counted on step
+//   completions) couldn't fire either. Two clocks, two meanings: the 60s
+//   timer measures per-step SILENCE; this 180s clock measures whole-batch
+//   NON-PROGRESS — the second must stay reachable even while the first is
+//   being perpetually deferred (a liveness signal must not veto a
+//   whole-batch watchdog — see guide §6.2 #14). Gated on the batch flag so
+//   non-batch callers can never fire it; returns true when the batch was
+//   terminated by this call.
+function _batchWallClockExceeded(){
+  if(typeof _reviewAnalyzeAllActive!=='undefined'&&!_reviewAnalyzeAllActive)return false;
+  if(typeof _batchLastStepCompletedAt!=='undefined'
+     &&_batchLastStepCompletedAt>0
+     &&performance.now()-_batchLastStepCompletedAt>180000
+     &&typeof _terminateBatchAfterRepeatedFailures==='function'){
+    try{_terminateBatchAfterRepeatedFailures('no step completed for 180s');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+    return true;
+  }
+  return false;
+}
+
 /**
  * v1.0.4 Rev24: Reset the per-step safety timer. Called on every advance
  * so a stuck engine on step N doesn't abort the entire batch — only step N.
  * 60 seconds per step is generous; depth-22 evals typically finish in 5-15s.
  * v1.1.1 Phase 59 Task 59.6: Log uses _reviewAnalyzeStep (not reviewStep).
+ * v1.2.3 round-61 (R61-c): every reset ALSO runs the 180s whole-batch
+ *   terminator first — see _batchWallClockExceeded(). This is the funnel
+ *   that onEngineProgress's progress lines reach (via the round-57
+ *   progress-aware reset), so a progress-reporting-but-never-completing
+ *   engine is now terminated here instead of hanging the batch forever.
  */
 function _reviewAnalyzeResetSafetyTimer(){
+  if(_batchWallClockExceeded())return;
   if(_reviewAnalyzeSafetyTimer){clearTimeout(_reviewAnalyzeSafetyTimer);}
   _reviewAnalyzeSafetyTimer=setTimeout(function(){
     if(_reviewAnalyzeAllActive){
@@ -5747,13 +5783,12 @@ function _reviewAnalyzeResetSafetyTimer(){
       //   completed step re-arms the clock, and a healthy step never sees
       //   60s of silence (progress lines reset this timer). Runs BEFORE the
       //   skip toast so a terminating fire shows only the termination toast.
-      if(typeof _batchLastStepCompletedAt!=='undefined'
-         &&_batchLastStepCompletedAt>0
-         &&performance.now()-_batchLastStepCompletedAt>180000
-         &&typeof _terminateBatchAfterRepeatedFailures==='function'){
-        try{_terminateBatchAfterRepeatedFailures('no step completed for 180s');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
-        return;
-      }
+      // v1.2.3 round-61 (R61-c): the 180s check now lives in
+      //   _batchWallClockExceeded() so the progress-reset path (which this
+      //   fire handler can never reach when progress keeps arriving) runs
+      //   it too. This branch keeps covering the other side: TRUE 60s
+      //   silence with no completed step for 180s.
+      if(_batchWallClockExceeded())return;
       // v1.2.3 round-57c: reaching here means the engine has been TOTALLY
       //   silent for 60s (no progress lines, no bestmove — the round-57
       //   progress-aware reset only defers on proof-of-life) but the batch

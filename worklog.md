@@ -1,3 +1,58 @@
+# Regalia v1.2.3 — round-61 工作日志（2026-11-21 UTC+8）
+
+## 任务来源
+
+消化 PR #56 最近批 CodeRabbit 评审中已逐条到源码现场核实属实、无误报的四条缺陷（指南 §5.1 R61-a/b/c/d），按 §7 全套流程实施。
+
+## R61-c：批量分析「进度不停却永不完成」挂起根治（ui.js）
+
+**根因**：180s「无步完成」终结检查只住在 60s 静默定时器的触发处理器内部，而 round-57 的进度感知重置让每行 onEngineProgress 进度都重置 60s 定时器——「引擎持续报进度、却永不回 bestmove、也无任何步完成」时，60s 处理器永不触发、180s 检查永不到达，批量无限挂起；round-57c 三连击同样依赖步完成事件，兜不住此路径（两道防线都被「有活性但无进展」绕过——本缺陷由 CodeRabbit 行级评审发现，是负空间测试盲区的又一实例）。
+
+**实施**：终结检查提取为 `_batchWallClockExceeded()`（语义原样：`_batchLastStepCompletedAt>0 && now-Δ>180000 && _terminateBatchAfterRepeatedFailures 可用`，附批量活跃门控防非批量调用误触发），在两处调用：
+1. `_reviewAnalyzeResetSafetyTimer()` 入口——onEngineProgress 进度 tick、步推进、引擎恢复的公共漏斗，每 tick 先查墙钟再重置 60s 定时器（**修复点**）；
+2. 60s 静默触发处理器内（原位置改为调用助手，保留「真静默 180s 无步完成」的另一面）。
+
+设计判定：两个时钟两种含义——每步 60s 静默管单步健康，整批 180s 无步完成管批量终结；活性信号不得否决整批看门狗（§6.2 #14）。
+
+**哨兵**：v1 新增场景 R61（行为级）：R61-1 新批启动、R61-2 健康进度 tick（新墙钟）不误杀、R61-3 进度 tick + 200s 陈旧墙钟 → 终结批量（旧代码下此断言必红）、R61-4 终结路径确实执行（step 复位 -1）。
+
+## R61-d：引擎批量中途死亡的 Activity 通知派发（StockfishNative.java）
+
+**根因**：`engineEvalDeepEndBatch()` 的 `if (!engineReady) return;` 早退位于通知派发之前——引擎批量中途死亡时，round-51 BG-1 延迟的 `webView.onPause()`（onEvalDeepBatchEnded 派发）永不执行，WebView 后台保持未暂停直到下次回前台（后台耗电泄漏；概率低但路径真实）。
+
+**实施**：Activity 通知块（`final Activity act = activityRef.get(); … mainActivity.onEvalDeepBatchEnded();`）整块上移至 engineReady 门控之前；引擎侧清理（searchMaybeInFlight 守卫的 stop-and-wait、状态复位、applySettings）原样保留门内。安全性论证：onEvalDeepBatchEnded 幂等且有守卫（仅「确实跳过过暂停且仍在后台」才动作），引擎死亡路径与从未开批的幂等调用均派发无害空操作；引擎就绪路径的通知最多提前 ~1s 落地（stopAndWaitForBestmove 闩至多阻塞 1s，通知只经 mainHandler post，延迟暂停仅在后台时动作，无 JS 定时器参与引擎侧清理）。
+
+**哨兵**：v2 新增 V2-21（结构级）：engineEvalDeepEndBatch 方法体内通知调用必须先于 !engineReady 门控行。**实作插曲**：V2-21 初版用 indexOf 定位，而 R61-d 修复注释原文引用了门控字面文本 `if (!engineReady) return;` → indexOf 命中注释先于真实派发行 → 误报。处置双保险：注释改述（不再含字面原文）+ 哨兵改行锚定正则（`\n\s*if \(!engineReady\) return;`），注释内的行中引用永不匹配行首锚。教训：哨兵匹配的代码字面量不得在注释中原样复写；行锚定是结构哨兵的默认姿势。
+
+## R61-a：java 台账三处 AGPL 类误标更正 + 反向哨兵（v3）
+
+**现场**：round-60 条目把 MainActivity.java、EngineService.java，round-58c 条目把 StabilizationHelper.java——三者均为 AGPL v3 分类类（round-56 分类清单）——标为 (GPL v3)；行 57-59 分类清单及几十处历史条目均正确。**漏检根因**：v3 H2b 只扫「GPL 类被误标 AGPL」单方向，反向无哨兵（§6.2 #12 哨兵单向性）。
+
+**实施**：三处 (GPL v3) → (AGPL v3) 原地更正；v3 新增 H2f 反向哨兵（7 个 AGPL 类不得被标 GPL；chess.src 3 个 AGPL 模块 chess960/eco-data/state-store 同向反向兜底）。
+
+**同向复发实况**：本人在 java 台账新写的 round-61 条目一度把 StockfishNative.java（GPL v3 类）误标 (AGPL v3)——被 H2b 哨兵当场红灯抓获（单向哨兵对它守的方向永远有效），已更正为 (GPL v3, DroidFish-derived)。双向哨兵的必要性在本轮得到现场验证；教训入档：新台账条目写完立即跑 v3 双向哨兵，不等收尾。
+
+## R61-b：V3-38 fail-open 收紧 + 路径可配置化（v3）
+
+**根因**：`if (!row) return true;` 与 `catch (e) { return true; }` 把「指南缺席 / 指南在但缺隐私行 / 读取失败」三类情况混为一谈全部跳过——哨兵形同虚设（§6.2 #13：fail-open 验证器等于没有验证器）。
+
+**实施**：收紧为仅「候选路径全不存在」跳过；缺行 FAIL、读失败 FAIL（附 console.warn 诊断）；新增 `REGALIA_V338_GUIDE_PATH` 环境变量（path.delimiter 分隔候选列表，先到先得，兜底保留 /mnt/agents/temp 历史路径）——新沙箱 / CI / 换机器不再恒跳过。
+
+**负例验证**（实跑记录见 verifier/runs/round61-audit.md，fixture 于 /tmp）：健康指南 → PASS；缺隐私行 → FAIL（收紧前静默 PASS）；陈旧表述（「无网络权限」）→ FAIL（收紧前静默 PASS）；缺席 → 跳过。收紧后行为与设计一致。
+
+## 验证
+
+- node --check ×10 JS 模块 + 3 个验证器文件全过。
+- 三件套新基线 **v1 34/34、v2 21/21、v3 39/39 全绿**（+4/+1/+1：场景 R61、V2-21、H2f）。
+- V3-38 负例四连测通过（健康过/缺行败/陈旧败/缺席跳）。
+- chess.html 重打包：**24,208 行 / 1,488,718 字节**（build-chess.py 字节确定性；round-60 为 24,173 / 1,486,508；+35 行全部来自 ui.js R61-c 助手与注释，与 ui.js diff 核对一致）。
+- 双语手册附录 A 新段置顶 + 导语行更新（第六十一轮至第十八轮 / 2026.7.17 ~ 2026.11.21）；三检通过：严格 UTF-8、单附录锚点、div 365/365（双语一致）。
+- 版本号不变（versionCode=10203，versionName="1.2.3"）；无新权限、无新网络出口、无新数据收集。
+- 环境限制声明：本会话沙箱无 Android SDK/NDK、无引擎二进制（tar 与公开仓库均不含 libstockfish.so）、无 release 密钥库——APK 六连验中的 APK 侧四项（签名 v1/v2/v3、证书指纹 45bc6d36…、APK 内引擎 SHA-256、APK 内 bundle 比对）本轮不可执行，需回原构建环境（/mnt/agents/buildenv）补做；源码层已确保 chess.html 为 build-chess.py 对当前 chess.src 的确定性重建产物。
+- §5.2 状态真实化：round-60 worklog 所称「指南 §5.5 三项打勾」中的第 2 项（58b 六 bug 专项哨兵）经 round-61 复核确认**未落地**（v1 实际新增的 V1-30/V2-20/V3-38 均为 round-60 F-1/F-2 的哨兵）——按军规 5 正式撤回该打勾；六条断言列为 round-62 待办（v1 行为级：重复派发抑制、环缓存救援、看门狗有界重试；v2 结构级：_manualLive 门控、Bug F 清偿点、列表刷新接线），方法论文档行级出处扩写一并顺延。历史 worklog 按惯例不改写，本节即为更正记录。
+
+---
+
 # Regalia v1.2.3 — round-60 工作日志（2026-10-07 UTC+8）
 
 ## 任务来源
