@@ -1,3 +1,62 @@
+# Regalia v1.2.3 — round-62 工作日志（2026-11-21 UTC+8）
+
+## 任务来源
+
+执行指南 §5.1 round-62 待办清单：①58b 六 bug 专项哨兵补盲（round-61 撤勾后的正式欠账）；②方法论文档行级出处扩写；③消重（最低目标：SafPickerHelper 三组 + 分块读循环共享段抽取 + 防回潮哨兵）；④APK 累计欠账补验与交付（58c/59/60/61 四轮无 APK 交付）；⑤仓库卫生。基线源 = GitHub main 快照（HEAD efa4a99e，指南钦定权威恢复源；本地 round-61 工作树核对后仅边缘文件差异，见下文）。
+
+## 环境重建记录（本沙箱从零搭建，指南 §2.3 之外的新坑）
+
+- Android SDK（platform-tools / platforms;android-35 / build-tools;35.0.0 + 34.0.0 / cmake;3.31.6）、NDK r27b（27.2.12479018，官方 zip）、Gradle 8.11.1、Temurin JDK 17.0.21 全部在线下载安装；引擎二进制取自官方 Stockfish sf_18 release 的 stockfish-android-armv8-dotprod.tar，**SHA-256 与指南硬性约束逐字节一致**（8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5，114,115,752 字节——官方构建即原始二进制，BUILDING.md 的"three-way match"记载得到印证）。
+- **新坑 1（内存）**：沙箱物理内存 4GB，项目 gradle.properties 要求 -Xmx4096m——Gradle daemon 起后即被杀（日志只到 Calculating task graph，无声死亡）。解法：GRADLE_USER_HOME/gradle.properties 覆盖为 -Xmx1536m（GRADLE_USER_HOME 级优先于项目级）。
+- **新坑 2（进程）**：跨工具调用的后台进程（含 setsid nohup 的 Gradle daemon）会在调用间隙被清理——构建必须单次前台调用内完成；依赖下载靠 Gradle 文件级缓存跨段收敛（实测 4 段 × ≤570s）。
+- **新坑 3（AGP 自动装 SDK 挂起）**：AGP 8.7.3 的自动安装器下载 build-tools 反复挂起；sdkmanager 手动预装 build-tools;34.0.0 后恢复。
+- **新坑 4（输出渲染假象）**：bash 工具输出把 `[main` 中的 `[m` 当 ANSI SGR reset 吞掉——`branches: [main, master]` 显示为 `branches: ain, master]`，一度误判 main 快照 workflows YAML 损坏；用 Python 字节级检查证伪。**教训：含方括号的输出判读必须经 repr/字节复核，不得凭肉眼。**
+- 均已写入方法论文档 §5（工具与环境坑）与恢复指南相应章节。
+
+## 一、58b 六 bug 专项哨兵（v1 行为级 + v2 结构级）
+
+- **v1 场景 S58**（10 断言）：S58-C0/C1/C2 同局面在飞去重（重复点击不再派发 + 重申分析中态）；S58-E1/E2/E3 非派发路径 bump gen 后的完成成果救援（环归属缓存 + 加载态与看门狗成对清偿 + 正在查看步立即回填）；S58-D0 进度 tick 重置看门狗（真静默语义），S58-D1/D2/D3 真静默自动重派恰好一次（加速时钟技术：沙箱内运行时替换 vm 的 setTimeout 把 45s 压到 15ms）+ 第二次静默只清偿不循环 + 重试预算不复位。v1 基线 34→**44**。
+- **v2 V2-22/23a/23b/23c/24**（结构级）：_manualLive 门控双模式（定义 + `_batchLive||_manualLive` 刷新条件）；onEngineRestarting/onEngineReady 各含 `if(_evalLoading){_evalLoading=false` 与看门狗 clearTimeout 成对；onEngineEval 三出口（救援/stale 缓存/正常）各清 `_evalLoading` 与 `_evalSafetyTimerId` ≥3 次；`_refreshReviewMoveListEvals` 在 ai-bridge 三处手动完成路径接线（typeof 守卫 + 调用相邻模式）。v2 基线 21→**27**。
+- **负例回归六连测**（perl 变异 ai-bridge.js 模拟旧行为 → 哨兵应红 → 恢复应绿）：N1 去重门失效→S58-C1 红；N2 救援分支失效→S58-E1 红；N3 重试无界→S58-D1 红；N4 删除正常完成路径的列表刷新→V2-24 红（注：初版负例只短路守卫不删语句，哨兵计数不变——负例必须**真删除调用语句**模拟 58b 前旧代码）；N5 _manualLive 门控失效→V2-22 红；N6 onEngineRestarting 看门狗解除删除→V2-23a 红。全部按预期，轨迹与脚本随源码树归档（verifier/runs/r62-negative-tests.sh）。
+- v1 S58-C1 断言等待从 60ms 修至 400ms（>300ms debounce）：负例在去重失效时需等 debounce 过后才可见重新派发——哨兵时序必须覆盖被测行为的完整路径。
+
+## 二、消重（首轮实体消重 + 防回潮）
+
+- **SafPickerHelper 两对选择器**：openExportFilePicker/openPGNExportFilePicker → openCreateDocumentPicker(单实现 + 参数化薄壳)；openSystemFilePicker/openPGNFilePicker → openOpenDocumentPicker。行为逐字保留（空内容守卫、Activity-null 守卫、catch 重置 pendingType 为默认 "settings"、setType("*/*") 主类型 HyperOS 兼容）。清理 3 个失效 import。
+- **8KB 分块读循环三份→一份**：FileIoHelper.readCappedText(cr, uri, maxChars, maxLines, tooLargeLabel, truncatedOut) 单实现；SafPickerHelper.readTextFromUri（maxLines=0 语义）/ readPgnFromUri（截断告警注释留在调用方——PGN 内容语义）/ StatsActivity PGN 导入三个调用方改造；round-13 null 检查、round-46 CR#15 字符硬上限、round-49 行数上限、round-54 CR#7/#8 CR/LF/CRLF 折合计数语义逐字保留。清理 2 个失效 import。
+- **指南口径更正**：§5.1 所称"三文件共享段"经现场核实为**两文件三处**（MainActivity 无分块读循环；round-61 行号口径过时——"行号引用即谎言"再次应验）。
+- **防回潮哨兵 V2-25**：ACTION_CREATE_DOCUMENT / ACTION_OPEN_DOCUMENT 在 SafPickerHelper 各恰 1 处；`char[8192]` 循环只在 FileIoHelper、SafPickerHelper/StatsActivity 为 0。
+- **G7 哨兵迁移（军规 3 现场案例）**：消重后 v3 G7a/G7b（守护 prevWasCr 计数）因逻辑移走而变红——按"哨兵是活的契约"更新为 G7a（FileIoHelper 唯一实现的 prevWasCr 语义）+ G7b（两个 PGN 调用方接线断言），并对"调用方回退朴素读取"做负例 RED 验证。v3 基线维持 **39**（条目语义升级，计数不变）。
+- **保留待办**：StockfishNative 五组（engineGoInternal/engineGoTimed 90 行最大组 + 2763/2818、4793/4905、4709/4842、912/1272）与 ui.js 两组（4183/220、6611-6638 跨 ui-interactions）——引擎状态机核心，本轮不做（回归面判断），行号锚点已更新至方法论文档 §3 军规 5。
+- StatsActivity 123/175 一带（OnBackInvokedCallback/handleBackKeyPress）：现场核实为 round-48 刻意抽取的复用关系，非重复——判定不动（负空间记录）。
+
+## 三、APK 欠账清偿（58c→62 累计）
+
+- 全新环境全量构建 BUILD SUCCESSFUL（ProGuard + shrinkResources + CMake native）。
+- **六连验全过**：v1/v2/v3 签名 true（apksigner verify）；证书 SHA-256 `45bc6d36c9fcff8ef9e55f510b43bce44cb854ea4b2f235a0f4955da05a8d8bc`（上传的 round-45 重建密钥库，与要求一致）；versionCode=10203 / versionName="1.2.3"（aapt2 badging）；APK 内 assets/chess.html 与源码 cmp 逐字节一致；APK 内 lib/arm64-v8a/libstockfish.so SHA-256 = 8f7116d3…61b5；bundle 确定性复核（python3 build-chess.py 重打包 cmp 无差异，24,208 行 / 1,488,718 字节——本轮 JS 模块零改动，与 round-61 完全一致）。
+- APK 78,320,490 字节。交付名 `Regalia-v1.2.3-round62-release.apk`。
+
+## 四、方法论文档行级扩写
+
+Regalia-bug-hunting-methodology.md 7.9KB→9.6KB：每条原则补 file+函数名锚定出处（行号以 round-62 基线标注并声明"跨轮引用以锚定特征为准"）；实例化 round-59/60/61 维度（谐振复算、装载形态语义差、噪声分诊、哨兵字面量/行锚定、双向哨兵）与 round-62 新维度（负例测试纪律、指标真实化三不、消重防回潮）；§4 基线表更新 44/27/39；新增 §5 工具与环境坑（四条新坑）。
+
+## 五、仓库卫生
+
+- CONTRIBUTING-en/zh 分支表 upload 行更新（分支 2026-11-21 已删除，main 唯一权威源）。
+- android-ci.yml 经字节级复核**完好无损**（`branches: [main, master]`×2，此前疑似的 `ain, master]` 损坏为输出渲染假象——见环境坑 4）；workflows 的 upload 引用清理在 main 侧已完成。
+- main 快照 vs round-61 工作树边缘差异（.gitignore / .github/dependabot.yml main 侧缺失；LICENSE&NOTICE.zip main 侧新增；.github/README.license main 侧缺 round-56 置顶条目；worker-pool.js main 侧存在=符合指南"留存目录不入清单"记载）：核心源码（Java/JS/chess.html/verifier/文档）完全一致；边缘文件差异**尊重 main 权威、不擅自恢复**，如实记录待用户定夺。
+- GitHub issue #48/#49：无仓库凭据，无法关闭/评论——留待仓库侧操作（本项为待办残留）。
+
+## 验证结论
+
+- node --check：改动的全部脚本（v1/v2/v3 验证器）通过；Java 由 javac（构建）通过。
+- 三件套：**44 / 27 / 39 全绿**（新基线；负例六连测 + G7b 负例全 RED）。
+- chess.html：零变化（24,208 行 / 1,488,718 字节，确定性重建复核）。
+- 版本号 10203/"1.2.3" 不变；无新权限、无新网络出口、无新数据收集。
+- 台账：verifier/ 与 src/main/java/com/Regalia/ README.license 新条目置顶（本轮改动文件登记），双向许可哨兵 H2b/H2f 随 v3 复跑全绿。
+
+---
+
 # Regalia v1.2.3 — round-61 工作日志（2026-11-21 UTC+8）
 
 ## 任务来源

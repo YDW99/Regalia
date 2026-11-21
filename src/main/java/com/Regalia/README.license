@@ -1,3 +1,30 @@
+v1.2.3 round-62 (2026.11.21): first physical dedup pass — SAF pickers and the 8KB chunked read loop single-sourced.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - SafPickerHelper.java (GPL v3, DroidFish-derived lineage): the two
+    CREATE_DOCUMENT export pickers (openExportFilePicker /
+    openPGNExportFilePicker) and the two OPEN_DOCUMENT import pickers
+    (openSystemFilePicker / openPGNFilePicker) were line-for-line Sonar
+    duplicate blocks; both pairs collapsed into single private
+    implementations (openCreateDocumentPicker / openOpenDocumentPicker)
+    behind thin public wrappers — behavior preserved verbatim (guards,
+    pending-export state machine, catch-path reset, HyperOS all-files
+    MIME workaround). readTextFromUri / readPgnFromUri now delegate to
+    FileIoHelper.readCappedText (3 unused imports removed).
+  - FileIoHelper.java (GPL v3, DroidFish-derived): NEW shared static
+    reader readCappedText(ContentResolver, Uri, maxChars, maxLines,
+    tooLargeLabel, truncatedOut) — the single implementation of the
+    bounded 8KB chunked read loop (round-13 null-check, round-46 CR#15
+    hard char cap, round-49 line cap, round-54 PR56 CR#7/#8 CR/LF/CRLF
+    folding — semantics preserved verbatim).
+  - StatsActivity.java (GPL v3): stats-page PGN import now calls the
+    shared reader (was the third copy of the loop; MAX_LINES=5000 /
+    MAX_CHARS=10M and the truncation warning comment unchanged; 2 unused
+    imports removed).
+  - Regression sentinels: v2 V2-25 (each SAF launch block exactly once;
+    the chunk loop only in FileIoHelper); v3 G7a/G7b upgraded to
+    sole-implementation + caller-wiring guards.
+  - License classification: unchanged (all three files GPL v3).
+
 v1.2.3 round-61 (2026.11.21): PR#56 review fixes — batch-hang terminator moved to the progress path + dead-engine batch-end notification + license-tag corrections.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - StockfishNative.java (GPL v3, DroidFish-derived): R61-d —

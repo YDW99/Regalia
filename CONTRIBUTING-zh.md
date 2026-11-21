@@ -103,7 +103,7 @@ cd Regalia
 | 分支 | 用途 | 说明 |
 |------|------|------|
 | `main` | 稳定分支 | 仅通过 PR 合并，直接推送禁止(除非受许绕过规则) |
-| `upload` | 上传解压 | 从任意分支切出，专用于搭配 `unzip-folder-optimized.yml` 实现自动解压上传的zip压缩包|
+| ~~`upload`~~ | （2026-11-21 已删除，PR #56 合并后） | 曾用于搭配 `unzip-folder-optimized.yml` 自动解压上传的 zip 压缩包；该分支已不存在，`main` 为唯一权威恢复源 |
 | `dev` | 开发分支 | 功能开发的集成分支 |
 | `feature/*` | 功能分支 | 从 `dev` 切出，如 `feature/pgn-import` |
 | `fix/*` | 修复分支 | 从 `dev` 切出，如 `fix/engine-crash` |

@@ -578,4 +578,81 @@ public class FileIoHelper {
             return "";
         }
     }
+
+    /**
+     * v1.2.3 round-62 (dedup, guide §5.1 item 3): the bounded chunked
+     * text-read loop previously existed in three line-for-line copies —
+     * SafPickerHelper.readTextFromUri, SafPickerHelper.readPgnFromUri and
+     * StatsActivity's PGN import (the duplicate blocks that kept the PR #56
+     * duplication ratio hovering at the 3% gate; merging PR #56 turned the
+     * gate green only via the "new code" window change, not because the
+     * blocks went away). Single implementation now; per-flavor wrappers
+     * keep their call sites and log labels.
+     *
+     * Semantics preserved verbatim from the round-46/49/54 originals:
+     *  - opens the stream via the given ContentResolver; a null stream throws
+     *    IOException (round-13 P1 openInputStream null-check);
+     *  - reads in 8KB chunks; when the accumulated content would exceed
+     *    maxChars, throws IOException("<label> too large (>N chars)") —
+     *    memory stays bounded by maxChars + one chunk buffer (round-46
+     *    CR#15 / round-49 review-4 P2-1: readLine() materializes a whole
+     *    line BEFORE any cap check, so a single multi-GB line OOMs);
+     *  - if maxLines > 0, counts lines with readLine() semantics: bare CR
+     *    and bare LF each end a line, CRLF pairs (even split across chunk
+     *    boundaries) count once (round-54 PR56 CR#7/#8 prevWasCr folding);
+     *    the read stops right after the line that reaches maxLines and
+     *    truncatedOut[0] (when provided) is set so the caller can append
+     *    its flavor-specific warning comment;
+     *  - maxLines <= 0 disables the line cap entirely (settings-import
+     *    semantics: char cap only).
+     *
+     * @param cr             ContentResolver to open the stream with
+     * @param uri            source URI
+     * @param maxChars       hard character cap (throws when exceeded)
+     * @param maxLines       line cap, or <= 0 for no line cap
+     * @param tooLargeLabel  label for the too-large IOException message
+     * @param truncatedOut   optional 1-slot array; [0]=true when the line
+     *                       cap stopped the read early
+     */
+    public static String readCappedText(android.content.ContentResolver cr, android.net.Uri uri,
+                                        int maxChars, int maxLines, String tooLargeLabel,
+                                        boolean[] truncatedOut) throws IOException {
+        InputStream is = cr.openInputStream(uri);
+        if (is == null) {
+            throw new IOException("openInputStream returned null for " + uri);
+        }
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(is, "UTF-8"))) {
+            StringBuilder sb = new StringBuilder();
+            char[] chunk = new char[8192];
+            int lineCount = 0;
+            boolean prevWasCr = false;
+            boolean truncated = false;
+            int n;
+            while ((n = reader.read(chunk, 0, chunk.length)) != -1) {
+                if (maxLines > 0 && lineCount >= maxLines) { truncated = true; break; }
+                if (sb.length() + n > maxChars) {
+                    throw new IOException(tooLargeLabel + " too large (>" + maxChars + " chars)");
+                }
+                int appendLen = n;
+                if (maxLines > 0) {
+                    for (int i = 0; i < n; i++) {
+                        if (chunk[i] == '\n') {
+                            if (!prevWasCr) lineCount++; // LF — count unless it closes a CRLF pair
+                            prevWasCr = false;
+                        } else if (chunk[i] == '\r') {
+                            lineCount++; // CR — always a line end (a following LF is folded above)
+                            prevWasCr = true;
+                        } else {
+                            prevWasCr = false;
+                        }
+                        if (lineCount >= maxLines) { appendLen = i + 1; break; }
+                    }
+                }
+                sb.append(chunk, 0, appendLen);
+                if (appendLen < n) { truncated = true; break; }
+            }
+            if (truncatedOut != null && truncatedOut.length > 0) truncatedOut[0] = truncated;
+            return sb.toString();
+        }
+    }
 }

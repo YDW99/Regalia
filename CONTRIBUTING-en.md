@@ -103,7 +103,7 @@ cd Regalia
 | Branch | Purpose | Note |
 |--------|---------|------|
 | `main` | Stable branch | Only merge via PR, direct push is prohibited(Unless permitted to bypass the rules) |
-| `upload` | Upload and unzip | Create a branch from any branch, specifically for use with the `unzip-folder-optimized.yml` workflow to automatically unzip and upload ZIP archives |
+| ~~`upload`~~ | (deleted 2026-11-21, after PR #56 merged) | Was used with `unzip-folder-optimized.yml` to unzip uploaded ZIP archives; the branch no longer exists — `main` is the sole authoritative source |
 | `dev` | Development branch | Integration branch for feature development |
 | `feature/*` | Feature branches | Branched from `dev`, e.g. `feature/pgn-import` |
 | `fix/*` | Fix branches | Branched from `dev`, e.g. `fix/engine-crash` |

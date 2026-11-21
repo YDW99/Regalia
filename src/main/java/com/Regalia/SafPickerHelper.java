@@ -38,9 +38,6 @@ import android.util.Log;
 
 import org.json.JSONObject;
 
-import java.io.BufferedReader;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.lang.ref.WeakReference;
@@ -117,56 +114,52 @@ public class SafPickerHelper {
 
     /** 打开 SAF 导出选择器（设置文件） */
     public void openExportFilePicker(String content) {
-        if (content == null || content.isEmpty()) {
-            Log.w(TAG, "openExportFilePicker: empty content, skipping");
-            return;
-        }
-        _pendingExportContent = content;
-        _pendingExportType = "settings";
-        Activity activity = activityRef.get();
-        if (activity == null) {
-            Log.w(TAG, "openExportFilePicker: no valid Activity reference");
-            callbacks.postJsCallback("if(typeof showToast==='function')showToast('Activity unavailable')");
-            return;
-        }
-        try {
-            Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
-            intent.addCategory(Intent.CATEGORY_OPENABLE);
-            intent.setType("text/plain");
-            intent.putExtra(Intent.EXTRA_TITLE, "Regalia_engine_settings.txt");
-            activity.startActivityForResult(intent, REQUEST_CODE_EXPORT_SETTINGS);
-            Log.i(TAG, "SAF export file picker opened");
-        } catch (Throwable e) {
-            Log.e(TAG, "openExportFilePicker failed", e);
-            _pendingExportContent = null;
-            _pendingExportType = "settings";
-            callbacks.postJsCallback("if(typeof showToast==='function')showToast('File picker unavailable')");
-        }
+        // v1.2.3 round-62 (dedup): thin wrapper — the launch logic lives in
+        //   openCreateDocumentPicker (was a line-for-line duplicate pair).
+        openCreateDocumentPicker(content, "settings", "text/plain",
+                "Regalia_engine_settings.txt", REQUEST_CODE_EXPORT_SETTINGS, "openExportFilePicker");
     }
 
     /** 打开 SAF 导出选择器（PGN 文件） */
     public void openPGNExportFilePicker(String content) {
+        // v1.2.3 round-62 (dedup): thin wrapper — see openExportFilePicker.
+        openCreateDocumentPicker(content, "pgn", "application/x-chess-pgn",
+                "Regalia_game.pgn", REQUEST_CODE_EXPORT_PGN, "openPGNExportFilePicker");
+    }
+
+    /**
+     * v1.2.3 round-62 (dedup, guide §5.1 item 3): single CREATE_DOCUMENT
+     * launch path for both export flavors (settings / PGN). The two public
+     * pickers were line-for-line Sonar duplicate blocks differing only in
+     * export type, MIME type, suggested file name, request code and log
+     * label. Behavior preserved verbatim: empty-content guard, pending
+     * export state, Activity-null guard with JS toast, and the catch path
+     * that drops the pending content and resets the type to the default
+     * ("settings").
+     */
+    private void openCreateDocumentPicker(String content, String exportType, String mimeType,
+                                           String suggestedName, int requestCode, String logLabel) {
         if (content == null || content.isEmpty()) {
-            Log.w(TAG, "openPGNExportFilePicker: empty content, skipping");
+            Log.w(TAG, logLabel + ": empty content, skipping");
             return;
         }
         _pendingExportContent = content;
-        _pendingExportType = "pgn";
+        _pendingExportType = exportType;
         Activity activity = activityRef.get();
         if (activity == null) {
-            Log.w(TAG, "openPGNExportFilePicker: no valid Activity reference");
+            Log.w(TAG, logLabel + ": no valid Activity reference");
             callbacks.postJsCallback("if(typeof showToast==='function')showToast('Activity unavailable')");
             return;
         }
         try {
             Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
             intent.addCategory(Intent.CATEGORY_OPENABLE);
-            intent.setType("application/x-chess-pgn");
-            intent.putExtra(Intent.EXTRA_TITLE, "Regalia_game.pgn");
-            activity.startActivityForResult(intent, REQUEST_CODE_EXPORT_PGN);
-            Log.i(TAG, "SAF PGN export file picker opened");
+            intent.setType(mimeType);
+            intent.putExtra(Intent.EXTRA_TITLE, suggestedName);
+            activity.startActivityForResult(intent, requestCode);
+            Log.i(TAG, "SAF export file picker opened: " + exportType);
         } catch (Throwable e) {
-            Log.e(TAG, "openPGNExportFilePicker failed", e);
+            Log.e(TAG, logLabel + " failed", e);
             _pendingExportContent = null;
             _pendingExportType = "settings";
             callbacks.postJsCallback("if(typeof showToast==='function')showToast('File picker unavailable')");
@@ -270,31 +263,33 @@ public class SafPickerHelper {
 
     /** 打开 SAF 导入选择器（设置文件） */
     public void openSystemFilePicker() {
-        Activity activity = activityRef.get();
-        if (activity == null) {
-            Log.w(TAG, "openSystemFilePicker: no valid Activity reference");
-            callbacks.postJsCallback("if(typeof showToast==='function')showToast('Activity unavailable')");
-            return;
-        }
-        try {
-            Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
-            intent.addCategory(Intent.CATEGORY_OPENABLE);
-            // v18.6.0 FIX: 使用 */* 作为主类型，显示所有文件包括 .txt
-            // 某些 OEM 文件选择器（小米 HyperOS）在 setType 为 "text/plain" 时不显示 .txt 文件
-            intent.setType("*/*");
-            intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"text/plain", "application/octet-stream"});
-            activity.startActivityForResult(intent, REQUEST_CODE_IMPORT_SETTINGS);
-        } catch (Throwable e) {
-            Log.e(TAG, "openSystemFilePicker failed", e);
-            callbacks.postJsCallback("if(typeof showToast==='function')showToast('File picker unavailable')");
-        }
+        // v1.2.3 round-62 (dedup): thin wrapper — the launch logic lives in
+        //   openOpenDocumentPicker (was a line-for-line duplicate pair).
+        openOpenDocumentPicker(new String[]{"text/plain", "application/octet-stream"},
+                REQUEST_CODE_IMPORT_SETTINGS, "openSystemFilePicker");
     }
 
     /** 打开 SAF 导入选择器（PGN 文件） */
     public void openPGNFilePicker() {
+        // v1.2.3 round-62 (dedup): thin wrapper — see openSystemFilePicker.
+        openOpenDocumentPicker(new String[]{"application/x-chess-pgn", "text/plain", "application/octet-stream"},
+                REQUEST_CODE_IMPORT_PGN, "openPGNFilePicker");
+    }
+
+    /**
+     * v1.2.3 round-62 (dedup, guide §5.1 item 3): single OPEN_DOCUMENT launch
+     * path for both import flavors (settings / PGN). The two public pickers
+     * were line-for-line Sonar duplicate blocks differing only in
+     * EXTRA_MIME_TYPES and the request code. Behavior preserved verbatim:
+     * Activity-null guard with JS toast, the all-files primary MIME type
+     * (v18.6.0 FIX kept: some OEM pickers — Xiaomi HyperOS — hide .txt
+     * files when the primary type is "text/plain"), and the catch path
+     * with its JS toast.
+     */
+    private void openOpenDocumentPicker(String[] mimeTypes, int requestCode, String logLabel) {
         Activity activity = activityRef.get();
         if (activity == null) {
-            Log.w(TAG, "openPGNFilePicker: no valid Activity reference");
+            Log.w(TAG, logLabel + ": no valid Activity reference");
             callbacks.postJsCallback("if(typeof showToast==='function')showToast('Activity unavailable')");
             return;
         }
@@ -302,10 +297,10 @@ public class SafPickerHelper {
             Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
             intent.addCategory(Intent.CATEGORY_OPENABLE);
             intent.setType("*/*");
-            intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"application/x-chess-pgn", "text/plain", "application/octet-stream"});
-            activity.startActivityForResult(intent, REQUEST_CODE_IMPORT_PGN);
+            intent.putExtra(Intent.EXTRA_MIME_TYPES, mimeTypes);
+            activity.startActivityForResult(intent, requestCode);
         } catch (Throwable e) {
-            Log.e(TAG, "openPGNFilePicker failed", e);
+            Log.e(TAG, logLabel + " failed", e);
             callbacks.postJsCallback("if(typeof showToast==='function')showToast('File picker unavailable')");
         }
     }
@@ -347,91 +342,32 @@ public class SafPickerHelper {
 
     /** 从 URI 读取文本内容（设置文件） */
     private String readTextFromUri(Uri uri) throws Throwable {
-        // v1.2.3 round-13 (P1): ContentResolver.openInputStream may return null
-        //   (e.g. provider unavailable, file deleted between picker and read).
-        //   Mirrors the write path's openOutputStream null-check (line ~204).
-        InputStream is = context.getContentResolver().openInputStream(uri);
-        if (is == null) {
-            throw new java.io.IOException("openInputStream returned null for " + uri);
-        }
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(is, "UTF-8"))) {
-            // v1.2.3 round-46 (PR53 CR#15): read in fixed-size chunks with a
-            //   hard cap instead of readLine(). The round-41 pre-append check
-            //   was NOT sufficient: readLine() itself materializes an entire
-            //   line in memory BEFORE the check runs, so a single multi-GB
-            //   line could OOM the process anyway. Memory use is now strictly
-            //   bounded by SETTINGS_MAX_CHARS + one 8KB chunk buffer. Line
-            //   endings are preserved as-is (downstream importSettings splits
-            //   on \r?\n, so CRLF input is fine).
-            StringBuilder sb = new StringBuilder();
-            char[] chunk = new char[8192];
-            int n;
-            while ((n = reader.read(chunk, 0, chunk.length)) != -1) {
-                if (sb.length() + n > SETTINGS_MAX_CHARS) {
-                    throw new java.io.IOException("Settings file too large (>" + SETTINGS_MAX_CHARS + " chars)");
-                }
-                sb.append(chunk, 0, n);
-            }
-            return sb.toString();
-        }
+        // v1.2.3 round-62 (dedup): the bounded chunked read loop moved to
+        //   FileIoHelper.readCappedText — shared with readPgnFromUri and
+        //   StatsActivity's PGN import (was a 3-way Sonar duplicate block).
+        //   Settings semantics: char cap only (no line cap), same too-large
+        //   message as before.
+        return FileIoHelper.readCappedText(context.getContentResolver(), uri,
+                SETTINGS_MAX_CHARS, 0, "Settings file", null);
     }
 
     /** 从 URI 读取 PGN 内容（含截断保护） */
     private String readPgnFromUri(Uri uri) throws Throwable {
-        // v1.2.3 round-13 (P1): see readTextFromUri — openInputStream may return null.
-        InputStream is = context.getContentResolver().openInputStream(uri);
-        if (is == null) {
-            throw new java.io.IOException("openInputStream returned null for " + uri);
+        // v1.2.3 round-62 (dedup): the chunked read + line-cap loop moved to
+        //   FileIoHelper.readCappedText (3-way duplicate collapsed: this
+        //   method, readTextFromUri, StatsActivity's PGN import). The PGN
+        //   truncation warning comment stays HERE — it is PGN content, not
+        //   generic I/O. All round-46/49/54 semantics preserved verbatim by
+        //   the shared helper (char cap throws, 8KB chunks, readLine()-
+        //   compatible CR/LF/CRLF folding, stop-at-line-cap).
+        boolean[] truncated = new boolean[1];
+        String content = FileIoHelper.readCappedText(context.getContentResolver(), uri,
+                PGN_MAX_CHARS, PGN_MAX_LINES, "PGN file", truncated);
+        if (truncated[0]) {
+            Log.w(TAG, "PGN file truncated at " + PGN_MAX_LINES + " lines");
+            content += "\n{ Warning: file truncated at " + PGN_MAX_LINES + " lines by Regalia import guard }\n";
         }
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(is, "UTF-8"))) {
-            // v1.2.3 round-49 (review-4 P2-1): 8KB 分块读 + 字符硬上限 +
-            //   跨块换行计数，取代 readLine()（同 readTextFromUri 的
-            //   round-46 CR#15 写法）。readLine() 会在任何上限检查之前把
-            //   整行物化进内存 —— 单个无换行的数百 MB 文件会直接在主线程
-            //   OOM（onActivityResult 路径，Error 不被非主线程抑制器覆盖）。
-            //   5000 行截断语义保留：内容截到第 5000 行的换行为止，追加
-            //   告警注释。行尾原样保留（CRLF 不再归一化为 \n，下游 PGN
-            //   解析按 \r?\n 分行）。
-            StringBuilder sb = new StringBuilder();
-            char[] chunk = new char[8192];
-            int lineCount = 0;
-            // v1.2.3 round-54 (PR56 CR#7): count bare '\r' as a line terminator
-            //   too — BufferedReader.readLine() (the pre-round-49 implementation
-            //   whose semantics this block replaced) treats CR, LF and CRLF all
-            //   as line ends, and a CR-only file could otherwise smuggle N
-            //   "lines" past PGN_MAX_LINES. prevWasCr folds a CRLF pair (even
-            //   one split across chunk boundaries) into a single line count.
-            boolean prevWasCr = false;
-            boolean truncated = false;
-            int n;
-            while ((n = reader.read(chunk, 0, chunk.length)) != -1) {
-                if (lineCount >= PGN_MAX_LINES) { truncated = true; break; }
-                if (sb.length() + n > PGN_MAX_CHARS) {
-                    throw new java.io.IOException("PGN file too large (>" + PGN_MAX_CHARS + " chars)");
-                }
-                int appendLen = n;
-                for (int i = 0; i < n; i++) {
-                    if (chunk[i] == '\n') {
-                        if (!prevWasCr) lineCount++; // LF — count unless it closes a CRLF pair
-                        prevWasCr = false;
-                    } else if (chunk[i] == '\r') {
-                        lineCount++; // CR — always a line end (a following LF is folded above)
-                        prevWasCr = true;
-                    } else {
-                        prevWasCr = false;
-                    }
-                    if (lineCount >= PGN_MAX_LINES) { appendLen = i + 1; break; }
-                }
-                sb.append(chunk, 0, appendLen);
-                if (appendLen < n) { truncated = true; break; }
-            }
-            String content = sb.toString();
-            if (truncated) {
-                Log.w(TAG, "PGN file truncated at " + PGN_MAX_LINES + " lines");
-                content += "\n{ Warning: file truncated at " + PGN_MAX_LINES + " lines by Regalia import guard }\n";
-            }
-            return content;
-        }
+        return content;
     }
 
     /** 过滤控制字符（保留换行、制表符、回车） */

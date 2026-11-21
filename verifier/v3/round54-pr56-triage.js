@@ -137,14 +137,23 @@ ok('G6e S7741 — no typeof _reviewAnalyzeStep guard (same-module binding)',
    !/typeof _reviewAnalyzeStep/.test(ab));
 
 // G7 — CR-aware line counting
-const saf = read('src/main/java/com/Regalia/SafPickerHelper.java');
-const sa = read('src/main/java/com/Regalia/StatsActivity.java');
-for (const [name, src] of [['G7a SafPickerHelper', saf], ['G7b StatsActivity', sa]]) {
-  ok(name + ': prevWasCr CR/LF/CRLF counting',
-     src.includes('prevWasCr')
-     && /chunk\[i\] == '\\n'\) \{\s*if \(!prevWasCr\) lineCount\+\+;/.test(src.replace(/\s+/g, ' ').replace(/\\n/g, '\\n'))
-     && src.includes("chunk[i] == '\\r'"));
-}
+// round-62 (dedup): the prevWasCr CR/LF/CRLF counting loop moved from
+//   SafPickerHelper.readPgnFromUri / StatsActivity's inline import into
+//   FileIoHelper.readCappedText (single implementation — see V2-25). The
+//   sentinel now guards BOTH the surviving implementation (G7a) AND the
+//   wiring of the PGN callers (G7b) — stronger than the old per-file
+//   textual-presence check: a caller that silently regressed to an
+//   uncapped/naive read would fail G7b even though G7a still passes.
+const fioG7 = read('src/main/java/com/Regalia/FileIoHelper.java');
+const safG7 = read('src/main/java/com/Regalia/SafPickerHelper.java');
+const saG7 = read('src/main/java/com/Regalia/StatsActivity.java');
+ok('G7a FileIoHelper.readCappedText: prevWasCr CR/LF/CRLF counting (sole implementation)',
+   fioG7.includes('prevWasCr')
+   && /chunk\[i\] == '\\n'\) \{\s*if \(!prevWasCr\) lineCount\+\+;/.test(fioG7.replace(/\s+/g, ' ').replace(/\\n/g, '\\n'))
+   && fioG7.includes("chunk[i] == '\\r'"));
+ok('G7b SafPickerHelper + StatsActivity wired to the shared CR-aware reader',
+   /FileIoHelper\.readCappedText\(context\.getContentResolver\(\), uri,\s*\n\s*PGN_MAX_CHARS, PGN_MAX_LINES/.test(safG7)
+   && /FileIoHelper\.readCappedText\(getContentResolver\(\), uri,\s*\n\s*MAX_CHARS, MAX_LINES/.test(saG7));
 
 // G8 — EngineService.java wake lock
 const es = read('src/main/java/com/Regalia/EngineService.java');

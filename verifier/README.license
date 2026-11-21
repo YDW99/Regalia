@@ -1,3 +1,28 @@
+v1.2.3 round-62 (2026.11.21): 58b six-bug sentinels + dedup regression sentinels (baseline 44/27/39).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - v1/eval-stale-harness.js (AGPL v3 harness): NEW scenario S58 (10
+    behavioral assertions) — same-position in-flight dedup (C0/C1/C2),
+    completed-work rescue with loading+watchdog settlement (E1/E2/E3),
+    true-silence watchdog with exactly-one bounded auto-retry via an
+    accelerated sandbox clock (D0/D1/D2/D3). Baseline 34 -> 44.
+  - v2/round53-sonar-triage.js (AGPL v3 harness): NEW V2-22 (_manualLive
+    gate in onEngineProgress), V2-23a/b/c (loading+watchdog paired
+    settlement in onEngineRestarting / onEngineReady / the three
+    onEngineEval exits), V2-24 (list refresh wired on all 3 manual
+    completion paths), V2-25 (dedup regression: SAF launch blocks single-
+    sourced, 8KB chunk loop only in FileIoHelper). Baseline 21 -> 27.
+  - v3/round54-pr56-triage.js (AGPL v3 harness): G7a/G7b migrated with
+    the round-62 dedup — G7a guards the prevWasCr CR/LF/CRLF counting in
+    FileIoHelper.readCappedText (sole implementation), G7b guards the
+    SafPickerHelper + StatsActivity caller wiring (RED if a caller
+    regresses to a naive read; negative-tested). Baseline stays 39
+    (entries upgraded in place, count unchanged).
+  - Negative-test discipline: all six new sentinels RED-verified by
+    regressing ai-bridge.java to pre-58b behavior via scripted mutations
+    (restore -> GREEN). Script: scripts/r62-negative-tests.sh (sandbox
+    tree); trajectory in verifier/runs/round62-audit.md.
+  - License classification: all files unchanged.
+
 v1.2.3 round-56 (2026.10.5): v1 harness module list synced to build-chess.py.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - v1/eval-stale-harness.js (AGPL v3 harness): MODULES updated to the
