@@ -130,7 +130,7 @@ jobs:
             notes += `---\n\n`;
             notes += `### Installation\n`;
             notes += `Download the APK from the assets below and install it on your Android device.\n`;
-            notes += `Note: This app bundles the official prebuilt Stockfish 18 engine binary (\`libstockfish.so\`, downloaded from the official Stockfish release into \`src/main/jniLibs/\`); the NDK is only used to build the \`libengine_bridge.so\` JNI shim from \`engine_jni.cpp\`.\n\n`;
+            notes += `Note: This app bundles the official prebuilt Stockfish 19 engine binary (arm64-universal build) (\`libstockfish.so\`, downloaded from the official Stockfish release into \`src/main/jniLibs/\`); the NDK is only used to build the \`libengine_bridge.so\` JNI shim from \`engine_jni.cpp\`.\n\n`;
             notes += `> ⚠️ **Note**: If you encounter any issues, please [report them here](https://github.com/${context.repo.owner}/${context.repo.repo}/issues).\n`;
 
             // Update the release with generated notes
