@@ -362,7 +362,8 @@ public class StabilizationHelper implements SensorEventListener {
         //   instead of System.currentTimeMillis() — the wall clock can jump
         //   backward (user manually changes date/time, NTP sync), which would
         //   make `now - lastJsCallbackTime` go negative. Since the throttle
-        //   check is `< JS_CALLBACK_MIN_INTERVAL_MS` (16ms, positive), a
+        //   check is `< JS_CALLBACK_MIN_INTERVAL_MS` (33ms, positive — round-58c
+        //   comment fix: D12 raised 16→33ms; this comment missed the update), a
         //   negative delta would always satisfy it → EVERY sensor event
         //   would be skipped → stabilization freezes until the wall clock
         //   catches back up to its previous value (could be hours/days if

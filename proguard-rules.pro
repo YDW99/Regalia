@@ -51,8 +51,9 @@
 # ----------------------------------------------------------------------------
 # 3. Native JNI methods
 # ----------------------------------------------------------------------------
-# Java calls StockfishNative.nativeChmod(String) : boolean (and the legacy
-# nativeRenice), both implemented in C++ in engine_jni.cpp via JNI. R8 must
+# Java calls StockfishNative.nativeChmod(String) : boolean, implemented in C++
+# in engine_jni.cpp via JNI (round-54: the legacy nativeRenice reference was
+# removed — its orphan implementation was deleted in round-48, RED-3). R8 must
 # not rename or remove the native method declarations (the JNI runtime looks
 # them up by exact name+signature). The ChmodProvider callback interface is
 # kept because engine_jni.cpp's JNI calls back into Java via it.
@@ -126,10 +127,16 @@
 # 9. Logging
 # ----------------------------------------------------------------------------
 # Strip android.util.Log.v() / Log.d() calls in release builds to reduce
-# overhead and avoid leaking internal state. Keep w/i/e for diagnostics.
+# overhead and avoid leaking internal state.
+# v1.2.3 round-56 (SEC-06): also strip Log.i() / Log.w() — informational and
+#   warning logs can leak engine paths, file names and timing details in
+#   release builds. Log.e() is KEPT: crash diagnostics need it, and error
+#   paths are both rare and the least sensitive.
 -assumenosideeffects class android.util.Log {
     public static *** v(...);
     public static *** d(...);
+    public static *** i(...);
+    public static *** w(...);
 }
 
 # ----------------------------------------------------------------------------

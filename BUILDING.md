@@ -3,6 +3,184 @@
 > Build guide for the Regalia Android chess app (versionCode=10203, versionName="1.2.3").
 > Round-by-round build notes are appended below (newest first).
 
+## Round-54b build notes (2026-10-05)
+
+- **SonarCloud follow-up on the round-54 tree** (4 issues → 2 fixed / 2
+  false positives): EngineProcessManager waitForBounded Javadoc moved above
+  killProcess (S8491 dangling Javadoc — introduced by the round-54 insert);
+  ai-bridge.js _bgDone typeof guard replaced with a direct undefined
+  comparison (S7741 — _reviewAnalyzeStep is same-module). chess.html rebuilt
+  (24,360 lines). compileReleaseJavaWithJavac BUILD SUCCESSFUL.
+- False positives kept: S125 at EngineProcessManager:106 (explanatory
+  comment, not commented-out code); S2486 at ai-bridge.js:4515
+  (pre-existing, the catch has a real fallback assignment).
+- Verifier v3 strengthened to 29 assertions (G4a / G6d / G6e).
+
+## Round-54 build notes (2026-10-05)
+
+- **PR #56 AI-review triage** (CodeRabbit 5 passes / GitHub Advanced
+  Security mobsfscan / PMD): 12 real findings fixed, 13 false positives
+  documented (see NOTICE / worklog.md for the full triage table).
+- **Build-script change (build.gradle)**: `usingFallbackVersion` now also
+  triggers when version.properties EXISTS but any of VERSION_MAJOR /
+  VERSION_MINOR / VERSION_PATCH / VERSION_BUILD is missing or blank —
+  previously the ?: defaults silently filled the gap and the SEC-1
+  warning never fired. No change when the file is complete.
+- **Java changes**: EngineProcessManager (new waitForBounded API-26
+  gate), EngineService (setReferenceCounted(false) on the wake lock),
+  SafPickerHelper + StatsActivity (CR-aware chunked line counting),
+  JsBridgeGateway (new isPathBrowsable gate), StockfishNative
+  (listFiles/getParentPath route through it), FileIoHelper
+  (getDefaultPaths gains filesDir). All compile clean
+  (compileReleaseJavaWithJavac BUILD SUCCESSFUL).
+- **JS changes**: game-logic.js (engineGo failure branches reschedule
+  doAIMove), ui-interactions.js (dlgChess960SPID reset sentinel -1),
+  ai-bridge.js (per-batch notification count, openStatsPage Binder-cap
+  re-check, sandbox-aware settings file browser + SAF escape). Rebuilt
+  via `python3 build-chess.py` (24,357 lines).
+- **stats.html changes**: en-passant victim-pawn validation, explicit
+  onStatsPGNFileError callback + pgn_read_failed i18n.
+- **Docs**: PRIVACY.md top-level title (MD041); NOTICE 9x→10x
+  README.license + HapticHelper "no effective calls" correction;
+  java/README.license same correction; proguard-rules.pro stale
+  nativeRenice reference removed; worklog.md round-48 count 20→19;
+  .github/README.license dual-license clarification.
+- **Verifier**: v3/round54-pr56-triage.js (27 assertions) added; v1
+  harness D3a batch-completion assertion; v2 F2d/F4b tightened.
+
+## Round-53 build notes (2026-10-05)
+
+- **SonarCloud PR #56 triage** (11 open issues → 9 fixed / 2 false
+  positives); version unchanged (versionCode=10203, versionName="1.2.3").
+- **JS (`game-logic.js`, `tablebase.js`, `ui-interactions.js`,
+  `ai-bridge.js`)**: S9383 — animation `Promise.all` wait gains an
+  explicit rejection handler (same guarded `_finishAnim()`); the three
+  bare `importPGNAsync()` fire-and-forget call sites are void-marked.
+  S6582 — `reviewStates?.length` (cross-module typeof guard kept);
+  S7741 — `_reviewEvalCache!==undefined`; S4138 — the round-52 T5
+  dispatch-ring loop converted to for-of.
+- **`EngineService.java` (S2696 ×2)**: the static `wakeLock` field is now
+  written only from the new `private static synchronized` helpers
+  `acquireEngineWakeLock(Context)` / `releaseEngineWakeLock()`;
+  `onCreate()`/`onDestroy()` delegate. `refreshWakeLock()` is now
+  `synchronized`, closing the re-arm-vs-release interleave race. The moved
+  acquire/release blocks catch `Exception` instead of `Throwable`
+  (S1181-compliant).
+- **`StockfishNative.java` (S6201/S1181)**: batch-end dispatch uses Java
+  17 pattern matching (`act instanceof MainActivity mainActivity`) and
+  catches `Exception` instead of `Throwable`.
+- **`MainActivity.java`**: comment-only — S116 ×2 triaged as false
+  positives (project `_xxx` field convention; "S116 kept" notes added).
+- **Rebuild**: `python3 build-chess.py` regenerated `chess.html`
+  (24,309 lines / 1,479,405 bytes); all 11 modules + inline script pass
+  `node --check`; verifier v2 19/19 PASS + v1 regression 28/28 PASS;
+  `gradle compileReleaseJavaWithJavac` clean.
+
+## Round-52 build notes (2026-10-05)
+
+- **Stale engine-eval race fix (JS fen-identity guard + Java stop/bestmove
+  hardening)**; version unchanged (versionCode=10203, versionName="1.2.3").
+- **`ai-bridge.js` (T5)**: closes the rare window where a late engine
+  bestmove/info callback for an older position arrives after the user
+  already played/navigated, so the eval bar briefly shows the PREVIOUS
+  position's score. New `_evalLastDispatchedFen` and
+  `_evalRecentDispatches` (8-entry ring of `{fen, step, states}`) are
+  recorded at every user-navigation dispatch (review-debounce dispatch
+  and normal-mode dispatch). `onEngineEval` drops a callback whose
+  `reqFen` differs from the last dispatched user-nav fen — except when it
+  matches a recent review-mode dispatch for the SAME `reviewStates`
+  array: then the eval is cached under that MATCHED step with White-POV
+  sign / WDL re-derived from the matched position's side-to-move
+  (preserves the Phase 59.3 background-caching intent; never poisons the
+  current step). Legacy 7-arg callbacks (no reqFen) still pass through
+  the round-46 generation check. References for the pattern: Polyglot
+  SyncStop, lichess ceval fen-tagging, python-chess `isready` barrier,
+  Stockfish UCI ordering guarantees.
+- **`StockfishNative.java` (J1-J4)**: J1 — the stop-timeout branch arms
+  `_discardingPonderBestmove` only when the captured `stateAtTimeout !=
+  STATE_NONE` (a naturally completed search needs no discard; the old
+  unconditional arming could eat the NEXT search's bestmove); J2 — the
+  idle fast-path no longer clears `_discardingPonderBestmove` (residue is
+  handled by latch-consumption / the discard path /
+  `_resetEngineRuntimeState`); J3 — the reader thread skips
+  `processInfoLine()` while `_discardingPonderBestmove` is set (stale info
+  lines no longer pollute the UI); J4 — the reader's discard branch no
+  longer clobbers `currentState` back to `STATE_NONE` (could overwrite a
+  NEWER search's state).
+- **`verifier/` (new)**: versioned acceptance verifier —
+  `v1/eval-stale-harness.js` (Node vm harness over the 11 chess.src
+  modules, 28 assertions; 28/28 pass on the fixed tree, expected failure
+  on the pre-fix baseline), append-only `README.md` index, timestamped
+  runs under `runs/`, plus `README.license` (AGPL v3 harness).
+- **Rebuild**: `python3 build-chess.py` regenerated `chess.html`
+  (24,290 lines / 1,477,911 bytes); all 11 modules + the inline script
+  pass `node --check`.
+- **Build environment note**: a full JDK (javac) is required on PATH /
+  via the Gradle toolchain — a JRE-only `java-17-openjdk-amd64`
+  installation fails configuration with "Toolchain installation ... does
+  not provide the required capabilities: [JAVA_COMPILER]".
+- Release APK rebuilt with v1+v2+v3 signatures; Stockfish dotprod engine
+  SHA-256 three-way match (8f7116d3...).
+
+## Round-51 build notes (2026-09-09)
+
+- **BACK navigation (level-by-level) + background analyze-all + batch-eval
+  bug fix**; version unchanged (versionCode=10203, versionName="1.2.3").
+- **`MainActivity.java` (BG-1)**: `onPause()` now SKIPS `webView.onPause()`
+  while an analyze-all eval batch is active (`StockfishNative.isEvalDeepBatchActive()`)
+  — pausing a WebView freezes all its JS timers and stalled the batch's
+  `setTimeout(0)` step chain in the background. The skipped pause is applied
+  later by the new `onEvalDeepBatchEnded()` (posted from the engine executor
+  via `mainHandler`) when the batch ends while still backgrounded, or becomes
+  moot on `onResume()`. New volatile flags `_activityResumed` /
+  `_webViewPausedForBatch`.
+- **`EngineService.java` (BG-2)**: the 30-minute partial wake lock is now
+  re-armed per batch step — `wakeLock` promoted to `static volatile`, new
+  `refreshWakeLock()` (no-op when the lock doesn't exist; AOSP
+  acquire(timeout) resets the timeout). Called from
+  `engineEvalDeepBeginBatch()` and every `engineEvalDeep()` dispatch, so the
+  v1.1.0 Phase 57 timeout safety net can no longer abort a legitimately
+  long (>30 min) background batch.
+- **`StockfishNative.java` (BUG-1 / BG-1)**: `handleBestMove`'s STATE_EVAL
+  branch no longer calls `restoreGameplayOptions()` while
+  `_evalDeepBatchActive` — the per-bestmove restore was silently undoing the
+  batch's objective Contempt=0 / MultiPV=1 / UCI_AnalyseMode=true options
+  after EVERY step, so from step 2 onward each batch eval ran biased
+  (Contempt 24) and shallower (user MultiPV) — the exact distortion the
+  round-44 batch hooks were designed to prevent. `engineEvalDeepEndBatch()`
+  already restores gameplay options on every termination path. Also: new
+  public `isEvalDeepBatchActive()` getter; `EngineService.refreshWakeLock()`
+  calls; `onEvalDeepBatchEnded()` main-thread dispatch at batch end.
+- **JS (`ui-interactions.js` BACK-A/B, `ui.js`, `game-logic.js`)**: root-level
+  BACK now shows an exit-confirmation dialog (new
+  `_showExitConfirmDialog()`, window._exitConfirmDialogDismiss /
+  _exitConfirmDialogOverlay hooks mirroring the setup-exit pattern;
+  退出 → existing `AndroidBridge.exitApp()` bridge → `finish()`; BACK on the
+  dialog = Cancel) instead of the historical intentional no-op; the
+  file-browser back check moved ABOVE the four header dialogs (the
+  body-appended browser overlay always paints on top of them — the old order
+  closed the covered dialog first, a dead-feeling first press); BACK is a
+  deliberate no-op while the z-99999 startup loading overlay is showing
+  (any dialog opened behind it would be invisible). 3 new i18n keys
+  (exit_confirm_title/msg/yes, zh+en). `_resetGameUIState` removes the exit
+  overlay symmetrically.
+- **JS (`ai-bridge.js` BG-3, `ui.js`)**: the FGS notification now shows
+  live batch progress — `onEngineProgress` updates it to
+  "正在分析... (k/N)" while `_reviewAnalyzeAllActive`, and the
+  `_reviewAnalyzeAdvance` completion branch posts the final "分析完成 N 步"
+  state (the completion toast is invisible while backgrounded).
+- **Doc consistency**: `MainActivity.MIN_SUPPORTED_CHROME_MAJOR` comment
+  updated — the round-49 "known residual" (stats.html `replaceAll`) was
+  already converted to regex `.replace` within round-49, so the "raise the
+  gate to 85" follow-up is moot.
+- `chess.html` rebuilt via `python3 build-chess.py` (24,206 lines /
+  1,472,348 bytes; all 11 modules + the inlined script pass `node --check`).
+  Release APK rebuilt: signature v1+v2+v3 all true; APK
+  `lib/arm64-v8a/libstockfish.so` SHA-256 =
+  `8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5`
+  (three-way match). Version: versionCode=10203, versionName="1.2.3"
+  (unchanged).
+
 ## Round-49 build notes (2026-09-06)
 
 - **`build-chess.py` (R5-8)**: new injection guard — any module containing
@@ -547,7 +725,9 @@
     marked UciProtocolHandler.java, EngineConfigManager.java, MessageBus.java
     as "NEVER CREATED" (Phase-73/75 plans that were never implemented)
     (Editor's note, round-48: the classes did exist as zero-instantiation
-    dead code and were finally deleted from git in round-48, RED-2.); noted
+    dead code and were finally deleted from git in round-48, RED-2. The
+    "NEVER CREATED" claim above refers to the Phase-73/75 plan only — the
+    later code-bearing re-uploads did exist; see the round-48 notes.); noted
     that ui-board.js/ui-review.js/ui-audio.js/ui-toolbar.js (Phase-74 extracts)
     were REMOVED in round-4.
   - `Manual/Regalia-v1.2.3-manual-{zh,en}.html` — UI architecture diagram
@@ -721,13 +901,17 @@ APK-embedded `lib/arm64-v8a/libstockfish.so` — in every release round):
 sha256sum src/main/jniLibs/arm64-v8a/libstockfish.so
 # 8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5
 ```
+The same hash is enforced as a CI gate in the `unzip-folder-optimized.yml`
+workflow (round-56), and the app verifies it again at runtime on engine
+extraction (`EXPECTED_ENGINE_SHA256` in `StockfishNative.java`, round-56;
+cached-engine reuse is re-verified on rooted devices).
 
 ## Build chess.html asset
 ```
 python3 build-chess.py
 ```
 The build script merges `src/main/assets/chess.src/*.js` (in order:
-game-logic → chess960 → pgn-standard → worker-pool → state-store → ai-bridge → tablebase → eco-data → ui-gameflow → ui-interactions → ui)
+game-logic → chess960 → pgn-standard → state-store → ai-bridge → tablebase → eco-data → ui-gameflow → ui-interactions → ui)
 into `src/main/assets/chess.html`, stripping `export` statements.
 
 Build failure contract (hard aborts): exit 1 = template/module I/O
@@ -751,6 +935,10 @@ dialogs, back-press routing, 1,438 lines). ui.js is down to 6,761 lines
 (-20%). The new modules sit immediately before ui.js in the bundle; all
 extracted units are pure function declarations (hoisted bundle-wide), so
 load order is unchanged. Bundle order is now 11 modules.
+v1.2.3 (round-56) removed worker-pool.js (zero-caller dead code, 732
+lines — PGN import has been synchronous since v1.0.8 PHASE 49, and the
+stats page uses its own page-inline Worker). Bundle order is now 10
+modules.
 
 ## Build APK
 ```
@@ -790,18 +978,22 @@ installs alongside the release build on the same device.
   hardcoded Ubuntu path `/usr/lib/jvm/java-21-openjdk-amd64`).
 - Configure `local.properties`:
   - `sdk.dir` → Android SDK path
-- Configure `../version.properties` (one level above the project dir):
+- Version definition: `version.properties` at the PROJECT ROOT is
+  committed to the repository (round-56) and is the single source of
+  truth:
   ```
   VERSION_MAJOR=1
   VERSION_MINOR=2
   VERSION_PATCH=3
   VERSION_BUILD=123
   ```
-  Defaults inside `build.gradle` cover the missing case (1.2.3 /
-  VERSION_BUILD=123, so computedVersionCode stays max(123, 10203) =
-  10203) and print a loud "USING FALLBACK VERSION" warning at
-  configuration time (v1.2.3 round-48, SEC-1) — do not ship such a
-  build; restore version.properties.
+  It contains no secrets, which is why it is intentionally NOT listed in
+  `.gitignore`. `build.gradle` reads the project-root file first, then
+  falls back to `../version.properties` (one level above the project
+  dir); a RELEASE build fails fast with a GradleException when neither
+  exists (round-56) — debug builds fall back to 1.2.3/123 with a loud
+  "USING FALLBACK VERSION" warning (round-48, SEC-1). Do not ship a
+  fallback build; restore version.properties.
   Since v1.2.3 round-44 (F11) the effective versionCode is
   `max(VERSION_BUILD, VERSION_MAJOR*10000 + VERSION_MINOR*100 + VERSION_PATCH)`
   — for v1.2.3 that is `max(123, 10203)` = **10203**, so versionCode can never
@@ -834,8 +1026,9 @@ them locally as described above:
 - `local.properties` — your SDK path
 - `lint-baseline.xml` — regenerated on the first `lintVitalRelease` run
 - `src/main/jniLibs/` — the engine binary (download separately, see above)
-- `*.keystore`, `../keystore.properties`, `../version.properties` — signing
-  and version configuration
+- `*.keystore`, `../keystore.properties` — signing configuration
+  (`version.properties` IS included — it is committed at the project
+  root since round-56 and contains no secrets)
 - `.git/`, `.idea/` — VCS / IDE metadata
 
 ## Build troubleshooting
@@ -853,12 +1046,52 @@ them locally as described above:
   `unzip -DD` (no directory timestamps) to avoid future-dated files.
 - **`./gradlew: Permission denied`**: The wrapper script may lose its executable
   bit after extraction. Fix: `chmod +x gradlew`.
-- **Aliyun Maven mirror 502**: `build.gradle` and `settings.gradle` list the
-  Aliyun mirrors (`maven.aliyun.com/repository/{google,central,gradle-plugin}`)
-  BEFORE `google()` / `mavenCentral()` (verified in both files as of round-43),
-  so Aliyun is tried first and the official repositories act as fallback. If
-  you hit Aliyun 502s, temporarily comment out the Aliyun mirror blocks in
-  both files — the official repos then serve directly.
+- **Repository order / Aliyun mirrors (round-56, SEC-03)**:
+  `settings.gradle` (pluginManagement + dependencyResolutionManagement)
+  and the `build.gradle` buildscript now list the OFFICIAL repositories
+  (`google()` / `mavenCentral()` / `gradlePluginPortal()`) FIRST, with
+  the Aliyun mirrors kept after them as fallback (supply-chain hygiene —
+  artifacts resolve from their authoritative source by default).
+  Developers in mainland China who prefer mirror-first resolution should
+  NOT edit the committed files; inject the mirrors locally via an
+  init-script, e.g. `~/.gradle/init.d/mirrors.gradle`. Because
+  `settings.gradle` uses `RepositoriesMode.PREFER_SETTINGS`, the
+  repositories that actually win are the SETTINGS-level ones — a plain
+  `allprojects { repositories { … } }` only adds PROJECT-level repos and
+  can never out-rank the settings-level `google()` / `mavenCentral()`.
+  Prepend the mirrors at the settings level instead (round-56b fix;
+  round-56c: use `beforeSettings` — `settingsEvaluated` fires AFTER the
+  settings file is evaluated, by which time the official repos are already
+  registered, so mirrors added there still resolve AFTER them; and name the
+  outer closure parameter — inside `maven { … }` the implicit `it` is the
+  new MavenArtifactRepository, not the URL string):
+  ```groovy
+  // ~/.gradle/init.d/mirrors.gradle — mirror-first, official as fallback.
+  def aliyun = [
+      'https://maven.aliyun.com/repository/google',
+      'https://maven.aliyun.com/repository/central',
+      'https://maven.aliyun.com/repository/gradle-plugin',
+      'https://maven.aliyun.com/repository/public',
+  ]
+  beforeSettings { settings ->                 // runs BEFORE settings.gradle is evaluated
+      settings.pluginManagement.repositories {
+          aliyun.each { mirrorUrl -> maven { url mirrorUrl } }   // mirrors FIRST
+          google(); mavenCentral(); gradlePluginPortal()
+      }
+      settings.dependencyResolutionManagement.repositories {
+          aliyun.each { mirrorUrl -> maven { url mirrorUrl } }   // mirrors FIRST
+          google(); mavenCentral()
+      }
+  }
+  allprojects {
+      buildscript.repositories {                    // buildscript classpath
+          aliyun.each { mirrorUrl -> maven { url mirrorUrl } }
+      }
+  }
+  ```
+  If you hit Aliyun 502s, remove the init script (or comment out its
+  `aliyun.each` lines) — the official repos committed in
+  `settings.gradle`/`build.gradle` then serve directly.
 
 - **CMake re-run loop (AGP 8.7.3 + CMake 3.22.1)**: In a fresh build environment,
   the `externalNativeBuild` task can fall into a "manifest 'build.ninja' still
@@ -2032,8 +2265,6 @@ A line-by-line first-principles review of every source file was performed after 
     **Note (v1.2.1 round-4)**: count back down to 11 — `MessageBus`,
     `UciProtocolHandler`, and `EngineConfigManager` were deleted in round-4
     (their functionality was either never wired up or duplicated inline).
-    (they later reappeared via archive re-upload and were finally deleted
-    from git in round-48, RED-2, together with HapticHelper)
     (they later reappeared via archive re-upload and were finally deleted
     from git in round-48, RED-2, together with HapticHelper)
 - **v1.2.0 Phase 82 (2026.7.11): renderInternal dialog extraction.**

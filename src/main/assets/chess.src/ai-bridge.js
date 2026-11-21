@@ -251,9 +251,13 @@ let _reviewEvalCache=new function(){
   //     point the module has fully loaded and the binding is initialized. The
   //     typeof guard + try/catch belt-and-braces any edge case (e.g., a set()
   //     called during module init by a future refactor).
-  //   - Type-robust comparison: persisted JSON parses keys as strings, while
-  //     fresh set() calls use numeric keys. Compare as String() on both sides
-  //     so the current step is correctly skipped regardless of key type.
+  //   - Type-robust comparison (round-60 F-5 correction): the persisted
+  //     format is an array-of-pairs [[key,value],...], so numeric keys
+  //     SURVIVE the JSON round-trip as numbers (the old comment's "JSON
+  //     parses keys as strings" describes OBJECT formats, which this cache
+  //     has never used). The String() comparison is kept as deliberate
+  //     defense-in-depth against a future format change to an object map,
+  //     where keys WOULD come back as strings.
   //   - Backward compat: if a persisted file from a pre-Phase-18 version has
   //     >2000 entries, the constructor loads them all (no migration needed);
   //     the next set() call triggers _evictIfOverCap and trims back to 2000.
@@ -372,7 +376,22 @@ let _setupFEN=null;
 let _importedStartMoveNum=1;
 let showVariations=false; // 💬显示变例 toggle state
 let _reviewAnalyzeSafetyTimer=null; // Safety timeout for reviewAnalyzeAll (prevents infinite hang)
-let _lastEngineCallbackTime=0; // Timestamp of last engine callback — used by heartbeat monitor
+// v1.2.3 round-57c (crash-loop terminator): wall-clock timestamp
+//   (performance.now()) of the last batch step that COMPLETED (cached a
+//   result — engine callback, terminal fast-path, or cache-hit skip). The
+//   per-step safety timer's strike counter alone cannot terminate a
+//   crash-LOOPING engine: every successful recovery (onEngineReady) resets
+//   _batchConsecutiveFail, so die→recover→dispatch→die cycles never reach 3
+//   strikes and the batch ghost-ran forever with zero new results. The
+//   safety-timer fire handler now also terminates the batch when no step has
+//   completed for 180s regardless of the strike count. Updated at batch
+//   start and on every completed step; a healthy batch (each step ≤60s of
+//   silence + cached) can never trip it.
+let _batchLastStepCompletedAt=0;
+// v1.2.3 round-56 (B1): all writes/reads use performance.now() (monotonic) —
+//   Date.now() jumps on system-clock changes (NTP sync, user adjustment) and
+//   could stall or false-trigger the 120s heartbeat-restart check.
+let _lastEngineCallbackTime=0; // Monotonic timestamp (performance.now()) of last engine callback — used by heartbeat monitor
 // v1.1.1 Phase 59 Task 59.6: Batch analyze-all session state, decoupled from
 //   reviewStep (the user's view). The batch runs in the background — the user
 //   can navigate freely without invalidating in-flight batch callbacks.
@@ -547,6 +566,27 @@ let _evalRequestGen=0; // Generation at time of last requestEngineEval() call
 //   the debounce/fast paths can bump _evalRequestGen without ever dispatching,
 //   which previously let a superseded request's late callback through.
 let _evalLastDispatchedGen=0;
+// v1.2.3 round-52 (T5): fen of the most recent ACTUALLY DISPATCHED user-nav
+//   eval — the position identity of that request. The gen-only check in
+//   onEngineEval becomes an IDENTITY once a newer request has been dispatched
+//   (both globals then hold the new gen), so a late callback from the
+//   PREVIOUS position passed every check and was displayed (and, in review
+//   mode, cached) as the new position's eval — "after a fast move the engine
+//   still shows the previous move's evaluation". Java echoes the request's
+//   fen back as onEngineEval's 8th param (round-49 T1); comparing it against
+//   this record rejects cross-position stale callbacks deterministically.
+//   Set ONLY at real dispatch points (same discipline as _evalLastDispatchedGen).
+let _evalLastDispatchedFen=null;
+// v1.2.3 round-52 (T5): small ring of recent REVIEW-MODE user-nav dispatches
+//   ({fen, step, states}). When a fen-mismatched (superseded) callback arrives
+//   in review mode, the ring identifies the step the result ACTUALLY belongs
+//   to so it can still be cached there — preserving v1.1.1 Phase 59.3's
+//   cache-stale-results intent without poisoning the CURRENT step's entry.
+//   `states` pins each entry to its reviewStates generation (reference
+//   equality), so a late callback from a previous review session can never
+//   write into the new session's cache. Bounded at 8: the 300ms user-nav
+//   debounce means at most a couple of dispatches can still be in flight.
+let _evalRecentDispatches=[];
 // v1.0.7 PHASE 19 (bug fix): Capture the mode at request time so onEngineEval
 // can reject cross-mode stale callbacks. Previously, a review-mode eval callback
 // still in flight after exitReview() would pass the normal-mode gen check
@@ -556,6 +596,45 @@ let _evalRequestReviewMode=false;
 // v1.0.4 Rev44: Safety timer for eval requests — prevents eval bar from
 // getting stuck at "分析中" if the engine doesn't respond.
 let _evalSafetyTimerId=null;
+// v1.2.3 round-58b: consecutive AUTO-RETRIES of the current manual eval after
+//   true engine silence (see _armEvalSafetyTimer). Reset to 0 on every fresh
+//   user-nav dispatch; the auto-retry path deliberately does NOT reset it, so
+//   a wedged engine can never loop forever.
+let _manualEvalAutoRetries=0;
+// v1.2.3 round-58b: shared manual-eval watchdog (review 45s / normal 30s).
+//   THE TIMER MEASURES TRUE ENGINE SILENCE, NOT ELAPSED TIME: onEngineProgress
+//   re-arms it on every tick, so a healthy-but-slow search is never cut. When
+//   it fires, the search was genuinely lost (wedged engine, swallowed
+//   bestmove) — clear the stuck loading state and, in review mode,
+//   auto-re-dispatch the SAME recorded search ONCE (bounded by
+//   _manualEvalAutoRetries). The re-dispatch reuses _evalLastDispatchedFen and
+//   keeps the gens untouched, so the retried callback passes every
+//   staleness check exactly as the original would have.
+function _armEvalSafetyTimer(isReview){
+  if(_evalSafetyTimerId)clearTimeout(_evalSafetyTimerId);
+  _evalSafetyTimerId=setTimeout(function(){
+    _evalSafetyTimerId=null;
+    if(!_evalLoading)return;
+    console.warn('Eval safety timer: engine silent for '+(isReview?45:30)+'s, resetting'+(isReview?' + auto-retry':''));
+    _evalLoading=false;_sfEvalReady=false;
+    _updateAllEvalDisplays();
+    if(isReview&&typeof reviewMode!=='undefined'&&reviewMode&&_manualEvalAutoRetries<1
+       &&typeof _reviewEvalRequestedStep!=='undefined'&&typeof reviewStep!=='undefined'
+       &&_reviewEvalRequestedStep===reviewStep
+       &&typeof _engineReady!=='undefined'&&_engineReady
+       &&typeof _evalLastDispatchedFen==='string'&&_evalLastDispatchedFen
+       &&typeof AndroidBridge!=='undefined'&&typeof AndroidBridge.isEngineReady==='function'&&AndroidBridge.isEngineReady()){
+      _manualEvalAutoRetries++;
+      try{
+        _evalLoading=true;
+        _updateAllEvalDisplays();
+        if(typeof AndroidBridge.engineEvalDeep==='function'){AndroidBridge.engineEvalDeep(_evalLastDispatchedFen);}
+        else{AndroidBridge.engineEval(_evalLastDispatchedFen);}
+        _armEvalSafetyTimer(true); // watchdog for the retried search
+      }catch(e){console.error('eval auto-retry dispatch error:',e);_evalLoading=false;_updateAllEvalDisplays();}
+    }
+  },isReview?45000:30000);
+}
 
 let _toastTimer=0;
 // v1.2.3 round-30 (perf): track the inner 300ms removal timer so rapid
@@ -727,17 +806,14 @@ function _isLightMode(){
 }
 function _loadingKingIconHTML(){
   // Same piece styling as .sq .pc.w (white) / .sq .pc.bk (black) in index.html.tpl.
-  // Uses _KING_PIECE_STYLE constants (defined in ui.js, loaded after ai-bridge.js
-  // — but the typeof check guards against load-order issues during development).
+  // round-60 (F-1): uses the shared _KING_PIECE_STYLE from game-logic.js —
+  // the first module in the bundle, initialized before this top-level call
+  // runs. (Previously the constant lived in ui.js and the typeof guard here
+  // could NOT see it: typeof on a TDZ const throws ReferenceError, the catch
+  // swallowed it, and this function silently used the inline fallback copy
+  // on every app start — the dedup was void. Verifier V1-30 pins the fix.)
   // \uFE0E is Variation Selector-15 (text-presentation).
-  let ps;
-  if(_isLightMode()){
-    ps={color:'#1A1A2E',stroke:'rgba(255,230,150,.85)',shadow:'rgba(255,230,150,.55)',sym:'\u265A'};
-  }else{
-    ps={color:'#E8E8F0',stroke:'rgba(30,15,0,.85)',shadow:'rgba(30,15,0,.55)',sym:'\u2654'};
-  }
-  // Defensive: if _KING_PIECE_STYLE is defined (ui.js loaded), use it for consistency
-  try{if(typeof _KING_PIECE_STYLE!=='undefined'){ps=_isLightMode()?_KING_PIECE_STYLE.black:_KING_PIECE_STYLE.white;}}catch(e){console.warn('[AIBridge] _KING_PIECE_STYLE lookup failed:',e.message);}
+  const ps=_isLightMode()?_KING_PIECE_STYLE.black:_KING_PIECE_STYLE.white;
   return '<div style="font-size:4rem;margin-bottom:16px;font-weight:400;color:'+ps.color+';-webkit-text-stroke:.3px '+ps.stroke+';text-shadow:0 0 .8px '+ps.shadow+';font-family:\'DejaVu Sans\',\'Noto Sans\',\'Segoe UI Symbol\',sans-serif;font-variant-emoji:text">'+ps.sym+'\uFE0E</div>';
 }
 function _showLoadingOverlay(){
@@ -1607,26 +1683,28 @@ function openStatsPage(){
         }
         window._pendingOpenStats=true;
         // v1.2.1 round-11 (Bug #2 fix hardening): safety timeout — if the
-        //   batch never completes within 10 minutes (e.g., engine stuck
+        //   batch never completes within the timeout (e.g., engine stuck
         //   unrecoverable, or a bug prevents the completion branch from
         //   firing), clear the pending flag so the user can retry 📊
-        //   instead of being permanently locked out. The timeout is
-        //   generous: a 200-step game at 60s/step worst-case = 200min,
-        //   but the per-step safety timer (60s) skips stuck steps, so a
-        //   healthy batch finishes in <30min for any realistic game.
-        //   10min covers the common case (engine slow to start) while
-        //   catching genuine deadlocks.
+        //   instead of being permanently locked out.
+        // v1.2.3 round-56 (C1): timeout is now DYNAMIC — the hardcoded 10min
+        //   misfired on long games: _uncachedCount steps at up to 60s/step
+        //   (per-step safety timer) can legitimately need far more than 10min
+        //   (e.g. a 150-move game with a cold engine ≈ 150×60s = 150min worst
+        //   case). Scale with the actual uncached-step count (60s per step,
+        //   matching the per-step safety timer), floor 10min for short games.
+        const _pendingTimeoutMs=Math.max(600000,_uncachedCount*60000);
         if(window._pendingOpenStatsTimer){clearTimeout(window._pendingOpenStatsTimer);}
         window._pendingOpenStatsTimer=setTimeout(function(){
           if(window._pendingOpenStats){
             window._pendingOpenStats=false;
-            console.warn('openStatsPage: pending-stats safety timeout fired (10min) — batch did not complete');
+            console.warn('openStatsPage: pending-stats safety timeout fired ('+Math.round(_pendingTimeoutMs/60000)+'min) — batch did not complete');
             // v1.2.1 round-16: proper i18n (was previously mixed zh+en
             //   "T('analyzing_progress') + ' timed out'").
             try{showToast(T('analysis_timed_out_retry'));}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
           }
           window._pendingOpenStatsTimer=null;
-        },600000); // 10 minutes
+        },_pendingTimeoutMs);
       }
       // v1.2.1 round-11 (Bug #2 fix): If a batch is already running (user
       //   clicked "Analyze All" manually before clicking 📊), DON'T restart
@@ -1790,6 +1868,16 @@ function openStatsPage(){
   if(payload.length>900*1024){
     console.warn('openStatsPage: payload exceeds 900KB ('+payload.length+' chars) — dropping visualAnnotations to stay under the Binder transaction limit');
     payload=JSON.stringify({pgn:pgn,evals:evalData,moveRecords:moveData,playerColor:playerColor,lang:(typeof _lang!=='undefined'?_lang:'zh'),gameVariant:(gameVariant !== undefined?gameVariant:null),visualAnnotationsTruncated:true});
+    // v1.2.3 round-54 (PR56 CR#4): a pgn/evals/moveRecords payload can still
+    //   exceed the Binder cap after the annotations drop — startActivity would
+    //   throw TransactionTooLargeException in Java, the stats page never opens,
+    //   and the existing clipboard fallback never fires. Bail out here with the
+    //   clipboard fallback instead.
+    if(payload.length>900*1024){
+      console.warn('openStatsPage: payload still exceeds 900KB after dropping annotations — falling back to clipboard');
+      safeCopyToClipboard(pgn,T('pgn_copied'));
+      return;
+    }
   }
   _bridgeCall(function(bridge){
     if(typeof bridge.openStatsPage==='function'){
@@ -2504,6 +2592,10 @@ function onEngineRestarting(){
   if(isAIThinking){isAIThinking=false;_aiBarInfo='';}
   if(isHintLoading){isHintLoading=false;_hintBarInfo='';}
   if(_evalLoading){_evalLoading=false;_sfEvalReady=false;}
+  // v1.2.3 round-58b: the in-flight manual eval is dead with the old engine —
+  //   disarm its watchdog so it can neither fire a spurious reset nor poison
+  //   the in-flight dedup signal while the restart is in flight.
+  if(_evalSafetyTimerId){clearTimeout(_evalSafetyTimerId);_evalSafetyTimerId=null;}
   _ponderGen++;_ponderMoveSAN='';_ponderBarInfo='';_pendingPonderMoveUCI=null;
   // v1.0.2 FIX (audit): Parity with restartCurrentEngine() — clear review eval
   // cache + MultiPV state so the recovered engine's evaluations are re-fetched
@@ -2556,6 +2648,10 @@ function onEngineReady(){
   if(isAIThinking){isAIThinking=false;_aiBarInfo='';}
   if(isHintLoading){isHintLoading=false;_hintBarInfo='';}
   if(_evalLoading){_evalLoading=false;_sfEvalReady=false;}
+  // v1.2.3 round-58b: disarm the manual-eval watchdog on engine-ready too —
+  //   the resume path below re-requests the eval through the normal dispatch
+  //   pipeline, which arms a FRESH watchdog; a stale one must not linger.
+  if(_evalSafetyTimerId){clearTimeout(_evalSafetyTimerId);_evalSafetyTimerId=null;}
   _ponderGen++;_ponderMoveSAN='';_ponderBarInfo='';_pendingPonderMoveUCI=null;
   if(_aiSafetyTimerId){clearTimeout(_aiSafetyTimerId);_aiSafetyTimerId=null;}
   // v1.0.2 FIX: Reset AI retry counter on engine ready (covers crash-recovery
@@ -2609,7 +2705,7 @@ function onBestMove(uciMove){
   // v1.1.0 Phase 54: Update heartbeat timestamp — onBestMove is proof-of-life
   // from a healthy engine. Without this, long AI thinks (>120s) falsely
   // trigger engine restart via the heartbeat monitor.
-  _lastEngineCallbackTime=Date.now();
+  _lastEngineCallbackTime=performance.now();
   // v1.0.3-p9 audit fix: check staleness BEFORE clearing the safety timer.
   // If a stale bestmove arrives, the real bestmove is still pending and the
   // safety timer must remain active to catch a potential timeout.
@@ -2832,7 +2928,7 @@ function onBestMove(uciMove){
 function onHintMove(uciMove){
   // v1.1.2 Phase 67: removed leftover console.log (Phase 66 cleanup miss).
   // v1.1.0 Phase 54: Update heartbeat timestamp — onHintMove is proof-of-life.
-  _lastEngineCallbackTime=Date.now();
+  _lastEngineCallbackTime=performance.now();
   // v1.0.8 PHASE 49: discard stale hint callbacks. If isHintLoading is already
   //   false by the time onHintMove fires, the user has moved (executeMove /
   //   doAIMove) or switched modes (setup/review/new game) since the hint was
@@ -2940,7 +3036,24 @@ function onHintMove(uciMove){
 // "SD<N>" right after "D<N>" to match the existing abbreviated style.
 function onEngineProgress(depth,nodes,nps,scoreCp,scoreMate,wdlW,wdlD,wdlL,seldepth){
   // v1.1.0 Phase 54: Update heartbeat timestamp — onEngineProgress is proof-of-life.
-  _lastEngineCallbackTime=Date.now();
+  _lastEngineCallbackTime=performance.now();
+  // v1.2.3 round-57 (analyze-all treadmill fix): while a batch eval is in
+  //   flight (_evalRequestBatchGen armed), each progress line is proof the
+  //   engine is alive and actively searching — reset the per-step safety
+  //   timer so a slow-but-healthy depth-22 step is never cut at 60s.
+  //   Previously the timer ignored engine activity: a >60s step (thermal
+  //   throttle / memory pressure / hard position) was skipped WITHOUT caching
+  //   any result, and _batchConsecutiveFail reset on every successful
+  //   dispatch, so the 3-strike terminator never fired — the batch marched
+  //   through all remaining steps at 60s apiece, caching nothing, while every
+  //   user-visible progress indicator renders the (frozen) cached count.
+  //   That was the "analyze-all stuck for an hour" bug. The timer now fires
+  //   only after 60s of TRUE engine silence (wedged/dead engine) — exactly
+  //   the case the safety net was designed for. Placed BEFORE the depth
+  //   guards below: any progress line is proof-of-life, even a malformed one.
+  if(typeof _reviewAnalyzeAllActive!=='undefined'&&_reviewAnalyzeAllActive&&_evalRequestBatchGen!==0&&typeof _reviewAnalyzeResetSafetyTimer==='function'){
+    try{_reviewAnalyzeResetSafetyTimer();}catch(e){console.warn('[AIBridge]',e&&e.message?e.message:e);}
+  }
   if(depth<=0)return;
   // DEFENSE IN DEPTH: Skip unrealistic depth values (>60) that could come from
   // stale info lines due to Java state machine race condition (see StockfishNative
@@ -2983,13 +3096,43 @@ function onEngineProgress(depth,nodes,nps,scoreCp,scoreMate,wdlW,wdlD,wdlL,selde
   // so the user saw "分析中" with no depth/nodes/speed info during eval searches.
   // Now Java dispatches onEngineProgress for all states, and we update the eval
   // display's depth indicator in real-time.
-  if(_evalLoading&&depth<=30){
+  // v1.2.3 round-57 (batch UX fix): also run while an analyze-all batch search
+  //   is in flight (_evalRequestBatchGen armed). _requestBatchEval never sets
+  //   _evalLoading (batch uses its own gen machinery), so the old gate skipped
+  //   every progress tick during batch — the review eval bar's live
+  //   depth/nodes/nps never updated. Now the bar ticks in real time; the
+  //   score/emoji half still comes from formatEval()'s cache-first lookup of
+  //   the VIEWED step, only the D/nodes/nps ticker reflects the live search.
+  // v1.2.3 round-58b: a progress tick is also proof-of-life for the MANUAL
+  //   eval watchdog — re-arm it so a healthy-but-slow depth-22 search (weak
+  //   device, thermal throttle) is never cut at 45s/30s of ELAPSED time. The
+  //   timer now measures TRUE ENGINE SILENCE only (see _armEvalSafetyTimer).
+  if(_evalLoading&&_evalSafetyTimerId){
+    try{_armEvalSafetyTimer(!!reviewMode);}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
+  }
+  const _batchLive=(typeof _reviewAnalyzeAllActive!=='undefined'&&_reviewAnalyzeAllActive&&_evalRequestBatchGen>0);
+  if((_evalLoading||_batchLive)&&depth<=30){
     _sfDepth=depth;
     // v1.0.4 Rev33: also track seldepth for the eval bar's "D15 SD22" display.
     _sfSeldepth=(seldepth!=null&&seldepth>0&&seldepth<=60)?seldepth:0;
     if(nodes!=null)_lastProgressNodes=nodes;
     if(nps!=null)_lastProgressNps=nps;
     _updateEvalDisplay();
+    // v1.2.3 round-57: refresh the REVIEW eval bar too (the call above only
+    //   targets the normal-mode #eval-disp element).
+    // v1.2.3 round-58b: tick the review bar for MANUAL single-step evals as
+    //   well — but only while the user is viewing the step the search belongs
+    //   to (_reviewEvalRequestedStep===reviewStep), otherwise the ticker would
+    //   describe a different position's search. Previously the bar only ever
+    //   ticked during analyze-all batches; a manual single-step eval showed a
+    //   frozen "分析中" for the whole 5-60s search — the user reasonably read
+    //   that as a hang and tapped again, restarting the analysis (see the
+    //   same-position in-flight dedup in requestEngineEval).
+    const _manualLive=(!_batchLive&&_evalLoading
+      &&typeof reviewMode!=='undefined'&&reviewMode
+      &&typeof reviewStep!=='undefined'&&typeof _reviewEvalRequestedStep!=='undefined'
+      &&_reviewEvalRequestedStep===reviewStep);
+    if(_batchLive||_manualLive){try{_updateReviewEvalUI();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}}
   }
   if(isAIThinking||isHintLoading)_updateAIThinkDisplay();
   // Update foreground service notification with engine progress info
@@ -2998,6 +3141,38 @@ function onEngineProgress(depth,nodes,nps,scoreCp,scoreMate,wdlW,wdlD,wdlL,selde
   // the notification is intentionally minimal to avoid distracting the user.
   if(isAIThinking&&depth>0){
     _updateEngineNotification(T('analyzing_ellipsis'));
+  }else if(typeof _reviewAnalyzeAllActive!=='undefined'&&_reviewAnalyzeAllActive&&depth>0){
+    // v1.2.3 round-51 (BG-3): analyze-all batch in progress — surface the
+    //   step progress in the foreground-service notification so the user
+    //   can see the batch advancing while the app is backgrounded (the
+    //   whole point of the round-51 background-analysis work: JS timers
+    //   keep running via MainActivity's deferred webView.onPause, the CPU
+    //   stays awake via the refreshed wake lock, and this line keeps the
+    //   FGS notification "fresh" — which also signals to OEMs that the
+    //   service is actively in use). Progress format: "正在分析... (k/N)".
+    //   _updateEngineNotification throttles to one update per second and
+    //   dedupes identical text, so this is cheap.
+    try{
+      // round-53 (S6582/S7741): `reviewStates?.length` keeps the cross-module
+      //   typeof guard (reviewStates is declared in ui.js — the round-11
+      //   degraded-module defense) while using the optional chain for the
+      //   null check.
+      const _bgTotal=(typeof reviewStates!=='undefined'&&reviewStates?.length)?reviewStates.length:0;
+      if(_bgTotal>0){
+        // v1.2.3 round-54 (PR56 CR#9): display the CURRENT batch's completed
+        //   count (_reviewAnalyzeStep+1), not _reviewEvalCache.size — the cache
+        //   is persisted across games (round-44 G11), so its size inflated the
+        //   notification progress for later batches (CodeRabbit). Clamp to the
+        //   current game length in case a hijack left the step ahead.
+        //   _reviewAnalyzeStep is declared in THIS module (line ~388), so a
+        //   direct undefined comparison suffices (S7741; the typeof guard was
+        //   copy-paste residue from the cross-module reviewStates guard).
+        const _bgDone=(_reviewAnalyzeStep!==undefined&&_reviewAnalyzeStep>=0)?Math.min(_reviewAnalyzeStep+1,_bgTotal):0;
+        _updateEngineNotification(T('analyzing_progress')+' ('+_bgDone+'/'+_bgTotal+')');
+      }else{
+        _updateEngineNotification(T('analyzing_ellipsis'));
+      }
+    }catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
   }
   // Ponder info: when not AI thinking, not hint loading, not eval loading, store as ponder info
   // Note: _ponderBarInfo is ONLY set by onPonderProgress(), not here.
@@ -3029,7 +3204,7 @@ function onEngineProgress(depth,nodes,nps,scoreCp,scoreMate,wdlW,wdlD,wdlL,selde
 // v1.0.4 Rev33: added seldepth (6th param) for "SD" display after "D".
 function onPonderProgress(depth,nodes,nps,scoreCp,scoreMate,seldepth){
   // v1.1.0 Phase 54: Update heartbeat timestamp — onPonderProgress is proof-of-life.
-  _lastEngineCallbackTime=Date.now();
+  _lastEngineCallbackTime=performance.now();
   if(depth<=0)return;
   if(depth>60)return; // Skip unrealistic depths from stale info lines
   // FIX: Generation-based staleness guard. If the ponder generation has changed
@@ -3089,10 +3264,59 @@ function onPonderProgress(depth,nodes,nps,scoreCp,scoreMate,seldepth){
 //   _lastEvalFen). The batch guard below compares it against the dispatch
 //   record; when the param is missing (older runtime calling the 7-arg form)
 //   we fall back to the legacy re-derivation check.
+// v1.2.3 round-52 (T5): the user-nav path now validates reqFen too (against
+//   _evalLastDispatchedFen) — see the T5 block below. Previously a late
+//   previous-position callback arriving after a newer dispatch passed the
+//   gen-only check (an identity at that point) and displayed/cached the old
+//   position's eval on the new one.
+// v1.2.3 round-58b: cache a stale user-nav eval callback under the step it
+//   was REQUESTED for (found in the _evalRecentDispatches ring by fen
+//   identity), instead of dropping the engine's completed work. Extracted
+//   from onEngineEval's fen-mismatch branch so the G1 gen-mismatch branch can
+//   reuse it (a gen bump by a non-dispatching path — cache-hit / terminal /
+//   debounce nav — used to silently throw away the in-flight search's
+//   perfectly good result). The matched step's side-to-move (NOT the current
+//   _evalForBlackTurn, which may belong to a newer request) drives the
+//   White-POV conversion. Returns true when a cache write happened.
+function _cacheStaleReviewEvalByFen(_cbFenNav,scoreCp,scoreMate,bgW,bgD,bgL,bgDepth,bgSeldepth){
+  if(!reviewMode||!reviewStates||reviewStates.length===0||!_cbFenNav)return false;
+  // round-53 (S4138): for-of — the loop index was unused (body only reads
+  //   the element); iteration order (oldest→newest) is unchanged.
+  //   (Parameter keeps the T5 name _cbFenNav so the round-53 structural
+  //   verifier sentinel for this ring logic stays meaningful.)
+  for(const _d of _evalRecentDispatches){
+    if(_d&&_d.states===reviewStates&&_d.fen===_cbFenNav&&_d.step>=0&&_d.step<reviewStates.length){
+      if(!_reviewEvalCache.has(_d.step)){
+        const _mBlack=reviewStates[_d.step].state.currentTurn==='black';
+        let _mW=bgW,_mD=bgD,_mL=bgL;
+        if(_mBlack&&_mW>=0){const _mt=_mW;_mW=_mL;_mL=_mt;}
+        let _mEval,_mMate;
+        if(scoreMate!=null){
+          const _mN=Number.parseInt(scoreMate,10);
+          if(!Number.isNaN(_mN)){
+            const _mWhiteWins=(_mBlack?_mN<=0:_mN>0);
+            _mEval=_mWhiteWins?99999:-99999;
+            _mMate=_mBlack?-_mN:_mN;
+          }else{_mEval=_mBlack?-scoreCp:scoreCp;_mMate=0;}
+        }else{_mEval=_mBlack?-scoreCp:scoreCp;_mMate=0;}
+        _reviewEvalCache.set(_d.step,{eval:_mEval,mate:_mMate,wdlW:_mW,wdlD:_mD,wdlL:_mL,depth:bgDepth,seldepth:bgSeldepth});
+        try{if(typeof _updateReviewAnalyzeBtn==='function')_updateReviewAnalyzeBtn();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
+        try{if(typeof _refreshEvalTrendChart==='function')_refreshEvalTrendChart();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
+        // v1.2.3 round-58b: refresh the move list's per-step eval annotations
+        //   too — a stale-cached step is usually visible in the list, and the
+        //   user should see its score appear immediately.
+        try{if(typeof _refreshReviewMoveListEvals==='function')_refreshReviewMoveListEvals();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
+        return true;
+      }
+      break;
+    }
+  }
+  return false;
+}
 function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth,reqFen){
   // Update heartbeat timestamp — prevents false-positive engine death detection
   // during long eval searches (go depth 22 can take several seconds)
-  _lastEngineCallbackTime=Date.now();
+  _lastEngineCallbackTime=performance.now();
   // v1.0.7 PHASE 19 (bug fix): Cross-mode stale callback rejection. A review-mode
   // eval callback still in flight after exitReview() would previously pass the
   // normal-mode gen check (both gens equal in normal mode). Now we capture the
@@ -3193,6 +3417,9 @@ function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth,reqFen){
             depth:_bgDepth,seldepth:_bgSeldepth
           });
         }
+        // v1.2.3 round-57c: a step genuinely completed — re-arm the
+        //   crash-loop wall clock (see the field's doc).
+        _batchLastStepCompletedAt=performance.now();
       }
     }catch(e){
       console.error('Batch eval cache write failed:',e);
@@ -3217,12 +3444,76 @@ function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth,reqFen){
     return;
   }
 
+  // v1.2.3 round-52 (T5): POSITION-IDENTITY check for user-nav callbacks.
+  //   The G1 gen check below compares two globals that BOTH advance with each
+  //   new dispatch — so once request B is dispatched, a late callback from
+  //   request A (previous position) sees _evalRequestGen ===
+  //   _evalLastDispatchedGen and passes. The engine pipeline is serial, so at
+  //   most one superseded user-nav eval can still be in flight; its callback
+  //   carries the OLD position's fen (8th param, echoed by Java). Compare it
+  //   against the fen of the most recent actual dispatch: a mismatch means
+  //   the result belongs to a superseded position. Legacy runtimes (7-arg
+  //   callback, reqFen missing) skip this check and fall through to G1.
+  const _cbFenNav=(typeof reqFen==='string'&&reqFen.length>0)?reqFen:null;
+  if(_cbFenNav!==null&&_evalLastDispatchedFen!==null&&_cbFenNav!==_evalLastDispatchedFen){
+    // Stale for display — but in review mode the engine's work is still valid
+    //   for the step it was requested for: cache it under THAT step (found via
+    //   the dispatch ring) instead of dropping it, preserving Phase 59.3's
+    //   "cache stale results" intent. The matched step's side-to-move (NOT the
+    //   current _evalForBlackTurn, which belongs to the newer request) drives
+    //   the White-POV conversion.
+    // v1.2.3 round-58b: ring-cache logic extracted to _cacheStaleReviewEvalByFen
+    //   (shared with the G1 branch below) + now refreshes the move list too.
+    _cacheStaleReviewEvalByFen(_cbFenNav,scoreCp,scoreMate,_bgWdlW,_bgWdlD,_bgWdlL,_bgDepth,_bgSeldepth);
+    console.warn('[AIBridge] Stale eval callback dropped (fen mismatch vs last dispatched user-nav request)');
+    return;
+  }
+
   // v1.2.3 round-44 (G1): drop callbacks whose gen doesn't match the most
   //   recent ACTUALLY DISPATCHED user-nav request. The debounce, cache-hit,
   //   and terminal fast paths all bump _evalRequestGen without dispatching —
   //   previously a superseded request's late callback could pass every check
   //   below and overwrite fresher state.
   if(_evalRequestGen!==_evalLastDispatchedGen){
+    // v1.2.3 round-58b (completed-work rescue): a gen mismatch with a MATCHING
+    //   callback fen is NOT a superseded request — it is the last-dispatched
+    //   search's OWN callback, and the gen was bumped by a non-dispatching
+    //   path (cache-hit / terminal / debounce nav — see the G1 comment above).
+    //   Example: tap uncached step B (search dispatched, gen N) → tap CACHED
+    //   step C (gen bumped to N+1, nothing dispatched) → B's callback arrives
+    //   with reqFen === _evalLastDispatchedFen. The old code dropped it here
+    //   and B's 5-60s of engine work was silently thrown away — B had to be
+    //   re-analyzed from scratch on the next visit, looking exactly like
+    //   "analysis lost / stuck". Attribute the result by FEN via the dispatch
+    //   ring and cache it under ITS OWN step (never _reviewEvalRequestedStep,
+    //   which intervening navigation may have repointed). If that step is
+    //   still the VIEWED step, mirror reviewGoTo's cache-restore so the bar
+    //   shows the fresh result immediately. Either way the latest search has
+    //   completed: settle _evalLoading and the watchdog (same reasoning as
+    //   the user-nav stale path below).
+    if(_cbFenNav!==null&&_evalLastDispatchedFen!==null&&_cbFenNav===_evalLastDispatchedFen){
+      let _cbStep=-1;
+      if(reviewMode&&reviewStates&&reviewStates.length>0){
+        for(const _d of _evalRecentDispatches){
+          if(_d&&_d.states===reviewStates&&_d.fen===_cbFenNav&&_d.step>=0&&_d.step<reviewStates.length){_cbStep=_d.step;break;}
+        }
+      }
+      const _written=_cacheStaleReviewEvalByFen(_cbFenNav,scoreCp,scoreMate,_bgWdlW,_bgWdlD,_bgWdlL,_bgDepth,_bgSeldepth);
+      _evalLoading=false;
+      if(_evalSafetyTimerId){clearTimeout(_evalSafetyTimerId);_evalSafetyTimerId=null;}
+      if(reviewMode&&_cbStep>=0&&_cbStep===reviewStep){
+        const _c=_reviewEvalCache.get(_cbStep);
+        if(_c!=null){
+          _sfEval=_c.eval;_sfMateDistance=_c.mate!=null?_c.mate:0;
+          _sfWdlW=_c.wdlW!=null?_c.wdlW:-1;_sfWdlD=_c.wdlD!=null?_c.wdlD:-1;_sfWdlL=_c.wdlL!=null?_c.wdlL:-1;
+          _sfDepth=_c.depth!=null?_c.depth:0;_sfSeldepth=_c.seldepth!=null?_c.seldepth:0;
+          _sfEvalReady=true;
+          _updateAllEvalDisplays();
+        }
+      }
+      console.warn('[AIBridge] Late eval callback cached for its original step (gen bumped by non-dispatching nav)');
+      return;
+    }
     console.warn('[AIBridge] Stale eval callback dropped (gen '+_evalRequestGen+' !== last dispatched '+_evalLastDispatchedGen+')');
     return;
   }
@@ -3237,6 +3528,18 @@ function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth,reqFen){
   //   The display variables (_sfEval etc.) are NOT updated (stale for the
   //   user's current view) — only the cache is populated.
   if(reviewMode&&_reviewEvalRequestedStep!==reviewStep){
+    // v1.2.3 round-58b (state-leak fix): reaching this branch means the
+    //   callback passed BOTH identity checks — the fen matched the most
+    //   recent dispatch (or legacy runtime) and G1's gen equality held — so
+    //   this IS the latest user-nav search's completion; no newer manual
+    //   search exists. The old code returned WITHOUT clearing _evalLoading or
+    //   the watchdog: _evalLoading stayed true (a lie that also poisoned the
+    //   round-58b in-flight dedup signal) until some unrelated path happened
+    //   to clear it, and the armed 45s watchdog later fired a spurious
+    //   "engine silent" reset (and, with the new auto-retry, would have
+    //   re-dispatched a search that had ALREADY completed). Settle both now.
+    _evalLoading=false;
+    if(_evalSafetyTimerId){clearTimeout(_evalSafetyTimerId);_evalSafetyTimerId=null;}
     // Stale for display, but cache for the original step
     if(_reviewEvalRequestedStep>=0&&_reviewEvalRequestedStep<reviewStates.length){
       if(!_reviewEvalCache.has(_reviewEvalRequestedStep)){
@@ -3247,6 +3550,9 @@ function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth,reqFen){
         // Live-refresh the analyze-all button label (in case batch is also
         // active and watching the cache size)
         try{if(typeof _updateReviewAnalyzeBtn==='function')_updateReviewAnalyzeBtn();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
+        // v1.2.3 round-58b: refresh the move list's per-step eval annotations
+        //   immediately — the cached step's row is usually on screen.
+        try{if(typeof _refreshReviewMoveListEvals==='function')_refreshReviewMoveListEvals();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
         // v1.1.1 Phase 59 Task 59.3: If the chart is currently displayed and
         //   step 0 just got cached, re-render the chart so the data point
         //   appears. We use a lightweight DOM update (not full render) to
@@ -3276,6 +3582,14 @@ function onEngineEval(scoreCp,scoreMate,depth,wdlW,wdlD,wdlL,seldepth,reqFen){
     _reviewEvalCache.set(reviewStep,{eval:_sfEval,mate:_sfMateDistance,wdlW:_sfWdlW,wdlD:_sfWdlD,wdlL:_sfWdlL,depth:_sfDepth,seldepth:_sfSeldepth});
   }
   _updateAllEvalDisplays();
+  // v1.2.3 round-58b (Bug: move list not updated after a MANUAL single-step
+  //   eval): refresh the review move list's per-step eval annotations the
+  //   moment the viewed step's analysis completes. Round-57b added this only
+  //   to the analyze-all advance path, so manual step-by-step analysis left
+  //   the list showing stale/empty scores until some unrelated full render.
+  try{
+    if(reviewMode&&typeof _refreshReviewMoveListEvals==='function')_refreshReviewMoveListEvals();
+  }catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
   // v1.0.7 PHASE 17: Also live-refresh the "Analyze All" button label so it
   // switches to "All Analyzed" the moment the last step's eval completes —
   // whether via the batch reviewAnalyzeAll() path OR via the user manually
@@ -3429,8 +3743,23 @@ function _openSettingsFileBrowser(){
   _bridgeCall(function(bridge){
     try{
       const paths=JSON.parse(bridge.getDefaultPaths());
-      _fileBrowserPath=paths.downloads||paths.externalStorage||'/sdcard';
-    }catch(e){_fileBrowserPath='/sdcard';}
+      // round-54 (PR56 CR#12): round-49's sandbox gate rejects /sdcard & the
+      //   public Download/Documents dirs (isPathInSandbox only covers the
+      //   internal files/cache dirs — settings import from public storage is
+      //   expected to route through the SAF picker instead). Start the browser
+      //   at the FIRST browsable root: internal files dir → app-specific
+      //   external dir (browsable via the new isPathBrowsable gate) → SAF hint.
+      _fileBrowserPath=paths.filesDir||paths.externalStorage||'';
+      if(!_fileBrowserPath){
+        showToast(T('settings_saf_hint'));
+        if(typeof bridge.openSystemFilePicker==='function')bridge.openSystemFilePicker();
+        return;
+      }
+    }catch(e){
+      showToast(T('settings_saf_hint'));
+      if(typeof bridge.openSystemFilePicker==='function')bridge.openSystemFilePicker();
+      return;
+    }
     _showFileBrowser();
   },null,false);
 }
@@ -3449,10 +3778,10 @@ function _showFileBrowser(){
       h+='<div style="background:var(--card);border:1px solid var(--border);border-radius:4px;padding:6px 10px;font-size:.72rem;color:var(--muted);margin-bottom:10px;word-break:break-all">'+_esc(_fileBrowserPath)+'</div>';
       // Navigation buttons
       h+='<div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap">';
-      h+='<button class="btn" style="font-size:.72rem;padding:3px 8px" onclick="_fileBrowserGoTo(\'/sdcard\')">/sdcard</button>';
-      h+='<button class="btn" style="font-size:.72rem;padding:3px 8px" onclick="_fileBrowserGoTo(\'/storage/emulated/0/Download\')">Download</button>';
-      h+='<button class="btn" style="font-size:.72rem;padding:3px 8px" onclick="_fileBrowserGoTo(\'/storage/emulated/0/Documents\')">Documents</button>';
-      h+='<button class="btn" style="font-size:.72rem;padding:3px 8px" onclick="_fileBrowserInputPath()">'+T('manual_path')+'</button>';
+      // round-54 (PR56 CR#12): /sdcard, public Download/Documents and manual
+      //   paths are outside the round-49 sandbox — listFiles rejects them.
+      //   Settings import from public storage goes through the SAF picker.
+      h+='<button class="btn" style="font-size:.72rem;padding:3px 8px" onclick="if(typeof AndroidBridge!==\'undefined\'&&AndroidBridge.openSystemFilePicker){_closeFileBrowser();AndroidBridge.openSystemFilePicker();}">'+T('settings_saf_button')+'</button>';
       h+='</div>';
       // Parent directory — use Java-resolved parent path instead of /..
       if(parentPath&&parentPath!==_fileBrowserPath){
@@ -3523,10 +3852,10 @@ function _fileBrowserHandleBack(){
   _closeFileBrowser();
   return true;
 }
-function _fileBrowserInputPath(){
-  const path=prompt(T('manual_path')+':',_fileBrowserPath);
-  if(path){_fileBrowserHistory.push(_fileBrowserPath);_fileBrowserPath=path;_showFileBrowser();}
-}
+// round-54 (PR56 CR#12): _fileBrowserInputPath removed — a manually entered
+//   path outside the sandbox always failed listFiles/readTextFile (round-49
+//   gate). Public-storage files are handled by the SAF picker button in the
+//   browser dialog.
 function _fileBrowserSelect(filePath){
   const overlay=document.getElementById('_fileBrowserOverlay');
   if(overlay)overlay.remove();
@@ -3547,12 +3876,19 @@ function _fileBrowserSelect(filePath){
     //   a retry instead of feeding the JSON marker into importSettings.
     if(content&&content.indexOf('"permission_pending"')!==-1){
       showToast(T('settings_permission_pending'));
+    }else if(content&&content.indexOf('"too_large"')!==-1){
+      // round-56: readTextFile 1 MiB 上限哨兵 —— 设置文件正常仅 KB 级，
+      //   超限说明用户选中了错误的大文件，提示其重新选择。
+      showToast(T('settings_file_too_large'));
     }else if(content){
       // importSettings() is async on the Java side — onSettingsImported
       // callback will fire the success/failure toast.
       bridge.importSettings(content);
     }else{
-      showToast(T('settings_read_fail'));
+      // round-54 (PR56 CR#12): read rejected by the sandbox (round-49) or
+      //   unreadable — offer the SAF picker, which has no path restrictions.
+      showToast(T('settings_saf_hint'));
+      if(typeof bridge.openSystemFilePicker==='function')bridge.openSystemFilePicker();
     }
   },null,false);
 }
@@ -3571,6 +3907,9 @@ function restartCurrentEngine(){
       isAIThinking=false;_aiBarInfo='';
       isHintLoading=false;_hintBarInfo='';
       _evalLoading=false;_sfEvalReady=false;
+      // v1.2.3 round-58b: disarm the manual-eval watchdog on manual restart
+      //   (same reasoning as onEngineRestarting/onEngineReady).
+      if(_evalSafetyTimerId){clearTimeout(_evalSafetyTimerId);_evalSafetyTimerId=null;}
       _ponderGen++;_ponderMoveSAN='';_ponderBarInfo='';_pendingPonderMoveUCI=null;
       // v1.0.2 FIX (audit): Clear review eval cache so the new engine instance's
       // evaluations are re-fetched. Without this, stale eval values from the
@@ -4477,6 +4816,11 @@ function onEngineError(msg){
   _ponderGen++;_ponderMoveSAN='';_ponderBarInfo='';_pendingPonderMoveUCI=null;
   // FIX: Reset eval loading state so UI doesn't permanently show "分析中"
   _evalLoading=false;_sfEvalReady=false;
+  // v1.2.3 round-58b: also disarm the manual-eval watchdog — otherwise it
+  //   fires up to 45s later, and its true-silence auto-retry would dispatch
+  //   a search against an engine that just errored (and poison the
+  //   in-flight dedup signal in the meantime).
+  if(_evalSafetyTimerId){clearTimeout(_evalSafetyTimerId);_evalSafetyTimerId=null;}
   _hideLoadingOverlay();
   if(showEngineConfig){renderEngineConfigAndUpdate();}
   // Clear loading fallback timers since engine responded (with error)
@@ -4535,7 +4879,16 @@ function onEngineError(msg){
   }else{
     // v1.2.3 round-44 (G5): budget exhausted within the window — stop JS
     //   restarts and surface the unavailable hint instead of a raw error loop.
-    showToast(T('engine_unavailable_hint'));
+    // v1.2.3 round-57c: recovery has conclusively failed — an active batch
+    //   parked on a dead engine would otherwise sit silent until the safety
+    //   net grinds out 3 strikes. Terminate it NOW (its own clearer toast
+    //   supersedes the generic hint, so skip the hint when terminating).
+    if(typeof _reviewAnalyzeAllActive!=='undefined'&&_reviewAnalyzeAllActive
+       &&typeof _terminateBatchAfterRepeatedFailures==='function'){
+      try{_terminateBatchAfterRepeatedFailures('engine recovery exhausted');}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
+    }else{
+      showToast(T('engine_unavailable_hint'));
+    }
   }
   _updateAllEvalDisplays();
   render();
@@ -4551,7 +4904,21 @@ function onEngineError(msg){
 //   user-nav eval requests are blocked (serve from cache or show "analyzing")
 //   to avoid canceling the batch's in-flight engine call.
 function requestEngineEval(){
-  if(!_engineReady||setupMode)return;
+  // v1.2.3 round-58b: engine-restart window (JS _engineReady false between
+  //   onEngineRestarting/onEngineError and onEngineReady). reviewGoTo no
+  //   longer pre-sets the analyzing state, so without this the bar would show
+  //   the PREVIOUS step's stale eval until onEngineReady re-requests. Mark the
+  //   viewed step as pending instead; the eventual onEngineReady →
+  //   requestEngineEval completes the real dispatch and clears this.
+  if((!_engineReady||setupMode)){
+    if(!_engineReady&&reviewMode&&typeof reviewStep!=='undefined'
+       &&reviewStates&&reviewStep>=0&&reviewStep<reviewStates.length
+       &&_reviewEvalCache.get(reviewStep)==null){
+      _sfEvalReady=false;_evalLoading=true;
+      _updateAllEvalDisplays();
+    }
+    return;
+  }
   // CRITICAL FIX: In normal (non-review) mode, skip eval when AI is about to move.
   if(!reviewMode&&!gameOver&&gameState.currentTurn!==playerColor)return;
   // v1.0.4 ROUND-5 REV12: Check cache BEFORE _resetEvalState() to avoid
@@ -4588,6 +4955,34 @@ function requestEngineEval(){
     //   IN-FLIGHT callback validation (T1) and stalled the batch for 60s.
     _updateAllEvalDisplays();
     return;
+  }
+  // v1.2.3 round-58b (root-cure of the single-tap "hang"): SAME-POSITION
+  //   IN-FLIGHT DEDUP. If the engine is ALREADY searching this exact position
+  //   (the previous tap's dispatch is still awaiting its callback — watchdog
+  //   armed, gens and fen identity intact), do NOT dispatch again. A second
+  //   engineEvalDeep would stopAndWait the HEALTHY search: its bestmove is
+  //   swallowed by the Java stop latch (never reaches JS, never cached) and
+  //   the restarted search begins again at depth 1. Before round-58b the
+  //   review bar also hid all live progress for manual evals, so the user saw
+  //   a frozen "分析中", tapped the same step again, and unknowingly killed
+  //   and restarted the analysis — a self-reinforcing stall that looked
+  //   exactly like a hang, and every restart threw away the completed work.
+  //   Now the repeat tap simply re-asserts the analyzing UI and keeps
+  //   waiting; the (now live-ticking) progress display shows the search is
+  //   alive. Truthfulness of the in-flight signal: _evalSafetyTimerId is
+  //   armed only between a manual dispatch and its callback/watchdog fire,
+  //   and _evalLoading is cleared by every completion/error path.
+  if(reviewMode&&_evalLoading&&_evalSafetyTimerId
+     &&_evalLastDispatchedGen===_evalRequestGen
+     &&typeof _evalLastDispatchedFen==='string'&&_evalLastDispatchedFen
+     &&reviewStates&&reviewStep>=0&&reviewStep<reviewStates.length){
+    let _curFen=null;
+    try{_curFen=_sanitizeFenForEngine(generateFEN(reviewStates[reviewStep].state));}catch(e){_curFen=null;}
+    if(_curFen!==null&&_curFen===_evalLastDispatchedFen){
+      _sfEvalReady=false; // show the analyzing state, not a stale cached value
+      _updateAllEvalDisplays();
+      return;
+    }
   }
   // P0 FIX: Reset eval state BEFORE capturing _evalRequestGen.
   _resetEvalState();
@@ -4648,16 +5043,21 @@ function requestEngineEval(){
           else{AndroidBridge.engineEval(fen);}
           // v1.2.3 round-44 (G1): record the gen actually dispatched.
           _evalLastDispatchedGen=_evalRequestGen;
+          // v1.2.3 round-52 (T5): record the dispatched position identity (fen)
+          //   for onEngineEval's stale-callback check, and keep a small ring of
+          //   recent review-mode dispatches so a superseded callback can still
+          //   be cached under the step it belongs to.
+          _evalLastDispatchedFen=fen;
+          _evalRecentDispatches.push({fen:fen,step:_reviewEvalRequestedStep,states:reviewStates});
+          if(_evalRecentDispatches.length>8)_evalRecentDispatches.shift();
+          // v1.2.3 round-58b: a FRESH user-nav dispatch — reset the auto-retry
+          //   budget (the auto-retry path in _armEvalSafetyTimer does not pass
+          //   through here, so its budget stays spent until the user acts).
+          _manualEvalAutoRetries=0;
         }catch(e){console.error("engineEvalDeep error:",e);_evalLoading=false;_updateAllEvalDisplays();}
-        if(_evalSafetyTimerId)clearTimeout(_evalSafetyTimerId);
-        _evalSafetyTimerId=setTimeout(function(){
-          _evalSafetyTimerId=null;
-          if(_evalLoading){
-            console.warn('Review eval safety timer: engine did not respond within 45s, resetting');
-            _evalLoading=false;_sfEvalReady=false;
-            _updateAllEvalDisplays();
-          }
-        },45000);
+        // v1.2.3 round-58b: shared watchdog — progress-aware (re-armed by
+        //   every onEngineProgress tick) and auto-retrying on true silence.
+        _armEvalSafetyTimer(true);
       },300);
     }
   }else{
@@ -4669,16 +5069,15 @@ function requestEngineEval(){
       _updateEvalDisplay();
       // v1.2.3 round-44 (G1): record the gen actually dispatched (normal-mode
       //   path — without this the G1 check would drop every normal-mode eval).
-      try{AndroidBridge.engineEval(fen);_evalLastDispatchedGen=_evalRequestGen;}catch(e){console.error('engineEval error:',e);_evalLoading=false;_updateEvalDisplay();}
-      if(_evalSafetyTimerId)clearTimeout(_evalSafetyTimerId);
-      _evalSafetyTimerId=setTimeout(function(){
-        _evalSafetyTimerId=null;
-        if(_evalLoading){
-          console.warn('Eval safety timer: engine did not respond within 30s, resetting');
-          _evalLoading=false;_sfEvalReady=false;
-          _updateEvalDisplay();
-        }
-      },30000);
+      //   v1.2.3 round-52 (T5): also record the dispatched fen — the gen
+      //   record alone cannot reject a late previous-position callback once a
+      //   newer request has been dispatched (both globals then hold the new
+      //   gen); the fen identity can.
+      try{AndroidBridge.engineEval(fen);_evalLastDispatchedGen=_evalRequestGen;_evalLastDispatchedFen=fen;}catch(e){console.error('engineEval error:',e);_evalLoading=false;_updateEvalDisplay();}
+      // v1.2.3 round-58b: shared watchdog — progress-aware (a healthy slow
+      //   search is never cut at 30s of elapsed time). No auto-retry in
+      //   normal mode (the post-move eval re-fires on the next state change).
+      _armEvalSafetyTimer(false);
     }
   }
 }
@@ -4706,7 +5105,10 @@ function _terminateBatchAfterRepeatedFailures(reason){
   try{if(typeof _endEvalDeepBatchIfActive==='function')_endEvalDeepBatchIfActive();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
   _endBatchWriteMode();
   try{if(typeof _updateReviewAnalyzeBtn==='function')_updateReviewAnalyzeBtn();}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
-  try{showToast(T('engine_unavailable_hint'));}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
+  // v1.2.3 round-57c: clearer termination toast — progress is kept and a tap
+  //   on Analyze All resumes from the breakpoint (bare 'engine_unavailable'
+  //   left users thinking everything was lost).
+  try{showToast(T('batch_terminated_hint'));}catch(e){console.warn('[AIBridge]',e?.message?e.message:e);}
 }
 
 // v1.1.1 Phase 59 Task 59.6: BATCH EVAL REQUEST (decoupled from reviewStep).
@@ -4731,6 +5133,9 @@ function _requestBatchEval(step){
   // Skip if already cached (shouldn't happen — _reviewAnalyzeAdvance skips
   // cached steps — but defensive)
   if(_reviewEvalCache.has(step)){
+    // v1.2.3 round-57c: a cache-hit skip completes the step instantly —
+    //   re-arm the crash-loop wall clock.
+    _batchLastStepCompletedAt=performance.now();
     // Advance to next step directly
     if(typeof _reviewAnalyzeAdvance==='function'){
       try{_reviewAnalyzeAdvance();}catch(e){console.error('Analyze-all advance (cached) failed:',e);}
@@ -4744,6 +5149,7 @@ function _requestBatchEval(step){
     const _isBlackTurn=_rs.currentTurn==='black';
     const _eval=_isBlackTurn?99999:-99999;
     _reviewEvalCache.set(step,{eval:_eval,mate:0,depth:0,seldepth:0,wdlW:_isBlackTurn?1000:0,wdlD:0,wdlL:_isBlackTurn?0:1000});
+    _batchLastStepCompletedAt=performance.now(); // v1.2.3 round-57c
     if(typeof _reviewAnalyzeAdvance==='function'){
       try{_reviewAnalyzeAdvance();}catch(e){console.error('Analyze-all advance (checkmate) failed:',e);}
     }
@@ -4751,6 +5157,7 @@ function _requestBatchEval(step){
   }
   if(_termStatus==='draw_stalemate'||_termStatus==='draw_insufficient'||_termStatus==='draw_5fold'||_termStatus==='draw_75move'||_termStatus==='draw_50move'||_termStatus==='draw_repetition'){
     _reviewEvalCache.set(step,{eval:0,mate:0,depth:0,seldepth:0,wdlW:333,wdlD:334,wdlL:333});
+    _batchLastStepCompletedAt=performance.now(); // v1.2.3 round-57c
     if(typeof _reviewAnalyzeAdvance==='function'){
       try{_reviewAnalyzeAdvance();}catch(e){console.error('Analyze-all advance (draw) failed:',e);}
     }
@@ -4787,6 +5194,24 @@ function _requestBatchEval(step){
       _batchConsecutiveFail=0;
     }catch(e){
       console.error('Batch engineEvalDeep error:',e);
+      // v1.2.3 round-56 (A3): a synchronous dispatch throw previously bypassed
+      //   the T4 3-strike terminator entirely — _batchConsecutiveFail was never
+      //   incremented here, so a persistently throwing bridge spun the batch
+      //   through every remaining step in 100ms cycles (or ghost-looped on the
+      //   safety net) instead of failing loudly. Count the throw, and at 3
+      //   consecutive failures terminate via the standard cleanup path (which
+      //   also flushes batch write mode and resets the analyze button).
+      _batchConsecutiveFail++;
+      // v1.2.3 round-56 (A3): clear the STALE dispatch record. The throw above
+      //   happened before this step's record was written, so _batchLastDispatched
+      //   still describes the PREVIOUS step — a late callback arriving now could
+      //   otherwise be claimed against it (T1 mis-claim). Null record → the T1
+      //   check drops any late callback as stale.
+      _batchLastDispatched=null;
+      if(_batchConsecutiveFail>=3){
+        _terminateBatchAfterRepeatedFailures('dispatch throw');
+        return;
+      }
       // On synchronous failure, advance to the next step (don't stall)
       if(typeof _reviewAnalyzeAdvance==='function'){
         setTimeout(function(){try{_reviewAnalyzeAdvance();}catch(_e){}},100);
@@ -4830,7 +5255,11 @@ function _buildEvalHTML(e,opts){
   const depthStr=_sfDepth>0?'<span style="font-size:.65rem;color:var(--muted);margin-left:4px">D'+_sfDepth+'</span>':'';
   s+=depthStr;
   let progressStr='';
-  if(_evalLoading&&_sfDepth>0){
+  // v1.2.3 round-57: opts.progress forces the nodes/nps ticker even when
+  //   _evalLoading is false — an analyze-all batch search never sets
+  //   _evalLoading (batch uses its own gen machinery), but the review eval
+  //   bar should still show the live search throughput while it runs.
+  if((_evalLoading||opts.progress)&&_sfDepth>0){
     let parts=[];
     if(_lastProgressNodes!=null){const ns=_lastProgressNodes>=1000000?(_lastProgressNodes/1000000).toFixed(1)+'M':_lastProgressNodes>=1000?Math.round(_lastProgressNodes/1000)+'K':String(_lastProgressNodes);parts.push(ns);}
     if(_lastProgressNps!=null){const ns=_lastProgressNps>=1000000?(_lastProgressNps/1000000).toFixed(1)+'M/s':_lastProgressNps>=1000?Math.round(_lastProgressNps/1000)+'K/s':String(_lastProgressNps);parts.push(ns);}
@@ -4889,7 +5318,18 @@ function _updateReviewEvalUI(){
     if(prevEval!=null) deltaStr=' '+_formatEvalDelta(_sfEval,prevEval.eval);
   }
   // P4 SIMPLIFY: Use shared helper for consistent eval display formatting
-  el.innerHTML=_buildEvalHTML(e,{delta:deltaStr});
+  // v1.2.3 round-57: while an analyze-all batch search is in flight, ask
+  //   _buildEvalHTML for the live nodes/nps ticker (batch never sets
+  //   _evalLoading, so the default gate would hide it).
+  // v1.2.3 round-58b: same for a MANUAL single-step eval whose step is being
+  //   viewed — _buildEvalHTML's own _evalLoading gate already covers this,
+  //   but pass the flag explicitly so the ticker's visibility no longer
+  //   depends on which global happens to be set.
+  const _batchLive=(typeof _reviewAnalyzeAllActive!=='undefined'&&_reviewAnalyzeAllActive&&typeof _evalRequestBatchGen!=='undefined'&&_evalRequestBatchGen>0);
+  const _manualLive=(!_batchLive&&_evalLoading
+    &&typeof _reviewEvalRequestedStep!=='undefined'&&typeof reviewStep!=='undefined'
+    &&_reviewEvalRequestedStep===reviewStep);
+  el.innerHTML=_buildEvalHTML(e,{delta:deltaStr,progress:_batchLive||_manualLive});
 }
 // v1.2.3 round-29 (PR52 S3358): extract the "mate-or-eval" selection so callers
 //   don't write nested ternaries. Returns a numeric eval score (centipawns,

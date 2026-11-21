@@ -61,7 +61,13 @@ public class EngineService extends Service {
     // system default, ignoring the user's in-app language preference.
     private static final String PREFS_NAME = "RegaliaEngine";
 
-    private PowerManager.WakeLock wakeLock = null;
+    // v1.2.3 round-51 (BG-2): static volatile — refreshWakeLock() is invoked
+    //   from StockfishNative's engine executor thread (one re-arm per analyze-
+    //   all batch step) while onCreate/onDestroy write it from the service
+    //   main thread. volatile gives the cross-thread visibility the old
+    //   instance field never needed (it was only touched on the service's
+    //   own thread).
+    private static volatile PowerManager.WakeLock wakeLock = null;
     // v1.0.8 PHASE 24 (bug fix): volatile — read from JS binder thread
     //   (updateNotification, start) and service main thread (onCreate/onDestroy).
     private static volatile boolean isRunning = false;
@@ -153,20 +159,20 @@ public class EngineService extends Service {
         //   suspend during very long background analysis sessions. The earlier
         //   wording ("longer sessions can re-acquire by re-entering the
         //   foreground state") described behavior that was never implemented.
-        //   Re-acquisition on expiry was considered (D4) and rejected: sessions
-        //   beyond 30 min of continuous background analysis are not a target
-        //   scenario, and the foreground notification keeps the process alive
-        //   regardless — only the CPU is allowed to sleep.
-        try {
-            PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
-            if (pm != null) {
-                wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Regalia:engine-analysis");
-                wakeLock.acquire(30L * 60L * 1000L); // 30 minutes
-                Log.i(TAG, "Partial wake lock acquired (30min timeout)");
-            }
-        } catch (Throwable e) {
-            Log.w(TAG, "Wake lock acquire failed", e);
-        }
+        //   v1.2.3 round-51 (BG-2): re-acquisition on expiry IS now implemented
+        //   for the analyze-all batch use case — see refreshWakeLock(). The
+        //   D4=A rejection ("sessions beyond 30 min are not a target
+        //   scenario") is superseded by the round-51 background-analysis
+        //   requirement: a 100+ step batch at 5-15s/step legitimately exceeds
+        //   30 minutes, and mid-batch CPU suspension silently stalls the
+        //   analysis. StockfishNative re-arms the lock on every
+        //   engineEvalDeep() dispatch and on engineEvalDeepBeginBatch().
+        // v1.2.3 round-53 (S2696): the actual write moved into the static
+        //   synchronized helper acquireEngineWakeLock() — instance methods
+        //   (onCreate/onDestroy) no longer write the static wakeLock field,
+        //   and all three accessors (acquire/refresh/release) now serialize
+        //   on the class monitor, closing the refresh-vs-release race.
+        acquireEngineWakeLock(this);
     }
 
     @Override
@@ -183,16 +189,8 @@ public class EngineService extends Service {
         isRunning = false;
         lastStatusInfo = "";
 
-        // Release wake lock
-        if (wakeLock != null && wakeLock.isHeld()) {
-            try {
-                wakeLock.release();
-                Log.i(TAG, "Partial wake lock released");
-            } catch (Throwable e) {
-                Log.w(TAG, "Wake lock release failed", e);
-            }
-            wakeLock = null;
-        }
+        // Release wake lock (round-53 (S2696): static synchronized helper).
+        releaseEngineWakeLock();
 
         Log.i(TAG, "Engine service destroyed");
     }
@@ -269,10 +267,100 @@ public class EngineService extends Service {
     }
 
     /**
+     * v1.2.3 round-51 (BG-2): re-arm the partial wake lock (30-minute timeout).
+     *   Called by StockfishNative on every engineEvalDeep() dispatch (once per
+     *   analyze-all batch step, 5-15s apart) and on engineEvalDeepBeginBatch(),
+     *   so the lock can never lapse while a background analyze-all batch is
+     *   actually progressing — the v1.1.0 Phase 57 30-minute safety net no
+     *   longer aborts long batches mid-flight.
+     *   Semantics (AOSP PowerManager): acquire(timeout) on a held lock RESETS
+     *   the timeout (no extra reference is held); acquiring an already-expired
+     *   lock is a plain acquire. Thread-safe — called from the engine executor
+     *   thread. No-op when the service/wake lock does not exist.
+     *   round-53 (S2696): synchronized — serializes with acquireEngineWakeLock/
+     *   releaseEngineWakeLock so a re-arm can never interleave with the
+     *   onDestroy release (a re-arm on a just-released lock would throw).
+     */
+    public static synchronized void refreshWakeLock() {
+        PowerManager.WakeLock wl = wakeLock;
+        if (wl == null) return;
+        try {
+            wl.acquire(30L * 60L * 1000L);
+        } catch (Throwable e) {
+            Log.w(TAG, "Wake lock re-arm failed", e);
+        }
+    }
+
+    /**
+     * v1.2.3 round-53 (S2696): static synchronized acquire helper — onCreate()
+     *   delegates here so instance methods no longer write the static wakeLock
+     *   field. Behaves exactly like the pre-round-53 inline block: create the
+     *   PARTIAL_WAKE_LOCK, publish it, then acquire with the 30-minute timeout.
+     *   The publish-then-acquire order matches the old code (a concurrent
+     *   refreshWakeLock() may re-arm the lock between the two statements —
+     *   harmless: a second acquire(timeout) on a held lock just resets the
+     *   timeout). catch (Exception) per S1181: PowerManager only raises
+     *   RuntimeExceptions here; Errors must propagate.
+     */
+    private static synchronized void acquireEngineWakeLock(Context ctx) {
+        try {
+            PowerManager pm = (PowerManager) ctx.getSystemService(Context.POWER_SERVICE);
+            if (pm != null) {
+                PowerManager.WakeLock wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Regalia:engine-analysis");
+                // v1.2.3 round-54 (PR56 CR#10): non-reference-counted — every
+                //   engineEvalDeep* call re-arms via refreshWakeLock(); with
+                //   the default reference counting each timed acquire would
+                //   pile on a reference + its own timeout releaser, so a single
+                //   release() in onDestroy could not drop the lock (CPU held
+                //   awake until the last timeout fired). With refcounting off,
+                //   re-acquire just resets the timeout and one release() frees
+                //   the lock regardless of how many refreshWakeLock() calls ran.
+                //   NOTE: set BEFORE publishing to the static field — a racing
+                //   refreshWakeLock() must never see a reference-counted lock.
+                wl.setReferenceCounted(false);
+                wakeLock = wl;
+                wl.acquire(30L * 60L * 1000L); // 30 minutes
+                Log.i(TAG, "Partial wake lock acquired (30min timeout)");
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "Wake lock acquire failed", e);
+        }
+    }
+
+    /**
+     * v1.2.3 round-53 (S2696): static synchronized release helper — onDestroy()
+     *   delegates here. Identical semantics to the pre-round-53 inline block:
+     *   null the field first (so a late refreshWakeLock() no-ops), then release
+     *   if held. catch (Exception) per S1181.
+     */
+    private static synchronized void releaseEngineWakeLock() {
+        PowerManager.WakeLock wl = wakeLock;
+        wakeLock = null;
+        if (wl != null && wl.isHeld()) {
+            try {
+                wl.release();
+                Log.i(TAG, "Partial wake lock released");
+            } catch (Exception e) {
+                Log.w(TAG, "Wake lock release failed", e);
+            }
+        }
+    }
+
+    /**
      * Start the engine foreground service from the given context.
      * Safe to call multiple times — no-op if already running.
      */
     public static void start(Context context) {
+        // round-60 (F-3 documented non-fix): between stop()'s stopService()
+        // call and the async onDestroy() callback, isRunning is still true —
+        // a start() landing in that millisecond window would early-return
+        // here and then see onDestroy reset the flag (service never starts).
+        // UNREACHABLE under the current call graph (stop only runs from
+        // shutdownInternal; start only from startEngineInternal's success
+        // tail — a full engine restart, seconds apart), and self-healing in
+        // practice (onEngineReady re-invokes start on every engine restart).
+        // If a manual-stop entry point is ever added, reset isRunning in
+        // stop() directly.
         if (isRunning) return;
         try {
             Intent intent = new Intent(context, EngineService.class);

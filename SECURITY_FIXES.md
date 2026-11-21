@@ -6,6 +6,25 @@
 
 ---
 
+## round-56 安全修复补录（2026-10-05）
+
+> 第一性原理代码审查实施轮。逐条对照当前代码核实。
+
+| 轮次 | 修复 | 位置（当前） | 类别 |
+|---|---|---|---|
+| round-56 | 引擎二进制 SHA-256 运行时校验：`EXPECTED_ENGINE_SHA256`（8f7116d3…）在 4 处接入——解压后必验；RootDetector 判定 root 设备时缓存复用也强制复验，防本地篡改 | StockfishNative.java | 供应链/完整性 |
+| round-56 | `isSafeFileName` 子串 `contains("..")` 误伤合法名（如 `a..b`）→ 精确段级语义（分隔符已先行拒绝，单段名仅拒 `.`/`..`），穿越防护不降级 | JsBridgeGateway.java | 路径穿越（正确性） |
+| round-56 | `readTextFile` 1 MB 上限 + `{"error":"too_large"}` 哨兵 + 双语 Toast，防超大文件 OOM | FileIoHelper.java / ai-bridge.js / game-logic.js | 健壮性/DoS |
+| round-56 | `loadAssetAsBase64` 段级路径穿越检查对齐（StatsActivity 侧纵深防御强化） | StatsActivity.java | 路径穿越 |
+| round-56 | stats.html CSP 增补 `form-action 'none'` + `object-src 'none'`；`_exportFullHTML` 的 JSON 载荷 `<` → `\u003c` 转义 | stats.html | CSP/XSS |
+| round-56 | index.html.tpl CSP 移除无调用方的 `worker-src blob:`（worker-pool.js 死代码删除后收紧；stats.html 内联热力图 Worker 保留该指令） | index.html.tpl | CSP 收紧 |
+| round-56 | release 构建 ProGuard 日志剥离扩展至 Log.v/d/i/w（保留 Log.e），降低调试面信息暴露 | proguard-rules.pro | 信息暴露 |
+| round-56 | release 缺签名/缺 version.properties 时 fail-fast（GradleException），杜绝静默产出未签名/错版本包 | build.gradle | 发布链 |
+| round-56 | CI `unzip-folder-optimized.yml` 新增引擎 SHA-256 门禁；`.gitignore` 建立（签名材料永不入库）；dependabot.yml 新增（github-actions 周检） | workflows / .gitignore | 供应链 |
+| round-56 | settings.gradle/build.gradle 仓库顺序官方优先、镜像兜底；镜像经 init.d 本地注入（BUILDING.md 注明） | settings.gradle / build.gradle | 供应链 |
+
+---
+
 ## round-17~41 安全修复补录（2026-08-10 round-42 实况核查后补录）
 
 > 本节为 round-42 对 worklog.md round-17~41 的提取补录。逐条对照当前代码核实，file:line 以 v1.2.3 round-44 树为准（round-44 复核）。

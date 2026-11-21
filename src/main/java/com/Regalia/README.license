@@ -1,3 +1,204 @@
+v1.2.3 round-61 (2026.11.21): PR#56 review fixes — batch-hang terminator moved to the progress path + dead-engine batch-end notification + license-tag corrections.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - StockfishNative.java (GPL v3, DroidFish-derived): R61-d —
+    engineEvalDeepEndBatch now
+    dispatches the round-51 (BG-1) Activity notification
+    (onEvalDeepBatchEnded) BEFORE the engineReady gate, so a mid-batch
+    engine death still applies the deferred webView.onPause() (the old
+    early-return left the WebView unpaused in the background — a battery
+    leak). The dispatch is guarded/idempotent on the MainActivity side, so
+    the dead-engine and never-started paths dispatch a harmless no-op.
+  - README.license self-correction (R61-a): three historical entries
+    (round-60: MainActivity, EngineService; round-58c: StabilizationHelper)
+    had these AGPL v3 classes tagged (GPL v3) — a slip that went unnoticed
+    because v3's H2b only swept ONE direction (GPL files wrongly tagged
+    AGPL). Corrected in place; v3 gained the reverse sweep (H2f) this round.
+  - License classification: unchanged (AGPL v3 = MainActivity,
+    ChessWebViewClient, EngineService, StabilizationHelper, ChessApp,
+    TlsSecurityHelper, RootDetector; the other 12 classes GPL v3).
+
+v1.2.3 round-60 (2026.10.7): locale fallback unification + stop→start window documented.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - MainActivity.java (AGPL v3): F-4 — showToastLocalized fallback unified with
+    EngineService/StockfishNative.isEnglishMode() semantics: only zh*
+    locales fall back to Chinese, all others to English (previously a
+    fr/ja/ru user saw a Chinese Toast beside an English service
+    notification). zh/en user behavior unchanged.
+  - EngineService.java (AGPL v3): F-3 documented non-fix — comment added at
+    start()'s isRunning early-return explaining the stop→start millisecond
+    window (isRunning stays true until the async onDestroy), its
+    unreachability under the current call graph, the onEngineReady
+    self-healing path, and the trigger condition for a future direct fix.
+  - Other 17 files: covered by the round-59 independent review report (this
+    round's input); no new findings beyond F-3/F-4.
+
+v1.2.3 round-58c (2026.10.7): full line-by-line Java review; one stale comment fixed.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - StabilizationHelper.java (AGPL v3): the throttle comment on the JS-callback
+    line still said 16ms although round-44 D12 raised
+    JS_CALLBACK_MIN_INTERVAL_MS to 33ms — comment corrected in place.
+  - All other 18 files (MainActivity, StockfishNative, StatsActivity, the
+    helper/manager set) reviewed line by line with no new findings — the
+    existing defense-in-depth conventions (catch (Throwable) policy, S1181
+    narrowing on wake-lock/haptic paths, sandbox gates, lifecycle state
+    machine) are documented in verifier/runs/round58c-audit.md.
+
+v1.2.3 round-58 (2026.10.6): analyze-all batch-start ghost-state fix.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - StockfishNative.java (GPL v3): engineEvalDeepBeginBatch no longer
+    pre-sets the ghost currentState=STATE_EVAL before any search exists
+    (the phantom state made the first engineEvalDeep's stopAndWaitForBestmove
+    misread an idle engine as searching, arm the late-bestmove discard flag
+    on its 1s latch timeout, and silently eat step 1's real bestmove —
+    exactly the batch-start stall then skip-toast failure chain the round-52
+    T6 comment predicted); engineEvalDeep() sets STATE_EVAL itself at the
+    correct moment, immediately before 'go depth 22'.
+  - StockfishNative.java (GPL v3): engineEvalDeepEndBatch now guards its
+    stopAndWaitForBestmove behind a searchMaybeInFlight check
+    (currentState != STATE_NONE || _isPondering) so a batch that ended
+    with no search running can no longer arm the same discard machinery.
+v1.2.3 round-56 (2026.10.5): first-principles review implementation — engine-integrity verification + path-gate alignment + read cap.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - StockfishNative.java (GPL v3): engine binary SHA-256 verification
+    (EXPECTED_ENGINE_SHA256 = 8f7116d3…) wired at 4 points — fresh
+    extraction always verifies; cached-engine reuse re-verifies on
+    rooted devices (RootDetector-gated).
+  - JsBridgeGateway.java (GPL v3): isSafeFileName switched from substring
+    contains("..") to exact segment semantics (separators are rejected
+    first; only "." / ".." are refused) — legitimate names like "a..b"
+    no longer false-rejected, traversal protection unchanged.
+  - StatsActivity.java (GPL v3): loadAssetAsBase64 traversal check
+    aligned to the same segment semantics (defense-in-depth).
+  - FileIoHelper.java (GPL v3): readTextFile 1 MB cap
+    (MAX_READ_TEXT_BYTES) + {"error":"too_large"} sentinel (JS surfaces
+    it as the bilingual settings_file_too_large toast).
+  - ChessApp.java (AGPL v3): comment-only clarification (B3).
+  - License classification: unchanged (AGPL v3 = MainActivity,
+    ChessWebViewClient, EngineService, StabilizationHelper, ChessApp,
+    TlsSecurityHelper, RootDetector; the other 12 classes GPL v3).
+
+v1.2.3 round-55 (2026.10.5): PR #56 CodeRabbit follow-up — getParentPath root-escape gate + license-tag sweep.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - StockfishNative.java (GPL v3, DroidFish-derived): CodeRabbit follow-up
+    REAL — getParentPath() returned the RAW parent of a whitelisted browse
+    root (e.g. /storage/emulated/0 for Download, or the app-data dir for
+    the files-dir start root). The parent itself is NOT browsable, so
+    tapping ".." at a root navigated into a guaranteed-"[]" listing. The
+    resolved parent now passes the same isPathBrowsable gate; a
+    non-browsable parent returns "" — all three JS call sites already
+    treat "" as "no parent" (the ".." button hides; BACK closes the
+    dialog). Read/write stay on the strict isPathInSandbox gate.
+  - License classification: unchanged — but a CodeRabbit-flagged tag sweep
+    corrected 7 mislabeled "(AGPL v3)" per-file tags to GPL v3
+    (EngineProcessManager ×2, StockfishNative ×3, SafPickerHelper +
+    StatsActivity ×1, FileIoHelper ×1), matching the file headers and the
+    definitive round-34/35/36 classification lists. The round-54b
+    EngineProcessManager tag was the flagged instance; the rest are the
+    same defect class swept in one pass.
+
+v1.2.3 round-54b (2026.10.5): SonarCloud follow-up — 1 real fix / 1 false positive.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - EngineProcessManager.java (GPL v3, DroidFish-derived): S8491 — the round-54 waitForBounded
+    Javadoc had been inserted between killProcess's Javadoc and its method,
+    leaving killProcess's Javadoc dangling (two Javadocs back-to-back).
+    waitForBounded (+ its Javadoc) moved ABOVE killProcess so every Javadoc
+    attaches to its declaration.
+  - False positive kept: S125 at EngineProcessManager.java:106 — the flagged
+    "commented-out code block" is the round-54 explanatory comment for
+    waitForBounded (why the API-26 gate exists), not commented-out code.
+  - License classification: unchanged.
+
+v1.2.3 round-54 (2026.10.5): PR #56 AI-review Java fixes — 6 files.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - EngineProcessManager.java (GPL v3, DroidFish-derived): Process.waitFor(2, SECONDS) is
+    API 26+ (minSdk 23) — routed through the new waitForBounded() helper
+    (blocking waitFor() below API 26); the old call could throw
+    NoSuchMethodError (an Error) past the catch (Exception) and skip the
+    sh -c fallback.
+  - EngineService.java (AGPL v3): the engine wake lock is now
+    setReferenceCounted(false) BEFORE publication — refreshWakeLock()
+    re-arms no longer accumulate references, so one release() in
+    onDestroy always drops the lock (CodeRabbit finding on PR #56).
+  - SafPickerHelper.java + StatsActivity.java (GPL v3): the 8KB chunked
+    PGN readers count bare CR as a line terminator (folding CRLF pairs,
+    even across chunk boundaries) — CR-only files previously bypassed the
+    5000-line import cap. StatsActivity also signals import failures via
+    the new onStatsPGNFileError JS callback instead of an ambiguous empty
+    content callback.
+  - JsBridgeGateway.java (GPL v3, DroidFish-derived): new isPathBrowsable()
+    gate (app-private dirs + app-specific external files + public
+    Download/Documents) — getDefaultPaths() surfaces those roots to the JS
+    file browser, but the round-49 sandbox gate always rejected them.
+  - StockfishNative.java (GPL v3, DroidFish-derived): listFiles /
+    getParentPath route through isPathBrowsable; readTextFile /
+    writeTextFile stay on the strict isPathInSandbox gate.
+  - FileIoHelper.java (GPL v3, DroidFish-derived): getDefaultPaths() now also returns
+    filesDir (always sandbox-browsable; the JS browser's new start dir).
+  - Also: the round-48 RED-2 "zero-instantiation" wording corrected to
+    "no effective calls" for HapticHelper (instantiated but never invoked,
+    per the round-10 record) — see the round-48 entry below.
+  - License classification: unchanged.
+
+v1.2.3 round-53 (2026.10.5): SonarCloud PR #56 Java fixes — EngineService/StockfishNative; MainActivity comment-only.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - EngineService.java (AGPL v3): S2696 ×2 — the static wakeLock field is
+    now written ONLY from the new static synchronized helpers
+    acquireEngineWakeLock()/releaseEngineWakeLock() (onCreate/onDestroy
+    delegate); refreshWakeLock() is now synchronized, closing the
+    re-arm-vs-release interleave race. The moved blocks catch Exception
+    instead of Throwable (S1181-compliant).
+  - StockfishNative.java (GPL v3, DroidFish-derived): S6201 — the
+    batch-end dispatch uses pattern matching for instanceof (Java 17);
+    S1181 — catches Exception instead of Throwable there (Errors must
+    propagate).
+  - MainActivity.java (AGPL v3): S116 ×2 triaged FALSE POSITIVE —
+    _activityResumed/_webViewPausedForBatch keep the project-wide `_xxx`
+    private-field convention (round-35 precedent); in-source "S116 kept"
+    notes added. No behavior change.
+  - License classification: all files unchanged.
+
+v1.2.3 round-52 (2026.10.5): StockfishNative — stop/bestmove race hardening (J1-J4).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - StockfishNative.java (GPL v3, DroidFish-derived): four race windows
+    closed around stopAndWaitForBestmove()/the reader thread, complementing
+    the JS-side fen-identity guard (chess.src/README.license round-52):
+    - J1: the stop-timeout branch now arms _discardingPonderBestmove ONLY
+      if the captured stateAtTimeout != STATE_NONE (a search that already
+      completed naturally needs no discard — the old code armed the flag
+      unconditionally and could eat the NEXT search's bestmove);
+    - J2: the idle fast-path no longer clears _discardingPonderBestmove
+      (clearing it let an in-flight stale bestmove through mislabeled);
+      residue is handled by latch-consumption/the discard path/
+      _resetEngineRuntimeState;
+    - J3: the reader's info-line branch skips processInfoLine() entirely
+      while _discardingPonderBestmove is set (stale info lines no longer
+      pollute the UI during the discard window);
+    - J4: the reader's discard branch no longer clobbers currentState back
+      to STATE_NONE (it could overwrite a NEWER search's state).
+  - License classification: all files unchanged.
+
+v1.2.3 round-51 (2026.9.9): MainActivity/EngineService/StockfishNative — background analyze-all + BACK hardening.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - MainActivity.java (AGPL v3): onPause() skips webView.onPause() while an
+    analyze-all eval batch is active (BG-1) so the WebView JS timers keep
+    driving the batch in the background; new onEvalDeepBatchEnded() applies
+    the deferred pause at batch end; new volatile flags
+    _activityResumed/_webViewPausedForBatch; stale round-49
+    MIN_SUPPORTED_CHROME_MAJOR residual comment corrected (doc-only).
+  - EngineService.java (AGPL v3): wakeLock promoted to static volatile; new
+    refreshWakeLock() re-arms the partial wake lock per batch step (BG-2)
+    so >30-minute background batches no longer stall at the Phase 57
+    timeout; onDestroy nulls the static lock.
+  - StockfishNative.java (GPL v3, DroidFish-derived):
+    BUG-1 — handleBestMove STATE_EVAL skips restoreGameplayOptions() while
+    _evalDeepBatchActive (the per-step restore was undoing the batch's
+    Contempt=0/MultiPV=1/UCI_AnalyseMode=true options, biasing every
+    analyze-all eval from step 2 onward); new public
+    isEvalDeepBatchActive() getter (Java-only); refreshWakeLock calls in
+    engineEvalDeepBeginBatch/engineEvalDeep; main-thread
+    onEvalDeepBatchEnded() dispatch in engineEvalDeepEndBatch.
+  - No new @JavascriptInterface methods; no permission/manifest changes.
+
 v1.2.3 round-50 (2026.9.6): StatsActivity/StabilizationHelper header style unified (comments only).
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - StatsActivity.java (GPL v3) / StabilizationHelper.java (AGPL v3):
@@ -22,12 +223,14 @@ v1.2.3 round-48 (2026.9.6): BUG-2 OnBackInvokedCallback + SEC-6 log demotion + R
     demoted to Log.d.
   - RED-2: MessageBus.java / UciProtocolHandler.java /
     EngineConfigManager.java / HapticHelper.java DELETED from git (1,031
-    lines total). These four zero-instantiation dead classes DID exist in
-    the git tree — the v1.2.1 round-4/round-10 deletions recorded below
-    only removed them from the build tree and never reached git, and a
-    zip-based sync later revived the file bodies (see the editor's notes
-    on the round-4 and round-10 entries below). This directory now holds
-    19 live Java classes.
+    lines total). These four dead classes had no effective calls
+    (HapticHelper was instantiated in StockfishNative but never invoked —
+    see the round-10 record). They DID exist in the git tree — the
+    v1.2.1 round-4/round-10 deletions recorded below only removed them
+    from the build tree and never reached git, and a zip-based sync
+    later revived the file bodies (see the editor's notes on the round-4
+    and round-10 entries below). This directory now holds 19 live Java
+    classes.
   - License classification: unchanged (deletions of dead code only; the
     4 classes are removed from the classification lists).
 

@@ -1,0 +1,21 @@
+# round-55 triage log — PR #56 CodeRabbit follow-up emails (2026-10-05)
+
+Source: two "邮件打印" PDFs — CodeRabbit notification emails on PR #56
+(13:24 CST, 5 actionable + 1 outside-diff note; 13:43 CST, 2 actionable).
+
+| # | Item | Verdict |
+|---|------|---------|
+| 1 | ai-bridge.js S7741 (typeof _reviewAnalyzeStep) | STALE — fixed in round-54b (direct `!== undefined`); v3 G4a/G6e cover it |
+| 2 | game-logic.js retry double-count (4 dispatch-failure branches) | REAL — fixed: single-counter contract, doAIMove owns increment + give-up |
+| 3 | EngineProcessManager S8491 (dangling Javadoc) | STALE — fixed in round-54b (waitForBounded above killProcess); v3 G6d covers it |
+| 4 | StockfishNative.getParentPath root escape | REAL — fixed: resolved parent re-gated via isPathBrowsable, "" = "no parent" |
+| 5 | verifier v3 read() process.cwd() | REAL — fixed: __dirname-based like v1/v2 |
+| 6 | chess.html:9214 Parcel-budget payload note (outside diff) | ALREADY IMPLEMENTED — round-54 900KB drop-annotations + re-check + clipboard fallback |
+| 7 | chess.src README.license ai-bridge/ui-interactions "(AGPL v3)" tags | REAL — fixed + swept: 25 tags corrected to GPL v3 (file headers authoritative) |
+| 8 | java README.license EngineProcessManager "(AGPL v3)" tag | REAL — fixed + swept: 7 tags corrected to GPL v3 (classification unchanged) |
+
+Incidents: a mount-layer write glitch corrupted game-logic.js mid-edit
+(2,588 interleaved duplicate lines; doAIMove duplicated). Restored from
+the round-54 patch zip (md5 a53856856b44eaa67e5e7dd454772d61) and
+re-applied the three intended edits; per-hunk diff re-verified.
+ai-bridge.js verified byte-identical to the round-54b zip (unaffected).

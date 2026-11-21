@@ -1,0 +1,29 @@
+PASS G1a requiredVersionKeys present
+PASS G1b missing/blank key treated as fallback
+PASS G1c versionCode/Name derivation untouched (10203 contract)
+PASS G2a timed engineGo fallback reschedules doAIMove (both throw branches)
+PASS G2b untimed engineGo branches reschedule doAIMove
+PASS G2c retry counter incremented before reschedule (no double-count)
+PASS G3a dlgChess960SPID reset to -1
+PASS G3b no dlgChess960SPID=null reset remains
+PASS G4a notification uses per-batch completed count (_reviewAnalyzeStep)
+PASS G4b cache size no longer feeds the progress notification
+PASS G4c openStatsPage re-checks payload after annotation drop
+PASS G5a en-passant victim-pawn validation present
+PASS G5b explicit PGN failure callback exists
+PASS G5c pgn_read_failed i18n entry (zh+en)
+PASS G6a waitForBounded helper present with API-26 gate
+PASS G6b no raw timed waitFor calls outside the waitForBounded helper
+PASS G6c both call sites routed through waitForBounded
+PASS G7a SafPickerHelper: prevWasCr CR/LF/CRLF counting
+PASS G7b StatsActivity: prevWasCr CR/LF/CRLF counting
+PASS G8a setReferenceCounted(false) before acquire in acquireEngineWakeLock
+PASS G9a isPathBrowsable gate present
+PASS G9b listFiles uses browse gate
+PASS G9c getParentPath uses browse gate
+PASS G9d read/write still on strict sandbox
+PASS G9e getDefaultPaths carries filesDir
+PASS G9f JS browser: no hardcoded /sdcard entry buttons, SAF button present
+PASS G9g settings i18n entries (zh+en)
+
+===== RESULT: 27 passed, 0 failed =====

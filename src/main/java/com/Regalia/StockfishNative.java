@@ -325,6 +325,18 @@ public class StockfishNative {
     //   50MB. The isElfFile() magic-header AND check at the call sites is
     //   unchanged, so integrity gating is preserved.
     private static final long MIN_ENGINE_BINARY_SIZE = 5_000_000L;
+    // v1.2.3 round-56 (SEC-01①): pinned SHA-256 of the shipped Stockfish
+    //   binary (stockfish-android-armv8-dotprod). Previously the hash was only
+    //   documented in README.md/BUILDING.md — documented but never enforced.
+    //   Verified at two points: (a) ALWAYS after a fresh extraction from the
+    //   APK/assets, catching truncated writes that still pass the length+ELF
+    //   gate (round-49 comment's residual hole); (b) on the cached-copy reuse
+    //   fast path when the device is rooted (SEC-09) — filesDir is app-private,
+    //   so without root there is no tampering vector and the expensive 114MB
+    //   hash is skipped. A mismatch deletes the poisoned copy and re-extracts
+    //   from the signature-protected APK.
+    private static final String EXPECTED_ENGINE_SHA256 =
+            "8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5";
     // v1.2.1 round-10 (review-D P3): extracted magic number — grace period
     //   (ms) to wait after sending "stop" for a ponder search's bestmove to
     //   arrive before assuming the engine is idle. Was a bare `100` literal.
@@ -930,13 +942,18 @@ public class StockfishNative {
     private void stopAndWaitForBestmove(String callerTag) {
         // v18.6.0: Skip stop/wait entirely when engine is idle — avoids unnecessary
         // latch allocation and 1-second timeout when no search is running.
-        // v1.2.1: 同时清空 _discardingPonderBestmove 残留标志 —— 否则上一次
-        //   engineStop() 在 STATE_NONE 路径上设置的丢弃标志会持续到下一次
-        //   bestmove 到达时被错误地丢弃（TOCTOU 残留 bug 修复）。
+        // v1.2.3 round-52 (T6): no longer clears _discardingPonderBestmove here.
+        //   The v1.2.1 clear targeted stale-flag residue, but it also disarmed a
+        //   LEGITIMATELY armed flag whose stale bestmove was still in flight:
+        //   engineStop()/stopPonder() reset currentState to STATE_NONE before
+        //   their "stop"'s bestmove arrives, so a task entering via this fast
+        //   path cleared the flag and the in-flight stale bestmove then fell
+        //   through to handleBestMove under the NEXT search's state and
+        //   _lastEvalFen — a mislabeled stale result that passes even the
+        //   round-49/52 fen identity checks. Real residue is already cleared by
+        //   the latch-consumption path, the reader discard path, and
+        //   _resetEngineRuntimeState() on engine restart.
         if (currentState == STATE_NONE && !_isPondering) {
-            synchronized (_discardFlagLock) {
-                _discardingPonderBestmove = false;
-            }
             return;
         }
 
@@ -991,12 +1008,37 @@ public class StockfishNative {
                 //   value while this write was in flight, or vice versa.
                 synchronized (_stopLatchLock) {
                     if (_stopLatch == stopLatch) {
-                        // We still own it — bestmove hasn't arrived. Arm the discard.
-                        synchronized (_discardFlagLock) {
-                            _discardingPonderBestmove = true;
-                        }
+                        // We still own it — bestmove hasn't arrived within 1s.
                         _stopLatch = null;
-                        Log.w(TAG, callerTag + ": stopAndWaitForBestmove timed out — discarding late bestmove");
+                        // v1.2.3 round-52 (T6): distinguish the timeout cause.
+                        //   (a) Engine frozen mid-search: currentState is still
+                        //       a search state — a late bestmove IS coming, so
+                        //       the discard flag must be armed (as before).
+                        //   (b) The "stop" raced with NATURAL completion: the
+                        //       search finished on its own and its bestmove was
+                        //       already consumed by handleBestMove (which resets
+                        //       currentState to STATE_NONE) just before our latch
+                        //       was installed — the "stop" went to an IDLE engine
+                        //       and NO late bestmove exists. Arming the flag here
+                        //       would silently eat the NEXT search's legitimate
+                        //       bestmove: the new position's eval/AI move would
+                        //       never arrive (the round-52 "stale eval shown,
+                        //       then stuck analyzing" failure chain).
+                        //       engineStop()/stopPonder() arm the flag themselves
+                        //       when they reset state, so a genuinely in-flight
+                        //       stale bestmove is still discarded.
+                        int stateAtTimeout;
+                        synchronized (stateLock) {
+                            stateAtTimeout = currentState;
+                        }
+                        if (stateAtTimeout != STATE_NONE) {
+                            synchronized (_discardFlagLock) {
+                                _discardingPonderBestmove = true;
+                            }
+                            Log.w(TAG, callerTag + ": stopAndWaitForBestmove timed out — discarding late bestmove");
+                        } else {
+                            Log.d(TAG, callerTag + ": stopAndWaitForBestmove timed out but the search had already completed naturally — no discard needed");
+                        }
                         // v1.2.3 P2 (Round 17 P2-5): After a stop-timeout, check
                         //   whether the engine process is actually alive. A
                         //   frozen-but-alive engine will recover on its own (the
@@ -1297,6 +1339,12 @@ public class StockfishNative {
                 }
                 sendUciCommand("position fen " + fen);
                 sendUciCommand("go depth 22");
+                // v1.2.3 round-51 (BG-2): re-arm the EngineService partial wake lock
+                //   on every batch step dispatch. Steps arrive 5-15s apart, so the
+                //   30-minute lock can never lapse while a background analyze-all
+                //   batch is actually progressing (a 100+ step batch can exceed
+                //   30 min total). No-op when the service/wake lock doesn't exist.
+                EngineService.refreshWakeLock();
             }
         }, "engineEvalDeep");
     }
@@ -1322,11 +1370,29 @@ public class StockfishNative {
                 }
                 // Stop any in-flight gameplay search before changing options.
                 stopAndWaitForBestmove("engineEvalDeepBeginBatch");
-                synchronized (stateLock) {
-                    currentState = STATE_EVAL;
-                }
+                // v1.2.3 round-58 (ghost-EVAL fix): do NOT set
+                //   currentState = STATE_EVAL here. No search is running yet
+                //   — beginBatch only applies UCI options. The premature
+                //   EVAL state made the FIRST engineEvalDeep()'s
+                //   stopAndWaitForBestmove misread an IDLE engine as
+                //   "search in flight": it sent "stop", waited out the full
+                //   1s latch timeout, and — per the round-52 T6 rule
+                //   (state != STATE_NONE ⇒ a late bestmove is coming) — armed
+                //   _discardingPonderBestmove. No late bestmove existed, so
+                //   the armed flag ate the FIRST batch step's REAL bestmove
+                //   (exactly the failure the T6 comment predicted: "eval
+                //   never completes until the JS safety timer fires"). The
+                //   user saw: batch starts, ~60-75s of silence, step-0
+                //   skipped by the safety timer, then every later step fine
+                //   (the discard had reset state to NONE, so step 2+ took
+                //   the idle fast-path). engineEvalDeep() sets STATE_EVAL
+                //   itself immediately before "go depth 22" — the correct
+                //   moment.
                 forceFullStrength();
                 applyEvalModeOptions();
+                // v1.2.3 round-51 (BG-2): batch start — re-arm the partial wake lock
+                //   so background analysis starts with a full 30-minute budget.
+                EngineService.refreshWakeLock();
             }
         }, "engineEvalDeepBeginBatch");
     }
@@ -1342,9 +1408,76 @@ public class StockfishNative {
         _evalDeepBatchActive = false;
         _safeExecute(new Runnable() { // tag: engineEvalDeepEndBatch
             public void run() {
+                // v1.2.3 round-61 (R61-d): the round-51 (BG-1) Activity
+                //   notification below is now dispatched BEFORE the
+                //   engineReady gate. When the engine died mid-batch, the old
+                //   !engineReady early-return skipped the dispatch
+                //   entirely, so a deferred webView.onPause() was NEVER applied
+                //   and the WebView kept running JS timers in the background
+                //   until the next resume (a background battery leak — a
+                //   low-probability but real path). onEvalDeepBatchEnded() is
+                //   guarded and idempotent (it acts only when a pause was
+                //   actually skipped AND the app is still backgrounded), so
+                //   the dead-engine path and the never-started idempotent
+                //   call dispatch a harmless no-op. Posting before the engine
+                //   work below is also safe: the JS caller has already torn
+                //   the batch down when it calls engineEvalDeepEndBatch(), and
+                //   the engine-side stop/restore below never touches the
+                //   WebView (stopAndWaitForBestmove may block up to ~1s on
+                //   its latch — the notification merely lands that much
+                //   sooner; the deferred pause only fires while the app is
+                //   backgrounded, when no JS timer is waiting on it).
+                // v1.2.3 round-51 (BG-1): the batch just ended. If the host
+                //   Activity skipped webView.onPause() when the user
+                //   backgrounded the app mid-batch (MainActivity.onPause BG-1),
+                //   the skipped pause must be applied now so background
+                //   JS-timer churn ends WITH the batch — otherwise the WebView
+                //   would keep ticking (clock/notification throttle timers)
+                //   for as long as the app stays backgrounded. Routed through
+                //   the main Handler because engineEvalDeepEndBatch runs on
+                //   the engine executor thread and WebView.onPause() is
+                //   main-thread-only API. Fire-and-forget: the MainActivity
+                //   method is itself guarded and idempotent.
+                // round-53 (S6201): pattern matching for instanceof — the
+                //   pattern variable is effectively final, so the anonymous
+                //   Runnable captures it directly (no cast needed).
+                final Activity act = activityRef.get();
+                if (act instanceof MainActivity mainActivity) {
+                    mainHandler.post(new Runnable() {
+                        public void run() {
+                            try {
+                                mainActivity.onEvalDeepBatchEnded();
+                            // round-53 (S1181): catch Exception, not Throwable —
+                            //   an Error (OOM, ThreadDeath) must not be swallowed
+                            //   here; onEvalDeepBatchEnded only raises RuntimeExceptions
+                            //   in practice (WebView state guards), which Exception covers.
+                            } catch (Exception t) {
+                                Log.w(TAG, "onEvalDeepBatchEnded dispatch failed", t);
+                            }
+                        }
+                    });
+                }
                 if (!engineReady) return;
-                // Stop any in-flight eval search before restoring options.
-                stopAndWaitForBestmove("engineEvalDeepEndBatch");
+                // v1.2.3 round-58 (ghost-EVAL fix, mirror): only run the
+                //   stop-and-wait when a search COULD be in flight. After a
+                //   normally-completed last step the state is already
+                //   STATE_NONE (handleBestMove resets it); calling
+                //   stopAndWaitForBestmove then would send "stop" to an IDLE
+                //   engine, time out after 1s, see state == STATE_EVAL (set
+                //   below? no — but beginBatch used to) and arm the discard
+                //   flag — eating the NEXT legitimate eval's bestmove. With
+                //   beginBatch no longer setting the ghost state, STATE_EVAL
+                //   here means a search genuinely IS in flight (the batch
+                //   ended mid-step), so the stop is exactly right. When the
+                //   state is already NONE, skip straight to the option
+                //   restore — no stray "stop", no discard flag.
+                boolean searchMaybeInFlight;
+                synchronized (stateLock) {
+                    searchMaybeInFlight = (currentState != STATE_NONE) || _isPondering;
+                }
+                if (searchMaybeInFlight) {
+                    stopAndWaitForBestmove("engineEvalDeepEndBatch");
+                }
                 synchronized (stateLock) {
                     currentState = STATE_NONE;
                 }
@@ -1353,6 +1486,21 @@ public class StockfishNative {
                 applySettings();
             }
         }, "engineEvalDeepEndBatch");
+    }
+
+    /**
+     * v1.2.3 round-51 (BG-1): whether an analyze-all eval batch is currently
+     *   active (between engineEvalDeepBeginBatch and engineEvalDeepEndBatch).
+     *   Read by MainActivity.onPause() to decide whether webView.onPause()
+     *   must be deferred — pausing a WebView freezes ALL its JS timers
+     *   (setTimeout/setInterval), which would stall the batch's
+     *   _reviewAnalyzeAdvance setTimeout(0) chain and the 60s per-step
+     *   safety net until the app returns to the foreground.
+     *   NOT @JavascriptInterface — same-package Java caller only.
+     *   Thread-safety: plain volatile read (the field is volatile).
+     */
+    public boolean isEvalDeepBatchActive() {
+        return _evalDeepBatchActive;
     }
 
     /**
@@ -2360,9 +2508,18 @@ public class StockfishNative {
                     _discardingPonderBestmove = false;
                 }
                 if (_shouldDiscard) {
-                    synchronized (stateLock) {
-                        currentState = STATE_NONE;
-                    }
+                    // v1.2.3 round-52 (T6): no longer forces currentState to
+                    //   STATE_NONE here. Every armer of the discard flag either
+                    //   already set STATE_NONE eagerly (engineStop / stopPonder /
+                    //   the ponder-stop branch above), or is a stopAndWait
+                    //   timeout whose caller ALWAYS establishes a fresh state
+                    //   immediately after (engineGo*/engineEval*/BeginBatch set
+                    //   theirs; EndBatch sets STATE_NONE itself). The
+                    //   unconditional write could clobber a NEW search's state
+                    //   when this stale bestmove arrived after the next search
+                    //   had already started — its info lines would then be
+                    //   dropped and its bestmove misrouted (eval never
+                    //   completes until the JS safety timer fires).
                     Log.d(TAG, "Discarding stale bestmove from stopped ponder (stopAndWaitForBestmove)");
                     return;
                 }
@@ -2384,6 +2541,18 @@ public class StockfishNative {
             if (line.startsWith("info")) {
                 synchronized (stateLock) {
                     if (currentState == STATE_NONE) return;
+                }
+                // v1.2.3 round-52 (T6): while a stale bestmove is pending
+                //   discard, every arriving info line still belongs to the
+                //   STOPPED search — UCI output is strictly ordered, so the
+                //   stopped search's bestmove (which consumes the flag) always
+                //   precedes any output of a later search. Processing such
+                //   lines would overwrite the NEW search's _storedEvalCp /
+                //   _lastEvalDepth with old-position data, and the result would
+                //   then carry the NEW fen — passing even the round-49/52 fen
+                //   identity checks. Skip until the stale bestmove arrives.
+                synchronized (_discardFlagLock) {
+                    if (_discardingPonderBestmove) return;
                 }
                 processInfoLine(line);
             }
@@ -2743,7 +2912,23 @@ public class StockfishNative {
                 // search isn't distorted. Use async setoption (no wait) — the next
                 // search's stopAndWaitForBestmove + isready handshake ensures the
                 // options are applied before the new search starts.
-                restoreGameplayOptions();
+                // v1.2.3 round-51 (BUG-1): SKIP the restore while an analyze-all
+                //   eval batch is active. engineEvalDeepBeginBatch() sets
+                //   Contempt=0 / MultiPV=1 / UCI_AnalyseMode=true exactly once for
+                //   the whole batch, and the per-step engineEvalDeep() deliberately
+                //   skips re-applying them (the round-44 P1 optimization). But THIS
+                //   unconditional per-bestmove restore undid those options after
+                //   EVERY step — from step 2 onward each batch search ran with the
+                //   gameplay Contempt=24 (draw-avoidance bias) and the user's
+                //   MultiPV (>1 splits search effort, reducing depth), and
+                //   UCI_AnalyseMode=false — exactly the distortion the batch hook
+                //   design was supposed to prevent. engineEvalDeepEndBatch()
+                //   already restores gameplay options via applySettings() on every
+                //   batch-termination path, so the restore here is only needed for
+                //   single (non-batch) evals.
+                if (!_evalDeepBatchActive) {
+                    restoreGameplayOptions();
+                }
                 break;
         }
 
@@ -4453,6 +4638,70 @@ public class StockfishNative {
     // ===================== ENGINE BINARY EXTRACTION HELPERS =====================
 
     /**
+     * v1.2.3 round-56 (SEC-01①): SHA-256 integrity check of an extracted engine
+     * binary against {@link #EXPECTED_ENGINE_SHA256}. minSdk 23 has no
+     * HexFormat, so the digest is hex-encoded manually; comparison goes through
+     * MessageDigest.isEqual (constant-time) on the ASCII hex bytes.
+     *
+     * @return true iff the file's SHA-256 matches the pinned hash
+     */
+    private boolean verifyEngineSha256(File file) {
+        java.security.MessageDigest md;
+        try {
+            md = java.security.MessageDigest.getInstance("SHA-256");
+        } catch (java.security.NoSuchAlgorithmException e) {
+            // SHA-256 is guaranteed on every Android runtime — unreachable in
+            // practice; fail CLOSED here (the fresh-extract caller treats false
+            // as reject), because a runtime without SHA-256 is not a supported
+            // environment anyway.
+            Log.e(TAG, "SHA-256 unavailable", e);
+            return false;
+        }
+        try (FileInputStream in = new FileInputStream(file)) {
+            byte[] buffer = new byte[262144];
+            int len;
+            while ((len = in.read(buffer)) > 0) {
+                md.update(buffer, 0, len);
+            }
+        } catch (Throwable e) {
+            Log.e(TAG, "Engine hash read failed: " + file.getAbsolutePath(), e);
+            return false;
+        }
+        byte[] digest = md.digest();
+        StringBuilder hex = new StringBuilder(digest.length * 2);
+        for (byte b : digest) {
+            hex.append(Character.forDigit((b >> 4) & 0xF, 16));
+            hex.append(Character.forDigit(b & 0xF, 16));
+        }
+        boolean match = java.security.MessageDigest.isEqual(
+                hex.toString().getBytes(java.nio.charset.StandardCharsets.US_ASCII),
+                EXPECTED_ENGINE_SHA256.getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+        if (!match) {
+            Log.e(TAG, "Engine SHA-256 mismatch: " + file.getAbsolutePath()
+                    + " actual=" + hex);
+        }
+        return match;
+    }
+
+    /**
+     * v1.2.3 round-56 (SEC-09): cached engine copies live in the app-private
+     * filesDir, which is only writable by our own process or by root. Hash-
+     * verifying the cached copy therefore only adds value on rooted devices;
+     * elsewhere the length+ELF gate is sufficient and the 114MB hash is wasted
+     * work on every cold start. RootDetector caches its result process-wide.
+     * Fail-open on detector errors — consistent with the app's documented
+     * advisory-only root posture (the fresh-extract path still always verifies).
+     */
+    private boolean shouldVerifyCachedEngine() {
+        try {
+            return RootDetector.isDeviceRooted(context);
+        } catch (Throwable t) {
+            Log.w(TAG, "Root detection failed; skipping cached-engine hash check", t);
+            return false;
+        }
+    }
+
+    /**
      * Extract engine binary from APK's lib/ directory to filesDir.
      * Fallback for OEM ROMs that skip extraction of large native libraries during install.
      */
@@ -4461,11 +4710,20 @@ public class StockfishNative {
 
         // FIX: Also verify ELF header on cached file to prevent using corrupted extraction
         if (destFile.exists() && destFile.length() > MIN_ENGINE_BINARY_SIZE && isElfFile(destFile)) {
-            Log.i(TAG, "Using previously extracted engine: " + destFile.getAbsolutePath()
-                    + " size=" + destFile.length());
-            makeExecutable(destFile);
-            currentEnginePath = destFile.getAbsolutePath();
-            return destFile;
+            // v1.2.3 round-56 (SEC-01①/SEC-09): on rooted devices the cached
+            //   copy must additionally pass the pinned SHA-256 check; a
+            //   mismatch deletes the poisoned file and falls through to a
+            //   fresh, always-verified extraction.
+            if (shouldVerifyCachedEngine() && !verifyEngineSha256(destFile)) {
+                Log.e(TAG, "Cached engine failed SHA-256 on rooted device — re-extracting");
+                if (!destFile.delete()) Log.w(TAG, "Failed to delete tampered engine: " + destFile.getAbsolutePath());
+            } else {
+                Log.i(TAG, "Using previously extracted engine: " + destFile.getAbsolutePath()
+                        + " size=" + destFile.length());
+                makeExecutable(destFile);
+                currentEnginePath = destFile.getAbsolutePath();
+                return destFile;
+            }
         }
 
         // Try extracting from assets first (universal APK compatibility)
@@ -4536,9 +4794,18 @@ public class StockfishNative {
 
             if (destFile.exists() && destFile.canRead() && destFile.length() > MIN_ENGINE_BINARY_SIZE) {
                 if (isElfFile(destFile)) {
-                    Log.i(TAG, "Engine extracted successfully, size=" + destFile.length());
-                    currentEnginePath = destFile.getAbsolutePath();
-                    return destFile;
+                    // v1.2.3 round-56 (SEC-01①): fresh extractions ALWAYS pass
+                    //   the pinned SHA-256 gate — a truncated write keeps the
+                    //   ELF magic (file head) and can exceed MIN_ENGINE_BINARY_SIZE,
+                    //   so length+ELF alone cannot prove integrity.
+                    if (verifyEngineSha256(destFile)) {
+                        Log.i(TAG, "Engine extracted successfully, size=" + destFile.length()
+                                + ", SHA-256 verified");
+                        currentEnginePath = destFile.getAbsolutePath();
+                        return destFile;
+                    }
+                    Log.e(TAG, "Extracted engine failed SHA-256 verification — deleting");
+                    if (!destFile.delete()) Log.w(TAG, "Failed to delete: " + destFile.getAbsolutePath());
                 } else {
                     Log.e(TAG, "Extracted engine failed ELF header verification");
                     if (!destFile.delete()) Log.w(TAG, "Failed to delete: " + destFile.getAbsolutePath());
@@ -4576,11 +4843,18 @@ public class StockfishNative {
 
         // FIX: Also verify ELF header on cached file to prevent using corrupted extraction
         if (destFile.exists() && destFile.length() > MIN_ENGINE_BINARY_SIZE && isElfFile(destFile)) {
-            Log.i(TAG, "Using previously asset-extracted engine: " + destFile.getAbsolutePath()
-                    + " size=" + destFile.length());
-            makeExecutable(destFile);
-            currentEnginePath = destFile.getAbsolutePath();
-            return destFile;
+            // v1.2.3 round-56 (SEC-01①/SEC-09): same rooted-device SHA-256 gate
+            //   as extractEngineFromApk's cached path.
+            if (shouldVerifyCachedEngine() && !verifyEngineSha256(destFile)) {
+                Log.e(TAG, "Cached asset-extracted engine failed SHA-256 on rooted device — re-extracting");
+                if (!destFile.delete()) Log.w(TAG, "Failed to delete tampered engine: " + destFile.getAbsolutePath());
+            } else {
+                Log.i(TAG, "Using previously asset-extracted engine: " + destFile.getAbsolutePath()
+                        + " size=" + destFile.length());
+                makeExecutable(destFile);
+                currentEnginePath = destFile.getAbsolutePath();
+                return destFile;
+            }
         }
 
         String assetPath = "engines/" + ENGINE_LIB_NAME;
@@ -4632,9 +4906,16 @@ public class StockfishNative {
 
         if (destFile.exists() && destFile.canRead() && destFile.length() > MIN_ENGINE_BINARY_SIZE) {
             if (isElfFile(destFile)) {
-                Log.i(TAG, "Engine extracted from assets successfully, size=" + destFile.length());
-                currentEnginePath = destFile.getAbsolutePath();
-                return destFile;
+                // v1.2.3 round-56 (SEC-01①): fresh extractions ALWAYS pass the
+                //   pinned SHA-256 gate (see extractEngineFromApk).
+                if (verifyEngineSha256(destFile)) {
+                    Log.i(TAG, "Engine extracted from assets successfully, size=" + destFile.length()
+                            + ", SHA-256 verified");
+                    currentEnginePath = destFile.getAbsolutePath();
+                    return destFile;
+                }
+                Log.e(TAG, "Asset-extracted engine failed SHA-256 verification — deleting");
+                if (!destFile.delete()) Log.w(TAG, "Failed to delete: " + destFile.getAbsolutePath());
             } else {
                 Log.e(TAG, "Asset-extracted engine failed ELF verification — deleting");
                 if (!destFile.delete()) Log.w(TAG, "Failed to delete: " + destFile.getAbsolutePath());
@@ -4786,13 +5067,18 @@ public class StockfishNative {
 
     @JavascriptInterface
     public String listFiles(String dirPath) {
-        // v1.2.3 round-49 (review-4 P3-6): same sandbox gate as writeTextFile/
-        //   readTextFile — without it JS could enumerate names/sizes of any
-        //   process-readable directory. Returns the helper's failure-mode
-        //   value ("[]") so the JS file browser renders an empty listing
-        //   instead of throwing on JSON.parse(null).
-        if (!_jsBridgeGateway.isPathInSandbox(dirPath)) {
-            Log.w(TAG, "listFiles: path rejected by sandbox check");
+        // v1.2.3 round-49 (review-4 P3-6): sandbox gate — without it JS could
+        //   enumerate names/sizes of any process-readable directory. Returns
+        //   the helper's failure-mode value ("[]") so the JS file browser
+        //   renders an empty listing instead of throwing on JSON.parse(null).
+        // v1.2.3 round-54 (PR56 CR#12): isPathInSandbox → isPathBrowsable.
+        //   getDefaultPaths() hands the JS browser external-files/Download/
+        //   Documents as roots — outside the strict sandbox on API 29+, so the
+        //   browser always showed "[]" there. Browsing (name/size listing) is
+        //   widened to those whitelisted roots; read/write stay sandbox-gated
+        //   (settings import from public dirs routes through the SAF picker).
+        if (!_jsBridgeGateway.isPathBrowsable(dirPath)) {
+            Log.w(TAG, "listFiles: path rejected by browse gate");
             return "[]";
         }
         return _fileIoHelper.listFiles(dirPath);
@@ -4807,11 +5093,24 @@ public class StockfishNative {
     public String getParentPath(String path) {
         // v1.2.3 round-49 (review-4 P3-6): sandbox gate (see listFiles above).
         //   Returns the helper's failure-mode value ("") on rejection.
-        if (!_jsBridgeGateway.isPathInSandbox(path)) {
-            Log.w(TAG, "getParentPath: path rejected by sandbox check");
+        // v1.2.3 round-54 (PR56 CR#12): same isPathBrowsable widening as
+        //   listFiles — navigating UP from a browsable root must work too.
+        if (!_jsBridgeGateway.isPathBrowsable(path)) {
+            Log.w(TAG, "getParentPath: path rejected by browse gate");
             return "";
         }
-        return _fileIoHelper.getParentPath(path);
+        String parent = _fileIoHelper.getParentPath(path);
+        // v1.2.3 round-55 (PR56 CR follow-up): gate the RESOLVED parent too.
+        //   At a whitelisted root (files dir / external-files / Download /
+        //   Documents) the raw parent escapes the browsable set (e.g.
+        //   /storage/emulated/0), so handing it out made the JS browser
+        //   navigate into a guaranteed-"[]" listing. Returning "" makes the
+        //   JS hide the ".." button / close the dialog instead (all three
+        //   call sites already treat "" as "no parent").
+        if (!parent.isEmpty() && !_jsBridgeGateway.isPathBrowsable(parent)) {
+            return "";
+        }
+        return parent;
     }
 
     // ===================== SAF FILE PICKER (IMPORT) =====================

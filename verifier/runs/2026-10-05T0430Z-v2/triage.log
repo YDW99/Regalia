@@ -1,0 +1,20 @@
+PASS F1a Promise.all has rejection handler (_finishAnim twice)
+PASS F2a tablebase.js void importPGNAsync
+PASS F2b ui-interactions.js void importPGNAsync (stats import-back)
+PASS F2c ui-interactions.js void importPGNAsync (paste import)
+PASS F2d no remaining bare importPGNAsync( call without void/.then receiver
+PASS F3a S6582 reviewStates?.length optional chain
+PASS F3b S7741 direct undefined comparison for _reviewEvalCache
+PASS F3c S4138 T5 ring uses for-of
+PASS F3d T5 ring logic intact (states identity + fen match + step bounds)
+PASS F4a S6201 pattern instanceof MainActivity
+PASS F4b S1181 catch (Exception) at batch-end dispatch
+PASS F5a onCreate contains no direct wakeLock write
+PASS F5b onDestroy contains no direct wakeLock write
+PASS F5c static synchronized acquire helper present
+PASS F5d static synchronized release helper present
+PASS F5e refreshWakeLock now synchronized
+PASS F5f wakeLock field still static volatile (BG-2 design kept)
+PASS F6a _activityResumed kept + S116-kept note
+PASS F6b _webViewPausedForBatch kept
+===== RESULT: 19 passed, 0 failed =====

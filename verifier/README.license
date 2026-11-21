@@ -1,0 +1,86 @@
+v1.2.3 round-56 (2026.10.5): v1 harness module list synced to build-chess.py.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - v1/eval-stale-harness.js (AGPL v3 harness): MODULES updated to the
+    10-module list (worker-pool.js removed from the project as
+    zero-caller dead code) — mirrors build-chess.py; all 29 assertions
+    still pass.
+  - v2 / v3 harnesses: unchanged (v3's worker-pool reference is an
+    absence assertion, still valid).
+  - License classification: all files unchanged.
+
+v1.2.3 round-55 (2026.10.5): v3 cwd-independence + round-55 assertions (34 total).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - v3/round54-pr56-triage.js: read() now resolves from __dirname (like
+    v1/v2) instead of process.cwd() — CodeRabbit PR56 follow-up: launched
+    from another directory, every file reported MISSING. G2a window
+    widened (900→1600) for the round-55 comment blocks; G2c rewritten for
+    the single-counter contract (exactly one statement-form _aiRetryCount++
+    remains — doAIMove's); G2d added (doAIMove keeps its entry increment +
+    >=3 ai_timeout give-up); H1a added (getParentPath re-gates the
+    resolved parent); H2a/H2b added (no "(AGPL v3)" tags on GPL-classified
+    files in either README.license ledger); H3 added (__dirname
+    resolution). 29 → 34 assertions, all PASS (also verified from a
+    foreign cwd).
+  - License-audit follow-up: v3 strengthened to 37 assertions — H2c (no
+    live "(AGPL v3)" tags on StatsActivity/HapticManager/index.html.tpl
+    in NOTICE), H2d (no "(AGPL v3)" tags on game-logic.js/pgn-standard.js
+    in the src/main + src/main/assets ledgers), H2e (README.md round-55
+    section + GPL/AGPL classification lists). 37/37 PASS (incl. foreign
+    cwd) — runs/2026-10-05T0900Z-v3/.
+  - runs/2026-10-05T0630Z-v3/: triage.log + regression logs + RESULT.md.
+  - License classification: unchanged (AGPL v3 harness).
+
+v1.2.3 round-54b (2026.10.5): v3 assertions strengthened (29 total).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - v3/round54-pr56-triage.js: G4a updated to the direct-comparison form
+    (_reviewAnalyzeStep!==undefined); G6d added (no dangling Javadoc —
+    every /** attaches to a declaration); G6e added (no typeof
+    _reviewAnalyzeStep guard remains). 27 → 29 assertions, all PASS.
+  - runs/2026-10-05T0530Z-v3/: triage.log + regression logs + RESULT.md.
+  - License classification: unchanged (AGPL v3 harness).
+
+v1.2.3 round-54 (2026.10.5): v3 added — PR #56 AI-review triage acceptance checks.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - v3/round54-pr56-triage.js (AGPL v3, AI-GEN: AI assisted): 27
+    structural assertions (G1-G9) covering build.gradle fallback-key
+    detection, engineGo retry branches, Chess960 sentinel, batch
+    notification count, openStatsPage re-check, stats.html en-passant +
+    error callback, waitForBounded API gate, CR-aware line counting,
+    non-reference-counted wake lock, and the isPathBrowsable wiring.
+  - v1/eval-stale-harness.js: D3a added — the batch-completion flag is
+    now asserted (was read-and-discarded); 29 assertions total.
+  - v2/round53-sonar-triage.js: F2d/F4b tightened per review (dual-file
+    scan, void/declaration-only prefixes; try-block-scoped catch check).
+  - runs/2026-10-05T0500Z-v3/: triage.log + regression logs + RESULT.md.
+  - License classification: unchanged (AGPL v3 harness).
+
+v1.2.3 round-53 (2026.10.5): v2 added — SonarCloud PR #56 triage acceptance checks.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - v2/round53-sonar-triage.js (AGPL v3, AI-GEN: AI assisted): 19
+    structural assertions over the round-53 tree — S9383 rejection
+    handler + void markers, S6582/S7741/S4138 ai-bridge fixes, S6201
+    pattern instanceof, S1181 catch-Exception, S2696 static-synchronized
+    wake-lock helpers (and no residual instance writes), S116-kept
+    markers. 19/19 pass; the v1 harness still passes 28/28.
+  - License classification: v1 harness AGPL v3 (loads AGPL-licensed
+    modules); v2 structural checker AGPL v3; logs and RESULT.md are
+    project documentation (same terms as the project docs).
+
+v1.2.3 round-52 (2026.10.5): directory created — round-52 acceptance verifier.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - README.md: append-only index of verifier versions (one entry per
+    version; older entries are never edited — corrections go in a new
+    version entry).
+  - v1/eval-stale-harness.js (AGPL v3, AI-GEN: AI assisted): Node vm harness
+    that loads the 11 chess.src modules with browser/AndroidBridge stubs
+    and asserts the round-52 stale-eval behavior (28 assertions): late
+    previous-position callbacks are dropped, review-mode stale callbacks
+    are cached under the MATCHED step with White-POV sign re-derivation,
+    the legacy 7-arg callback path still works, batch analyze-all is
+    unaffected, and duplicate callbacks are idempotent.
+  - runs/<timestamp>-v<version>/: timestamped run artifacts (harness logs +
+    RESULT.md). Runs are append-only records; a re-run creates a new
+    timestamped directory.
+  - License classification: harness AGPL v3 (loads AGPL-licensed modules);
+    logs and RESULT.md are project documentation (same terms as the
+    project docs).

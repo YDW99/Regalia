@@ -1,3 +1,143 @@
+# Privacy Policy — Regalia
+
+## Round-56 changes (2026-10-05)
+
+**No new permissions, no new network endpoints, no new data collection.**
+This round implements a first-principles code review (bug fixes,
+robustness, dead-code removal, documentation). Privacy-relevant notes:
+
+- **Clipboard disclosure (documentation completeness — behavior
+  unchanged):** the app READS the clipboard only on explicit user action
+  (paste PGN / paste FEN), and WRITES to it only on explicit user action
+  (copy FEN / copy PGN) or as an explicit, toast-announced fallback when
+  a statistics-page payload exceeds the Binder transfer budget (the PGN
+  text is copied so nothing is lost). Clipboard content never leaves the
+  device and is never read in the background.
+- **Tablebase FEN (unchanged, restated):** the only network access
+  remains the optional Lichess tablebase probe
+  (`tablebase.lichess.ovh`, certificate-pinned); on explicit user request
+  it sends only the queried board position (FEN string) — no account, no
+  identifiers, no game metadata. See Network Access below.
+- Settings-file reads are now capped at 1 MB with an explicit
+  `too_large` error (robustness; the file browser's path gates are
+  unchanged from round-54).
+- The Stockfish engine binary's SHA-256 is verified at runtime on
+  extraction (and on cached reuse for rooted devices) — a local
+  integrity check; no data leaves the device.
+- Release builds strip verbose/debug/info/warn logs (ProGuard), reducing
+  what an attached debugger could observe; error logs are kept. No
+  logging ever leaves the device.
+- The removed `worker-pool.js` was zero-caller dead code; its removal
+  changes no data flow. All other changes are local correctness fixes
+  with no privacy impact.
+
+## Round-54b changes (2026-10-05)
+
+**No new permissions, no new network endpoints, no new data collection.**
+SonarCloud follow-up on the round-54 tree: a Javadoc reorder
+(EngineProcessManager) and a typeof-guard simplification (ai-bridge.js) —
+both are pure code-quality fixes with no privacy impact. Two further
+findings triaged as false positives (an explanatory comment flagged as
+"commented-out code"; a pre-existing catch that already has a fallback
+assignment).
+
+## Round-54 changes (2026-10-05)
+
+**No new permissions, no new network endpoints, no new data collection.**
+This round triages the AI-reported findings on GitHub PR #56 (CodeRabbit
+/ GitHub Advanced Security). Privacy-relevant notes:
+
+- The settings file browser (ai-bridge.js + Java bridge) is now
+  explicitly scoped: directory LISTING is allowed under app-private dirs
+  plus the public Download/Documents roots (a new isPathBrowsable gate),
+  while file READ/WRITE remains restricted to the strict internal sandbox
+  (isPathInSandbox). Files in public storage are imported via the SAF
+  system picker (user-initiated, per-file grant) — no broad storage
+  access is requested or used.
+- The PGN import readers (SafPickerHelper / StatsActivity) now count
+  CR-only line endings toward the 5000-line cap — a robustness fix, no
+  data-handling change.
+- A failed stats-page PGN import now surfaces an explicit error toast
+  instead of failing silently — UI feedback only, no data change.
+- The engine wake lock is now non-reference-counted so a single release
+  always frees it — battery/behavior hygiene, no data change.
+- All other changes are local correctness fixes (AI-move retry on engine
+  dispatch failure, Chess960 dialog sentinel, en-passant FEN validation,
+  version-fallback warning) with no privacy impact.
+
+## Round-53 changes (2026-10-05)
+
+**No new permissions, no new network endpoints, no new data collection.**
+This round is a SonarCloud PR #56 triage (9 style/robustness fixes, 2
+documented false positives); privacy-relevant notes:
+
+- All changes are local code-quality fixes: a Promise rejection handler
+  (game-logic.js), `void` markers on fire-and-forget imports, optional
+  chaining / direct undefined comparison / for-of (ai-bridge.js),
+  static-synchronized wake-lock helpers (EngineService.java), pattern
+  instanceof + catch-Exception (StockfishNative.java), and comment-only
+  annotations (MainActivity.java). No data flows, storage, IPC, network,
+  or permission behavior changed.
+- verifier/v2 adds a structural source-checker (reads project files,
+  asserts patterns); it executes no engine and touches no user data, and
+  is not shipped in the APK.
+
+## Round-52 changes (2026-10-05)
+
+**No new permissions, no new network endpoints, no new data collection.**
+This round fixes a stale engine-evaluation race; privacy-relevant notes:
+
+- **JS fen-identity guard (T5)**: the eval pipeline now tags each
+  dispatched request with the position's fen string and keeps an 8-entry
+  in-memory ring of recent dispatches (`_evalRecentDispatches`) so stale
+  callbacks can be dropped or filed under the correct review step. The
+  ring holds only fen strings / step indices / array references for the
+  current game session, lives purely in JS memory, and is never persisted,
+  exported, or transmitted. No storage, PGN-export, or telemetry paths
+  changed.
+- **Java stop/bestmove hardening (J1-J4)**: changes are confined to
+  `StockfishNative.java`'s in-process engine state machine (discard-flag
+  arming conditions, info-line gating, state clobbering removal). No IPC,
+  file, or network behavior changed.
+- **verifier/ (new)**: a build-time/dev-time acceptance harness (Node vm)
+  that runs the bundled JS modules with stubbed browser/bridge objects.
+  It executes no engine, touches no user data, and is not shipped in the
+  APK.
+
+## Round-51 changes (2026-09-09)
+
+**No new permissions, no new network endpoints, no new data collection.**
+Privacy-relevant items from this BACK-navigation + background-analysis round:
+
+- **Deferred `webView.onPause()` during analyze-all** (BG-1): while an eval
+  batch is active, `MainActivity.onPause()` skips pausing the WebView so
+  its JS timers (the batch's step chain) keep running in the background.
+  The skipped pause is applied when the batch ends
+  (`onEvalDeepBatchEnded()`). No data flows change — the WebView keeps
+  loading only local asset content; the batch talks to the engine
+  subprocess via the existing in-process bridge.
+- **Wake-lock re-arm per batch step** (BG-2): `EngineService.refreshWakeLock()`
+  re-arms the existing PARTIAL_WAKE_LOCK (WAKE_LOCK permission was already
+  declared) on every analyze-all step dispatch, so background batches
+  longer than the previous 30-minute lock timeout no longer stall. The
+  foreground-service notification (POST_NOTIFICATIONS, already declared)
+  now shows live batch progress (k/N) and the completion state — status
+  text only, no game data.
+- **Root-level exit-confirmation dialog** (BACK-A): a JS-rendered 退出/取消
+  dialog calls the existing `AndroidBridge.exitApp()` bridge method (no new
+  bridge surface). The exit path flushes state exactly like the existing
+  BACK-finish path (no new persistence).
+- **Batch-eval options bug fix** (BUG-1, `StockfishNative.java`):
+  `restoreGameplayOptions()` is skipped while a batch is active so the
+  engine's objective-eval UCI options survive across steps. Pure engine-
+  option handling; no data flow.
+- The BACK routing reorder (file-browser check above the header dialogs)
+  and the 3 new i18n keys are UI-only and privacy-neutral.
+
+The permission table below remains accurate (8 declared permissions,
+unchanged); the foreground service (specialUse) and its notification are
+unchanged in kind — only the notification's status text is richer.
+
 ## Round-45~49 changes (2026-09-06)
 
 **No new permissions, no new network endpoints, no new data collection.**
@@ -454,7 +594,12 @@ permitted network origin — plus `object-src 'none'`, `form-action 'none'` and
 
 ## Local Data
 
-Game data (board positions, move records, engine settings, PGN cache entries, eval cache) is stored locally on the device using browser localStorage, Android SharedPreferences, and app-private files. The on-device storage locations are:
+Game data (board positions, move records, engine settings, PGN cache entries, eval cache) is stored locally on the device using browser localStorage, Android SharedPreferences, and app-private files.
+
+**Clipboard:** read only on explicit user action (paste PGN / paste FEN);
+written only on explicit user action (copy FEN / copy PGN) or as an
+explicit, toast-announced fallback when a statistics-page payload exceeds
+the Binder transfer budget. Clipboard content never leaves the device. The on-device storage locations are:
 
 - `/data/data/com.Regalia/app_webview/Local Storage/` — WebView localStorage (may be wiped by aggressive OEM memory managers like Xiaomi HyperOS 3)
 - `/data/data/com.Regalia/shared_prefs/RegaliaEngine.xml` — SharedPreferences (engine settings, language preference, persistent kv_* fallback store)
@@ -709,16 +854,11 @@ The Stockfish 18 engine binary (`libstockfish.so`) is shipped as an arm64-v8a na
 
 - **ELF magic check** (first 4 bytes = `\x7fELF`) — guards against corrupted or non-ELF files.
 - **Minimum-size check** (5 MB; lowered from 50 MB in round-44, A16) — the genuine Stockfish 18 binary is ~114 MB; truncated or stub files are rejected.
+- **SHA-256 integrity check** (round-56, SEC-09/SEC-011) — the known-good digest `8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5` is pinned in code as `EXPECTED_ENGINE_SHA256` and verified at runtime: **every fresh extraction is always hashed**, and a **cached copy is re-hashed on reuse only on rooted devices** (via `RootDetector`; on non-rooted devices the app-private `filesDir` copy can only have been written by our own process, so the ELF + size gate is sufficient and the 114 MB re-hash is skipped as wasted work). All checks are purely local — no data leaves the device.
 
-The known-good SHA-256 of the official Stockfish 18 arm64-v8a-dotprod binary
-(`8f7116d3f1a7004a6581d4fb0c1ff891ce095bab6d45e52f1578897cf23b61b5`) is
-documented in BUILDING.md and is verified three-way (source file / deployed
-jniLibs copy / APK-embedded library) in every release round; the app itself
-performs the ELF + size checks above at runtime (this section was corrected
-in round-43 — it previously claimed a baked-in SHA-256 runtime check that
-the current code does not perform).
+If any check fails, the engine refuses to start (a tampered/mismatched cached copy is deleted and falls through to a fresh, always-verified extraction) and reports the error to the user via the UI. The binary is never downloaded at runtime; it is statically embedded in the APK.
 
-If either check fails, the engine refuses to start and reports the error to the user via the UI. The binary is never downloaded at runtime; it is statically embedded in the APK.
+_History: this section was corrected in round-43 (it previously claimed a baked-in SHA-256 runtime check that the then-current code did not perform) and updated in round-56 when the runtime SHA-256 verification described above was actually wired in._
 
 ## v1.2.3 round-13 refinement (2026.7.16)
 

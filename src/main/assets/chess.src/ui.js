@@ -1201,6 +1201,24 @@ function _buildReviewMovesInnerHTML(startIdx,endIdx){
   return h;
 }
 
+// v1.2.3 round-57 (batch UX fix): lightweight move-list refresh used while an
+//   analyze-all batch runs. Rebuilds ONLY #reviewMovesList's innerHTML via
+//   _buildReviewMovesInnerHTML (the single source of truth for row rendering)
+//   so each freshly-cached eval — delta + classification label — appears the
+//   moment its step completes. Previously the rows waited for the
+//   every-10-steps full render() in _reviewAnalyzeAdvance, so the list lagged
+//   up to 10 steps behind the chart. Scroll position is preserved across the
+//   swap. Cost is one O(n) string build + one innerHTML write per step —
+//   trivial next to a multi-second engine search, and far cheaper than the
+//   full-DOM render() that Issue 30 root-cause A flagged for memory pressure.
+function _refreshReviewMoveListEvals(){
+  const ml=document.getElementById('reviewMovesList');
+  if(!ml)return;
+  const st=ml.scrollTop;
+  ml.innerHTML=_buildReviewMovesInnerHTML(0,moveRecords.length);
+  ml.scrollTop=st;
+}
+
 // v1.1.0 Phase 54 rev14: Virtual list scroll-driven refresh functions removed.
 //   _suppressScrollRefresh, _refreshReviewMovesOnly, _onReviewMovesScroll,
 //   _forceReviewWindowToStep were all dead code after RV_VIRTUAL_THRESHOLD=Infinity.
@@ -2027,13 +2045,10 @@ function capturedPiecesHtml(board, pieceColor, playerColor, splitAt) {
 // pieces exactly (same color, stroke, glow). The icon is wrapped in a gold
 // gradient border (unchanged in both modes) — only the king symbol and its
 // piece styling change with the theme.
-// _KING_PIECE_STYLE: shared piece-styling constants for _hdrKingIconHTML
-// (ui.js) and _loadingKingIconHTML (ai-bridge.js). Extracted to avoid
-// duplicating the color/stroke/shadow values across two functions.
-const _KING_PIECE_STYLE={
-  white:{color:'#E8E8F0',stroke:'rgba(30,15,0,.85)',shadow:'rgba(30,15,0,.55)',sym:'\u2654'},
-  black:{color:'#1A1A2E',stroke:'rgba(255,230,150,.85)',shadow:'rgba(255,230,150,.55)',sym:'\u265A'}
-};
+// _KING_PIECE_STYLE lives in game-logic.js (shared constants region, first
+// module in the bundle) since round-60 — see F-1: when it was declared here
+// (last module), ai-bridge.js's top-level _showLoadingOverlay() hit the TDZ
+// and silently fell back to an inline copy on every app start.
 function _hdrKingIconHTML(){
   // Gold gradient border + piece-styled king. Same border in both modes; only
   // the king symbol + piece color/stroke/glow differ.
@@ -5254,6 +5269,20 @@ function _resetGameUIState(){
       window._setupExitDialogOverlay=null;
     }
     window._setupExitDialogDismiss=null;
+    // v1.2.3 round-51 (BACK-A): symmetric removal for the root-level exit
+    //   confirmation overlay (same body-appended z-index:10000 pattern as
+    //   the setup-exit dialog above). A game-state reset while the exit
+    //   dialog is open (e.g. a deferred import completing) must not leave
+    //   the backdrop masking the new game. Do NOT route through
+    //   window._exitConfirmDialogDismiss — that callback would run
+    //   _dismiss(false) → render() (harmless here) — but removing the node
+    //   and nulling both hooks directly is the same forced-removal
+    //   convention used for the setup-exit overlay.
+    if(window._exitConfirmDialogOverlay){
+      try{window._exitConfirmDialogOverlay.remove();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+      window._exitConfirmDialogOverlay=null;
+    }
+    window._exitConfirmDialogDismiss=null;
   }
   // v1.0.4 REV13: Reset scroll state on new game
   // v1.0.4 Rev30: also reset the restore guard (in case a render is in flight)
@@ -5401,7 +5430,14 @@ function reviewGoTo(step){
     //   the live-eval path (ai-bridge.js) restores all six fields; omitting
     //   seldepth here left the previous step's value on screen (stale SD).
   }else{
-    _resetEvalState();
+    // v1.2.3 round-58b: removed the redundant _resetEvalState() call that
+    //   preceded requestEngineEval(). requestEngineEval performs its own
+    //   _resetEvalState() on the dispatch path (and the cache/terminal/batch
+    //   paths set their display state directly), so this call was pure
+    //   duplication — and it force-set _evalLoading=true, destroying the
+    //   truthful "a search is actually in flight" signal that
+    //   requestEngineEval's same-position in-flight dedup relies on (a
+    //   repeat tap on the analyzing step must NOT restart the search).
     // FIX: Auto-start analysis when selecting an unanalyzed move in review mode.
     // Previously, selecting an unanalyzed step would show "分析中" but never actually
     // request the engine eval. The user had to manually trigger analysis.
@@ -5648,6 +5684,11 @@ function reviewAnalyzeAll(){
     return;
   }
   _reviewAnalyzeAllActive=true;
+  // v1.2.3 round-57c: arm the crash-loop wall clock at batch start — the
+  //   safety-timer fire handler terminates the batch when no step completes
+  //   for 180s, regardless of the strike count (crash-looping engines reset
+  //   the strikes on every recovery — see ai-bridge.js field doc).
+  if(typeof _batchLastStepCompletedAt!=='undefined')_batchLastStepCompletedAt=performance.now();
   // v1.2.3 round-20: immediately switch the analyze button to
   //   label + right-aligned "batch in progress" hint (no full render
   //   happens at batch start; the helper rewrites the button in place).
@@ -5678,19 +5719,82 @@ function reviewAnalyzeAll(){
   _requestBatchEval(startStep);
 }
 
+// v1.2.3 round-61 (R61-c): the 180s no-step-completed whole-batch wall-clock
+//   terminator, extracted from the 60s silence-timer fire handler into a
+//   helper so BOTH clock paths can run it: (1) the 60s TRUE-silence fire
+//   handler (engine wedged silently mid-step) and (2) every liveness tick —
+//   _reviewAnalyzeResetSafetyTimer() is the funnel for ALL of those
+//   (onEngineProgress progress lines, per-step advance, engine recovery).
+//   Why the move was mandatory: round-57 made every onEngineProgress progress
+//   line reset the 60s timer, so an engine that keeps REPORTING progress yet
+//   never returns bestmove (and thus never completes a step) starved the
+//   fire handler forever — the 180s check inside it never ran, the batch hung
+//   indefinitely, and the round-57c three-strike rule (counted on step
+//   completions) couldn't fire either. Two clocks, two meanings: the 60s
+//   timer measures per-step SILENCE; this 180s clock measures whole-batch
+//   NON-PROGRESS — the second must stay reachable even while the first is
+//   being perpetually deferred (a liveness signal must not veto a
+//   whole-batch watchdog — see guide §6.2 #14). Gated on the batch flag so
+//   non-batch callers can never fire it; returns true when the batch was
+//   terminated by this call.
+function _batchWallClockExceeded(){
+  if(typeof _reviewAnalyzeAllActive!=='undefined'&&!_reviewAnalyzeAllActive)return false;
+  if(typeof _batchLastStepCompletedAt!=='undefined'
+     &&_batchLastStepCompletedAt>0
+     &&performance.now()-_batchLastStepCompletedAt>180000
+     &&typeof _terminateBatchAfterRepeatedFailures==='function'){
+    try{_terminateBatchAfterRepeatedFailures('no step completed for 180s');}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+    return true;
+  }
+  return false;
+}
+
 /**
  * v1.0.4 Rev24: Reset the per-step safety timer. Called on every advance
  * so a stuck engine on step N doesn't abort the entire batch — only step N.
  * 60 seconds per step is generous; depth-22 evals typically finish in 5-15s.
  * v1.1.1 Phase 59 Task 59.6: Log uses _reviewAnalyzeStep (not reviewStep).
+ * v1.2.3 round-61 (R61-c): every reset ALSO runs the 180s whole-batch
+ *   terminator first — see _batchWallClockExceeded(). This is the funnel
+ *   that onEngineProgress's progress lines reach (via the round-57
+ *   progress-aware reset), so a progress-reporting-but-never-completing
+ *   engine is now terminated here instead of hanging the batch forever.
  */
 function _reviewAnalyzeResetSafetyTimer(){
+  if(_batchWallClockExceeded())return;
   if(_reviewAnalyzeSafetyTimer){clearTimeout(_reviewAnalyzeSafetyTimer);}
   _reviewAnalyzeSafetyTimer=setTimeout(function(){
     if(_reviewAnalyzeAllActive){
       // v1.0.4 Rev24: Don't abort the whole batch — skip the stuck step and
       // continue. This is more resilient than the old behavior (abort all).
+      // v1.2.3 round-57c: with the round-57 progress-aware reset in place,
+      //   reaching this handler means the engine has been TOTALLY silent for
+      //   60s (no progress lines, no bestmove) — almost certainly wedged or
+      //   dead. Surface the skip to the user (was console-only: the "stuck
+      //   with zero feedback" complaint) and run the crash-loop wall clock.
       console.warn('Analyze-all: step '+_reviewAnalyzeStep+' timed out, skipping');
+      // v1.2.3 round-57c (crash-loop terminator): a crash-LOOPING engine
+      //   never accumulates 3 strikes — onEngineReady resets
+      //   _batchConsecutiveFail on every recovery, so die→recover→dispatch→die
+      //   cycles ghost-ran forever with zero new results (the residual
+      //   "stuck, nothing happening" after round-57). Terminate when no step
+      //   has completed for 180s of wall-clock time, no matter what the
+      //   strike counter says. A healthy batch can't trip this: every
+      //   completed step re-arms the clock, and a healthy step never sees
+      //   60s of silence (progress lines reset this timer). Runs BEFORE the
+      //   skip toast so a terminating fire shows only the termination toast.
+      // v1.2.3 round-61 (R61-c): the 180s check now lives in
+      //   _batchWallClockExceeded() so the progress-reset path (which this
+      //   fire handler can never reach when progress keeps arriving) runs
+      //   it too. This branch keeps covering the other side: TRUE 60s
+      //   silence with no completed step for 180s.
+      if(_batchWallClockExceeded())return;
+      // v1.2.3 round-57c: reaching here means the engine has been TOTALLY
+      //   silent for 60s (no progress lines, no bestmove — the round-57
+      //   progress-aware reset only defers on proof-of-life) but the batch
+      //   is still making progress overall. Surface the skip to the user
+      //   (was console-only: the "stuck with zero feedback" complaint).
+      try{showToast(T('batch_step_timeout_skip'));}catch(e){console.warn('[UI]',e?.message?e.message:e);}
       // v1.1.1 Phase 59 Task 59.6: Clear the batch gen so the stale callback
       //   (if it ever arrives) doesn't double-advance.
       if(typeof _evalRequestBatchGen!=='undefined')_evalRequestBatchGen=0;
@@ -5819,6 +5923,19 @@ function _reviewAnalyzeAdvance(){
     // v1.2.3 P1: Batch completed normally — restore gameplay UCI options
     //   that were overridden by engineEvalDeepBeginBatch().
     _endEvalDeepBatchIfActive();
+    // v1.2.3 round-51 (BG-3): surface batch completion in the foreground-service
+    //   notification. The completion toast below is invisible while the app is
+    //   backgrounded (round-51 lets the batch finish in the background), so the
+    //   notification is the only user-visible signal that the analysis is done
+    //   and the "analysis running" state can be retired. _updateEngineNotification
+    //   is defined in ai-bridge.js (loads before this module) and throttles to
+    //   1/sec — a single call here is cheap. typeof-guarded per the
+    //   cross-module convention.
+    try{
+      if(typeof _updateEngineNotification==='function'){
+        _updateEngineNotification(T('analysis_done')+' '+(_lastStep+1)+' '+T('step'));
+      }
+    }catch(e){console.warn('[UI]',e?.message?e.message:e);}
     // v1.2.3 round-44 (G11): leave batch write mode + flush pending cache writes.
     try{if(typeof _endBatchWriteMode==='function')_endBatchWriteMode();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
     if(_reviewAnalyzeSafetyTimer){clearTimeout(_reviewAnalyzeSafetyTimer);_reviewAnalyzeSafetyTimer=null;}
@@ -5892,23 +6009,27 @@ function _reviewAnalyzeAdvance(){
   // v1.1.2 Phase 68 (Issue 30 P1): Incremental UI update — instead of calling
   //   render() on every step (which rebuilds the entire DOM and causes memory
   //   pressure on long games per Issue 30 root cause A), use lightweight
-  //   updates: refresh the eval trend chart + analyze-all button label, and
-  //   only call full render() every 10 steps (or at the end, which is handled
-  //   by the completion branch above).
+  //   updates: refresh the eval trend chart + analyze-all button label.
   //   - _refreshEvalTrendChart() rebuilds ONLY the SVG inside .review-chart
   //     (one DOM write), keeping the chart visually in sync with new evals.
   //   - _updateReviewAnalyzeBtn() updates the button label (one textContent).
-  //   - Full render() every 10 steps handles: move-list row updates (eval
-  //     delta colors, critical-move markers), scroll-into-view for active step,
-  //     and any layout shifts. 10 was chosen as a balance: frequent enough
-  //     that the move list feels responsive, infrequent enough to avoid the
-  //     O(n) DOM rebuild cost that caused WebView memory pressure on 100+
-  //     step games.
+  // v1.2.3 round-57 (batch UX fix): the every-10-steps full render() is
+  //   REPLACED by two per-step targeted refreshes:
+  //   - _refreshReviewMoveListEvals() rebuilds ONLY #reviewMovesList's rows
+  //     (one innerHTML write, scroll preserved) so each step's eval delta +
+  //     classification label appears the moment its analysis completes —
+  //     previously the list lagged up to 10 steps behind the chart.
+  //   - _updateReviewEvalUI() refreshes the eval bar (score/emoji/depth) so
+  //     completing the step the user is currently viewing updates the bar
+  //     immediately instead of waiting for the next full render.
+  //   The old full render() also handled scroll-into-view for the active step
+  //   and layout shifts — neither applies during a batch: reviewStep (the
+  //   highlighted/active row) doesn't move while the batch runs, and row
+  //   content growth is handled by the innerHTML swap itself.
   try{if(typeof _updateReviewAnalyzeBtn==='function')_updateReviewAnalyzeBtn();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   try{if(typeof _refreshEvalTrendChart==='function')_refreshEvalTrendChart();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
-  if(nextStep%10===0){
-    try{render();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
-  }
+  try{_refreshReviewMoveListEvals();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
+  try{if(typeof _updateReviewEvalUI==='function')_updateReviewEvalUI();}catch(e){console.warn('[UI]',e?.message?e.message:e);}
   // v1.1.2 Phase 68 (Issue 30 P1): Main-thread yield — wrap the next
   //   _requestBatchEval call in setTimeout(0) so the JS main thread can
   //   process pending UI events (touch events, scroll, paint) between batch
@@ -6885,11 +7006,11 @@ window._showStatsImportBackPrompt=_showStatsImportBackPrompt;
  */
 function _startEngineHeartbeat(){
   _heartbeatRunning=true;
-  _lastEngineCallbackTime=Date.now();
+  _lastEngineCallbackTime=performance.now();
   if(_heartbeatIntervalId){clearInterval(_heartbeatIntervalId);}
   _heartbeatIntervalId=setInterval(function(){
     if(!_heartbeatRunning)return;
-    const elapsed=Date.now()-_lastEngineCallbackTime;
+    const elapsed=performance.now()-_lastEngineCallbackTime;
     if(elapsed>120000){
       console.warn('Engine heartbeat: no response for 120s, attempting restart');
       try{
@@ -6901,7 +7022,7 @@ function _startEngineHeartbeat(){
           isHintLoading=false;_hintBarInfo='';
           _evalLoading=false;_sfEvalReady=false;
           _ponderGen++;_ponderMoveSAN='';_ponderBarInfo='';_pendingPonderMoveUCI=null;
-          _lastEngineCallbackTime=Date.now();
+          _lastEngineCallbackTime=performance.now();
         }
       }catch(e){console.error('Heartbeat restart failed:',e);}
     }

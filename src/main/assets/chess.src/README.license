@@ -1,3 +1,296 @@
+v1.2.3 round-61 (2026.11.21): analyze-all progress-hang terminator moved to the progress path (R61-c).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - ui.js (GPL v3): the 180s no-step-completed whole-batch wall-clock
+    terminator extracted from the 60s silence-timer fire handler into the
+    new helper _batchWallClockExceeded(), which is now ALSO run at the top
+    of _reviewAnalyzeResetSafetyTimer() — the funnel that every
+    onEngineProgress progress tick reaches via the round-57 progress-aware
+    reset. Before this, an engine that kept REPORTING progress yet never
+    completed a step starved the 60s fire handler forever (every progress
+    line reset it), so the 180s check inside it never ran and the batch
+    hung indefinitely — the round-57c three-strike rule (counted on step
+    completions) couldn't fire either. Two clocks, two meanings: per-step
+    60s SILENCE vs whole-batch 180s NON-PROGRESS; a liveness signal must
+    not veto a whole-batch watchdog. The fire handler keeps calling the
+    helper for the true-silence side. Behavioral coverage: v1 scenario R61
+    (R61-1..R61-4) — healthy ticks don't terminate; a tick with a
+    200s-stale wall clock does.
+
+v1.2.3 round-60 (2026.10.7): king shake amplitude raised + F-1 TDZ root-fix + F-5 comment fix.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - game-logic.js (GPL v3): (1) king "imperial seal stamp" ring amplitude
+    raised — the damped-harmonic first peak -5.5px -> -7px (f=6.5Hz, d=6 and
+    the 680ms duration unchanged; the 11px stamp is untouched) so the king
+    reclaims the largest ring of the set (queen's ground-pound is 6px);
+    peaks now -7/+4.42/-2.79/+1.76/-1.11/+0.70/... (independently
+    recomputed). (2) F-1 root-fix: _KING_PIECE_STYLE moved here from ui.js
+    (shared constants region, first module in the bundle) — ai-bridge.js's
+    top-level _showLoadingOverlay() previously hit the TDZ (typeof on a
+    later const THROWS ReferenceError instead of returning 'undefined') and
+    silently used an inline fallback copy on every app start for 7+ rounds;
+    the dedup intent is now real. Added to the export list.
+  - ai-bridge.js (GPL v3): F-1 — _loadingKingIconHTML uses the shared
+    constant directly (dead try/typeof fallback branch deleted); F-5 —
+    _evictIfOverCap comment corrected: array-of-pairs persistence keeps
+    numeric keys numeric across JSON round-trips; the String() comparison is
+    documented as defense against a future object-format change.
+  - ui.js (GPL v3): F-1 — _KING_PIECE_STYLE declaration removed (now in
+    game-logic.js), pointer comment left.
+  - Verifier extensions: V1-30 (TDZ warn sentinel), V2-20 (constant-location
+    sentinel), V3-38 (guide privacy-line sentinel) — new baseline 30/20/38.
+
+v1.2.3 round-59 (2026.10.7): simulated resonance (damped-harmonic ring) for all six landing shakes.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - game-logic.js (GPL v3): aftershock tails of all six per-piece shake
+    signatures are now GENERATED from the damped-harmonic-oscillator model
+    y(τ)=A·e^(−d·τ)·cos(2πf·τ) via the new _ringKfs generator (quarter-period
+    sampling, 0.08px perception-threshold cut-off, 48-frame hard cap), instead
+    of hand-placed thumps. Per-piece physics: king 6.5Hz/d=6 (deepest, slowest
+    — heavy things ring low and long), queen 8Hz/d=8 (vertical with a
+    directional lean), rook 12Hz/d=20 (brutal stop, dies fast), knight
+    11Hz/d=11 (underdamped spring), bishop 16Hz/d=24 (a blade's "ting"), pawn
+    22Hz/d=18 (true harmonic tremor). Strike phases (personality keyframes)
+    and SHAKE_DURATIONS unchanged; pure translate3d, direction-aware.
+  - ui-interactions.js (GPL v3): stale comment fix — ANIMATION_DEFER_MS note
+    still referenced the retired SHAKE_HEAVY_DUR/SHAKE_MASSIVE_DUR constants
+    (missed by the round-58 shake redesign); now cites SHAKE_DURATIONS and
+    explains a shake may safely outlive the 600ms defer.
+
+v1.2.3 round-58c (2026.10.7): king landing-shake heaviness deepened + reducer hardening.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - game-logic.js (GPL v3): king "imperial seal stamp" deepened on the 58b
+    skeleton — main stamp displacement 7.5px -> 11px (sharpest single impact
+    of the set; directional component 2.5 -> 3), anticipation lift -1.4px ->
+    -2.2px, NEW second-contact thud keyframe (the weight re-settles after the
+    strike), widened decay-peak spacing (low-frequency ring-out), duration
+    560ms -> 680ms (longest signature of the set). Queen stays the most
+    elaborate signature; the king keeps the sharpest stamp + longest ring-out.
+  - state-store.js (AGPL v3): reducer hardening — ENTER_REVIEW / PGN_LOADED
+    gained the Phase-71 `payload = payload || {}` guard; SET_CHESS960 fixed a
+    latent bug where `payload.spid || -1` silently mapped the legitimate SPID
+    0 (BBQNNRKR start position) to "unset" — now `!= null`-checked.
+  - eco-data.js (AGPL v3): two comment-target fixes — a stale reference to
+    "_loadEcoFromCache (line 51)" now correctly names _openEcoDB (where the
+    warn actually lives), and a drifted "line 166" citation was removed.
+  - License-ledger hygiene: three round-58b entries above had GPL-classified
+    ai-bridge.js / ui.js / game-logic.js mislabeled (AGPL v3) — corrected to
+    (GPL v3) in place (verifier v3 H2a caught it; classification per the
+    round-42 record: AGPL v3 = chess960.js, eco-data.js, state-store.js).
+
+v1.2.3 round-58b (2026.10.6): manual single-step review-analysis hang root-cure + king shake re-forge.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - ai-bridge.js (GPL v3): six-bug root-cure of the manual (non-batch)
+    review-step analysis "hang" — (C) same-position in-flight dedup in
+    requestEngineEval: a repeat tap on the step whose exact fen is already
+    being searched no longer re-dispatches (previously the Java stop latch
+    killed the healthy search, swallowed its bestmove, and restarted from
+    depth 1 — the self-reinforcing stall); (A) onEngineProgress now ticks
+    the review eval bar for manual evals while the searched step is viewed
+    (_manualLive gate; previously batch-only); (D) shared progress-aware
+    watchdog _armEvalSafetyTimer (review 45s / normal 30s, re-armed by every
+    progress tick — measures TRUE engine silence; on silence auto
+    re-dispatches the same recorded fen once, bounded by
+    _manualEvalAutoRetries); (E) G1 gen-mismatch branch now rescues
+    completed work via fen-identity ring caching (_cacheStaleReviewEvalByFen)
+    instead of dropping it, restoring the bar from cache when the step is
+    still viewed; (B) all three manual completion paths refresh the move
+    list via _refreshReviewMoveListEvals; (F) stale-callback path and
+    onEngineError/onEngineRestarting/onEngineReady/restartCurrentEngine now
+    uniformly disarm the manual watchdog and settle _evalLoading.
+  - ui.js (GPL v3): reviewGoTo no longer pre-calls _resetEvalState() —
+    requestEngineEval manages display state on every path, and the removed
+    call force-set _evalLoading=true, destroying the truthful in-flight
+    signal the dedup relies on.
+  - game-logic.js (GPL v3): king landing shake re-forged as the "imperial
+    seal stamp" — anticipation lift, one hard 7.5px accelerating downward
+    stamp (dedicated _SHAKE_STAMP_EASING — sharpest single impact in the
+    set), deep low-frequency decay (560ms); queen/rook/knight/bishop/pawn
+    amplitudes moderately boosted (~20-30%). Per-keyframe easing and pure
+    translate3d compositor animation unchanged.
+
+v1.2.3 round-58 (2026.10.6): batch-start ghost-state fix + per-piece WAAPI shake redesign.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - game-logic.js (GPL v3): landing shakes rebuilt as runtime-generated
+    WAAPI keyframes — _shakeKeyframesFor(piece,ux,uy) with direction-aware
+    impulse (unit vector of the mover's travel); six per-piece signatures
+    (queen slam+ground-pound+aftershocks / king deep vertical thud + low
+    settles / rook charge-jolt + snap-back / knight double-hop / bishop
+    axial zing / pawn tremble); pawn/knight/bishop gained landing shakes;
+    SHAKE_DURATIONS replaces the SHAKE_LIGHT/HEAVY/MASSIVE_DUR trio;
+    legacy strength strings mapped via _SHAKE_ALIASES.
+  - Other files: No changes (the ghost-STATE_EVAL fix is in
+    src/main/java/com/Regalia/StockfishNative.java — see its ledger).
+
+v1.2.3 round-57 (2026.10.6): analyze-all liveness + move-animation frame-rate fixes.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - ai-bridge.js (GPL v3): onEngineProgress resets the per-step 60s safety
+    timer while a batch eval is in flight (anti-treadmill — slow-but-healthy
+    depth-22 steps no longer killed uncached); live depth/nodes/nps gate
+    extended to batch searches (_batchLive) + review eval bar refresh;
+    _buildEvalHTML progress ticker gains opts.progress; _updateReviewEvalUI
+    passes it while a batch runs. (57c) _batchLastStepCompletedAt wall clock
+    — batch terminates loudly after 180s with no completed step (crash-loop
+    guard); onEngineError recovery-exhausted branch terminates an active
+    batch immediately; termination toast uses the new batch_terminated_hint.
+  - ui.js (GPL v3): new _refreshReviewMoveListEvals() (innerHTML-only move
+    list refresh, scroll preserved); _reviewAnalyzeAdvance per-step targeted
+    refresh replaces the every-10-steps full render(). (57c) batch start arms
+    the wall clock; safety-timer fire shows a skip toast
+    (batch_step_timeout_skip) and runs the 180s no-progress terminator.
+  - game-logic.js (GPL v3): _triggerBoardShake ported to WAAPI
+    (_SHAKE_KEYFRAMES, keyframes/easing/durations 1:1 from the retired CSS)
+    — no more forced synchronous reflow at landing. (57c) easing moved onto
+    each keyframe interval (CSS semantics) — restores the original punch.
+    i18n: +batch_step_timeout_skip, +batch_terminated_hint (zh/en).
+  - index.html.tpl (GPL v3): .move-anim drop-shadow filter removed
+    (equivalent text-shadow layers on .w-piece/.bk-piece); .bwrap.shake-*
+    classes + shakeLight/shakeHeavy/shakeMassive @keyframes removed (moved
+    to JS); reduced-motion media query cleaned accordingly.
+  - Other files: No changes.
+
+v1.2.3 round-56 (2026.10.5): first-principles review implementation — worker-pool.js removed (zero-caller dead code) + 7 module fixes.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - worker-pool.js (was GPL v3): DELETED — 732 lines, zero callers since
+    the v1.0.8 PHASE 49 switch to the "toast + paint-yield + synchronous
+    import" PGN path. Historical ledger entries for it are kept as
+    history; it is removed from the live classification.
+  - ai-bridge.js (GPL v3): batch-dispatch failure 3-strike termination
+    (_batchConsecutiveFail → _terminateBatchAfterRepeatedFailures);
+    5× timestamps switched to performance.now() (monotonic);
+    openStatsPage dynamic timeout max(600000, uncached×60000);
+    _fileBrowserSelect surfaces the {"error":"too_large"} sentinel as a
+    toast (settings_file_too_large).
+  - game-logic.js (GPL v3): new bilingual i18n key settings_file_too_large
+    (zh/en).
+  - ui.js (GPL v3): 3× heartbeat timestamps → performance.now().
+  - ui-gameflow.js / ui-interactions.js (GPL v3): stateHistory cap
+    eviction splice(0,1) → splice(1,1) — index 0 (initial position) is
+    an invariant consumed by [0] readers.
+  - tablebase.js (GPL v3): importPGNAsync unconditional synchronous path
+    (the effective path since v1.0.8 PHASE 49); worker typeof residue
+    cleaned.
+  - index.html.tpl (GPL v3): CSP drops worker-src blob: (no Worker use
+    remains in the bundle after the worker-pool.js removal).
+  - License classification: unchanged for all remaining files
+    (AGPL v3 = chess960.js, eco-data.js, state-store.js; the rest GPL v3).
+
+v1.2.3 round-55 (2026.10.5): PR #56 CodeRabbit follow-up — retry single-counter fix + license-tag sweep.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - game-logic.js (GPL v3, DroidFish-derived): CodeRabbit follow-up REAL —
+    the round-54 dispatch-failure catch branches incremented _aiRetryCount
+    a SECOND time for the same failed dispatch (doAIMove() already
+    increments on entry), so the 500ms retry call pushed the count to 3
+    and doAIMove returned at its cap WITHOUT re-dispatching — one
+    transient bridge throw led straight to ai_timeout with zero real
+    retries. Fixed to the single-counter contract: the four catch branches
+    (timed×2 + untimed×2) now only reset thinking state and reschedule the
+    guarded retry; doAIMove() owns the increment AND the >=3 give-up
+    (ai_timeout + reset), with success still zeroing the counter via
+    onBestMove/book/tablebase. The stale "see line ~3070" comment
+    reference dropped with the old contract.
+  - License classification: unchanged — but a CodeRabbit-flagged tag sweep
+    corrected 25 mislabeled "(AGPL v3)" per-file tags to GPL v3
+    (ai-bridge.js ×6, ui-interactions.js ×1, game-logic.js ×1,
+    pgn-standard.js ×6, index.html.tpl ×11), matching the file headers and
+    the round-42 classification record (AGPL v3 = chess960.js, eco-data.js,
+    state-store.js only). The round-54b ai-bridge.js tag was the flagged
+    instance; the rest are the same defect class swept in one pass.
+
+v1.2.3 round-54b (2026.10.5): SonarCloud follow-up — 1 real fix / 1 false positive.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - ai-bridge.js (GPL v3): S7741 — the round-54 _bgDone line carried a
+    copy-pasted `typeof _reviewAnalyzeStep!=='undefined'` guard;
+    _reviewAnalyzeStep is declared in THIS module (~line 388), so a direct
+    `!== undefined` comparison suffices. Fixed.
+  - False positive kept: S2486 at ai-bridge.js:4515 (2026-06-27, pre-existing)
+    — the _convertPVtoSAN catch has a real fallback assignment (raw PV,
+    truncated to 4 moves); not an empty catch.
+  - License classification: unchanged.
+
+v1.2.3 round-54 (2026.10.5): PR #56 AI-review JS fixes — game-logic/ui-interactions/ai-bridge.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - game-logic.js (GPL v3, DroidFish-derived): the four engineGo/
+    engineGoNewGame dispatch-failure branches (timed + untimed) now
+    reschedule doAIMove (retry cap 3, then ai_timeout) — a thrown bridge
+    call previously stranded the game on the AI's turn. Two i18n entries
+    added (settings_saf_button / settings_saf_hint).
+  - ui-interactions.js (GPL v3, DroidFish-derived): dlgChess960SPID reset sentinel corrected
+    null → -1 (the declared "random" sentinel; null coerces to 0 under >=
+    and broke the dialog preview + randomSPID pick).
+  - ai-bridge.js (GPL v3): background analyze-all notification now shows
+    the current batch's completed count (_reviewAnalyzeStep+1) instead of
+    the persisted cross-game cache size; openStatsPage re-checks the
+    payload size after dropping visualAnnotations and falls back to the
+    PGN clipboard copy if still over the Binder cap; the settings file
+    browser starts at the internal files dir, drops the dead /sdcard and
+    manual-path entries, and offers a SAF-picker escape (round-49 sandbox
+    gate made the old roots always list as "[]").
+  - License classification: unchanged.
+
+v1.2.3 round-53 (2026.10.5): SonarCloud PR #56 JS fixes — game-logic/tablebase/ui-interactions/ai-bridge.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - game-logic.js (GPL v3, DroidFish-derived): S9383 — the
+    Promise.all(promises) animation wait gains an explicit rejection
+    handler running the same guarded _finishAnim() cleanup (the _anim*
+    promises never reject by construction; the handler future-proofs
+    against a rejecting animator and satisfies the no-floating-promise
+    rule).
+  - tablebase.js (GPL v3): S9383 — the fire-and-forget
+    importPGNAsync(sanitized) call is void-marked (the promise never
+    rejects; the result is unused by design).
+  - ui-interactions.js (GPL v3, DroidFish-derived): S9383 — the two other
+    bare importPGNAsync() call sites (stats import-back, paste import)
+    void-marked for consistency.
+  - ai-bridge.js (GPL v3): S6582 — reviewStates?.length optional chain
+    (cross-module typeof guard for reviewStates KEPT — round-11
+    degraded-module defense); S7741 — _reviewEvalCache!==undefined direct
+    comparison (same-module binding, typeof was redundant); S4138 — the
+    round-52 T5 _evalRecentDispatches loop converted to for-of (index was
+    unused; iteration order unchanged).
+  - License classification: all files unchanged.
+
+v1.2.3 round-52 (2026.10.5): ai-bridge.js — stale engine-eval fen-identity guard (T5).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - ai-bridge.js (GPL v3): fixes the rare "engine still shows the PREVIOUS
+    position's eval right after a quick new move" race. The engine<->UI
+    channel is asynchronous, so a late bestmove/info callback for an older
+    position can arrive after the user already played/navigated. Round-49
+    added fen-tagging for the batch (analyze-all) path only; round-52
+    extends fen identity to USER-NAVIGATION dispatches:
+    - new fields _evalLastDispatchedFen + _evalRecentDispatches (8-entry
+      ring of {fen, step, states}), recorded at every dispatch point
+      (review-debounce dispatch and normal-mode dispatch);
+    - onEngineEval drops a callback whose reqFen differs from the last
+      dispatched user-nav fen — EXCEPT when the fen matches a recent
+      review-mode dispatch for the SAME reviewStates array, in which case
+      the eval is cached under that MATCHED step (White-POV sign and WDL
+      re-derived from the matched position's side-to-move), preserving the
+      Phase 59.3 background-caching intent without poisoning the current
+      step;
+    - legacy 7-arg callbacks (no reqFen) still fall through to the
+      round-46 generation check, so older bridges keep working.
+  - License classification: all files unchanged.
+
+v1.2.3 round-51 (2026.9.9): ui-interactions/ui/ai-bridge/game-logic — level-by-level BACK + batch background/notification.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - ui-interactions.js (GPL v3, DroidFish-derived): BACK-A — root-level BACK
+    now opens an exit-confirmation dialog (_showExitConfirmDialog; the
+    退出 choice calls the pre-existing AndroidBridge.exitApp() bridge;
+    window._exitConfirmDialogDismiss/_exitConfirmDialogOverlay hooks
+    mirror the setup-exit pattern); BACK-B — the file-browser back check
+    moved above the four header dialogs (its body-appended overlay always
+    paints on top); BACK is a no-op only while the z-99999 startup loading
+    overlay shows.
+  - ui.js (GPL v3, DroidFish-derived): _resetGameUIState removes the exit
+    overlay symmetrically; the analyze-all completion branch posts the
+    final state to the FGS notification (BG-3).
+  - ai-bridge.js (GPL v3): onEngineProgress surfaces live batch progress
+    ("正在分析... (k/N)") in the FGS notification while
+    _reviewAnalyzeAllActive (BG-3).
+  - game-logic.js (GPL v3, DroidFish-derived): 3 new i18n keys
+    (exit_confirm_title/exit_confirm_msg/exit_confirm_yes, zh+en) — table
+    404 -> 407 keys, parity maintained.
+
 v1.2.3 round-50 (2026.9.6): no module content changes.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - No chess.src module content changes this round (the chess.html header
@@ -962,7 +1255,7 @@ v1.2.2 (2026.7.14) — Comprehensive audit-report non-false-positive fix + versi
     correct whitelist approach.
   - game-logic.js (GPL v3): loading_title i18n key updated from
     "Regalia v1.2.1" to "Regalia v1.2.2".
-  - index.html.tpl (AGPL v3): <title> updated from "Regalia v1.2.1" to
+  - index.html.tpl (GPL v3): <title> updated from "Regalia v1.2.1" to
     "Regalia v1.2.2".
   - ui.js (GPL v3): 3 version-string references updated from "v1.2.1" to
     "v1.2.2" (about-dialog h2, header badge, about-dialog app_name row).
@@ -1103,7 +1396,7 @@ v1.2.1 round-12 (2026.7.14) — SonarCloud PR #43 bugs + code smells cleanup:
   - chess960.js (AGPL v3): 2 changes — (1) S108: 1 empty catch now logs
     console.warn('[Chess960]', e.message); (2) S1154: String.fromCharCode →
     String.fromCodePoint (1 site).
-  - index.html.tpl (AGPL v3): S3646 — merged two adjacent
+  - index.html.tpl (GPL v3): S3646 — merged two adjacent
     .dlg:not([style*="max-width"]) rules and two adjacent
     .review-left .review-board .bgrid rules.
   - Other JS modules (pgn-standard.js, worker-pool.js, state-store.js,
@@ -1559,7 +1852,7 @@ v1.1.2 Phase 68 (2026.7.8, same-version revision):
       New state _reviewAnalyzePriorityQueue. New function _prioritizeReviewStep.
     * PGN cache partial-eval dialog: title has emoji prefix; back-button support
       via _pgnPartialEvalDialogActive/_pgnPartialEvalDialogDismiss.
-  - game-logic.js (AGPL v3): 3 new i18n keys (priority_eval_toast,
+  - game-logic.js (GPL v3, DroidFish-derived): 3 new i18n keys (priority_eval_toast,
     priority_eval_already_cached, priority_eval_not_in_review) + emoji in
     partial-eval title.
   - index.html.tpl (GPL v3): .rmv-block CSS — added user-select:none +
@@ -2418,7 +2711,7 @@ v1.0.4 EXPANSION (this round) — in stats.html and chess.src/*.js:
   - game-logic.js (EXPANDED, GPL v3 — DroidFish-derived SAN logic):
       Added i18n strings for Chess960 UI (chess960_*) and time-control
       UI (time_control_*). loading_title updated to v1.0.4.
-  - index.html.tpl (AGPL v3): <title>Regalia v1.0.4</title>.
+  - index.html.tpl (GPL v3): <title>Regalia v1.0.4</title>.
   - chess960.js (NEW in prior v1.0.4 round, AGPL v3): SP-ID generator,
       Shredder-FEN castling rights, 960 castling rules.
   - stats.html (EXPANDED, GPL v3 — DroidFish-derived PGN parsing):
@@ -2745,7 +3038,7 @@ v1.0.3 patch changes (in addition to the v1.0.3 baseline above):
         .review-overlay (position:fixed), skipping the container. Replaced
         with getBoundingClientRect(): _offsetTop = _rActRect.top -
         _rListRect.top + _rList.scrollTop. Works in both orientations.
-  - index.html.tpl (AGPL v3):
+  - index.html.tpl (GPL v3):
       * Landscape review CSS: complete redesign (see ui.js changes above).
         New classes: .review-top, .review-bottom, .review-nav.
         v1.0.3-p7: .review-body is overflow-y:auto (TWO-LAYER SCROLL — body
@@ -3055,7 +3348,7 @@ for full license texts and attribution details.
       to inner column div, max-width:100% + box-sizing:border-box to
       #ai-search-info, min-width:0 + overflow:hidden to line-3 container,
       min-width:0 to #ai-ponder-info. All text now properly truncates.
-    - index.html.tpl (AGPL v3): .pbar CSS gains max-width:100% +
+    - index.html.tpl (GPL v3): .pbar CSS gains max-width:100% +
       overflow:hidden to prevent the bar from being pushed wider than
       its parent by internal content.
     - chess.html: rebuilt from the above chess.src/ changes.
@@ -3148,15 +3441,15 @@ for full license texts and attribution details.
       square highlights via CSS box-shadow inset (3px), arrows via SVG
       overlay (4px stroke, per-color arrowhead markers). New constant
       _RV_VA_COLORS for the 4 annotation colors.
-    - pgn-standard.js (AGPL v3): Updated color code documentation comment
+    - pgn-standard.js (GPL v3): Updated color code documentation comment
       block to reflect the full 4-color arrow semantics (B/R/Y/G).
-    - index.html.tpl (AGPL v3): .review-board CSS rule now has
+    - index.html.tpl (GPL v3): .review-board CSS rule now has
       position:relative so the SVG arrow overlay's position:absolute
       anchors correctly.
     - chess.html: rebuilt from the above chess.src/ changes.
 
   v1.0.5 Round-6 Rev49 changes:
-    - index.html.tpl (AGPL v3): High aspect-ratio screen adaptation (min-width:0
+    - index.html.tpl (GPL v3): High aspect-ratio screen adaptation (min-width:0
       on flex children, flex-wrap:wrap on .hdr-tools, word-break on long text,
       3 new media-query tiers for ultra-tall/wide/short aspect ratios). New
       --safe-top/bottom/left/right CSS variables. New .bwrap.stabilized CSS
@@ -3193,7 +3486,7 @@ for full license texts and attribution details.
     - chess.html: rebuilt.
 
   v1.0.5 Round-6 Rev53 changes:
-    - index.html.tpl (AGPL v3): .bwrap.stabilized CSS updated to
+    - index.html.tpl (GPL v3): .bwrap.stabilized CSS updated to
       translate3d(x,y,0) rotate(var(--stab-rot,0deg)).
     - ui.js (GPL v3): Yellow arrows now bidirectional (both sides' queens).
       Blue arrows also bidirectional. New _computeInitialPositionAnnotations()
@@ -3261,7 +3554,7 @@ for full license texts and attribution details.
     - chess.html: rebuilt from chess.src/ changes.
 
   v1.0.5 Round-6 Rev56 changes (MultiPV + dirty-flag pipeline audit):
-    - ai-bridge.js (AGPL v3): FOUR improvements to the MultiPV processing path:
+    - ai-bridge.js (GPL v3): FOUR improvements to the MultiPV processing path:
       (1) PERF: _updateMultiPVDisplay() — added a per-line signature cache
           (_multiPVDisplayCache) so we skip the expensive _convertPVtoSAN()
           call when a PV line's content hasn't changed since the last display
@@ -3431,7 +3724,7 @@ for full license texts and attribution details.
           Rev49/54/58 multi-revision narrative, Rev65/66 yellow-square redundant
           explanations, Rev62 resign-sound fix comment, Rev63 arrow-design
           change markers. Current-behavior descriptions retained.
-    - index.html.tpl (AGPL v3, original): COMMENT CLEANUP — CSS
+    - index.html.tpl (GPL v3): COMMENT CLEANUP — CSS
       .bwrap.stabilized comment simplified (removed Rev53/Rev64 markers and
       --stab-rot removal note).
     - chess.html: rebuilt from chess.src/ changes.
@@ -3491,7 +3784,7 @@ for full license texts and attribution details.
           redoes, cache entries are re-created as needed.
           New function _invalidateCachesForUndoneMoves(currentMoveCount) added
           near _resetGameUIState().
-    - index.html.tpl (AGPL v3, original): ONE change:
+    - index.html.tpl (GPL v3): ONE change:
       (1) CSS .bwrap.stabilized transform changed from
           translate3d(...) rotate(var(--stab-rot,0deg)) to
           translate3d(var(--stab-x,0px),var(--stab-y,0px),0) only.
@@ -3556,7 +3849,7 @@ for full license texts and attribution details.
       (2) BUG: worker onerror handler called .delete() on _workerPending Map
       during for...of iteration. Fixed to snapshot keys via Array.from()
       before deletion.
-    - pgn-standard.js (AGPL v3, original): REDUNDANCY — removed dead
+    - pgn-standard.js (GPL v3): REDUNDANCY — removed dead
       `let lineLen=0` in composePGN() (wrapping logic uses curLine.length,
       never reads lineLen).
     - ai-bridge.js (GPL v3, DroidFish-derived): FOUR fixes —
@@ -3634,7 +3927,7 @@ for full license texts and attribution details.
       _finishAnim() clears _lastAnimMv. loading_title updated to v1.0.6.
       NEW i18n strings: gray_disabled_by_eco_book, gray_disabled_by_chess960.
     - chess960.js (AGPL v3): No changes (castling helpers unchanged).
-    - pgn-standard.js (AGPL v3): No changes.
+    - pgn-standard.js (GPL v3): No changes.
     - worker-pool.js (GPL v3): Comment fix — removed backtick from a
       comment inside the _WORKER_SOURCE template literal (Rev57-class bug
       that prematurely terminated the template string, causing blank screen).
@@ -3666,7 +3959,7 @@ for full license texts and attribution details.
       .op-list. Analyze-all off-by-one fix (_totalSteps=moveRecords.length,
       reviewAnalyzeAll iterates 1..N, _reviewAnalyzeAdvance terminates at
       nextStep>N). Version strings updated to v1.0.6 (3 locations).
-    - index.html.tpl (AGPL v3): NEW .castle-ring CSS (golden dashed pulse
+    - index.html.tpl (GPL v3): NEW .castle-ring CSS (golden dashed pulse
       animation). Portrait New Game dialog CSS (max-width:460px, tighter
       padding, stacked inputs, ECO search wrap). Title updated to v1.0.6.
     - chess.html: rebuilt from chess.src/ changes.
@@ -4083,7 +4376,7 @@ v1.0.8 Phase 30 (2026.7.1):
     init; header comment updated.
   - chess960.js (AGPL v3): initChess960State integer SP-ID validation;
     dead `||'-'` removed from toShredderCastling.
-  - pgn-standard.js (AGPL v3): JSDoc typo "0-2" → "0-1".
+  - pgn-standard.js (GPL v3): JSDoc typo "0-2" → "0-1".
   - worker-pool.js (GPL v3): truncated AGPL boilerplate completed.
   - ui.js (GPL v3): dead playCastleRookLand() removed; dead --rv-board-w
     removed; tablebase bar XSS _jsAttrEncode+_esc; ECO bar _esc; render
@@ -4113,7 +4406,7 @@ v1.0.8 Phase 32 (2026.7.1):
     vector via path containing "<script>"). Regex includes & in char class.
   - worker-pool.js (GPL v3): added _MAX_QUEUE_SIZE=50 cap; rejects excess
     tasks immediately so callers fall back to sync execution.
-  - pgn-standard.js (AGPL v3): all parseInt() in parseTimeControl now pass
+  - pgn-standard.js (GPL v3): all parseInt() in parseTimeControl now pass
     radix 10 (lint-clean, future-proof).
   - game-logic.js (GPL v3): No changes.
   - ui.js (GPL v3): No changes.
@@ -4128,7 +4421,7 @@ v1.0.8 Phase 33 (2026.7.1):
   - tablebase.js (GPL v3): parseInt radix 10 on 4 fenToState sites; trimmed 3
     memorials + stale .docx reference.
   - chess960.js (AGPL v3): dropped stale "v1.0.4 NEW" version tag.
-  - pgn-standard.js (AGPL v3): dropped stale "v1.0.4 NEW" version tag.
+  - pgn-standard.js (GPL v3): dropped stale "v1.0.4 NEW" version tag.
   - eco-data.js (AGPL v3): trimmed duplicate Phase 31 comment.
   - worker-pool.js (GPL v3): added dead-code-status note; trimmed CSP memorial.
   - index.html.tpl (combined): trimmed legacy @media memorial.

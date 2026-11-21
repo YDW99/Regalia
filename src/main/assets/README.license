@@ -1,3 +1,126 @@
+v1.2.3 round-61 (2026.11.21): chess.html rebuilt from the round-61 modules (24,208 lines).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - chess.html (AGPL v3 combined work): rebuilt byte-deterministically by
+    build-chess.py from the 10-module chess.src tree — carries the
+    round-61 R61-c fix only (ui.js: the 180s whole-batch wall-clock
+    terminator moved to the progress path via the new
+    _batchWallClockExceeded() helper; see chess.src/README.license).
+    24,208 lines / 1,488,718 bytes (round-60: 24,173 / 1,486,508).
+
+v1.2.3 round-60 (2026.10.7): chess.html rebuilt from the round-60 modules (24,173 lines).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - chess.html (AGPL v3 combined work): rebuilt byte-deterministically by
+    build-chess.py from the 10-module chess.src tree — carries the round-60
+    king-shake amplitude raise (ring first peak 7px), the F-1 TDZ root-fix
+    (_KING_PIECE_STYLE single source of truth in game-logic.js) and the F-5
+    comment correction (see chess.src/README.license).
+
+v1.2.3 round-59 (2026.10.7): chess.html rebuilt from the round-59 modules (24,159 lines).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - chess.html (AGPL v3 combined work): rebuilt byte-deterministically by
+    build-chess.py from the 10-module chess.src tree — carries the round-59
+    simulated-resonance shake tails (_ringKfs damped-harmonic generator, all
+    six pieces) and the ui-interactions stale-comment fix (see
+    chess.src/README.license).
+
+v1.2.3 round-58c (2026.10.7): chess.html rebuilt from the round-58c modules (24,132 lines).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - chess.html (AGPL v3 combined work): rebuilt byte-deterministically by
+    build-chess.py from the 10-module chess.src tree — carries the round-58c
+    king-shake enhancement, the state-store reducer hardening, and the
+    eco-data comment fixes (see chess.src/README.license).
+
+v1.2.3 round-58b (2026.10.6): chess.html rebuilt from the round-58b modules (24,104 lines).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - chess.html (AGPL v3 combined work): rebuilt byte-deterministically by
+    build-chess.py from the 10-module chess.src tree — carries the round-58b
+    manual single-step analysis root-cure (in-flight dedup, live eval-bar
+    ticker, progress-aware auto-retrying watchdog, completed-work rescue,
+    move-list immediate refresh, state-leak cleanup) and the king's
+    "imperial seal stamp" shake with the global amplitude boost.
+
+v1.2.3 round-58 (2026.10.6): chess.html rebuilt from the round-58 modules (23,876 lines).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - chess.html (AGPL v3 combined work): rebuilt byte-deterministically by
+    build-chess.py from the 10-module chess.src tree — carries the round-58
+    per-piece direction-aware WAAPI board-shake redesign (six distinct
+    personalities: queen slam + ground-pound aftershocks, king's deep
+    vertical resonance, rook charge-jolt, knight double-hop, bishop axial
+    zing, pawn tremble; per-keyframe easing; SHAKE_DURATIONS table) plus the
+    round-58 worklog/manual wording.
+v1.2.3 round-57 (2026.10.6): chess.html rebuilt from the round-57 modules (23,725 lines).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - chess.html (AGPL v3 combined work): rebuilt byte-deterministically by
+    build-chess.py from the 10-module chess.src tree — carries the round-57
+    analyze-all liveness fixes (progress-aware safety timer, per-step
+    move-list/eval-bar refresh, live depth ticker) and the animation
+    frame-rate fixes (drop-shadow filter removal, WAAPI board shake).
+  - stats.html: No changes.
+  - chess.src/README.license: round-57 entry (per-module detail).
+
+v1.2.3 round-56 (2026.10.5): first-principles review implementation — stats.html hardening + chess.html rebuild.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - stats.html (GPL v3): CSP gains form-action 'none' + object-src 'none'
+    (worker-src blob: kept — the page-inline heatmap Worker is live);
+    _exportFullHTML escapes </ inside the JSON payload (\u003c);
+    renderFENPanel defaults to the last move; PGN header regex made
+    tolerant of unquoted tag values.
+  - chess.html (AGPL v3 combined work): rebuilt byte-deterministically
+    (23,672 lines) from the 10-module set after the worker-pool.js
+    removal; CSP no longer carries worker-src blob:.
+  - License classification: all files unchanged.
+
+v1.2.3 round-55 (2026.10.5): chess.html rebuilt + license-tag audit corrections.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - chess.html (AGPL v3, combined work): rebuilt via build-chess.py after
+    the game-logic.js dispatch-failure retry fix (24,364 lines); bundle
+    passes node --check.
+  - Round-55 license audit corrections in this ledger: 1 × game-logic.js
+    + 1 × pgn-standard.js historical tags "(AGPL v3)" → GPL v3 (file
+    headers are authoritative); editor's notes attached at both sites.
+  - License classification: unchanged (chess.html AGPL v3 combined work;
+    stats.html GPL v3).
+
+v1.2.3 round-54b (2026.10.5): chess.html rebuilt (ai-bridge S7741 fix).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - chess.html (AGPL v3, combined work): rebuilt via build-chess.py after
+    the ai-bridge.js _bgDone typeof-guard fix (24,360 lines); bundle passes
+    node --check.
+  - License classification: unchanged.
+
+v1.2.3 round-54 (2026.10.5): chess.html rebuilt from the round-54 module changes; stats.html fixed.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - chess.html (AGPL v3, combined work): rebuilt via build-chess.py after
+    the game-logic/ui-interactions/ai-bridge fixes (24,357 lines);
+    bundle + inline script pass node --check.
+  - stats.html (GPL v3, DroidFish-derived): en-passant FEN target now
+    requires an opposing victim pawn; new explicit onStatsPGNFileError
+    callback + pgn_read_failed i18n (a failed PGN import no longer fails
+    silently).
+  - License classification: unchanged.
+
+v1.2.3 round-53 (2026.10.5): chess.html rebuilt from the round-53 module changes.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - chess.html (AGPL v3, combined work): rebuilt via build-chess.py after
+    the round-53 game-logic.js / tablebase.js / ui-interactions.js /
+    ai-bridge.js SonarCloud fixes; bundle 24309 lines / 1479405 bytes,
+    inline script passes node --check.
+  - License classification: all files unchanged.
+
+v1.2.3 round-52 (2026.10.5): chess.html rebuilt from the round-52 ai-bridge.js change.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - chess.html (AGPL v3, combined work): rebuilt via build-chess.py after
+    the round-52 ai-bridge.js stale-eval fen-identity guard (T5); bundle
+    24290 lines / 1477911 bytes, inline script passes node --check.
+  - License classification: all files unchanged.
+
+v1.2.3 round-51 (2026.9.9): chess.html rebuilt from the round-51 module changes.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - chess.html (AGPL v3, combined work): rebuilt via build-chess.py after
+    the round-51 ui-interactions.js / ui.js / ai-bridge.js / game-logic.js
+    changes (24,206 lines / 1,472,348 bytes; all modules + the inlined
+    script pass node --check). stats.html unchanged.
+
 v1.2.3 round-50 (2026.9.6): chess.html header license mislabel fixed (GPL -> AGPL v3 combined work).
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - chess.html (AGPL v3, combined work): the top-of-file license header
@@ -1133,7 +1256,9 @@ v1.0.4 Round-5 Rev48 changes:
   - chess.src/ai-bridge.js (GPL v3): _buildPGNString() includes mr.comment.
   - chess.src/ui.js (GPL v3): Blue/Yellow arrows in _computeAndCacheVisualAnnotations;
     review board [%csl]/[%cal] overlay when heatmap is OFF.
-  - chess.src/pgn-standard.js (AGPL v3): Updated color code documentation.
+  - chess.src/pgn-standard.js (GPL v3 — corrected round-55; this tag
+    previously read "(AGPL v3)", contradicting the file header and the
+    canonical classification): Updated color code documentation.
   - chess.src/index.html.tpl (AGPL v3): .review-board position:relative.
   - stats.html (GPL v3): 4-color arrow display (B/R/Y/G order), conditional
     section display, new i18n keys blue_arrows_threats + yellow_arrows_queen.
@@ -1188,7 +1313,6 @@ v1.0.5 Round-6 Rev54 through Rev68 changes (reflected in chess.html rebuilds):
   - stats.html unchanged from Rev62 baseline.
   - AGPLv3_Logo.svg, GPLv3_Logo.svg unchanged.
 
-
 v1.0.6 (2026.6.27):
   - chess.src/ changes: see src/main/assets/chess.src/README.license for
     full per-file details. Key changes: Chess960 ECO suppression, PGN FEN
@@ -1241,7 +1365,6 @@ v1.0.8 Phase 22 7th/8th supplements (2026.6.30):
     stale will-change/transition cleanup).
   - stats.html: no changes in 7th/8th supplements.
   - AGPLv3_Logo.svg, GPLv3_Logo.svg unchanged.
-
 
 v1.0.8 Phase 23 (2026.7.1):
   - chess.html rebuilt from chess.src/ (see chess.src/README.license for
@@ -1421,7 +1544,9 @@ v1.1.2 Phase 68 (2026.7.8, same-version revision):
       sends engineStop(), pushes step, fires Toast + haptic, schedules advance.
     * PGN cache partial-eval dialog: title has emoji prefix; back-button support
       via _pgnPartialEvalDialogActive/_pgnPartialEvalDialogDismiss globals.
-  - chess.src/game-logic.js (AGPL v3, original):
+  - chess.src/game-logic.js (GPL v3, DroidFish-derived — corrected round-55;
+    this tag previously read "(AGPL v3, original)", contradicting the file
+    header and the canonical classification):
     * 3 new i18n keys (zh/en): priority_eval_toast, priority_eval_already_cached,
       priority_eval_not_in_review.
     * Partial-eval dialog title now has emoji prefix.
@@ -1687,7 +1812,6 @@ v1.1.0 Phase 54 (2026.7.4):
     alternative vs continuation).
   - tablebase.js: PGN cascade-skip threshold 5 → max(15, len*0.1).
   All changes in GPL-v3-licensed files.
-
 
 v1.1.0 Phase 53 (2026.7.3):
   - chess.html rebuilt (Phase 53 changes in chess.src/ui.js, chess.src/game-logic.js,

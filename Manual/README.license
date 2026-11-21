@@ -1,3 +1,114 @@
+v1.2.3 round-61 (2026.11.21): manuals carry the round-61 changelog entry.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - Regalia-v1.2.3-manual-zh.html / -en.html: round-61 paragraph prepended
+    to the Appendix A rounds chain (four PR#56-review defects digested:
+    R61-a license-ledger mislabels corrected + reverse sentinel H2f, R61-b
+    V3-38 fail-open tightened + configurable guide path, R61-c analyze-all
+    progress-hang terminator moved to the progress path, R61-d dead-engine
+    batch-end notification dispatched outside the engineReady gate;
+    verifier baseline extended to 34/21/39); the chain's intro line updated
+    to "第六十一轮"/"sixty-first" and the date range extended to
+    2026.11.21; div balance re-verified 365/365 both manuals, strict
+    UTF-8, single appendix anchor.
+
+v1.2.3 round-60 (2026.10.7): manuals carry the round-60 changelog entry.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - Regalia-v1.2.3-manual-zh.html / -en.html: round-60 paragraph prepended
+    to the Appendix A rounds chain (king shake amplitude raise — ring first
+    peak 5.5px to 7px; the round-59 review report digested: F-1 TDZ
+    root-fix, F-2 guide privacy line, F-3 documented window, F-4 locale
+    fallback unification, F-5 comment correction; verifier extended to
+    30/20/38; methodology document landed); the chain's intro line updated
+    to "第六十轮"/"sixtieth" and the date range kept at
+    2026.10.7; div balance re-verified 365/365 both manuals, strict UTF-8.
+
+v1.2.3 round-58b (2026.10.6): manuals carry the round-58b changelog entry.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - Regalia-v1.2.3-manual-zh.html / -en.html: round-58b paragraph prepended
+    to the Appendix A rounds chain (manual single-step hang root-cure —
+    re-dispatch storm dedup, live ticker, progress-aware watchdog with
+    bounded auto-retry, completed-work rescue, move-list refresh, state-leak
+    cleanup; king shake re-forged as the imperial seal stamp plus a global
+    amplitude boost); the chain's intro line updated to
+    "第五十八轮b至第十八轮" / "fifty-eighth-b through eighteenth";
+    div balance re-verified at 365/365 per manual.
+
+v1.2.3 round-58 (2026.10.6): manuals carry the round-58 changelog entry.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - Regalia-v1.2.3-manual-zh.html / -en.html: round-58 paragraph prepended
+    to the Appendix A rounds chain (batch-start ghost-state fix in
+    StockfishNative — first step's bestmove no longer discarded; per-piece
+    direction-aware WAAPI shake redesign); the chain's intro line updated
+    to "第五十八轮至第十八轮" / "fifty-eighth through eighteenth";
+    div balance re-verified at 365/365 per manual.
+v1.2.3 round-57 (2026.10.6): manuals carry the round-57 changelog entry.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - Regalia-v1.2.3-manual-zh.html / -en.html: round-57 paragraph prepended
+    to the Appendix A rounds chain (anti-treadmill safety-timer fix,
+    per-step move-list/eval-bar live refresh, animation frame-rate fixes);
+    the chain's intro line updated to "第五十七轮至第十八轮" /
+    "fifty-seventh through eighteenth". div balance 365/365 preserved.
+  - Body sections: No changes (the round-57 fixes make the live behavior
+    match what the body already describes).
+
+v1.2.3 round-56 (2026.10.5): manuals synced to the round-56 tree.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - Regalia-v1.2.3-manual-zh.html / -en.html: changelog reordered
+    strictly newest-first (the v1.0.8 PHASE 51→22 block had been nested
+    after the v1.0.9 card); round-56 paragraph prepended to the section-1
+    narrative chain; all current-state worker-pool.js references updated
+    (feature bullet, module tree, data-flow text, MODULES snippet, GPL
+    list, heatmap/stats-architecture text, Web Worker section rewritten
+    as page-inline stats Worker) — historical round entries untouched;
+    review-toolbar and cache-manager mockups verified against the code.
+  - License classification: all files unchanged.
+
+v1.2.3 round-55 (2026.10.5): no changes to files in this directory.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - License classification: all files unchanged.
+
+v1.2.3 round-54b (2026.10.5): no changes to files in this directory.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - License classification: all files unchanged.
+
+v1.2.3 round-54 (2026.10.5): manuals updated — round-54 changelog entries (zh & en in sync).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - Regalia-v1.2.3-manual-zh.html / Regalia-v1.2.3-manual-en.html: the
+    chapter-1 round log gained the round-54 paragraph (PR #56 AI-review
+    triage summary: 12 fixed / 13 false positives), prepended newest-first
+    above the round-53 entry; ordering verified (zh 五十四→五十三→五十二 /
+    en fifty-fourth→fifty-third→fifty-second). No UI change this round, so
+    screenshots/mockups unchanged.
+  - License classification: unchanged (AGPL v3 documentation).
+
+v1.2.3 round-53 (2026.10.5): manuals updated — round-53 changelog entries (zh & en in sync).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - Regalia-v1.2.3-manual-zh.html / Regalia-v1.2.3-manual-en.html: the
+    round-53 entry is prepended at the TOP of the chapter-1 round log
+    (newest-first ordering re-verified). No UI changes this round —
+    mockups/diagrams re-checked against the round-53 build and remain
+    accurate.
+  - License classification: all files unchanged.
+
+v1.2.3 round-52 (2026.10.5): manuals updated — round-52 changelog entries + stale-eval behavior note (zh & en in sync).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - Regalia-v1.2.3-manual-zh.html / Regalia-v1.2.3-manual-en.html: changelog
+    sections gain the round-52 entry at the TOP (newest-first ordering
+    re-verified for every entry); the engine-analysis section documents
+    that eval results are now validated against the displayed position
+    (stale asynchronous callbacks are discarded or filed under the matching
+    review step). Screenshots/diagrams re-checked against the round-52 UI.
+  - License classification: all files unchanged.
+
+v1.2.3 round-51 (2026.9.9): manuals updated — round-51 changelog entries + BACK/background-analysis sections (zh & en in sync).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - Regalia-v1.2.3-manual-zh.html / Regalia-v1.2.3-manual-en.html: the
+    BACK-button section now documents the root-level exit-confirmation
+    dialog and the file-browser/dialog back ordering; the review-mode
+    section documents that (一键)分析全部 continues in the background
+    (notification progress k/N); changelog gains the round-51 entry
+    (newest first).
+
 v1.2.3 round-50 (2026.9.6): manuals updated — changelog round-45~50 entries + Appendix A strict newest-first.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - Regalia-v1.2.3-manual-zh.html / Regalia-v1.2.3-manual-en.html: changelog
