@@ -1,3 +1,31 @@
+v1.2.3 round-63 (2026.11.21): PR #57 CodeRabbit follow-up — negative-test
+  script hardened, meta sentinel V3-39 added (baseline 44/27/40).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - verifier/runs/r62-negative-tests.sh (project script): four review
+    findings fixed — (1) the repo root self-resolves from the script
+    location (BASH_SOURCE), removing the hardcoded sandbox path that
+    fails the backup on other machines and would mutate/verify a foreign
+    checkout where it exists; (2) exclusive mktemp backup with
+    EXIT/INT/TERM traps armed before the first mutation (a mid-run
+    SIGTERM can no longer leave an injected regression in the worktree;
+    per-item restore kept); (3) failures accumulate — mutated=no (stale
+    perl expression) or sentinel=NOT-RED now exit non-zero; (4) the
+    final baseline propagates the verifiers' real exit statuses (set -o
+    pipefail; a bare `node | tail` returned tail's 0), and v3 joins the
+    final check because it also reads ai-bridge.js. Trajectory and the
+    meta negative tests (broken-expression exit 1, SIGTERM recovery) in
+    verifier/runs/round63-audit.md.
+  - verifier/v3/round54-pr56-triage.js (AGPL v3 harness): NEW V3-39 —
+    structural self-discipline guard over the negative-test script (no
+    absolute paths, self-resolved root, trap recovery, exclusive backup,
+    failure accumulation with a real exit gate, and this ledger pointing
+    at the committed script path). Baseline 39 -> 40 (v1/v2 unchanged).
+  - Round-62 ledger entry corrected in place (R61-a precedent): the
+    negative-test script reference now points at the committed path (it
+    previously named an uncommitted sandbox-tree location) and one
+    filename typo is fixed (ai-bridge.js, not .java).
+  - License classification: all files unchanged.
+
 v1.2.3 round-62 (2026.11.21): 58b six-bug sentinels + dedup regression sentinels (baseline 44/27/39).
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - v1/eval-stale-harness.js (AGPL v3 harness): NEW scenario S58 (10
@@ -18,9 +46,10 @@ v1.2.3 round-62 (2026.11.21): 58b six-bug sentinels + dedup regression sentinels
     regresses to a naive read; negative-tested). Baseline stays 39
     (entries upgraded in place, count unchanged).
   - Negative-test discipline: all six new sentinels RED-verified by
-    regressing ai-bridge.java to pre-58b behavior via scripted mutations
-    (restore -> GREEN). Script: scripts/r62-negative-tests.sh (sandbox
-    tree); trajectory in verifier/runs/round62-audit.md.
+    regressing ai-bridge.js to pre-58b behavior via scripted mutations
+    (restore -> GREEN). Script: verifier/runs/r62-negative-tests.sh
+    (paths self-resolve from the script location; hardened in round-63);
+    trajectory in verifier/runs/round62-audit.md.
   - License classification: all files unchanged.
 
 v1.2.3 round-56 (2026.10.5): v1 harness module list synced to build-chess.py.

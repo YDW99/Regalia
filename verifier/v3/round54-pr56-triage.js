@@ -258,6 +258,39 @@ ok('V3-38 guide §1 privacy line accurate (skip only when guide absent)',
      if (!row) return false; // present guide, missing privacy row → FAIL
      return row.includes('残局库') && !row.includes('无网络权限');
    })());
+// V3-39 — round-63 (PR #57 CodeRabbit follow-up): the round-62 negative-test
+//   script is the "guardian of the guardians" — if it fails open, all six
+//   58b sentinels it verifies go naked silently. The four reviewed defects
+//   (hardcoded sandbox paths, no trap recovery, no failure accumulation,
+//   tail masking node's exit status) were each a §6.2 #13 recurrence
+//   ("a fail-open verifier is no verifier") at the meta layer. This sentinel
+//   pins the fixed properties permanently (methodology §2.7, round-63):
+//   (a) no absolute sandbox paths — the root must self-resolve from the
+//       script location;
+//   (b) trap-based mutation recovery (EXIT/INT/TERM) over an exclusive
+//       mktemp backup;
+//   (c) failure accumulation with a real exit gate — mutated=no or
+//       NOT-RED must fail the run;
+//   (d) pipefail, so `node | tail` cannot mask node's exit status;
+//   (e) the verifier README.license points at the committed script path
+//       and carries no phantom sandbox-tree reference (the CR#1 fix).
+ok('V3-39 r62-negative-tests.sh self-discipline (self-resolved root, trap recovery, exclusive backup, accumulated failures, real exit codes)',
+   (() => {
+     const s = read('verifier/runs/r62-negative-tests.sh');
+     const vl = read('verifier/README.license');
+     if (!s || !vl) return false;
+     return !s.includes('/home/')
+       && s.includes('BASH_SOURCE')
+       && s.includes('mktemp')
+       && /trap\s+'[^']*'\s+EXIT/.test(s)
+       && /trap\s+'[^']*'\s+INT/.test(s)
+       && /trap\s+'[^']*'\s+TERM/.test(s)
+       && s.includes('FAILED=$((FAILED+1))')
+       && s.includes('set -o pipefail')
+       && s.includes('[ "$FAILED" -gt 0 ]')
+       && vl.includes('verifier/runs/r62-negative-tests.sh')
+       && !vl.includes('scripts/r62-negative-tests.sh');
+   })());
 // H3 — path resolution is __dirname-based (like v1/v2), not cwd-based
 ok('H3 verifier resolves from __dirname (cwd-independent)',
    read('verifier/v3/round54-pr56-triage.js').includes("path.join(__dirname, '..', '..'"));

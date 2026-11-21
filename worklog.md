@@ -1,3 +1,47 @@
+# Regalia v1.2.3 — round-63 工作日志（2026-11-21 UTC+8）
+
+## 任务来源
+
+消化 PR #57（upload → main，head `e4f8f43e` = round-62 树，今晨 11:31 创建）CodeRabbit 评审 4 条意见（邮件 2026-11-21 11:39）+ 用户逐条核实与修法清单。四条全部指向 round-62 新增的负向测试脚本 `verifier/runs/r62-negative-tests.sh`（41 行）及其台账引用，逐条到源码现场核实**全部属实，无误报**。基线源 = GitHub upload 分支 head `e4f8f43e`（与 round-62 交付树一致；本地克隆后三件套 44/27/39 复核全绿）。
+
+## 现场核实（逐条）
+
+| # | 级别 | 意见 | 现场核实 |
+|---|---|---|---|
+| 1 | Minor | 台账引用路径不存在 | `verifier/README.license:22` 引用 `scripts/r62-negative-tests.sh` "(sandbox tree)"——仓库内不存在该路径，实际提交于 `verifier/runs/`；同段第 21 行 ai-bridge.java 系笔误（应为 .js） |
+| 2 | Major | 硬编码绝对路径 | 脚本第 4 行 `AB=/home/z/my-project/regalia/…`，第 8/9/41 行同根——异机运行备份失败；该路径若存在则会变异并验证另一个检出 |
+| 3 | Minor | 变异前无退出恢复 | 全脚本无 trap；第 12 行 perl 变异后若收 SIGTERM，第 17/39 行恢复不执行，工作区留下故意注入的回归；BAK 固定 /tmp 路径，并发运行互踩备份 |
+| 4 | Major | 无效负向测试静默通过 | 第 13/15 行 mutated=no / NOT-RED 只 echo 不累计；第 41 行 `node … \| tail -1` 的退出码是 tail 的，node 真实失败被管道吞掉——perl 失配或哨兵标签改名后脚本以 0 宣布通过，六哨兵裸奔无人知晓 |
+
+**定性**：该脚本的职责是证明哨兵真的会红——"守护者的守护者"。第 4 条是 round-61 R61-b 刚修掉的 V3-38 fail-open（§6.2 #13：fail-open 验证器等于没有验证器）在元层的重演；第 2 条对应 V3-38 的路径硬编码教训；第 3 条对应 Bug F 状态清偿/编辑铁律；第 1 条对应"文档指向失真"。事件整体写入方法论 §2.7 round-63 实例化。
+
+## 实施（一个脚本 + 台账 + v3 新哨兵；不触碰哨兵本体与 v1/v2）
+
+1. **`r62-negative-tests.sh` 四条全修**：ROOT 由 `BASH_SOURCE` 自解析（脚本在 verifier/runs/，上两级即仓库根），AB / run_v1 / run_v2 / 终检全部改用 ROOT；`mktemp` 独占备份 + `trap … EXIT/INT/TERM` 于首次变异前置位（信号路径恢复后以 130/143 退出；逐项恢复保留）；FAILED 累计器——任一项 mutated≠yes 或 ST≠RED 即 +1；`set -o pipefail`——终检穿透 node 真实退出码，v3 纳入终检（v3 亦读 ai-bridge.js，恢复失败无处藏身）；FAILED>0 → exit 1。
+2. **台账两处就地更正**（R61-a 先例）+ round-63 新条目置顶：脚本路径改为已提交路径、删 "(sandbox tree)"；ai-bridge.java→.js。
+3. **防回潮哨兵 V3-39**（v3，负空间测试标准动作——本轮手工发现转永久哨兵）：结构断言——脚本不得含 /home/ 绝对路径、必须 BASH_SOURCE 自解析、必须 mktemp+trap（EXIT/INT/TERM）、必须含 FAILED 累计与 pipefail 与终检门、台账必须指向已提交路径且不含失真路径字面量。v3 基线 39→**40**，新三件套基线 **44/27/40**。
+4. **方法论扩写**：§2.7 新增 round-63 实例化（"守护者的守护者也要过军规"：退出码必须真实、路径必须自解析、变异必须可恢复、文档必须指向实物 + 元纪律"负例脚本必须能证明自己会失败"）；§4 基线表更新；round-63 状态闭环行。
+
+## 实跑自证（军规 8：禁止"改完就算"）
+
+- **修复后脚本全量实跑**：六项全部 `mutated=yes sentinel=RED`（N1→S58-C1、N2→S58-E1、N3→S58-D1、N4→V2-24、N5→V2-22、N6→V2-23a），终检 v1/v2/v3 全绿（44/27/40），退出码 0。
+- **元负例 1（证第 4 条修复生效）**：把 N1 的 perl 表达式改坏（匹配不存在的字面量）→ 修复版报告 `mutated=no sentinel=NOT-RED`、FAILED=1、**exit 1**；恢复后复跑 exit 0。
+- **元负例 2（A/B 对照，旧缺陷现场）**：原版脚本（e4f8f43e）同法改坏 N1 → 打印 `mutated=no sentinel=NOT-RED` 后其余五项照常 RED、终检照常打印，**exit 0**——旧脚本在哨兵裸奔时宣布通过，缺陷现场完整复现。
+- **元负例 3（证第 3 条修复生效）**：后台运行修复版，9 秒时点（N1 已完成、N2 变异在途）kill -TERM → `wait` 返回 143，工作区 `git diff` 干净（在途变异被 trap 恢复），无残留 mktemp 备份；1.2s / 3.0s 时点重复一致。
+- **fail-closed 旁证**：脚本副本放到 /tmp（目录深度错位 → ROOT 解析为 /）→ cp/perl/验证全部失败 → **exit 1**——路径错位时宁可失败，不会静默验证错误的树。
+- **git 纪律现场（仓库无 .gitignore 的三重事故）**：构建后 `git add -A` 误纳引擎二进制（114MB）与 337 个构建产物（build/268 + .cxx/46 + .gradle/23）。首次修复命令以 `cat .gitignore` 开头——仓库本无该文件，`&&` 链在第一步静默断裂，**修复从未执行而验证输出看起来正常**；二次修复清了构建产物但引擎仍在；三次（本次）以 `git ls-tree -r HEAD` 硬断言验证：HEAD 树 161 文件 = e4f8f43e 的 160 + round63-audit.md，jniLibs/build/.gradle/.cxx 条目数全为 0。教训：①tar 纯净复核（§3.3）必须打包后立即执行；②**修复的验证断言不得与修复同处一条 `&&` 链**（链首失败会让验证一并跳过）；③验证用 `ls-tree`（树内容）而非 `show --stat`（差异）。
+- 三件套新基线 **44 / 27 / 40 全绿**（v3 含 V3-39）；恢复后复跑一致。
+
+## 验证结论
+
+- node --check：v3 改动通过（v1/v2 零改动，哨兵本体未触碰）。
+- chess.html：零变化（24,208 行 / 1,488,718 字节，本轮 JS 模块零改动，构建输入与 round-62 逐字节一致）。
+- 版本号 10203/"1.2.3" 不变；无新权限、无新网络出口、无新数据收集（本轮不触碰 Manifest/Java/JS）。
+- 台账：verifier/README.license round-63 条目置顶 + round-62 条目两处更正；H2b/H2f 双向哨兵随 v3 复跑全绿（新条目写完立即跑，§6.2 #18）。
+- APK：构建输入与 round-62 逐字节一致，全新环境重建后全量签名构建 + 六连验（结果见 round63-audit.md §4）。
+
+---
+
 # Regalia v1.2.3 — round-62 工作日志（2026-11-21 UTC+8）
 
 ## 任务来源
