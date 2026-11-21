@@ -1,3 +1,53 @@
+# Regalia v1.2.3 — round-64 工作日志（2026-11-21 UTC+8）
+
+## 任务来源
+
+消化 PR #57（upload → main，head `94efed9e` = round-63 树）CodeRabbit 第二轮评审 3 条意见（邮件 2026-11-21 12:58）+ 用户自查发现的 1 处活体绕过（CodeRabbit 未抓到）。四条全部指向 round-63 对 `verifier/runs/r62-negative-tests.sh` 的加固本身及其 v3 哨兵 V3-39，逐条到源码现场核实**全部属实，无误报**。基线源 = GitHub upload 分支 head `94efed9e`。
+
+**环境事件**：本轮开工时沙箱文件系统已回滚至 round-61 态（round-62/63 本地文件全部丢失）——GitHub upload 分支再次证明是唯一权威恢复源，重新克隆后三件套 44/27/40 复核全绿，零差异。此教训入指南避坑清单。
+
+## 现场核实（逐条）
+
+| # | 级别 | 意见 | 现场核实 |
+|---|---|---|---|
+| 1 | Major | 初始备份 cp 未检查 | `BAK=$(mktemp) \|\| exit 1` 后 `cp "$AB" "$BAK"` 裸跑——tmpfs 满或源不可读时备份为空/残缺，脚本照常变异；随后逐项恢复与 EXIT trap 都会用坏备份覆盖 ai-bridge.js，**运行前内容（含未提交修改）永久丢失** |
+| 2 | Major | restore() 无条件删备份 + EXIT 不传播失败 | 第 33 行 cp 失败后第 34 行 `rm -f` 照删（无 set -e）→ 唯一备份销毁、目标停留变异态，不可恢复；`2>/dev/null` 吞掉诊断；EXIT trap `restore` 失败不改退出码 → 恢复失败仍 exit 0；信号路径先 restore（删 BAK）再 exit，EXIT 二次调用时 BAK 已不存在——"cp 失败即非零"的朴素修法会把正常幂等清理误报为失败，幂等性要求是真实的 |
+| 3 | Minor | V3-39 trap 正则可被空处理器满足 | `/trap\s+'[^']*'\s+EXIT/` 对 `trap '' EXIT` 照样匹配（`[^']*` 允许零字符）——三个 handler 全删空，V3-39 仍绿 |
+| 4 | 活体（用户发现） | V3-39 includes() 可被注释满足 | `s.includes('mktemp')` 命中脚本头注释 "exclusive mktemp backup"（第 9 行）——删掉 `BAK=$(mktemp)` 实现行只留注释，V3-39 照样绿，**现成绕过路径而非假设**；§6.2 #17（哨兵被注释引文抢先命中）第三次重演，这次在元哨兵身上；BASH_SOURCE/pipefail/FAILED 各子句同构脆弱（当前注释无完整字面量，但离被绕过只差一行注释） |
+
+**定性（如实定级）**：第 1/2 条是**数据丢失路径**，不是一般风格问题——为"变异可恢复"而建的备份/恢复机制，自身成了销毁它所保护文件的最可靠向量（方法论 §1.2"防御机制自身的副作用"的 shell 版实例，入档）。第 3/4 条与 round-63 呈**同构递归**：脚本 fail-open → 修 → 加元哨兵 → 元哨兵被空处理器/注释绕过 → 行锚定 + handler 内容检查 + 当轮 RED-verified。三轮教训升格为硬约束写入指南 §7：任何新增哨兵（含守护脚本的元哨兵）当轮必须 RED-verified，负向用例必须覆盖"声明存在但实现为空/被注释替代"（军规 4 对称性审查的完整闭环）。
+
+## 实施（一个 fixup 变更面：守护脚本 + v3 哨兵；不触碰哨兵本体与 v1/v2；基线 44/27/40 不变）
+
+1. **[CR#5] 备份字节复核、变异前中止**：`if ! cp "$AB" "$BAK" || ! cmp -s "$AB" "$BAK"; then rm -f "$BAK"; echo "backup failed, aborting before any mutation" >&2; exit 1; fi`——cmp 逐字节复核符合项目字节纪律；中止发生在 trap 武装之前，工作区未被触碰。
+2. **[CR#6] restore 幂等 + 成功才删 + 失败传播**：BAK 不存在 → return 0（信号→EXIT 双调用不误报）；`cp && cmp -s` 通过才 `rm -f`；失败保留备份、stderr 打印 `RESTORE FAILED — backup kept at: $BAK`、return 1；三 trap 改为 `trap 'restore || exit 1' EXIT`（INT/TERM 追加 `exit 130/143`）——恢复失败不再可能 exit 0。neg() 内逐项恢复同加 `cp + cmp -s` 检查：失败即打印 + FAILED++ + 中止变异序列，交给 EXIT trap 兜底重试。
+3. **V3-39 从"字面量存在性"升级为"实现行存在性"**：全部子句行锚定——`^ROOT=.*BASH_SOURCE/m`、`^BAK=\$\(mktemp\)/m`、`^set -o pipefail/m`、`^[^#\n]*FAILED=\$\(\(FAILED\+1\)\)/m`、`^[^#\n]*\[ "\$FAILED" -gt 0 \]/m`（`[^#\n]*` 前缀允许缩进但永不匹配注释行），trap 正则要求 handler 体内含 restore：`^trap\s+'[^']*\brestore\b[^']*'\s+(EXIT|INT|TERM)/m`。ok() 标题标注 "line-anchored … restore-calling trap handlers" 以便后人识别检查代际。断言数不变（40），无新哨兵编号。
+
+## 实跑自证（军规 8：禁止"改完就算"）——全部在 /tmp fixture 树注入，真实工作树零触碰
+
+- **元负例 A（备份 cp 失败注入）**：fixture 树 ai-bridge.js chmod 000 → **exit 1**、stderr "backup failed, aborting before any mutation"、源文件 sha256 前后一致（未被触碰）、专设 TMPDIR 无残留（坏备份被 rm）。
+- **元负例 B（restore 失败注入）**：fixture 脚本在 N1 变异+哨兵之后、逐项恢复之前插桩 `chmod 555 "$AB"`（目标变只读）→ **exit 1**、两段失败信息齐全（"per-item restore failed after NEG[N1-dedup]" + "RESTORE FAILED — backup kept at: <路径>"）、**备份保留在盘且内容 == 运行前内容**（可手工恢复）、目标诚实停留变异态（无假成功、无静默覆盖）。
+- **元负例 C（SIGINT 双调用不误报）**：t=2.5s（首项哨兵在途）kill -INT → **exit 130**、EXIT 重入无 "RESTORE FAILED" 误报、工作树逐字节恢复、BAK 清理、0/6 项完成（真实中断）。
+- **元负例 D1（空处理器变异）**：三 trap 改 `trap '' EXIT/INT/TERM` → v3 **V3-39 FAIL**、RESULT 39 passed 1 failed、exit 1。
+- **元负例 D2（删实现留注释变异）**：删 `BAK=$(mktemp)`/`set -o pipefail`/`ROOT=` 三实现行（注释 "mktemp backup" 仍在）→ v3 **V3-39 FAIL**、exit 1。**A/B 现场对照**：旧 `includes('mktemp')` 对该变异树返回 TRUE（活体绕过复现），新行锚定返回 false——CodeRabbit 漏掉的正是这一差距。
+- **守护脚本真实树全量实跑**：六项全部 `mutated=yes sentinel=RED`，终检 v1/v2/v3 全绿（44/27/40），退出码 0；跑后 `git status` 仅两个预期修改文件，变异系列零残留。
+- 25 项元测试断言全 PASS。
+
+## bash/POSIX 信号语义坑（测试 C 两次失败定位出的新坑，入指南）
+
+非交互 shell 以 `&` 后台启动且 job control 关闭时，**父 shell 按 POSIX 异步列表规则给子进程设 SIGINT=SIG_IGN**，而 bash 拒绝 trap "启动时被忽略的信号"——`script & kill -INT` 永远到不了 INT trap（脚本安静跑完、退出 0，工作树干净是正常完成而非信号恢复——一个会静默通过的测试陷阱）。setsid 无效（ignored disposition 穿透 exec）。SIGTERM 不在 POSIX 忽略集——round-63 的 TERM 元测试因此成功。修法：`&` 启动前后 `set -m`/`set +m`（作业控制开启 → 后台作业独立进程组 + 保留默认 SIGINT 处置）。推论：守护脚本作为真后台作业运行时 INT trap 按 POSIX 设计天然失效，EXIT/TERM 才是有效恢复路径；INT trap 服务于前台 Ctrl-C 场景。
+
+## 验证结论
+
+- node --check：v3 改动通过（v1/v2 零改动，哨兵本体未触碰）。
+- chess.html：零变化（本轮 JS 模块零改动，构建输入与 round-63 逐字节一致）。
+- 版本号 10203/"1.2.3" 不变；无新权限、无新网络出口、无新数据收集（本轮不触碰 Manifest/Java/JS）。
+- 台账：verifier/README.license round-64 条目置顶；H2b/H2f 双向哨兵随 v3 复跑全绿（新条目写完立即跑，§6.2 #18）。
+- 三件套基线 **44 / 27 / 40 全绿**（V3-39 升级后仍 40 项）。
+- APK：构建输入与 round-63 逐字节一致，全新环境重建后全量签名构建 + 六连验（结果见 round64-audit.md §6）。
+
+---
+
 # Regalia v1.2.3 — round-63 工作日志（2026-11-21 UTC+8）
 
 ## 任务来源

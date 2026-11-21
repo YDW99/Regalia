@@ -274,20 +274,31 @@ ok('V3-38 guide §1 privacy line accurate (skip only when guide absent)',
 //   (d) pipefail, so `node | tail` cannot mask node's exit status;
 //   (e) the verifier README.license points at the committed script path
 //       and carries no phantom sandbox-tree reference (the CR#1 fix).
-ok('V3-39 r62-negative-tests.sh self-discipline (self-resolved root, trap recovery, exclusive backup, accumulated failures, real exit codes)',
+//   round-64 (follow-up 2): upgraded from LITERAL existence to
+//   IMPLEMENTATION-LINE existence. The round-63 version had two live bypass
+//   routes, both §6.2 #17 recurrences (a sentinel satisfied by a comment):
+//   the includes() checks matched the script's own comments ("exclusive
+//   mktemp backup"), so deleting the real implementation and keeping the
+//   comment still passed; and /trap\s+'[^']*'\s+EXIT/ matched EMPTY handlers
+//   (trap '' EXIT). Now every property is line-anchored (^…/m, so a '#'
+//   comment line can never satisfy it) and the trap handlers must actually
+//   call restore. Meta negative tests for all bypass mutations (empty
+//   handler, implementation deleted comment kept, backup-cp failure,
+//   restore failure, SIGINT double-trap) live in round64-audit.md.
+ok('V3-39 r62-negative-tests.sh self-discipline (line-anchored: self-resolved root, verified backup, restore-calling trap handlers, exclusive backup, accumulated failures, real exit codes)',
    (() => {
      const s = read('verifier/runs/r62-negative-tests.sh');
      const vl = read('verifier/README.license');
      if (!s || !vl) return false;
      return !s.includes('/home/')
-       && s.includes('BASH_SOURCE')
-       && s.includes('mktemp')
-       && /trap\s+'[^']*'\s+EXIT/.test(s)
-       && /trap\s+'[^']*'\s+INT/.test(s)
-       && /trap\s+'[^']*'\s+TERM/.test(s)
-       && s.includes('FAILED=$((FAILED+1))')
-       && s.includes('set -o pipefail')
-       && s.includes('[ "$FAILED" -gt 0 ]')
+       && /^ROOT=.*BASH_SOURCE/m.test(s)
+       && /^BAK=\$\(mktemp\)/m.test(s)
+       && /^trap\s+'[^']*\brestore\b[^']*'\s+EXIT/m.test(s)
+       && /^trap\s+'[^']*\brestore\b[^']*'\s+INT/m.test(s)
+       && /^trap\s+'[^']*\brestore\b[^']*'\s+TERM/m.test(s)
+       && /^[^#\n]*FAILED=\$\(\(FAILED\+1\)\)/m.test(s)
+       && /^set -o pipefail/m.test(s)
+       && /^[^#\n]*\[ "\$FAILED" -gt 0 \]/m.test(s)
        && vl.includes('verifier/runs/r62-negative-tests.sh')
        && !vl.includes('scripts/r62-negative-tests.sh');
    })());

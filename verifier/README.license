@@ -1,3 +1,40 @@
+v1.2.3 round-64 (2026.11.21): PR #57 CodeRabbit follow-up 2 — guard-script
+  data-loss paths closed, meta sentinel V3-39 upgraded to
+  implementation-line anchoring (baseline 44/27/40 unchanged).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - verifier/runs/r62-negative-tests.sh (project script): the round-63
+    hardening itself opened two DATA-LOSS paths (methodology §1.2, a
+    defense mechanism's own side effects) — (1) the initial backup cp
+    ran unchecked, so a full tmpfs / unreadable source would hand every
+    later restore an empty/partial BAK to copy over ai-bridge.js,
+    destroying the pre-run content; now cp + cmp -s byte-verified,
+    aborting BEFORE any mutation (before the traps are armed, worktree
+    untouched); (2) restore() deleted the backup unconditionally (a
+    failed cp still rm'd the ONLY copy while 2>/dev/null swallowed the
+    diagnosis) and the EXIT trap did not propagate the failure; now
+    idempotent restore (absent BAK = success — the signal-then-EXIT
+    double call cannot false-alarm), delete only after cp + cmp -s
+    succeed, keep the backup + print its path + exit non-zero otherwise;
+    the per-item restore in neg() gets the same check and aborts the
+    mutation series on failure, leaving recovery to the EXIT trap.
+  - verifier/v3/round54-pr56-triage.js (AGPL v3 harness): V3-39 upgraded
+    from literal existence to IMPLEMENTATION-LINE existence — every
+    property line-anchored (^ROOT=.*BASH_SOURCE/m, ^BAK=$(mktemp)/m,
+    ^set -o pipefail/m, ^[^#\n]*FAILED=$((FAILED+1))/m,
+    ^[^#\n]*[ "$FAILED" -gt 0 ]/m — a '#' comment line can never satisfy
+    them) and the trap handlers must actually call restore (^trap\s+'
+    [^']*\brestore\b[^']*'\s+EXIT|INT|TERM/m) — closing the live bypass
+    where s.includes('mktemp') was satisfied by the header comment
+    "exclusive mktemp backup" with the implementation line deleted, and
+    the empty-handler bypass (trap '' EXIT) on the trap regexes. Same
+    sentinel number, 25-assertion meta negative test suite (backup-cp
+    failure, restore failure with backup kept, SIGINT 130 with no
+    double-restore false alarm, empty handlers RED, implementation-
+    deleted-comment-kept RED + old-check A/B bypass demo) in
+    verifier/runs/round64-audit.md; all injections on /tmp fixture
+    copies, the real worktree untouched.
+  - License classification: all files unchanged.
+
 v1.2.3 round-63 (2026.11.21): PR #57 CodeRabbit follow-up — negative-test
   script hardened, meta sentinel V3-39 added (baseline 44/27/40).
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
