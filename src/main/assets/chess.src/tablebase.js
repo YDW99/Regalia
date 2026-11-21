@@ -152,7 +152,15 @@ function _parsePGN(pgnText){
   // Handle multiple games: only parse the first game.
   // PGN files with multiple games have header blocks starting with [Event ...].
   // Split on double-newline followed by a header tag to isolate the first game.
-  const gameBlocks=pgnText.split(/\n\s*\n(?=\[)/);
+  // v1.2.3 round-66 (F-23): hardened linear lookbehind form — the old
+  //   /\n\s*\n(?=\[)/ backtracks O(k²) on long blank-line runs not followed
+  //   by '[' (the round-49 stats.html fix updated three copies but missed
+  //   this fourth one — the MAIN page's import parser, main thread ANR on
+  //   hostile PGNs). Same form as stats.html's split; split results are
+  //   byte-identical (round-49 proved this transformation with a 300k-case
+  //   fuzz; see round66-audit.md). Lookbehind needs Chrome 62+ — inside the
+  //   WebView≥84 floor.
+  const gameBlocks=pgnText.split(/(?<!\n)\n[^\S\n]*\n(?:[^\S\n]*\n)*(?=\[)/);
   if(gameBlocks.length>1)pgnText=gameBlocks[0];
   
   // Extract FEN from headers if present (for custom starting positions)
@@ -2057,8 +2065,29 @@ if(wait>0)await new Promise(r=>setTimeout(r,wait));
 try{
 const ctrl=typeof AbortController!=='undefined'?new AbortController():null;
 const tmr=ctrl?setTimeout(()=>ctrl.abort(),5000):null;
-const resp=await fetch(`https://tablebase.lichess.ovh/standard?fen=${encodeURIComponent(fen)}`,{signal:ctrl?ctrl.signal:undefined});
-if(tmr)clearTimeout(tmr);
+// v1.2.3 round-66 (F-11): two gaps on legacy WebViews (no AbortController,
+//   Chrome < 66; minSdk 23 can ship such WebViews unreplaced): (a) the fetch
+//   had NO timeout at all — a stalled network hung the probe forever;
+//   (b) clearTimeout ran only on the success path, so a rejected fetch left
+//   the abort timer armed for its full 5s. (a) is fixed with a 5s
+//   Promise.race wall-clock fallback that rejects into the existing catch
+//   (uniform fail-count semantics; Promise.race attaches handlers to the
+//   losing fetch, so a late network rejection cannot become an unhandled
+//   rejection); (b) by clearing the timer in a finally.
+const _tbUrl=`https://tablebase.lichess.ovh/standard?fen=${encodeURIComponent(fen)}`;
+let resp;
+try{
+  if(ctrl){
+    resp=await fetch(_tbUrl,{signal:ctrl.signal});
+  }else{
+    resp=await Promise.race([
+      fetch(_tbUrl),
+      new Promise((_,rej)=>setTimeout(()=>rej(new Error('tablebase probe: 5s wall-clock timeout (no AbortController)')),5000))
+    ]);
+  }
+}finally{
+  if(tmr)clearTimeout(tmr);
+}
 // v1.0.5 Round-6 Rev62 (2026.6.27) FIX: a 404 response means "position not in
 // tablebase", NOT "server is down". (The entry is already defended — v1.2.3
 // round-41 added the pieceCountLE7 guard at the top of probeTablebase — but a

@@ -1301,10 +1301,17 @@ body{font-family:system-ui,-apple-system,sans-serif;background:var(--bg);color:v
 // hashing, FEN generation, game status, constants, i18n (T/toggleLang/_i18n),
 // personified move animations (Web Animations API), AI move requests, ECO
 // recommendation logic, and setup-mode validation.
-// Bundled by build-chess.py after chess960.js + pgn-standard.js + worker-pool.js
-// and before ai-bridge.js + tablebase.js + eco-data.js + ui.js. References
-// globals (gameState, playerColor, AndroidBridge, audioEngine, …) defined in
-// ui.js. See README.license for the module merge order.
+// Bundled by build-chess.py as the FIRST module — before chess960.js,
+// pgn-standard.js, state-store.js, ai-bridge.js, tablebase.js, eco-data.js,
+// ui-gameflow.js, ui-interactions.js and ui.js (build-chess.py's modules
+// list is the authoritative order; worker-pool.js has not been bundled since
+// round-56 and was deleted in round-66). Being first is a responsibility:
+// any constant shared across modules MUST live here or in another early
+// module, never in a later one (round-60 F-1). References globals
+// (gameState, playerColor, AndroidBridge, audioEngine, …) defined in ui.js —
+// ui.js is the LAST module, so those globals exist only at runtime (inside
+// function bodies); referencing them during this module's top-level
+// evaluation throws TDZ/ReferenceError. See README.license for the merge order.
 //
 // Copyright (C) 2026 Regalia
 //
@@ -4619,8 +4626,9 @@ if(gameOver||reviewMode||setupMode||gameState.currentTurn===playerColor||!isAITh
 // Level 7: probe tablebase for endgame positions (7 pieces or fewer) before Stockfish
 // v1.2.1 round-11 (review fix): restore the typeof guard around pieceCountLE7.
 //   tablebase.js is loaded AFTER game-logic.js in build-chess.py's module
-//   order, and is also a network-fetched fallback (the worker-pool path may
-//   fail to register on extreme WebView implementations). If pieceCountLE7
+//   order, and its lichess probe is a network-dependent path. (round-66 R-2:
+//   the old parenthetical cited the worker-pool path — a dead reference,
+//   worker-pool.js has not been bundled since round-56.) If pieceCountLE7
 //   is somehow undefined (script load failure, worker error), an unguarded
 //   call would throw ReferenceError and completely halt AI move generation
 //   — the user would see "AI thinking" forever with no recovery path. The
@@ -12060,7 +12068,11 @@ function _requestBatchEval(step){
       }
       // On synchronous failure, advance to the next step (don't stall)
       if(typeof _reviewAnalyzeAdvance==='function'){
-        setTimeout(function(){try{_reviewAnalyzeAdvance();}catch(_e){}},100);
+        // v1.2.3 round-66 (F-12): this delayed advance is the recovery path of
+        //   the batch pipeline — the project's most hang-prone path (rounds
+        //   57/57c/58/61). A silently swallowed retry failure destroys the
+        //   diagnostic trail exactly when it is needed.
+        setTimeout(function(){try{_reviewAnalyzeAdvance();}catch(_e){console.warn('[BATCH] delayed advance failed',_e&&_e.message?_e.message:_e);}},100);
       }
       return;
     }
@@ -12456,7 +12468,15 @@ function _parsePGN(pgnText){
   // Handle multiple games: only parse the first game.
   // PGN files with multiple games have header blocks starting with [Event ...].
   // Split on double-newline followed by a header tag to isolate the first game.
-  const gameBlocks=pgnText.split(/\n\s*\n(?=\[)/);
+  // v1.2.3 round-66 (F-23): hardened linear lookbehind form — the old
+  //   /\n\s*\n(?=\[)/ backtracks O(k²) on long blank-line runs not followed
+  //   by '[' (the round-49 stats.html fix updated three copies but missed
+  //   this fourth one — the MAIN page's import parser, main thread ANR on
+  //   hostile PGNs). Same form as stats.html's split; split results are
+  //   byte-identical (round-49 proved this transformation with a 300k-case
+  //   fuzz; see round66-audit.md). Lookbehind needs Chrome 62+ — inside the
+  //   WebView≥84 floor.
+  const gameBlocks=pgnText.split(/(?<!\n)\n[^\S\n]*\n(?:[^\S\n]*\n)*(?=\[)/);
   if(gameBlocks.length>1)pgnText=gameBlocks[0];
   
   // Extract FEN from headers if present (for custom starting positions)
@@ -14361,8 +14381,29 @@ if(wait>0)await new Promise(r=>setTimeout(r,wait));
 try{
 const ctrl=typeof AbortController!=='undefined'?new AbortController():null;
 const tmr=ctrl?setTimeout(()=>ctrl.abort(),5000):null;
-const resp=await fetch(`https://tablebase.lichess.ovh/standard?fen=${encodeURIComponent(fen)}`,{signal:ctrl?ctrl.signal:undefined});
-if(tmr)clearTimeout(tmr);
+// v1.2.3 round-66 (F-11): two gaps on legacy WebViews (no AbortController,
+//   Chrome < 66; minSdk 23 can ship such WebViews unreplaced): (a) the fetch
+//   had NO timeout at all — a stalled network hung the probe forever;
+//   (b) clearTimeout ran only on the success path, so a rejected fetch left
+//   the abort timer armed for its full 5s. (a) is fixed with a 5s
+//   Promise.race wall-clock fallback that rejects into the existing catch
+//   (uniform fail-count semantics; Promise.race attaches handlers to the
+//   losing fetch, so a late network rejection cannot become an unhandled
+//   rejection); (b) by clearing the timer in a finally.
+const _tbUrl=`https://tablebase.lichess.ovh/standard?fen=${encodeURIComponent(fen)}`;
+let resp;
+try{
+  if(ctrl){
+    resp=await fetch(_tbUrl,{signal:ctrl.signal});
+  }else{
+    resp=await Promise.race([
+      fetch(_tbUrl),
+      new Promise((_,rej)=>setTimeout(()=>rej(new Error('tablebase probe: 5s wall-clock timeout (no AbortController)')),5000))
+    ]);
+  }
+}finally{
+  if(tmr)clearTimeout(tmr);
+}
 // v1.0.5 Round-6 Rev62 (2026.6.27) FIX: a 404 response means "position not in
 // tablebase", NOT "server is down". (The entry is already defended — v1.2.3
 // round-41 added the pieceCountLE7 guard at the top of probeTablebase — but a

@@ -258,3 +258,51 @@ javac), second invocation ran clean:
 - Deliveries: source archive, signed APK, recovery guide (the usual
   trio), plus the round-64 mirror-strategy environment notes carried
   into the guide's pitfalls section.
+
+
+---
+
+## ERRATUM (round-66, F-21) — Gradle property precedence recorded upside-down above
+
+The note above ("a GRADLE_USER_HOME gradle.properties does NOT outrank the
+project gradle.properties — the command line does; round-62's lesson recorded
+more precisely this round") is WRONG, and it "corrected" a round-62 worklog
+record that was RIGHT. The actual precedence (high → low):
+
+1. command line (`-P`, `-D`, `--project-prop`) — highest;
+2. **`GRADLE_USER_HOME/gradle.properties` (user-level)**;
+3. project-root `gradle.properties`;
+4. `GRADLE_HOME/gradle.properties` — lowest.
+
+The user-level file DOES override the project-level one (Gradle merges
+user-level properties as overrides on top of project-level ones; this is also
+how this project's 4GB-sandbox `-Xmx` workaround survives a project-level
+`-Xmx4096m` when the daemon is launched with a user-level file present). The
+round-62 worklog line ("GRADLE_USER_HOME 级优先于项目级") was correct as written;
+the round-64 "more precisely" pass inverted it. What round-64 MEANT to record
+survives: the command line outranks both, and the round-64 build used the
+command-line form — which is why the build itself worked despite this note
+being wrong.
+
+The round-66 sandbox re-verified the precedence empirically on the same
+Gradle 8.11.1, three independent methods (all reproducible, recorded in
+round66-audit.md §4):
+  (a) build property — GRADLE_USER_HOME sets my.prop=userValue, project root
+      sets my.prop=projectValue → providers.gradleProperty('my.prop') ==
+      userValue (USER wins);
+  (b) live daemon Xmx — user-level org.gradle.jvmargs=-Xmx512m + project-level
+      -Xmx384m → the daemon's actual command line (jcmd/ps) carries -Xmx512m
+      (USER wins);
+  (c) invalid-value matrix (--no-daemon) — user-level INVALID + project-level
+      valid → JVM refuses to start (the user-level INVALID governs); user-level
+      valid + project-level INVALID → build succeeds (project INVALID ignored);
+      user-level INVALID + CLI -D valid → succeeds (CLI wins).
+Consistent conclusion: command line > GRADLE_USER_HOME > project root >
+GRADLE_HOME — for build properties AND for org.gradle.jvmargs alike.
+Verification-process note (meta): the round-66 matrix was first run with a
+malformed user-level file (bare value, missing the org.gradle.jvmargs= key),
+which made the project-level value appear to win; the (b) jcmd cross-check
+exposed the test's own bug. Every "empirical" result owes its reader the
+cross-check — this erratum included.
+This erratum is appended, not written over the history, per append-only
+discipline.

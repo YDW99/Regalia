@@ -630,9 +630,14 @@ public class FileIoHelper {
             int n;
             while ((n = reader.read(chunk, 0, chunk.length)) != -1) {
                 if (maxLines > 0 && lineCount >= maxLines) { truncated = true; break; }
-                if (sb.length() + n > maxChars) {
-                    throw new IOException(tooLargeLabel + " too large (>" + maxChars + " chars)");
-                }
+                // v1.2.3 round-66 (F-8): the line-cap truncation point is computed
+                //   FIRST and the char cap now applies to what would ACTUALLY be
+                //   appended (appendLen), not to the raw chunk length. Previously a
+                //   chunk that crossed maxChars threw "too large" even when the line
+                //   cap would have truncated the append back under the cap — a
+                //   legal, line-truncatable import was misrejected at the edge
+                //   (long-line PGN with the line boundary inside the overshooting
+                //   chunk). Order swap only; the G7a prevWasCr counting is untouched.
                 int appendLen = n;
                 if (maxLines > 0) {
                     for (int i = 0; i < n; i++) {
@@ -647,6 +652,9 @@ public class FileIoHelper {
                         }
                         if (lineCount >= maxLines) { appendLen = i + 1; break; }
                     }
+                }
+                if (sb.length() + appendLen > maxChars) {
+                    throw new IOException(tooLargeLabel + " too large (>" + maxChars + " chars)");
                 }
                 sb.append(chunk, 0, appendLen);
                 if (appendLen < n) { truncated = true; break; }

@@ -704,7 +704,10 @@ function parsePGN(pgnText){
   // Normalize
   let text=pgnText.replace(/\r\n/g,'\n').replace(/\r/g,'\n');
   // v1.2.3 round-48 (BUG-14): Multi-game PGN — keep only the FIRST game,
-  //   mirroring the main page's worker-pool.js _syncParsePGNText
+  //   mirroring tablebase.js's _parsePGN first-game split (round-66: the
+  //   historical mirror source worker-pool.js was unbundled in round-56 and
+  //   deleted in round-66; tablebase.js is the live twin — same hardened
+  //   form since round-66 F-23)
   //   (text.split(...) → take gameBlocks[0]). Previously the whole
   //   file was parsed as one game: later games' headers silently overwrote
   //   earlier ones, and the second game's movetext either cascade-failed
@@ -725,7 +728,9 @@ function parsePGN(pgnText){
   //   (300k-case fuzz, 0 mismatches): any match starting mid-run implies an
   //   equivalent match at the run's first '\n', which split() finds first.
   //   Lookbehind needs Chrome 62+ — inside the WebView≥84 floor. Keep in sync
-  //   with worker-pool.js (_WORKER_SRC + _syncParsePGNText copies).
+  //   with tablebase.js's _parsePGN split (the two live parsers share this
+  //   hardened form; worker-pool.js's copies are gone with the file,
+  //   round-66).
   const _gameBlocks=text.split(/(?<!\n)\n[^\S\n]*\n(?:[^\S\n]*\n)*(?=\[)/);
   const _multiGame=_gameBlocks.length>1;
   if(_multiGame)text=_gameBlocks[0];
@@ -736,10 +741,69 @@ function parsePGN(pgnText){
   //   dropped a FEN header and made the replay start from the standard initial
   //   position instead of the recorded one. Quoted branch now also accepts
   //   \" escapes instead of cutting the value at the first inner quote.
-  const headerRe=/\[(\w+)\s+(?:"((?:[^"\\]|\\.)*)"|([^\]\n]*?))\s*\]/g;
-  let hm;
-  while((hm=headerRe.exec(text))!==null){
-    headers[hm[1]]=(hm[2]!==undefined?hm[2]:hm[3]);
+  // v1.2.3 round-66 (F-9): the header extraction REGEX IS GONE. Its lazy
+  //   value branch followed by \s*\] was an ambiguity bomb: on malformed
+  //   input ([FEN + a whitespace run with no ]) every start position
+  //   backtracked through the whole run. Measured on this toolchain: a
+  //   single 100k-space line exceeded 120 s with the old form, and still
+  //   exceeded 90 s with a line-anchored variant of the same regex —
+  //   anchoring cuts the number of start positions, not the per-start
+  //   backtracking. The replacement is a deterministic scanner with the
+  //   SAME match semantics (differential-fuzzed against the old regex,
+  //   zero diff, see round66-audit.md): indexOf('[') finds tag starts,
+  //   the quoted branch is a linear escape-aware scan, the unquoted branch
+  //   bounds the value at the first ']' via indexOf. Worst case O(n).
+  //   Round-56 (C3) unquoted-value and \"-escape tolerance preserved.
+  let _hs=0;
+  for(;;){
+    const _b=text.indexOf('[',_hs);
+    if(_b<0)break;
+    // \[(\w+)\s+ — tag name, then the whitespace run (deterministic scan)
+    let _j=_b+1;
+    while(_j<text.length&&/\w/.test(text.charAt(_j)))_j++;
+    if(_j===_b+1||_j>=text.length||!/\s/.test(text.charAt(_j))){_hs=_b+1;continue;}
+    const _name=text.slice(_b+1,_j);
+    while(_j<text.length&&/\s/.test(text.charAt(_j)))_j++;
+    if(_j>=text.length){_hs=_b+1;continue;}
+    let _matched=false;
+    if(text.charAt(_j)==='"'){
+      // quoted branch: "((?:[^"\\]|\\.)*)" then \s*\]
+      let _k=_j+1,_val='',_closed=false;
+      while(_k<text.length){
+        const _c=text.charAt(_k);
+        if(_c==='\\'){
+          // \\.(dot) — the dot never matches a line terminator, and the
+          // escape needs a following char; a backslash before \n/\r/\u2028/
+          // \u2029 or at EOF fails BOTH alternation arms (unterminated),
+          // exactly like the old regex. (Differential-fuzz finding.)
+          const _nx=(_k+1<text.length)?text.charAt(_k+1):'';
+          if(_nx==='\n'||_nx==='\r'||_nx==='\u2028'||_nx==='\u2029'||_nx===''){break;}
+          _val+=_c+_nx;_k+=2;continue;
+        }
+        if(_c==='"'){_closed=true;break;}
+        _val+=_c;_k++;
+      }
+      if(_closed){
+        let _k2=_k+1;
+        while(_k2<text.length&&/\s/.test(text.charAt(_k2)))_k2++;
+        if(text.charAt(_k2)===']'){headers[_name]=_val;_hs=_k2+1;_matched=true;}
+      }
+    }
+    if(!_matched){
+      // unquoted branch (also the alternation retry when a quoted match's
+      // tail fails, mirroring the old regex): lazy [^\]\n]*? + \s*\] ==
+      // value ends at the first ']', trailing whitespace trimmed, and the
+      // trimmed value must not contain '\n' (the old \s* could span one)
+      const _e=text.indexOf(']',_j);
+      if(_e>=0){
+        let _vEnd=_e;
+        while(_vEnd>_j&&/\s/.test(text.charAt(_vEnd-1)))_vEnd--;
+        if(text.slice(_j,_vEnd).indexOf('\n')<0){
+          headers[_name]=text.slice(_j,_vEnd);_hs=_e+1;_matched=true;
+        }
+      }
+    }
+    if(!_matched)_hs=_b+1;
   }
   // Extract FEN if present
   let startFEN=headers.FEN||null;

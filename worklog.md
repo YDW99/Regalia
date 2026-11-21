@@ -1,3 +1,93 @@
+# Regalia v1.2.3 — round-66 工作日志（2026-11-21 UTC+8）
+
+## 任务来源
+
+用户上传《Regalia-upload分支全量审查报告（v2·合并外部评审分诊）》（审查 upload 分支 head
+`e33f0add` = round-65 完成态；23 项属实发现：bug 8 / 健壮性 8 / 冗余清理 7 + 机会项 3），
+指令：完成 round-66、交付老三样。实施批次按报告第八章 ①→④（⑤ O-1 判定不做，见下）。
+
+## 沙箱恢复（第四次回滚实录）
+
+本地树再次回滚至 round-61 态。按指南 §2 流程：git ls-remote 核实 upload head = `e33f0add`
+→ git clone 443 超时 → codeload 快照（5.65MB）恢复 → 首跑三验证器 **44/27/41 全绿** 确认树正确
+→ 引擎自 round-65 APK 提取（Deflate 存储，SHA/尺寸三方一致）→ 本地 git 基线（发现并落库
+R-9：远端两分支从未有过 .gitignore）。开工门禁全过才开始改动。
+
+## 修复实施（报告 23 项 + 本轮新发现 4 项）
+
+**批次①（引擎正确性）**：F-1 缓存门升级为精确尺寸等值（新常量 `EXPECTED_ENGINE_SIZE_BYTES
+= 100_695_968L`，两处 `>MIN` → `==EXPECTED`）；F-7 提取原子提交（写 `.tmp` → 验证 →
+`renameTo` 原子替换，失败路径永不触碰旧缓存）；O-2 常量单源化（进度分母/NOTICE/BUILDING
+同源）；O-3 优先级 1-3 全路径尺寸门；F-19 BUILDING 活构建指南整章 SF19 化（URL/命令/双检）
++ R-7 幻影 CI 门句如实改写。**新发现 R-8**：build.gradle/PRIVACY/BUILDING 三处
+useLegacyPackaging 语义写反（实测 APK 引擎为压缩存储），全部勘误。
+
+**批次②（引擎身份活文档）**：F-2 release-helper SF19；F-3 手册活区 9 处身份替换 + 2 处出处
+加注（报告列 8 处，全量扫描多出 en:544）；F-4 PRIVACY:922 SF19 + 语义勘误。
+
+**批次③（注释/死代码/勘误真实化）**：F-5 game-logic 模块头按真实打包顺序重写 + TDZ 警示；
+F-6/R-4 worker-pool.js 整文件删除（732 行，兑现 round-56 台账早已声称的 DELETED）；
+F-21 round64-audit Gradle 优先级 append-only 勘误（正确优先级：命令行 > **用户级** > 项目根）；
+R-1（114MB→~100MB 注释）；R-2（死引用从句）；R-3（stats 镜像源注释改指 tablebase.js）；
+R-5（catch(Throwable) 实测 191，历史记载不动）；R-6（v3 恒等替换删除，CodeQL 属实项）。
+
+**批次④（健壮性边缘 + 元哨兵第三轮）**：F-8 readCappedText 行截断先于字符判定（throw 条件
+`sb+n`→`sb+appendLen`）；F-9 stats.html headerRe 消除回溯——**报告推荐的行锚定形态实测仍
+>90s 不达标，改用确定性扫描器**（343,010 例差分 fuzz 零差异；1M 空格畸形输入 24ms vs 旧
+>120,000ms）；**新发现 F-23**：tablebase.js:155 主页分卷正则仍是 round-49 漏修的第四处副本
+（O(k²) ANR 面），换用 hardened 形态；F-10 SAF null 路径清 pending（与 catch 路径对称）；
+F-11 老 WebView 5s 墙钟兜底 + clearTimeout 入 finally；F-12 批量推进重试 catch 补 warn；
+F-20/F-22 V3-39 第三轮加固（trap 钉命令形状；备份/恢复/每项恢复三处 cp+cmp 全钉）。
+
+**判定不做（如实记录）**：O-1 engineGo 骨架消重——引擎状态机核心路径回归面大，优先级铁律
+下让位四批修复，待办保留（报告批次⑤"视回归面"口径一致）。
+
+## 哨兵与验证体系（新基线 44/27/47）
+
+- v3 新增六哨兵：**V3-40b**（引擎身份活文档全域清扫：BUILDING 活指南摘要+尺寸、
+  release-helper、PRIVACY、手册活区、README 活区——round-65 五处漏网全在旧 V3-40 覆盖面外，
+  哨兵覆盖面自身的对称性审查落到谓词里）；**V3-41**（缓存门/原子提交/常量单源/优先级门）；
+  **V3-42**（模块头真实顺序）；**V3-43**（cap 判定顺序）；**V3-44**（SAF pending 清理）；
+  **V3-45**（双解析器无回溯）。V3-40 (b) 腿改钉常量==NOTICE；V3-39 升级（见上）；R-6 落地。
+- 负例脚本泛化为多目标（mktemp -d 独占目录，ai-bridge.js + stats.html 双目标字节校验备份），
+  新增 **N7**（F-9 扫描器击杀 → V3-45 RED）——报告"负向脚本扩展钉 F-9"落地。过程实录：
+  stats 路径变量命名 `ST` 与 neg() 内部状态变量 `ST=RED` 撞名（N6 残值 "RED" 被当文件名，
+  perl "Can't open RED"），首跑暴露，改名 `STF` 修复——shell 全局变量命名坑入档。
+- **元负例 20+1 场景全 RED**（/tmp fixture 树）：V3-39 六场景（echo restore×2 / 删备份实现 /
+  删恢复 cmp / 空处理器 / 注释满足）、V3-40 两场景、V3-40b 四场景、V3-41 三场景 + rename
+  双变体、V3-42/43/44 各一、V3-45 两场景。**元负例自抓第四级绕过**：`if (false &&
+  !tmpFile.renameTo(...))` 死守卫使子串计数钉法照样绿——V3-41 当场升级为行锚定活语句形态。
+  方法论 §3.10 升格：字面存在 → 实现行 → 行为形状 → **活语句**，四级谱系每级配绕过负例。
+
+## 验证记录
+
+- node --check 全部 10 模块通过（worker-pool 删除后恰 10 个）。
+- 三验证器 **44/27/47 全绿**（v3 +6）；负例脚本 7 RED + 3 绿 + exit 0；元负例 ALL RED。
+- build-chess.py 连续两次重建逐字节一致（24,249 行 / 1,491,174 B；round-65 为 24,208 行 /
+  1,488,720 B，增量全部来自本轮模块编辑）。
+- 手册三检：严格 UTF-8 / 附录锚点 1/1 / div 365/365 双语一致。
+- 台账双向哨兵 H2a/H2f 即时跑 PASS（新条目后不等收尾）。
+- F-9 差分 fuzz 343,010 例零差异 + 畸形输入基准（数据入 round66-audit.md §3）。
+
+## 构建与交付
+
+构建环境从零重建（腾讯镜像 SDK 全家 + Gradle 8.11.1；Azul 8 段并行 Zulu JDK 17.0.13；Maven
+官方源慢而可达 → init-script 摘除由阿里镜像接管；引擎从 round-65 APK 提取，无下载）。
+`assembleRelease` **BUILD SUCCESSFUL in 1m 21s（51 tasks）**。
+
+六连验实测全过：v1/v2/v3 签名 true；证书 SHA-256 `45bc6d36…a8d8bc`；versionCode 10203 /
+versionName 1.2.3 锁定；APK 内 chess.html 与源码逐字节一致（1,491,174 B）；引擎
+`ffd8fc20…cf1daf8` / 100,695,968 B 三方一致；构建后交付门三验证器 **44/27/47** + 负例脚本
+七变异全 RED + exit 0。APK **81,542,436 字节**（round-65：81,548,307）。
+
+F-21 Gradle 优先级三方法实证（构建属性合并 / 真实 daemon jcmd Xmx / 无效值矩阵）：**命令行 >
+GRADLE_USER_HOME > 项目根 > GRADLE_HOME**，round-62 正确、round-64 写反、勘误成立；验证过程
+中自己的无效值矩阵首跑因裸值文件得出反向结论、被 jcmd 交叉检验纠出（元教训入档，详见
+round66-audit.md §4）。
+
+交付老三样（源码备份 tar.gz / APK / 恢复指南 md+zip）+ 辅助（pr-upload.zip 变更文件集 /
+PR #57 标题描述文案 / SHA256SUMS / 交付 README），全部 ASCII 安全文件名。
+
 # Regalia v1.2.3 — round-65 工作日志（2026-11-21 UTC+8）
 
 ## 任务来源

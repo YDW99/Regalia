@@ -5214,7 +5214,11 @@ function _requestBatchEval(step){
       }
       // On synchronous failure, advance to the next step (don't stall)
       if(typeof _reviewAnalyzeAdvance==='function'){
-        setTimeout(function(){try{_reviewAnalyzeAdvance();}catch(_e){}},100);
+        // v1.2.3 round-66 (F-12): this delayed advance is the recovery path of
+        //   the batch pipeline — the project's most hang-prone path (rounds
+        //   57/57c/58/61). A silently swallowed retry failure destroys the
+        //   diagnostic trail exactly when it is needed.
+        setTimeout(function(){try{_reviewAnalyzeAdvance();}catch(_e){console.warn('[BATCH] delayed advance failed',_e&&_e.message?_e.message:_e);}},100);
       }
       return;
     }

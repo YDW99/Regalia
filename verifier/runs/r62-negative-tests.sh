@@ -1,88 +1,71 @@
-#!/bin/bash
-# round-62: negative tests for the new 58b sentinels (perl-based, sed escaping avoided)
-# round-63 (PR #57 CodeRabbit follow-up): this script guards the guardians, so
-#   it must itself obey the verifier discipline it enforces (methodology §2.7,
-#   guarded by v3 sentinel V3-39):
-#   [CR#2] the repo root self-resolves from the script location — no
-#          hardcoded sandbox paths that would fail the backup elsewhere or
-#          silently mutate/verify a foreign checkout;
-#   [CR#3] every mutation is recoverable — exclusive mktemp backup, traps
-#          armed before the first mutation, per-item restore kept;
-#   [CR#4] failures accumulate and the exit code is real — mutated=no (stale
-#          perl expression) or sentinel=NOT-RED fails the run; the final
-#          baseline propagates node's exit status (pipefail, not tail's 0).
-# round-64 (PR #57 CodeRabbit follow-up 2): the round-63 hardening itself
-#   opened two data-loss paths and left two sentinel checks bypassable
-#   (methodology §1.2 — a defense mechanism's own side effects, shell edition;
-#   full account in verifier/runs/round64-audit.md):
-#   [CR#5] the initial backup copy ran UNCHECKED — a full tmpfs or an
-#          unreadable source would leave an empty/partial BAK, and every
-#          later restore (per-item AND the EXIT trap) would overwrite
-#          ai-bridge.js with it, destroying the pre-run content including
-#          uncommitted work. Now: cp + cmp -s byte-verification, abort
-#          BEFORE any mutation (the abort precedes trap arming, so the
-#          worktree is never touched);
-#   [CR#6] restore() deleted the backup unconditionally (a failed cp still
-#          rm'd the ONLY copy while 2>/dev/null swallowed the diagnosis) and
-#          the EXIT trap did not propagate the failure (exit 0 after a
-#          failed restore). Now: idempotent restore (absent BAK = success,
-#          so the signal-then-EXIT double call cannot false-alarm), delete
-#          the backup only after cp + cmp -s prove the restore landed, keep
-#          the backup + print its path + exit non-zero otherwise; the
-#          per-item restore in neg() gets the same check (failure aborts
-#          the mutation series, leaving recovery to the EXIT trap).
-#   The matching V3-39 upgrades (trap handlers must call restore; every
-#   property line-anchored so comments cannot satisfy the sentinel) live in
-#   verifier/v3/round54-pr56-triage.js.
-# Run: bash verifier/runs/r62-negative-tests.sh
-set -u
+#!/usr/bin/env bash
+# r62-negative-tests.sh — perl-mutation negative cases for the 58b sentinel set
+# (N1–N6, round-62 charter) + N7 (round-66, F-9: the stats.html header-scanner
+# kill must turn V3-45 RED). Backup/recovery hardening lineage: round-63
+# CR#1–CR#6, round-64 byte-verified backup/restore + idempotent restore +
+# failure propagation, round-66 multi-target generalization (one exclusive
+# mktemp DIRECTORY with one byte-verified copy per mutable target —
+# ai-bridge.js for N1–N6, stats.html for N7).
 set -o pipefail
-
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 AB="$ROOT/src/main/assets/chess.src/ai-bridge.js"
+STF="$ROOT/src/main/assets/stats.html"
 VDIR="$ROOT/verifier"
 FAILED=0
 
 run_v1() { (cd "$VDIR" && node v1/eval-stale-harness.js 2>/dev/null | grep -E "FAIL |RESULT"); }
 run_v2() { (cd "$VDIR" && node v2/round53-sonar-triage.js 2>/dev/null | grep -E "FAIL |RESULT"); }
+run_v3() { (cd "$VDIR" && node v3/round54-pr56-triage.js 2>/dev/null | grep -E "FAIL |RESULT"); }
 
-# [CR#3] Exclusive per-run backup (concurrent runs cannot stomp each other's
-# restore source) + exit/signal recovery, armed BEFORE the first mutation: a
-# mid-run SIGTERM can no longer leave an injected regression in the worktree.
-# Signal paths restore, then re-exit non-zero (130 = SIGINT, 143 = SIGTERM).
-# [CR#5] The backup must be byte-verified BEFORE any mutation: an unchecked
-# cp on a full tmpfs (or an unreadable source) would hand every later restore
-# an empty/partial BAK to copy over ai-bridge.js — the pre-run content,
-# including uncommitted edits, would be unrecoverable. Aborting here is
-# safe: the traps are not armed yet, so nothing has touched the worktree.
-BAK=$(mktemp) || exit 1
-if ! cp "$AB" "$BAK" || ! cmp -s "$AB" "$BAK"; then
-  rm -f "$BAK"
+# [CR#3] Exclusive per-run backup DIRECTORY (concurrent runs cannot stomp each
+# other's restore source) + exit/signal recovery, armed BEFORE the first
+# mutation: a mid-run SIGTERM can no longer leave an injected regression in
+# the worktree. Signal paths restore, then re-exit non-zero (130 = SIGINT,
+# 143 = SIGTERM).
+# [CR#5] Every target's backup must be byte-verified BEFORE any mutation: an
+# unchecked cp on a full tmpfs (or an unreadable source) would hand every
+# later restore an empty/partial copy to lay over the live file — the pre-run
+# content, including uncommitted edits, would be unrecoverable. Aborting here
+# is safe: the traps are not armed yet, so nothing has touched the worktree.
+backup_one() { # $1=target  $2=backup-path — byte-verified copy
+  cp "$1" "$2" && cmp -s "$1" "$2"
+}
+BAK=$(mktemp -d) || exit 1
+if ! backup_one "$AB" "$BAK/ai-bridge.js" || ! backup_one "$STF" "$BAK/stats.html"; then
+  rm -rf "$BAK"
   echo "backup failed, aborting before any mutation" >&2
   exit 1
 fi
 # [CR#6] Idempotent restore: an absent backup means already-restored (the
-# signal-then-EXIT double call must NOT be misreported as failure); the
+# signal-then-EXIT double call must NOT be misreported as failure); each
 # backup is deleted only after cp + cmp -s prove the restore landed; on
 # failure the backup is KEPT, its path printed, and the failure propagated
 # (a non-zero exit) so the run can never report success over a dirty tree.
-restore() {
-  [ -f "$BAK" ] || return 0
-  if cp "$BAK" "$AB" && cmp -s "$BAK" "$AB"; then
-    rm -f "$BAK"
+restore_one() { # $1=backup-path  $2=target
+  [ -f "$1" ] || return 0
+  if cp "$1" "$2" && cmp -s "$1" "$2"; then
+    rm -f "$1"
   else
-    echo "RESTORE FAILED — backup kept at: $BAK" >&2
+    echo "RESTORE FAILED — backup kept at: $1" >&2
     return 1
   fi
+}
+restore() {
+  _rc=0
+  restore_one "$BAK/ai-bridge.js" "$AB" || _rc=1
+  restore_one "$BAK/stats.html" "$STF" || _rc=1
+  return $_rc
 }
 trap 'restore || exit 1' EXIT
 trap 'restore || exit 1; exit 130' INT
 trap 'restore || exit 1; exit 143' TERM
 
-neg() { # $1=name $2=perl-expr $3=verifier $4=target-FAIL-label
-  perl -0777 -pi -e "$2" "$AB"
-  if ! diff -q "$BAK" "$AB" > /dev/null; then CHANGED=yes; else CHANGED=no; fi
-  if [ "$3" = "v1" ]; then OUT=$(run_v1); else OUT=$(run_v2); fi
+neg() { # $1=name $2=perl-expr $3=verifier(v1|v2|v3) $4=target-FAIL-label $5=target-file (default: ai-bridge.js)
+  _tgt="${5:-$AB}"
+  _bak="$BAK/$(basename "$_tgt")"
+  perl -0777 -pi -e "$2" "$_tgt"
+  if ! diff -q "$_bak" "$_tgt" > /dev/null; then CHANGED=yes; else CHANGED=no; fi
+  if [ "$3" = "v1" ]; then OUT=$(run_v1); elif [ "$3" = "v2" ]; then OUT=$(run_v2); else OUT=$(run_v3); fi
   if echo "$OUT" | grep -q "FAIL $4"; then ST=RED; else ST="NOT-RED"; fi
   echo "NEG[$1] mutated=$CHANGED sentinel=$ST"
   # [CR#4] An ineffective negative test IS a failure: mutated=no means the
@@ -94,7 +77,7 @@ neg() { # $1=name $2=perl-expr $3=verifier $4=target-FAIL-label
   # on failure the mutation series aborts (FAILED++ then exit 1), and the
   # EXIT trap retries the recovery — if even that fails, the backup is kept
   # and its path printed. Never continue the series over a dirty tree.
-  if ! cp "$BAK" "$AB" || ! cmp -s "$BAK" "$AB"; then
+  if ! cp "$_bak" "$_tgt" || ! cmp -s "$_bak" "$_tgt"; then
     echo "per-item restore failed after NEG[$1]; aborting mutations (EXIT trap will retry)" >&2
     FAILED=$((FAILED+1))
     exit 1
@@ -120,11 +103,17 @@ neg "N5-manual"  "s/const _manualLive=\(!_batchLive&&_evalLoading/const _manualL
 # N6: drop the watchdog disarm from onEngineRestarting (pre-58b Bug F regression)
 neg "N6-watchdog" "s/^(  if\(_evalSafetyTimerId\)\{clearTimeout\(_evalSafetyTimerId\);_evalSafetyTimerId=null;\}\n  _ponderGen\+\+)/  \/\/ NEG-TEST removed watchdog disarm\n  \$2/m" v2 "V2-23a"
 
+# N7 (round-66, F-9): kill the stats.html deterministic header scanner's
+# tag-start lookup. V3-45 pins the scanner's implementation lines; breaking
+# the scan (any regression back toward a regex, or a dead scanner) must turn
+# the sentinel RED, not silently pass. Target: stats.html, verifier: v3.
+neg "N7-f9scan" "s/const _b=text\.indexOf\('\[',_hs\);/const _b=-1;/" v3 "V3-45" "$STF"
+
 # [CR#4] Final all-green must reflect the verifiers' REAL exit status: the
 # original `node ... | tail -1` returned tail's 0 even when node failed, so a
 # broken tree could sail through. pipefail propagates node's status through
-# the pipeline. v3 joins the check because it also reads ai-bridge.js — a
-# failed restore must not be able to hide there.
+# the pipeline. All three verifiers join the check — v3 reads ai-bridge.js
+# AND stats.html/tablebase.js now, so a failed restore cannot hide anywhere.
 echo "=== restored, final all-green check ==="
 (cd "$VDIR" && node v1/eval-stale-harness.js 2>/dev/null | tail -1) || FAILED=$((FAILED+1))
 (cd "$VDIR" && node v2/round53-sonar-triage.js 2>/dev/null | tail -1) || FAILED=$((FAILED+1))
@@ -134,5 +123,5 @@ if [ "$FAILED" -gt 0 ]; then
   echo "R62-NEG FAILED: $FAILED ineffective negative test(s) and/or non-green baseline"
   exit 1
 fi
-echo "R62-NEG OK: all six mutations RED, sentinels effective, baseline green"
+echo "R62-NEG OK: all seven mutations RED, sentinels effective, baseline green"
 exit 0

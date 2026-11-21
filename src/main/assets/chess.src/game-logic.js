@@ -4,10 +4,17 @@
 // hashing, FEN generation, game status, constants, i18n (T/toggleLang/_i18n),
 // personified move animations (Web Animations API), AI move requests, ECO
 // recommendation logic, and setup-mode validation.
-// Bundled by build-chess.py after chess960.js + pgn-standard.js + worker-pool.js
-// and before ai-bridge.js + tablebase.js + eco-data.js + ui.js. References
-// globals (gameState, playerColor, AndroidBridge, audioEngine, …) defined in
-// ui.js. See README.license for the module merge order.
+// Bundled by build-chess.py as the FIRST module — before chess960.js,
+// pgn-standard.js, state-store.js, ai-bridge.js, tablebase.js, eco-data.js,
+// ui-gameflow.js, ui-interactions.js and ui.js (build-chess.py's modules
+// list is the authoritative order; worker-pool.js has not been bundled since
+// round-56 and was deleted in round-66). Being first is a responsibility:
+// any constant shared across modules MUST live here or in another early
+// module, never in a later one (round-60 F-1). References globals
+// (gameState, playerColor, AndroidBridge, audioEngine, …) defined in ui.js —
+// ui.js is the LAST module, so those globals exist only at runtime (inside
+// function bodies); referencing them during this module's top-level
+// evaluation throws TDZ/ReferenceError. See README.license for the merge order.
 //
 // Copyright (C) 2026 Regalia
 //
@@ -3322,8 +3329,9 @@ if(gameOver||reviewMode||setupMode||gameState.currentTurn===playerColor||!isAITh
 // Level 7: probe tablebase for endgame positions (7 pieces or fewer) before Stockfish
 // v1.2.1 round-11 (review fix): restore the typeof guard around pieceCountLE7.
 //   tablebase.js is loaded AFTER game-logic.js in build-chess.py's module
-//   order, and is also a network-fetched fallback (the worker-pool path may
-//   fail to register on extreme WebView implementations). If pieceCountLE7
+//   order, and its lichess probe is a network-dependent path. (round-66 R-2:
+//   the old parenthetical cited the worker-pool path — a dead reference,
+//   worker-pool.js has not been bundled since round-56.) If pieceCountLE7
 //   is somehow undefined (script load failure, worker error), an unguarded
 //   call would throw ReferenceError and completely halt AI move generation
 //   — the user would see "AI thinking" forever with no recovery path. The

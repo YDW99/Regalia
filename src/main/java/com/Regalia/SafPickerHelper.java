@@ -148,6 +148,14 @@ public class SafPickerHelper {
         Activity activity = activityRef.get();
         if (activity == null) {
             Log.w(TAG, logLabel + ": no valid Activity reference");
+            // v1.2.3 round-66 (F-10): this path never launches the picker, so
+            //   leaving _pendingExport* set would keep the state machine in
+            //   "picker in flight" with a possibly large PGN string pinned in
+            //   memory — and it diverged from the catch-path cleanup below.
+            //   Mirror the catch path exactly (type resets to the default
+            //   sentinel "settings").
+            _pendingExportContent = null;
+            _pendingExportType = "settings";
             callbacks.postJsCallback("if(typeof showToast==='function')showToast('Activity unavailable')");
             return;
         }

@@ -1,3 +1,29 @@
+v1.2.3 round-66 (2026.11.21): engine cache identity gate + atomic extraction commit + robustness edges.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - StockfishNative.java (GPL v3, DroidFish-derived lineage): (1) F-1 — new
+    constant EXPECTED_ENGINE_SIZE_BYTES = 100_695_968L; both cached-copy reuse
+    gates upgraded from "> MIN_ENGINE_BINARY_SIZE" to exact size equality (an
+    old release's cached engine — sf_18, 114,115,752 B — sailed through the
+    old gate on non-rooted filesDir-fallback devices while the UI claimed
+    SF19); (2) F-7 — both extraction paths now write libstockfish.so.tmp,
+    verify ELF+SHA there, and atomically renameTo(destFile) (rename(2)
+    semantics); a killed process can no longer leave a half-written cache;
+    (3) O-3 — resolveEngineBinary priorities 1-3 get the same exact-size
+    identity check; (4) O-2 — extraction-progress denominator now references
+    the shared constant; (5) R-1 — "114MB hash" comment corrected to ~100MB.
+    No engine-protocol changes — UCI integration unchanged.
+  - FileIoHelper.java (GPL v3): F-8 — readCappedText computes the line-cap
+    truncation (appendLen) BEFORE the char-cap throw, and the throw applies
+    to what would actually be appended; a line-truncatable import is no
+    longer misrejected when its final chunk crosses maxChars. G7a counting
+    semantics (prevWasCr) untouched.
+  - SafPickerHelper.java (GPL v3): F-10 — the export picker's Activity-null
+    path now clears _pendingExportContent/_pendingExportType before
+    returning (mirrors the catch path; no phantom "picker in flight" state,
+    no pinned PGN string). Import-side null branch needs no change (it never
+    sets pending state).
+  - License classification: all files unchanged (GPL v3).
+
 v1.2.3 round-65 (2026.11.21): engine upgrade sf_18 -> sf_19 — StockfishNative engine-identity constants updated.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - StockfishNative.java (GPL v3, DroidFish-derived lineage): (1)

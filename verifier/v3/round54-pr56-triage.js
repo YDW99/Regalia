@@ -149,7 +149,7 @@ const safG7 = read('src/main/java/com/Regalia/SafPickerHelper.java');
 const saG7 = read('src/main/java/com/Regalia/StatsActivity.java');
 ok('G7a FileIoHelper.readCappedText: prevWasCr CR/LF/CRLF counting (sole implementation)',
    fioG7.includes('prevWasCr')
-   && /chunk\[i\] == '\\n'\) \{\s*if \(!prevWasCr\) lineCount\+\+;/.test(fioG7.replace(/\s+/g, ' ').replace(/\\n/g, '\\n'))
+   && /chunk\[i\] == '\\n'\) \{\s*if \(!prevWasCr\) lineCount\+\+;/.test(fioG7.replace(/\s+/g, ' '))
    && fioG7.includes("chunk[i] == '\\r'"));
 ok('G7b SafPickerHelper + StatsActivity wired to the shared CR-aware reader',
    /FileIoHelper\.readCappedText\(context\.getContentResolver\(\), uri,\s*\n\s*PGN_MAX_CHARS, PGN_MAX_LINES/.test(safG7)
@@ -285,17 +285,28 @@ ok('V3-38 guide §1 privacy line accurate (skip only when guide absent)',
 //   call restore. Meta negative tests for all bypass mutations (empty
 //   handler, implementation deleted comment kept, backup-cp failure,
 //   restore failure, SIGINT double-trap) live in round64-audit.md.
-ok('V3-39 r62-negative-tests.sh self-discipline (line-anchored: self-resolved root, verified backup, restore-calling trap handlers, exclusive backup, accumulated failures, real exit codes)',
+ok('V3-39 r62-negative-tests.sh self-discipline (line-anchored: self-resolved root, exclusive mktemp -d backup dir, byte-verified backup/restore/per-item cp+cmp at every site, restore-CALLING trap handlers (command shape, not mention), accumulated failures, real exit codes, no absolute paths)',
    (() => {
      const s = read('verifier/runs/r62-negative-tests.sh');
      const vl = read('verifier/README.license');
      if (!s || !vl) return false;
+     // F-20 (round-66, third bypass round): the handler must CALL restore in
+     //   the 'restore || exit 1' command shape — 'trap \x27echo restore\x27 EXIT'
+     //   mentions restore without calling it and must NOT satisfy this.
+     // F-22 (round-66): the title claims byte-verified backup — every cp
+     //   site (backup_one body, restore_one body, per-item restore) is now
+     //   pinned by its own implementation line, so deleting any verification
+     //   while keeping the mktemp line turns this RED.
      return !s.includes('/home/')
        && /^ROOT=.*BASH_SOURCE/m.test(s)
-       && /^BAK=\$\(mktemp\)/m.test(s)
-       && /^trap\s+'[^']*\brestore\b[^']*'\s+EXIT/m.test(s)
-       && /^trap\s+'[^']*\brestore\b[^']*'\s+INT/m.test(s)
-       && /^trap\s+'[^']*\brestore\b[^']*'\s+TERM/m.test(s)
+       && /^BAK=\$\(mktemp -d\)/m.test(s)
+       && /^trap\s+'restore\s*\|\|\s*exit\s+1[^']*'\s+EXIT/m.test(s)
+       && /^trap\s+'restore\s*\|\|\s*exit\s+1[^']*'\s+INT/m.test(s)
+       && /^trap\s+'restore\s*\|\|\s*exit\s+1[^']*'\s+TERM/m.test(s)
+       && /^  cp "\$1" "\$2" && cmp -s "\$1" "\$2"$/m.test(s)
+       && /^  if cp "\$1" "\$2" && cmp -s "\$1" "\$2"; then$/m.test(s)
+       && /^if ! backup_one "\$AB" "\$BAK\/ai-bridge\.js" \|\| ! backup_one "\$STF" "\$BAK\/stats\.html"; then$/m.test(s)
+       && /^[^#\n]*if ! cp "\$_bak" "\$_tgt" \|\| ! cmp -s "\$_bak" "\$_tgt"; then$/m.test(s)
        && /^[^#\n]*FAILED=\$\(\(FAILED\+1\)\)/m.test(s)
        && /^set -o pipefail/m.test(s)
        && /^[^#\n]*\[ "\$FAILED" -gt 0 \]/m.test(s)
@@ -316,11 +327,17 @@ ok('H3 verifier resolves from __dirname (cwd-independent)',
 //   CONSISTENCY, not the value itself (the pinned value lives in exactly
 //   one place — the Java constant — and everyone else must agree):
 //   (a) Java digest == NOTICE digest == BUILDING.md topmost digest;
-//   (b) Java progress denominator (bytes) == NOTICE declared engine size.
-//   Line-anchored where anchors exist; RED-verified this round with two
-//   fixture mutations (NOTICE digest flipped one hex digit; denominator
-//   reverted to the old engine size) — see round65-audit.md.
-ok('V3-40 engine identity cross-file consistent (Java digest == NOTICE == topmost BUILDING.md; progress denominator == NOTICE byte size)',
+//   (b) Java EXPECTED_ENGINE_SIZE_BYTES constant == NOTICE declared engine
+//       size. (round-66, O-2: the progress denominator now references the
+//       shared constant instead of a numeric literal; V3-41 pins the
+//       denominator->constant wiring and the BUILDING live guide, so the
+//       chain Java constant == NOTICE == BUILDING-top == denominator has no
+//       gap — this check keeps the Java == NOTICE legs.)
+//   Line-anchored where anchors exist; RED-verified round-65 with two fixture
+//   mutations (NOTICE digest flipped one hex digit; denominator reverted to
+//   the old engine size) and re-verified round-66 after the constant swap —
+//   see round65-audit.md / round66-audit.md.
+ok('V3-40 engine identity cross-file consistent (Java digest == NOTICE == topmost BUILDING.md; Java size constant == NOTICE byte size)',
    (() => {
      const sn = read('src/main/java/com/Regalia/StockfishNative.java');
      const notice = read('NOTICE');
@@ -330,12 +347,168 @@ ok('V3-40 engine identity cross-file consistent (Java digest == NOTICE == topmos
             || sn.match(/EXPECTED_ENGINE_SHA256 =\s*\n\s*"([0-9a-f]{64})"/);
      const nd = notice.match(/SHA-256\s+([0-9a-f]{64})/);
      const bd = building.match(/SHA-256\s*`?([0-9a-f]{64})`?/);
-     const den = sn.match(/total \* 13L \/ (\d+)L/);
+     const jsz = sn.match(/EXPECTED_ENGINE_SIZE_BYTES = ([\d_]+)L/);
      const nsz = notice.match(/libstockfish\.so\s*\(([\d,]{6,}) bytes/);
-     if (!jd || !nd || !bd || !den || !nsz) return false;
+     if (!jd || !nd || !bd || !jsz || !nsz) return false;
      return jd[1] === nd[1]
        && jd[1] === bd[1]
-       && Number(den[1]) === Number(nsz[1].replace(/,/g, ''));
+       && Number(jsz[1].replace(/_/g, '')) === Number(nsz[1].replace(/,/g, ''));
+   })());
+
+
+// V3-40b — round-66 (F-2/F-3/F-4/F-19): round-65's V3-40 pinned Java ==
+//   NOTICE == BUILDING-top == progress denominator — and ALL FIVE live-document
+//   leaks of the engine upgrade (BUILDING's live build guide, release-helper's
+//   release-notes template, the manuals' live chapters, PRIVACY's round-8
+//   section) fell OUTSIDE that coverage. A sentinel's coverage surface itself
+//   needs a symmetry review (military rule 4). This sweep pins the engine
+//   identity in every LIVE doc zone:
+//   (a) BUILDING.md live build guide (the '# Building Regalia v1.2.3 from
+//       source' how-to, up to the first round-history heading): digest AND
+//       size must equal the Java constants;
+//   (b) release-helper.yml names Stockfish 19, never 18;
+//   (c) PRIVACY.md carries the current digest;
+//   (d) manual en/zh LIVE chapters (before the appendix-changelog anchor)
+//       contain no stale identity strings — exempted: the two annotated
+//       'Stockfish 18 best practice' hash-table source citations;
+//   (e) README.md live zone (before the first round-history heading).
+ok('V3-40b engine identity live-doc sweep (BUILDING live guide digest+size, release-helper SF19, PRIVACY digest, manual+README live zones clean)',
+   (() => {
+     const sn = read('src/main/java/com/Regalia/StockfishNative.java');
+     const building = read('BUILDING.md');
+     const rh = read('.github/workflows/release-helper.yml');
+     const pv = read('PRIVACY.md');
+     const men = read('Manual/Regalia-v1.2.3-manual-en.html');
+     const mzh = read('Manual/Regalia-v1.2.3-manual-zh.html');
+     const rm = read('README.md');
+     if (!sn || !building || !rh || !pv || !men || !mzh || !rm) return false;
+     const jdm = sn.match(/EXPECTED_ENGINE_SHA256 =\s*\n?\s*"([0-9a-f]{64})"/);
+     const jszm = sn.match(/EXPECTED_ENGINE_SIZE_BYTES = ([\d_]+)L/);
+     if (!jdm || !jszm) return false;
+     const jd = jdm[1];
+     const jsz = Number(jszm[1].replace(/_/g, ''));
+     // (a) live build guide section
+     const g0 = building.indexOf('# Building Regalia v1.2.3 from source');
+     if (g0 < 0) return false;
+     const gm = building.slice(g0).match(/^## (?:v1\.2\.3 )?[Rr]ound/m);
+     const guide = gm ? building.slice(g0, building.indexOf(gm[0], g0)) : building.slice(g0);
+     if (!guide.includes(jd)) return false;
+     const gsz = guide.match(/# (\d{9})/);
+     if (!gsz || Number(gsz[1]) !== jsz) return false;
+     // (b) release-helper names 19, not 18
+     if (!/Stockfish 19/.test(rh) || /Stockfish 18/.test(rh)) return false;
+     // (c) PRIVACY carries the current digest
+     if (!pv.includes(jd)) return false;
+     // (d) manual live zones; strip the two annotated best-practice citations
+     const STALE = /Stockfish 18|SF18|sf18|armv8-dotprod|armv8\.dotprod/;
+     for (const pair of [[men, 'Stockfish 18 best practice, still followed by SF19'],
+                         [mzh, 'Stockfish 18 最佳实践，SF19 沿用']]) {
+       const live = pair[0].split('id="appendix-changelog"')[0].split(pair[1]).join('');
+       if (STALE.test(live)) return false;
+     }
+     // (e) README live zone
+     const rLive = rm.slice(0, rm.indexOf('### Round-'));
+     if (STALE.test(rLive)) return false;
+     return true;
+   })());
+
+// V3-41 — round-66 (F-1/F-7/O-2/O-3): the engine cache-reuse gates must check
+//   IDENTITY (exact size equality), not just ">5MB + ELF" — an old release's
+//   cached engine (sf_18, 114,115,752 B) sailed through the old gate on
+//   non-rooted fallback devices while the UI claimed SF19; and extraction
+//   must commit ATOMICALLY (write .tmp, verify SHA there, rename) so a killed
+//   process can never leave a half-written cache for the next start.
+ok('V3-41 engine cache identity gate + atomic extraction commit (exact-size gates ×2, size constant, denominator uses constant, tmp+rename ×2, priority-1..3 size checks)',
+   (() => {
+     const sn = read('src/main/java/com/Regalia/StockfishNative.java');
+     if (!sn) return false;
+     const gates = sn.match(/^ {8}if \(destFile\.exists\(\) && destFile\.length\(\) == EXPECTED_ENGINE_SIZE_BYTES && isElfFile\(destFile\)\)/gm) || [];
+     // line-anchored LIVE guard form: 'if (false && !tmpFile.renameTo(...))'
+     // leaves the call as dead text while still counting 2 — count the
+     // real statement lines instead (meta-neg V41-rename-disabled finding).
+     const renames = sn.match(/^ +if \(!tmpFile\.renameTo\(destFile\)\) \{$/gm) || [];
+     return /^ {4}private static final long EXPECTED_ENGINE_SIZE_BYTES = 100_695_968L;/m.test(sn)
+       && gates.length === 2
+       && /total \* 13L \/ EXPECTED_ENGINE_SIZE_BYTES\)/.test(sn)
+       && /new java\.io\.FileOutputStream\(tmpFile\)\)/.test(sn)
+       && renames.length === 2
+       && /libFile\.length\(\) != EXPECTED_ENGINE_SIZE_BYTES/.test(sn)
+       && /appLibFile\.length\(\) == EXPECTED_ENGINE_SIZE_BYTES && isElfFile\(appLibFile\)/.test(sn)
+       && /candidate\.length\(\) == EXPECTED_ENGINE_SIZE_BYTES && isElfFile\(candidate\)/.test(sn);
+   })());
+
+// V3-42 — round-66 (F-5): game-logic.js's module header claimed a bundle
+//   order that was BACKWARDS (it said "after chess960 + pgn-standard +
+//   worker-pool" — game-logic is FIRST, worker-pool left the bundle in
+//   round-56) and hid the round-60 TDZ lesson. The header must state the
+//   true order; build-chess.py's modules list stays the authority.
+ok('V3-42 game-logic.js module header states true bundle order (first module; ui.js last; TDZ warning present)',
+   (() => {
+     const gl = read('src/main/assets/chess.src/game-logic.js');
+     const bcp = read('build-chess.py');
+     if (!gl || !bcp) return false;
+     const head = gl.slice(0, 2000);
+     return /Bundled by build-chess\.py as the FIRST module/.test(head)
+       && /ui\.js is the LAST module/.test(head)
+       && /TDZ\/ReferenceError/.test(head)
+       && !/after chess960\.js \+ pgn-standard\.js \+ worker-pool\.js/.test(head)
+       && bcp.indexOf('"game-logic.js"') < bcp.indexOf('"chess960.js"')
+       && bcp.lastIndexOf('"ui.js"') > bcp.lastIndexOf('"ui-interactions.js"');
+   })());
+
+// V3-43 — round-66 (F-8): readCappedText must compute the line-cap truncation
+//   (appendLen) BEFORE the char-cap throw, so a file the line cap would
+//   legally truncate is not misrejected as "too large" when its final chunk
+//   crosses maxChars. Ordering pinned by source position of the two anchors.
+ok('V3-43 FileIoHelper.readCappedText: line-cap truncation computed before char-cap throw',
+   (() => {
+     const fio = read('src/main/java/com/Regalia/FileIoHelper.java');
+     if (!fio) return false;
+     const scan = fio.indexOf('int appendLen = n;');
+     const thr = fio.indexOf('if (sb.length() + appendLen > maxChars)');
+     const oldThr = fio.indexOf('if (sb.length() + n > maxChars)');
+     return scan >= 0 && thr > scan && oldThr === -1
+       && /chunk\[i\] == '\\n'\) \{/.test(fio);
+   })());
+
+// V3-44 — round-66 (F-10): the SAF export picker's Activity-null path must
+//   clear the pending payload — it never launches the picker, so "in flight"
+//   state would be a lie and would pin a large PGN string in memory.
+//   Line-anchored inside the null branch, mirroring the catch-path reset.
+ok('V3-44 SafPickerHelper: Activity-null export path clears pending content/type',
+   (() => {
+     const saf = read('src/main/java/com/Regalia/SafPickerHelper.java');
+     if (!saf) return false;
+     const nul = saf.indexOf('if (activity == null) {');
+     const clr = saf.indexOf('_pendingExportContent = null;', nul);
+     const toast = saf.indexOf('Activity unavailable', nul);
+     return nul >= 0 && clr > nul && clr < toast
+       && /_pendingExportType = "settings";/.test(saf.slice(clr, clr + 120));
+   })());
+
+// V3-45 — round-66 (F-9/F-23): the two live PGN parsers must be
+//   backtracking-free. F-9: stats.html's old lazy-branch header regex
+//   exceeded 120 s on a 100k-space malformed tag (measured; main thread =
+//   frozen page) — now a deterministic scanner, differential-fuzzed against
+//   the old regex (zero diff, 343k cases, round66-audit.md). F-23:
+//   tablebase.js's multi-game split still had the pre-round-49 quadratic
+//   form (round-49 fixed three copies, missed this fourth — the MAIN page's
+//   import path); now the hardened linear lookbehind form shared with
+//   stats.html's split.
+ok('V3-45 PGN parsers backtracking-free (stats.html deterministic header scanner, lazy headerRe gone; tablebase.js hardened split form, quadratic form gone)',
+   (() => {
+     const st = read('src/main/assets/stats.html');
+     const tb = read('src/main/assets/chess.src/tablebase.js');
+     if (!st || !tb) return false;
+     // fail-closed direction: the ambiguous lazy header regex tail must be gone
+     if (/\*\?\)\)\\s\*\\\]/.test(st)) return false;
+     // deterministic scanner implementation lines
+     if (!/const _b=text\.indexOf\('\[', ?_hs\);/.test(st)) return false;
+     if (!/const _e=text\.indexOf\('\]', ?_j\);/.test(st)) return false;
+     // tablebase: hardened linear lookbehind present, old quadratic gone
+     if (!tb.includes('(?<!\\n)\\n[^\\S\\n]*\\n(?:[^\\S\\n]*\\n)*(?=\\[)')) return false;
+     if (tb.includes('split(/\\n\\s*\\n(?=\\[)/)')) return false;
+     return true;
    })());
 
 console.log('\n===== RESULT: ' + pass + ' passed, ' + fail + ' failed =====');

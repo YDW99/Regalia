@@ -338,6 +338,21 @@ public class StockfishNative {
     //   for the sf_19 arm64-universal engine.)
     private static final String EXPECTED_ENGINE_SHA256 =
             "ffd8fc2004d3d19f9fdab95d84c92709aea92e8d3af405eda0b281b23cf1daf8";
+    // v1.2.3 round-66 (F-1/O-2): exact byte size of the bundled engine —
+    //   single source shared by the cached-copy identity gates below, the
+    //   extraction-progress denominator, and (via the V3-40 sentinel) the
+    //   NOTICE / BUILDING.md declarations. Rationale: ">5MB + ELF magic"
+    //   cannot tell an OLD engine from the current one — after an upgrade
+    //   install, a device whose resolution priorities 1-3 all miss (exactly
+    //   the filesDir-fallback population this cache exists for) would
+    //   silently keep running the previous release's engine (sf_18
+    //   armv8-dotprod, 114,115,752 B) while the UI reports SF19; non-rooted
+    //   devices skip the SHA re-verify by design (SEC-09), so the only O(1)
+    //   identity check available is exact size equality. useLegacyPackaging
+    //   =true means the .so is extracted from the APK at install
+    //   byte-for-byte, so every legitimate copy has exactly this size; any
+    //   other size = wrong or truncated engine = reject and re-extract.
+    private static final long EXPECTED_ENGINE_SIZE_BYTES = 100_695_968L;
     // v1.2.1 round-10 (review-D P3): extracted magic number — grace period
     //   (ms) to wait after sending "stop" for a ponder search's bestmove to
     //   arrive before assuming the engine is idle. Was a bare `100` literal.
@@ -1731,7 +1746,14 @@ public class StockfishNative {
                         + " length=" + libFile.length());
 
                 if (libFile.exists() && libFile.canRead()) {
-                    if (isElfFile(libFile)) {
+                    // v1.2.3 round-66 (O-3): cheap identity check — exact size
+                    //   equality against the bundled engine (see
+                    //   EXPECTED_ENGINE_SIZE_BYTES) unifies every resolution
+                    //   path with the cached-copy gate. A wrong-size file is
+                    //   not our engine; fall through rather than execute it.
+                    if (libFile.length() != EXPECTED_ENGINE_SIZE_BYTES) {
+                        Log.d(TAG, "Engine in nativeLibraryDir has unexpected size " + libFile.length() + " — skipping");
+                    } else if (isElfFile(libFile)) {
                         Log.i(TAG, "Engine binary found in nativeLibraryDir (SELinux-trusted)");
                         currentEnginePath = libFile.getAbsolutePath();
                         return libFile;
@@ -1756,7 +1778,9 @@ public class StockfishNative {
             File appLibDir = new File(context.getApplicationInfo().dataDir, "lib");
             File appLibFile = new File(appLibDir, ENGINE_LIB_NAME);
             if (appLibFile.exists() && appLibFile.canRead()) {
-                if (isElfFile(appLibFile)) {
+                // v1.2.3 round-66 (O-3): same exact-size identity check as
+                //   priority 1 (see EXPECTED_ENGINE_SIZE_BYTES).
+                if (appLibFile.length() == EXPECTED_ENGINE_SIZE_BYTES && isElfFile(appLibFile)) {
                     Log.i(TAG, "Engine binary found in app lib dir: " + appLibFile.getAbsolutePath());
                     currentEnginePath = appLibFile.getAbsolutePath();
                     return appLibFile;
@@ -1781,7 +1805,11 @@ public class StockfishNative {
                     if (candidates != null) {
                         for (File candidate : candidates) {
                             if (candidate.exists() && candidate.canRead() && candidate.isFile()) {
-                                if (isElfFile(candidate)) {
+                                // v1.2.3 round-66 (O-3): exact-size identity
+                                //   check — a name-matching file of the wrong
+                                //   size (e.g. a stale engine restored by a
+                                //   backup tool) is not our engine.
+                                if (candidate.length() == EXPECTED_ENGINE_SIZE_BYTES && isElfFile(candidate)) {
                                     Log.i(TAG, "Engine binary found by search: " + candidate.getAbsolutePath());
                                     currentEnginePath = candidate.getAbsolutePath();
                                     return candidate;
@@ -4688,8 +4716,9 @@ public class StockfishNative {
      * v1.2.3 round-56 (SEC-09): cached engine copies live in the app-private
      * filesDir, which is only writable by our own process or by root. Hash-
      * verifying the cached copy therefore only adds value on rooted devices;
-     * elsewhere the length+ELF gate is sufficient and the 114MB hash is wasted
-     * work on every cold start. RootDetector caches its result process-wide.
+     * elsewhere the exact-size+ELF gate (round-66, F-1) is sufficient and the
+     * ~100MB hash is wasted work on every cold start. RootDetector caches its
+     * result process-wide.
      * Fail-open on detector errors — consistent with the app's documented
      * advisory-only root posture (the fresh-extract path still always verifies).
      */
@@ -4708,9 +4737,23 @@ public class StockfishNative {
      */
     private File extractEngineFromApk() {
         File destFile = new File(context.getFilesDir(), ENGINE_LIB_NAME);
+        // v1.2.3 round-66 (F-7): extraction writes to a .tmp sibling and is
+        //   fully verified THERE; only a verified file is atomically renamed
+        //   onto the cache path (File.renameTo on Android/Linux is rename(2),
+        //   which atomically replaces the target). A process kill mid-write
+        //   can now only leave a .tmp behind — the cached-copy gate above
+        //   never sees a partial file, and a previously good cache is never
+        //   clobbered by a failed re-extraction.
+        File tmpFile = new File(context.getFilesDir(), ENGINE_LIB_NAME + ".tmp");
 
         // FIX: Also verify ELF header on cached file to prevent using corrupted extraction
-        if (destFile.exists() && destFile.length() > MIN_ENGINE_BINARY_SIZE && isElfFile(destFile)) {
+        // v1.2.3 round-66 (F-1): cached-copy identity gate upgraded from
+        //   "> MIN_ENGINE_BINARY_SIZE" to exact size equality against
+        //   EXPECTED_ENGINE_SIZE_BYTES — an older release's cache (e.g. the
+        //   sf_18 binary) or any truncated file is deterministically
+        //   rejected here, without re-opening the ~100MB hash on non-rooted
+        //   cold starts. Rooted devices keep the SHA-256 gate on top (SEC-09).
+        if (destFile.exists() && destFile.length() == EXPECTED_ENGINE_SIZE_BYTES && isElfFile(destFile)) {
             // v1.2.3 round-56 (SEC-01①/SEC-09): on rooted devices the cached
             //   copy must additionally pass the pinned SHA-256 check; a
             //   mismatch deletes the poisoned file and falls through to a
@@ -4763,7 +4806,7 @@ public class StockfishNative {
                 Log.i(TAG, "Extracting engine from APK: " + entry.getName());
 
                 try (java.io.InputStream in = zip.getInputStream(entry);
-                     java.io.FileOutputStream out = new java.io.FileOutputStream(destFile)) {
+                     java.io.FileOutputStream out = new java.io.FileOutputStream(tmpFile)) {
                     byte[] buffer = new byte[262144];
                     int len;
                     long total = 0;
@@ -4791,42 +4834,48 @@ public class StockfishNative {
                 }
             }
 
-            makeExecutable(destFile);
-
-            if (destFile.exists() && destFile.canRead() && destFile.length() > MIN_ENGINE_BINARY_SIZE) {
-                if (isElfFile(destFile)) {
+            if (tmpFile.exists() && tmpFile.canRead() && tmpFile.length() > MIN_ENGINE_BINARY_SIZE) {
+                if (isElfFile(tmpFile)) {
                     // v1.2.3 round-56 (SEC-01①): fresh extractions ALWAYS pass
                     //   the pinned SHA-256 gate — a truncated write keeps the
                     //   ELF magic (file head) and can exceed MIN_ENGINE_BINARY_SIZE,
                     //   so length+ELF alone cannot prove integrity.
-                    if (verifyEngineSha256(destFile)) {
+                    // v1.2.3 round-66 (F-7): verification runs on the .tmp file;
+                    //   only a verified file is renamed onto the cache path.
+                    if (verifyEngineSha256(tmpFile)) {
+                        if (!tmpFile.renameTo(destFile)) {
+                            // Fail-closed: without the atomic commit the cache
+                            // path still holds whatever it held before — retry
+                            // next start rather than execute an unverified file.
+                            Log.e(TAG, "Engine atomic commit failed (renameTo)");
+                            if (!tmpFile.delete()) Log.w(TAG, "Failed to delete: " + tmpFile.getAbsolutePath());
+                            return null;
+                        }
+                        makeExecutable(destFile);
                         Log.i(TAG, "Engine extracted successfully, size=" + destFile.length()
-                                + ", SHA-256 verified");
+                                + ", SHA-256 verified (atomic commit)");
                         currentEnginePath = destFile.getAbsolutePath();
                         return destFile;
                     }
                     Log.e(TAG, "Extracted engine failed SHA-256 verification — deleting");
-                    if (!destFile.delete()) Log.w(TAG, "Failed to delete: " + destFile.getAbsolutePath());
+                    if (!tmpFile.delete()) Log.w(TAG, "Failed to delete: " + tmpFile.getAbsolutePath());
                 } else {
                     Log.e(TAG, "Extracted engine failed ELF header verification");
-                    if (!destFile.delete()) Log.w(TAG, "Failed to delete: " + destFile.getAbsolutePath());
+                    if (!tmpFile.delete()) Log.w(TAG, "Failed to delete: " + tmpFile.getAbsolutePath());
                 }
             } else {
-                Log.e(TAG, "Extracted engine file is invalid (size=" + (destFile.exists() ? destFile.length() : 0) + ")");
-                if (!destFile.delete()) Log.w(TAG, "Failed to delete: " + destFile.getAbsolutePath());
+                Log.e(TAG, "Extracted engine file is invalid (size=" + (tmpFile.exists() ? tmpFile.length() : 0) + ")");
+                if (!tmpFile.delete()) Log.w(TAG, "Failed to delete: " + tmpFile.getAbsolutePath());
             }
         } catch (Throwable e) {
             Log.e(TAG, "Failed to extract engine from APK", e);
-            // v1.2.3 round-49 (review-4 P2-2): best-effort delete the partially
-            //   written destFile. A truncated binary >5MB would pass the cached-
-            //   file check above (length > MIN_ENGINE_BINARY_SIZE && ELF magic —
-            //   the magic lives in the file head, so a truncation keeps it) and
-            //   poison every future start (exec dies → handshake timeout →
-            //   cleanupFailedEngine → repeat, with no self-heal). Deleting here
-            //   makes the next start re-extract from a clean slate.
+            // v1.2.3 round-49 (review-4 P2-2): best-effort delete of the partially
+            //   written file. v1.2.3 round-66 (F-7): extraction now targets the
+            //   .tmp sibling, so a kill mid-write can no longer poison the
+            //   cached copy at all — this delete is pure leftover hygiene.
             try {
-                if (destFile.exists() && !destFile.delete()) {
-                    Log.w(TAG, "Failed to delete partial engine file: " + destFile.getAbsolutePath());
+                if (tmpFile.exists() && !tmpFile.delete()) {
+                    Log.w(TAG, "Failed to delete partial engine file: " + tmpFile.getAbsolutePath());
                 }
             } catch (Throwable delErr) {
                 Log.w(TAG, "delete of partial engine file threw", delErr);
@@ -4841,9 +4890,14 @@ public class StockfishNative {
      */
     private File extractEngineFromAssets() {
         File destFile = new File(context.getFilesDir(), ENGINE_LIB_NAME);
+        // v1.2.3 round-66 (F-7): same atomic-commit protocol as
+        //   extractEngineFromApk — write .tmp, verify, then rename.
+        File tmpFile = new File(context.getFilesDir(), ENGINE_LIB_NAME + ".tmp");
 
         // FIX: Also verify ELF header on cached file to prevent using corrupted extraction
-        if (destFile.exists() && destFile.length() > MIN_ENGINE_BINARY_SIZE && isElfFile(destFile)) {
+        // v1.2.3 round-66 (F-1): same exact-size identity gate as
+        //   extractEngineFromApk's cached path (see EXPECTED_ENGINE_SIZE_BYTES).
+        if (destFile.exists() && destFile.length() == EXPECTED_ENGINE_SIZE_BYTES && isElfFile(destFile)) {
             // v1.2.3 round-56 (SEC-01①/SEC-09): same rooted-device SHA-256 gate
             //   as extractEngineFromApk's cached path.
             if (shouldVerifyCachedEngine() && !verifyEngineSha256(destFile)) {
@@ -4862,7 +4916,7 @@ public class StockfishNative {
         Log.i(TAG, "Attempting to extract engine from assets: " + assetPath);
 
         try (java.io.InputStream in = context.getAssets().open(assetPath);
-             java.io.FileOutputStream out = new java.io.FileOutputStream(destFile)) {
+             java.io.FileOutputStream out = new java.io.FileOutputStream(tmpFile)) {
             byte[] buffer = new byte[262144];
             int len;
             long total = 0;
@@ -4882,7 +4936,11 @@ public class StockfishNative {
                     // v1.2.3 round-65: denominator updated from 114115752L (sf_18
                     //   armv8-dotprod) to 100695968L (sf_19 arm64-universal) — the
                     //   extraction-progress scale must track the bundled engine size.
-                    int pct = 12 + (int) (total * 13L / 100695968L);
+                    // v1.2.3 round-66 (O-2): literal replaced by the shared
+                    //   EXPECTED_ENGINE_SIZE_BYTES constant (V3-40 pins the
+                    //   constant == NOTICE == BUILDING declarations); scale itself
+                    //   (12%→25%) unchanged.
+                    int pct = 12 + (int) (total * 13L / EXPECTED_ENGINE_SIZE_BYTES);
                     postJsCallback("onInitProgress(" + pct + ", " + escapeJsString((isEnglishMode() ? "Extracting engine... " : "\u6b63\u5728\u63d0\u53d6\u5f15\u64ce... ") + (total / 1048576) + "MB") + ")");
                 }
             }
@@ -4893,12 +4951,12 @@ public class StockfishNative {
             return null;
         } catch (Throwable e) {
             Log.w(TAG, "Failed to extract engine from assets", e);
-            // v1.2.3 round-49 (review-4 P2-2): best-effort delete the partially
-            //   written destFile (same rationale as extractEngineFromApk —
-            //   a truncated binary can pass the cached-file length+ELF check).
+            // v1.2.3 round-49 (review-4 P2-2): best-effort delete of the
+            //   partially written file (same rationale as extractEngineFromApk).
+            //   v1.2.3 round-66 (F-7): the partial file is now the .tmp sibling.
             try {
-                if (destFile.exists() && !destFile.delete()) {
-                    Log.w(TAG, "Failed to delete partial engine file: " + destFile.getAbsolutePath());
+                if (tmpFile.exists() && !tmpFile.delete()) {
+                    Log.w(TAG, "Failed to delete partial engine file: " + tmpFile.getAbsolutePath());
                 }
             } catch (Throwable delErr) {
                 Log.w(TAG, "delete of partial engine file threw", delErr);
@@ -4906,27 +4964,33 @@ public class StockfishNative {
             return null;
         }
 
-        makeExecutable(destFile);
-
-        if (destFile.exists() && destFile.canRead() && destFile.length() > MIN_ENGINE_BINARY_SIZE) {
-            if (isElfFile(destFile)) {
+        if (tmpFile.exists() && tmpFile.canRead() && tmpFile.length() > MIN_ENGINE_BINARY_SIZE) {
+            if (isElfFile(tmpFile)) {
                 // v1.2.3 round-56 (SEC-01①): fresh extractions ALWAYS pass the
                 //   pinned SHA-256 gate (see extractEngineFromApk).
-                if (verifyEngineSha256(destFile)) {
+                // v1.2.3 round-66 (F-7): verification runs on the .tmp file;
+                //   only a verified file is renamed onto the cache path.
+                if (verifyEngineSha256(tmpFile)) {
+                    if (!tmpFile.renameTo(destFile)) {
+                        Log.e(TAG, "Asset engine atomic commit failed (renameTo)");
+                        if (!tmpFile.delete()) Log.w(TAG, "Failed to delete: " + tmpFile.getAbsolutePath());
+                        return null;
+                    }
+                    makeExecutable(destFile);
                     Log.i(TAG, "Engine extracted from assets successfully, size=" + destFile.length()
-                            + ", SHA-256 verified");
+                            + ", SHA-256 verified (atomic commit)");
                     currentEnginePath = destFile.getAbsolutePath();
                     return destFile;
                 }
                 Log.e(TAG, "Asset-extracted engine failed SHA-256 verification — deleting");
-                if (!destFile.delete()) Log.w(TAG, "Failed to delete: " + destFile.getAbsolutePath());
+                if (!tmpFile.delete()) Log.w(TAG, "Failed to delete: " + tmpFile.getAbsolutePath());
             } else {
                 Log.e(TAG, "Asset-extracted engine failed ELF verification — deleting");
-                if (!destFile.delete()) Log.w(TAG, "Failed to delete: " + destFile.getAbsolutePath());
+                if (!tmpFile.delete()) Log.w(TAG, "Failed to delete: " + tmpFile.getAbsolutePath());
             }
         } else {
-            Log.e(TAG, "Asset-extracted engine is invalid (size=" + (destFile.exists() ? destFile.length() : 0) + ")");
-            if (!destFile.delete()) Log.w(TAG, "Failed to delete: " + destFile.getAbsolutePath());
+            Log.e(TAG, "Asset-extracted engine is invalid (size=" + (tmpFile.exists() ? tmpFile.length() : 0) + ")");
+            if (!tmpFile.delete()) Log.w(TAG, "Failed to delete: " + tmpFile.getAbsolutePath());
         }
         return null;
     }

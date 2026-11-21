@@ -1,3 +1,34 @@
+v1.2.3 round-66 (2026.11.21): sentinel ladder upgrade — six new v3 sentinels, V3-39 third-round hardening, negative-script N7; baseline 44/27/47.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - verifier/v3/round54-pr56-triage.js (AGPL v3 harness): NEW V3-40b (engine
+    identity live-doc sweep: BUILDING live build guide digest+size,
+    release-helper SF19, PRIVACY digest, manual live zones + README live zone
+    clean of stale identity — the five round-65 leaks all fell outside V3-40's
+    coverage), V3-41 (exact-size cache gates, size constant, atomic tmp+rename
+    commit as LIVE line-anchored statements, priority-1..3 size checks),
+    V3-42 (game-logic header true order), V3-43 (readCappedText cap order),
+    V3-44 (SAF null-path pending clear), V3-45 (both PGN parsers
+    backtracking-free: stats.html deterministic scanner + tablebase.js
+    hardened split). V3-39 third-round hardening: trap handlers pinned by
+    command shape ('restore || exit 1', not the word restore — echo-restore
+    bypass closed); backup_one/restore_one/per-item cp+cmp implementation
+    lines all pinned (name-vs-predicate table in round66-audit.md §7).
+    V3-40 (b) leg re-pinned to the size constant. R-6: identity
+    .replace(/\\n/g,'\\n') removed from G7a (CodeQL js/identity-replacement).
+  - verifier/runs/r62-negative-tests.sh (GPL v3): generalized to multi-target
+    (exclusive mktemp -d backup directory, one byte-verified copy per mutable
+    target: ai-bridge.js + stats.html); NEW N7 (killing the stats.html
+    deterministic header scanner must turn V3-45 RED). Path variable renamed
+    ST -> STF (collision with the sentinel-status variable ST=RED left N6's
+    residual value "RED" as a filename — found on first run, fixed).
+  - verifier/runs/round66-audit.md (new, GPL v3): round-66 audit trail —
+    23 report findings disposition table, 4 new findings (F-23 tablebase
+    quadratic split, R-8 useLegacyPackaging semantics inversion, R-9 missing
+    remote .gitignore, V41 dead-guard fourth-level bypass), F-9 benchmark +
+    343,010-case differential fuzz data, meta-negative 20+1 RED records.
+  - License classification: v3 harness AGPL v3; shell scripts + audit GPL v3
+    (unchanged).
+
 v1.2.3 round-65 (2026.11.21): engine upgrade sf_18 -> sf_19 — NEW sentinel
   V3-40 (engine identity cross-file consistency; baseline 44/27/41).
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).

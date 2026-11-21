@@ -1,3 +1,27 @@
+v1.2.3 round-66 (2026.11.21): external-review report implementation — worker-pool.js deleted; parser hardening; comment truthification.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - worker-pool.js (was GPL v3): DELETED FOR REAL — the round-56 entry below
+    already recorded it as deleted ("zero-caller dead code"), but the file
+    lingered in the tree for 10 rounds with a header falsely claiming it was
+    "still exercised by stats.html's separate inline worker" (stats.html has
+    its own inline worker, build-chess.py:101-102; the pool had zero live
+    callers and was never in the bundle since round-56). Tree now matches the
+    ledger; 10 modules remain, all node --check clean.
+  - tablebase.js (GPL v3): (1) F-23 — the multi-game split regex was the
+    FOURTH pre-round-49 quadratic copy (round-49 fixed three copies, missed
+    this one — the MAIN page's import parser, main thread): now the hardened
+    linear lookbehind form shared with stats.html; (2) F-11 — legacy WebViews
+    without AbortController get a 5s Promise.race wall-clock fallback and the
+    abort timer is cleared in a finally.
+  - game-logic.js (GPL v3): F-5 — module header rewritten to the TRUE bundle
+    order (game-logic first, ui.js last) with the round-60 TDZ warning;
+    R-2 — dead worker-pool reference clause removed from the typeof-guard
+    rationale.
+  - ai-bridge.js (GPL v3): F-12 — the delayed-advance retry's empty catch now
+    logs '[BATCH] delayed advance failed' (the only silent catch on the
+    batch-advance critical path).
+  - License classification: all remaining files unchanged.
+
 v1.2.3 round-65 (2026.11.21): engine identity strings updated to Stockfish 19 (sf_18 -> sf_19 upgrade).
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - ai-bridge.js (GPL v3): engine notification text
