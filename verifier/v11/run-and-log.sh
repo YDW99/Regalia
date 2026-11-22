@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# round-73: preserve output and history for normal and signal-interrupted runs.
+# round-74: asynchronous wait lets wrapper-only signals interrupt promptly.
 set -uo pipefail
 if [ "$#" -lt 2 ]; then
   printf 'usage: %s NAME COMMAND [ARG ...]\n' "$0" >&2
@@ -18,6 +18,7 @@ trap cleanup EXIT
 printf -v CMD '%q ' "$@"
 START="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 FINALIZED=0
+CHILD_PID=""
 
 finish() {
   local rc="$1"
@@ -47,6 +48,13 @@ handle_signal() {
   local rc="$1"
   local signal="$2"
   trap '' HUP INT TERM
+  if [ -n "$CHILD_PID" ]; then
+    # A wrapper-only signal must not leave the asynchronous child running.
+    # Reap it before reading TMP so its final output is included in the log.
+    kill -TERM "$CHILD_PID" 2>/dev/null || true
+    wait "$CHILD_PID" 2>/dev/null || true
+    CHILD_PID=""
+  fi
   finish "$rc" "$signal"
   exit "$rc"
 }
@@ -55,8 +63,11 @@ trap 'handle_signal 130 INT' INT
 trap 'handle_signal 143 TERM' TERM
 
 set +e
-"$@" >"$TMP" 2>&1
+"$@" >"$TMP" 2>&1 <&0 &
+CHILD_PID=$!
+wait "$CHILD_PID"
 RC=$?
+CHILD_PID=""
 set -e
 trap '' HUP INT TERM
 finish "$RC"

@@ -114,3 +114,11 @@ is a required source entry; and HUP/INT/TERM paths preserve output, history and
 entry. New regressions reproduce the old failures and pass 21 primitive negative
 checks plus 18 isolated integration checks. CodeQL/MobSF/Dependabot metadata and
 the gradlew executable index mode are restored after the current auto-unzip upload.
+
+Round-74 follow-up fixes wrapper-only signal handling. The child runs asynchronously
+with inherited stdin while Bash waits on its PID; HUP/INT/TERM handlers terminate and
+reap that child before finalizing output, history and 129/130/143 statuses. Normal
+completion still returns the child's original status. A new regression signals only
+the wrapper PID, proves prompt termination/reaping and retains the existing process-
+group TERM case, bringing the primitive negative suite to 22 checks. Reviewed CI
+metadata and the gradlew executable mode are restored again after auto-unzip loss.

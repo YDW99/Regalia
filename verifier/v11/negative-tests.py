@@ -204,6 +204,28 @@ def test_walk_errors() -> None:
     passed("directory traversal errors invoke onerror and abort payload enumeration")
 
 
+def assert_term_run(label: str, before_logs: set[Path], before_history: set[str],
+                    process: subprocess.Popen, output: str) -> None:
+    runs = ROOT / "verifier/runs"
+    if process.returncode != 143 or "exit_code=143" not in output or "interrupted_by=TERM" not in output:
+        raise AssertionError("TERM did not produce an interrupted 143 result")
+    if "child-before-TERM\n" not in output:
+        raise AssertionError("TERM discarded output produced before interruption")
+    new_logs = set(runs.glob(f"*-{label}.*.log")) - before_logs
+    if len(new_logs) != 1:
+        raise AssertionError("TERM did not preserve exactly one independent log")
+    log = next(iter(new_logs))
+    content = log.read_text(encoding="utf-8")
+    if "exit_code=143" not in content or "child-before-TERM\n" not in content:
+        raise AssertionError("interrupt log lacks status or pre-TERM output")
+    history = runs / "v11-history.tsv"
+    after_history = set(history.read_text(encoding="utf-8").splitlines())
+    new_history = after_history - before_history
+    expected = f"\t{label}\t143\t{log.relative_to(ROOT).as_posix()}"
+    if len(new_history) != 1 or expected not in next(iter(new_history)):
+        raise AssertionError("interrupt history lacks the 143 status or retained log path")
+
+
 def test_wrapper_signal() -> None:
     runs = ROOT / "verifier/runs"
     label = f"wrapper-negative-term-{os.getpid()}"
@@ -233,23 +255,52 @@ def test_wrapper_signal() -> None:
             if process.poll() is None:
                 os.killpg(process.pid, signal.SIGKILL)
                 process.communicate()
-    if process.returncode != 143 or "exit_code=143" not in output or "interrupted_by=TERM" not in output:
-        raise AssertionError("TERM did not produce an interrupted 143 result")
-    if "child-before-TERM\n" not in output:
-        raise AssertionError("TERM discarded output produced before interruption")
-    new_logs = set(runs.glob(f"*-{label}.*.log")) - before_logs
-    if len(new_logs) != 1:
-        raise AssertionError("TERM did not preserve exactly one independent log")
-    log = next(iter(new_logs))
-    content = log.read_text(encoding="utf-8")
-    if "exit_code=143" not in content or "child-before-TERM\n" not in content:
-        raise AssertionError("interrupt log lacks status or pre-TERM output")
-    after_history = set(history.read_text(encoding="utf-8").splitlines())
-    new_history = after_history - before_history
-    expected = f"\t{label}\t143\t{log.relative_to(ROOT).as_posix()}"
-    if len(new_history) != 1 or expected not in next(iter(new_history)):
-        raise AssertionError("interrupt history lacks the 143 status or retained log path")
+    assert_term_run(label, before_logs, before_history, process, output)
     passed("TERM preserves pre-signal output, history and exit status 143")
+
+
+def test_wrapper_only_signal() -> None:
+    runs = ROOT / "verifier/runs"
+    label = f"wrapper-only-negative-term-{os.getpid()}"
+    before_logs = set(runs.glob(f"*-{label}.*.log"))
+    history = runs / "v11-history.tsv"
+    before_history = set(history.read_text(encoding="utf-8").splitlines()) if history.is_file() else set()
+    with tempfile.TemporaryDirectory(prefix="v11-wrapper-only-term-") as temporary:
+        ready = Path(temporary) / "ready"
+        child_pid_file = Path(temporary) / "child.pid"
+        process = subprocess.Popen(
+            ["bash", str(ROOT / "verifier/v11/run-and-log.sh"), label,
+             "sh", "-c",
+             "printf 'child-before-TERM\\n'; printf '%s' \"$$\" > \"$1\"; "
+             "printf ready > \"$2\"; exec sleep 30",
+             "sh", str(child_pid_file), str(ready)],
+            cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+        try:
+            deadline = time.monotonic() + 10
+            while not ready.is_file():
+                if process.poll() is not None:
+                    raise AssertionError("wrapper exited before the wrapper-only fixture became ready")
+                if time.monotonic() > deadline:
+                    raise AssertionError("timed out waiting for wrapper-only child output")
+                time.sleep(0.02)
+            # Deliberately signal only Bash, not its process group or child.
+            os.kill(process.pid, signal.SIGTERM)
+            output = process.communicate(timeout=5)[0]
+        finally:
+            if process.poll() is None:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.communicate()
+        child_pid = int(child_pid_file.read_text(encoding="ascii"))
+    try:
+        os.kill(child_pid, 0)
+    except ProcessLookupError:
+        pass
+    else:
+        raise AssertionError("wrapper-only TERM left its child running or unreaped")
+    assert_term_run(label, before_logs, before_history, process, output)
+    passed("wrapper-only TERM promptly terminates and reaps the child before finalizing evidence")
 
 
 def test_leading_data_nested_secret() -> None:
@@ -306,6 +357,7 @@ def test_license_budget_order() -> None:
 def main() -> None:
     test_wrapper()
     test_wrapper_signal()
+    test_wrapper_only_signal()
     test_recursive_secrets()
     test_leading_data_nested_secret()
     test_recursive_binaries()
@@ -313,7 +365,7 @@ def main() -> None:
     test_directory_member_budget()
     test_license_budget_order()
     test_walk_errors()
-    assert checks == 21, checks
+    assert checks == 22, checks
     print(f"V11-NEGATIVE-PRIMITIVES OK: {checks}/{checks}")
 
 
