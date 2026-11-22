@@ -1,3 +1,22 @@
+v1.2.3 round-68 (2026.11.22): StockfishNative Sonar cleanup (T10/T11).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - StockfishNative.java (GPL v3, DroidFish-derived lineage): (1) Sonar
+    S3776 — commitExtractedEngine's cognitive complexity was 28 (>15): the
+    three reject arms now share ONE rejectExtractedEngine(tmpFile, label,
+    reason) helper (log reason + best-effort delete of the .tmp + return
+    null); (2) Sonar S1192 — the Extracted-engine log prefix literal now
+    exists exactly once (in the helper; V3-41 pins the single-sourcing);
+    (3) Sonar S1066 — priority-2 resolveEngineBinary guards merged into one
+    condition (round-67 T4 did the same for priority-3; semantics
+    unchanged, exact-size + ELF gates identical); (4) Sonar S125 — the
+    round-67 call-site comment carried a code-like "gate → gate → ...;"
+    chain duplicating the helper javadoc (Sonar misread it as commented-out
+    code): trimmed to a pointer, ordering spec now lives in exactly one
+    place. NO engine-protocol or extraction-semantics changes — verify→
+    rename adjacency, labels, tmp-sibling streams and all V3-41 anchors
+    preserved; compile gate BUILD SUCCESSFUL (compileReleaseJavaWithJavac).
+  - No other Java files changed this round.
+
 v1.2.3 round-66 (2026.11.21): engine cache identity gate + atomic extraction commit + robustness edges.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - StockfishNative.java (GPL v3, DroidFish-derived lineage): (1) F-1 — new

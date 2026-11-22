@@ -1,3 +1,105 @@
+# Regalia v1.2.3 — round-68 工作日志（2026-11-22 UTC+8）
+
+## 任务来源
+
+用户上传《Regalia-round68任务规划》（基于远端 upload head `414a523b` = round-67 交付树
+＋release-helper.yml web 编辑；三验证器起始实跑 44/44、27/27、47/49——V3-46/47 为规划
+明载的**预期可见缺口**；Sonar 门 OK、重复率 0.0%；PR 未决 Issue 16 条全部属实），指令：
+完成 round-68、交付老三样，过程中保持小心谨慎、避免引入新 bug 或冗余，需用户手动操作
+的部分留下指导。最高优先：**N8 基准完整性**（假绿比没有基准更危险）。
+
+## 沙箱恢复
+
+work/ 为 round-61 回滚态（不可信）→ codeload 快照恢复 `414a523b`（206 条目）＋ 从
+round-67 APK 提取引擎（SHA `ffd8fc20…1daf8`/100,695,968 B 双验通过）→ 首跑三验证器
+**44/44、27/27、47/49（V3-46/47 RED＝T0 预期缺口，非回归）**。构建环境从零重建（腾讯
+镜像全套：platform-35 r02/build-tools 35.0.0/platform-tools r37.0.3/cmake 3.31.6/
+NDK r27c 663,987,688 B/Gradle 8.11.1 + 清华 Temurin 17.0.21；全部存在性验证通过，
+脚本 scripts/r68-env-setup.sh 一段前台完成）。
+
+## 实施纪要（批次①→④，T0-T14 全部落地；细节/数据入 round68-audit.md）
+
+**批次① N8 基准完整性（守护者的守护者）**：T1——round-67 的 case-1 输入是转义事故
+`' \n'`（求值为空格+反斜杠+字母 n，**无真实换行**，用例空转假绿）；修复为 `' 
+'` 且
+**每个用例声明输入类不变量**（真实换行/含 `[`/无 `]`），执行前元断言校验——基准输入
+自身也要被守护。T2——基准改**双层结构**：`--case <name>` 子进程单用例模式（提取逻辑
+不变，只读不写树），父进程串行 spawn＋硬超时（BOUND_MS×3=3s）SIGKILL＋报用例名＋
+门失败——解析器回归不再能把门拖到分钟级或永远挂起；判定＝退出码＋成功标记双证。
+T3——负例自证入负例门：**N8a**（round-66 lookbehind 旧分割器注入**两孪生同体**——孪生
+检查保持可满足，失败必须来自时序界本身：被 3s kill）、**N8b**（扫描器 per-candidate
+`]` 重扫回注：三用例 1.2-2.1s 超界 RED）、**N8c**（`' 
+'`→`' \n'` 事故重注：元断言
+RED）、**N8d**（死循环用例：3s 内 kill＋点名＋exit≠0）。负例脚本扩为**十三门 exit 0**
+（备份集扩至四目标字节复核；bench 调用 9>&- 不继承互斥锁；终检只豁免文档化的
+V3-46/47 过渡 RED，其余任何失败仍拦——哨兵保持红、缺口可见化，不为消红弱化任何东西）。
+
+**批次② tablebase 网络健壮性（码兔 Major/Minor）**：T4——5s 期限现覆盖**响应体读取**：
+旧形 fetch 一返回头就 clearTimeout，"发头后停体"可无限挂起（AbortController 的 signal
+本可覆盖 body 流却被提前缴械）；新形为 `try/catch/finally` 三段式（tmr 声明在 try 外、
+finally 覆盖全程），body 读取中的 AbortError **重抛进既有 catch**（fail-count 语义正确，
+不误入 PHASE 19 bad-JSON 不计数路径）；legacy 无控制器路径的 5s race 同样包裹整条
+fetch→status→body 链。**行为级 fixture 六案全过**（两停体路径 5.005/5.006s 中止＋
+failCount=1；正常/404/5xx 三击/bad-JSON 语义回归不变）。T5——手动查询回调身份门：
+发起时记录 board 引用（AI 路径 `_tbSavedBoard` 先例），过期回调不再 autoSelect 旧推荐；
+**`_tbLoading` 两路共享（手动+AI）⇒ 显式归属令牌 `_tbLoadingBoard`**（引用相等，非 gen
+计数器，军规 2）：每路武装时认领、清偿时校验只降自己的旗（58b Bug F 模式），AI 路径
+武装点补 1 行认领＋两回调臂条件化清偿。**T6 哨兵**：V3-48（期限覆盖：tmr 在 try 外、
+clearTimeout 位于 body 解析后、AbortError 重抛、handled-outcome 哨兵、legacy 全链 race、
+旧早清形禁令——位置锚定）＋ V3-49（身份门：令牌声明、捕获+认领、两臂只清己有、
+autoSelect 板等价门、AI 认领与两臂清偿、旧无门形禁令）；元负例 6 场景全 RED（早清/
+重抛删除/race 降范围/归属删除/autoSelect 门删除/AI 认领删除）。
+
+**批次③ Sonar 15 修＋1 豁免**：T7/T8——孪生分割器 Sonar 清理（S3504 var→let/const ×6、
+S3776 认知复杂度 16→抽 `_blankRunStart` 局部助手、S7766 `Math.max(_run,1)`；扫描器
+S7766 `Math.max(_ws,_j)`）；**两孪生字节一致**（V3-45 同批改钉：Math.max 核心行、
+helper 钉法、扫描器行）；`[x.length-1]` 形**保留不动**（S7755 平台豁免——`.at()` 需
+Chrome 92+ > WebView 底线 84）；**差分 fuzz：分割 112,411 例＋扫描 50,005 例全部零差异**
+（确定性 PRNG 语料可复现）。T9——S7755 平台豁免＋"平台 API 底线对照"清单入方法论
+（minSdk 23／WebView 84／Java 8 无 desugaring；S9412 与 S7755 两例成表）。T10——
+StockfishNative：S3776（复杂度 28）抽 `rejectExtractedEngine(tmp,label,reason)` 共享
+拒绝助手（三拒绝臂一实现）＋S1192（"Extracted engine (" 字面量 ×3→×1，V3-41 钉单源）
+＋S1066（优先级 2 嵌套守卫合并，同 round-67 T4 先例）＋S125（:4836-4840 调用点注释含
+代码式标点链且与助手 javadoc 重复——精简为指针；**现场核实全文件无真正的注释掉的代码
+块**，定性如实入审计）；**编译门 BUILD SUCCESSFUL**（compileReleaseJavaWithJavac，
+41 条既有风格警告）。**T11**——V3-41 补两拒绝分支体 `return null;` 邻接钉法（旧钉法只
+匹配 if 行——`return destFile;` 变异可放行坏缓存而哨兵照绿）＋rejectExtractedEngine
+三调用点/声明/字面量单源钉法；元负例 ×3 全 RED（两分支 return null→destFile、拒绝臂
+内联回退）。
+
+**批次④ 文档收口＋平台豁免**：T12——round64-audit **ERRATUM-3**（补 `-Dorg.gradle.project.*`
+与 `ORG_GRADLE_PROJECT_*` 两来源＋**权威优先级表收口**：对照 Gradle 8.11.1 官方文档
+逐项核实＋沙箱实测 E1-E11 裁决——**实测推翻文档四选项列表第 3/4 位次**（env 实际胜过
+gradle.properties 文件），且**属性文件内 org.gradle.project.* 形态实测完全无效**（E9：
+唯一来源时属性 unset）——分歧如实记录，以实验为准；勘误递归封顶原则入方法论）。
+T13——**平台侧豁免配置入仓**（治本终止每轮重报）：`config/pmd-ruleset.xml`（quickstart
+减 ControlStatementBraces；**实测发现 pmd.yml 的 errorprone/bestpractices 两个 ruleset
+引用在 PMD 7.4.0 根本无法解析**——弃用别名不存在，CI 的 PMD 一直在仅用 quickstart 跑；
+新 ruleset 与现行为**逐规则等价**（diff 仅 braces 194→0）；激活需用户 web 改 pmd.yml
+一行——保护路径 zip 送不进）＋`src/main/java/.mobsf`（android_logging/CWE-532 仓库侧
+豁免：全树 264→0 实证、其余规则不受影响、自动拾取于 workflow 首扫描路径；dotfile 经
+zip 渠道有 .gitignore 前科——README 留 web 兜底指引）。T14——方法论 round-68 入档
+（基准输入守护/勘误递归封顶/平台底线清单/上传管线三先天限制与 git 直推出口）＋§4 基线
+表更新。**T0**——合并后三步 checklist（手动删 worker-pool.js→web 建 .gitignore→远端
+复跑 49/49→51/51 复核）入交付 README＋round68-audit §T0；git 直推方案（沙箱
+commit/push 或 Contents API 逐文件；凭据安全约束：token 不入仓库/文档/交付物）文档化
+入审计；PR stale 大限 2026-12-21 重申。
+
+## 验证与交付
+
+- 三验证器：**本地 44 / 27 / 51 项中 50 PASS**（交付树携带 .gitignore，V3-47 本地绿；
+  唯 V3-46 红——worker-pool.js 删除按用户决定留待合并后手动执行，缺口可见化）。远端
+  上传后预期 50 PASS（zip 携 .gitignore；若 dotfile 再次未落地则 49——V3-47 照红并
+  按 README web 兜底）；合并后 web 删 worker-pool.js 即 51/51。
+- 负例门：**十三门全绿 exit 0**（N1-N7 变异 RED＋N8 基准＋N8a-d 自保护＋N9 互斥零触碰）；
+  元负例 6+3 场景全 RED（T5/T6/T11）；T4 行为 fixture 6/6；fuzz 16.2 万例零差异。
+- 重打包：`build-chess.py` ×2 **cmp 0 差异**，**24,358 行 / 1,498,288 B**（round-67：
+  24,288/1,493,374；增量来自 T4/T5）。
+- APK 全量重建 ×2 ＋六连验（见 round68-audit §构建）；tar 纯净复核 0 命中＋口令扫描 0。
+- 交付：老三样（source-backup.tar.gz / release.apk / 恢复指南 md+zip）＋pr-upload.zip
+  ＋SHA256SUMS＋README（含用户手动操作指导：pmd.yml 一行激活、.gitignore web 兜底、
+  合并后三步、PR 收尾）。
+
 # Regalia v1.2.3 — round-67 工作日志（2026-11-21 UTC+8）
 
 ## 任务来源

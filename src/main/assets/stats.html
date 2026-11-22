@@ -717,19 +717,28 @@ const OPP_COLOR={white:'black',black:'white'};
 //   _pgnFirstGameSplit — the two files share no bundle, so the algorithm is
 //   necessarily duplicated and kept in shape-sync by V3-45.
 function _pgnFirstGameSplit(text){
-  var _ls=text.split('\n');
-  var _pos=new Array(_ls.length+1);
-  var _cuts=[];
-  var _run=-1;
-  var _i;
+  const _ls=text.split('\n');
+  const _pos=new Array(_ls.length+1);
+  const _cuts=[];
+  let _run=-1;
+  // v1.2.3 round-68 (T7/T8, Sonar S3776/S3504/S7766): the blank-run tracker
+  //   moved into a local helper (function-level cognitive complexity below
+  //   the rule threshold; semantics byte-identical — differential fuzz in
+  //   round68-audit.md), var -> let/const (S3504), and the cut-position
+  //   ternary became Math.max (S7766). Math.max is ES1 — safe on the
+  //   WebView 84 floor (unlike Array.prototype.at, which needs Chrome 92;
+  //   the remaining [x.length-1] index below stays for that reason —
+  //   S7755 platform exemption, round68-audit.md T9).
+  const _blankRunStart=(line,idx,run)=>/^\s*$/.test(line)?(run===-1?idx:run):-1;
+  let _i;
   _pos[0]=0;
   for(_i=0;_i<_ls.length;_i++)_pos[_i+1]=_pos[_i]+_ls[_i].length+1;
   for(_i=0;_i<_ls.length;_i++){
-    if(_ls[_i].charAt(0)==='['&&_run!==-1&&(_run>=1||_i>=2))_cuts.push([_pos[_run>=1?_run:1]-1,_pos[_i]]);
-    if(/^\s*$/.test(_ls[_i])){if(_run===-1)_run=_i;}else _run=-1;
+    if(_ls[_i].charAt(0)==='['&&_run!==-1&&(_run>=1||_i>=2))_cuts.push([_pos[Math.max(_run,1)]-1,_pos[_i]]);
+    _run=_blankRunStart(_ls[_i],_i,_run);
   }
   if(!_cuts.length)return [text];
-  var _out=[text.slice(0,_cuts[0][0])];
+  const _out=[text.slice(0,_cuts[0][0])];
   for(_i=1;_i<_cuts.length;_i++)_out.push(text.slice(_cuts[_i-1][1],_cuts[_i][0]));
   _out.push(text.slice(_cuts[_cuts.length-1][1]));
   return _out;
@@ -862,7 +871,7 @@ function parsePGN(pgnText){
       const _e=_nextClose(_j);
       if(_e>=0){
         const _ws=_closeWsStart();
-        const _vEnd=(_ws>_j?_ws:_j);
+        const _vEnd=Math.max(_ws,_j);
         const _nlPos=_nextNl(_j);
         if(!(_nlPos>=0&&_nlPos<_vEnd)){
           headers[_name]=text.slice(_j,_vEnd);_hs=_e+1;_matched=true;

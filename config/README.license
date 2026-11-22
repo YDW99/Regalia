@@ -1,0 +1,11 @@
+v1.2.3 round-68 (2026.11.22): PMD platform-side exemption config.
+  - pmd-ruleset.xml NEW (AGPL v3, project-original build config): replicates
+    the CI workflow's effectively-loading ruleset (rulesets/java/quickstart.xml
+    — the workflow's errorprone/bestpractices references are PMD 6 deprecated
+    aliases that do not resolve in PMD 7.4.0 and never loaded; verified with
+    the same PMD version, rule-by-rule distribution identical) minus
+    ControlStatementBraces, the project's documented dense-guard style
+    convention (~194 full-tree instances; rationale in the file header and
+    round68-audit.md §T13). Activation requires a one-line user web edit of
+    .github/workflows/pmd.yml (protected path — the zip channel cannot
+    deliver it; instructions in the round-68 delivery README).

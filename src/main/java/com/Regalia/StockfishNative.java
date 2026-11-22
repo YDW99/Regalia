@@ -1782,14 +1782,16 @@ public class StockfishNative {
         try {
             File appLibDir = new File(context.getApplicationInfo().dataDir, "lib");
             File appLibFile = new File(appLibDir, ENGINE_LIB_NAME);
-            if (appLibFile.exists() && appLibFile.canRead()) {
-                // v1.2.3 round-66 (O-3): same exact-size identity check as
-                //   priority 1 (see EXPECTED_ENGINE_SIZE_BYTES).
-                if (appLibFile.length() == EXPECTED_ENGINE_SIZE_BYTES && isElfFile(appLibFile)) {
-                    Log.i(TAG, "Engine binary found in app lib dir: " + appLibFile.getAbsolutePath());
-                    currentEnginePath = appLibFile.getAbsolutePath();
-                    return appLibFile;
-                }
+            // v1.2.3 round-66 (O-3): same exact-size identity check as
+            //   priority 1 (see EXPECTED_ENGINE_SIZE_BYTES).
+            // v1.2.3 round-68 (T10, Sonar S1066): the two nested guards are
+            //   one condition now — same semantics, one branch level fewer
+            //   (round-67 T4 did the same merge for the priority-3 candidate).
+            if (appLibFile.exists() && appLibFile.canRead()
+                    && appLibFile.length() == EXPECTED_ENGINE_SIZE_BYTES && isElfFile(appLibFile)) {
+                Log.i(TAG, "Engine binary found in app lib dir: " + appLibFile.getAbsolutePath());
+                currentEnginePath = appLibFile.getAbsolutePath();
+                return appLibFile;
             }
         } catch (Throwable e) {
             Log.w(TAG, "Error checking app lib dir", e);
@@ -4833,11 +4835,11 @@ public class StockfishNative {
                 }
             }
 
-            // v1.2.3 round-67 (T2): the verify-then-commit cascade moved into
-            //   the shared commitExtractedEngine() helper (size gate → ELF
-            //   gate → SHA-256 on the .tmp → atomic renameTo → makeExecutable;
-            //   any failure deletes the .tmp and returns null). Both
-            //   extraction paths shared this code byte-for-byte.
+            // v1.2.3 round-67 (T2): shared verify-then-commit cascade — see
+            //   commitExtractedEngine()'s javadoc for the gate ordering (the
+            //   ordering spec lives in exactly one place; round-68 T10 also
+            //   removed the code-like punctuation this comment carried, which
+            //   Sonar S125 misread as commented-out code).
             return commitExtractedEngine(tmpFile, destFile, "APK");
         } catch (Throwable e) {
             Log.e(TAG, "Failed to extract engine from APK", e);
@@ -5000,17 +5002,27 @@ public class StockfishNative {
                     currentEnginePath = destFile.getAbsolutePath();
                     return destFile;
                 }
-                Log.e(TAG, "Extracted engine (" + label + ") failed SHA-256 verification — deleting");
-                if (!tmpFile.delete()) Log.w(TAG, LOG_DELETE_FAILED + tmpFile.getAbsolutePath());
-            } else {
-                Log.e(TAG, "Extracted engine (" + label + ") failed ELF header verification — deleting");
-                if (!tmpFile.delete()) Log.w(TAG, LOG_DELETE_FAILED + tmpFile.getAbsolutePath());
+                // v1.2.3 round-68 (T10, Sonar S3776/S1192): the three reject
+                //   arms share rejectExtractedEngine() — the inline copies put
+                //   this method's cognitive complexity at 28 and repeated
+                //   the Extracted-engine prefix literal three times.
+                return rejectExtractedEngine(tmpFile, label, "failed SHA-256 verification — deleting");
             }
-        } else {
-            Log.e(TAG, "Extracted engine (" + label + ") is invalid (size="
-                    + (tmpFile.exists() ? tmpFile.length() : 0) + ") — deleting");
-            if (!tmpFile.delete()) Log.w(TAG, LOG_DELETE_FAILED + tmpFile.getAbsolutePath());
+            return rejectExtractedEngine(tmpFile, label, "failed ELF header verification — deleting");
         }
+        return rejectExtractedEngine(tmpFile, label,
+                "is invalid (size=" + (tmpFile.exists() ? tmpFile.length() : 0) + ") — deleting");
+    }
+
+    /**
+     * v1.2.3 round-68 (T10, Sonar S3776/S1192): the shared reject path for
+     * every commitExtractedEngine failure gate — log the reason, delete the
+     * partial .tmp (best effort; LOG_DELETE_FAILED constant per round-67 T3),
+     * return null. One implementation, one Extracted-engine prefix literal.
+     */
+    private File rejectExtractedEngine(File tmpFile, String label, String reason) {
+        Log.e(TAG, "Extracted engine (" + label + ") " + reason);
+        if (!tmpFile.delete()) Log.w(TAG, LOG_DELETE_FAILED + tmpFile.getAbsolutePath());
         return null;
     }
 

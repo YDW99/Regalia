@@ -1,3 +1,40 @@
+v1.2.3 round-68 (2026.11.22): benchmark self-protection + deadline/identity sentinels; baseline 44/27/51 (49 PASS + V3-46/47 transitional RED).
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - runs/r67-bench.js (AGPL v3 harness): hardened T1/T2 (CodeRabbit r67
+    #1/#2) — the round-67 case-1 input was the escaping accident
+    ' \\n' (space, backslash, letter n: NO real newline — a false-green
+    case testing nothing); fixed to ' \n' and every case now carries an
+    input SPEC (realNewline/bracket/closeBracket) asserted by a meta check
+    before benching (T1). Each case runs in a CHILD process (--case name);
+    the parent spawns serially with a hard timeout (BOUND_MS*3, SIGKILL,
+    case named, gate failed) — a hung/regressed parser can no longer stall
+    the gate past 3s/case or hang it forever (T2). Old-form negatives
+    N8a/N8b (round-66 lookbehind splitter re-injected into BOTH twins;
+    scanner per-candidate ']' rescan) prove the bound itself catches the
+    regression classes; N8c/N8d prove the meta check and the dead-loop kill
+    (T3). Verdict = exit code + success marker (dual proof).
+  - runs/r62-negative-tests.sh (AGPL v3 harness): backup set extended to
+    four byte-verified targets (tablebase.js and r67-bench.js joined);
+    bench invocations run fd-9-closed (children never inherit the workspace
+    mutex); four new gates N8a-d with the same mutate-run-assert-restore
+    discipline; final all-green check now tolerates EXACTLY the documented
+    V3-46/V3-47 transitional REDs (pre-merge delivery-channel gaps) and
+    fails on any other verifier failure; thirteen gates total, exit 0.
+  - v3/round54-pr56-triage.js (AGPL v3 harness): V3-45 predicates updated
+    same-batch with the splitter rewrite (Math.max core line, _blankRunStart
+    helper, scanner Math.max); V3-39 extended (four-target backup line, new
+    gate labels, run_bench fd discipline, restore_mut shape); V3-41 extended
+    (both rejection bodies pinned to return null — a return-destFile
+    mutation now goes RED; rejectExtractedEngine single-sourcing pinned);
+    NEW V3-48 (probe deadline covers fetch AND body: position-anchored
+    timer/parse/clearTimeout ordering, AbortError rethrow, handled-outcome
+    sentinel, legacy whole-chain race) and V3-49 (manual-path identity gate
+    + _tbLoadingBoard ownership protocol across both files).
+    Baseline: v1 44 / v2 27 / v3 51 checks (delivery tree carries .gitignore
+    so V3-47 is green locally; V3-46 stays RED until the user's post-merge
+    web deletion of worker-pool.js; remote mirrors once the zip lands —
+    see round68-audit T0).
+
 v1.2.3 round-67 (2026.11.21): de-twinning + linearization + delivery-completeness sentinels; baseline 44/27/49.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - verifier/v3/round54-pr56-triage.js (AGPL v3 harness): V3-41 REWRITTEN

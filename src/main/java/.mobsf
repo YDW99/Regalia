@@ -1,0 +1,22 @@
+# mobsfscan project exemptions (round-68, T13) — see round68-audit.md §T13.
+#
+# android_logging (CWE-532): every Log.* call that interpolates a variable is
+# flagged (264 findings on the full tree with mobsfscan 1.2.0). Project-wide
+# documented stance (round-56 SEC-06, proguard-rules.pro:135-139): release
+# builds strip Log.v/d/i/w via -assumenosideeffects; only Log.e survives,
+# and E-level calls that embed file paths are exactly two documented
+# residuals (StockfishNative engine-extraction failure paths, none of them
+# user data). The app is offline-first (V3-38): no user data is ever logged.
+#
+# Why repo-side instead of per-finding UI dismissal: GitHub code scanning
+# dismissals are per-finding-instance — every new code line re-reports the
+# class. This file is picked up automatically: the mobsf workflow scans
+# `src/main/java` first, and mobsfscan looks for .mobsf in the first scanned
+# path (verified empirically: 264 -> 0 findings, other rules unaffected).
+#
+# NOTE: dotfiles have failed to land through the zip overlay channel before
+# (the .gitignore incident, round-67 T0). If the post-upload remote re-check
+# shows this file missing, create it via the GitHub web editor with this
+# exact content (see the round-68 delivery README).
+ignore-rules:
+  - android_logging

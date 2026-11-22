@@ -62,13 +62,14 @@
 |---|---|---|
 | `verifier/v1/eval-stale-harness.js` | eval 回调陈旧性、批量推进、缓存归属的**行为级**仿真 + TDZ 哨兵 + 场景 R61 + **场景 S58（round-62：在飞去重/环缓存救援/看门狗有界重试，10 断言）** | **44 项** |
 | `verifier/v2/round53-sonar-triage.js` | round-44 起各修复的**结构哨兵** + V2-20/21 + **V2-22/23a/23b/23c（58b Bug A/F 结构守护）+ V2-25（消重防回潮）** | **27 项** |
-| `verifier/v3/round54-pr56-triage.js` | PR 评审项、文档/许可完整性（H2a–H2f 双向）+ V3-38 指南隐私行（fail-closed）+ G7 升级版（round-62：唯一实现 + 调用方接线双守护）+ **V3-39（round-63 自纪律；round-64 实现行锚定；round-67 flock 互斥钉实现行与"锁先于备份"次序）** + **round-67：V3-41 改钉共享助手唯一实现＋双调用点＋verify→rename 邻接＋死守卫禁令；V3-43 钉截断赋值先于 throw；V3-45 改钉同构孪生＋单调缓存扫描器；V3-46/47 交付完整性（worker-pool 缺席/.gitignore 在位）** | **49 项** |
+| `verifier/v3/round54-pr56-triage.js` | PR 评审项、文档/许可完整性（H2a–H2f 双向）+ V3-38 指南隐私行（fail-closed）+ G7 升级版（round-62：唯一实现 + 调用方接线双守护）+ **V3-39（round-63 自纪律；round-64 实现行锚定；round-67 flock 互斥钉实现行与"锁先于备份"次序）** + **round-67：V3-41 改钉共享助手唯一实现＋双调用点＋verify→rename 邻接＋死守卫禁令；V3-43 钉截断赋值先于 throw；V3-45 改钉同构孪生＋单调缓存扫描器；V3-46/47 交付完整性（worker-pool 缺席/.gitignore 在位）；round-68：V3-48 表残局探测 5s 期限覆盖响应体（位置锚定）；V3-49 查询回调身份门（_tbLoadingBoard 归属令牌）** | **51 项（过渡期本地 50 PASS：交付树带 .gitignore 故 V3-47 绿，唯 V3-46 红——worker-pool.js 按用户决定留待合并后手动删；合并后 51/51）** |
 
 - 运行：`cd verifier && node v1/eval-stale-harness.js && node v2/round53-sonar-triage.js && node v3/round54-pr56-triage.js`（不依赖 Android 环境）。
 - round-62 状态闭环：58b 六 bug 哨兵欠账**已全部落地**（v1 行为级三主题：重复派发抑制 S58-C、环缓存救援 S58-E、看门狗有界重试 S58-D；v2 结构级三主题：`_manualLive` 门控 V2-22、Bug F 清偿点 V2-23a/b/c、列表刷新接线 V2-24），负例回归变异六连测全 RED；**58b 哨兵欠账清零**。
 - round-63 状态闭环：负例脚本四缺陷（退出码失真/路径硬编码/无 trap 恢复/台账失真）全部修复并元负例三连测验证；V3-39 永久哨兵落地，新基线 **44/27/40**。
 - round-64 状态闭环：round-63 加固自身引入的两条数据丢失路径（未校验备份/无条件删备份）全部闭合（备份与恢复全链 `cp + cmp -s` 字节复核 + 幂等 restore + 失败传播），V3-39 两处绕过（空处理器/注释满足）以实现行锚定堵死；二十五断言元负例套件全 PASS；基线 **44/27/40 不变**。
 - round-67 状态闭环：CodeRabbit 9 条＋Sonar 4 条全部处置；消孪生（V3-41 重写）＋两解析器单遍线性化（V3-45 重写＋N8 基准门）＋flock 互斥（V3-39 升级＋N9 并发负例）＋交付完整性哨兵（V3-46/47）；同构孪生基准实测最坏 294ms/上界 1000ms；基线 **44/27/49**，负例门九项（7 变异 RED＋bench＋lock）。
+- round-68 状态闭环：CodeRabbit 6 条（N8 假绿×2、tablebase 期限/身份、V3-41 分支体、Gradle 勘误）＋Sonar 16 条（15 修＋S7755 平台豁免）全部处置；N8 基准自保护四负例（N8a-d：旧形态×2/元断言/死循环 kill）入负例门（十三门 exit 0）；表残局探测期限覆盖响应体＋回调身份门（V3-48/49＋fixture 6 案＋元负例 6 RED）；孪生分割器 Sonar 清理（S3504/S3776/S7766，fuzz 16.2 万例零差异）；StockfishNative S3776/S1192/S1066/S125（rejectExtractedEngine 单源＋V3-41 分支体 return-null 钉法）；PMD/mobsfscan 平台侧豁免配置入仓（双配置实证：194→0/264→0，逐规则等价）；基线 **44/27/51 项中本地 50 PASS**（V3-46 过渡红——worker-pool.js 删除留待用户合并后手动执行；.gitignore 已随交付树，V3-47 本地绿/远端待落地，见 §5 平台管线）。
 - 扩展位：StockfishNative 余三组（engineGo 对 ~90 行，O-1）与 ui.js 两组重复对的消重防回潮哨兵（届时与 V2-25 同型）。
 
 ## 5. 工具与环境坑（跨沙箱恢复必读）
@@ -76,3 +77,6 @@
 - **构建环境每次按 §2.3 重建**；本沙箱（round-62）新增两条：①项目 `gradle.properties` 要求 `-Xmx4096m` 而 4GB 物理内存的沙箱会 OOM 杀 daemon——用 `GRADLE_USER_HOME/gradle.properties` 覆盖为 `-Xmx1536m`；②长驻后台进程（setsid nohup 含 Gradle daemon）在工具调用间隙会被清理——**构建必须在单次前台调用内完成**，依赖下载用 Gradle 文件级缓存跨段收敛（实测 4 段，每段 ≤570s）。
 - AGP 8.7.3 的自动 SDK 安装器下载 build-tools 可能反复挂起——`sdkmanager` 手动预装后恢复。
 - **round-67 新增**：①沙箱回收不仅回滚目录，还可能把大文件掳空而保留目录骨架（两处遗留 SDK 的 platforms/android-35 与 build-tools/*/ 只剩 package.xml）——恢复后先做 source.properties/android.jar 存在性复核再开工（修复配方：腾讯镜像重拉 platform-35/build-tools 34+35/platform-tools；NDK r27c 663,987,688 B 同样需重拉）；②flock 工作区互斥（r62-negative-tests.sh）为 Linux-only（util-linux）；沙箱与 CI 均 Linux，如实记录。
+- **round-68 新增（评审器建议先对表——平台 API 底线对照清单）**：任何静态分析/评审器建议的 API，落地前先对照本项目三重底线——**minSdk 23**（Android 6.0：`List.sort` 默认方法 API 24+、`networkSecurityConfig` API 24+——round-44 F15 教训；`usesCleartextTraffic` 属性兜 API 23）；**WebView ≥ 84**（项目底线：`Array.prototype.at` 需 Chrome 92+ **禁用**——Sonar S7755 建议即此例，平台豁免不采纳；lookbehind 正则 Chrome 62+ 可用；AbortController Chrome 66+ 可用但保留无控制器兜底路径）；**Java 8 无 desugaring**（避免依赖需要 desugaring 的 API/语法）。两例入档：S9412/minSdk23（List.sort）与 S7755/WebView84（.at()）——同款陷阱两独立实例，成清单防第三例。
+- **round-68 新增（基准输入自身也要被守护）**：N8 基准的 `' \\n'` 字面量事故（源码求值为空格+反斜杠+字母 n，无真实换行）使一个用例静默空转——性能断言的**输入有效性是断言的一部分**：每个基准用例声明其输入类不变量（真实换行/含括号/无闭括号），执行前元断言校验（N8c 负例钉死）。守护者的输入也要被守护。
+- **round-68 新增（勘误递归封顶）**：同一事实记载勘误三轮（round-64 Gradle 优先级写反 → round-67 补一半 → round-68 再补两来源）说明**逐轮 append-only 勘误会自我增殖**；封顶法：第三轮必须产出"对照权威源逐项核实＋可复现实验裁决"的权威表，标注前次表述 superseded，后续以表为准不再逐条勘误（round64-audit ERRATUM-3 为首例；实证配方 E1-E11 入 round68-audit §T12——文档列表与实测行为冲突时以实验为准，分歧点如实记录）。

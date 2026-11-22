@@ -347,3 +347,38 @@ ERRATUM-1's list line is retained verbatim above (append-only discipline);
 this erratum supersedes it. `grep` audit note: `-P`/`--project-prop` now
 appear in this file only inside the historical ERRATUM-1 list, its
 supersession note here, and the project-property section of this erratum.
+### ERRATUM-3（round-68，T12）— 项目属性来源清单补全＋权威优先级表收口
+
+ERRATUM-2 的项目属性节列了 `-P` 与三级 gradle.properties，**漏了两个来源**：
+`-Dorg.gradle.project.<name>` 命令行系统属性与 `ORG_GRADLE_PROJECT_<name>` 环境
+变量（两者均可覆盖任何 gradle.properties 里的同名 `<name>`）。同一记载已勘误三轮
+（round-64 写反 → round-67 ERRATUM-2 → 本条），按"勘误递归封顶"原则，本条给出
+**对照 Gradle 8.11.1 官方文档逐项核实＋沙箱实测裁决**的权威表，前两次勘误中被
+取代的表述以本表为准（superseded；原文按 append-only 纪律保留在上文）。
+
+**权威优先级表（Gradle 8.11.1，实测 E1–E11 全程可复现，见 round68-audit §T12）**
+
+A. **Gradle 属性**（`org.gradle.*` 命名空间；官方文档 "Gradle properties" 表）：
+   1. 命令行 `-D`（唯一命令行来源；`-P` 到不了该命名空间——ERRATUM-2 第 1 条不变）
+   2. `GRADLE_USER_HOME/gradle.properties`
+   3. 项目根（及父项目逐级向上）`gradle.properties`
+   4. `GRADLE_HOME/gradle.properties`
+
+B. **项目属性**（其余一切键，喂给 `project.findProperty`/`providers.gradleProperty`）：
+   1. `-P`/`--project-prop`（命令行）— 实测 E4/E5
+   2. `-Dorg.gradle.project.<name>`（命令行系统属性）— 实测 E3/E6
+   3. `ORG_GRADLE_PROJECT_<name>`（环境变量）— 实测 E2/E5/E6/E11
+   4. gradle.properties 文件（GRADLE_USER_HOME > 项目根 > GRADLE_HOME）— 实测 E10
+   5. （`gradle.properties` 文件内写 `org.gradle.project.<name>` 形态：**8.11.1
+      实测无效**（E9：唯一来源时属性为 unset）——官方文档第 2 项"or
+      gradle.properties file"的措辞与实测不符，按实测记录。）
+
+**文档 vs 实测的分歧点（如实记录）**：官方 "Project properties" 节的四选项列表
+按 1`-P` 2系统属性 3属性文件 4环境变量 排序——实测第 3/4 位**相反**（E2：环境
+变量胜过项目根文件；E11：胜过 GRADLE_USER_HOME 文件）。本表以实测为准；若后续
+Gradle 版本变更行为，以同套实验（E1–E11 配方入 round68-audit §T12）重测。
+
+round-68 沙箱实测记录（Gradle 8.11.1 + Temurin 17.0.21，/tmp/gradle-prio 最小
+工程）：E3 `-Dorg.gradle.project.foo` 覆盖项目根文件条目生效（规划 T12 验收项）；
+E5 `-P` 胜环境变量；E6 系统属性胜环境变量；E9 文件内 org.gradle.project 形态无效；
+E10 GRADLE_USER_HOME 文件胜项目根文件；E11 环境变量胜 GRADLE_USER_HOME 文件。

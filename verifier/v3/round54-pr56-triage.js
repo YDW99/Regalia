@@ -285,7 +285,7 @@ ok('V3-38 guide §1 privacy line accurate (skip only when guide absent)',
 //   call restore. Meta negative tests for all bypass mutations (empty
 //   handler, implementation deleted comment kept, backup-cp failure,
 //   restore failure, SIGINT double-trap) live in round64-audit.md.
-ok('V3-39 r62-negative-tests.sh self-discipline (line-anchored: self-resolved root, flock workspace mutex BEFORE first backup held to exit, exclusive mktemp -d backup dir, byte-verified backup/restore/per-item cp+cmp at every site, restore-CALLING trap handlers (command shape, not mention), accumulated failures, real exit codes, no absolute paths; N8 bench gate + N9 lock negative wired)',
+ok('V3-39 r62-negative-tests.sh self-discipline (line-anchored: self-resolved root, flock workspace mutex BEFORE first backup held to exit, exclusive mktemp -d backup dir covering all four mutable targets, byte-verified backup/restore/per-item cp+cmp at every site, restore-CALLING trap handlers (command shape, not mention), accumulated failures, real exit codes, no absolute paths; N8 bench gate + N8a-d benchmark self-protection negatives + N9 lock negative wired; bench runs fd-9-closed so children never inherit the workspace mutex)',
    (() => {
      const s = read('verifier/runs/r62-negative-tests.sh');
      const vl = read('verifier/README.license');
@@ -301,6 +301,10 @@ ok('V3-39 r62-negative-tests.sh self-discipline (line-anchored: self-resolved ro
      //   by its three implementation lines, and the lock must be taken
      //   BEFORE the first backup (source order) — a lock added after the
      //   mutations would not close the shared-target race it exists for.
+     // round-68 (T1/T2/T3): the backup set grew to four targets (tablebase.js
+     //   and r67-bench.js joined as mutation targets for the benchmark
+     //   self-protection negatives); the pinned invocation line grew with
+     //   it, and the new gates + their restore discipline are pinned too.
      const lockIdx = s.indexOf('flock -n 9');
      const bakIdx = s.indexOf('BAK=$(mktemp -d)');
      return !s.includes('/home/')
@@ -312,13 +316,24 @@ ok('V3-39 r62-negative-tests.sh self-discipline (line-anchored: self-resolved ro
        && s.includes('node runs/r67-bench.js')
        && s.includes('bash "$0" >"$_N9LOG" 2>&1')
        && s.includes('TREE MODIFIED by the second instance')
+       // round-68 (T1/T2/T3): the benchmark self-protection negatives are
+       // wired and named (gate labels), the bench runs without the lock fd
+       // (9>&- — its node children must not inherit the workspace mutex),
+       // and the mutation gates carry their own byte-verified restore
+       // discipline (mutcheck/restore_mut with cp+cmp).
+       && s.includes('NEG[N8a-split-oldform]')
+       && s.includes('NEG[N8b-scan-oldform]')
+       && s.includes('NEG[N8c-meta-newline]')
+       && s.includes('NEG[N8d-deadloop]')
+       && /^run_bench\(\) \{ \( cd "\$VDIR" && node runs\/r67-bench\.js 9>&- \); \}$/m.test(s)
+       && /^  if ! cp "\$BAK\/\$\(basename "\$1"\)" "\$1" \|\| ! cmp -s "\$BAK\/\$\(basename "\$1"\)" "\$1"; then$/m.test(s)
        && /^BAK=\$\(mktemp -d\)/m.test(s)
        && /^trap\s+'restore\s*\|\|\s*exit\s+1[^']*'\s+EXIT/m.test(s)
        && /^trap\s+'restore\s*\|\|\s*exit\s+1[^']*'\s+INT/m.test(s)
        && /^trap\s+'restore\s*\|\|\s*exit\s+1[^']*'\s+TERM/m.test(s)
        && /^  cp "\$1" "\$2" && cmp -s "\$1" "\$2"$/m.test(s)
        && /^  if cp "\$1" "\$2" && cmp -s "\$1" "\$2"; then$/m.test(s)
-       && /^if ! backup_one "\$AB" "\$BAK\/ai-bridge\.js" \|\| ! backup_one "\$STF" "\$BAK\/stats\.html"; then$/m.test(s)
+       && /^if ! backup_one "\$AB" "\$BAK\/ai-bridge\.js" \|\| ! backup_one "\$STF" "\$BAK\/stats\.html" \|\| ! backup_one "\$TBF" "\$BAK\/tablebase\.js" \|\| ! backup_one "\$BEN" "\$BAK\/r67-bench\.js"; then$/m.test(s)
        && /^[^#\n]*if ! cp "\$_bak" "\$_tgt" \|\| ! cmp -s "\$_bak" "\$_tgt"; then$/m.test(s)
        && /^[^#\n]*FAILED=\$\(\(FAILED\+1\)\)/m.test(s)
        && /^set -o pipefail/m.test(s)
@@ -445,7 +460,7 @@ ok('V3-40b engine identity live-doc sweep (BUILDING live guide digest+size, rele
 //   as a cheap death-guard; deeper wrappers (if (0==1)) remain a documented
 //   residual (methodology §3.10 five-level lineage; the behavioral property
 //   is covered by fixture review + this script's negative mutations).
-ok('V3-41 engine cache identity gate + atomic extraction commit, single shared implementation (exact-size gate + rooted-SHA gate in cachedEngineAcceptable; verify-SHA-then-rename adjacency inside commitExtractedEngine; label call sites ×2 each; LOG constant single-source; tmp sibling streams ×2; priority-1..3 size checks; no dead-literal wrappers)',
+ok('V3-41 engine cache identity gate + atomic extraction commit, single shared implementation (exact-size gate + rooted-SHA gate in cachedEngineAcceptable, both rejection bodies pinned to return null; verify-SHA-then-rename adjacency inside commitExtractedEngine; reject arms share rejectExtractedEngine with the Extracted-engine literal single-sourced; label call sites ×2 each; LOG constant single-source; tmp sibling streams ×2; priority-1..3 size checks; no dead-literal wrappers)',
    (() => {
      const sn = read('src/main/java/com/Regalia/StockfishNative.java');
      if (!sn) return false;
@@ -455,6 +470,13 @@ ok('V3-41 engine cache identity gate + atomic extraction commit, single shared i
      if (!/^ {8}if \(!destFile\.exists\(\) \|\| destFile\.length\(\) != EXPECTED_ENGINE_SIZE_BYTES \|\| !isElfFile\(destFile\)\) \{$/m.test(sn)) return false;
      // (3) rooted-device SHA gate inside the helper
      if (!/^ {8}if \(shouldVerifyCachedEngine\(\) && !verifyEngineSha256\(destFile\)\) \{$/m.test(sn)) return false;
+     // round-68 (T11, CodeRabbit r67): the rejection branch BODIES must
+     //   actually return null. The round-67 pins matched only the if-LINES —
+     //   a `return destFile;` in a branch body kept the sentinel green while
+     //   releasing a bad cache (the method returns File, so return destFile
+     //   compiles fine). Adjacency-pinned on both rejection branches.
+     if (!/!isElfFile\(destFile\)\) \{\n            return null;\n        \}/.test(sn)) return false;
+     if (!/getAbsolutePath\(\)\);\n            return null;\n        \}/.test(sn)) return false;
      // (4) helper called from BOTH extraction paths (exact labels)
      if ((sn.match(/cachedEngineAcceptable\(destFile, "extracted"\)/g) || []).length !== 1) return false;
      if ((sn.match(/cachedEngineAcceptable\(destFile, "asset-extracted"\)/g) || []).length !== 1) return false;
@@ -470,6 +492,13 @@ ok('V3-41 engine cache identity gate + atomic extraction commit, single shared i
      // (8) the delete-failure log literal exists ONLY as the shared constant (S1192)
      if (!/^ {4}private static final String LOG_DELETE_FAILED = "Failed to delete: ";$/m.test(sn)) return false;
      if ((sn.match(/Log\.w\(TAG, "Failed to delete: " \+/g) || []).length !== 0) return false;
+     // round-68 (T10, Sonar S3776/S1192): the three reject arms share ONE
+     //   rejectExtractedEngine() helper — three call sites, one declaration,
+     //   and the "Extracted engine (" literal exists exactly once (in the
+     //   helper), replacing the former three inline copies.
+     if ((sn.match(/rejectExtractedEngine\(tmpFile, label/g) || []).length !== 3) return false;
+     if (!/^    private File rejectExtractedEngine\(File tmpFile, String label, String reason\) \{$/m.test(sn)) return false;
+     if ((sn.match(/"Extracted engine \("/g) || []).length !== 1) return false;
      // (9) extraction still writes the .tmp sibling in both paths
      if ((sn.match(/new java\.io\.FileOutputStream\(tmpFile\)\)/g) || []).length !== 2) return false;
      // (10) priority-1..3 resolution gates unchanged (F-1/O-3)
@@ -565,8 +594,11 @@ ok('V3-45 PGN parsers single-pass linear (isomorphic _pgnFirstGameSplit twins by
      const a = tb.match(fnRe), b = st.match(fnRe);
      if (!a || !b || a[0] !== b[0]) return false;
      // (2) the semantic core lines inside the shared body
-     if (!/^ {4}if\(_ls\[_i\]\.charAt\(0\)==='\['&&_run!==-1&&\(_run>=1\|\|_i>=2\)\)_cuts\.push\(\[_pos\[_run>=1\?_run:1\]-1,_pos\[_i\]\]\);$/m.test(a[0])) return false;
-     if (!/^ {4}if\(\/\^\\s\*\$\/\.test\(_ls\[_i\]\)\)\{if\(_run===-1\)_run=_i;\}else _run=-1;$/m.test(a[0])) return false;
+     if (!/^ {4}if\(_ls\[_i\]\.charAt\(0\)==='\['&&_run!==-1&&\(_run>=1\|\|_i>=2\)\)_cuts\.push\(\[_pos\[Math\.max\(_run,1\)\]-1,_pos\[_i\]\]\);$/m.test(a[0])) return false;
+     if (!/^ {4}_run=_blankRunStart\(_ls\[_i\],_i,_run\);$/m.test(a[0])) return false;
+     // round-68 (T7/T8): the blank-run tracker is a pinned local helper —
+     //   a blank line keeps the first run start, a non-blank line resets.
+     if (!/^ {2}const _blankRunStart=\(line,idx,run\)=>\/\^\\s\*\$\/\.test\(line\)\?\(run===-1\?idx:run\):-1;$/m.test(a[0])) return false;
      // (3) both files actually call it for the first-game split
      if (!/const gameBlocks=_pgnFirstGameSplit\(pgnText\);/.test(tb)) return false;
      if (!/const _gameBlocks=_pgnFirstGameSplit\(text\);/.test(st)) return false;
@@ -580,7 +612,7 @@ ok('V3-45 PGN parsers single-pass linear (isomorphic _pgnFirstGameSplit twins by
      if (!/^  let _nb=text\.indexOf\('\]'\),_nbFrom=0,_nbWs=-1;$/m.test(st)) return false;
      if (!/^  let _nl=text\.indexOf\('\\n'\),_nlFrom=0;$/m.test(st)) return false;
      if (!/^    if\(from<_nbFrom\|\|\(_nb>=0&&_nb<from\)\)\{_nbFrom=from;_nb=text\.indexOf\('\]',from\);_nbWs=-1;\}$/m.test(st)) return false;
-     if (!/^        const _vEnd=\(_ws>_j\?_ws:_j\);$/m.test(st)) return false;
+     if (!/^        const _vEnd=Math\.max\(_ws,_j\);$/m.test(st)) return false;
      if (!/^        if\(!\(_nlPos>=0&&_nlPos<_vEnd\)\)\{$/m.test(st)) return false;
      if (!/^    const _b=text\.indexOf\('\[',_hs\);$/m.test(st)) return false;
      // (6) the behavioral bound is wired into the negative gate (N8)
@@ -628,6 +660,77 @@ ok('V3-47 .gitignore present with never-commit exclusions (keystore.properties, 
        && /^\.cxx\/$/m.test(gi)
        && /^\.gradle\/$/m.test(gi)
        && /^src\/main\/jniLibs\/$/m.test(gi);
+   })());
+
+// V3-48 — round-68 (T4, CodeRabbit r67 Major): probeTablebase's 5s deadline
+//   must cover the response BODY read, not just the headers. The round-66/67
+//   form cleared the abort timer in an inner finally right after fetch
+//   resolved — a server that sent headers then stalled the body hung the
+//   probe forever. Pinned (position-anchored, whole file, unique anchors):
+//   (1) the timer decl sits OUTSIDE the try (so the outer finally covers
+//       every path);
+//   (2) the clearTimeout finally sits AFTER the body-parse anchor
+//       (`return await r.json();`) — moving it back before the parse is the
+//       exact regression class;
+//   (3) the AbortError rethrow inside the JSON catch routes a deadline abort
+//       during the body read into the EXISTING catch (fail-count semantics),
+//       not the PHASE 19 malformed-payload path;
+//   (4) the handled-outcome sentinel `if(data===undefined)return null;`
+//       distinguishes 4xx/5xx/bad-JSON outcomes from a parsed payload;
+//   (5) the legacy no-AbortController race wraps the whole _fetchProbe()
+//       chain, not a bare fetch;
+//   (6) the known-bad early-clear inner finally is gone.
+//   Meta-negatives RED-verified (round68-audit.md §T6): early-clear
+//   reintroduction, AbortError-rethrow removal, legacy race de-scoping.
+ok('V3-48 tablebase probe: 5s deadline covers fetch AND response body (timer outside try; clearTimeout AFTER body parse; AbortError during body read rethrown to fail-count catch; handled-outcome sentinel; legacy race wraps whole chain; early-clear inner finally gone)',
+   (() => {
+     const tb = read('src/main/assets/chess.src/tablebase.js');
+     if (!tb) return false;
+     const decl = tb.indexOf("const tmr=ctrl?setTimeout(()=>ctrl.abort(),5000):null;");
+     const tryB = tb.indexOf('try{\nconst _tbUrl=');
+     const parse = tb.indexOf('return await r.json();');
+     const clear = tb.indexOf('finally{if(tmr)clearTimeout(tmr);}');
+     if (decl < 0 || tryB < 0 || parse < 0 || clear < 0) return false;
+     if (!(decl < tryB && parse < clear)) return false;
+     if (!/if\(ctrl&&e&&e\.name==='AbortError'\)throw e;/.test(tb)) return false;
+     if (!/^if\(data===undefined\)return null;$/m.test(tb)) return false;
+     if (!/Promise\.race\(\[\n    _fetchProbe\(\),/.test(tb)) return false;
+     if (/\}finally\{\n  if\(tmr\)clearTimeout\(tmr\);\n\}/.test(tb)) return false;
+     if (/resp=await fetch\(/.test(tb)) return false;
+     return true;
+   })());
+
+// V3-49 — round-68 (T5, CodeRabbit r67 Minor): the manual tablebase query's
+//   async callback must be IDENTITY-CHECKED before it touches shared state.
+//   The probe is async; a callback returning after the position changed must
+//   not autoSelect an OLD recommendation onto the changed board, and must
+//   not lower a loading flag that now belongs to a NEWER query. The AI path
+//   precedent (_tbSavedBoard reference equality, game-logic.js) is extended
+//   with a shared ownership token _tbLoadingBoard (reference, NOT a
+//   generation counter — military rule 2): every arm claims it, every lower
+//   verifies it (58b Bug F "settle only your own state").
+//   Pinned: token declaration; manual-path capture + claim + gated lowering
+//   on BOTH the then and catch arms; autoSelect gated on board identity;
+//   the AI path's arm-site claim and BOTH gated lowerings; the old ungated
+//   `then(function(d){\n_tbLoading=false;` form gone.
+//   Meta-negatives RED-verified (round68-audit.md §T6): ownership check
+//   removal (stale callback clears newer loading), autoSelect gate removal.
+ok('V3-49 tablebase query callbacks identity-gated (_tbLoadingBoard ownership token: manual path captures board, claims token, lowers only-if-owning on both arms, autoSelect gated on board identity; AI path claims token at arm and lowers only-if-owning on both arms; old ungated lowering gone)',
+   (() => {
+     const tb = read('src/main/assets/chess.src/tablebase.js');
+     const gl = read('src/main/assets/chess.src/game-logic.js');
+     if (!tb || !gl) return false;
+     if (!/^let _tbLoadingBoard=null;$/m.test(tb)) return false;
+     if (!/const _boardAtQuery=gameState\.board;\n_tbLoadingBoard=_boardAtQuery;/.test(tb)) return false;
+     const gatedLower = "if(_tbLoadingBoard===_boardAtQuery){_tbLoading=false;_tbLoadingBoard=null;}";
+     if ((tb.match(new RegExp(gatedLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length !== 2) return false;
+     if (!/if\(gameState\.board===_boardAtQuery\)\{\nif\(d\)\{const bm=bestMoveFromTablebase\(d\);if\(bm\)\{autoSelectTablebaseMove\(bm\.uci\);\}\}\n\}/.test(tb)) return false;
+     if (/probeTablebase\(gameState\)\.then\(function\(d\)\{\n_tbLoading=false;/.test(tb)) return false;
+     if (!/_tbLoading=true;_tbLoadingBoard=gameState\.board;\n/.test(gl)) return false;
+     const aiLower = "if(_tbLoadingBoard===_tbSavedBoard){_tbLoading=false;_tbLoadingBoard=null;}";
+     if ((gl.match(new RegExp(aiLower.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g')) || []).length !== 2) return false;
+     if (/\}\)\.catch\(function\(\)\{\n_tbLoading=false;\n_tbRetryCount\+\+;/.test(gl)) return false;
+     return true;
    })());
 
 console.log('\n===== RESULT: ' + pass + ' passed, ' + fail + ' failed =====');

@@ -1,3 +1,29 @@
+v1.2.3 round-68 (2026.11.22): tablebase deadline/identity + splitter Sonar cleanup.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - tablebase.js (GPL v3, DroidFish-derived lineage): (1) probeTablebase —
+    the 5s deadline now covers the response BODY read (T4, CodeRabbit r67
+    Major): the abort timer stays armed through headers → status → body →
+    parse (outer try/catch/finally; timer declared outside try), an
+    AbortError during the body read is rethrown into the existing catch
+    (fail-count semantics — NOT the PHASE 19 malformed-payload path), and
+    the legacy no-AbortController path races the whole fetch+parse chain;
+    404-no-count (Rev62), bad-JSON-no-count (PHASE 19) and three-strike
+    offline semantics unchanged (behavioral fixture: 6/6, round68-audit
+    §T4). (2) _triggerTbQuery — stale-callback identity gate (T5,
+    CodeRabbit r67 Minor): board reference captured before the async probe;
+    a callback returning after the position changed never autoSelects the
+    old recommendation, and lowers the shared _tbLoading flag only when it
+    still owns it (new _tbLoadingBoard ownership token — reference equality,
+    not a generation counter). (3) _pgnFirstGameSplit — Sonar S3504/S3776/
+    S7766 cleanup (var -> let/const; _blankRunStart helper; Math.max),
+    byte-identical twin of stats.html's copy (V3-45), differential fuzz
+    112,411 cases zero diff.
+  - game-logic.js (GPL v3): AI tablebase path claims the shared
+    _tbLoadingBoard ownership token at arm time and lowers _tbLoading only
+    when it still owns it on both callback arms (T5 coordination; move-
+    execution identity gate unchanged).
+  - No other modules changed this round.
+
 v1.2.3 round-66 (2026.11.21): external-review report implementation — worker-pool.js deleted; parser hardening; comment truthification.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - worker-pool.js (was GPL v3): DELETED FOR REAL — the round-56 entry below

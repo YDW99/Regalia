@@ -153,19 +153,28 @@ if(gameState.currentTurn!==playerColor)doAIMove();
 //   _pgnFirstGameSplit — the two files share no bundle, so the algorithm is
 //   necessarily duplicated and kept in shape-sync by V3-45.
 function _pgnFirstGameSplit(text){
-  var _ls=text.split('\n');
-  var _pos=new Array(_ls.length+1);
-  var _cuts=[];
-  var _run=-1;
-  var _i;
+  const _ls=text.split('\n');
+  const _pos=new Array(_ls.length+1);
+  const _cuts=[];
+  let _run=-1;
+  // v1.2.3 round-68 (T7/T8, Sonar S3776/S3504/S7766): the blank-run tracker
+  //   moved into a local helper (function-level cognitive complexity below
+  //   the rule threshold; semantics byte-identical — differential fuzz in
+  //   round68-audit.md), var -> let/const (S3504), and the cut-position
+  //   ternary became Math.max (S7766). Math.max is ES1 — safe on the
+  //   WebView 84 floor (unlike Array.prototype.at, which needs Chrome 92;
+  //   the remaining [x.length-1] index below stays for that reason —
+  //   S7755 platform exemption, round68-audit.md T9).
+  const _blankRunStart=(line,idx,run)=>/^\s*$/.test(line)?(run===-1?idx:run):-1;
+  let _i;
   _pos[0]=0;
   for(_i=0;_i<_ls.length;_i++)_pos[_i+1]=_pos[_i]+_ls[_i].length+1;
   for(_i=0;_i<_ls.length;_i++){
-    if(_ls[_i].charAt(0)==='['&&_run!==-1&&(_run>=1||_i>=2))_cuts.push([_pos[_run>=1?_run:1]-1,_pos[_i]]);
-    if(/^\s*$/.test(_ls[_i])){if(_run===-1)_run=_i;}else _run=-1;
+    if(_ls[_i].charAt(0)==='['&&_run!==-1&&(_run>=1||_i>=2))_cuts.push([_pos[Math.max(_run,1)]-1,_pos[_i]]);
+    _run=_blankRunStart(_ls[_i],_i,_run);
   }
   if(!_cuts.length)return [text];
-  var _out=[text.slice(0,_cuts[0][0])];
+  const _out=[text.slice(0,_cuts[0][0])];
   for(_i=1;_i<_cuts.length;_i++)_out.push(text.slice(_cuts[_i-1][1],_cuts[_i][0]));
   _out.push(text.slice(_cuts[_cuts.length-1][1]));
   return _out;
@@ -2057,6 +2066,15 @@ let _tbFailCount=0;
 let _tbOfflineSince=0;
 function isTbOffline(){if(_tbOffline&&Date.now()-_tbOfflineSince>60000){_tbOffline=false;_tbFailCount=0;}return _tbOffline}
 let _tbLoading=false;
+// v1.2.3 round-68 (T5): ownership token for the shared _tbLoading flag —
+//   the board reference the CURRENT in-flight loading was armed for. Two
+//   paths arm _tbLoading (this manual trigger + game-logic's AI tablebase
+//   move, which re-arms without a re-entry check); a callback may only
+//   lower a flag it armed for the board it armed it for (58b Bug F
+//   "settle only your own state"). Reference equality, NOT a generation
+//   counter (military rule 2) — the AI path's _tbSavedBoard precedent,
+//   hoisted to shared scope because two writers share one flag.
+let _tbLoadingBoard=null;
 let _tbRetryCount=0;
 let _tbLastRequestTime=0;
 
@@ -2098,9 +2116,6 @@ if(_cached!==undefined){
 const now=Date.now();const wait=Math.max(0,600-(now-_tbLastRequestTime));
 _tbLastRequestTime=now+wait; // Reserve slot immediately
 if(wait>0)await new Promise(r=>setTimeout(r,wait));
-try{
-const ctrl=typeof AbortController!=='undefined'?new AbortController():null;
-const tmr=ctrl?setTimeout(()=>ctrl.abort(),5000):null;
 // v1.2.3 round-66 (F-11): two gaps on legacy WebViews (no AbortController,
 //   Chrome < 66; minSdk 23 can ship such WebViews unreplaced): (a) the fetch
 //   had NO timeout at all — a stalled network hung the probe forever;
@@ -2110,53 +2125,83 @@ const tmr=ctrl?setTimeout(()=>ctrl.abort(),5000):null;
 //   (uniform fail-count semantics; Promise.race attaches handlers to the
 //   losing fetch, so a late network rejection cannot become an unhandled
 //   rejection); (b) by clearing the timer in a finally.
+// v1.2.3 round-68 (T4, CodeRabbit r67 Major, outside-diff :2125): the 5s
+//   deadline now covers the response BODY read too. The round-66/67 form
+//   cleared the abort timer in a finally that ended right after fetch
+//   resolved — i.e. as soon as the response HEADERS arrived — so a server
+//   that sent headers and then stalled the body could hang the probe
+//   forever (the AbortController signal already covers the body stream; it
+//   was being disarmed early). The timer now stays armed through the whole
+//   headers→status→body→parse chain (outer finally below), and an
+//   AbortError raised during the body read is RETHROWN into the existing
+//   catch — a stalled body is a network failure (fail-count semantics),
+//   NOT a malformed payload (PHASE 19 path). The legacy no-AbortController
+//   path gets the same coverage: the 5s wall-clock race wraps the whole
+//   chain, not just the fetch. Semantics otherwise unchanged: 404 does not
+//   count toward _tbFailCount (Rev62), bad JSON does not count (PHASE 19),
+//   5xx/network errors three-strike offline for 60s.
+const ctrl=typeof AbortController!=='undefined'?new AbortController():null;
+const tmr=ctrl?setTimeout(()=>ctrl.abort(),5000):null;
+try{
 const _tbUrl=`https://tablebase.lichess.ovh/standard?fen=${encodeURIComponent(fen)}`;
-let resp;
-try{
-  if(ctrl){
-    resp=await fetch(_tbUrl,{signal:ctrl.signal});
-  }else{
-    resp=await Promise.race([
-      fetch(_tbUrl),
-      new Promise((_,rej)=>setTimeout(()=>rej(new Error('tablebase probe: 5s wall-clock timeout (no AbortController)')),5000))
-    ]);
+// One chain for both paths: headers → status gates → body parse. Returns
+// undefined for the handled non-network outcomes (4xx/5xx gates applied,
+// malformed payload) and the parsed payload otherwise; a deadline abort
+// during fetch OR body read throws into the outer catch.
+const _fetchProbe=async()=>{
+  const r=await fetch(_tbUrl,ctrl?{signal:ctrl.signal}:undefined);
+  // v1.0.5 Round-6 Rev62 (2026.6.27) FIX: a 404 response means "position not in
+  // tablebase", NOT "server is down". (The entry is already defended — v1.2.3
+  //   round-41 added the pieceCountLE7 guard at the top of probeTablebase — but a
+  //   404 can still occur for positions outside the tablebase's coverage, e.g.
+  //   positions with castling rights.) Previously, 3 consecutive 404s would
+  //   falsely set _tbOffline=true for 60 seconds, blocking ALL tablebase queries
+  //   even though the server is healthy. Now only 5xx errors and network errors
+  //   (caught below) count toward _tbFailCount; 4xx errors return null silently.
+  if(!r.ok){
+    if(r.status>=500){
+      _tbFailCount++;
+      if(_tbFailCount>=3){_tbOffline=true;_tbOfflineSince=Date.now();}
+    }
+    return undefined;
   }
-}finally{
-  if(tmr)clearTimeout(tmr);
-}
-// v1.0.5 Round-6 Rev62 (2026.6.27) FIX: a 404 response means "position not in
-// tablebase", NOT "server is down". (The entry is already defended — v1.2.3
-// round-41 added the pieceCountLE7 guard at the top of probeTablebase — but a
-// 404 can still occur for positions outside the tablebase's coverage, e.g.
-// positions with castling rights.) Previously, 3 consecutive 404s would
-// falsely set _tbOffline=true for 60 seconds, blocking ALL tablebase queries
-// even though the server is healthy. Now only 5xx errors and network errors
-// (caught below) count toward _tbFailCount; 4xx errors return null silently.
-if(!resp.ok){
-  if(resp.status>=500){
-    _tbFailCount++;
-    if(_tbFailCount>=3){_tbOffline=true;_tbOfflineSince=Date.now();}
+  // v1.0.7 PHASE 19 (bug fix): Parse JSON in its own try/catch so a malformed
+  //   response body (server reachable but bad payload) does NOT count toward
+  //   _tbFailCount and trip _tbOffline. Previously, a JSON parse error threw into
+  //   the generic catch below, incrementing the fail count — contradicting the
+  //   Rev62 fix that excluded 4xx errors for the same reason (server is reachable).
+  try{
+    return await r.json();
+  }catch(e){
+    // round-68 (T4): a deadline abort during the body read is a NETWORK
+    //   failure — rethrow to the existing catch (fail-count semantics);
+    //   only genuine malformed payloads take the PHASE 19 no-count path.
+    if(ctrl&&e&&e.name==='AbortError')throw e;
+    console.warn('probeTablebase: bad JSON response',e);
+    return undefined;
   }
-  return null;
-}
-// v1.0.7 PHASE 19 (bug fix): Parse JSON in its own try/catch so a malformed
-// response body (server reachable but bad payload) does NOT count toward
-// _tbFailCount and trip _tbOffline. Previously, a JSON parse error threw into
-// the generic catch below, incrementing the fail count — contradicting the
-// Rev62 fix that excluded 4xx errors for the same reason (server is reachable).
+};
 let data;
-try{
-  data=await resp.json();
-}catch(e){
-  console.warn('probeTablebase: bad JSON response',e);
-  return null;
+if(ctrl){
+  data=await _fetchProbe();
+}else{
+  data=await Promise.race([
+    _fetchProbe(),
+    new Promise((_,rej)=>setTimeout(()=>rej(new Error('tablebase probe: 5s wall-clock timeout (no AbortController)')),5000))
+  ]);
 }
+// undefined = handled outcome (4xx/5xx gates or malformed payload) — the
+// caller gets null. (A literal JSON `null` body — never produced by the
+// tablebase API — is NOT undefined, so it keeps the historical cache+reset
+// semantics instead of being mistaken for a handled failure.)
+if(data===undefined)return null;
 // LRU cache: evict oldest when full
 if(_tbCache.size>=_TB_CACHE_MAX){const firstKey=_tbCache.keys().next().value;_tbCache.delete(firstKey);}
 _tbCache.set(fen,data);
 _tbFailCount=0;
 return data;
 }catch(e){_tbFailCount++;if(_tbFailCount>=3){_tbOffline=true;_tbOfflineSince=Date.now();}return null}
+finally{if(tmr)clearTimeout(tmr);}
 }
 
 // Get best move from tablebase
@@ -2170,17 +2215,32 @@ return data.moves[0];
 // Manual trigger: user clicks to query tablebase for current position
 function _triggerTbQuery(){
 if(_tbLoading||isTbOffline())return;
+// v1.2.3 round-68 (T5, CodeRabbit r67 Minor, outside-diff :2174): manual-path
+//   stale-callback identity check, mirroring the AI path's _tbSavedBoard
+//   precedent (game-logic.js). The probe is async — if the position changed
+//   while it was in flight, the payload describes the OLD position and must
+//   never be autoSelected onto the changed board. The loading flag is
+//   lowered only when this callback still owns it: a newer query (the AI
+//   path can start while a manual query is in flight — it re-arms
+//   _tbLoading without a re-entry check) has re-pointed _tbLoadingBoard at
+//   the new board, and that flag is not ours to lower.
+const _boardAtQuery=gameState.board;
+_tbLoadingBoard=_boardAtQuery;
 _tbLoading=true;render();
 probeTablebase(gameState).then(function(d){
-_tbLoading=false;
+if(_tbLoadingBoard===_boardAtQuery){_tbLoading=false;_tbLoadingBoard=null;}
 // Auto-select piece on tablebase recommendation
+if(gameState.board===_boardAtQuery){
 if(d){const bm=bestMoveFromTablebase(d);if(bm){autoSelectTablebaseMove(bm.uci);}}
+}
 render();
 // v1.2.3 round-13 (P3): log the error so a bug in bestMoveFromTablebase or
 //   autoSelectTablebaseMove is not silently swallowed. probeTablebase itself
 //   has its own internal try/catch that logs and returns null; this catch
 //   covers errors from the downstream callbacks in the promise chain.
-}).catch(function(e){console.warn('probeTablebase callback failed:',e);_tbLoading=false;render();});
+}).catch(function(e){console.warn('probeTablebase callback failed:',e);
+if(_tbLoadingBoard===_boardAtQuery){_tbLoading=false;_tbLoadingBoard=null;}
+render();});
 }
 
 // Auto-select the piece for a tablebase-recommended move
