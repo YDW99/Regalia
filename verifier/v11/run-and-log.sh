@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# round-75: isolate each command and bound signal-driven descendant cleanup.
+# round-76: defer startup signals and keep the watchdog through group escalation.
 set -uo pipefail
 if [ "$#" -lt 2 ]; then
   printf 'usage: %s NAME COMMAND [ARG ...]\n' "$0" >&2
@@ -19,6 +19,8 @@ printf -v CMD '%q ' "$@"
 START="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 FINALIZED=0
 CHILD_PID=""
+PENDING_RC=""
+PENDING_SIGNAL=""
 TERM_GRACE_SECONDS=2
 
 finish() {
@@ -48,37 +50,53 @@ finish() {
 handle_signal() {
   local rc="$1"
   local signal="$2"
-  trap '' HUP INT TERM
-  if [ -n "$CHILD_PID" ]; then
-    # Signal only this command's isolated group, never the caller's group.
-    kill -TERM -- "-$CHILD_PID" 2>/dev/null || true
-    # A child may ignore TERM; escalate outside its group after a bounded grace.
-    (
-      trap - HUP INT TERM
-      sleep "$TERM_GRACE_SECONDS"
-      kill -KILL -- "-$CHILD_PID" 2>/dev/null || true
-    ) </dev/null >/dev/null 2>&1 &
-    local watchdog_pid=$!
-    # Reap the direct child before reading TMP so its final output is retained.
-    wait "$CHILD_PID" 2>/dev/null || true
-    CHILD_PID=""
-    kill "$watchdog_pid" 2>/dev/null || true
-    wait "$watchdog_pid" 2>/dev/null || true
+  if [ -z "$CHILD_PID" ]; then
+    # The command PID is not recorded yet. Defer cleanup without making the
+    # new command inherit ignored signals; its launch subshell resets them.
+    PENDING_RC="$rc"
+    PENDING_SIGNAL="$signal"
+    trap '' HUP INT QUIT TERM
+    return
   fi
+  trap '' HUP INT QUIT TERM
+  local command_pid="$CHILD_PID"
+  # The direct PID covers the tiny window before setsid execs; the PGID covers
+  # every descendant without ever signaling the caller's process group.
+  kill -TERM "$command_pid" 2>/dev/null || true
+  kill -TERM -- "-$command_pid" 2>/dev/null || true
+  (
+    trap - HUP INT QUIT TERM
+    sleep "$TERM_GRACE_SECONDS"
+    kill -KILL -- "-$command_pid" 2>/dev/null || true
+  ) </dev/null >/dev/null 2>&1 &
+  local watchdog_pid=$!
+  # Reap the direct child before reading TMP so its final output is retained.
+  wait "$command_pid" 2>/dev/null || true
+  CHILD_PID=""
+  # A direct-child exit does not prove the group is empty. Keep the watchdog
+  # until its bounded grace expires and its group-level KILL has been issued.
+  wait "$watchdog_pid" 2>/dev/null || true
   finish "$rc" "$signal"
   exit "$rc"
 }
 trap 'handle_signal 129 HUP' HUP
 trap 'handle_signal 130 INT' INT
+trap 'handle_signal 131 QUIT' QUIT
 trap 'handle_signal 143 TERM' TERM
 
 set +e
-setsid -- "$@" >"$TMP" 2>&1 <&0 &
+(
+  trap - HUP INT QUIT TERM
+  exec setsid -- "$@"
+) >"$TMP" 2>&1 <&0 &
 CHILD_PID=$!
+if [ -n "$PENDING_SIGNAL" ]; then
+  handle_signal "$PENDING_RC" "$PENDING_SIGNAL"
+fi
 wait "$CHILD_PID"
 RC=$?
+trap '' HUP INT QUIT TERM
 CHILD_PID=""
 set -e
-trap '' HUP INT TERM
 finish "$RC"
 exit "$RC"

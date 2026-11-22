@@ -8,8 +8,10 @@ import io
 import os
 from pathlib import Path
 import signal
+import shutil
 import stat
 import subprocess
+import sys
 import tempfile
 import time
 from unittest import mock
@@ -204,26 +206,34 @@ def test_walk_errors() -> None:
     passed("directory traversal errors invoke onerror and abort payload enumeration")
 
 
-def assert_term_run(label: str, before_logs: set[Path], before_history: set[str],
-                    process: subprocess.Popen, output: str) -> None:
+def assert_interrupt_run(label: str, before_logs: set[Path], before_history: set[str],
+                         process: subprocess.Popen, output: str, signal_name: str = "TERM") -> None:
+    expected_status = {"HUP": 129, "INT": 130, "QUIT": 131, "TERM": 143}[signal_name]
+    marker = f"child-before-{signal_name}\n"
     runs = ROOT / "verifier/runs"
-    if process.returncode != 143 or "exit_code=143" not in output or "interrupted_by=TERM" not in output:
-        raise AssertionError("TERM did not produce an interrupted 143 result")
-    if "child-before-TERM\n" not in output:
-        raise AssertionError("TERM discarded output produced before interruption")
+    if (process.returncode != expected_status or f"exit_code={expected_status}" not in output
+            or f"interrupted_by={signal_name}" not in output):
+        raise AssertionError(f"{signal_name} did not produce an interrupted {expected_status} result")
+    if marker not in output:
+        raise AssertionError(f"{signal_name} discarded output produced before interruption")
     new_logs = set(runs.glob(f"*-{label}.*.log")) - before_logs
     if len(new_logs) != 1:
-        raise AssertionError("TERM did not preserve exactly one independent log")
+        raise AssertionError(f"{signal_name} did not preserve exactly one independent log")
     log = next(iter(new_logs))
     content = log.read_text(encoding="utf-8")
-    if "exit_code=143" not in content or "child-before-TERM\n" not in content:
-        raise AssertionError("interrupt log lacks status or pre-TERM output")
+    if f"exit_code={expected_status}" not in content or marker not in content:
+        raise AssertionError("interrupt log lacks status or pre-signal output")
     history = runs / "v11-history.tsv"
     after_history = set(history.read_text(encoding="utf-8").splitlines())
     new_history = after_history - before_history
-    expected = f"\t{label}\t143\t{log.relative_to(ROOT).as_posix()}"
+    expected = f"\t{label}\t{expected_status}\t{log.relative_to(ROOT).as_posix()}"
     if len(new_history) != 1 or expected not in next(iter(new_history)):
-        raise AssertionError("interrupt history lacks the 143 status or retained log path")
+        raise AssertionError(f"interrupt history lacks the {expected_status} status or retained log path")
+
+
+def assert_term_run(label: str, before_logs: set[Path], before_history: set[str],
+                    process: subprocess.Popen, output: str) -> None:
+    assert_interrupt_run(label, before_logs, before_history, process, output)
 
 
 def test_wrapper_signal() -> None:
@@ -350,6 +360,11 @@ def test_wrapper_descendant_signal() -> None:
                               os.getpgid(child_pid) != os.getpgid(process.pid))
             os.kill(process.pid, signal.SIGTERM)
             output = process.communicate(timeout=8)[0]
+            # Assert wrapper cleanup before the fallback can hide a leak.
+            assert_process_gone(child_pid, "direct child")
+            assert_process_gone(descendant_pid, "non-exec descendant")
+            if not isolated_group:
+                raise AssertionError("command lacked an isolated process group")
         finally:
             if process.poll() is None:
                 os.killpg(process.pid, signal.SIGKILL)
@@ -360,10 +375,6 @@ def test_wrapper_descendant_signal() -> None:
                         os.kill(pid, signal.SIGKILL)
                     except ProcessLookupError:
                         pass
-        assert_process_gone(child_pid, "direct child")
-        assert_process_gone(descendant_pid, "non-exec descendant")
-        if not isolated_group:
-            raise AssertionError("command lacked an isolated process group")
     assert_term_run(label, before_logs, before_history, process, output)
     passed("wrapper-only TERM terminates the isolated group including non-exec descendants")
 
@@ -398,6 +409,8 @@ def test_wrapper_term_refusal() -> None:
             child_pid = int(child_pid_file.read_text(encoding="ascii"))
             os.kill(process.pid, signal.SIGTERM)
             output = process.communicate(timeout=8)[0]
+            # A stubborn child must be gone before fallback cleanup runs.
+            assert_process_gone(child_pid, "TERM-refusing child")
         finally:
             if process.poll() is None:
                 os.killpg(process.pid, signal.SIGKILL)
@@ -407,9 +420,194 @@ def test_wrapper_term_refusal() -> None:
                     os.kill(child_pid, signal.SIGKILL)
                 except ProcessLookupError:
                     pass
-        assert_process_gone(child_pid, "TERM-refusing child")
     assert_term_run(label, before_logs, before_history, process, output)
     passed("bounded TERM grace escalates to KILL and preserves interrupted evidence")
+
+
+def test_wrapper_orphan_term_refusal() -> None:
+    runs = ROOT / "verifier/runs"
+    label = f"wrapper-orphan-stubborn-negative-term-{os.getpid()}"
+    before_logs = set(runs.glob(f"*-{label}.*.log"))
+    history = runs / "v11-history.tsv"
+    before_history = set(history.read_text(encoding="utf-8").splitlines()) if history.is_file() else set()
+    with tempfile.TemporaryDirectory(prefix="v11-orphan-stubborn-term-") as temporary:
+        base = Path(temporary)
+        ready = base / "ready"
+        child_pid_file = base / "child.pid"
+        descendant_pid_file = base / "descendant.pid"
+        stubborn = base / "stubborn.py"
+        stubborn.write_text(
+            "import os, signal, sys, time\n"
+            "from pathlib import Path\n"
+            "signal.signal(signal.SIGHUP, signal.SIG_IGN)\n"
+            "signal.signal(signal.SIGTERM, signal.SIG_IGN)\n"
+            "Path(sys.argv[1]).write_text(str(os.getpid()), encoding='ascii')\n"
+            "Path(sys.argv[2]).write_text('ready', encoding='ascii')\n"
+            "while True: time.sleep(1)\n", encoding="utf-8")
+        parent = base / "parent.py"
+        parent.write_text(
+            "import os, signal, subprocess, sys, time\n"
+            "from pathlib import Path\n"
+            "signal.signal(signal.SIGHUP, signal.SIG_IGN)\n"
+            "signal.signal(signal.SIGTERM, lambda *_: os._exit(0))\n"
+            "print('child-before-TERM', flush=True)\n"
+            "child = subprocess.Popen([sys.executable, sys.argv[1], sys.argv[3], sys.argv[4]])\n"
+            "Path(sys.argv[2]).write_text(str(os.getpid()), encoding='ascii')\n"
+            "Path(sys.argv[3]).write_text(str(child.pid), encoding='ascii')\n"
+            "while True: time.sleep(1)\n", encoding="utf-8")
+        process = subprocess.Popen(
+            ["bash", str(ROOT / "verifier/v11/run-and-log.sh"), label,
+             sys.executable, str(parent), str(stubborn), str(child_pid_file),
+             str(descendant_pid_file), str(ready)],
+            cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+        child_pid = descendant_pid = None
+        try:
+            deadline = time.monotonic() + 10
+            while not ready.is_file():
+                if process.poll() is not None:
+                    raise AssertionError("wrapper exited before the stubborn orphan became ready")
+                if time.monotonic() > deadline:
+                    raise AssertionError("timed out waiting for stubborn orphan fixture")
+                time.sleep(0.02)
+            child_pid = int(child_pid_file.read_text(encoding="ascii"))
+            descendant_pid = int(descendant_pid_file.read_text(encoding="ascii"))
+            os.kill(process.pid, signal.SIGTERM)
+            output = process.communicate(timeout=8)[0]
+            # The parent accepts TERM; its stubborn descendant still requires KILL.
+            assert_process_gone(child_pid, "TERM-accepting direct child")
+            assert_process_gone(descendant_pid, "orphaned TERM-refusing descendant")
+        finally:
+            if process.poll() is None:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.communicate()
+            if child_pid is not None:
+                try:
+                    os.killpg(child_pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            for pid in (child_pid, descendant_pid):
+                if pid is not None:
+                    try:
+                        os.kill(pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+    assert_term_run(label, before_logs, before_history, process, output)
+    passed("watchdog remains armed until KILL after the direct child leaves a stubborn orphan")
+
+
+def test_wrapper_startup_signal() -> None:
+    runs = ROOT / "verifier/runs"
+    label = f"wrapper-startup-negative-term-{os.getpid()}"
+    before_logs = set(runs.glob(f"*-{label}.*.log"))
+    history = runs / "v11-history.tsv"
+    before_history = set(history.read_text(encoding="utf-8").splitlines()) if history.is_file() else set()
+    real_setsid = shutil.which("setsid")
+    if real_setsid is None:
+        raise AssertionError("setsid is required for the startup-signal regression")
+    with tempfile.TemporaryDirectory(prefix="v11-startup-term-") as temporary:
+        base = Path(temporary)
+        fake_bin = base / "bin"
+        fake_bin.mkdir()
+        child_pid_file = base / "child.pid"
+        shim = fake_bin / "setsid"
+        shim.write_text(
+            "#!/bin/bash\n"
+            "printf 'child-before-TERM\\n'\n"
+            "printf '%s' \"$$\" > \"$R76_CHILD_PID_FILE\"\n"
+            f"exec {real_setsid} \"$@\"\n", encoding="utf-8")
+        shim.chmod(0o755)
+        # Inject TERM immediately before CHILD_PID=$!, after the launch but before
+        # the assignment. The wait for the shim PID makes this window deterministic.
+        debug_env = base / "bash-env"
+        debug_env.write_text(
+            "trap '\n"
+            "if [[ $BASH_COMMAND == \"CHILD_PID=\\$!\" ]]; then\n"
+            "  trap - DEBUG\n"
+            "  while [ ! -s \"$R76_CHILD_PID_FILE\" ]; do :; done\n"
+            "  kill -TERM \"$$\"\n"
+            "fi\n"
+            "' DEBUG\n", encoding="utf-8")
+        env = dict(os.environ, PATH=str(fake_bin) + os.pathsep + os.environ["PATH"],
+                   BASH_ENV=str(debug_env), R76_CHILD_PID_FILE=str(child_pid_file))
+        process = subprocess.Popen(
+            ["bash", str(ROOT / "verifier/v11/run-and-log.sh"), label,
+             "bash", "-c", "exec sleep 30"],
+            cwd=ROOT, env=env, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+        child_pid = None
+        try:
+            output = process.communicate(timeout=8)[0]
+            child_pid = int(child_pid_file.read_text(encoding="ascii"))
+            assert_process_gone(child_pid, "command signaled before PID assignment")
+        finally:
+            if process.poll() is None:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.communicate()
+            if child_pid is None and child_pid_file.is_file():
+                child_pid = int(child_pid_file.read_text(encoding="ascii"))
+            if child_pid is not None:
+                try:
+                    os.killpg(child_pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                try:
+                    os.kill(child_pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+    assert_term_run(label, before_logs, before_history, process, output)
+    passed("a signal before CHILD_PID assignment is deferred and still cleans the command")
+
+
+def test_wrapper_group_quit() -> None:
+    runs = ROOT / "verifier/runs"
+    label = f"wrapper-group-negative-quit-{os.getpid()}"
+    before_logs = set(runs.glob(f"*-{label}.*.log"))
+    history = runs / "v11-history.tsv"
+    before_history = set(history.read_text(encoding="utf-8").splitlines()) if history.is_file() else set()
+    with tempfile.TemporaryDirectory(prefix="v11-group-quit-") as temporary:
+        ready = Path(temporary) / "ready"
+        child_pid_file = Path(temporary) / "child.pid"
+        process = subprocess.Popen(
+            ["bash", str(ROOT / "verifier/v11/run-and-log.sh"), label,
+             "sh", "-c",
+             "printf 'child-before-QUIT\\n'; printf '%s' \"$$\" > \"$1\"; "
+             "printf ready > \"$2\"; exec sleep 30",
+             "sh", str(child_pid_file), str(ready)],
+            cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+        child_pid = None
+        try:
+            deadline = time.monotonic() + 10
+            while not ready.is_file():
+                if process.poll() is not None:
+                    raise AssertionError("wrapper exited before the QUIT fixture became ready")
+                if time.monotonic() > deadline:
+                    raise AssertionError("timed out waiting for QUIT fixture")
+                time.sleep(0.02)
+            child_pid = int(child_pid_file.read_text(encoding="ascii"))
+            # The isolated command is not in this group; the wrapper must forward it.
+            os.killpg(process.pid, signal.SIGQUIT)
+            output = process.communicate(timeout=8)[0]
+            assert_process_gone(child_pid, "command after process-group QUIT")
+        finally:
+            if process.poll() is None:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.communicate()
+            if child_pid is not None:
+                try:
+                    os.killpg(child_pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                try:
+                    os.kill(child_pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+    assert_interrupt_run(label, before_logs, before_history, process, output, "QUIT")
+    passed("process-group QUIT triggers isolated cleanup and preserves status 131")
 
 
 def test_leading_data_nested_secret() -> None:
@@ -469,6 +667,9 @@ def main() -> None:
     test_wrapper_only_signal()
     test_wrapper_descendant_signal()
     test_wrapper_term_refusal()
+    test_wrapper_orphan_term_refusal()
+    test_wrapper_startup_signal()
+    test_wrapper_group_quit()
     test_recursive_secrets()
     test_leading_data_nested_secret()
     test_recursive_binaries()
@@ -476,7 +677,7 @@ def main() -> None:
     test_directory_member_budget()
     test_license_budget_order()
     test_walk_errors()
-    assert checks == 24, checks
+    assert checks == 27, checks
     print(f"V11-NEGATIVE-PRIMITIVES OK: {checks}/{checks}")
 
 

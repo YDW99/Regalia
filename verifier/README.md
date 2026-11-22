@@ -131,3 +131,15 @@ stdin, complete output/history and 129/130/143 statuses are retained. New regres
 cover a non-`exec` background descendant and a child that refuses TERM, bringing the
 primitive negative suite to 24 checks. Reviewed CI metadata and the gradlew executable
 mode are restored again after auto-unzip loss.
+
+Round-76 follow-up corrects round-75's premature watchdog cancellation: direct-child
+reaping no longer cancels escalation, and the watchdog is reaped only after its
+bounded grace expires and group-level KILL has been issued. Startup HUP/INT/QUIT/TERM
+signals are deferred until `$!` is recorded; the launch subshell restores default
+signal dispositions before `exec setsid`. Cleanup signals both the direct PID (for the
+pre-`setsid` window) and its isolated PGID. QUIT triggers the same bounded cleanup
+and is logged as 131. Assertions now run before test fallback cleanup; new deterministic regressions cover
+a TERM-accepting parent with a stubborn orphan, the pre-assignment signal window and
+process-group QUIT, bringing the primitive negative suite to 27 checks. SIGKILL cannot
+be trapped, so no wrapper self-cleanup guarantee is claimed after an external KILL.
+Reviewed CI metadata and gradlew's Git index mode 100755 are restored again.
