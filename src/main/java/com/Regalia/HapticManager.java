@@ -170,7 +170,7 @@ public class HapticManager {
         } catch (Exception e) {
             // v1.2.3 (S1181): getSystemService / hasVibrator throw
             //   RuntimeException subtypes at most — log and continue.
-            Log.w(TAG, "performHaptic failed: " + e.getMessage());
+            Log.w(TAG, "performHaptic failed: " + e.getMessage()); // mobsf-ignore: android_logging
         }
     }
 
@@ -525,7 +525,7 @@ public class HapticManager {
             // v1.2.3 (S1181): vibrate() throws RuntimeException subtypes
             //   (e.g. IllegalStateException when the service is unavailable).
             //   Haptic is best-effort; tell the caller to fall back.
-            Log.d(TAG, "Waveform vibrate failed, will fall back: " + e.getMessage());
+            Log.d(TAG, "Waveform vibrate failed, will fall back: " + e.getMessage()); // mobsf-ignore: android_logging
             return false;
         }
     }

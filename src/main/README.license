@@ -1,3 +1,30 @@
+v1.2.3 round-70 (2026.11.22): PR#59 review triage — per-line mobsf migration + callback-payload root fix.
+  - Version: versionCode=10203, versionName="1.2.3" (unchanged).
+  - java/com/Regalia/StockfishNative.java: _postJsCallbackDirect's catch
+    logged the raw JS callback expression — an onEngineEval callback embeds
+    the FEN (the full game position) as its 8th argument, so an
+    evaluateJavascript failure would leak the game state into logcat via
+    the release-surviving Log.e (CodeRabbit PR#59 #1). Root-fixed the
+    round-69 sendUciCommand way: the message now carries the callback
+    EVENT NAME (text before the first '(' — new helper _callbackEventName)
+    and the payload LENGTH only; payload text never enters logcat.
+  - java/*.java (15 files, AGPL v3): the mobsfscan android_logging
+    suppression migrates from the global .mobsf ignore-rule to per-line
+    `// mobsf-ignore: android_logging` markers at every flagged line
+    (223 unique sites covering all 259 findings; CodeRabbit PR#59 #2).
+    Suppression semantics verified empirically (mobsfscan 1.2.0: annotated
+    lines suppressed, unannotated flagged; byte-parity proof that nothing
+    but the markers changed); FUTURE unsafe Log lines will now ALERT in
+    the MobSF SARIF instead of being swallowed by a global rule.
+    Line-level review of the 48 Log.e-class findings: game-content-capable
+    paths are exactly the two now root-fixed (sendUciCommand round-69,
+    postJsCallback round-70); the remaining release Log.e output is engine
+    paths, thread/setting names, exit codes and static labels
+    (round70-audit §T-logE).
+  - java/.mobsf: ALL active directives removed (ignore-rules deleted) —
+    the file survives as the audit trail for the documented stance;
+    suppression now lives at the flagged lines (see above).
+
 v1.2.3 round-69 (2026.11.22): PR#57 review triage — .mobsf FEN-leak root fix + license ledger erratum.
   - Version: versionCode=10203, versionName="1.2.3" (unchanged).
   - ERRATUM (CodeRabbit PR#57 Minor): the round-68 entry below labeled

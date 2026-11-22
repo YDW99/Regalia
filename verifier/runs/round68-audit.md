@@ -59,8 +59,11 @@ PR #57 stale 大限 **2026-12-21**，合并收尾在此前。
      写入分支——默认分支不是 upload 时 PUT 会写到默认分支，或因 sha 不匹配而
      409。每个 PUT/DELETE 请求体都必须带 `"branch": "upload"`。
   2. **PUT 不能删除文件**：PUT 只能创建/替换（base64 内容＋当前 sha 表达修改）；
-     删除必须用同端点的 **DELETE** 方法，请求体带 `{"message", "sha": <文件
-     blob sha>, "branch": "upload"}`。按原文操作 worker-pool.js 会残留、
+     删除必须用同端点的 **DELETE** 方法，请求体带
+     `{"message":"Delete file","sha":"<文件 blob sha>","branch":"upload"}`。
+     **round-70 勘误（CodeRabbit PR#59 #5）**：原文示例 `{"message", "sha": …}`
+     不是合法 JSON——`"message"` 是 Contents API DELETE 的必填提交说明
+     字符串，必须带值。按原文（修复示例前）操作 worker-pool.js 会残留、
      V3-46 持续 RED。
   一次循环送全部变更文件（修改走 PUT、删除走 DELETE）；同样凭据约束。
 - 共同验收：推送后对远端 head 快照复跑三件套＋`diff -rq` 远端 vs 本地交付树零未解释

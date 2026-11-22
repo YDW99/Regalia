@@ -1,40 +1,36 @@
-# mobsfscan project exemptions (round-68 T13, rationale updated round-69) —
-#   see round68-audit.md §T13 and the round-69 audit §T-mobsf.
+# mobsfscan project exemptions (round-68 T13; round-70 T-mobsf migration) —
+#   see round68-audit.md §T13, round69-audit.md §T-b and round70-audit.md §T-mobsf.
 #
-# android_logging (CWE-532): every Log.* call that interpolates a variable is
-# flagged (264 findings on the full tree with mobsfscan 1.2.0). Project-wide
-# documented stance (round-56 SEC-06, proguard-rules.pro:135-139): release
-# builds strip Log.v/d/i/w via -assumenosideeffects; only Log.e survives,
-# and E-level calls that embed file paths are exactly two documented
-# residuals (StockfishNative engine-extraction failure paths, none of them
-# user data). The app is offline-first (V3-38): no user data is ever logged.
+# android_logging (CWE-532): mobsfscan 1.2.0 flags every Log.* call that
+# interpolates a variable (259 findings on this tree, measured 2026-11-22).
+# Project-wide documented stance (round-56 SEC-06, proguard-rules.pro:135-139):
+# release builds strip Log.v/d/i/w via -assumenosideeffects; only Log.e survives.
 #
-# round-69 (CodeRabbit PR#57 Minor, root fix): the one android_logging
-# finding that DID carry user data — StockfishNative.sendUciCommand's
-# Log.e("Error sending command: " + command), whose command can embed a FEN
-# (the full game position) — is FIXED AT THE ROOT (the command text is no
-# longer logged; the message is static + command.length() only). That finding
-# no longer exists to suppress. The suppression is nevertheless KEPT:
-#   - the remaining ~263 findings are Log.v/d/i/w (release-stripped) plus the
-#     two documented path-bearing Log.e residuals — none carry user data;
-#   - mobsfscan has no per-line suppression granularity in .mobsf (only
-#     ignore-rules / ignore-paths / ignore-filenames), so "delete the global
-#     rule" would re-open ~263 SARIF alerts whose only effect is burying real
-#     signals in noise (alert fatigue is itself a security anti-pattern);
-#   - the release-strip stance is enforced by proguard and verified by the
-#     round-56 review chain.
-# If mobsfscan grows line-level suppression, prefer narrowing this rule to
-# the two documented E-level residuals and re-reviewing the v/d/i/w class.
+# round-69 (CodeRabbit PR#57 #3): the one finding that carried user game data —
+#   StockfishNative.sendUciCommand's Log.e("Error sending command: " + command),
+#   whose command can embed a FEN (the full game position) — was FIXED AT THE
+#   ROOT: static message + command.length() only. (Debug builds keep a
+#   documented Log.d of the full command — release-stripped, diagnostic-only.)
+# round-70 (CodeRabbit PR#59 #1): the second game-content-capable path —
+#   _postJsCallbackDirect's Log.e("Error posting JS callback: " + cleanJs),
+#   whose onEngineEval payload embeds the FEN as 8th argument — root-fixed the
+#   same way (event name + payload length only, see _callbackEventName). The
+#   remaining release Log.e output is engine paths, thread/setting names,
+#   exit codes and static labels (site-by-site review, round70-audit §T-logE).
 #
-# Why repo-side instead of per-finding UI dismissal: GitHub code scanning
-# dismissals are per-finding-instance — every new code line re-reports the
-# class. This file is picked up automatically: the mobsf workflow scans
-# `src/main/java` first, and mobsfscan looks for .mobsf in the first scanned
-# path (verified empirically: 264 -> 0 findings, other rules unaffected).
+# round-70 (CodeRabbit PR#59 #2) — GLOBAL ignore-rules DELETED, per-line
+#   suppression IN. mobsfscan 1.2.0 supports an inline
+#       // mobsf-ignore: android_logging
+#   comment on any line of the flagged span (verified empirically in-sandbox:
+#   annotated lines suppressed, unannotated flagged). All 259 findings were
+#   reviewed and now carry the marker at the flagged line, so any FUTURE
+#   unsafe Log line — new code or refactors — will ALERT in the MobSF SARIF
+#   instead of being silently swallowed by a global rule here. This file
+#   intentionally carries NO active directives; it survives as the audit
+#   trail for the stance. If code scanning shows android_logging findings:
+#   they are NEW, read them, do not blanket-ignore them here.
 #
 # NOTE: dotfiles have failed to land through the zip overlay channel before
 # (the .gitignore incident, round-67 T0). If the post-upload remote re-check
 # shows this file missing, create it via the GitHub web editor with this
 # exact content (see the round-68 delivery README).
-ignore-rules:
-  - android_logging

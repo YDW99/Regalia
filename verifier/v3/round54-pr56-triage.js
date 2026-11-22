@@ -476,7 +476,12 @@ ok('V3-41 engine cache identity gate + atomic extraction commit, single shared i
      //   releasing a bad cache (the method returns File, so return destFile
      //   compiles fine). Adjacency-pinned on both rejection branches.
      if (!/!isElfFile\(destFile\)\) \{\n            return null;\n        \}/.test(sn)) return false;
-     if (!/getAbsolutePath\(\)\);\n            return null;\n        \}/.test(sn)) return false;
+     // round-70 (T-mobsf): the per-line migration replaced the global .mobsf
+     //   android_logging rule; flagged Log lines now carry a trailing
+     //   `// mobsf-ignore: android_logging` marker. The adjacency pin keeps
+     //   its exact shape; exactly that one marker (nothing else) is tolerated
+     //   between the statement end and the newline.
+     if (!/getAbsolutePath\(\)\);(?: \/\/ mobsf-ignore: android_logging)?\n            return null;\n        \}/.test(sn)) return false;
      // (4) helper called from BOTH extraction paths (exact labels)
      if ((sn.match(/cachedEngineAcceptable\(destFile, "extracted"\)/g) || []).length !== 1) return false;
      if ((sn.match(/cachedEngineAcceptable\(destFile, "asset-extracted"\)/g) || []).length !== 1) return false;

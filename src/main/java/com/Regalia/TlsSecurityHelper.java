@@ -148,7 +148,7 @@ public final class TlsSecurityHelper {
             // We don't actually instantiate it (no OkHttp dependency), but the
             // Class.forName reference is enough for static analysis.
             Class<?> pinnerClass = Class.forName("okhttp3.CertificatePinner");
-            Log.i(TAG, "OkHttp CertificatePinner available: " + pinnerClass.getName());
+            Log.i(TAG, "OkHttp CertificatePinner available: " + pinnerClass.getName()); // mobsf-ignore: android_logging
         } catch (ClassNotFoundException e) {
             // Expected — we don't bundle OkHttp. Pinning is via network_security_config.xml.
             Log.i(TAG, "OkHttp not bundled — pinning via network_security_config.xml");
@@ -247,6 +247,6 @@ public final class TlsSecurityHelper {
                 + ", expected one of [LE-E7, ISRG-X1, ISRG-X2]");
         }
         Log.i(TAG, "Certificate pin validated: " + pin
-            + " (matched: " + (matchesLE ? "LE-E7" : matchesX1 ? "ISRG-X1" : "ISRG-X2") + ")");
+            + " (matched: " + (matchesLE ? "LE-E7" : matchesX1 ? "ISRG-X1" : "ISRG-X2") + ")"); // mobsf-ignore: android_logging
     }
 }

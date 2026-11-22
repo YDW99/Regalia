@@ -31,8 +31,16 @@ CodeRabbit 字面建议「删全局豁免」。实际处置＝**修根因 + 保�
 
 1. **根因已修**：StockfishNative.java sendUciCommand 的 `Log.e(TAG, "Error
    sending command: " + command, e)` 改为静态消息＋`command.length()`（长度
-   助关联、无内容）；`position fen …` 命令不再可能进 logcat。该 finding 从
-   源头消失，不再是「被豁免掩盖的真问题」。
+   助关联、无内容）；`position fen …` 命令不再可能经**该 Log.e 路径**进入
+   release logcat。该 finding 携带 FEN 的泄漏面从源头消失，不再是「被豁免
+   掩盖的真问题」。
+   **round-70 勘误（CodeRabbit PR#59 #6）**：原文「`position fen …` 命令不再
+   可能进 logcat」表述过宽——debug 构建的 `Log.d`（3041 行
+   `"Sending UCI: " + command`）仍记录完整命令（release 剥离、开发诊断
+   专属，即本条点 3 的既有例外）；结论限定为修改后的 Log.e 路径。另注：
+   mobsfscan 对该行的 finding 因 `command.length()` 插值**仍然存在**（round-70
+   起由行级 `// mobsf-ignore: android_logging` 标记抑制）——「从源头消失」
+   指泄漏面消失，非扫描器报告消失。
 2. **删豁免的代价不可接受**：mobsfscan 1.2.0 全树 264 条 android_logging
    findings 中除 sendUciCommand 外全部是 Log.v/d/i/w（release 构建 proguard
    `-assumenosideeffects` 剥离，proguard-rules.pro:135-139，round-56 SEC-06
@@ -40,10 +48,17 @@ CodeRabbit 字面建议「删全局豁免」。实际处置＝**修根因 + 保�
    ignore-rules/ignore-paths/ignore-filenames 三种粒度，**没有行级豁免**——
    删全局规则＝重开 ~263 条 SARIF alerts，唯一效果是把真信号埋进噪音
    （alert fatigue 本身是安全反模式）。
+   **round-70 superseded（CodeRabbit PR#59 #2）**：本点前提「没有行级豁免」
+   经实证为误——mobsfscan 1.2.0 支持行级 `// mobsf-ignore: android_logging`
+   （源码 suppress_pm_comments＋微型用例双证）。round-70 已完成逐行迁移
+   （259 findings→223 标注点）并删除全局豁免，「未来若支持行级豁免」的
+   尾注条件已提前兑现；本点作为历史决策记录保留，不再作为现状依据。
 3. **不修 Log.d**（3041 行 `"Sending UCI: " + command`）：debug 构建专属
    （release 剥离），保留供开发诊断；注释里已写明这个差别。
 
 若未来 mobsfscan 支持行级豁免，优先收窄到两条 E 级残留（.mobsf 尾注已留指引）。
+（round-70 注：该条件已兑现并实施——见上点 superseded 标记与 round70-audit
+§T-mobsf；「两条 E 级残留」的措辞同时由 §T-logE 的 48 条全量审查取代。）
 
 ## T-c E12 实测（意见 7 的勘误依据）
 

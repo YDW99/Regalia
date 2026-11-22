@@ -177,14 +177,19 @@ printf '%s\n' "$_V3RESULT"
 #   could pass the gate. Now: no RESULT marker, or a RESULT whose claimed
 #   failed-count disagrees with the FAIL lines actually printed (a truncated
 #   or tampered harness), both hard-fail BEFORE the allowance is consulted.
+# round-70 (CodeRabbit PR#59 #3): an UNPARSEABLE RESULT (empty _V3CLAIM — e.g.
+#   "RESULT: 51 passed, X failed" with a non-numeric count) must also fail
+#   closed: the old `-n` test skipped the count check entirely and let a
+#   malformed marker fall straight into the allowance branch. Only a valid,
+#   count-consistent RESULT may enter the allowance. No third door.
 _V3RESULTN=$(printf '%s\n' "$_V3OUT" | grep -c "RESULT")
 _V3FAILN=$(printf '%s\n' "$_V3OUT" | grep -c "^FAIL ")
 _V3CLAIM=$(printf '%s\n' "$_V3RESULT" | sed -n 's/.*RESULT: [0-9]* passed, \([0-9]*\) failed.*/\1/p')
 if [ "$_V3RC" -ne 0 ] && [ "$_V3RESULTN" -lt 1 ]; then
   echo "v3 exited WITHOUT a final RESULT marker (crash/kill mid-run) — an incomplete baseline can never clear the allowance" >&2
   FAILED=$((FAILED+1))
-elif [ "$_V3RC" -ne 0 ] && [ -n "$_V3CLAIM" ] && [ "$_V3CLAIM" != "$_V3FAILN" ]; then
-  echo "v3 RESULT marker claims $_V3CLAIM failed but $_V3FAILN FAIL lines were printed (truncated/tampered harness output)" >&2
+elif [ "$_V3RC" -ne 0 ] && { [ -z "$_V3CLAIM" ] || [ "$_V3CLAIM" != "$_V3FAILN" ]; }; then
+  echo "v3 RESULT marker missing or malformed (claimed='$_V3CLAIM', FAIL lines printed='$_V3FAILN') — truncated/tampered harness output cannot clear the allowance" >&2
   FAILED=$((FAILED+1))
 elif [ "$_V3RC" -ne 0 ]; then
   _V3UNEXPECTED=$(printf '%s\n' "$_V3OUT" | grep "^FAIL " | grep -v "^FAIL V3-46 " | grep -v "^FAIL V3-47 " || true)
