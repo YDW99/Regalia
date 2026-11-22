@@ -180,3 +180,29 @@ v1 **44/44**、v2 **27/27**、v3 **51/51**，r62 十三门全绿，r67-bench PAS
 ## 最终 ZIP 边界
 
 round-72 新源码 ZIP 包含当前许可包、v1–v11、完整审计与诚实日志，不含引擎、ELF、构建缓存、密钥库或签名材料。最终 ZIP 的 verify、秘密扫描、大小、条目数和 SHA-256 属于 post-package 证据，外置到 recovery 与交付清单，不回写已验 ZIP 造成自引用。完整实施审计见 `verifier/runs/round72-audit.md`，恢复边界见 `verifier/runs/recovery-round72.md`。
+
+
+# Regalia v1.2.3 — round-73 验证链补丁工作日志（2026-11-22 UTC）
+
+## 基线与范围
+
+根据新上传邮件的 6 条 actionable 意见加固 v11。补丁基线为当前远端 `upload` 提交 `f36e239e3a8b085e3c446620a32fcd57d6dfe996`；固定源码比较基线仍为 `f78317919818a02c1fa169a99b85cad6ebf8a1fe`。只修改验证器、追加式记录及已确认回退的 CI 元数据，不改棋类功能、Java 业务行为、APK、依赖、SDK、ABI、版本或权限，不执行远端写操作。
+
+## 六项修复
+
+- 目录成员在跳过内容前先占用共享成员预算；预算内目录仍通过且计数包含目录。
+- 每个非目录成员在既有单成员和累计预算内完整 spool，再用 `zipfile.is_zipfile()` 按内容识别 ZIP；非 ZIP 后缀、shebang 或其他前导数据不能绕过递归。确认为 ZIP 后才执行嵌套大小与深度限制，归档后缀损坏仍 fail closed。
+- 源码打包与秘密扫描共用实际 ZIP 内容识别入口；`payload.dat` 内嵌 ELF 会在发布前拒绝。
+- `verifier/v11/verify-apk.py` 加入必需文件清单，源目录与 ZIP 同步删除也不能绕过。
+- 最终源码 ZIP 在任何成员摘要、CRC 或 `archive.read()` 前先跑共享有界扫描；许可包及 source gate 也复用有界入口，保留原有 CRC 和当前字节一致性检查。
+- wrapper 的 EXIT trap 仅清理临时文件；HUP/INT/TERM 分别完成日志与 history 后以 129/130/143 退出，保留中断前输出并记录信号。
+
+## 自动解压元数据
+
+当前远端再次缺 `.github/dependabot.yml`，CodeQL/MobSF 回退且 gradlew index mode 为 100644。按 round-72 已审字节恢复 C/C++ no-build、checkout 禁持久凭据、`mobsfscan==1.2.0`、Dependabot 周检与 gradlew 100755；未做额外 CI 重构。根 `LICENSE&NOTICE.zip` 未修改，后续人工更新继续优先，不以本轮观察值作为固定大小或哈希。
+
+## 负向复现与回归
+
+新增用例先在保留旧实现的隔离副本上分别复现：TERM 后输出/history/退出码错误、前导数据隐式 ZIP 被接受、目录未计费、许可包先 CRC、源码包先摘要、嵌套 ELF 被打包以及 verify-apk 双删被接受。修复后 v11 原语负测 **21/21**、隔离集成测试 **18/18**、固定基线 source gate **27/27**。高压缩率 129 MiB 合成成员在摘要或 CRC 前被成员预算拒绝，未实际执行无界解压。
+
+既有回归 v1 **44/44**、v2 **27/27**、v3 **51/51**，r62 十三门全绿，r67-bench PASS，rename-only 十二项通过，JS 10 模块语法通过。网页包两次构建一致：24,393 行 / 1,500,732 B，SHA-256 `cc69b869077a72dc1367461c6567a47fea159d292fd5e3d207a2afef84f167b5`。本轮仅交付仓库相对路径补丁 ZIP，不生成 APK；补丁自身哈希不写入本日志，避免自引用。

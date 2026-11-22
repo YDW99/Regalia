@@ -7,9 +7,11 @@ import hashlib
 import io
 import os
 from pathlib import Path
+import signal
 import stat
 import subprocess
 import tempfile
+import time
 from unittest import mock
 import zipfile
 
@@ -202,13 +204,116 @@ def test_walk_errors() -> None:
     passed("directory traversal errors invoke onerror and abort payload enumeration")
 
 
+def test_wrapper_signal() -> None:
+    runs = ROOT / "verifier/runs"
+    label = f"wrapper-negative-term-{os.getpid()}"
+    before_logs = set(runs.glob(f"*-{label}.*.log"))
+    history = runs / "v11-history.tsv"
+    before_history = set(history.read_text(encoding="utf-8").splitlines()) if history.is_file() else set()
+    with tempfile.TemporaryDirectory(prefix="v11-term-") as temporary:
+        ready = Path(temporary) / "ready"
+        process = subprocess.Popen(
+            ["bash", str(ROOT / "verifier/v11/run-and-log.sh"), label,
+             "sh", "-c", "printf 'child-before-TERM\\n'; printf ready > \"$1\"; sleep 30",
+             "sh", str(ready)],
+            cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+        try:
+            deadline = time.monotonic() + 10
+            while not ready.is_file():
+                if process.poll() is not None:
+                    raise AssertionError("wrapper exited before the signal fixture became ready")
+                if time.monotonic() > deadline:
+                    raise AssertionError("timed out waiting for child output")
+                time.sleep(0.02)
+            os.killpg(process.pid, signal.SIGTERM)
+            output = process.communicate(timeout=10)[0]
+        finally:
+            if process.poll() is None:
+                os.killpg(process.pid, signal.SIGKILL)
+                process.communicate()
+    if process.returncode != 143 or "exit_code=143" not in output or "interrupted_by=TERM" not in output:
+        raise AssertionError("TERM did not produce an interrupted 143 result")
+    if "child-before-TERM\n" not in output:
+        raise AssertionError("TERM discarded output produced before interruption")
+    new_logs = set(runs.glob(f"*-{label}.*.log")) - before_logs
+    if len(new_logs) != 1:
+        raise AssertionError("TERM did not preserve exactly one independent log")
+    log = next(iter(new_logs))
+    content = log.read_text(encoding="utf-8")
+    if "exit_code=143" not in content or "child-before-TERM\n" not in content:
+        raise AssertionError("interrupt log lacks status or pre-TERM output")
+    after_history = set(history.read_text(encoding="utf-8").splitlines())
+    new_history = after_history - before_history
+    expected = f"\t{label}\t143\t{log.relative_to(ROOT).as_posix()}"
+    if len(new_history) != 1 or expected not in next(iter(new_history)):
+        raise AssertionError("interrupt history lacks the 143 status or retained log path")
+    passed("TERM preserves pre-signal output, history and exit status 143")
+
+
+def test_leading_data_nested_secret() -> None:
+    secret = "V11-TEST-SENTINEL-SHEBANG-71c2"
+    inner = io.BytesIO()
+    with zipfile.ZipFile(inner, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("compressed-note.txt", b"prefix-" + secret.encode() + b"-suffix")
+    prefixed_zip = b"#!/bin/sh\n# leading data before a valid ZIP\nexit 0\n" + inner.getvalue()
+    outer = io.BytesIO()
+    with zipfile.ZipFile(outer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("payload.dat", prefixed_zip)
+    with mock.patch.dict(os.environ, {
+        "RELEASE_KEYSTORE_PASSWORD": secret,
+        "RELEASE_KEY_PASSWORD": "V11-TEST-SENTINEL-OTHER-18d3",
+    }):
+        scanner = SecretScanner()
+        message = expect_failure(
+            lambda: scanner.archive(io.BytesIO(outer.getvalue()), "opaque.fixture.shebang"),
+            forbidden=(secret, "payload.dat", "compressed-note.txt"),
+        )
+    if "uploaded password match" not in message:
+        raise AssertionError("leading-data nested ZIP did not reach the secret scanner")
+    passed("non-ZIP suffix and leading data cannot hide a compressed password")
+
+
+def test_directory_member_budget() -> None:
+    directories = io.BytesIO()
+    with zipfile.ZipFile(directories, "w") as archive:
+        for name in ("a/", "b/", "c/"):
+            archive.writestr(name, b"")
+    expect_failure(lambda: scan_archive(io.BytesIO(directories.getvalue()), consume_all,
+                                        "opaque.directories", limits=ArchiveLimits(max_members=2)))
+    budget = scan_archive(io.BytesIO(directories.getvalue()), consume_all,
+                          "opaque.directories", limits=ArchiveLimits(max_members=3))
+    if budget.members != 3 or budget.bytes != 0:
+        raise AssertionError("in-budget directory entries were not counted correctly")
+    passed("directory entries consume member budget and valid directories pass")
+
+
+def test_license_budget_order() -> None:
+    with tempfile.TemporaryDirectory(prefix="v11-license-order-") as temporary:
+        root = Path(temporary)
+        with zipfile.ZipFile(root / "LICENSE&NOTICE.zip", "w") as archive:
+            archive.writestr("LICENSE&NOTICE/test.txt", "synthetic test bytes\n")
+        with mock.patch.object(source_archive.BinaryInspector, "archive",
+                               side_effect=AssertionError("bounded license sentinel")) as bounded, \
+             mock.patch.object(source_archive.zipfile.ZipFile, "testzip") as crc:
+            message = expect_failure(lambda: source_archive.protected_license_metadata(root))
+        if "bounded license sentinel" not in message or not bounded.called or crc.called:
+            raise AssertionError("license CRC decompression ran before the bounded scanner")
+    passed("protected license budget scan precedes CRC decompression")
+
+
 def main() -> None:
     test_wrapper()
+    test_wrapper_signal()
     test_recursive_secrets()
+    test_leading_data_nested_secret()
     test_recursive_binaries()
     test_archive_limits()
+    test_directory_member_budget()
+    test_license_budget_order()
     test_walk_errors()
-    assert checks == 17, checks
+    assert checks == 21, checks
     print(f"V11-NEGATIVE-PRIMITIVES OK: {checks}/{checks}")
 
 

@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 
 from archive_scan import ArchiveLimits, scan_archive
-from source_archive import payload_files
+from source_archive import is_archive_payload, payload_files
 
 
 class SecretScanner:
@@ -76,7 +76,7 @@ def main() -> None:
     for index, path in enumerate(files, 1):
         label = f"source.file{index}"
         scanner.file(path, label)
-        if path.suffix.lower() in (".zip", ".jar"):
+        if is_archive_payload(path, label):
             scanner.archive(path, label + ".archive")
     scanner.file(args.apk.resolve(), "delivery.apk.raw")
     apk_budget = scanner.archive(args.apk.resolve(), "delivery.apk")

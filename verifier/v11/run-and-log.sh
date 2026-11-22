@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# round-72: reject empty invocations and preserve every run with an exclusive log.
+# round-73: preserve output and history for normal and signal-interrupted runs.
 set -uo pipefail
 if [ "$#" -lt 2 ]; then
   printf 'usage: %s NAME COMMAND [ARG ...]\n' "$0" >&2
@@ -14,22 +14,50 @@ mkdir -p verifier/runs || exit 73
 LOG="$(mktemp "verifier/runs/${TS}-${SAFE_NAME}.XXXXXX.log")" || exit 73
 TMP="$(mktemp)" || exit 73
 cleanup() { rm -f -- "$TMP"; }
-trap cleanup EXIT HUP INT TERM
+trap cleanup EXIT
 printf -v CMD '%q ' "$@"
 START="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+FINALIZED=0
+
+finish() {
+  local rc="$1"
+  local interrupted_by="${2:-}"
+  if [ "$FINALIZED" -ne 0 ]; then
+    return 0
+  fi
+  FINALIZED=1
+  RC="$rc"
+  {
+    printf 'timestamp_start=%s\n' "$START"
+    printf 'timestamp_end=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf 'cwd=%s\n' "$ROOT"
+    printf 'command=%s\n' "$CMD"
+    printf 'exit_code=%s\n' "$RC"
+    if [ -n "$interrupted_by" ]; then
+      printf 'interrupted_by=%s\n' "$interrupted_by"
+    fi
+    printf '%s\n' '--- output ---'
+    cat "$TMP"
+  } >"$LOG"
+  printf '%s\t%s\t%s\t%s\n' "$TS" "$SAFE_NAME" "$RC" "$LOG" >> verifier/runs/v11-history.tsv
+  cat "$LOG"
+}
+
+handle_signal() {
+  local rc="$1"
+  local signal="$2"
+  trap '' HUP INT TERM
+  finish "$rc" "$signal"
+  exit "$rc"
+}
+trap 'handle_signal 129 HUP' HUP
+trap 'handle_signal 130 INT' INT
+trap 'handle_signal 143 TERM' TERM
+
 set +e
 "$@" >"$TMP" 2>&1
 RC=$?
 set -e
-{
-  printf 'timestamp_start=%s\n' "$START"
-  printf 'timestamp_end=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  printf 'cwd=%s\n' "$ROOT"
-  printf 'command=%s\n' "$CMD"
-  printf 'exit_code=%s\n' "$RC"
-  printf '%s\n' '--- output ---'
-  cat "$TMP"
-} >"$LOG"
-printf '%s\t%s\t%s\t%s\n' "$TS" "$SAFE_NAME" "$RC" "$LOG" >> verifier/runs/v11-history.tsv
-cat "$LOG"
+trap '' HUP INT TERM
+finish "$RC"
 exit "$RC"

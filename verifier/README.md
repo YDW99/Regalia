@@ -103,3 +103,14 @@ checks, safe concurrent packing, exclusive same-second logs, 17 primitive negati
 checks and 15 isolated integration checks. The exact browser-downloaded inherited
 APK must pass the complete v11 gate. Post-package source-ZIP evidence remains
 external to avoid self-reference. No chess/Java business behavior or APK bytes change.
+
+Round-73 follow-up hardening retains v11 and addresses six archive/log-gate review
+findings: directory entries consume member budget; complete bounded members are
+detected as ZIP by content even with leading data or neutral suffixes; protected
+license and delivery ZIP budgets run before CRC/digest decompression; source payload
+and secret-scan entry points share content-based archive detection; `verify-apk.py`
+is a required source entry; and HUP/INT/TERM paths preserve output, history and
+129/130/143 statuses. The source gate also reuses the bounded protected-license
+entry. New regressions reproduce the old failures and pass 21 primitive negative
+checks plus 18 isolated integration checks. CodeQL/MobSF/Dependabot metadata and
+the gradlew executable index mode are restored after the current auto-unzip upload.

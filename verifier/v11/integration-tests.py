@@ -10,7 +10,9 @@ import shutil
 import subprocess
 import tempfile
 import zipfile
+from unittest import mock
 
+import source_archive
 from source_archive import pack, payload_files, verify
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -97,9 +99,49 @@ def test_archives() -> None:
         expect_assertion(lambda: verify(source, changed_zip), "source content digest mismatch")
         passed("same-name modified content is rejected by per-member SHA-256")
 
+        nested_elf = io.BytesIO()
+        with zipfile.ZipFile(nested_elf, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("engine.bin", b"\x7fELF" + b"\x00" * 63)
+        (source / "payload.dat").write_bytes(
+            b"#!/bin/sh\n# valid ZIP with leading data and a neutral suffix\n" + nested_elf.getvalue()
+        )
+        blocked_output = base / "blocked-nested-elf.zip"
+        expect_assertion(lambda: pack(source, blocked_output), "ELF content detected")
+        if blocked_output.exists() or blocked_output.with_name(blocked_output.name + ".lock").exists():
+            raise AssertionError("rejected nested ELF payload was published or left a lock")
+        (source / "payload.dat").unlink()
+        passed("pack detects actual ZIP content and rejects nested ELF before publication")
+
+        bomb_zip = base / "oversized-before-digest.zip"
+        with zipfile.ZipFile(baseline_zip) as original, \
+             zipfile.ZipFile(bomb_zip, "w", compression=zipfile.ZIP_DEFLATED,
+                             compresslevel=9, allowZip64=True) as rewritten:
+            for info in original.infolist():
+                if info.filename != PREFIX + "build.gradle":
+                    rewritten.writestr(info, original.read(info.filename))
+            with rewritten.open(PREFIX + "build.gradle", "w") as stream:
+                chunk = b"\x00" * (1024 * 1024)
+                for _ in range(129):
+                    stream.write(chunk)
+        original_testzip = zipfile.ZipFile.testzip
+
+        def guarded_testzip(archive):
+            filename = getattr(archive, "filename", None)
+            if filename is not None and Path(filename).resolve() == bomb_zip.resolve():
+                raise AssertionError("source-ZIP CRC ran before the bounded scanner")
+            return original_testzip(archive)
+
+        with mock.patch.object(source_archive.hashlib, "file_digest",
+                               side_effect=AssertionError("member digest ran before the bounded scanner")) as digest, \
+             mock.patch.object(zipfile.ZipFile, "testzip", guarded_testzip):
+            expect_assertion(lambda: verify(source, bomb_zip), "archive member size limit exceeded")
+        if digest.called:
+            raise AssertionError("a source member digest was attempted before budget rejection")
+        passed("source-ZIP member budget rejects before digest or CRC decompression")
+
         for relative in (
             "build.gradle", "gradlew", "src/main/java/com/Regalia/MainActivity.java",
-            "verifier/v11/secret_scan.py",
+            "verifier/v11/secret_scan.py", "verifier/v11/verify-apk.py",
         ):
             original_bytes = (source / relative).read_bytes()
             original_mode = (source / relative).stat().st_mode
@@ -201,7 +243,7 @@ def test_git_baseline() -> None:
 def main() -> None:
     test_archives()
     test_git_baseline()
-    assert checks == 15, checks
+    assert checks == 18, checks
     print(f"V11-INTEGRATION OK: {checks}/{checks}")
 
 
