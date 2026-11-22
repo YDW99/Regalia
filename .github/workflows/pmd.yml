@@ -36,7 +36,7 @@ jobs:
         uses: pmd/pmd-github-action@v2
         with:
           version: "7.4.0"
-          rulesets: "rulesets/java/quickstart.xml,rulesets/java/errorprone.xml,rulesets/java/bestpractices.xml"
+          rulesets: "config/pmd-ruleset.xml"
           sourcePath: "src/main/java"
           analyzeModifiedFilesOnly: "${{ github.event_name == 'pull_request' }}"
           format: "sarif"
